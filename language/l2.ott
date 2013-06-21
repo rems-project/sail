@@ -318,16 +318,41 @@ nexp :: '' ::=
 
 
 end_aux :: 'End_' ::=  
-  {{ com Numerical expressions for specifying vector lengths and indexes}}
+  {{ com endianness specifications}}
   | EN                                  :: :: var
   | inc                                 :: :: inc
   | dec                                 :: :: dec
   | ( end )				:: S :: paren {{ icho [[end]] }}
 
 end :: '' ::=
-  {{ com Location-annotated vector lengths }}
+  {{ com Location-annotated endianness specifications }}
   | end_aux l				:: :: End_l
 
+
+effect_aux :: 'Effect_' ::=
+  {{ com effect }}
+  | rreg                                :: :: rreg {{ com read register }}
+  | wreg                                :: :: wreg {{ com write register }}
+  | rmem                                :: :: rmem {{ com read memory }}
+  | wmem                                :: :: wmem {{ com write memory }}
+  | undef                               :: :: undef {{ com undefined-instruction exception }}
+  | unspec                              :: :: unspec {{ com unspecified values }}
+  | nondet                              :: :: nondet {{ com nondeterminism from intra-instruction parallelism }}
+
+effect :: '' ::=
+  {{ com location-annotated effect }}
+  | effect_aux l                        :: :: Effect_l
+
+
+effects_aux :: 'Effects_' ::=
+  {{ com effect set }}
+ | { effect1 , .. , effectn }           :: :: set {{ com effect set }}
+ | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ icho [] }}
+
+effects :: '' ::=
+  {{ com location-annotated effect set }}
+  | effects_aux l                        :: :: Effects_l
+% TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.
 
 
 typ_aux :: 'Typ_' ::=
@@ -336,9 +361,10 @@ typ_aux :: 'Typ_' ::=
     {{ com Unspecified type }}
   | a_l						:: :: var
     {{ com Type variables }}
-  | typ1 -> typ2				:: :: fn
+  | typ1 -> typ2 effects			:: :: fn
     {{ com Function types -- first-order only}}
 % TODO: build first-order restriction into AST or just into type rules?
+% TODO: concrete syntax for effects in a function type?
   | typ1 * .... * typn				:: :: tup
     {{ com Tuple types }}
   | nexp					:: :: nexps 
