@@ -247,6 +247,22 @@ EN_l {{ tex EN^{l} }} :: '' ::=
   | EN l                                           :: :: EN_l
 
 
+EFF :: '' ::=
+                                                   {{ ocaml terminal * text }}
+                                                   {{ lem terminal * string }}
+                                                   {{ hol string }}
+    {{ com effect set variables }} 
+    | ' ' ' ' x                                     :: :: EFF
+      {{ hol [[x]] }}
+      {{ ocaml [[x]] }}            
+      {{ lem [[x]] }}            
+% TODO: better concrete syntax!!!!
+
+EFF_l {{ tex EFF^{l} }} :: '' ::=
+  {{ com Location-annotated effect set variables }}
+  | EFF l                                           :: :: EFF_l
+
+
 id :: '' ::=
   {{ com Not-very-long identifers }}
   | x_l				:: :: Id
@@ -256,12 +272,14 @@ tnv :: '' ::=
     | a					:: :: Av
     | N					:: :: Nv
     | EN				:: :: ENv
+    | EFF				:: :: EFFv
 
 tnvar {{ tex tnvar^{l} }} :: '' ::=                                
    {{ com Union of type variables and nexp type variables, with locations }}
    | a_l                                         :: :: Avl
    | N_l                                        :: :: Nvl
    | EN_l                                        :: :: ENvl
+   | EFF_l                                        :: :: EFFvl
 
 tnvs :: '' ::=				{{ phantom }}
 						{{ hol tnv list }}
@@ -288,6 +306,7 @@ base_kind_aux :: 'BK_' ::=
   | Type                                       :: :: type
   | Nat                                        :: :: nat
   | Endian                                     :: :: endian
+  | Effects                                    :: :: effects
 
 base_kind :: '' ::=  
   {{ com location-annotated base kinds }}
@@ -346,13 +365,14 @@ effect :: '' ::=
 
 effects_aux :: 'Effects_' ::=
   {{ com effect set }}
+ | EFF                                  :: :: var
  | { effect1 , .. , effectn }           :: :: set {{ com effect set }}
  | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ icho [] }}
 
 effects :: '' ::=
   {{ com location-annotated effect set }}
   | effects_aux l                        :: :: Effects_l
-% TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.
+% TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.  Yes.  But we think we don't need any interesting effect-set expressions, eg effectset-variable union {rreg}. 
 
 
 typ_aux :: 'Typ_' ::=
@@ -363,8 +383,8 @@ typ_aux :: 'Typ_' ::=
     {{ com Type variables }}
   | typ1 -> typ2 effects			:: :: fn
     {{ com Function types -- first-order only}}
-% TODO: build first-order restriction into AST or just into type rules?
-% TODO: concrete syntax for effects in a function type?
+% TODO: build first-order restriction into AST or just into type rules? neither - see note
+% TODO: concrete syntax for effects in a function type?  needed only for pp, not in user syntax.
   | typ1 * .... * typn				:: :: tup
     {{ com Tuple types }}
   | nexp					:: :: nexps 
