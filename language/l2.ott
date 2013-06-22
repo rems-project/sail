@@ -208,19 +208,20 @@ end*)
 
 grammar
 
-a_aux :: '' ::=
+id :: '' ::=
+  {{ com Not-very-long identifers }}
+  {{ aux _ l }}
+  | x				:: :: Id
+
+
+a :: 'A_' ::=
+                                                {{ aux _ l }}
 						{{ ocaml terminal * text }}
 						{{ lem terminal * string }}
 						{{ hol string }}
   {{ com Type variables }}
   | ' x 					:: :: A
-    {{ hol [[x]] }}
-    {{ ocaml [[x]] }}
-    {{ lem [[x]] }}
-
-a {{ tex \alpha l}} :: '' ::=
-  {{ com location-annotated type variables }}
-  | a_aux l 					:: :: A_aux
+    {{ ichlo [[x]] }}
 
 N :: 'N_' ::=
                                                    {{ aux _ l }}
@@ -229,10 +230,7 @@ N :: 'N_' ::=
                                                    {{ hol string }}
     {{ com numeric variables }} 
     | ' ' x                                        :: :: N
-      {{ hol [[x]] }}
-      {{ ocaml [[x]] }}            
-      {{ lem [[x]] }}            
-
+      {{ ichlo [[x]] }}
 
 EN :: 'EN_' ::=
                                                    {{ aux _ l }}
@@ -241,10 +239,7 @@ EN :: 'EN_' ::=
                                                    {{ hol string }}
     {{ com endianness variables }} 
     | ' ' ' x                                     :: :: EN
-      {{ hol [[x]] }}
-      {{ ocaml [[x]] }}            
-      {{ lem [[x]] }}            
-
+      {{ ichlo [[x]] }}
 
 EFF :: 'EFF_' ::=
                                                    {{ aux _ l }}
@@ -253,50 +248,27 @@ EFF :: 'EFF_' ::=
                                                    {{ hol string }}
     {{ com effect set variables }} 
     | ' ' ' ' x                                     :: :: EFF
-      {{ hol [[x]] }}
-      {{ ocaml [[x]] }}            
-      {{ lem [[x]] }}            
+      {{ ichlo [[x]] }}
 % TODO: better concrete syntax!!!!
 
 
-id :: '' ::=
-  {{ com Not-very-long identifers }}
-  | x_l				:: :: Id
-
-tnv :: '' ::=				
-    {{ com Union of type variables and nexp type variables, without locations }}
+tnvar :: '' ::=				
+    {{ com Union of type, nexp, endianess and effect variables }}
     | a					:: :: Av
     | N					:: :: Nv
     | EN				:: :: ENv
     | EFF				:: :: EFFv
 
-tnvar {{ tex tnvar^{l} }} :: '' ::=                                
-   {{ com Union of type variables and nexp type variables, with locations }}
-   | a_l                                         :: :: Avl
-   | N_l                                        :: :: Nvl
-   | EN_l                                        :: :: ENvl
-   | EFF_l                                        :: :: EFFvl
-
-tnvs :: '' ::=				{{ phantom }}
-						{{ hol tnv list }}
-						{{ ocaml tnv list }}
-						{{ lem list tnv }}
-  {{ com Type variable lists }}
-  | tnv1 .. tnvn		:: :: Tvars
-    {{ hol [[tnv1..tnvn]] }}
-    {{ ocaml [[tnv1..tnvn]] }}
-    {{ lem [[tnv1..tnvn]] }}
-    
-tnvars {{ tex tnvars^{l} }} :: '' ::=				{{ phantom }}
+tnvars :: '' ::=				{{ phantom }}
 						{{ hol tnvar list }}
 						{{ ocaml tnvar list }}
 						{{ lem list tnvar }}
   {{ com Type variable lists }}
-  | tnvar1 .. tnvarn		:: :: tnvars_l
+  | tnvar1 .. tnvarn		:: :: Tvars
     {{ hol [[tnvar1..tnvarn]] }}
     {{ ocaml [[tnvar1..tnvarn]] }}
     {{ lem [[tnvar1..tnvarn]] }}
-
+    
 base_kind :: 'BK_' ::=  
   {{ com base kinds}}
   {{ aux _ l }}
@@ -305,7 +277,7 @@ base_kind :: 'BK_' ::=
   | Endian                                     :: :: endian
   | Effects                                    :: :: effects
 
-kind :: 'K_' ::=  
+kind :: '' ::=  
   {{ com kinds}}
   {{ aux _ l }}
   | base_kind1 -> ... -> base_kindn            :: :: kind
@@ -787,12 +759,12 @@ p :: 'Path_' ::=
 
 t_subst {{ tex \ensuremath{\sigma} }} :: '' ::=	{{ phantom }}
 						{{ hol (a # t) list }}
-						{{ lem list (tnv * t) }}
+						{{ lem list (tnvar * t) }}
   {{ com Type variable substitutions }}
-  | { tnv1 |-> t1 .. tnvn |-> tn }			:: :: T_subst
+  | { tnvar1 |-> t1 .. tnvarn |-> tn }			:: :: T_subst
     {{ ocaml (assert false) }}
-    {{ lem ([[tnv1 t1 .. tnvn tn]]) }}
-    {{ hol ([[tnv1 t1 .. tnvn tn]]) }}
+    {{ lem ([[tnvar1 t1 .. tnvarn tn]]) }}
+    {{ hol ([[tnvar1 t1 .. tnvarn tn]]) }}
 
 t , u :: 'T_' ::=
   {{ com Internal types }}
