@@ -201,9 +201,14 @@ end*)
 
 }}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Kinds and Types                                              %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 grammar
 
-a {{ tex \alpha }} :: '' ::=
+a_aux :: '' ::=
 						{{ ocaml terminal * text }}
 						{{ lem terminal * string }}
 						{{ hol string }}
@@ -213,11 +218,12 @@ a {{ tex \alpha }} :: '' ::=
     {{ ocaml [[x]] }}
     {{ lem [[x]] }}
 
-a_l {{ tex \alpha^{l} }} :: '' ::=
-  {{ com Location-annotated type variables }}
-  | a l						:: :: A_l
+a {{ tex \alpha l}} :: '' ::=
+  {{ com location-annotated type variables }}
+  | a_aux l 					:: :: A_aux
 
-N :: '' ::=
+N :: 'N_' ::=
+                                                   {{ aux _ l }}
                                                    {{ ocaml terminal * text }}
                                                    {{ lem terminal * string }}
                                                    {{ hol string }}
@@ -227,12 +233,9 @@ N :: '' ::=
       {{ ocaml [[x]] }}            
       {{ lem [[x]] }}            
 
-N_l {{ tex N^{l} }} :: '' ::=
-  {{ com Location-annotated numeric variables }}
-  | N l                                           :: :: N_l
 
-
-EN :: '' ::=
+EN :: 'EN_' ::=
+                                                   {{ aux _ l }}
                                                    {{ ocaml terminal * text }}
                                                    {{ lem terminal * string }}
                                                    {{ hol string }}
@@ -242,12 +245,9 @@ EN :: '' ::=
       {{ ocaml [[x]] }}            
       {{ lem [[x]] }}            
 
-EN_l {{ tex EN^{l} }} :: '' ::=
-  {{ com Location-annotated endianness variables }}
-  | EN l                                           :: :: EN_l
 
-
-EFF :: '' ::=
+EFF :: 'EFF_' ::=
+                                                   {{ aux _ l }}
                                                    {{ ocaml terminal * text }}
                                                    {{ lem terminal * string }}
                                                    {{ hol string }}
@@ -257,10 +257,6 @@ EFF :: '' ::=
       {{ ocaml [[x]] }}            
       {{ lem [[x]] }}            
 % TODO: better concrete syntax!!!!
-
-EFF_l {{ tex EFF^{l} }} :: '' ::=
-  {{ com Location-annotated effect set variables }}
-  | EFF l                                           :: :: EFF_l
 
 
 id :: '' ::=
@@ -301,29 +297,24 @@ tnvars {{ tex tnvars^{l} }} :: '' ::=				{{ phantom }}
     {{ ocaml [[tnvar1..tnvarn]] }}
     {{ lem [[tnvar1..tnvarn]] }}
 
-base_kind_aux :: 'BK_' ::=  
+base_kind :: 'BK_' ::=  
   {{ com base kinds}}
+  {{ aux _ l }}
   | Type                                       :: :: type
   | Nat                                        :: :: nat
   | Endian                                     :: :: endian
   | Effects                                    :: :: effects
 
-base_kind :: '' ::=  
-  {{ com location-annotated base kinds }}
-  | base_kind_aux l                             :: :: Base_kind_l
-
-kind_aux :: 'K_' ::=  
+kind :: 'K_' ::=  
   {{ com kinds}}
+  {{ aux _ l }}
   | base_kind1 -> ... -> base_kindn            :: :: kind
 % we'll never use  ...-> Nat
 
-kind :: '' ::=  
-  {{ com location-annotated kinds}}
-  | kind_aux l                                      :: :: Kind_l
-
     
-nexp_aux :: 'Nexp_' ::=  
+nexp :: 'Nexp_' ::=  
   {{ com Numerical expressions for specifying vector lengths and indexes}}
+  {{ aux _ l }}
   | N                                   :: :: var
   | num                                 :: :: constant
   | nexp1 * nexp2                       :: :: times {{ com must be linear after normalisation... }}
@@ -331,25 +322,17 @@ nexp_aux :: 'Nexp_' ::=
   | 2 ^ nexp                            :: :: exp
   | ( nexp )				:: S :: paren  {{ icho [[nexp]] }}
 
-nexp :: '' ::=
-  {{ com Location-annotated vector lengths }}
-  | nexp_aux l				:: :: Length_l
-
-
-end_aux :: 'End_' ::=  
+end :: 'End_' ::=  
   {{ com endianness specifications}}
+  {{ aux _ l }}
   | EN                                  :: :: var
   | inc                                 :: :: inc
   | dec                                 :: :: dec
   | ( end )				:: S :: paren {{ icho [[end]] }}
 
-end :: '' ::=
-  {{ com Location-annotated endianness specifications }}
-  | end_aux l				:: :: End_l
-
-
-effect_aux :: 'Effect_' ::=
+effect :: 'Effect_' ::=
   {{ com effect }}
+  {{ aux _ l }} 
   | rreg                                :: :: rreg {{ com read register }}
   | wreg                                :: :: wreg {{ com write register }}
   | rmem                                :: :: rmem {{ com read memory }}
@@ -358,24 +341,18 @@ effect_aux :: 'Effect_' ::=
   | unspec                              :: :: unspec {{ com unspecified values }}
   | nondet                              :: :: nondet {{ com nondeterminism from intra-instruction parallelism }}
 
-effect :: '' ::=
-  {{ com location-annotated effect }}
-  | effect_aux l                        :: :: Effect_l
 
-
-effects_aux :: 'Effects_' ::=
+effects :: 'Effects_' ::=
   {{ com effect set }}
+  {{ aux _ l }}
  | EFF                                  :: :: var
  | { effect1 , .. , effectn }           :: :: set {{ com effect set }}
  | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ icho [] }}
 
-effects :: '' ::=
-  {{ com location-annotated effect set }}
-  | effects_aux l                        :: :: Effects_l
 % TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.  Yes.  But we think we don't need any interesting effect-set expressions, eg effectset-variable union {rreg}. 
 
 
-typ_aux :: 'Typ_' ::=
+typ :: 'Typ_' ::=
   {{ com Constructors (of all kinds, not just Type) }}
   | _						:: :: wild
     {{ com Unspecified type }}
@@ -398,17 +375,19 @@ typ_aux :: 'Typ_' ::=
 
 typ_sugar :: 'TypSugar_' ::=
   {{ com library types and syntactic sugar }}
+  {{ aux _ l }}
 % boring base types:
+  | unit :: :: unit
   | bool :: :: bool
   | bit :: :: bit
-% experimentally trying with two distinct types there...
+% experimentally trying with two distinct types of bool and bit ...
   | nat :: :: nat
   | string :: :: string
 % finite subranges of nat
   | enum nexp1 nexp2 end :: :: enum  {{ com type of the natural numbers from [[nexp2]] to [[nexp2]]+[[nexp1]]-1, ordered according to [[end]] }}
   | [ nexp ]             :: :: enum1 {{ com sugar for \texttt{enum nexp 0 inc} }}
   | [ nexp : nexp' ]  :: :: enum2 {{ com sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} }}
-% total maps or vectors
+% total maps and vectors indexed by finite subranges of nat
   | enummap nexp1 nexp2 end typ :: :: enummap 
 % probably some sugar for enummap types, using [ ] similarly to enums:
   | typ [ nexp ]  :: :: enummap2
@@ -417,11 +396,6 @@ typ_sugar :: 'TypSugar_' ::=
   | list typ :: :: list
   | set typ  :: :: set
 
-
-
-typ :: '' ::=
-  {{ com Location-annotated types }}
-  | typ_aux l					:: :: Typ_l
 
 parsing
 
@@ -433,8 +407,9 @@ Typ_fn <= Typ_tup
 
 grammar
 
-nexp_constraint_aux :: '' ::=
+nexp_constraint :: 'NC_' ::=
   {{ com Whether a vector is bounded or fixed size }}
+  {{ aux _ l }}
   | nexp = nexp'				:: :: fixed
   | nexp >= nexp'				:: :: bounded_ge
   | nexp '<=' nexp'				:: :: bounded_le
@@ -443,12 +418,9 @@ nexp_constraint_aux :: '' ::=
 % Note only constants in a finite-set-bound, as we don't think we need
 % anything more
 
-nexp_constraint :: '' ::=
-  {{ com Location-annotated nexp range }}
-  | nexp_constraint_aux l		    	       :: :: range_l
-
 
 typquant :: 'TQ_' ::= 
+  {{ aux _ l }}
   | forall tnvar1 .. tnvarn . nexp_constraint1 , .. , nexp_constrainti => 							:: :: Ts
 %TODO add sugar here for no constraints and no constraints-or-tnvars
 %  |  forall tnvar1 ... tnvarn . typ             :: S :: Ts_no_constraint
@@ -457,8 +429,14 @@ typquant :: 'TQ_' ::=
 
 typschm :: 'TS_' ::=
     {{ com Type schemes  }}
+  {{ aux _ l }}
   |  typquant typ							:: :: Ts
 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Type definitions                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 grammar
 ctor_def :: '' ::=
@@ -466,7 +444,6 @@ ctor_def :: '' ::=
   | x_l : typschm					:: :: Cte
 % but we could get away with disallowing constraints in typschm, we
 % think - if it's useful to do that
-
 
 enumeration_flag_opt :: 'Enum_' ::=
   |      :: :: empty
@@ -486,26 +463,24 @@ naming_scheme_opt {{ tex \ottnt{name}^{?} }} :: 'Name_sect_' ::=
   |  	 	       		     	 	      :: :: none
   | [ name = regexp ]  		     	 	      :: :: name
 
-td :: '' ::=
+type_def :: '' ::=
   {{ com Type definitions }}
   | type x_l : kind naming_scheme_opt = tdefbody  		        	:: :: Td
 %  | enumeration x_l naming_scheme_opt = tdefbody  		        	::   :: Td2
 % the enumeration is sugar for something that uses an enum flag, where the type system will restrict the tdefbody to be a simple enum...
 
 
-
-%...  | x_l tnvars naming_scheme_opt = texp		        	:: S :: Td
-
-
-% eg     t 'a ''n 'b [name="a*"] = ('a * 'b * (enum 0 ''n))
-% slightly odd that we don't currently allow constraints there
+% TODO: do we need mutually recursive type definitions?  
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Literals                                                     %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
 grammar
 
-lit_aux :: 'L_' ::=
+lit :: 'L_' ::=
   {{ com Literal constants }}
   | true						:: :: true
   | false						:: :: false
@@ -518,10 +493,6 @@ lit_aux :: 'L_' ::=
   | bitzero						:: :: zero
   {{ com bitzero and bitone are constant bits, if commonly used we will consider overloading 0 and 1 }}
   | bitone						:: :: one
-
-lit :: '' ::=
-  | lit_aux l						:: :: Lit_l
-    {{ com Location-annotated literal constants }}
 
 semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=		{{ phantom }}
 							{{ ocaml terminal * bool }}
@@ -538,8 +509,14 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=		{{ phantom }}
     {{ lem true }}
 
 
-pat_aux :: 'P_' ::= 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Patterns                                                     %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+pat :: 'P_' ::= 
   {{ com Patterns }}
+  {{ aux _ l }}
   | _							:: :: wild  
     {{ com Wildcards }}
   | ( pat as x_l )					:: :: as
@@ -570,17 +547,20 @@ pat_aux :: 'P_' ::=
   | lit							:: :: lit
     {{ com Literal constant patterns }}
 
-pat :: '' ::=
-  {{ com Location-annotated patterns }}
-  | pat_aux l						::  :: Pat_l
-
-fpat :: '' ::=
+fpat :: 'FP' ::=
   {{ com Field patterns }}
-  | id = pat l						:: :: Fpat
+  {{ aux _ l }}
+  | id = pat						:: :: Fpat
 
 parsing
 P_app <= P_app
 P_app <= P_as
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Expressions                                                  %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 
 grammar
 
@@ -598,8 +578,9 @@ bar_opt {{ tex \ottkw{|}^{?} }} :: 'bar_' ::=		{{ phantom }}
     {{ ocaml true }}
     {{ lem true }}
 
-exp_aux :: '' ::=
+exp :: 'E_' ::=
   {{ com Expressions }}
+  {{ aux _ l }}
   | id							:: :: Ident
     {{ com Identifiers }}
   | N							:: :: Nvar
@@ -656,96 +637,101 @@ exp_aux :: '' ::=
   | lit							:: :: Lit
     {{ com Literal constants }}
 
-exp  :: '' ::=
-  {{ com Location-annotated expressions }}
-  | exp_aux l						:: :: Expr_l
-
-fexp :: '' ::=
+fexp :: 'FE' ::=
   {{ com Field-expressions }}
-  | id = exp l						:: :: Fexp
+  {{ aux _ l }}
+  | id = exp 						:: :: Fexp
 
-fexps :: '' ::=
+fexps :: 'FES' ::=
   {{ com Field-expression lists }}
-  | fexp1 ; ... ; fexpn semi_opt l			:: :: Fexps
+  {{ aux _ l }}
+  | fexp1 ; ... ; fexpn semi_opt 			:: :: Fexps
 
-pexp :: '' ::=
+pexp :: 'Pat' ::=
   {{ com Pattern matches }}
-  | pat -> exp l					:: :: Patexp
+  {{ aux _ l }}
+  | pat -> exp					:: :: exp
 
-psexp :: '' ::=
+psexp :: 'Pats' ::=
   {{ com Multi-pattern matches }}
-  | pat1 ... patn -> exp l				:: :: Patsexp
+  {{ aux _ l }}
+  | pat1 ... patn -> exp 				:: :: exp
 
-tannot_opt {{ tex \ottnt{tannot}^? }} :: 'Typ_annot_' ::=
+tannot_opt_aux :: 'Typ_annot_' ::=
   {{ com Optional type annotations }}
   | 							:: :: none
   | : typ						:: :: some 
 
-funcl_aux :: '' ::=
+tannot_opt {{ tex \ottnt{tannot}^? }} :: 'Typ_annot_' ::=
+  {{ com location-annotated optional type annotations }}
+  | tannot_opt_aux l					:: :: aux
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Function definitions                                         %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+funcl :: 'FCL' ::=
   {{ com Function clauses }}
+  {{ aux _ l }}
   | x_l pat1 ... patn tannot_opt = exp			:: :: Funcl
 
-letbind_aux :: '' ::=
+letbind :: 'LB_' ::=
   {{ com Let bindings }}
+  {{ aux _ l }}
   | pat tannot_opt = exp 				:: :: Let_val
     {{ com Value bindings }}
-  | funcl_aux						:: :: Let_fun
+  | funcl						:: :: Let_fun
     {{ com Function bindings }}
-
-letbind :: '' ::=
-  {{ com Location-annotated let bindings }}
-  | letbind_aux l					:: :: Letbind
-
-funcl :: '' ::=
-  {{ com Location-annotated function clauses }}
-  | funcl_aux l						:: :: Rec_l
 
 parsing
 
-P_app right Let_val
+P_app right LB_Let_val
 
 %P_app <= Fun
 
 %Fun right App
 %Function right App
-Case right App
-Let right App
+E_Case right E_App
+E_Let right E_App
 
 %Fun <= Field
 %Function <= Field
-App <= Field
-Case <= Field
-Let <= Field
+E_App <= E_Field
+E_Case <= E_Field
+E_Let <= E_Field
 
-App left App
+E_App left E_App
 
 grammar
 
 
 
-val_def :: '' ::= 
+val_def :: 'VD' ::= 
   {{ com Value definitions }}
+  {{ aux _ l }}
   | let letbind					:: :: Let_def
     {{ com Non-recursive value definitions }}
   | let rec  funcl1 and ... and funcln		:: :: Let_rec
     {{ com Recursive function definitions }}
 
-val_spec :: '' ::=
+val_spec :: 'VS' ::=
   {{ com Value type specifications }} 
+  {{ aux _ l }}
   | val x_l : typschm						:: :: Val_spec
 
-def_aux :: '' ::=
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Top-level definitions                                        %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+def :: 'DEF' ::=
   {{ com Top-level definitions }}
-  | type td1 and ... and tdn					:: :: Type_def
+  {{ aux _ l }}
+  | type_def           	       					:: :: Type_def
     {{ com Type definitions }}
   | val_def							:: :: Val_def
     {{ com Value definitions }}
   | val_spec 							:: :: Spec_def
     {{ com Top-level type constraints }}
-
-def :: '' ::=
-  {{ com Location-annotated definitions }}
-  | def_aux l							:: :: Def_l
 
 semisemi_opt {{ tex \ottkw{;;}^? }} :: 'semisemi_' ::=		{{ phantom }}
 								{{ ocaml terminal * bool }}
@@ -763,7 +749,15 @@ semisemi_opt {{ tex \ottkw{;;}^? }} :: 'semisemi_' ::=		{{ phantom }}
 
 defs :: '' ::=
   {{ com Definition sequences }}
+  {{ aux _ l }}
   | def1 semisemi_opt1 .. defn semisemi_optn			:: :: Defs
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Machinery for typing rules                                   %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 
 
 grammar
