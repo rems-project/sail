@@ -165,41 +165,48 @@ l :: '' ::=                                     {{ phantom }}
     {{ lem Unknown }}
     {{ hol () }}
 
-x_l {{ tex \ottnt{x}^{l} }} , y_l {{ tex \ottnt{y}^{l} }} , z_l {{ tex \ottnt{z}^{l} }} , name :: '' ::=
-  {{ com Location-annotated names }}
-  | x l                                         :: :: X_l
-  | ( ix ) l                                    :: :: PreX_l
-    {{ com Remove infix status }}
+id :: '' ::=
+  {{ com identifiers }}
+  {{ aux _ l }}
+  | x                           :: :: Id
+  | ( x )                       :: :: DeIId {{ com remove infix status }}
 
-ix_l {{ tex \ottnt{ix}^{l} }} :: '' ::=
-  {{ com Location-annotated infix names }}
-  | ix l                                        :: :: SymX_l
-  | ` x ` l                                     :: :: InX_l
-    {{ com Add infix status }}
-
-embed
-{{ ocaml
-let xl_to_l = function
-  | X_l(_,l) -> l
-  | PreX_l(_,_,_,l) -> l
-
-let ixl_to_l = function
-  | SymX_l(_,l) -> l
-  | InX_l(_,_,_,l) -> l
-}}
-{{ lem
-
-(*let xl_to_l = function
-  | X_l(_,l) -> l
-  | PreX_l(_,_,l) -> l
-end
-
-let ixl_to_l = function
-  | SymX_l(_,l) -> l
-  | InX_l(_,_,_,l) -> l
-end*)
-
-}}
+%% 
+%% x_l {{ tex \ottnt{x}^{l} }} , y_l {{ tex \ottnt{y}^{l} }} , z_l {{ tex \ottnt{z}^{l} }} , name :: '' ::=
+%%   {{ com Location-annotated names }}
+%%   | x l                                         :: :: X_l
+%%   | ( ix ) l                                    :: :: PreX_l
+%%     {{ com Remove infix status }}
+%% 
+%% ix_l {{ tex \ottnt{ix}^{l} }} :: '' ::=
+%%   {{ com Location-annotated infix names }}
+%%   | ix l                                        :: :: SymX_l
+%%   | ` x ` l                                     :: :: InX_l
+%%     {{ com Add infix status }}
+%% 
+%% embed
+%% {{ ocaml
+%% let xl_to_l = function
+%%   | X_l(_,l) -> l
+%%   | PreX_l(_,_,_,l) -> l
+%% 
+%% let ixl_to_l = function
+%%   | SymX_l(_,l) -> l
+%%   | InX_l(_,_,_,l) -> l
+%% }}
+%% {{ lem
+%% 
+%% (*let xl_to_l = function
+%%   | X_l(_,l) -> l
+%%   | PreX_l(_,_,l) -> l
+%% end
+%% 
+%% let ixl_to_l = function
+%%   | SymX_l(_,l) -> l
+%%   | InX_l(_,_,_,l) -> l
+%% end*)
+%% 
+%% }}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Kinds and Types                                              %
@@ -208,67 +215,74 @@ end*)
 
 grammar
 
-id :: '' ::=
-  {{ com Not-very-long identifers }}
-  {{ aux _ l }}
-  | x                           :: :: Id
 
-
-a :: 'A_' ::=
-                                                {{ aux _ l }}
-                                                {{ ocaml terminal * text }}
-                                                {{ lem terminal * string }}
-                                                {{ hol string }}
-  {{ com Type variables }}
-  | ' x                                         :: :: A
-    {{ ichlo [[x]] }}
-
-N :: 'N_' ::=
-                                                   {{ aux _ l }}
-                                                   {{ ocaml terminal * text }}
-                                                   {{ lem terminal * string }}
-                                                   {{ hol string }}
-    {{ com numeric variables }} 
-    | ' ' x                                        :: :: N
-      {{ ichlo [[x]] }}
-
-EN :: 'EN_' ::=
-                                                   {{ aux _ l }}
-                                                   {{ ocaml terminal * text }}
-                                                   {{ lem terminal * string }}
-                                                   {{ hol string }}
-    {{ com endianness variables }} 
-    | ' ' ' x                                     :: :: EN
-      {{ ichlo [[x]] }}
-
-EFF :: 'EFF_' ::=
-                                                   {{ aux _ l }}
-                                                   {{ ocaml terminal * text }}
-                                                   {{ lem terminal * string }}
-                                                   {{ hol string }}
-    {{ com effect set variables }} 
-    | ' ' ' ' x                                     :: :: EFF
-      {{ ichlo [[x]] }}
-% TODO: better concrete syntax!!!!
-
-
-tnvar :: '' ::=                         
-    {{ com variables of the base kinds }}
-    | a                                 :: :: Av
-    | N                                 :: :: Nv
-    | EN                                :: :: ENv
-    | EFF                               :: :: EFFv
-
-tnvars :: '' ::=                                {{ phantom }}
-                                                {{ hol tnvar list }}
-                                                {{ ocaml tnvar list }}
-                                                {{ lem list tnvar }}
-  {{ com Type variable lists }}
-  | tnvar1 .. tnvarn            :: :: Tvars
-    {{ hol [[tnvar1..tnvarn]] }}
-    {{ ocaml [[tnvar1..tnvarn]] }}
-    {{ lem [[tnvar1..tnvarn]] }}
+% a :: 'A_' ::=
+%                                                 {{ aux _ l }}
+%                                                 {{ ocaml terminal * text }}
+%                                                 {{ lem terminal * string }}
+%                                                 {{ hol string }}
+%   {{ com Type variables }}
+%   | ' x                                         :: :: A
+%     {{ ichlo [[x]] }}
+% 
+% N :: 'N_' ::=
+%                                                    {{ aux _ l }}
+%                                                    {{ ocaml terminal * text }}
+%                                                    {{ lem terminal * string }}
+%                                                    {{ hol string }}
+%     {{ com numeric variables }} 
+%     | ' ' x                                        :: :: N
+%       {{ ichlo [[x]] }}
+% 
+% EN :: 'EN_' ::=
+%                                                    {{ aux _ l }}
+%                                                    {{ ocaml terminal * text }}
+%                                                    {{ lem terminal * string }}
+%                                                    {{ hol string }}
+%     {{ com endianness variables }} 
+%     | ' ' ' x                                     :: :: EN
+%       {{ ichlo [[x]] }}
+% 
+% EFF :: 'EFF_' ::=
+%                                                    {{ aux _ l }}
+%                                                    {{ ocaml terminal * text }}
+%                                                    {{ lem terminal * string }}
+%                                                    {{ hol string }}
+%     {{ com effect set variables }} 
+%     | ' ' ' ' x                                     :: :: EFF
+%       {{ ichlo [[x]] }}
+% % TODO: better concrete syntax!!!!
+% 
+% 
+% tnvar :: '' ::=                         
+%     {{ com variables of the base kinds }}
+%     | a                                 :: :: Av
+%     | N                                 :: :: Nv
+%     | EN                                :: :: ENv
+%     | EFF                               :: :: EFFv
+% 
+% tnvars :: '' ::=                                {{ phantom }}
+%                                                 {{ hol tnvar list }}
+%                                                 {{ ocaml tnvar list }}
+%                                                 {{ lem list tnvar }}
+%   {{ com Type variable lists }}
+%   | tnvar1 .. tnvarn            :: :: Tvars
+%     {{ hol [[tnvar1..tnvarn]] }}
+%     {{ ocaml [[tnvar1..tnvarn]] }}
+%     {{ lem [[tnvar1..tnvarn]] }}
+%     
+% 
+% ids :: '' ::=                                {{ phantom }}
+%                                                 {{ hol id list }}
+%                                                 {{ ocaml id list }}
+%                                                 {{ lem list id }}
+%   {{ com Type variable lists }}
+%   | id1 .. idn            :: :: Tvars
+%     {{ hol [[id1..idn]] }}
+%     {{ ocaml [[id1..idn]] }}
+%     {{ lem [[id1..idn]] }}
     
+
 base_kind :: 'BK_' ::=  
   {{ com base kinds}}
   {{ aux _ l }}
@@ -287,7 +301,7 @@ kind :: '' ::=
 nexp :: 'Nexp_' ::=  
   {{ com expressions of kind Nat, for vector lengths }}
   {{ aux _ l }}
-  | N                                   :: :: var
+  | id                                   :: :: var
   | num                                 :: :: constant
   | nexp1 * nexp2                       :: :: times {{ com must be linear after normalisation... }}
   | nexp1 + nexp2                       :: :: sum
@@ -297,7 +311,7 @@ nexp :: 'Nexp_' ::=
 endian :: 'End_' ::=  
   {{ com endianness specifications}}
   {{ aux _ l }}
-  | EN                                  :: :: var
+  | id                                  :: :: var
   | inc                                 :: :: inc
   | dec                                 :: :: dec
   | ( endian )                             :: S :: paren {{ icho [[endian]] }}
@@ -317,7 +331,7 @@ effect :: 'Effect_' ::=
 effects :: 'Effects_' ::=
   {{ com effect set }}
   {{ aux _ l }}
- | EFF                                  :: :: var
+ | id                                  :: :: var
  | { effect1 , .. , effectn }           :: :: set {{ com effect set }}
  | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ icho [] }}
 
@@ -328,7 +342,7 @@ typ :: 'Typ_' ::=
   {{ com Constructors (of all kinds, not just Type) }}
   | _                                           :: :: wild
     {{ com Unspecified type }}
-  | a_l                                         :: :: var
+  | id                                         :: :: var
     {{ com Type variables }}
   | typ1 -> typ2 effects                        :: :: fn
     {{ com Function types -- first-order only}}
@@ -358,10 +372,11 @@ typ_sugar :: 'TypSugar_' ::=
 % finite subranges of nat
   | enum nexp1 nexp2 endian :: :: enum  {{ com natural numbers from [[nexp2]] to [[nexp2]]+[[nexp1]]-1, ordered by [[endian]] }}
   | [ nexp ]             :: :: enum1 {{ com sugar for \texttt{enum nexp 0 inc} }}
-  | [ nexp : nexp' ]  :: :: enum2 {{ com sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} }}
+  | [ nexp '..' nexp' ]  :: :: enum2 {{ com sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} }}
 % total maps and vectors indexed by finite subranges of nat
   | enummap nexp1 nexp2 endian typ :: :: enummap 
 % probably some sugar for enummap types, using [ ] similarly to enums:
+% (but with .. not : in the former, to avoid confusion...)
   | typ [ nexp ]  :: :: enummap2
   | typ [ nexp : nexp' ] :: :: enummap3
 % ...so bit [ nexp ] etc is just an instance of that
@@ -385,16 +400,16 @@ nexp_constraint :: 'NC_' ::=
   | nexp = nexp'                                :: :: fixed
   | nexp >= nexp'                               :: :: bounded_ge
   | nexp '<=' nexp'                             :: :: bounded_le
-  | nexp 'IN' { num1 , ... , numn }               :: :: ad_hoc_nat_set_bounded
+  | id 'IN' { num1 , ... , numn }               :: :: ad_hoc_nat_set_bounded
 
-% Note only constants in a finite-set-bound, as we don't think we need
-% anything more
+% Note only id on the left and constants on the right in a
+% finite-set-bound, as we don't think we need anything more
 
 
 typquant :: 'TQ_' ::= 
   {{ aux _ l }}
-  | forall tnvar1 ... tnvarn . nexp_constraint1 , ... , nexp_constrainti . :: :: Ts {{ texlong }}
-  | forall tnvar1 ... tnvarn . ::  ::  Ts_no_constraint {{ com sugar }}
+  | forall id1 ... idn . nexp_constraint1 , ... , nexp_constrainti . :: :: Ts {{ texlong }}
+  | forall id1 ... idn . ::  ::  Ts_no_constraint {{ com sugar }}
   |                           ::  ::  Ts_no_forall     {{ com sugar }}
 
 typschm :: 'TS_' ::=
@@ -450,16 +465,16 @@ c_tdefbody :: 'C_Te_' ::=
   | typedef id naming_scheme_opt = typschm                                        :: :: abbrev
     {{ com Type abbreviations }}
   | typedef id naming_scheme_opt = struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: :: record
-    {{ com Struct type definition }}
+    {{ com Struct type definition }} {{ texlong }}
 % for specifying constructor result types of nat-indexed GADTs, we can
 %  let the typi be function types (as constructors are not allowed to
 %  take parameters of function types)
 % concrete syntax: to be even closer to C, could have a postfix id rather than prefix id = 
   | typedef id naming_scheme_opt = union typquant { typ1 id1 ; ... ; typn idn semi_opt }   :: :: variant
-    {{ com Union type definition}}
+    {{ com Union type definition}} {{ texlong }}
 
   | typedef id naming_scheme_opt = enum { id1 ; ... ; idn semi_opt }   :: :: enum
-    {{ com Union type definition}}
+    {{ com enumeration type definition}}
 
 
 
@@ -512,8 +527,13 @@ pat :: 'P_' ::=
     {{ com Wildcards }}
   | ( pat as id )                                      :: :: as
     {{ com Named patterns }}
-  | ( pat : typ )                                       :: :: typ
+% ML-style
+%  | ( pat : typ )                                       :: :: typ
+%    {{ com Typed patterns }}
+% C-style
+  | ( typ pat )                                       :: :: typ
     {{ com Typed patterns }}
+%
   | id pat1 .. patn                                     :: :: app
     {{ com Single variable and constructor patterns }}
 % OR?  do we invent something ghastly including a union keyword?  Perhaps not...
@@ -765,6 +785,17 @@ val_spec :: 'VS' ::=
   {{ aux _ l }}
   | val typschm id                                  :: :: Val_spec
 
+default_typing_spec :: 'DT_' ::=
+  {{ com default kinding and typing assumptions }}
+  {{ aux _ l }}
+  | default base_kind regexp    :: :: kind
+  | default typschm regexp      :: :: typ
+% The intended semantics of these is that if an id in binding position
+% doesn't have a kind or type annotation, then we look through the
+% default regexps (in order from the beginning) and pick the first
+% assumption for which id matches the regexp, if there is one.
+% Otherwise we try to infer.  Perhaps warn if there are multiple matches.
+% For example, we might often have default Type ['alphanum]
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Top-level definitions                                        %
@@ -774,13 +805,15 @@ def :: 'DEF' ::=
   {{ com Top-level definitions }}
   {{ aux _ l }}
   | type_def                                                    :: :: Type_def
-    {{ com Type definitions }}
+    {{ com Type definition }}
   | c_fundef                                                   :: :: Fun_def
-    {{ com Function definitions }}
+    {{ com Function definition }}
   | c_letbind                                                   :: :: Val_def
-    {{ com Value definitions }}
+    {{ com Value definition }}
   | val_spec                                                    :: :: Spec_def
-    {{ com Top-level type constraints }}
+    {{ com Top-level type constraint }}
+  | default_typing_spec                                         :: :: Default_def
+    {{ com default kind and type assumptions }}
 
 
 defs :: '' ::=
