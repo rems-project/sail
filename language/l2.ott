@@ -350,8 +350,9 @@ typ :: 'Typ_' ::=
 % TODO: concrete syntax for effects in a function type?  needed only for pp, not in user syntax.
   | typ1 * .... * typn                          :: :: tup
     {{ com Tuple types }}
-  | nexp                                        :: :: nexps 
+  | nexp                                :: :: nexps 
   {{ com here to permit applications to nexps, otherwise not accepted }}
+% TODO union in the other kind grammars?  or make a syntax of argument? or glom together the grammars and leave o the typechecker
   | id typ1 .. typn                     :: :: app
   {{ com Type applications }}
   | ( typ )
@@ -409,6 +410,9 @@ nexp_constraint :: 'NC_' ::=
 typquant :: 'TQ_' ::= 
   {{ aux _ l }}
   | forall id1 ... idn . nexp_constraint1 , ... , nexp_constrainti . :: :: Ts {{ texlong }}
+
+% WHY ARE CONSTRAINTS HERE AND NOT IN THE KIND LANGUAGE
+
   | forall id1 ... idn . ::  ::  Ts_no_constraint {{ com sugar }}
   |                           ::  ::  Ts_no_forall     {{ com sugar }}
 
