@@ -350,13 +350,16 @@ typ :: 'Typ_' ::=
 % TODO: concrete syntax for effects in a function type?  needed only for pp, not in user syntax.
   | typ1 * .... * typn                          :: :: tup
     {{ com Tuple types }}
-  | nexp                                :: :: nexps 
-  {{ com here to permit applications to nexps, otherwise not accepted }}
 % TODO union in the other kind grammars?  or make a syntax of argument? or glom together the grammars and leave o the typechecker
-  | id typ1 .. typn                     :: :: app
-  {{ com Type applications }}
-  | ( typ )
-                                        :: S :: paren {{ icho [[typ]] }}
+  | id typ_arg1 .. typ_argn                     :: :: app
+  {{ com type constructor applications }}
+  | ( typ )                            :: S :: paren {{ icho [[typ]] }} 
+
+typ_arg :: 'Typ_Arg_' ::=
+  | nexp       :: :: nexp
+  | typ        :: :: typ
+  | endian     :: :: endian
+  | effects    :: :: effects
 
 % plus more for l-value/r-value pairs, as introduced by the L3 'compound' declarations   ... ref typ
 
@@ -410,6 +413,8 @@ nexp_constraint :: 'NC_' ::=
 typquant :: 'TQ_' ::= 
   {{ aux _ l }}
   | forall id1 ... idn . nexp_constraint1 , ... , nexp_constrainti . :: :: Ts {{ texlong }}
+
+% TODO those ids have to have optional kind annotations
 
 % WHY ARE CONSTRAINTS HERE AND NOT IN THE KIND LANGUAGE
 
@@ -480,6 +485,8 @@ c_tdefbody :: 'C_Te_' ::=
   | typedef id naming_scheme_opt = enum { id1 ; ... ; idn semi_opt }   :: :: enum
     {{ com enumeration type definition}}
 
+
+% 
 
 
 
