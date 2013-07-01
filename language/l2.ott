@@ -520,7 +520,7 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
     {{ hol F }}
     {{ ocaml false }}
     {{ lem false }}
-  | ';'                                                 :: :: yes
+  | ';'                                                 :: :: yesb
     {{ hol T }}
     {{ ocaml true }}
     {{ lem true }}
