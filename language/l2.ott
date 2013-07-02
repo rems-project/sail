@@ -301,7 +301,7 @@ kind :: '' ::=
 nexp :: 'Nexp_' ::=  
   {{ com expressions of kind Nat, for vector lengths }}
   {{ aux _ l }}
-  | id                                   :: :: var
+  | id                                  :: :: var
   | num                                 :: :: constant
   | nexp1 * nexp2                       :: :: times {{ com must be linear after normalisation... except for the type of *, ahem }}
   | nexp1 + nexp2                       :: :: sum
@@ -339,7 +339,7 @@ effects :: 'Effects_' ::=
 
 
 typ :: 'Typ_' ::=
-  {{ com Constructors (of all kinds, not just Type) }}
+  {{ com Constructors of kind Type }}
   | _                                           :: :: wild
     {{ com Unspecified type }}
   | id                                         :: :: var
@@ -355,7 +355,8 @@ typ :: 'Typ_' ::=
   {{ com type constructor applications }}
   | ( typ )                            :: S :: paren {{ icho [[typ]] }} 
 
-typ_arg :: 'Typ_Arg_' ::=
+typ_arg :: 'Typ_arg_' ::=
+  {{ com Type constructor arguments of all kinds }}
   | nexp       :: :: nexp
   | typ        :: :: typ
   | endian     :: :: endian
@@ -363,7 +364,7 @@ typ_arg :: 'Typ_Arg_' ::=
 
 % plus more for l-value/r-value pairs, as introduced by the L3 'compound' declarations   ... ref typ
 
-typ_sugar :: 'TypSugar_' ::=
+typ_sugar :: 'Typ_sugar_' ::=
   {{ com library types and syntactic sugar }}
   {{ aux _ l }}
 % boring base types:
@@ -408,21 +409,26 @@ nexp_constraint :: 'NC_' ::=
   | nexp = nexp'                                :: :: fixed
   | nexp >= nexp'                               :: :: bounded_ge
   | nexp '<=' nexp'                             :: :: bounded_le
-  | id 'IN' { num1 , ... , numn }               :: :: ad_hoc_nat_set_bounded
+  | id 'IN' { num1 , ... , numn }               :: :: nat_set_bounded
 
 % Note only id on the left and constants on the right in a
 % finite-set-bound, as we don't think we need anything more
 
+opt_kind :: 'ki_ant_' ::=
+  {{ com optionally kind-annotated identifier }}
+  | id	 	    		   	      :: :: none
+  | id : kind				      :: :: kind
+  | ( opt_kind ) 			      :: S :: paren {{ icho [[opt_kind]] }}
 
 typquant :: 'TQ_' ::= 
   {{ aux _ l }}
-  | forall id1 ... idn . nexp_constraint1 , ... , nexp_constrainti . :: :: Ts {{ texlong }}
+  | forall opt_kind1 ... opt_kindn . nexp_constraint1 , ... , nexp_constrainti . :: :: Ts {{ texlong }}
 
 % TODO those ids have to have optional kind annotations
 
 % WHY ARE CONSTRAINTS HERE AND NOT IN THE KIND LANGUAGE
 
-  | forall id1 ... idn . ::  ::  Ts_no_constraint {{ com sugar }}
+  | forall opt_kind1 ... opt_kindn . ::  ::  Ts_no_constraint {{ com sugar }}
   |                           ::  ::  Ts_no_forall     {{ com sugar }}
 
 typschm :: 'TS_' ::=
@@ -459,7 +465,7 @@ tdefbody :: 'Te_' ::=
 naming_scheme_opt {{ tex \ottnt{name}^{?} }} :: 'Name_sect_' ::=
   {{ com Optional variable-naming-scheme specification for variables of defined type }} 
   |                                                   :: :: none
-  | [ name = regexp ]                                 :: :: name
+  | [ name = regexp ]                                 :: :: some
 
 type_def :: '' ::=
   {{ com Type definitions }}
@@ -521,6 +527,7 @@ lit :: 'L_' ::=
   | bin                                         :: :: bin
   | string                                              :: :: string
   | ( )                                                 :: :: unit
+%Presumably we want to remove bitzero and bitone ?
   | bitzero                                             :: :: zero
   {{ com bitzero and bitone are constant bits, if commonly used we will consider overloading 0 and 1 }}
   | bitone                                              :: :: one
@@ -570,16 +577,17 @@ pat :: 'P_' ::=
     {{ com C-style struct patterns }}
 
 %Patterns for vectors
+%Should these be the same since vector syntax has changed, and lists have also changed?
 
   | [| pat1 ; .. ; patn semi_opt |]                     :: :: vector
    {{ com Vector patterns }}
 
-  | [| pat1 .. patn |]                                  :: :: vectorC
+  | [| pat1 .. patn |]                                  :: :: vector_concat
   {{ com Concatenated vector patterns }} 
 
   | ( pat1 , .... , patn )                              :: :: tup
     {{ com Tuple patterns }}
-  | [ pat1 ; .. ; patn semi_opt ]                       :: :: list
+  | [| pat1 , .. , patn |]	                        :: :: list
     {{ com List patterns }}
   | ( pat )                                             :: :: paren
   | pat1 '::' pat2                                      :: :: cons
@@ -624,24 +632,24 @@ exp :: 'E_' ::=
   {{ com Expressions }}
   {{ aux _ l }}  
 
-  | ( exp )                                             :: S :: Paren {{ ichlo [[exp]] }}
-  | { exp1 ; ... ; expn }                               ::   :: Block 
+  | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
+  | { exp1 ; ... ; expn }                               ::   :: block 
 
-  | id                                                  :: :: Ident
+  | id                                                  :: :: ident
     {{ com Identifiers }}
 
-  | lit                                                 :: :: Lit
+  | lit                                                 :: :: lit
     {{ com Literal constants }}
 
-  | exp1 exp2                                           :: :: App
+  | exp1 exp2                                           :: :: app
     {{ com Function applications }}
-  | exp1 id exp2                                        :: :: Infix
+  | exp1 id exp2                                        :: :: infix
     {{ com Infix applications }}
  
-  | ( exp1 , .... , expn )                              :: :: Tup
+  | ( exp1 , .... , expn )                              :: :: tup
     {{ com Tuples }}
 
-  | if exp1 then exp2 else exp3                         :: :: If
+  | if exp1 then exp2 else exp3                         :: :: if
     {{ com Conditionals }}
 
 
@@ -649,7 +657,7 @@ exp :: 'E_' ::=
 % enummaps
   | [ exp1 , ... , expn ]                             :: :: enummap
 
-  | [ num1 = exp1 , ... , numn = expn ]               :: :: enummap2
+  | [ num1 = exp1 , ... , numn = expn ]               :: :: enummap_e
 
 % we pick [ ] not { } for enummap literals for consistency with their
 % array-like access syntax, in contrast to the C which has funny
@@ -663,18 +671,18 @@ exp :: 'E_' ::=
   {{ com Subenummap extraction }}
   % do we want to allow a comma-separated list of such thingies?  
 
-  | [ exp with exp1 = exp2 ]                          :: :: enummap_functional_update 
+  | [ exp with exp1 = exp2 ]                          :: :: enummap_update 
   {{ com enummap functional update }}
 
-  | [ exp with exp1 .. exp2 = exp3 ]                          :: :: enummap_functional_update2 
+  | [ exp with exp1 .. exp2 = exp3 ]                          :: :: enummap_update_range
   {{ com enummap functional subrange update (with another enummap)}}
   % do we want a functional update form with a comma-separated list of such?
 
 
 % lists 
-  | [| exp1 , ..  , expn |]                    :: :: Lists
+  | [| exp1 , ..  , expn |]                    :: :: list
   {{ com list }}
-  | exp1 '::' exp2                                      :: :: Cons
+  | exp1 '::' exp2                                      :: :: cons
     {{ com Cons expressions }}
 
 
@@ -684,11 +692,11 @@ exp :: 'E_' ::=
 
 % TODO
 
- | <| fexps |>                                         :: :: Record
+ | <| fexps |>                                         :: :: record
     {{ com Records }}
-  | <| exp with fexps |>                                :: :: Recup
+  | <| exp with fexps |>                                :: :: recup
     {{ com Functional update for records }}
-  | exp . id                                            :: :: Field
+  | exp . id                                            :: :: field
     {{ com Field projection for records }}
 
 %Expressions for creating and accessing vectors
@@ -704,21 +712,21 @@ exp :: 'E_' ::=
 
 %  and maybe with nice syntax
 
-  | switch exp { case pexp1  ... case pexpn } :: :: Case
+  | switch exp { case pexp1  ... case pexpn } :: :: case
     {{ com Pattern matching expressions }}
 %  | ( typ ) exp                                      :: :: Typed
 %    {{ com Type-annotated expressions }}
-  | c_letbind in exp                                  :: :: Let
+  | c_letbind in exp                                  :: :: let
     {{ com Let expressions }}
 
   | lexp := exp                                      :: :: assign
 
 
 lexp :: 'LEXP_' ::=
-    | id                                                  :: :: Ident
+    | id                                                  :: :: ident
     {{ com Identifiers }}
     | lexp [ exp ]  :: ::                         enummap
-    | lexp [ exp1 '..' exp2 ]  :: ::              enummap2
+    | lexp [ exp1 '..' exp2 ]  :: ::              enummap_range
     % maybe comma-sep such lists too
     | lexp . id :: :: field  
 
@@ -753,16 +761,16 @@ parsing
 
 %%Fun right App
 %%Function right App
-E_Case right E_App
-E_Let right E_App
+E_case right E_app
+E_let right E_app
 
 %%Fun <= Field
 %%Function <= Field
-E_App <= E_Field
-E_Case <= E_Field
-E_Let <= E_Field
+E_app <= E_field
+E_case <= E_field
+E_let <= E_field
 
-E_App left E_App
+E_app left E_app
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -810,7 +818,7 @@ grammar
 
 %%%%% C-ish style %%%%%%%%%%
 
-c_tannot_opt :: 'C_Typ_annot_' ::=
+c_tannot_opt :: 'C_typ_annot_' ::=
   {{ com Optional type annotations }}
   |                                             :: :: none
   | typ_quant typ                               :: :: some 
@@ -844,16 +852,16 @@ c_fundef :: 'C_FD' ::=
 c_letbind :: 'LB_' ::=
   {{ com Let bindings }}
   {{ aux _ l }}
-  | typschm id = exp                                :: :: valexp
+  | typschm id = exp                                :: :: val_exp
     {{ com Value binding }}
-  | let id = exp                                    :: :: valimp
+  | let id = exp                                    :: :: val_imp
     {{ com value binding with implicit type }}
 
 
 val_spec :: 'VS' ::=
   {{ com Value type specifications }} 
   {{ aux _ l }}
-  | val typschm id                                  :: :: Val_spec
+  | val typschm id                                  :: :: val_spec
 
 default_typing_spec :: 'DT_' ::=
   {{ com default kinding and typing assumptions }}
@@ -871,20 +879,20 @@ default_typing_spec :: 'DT_' ::=
 % Top-level definitions                                        %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-def :: 'DEF' ::=
+def :: 'DEF_' ::=
   {{ com Top-level definitions }}
   {{ aux _ l }}
-  | type_def                                                    :: :: Type_def
+  | type_def                                                    :: :: type_def
     {{ com Type definition }}
-  | c_fundef                                                   :: :: Fun_def
+  | c_fundef                                                   :: :: fun_def
     {{ com Function definition }}
-  | c_letbind                                                   :: :: Val_def
+  | c_letbind                                                   :: :: val_def
     {{ com Value definition }}
-  | val_spec                                                    :: :: Spec_def
+  | val_spec                                                    :: :: spec_def
     {{ com Top-level type constraint }}
-  | default_typing_spec                                         :: :: Default_def
+  | default_typing_spec                                         :: :: default_def
     {{ com default kind and type assumptions }}
-  | register typ id                                   :: :: Reg_dec
+  | register typ id                                   :: :: reg_dec
     {{ com Register declaration }}
 
 
