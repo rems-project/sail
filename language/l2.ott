@@ -303,7 +303,7 @@ nexp :: 'Nexp_' ::=
   {{ aux _ l }}
   | id                                   :: :: var
   | num                                 :: :: constant
-  | nexp1 * nexp2                       :: :: times {{ com must be linear after normalisation... }}
+  | nexp1 * nexp2                       :: :: times {{ com must be linear after normalisation... except for the type of *, ahem }}
   | nexp1 + nexp2                       :: :: sum
   | 2 ^ nexp                            :: :: exp
   | ( nexp )                            :: S :: paren  {{ icho [[nexp]] }}
@@ -369,7 +369,7 @@ typ_sugar :: 'TypSugar_' ::=
 % boring base types:
   | unit :: :: unit
   | bool :: :: bool
-  | bit :: :: bit
+  | bit :: :: bit  {{ com pure bits, not mutable bits! }}
 % experimentally trying with two distinct types of bool and bit ...
   | nat :: :: nat
   | string :: :: string
@@ -377,6 +377,7 @@ typ_sugar :: 'TypSugar_' ::=
   | enum nexp1 nexp2 endian :: :: enum  {{ com natural numbers from [[nexp2]] to [[nexp2]]+[[nexp1]]-1, ordered by [[endian]] }}
   | [ nexp ]             :: :: enum1 {{ com sugar for \texttt{enum nexp 0 inc} }}
   | [ nexp '..' nexp' ]  :: :: enum2 {{ com sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} }}
+% use .. not - to avoid ambiguity with nexp -
 % total maps and vectors indexed by finite subranges of nat
   | enummap nexp1 nexp2 endian typ :: :: enummap 
 % probably some sugar for enummap types, using [ ] similarly to enums:
@@ -386,7 +387,10 @@ typ_sugar :: 'TypSugar_' ::=
 % ...so bit [ nexp ] etc is just an instance of that
   | list typ :: :: list
   | set typ  :: :: set
-
+  | reg typ  :: :: reg  {{ com type of mutable register components }}
+% "reg t" is basically the ML "t ref" 
+% not sure how first-class it should be, though
+% use "reg word32" etc for the types of vanilla registers 
 
 parsing
 
@@ -473,18 +477,28 @@ c_tdefbody :: 'C_Te_' ::=
   {{ com Type definition bodies }}
   | typedef id naming_scheme_opt = typschm                                        :: :: abbrev
     {{ com Type abbreviations }}
-  | typedef id naming_scheme_opt = struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: :: record
+  | typedef id naming_scheme_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: :: record
     {{ com Struct type definition }} {{ texlong }}
 % for specifying constructor result types of nat-indexed GADTs, we can
 %  let the typi be function types (as constructors are not allowed to
 %  take parameters of function types)
 % concrete syntax: to be even closer to C, could have a postfix id rather than prefix id = 
-  | typedef id naming_scheme_opt = union typquant { typ1 id1 ; ... ; typn idn semi_opt }   :: :: variant
+  | typedef id naming_scheme_opt = const union typquant { typ1 id1 ; ... ; typn idn semi_opt }   :: :: variant
     {{ com Union type definition}} {{ texlong }}
 
   | typedef id naming_scheme_opt = enum { id1 ; ... ; idn semi_opt }   :: :: enum
     {{ com enumeration type definition}}
 
+  | typedef  id = register bits [ nexp : nexp' ] { bitfield1 : id1 ; ... ; bitfieldn : idn } 
+:: :: register {{ com register mutable bitfield type }}
+
+% also sugar [  nexp ] 
+
+
+bitfield :: 'BF_' ::=
+  | num :: :: bit
+  | num1 '..' num2 :: :: bits
+  | bitfield1 , bitfield2 :: :: bitfields
 
 % 
 
@@ -520,7 +534,7 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
     {{ hol F }}
     {{ ocaml false }}
     {{ lem false }}
-  | ';'                                                 :: :: yesb
+  | ';'                                                 :: :: yes
     {{ hol T }}
     {{ ocaml true }}
     {{ lem true }}
@@ -609,15 +623,68 @@ bar_opt {{ tex \ottkw{|}^{?} }} :: 'bar_' ::=           {{ phantom }}
 exp :: 'E_' ::=
   {{ com Expressions }}
   {{ aux _ l }}
+
+  | ( exp )                                             :: S :: Paren {{ ichlo [[exp]] }}
+  | { exp1 ; ... ; expn }                               ::   :: Block 
+
   | id                                                  :: :: Ident
     {{ com Identifiers }}
-  | N                                                   :: :: Nvar
-    {{ com nexp var, has type num }}
+
+  | lit                                                 :: :: Lit
+    {{ com Literal constants }}
+
   | exp1 exp2                                           :: :: App
     {{ com Function applications }}
-  | exp1 ix_l exp2                                      :: :: Infix
+  | exp1 id exp2                                        :: :: Infix
     {{ com Infix applications }}
-  | <| fexps |>                                         :: :: Record
+ 
+  | ( exp1 , .... , expn )                              :: :: Tup
+    {{ com Tuples }}
+
+  | if exp1 then exp2 else exp3                         :: :: If
+    {{ com Conditionals }}
+
+
+
+% enummaps
+  | [ exp1 , ... , expn ]                             :: :: enummap
+
+  | [ num1 = exp1 , ... , numn = expn ]               :: :: enummap2
+
+% we pick [ ] not { } for enummap literals for consistency with their
+% array-like access syntax, in contrast to the C which has funny
+% syntax for array literals.  We don't have to preserve [ ] for lists
+% as we don't expect to use lists very much. 
+
+  | exp [ exp ]                                       :: :: enummap_access
+  {{ com enummap access }}
+
+  | exp [ exp1 '..' exp2 ]                            :: :: enummap_subrange
+  {{ com Subenummap extraction }}
+  % do we want to allow a comma-separated list of such thingies?  
+
+  | [ exp with exp1 = exp2 ]                          :: :: enummap_functional_update 
+  {{ com enummap functional update }}
+
+  | [ exp with exp1 .. exp2 = exp3 ]                          :: :: enummap_functional_update 
+  {{ com enummap functional subrange update (with another enummap)}}
+  % do we want a functional update form with a comma-separated list of such?
+
+
+% lists 
+  | [| exp1 , ..  , expn |]                    :: :: Lists
+  {{ com Vector instantiation }}
+  | exp1 '::' exp2                                      :: :: Cons
+    {{ com Cons expressions }}
+
+
+% const unions
+
+% const structs
+
+% TODO
+
+ | <| fexps |>                                         :: :: Record
     {{ com Records }}
   | <| exp with fexps |>                                :: :: Recup
     {{ com Functional update for records }}
@@ -625,15 +692,7 @@ exp :: 'E_' ::=
     {{ com Field projection for records }}
 
 %Expressions for creating and accessing vectors
-  | [| exp1 ; ..  ; expn semi_opt |]                    :: :: Vector
-  {{ com Vector instantiation }}
 
-  | exp .( nexp )                                       :: :: VAccess
-  {{ com Vector access }}
-
-% PS '..' or . . ?
-  | exp .( nexp1 '..' nexp2 )                   :: :: VAccessR
-  {{ com Subvector extraction }}
 
 
 %  map : forall 'x 'y ''N.  ('x -> 'y) -> vector ''N 'x -> vector ''N 'y
@@ -645,25 +704,24 @@ exp :: 'E_' ::=
 
 %  and maybe with nice syntax
 
-  | match exp with bar_opt pexp1 '|' ... '|' pexpn l end :: :: Case
+  | switch exp { case pexp1  ... case pexpn } :: :: Case
     {{ com Pattern matching expressions }}
 %  | ( typ ) exp                                      :: :: Typed
 %    {{ com Type-annotated expressions }}
   | c_letbind in exp                                  :: :: Let
     {{ com Let expressions }}
-  | ( exp1 , .... , expn )                              :: :: Tup
-    {{ com Tuples }}
-  | [ exp1 ; .. ; expn semi_opt ]                       :: :: Elist
-    {{ com Lists }}
-  | ( exp )                                             :: S :: Paren {{ ichlo [[exp]] }}
-%  | begin exp end                                       :: :: Begin
-%    {{ com Alternate syntax for $\ottnt(exp)$ }}
-  | if exp1 then exp2 else exp3                         :: :: If
-    {{ com Conditionals }}
-  | exp1 '::' exp2                                      :: :: Cons
-    {{ com Cons expressions }}
-  | lit                                                 :: :: Lit
-    {{ com Literal constants }}
+
+  | lexp := exp                                      :: :: assign
+
+
+lexp :: 'LEXP_' ::=
+    | id                                                  :: :: Ident
+    {{ com Identifiers }}
+    | lexp [ exp ]  :: ::                         enummap
+    | lexp [ exp1 '..' exp2 ]  :: ::              enummap2
+    % maybe comma-sep such lists too
+    | lexp . id :: :: field  
+
 
 fexp :: 'FE' ::=
   {{ com Field-expressions }}
@@ -679,6 +737,7 @@ pexp :: 'Pat' ::=
   {{ com Pattern matches }}
   {{ aux _ l }}
   | pat -> exp                                  :: :: exp
+% apparently could use -> or => for this.
 
 %% % psexp :: 'Pats' ::=
 %% %   {{ com Multi-pattern matches }}
@@ -825,6 +884,8 @@ def :: 'DEF' ::=
     {{ com Top-level type constraint }}
   | default_typing_spec                                         :: :: Default_def
     {{ com default kind and type assumptions }}
+  | register typ id                                   :: :: Reg_dec
+    {{ com Register declaration }}
 
 
 defs :: '' ::=
