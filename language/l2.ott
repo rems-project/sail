@@ -622,7 +622,7 @@ bar_opt {{ tex \ottkw{|}^{?} }} :: 'bar_' ::=           {{ phantom }}
 
 exp :: 'E_' ::=
   {{ com Expressions }}
-  {{ aux _ l }}
+  {{ aux _ l }}  
 
   | ( exp )                                             :: S :: Paren {{ ichlo [[exp]] }}
   | { exp1 ; ... ; expn }                               ::   :: Block 
@@ -656,7 +656,7 @@ exp :: 'E_' ::=
 % syntax for array literals.  We don't have to preserve [ ] for lists
 % as we don't expect to use lists very much. 
 
-  | exp [ exp ]                                       :: :: enummap_access
+  | exp [ exp' ]                                      :: :: enummap_access
   {{ com enummap access }}
 
   | exp [ exp1 '..' exp2 ]                            :: :: enummap_subrange
@@ -666,14 +666,14 @@ exp :: 'E_' ::=
   | [ exp with exp1 = exp2 ]                          :: :: enummap_functional_update 
   {{ com enummap functional update }}
 
-  | [ exp with exp1 .. exp2 = exp3 ]                          :: :: enummap_functional_update 
+  | [ exp with exp1 .. exp2 = exp3 ]                          :: :: enummap_functional_update2 
   {{ com enummap functional subrange update (with another enummap)}}
   % do we want a functional update form with a comma-separated list of such?
 
 
 % lists 
   | [| exp1 , ..  , expn |]                    :: :: Lists
-  {{ com Vector instantiation }}
+  {{ com list }}
   | exp1 '::' exp2                                      :: :: Cons
     {{ com Cons expressions }}
 
