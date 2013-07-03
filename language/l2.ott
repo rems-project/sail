@@ -614,20 +614,6 @@ P_app <= P_as
 
 grammar
 
-bar_opt {{ tex \ottkw{|}^{?} }} :: 'bar_' ::=           {{ phantom }}
-                                                        {{ ocaml terminal * bool }}
-                                                        {{ lem (terminal * bool) }}
-                                                        {{ hol bool }}
-  {{ com Optional bars }}
-  |                                                     :: :: no
-    {{ hol F }}
-    {{ ocaml false }}
-    {{ lem false }}
-  | '|'                                                 :: :: yes
-    {{ hol T }}
-    {{ ocaml true }}
-    {{ lem true }}
-
 exp :: 'E_' ::=
   {{ com Expressions }}
   {{ aux _ l }}  
