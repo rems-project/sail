@@ -1,4 +1,3 @@
-#OTTLIB=/Users/sowens/ott/hol
 OTTLIB=$(dir $(shell which ott))../hol
 
 all: l2.pdf
@@ -11,7 +10,7 @@ l2Theory.uo: l2Script.sml
 
 l2.tex ../src/ast.ml l2Script.sml: l2.ott
 	ott -sort false -generate_aux_rules false -o l2.tex  -picky_multiple_parses true l2.ott
-	ott -sort false -generate_aux_rules true -ocaml_include_terminals true -o l2.ml -o l2Script.sml -picky_multiple_parses true l2.ott
+	ott -sort false -generate_aux_rules true -ocaml_include_terminals true -o ../src/ast.ml -o l2Script.sml -picky_multiple_parses true l2.ott
 
 	#rm -f ../src/ast.ml
 #	chmod a-w ../src/ast.ml

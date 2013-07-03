@@ -597,7 +597,7 @@ pat :: 'P_' ::=
   | lit                                                 :: :: lit
     {{ com Literal constant patterns }}
 
-fpat :: 'FP' ::=
+fpat :: 'FP_' ::=
   {{ com Field patterns }}
   {{ aux _ l }}
   | id = pat                                            :: :: Fpat
@@ -717,17 +717,17 @@ lexp :: 'LEXP_' ::=
     | lexp . id :: :: field  
 
 
-fexp :: 'FE' ::=
+fexp :: 'FE_' ::=
   {{ com Field-expressions }}
   {{ aux _ l }}
   | id = exp                                            :: :: Fexp
 
-fexps :: 'FES' ::=
+fexps :: 'FES_' ::=
   {{ com Field-expression lists }}
   {{ aux _ l }}
   | fexp1 ; ... ; fexpn semi_opt                        :: :: Fexps
 
-pexp :: 'Pat' ::=
+pexp :: 'Pat_' ::=
   {{ com Pattern matches }}
   {{ aux _ l }}
   | pat -> exp                                  :: :: exp
@@ -809,7 +809,7 @@ c_tannot_opt :: 'C_typ_annot_' ::=
   |                                             :: :: none
   | typ_quant typ                               :: :: some 
 
-c_funcl :: 'C_FCL' ::=
+c_funcl :: 'C_FCL_' ::=
   {{ com Function clauses }}
   {{ aux _ l }}
   | id pat = exp                   :: :: Funcl
@@ -824,7 +824,7 @@ c_effects_opt :: '' ::=
   |                                             :: :: pure {{ com sugar for pure }}
   | effects                                     :: :: nonpure
 
-c_fundef :: 'C_FD' ::=
+c_fundef :: 'C_FD_' ::=
   {{ com Function definition}}
   {{ aux _ l }}
   | function c_rec_opt c_tannot_opt c_effects_opt c_funcl1 and ... and c_funcln :: :: function {{ texlong }}  {{ com function definition }}
@@ -844,7 +844,7 @@ c_letbind :: 'LB_' ::=
     {{ com value binding with implicit type }}
 
 
-val_spec :: 'VS' ::=
+val_spec :: 'VS_' ::=
   {{ com Value type specifications }} 
   {{ aux _ l }}
   | val typschm id                                  :: :: val_spec
