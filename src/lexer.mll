@@ -154,25 +154,39 @@ rule token skips = parse
   | "<+"				{ (LtPlus(Some(skips),r"<+")) }
   | "**"				{ (StarStar(Some(skips),r"**")) }
 
-  | "(*"                           
+  | "--"                           
     { token (Ast.Com(Ast.Comment(comment lexbuf))::skips) lexbuf }
 
   | startident ident* as i              { if M.mem i kw_table then
                                             (M.find i kw_table) (Some(skips))
                                           else
                                             Id(Some(skips), Ulib.Text.of_latin1 i) }
-
-  | "\\\\" ([^' ' '\t' '\n']+ as i)     { (Id(Some(skips), Ulib.Text.of_latin1 i)) } 
-
-  | ['!''?''~'] oper_char* as i         { (Id(Some(skips), Ulib.Text.of_latin1 i)) }
-
-  | "**" oper_char* as i                { (StarStar(Some(skips), Ulib.Text.of_latin1 i)) }
-  | ['/''%'] oper_char* as i         { (Id(Some(skips), Ulib.Text.of_latin1 i)) }
-  | "*" oper_char+ as i         { (Id(Some(skips), Ulib.Text.of_latin1 i)) }
-  | ['+''-'] oper_char* as i            { (Id(Some(skips), Ulib.Text.of_latin1 i)) }
-  | ">=" oper_char+ as i   		{ (Id(Some(skips), Ulib.Text.of_latin1 i)) }
-  | ['@''^'] oper_char* as i            { (Id(Some(skips), Ulib.Text.of_latin1 i)) }
-  | ['=''<''>''|''&''$'] oper_char* as i { (Id(Some(skips), Ulib.Text.of_latin1 i)) }
+  | "&" oper_char* as i                 { (AmpI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "@" oper_char* as i                 { (AtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "^" oper_char* as i                 { (CarrotI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "/" oper_char* as i                 { (DivI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "!" oper_char* as i                 { (ExclI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">" oper_char* as i                 { (GtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<" oper_char* as i			{ (LtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "+"	oper_char* as i			{ (PlusI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "*" oper_char* as i                 { (StarI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "~"	oper_char* as i			{ (TildeI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "&&" oper_char* as i                { (AmpAmpI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "::" oper_char* as i                { (ColonColonI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "==" oper_char* as i		{ (EqEqI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "!=" oper_char* as i		{ (ExclEqI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">=" oper_char* as i		{ (GtEqI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">=+" oper_char* as i		{ (GtEqPlusI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">>" oper_char* as i		{ (GtGtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">>>" oper_char* as i		{ (GtGtGtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">+" oper_char* as i		{ (GtPlusI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<=" oper_char* as i		{ (LtEqI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<=+" oper_char* as i		{ (LtEqPlusI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<<" oper_char* as i		{ (LtLtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<<<" oper_char* as i		{ (LtLtLtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<+" oper_char* as i		{ (LtPlusI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "**" oper_char* as i		{ (StarStarI(Some(skips),Ulib.Text.of_latin1 i)) }
+  
   | digit+ as i                         { (Num(Some(skips),int_of_string i)) }
   | "0b" (binarydigit+ as i)		{ (Bin(Some(skips), i)) }
   | "0x" (hexdigit+ as i) 		{ (Hex(Some(skips), i)) }
@@ -183,12 +197,11 @@ rule token skips = parse
 
 
 and comment = parse
-  | (com_body "("* as i) "(*"           { let c1 = comment lexbuf in
+  | (com_body "("* as i) "--"           { let c1 = comment lexbuf in
                                           let c2 = comment lexbuf in
                                             Ast.Chars(Ulib.Text.of_latin1 i) :: Ast.Comment(c1) :: c2}
-  | (com_body as i) "*)"                { [Ast.Chars(Ulib.Text.of_latin1 i)] }
-  | com_body "("* "\n" as i             { Lexing.new_line lexbuf; 
-                                          (Ast.Chars(Ulib.Text.of_latin1 i) :: comment lexbuf) }
+  | (com_body as i) "\n"                { Lexing.new_line lexbuf;
+                                          [Ast.Chars(Ulib.Text.of_latin1 i)] }
   | _  as c                             { raise (LexError(c, Lexing.lexeme_start_p lexbuf)) }
   | eof                                 { [] }
 

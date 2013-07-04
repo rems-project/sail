@@ -146,7 +146,10 @@ let mk_pre_x_l sk1 (sk2,id) sk3 l =
 %token <Ast.terminal * Ulib.Text.t> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde
 %token <Ast.terminal * Ulib.Text.t> AmpAmp ColonColon EqEq ExclEq GtEq GtEqPlus GtGt 
 %token <Ast.terminal * Ulib.Text.t> GtGtGt GtPlus LtEq LtEqPlus LtLt LtLtLt LtPlus StarStar 
-%token <Ast.terminal * Ulib.Text.t> SquareBar BarSquare 
+
+%token <Ast.terminal * Ulib.Text.t> AmpI AtI CarrotI  DivI EqI ExclI GtI LtI PlusI StarI TildeI
+%token <Ast.terminal * Ulib.Text.t> AmpAmpI ColonColonI EqEqI ExclEqI GtEqI GtEqPlusI GtGtI 
+%token <Ast.terminal * Ulib.Text.t> GtGtGtI GtPlusI LtEqI LtEqPlusI LtLtI LtLtLtI LtPlusI StarStarI
 
 %start file
 %type <Ast.defs> defs
