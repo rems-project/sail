@@ -84,6 +84,14 @@ let kw_table =
      ("union",			 (fun x -> Union(x)))
      ("with",                    (fun x -> With(x)));
      ("val",                     (fun x -> Val(x)));
+
+     ("AND",			 (fun x -> AND(x)));
+     ("div",			 (fun x -> Div_(x)));
+     ("EOR",			 (fun x -> EOR(x)));
+     ("mod",			 (fun x -> Mod(x)));
+     ("OR",			 (fun x -> OR(x)));
+     ("quot",			 (fun x -> Quot(x)));
+     ("rem",			 (fun x -> Rem(x)));
 ]
 
 }
@@ -121,6 +129,7 @@ rule token skips = parse
   | "="                                 { (Eq(Some(skips),r"=")) }
   | "!"					{ (Excl(Some(skips),r"!")) }
   | ">"					{ (Gt(Some(skips),r">")) }
+  | "-"					{ (Minus(Some(skips))) }
   | "<"					{ (Lt(Some(skips),r"<")) }
   | "+"					{ (Plus(Some(skips),r"+")) }
   | ";"                                 { (Semi(Some(skips))) }
@@ -134,25 +143,56 @@ rule token skips = parse
   | "["                                 { (Lsquare(Some(skips))) }
   | "]"                                 { (Rsquare(Some(skips))) }
   | "&&" as i                           { (AmpAmp(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "->"                                { (Arrow(Some(skips))) }
   | "||"                                { (BarBar(Some(skips))) }
   | "|>"                                { (BarGt(Some(skips))) }
   | "|]"				{ (BarSquare(Some(skips))) }
+  | "^^"				{ (CarrotCarrot(Some(skips),r"^^")) }
   | "::" as i                           { (ColonColon(Some(skips),Ulib.Text.of_latin1 i)) }
   | ".."				{ (DotDot(Some(skips)) }  
+  | "=/="				{ (EqDivEq(Some(skips),r"=/=")) }
   | "=="				{ (EqEq(Some(skips),r"==")) }
   | "!="				{ (ExclEq(Some(skips),r"!=")) }
+  | "!!"				{ (ExclExcl(Some(skips),r"!!")) }
   | ">="				{ (GtEq(Some(skips),r">=")) }
   | ">=+"				{ (GtEqPlus(Some(skips),r">=+")) }
   | ">>"				{ (GtGt(Some(skips),r">>")) }
   | ">>>"				{ (GtGtGt(Some(skips),r">>")) }
   | ">+"				{ (GtPlus(Some(skips),r">+")) }
+  | "#>>"				{ (HashGtGt(Some(skips),r"#>>")) }
+  | "#<<"				{ (HashLtLt(Some(skips),r"#<<")) }
+  | "->"                                { (MinusGt(Some(skips))) }
   | "<="				{ (LtEq(Some(skips),r"<=")) }
   | "<=+"				{ (LtEqPlus(Some(skips),r"<=+")) }
+  | "<>"				{ (LtGt(Some(skips),r"<>")) }
   | "<<"				{ (LtLt(Some(skips),r"<<")) }
   | "<<<"				{ (LtLtLt(Some(skips),r"<<<")) }
   | "<+"				{ (LtPlus(Some(skips),r"<+")) }
   | "**"				{ (StarStar(Some(skips),r"**")) }
+  | "~^"				{ (TildeCarrot(Some(skips),r"~^")) }
+
+  | ">=_s"				{ (GtEqUnderS(Some(skips),r">=_s")) }
+  | ">=_si"				{ (GtEqUnderSi(Some(skips),r">=_si")) }
+  | ">=_u"				{ (GtEqUnderU(Some(skips),r">=_u")) }
+  | ">=_ui"				{ (GtEqUnderUi(Some(skips),r">=_ui")) }
+  | ">>_u"				{ (GtGtUnderU(Some(skips),r">>_u")) }
+  | ">_s"				{ (GtUnderS(Some(skips),r">_s")) }
+  | ">_si"				{ (GtUnderSi(Some(skips),r">_si")) }
+  | ">_u"				{ (GtUnderU(Some(skips),r">_u")) }
+  | ">_ui"				{ (GtUnderUi(Some(skips),r">_ui")) }
+  | "<=_s"				{ (LtEqUnderS(Some(skips),r"<=_s")) }
+  | "<=_si"				{ (LtEqUnderSi(Some(skips),r"<=_si")) }
+  | "<=_u"				{ (LtEqUnderU(Some(skips),r"<=_u")) }
+  | "<=_ui"				{ (LtEqUnderUi(Some(skips),r"<=_ui")) }
+  | "<_s"				{ (LtUnderS(Some(skips),r"<_s")) }
+  | "<_si"				{ (LtUnderSi(Some(skips),r"<_si")) }
+  | "<_u"				{ (LtUnderU(Some(skips),r"<_u")) }
+  | "<_ui"				{ (LtUnderUi(Some(skips),r"<_ui")) }
+  | "**_s"				{ (StarStarUnderS(Some(skips),r"**_s")) }
+  | "**_si"				{ (StarStarUnderSi(Some(skips),r"**_si")) }
+  | "*_u"				{ (StarUnderU(Some(skips),r"*_u")) }
+  | "*_ui"				{ (StarUnderUi(Some(skips),r"*_ui")) }
+  | "2^"				{ (TwoCarrot(Some(skips),r"2^")) }
+
 
   | "--"                           
     { token (Ast.Com(Ast.Comment(comment lexbuf))::skips) lexbuf }
@@ -161,31 +201,61 @@ rule token skips = parse
                                             (M.find i kw_table) (Some(skips))
                                           else
                                             Id(Some(skips), Ulib.Text.of_latin1 i) }
-  | "&" oper_char* as i                 { (AmpI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "@" oper_char* as i                 { (AtI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "^" oper_char* as i                 { (CarrotI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "/" oper_char* as i                 { (DivI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "!" oper_char* as i                 { (ExclI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | ">" oper_char* as i                 { (GtI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "<" oper_char* as i			{ (LtI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "+"	oper_char* as i			{ (PlusI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "*" oper_char* as i                 { (StarI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "~"	oper_char* as i			{ (TildeI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "&&" oper_char* as i                { (AmpAmpI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "::" oper_char* as i                { (ColonColonI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "==" oper_char* as i		{ (EqEqI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "!=" oper_char* as i		{ (ExclEqI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | ">=" oper_char* as i		{ (GtEqI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | ">=+" oper_char* as i		{ (GtEqPlusI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | ">>" oper_char* as i		{ (GtGtI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | ">>>" oper_char* as i		{ (GtGtGtI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | ">+" oper_char* as i		{ (GtPlusI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "<=" oper_char* as i		{ (LtEqI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "<=+" oper_char* as i		{ (LtEqPlusI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "<<" oper_char* as i		{ (LtLtI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "<<<" oper_char* as i		{ (LtLtLtI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "<+" oper_char* as i		{ (LtPlusI(Some(skips),Ulib.Text.of_latin1 i)) }
-  | "**" oper_char* as i		{ (StarStarI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "&" oper_char+ as i                 { (AmpI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "@" oper_char+ as i                 { (AtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "^" oper_char+ as i                 { (CarrotI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "/" oper_char+ as i                 { (DivI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "=" oper_char+ as i			{ (EqI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "!" oper_char+ as i                 { (ExclI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">" oper_char+ as i                 { (GtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<" oper_char+ as i			{ (LtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "+"	oper_char+ as i			{ (PlusI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "*" oper_char+ as i                 { (StarI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "~"	oper_char+ as i			{ (TildeI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "&&" oper_char+ as i                { (AmpAmpI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "^^" oper_char+ as i		{ (CarrotCarrotI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "::" oper_char+ as i                { (ColonColonI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "=/=" oper_char+ as i		{ (EqDivEqI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "==" oper_char+ as i		{ (EqEqI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "!=" oper_char+ as i		{ (ExclEqI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "!!" oper_char+ as i		{ (ExclExclI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">=" oper_char+ as i		{ (GtEqI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">=+" oper_char+ as i		{ (GtEqPlusI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">>" oper_char+ as i		{ (GtGtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">>>" oper_char+ as i		{ (GtGtGtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">+" oper_char+ as i		{ (GtPlusI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "#>>" oper_char+ as i		{ (HashGtGt(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "#<<" oper_char+ as i		{ (HashLtLt(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<=" oper_char+ as i		{ (LtEqI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<=+" oper_char+ as i		{ (LtEqPlusI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<<" oper_char+ as i		{ (LtLtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<<<" oper_char+ as i		{ (LtLtLtI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<+" oper_char+ as i		{ (LtPlusI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "**" oper_char+ as i		{ (StarStarI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "~^" oper_char+ as i		{ (TildeCarrot(Some(skips),Ulib.Text.of_latin1 i)) }
+
+  | ">=_s" oper_char+ as i				{ (GtEqUnderSI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">=_si" oper_char+ as i				{ (GtEqUnderSiI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">=_u" oper_char+ as i				{ (GtEqUnderUI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">=_ui" oper_char+ as i				{ (GtEqUnderUiI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">>_u" oper_char+ as i				{ (GtGtUnderUI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">_s" oper_char+ as i				{ (GtUnderSI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">_si" oper_char+ as i				{ (GtUnderSiI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">_u" oper_char+ as i				{ (GtUnderUI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | ">_ui" oper_char+ as i				{ (GtUnderUiI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<=_s" oper_char+ as i				{ (LtEqUnderSI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<=_si" oper_char+ as i				{ (LtEqUnderSiI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<=_u" oper_char+ as i				{ (LtEqUnderUI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<=_ui" oper_char+ as i				{ (LtEqUnderUiI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<_s" oper_char+ as i				{ (LtUnderSI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<_si" oper_char+ as i				{ (LtUnderSiI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<_u" oper_char+ as i				{ (LtUnderUI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "<_ui" oper_char+ as i				{ (LtUnderUiI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "**_s" oper_char+ as i				{ (StarStarUnderSI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "**_si" oper_char+ as i				{ (StarStarUnderSiI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "*_u" oper_char+ as i				{ (StarUnderUI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "*_ui" oper_char+ as i				{ (StarUnderUiI(Some(skips),Ulib.Text.of_latin1 i)) }
+  | "2^" oper_char+ as i				{ (TwoCarrotI(Some(skips),Ulib.Text.of_latin1 i)) }
   
   | digit+ as i                         { (Num(Some(skips),int_of_string i)) }
   | "0b" (binarydigit+ as i)		{ (Bin(Some(skips), i)) }

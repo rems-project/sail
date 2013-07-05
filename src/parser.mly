@@ -130,10 +130,11 @@ let mk_pre_x_l sk1 (sk2,id) sk3 l =
 %token <Ast.terminal> If_ In IN Let_ Rec Register Struct Switch Then True 
 %token <Ast.terminal> Type Typedef Union With Val
 
-%token <Ast.terminal> Arrow Bar Colon Comma Dot Eof Semi Under
-%token <Ast.terminal> Lcurly Rcurly Lparen Rparen Lsquare Rsquare
-%token <Ast.terminal> BarBar BarGt BarSquare DotDot LtBar SquareBar 
+%token <Ast.terminal> AND Div_ EOR Mod OR Quot Rem 
 
+%token <Ast.terminal> Bar Colon Comma Dot Eof Minus Semi Under
+%token <Ast.terminal> Lcurly Rcurly Lparen Rparen Lsquare Rsquare
+%token <Ast.terminal> BarBar BarGt BarSquare DotDot MinusGt LtBar SquareBar 
 
 %{
 (*Terminals with content*)
@@ -143,13 +144,25 @@ let mk_pre_x_l sk1 (sk2,id) sk3 l =
 %token <Ast.terminal * int> Num
 %token <Ast.terminal * string> String Bin Hex
 
-%token <Ast.terminal * Ulib.Text.t> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde
-%token <Ast.terminal * Ulib.Text.t> AmpAmp ColonColon EqEq ExclEq GtEq GtEqPlus GtGt 
-%token <Ast.terminal * Ulib.Text.t> GtGtGt GtPlus LtEq LtEqPlus LtLt LtLtLt LtPlus StarStar 
+%token <Ast.terminal * Ulib.Text.t> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde 
+%token <Ast.terminal * Ulib.Text.t> AmpAmp CarrotCarrot ColonColon EqDivEq EqEq ExclEq ExclExcl  
+%token <Ast.terminal * Ulib.Text.t> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt   
+%token <Ast.terminal * Ulib.Text.t> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar TildeCarrot
+
+%token <Ast.terminal * Ulib.Text.t> GtEqUnderS GtEqUnderSi GtEqUnderU GtEqUnderUi GtGtUnderU GtUnderS 
+%token <Ast.terminal * Ulib.Text.t> GtUnderSi GtUnderU GtUnderUi LtEqUnderS LtEqUnderSi LtEqUnderU 
+%token <Ast.terminal * Ulib.Text.t> LtEqUnderUi LtUnderS LtUnderSi LtUnderU LtUnderUi StarUnderS 
+%token <Ast.terminal * Ulib.Text.t> StarUnderSi StarUnderU StarUnderUi TwoCarrot
 
 %token <Ast.terminal * Ulib.Text.t> AmpI AtI CarrotI  DivI EqI ExclI GtI LtI PlusI StarI TildeI
-%token <Ast.terminal * Ulib.Text.t> AmpAmpI ColonColonI EqEqI ExclEqI GtEqI GtEqPlusI GtGtI 
-%token <Ast.terminal * Ulib.Text.t> GtGtGtI GtPlusI LtEqI LtEqPlusI LtLtI LtLtLtI LtPlusI StarStarI
+%token <Ast.terminal * Ulib.Text.t> AmpAmpI CarrotCarrotI ColonColonI EqDivEqI EqEqI ExclEqI ExclExclI  
+%token <Ast.terminal * Ulib.Text.t> GtEqI GtEqPlusI GtGtI GtGtGtI GtPlusI HashGtGtI HashLtLtI  
+%token <Ast.terminal * Ulib.Text.t> LtEqI LtEqPlusI LtGtI LtLtI LtLtLtI LtPlusI StarStarI TildeCarrotI
+
+%token <Ast.terminal * Ulib.Text.t> GtEqUnderSI GtEqUnderSiI GtEqUnderUI GtEqUnderUiI GtGtUnderUI GtUnderSI 
+%token <Ast.terminal * Ulib.Text.t> GtUnderSiI GtUnderUI GtUnderUiI LtEqUnderSI LtEqUnderSiI LtEqUnderUI 
+%token <Ast.terminal * Ulib.Text.t> LtEqUnderUiI LtUnderSI LtUnderSiI LtUnderUI LtUnderUiI StarUnderSI 
+%token <Ast.terminal * Ulib.Text.t> StarUnderSiI StarUnderUI StarUnderUiI TwoCarrotI
 
 %start file
 %type <Ast.defs> defs
