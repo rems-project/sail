@@ -138,7 +138,7 @@ metavar x , y , z ::=
   {{ ocaml terminal * text }}
   {{ lem terminal * string }}
   {{ hol string }}
-  {{ com Variables }}
+  {{ com identifier }}
   {{ ocamlvar "[[x]]" }}
   {{ lemvar "[[x]]" }}
 
@@ -147,7 +147,7 @@ metavar ix ::=
   {{ ocaml terminal * text }}
   {{ lem terminal * string }}
   {{ hol string }}
-  {{ com Variables }}
+  {{ com infix identifier }}
   {{ ocamlvar "[[ix]]" }}
   {{ lemvar "[[ix]]" }}
 
@@ -159,17 +159,17 @@ l :: '' ::=                                     {{ phantom }}
                                                 {{ ocaml l }}
                                                 {{ lem l }}
                                                 {{ hol unit }}
-  {{ com Source locations }}
+  {{ com Source location }}
   |                                             :: :: Unknown
     {{ ocaml Unknown }}
     {{ lem Unknown }}
     {{ hol () }}
 
 id :: '' ::=
-  {{ com identifiers }}
+  {{ com Identifier }}
   {{ aux _ l }}
-  | x                           :: :: Id
-  | ( x )                       :: :: DeIId {{ com remove infix status }}
+  | x                           :: :: id
+  | ( x )                       :: :: deIid {{ com remove infix status }}
 
 %% 
 %% x_l {{ tex \ottnt{x}^{l} }} , y_l {{ tex \ottnt{y}^{l} }} , z_l {{ tex \ottnt{z}^{l} }} , name :: '' ::=
@@ -284,36 +284,37 @@ grammar
     
 
 base_kind :: 'BK_' ::=  
-  {{ com base kinds}}
+  {{ com base kind}}
   {{ aux _ l }}
-  | Type                                       :: :: type
-  | Nat                                        :: :: nat
-  | Endian                                     :: :: endian
-  | Effects                                    :: :: effects
+  | Type                                       :: :: type    {{ com kind of types  }} 
+  | Nat                                        :: :: nat     {{ com kind of natural number size expressions  }} 
+  | Endian                                     :: :: endian  {{ com kind of endianness specifications  }} 
+  | Effects                                    :: :: effects {{ com kind of effect sets  }} 
 
 kind :: 'K_' ::=  
   {{ com kinds}}
   {{ aux _ l }}
-  | base_kind1 -> ... -> base_kindn            :: :: kind
+  | base_kind1 -> ... -> base_kindn            :: :: kind 
 % we'll never use  ...-> Nat
 
     
 nexp :: 'Nexp_' ::=  
-  {{ com expressions of kind Nat, for vector lengths }}
+  {{ com expression of kind Nat, for vector sizes and origins }}
   {{ aux _ l }}
-  | id                                  :: :: var
-  | num                                 :: :: constant
-  | nexp1 * nexp2                       :: :: times {{ com must be linear after normalisation... except for the type of *, ahem }}
-  | nexp1 + nexp2                       :: :: sum
-  | 2 ** nexp                            :: :: exp
+  | id                                  :: :: id          {{ com identifier }}
+  | num                                 :: :: constant     {{ com constant }}
+  | nexp1 * nexp2                       :: :: times        {{ com product }}
+%{{ com must be linear after normalisation... except for the type of *, ahem }}
+  | nexp1 + nexp2                       :: :: sum          {{ com sum }}
+  | 2 ** nexp                            :: :: exp         {{ com exponential }}
   | ( nexp )                            :: S :: paren  {{ icho [[nexp]] }}
 
 endian :: 'End_' ::=  
   {{ com endianness specifications}}
   {{ aux _ l }}
-  | id                                  :: :: var
-  | inc                                 :: :: inc
-  | dec                                 :: :: dec
+  | id                                  :: :: id  {{ com identifier }}
+  | inc                                 :: :: inc  {{ com increasing (little-endian) }}
+  | dec                                 :: :: dec  {{ com decreasing (big-endian) }}
   | ( endian )                             :: S :: paren {{ icho [[endian]] }}
 
 effect :: 'Effect_' ::=
@@ -339,20 +340,20 @@ effects :: 'Effects_' ::=
 
 
 typ :: 'Typ_' ::=
-  {{ com Constructors of kind Type }}
+  {{ com Constructor of kind Type }}
   | _                                           :: :: wild
     {{ com Unspecified type }}
   | id                                         :: :: var
-    {{ com Type variables }}
+    {{ com Type variable }}
   | typ1 -> typ2 effects                        :: :: fn
-    {{ com Function types -- first-order only}}
+    {{ com Function type (first-order only in user code) }}
 % TODO: build first-order restriction into AST or just into type rules? neither - see note
 % TODO: concrete syntax for effects in a function type?  needed only for pp, not in user syntax.
   | typ1 * .... * typn                          :: :: tup
-    {{ com Tuple types }}
+    {{ com Tuple type }}
 % TODO union in the other kind grammars?  or make a syntax of argument? or glom together the grammars and leave o the typechecker
   | id typ_arg1 .. typ_argn                     :: :: app
-  {{ com type constructor applications }}
+  {{ com type constructor application }}
   | ( typ )                            :: S :: paren {{ icho [[typ]] }} 
 
 typ_arg :: 'Typ_arg_' ::=
@@ -364,31 +365,31 @@ typ_arg :: 'Typ_arg_' ::=
 
 % plus more for l-value/r-value pairs, as introduced by the L3 'compound' declarations   ... ref typ
 
-typ_sugar :: 'Typ_sugar_' ::=
-  {{ com library types and syntactic sugar }}
+typ_lib :: 'Typ_lib_' ::=
+  {{ com library types and syntactic sugar for them }}
   {{ aux _ l }}
 % boring base types:
-  | unit :: :: unit
-  | bool :: :: bool
-  | bit :: :: bit  {{ com pure bits, not mutable bits! }}
+  | unit :: :: unit {{ com unit type with value $()$ }}
+  | bool :: :: bool {{ com booleans $[[true]]$ and $[[false]]$ }}
+  | bit :: :: bit  {{ com pure bit values (not mutable bits) }}
 % experimentally trying with two distinct types of bool and bit ...
-  | nat :: :: nat
-  | string :: :: string
+  | nat :: :: nat {{ com natural numbers 0,1,2,... }}
+  | string :: :: string {{ com UTF8 strings }}
 % finite subranges of nat
-  | enum nexp1 nexp2 endian :: :: enum  {{ com natural numbers from [[nexp2]] to [[nexp2]]+[[nexp1]]-1, ordered by [[endian]] }}
+  | enum nexp1 nexp2 endian :: :: enum  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1, ordered by [[endian]] }}
   | [ nexp ]             :: :: enum1 {{ com sugar for \texttt{enum nexp 0 inc} }}
   | [ nexp '..' nexp' ]  :: :: enum2 {{ com sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} }}
 % use .. not - to avoid ambiguity with nexp -
 % total maps and vectors indexed by finite subranges of nat
-  | vector nexp1 nexp2 endian typ :: :: vector 
+  | vector nexp1 nexp2 endian typ :: :: vector {{ com vector of [[typ]], indexed by natural range }}
 % probably some sugar for vector types, using [ ] similarly to enums:
 % (but with .. not : in the former, to avoid confusion...)
-  | typ [ nexp ]  :: :: vector2
-  | typ [ nexp : nexp' ] :: :: vector3
+  | typ [ nexp ]  :: :: vector2 {{ com sugar for vector indexed by [ [[nexp]] ] }}
+  | typ [ nexp : nexp' ] :: :: vector3 {{ com sugar for vector indexed by [ [[nexp]]:[[nexp']] ] }}
 % ...so bit [ nexp ] etc is just an instance of that
-  | list typ :: :: list
-  | set typ  :: :: set
-  | reg typ  :: :: reg  {{ com type of mutable register components }}
+  | list typ :: :: list {{ com list of [[typ]] }}
+  | set typ  :: :: set  {{ com finite set of [[typ]] }}
+  | reg typ  :: :: reg  {{ com mutable register components holding [[typ]] }}
 % "reg t" is basically the ML "t ref" 
 % not sure how first-class it should be, though
 % use "reg word32" etc for the types of vanilla registers 
@@ -404,7 +405,7 @@ Typ_fn <= Typ_tup
 grammar
 
 nexp_constraint :: 'NC_' ::=
-  {{ com contraints over kind Nat }}
+  {{ com contraint over kind Nat }}
   {{ aux _ l }}
   | nexp = nexp'                                :: :: fixed
   | nexp >= nexp'                               :: :: bounded_ge
@@ -416,8 +417,8 @@ nexp_constraint :: 'NC_' ::=
 
 kinded_id :: 'KOpt_' ::=
   {{ com optionally kind-annotated identifier }}
-  | id	 	    		   	      :: :: none
-  | kind id				      :: :: kind
+  | id	 	    		   	      :: :: none {{ com identifier }}
+  | kind id				      :: :: kind {{ com kind-annotated variable }}
   | ( kinded_id ) 			      :: S :: paren {{ icho [[kinded_id]] }}
 
 typquant :: 'TypQ_' ::= 
@@ -442,14 +443,14 @@ typschm :: 'TypSchm_' ::=
 
 grammar
 ctor_def :: 'CT_' ::=
-  {{ com Datatype definition clauses }}
+  {{ com Datatype constructor definition clause }}
   | id : typschm                                       :: :: ct
 % but we could get away with disallowing constraints in typschm, we
 % think - if it's useful to do that
 
-enum_opt :: 'EnumOpt_' ::=
-  |      :: :: empty
-  | enum :: :: enum
+%enum_opt :: 'EnumOpt_' ::=
+%  |      :: :: empty
+%  | enum :: :: enum
 
 %% tdefbody :: 'TD_' ::=
 %%   {{ com Type definition bodies }}
@@ -478,9 +479,9 @@ enum_opt :: 'EnumOpt_' ::=
 %%% OR, IN C STYLE
 
 tdef :: 'TD_' ::=
-  {{ com Type definition bodies }}
+  {{ com Type definition body }}
   | typedef id naming_scheme_opt = typschm                                        :: :: abbrev
-    {{ com Type abbreviations }}
+    {{ com Type abbreviation }} {{ texlong }}
   | typedef id naming_scheme_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: :: record
     {{ com Struct type definition }} {{ texlong }}
 % for specifying constructor result types of nat-indexed GADTs, we can
@@ -491,18 +492,18 @@ tdef :: 'TD_' ::=
     {{ com Union type definition}} {{ texlong }}
 
   | typedef id naming_scheme_opt = enum { id1 ; ... ; idn semi_opt }   :: :: enum
-    {{ com enumeration type definition}}
+    {{ com enumeration type definition}} {{ texlong }}
 
-  | typedef  id = register bits [ nexp : nexp' ] { bitfield1 : id1 ; ... ; bitfieldn : idn } 
-:: :: register {{ com register mutable bitfield type }}
+  | typedef  id = register bits [ nexp : nexp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
+:: :: register {{ com register mutable bitfield type }} {{ texlong }}
 
 % also sugar [  nexp ] 
 
 
-bitfield :: 'BF_' ::=
-  | num :: :: bit
-  | num1 '..' num2 :: :: bits
-  | bitfield1 , bitfield2 :: :: bitfields
+index_range :: 'BF_' ::= {{ com index specification, e.g.~for bitfields }} 
+  | num :: :: 'single'  {{ com single index }}
+  | num1 '..' num2 :: :: range {{ com index range }}
+  | index_range1 , index_range2 :: :: concat {{ com concatenation of index ranges }}
 
 % 
 
@@ -516,26 +517,25 @@ bitfield :: 'BF_' ::=
 grammar
 
 lit :: 'L_' ::=
-  {{ com Literal constants }}
-  | true                                                :: :: true
-  | false                                               :: :: false
-  | num                                         :: :: num
-  | hex                                         :: :: hex
-  {{ com hex and bin are constant bit vectors, entered as C-style hex or binaries }}
-  | bin                                         :: :: bin
-  | string                                              :: :: string
-  | ( )                                                 :: :: unit
+  {{ com Literal constant }}
+  | ( )                                                 :: :: unit  {{ com $() : [[unit]]$ }}
 %Presumably we want to remove bitzero and bitone ?
-  | bitzero                                             :: :: zero
-  {{ com bitzero and bitone are constant bits, if commonly used we will consider overloading 0 and 1 }}
-  | bitone                                              :: :: one
+  | bitzero                                             :: :: zero {{ com $[[bitzero]] : [[bit]]$ }}
+  | bitone                                              :: :: one {{ com $[[bitone]] : [[bit]]$ }}
+  | true                                                :: :: true  {{ com $[[true]] : [[bool]]$ }}
+  | false                                               :: :: false {{ com $[[false]] : [[bool]]$ }}
+  | num                                         :: :: num  {{ com natural number constant }}
+  | hex                                         :: :: hex  {{ com bit vector constant, C-style }}
+  {{ com hex and bin are constant bit vectors, C-style }}
+  | bin                                         :: :: bin  {{ com bit vector constant, C-style }}
+  | string                                              :: :: string {{ com string constant }}
 
 semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
                                                         {{ ocaml terminal * bool }}
                                                         {{ lem (terminal * bool) }}
                                                         {{ hol bool }}
-  {{ com Optional semi-colons }}
-  |                                                     :: :: no
+  {{ com Optional semi-colon }}
+  |                                                     :: :: no  
     {{ hol F }}
     {{ ocaml false }}
     {{ lem false }}
@@ -551,56 +551,61 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
 
 
 pat :: 'P_' ::= 
-  {{ com Patterns }}
+  {{ com Pattern }}
   {{ aux _ l }}
   | _                                                   :: :: wild  
-    {{ com Wildcards }}
+    {{ com wildcard }}
   | ( pat as id )                                      :: :: as
-    {{ com Named patterns }}
+    {{ com named pattern }}
 % ML-style
 %  | ( pat : typ )                                       :: :: typ
 %    {{ com Typed patterns }}
 % C-style
   | ( typ pat )                                       :: :: typ
-    {{ com Typed patterns }}
+    {{ com typed pattern }}
+
+  | id                                      :: :: id
+    {{ com identifier  }}
+
 %
   | id pat1 .. patn                                     :: :: app
-    {{ com Single variable and constructor patterns }}
+    {{ com union constructor pattern }}
+
 % OR?  do we invent something ghastly including a union keyword?  Perhaps not...
 
 %  | <| fpat1 ; ... ; fpatn semi_opt |>                  :: :: record
 %    {{ com Record patterns }}
 % OR
-  | struct { fpat1 ; ... ; fpatn semi_opt }                  :: :: c_record
-    {{ com C-style struct patterns }}
+  | { fpat1 ; ... ; fpatn semi_opt }                  :: :: record
+    {{ com struct pattern }}
 
 %Patterns for vectors
 %Should these be the same since vector syntax has changed, and lists have also changed?
 
   | [ pat1 , .. , patn  ]                     :: :: vector
-   {{ com Vector patterns }}
+   {{ com vector pattern }}
 
   | [ num1 = pat1 , .. , numn = patn  ]                     :: :: vector_indexed
-   {{ com Vector patterns }}
+   {{ com vector pattern (with explicit indices) }}
 
 % cf ntoes for this
   |  pat1 : .. : patn                                   :: :: vector_concat
-  {{ com Concatenated vector patterns }} 
+  {{ com concatenated vector pattern }} 
 
   | ( pat1 , .... , patn )                              :: :: tup
-    {{ com Tuple patterns }}
+    {{ com tuple pattern }}
   | [| pat1 , .. , patn |]	                        :: :: list
-    {{ com List patterns }}
+    {{ com list pattern }}
   | ( pat )                                             :: :: paren
 %  | pat1 '::' pat2                                      :: :: cons
 %    {{ com Cons patterns }}
 %  | id '+' num                                         :: :: num_add
 %    {{ com constant addition patterns }}
   | lit                                                 :: :: lit
-    {{ com Literal constant patterns }}
+    {{ com literal constant pattern }}
 
 fpat :: 'FP_' ::=
-  {{ com Field patterns }}
+  {{ com Field pattern }}
   {{ aux _ l }}
   | id = pat                                            :: :: Fpat
 
@@ -617,36 +622,36 @@ P_app <= P_as
 grammar
 
 exp :: 'E_' ::=
-  {{ com Expressions }}
+  {{ com Expression }}
   {{ aux _ l }}  
 
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
-  | { exp1 ; ... ; expn }                               ::   :: block 
+  | { exp1 ; ... ; expn }                               ::   :: block {{ com block (parsing conflict with structs?) }}
 
-  | id                                                  :: :: ident
-    {{ com Identifiers }}
+  | id                                                  :: :: id
+    {{ com identifier }}
 
   | lit                                                 :: :: lit
-    {{ com Literal constants }}
+    {{ com literal constant }}
 
   | exp1 exp2                                           :: :: app
-    {{ com Function applications }}
+    {{ com function application }}
   | exp1 id exp2                                        :: :: infix
-    {{ com Infix applications }}
+    {{ com infix function application }}
  
   | ( exp1 , .... , expn )                              :: :: tup
-    {{ com Tuples }}
+    {{ com tuple }}
 
   | if exp1 then exp2 else exp3                         :: :: if
-    {{ com Conditionals }}
+    {{ com conditional }}
 
 
 
 % vectors
-  | [ exp1 , ... , expn ]                             :: :: vector
+  | [ exp1 , ... , expn ]                             :: :: vector {{ com vector (indexed from 0) }}
 % endianness comes from global command-line option???
 
-  | [ num1 = exp1 , ... , numn = expn ]               :: :: vector_indexed
+  | [ num1 = exp1 , ... , numn = expn ]               :: :: vector_indexed {{ com vector (indexed consecutively) }}
 % num1 .. numn must be a consecutive list of naturals
 
 % we pick [ ] not { } for vector literals for consistency with their
@@ -658,7 +663,7 @@ exp :: 'E_' ::=
   {{ com vector access }}
 
   | exp [ exp1 : exp2 ]                            :: :: vector_subrange
-  {{ com Subvector extraction }}
+  {{ com subvector extraction }}
   % do we want to allow a comma-separated list of such thingies?  
 
   | [ exp with exp1 = exp2 ]                          :: :: vector_update 
@@ -673,7 +678,7 @@ exp :: 'E_' ::=
   | [| exp1 , ..  , expn |]                    :: :: list
   {{ com list }}
   | exp1 '::' exp2                                      :: :: cons
-    {{ com Cons expressions }}
+    {{ com cons }}
 
 
 % const unions
@@ -682,12 +687,12 @@ exp :: 'E_' ::=
 
 % TODO
 
- | <| fexps |>                                         :: :: record
-    {{ com Records }}
-  | <| exp with fexps |>                                :: :: recup
-    {{ com Functional update for records }}
+  | { fexps }                                         :: :: record
+    {{ com struct }}
+  | { exp with fexps }                                :: :: recup
+    {{ com functional update of struct }}
   | exp . id                                            :: :: field
-    {{ com Field projection for records }}
+    {{ com field projection from struct  }}
 
 %Expressions for creating and accessing vectors
 
@@ -703,36 +708,36 @@ exp :: 'E_' ::=
 %  and maybe with nice syntax
 
   | switch exp { case pexp1  ... case pexpn } :: :: case
-    {{ com Pattern matching expressions }}
+    {{ com pattern matching }}
 %  | ( typ ) exp                                      :: :: Typed
 %    {{ com Type-annotated expressions }}
   | letbind in exp                                  :: :: let
-    {{ com Let expressions }}
+    {{ com let expression }}
 
   | lexp := exp                                      :: :: assign
+    {{ com imperative assignment }}
 
-
-lexp :: 'LEXP_' ::=
-    | id                                                  :: :: ident
-    {{ com Identifiers }}
-    | lexp [ exp ]  :: ::                         vector
-    | lexp [ exp1 : exp2 ]  :: ::              vector_range
+lexp :: 'LEXP_' ::= {{ com lvalue expression }}
+    | id                                                  :: :: id
+    {{ com identifier }}
+    | lexp [ exp ]  :: ::                         vector  {{ com vector element }}
+    | lexp [ exp1 : exp2 ]  :: ::              vector_range {{ com subvector }}
     % maybe comma-sep such lists too
-    | lexp . id :: :: field  
+    | lexp . id :: :: field                        {{ com struct field }}
 
 
 fexp :: 'FE_' ::=
-  {{ com Field-expressions }}
+  {{ com field-expression }}
   {{ aux _ l }}
   | id = exp                                            :: :: Fexp
 
 fexps :: 'FES_' ::=
-  {{ com Field-expression lists }}
+  {{ com field-expression list }}
   {{ aux _ l }}
   | fexp1 ; ... ; fexpn semi_opt                        :: :: Fexps
 
 pexp :: 'Pat_' ::=
-  {{ com Pattern matches }}
+  {{ com pattern match }}
   {{ aux _ l }}
   | pat -> exp                                  :: :: exp
 % apparently could use -> or => for this.
@@ -809,12 +814,12 @@ grammar
 %%%%% C-ish style %%%%%%%%%%
 
 tannot_opt :: 'Typ_annot_opt_' ::=
-  {{ com Optional type annotations }}
+  {{ com Optional type annotation }}
   |                                             :: :: none
   | typ_quant typ                               :: :: some 
 
 funcl :: 'FCL_' ::=
-  {{ com Function clauses }}
+  {{ com Function clause }}
   {{ aux _ l }}
   | id pat = exp                   :: :: Funcl
 
@@ -825,7 +830,7 @@ rec_opt :: 'Rec_' ::=
 
 effects_opt :: 'Effects_opt_' ::=
   {{ aux _ l }}
-  |                                             :: :: pure {{ com sugar for pure }}
+  |                                             :: :: pure {{ com sugar for empty effect set }}
   | effects                                     :: :: nonpure
 
 fundef :: 'FD_' ::=
@@ -840,7 +845,7 @@ fundef :: 'FD_' ::=
 %  which is ok for the typ_quant part but not for the typ part
 
 letbind :: 'LB_' ::=
-  {{ com Let bindings }}
+  {{ com Let binding }}
   {{ aux _ l }}
   | typschm id = exp                                :: :: val_explicit
     {{ com Value binding }}
@@ -849,12 +854,12 @@ letbind :: 'LB_' ::=
 
 
 val_spec :: 'VS_' ::=
-  {{ com Value type specifications }} 
+  {{ com Value type specification }} 
   {{ aux _ l }}
   | val typschm id                                  :: :: val_spec
 
 default_typing_spec :: 'DT_' ::=
-  {{ com default kinding and typing assumptions }}
+  {{ com default kinding and typing assumption }}
   {{ aux _ l }}
   | default base_kind regexp    :: :: kind
   | default typschm regexp      :: :: typ
@@ -870,7 +875,7 @@ default_typing_spec :: 'DT_' ::=
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 def :: 'DEF_' ::=
-  {{ com Top-level definitions }}
+  {{ com Top-level definition }}
   {{ aux _ l }}
   | type_def                                                    :: :: type
     {{ com Type definition }}
@@ -885,13 +890,13 @@ def :: 'DEF_' ::=
   | register typ id                                   :: :: reg_dec
     {{ com Register declaration }}
 
-  | split function rec_opt tannot_opt effects_opt id   :: :: split_function
+  | split function rec_opt tannot_opt effects_opt id   :: :: split_function {{ texlong }}
 
   | function clause funcl  :: :: split_funcl
 
   | end id  :: :: split_end
 
-  | split typedef id naming_scheme_opt = const union typquant :: :: split_variant
+  | split typedef id naming_scheme_opt = const union typquant :: :: split_variant {{ texlong }}
 
   | union member id =  typ id'  :: :: split_unioncl
 
@@ -1302,6 +1307,9 @@ defs :: '' ::=
 grammar
 
 terminals :: '' ::=
+  | **                                  :: :: starstar
+    {{ tex \ensuremath{\mathop{\mathord{*}\mathord{*} } } }}
+    {{ com \texttt{**} }}
   | >=                                  :: :: geq
     {{ tex \ensuremath{\geq} }}
     {{ com \texttt{>=} }}

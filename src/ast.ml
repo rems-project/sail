@@ -45,21 +45,21 @@ let combine_lex_skips s1 s2 =
 type terminal = lex_skips
 
 
-type x = terminal * text (* Variables *)
-type ix = terminal * text (* Variables *)
+type x = terminal * text (* identifier *)
+type ix = terminal * text (* infix identifier *)
 
 type 
-id_aux =  (* identifiers *)
+id_aux =  (* Identifier *)
    Id of x
- | DeIId of terminal * x * terminal (* remove infix status *)
+ | DeIid of terminal * x * terminal (* remove infix status *)
 
 
 type 
-base_kind_aux =  (* base kinds *)
-   BK_type of terminal
- | BK_nat of terminal
- | BK_endian of terminal
- | BK_effects of terminal
+base_kind_aux =  (* base kind *)
+   BK_type of terminal (* kind of types *)
+ | BK_nat of terminal (* kind of natural number size expressions *)
+ | BK_endian of terminal (* kind of endianness specifications *)
+ | BK_effects of terminal (* kind of effect sets *)
 
 
 type 
@@ -84,12 +84,12 @@ effect_aux =  (* effect *)
 
 
 type 
-nexp_aux =  (* expressions of kind Nat, for vector lengths *)
-   Nexp_var of id
- | Nexp_constant of terminal * int
- | Nexp_times of nexp * terminal * nexp (* must be linear after normalisation... except for the type of *, ahem *)
- | Nexp_sum of nexp * terminal * nexp
- | Nexp_exp of terminal * terminal * nexp
+nexp_aux =  (* expression of kind Nat, for vector sizes and origins *)
+   Nexp_id of id (* identifier *)
+ | Nexp_constant of terminal * int (* constant *)
+ | Nexp_times of nexp * terminal * nexp (* product *)
+ | Nexp_sum of nexp * terminal * nexp (* sum *)
+ | Nexp_exp of terminal * terminal * nexp (* exponential *)
 
 and nexp = 
    Nexp_aux of nexp_aux * l
@@ -106,7 +106,7 @@ effect =
 
 
 type 
-nexp_constraint_aux =  (* contraints over kind Nat *)
+nexp_constraint_aux =  (* contraint over kind Nat *)
    NC_fixed of nexp * terminal * nexp
  | NC_bounded_ge of nexp * terminal * nexp
  | NC_bounded_le of nexp * terminal * nexp
@@ -119,16 +119,16 @@ kind =
 
 
 type 
-endian_aux =  (* endianness specifications *)
-   End_var of id
- | End_inc of terminal
- | End_dec of terminal
-
-
-type 
 effects_aux =  (* effect set *)
    Effects_var of id
  | Effects_set of terminal * (effect * terminal) list * terminal (* effect set *)
+
+
+type 
+endian_aux =  (* endianness specifications *)
+   End_id of id (* identifier *)
+ | End_inc of terminal (* increasing (little-endian) *)
+ | End_dec of terminal (* decreasing (big-endian) *)
 
 
 type 
@@ -138,18 +138,18 @@ nexp_constraint =
 
 type 
 kinded_id =  (* optionally kind-annotated identifier *)
-   KOpt_none of id
- | KOpt_kind of kind * id
-
-
-type 
-endian = 
-   End_aux of endian_aux * l
+   KOpt_none of id (* identifier *)
+ | KOpt_kind of kind * id (* kind-annotated variable *)
 
 
 type 
 effects = 
    Effects_aux of effects_aux * l
+
+
+type 
+endian = 
+   End_aux of endian_aux * l
 
 
 type 
@@ -160,12 +160,12 @@ typquant_aux =
 
 
 type 
-typ =  (* Constructors of kind Type *)
+typ =  (* Constructor of kind Type *)
    Typ_wild of terminal (* Unspecified type *)
- | Typ_var of id (* Type variables *)
- | Typ_fn of typ * terminal * typ * effects (* Function types -- first-order only *)
- | Typ_tup of (typ * terminal) list (* Tuple types *)
- | Typ_app of id * (typ_arg) list (* type constructor applications *)
+ | Typ_var of id (* Type variable *)
+ | Typ_fn of typ * terminal * typ * effects (* Function type (first-order only in user code) *)
+ | Typ_tup of (typ * terminal) list (* Tuple type *)
+ | Typ_app of id * (typ_arg) list (* type constructor application *)
 
 and typ_arg =  (* Type constructor arguments of all kinds *)
    Typ_arg_nexp of nexp
@@ -185,16 +185,16 @@ typschm_aux =  (* Type schemes *)
 
 
 type 
-lit =  (* Literal constants *)
-   L_true of terminal
- | L_false of terminal
- | L_num of terminal * int
- | L_hex of terminal * string (* hex and bin are constant bit vectors, entered as C-style hex or binaries *)
- | L_bin of terminal * string
- | L_string of terminal * Ulib.UTF8.t
- | L_unit of terminal * terminal
- | L_zero of terminal (* bitzero and bitone are constant bits, if commonly used we will consider overloading 0 and 1 *)
- | L_one of terminal
+lit =  (* Literal constant *)
+   L_unit of terminal * terminal (* $() : _$ *)
+ | L_zero of terminal (* $_ : _$ *)
+ | L_one of terminal (* $_ : _$ *)
+ | L_true of terminal (* $_ : _$ *)
+ | L_false of terminal (* $_ : _$ *)
+ | L_num of terminal * int (* natural number constant *)
+ | L_hex of terminal * string (* bit vector constant, C-style *)
+ | L_bin of terminal * string (* bit vector constant, C-style *)
+ | L_string of terminal * Ulib.UTF8.t (* string constant *)
 
 
 type 
@@ -203,24 +203,25 @@ typschm =
 
 
 type 
-pat_aux =  (* Patterns *)
-   P_wild of terminal (* Wildcards *)
- | P_as of terminal * pat * terminal * id * terminal (* Named patterns *)
- | P_typ of terminal * typ * pat * terminal (* Typed patterns *)
- | P_app of id * (pat) list (* Single variable and constructor patterns *)
- | P_c_record of terminal * terminal * (fpat * terminal) list * terminal * bool * terminal (* C-style struct patterns *)
- | P_vector of terminal * (pat * terminal) list * terminal (* Vector patterns *)
- | P_vector_indexed of terminal * ((terminal * int * terminal * pat) * terminal) list * terminal (* Vector patterns *)
- | P_vector_concat of (pat * terminal) list (* Concatenated vector patterns *)
- | P_tup of terminal * (pat * terminal) list * terminal (* Tuple patterns *)
- | P_list of terminal * (pat * terminal) list * terminal (* List patterns *)
+pat_aux =  (* Pattern *)
+   P_wild of terminal (* wildcard *)
+ | P_as of terminal * pat * terminal * id * terminal (* named pattern *)
+ | P_typ of terminal * typ * pat * terminal (* typed pattern *)
+ | P_id of id (* identifier *)
+ | P_app of id * (pat) list (* union constructor pattern *)
+ | P_record of terminal * (fpat * terminal) list * terminal * bool * terminal (* struct pattern *)
+ | P_vector of terminal * (pat * terminal) list * terminal (* vector pattern *)
+ | P_vector_indexed of terminal * ((terminal * int * terminal * pat) * terminal) list * terminal (* vector pattern (with explicit indices) *)
+ | P_vector_concat of (pat * terminal) list (* concatenated vector pattern *)
+ | P_tup of terminal * (pat * terminal) list * terminal (* tuple pattern *)
+ | P_list of terminal * (pat * terminal) list * terminal (* list pattern *)
  | P_paren of terminal * pat * terminal
- | P_lit of lit (* Literal constant patterns *)
+ | P_lit of lit (* literal constant pattern *)
 
 and pat = 
    P_aux of pat_aux * l
 
-and fpat_aux =  (* Field patterns *)
+and fpat_aux =  (* Field pattern *)
    FP_Fpat of id * terminal * pat
 
 and fpat = 
@@ -228,57 +229,57 @@ and fpat =
 
 
 type 
-exp_aux =  (* Expressions *)
-   E_block of terminal * (exp * terminal) list * terminal
- | E_ident of id (* Identifiers *)
- | E_lit of lit (* Literal constants *)
- | E_app of exp * exp (* Function applications *)
- | E_infix of exp * id * exp (* Infix applications *)
- | E_tup of terminal * (exp * terminal) list * terminal (* Tuples *)
- | E_if of terminal * exp * terminal * exp * terminal * exp (* Conditionals *)
- | E_vector of terminal * (exp * terminal) list * terminal
- | E_vector_indexed of terminal * ((terminal * int * terminal * exp) * terminal) list * terminal
+exp_aux =  (* Expression *)
+   E_block of terminal * (exp * terminal) list * terminal (* block (parsing conflict with structs?) *)
+ | E_id of id (* identifier *)
+ | E_lit of lit (* literal constant *)
+ | E_app of exp * exp (* function application *)
+ | E_infix of exp * id * exp (* infix function application *)
+ | E_tup of terminal * (exp * terminal) list * terminal (* tuple *)
+ | E_if of terminal * exp * terminal * exp * terminal * exp (* conditional *)
+ | E_vector of terminal * (exp * terminal) list * terminal (* vector (indexed from 0) *)
+ | E_vector_indexed of terminal * ((terminal * int * terminal * exp) * terminal) list * terminal (* vector (indexed consecutively) *)
  | E_vector_access of exp * terminal * exp * terminal (* vector access *)
- | E_vector_subrange of exp * terminal * exp * terminal * exp * terminal (* Subvector extraction *)
+ | E_vector_subrange of exp * terminal * exp * terminal * exp * terminal (* subvector extraction *)
  | E_vector_update of terminal * exp * terminal * exp * terminal * exp * terminal (* vector functional update *)
  | E_vector_update_range of terminal * exp * terminal * exp * terminal * exp * terminal * exp * terminal (* vector functional subrange update (with another vector) *)
  | E_list of terminal * (exp * terminal) list * terminal (* list *)
- | E_cons of exp * terminal * exp (* Cons expressions *)
- | E_record of terminal * fexps * terminal (* Records *)
- | E_recup of terminal * exp * terminal * fexps * terminal (* Functional update for records *)
- | E_field of exp * terminal * id (* Field projection for records *)
- | E_case of terminal * exp * terminal * ((terminal * pexp)) list * terminal (* Pattern matching expressions *)
- | E_let of letbind * terminal * exp (* Let expressions *)
- | E_assign of lexp * terminal * exp
+ | E_cons of exp * terminal * exp (* cons *)
+ | E_record of terminal * fexps * terminal (* struct *)
+ | E_recup of terminal * exp * terminal * fexps * terminal (* functional update of struct *)
+ | E_field of exp * terminal * id (* field projection from struct *)
+ | E_case of terminal * exp * terminal * ((terminal * pexp)) list * terminal (* pattern matching *)
+ | E_let of letbind * terminal * exp (* let expression *)
+ | E_assign of lexp * terminal * exp (* imperative assignment *)
 
 and exp = 
    E_aux of exp_aux * l
 
-and lexp = 
-   LEXP_ident of id (* Identifiers *)
- | LEXP_vector of lexp * terminal * exp * terminal
- | LEXP_vector_range of lexp * terminal * exp * terminal * exp * terminal
- | LEXP_field of lexp * terminal * id
+and lexp =  (* lvalue expression *)
+   LEXP_id of id (* identifier *)
+ | LEXP_vector of lexp * terminal * exp * terminal (* vector element *)
+ | LEXP_vector_range of lexp * terminal * exp * terminal * exp * terminal (* subvector *)
+ | LEXP_field of lexp * terminal * id (* struct field *)
 
-and fexp_aux =  (* Field-expressions *)
+and fexp_aux =  (* field-expression *)
    FE_Fexp of id * terminal * exp
 
 and fexp = 
    FE_aux of fexp_aux * l
 
-and fexps_aux =  (* Field-expression lists *)
+and fexps_aux =  (* field-expression list *)
    FES_Fexps of (fexp * terminal) list * terminal * bool
 
 and fexps = 
    FES_aux of fexps_aux * l
 
-and pexp_aux =  (* Pattern matches *)
+and pexp_aux =  (* pattern match *)
    Pat_exp of pat * terminal * exp
 
 and pexp = 
    Pat_aux of pexp_aux * l
 
-and letbind_aux =  (* Let bindings *)
+and letbind_aux =  (* Let binding *)
    LB_val_explicit of typschm * id * terminal * exp (* Value binding *)
  | LB_val_implicit of terminal * id * terminal * exp (* value binding with implicit type *)
 
@@ -287,7 +288,7 @@ and letbind =
 
 
 type 
-funcl_aux =  (* Function clauses *)
+funcl_aux =  (* Function clause *)
    FCL_Funcl of id * pat * terminal * exp
 
 
@@ -299,12 +300,12 @@ rec_opt_aux =
 
 type 
 effects_opt_aux = 
-   Effects_opt_pure (* sugar for pure *)
+   Effects_opt_pure (* sugar for empty effect set *)
  | Effects_opt_nonpure of effects
 
 
 type 
-tannot_opt =  (* Optional type annotations *)
+tannot_opt =  (* Optional type annotation *)
    Typ_annot_opt_none
  | Typ_annot_opt_some of terminal * typ
 
@@ -330,12 +331,12 @@ fundef_aux =  (* Function definition *)
 
 
 type 
-val_spec_aux =  (* Value type specifications *)
+val_spec_aux =  (* Value type specification *)
    VS_val_spec of terminal * typschm * id
 
 
 type 
-default_typing_spec_aux =  (* default kinding and typing assumptions *)
+default_typing_spec_aux =  (* default kinding and typing assumption *)
    DT_kind of terminal * base_kind * terminal * string
  | DT_typ of terminal * typschm * terminal * string
 
@@ -356,7 +357,7 @@ default_typing_spec =
 
 
 type 
-def_aux =  (* Top-level definitions *)
+def_aux =  (* Top-level definition *)
    DEF_type of terminal (* Type definition *)
  | DEF_fundef of fundef (* Function definition *)
  | DEF_val of letbind (* Value definition *)
@@ -376,28 +377,28 @@ def =
 
 
 type 
-typ_sugar_aux =  (* library types and syntactic sugar *)
-   Typ_sugar_unit of terminal
- | Typ_sugar_bool of terminal
- | Typ_sugar_bit of terminal (* pure bits, not mutable bits! *)
- | Typ_sugar_nat of terminal
- | Typ_sugar_string of terminal * Ulib.UTF8.t
- | Typ_sugar_enum of terminal * nexp * nexp * endian (* natural numbers from nexp to nexp+nexp-1, ordered by endian *)
- | Typ_sugar_enum1 of terminal * nexp * terminal (* sugar for \texttt{enum nexp 0 inc} *)
- | Typ_sugar_enum2 of terminal * nexp * terminal * nexp * terminal (* sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} *)
- | Typ_sugar_vector of terminal * nexp * nexp * endian * typ
- | Typ_sugar_vector2 of typ * terminal * nexp * terminal
- | Typ_sugar_vector3 of typ * terminal * nexp * terminal * nexp * terminal
- | Typ_sugar_list of terminal * typ
- | Typ_sugar_set of terminal * typ
- | Typ_sugar_reg of terminal * typ (* type of mutable register components *)
+typ_lib_aux =  (* library types and syntactic sugar for them *)
+   Typ_lib_unit of terminal (* unit type with value $()$ *)
+ | Typ_lib_bool of terminal (* booleans $_$ and $_$ *)
+ | Typ_lib_bit of terminal (* pure bit values (not mutable bits) *)
+ | Typ_lib_nat of terminal (* natural numbers 0,1,2,... *)
+ | Typ_lib_string of terminal * Ulib.UTF8.t (* UTF8 strings *)
+ | Typ_lib_enum of terminal * nexp * nexp * endian (* natural numbers nexp .. nexp+nexp-1, ordered by endian *)
+ | Typ_lib_enum1 of terminal * nexp * terminal (* sugar for \texttt{enum nexp 0 inc} *)
+ | Typ_lib_enum2 of terminal * nexp * terminal * nexp * terminal (* sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} *)
+ | Typ_lib_vector of terminal * nexp * nexp * endian * typ (* vector of typ, indexed by natural range *)
+ | Typ_lib_vector2 of typ * terminal * nexp * terminal (* sugar for vector indexed by [ nexp ] *)
+ | Typ_lib_vector3 of typ * terminal * nexp * terminal * nexp * terminal (* sugar for vector indexed by [ nexp:nexp ] *)
+ | Typ_lib_list of terminal * typ (* list of typ *)
+ | Typ_lib_set of terminal * typ (* finite set of typ *)
+ | Typ_lib_reg of terminal * typ (* mutable register components holding typ *)
 
 
 type 
-bitfield = 
-   BF_bit of terminal * int
- | BF_bits of terminal * int * terminal * terminal * int
- | BF_bitfields of bitfield * terminal * bitfield
+index_range =  (* index specification, e.g.~for bitfields *)
+   BF_single of terminal * int (* single index *)
+ | BF_range of terminal * int * terminal * terminal * int (* index range *)
+ | BF_concat of index_range * terminal * index_range (* concatenation of index ranges *)
 
 
 type 
@@ -406,28 +407,22 @@ defs_aux =  (* Definition sequences *)
 
 
 type 
-typ_sugar = 
-   Typ_sugar_aux of typ_sugar_aux * l
+typ_lib = 
+   Typ_lib_aux of typ_lib_aux * l
 
 
 type 
-ctor_def =  (* Datatype definition clauses *)
+ctor_def =  (* Datatype constructor definition clause *)
    CT_ct of id * terminal * typschm
 
 
 type 
-enum_opt = 
-   EnumOpt_empty
- | EnumOpt_enum of terminal
-
-
-type 
-tdef =  (* Type definition bodies *)
-   TD_abbrev of terminal * id * terminal * terminal * typschm (* Type abbreviations *)
+tdef =  (* Type definition body *)
+   TD_abbrev of terminal * id * terminal * terminal * typschm (* Type abbreviation *)
  | TD_record of terminal * id * terminal * terminal * terminal * terminal * typquant * terminal * ((typ * id) * terminal) list * terminal * bool * terminal (* Struct type definition *)
  | TD_variant of terminal * id * terminal * terminal * terminal * terminal * typquant * terminal * ((typ * id) * terminal) list * terminal * bool * terminal (* Union type definition *)
  | TD_enum of terminal * id * terminal * terminal * terminal * terminal * (id * terminal) list * terminal * bool * terminal (* enumeration type definition *)
- | TD_register of terminal * id * terminal * terminal * terminal * terminal * nexp * terminal * nexp * terminal * terminal * ((bitfield * terminal * id) * terminal) list * terminal (* register mutable bitfield type *)
+ | TD_register of terminal * id * terminal * terminal * terminal * terminal * nexp * terminal * nexp * terminal * terminal * ((index_range * terminal * id) * terminal) list * terminal (* register mutable bitfield type *)
 
 
 type 
