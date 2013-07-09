@@ -481,26 +481,26 @@ ctor_def :: 'CT_' ::=
 tdef :: 'TD_' ::=
   {{ com Type definition body }}
   | typedef id naming_scheme_opt = typschm                                        :: :: abbrev
-    {{ com Type abbreviation }} {{ texlong }}
+    {{ com type abbreviation }} {{ texlong }}
   | typedef id naming_scheme_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: :: record
-    {{ com Struct type definition }} {{ texlong }}
+    {{ com struct type definition }} {{ texlong }}
 % for specifying constructor result types of nat-indexed GADTs, we can
 %  let the typi be function types (as constructors are not allowed to
 %  take parameters of function types)
 % concrete syntax: to be even closer to C, could have a postfix id rather than prefix id = 
   | typedef id naming_scheme_opt = const union typquant { typ1 id1 ; ... ; typn idn semi_opt }   :: :: variant
-    {{ com Union type definition}} {{ texlong }}
+    {{ com union type definition}} {{ texlong }}
 
   | typedef id naming_scheme_opt = enum { id1 ; ... ; idn semi_opt }   :: :: enum
     {{ com enumeration type definition}} {{ texlong }}
 
   | typedef  id = register bits [ nexp : nexp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
-:: :: register {{ com register mutable bitfield type }} {{ texlong }}
+:: :: register {{ com register mutable bitfield type definition }} {{ texlong }}
 
 % also sugar [  nexp ] 
 
 
-index_range :: 'BF_' ::= {{ com index specification, e.g.~for bitfields }} 
+index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}} 
   | num :: :: 'single'  {{ com single index }}
   | num1 '..' num2 :: :: range {{ com index range }}
   | index_range1 , index_range2 :: :: concat {{ com concatenation of index ranges }}
@@ -553,6 +553,8 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
 pat :: 'P_' ::= 
   {{ com Pattern }}
   {{ aux _ l }}
+  | lit                                                 :: :: lit
+    {{ com literal constant pattern }}
   | _                                                   :: :: wild  
     {{ com wildcard }}
   | ( pat as id )                                      :: :: as
@@ -589,20 +591,19 @@ pat :: 'P_' ::=
    {{ com vector pattern (with explicit indices) }}
 
 % cf ntoes for this
-  |  pat1 : .. : patn                                   :: :: vector_concat
+  |  pat1 : .... : patn                                   :: :: vector_concat
   {{ com concatenated vector pattern }} 
 
   | ( pat1 , .... , patn )                              :: :: tup
     {{ com tuple pattern }}
   | [| pat1 , .. , patn |]	                        :: :: list
     {{ com list pattern }}
-  | ( pat )                                             :: :: paren
+  | ( pat )                                             :: S :: paren
+{{ ichlo [[pat]] }}
 %  | pat1 '::' pat2                                      :: :: cons
 %    {{ com Cons patterns }}
 %  | id '+' num                                         :: :: num_add
 %    {{ com constant addition patterns }}
-  | lit                                                 :: :: lit
-    {{ com literal constant pattern }}
 
 fpat :: 'FP_' ::=
   {{ com Field pattern }}
@@ -625,7 +626,6 @@ exp :: 'E_' ::=
   {{ com Expression }}
   {{ aux _ l }}  
 
-  | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
   | { exp1 ; ... ; expn }                               ::   :: block {{ com block (parsing conflict with structs?) }}
 
   | id                                                  :: :: id
@@ -670,7 +670,7 @@ exp :: 'E_' ::=
   {{ com vector functional update }}
 
   | [ exp with exp1 : exp2 = exp3 ]                          :: :: vector_update_range
-  {{ com vector functional subrange update (with another vector)}}
+  {{ com vector subrange update (with vector)}}
   % do we want a functional update form with a comma-separated list of such?
 
 
@@ -717,6 +717,9 @@ exp :: 'E_' ::=
   | lexp := exp                                      :: :: assign
     {{ com imperative assignment }}
 
+  | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
+
+
 lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     | id                                                  :: :: id
     {{ com identifier }}
@@ -727,17 +730,17 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
 
 
 fexp :: 'FE_' ::=
-  {{ com field-expression }}
+  {{ com Field-expression }}
   {{ aux _ l }}
   | id = exp                                            :: :: Fexp
 
 fexps :: 'FES_' ::=
-  {{ com field-expression list }}
+  {{ com Field-expression list }}
   {{ aux _ l }}
   | fexp1 ; ... ; fexpn semi_opt                        :: :: Fexps
 
 pexp :: 'Pat_' ::=
-  {{ com pattern match }}
+  {{ com Pattern match }}
   {{ aux _ l }}
   | pat -> exp                                  :: :: exp
 % apparently could use -> or => for this.
@@ -814,29 +817,31 @@ grammar
 %%%%% C-ish style %%%%%%%%%%
 
 tannot_opt :: 'Typ_annot_opt_' ::=
-  {{ com Optional type annotation }}
+  {{ com Optional type annotation for functions}}
   |                                             :: :: none
   | typ_quant typ                               :: :: some 
+
+rec_opt :: 'Rec_' ::=
+  {{ aux _ l }} {{ com Optional recursive annotation for functions }}
+  |                                             :: :: nonrec {{ com non-recursive }}
+  | rec                                         :: :: rec {{ com recursive }}
+
+effects_opt :: 'Effects_opt_' ::=
+  {{ aux _ l }} {{ com Optional effect annotation for functions }}
+  |                                             :: :: pure {{ com sugar for empty effect set }}
+  | effects                                     :: :: effects
 
 funcl :: 'FCL_' ::=
   {{ com Function clause }}
   {{ aux _ l }}
   | id pat = exp                   :: :: Funcl
 
-rec_opt :: 'Rec_' ::=
-  {{ aux _ l }}
-  |                                             :: :: nonrec
-  | rec                                         :: :: rec
-
-effects_opt :: 'Effects_opt_' ::=
-  {{ aux _ l }}
-  |                                             :: :: pure {{ com sugar for empty effect set }}
-  | effects                                     :: :: nonpure
 
 fundef :: 'FD_' ::=
   {{ com Function definition}}
   {{ aux _ l }}
-  | function rec_opt tannot_opt effects_opt funcl1 and ... and funcln :: :: function {{ texlong }}  {{ com function definition }}
+  | function rec_opt tannot_opt effects_opt funcl1 and ... and funcln :: :: function {{ texlong }}  
+% {{ com function definition }}
 % TODO note that the typ in the tannot_opt is the *result* type, not
 %  the type of the whole function.  The argument type comes from the
 %  pattern in the funcl
@@ -848,7 +853,7 @@ letbind :: 'LB_' ::=
   {{ com Let binding }}
   {{ aux _ l }}
   | typschm id = exp                                :: :: val_explicit
-    {{ com Value binding }}
+    {{ com value binding with explicit type }}
   | let id = exp                                    :: :: val_implicit
     {{ com value binding with implicit type }}
 
@@ -859,7 +864,7 @@ val_spec :: 'VS_' ::=
   | val typschm id                                  :: :: val_spec
 
 default_typing_spec :: 'DT_' ::=
-  {{ com default kinding and typing assumption }}
+  {{ com Default kinding or typing assumption }}
   {{ aux _ l }}
   | default base_kind regexp    :: :: kind
   | default typschm regexp      :: :: typ
@@ -878,30 +883,31 @@ def :: 'DEF_' ::=
   {{ com Top-level definition }}
   {{ aux _ l }}
   | type_def                                                    :: :: type
-    {{ com Type definition }}
+    {{ com type definition }}
   | fundef                                                   :: :: fundef
-    {{ com Function definition }}
+    {{ com function definition }}
   | letbind                                                   :: :: val
-    {{ com Value definition }}
+    {{ com value definition }}
   | val_spec                                                    :: :: spec
-    {{ com Top-level type constraint }}
+    {{ com top-level type constraint }}
   | default_typing_spec                                         :: :: default
     {{ com default kind and type assumptions }}
   | register typ id                                   :: :: reg_dec
-    {{ com Register declaration }}
+    {{ com register declaration }}
 
-  | split function rec_opt tannot_opt effects_opt id   :: :: split_function {{ texlong }}
+  | scattered function rec_opt tannot_opt effects_opt id   :: :: scattered_function {{ texlong }} {{ com scattered function definition header }}
 
-  | function clause funcl  :: :: split_funcl
+  | function clause funcl  :: :: scattered_funcl  
+{{ com scattered function definition clause }}
 
-  | end id  :: :: split_end
+  | scattered typedef id naming_scheme_opt = const union typquant :: :: scattered_variant {{ texlong }} {{ com scattered union definition header }}
 
-  | split typedef id naming_scheme_opt = const union typquant :: :: split_variant {{ texlong }}
-
-  | union member id =  typ id'  :: :: split_unioncl
+  | union id member typ id'  :: :: scattered_unioncl {{ com scattered union definition member }}
+  | end id  :: :: scattered_end
+{{ com scattered definition end }}
 
 defs :: '' ::=
-  {{ com Definition sequences }}
+  {{ com Definition sequence }}
   {{ aux _ l }}
   | def1  .. defn                 :: :: Defs
 
