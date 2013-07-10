@@ -170,6 +170,13 @@ id :: '' ::=
   {{ aux _ l }}
   | x                           :: :: id
   | ( x )                       :: :: deIid {{ com remove infix status }}
+% Note: we have just a single namespace. We don't want the same
+% identifier to be reused as a type name or variable, expression
+% variable, and field name.  We don't enforce any lexical convention
+% on type variables (or variables of other kinds)
+% We don't enforce a lexical convention on infix operators, as some of the 
+% targets use alphabetical infix operators. 
+
 
 %% 
 %% x_l {{ tex \ottnt{x}^{l} }} , y_l {{ tex \ottnt{y}^{l} }} , z_l {{ tex \ottnt{z}^{l} }} , name :: '' ::=
@@ -288,7 +295,7 @@ base_kind :: 'BK_' ::=
   {{ aux _ l }}
   | Type                                       :: :: type    {{ com kind of types  }} 
   | Nat                                        :: :: nat     {{ com kind of natural number size expressions  }} 
-  | Endian                                     :: :: endian  {{ com kind of endianness specifications  }} 
+  | Order                                     :: :: order  {{ com kind of vector order specifications  }} 
   | Effects                                    :: :: effects {{ com kind of effect sets  }} 
 
 kind :: 'K_' ::=  
@@ -299,7 +306,7 @@ kind :: 'K_' ::=
 
     
 nexp :: 'Nexp_' ::=  
-  {{ com expression of kind Nat, for vector sizes and origins }}
+  {{ com expression of kind $[[Nat]]$, for vector sizes and origins }}
   {{ aux _ l }}
   | id                                  :: :: id          {{ com identifier }}
   | num                                 :: :: constant     {{ com constant }}
@@ -309,13 +316,13 @@ nexp :: 'Nexp_' ::=
   | 2 ** nexp                            :: :: exp         {{ com exponential }}
   | ( nexp )                            :: S :: paren  {{ icho [[nexp]] }}
 
-endian :: 'End_' ::=  
-  {{ com endianness specifications}}
+order :: 'Ord_' ::=  
+  {{ com vector order specifications, of kind $[[Order]]$}}
   {{ aux _ l }}
   | id                                  :: :: id  {{ com identifier }}
   | inc                                 :: :: inc  {{ com increasing (little-endian) }}
   | dec                                 :: :: dec  {{ com decreasing (big-endian) }}
-  | ( endian )                             :: S :: paren {{ icho [[endian]] }}
+  | ( order )                             :: S :: paren {{ icho [[order]] }}
 
 effect :: 'Effect_' ::=
   {{ com effect }}
@@ -330,7 +337,7 @@ effect :: 'Effect_' ::=
 
 
 effects :: 'Effects_' ::=
-  {{ com effect set }}
+  {{ com effect set, of kind $[[Effects]]$ }}
   {{ aux _ l }}
  | id                                  :: :: var
  | { effect1 , .. , effectn }           :: :: set {{ com effect set }}
@@ -340,7 +347,7 @@ effects :: 'Effects_' ::=
 
 
 typ :: 'Typ_' ::=
-  {{ com Constructor of kind Type }}
+  {{ com Type expressions, of kind $[[Type]]$ }}
   | _                                           :: :: wild
     {{ com Unspecified type }}
   | id                                         :: :: var
@@ -360,7 +367,7 @@ typ_arg :: 'Typ_arg_' ::=
   {{ com Type constructor arguments of all kinds }}
   | nexp       :: :: nexp
   | typ        :: :: typ
-  | endian     :: :: endian
+  | order     :: :: order
   | effects    :: :: effects
 
 % plus more for l-value/r-value pairs, as introduced by the L3 'compound' declarations   ... ref typ
@@ -376,16 +383,16 @@ typ_lib :: 'Typ_lib_' ::=
   | nat :: :: nat {{ com natural numbers 0,1,2,... }}
   | string :: :: string {{ com UTF8 strings }}
 % finite subranges of nat
-  | enum nexp1 nexp2 endian :: :: enum  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1, ordered by [[endian]] }}
+  | enum nexp1 nexp2 order :: :: enum  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1, ordered by [[order]] }}
   | [ nexp ]             :: :: enum1 {{ com sugar for \texttt{enum nexp 0 inc} }}
   | [ nexp '..' nexp' ]  :: :: enum2 {{ com sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} }}
 % use .. not - to avoid ambiguity with nexp -
 % total maps and vectors indexed by finite subranges of nat
-  | vector nexp1 nexp2 endian typ :: :: vector {{ com vector of [[typ]], indexed by natural range }}
+  | vector nexp1 nexp2 order typ :: :: vector {{ com vector of [[typ]], indexed by natural range }}
 % probably some sugar for vector types, using [ ] similarly to enums:
 % (but with .. not : in the former, to avoid confusion...)
   | typ [ nexp ]  :: :: vector2 {{ com sugar for vector indexed by [ [[nexp]] ] }}
-  | typ [ nexp : nexp' ] :: :: vector3 {{ com sugar for vector indexed by [ [[nexp]]:[[nexp']] ] }}
+  | typ [ nexp : nexp' ] :: :: vector3 {{ com sugar for vector indexed by [ [[nexp]]..[[nexp']] ] }}
 % ...so bit [ nexp ] etc is just an instance of that
   | list typ :: :: list {{ com list of [[typ]] }}
   | set typ  :: :: set  {{ com finite set of [[typ]] }}
@@ -405,7 +412,7 @@ Typ_fn <= Typ_tup
 grammar
 
 nexp_constraint :: 'NC_' ::=
-  {{ com contraint over kind Nat }}
+  {{ com constraint over kind $[[Nat]]$ }}
   {{ aux _ l }}
   | nexp = nexp'                                :: :: fixed
   | nexp >= nexp'                               :: :: bounded_ge
@@ -422,16 +429,16 @@ kinded_id :: 'KOpt_' ::=
   | ( kinded_id ) 			      :: S :: paren {{ icho [[kinded_id]] }}
 
 typquant :: 'TypQ_' ::= 
-  {{ aux _ l }}
+  {{ aux _ l }} {{ com type quantifiers and constraints}}
   | forall kinded_id1 ... kinded_idn . nexp_constraint1 , ... , nexp_constrainti . :: :: tq {{ texlong }}
 
 % WHY ARE CONSTRAINTS HERE AND NOT IN THE KIND LANGUAGE
 
-  | forall kinded_id1 ... kinded_idn . ::  ::  no_constraint {{ com sugar }}
-  |                           ::  ::  no_forall     {{ com sugar }}
+  | forall kinded_id1 ... kinded_idn . ::  ::  no_constraint {{ com sugar, omitting constraints}}
+  |                           ::  ::  no_forall     {{ com sugar, omitting quantifier and constraints }}
 
 typschm :: 'TypSchm_' ::=
-    {{ com Type schemes  }}
+    {{ com type scheme  }}
   {{ aux _ l }}
   |  typquant typ                                                       :: :: ts
 
@@ -626,7 +633,8 @@ exp :: 'E_' ::=
   {{ com Expression }}
   {{ aux _ l }}  
 
-  | { exp1 ; ... ; expn }                               ::   :: block {{ com block (parsing conflict with structs?) }}
+  | { exp1 ; ... ; expn }                               :: :: block {{ com block (parsing conflict with structs?) }}
+% maybe we really should have indentation-sensitive syntax :-)  (given that some of the targets do)
 
   | id                                                  :: :: id
     {{ com identifier }}
@@ -634,22 +642,29 @@ exp :: 'E_' ::=
   | lit                                                 :: :: lit
     {{ com literal constant }}
 
-  | exp1 exp2                                           :: :: app
+  | ( typ ) exp                                         :: :: cast
+    {{ com cast }}
+
+  | exp exp1 ... expn                                   :: :: app
     {{ com function application }}
-  | exp1 id exp2                                        :: :: infix
+% Note: fully applied function application only
+% We might restrict exp to be an identifier
+% We might require expn to have outermost parentheses (but not two sets if it's a tuple)
+
+  | exp1 id exp2                                        :: :: app_infix
     {{ com infix function application }}
  
-  | ( exp1 , .... , expn )                              :: :: tup
+  | ( exp1 , .... , expn )                              :: :: tuple
     {{ com tuple }}
 
   | if exp1 then exp2 else exp3                         :: :: if
     {{ com conditional }}
 
-
-
 % vectors
   | [ exp1 , ... , expn ]                             :: :: vector {{ com vector (indexed from 0) }}
-% endianness comes from global command-line option???
+% order comes from global command-line option???
+% here the expi are of type 'a and the result is a vector of 'a, whereas in exp1 : ... : expn 
+% the expi and the result are both of type vector of 'a 
 
   | [ num1 = exp1 , ... , numn = expn ]               :: :: vector_indexed {{ com vector (indexed consecutively) }}
 % num1 .. numn must be a consecutive list of naturals
@@ -662,22 +677,22 @@ exp :: 'E_' ::=
   | exp [ exp' ]                                      :: :: vector_access
   {{ com vector access }}
 
-  | exp [ exp1 : exp2 ]                            :: :: vector_subrange
+  | exp [ exp1 : exp2 ]                               :: :: vector_subrange
   {{ com subvector extraction }}
   % do we want to allow a comma-separated list of such thingies?  
 
   | [ exp with exp1 = exp2 ]                          :: :: vector_update 
   {{ com vector functional update }}
 
-  | [ exp with exp1 : exp2 = exp3 ]                          :: :: vector_update_range
+  | [ exp with exp1 : exp2 = exp3 ]                   :: :: vector_update_subrange
   {{ com vector subrange update (with vector)}}
   % do we want a functional update form with a comma-separated list of such?
 
 
 % lists 
-  | [| exp1 , ..  , expn |]                    :: :: list
+  | [| exp1 , ..  , expn |]                           :: :: list
   {{ com list }}
-  | exp1 '::' exp2                                      :: :: cons
+  | exp1 '::' exp2                                    :: :: cons
     {{ com cons }}
 
 
@@ -689,9 +704,9 @@ exp :: 'E_' ::=
 
   | { fexps }                                         :: :: record
     {{ com struct }}
-  | { exp with fexps }                                :: :: recup
+  | { exp with fexps }                                :: :: record_update
     {{ com functional update of struct }}
-  | exp . id                                            :: :: field
+  | exp . id                                          :: :: field
     {{ com field projection from struct  }}
 
 %Expressions for creating and accessing vectors
@@ -852,10 +867,10 @@ fundef :: 'FD_' ::=
 letbind :: 'LB_' ::=
   {{ com Let binding }}
   {{ aux _ l }}
-  | typschm id = exp                                :: :: val_explicit
-    {{ com value binding with explicit type }}
-  | let id = exp                                    :: :: val_implicit
-    {{ com value binding with implicit type }}
+  | typschm pat = exp                                :: :: val_explicit
+    {{ com value binding, explicit type ([[pat]] must be total)}}
+  | let pat = exp                                    :: :: val_implicit
+    {{ com value binding, implicit type ([[pat]] must be total)}}
 
 
 val_spec :: 'VS_' ::=

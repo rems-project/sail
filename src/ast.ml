@@ -58,7 +58,7 @@ type
 base_kind_aux =  (* base kind *)
    BK_type of terminal (* kind of types *)
  | BK_nat of terminal (* kind of natural number size expressions *)
- | BK_endian of terminal (* kind of endianness specifications *)
+ | BK_order of terminal (* kind of vector order specifications *)
  | BK_effects of terminal (* kind of effect sets *)
 
 
@@ -84,7 +84,7 @@ effect_aux =  (* effect *)
 
 
 type 
-nexp_aux =  (* expression of kind Nat, for vector sizes and origins *)
+nexp_aux =  (* expression of kind $_$, for vector sizes and origins *)
    Nexp_id of id (* identifier *)
  | Nexp_constant of terminal * int (* constant *)
  | Nexp_times of nexp * terminal * nexp (* product *)
@@ -106,7 +106,7 @@ effect =
 
 
 type 
-nexp_constraint_aux =  (* contraint over kind Nat *)
+nexp_constraint_aux =  (* constraint over kind $_$ *)
    NC_fixed of nexp * terminal * nexp
  | NC_bounded_ge of nexp * terminal * nexp
  | NC_bounded_le of nexp * terminal * nexp
@@ -119,16 +119,16 @@ kind =
 
 
 type 
-effects_aux =  (* effect set *)
+effects_aux =  (* effect set, of kind $_$ *)
    Effects_var of id
  | Effects_set of terminal * (effect * terminal) list * terminal (* effect set *)
 
 
 type 
-endian_aux =  (* endianness specifications *)
-   End_id of id (* identifier *)
- | End_inc of terminal (* increasing (little-endian) *)
- | End_dec of terminal (* decreasing (big-endian) *)
+order_aux =  (* vector order specifications, of kind $_$ *)
+   Ord_id of id (* identifier *)
+ | Ord_inc of terminal (* increasing (little-endian) *)
+ | Ord_dec of terminal (* decreasing (big-endian) *)
 
 
 type 
@@ -148,19 +148,19 @@ effects =
 
 
 type 
-endian = 
-   End_aux of endian_aux * l
+order = 
+   Ord_aux of order_aux * l
 
 
 type 
-typquant_aux = 
+typquant_aux =  (* type quantifiers and constraints *)
    TypQ_tq of terminal * (kinded_id) list * terminal * (nexp_constraint * terminal) list * terminal
- | TypQ_no_constraint of terminal * (kinded_id) list * terminal (* sugar *)
- | TypQ_no_forall (* sugar *)
+ | TypQ_no_constraint of terminal * (kinded_id) list * terminal (* sugar, omitting constraints *)
+ | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
 type 
-typ =  (* Constructor of kind Type *)
+typ =  (* Type expressions, of kind $_$ *)
    Typ_wild of terminal (* Unspecified type *)
  | Typ_var of id (* Type variable *)
  | Typ_fn of typ * terminal * typ * effects (* Function type (first-order only in user code) *)
@@ -170,7 +170,7 @@ typ =  (* Constructor of kind Type *)
 and typ_arg =  (* Type constructor arguments of all kinds *)
    Typ_arg_nexp of nexp
  | Typ_arg_typ of typ
- | Typ_arg_endian of endian
+ | Typ_arg_order of order
  | Typ_arg_effects of effects
 
 
@@ -180,7 +180,7 @@ typquant =
 
 
 type 
-typschm_aux =  (* Type schemes *)
+typschm_aux =  (* type scheme *)
    TypSchm_ts of typquant * typ
 
 
@@ -232,20 +232,21 @@ exp_aux =  (* Expression *)
    E_block of terminal * (exp * terminal) list * terminal (* block (parsing conflict with structs?) *)
  | E_id of id (* identifier *)
  | E_lit of lit (* literal constant *)
- | E_app of exp * exp (* function application *)
- | E_infix of exp * id * exp (* infix function application *)
- | E_tup of terminal * (exp * terminal) list * terminal (* tuple *)
+ | E_cast of terminal * typ * terminal * exp (* cast *)
+ | E_app of exp * (exp) list (* function application *)
+ | E_app_infix of exp * id * exp (* infix function application *)
+ | E_tuple of terminal * (exp * terminal) list * terminal (* tuple *)
  | E_if of terminal * exp * terminal * exp * terminal * exp (* conditional *)
  | E_vector of terminal * (exp * terminal) list * terminal (* vector (indexed from 0) *)
  | E_vector_indexed of terminal * ((terminal * int * terminal * exp) * terminal) list * terminal (* vector (indexed consecutively) *)
  | E_vector_access of exp * terminal * exp * terminal (* vector access *)
  | E_vector_subrange of exp * terminal * exp * terminal * exp * terminal (* subvector extraction *)
  | E_vector_update of terminal * exp * terminal * exp * terminal * exp * terminal (* vector functional update *)
- | E_vector_update_range of terminal * exp * terminal * exp * terminal * exp * terminal * exp * terminal (* vector subrange update (with vector) *)
+ | E_vector_update_subrange of terminal * exp * terminal * exp * terminal * exp * terminal * exp * terminal (* vector subrange update (with vector) *)
  | E_list of terminal * (exp * terminal) list * terminal (* list *)
  | E_cons of exp * terminal * exp (* cons *)
  | E_record of terminal * fexps * terminal (* struct *)
- | E_recup of terminal * exp * terminal * fexps * terminal (* functional update of struct *)
+ | E_record_update of terminal * exp * terminal * fexps * terminal (* functional update of struct *)
  | E_field of exp * terminal * id (* field projection from struct *)
  | E_case of terminal * exp * terminal * ((terminal * pexp)) list * terminal (* pattern matching *)
  | E_let of letbind * terminal * exp (* let expression *)
@@ -279,8 +280,8 @@ and pexp =
    Pat_aux of pexp_aux * l
 
 and letbind_aux =  (* Let binding *)
-   LB_val_explicit of typschm * id * terminal * exp (* value binding with explicit type *)
- | LB_val_implicit of terminal * id * terminal * exp (* value binding with implicit type *)
+   LB_val_explicit of typschm * pat * terminal * exp (* value binding, explicit type (pat must be total) *)
+ | LB_val_implicit of terminal * pat * terminal * exp (* value binding, implicit type (pat must be total) *)
 
 and letbind = 
    LB_aux of letbind_aux * l
@@ -382,12 +383,12 @@ typ_lib_aux =  (* library types and syntactic sugar for them *)
  | Typ_lib_bit of terminal (* pure bit values (not mutable bits) *)
  | Typ_lib_nat of terminal (* natural numbers 0,1,2,... *)
  | Typ_lib_string of terminal * Ulib.UTF8.t (* UTF8 strings *)
- | Typ_lib_enum of terminal * nexp * nexp * endian (* natural numbers nexp .. nexp+nexp-1, ordered by endian *)
+ | Typ_lib_enum of terminal * nexp * nexp * order (* natural numbers nexp .. nexp+nexp-1, ordered by order *)
  | Typ_lib_enum1 of terminal * nexp * terminal (* sugar for \texttt{enum nexp 0 inc} *)
  | Typ_lib_enum2 of terminal * nexp * terminal * nexp * terminal (* sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} *)
- | Typ_lib_vector of terminal * nexp * nexp * endian * typ (* vector of typ, indexed by natural range *)
+ | Typ_lib_vector of terminal * nexp * nexp * order * typ (* vector of typ, indexed by natural range *)
  | Typ_lib_vector2 of typ * terminal * nexp * terminal (* sugar for vector indexed by [ nexp ] *)
- | Typ_lib_vector3 of typ * terminal * nexp * terminal * nexp * terminal (* sugar for vector indexed by [ nexp:nexp ] *)
+ | Typ_lib_vector3 of typ * terminal * nexp * terminal * nexp * terminal (* sugar for vector indexed by [ nexp..nexp ] *)
  | Typ_lib_list of terminal * typ (* list of typ *)
  | Typ_lib_set of terminal * typ (* finite set of typ *)
  | Typ_lib_reg of terminal * typ (* mutable register components holding typ *)
