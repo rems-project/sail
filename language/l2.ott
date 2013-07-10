@@ -468,10 +468,10 @@ ctor_def :: 'CT_' ::=
 %%   | enumeration_flag_opt '|' ctor_def1 '|' ... '|' ctor_defn            :: :: variant
 %%     {{ com Variant types }}
 %% 
-%% naming_scheme_opt {{ tex \ottnt{name}^{?} }} :: 'Name_sect_' ::=
-%%   {{ com Optional variable-naming-scheme specification for variables of defined type }} 
-%%   |                                                   :: :: none
-%%   | [ name = regexp ]                                 :: :: some
+ naming_scheme_opt :: 'Name_sect_' ::=
+   {{ com Optional variable-naming-scheme specification for variables of defined type }} 
+   |                                                   :: :: none
+   | [ name = regexp ]                                 :: :: some
 %% 
 %% type_def :: '' ::=
 %%   {{ com Type definitions }}
@@ -485,7 +485,7 @@ ctor_def :: 'CT_' ::=
 
 %%% OR, IN C STYLE
 
-tdef :: 'TD_' ::=
+type_def :: 'TD_' ::=
   {{ com Type definition body }}
   | typedef id naming_scheme_opt = typschm                                        :: :: abbrev
     {{ com type abbreviation }} {{ texlong }}
@@ -923,7 +923,7 @@ def :: 'DEF_' ::=
 
 defs :: '' ::=
   {{ com Definition sequence }}
-  {{ aux _ l }}
+%  {{ aux _ l }}
   | def1  .. defn                 :: :: Defs
 
 

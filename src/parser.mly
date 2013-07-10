@@ -54,15 +54,14 @@ open Ast
 let loc () = Range(Parsing.symbol_start_pos(),Parsing.symbol_end_pos())
 let locn m n = Range(Parsing.rhs_start_pos m,Parsing.rhs_end_pos n)
 
-(*let tloc t = Typ_l(t,loc ())
+let tloc t = Typ_l(t,loc ())
 let nloc n = Length_l(n,loc ())
 let lloc l = Lit_l(l,loc ())
 let ploc p = Pat_l(p,loc ())
 let eloc e = Expr_l(e,loc ())
 let lbloc lb = Letbind(lb,loc ())
-let dloc d = Def_l(d,loc ())
-let irloc ir = Rule_l(ir,loc())
-let reclloc fcl = Rec_l(fcl,loc())*)
+
+let dloc d = DEF_aux(d,loc ())
 
 let pat_to_let p =
   match p with
@@ -126,9 +125,9 @@ let mk_pre_x_l sk1 (sk2,id) sk3 l =
 (*Terminals with no content*)
 }%
 
-%token <Ast.terminal> And As Case Const Default Enum Else False Forall Function_
-%token <Ast.terminal> If_ In IN Let_ Rec Register Struct Switch Then True 
-%token <Ast.terminal> Type Typedef Union With Val
+%token <Ast.terminal> And As Case Clause Const Default End Enum Else False Forall 
+%token <Ast.terminal> Function_ If_ In IN Let_ Member Rec Register Scattered  
+%token <Ast.terminal> Struct Switch Then True Type Typedef Union With Val
 
 %token <Ast.terminal> AND Div_ EOR Mod OR Quot Rem 
 
@@ -875,29 +874,7 @@ val_defs:
   | val_def val_defs
     { ($1,loc ())::$2 }
 
-def:
-  | Type tds
-    { dloc (Type_def($1,$2)) }
-  | val_def
-    { dloc (Val_def($1)) }
-  | Rename targets_opt id Eq x
-    { dloc (Ident_rename($1,$2,$3,fst $4,$5)) }
-  | Module_ x Eq Struct defs End
-    { mod_cap $2; dloc (Module($1,$2,fst $3,$4,$5,$6)) }
-  | Module_ x Eq id
-    { mod_cap $2; dloc (Rename($1,$2,fst $3,$4)) }
-  | Open_ id
-    { dloc (Open($1,$2)) }
-  | Indreln targets_opt and_indreln_clauses
-    { dloc (Indreln($1,$2,$3)) }
-  | val_spec
-    { dloc (Spec_def($1)) }
-  | Class_ Lparen x tnvar Rparen class_val_specs End
-    { dloc (Class($1,$2,$3,$4,$5,$6,$7)) }
-  | Inst instschm val_defs End
-    { dloc (Instance($1,$2,$3,$4)) }
-  | lemma
-    { dloc (Lemma $1) }
+
 
 xtyp:
   | x Colon typ
@@ -941,7 +918,7 @@ texp:
 
 name_sect:
   | Lsquare x Eq String Rsquare
-    { Name_sect_name($1,$2,fst $3,(fst $4),(snd $4),$5) }
+    { Name_sect_some($1,$2,fst $3,(fst $4),(snd $4),$5) }
  
 td:
   | x tnvs
@@ -959,15 +936,37 @@ tds:
   | td And tds
     { ($1,$2)::$3 }
 
+def:
+  | type_def
+    { dloc (DEF_type($1)) }
+  | fun_def
+    { dloc (DEF_fundef($1)) }
+  | letbind
+    { dloc (DEF_val($1)) }
+  | val_spec
+    { dloc (DEF_spec($1)) }
+  | default_typ 
+    { dloc (DEF_default($1)) }
+  | Register typ id
+    { dloc (DEF_reg_dec($1,$2,$3)) }
+  | Scattered Function_ rec_opt tannot_opt effects_opt id
+    { dloc (DEF_scattered_function($1,$2,$3,$4,$5,$6)) }
+  | Function_ Clause funcl
+    { dloc (DEF_funcl($1,$2,$3)) }
+  | Scattered Typedef id name_sect_opt Equal Const Union typquant
+    { dloc (DEF_scattered_variant($1,$2,$3,$4,$5,$6,$7,$8)) }
+  | Scattered Typedef id Equal Const Union typquant
+    { dloc (DEF_scattered_variant($1,$2,Name_sect_none,$3,$4,$5,$6,$7)) }
+  | Union id Member typ id
+    { dloc (DEF_scattered_unioncl($1,$2,$3,$4,$5)) }
+  | End id 
+    { dloc (DEF_scattered_end($1,$2)) }
+
 defs_help:
   | def
     { [($1,None,false)] }
-  | def SemiSemi
-    { [($1,$2,true)] }
   | def defs_help
     { ($1,None,false)::$2 }
-  | def SemiSemi defs_help
-    { ($1,$2,true)::$3 }
 
 defs:
   | defs_help
