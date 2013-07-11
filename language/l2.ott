@@ -881,8 +881,8 @@ val_spec :: 'VS_' ::=
 default_typing_spec :: 'DT_' ::=
   {{ com Default kinding or typing assumption }}
   {{ aux _ l }}
-  | default base_kind regexp    :: :: kind
-  | default typschm regexp      :: :: typ
+  | default base_kind id    :: :: kind
+  | default typschm id      :: :: typ
 % The intended semantics of these is that if an id in binding position
 % doesn't have a kind or type annotation, then we look through the
 % default regexps (in order from the beginning) and pick the first

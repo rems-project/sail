@@ -49,6 +49,12 @@ type x = terminal * text (* identifier *)
 type ix = terminal * text (* infix identifier *)
 
 type 
+id_aux =  (* Identifier *)
+   Id of x
+ | DeIid of terminal * x * terminal (* remove infix status *)
+
+
+type 
 base_kind_aux =  (* base kind *)
    BK_type of terminal (* kind of types *)
  | BK_nat of terminal (* kind of natural number size expressions *)
@@ -57,9 +63,8 @@ base_kind_aux =  (* base kind *)
 
 
 type 
-id_aux =  (* Identifier *)
-   Id of x
- | DeIid of terminal * x * terminal (* remove infix status *)
+id = 
+   Id_aux of id_aux * l
 
 
 type 
@@ -68,13 +73,14 @@ base_kind =
 
 
 type 
-id = 
-   Id_aux of id_aux * l
-
-
-type 
-kind_aux =  (* kinds *)
-   K_kind of (base_kind * terminal) list
+effect_aux =  (* effect *)
+   Effect_rreg of terminal (* read register *)
+ | Effect_wreg of terminal (* write register *)
+ | Effect_rmem of terminal (* read memory *)
+ | Effect_wmem of terminal (* write memory *)
+ | Effect_undef of terminal (* undefined-instruction exception *)
+ | Effect_unspec of terminal (* unspecified values *)
+ | Effect_nondet of terminal (* nondeterminism from intra-instruction parallelism *)
 
 
 type 
@@ -90,19 +96,13 @@ and nexp =
 
 
 type 
-effect_aux =  (* effect *)
-   Effect_rreg of terminal (* read register *)
- | Effect_wreg of terminal (* write register *)
- | Effect_rmem of terminal (* read memory *)
- | Effect_wmem of terminal (* write memory *)
- | Effect_undef of terminal (* undefined-instruction exception *)
- | Effect_unspec of terminal (* unspecified values *)
- | Effect_nondet of terminal (* nondeterminism from intra-instruction parallelism *)
+kind_aux =  (* kinds *)
+   K_kind of (base_kind * terminal) list
 
 
 type 
-kind = 
-   K_aux of kind_aux * l
+effect = 
+   Effect_aux of effect_aux * l
 
 
 type 
@@ -114,19 +114,14 @@ nexp_constraint_aux =  (* constraint over kind $_$ *)
 
 
 type 
-effect = 
-   Effect_aux of effect_aux * l
+kind = 
+   K_aux of kind_aux * l
 
 
 type 
-kinded_id =  (* optionally kind-annotated identifier *)
-   KOpt_none of id (* identifier *)
- | KOpt_kind of kind * id (* kind-annotated variable *)
-
-
-type 
-nexp_constraint = 
-   NC_aux of nexp_constraint_aux * l
+effects_aux =  (* effect set, of kind $_$ *)
+   Effects_var of id
+ | Effects_set of terminal * (effect * terminal) list * terminal (* effect set *)
 
 
 type 
@@ -137,21 +132,14 @@ order_aux =  (* vector order specifications, of kind $_$ *)
 
 
 type 
-effects_aux =  (* effect set, of kind $_$ *)
-   Effects_var of id
- | Effects_set of terminal * (effect * terminal) list * terminal (* effect set *)
+nexp_constraint = 
+   NC_aux of nexp_constraint_aux * l
 
 
 type 
-typquant_aux =  (* type quantifiers and constraints *)
-   TypQ_tq of terminal * (kinded_id) list * terminal * (nexp_constraint * terminal) list * terminal
- | TypQ_no_constraint of terminal * (kinded_id) list * terminal (* sugar, omitting constraints *)
- | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
-
-
-type 
-order = 
-   Ord_aux of order_aux * l
+kinded_id =  (* optionally kind-annotated identifier *)
+   KOpt_none of id (* identifier *)
+ | KOpt_kind of kind * id (* kind-annotated variable *)
 
 
 type 
@@ -160,8 +148,15 @@ effects =
 
 
 type 
-typquant = 
-   TypQ_aux of typquant_aux * l
+order = 
+   Ord_aux of order_aux * l
+
+
+type 
+typquant_aux =  (* type quantifiers and constraints *)
+   TypQ_tq of terminal * (kinded_id) list * terminal * (nexp_constraint * terminal) list * terminal
+ | TypQ_no_constraint of terminal * (kinded_id) list * terminal (* sugar, omitting constraints *)
+ | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
 type 
@@ -177,6 +172,11 @@ and typ_arg =  (* Type constructor arguments of all kinds *)
  | Typ_arg_typ of typ
  | Typ_arg_order of order
  | Typ_arg_effects of effects
+
+
+type 
+typquant = 
+   TypQ_aux of typquant_aux * l
 
 
 type 
@@ -288,6 +288,12 @@ and letbind =
 
 
 type 
+rec_opt_aux =  (* Optional recursive annotation for functions *)
+   Rec_nonrec (* non-recursive *)
+ | Rec_rec of terminal (* recursive *)
+
+
+type 
 effects_opt_aux =  (* Optional effect annotation for functions *)
    Effects_opt_pure (* sugar for empty effect set *)
  | Effects_opt_effects of effects
@@ -296,22 +302,6 @@ effects_opt_aux =  (* Optional effect annotation for functions *)
 type 
 funcl_aux =  (* Function clause *)
    FCL_Funcl of id * pat * terminal * exp
-
-
-type 
-rec_opt_aux =  (* Optional recursive annotation for functions *)
-   Rec_nonrec (* non-recursive *)
- | Rec_rec of terminal (* recursive *)
-
-
-type 
-effects_opt = 
-   Effects_opt_aux of effects_opt_aux * l
-
-
-type 
-funcl = 
-   FCL_aux of funcl_aux * l
 
 
 type 
@@ -326,13 +316,13 @@ rec_opt =
 
 
 type 
-fundef_aux =  (* Function definition *)
-   FD_function of terminal * rec_opt * tannot_opt * effects_opt * (funcl * terminal) list
+effects_opt = 
+   Effects_opt_aux of effects_opt_aux * l
 
 
 type 
-val_spec_aux =  (* Value type specification *)
-   VS_val_spec of terminal * typschm * id
+funcl = 
+   FCL_aux of funcl_aux * l
 
 
 type 
@@ -349,9 +339,28 @@ index_range =  (* index specification, for bitfields in register types *)
 
 
 type 
+fundef_aux =  (* Function definition *)
+   FD_function of terminal * rec_opt * tannot_opt * effects_opt * (funcl * terminal) list
+
+
+type 
+val_spec_aux =  (* Value type specification *)
+   VS_val_spec of terminal * typschm * id
+
+
+type 
 default_typing_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of terminal * base_kind * terminal * string
- | DT_typ of terminal * typschm * terminal * string
+   DT_kind of terminal * base_kind * id
+ | DT_typ of terminal * typschm * id
+
+
+type 
+type_def =  (* Type definition body *)
+   TD_abbrev of terminal * id * naming_scheme_opt * terminal * typschm (* type abbreviation *)
+ | TD_record of terminal * id * naming_scheme_opt * terminal * terminal * terminal * typquant * terminal * ((typ * id) * terminal) list * terminal * bool * terminal (* struct type definition *)
+ | TD_variant of terminal * id * naming_scheme_opt * terminal * terminal * terminal * typquant * terminal * ((typ * id) * terminal) list * terminal * bool * terminal (* union type definition *)
+ | TD_enum of terminal * id * naming_scheme_opt * terminal * terminal * terminal * (id * terminal) list * terminal * bool * terminal (* enumeration type definition *)
+ | TD_register of terminal * id * terminal * terminal * terminal * terminal * nexp * terminal * nexp * terminal * terminal * ((index_range * terminal * id) * terminal) list * terminal (* register mutable bitfield type definition *)
 
 
 type 
@@ -362,15 +371,6 @@ fundef =
 type 
 val_spec = 
    VS_aux of val_spec_aux * l
-
-
-type 
-type_def =  (* Type definition body *)
-   TD_abbrev of terminal * id * naming_scheme_opt * terminal * typschm (* type abbreviation *)
- | TD_record of terminal * id * naming_scheme_opt * terminal * terminal * terminal * typquant * terminal * ((typ * id) * terminal) list * terminal * bool * terminal (* struct type definition *)
- | TD_variant of terminal * id * naming_scheme_opt * terminal * terminal * terminal * typquant * terminal * ((typ * id) * terminal) list * terminal * bool * terminal (* union type definition *)
- | TD_enum of terminal * id * naming_scheme_opt * terminal * terminal * terminal * (id * terminal) list * terminal * bool * terminal (* enumeration type definition *)
- | TD_register of terminal * id * terminal * terminal * terminal * terminal * nexp * terminal * nexp * terminal * terminal * ((index_range * terminal * id) * terminal) list * terminal (* register mutable bitfield type definition *)
 
 
 type 
@@ -394,11 +394,6 @@ def_aux =  (* Top-level definition *)
 
 
 type 
-def = 
-   DEF_aux of def_aux * l
-
-
-type 
 typ_lib_aux =  (* library types and syntactic sugar for them *)
    Typ_lib_unit of terminal (* unit type with value $()$ *)
  | Typ_lib_bool of terminal (* booleans $_$ and $_$ *)
@@ -417,8 +412,13 @@ typ_lib_aux =  (* library types and syntactic sugar for them *)
 
 
 type 
-defs =  (* Definition sequence *)
-   Defs of (def) list
+def = 
+   DEF_aux of def_aux * l
+
+
+type 
+typ_lib = 
+   Typ_lib_aux of typ_lib_aux * l
 
 
 type 
@@ -427,8 +427,8 @@ ctor_def =  (* Datatype constructor definition clause *)
 
 
 type 
-typ_lib = 
-   Typ_lib_aux of typ_lib_aux * l
+defs =  (* Definition sequence *)
+   Defs of (def) list
 
 
 
