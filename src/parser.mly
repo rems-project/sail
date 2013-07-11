@@ -949,8 +949,10 @@ def:
     { dloc (DEF_default($1)) }
   | Register typ id
     { dloc (DEF_reg_dec($1,$2,$3)) }
-  | Scattered Function_ rec_opt tannot_opt effects_opt id
-    { dloc (DEF_scattered_function($1,$2,$3,$4,$5,$6)) }
+  | Scattered Function_ Rec tannot_opt effects_opt id
+    { dloc (DEF_scattered_function($1,$2,(Rec_rec($3)),$4,$5,$6)) }
+  | Scattered Function_ tannot_opt effects_opt id
+    { dloc (DEF_scattered_function($1,$2,Rec_nonrec,$4,$5,$6)) }
   | Function_ Clause funcl
     { dloc (DEF_funcl($1,$2,$3)) }
   | Scattered Typedef id name_sect_opt Equal Const Union typquant
