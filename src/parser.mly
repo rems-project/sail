@@ -125,9 +125,9 @@ let mk_pre_x_l sk1 (sk2,id) sk3 l =
 (*Terminals with no content*)
 }%
 
-%token <Ast.terminal> And As Case Clause Const Default End Enum Else False Forall 
-%token <Ast.terminal> Function_ If_ In IN Let_ Member Rec Register Scattered  
-%token <Ast.terminal> Struct Switch Then True Type Typedef Union With Val
+%token <Ast.terminal> And As Case Clause Const Default Effects End Enum Else False Forall 
+%token <Ast.terminal> Function_ If_ In IN Let_ Member Nat Order Rec Register Scattered  
+%token <Ast.terminal> Struct Switch Then True Type TYPE Typedef Union With Val
 
 %token <Ast.terminal> AND Div_ EOR Mod OR Quot Rem 
 
@@ -173,7 +173,7 @@ let mk_pre_x_l sk1 (sk2,id) sk3 l =
 
 %%
 
-x:
+id:
   | X
     { X_l($1, loc ()) }
   | Lparen Eq Rparen
@@ -211,22 +211,8 @@ x:
   | Lparen AtX Rparen
     { mk_pre_x_l $1 $2 $3 (loc ()) }
 
-id:
-  | id_help
-    { Id(fst $1, snd $1, loc ()) }
-
-id_help:
-  | x
-    { ([],$1) }
-  | x Dot id_help
-    { let (l,last) = $3 in
-        (($1,$2)::l, last) }
-
-tnvar:
-  | Tyvar
-    { Avl(A_l((fst $1, snd $1), loc ())) }
-  | Nvar
-    { Nvl(N_l((fst $1, snd $1), loc ())) }
+atomic_kind:
+  |  
 
 atomic_typ:
   | Under
@@ -917,7 +903,7 @@ texp:
     { Te_variant(None,false,[($1,None)]) }
 
 name_sect:
-  | Lsquare x Eq String Rsquare
+  | Lsquare id Eq String Rsquare
     { Name_sect_some($1,$2,fst $3,(fst $4),(snd $4),$5) }
  
 td:
@@ -936,6 +922,16 @@ tds:
   | td And tds
     { ($1,$2)::$3 }
 
+scattered_def:
+  | Function_ Rec tannot_opt effects_opt id
+    { (DEF_scattered_function(None,$1,(Rec_rec ($2)),$3,$4,$5)) }
+  | Function_ tannot_opt effects_opt id
+    { dloc (DEF_scattered_function(None,$1,Rec_nonrec,$2,$3,$4)) }  
+  | Typedef id name_sect_opt Equal Const Union typquant
+    { dloc (DEF_scattered_variant(None,$1,$2,$3,$4,$5,$6,$7)) }
+  | Typedef id Equal Const Union typquant
+    { dloc (DEF_scattered_variant(None,$1,Name_sect_none,$2,$3,$4,$5,$6)) }
+
 def:
   | type_def
     { dloc (DEF_type($1)) }
@@ -949,16 +945,12 @@ def:
     { dloc (DEF_default($1)) }
   | Register typ id
     { dloc (DEF_reg_dec($1,$2,$3)) }
-  | Scattered Function_ Rec tannot_opt effects_opt id
-    { dloc (DEF_scattered_function($1,$2,(Rec_rec($3)),$4,$5,$6)) }
-  | Scattered Function_ tannot_opt effects_opt id
-    { dloc (DEF_scattered_function($1,$2,Rec_nonrec,$4,$5,$6)) }
+  | Scattered scattered_def
+    { dloc (match ($2) with
+            | DEF_scattered_function(_,f,r,t,e,i) -> DEF_scattered_function($1,f,r,t,e,i)
+            | DEF_scattered_variant(_,t,i,n,e,c,u,ty) -> DEF_scattered_variant($1,t,i,n,e,c,u,ty)) }
   | Function_ Clause funcl
     { dloc (DEF_funcl($1,$2,$3)) }
-  | Scattered Typedef id name_sect_opt Equal Const Union typquant
-    { dloc (DEF_scattered_variant($1,$2,$3,$4,$5,$6,$7,$8)) }
-  | Scattered Typedef id Equal Const Union typquant
-    { dloc (DEF_scattered_variant($1,$2,Name_sect_none,$3,$4,$5,$6,$7)) }
   | Union id Member typ id
     { dloc (DEF_scattered_unioncl($1,$2,$3,$4,$5)) }
   | End id 
