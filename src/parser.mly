@@ -45,9 +45,8 @@
 /**************************************************************************/
 
 %{
-(* 
-   *)
-let r = Ulib.Text.of_latin1
+
+let r = fun x -> x (* Ulib.Text.of_latin1 *)
 
 open Ast
 
@@ -60,6 +59,10 @@ let lloc l = Lit_l(l,loc ())
 let ploc p = Pat_l(p,loc ())
 let eloc e = Expr_l(e,loc ())
 let lbloc lb = Letbind(lb,loc ())
+
+let bkloc k = BK_aux(k,loc ())
+let kloc k = K_aux(k,loc ())
+let nloc n = Nexp_aux(k,loc ())
 
 let dloc d = DEF_aux(d,loc ())
 
@@ -77,23 +80,9 @@ let pat_to_letfun p =
     | Pat_l(_,l) -> 
         raise (Parse_error_locn(l,"Bad pattern for let binding of a function"))
 
-let get_target (s1,n) =
-  if Ulib.Text.compare n (r"hol") = 0 then
-    Target_hol(s1)
-  else if Ulib.Text.compare n (r"ocaml") = 0 then
-    Target_ocaml(s1)
-  else if Ulib.Text.compare n (r"coq") = 0 then
-    Target_coq(s1)
-  else if Ulib.Text.compare n (r"isabelle") = 0 then
-    Target_isa(s1)
-  else if Ulib.Text.compare n (r"tex") = 0 then
-    Target_tex(s1)
-  else
-    raise (Parse_error_locn(loc (),"Expected substitution target in {hol; isabelle; ocaml; coq; tex}, given " ^ Ulib.Text.to_string n))
-
 let build_fexp (Expr_l(e,_)) l =
   match e with
-    | Infix(Expr_l(Ident(i), l'),SymX_l((stx,op),l''),e2) when Ulib.Text.compare op (r"=") = 0 ->
+    | Infix(Expr_l(Ident(i), l'),SymX_l((stx,op),l''),e2) when String.compare op (r"=") = 0 ->
         Fexp(i, stx, e2, l)
     | _ ->
         raise (Parse_error_locn(l,"Invalid record field assignment (should be id = exp)"))
@@ -104,10 +93,10 @@ let mod_cap n =
   else
     ()
 
-let space = Ulib.Text.of_latin1 " "
-let star = Ulib.Text.of_latin1 "*"
+let space = " "
+let star = "*"
 
-let mk_pre_x_l sk1 (sk2,id) sk3 l =
+(*let mk_pre_x_l sk1 (sk2,id) sk3 l =
   if (sk2 = None || sk2 = Some []) && (sk3 = None || sk3 = Some []) then
     PreX_l(sk1,(None,id),None,l)
   else if (sk2 = Some [Ws space] && 
@@ -116,17 +105,15 @@ let mk_pre_x_l sk1 (sk2,id) sk3 l =
             Ulib.Text.right id 1 = star)) then
     PreX_l(sk1,(None,id),None,l)
   else
-    raise (Parse_error_locn(l, "illegal whitespace in parenthesised infix name"))
+    raise (Parse_error_locn(l, "illegal whitespace in parenthesised infix name"))*)
 
 
 %}
 
-%{
-(*Terminals with no content*)
-}%
+/*Terminals with no content*/
 
 %token <Ast.terminal> And As Case Clause Const Default Effects End Enum Else False Forall 
-%token <Ast.terminal> Function_ If_ In IN Let_ Member Nat Order Rec Register Scattered  
+%token <Ast.terminal> Function_ If_ In IN Let_ Member Nat Order Pure Rec Register Scattered  
 %token <Ast.terminal> Struct Switch Then True Type TYPE Typedef Union With Val
 
 %token <Ast.terminal> AND Div_ EOR Mod OR Quot Rem 
@@ -135,33 +122,31 @@ let mk_pre_x_l sk1 (sk2,id) sk3 l =
 %token <Ast.terminal> Lcurly Rcurly Lparen Rparen Lsquare Rsquare
 %token <Ast.terminal> BarBar BarGt BarSquare DotDot MinusGt LtBar SquareBar 
 
-%{
-(*Terminals with content*)
-}%
+/*Terminals with content*/
 
-%token <Ast.terminal * Ulib.Text.t> Id
+%token <Ast.terminal * string> Id
 %token <Ast.terminal * int> Num
 %token <Ast.terminal * string> String Bin Hex
 
-%token <Ast.terminal * Ulib.Text.t> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde 
-%token <Ast.terminal * Ulib.Text.t> AmpAmp CarrotCarrot ColonColon EqDivEq EqEq ExclEq ExclExcl  
-%token <Ast.terminal * Ulib.Text.t> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt   
-%token <Ast.terminal * Ulib.Text.t> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar TildeCarrot
+%token <Ast.terminal * string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde 
+%token <Ast.terminal * string> AmpAmp CarrotCarrot ColonColon EqDivEq EqEq ExclEq ExclExcl  
+%token <Ast.terminal * string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt   
+%token <Ast.terminal * string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar TildeCarrot
 
-%token <Ast.terminal * Ulib.Text.t> GtEqUnderS GtEqUnderSi GtEqUnderU GtEqUnderUi GtGtUnderU GtUnderS 
-%token <Ast.terminal * Ulib.Text.t> GtUnderSi GtUnderU GtUnderUi LtEqUnderS LtEqUnderSi LtEqUnderU 
-%token <Ast.terminal * Ulib.Text.t> LtEqUnderUi LtUnderS LtUnderSi LtUnderU LtUnderUi StarUnderS 
-%token <Ast.terminal * Ulib.Text.t> StarUnderSi StarUnderU StarUnderUi TwoCarrot
+%token <Ast.terminal * string> GtEqUnderS GtEqUnderSi GtEqUnderU GtEqUnderUi GtGtUnderU GtUnderS 
+%token <Ast.terminal * string> GtUnderSi GtUnderU GtUnderUi LtEqUnderS LtEqUnderSi LtEqUnderU 
+%token <Ast.terminal * string> LtEqUnderUi LtUnderS LtUnderSi LtUnderU LtUnderUi StarUnderS 
+%token <Ast.terminal * string> StarUnderSi StarUnderU StarUnderUi TwoCarrot
 
-%token <Ast.terminal * Ulib.Text.t> AmpI AtI CarrotI  DivI EqI ExclI GtI LtI PlusI StarI TildeI
-%token <Ast.terminal * Ulib.Text.t> AmpAmpI CarrotCarrotI ColonColonI EqDivEqI EqEqI ExclEqI ExclExclI  
-%token <Ast.terminal * Ulib.Text.t> GtEqI GtEqPlusI GtGtI GtGtGtI GtPlusI HashGtGtI HashLtLtI  
-%token <Ast.terminal * Ulib.Text.t> LtEqI LtEqPlusI LtGtI LtLtI LtLtLtI LtPlusI StarStarI TildeCarrotI
+%token <Ast.terminal * string> AmpI AtI CarrotI  DivI EqI ExclI GtI LtI PlusI StarI TildeI
+%token <Ast.terminal * string> AmpAmpI CarrotCarrotI ColonColonI EqDivEqI EqEqI ExclEqI ExclExclI  
+%token <Ast.terminal * string> GtEqI GtEqPlusI GtGtI GtGtGtI GtPlusI HashGtGtI HashLtLtI  
+%token <Ast.terminal * string> LtEqI LtEqPlusI LtGtI LtLtI LtLtLtI LtPlusI StarStarI TildeCarrotI
 
-%token <Ast.terminal * Ulib.Text.t> GtEqUnderSI GtEqUnderSiI GtEqUnderUI GtEqUnderUiI GtGtUnderUI GtUnderSI 
-%token <Ast.terminal * Ulib.Text.t> GtUnderSiI GtUnderUI GtUnderUiI LtEqUnderSI LtEqUnderSiI LtEqUnderUI 
-%token <Ast.terminal * Ulib.Text.t> LtEqUnderUiI LtUnderSI LtUnderSiI LtUnderUI LtUnderUiI StarUnderSI 
-%token <Ast.terminal * Ulib.Text.t> StarUnderSiI StarUnderUI StarUnderUiI TwoCarrotI
+%token <Ast.terminal * string> GtEqUnderSI GtEqUnderSiI GtEqUnderUI GtEqUnderUiI GtGtUnderUI GtUnderSI 
+%token <Ast.terminal * string> GtUnderSiI GtUnderUI GtUnderUiI LtEqUnderSI LtEqUnderSiI LtEqUnderUI 
+%token <Ast.terminal * string> LtEqUnderUiI LtUnderSI LtUnderSiI LtUnderUI LtUnderUiI StarUnderSI 
+%token <Ast.terminal * string> StarUnderSiI StarUnderUI StarUnderUiI TwoCarrotI
 
 %start file
 %type <Ast.defs> defs
@@ -174,7 +159,7 @@ let mk_pre_x_l sk1 (sk2,id) sk3 l =
 %%
 
 id:
-  | X
+  | Id
     { X_l($1, loc ()) }
   | Lparen Eq Rparen
     { mk_pre_x_l $1 $2 $3 (loc ()) }
@@ -212,15 +197,58 @@ id:
     { mk_pre_x_l $1 $2 $3 (loc ()) }
 
 atomic_kind:
-  |  
+  | TYPE
+    { bkloc (BK_type($1)) }
+  | Nat
+    { bkloc (BK_nat($1)) }
+  | Order
+    { bkloc (BK_order($1)) }
+  | Effects
+    { bkloc (BK_effects($1)) }
+
+kind:
+  | atomic_kind
+    { [ ($1,None) ] }
+  | atomic_kind MinusGt kind
+    { ($1,$2)::$3 }
+
+atomic_nexp_no_id:
+  | Num
+    { nloc (Nexp_constant(fst $1, snd$1)) }
+  | Lparen nexp Rparen
+    { $2 }
+
+atomic_nexp:
+   | id
+     { nloc (Nexp_var (fst $1, snd $1)) }
+   | atomic_nexp_no_id
+     { $1 }
+
+star_nexp:
+   | atomic_nexp
+     { $1 }
+   | atomic_nexp Star star_nexp
+     { nloc (Nexp_times($1, fst $2, $3)) }
+
+exp_nexp:
+   | star_nexp
+     { $1 }
+   | Num StarStar nexp
+     { if (2 = (fst $1))
+       then nloc (Nexp_exp((fst $1,snd $1),$2,$3))
+       else Parse_error_locn(loc (), "Only 2 is a valid exponent base in Nats") }
+
+nexp:
+   | exp_nexp
+     { $1 }
+   | exp_nexp Plus nexp
+     { nloc (Nexp_sum($1,fst $2,$3)) }
 
 atomic_typ:
   | Under
     { tloc (Typ_wild($1)) }
-  | Tyvar
-    { tloc (Typ_var(A_l((fst $1, snd $1), loc()))) }
   | id
-    { tloc (Typ_app($1,[])) }
+    { tloc (Typ_var(A_l((fst $1, snd $1), loc()))) }
   | Lparen typ Rparen
     { tloc (Typ_paren($1,$2,$3)) }
 
@@ -262,25 +290,6 @@ typ:
   | star_typ Arrow typ
     { tloc (Typ_fn($1,$2,$3)) }
 
-atomic_nexp:
-   | Nvar
-     { nloc (Nexp_var (fst $1, snd $1)) }
-   | Num
-     { nloc (Nexp_constant(fst $1, snd $1)) }
-   | Lparen nexp Rparen
-     { nloc (Nexp_paren($1,$2,$3)) }
-
-star_nexp:
-   | atomic_nexp
-     { $1 }
-   | atomic_nexp Star star_nexp
-     { nloc (Nexp_times($1, fst $2, $3)) }
-
-nexp:
-   | star_nexp
-     { $1 }
-   | star_nexp Plus nexp
-     { nloc (Nexp_sum($1,fst $2,$3)) }
 
 lit:
   | True

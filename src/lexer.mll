@@ -129,7 +129,7 @@ rule token skips = parse
   | ":"                                 { (Colon(Some(skips))) }
   | ","                                 { (Comma(Some(skips))) }
   | "."                                 { (Dot(Some(skips))) }
-  | "\"					{ (Div(Some(skips),r"\")) }
+  | "/"			                { (Div(Some(skips),r"/")) }
   | "="                                 { (Eq(Some(skips),r"=")) }
   | "!"					{ (Excl(Some(skips),r"!")) }
   | ">"					{ (Gt(Some(skips),r">")) }
@@ -152,7 +152,7 @@ rule token skips = parse
   | "|]"				{ (BarSquare(Some(skips))) }
   | "^^"				{ (CarrotCarrot(Some(skips),r"^^")) }
   | "::" as i                           { (ColonColon(Some(skips),Ulib.Text.of_latin1 i)) }
-  | ".."				{ (DotDot(Some(skips)) }  
+  | ".."				{ (DotDot(Some(skips))) }  
   | "=/="				{ (EqDivEq(Some(skips),r"=/=")) }
   | "=="				{ (EqEq(Some(skips),r"==")) }
   | "!="				{ (ExclEq(Some(skips),r"!=")) }
