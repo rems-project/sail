@@ -61,7 +61,7 @@ let bkloc k = BK_aux(k,loc ())
 let kloc k = K_aux(k,loc ())
 let tloc t = ATyp_aux(t,loc ())
 let lloc l = L_aux(l,loc ())
-
+let ploc p = P_aux(p,(None,loc ()))
 
 let dloc d = DEF_aux(d,loc ())
 
@@ -298,41 +298,31 @@ lit:
     { lloc (L_hex(fst $1, snd $1)) }
 
 atomic_pat:
+  | lit
+    { ploc (P_lit($1)) }
   | Under
     { ploc (P_wild($1)) }
+  | Lparen pat As id Rparen
+    { ploc (P_as($1,$2,$3,$4,$5)) }
+  | Lparen atyp pat Rparen
+    { ploc (P_typ($1,$2,$3,$4,$5)) }
   | id
     { ploc (P_app($1,[])) }
-  | Lparen pat Colon typ Rparen
-    { ploc (P_typ($1,$2,$3,$4,$5)) }
   | LtBar fpats BarGt
     { ploc (P_record($1,fst $2,fst (snd $2),snd (snd $2),$3)) }
-  | BraceBar semi_pats_atomic BarBrace
+  | Lsquare semi_pats_atomic Rsquare
     { ploc (P_vector($1,fst $2,fst (snd $2),snd (snd $2),$3)) }
-  | BraceBar atomic_pats_two BarBrace
-    { ploc (P_vectorC($1, $2, $3)) }
   | Lparen comma_pats Rparen
     { ploc (P_tup($1,$2,$3)) }
   | Lparen pat Rparen
-    { ploc (P_paren($1,$2,$3)) }
-  | Lsquare semi_pats Rsquare
+    { $2 }
+  | LsquareBar semi_pats BarRsquare
     { ploc (P_list($1,fst $2,fst (snd $2),snd (snd $2),$3)) }
-  | lit
-    { ploc (P_lit($1)) }
-  | Lparen pat As x Rparen
-    { ploc (P_as($1,$2,$3,$4,$5)) }
-  | x Plus Num
-    { ploc (P_num_add($1,fst $2,fst $3, snd $3)) }
 
 atomic_pats:
   | atomic_pat
     { [$1] }
   | atomic_pat atomic_pats
-    { $1::$2 }
-
-atomic_pats_two:
-  | atomic_pat atomic_pat
-    { [$1;$2] }
-  | atomic_pat atomic_pats_two
     { $1::$2 }
 
 app_pat:
@@ -388,6 +378,14 @@ fpats:
     { (($1,$2)::fst $3, snd $3) }
 
 atomic_exp:
+  | id 
+    { eloc (E_id($1)) }
+  | lit
+    { eloc (E_lit($1)) }
+  | Lparen exp Rparen
+    { $2 }
+  | Lparen atyp Rparen exp
+    { eloc (E_cast($1,$2,$3,$4)) }
   | LtBar fexps BarGt
     { eloc (Record($1,$2,$3)) }
   | LtBar at_exp With fexps BarGt
@@ -400,14 +398,8 @@ atomic_exp:
     { eloc (Elist($1,fst $2,fst (snd $2), snd (snd $2), $3)) }
   | Lparen comma_exps Rparen
     { eloc (Tup($1,$2,$3)) }
-  | Lparen exp Rparen
-    { eloc (Paren($1,$2,$3)) }
   | Begin_ exp End
     { eloc (Begin($1,$2,$3)) }
-  | lit
-    { eloc (Lit($1)) }
-  | Nvar
-    { eloc (Nvar($1)) }
   | Lcurly exp Bar exp Rcurly
     { eloc (Setcomp($1,$2,$3,$4,$5)) }
   | Lcurly exp Bar Forall quant_bindings Bar exp Rcurly
