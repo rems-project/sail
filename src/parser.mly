@@ -53,16 +53,15 @@ open Ast
 let loc () = Range(Parsing.symbol_start_pos(),Parsing.symbol_end_pos())
 let locn m n = Range(Parsing.rhs_start_pos m,Parsing.rhs_end_pos n)
 
-let tloc t = Typ_l(t,loc ())
-let nloc n = Length_l(n,loc ())
-let lloc l = Lit_l(l,loc ())
 let ploc p = Pat_l(p,loc ())
 let eloc e = Expr_l(e,loc ())
 let lbloc lb = Letbind(lb,loc ())
 
 let bkloc k = BK_aux(k,loc ())
 let kloc k = K_aux(k,loc ())
-let nloc n = Nexp_aux(k,loc ())
+let tloc t = ATyp_aux(t,loc ())
+let lloc l = L_aux(l,loc ())
+
 
 let dloc d = DEF_aux(d,loc ())
 
@@ -165,10 +164,6 @@ id:
     { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen IN Rparen
     { mk_pre_x_l $1 $2 $3 (loc ()) }
-  | Lparen MEM Rparen
-    { mk_pre_x_l $1 $2 $3 (loc ()) }
-  | Lparen MinusMinusGt Rparen
-    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen AmpAmp Rparen
     { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen BarBar Rparen
@@ -181,19 +176,7 @@ id:
     { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen GtEq Rparen
     { mk_pre_x_l $1 $2 $3 (loc ()) }
-  | Lparen PlusX Rparen
-    { mk_pre_x_l $1 $2 $3 (loc ()) }
-  | Lparen StarX Rparen
-    { mk_pre_x_l $1 $2 $3 (loc ()) }
-  | Lparen GtEqX Rparen
-    { mk_pre_x_l $1 $2 $3 (loc ()) }
-  | Lparen EqualX Rparen
-    { mk_pre_x_l $1 $2 $3 (loc ()) }
-  | Lparen StarstarX Rparen
-    { mk_pre_x_l $1 $2 $3 (loc ()) }
   | Lparen At Rparen
-    { mk_pre_x_l $1 $2 $3 (loc ()) }
-  | Lparen AtX Rparen
     { mk_pre_x_l $1 $2 $3 (loc ()) }
 
 atomic_kind:
@@ -212,64 +195,54 @@ kind:
   | atomic_kind MinusGt kind
     { ($1,$2)::$3 }
 
-atomic_nexp_no_id:
-  | Num
-    { nloc (Nexp_constant(fst $1, snd$1)) }
-  | Lparen nexp Rparen
-    { $2 }
+effect:
+  | id
+    { (match id with
+       | Id_aux(Id(s,t),l) ->
+	 Effect_aux
+	   ((match s with
+	   | "rreg" -> (Effect_rreg t)
+	   | "wreg" -> (Effect_wreg t)
+	   | "rmem" -> (Effect_rmem t)
+	   | "wmem" -> (Effect_wmem t)
+	   | "undef" -> (Effect_undef t)
+	   | "unspec" -> (Effect_unspec t)
+	   | "nondet" -> (Effect_nondet t)
+	   | _ -> Parse_error_locn(l, "Invalid effect")),l)
+       | _ -> Parse_error_locn(loc () , "Invalid effect")) }
 
-atomic_nexp:
-   | id
-     { nloc (Nexp_var (fst $1, snd $1)) }
-   | atomic_nexp_no_id
-     { $1 }
-
-star_nexp:
-   | atomic_nexp
-     { $1 }
-   | atomic_nexp Star star_nexp
-     { nloc (Nexp_times($1, fst $2, $3)) }
-
-exp_nexp:
-   | star_nexp
-     { $1 }
-   | Num StarStar nexp
-     { if (2 = (fst $1))
-       then nloc (Nexp_exp((fst $1,snd $1),$2,$3))
-       else Parse_error_locn(loc (), "Only 2 is a valid exponent base in Nats") }
-
-nexp:
-   | exp_nexp
-     { $1 }
-   | exp_nexp Plus nexp
-     { nloc (Nexp_sum($1,fst $2,$3)) }
+effect_list:
+  | effect
+    { [($1,None)] }
+  | effect Comma effect_list
+    { ($1,Some($2))::$3 }
 
 atomic_typ:
-  | Under
-    { tloc (Typ_wild($1)) }
   | id
-    { tloc (Typ_var(A_l((fst $1, snd $1), loc()))) }
+    { tloc (Atyp_var (fst $1, snd $1)) }
+  | Num
+    { tloc (Atyp_constant(fst $1, snd$1)) }
+  | Pure
+    { tloc (Atyp_pure($1)) }
+  | Under
+    { tloc (ATyp_wild($1)) }
+  | Lcurly effect_list Rcurly
+    { tloc (ATyp_effects($1,$2,$3)) }
   | Lparen typ Rparen
-    { tloc (Typ_paren($1,$2,$3)) }
-
-appt_typ :
-  | atomic_typ
-    { $1 }
-  | atomic_nexp
-    { tloc (Typ_Nexps($1)) }
+    { $2 }
 
 atomic_typs:
-  | appt_typ
+  | atomic_typ
     { [$1] }
-  | appt_typ atomic_typs
+  | atomic_typ atomic_typs
     { $1::$2 }
 
 app_typ:
   | atomic_typ
     { $1 }
   | id atomic_typs
-    { tloc (Typ_app($1,$2)) }
-  
+    { tloc (ATyp_app($1,$2)) }
+
 star_typ_list:
   | app_typ
     { [($1,None)] }
@@ -282,14 +255,31 @@ star_typ:
         | [] -> assert false
         | [(t,None)] -> t
         | [(t,Some _)] -> assert false
-        | ts -> tloc (Typ_tup(ts)) }
+        | ts -> tloc (ATyp_tup(ts)) }
+
+exp_typ:
+   | star_typ
+     { $1 }
+   | Num StarStar nexp
+     { if (2 = (fst $1))
+       then tloc (ATyp_exp((fst $1,snd $1),$2,$3))
+       else Parse_error_locn(loc (), "Only 2 is a valid exponent base in Nats") }
+
+nexp_typ:
+   | exp_typ
+     { $1 }
+   | exp_typ Plus typ
+     { tloc (ATyp_sum($1,fst $2,$3)) }
 
 typ:
-  | star_typ
+  | nexp_typ
     { $1 }
-  | star_typ Arrow typ
-    { tloc (Typ_fn($1,$2,$3)) }
-
+  | star_typ MinusGt typ id
+    { tloc (ATyp_fn($1,$2,$3,(tloc (ATyp_id($4))))) }
+  | star_typ MinusGt typ Pure
+    { tloc (ATyp_fn($1,$2,$3,(tloc (ATyp_pure($4))))) }
+  | star_typ MinusGt typ Lcurly effect_list Rcurly
+    { tloc (ATyp_fn($1,$2,$3,(tloc (ATyp_effects($4,$5,$6))))) }
 
 lit:
   | True
@@ -302,10 +292,6 @@ lit:
     { lloc (L_string(fst $1, snd $1)) }
   | Lparen Rparen
     { lloc (L_unit($1,$2)) }
-  | HashZero
-    { lloc (L_zero($1)) }
-  | HashOne
-    { lloc (L_one($1)) }
   | Bin
     { lloc (L_bin(fst $1, snd $1)) }
   | Hex
