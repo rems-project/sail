@@ -5,7 +5,7 @@ indexvar n , i , j , k ::=
 metavar num ::=
   {{ phantom }}
   {{ lex numeric }}
-  {{ ocaml terminal * int }}
+  {{ ocaml (terminal * int) }}
   {{ hol num }}
   {{ lem (terminal * num) }}
   {{ com Numeric literals }}
@@ -304,7 +304,7 @@ kind :: 'K_' ::=
   | base_kind1 -> ... -> base_kindn            :: :: kind 
 % we'll never use  ...-> Nat
 
-effect :: 'Effect_' ::=
+efct :: 'Effect_' ::=
   {{ com effect }}
   {{ aux _ l }}  
   | rreg                                :: :: rreg {{ com read register }}
@@ -328,8 +328,8 @@ atyp :: 'ATyp_' ::=
 
   | inc                                 :: :: inc  {{ com increasing (little-endian) }}
   | dec                                 :: :: dec  {{ com decreasing (big-endian) }}
-
- | { effect1 , .. , effectn }           :: :: set {{ com effect set }}
+ | effect id                            :: :: efid
+ | effect { efct1 , .. , efctn }           :: :: set {{ com effect set }}
  | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ icho [] }}
 
 % TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.  Yes.  But we think we don't need any interesting effect-set expressions, eg effectset-variable union {rreg}. 

@@ -65,6 +65,8 @@ let kw_table =
      ("clause",                  (fun x -> Clause(x)));
      ("const",			 (fun x -> Const(x)));
      ("default",		 (fun x -> Default(x)));
+     ("effect",                  (fun x -> Effect(x)));
+     ("Effects",                 (fun x -> Effects(x)));
      ("end",                     (fun x -> End(x)));
      ("enum",			 (fun x -> Enum(x)));
      ("else",                    (fun x -> Else(x)));
@@ -76,6 +78,8 @@ let kw_table =
      ("IN",                      (fun x -> IN(x,r"IN")));     
      ("let",                     (fun x -> Let_(x)));
      ("member",                  (fun x -> Member(x)));
+     ("Nat",                     (fun x -> Nat(x)));
+     ("Order",                   (fun x -> Order(x)));
      ("rec",			 (fun x -> Rec(x)));
      ("register",		 (fun x -> Register(x)));
      ("scattered",               (fun x -> Scattered(x)));
@@ -84,6 +88,7 @@ let kw_table =
      ("then",                    (fun x -> Then(x)));
      ("true",                    (fun x -> True(x)));
      ("type",                    (fun x -> Type(x)));
+     ("Type",                    (fun x -> TYPE(x)));
      ("typedef",		 (fun x -> Typedef(x)));
      ("union",			 (fun x -> Union(x)))
      ("with",                    (fun x -> With(x)));
