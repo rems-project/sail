@@ -392,7 +392,7 @@ typ_lib :: 'Typ_lib_' ::=
   | nat :: :: nat {{ com natural numbers 0,1,2,... }}
   | string :: :: string {{ com UTF8 strings }}
 % finite subranges of nat
-  | enum nexp1 nexp2 order :: :: enum  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1, ordered by $[[order]]$ }}
+  | enum nexp1 nexp2 order :: :: enum  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1, ordered by [[order]] }}
   | [ nexp ]             :: :: enum1 {{ com sugar for \texttt{enum nexp 0 inc} }}
   | [ nexp '..' nexp' ]  :: :: enum2 {{ com sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} }}
 % use .. not - to avoid ambiguity with nexp -

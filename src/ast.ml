@@ -59,24 +59,24 @@ base_kind_aux =  (* base kind *)
 
 
 type 
+base_kind = 
+   BK_aux of base_kind_aux * l
+
+
+type 
 id_aux =  (* Identifier *)
    Id of x
  | DeIid of terminal * x * terminal (* remove infix status *)
 
 
 type 
-base_kind = 
-   BK_aux of base_kind_aux * l
+kind_aux =  (* kinds *)
+   K_kind of (base_kind * terminal) list
 
 
 type 
 id = 
    Id_aux of id_aux * l
-
-
-type 
-kind_aux =  (* kinds *)
-   K_kind of (base_kind * terminal) list
 
 
 type 
@@ -88,6 +88,11 @@ efct_aux =  (* effect *)
  | Effect_undef of terminal (* undefined-instruction exception *)
  | Effect_unspec of terminal (* unspecified values *)
  | Effect_nondet of terminal (* nondeterminism from intra-instruction parallelism *)
+
+
+type 
+kind = 
+   K_aux of kind_aux * l
 
 
 type 
@@ -103,13 +108,14 @@ and nexp =
 
 
 type 
-kind = 
-   K_aux of kind_aux * l
+efct = 
+   Effect_aux of efct_aux * l
 
 
 type 
-efct = 
-   Effect_aux of efct_aux * l
+kinded_id_aux =  (* optionally kind-annotated identifier *)
+   KOpt_none of id (* identifier *)
+ | KOpt_kind of kind * id (* kind-annotated variable *)
 
 
 type 
@@ -118,12 +124,6 @@ type
  | NC_bounded_ge of nexp * terminal * nexp
  | NC_bounded_le of nexp * terminal * nexp
  | NC_nat_set_bounded of id * terminal * terminal * ((terminal * int) * terminal) list * terminal
-
-
-type 
-kinded_id_aux =  (* optionally kind-annotated identifier *)
-   KOpt_none of id (* identifier *)
- | KOpt_kind of kind * id (* kind-annotated variable *)
 
 
 type 
@@ -140,13 +140,13 @@ order_aux =  (* vector order specifications, of kind $_$ *)
 
 
 type 
-'a nexp_constraint = 
-   NC_aux of 'a nexp_constraint_aux * 'a annot
+kinded_id = 
+   KOpt_aux of kinded_id_aux * l
 
 
 type 
-kinded_id = 
-   KOpt_aux of kinded_id_aux * l
+'a nexp_constraint = 
+   NC_aux of 'a nexp_constraint_aux * 'a annot
 
 
 type 
@@ -164,6 +164,19 @@ type
    TypQ_tq of terminal * (kinded_id) list * terminal * ('a nexp_constraint * terminal) list * terminal
  | TypQ_no_constraint of terminal * (kinded_id) list * terminal (* sugar, omitting constraints *)
  | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
+
+
+type 
+lit_aux =  (* Literal constant *)
+   L_unit of terminal * terminal (* $() : _$ *)
+ | L_zero of terminal (* $_ : _$ *)
+ | L_one of terminal (* $_ : _$ *)
+ | L_true of terminal (* $_ : _$ *)
+ | L_false of terminal (* $_ : _$ *)
+ | L_num of (terminal * int) (* natural number constant *)
+ | L_hex of terminal * string (* bit vector constant, C-style *)
+ | L_bin of terminal * string (* bit vector constant, C-style *)
+ | L_string of terminal * string (* string constant *)
 
 
 type 
@@ -193,31 +206,13 @@ type
 
 
 type 
-lit_aux =  (* Literal constant *)
-   L_unit of terminal * terminal (* $() : _$ *)
- | L_zero of terminal (* $_ : _$ *)
- | L_one of terminal (* $_ : _$ *)
- | L_true of terminal (* $_ : _$ *)
- | L_false of terminal (* $_ : _$ *)
- | L_num of (terminal * int) (* natural number constant *)
- | L_hex of terminal * string (* bit vector constant, C-style *)
- | L_bin of terminal * string (* bit vector constant, C-style *)
- | L_string of terminal * string (* string constant *)
-
-
-type 
-'a typschm_aux =  (* type scheme *)
-   TypSchm_ts of 'a typquant * typ
-
-
-type 
 lit = 
    L_aux of lit_aux * l
 
 
 type 
-'a typschm = 
-   TypSchm_aux of 'a typschm_aux * 'a annot
+'a typschm_aux =  (* type scheme *)
+   TypSchm_ts of 'a typquant * typ
 
 
 type 
@@ -246,7 +241,15 @@ and 'a fpat =
 
 
 type 
-'a exp_aux =  (* Expression *)
+'a typschm = 
+   TypSchm_aux of 'a typschm_aux * 'a annot
+
+
+type 
+'a letbind = 
+   LB_aux of 'a letbind_aux * 'a annot
+
+and 'a exp_aux =  (* Expression *)
    E_block of terminal * ('a exp * terminal) list * terminal (* block (parsing conflict with structs?) *)
  | E_id of id (* identifier *)
  | E_lit of lit (* literal constant *)
@@ -304,20 +307,11 @@ and 'a letbind_aux =  (* Let binding *)
    LB_val_explicit of 'a typschm * 'a pat * terminal * 'a exp (* value binding, explicit type ('a pat must be total) *)
  | LB_val_implicit of terminal * 'a pat * terminal * 'a exp (* value binding, implicit type ('a pat must be total) *)
 
-and 'a letbind = 
-   LB_aux of 'a letbind_aux * 'a annot
-
 
 type 
 naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
    Name_sect_none
  | Name_sect_some of terminal * terminal * terminal * terminal * string * terminal
-
-
-type 
-'a tannot_opt_aux =  (* Optional type annotation for functions *)
-   Typ_annot_opt_none
- | Typ_annot_opt_some of terminal * typ
 
 
 type 
@@ -327,19 +321,20 @@ rec_opt_aux =  (* Optional recursive annotation for functions *)
 
 
 type 
-'a effects_opt_aux =  (* Optional effect annotation for functions *)
-   Effects_opt_pure (* sugar for empty effect set *)
- | Effects_opt_effects of effects
-
-
-type 
 'a funcl_aux =  (* Function clause *)
    FCL_Funcl of id * 'a pat * terminal * 'a exp
 
 
 type 
-naming_scheme_opt = 
-   Name_sect_aux of naming_scheme_opt_aux * l
+'a tannot_opt_aux =  (* Optional type annotation for functions *)
+   Typ_annot_opt_none
+ | Typ_annot_opt_some of terminal * typ
+
+
+type 
+'a effects_opt_aux =  (* Optional effect annotation for functions *)
+   Effects_opt_pure (* sugar for empty effect set *)
+ | Effects_opt_effects of effects
 
 
 type 
@@ -353,8 +348,8 @@ and index_range =
 
 
 type 
-'a tannot_opt = 
-   Typ_annot_opt_aux of 'a tannot_opt_aux * 'a annot
+naming_scheme_opt = 
+   Name_sect_aux of naming_scheme_opt_aux * l
 
 
 type 
@@ -363,19 +358,18 @@ rec_opt =
 
 
 type 
-'a effects_opt = 
-   Effects_opt_aux of 'a effects_opt_aux * 'a annot
-
-
-type 
 'a funcl = 
    FCL_aux of 'a funcl_aux * 'a annot
 
 
 type 
-'a default_typing_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of terminal * base_kind * id
- | DT_typ of terminal * 'a typschm * id
+'a tannot_opt = 
+   Typ_annot_opt_aux of 'a tannot_opt_aux * 'a annot
+
+
+type 
+'a effects_opt = 
+   Effects_opt_aux of 'a effects_opt_aux * 'a annot
 
 
 type 
@@ -388,18 +382,19 @@ type
 
 
 type 
-'a fundef_aux =  (* Function definition *)
-   FD_function of terminal * rec_opt * 'a tannot_opt * 'a effects_opt * ('a funcl * terminal) list
-
-
-type 
 'a val_spec_aux =  (* Value type specification *)
    VS_val_spec of terminal * 'a typschm * id
 
 
 type 
-'a default_typing_spec = 
-   DT_aux of 'a default_typing_spec_aux * 'a annot
+'a default_typing_spec_aux =  (* Default kinding or typing assumption *)
+   DT_kind of terminal * base_kind * id
+ | DT_typ of terminal * 'a typschm * id
+
+
+type 
+'a fundef_aux =  (* Function definition *)
+   FD_function of terminal * rec_opt * 'a tannot_opt * 'a effects_opt * ('a funcl * terminal) list
 
 
 type 
@@ -408,13 +403,18 @@ type
 
 
 type 
-'a fundef = 
-   FD_aux of 'a fundef_aux * 'a annot
+'a val_spec = 
+   VS_aux of 'a val_spec_aux * 'a annot
 
 
 type 
-'a val_spec = 
-   VS_aux of 'a val_spec_aux * 'a annot
+'a default_typing_spec = 
+   DT_aux of 'a default_typing_spec_aux * 'a annot
+
+
+type 
+'a fundef = 
+   FD_aux of 'a fundef_aux * 'a annot
 
 
 type 
@@ -433,18 +433,13 @@ type
 
 
 type 
-'a def = 
-   DEF_aux of 'a def_aux * 'a annot
-
-
-type 
 'a typ_lib_aux =  (* library types and syntactic sugar for them *)
    Typ_lib_unit of terminal (* unit type with value $()$ *)
  | Typ_lib_bool of terminal (* booleans $_$ and $_$ *)
  | Typ_lib_bit of terminal (* pure bit values (not mutable bits) *)
  | Typ_lib_nat of terminal (* natural numbers 0,1,2,... *)
  | Typ_lib_string of terminal * string (* UTF8 strings *)
- | Typ_lib_enum of terminal * nexp * nexp * order (* natural numbers nexp .. nexp+nexp-1, ordered by $order$ *)
+ | Typ_lib_enum of terminal * nexp * nexp * order (* natural numbers nexp .. nexp+nexp-1, ordered by order *)
  | Typ_lib_enum1 of terminal * nexp * terminal (* sugar for \texttt{enum nexp 0 inc} *)
  | Typ_lib_enum2 of terminal * nexp * terminal * nexp * terminal (* sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} *)
  | Typ_lib_vector of terminal * nexp * nexp * order * typ (* vector of typ, indexed by natural range *)
@@ -461,8 +456,8 @@ type
 
 
 type 
-'a defs =  (* Definition sequence *)
-   Defs of ('a def) list
+'a def = 
+   DEF_aux of 'a def_aux * 'a annot
 
 
 type 
@@ -473,6 +468,11 @@ type
 type 
 'a ctor_def = 
    CT_aux of 'a ctor_def_aux * 'a annot
+
+
+type 
+'a defs =  (* Definition sequence *)
+   Defs of ('a def) list
 
 
 

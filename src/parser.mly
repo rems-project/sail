@@ -242,19 +242,19 @@ atomic_typs:
   | atomic_typ
     { [$1] }
   | atomic_typ atomic_typs
-    { $1::$2 }
+    { $1::$2 } 
 
 app_typ:
   | atomic_typ
     { $1 }
   | id atomic_typs
-    { tloc (ATyp_app($1,$2)) }
+    { tloc (ATyp_app($1,$2)) } 
 
 star_typ_list:
   | app_typ
     { [($1,None)] }
   | app_typ Star star_typ_list
-    { ($1,fst $2)::$3 }
+    { ($1,fst $2)::$3 } 
 
 star_typ:
   | star_typ_list
@@ -270,19 +270,19 @@ exp_typ:
    | Num StarStar typ
      { if (2 = (fst $1))
        then tloc (ATyp_exp((fst $1,snd $1),$2,$3))
-       else Parse_error_locn(loc (), "Only 2 is a valid exponent base in Nats") }
+       else Parse_error_locn(loc (), "Only 2 is a valid exponent base in Nats") } 
 
 nexp_typ:
    | exp_typ
      { $1 }
    | atomic_typ Plus typ
-     { tloc (ATyp_sum($1,fst $2,$3)) }
+     { tloc (ATyp_sum($1,fst $2,$3)) } 
 
 typ:
   | nexp_typ
     { $1 }
   | star_typ MinusGt atomic_typ effect_typ
-    { tloc (ATyp_fn($1,$2,$3,$4)) }
+    { tloc (ATyp_fn($1,$2,$3,$4)) } 
 
 lit:
   | True
@@ -328,18 +328,11 @@ atomic_pat:
   | Lparen pat Rparen
     { $2 }
 
-
-atomic_pats:
-  | atomic_pat
-    { [$1] }
-  | atomic_pat atomic_pats
-    { $1::$2 }
-
 app_pat:
   | atomic_pat
     { $1 }
-  | id atomic_pats
-    { ploc (P_app($1,$2)) }
+  | id pat
+    { ploc (P_app($1,[$2])) }
 
 pat_colons:
   | atomic_pat Colon atomic_pat
@@ -385,14 +378,12 @@ atomic_exp:
   | Lcurly semi_exps Rcurly
     { eloc (E_block($1,$2,$3)) }
   | id 
-    { eloc (E_id($1)) }
+    { eloc (E_id($1)) } 
   | lit
     { eloc (E_lit($1)) }
   | Lparen exp Rparen
     { $2 }
-/*  | Lparen typ Rparen exp
-    { eloc (E_cast($1,$2,$3,$4)) }
-*/  | Lparen comma_exps Rparen
+  | Lparen comma_exps Rparen
     { eloc (E_tup($1,$2,$3)) }
   | Lsquare comma_exps Rsquare
     { eloc (E_vector($1,$2,$3)) }
@@ -404,7 +395,6 @@ atomic_exp:
     { eloc (E_list($1,$2,$3)) }
   | Switch exp Lcurly case_exps Rcurly
     { eloc (E_case($1,$2,$3,$4,$5)) }
-
 
 field_exp:
   | atomic_exp
@@ -423,14 +413,10 @@ vaccess_exp:
 app_exp:
   | vaccess_exp
     { $1 }
-  | atomic_exp exps
+  | id Lparen exp Rparen
     { eloc (E_app($1,$2)) }
-
-exps:
-  | atomic_exp
-    { [$1] }
-  | atomic_exp exps
-    { $1::$2 }
+  | id Lparen comma_exps Rparen
+    { eloc (E_app($1,$3)) }
 
 right_atomic_exp:
   | If_ exp Then exp Else exp
@@ -444,20 +430,17 @@ starstar_exp:
   | starstar_exp StarStar app_exp
     { eloc (E_app_infix($1,SymX_l($2, locn 2 2), $3)) }
 
-
 starstar_right_atomic_exp:
   | right_atomic_exp
     { $1 }
   | starstar_exp StarStar right_atomic_exp
     { eloc (E_app_infix($1,SymX_l($2, locn 2 2), $3)) }
 
-
 star_exp:
   | starstar_exp
     { $1 }
   | star_exp Star starstar_exp
     { eloc (E_app_infix($1,SymX_l($2, locn 2 2), $3)) }
-
 
 star_right_atomic_exp:
   | starstar_right_atomic_exp
@@ -471,7 +454,6 @@ plus_exp:
   | plus_exp Plus star_exp
     { eloc (E_app_infix($1,SymX_l($2, locn 2 2), $3)) }
 
-
 plus_right_atomic_exp:
   | star_right_atomic_exp
     { $1 }
@@ -483,7 +465,6 @@ cons_exp:
     { $1 }
   | plus_exp ColonColon cons_exp
     { eloc (E_cons($1,fst $2,$3)) }
-
 
 cons_right_atomic_exp:
   | plus_right_atomic_exp
@@ -497,7 +478,6 @@ at_exp:
   | cons_exp At at_exp
     { eloc (E_app_infix($1,SymX_l($2, locn 2 2), $3)) }
 
-
 at_right_atomic_exp:
   | cons_right_atomic_exp
     { $1 }
@@ -507,6 +487,7 @@ at_right_atomic_exp:
 eq_exp:
   | at_exp
     { $1 }
+  /* Adds one shift/reduce conflict */
   | eq_exp Eq at_exp
     { eloc (E_app_infix($1,SymX_l($2, locn 2 2), $3)) }
   | eq_exp GtEq at_exp
@@ -515,7 +496,6 @@ eq_exp:
     { eloc (E_app_infix($1,SymX_l($2, locn 2 2), $3)) }
   | eq_exp ColonEq at_exp
     { eloc (E_assign($1,$2,$3)) }
-
 
 eq_right_atomic_exp:
   | at_right_atomic_exp
@@ -528,7 +508,6 @@ and_exp:
     { $1 }
   | eq_exp AmpAmp and_exp
     { eloc (E_app_infix($1,SymX_l($2, locn 2 2), $3)) }
-
 
 and_right_atomic_exp:
   | eq_right_atomic_exp
@@ -550,10 +529,11 @@ or_right_atomic_exp:
     { eloc (E_app_infix($1,SymX_l($2, locn 2 2), $3)) }
 
 exp:
-  | app_exp
+  | or_exp
     { $1 } 
-  | right_atomic_exp
+  | or_right_atomic_exp
     { $1 }
+
 
 comma_exps:
   | exp Comma exp
@@ -586,25 +566,26 @@ case_exps:
     { $1::$2 }
 
 patsexp:
-  | atomic_pats1 MinusGt exp
+  | atomic_pats MinusGt exp
     { Patsexp($1,$2,$3,loc ()) }
 
-atomic_pats1:
+atomic_pats:
   | atomic_pat
     { [$1] }
-  | atomic_pat atomic_pats1
+  | atomic_pat atomic_pats
     { $1::$2 } 
 
 letbind:
   | Let_ atomic_pat Eq exp
     { }
-  | typquant atomic_typ atomic_pat Eq exp
+  | Let_ typquant atomic_typ atomic_pat Eq exp
     { }
+  /* This is ambiguous causing 4 shift/reduce and 5 reduce/reduce conflicts because the parser can't tell until the end of typ whether it was parsing a type or a pattern, and this seem to be too late. Solutions are to have a different keyword for this and the above solution besides let (while still absolutely having a keyword here) 
   | Let_ atomic_typ atomic_pat Eq exp
-    { }
+    { } */
 
 funcl: 
-  | id atomic_pats1 Eq exp
+  | id atomic_pats Eq exp
     { reclloc (FCL_Funcl($1,$2,fst $3,$4)) }
 
 funcl_ands:
@@ -613,33 +594,33 @@ funcl_ands:
   | funcl And funcl_ands
     { $1::$3 }
 
-
 fun_def:
-  | Function_ Rec typquant typ effect_typ funcl_ands
+  | Function_ Rec typquant atomic_typ effect_typ funcl_ands
     { $1,$2,$3,$4,$5 }
-  | Function_ Rec typquant typ effect_typ funcl_ands
+  | Function_ Rec typquant atomic_typ funcl_ands
+    { $1,$2,$3,$4,$5 }  
+  | Function_ Rec atomic_typ effect_typ funcl_ands
     { }
-  | Function_ Rec typ funcl_ands
+  | Function_ Rec atomic_typ funcl_ands
     { $1,$2,$3,$4 }
+  /* The below causes 2 shift/reduce conflicts because it can't here tell the difference between the start of the function the potential start of a type */
   | Function_ Rec funcl_ands
     { $1,$2,$3 }
-  | Function_ typquant typ effect_typ funcl_ands
+  | Function_ typquant atomic_typ effect_typ funcl_ands
     { $1,$2,$3,$4 }
-  | Function_ typquant typ funcl_ands
+  | Function_ typquant atomic_typ funcl_ands
     { $1,$2,$3 }
-  | Function_ typ funcl_ands
+  | Function_ atomic_typ funcl_ands
     { $1,$2,$3 }
   | Function_ funcl_ands
     { $1,$2 }
 
 
 val_spec:
-  | Val typschm id
+  | Val typquant atomic_typ id
     { Val_spec($1,$2,$3) }
-
-texp:
-  | typ
-    { Te_abbrev($1) }
+  | Val atomic_typ id
+    { Val_spec($1,$2,$3) }
 
 kinded_id:
   | id
@@ -683,12 +664,6 @@ typquant:
   | Forall kinded_ids Dot
     { typql(TypQ_no_constraint($1,$2,$3)) }
 
-typschm:
-  | typquant typ
-    { TypS($1,$2) }
-  | typ
-    { TypS(None,$1) }
-
 name_sect:
   | Lsquare id Eq String Rsquare
     { Name_sect_some($1,$2,fst $3,(fst $4),(snd $4),$5) }
@@ -699,7 +674,7 @@ c_def_body:
   | typ id Semi
     { [(($1,$2),Some)] }
   | typ id Semi c_def_body
-    { (($1,$2)$3)::$4 }
+    { (($1,$2)$3)::$4 } 
 
 index_range_atomic:
   | Num
@@ -723,17 +698,21 @@ r_def_body:
   | index_range Semi r_def_body
     { ($1,$2)::$3 }
 
-
 type_def:
-  | Typedef id name_sect Eq typschm
+  | Typedef id name_sect Eq typquant typ
     {}
-  | Typedef id Eq typschm
+  | Typedef id name_sect Eq typ
     { }
+  | Typedef id Eq typquant typ
+    { }
+  | Typedef id Eq typ
+    { }
+  /* The below adds 4 shift/reduce conflicts. Unclear why */
   | Typedef id name_sect Eq Const Struct typquant Lcurly c_def_body Rcurly
     {}
-  | Typedef id Eq Const Struct typquant Lcurly c_def_body Rcurly
-    {}
   | Typedef id name_sect Eq Const Struct Lcurly c_def_body Rcurly
+    {}
+  | Typedef id Eq Const Struct typquant Lcurly c_def_body Rcurly
     {}
   | Typedef id Eq Const Struct Lcurly c_def_body Rcurly
     {}
@@ -751,21 +730,24 @@ type_def:
 
 default_typ:
   | Default atomic_kind id
-    { $1,$2,$3 }
-  | Default typ id
     { $1,$2,$3 } 
-
+  | Default atomic_typ id
+    { $1,$2,$3 }
  
 scattered_def:
-  | Function_ Rec typschm effect_typ id
+  | Function_ Rec typquant atomic_typ effect_typ id
     { (DEF_scattered_function(None,$1,(Rec_rec ($2)),$3,$4,$5)) }
-  | Function_ Rec typschm id
+  | Function_ Rec atomic_typ effect_typ id
+    { (DEF_scattered_function(None,$1,(Rec_rec ($2)),$3,$4,$5)) }
+  | Function_ Rec atomic_typ id
     { (DEF_scattered_function(None,$1,(Rec_rec ($2)),$3,$4)) }
   | Function_ Rec id
     { DEF_scattered_function(None,$1,$2,None,None,$3) }
-  | Function_ typschm effect_typ id
+  | Function_ typquant atomic_typ effect_typ id
     { (DEF_scattered_function(None,$1,(Rec_rec ()),$2,$3,$4)) }
-  | Function_ typschm id
+  | Function_ atomic_typ effect_typ id
+    { (DEF_scattered_function(None,$1,(Rec_rec ($2)),$3,)) }
+  | Function_ atomic_typ id
     { (DEF_scattered_function(None,$1,(Rec_rec ($2)),$3,)) }
   | Function_ id
     { DEF_scattered_function(None,$1,$2,None,None,) }
@@ -789,7 +771,7 @@ def:
     { dloc (DEF_spec($1)) }
   | default_typ 
     { dloc (DEF_default($1)) }
-  | Register typ id
+  | Register atomic_typ id
     { dloc (DEF_reg_dec($1,$2,$3)) }
   | Scattered scattered_def
     { dloc (match ($2) with
@@ -797,7 +779,7 @@ def:
             | DEF_scattered_variant(_,t,i,n,e,c,u,ty) -> DEF_scattered_variant($1,t,i,n,e,c,u,ty)) }
   | Function_ Clause funcl
     { dloc (DEF_funcl($1,$2,$3)) }
-  | Union id Member typ id
+  | Union id Member atomic_typ id
     { dloc (DEF_scattered_unioncl($1,$2,$3,$4,$5)) }
   | End id 
     { dloc (DEF_scattered_end($1,$2)) }
