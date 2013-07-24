@@ -351,7 +351,7 @@ atyp :: 'ATyp_' ::=
 
 typ_lib :: 'Typ_lib_' ::=
   {{ com library types and syntactic sugar for them }}
-  {{ aux _ l }} {{ auxparam 'a }}
+  {{ aux _ l }} %{{ auxparam 'a }}
 % boring base types:
   | unit :: :: unit {{ com unit type with value $()$ }}
   | bool :: :: bool {{ com booleans $[[true]]$ and $[[false]]$ }}
@@ -390,7 +390,8 @@ grammar
 
 nexp_constraint :: 'NC_' ::=
   {{ com constraint over kind $[[Nat]]$ }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | atyp = atyp'                                :: :: fixed
   | atyp >= atyp'                               :: :: bounded_ge
   | atyp '<=' atyp'                             :: :: bounded_le
@@ -408,7 +409,8 @@ kinded_id :: 'KOpt_' ::=
 
 typquant :: 'TypQ_' ::= 
   {{ com type quantifiers and constraints}}
-  {{ aux _ annot }} {{ auxparam 'a }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
   | forall kinded_id1 ... kinded_idn . nexp_constraint1 , ... , nexp_constrainti . :: :: tq {{ texlong }}
 
 % WHY ARE CONSTRAINTS HERE AND NOT IN THE KIND LANGUAGE
@@ -418,7 +420,8 @@ typquant :: 'TypQ_' ::=
 
 typschm :: 'TypSchm_' ::=
   {{ com type scheme  }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
   |  typquant atyp                                                       :: :: ts
 
 
@@ -430,7 +433,8 @@ typschm :: 'TypSchm_' ::=
 grammar
 ctor_def :: 'CT_' ::=
   {{ com Datatype constructor definition clause }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | id : typschm                                       :: :: ct
 % but we could get away with disallowing constraints in typschm, we
 % think - if it's useful to do that
@@ -468,7 +472,8 @@ ctor_def :: 'CT_' ::=
 
 type_def :: 'TD_' ::=
   {{ com Type definition body }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | typedef id naming_scheme_opt = typschm                                        :: :: abbrev
     {{ com type abbreviation }} {{ texlong }}
   | typedef id naming_scheme_opt = const struct typquant { atyp1 id1 ; ... ; atypn idn semi_opt }     :: :: record
@@ -483,7 +488,7 @@ type_def :: 'TD_' ::=
   | typedef id naming_scheme_opt = enum { id1 ; ... ; idn semi_opt }   :: :: enum
     {{ com enumeration type definition}} {{ texlong }}
 
-  | typedef  id = register bits [ nexp : nexp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
+  | typedef  id = register bits [ atyp : atyp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
 :: :: register {{ com register mutable bitfield type definition }} {{ texlong }}
 
 % also sugar [  nexp ] 
@@ -543,7 +548,8 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
 
 pat :: 'P_' ::= 
   {{ com Pattern }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | lit                                                 :: :: lit
     {{ com literal constant pattern }}
   | _                                                   :: :: wild  
@@ -598,7 +604,8 @@ pat :: 'P_' ::=
 
 fpat :: 'FP_' ::=
   {{ com Field pattern }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | id = pat                                            :: :: Fpat
 
 parsing
@@ -615,7 +622,8 @@ grammar
 
 exp :: 'E_' ::=
   {{ com Expression }}
-  {{ aux _ annot }} {{ auxparam 'a }}  
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}  
 
   | { exp1 ; ... ; expn }                               :: :: block {{ com block (parsing conflict with structs?) }}
 % maybe we really should have indentation-sensitive syntax :-)  (given that some of the targets do)
@@ -713,14 +721,15 @@ exp :: 'E_' ::=
   | letbind in exp                                  :: :: let
     {{ com let expression }}
 
-  | lexp := exp                                      :: :: assign
+  | exp := exp'                                      :: :: assign
     {{ com imperative assignment }}
 
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
 
 
 lexp :: 'LEXP_' ::= {{ com lvalue expression }}
-    {{ aux _ annot }} {{ auxparam 'a }}
+    {{ aux _ l }}
+%    {{ aux _ annot }} {{ auxparam 'a }}
     | id                                                  :: :: id
     {{ com identifier }}
     | lexp [ exp ]  :: ::                         vector  {{ com vector element }}
@@ -731,17 +740,20 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
 
 fexp :: 'FE_' ::=
   {{ com Field-expression }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }} 
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | id = exp                                            :: :: Fexp
 
 fexps :: 'FES_' ::=
   {{ com Field-expression list }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | fexp1 ; ... ; fexpn semi_opt                        :: :: Fexps
 
 pexp :: 'Pat_' ::=
   {{ com Pattern match }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | pat -> exp                                  :: :: exp
 % apparently could use -> or => for this.
 
@@ -818,9 +830,10 @@ grammar
 
 tannot_opt :: 'Typ_annot_opt_' ::=
   {{ com Optional type annotation for functions}}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   |                                             :: :: none
-  | typ_quant typ                               :: :: some 
+  | typquant atyp                               :: :: some 
 
 rec_opt :: 'Rec_' ::=
   {{ com Optional recursive annotation for functions }}
@@ -830,19 +843,22 @@ rec_opt :: 'Rec_' ::=
 
 effects_opt :: 'Effects_opt_' ::=
   {{ com Optional effect annotation for functions }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   |                                             :: :: pure {{ com sugar for empty effect set }}
-  | effects                                     :: :: effects
+  | atyp                                     :: :: effects
 
 funcl :: 'FCL_' ::=
   {{ com Function clause }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | id pat = exp                   :: :: Funcl
 
 
 fundef :: 'FD_' ::=
   {{ com Function definition}}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | function rec_opt tannot_opt effects_opt funcl1 and ... and funcln :: :: function {{ texlong }}  
 % {{ com function definition }}
 % TODO note that the typ in the tannot_opt is the *result* type, not
@@ -854,7 +870,8 @@ fundef :: 'FD_' ::=
 
 letbind :: 'LB_' ::=
   {{ com Let binding }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | typschm pat = exp                                :: :: val_explicit
     {{ com value binding, explicit type ([[pat]] must be total)}}
   | let pat = exp                                    :: :: val_implicit
@@ -863,12 +880,14 @@ letbind :: 'LB_' ::=
 
 val_spec :: 'VS_' ::=
   {{ com Value type specification }} 
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | val typschm id                                  :: :: val_spec
 
 default_typing_spec :: 'DT_' ::=
   {{ com Default kinding or typing assumption }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | default base_kind id    :: :: kind
   | default typschm id      :: :: typ
 % The intended semantics of these is that if an id in binding position
@@ -884,7 +903,8 @@ default_typing_spec :: 'DT_' ::=
 
 def :: 'DEF_' ::=
   {{ com Top-level definition }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
+%  {{ aux _ annot }} {{ auxparam 'a }}
   | type_def                                                    :: :: type
     {{ com type definition }}
   | fundef                                                   :: :: fundef
@@ -895,7 +915,7 @@ def :: 'DEF_' ::=
     {{ com top-level type constraint }}
   | default_typing_spec                                         :: :: default
     {{ com default kind and type assumptions }}
-  | register typ id                                   :: :: reg_dec
+  | register atyp id                                   :: :: reg_dec
     {{ com register declaration }}
 
   | scattered function rec_opt tannot_opt effects_opt id   :: :: scattered_function {{ texlong }} {{ com scattered function definition header }}
@@ -905,13 +925,13 @@ def :: 'DEF_' ::=
 
   | scattered typedef id naming_scheme_opt = const union typquant :: :: scattered_variant {{ texlong }} {{ com scattered union definition header }}
 
-  | union id member typ id'  :: :: scattered_unioncl {{ com scattered union definition member }}
+  | union id member atyp id'  :: :: scattered_unioncl {{ com scattered union definition member }}
   | end id  :: :: scattered_end
 {{ com scattered definition end }}
 
 defs :: '' ::=
   {{ com Definition sequence }}
-  {{ auxparam 'a }}
+%  {{ auxparam 'a }}
   | def1  .. defn                 :: :: Defs
 
 

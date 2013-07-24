@@ -56,9 +56,10 @@ let get_lexbuf fn =
                                   Lexing.pos_cnum = 0; };
     lexbuf
 
-let parse_file (f : string) : (bool Ast.defs * Ast.lex_skips) =
+let parse_file (f : string) : (Parse_ast.defs * Parse_ast.lex_skips) =
   let lexbuf = get_lexbuf f in
-    try
+  Parser.file (Lexer.token []) lexbuf
+(*    try
       Parser.file (Lexer.token []) lexbuf
     with
       | Parsing.Parse_error ->
@@ -67,7 +68,7 @@ let parse_file (f : string) : (bool Ast.defs * Ast.lex_skips) =
       | Ast.Parse_error_locn(l,m) ->
           raise "Parse error 2" (*Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m))*)
       | Lexer.LexError(c,p) ->
-          raise "Lex error" (*Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, c))*)
+          raise "Lex error" (*Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, c))*)*)
 
 (* type instances = Types.instance list Types.Pfmap.t
 

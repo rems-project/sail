@@ -328,7 +328,7 @@ type
 type 
 'a tannot_opt_aux =  (* Optional type annotation for functions *)
    Typ_annot_opt_none
- | Typ_annot_opt_some of terminal * typ
+ | Typ_annot_opt_some of 'a typquant * typ
 
 
 type 

@@ -852,7 +852,7 @@ tannot_opt :: 'Typ_annot_opt_' ::=
   {{ com Optional type annotation for functions}}
   {{ aux _ annot }} {{ auxparam 'a }}
   |                                             :: :: none
-  | typ_quant typ                               :: :: some 
+  | typquant typ                                :: :: some 
 
 rec_opt :: 'Rec_' ::=
   {{ com Optional recursive annotation for functions }}
