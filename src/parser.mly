@@ -603,7 +603,6 @@ fun_def:
     { }
   | Function_ Rec atomic_typ funcl_ands
     { $1,$2,$3,$4 }
-  /* The below causes 2 shift/reduce conflicts because it can't here tell the difference between the start of the function the potential start of a type */
   | Function_ Rec funcl_ands
     { $1,$2,$3 }
   | Function_ typquant atomic_typ effect_typ funcl_ands

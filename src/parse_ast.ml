@@ -411,12 +411,12 @@ type
  | Typ_lib_enum of terminal * terminal * terminal * terminal (* natural numbers _ .. _+_-1, ordered by order *)
  | Typ_lib_enum1 of terminal * terminal * terminal (* sugar for \texttt{enum nexp 0 inc} *)
  | Typ_lib_enum2 of terminal * terminal * terminal * terminal * terminal (* sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} *)
- | Typ_lib_vector of terminal * terminal * terminal * terminal * terminal (* vector of _, indexed by natural range *)
- | Typ_lib_vector2 of atyp * terminal * terminal * terminal (* sugar for vector indexed by [ _ ] *)
- | Typ_lib_vector3 of atyp * terminal * terminal * terminal * terminal * terminal (* sugar for vector indexed by [ _.._ ] *)
- | Typ_lib_list of terminal * atyp (* list of _ *)
- | Typ_lib_set of terminal * atyp (* finite set of _ *)
- | Typ_lib_reg of terminal * atyp (* mutable register components holding _ *)
+ | Typ_lib_vector of terminal * terminal * terminal * terminal * atyp (* vector of atyp, indexed by natural range *)
+ | Typ_lib_vector2 of atyp * terminal * terminal * terminal (* sugar for vector indexed by [ atyp ] *)
+ | Typ_lib_vector3 of atyp * terminal * terminal * terminal * terminal * terminal (* sugar for vector indexed by [ atyp.._ ] *)
+ | Typ_lib_list of terminal * atyp (* list of atyp *)
+ | Typ_lib_set of terminal * atyp (* finite set of atyp *)
+ | Typ_lib_reg of terminal * atyp (* mutable register components holding atyp *)
 
 
 type 

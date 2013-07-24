@@ -360,20 +360,20 @@ typ_lib :: 'Typ_lib_' ::=
   | nat :: :: nat {{ com natural numbers 0,1,2,... }}
   | string :: :: string {{ com UTF8 strings }}
 % finite subranges of nat
-  | enum nexp1 nexp2 order :: :: enum  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1, ordered by order }}
+  | enum nexp1 nexp2 order :: :: enum  {{ com natural numbers [[atyp2]] .. [[atyp2]]+[[atyp1]]-1, ordered by order }}
   | [ nexp ]             :: :: enum1 {{ com sugar for \texttt{enum nexp 0 inc} }}
   | [ nexp '..' nexp' ]  :: :: enum2 {{ com sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} }}
 % use .. not - to avoid ambiguity with nexp -
 % total maps and vectors indexed by finite subranges of nat
-  | vector nexp1 nexp2 order typ :: :: vector {{ com vector of [[typ]], indexed by natural range }}
+  | vector nexp1 nexp2 order atyp :: :: vector {{ com vector of [[atyp]], indexed by natural range }}
 % probably some sugar for vector types, using [ ] similarly to enums:
 % (but with .. not : in the former, to avoid confusion...)
-  | atyp [ nexp ]  :: :: vector2 {{ com sugar for vector indexed by [ [[nexp]] ] }}
-  | atyp [ nexp : nexp' ] :: :: vector3 {{ com sugar for vector indexed by [ [[nexp]]..[[nexp']] ] }}
+  | atyp [ nexp ]  :: :: vector2 {{ com sugar for vector indexed by [ [[atyp]] ] }}
+  | atyp [ nexp : nexp' ] :: :: vector3 {{ com sugar for vector indexed by [ [[atyp]]..[[atyp']] ] }}
 % ...so bit [ nexp ] etc is just an instance of that
-  | list atyp :: :: list {{ com list of [[typ]] }}
-  | set atyp  :: :: set  {{ com finite set of [[typ]] }}
-  | reg atyp  :: :: reg  {{ com mutable register components holding [[typ]] }}
+  | list atyp :: :: list {{ com list of [[atyp]] }}
+  | set atyp  :: :: set  {{ com finite set of [[atyp]] }}
+  | reg atyp  :: :: reg  {{ com mutable register components holding [[atyp]] }}
 % "reg t" is basically the ML "t ref" 
 % not sure how first-class it should be, though
 % use "reg word32" etc for the types of vanilla registers 
