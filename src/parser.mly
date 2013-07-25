@@ -53,6 +53,8 @@ open Parse_ast
 let loc () = Range(Parsing.symbol_start_pos(),Parsing.symbol_end_pos())
 let locn m n = Range(Parsing.rhs_start_pos m,Parsing.rhs_end_pos n)
 
+let idl i = Id_aux(i, loc())
+
 let ploc p = P_aux(p,loc ())
 let eloc e = E_aux(e,loc ())
 let peloc pe = Pat_aux(pe,loc ())
@@ -166,13 +168,13 @@ let star = "*"
 
 id:
   | Id
-    { Id_aux(Id($1), loc ()) }
-  | Lparen Eq Rparen
+    { idl (Id($1)) }
+  | Lparen At Rparen
+    { Id_aux(DeIid($1,$2,$3),loc ()) }
+ | Lparen Eq Rparen
     { Id_aux(DeIid($1,$2,$3),loc ()) }
   | Lparen IN Rparen
     { Id_aux(DeIid($1,($2,"In"),$3),loc ()) }
-  | Lparen AmpAmp Rparen
-    { Id_aux(DeIid($1,$2,$3),loc ()) }
   | Lparen BarBar Rparen
     { Id_aux(DeIid($1,($2,"||"),$3),loc ()) }
   | Lparen ColonColon Rparen
@@ -182,8 +184,6 @@ id:
   | Lparen Plus Rparen
     { Id_aux(DeIid($1,$2,$3),loc ()) }
   | Lparen GtEq Rparen
-    { Id_aux(DeIid($1,$2,$3),loc ()) }
-  | Lparen At Rparen
     { Id_aux(DeIid($1,$2,$3),loc ()) }
 
 atomic_kind:
@@ -252,6 +252,14 @@ atomic_typ:
   | Lsquare nexp_typ Colon nexp_typ Rsquare
       { assert false }
 
+vtyp_typ:
+   | atomic_typ
+       { $1 }
+   | atomic_typ Lsquare nexp_typ Rsquare
+     { assert false }
+   | atomic_typ Lsquare nexp_typ Colon nexp_typ Rsquare
+     { assert false }
+
 atomic_typs:
   | atomic_typ
     { [$1] }
@@ -259,7 +267,7 @@ atomic_typs:
     { $1::$2 } 
 
 app_typ:
-  | atomic_typ
+  | vtyp_typ
     { $1 }
   | id atomic_typs
     { tloc (ATyp_app($1,$2)) } 
@@ -292,18 +300,10 @@ nexp_typ:
    | atomic_typ Plus typ
      { tloc (ATyp_sum($1,fst $2,$3)) } 
 
-vtyp_typ:
-   | star_typ
-       { $1 }
-   | star_typ Lsquare nexp_typ Rsquare
-     { assert false }
-   | star_typ Lsquare nexp_typ Colon nexp_typ Rsquare
-     { assert false }
-
 typ:
   | nexp_typ
     { $1 }
-  | vtyp_typ MinusGt atomic_typ effect_typ
+  | star_typ MinusGt atomic_typ effect_typ
     { tloc (ATyp_fn($1,$2,$3,$4)) } 
 
 lit:
@@ -409,9 +409,9 @@ atomic_exp:
     { eloc (E_tuple($1,$2,$3)) }
   | Lsquare comma_exps Rsquare
     { eloc (E_vector($1,$2,$3)) }
-  | Lsquare exp With exp Eq exp Rsquare
+  | Lsquare exp With atomic_exp Eq exp Rsquare
     { eloc (E_vector_update($1,$2,$3,$4,fst $5,$6,$7)) }
-  | Lsquare exp With exp Colon exp Eq exp Rsquare
+  | Lsquare exp With atomic_exp Colon atomic_exp Eq exp Rsquare
     { eloc (E_vector_update_subrange($1,$2,$3,$4,$5,$6,fst $7,$8,$9)) }
   | SquareBar comma_exps BarSquare
     { eloc (E_list($1,$2,$3)) }
@@ -612,6 +612,7 @@ funcl_ands:
   | funcl And funcl_ands
     { ($1,$2)::$3 }
 
+/* This causes ambiguity because without a type quantifier it's unclear whether the first id is a function name or a type name for the optional types.*/
 fun_def:
   | Function_ Rec typquant atomic_typ effect_typ funcl_ands
     { funloc (FD_function($1,mk_rec $2 2, mk_tannot $3 $4 3 4, mk_eannot $5 5, $6)) }
@@ -684,7 +685,7 @@ nexp_constraints:
     { ($1,$2)::$3 }
 
 typquant:
-  /* This is a syntactic change to avoid 6 significant shift/reduce conflicts in the Dot */
+  /* This is a syntactic change to avoid 6 significant shift/reduce conflicts instead of the Dot */
   | Forall kinded_ids Amp nexp_constraints Dot
     { typql(TypQ_tq($1,$2,fst $3,$4,$5)) }
   | Forall kinded_ids Dot
@@ -737,7 +738,7 @@ type_def:
     { tdloc (TD_abbrev($1,$2,mk_namesectn (),fst $3, mk_typschm $4 $5 4 5))}
   | Typedef id Eq typ
     { tdloc (TD_abbrev($1,$2,mk_namesectn (),fst $3,mk_typschm (mk_typqn ()) $4 4 4)) }
-  /* The below adds 4 shift/reduce conflicts. Unclear why */
+  /* The below adds 4 shift/reduce conflicts. Due to c_def_body and confusions in id id and parens  */
   | Typedef id name_sect Eq Const Struct typquant Lcurly c_def_body Rcurly
     { tdloc (TD_record($1,$2,$3,fst $4,$5,$6,$7,$8,fst $9, fst (snd $9), snd (snd $9), $10)) }
   | Typedef id name_sect Eq Const Struct Lcurly c_def_body Rcurly
