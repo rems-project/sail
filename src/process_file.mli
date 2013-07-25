@@ -50,7 +50,7 @@ val parse_file : string -> Parse_ast.defs * Parse_ast.lex_skips
 
 (* type instances = Types.instance list Types.Pfmap.t
 
-val check_ast_as_module : 
+val check_ast_as_module :
   Targetset.t ->
   Name.t list ->
   (Types.type_defs * instances) * env ->
@@ -59,7 +59,7 @@ val check_ast_as_module :
   (Types.type_defs * instances * instances) * env *
   (def list * Ast.lex_skips)
 
-val check_ast : 
+val check_ast :
   Targetset.t ->
   Name.t list ->
   (Types.type_defs * instances) * env ->
@@ -67,10 +67,10 @@ val check_ast :
   (Types.type_defs * instances * instances) * env *
   (def list * Ast.lex_skips)
 
-val output : 
+val output :
   string ->                           (* The path to the library *)
   string ->                           (* Isabelle Theory to be included *)
-  target option ->                    (* Backend name (None for the identity backend) *) 
+  target option ->                    (* Backend name (None for the identity backend) *)
   Typed_ast.var_avoid_f ->
   (Types.type_defs * instances) -> (* The full environment built after all typechecking, and transforming *)
   checked_module list ->              (* The typechecked modules *)

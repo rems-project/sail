@@ -107,8 +107,8 @@ let star = "*"
 (*let mk_pre_x_l sk1 (sk2,id) sk3 l =
   if (sk2 = None || sk2 = Some []) && (sk3 = None || sk3 = Some []) then
     PreX_l(sk1,(None,id),None,l)
-  else if (sk2 = Some [Ws space] && 
-           sk3 = Some [Ws space] && 
+  else if (sk2 = Some [Ws space] &&
+           sk3 = Some [Ws space] &&
            (Ulib.Text.left id 1 = star ||
             Ulib.Text.right id 1 = star)) then
     PreX_l(sk1,(None,id),None,l)
@@ -120,15 +120,15 @@ let star = "*"
 
 /*Terminals with no content*/
 
-%token <Parse_ast.terminal> And As Bits Case Clause Const Default Effect Effects End Enum Else False 
-%token <Parse_ast.terminal> Forall Function_ If_ In IN Let_ Member Nat Order Pure Rec Register  
+%token <Parse_ast.terminal> And As Bits Case Clause Const Default Effect Effects End Enum Else False
+%token <Parse_ast.terminal> Forall Function_ If_ In IN Let_ Member Nat Order Pure Rec Register
 %token <Parse_ast.terminal> Scattered Struct Switch Then True Type TYPE Typedef Union With Val
 
-%token <Parse_ast.terminal> AND Div_ EOR Mod OR Quot Rem 
+%token <Parse_ast.terminal> AND Div_ EOR Mod OR Quot Rem
 
 %token <Parse_ast.terminal> Bar Colon Comma Dot Eof Minus Semi Under
 %token <Parse_ast.terminal> Lcurly Rcurly Lparen Rparen Lsquare Rsquare
-%token <Parse_ast.terminal> BarBar BarGt BarSquare DotDot MinusGt LtBar SquareBar 
+%token <Parse_ast.terminal> BarBar BarGt BarSquare DotDot MinusGt LtBar SquareBar
 
 /*Terminals with content*/
 
@@ -136,24 +136,24 @@ let star = "*"
 %token <Parse_ast.terminal * int> Num
 %token <Parse_ast.terminal * string> String Bin Hex
 
-%token <Parse_ast.terminal * string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde 
-%token <Parse_ast.terminal * string> AmpAmp CarrotCarrot ColonColon ColonEq EqDivEq EqEq ExclEq ExclExcl  
-%token <Parse_ast.terminal * string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt   
+%token <Parse_ast.terminal * string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde
+%token <Parse_ast.terminal * string> AmpAmp CarrotCarrot ColonColon ColonEq EqDivEq EqEq ExclEq ExclExcl
+%token <Parse_ast.terminal * string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt
 %token <Parse_ast.terminal * string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar TildeCarrot
 
-%token <Parse_ast.terminal * string> GtEqUnderS GtEqUnderSi GtEqUnderU GtEqUnderUi GtGtUnderU GtUnderS 
-%token <Parse_ast.terminal * string> GtUnderSi GtUnderU GtUnderUi LtEqUnderS LtEqUnderSi LtEqUnderU 
-%token <Parse_ast.terminal * string> LtEqUnderUi LtUnderS LtUnderSi LtUnderU LtUnderUi StarStarUnderS StarStarUnderSi StarUnderS 
+%token <Parse_ast.terminal * string> GtEqUnderS GtEqUnderSi GtEqUnderU GtEqUnderUi GtGtUnderU GtUnderS
+%token <Parse_ast.terminal * string> GtUnderSi GtUnderU GtUnderUi LtEqUnderS LtEqUnderSi LtEqUnderU
+%token <Parse_ast.terminal * string> LtEqUnderUi LtUnderS LtUnderSi LtUnderU LtUnderUi StarStarUnderS StarStarUnderSi StarUnderS
 %token <Parse_ast.terminal * string> StarUnderSi StarUnderU StarUnderUi TwoCarrot
 
 %token <Parse_ast.terminal * string> AmpI AtI CarrotI  DivI EqI ExclI GtI LtI PlusI StarI TildeI
-%token <Parse_ast.terminal * string> AmpAmpI CarrotCarrotI ColonColonI ColonEqI EqDivEqI EqEqI ExclEqI ExclExclI  
-%token <Parse_ast.terminal * string> GtEqI GtEqPlusI GtGtI GtGtGtI GtPlusI HashGtGtI HashLtLtI  
+%token <Parse_ast.terminal * string> AmpAmpI CarrotCarrotI ColonColonI ColonEqI EqDivEqI EqEqI ExclEqI ExclExclI
+%token <Parse_ast.terminal * string> GtEqI GtEqPlusI GtGtI GtGtGtI GtPlusI HashGtGtI HashLtLtI
 %token <Parse_ast.terminal * string> LtEqI LtEqPlusI LtGtI LtLtI LtLtLtI LtPlusI StarStarI TildeCarrotI
 
-%token <Parse_ast.terminal * string> GtEqUnderSI GtEqUnderSiI GtEqUnderUI GtEqUnderUiI GtGtUnderUI GtUnderSI 
-%token <Parse_ast.terminal * string> GtUnderSiI GtUnderUI GtUnderUiI LtEqUnderSI LtEqUnderSiI LtEqUnderUI 
-%token <Parse_ast.terminal * string> LtEqUnderUiI LtUnderSI LtUnderSiI LtUnderUI LtUnderUiI StarStarUnderSI StarStarUnderSiI StarUnderSI 
+%token <Parse_ast.terminal * string> GtEqUnderSI GtEqUnderSiI GtEqUnderUI GtEqUnderUiI GtGtUnderUI GtUnderSI
+%token <Parse_ast.terminal * string> GtUnderSiI GtUnderUI GtUnderUiI LtEqUnderSI LtEqUnderSiI LtEqUnderUI
+%token <Parse_ast.terminal * string> LtEqUnderUiI LtUnderSI LtUnderSiI LtUnderUI LtUnderUiI StarStarUnderSI StarStarUnderSiI StarUnderSI
 %token <Parse_ast.terminal * string> StarUnderSiI StarUnderUI StarUnderUiI TwoCarrotI
 
 %start file
@@ -264,19 +264,19 @@ atomic_typs:
   | atomic_typ
     { [$1] }
   | atomic_typ atomic_typs
-    { $1::$2 } 
+    { $1::$2 }
 
 app_typ:
   | vtyp_typ
     { $1 }
   | id atomic_typs
-    { tloc (ATyp_app($1,$2)) } 
+    { tloc (ATyp_app($1,$2)) }
 
 star_typ_list:
   | app_typ
     { [($1,None)] }
   | app_typ Star star_typ_list
-    { ($1,fst $2)::$3 } 
+    { ($1,fst $2)::$3 }
 
 star_typ:
   | star_typ_list
@@ -292,19 +292,19 @@ exp_typ:
    | Num StarStar typ
      { if (2 = (snd $1))
        then tloc (ATyp_exp((fst $1),(fst $2),$3))
-       else raise (Parse_error_locn(loc (), "Only 2 is a valid exponent base in Nats")) } 
+       else raise (Parse_error_locn(loc (), "Only 2 is a valid exponent base in Nats")) }
 
 nexp_typ:
    | exp_typ
      { $1 }
    | atomic_typ Plus typ
-     { tloc (ATyp_sum($1,fst $2,$3)) } 
+     { tloc (ATyp_sum($1,fst $2,$3)) }
 
 typ:
   | nexp_typ
     { $1 }
   | star_typ MinusGt atomic_typ effect_typ
-    { tloc (ATyp_fn($1,$2,$3,$4)) } 
+    { tloc (ATyp_fn($1,$2,$3,$4)) }
 
 lit:
   | True
@@ -334,7 +334,7 @@ atomic_pat:
 /*  | Lparen atomic_typ pat Rparen
     { ploc (P_typ($1,$2,$3,$4)) } */
   | id
-    { ploc (P_app($1,[])) } 
+    { ploc (P_app($1,[])) }
   | Lcurly fpats Rcurly
     { ploc (P_record($1,fst $2,fst (snd $2),snd (snd $2),$3)) }
   | Lsquare pat Rsquare
@@ -342,11 +342,11 @@ atomic_pat:
   | Lsquare comma_pats Rsquare
     { ploc (P_vector($1,$2,$3)) }
   | Lsquare npats Rsquare
-    { ploc (P_vector_indexed($1,$2,$3)) } 
+    { ploc (P_vector_indexed($1,$2,$3)) }
   | Lparen comma_pats Rparen
-    { ploc (P_tup($1,$2,$3)) } 
+    { ploc (P_tup($1,$2,$3)) }
   | SquareBar comma_pats BarSquare
-    { ploc (P_list($1,$2,$3)) } 
+    { ploc (P_list($1,$2,$3)) }
   | Lparen pat Rparen
     { $2 }
 
@@ -366,7 +366,7 @@ pat:
   | app_pat
     { $1 }
   | pat_colons
-    { ploc (P_vector_concat($1)) } 
+    { ploc (P_vector_concat($1)) }
 
 comma_pats:
   | atomic_pat Comma atomic_pat
@@ -386,7 +386,7 @@ fpats:
   | fpat Semi fpats
     { (($1,$2)::fst $3, snd $3) }
 
-npat: 
+npat:
   | Num Eq pat
     { ($1,fst $2,$3) }
 
@@ -399,8 +399,8 @@ npats:
 atomic_exp:
   | Lcurly semi_exps Rcurly
     { eloc (E_block($1,$2,$3)) }
-  | id 
-    { eloc (E_id($1)) } 
+  | id
+    { eloc (E_id($1)) }
   | lit
     { eloc (E_lit($1)) }
   | Lparen exp Rparen
@@ -444,7 +444,7 @@ right_atomic_exp:
   | If_ exp Then exp Else exp
     { eloc (E_if($1,$2,$3,$4,$5,$6)) }
   | letbind In exp
-    { eloc (E_let($1,$2,$3)) } 
+    { eloc (E_let($1,$2,$3)) }
 
 starstar_exp:
   | app_exp
@@ -524,7 +524,7 @@ eq_right_atomic_exp:
     { $1 }
   | eq_exp Eq at_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
-  | eq_exp ColonEq at_right_atomic_exp 
+  | eq_exp ColonEq at_right_atomic_exp
     { eloc (E_assign($1,fst $2,$3)) }
 
 and_exp:
@@ -554,7 +554,7 @@ or_right_atomic_exp:
 
 exp:
   | or_exp
-    { $1 } 
+    { $1 }
   | or_right_atomic_exp
     { $1 }
 
@@ -564,7 +564,7 @@ comma_exps:
     { [($1,$2);($3,None)] }
   | exp Comma comma_exps
     { ($1,$2)::$3 }
- 
+
 semi_exps_help:
   | exp
     { [($1,None)] }
@@ -598,11 +598,11 @@ letbind:
     { lbloc (LB_val_implicit($1,$2,fst $3,$4)) }
   | Let_ typquant atomic_typ atomic_pat Eq exp
     { lbloc (LB_val_explicit((mk_typschm $2 $3 2 3),$4,fst $5,$6)) }
-  /* This is ambiguous causing 4 shift/reduce and 5 reduce/reduce conflicts because the parser can't tell until the end of typ whether it was parsing a type or a pattern, and this seem to be too late. Solutions are to have a different keyword for this and the above solution besides let (while still absolutely having a keyword here) 
+  /* This is ambiguous causing 4 shift/reduce and 5 reduce/reduce conflicts because the parser can't tell until the end of typ whether it was parsing a type or a pattern, and this seem to be too late. Solutions are to have a different keyword for this and the above solution besides let (while still absolutely having a keyword here)
   | Let_ atomic_typ atomic_pat Eq exp
     { } */
 
-funcl: 
+funcl:
   | id atomic_pat Eq exp
     { funclloc (FCL_Funcl($1,$2,fst $3,$4)) }
 
@@ -617,26 +617,26 @@ fun_def:
   | Function_ Rec typquant atomic_typ effect_typ funcl_ands
     { funloc (FD_function($1,mk_rec $2 2, mk_tannot $3 $4 3 4, mk_eannot $5 5, $6)) }
   | Function_ Rec typquant atomic_typ funcl_ands
-    { funloc (FD_function($1,mk_rec $2 2, mk_tannot $3 $4 3 4, mk_eannotn (), $5)) }  
+    { funloc (FD_function($1,mk_rec $2 2, mk_tannot $3 $4 3 4, mk_eannotn (), $5)) }
   | Function_ Rec atomic_typ effect_typ funcl_ands
     { funloc (FD_function($1,mk_rec $2 2, mk_tannot (mk_typqn ()) $3 3 3, mk_eannot $4 4, $5)) }
   | Function_ Rec atomic_typ funcl_ands
     { match $3 with
-      | ATyp_aux(ATyp_efid _, _) | ATyp_aux(ATyp_set _, _) -> 
+      | ATyp_aux(ATyp_efid _, _) | ATyp_aux(ATyp_set _, _) ->
         funloc (FD_function($1,mk_rec $2 2,mk_tannotn (), mk_eannot $3 3, $4))
-      | _ -> 
+      | _ ->
         funloc (FD_function($1,mk_rec $2 2,mk_tannot (mk_typqn ()) $3 3 3, mk_eannotn (), $4)) }
   | Function_ Rec funcl_ands
     { funloc (FD_function($1,mk_rec $2 2, mk_tannotn (), mk_eannotn (), $3)) }
   | Function_ typquant atomic_typ effect_typ funcl_ands
     { funloc (FD_function($1,mk_recn (), mk_tannot $2 $3 2 3, mk_eannot $4 4, $5)) }
   | Function_ typquant atomic_typ funcl_ands
-    { funloc (FD_function($1,mk_recn (), mk_tannot $2 $3 2 2, mk_eannotn (), $4)) }  
+    { funloc (FD_function($1,mk_recn (), mk_tannot $2 $3 2 2, mk_eannotn (), $4)) }
   | Function_ atomic_typ funcl_ands
     { match $2 with
-      | ATyp_aux(ATyp_efid _, _) | ATyp_aux(ATyp_set _, _) -> 
+      | ATyp_aux(ATyp_efid _, _) | ATyp_aux(ATyp_set _, _) ->
         funloc (FD_function($1,mk_recn (),mk_tannotn (), mk_eannot $2 2, $3))
-      | _ -> 
+      | _ ->
         funloc (FD_function($1,mk_recn (),mk_tannot (mk_typqn ()) $2 2 2, mk_eannotn (), $3)) }
   | Function_ funcl_ands
     { funloc (FD_function($1,mk_recn (), mk_tannotn (), mk_eannotn (), $2)) }
@@ -676,12 +676,12 @@ nexp_constraint:
   | typ LtEq typ
     { NC_aux(NC_bounded_le($1,(fst $2),$3), loc () ) }
   | id IN Lcurly nums Rcurly
-    { NC_aux(NC_nat_set_bounded($1,$2,$3,$4,$5), loc ()) } 
-    
+    { NC_aux(NC_nat_set_bounded($1,$2,$3,$4,$5), loc ()) }
+
 nexp_constraints:
   | nexp_constraint
     { [($1,None)] }
-  | nexp_constraint Comma nexp_constraints 
+  | nexp_constraint Comma nexp_constraints
     { ($1,$2)::$3 }
 
 typquant:
@@ -701,7 +701,7 @@ c_def_body:
   | typ id Semi
     { [(($1,$2),None)],($3,true) }
   | typ id Semi c_def_body
-    { (($1,$2),$3)::(fst $4), snd $4 } 
+    { (($1,$2),$3)::(fst $4), snd $4 }
 
 index_range_atomic:
   | Num
@@ -715,7 +715,7 @@ index_range:
   | index_range_atomic
     { $1 }
   | index_range_atomic Comma index_range
-    { irloc(BF_concat($1,$2,$3)) } 
+    { irloc(BF_concat($1,$2,$3)) }
 
 r_id_def:
   | index_range Colon id
@@ -761,12 +761,12 @@ type_def:
 
 default_typ:
   | Default atomic_kind id
-    { defloc (DT_kind($1,$2,$3)) } 
+    { defloc (DT_kind($1,$2,$3)) }
   | Default typquant atomic_typ id
     { defloc (DT_typ($1,(mk_typschm $2 $3 2 3),$4)) }
   | Default atomic_typ id
     { defloc (DT_typ($1,(mk_typschm (mk_typqn ()) $2 2 2),$3)) }
- 
+
 scattered_def:
   | Function_ Rec typquant atomic_typ effect_typ id
     { (DEF_scattered_function(None,$1,mk_rec $2 2, mk_tannot $3 $4 3 4, mk_eannot $5 5, $6)) }
@@ -776,7 +776,7 @@ scattered_def:
     { (DEF_scattered_function(None,$1,mk_rec $2 2, mk_tannot $3 $4 3 4, mk_eannotn (), $5)) }
   | Function_ Rec atomic_typ id
     { match $3 with
-      | (ATyp_aux(ATyp_efid _, _)) | (ATyp_aux(ATyp_set _, _)) -> 
+      | (ATyp_aux(ATyp_efid _, _)) | (ATyp_aux(ATyp_set _, _)) ->
         (DEF_scattered_function(None,$1,mk_rec $2 2, mk_tannotn (), mk_eannot $3 3, $4))
       | _ ->
         (DEF_scattered_function(None,$1,mk_rec $2 2,mk_tannot (mk_typqn ()) $3 3 3, mk_eannotn (), $4)) }
@@ -790,7 +790,7 @@ scattered_def:
     { (DEF_scattered_function(None,$1,mk_recn (), mk_tannot $2 $3 2 3, mk_eannotn (), $4)) }
   | Function_ atomic_typ id
     { match $2 with
-      | (ATyp_aux(ATyp_efid _, _)) | (ATyp_aux(ATyp_set _, _)) -> 
+      | (ATyp_aux(ATyp_efid _, _)) | (ATyp_aux(ATyp_set _, _)) ->
         (DEF_scattered_function(None,$1,mk_recn (), mk_tannotn (), mk_eannot $2 2, $3))
       | _ ->
         (DEF_scattered_function(None,$1,mk_recn (), mk_tannot (mk_typqn ()) $2 2 2, mk_eannotn (), $3)) }
@@ -814,7 +814,7 @@ def:
     { dloc (DEF_val($1)) }
   | val_spec
     { dloc (DEF_spec($1)) }
-  | default_typ 
+  | default_typ
     { dloc (DEF_default($1)) }
   | Register atomic_typ id
     { dloc (DEF_reg_dec($1,$2,$3)) }
@@ -827,7 +827,7 @@ def:
     { dloc (DEF_scattered_funcl($1,$2,$3)) }
   | Union id Member atomic_typ id
     { dloc (DEF_scattered_unioncl($1,$2,$3,$4,$5)) }
-  | End id 
+  | End id
     { dloc (DEF_scattered_end($1,$2)) }
 
 defs_help:

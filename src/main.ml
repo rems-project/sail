@@ -60,22 +60,22 @@ let isa_theory = ref None
 let opt_file_arguments = ref ([]:string list)
 
 let options = Arg.align ([
-  ( "-i", 
+  ( "-i",
     Arg.String (fun l -> lib := l::!lib),
     " treat the file as input only and generate no output for it");
-  ( "-tex", 
+  ( "-tex",
     Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_tex)) !backends) then
                 backends := Some(Typed_ast.Target_tex)::!backends),
     " generate LaTeX");
-  ( "-html", 
+  ( "-html",
     Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_html)) !backends) then
                 backends := Some(Typed_ast.Target_html)::!backends),
     " generate Html");
-  ( "-hol", 
+  ( "-hol",
     Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_hol)) !backends) then
                 backends := Some(Typed_ast.Target_hol)::!backends),
     " generate HOL");
-  ( "-ocaml", 
+  ( "-ocaml",
     Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_ocaml)) !backends) then
                 backends := Some(Typed_ast.Target_ocaml)::!backends),
     " generate OCaml");
@@ -94,22 +94,22 @@ let options = Arg.align ([
   ( "-print_types",
     Arg.Unit (fun b -> opt_print_types := true),
     " print types on stdout");
-  ( "-lib", 
+  ( "-lib",
     Arg.String (fun l -> opt_library := Some l),
     " library path"^match !opt_library with None->"" | Some s -> " (default "^s^")");
-  ( "-ocaml_lib", 
+  ( "-ocaml_lib",
     Arg.String (fun l -> ocaml_lib := l::!ocaml_lib),
     " add to OCaml library");
-  ( "-hol_lib", 
+  ( "-hol_lib",
     Arg.String (fun l -> hol_lib := l::!hol_lib),
     " add to HOL library");
-  ( "-isa_lib", 
+  ( "-isa_lib",
     Arg.String (fun l -> isa_lib := l::!isa_lib),
     " add to Isabelle library");
-  ( "-isa_theory", 
+  ( "-isa_theory",
     Arg.String (fun l -> isa_theory := Some l),
     " Isabelle Lem theory");
-  ( "-coq_lib", 
+  ( "-coq_lib",
     Arg.String (fun l -> coq_lib := l::!coq_lib),
     " add to Coq library");
   ( "-v",
@@ -121,7 +121,7 @@ let options = Arg.align ([
   ( "-only_changed_output",
     Arg.Unit (fun b -> Process_file.always_replace_files := false),
     " generate only output files, whose content really changed compared to the existing file");
-  ( "-extra_level", 
+  ( "-extra_level",
     Arg.Symbol (["none"; "auto"; "all"], (fun s ->
      Backend.gen_extra_level := (match s with
        | "none" -> 0
@@ -130,14 +130,14 @@ let options = Arg.align ([
     " generate no (none) extra-information, only extras that can be handled automatically (auto) or all (all) extra information")
 ] @ Reporting.warn_opts)
 
-let usage_msg = 
+let usage_msg =
     ("Lem " ^ Version.v ^ "\n"
-     ^ "example usage:       lem -hol -ocaml -lib ../lem/library test.lem\n" 
+     ^ "example usage:       lem -hol -ocaml -lib ../lem/library test.lem\n"
     )
 
-let _ = 
-  Arg.parse options 
-    (fun s -> 
+let _ =
+  Arg.parse options
+    (fun s ->
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg
 
@@ -177,14 +177,14 @@ let per_target libpath isa_thy modules (def_info,env) consts alldoc_accum alldoc
   let module T = Target_trans.Make(C) in
   let (trans,avoid) = T.get_transformation targ consts in
     try
-      let (_,transformed_m) = 
-        List.fold_left 
-          (fun (env,new_mods) old_mod -> 
+      let (_,transformed_m) =
+        List.fold_left
+          (fun (env,new_mods) old_mod ->
              let (env,m) = trans env old_mod in
                (env,m::new_mods))
           (env,[])
           modules
-      in      
+      in
       let consts' = T.extend_consts targ consts transformed_m in
       let transformed_m' = T.rename_def_params targ consts' transformed_m in
         output libpath isa_thy targ (avoid consts') def_info (List.rev transformed_m') alldoc_accum alldoc_inc_accum alldoc_inc_usage_accum
@@ -199,38 +199,38 @@ let per_target libpath isa_thy modules (def_info,env) consts alldoc_accum alldoc
 
 let main () =
   let _ = if !opt_print_version then print_string ("Lem " ^ Version.v ^ "\n") in
-  let lib_path = 
+  let lib_path =
     match !opt_library with
-      | None -> (try 
+      | None -> (try
                 let lp = Sys.getenv("LEMLIB") in
-                if Filename.is_relative lp 
+                if Filename.is_relative lp
                 then Filename.concat (Sys.getcwd ()) lp
                 else lp
-            with 
+            with
                 | Not_found -> raise (Failure("must specify a -lib argument or have a LEMLIB environment variable")))
-      | Some lp -> 
+      | Some lp ->
           if Filename.is_relative lp then
             Filename.concat (Sys.getcwd ()) lp
           else
             lp
   in
-  let isa_thy = 
+  let isa_thy =
     match !isa_theory with
       | None -> Filename.concat lib_path "../isabelle-lib/Lem"
       | Some thy -> thy
   in
-  let _ = 
+  let _ =
     List.iter
       (fun f ->
          try
            if String.compare ".lem" (String.sub f (String.length f - 4) 4) <> 0 then
              raise (Failure("Files must have .lem extension"))
-         with 
-           | Invalid_argument _ -> 
+         with
+           | Invalid_argument _ ->
              raise (Failure("Files must have .lem extension")))
       (!opt_file_arguments @ !lib @ !ocaml_lib @ !hol_lib @ !isa_lib @ !coq_lib)
   in
-  let _ = 
+  let _ =
     List.iter
       (fun f ->
          if not (Str.string_match (Str.regexp "[A-Za-z]") (Filename.basename f) 0) then
@@ -257,9 +257,9 @@ let main () =
   let init = List.fold_right (Initial_env.add_to_init Typed_ast.Target_isa) !isa_lib init in
   let init = List.fold_right (Initial_env.add_to_init Typed_ast.Target_coq) !coq_lib init in
 
-  let consts = 
+  let consts =
     List.map
-      (fun (targ,cL) ->        
+      (fun (targ,cL) ->
         let consts = List.fold_left
               (fun s c -> Typed_ast.NameSet.add (Name.from_rope c) s)
               Typed_ast.NameSet.empty
@@ -276,8 +276,8 @@ let main () =
          let f' = Filename.basename (Filename.chop_extension f) in
          let mod_name = String.capitalize f' in
          let mod_name_name = Name.from_rope (Ulib.Text.of_latin1 mod_name) in
-         let backend_set = 
-           List.fold_right 
+         let backend_set =
+           List.fold_right
              (fun x s ->
                 match x with
                   | None -> s
@@ -285,14 +285,14 @@ let main () =
                   | Some(Typed_ast.Target_html) -> s
                   | Some(t) -> Typed_ast.Targetset.add t s)
              !backends
-             Typed_ast.Targetset.empty 
+             Typed_ast.Targetset.empty
          in
-         let ((tdefs,instances,new_instances),new_env,tast) = 
+         let ((tdefs,instances,new_instances),new_env,tast) =
            check_ast backend_set [mod_name_name] (def_info,env) ast
          in
          let md = { Typed_ast.mod_env = new_env; Typed_ast.mod_binding = Path.mk_path [] mod_name_name } in
          let e = { env with Typed_ast.m_env = Typed_ast.Nfmap.insert env.Typed_ast.m_env (mod_name_name,md) } in
-         let module_record = 
+         let module_record =
            { Typed_ast.filename = f;
              Typed_ast.module_name = mod_name;
              Typed_ast.predecessor_modules = previously_processed_modules;
@@ -314,12 +314,12 @@ let main () =
            ((if add_to_modules then
              module_record::mods
                else
-             mods), 
+             mods),
             ((tdefs,instances),e), mod_name::previously_processed_modules))
       ([],type_info,[])
       (* We don't want to add the files in !lib to the resulting module ASTs,
        * because we don't want to put them throught the back end *)
-      (List.map (fun x -> (x, false)) (List.rev !lib) @ 
+      (List.map (fun x -> (x, false)) (List.rev !lib) @
        List.map (fun x -> (x, true)) !opt_file_arguments)
   in
 
@@ -332,13 +332,13 @@ let main () =
   let alldoc_inc_accum = ref ([] : Ulib.Text.t list) in
   let alldoc_inc_usage_accum = ref ([] : Ulib.Text.t list) in
     ignore (List.iter (per_target lib_path isa_thy (List.rev modules) type_info consts alldoc_accum alldoc_inc_accum alldoc_inc_usage_accum) !backends);
-    (if List.mem (Some(Typed_ast.Target_tex)) !backends then 
+    (if List.mem (Some(Typed_ast.Target_tex)) !backends then
        output_alldoc "alldoc" (String.concat " " !opt_file_arguments) alldoc_accum alldoc_inc_accum alldoc_inc_usage_accum)
 
-let _ = 
-  try 
+let _ =
+  try
     begin
-      try ignore(main ()) 
+      try ignore(main ())
       with  Failure(s) -> raise (Reporting_basic.err_general false Ast.Unknown ("Failure "^s))
     end
   with Reporting_basic.Fatal_error e -> Reporting_basic.report_error e
@@ -349,22 +349,22 @@ let lib = ref []
 let opt_print_version = ref false
 let opt_file_arguments = ref ([]:string list)
 let options = Arg.align ([
-  ( "-i", 
+  ( "-i",
     Arg.String (fun l -> lib := l::!lib),
     " treat the file as input only and generate no output for it");
-  (*( "-tex", 
+  (*( "-tex",
     Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_tex)) !backends) then
                 backends := Some(Typed_ast.Target_tex)::!backends),
     " generate LaTeX");
-  ( "-html", 
+  ( "-html",
     Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_html)) !backends) then
                 backends := Some(Typed_ast.Target_html)::!backends),
     " generate Html");
-  ( "-hol", 
+  ( "-hol",
     Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_hol)) !backends) then
                 backends := Some(Typed_ast.Target_hol)::!backends),
     " generate HOL");
-  ( "-ocaml", 
+  ( "-ocaml",
     Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_ocaml)) !backends) then
                 backends := Some(Typed_ast.Target_ocaml)::!backends),
     " generate OCaml");
@@ -388,14 +388,14 @@ let options = Arg.align ([
     " print version");
 ] )
 
-let usage_msg = 
+let usage_msg =
     ("L2 " ^ "pre alpha" ^ "\n"
-     ^ "example usage:       l2 test.ltwo\n" 
+     ^ "example usage:       l2 test.ltwo\n"
     )
 
-let _ = 
-  Arg.parse options 
-    (fun s -> 
+let _ =
+  Arg.parse options
+    (fun s ->
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg
 

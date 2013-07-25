@@ -53,7 +53,7 @@ let r = fun s -> s (* Ulib.Text.of_latin1 *)
 (* Available as Scanf.unescaped since OCaml 4.0 but 3.12 is still common *)
 let unescaped s = Scanf.sscanf ("\"" ^ s ^ "\"") "%S%!" (fun x -> x)
 
-let kw_table = 
+let kw_table =
   List.fold_left
     (fun r (x,y) -> M.add x y r)
     M.empty
@@ -74,7 +74,7 @@ let kw_table =
      ("function",                (fun x -> Function_(x)));
      ("if",                      (fun x -> If_(x)));
      ("in",			 (fun x -> In(x)));
-     ("IN",                      (fun x -> IN(x)));     
+     ("IN",                      (fun x -> IN(x)));
      ("let",                     (fun x -> Let_(x)));
      ("member",                  (fun x -> Member(x)));
      ("Nat",                     (fun x -> Nat(x)));
@@ -124,8 +124,8 @@ rule token skips = parse
     { token (Parse_ast.Ws(r i)::skips) lexbuf }
   | "\n"
     { Lexing.new_line lexbuf;
-      token (Parse_ast.Nl::skips) lexbuf } 
-  
+      token (Parse_ast.Nl::skips) lexbuf }
+
   | "&"					{ (Amp(Some(skips),r"&")) }
   | "@"					{ (At(Some(skips),r"@")) }
   | "|"                                 { (Bar(Some(skips))) }
@@ -156,7 +156,7 @@ rule token skips = parse
   | "|]"				{ (BarSquare(Some(skips))) }
   | "^^"				{ (CarrotCarrot(Some(skips),r"^^")) }
   | "::" as i                           { (ColonColon(Some(skips),r i)) }
-  | ".."				{ (DotDot(Some(skips))) }  
+  | ".."				{ (DotDot(Some(skips))) }
   | "=/="				{ (EqDivEq(Some(skips),r"=/=")) }
   | "=="				{ (EqEq(Some(skips),r"==")) }
   | "!="				{ (ExclEq(Some(skips),r"!=")) }
@@ -202,7 +202,7 @@ rule token skips = parse
   | "2^"				{ (TwoCarrot(Some(skips),r"2^")) }
 
 
-  | "--"                           
+  | "--"
     { token (Parse_ast.Com(Parse_ast.Comment(comment lexbuf))::skips) lexbuf }
 
   | startident ident* as i              { if M.mem i kw_table then
@@ -264,7 +264,7 @@ rule token skips = parse
   | "*_u" oper_char+ as i				{ (StarUnderUI(Some(skips),r i)) }
   | "*_ui" oper_char+ as i				{ (StarUnderUiI(Some(skips),r i)) }
   | "2^" oper_char+ as i				{ (TwoCarrotI(Some(skips),r i)) }
-  
+
   | digit+ as i                         { (Num(Some(skips),int_of_string i)) }
   | "0b" (binarydigit+ as i)		{ (Bin(Some(skips), i)) }
   | "0x" (hexdigit+ as i) 		{ (Hex(Some(skips), i)) }
