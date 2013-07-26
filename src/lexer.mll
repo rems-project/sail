@@ -58,48 +58,47 @@ let kw_table =
     (fun r (x,y) -> M.add x y r)
     M.empty
     [
-     ("and",                     (fun x -> And(x)));
-     ("as",                      (fun x -> As(x)));
-     ("case",			 (fun x -> Case(x)));
-     ("clause",                  (fun x -> Clause(x)));
-     ("const",			 (fun x -> Const(x)));
-     ("default",		 (fun x -> Default(x)));
-     ("effect",                  (fun x -> Effect(x)));
-     ("Effects",                 (fun x -> Effects(x)));
-     ("end",                     (fun x -> End(x)));
-     ("enum",			 (fun x -> Enum(x)));
-     ("else",                    (fun x -> Else(x)));
-     ("false",                   (fun x -> False(x)));
-     ("forall",                  (fun x -> Forall(x)));
-     ("function",                (fun x -> Function_(x)));
-     ("if",                      (fun x -> If_(x)));
-     ("in",			 (fun x -> In(x)));
-     ("IN",                      (fun x -> IN(x)));
-     ("let",                     (fun x -> Let_(x)));
-     ("member",                  (fun x -> Member(x)));
-     ("Nat",                     (fun x -> Nat(x)));
-     ("Order",                   (fun x -> Order(x)));
-     ("rec",			 (fun x -> Rec(x)));
-     ("register",		 (fun x -> Register(x)));
-     ("scattered",               (fun x -> Scattered(x)));
-     ("struct",                  (fun x -> Struct(x)));
-     ("switch",			 (fun x -> Switch(x)));
-     ("then",                    (fun x -> Then(x)));
-     ("true",                    (fun x -> True(x)));
-     ("type",                    (fun x -> Type(x)));
-     ("Type",                    (fun x -> TYPE(x)));
-     ("typedef",		 (fun x -> Typedef(x)));
-     ("union",			 (fun x -> Union(x)));
-     ("with",                    (fun x -> With(x)));
-     ("val",                     (fun x -> Val(x)));
+     ("and",                     (fun _ -> And));
+     ("as",                      (fun _ -> As));
+     ("case",			 (fun _ -> Case));
+     ("clause",                  (fun _ -> Clause));
+     ("const",			 (fun _ -> Const));
+     ("default",		 (fun _ -> Default));
+     ("effect",                  (fun _ -> Effect));
+     ("Effects",                 (fun _ -> Effects));
+     ("end",                     (fun _ -> End));
+     ("enum",			 (fun _ -> Enum));
+     ("else",                    (fun _ -> Else));
+     ("false",                   (fun _ -> False));
+     ("forall",                  (fun _ -> Forall));
+     ("function",                (fun x -> Function_));
+     ("if",                      (fun x -> If_));
+     ("in",			 (fun x -> In));
+     ("IN",                      (fun x -> IN));
+     ("let",                     (fun x -> Let_));
+     ("member",                  (fun x -> Member));
+     ("Nat",                     (fun x -> Nat));
+     ("Order",                   (fun x -> Order));
+     ("rec",			 (fun x -> Rec));
+     ("register",		 (fun x -> Register));
+     ("scattered",               (fun x -> Scattered));
+     ("struct",                  (fun x -> Struct));
+     ("switch",			 (fun x -> Switch));
+     ("then",                    (fun x -> Then));
+     ("true",                    (fun x -> True));
+     ("Type",                    (fun x -> TYPE));
+     ("typedef",		 (fun x -> Typedef));
+     ("union",			 (fun x -> Union));
+     ("with",                    (fun x -> With));
+     ("val",                     (fun x -> Val));
 
-     ("AND",			 (fun x -> AND(x)));
-     ("div",			 (fun x -> Div_(x)));
-     ("EOR",			 (fun x -> EOR(x)));
-     ("mod",			 (fun x -> Mod(x)));
-     ("OR",			 (fun x -> OR(x)));
-     ("quot",			 (fun x -> Quot(x)));
-     ("rem",			 (fun x -> Rem(x)));
+     ("AND",			 (fun x -> AND));
+     ("div",			 (fun x -> Div_));
+     ("EOR",			 (fun x -> EOR));
+     ("mod",			 (fun x -> Mod));
+     ("OR",			 (fun x -> OR));
+     ("quot",			 (fun x -> Quot));
+     ("rem",			 (fun x -> Rem));
 ]
 
 }
@@ -119,158 +118,159 @@ let com_help = "("*safe_com2 | "*"*"("+safe_com2 | "*"*safe_com1
 let com_body = com_help*"*"*
 let escape_sequence = ('\\' ['\\''\"''\'''n''t''b''r']) | ('\\' digit digit digit) | ('\\' 'x' hexdigit hexdigit)
 
-rule token skips = parse
+rule token = parse
   | ws as i
-    { token (Parse_ast.Ws(r i)::skips) lexbuf }
+    { token lexbuf }
   | "\n"
     { Lexing.new_line lexbuf;
-      token (Parse_ast.Nl::skips) lexbuf }
+      token lexbuf }
 
-  | "&"					{ (Amp(Some(skips),r"&")) }
-  | "@"					{ (At(Some(skips),r"@")) }
-  | "|"                                 { (Bar(Some(skips))) }
-  | "^"					{ (Carrot(Some(skips),r"^")) }
-  | ":"                                 { (Colon(Some(skips))) }
-  | ","                                 { (Comma(Some(skips))) }
-  | "."                                 { (Dot(Some(skips))) }
-  | "/"			                { (Div(Some(skips),r"/")) }
-  | "="                                 { (Eq(Some(skips),r"=")) }
-  | "!"					{ (Excl(Some(skips),r"!")) }
-  | ">"					{ (Gt(Some(skips),r">")) }
-  | "-"					{ (Minus(Some(skips))) }
-  | "<"					{ (Lt(Some(skips),r"<")) }
-  | "+"					{ (Plus(Some(skips),r"+")) }
-  | ";"                                 { (Semi(Some(skips))) }
-  | "*"                                 { (Star(Some(skips),r"*")) }
-  | "~"					{ (Tilde(Some(skips),r"~")) }
-  | "_"                                 { (Under(Some(skips))) }
-  | "{"                                 { (Lcurly(Some(skips))) }
-  | "}"                                 { (Rcurly(Some(skips))) }
-  | "("                                 { (Lparen(Some(skips))) }
-  | ")"                                 { (Rparen(Some(skips))) }
-  | "["                                 { (Lsquare(Some(skips))) }
-  | "]"                                 { (Rsquare(Some(skips))) }
-  | "&&" as i                           { (AmpAmp(Some(skips),r i)) }
-  | "||"                                { (BarBar(Some(skips))) }
-  | "|>"                                { (BarGt(Some(skips))) }
-  | "|]"				{ (BarSquare(Some(skips))) }
-  | "^^"				{ (CarrotCarrot(Some(skips),r"^^")) }
-  | "::" as i                           { (ColonColon(Some(skips),r i)) }
-  | ".."				{ (DotDot(Some(skips))) }
-  | "=/="				{ (EqDivEq(Some(skips),r"=/=")) }
-  | "=="				{ (EqEq(Some(skips),r"==")) }
-  | "!="				{ (ExclEq(Some(skips),r"!=")) }
-  | "!!"				{ (ExclExcl(Some(skips),r"!!")) }
-  | ">="				{ (GtEq(Some(skips),r">=")) }
-  | ">=+"				{ (GtEqPlus(Some(skips),r">=+")) }
-  | ">>"				{ (GtGt(Some(skips),r">>")) }
-  | ">>>"				{ (GtGtGt(Some(skips),r">>")) }
-  | ">+"				{ (GtPlus(Some(skips),r">+")) }
-  | "#>>"				{ (HashGtGt(Some(skips),r"#>>")) }
-  | "#<<"				{ (HashLtLt(Some(skips),r"#<<")) }
-  | "->"                                { (MinusGt(Some(skips))) }
-  | "<="				{ (LtEq(Some(skips),r"<=")) }
-  | "<=+"				{ (LtEqPlus(Some(skips),r"<=+")) }
-  | "<>"				{ (LtGt(Some(skips),r"<>")) }
-  | "<<"				{ (LtLt(Some(skips),r"<<")) }
-  | "<<<"				{ (LtLtLt(Some(skips),r"<<<")) }
-  | "<+"				{ (LtPlus(Some(skips),r"<+")) }
-  | "**"				{ (StarStar(Some(skips),r"**")) }
-  | "~^"				{ (TildeCarrot(Some(skips),r"~^")) }
+  | "&"					{ (Amp(r"&")) }
+  | "@"					{ (At(r"@")) }
+  | "|"                                 { Bar }
+  | "^"					{ (Carrot(r"^")) }
+  | ":"                                 { Colon }
+  | ","                                 { Comma }
+  | "."                                 { Dot }
+  | "/"			                { (Div(r "/")) }
+  | "="                                 { (Eq(r"=")) }
+  | "!"					{ (Excl(r"!")) }
+  | ">"					{ (Gt(r">")) }
+  | "-"					{ Minus }
+  | "<"					{ (Lt(r"<")) }
+  | "+"					{ (Plus(r"+")) }
+  | ";"                                 { Semi }
+  | "*"                                 { (Star(r"*")) }
+  | "~"					{ (Tilde(r"~")) }
+  | "_"                                 { Under }
+  | "{"                                 { Lcurly }
+  | "}"                                 { Rcurly }
+  | "("                                 { Lparen }
+  | ")"                                 { Rparen }
+  | "["                                 { Lsquare }
+  | "]"                                 { Rsquare }
+  | "&&" as i                           { (AmpAmp(r i)) }
+  | "||"                                { BarBar }
+  | "|>"                                { BarGt }
+  | "|]"				{ BarSquare }
+  | "^^"				{ (CarrotCarrot(r"^^")) }
+  | "::" as i                           { (ColonColon(r i)) }
+  | ".."				{ DotDot }
+  | "=/="				{ (EqDivEq(r"=/=")) }
+  | "=="				{ (EqEq(r"==")) }
+  | "!="				{ (ExclEq(r"!=")) }
+  | "!!"				{ (ExclExcl(r"!!")) }
+  | ">="				{ (GtEq(r">=")) }
+  | ">=+"				{ (GtEqPlus(r">=+")) }
+  | ">>"				{ (GtGt(r">>")) }
+  | ">>>"				{ (GtGtGt(r">>>")) }
+  | ">+"				{ (GtPlus(r">+")) }
+  | "#>>"				{ (HashGtGt(r"#>>")) }
+  | "#<<"				{ (HashLtLt(r"#<<")) }
+  | "->"                                { MinusGt }
+  | "<="				{ (LtEq(r"<=")) }
+  | "<=+"				{ (LtEqPlus(r"<=+")) }
+  | "<>"				{ (LtGt(r"<>")) }
+  | "<<"				{ (LtLt(r"<<")) }
+  | "<<<"				{ (LtLtLt(r"<<<")) }
+  | "<+"				{ (LtPlus(r"<+")) }
+  | "**"				{ (StarStar(r"**")) }
+  | "~^"				{ (TildeCarrot(r"~^")) }
 
-  | ">=_s"				{ (GtEqUnderS(Some(skips),r">=_s")) }
-  | ">=_si"				{ (GtEqUnderSi(Some(skips),r">=_si")) }
-  | ">=_u"				{ (GtEqUnderU(Some(skips),r">=_u")) }
-  | ">=_ui"				{ (GtEqUnderUi(Some(skips),r">=_ui")) }
-  | ">>_u"				{ (GtGtUnderU(Some(skips),r">>_u")) }
-  | ">_s"				{ (GtUnderS(Some(skips),r">_s")) }
-  | ">_si"				{ (GtUnderSi(Some(skips),r">_si")) }
-  | ">_u"				{ (GtUnderU(Some(skips),r">_u")) }
-  | ">_ui"				{ (GtUnderUi(Some(skips),r">_ui")) }
-  | "<=_s"				{ (LtEqUnderS(Some(skips),r"<=_s")) }
-  | "<=_si"				{ (LtEqUnderSi(Some(skips),r"<=_si")) }
-  | "<=_u"				{ (LtEqUnderU(Some(skips),r"<=_u")) }
-  | "<=_ui"				{ (LtEqUnderUi(Some(skips),r"<=_ui")) }
-  | "<_s"				{ (LtUnderS(Some(skips),r"<_s")) }
-  | "<_si"				{ (LtUnderSi(Some(skips),r"<_si")) }
-  | "<_u"				{ (LtUnderU(Some(skips),r"<_u")) }
-  | "<_ui"				{ (LtUnderUi(Some(skips),r"<_ui")) }
-  | "**_s"				{ (StarStarUnderS(Some(skips),r"**_s")) }
-  | "**_si"				{ (StarStarUnderSi(Some(skips),r"**_si")) }
-  | "*_u"				{ (StarUnderU(Some(skips),r"*_u")) }
-  | "*_ui"				{ (StarUnderUi(Some(skips),r"*_ui")) }
-  | "2^"				{ (TwoCarrot(Some(skips),r"2^")) }
+  | ">=_s"				{ (GtEqUnderS(r">=_s")) }
+  | ">=_si"				{ (GtEqUnderSi(r">=_si")) }
+  | ">=_u"				{ (GtEqUnderU(r">=_u")) }
+  | ">=_ui"				{ (GtEqUnderUi(r">=_ui")) }
+  | ">>_u"				{ (GtGtUnderU(r">>_u")) }
+  | ">_s"				{ (GtUnderS(r">_s")) }
+  | ">_si"				{ (GtUnderSi(r">_si")) }
+  | ">_u"				{ (GtUnderU(r">_u")) }
+  | ">_ui"				{ (GtUnderUi(r">_ui")) }
+  | "<=_s"				{ (LtEqUnderS(r"<=_s")) }
+  | "<=_si"				{ (LtEqUnderSi(r"<=_si")) }
+  | "<=_u"				{ (LtEqUnderU(r"<=_u")) }
+  | "<=_ui"				{ (LtEqUnderUi(r"<=_ui")) }
+  | "<_s"				{ (LtUnderS(r"<_s")) }
+  | "<_si"				{ (LtUnderSi(r"<_si")) }
+  | "<_u"				{ (LtUnderU(r"<_u")) }
+  | "<_ui"				{ (LtUnderUi(r"<_ui")) }
+  | "**_s"				{ (StarStarUnderS(r"**_s")) }
+  | "**_si"				{ (StarStarUnderSi(r"**_si")) }
+  | "*_u"				{ (StarUnderU(r"*_u")) }
+  | "*_ui"				{ (StarUnderUi(r"*_ui")) }
+  | "2^"				{ (TwoCarrot(r"2^")) }
 
 
   | "--"
-    { token (Parse_ast.Com(Parse_ast.Comment(comment lexbuf))::skips) lexbuf }
+    { comment lexbuf;
+      token lexbuf }
 
   | startident ident* as i              { if M.mem i kw_table then
-                                            (M.find i kw_table) (Some(skips))
+                                            (M.find i kw_table) ()
                                           else
-                                            Id(Some(skips), r i) }
-  | "&" oper_char+ as i                 { (AmpI(Some(skips),r i)) }
-  | "@" oper_char+ as i                 { (AtI(Some(skips),r i)) }
-  | "^" oper_char+ as i                 { (CarrotI(Some(skips),r i)) }
-  | "/" oper_char+ as i                 { (DivI(Some(skips),r i)) }
-  | "=" oper_char+ as i			{ (EqI(Some(skips),r i)) }
-  | "!" oper_char+ as i                 { (ExclI(Some(skips),r i)) }
-  | ">" oper_char+ as i                 { (GtI(Some(skips),r i)) }
-  | "<" oper_char+ as i			{ (LtI(Some(skips),r i)) }
-  | "+"	oper_char+ as i			{ (PlusI(Some(skips),r i)) }
-  | "*" oper_char+ as i                 { (StarI(Some(skips),r i)) }
-  | "~"	oper_char+ as i			{ (TildeI(Some(skips),r i)) }
-  | "&&" oper_char+ as i                { (AmpAmpI(Some(skips),r i)) }
-  | "^^" oper_char+ as i		{ (CarrotCarrotI(Some(skips),r i)) }
-  | "::" oper_char+ as i                { (ColonColonI(Some(skips),r i)) }
-  | "=/=" oper_char+ as i		{ (EqDivEqI(Some(skips),r i)) }
-  | "==" oper_char+ as i		{ (EqEqI(Some(skips),r i)) }
-  | "!=" oper_char+ as i		{ (ExclEqI(Some(skips),r i)) }
-  | "!!" oper_char+ as i		{ (ExclExclI(Some(skips),r i)) }
-  | ">=" oper_char+ as i		{ (GtEqI(Some(skips),r i)) }
-  | ">=+" oper_char+ as i		{ (GtEqPlusI(Some(skips),r i)) }
-  | ">>" oper_char+ as i		{ (GtGtI(Some(skips),r i)) }
-  | ">>>" oper_char+ as i		{ (GtGtGtI(Some(skips),r i)) }
-  | ">+" oper_char+ as i		{ (GtPlusI(Some(skips),r i)) }
-  | "#>>" oper_char+ as i		{ (HashGtGt(Some(skips),r i)) }
-  | "#<<" oper_char+ as i		{ (HashLtLt(Some(skips),r i)) }
-  | "<=" oper_char+ as i		{ (LtEqI(Some(skips),r i)) }
-  | "<=+" oper_char+ as i		{ (LtEqPlusI(Some(skips),r i)) }
-  | "<<" oper_char+ as i		{ (LtLtI(Some(skips),r i)) }
-  | "<<<" oper_char+ as i		{ (LtLtLtI(Some(skips),r i)) }
-  | "<+" oper_char+ as i		{ (LtPlusI(Some(skips),r i)) }
-  | "**" oper_char+ as i		{ (StarStarI(Some(skips),r i)) }
-  | "~^" oper_char+ as i		{ (TildeCarrot(Some(skips),r i)) }
+                                            Id(r i) }
+  | "&" oper_char+ as i                 { (AmpI(r i)) }
+  | "@" oper_char+ as i                 { (AtI(r i)) }
+  | "^" oper_char+ as i                 { (CarrotI(r i)) }
+  | "/" oper_char+ as i                 { (DivI(r i)) }
+  | "=" oper_char+ as i			{ (EqI(r i)) }
+  | "!" oper_char+ as i                 { (ExclI(r i)) }
+  | ">" oper_char+ as i                 { (GtI(r i)) }
+  | "<" oper_char+ as i			{ (LtI(r i)) }
+  | "+"	oper_char+ as i			{ (PlusI(r i)) }
+  | "*" oper_char+ as i                 { (StarI(r i)) }
+  | "~"	oper_char+ as i			{ (TildeI(r i)) }
+  | "&&" oper_char+ as i                { (AmpAmpI(r i)) }
+  | "^^" oper_char+ as i		{ (CarrotCarrotI(r i)) }
+  | "::" oper_char+ as i                { (ColonColonI(r i)) }
+  | "=/=" oper_char+ as i		{ (EqDivEqI(r i)) }
+  | "==" oper_char+ as i		{ (EqEqI(r i)) }
+  | "!=" oper_char+ as i		{ (ExclEqI(r i)) }
+  | "!!" oper_char+ as i		{ (ExclExclI(r i)) }
+  | ">=" oper_char+ as i		{ (GtEqI(r i)) }
+  | ">=+" oper_char+ as i		{ (GtEqPlusI(r i)) }
+  | ">>" oper_char+ as i		{ (GtGtI(r i)) }
+  | ">>>" oper_char+ as i		{ (GtGtGtI(r i)) }
+  | ">+" oper_char+ as i		{ (GtPlusI(r i)) }
+  | "#>>" oper_char+ as i		{ (HashGtGt(r i)) }
+  | "#<<" oper_char+ as i		{ (HashLtLt(r i)) }
+  | "<=" oper_char+ as i		{ (LtEqI(r i)) }
+  | "<=+" oper_char+ as i		{ (LtEqPlusI(r i)) }
+  | "<<" oper_char+ as i		{ (LtLtI(r i)) }
+  | "<<<" oper_char+ as i		{ (LtLtLtI(r i)) }
+  | "<+" oper_char+ as i		{ (LtPlusI(r i)) }
+  | "**" oper_char+ as i		{ (StarStarI(r i)) }
+  | "~^" oper_char+ as i		{ (TildeCarrot(r i)) }
 
-  | ">=_s" oper_char+ as i				{ (GtEqUnderSI(Some(skips),r i)) }
-  | ">=_si" oper_char+ as i				{ (GtEqUnderSiI(Some(skips),r i)) }
-  | ">=_u" oper_char+ as i				{ (GtEqUnderUI(Some(skips),r i)) }
-  | ">=_ui" oper_char+ as i				{ (GtEqUnderUiI(Some(skips),r i)) }
-  | ">>_u" oper_char+ as i				{ (GtGtUnderUI(Some(skips),r i)) }
-  | ">_s" oper_char+ as i				{ (GtUnderSI(Some(skips),r i)) }
-  | ">_si" oper_char+ as i				{ (GtUnderSiI(Some(skips),r i)) }
-  | ">_u" oper_char+ as i				{ (GtUnderUI(Some(skips),r i)) }
-  | ">_ui" oper_char+ as i				{ (GtUnderUiI(Some(skips),r i)) }
-  | "<=_s" oper_char+ as i				{ (LtEqUnderSI(Some(skips),r i)) }
-  | "<=_si" oper_char+ as i				{ (LtEqUnderSiI(Some(skips),r i)) }
-  | "<=_u" oper_char+ as i				{ (LtEqUnderUI(Some(skips),r i)) }
-  | "<=_ui" oper_char+ as i				{ (LtEqUnderUiI(Some(skips),r i)) }
-  | "<_s" oper_char+ as i				{ (LtUnderSI(Some(skips),r i)) }
-  | "<_si" oper_char+ as i				{ (LtUnderSiI(Some(skips),r i)) }
-  | "<_u" oper_char+ as i				{ (LtUnderUI(Some(skips),r i)) }
-  | "<_ui" oper_char+ as i				{ (LtUnderUiI(Some(skips),r i)) }
-  | "**_s" oper_char+ as i				{ (StarStarUnderSI(Some(skips),r i)) }
-  | "**_si" oper_char+ as i				{ (StarStarUnderSiI(Some(skips),r i)) }
-  | "*_u" oper_char+ as i				{ (StarUnderUI(Some(skips),r i)) }
-  | "*_ui" oper_char+ as i				{ (StarUnderUiI(Some(skips),r i)) }
-  | "2^" oper_char+ as i				{ (TwoCarrotI(Some(skips),r i)) }
+  | ">=_s" oper_char+ as i				{ (GtEqUnderSI(r i)) }
+  | ">=_si" oper_char+ as i				{ (GtEqUnderSiI(r i)) }
+  | ">=_u" oper_char+ as i				{ (GtEqUnderUI(r i)) }
+  | ">=_ui" oper_char+ as i				{ (GtEqUnderUiI(r i)) }
+  | ">>_u" oper_char+ as i				{ (GtGtUnderUI(r i)) }
+  | ">_s" oper_char+ as i				{ (GtUnderSI(r i)) }
+  | ">_si" oper_char+ as i				{ (GtUnderSiI(r i)) }
+  | ">_u" oper_char+ as i				{ (GtUnderUI(r i)) }
+  | ">_ui" oper_char+ as i				{ (GtUnderUiI(r i)) }
+  | "<=_s" oper_char+ as i				{ (LtEqUnderSI(r i)) }
+  | "<=_si" oper_char+ as i				{ (LtEqUnderSiI(r i)) }
+  | "<=_u" oper_char+ as i				{ (LtEqUnderUI(r i)) }
+  | "<=_ui" oper_char+ as i				{ (LtEqUnderUiI(r i)) }
+  | "<_s" oper_char+ as i				{ (LtUnderSI(r i)) }
+  | "<_si" oper_char+ as i				{ (LtUnderSiI(r i)) }
+  | "<_u" oper_char+ as i				{ (LtUnderUI(r i)) }
+  | "<_ui" oper_char+ as i				{ (LtUnderUiI(r i)) }
+  | "**_s" oper_char+ as i				{ (StarStarUnderSI(r i)) }
+  | "**_si" oper_char+ as i				{ (StarStarUnderSiI(r i)) }
+  | "*_u" oper_char+ as i				{ (StarUnderUI(r i)) }
+  | "*_ui" oper_char+ as i				{ (StarUnderUiI(r i)) }
+  | "2^" oper_char+ as i				{ (TwoCarrotI(r i)) }
 
-  | digit+ as i                         { (Num(Some(skips),int_of_string i)) }
-  | "0b" (binarydigit+ as i)		{ (Bin(Some(skips), i)) }
-  | "0x" (hexdigit+ as i) 		{ (Hex(Some(skips), i)) }
-  | '"'                                 { (String(Some(skips),
+  | digit+ as i                         { (Num(int_of_string i)) }
+  | "0b" (binarydigit+ as i)		{ (Bin(i)) }
+  | "0x" (hexdigit+ as i) 		{ (Hex(i)) }
+  | '"'                                 { (String(
                                            string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf)) }
-  | eof                                 { (Eof(Some(skips))) }
+  | eof                                 { Eof }
   | _  as c                             { raise (LexError(c, Lexing.lexeme_start_p lexbuf)) }
 
 

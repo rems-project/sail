@@ -56,9 +56,9 @@ let get_lexbuf fn =
                                   Lexing.pos_cnum = 0; };
     lexbuf
 
-let parse_file (f : string) : (Parse_ast.defs * Parse_ast.lex_skips) =
+let parse_file (f : string) : Parse_ast.defs =
   let lexbuf = get_lexbuf f in
-  Parser.file (Lexer.token []) lexbuf
+  Parser.file Lexer.token lexbuf
 (*    try
       Parser.file (Lexer.token []) lexbuf
     with

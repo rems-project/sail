@@ -79,7 +79,7 @@ let vloc v = VS_aux(v, loc ())
 let dloc d = DEF_aux(d,loc ())
 
 let mk_typschm tq t s e = TypSchm_aux((TypSchm_ts(tq,t)),(locn s e))
-let mk_rec r i = (Rec_aux((Rec_rec (r)), locn i i))
+let mk_rec i = (Rec_aux((Rec_rec), locn i i))
 let mk_recn _ = (Rec_aux((Rec_nonrec), Unknown))
 let mk_typqn _ = (TypQ_aux(TypQ_no_forall,Unknown))
 let mk_tannot tq t s e = Typ_annot_opt_aux(Typ_annot_opt_some(tq,t),(locn s e))
@@ -120,48 +120,48 @@ let star = "*"
 
 /*Terminals with no content*/
 
-%token <Parse_ast.terminal> And As Bits Case Clause Const Default Effect Effects End Enum Else False
-%token <Parse_ast.terminal> Forall Function_ If_ In IN Let_ Member Nat Order Pure Rec Register
-%token <Parse_ast.terminal> Scattered Struct Switch Then True Type TYPE Typedef Union With Val
+%token And As Bits Case Clause Const Default Effect Effects End Enum Else False
+%token Forall Function_ If_ In IN Let_ Member Nat Order Pure Rec Register
+%token Scattered Struct Switch Then True Type TYPE Typedef Union With Val
 
-%token <Parse_ast.terminal> AND Div_ EOR Mod OR Quot Rem
+%token AND Div_ EOR Mod OR Quot Rem
 
-%token <Parse_ast.terminal> Bar Colon Comma Dot Eof Minus Semi Under
-%token <Parse_ast.terminal> Lcurly Rcurly Lparen Rparen Lsquare Rsquare
-%token <Parse_ast.terminal> BarBar BarGt BarSquare DotDot MinusGt LtBar SquareBar
+%token Bar Colon Comma Dot Eof Minus Semi Under
+%token Lcurly Rcurly Lparen Rparen Lsquare Rsquare
+%token BarBar BarGt BarSquare DotDot MinusGt LtBar SquareBar
 
 /*Terminals with content*/
 
-%token <Parse_ast.terminal * string> Id
-%token <Parse_ast.terminal * int> Num
-%token <Parse_ast.terminal * string> String Bin Hex
+%token <string> Id
+%token <int> Num
+%token <string> String Bin Hex
 
-%token <Parse_ast.terminal * string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde
-%token <Parse_ast.terminal * string> AmpAmp CarrotCarrot ColonColon ColonEq EqDivEq EqEq ExclEq ExclExcl
-%token <Parse_ast.terminal * string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt
-%token <Parse_ast.terminal * string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar TildeCarrot
+%token <string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde
+%token <string> AmpAmp CarrotCarrot ColonColon ColonEq EqDivEq EqEq ExclEq ExclExcl
+%token <string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt
+%token <string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar TildeCarrot
 
-%token <Parse_ast.terminal * string> GtEqUnderS GtEqUnderSi GtEqUnderU GtEqUnderUi GtGtUnderU GtUnderS
-%token <Parse_ast.terminal * string> GtUnderSi GtUnderU GtUnderUi LtEqUnderS LtEqUnderSi LtEqUnderU
-%token <Parse_ast.terminal * string> LtEqUnderUi LtUnderS LtUnderSi LtUnderU LtUnderUi StarStarUnderS StarStarUnderSi StarUnderS
-%token <Parse_ast.terminal * string> StarUnderSi StarUnderU StarUnderUi TwoCarrot
+%token <string> GtEqUnderS GtEqUnderSi GtEqUnderU GtEqUnderUi GtGtUnderU GtUnderS
+%token <string> GtUnderSi GtUnderU GtUnderUi LtEqUnderS LtEqUnderSi LtEqUnderU
+%token <string> LtEqUnderUi LtUnderS LtUnderSi LtUnderU LtUnderUi StarStarUnderS StarStarUnderSi StarUnderS
+%token <string> StarUnderSi StarUnderU StarUnderUi TwoCarrot
 
-%token <Parse_ast.terminal * string> AmpI AtI CarrotI  DivI EqI ExclI GtI LtI PlusI StarI TildeI
-%token <Parse_ast.terminal * string> AmpAmpI CarrotCarrotI ColonColonI ColonEqI EqDivEqI EqEqI ExclEqI ExclExclI
-%token <Parse_ast.terminal * string> GtEqI GtEqPlusI GtGtI GtGtGtI GtPlusI HashGtGtI HashLtLtI
-%token <Parse_ast.terminal * string> LtEqI LtEqPlusI LtGtI LtLtI LtLtLtI LtPlusI StarStarI TildeCarrotI
+%token <string> AmpI AtI CarrotI  DivI EqI ExclI GtI LtI PlusI StarI TildeI
+%token <string> AmpAmpI CarrotCarrotI ColonColonI ColonEqI EqDivEqI EqEqI ExclEqI ExclExclI
+%token <string> GtEqI GtEqPlusI GtGtI GtGtGtI GtPlusI HashGtGtI HashLtLtI
+%token <string> LtEqI LtEqPlusI LtGtI LtLtI LtLtLtI LtPlusI StarStarI TildeCarrotI
 
-%token <Parse_ast.terminal * string> GtEqUnderSI GtEqUnderSiI GtEqUnderUI GtEqUnderUiI GtGtUnderUI GtUnderSI
-%token <Parse_ast.terminal * string> GtUnderSiI GtUnderUI GtUnderUiI LtEqUnderSI LtEqUnderSiI LtEqUnderUI
-%token <Parse_ast.terminal * string> LtEqUnderUiI LtUnderSI LtUnderSiI LtUnderUI LtUnderUiI StarStarUnderSI StarStarUnderSiI StarUnderSI
-%token <Parse_ast.terminal * string> StarUnderSiI StarUnderUI StarUnderUiI TwoCarrotI
+%token <string> GtEqUnderSI GtEqUnderSiI GtEqUnderUI GtEqUnderUiI GtGtUnderUI GtUnderSI
+%token <string> GtUnderSiI GtUnderUI GtUnderUiI LtEqUnderSI LtEqUnderSiI LtEqUnderUI
+%token <string> LtEqUnderUiI LtUnderSI LtUnderSiI LtUnderUI LtUnderUiI StarStarUnderSI StarStarUnderSiI StarUnderSI
+%token <string> StarUnderSiI StarUnderUI StarUnderUiI TwoCarrotI
 
 %start file
 %type <Parse_ast.defs> defs
 %type <Parse_ast.atyp> typ
 %type <Parse_ast.pat> pat
 %type <Parse_ast.exp> exp
-%type <Parse_ast.defs * Parse_ast.terminal> file
+%type <Parse_ast.defs> file
 
 
 %%
@@ -170,37 +170,37 @@ id:
   | Id
     { idl (Id($1)) }
   | Lparen At Rparen
-    { Id_aux(DeIid($1,$2,$3),loc ()) }
+    { Id_aux(DeIid($2),loc ()) }
  | Lparen Eq Rparen
-    { Id_aux(DeIid($1,$2,$3),loc ()) }
+    { Id_aux(DeIid($2),loc ()) }
   | Lparen IN Rparen
-    { Id_aux(DeIid($1,($2,"In"),$3),loc ()) }
+    { Id_aux(DeIid("In"),loc ()) }
   | Lparen BarBar Rparen
-    { Id_aux(DeIid($1,($2,"||"),$3),loc ()) }
+    { Id_aux(DeIid("||"),loc ()) }
   | Lparen ColonColon Rparen
-    { Id_aux(DeIid($1,$2,$3),loc ()) }
+    { Id_aux(DeIid($2),loc ()) }
   | Lparen Star Rparen
-    { Id_aux(DeIid($1,$2,$3),loc ()) }
+    { Id_aux(DeIid($2),loc ()) }
   | Lparen Plus Rparen
-    { Id_aux(DeIid($1,$2,$3),loc ()) }
+    { Id_aux(DeIid($2),loc ()) }
   | Lparen GtEq Rparen
-    { Id_aux(DeIid($1,$2,$3),loc ()) }
+    { Id_aux(DeIid($2),loc ()) }
 
 atomic_kind:
   | TYPE
-    { bkloc (BK_type($1)) }
+    { bkloc BK_type }
   | Nat
-    { bkloc (BK_nat($1)) }
+    { bkloc BK_nat }
   | Order
-    { bkloc (BK_order($1)) }
+    { bkloc BK_order }
   | Effects
-    { bkloc (BK_effects($1)) }
+    { bkloc BK_effects }
 
 kind_help:
   | atomic_kind
-    { [ ($1,None) ] }
+    { [ $1 ] }
   | atomic_kind MinusGt kind_help
-    { ($1,$2)::$3 }
+    { $1::$3 }
 
 kind:
   | kind_help
@@ -209,40 +209,40 @@ kind:
 effect:
   | id
     { (match $1 with
-       | Id_aux(Id(t,s),l) ->
+       | Id_aux(Id(s),l) ->
 	 Effect_aux
 	   ((match s with
-	   | "rreg" -> (Effect_rreg t)
-	   | "wreg" -> (Effect_wreg t)
-	   | "rmem" -> (Effect_rmem t)
-	   | "wmem" -> (Effect_wmem t)
-	   | "undef" -> (Effect_undef t)
-	   | "unspec" -> (Effect_unspec t)
-	   | "nondet" -> (Effect_nondet t)
+	   | "rreg" -> (Effect_rreg)
+	   | "wreg" -> (Effect_wreg)
+	   | "rmem" -> (Effect_rmem)
+	   | "wmem" -> (Effect_wmem)
+	   | "undef" -> (Effect_undef)
+	   | "unspec" -> (Effect_unspec)
+	   | "nondet" -> (Effect_nondet)
 	   | _ -> raise (Parse_error_locn (l,"Invalid effect"))),l)
        | _ -> raise (Parse_error_locn ((loc ()),"Invalid effect"))) }
 
 effect_list:
   | effect
-    { [($1,None)] }
+    { [$1] }
   | effect Comma effect_list
-    { ($1,$2)::$3 }
+    { $1::$3 }
 
 effect_typ:
   | Effect id
-    { tloc (ATyp_efid($1,$2)) }
+    { tloc (ATyp_efid($2)) }
   | Effect Lcurly effect_list Rcurly
-    { tloc (ATyp_set($1,$2,$3,$4)) }
+    { tloc (ATyp_set($3)) }
   | Pure
-    { tloc (ATyp_set($1,None,[],None)) }
+    { tloc (ATyp_set([])) }
 
 atomic_typ:
   | id
     { tloc (ATyp_id $1) }
   | Num
-    { tloc (ATyp_constant(fst $1, snd $1)) }
+    { tloc (ATyp_constant $1) }
   | Under
-    { tloc (ATyp_wild($1)) }
+    { tloc (ATyp_wild) }
   | effect_typ
     { $1 }
   | Lparen typ Rparen
@@ -274,79 +274,78 @@ app_typ:
 
 star_typ_list:
   | app_typ
-    { [($1,None)] }
+    { [$1] }
   | app_typ Star star_typ_list
-    { ($1,fst $2)::$3 }
+    { $1::$3 }
 
 star_typ:
   | star_typ_list
     { match $1 with
         | [] -> assert false
-        | [(t,None)] -> t
-        | [(t,Some _)] -> assert false
+        | [t] -> t
         | ts -> tloc (ATyp_tup(ts)) }
 
 exp_typ:
    | star_typ
      { $1 }
    | Num StarStar typ
-     { if (2 = (snd $1))
-       then tloc (ATyp_exp((fst $1),(fst $2),$3))
+     { if (2 = $1)
+       then tloc (ATyp_exp($3))
        else raise (Parse_error_locn(loc (), "Only 2 is a valid exponent base in Nats")) }
 
 nexp_typ:
    | exp_typ
      { $1 }
    | atomic_typ Plus typ
-     { tloc (ATyp_sum($1,fst $2,$3)) }
+     { tloc (ATyp_sum($1,$3)) }
 
 typ:
   | nexp_typ
     { $1 }
   | star_typ MinusGt atomic_typ effect_typ
-    { tloc (ATyp_fn($1,$2,$3,$4)) }
+    { tloc (ATyp_fn($1,$3,$4)) }
 
 lit:
   | True
-    { lloc (L_true($1)) }
+    { lloc L_true }
   | False
-    { lloc (L_false($1)) }
+    { lloc L_false }
   | Num
-    { lloc (L_num(fst $1, snd $1)) }
+    { lloc (L_num $1) }
   | String
-    { lloc (L_string(fst $1, snd $1)) }
+    { lloc (L_string $1) }
   | Lparen Rparen
-    { lloc (L_unit($1,$2)) }
+    { lloc L_unit }
   | Bin
-    { lloc (L_bin(fst $1, snd $1)) }
+    { lloc (L_bin $1) }
   | Hex
-    { lloc (L_hex(fst $1, snd $1)) }
+    { lloc (L_hex $1) }
 
 
 atomic_pat:
   | lit
-    { ploc (P_lit($1)) }
+    { ploc (P_lit $1) }
   | Under
-    { ploc (P_wild($1)) }
+    { ploc P_wild }
   | Lparen pat As id Rparen
-    { ploc (P_as($1,$2,$3,$4,$5)) }
+    { ploc (P_as($2,$4)) }
 /* Because of ( id id ) being either application or type casts, this is inherently ambiguous */
 /*  | Lparen atomic_typ pat Rparen
-    { ploc (P_typ($1,$2,$3,$4)) } */
+    { ploc (P_typ($2,$3)) } */
   | id
     { ploc (P_app($1,[])) }
   | Lcurly fpats Rcurly
-    { ploc (P_record($1,fst $2,fst (snd $2),snd (snd $2),$3)) }
+    { ploc (P_record((fst $2, snd $2))) }
   | Lsquare pat Rsquare
-    { ploc (P_vector($1,[($2,None)],$3)) }
+    { ploc (P_vector([$2])) }
   | Lsquare comma_pats Rsquare
-    { ploc (P_vector($1,$2,$3)) }
+    { ploc (P_vector($2)) }
   | Lsquare npats Rsquare
-    { ploc (P_vector_indexed($1,$2,$3)) }
+    { ploc (P_vector_indexed($2)) }
   | Lparen comma_pats Rparen
-    { ploc (P_tup($1,$2,$3)) }
+    { ploc (P_tup($2)) }
   | SquareBar comma_pats BarSquare
-    { ploc (P_list($1,$2,$3)) }
+    { ploc (P_list($2)) }
   | Lparen pat Rparen
     { $2 }
 
@@ -358,9 +357,9 @@ app_pat:
 
 pat_colons:
   | atomic_pat Colon atomic_pat
-    { ([($1,$2);($3,None)]) }
+    { ([$1;$3]) }
   | atomic_pat Colon pat_colons
-    { (($1,$2)::$3) }
+    { ($1::$3) }
 
 pat:
   | app_pat
@@ -370,35 +369,35 @@ pat:
 
 comma_pats:
   | atomic_pat Comma atomic_pat
-    { [($1,$2);($3,None)] }
+    { [$1;$3] }
   | atomic_pat Comma comma_pats
-    { ($1,$2)::$3 }
+    { $1::$3 }
 
 fpat:
   | id Eq pat
-    { fploc (FP_Fpat($1,fst $2,$3)) }
+    { fploc (FP_Fpat($1,$3)) }
 
 fpats:
   | fpat
-    { ([($1,None)], (None,false)) }
+    { ([$1], false) }
   | fpat Semi
-    { ([($1,None)], ($2,true)) }
+    { ([$1], true) }
   | fpat Semi fpats
-    { (($1,$2)::fst $3, snd $3) }
+    { ($1::fst $3, snd $3) }
 
 npat:
   | Num Eq pat
-    { ($1,fst $2,$3) }
+    { ($1,$3) }
 
 npats:
   | npat
-    { ([($1,None)]) }
+    { [$1] }
   | npat Comma npats
-    { (($1,$2)::$3) }
+    { ($1::$3) }
 
 atomic_exp:
   | Lcurly semi_exps Rcurly
-    { eloc (E_block($1,$2,$3)) }
+    { eloc (E_block $2) }
   | id
     { eloc (E_id($1)) }
   | lit
@@ -406,31 +405,31 @@ atomic_exp:
   | Lparen exp Rparen
     { $2 }
   | Lparen comma_exps Rparen
-    { eloc (E_tuple($1,$2,$3)) }
+    { eloc (E_tuple($2)) }
   | Lsquare comma_exps Rsquare
-    { eloc (E_vector($1,$2,$3)) }
+    { eloc (E_vector($2)) }
   | Lsquare exp With atomic_exp Eq exp Rsquare
-    { eloc (E_vector_update($1,$2,$3,$4,fst $5,$6,$7)) }
+    { eloc (E_vector_update($2,$4,$6)) }
   | Lsquare exp With atomic_exp Colon atomic_exp Eq exp Rsquare
-    { eloc (E_vector_update_subrange($1,$2,$3,$4,$5,$6,fst $7,$8,$9)) }
+    { eloc (E_vector_update_subrange($2,$4,$6,$8)) }
   | SquareBar comma_exps BarSquare
-    { eloc (E_list($1,$2,$3)) }
+    { eloc (E_list($2)) }
   | Switch exp Lcurly case_exps Rcurly
-    { eloc (E_case($1,$2,$3,$4,$5)) }
+    { eloc (E_case($2,$4)) }
 
 field_exp:
   | atomic_exp
     { $1 }
   | atomic_exp Dot id
-    { eloc (E_field($1,$2,$3)) }
+    { eloc (E_field($1,$3)) }
 
 vaccess_exp:
   | field_exp
     { $1 }
   | atomic_exp Lsquare exp Rsquare
-    { eloc (E_vector_access($1,$2,$3,$4)) }
+    { eloc (E_vector_access($1,$3)) }
   | atomic_exp Lsquare exp DotDot exp Rsquare
-    { eloc (E_vector_subrange($1,$2,$3,$4,$5,$6)) }
+    { eloc (E_vector_subrange($1,$3,$5)) }
 
 app_exp:
   | vaccess_exp
@@ -438,13 +437,13 @@ app_exp:
   | id Lparen exp Rparen
     { eloc (E_app((E_aux((E_id $1),locn 1 1)),[$3])) }
   | id Lparen comma_exps Rparen
-    { eloc (E_app((E_aux((E_id $1),locn 1 1)),[(E_aux((E_tuple($2,$3,$4)),locn 2 4))])) }
+    { eloc (E_app((E_aux((E_id $1),locn 1 1)),$3)) }
 
 right_atomic_exp:
   | If_ exp Then exp Else exp
-    { eloc (E_if($1,$2,$3,$4,$5,$6)) }
+    { eloc (E_if($2,$4,$6)) }
   | letbind In exp
-    { eloc (E_let($1,$2,$3)) }
+    { eloc (E_let($1,$3)) }
 
 starstar_exp:
   | app_exp
@@ -486,13 +485,13 @@ cons_exp:
   | plus_exp
     { $1 }
   | plus_exp ColonColon cons_exp
-    { eloc (E_cons($1,fst $2,$3)) }
+    { eloc (E_cons($1,$3)) }
 
 cons_right_atomic_exp:
   | plus_right_atomic_exp
     { $1 }
   | plus_exp ColonColon cons_right_atomic_exp
-    { eloc (E_cons($1,fst $2,$3)) }
+    { eloc (E_cons($1,$3)) }
 
 at_exp:
   | cons_exp
@@ -515,9 +514,9 @@ eq_exp:
   | eq_exp GtEq at_exp
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp IN at_exp
-    { eloc (E_app_infix($1,Id_aux(Id(($2,"In")), locn 2 2), $3)) }
+    { eloc (E_app_infix($1,Id_aux(Id("In"), locn 2 2), $3)) }
   | eq_exp ColonEq at_exp
-    { eloc (E_assign($1,fst $2,$3)) }
+    { eloc (E_assign($1,$3)) }
 
 eq_right_atomic_exp:
   | at_right_atomic_exp
@@ -525,7 +524,7 @@ eq_right_atomic_exp:
   | eq_exp Eq at_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp ColonEq at_right_atomic_exp
-    { eloc (E_assign($1,fst $2,$3)) }
+    { eloc (E_assign($1,$3)) }
 
 and_exp:
   | eq_exp
@@ -543,14 +542,14 @@ or_exp:
   | and_exp
     { $1 }
   | and_exp BarBar or_exp
-    { eloc (E_app_infix($1,Id_aux(Id(($2,"||")), locn 2 2), $3)) }
+    { eloc (E_app_infix($1,Id_aux(Id("||"), locn 2 2), $3)) }
 
 
 or_right_atomic_exp:
   | and_right_atomic_exp
     { $1 }
   | and_exp BarBar or_right_atomic_exp
-    { eloc (E_app_infix($1,Id_aux(Id(($2,"||")), locn 2 2), $3)) }
+    { eloc (E_app_infix($1,Id_aux(Id("||"), locn 2 2), $3)) }
 
 exp:
   | or_exp
@@ -561,17 +560,17 @@ exp:
 
 comma_exps:
   | exp Comma exp
-    { [($1,$2);($3,None)] }
+    { [$1;$3] }
   | exp Comma comma_exps
-    { ($1,$2)::$3 }
+    { $1::$3 }
 
 semi_exps_help:
   | exp
-    { [($1,None)] }
+    { [$1] }
   | exp Semi
-    { [($1,$2)] }
+    { [$1] }
   | exp Semi semi_exps_help
-    { ($1,$2)::$3 }
+    { $1::$3 }
 
 semi_exps:
   |
@@ -581,7 +580,7 @@ semi_exps:
 
 case_exp:
   | Case patsexp
-    { ($1,$2) }
+    { $2 }
 
 case_exps:
   | case_exp
@@ -591,62 +590,62 @@ case_exps:
 
 patsexp:
   | atomic_pat MinusGt exp
-    { peloc (Pat_exp($1,$2,$3)) }
+    { peloc (Pat_exp($1,$3)) }
 
 letbind:
   | Let_ atomic_pat Eq exp
-    { lbloc (LB_val_implicit($1,$2,fst $3,$4)) }
+    { lbloc (LB_val_implicit($2,$4)) }
   | Let_ typquant atomic_typ atomic_pat Eq exp
-    { lbloc (LB_val_explicit((mk_typschm $2 $3 2 3),$4,fst $5,$6)) }
+    { lbloc (LB_val_explicit((mk_typschm $2 $3 2 3),$4,$6)) }
   /* This is ambiguous causing 4 shift/reduce and 5 reduce/reduce conflicts because the parser can't tell until the end of typ whether it was parsing a type or a pattern, and this seem to be too late. Solutions are to have a different keyword for this and the above solution besides let (while still absolutely having a keyword here)
   | Let_ atomic_typ atomic_pat Eq exp
     { } */
 
 funcl:
   | id atomic_pat Eq exp
-    { funclloc (FCL_Funcl($1,$2,fst $3,$4)) }
+    { funclloc (FCL_Funcl($1,$2,$4)) }
 
 funcl_ands:
   | funcl
-    { [$1,None] }
+    { [$1] }
   | funcl And funcl_ands
-    { ($1,$2)::$3 }
+    { $1::$3 }
 
 /* This causes ambiguity because without a type quantifier it's unclear whether the first id is a function name or a type name for the optional types.*/
 fun_def:
   | Function_ Rec typquant atomic_typ effect_typ funcl_ands
-    { funloc (FD_function($1,mk_rec $2 2, mk_tannot $3 $4 3 4, mk_eannot $5 5, $6)) }
+    { funloc (FD_function(mk_rec 2, mk_tannot $3 $4 3 4, mk_eannot $5 5, $6)) }
   | Function_ Rec typquant atomic_typ funcl_ands
-    { funloc (FD_function($1,mk_rec $2 2, mk_tannot $3 $4 3 4, mk_eannotn (), $5)) }
+    { funloc (FD_function(mk_rec 2, mk_tannot $3 $4 3 4, mk_eannotn (), $5)) }
   | Function_ Rec atomic_typ effect_typ funcl_ands
-    { funloc (FD_function($1,mk_rec $2 2, mk_tannot (mk_typqn ()) $3 3 3, mk_eannot $4 4, $5)) }
+    { funloc (FD_function(mk_rec 2, mk_tannot (mk_typqn ()) $3 3 3, mk_eannot $4 4, $5)) }
   | Function_ Rec atomic_typ funcl_ands
     { match $3 with
       | ATyp_aux(ATyp_efid _, _) | ATyp_aux(ATyp_set _, _) ->
-        funloc (FD_function($1,mk_rec $2 2,mk_tannotn (), mk_eannot $3 3, $4))
+        funloc (FD_function(mk_rec 2,mk_tannotn (), mk_eannot $3 3, $4))
       | _ ->
-        funloc (FD_function($1,mk_rec $2 2,mk_tannot (mk_typqn ()) $3 3 3, mk_eannotn (), $4)) }
+        funloc (FD_function(mk_rec 2,mk_tannot (mk_typqn ()) $3 3 3, mk_eannotn (), $4)) }
   | Function_ Rec funcl_ands
-    { funloc (FD_function($1,mk_rec $2 2, mk_tannotn (), mk_eannotn (), $3)) }
+    { funloc (FD_function(mk_rec 2, mk_tannotn (), mk_eannotn (), $3)) }
   | Function_ typquant atomic_typ effect_typ funcl_ands
-    { funloc (FD_function($1,mk_recn (), mk_tannot $2 $3 2 3, mk_eannot $4 4, $5)) }
+    { funloc (FD_function(mk_recn (), mk_tannot $2 $3 2 3, mk_eannot $4 4, $5)) }
   | Function_ typquant atomic_typ funcl_ands
-    { funloc (FD_function($1,mk_recn (), mk_tannot $2 $3 2 2, mk_eannotn (), $4)) }
+    { funloc (FD_function(mk_recn (), mk_tannot $2 $3 2 2, mk_eannotn (), $4)) }
   | Function_ atomic_typ funcl_ands
     { match $2 with
       | ATyp_aux(ATyp_efid _, _) | ATyp_aux(ATyp_set _, _) ->
-        funloc (FD_function($1,mk_recn (),mk_tannotn (), mk_eannot $2 2, $3))
+        funloc (FD_function(mk_recn (),mk_tannotn (), mk_eannot $2 2, $3))
       | _ ->
-        funloc (FD_function($1,mk_recn (),mk_tannot (mk_typqn ()) $2 2 2, mk_eannotn (), $3)) }
+        funloc (FD_function(mk_recn (),mk_tannot (mk_typqn ()) $2 2 2, mk_eannotn (), $3)) }
   | Function_ funcl_ands
-    { funloc (FD_function($1,mk_recn (), mk_tannotn (), mk_eannotn (), $2)) }
+    { funloc (FD_function(mk_recn (), mk_tannotn (), mk_eannotn (), $2)) }
 
 
 val_spec:
   | Val typquant atomic_typ id
-    { vloc (VS_val_spec($1,mk_typschm $2 $3 2 3,$4)) }
+    { vloc (VS_val_spec(mk_typschm $2 $3 2 3,$4)) }
   | Val atomic_typ id
-    { vloc (VS_val_spec($1,mk_typschm (mk_typqn ()) $2 2 2,$3)) }
+    { vloc (VS_val_spec(mk_typschm (mk_typqn ()) $2 2 2,$3)) }
 
 kinded_id:
   | id
@@ -664,50 +663,50 @@ kinded_ids:
 
 nums:
   | Num
-    { [($1,None)] }
+    { [$1] }
   | Num Comma nums
-    { ($1,$2)::$3 }
+    { $1::$3 }
 
 nexp_constraint:
   | typ Eq typ
-    { NC_aux(NC_fixed($1,(fst $2),$3), loc () ) }
+    { NC_aux(NC_fixed($1,$3), loc () ) }
   | typ GtEq typ
-    { NC_aux(NC_bounded_ge($1,(fst $2),$3), loc () ) }
+    { NC_aux(NC_bounded_ge($1,$3), loc () ) }
   | typ LtEq typ
-    { NC_aux(NC_bounded_le($1,(fst $2),$3), loc () ) }
+    { NC_aux(NC_bounded_le($1,$3), loc () ) }
   | id IN Lcurly nums Rcurly
-    { NC_aux(NC_nat_set_bounded($1,$2,$3,$4,$5), loc ()) }
+    { NC_aux(NC_nat_set_bounded($1,$4), loc ()) }
 
 nexp_constraints:
   | nexp_constraint
-    { [($1,None)] }
+    { [$1] }
   | nexp_constraint Comma nexp_constraints
-    { ($1,$2)::$3 }
+    { $1::$3 }
 
 typquant:
   /* This is a syntactic change to avoid 6 significant shift/reduce conflicts instead of the Dot */
   | Forall kinded_ids Amp nexp_constraints Dot
-    { typql(TypQ_tq($1,$2,fst $3,$4,$5)) }
+    { typql(TypQ_tq($2,$4)) }
   | Forall kinded_ids Dot
-    { typql(TypQ_no_constraint($1,$2,$3)) }
+    { typql(TypQ_no_constraint($2)) }
 
 name_sect:
   | Lsquare Id Eq String Rsquare
-    { Name_sect_aux(Name_sect_some($1,(fst $2),fst $3,(fst $4),(snd $4),$5), loc ()) }
+    { Name_sect_aux(Name_sect_some($4), loc ()) }
 
 c_def_body:
   | typ id
-    { [(($1,$2),None)],(None,false) }
+    { [($1,$2)],false }
   | typ id Semi
-    { [(($1,$2),None)],($3,true) }
+    { [($1,$2)],true }
   | typ id Semi c_def_body
-    { (($1,$2),$3)::(fst $4), snd $4 }
+    { ($1,$2)::(fst $4), snd $4 }
 
 index_range_atomic:
   | Num
     { irloc (BF_single($1)) }
   | Num DotDot Num
-    { irloc (BF_range($1,$2,$3)) }
+    { irloc (BF_range($1,$3)) }
   | Lparen index_range Rparen
     { $2 }
 
@@ -715,95 +714,95 @@ index_range:
   | index_range_atomic
     { $1 }
   | index_range_atomic Comma index_range
-    { irloc(BF_concat($1,$2,$3)) }
+    { irloc(BF_concat($1,$3)) }
 
 r_id_def:
   | index_range Colon id
-    { $1,$2,$3 }
+    { $1,$3 }
 
 r_def_body:
   | r_id_def
-    { [($1,None)] }
+    { [$1] }
   | r_id_def Semi
-    { [$1,$2] }
+    { [$1] }
   | r_id_def Semi r_def_body
-    { ($1,$2)::$3 }
+    { $1::$3 }
 
 type_def:
   | Typedef id name_sect Eq typquant typ
-    { tdloc (TD_abbrev($1,$2,$3,fst $4,mk_typschm $5 $6 5 6)) }
+    { tdloc (TD_abbrev($2,$3,mk_typschm $5 $6 5 6)) }
   | Typedef id name_sect Eq typ
-    { tdloc (TD_abbrev($1,$2,$3,fst $4,mk_typschm (mk_typqn ()) $5 5 5)) }
+    { tdloc (TD_abbrev($2,$3,mk_typschm (mk_typqn ()) $5 5 5)) }
   | Typedef id Eq typquant typ
-    { tdloc (TD_abbrev($1,$2,mk_namesectn (),fst $3, mk_typschm $4 $5 4 5))}
+    { tdloc (TD_abbrev($2,mk_namesectn (), mk_typschm $4 $5 4 5))}
   | Typedef id Eq typ
-    { tdloc (TD_abbrev($1,$2,mk_namesectn (),fst $3,mk_typschm (mk_typqn ()) $4 4 4)) }
+    { tdloc (TD_abbrev($2,mk_namesectn (),mk_typschm (mk_typqn ()) $4 4 4)) }
   /* The below adds 4 shift/reduce conflicts. Due to c_def_body and confusions in id id and parens  */
   | Typedef id name_sect Eq Const Struct typquant Lcurly c_def_body Rcurly
-    { tdloc (TD_record($1,$2,$3,fst $4,$5,$6,$7,$8,fst $9, fst (snd $9), snd (snd $9), $10)) }
+    { tdloc (TD_record($2,$3,$7,fst $9, snd $9)) }
   | Typedef id name_sect Eq Const Struct Lcurly c_def_body Rcurly
-    { tdloc (TD_record($1,$2,$3,fst $4,$5,$6,(mk_typqn ()), $7, fst $8, fst (snd $8), snd (snd $8), $9)) }
+    { tdloc (TD_record($2,$3,(mk_typqn ()), fst $8, snd $8)) }
   | Typedef id Eq Const Struct typquant Lcurly c_def_body Rcurly
-    { tdloc (TD_record($1,$2,mk_namesectn (), fst $3, $4, $5, $6, $7, fst $8, fst (snd $8), snd (snd $8), $9)) }
+    { tdloc (TD_record($2,mk_namesectn (), $6, fst $8, snd $8)) }
   | Typedef id Eq Const Struct Lcurly c_def_body Rcurly
-    { tdloc (TD_record($1,$2, mk_namesectn (), fst $3, $4, $5, mk_typqn (), $6, fst $7, fst (snd $7), snd (snd $7), $8)) }
+    { tdloc (TD_record($2, mk_namesectn (), mk_typqn (), fst $7, snd $7)) }
   | Typedef id name_sect Eq Const Union typquant Lcurly c_def_body Rcurly
-    { tdloc (TD_variant($1,$2,$3,fst $4, $5, $6, $7, $8, fst $9, fst (snd $9), snd (snd $9), $10)) }
+    { tdloc (TD_variant($2,$3, $7, fst $9, snd $9)) }
   | Typedef id Eq Const Union typquant Lcurly c_def_body Rcurly
-    { tdloc (TD_variant($1,$2,mk_namesectn (), fst $3, $4, $5, $6, $7, fst $8, fst (snd $8), snd (snd $8), $9)) }
+    { tdloc (TD_variant($2,mk_namesectn (), $6, fst $8, snd $8)) }
   | Typedef id name_sect Eq Const Union Lcurly c_def_body Rcurly
-    { tdloc (TD_variant($1, $2, $3, fst $4, $5, $6, mk_typqn (), $7, fst $8, fst (snd $8), snd (snd $8), $9)) }
+    { tdloc (TD_variant($2, $3, mk_typqn (), fst $8, snd $8)) }
   | Typedef id Eq Const Union Lcurly c_def_body Rcurly
-    { tdloc (TD_variant($1,$2, mk_namesectn (), fst $3, $4, $5, mk_typqn (), $6, fst $7, fst (snd $7), snd (snd $7), $8)) }
+    { tdloc (TD_variant($2, mk_namesectn (), mk_typqn (), fst $7, snd $7)) }
   | Typedef id Eq Register Bits Lsquare typ Colon typ Rsquare Lcurly r_def_body Rcurly
-    { tdloc (TD_register($1,$2,fst $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)) }
+    { tdloc (TD_register($2, $7, $9, $12)) }
 
 
 default_typ:
   | Default atomic_kind id
-    { defloc (DT_kind($1,$2,$3)) }
+    { defloc (DT_kind($2,$3)) }
   | Default typquant atomic_typ id
-    { defloc (DT_typ($1,(mk_typschm $2 $3 2 3),$4)) }
+    { defloc (DT_typ((mk_typschm $2 $3 2 3),$4)) }
   | Default atomic_typ id
-    { defloc (DT_typ($1,(mk_typschm (mk_typqn ()) $2 2 2),$3)) }
+    { defloc (DT_typ((mk_typschm (mk_typqn ()) $2 2 2),$3)) }
 
 scattered_def:
   | Function_ Rec typquant atomic_typ effect_typ id
-    { (DEF_scattered_function(None,$1,mk_rec $2 2, mk_tannot $3 $4 3 4, mk_eannot $5 5, $6)) }
+    { (DEF_scattered_function(mk_rec 2, mk_tannot $3 $4 3 4, mk_eannot $5 5, $6)) }
   | Function_ Rec atomic_typ effect_typ id
-    { (DEF_scattered_function(None,$1,mk_rec $2 2, mk_tannot (mk_typqn ()) $3 3 3, mk_eannot $4 4, $5)) }
+    { (DEF_scattered_function(mk_rec 2, mk_tannot (mk_typqn ()) $3 3 3, mk_eannot $4 4, $5)) }
   | Function_ Rec typquant atomic_typ id
-    { (DEF_scattered_function(None,$1,mk_rec $2 2, mk_tannot $3 $4 3 4, mk_eannotn (), $5)) }
+    { (DEF_scattered_function(mk_rec 2, mk_tannot $3 $4 3 4, mk_eannotn (), $5)) }
   | Function_ Rec atomic_typ id
     { match $3 with
       | (ATyp_aux(ATyp_efid _, _)) | (ATyp_aux(ATyp_set _, _)) ->
-        (DEF_scattered_function(None,$1,mk_rec $2 2, mk_tannotn (), mk_eannot $3 3, $4))
+        (DEF_scattered_function(mk_rec 2, mk_tannotn (), mk_eannot $3 3, $4))
       | _ ->
-        (DEF_scattered_function(None,$1,mk_rec $2 2,mk_tannot (mk_typqn ()) $3 3 3, mk_eannotn (), $4)) }
+        (DEF_scattered_function(mk_rec 2,mk_tannot (mk_typqn ()) $3 3 3, mk_eannotn (), $4)) }
   | Function_ Rec id
-    { (DEF_scattered_function(None,$1,mk_rec $2 2,mk_tannotn (), mk_eannotn (),$3)) }
+    { (DEF_scattered_function(mk_rec 2,mk_tannotn (), mk_eannotn (),$3)) }
   | Function_ typquant atomic_typ effect_typ id
-    { (DEF_scattered_function(None,$1,mk_recn (),mk_tannot $2 $3 2 3, mk_eannot $4 4, $5)) }
+    { (DEF_scattered_function(mk_recn (),mk_tannot $2 $3 2 3, mk_eannot $4 4, $5)) }
   | Function_ atomic_typ effect_typ id
-    { (DEF_scattered_function(None,$1,mk_recn (), mk_tannot (mk_typqn ()) $2 2 2, mk_eannot $3 3, $4)) }
+    { (DEF_scattered_function(mk_recn (), mk_tannot (mk_typqn ()) $2 2 2, mk_eannot $3 3, $4)) }
   | Function_ typquant atomic_typ id
-    { (DEF_scattered_function(None,$1,mk_recn (), mk_tannot $2 $3 2 3, mk_eannotn (), $4)) }
+    { (DEF_scattered_function(mk_recn (), mk_tannot $2 $3 2 3, mk_eannotn (), $4)) }
   | Function_ atomic_typ id
     { match $2 with
       | (ATyp_aux(ATyp_efid _, _)) | (ATyp_aux(ATyp_set _, _)) ->
-        (DEF_scattered_function(None,$1,mk_recn (), mk_tannotn (), mk_eannot $2 2, $3))
+        (DEF_scattered_function(mk_recn (), mk_tannotn (), mk_eannot $2 2, $3))
       | _ ->
-        (DEF_scattered_function(None,$1,mk_recn (), mk_tannot (mk_typqn ()) $2 2 2, mk_eannotn (), $3)) }
+        (DEF_scattered_function(mk_recn (), mk_tannot (mk_typqn ()) $2 2 2, mk_eannotn (), $3)) }
   | Function_ id
-    { (DEF_scattered_function(None,$1,mk_recn (), mk_tannotn (), mk_eannotn (), $2)) }
+    { (DEF_scattered_function(mk_recn (), mk_tannotn (), mk_eannotn (), $2)) }
   | Typedef id name_sect Eq Const Union typquant
-    { (DEF_scattered_variant(None,$1,$2,$3,fst $4,$5,$6,$7)) }
+    { (DEF_scattered_variant($2,$3,$7)) }
   | Typedef id Eq Const Union typquant
-    { (DEF_scattered_variant(None,$1,$2,(mk_namesectn ()),fst $3,$4,$5,$6)) }
+    { (DEF_scattered_variant($2,(mk_namesectn ()),$6)) }
   | Typedef id name_sect Eq Const Union
-    { (DEF_scattered_variant(None,$1,$2,$3,fst $4,$5,$6,mk_typqn ())) }
+    { (DEF_scattered_variant($2,$3,mk_typqn ())) }
   | Typedef id Eq Const Union
-    { (DEF_scattered_variant(None,$1,$2,mk_namesectn (),fst $3,$4,$5,mk_typqn ())) }
+    { (DEF_scattered_variant($2,mk_namesectn (),mk_typqn ())) }
 
 def:
   | type_def
@@ -817,18 +816,15 @@ def:
   | default_typ
     { dloc (DEF_default($1)) }
   | Register atomic_typ id
-    { dloc (DEF_reg_dec($1,$2,$3)) }
+    { dloc (DEF_reg_dec($2,$3)) }
   | Scattered scattered_def
-    { dloc (match ($2) with
-            | DEF_scattered_function(_,f,r,t,e,i) -> DEF_scattered_function($1,f,r,t,e,i)
-            | DEF_scattered_variant(_,t,i,n,e,c,u,ty) -> DEF_scattered_variant($1,t,i,n,e,c,u,ty)
-            | _ -> assert false) }
+    { dloc $2 }
   | Function_ Clause funcl
-    { dloc (DEF_scattered_funcl($1,$2,$3)) }
+    { dloc (DEF_scattered_funcl($3)) }
   | Union id Member atomic_typ id
-    { dloc (DEF_scattered_unioncl($1,$2,$3,$4,$5)) }
+    { dloc (DEF_scattered_unioncl($2,$4,$5)) }
   | End id
-    { dloc (DEF_scattered_end($1,$2)) }
+    { dloc (DEF_scattered_end($2)) }
 
 defs_help:
   | def
@@ -842,5 +838,5 @@ defs:
 
 file:
   | defs Eof
-    { ($1,$2) }
+    { $1 }
 

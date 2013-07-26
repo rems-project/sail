@@ -13,11 +13,11 @@ l2Theory.uo: l2Script.sml
 
 l2.tex ../src/ast.ml l2Script.sml: l2.ott 
 	ott -sort false -generate_aux_rules false -o l2.tex  -picky_multiple_parses true l2.ott
-	ott -sort false -generate_aux_rules true -ocaml_include_terminals true -o ../src/ast.ml -o l2Script.sml -picky_multiple_parses true l2.ott
+	ott -sort false -generate_aux_rules true -o ../src/ast.ml -o l2Script.sml -picky_multiple_parses true l2.ott
 
 l2_parse.tex parse_ast.ml ../src/parse_ast.ml: l2_parse.ott
 	ott -sort false -generate_aux_rules false -o l2_parse.tex  -picky_multiple_parses true l2_parse.ott
-	ott -sort false -generate_aux_rules true -ocaml_include_terminals true -o ../src/parse_ast.ml -picky_multiple_parses true l2_parse.ott
+	ott -sort false -generate_aux_rules true -o ../src/parse_ast.ml -picky_multiple_parses true l2_parse.ott
   
 
 #	rm -f ../src/ast.ml

@@ -46,7 +46,7 @@
 
 (* open Typed_ast *)
 
-val parse_file : string -> Parse_ast.defs * Parse_ast.lex_skips
+val parse_file : string -> Parse_ast.defs
 
 (* type instances = Types.instance list Types.Pfmap.t
 

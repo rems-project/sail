@@ -5,9 +5,9 @@ indexvar n , i , j , k ::=
 metavar num ::=
   {{ phantom }}
   {{ lex numeric }}
-  {{ ocaml (terminal * int) }}
+  {{ ocaml int }}
   {{ hol num }}
-  {{ lem (terminal * num) }}
+  {{ lem num }}
   {{ com Numeric literals }}
 
 % metavar nat ::=
@@ -21,28 +21,28 @@ metavar num ::=
 metavar hex ::=
   {{ phantom }}
   {{ lex numeric }}
-  {{ ocaml terminal * string }}
-  {{ lem (terminal * string) }}
+  {{ ocaml string }}
+  {{ lem string }}
   {{ com Bit vector literal, specified by C-style hex number }}
   
 metavar bin ::=
   {{ phantom }}
   {{ lex numeric }}
-  {{ ocaml terminal * string }}
-  {{ lem (terminal * string) }}
+  {{ ocaml string }}
+  {{ lem string }}
   {{ com Bit vector literal, specified by C-style binary number }}  
 
 metavar string ::=
   {{ phantom }}
-  {{ ocaml terminal * string }}
-  {{ lem (terminal * string) }}
+  {{ ocaml string }}
+  {{ lem string }}
   {{ hol string }}
   {{ com String literals }}
 
 metavar regexp ::=
   {{ phantom }}
-  {{ ocaml terminal * string }}
-  {{ lem (terminal * string) }}
+  {{ ocaml string }}
+  {{ lem string }}
   {{ hol string }}
   {{ com Regular expresions, as a string literal }}
 
@@ -137,8 +137,8 @@ val subst : forall 'a. list 'a -> list 'a -> bool
 }}
 
 metavar x , y , z ::=
-  {{ ocaml terminal * text }}
-  {{ lem terminal * string }}
+  {{ ocaml text }}
+  {{ lem string }}
   {{ hol string }}
   {{ com identifier }}
   {{ ocamlvar "[[x]]" }}
@@ -146,8 +146,8 @@ metavar x , y , z ::=
 
 metavar ix ::=
   {{ lex alphanum }}
-  {{ ocaml terminal * text }}
-  {{ lem terminal * string }}
+  {{ ocaml text }}
+  {{ lem string }}
   {{ hol string }}
   {{ com infix identifier }}
   {{ ocamlvar "[[ix]]" }}
@@ -554,8 +554,8 @@ lit :: 'L_' ::=
   | string                                              :: :: string {{ com string constant }}
 
 semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
-                                                        {{ ocaml terminal * bool }}
-                                                        {{ lem (terminal * bool) }}
+                                                        {{ ocaml bool }}
+                                                        {{ lem bool }}
                                                         {{ hol bool }}
   {{ com Optional semi-colon }}
   |                                                     :: :: no  
