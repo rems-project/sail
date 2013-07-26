@@ -128,7 +128,7 @@ let star = "*"
 
 %token Bar Colon Comma Dot Eof Minus Semi Under
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare
-%token BarBar BarGt BarSquare DotDot MinusGt LtBar SquareBar
+%token BarBar BarGt BarSquare DotDot MinusGt LtBar LparenColon SquareBar
 
 /*Terminals with content*/
 
@@ -169,21 +169,21 @@ let star = "*"
 id:
   | Id
     { idl (Id($1)) }
-  | Lparen At Rparen
+  | LparenColon At Rparen
     { Id_aux(DeIid($2),loc ()) }
- | Lparen Eq Rparen
+ | LparenColon Eq Rparen
     { Id_aux(DeIid($2),loc ()) }
-  | Lparen IN Rparen
+  | LparenColon IN Rparen
     { Id_aux(DeIid("In"),loc ()) }
-  | Lparen BarBar Rparen
+  | LparenColon BarBar Rparen
     { Id_aux(DeIid("||"),loc ()) }
-  | Lparen ColonColon Rparen
+  | LparenColon ColonColon Rparen
     { Id_aux(DeIid($2),loc ()) }
-  | Lparen Star Rparen
+  | LparenColon Star Rparen
     { Id_aux(DeIid($2),loc ()) }
-  | Lparen Plus Rparen
+  | LparenColon Plus Rparen
     { Id_aux(DeIid($2),loc ()) }
-  | Lparen GtEq Rparen
+  | LparenColon GtEq Rparen
     { Id_aux(DeIid($2),loc ()) }
 
 atomic_kind:
@@ -252,13 +252,14 @@ atomic_typ:
   | Lsquare nexp_typ Colon nexp_typ Rsquare
       { assert false }
 
-vtyp_typ:
+/*Inherently ambiguous with type application, but type checking should be able to sort it out */
+/*vtyp_typ:
    | atomic_typ
        { $1 }
    | atomic_typ Lsquare nexp_typ Rsquare
      { assert false }
    | atomic_typ Lsquare nexp_typ Colon nexp_typ Rsquare
-     { assert false }
+     { assert false }*/
 
 atomic_typs:
   | atomic_typ
@@ -267,7 +268,7 @@ atomic_typs:
     { $1::$2 }
 
 app_typ:
-  | vtyp_typ
+  | atomic_typ
     { $1 }
   | id atomic_typs
     { tloc (ATyp_app($1,$2)) }
@@ -557,7 +558,6 @@ exp:
   | or_right_atomic_exp
     { $1 }
 
-
 comma_exps:
   | exp Comma exp
     { [$1;$3] }
@@ -625,9 +625,9 @@ fun_def:
         funloc (FD_function(mk_rec 2,mk_tannotn (), mk_eannot $3 3, $4))
       | _ ->
         funloc (FD_function(mk_rec 2,mk_tannot (mk_typqn ()) $3 3 3, mk_eannotn (), $4)) }
-  | Function_ Rec funcl_ands
+/*  | Function_ Rec funcl_ands
     { funloc (FD_function(mk_rec 2, mk_tannotn (), mk_eannotn (), $3)) }
-  | Function_ typquant atomic_typ effect_typ funcl_ands
+*/  | Function_ typquant atomic_typ effect_typ funcl_ands
     { funloc (FD_function(mk_recn (), mk_tannot $2 $3 2 3, mk_eannot $4 4, $5)) }
   | Function_ typquant atomic_typ funcl_ands
     { funloc (FD_function(mk_recn (), mk_tannot $2 $3 2 2, mk_eannotn (), $4)) }
@@ -637,9 +637,9 @@ fun_def:
         funloc (FD_function(mk_recn (),mk_tannotn (), mk_eannot $2 2, $3))
       | _ ->
         funloc (FD_function(mk_recn (),mk_tannot (mk_typqn ()) $2 2 2, mk_eannotn (), $3)) }
-  | Function_ funcl_ands
+/*  | Function_ funcl_ands
     { funloc (FD_function(mk_recn (), mk_tannotn (), mk_eannotn (), $2)) }
-
+*/
 
 val_spec:
   | Val typquant atomic_typ id
@@ -652,14 +652,12 @@ kinded_id:
     { kiloc (KOpt_none $1) }
   | kind id
     { kiloc (KOpt_kind($1,$2))}
-  | Lparen kinded_id Rparen
-    { $2 }
 
-kinded_ids:
+/*kinded_ids:
   | kinded_id
     { [$1] }
   | kinded_id kinded_ids
-    { $1::$2 }
+    { $1::$2 }*/
 
 nums:
   | Num
@@ -677,29 +675,32 @@ nexp_constraint:
   | id IN Lcurly nums Rcurly
     { NC_aux(NC_nat_set_bounded($1,$4), loc ()) }
 
-nexp_constraints:
+id_constraint:
   | nexp_constraint
-    { [$1] }
-  | nexp_constraint Comma nexp_constraints
-    { $1::$3 }
+      { QI_aux((QI_const $1), loc())}
+  | kinded_id
+      { QI_aux((QI_id $1), loc()) }
+
+id_constraints:
+  | id_constraint
+      { [$1] }
+  | id_constraint Comma id_constraints
+      { $1::$3 }
 
 typquant:
-  /* This is a syntactic change to avoid 6 significant shift/reduce conflicts instead of the Dot */
-  | Forall kinded_ids Amp nexp_constraints Dot
-    { typql(TypQ_tq($2,$4)) }
-  | Forall kinded_ids Dot
-    { typql(TypQ_no_constraint($2)) }
+  | Forall id_constraints Dot
+    { typql(TypQ_tq($2)) }
 
 name_sect:
   | Lsquare Id Eq String Rsquare
     { Name_sect_aux(Name_sect_some($4), loc ()) }
 
 c_def_body:
-  | typ id
+  | atomic_typ id
     { [($1,$2)],false }
-  | typ id Semi
+  | atomic_typ id Semi
     { [($1,$2)],true }
-  | typ id Semi c_def_body
+  | atomic_typ id Semi c_def_body
     { ($1,$2)::(fst $4), snd $4 }
 
 index_range_atomic:

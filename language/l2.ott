@@ -436,16 +436,17 @@ kinded_id :: 'KOpt_' ::=
   {{ aux _ l }}
   | id	 	    		   	      :: :: none {{ com identifier }}
   | kind id				      :: :: kind {{ com kind-annotated variable }}
-  | ( kinded_id ) 			      :: S :: paren {{ icho [[kinded_id]] }}
+
+quant_item :: 'QI_' ::=
+  {{ com Either a kinded identifier or a nexp constraint for a typquant }}
+  | kinded_id 	  	 	       	      :: :: id {{ com An optionally kinded identifier }}
+  | nexp_constraint			      :: :: const {{ com A constraint for this type }}
 
 typquant :: 'TypQ_' ::= 
   {{ com type quantifiers and constraints}}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | forall kinded_id1 ... kinded_idn . nexp_constraint1 , ... , nexp_constrainti . :: :: tq {{ texlong }}
-
+  | forall quant_item1 , ... , quant_itemn . :: :: tq {{ texlong }}
 % WHY ARE CONSTRAINTS HERE AND NOT IN THE KIND LANGUAGE
-
-  | forall kinded_id1 ... kinded_idn . ::  ::  no_constraint {{ com sugar, omitting constraints}}
   |                           ::  ::  no_forall     {{ com sugar, omitting quantifier and constraints }}
 
 typschm :: 'TypSchm_' ::=

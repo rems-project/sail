@@ -145,9 +145,19 @@ kinded_id =
 
 
 type 
+quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
+   QI_id of kinded_id (* An optionally kinded identifier *)
+ | QI_const of nexp_constraint (* A constraint for this type *)
+
+
+type 
+quant_item = 
+   QI_aux of quant_item_aux * l
+
+
+type 
 typquant_aux =  (* type quantifiers and constraints *)
-   TypQ_tq of (kinded_id) list * (nexp_constraint) list
- | TypQ_no_constraint of (kinded_id) list (* sugar, omitting constraints *)
+   TypQ_tq of (quant_item) list
  | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
@@ -270,26 +280,26 @@ naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for va
 
 
 type 
-rec_opt_aux =  (* Optional recursive annotation for functions *)
-   Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
-
-
-type 
 tannot_opt_aux =  (* Optional type annotation for functions *)
    Typ_annot_opt_none
  | Typ_annot_opt_some of typquant * atyp
 
 
 type 
-funcl_aux =  (* Function clause *)
-   FCL_Funcl of id * pat * exp
-
-
-type 
 effects_opt_aux =  (* Optional effect annotation for functions *)
    Effects_opt_pure (* sugar for empty effect set *)
  | Effects_opt_effects of atyp
+
+
+type 
+rec_opt_aux =  (* Optional recursive annotation for functions *)
+   Rec_nonrec (* non-recursive *)
+ | Rec_rec (* recursive *)
+
+
+type 
+funcl_aux =  (* Function clause *)
+   FCL_Funcl of id * pat * exp
 
 
 type 
@@ -308,18 +318,8 @@ naming_scheme_opt =
 
 
 type 
-rec_opt = 
-   Rec_aux of rec_opt_aux * l
-
-
-type 
 tannot_opt = 
    Typ_annot_opt_aux of tannot_opt_aux * l
-
-
-type 
-funcl = 
-   FCL_aux of funcl_aux * l
 
 
 type 
@@ -328,9 +328,18 @@ effects_opt =
 
 
 type 
-default_typing_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of base_kind * id
- | DT_typ of typschm * id
+rec_opt = 
+   Rec_aux of rec_opt_aux * l
+
+
+type 
+funcl = 
+   FCL_aux of funcl_aux * l
+
+
+type 
+val_spec_aux =  (* Value type specification *)
+   VS_val_spec of typschm * id
 
 
 type 
@@ -343,8 +352,9 @@ type_def_aux =  (* Type definition body *)
 
 
 type 
-val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
+default_typing_spec_aux =  (* Default kinding or typing assumption *)
+   DT_kind of base_kind * id
+ | DT_typ of typschm * id
 
 
 type 
@@ -353,8 +363,8 @@ fundef_aux =  (* Function definition *)
 
 
 type 
-default_typing_spec = 
-   DT_aux of default_typing_spec_aux * l
+val_spec = 
+   VS_aux of val_spec_aux * l
 
 
 type 
@@ -363,8 +373,8 @@ type_def =
 
 
 type 
-val_spec = 
-   VS_aux of val_spec_aux * l
+default_typing_spec = 
+   DT_aux of default_typing_spec_aux * l
 
 
 type 
@@ -393,6 +403,11 @@ def =
 
 
 type 
+ctor_def_aux =  (* Datatype constructor definition clause *)
+   CT_ct of id * typschm
+
+
+type 
 typ_lib_aux =  (* library types and syntactic sugar for them *)
    Typ_lib_unit (* unit type with value $()$ *)
  | Typ_lib_bool (* booleans $_$ and $_$ *)
@@ -408,11 +423,6 @@ typ_lib_aux =  (* library types and syntactic sugar for them *)
  | Typ_lib_list of atyp (* list of atyp *)
  | Typ_lib_set of atyp (* finite set of atyp *)
  | Typ_lib_reg of atyp (* mutable register components holding atyp *)
-
-
-type 
-ctor_def_aux =  (* Datatype constructor definition clause *)
-   CT_ct of id * typschm
 
 
 type 
@@ -432,13 +442,13 @@ defs =  (* Definition sequence *)
 
 
 type 
-typ_lib = 
-   Typ_lib_aux of typ_lib_aux * l
+ctor_def = 
+   CT_aux of ctor_def_aux * l
 
 
 type 
-ctor_def = 
-   CT_aux of ctor_def_aux * l
+typ_lib = 
+   Typ_lib_aux of typ_lib_aux * l
 
 
 
