@@ -155,6 +155,7 @@ rule token = parse
   | "|]"				{ BarSquare }
   | "^^"				{ (CarrotCarrot(r"^^")) }
   | "::" as i                           { (ColonColon(r i)) }
+  | ":="                                { ColonEq }
   | ".."				{ DotDot }
   | "=/="				{ (EqDivEq(r"=/=")) }
   | "=="				{ (EqEq(r"==")) }

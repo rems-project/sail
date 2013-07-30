@@ -128,7 +128,7 @@ let star = "*"
 
 %token Bar Colon Comma Dot Eof Minus Semi Under
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare
-%token BarBar BarGt BarSquare DotDot MinusGt LtBar LparenColon SquareBar
+%token BarBar BarGt BarSquare DotDot ColonEq MinusGt LtBar LparenColon SquareBar
 
 /*Terminals with content*/
 
@@ -137,7 +137,7 @@ let star = "*"
 %token <string> String Bin Hex
 
 %token <string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde
-%token <string> AmpAmp CarrotCarrot ColonColon ColonEq EqDivEq EqEq ExclEq ExclExcl
+%token <string> AmpAmp CarrotCarrot ColonColon EqDivEq EqEq ExclEq ExclExcl
 %token <string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt
 %token <string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar TildeCarrot
 
@@ -147,7 +147,7 @@ let star = "*"
 %token <string> StarUnderSi StarUnderU StarUnderUi TwoCarrot
 
 %token <string> AmpI AtI CarrotI  DivI EqI ExclI GtI LtI PlusI StarI TildeI
-%token <string> AmpAmpI CarrotCarrotI ColonColonI ColonEqI EqDivEqI EqEqI ExclEqI ExclExclI
+%token <string> AmpAmpI CarrotCarrotI ColonColonI EqDivEqI EqEqI ExclEqI ExclExclI
 %token <string> GtEqI GtEqPlusI GtGtI GtGtGtI GtPlusI HashGtGtI HashLtLtI
 %token <string> LtEqI LtEqPlusI LtGtI LtLtI LtLtLtI LtPlusI StarStarI TildeCarrotI
 
@@ -169,22 +169,72 @@ let star = "*"
 id:
   | Id
     { idl (Id($1)) }
+  | Tilde
+    { idl (Id($1)) }
+  | LparenColon Amp Rparen
+    { idl (DeIid($2)) }
   | LparenColon At Rparen
+    { idl (DeIid($2)) }
+  | LparenColon Carrot Rparen
+    { idl (DeIid($2)) }
+  | LparenColon Div Rparen 
+    { idl (DeIid($2)) }
+  | LparenColon Eq Rparen
     { Id_aux(DeIid($2),loc ()) }
- | LparenColon Eq Rparen
-    { Id_aux(DeIid($2),loc ()) }
-  | LparenColon IN Rparen
-    { Id_aux(DeIid("In"),loc ()) }
-  | LparenColon BarBar Rparen
-    { Id_aux(DeIid("||"),loc ()) }
-  | LparenColon ColonColon Rparen
-    { Id_aux(DeIid($2),loc ()) }
-  | LparenColon Star Rparen
-    { Id_aux(DeIid($2),loc ()) }
+  | LparenColon Excl Lparen
+    { idl (DeIid($2)) } 
+  | LparenColon Gt Lparen
+    { idl (DeIid($2)) }
+  | LparenColon Lt Lparen
+    { idl (DeIid($2)) }
+  | LparenColon Minus Lparen
+    { idl (DeIid("-")) }
   | LparenColon Plus Rparen
-    { Id_aux(DeIid($2),loc ()) }
+    { idl (DeIid($2)) }
+  | LparenColon Star Rparen
+    { idl (DeIid($2)) }
+  | LparenColon AmpAmp Rparen
+    { idl (DeIid($2)) }
+  | LparenColon BarBar Rparen
+    { idl (DeIid("||")) }
+  | LparenColon CarrotCarrot Rparen
+    { idl (DeIid($2)) }
+  | LparenColon ColonColon Rparen
+    { idl (DeIid($2)) }
+  | LparenColon EqDivEq Rparen
+    { idl (DeIid($2)) }
+  | LparenColon EqEq Rparen
+    { idl (DeIid($2)) }
+  | LparenColon ExclEq Rparen
+    { idl (DeIid($2)) }
+  | LparenColon ExclExcl Rparen
+    { idl (DeIid($2)) }
   | LparenColon GtEq Rparen
-    { Id_aux(DeIid($2),loc ()) }
+    { idl (DeIid($2)) }
+  | LparenColon GtEqPlus Rparen
+    { idl (DeIid($2)) }
+  | LparenColon GtGt Rparen
+    { idl (DeIid($2)) }
+  | LparenColon GtGtGt Rparen
+    { idl (DeIid($2)) }
+  | LparenColon GtPlus Rparen
+    { idl (DeIid($2)) }
+  | LparenColon HashGtGt Rparen
+    { idl (DeIid($2)) }
+  | LparenColon HashLtLt Rparen
+    { idl (DeIid($2)) }
+  | LparenColon LtEq Rparen
+    { idl (DeIid($2)) }
+  | LparenColon LtLt Rparen
+    { idl (DeIid($2)) }
+  | LparenColon LtLtLt Rparen
+    { idl (DeIid($2)) }
+  | LparenColon LtPlus Rparen
+    { idl (DeIid($2)) }
+  | LparenColon StarStar Rparen
+    { idl (DeIid($2)) }
+  | LparenColon TildeCarrot Rparen
+    { idl (DeIid($2)) }
 
 atomic_kind:
   | TYPE
@@ -463,11 +513,47 @@ star_exp:
     { $1 }
   | star_exp Star starstar_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp Div starstar_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp Div_ starstar_exp
+    { eloc (E_app_infix($1,Id_aux(Id("div"), locn 2 2), $3)) }
+  | star_exp Quot starstar_exp
+    { eloc (E_app_infix($1,Id_aux(Id("quot"), locn 2 2), $3)) }
+  | star_exp Rem starstar_exp
+    { eloc (E_app_infix($1,Id_aux(Id("rem"), locn 2 2), $3)) }
+  | star_exp Mod starstar_exp
+    { eloc (E_app_infix($1,Id_aux(Id("mod"), locn 2 2), $3)) }
+  | star_exp StarUnderS starstar_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp StarUnderSi starstar_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp StarUnderU starstar_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp StarUnderUi starstar_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
 
 star_right_atomic_exp:
   | starstar_right_atomic_exp
     { $1 }
   | star_exp Star starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp Div starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp Div_ starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id("div"), locn 2 2), $3)) }
+  | star_exp Quot starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id("quot"), locn 2 2), $3)) }
+  | star_exp Rem starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id("rem"), locn 2 2), $3)) }
+  | star_exp Mod starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id("mod"), locn 2 2), $3)) }
+  | star_exp StarUnderS starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp StarUnderSi starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp StarUnderU starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp StarUnderUi starstar_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
 
 plus_exp:
@@ -475,18 +561,24 @@ plus_exp:
     { $1 }
   | plus_exp Plus star_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | plus_exp Minus star_exp
+    { eloc (E_app_infix($1,Id_aux(Id("-"), locn 2 2), $3)) }
 
 plus_right_atomic_exp:
   | star_right_atomic_exp
     { $1 }
   | plus_exp Plus star_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | plus_exp Minus star_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id("-"), locn 2 2), $3)) } 
 
 cons_exp:
   | plus_exp
     { $1 }
   | plus_exp ColonColon cons_exp
     { eloc (E_cons($1,$3)) }
+  | plus_exp Colon cons_exp
+    { eloc (E_app_infix($1,Id_aux(Id(":"), locn 2 2), $3)) }
 
 cons_right_atomic_exp:
   | plus_right_atomic_exp
@@ -499,20 +591,37 @@ at_exp:
     { $1 }
   | cons_exp At at_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | cons_exp CarrotCarrot at_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | cons_exp Carrot at_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
 
 at_right_atomic_exp:
   | cons_right_atomic_exp
     { $1 }
   | cons_exp At at_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | cons_exp CarrotCarrot at_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | cons_exp Carrot at_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
 
 eq_exp:
   | at_exp
     { $1 }
-  /* Adds one shift/reduce conflict */
   | eq_exp Eq at_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp GtEq at_exp
+    { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp Gt at_exp
+    { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp LtEq at_exp
+    { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp Lt at_exp
+    { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp LtUnderS at_exp
+    { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp LtUnderSi at_exp
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp IN at_exp
     { eloc (E_app_infix($1,Id_aux(Id("In"), locn 2 2), $3)) }
@@ -530,27 +639,44 @@ eq_right_atomic_exp:
 and_exp:
   | eq_exp
     { $1 }
+  | eq_exp Amp and_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp AmpAmp and_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp AND and_exp
+    { eloc (E_app_infix($1,Id_aux(Id("And"), locn 2 2), $3)) }
+
 
 and_right_atomic_exp:
   | eq_right_atomic_exp
     { $1 }
+  | eq_exp Amp and_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp AmpAmp and_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp AND and_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id("And"), locn 2 2), $3)) }
 
 or_exp:
   | and_exp
     { $1 }
+  | and_exp Bar or_exp
+    { eloc (E_app_infix($1,Id_aux(Id("|"), locn 2 2), $3)) }
   | and_exp BarBar or_exp
     { eloc (E_app_infix($1,Id_aux(Id("||"), locn 2 2), $3)) }
+  | and_exp OR or_exp
+    { eloc (E_app_infix($1,Id_aux(Id("OR"), locn 2 2), $3)) } 
 
 
 or_right_atomic_exp:
   | and_right_atomic_exp
     { $1 }
+  | and_exp Bar or_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id("|"), locn 2 2), $3)) }
   | and_exp BarBar or_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id("||"), locn 2 2), $3)) }
+  | and_exp OR or_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id("OR"), locn 2 2), $3)) } 
 
 exp:
   | or_exp
