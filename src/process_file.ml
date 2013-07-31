@@ -58,17 +58,16 @@ let get_lexbuf fn =
 
 let parse_file (f : string) : Parse_ast.defs =
   let lexbuf = get_lexbuf f in
-  Parser.file Lexer.token lexbuf
-(*    try
-      Parser.file (Lexer.token []) lexbuf
+    try
+      Parser.file Lexer.token lexbuf
     with
       | Parsing.Parse_error ->
           let pos = Lexing.lexeme_start_p lexbuf in
-          raise "Parse error" (* (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "")))*)
-      | Ast.Parse_error_locn(l,m) ->
-          raise "Parse error 2" (*Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m))*)
+           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "")))
+      | Parse_ast.Parse_error_locn(l,m) ->
+          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
       | Lexer.LexError(c,p) ->
-          raise "Lex error" (*Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, c))*)*)
+          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, c)))
 
 (* type instances = Types.instance list Types.Pfmap.t
 

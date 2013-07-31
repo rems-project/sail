@@ -404,4 +404,9 @@ let main() =
   then Printf.printf "L2 pre alpha \n"
   else ignore(List.map (fun f -> (parse_file f))  !opt_file_arguments)
 
-let _ = main()
+let _ =  try
+    begin
+      try ignore(main ())
+      with  Failure(s) -> raise (Reporting_basic.err_general Parse_ast.Unknown ("Failure "^s))
+    end
+  with Reporting_basic.Fatal_error e -> Reporting_basic.report_error e

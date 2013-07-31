@@ -549,11 +549,7 @@ star_right_atomic_exp:
     { eloc (E_app_infix($1,Id_aux(Id("mod"), locn 2 2), $3)) }
   | star_exp StarUnderS starstar_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
-  | star_exp StarUnderSi starstar_right_atomic_exp
-    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | star_exp StarUnderU starstar_right_atomic_exp
-    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
-  | star_exp StarUnderUi starstar_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
 
 plus_exp:
@@ -572,18 +568,34 @@ plus_right_atomic_exp:
   | plus_exp Minus star_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id("-"), locn 2 2), $3)) } 
 
-cons_exp:
+shift_exp:
   | plus_exp
     { $1 }
-  | plus_exp ColonColon cons_exp
+  | shift_exp GtGt plus_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | shift_exp GtGtGt plus_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | shift_exp LtLt plus_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+
+shift_right_atomic_exp:
+  | plus_right_atomic_exp
+    { $1 }
+  | shift_exp GtGt plus_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+
+cons_exp:
+  | shift_exp
+    { $1 }
+  | shift_exp ColonColon cons_exp
     { eloc (E_cons($1,$3)) }
-  | plus_exp Colon cons_exp
+  | shift_exp Colon cons_exp
     { eloc (E_app_infix($1,Id_aux(Id(":"), locn 2 2), $3)) }
 
 cons_right_atomic_exp:
-  | plus_right_atomic_exp
+  | shift_right_atomic_exp
     { $1 }
-  | plus_exp ColonColon cons_right_atomic_exp
+  | shift_exp ColonColon cons_right_atomic_exp
     { eloc (E_cons($1,$3)) }
 
 at_exp:
@@ -594,6 +606,8 @@ at_exp:
   | cons_exp CarrotCarrot at_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | cons_exp Carrot at_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | cons_exp TildeCarrot at_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
 
 at_right_atomic_exp:
@@ -611,20 +625,32 @@ eq_exp:
     { $1 }
   | eq_exp Eq at_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp EqEq at_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp ExclEq at_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp GtEq at_exp
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp GtEqUnderS at_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp GtEqUnderU at_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp Gt at_exp
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp GtUnderS at_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp LtEq at_exp
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp LtEqUnderS at_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp Lt at_exp
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp LtUnderS at_exp
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp LtUnderSi at_exp
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
-  | eq_exp IN at_exp
-    { eloc (E_app_infix($1,Id_aux(Id("In"), locn 2 2), $3)) }
+  | eq_exp LtUnderU at_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp ColonEq at_exp
     { eloc (E_assign($1,$3)) }
 
@@ -632,6 +658,32 @@ eq_right_atomic_exp:
   | at_right_atomic_exp
     { $1 }
   | eq_exp Eq at_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp EqEq at_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp ExclEq at_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp GtEq at_right_atomic_exp
+    { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp GtEqUnderS at_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp GtEqUnderU at_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp Gt at_right_atomic_exp
+    { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp GtUnderS at_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp LtEq at_right_atomic_exp
+    { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp LtEqUnderS at_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp Lt at_right_atomic_exp
+    { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp LtUnderS at_right_atomic_exp
+    { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp LtUnderSi at_right_atomic_exp
+    { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp LtUnderU at_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp ColonEq at_right_atomic_exp
     { eloc (E_assign($1,$3)) }
@@ -643,9 +695,6 @@ and_exp:
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp AmpAmp and_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
-  | eq_exp AND and_exp
-    { eloc (E_app_infix($1,Id_aux(Id("And"), locn 2 2), $3)) }
-
 
 and_right_atomic_exp:
   | eq_right_atomic_exp
@@ -654,8 +703,6 @@ and_right_atomic_exp:
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp AmpAmp and_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
-  | eq_exp AND and_right_atomic_exp
-    { eloc (E_app_infix($1,Id_aux(Id("And"), locn 2 2), $3)) }
 
 or_exp:
   | and_exp
@@ -664,9 +711,6 @@ or_exp:
     { eloc (E_app_infix($1,Id_aux(Id("|"), locn 2 2), $3)) }
   | and_exp BarBar or_exp
     { eloc (E_app_infix($1,Id_aux(Id("||"), locn 2 2), $3)) }
-  | and_exp OR or_exp
-    { eloc (E_app_infix($1,Id_aux(Id("OR"), locn 2 2), $3)) } 
-
 
 or_right_atomic_exp:
   | and_right_atomic_exp
@@ -675,8 +719,6 @@ or_right_atomic_exp:
     { eloc (E_app_infix($1,Id_aux(Id("|"), locn 2 2), $3)) }
   | and_exp BarBar or_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id("||"), locn 2 2), $3)) }
-  | and_exp OR or_right_atomic_exp
-    { eloc (E_app_infix($1,Id_aux(Id("OR"), locn 2 2), $3)) } 
 
 exp:
   | or_exp

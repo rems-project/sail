@@ -97,17 +97,6 @@ and nexp =
 
 
 type 
-efct_aux =  (* effect *)
-   Effect_rreg (* read register *)
- | Effect_wreg (* write register *)
- | Effect_rmem (* read memory *)
- | Effect_wmem (* write memory *)
- | Effect_undef (* undefined-instruction exception *)
- | Effect_unspec (* unspecified values *)
- | Effect_nondet (* nondeterminism from intra-instruction parallelism *)
-
-
-type 
 kinded_id_aux =  (* optionally kind-annotated identifier *)
    KOpt_none of id (* identifier *)
  | KOpt_kind of kind * id (* kind-annotated variable *)
@@ -122,8 +111,14 @@ type
 
 
 type 
-efct = 
-   Effect_aux of efct_aux * l
+efct_aux =  (* effect *)
+   Effect_rreg (* read register *)
+ | Effect_wreg (* write register *)
+ | Effect_rmem (* read memory *)
+ | Effect_wmem (* write memory *)
+ | Effect_undef (* undefined-instruction exception *)
+ | Effect_unspec (* unspecified values *)
+ | Effect_nondet (* nondeterminism from intra-instruction parallelism *)
 
 
 type 
@@ -134,6 +129,17 @@ kinded_id =
 type 
 'a nexp_constraint = 
    NC_aux of 'a nexp_constraint_aux * 'a annot
+
+
+type 
+efct = 
+   Effect_aux of efct_aux * l
+
+
+type 
+'a quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
+   QI_id of kinded_id (* An optionally kinded identifier *)
+ | QI_const of 'a nexp_constraint (* A constraint for this type *)
 
 
 type 
@@ -150,9 +156,8 @@ order_aux =  (* vector order specifications, of kind $_$ *)
 
 
 type 
-quant_item =  (* Either a kinded identifier or a nexp constraint for a typquant *)
-   QI_id of kinded_id (* An optionally kinded identifier *)
- | QI_const of 'a nexp_constraint (* A constraint for this type *)
+'a quant_item = 
+   QI_aux of 'a quant_item_aux * 'a annot
 
 
 type 
@@ -167,7 +172,7 @@ order =
 
 type 
 'a typquant_aux =  (* type quantifiers and constraints *)
-   TypQ_tq of (quant_item) list
+   TypQ_tq of ('a quant_item) list
  | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
@@ -314,15 +319,14 @@ and 'a pexp =
 
 
 type 
-'a effects_opt_aux =  (* Optional effect annotation for functions *)
-   Effects_opt_pure (* sugar for empty effect set *)
- | Effects_opt_effects of effects
+naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
+   Name_sect_none
+ | Name_sect_some of string
 
 
 type 
-'a tannot_opt_aux =  (* Optional type annotation for functions *)
-   Typ_annot_opt_none
- | Typ_annot_opt_some of 'a typquant * typ
+'a funcl_aux =  (* Function clause *)
+   FCL_Funcl of id * 'a pat * 'a exp
 
 
 type 
@@ -332,39 +336,14 @@ rec_opt_aux =  (* Optional recursive annotation for functions *)
 
 
 type 
-'a funcl_aux =  (* Function clause *)
-   FCL_Funcl of id * 'a pat * 'a exp
+'a tannot_opt_aux =  (* Optional type annotation for functions *)
+   Typ_annot_opt_some of 'a typquant * typ
 
 
 type 
-naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
-   Name_sect_none
- | Name_sect_some of string
-
-
-type 
-'a effects_opt = 
-   Effects_opt_aux of 'a effects_opt_aux * 'a annot
-
-
-type 
-'a tannot_opt = 
-   Typ_annot_opt_aux of 'a tannot_opt_aux * 'a annot
-
-
-type 
-rec_opt = 
-   Rec_aux of rec_opt_aux * l
-
-
-type 
-'a funcl = 
-   FCL_aux of 'a funcl_aux * 'a annot
-
-
-type 
-naming_scheme_opt = 
-   Name_sect_aux of naming_scheme_opt_aux * l
+'a effects_opt_aux =  (* Optional effect annotation for functions *)
+   Effects_opt_pure (* sugar for empty effect set *)
+ | Effects_opt_effects of effects
 
 
 type 
@@ -378,8 +357,42 @@ and index_range =
 
 
 type 
+naming_scheme_opt = 
+   Name_sect_aux of naming_scheme_opt_aux * l
+
+
+type 
+'a funcl = 
+   FCL_aux of 'a funcl_aux * 'a annot
+
+
+type 
+rec_opt = 
+   Rec_aux of rec_opt_aux * l
+
+
+type 
+'a tannot_opt = 
+   Typ_annot_opt_aux of 'a tannot_opt_aux * 'a annot
+
+
+type 
+'a effects_opt = 
+   Effects_opt_aux of 'a effects_opt_aux * 'a annot
+
+
+type 
 'a val_spec_aux =  (* Value type specification *)
    VS_val_spec of 'a typschm * id
+
+
+type 
+'a type_def_aux =  (* Type definition body *)
+   TD_abbrev of id * naming_scheme_opt * 'a typschm (* type abbreviation *)
+ | TD_record of id * naming_scheme_opt * 'a typquant * ((typ * id)) list * bool (* struct type definition *)
+ | TD_variant of id * naming_scheme_opt * 'a typquant * ((typ * id)) list * bool (* union type definition *)
+ | TD_enum of id * naming_scheme_opt * (id) list * bool (* enumeration type definition *)
+ | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
 
 
 type 
@@ -394,17 +407,13 @@ type
 
 
 type 
-'a type_def_aux =  (* Type definition body *)
-   TD_abbrev of id * naming_scheme_opt * 'a typschm (* type abbreviation *)
- | TD_record of id * naming_scheme_opt * 'a typquant * ((typ * id)) list * bool (* struct type definition *)
- | TD_variant of id * naming_scheme_opt * 'a typquant * ((typ * id)) list * bool (* union type definition *)
- | TD_enum of id * naming_scheme_opt * (id) list * bool (* enumeration type definition *)
- | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
+'a val_spec = 
+   VS_aux of 'a val_spec_aux * 'a annot
 
 
 type 
-'a val_spec = 
-   VS_aux of 'a val_spec_aux * 'a annot
+'a type_def = 
+   TD_aux of 'a type_def_aux * 'a annot
 
 
 type 
@@ -415,11 +424,6 @@ type
 type 
 'a default_typing_spec = 
    DT_aux of 'a default_typing_spec_aux * 'a annot
-
-
-type 
-'a type_def = 
-   TD_aux of 'a type_def_aux * 'a annot
 
 
 type 

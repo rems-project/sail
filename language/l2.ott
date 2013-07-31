@@ -439,6 +439,7 @@ kinded_id :: 'KOpt_' ::=
 
 quant_item :: 'QI_' ::=
   {{ com Either a kinded identifier or a nexp constraint for a typquant }}
+  {{ aux _ annot }} {{ auxparam 'a }}
   | kinded_id 	  	 	       	      :: :: id {{ com An optionally kinded identifier }}
   | nexp_constraint			      :: :: const {{ com A constraint for this type }}
 
@@ -852,7 +853,8 @@ grammar
 tannot_opt :: 'Typ_annot_opt_' ::=
   {{ com Optional type annotation for functions}}
   {{ aux _ annot }} {{ auxparam 'a }}
-  |                                             :: :: none
+%  |                                             :: :: none
+% Currently not optional; one issue, do the type parameters apply over the argument types, or should this be the type of the function and not just the return
   | typquant typ                                :: :: some 
 
 rec_opt :: 'Rec_' ::=
