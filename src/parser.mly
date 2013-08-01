@@ -583,12 +583,21 @@ shift_exp:
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | shift_exp LtLt plus_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | shift_exp LtLtLt plus_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
 
 shift_right_atomic_exp:
   | plus_right_atomic_exp
     { $1 }
   | shift_exp GtGt plus_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | shift_exp GtGtGt plus_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | shift_exp LtLt plus_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | shift_exp LtLtLt plus_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+
 
 cons_exp:
   | shift_exp
