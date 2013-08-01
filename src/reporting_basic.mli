@@ -83,7 +83,7 @@ type error =
 
   | Err_syntax of Lexing.position * string
   | Err_syntax_locn of Parse_ast.l * string
-  | Err_lex of Lexing.position * char
+  | Err_lex of Lexing.position * string
   | Err_type of Parse_ast.l * string
   
 exception Fatal_error of error

@@ -12,40 +12,6 @@ type 'a annot = l * 'a
 
 exception Parse_error_locn of l * string
 
-type ml_comment = 
-  | Chars of string
-  | Comment of ml_comment list
-
-type lex_skip =
-  | Com of ml_comment
-  | Ws of string
-  | Nl
-
-type lex_skips = lex_skip list option
-
-let pp_lex_skips ppf sk = 
-  match sk with
-    | None -> ()
-    | Some(sks) ->
-        List.iter
-          (fun sk ->
-             match sk with
-               | Com(ml_comment) ->
-                   (* TODO: fix? *)
-                   Format.fprintf ppf "(**)"
-               | Ws(r) ->
-                   Format.fprintf ppf "%s" r (*(Ulib.Text.to_string r)*)
-               | Nl -> Format.fprintf ppf "\\n")
-          sks
-
-let combine_lex_skips s1 s2 =
-  match (s1,s2) with
-    | (None,_) -> s2
-    | (_,None) -> s1
-    | (Some(s1),Some(s2)) -> Some(s2@s1)
-
-type terminal = lex_skips
-
 
 type x = text (* identifier *)
 type ix = text (* infix identifier *)

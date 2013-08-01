@@ -144,7 +144,7 @@ type error =
   | Err_todo of Parse_ast.l * string
   | Err_syntax of Lexing.position * string
   | Err_syntax_locn of Parse_ast.l * string
-  | Err_lex of Lexing.position * char
+  | Err_lex of Lexing.position * string
   | Err_type of Parse_ast.l * string
 
 let dest_err = function
@@ -153,7 +153,7 @@ let dest_err = function
   | Err_todo (l, m) -> ("Todo" ^ m, false, Loc l, "")
   | Err_syntax (p, m) -> ("Syntax error", false, Pos p, m)
   | Err_syntax_locn (l, m) -> ("Syntax error", false, Loc l, m)
-  | Err_lex (p, c) -> ("Lexical error", false, Pos p, "unknown character "^(String.make 1 c))
+  | Err_lex (p, s) -> ("Lexical error", false, Pos p, s)
   | Err_type (l, m) -> ("Type error", false, Loc l, m)
 
 exception Fatal_error of error

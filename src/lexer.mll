@@ -47,7 +47,7 @@
 {
 open Parser
 module M = Map.Make(String)
-exception LexError of char * Lexing.position
+exception LexError of string * Lexing.position
 
 let r = fun s -> s (* Ulib.Text.of_latin1 *)
 (* Available as Scanf.unescaped since OCaml 4.0 but 3.12 is still common *)
@@ -112,14 +112,10 @@ let alphanum = letter|digit
 let startident = letter|'_'
 let ident = alphanum|['_''\'']
 let oper_char = ['!''$''%''&''*''+''-''.''/'':''<''=''>''?''@''^''|''~']
-let safe_com1 = [^'*''('')''\n']
-let safe_com2 = [^'*''(''\n']
-let com_help = "("*safe_com2 | "*"*"("+safe_com2 | "*"*safe_com1
-let com_body = com_help*"*"*
 let escape_sequence = ('\\' ['\\''\"''\'''n''t''b''r']) | ('\\' digit digit digit) | ('\\' 'x' hexdigit hexdigit)
 
 rule token = parse
-  | ws as i
+  | ws
     { token lexbuf }
   | "\n"
     { Lexing.new_line lexbuf;
@@ -202,9 +198,8 @@ rule token = parse
   | "2^"				{ (TwoCarrot(r"2^")) }
 
 
-  | "--"
-    { comment lexbuf;
-      token lexbuf }
+  | "(*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }
+  | "*)"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
 
   | startident ident* as i              { if M.mem i kw_table then
                                             (M.find i kw_table) ()
@@ -272,17 +267,22 @@ rule token = parse
   | '"'                                 { (String(
                                            string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf)) }
   | eof                                 { Eof }
-  | _  as c                             { raise (LexError(c, Lexing.lexeme_start_p lexbuf)) }
+  | _  as c                             { raise (LexError(
+                                          Printf.sprintf "Unexpected character: %c" c,
+                                          Lexing.lexeme_start_p lexbuf)) }
 
 
-and comment = parse
-  | (com_body "("* as i) "--"           { let c1 = comment lexbuf in
-                                          let c2 = comment lexbuf in
-                                            Parse_ast.Chars(r i) :: Parse_ast.Comment(c1) :: c2}
-  | (com_body as i) "\n"                { Lexing.new_line lexbuf;
-                                          [Parse_ast.Chars(r i)] }
-  | _  as c                             { raise (LexError(c, Lexing.lexeme_start_p lexbuf)) }
-  | eof                                 { [] }
+and comment pos depth = parse
+  | "(*"                                { comment pos (depth+1) lexbuf }
+  | "*)"                                { if depth = 0 then ()
+                                          else if depth > 0 then comment pos (depth-1) lexbuf
+                                          else assert false }
+  | "\n"                                { Lexing.new_line lexbuf;
+                                          comment pos depth lexbuf }
+  | '"'                                 { ignore(string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf);
+                                          comment pos depth lexbuf }
+  | _                                   { comment pos depth lexbuf }
+  | eof                                 { raise (LexError("Unbalanced comment", pos)) }
 
 and string pos b = parse
   | ([^'"''\n''\\']*'\n' as i)          { Lexing.new_line lexbuf;

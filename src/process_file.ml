@@ -66,8 +66,8 @@ let parse_file (f : string) : Parse_ast.defs =
            raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "")))
       | Parse_ast.Parse_error_locn(l,m) ->
           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
-      | Lexer.LexError(c,p) ->
-          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, c)))
+      | Lexer.LexError(s,p) ->
+          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
 
 (* type instances = Types.instance list Types.Pfmap.t
 
