@@ -124,6 +124,10 @@ let star = "*"
 %token Forall Function_ If_ In IN Let_ Member Nat Order Pure Rec Register
 %token Scattered Struct Switch Then True Type TYPE Typedef Union With Val
 
+/* Avoid shift/reduce conflict - see right_atomic_exp rule */
+%nonassoc Then
+%nonassoc Else
+
 %token AND Div_ EOR Mod OR Quot Rem
 
 %token Bar Colon Comma Dot Eof Minus Semi Under
@@ -177,12 +181,12 @@ id:
     { idl (DeIid($2)) }
   | LparenColon Carrot Rparen
     { idl (DeIid($2)) }
-  | LparenColon Div Rparen 
+  | LparenColon Div Rparen
     { idl (DeIid($2)) }
   | LparenColon Eq Rparen
     { Id_aux(DeIid($2),loc ()) }
   | LparenColon Excl Lparen
-    { idl (DeIid($2)) } 
+    { idl (DeIid($2)) }
   | LparenColon Gt Lparen
     { idl (DeIid($2)) }
   | LparenColon Lt Lparen
@@ -493,6 +497,8 @@ app_exp:
 right_atomic_exp:
   | If_ exp Then exp Else exp
     { eloc (E_if($2,$4,$6)) }
+  | If_ exp Then exp
+    { eloc (E_if($2,$4, eloc (E_lit(lloc L_unit)))) }
   | letbind In exp
     { eloc (E_let($1,$3)) }
 
@@ -566,7 +572,7 @@ plus_right_atomic_exp:
   | plus_exp Plus star_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | plus_exp Minus star_right_atomic_exp
-    { eloc (E_app_infix($1,Id_aux(Id("-"), locn 2 2), $3)) } 
+    { eloc (E_app_infix($1,Id_aux(Id("-"), locn 2 2), $3)) }
 
 shift_exp:
   | plus_exp
@@ -639,6 +645,8 @@ eq_exp:
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp GtUnderS at_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp GtUnderU at_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp LtEq at_exp
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp LtEqUnderS at_exp
@@ -672,6 +680,8 @@ eq_right_atomic_exp:
   | eq_exp Gt at_right_atomic_exp
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp GtUnderS at_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | eq_exp GtUnderU at_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp LtEq at_right_atomic_exp
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
