@@ -44,49 +44,11 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (**************************************************************************)
 
-(* open Typed_ast *)
+open Format
+val pp_str : formatter -> string -> unit
 
-val parse_file : string -> Parse_ast.defs
-val convert_ast : Parse_ast.defs -> Type_internal.tannot Ast.defs
+val lst : ('a, formatter, unit) format -> (formatter -> 'b -> unit) -> formatter -> 'b list -> unit
 
-(* type instances = Types.instance list Types.Pfmap.t
+val opt : (formatter -> 'a -> unit) -> formatter -> 'a option -> unit
 
-val check_ast_as_module :
-  Targetset.t ->
-  Name.t list ->
-  (Types.type_defs * instances) * env ->
-  Ulib.Text.t ->
-  Ast.defs * Ast.lex_skips ->
-  (Types.type_defs * instances * instances) * env *
-  (def list * Ast.lex_skips)
-
-val check_ast :
-  Targetset.t ->
-  Name.t list ->
-  (Types.type_defs * instances) * env ->
-  Ast.defs * Ast.lex_skips ->
-  (Types.type_defs * instances * instances) * env *
-  (def list * Ast.lex_skips)
-
-val output :
-  string ->                           (* The path to the library *)
-  string ->                           (* Isabelle Theory to be included *)
-  target option ->                    (* Backend name (None for the identity backend) *)
-  Typed_ast.var_avoid_f ->
-  (Types.type_defs * instances) -> (* The full environment built after all typechecking, and transforming *)
-  checked_module list ->              (* The typechecked modules *)
-  Ulib.Text.t list ref ->               (* alldoc accumulator *)
-  Ulib.Text.t list ref ->               (* alldoc-inc accumulator *)
-  Ulib.Text.t list ref ->               (* alldoc-use_inc accumulator *)
-  unit
-
-val output_alldoc : string -> string -> Ulib.Text.t list ref -> Ulib.Text.t list ref -> Ulib.Text.t list ref -> unit
-
-(** [always_replace_files] determines whether Lem only updates modified files.
-    If it is set to [true], all output files are written, regardless of whether the
-    files existed before. If it is set to [false] and an output file already exists,
-    the output file is only updated, if its content really changes. For some
-    backends like OCaml, HOL, Isabelle, this is benefitial, since it prevents them
-    from reprocessing these unchanged files. *)
-val always_replace_files : bool ref
-*)
+val pp_to_string : (formatter -> 'a) -> string

@@ -44,7 +44,7 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (**************************************************************************)
 
-(* XXX: for debugging the developing code: open Coq_ast *)
+open Type_internal
 
 (* let r = Ulib.Text.of_latin1 *)
 
@@ -68,6 +68,9 @@ let parse_file (f : string) : Parse_ast.defs =
           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
       | Lexer.LexError(s,p) ->
           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
+
+let convert_ast (defs : Parse_ast.defs) : Type_internal.tannot Ast.defs =
+  Initial_check.to_ast Nameset.empty Kindmap.empty Typmap.empty [] defs
 
 (* type instances = Types.instance list Types.Pfmap.t
 
