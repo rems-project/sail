@@ -70,7 +70,7 @@ let parse_file (f : string) : Parse_ast.defs =
           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
 
 let convert_ast (defs : Parse_ast.defs) : Type_internal.tannot Ast.defs =
-  Initial_check.to_ast Nameset.empty Kindmap.empty Typmap.empty [] defs
+  Initial_check.to_ast Nameset.empty Envmap.empty Envmap.empty defs
 
 (* type instances = Types.instance list Types.Pfmap.t
 

@@ -1,9 +1,19 @@
-module Kindmap : Finite_map.Fmap with type k = string
-module Typmap : Finite_map.Fmap with type k = string
+module Envmap : Finite_map.Fmap with type k = string
 module Nameset : sig
   include Set.S with type elt = string
   val pp : Format.formatter -> t -> unit
 end
+
+
+type kind = { mutable k : k_aux }
+and k_aux =
+  | K_Typ
+  | K_Nat
+  | K_Ord
+  | K_Efct
+  | K_Val
+  | K_Lam of kind list * kind
+  | K_infer
 
 type t_uvar
 type n_uvar

@@ -1,4 +1,4 @@
-module Kindmap = Finite_map.Fmap_map(String)
+module Envmap = Finite_map.Fmap_map(String)
 module Nameset' = Set.Make(String)
 module Nameset = struct
   include Nameset'
@@ -8,7 +8,15 @@ module Nameset = struct
       (Nameset'.elements nameset)
 end
 
-module Typmap = Finite_map.Fmap_map(String)
+type kind = { mutable k : k_aux }
+and k_aux =
+  | K_Typ
+  | K_Nat
+  | K_Ord
+  | K_Efct
+  | K_Val
+  | K_Lam of kind list * kind
+  | K_infer
 
 type t = { mutable t : t_aux }
 and t_aux =
@@ -55,3 +63,4 @@ type nexp_range =
   | In of Parse_ast.l * nexp * nexp list
 
 type tannot = (t * nexp_range list) option
+

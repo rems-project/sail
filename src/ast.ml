@@ -64,7 +64,7 @@ kinded_id_aux =  (* optionally kind-annotated identifier *)
 
 
 type 
-'a nexp_constraint_aux =  (* constraint over kind $_$ *)
+nexp_constraint_aux =  (* constraint over kind $_$ *)
    NC_fixed of nexp * nexp
  | NC_bounded_ge of nexp * nexp
  | NC_bounded_le of nexp * nexp
@@ -88,8 +88,8 @@ kinded_id =
 
 
 type 
-'a nexp_constraint = 
-   NC_aux of 'a nexp_constraint_aux * 'a annot
+nexp_constraint = 
+   NC_aux of nexp_constraint_aux * l
 
 
 type 
@@ -98,9 +98,9 @@ efct =
 
 
 type 
-'a quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
+quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
    QI_id of kinded_id (* An optionally kinded identifier *)
- | QI_const of 'a nexp_constraint (* A constraint for this type *)
+ | QI_const of nexp_constraint (* A constraint for this type *)
 
 
 type 
@@ -117,8 +117,8 @@ order_aux =  (* vector order specifications, of kind $_$ *)
 
 
 type 
-'a quant_item = 
-   QI_aux of 'a quant_item_aux * 'a annot
+quant_item = 
+   QI_aux of quant_item_aux * l
 
 
 type 
@@ -132,8 +132,8 @@ order =
 
 
 type 
-'a typquant_aux =  (* type quantifiers and constraints *)
-   TypQ_tq of ('a quant_item) list
+typquant_aux =  (* type quantifiers and constraints *)
+   TypQ_tq of (quant_item) list
  | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
@@ -172,8 +172,8 @@ and typ_arg =
 
 
 type 
-'a typquant = 
-   TypQ_aux of 'a typquant_aux * 'a annot
+typquant = 
+   TypQ_aux of typquant_aux * l
 
 
 type 
@@ -182,8 +182,8 @@ lit =
 
 
 type 
-'a typschm_aux =  (* type scheme *)
-   TypSchm_ts of 'a typquant * typ
+typschm_aux =  (* type scheme *)
+   TypSchm_ts of typquant * typ
 
 
 type 
@@ -212,13 +212,13 @@ and 'a fpat =
 
 
 type 
-'a typschm = 
-   TypSchm_aux of 'a typschm_aux * 'a annot
+typschm = 
+   TypSchm_aux of typschm_aux * l
 
 
 type 
 'a letbind_aux =  (* Let binding *)
-   LB_val_explicit of 'a typschm * 'a pat * 'a exp (* value binding, explicit type ('a pat must be total) *)
+   LB_val_explicit of typschm * 'a pat * 'a exp (* value binding, explicit type ('a pat must be total) *)
  | LB_val_implicit of 'a pat * 'a exp (* value binding, implicit type ('a pat must be total) *)
 
 and 'a letbind = 
@@ -298,7 +298,7 @@ rec_opt_aux =  (* Optional recursive annotation for functions *)
 
 type 
 'a tannot_opt_aux =  (* Optional type annotation for functions *)
-   Typ_annot_opt_some of 'a typquant * typ
+   Typ_annot_opt_some of typquant * typ
 
 
 type 
@@ -344,14 +344,14 @@ type
 
 type 
 'a val_spec_aux =  (* Value type specification *)
-   VS_val_spec of 'a typschm * id
+   VS_val_spec of typschm * id
 
 
 type 
 'a type_def_aux =  (* Type definition body *)
-   TD_abbrev of id * naming_scheme_opt * 'a typschm (* type abbreviation *)
- | TD_record of id * naming_scheme_opt * 'a typquant * ((typ * id)) list * bool (* struct type definition *)
- | TD_variant of id * naming_scheme_opt * 'a typquant * ((typ * id)) list * bool (* union type definition *)
+   TD_abbrev of id * naming_scheme_opt * typschm (* type abbreviation *)
+ | TD_record of id * naming_scheme_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
+ | TD_variant of id * naming_scheme_opt * typquant * ((typ * id)) list * bool (* union type definition *)
  | TD_enum of id * naming_scheme_opt * (id) list * bool (* enumeration type definition *)
  | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
 
@@ -364,7 +364,7 @@ type
 type 
 'a default_typing_spec_aux =  (* Default kinding or typing assumption *)
    DT_kind of base_kind * id
- | DT_typ of 'a typschm * id
+ | DT_typ of typschm * id
 
 
 type 
@@ -397,14 +397,14 @@ type
  | DEF_reg_dec of typ * id (* register declaration *)
  | DEF_scattered_function of rec_opt * 'a tannot_opt * 'a effects_opt * id (* scattered function definition header *)
  | DEF_scattered_funcl of 'a funcl (* scattered function definition clause *)
- | DEF_scattered_variant of id * naming_scheme_opt * 'a typquant (* scattered union definition header *)
+ | DEF_scattered_variant of id * naming_scheme_opt * typquant (* scattered union definition header *)
  | DEF_scattered_unioncl of id * typ * id (* scattered union definition member *)
  | DEF_scattered_end of id (* scattered definition end *)
 
 
 type 
 'a ctor_def_aux =  (* Datatype constructor definition clause *)
-   CT_ct of id * 'a typschm
+   CT_ct of id * typschm
 
 
 type 

@@ -97,6 +97,9 @@ val err_general : Parse_ast.l -> string -> exn
 (** [err_unreachable l m] is an abreviatiation for [Fatal_error (Err_unreachable (b, l, m))] *)
 val err_unreachable : Parse_ast.l -> string -> exn
 
+(** [err_typ l m] is an abreviatiation for [Fatal_error (Err_type (l, m))] *)
+val err_typ : Parse_ast.l -> string -> exn
+
 (** Report error should only be used by main to print the error in the end. Everywhere else,
     raising a [Fatal_error] exception is recommended. *)
 val report_error : error -> 'a

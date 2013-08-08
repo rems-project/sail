@@ -162,7 +162,7 @@ exception Fatal_error of error
 let err_todo l m = Fatal_error (Err_todo (l, m))
 let err_unreachable l m = Fatal_error (Err_unreachable (l, m))
 let err_general l m = Fatal_error (Err_general (l, m))
-
+let err_typ l m = Fatal_error (Err_type (l,m))
 
 let report_error e = 
   let (m1, verb_pos, pos_l, m2) = dest_err e in

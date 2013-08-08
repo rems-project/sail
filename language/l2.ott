@@ -375,7 +375,7 @@ grammar
 
 nexp_constraint :: 'NC_' ::=
   {{ com constraint over kind $[[Nat]]$ }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
   | nexp = nexp'                                :: :: fixed
   | nexp >= nexp'                               :: :: bounded_ge
   | nexp '<=' nexp'                             :: :: bounded_le
@@ -392,20 +392,20 @@ kinded_id :: 'KOpt_' ::=
 
 quant_item :: 'QI_' ::=
   {{ com Either a kinded identifier or a nexp constraint for a typquant }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
   | kinded_id 	  	 	       	      :: :: id {{ com An optionally kinded identifier }}
   | nexp_constraint			      :: :: const {{ com A constraint for this type }}
 
 typquant :: 'TypQ_' ::= 
   {{ com type quantifiers and constraints}}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
   | forall quant_item1 , ... , quant_itemn . :: :: tq {{ texlong }}
 % WHY ARE CONSTRAINTS HERE AND NOT IN THE KIND LANGUAGE
   |                           ::  ::  no_forall     {{ com sugar, omitting quantifier and constraints }}
 
 typschm :: 'TypSchm_' ::=
   {{ com type scheme  }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
   |  typquant typ                                                       :: :: ts
 
 
