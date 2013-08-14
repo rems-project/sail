@@ -657,7 +657,7 @@ exp :: 'E_' ::=
 
   | { fexps }                                         :: :: record
     {{ com struct }}
-  | { exp with fexps }                                :: :: record_update
+  | { exp with exp1 ; .. ; expn }                                :: :: record_update
     {{ com functional update of struct }}
   | exp . id                                          :: :: field
     {{ com field projection from struct  }}

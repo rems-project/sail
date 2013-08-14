@@ -13,7 +13,25 @@ let id_to_string (Id_aux(id,l)) =
 (*placeholder, write in type_internal*)
 let kind_to_string _ = " kind pp place holder "
 
-let typquant_to_quantids k_env typquant = []
+let typquant_to_quantkinds k_env typquant = 
+  match typquant with
+  | TypQ_aux(tq,_) ->
+    (match tq with
+    | TypQ_no_forall -> []
+    | TypQ_tq(qlist) ->
+      List.fold_right
+        (fun (QI_aux(qi,_)) rst ->
+          match qi with
+          | QI_const _ -> rst
+          | QI_id(ki) -> begin
+            match ki with 
+            | KOpt_aux(KOpt_none(id),l) | KOpt_aux(KOpt_kind(_,id),l) -> 
+              (match Envmap.apply k_env (id_to_string id) with
+              | Some(typ) -> typ::rst
+              | None -> raise (Reporting_basic.err_unreachable l "Envmap didn't get an entry during typschm processing"))
+          end)
+        qlist
+        [])
 
 let typ_error l msg opt_id opt_kind =
   raise (Reporting_basic.err_typ 
@@ -67,13 +85,13 @@ let rec to_ast_typ (k_env : kind Envmap.t) (t: Parse_ast.atyp) : Ast.typ =
                                                            (to_ast_typ k_env ret),
                                                            (to_ast_effects k_env efct))
               | Parse_ast.ATyp_tup(typs) -> Typ_tup( List.map (to_ast_typ k_env) typs)
-              | Parse_ast.ATyp_app(pid,typs) -> 
-                let id = to_ast_id pid in 
-                let k = Envmap.apply k_env (id_to_string id) in
-                (match k with 
-                | Some({k = K_Lam(args,t)}) -> Typ_app(id,(List.map2 (fun k a -> (to_ast_typ_arg k_env k a)) args typs))
-                | None -> typ_error l "Required a type constructor, encountered an unbound variable" (Some id) None
-                | _ -> typ_error l "Required a type constructor, encountered a base kind variable" (Some id) None)
+              | Parse_ast.ATyp_app(pid,typs) ->
+                  let id = to_ast_id pid in 
+                  let k = Envmap.apply k_env (id_to_string id) in
+                  (match k with 
+                  | Some({k = K_Lam(args,t)}) -> Typ_app(id,(List.map2 (fun k a -> (to_ast_typ_arg k_env k a)) args typs))
+                  | None -> typ_error l "Required a type constructor, encountered an unbound variable" (Some id) None
+                  | _ -> typ_error l "Required a type constructor, encountered a base kind variable" (Some id) None)
               | _ -> typ_error l "Required an item of kind Type, encountered an illegal form for this kind" None None
     ), l)
 
@@ -242,6 +260,120 @@ let to_ast_typschm (k_env : kind Envmap.t) (tschm : Parse_ast.typschm) : Ast.typ
       let typ = to_ast_typ k_env t in
       TypSchm_aux(TypSchm_ts(tq,typ),l))
 
+let to_ast_lit (Parse_ast.L_aux(lit,l)) : lit = 
+  L_aux(
+    (match lit with
+    | Parse_ast.L_unit -> L_unit
+    | Parse_ast.L_zero -> L_zero
+    | Parse_ast.L_one -> L_one
+    | Parse_ast.L_true -> L_true
+    | Parse_ast.L_false -> L_false
+    | Parse_ast.L_num(i) -> L_num(i)
+    | Parse_ast.L_hex(h) -> L_hex(h)
+    | Parse_ast.L_bin(b) -> L_bin(b)
+    | Parse_ast.L_string(s) -> L_string(s))
+      ,l)
+
+let rec to_ast_pat (k_env : kind Envmap.t) (Parse_ast.P_aux(pat,l) : Parse_ast.pat) : tannot pat = 
+  P_aux(
+    (match pat with 
+    | Parse_ast.P_lit(lit) -> P_lit(to_ast_lit lit)
+    | Parse_ast.P_wild -> P_wild
+    | Parse_ast.P_as(pat,id) -> P_as(to_ast_pat k_env pat,to_ast_id id)
+    | Parse_ast.P_typ(typ,pat) -> P_typ(to_ast_typ k_env typ,to_ast_pat k_env pat)
+    | Parse_ast.P_id(id) -> P_id(to_ast_id id)
+    | Parse_ast.P_app(id,pats) -> P_app(to_ast_id id, List.map (to_ast_pat k_env) pats)
+    | Parse_ast.P_record(fpats,_) -> P_record(List.map 
+                                                (fun (Parse_ast.FP_aux(Parse_ast.FP_Fpat(id,fp),l)) -> FP_aux(FP_Fpat(to_ast_id id, to_ast_pat k_env fp),(l,None)))
+                                                fpats, false)
+    | Parse_ast.P_vector(pats) -> P_vector(List.map (to_ast_pat k_env) pats)
+    | Parse_ast.P_vector_indexed(ipats) -> P_vector_indexed(List.map (fun (i,pat) -> i,to_ast_pat k_env pat) ipats)
+    | Parse_ast.P_vector_concat(pats) -> P_vector_concat(List.map (to_ast_pat k_env) pats)
+    | Parse_ast.P_tup(pats) -> P_tup(List.map (to_ast_pat k_env) pats)
+    | Parse_ast.P_list(pats) -> P_list(List.map (to_ast_pat k_env) pats)
+    ), (l,None))
+
+(*
+
+type 
+exp_aux =  (* Expression *)
+   E_block of (exp) list (* block (parsing conflict with structs?) *)
+ | E_id of id (* identifier *)
+ | E_lit of lit (* literal constant *)
+ | E_cast of atyp * exp (* cast *)
+ | E_app of exp * (exp) list (* function application *)
+ | E_app_infix of exp * id * exp (* infix function application *)
+ | E_tuple of (exp) list (* tuple *)
+ | E_if of exp * exp * exp (* conditional *)
+ | E_vector of (exp) list (* vector (indexed from 0) *)
+ | E_vector_indexed of ((int * exp)) list (* vector (indexed consecutively) *)
+ | E_vector_access of exp * exp (* vector access *)
+ | E_vector_subrange of exp * exp * exp (* subvector extraction *)
+ | E_vector_update of exp * exp * exp (* vector functional update *)
+ | E_vector_update_subrange of exp * exp * exp * exp (* vector subrange update (with vector) *)
+ | E_list of (exp) list (* list *)
+ | E_cons of exp * exp (* cons *)
+ | E_record of fexps (* struct *) (*Not generated by parser, must be disambiguated from types *)
+ | E_record_update of exp * fexps (* functional update of struct *)
+ | E_field of exp * id (* field projection from struct *)
+ | E_case of exp * (pexp) list (* pattern matching *)
+ | E_let of letbind * exp (* let expression *)
+ | E_assign of exp * exp (* imperative assignment *) (*left side not disambiguated to lexp by parser*)
+
+__ ast __
+
+and 'a exp_aux =  (* Expression *)
+   E_block of ('a exp) list (* block (parsing conflict with structs?) *)
+ | E_id of id (* identifier *)
+ | E_lit of lit (* literal constant *)
+ | E_cast of typ * 'a exp (* cast *)
+ | E_app of 'a exp * ('a exp) list (* function application *)
+ | E_app_infix of 'a exp * id * 'a exp (* infix function application *)
+ | E_tuple of ('a exp) list (* tuple *)
+ | E_if of 'a exp * 'a exp * 'a exp (* conditional *)
+ | E_vector of ('a exp) list (* vector (indexed from 0) *)
+ | E_vector_indexed of ((int * 'a exp)) list (* vector (indexed consecutively) *)
+ | E_vector_access of 'a exp * 'a exp (* vector access *)
+ | E_vector_subrange of 'a exp * 'a exp * 'a exp (* subvector extraction *)
+ | E_vector_update of 'a exp * 'a exp * 'a exp (* vector functional update *)
+ | E_vector_update_subrange of 'a exp * 'a exp * 'a exp * 'a exp (* vector subrange update (with vector) *)
+ | E_list of ('a exp) list (* list *)
+ | E_cons of 'a exp * 'a exp (* cons *)
+ | E_record of 'a fexps (* struct *)
+ | E_record_update of 'a exp * 'a fexps (* functional update of struct *)
+ | E_field of 'a exp * id (* field projection from struct *)
+ | E_case of 'a exp * ('a pexp) list (* pattern matching *)
+ | E_let of 'a letbind * 'a exp (* let expression *)
+ | E_assign of 'a lexp * 'a exp (* imperative assignment *)
+
+*)
+
+let rec to_ast_exp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : tannot exp = 
+  E_aux(
+    (match exp with
+    | Parse_ast.E_block(exps) -> assert false
+    | Parse_ast.E_id(id) -> E_id(to_ast_id id)
+    | Parse_ast.E_lit(lit) -> E_lit(to_ast_lit lit)
+    | Parse_ast.E_cast(typ,exp) -> E_cast(to_ast_typ k_env typ, to_ast_exp k_env exp)
+    | Parse_ast.E_app(f,args) -> assert false
+    | Parse_ast.E_app_infix(left,op,right) -> assert false
+    | Parse_ast.E_tuple(exps) -> E_tuple(List.map (to_ast_exp k_env) exps)
+    | Parse_ast.E_if(e1,e2,e3) -> E_if(to_ast_exp k_env e1, to_ast_exp k_env e2, to_ast_exp k_env e3)
+    | Parse_ast.E_vector(exps) -> E_vector(List.map (to_ast_exp k_env) exps)
+    | Parse_ast.E_vector_indexed(iexps) -> E_vector_indexed(List.map (fun (i,e) -> (i,to_ast_exp k_env e)) iexps)
+    | Parse_ast.E_vector_access(vexp,exp) -> E_vector_access(to_ast_exp k_env vexp, to_ast_exp k_env exp)
+    ), (l,None))
+
+and to_ast_lexp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : tannot lexp = 
+  LEXP_aux(
+    (match exp with
+    | Parse_ast.E_id(id) -> LEXP_id(to_ast_id id)
+    | Parse_ast.E_vector_access(vexp,exp) -> LEXP_vector(to_ast_lexp k_env vexp, to_ast_exp k_env exp)
+    | Parse_ast.E_vector_subrange(vexp,exp1,exp2) -> LEXP_vector_range(to_ast_lexp k_env vexp, to_ast_exp k_env exp1, to_ast_exp k_env exp2)
+    | Parse_ast.E_field(fexp,id) -> LEXP_field(to_ast_lexp k_env fexp, to_ast_id id)
+    | _ -> typ_error l "Only identifiers, vector accesses, vector slices, and fields can be on the lefthand side of an assignment" None None)
+      , (l,None))
+      
 let to_ast_default (names, k_env, t_env) (default : Parse_ast.default_typing_spec) : (tannot default_typing_spec) envs_out =
   match default with
   | Parse_ast.DT_aux(df,l) ->
@@ -263,7 +395,20 @@ let to_ast_spec (names,k_env,t_env) (val_:Parse_ast.val_spec) : (tannot val_spec
     | Parse_ast.VS_val_spec(ts,id) ->
       VS_aux(VS_val_spec(to_ast_typschm k_env ts,to_ast_id id),(l,None)),(names,k_env,t_env)) (*Do names and t_env need updating this pass? *)
 
-let to_ast_namescm name_scm_opt = assert false
+let to_ast_namescm (Parse_ast.Name_sect_aux(ns,l)) = 
+  Name_sect_aux(
+    (match ns with
+    | Parse_ast.Name_sect_none -> Name_sect_none
+    | Parse_ast.Name_sect_some(s) -> Name_sect_some(s)
+    ),l)
+
+let rec to_ast_range (Parse_ast.BF_aux(r,l)) = (* TODO add check that ranges are sensible for some definition of sensible *)
+  BF_aux(
+    (match r with
+    | Parse_ast.BF_single(i) -> BF_single(i)
+    | Parse_ast.BF_range(i1,i2) -> BF_range(i1,i2)
+    | Parse_ast.BF_concat(ir1,ir2) -> BF_concat( to_ast_range ir1, to_ast_range ir2)),
+    l)
 
 let to_ast_typedef (names,k_env,t_env) (td:Parse_ast.type_def) : (tannot type_def) envs_out =
   match td with
@@ -271,18 +416,51 @@ let to_ast_typedef (names,k_env,t_env) (td:Parse_ast.type_def) : (tannot type_de
   (match td with 
   | Parse_ast.TD_abbrev(id,name_scm_opt,typschm) ->
     let id = to_ast_id id in
-    let name_scm_opt = to_ast_namescm name_scm_opt in
     let key = id_to_string id in
     let typschm = to_ast_typschm k_env typschm in
-(*    match typschm with 
-    | TypSchm_aux(TypSchm_no_forall,_) -> 
-      TD_aux(TD_abbrev(id,name_scm_opt,typschm),(l,None)),(names,Envmap.insert (key,{k = K_Typ}) k_env,t_env) 
-    | TypSchm_aux(TypSchm_ts(tq,typ), _) *)
-      assert false
-  | Parse_ast.TD_record(id,name_scm_opt,typq,fields,_) -> assert false
-  | Parse_ast.TD_variant(id,name_scm_opt,typq,arms,_) -> assert false
-  | Parse_ast.TD_enum(id,name_scm_opt,enums,_) -> assert false
-  | Parse_ast.TD_register(id,t1,t2,ranges) -> assert false)
+    let td_abrv = TD_aux(TD_abbrev(id,to_ast_namescm name_scm_opt,typschm),(l,None)) in
+    let typ = (match typschm with 
+      | TypSchm_aux(TypSchm_ts(tq,typ), _) ->
+        begin match (typquant_to_quantkinds k_env tq) with
+        | [] -> {k = K_Typ}
+        | typs -> {k= K_Lam(typs,{k=K_Typ})}
+        end) in
+    td_abrv,(names,Envmap.insert k_env (key,typ),t_env)
+  | Parse_ast.TD_record(id,name_scm_opt,typq,fields,_) -> 
+    let id = to_ast_id id in
+    let key = id_to_string id in
+    let typq,k_env = to_ast_typquant k_env typq in
+    let fields = List.map (fun (atyp,id) -> (to_ast_typ k_env atyp),(to_ast_id id)) fields in (* Add check that all arms have unique names locally *)
+    let td_rec = TD_aux(TD_record(id,to_ast_namescm name_scm_opt,typq,fields,false),(l,None)) in
+    let typ = (match (typquant_to_quantkinds k_env typq) with
+      | [ ] -> {k = K_Typ}
+      | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
+    td_rec, (names,Envmap.insert k_env (key,typ), t_env)
+  | Parse_ast.TD_variant(id,name_scm_opt,typq,arms,_) ->
+    let id = to_ast_id id in
+    let key = id_to_string id in
+    let typq,k_env = to_ast_typquant k_env typq in
+    let arms = List.map (fun (atyp,id) -> (to_ast_typ k_env atyp),(to_ast_id id)) arms in (* Add check that all arms have unique names *)
+    let td_var = TD_aux(TD_variant(id,to_ast_namescm name_scm_opt,typq,arms,false),(l,None)) in
+    let typ = (match (typquant_to_quantkinds k_env typq) with
+      | [ ] -> {k = K_Typ}
+      | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
+    td_var, (names,Envmap.insert k_env (key,typ), t_env)
+  | Parse_ast.TD_enum(id,name_scm_opt,enums,_) -> 
+    let id = to_ast_id id in
+    let key = id_to_string id in
+    let enums = List.map to_ast_id enums in
+    let keys = List.map id_to_string enums in
+    let td_enum = TD_aux(TD_enum(id,to_ast_namescm name_scm_opt,enums,false),(l,None)) in (* Add check that all enums have unique names *)
+    let k_env = List.fold_right (fun k k_env -> Envmap.insert k_env (k,{k=K_Nat})) keys (Envmap.insert k_env (key,{k=K_Typ})) in
+    td_enum, (names,k_env,t_env)
+  | Parse_ast.TD_register(id,t1,t2,ranges) -> 
+    let id = to_ast_id id in
+    let key = id_to_string id in
+    let n1 = to_ast_nexp k_env t1 in
+    let n2 = to_ast_nexp k_env t2 in
+    let ranges = List.map (fun (range,id) -> (to_ast_range range),to_ast_id id) ranges in
+    TD_aux(TD_register(id,n1,n2,ranges),(l,None)), (names,k_env,t_env))
 
 (*
 
@@ -323,7 +501,9 @@ let to_ast_def (names, k_env, t_env) partial_defs def : ((tannot def) option) en
   match def with
   | Parse_ast.DEF_aux(d,l) ->
     (match d with
-    | Parse_ast.DEF_type(t_def) -> assert false
+    | Parse_ast.DEF_type(t_def) -> 
+      let td,envs = to_ast_typedef envs t_def in
+      ((Some(DEF_aux(DEF_type(td),(l,None)))),envs),partial_defs
     | Parse_ast.DEF_fundef(f_def) -> assert false
     | Parse_ast.DEF_val(lbind) -> assert false
     | Parse_ast.DEF_spec(val_spec) -> 

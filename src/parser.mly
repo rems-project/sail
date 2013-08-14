@@ -88,18 +88,18 @@ let mk_eannot e i = Effects_opt_aux((Effects_opt_effects(e)),(locn i i))
 let mk_eannotn _ = Effects_opt_aux(Effects_opt_pure,Unknown)
 let mk_namesectn _ = Name_sect_aux(Name_sect_none,Unknown)
 
-(*let build_fexp (Expr_l(e,_)) l =
-  match e with
-    | Infix(Expr_l(Ident(i), l'),SymX_l((stx,op),l''),e2) when String.compare op (r"=") = 0 ->
-        Fexp(i, stx, e2, l)
-    | _ ->
-        raise (Parse_error_locn(l,"Invalid record field assignment (should be id = exp)"))
+let make_enum_sugar_bounded typ1 typ2 =
+  ATyp_app(Id_aux(Id("enum"),Unknown),
+           [typ1; typ2; ATyp_aux(ATyp_inc,Unknown)])
+let make_enum_sugar typ1 =
+  make_enum_sugar_bounded typ1 (ATyp_aux(ATyp_constant(0), Unknown))
 
-let mod_cap n =
-  if not (Name.starts_with_upper_letter (Name.strip_lskip (Name.from_x n))) then
-    raise (Parse_error_locn(Ast.xl_to_l n, "Module name must begin with an upper-case letter"))
-  else
-    ()*)
+let make_vector_sugar_bounded typ typ1 typ2 = 
+  ATyp_app(Id_aux(Id("vector"),Unknown),
+           [typ1;typ2;ATyp_aux(ATyp_inc,Unknown);typ])
+let make_vector_sugar typ typ1 =
+  make_vector_sugar_bounded typ typ1 (ATyp_aux(ATyp_constant(0),Unknown))
+    
 
 let space = " "
 let star = "*"
@@ -120,8 +120,8 @@ let star = "*"
 
 /*Terminals with no content*/
 
-%token And As Bits Case Clause Const Default Effect Effects End Enum Else False
-%token Forall Function_ If_ In IN Let_ Member Nat Order Pure Rec Register
+%token And As Bits Case Clause Const Default Dec Effect Effects End Enum Else False
+%token Forall Function_ If_ In IN Inc Let_ Member Nat Order Pure Rec Register
 %token Scattered Struct Switch Then True Type TYPE Typedef Union With Val
 
 /* Avoid shift/reduce conflict - see right_atomic_exp rule */
@@ -132,11 +132,11 @@ let star = "*"
 
 %token Bar Colon Comma Dot Eof Minus Semi Under
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare
-%token BarBar BarGt BarSquare DotDot ColonEq MinusGt LtBar LparenColon SquareBar
+%token BarBar BarGt BarSquare DotDot ColonEq ColonGt MinusGt LtBar LparenColon SquareBar
 
 /*Terminals with content*/
 
-%token <string> Id
+%token <string> Id TickId
 %token <int> Num
 %token <string> String Bin Hex
 
@@ -293,38 +293,37 @@ effect_typ:
 atomic_typ:
   | id
     { tloc (ATyp_id $1) }
-  | Num
-    { tloc (ATyp_constant $1) }
-  | Under
-    { tloc (ATyp_wild) }
   | effect_typ
     { $1 }
+  | Inc
+    { tloc (ATyp_inc) }
+  | Dec
+    { tloc (ATyp_dec) } 
   | Lparen typ Rparen
     { $2 }
-  | Lsquare nexp_typ Rsquare
-      { assert false }
-  | Lsquare nexp_typ Colon nexp_typ Rsquare
-      { assert false }
+  | SquareBar nexp_typ BarSquare
+      { tloc (make_enum_sugar $2) }
+  | SquareBar nexp_typ Colon nexp_typ BarSquare
+      { tloc (make_enum_sugar_bounded $2 $4) }
 
-/*Inherently ambiguous with type application, but type checking should be able to sort it out */
-/*vtyp_typ:
-   | atomic_typ
-       { $1 }
-   | atomic_typ Lsquare nexp_typ Rsquare
-     { assert false }
-   | atomic_typ Lsquare nexp_typ Colon nexp_typ Rsquare
-     { assert false }*/
-
-atomic_typs:
+vec_typ:
   | atomic_typ
+      { $1 }
+  | atomic_typ Lsquare nexp_typ Rsquare
+      { tloc (make_vector_sugar $1 $3) }
+  | atomic_typ Lsquare nexp_typ Colon nexp_typ Rsquare
+      { tloc (make_vector_sugar_bounded $1 $3 $5) }
+
+app_typs:
+  | vec_typ
     { [$1] }
-  | atomic_typ atomic_typs
+  | vec_typ app_typs
     { $1::$2 }
 
 app_typ:
-  | atomic_typ
+  | vec_typ
     { $1 }
-  | id atomic_typs
+  | id app_typs
     { tloc (ATyp_app($1,$2)) }
 
 star_typ_list:
@@ -349,6 +348,8 @@ exp_typ:
        else raise (Parse_error_locn(loc (), "Only 2 is a valid exponent base in Nats")) }
 
 nexp_typ:
+  | Num
+    { tloc (ATyp_constant $1) }
    | exp_typ
      { $1 }
    | atomic_typ Plus typ
@@ -384,9 +385,8 @@ atomic_pat:
     { ploc P_wild }
   | Lparen pat As id Rparen
     { ploc (P_as($2,$4)) }
-/* Because of ( id id ) being either application or type casts, this is inherently ambiguous */
-/*  | Lparen atomic_typ pat Rparen
-    { ploc (P_typ($2,$3)) } */
+  | Lt typ Gt atomic_pat
+    { ploc (P_typ($2,$4)) } 
   | id
     { ploc (P_app($1,[])) }
   | Lcurly fpats Rcurly
@@ -407,8 +407,10 @@ atomic_pat:
 app_pat:
   | atomic_pat
     { $1 }
-  | id pat
-    { ploc (P_app($1,[$2])) }
+  | id Lparen pat Rparen
+    { ploc (P_app($1,[$3])) }
+  | id Lparen comma_pats Rparen
+    { ploc (P_app($1,$3)) }
 
 pat_colons:
   | atomic_pat Colon atomic_pat
@@ -459,8 +461,12 @@ atomic_exp:
     { eloc (E_lit($1)) }
   | Lparen exp Rparen
     { $2 }
+  | Lt typ Gt atomic_exp 
+    { eloc (E_cast($2,$4)) }
   | Lparen comma_exps Rparen
     { eloc (E_tuple($2)) }
+  | Lcurly exp With semi_exps Rcurly
+    { eloc (E_record_update($2,$4)) } 
   | Lsquare comma_exps Rsquare
     { eloc (E_vector($2)) }
   | Lsquare exp With atomic_exp Eq exp Rsquare
@@ -780,13 +786,13 @@ patsexp:
     { peloc (Pat_exp($1,$3)) }
 
 letbind:
-  | Let_ atomic_pat Eq exp
-    { lbloc (LB_val_implicit($2,$4)) }
+/*  | Let_ atomic_pat Eq atomic_exp
+    { lbloc (LB_val_implicit($2,$4)) }*/
   | Let_ typquant atomic_typ atomic_pat Eq exp
     { lbloc (LB_val_explicit((mk_typschm $2 $3 2 3),$4,$6)) }
-  /* This is ambiguous causing 4 shift/reduce and 5 reduce/reduce conflicts because the parser can't tell until the end of typ whether it was parsing a type or a pattern, and this seem to be too late. Solutions are to have a different keyword for this and the above solution besides let (while still absolutely having a keyword here)
+  /* This is ambiguous causing 4 shift/reduce and 5 reduce/reduce conflicts because the parser can't tell until the end of typ whether it was parsing a type or a pattern, and this seem to be too late. Solutions are to have a different keyword for this and the above solution besides let (while still absolutely having a keyword here) */
   | Let_ atomic_typ atomic_pat Eq exp
-    { } */
+    { lbloc (LB_val_explicit((mk_typschm (mk_typqn ()) $2 2 2),$3,$5)) } 
 
 funcl:
   | id atomic_pat Eq exp
