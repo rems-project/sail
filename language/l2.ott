@@ -541,7 +541,8 @@ pat :: 'P_' ::=
 %  | ( pat : typ )                                       :: :: typ
 %    {{ com Typed patterns }}
 % C-style
-  | ( typ pat )                                       :: :: typ
+% XXX < > are necessary to make the grammar non ambiguous
+  | ( < typ > pat )                                       :: :: typ
     {{ com typed pattern }}
 
   | id                                      :: :: id
@@ -583,6 +584,7 @@ pat :: 'P_' ::=
 %  | id '+' num                                         :: :: num_add
 %    {{ com constant addition patterns }}
 
+% XXX Is this still useful?
 fpat :: 'FP_' ::=
   {{ com Field pattern }}
   {{ aux _ annot }} {{ auxparam 'a }}

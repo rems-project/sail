@@ -521,7 +521,7 @@ pat :: 'P_' ::=
 %  | ( pat : typ )                                       :: :: typ
 %    {{ com Typed patterns }}
 % C-style
-  | ( atyp pat )                                       :: :: typ
+  | ( < atyp > pat )                                       :: :: typ
     {{ com typed pattern }}
 
   | id                                      :: :: id
