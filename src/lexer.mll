@@ -60,6 +60,7 @@ let kw_table =
     [
      ("and",                     (fun _ -> And));
      ("as",                      (fun _ -> As));
+     ("by",                      (fun _ -> By));
      ("case",			 (fun _ -> Case));
      ("clause",                  (fun _ -> Clause));
      ("const",			 (fun _ -> Const));
@@ -71,6 +72,7 @@ let kw_table =
      ("else",                    (fun _ -> Else));
      ("false",                   (fun _ -> False));
      ("forall",                  (fun _ -> Forall));
+     ("foreach",                  (fun _ -> Foreach));
      ("function",                (fun x -> Function_));
      ("if",                      (fun x -> If_));
      ("in",			 (fun x -> In));

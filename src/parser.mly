@@ -120,8 +120,8 @@ let star = "*"
 
 /*Terminals with no content*/
 
-%token And As Bits Case Clause Const Default Dec Effect Effects End Enum Else False
-%token Forall Function_ If_ In IN Inc Let_ Member Nat Order Pure Rec Register
+%token And As Bits By Case Clause Const Default Dec Effect Effects End Enum Else False
+%token Forall Foreach Function_ If_ In IN Inc Let_ Member Nat Order Pure Rec Register
 %token Scattered Struct Switch Then True Type TYPE Typedef Union With Val
 
 /* Avoid shift/reduce conflict - see right_atomic_exp rule */
@@ -505,6 +505,26 @@ right_atomic_exp:
     { eloc (E_if($2,$4,$6)) }
   | If_ exp Then exp
     { eloc (E_if($2,$4, eloc (E_lit(lloc L_unit)))) }
+  | Foreach id Id atomic_exp Id atomic_exp By atomic_exp exp
+    { if $3 <> "from" then
+       raise (Parse_error_locn ((loc ()),"Missing \"from\" in foreach loop"));
+      if $5 <> "to" && $5 <> "downto" then
+       raise (Parse_error_locn ((loc ()),"Missing \"to\" or \"downto\" in foreach loop"));
+      let step =
+        if $5 = "to"
+        then $8
+        else eloc (E_app_infix(eloc (E_lit(lloc (L_num 0))), idl (Id "-"), $8)) in
+      eloc (E_for($2,$4,$6,step,$9)) }
+  | Foreach id Id atomic_exp Id atomic_exp exp
+    { if $3 <> "from" then
+       raise (Parse_error_locn ((loc ()),"Missing \"from\" in foreach loop"));
+      if $5 <> "to" && $5 <> "downto" then
+       raise (Parse_error_locn ((loc ()),"Missing \"to\" or \"downto\" in foreach loop"));
+      let step =
+        if $5 = "to"
+        then eloc (E_lit(lloc (L_num 1)))
+        else eloc (E_lit(lloc (L_num (-1)))) in
+      eloc (E_for($2,$4,$6,step,$7)) }
   | letbind In exp
     { eloc (E_let($1,$3)) }
 
