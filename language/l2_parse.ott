@@ -320,7 +320,7 @@ typ_lib :: 'Typ_lib_' ::=
 % finite subranges of nat
   | enum nexp1 nexp2 order :: :: enum  {{ com natural numbers [[atyp2]] .. [[atyp2]]+[[atyp1]]-1, ordered by order }}
   | [ nexp ]             :: :: enum1 {{ com sugar for \texttt{enum nexp 0 inc} }}
-  | [ nexp '..' nexp' ]  :: :: enum2 {{ com sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} }}
+  | [ nexp : nexp' ]  :: :: enum2 {{ com sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} }}
 % use .. not - to avoid ambiguity with nexp -
 % total maps and vectors indexed by finite subranges of nat
   | vector nexp1 nexp2 order atyp :: :: vector {{ com vector of [[atyp]], indexed by natural range }}
@@ -458,7 +458,7 @@ type_def :: 'TD_' ::=
 index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}} 
   {{ aux _ l }}
   | num :: :: 'single'  {{ com single index }}
-  | num1 '..' num2 :: :: range {{ com index range }}
+  | num1 : num2 :: :: range {{ com index range }}
   | index_range1 , index_range2 :: :: concat {{ com concatenation of index ranges }}
 
 % 
