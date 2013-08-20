@@ -60,3 +60,5 @@ type nexp_range =
   | In of Parse_ast.l * nexp * nexp list
 
 type tannot = (t * nexp_range list) option
+
+val initial_kind_env : kind Envmap.t
