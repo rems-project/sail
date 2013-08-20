@@ -347,6 +347,7 @@ let _ =
 
 let lib = ref []
 let opt_print_version = ref false
+let opt_print_verbose = ref false
 let opt_file_arguments = ref ([]:string list)
 let options = Arg.align ([
   ( "-i",
@@ -383,6 +384,9 @@ let options = Arg.align ([
 (*  ( "-print_types",
     Arg.Unit (fun b -> opt_print_types := true),
     " print types on stdout");*)
+  ( "-verbose",
+    Arg.Unit (fun b -> opt_print_verbose := true),
+    " pretty-print out the file");
   ( "-v",
     Arg.Unit (fun b -> opt_print_version := true),
     " print version");
@@ -402,7 +406,12 @@ let _ =
 let main() =
   if !(opt_print_version)
   then Printf.printf "L2 pre alpha \n"
-  else ignore(List.map (fun f -> (parse_file f))  !opt_file_arguments)
+  else let parsed = (List.map (fun f -> (parse_file f))  !opt_file_arguments) in
+       let merged = List.flatten [parsed] in
+       let ast = convert_ast (List.hd merged) in
+       if !(opt_print_verbose)
+       then ((Pretty_print.pp_defs Format.std_formatter) ast)
+       else ()
 
 let _ =  try
     begin
