@@ -120,7 +120,7 @@ let star = "*"
 
 /*Terminals with no content*/
 
-%token And As Bits By Case Clause Const Default Dec Effect Effects End Enum Else False
+%token And As Bits By Case Clause Const Default Dec Effect Effects End Enumerate Else False
 %token Forall Foreach Function_ If_ In IN Inc Let_ Member Nat Order Pure Rec Register
 %token Scattered Struct Switch Then True Type TYPE Typedef Union With Val
 
@@ -924,6 +924,14 @@ index_range_atomic:
   | Lparen index_range Rparen
     { $2 }
 
+enum_body:
+  | id
+  { [$1] }
+  | id Semi
+  { [$1] }
+  | id Semi enum_body
+  { $1::$3 }
+
 index_range:
   | index_range_atomic
     { $1 }
@@ -968,6 +976,10 @@ type_def:
     { tdloc (TD_variant($2, $3, mk_typqn (), fst $8, snd $8)) }
   | Typedef id Eq Const Union Lcurly c_def_body Rcurly
     { tdloc (TD_variant($2, mk_namesectn (), mk_typqn (), fst $7, snd $7)) }
+  | Typedef id Eq Enumerate Lcurly enum_body Rcurly
+    { tdloc (TD_enum($2, mk_namesectn (), $6,false)) }
+  | Typedef id name_sect Eq Enumerate Lcurly enum_body Rcurly
+    { tdloc (TD_enum($2,$3,$7,false)) }
   | Typedef id Eq Register Bits Lsquare typ Colon typ Rsquare Lcurly r_def_body Rcurly
     { tdloc (TD_register($2, $7, $9, $12)) }
 

@@ -479,7 +479,7 @@ type_def :: 'TD_' ::=
 index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}} 
   {{ aux _ l }}
   | num :: :: 'single'  {{ com single index }}
-  | num1 : num2 :: :: range {{ com index range }}
+  | num1 '..' num2 :: :: range {{ com index range }}
   | index_range1 , index_range2 :: :: concat {{ com concatenation of index ranges }}
 
 % 

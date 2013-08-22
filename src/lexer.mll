@@ -60,6 +60,7 @@ let kw_table =
     [
      ("and",                     (fun _ -> And));
      ("as",                      (fun _ -> As));
+     ("bits",                    (fun _ -> Bits));
      ("by",                      (fun _ -> By));
      ("case",			 (fun _ -> Case));
      ("clause",                  (fun _ -> Clause));
@@ -68,7 +69,7 @@ let kw_table =
      ("effect",                  (fun _ -> Effect));
      ("Effects",                 (fun _ -> Effects));
      ("end",                     (fun _ -> End));
-     ("enum",			 (fun _ -> Enum));
+     ("enumerate",		 (fun _ -> Enumerate));
      ("else",                    (fun _ -> Else));
      ("false",                   (fun _ -> False));
      ("forall",                  (fun _ -> Forall));
@@ -81,6 +82,7 @@ let kw_table =
      ("member",                  (fun x -> Member));
      ("Nat",                     (fun x -> Nat));
      ("Order",                   (fun x -> Order));
+     ("pure",                    (fun x -> Pure));
      ("rec",			 (fun x -> Rec));
      ("register",		 (fun x -> Register));
      ("scattered",               (fun x -> Scattered));

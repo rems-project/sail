@@ -68,6 +68,7 @@ let initial_kind_env =
   Envmap.from_list [ 
     ("bool", {k = K_Typ});
     ("nat", {k = K_Typ});
+    ("unit", {k = K_Typ});
     ("list", {k = K_Lam( [{k = K_Typ}], {k = K_Typ})});
     ("enum", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}; {k=K_Ord} ], {k = K_Typ}) });
     ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } )
