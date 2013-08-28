@@ -18,9 +18,9 @@ let rec list_pp i_format l_format =
 let kwd ppf s = fprintf ppf "%s" s
 let base ppf s = fprintf ppf "%s" s
 
-let parens is_atomic v base =
-  if (is_atomic v) then base
-  else "(" ^ base ^ ")"
+let parens is_atomic to_base v =
+  if (is_atomic v) then to_base v
+  else "(" ^ to_base v ^ ")"
 
 let pp_parens is_atomic format =
   fun ppf v -> 
@@ -58,12 +58,19 @@ let is_atomic_nexp (Nexp_aux(n,_)) =
   | Nexp_id _ | Nexp_constant _ | Nexp_exp _ -> true
   | _ -> false
  
+let is_atomic_pat (P_aux(p,l)) =
+  match p with
+  | P_lit(_) | P_wild | P_id(_) | P_as _ | P_typ _ -> true
+  | P_app(_,pats) -> if (pats = []) then true else false
+  | P_record(_,_) | P_vector(_) | P_vector_indexed(_) | P_tup(_) | P_list(_) -> true
+  | _ -> false
+
 let rec pp_format_typ (Typ_aux(t,_)) =
   match t with
   | Typ_var(id) -> pp_format_id id
   | Typ_wild -> "_"
-  | Typ_fn(arg,ret,efct) -> "(" ^ (parens is_atomic_typ arg (pp_format_typ arg)) ^ " -> " ^ 
-                            (parens is_atomic_typ ret (pp_format_typ ret)) ^ " " ^
+  | Typ_fn(arg,ret,efct) -> "(" ^ (parens is_atomic_typ pp_format_typ arg) ^ " -> " ^ 
+                            (parens is_atomic_typ pp_format_typ ret) ^ " " ^
                             (pp_format_effects efct) ^ ")"
   | Typ_tup(typs) -> "(" ^ (list_format " * " pp_format_typ typs) ^ ")"
   | Typ_app(id,args) -> "(" ^ (pp_format_id id) ^ " " ^ (list_format " " pp_format_typ_arg args) ^ ")"
@@ -167,25 +174,28 @@ let rec pp_format_pat (P_aux(p,l)) =
   | P_id(id) -> pp_format_id id
   | P_as(pat,id) -> "(" ^ pp_format_pat pat ^ " as " ^ pp_format_id id ^ ")"
   | P_typ(typ,pat) -> "<" ^ pp_format_typ typ ^ "> " ^ pp_format_pat pat
-  | P_app(id,pats) -> pp_format_id id ^ "(" ^
-                      list_format ", " pp_format_pat pats ^ ")"
+  | P_app(id,pats) -> if (pats = [])
+                      then pp_format_id id 
+                      else pp_format_id id ^ "(" ^
+                      list_format ", " (parens is_atomic_pat pp_format_pat) pats ^ ")"
   | P_record(fpats,_) -> "{" ^
                        list_format "; " (fun (FP_aux(FP_Fpat(id,fpat),_)) -> 
 			                  pp_format_id id ^ " = " ^ pp_format_pat fpat) fpats
                        ^ "}"
-  | P_vector(pats) -> "[" ^ list_format "; " pp_format_pat pats ^ "]"
+  | P_vector(pats) -> "[" ^ list_format "; " (parens is_atomic_pat pp_format_pat) pats ^ "]"
   | P_vector_indexed(ipats) ->
     "[" ^ list_format "; " (fun (i,p) -> string_of_int i ^ " = " ^ pp_format_pat p) ipats ^ "]"
   | P_vector_concat(pats) -> list_format " ^ " pp_format_pat pats
-  | P_tup(pats) -> "(" ^ (list_format ", " pp_format_pat pats) ^ ")"
-  | P_list(pats) -> "[|" ^ (list_format "; " pp_format_pat pats) ^ "|]"
+  | P_tup(pats) -> "(" ^ (list_format ", " (parens is_atomic_pat pp_format_pat) pats) ^ ")"
+  | P_list(pats) -> "[|" ^ (list_format "; " (parens is_atomic_pat pp_format_pat) pats) ^ "|]"
 
 let pp_pat ppf p = base ppf (pp_format_pat p)
+let pp_pat_atomic ppf p = base ppf (parens is_atomic_pat pp_format_pat p)
 
 let rec pp_let ppf (LB_aux(lb,_)) =
   match lb with
-  | LB_val_explicit(ts,pat,exp) -> fprintf ppf "@[<0>%a %a %a %a@ %a@]" kwd "let" pp_typscm ts pp_pat pat kwd " =" pp_exp exp
-  | LB_val_implicit(pat,exp) -> fprintf ppf "@[<0>%a %a %a@ %a@]" kwd "let" pp_pat pat kwd " =" pp_exp exp
+  | LB_val_explicit(ts,pat,exp) -> fprintf ppf "@[<0>%a %a %a %a@ %a@]" kwd "let" pp_typscm ts pp_pat_atomic pat kwd " =" pp_exp exp
+  | LB_val_implicit(pat,exp) -> fprintf ppf "@[<0>%a %a %a@ %a@]" kwd "let" pp_pat_atomic pat kwd " =" pp_exp exp
 
 (* Need an is_atomic? check and insert parens otherwise *)
 and pp_exp ppf (E_aux(e,_)) = 
@@ -232,7 +242,8 @@ and pp_comma_exp ppf e = fprintf ppf "@[<1>%a %a@]" pp_exp e kwd ","
 and pp_fexp ppf (FE_aux(FE_Fexp(id,exp),_)) = fprintf ppf "@[<1>%a %a %a@]" pp_id id kwd " = " pp_exp exp
 and pp_semi_fexp ppf fexp = fprintf ppf "@[<1>%a %a@]" pp_fexp fexp kwd ";"
 
-and pp_case ppf (Pat_aux(Pat_exp(pat,exp),_)) = fprintf ppf "@[<1>%a %a@ @[<1> %a @] @]" pp_pat pat kwd "-> " pp_exp exp 
+and pp_case ppf (Pat_aux(Pat_exp(pat,exp),_)) = 
+  fprintf ppf "@[<1>%a %a@ @[<1> %a @] @]" pp_pat_atomic pat kwd "-> " pp_exp exp 
 
 and pp_lexp ppf (LEXP_aux(lexp,_)) =
   match lexp with
@@ -299,7 +310,7 @@ let pp_effects_opt ppf (Effects_opt_aux(e,_)) =
   | Effects_opt_effects e -> pp_effects ppf e
 
 let pp_funcl ppf (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
-  fprintf ppf "@[<0>%a %a %a @[<1>%a@] @]@\n" pp_id id pp_pat pat kwd "=" pp_exp exp 
+  fprintf ppf "@[<0>%a %a %a @[<1>%a@] @]@\n" pp_id id pp_pat_atomic pat kwd "=" pp_exp exp 
 
 let pp_fundef ppf (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   let pp_funcls ppf funcl = fprintf ppf "%a %a" kwd "and" pp_funcl funcl in
