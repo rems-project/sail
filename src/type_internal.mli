@@ -33,7 +33,7 @@ and nexp_aux =
   | Nadd of nexp * nexp
   | Nmult of nexp * nexp
   | N2n of nexp
-  | Nneg of nexp (* Unary minus for representing new vector sizes after vector slicing *)
+  | Nneg of nexp (* Unary minus for representing new sizes after slicing *)
   | Nuvar of n_uvar
 and effect = { mutable effect : effect_aux }
 and effect_aux =

@@ -136,43 +136,6 @@ id :: '' ::=
 % targets use alphabetical infix operators. 
 
 
-%% 
-%% x_l {{ tex \ottnt{x}^{l} }} , y_l {{ tex \ottnt{y}^{l} }} , z_l {{ tex \ottnt{z}^{l} }} , name :: '' ::=
-%%   {{ com Location-annotated names }}
-%%   | x l                                         :: :: X_l
-%%   | ( ix ) l                                    :: :: PreX_l
-%%     {{ com Remove infix status }}
-%% 
-%% ix_l {{ tex \ottnt{ix}^{l} }} :: '' ::=
-%%   {{ com Location-annotated infix names }}
-%%   | ix l                                        :: :: SymX_l
-%%   | ` x ` l                                     :: :: InX_l
-%%     {{ com Add infix status }}
-%% 
-%% embed
-%% {{ ocaml
-%% let xl_to_l = function
-%%   | X_l(_,l) -> l
-%%   | PreX_l(_,_,_,l) -> l
-%% 
-%% let ixl_to_l = function
-%%   | SymX_l(_,l) -> l
-%%   | InX_l(_,_,_,l) -> l
-%% }}
-%% {{ lem
-%% 
-%% (*let xl_to_l = function
-%%   | X_l(_,l) -> l
-%%   | PreX_l(_,_,l) -> l
-%% end
-%% 
-%% let ixl_to_l = function
-%%   | SymX_l(_,l) -> l
-%%   | InX_l(_,_,_,l) -> l
-%% end*)
-%% 
-%% }}
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Kinds and Types                                              %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -181,72 +144,6 @@ id :: '' ::=
 grammar
 
 
-% a :: 'A_' ::=
-%                                                 {{ aux _ l }}
-%                                                 {{ ocaml terminal * text }}
-%                                                 {{ lem terminal * string }}
-%                                                 {{ hol string }}
-%   {{ com Type variables }}
-%   | ' x                                         :: :: A
-%     {{ ichlo [[x]] }}
-% 
-% N :: 'N_' ::=
-%                                                    {{ aux _ l }}
-%                                                    {{ ocaml terminal * text }}
-%                                                    {{ lem terminal * string }}
-%                                                    {{ hol string }}
-%     {{ com numeric variables }} 
-%     | ' ' x                                        :: :: N
-%       {{ ichlo [[x]] }}
-% 
-% EN :: 'EN_' ::=
-%                                                    {{ aux _ l }}
-%                                                    {{ ocaml terminal * text }}
-%                                                    {{ lem terminal * string }}
-%                                                    {{ hol string }}
-%     {{ com endianness variables }} 
-%     | ' ' ' x                                     :: :: EN
-%       {{ ichlo [[x]] }}
-% 
-% EFF :: 'EFF_' ::=
-%                                                    {{ aux _ l }}
-%                                                    {{ ocaml terminal * text }}
-%                                                    {{ lem terminal * string }}
-%                                                    {{ hol string }}
-%     {{ com effect set variables }} 
-%     | ' ' ' ' x                                     :: :: EFF
-%       {{ ichlo [[x]] }}
-% % TODO: better concrete syntax!!!!
-% 
-% 
-% tnvar :: '' ::=                         
-%     {{ com variables of the base kinds }}
-%     | a                                 :: :: Av
-%     | N                                 :: :: Nv
-%     | EN                                :: :: ENv
-%     | EFF                               :: :: EFFv
-% 
-% tnvars :: '' ::=                                {{ phantom }}
-%                                                 {{ hol tnvar list }}
-%                                                 {{ ocaml tnvar list }}
-%                                                 {{ lem list tnvar }}
-%   {{ com Type variable lists }}
-%   | tnvar1 .. tnvarn            :: :: Tvars
-%     {{ hol [[tnvar1..tnvarn]] }}
-%     {{ ocaml [[tnvar1..tnvarn]] }}
-%     {{ lem [[tnvar1..tnvarn]] }}
-%     
-% 
-% ids :: '' ::=                                {{ phantom }}
-%                                                 {{ hol id list }}
-%                                                 {{ ocaml id list }}
-%                                                 {{ lem list id }}
-%   {{ com Type variable lists }}
-%   | id1 .. idn            :: :: Tvars
-%     {{ hol [[id1..idn]] }}
-%     {{ ocaml [[id1..idn]] }}
-%     {{ lem [[id1..idn]] }}
-    
 
 base_kind :: 'BK_' ::=  
   {{ com base kind}}
@@ -274,33 +171,27 @@ efct :: 'Effect_' ::=
   | nondet                              :: :: nondet {{ com nondeterminism from intra-instruction parallelism }}
 
 atyp :: 'ATyp_' ::=
-  {{ com expression of all kinds }}
+  {{ com expressions of all kinds, to be translated to types, nats, orders, and effects after parsing }}
   {{ aux _ l }}
   | id                                  :: :: id          {{ com identifier }}
   | num                                 :: :: constant     {{ com constant }}
   | atyp1 * atyp2                       :: :: times        {{ com product }}
-%{{ com must be linear after normalisation... except for the type of *, ahem }}
   | atyp1 + atyp2                       :: :: sum          {{ com sum }}
   | 2 ** atyp                            :: :: exp         {{ com exponential }}
   | ( atyp )                            :: S :: paren  {{ icho [[atyp]] }}
 
   | inc                                 :: :: inc  {{ com increasing (little-endian) }}
   | dec                                 :: :: dec  {{ com decreasing (big-endian) }}
- | effect id                            :: :: efid
- | effect { efct1 , .. , efctn }           :: :: set {{ com effect set }}
- | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ icho [] }}
-
-% TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.  Yes.  But we think we don't need any interesting effect-set expressions, eg effectset-variable union {rreg}. 
+  | effect id                            :: :: efid
+  | effect { efct1 , .. , efctn }           :: :: set {{ com effect set }}
+  | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ icho [] }}
 
   | _                                           :: :: wild
     {{ com Unspecified type }}
   | atyp1 -> atyp2 atyp3                        :: :: fn
-    {{ com Function type (first-order only in user code) }}
-% TODO: build first-order restriction into AST or just into type rules? neither - see note
-% TODO: concrete syntax for effects in a function type?  needed only for pp, not in user syntax.
+    {{ com Function type (first-order only in user code), last atyp is an effect }}
   | atyp1 * .... * atypn                          :: :: tup
     {{ com Tuple type }}
-% TODO union in the other kind grammars?  or make a syntax of argument? or glom together the grammars and leave o the typechecker
   | id atyp1 .. atypn                     :: :: app
   {{ com type constructor application }}
 
@@ -341,15 +232,12 @@ parsing
 ATyp_tup <= ATyp_tup
 ATyp_fn right ATyp_fn
 ATyp_fn <= ATyp_tup
-%Typ_fn right Typ_app1
-%Typ_tup right Typ_app1
 
 grammar
 
 nexp_constraint :: 'NC_' ::=
   {{ com constraint over kind $[[Nat]]$ }}
   {{ aux _ l }}
-%  {{ aux _ annot }} {{ auxparam 'a }}
   | atyp = atyp'                                :: :: fixed
   | atyp >= atyp'                               :: :: bounded_ge
   | atyp '<=' atyp'                             :: :: bounded_le
@@ -372,16 +260,12 @@ quant_item :: 'QI_' ::=
 
 typquant :: 'TypQ_' ::= 
   {{ com type quantifiers and constraints}}
-%  {{ aux _ annot }} {{ auxparam 'a }}
   {{ aux _ l }}
   | forall quant_item1 , ... , quant_itemn . :: :: tq {{ texlong }}
-
-% WHY ARE CONSTRAINTS HERE AND NOT IN THE KIND LANGUAGE
   |                           ::  ::  no_forall     {{ com sugar, omitting quantifier and constraints }}
 
 typschm :: 'TypSchm_' ::=
   {{ com type scheme  }}
-%  {{ aux _ annot }} {{ auxparam 'a }}
   {{ aux _ l }}
   |  typquant atyp                                                       :: :: ts
 
@@ -395,58 +279,26 @@ grammar
 ctor_def :: 'CT_' ::=
   {{ com Datatype constructor definition clause }}
   {{ aux _ l }}
-%  {{ aux _ annot }} {{ auxparam 'a }}
   | id : typschm                                       :: :: ct
 % but we could get away with disallowing constraints in typschm, we
 % think - if it's useful to do that
 
-%enum_opt :: 'EnumOpt_' ::=
-%  |      :: :: empty
-%  | enum :: :: enum
-
-%% tdefbody :: 'TD_' ::=
-%%   {{ com Type definition bodies }}
-%%   | typschm                                                     :: :: abbrev
-%%     {{ com Type abbreviations }}
-%%   | typquant <| id1 : atyp1 ; ... ; idn : atypn semi_opt |>     :: :: record
-%%     {{ com Record types }}
-%%   | enumeration_flag_opt '|' ctor_def1 '|' ... '|' ctor_defn            :: :: variant
-%%     {{ com Variant types }}
-%% 
  naming_scheme_opt :: 'Name_sect_' ::=
    {{ com Optional variable-naming-scheme specification for variables of defined type }} 
    {{ aux _ l }}
    |                                                   :: :: none
    | [ name = regexp ]                                 :: :: some
-%% 
-%% type_def :: '' ::=
-%%   {{ com Type definitions }}
-%%   | type id : kind naming_scheme_opt = tdefbody                                :: :: Td
-%% %  | enumeration id naming_scheme_opt = tdefbody                               ::   :: Td2
-%% % the enumeration is sugar for something that uses an enum flag, where the type system will restrict the tdefbody to be a simple enum...
-%% 
-
-% TODO: do we need mutually recursive type definitions?  
-
-
-%%% OR, IN C STYLE
 
 type_def :: 'TD_' ::=
   {{ com Type definition body }}
   {{ aux _ l }}
-%  {{ aux _ annot }} {{ auxparam 'a }}
   | typedef id naming_scheme_opt = typschm                                        :: :: abbrev
     {{ com type abbreviation }} {{ texlong }}
   | typedef id naming_scheme_opt = const struct typquant { atyp1 id1 ; ... ; atypn idn semi_opt }     :: :: record
     {{ com struct type definition }} {{ texlong }}
-% for specifying constructor result types of nat-indexed GADTs, we can
-%  let the typi be function types (as constructors are not allowed to
-%  take parameters of function types)
-% concrete syntax: to be even closer to C, could have a postfix id rather than prefix id = 
   | typedef id naming_scheme_opt = const union typquant { atyp1 id1 ; ... ; atypn idn semi_opt }   :: :: variant
     {{ com union type definition}} {{ texlong }}
-
-  | typedef id naming_scheme_opt = enum { id1 ; ... ; idn semi_opt }   :: :: enum
+  | typedef id naming_scheme_opt = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
     {{ com enumeration type definition}} {{ texlong }}
 
   | typedef  id = register bits [ atyp : atyp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
@@ -510,37 +362,23 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
 pat :: 'P_' ::= 
   {{ com Pattern }}
   {{ aux _ l }}
-%  {{ aux _ annot }} {{ auxparam 'a }}
   | lit                                                 :: :: lit
     {{ com literal constant pattern }}
   | _                                                   :: :: wild  
     {{ com wildcard }}
   | ( pat as id )                                      :: :: as
     {{ com named pattern }}
-% ML-style
-%  | ( pat : typ )                                       :: :: typ
-%    {{ com Typed patterns }}
-% C-style
   | ( < atyp > pat )                                       :: :: typ
     {{ com typed pattern }}
 
   | id                                      :: :: id
     {{ com identifier  }}
 
-%
   | id pat1 .. patn                                     :: :: app
     {{ com union constructor pattern }}
 
-% OR?  do we invent something ghastly including a union keyword?  Perhaps not...
-
-%  | <| fpat1 ; ... ; fpatn semi_opt |>                  :: :: record
-%    {{ com Record patterns }}
-% OR
   | { fpat1 ; ... ; fpatn semi_opt }                  :: :: record
     {{ com struct pattern }}
-
-%Patterns for vectors
-%Should these be the same since vector syntax has changed, and lists have also changed?
 
   | [ pat1 , .. , patn  ]                     :: :: vector
    {{ com vector pattern }}
@@ -548,7 +386,6 @@ pat :: 'P_' ::=
   | [ num1 = pat1 , .. , numn = patn  ]                     :: :: vector_indexed
    {{ com vector pattern (with explicit indices) }}
 
-% cf ntoes for this
   |  pat1 : .... : patn                                   :: :: vector_concat
   {{ com concatenated vector pattern }} 
 
@@ -558,15 +395,10 @@ pat :: 'P_' ::=
     {{ com list pattern }}
   | ( pat )                                             :: S :: paren
 {{ ichlo [[pat]] }}
-%  | pat1 '::' pat2                                      :: :: cons
-%    {{ com Cons patterns }}
-%  | id '+' num                                         :: :: num_add
-%    {{ com constant addition patterns }}
 
 fpat :: 'FP_' ::=
   {{ com Field pattern }}
   {{ aux _ l }}
-%  {{ aux _ annot }} {{ auxparam 'a }}
   | id = pat                                            :: :: Fpat
 
 parsing
@@ -584,7 +416,6 @@ grammar
 exp :: 'E_' ::=
   {{ com Expression }}
   {{ aux _ l }}
-%  {{ aux _ annot }} {{ auxparam 'a }}  
 
   | { exp1 ; ... ; expn }                               :: :: block {{ com block (parsing conflict with structs?) }}
 % maybe we really should have indentation-sensitive syntax :-)  (given that some of the targets do)

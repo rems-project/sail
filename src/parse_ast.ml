@@ -62,7 +62,7 @@ kind_aux =  (* kinds *)
 
 
 type 
-atyp_aux =  (* expression of all kinds *)
+atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders, and effects after parsing *)
    ATyp_id of id (* identifier *)
  | ATyp_constant of int (* constant *)
  | ATyp_times of atyp * atyp (* product *)
@@ -73,7 +73,7 @@ atyp_aux =  (* expression of all kinds *)
  | ATyp_efid of id
  | ATyp_set of (efct) list (* effect set *)
  | ATyp_wild (* Unspecified type *)
- | ATyp_fn of atyp * atyp * atyp (* Function type (first-order only in user code) *)
+ | ATyp_fn of atyp * atyp * atyp (* Function type (first-order only in user code), last atyp is an effect *)
  | ATyp_tup of (atyp) list (* Tuple type *)
  | ATyp_app of id * (atyp) list (* type constructor application *)
 
