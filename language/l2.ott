@@ -467,7 +467,7 @@ type_def :: 'TD_' ::=
   | typedef id naming_scheme_opt = const union typquant { typ1 id1 ; ... ; typn idn semi_opt }   :: :: variant
     {{ com union type definition}} {{ texlong }}
 
-  | typedef id naming_scheme_opt = enum { id1 ; ... ; idn semi_opt }   :: :: enum
+  | typedef id naming_scheme_opt = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
     {{ com enumeration type definition}} {{ texlong }}
 
   | typedef  id = register bits [ nexp : nexp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
