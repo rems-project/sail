@@ -2,7 +2,7 @@ indexvar n , i , j ::=
   {{ phantom }}
   {{ com Index variables for meta-lists }}
 
-metavar num ::=
+metavar num , zero ::=
   {{ phantom }}
   {{ lex numeric }}
   {{ ocaml int }}
@@ -137,7 +137,12 @@ id :: '' ::=
 % on type variables (or variables of other kinds)
 % We don't enforce a lexical convention on infix operators, as some of the 
 % targets use alphabetical infix operators. 
-
+  | bool      		   	 :: S :: bool {{ com Built in type identifiers }} {{ icho bool_id }}
+  | bit				 :: S :: bit {{ icho bit_id }} 
+  | unit			 :: S :: unit {{ icho unit_id }}
+  | nat				 :: S :: nat  {{ icho nat_id }}
+  | vector			 :: S :: vector {{ icho vector_id }}
+  | list			 :: S :: list {{ icho list_id }}
 
 %% 
 %% x_l {{ tex \ottnt{x}^{l} }} , y_l {{ tex \ottnt{y}^{l} }} , z_l {{ tex \ottnt{z}^{l} }} , name :: '' ::=
@@ -942,7 +947,7 @@ k :: 'Ki_' ::=
 t , u :: 'T_' ::=                                {{ phantom }}
 {{ com Internal types }}
    | id                                           :: :: var
-   | t1 -> t2                                    :: :: fn
+   | t1 -> t2 effects                                 :: :: fn
    | t1 * .... * tn                              :: :: tup
    | id t_args                                    :: :: app 
 %% %%   | t_subst ( t )                               :: M :: subst_app
@@ -961,29 +966,26 @@ t , u :: 'T_' ::=                                {{ phantom }}
 %% %%     {{ hol (FOLDR T_fn [[t]] [[t_multi]]) }}
 %% %%     {{ lem (List.fold_right T_fn [[t_multi]] [[t]]) }}
 %% %% 
-%% %% ne :: 'Ne_' ::=
-%% %%   {{ com internal numeric expressions }}
-%% %%   | N                                           :: :: var
-%% %%   | nat                                 :: :: const
-%% %%   | ne1 * ne2                           :: :: mult
-%% %%   | ne1 + ne2                           :: :: add
-%% %%   | ( - ne )                            :: :: unary
-%% %%   | normalize ( ne )                    :: M :: normalize
-%% %%     {{ ocaml (assert false) }}
-%% %%     {{ hol ARB }}
-%% %%     {{ lem (normalize [[ne]] ) }}
+ne :: 'Ne_' ::=
+ {{ com internal numeric expressions }}
+   | id                                           :: :: var
+   | num                                 :: :: const
+   | ne1 * ne2                           :: :: mult
+   | ne1 + ne2                           :: :: add
+   | 2 ** ne				 :: :: exp
+   | ( - ne )                            :: :: unary
 %% %%   | ne1 + ... + nen                     :: M :: addmany
 %% %%     {{ ocaml (assert false) }}
 %% %%     {{ hol ARB }}
 %% %%     {{ lem (sumation_nes [[ne1...nen]]) }}
-%% %%   | bitlength ( bin )                   :: M :: cbin
-%% %%     {{ ocaml (asssert false) }}
-%% %%     {{ hol ARB }}
-%% %%     {{ lem (blength [[bin]]) }}
-%% %%   | bitlength ( hex )                   :: M :: chex
-%% %%     {{ ocaml (assert false) }}
-%% %%     {{ hol ARB }}
-%% %%     {{ lem (hlength [[hex]]) }}
+   | bitlength ( bin )                   :: M :: cbin
+     {{ ocaml (asssert false) }}
+     {{ hol ARB }}
+     {{ lem (blength [[bin]]) }}
+   | bitlength ( hex )                   :: M :: chex
+     {{ ocaml (assert false) }}
+     {{ hol ARB }}
+     {{ lem (hlength [[hex]]) }}
 %% %%   | length ( pat1 ... patn )            :: M :: cpat
 %% %%     {{ ocaml (assert false) }}
 %% %%     {{ hol ARB }}
@@ -993,29 +995,17 @@ t , u :: 'T_' ::=                                {{ phantom }}
 %% %%     {{ ocaml (assert false) }}
 %% %%     {{ lem (Ne_const (List.length [[exp1...expn]])) }}
 %% %% 
-%% %% t_args :: '' ::=
-%% %%   {{ com Lists of types }}
-%% %%   | t1 .. tn                            :: :: T_args
-%% %%   | t_subst ( t_args )                          :: M :: T_args_subst_app
-%% %%     {{ com Multiple substitutions }}
-%% %%     {{ ocaml (assert false) }}
-%% %%     {{ hol (t_subst_t_args [[t_subst]] [[t_args]]) }}
-%% %%     {{ lem (t_subst_t_args [[t_subst]] [[t_args]]) }}
-%% %% 
-%% %% t_multi :: '' ::=                               {{ phantom }}
-%% %%                                                 {{ hol t list }}
-%% %%                                                 {{ ocaml t list }}
-%% %%                                                 {{ lem list t }}
-%% %%   {{ com Lists of types }}
-%% %%   | ( t1 * .. * tn )                            :: :: T_multi
-%% %%     {{ hol [[t1..tn]] }}
-%% %%     {{ lem [[t1..tn]] }}
-%% %%   | t_subst ( t_multi )                         :: M :: T_multi_subst_app
-%% %%     {{ com Multiple substitutions }}
-%% %%     {{ ocaml (assert false) }}
-%% %%     {{ hol (MAP (t_subst_t [[t_subst]]) [[t_multi]]) }}
-%% %%     {{ lem (List.map (t_subst_t [[t_subst]]) [[t_multi]]) }}
-%% %% 
+ t_arg :: '' ::=
+ {{ com Argument to type constructors }}
+ | t :: :: typ
+ | ne :: :: nexp
+ | effects :: :: effect
+ | order :: :: order
+
+ t_args :: '' ::=
+  {{ com Arguments to type constructors }}
+   | t_arg1 ... t_argn                            :: :: T_args
+
 %% %% nec :: '' ::=
 %% %%   {{ com Numeric expression constraints }}
 %% %%   | ne < nec            :: :: lessthan
@@ -1291,6 +1281,14 @@ terminals :: '' ::=
     {{ tex \ensuremath{\rangle} }}
   | |-                                  :: :: vdash
     {{ tex \ensuremath{\vdash} }}
+  | |-t					:: :: vdashT
+    {{ tex \ensuremath{\vdash_t} }}
+  | |-n					:: :: vdashN
+    {{ tex \ensuremath{\vdash_n} }}
+  | |-t					:: :: vdashE
+    {{ tex \ensuremath{\vdash_e} }}
+  | |-t					:: :: vdashO
+    {{ tex \ensuremath{\vdash_o} }}
   | '                                   :: :: quote
     {{ tex \mbox{'} }}
   | |->                                 :: :: mapsto
@@ -1321,6 +1319,9 @@ formula :: formula_ ::=
      {{ com Type lookup }}
      {{ hol (FLOOKUP [[E_t]] [[id]] = SOME [[t]]) }}
      {{ lem Pmap.find [[id]] [[E_t]] = [[t]] }} 
+
+  | E_k ( id ) <-| k						:: :: update_k
+     {{ com Update the kind associated with id to k }}        
 
 %% %% %   | TD ( p ) gives tc_def                                     :: :: lookup_tc
 %% %% %     {{ com Type constructor lookup }}
@@ -1390,18 +1391,15 @@ formula :: formula_ ::=
 %% %%     {{ hol (~?__semC__. MEM (Inst __semC__ [[p]] [[t]]) [[I]]) }}
 %% %%     {{ lem (Pervasives.not ((Inst [] [[p]] [[t]]) IN [[I]])) }}
 %% %% 
-%% %%   | E_l1 = E_l2                                                 :: :: E_l_eqn
-%% %%     {{ ichl ([[E_l1]] = [[E_l2]]) }}
-%% %% 
-%% %%   | E_x1 = E_x2                                                 :: :: E_x_eqn
-%% %%     {{ ichl ([[E_x1]] = [[E_x2]]) }}
-%% %% 
-%% %%   | E_f1 = E_f2                                                 :: :: E_f_eqn
-%% %%     {{ ichl ([[E_f1]] = [[E_f2]]) }}
-%% %% 
-%% %%   | E1 = E2                                                     :: :: E_eqn
-%% %%     {{ ichl ([[E1]] = [[E2]]) }}
-%% %% 
+   | E_k1 = E_k2                                                 :: :: E_k_eqn
+     {{ ichl ([[E_k1]] = [[E_k2]]) }}
+
+   | E_t1 = E_t2                                                 :: :: E_f_eqn
+     {{ ichl ([[E_t1]] = [[E_t2]]) }}
+ 
+   | E1 = E2                                                     :: :: E_eqn
+     {{ ichl ([[E1]] = [[E2]]) }}
+ 
 %% %%   | TD1 = TD2                                                   :: :: TD_eqn
 %% %%     {{ ichl ([[TD1]] = [[TD2]]) }}
 %% %% 
@@ -1414,8 +1412,10 @@ formula :: formula_ ::=
 %% %%   | names1 = names2                                             :: :: names_eq
 %% %%     {{ ichl ([[names1]] = [[names2]]) }}
 %% %% 
-%% %%   | t1 = t2                                                     :: :: t_eq
-%% %%     {{ ichl ([[t1]] = [[t2]]) }}
+   | t1 = t2                                                     :: :: t_eq
+     {{ ichl ([[t1]] = [[t2]]) }}
+   | ne1 = ne2							:: :: ne_eq
+     {{ ichl ([[ne1]] = [[ne2]]) }}
 %% %% 
 %% %%   | t_subst1 = t_subst2                                         :: :: t_subst_eq
 %% %%     {{ ichl ([[t_subst1]] = [[t_subst2]]) }}
@@ -1439,109 +1439,123 @@ formula :: formula_ ::=
 defns 
 translate_ast :: '' ::=
 
-%% % 
-%% % 
-%% % defns
-%% % convert_tnvars :: '' ::=
-%% % 
-%% % defn
-%% % tnvars ~> tnvs :: :: convert_tnvars :: convert_tnvars_
-%% % by
-%% % 
-%% % :convert_tnvar: tnvar1 ~> tnv1 .. :convert_tnvar: tnvarn ~> tnvn
-%% % ------------------------------------------------------------ :: none
-%% % tnvar1 .. tnvarn  ~> tnv1 .. tnvn
-%% % 
-%% % defn
-%% % tnvar ~> tnv :: :: convert_tnvar :: convert_tnvar_
-%% % by
-%% % 
-%% % ----------------------------------------------------------- :: a
-%% % a l ~> a
-%% % 
-%% % ---------------------------------------------------------- :: N
-%% % N l ~> N
-%% % 
-%% % 
-%% % defns
-%% % look_m :: '' ::=
-%% % 
-%% % defn
-%% % E1 ( x_l1 .. x_ln ) gives E2 :: :: look_m :: look_m_ 
-%% % {{ com Name path lookup }}
-%% % by
-%% % 
-%% % ------------------------------------------------------------ :: none
-%% % E() gives E
-%% % 
-%% % E_m(x) gives E1
-%% % E1(</y_li//i/>) gives E2
-%% % ------------------------------------------------------------ :: some
-%% % <E_m,E_p,E_f,E_x>(x l </y_li//i/>) gives E2
-%% % 
-%% % defns
-%% % look_m_id :: '' ::=
-%% %  
-%% % defn
-%% % E1 ( id ) gives E2 :: :: look_m_id :: look_m_id_ 
-%% % {{ com Module identifier lookup }}
-%% % by
-%% % 
-%% % E1(</y_li//i/> x l1) gives E2
-%% % ------------------------------------------------------------ :: all
-%% % E1(</y_li.//i/> x l1 l2) gives E2
-%% % 
-%% % defns
-%% % look_tc :: '' ::=
-%% % 
-%% % defn
-%% % E ( id ) gives p :: :: look_tc :: look_tc_ 
-%% % {{ com Path identifier lookup }}
-%% % by
-%% % 
-%% % E(</y_li//i/>) gives <E_m,E_p,E_f,E_x>
-%% % E_p(x) gives p
-%% % ------------------------------------------------------------ :: all
-%% % E(</y_li.//i/> x l1 l2) gives p
-%% % 
-%% % 
-%% % defns
-%% % check_t :: '' ::=
-%% % 
-%% % defn
-%% % TD |- t ok :: :: check_t :: check_t_ 
-%% % {{ com Well-formed types }}
-%% % by
-%% % 
-%% % ------------------------------------------------------------ :: var
-%% % TD |- a ok
-%% % 
-%% % TD |- t1 ok
-%% % TD |- t2 ok
-%% % ------------------------------------------------------------ :: fn
-%% % TD |- t1 -> t2 ok
-%% % 
-%% % TD |- t1 ok .... TD |- tn ok
-%% % ------------------------------------------------------------ :: tup
-%% % TD |- t1 * .... * tn ok
-%% % 
-%% % TD(p) gives tnv1..tnvn tc_abbrev
-%% % TD,tnv1 |- t1 ok .. TD,tnvn |- tn ok
-%% % ------------------------------------------------------------ :: app
-%% % TD |- p t1 .. tn ok
-%% % 
-%% % 
-%% % defn
-%% % TD , tnv |- t ok :: :: check_tlen :: check_tlen_ 
-%% % {{ com Well-formed type/nexps matching the application type variable }}
-%% % by
-%% % 
-%% % TD |- t ok
-%% % ------------------------------------------------------------ :: t
-%% % TD,a |- t ok
-%% % 
-%% % ------------------------------------------------------------ :: len
-%% % TD,N |- ne ok
+defns
+check_t :: '' ::=
+
+defn
+E_k |-t t ok :: :: check_t :: check_t_ 
+ {{ com Well-formed types }}
+ by
+
+ E_k(id) gives K_Typ
+ ------------------------------------------------------------ :: var
+ E_k |-t id ok
+
+ E_k(id) gives K_infer
+ E_k(id) <-| K_Typ
+ ------------------------------------------------------------ :: varInfer
+ E_k |-t id ok
+
+ E_k |-t t1 ok
+ E_k |-t t2 ok
+ E_k |-e effects ok
+ ------------------------------------------------------------ :: fn
+ E_k |-t t1 -> t2 effects ok
+
+ E_k |-t t1 ok .... E_k |-t tn ok
+ ------------------------------------------------------------ :: tup
+ E_k |-t t1 * .... * tn ok
+
+ E_k(id) gives K_Lam(k1..kn -> K_Typ)
+ E_k,k1 |- t_arg1 ok .. E_k,kn |- t_argn ok
+ ------------------------------------------------------------ :: app
+ E_k |-t id t_arg1 .. t_argn ok
+
+defn 
+E_k |-e effects ok :: :: check_ef :: check_ef_
+{{ com Well-formed effects }}
+by
+
+E_k(id) gives K_Efct
+----------------------------------------------------------- :: var
+E_k |-e effect id ok
+
+E_k(id) gives K_infer
+E_k(id) <-| K_Efct
+------------------------------------------------------------ :: varInfer
+E_k |-e effect id ok
+
+------------------------------------------------------------- :: set
+E_k |-e effect { efct1 , .. , efctn } ok
+
+defn 
+E_k |-n ne ok :: :: check_n :: check_n_
+{{ com Well-formed numeric expressions }}
+by
+
+E_k(id) gives K_Nat
+----------------------------------------------------------- :: var
+E_k |-n id ok
+
+E_k(id) gives K_infer
+E_k(id) <-| K_Nat
+------------------------------------------------------------ :: varInfer
+E_k |-n id ok
+
+----------------------------------------------------------- :: num
+E_k |-n num ok
+
+E_k |-n ne1 ok
+E_k |-n ne2 ok
+----------------------------------------------------------- :: sum
+E_k |-n ne1 + ne2 ok
+
+E_k |-n ne1 ok
+E_k |-n ne2 ok
+------------------------------------------------------------ :: mult
+E_k |-n ne1 * ne2 ok
+
+E_k |-n ne ok
+------------------------------------------------------------ :: exp
+E_k |-n 2 ** ne ok
+
+defn 
+E_k |-o order ok :: :: check_ord :: check_ord_
+{{ com Well-formed numeric expressions }}
+by
+
+E_k(id) gives K_Ord
+----------------------------------------------------------- :: var
+E_k |-o id ok
+
+ E_k(id) gives K_infer
+ E_k(id) <-| K_Ord
+ ------------------------------------------------------------ :: varInfer
+ E_k |-o id ok
+
+
+defn
+E_k , k |- t_arg ok :: :: check_targs :: check_targs_ 
+{{ com Well-formed type arguments kind check matching the application type variable }}
+by
+
+E_k |-t t ok
+--------------------------------------------------------- :: typ
+E_k , K_Typ |- t ok
+
+E_k |-e effects ok
+--------------------------------------------------------- :: eff
+E_k , K_Efct |- effects ok
+
+E_k |-n ne ok
+--------------------------------------------------------- :: nat
+E_k , K_Nat |- ne ok
+
+E_k |-o order ok
+--------------------------------------------------------- :: ord
+E_k, K_Ord |- order ok
+
+
 %% % 
 %% % %TODO type equality isn't right; neither is type conversion
 %% % 
@@ -1666,43 +1680,40 @@ translate_ast :: '' ::=
 %% % ------------------------------------------------------------ :: all
 %% % TD,E |- typ1 * .. * typn ~> (t1 * .. * tn)
 %% % 
-%% % defns
-%% % check_lit :: '' ::=
-%% % 
-%% % defn
-%% % |- lit : t :: :: check_lit :: check_lit_ 
-%% % {{ com Typing literal constants }}
-%% % by
-%% % 
-%% % ------------------------------------------------------------ :: true
-%% % |- true l : __bool
-%% % 
-%% % ------------------------------------------------------------ :: false
-%% % |- false l : __bool
-%% % 
-%% % ------------------------------------------------------------ :: num
-%% % |- num l : __num
-%% % 
-%% % nat = bitlength(hex)
-%% % ------------------------------------------------------------ :: hex
-%% % |- hex l : __vector nat __bit
-%% % 
-%% % nat = bitlength(bin)
-%% % ------------------------------------------------------------ :: bin 
-%% % |- bin l : __vector nat __bit
-%% % 
-%% % ------------------------------------------------------------ :: string
-%% % |- string l : __string
-%% % 
-%% % ------------------------------------------------------------ :: unit
-%% % |- () l : __unit
-%% % 
-%% % ------------------------------------------------------------ :: bitzero
-%% % |- bitzero l : __bit
-%% % 
-%% % ------------------------------------------------------------ :: bitone
-%% % |- bitone l : __bit
-%% % 
+defns
+check_lit :: '' ::=
+ 
+defn
+|- lit : t :: :: check_lit :: check_lit_ 
+{{ com Typing literal constants }}
+by
+
+ ------------------------------------------------------------ :: true
+ |- true : bool
+
+ ------------------------------------------------------------ :: false
+ |- false : bool
+ 
+ ------------------------------------------------------------ :: num
+ |- num : nat
+ 
+ num = bitlength(hex)
+ ------------------------------------------------------------ :: hex
+ |- hex : vector zero num inc bit
+
+ num = bitlength(bin)
+ ------------------------------------------------------------ :: bin 
+ |- bin  : vector zero num inc bit
+
+ ------------------------------------------------------------ :: unit
+ |- () : unit
+
+ ------------------------------------------------------------ :: bitzero
+ |- bitzero : bit
+
+ ------------------------------------------------------------ :: bitone
+ |- bitone : bit
+
 %% % 
 %% % defns
 %% % inst_field :: '' ::=
