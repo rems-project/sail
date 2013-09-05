@@ -32,66 +32,31 @@ val subst : forall 'a. list 'a -> list 'a -> bool
 type x = string (* identifier *)
 type ix = string (* infix identifier *)
 
-type base_kind_aux =  (* base kind *)
+type id =  (* Identifier *)
+ | Id of x
+ | DeIid of x (* remove infix status *)
+
+
+type base_kind =  (* base kind *)
  | BK_type (* kind of types *)
  | BK_nat (* kind of natural number size expressions *)
  | BK_order (* kind of vector order specifications *)
  | BK_effects (* kind of effect sets *)
 
 
-type id_aux =  (* Identifier *)
- | Id of x
- | DeIid of x (* remove infix status *)
-
-
-type base_kind = 
- | BK_aux of base_kind_aux * l
-
-
-type id = 
- | Id_aux of id_aux * l
-
-
-type kind_aux =  (* kinds *)
- | K_kind of list base_kind
-
-
-type nexp_aux =  (* expression of kind $Nat$, for vector sizes and origins *)
+type nexp =  (* expression of kind $Nat$, for vector sizes and origins *)
  | Nexp_id of id (* identifier *)
  | Nexp_constant of num (* constant *)
  | Nexp_times of nexp * nexp (* product *)
  | Nexp_sum of nexp * nexp (* sum *)
  | Nexp_exp of nexp (* exponential *)
 
-and nexp = 
- | Nexp_aux of nexp_aux * l
+
+type kind =  (* kinds *)
+ | K_kind of list base_kind
 
 
-type kind = 
- | K_aux of kind_aux * l
-
-
-type nexp_constraint_aux =  (* constraint over kind $Nat$ *)
- | NC_fixed of nexp * nexp
- | NC_bounded_ge of nexp * nexp
- | NC_bounded_le of nexp * nexp
- | NC_nat_set_bounded of id * list num
-
-
-type kinded_id_aux =  (* optionally kind-annotated identifier *)
- | KOpt_none of id (* identifier *)
- | KOpt_kind of kind * id (* kind-annotated variable *)
-
-
-type nexp_constraint = 
- | NC_aux of nexp_constraint_aux * l
-
-
-type kinded_id = 
- | KOpt_aux of kinded_id_aux * l
-
-
-type efct_aux =  (* effect *)
+type efct =  (* effect *)
  | Effect_rreg (* read register *)
  | Effect_wreg (* write register *)
  | Effect_rmem (* read memory *)
@@ -101,44 +66,58 @@ type efct_aux =  (* effect *)
  | Effect_nondet (* nondeterminism from intra-instruction parallelism *)
 
 
-type quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
- | QI_id of kinded_id (* An optionally kinded identifier *)
- | QI_const of nexp_constraint (* A constraint for this type *)
+type nexp_constraint =  (* constraint over kind $Nat$ *)
+ | NC_fixed of nexp * nexp
+ | NC_bounded_ge of nexp * nexp
+ | NC_bounded_le of nexp * nexp
+ | NC_nat_set_bounded of id * list num
 
 
-type efct = 
- | Effect_aux of efct_aux * l
+type kinded_id =  (* optionally kind-annotated identifier *)
+ | KOpt_none of id (* identifier *)
+ | KOpt_kind of kind * id (* kind-annotated variable *)
 
 
-type quant_item = 
- | QI_aux of quant_item_aux * l
-
-
-type effects_aux =  (* effect set, of kind $Effects$ *)
- | Effects_var of id
- | Effects_set of list efct (* effect set *)
-
-
-type order_aux =  (* vector order specifications, of kind $Order$ *)
+type order =  (* vector order specifications, of kind $Order$ *)
  | Ord_id of id (* identifier *)
  | Ord_inc (* increasing (little-endian) *)
  | Ord_dec (* decreasing (big-endian) *)
 
 
-type typquant_aux =  (* type quantifiers and constraints *)
- | TypQ_tq of list quant_item
- | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
+type effects =  (* effect set, of kind $Effects$ *)
+ | Effects_var of id
+ | Effects_set of list efct (* effect set *)
 
 
-type effects = 
- | Effects_aux of effects_aux * l
+type quant_item =  (* Either a kinded identifier or a nexp constraint for a typquant *)
+ | QI_id of kinded_id (* An optionally kinded identifier *)
+ | QI_const of nexp_constraint (* A constraint for this type *)
 
 
-type order = 
- | Ord_aux of order_aux * l
+type ne =  (* internal numeric expressions *)
+ | Ne_var of id
+ | Ne_const of num
+ | Ne_mult of ne * ne
+ | Ne_add of ne * ne
+ | Ne_exp of ne
+ | Ne_unary of ne
 
 
-type lit_aux =  (* Literal constant *)
+type typ =  (* Type expressions, of kind $Type$ *)
+ | Typ_wild (* Unspecified type *)
+ | Typ_var of id (* Type variable *)
+ | Typ_fn of typ * typ * effects (* Function type (first-order only in user code) *)
+ | Typ_tup of list typ (* Tuple type *)
+ | Typ_app of id * list typ_arg (* type constructor application *)
+
+and typ_arg =  (* Type constructor arguments of all kinds *)
+ | Typ_arg_nexp of nexp
+ | Typ_arg_typ of typ
+ | Typ_arg_order of order
+ | Typ_arg_effects of effects
+
+
+type lit =  (* Literal constant *)
  | L_unit (* $() : unit$ *)
  | L_zero (* $bitzero : bit$ *)
  | L_one (* $bitone : bit$ *)
@@ -150,39 +129,32 @@ type lit_aux =  (* Literal constant *)
  | L_string of string (* string constant *)
 
 
-type typquant = 
- | TypQ_aux of typquant_aux * l
+type typquant =  (* type quantifiers and constraints *)
+ | TypQ_tq of list quant_item
+ | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
-type typ_aux =  (* Type expressions, of kind $Type$ *)
- | Typ_wild (* Unspecified type *)
- | Typ_var of id (* Type variable *)
- | Typ_fn of typ * typ * effects (* Function type (first-order only in user code) *)
- | Typ_tup of list typ (* Tuple type *)
- | Typ_app of id * list typ_arg (* type constructor application *)
-
-and typ = 
- | Typ_aux of typ_aux * l
-
-and typ_arg_aux =  (* Type constructor arguments of all kinds *)
- | Typ_arg_nexp of nexp
- | Typ_arg_typ of typ
- | Typ_arg_order of order
- | Typ_arg_effects of effects
-
-and typ_arg = 
- | Typ_arg_aux of typ_arg_aux * l
+type k =  (* Internal kinds *)
+ | Ki_typ
+ | Ki_nat
+ | Ki_ord
+ | Ki_efct
+ | Ki_val (* Representing values, for use in identifier checks *)
+ | Ki_ctor of list k * k
+ | Ki_infer (* Representing an unknown kind, inferred by context *)
 
 
-type lit = 
- | L_aux of lit_aux * l
+type t_arg =  (* Argument to type constructors *)
+ | Typ of t
+ | Nexp of ne
+ | Effect of effects
+ | Order of order
+
+and t_args =  (* Arguments to type constructors *)
+ | T_args of list t_arg
 
 
-type typschm_aux =  (* type scheme *)
- | TypSchm_ts of typquant * typ
-
-
-type pat_aux =  (* Pattern *)
+type pat =  (* Pattern *)
  | P_lit of lit (* literal constant pattern *)
  | P_wild (* wildcard *)
  | P_as of pat * id (* named pattern *)
@@ -196,21 +168,15 @@ type pat_aux =  (* Pattern *)
  | P_tup of list pat (* tuple pattern *)
  | P_list of list pat (* list pattern *)
 
-and pat = 
- | P_aux of pat_aux * annot
-
-and fpat_aux =  (* Field pattern *)
+and fpat =  (* Field pattern *)
  | FP_Fpat of id * pat
 
-and fpat = 
- | FP_aux of fpat_aux * annot
+
+type typschm =  (* type scheme *)
+ | TypSchm_ts of typquant * typ
 
 
-type typschm = 
- | TypSchm_aux of typschm_aux * l
-
-
-type exp_aux =  (* Expression *)
+type exp =  (* Expression *)
  | E_block of list exp (* block (parsing conflict with structs?) *)
  | E_id of id (* identifier *)
  | E_lit of lit (* literal constant *)
@@ -235,126 +201,56 @@ type exp_aux =  (* Expression *)
  | E_let of letbind * exp (* let expression *)
  | E_assign of lexp * exp (* imperative assignment *)
 
-and exp = 
- | E_aux of exp_aux * annot
-
-and lexp_aux =  (* lvalue expression *)
+and lexp =  (* lvalue expression *)
  | LEXP_id of id (* identifier *)
  | LEXP_vector of lexp * exp (* vector element *)
  | LEXP_vector_range of lexp * exp * exp (* subvector *)
  | LEXP_field of lexp * id (* struct field *)
 
-and lexp = 
- | LEXP_aux of lexp_aux * annot
-
-and fexp_aux =  (* Field-expression *)
+and fexp =  (* Field-expression *)
  | FE_Fexp of id * exp
 
-and fexp = 
- | FE_aux of fexp_aux * annot
-
-and fexps_aux =  (* Field-expression list *)
+and fexps =  (* Field-expression list *)
  | FES_Fexps of list fexp * bool
 
-and fexps = 
- | FES_aux of fexps_aux * annot
-
-and pexp_aux =  (* Pattern match *)
+and pexp =  (* Pattern match *)
  | Pat_exp of pat * exp
 
-and pexp = 
- | Pat_aux of pexp_aux * annot
-
-and letbind_aux =  (* Let binding *)
+and letbind =  (* Let binding *)
  | LB_val_explicit of typschm * pat * exp (* value binding, explicit type (pat must be total) *)
  | LB_val_implicit of pat * exp (* value binding, implicit type (pat must be total) *)
 
-and letbind = 
- | LB_aux of letbind_aux * annot
 
-
-type ne =  (* internal numeric expressions *)
- | Ne_var of id
- | Ne_const of num
- | Ne_mult of ne * ne
- | Ne_add of ne * ne
- | Ne_exp of ne
- | Ne_unary of ne
-
-
-type naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
+type naming_scheme_opt =  (* Optional variable-naming-scheme specification for variables of defined type *)
  | Name_sect_none
  | Name_sect_some of string
 
 
-type tannot_opt_aux =  (* Optional type annotation for functions *)
- | Typ_annot_opt_some of typquant * typ
-
-
-type funcl_aux =  (* Function clause *)
- | FCL_Funcl of id * pat * exp
-
-
-type effects_opt_aux =  (* Optional effect annotation for functions *)
- | Effects_opt_pure (* sugar for empty effect set *)
- | Effects_opt_effects of effects
-
-
-type rec_opt_aux =  (* Optional recursive annotation for functions *)
- | Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
-
-
-type k =  (* Internal kinds *)
- | Ki_typ
- | Ki_nat
- | Ki_ord
- | Ki_efct
- | Ki_val (* Representing values, for use in identifier checks *)
- | Ki_ctor of list k * k
- | Ki_infer (* Representing an unknown kind, inferred by context *)
-
-
-type t_arg =  (* Argument to type constructors *)
- | Typ of t
- | Nexp of ne
- | Effect of effects
- | Order of order
-
-and t_args =  (* Arguments to type constructors *)
- | T_args of list t_arg
-
-
-type naming_scheme_opt = 
- | Name_sect_aux of naming_scheme_opt_aux * l
-
-
-type index_range_aux =  (* index specification, for bitfields in register types *)
+type index_range =  (* index specification, for bitfields in register types *)
  | BF_single of num (* single index *)
  | BF_range of num * num (* index range *)
  | BF_concat of index_range * index_range (* concatenation of index ranges *)
 
-and index_range = 
- | BF_aux of index_range_aux * l
+
+type tannot_opt =  (* Optional type annotation for functions *)
+ | Typ_annot_opt_some of typquant * typ
 
 
-type tannot_opt = 
- | Typ_annot_opt_aux of tannot_opt_aux * annot
+type rec_opt =  (* Optional recursive annotation for functions *)
+ | Rec_nonrec (* non-recursive *)
+ | Rec_rec (* recursive *)
 
 
-type funcl = 
- | FCL_aux of funcl_aux * annot
+type effects_opt =  (* Optional effect annotation for functions *)
+ | Effects_opt_pure (* sugar for empty effect set *)
+ | Effects_opt_effects of effects
 
 
-type effects_opt = 
- | Effects_opt_aux of effects_opt_aux * annot
+type funcl =  (* Function clause *)
+ | FCL_Funcl of id * pat * exp
 
 
-type rec_opt = 
- | Rec_aux of rec_opt_aux * l
-
-
-type type_def_aux =  (* Type definition body *)
+type type_def =  (* Type definition body *)
  | TD_abbrev of id * naming_scheme_opt * typschm (* type abbreviation *)
  | TD_record of id * naming_scheme_opt * typquant * list (typ * id) * bool (* struct type definition *)
  | TD_variant of id * naming_scheme_opt * typquant * list (typ * id) * bool (* union type definition *)
@@ -362,36 +258,20 @@ type type_def_aux =  (* Type definition body *)
  | TD_register of id * nexp * nexp * list (index_range * id) (* register mutable bitfield type definition *)
 
 
-type default_typing_spec_aux =  (* Default kinding or typing assumption *)
+type fundef =  (* Function definition *)
+ | FD_function of rec_opt * tannot_opt * effects_opt * list funcl
+
+
+type val_spec =  (* Value type specification *)
+ | VS_val_spec of typschm * id
+
+
+type default_typing_spec =  (* Default kinding or typing assumption *)
  | DT_kind of base_kind * id
  | DT_typ of typschm * id
 
 
-type fundef_aux =  (* Function definition *)
- | FD_function of rec_opt * tannot_opt * effects_opt * list funcl
-
-
-type val_spec_aux =  (* Value type specification *)
- | VS_val_spec of typschm * id
-
-
-type type_def = 
- | TD_aux of type_def_aux * annot
-
-
-type default_typing_spec = 
- | DT_aux of default_typing_spec_aux * annot
-
-
-type fundef = 
- | FD_aux of fundef_aux * annot
-
-
-type val_spec = 
- | VS_aux of val_spec_aux * annot
-
-
-type def_aux =  (* Top-level definition *)
+type def =  (* Top-level definition *)
  | DEF_type of type_def (* type definition *)
  | DEF_fundef of fundef (* function definition *)
  | DEF_val of letbind (* value definition *)
@@ -405,7 +285,7 @@ type def_aux =  (* Top-level definition *)
  | DEF_scattered_end of id (* scattered definition end *)
 
 
-type typ_lib_aux =  (* library types and syntactic sugar for them *)
+type typ_lib =  (* library types and syntactic sugar for them *)
  | Typ_lib_unit (* unit type with value $()$ *)
  | Typ_lib_bool (* booleans $true$ and $false$ *)
  | Typ_lib_bit (* pure bit values (not mutable bits) *)
@@ -422,20 +302,8 @@ type typ_lib_aux =  (* library types and syntactic sugar for them *)
  | Typ_lib_reg of typ (* mutable register components holding typ *)
 
 
-type ctor_def_aux =  (* Datatype constructor definition clause *)
+type ctor_def =  (* Datatype constructor definition clause *)
  | CT_ct of id * typschm
-
-
-type def = 
- | DEF_aux of def_aux * annot
-
-
-type typ_lib = 
- | Typ_lib_aux of typ_lib_aux * l
-
-
-type ctor_def = 
- | CT_aux of ctor_def_aux * annot
 
 
 type defs =  (* Definition sequence *)
@@ -448,7 +316,11 @@ indreln
 (** definitions *)
  (* defns check_t *)
 indreln
-(* defn check_t *)
+[check_t : map id k -> t -> bool]
+ and [check_ef : map id k -> effects -> bool]
+ and [check_n : map id k -> ne -> bool]
+ and [check_ord : map id k -> order -> bool]
+ and [check_targs : map id k -> k -> t_arg -> bool](* defn check_t *)
 
 check_t_var: forall E_k id .
 ( Pmap.find  id   E_k  =  Ki_typ )
@@ -490,20 +362,20 @@ and
 check_ef_var: forall E_k id .
 ( Pmap.find  id   E_k  =  Ki_efct )
  ==> 
-check_ef E_k (Effects_aux (Effects_var id)  Unknown )
+check_ef E_k (Effects_var id)
 
 and
 check_ef_varInfer: forall E_k id .
 ( Pmap.find  id   E_k  =  Ki_infer ) &&
 ((Formula_update_k E_k id Ki_efct))
  ==> 
-check_ef E_k (Effects_aux (Effects_var id)  Unknown )
+check_ef E_k (Effects_var id)
 
 and
 check_ef_set: forall efct_list E_k .
 true
  ==> 
-check_ef E_k (Effects_aux (Effects_set (efct_list))  Unknown )
+check_ef E_k (Effects_set (efct_list))
 
 
 and
@@ -554,14 +426,14 @@ and
 check_ord_var: forall E_k id .
 ( Pmap.find  id   E_k  =  Ki_ord )
  ==> 
-check_ord E_k (Ord_aux (Ord_id id)  Unknown )
+check_ord E_k (Ord_id id)
 
 and
 check_ord_varInfer: forall E_k id .
 ( Pmap.find  id   E_k  =  Ki_infer ) &&
 ((Formula_update_k E_k id Ki_ord))
  ==> 
-check_ord E_k (Ord_aux (Ord_id id)  Unknown )
+check_ord E_k (Ord_id id)
 
 
 and
@@ -594,12 +466,13 @@ check_targs E_k Ki_ord (Order order)
 (** definitions *)
  (* defns convert_typ *)
 indreln
-(* defn convert_typ *)
+[convert_typ : map id k -> typ -> t -> bool]
+ and [convert_targ : map id k -> k -> typ_arg -> t_arg -> bool](* defn convert_typ *)
 
 convert_typ_var: forall E_k id .
 ( Pmap.find  id   E_k  =  Ki_typ )
  ==> 
-convert_typ E_k (Typ_aux (Typ_var id)  Unknown ) (T_var id)
+convert_typ E_k (Typ_var id) (T_var id)
 
 and
 convert_typ_fn: forall E_k typ1 typ2 effects t1 t2 .
@@ -607,20 +480,20 @@ convert_typ_fn: forall E_k typ1 typ2 effects t1 t2 .
 (convert_typ E_k typ2 t2) &&
 (check_ef E_k effects)
  ==> 
-convert_typ E_k (Typ_aux (Typ_fn typ1 typ2 effects)  Unknown ) (T_fn t1 t2 effects)
+convert_typ E_k (Typ_fn typ1 typ2 effects) (T_fn t1 t2 effects)
 
 and
 convert_typ_tup: forall typ_t_list E_k .
 ((List.for_all (fun b -> b) ((List.map (fun (typ_,t_) -> convert_typ E_k typ_ t_) typ_t_list))))
  ==> 
-convert_typ E_k (Typ_aux (Typ_tup ((List.map (fun (typ_,t_) -> typ_) typ_t_list)))  Unknown ) (T_tup ((List.map (fun (typ_,t_) -> t_) typ_t_list)))
+convert_typ E_k (Typ_tup ((List.map (fun (typ_,t_) -> typ_) typ_t_list))) (T_tup ((List.map (fun (typ_,t_) -> t_) typ_t_list)))
 
 and
 convert_typ_app: forall typ_arg_t_arg_k_list E_k id .
 ( Pmap.find  id   E_k  =  (Ki_ctor ((List.map (fun (typ_arg_,t_arg_,k_) -> k_) typ_arg_t_arg_k_list)) Ki_typ) ) &&
 ((List.for_all (fun b -> b) ((List.map (fun (typ_arg_,t_arg_,k_) -> convert_targ E_k k_ typ_arg_ t_arg_) typ_arg_t_arg_k_list))))
  ==> 
-convert_typ E_k (Typ_aux (Typ_app id ((List.map (fun (typ_arg_,t_arg_,k_) -> typ_arg_) typ_arg_t_arg_k_list)))  Unknown ) (T_app id (T_args ((List.map (fun (typ_arg_,t_arg_,k_) -> t_arg_) typ_arg_t_arg_k_list))))
+convert_typ E_k (Typ_app id ((List.map (fun (typ_arg_,t_arg_,k_) -> typ_arg_) typ_arg_t_arg_k_list))) (T_app id (T_args ((List.map (fun (typ_arg_,t_arg_,k_) -> t_arg_) typ_arg_t_arg_k_list))))
 
 and
 convert_typ_eq: forall E_k typ t2 t1 .
@@ -636,104 +509,104 @@ and
 (** definitions *)
  (* defns check_lit *)
 indreln
-(* defn check_lit *)
+[check_lit : lit -> t -> bool](* defn check_lit *)
 
 check_lit_true: forall .
 true
  ==> 
-check_lit (L_aux L_true  Unknown ) (T_var (Id_aux  bool_id   Unknown ))
+check_lit L_true (T_var  bool_id )
 
 and
 check_lit_false: forall .
 true
  ==> 
-check_lit (L_aux L_false  Unknown ) (T_var (Id_aux  bool_id   Unknown ))
+check_lit L_false (T_var  bool_id )
 
 and
 check_lit_num: forall num .
 true
  ==> 
-check_lit (L_aux (L_num num)  Unknown ) (T_var (Id_aux  nat_id   Unknown ))
+check_lit (L_num num) (T_var  nat_id )
 
 and
 check_lit_string: forall string .
 true
  ==> 
-check_lit (L_aux (L_string string)  Unknown ) (T_var (Id_aux  string_id   Unknown ))
+check_lit (L_string string) (T_var  string_id )
 
 and
 check_lit_hex: forall hex zero num .
 ( ( (Ne_const num)  =   (hlength  hex )  ) )
  ==> 
-check_lit (L_aux (L_hex hex)  Unknown ) (T_app (Id_aux  vector_id   Unknown ) (T_args ([((Nexp (Ne_const zero)))] @ [((Nexp (Ne_const num)))] @ [((Order (Ord_aux Ord_inc  Unknown )))] @ [((Typ (T_var (Id_aux  bit_id   Unknown ))))])))
+check_lit (L_hex hex) (T_app  vector_id  (T_args ([((Nexp (Ne_const zero)))] @ [((Nexp (Ne_const num)))] @ [((Order Ord_inc))] @ [((Typ (T_var  bit_id )))])))
 
 and
 check_lit_bin: forall bin zero num .
 ( ( (Ne_const num)  =   (blength  bin )  ) )
  ==> 
-check_lit (L_aux (L_bin bin)  Unknown ) (T_app (Id_aux  vector_id   Unknown ) (T_args ([((Nexp (Ne_const zero)))] @ [((Nexp (Ne_const num)))] @ [((Order (Ord_aux Ord_inc  Unknown )))] @ [((Typ (T_var (Id_aux  bit_id   Unknown ))))])))
+check_lit (L_bin bin) (T_app  vector_id  (T_args ([((Nexp (Ne_const zero)))] @ [((Nexp (Ne_const num)))] @ [((Order Ord_inc))] @ [((Typ (T_var  bit_id )))])))
 
 and
 check_lit_unit: forall .
 true
  ==> 
-check_lit (L_aux L_unit  Unknown ) (T_var (Id_aux  unit_id   Unknown ))
+check_lit L_unit (T_var  unit_id )
 
 and
 check_lit_bitzero: forall .
 true
  ==> 
-check_lit (L_aux L_zero  Unknown ) (T_var (Id_aux  bit_id   Unknown ))
+check_lit L_zero (T_var  bit_id )
 
 and
 check_lit_bitone: forall .
 true
  ==> 
-check_lit (L_aux L_one  Unknown ) (T_var (Id_aux  bit_id   Unknown ))
+check_lit L_one (T_var  bit_id )
 
 
 (** definitions *)
  (* defns check_pat *)
 indreln
-(* defn check_pat *)
+[check_pat : env -> pat -> t -> map x f_desc -> bool](* defn check_pat *)
 
 check_pat_wild: forall E_k t .
 (check_t E_k t)
  ==> 
-(PARSE_ERROR "line 1762 - 1763" "no parses (char 16): <E_t,E_k> |- _ :*** t gives {}  ")
+(PARSE_ERROR "line 1762 - 1763" "no parses (char 16): <E_t,E_k> |- _ a***nnot : t gives {}  ")
 
 and
-check_pat_as: forall E_t E_k pat t E_t1 id .
+check_pat_as: forall E_t E_k pat id t E_t1 .
 (check_pat  (Env  E_k   E_t )  pat t E_t1) &&
 ( Pervasives.not (Pmap.mem  id   E_t1 ) )
  ==> 
-(PARSE_ERROR "line 1768 - 1769" "no parses (char 26): <E_t,E_k> |- (pat as id) :*** t gives E_t1 u+ {id|->t} ")
+check_pat  (Env  E_k   E_t )  (P_as pat id) t  (List.fold_right union_map  ([(E_t1)] @ [( (List.fold_right (fun (x,f) m -> Pmap.add x f m)  ([(id,t)])  Pmap.empty) )])  Pmap.empty) 
 
 and
-check_pat_typ: forall E_k typ t E_t pat E_t1 .
+check_pat_typ: forall E_t E_k typ pat t E_t1 .
 (convert_typ E_k typ t) &&
 (check_pat  (Env  E_k   E_t )  pat t E_t1)
  ==> 
-(PARSE_ERROR "line 1773 - 1774" "no parses (char 26): <E_t,E_k> |- (<typ> pat) :*** t gives E_t1 ")
+check_pat  (Env  E_k   E_t )  (P_typ typ pat) t E_t1
 
 and
-check_pat_ident_constr: forall pat_t_E_t_list E_t E_k .
-((List.for_all (fun b -> b) ((List.map (fun (pat_,t_,E_t_) -> check_pat  (Env  E_k   E_t )  pat_ t_ E_t_) pat_t_E_t_list))))
+check_pat_ident_constr: forall pat_E_t_t_list E_t E_k id t_args .
+((List.for_all (fun b -> b) ((List.map (fun (pat_,E_t_,t_) -> check_pat  (Env  E_k   E_t )  pat_ t_ E_t_) pat_E_t_t_list))))
  ==> 
-(PARSE_ERROR "line 1779 - 1780" "no parses (char 36): <E_t,E_k> |- id pat1 .. patn : id t_***args gives E_t1 u+ .. u+ E_tn ")
+check_pat  (Env  E_k   E_t )  (P_app id ((List.map (fun (pat_,E_t_,t_) -> pat_) pat_E_t_t_list))) (T_app id t_args)  (List.fold_right union_map  ((List.map (fun (pat_,E_t_,t_) -> E_t_) pat_E_t_t_list))  Pmap.empty) 
 
 and
-check_pat_var: forall E_k t .
+check_pat_var: forall E_t E_k id t .
 (check_t E_k t)
  ==> 
-(PARSE_ERROR "line 1783 - 1784" "no parses (char 24): <E_t,E_k> |- :P_id: id :*** t gives E_t u+ {id|->t} ")
+check_pat  (Env  E_k   E_t )  (P_id id) t  (List.fold_right union_map  ([(E_t)] @ [( (List.fold_right (fun (x,f) m -> Pmap.add x f m)  ([(id,t)])  Pmap.empty) )])  Pmap.empty) 
 
 and
 check_pat_tup: forall pat_t_E_t_list E_t E_k .
 ((List.for_all (fun b -> b) ((List.map (fun (pat_,t_,E_t_) -> check_pat  (Env  E_k   E_t )  pat_ t_ E_t_) pat_t_E_t_list)))) &&
 ( disjoint_all (List.map Pmap.domain  ((List.map (fun (pat_,t_,E_t_) -> E_t_) pat_t_E_t_list)) ) )
  ==> 
-(PARSE_ERROR "line 1809 - 1810" "no parses (char 33): <E_t,E_k> |- (pat1, ...., patn) :*** t1 * .... * tn gives E_t1 u+ .... u+ E_tn  ")
+check_pat  (Env  E_k   E_t )  (P_tup ((List.map (fun (pat_,t_,E_t_) -> pat_) pat_t_E_t_list))) (T_tup ((List.map (fun (pat_,t_,E_t_) -> t_) pat_t_E_t_list)))  (List.fold_right union_map  ((List.map (fun (pat_,t_,E_t_) -> E_t_) pat_t_E_t_list))  Pmap.empty) 
 
 
 (** definitions *)

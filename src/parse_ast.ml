@@ -25,6 +25,12 @@ base_kind_aux =  (* base kind *)
 
 
 type 
+id_aux =  (* Identifier *)
+   Id of x
+ | DeIid of x (* remove infix status *)
+
+
+type 
 efct_aux =  (* effect *)
    Effect_rreg (* read register *)
  | Effect_wreg (* write register *)
@@ -36,24 +42,18 @@ efct_aux =  (* effect *)
 
 
 type 
-id_aux =  (* Identifier *)
-   Id of x
- | DeIid of x (* remove infix status *)
-
-
-type 
 base_kind = 
    BK_aux of base_kind_aux * l
 
 
 type 
-efct = 
-   Effect_aux of efct_aux * l
+id = 
+   Id_aux of id_aux * l
 
 
 type 
-id = 
-   Id_aux of id_aux * l
+efct = 
+   Effect_aux of efct_aux * l
 
 
 type 
@@ -128,6 +128,11 @@ typquant_aux =  (* type quantifiers and constraints *)
 
 
 type 
+typquant = 
+   TypQ_aux of typquant_aux * l
+
+
+type 
 lit_aux =  (* Literal constant *)
    L_unit (* $() : _$ *)
  | L_zero (* $_ : _$ *)
@@ -141,8 +146,8 @@ lit_aux =  (* Literal constant *)
 
 
 type 
-typquant = 
-   TypQ_aux of typquant_aux * l
+typschm_aux =  (* type scheme *)
+   TypSchm_ts of typquant * atyp
 
 
 type 
@@ -151,8 +156,8 @@ lit =
 
 
 type 
-typschm_aux =  (* type scheme *)
-   TypSchm_ts of typquant * atyp
+typschm = 
+   TypSchm_aux of typschm_aux * l
 
 
 type 
@@ -178,11 +183,6 @@ and fpat_aux =  (* Field pattern *)
 
 and fpat = 
    FP_aux of fpat_aux * l
-
-
-type 
-typschm = 
-   TypSchm_aux of typschm_aux * l
 
 
 type 
@@ -253,20 +253,25 @@ tannot_opt_aux =  (* Optional type annotation for functions *)
 
 
 type 
-effects_opt_aux =  (* Optional effect annotation for functions *)
-   Effects_opt_pure (* sugar for empty effect set *)
- | Effects_opt_effects of atyp
-
-
-type 
 rec_opt_aux =  (* Optional recursive annotation for functions *)
    Rec_nonrec (* non-recursive *)
  | Rec_rec (* recursive *)
 
 
 type 
+effects_opt_aux =  (* Optional effect annotation for functions *)
+   Effects_opt_pure (* sugar for empty effect set *)
+ | Effects_opt_effects of atyp
+
+
+type 
 funcl_aux =  (* Function clause *)
    FCL_Funcl of id * pat * exp
+
+
+type 
+naming_scheme_opt = 
+   Name_sect_aux of naming_scheme_opt_aux * l
 
 
 type 
@@ -280,18 +285,8 @@ and index_range =
 
 
 type 
-naming_scheme_opt = 
-   Name_sect_aux of naming_scheme_opt_aux * l
-
-
-type 
 tannot_opt = 
    Typ_annot_opt_aux of tannot_opt_aux * l
-
-
-type 
-effects_opt = 
-   Effects_opt_aux of effects_opt_aux * l
 
 
 type 
@@ -300,13 +295,13 @@ rec_opt =
 
 
 type 
-funcl = 
-   FCL_aux of funcl_aux * l
+effects_opt = 
+   Effects_opt_aux of effects_opt_aux * l
 
 
 type 
-val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
+funcl = 
+   FCL_aux of funcl_aux * l
 
 
 type 
@@ -319,19 +314,19 @@ type_def_aux =  (* Type definition body *)
 
 
 type 
-default_typing_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of base_kind * id
- | DT_typ of typschm * id
-
-
-type 
 fundef_aux =  (* Function definition *)
    FD_function of rec_opt * tannot_opt * effects_opt * (funcl) list
 
 
 type 
-val_spec = 
-   VS_aux of val_spec_aux * l
+val_spec_aux =  (* Value type specification *)
+   VS_val_spec of typschm * id
+
+
+type 
+default_typing_spec_aux =  (* Default kinding or typing assumption *)
+   DT_kind of base_kind * id
+ | DT_typ of typschm * id
 
 
 type 
@@ -340,13 +335,18 @@ type_def =
 
 
 type 
-default_typing_spec = 
-   DT_aux of default_typing_spec_aux * l
+fundef = 
+   FD_aux of fundef_aux * l
 
 
 type 
-fundef = 
-   FD_aux of fundef_aux * l
+val_spec = 
+   VS_aux of val_spec_aux * l
+
+
+type 
+default_typing_spec = 
+   DT_aux of default_typing_spec_aux * l
 
 
 type 
@@ -362,16 +362,6 @@ def_aux =  (* Top-level definition *)
  | DEF_scattered_variant of id * naming_scheme_opt * typquant (* scattered union definition header *)
  | DEF_scattered_unioncl of id * atyp * id (* scattered union definition member *)
  | DEF_scattered_end of id (* scattered definition end *)
-
-
-type 
-def = 
-   DEF_aux of def_aux * l
-
-
-type 
-ctor_def_aux =  (* Datatype constructor definition clause *)
-   CT_ct of id * typschm
 
 
 type 
@@ -393,6 +383,26 @@ typ_lib_aux =  (* library types and syntactic sugar for them *)
 
 
 type 
+ctor_def_aux =  (* Datatype constructor definition clause *)
+   CT_ct of id * typschm
+
+
+type 
+def = 
+   DEF_aux of def_aux * l
+
+
+type 
+typ_lib = 
+   Typ_lib_aux of typ_lib_aux * l
+
+
+type 
+ctor_def = 
+   CT_aux of ctor_def_aux * l
+
+
+type 
 lexp_aux =  (* lvalue expression *)
    LEXP_id of id (* identifier *)
  | LEXP_vector of lexp * exp (* vector element *)
@@ -406,16 +416,6 @@ and lexp =
 type 
 defs =  (* Definition sequence *)
    Defs of (def) list
-
-
-type 
-ctor_def = 
-   CT_aux of ctor_def_aux * l
-
-
-type 
-typ_lib = 
-   Typ_lib_aux of typ_lib_aux * l
 
 
 

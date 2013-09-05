@@ -1759,7 +1759,7 @@ by
 
 E_k |-t t ok
 ------------------------------------------------------------ :: wild
-<E_t,E_k> |- _ : t gives {} 
+<E_t,E_k> |- _ annot : t gives {} 
 % This case should perhaps indicate the generation of a type variable, with kind Typ
 
 <E_t,E_k> |- pat : t gives E_t1

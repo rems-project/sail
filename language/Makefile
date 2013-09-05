@@ -13,7 +13,9 @@ l2Theory.uo: l2Script.sml
 
 l2.tex ../src/ast.ml ../src/ast.lem l2Script.sml: l2.ott 
 	ott -sort false -generate_aux_rules false -o l2.tex  -picky_multiple_parses true l2.ott
-	ott -sort false -generate_aux_rules true -o ../src/ast.ml -o ../src/ast.lem -o l2Script.sml -picky_multiple_parses true l2.ott
+	ott -sort false -generate_aux_rules false -o ../src/ast.lem -o l2Script.sml -picky_multiple_parses true l2.ott
+	ott -sort false -generate_aux_rules true -o ../src/ast.ml -picky_multiple_parses true l2.ott
+# the above is working around what is probably a bug in -generate_aux_rules true: when we try to generate Lem code with that turned on, we get some surprising-looking parse failures in a few rules.  Likely we're not doing the proper transform for rules generated from inductive relation syntax. 
 
 l2_parse.tex parse_ast.ml ../src/parse_ast.ml: l2_parse.ott
 	ott -sort false -generate_aux_rules false -o l2_parse.tex  -picky_multiple_parses true l2_parse.ott
