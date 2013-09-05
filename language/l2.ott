@@ -10,14 +10,6 @@ metavar num , zero ::=
   {{ lem num }}
   {{ com Numeric literals }}
 
-% metavar nat ::=
-%   {{ phantom }}
-%   {{ lex numeric }}
-%   {{ ocaml int }}
-%   {{ hol num }}
-%   {{ lem num }}
-%   {{ com Internal literal numbers }}
-
 metavar hex ::=
   {{ phantom }}
   {{ lex numeric }}
@@ -137,49 +129,17 @@ id :: '' ::=
 % on type variables (or variables of other kinds)
 % We don't enforce a lexical convention on infix operators, as some of the 
 % targets use alphabetical infix operators. 
-  | bool      		   	 :: S :: bool {{ com Built in type identifiers }} {{ icho bool_id }}
-  | bit				 :: S :: bit {{ icho bit_id }} 
-  | unit			 :: S :: unit {{ icho unit_id }}
-  | nat				 :: S :: nat  {{ icho nat_id }}
-  | vector			 :: S :: vector {{ icho vector_id }}
-  | list			 :: S :: list {{ icho list_id }}
+  | bool      		   	 :: M :: bool {{ com Built in type identifiers }} {{ ichlo bool_id }}
+  | bit				 :: M :: bit {{ ichlo bit_id }} 
+  | unit			 :: M :: unit {{ ichlo unit_id }}
+  | nat				 :: M :: nat  {{ ichlo nat_id }}
+  | string                       :: M :: string {{ ichlo string_id }}
+  | enum                         :: M :: enum {{ ichlo enum_id }}
+  | vector			 :: M :: vector {{ ichlo vector_id }}
+  | list			 :: M :: list {{ ichlo list_id }}
+  | set                          :: M :: set {{ ichlo set_id }}
+  | reg                          :: M :: reg {{ ichlo reg_id }}
 
-%% 
-%% x_l {{ tex \ottnt{x}^{l} }} , y_l {{ tex \ottnt{y}^{l} }} , z_l {{ tex \ottnt{z}^{l} }} , name :: '' ::=
-%%   {{ com Location-annotated names }}
-%%   | x l                                         :: :: X_l
-%%   | ( ix ) l                                    :: :: PreX_l
-%%     {{ com Remove infix status }}
-%% 
-%% ix_l {{ tex \ottnt{ix}^{l} }} :: '' ::=
-%%   {{ com Location-annotated infix names }}
-%%   | ix l                                        :: :: SymX_l
-%%   | ` x ` l                                     :: :: InX_l
-%%     {{ com Add infix status }}
-%% 
-%% embed
-%% {{ ocaml
-%% let xl_to_l = function
-%%   | X_l(_,l) -> l
-%%   | PreX_l(_,_,_,l) -> l
-%% 
-%% let ixl_to_l = function
-%%   | SymX_l(_,l) -> l
-%%   | InX_l(_,_,_,l) -> l
-%% }}
-%% {{ lem
-%% 
-%% (*let xl_to_l = function
-%%   | X_l(_,l) -> l
-%%   | PreX_l(_,_,l) -> l
-%% end
-%% 
-%% let ixl_to_l = function
-%%   | SymX_l(_,l) -> l
-%%   | InX_l(_,_,_,l) -> l
-%% end*)
-%% 
-%% }}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Kinds and Types                                              %
@@ -280,7 +240,7 @@ nexp :: 'Nexp_' ::=
 %{{ com must be linear after normalisation... except for the type of *, ahem }}
   | nexp1 + nexp2                       :: :: sum          {{ com sum }}
   | 2 ** nexp                            :: :: exp         {{ com exponential }}
-  | ( nexp )                            :: S :: paren  {{ icho [[nexp]] }}
+  | ( nexp )                            :: S :: paren  {{ ichlo [[nexp]] }}
 
 order :: 'Ord_' ::=  
   {{ com vector order specifications, of kind $[[Order]]$}}
@@ -288,7 +248,7 @@ order :: 'Ord_' ::=
   | id                                  :: :: id  {{ com identifier }}
   | inc                                 :: :: inc  {{ com increasing (little-endian) }}
   | dec                                 :: :: dec  {{ com decreasing (big-endian) }}
-  | ( order )                             :: S :: paren {{ icho [[order]] }}
+  | ( order )                             :: S :: paren {{ ichlo [[order]] }}
 
 efct :: 'Effect_' ::=
   {{ com effect }}
@@ -307,7 +267,7 @@ effects :: 'Effects_' ::=
   {{ aux _ l }}
  | effect id                                  :: :: var
  | effect { efct1 , .. , efctn }           :: :: set {{ com effect set }}
- | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ icho [] }}
+ | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ ichlo [] }}
 
 % TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.  Yes.  But we think we don't need any interesting effect-set expressions, eg effectset-variable union {rreg}. 
 
@@ -327,7 +287,7 @@ typ :: 'Typ_' ::=
 % TODO union in the other kind grammars?  or make a syntax of argument? or glom together the grammars and leave o the typechecker
   | id typ_arg1 .. typ_argn                     :: :: app
   {{ com type constructor application }}
-  | ( typ )                            :: S :: paren {{ icho [[typ]] }} 
+  | ( typ )                            :: S :: paren {{ ichlo [[typ]] }} 
 
 typ_arg :: 'Typ_arg_' ::=
   {{ com Type constructor arguments of all kinds }}
@@ -638,12 +598,12 @@ exp :: 'E_' ::=
   | if exp1 then exp2 else exp3                         :: :: if
     {{ com conditional }}
 
-  | if exp1 then exp2                                   :: S :: ifnoelse {{ icho [[ if exp1 then exp2 else unit ]] }}
+  | if exp1 then exp2                                   :: S :: ifnoelse {{ ichlo [[ if exp1 then exp2 else ( ) ]] }}
 
   | foreach id from exp1 to exp2 by exp3 exp4           ::   :: for {{ com loop }}
-  | foreach id from exp1 to exp2 exp3                   :: S :: forbyone  {{ icho [[ foreach id from exp1 to exp2 by 1 exp4 ]] }}
-  | foreach id from exp1 downto exp2 by exp3 exp4       :: S :: fordown {{ icho [[ foreach id from exp1 to exp2 by ( - exp3 ) exp4 ]] }}
-  | foreach id from exp1 downto exp2 exp3               :: S :: fordownbyone  {{ icho [[ foreach id from exp1 downto exp2 by 1 exp4 ]] }}
+  | foreach id from exp1 to exp2 exp3                   :: S :: forbyone  {{ ichlo [[ foreach id from exp1 to exp2 by 1 exp4 ]] }}
+  | foreach id from exp1 downto exp2 by exp3 exp4       :: S :: fordown {{ ichlo [[ foreach id from exp1 to exp2 by ( - exp3 ) exp4 ]] }}
+  | foreach id from exp1 downto exp2 exp3               :: S :: fordownbyone  {{ ichlo [[ foreach id from exp1 downto exp2 by 1 exp4 ]] }}
 
 % vectors
   | [ exp1 , ... , expn ]                             :: :: vector {{ com vector (indexed from 0) }}
@@ -1285,9 +1245,9 @@ terminals :: '' ::=
     {{ tex \ensuremath{\vdash_t} }}
   | |-n					:: :: vdashN
     {{ tex \ensuremath{\vdash_n} }}
-  | |-t					:: :: vdashE
+  | |-e					:: :: vdashE
     {{ tex \ensuremath{\vdash_e} }}
-  | |-t					:: :: vdashO
+  | |-o					:: :: vdashO
     {{ tex \ensuremath{\vdash_o} }}
   | '                                   :: :: quote
     {{ tex \mbox{'} }}
@@ -1340,11 +1300,11 @@ formula :: formula_ ::=
      {{ hol (DISJOINT (FDOM [[E_f1]]) (FDOM [[E_f2]])) }}
      {{ lem disjoint (Pmap.domain [[E_f1]]) (Pmap.domain [[E_f2]]) }} 
 
-%% %%   | disjoint doms ( E_x1 , .... , E_xn )                        :: :: E_x_disjoint_many
-%% %%     {{ hol (FOLDR (\E b. case b of NONE => NONE | SOME s => if DISJOINT (FDOM
-%% %% E) s then SOME (FDOM E UNION s) else NONE) (SOME {}) [[E_x1....E_xn]] <> NONE) }}
-%% %%     {{ lem disjoint_all (List.map Pmap.domain [[E_x1 .... E_xn]]) }}
-%% %%     {{ com Pairwise disjoint domains }}
+   | disjoint doms ( E_t1 , .... , E_tn )                        :: :: E_x_disjoint_many
+    {{ hol (FOLDR (\E b. case b of NONE => NONE | SOME s => if DISJOINT (FDOM
+       E) s then SOME (FDOM E UNION s) else NONE) (SOME {}) [[E_t1....E_tn]] <> NONE) }}
+     {{ lem disjoint_all (List.map Pmap.domain [[E_t1 .... E_tn]]) }}
+     {{ com Pairwise disjoint domains }}
 %% %% 
 %% %%   | compatible overlap ( x1 |-> t1 , .. , xn |-> tn )           :: :: E_l_compat
 %% %%     {{ hol (!__n __m. MEM __m [[x1 t1 .. xn tn]] /\ MEM __n [[x1 t1..xn tn]] /\ (FST __m  = FST __n) ==> (SND __m = SND __n)) }}
@@ -1363,9 +1323,9 @@ formula :: formula_ ::=
      {{ hol ([[id]] NOTIN FDOM [[E_k]]) }}
      {{ lem Pervasives.not (Pmap.mem [[id]] [[E_k]]) }} 
 
-%% %%   | x NOTIN dom ( E_f )                                         :: :: notin_dom_f
-%% %%     {{ hol ([[x]] NOTIN FDOM [[E_f]]) }}
-%% %%     {{ lem Pervasives.not (Pmap.mem [[x]] [[E_f]]) }} 
+   | id NOTIN dom ( E_t )                                         :: :: notin_dom_t
+     {{ hol ([[id]] NOTIN FDOM [[E_t]]) }}
+     {{ lem Pervasives.not (Pmap.mem [[id]] [[E_t]]) }} 
 %% %% 
 %% %% 
 %% %%   | FV ( t ) SUBSET tnvs                                                :: :: FV_t
@@ -1603,52 +1563,44 @@ E_k, K_Ord |- order ok
 %% % TD |- ne = ne' 
 %% % 
 %% % 
-%% % defns
-%% % convert_typ :: '' ::=
-%% % 
-%% % defn
-%% % TD , E |- typ ~> t :: :: convert_typ :: convert_typ_ 
-%% % {{ com Convert source types to internal types }}
-%% % by
-%% % 
-%% % % TODO : Can't allow things like type t = _, but it's useful to have things 
-%% % % like f (x : (_, int)) = snd x
-%% % %TD |- t ok
-%% % %------------------------------------------------------------ :: wild
-%% % %TD,E |- _ l ~> t
-%% % 
-%% % ------------------------------------------------------------ :: var
-%% % TD,E |- a l' l ~> a
-%% % 
-%% % TD,E |- typ1 ~> t1
-%% % TD,E |- typ2 ~> t2
-%% % ------------------------------------------------------------ :: fn
-%% % TD,E |- typ1->typ2 l ~> t1->t2
-%% % 
-%% % TD,E |- typ1 ~> t1 .... TD,E |- typn ~> tn
-%% % ------------------------------------------------------------ :: tup
-%% % TD,E |- typ1 * .... * typn l ~> t1 * .... * tn
-%% % 
-%% % TD,E |- typ1 ~> t1 .. TD,E |- typn ~> tn
-%% % E(id) gives p
-%% % TD(p) gives a1..an tc_abbrev
-%% % ------------------------------------------------------------ :: app
-%% % TD,E |- id typ1 .. typn l ~> p t1 .. tn
-%% % 
-%% % |- nexp ~> ne
-%% % ------------------------------------------------------------ :: nexp
-%% % TD,E |- nexp ~> ne
-%% % 
-%% % TD,E |- typ ~> t
-%% % ------------------------------------------------------------ :: paren
-%% % TD,E |- (typ) l ~> t
-%% % 
-%% % 
-%% % TD,E |- typ ~> t1
-%% % TD |- t1 = t2
-%% % ------------------------------------------------------------ :: eq
-%% % TD,E |- typ ~> t2
-%% % 
+
+defns
+convert_typ :: '' ::=
+ 
+defn
+E_k |- typ ~> t :: :: convert_typ :: convert_typ_ 
+{{ com Convert source types to internal types }}
+by
+ 
+E_k(id) gives K_Typ
+------------------------------------------------------------ :: var
+E_k |- :Typ_var: id ~> id
+
+E_k |- typ1 ~> t1
+E_k |- typ2 ~> t2
+E_k |-e effects ok
+------------------------------------------------------------ :: fn
+E_k |- typ1->typ2 effects ~> t1->t2 effects
+ 
+E_k |- typ1 ~> t1 .... E_k |- typn ~> tn
+------------------------------------------------------------ :: tup
+E_k |- typ1 * .... * typn ~> t1 * .... * tn
+
+E_k(id) gives K_Lam (k1..kn -> K_Typ)
+E_k,k1 |- typ_arg1 ~> t_arg1 .. E_k,kn |- typ_argn ~> t_argn
+------------------------------------------------------------ :: app
+E_k |- id typ_arg1 .. typ_argn ~> id t_arg1 .. t_argn
+
+E_k |- typ ~> t1
+%E_k |- t1 = t2
+------------------------------------------------------------ :: eq
+E_k |- typ ~> t2
+
+defn
+E_k , k |- typ_arg ~> t_arg :: :: convert_targ :: convert_targ_
+{{ com Convert source type arguments to internals }}
+by
+ 
 %% % defn 
 %% % |- nexp ~> ne :: :: convert_nexp :: convert_nexp_ 
 %% % {{ com Convert and normalize numeric expressions }}
@@ -1697,13 +1649,16 @@ by
  ------------------------------------------------------------ :: num
  |- num : nat
  
+ ------------------------------------------------------------- :: string
+ |- string : string
+
  num = bitlength(hex)
  ------------------------------------------------------------ :: hex
- |- hex : vector zero num inc bit
+ |- hex : vector zero num inc :T_var: bit
 
  num = bitlength(bin)
  ------------------------------------------------------------ :: bin 
- |- bin  : vector zero num inc bit
+ |- bin  : vector zero num inc :T_var: bit
 
  ------------------------------------------------------------ :: unit
  |- () : unit
@@ -1794,48 +1749,39 @@ by
 %% % E_l |- x_l1. .. x_ln.y_l.z_l l not shadowed
 %% % 
 %% % 
-%% % defns
-%% % check_pat :: '' ::=
-%% % 
-%% % defn
-%% % TD , E , E_l1 |- pat : t gives E_l2 :: :: check_pat :: check_pat_ 
-%% % {{ com Typing patterns, building their binding environment }}
-%% % by
-%% % 
-%% % :check_pat_aux: TD,E,E_l1 |- pat_aux : t gives E_l2
-%% % ------------------------------------------------------------ :: all
-%% % TD,E,E_l1 |- pat_aux l : t gives E_l2
-%% % 
-%% % defn
-%% % TD , E , E_l1 |- pat_aux : t gives E_l2 :: :: check_pat_aux :: check_pat_aux_ 
-%% % {{ com Typing patterns, building their binding environment }}
-%% % by
-%% % 
-%% % TD |- t ok
-%% % ------------------------------------------------------------ :: wild
-%% % TD,E,E_l |- _ : t gives {}
-%% % 
-%% % TD,E,E_l1 |- pat : t gives E_l2
-%% % x NOTIN dom(E_l2)
-%% % ------------------------------------------------------------ :: as
-%% % TD,E,E_l1 |- (pat as x l) : t gives E_l2 u+ {x|->t}
-%% % 
-%% % TD,E,E_l1 |- pat : t gives E_l2
-%% % TD,E |- typ ~> t
-%% % ------------------------------------------------------------ :: typ
-%% % TD,E,E_l1 |- (pat : typ) : t gives E_l2
-%% % 
+defns
+check_pat :: '' ::=
+ 
+defn
+E |- pat : t gives E_t :: :: check_pat :: check_pat_ 
+{{ com Typing patterns, building their binding environment }}
+by
+
+E_k |-t t ok
+------------------------------------------------------------ :: wild
+<E_t,E_k> |- _ : t gives {} 
+% This case should perhaps indicate the generation of a type variable, with kind Typ
+
+<E_t,E_k> |- pat : t gives E_t1
+id NOTIN dom(E_t1)
+------------------------------------------------------------ :: as
+<E_t,E_k> |- (pat as id) : t gives E_t1 u+ {id|->t}
+
+E_k |- typ ~> t
+<E_t,E_k> |- pat : t gives E_t1
+------------------------------------------------------------ :: typ
+<E_t,E_k> |- (<typ> pat) : t gives E_t1
+
 %% % TD,E |- ctor id : (t1*..*tn) -> p t_args gives (x of names)
-%% % E_l |- id not shadowed
-%% % TD,E,E_l |- pat1 : t1 gives E_l1 .. TD,E,E_l |- patn : tn gives E_ln
+<E_t,E_k> |- pat1 : t1 gives E_t1 .. <E_t,E_k> |- patn : tn gives E_tn
 %% % disjoint doms(E_l1,..,E_ln)
-%% % ------------------------------------------------------------ :: ident_constr
-%% % TD,E,E_l |- id pat1 .. patn : p t_args gives E_l1 u+ .. u+ E_ln
-%% % 
-%% % TD |- t ok
-%% % E,E_l |- x not ctor
-%% % ------------------------------------------------------------ :: var
-%% % TD,E,E_l |- x l1 l2 : t gives {x|->t}
+------------------------------------------------------------ :: ident_constr
+<E_t,E_k> |- id pat1 .. patn : id t_args gives E_t1 u+ .. u+ E_tn
+
+E_k |-t t ok
+ ------------------------------------------------------------ :: var
+<E_t,E_k> |- :P_id: id : t gives E_t u+ {id|->t}
+
 %% % 
 %% % </TD,E |- field idi : p t_args -> ti gives (xi of names) // i />
 %% % </TD,E,E_l |- pati : ti gives E_li//i/>
@@ -1856,12 +1802,12 @@ by
 %% % ----------------------------------------------------------- :: vectorConcat
 %% % TD,E,E_l |- [| pat1 ... patn  |] : __vector ne' t gives E_l1 u+ ... u+ E_ln
 %% % 
-%% % 
-%% % TD,E,E_l |- pat1 : t1 gives E_l1 .... TD,E,E_l |- patn : tn gives E_ln
-%% % disjoint doms(E_l1,....,E_ln)
-%% % ------------------------------------------------------------ :: tup
-%% % TD,E,E_l |- (pat1, ...., patn) : t1 * .... * tn gives E_l1 u+ .... u+ E_ln 
-%% % 
+
+<E_t,E_k> |- pat1 : t1 gives E_t1 .... <E_t,E_k> |- patn : tn gives E_tn
+disjoint doms(E_t1,....,E_tn)
+------------------------------------------------------------ :: tup
+<E_t,E_k> |- (pat1, ...., patn) : t1 * .... * tn gives E_t1 u+ .... u+ E_tn 
+
 %% % TD |- t ok
 %% % TD,E,E_l |- pat1 : t gives E_l1 .. TD,E,E_l |- patn : t gives E_ln
 %% % disjoint doms(E_l1,..,E_ln)
@@ -1925,9 +1871,9 @@ by
 %% % ------------------------------------------------------------ :: cons
 %% % <E_m,E_p,E_f,E_x> |- x l1.</y_li.//i/> z_l l2 value
 %% % 
-%% % defns
-%% % check_exp :: '' ::=
-%% % 
+defns
+check_exp :: '' ::=
+ 
 %% % defn
 %% % TD , E , E_l |- exp : t gives S_c , S_N :: :: check_exp :: check_exp_ 
 %% % {{ com Typing expressions, collecting typeclass and index constraints }}

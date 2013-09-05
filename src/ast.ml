@@ -109,16 +109,16 @@ quant_item =
 
 
 type 
-effects_aux =  (* effect set, of kind $_$ *)
-   Effects_var of id
- | Effects_set of (efct) list (* effect set *)
-
-
-type 
 order_aux =  (* vector order specifications, of kind $_$ *)
    Ord_id of id (* identifier *)
  | Ord_inc (* increasing (little-endian) *)
  | Ord_dec (* decreasing (big-endian) *)
+
+
+type 
+effects_aux =  (* effect set, of kind $_$ *)
+   Effects_var of id
+ | Effects_set of (efct) list (* effect set *)
 
 
 type 
@@ -128,13 +128,13 @@ typquant_aux =  (* type quantifiers and constraints *)
 
 
 type 
-effects = 
-   Effects_aux of effects_aux * l
+order = 
+   Ord_aux of order_aux * l
 
 
 type 
-order = 
-   Ord_aux of order_aux * l
+effects = 
+   Effects_aux of effects_aux * l
 
 
 type 
@@ -281,6 +281,16 @@ and 'a letbind =
 
 
 type 
+ne =  (* internal numeric expressions *)
+   Ne_var of id
+ | Ne_const of int
+ | Ne_mult of ne * ne
+ | Ne_add of ne * ne
+ | Ne_exp of ne
+ | Ne_unary of ne
+
+
+type 
 naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
    Name_sect_none
  | Name_sect_some of string
@@ -306,6 +316,28 @@ type
 rec_opt_aux =  (* Optional recursive annotation for functions *)
    Rec_nonrec (* non-recursive *)
  | Rec_rec (* recursive *)
+
+
+type 
+k =  (* Internal kinds *)
+   Ki_typ
+ | Ki_nat
+ | Ki_ord
+ | Ki_efct
+ | Ki_val (* Representing values, for use in identifier checks *)
+ | Ki_ctor of (k) list * k
+ | Ki_infer (* Representing an unknown kind, inferred by context *)
+
+
+type 
+t_arg =  (* Argument to type constructors *)
+   Typ of t
+ | Nexp of ne
+ | Effect of effects
+ | Order of order
+
+and t_args =  (* Arguments to type constructors *)
+   T_args of (t_arg) list
 
 
 type 
@@ -344,27 +376,6 @@ rec_opt =
 
 
 type 
-ne =  (* internal numeric expressions *)
-   Ne_var of id
- | Ne_const of int
- | Ne_mult of ne * ne
- | Ne_add of ne * ne
- | Ne_exp of ne
- | Ne_unary of ne
-
-
-type 
-k =  (* Internal kinds *)
-   Ki_typ
- | Ki_nat
- | Ki_ord
- | Ki_efct
- | Ki_val (* Representing values, for use in identifier checks *)
- | Ki_ctor of (k) list * k
- | Ki_infer (* Representing an unknown kind, inferred by context *)
-
-
-type 
 'a type_def_aux =  (* Type definition body *)
    TD_abbrev of id * naming_scheme_opt * typschm (* type abbreviation *)
  | TD_record of id * naming_scheme_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
@@ -387,17 +398,6 @@ type
 type 
 'a val_spec_aux =  (* Value type specification *)
    VS_val_spec of typschm * id
-
-
-type 
-t_arg =  (* Argument to type constructors *)
-   Typ of t
- | Nexp of ne
- | Effect of effects
- | Order of order
-
-and t_args =  (* Arguments to type constructors *)
-   T_args of (t_arg) list
 
 
 type 
@@ -477,6 +477,9 @@ type
 'a defs =  (* Definition sequence *)
    Defs of ('a def) list
 
+(** definitions *)
+(** definitions *)
+(** definitions *)
 (** definitions *)
 (** definitions *)
 (** definitions *)
