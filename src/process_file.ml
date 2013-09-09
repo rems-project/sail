@@ -77,7 +77,7 @@ let convert_ast (defs : Parse_ast.defs) : Type_internal.tannot Ast.defs =
   Initial_check.to_ast Nameset.empty Type_internal.initial_kind_env Envmap.empty defs
 
 let open_output_with_check file_name =
-  let (temp_file_name, o) = Filename.open_temp_file "lem_temp" "" in
+  let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in
   let o' = Format.formatter_of_out_channel o in
   (o', (o, temp_file_name, file_name))
 
@@ -136,7 +136,9 @@ let output1 libpath out_arg filename defs (* alldoc_accum alldoc_inc_accum alldo
       | Lem_ast_out ->
 	begin
 	  let (o, ext_o) = open_output_with_check (f' ^ ".lem") in
-	  Format.fprintf o "(* %s *)" (generated_line filename);
+	  Format.fprintf o "(* %s *)@\n" (generated_line filename);
+          Format.fprintf o "open Ast@\n";
+          Format.fprintf o "let defs = ";
 	  Pretty_print.pp_lem_defs o defs;
 	  close_output_with_check ext_o
 	end

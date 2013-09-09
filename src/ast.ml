@@ -109,16 +109,16 @@ quant_item =
 
 
 type 
+effects_aux =  (* effect set, of kind $_$ *)
+   Effects_var of id
+ | Effects_set of (efct) list (* effect set *)
+
+
+type 
 order_aux =  (* vector order specifications, of kind $_$ *)
    Ord_id of id (* identifier *)
  | Ord_inc (* increasing (little-endian) *)
  | Ord_dec (* decreasing (big-endian) *)
-
-
-type 
-effects_aux =  (* effect set, of kind $_$ *)
-   Effects_var of id
- | Effects_set of (efct) list (* effect set *)
 
 
 type 
@@ -128,13 +128,26 @@ typquant_aux =  (* type quantifiers and constraints *)
 
 
 type 
+effects = 
+   Effects_aux of effects_aux * l
+
+
+type 
 order = 
    Ord_aux of order_aux * l
 
 
 type 
-effects = 
-   Effects_aux of effects_aux * l
+lit_aux =  (* Literal constant *)
+   L_unit (* $() : _$ *)
+ | L_zero (* $_ : _$ *)
+ | L_one (* $_ : _$ *)
+ | L_true (* $_ : _$ *)
+ | L_false (* $_ : _$ *)
+ | L_num of int (* natural number constant *)
+ | L_hex of string (* bit vector constant, C-style *)
+ | L_bin of string (* bit vector constant, C-style *)
+ | L_string of string (* string constant *)
 
 
 type 
@@ -164,31 +177,13 @@ and typ_arg =
 
 
 type 
-lit_aux =  (* Literal constant *)
-   L_unit (* $() : _$ *)
- | L_zero (* $_ : _$ *)
- | L_one (* $_ : _$ *)
- | L_true (* $_ : _$ *)
- | L_false (* $_ : _$ *)
- | L_num of int (* natural number constant *)
- | L_hex of string (* bit vector constant, C-style *)
- | L_bin of string (* bit vector constant, C-style *)
- | L_string of string (* string constant *)
-
-
-type 
-typschm_aux =  (* type scheme *)
-   TypSchm_ts of typquant * typ
-
-
-type 
 lit = 
    L_aux of lit_aux * l
 
 
 type 
-typschm = 
-   TypSchm_aux of typschm_aux * l
+typschm_aux =  (* type scheme *)
+   TypSchm_ts of typquant * typ
 
 
 type 
@@ -214,6 +209,11 @@ and 'a fpat_aux =  (* Field pattern *)
 
 and 'a fpat = 
    FP_aux of 'a fpat_aux * 'a annot
+
+
+type 
+typschm = 
+   TypSchm_aux of typschm_aux * l
 
 
 type 
@@ -281,29 +281,19 @@ and 'a letbind =
 
 
 type 
-ne =  (* internal numeric expressions *)
-   Ne_var of id
- | Ne_const of int
- | Ne_mult of ne * ne
- | Ne_add of ne * ne
- | Ne_exp of ne
- | Ne_unary of ne
-
-
-type 
-naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
-   Name_sect_none
- | Name_sect_some of string
-
-
-type 
-'a tannot_opt_aux =  (* Optional type annotation for functions *)
-   Typ_annot_opt_some of typquant * typ
+rec_opt_aux =  (* Optional recursive annotation for functions *)
+   Rec_nonrec (* non-recursive *)
+ | Rec_rec (* recursive *)
 
 
 type 
 'a funcl_aux =  (* Function clause *)
    FCL_Funcl of id * 'a pat * 'a exp
+
+
+type 
+'a tannot_opt_aux =  (* Optional type annotation for functions *)
+   Typ_annot_opt_some of typquant * typ
 
 
 type 
@@ -313,25 +303,29 @@ type
 
 
 type 
-rec_opt_aux =  (* Optional recursive annotation for functions *)
-   Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
+naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
+   Name_sect_none
+ | Name_sect_some of string
 
 
 type 
-k =  (* Internal kinds *)
-   Ki_typ
- | Ki_nat
- | Ki_ord
- | Ki_efct
- | Ki_val (* Representing values, for use in identifier checks *)
- | Ki_ctor of (k) list * k
- | Ki_infer (* Representing an unknown kind, inferred by context *)
+rec_opt = 
+   Rec_aux of rec_opt_aux * l
 
 
 type 
-naming_scheme_opt = 
-   Name_sect_aux of naming_scheme_opt_aux * l
+'a funcl = 
+   FCL_aux of 'a funcl_aux * 'a annot
+
+
+type 
+'a tannot_opt = 
+   Typ_annot_opt_aux of 'a tannot_opt_aux * 'a annot
+
+
+type 
+'a effects_opt = 
+   Effects_opt_aux of 'a effects_opt_aux * 'a annot
 
 
 type 
@@ -345,38 +339,8 @@ and index_range =
 
 
 type 
-'a tannot_opt = 
-   Typ_annot_opt_aux of 'a tannot_opt_aux * 'a annot
-
-
-type 
-'a funcl = 
-   FCL_aux of 'a funcl_aux * 'a annot
-
-
-type 
-'a effects_opt = 
-   Effects_opt_aux of 'a effects_opt_aux * 'a annot
-
-
-type 
-rec_opt = 
-   Rec_aux of rec_opt_aux * l
-
-
-type 
-'a type_def_aux =  (* Type definition body *)
-   TD_abbrev of id * naming_scheme_opt * typschm (* type abbreviation *)
- | TD_record of id * naming_scheme_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
- | TD_variant of id * naming_scheme_opt * typquant * ((typ * id)) list * bool (* union type definition *)
- | TD_enum of id * naming_scheme_opt * (id) list * bool (* enumeration type definition *)
- | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
-
-
-type 
-'a default_typing_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of base_kind * id
- | DT_typ of typschm * id
+naming_scheme_opt = 
+   Name_sect_aux of naming_scheme_opt_aux * l
 
 
 type 
@@ -390,13 +354,28 @@ type
 
 
 type 
-'a type_def = 
-   TD_aux of 'a type_def_aux * 'a annot
+'a default_typing_spec_aux =  (* Default kinding or typing assumption *)
+   DT_kind of base_kind * id
+ | DT_typ of typschm * id
 
 
 type 
-'a default_typing_spec = 
-   DT_aux of 'a default_typing_spec_aux * 'a annot
+'a type_def_aux =  (* Type definition body *)
+   TD_abbrev of id * naming_scheme_opt * typschm (* type abbreviation *)
+ | TD_record of id * naming_scheme_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
+ | TD_variant of id * naming_scheme_opt * typquant * ((typ * id)) list * bool (* union type definition *)
+ | TD_enum of id * naming_scheme_opt * (id) list * bool (* enumeration type definition *)
+ | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
+
+
+type 
+ne =  (* internal numeric expressions *)
+   Ne_var of id
+ | Ne_const of int
+ | Ne_mult of ne * ne
+ | Ne_add of ne * ne
+ | Ne_exp of ne
+ | Ne_unary of ne
 
 
 type 
@@ -407,6 +386,27 @@ type
 type 
 'a val_spec = 
    VS_aux of 'a val_spec_aux * 'a annot
+
+
+type 
+'a default_typing_spec = 
+   DT_aux of 'a default_typing_spec_aux * 'a annot
+
+
+type 
+'a type_def = 
+   TD_aux of 'a type_def_aux * 'a annot
+
+
+type 
+k =  (* Internal kinds *)
+   Ki_typ
+ | Ki_nat
+ | Ki_ord
+ | Ki_efct
+ | Ki_val (* Representing values, for use in identifier checks *)
+ | Ki_ctor of (k) list * k
+ | Ki_infer (* Representing an unknown kind, inferred by context *)
 
 
 type 
@@ -466,11 +466,5 @@ type
 'a defs =  (* Definition sequence *)
    Defs of ('a def) list
 
-(** definitions *)
-(** definitions *)
-(** definitions *)
-(** definitions *)
-(** definitions *)
-(** definitions *)
 
 

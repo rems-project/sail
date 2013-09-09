@@ -340,8 +340,8 @@ let pp_defs ppf (Defs(defs)) =
 
 let pp_format_id_lem (Id_aux(i,_)) =
   match i with
-  | Id(i) -> "(Id " ^ i ^ ")"
-  | DeIid(x) -> "(DeIid " ^ x ^ ")"
+  | Id(i) -> "(Id \"" ^ i ^ "\")"
+  | DeIid(x) -> "(DeIid \"" ^ x ^ "\")"
 
 let pp_lem_id ppf id = base ppf (pp_format_id_lem id)
 
@@ -352,12 +352,12 @@ let pp_format_bkind_lem (BK_aux(k,_)) =
   | BK_order -> "BK_order"
   | BK_effects -> "BK_effects"
 
-let pp_lem_bkind ppf bk = base ppf (pp_format_bkind bk)
+let pp_lem_bkind ppf bk = base ppf (pp_format_bkind_lem bk)
 
 let pp_format_kind_lem (K_aux(K_kind(klst),_)) = 
-  "(K_kind [" ^ list_format "; " pp_format_bkind klst ^ "])"
+  "(K_kind [" ^ list_format "; " pp_format_bkind_lem klst ^ "])"
 
-let pp_lem_kind ppf k = base ppf (pp_format_kind k)
+let pp_lem_kind ppf k = base ppf (pp_format_kind_lem k)
 
 let rec pp_format_typ_lem (Typ_aux(t,_)) =
   match t with
@@ -365,7 +365,7 @@ let rec pp_format_typ_lem (Typ_aux(t,_)) =
   | Typ_fn(arg,ret,efct) -> "(Typ_fn " ^ pp_format_typ_lem arg ^ " " ^ 
                              pp_format_typ_lem ret ^ " " ^
                             (pp_format_effects_lem efct) ^ ")"
-  | Typ_tup(typs) -> "(Typ_tup " ^ (list_format " " pp_format_typ_lem typs) ^ ")"
+  | Typ_tup(typs) -> "(Typ_tup [" ^ (list_format "; " pp_format_typ_lem typs) ^ "])"
   | Typ_app(id,args) -> "(Typ_app " ^ (pp_format_id_lem id) ^ " [" ^ (list_format "; " pp_format_typ_arg_lem args) ^ "])"
 and pp_format_nexp_lem (Nexp_aux(n,_)) = 
   match n with
@@ -409,9 +409,9 @@ let pp_lem_effects ppf e = base ppf (pp_format_effects_lem e)
 
 let pp_format_nexp_constraint_lem (NC_aux(nc,_)) =
   match nc with
-  | NC_fixed(n1,n2) -> "(NC_fixed " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp n2 ^ ")"
-  | NC_bounded_ge(n1,n2) -> "(NC_bounded_ge " ^ pp_format_nexp n1 ^ " " ^ pp_format_nexp n2 ^ ")"
-  | NC_bounded_le(n1,n2) -> "(NC_bounded_le " ^ pp_format_nexp n1 ^ " " ^ pp_format_nexp n2 ^ ")"
+  | NC_fixed(n1,n2) -> "(NC_fixed " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
+  | NC_bounded_ge(n1,n2) -> "(NC_bounded_ge " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
+  | NC_bounded_le(n1,n2) -> "(NC_bounded_le " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
   | NC_nat_set_bounded(id,bounds) -> "(NC_nat_set_bounded " ^ 
     pp_format_id id ^
       " [" ^
@@ -422,12 +422,12 @@ let pp_lem_nexp_constraint ppf nc = base ppf (pp_format_nexp_constraint_lem nc)
 
 let pp_format_qi_lem (QI_aux(qi,_)) =
   match qi with
-  | QI_const(n_const) -> "(QI_const " ^ pp_format_nexp_constraint n_const ^ ")"
+  | QI_const(n_const) -> "(QI_const " ^ pp_format_nexp_constraint_lem n_const ^ ")"
   | QI_id(KOpt_aux(ki,_)) ->
     "(QI_id " ^
     (match ki with
-    | KOpt_none(id) -> "(KOpt_none " ^ pp_format_id id ^ ")"
-    | KOpt_kind(k,id) -> "(KOpt_kind " ^ pp_format_kind k ^ " " ^ pp_format_id id ^ ")") ^ ")"
+    | KOpt_none(id) -> "(KOpt_none " ^ pp_format_id_lem id ^ ")"
+    | KOpt_kind(k,id) -> "(KOpt_kind " ^ pp_format_kind_lem k ^ " " ^ pp_format_id_lem id ^ ")") ^ ")"
 
 let pp_lem_qi ppf qi = base ppf (pp_format_qi_lem qi)
 
@@ -435,9 +435,9 @@ let pp_format_typquant_lem (TypQ_aux(tq,_)) =
   match tq with
   | TypQ_no_forall -> "TypQ_no_forall"
   | TypQ_tq(qlist) ->
-    "(TypQ_tq " ^ 
-    (list_format " " pp_format_qi qlist) ^
-    ")"
+    "(TypQ_tq [" ^ 
+    (list_format "; " pp_format_qi_lem qlist) ^
+    "])"
 
 let pp_lem_typquant ppf tq = base ppf (pp_format_typquant_lem tq)
 
@@ -548,8 +548,8 @@ and pp_lem_lexp ppf (LEXP_aux(lexp,_)) =
 
 let pp_lem_default ppf (DT_aux(df,_)) =
   match df with
-  | DT_kind(bk,id) -> fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "DT_kind" pp_lem_bkind bk pp_lem_id id
-  | DT_typ(ts,id) -> fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "DT_typ" pp_lem_typscm ts pp_lem_id id
+  | DT_kind(bk,id) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "DT_kind" pp_lem_bkind bk pp_lem_id id
+  | DT_typ(ts,id) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "DT_typ" pp_lem_typscm ts pp_lem_id id
 
 let pp_lem_spec ppf (VS_aux(VS_val_spec(ts,id),_)) =
   fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_val_spec" pp_lem_typscm ts pp_lem_id id
@@ -568,25 +568,25 @@ let rec pp_lem_range ppf (BF_aux(r,_)) =
 let pp_lem_typdef ppf (TD_aux(td,_)) =
   match td with
   | TD_abbrev(id,namescm,typschm) -> 
-    fprintf ppf "@[<0>(%a %a %a %a)@]@\n" kwd "TD_abbrev" pp_lem_id id pp_lem_namescm namescm pp_lem_typscm typschm
+    fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "TD_abbrev" pp_lem_id id pp_lem_namescm namescm pp_lem_typscm typschm
   | TD_record(id,nm,typq,fs,_) -> 
     let f_pp ppf (typ,id) =
       fprintf ppf "@[<1>(%a, %a)%a@]" pp_lem_typ typ pp_lem_id id kwd ";" in
-    fprintf ppf "@[<0>(%a %a %a %a [%a])]@\n" 
+    fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]" 
       kwd "TD_record" pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp f_pp f_pp) fs
   | TD_variant(id,nm,typq,ar,_) ->
     let a_pp ppf (typ,id) = 
       fprintf ppf "@[<1>(%a, %a)%a@]" pp_lem_typ typ pp_lem_id id kwd ";" in
-    fprintf ppf "@[<0>(%a %a %a %a [%a])]@\n" 
+    fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]" 
       kwd "TD_variant" pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp a_pp a_pp) ar 
   | TD_enum(id,ns,enums,_) ->
     let pp_id_semi ppf id = fprintf ppf "%a%a " pp_lem_id id kwd ";" in
-    fprintf ppf "@[<0>(%a %a %a [%a])@]@\n"
+    fprintf ppf "@[<0>(%a %a %a [%a] false)@]"
       kwd "TD_enum" pp_lem_id id pp_lem_namescm ns (list_pp pp_id_semi pp_lem_id) enums
   | TD_register(id,n1,n2,rs) -> 
     let pp_rid ppf (r,id) = fprintf ppf "(%a, %a)%a " pp_lem_range r pp_lem_id id kwd ";" in
     let pp_rids = (list_pp pp_rid pp_rid) in
-    fprintf ppf "@[<0>(%a %a %a %a [%a])@]@\n"
+    fprintf ppf "@[<0>(%a %a %a %a [%a])@]"
      kwd "TD_register" pp_lem_id id pp_lem_nexp n1 pp_lem_nexp n2 pp_rids rs
 
 let pp_lem_rec ppf (Rec_aux(r,_)) =
@@ -608,17 +608,17 @@ let pp_lem_funcl ppf (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
 
 let pp_lem_fundef ppf (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   let pp_funcls ppf funcl = fprintf ppf "%a %a" kwd ";" pp_lem_funcl funcl in
-  fprintf ppf "@[<0>(%a %a %a %a [%a]@]@\n" 
+  fprintf ppf "@[<0>(%a %a %a %a [%a]@]" 
     kwd "FD_function" pp_lem_rec r pp_lem_tannot_opt typa pp_lem_effects_opt efa (list_pp pp_funcls pp_funcls) fcls
 
 let pp_lem_def ppf (DEF_aux(d,(l,_))) =
   match d with
-  | DEF_default(df) -> fprintf ppf "(DEF_default %a)" pp_lem_default df
-  | DEF_spec(v_spec) -> fprintf ppf "(DEF_spec %a)" pp_lem_spec v_spec
-  | DEF_type(t_def) -> fprintf ppf "(DEF_type %a)" pp_lem_typdef t_def
-  | DEF_fundef(f_def) -> fprintf ppf "(DEF_fundef %a)" pp_lem_fundef f_def
-  | DEF_val(lbind) -> fprintf ppf "(DEF_val %a)" pp_lem_let lbind
-  | DEF_reg_dec(typ,id) -> fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "DEF_reg_dec" pp_lem_typ typ pp_lem_id id
+  | DEF_default(df) -> fprintf ppf "(DEF_default %a);@\n" pp_lem_default df
+  | DEF_spec(v_spec) -> fprintf ppf "(DEF_spec %a);@\n" pp_lem_spec v_spec
+  | DEF_type(t_def) -> fprintf ppf "(DEF_type %a);@\n" pp_lem_typdef t_def
+  | DEF_fundef(f_def) -> fprintf ppf "(DEF_fundef %a);@\n" pp_lem_fundef f_def
+  | DEF_val(lbind) -> fprintf ppf "(DEF_val %a);@\n" pp_lem_let lbind
+  | DEF_reg_dec(typ,id) -> fprintf ppf "@[<0>(%a %a %a)@];@\n" kwd "DEF_reg_dec" pp_lem_typ typ pp_lem_id id
   | _ -> raise (Reporting_basic.err_unreachable l "initial_check didn't remove all scattered Defs")
 
 let pp_lem_defs ppf (Defs(defs)) =
