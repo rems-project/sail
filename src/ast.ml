@@ -72,6 +72,16 @@ kinded_id_aux =  (* optionally kind-annotated identifier *)
 
 
 type 
+nexp_constraint = 
+   NC_aux of nexp_constraint_aux * l
+
+
+type 
+kinded_id = 
+   KOpt_aux of kinded_id_aux * l
+
+
+type 
 efct_aux =  (* effect *)
    Effect_rreg (* read register *)
  | Effect_wreg (* write register *)
@@ -83,13 +93,9 @@ efct_aux =  (* effect *)
 
 
 type 
-nexp_constraint = 
-   NC_aux of nexp_constraint_aux * l
-
-
-type 
-kinded_id = 
-   KOpt_aux of kinded_id_aux * l
+quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
+   QI_id of kinded_id (* An optionally kinded identifier *)
+ | QI_const of nexp_constraint (* A constraint for this type *)
 
 
 type 
@@ -98,9 +104,8 @@ efct =
 
 
 type 
-quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
-   QI_id of kinded_id (* An optionally kinded identifier *)
- | QI_const of nexp_constraint (* A constraint for this type *)
+quant_item = 
+   QI_aux of quant_item_aux * l
 
 
 type 
@@ -117,8 +122,9 @@ effects_aux =  (* effect set, of kind $_$ *)
 
 
 type 
-quant_item = 
-   QI_aux of quant_item_aux * l
+typquant_aux =  (* type quantifiers and constraints *)
+   TypQ_tq of (quant_item) list
+ | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
 type 
@@ -132,9 +138,8 @@ effects =
 
 
 type 
-typquant_aux =  (* type quantifiers and constraints *)
-   TypQ_tq of (quant_item) list
- | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
+typquant = 
+   TypQ_aux of typquant_aux * l
 
 
 type 
@@ -156,11 +161,6 @@ and typ_arg_aux =  (* Type constructor arguments of all kinds *)
 
 and typ_arg = 
    Typ_arg_aux of typ_arg_aux * l
-
-
-type 
-typquant = 
-   TypQ_aux of typquant_aux * l
 
 
 type 
@@ -281,6 +281,16 @@ and 'a letbind =
 
 
 type 
+ne =  (* internal numeric expressions *)
+   Ne_var of id
+ | Ne_const of int
+ | Ne_mult of ne * ne
+ | Ne_add of ne * ne
+ | Ne_exp of ne
+ | Ne_unary of ne
+
+
+type 
 naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
    Name_sect_none
  | Name_sect_some of string
@@ -292,9 +302,8 @@ type
 
 
 type 
-rec_opt_aux =  (* Optional recursive annotation for functions *)
-   Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
+'a funcl_aux =  (* Function clause *)
+   FCL_Funcl of id * 'a pat * 'a exp
 
 
 type 
@@ -304,18 +313,20 @@ type
 
 
 type 
-'a funcl_aux =  (* Function clause *)
-   FCL_Funcl of id * 'a pat * 'a exp
+rec_opt_aux =  (* Optional recursive annotation for functions *)
+   Rec_nonrec (* non-recursive *)
+ | Rec_rec (* recursive *)
 
 
 type 
-ne =  (* internal numeric expressions *)
-   Ne_var of id
- | Ne_const of int
- | Ne_mult of ne * ne
- | Ne_add of ne * ne
- | Ne_exp of ne
- | Ne_unary of ne
+k =  (* Internal kinds *)
+   Ki_typ
+ | Ki_nat
+ | Ki_ord
+ | Ki_efct
+ | Ki_val (* Representing values, for use in identifier checks *)
+ | Ki_ctor of (k) list * k
+ | Ki_infer (* Representing an unknown kind, inferred by context *)
 
 
 type 
@@ -339,8 +350,8 @@ type
 
 
 type 
-rec_opt = 
-   Rec_aux of rec_opt_aux * l
+'a funcl = 
+   FCL_aux of 'a funcl_aux * 'a annot
 
 
 type 
@@ -349,30 +360,8 @@ type
 
 
 type 
-'a funcl = 
-   FCL_aux of 'a funcl_aux * 'a annot
-
-
-type 
-k =  (* Internal kinds *)
-   Ki_typ
- | Ki_nat
- | Ki_ord
- | Ki_efct
- | Ki_val (* Representing values, for use in identifier checks *)
- | Ki_ctor of (k) list * k
- | Ki_infer (* Representing an unknown kind, inferred by context *)
-
-
-type 
-t_arg =  (* Argument to type constructors *)
-   Typ of t
- | Nexp of ne
- | Effect of effects
- | Order of order
-
-and t_args =  (* Arguments to type constructors *)
-   T_args of (t_arg) list
+rec_opt = 
+   Rec_aux of rec_opt_aux * l
 
 
 type 
@@ -382,6 +371,12 @@ type
  | TD_variant of id * naming_scheme_opt * typquant * ((typ * id)) list * bool (* union type definition *)
  | TD_enum of id * naming_scheme_opt * (id) list * bool (* enumeration type definition *)
  | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
+
+
+type 
+'a default_typing_spec_aux =  (* Default kinding or typing assumption *)
+   DT_kind of base_kind * id
+ | DT_typ of typschm * id
 
 
 type 
@@ -395,14 +390,13 @@ type
 
 
 type 
-'a default_typing_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of base_kind * id
- | DT_typ of typschm * id
+'a type_def = 
+   TD_aux of 'a type_def_aux * 'a annot
 
 
 type 
-'a type_def = 
-   TD_aux of 'a type_def_aux * 'a annot
+'a default_typing_spec = 
+   DT_aux of 'a default_typing_spec_aux * 'a annot
 
 
 type 
@@ -413,11 +407,6 @@ type
 type 
 'a val_spec = 
    VS_aux of 'a val_spec_aux * 'a annot
-
-
-type 
-'a default_typing_spec = 
-   DT_aux of 'a default_typing_spec_aux * 'a annot
 
 
 type 
@@ -433,6 +422,11 @@ type
  | DEF_scattered_variant of id * naming_scheme_opt * typquant (* scattered union definition header *)
  | DEF_scattered_unioncl of id * typ * id (* scattered union definition member *)
  | DEF_scattered_end of id (* scattered definition end *)
+
+
+type 
+'a ctor_def_aux =  (* Datatype constructor definition clause *)
+   CT_ct of id * typschm
 
 
 type 
@@ -454,23 +448,18 @@ type
 
 
 type 
-'a ctor_def_aux =  (* Datatype constructor definition clause *)
-   CT_ct of id * typschm
-
-
-type 
 'a def = 
    DEF_aux of 'a def_aux * 'a annot
 
 
 type 
-'a typ_lib = 
-   Typ_lib_aux of 'a typ_lib_aux * l
+'a ctor_def = 
+   CT_aux of 'a ctor_def_aux * 'a annot
 
 
 type 
-'a ctor_def = 
-   CT_aux of 'a ctor_def_aux * 'a annot
+'a typ_lib = 
+   Typ_lib_aux of 'a typ_lib_aux * l
 
 
 type 

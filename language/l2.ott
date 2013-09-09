@@ -955,14 +955,14 @@ ne :: 'Ne_' ::=
 %% %%     {{ ocaml (assert false) }}
 %% %%     {{ lem (Ne_const (List.length [[exp1...expn]])) }}
 %% %% 
- t_arg :: '' ::=
+ t_arg :: '' ::=   {{ phantom }}
  {{ com Argument to type constructors }}
  | t :: :: typ
  | ne :: :: nexp
  | effects :: :: effect
  | order :: :: order
 
- t_args :: '' ::=
+ t_args :: '' ::=   {{ phantom }}
   {{ com Arguments to type constructors }}
    | t_arg1 ... t_argn                            :: :: T_args
 

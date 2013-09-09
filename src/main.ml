@@ -348,6 +348,7 @@ let _ =
 let lib = ref []
 let opt_print_version = ref false
 let opt_print_verbose = ref false
+let opt_print_lem = ref false
 let opt_file_arguments = ref ([]:string list)
 let options = Arg.align ([
   ( "-i",
@@ -361,32 +362,16 @@ let options = Arg.align ([
     Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_html)) !backends) then
                 backends := Some(Typed_ast.Target_html)::!backends),
     " generate Html");
-  ( "-hol",
-    Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_hol)) !backends) then
-                backends := Some(Typed_ast.Target_hol)::!backends),
-    " generate HOL");
-  ( "-ocaml",
-    Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_ocaml)) !backends) then
-                backends := Some(Typed_ast.Target_ocaml)::!backends),
-    " generate OCaml");
-  ( "-isa",
-    Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_isa)) !backends) then
-                backends := Some(Typed_ast.Target_isa)::!backends),
-    " generate Isabelle");
-  ( "-coq",
-    Arg.Unit (fun b -> if not (List.mem (Some(Typed_ast.Target_coq)) !backends) then
-                backends := Some(Typed_ast.Target_coq)::!backends),
-    " generate Coq");
   ( "-ident",
     Arg.Unit (fun b -> if not (List.mem None !backends) then
                 backends := None::!backends),
     " generate input on stdout");*)
-(*  ( "-print_types",
-    Arg.Unit (fun b -> opt_print_types := true),
-    " print types on stdout");*)
   ( "-verbose",
     Arg.Unit (fun b -> opt_print_verbose := true),
     " pretty-print out the file");
+  ( "-lem_ast",
+    Arg.Unit (fun b -> opt_print_lem := true),
+    " pretty-print a Lem AST representation of the file");
   ( "-v",
     Arg.Unit (fun b -> opt_print_version := true),
     " print version");
@@ -406,12 +391,16 @@ let _ =
 let main() =
   if !(opt_print_version)
   then Printf.printf "L2 pre alpha \n"
-  else let parsed = (List.map (fun f -> (parse_file f))  !opt_file_arguments) in
-       let merged = List.flatten [parsed] in
-       let ast = convert_ast (List.hd merged) in
-       if !(opt_print_verbose)
-       then ((Pretty_print.pp_defs Format.std_formatter) ast)
-       else ()
+  else let parsed = (List.map (fun f -> (f,(parse_file f)))  !opt_file_arguments) in
+       let asts = (List.map (fun (f,past) -> (f,convert_ast past)) parsed) in
+       begin 
+	 (if !(opt_print_verbose)
+	  then ((Pretty_print.pp_defs Format.std_formatter) (snd (List.hd asts)))
+	  else ());
+	 (if !(opt_print_lem)
+	  then output "" Lem_ast_out asts
+	  else ());
+       end
 
 let _ =  try
     begin

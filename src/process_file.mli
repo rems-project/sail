@@ -44,43 +44,25 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (**************************************************************************)
 
-(* open Typed_ast *)
-
 val parse_file : string -> Parse_ast.defs
 val convert_ast : Parse_ast.defs -> Type_internal.tannot Ast.defs
 
-(* type instances = Types.instance list Types.Pfmap.t
-
-val check_ast_as_module :
-  Targetset.t ->
-  Name.t list ->
-  (Types.type_defs * instances) * env ->
-  Ulib.Text.t ->
-  Ast.defs * Ast.lex_skips ->
-  (Types.type_defs * instances * instances) * env *
-  (def list * Ast.lex_skips)
-
-val check_ast :
-  Targetset.t ->
-  Name.t list ->
-  (Types.type_defs * instances) * env ->
-  Ast.defs * Ast.lex_skips ->
-  (Types.type_defs * instances * instances) * env *
-  (def list * Ast.lex_skips)
+type out_type =
+  | Lem_ast_out
+  | Lem_out
 
 val output :
   string ->                           (* The path to the library *)
-  string ->                           (* Isabelle Theory to be included *)
-  target option ->                    (* Backend name (None for the identity backend) *)
-  Typed_ast.var_avoid_f ->
-  (Types.type_defs * instances) -> (* The full environment built after all typechecking, and transforming *)
+  out_type ->                         (* Backend kind *)
+  (string * Type_internal.tannot Ast.defs) list -> (*File names paired with definitions *)
+(*  (Types.type_defs * instances) -> (* The full environment built after all typechecking, and transforming *)
   checked_module list ->              (* The typechecked modules *)
   Ulib.Text.t list ref ->               (* alldoc accumulator *)
   Ulib.Text.t list ref ->               (* alldoc-inc accumulator *)
-  Ulib.Text.t list ref ->               (* alldoc-use_inc accumulator *)
+  Ulib.Text.t list ref ->               (* alldoc-use_inc accumulator *) *)
   unit
 
-val output_alldoc : string -> string -> Ulib.Text.t list ref -> Ulib.Text.t list ref -> Ulib.Text.t list ref -> unit
+(*val output_alldoc : string -> string -> Ulib.Text.t list ref -> Ulib.Text.t list ref -> Ulib.Text.t list ref -> unit*)
 
 (** [always_replace_files] determines whether Lem only updates modified files.
     If it is set to [true], all output files are written, regardless of whether the
@@ -89,4 +71,3 @@ val output_alldoc : string -> string -> Ulib.Text.t list ref -> Ulib.Text.t list
     backends like OCaml, HOL, Isabelle, this is benefitial, since it prevents them
     from reprocessing these unchanged files. *)
 val always_replace_files : bool ref
-*)

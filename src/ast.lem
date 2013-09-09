@@ -144,16 +144,6 @@ type k =  (* Internal kinds *)
  | Ki_infer (* Representing an unknown kind, inferred by context *)
 
 
-type t_arg =  (* Argument to type constructors *)
- | Typ of t
- | Nexp of ne
- | Effect of effects
- | Order of order
-
-and t_args =  (* Arguments to type constructors *)
- | T_args of list t_arg
-
-
 type pat =  (* Pattern *)
  | P_lit of lit (* literal constant pattern *)
  | P_wild (* wildcard *)
@@ -221,19 +211,15 @@ and letbind =  (* Let binding *)
  | LB_val_implicit of pat * exp (* value binding, implicit type (pat must be total) *)
 
 
-type naming_scheme_opt =  (* Optional variable-naming-scheme specification for variables of defined type *)
- | Name_sect_none
- | Name_sect_some of string
-
-
 type index_range =  (* index specification, for bitfields in register types *)
  | BF_single of num (* single index *)
  | BF_range of num * num (* index range *)
  | BF_concat of index_range * index_range (* concatenation of index ranges *)
 
 
-type tannot_opt =  (* Optional type annotation for functions *)
- | Typ_annot_opt_some of typquant * typ
+type naming_scheme_opt =  (* Optional variable-naming-scheme specification for variables of defined type *)
+ | Name_sect_none
+ | Name_sect_some of string
 
 
 type rec_opt =  (* Optional recursive annotation for functions *)
@@ -241,13 +227,21 @@ type rec_opt =  (* Optional recursive annotation for functions *)
  | Rec_rec (* recursive *)
 
 
+type tannot_opt =  (* Optional type annotation for functions *)
+ | Typ_annot_opt_some of typquant * typ
+
+
+type funcl =  (* Function clause *)
+ | FCL_Funcl of id * pat * exp
+
+
 type effects_opt =  (* Optional effect annotation for functions *)
  | Effects_opt_pure (* sugar for empty effect set *)
  | Effects_opt_effects of effects
 
 
-type funcl =  (* Function clause *)
- | FCL_Funcl of id * pat * exp
+type val_spec =  (* Value type specification *)
+ | VS_val_spec of typschm * id
 
 
 type type_def =  (* Type definition body *)
@@ -258,17 +252,13 @@ type type_def =  (* Type definition body *)
  | TD_register of id * nexp * nexp * list (index_range * id) (* register mutable bitfield type definition *)
 
 
-type fundef =  (* Function definition *)
- | FD_function of rec_opt * tannot_opt * effects_opt * list funcl
-
-
-type val_spec =  (* Value type specification *)
- | VS_val_spec of typschm * id
-
-
 type default_typing_spec =  (* Default kinding or typing assumption *)
  | DT_kind of base_kind * id
  | DT_typ of typschm * id
+
+
+type fundef =  (* Function definition *)
+ | FD_function of rec_opt * tannot_opt * effects_opt * list funcl
 
 
 type def =  (* Top-level definition *)
@@ -283,6 +273,10 @@ type def =  (* Top-level definition *)
  | DEF_scattered_variant of id * naming_scheme_opt * typquant (* scattered union definition header *)
  | DEF_scattered_unioncl of id * typ * id (* scattered union definition member *)
  | DEF_scattered_end of id (* scattered definition end *)
+
+
+type ctor_def =  (* Datatype constructor definition clause *)
+ | CT_ct of id * typschm
 
 
 type typ_lib =  (* library types and syntactic sugar for them *)
@@ -302,10 +296,6 @@ type typ_lib =  (* library types and syntactic sugar for them *)
  | Typ_lib_reg of typ (* mutable register components holding typ *)
 
 
-type ctor_def =  (* Datatype constructor definition clause *)
- | CT_ct of id * typschm
-
-
 type defs =  (* Definition sequence *)
  | Defs of list def
 
@@ -316,11 +306,7 @@ indreln
 (** definitions *)
  (* defns check_t *)
 indreln
-[check_t : map id k -> t -> bool]
- and [check_ef : map id k -> effects -> bool]
- and [check_n : map id k -> ne -> bool]
- and [check_ord : map id k -> order -> bool]
- and [check_targs : map id k -> k -> t_arg -> bool](* defn check_t *)
+(* defn check_t *)
 
 check_t_var: forall E_k id .
 ( Pmap.find  id   E_k  =  Ki_typ )
@@ -466,8 +452,7 @@ check_targs E_k Ki_ord (Order order)
 (** definitions *)
  (* defns convert_typ *)
 indreln
-[convert_typ : map id k -> typ -> t -> bool]
- and [convert_targ : map id k -> k -> typ_arg -> t_arg -> bool](* defn convert_typ *)
+(* defn convert_typ *)
 
 convert_typ_var: forall E_k id .
 ( Pmap.find  id   E_k  =  Ki_typ )
@@ -509,7 +494,7 @@ and
 (** definitions *)
  (* defns check_lit *)
 indreln
-[check_lit : lit -> t -> bool](* defn check_lit *)
+(* defn check_lit *)
 
 check_lit_true: forall .
 true
@@ -568,7 +553,7 @@ check_lit L_one (T_var  bit_id )
 (** definitions *)
  (* defns check_pat *)
 indreln
-[check_pat : env -> pat -> t -> map x f_desc -> bool](* defn check_pat *)
+(* defn check_pat *)
 
 check_pat_wild: forall E_k t .
 (check_t E_k t)
