@@ -1,0 +1,100 @@
+open Pervasives
+open Pmap
+open Ast
+
+type box_ref = id * nat
+
+type mem 'a = map 'a value
+
+type value =
+     | V_box of box_ref (* For local reg types *)
+     | V_lit of lit
+     | V_tuple of list value
+     | V_list of list value
+     | V_vector of list value
+     | V_record of list (id * value)
+
+(* These may need to be refined or expanded based on memory requirement *)
+type action = 
+     | Read_reg of id * nat * nat
+     | Write_reg id * nat * nat * value
+     | Read_mem id * nat * nat
+     | Write_mem id * nat * nat * value
+
+type outcome =
+     | Value of value
+     | Action of action * id * exp * mem nat
+     | Error of string (* When we store location information, it should be added here *)
+
+val to_value : map id nat  -> exp -> value
+val to_exp : value -> exp
+
+val read_hex : string -> value
+val read_bin : string -> value
+
+(* interprets the exp sequentially in the presence of a set of top level definitions, a register memory, and a main memory *)
+val interp : defs -> exp -> outcome
+
+let rec to_value env exp =
+    match exp with
+    | E_lit lit ->
+      match lit with
+      | L_hex(s) -> read_hex s
+      | L_bin(s) -> read_bin s
+      | _ -> V_lit lit
+      end
+    | E_tuple(exps) -> V_tuple (List.map (to_value env) exps)
+    | E_vector(exps) -> V_vector (List.map (to_value env) exps)
+    | E_list(exps) -> V_list (List.map (to_value env) exps)
+    | E_record(fexps) -> V_record (List.map (fun (FE_exp(id,exp)) -> (id, to_value env exp))
+                                                                ((fun (FES_fexps(fexps,_)) -> fexps) fexps))
+    | E_id id -> V_box(id,find id env)
+    | _ -> V_error_value
+    end
+
+let rec to_exp v =
+    match v with
+    | V_box(id,nat) -> E_id id
+    | V_lit lit -> E_lit lit
+    | V_tuple(vals) -> E_tuple (List.map to_exp vals)
+    | V_vector(vals) -> V_vector (List.map to_exp vals)
+    | V_record(ivals) -> E_record(FES_fexps(List.map (fun (id,val) -> FE_exp(id, to_exp val)) ivals, false))
+    end
+
+let rec interp_main defs local_mem exp =
+    match exp with
+    | E_lit lit -> (Value (V_lit lit), local_mem)
+    | E_cast(typ,exp) -> interp_main defs local_mem exp (* Potentially introduce coercions between vectors and numbers here? *)
+    | E_if(cond,thn,els) ->
+      let (val,lm) = interp_main defs local_mem cond in
+      match val with
+      | Value val -> 
+            match val with
+                | V_lit(L_true) -> interp_main defs lm thn
+                | V_lit(L_false) -> interp_main defs lm els
+                | Error "Type error, not provided boolean for if" end
+      | Action(action, id, c, mem) -> Action action (E_if c thn els) c mem, lm
+      | Error s -> Error s, lm
+      end end
+    | E_cons(h,t) ->
+      let (v,lm) = interp_main defs local_mem h in
+      match v with
+      | Value h -> (let (v,lm) = interp_main defs lm t in
+                          match v with 
+                          | Value (V_list(t) -> Value(V_list(h::t)), lm
+                          | Action action id t mem -> Action action id (E_cons(to_exp h) t) mem (* need to maintain a mapping from the id to the mem *), lm
+                          | Error s -> Error s, lm
+                           end end
+      | Action action id h mem -> Action action id (E_cons h t) mem, lm
+      | Error s -> Error s, lm
+      end end
+    | E_tuple(exps) -> let vals, local_mem = 
+                                 List.fold_right (fun exp (tups,local_mem) -> 
+                                                                    let val, lm = interp_main defs local_mem exp in
+                                                                    (tups@[val],lm) end)
+                                                       exps ([], local_mem) in
+                                V_tuple vals, local_mem end
+    | E_block(exps) -> List.fold_right (fun exp (val,local_mem,reg_mem,main_mem) -> interp_main defs local_mem reg_mem main_mem exp)
+                                                     exps
+                                                     (V_lit(Lit_unit),local_mem,reg_mem,main_mem)
+
