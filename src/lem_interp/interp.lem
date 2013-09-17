@@ -2,7 +2,7 @@ open Pervasives
 open Pmap
 open Ast
 
-type mem 'a = map 'a value
+type nat = num
 
 type value =
  | V_box of id (* For local reg types *)
@@ -13,17 +13,24 @@ type value =
  | V_vector of nat * bool * list value (* The nat stores the first index, the bool whether that's most or least significant *)
  | V_record of list (id * value)
 
+type mem 'a = list ('a * value) (*map 'a value*)
+
 (* These may need to be refined or expanded based on memory requirement *)
 type action = 
  | Read_reg of id * nat * nat
- | Write_reg id * nat * nat * value
- | Read_mem id * nat * nat
- | Write_mem id * nat * nat * value
+ | Write_reg of id * nat * nat * value
+ | Read_mem of id * nat * nat
+ | Write_mem of id * nat * nat * value
+
+(* Inverted call stack, where top item on the stack is waiting for an action and all other frames for the right stack *)
+type stack = 
+ | Top
+ | Frame of id * exp * list (id * value) * mem id * stack
 
 (* Either a case must be added for parallel options or action must be tied to a list *)
 type outcome =
  | Value of value
- | Action of action * id * exp * mem id
+ | Action of action * stack
  | Error of string (* When we store location information, it should be added here *)
 
 val to_value : exp -> value
@@ -34,6 +41,11 @@ val read_bin : string -> value
 
 (* interprets the exp sequentially in the presence of a set of top level definitions and returns a value or a memory request *)
 val interp : defs -> exp -> outcome
+
+let add_to_top_frame e_builder stack =
+  match stack with
+  | Frame id e env mem stack -> Frame id (e_builder e) env mem stack
+  end
 
 let rec to_value exp =
     match exp with
@@ -46,75 +58,77 @@ let rec to_value exp =
     | E_tuple(exps) -> V_tuple (List.map to_value exps)
     | E_vector(exps) -> V_vector 0 true (List.map to_value exps)
     | E_list(exps) -> V_list (List.map to_value exps)
-    | E_record(fexps) -> V_record (List.map (fun (FE_exp(id,exp)) -> (id, to_value exp))
-                                                                ((fun (FES_fexps(fexps,_)) -> fexps) fexps))
+    | E_record(fexps) -> V_record (List.map (fun (FE_Fexp id exp) -> (id, to_value exp))
+                                                                ((fun (FES_Fexps fexps _) -> fexps) fexps))
     | E_id id -> V_box(id)
-    | _ -> V_error_value
     end
 
 let rec to_exp v =
     match v with
-    | V_box(id,nat) -> E_id id
+    | V_box id -> E_id id
     | V_lit lit -> E_lit lit
     | V_tuple(vals) -> E_tuple (List.map to_exp vals)
-    | V_vector(n,inc,vals) -> E_vector (List.map to_exp vals) (*Todo, if n not 0 or inc not true, should generate an indexed vector *)
-    | V_record(ivals) -> E_record(FES_fexps(List.map (fun (id,val) -> FE_exp(id, to_exp val)) ivals, false))
+    | V_vector n inc vals -> E_vector (List.map to_exp vals) (*Todo, if n not 0 or inc not true, should generate an indexed vector *)
+    | V_record(ivals) -> E_record(FES_Fexps (List.map (fun (id,value) -> (FE_Fexp id (to_exp value))) ivals) false)
     end
 
 val find_type_def : defs -> id -> option type_def
-val find_function : defs -> id -> option list funcl
+val find_function : defs -> id -> option (list funcl)
 
-let get_funcls id (FD_funciton r e t fcls) =
-  List.filter (fun (FCL_funcl name pat exp) -> id = name) fcls (* Is this = ok here? *)
+let get_funcls id (FD_function r e t fcls) =
+  List.filter (fun (FCL_Funcl name pat exp) -> id = name) fcls (* Is this = ok here? *)
 
-let rec find_function defs id =
+let rec find_function (Defs defs) id =
   match defs with 
   | [] -> None
   | def::defs -> 
     match def with
-    | DEF_fundef f -> get_funcls id f
-    | _ -> find_function defs id
+    | DEF_fundef f -> Some (get_funcls id f)
+    | _ -> find_function (Defs defs) id
     end end
 
 val match_pattern : pat -> value -> bool * list (id * value)
-
 let rec match_pattern p value =
   match p with 
   | P_lit(lit) -> 
     match value with
-    | V_lit(litv) -> lit = litv, [] (*Is this = ok? or do I need to write my own here*)
-    | _ -> false,[]
+    | V_lit(litv) -> (lit = litv, []) (*Is this = ok? or do I need to write my own here*)
+    | _ -> (false,[])
     end
- | P_wild -> true,[]
- | P_as (pat,id) ->  let matched_p,bounds = match_pattern pat value in
+ | P_wild -> (true,[])
+ | P_as pat id ->  let (matched_p,bounds) = match_pattern pat value in
 		     if matched_p then
-		       matched_p,(id,value)::bounds
-		     else false,[]
- | P_typ (typ,pat) -> match_pattern pat value (* Might like to destructure against the type to get information *)
- | P_id (id) -> true, (id,value)::bounds
+		       (matched_p,(id,value)::bounds)
+		     else (false,[])
+ | P_typ typ pat -> match_pattern pat value (* Might like to destructure against the type to get information *)
+ | P_id id -> (true, [(id,value)])
 (* | P_app (id, list pat) -> (* union constructor pattern *) need defs for this case, to check that id is a constructor *)
 (* | P_record of list fpat * bool (* struct pattern *) todo *)
- | P_vector(pats) ->
+ | P_vector pats ->
    match value with
-   | V_vector(n,inc,vals) ->
+   | V_vector n inc vals ->
      if ((List.length vals) = (List.length pats))
      then List.fold_right2
-       (fun pat value (matched_p,bounds) -> if matched_p then
-	   let matched_p,new_bounds = match_pattern pat value in
-	   matched_p, new_bounds@bounds) 
-       (if inc then pats else List.reverse pats) (true,[])
-   | _ -> false,[]
+       (fun pat value (matched_p,bounds) -> 
+	 if matched_p then
+	   let (matched_p,new_bounds) = match_pattern pat value in
+	   (matched_p, (new_bounds @ bounds)) 
+	 else (false,[]))
+       (if inc then pats else List.rev pats) vals (true,[])
+     else (false,[])
+   | _ -> (false,[])
      end
- | P_vector_indexed(ipats) ->
+ | P_vector_indexed ipats ->
    match value with
-   | V_vector(n,inc,vals) ->
+   | V_vector n inc vals ->
      let v_len = if inc then List.length vals + n else n - List.length vals in
      List.fold_right
        (fun (i,pat) (matched_p,bounds) -> if matched_p && i < v_len then
-	   let matched_p,new_bounds = match_pattern pat (List.nth (if inc then i+n else i-n)) in
-	   matched_p,new_bounds@bounds)
+	   let (matched_p,new_bounds) = match_pattern pat (List.nth vals (if inc then i+n else i-n)) in
+	   (matched_p,new_bounds@bounds)
+         else (false,[]))
        ipats (true,[])
-   | _ -> false, []
+   | _ -> (false, [])
    end
 (* | P_vector_concat of list pat (* concatenated vector pattern *) TODO *)
  | P_tup(pats) ->
@@ -123,70 +137,110 @@ let rec match_pattern p value =
      if ((List.length pats)= (List.length vals))
      then List.fold_right2 
        (fun pat v (matched_p,bounds) -> if matched_p then
-	   let matched_p,new_bounds = match_pattern pat v in
-	   matched_p,bounds@new_bounds)
+	   let (matched_p,new_bounds) = match_pattern pat v in
+	   (matched_p,bounds@new_bounds)
+	 else (false,[]))
        pats vals (true,[])
-   | _ -> false,[]
+     else (false,[])
+   | _ -> (false,[])
      end 
- | P_list(pats)
+ | P_list(pats) ->
    match value with 
    | V_list(vals) ->
      if ((List.length pats)= (List.length vals))
      then List.fold_right2 
        (fun pat v (matched_p,bounds) -> if matched_p then
-	   let matched_p,new_bounds = match_pattern pat v in
-	   matched_p,bounds@new_bounds)
+	   let (matched_p,new_bounds) = match_pattern pat v in
+	   (matched_p,bounds@new_bounds)
+	 else (false,[]))
        pats vals (true,[])
-   | _ -> false,[]
-     end 
+     else (false,[])
+   | _ -> (false,[]) end
+ end 
 
+val find_funcl : list funcl -> value -> option (list (id * value) * exp)
 
-val interp_main : defs -> map id typ -> map id value -> mem id -> exp -> (outcome * mem id)
+val interp_main : defs -> list (id*value) -> mem id -> exp -> (outcome * mem id)
+val exp_list : defs -> (list exp -> exp) -> (list value -> value) -> list (id*value) -> mem id -> list value -> list exp -> (outcome * mem id)
 
 let rec exp_list defs build_e build_v l_env local_mem vals exps =
   match exps with
-  | [ ] -> Value (build_v vals), local_mem
+  | [ ] -> (Value (build_v vals), local_mem)
   | e::exps -> 
     match (interp_main defs l_env local_mem e) with
-    | Value(v),lm -> exp_list defs build_e build_v l_env lm build_e vals@[v] exps
-    | Action(action, id, e, mem),lm -> Action(action, id, (build_e (List.map to_exp vals)@(e::exps)), mem),lm
-    | Error s, lm -> Error s, lm end
+    | (Value(v),lm) -> exp_list defs build_e build_v l_env lm (vals@[v]) exps
+    | (Action action stack,lm) -> 
+      (Action action (add_to_top_frame (fun e -> (build_e ((List.map to_exp vals)@(e::exps)))) stack),lm)
+    | (Error s, lm) -> (Error s, lm) end
   end
 
 and interp_main defs l_env l_mem exp =
     match exp with
     | E_lit lit -> (Value (V_lit lit), l_mem)
-    | E_cast(typ,exp) -> interp_main defs l_env l_mem exp (* Potentially introduce coercions ie vectors and numbers *)
-    | E_if(cond,thn,els) ->
-      let (val,lm) = interp_main defs l_env l_mem cond in
-      match val with
-      | Value val -> 
-            match val with
+    | E_cast typ exp -> interp_main defs l_env l_mem exp (* Potentially introduce coercions ie vectors and numbers *)
+    | E_if cond thn els ->
+      let (value,lm) = interp_main defs l_env l_mem cond in
+      match value with
+      | Value value -> 
+            match value with
                 | V_lit(L_true) -> interp_main defs l_env lm thn
                 | V_lit(L_false) -> interp_main defs l_env lm els
-                | _ -> Error "Type error, not provided boolean for if" end
-      | Action(action, id, c, mem) -> Action action (E_if c thn els) c mem, lm
-      | Error s -> Error s, lm
-      end end
+                | _ -> (Error "Type error, not provided boolean for if",lm) end
+      | Action action stack -> (Action action (add_to_top_frame (fun c -> (E_if c thn els)) stack), lm)
+      | Error s -> (Error s, lm)
+      end
     | E_list(exps) ->
       exp_list defs E_list V_list l_env l_mem [] exps
-    | E_cons(h,t) ->
-      let (v,lm) = interp_main defs local_mem h in
+    | E_cons h t ->
+      let (v,lm) = interp_main defs l_env l_mem h in
       match v with
-      | Value h -> (let (v,lm) = interp_main defs lm t in
+      | Value h -> let (v,lm) = interp_main defs l_env lm t in
                           match v with 
-                          | Value (V_list(t) -> Value(V_list(h::t)), lm
-                          | Action action id t mem -> Action action id (E_cons(to_exp h) t) mem, lm
-                          | Error s -> Error s, lm
-                           end end
-      | Action action id h mem -> Action action id (E_cons h t) mem, lm
-      | Error s -> Error s, lm
-      end end
+                          | Value (V_list(t)) -> (Value(V_list(h::t)), lm)
+                          | Action action stack -> 
+			    (Action action (add_to_top_frame (fun t -> (E_cons(to_exp h) t)) stack), lm)
+                          | Error s -> (Error s, lm)
+			  | _ -> (Error "Not a list value",lm)
+                           end
+      | Action action stack -> (Action action (add_to_top_frame (fun h -> (E_cons h t)) stack), lm)
+      | Error s -> (Error s, lm)
+      end
     | E_tuple(exps) -> 
-      exp_list defs E_tuple V_tuple local_mem [] exps
+      exp_list defs E_tuple V_tuple l_env l_mem [] exps
     | E_vector(exps) ->
-      exp_list defs E_vector (fun vals -> V_vector 0 true vals) local_mem [] exps
-    | E_block(exps) -> List.fold_right (fun exp (val,local_mem,reg_mem,main_mem) -> interp_main defs local_mem reg_mem main_mem exp)
-                                                     exps
-                                                     (V_lit(Lit_unit),local_mem,reg_mem,main_mem)
+      exp_list defs E_vector (fun vals -> V_vector 0 true vals) l_env l_mem [] exps
+    | E_block(exps) -> interp_block defs l_env l_mem exps
+    | E_app f args ->
+      match f with
+      | E_id(id) -> (match find_function defs id with
+	             | None -> (Error "No function",l_mem) (* Add in a new check for a data constructor call here *)
+		     | Some(funcls) -> 
+		       (match interp_main defs l_env l_mem (List.hd args) with
+		       | (Value v,lm) -> (match find_funcl funcls v with
+			               | None -> (Error "No matching pattern for function",l_mem) (*TODO add function name*)
+				       | Some(env,exp) -> 
+					 match interp_main defs env [] exp with
+					 | (Value a,lm) -> (Value a, l_mem)
+					 | (Action action stack, lm) -> 
+					   (Action action (Frame (Id "1") (E_id (Id "1")) l_env l_mem stack), l_mem) (*TODO fresh var? *)
+					 | (Error s, lm) -> (Error s, lm) end end)
+		       | (Action action stack,lm) -> 
+			 (Action action (add_to_top_frame (fun a -> (E_app f [a])) stack), lm)
+		       | (Error s,lm) -> (Error s,lm)
+			end)
+		     end)
+      | _ -> (Error "Application with expression other than identifier",l_mem)
+      end
+    end
 
+and interp_block defs local_env local_mem exps =
+    match exps with
+    | [ ] -> (Value (V_lit(L_unit)), local_mem)
+    | exp:: exps ->
+      let (outcome,lm) = interp_main defs local_env local_mem exp in
+      match outcome with
+      | Value _ -> interp_block defs local_env lm exps
+      | Action action stack -> (Action action (add_to_top_frame (fun e -> E_block(e::exps)) stack), lm)
+      | Error s -> (Error s, lm)
+      end 
+    end
