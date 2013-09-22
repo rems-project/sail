@@ -36,11 +36,15 @@ type outcome =
 val to_value : exp -> value
 val to_exp : value -> exp
 
-val read_hex : string -> value
-val read_bin : string -> value
-
 (* interprets the exp sequentially in the presence of a set of top level definitions and returns a value or a memory request *)
 val interp : defs -> exp -> outcome
+
+val in_env : list (id * value) -> id -> option value
+let rec in_env env id =
+ match env with
+ | [] -> None
+ | (eid,value)::env -> if eid = id then Some value else in_env env id
+ end
 
 let add_to_top_frame e_builder stack =
   match stack with
@@ -49,12 +53,7 @@ let add_to_top_frame e_builder stack =
 
 let rec to_value exp =
     match exp with
-    | E_lit lit ->
-      match lit with
-      | L_hex(s) -> read_hex s
-      | L_bin(s) -> read_bin s
-      | _ -> V_lit lit
-      end
+    | E_lit lit -> V_lit lit
     | E_tuple(exps) -> V_tuple (List.map to_value exps)
     | E_vector(exps) -> V_vector 0 true (List.map to_value exps)
     | E_list(exps) -> V_list (List.map to_value exps)
@@ -83,8 +82,29 @@ let rec find_function (Defs defs) id =
   | [] -> None
   | def::defs -> 
     match def with
-    | DEF_fundef f -> Some (get_funcls id f)
+    | DEF_fundef f -> match get_funcls id f with
+      | [] -> find_function (Defs defs) id
+      | funcs -> Some funcs end
     | _ -> find_function (Defs defs) id
+    end end
+
+let rec find_reg (Defs defs) id = 
+  match defs with
+  | [] -> None
+  | def::defs ->
+    match def with 
+    | DEF_reg_dec typ rid -> if id = rid then Some (typ,id) else find_reg (Defs defs) id
+    | _ -> find_reg (Defs defs) id
+    end 
+  end
+
+let rec find_val (Defs defs) id =
+  match defs with
+  | [] -> None
+  | def::defs ->
+    match def with
+    | DEF_spec vspec -> None
+    | _ -> find_val (Defs defs) id
     end end
 
 val match_pattern : pat -> value -> bool * list (id * value)
@@ -159,6 +179,14 @@ let rec match_pattern p value =
  end 
 
 val find_funcl : list funcl -> value -> option (list (id * value) * exp)
+let rec find_funcl funcls value =
+  match funcls with
+  | [] -> None
+  | (FCL_Funcl id pat exp)::funcls ->
+    let (is_matching,env) = match_pattern pat value in
+    if is_matching then Some (env,exp) else find_funcl funcls value
+  end
+
 
 val interp_main : defs -> list (id*value) -> mem id -> exp -> (outcome * mem id)
 val exp_list : defs -> (list exp -> exp) -> (list value -> value) -> list (id*value) -> mem id -> list value -> list exp -> (outcome * mem id)
@@ -178,6 +206,14 @@ and interp_main defs l_env l_mem exp =
     match exp with
     | E_lit lit -> (Value (V_lit lit), l_mem)
     | E_cast typ exp -> interp_main defs l_env l_mem exp (* Potentially introduce coercions ie vectors and numbers *)
+    | E_id id -> match in_env l_env id with
+                 | Some(value) -> match value with
+		                  | V_box id -> match in_env l_mem id with
+				                | None -> (Error "Local access of id not in l_mem",l_mem)
+						| Some value -> (Value value,l_mem) end
+		                  | _ -> (Value value,l_mem) end
+		 | None -> (Error "Unimplemented global register or memory read",l_mem)
+		end
     | E_if cond thn els ->
       let (value,lm) = interp_main defs l_env l_mem cond in
       match value with
