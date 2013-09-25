@@ -5,27 +5,35 @@ open Ast
 type nat = num
 
 type value =
- | V_box of id (* For local reg types *)
+ | V_boxref of nat 
  | V_lit of lit
  | V_tuple of list value
  | V_list of list value
      (* TODO: once there is type information, it would be better to use Lem vectors if at all possible *)
  | V_vector of nat * bool * list value (* The nat stores the first index, the bool whether that's most or least significant *)
  | V_record of list (id * value)
+ | V_ctor of id * value
 
-type mem 'a = list ('a * value) (*map 'a value*)
+type mem = Mem of nat * map nat value
+type env = list (id * value)
+
+let emem = Mem 1 Pmap.empty
+
+type reg_form =
+ | Reg of typ
+ | SubReg of id * reg_form * index_range
 
 (* These may need to be refined or expanded based on memory requirement *)
 type action = 
- | Read_reg of id * nat * nat
- | Write_reg of id * nat * nat * value
+ | Read_reg of reg_form * option (nat * nat)
+ | Write_reg of reg_form * option (nat* nat) * value
  | Read_mem of id * nat * nat
  | Write_mem of id * nat * nat * value
 
 (* Inverted call stack, where top item on the stack is waiting for an action and all other frames for the right stack *)
 type stack = 
  | Top
- | Frame of id * exp * list (id * value) * mem id * stack
+ | Frame of id * exp * env * mem * stack
 
 (* Either a case must be added for parallel options or action must be tied to a list *)
 type outcome =
@@ -33,38 +41,69 @@ type outcome =
  | Action of action * stack
  | Error of string (* When we store location information, it should be added here *)
 
-val to_value : exp -> value
-val to_exp : value -> exp
-
 (* interprets the exp sequentially in the presence of a set of top level definitions and returns a value or a memory request *)
 val interp : defs -> exp -> outcome
 
-val in_env : list (id * value) -> id -> option value
+val to_registers : defs -> list (id * reg_form)
+let rec to_registers (Defs defs) =
+  match defs with
+  | [ ] -> [ ]
+  | def::defs -> 
+    match def with 
+    | DEF_val letb -> to_registers (Defs defs) (* Todo, maybe look through let bindings *)
+    | DEF_spec valsp -> 
+      match valsp with
+      | VS_val_spec (TypSchm_ts tq ((Typ_app (Id "reg") _) as t)) id -> (id, Reg t):: (to_registers (Defs defs))
+      | _ -> to_registers (Defs defs)
+      end
+    | DEF_reg_dec typ id -> (id, Reg typ) :: (to_registers (Defs defs))
+    | DEF_type tdef ->
+      match tdef with 
+      | TD_register id n1 n2 ranges -> 
+	(id,Reg (Typ_app (Id "vector")[]))::
+	((to_reg_ranges id (Reg (Typ_app (Id "vector")[])) ranges) @ (to_registers (Defs defs)))
+      | _ -> to_registers (Defs defs)
+      end
+    | _ -> to_registers (Defs defs)
+    end 
+  end
+and to_reg_ranges base_id base_reg ranges =
+  match ranges with
+  | [ ] -> [ ]
+  | (irange,id)::ranges -> (id,(SubReg base_id base_reg irange))::(to_reg_ranges base_id base_reg ranges)
+  end
+
+val in_env : env -> id -> option value
 let rec in_env env id =
  match env with
  | [] -> None
  | (eid,value)::env -> if eid = id then Some value else in_env env id
- end
+ end 
 
+val in_mem : mem -> nat -> option value
+let in_mem (Mem _ m) n =
+  if (Pmap.mem n m) then Some (Pmap.find n m) else None
+
+val update_mem : mem -> nat -> value -> mem
+let update_mem (Mem c m) loc value =
+  let m' = Pmap.remove loc m in
+  let m' = Pmap.add loc value m' in
+  Mem c m'
+
+val in_reg : list (id * reg_form) -> id -> option reg_form
+let rec in_reg regs id =
+  match regs with
+  | [] -> None
+  | (eid,regf)::regs -> if eid = id then Some regf else in_reg regs id
+end
 let add_to_top_frame e_builder stack =
   match stack with
   | Frame id e env mem stack -> Frame id (e_builder e) env mem stack
   end
 
-let rec to_value exp =
-    match exp with
-    | E_lit lit -> V_lit lit
-    | E_tuple(exps) -> V_tuple (List.map to_value exps)
-    | E_vector(exps) -> V_vector 0 true (List.map to_value exps)
-    | E_list(exps) -> V_list (List.map to_value exps)
-    | E_record(fexps) -> V_record (List.map (fun (FE_Fexp id exp) -> (id, to_value exp))
-                                                                ((fun (FES_Fexps fexps _) -> fexps) fexps))
-    | E_id id -> V_box(id)
-    end
-
 let rec to_exp v =
     match v with
-    | V_box id -> E_id id
+    | V_boxref n -> E_id (Id (string_of_num n))
     | V_lit lit -> E_lit lit
     | V_tuple(vals) -> E_tuple (List.map to_exp vals)
     | V_vector n inc vals -> E_vector (List.map to_exp vals) (*Todo, if n not 0 or inc not true, should generate an indexed vector *)
@@ -74,8 +113,8 @@ let rec to_exp v =
 val find_type_def : defs -> id -> option type_def
 val find_function : defs -> id -> option (list funcl)
 
-let get_funcls id (FD_function r e t fcls) =
-  List.filter (fun (FCL_Funcl name pat exp) -> id = name) fcls (* Is this = ok here? *)
+let get_funcls id (FD_function _ _ _ fcls) =
+  List.filter (fun (FCL_Funcl name pat exp) -> id = name) fcls
 
 let rec find_function (Defs defs) id =
   match defs with 
@@ -87,16 +126,6 @@ let rec find_function (Defs defs) id =
       | funcs -> Some funcs end
     | _ -> find_function (Defs defs) id
     end end
-
-let rec find_reg (Defs defs) id = 
-  match defs with
-  | [] -> None
-  | def::defs ->
-    match def with 
-    | DEF_reg_dec typ rid -> if id = rid then Some (typ,id) else find_reg (Defs defs) id
-    | _ -> find_reg (Defs defs) id
-    end 
-  end
 
 let rec find_val (Defs defs) id =
   match defs with
@@ -178,7 +207,7 @@ let rec match_pattern p value =
    | _ -> (false,[]) end
  end 
 
-val find_funcl : list funcl -> value -> option (list (id * value) * exp)
+val find_funcl : list funcl -> value -> option (env * exp)
 let rec find_funcl funcls value =
   match funcls with
   | [] -> None
@@ -187,96 +216,214 @@ let rec find_funcl funcls value =
     if is_matching then Some (env,exp) else find_funcl funcls value
   end
 
+type top_level = defs * list (id*reg_form)
 
-val interp_main : defs -> list (id*value) -> mem id -> exp -> (outcome * mem id)
-val exp_list : defs -> (list exp -> exp) -> (list value -> value) -> list (id*value) -> mem id -> list value -> list exp -> (outcome * mem id)
+val interp_main : top_level -> env -> mem -> exp -> (outcome * mem * env)
+val exp_list : top_level -> (list exp -> exp) -> (list value -> value) -> env -> mem -> list value -> list exp -> (outcome * mem * env)
 
-let rec exp_list defs build_e build_v l_env local_mem vals exps =
+(*Interpret a list of expressions, tracking local state but evaluating in the same scope (i.e. not tracking env) *)
+let rec exp_list t_level build_e build_v l_env l_mem vals exps =
   match exps with
-  | [ ] -> (Value (build_v vals), local_mem)
+  | [ ] -> (Value (build_v vals), l_mem, l_env)
   | e::exps -> 
-    match (interp_main defs l_env local_mem e) with
-    | (Value(v),lm) -> exp_list defs build_e build_v l_env lm (vals@[v]) exps
-    | (Action action stack,lm) -> 
-      (Action action (add_to_top_frame (fun e -> (build_e ((List.map to_exp vals)@(e::exps)))) stack),lm)
-    | (Error s, lm) -> (Error s, lm) end
+    match (interp_main t_level l_env l_mem e) with
+    | (Value(v),lm,_) -> exp_list t_level build_e build_v l_env lm (vals@[v]) exps
+    | (Action action stack,lm,_) -> 
+      (Action action (add_to_top_frame (fun e -> (build_e ((List.map to_exp vals)@(e::exps)))) stack),lm,l_env)
+    | (Error s, lm,le) -> (Error s, lm,le) end
   end
 
-and interp_main defs l_env l_mem exp =
+and interp_main t_level l_env l_mem exp =
     match exp with
-    | E_lit lit -> (Value (V_lit lit), l_mem)
-    | E_cast typ exp -> interp_main defs l_env l_mem exp (* Potentially introduce coercions ie vectors and numbers *)
+    | E_lit lit -> (Value (V_lit lit), l_mem,l_env)
+    | E_cast typ exp -> interp_main t_level l_env l_mem exp (* Potentially introduce coercions ie vectors and numbers *)
     | E_id id -> match in_env l_env id with
                  | Some(value) -> match value with
-		                  | V_box id -> match in_env l_mem id with
-				                | None -> (Error "Local access of id not in l_mem",l_mem)
-						| Some value -> (Value value,l_mem) end
-		                  | _ -> (Value value,l_mem) end
-		 | None -> (Error "Unimplemented global register or memory read",l_mem)
+		                  | V_boxref n -> match in_mem l_mem n with
+				                | None -> (Error "Local access of id not in l_mem",l_mem,l_env)
+						| Some value -> (Value value,l_mem,l_env) end
+		                  | _ -> (Value value,l_mem,l_env) end
+		 | None -> match t_level with
+		           | (defs,regs) ->
+			     match in_reg regs id with
+			     | Some(regf) -> 
+			       (Action (Read_reg regf None) (Frame (Id "0") (E_id (Id "0")) l_env l_mem Top), l_mem, l_env) 
+			     | None -> 
+			       (Error "Unimplemented global memory read or unbound identifier",l_mem,l_env)
+			     end 
+                            end
 		end
     | E_if cond thn els ->
-      let (value,lm) = interp_main defs l_env l_mem cond in
+      let (value,lm,_) = interp_main t_level l_env l_mem cond in
       match value with
       | Value value -> 
             match value with
-                | V_lit(L_true) -> interp_main defs l_env lm thn
-                | V_lit(L_false) -> interp_main defs l_env lm els
-                | _ -> (Error "Type error, not provided boolean for if",lm) end
-      | Action action stack -> (Action action (add_to_top_frame (fun c -> (E_if c thn els)) stack), lm)
-      | Error s -> (Error s, lm)
+                | V_lit(L_true) -> interp_main t_level l_env lm thn
+                | V_lit(L_false) -> interp_main t_level l_env lm els
+                | _ -> (Error "Type error, not provided boolean for if",lm,l_env) end
+      | Action action stack -> (Action action (add_to_top_frame (fun c -> (E_if c thn els)) stack), lm,l_env)
+      | Error s -> (Error s, lm,l_env)
       end
+    | E_record(FES_Fexps fexps _) -> 
+      let (fields,exps) = List.split (List.map (fun (FE_Fexp id exp) -> (id,exp)) fexps) in
+      exp_list t_level (fun es -> (E_record(FES_Fexps (List.map2 (fun id exp -> FE_Fexp id exp) fields es) false)))
+	               (fun vs -> (V_record (List.combine fields vs))) l_env l_mem [] exps
     | E_list(exps) ->
-      exp_list defs E_list V_list l_env l_mem [] exps
+      exp_list t_level E_list V_list l_env l_mem [] exps
     | E_cons h t ->
-      let (v,lm) = interp_main defs l_env l_mem h in
+      let (v,lm,_) = interp_main t_level l_env l_mem h in
       match v with
-      | Value h -> let (v,lm) = interp_main defs l_env lm t in
+      | Value h -> let (v,lm,_) = interp_main t_level l_env lm t in
                           match v with 
-                          | Value (V_list(t)) -> (Value(V_list(h::t)), lm)
+                          | Value (V_list(t)) -> (Value(V_list(h::t)), lm,l_env)
                           | Action action stack -> 
-			    (Action action (add_to_top_frame (fun t -> (E_cons(to_exp h) t)) stack), lm)
-                          | Error s -> (Error s, lm)
-			  | _ -> (Error "Not a list value",lm)
+			    (Action action (add_to_top_frame (fun t -> (E_cons(to_exp h) t)) stack), lm,l_env)
+                          | Error s -> (Error s, lm,l_env)
+			  | _ -> (Error "Not a list value",lm,l_env)
                            end
-      | Action action stack -> (Action action (add_to_top_frame (fun h -> (E_cons h t)) stack), lm)
-      | Error s -> (Error s, lm)
+      | Action action stack -> (Action action (add_to_top_frame (fun h -> (E_cons h t)) stack), lm,l_env)
+      | Error s -> (Error s, lm,l_env)
+      end 
+    | E_field exp id -> 
+      let (v,lm,_) = interp_main t_level l_env l_mem exp in
+      match v with
+      | Value (V_record(fexps)) -> 
+	match in_env fexps id with
+	| Some v -> (Value v, lm, l_env)
+	| None -> (Error "Field not found",lm,l_env)
+        end 
+      | Value _ -> (Error "Field access not a record",lm,l_env)
+      | Action action stack -> (Action action (add_to_top_frame (fun e -> (E_field e id)) stack),lm,l_env)
+      | error -> (error,lm,l_env)
+      end 
+    | E_vector_access vec i ->
+      match interp_main t_level l_env l_mem i with
+      | (Value (V_lit (L_num n)),lm,_) -> 
+	match interp_main t_level l_env l_mem vec with
+	| (Value (V_vector base inc vals),lm,_) -> 
+	  if inc 
+	  then (Value(List.nth vals (n - base)),lm,l_env)
+	  else (Value(List.nth vals (base - n)),lm,l_env)
+	| (Value _,lm,_) -> (Error "Vector access not given vector",lm,l_env)
+	| (Action action stack,lm,_) -> 
+	  (Action action (add_to_top_frame (fun v -> (E_vector_access v (E_lit (L_num n)))) stack),lm,l_env)
+	| error -> error
+        end 
+      | (Value _,lm,_) -> (Error "Vector access not given number for access point",lm,l_env)
+      | (Action action stack,lm,_) -> (Action action (add_to_top_frame (fun i -> (E_vector_access vec i)) stack),lm,l_env)
+      | error -> error
       end
     | E_tuple(exps) -> 
-      exp_list defs E_tuple V_tuple l_env l_mem [] exps
+      exp_list t_level E_tuple V_tuple l_env l_mem [] exps
     | E_vector(exps) ->
-      exp_list defs E_vector (fun vals -> V_vector 0 true vals) l_env l_mem [] exps
-    | E_block(exps) -> interp_block defs l_env l_mem exps
+      exp_list t_level E_vector (fun vals -> V_vector 0 true vals) l_env l_mem [] exps
+    | E_block(exps) -> interp_block t_level l_env l_env l_mem exps
     | E_app f args ->
-      match f with
-      | E_id(id) -> (match find_function defs id with
-	             | None -> (Error "No function",l_mem) (* Add in a new check for a data constructor call here *)
-		     | Some(funcls) -> 
-		       (match interp_main defs l_env l_mem (List.hd args) with
-		       | (Value v,lm) -> (match find_funcl funcls v with
-			               | None -> (Error "No matching pattern for function",l_mem) (*TODO add function name*)
-				       | Some(env,exp) -> 
-					 match interp_main defs env [] exp with
-					 | (Value a,lm) -> (Value a, l_mem)
-					 | (Action action stack, lm) -> 
-					   (Action action (Frame (Id "1") (E_id (Id "1")) l_env l_mem stack), l_mem) (*TODO fresh var? *)
-					 | (Error s, lm) -> (Error s, lm) end end)
-		       | (Action action stack,lm) -> 
-			 (Action action (add_to_top_frame (fun a -> (E_app f [a])) stack), lm)
-		       | (Error s,lm) -> (Error s,lm)
-			end)
-		     end)
-      | _ -> (Error "Application with expression other than identifier",l_mem)
-      end
+      match (f,t_level) with
+      | (E_id(id),(defs,regs)) -> 
+	(match find_function defs id with
+	| None -> (Error "No function",l_mem,l_env) (* Add in a new check for a data constructor call here *)
+	| Some(funcls) -> 
+	  (match interp_main t_level l_env l_mem (List.hd args) with
+	  | (Value v,lm,_) -> (match find_funcl funcls v with
+	    | None -> (Error "No matching pattern for function",l_mem,l_env) (*TODO add function name*)
+	    | Some(env,exp) -> 
+	      match interp_main t_level env emem exp with
+	      | (Value a,lm,_) -> (Value a, l_mem,l_env)
+	      | (Action action stack, lm,_) -> 
+		(Action action (Frame (Id "0") (E_id (Id "0")) l_env l_mem stack), l_mem,l_env) (*TODO fresh var? *)
+	      | (Error s, lm,_) -> (Error s, lm,l_env) end end)
+	  | (Action action stack,lm,_) -> 
+	    (Action action (add_to_top_frame (fun a -> (E_app f [a])) stack), lm,l_env)
+	  | (Error s,lm,_) -> (Error s,lm,l_env)
+	   end)
+	 end)
+      | _ -> (Error "Application with expression other than identifier",l_mem,l_env)
+      end 
+    | E_app_infix l op r -> 
+      match interp_main t_level l_env l_mem l with
+      | (Value vl,lm,_) -> (match interp_main t_level l_env lm r with
+	                    | (Value vr,lm,_) -> 
+			      (match t_level with
+			      | (defs,regs) ->
+				(match find_function defs op with
+				| None -> (Error "No matching pattern for function",lm,l_env)
+				| Some (funcls) ->
+				  (match find_funcl funcls (V_tuple [vl;vr]) with 
+				  | None -> (Error "No matching pattern for function",lm,l_env)
+				  | Some(env,exp) ->
+				    match interp_main t_level env emem exp with
+				    | (Value a,lm,_) -> (Value a,l_mem,l_env)
+				    | (Action action stack, _,_) ->
+				      (Action action (Frame (Id "0") (E_id (Id "0")) l_env l_mem stack),l_mem,l_env)
+				    | (Error s,_,_) -> (Error s,l_mem,l_env)
+				   end
+				 end)
+				 end)
+			       end)
+			    | (Action action stack,lm,_) ->
+			      (Action action (add_to_top_frame (fun r -> (E_app_infix (to_exp vl) op r)) stack),lm,l_env)
+			    | (Error s,_,_) -> (Error s,l_mem,l_env)
+			    end)
+      | (Action action stack,lm,_) ->
+	(Action action (add_to_top_frame (fun l -> (E_app_infix l op r)) stack),lm,l_env)
+      | error -> error
+      end 
+  | E_assign lexp exp ->
+    match interp_main t_level l_env l_mem exp with
+    | (Value v,lm,_) -> create_write_message_or_update t_level v l_env lm true lexp
+    | (Action action stack,lm,_) ->
+      (Action action (add_to_top_frame (fun v -> (E_assign lexp v)) stack),lm,l_env)
+    | error -> error
     end
+  end
 
-and interp_block defs local_env local_mem exps =
-    match exps with
-    | [ ] -> (Value (V_lit(L_unit)), local_mem)
+ and interp_block t_level init_env local_env local_mem exps =
+   match exps with
+    | [ ] -> (Value (V_lit(L_unit)), local_mem, init_env)
     | exp:: exps ->
-      let (outcome,lm) = interp_main defs local_env local_mem exp in
+      let (outcome,lm,le) = interp_main t_level local_env local_mem exp in
       match outcome with
-      | Value _ -> interp_block defs local_env lm exps
-      | Action action stack -> (Action action (add_to_top_frame (fun e -> E_block(e::exps)) stack), lm)
-      | Error s -> (Error s, lm)
+      | Value _ -> interp_block t_level init_env le lm exps
+      | Action action stack -> (Action action (add_to_top_frame (fun e -> E_block(e::exps)) stack), lm,le)
+      | Error s -> (Error s, lm,le)
       end 
     end
+
+and create_write_message_or_update t_level value l_env l_mem is_top_level lexp =
+   let (defs,regs) = t_level in
+   match (lexp,is_top_level) with
+    | (LEXP_id id,true) -> 
+      match in_env l_env id with
+      | Some (V_boxref n) -> (Value (V_lit L_unit), update_mem l_mem n value, l_env)
+      end 
+   end
+	
+
+let interp defs exp =
+  let t_level = (defs, to_registers defs) in
+  match interp_main t_level [] emem exp with
+  | (o,_,_) -> o
+  end
+
+let rec resume_main t_level stack value =
+  match stack with
+  | Top -> Error "Top hit without place to put value"
+  | Frame id exp env mem Top -> 
+    match interp_main t_level ((id,value)::env) mem exp with
+    | (o,_,_) -> o
+    end 
+  | Frame id exp env mem stack ->
+    match resume_main t_level stack value with
+    | Value v -> 
+      match interp_main t_level ((id,value)::env) mem exp with
+      | (o,_,_) -> o
+      end 
+    | Action action stack -> Action action (Frame id exp env mem stack)
+    | Error s -> Error s
+    end  
+  end
+
+let resume defs stack value =
+  let t_level = (defs, to_registers defs) in
+  resume_main t_level stack value 
