@@ -396,6 +396,14 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level lexp =
     | (LEXP_id id,true) -> 
       match in_env l_env id with
       | Some (V_boxref n) -> (Value (V_lit L_unit), update_mem l_mem n value, l_env)
+      | None -> 
+	match in_reg regs id with
+	| Some regf -> (Action (Write_reg regf None value) (Frame (Id "0") (E_id (Id "0")) l_env l_mem Top),l_mem,l_env)
+	| None -> (*Should check memory here*)
+	  let (Mem c m) = l_mem in
+	  let l_mem = (Mem (c+1) m) in
+	  (Value (V_lit L_unit), update_mem l_mem c value, (id,(V_boxref c))::l_env)
+        end
       end 
    end
 	

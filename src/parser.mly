@@ -122,7 +122,7 @@ let star = "*"
 
 %token And As Bits By Case Clause Const Default Dec Effect Effects End Enumerate Else False
 %token Forall Foreach Function_ If_ In IN Inc Let_ Member Nat Order Pure Rec Register
-%token Scattered Struct Switch Then True Type TYPE Typedef Union With Val
+%token Scattered Struct Switch Then True Type TYPE Typedef Undefined Union With Val
 
 /* Avoid shift/reduce conflict - see right_atomic_exp rule */
 %nonassoc Then
@@ -376,6 +376,8 @@ lit:
     { lloc (L_bin $1) }
   | Hex
     { lloc (L_hex $1) }
+  | Undefined
+    { lloc L_undef }
 
 
 atomic_pat:

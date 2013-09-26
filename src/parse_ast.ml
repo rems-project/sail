@@ -137,6 +137,7 @@ lit_aux =  (* Literal constant *)
  | L_num of int (* natural number constant *)
  | L_hex of string (* bit vector constant, C-style *)
  | L_bin of string (* bit vector constant, C-style *)
+ | L_undef (* undefined value *)
  | L_string of string (* string constant *)
 
 
