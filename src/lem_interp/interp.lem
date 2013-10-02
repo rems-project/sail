@@ -14,6 +14,15 @@ type value =
  | V_record of list (id * value)
  | V_ctor of id * value
 
+val access_vector : value -> nat -> value
+let access_vector v n =
+  match v with
+  | V_vector m inc vs -> 
+    if inc then
+    List.nth vs (m + n)
+    else List.nth vs (m-n)
+  end
+
 type mem = Mem of nat * map nat value
 type env = list (id * value)
 
@@ -80,9 +89,10 @@ let rec in_env env id =
  | (eid,value)::env -> if eid = id then Some value else in_env env id
  end 
 
-val in_mem : mem -> nat -> option value
-let in_mem (Mem _ m) n =
-  if (Pmap.mem n m) then Some (Pmap.find n m) else None
+val in_mem : mem -> nat -> value
+let in_mem (Mem _ m) n = 
+  Pmap.find n m
+  (* if (Pmap.mem n m) then Some (Pmap.find n m) else None *)
 
 val update_mem : mem -> nat -> value -> mem
 let update_mem (Mem c m) loc value =
@@ -221,16 +231,23 @@ type top_level = defs * list (id*reg_form)
 val interp_main : top_level -> env -> mem -> exp -> (outcome * mem * env)
 val exp_list : top_level -> (list exp -> exp) -> (list value -> value) -> env -> mem -> list value -> list exp -> (outcome * mem * env)
 
+let resolve_outcome to_match value_thunk action_thunk =
+  match to_match with
+  | (Value v,lm,le) -> value_thunk v lm le
+  | (Action action stack,lm,le) -> (action_thunk (Action action stack), lm,le)
+  | (Error s,lm,le) -> (Error s,lm,le)
+  end
+
+let update_stack (Action act stack) fn = Action act (fn stack)  
+
 (*Interpret a list of expressions, tracking local state but evaluating in the same scope (i.e. not tracking env) *)
 let rec exp_list t_level build_e build_v l_env l_mem vals exps =
   match exps with
   | [ ] -> (Value (build_v vals), l_mem, l_env)
   | e::exps -> 
-    match (interp_main t_level l_env l_mem e) with
-    | (Value(v),lm,_) -> exp_list t_level build_e build_v l_env lm (vals@[v]) exps
-    | (Action action stack,lm,_) -> 
-      (Action action (add_to_top_frame (fun e -> (build_e ((List.map to_exp vals)@(e::exps)))) stack),lm,l_env)
-    | (Error s, lm,le) -> (Error s, lm,le) end
+    resolve_outcome (interp_main t_level l_env l_mem e)
+                    (fun value lm le -> exp_list t_level build_e build_v l_env lm (vals@[value]) exps)
+                    (fun a -> update_stack a (add_to_top_frame (fun e -> (build_e ((List.map to_exp vals)@(e::exps))))))
   end
 
 and interp_main t_level l_env l_mem exp =
@@ -239,9 +256,7 @@ and interp_main t_level l_env l_mem exp =
     | E_cast typ exp -> interp_main t_level l_env l_mem exp (* Potentially introduce coercions ie vectors and numbers *)
     | E_id id -> match in_env l_env id with
                  | Some(value) -> match value with
-		                  | V_boxref n -> match in_mem l_mem n with
-				                | None -> (Error "Local access of id not in l_mem",l_mem,l_env)
-						| Some value -> (Value value,l_mem,l_env) end
+		                  | V_boxref n ->(Value (in_mem l_mem n),l_mem,l_env)
 		                  | _ -> (Value value,l_mem,l_env) end
 		 | None -> match t_level with
 		           | (defs,regs) ->
@@ -254,65 +269,51 @@ and interp_main t_level l_env l_mem exp =
                             end
 		end
     | E_if cond thn els ->
-      let (value,lm,_) = interp_main t_level l_env l_mem cond in
-      match value with
-      | Value value -> 
-            match value with
-                | V_lit(L_true) -> interp_main t_level l_env lm thn
-                | V_lit(L_false) -> interp_main t_level l_env lm els
-                | _ -> (Error "Type error, not provided boolean for if",lm,l_env) end
-      | Action action stack -> (Action action (add_to_top_frame (fun c -> (E_if c thn els)) stack), lm,l_env)
-      | Error s -> (Error s, lm,l_env)
-      end
+      resolve_outcome (interp_main t_level l_env l_mem cond)
+                      (fun value lm le -> 
+                        match value with
+                        | V_lit(L_true) -> interp_main t_level l_env lm thn
+                        | V_lit(L_false) -> interp_main t_level l_env lm els
+                        | _ -> (Error "Type error, not provided boolean for if",lm,l_env) end)
+                      (fun a -> update_stack a (add_to_top_frame (fun c -> (E_if c thn els))))
     | E_record(FES_Fexps fexps _) -> 
       let (fields,exps) = List.split (List.map (fun (FE_Fexp id exp) -> (id,exp)) fexps) in
       exp_list t_level (fun es -> (E_record(FES_Fexps (List.map2 (fun id exp -> FE_Fexp id exp) fields es) false)))
 	               (fun vs -> (V_record (List.combine fields vs))) l_env l_mem [] exps
     | E_list(exps) ->
       exp_list t_level E_list V_list l_env l_mem [] exps
-    | E_cons h t ->
-      let (v,lm,_) = interp_main t_level l_env l_mem h in
-      match v with
-      | Value h -> let (v,lm,_) = interp_main t_level l_env lm t in
-                          match v with 
-                          | Value (V_list(t)) -> (Value(V_list(h::t)), lm,l_env)
-                          | Action action stack -> 
-			    (Action action (add_to_top_frame (fun t -> (E_cons(to_exp h) t)) stack), lm,l_env)
-                          | Error s -> (Error s, lm,l_env)
-			  | _ -> (Error "Not a list value",lm,l_env)
-                           end
-      | Action action stack -> (Action action (add_to_top_frame (fun h -> (E_cons h t)) stack), lm,l_env)
-      | Error s -> (Error s, lm,l_env)
-      end 
+    | E_cons hd tl ->
+      resolve_outcome (interp_main t_level l_env l_mem hd)
+                      (fun hdv lm le -> resolve_outcome
+                                        (interp_main t_level l_env lm tl)
+                                        (fun tlv lm le -> match tlv with 
+                                                   | V_list t -> (Value(V_list (hdv::t)),lm,le)
+                                                   | _ -> (Error ":: of non-list value",lm,le) end)
+                                        (fun a -> update_stack a (add_to_top_frame (fun t -> E_cons (to_exp hdv) t))))
+                      (fun a -> update_stack a (add_to_top_frame (fun h -> E_cons h tl)))
     | E_field exp id -> 
-      let (v,lm,_) = interp_main t_level l_env l_mem exp in
-      match v with
-      | Value (V_record(fexps)) -> 
-	match in_env fexps id with
-	| Some v -> (Value v, lm, l_env)
-	| None -> (Error "Field not found",lm,l_env)
-        end 
-      | Value _ -> (Error "Field access not a record",lm,l_env)
-      | Action action stack -> (Action action (add_to_top_frame (fun e -> (E_field e id)) stack),lm,l_env)
-      | error -> (error,lm,l_env)
-      end 
+      resolve_outcome (interp_main t_level l_env l_mem exp)
+                      (fun value lm le -> 
+                        match value with 
+                        | V_record fexps -> match in_env fexps id with
+                                            | Some v -> (Value v,lm,l_env)
+                                            | None -> (Error "Field not found in record",lm,le) end
+                        | _ -> (Error "Field access requires a record",lm,le)
+                        end )
+                      (fun a -> update_stack a (add_to_top_frame (fun e -> E_field e id)))
     | E_vector_access vec i ->
-      match interp_main t_level l_env l_mem i with
-      | (Value (V_lit (L_num n)),lm,_) -> 
-	match interp_main t_level l_env l_mem vec with
-	| (Value (V_vector base inc vals),lm,_) -> 
-	  if inc 
-	  then (Value(List.nth vals (n - base)),lm,l_env)
-	  else (Value(List.nth vals (base - n)),lm,l_env)
-	| (Value _,lm,_) -> (Error "Vector access not given vector",lm,l_env)
-	| (Action action stack,lm,_) -> 
-	  (Action action (add_to_top_frame (fun v -> (E_vector_access v (E_lit (L_num n)))) stack),lm,l_env)
-	| error -> error
-        end 
-      | (Value _,lm,_) -> (Error "Vector access not given number for access point",lm,l_env)
-      | (Action action stack,lm,_) -> (Action action (add_to_top_frame (fun i -> (E_vector_access vec i)) stack),lm,l_env)
-      | error -> error
-      end
+      resolve_outcome (interp_main t_level l_env l_mem i)
+                      (fun iv lm le -> 
+                        match iv with
+                        | V_lit (L_num n) -> 
+                          resolve_outcome (interp_main t_level l_env lm vec)
+                                          (fun vvec lm le ->
+                                            match vvec with
+                                            | V_vector base inc vals -> (Value (access_vector vvec n),lm,le)
+                                            | _ -> (Error "Vector access of non-vector",lm,le)end)
+                                          (fun a -> update_stack a (add_to_top_frame (fun v -> (E_vector_access v (E_lit (L_num n))))))
+                        | _ -> (Error "Vector access not given a number for index",lm,l_env) end)
+                      (fun a -> update_stack a (add_to_top_frame (fun i -> E_vector_access vec i)))
     | E_tuple(exps) -> 
       exp_list t_level E_tuple V_tuple l_env l_mem [] exps
     | E_vector(exps) ->
@@ -322,72 +323,55 @@ and interp_main t_level l_env l_mem exp =
       match (f,t_level) with
       | (E_id(id),(defs,regs)) -> 
 	(match find_function defs id with
-	| None -> (Error "No function",l_mem,l_env) (* Add in a new check for a data constructor call here *)
+	| None -> (Error "No function",l_mem,l_env) (* Add in another check for a data constructor call here *)
 	| Some(funcls) -> 
-	  (match interp_main t_level l_env l_mem (List.hd args) with
-	  | (Value v,lm,_) -> (match find_funcl funcls v with
-	    | None -> (Error "No matching pattern for function",l_mem,l_env) (*TODO add function name*)
-	    | Some(env,exp) -> 
-	      match interp_main t_level env emem exp with
-	      | (Value a,lm,_) -> (Value a, l_mem,l_env)
-	      | (Action action stack, lm,_) -> 
-		(Action action (Frame (Id "0") (E_id (Id "0")) l_env l_mem stack), l_mem,l_env) (*TODO fresh var? *)
-	      | (Error s, lm,_) -> (Error s, lm,l_env) end end)
-	  | (Action action stack,lm,_) -> 
-	    (Action action (add_to_top_frame (fun a -> (E_app f [a])) stack), lm,l_env)
-	  | (Error s,lm,_) -> (Error s,lm,l_env)
-	   end)
+          resolve_outcome (interp_main t_level l_env l_mem (List.hd args))
+                          (fun argv lm le -> 
+                            (match find_funcl funcls argv with
+	                    | None -> (Error "No matching pattern for function",lm,l_env) (*TODO add function name*)
+	                    | Some(env,exp) -> 
+                              resolve_outcome (interp_main t_level env emem exp)
+	                                      (fun ret lm le -> (Value ret, l_mem,l_env))
+                                              (fun a -> update_stack a (fun stack -> (Frame (Id "0") (E_id (Id "0")) l_env l_mem stack)))
+                             end))
+                          (fun a -> update_stack a (add_to_top_frame (fun a -> (E_app f [a]))))
 	 end)
       | _ -> (Error "Application with expression other than identifier",l_mem,l_env)
       end 
     | E_app_infix l op r -> 
-      match interp_main t_level l_env l_mem l with
-      | (Value vl,lm,_) -> (match interp_main t_level l_env lm r with
-	                    | (Value vr,lm,_) -> 
-			      (match t_level with
-			      | (defs,regs) ->
-				(match find_function defs op with
-				| None -> (Error "No matching pattern for function",lm,l_env)
-				| Some (funcls) ->
-				  (match find_funcl funcls (V_tuple [vl;vr]) with 
-				  | None -> (Error "No matching pattern for function",lm,l_env)
-				  | Some(env,exp) ->
-				    match interp_main t_level env emem exp with
-				    | (Value a,lm,_) -> (Value a,l_mem,l_env)
-				    | (Action action stack, _,_) ->
-				      (Action action (Frame (Id "0") (E_id (Id "0")) l_env l_mem stack),l_mem,l_env)
-				    | (Error s,_,_) -> (Error s,l_mem,l_env)
-				   end
-				 end)
-				 end)
-			       end)
-			    | (Action action stack,lm,_) ->
-			      (Action action (add_to_top_frame (fun r -> (E_app_infix (to_exp vl) op r)) stack),lm,l_env)
-			    | (Error s,_,_) -> (Error s,l_mem,l_env)
-			    end)
-      | (Action action stack,lm,_) ->
-	(Action action (add_to_top_frame (fun l -> (E_app_infix l op r)) stack),lm,l_env)
-      | error -> error
-      end 
+      resolve_outcome (interp_main t_level l_env l_mem l)
+                      (fun lv lm le -> 
+                         resolve_outcome (interp_main t_level l_env lm r)
+                                         (fun rv lm le -> 
+			                   (match t_level with
+			                   | (defs,regs) ->
+				             (match find_function defs op with
+				             | None -> (Error "No matching pattern for function",lm,l_env)
+				             | Some (funcls) ->
+				               (match find_funcl funcls (V_tuple [lv;rv]) with 
+				               | None -> (Error "No matching pattern for function",lm,l_env)
+				               | Some(env,exp) ->
+				                 resolve_outcome (interp_main t_level env emem exp)
+				                 (fun ret lm le -> (Value ret,l_mem,l_env))
+                                                 (fun a -> update_stack a (fun stack -> (Frame (Id "0") (E_id (Id "0")) l_env l_mem stack)))
+				                end)
+				              end)
+			                    end))
+                                         (fun a -> update_stack a (add_to_top_frame (fun r -> (E_app_infix (to_exp lv) op r)))))
+                       (fun a -> update_stack a (add_to_top_frame (fun l -> (E_app_infix l op r))))
   | E_assign lexp exp ->
-    match interp_main t_level l_env l_mem exp with
-    | (Value v,lm,_) -> create_write_message_or_update t_level v l_env lm true lexp
-    | (Action action stack,lm,_) ->
-      (Action action (add_to_top_frame (fun v -> (E_assign lexp v)) stack),lm,l_env)
-    | error -> error
-    end
+    resolve_outcome (interp_main t_level l_env l_mem exp)
+                    (fun v lm le -> create_write_message_or_update t_level v l_env lm true lexp)
+                    (fun a -> update_stack a (add_to_top_frame (fun v -> (E_assign lexp v))))
   end
 
  and interp_block t_level init_env local_env local_mem exps =
    match exps with
     | [ ] -> (Value (V_lit(L_unit)), local_mem, init_env)
     | exp:: exps ->
-      let (outcome,lm,le) = interp_main t_level local_env local_mem exp in
-      match outcome with
-      | Value _ -> interp_block t_level init_env le lm exps
-      | Action action stack -> (Action action (add_to_top_frame (fun e -> E_block(e::exps)) stack), lm,le)
-      | Error s -> (Error s, lm,le)
-      end 
+      resolve_outcome (interp_main t_level local_env local_mem exp)
+                      (fun _ lm le -> interp_block t_level init_env le lm exps)
+                      (fun a -> update_stack a (add_to_top_frame (fun e -> E_block(e::exps))))
     end
 
 and create_write_message_or_update t_level value l_env l_mem is_top_level lexp =
@@ -398,43 +382,43 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level lexp =
       | Some (V_boxref n) -> 
 	if is_top_level 
 	then (Value (V_lit L_unit), update_mem l_mem n value, l_env)
-	else (Value (V_boxref n), l_mem, l_env)
-      | Some v -> if is_top_level then (Error "Writes must be to reg values",l_mem,l_env)
-	          else (Value v,l_mem,l_env) 
+	else (Value (in_mem l_mem n), l_mem, l_env)
+      | Some v -> if is_top_level then (Error "Writes must be to reg values",l_mem,l_env) else (Value v,l_mem,l_env)
       | None -> 
 	match in_reg regs id with
 	| Some regf -> (Action (Write_reg regf None value) (Frame (Id "0") (E_id (Id "0")) l_env l_mem Top),l_mem,l_env)
 	| None -> (*Should check memory here*)
-	  if is_top_level then begin
+	  if is_top_level 
+          then begin
 	    let (Mem c m) = l_mem in
 	    let l_mem = (Mem (c+1) m) in
 	    (Value (V_lit L_unit), update_mem l_mem c value, (id,(V_boxref c))::l_env)
-            end
+          end
           else (Error "Undefined id",l_mem,l_env)
         end
       end 
     | LEXP_vector lexp exp -> 
-      match interp_main top_level l_env l_mem exp with
-      | (Action action stack,_,_) -> 
-	(Action action (update_top_frame (fun e -> LEXP_vector lexp e) stack),l_mem,l_env)
-      | (Value (V_lit (L_num n))) -> 
-	match create_write_message_or_update t_level value l_env l_mem false lexp with
-	| (Value (V_vector inc m vs),lm,_) ->
-	  let nth = List.nth vs (if inc then (n+m) else (m-n)) in
-	  if top_level then
-	    match nth with 
-	    | V_boxref n -> (Value (V_lit L_unit), update_mem l_mem n value,l_env)
-	    | _ -> (Error "Attempt to mutate non boxref",l_mem,l_env)
-            end
-	 else (Value nth,lm,l_env)
-        | (Value _,_,_) -> (Error "Not a vector in vector lookup", l_mem,l_env)
-	| (Action action stack,_,_) -> (Action (refine_action action n))
-	| e -> e
-        end 
-      | e -> e 
-      end 
-    end
-	
+      resolve_outcome (interp_main t_level l_env l_mem exp) 
+                      (fun i lm le -> 
+                       match i with 
+                       | V_lit (L_num n) -> 
+                         resolve_outcome (create_write_message_or_update t_level value l_env l_mem false lexp)
+                                         (fun v lm le -> 
+                                           match v with 
+                                           | V_vector inc m vs -> 
+                                             let nth = access_vector v n in
+                                             match nth with
+                                             | V_boxref n -> if is_top_level then (Value (V_lit L_unit), update_mem lm n value, l_env)
+                                                             else (Value (in_mem lm n), lm, l_env)
+                                             | v -> if is_top_level then (Error "Vector does not contain reg values",lm,l_env)
+                                                    else (Value v,lm,le) end
+                                           | _ -> (Error "Vector access of non-vector",lm,l_env) end)
+                                         (fun a -> match a with
+                                         | (Action (Write_reg regf None value) s) -> (Action (Write_reg regf (Some (n,n)) value) s)
+                                          end)
+                       | _ -> (Error "Vector access must be a number",lm,le) end)
+                      (fun a -> a )(* update_stack (add_to_top_frame (fun e -> LEXP_vector lexp e))) *)
+     end	
 	
 
 let interp defs exp =
