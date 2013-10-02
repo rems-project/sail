@@ -392,20 +392,49 @@ and interp_main t_level l_env l_mem exp =
 
 and create_write_message_or_update t_level value l_env l_mem is_top_level lexp =
    let (defs,regs) = t_level in
-   match (lexp,is_top_level) with
-    | (LEXP_id id,true) -> 
+   match lexp with
+    | LEXP_id id -> 
       match in_env l_env id with
-      | Some (V_boxref n) -> (Value (V_lit L_unit), update_mem l_mem n value, l_env)
+      | Some (V_boxref n) -> 
+	if is_top_level 
+	then (Value (V_lit L_unit), update_mem l_mem n value, l_env)
+	else (Value (V_boxref n), l_mem, l_env)
+      | Some v -> if is_top_level then (Error "Writes must be to reg values",l_mem,l_env)
+	          else (Value v,l_mem,l_env) 
       | None -> 
 	match in_reg regs id with
 	| Some regf -> (Action (Write_reg regf None value) (Frame (Id "0") (E_id (Id "0")) l_env l_mem Top),l_mem,l_env)
 	| None -> (*Should check memory here*)
-	  let (Mem c m) = l_mem in
-	  let l_mem = (Mem (c+1) m) in
-	  (Value (V_lit L_unit), update_mem l_mem c value, (id,(V_boxref c))::l_env)
+	  if is_top_level then begin
+	    let (Mem c m) = l_mem in
+	    let l_mem = (Mem (c+1) m) in
+	    (Value (V_lit L_unit), update_mem l_mem c value, (id,(V_boxref c))::l_env)
+            end
+          else (Error "Undefined id",l_mem,l_env)
         end
       end 
-   end
+    | LEXP_vector lexp exp -> 
+      match interp_main top_level l_env l_mem exp with
+      | (Action action stack,_,_) -> 
+	(Action action (update_top_frame (fun e -> LEXP_vector lexp e) stack),l_mem,l_env)
+      | (Value (V_lit (L_num n))) -> 
+	match create_write_message_or_update t_level value l_env l_mem false lexp with
+	| (Value (V_vector inc m vs),lm,_) ->
+	  let nth = List.nth vs (if inc then (n+m) else (m-n)) in
+	  if top_level then
+	    match nth with 
+	    | V_boxref n -> (Value (V_lit L_unit), update_mem l_mem n value,l_env)
+	    | _ -> (Error "Attempt to mutate non boxref",l_mem,l_env)
+            end
+	 else (Value nth,lm,l_env)
+        | (Value _,_,_) -> (Error "Not a vector in vector lookup", l_mem,l_env)
+	| (Action action stack,_,_) -> (Action (refine_action action n))
+	| e -> e
+        end 
+      | e -> e 
+      end 
+    end
+	
 	
 
 let interp defs exp =
