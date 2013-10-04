@@ -1,0 +1,3 @@
+true: -traverse, debug
+<**/*.ml>: bin_annot, annot
+
