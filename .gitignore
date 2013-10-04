@@ -1,1 +1,16 @@
-src/_build/*
+*.native
+*.byte
+src/_build/
+src/lem_interp/_build/
+src/lem_interp/*.ml
+language/*.pdf
+language/*.uo
+language/*.ui
+language/*.sig
+language/*.sml
+language/.HOLMK
+language/*.tex
+language/*.aux
+language/*.log
+language/*.dvi
+language/*.ps
