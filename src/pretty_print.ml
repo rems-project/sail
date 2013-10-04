@@ -368,6 +368,7 @@ let rec pp_format_typ_lem (Typ_aux(t,_)) =
                             (pp_format_effects_lem efct) ^ ")"
   | Typ_tup(typs) -> "(Typ_tup [" ^ (list_format "; " pp_format_typ_lem typs) ^ "])"
   | Typ_app(id,args) -> "(Typ_app " ^ (pp_format_id_lem id) ^ " [" ^ (list_format "; " pp_format_typ_arg_lem args) ^ "])"
+  | Typ_wild -> "Typ_wild"
 and pp_format_nexp_lem (Nexp_aux(n,_)) = 
   match n with
   | Nexp_id(id) -> "(Nexp_id " ^ pp_format_id_lem id ^ ")"
