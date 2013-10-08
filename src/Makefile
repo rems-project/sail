@@ -1,5 +1,8 @@
+.PHONY: all doc doc-pdf doc-dot clean
+
 all:
 	ocamlbuild main.native
+	$(MAKE) -C lem_interp
 
 doc:
 	mkdir -p html-doc
@@ -13,9 +16,6 @@ doc-pdf:
 doc-dot:
 	ocamldoc -I _build/ *.ml *.mli ulib/*.ml -dot -sort -d tex-doc -dot-reduce -o dep.dot; true
 	dot -Tpdf -o dep.pdf dep.dot
-
-debug: 
-	ocamlbuild main.d.byte
 
 clean:
 	-ocamlbuild -clean
