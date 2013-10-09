@@ -497,6 +497,8 @@ vaccess_exp:
 app_exp:
   | vaccess_exp
     { $1 }
+  | id Lparen Rparen
+    { eloc (E_app((E_aux((E_id $1), locn 1 1)), [eloc (E_lit (lloc L_unit))])) }
   | id Lparen exp Rparen
     { eloc (E_app((E_aux((E_id $1),locn 1 1)),[$3])) }
   | id Lparen comma_exps Rparen
