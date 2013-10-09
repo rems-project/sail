@@ -820,8 +820,9 @@ fundef :: 'FD_' ::=
 letbind :: 'LB_' ::=
   {{ com Let binding }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | typschm pat = exp                                :: :: val_explicit
+  | let typschm pat = exp                                :: :: val_explicit
     {{ com value binding, explicit type ([[pat]] must be total)}}
+% at the moment, we cannot parse the following, so perhaps we shouldn't keep this form here 
   | let pat = exp                                    :: :: val_implicit
     {{ com value binding, implicit type ([[pat]] must be total)}}
 

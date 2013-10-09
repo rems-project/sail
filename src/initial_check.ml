@@ -348,6 +348,10 @@ and to_ast_lexp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp)
   LEXP_aux(
     (match exp with
     | Parse_ast.E_id(id) -> LEXP_id(to_ast_id id)
+    | Parse_ast.E_app(Parse_ast.E_aux(f,l'),[exp]) -> 
+      (match f with
+      | Parse_ast.E_id(id) -> LEXP_memory(to_ast_id id,to_ast_exp k_env exp)
+      | _ -> typ_error l' "memory call on lefthand side of assignment must begin with an id" None None)
     | Parse_ast.E_vector_access(vexp,exp) -> LEXP_vector(to_ast_lexp k_env vexp, to_ast_exp k_env exp)
     | Parse_ast.E_vector_subrange(vexp,exp1,exp2) -> LEXP_vector_range(to_ast_lexp k_env vexp, to_ast_exp k_env exp1, to_ast_exp k_env exp2)
     | Parse_ast.E_field(fexp,id) -> LEXP_field(to_ast_lexp k_env fexp, to_ast_id id)

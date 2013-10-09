@@ -248,6 +248,7 @@ and 'a exp =
 
 and 'a lexp_aux =  (* lvalue expression *)
    LEXP_id of id (* identifier *)
+ | LEXP_memory of id * 'a exp (* memory write via function call *)
  | LEXP_vector of 'a lexp * 'a exp (* vector element *)
  | LEXP_vector_range of 'a lexp * 'a exp * 'a exp (* subvector *)
  | LEXP_field of 'a lexp * id (* struct field *)

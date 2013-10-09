@@ -279,7 +279,8 @@ let rec find_funcl funcls value =
     if is_matching then Some (env,exp) else find_funcl funcls value
   end
 
-type top_level = defs * list (id*reg_form)
+(*top_level is a three tuple of (all definitions, declared registers, memory functions (typ expected to be num -> num -> a)) *)
+type top_level = defs * list (id*reg_form) * list (id * typ)
 
 val interp_main : top_level -> env -> mem -> exp -> (outcome * mem * env)
 val exp_list : top_level -> (list exp -> exp) -> (list value -> value) -> env -> mem -> list value -> list exp -> (outcome * mem * env)
@@ -313,7 +314,7 @@ and interp_main t_level l_env l_mem exp =
 		                  | V_boxref n ->(Value (in_mem l_mem n),l_mem,l_env)
 		                  | _ -> (Value value,l_mem,l_env) end
 		 | None -> match t_level with
-		           | (defs,regs) ->
+		           | (defs,regs,mems) ->
 			     match in_reg regs id with
 			     | Some(regf) -> 
 			       (Action (Read_reg regf None) (Frame (Id "0") (E_id (Id "0")) l_env l_mem Top), l_mem, l_env) 
@@ -411,9 +412,9 @@ and interp_main t_level l_env l_mem exp =
     | E_block(exps) -> interp_block t_level l_env l_env l_mem exps
     | E_app f args ->
       match (f,t_level) with
-      | (E_id(id),(defs,regs)) -> 
+      | (E_id(id),(defs,regs,mems)) -> 
 	(match find_function defs id with
-	| None -> (Error "No function",l_mem,l_env) (* Add in another check for a data constructor call here *)
+	| None -> (Error "No function",l_mem,l_env) (* Add in another check for a data constructor call here, as well as memory reads *)
 	| Some(funcls) -> 
           resolve_outcome (interp_main t_level l_env l_mem (List.hd args))
                           (fun argv lm le -> 
@@ -434,7 +435,7 @@ and interp_main t_level l_env l_mem exp =
                          resolve_outcome (interp_main t_level l_env lm r)
                                          (fun rv lm le -> 
 			                   (match t_level with
-			                   | (defs,regs) ->
+			                   | (defs,regs,mems) ->
 				             (match find_function defs op with
 				             | None -> (Error "No matching pattern for function",lm,l_env)
 				             | Some (funcls) ->
@@ -476,7 +477,7 @@ and interp_main t_level l_env l_mem exp =
     end
 
 and create_write_message_or_update t_level value l_env l_mem is_top_level lexp =
-   let (defs,regs) = t_level in
+   let (defs,regs,mems) = t_level in
    match lexp with
     | LEXP_id id -> 
       match in_env l_env id with
@@ -489,7 +490,7 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level lexp =
 	match in_reg regs id with
 	| Some regf -> let request = (Action (Write_reg regf None value) (Frame (Id "0") (E_id (Id "0")) l_env l_mem Top),l_mem,l_env) in
                        if is_top_level then (request,None) else (request,Some (fun e -> LEXP_id id))
-	| None -> (*Should check memory here*)
+	| None -> 
 	  if is_top_level 
           then begin
 	    let (Mem c m) = l_mem in
@@ -499,6 +500,16 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level lexp =
           else ((Error "Undefined id",l_mem,l_env),None)
         end
       end 
+    | LEXP_memory id exp -> 
+      match (interp_main t_level l_env l_mem exp) with
+      | (Value t,lm,le) ->
+        (match t with
+        | V_tuple [V_lit (L_num n1);V_lit (L_num n2)] ->
+          let request = (Action (Write_mem id n1 n2 value) (Frame (Id "0") (E_id (Id "0")) l_env lm Top),lm,l_env) in
+          if is_top_level then (request,None) else (request,Some (fun e -> (LEXP_memory id (E_tuple [E_lit (L_num n1); E_lit (L_num n2)]))))
+        | _ -> ((Error "Memory access requires two numbers as agrument",lm,le),None) end)
+      | (Action a s,lm, le) -> ((Action a s,lm,le), Some (fun e -> (LEXP_memory id e)))
+      | e -> (e,None) end
     | LEXP_vector lexp exp -> 
       match (interp_main t_level l_env l_mem exp) with
       | (Value i,lm,le) ->
@@ -578,7 +589,7 @@ end
 
 
 let interp defs exp =
-  let t_level = (defs, to_registers defs) in
+  let t_level = (defs, to_registers defs,[]) in (*How to get memory in?*)
   match interp_main t_level [] emem exp with
   | (o,_,_) -> o
   end
@@ -598,5 +609,5 @@ let rec resume_main t_level stack value =
   end
 
 let resume defs stack value =
-  let t_level = (defs, to_registers defs) in
+  let t_level = (defs, to_registers defs,[]) in
   resume_main t_level stack value 

@@ -252,6 +252,7 @@ and pp_case ppf (Pat_aux(Pat_exp(pat,exp),_)) =
 and pp_lexp ppf (LEXP_aux(lexp,_)) =
   match lexp with
   | LEXP_id(id) -> pp_id ppf id
+  | LEXP_memory(id,exp) -> fprintf ppf "@[%a %a@]" pp_id id pp_exp exp
   | LEXP_vector(v,exp) -> fprintf ppf "@[%a %a %a %a@]" pp_lexp v kwd "[" pp_exp exp kwd "]"
   | LEXP_vector_range(v,e1,e2) -> fprintf ppf "@[%a %a %a %a %a %a@]" pp_lexp v kwd "[" pp_exp e1 kwd ":" pp_exp e2 kwd "]"
   | LEXP_field(v,id) -> fprintf ppf "@[%a%a%a@]" pp_lexp v kwd "." pp_id id
@@ -544,6 +545,7 @@ and pp_lem_case ppf (Pat_aux(Pat_exp(pat,exp),_)) =
 and pp_lem_lexp ppf (LEXP_aux(lexp,_)) =
   match lexp with
   | LEXP_id(id) -> fprintf ppf "(%a %a)" kwd "LEXP_id" pp_lem_id id
+  | LEXP_memory(id,exp) -> fprintf ppf "(%a %a %a)" kwd "LEXP_memory" pp_lem_id id pp_lem_exp exp
   | LEXP_vector(v,exp) -> fprintf ppf "@[(%a %a %a)@]" kwd "LEXP_vector" pp_lem_lexp v pp_lem_exp exp
   | LEXP_vector_range(v,e1,e2) -> 
     fprintf ppf "@[(%a %a %a %a)@]" kwd "LEXP_vector_range" pp_lem_lexp v  pp_lem_exp e1 pp_lem_exp e2
