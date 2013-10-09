@@ -686,8 +686,9 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     {{ aux _ annot }} {{ auxparam 'a }}
     | id                                                  :: :: id
     {{ com identifier }}
-    | lexp [ exp ]  :: ::                         vector  {{ com vector element }}
-    | lexp [ exp1 : exp2 ]  :: ::              vector_range {{ com subvector }}
+    | id exp :: ::                                        memory {{ com memory write via function call }}
+    | lexp [ exp ]  :: ::                                 vector  {{ com vector element }}
+    | lexp [ exp1 : exp2 ]  :: ::                         vector_range {{ com subvector }}
     % maybe comma-sep such lists too
     | lexp . id :: :: field                        {{ com struct field }}
 
