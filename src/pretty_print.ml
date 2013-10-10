@@ -495,7 +495,7 @@ let rec pp_lem_let ppf (LB_aux(lb,_)) =
 
 and pp_lem_exp ppf (E_aux(e,_)) = 
   match e with
-  | E_block(exps) -> fprintf ppf "@[<0>%a [%a@] %a@]" 
+  | E_block(exps) -> fprintf ppf "@[<0>%a [%a] %a@]"
                                  kwd "(E_block" 
                                  (list_pp pp_semi_lem_exp pp_lem_exp) exps
                                  kwd ")"
