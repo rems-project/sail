@@ -1,7 +1,10 @@
-.PHONY: all clean
+.PHONY: all test clean
 
 all:
 	ocamlbuild main.native test/run_tests.native
+
+test: all
+	./run_tests.native
 
 clean:
 	-ocamlbuild -clean
