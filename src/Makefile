@@ -1,15 +1,7 @@
-.PHONY: all test clean
+.PHONY: all clean
 
-all: main.native test
-
-.PHONY: main.native
-main.native:
-	ocamlbuild main.native
-
-TESTS=test/test1.native
-
-test:
-	ocamlbuild $(TESTS)
+all:
+	ocamlbuild main.native test/run_tests.native
 
 clean:
 	-ocamlbuild -clean
