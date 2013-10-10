@@ -137,7 +137,7 @@ let output1 libpath out_arg filename defs (* alldoc_accum alldoc_inc_accum alldo
 	begin
 	  let (o, ext_o) = open_output_with_check (f' ^ ".lem") in
 	  Format.fprintf o "(* %s *)@\n" (generated_line filename);
-          Format.fprintf o "open Ast@\n";
+          Format.fprintf o "open Interp_ast@\n";
           Format.fprintf o "let defs = ";
 	  Pretty_print.pp_lem_defs o defs;
 	  close_output_with_check ext_o

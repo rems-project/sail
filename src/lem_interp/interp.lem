@@ -1,6 +1,6 @@
 open Pervasives
 open Pmap
-open Ast
+open Interp_ast
 
 type nat = num
 

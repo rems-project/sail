@@ -3,13 +3,13 @@
 LEMDIR=$(abspath ../../../lem)
 OCAMLPATH:=$(LEMDIR)/ocaml-lib:$(OCAMLPATH)
 
-all: interp.native
+all: interp.cma interp.cmxa
 
-ast.ml interp.ml: ast.lem interp.lem
+interp_ast.ml interp.ml: interp_ast.lem interp.lem
 	$(LEMDIR)/lem -ocaml $^
 
-interp.native: ast.ml interp.ml
-	OCAMLPATH=$(OCAMLPATH) ocamlbuild -use-ocamlfind -pkg lem interp.native
+interp.cma interp.cmxa: interp_ast.ml interp.ml
+	OCAMLPATH=$(OCAMLPATH) ocamlbuild -use-ocamlfind -pkg lem $@
 
 clean:
 	-ocamlbuild -clean
