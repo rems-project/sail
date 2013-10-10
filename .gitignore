@@ -1,8 +1,6 @@
 *.native
 *.byte
 src/_build/
-src/lem_interp/_build/
-src/lem_interp/*.ml
 language/*.pdf
 language/*.uo
 language/*.ui
