@@ -49,7 +49,6 @@ let rec to_registers (Defs defs) =
   | [ ] -> [ ]
   | def::defs -> 
     match def with 
-    | DEF_val letb -> to_registers (Defs defs) (* Todo, maybe look through let bindings *)
     | DEF_spec valsp -> 
       match valsp with
       | VS_val_spec (TypSchm_ts tq ((Typ_app (Id "reg") _) as t)) id -> (id, Reg t):: (to_registers (Defs defs))
@@ -202,6 +201,7 @@ let fupdate_vec v n vexp =
 let rec replace_is ls vs base start stop =
   match (ls,vs) with
   | ([],_) -> []
+  | (ls,[]) -> ls
   | (l::ls,v::vs) -> 
     if base >= start then
       if start >= stop then ls
@@ -247,6 +247,8 @@ let rec to_exp v =
       else 
         E_vector_indexed (snd (List.fold_right (fun e (n,acc) -> (n+1,(n, to_exp e)::acc)) vals (n-(List.length vals),[])))
     | V_record(ivals) -> E_record(FES_Fexps (List.map (fun (id,value) -> (FE_Fexp id (to_exp value))) ivals) false)
+    | V_list(vals) -> E_list (List.map to_exp vals)
+    | V_ctor id vals -> E_app (E_id id) [to_exp vals]
     end
 
 val find_type_def : defs -> id -> option type_def
@@ -337,8 +339,28 @@ let rec match_pattern p value =
          else (false,[]))
        ipats (true,[])
    | _ -> (false, [])
+   end 
+ | P_vector_concat pats ->
+   match value with
+   | V_vector n inc vals ->
+     let (matched_p,bounds,remaining_vals) =
+       List.fold_right 
+         (fun pat (matched_p,bounds,r_vals) ->
+           match pat with
+           | P_vector pats ->
+             List.fold_right
+               (fun pat (matched_p,bounds,r_vals) ->
+                 if matched_p then
+                   match r_vals with
+                   | [] -> (false,[],[])
+                   | v::r_vals -> let (matched_p,new_bounds) = match_pattern pat v in
+                                  (matched_p,bounds@new_bounds,r_vals) end
+                 else (false,[],[])) pats (true,[],r_vals)
+           | P_id id -> (false,[],[]) (*Need to have at least a guess of how many to consume*)
+           | _ -> (false,[],[]) end) pats (true,[],vals) in
+     if matched_p && ([] = remaining_vals) then (matched_p,bounds) else (false,[]) 
+   | _ -> (false, []) 
    end
-(* | P_vector_concat of list pat (* concatenated vector pattern *) TODO *)
  | P_tup(pats) ->
    match value with 
    | V_tuple(vals) ->
@@ -423,8 +445,8 @@ and interp_main t_level l_env l_mem exp =
 			     match in_reg regs id with
 			     | Some(regf) -> 
 			       (Action (Read_reg regf None) (Frame (Id "0") (E_id (Id "0")) l_env l_mem Top), l_mem, l_env) 
-			     | None -> 
-			       (Error "Unimplemented global memory read or unbound identifier",l_mem,l_env)
+			     | None ->                                  
+			       (Error "unbound identifier",l_mem,l_env)
 			     end 
                             end
 		end
@@ -600,9 +622,9 @@ and interp_main t_level l_env l_mem exp =
                             (match find_funcl funcls argv with
 	                    | None -> (Error "No matching pattern for function",lm,l_env) (*TODO add function name*)
 	                    | Some(env,exp) -> 
-                              resolve_outcome (interp_main t_level env emem exp)
-	                                      (fun ret lm le -> (Value ret, l_mem,l_env))
-                                              (fun a -> update_stack a (fun stack -> (Frame (Id "0") (E_id (Id "0")) l_env l_mem stack)))
+                              resolve_outcome (interp_main t_level env lm exp)
+	                                      (fun ret lm le -> (Value ret, lm,l_env))
+                                              (fun a -> update_stack a (fun stack -> (Frame (Id "0") (E_id (Id "0")) l_env lm stack)))
                              end))
                           (fun a -> update_stack a (add_to_top_frame (fun a -> (E_app f [a]))))
 	| None -> 
@@ -760,6 +782,22 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level lexp =
       | (Action a s,lm,le) ->
         ((Action a s, lm,le), Some (fun e -> LEXP_vector_range lexp e exp2))
       | e -> (e,None) end
+   | LEXP_field lexp id ->
+     (match (create_write_message_or_update t_level value l_env l_mem false lexp) with
+     | ((Value (V_record fexps),lm,le),Some lexp_builder) ->
+       match (in_env fexps id,is_top_level) with
+       | (Some (V_boxref n),true) -> ((Value (V_lit L_unit), update_mem lm n value, l_env),None)
+       | (Some (V_boxref n),false) -> ((Value (in_mem lm n),lm,l_env),Some (fun e -> LEXP_field (lexp_builder e) id))
+       | (Some v, true) -> ((Error "Field access requires record",lm,le),None)
+       | (Some v,false) -> ((Value v,lm,l_env),Some (fun e -> LEXP_field (lexp_builder e) id))
+       | (None,_) -> ((Error "Field not found in specified record",lm,le),None) end
+     | ((Action a s,lm,le), Some lexp_builder) ->  
+       match a with
+       | Read_reg _ _ -> ((Action a s,lm,le), Some (fun e -> LEXP_field (lexp_builder e) id))
+       | Read_mem _ _ _ -> ((Action a s,lm,le), Some (fun e -> LEXP_field (lexp_builder e) id))
+       | _ -> ((Error "Unimplemented feature, writing to a field in a register or memory",lm,le),None)
+       end 
+     | e -> e end)
      end	
 
 and interp_letbind t_level l_env l_mem lbind =

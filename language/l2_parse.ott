@@ -276,10 +276,10 @@ typschm :: 'TypSchm_' ::=
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 grammar
-ctor_def :: 'CT_' ::=
-  {{ com Datatype constructor definition clause }}
-  {{ aux _ l }}
-  | id : typschm                                       :: :: ct
+%ctor_def :: 'CT_' ::=
+%  {{ com Datatype constructor definition clause }}
+%  {{ aux _ l }}
+%  | id : typschm                                       :: :: ct
 % but we could get away with disallowing constraints in typschm, we
 % think - if it's useful to do that
 

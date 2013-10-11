@@ -108,11 +108,6 @@ and typ_arg =  (* Type constructor arguments of all kinds *)
  | Typ_arg_effects of effects
 
 
-type typquant =  (* type quantifiers and constraints *)
- | TypQ_tq of list quant_item
- | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
-
-
 type lit =  (* Literal constant *)
  | L_unit (* $() : unit$ *)
  | L_zero (* $bitzero : bit$ *)
@@ -126,8 +121,9 @@ type lit =  (* Literal constant *)
  | L_string of string (* string constant *)
 
 
-type typschm =  (* type scheme *)
- | TypSchm_ts of typquant * typ
+type typquant =  (* type quantifiers and constraints *)
+ | TypQ_tq of list quant_item
+ | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
 type pat =  (* Pattern *)
@@ -148,6 +144,10 @@ and fpat =  (* Field pattern *)
  | FP_Fpat of id * pat
 
 
+type typschm =  (* type scheme *)
+ | TypSchm_ts of typquant * typ
+
+
 type ne =  (* internal numeric expressions *)
  | Ne_var of id
  | Ne_const of num
@@ -157,11 +157,7 @@ type ne =  (* internal numeric expressions *)
  | Ne_unary of ne
 
 
-type letbind =  (* Let binding *)
- | LB_val_explicit of typschm * pat * exp (* value binding, explicit type (pat must be total) *)
- | LB_val_implicit of pat * exp (* value binding, implicit type (pat must be total) *)
-
-and exp =  (* Expression *)
+type exp =  (* Expression *)
  | E_block of list exp (* block (parsing conflict with structs?) *)
  | E_id of id (* identifier *)
  | E_lit of lit (* literal constant *)
@@ -202,6 +198,10 @@ and fexps =  (* Field-expression list *)
 and pexp =  (* Pattern match *)
  | Pat_exp of pat * exp
 
+and letbind =  (* Let binding *)
+ | LB_val_explicit of typschm * pat * exp (* value binding, explicit type (pat must be total) *)
+ | LB_val_implicit of pat * exp (* value binding, implicit type (pat must be total) *)
+
 
 type k =  (* Internal kinds *)
  | Ki_typ
@@ -211,6 +211,24 @@ type k =  (* Internal kinds *)
  | Ki_val (* Representing values, for use in identifier checks *)
  | Ki_ctor of list k * k
  | Ki_infer (* Representing an unknown kind, inferred by context *)
+
+
+type tannot_opt =  (* Optional type annotation for functions *)
+ | Typ_annot_opt_some of typquant * typ
+
+
+type effects_opt =  (* Optional effect annotation for functions *)
+ | Effects_opt_pure (* sugar for empty effect set *)
+ | Effects_opt_effects of effects
+
+
+type rec_opt =  (* Optional recursive annotation for functions *)
+ | Rec_nonrec (* non-recursive *)
+ | Rec_rec (* recursive *)
+
+
+type funcl =  (* Function clause *)
+ | FCL_Funcl of id * pat * exp
 
 
 type index_range =  (* index specification, for bitfields in register types *)
@@ -224,31 +242,8 @@ type naming_scheme_opt =  (* Optional variable-naming-scheme specification for v
  | Name_sect_some of string
 
 
-type rec_opt =  (* Optional recursive annotation for functions *)
- | Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
-
-
-type effects_opt =  (* Optional effect annotation for functions *)
- | Effects_opt_pure (* sugar for empty effect set *)
- | Effects_opt_effects of effects
-
-
-type funcl =  (* Function clause *)
- | FCL_Funcl of id * pat * exp
-
-
-type tannot_opt =  (* Optional type annotation for functions *)
- | Typ_annot_opt_some of typquant * typ
-
-
-type default_typing_spec =  (* Default kinding or typing assumption *)
- | DT_kind of base_kind * id
- | DT_typ of typschm * id
-
-
-type val_spec =  (* Value type specification *)
- | VS_val_spec of typschm * id
+type fundef =  (* Function definition *)
+ | FD_function of rec_opt * tannot_opt * effects_opt * list funcl
 
 
 type type_def =  (* Type definition body *)
@@ -259,8 +254,13 @@ type type_def =  (* Type definition body *)
  | TD_register of id * nexp * nexp * list (index_range * id) (* register mutable bitfield type definition *)
 
 
-type fundef =  (* Function definition *)
- | FD_function of rec_opt * tannot_opt * effects_opt * list funcl
+type default_typing_spec =  (* Default kinding or typing assumption *)
+ | DT_kind of base_kind * id
+ | DT_typ of typschm * id
+
+
+type val_spec =  (* Value type specification *)
+ | VS_val_spec of typschm * id
 
 
 type def =  (* Top-level definition *)
@@ -292,10 +292,6 @@ type typ_lib =  (* library types and syntactic sugar for them *)
  | Typ_lib_list of typ (* list of typ *)
  | Typ_lib_set of typ (* finite set of typ *)
  | Typ_lib_reg of typ (* mutable register components holding typ *)
-
-
-type ctor_def =  (* Datatype constructor definition clause *)
- | CT_ct of id * typschm
 
 
 type defs =  (* Definition sequence *)

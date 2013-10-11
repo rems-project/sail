@@ -248,26 +248,26 @@ naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for va
 
 
 type 
-tannot_opt_aux =  (* Optional type annotation for functions *)
-   Typ_annot_opt_none
- | Typ_annot_opt_some of typquant * atyp
-
-
-type 
-effects_opt_aux =  (* Optional effect annotation for functions *)
-   Effects_opt_pure (* sugar for empty effect set *)
- | Effects_opt_effects of atyp
-
-
-type 
 rec_opt_aux =  (* Optional recursive annotation for functions *)
    Rec_nonrec (* non-recursive *)
  | Rec_rec (* recursive *)
 
 
 type 
+tannot_opt_aux =  (* Optional type annotation for functions *)
+   Typ_annot_opt_none
+ | Typ_annot_opt_some of typquant * atyp
+
+
+type 
 funcl_aux =  (* Function clause *)
    FCL_Funcl of id * pat * exp
+
+
+type 
+effects_opt_aux =  (* Optional effect annotation for functions *)
+   Effects_opt_pure (* sugar for empty effect set *)
+ | Effects_opt_effects of atyp
 
 
 type 
@@ -286,18 +286,13 @@ naming_scheme_opt =
 
 
 type 
-tannot_opt = 
-   Typ_annot_opt_aux of tannot_opt_aux * l
-
-
-type 
-effects_opt = 
-   Effects_opt_aux of effects_opt_aux * l
-
-
-type 
 rec_opt = 
    Rec_aux of rec_opt_aux * l
+
+
+type 
+tannot_opt = 
+   Typ_annot_opt_aux of tannot_opt_aux * l
 
 
 type 
@@ -306,8 +301,14 @@ funcl =
 
 
 type 
-val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
+effects_opt = 
+   Effects_opt_aux of effects_opt_aux * l
+
+
+type 
+default_typing_spec_aux =  (* Default kinding or typing assumption *)
+   DT_kind of base_kind * id
+ | DT_typ of typschm * id
 
 
 type 
@@ -320,9 +321,8 @@ type_def_aux =  (* Type definition body *)
 
 
 type 
-default_typing_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of base_kind * id
- | DT_typ of typschm * id
+val_spec_aux =  (* Value type specification *)
+   VS_val_spec of typschm * id
 
 
 type 
@@ -331,8 +331,8 @@ fundef_aux =  (* Function definition *)
 
 
 type 
-val_spec = 
-   VS_aux of val_spec_aux * l
+default_typing_spec = 
+   DT_aux of default_typing_spec_aux * l
 
 
 type 
@@ -341,8 +341,8 @@ type_def =
 
 
 type 
-default_typing_spec = 
-   DT_aux of default_typing_spec_aux * l
+val_spec = 
+   VS_aux of val_spec_aux * l
 
 
 type 
@@ -368,11 +368,6 @@ def_aux =  (* Top-level definition *)
 type 
 def = 
    DEF_aux of def_aux * l
-
-
-type 
-ctor_def_aux =  (* Datatype constructor definition clause *)
-   CT_ct of id * typschm
 
 
 type 
@@ -407,11 +402,6 @@ and lexp =
 type 
 defs =  (* Definition sequence *)
    Defs of (def) list
-
-
-type 
-ctor_def = 
-   CT_aux of ctor_def_aux * l
 
 
 type 
