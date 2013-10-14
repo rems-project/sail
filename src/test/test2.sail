@@ -1,5 +1,3 @@
 function nat id ( n ) = n
 
-function nat main _ = {
-  id ( 42 );
-}
+function nat main _ = id(42)
