@@ -47,7 +47,7 @@ let act_to_string = function
  | Write_mem _ -> "write_mem"
 ;;
 
-let run (name, test) = match interp test (E_block []) with
+let run (name, test) = match interp test (E_app(E_id(Id "main"), [E_lit L_unit])) with
  | Value v -> eprintf "%s: returned %s\n" name (val_to_string v)
  | Action (a, s) -> eprintf "%s: suspended on action %s\n" name (act_to_string a)
  | Error e -> eprintf "%s: error: %s\n" name e

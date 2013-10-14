@@ -1,4 +1,5 @@
-function unit main ( < bit > x ) = {
-  42
+function nat id ( n ) = n
+
+function nat main _ = {
+  id ( 42 );
 }
-let unit run = main ( 42 )
