@@ -620,7 +620,9 @@ and interp_main t_level l_env l_mem exp =
           resolve_outcome (interp_main t_level l_env l_mem (List.hd args))
                           (fun argv lm le -> 
                             (match find_funcl funcls argv with
-	                    | None -> (Error "No matching pattern for function",lm,l_env) (*TODO add function name*)
+	                    | None ->
+                          let name = match id with Id s -> s | DeIid s -> s end in
+                          (Error ("No matching pattern for function " ^ name),lm,l_env)
 	                    | Some(env,exp) -> 
                               resolve_outcome (interp_main t_level env lm exp)
 	                                      (fun ret lm le -> (Value ret, lm,l_env))
