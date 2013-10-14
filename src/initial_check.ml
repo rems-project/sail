@@ -288,7 +288,10 @@ let rec to_ast_pat (k_env : kind Envmap.t) (Parse_ast.P_aux(pat,l) : Parse_ast.p
     | Parse_ast.P_as(pat,id) -> P_as(to_ast_pat k_env pat,to_ast_id id)
     | Parse_ast.P_typ(typ,pat) -> P_typ(to_ast_typ k_env typ,to_ast_pat k_env pat)
     | Parse_ast.P_id(id) -> P_id(to_ast_id id)
-    | Parse_ast.P_app(id,pats) -> P_app(to_ast_id id, List.map (to_ast_pat k_env) pats)
+    | Parse_ast.P_app(id,pats) ->
+      if pats = [] 
+      then P_id (to_ast_id id)
+      else P_app(to_ast_id id, List.map (to_ast_pat k_env) pats)
     | Parse_ast.P_record(fpats,_) -> P_record(List.map 
                                                 (fun (Parse_ast.FP_aux(Parse_ast.FP_Fpat(id,fp),l)) -> FP_aux(FP_Fpat(to_ast_id id, to_ast_pat k_env fp),(l,None)))
                                                 fpats, false)
