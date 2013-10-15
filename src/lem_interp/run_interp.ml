@@ -41,14 +41,33 @@ let rec val_to_string = function
 ;;
 
 let act_to_string = function
- | Read_reg _ -> "read_reg"
- | Write_reg _ -> "write_reg"
- | Read_mem _ -> "read_mem"
- | Write_mem _ -> "write_mem"
+ | Read_reg ((Reg (id, _) | SubReg (id, _, _)), None) ->
+     sprintf "read_reg %s" (id_to_string id)
+ | Read_reg ((Reg (id, _) | SubReg (id, _, _)), Some (n1, n2)) ->
+     sprintf "read_reg %s (%d, %d)" (id_to_string id) n1 n2
+ | Write_reg ((Reg (id, _) | SubReg (id, _, _)), None, value) ->
+     sprintf "write_reg %s = %s" (id_to_string id) (val_to_string value)
+ | Write_reg ((Reg (id, _) | SubReg (id, _, _)), Some (n1, n2), value) ->
+     sprintf "write_reg %s (%d, %d) = %s" (id_to_string id) n1 n2
+     (val_to_string value)
+ | Read_mem (id, args, None) ->
+     sprintf "read_mem %s(%s)" (id_to_string id) (val_to_string args)
+ | Read_mem (id, args, Some (n1, n2)) ->
+     sprintf "read_mem %s(%s) (%d, %d)" (id_to_string id) (val_to_string args) n1 n2
+ | Write_mem (id, args, None, value) ->
+     sprintf "write_mem %s(%s) = %s" (id_to_string id) (val_to_string args) (val_to_string value)
+ | Write_mem (id, args, Some(n1, n2), value) ->
+     sprintf "write_mem %s(%s) (%d, %d) = %s" (id_to_string id) (val_to_string args) n1 n2 (val_to_string value)
 ;;
 
-let run (name, test) = match interp test (E_app(E_id(Id "main"), [E_lit L_unit])) with
- | Value v -> eprintf "%s: returned %s\n" name (val_to_string v)
- | Action (a, s) -> eprintf "%s: suspended on action %s\n" name (act_to_string a)
- | Error e -> eprintf "%s: error: %s\n" name e
+let run (name, test) =
+  let rec loop = function
+  | Value v -> eprintf "%s: returned %s\n" name (val_to_string v)
+  | Action (a, s) ->
+      eprintf "%s: suspended on action %s\n" name (act_to_string a);
+      (* XXX return unit for every action *)
+      loop (resume test s (V_lit L_unit))
+  | Error e -> eprintf "%s: error: %s\n" name e in
+  let entry = E_app(E_id(Id "main"), [E_lit L_unit]) in
+  loop (interp test entry)
 ;;
