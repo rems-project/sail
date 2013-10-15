@@ -685,7 +685,8 @@ and interp_main t_level l_env l_mem exp =
 
  and interp_block t_level init_env local_env local_mem exps =
    match exps with
-    | [ ] -> (Value (V_lit(L_unit)), local_mem, init_env)
+    | [ ] -> (Value (V_lit (L_unit)), local_mem, init_env)
+    | [ exp ] -> interp_main t_level local_env local_mem exp
     | exp:: exps ->
       resolve_outcome (interp_main t_level local_env local_mem exp)
                       (fun _ lm le -> interp_block t_level init_env le lm exps)
