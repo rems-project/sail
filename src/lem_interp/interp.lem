@@ -19,7 +19,7 @@ type env = list (id * value)
 let emem = Mem 1 Pmap.empty
 
 type reg_form =
- | Reg of typ
+ | Reg of id * typ
  | SubReg of id * reg_form * index_range
 
 (* These may need to be refined or expanded based on memory requirement *)
@@ -51,15 +51,15 @@ let rec to_registers (Defs defs) =
     match def with 
     | DEF_spec valsp -> 
       match valsp with
-      | VS_val_spec (TypSchm_ts tq ((Typ_app (Id "reg") _) as t)) id -> (id, Reg t):: (to_registers (Defs defs))
+      | VS_val_spec (TypSchm_ts tq ((Typ_app (Id "reg") _) as t)) id -> (id, Reg id t):: (to_registers (Defs defs))
       | _ -> to_registers (Defs defs)
       end
-    | DEF_reg_dec typ id -> (id, Reg typ) :: (to_registers (Defs defs))
+    | DEF_reg_dec typ id -> (id, Reg id typ) :: (to_registers (Defs defs))
     | DEF_type tdef ->
       match tdef with 
       | TD_register id n1 n2 ranges -> 
-	(id,Reg (Typ_app (Id "vector")[]))::
-	((to_reg_ranges id (Reg (Typ_app (Id "vector")[])) ranges) @ (to_registers (Defs defs)))
+	(id,Reg id (Typ_app (Id "vector")[]))::
+	((to_reg_ranges id (Reg id (Typ_app (Id "vector")[])) ranges) @ (to_registers (Defs defs)))
       | _ -> to_registers (Defs defs)
       end
     | _ -> to_registers (Defs defs)
