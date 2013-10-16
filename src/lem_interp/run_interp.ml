@@ -55,24 +55,39 @@ let act_to_string = function
      sprintf "write_mem %s(%s)%s = %s" (id_to_string id) (val_to_string args)
      (sub_to_string sub) (val_to_string value)
 ;;
+
+module Reg = struct
+  include Map.Make(struct type t = id let compare = compare end)
+  let update k v m = add k v (if mem k m then remove k m else m)
+end ;;
+
+module Mem = struct
+  include Map.Make(struct type t = id  * value let compare = compare end)
+  let update k v m = add k v (if mem k m then remove k m else m)
+end ;;
+
+let perform_action ((reg, mem) as env) = function
+ | Read_reg ((Reg (id, _) | SubReg (id, _, _)), None) ->
+     Reg.find id reg, env
  | Read_mem (id, args, None) ->
-     sprintf "read_mem %s(%s)" (id_to_string id) (val_to_string args)
- | Read_mem (id, args, Some (n1, n2)) ->
-     sprintf "read_mem %s(%s) (%d, %d)" (id_to_string id) (val_to_string args) n1 n2
+     Mem.find (id, args) mem, env
+ | Write_reg ((Reg (id, _) | SubReg (id, _, _)), None, value) ->
+     V_lit L_unit, (Reg.update id value reg, mem)
  | Write_mem (id, args, None, value) ->
-     sprintf "write_mem %s(%s) = %s" (id_to_string id) (val_to_string args) (val_to_string value)
- | Write_mem (id, args, Some(n1, n2), value) ->
-     sprintf "write_mem %s(%s) (%d, %d) = %s" (id_to_string id) (val_to_string args) n1 n2 (val_to_string value)
+     V_lit L_unit, (reg, Mem.update (id, args) value mem)
+ | _ -> failwith "partial read/write not implemented" (* XXX *)
 ;;
 
+
 let run (name, test) =
-  let rec loop = function
+  let rec loop env = function
   | Value v -> eprintf "%s: returned %s\n" name (val_to_string v)
   | Action (a, s) ->
       eprintf "%s: suspended on action %s\n" name (act_to_string a);
-      (* XXX return unit for every action *)
-      loop (resume test s (V_lit L_unit))
+      let return, env' = perform_action env a in
+      eprintf "%s: action returned %s\n" name (val_to_string return);
+      loop env' (resume test s return)
   | Error e -> eprintf "%s: error: %s\n" name e in
   let entry = E_app(E_id(Id "main"), [E_lit L_unit]) in
-  loop (interp test entry)
+  loop (Reg.empty, Mem.empty) (interp test entry)
 ;;

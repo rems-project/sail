@@ -3,14 +3,25 @@ register nat dummy_reg
 (* a function to read from memory; wmem serves no purpose currently,
    memory-writing functions are figured out syntactically. *)
 val ( nat -> nat effect { wmem , rmem } ) MEM
+val ( nat -> nat effect { wmem , rmem } ) MEM_GPU
+val ( ( nat * nat ) -> nat effect { wmem , rmem } ) MEM_SIZE
 
 function nat main _ = {
+  (* left-hand side function call = memory write *)
+  MEM(0) := 0;
   (* memory read, thanks to effect { rmem} above *)
   MEM(0);
-  (* left-hand side function call = memory write *)
-  MEM(0) := 1;
-  (* register read, thanks to register declaration *)
-  dummy_reg;
   (* register write, idem *)
   dummy_reg := 1;
+  (* register read, thanks to register declaration *)
+  dummy_reg;
+
+  (* Some more checks *)
+  MEM(1) := 2;
+  MEM(1);
+  MEM_GPU(0) := 3;
+  MEM_GPU(0);
+  (* extra-parentheses are needed here *)
+  MEM_SIZE( (0,1) ) := 4;
+  MEM_SIZE( (0,1) );
 }
