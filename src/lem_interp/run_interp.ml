@@ -40,16 +40,21 @@ let rec val_to_string = function
      sprintf "constructor %s %s" (id_to_string id) (val_to_string value)
 ;;
 
+let reg_to_string = function Reg (id,_) | SubReg (id,_,_) -> id_to_string id ;;
+let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%d, %d)" x y
 let act_to_string = function
- | Read_reg ((Reg (id, _) | SubReg (id, _, _)), None) ->
-     sprintf "read_reg %s" (id_to_string id)
- | Read_reg ((Reg (id, _) | SubReg (id, _, _)), Some (n1, n2)) ->
-     sprintf "read_reg %s (%d, %d)" (id_to_string id) n1 n2
- | Write_reg ((Reg (id, _) | SubReg (id, _, _)), None, value) ->
-     sprintf "write_reg %s = %s" (id_to_string id) (val_to_string value)
- | Write_reg ((Reg (id, _) | SubReg (id, _, _)), Some (n1, n2), value) ->
-     sprintf "write_reg %s (%d, %d) = %s" (id_to_string id) n1 n2
+ | Read_reg (reg, sub) ->
+     sprintf "read_reg %s%s" (reg_to_string reg) (sub_to_string sub)
+ | Write_reg (reg, sub, value) ->
+     sprintf "write_reg %s%s = %s" (reg_to_string reg) (sub_to_string sub)
      (val_to_string value)
+ | Read_mem (id, args, sub) ->
+     sprintf "read_mem %s(%s)%s" (id_to_string id) (val_to_string args)
+     (sub_to_string sub)
+ | Write_mem (id, args, sub, value) ->
+     sprintf "write_mem %s(%s)%s = %s" (id_to_string id) (val_to_string args)
+     (sub_to_string sub) (val_to_string value)
+;;
  | Read_mem (id, args, None) ->
      sprintf "read_mem %s(%s)" (id_to_string id) (val_to_string args)
  | Read_mem (id, args, Some (n1, n2)) ->
