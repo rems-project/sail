@@ -21,11 +21,11 @@ E_k |-t t ok :: :: check_t :: check_t_
  E_k |-t t2 ok
  E_k |-e effects ok
  ------------------------------------------------------------ :: fn
- E_k |-t t1 -> t2 effects ok
+ E_k |-t t1 -> t2 effects tag S_N ok
 
  E_k |-t t1 ok .... E_k |-t tn ok
  ------------------------------------------------------------ :: tup
- E_k |-t t1 * .... * tn ok
+ E_k |-t (t1 * .... * tn) ok
 
  E_k(id) gives K_Lam(k1..kn -> K_Typ)
  E_k,k1 |- t_arg1 ok .. E_k,kn |- t_argn ok
@@ -89,10 +89,10 @@ E_k(id) gives K_Ord
 ----------------------------------------------------------- :: var
 E_k |-o id ok
 
- E_k(id) gives K_infer
- E_k(id) <-| K_Ord
- ------------------------------------------------------------ :: varInfer
- E_k |-o id ok
+E_k(id) gives K_infer
+E_k(id) <-| K_Ord
+------------------------------------------------------------ :: varInfer
+E_k |-o id ok
 
 
 defn
@@ -120,13 +120,13 @@ E_k, K_Ord |- order ok
 %% % 
 %% % %TODO type equality isn't right; neither is type conversion
 %% % 
-%% % defns
-%% % teq :: '' ::=
-%% % 
-%% % defn
-%% % TD |- t1 = t2 :: :: teq :: teq_ 
-%% % {{ com Type equality }}
-%% % by
+defns
+teq :: '' ::=
+
+defn
+E_k |- t1 = t2 :: :: teq :: teq_ 
+{{ com Type equality }}
+by
 %% % 
 %% % TD |- t ok
 %% % ------------------------------------------------------------ :: refl
@@ -181,11 +181,11 @@ E_k |- typ1 ~> t1
 E_k |- typ2 ~> t2
 E_k |-e effects ok
 ------------------------------------------------------------ :: fn
-E_k |- typ1->typ2 effects ~> t1->t2 effects
+E_k |- typ1->typ2 effects ~> t1->t2 effects None
  
 E_k |- typ1 ~> t1 .... E_k |- typn ~> tn
 ------------------------------------------------------------ :: tup
-E_k |- typ1 * .... * typn ~> t1 * .... * tn
+E_k |- typ1 * .... * typn ~> (t1 * .... * tn)
 
 E_k(id) gives K_Lam (k1..kn -> K_Typ)
 E_k,k1 |- typ_arg1 ~> t_arg1 .. E_k,kn |- typ_argn ~> t_argn
@@ -193,7 +193,7 @@ E_k,k1 |- typ_arg1 ~> t_arg1 .. E_k,kn |- typ_argn ~> t_argn
 E_k |- id typ_arg1 .. typ_argn ~> id t_arg1 .. t_argn
 
 E_k |- typ ~> t1
-%E_k |- t1 = t2
+E_k |- t1 = t2
 ------------------------------------------------------------ :: eq
 E_k |- typ ~> t2
 
@@ -248,7 +248,7 @@ by
  |- false : bool
  
  ------------------------------------------------------------ :: num
- |- num : nat
+ |- num : enum num num inc
  
  ------------------------------------------------------------- :: string
  |- string : string
@@ -354,84 +354,87 @@ defns
 check_pat :: '' ::=
  
 defn
-E |- pat : t gives E_t :: :: check_pat :: check_pat_ 
+E |- pat : t gives E_t , S_N :: :: check_pat :: check_pat_ 
 {{ com Typing patterns, building their binding environment }}
 by
 
+|- lit : t
+------------------------------------------------------------ :: lit
+E |- lit : t gives {}, {}
+
 E_k |-t t ok
 ------------------------------------------------------------ :: wild
-<E_t,E_k> |- _ annot : t gives {} 
+<E_t,E_r,E_k> |- _ : t gives {}, {}
 % This case should perhaps indicate the generation of a type variable, with kind Typ
 
-<E_t,E_k> |- pat : t gives E_t1
+<E_t,E_r,E_k> |- pat : t gives E_t1,S_N
 id NOTIN dom(E_t1)
 ------------------------------------------------------------ :: as
-<E_t,E_k> |- (pat as id) : t gives E_t1 u+ {id|->t}
+<E_t,E_r,E_k> |- (pat as id) : t gives E_t1 u+ {id|->t},S_N
 
 E_k |- typ ~> t
-<E_t,E_k> |- pat : t gives E_t1
+<E_t,E_r,E_k> |- pat : t gives E_t1,S_N
 ------------------------------------------------------------ :: typ
-<E_t,E_k> |- (<typ> pat) : t gives E_t1
+<E_t,E_r,E_k> |- (<typ> pat) : t gives E_t1,S_N
 
-%% % TD,E |- ctor id : (t1*..*tn) -> p t_args gives (x of names)
-<E_t,E_k> |- pat1 : t1 gives E_t1 .. <E_t,E_k> |- patn : tn gives E_tn
-%% % disjoint doms(E_l1,..,E_ln)
+E_t(id) gives (t1*..*tn) -> id t_args effect { } Ctor
+<E_t,E_r,E_k> |- pat1 : t1 gives E_t1,S_N1 .. <E_t,E_r,E_k> |- patn : tn gives E_tn,S_Nn
+disjoint doms(E_t1,..,E_tn)
 ------------------------------------------------------------ :: ident_constr
-<E_t,E_k> |- id pat1 .. patn : id t_args gives E_t1 u+ .. u+ E_tn
+<E_t,E_r,E_k> |- id pat1 .. patn : id t_args gives E_t1 u+ .. u+ E_tn, S_N1 u+ .. u+ S_Nn
 
 E_k |-t t ok
  ------------------------------------------------------------ :: var
-<E_t,E_k> |- :P_id: id : t gives E_t u+ {id|->t}
+<E_t,E_r,E_k> |- :P_id: id : t gives E_t u+ {id|->t},{}
 
-%% % 
-%% % </TD,E |- field idi : p t_args -> ti gives (xi of names) // i />
-%% % </TD,E,E_l |- pati : ti gives E_li//i/>
-%% % disjoint doms(</E_li//i/>)
-%% % duplicates(</xi//i/>) = emptyset
-%% % ------------------------------------------------------------ :: record
-%% % TD,E,E_l |- <| </idi = pati li//i/> semi_opt |> : p t_args gives u+ </E_li//i/>
-%% % 
-%% % TD,E,E_l |- pat1 : t gives E_l1 ... TD,E,E_l |- patn : t gives E_ln
-%% % disjoint doms(E_l1 , ... , E_ln)
-%% % length(pat1 ... patn) = nat
-%% % ----------------------------------------------------------- :: vector
-%% % TD,E,E_l |- [| pat1 ; ... ; patn semi_opt |] : __vector nat t gives E_l1 u+ ... u+ E_ln
-%% % 
-%% % TD,E,E_l |- pat1 : __vector ne1 t gives E_l1 ... TD,E,E_l |- patn : __vector nen t gives E_ln
-%% % disjoint doms(E_l1 , ... , E_ln)
-%% % ne' = ne1 + ... + nen
-%% % ----------------------------------------------------------- :: vectorConcat
-%% % TD,E,E_l |- [| pat1 ... patn  |] : __vector ne' t gives E_l1 u+ ... u+ E_ln
-%% % 
+E_r(</idi//i/>) gives id t_args, (</ti//i/>)
+</<E_t,E_r,E_k> |- pati : ti gives E_ti,S_Ni//i/>
+disjoint doms(</E_ti//i/>)
+------------------------------------------------------------ :: record
+<E_t,E_r,E_k> |- { </idi = pati//i/> semi_opt } : id t_args gives u+ </E_ti//i/>, u+ </S_Ni//i/>
+ 
+E |- pat1 : t gives E_t1,S_N1 ... E |- patn : t gives E_tn,S_Nn
+disjoint doms(E_t1 , ... , E_tn)
+length(pat1 ... patn) = num
+----------------------------------------------------------- :: vector
+E |- [ pat1 , ... , patn ] : vector :t_arg_nexp: id num+id inc t gives E_t1 u+ ... u+ E_tn,S_N1 u+ ... u+ S_Nn
 
-<E_t,E_k> |- pat1 : t1 gives E_t1 .... <E_t,E_k> |- patn : tn gives E_tn
+E |- pat1 : t gives E_t1,S_N1 ... E |- patn : t gives E_tn,S_Nn
+disjoint doms(E_t1 , ... , E_tn)
+num1 lt ... lt numn
+----------------------------------------------------------- :: indexedVectorInc
+E |- [ num1 = pat1 , ... , numn = patn ] : vector :t_arg_nexp: id :t_arg_nexp: id' inc t gives E_t1 u+ ... u+ E_tn, {id<=num1, id' >= numn + (- num1)} u+ S_N1 u+ ... u+ S_Nn
+
+E |- pat1 : t gives E_t1,S_N1 ... E |- patn : t gives E_tn,S_Nn
+disjoint doms(E_t1 , ... , E_tn)
+num1 gt ... gt numn
+----------------------------------------------------------- :: indexedVectorDec
+E |- [ num1 = pat1 , ... , numn = patn ] : vector :t_arg_nexp: id :t_arg_nexp: id' dec t gives E_t1 u+ ... u+ E_tn, {id>=num1,id'<=num1 +(-numn)} u+ S_N1 u+ ... u+ S_Nn
+
+E |- pat1 : vector ne1 ne'1 inc t gives E_t1,S_N1 ... E |- patn : vector nen ne'n inc t gives E_tn,S_Nn
+disjoint doms(E_t1 , ... , E_tn)
+S_N0 = consistent_increase ne1 ne'1 ... nen ne'n
+----------------------------------------------------------- :: vectorConcatInc
+E |- pat1 : ... : patn : vector :t_arg_nexp: id :t_arg_nexp: id' inc t gives E_t1 u+ ... u+ E_tn,{id<=ne1,id'>= ne'1 + ... + ne'n} u+ S_N0 u+ S_N1 u+ ... u+ S_Nn
+
+E |- pat1 : vector ne1 ne'1 dec t gives E_t1,S_N1 ... E |- patn : vector nen ne'n dec t gives E_tn,S_Nn
+disjoint doms(E_t1 , ... , E_tn)
+S_N0 = consistent_decrease ne1 ne'1 ... nen ne'n
+----------------------------------------------------------- :: vectorConcatDec
+E |- pat1 : ... : patn : vector :t_arg_nexp: id :t_arg_nexp: id' inc t gives E_t1 u+ ... u+ E_tn,{id>=ne1,id'>= ne'1 + ... + ne'n} u+ S_N0 u+ S_N1 u+ ... u+ S_Nn
+
+<E_t,E_r,E_k> |- pat1 : t1 gives E_t1,S_N1 .... <E_t,E_r,E_k> |- patn : tn gives E_tn,S_Nn
 disjoint doms(E_t1,....,E_tn)
 ------------------------------------------------------------ :: tup
-<E_t,E_k> |- (pat1, ...., patn) : t1 * .... * tn gives E_t1 u+ .... u+ E_tn 
+<E_t,E_r,E_k> |- (pat1, ...., patn) : (t1 * .... * tn) gives E_t1 u+ .... u+ E_tn,S_N1 u+ .... u+ S_Nn 
 
-%% % TD |- t ok
-%% % TD,E,E_l |- pat1 : t gives E_l1 .. TD,E,E_l |- patn : t gives E_ln
-%% % disjoint doms(E_l1,..,E_ln)
-%% % ------------------------------------------------------------ :: list
-%% % TD,E,E_l |- [pat1; ..; patn semi_opt] : __list t gives E_l1 u+ .. u+ E_ln 
-%% % 
-%% % TD,E,E_l1 |- pat : t gives E_l2
-%% % ------------------------------------------------------------ :: paren
-%% % TD,E,E_l1 |- (pat) : t gives E_l2
-%% % 
-%% % TD,E,E_l1 |- pat1 : t gives E_l2
-%% % TD,E,E_l1 |- pat2 : __list t gives E_l3
-%% % disjoint doms(E_l2,E_l3)
-%% % ------------------------------------------------------------ :: cons
-%% % TD,E,E_l1 |- pat1 :: pat2 : __list t gives E_l2 u+ E_l3
-%% % 
-%% % |- lit : t
-%% % ------------------------------------------------------------ :: lit
-%% % TD,E,E_l |- lit : t gives {}
-%% % 
-%% % E,E_l |- x not ctor
-%% % ------------------------------------------------------------ :: num_add
-%% % TD,E,E_l |- x l + num : __num gives {x|->__num}
+E_k |-t t ok
+<E_t,E_r,E_k> |- pat1 : t gives E_t1,S_N1 .. <E_t,E_r,E_k> |- patn : t gives E_tn,S_Nn
+disjoint doms(E_t1,..,E_tn)
+------------------------------------------------------------ :: list
+<E_t,E_r,E_k> |- [|pat1, .., patn |] : list t gives E_t1 u+ .. u+ E_tn,S_N1 u+ .. u+ S_Nn
+
+ 
 %% % 
 %% % 
 %% % defns
@@ -472,99 +475,55 @@ disjoint doms(E_t1,....,E_tn)
 %% % ------------------------------------------------------------ :: cons
 %% % <E_m,E_p,E_f,E_x> |- x l1.</y_li.//i/> z_l l2 value
 %% % 
+
 defns
 check_exp :: '' ::=
  
-%% % defn
-%% % TD , E , E_l |- exp : t gives S_c , S_N :: :: check_exp :: check_exp_ 
-%% % {{ com Typing expressions, collecting typeclass and index constraints }}
-%% % by
-%% % 
-%% % :check_exp_aux: TD,E,E_l |- exp_aux : t gives S_c,S_N
-%% % ------------------------------------------------------------ :: all
-%% % TD,E,E_l  |- exp_aux l : t gives S_c,S_N
-%% % 
-%% % defn
-%% % TD , E , E_l |- exp_aux : t gives S_c , S_N :: :: check_exp_aux :: check_exp_aux_
-%% % {{ com Typing expressions, collecting typeclass and index constraints }}
-%% % by
-%% % 
-%% % E_l(x) gives t
-%% % ------------------------------------------------------------ :: var
-%% % TD,E,E_l |- x l1 l2 : t gives {},{}
-%% % 
-%% % %TODO KG Add check that N is in scope
-%% % ------------------------------------------------------------ :: nvar
-%% % TD,E,E_l |- N : __num gives {},{}
-%% % 
-%% % E_l |- id not shadowed
-%% % E |- id value
-%% % TD,E |- ctor id : t_multi -> p t_args gives (x of names)
-%% % ------------------------------------------------------------ :: ctor
-%% % TD,E,E_l |- id : curry(t_multi, p t_args) gives {},{}
-%% % 
-%% % E_l |- id not shadowed
-%% % E |- id value
-%% % TD, E |- val id : t gives S_c
-%% % ------------------------------------------------------------ :: val
-%% % TD,E,E_l |- id : t gives S_c,{}
-%% % 
-%% % 
-%% % TD,E,E_l |- pat1 : t1 gives E_l1 ... TD,E,E_l |- patn : tn gives E_ln
-%% % TD,E,E_l u+ E_l1 u+ ... u+ E_ln |- exp : u gives S_c,S_N
-%% % disjoint doms(E_l1,...,E_ln)
-%% % ------------------------------------------------------------ :: fn
-%% % TD,E,E_l |- fun pat1 ... patn -> exp l : curry((t1*...*tn), u) gives S_c,S_N
-%% % 
-%% % %TODO: the various patterns might want to use different specifications for vector length (i.e. 32 in one and 8+n+8 in another)
-%% % % So should be pati : t gives E_li,S_Ni
-%% % </TD,E,E_l |- pati : t gives E_li//i/>
-%% % </TD,E,E_l u+ E_li |- expi : u gives S_ci, S_Ni//i/>
-%% % ------------------------------------------------------------ :: function
-%% % TD,E,E_l |- function bar_opt </pati -> expi li//i/> end : t -> u gives </S_ci//i/> , </S_Ni//i/>
-%% % 
-%% % %TODO t1 and t1 should be t1 and t'1 so that constraints from any vectors can be extracted and added to S_N
-%% % TD,E,E_l |- exp1 : t1 -> t2 gives S_c1,S_N1
-%% % TD,E,E_l |- exp2 : t1 gives S_c2,S_N2
-%% % ------------------------------------------------------------ :: app
-%% % TD,E,E_l |- exp1 exp2 : t2 gives S_c1 union S_c2, S_N1 union S_N2
-%% % 
-%% % %TODO t1 and t1 should be t1 and t'1 so that constraints from any vectors can be extracted and added to S_N
-%% % %          Same for t2
-%% % :check_exp_aux: TD,E,E_l |- (ix) : t1 -> t2 -> t3 gives S_c1,S_N1
-%% % TD,E,E_l |- exp1 : t1 gives S_c2,S_N2
-%% % TD,E,E_l |- exp2 : t2 gives S_c3,S_N3
-%% % ------------------------------------------------------------ :: infix_app1
-%% % TD,E,E_l |- exp1 ix l exp2 : t3 gives S_c1 union S_c2 union S_c3,S_N1 union S_N2 union S_N3
-%% % 
-%% % %TODO, see above todo
-%% % :check_exp_aux: TD,E,E_l |- x : t1 -> t2 -> t3 gives S_c1,S_N1
-%% % TD,E,E_l |- exp1 : t1 gives S_c2,S_N2
-%% % TD,E,E_l |- exp2 : t2 gives S_c3,S_N3
-%% % ------------------------------------------------------------ :: infix_app2
-%% % TD,E,E_l |- exp1 `x` l exp2 : t3 gives S_c1 union S_c2 union S_c3,S_N1 union S_N2 union S_N3
-%% % 
-%% % %TODO, see above todo, with regard to t_args
-%% % </TD,E |- field idi : p t_args -> ti gives (xi of names)//i/>
-%% % </TD,E,E_l |- expi : ti gives S_ci,S_Ni//i/>
-%% % duplicates(</xi//i/>) = emptyset
-%% % names = {</xi//i/>}
-%% % ------------------------------------------------------------ :: record
-%% % TD,E,E_l |- <| </idi = expi li//i/> semi_opt l |> : p t_args gives </S_ci//i/>,</S_Ni//i/>
-%% % 
-%% % %TODO, see above todo, with regard to t_args
-%% % </TD,E |- field idi : p t_args -> ti gives (xi of names)//i/>
-%% % </TD,E,E_l |- expi : ti gives S_ci,S_Ni//i/>
-%% % duplicates(</xi//i/>) = emptyset
-%% % TD,E,E_l |- exp : p t_args gives S_c',S_N'
-%% % ------------------------------------------------------------ :: recup
-%% % TD,E,E_l |- <| exp with </idi = expi li//i/> semi_opt l |> : p t_args gives S_c' union </S_ci//i/>,S_N' union </S_Ni//i/>
-%% % 
-%% % TD,E,E_l |- exp1 : t gives S_c1,S_N1 ... TD,E,E_l |- expn : t gives S_cn,S_Nn
-%% % length(exp1 ... expn) = nat
-%% % ------------------------------------------------------------ :: vector
-%% % TD,E,E_l |- [| exp1 ; ... ; expn semi_opt |] : __vector nat t gives S_c1 union ... union S_cn, S_N1 union ... union S_Nn
-%% % 
+defn
+E |- exp : t gives I :: :: check_exp :: check_exp_ 
+{{ com Typing expressions, collecting nexp constraints and effects }}
+by
+
+%% TODO::: if t is a reg, need to distinguish here between reg and ref cell access, and add to effect if reg, and maybe add to tag
+ 
+E_t(id) gives t
+------------------------------------------------------------ :: var
+<E_t,E_r,E_k> |- id : t gives Ie
+
+E_t(id) gives t' -> t effect {} Ctor {} 
+<E_t,E_r,E_k> |- exp : t' gives I
+------------------------------------------------------------ :: ctor
+<E_t,E_r,E_k> |- id exp : t gives Ir
+
+ 
+E_t(id) gives t' -> t effects tag S_N
+<E_t,E_r,E_k> |- exp : t' gives <S_N1,effects',_>
+------------------------------------------------------------ :: app
+<E_t,E_r,E_k> |- id exp : t gives <S_N u+ S_N1,effects u+ effects',tag>
+ 
+E_t(id) gives (t1 * t2) -> t effects tag S_N
+<E_t,E_r,E_k> |- exp1 : t1 gives <S_N2,effects2,_>
+<E_t,E_r,E_k> |- exp2 : t2 gives <S_N3,effects3,_>
+------------------------------------------------------------ :: infix_app
+<E_t,E_r,E_k> |- :E_app_infix: exp1 id exp2 : t gives <S_N u+ S_N2 u+ S_N3, effects u+ effects2 u+ effects3,tag>
+
+E_r(</idi//i/>) gives id t_args, </ti//i/>
+</ <E_t,E_r,E_k> |- expi : ti gives Ii//i/>
+------------------------------------------------------------ :: record
+<E_t,E_r,E_k> |- { </idi = expi//i/> semi_opt} : id t_args gives u+ </Ii//i/>
+
+<E_t,E_r,E_k> |- exp : id t_args gives I
+E_r(id t_args) gives </ id'n:t'n//n/>
+</ <E_t,E_r,E_k> |- expi : ti gives Ii//i/>
+</idi:ti//i/> SUBSET </id'n : t'n//n/>
+------------------------------------------------------------ :: recup
+<E_t,E_r,E_k> |- { exp with </idi = expi//i/> semi_opt } : id t_args gives I
+
+E |- exp1 : t gives I1 ... E |- expn : t gives In
+length(exp1 ... expn) = num
+------------------------------------------------------------ :: vector
+E |- [ exp1 , ... , expn ] : vector zero num inc t gives I1 u+ ... u+ In
+ 
 %% % TD,E,E_l |- exp : __vector ne' t gives S_c,S_N
 %% % |- nexp ~> ne
 %% % ------------------------------------------------------------- :: vectorget
@@ -576,141 +535,53 @@ check_exp :: '' ::=
 %% % ne = :Ne_add: ne2 + (- ne1)
 %% % ------------------------------------------------------------- :: vectorsub
 %% % TD,E,E_l |- exp .( nexp1 .. nexp2 ) : __vector ne t gives S_c,S_N union {ne1 < ne2 < ne'}
-%% % 
-%% % E |- id field
-%% % TD,E |- field id : p t_args -> t gives (x of names)
-%% % TD,E,E_l |- exp : p t_args gives S_c,S_N
-%% % ------------------------------------------------------------ :: field
-%% % TD,E,E_l |- exp.id : t gives S_c,S_N
-%% % 
+
+E_r (id t_args) gives </idi : ti//i/> id : t </id'j : t'j//j/>
+<E_t,E_r,E_k> |- exp : id t_args gives I
+------------------------------------------------------------ :: field
+<E_t,E_r,E_k> |- exp.id : t gives Ir
+
 %% % </TD,E,E_l |- pati : t gives E_li//i/>
 %% % </TD,E,E_l u+ E_li |- expi : u gives S_ci,S_Ni//i/>
 %% % TD,E,E_l |- exp : t gives S_c',S_N'
 %% % ------------------------------------------------------------ :: case
 %% % TD,E,E_l |- match exp with bar_opt </pati -> expi li//i/> l end : u gives S_c' union </S_ci//i/>,S_N' union </S_Ni//i/>
-%% % 
-%% % TD,E,E_l |- exp : t gives S_c,S_N
-%% % TD,E |- typ ~> t
-%% % ------------------------------------------------------------ :: typed
-%% % TD,E,E_l |- (exp : typ) : t gives S_c,S_N
-%% % 
+
+<E_t,E_r,E_k> |- exp : t gives I
+E_k |- typ ~> t
+------------------------------------------------------------ :: typed
+<E_t,E_r,E_k> |- (typ) exp : t gives Ir
+
 %% % %KATHYCOMMENT: where does E_l1 come from?
 %% % TD,E,E_l1 |- letbind gives E_l2, S_c1,S_N1
 %% % TD,E,E_l1 u+ E_l2 |- exp : t gives S_c2,S_N2
 %% % ------------------------------------------------------------ :: let
 %% % TD,E,E_l |- let letbind in exp : t gives S_c1 union S_c2,S_N1 union S_N2
-%% % 
-%% % TD,E,E_l |- exp1 : t1 gives S_c1,S_N1 .... TD,E,E_l |- expn : tn gives S_cn,S_Nn
-%% % ------------------------------------------------------------ :: tup
-%% % TD,E,E_l |- (exp1, ...., expn) : t1 * .... * tn gives S_c1 union .... union S_cn,S_N1 union .... union S_Nn
-%% % 
-%% % TD |- t ok
-%% % TD,E,E_l |- exp1 : t gives S_c1,S_N1 .. TD,E,E_l |- expn : t gives S_cn,S_Nn
-%% % ------------------------------------------------------------ :: list
-%% % TD,E,E_l |- [exp1; ..; expn semi_opt] : __list t gives S_c1 union .. union S_cn, S_N1 union .. union S_Nn
-%% % 
-%% % TD,E,E_l |- exp : t gives S_c,S_N
-%% % ------------------------------------------------------------ :: paren
-%% % TD,E,E_l |- (exp) : t gives S_c,S_N
-%% % 
-%% % TD,E,E_l |- exp : t gives S_c,S_N
-%% % ------------------------------------------------------------ :: begin
-%% % TD,E,E_l |- begin exp end : t gives S_c,S_N
-%% % 
-%% % %TODO t might need different index constraints
-%% % TD,E,E_l |- exp1 : __bool gives S_c1,S_N1
-%% % TD,E,E_l |- exp2 : t gives S_c2,S_N2
-%% % TD,E,E_l |- exp3 : t gives S_c3,S_N3
-%% % ------------------------------------------------------------ :: if
-%% % TD,E,E_l |- if exp1 then exp2 else exp3 : t gives S_c1 union S_c2 union S_c3,S_N1 union S_N2 union S_N3
-%% % 
-%% % %TODO t might need different index constraints
-%% % TD,E,E_l |- exp1 : t gives S_c1,S_N1
-%% % TD,E,E_l |- exp2 : __list t gives S_c2,S_N2
-%% % ------------------------------------------------------------ :: cons
-%% % TD,E,E_l |- exp1 :: exp2 : __list t gives S_c1 union S_c2,S_N1 union S_N2
-%% % 
-%% % |- lit : t
-%% % ------------------------------------------------------------ :: lit
-%% % TD,E,E_l |- lit : t gives {},{}
-%% % 
-%% % % TODO: should require that each xi actually appears free in exp1
-%% % </TD |- ti ok//i/>
-%% % TD,E,E_l u+ {</xi|->ti//i/>} |- exp1 : t gives S_c1,S_N1
-%% % TD,E,E_l u+ {</xi|->ti//i/>} |- exp2 : __bool gives S_c2,S_N2
-%% % disjoint doms(E_l, {</xi|->ti//i/>})
-%% % E = <E_m,E_p,E_f,E_x>
-%% % </xi NOTIN dom(E_x)//i/>
-%% % ------------------------------------------------------------ :: set_comp
-%% % TD,E,E_l |- { exp1 | exp2 } : __set t gives S_c1 union S_c2,S_N1 union S_N2
-%% % 
-%% % TD,E,E_l1 |- </qbindi//i/> gives E_l2,S_c1
-%% % TD,E,E_l1 u+ E_l2 |- exp1 : t gives S_c2,S_N2
-%% % TD,E,E_l1 u+ E_l2 |- exp2 :  __bool gives S_c3,S_N3
-%% % ------------------------------------------------------------ :: set_comp_binding
-%% % TD,E,E_l1 |- { exp1 | forall </qbindi//i/> | exp2 } : __set t gives S_c1 union S_c2 union S_c3,S_N2 union S_N3
-%% % 
-%% % TD |- t ok
-%% % TD,E,E_l |- exp1 : t gives S_c1,S_N1 .. TD,E,E_l |- expn : t gives S_cn,S_Nn
-%% % ------------------------------------------------------------ :: set
-%% % TD,E,E_l |- { exp1; ..; expn semi_opt } : __set t gives S_c1 union .. union S_cn,S_N1 union .. union S_Nn
-%% % 
-%% % TD,E,E_l1 |- </qbindi//i/> gives E_l2,S_c1
-%% % TD,E,E_l1 u+ E_l2 |- exp : __bool gives S_c2,S_N2
-%% % ------------------------------------------------------------ :: quant
-%% % TD,E,E_l1 |- q </qbindi//i/> . exp : __bool gives S_c1 union S_c2,S_N2
-%% % 
-%% % TD,E,E_l1 |- list </qbindi//i/> gives E_l2,S_c1
-%% % TD,E,E_l1 u+ E_l2 |- exp1 : t gives S_c2,S_N2
-%% % TD,E,E_l1 u+ E_l2 |- exp2 : __bool gives S_c3,S_N3
-%% % ------------------------------------------------------------ :: list_comp_binding
-%% % TD,E,E_l1 |- [ exp1 | forall </qbindi//i/> | exp2 ] : __list t gives S_c1 union S_c2 union S_c3,S_N2 union S_N3
-%% % 
-%% % defn
-%% % TD , E , E_l1 |- qbind1 .. qbindn gives E_l2 , S_c :: :: check_listquant_binding
-%% % :: check_listquant_binding_
-%% % {{ com Build the environment for quantifier bindings, collecting typeclass constraints }}
-%% %  by
-%% % 
-%% % ------------------------------------------------------------ :: empty
-%% % TD,E,E_l |- gives {},{}
-%% % 
-%% % TD |- t ok
-%% % TD,E,E_l1 u+ {x |-> t} |- </qbindi//i/> gives E_l2,S_c1
-%% % disjoint doms({x |-> t}, E_l2)
-%% % ------------------------------------------------------------ :: var
-%% % TD,E,E_l1 |- x l </qbindi//i/> gives {x |-> t} u+ E_l2,S_c1
-%% % 
-%% % TD,E,E_l1 |- pat : t gives E_l3
-%% % TD,E,E_l1 |- exp : __set t gives S_c1,S_N1
-%% % TD,E,E_l1 u+ E_l3 |- </qbindi//i/> gives E_l2,S_c2
-%% % disjoint doms(E_l3, E_l2)
-%% % ------------------------------------------------------------ :: restr
-%% % TD,E,E_l1 |- (pat IN exp) </qbindi//i/> gives E_l2 u+ E_l3,S_c1 union S_c2
-%% % 
-%% % TD,E,E_l1 |- pat : t gives E_l3
-%% % TD,E,E_l1 |- exp : __list t gives S_c1,S_N1
-%% % TD,E,E_l1 u+ E_l3 |- </qbindi//i/> gives E_l2,S_c2
-%% % disjoint doms(E_l3, E_l2)
-%% % ------------------------------------------------------------ :: list_restr
-%% % TD,E,E_l1 |- (pat MEM exp) </qbindi//i/> gives E_l2 u+ E_l3,S_c1 union S_c2
-%% % 
-%% % defn
-%% % TD , E , E_l1 |- list qbind1 .. qbindn gives E_l2 , S_c :: :: check_quant_binding :: check_quant_binding_
-%% % {{ com Build the environment for quantifier bindings, collecting typeclass constraints }}
-%% %  by
-%% % 
-%% % ------------------------------------------------------------ :: empty
-%% % TD,E,E_l |- list gives {},{}
-%% % 
-%% % TD,E,E_l1 |- pat : t gives E_l3
-%% % TD,E,E_l1 |- exp : __list t gives S_c1,S_N1
-%% % TD,E,E_l1 u+ E_l3 |- </qbindi//i/> gives E_l2,S_c2
-%% % disjoint doms(E_l3, E_l2)
-%% % ------------------------------------------------------------ :: restr
-%% % TD,E,E_l1 |- list (pat MEM exp) </qbindi//i/> gives E_l2 u+ E_l3,S_c1 union S_c2
-%% % 
-%% % 
+ 
+E |- exp1 : t1 gives I1 .... E |- expn : tn gives In
+------------------------------------------------------------ :: tup
+E |- (exp1, .... , expn) : (t1 * .... * tn) gives I1 u+ .... u+ In
+ 
+E |- exp1 : t gives I1 .. E |- expn : t gives In
+------------------------------------------------------------ :: list
+E |- [|exp1, .., expn |] : list t gives I1 u+ .. u+ In
+
+E |- exp1 : bool gives I1
+E |- exp2 : t gives I2
+E |- exp3 : t gives I3
+------------------------------------------------------------ :: if
+E |- if exp1 then exp2 else exp3 : t gives I1 u+ I2 u+ I3
+
+E |- exp1 : t gives I1
+E |- exp2 : list t gives I2
+------------------------------------------------------------ :: cons
+E |- exp1 :: exp2 : list t gives I1 u+ I2
+
+|- lit : t
+------------------------------------------------------------ :: lit
+E |- lit : t gives Ie
+
+
 %% % defn
 %% % TD , E , E_l |- funcl gives { x |-> t } , S_c , S_N :: :: check_funcl :: check_funcl_
 %% % {{ com Build the environment for a function definition clause, collecting typeclass and index constraints }}

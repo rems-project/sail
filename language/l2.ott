@@ -268,6 +268,7 @@ effects :: 'Effects_' ::=
  | effect id                                  :: :: var
  | effect { efct1 , .. , efctn }           :: :: set {{ com effect set }}
  | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ ichlo [] }}
+ | effects1 u+ .. u+ effectsn                   :: M :: union {{ com meta operation for combining sets of effects }} {{ ichlo [] }}
 
 % TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.  Yes.  But we think we don't need any interesting effect-set expressions, eg effectset-variable union {rreg}. 
 
@@ -888,16 +889,6 @@ defs :: '' ::=
  
 grammar 
 
-%% %% t_subst {{ tex \ensuremath{\sigma} }} :: '' ::= {{ phantom }}
-%% %%                                                 {{ hol (a # t) list }}
-%% %%                                                 {{ lem list (tnvar * t) }}
-%% %%   {{ com Type variable substitutions }}
-%% %%   | { tnvar1 |-> t1 .. tnvarn |-> tn }                  :: :: T_subst
-%% %%     {{ ocaml (assert false) }}
-%% %%     {{ lem ([[tnvar1 t1 .. tnvarn tn]]) }}
-%% %%     {{ hol ([[tnvar1 t1 .. tnvarn tn]]) }}
-%% %% 
-
 k :: 'Ki_' ::=
 {{ com Internal kinds }}
    | K_Typ                                             :: :: typ
@@ -911,31 +902,23 @@ k :: 'Ki_' ::=
 t , u :: 'T_' ::=                                {{ phantom }}
 {{ com Internal types }}
    | id                                           :: :: var
-   | t1 -> t2 effects                                 :: :: fn
-   | t1 * .... * tn                              :: :: tup
+   | t1 -> t2 effects tag S_N                     :: :: fn  {{ com [[S_N]] are constraints for the function, [[tag]] holds generation data }}
+   | ( t1 * .... * tn )                           :: :: tup
    | id t_args                                    :: :: app 
-%% %%   | t_subst ( t )                               :: M :: subst_app
-%% %%     {{ com Multiple substitutions }}
-%% %%     {{ ocaml (assert false) }}
-%% %%     {{ hol (t_subst_t [[t_subst]] [[t]]) }}
-%% %%     {{ lem (t_subst_t [[t_subst]] [[t]]) }}
-%% %%   | t_subst ( tnv )                     :: M :: var_subst_app
-%% %%     {{ com Single variable substitution }}
-%% %%     {{ ocaml (assert false) }}
-%% %%     {{ hol (t_subst_tnv [[t_subst]] [[tnv]]) }}
-%% %%     {{ lem (t_subst_tnv [[t_subst]] [[tnv]]) }}
-%% %%   | curry ( t_multi ,  t )                      :: M :: multifn
-%% %%     {{ com Curried, multiple argument functions }}
-%% %%     {{ ocaml (assert false) }}
-%% %%     {{ hol (FOLDR T_fn [[t]] [[t_multi]]) }}
-%% %%     {{ lem (List.fold_right T_fn [[t_multi]] [[t]]) }}
-%% %% 
+
+tag :: 'Tag_' ::=                                 {{ phantom }}
+{{ com Data indicating where the function arises and thus information necessary in compilation }}
+   | None                                 :: :: empty 
+   | Ctor                                 :: :: ctor {{ com Data constructor from a type union }}
+   | Extern                               :: :: extern {{ com External function, specied only with a val statement }}
+   | _                                    :: :: dontcare 
+
 ne :: 'Ne_' ::=
  {{ com internal numeric expressions }}
    | id                                           :: :: var
    | num                                 :: :: const
    | ne1 * ne2                           :: :: mult
-   | ne1 + ne2                           :: :: add
+   | ne1 + ... + nen                           :: :: add
    | 2 ** ne				 :: :: exp
    | ( - ne )                            :: :: unary
 %% %%   | ne1 + ... + nen                     :: M :: addmany
@@ -950,16 +933,16 @@ ne :: 'Ne_' ::=
      {{ ocaml (assert false) }}
      {{ hol ARB }}
      {{ lem (hlength [[hex]]) }}
-%% %%   | length ( pat1 ... patn )            :: M :: cpat
-%% %%     {{ ocaml (assert false) }}
-%% %%     {{ hol ARB }}
-%% %%     {{ lem (Ne_const (List.length [[pat1...patn]])) }}
-%% %%   | length ( exp1 ... expn )            :: M :: cexp
-%% %%     {{ hol ARB }}
-%% %%     {{ ocaml (assert false) }}
-%% %%     {{ lem (Ne_const (List.length [[exp1...expn]])) }}
-%% %% 
- t_arg :: '' ::=   {{ phantom }}
+   | length ( pat1 ... patn )            :: M :: cpat
+     {{ ocaml (assert false) }}
+     {{ hol ARB }}
+     {{ lem (Ne_const (List.length [[pat1...patn]])) }}
+   | length ( exp1 ... expn )            :: M :: cexp
+     {{ hol ARB }}
+     {{ ocaml (assert false) }}
+     {{ lem (Ne_const (List.length [[exp1...expn]])) }}
+ 
+ t_arg :: 't_arg_' ::=   {{ phantom }}
  {{ com Argument to type constructors }}
  | t :: :: typ
  | ne :: :: nexp
@@ -970,17 +953,12 @@ ne :: 'Ne_' ::=
   {{ com Arguments to type constructors }}
    | t_arg1 ... t_argn                            :: :: T_args
 
-%% %% nec :: '' ::=
-%% %%   {{ com Numeric expression constraints }}
-%% %%   | ne < nec            :: :: lessthan
-%% %%   | ne = nec            :: :: eq
-%% %%   | ne <= nec           :: :: lteq
-%% %%   | ne                          :: :: base
-%% %% 
-%% %% parsing
-%% %% T_fn right T_fn
-%% %% T_tup <= T_multi
-%% %% 
+ nec :: 'Nec_' ::=
+   {{ com Numeric expression constraints }}
+   | ne <= ne'            :: :: lteq
+   | ne = ne'            :: :: eq
+   | ne >= ne'           :: :: gteq
+
 %% %% embed
 %% %% {{ lem
 %% %% 
@@ -1087,30 +1065,40 @@ ne :: 'Ne_' ::=
 %% %%     {{ hol [[x1..xn]] }}
 %% %%     {{ lem [[x1..xn]] }}
 %% %% 
-%% %% S_N {{ tex { \ensuremath{ {\Sigma}^{\mathcal{N} } } } }} :: '' ::= {{ phantom }}
-%% %%                                                                    {{ hol nec list }}
-%% %%                                                                    {{ lem list nec }}
-%% %%    {{ com nexp constraint lists }}
-%% %%    | { nec1 , .. ,  necn }                              :: :: Sn_concrete
-%% %%      {{ hol [[nec1 .. necn]] }}
-%% %%      {{ lem [[nec1 .. necn]] }}
-%% %%    | S_N1 union .. union S_Nn                   :: M :: SN_union
-%% %%      {{ hol (FLAT [[S_N1..S_Nn]]) }}
-%% %%      {{ lem (List.flatten [[S_N1..S_Nn]]) }}
-%% %%      {{ ocaml assert false }}
-%% %% 
-%% %% 
+S_N {{ tex \Sigma^{\textsc{N} } }} :: '' ::= {{ phantom }}
+                                                                    {{ hol nec list }}
+                                                                    {{ lem list nec }}
+    {{ com nexp constraint lists }}
+    | { nec1 , .. ,  necn }                              :: :: Sn_concrete
+      {{ hol [[nec1 .. necn]] }}
+      {{ lem [[nec1 .. necn]] }}
+   | S_N1 u+ .. u+ S_Nn                                                    :: M :: SN_union
+     {{ hol (FOLDR FUNION FEMPTY [[S_N1..S_Nn]]) }}
+     {{ lem (List.fold_right union_map [[S_N1..S_Nn]] Pmap.empty) }}
+     {{ ocaml (assert false) }}
+   | consistent_increase ne1 ne'1 ... nen ne'n                    :: M :: SN_increasing
+     {{ com Generates constraints from  pairs of constraints, where the first of each pair is always larger than the sum of the previous pair }}
+     {{ ocaml (assert false) }}
+     {{ ichl todo }}
+   | consistent_decrease ne1 ne'1 ... nen ne'n                      :: M :: SN_decreasing
+     {{ com Generates constraints from  pairs of constraints, where the first of each pair is always smaller than the difference of the previous pair }}
+     {{ ocaml assert false }}
+     {{ ichl todo }}
+ 
+ I :: '' ::=                                                     {{ phantom }}
+  {{ com Information given by type checking an expression; tag only reflects the immediate exp }}
+  | < S_N , effects , tag >                                      :: :: I
+  | Ir                                                           :: :: reset {{ com resets the tag of an I. }} {{ tex {\ottnt{I}_{\textit{reset} } } }}
+  | Ie                                                           :: :: Iempty {{ com Empty constraints, effetcs, tag }} {{ tex {\ottnt{I}_{\epsilon} } }}
+  | I1 u+ .. u+ In                                               :: :: Iunion {{ com Unions the constraints and effects, setting None for the tag }}
+
  E :: '' ::=                                                     {{ phantom }}
                                                                  {{ hol ((string,env_body) fmaptree) }}
                                                                  {{ lem env }}
  {{ com Environments }}
- | < E_t , E_k >                                           :: :: E
+ | < E_t , E_r , E_k >                                           :: :: E
   {{ hol arb }}
-  {{ lem (Env [[E_k]] [[E_t]]) }}
- | E1 u+ E2                                                    :: M :: E_union
-  {{ hol (env_union [[E1]] [[E2]]) }}
-  {{ lem (env_union [[E1]] [[E2]]) }}
-  {{ ocaml assert false }}
+  {{ lem (Env [[E_k]] [[E_r]] [[E_t]]) }}
  | empty                                                       :: M :: E_empty
    {{ hol arb }}
    {{ lem EnvEmp }}
@@ -1140,68 +1128,21 @@ ne :: 'Ne_' ::=
      {{ lem (List.fold_right union_map [[E_t1..E_tn]] Pmap.empty) }}
      {{ ocaml (assert false) }}
 
-%% %% tc_abbrev :: 'Tc_abbrev_' ::=                                   {{ phantom }}
-%% %%                                                                 {{ hol t option }}
-%% %%                                                                 {{ lem option t }}
-%% %%                                                                 {{ ocaml t option }}
-%% %%   {{ com Type abbreviations }}
-%% %%   | . t                                                         :: :: some
-%% %%     {{ hol (SOME [[t]]) }}
-%% %%     {{ lem (Some [[t]]) }}
-%% %%   |                                                             :: :: none
-%% %%     {{ hol NONE }}
-%% %%     {{ lem None }}
-%% %% 
-%% %% tc_def :: '' ::=
-%% %%   {{ com Type and class constructor definitions }} 
-%% %%   | tnvs tc_abbrev                                              :: :: Tc_def
-%% %%     {{ com Type constructors }}
-%% %% 
-%% %% TD {{ tex \ensuremath{\Delta} }} :: 'TD_' ::=                   {{ phantom }}
-%% %%                                                                 {{ hol p |-> tc_def }}
-%% %%                                                                 {{ lem map p tc_def }}
-%% %%   {{ com Type constructor definitions }}
-%% %%   | { p1 |-> tc_def1 , .. , pn |-> tc_defn }                    :: :: concrete
-%% %%     {{ hol (FOLDR (\x E. E |+ x) FEMPTY [[p1 tc_def1 .. pn tc_defn]]) }}
-%% %%     {{ lem (List.fold_right (fun (p,t) m -> Pmap.add p t m) [[p1 tc_def1 .. pn tc_defn]] Pmap.empty) }} 
-%% %%     {{ ocaml (assert false) }}
-%% %%   | TD1 u+ TD2                                                  :: M :: union
-%% %%     {{ hol (FUNION [[TD1]] [[TD2]]) }}
-%% %%     {{ lem (union_map [[TD1]] [[TD2]]) }}
-%% %%     {{ ocaml (assert false) }}
-%% %% 
-%% %% 
-%% %% 
-%% %% D :: 'D_' ::=                                                   {{ phantom }}
-%% %%                                                                 {{ hol ((p |-> tc_def) # (p |-> x list) # (inst list)) }}
-%% %%                                                                 {{ lem tdefs}}
-%% %%   {{ com Global type definition store }}
-%% %%   | < TD , TC , I >                                                     :: :: concrete
-%% %%     {{ hol ([[TD]], [[TC]], [[I]]) }}
-%% %%     {{ lem (D [[TD]] [[TC]] [[I]]) }}
-%% %%   | D1 u+ D2                                                    :: M :: union
-%% %%     {{ hol (case ([[D1]],[[D2]]) of ((x1,x2,x3),(y1,y2,y3)) => (FUNION x1 y1, FUNION x2 y2, x3 ++ y3)) }}
-%% %%     {{ lem (union_tcdefs [[D1]] [[D2]]) }}
-%% %%     {{ ocaml (assert false) }}
-%% %%   | empty                                                       :: M :: empty
-%% %%     {{ hol (FEMPTY, FEMPTY, []) }}
-%% %%     {{ lem DEmp }}
-%% %%     {{ ocaml assert false }}
-%% %% 
-%% %% parsing
-%% %% E_union left E_union
-%% %% 
-%% %% embed
-%% %% {{ lem
-%% %% type tdefs =
-%% %%   | DEmp
-%% %%   | D of (map p tc_def) * (map p (list x)) * (set inst)
-%% %% 
-%% %% val union_tcdefs : tdefs -> tdefs -> tdefs
-%% %% 
-%% %% }}
+ field_typs :: 'FT_' ::=     {{ phantom }}
+ {{ com Record fields }}
+ | id1 : t1 , .. , idn : tn :: :: fields
 
-grammar
+ E_r {{ tex \ottnt{E}^{\textsc{r} } }} :: 'E_r_' ::=             {{ phantom }}
+                                                                 {{ hol (id |-> t) }}
+                                                                 {{ lem map x f_desc }}
+   {{ com Record environments }}
+   | { { field_typs1 } |-> t1 , .. , { field_typsn } |-> tn }                    :: :: concrete
+     {{ hol (FOLDR (\x E. E |+ x) FEMPTY) }}
+     {{ lem (List.fold_right (fun (x,f) m -> Pmap.add x f m)  Pmap.empty) }} 
+   | E_r1 u+ .. u+ E_rn                                          :: M :: union
+     {{ hol (FOLDR FUNION FEMPTY [[E_r1..E_rn]]) }}
+     {{ lem (List.fold_right union_map [[E_r1..E_rn]] Pmap.empty) }}
+     {{ ocaml (assert false) }}
 
 terminals :: '' ::=
   | **                                  :: :: starstar
@@ -1227,8 +1168,6 @@ terminals :: '' ::=
     {{ com \texttt{|>} }}
   | inter                               :: :: inter
     {{ tex \ensuremath{\cap} }}
-%  | union                               :: :: union
-%    {{ tex \ensuremath{\cup} }}
   | u+                                  :: :: uplus
     {{ tex \ensuremath{\uplus} }}
   | NOTIN                               :: :: notin
@@ -1243,6 +1182,10 @@ terminals :: '' ::=
     {{ tex \ensuremath{\langle} }}
   | >                                   :: :: gt
     {{ tex \ensuremath{\rangle} }}
+  | lt                                  :: :: mathlt
+    {{ tex < }}
+  | gt                                  :: :: mathgt
+    {{ tex > }} 
   | |-                                  :: :: vdash
     {{ tex \ensuremath{\vdash} }}
   | |-t					:: :: vdashT
@@ -1267,7 +1210,13 @@ terminals :: '' ::=
     {{ tex \mbox{--} }}
   | empty                               :: :: empty
     {{ tex \ensuremath{\epsilon} }}
- 
+  | consistent_increase                 :: :: ci
+    {{ tex \ottkw{consistent\_increase}~ }}
+  | consistent_decrease                 :: :: cd
+    {{ tex \ottkw{consistent\_decrease}~ }}
+
+ts :: ts_ ::=
+  | t1 , .. , tn :: :: lst 
 
 formula :: formula_ ::=
   | judgement                                                   :: :: judgement
@@ -1287,14 +1236,11 @@ formula :: formula_ ::=
   | E_k ( id ) <-| k						:: :: update_k
      {{ com Update the kind associated with id to k }}        
 
-%% %% %   | TD ( p ) gives tc_def                                     :: :: lookup_tc
-%% %% %     {{ com Type constructor lookup }}
-%% %% %     {{ hol (FLOOKUP [[TD]] [[p]] = SOME [[tc_def]]) }}
-%% %% %     {{ lem Pmap.find [[p]] [[TD]] = [[tc_def]] }} 
-%% %% 
-%% %%   | dom ( E_m1 ) inter dom ( E_m2 ) = emptyset                  :: :: E_m_disjoint
-%% %%     {{ hol (DISJOINT (FDOM [[E_m1]]) (FDOM [[E_m2]])) }}
-%% %%     {{ lem disjoint (Pmap.domain [[E_m1]]) (Pmap.domain [[E_m2]]) }} 
+  | E_r ( id0 .. idn ) gives t , ts                      :: :: lookup_r
+     {{ com Record lookup }}
+
+  | E_r ( t ) gives id0 : t0 .. idn : tn                 :: :: lookup_rt
+    {{ com Record looup by type }}
 
    | dom ( E_t1 ) inter dom ( E_t2 ) = emptyset                  :: :: E_t_disjoint
      {{ hol (DISJOINT (FDOM [[E_t1]]) (FDOM [[E_t2]])) }}
@@ -1330,6 +1276,8 @@ formula :: formula_ ::=
    | id NOTIN dom ( E_t )                                         :: :: notin_dom_t
      {{ hol ([[id]] NOTIN FDOM [[E_t]]) }}
      {{ lem Pervasives.not (Pmap.mem [[id]] [[E_t]]) }} 
+
+   | id0 : t0 .. idn : tn SUBSET id'0 : t'0 .. id'i : t'i       :: :: subsetFields
 %% %% 
 %% %% 
 %% %%   | FV ( t ) SUBSET tnvs                                                :: :: FV_t
@@ -1355,14 +1303,22 @@ formula :: formula_ ::=
 %% %%     {{ hol (~?__semC__. MEM (Inst __semC__ [[p]] [[t]]) [[I]]) }}
 %% %%     {{ lem (Pervasives.not ((Inst [] [[p]] [[t]]) IN [[I]])) }}
 %% %% 
+
+   | num1 lt ... lt numn                                         :: :: increasing
+
+   | num1 gt ... gt numn                                         :: :: decreasing
+
    | E_k1 = E_k2                                                 :: :: E_k_eqn
      {{ ichl ([[E_k1]] = [[E_k2]]) }}
 
-   | E_t1 = E_t2                                                 :: :: E_f_eqn
+   | E_t1 = E_t2                                                 :: :: E_t_eqn
      {{ ichl ([[E_t1]] = [[E_t2]]) }}
  
    | E1 = E2                                                     :: :: E_eqn
      {{ ichl ([[E1]] = [[E2]]) }}
+
+   | S_N1 = S_N2                                                :: :: S_N_eqn
+     {{ ichl ([[S_N1]] = [[S_N2]]) }}
  
 %% %%   | TD1 = TD2                                                   :: :: TD_eqn
 %% %%     {{ ichl ([[TD1]] = [[TD2]]) }}

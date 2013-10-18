@@ -20,19 +20,14 @@ base_kind_aux =  (* base kind *)
 
 
 type 
-base_kind = 
-   BK_aux of base_kind_aux * l
-
-
-type 
 id_aux =  (* Identifier *)
    Id of x
  | DeIid of x (* remove infix status *)
 
 
 type 
-kind_aux =  (* kinds *)
-   K_kind of (base_kind) list
+base_kind = 
+   BK_aux of base_kind_aux * l
 
 
 type 
@@ -41,8 +36,8 @@ id =
 
 
 type 
-kind = 
-   K_aux of kind_aux * l
+kind_aux =  (* kinds *)
+   K_kind of (base_kind) list
 
 
 type 
@@ -58,9 +53,8 @@ and nexp =
 
 
 type 
-kinded_id_aux =  (* optionally kind-annotated identifier *)
-   KOpt_none of id (* identifier *)
- | KOpt_kind of kind * id (* kind-annotated variable *)
+kind = 
+   K_aux of kind_aux * l
 
 
 type 
@@ -69,6 +63,22 @@ nexp_constraint_aux =  (* constraint over kind $_$ *)
  | NC_bounded_ge of nexp * nexp
  | NC_bounded_le of nexp * nexp
  | NC_nat_set_bounded of id * (int) list
+
+
+type 
+kinded_id_aux =  (* optionally kind-annotated identifier *)
+   KOpt_none of id (* identifier *)
+ | KOpt_kind of kind * id (* kind-annotated variable *)
+
+
+type 
+nexp_constraint = 
+   NC_aux of nexp_constraint_aux * l
+
+
+type 
+kinded_id = 
+   KOpt_aux of kinded_id_aux * l
 
 
 type 
@@ -83,13 +93,9 @@ efct_aux =  (* effect *)
 
 
 type 
-kinded_id = 
-   KOpt_aux of kinded_id_aux * l
-
-
-type 
-nexp_constraint = 
-   NC_aux of nexp_constraint_aux * l
+quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
+   QI_id of kinded_id (* An optionally kinded identifier *)
+ | QI_const of nexp_constraint (* A constraint for this type *)
 
 
 type 
@@ -98,15 +104,8 @@ efct =
 
 
 type 
-quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
-   QI_id of kinded_id (* An optionally kinded identifier *)
- | QI_const of nexp_constraint (* A constraint for this type *)
-
-
-type 
-effects_aux =  (* effect set, of kind $_$ *)
-   Effects_var of id
- | Effects_set of (efct) list (* effect set *)
+quant_item = 
+   QI_aux of quant_item_aux * l
 
 
 type 
@@ -117,13 +116,15 @@ order_aux =  (* vector order specifications, of kind $_$ *)
 
 
 type 
-quant_item = 
-   QI_aux of quant_item_aux * l
+effects_aux =  (* effect set, of kind $_$ *)
+   Effects_var of id
+ | Effects_set of (efct) list (* effect set *)
 
 
 type 
-effects = 
-   Effects_aux of effects_aux * l
+typquant_aux =  (* type quantifiers and constraints *)
+   TypQ_tq of (quant_item) list
+ | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
 type 
@@ -132,9 +133,13 @@ order =
 
 
 type 
-typquant_aux =  (* type quantifiers and constraints *)
-   TypQ_tq of (quant_item) list
- | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
+effects = 
+   Effects_aux of effects_aux * l
+
+
+type 
+typquant = 
+   TypQ_aux of typquant_aux * l
 
 
 type 
@@ -156,11 +161,6 @@ and typ_arg_aux =  (* Type constructor arguments of all kinds *)
 
 and typ_arg = 
    Typ_arg_aux of typ_arg_aux * l
-
-
-type 
-typquant = 
-   TypQ_aux of typquant_aux * l
 
 
 type 
@@ -283,9 +283,30 @@ and 'a letbind =
 
 
 type 
+ne =  (* internal numeric expressions *)
+   Ne_var of id
+ | Ne_const of int
+ | Ne_mult of ne * ne
+ | Ne_add of (ne) list
+ | Ne_exp of ne
+ | Ne_unary of ne
+
+
+type 
 naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
    Name_sect_none
  | Name_sect_some of string
+
+
+type 
+rec_opt_aux =  (* Optional recursive annotation for functions *)
+   Rec_nonrec (* non-recursive *)
+ | Rec_rec (* recursive *)
+
+
+type 
+'a funcl_aux =  (* Function clause *)
+   FCL_Funcl of id * 'a pat * 'a exp
 
 
 type 
@@ -300,14 +321,10 @@ type
 
 
 type 
-rec_opt_aux =  (* Optional recursive annotation for functions *)
-   Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
-
-
-type 
-'a funcl_aux =  (* Function clause *)
-   FCL_Funcl of id * 'a pat * 'a exp
+nec =  (* Numeric expression constraints *)
+   Nec_lteq of ne * ne
+ | Nec_eq of ne * ne
+ | Nec_gteq of ne * ne
 
 
 type 
@@ -326,16 +343,6 @@ naming_scheme_opt =
 
 
 type 
-'a tannot_opt = 
-   Typ_annot_opt_aux of 'a tannot_opt_aux * 'a annot
-
-
-type 
-'a effects_opt = 
-   Effects_opt_aux of 'a effects_opt_aux * 'a annot
-
-
-type 
 rec_opt = 
    Rec_aux of rec_opt_aux * l
 
@@ -346,8 +353,13 @@ type
 
 
 type 
-'a val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
+'a tannot_opt = 
+   Typ_annot_opt_aux of 'a tannot_opt_aux * 'a annot
+
+
+type 
+'a effects_opt = 
+   Effects_opt_aux of 'a effects_opt_aux * 'a annot
 
 
 type 
@@ -360,29 +372,19 @@ type
 
 
 type 
-'a default_typing_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of base_kind * id
- | DT_typ of typschm * id
-
-
-type 
 'a fundef_aux =  (* Function definition *)
    FD_function of rec_opt * 'a tannot_opt * 'a effects_opt * ('a funcl) list
 
 
 type 
-ne =  (* internal numeric expressions *)
-   Ne_var of id
- | Ne_const of int
- | Ne_mult of ne * ne
- | Ne_add of ne * ne
- | Ne_exp of ne
- | Ne_unary of ne
+'a val_spec_aux =  (* Value type specification *)
+   VS_val_spec of typschm * id
 
 
 type 
-'a val_spec = 
-   VS_aux of 'a val_spec_aux * 'a annot
+'a default_typing_spec_aux =  (* Default kinding or typing assumption *)
+   DT_kind of base_kind * id
+ | DT_typ of typschm * id
 
 
 type 
@@ -391,13 +393,18 @@ type
 
 
 type 
-'a default_typing_spec = 
-   DT_aux of 'a default_typing_spec_aux * 'a annot
+'a fundef = 
+   FD_aux of 'a fundef_aux * 'a annot
 
 
 type 
-'a fundef = 
-   FD_aux of 'a fundef_aux * 'a annot
+'a val_spec = 
+   VS_aux of 'a val_spec_aux * 'a annot
+
+
+type 
+'a default_typing_spec = 
+   DT_aux of 'a default_typing_spec_aux * 'a annot
 
 
 type 
@@ -447,6 +454,11 @@ type
  | Typ_lib_list of typ (* list of typ *)
  | Typ_lib_set of typ (* finite set of typ *)
  | Typ_lib_reg of typ (* mutable register components holding typ *)
+
+
+type 
+ts = 
+   Ts_lst of (t) list
 
 
 type 
