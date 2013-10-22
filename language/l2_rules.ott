@@ -524,17 +524,42 @@ length(exp1 ... expn) = num
 ------------------------------------------------------------ :: vector
 E |- [ exp1 , ... , expn ] : vector zero num inc t gives I1 u+ ... u+ In
  
-%% % TD,E,E_l |- exp : __vector ne' t gives S_c,S_N
-%% % |- nexp ~> ne
-%% % ------------------------------------------------------------- :: vectorget
-%% % TD,E,E_l |- exp .( nexp ) : t gives S_c,S_N union {ne<ne'}
-%% % 
-%% % TD,E,E_l |- exp : __vector ne' t gives S_c,S_N
-%% % |- nexp1 ~> ne1
-%% % |- nexp2 ~> ne2
-%% % ne = :Ne_add: ne2 + (- ne1)
-%% % ------------------------------------------------------------- :: vectorsub
-%% % TD,E,E_l |- exp .( nexp1 .. nexp2 ) : __vector ne t gives S_c,S_N union {ne1 < ne2 < ne'}
+E |- exp1 : vector ne ne' inc t gives I1
+E |- exp2 : enum ne2 ne2' inc gives I2 
+------------------------------------------------------------- :: vectorgetInc
+E |- :E_vector_access: exp1 [ exp2 ] : t gives I1 u+ I2 u+ <{ne<=ne2,ne2+ne2'<=ne+ne'},pure,None>
+
+E |- exp1 : vector ne ne' dec t gives I1
+E |- exp2 : enum ne2 ne'2 dec gives I2 
+------------------------------------------------------------- :: vectorgetDec
+E |- :E_vector_access: exp1 [ exp2 ] : t gives I1 u+ I2 u+ <{ne>=ne2,ne2+(-ne2')<=ne+(-ne')},pure,None>
+
+E |- exp1 : vector ne ne' order t gives I1
+E |- exp2 : enum ne2 ne'2 order gives I2
+E |- exp3 : enum ne3 ne'3 order gives I3
+------------------------------------------------------------- :: vectorsub
+E |- :E_vector_subrange: exp1[ exp2 : exp3 ] : vector :t_arg_nexp: id :t_arg_nexp: id' order t gives I1 u+ I2 u+ I3 u+ <{ne <= ne2, id >= ne2 , id <= ne2+ne2', ne2+ne'2<=ne3, ne+ne'>=ne3+ne'3, id' <=ne3 + ne'3},pure,None>
+
+E |- exp : vector ne1 ne2 order t gives I
+E |- exp1 : enum ne3 ne4 order gives I1
+E |- exp2 : t gives I2
+------------------------------------------------------------ :: vectorup
+E |- [ exp with exp1 = exp2 ] : vector ne1 ne2 order t gives I u+ I1 u+ I2 u+ <{ne1 <= ne3, ne1 + ne2 >= ne3 + ne4},pure,None>
+
+E |- exp : vector ne1 ne2 order t gives I
+E |- exp1 : enum ne3 ne4 order gives I1
+E |- exp2 : enum ne5 ne6 order gives I2
+E |- exp3 : vector ne7 ne8 order t gives I3
+------------------------------------------------------------ :: vecrangeup
+E |- [ exp with exp1 : exp2 = exp3 ] : vector ne1 ne2 order t gives I u+ I1 u+ I2 u+ I3 u+ <{ne1 <= ne3, ne1 <= ne5,ne3+ne4 <= ne5, ne1 + ne2 <= ne5 + ne6 + (- ne3) + (- ne4), ne7 + ne8 = ne1 + ne2 + (- ne3) + (- ne4)},pure,None>
+
+E |- exp : vector ne1 ne2 order t gives I
+E |- exp1 : enum ne3 ne4 order gives I1
+E |- exp2 : enum ne5 ne6 order gives I2
+E |- exp3 : t gives I3
+------------------------------------------------------------ :: vecrangeupvalue
+E |- [ exp with exp1 : exp2 = exp3 ] : vector ne1 ne2 order t gives I u+ I1 u+ I2 u+ I3 u+ <{ne1 <= ne3, ne1 <= ne5,ne3+ne4 <= ne5, ne1 + ne2 <= ne5 + ne6 + (- ne3) + (- ne4)},pure,None>
+
 
 E_r (id t_args) gives </idi : ti//i/> id : t </id'j : t'j//j/>
 <E_t,E_r,E_k> |- exp : id t_args gives I
@@ -571,6 +596,13 @@ E |- exp2 : t gives I2
 E |- exp3 : t gives I3
 ------------------------------------------------------------ :: if
 E |- if exp1 then exp2 else exp3 : t gives I1 u+ I2 u+ I3
+
+<E_t,E_r,E_k> |- exp1 : enum ne1 ne2 order gives I1
+<E_t,E_r,E_k> |- exp2 : enum ne3 ne4 order gives I2
+<E_t,E_r,E_k> |- exp3 : enum ne5 ne6 order gives I3
+<E_t u+ {id |-> enum ne1 ne3+ne4 order},E_r,E_k> |- exp4 : t gives I4
+----------------------------------------------------------- :: for
+<E_t,E_r,E_k> |- foreach id from exp1 to exp2 by exp3 exp4 : t gives I1 u+ I2 u+ I3 u+ I4 u+ <{ne1 <= ne3+ne4},pure,None>
 
 E |- exp1 : t gives I1
 E |- exp2 : list t gives I2
