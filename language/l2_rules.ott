@@ -370,7 +370,7 @@ E_k |-t t ok
 <E_t,E_r,E_k> |- pat : t gives E_t1,S_N
 id NOTIN dom(E_t1)
 ------------------------------------------------------------ :: as
-<E_t,E_r,E_k> |- (pat as id) : t gives E_t1 u+ {id|->t},S_N
+<E_t,E_r,E_k> |- (pat as id) : t gives (E_t1 u+ {id|->t}),S_N
 
 E_k |- typ ~> t
 <E_t,E_r,E_k> |- pat : t gives E_t1,S_N
@@ -381,190 +381,149 @@ E_t(id) gives (t1*..*tn) -> id t_args effect { } Ctor
 <E_t,E_r,E_k> |- pat1 : t1 gives E_t1,S_N1 .. <E_t,E_r,E_k> |- patn : tn gives E_tn,S_Nn
 disjoint doms(E_t1,..,E_tn)
 ------------------------------------------------------------ :: ident_constr
-<E_t,E_r,E_k> |- id pat1 .. patn : id t_args gives E_t1 u+ .. u+ E_tn, S_N1 u+ .. u+ S_Nn
+<E_t,E_r,E_k> |- id pat1 .. patn : id t_args gives u+ E_t1 .. E_tn, S_N1 u+ .. u+ S_Nn
 
 E_k |-t t ok
  ------------------------------------------------------------ :: var
-<E_t,E_r,E_k> |- :P_id: id : t gives E_t u+ {id|->t},{}
+<E_t,E_r,E_k> |- :P_id: id : t gives (E_t u+ {id|->t}),{}
 
 E_r(</idi//i/>) gives id t_args, (</ti//i/>)
 </<E_t,E_r,E_k> |- pati : ti gives E_ti,S_Ni//i/>
 disjoint doms(</E_ti//i/>)
 ------------------------------------------------------------ :: record
-<E_t,E_r,E_k> |- { </idi = pati//i/> semi_opt } : id t_args gives u+ </E_ti//i/>, u+ </S_Ni//i/>
+<E_t,E_r,E_k> |- { </idi = pati//i/> semi_opt } : id t_args gives :E_t_multi_union: u+ </E_ti//i/>, u+ </S_Ni//i/>
  
-E |- pat1 : t gives E_t1,S_N1 ... E |- patn : t gives E_tn,S_Nn
-disjoint doms(E_t1 , ... , E_tn)
-length(pat1 ... patn) = num
+E |- pat1 : t gives E_t1,S_N1 .. E |- patn : t gives E_tn,S_Nn
+disjoint doms(E_t1 , .. , E_tn)
+length(pat1 .. patn) = num
 ----------------------------------------------------------- :: vector
-E |- [ pat1 , ... , patn ] : vector :t_arg_nexp: id num+id inc t gives E_t1 u+ ... u+ E_tn,S_N1 u+ ... u+ S_Nn
+E |- [ pat1 , .. , patn ] : vector :t_arg_nexp: id num+id inc t gives (E_t1 u+ .. u+ E_tn),S_N1 u+ .. u+ S_Nn
 
 E |- pat1 : t gives E_t1,S_N1 ... E |- patn : t gives E_tn,S_Nn
 disjoint doms(E_t1 , ... , E_tn)
 num1 lt ... lt numn
 ----------------------------------------------------------- :: indexedVectorInc
-E |- [ num1 = pat1 , ... , numn = patn ] : vector :t_arg_nexp: id :t_arg_nexp: id' inc t gives E_t1 u+ ... u+ E_tn, {id<=num1, id' >= numn + (- num1)} u+ S_N1 u+ ... u+ S_Nn
+E |- [ num1 = pat1 , ... , numn = patn ] : vector :t_arg_nexp: id :t_arg_nexp: id' inc t gives (E_t1 u+ ... u+ E_tn), {id<=num1, id' >= numn + (- num1)} u+ S_N1 u+ ... u+ S_Nn
 
 E |- pat1 : t gives E_t1,S_N1 ... E |- patn : t gives E_tn,S_Nn
 disjoint doms(E_t1 , ... , E_tn)
 num1 gt ... gt numn
 ----------------------------------------------------------- :: indexedVectorDec
-E |- [ num1 = pat1 , ... , numn = patn ] : vector :t_arg_nexp: id :t_arg_nexp: id' dec t gives E_t1 u+ ... u+ E_tn, {id>=num1,id'<=num1 +(-numn)} u+ S_N1 u+ ... u+ S_Nn
+E |- [ num1 = pat1 , ... , numn = patn ] : vector :t_arg_nexp: id :t_arg_nexp: id' dec t gives (E_t1 u+ ... u+ E_tn), {id>=num1,id'<=num1 +(-numn)} u+ S_N1 u+ ... u+ S_Nn
 
 E |- pat1 : vector ne1 ne'1 inc t gives E_t1,S_N1 ... E |- patn : vector nen ne'n inc t gives E_tn,S_Nn
 disjoint doms(E_t1 , ... , E_tn)
 S_N0 = consistent_increase ne1 ne'1 ... nen ne'n
 ----------------------------------------------------------- :: vectorConcatInc
-E |- pat1 : ... : patn : vector :t_arg_nexp: id :t_arg_nexp: id' inc t gives E_t1 u+ ... u+ E_tn,{id<=ne1,id'>= ne'1 + ... + ne'n} u+ S_N0 u+ S_N1 u+ ... u+ S_Nn
+E |- pat1 : ... : patn : vector :t_arg_nexp: id :t_arg_nexp: id' inc t gives (E_t1 u+ ... u+ E_tn),{id<=ne1,id'>= ne'1 + ... + ne'n} u+ S_N0 u+ S_N1 u+ ... u+ S_Nn
 
 E |- pat1 : vector ne1 ne'1 dec t gives E_t1,S_N1 ... E |- patn : vector nen ne'n dec t gives E_tn,S_Nn
 disjoint doms(E_t1 , ... , E_tn)
 S_N0 = consistent_decrease ne1 ne'1 ... nen ne'n
 ----------------------------------------------------------- :: vectorConcatDec
-E |- pat1 : ... : patn : vector :t_arg_nexp: id :t_arg_nexp: id' inc t gives E_t1 u+ ... u+ E_tn,{id>=ne1,id'>= ne'1 + ... + ne'n} u+ S_N0 u+ S_N1 u+ ... u+ S_Nn
+E |- pat1 : ... : patn : vector :t_arg_nexp: id :t_arg_nexp: id' inc t gives (E_t1 u+ ... u+ E_tn),{id>=ne1,id'>= ne'1 + ... + ne'n} u+ S_N0 u+ S_N1 u+ ... u+ S_Nn
 
 <E_t,E_r,E_k> |- pat1 : t1 gives E_t1,S_N1 .... <E_t,E_r,E_k> |- patn : tn gives E_tn,S_Nn
 disjoint doms(E_t1,....,E_tn)
 ------------------------------------------------------------ :: tup
-<E_t,E_r,E_k> |- (pat1, ...., patn) : (t1 * .... * tn) gives E_t1 u+ .... u+ E_tn,S_N1 u+ .... u+ S_Nn 
+<E_t,E_r,E_k> |- (pat1, ...., patn) : (t1 * .... * tn) gives (E_t1 u+ .... u+ E_tn),S_N1 u+ .... u+ S_Nn 
 
 E_k |-t t ok
 <E_t,E_r,E_k> |- pat1 : t gives E_t1,S_N1 .. <E_t,E_r,E_k> |- patn : t gives E_tn,S_Nn
 disjoint doms(E_t1,..,E_tn)
 ------------------------------------------------------------ :: list
-<E_t,E_r,E_k> |- [|pat1, .., patn |] : list t gives E_t1 u+ .. u+ E_tn,S_N1 u+ .. u+ S_Nn
+<E_t,E_r,E_k> |- [|pat1, .., patn |] : list t gives (E_t1 u+ .. u+ E_tn),S_N1 u+ .. u+ S_Nn
 
- 
-%% % 
-%% % 
-%% % defns
-%% % id_field :: '' ::=
-%% % 
-%% % defn
-%% % E |- id field :: :: id_field :: id_field_
-%% % {{ com Check that the identifier is a permissible field identifier }}
-%% % by
-%% % 
-%% % E_f(x) gives f_desc
-%% % ------------------------------------------------------------ :: empty
-%% % <E_m,E_p,E_f,E_x> |- x l1 l2 field
-%% % 
-%% % 
-%% % E_m(x) gives E
-%% % x NOTIN dom(E_f)
-%% % E |- </y_li.//i/> z_l l2 field
-%% % ------------------------------------------------------------ :: cons
-%% % <E_m,E_p,E_f,E_x> |- x l1.</y_li.//i/> z_l l2 field
-%% % 
-%% % defns
-%% % id_value :: '' ::=
-%% % 
-%% % defn
-%% % E |- id value :: :: id_value :: id_value_
-%% % {{ com Check that the identifier is a permissible value identifier }}
-%% % by
-%% % 
-%% % E_x(x) gives v_desc
-%% % ------------------------------------------------------------ :: empty
-%% % <E_m,E_p,E_f,E_x> |- x l1 l2 value
-%% % 
-%% % 
-%% % E_m(x) gives E
-%% % x NOTIN dom(E_x)
-%% % E |- </y_li.//i/> z_l l2 value
-%% % ------------------------------------------------------------ :: cons
-%% % <E_m,E_p,E_f,E_x> |- x l1.</y_li.//i/> z_l l2 value
-%% % 
 
 defns
 check_exp :: '' ::=
  
 defn
-E |- exp : t gives I :: :: check_exp :: check_exp_ 
-{{ com Typing expressions, collecting nexp constraints and effects }}
+E |- exp : t gives I , E_t :: :: check_exp :: check_exp_ 
+{{ com Typing expressions, collecting nexp constraints, effects, and new bindings }}
 by
 
-%% TODO::: if t is a reg, need to distinguish here between reg and ref cell access, and add to effect if reg, and maybe add to tag
+%% TODO::: if t is a reg, need to distinguish here between reg and ref cell access, and add to effect if reg
  
 E_t(id) gives t
 ------------------------------------------------------------ :: var
-<E_t,E_r,E_k> |- id : t gives Ie
+<E_t,E_r,E_k> |- id : t gives Ie,E_t
 
 E_t(id) gives t' -> t effect {} Ctor {} 
-<E_t,E_r,E_k> |- exp : t' gives I
+<E_t,E_r,E_k> |- exp : t' gives I,E_t
 ------------------------------------------------------------ :: ctor
-<E_t,E_r,E_k> |- id exp : t gives Ir
+<E_t,E_r,E_k> |- id exp : t gives I,E_t
 
  
 E_t(id) gives t' -> t effects tag S_N
-<E_t,E_r,E_k> |- exp : t' gives <S_N1,effects',_>
+<E_t,E_r,E_k> |- exp : t' gives I,E_t
 ------------------------------------------------------------ :: app
-<E_t,E_r,E_k> |- id exp : t gives <S_N u+ S_N1,effects u+ effects',tag>
+<E_t,E_r,E_k> |- id exp : t gives I u+ <S_N ,effects>, E_t
  
 E_t(id) gives (t1 * t2) -> t effects tag S_N
-<E_t,E_r,E_k> |- exp1 : t1 gives <S_N2,effects2,_>
-<E_t,E_r,E_k> |- exp2 : t2 gives <S_N3,effects3,_>
+<E_t,E_r,E_k> |- exp1 : t1 gives I2,E_t
+<E_t,E_r,E_k> |- exp2 : t2 gives I3,E_t
 ------------------------------------------------------------ :: infix_app
-<E_t,E_r,E_k> |- :E_app_infix: exp1 id exp2 : t gives <S_N u+ S_N2 u+ S_N3, effects u+ effects2 u+ effects3,tag>
+<E_t,E_r,E_k> |- :E_app_infix: exp1 id exp2 : t gives I2 u+ I3 u+ <S_N, effects>, E_t
 
 E_r(</idi//i/>) gives id t_args, </ti//i/>
-</ <E_t,E_r,E_k> |- expi : ti gives Ii//i/>
+</ <E_t,E_r,E_k> |- expi : ti gives Ii,E_t//i/>
 ------------------------------------------------------------ :: record
-<E_t,E_r,E_k> |- { </idi = expi//i/> semi_opt} : id t_args gives u+ </Ii//i/>
+<E_t,E_r,E_k> |- { </idi = expi//i/> semi_opt} : id t_args gives u+ </Ii//i/>, E_t
 
-<E_t,E_r,E_k> |- exp : id t_args gives I
+<E_t,E_r,E_k> |- exp : id t_args gives I,E_t
 E_r(id t_args) gives </ id'n:t'n//n/>
-</ <E_t,E_r,E_k> |- expi : ti gives Ii//i/>
+</ <E_t,E_r,E_k> |- expi : ti gives Ii,E_t//i/>
 </idi:ti//i/> SUBSET </id'n : t'n//n/>
 ------------------------------------------------------------ :: recup
-<E_t,E_r,E_k> |- { exp with </idi = expi//i/> semi_opt } : id t_args gives I
+<E_t,E_r,E_k> |- { exp with </idi = expi//i/> semi_opt } : id t_args gives I u+ </Ii//i/>, E_t
 
-E |- exp1 : t gives I1 ... E |- expn : t gives In
+E |- exp1 : t gives I1,E_t ... E |- expn : t gives In,E_t
 length(exp1 ... expn) = num
 ------------------------------------------------------------ :: vector
-E |- [ exp1 , ... , expn ] : vector zero num inc t gives I1 u+ ... u+ In
+E |- [ exp1 , ... , expn ] : vector zero num inc t gives I1 u+ ... u+ In, E_t
  
-E |- exp1 : vector ne ne' inc t gives I1
-E |- exp2 : enum ne2 ne2' inc gives I2 
+E |- exp1 : vector ne ne' inc t gives I1,E_t
+E |- exp2 : enum ne2 ne2' inc gives I2,E_t
 ------------------------------------------------------------- :: vectorgetInc
-E |- :E_vector_access: exp1 [ exp2 ] : t gives I1 u+ I2 u+ <{ne<=ne2,ne2+ne2'<=ne+ne'},pure,None>
+E |- :E_vector_access: exp1 [ exp2 ] : t gives I1 u+ I2 u+ <{ne<=ne2,ne2+ne2'<=ne+ne'},pure>,E_t
 
-E |- exp1 : vector ne ne' dec t gives I1
-E |- exp2 : enum ne2 ne'2 dec gives I2 
+E |- exp1 : vector ne ne' dec t gives I1,E_t
+E |- exp2 : enum ne2 ne'2 dec gives I2,E_t
 ------------------------------------------------------------- :: vectorgetDec
-E |- :E_vector_access: exp1 [ exp2 ] : t gives I1 u+ I2 u+ <{ne>=ne2,ne2+(-ne2')<=ne+(-ne')},pure,None>
+E |- :E_vector_access: exp1 [ exp2 ] : t gives I1 u+ I2 u+ <{ne>=ne2,ne2+(-ne2')<=ne+(-ne')},pure>,E_t
 
-E |- exp1 : vector ne ne' order t gives I1
-E |- exp2 : enum ne2 ne'2 order gives I2
-E |- exp3 : enum ne3 ne'3 order gives I3
+E |- exp1 : vector ne ne' order t gives I1,E_t
+E |- exp2 : enum ne2 ne'2 order gives I2,E_t
+E |- exp3 : enum ne3 ne'3 order gives I3,E_t
 ------------------------------------------------------------- :: vectorsub
-E |- :E_vector_subrange: exp1[ exp2 : exp3 ] : vector :t_arg_nexp: id :t_arg_nexp: id' order t gives I1 u+ I2 u+ I3 u+ <{ne <= ne2, id >= ne2 , id <= ne2+ne2', ne2+ne'2<=ne3, ne+ne'>=ne3+ne'3, id' <=ne3 + ne'3},pure,None>
+E |- :E_vector_subrange: exp1[ exp2 : exp3 ] : vector :t_arg_nexp: id :t_arg_nexp: id' order t gives I1 u+ I2 u+ I3 u+ <{ne <= ne2, id >= ne2 , id <= ne2+ne2', ne2+ne'2<=ne3, ne+ne'>=ne3+ne'3, id' <=ne3 + ne'3},pure>,E_t
 
-E |- exp : vector ne1 ne2 order t gives I
-E |- exp1 : enum ne3 ne4 order gives I1
-E |- exp2 : t gives I2
+E |- exp : vector ne1 ne2 order t gives I,E_t
+E |- exp1 : enum ne3 ne4 order gives I1,E_t
+E |- exp2 : t gives I2,E_t
 ------------------------------------------------------------ :: vectorup
-E |- [ exp with exp1 = exp2 ] : vector ne1 ne2 order t gives I u+ I1 u+ I2 u+ <{ne1 <= ne3, ne1 + ne2 >= ne3 + ne4},pure,None>
+E |- [ exp with exp1 = exp2 ] : vector ne1 ne2 order t gives I u+ I1 u+ I2 u+ <{ne1 <= ne3, ne1 + ne2 >= ne3 + ne4},pure>,E_t
 
-E |- exp : vector ne1 ne2 order t gives I
-E |- exp1 : enum ne3 ne4 order gives I1
-E |- exp2 : enum ne5 ne6 order gives I2
-E |- exp3 : vector ne7 ne8 order t gives I3
+E |- exp : vector ne1 ne2 order t gives I,E_t
+E |- exp1 : enum ne3 ne4 order gives I1,E_t
+E |- exp2 : enum ne5 ne6 order gives I2,E_t
+E |- exp3 : vector ne7 ne8 order t gives I3,E_t
 ------------------------------------------------------------ :: vecrangeup
-E |- [ exp with exp1 : exp2 = exp3 ] : vector ne1 ne2 order t gives I u+ I1 u+ I2 u+ I3 u+ <{ne1 <= ne3, ne1 <= ne5,ne3+ne4 <= ne5, ne1 + ne2 <= ne5 + ne6 + (- ne3) + (- ne4), ne7 + ne8 = ne1 + ne2 + (- ne3) + (- ne4)},pure,None>
+E |- [ exp with exp1 : exp2 = exp3 ] : vector ne1 ne2 order t gives I u+ I1 u+ I2 u+ I3 u+ <{ne1 <= ne3, ne1 <= ne5,ne3+ne4 <= ne5, ne1 + ne2 <= ne5 + ne6 + (- ne3) + (- ne4), ne7 + ne8 = ne1 + ne2 + (- ne3) + (- ne4)},pure>,E_t
 
-E |- exp : vector ne1 ne2 order t gives I
-E |- exp1 : enum ne3 ne4 order gives I1
-E |- exp2 : enum ne5 ne6 order gives I2
-E |- exp3 : t gives I3
+E |- exp : vector ne1 ne2 order t gives I,E_t
+E |- exp1 : enum ne3 ne4 order gives I1,E_t
+E |- exp2 : enum ne5 ne6 order gives I2,E_t
+E |- exp3 : t gives I3,E_t
 ------------------------------------------------------------ :: vecrangeupvalue
-E |- [ exp with exp1 : exp2 = exp3 ] : vector ne1 ne2 order t gives I u+ I1 u+ I2 u+ I3 u+ <{ne1 <= ne3, ne1 <= ne5,ne3+ne4 <= ne5, ne1 + ne2 <= ne5 + ne6 + (- ne3) + (- ne4)},pure,None>
+E |- [ exp with exp1 : exp2 = exp3 ] : vector ne1 ne2 order t gives I u+ I1 u+ I2 u+ I3 u+ <{ne1 <= ne3, ne1 <= ne5,ne3+ne4 <= ne5, ne1 + ne2 <= ne5 + ne6 + (- ne3) + (- ne4)},pure>,E_t
 
 
 E_r (id t_args) gives </idi : ti//i/> id : t </id'j : t'j//j/>
-<E_t,E_r,E_k> |- exp : id t_args gives I
+<E_t,E_r,E_k> |- exp : id t_args gives I,E_t
 ------------------------------------------------------------ :: field
-<E_t,E_r,E_k> |- exp.id : t gives Ir
+<E_t,E_r,E_k> |- exp.id : t gives I,E_t
 
 %% % </TD,E,E_l |- pati : t gives E_li//i/>
 %% % </TD,E,E_l u+ E_li |- expi : u gives S_ci,S_Ni//i/>
@@ -572,10 +531,10 @@ E_r (id t_args) gives </idi : ti//i/> id : t </id'j : t'j//j/>
 %% % ------------------------------------------------------------ :: case
 %% % TD,E,E_l |- match exp with bar_opt </pati -> expi li//i/> l end : u gives S_c' union </S_ci//i/>,S_N' union </S_Ni//i/>
 
-<E_t,E_r,E_k> |- exp : t gives I
+<E_t,E_r,E_k> |- exp : t gives I,E_t
 E_k |- typ ~> t
 ------------------------------------------------------------ :: typed
-<E_t,E_r,E_k> |- (typ) exp : t gives Ir
+<E_t,E_r,E_k> |- (typ) exp : t gives I,E_t
 
 %% % %KATHYCOMMENT: where does E_l1 come from?
 %% % TD,E,E_l1 |- letbind gives E_l2, S_c1,S_N1
@@ -583,35 +542,35 @@ E_k |- typ ~> t
 %% % ------------------------------------------------------------ :: let
 %% % TD,E,E_l |- let letbind in exp : t gives S_c1 union S_c2,S_N1 union S_N2
  
-E |- exp1 : t1 gives I1 .... E |- expn : tn gives In
+E |- exp1 : t1 gives I1,E_t .... E |- expn : tn gives In,E_t
 ------------------------------------------------------------ :: tup
-E |- (exp1, .... , expn) : (t1 * .... * tn) gives I1 u+ .... u+ In
+E |- (exp1, .... , expn) : (t1 * .... * tn) gives I1 u+ .... u+ In,E_t
  
-E |- exp1 : t gives I1 .. E |- expn : t gives In
+E |- exp1 : t gives I1,E_t .. E |- expn : t gives In,E_t
 ------------------------------------------------------------ :: list
-E |- [|exp1, .., expn |] : list t gives I1 u+ .. u+ In
+E |- [|exp1, .., expn |] : list t gives I1 u+ .. u+ In,E_t
 
-E |- exp1 : bool gives I1
-E |- exp2 : t gives I2
-E |- exp3 : t gives I3
+E |- exp1 : bool gives I1,E_t
+E |- exp2 : t gives I2,E_t2
+E |- exp3 : t gives I3,E_t3
 ------------------------------------------------------------ :: if
-E |- if exp1 then exp2 else exp3 : t gives I1 u+ I2 u+ I3
+E |- if exp1 then exp2 else exp3 : t gives I1 u+ I2 u+ I3,(E_t2 inter E_t3)
 
-<E_t,E_r,E_k> |- exp1 : enum ne1 ne2 order gives I1
-<E_t,E_r,E_k> |- exp2 : enum ne3 ne4 order gives I2
-<E_t,E_r,E_k> |- exp3 : enum ne5 ne6 order gives I3
-<E_t u+ {id |-> enum ne1 ne3+ne4 order},E_r,E_k> |- exp4 : t gives I4
+<E_t,E_r,E_k> |- exp1 : enum ne1 ne2 order gives I1,E_t
+<E_t,E_r,E_k> |- exp2 : enum ne3 ne4 order gives I2,E_t
+<E_t,E_r,E_k> |- exp3 : enum ne5 ne6 order gives I3,E_t
+<(E_t u+ {id |-> enum ne1 ne3+ne4 order}),E_r,E_k> |- exp4 : t gives I4,(E_t u+ {id |-> enum ne1 ne3+ne4 order})
 ----------------------------------------------------------- :: for
-<E_t,E_r,E_k> |- foreach id from exp1 to exp2 by exp3 exp4 : t gives I1 u+ I2 u+ I3 u+ I4 u+ <{ne1 <= ne3+ne4},pure,None>
+<E_t,E_r,E_k> |- foreach id from exp1 to exp2 by exp3 exp4 : t gives I1 u+ I2 u+ I3 u+ I4 u+ <{ne1 <= ne3+ne4},pure>,E_t
 
-E |- exp1 : t gives I1
-E |- exp2 : list t gives I2
+E |- exp1 : t gives I1,E_t
+E |- exp2 : list t gives I2,E_t
 ------------------------------------------------------------ :: cons
-E |- exp1 :: exp2 : list t gives I1 u+ I2
+E |- exp1 :: exp2 : list t gives I1 u+ I2,E_t
 
 |- lit : t
 ------------------------------------------------------------ :: lit
-E |- lit : t gives Ie
+<E_t,E_r,E_k> |- lit : t gives Ie,E_t
 
 
 %% % defn

@@ -1087,9 +1087,8 @@ S_N {{ tex \Sigma^{\textsc{N} } }} :: '' ::= {{ phantom }}
  
  I :: '' ::=                                                     {{ phantom }}
   {{ com Information given by type checking an expression; tag only reflects the immediate exp }}
-  | < S_N , effects , tag >                                      :: :: I
-  | Ir                                                           :: :: reset {{ com resets the tag of an I. }} {{ tex {\ottnt{I}_{\textit{reset} } } }}
-  | Ie                                                           :: :: Iempty {{ com Empty constraints, effetcs, tag }} {{ tex {\ottnt{I}_{\epsilon} } }}
+  | < S_N , effects >                                      :: :: I
+  | Ie                                                           :: :: Iempty {{ com Empty constraints, effetcs }} {{ tex {\ottnt{I}_{\epsilon} } }}
   | I1 u+ .. u+ In                                               :: :: Iunion {{ com Unions the constraints and effects, setting None for the tag }}
 
  E :: '' ::=                                                     {{ phantom }}
@@ -1120,13 +1119,26 @@ S_N {{ tex \Sigma^{\textsc{N} } }} :: '' ::= {{ phantom }}
                                                                  {{ hol (id |-> t) }}
                                                                  {{ lem map x f_desc }}
    {{ com Type environments }}
-   | { id1 |-> t1 , .. , idn |-> tn }                    :: :: concrete
+   | { id1 |-> t1 , .. , idn |-> tn }                    :: :: base
      {{ hol (FOLDR (\x E. E |+ x) FEMPTY [[id1 t1 .. idn tn]]) }}
      {{ lem (List.fold_right (fun (x,f) m -> Pmap.add x f m) [[id1 t1 .. idn tn]] Pmap.empty) }} 
-   | E_t1 u+ .. u+ E_tn                                          :: M :: union
-     {{ hol (FOLDR FUNION FEMPTY [[E_t1..E_tn]]) }}
-     {{ lem (List.fold_right union_map [[E_t1..E_tn]] Pmap.empty) }}
+   | ( E_t1 u+ .... u+ E_tn )                                         :: M :: union
+     {{ hol (FOLDR FUNION FEMPTY [[E_t1....E_tn]]) }}
+     {{ lem (List.fold_right union_map [[E_t1....E_tn]] Pmap.empty) }}
      {{ ocaml (assert false) }}
+   | u+ E_t1 .. E_tn                                            :: M :: multi_union
+     {{ hol arb }}
+     {{ lem arb }}
+     {{ ocaml assert false }}
+   | ( E_t1 inter .... inter E_tn )                                  :: M :: intersect
+     {{ hol arb }}
+     {{ lem syntax error }}
+     {{ ocaml (assert false) }}
+   | inter E_t1 .. E_tn                                            :: M :: multi_inter
+     {{ hol arb }}
+     {{ lem arb }}
+     {{ ocaml assert false }}
+
 
  field_typs :: 'FT_' ::=     {{ phantom }}
  {{ com Record fields }}
