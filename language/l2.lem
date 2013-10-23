@@ -283,10 +283,6 @@ type def =  (* Top-level definition *)
  | DEF_scattered_end of id (* scattered definition end *)
 
 
-type ts = 
- | Ts_lst of list t
-
-
 type defs =  (* Definition sequence *)
  | Defs of list def
 

@@ -1215,7 +1215,7 @@ terminals :: '' ::=
   | consistent_decrease                 :: :: cd
     {{ tex \ottkw{consistent\_decrease}~ }}
 
-ts :: ts_ ::=
+ts :: ts_ ::=                                     {{ phantom }}
   | t1 , .. , tn :: :: lst 
 
 formula :: formula_ ::=

@@ -457,11 +457,6 @@ type
 
 
 type 
-ts = 
-   Ts_lst of (t) list
-
-
-type 
 'a defs =  (* Definition sequence *)
    Defs of ('a def) list
 
