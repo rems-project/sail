@@ -1115,7 +1115,7 @@ S_N {{ tex \Sigma^{\textsc{N} } }} :: '' ::= {{ phantom }}
      {{ lem (List.fold_right union_map [[E_k1..E_kn]] Pmap.empty) }}
      {{ ocaml (assert false) }}
  
- E_t {{ tex \ottnt{E}^{\textsc{t} } }} :: 'E_t_' ::=             {{ phantom }}
+ E_t {{ tex {\ottnt{E}^{\textsc{t} } } }} :: 'E_t_' ::=             {{ phantom }}
                                                                  {{ hol (id |-> t) }}
                                                                  {{ lem map x f_desc }}
    {{ com Type environments }}
@@ -1130,6 +1130,8 @@ S_N {{ tex \Sigma^{\textsc{N} } }} :: '' ::= {{ phantom }}
      {{ hol arb }}
      {{ lem arb }}
      {{ ocaml assert false }}
+   | E_t u- E_t1 .. E_tn                                            :: M :: multi_set_minus
+     {{ hol arb }} {{ lem arb }} {{ ocaml assert false }}
    | ( E_t1 inter .... inter E_tn )                                  :: M :: intersect
      {{ hol arb }}
      {{ lem syntax error }}
@@ -1182,6 +1184,8 @@ terminals :: '' ::=
     {{ tex \ensuremath{\cap} }}
   | u+                                  :: :: uplus
     {{ tex \ensuremath{\uplus} }}
+  | u-                                  :: :: uminus
+    {{ tex \ensuremath{\setminus} }}
   | NOTIN                               :: :: notin
     {{ tex \ensuremath{\not\in} }}
   | SUBSET                              :: :: subset

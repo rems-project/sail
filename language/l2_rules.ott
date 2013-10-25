@@ -525,11 +525,11 @@ E_r (id t_args) gives </idi : ti//i/> id : t </id'j : t'j//j/>
 ------------------------------------------------------------ :: field
 <E_t,E_r,E_k> |- exp.id : t gives I,E_t
 
-%% % </TD,E,E_l |- pati : t gives E_li//i/>
-%% % </TD,E,E_l u+ E_li |- expi : u gives S_ci,S_Ni//i/>
-%% % TD,E,E_l |- exp : t gives S_c',S_N'
-%% % ------------------------------------------------------------ :: case
-%% % TD,E,E_l |- match exp with bar_opt </pati -> expi li//i/> l end : u gives S_c' union </S_ci//i/>,S_N' union </S_Ni//i/>
+</<E_t,E_r,E_k> |- pati : t gives E_ti,S_Ni//i/>
+</<(E_t u+ E_ti),E_r,E_k> |- expi : u gives Ii,E_t'i//i/>
+<E_t,E_r,E_k> |- exp : t gives I,E_t
+------------------------------------------------------------ :: case
+<E_t,E_r,E_k> |- switch exp { </case pati -> expi//i/> }: u gives I u+ </Ii u+ <S_Ni,pure>//i/>, inter </E_t'i//i/> u- </E_ti//i/>
 
 <E_t,E_r,E_k> |- exp : t gives I,E_t
 E_k |- typ ~> t
