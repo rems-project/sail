@@ -1,0 +1,80 @@
+2013-10-29    Jan, Peter, Anthony, Gabriel, Ohad, Kathy   video chat
+
+Goal: produce good human-readable L2 definitions of Anthony's current
+L3 processor models, so that they can be used to generate definitions
+in other targets (Coq/Isabelle, not just HOL) and to generate
+definitions that we can integrate with our concurrency semantics. 
+
+
+Syntactic L3-to-L2 translation
+------------------------------
+
+We're hoping that generating L2 won't depend on the L3 type inference,
+and hence that we can work in a quite syntactic way, but it is
+possible that we'll discover later that we need the L3 inferred types
+or coercions to produce good L2 definitions - we'll see.
+
+
+This first part is fairly clear - basically "get an AST with comment
+and location info in":
+
+- get current snapshot of L3 from Anthony's pages
+
+- cut out enough of the lexing and parsing - probably:
+  
+     Lib.sml
+     lexer.lex
+     Parser.sml
+     Base.sml
+     Data.sml  ? 
+
+- check that into l3-to-l2/src  and trim it down, cutting out
+  everything that's not parsing-related.
+
+  That has a conventional lexer-generator lexer and a
+  parser-combinator parser; it doesn't have an explicit AST
+  representation.
+
+  One could either work entirely in SML or port the above code into
+  OCaml and work in that; whichever you prefer.  L2 is in OCaml, L3 in
+  SML...
+
+  In the l3.pdf document on the web site there's a BNF for L3
+  (slightly out of date, but in ways that shouldn't matter).  We can
+  use that to define an SML datatype for the AST.   That should
+  include source-location and comment information so that we can map
+  them into readable L2 definitions.   
+
+  (One could either write that AST type directly or (if using OCaml)
+  write an Ott definition of the L3 source language (which would be
+  useful for L3 documentation) and use that to generate an OCaml AST
+  type; whichever you want.)
+
+  Then adapt the lexer.lex and Parser.sml to produce elements of that
+  AST type.   
+
+- Check it works (at least parses) on Anthony's full ARM model.
+
+
+Then start work on generating human-readable L2 (with the original
+comments) from that AST, using Gabriel's Tiny processor definiton as a
+model.  This will probably find places where L2 isn't quite right and
+prompt us to adapt it :-)
+
+Later we'll want to pay attention to validation - in the first
+instance, perhaps comparing the results of running single-instruction
+test cases in Anthony's model and using the L2 interpreter (which
+exists already).   After that, we'll want to compare those results
+with the output of L2-to-Lem and the ultimate Coq/HOL/Isabelle output
+from that, but those aren't in place yet.
+
+And we'll also want to pay attention to whatever constraints on the
+semantic style of the ultimate Coq definitions arise from whatever
+Adam wants to do with these.
+
+
+
+
+
+
+
