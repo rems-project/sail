@@ -202,11 +202,11 @@ E_k , k |- typ_arg ~> t_arg :: :: convert_targ :: convert_targ_
 {{ com Convert source type arguments to internals }}
 by
  
-%% % defn 
-%% % |- nexp ~> ne :: :: convert_nexp :: convert_nexp_ 
-%% % {{ com Convert and normalize numeric expressions }}
-%% % by
-%% % 
+defn 
+|- nexp ~> ne :: :: convert_nexp :: convert_nexp_ 
+{{ com Convert and normalize numeric expressions }}
+by
+ 
 %% % ------------------------------------------------------------ :: var
 %% % |- N l ~> N
 %% % 
@@ -223,16 +223,26 @@ by
 %% % ----------------------------------------------------------- :: add
 %% % |- nexp1 + nexp2 l ~> :Ne_add: ne1 + ne2
 %% % 
-%% % defns
-%% % convert_typs :: '' ::=
-%% % 
-%% % defn
-%% % TD , E |- typs ~> t_multi :: :: convert_typs :: convert_typs_ by
-%% % 
-%% % TD,E |- typ1 ~> t1 .. TD,E |- typn ~> tn
-%% % ------------------------------------------------------------ :: all
-%% % TD,E |- typ1 * .. * typn ~> (t1 * .. * tn)
-%% % 
+
+defn 
+E_k |- t :> t' , S_N :: :: coerce_typ :: coerce_typ_ by
+
+E_k |- t = u
+-------------------------------------- :: eq
+E_k |- t :> u, {}
+
+E_k |- t1 :> u1, S_N1 .. E_k |- tn :> un, S_Nn
+-------------------------------------- :: tuple
+E_k |- (t1 * .. * tn) :> (u1 * .. * un), u+ S_N1 .. S_Nn
+
+-------------------------------------- :: enum
+E_k |- enum ne1 ne2 order :> enum ne3 ne4 order, {ne3 <= ne1, ne3+ne4 >= ne1 + ne2}
+
+-------------------------------------- :: toEnum
+E_k |- vector ne1 ne2 order bit :> enum ne3 ne4 order, { ne3 = zero, ne4 = 2 ^^ ne2}
+
+%% Will also need environment of enumerations to converte between
+
 defns
 check_lit :: '' ::=
  
@@ -270,86 +280,7 @@ by
  ------------------------------------------------------------ :: bitone
  |- bitone : bit
 
-%% % 
-%% % defns
-%% % inst_field :: '' ::=
-%% % 
-%% % defn
-%% % TD , E |- field id : p t_args -> t gives ( x of names ) :: :: inst_field :: inst_field_
-%% % {{ com Field typing (also returns canonical field names) }} 
-%% % by
-%% % 
-%% % E(</x_li//i/>) gives <E_m,E_p,E_f,E_x>
-%% % E_f(y) gives <forall tnv1..tnvn. p -> t, (z of names)>
-%% % TD |- t1 ok .. TD |- tn ok
-%% % ------------------------------------------------------------ :: all
-%% % TD,E |- field </x_li.//i/> y l1 l2: p t1 .. tn -> {tnv1|->t1..tnvn|->tn}(t) gives (z of names)
-%% % 
-%% % defns
-%% % inst_ctor :: '' ::=
-%% % 
-%% % defn
-%% % TD , E |- ctor id : t_multi -> p t_args gives ( x of names ) :: :: inst_ctor :: inst_ctor_ 
-%% % {{ com Data constructor typing (also returns canonical constructor names) }} 
-%% % by
-%% % 
-%% % E(</x_li//i/>) gives <E_m,E_p,E_f,E_x>
-%% % E_x(y) gives <forall tnv1..tnvn. t_multi -> p, (z of names)>
-%% % TD |- t1 ok .. TD |- tn ok
-%% % ------------------------------------------------------------ :: all
-%% % TD,E |- ctor </x_li.//i/> y l1 l2 : {tnv1|->t1..tnvn|->tn}(t_multi) -> p t1 .. tn gives (z of names)
-%% % 
-%% % defns
-%% % inst_val :: '' ::=
-%% % 
-%% % defn
-%% % TD , E |- val id : t gives S_c :: :: inst_val :: inst_val_
-%% % {{ com Typing top-level bindings, collecting typeclass constraints }}
-%% % by
-%% % 
-%% % E(</x_li//i/>) gives <E_m,E_p,E_f,E_x>
-%% % E_x(y) gives <forall tnv1..tnvn. (p1 tnv'1) .. (pi tnv'i) => t,env_tag>
-%% % TD |- t1 ok .. TD |- tn ok
-%% % t_subst = {tnv1|->t1..tnvn|->tn}
-%% % ------------------------------------------------------------ :: all
-%% % TD, E |- val </x_li.//i/> y l1 l2 : t_subst(t) gives {(p1 t_subst(tnv'1)), .. , (pi t_subst(tnv'i))}
-%% % 
-%% % defns
-%% % not_ctor :: '' ::=
-%% % 
-%% % defn
-%% % E , E_l |- x not ctor :: :: not_ctor :: not_ctor_ 
-%% % {{ com $\ottnt{v}$ is not bound to a data constructor }}
-%% % by
-%% % 
-%% % E_l(x) gives t
-%% % ------------------------------------------------------------ :: val
-%% % E,E_l |- x not ctor
-%% % 
-%% % x NOTIN dom(E_x)
-%% % ------------------------------------------------------------ :: unbound
-%% % <E_m,E_p,E_f,E_x>,E_l |- x not ctor
-%% % 
-%% % E_x(x) gives <forall tnv1..tnvn. (p1 tnv'1)..(pi tnv'i) => t,env_tag>
-%% % ------------------------------------------------------------ :: bound
-%% % <E_m,E_p,E_f,E_x>,E_l |- x not ctor
-%% % 
-%% % defns
-%% % not_shadowed :: '' ::=
-%% % 
-%% % defn
-%% % E_l |- id not shadowed :: :: not_shadowed :: not_shadowed_ 
-%% % {{ com $\ottnt{id}$ is not lexically shadowed }}
-%% % by
-%% % 
-%% % x NOTIN dom(E_l)
-%% % ------------------------------------------------------------ :: sing
-%% % E_l |- x l1 l2 not shadowed
-%% % 
-%% % ------------------------------------------------------------ :: multi
-%% % E_l |- x_l1. .. x_ln.y_l.z_l l not shadowed
-%% % 
-%% % 
+
 defns
 check_pat :: '' ::=
  
@@ -454,11 +385,13 @@ E_t(id) gives t' -> t effect {} Ctor {}
 ------------------------------------------------------------ :: ctor
 <E_t,E_r,E_k> |- id exp : t gives I,E_t
 
+%We need overloading here
  
 E_t(id) gives t' -> t effects tag S_N
-<E_t,E_r,E_k> |- exp : t' gives I,E_t
+<E_t,E_r,E_k> |- exp : u gives I,E_t
+E_k |- u :> t',S_N2
 ------------------------------------------------------------ :: app
-<E_t,E_r,E_k> |- id exp : t gives I u+ <S_N ,effects>, E_t
+<E_t,E_r,E_k> |- id exp : t gives I u+ <S_N u+ S_N2 ,effects>, E_t
  
 E_t(id) gives (t1 * t2) -> t effects tag S_N
 <E_t,E_r,E_k> |- exp1 : t1 gives I2,E_t
@@ -532,15 +465,15 @@ E_r (id t_args) gives </idi : ti//i/> id : t </id'j : t'j//j/>
 <E_t,E_r,E_k> |- switch exp { </case pati -> expi//i/> }: u gives I u+ </Ii u+ <S_Ni,pure>//i/>, inter </E_t'i//i/> u- </E_ti//i/>
 
 <E_t,E_r,E_k> |- exp : t gives I,E_t
-E_k |- typ ~> t
+E_k |- typ ~> u
+|- u :> t, S_N
 ------------------------------------------------------------ :: typed
-<E_t,E_r,E_k> |- (typ) exp : t gives I,E_t
+<E_t,E_r,E_k> |- (typ) exp : t gives I u+ <S_N,pure>,E_t
 
-%% % %KATHYCOMMENT: where does E_l1 come from?
-%% % TD,E,E_l1 |- letbind gives E_l2, S_c1,S_N1
-%% % TD,E,E_l1 u+ E_l2 |- exp : t gives S_c2,S_N2
-%% % ------------------------------------------------------------ :: let
-%% % TD,E,E_l |- let letbind in exp : t gives S_c1 union S_c2,S_N1 union S_N2
+<E_t,E_r,E_k> |- letbind gives E_t2, I1
+<(E_t u+ E_t2),E_r,E_k> |- exp : t gives I2
+------------------------------------------------------------ :: let
+<E_t,E_r,E_k> |- let letbind in exp : t gives I1 u+ I2, E_t
  
 E |- exp1 : t1 gives I1,E_t .... E |- expn : tn gives In,E_t
 ------------------------------------------------------------ :: tup
@@ -591,43 +524,23 @@ E |- exp1 :: exp2 : list t gives I1 u+ I2,E_t
 %% % ------------------------------------------------------------ :: noannot
 %% % TD,E,E_l |- x l1 pat1 ... patn = exp l2 gives {x |-> curry((t1 * ... * tn), u)}, S_c,S_N
 %% % 
-%% % 
-%% % defn
-%% % TD , E , E_l1 |- letbind gives E_l2 , S_c , S_N :: :: check_letbind :: check_letbind_ 
-%% % {{ com Build the environment for a let binding, collecting typeclass and index constraints }}
-%% % by
-%% % 
-%% % %TODO similar type equality issues to above ones
-%% % TD,E,E_l1 |- pat : t gives E_l2
-%% % TD,E,E_l1 |- exp : t gives S_c,S_N
-%% % TD,E |- typ ~> t
-%% % ------------------------------------------------------------ :: val_annot
-%% % TD,E,E_l1 |- pat : typ = exp l gives E_l2,S_c,S_N
-%% % 
+
+defn
+E |- letbind gives I , E_t :: :: check_letbind :: check_letbind_ 
+{{ com Build the environment for a let binding, collecting index constraints }}
+by
+
+<E_t,E_r,E_k> |- pat : t gives E_t1, S_N
+<E_t,E_r,E_k2> |- exp : t gives S_c,S_N
+E_k |- typschn ~> t,E_k2
+------------------------------------------------------------ :: val_annot
+<E_t,E_r,E_k> |- typschm pat = exp l gives I,E_t
+ 
 %% % TD,E,E_l1 |- pat : t gives E_l2
 %% % TD,E,E_l1 |- exp : t gives S_c,S_N
 %% % ------------------------------------------------------------ :: val_noannot
 %% % TD,E,E_l1 |- pat = exp l gives E_l2,S_c,S_N
-%% % 
-%% % :check_funcl:TD,E,E_l1 |- funcl_aux l gives {x|->t},S_c,S_N
-%% % ------------------------------------------------------------ :: fn
-%% % TD,E,E_l1 |- funcl_aux l gives {x|->t},S_c,S_N
-%% % 
-%% % defns
-%% % check_rule :: '' ::=
-%% % 
-%% % defn
-%% % TD , E , E_l |- rule gives { x |-> t } , S_c , S_N :: :: check_rule :: check_rule_
-%% % {{ com Build the environment for an inductive relation clause, collecting typeclass and index constraints }}
-%% % by
-%% % 
-%% % </TD |- ti ok//i/>
-%% % E_l2 = {</yi|->ti//i/>} 
-%% % TD,E,E_l1 u+ E_l2 |- exp' : __bool gives S_c',S_N'
-%% % TD,E,E_l1 u+ E_l2 |- exp1 : u1 gives S_c1,S_N1 .. TD,E,E_l1 u+ E_l2 |- expn : un gives S_cn,S_Nn
-%% % ------------------------------------------------------------ :: rule
-%% % TD,E,E_l1 |- x_l_opt forall </yi li//i/> . exp' ==> x l exp1 .. expn l' gives {x|->curry((u1 * .. * un) , __bool)}, S_c' union S_c1 union .. union S_cn,S_N' union S_N1 union .. union S_Nn
-%% % 
+
 %% % defns
 %% % check_texp_tc :: '' ::=
 %% % 
