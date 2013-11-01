@@ -120,8 +120,8 @@ let star = "*"
 
 /*Terminals with no content*/
 
-%token And As Bits By Case Clause Const Default Dec Effect Effects End Enumerate Else False
-%token Forall Foreach Function_ If_ In IN Inc Let_ Member Nat Order Pure Rec Register
+%token And As Bits By Case Clause Const Default Dec Effect Effects End Enumerate Else Extern
+%token False Forall Foreach Function_ If_ In IN Inc Let_ Member Nat Order Pure Rec Register
 %token Scattered Struct Switch Then True Type TYPE Typedef Undefined Union With Val
 
 /* Avoid shift/reduce conflict - see right_atomic_exp rule */
@@ -863,6 +863,10 @@ val_spec:
     { vloc (VS_val_spec(mk_typschm $2 $3 2 3,$4)) }
   | Val atomic_typ id
     { vloc (VS_val_spec(mk_typschm (mk_typqn ()) $2 2 2,$3)) }
+  | Val Extern typquant atomic_typ id Eq String
+    { vloc (VS_extern_spec (mk_typschm $3 $4 3 4,$5,$7)) }
+  | Val Extern atomic_typ id Eq String
+    { vloc (VS_extern_spec (mk_typschm (mk_typqn ()) $3 3 3,$4, $6)) }
 
 kinded_id:
   | id

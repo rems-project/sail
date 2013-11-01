@@ -32,16 +32,20 @@ val subst : forall 'a. list 'a -> list 'a -> bool
 type x = string (* identifier *)
 type ix = string (* infix identifier *)
 
-type id =  (* Identifier *)
- | Id of x
- | DeIid of x (* remove infix status *)
-
-
 type base_kind =  (* base kind *)
  | BK_type (* kind of types *)
  | BK_nat (* kind of natural number size expressions *)
  | BK_order (* kind of vector order specifications *)
  | BK_effects (* kind of effect sets *)
+
+
+type id =  (* Identifier *)
+ | Id of x
+ | DeIid of x (* remove infix status *)
+
+
+type kind =  (* kinds *)
+ | K_kind of list base_kind
 
 
 type nexp =  (* expression of kind $Nat$, for vector sizes and origins *)
@@ -50,10 +54,6 @@ type nexp =  (* expression of kind $Nat$, for vector sizes and origins *)
  | Nexp_times of nexp * nexp (* product *)
  | Nexp_sum of nexp * nexp (* sum *)
  | Nexp_exp of nexp (* exponential *)
-
-
-type kind =  (* kinds *)
- | K_kind of list base_kind
 
 
 type efct =  (* effect *)
@@ -66,6 +66,11 @@ type efct =  (* effect *)
  | Effect_nondet (* nondeterminism from intra-instruction parallelism *)
 
 
+type kinded_id =  (* optionally kind-annotated identifier *)
+ | KOpt_none of id (* identifier *)
+ | KOpt_kind of kind * id (* kind-annotated variable *)
+
+
 type nexp_constraint =  (* constraint over kind $Nat$ *)
  | NC_fixed of nexp * nexp
  | NC_bounded_ge of nexp * nexp
@@ -73,9 +78,9 @@ type nexp_constraint =  (* constraint over kind $Nat$ *)
  | NC_nat_set_bounded of id * list num
 
 
-type kinded_id =  (* optionally kind-annotated identifier *)
- | KOpt_none of id (* identifier *)
- | KOpt_kind of kind * id (* kind-annotated variable *)
+type effects =  (* effect set, of kind $Effects$ *)
+ | Effects_var of id
+ | Effects_set of list efct (* effect set *)
 
 
 type order =  (* vector order specifications, of kind $Order$ *)
@@ -84,23 +89,9 @@ type order =  (* vector order specifications, of kind $Order$ *)
  | Ord_dec (* decreasing (big-endian) *)
 
 
-type effects =  (* effect set, of kind $Effects$ *)
- | Effects_var of id
- | Effects_set of list efct (* effect set *)
-
-
 type quant_item =  (* Either a kinded identifier or a nexp constraint for a typquant *)
  | QI_id of kinded_id (* An optionally kinded identifier *)
  | QI_const of nexp_constraint (* A constraint for this type *)
-
-
-type ne =  (* internal numeric expressions *)
- | Ne_var of id
- | Ne_const of num
- | Ne_mult of ne * ne
- | Ne_add of list ne
- | Ne_exp of ne
- | Ne_unary of ne
 
 
 type typ =  (* Type expressions, of kind $Type$ *)
@@ -117,11 +108,6 @@ and typ_arg =  (* Type constructor arguments of all kinds *)
  | Typ_arg_effects of effects
 
 
-type typquant =  (* type quantifiers and constraints *)
- | TypQ_tq of list quant_item
- | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
-
-
 type lit =  (* Literal constant *)
  | L_unit (* $() : unit$ *)
  | L_zero (* $bitzero : bit$ *)
@@ -135,14 +121,9 @@ type lit =  (* Literal constant *)
  | L_string of string (* string constant *)
 
 
-type nec =  (* Numeric expression constraints *)
- | Nec_lteq of ne * ne
- | Nec_eq of ne * ne
- | Nec_gteq of ne * ne
-
-
-type typschm =  (* type scheme *)
- | TypSchm_ts of typquant * typ
+type typquant =  (* type quantifiers and constraints *)
+ | TypQ_tq of list quant_item
+ | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
 type pat =  (* Pattern *)
@@ -161,6 +142,10 @@ type pat =  (* Pattern *)
 
 and fpat =  (* Field pattern *)
  | FP_Fpat of id * pat
+
+
+type typschm =  (* type scheme *)
+ | TypSchm_ts of typquant * typ
 
 
 type exp =  (* Expression *)
@@ -209,15 +194,12 @@ and letbind =  (* Let binding *)
  | LB_val_implicit of pat * exp (* value binding, implicit type (pat must be total) *)
 
 
-type index_range =  (* index specification, for bitfields in register types *)
- | BF_single of num (* single index *)
- | BF_range of num * num (* index range *)
- | BF_concat of index_range * index_range (* concatenation of index ranges *)
+type tannot_opt =  (* Optional type annotation for functions *)
+ | Typ_annot_opt_some of typquant * typ
 
 
-type naming_scheme_opt =  (* Optional variable-naming-scheme specification for variables of defined type *)
- | Name_sect_none
- | Name_sect_some of string
+type funcl =  (* Function clause *)
+ | FCL_Funcl of id * pat * exp
 
 
 type effects_opt =  (* Optional effect annotation for functions *)
@@ -230,22 +212,15 @@ type rec_opt =  (* Optional recursive annotation for functions *)
  | Rec_rec (* recursive *)
 
 
-type tannot_opt =  (* Optional type annotation for functions *)
- | Typ_annot_opt_some of typquant * typ
+type naming_scheme_opt =  (* Optional variable-naming-scheme specification for variables of defined type *)
+ | Name_sect_none
+ | Name_sect_some of string
 
 
-type funcl =  (* Function clause *)
- | FCL_Funcl of id * pat * exp
-
-
-type k =  (* Internal kinds *)
- | Ki_typ
- | Ki_nat
- | Ki_ord
- | Ki_efct
- | Ki_val (* Representing values, for use in identifier checks *)
- | Ki_ctor of list k * k
- | Ki_infer (* Representing an unknown kind, inferred by context *)
+type index_range =  (* index specification, for bitfields in register types *)
+ | BF_single of num (* single index *)
+ | BF_range of num * num (* index range *)
+ | BF_concat of index_range * index_range (* concatenation of index ranges *)
 
 
 type default_typing_spec =  (* Default kinding or typing assumption *)
@@ -253,8 +228,13 @@ type default_typing_spec =  (* Default kinding or typing assumption *)
  | DT_typ of typschm * id
 
 
+type fundef =  (* Function definition *)
+ | FD_function of rec_opt * tannot_opt * effects_opt * list funcl
+
+
 type val_spec =  (* Value type specification *)
  | VS_val_spec of typschm * id
+ | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
 
 
 type type_def =  (* Type definition body *)
@@ -263,10 +243,6 @@ type type_def =  (* Type definition body *)
  | TD_variant of id * naming_scheme_opt * typquant * list (typ * id) * bool (* union type definition *)
  | TD_enum of id * naming_scheme_opt * list id * bool (* enumeration type definition *)
  | TD_register of id * nexp * nexp * list (index_range * id) (* register mutable bitfield type definition *)
-
-
-type fundef =  (* Function definition *)
- | FD_function of rec_opt * tannot_opt * effects_opt * list funcl
 
 
 type def =  (* Top-level definition *)

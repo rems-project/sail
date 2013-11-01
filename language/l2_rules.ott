@@ -1,5 +1,326 @@
 grammar
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Machinery for typing rules                                   %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ 
+grammar 
+
+k :: 'Ki_' ::=
+{{ com Internal kinds }}
+   | K_Typ                                             :: :: typ
+   | K_Nat                                             :: :: nat
+   | K_Ord                                             :: :: ord
+   | K_Efct                                            :: :: efct
+   | K_Lam ( k0 .. kn -> k' )                          :: :: ctor
+   | K_infer                                           :: :: infer {{ com Representing an unknown kind, inferred by context }}
+   | K_Abbrev t                                        :: :: abbrev {{ com Not really a kind, but a convenient way of tracking type abbreviations }}
+
+t , u :: 'T_' ::=                                {{ phantom }}
+{{ com Internal types }}
+   | id                                           :: :: var
+   | t1 -> t2 effects tag S_N                     :: :: fn  {{ com [[S_N]] are constraints for the function, [[tag]] holds generation data }}
+   | ( t1 * .... * tn )                           :: :: tup
+   | id t_args                                    :: :: app 
+   | register t_args                              :: :: reg_app
+
+tag :: 'Tag_' ::=                                 {{ phantom }}
+{{ com Data indicating where the identifier arises and thus information necessary in compilation }}
+   | None                                 :: :: empty 
+   | Ctor                                 :: :: ctor {{ com Data constructor from a type union }}
+   | Extern                               :: :: extern {{ com External function, specied only with a val statement }}
+   | Default                              :: :: default {{ com Type has come from default declaration, identifier may not be bound locally }}
+   | _                                    :: :: dontcare 
+
+ne :: 'Ne_' ::=
+ {{ com internal numeric expressions }}
+   | id                                           :: :: var
+   | num                                 :: :: const
+   | ne1 * ne2                           :: :: mult
+   | ne1 + ... + nen                     :: :: add
+   | 2 ** ne				 :: :: exp
+   | ( - ne )                            :: :: unary
+   | bitlength ( bin )                   :: M :: cbin
+     {{ ocaml (asssert false) }}
+     {{ hol ARB }}
+     {{ lem (blength [[bin]]) }}
+   | bitlength ( hex )                   :: M :: chex
+     {{ ocaml (assert false) }}
+     {{ hol ARB }}
+     {{ lem (hlength [[hex]]) }}
+   | length ( pat1 ... patn )            :: M :: cpat
+     {{ ocaml (assert false) }}
+     {{ hol ARB }}
+     {{ lem (Ne_const (List.length [[pat1...patn]])) }}
+   | length ( exp1 ... expn )            :: M :: cexp
+     {{ hol ARB }}
+     {{ ocaml (assert false) }}
+     {{ lem (Ne_const (List.length [[exp1...expn]])) }}
+ 
+ t_arg :: 't_arg_' ::=   {{ phantom }}
+ {{ com Argument to type constructors }}
+ | t :: :: typ
+ | ne :: :: nexp
+ | effects :: :: effect
+ | order :: :: order
+
+ t_args :: '' ::=   {{ phantom }}
+  {{ com Arguments to type constructors }}
+   | t_arg1 ... t_argn                            :: :: T_args
+
+ nec :: 'Nec_' ::=
+   {{ com Numeric expression constraints }}
+   | ne <= ne'            :: :: lteq
+   | ne = ne'            :: :: eq
+   | ne >= ne'           :: :: gteq
+   | id 'IN' { num1 , ... , numn } :: :: in
+
+%% %% embed
+%% %% {{ lem
+%% %% 
+%% %% val t_subst_t : list (tnv * t) -> t -> t 
+%% %% val t_subst_tnv : list (tnv * t) -> tnv -> t
+%% %% val ftv_t : t -> list tnv
+%% %% val ftv_tm : list t -> list tnv
+%% %% val ftv_s : list (p*tnv) -> list tnv
+%% %% val compatible_overlap : list (x*t) -> bool
+%% %% 
+%% %% (*TODO Should this normalize following the implementation? And blength and hlength need a means of implementation*)
+%% %% let normalize n = n
+%% %% 
+%% %% let blength (_,bit) = Ne_const 8
+%% %% let hlength (_,bit) = Ne_const 8
+%% %% 
+%% %% let rec sumation_nes nes = match nes with
+%% %%   | [ a; b] -> Ne_add a b 
+%% %%   | x :: y -> Ne_add x (sumation_nes y)
+%% %% end
+%% %% 
+%% %% }}
+%% %% 
+%% %% embed
+%% %% {{ hol
+%% %% load "fmaptreeTheory";
+%% %% val _ = 
+%% %%   Hol_datatype 
+%% %%     `env_body = <| env_p : x|->p; env_f : x|->f_desc; env_v : x|->v_desc |>`;
+%% %% 
+%% %% val _ = Define `
+%% %%   env_union e1 e2 =
+%% %%     let i1 = item e1 in
+%% %%     let m1 = map e1 in
+%% %%     let i2 = item e2 in
+%% %%     let m2 = map e2 in
+%% %%       FTNode <| env_p:=FUNION i1.env_p i2.env_p; 
+%% %%                 env_f:=FUNION i1.env_f i2.env_f;
+%% %%                 env_v:=FUNION i1.env_v i2.env_v |>
+%% %%              (FUNION m1 m2)`;
+%% %% }}
+%% %% {{ lem
+%% %% type env =
+%% %%   | EnvEmp 
+%% %%   | Env of (map x env) * (map x p) * (map x f_desc) * (map x v_desc)
+%% %% 
+%% %% val env_union : env -> env -> env
+%% %% let env_union e1 e2 =
+%% %%   match (e1,e2) with
+%% %%    | (EnvEmp,e2) -> e2
+%% %%    | (e1,EnvEmp) -> e1
+%% %%    | ((Env Em1 Ep1 Ef1 Ev1),(Env Em2 Ep2 Ef2 Ev2)) ->
+%% %%      Env(union_map Em1 Em2) (union_map Ep1 Ep2) (union_map Ef1 Ef2) (union_map Ev1 Ev2)
+%% %% end
+%% %% 
+%% %% }}
+%% %% 
+
+S_N {{ tex \Sigma^{\textsc{N} } }} :: '' ::= {{ phantom }}
+                                                                    {{ hol nec list }}
+                                                                    {{ lem list nec }}
+    {{ com nexp constraint lists }}
+    | { nec1 , .. ,  necn }                              :: :: Sn_concrete
+      {{ hol [[nec1 .. necn]] }}
+      {{ lem [[nec1 .. necn]] }}
+   | S_N1 u+ .. u+ S_Nn                                                    :: M :: SN_union
+     {{ hol (FOLDR FUNION FEMPTY [[S_N1..S_Nn]]) }}
+     {{ lem (List.fold_right union_map [[S_N1..S_Nn]] Pmap.empty) }}
+     {{ ocaml (assert false) }}
+   | consistent_increase ne1 ne'1 ... nen ne'n                    :: M :: SN_increasing
+     {{ com Generates constraints from  pairs of constraints, where the first of each pair is always larger than the sum of the previous pair }}
+     {{ ocaml (assert false) }}
+     {{ ichl todo }}
+   | consistent_decrease ne1 ne'1 ... nen ne'n                      :: M :: SN_decreasing
+     {{ com Generates constraints from  pairs of constraints, where the first of each pair is always smaller than the difference of the previous pair }}
+     {{ ocaml assert false }}
+     {{ ichl todo }}
+   | resolve S_N                                                :: :: resolution
+ 
+ I :: '' ::=                                                     {{ phantom }}
+  {{ com Information given by type checking an expression }}
+  | < S_N , effects >                                      :: :: I
+  | Ie                                                           :: :: Iempty {{ com Empty constraints, effects }} {{ tex {\ottnt{I}_{\epsilon} } }}
+  | I1 u+ .. u+ In                                               :: :: Iunion {{ com Unions the constraints and effects }}
+
+ E :: '' ::=                                                     {{ phantom }}
+                                                                 {{ hol ((string,env_body) fmaptree) }}
+                                                                 {{ lem env }}
+ {{ com Environments }}
+ | < E_t , E_r , E_k >                                           :: :: E
+  {{ hol arb }}
+  {{ lem (Env [[E_k]] [[E_r]] [[E_t]]) }}
+ | empty                                                       :: M :: E_empty
+   {{ hol arb }}
+   {{ lem EnvEmp }}
+   {{ ocaml assert false }}
+ | E u+ E'                                                      :: :: E_union
+ 
+ kinf :: 'kinf_' ::=
+   {{ com Whether a kind is default or from a local binding }}
+   | k                                        :: :: k
+   | k default                                :: :: def
+
+ E_k {{ tex \ottnt{E}^{\textsc{k} } }} :: 'E_k_' ::=             {{ phantom }}
+                                                                 {{ hol (id-> k) }}
+                                                                 {{ lem map id k }}
+   {{ com Kind environments }}
+   | { id1 |-> kinf1 , .. , idn |-> kinfn }    :: :: concrete
+     {{ hol (FOLDR (\(k1,k2) E. E |+ (k1,k2)) FEMPTY [[id1 kinf1 .. idn kinfn]]) }}
+     {{ lem (List.fold_right (fun (x,v) m -> Pmap.add x v m) [[id1 kinf1 .. idn kinfn]] Pmap.empty) }} 
+   | E_k1 u+ .. u+ E_kn                                          :: M :: union
+     {{ com In a unioning kinf, {k default} u {k} results in {k} (i.e. the default is locally forgotten) }} 
+     {{ hol (FOLDR FUNION FEMPTY [[E_k1..E_kn]]) }}
+     {{ lem (List.fold_right union_map [[E_k1..E_kn]] Pmap.empty) }}
+     {{ ocaml (assert false) }}
+   | E_k u- E_k1 .. E_kn                                            :: M :: multi_set_minus
+     {{ hol arb }} {{ lem arb }} {{ ocaml assert false }}
+
+ 
+ tinf :: 'tinf_' ::=                                                 
+    {{ com Type variables, type, and constraints, bound to an identifier }}
+    | t                                                 :: :: typ
+    | E_k , S_N , tag , t         :: :: quant_typ                                                                 
+
+ E_t {{ tex {\ottnt{E}^{\textsc{t} } } }} :: 'E_t_' ::=             {{ phantom }}
+                                                                 {{ hol (id |-> tinf) }}
+                                                                 {{ lem map x f_desc }}
+   {{ com Type environments }}
+   | { id1 |-> tinf1 , .. , idn |-> tinfn }                    :: :: base
+     {{ hol (FOLDR (\x E. E |+ x) FEMPTY [[id1 tinf1 .. idn tinfn]]) }}
+     {{ lem (List.fold_right (fun (x,f) m -> Pmap.add x f m) [[id1 tinf1 .. idn tinfn]] Pmap.empty) }} 
+   | ( E_t1 u+ .... u+ E_tn )                                         :: M :: union
+     {{ hol (FOLDR FUNION FEMPTY [[E_t1....E_tn]]) }}
+     {{ lem (List.fold_right union_map [[E_t1....E_tn]] Pmap.empty) }}
+     {{ ocaml (assert false) }}
+   | u+ E_t1 .. E_tn                                            :: M :: multi_union
+     {{ hol arb }}
+     {{ lem arb }}
+     {{ ocaml assert false }}
+   | E_t u- E_t1 .. E_tn                                            :: M :: multi_set_minus
+     {{ hol arb }} {{ lem arb }} {{ ocaml assert false }}
+   | ( E_t1 inter .... inter E_tn )                                  :: M :: intersect
+     {{ hol arb }}
+     {{ lem syntax error }}
+     {{ ocaml (assert false) }}
+   | inter E_t1 .. E_tn                                            :: M :: multi_inter
+     {{ hol arb }}
+     {{ lem arb }}
+     {{ ocaml assert false }}
+
+
+ field_typs :: 'FT_' ::=     {{ phantom }}
+ {{ com Record fields }}
+ | id1 : t1 , .. , idn : tn :: :: fields
+
+ E_r {{ tex \ottnt{E}^{\textsc{r} } }} :: 'E_r_' ::=             {{ phantom }}
+                                                                 {{ hol (id |-> t) }}
+                                                                 {{ lem map x f_desc }}
+   {{ com Record environments }}
+   | { { field_typs1 } |-> tinf1 , .. , { field_typsn } |-> tinfn }                    :: :: concrete
+     {{ hol (FOLDR (\x E. E |+ x) FEMPTY) }}
+     {{ lem (List.fold_right (fun (x,f) m -> Pmap.add x f m)  Pmap.empty) }} 
+   | E_r1 u+ .. u+ E_rn                                          :: M :: union
+     {{ hol (FOLDR FUNION FEMPTY [[E_r1..E_rn]]) }}
+     {{ lem (List.fold_right union_map [[E_r1..E_rn]] Pmap.empty) }}
+     {{ ocaml (assert false) }}
+
+ts :: ts_ ::=                                     {{ phantom }}
+  | t1 , .. , tn :: :: lst 
+
+formula :: formula_ ::=
+  | judgement                                                   :: :: judgement
+
+  | formula1 .. formulan                                        :: :: dots
+
+   | E_k ( id ) gives kinf                                      :: :: lookup_k
+     {{ com Kind lookup }}
+     {{ hol (FLOOKUP [[E_k]] [[id]] = SOME [[k]]) }}
+     {{ lem Pmap.find [[id]] [[E_k]] = [[k]] }} 
+
+   | E_t ( id ) gives tinf                                      :: :: lookup_t
+     {{ com Type lookup }}
+     {{ hol (FLOOKUP [[E_t]] [[id]] = SOME [[t]]) }}
+     {{ lem Pmap.find [[id]] [[E_t]] = [[t]] }} 
+
+  | E_k ( id ) <-| k						:: :: update_k
+     {{ com Update the kind associated with id to k }}        
+
+  | E_r ( id0 .. idn ) gives t , ts                      :: :: lookup_r
+     {{ com Record lookup }}
+
+  | E_r ( t ) gives id0 : t0 .. idn : tn                 :: :: lookup_rt
+    {{ com Record looup by type }}
+
+   | dom ( E_t1 ) inter dom ( E_t2 ) = emptyset                  :: :: E_t_disjoint
+     {{ hol (DISJOINT (FDOM [[E_t1]]) (FDOM [[E_t2]])) }}
+     {{ lem disjoint (Pmap.domain [[E_t1]]) (Pmap.domain [[E_t2]])  }} 
+   
+   | dom ( E_k1 ) inter dom ( E_k2 ) = emptyset                  :: :: E_k_disjoint
+     {{ hol (DISJOINT (FDOM [[E_f1]]) (FDOM [[E_f2]])) }}
+     {{ lem disjoint (Pmap.domain [[E_f1]]) (Pmap.domain [[E_f2]]) }} 
+
+   | disjoint doms ( E_t1 , .... , E_tn )                        :: :: E_x_disjoint_many
+    {{ hol (FOLDR (\E b. case b of NONE => NONE | SOME s => if DISJOINT (FDOM
+       E) s then SOME (FDOM E UNION s) else NONE) (SOME {}) [[E_t1....E_tn]] <> NONE) }}
+     {{ lem disjoint_all (List.map Pmap.domain [[E_t1 .... E_tn]]) }}
+     {{ com Pairwise disjoint domains }}
+
+   | id NOTIN dom ( E_k )                                         :: :: notin_dom_k
+     {{ hol ([[id]] NOTIN FDOM [[E_k]]) }}
+     {{ lem Pervasives.not (Pmap.mem [[id]] [[E_k]]) }} 
+
+   | id NOTIN dom ( E_t )                                         :: :: notin_dom_t
+     {{ hol ([[id]] NOTIN FDOM [[E_t]]) }}
+     {{ lem Pervasives.not (Pmap.mem [[id]] [[E_t]]) }} 
+
+   | id0 : t0 .. idn : tn SUBSET id'0 : t'0 .. id'i : t'i       :: :: subsetFields
+
+   | num1 lt ... lt numn                                         :: :: increasing
+
+   | num1 gt ... gt numn                                         :: :: decreasing
+
+   | E_k1 = E_k2                                                 :: :: E_k_eqn
+     {{ ichl ([[E_k1]] = [[E_k2]]) }}
+
+   | E_t1 = E_t2                                                 :: :: E_t_eqn
+     {{ ichl ([[E_t1]] = [[E_t2]]) }}
+
+   | E_r1 = E_r2                                                :: :: E_r_eqn
+     {{ ichl ([[E_r1]] = [[E_r2]]) }}
+ 
+   | E1 = E2                                                     :: :: E_eqn
+     {{ ichl ([[E1]] = [[E2]]) }}
+
+   | S_N1 = S_N2                                                :: :: S_N_eqn
+     {{ ichl ([[S_N1]] = [[S_N2]]) }}
+ 
+   | I1 = I2                                                     :: :: I_eqn
+     {{ ichl ([[I1]] = [[I2]]) }}
+
+   | t1 = t2                                                     :: :: t_eq
+     {{ ichl ([[t1]] = [[t2]]) }}
+   | ne1 = ne2							:: :: ne_eq
+     {{ ichl ([[ne1]] = [[ne2]]) }}
+
+
 defns
 check_t :: '' ::=
 
@@ -16,6 +337,11 @@ E_k |-t t ok :: :: check_t :: check_t_
  E_k(id) <-| K_Typ
  ------------------------------------------------------------ :: varInfer
  E_k |-t id ok
+
+ E_k(id) gives K_Abbrev t
+ E_k u- {id |-> K_Abbrev t} |-t t ok
+ ------------------------------------------------------------ :: varAbbrev
+ E_k |-t id ok 
 
  E_k |-t t1 ok
  E_k |-t t2 ok
@@ -127,47 +453,96 @@ defn
 E_k |- t1 = t2 :: :: teq :: teq_ 
 {{ com Type equality }}
 by
-%% % 
-%% % TD |- t ok
-%% % ------------------------------------------------------------ :: refl
-%% % TD |- t = t
-%% % 
-%% % TD |- t2 = t1
-%% % ------------------------------------------------------------ :: sym
-%% % TD |- t1 = t2
-%% % 
-%% % TD |- t1 = t2
-%% % TD |- t2 = t3
-%% % ------------------------------------------------------------ :: trans
-%% % TD |- t1 = t3
-%% % 
-%% % TD |- t1 = t3
-%% % TD |- t2 = t4
-%% % ------------------------------------------------------------ :: arrow
-%% % TD |- t1 -> t2 = t3 -> t4
-%% % 
-%% % TD |- t1 = u1 .... TD |- tn = un
-%% % ------------------------------------------------------------ :: tup
-%% % TD |- t1*....*tn = u1*....*un
-%% % 
-%% % TD(p) gives a1..an
-%% % TD |- t1 = u1 .. TD |- tn = un
-%% % ------------------------------------------------------------ :: app
-%% % TD |- p  t1 .. tn = p u1 .. un
-%% % 
-%% % TD(p) gives a1..an . u 
-%% % ------------------------------------------------------------ :: expand
-%% % TD |- p t1 .. tn = {a1|->t1..an|->tn}(u)
-%% % 
-%% % ne = normalize (ne')
-%% % ----------------------------------------------------------  :: nexp
-%% % TD |- ne = ne' 
-%% % 
-%% % 
+
+E_k |-t t ok
+------------------------------------------------------------ :: refl
+E_k |- t = t
+ 
+E_k |- t2 = t1
+------------------------------------------------------------ :: sym
+E_k |- t1 = t2
+ 
+E_k |- t1 = t2
+E_k |- t2 = t3
+------------------------------------------------------------ :: trans
+E_k |- t1 = t3
+
+E_k(id) gives K_Abbrev u
+E_k |- u = t
+------------------------------------------------------------ :: abbrev
+E_k |- id = t 
+ 
+E_k |- t1 = t3
+E_k |- t2 = t4
+------------------------------------------------------------ :: arrow
+E_k |- t1 -> t2 effects tag = t3 -> t4 effects tag
+ 
+E_k |- t1 = u1 .... E_k |- tn = un
+------------------------------------------------------------ :: tup
+E_k |- (t1*....*tn) = (u1*....*un)
+
+E_k(id) gives K_Lam (k1 .. kn -> K_Typ)
+E_k,k1 |- t_arg1 = t_arg'1 .. E_k,kn |- t_argn = t_arg'n
+------------------------------------------------------------ :: app
+E_k |- id t_arg1 .. t_argn = id t_arg'1 .. t_arg'n
+
+defn
+E_k , k |- t_arg = t_arg' :: :: targeq :: targeq_ by
+
+defns
+convert_kind :: '' ::=
+
+defn
+E_k |- kind ~> k :: :: convert_kind :: convert_kind_ by
 
 defns
 convert_typ :: '' ::=
- 
+
+defn 
+E_k |- quant_item ~> E_k1 , S_N :: :: convert_quants :: convert_quants_
+{{ com Convert source quantifiers to kind environments and constraints }}
+by
+
+E_k |- kind ~> k
+----------------------------------------------------------- :: kind
+E_k |- kind id ~> {id |-> k}, {}
+
+E_k(id) gives k
+----------------------------------------------------------- :: nokind
+E_k |- id ~> {id |-> k},{}
+
+|- nexp1 ~> ne1
+|- nexp2 ~> ne2
+----------------------------------------------------------- :: eq
+E_k |- nexp1 = nexp2 ~> {}, {ne1 = ne2}
+
+|- nexp1 ~> ne1
+|- nexp2 ~> ne2
+----------------------------------------------------------- :: gteq
+E_k |- nexp1 >= nexp2 ~> {}, {ne1 >= ne2}
+
+|- nexp1 ~> ne1
+|- nexp2 ~> ne2
+----------------------------------------------------------- :: lteq
+E_k |- nexp1 <= nexp2 ~> {}, {ne1 <= ne2}
+
+----------------------------------------------------------- :: in
+E_k |- id IN {num1 , ... , numn} ~> {}, {id IN {num1 , ..., numn}}
+
+defn 
+E_k |- typschm ~> t , E_k2 , S_N :: :: convert_typschm :: convert_typschm_
+{{ com Convert source types with typeschemes to internal types and kind environments }}
+by
+
+E_k |- typ ~> t
+----------------------------------------------------------- :: noquant
+E_k |- typ ~> t,E_k,{}
+
+E_k |- quant_item1 ~> E_k1, S_N1 ... E_k |- quant_itemn ~> E_kn, S_Nn
+E_k u+ E_k1 u+ ... u+ E_kn |- typ ~> t
+----------------------------------------------------------- :: quant
+E_k |- forall quant_item1 , ... , quant_itemn . typ ~> t, E_k1 u+ ... u+ E_kn, S_N1 u+ ... u+ S_Nn
+
 defn
 E_k |- typ ~> t :: :: convert_typ :: convert_typ_ 
 {{ com Convert source types to internal types }}
@@ -207,22 +582,25 @@ defn
 {{ com Convert and normalize numeric expressions }}
 by
  
-%% % ------------------------------------------------------------ :: var
-%% % |- N l ~> N
-%% % 
-%% % ------------------------------------------------------------ :: num
-%% % |- num l ~> nat
-%% % 
-%% % |- nexp1 ~> ne1
-%% % |- nexp2 ~> ne2
-%% % ------------------------------------------------------------ :: mult
-%% % |- nexp1 * nexp2 l ~> ne1 * ne2
-%% % 
-%% % |- nexp1 ~> ne1
-%% % |- nexp2 ~> ne2
-%% % ----------------------------------------------------------- :: add
-%% % |- nexp1 + nexp2 l ~> :Ne_add: ne1 + ne2
-%% % 
+------------------------------------------------------------ :: var
+|- id ~> id
+
+------------------------------------------------------------ :: num
+|- num ~> num
+
+|- nexp1 ~> ne1
+|- nexp2 ~> ne2
+------------------------------------------------------------ :: mult
+|- nexp1 * nexp2 ~> ne1 * ne2
+
+|- nexp1 ~> ne1
+|- nexp2 ~> ne2
+----------------------------------------------------------- :: add
+|- nexp1 + nexp2 ~> ne1 + ne2
+
+|- nexp ~> ne
+------------------------------------------------------------ :: exp
+|- 2 ** nexp ~> 2 ** ne
 
 defn 
 E_k |- t :> t' , S_N :: :: coerce_typ :: coerce_typ_ by
@@ -233,13 +611,13 @@ E_k |- t :> u, {}
 
 E_k |- t1 :> u1, S_N1 .. E_k |- tn :> un, S_Nn
 -------------------------------------- :: tuple
-E_k |- (t1 * .. * tn) :> (u1 * .. * un), u+ S_N1 .. S_Nn
+E_k |- (t1 * .. * tn) :> (u1 * .. * un), S_N1 u+ .. u+ S_Nn
 
 -------------------------------------- :: enum
 E_k |- enum ne1 ne2 order :> enum ne3 ne4 order, {ne3 <= ne1, ne3+ne4 >= ne1 + ne2}
 
 -------------------------------------- :: toEnum
-E_k |- vector ne1 ne2 order bit :> enum ne3 ne4 order, { ne3 = zero, ne4 = 2 ^^ ne2}
+E_k |- vector ne1 ne2 order :t_arg_typ: bit :> enum ne3 ne4 order, { ne3 = zero, ne4 = 2** ne2}
 
 %% Will also need environment of enumerations to converte between
 
@@ -303,6 +681,11 @@ id NOTIN dom(E_t1)
 ------------------------------------------------------------ :: as
 <E_t,E_r,E_k> |- (pat as id) : t gives (E_t1 u+ {id|->t}),S_N
 
+<E_t,E_r,E_k> |- pat : t gives E_t1,S_N
+E_t(id) gives {}, {}, Default, t
+------------------------------------------------------------ :: as_default
+<E_t,E_r,E_k> |- (pat as id) : t gives (E_t1 u+ {id|->t}),S_N
+
 E_k |- typ ~> t
 <E_t,E_r,E_k> |- pat : t gives E_t1,S_N
 ------------------------------------------------------------ :: typ
@@ -315,7 +698,11 @@ disjoint doms(E_t1,..,E_tn)
 <E_t,E_r,E_k> |- id pat1 .. patn : id t_args gives u+ E_t1 .. E_tn, S_N1 u+ .. u+ S_Nn
 
 E_k |-t t ok
- ------------------------------------------------------------ :: var
+------------------------------------------------------------ :: var
+<E_t,E_r,E_k> |- :P_id: id : t gives (E_t u+ {id|->t}),{}
+
+E_t(id) gives {},{},Default,t
+------------------------------------------------------------ :: var_default
 <E_t,E_r,E_k> |- :P_id: id : t gives (E_t u+ {id|->t}),{}
 
 E_r(</idi//i/>) gives id t_args, (</ti//i/>)
@@ -374,30 +761,33 @@ E |- exp : t gives I , E_t :: :: check_exp :: check_exp_
 {{ com Typing expressions, collecting nexp constraints, effects, and new bindings }}
 by
 
-%% TODO::: if t is a reg, need to distinguish here between reg and ref cell access, and add to effect if reg
+E |- exp : u gives <S_N,effects>,E_t1
+E_k |- u :> t, S_N2
+------------------------------------------------------------ :: coerce
+<E_t,E_r,E_k> |- exp : t gives <S_N u+ S_N2,effects>,E_t1
+
+%% TODO::: if t is a reg, need to distinguish here between reg and ref cell access, and add to effect if reg, need to look at possible type variables introduced here and do substitutions
  
 E_t(id) gives t
 ------------------------------------------------------------ :: var
 <E_t,E_r,E_k> |- id : t gives Ie,E_t
 
+% Need to take into account possible type variables here
 E_t(id) gives t' -> t effect {} Ctor {} 
 <E_t,E_r,E_k> |- exp : t' gives I,E_t
 ------------------------------------------------------------ :: ctor
 <E_t,E_r,E_k> |- id exp : t gives I,E_t
 
-%We need overloading here
+% Need to take into account possible type variables on result of id
+E_t(id) gives t' -> t effects tag S_N
+<E_t,E_r,E_k> |- exp : t' gives I,E_t
+------------------------------------------------------------ :: app
+<E_t,E_r,E_k> |- id exp : t gives I u+ <S_N,effects>, E_t
  
 E_t(id) gives t' -> t effects tag S_N
-<E_t,E_r,E_k> |- exp : u gives I,E_t
-E_k |- u :> t',S_N2
------------------------------------------------------------- :: app
-<E_t,E_r,E_k> |- id exp : t gives I u+ <S_N u+ S_N2 ,effects>, E_t
- 
-E_t(id) gives (t1 * t2) -> t effects tag S_N
-<E_t,E_r,E_k> |- exp1 : t1 gives I2,E_t
-<E_t,E_r,E_k> |- exp2 : t2 gives I3,E_t
+<E_t,E_r,E_k> |- (exp1,exp2) : t' gives I,E_t
 ------------------------------------------------------------ :: infix_app
-<E_t,E_r,E_k> |- :E_app_infix: exp1 id exp2 : t gives I2 u+ I3 u+ <S_N, effects>, E_t
+<E_t,E_r,E_k> |- :E_app_infix: exp1 id exp2 : t gives I u+ <S_N, effects>, E_t
 
 E_r(</idi//i/>) gives id t_args, </ti//i/>
 </ <E_t,E_r,E_k> |- expi : ti gives Ii,E_t//i/>
@@ -464,16 +854,14 @@ E_r (id t_args) gives </idi : ti//i/> id : t </id'j : t'j//j/>
 ------------------------------------------------------------ :: case
 <E_t,E_r,E_k> |- switch exp { </case pati -> expi//i/> }: u gives I u+ </Ii u+ <S_Ni,pure>//i/>, inter </E_t'i//i/> u- </E_ti//i/>
 
-<E_t,E_r,E_k> |- exp : t gives I,E_t
-E_k |- typ ~> u
-|- u :> t, S_N
+E |- exp : t gives I,E_t
 ------------------------------------------------------------ :: typed
-<E_t,E_r,E_k> |- (typ) exp : t gives I u+ <S_N,pure>,E_t
+<E_t,E_r,E_k> |- (typ) exp : t gives I,E_t
 
-<E_t,E_r,E_k> |- letbind gives E_t2, I1
-<(E_t u+ E_t2),E_r,E_k> |- exp : t gives I2
+<E_t,E_r,E_k> |- letbind gives E_t1, S_N, effects, {}
+<(E_t u+ E_t1),E_r,E_k> |- exp : t gives I2, E_t2
 ------------------------------------------------------------ :: let
-<E_t,E_r,E_k> |- let letbind in exp : t gives I1 u+ I2, E_t
+<E_t,E_r,E_k> |- letbind in exp : t gives <S_N,effects> u+ I2, E_t
  
 E |- exp1 : t1 gives I1,E_t .... E |- expn : tn gives In,E_t
 ------------------------------------------------------------ :: tup
@@ -505,6 +893,14 @@ E |- exp1 :: exp2 : list t gives I1 u+ I2,E_t
 ------------------------------------------------------------ :: lit
 <E_t,E_r,E_k> |- lit : t gives Ie,E_t
 
+<E_t,E_r,E_k> |- exp : t gives I, E_t1
+------------------------------------------------------------ :: blockbase
+<E_t,E_r,E_k> |- { exp } : t gives I, E_t
+
+<E_t,E_r,E_k> |- exp : u gives I1, E_t1
+<(E_t u+ E_t1),E_r,E_k> |- { </expi//i/> } : t gives I2, E_t2
+------------------------------------------------------------ :: blockrec
+<E_t,E_r,E_k> |- { exp ; </expi//i/> } : t gives I1 u+ I2, E_t
 
 %% % defn
 %% % TD , E , E_l |- funcl gives { x |-> t } , S_c , S_N :: :: check_funcl :: check_funcl_
@@ -526,301 +922,139 @@ E |- exp1 :: exp2 : list t gives I1 u+ I2,E_t
 %% % 
 
 defn
-E |- letbind gives I , E_t :: :: check_letbind :: check_letbind_ 
+E |- letbind gives E_t , S_N , effects , E_k :: :: check_letbind :: check_letbind_ 
 {{ com Build the environment for a let binding, collecting index constraints }}
 by
 
-<E_t,E_r,E_k> |- pat : t gives E_t1, S_N
-<E_t,E_r,E_k2> |- exp : t gives S_c,S_N
-E_k |- typschn ~> t,E_k2
+<E_t,E_r,E_k u+ E_k2> |- pat : t gives E_t1, S_N1
+<E_t,E_r,E_k u+ E_k2> |- exp : t gives <S_N2,effects>,E_t2
+E_k |- typschm ~> t,E_k2,S_N
 ------------------------------------------------------------ :: val_annot
-<E_t,E_r,E_k> |- typschm pat = exp l gives I,E_t
+<E_t,E_r,E_k> |- let typschm pat = exp gives E_t1, S_N u+ S_N1 u+ S_N2, effects, E_k2
  
-%% % TD,E,E_l1 |- pat : t gives E_l2
-%% % TD,E,E_l1 |- exp : t gives S_c,S_N
-%% % ------------------------------------------------------------ :: val_noannot
-%% % TD,E,E_l1 |- pat = exp l gives E_l2,S_c,S_N
+<E_t,E_r,E_k> |- pat : t gives E_t1,S_N1
+<(E_t u+ E_t1),E_r,E_k> |- exp : t gives <S_N2,effects>,E_t2
+------------------------------------------------------------ :: val_noannot
+<E_t,E_r,E_k> |- let pat = exp gives E_t1, S_N1 u+ S_N2, effects,{}
 
-%% % defns
-%% % check_texp_tc :: '' ::=
-%% % 
-%% % defn
-%% % xs , TD1 , E |- tc td gives TD2 , E_p :: :: check_texp_tc :: check_texp_tc_
-%% % {{ com Extract the type constructor information }}
-%% % by
-%% % 
-%% % tnvars ~> tnvs
-%% % TD,E |- typ ~> t
-%% % duplicates(tnvs) = emptyset
-%% % FV(t) SUBSET tnvs
-%% % </yi.//i/>x NOTIN dom(TD)
-%% % ------------------------------------------------------------ :: abbrev
-%% % </yi//i/>,TD,E |- tc x l tnvars = typ gives {</yi.//i/>x|->tnvs.t},{x|-></yi.//i/>x}
-%% % 
-%% % tnvars ~> tnvs
-%% % duplicates(tnvs) = emptyset
-%% % </yi.//i/>x NOTIN dom(TD)
-%% % ------------------------------------------------------------ :: abstract
-%% % </yi//i/>,TD,E1 |- tc x l tnvars gives {</yi.//i/>x|->tnvs},{x|-></yi.//i/>x}
-%% % 
-%% % tnvars ~> tnvs
-%% % duplicates(tnvs) = emptyset
-%% % </yi.//i/>x NOTIN dom(TD)
-%% % ------------------------------------------------------------ :: rec
-%% % </yi//i/>,TD1,E |- tc x l tnvars = <| x_l1 : typ1 ; ... ; x_lj : typj semi_opt |> gives {</yi.//i/>x|->tnvs},{x|-></yi.//i/>x}
-%% % 
-%% % tnvars ~> tnvs
-%% % duplicates(tnvs) = emptyset
-%% % </yi.//i/>x NOTIN dom(TD)
-%% % ------------------------------------------------------------ :: var
-%% % </yi//i/>,TD1,E |- tc x l tnvars = bar_opt ctor_def1 | ... | ctor_defj gives {</yi.//i/>x|->tnvs},{x|-></yi.//i/>x}
-%% % 
-%% % defns
-%% % check_texps_tc :: '' ::=
-%% % 
-%% % defn
-%% % xs , TD1 , E |- tc td1 .. tdi gives TD2 , E_p :: :: check_texps_tc :: check_texps_tc_
-%% % {{ com Extract the type constructor information }}
-%% % by
-%% % 
-%% % ------------------------------------------------------------ :: empty
-%% % xs,TD,E |- tc gives {},{}
-%% % 
-%% % :check_texp_tc: xs,TD1,E |- tc td gives TD2,E_p2
-%% % xs,TD1 u+ TD2,E u+ <{},E_p2,{},{}> |- tc </tdi//i/> gives TD3,E_p3
-%% % dom(E_p2) inter dom(E_p3) = emptyset
-%% % ------------------------------------------------------------ :: abbrev
-%% % xs,TD1,E |- tc td </tdi//i/> gives TD2 u+ TD3,E_p2 u+ E_p3
-%% % 
-%% % defns
-%% % check_texp :: '' ::=
-%% % 
-%% % defn
-%% % TD , E |- tnvs p = texp gives < E_f , E_x > :: :: check_texp :: check_texp_ 
-%% % {{ com Check a type definition, with its path already resolved }}
-%% % by
-%% % 
-%% % ------------------------------------------------------------ :: abbrev
-%% % TD,E |- tnvs p = typ gives <{},{}>
-%% % 
-%% % </TD,E |- typi ~> ti//i/>
-%% % names = {</xi//i/>}
-%% % duplicates(</xi//i/>) = emptyset
-%% % </FV(ti) SUBSET tnvs//i/>
-%% % E_f = {</xi|-> <forall tnvs. p -> ti, (xi of names)>//i/>}
-%% % ------------------------------------------------------------ :: rec
-%% % TD,E |- tnvs p = <| </x_li:typi//i/> semi_opt |> gives <E_f,{}>
-%% % 
-%% % </TD,E |- typsi ~> t_multii//i/>
-%% % names = {</xi//i/>}
-%% % duplicates(</xi//i/>) = emptyset
-%% % </FV(t_multii) SUBSET tnvs//i/>
-%% % E_x = {</xi|-><forall tnvs. t_multii -> p, (xi of names)>//i/>}
-%% % ------------------------------------------------------------ :: var
-%% % TD,E |- tnvs p = bar_opt </x_li of typsi//i/> gives <{},E_x>
-%% % 
-%% % defns
-%% % check_texps :: '' ::=
-%% % 
-%% % defn
-%% % xs , TD , E |- td1 .. tdn gives < E_f , E_x > :: :: check_texps :: check_texps_ by
-%% % 
-%% % ------------------------------------------------------------ :: empty
-%% % </yi//i/>,TD,E |- gives <{},{}>
-%% % 
-%% % tnvars ~> tnvs
-%% % TD,E1 |- tnvs </yi.//i/>x = texp gives <E_f1,E_x1>
-%% % </yi//i/>,TD,E |- </tdj//j/> gives <E_f2,E_x2>
-%% % dom(E_x1) inter dom(E_x2) = emptyset
-%% % dom(E_f1) inter dom(E_f2) = emptyset
-%% % ------------------------------------------------------------ :: cons_concrete
-%% % </yi//i/>,TD,E |- x l tnvars = texp </tdj//j/> gives <E_f1 u+ E_f2, E_x1 u+ E_x2>
-%% % 
-%% % </yi//i/>,TD,E |- </tdj//j/> gives <E_f,E_x>
-%% % ------------------------------------------------------------ :: cons_abstract
-%% % </yi//i/>,TD,E |- x l tnvars </tdj//j/> gives <E_f,E_x>
-%% % 
-%% % defns
-%% % convert_class :: '' ::=
-%% % 
-%% % defn
-%% % TC , E |- id ~> p :: :: convert_class :: convert_class_
-%% % {{ com Lookup a type class }}
-%% % by
-%% % 
-%% % E(id) gives p
-%% % TC(p) gives xs
-%% % ------------------------------------------------------------ :: all
-%% % TC,E |- id ~> p
-%% % 
-%% % defns
-%% % solve_class_constraint :: '' ::=
-%% % 
-%% % defn
-%% % I |- ( p t ) 'IN' semC :: :: solve_class_constraint :: solve_class_constraint_
-%% % {{ com Solve class constraint }}
-%% % by
-%% % 
-%% % ------------------------------------------------------------ :: immediate
-%% % I |- (p a) IN (p1 tnv1) .. (pi tnvi) (p a) (p'1 tnv'1) .. (p'j tnv'j)
-%% % 
-%% % (p1 tnv1)..(pn tnvn)=>(p t) IN I 
-%% % I |- (p1 t_subst(tnv1)) IN semC .. I |- (pn t_subst(tnvn)) IN semC
-%% % ------------------------------------------------------------ :: chain
-%% % I |- (p t_subst(t)) IN semC
-%% % 
-%% % defns
-%% % solve_class_constraints :: '' ::=
-%% % 
-%% % defn
-%% % I |- S_c gives semC :: :: solve_class_constraints :: solve_class_constraints_
-%% % {{ com Solve class constraints }}
-%% % by
-%% % 
-%% % I |- (p1 t1) IN semC ..  I |- (pn tn) IN semC
-%% % ------------------------------------------------------------ :: all
-%% % I |- {(p1 t1), .., (pn tn)} gives semC
-%% % 
-%% % defns
-%% % check_val_def :: '' ::=
-%% % 
-%% % defn
-%% % TD , I , E |- val_def gives E_x :: :: check_val_def :: check_val_def_
-%% % {{ com Check a value definition }}
-%% % by
-%% % 
-%% % TD,E,{} |- letbind gives {</xi|->ti//i/>},S_c,S_N
-%% % %TODO, check S_N constraints
-%% % I |- S_c gives semC
-%% % </FV(ti) SUBSET tnvs//i/>
-%% % FV(semC) SUBSET tnvs
-%% % ------------------------------------------------------------ :: val
-%% % TD,I,E1 |- let targets_opt letbind gives {</xi |-> <forall tnvs. semC => ti, let>//i/>}
-%% % 
-%% % </TD,E,E_l |- funcli gives {xi|->ti},S_ci,S_Ni//i/>
-%% % I |- S_c gives semC
-%% % </FV(ti) SUBSET tnvs//i/>
-%% % FV(semC) SUBSET tnvs
-%% % compatible overlap(</xi|->ti//i/>)
-%% % E_l = {</xi|->ti//i/>}
-%% % ------------------------------------------------------------ :: recfun
-%% % TD,I,E |- let rec targets_opt </funcli//i/> gives {</xi|-><forall tnvs. semC => ti,let>//i/>}
-%% % 
-%% % defns
-%% % check_t_instance :: '' ::=
-%% % 
-%% % defn
-%% % 
-%% % TD , ( a1 , .. , an ) |- t instance :: :: check_t_instance :: check_t_instance_
-%% % {{ com Check that $\ottnt{t}$ be a typeclass instance }}
-%% % by
-%% % 
-%% % ------------------------------------------------------------ :: var
-%% % TD , (a) |- a instance
-%% % 
-%% % ------------------------------------------------------------ :: tup 
-%% % TD , (a1, ...., an) |- a1 * .... * an instance
-%% % 
-%% % ------------------------------------------------------------ :: fn
-%% % TD , (a1, a2) |- a1 -> an instance
-%% % 
-%% % TD(p) gives a'1..a'n
-%% % ------------------------------------------------------------ :: tc
-%% % TD , (a1, .., an) |- p a1 .. an instance
-%% % 
-%% % defns
-%% % check_defs :: '' ::=
-%% % 
-%% % defn
-%% % 
-%% % </ zj // j /> , D1 , E1 |- def gives D2 , E2 :: :: check_def :: check_def_ 
-%% % {{ com Check a definition }}
-%% % by
-%% % 
-%% % 
-%% % </zj//j/>,TD1,E |- tc </tdi//i/> gives TD2,E_p
-%% % </zj//j/>,TD1 u+ TD2,E u+ <{},E_p,{},{}> |- </tdi//i/> gives <E_f,E_x>
-%% % ------------------------------------------------------------ :: type 
-%% % </zj//j/>,<TD1,TC,I>,E |- type </tdi//i/> l gives <TD2,{},{}>,<{},E_p,E_f,E_x>
-%% % 
-%% % TD,I,E |- val_def gives E_x
-%% % ------------------------------------------------------------ :: val_def
-%% % </zj//j/>,<TD,TC,I>,E |- val_def l gives empty,<{},{},{},E_x>
-%% % 
-%% % </TD,E1,E_l |- rulei gives {xi|->ti},S_ci,S_Ni//i/>
-%% % %TODO Check S_N constraints
-%% % I |- </S_ci//i/> gives semC
-%% % </FV(ti) SUBSET tnvs//i/>
-%% % FV(semC) SUBSET tnvs
-%% % compatible overlap(</xi|->ti//i/>)
-%% % E_l = {</xi|->ti//i/>}
-%% % E2 = <{},{},{},{</xi |-><forall tnvs. semC => ti,let>//i/>}>
-%% % ------------------------------------------------------------ :: indreln
-%% % </zj//j/>,<TD,TC,I>,E1 |- indreln targets_opt </rulei//i/> l gives empty,E2
-%% % 
-%% % </zj//j/> x,D1,E1 |- defs gives D2,E2
-%% % ------------------------------------------------------------ :: module
-%% % </zj//j/>,D1,E1 |- module x l1 = struct defs end l2 gives D2,<{x|->E2},{},{},{}>
-%% % 
-%% % E1(id) gives E2
-%% % ------------------------------------------------------------ :: module_rename
-%% % </zj//j/>,D,E1 |- module x l1 = id l2 gives empty,<{x|->E2},{},{},{}>
-%% % 
-%% % TD,E |- typ ~> t
-%% % FV(t) SUBSET </ai//i/>
-%% % FV(</a'k//k/>) SUBSET </ai//i/>
-%% % </TC,E |- idk ~> pk//k/>
-%% % E' = <{},{},{},{x|-><forall </ai//i/>. </(pk a'k)//k/> => t,val>}>
-%% % ------------------------------------------------------------ :: spec
-%% % </zj//j/>,<TD,TC,I>,E |- val x l1 : forall </ai l''i//i/>. </idk a'k l'k//k/> => typ l2 gives empty,E'
-%% % 
-%% % </TD,E1 |- typi ~> ti//i/>
-%% % </FV(ti) SUBSET a//i/>
-%% % :formula_p_eq: p = </zj.//j/>x
-%% % E2 = <{},{x|->p},{},{</yi |-><forall a. (p a) => ti,method>//i/>}>
-%% % TC2 = {p|-></yi//i/>}
-%% % p NOTIN dom(TC1)
-%% % ------------------------------------------------------------ :: class
-%% % </zj//j/>,<TD,TC1,I>,E1 |- class (x l a l'') </val yi li : typi li//i/> end l' gives <{},TC2,{}>,E2
-%% % 
-%% % E = <E_m,E_p,E_f,E_x>
-%% % TD,E |- typ' ~> t'
-%% % TD,(</ai//i/>) |- t' instance
-%% % tnvs = </ai//i/>
-%% % duplicates(tnvs) = emptyset
-%% % </TC,E |- idk ~> pk//k/>
-%% % FV(</a'k//k/>) SUBSET tnvs
-%% % E(id) gives p
-%% % TC(p) gives </zj//j/>
-%% % I2 = { </=> (pk a'k)//k/> }
-%% % </TD,I union I2,E |- val_defn gives E_xn//n/>
-%% % disjoint doms(</E_xn//n/>)
-%% % </E_x(xk) gives <forall a''. (p a'') => tk,method>//k/>
-%% % {</xk |-> <forall tnvs. => {a''|->t'}(tk),let>//k/>} = </E_xn//n/>
-%% % :formula_xs_eq:</xk//k/> = </zj//j/>
-%% % I3 = {</(pk a'k) => (p t')//k/>}
-%% % (p {</ai |-> a'''i//i/>}(t')) NOTIN I
-%% % ------------------------------------------------------------ :: instance_tc
-%% % </zj//j/>,<TD,TC,I>,E |- instance forall </ai l'i//i/>. </idk a'k l''k//k/> => (id typ') </val_defn ln//n/> end l' gives <{},{},I3>,empty
-%% % 
-%% % defn
-%% % </ zj // j /> , D1 , E1 |- defs gives D2 , E2 :: :: check_defs :: check_defs_ 
-%% % {{ com Check definitions, given module path, definitions and environment }}
-%% % by
-%% % 
-%% % % TODO: Check compatibility for duplicate definitions
-%% % 
-%% % ------------------------------------------------------------ :: empty
-%% % </zj//j/>,D,E |- gives empty,empty
-%% % 
-%% % :check_def: </zj//j/>,D1,E1 |- def gives D2,E2
-%% % </zj//j/>,D1 u+ D2,E1 u+ E2 |- </defi semisemi_opti // i/> gives D3,E3
-%% % ------------------------------------------------------------ :: relevant_def 
-%% % </zj//j/>,D1,E1 |- def semisemi_opt </defi semisemi_opti // i/> gives D2 u+ D3, E2 u+ E3
-%% % 
-%% % E1(id) gives E2
-%% % </zj//j/>,D1,E1 u+ E2 |- </defi semisemi_opti // i/> gives D3,E3
-%% % ------------------------------------------------------------ :: open
-%% % </zj//j/>,D1,E1 |- open id l semisemi_opt </defi semisemi_opti // i/> gives D3,E3
-%% % 
+defns
+check_defs :: '' ::=
+
+defn
+E_k1 |- type_def gives E_t , E_k , E_r :: :: check_td :: check_td_
+{{ com Check a type definition }}
+by
+
+%Does abbrev need a type environment? Ouch if yes
+E_k |- typschm ~> t,E_k1,S_N 
+----------------------------------------------------------- :: abbrev
+E_k |- typedef id naming_scheme_opt = typschm gives {},{id |-> K_Abbrev t},{}
+
+E_k |- typ1 ~> t1 .. E_k |- typn ~> tn
+E_r = { {id1:t1, .., idn:tn} |-> id } 
+----------------------------------------------------------- :: unquant_record
+E_k |- typedef id naming_scheme_opt = const struct { typ1 id1 ; .. ; typn idn semi_opt } gives {},{id |-> K_Typ},E_r
+
+</ E_k |- quant_itemi ~>E_ki, S_Ni//i/>
+E_k u+ </E_ki//i/> |- typ1 ~> t1 .. E_k u+ </E_ki//i/> |- typn ~> tn
+{ id'1 |-> k1, .. ,id'm |-> km } = u+ </E_ki//i/>
+E_r = { {id1:t1, .., idn:tn} |-> {id'1 |-> k1, ..,id'm |-> km}, u+</S_Ni//i/>, None, id :t_arg_typ: id'1 ..  :t_arg_typ: id'm }
+E_k1 = { id |-> K_Lam (k1 .. km -> K_Typ) }
+----------------------------------------------------------- :: quant_record
+E_k |- typedef id naming_scheme_opt = const struct forall </quant_itemi//i/> . { typ1 id1 ; .. ; typn idn semi_opt } gives {},E_k1,E_r
+
+E_t = { id1 |-> t1 -> :T_var: id pure Ctor {}, ..., idn |-> tn -> :T_var: id pure Ctor {} }
+E_k1 = { id |-> K_Typ }
+E_k u+ E_k1 |- typ1 ~> t1 ... E_k u+ E_k1 |- typn ~> tn
+------------------------------------------------------------ :: unquant_union
+E_k |- typedef id naming_scheme_opt = const union { typ1 id1 ; ... ; typn idn semi_opt } gives E_t,E_k1,{}
+
+</ E_k |- quant_itemi ~> E_ki, S_Ni//i/>
+{ id'1 |-> k1, ... , id'm |-> km } = u+ </E_ki//i/>
+E_k1 = { id |-> K_Lam (k1 ... km -> K_Typ) } u+ </E_ki//i/>
+E_k u+ E_k1 |- typ1 ~> t1 ... E_k u+ E_k1 |- typn ~> tn
+t = id :t_arg_typ: id'1 ... :t_arg_typ: id'm
+E_t = { id1 |-> E_k1, u+</S_Ni//i/>, Ctor, t1 -> t pure Ctor {}, ... , idn |-> E_k1, u+</S_Ni//i/>, Ctor, tn -> t pure Ctor {} }
+------------------------------------------------------------ :: quant_union
+E_k |- typedef id naming_scheme_opt = const union forall </quant_itemi//i/> . { typ1 id1 ; ... ; typn idn semi_opt } gives E_t,E_k1,{}
+
+% Save these as enumerations for coercion
+E_t = {id1 |-> id, ..., idn |-> id}
+------------------------------------------------------------- :: enumerate
+E_k |- typedef id naming_scheme_opt = enumerate { id1 ; ... ; idn semi_opt } gives E_t,{id |-> K_Typ},{}
+
+defn
+E |- fundef gives E_t , S_N :: :: check_fd :: check_fd_
+{{ com Check a function definition }}
+by
+
+defn
+E |- val_spec gives E_t :: :: check_spec :: check_spec_
+{{ com Check a value specification }}
+by
+
+E_k |- typschm ~> t, E_k1, S_N
+-------------------------------------------------------- :: val_spec
+<E_t,E_r,E_k> |- val typschm id gives {id |-> E_k1,S_N,None,t }
+
+E_k |- typschm ~> t, E_k1, S_N
+-------------------------------------------------------- :: extern
+<E_t,E_r,E_k> |- val extern typschm id = string gives {id |-> E_k1,S_N,Extern,t}
+
+defn
+E_k |- default_typing_spec gives E_t , E_k1 :: :: check_default :: check_default_
+{{ com Check a default typing specification }}
+by
+
+E_k |- base_kind ~> k
+------------------------------------------------------------ :: kind
+E_k |- default base_kind id gives {}, {id |-> k default }
+
+E_k |- typschm ~> t,E_k1,S_N 
+------------------------------------------------------------ :: typ
+E_k |- default typschm id gives {id |-> E_k1,S_N,Default,t},{}
+
+defn
+ 
+E |- def gives E' :: :: check_def :: check_def_ 
+{{ com Check a definition }}
+by
+
+E_k |- type_def gives E_t1,E_k1,E_r1
+--------------------------------------------------------- :: tdef
+<E_t,E_r,E_k>|- type_def gives <E_t,E_r,E_k> u+ <E_t1,E_r1,E_k1>
+
+E |- fundef gives E_t,S_N 
+--------------------------------------------------------- :: fdef
+E |- fundef gives E u+ <E_t,{},{}>
+
+E |- letbind gives {id1 |-> t1 , .. , idn |-> tn},S_N,pure,E_k 
+S_N1 = resolve S_N
+--------------------------------------------------------- :: vdef
+E |- letbind gives E u+ <{id1 |-> E_k,S_N,None,t1 , .. , idn |-> E_k,S_N,None,tn},{},{}>
+
+E |- val_spec gives E_t
+--------------------------------------------------------- :: vspec
+E |- val_spec gives E u+ <E_t,{},{}>
+
+E_k |- default_typing_spec gives E_t, E_k
+--------------------------------------------------------- :: default
+<E_t,E_r,E_k> |- default_typing_spec  gives E u+ <E_t,{},E_k>
+
+E_k |- typ ~> t
+---------------------------------------------------------- :: register
+<E_t,E_r,E_k> |- register typ id gives E u+ <{id |-> register t},{},{}>
+
+defn
+E |- defs gives E' :: :: check_defs :: check_defs_ 
+{{ com Check definitions, potentially given default environment of built-in library }}
+by
+
+------------------------------------------------------------ :: empty
+E |- gives E
+
+:check_def: E |- def gives E1
+E u+ E1 |- </defi// i/> gives E2
+------------------------------------------------------------ :: defs 
+E |- def </defi// i/> gives E2
 

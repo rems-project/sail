@@ -415,7 +415,11 @@ let to_ast_spec (names,k_env,t_env) (val_:Parse_ast.val_spec) : (tannot val_spec
     (match vs with
     | Parse_ast.VS_val_spec(ts,id) ->
       let typsch,_,_ = to_ast_typschm k_env ts in
-      VS_aux(VS_val_spec(typsch,to_ast_id id),(l,None)),(names,k_env,t_env)) (*Do names and t_env need updating this pass? *)
+      VS_aux(VS_val_spec(typsch,to_ast_id id),(l,None)),(names,k_env,t_env)
+    | Parse_ast.VS_extern_spec(ts,id,s) ->
+      let typsch,_,_ = to_ast_typschm k_env ts in
+      VS_aux(VS_extern_spec(typsch,to_ast_id id,s),(l,None)),(names,k_env,t_env))(*Do names and t_env need updating this pass? *)
+    
 
 let to_ast_namescm (Parse_ast.Name_sect_aux(ns,l)) = 
   Name_sect_aux(

@@ -262,8 +262,10 @@ let pp_default ppf (DT_aux(df,_)) =
   | DT_kind(bk,id) -> fprintf ppf "@[<0>%a %a %a@]@\n" kwd "default" pp_bkind bk pp_id id
   | DT_typ(ts,id) -> fprintf ppf "@[<0>%a %a %a@]@\n" kwd "default" pp_typscm ts pp_id id
 
-let pp_spec ppf (VS_aux(VS_val_spec(ts,id),_)) =
-  fprintf ppf "@[<0>%a %a %a@]@\n" kwd "val" pp_typscm ts pp_id id
+let pp_spec ppf (VS_aux(v,_)) =
+  match v with
+  | VS_val_spec(ts,id) -> fprintf ppf "@[<0>%a %a %a@]@\n" kwd "val" pp_typscm ts pp_id id
+  | VS_extern_spec(ts,id,s) -> fprintf ppf "@[<0>%a %a %a %a %a \"%s\"@]@\n" kwd "val" kwd "extern" pp_typscm ts pp_id id kwd "=" s
 
 let pp_namescm ppf (Name_sect_aux(ns,_)) =
   match ns with
@@ -556,8 +558,10 @@ let pp_lem_default ppf (DT_aux(df,_)) =
   | DT_kind(bk,id) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "DT_kind" pp_lem_bkind bk pp_lem_id id
   | DT_typ(ts,id) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "DT_typ" pp_lem_typscm ts pp_lem_id id
 
-let pp_lem_spec ppf (VS_aux(VS_val_spec(ts,id),_)) =
-  fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_val_spec" pp_lem_typscm ts pp_lem_id id
+let pp_lem_spec ppf (VS_aux(v,_)) =
+  match v with
+  | VS_val_spec(ts,id) -> fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_val_spec" pp_lem_typscm ts pp_lem_id id
+  | VS_extern_spec(ts,id,s) -> fprintf ppf "@[<0>(%a %a %a \"%s\")@]@\n" kwd "VS_extern_spec" pp_lem_typscm ts pp_lem_id id s
 
 let pp_lem_namescm ppf (Name_sect_aux(ns,_)) =
   match ns with

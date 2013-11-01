@@ -683,6 +683,7 @@ val_spec :: 'VS_' ::=
   {{ aux _ l }}
 %  {{ aux _ annot }} {{ auxparam 'a }}
   | val typschm id                                  :: :: val_spec
+  | val extern typschm id = string                  :: :: extern_spec
 
 default_typing_spec :: 'DT_' ::=
   {{ com Default kinding or typing assumption }}
