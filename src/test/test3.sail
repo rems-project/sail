@@ -6,6 +6,9 @@ val ( nat -> nat effect { wmem , rmem } ) MEM
 val ( nat -> nat effect { wmem , rmem } ) MEM_GPU
 val ( ( nat * nat ) -> nat effect { wmem , rmem } ) MEM_SIZE
 
+(* extern function *)
+val extern ( nat -> nat pure ) add = "add"
+
 function nat main _ = {
   (* left-hand side function call = memory write *)
   MEM(0) := 0;
@@ -24,4 +27,7 @@ function nat main _ = {
   (* extra-parentheses are needed here *)
   MEM_SIZE( (0,1) ) := 4;
   MEM_SIZE( (0,1) );
+
+  (* extern calls *)
+  add(5);
 }

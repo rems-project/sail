@@ -71,6 +71,7 @@ let kw_table =
      ("end",                     (fun _ -> End));
      ("enumerate",		 (fun _ -> Enumerate));
      ("else",                    (fun _ -> Else));
+     ("extern",                  (fun _ -> Extern));
      ("false",                   (fun _ -> False));
      ("forall",                  (fun _ -> Forall));
      ("foreach",                  (fun _ -> Foreach));
