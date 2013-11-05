@@ -148,6 +148,7 @@ rule token = parse
   | "{"                                 { Lcurly }
   | "}"                                 { Rcurly }
   | "("                                 { Lparen }
+  | "(:"                                { LparenColon }
   | ")"                                 { Rparen }
   | "["                                 { Lsquare }
   | "]"                                 { Rsquare }

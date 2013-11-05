@@ -6,8 +6,11 @@ val ( nat -> nat effect { wmem , rmem } ) MEM
 val ( nat -> nat effect { wmem , rmem } ) MEM_GPU
 val ( ( nat * nat ) -> nat effect { wmem , rmem } ) MEM_SIZE
 
-(* extern function *)
+(* extern functions *)
 val extern ( nat -> nat pure ) add = "add"
+val extern ( nat -> nat pure ) (: + ) = "add"   (* infix plus *)
+
+function nat (: * ) ( < nat > x, < nat > y ) = 42
 
 function nat main _ = {
   (* left-hand side function call = memory write *)
@@ -19,6 +22,9 @@ function nat main _ = {
   (* register read, thanks to register declaration *)
   dummy_reg;
 
+  (* infix call *)
+  7 * 9;
+
   (* Some more checks *)
   MEM(1) := 2;
   MEM(1);
@@ -29,5 +35,6 @@ function nat main _ = {
   MEM_SIZE( (0,1) );
 
   (* extern calls *)
+  3 + 39;
   add(5);
 }
