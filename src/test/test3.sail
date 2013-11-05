@@ -8,7 +8,7 @@ val ( ( nat * nat ) -> nat effect { wmem , rmem } ) MEM_SIZE
 
 (* extern functions *)
 val extern ( nat -> nat pure ) add = "add"
-val extern ( nat -> nat pure ) (: + ) = "add"   (* infix plus *)
+val extern ( nat -> nat pure ) (: + ) = "add_infix"   (* infix plus *)
 
 function nat (: * ) ( < nat > x, < nat > y ) = 42
 

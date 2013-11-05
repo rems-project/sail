@@ -674,6 +674,10 @@ and interp_main t_level l_env l_mem exp =
       | _ -> (Error "Application with expression other than identifier",l_mem,l_env)
       end 
     | E_app_infix l op r -> 
+       let op = match op with
+       | Id x -> DeIid x
+       | DeIid _ -> op
+       end in
       resolve_outcome (interp_main t_level l_env l_mem l)
                       (fun lv lm le -> 
                          resolve_outcome (interp_main t_level l_env lm r)
