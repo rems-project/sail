@@ -1,0 +1,3 @@
+open Interp ;;
+
+let eval_external name v = v ;;

@@ -1,6 +1,7 @@
 open Printf ;;
 open Interp_ast ;;
 open Interp ;;
+open Interp_lib ;;
 
 let lit_to_string = function
  | L_unit -> "unit"
@@ -55,7 +56,7 @@ let act_to_string = function
      sprintf "write_mem %s(%s)%s = %s" (id_to_string id) (val_to_string args)
      (sub_to_string sub) (val_to_string value)
  | Call_extern (name, arg) ->
-     "extern call to " ^ name
+     sprintf "extern call %s applied to %s" name (val_to_string arg)
 ;;
 
 module Reg = struct
@@ -77,7 +78,7 @@ let perform_action ((reg, mem) as env) = function
      V_lit L_unit, (Reg.update id value reg, mem)
  | Write_mem (id, args, None, value) ->
      V_lit L_unit, (reg, Mem.update (id, args) value mem)
- | Call_extern (name, arg) -> failwith "extern calls not implemented" (* XXX *)
+ | Call_extern (name, arg) -> eval_external name arg, env
  | _ -> failwith "partial read/write not implemented" (* XXX *)
 ;;
 

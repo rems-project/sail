@@ -8,7 +8,14 @@ let lem_dir = "../../../lem" ;;
 let lem_libdir = lem_dir / "ocaml-lib/_build" ;;
 let lem_lib = lem_libdir / "extract" ;;
 let lem = lem_dir / "lem" ;;
-let interp_ast = "lem_interp/interp_ast.lem" ;;
+
+(* Order matters - respect dependencies! *)
+let lem_deps = List.map ((/) "lem_interp") [
+  "interp_ast.lem";
+  "interp.lem";
+  "interp_lib.lem";
+  ] ;;
+let lem_opts = List.fold_right (fun s l -> [A "-i"; P s] @ l) lem_deps [] ;;
 
 dispatch begin function
 | After_rules ->
@@ -17,9 +24,9 @@ dispatch begin function
 
     rule "lem -> ml"
     ~prod: "%.ml"
-    ~deps: ["%.lem"; interp_ast]
+    ~deps: ("%.lem" :: lem_deps)
     (fun env builder -> Seq [
-      Cmd (S [ P lem; A "-i"; P interp_ast; A "-ocaml"; P (env "%.lem") ]);
+      Cmd (S ([ P lem] @ lem_opts @ [ A "-ocaml"; P (env "%.lem") ]));
       mv (basename (env "%.ml")) (dirname (env "%.ml"))
       ]);
 
