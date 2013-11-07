@@ -928,6 +928,8 @@ terminals :: '' ::=
     {{ tex < }}
   | gt                                  :: :: mathgt
     {{ tex > }} 
+  | ~=                                  :: :: alphaeq
+    {{ tex \ensuremath{\approx} }}
   | |-                                  :: :: vdash
     {{ tex \ensuremath{\vdash} }}
   | |-t					:: :: vdashT

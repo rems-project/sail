@@ -133,7 +133,7 @@ ne :: 'Ne_' ::=
 %% %% }}
 %% %% 
 
-S_N {{ tex \Sigma^{\textsc{N} } }} :: '' ::= {{ phantom }}
+S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
                                                                     {{ hol nec list }}
                                                                     {{ lem list nec }}
     {{ com nexp constraint lists }}
@@ -152,7 +152,7 @@ S_N {{ tex \Sigma^{\textsc{N} } }} :: '' ::= {{ phantom }}
      {{ com Generates constraints from  pairs of constraints, where the first of each pair is always smaller than the difference of the previous pair }}
      {{ ocaml assert false }}
      {{ ichl todo }}
-   | resolve S_N                                                :: :: resolution
+   | resolve ( S_N )                                                :: :: resolution
  
  I :: '' ::=                                                     {{ phantom }}
   {{ com Information given by type checking an expression }}
@@ -300,6 +300,9 @@ formula :: formula_ ::=
    | E_k1 = E_k2                                                 :: :: E_k_eqn
      {{ ichl ([[E_k1]] = [[E_k2]]) }}
 
+   | E_k1 ~= E_k2                                                :: :: E_k_approx
+     {{ ichl arb }}
+
    | E_t1 = E_t2                                                 :: :: E_t_eqn
      {{ ichl ([[E_t1]] = [[E_t2]]) }}
 
@@ -314,6 +317,9 @@ formula :: formula_ ::=
  
    | I1 = I2                                                     :: :: I_eqn
      {{ ichl ([[I1]] = [[I2]]) }}
+
+   | effects1 = effects2                                        :: :: Ef_eqn
+     {{ ichl ([[effects1]] = [[effects2]]) }}
 
    | t1 = t2                                                     :: :: t_eq
      {{ ichl ([[t1]] = [[t2]]) }}
@@ -988,6 +994,94 @@ E |- fundef gives E_t , S_N :: :: check_fd :: check_fd_
 {{ com Check a function definition }}
 by
 
+E_t(id) gives E_k1,S_N1,None, t1 -> t effects None S_N1
+</E_k |- quant_itemi ~> E_ki,S_Ni//i/>
+S_N2 = u+ </S_Ni//i/>
+E_k1 ~= </E_ki//i/>
+E_k1 u+ E_k |- typ ~> t
+</<E_t,E_r,E_k u+ E_k1> |- patj : t1 gives E_tj,S_N'j//j/>
+</<(E_t u+ E_tj),E_r,E_k u+ E_k1> |- expj : t gives <S_N''j,effects'j>,E_t'j//j/>
+S_N3 = u+ </S_N'j u+ S_N''j//j/>
+effects = u+ </effects'j//j/>
+S_N = resolve ( S_N1 u+ S_N2 u+ S_N3)
+------------------------------------------------------------- :: rec_function
+<E_t,E_r,E_k> |- function rec forall </quant_itemi//i/> . typ effects </id patj = expj//j/> gives E_t, S_N
+
+E_t(id) gives t1 -> t effects None S_N1
+E_k |- typ ~> t
+</<E_t,E_r,E_k> |- patj : t1 gives E_tj,S_N'j//j/>
+</<(E_t u+ E_tj),E_r,E_k> |- expj : t gives <S_N''j,effects'j>,E_t'j//j/>
+effects = u+ </effects'j//j/>
+S_N = resolve (S_N1 u+ </S_N'j u+ S_N''j//j/>)
+------------------------------------------------------------- :: rec_function2
+<E_t,E_r,E_k> |- function rec typ effects </id patj = expj//j/> gives E_t, S_N
+
+</E_k |- quant_itemi ~> E_ki,S_Ni//i/>
+S_N1 = u+ </S_Ni//i/>
+E_k2 = E_k u+ </E_ki//i/>
+E_k2 |- typ ~> t
+</<E_t,E_r,E_k2> |- patj : t1 gives E_tj,S_N'j//j/>
+E_t2 = (E_t u+ {id |-> t1 -> t effects None S_N1})
+</<(E_t u+ E_tj),E_r,E_k2> |- expj : t gives <S_N'j,effects'j>,E_t'j//j/>
+effects = u+ </effects'j//j/>
+S_N = resolve (S_N1 u+ </S_N'j u+ S_N''j//j/>)
+------------------------------------------------------------- :: rec_function_no_spec
+<E_t,E_r,E_k> |- function rec forall </quant_itemi//i/> . typ effects </id patj = expj//j/> gives E_t2, S_N
+
+E_k |- typ ~> t
+</<E_t,E_r,E_k> |- patj : t1 gives E_tj,S_N'j//j/>
+E_t2 = (E_t u+ {id |-> t1 -> t effects None {}})
+</<(E_t u+ E_tj),E_r,E_k> |- expj : t gives <S_N'j,effects'j>,E_t'j//j/>
+effects = u+ </effects'j//j/>
+S_N = resolve (u+ </S_N'j u+ S_N''j//j/>)
+------------------------------------------------------------- :: rec_function_no_spec2
+<E_t,E_r,E_k> |- function rec typ effects </id patj = expj//j/> gives E_t2, S_N
+
+t2 = t1 -> t effects None S_N1
+E_t(id) gives E_k1,S_N1,None, t2
+</E_k |- quant_itemi ~> E_ki,S_Ni//i/>
+S_N2 = u+ </S_Ni//i/>
+E_k1 ~= </E_ki//i/>
+E_k1 u+ E_k |- typ ~> t
+</<E_t,E_r,E_k u+ E_k1> |- patj : t1 gives E_tj,S_N'j//j/>
+</<((E_t u- {id |-> t1->t effects None S_N1}) u+ E_tj),E_r,E_k u+ E_k1> |- expj : t gives <S_N''j,effects'j>,E_t'j//j/>
+S_N3 = u+ </S_N'j u+ S_N''j//j/>
+effects = u+ </effects'j//j/>
+S_N = resolve ( S_N1 u+ S_N2 u+ S_N3)
+------------------------------------------------------------- :: function
+<E_t,E_r,E_k> |- function forall </quant_itemi//i/> . typ effects </id patj = expj//j/> gives E_t, S_N
+
+E_t(id) gives t1 -> t effects None S_N1
+E_k |- typ ~> t
+</<E_t,E_r,E_k> |- patj : t1 gives E_tj,S_N'j//j/>
+</<(E_t u+ E_tj),E_r,E_k> |- expj : t gives <S_N''j,effects'j>,E_t'j//j/>
+effects = u+ </effects'j//j/>
+S_N = resolve (S_N1 u+ </S_N'j u+ S_N''j//j/>)
+------------------------------------------------------------- :: function2
+<E_t,E_r,E_k> |- function rec typ effects </id patj = expj//j/> gives E_t, S_N
+
+</E_k |- quant_itemi ~> E_ki,S_Ni//i/>
+S_N1 = u+ </S_Ni//i/>
+E_k2 = E_k u+ </E_ki//i/>
+E_k2 |- typ ~> t
+</<E_t,E_r,E_k2> |- patj : t1 gives E_tj,S_N'j//j/>
+E_t2 = (E_t u+ {id |-> t1 -> t effects None S_N1})
+</<(E_t u+ E_tj),E_r,E_k2> |- expj : t gives <S_N'j,effects'j>,E_t'j//j/>
+effects = u+ </effects'j//j/>
+S_N = resolve (S_N1 u+ </S_N'j u+ S_N''j//j/>)
+------------------------------------------------------------- :: function_no_spec
+<E_t,E_r,E_k> |- function rec forall </quant_itemi//i/> . typ effects </id patj = expj//j/> gives E_t2, S_N
+
+E_k |- typ ~> t
+</<E_t,E_r,E_k> |- patj : t1 gives E_tj,S_N'j//j/>
+E_t2 = (E_t u+ {id |-> t1 -> t effects None {}})
+</<(E_t u+ E_tj),E_r,E_k> |- expj : t gives <S_N'j,effects'j>,E_t'j//j/>
+effects = u+ </effects'j//j/>
+S_N = resolve (u+ </S_N'j u+ S_N''j//j/>)
+------------------------------------------------------------- :: function_no_spec2
+<E_t,E_r,E_k> |- function rec typ effects </id patj = expj//j/> gives E_t2, S_N
+
+
 defn
 E |- val_spec gives E_t :: :: check_spec :: check_spec_
 {{ com Check a value specification }}
@@ -1029,7 +1123,7 @@ E |- fundef gives E_t,S_N
 E |- fundef gives E u+ <E_t,{},{}>
 
 E |- letbind gives {id1 |-> t1 , .. , idn |-> tn},S_N,pure,E_k 
-S_N1 = resolve S_N
+S_N1 = resolve(S_N)
 --------------------------------------------------------- :: vdef
 E |- letbind gives E u+ <{id1 |-> E_k,S_N,None,t1 , .. , idn |-> E_k,S_N,None,tn},{},{}>
 
