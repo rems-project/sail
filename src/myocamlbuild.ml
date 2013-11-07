@@ -17,6 +17,9 @@ let lem_deps = List.map ((/) "lem_interp") [
   ] ;;
 let lem_opts = List.fold_right (fun s l -> [A "-i"; P s] @ l) lem_deps [] ;;
 
+(* New library magic: *)
+let lem_opts = [A "-lib"; P "../lem_interp"] ;;
+
 dispatch begin function
 | After_rules ->
     (* ocaml_lib "lem_interp/interp"; *)
@@ -24,10 +27,11 @@ dispatch begin function
 
     rule "lem -> ml"
     ~prod: "%.ml"
-    ~deps: ("%.lem" :: lem_deps)
+    ~dep: "%.lem"
     (fun env builder -> Seq [
       Cmd (S ([ P lem] @ lem_opts @ [ A "-ocaml"; P (env "%.lem") ]));
-      mv (basename (env "%.ml")) (dirname (env "%.ml"))
+      (* XXX should be unnecessary with new lem
+       * mv (basename (env "%.ml")) (dirname (env "%.ml")) *)
       ]);
 
     rule "sail -> lem"

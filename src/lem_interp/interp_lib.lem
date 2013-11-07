@@ -1,3 +1,13 @@
-open Interp ;;
+open import Interp ;;
+import Maybe_extra
+open import List
 
-let eval_external name v = v ;;
+let add v = v ;;
+
+
+let function_map = [
+  ("add", add);
+  ("add_infix", add);
+] ;;
+
+let eval_external name v = (Maybe_extra.fromJust (List.lookup name function_map)) v ;;

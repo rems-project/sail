@@ -142,7 +142,7 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
       {{ lem [[nec1 .. necn]] }}
    | S_N1 u+ .. u+ S_Nn                                                    :: M :: SN_union
      {{ hol (FOLDR FUNION FEMPTY [[S_N1..S_Nn]]) }}
-     {{ lem (List.fold_right union_map [[S_N1..S_Nn]] Pmap.empty) }}
+     {{ lem (List.fold_right union_map [[S_N1..S_Nn]] Map.empty) }}
      {{ ocaml (assert false) }}
    | consistent_increase ne1 ne'1 ... nen ne'n                    :: M :: SN_increasing
      {{ com Generates constraints from  pairs of constraints, where the first of each pair is always larger than the sum of the previous pair }}
@@ -184,11 +184,11 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
    {{ com Kind environments }}
    | { id1 |-> kinf1 , .. , idn |-> kinfn }    :: :: concrete
      {{ hol (FOLDR (\(k1,k2) E. E |+ (k1,k2)) FEMPTY [[id1 kinf1 .. idn kinfn]]) }}
-     {{ lem (List.fold_right (fun (x,v) m -> Pmap.add x v m) [[id1 kinf1 .. idn kinfn]] Pmap.empty) }} 
+     {{ lem (List.fold_right (fun (x,v) m -> Map.insert x v m) [[id1 kinf1 .. idn kinfn]] Map.empty) }} 
    | E_k1 u+ .. u+ E_kn                                          :: M :: union
      {{ com In a unioning kinf, {k default} u {k} results in {k} (i.e. the default is locally forgotten) }} 
      {{ hol (FOLDR FUNION FEMPTY [[E_k1..E_kn]]) }}
-     {{ lem (List.fold_right union_map [[E_k1..E_kn]] Pmap.empty) }}
+     {{ lem (List.fold_right union_map [[E_k1..E_kn]] Map.empty) }}
      {{ ocaml (assert false) }}
    | E_k u- E_k1 .. E_kn                                            :: M :: multi_set_minus
      {{ hol arb }} {{ lem arb }} {{ ocaml assert false }}
@@ -205,10 +205,10 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
    {{ com Type environments }}
    | { id1 |-> tinf1 , .. , idn |-> tinfn }                    :: :: base
      {{ hol (FOLDR (\x E. E |+ x) FEMPTY [[id1 tinf1 .. idn tinfn]]) }}
-     {{ lem (List.fold_right (fun (x,f) m -> Pmap.add x f m) [[id1 tinf1 .. idn tinfn]] Pmap.empty) }} 
+     {{ lem (List.fold_right (fun (x,f) m -> Map.insert x f m) [[id1 tinf1 .. idn tinfn]] Map.empty) }} 
    | ( E_t1 u+ .... u+ E_tn )                                         :: M :: union
      {{ hol (FOLDR FUNION FEMPTY [[E_t1....E_tn]]) }}
-     {{ lem (List.fold_right union_map [[E_t1....E_tn]] Pmap.empty) }}
+     {{ lem (List.fold_right union_map [[E_t1....E_tn]] Map.empty) }}
      {{ ocaml (assert false) }}
    | u+ E_t1 .. E_tn                                            :: M :: multi_union
      {{ hol arb }}
@@ -236,10 +236,10 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
    {{ com Record environments }}
    | { { field_typs1 } |-> tinf1 , .. , { field_typsn } |-> tinfn }                    :: :: concrete
      {{ hol (FOLDR (\x E. E |+ x) FEMPTY) }}
-     {{ lem (List.fold_right (fun (x,f) m -> Pmap.add x f m)  Pmap.empty) }} 
+     {{ lem (List.fold_right (fun (x,f) m -> Map.insert x f m)  Map.empty) }} 
    | E_r1 u+ .. u+ E_rn                                          :: M :: union
      {{ hol (FOLDR FUNION FEMPTY [[E_r1..E_rn]]) }}
-     {{ lem (List.fold_right union_map [[E_r1..E_rn]] Pmap.empty) }}
+     {{ lem (List.fold_right union_map [[E_r1..E_rn]] Map.empty) }}
      {{ ocaml (assert false) }}
 
 ts :: ts_ ::=                                     {{ phantom }}
@@ -253,12 +253,12 @@ formula :: formula_ ::=
    | E_k ( id ) gives kinf                                      :: :: lookup_k
      {{ com Kind lookup }}
      {{ hol (FLOOKUP [[E_k]] [[id]] = SOME [[k]]) }}
-     {{ lem Pmap.find [[id]] [[E_k]] = [[k]] }} 
+     {{ lem Map.lookup [[id]] [[E_k]] = Just [[k]] }} 
 
    | E_t ( id ) gives tinf                                      :: :: lookup_t
      {{ com Type lookup }}
      {{ hol (FLOOKUP [[E_t]] [[id]] = SOME [[t]]) }}
-     {{ lem Pmap.find [[id]] [[E_t]] = [[t]] }} 
+     {{ lem Map.lookup [[id]] [[E_t]] = Just [[t]] }} 
 
   | E_k ( id ) <-| k						:: :: update_k
      {{ com Update the kind associated with id to k }}        
@@ -271,25 +271,25 @@ formula :: formula_ ::=
 
    | dom ( E_t1 ) inter dom ( E_t2 ) = emptyset                  :: :: E_t_disjoint
      {{ hol (DISJOINT (FDOM [[E_t1]]) (FDOM [[E_t2]])) }}
-     {{ lem disjoint (Pmap.domain [[E_t1]]) (Pmap.domain [[E_t2]])  }} 
+     {{ lem disjoint (Map.domain [[E_t1]]) (Map.domain [[E_t2]])  }} 
    
    | dom ( E_k1 ) inter dom ( E_k2 ) = emptyset                  :: :: E_k_disjoint
      {{ hol (DISJOINT (FDOM [[E_f1]]) (FDOM [[E_f2]])) }}
-     {{ lem disjoint (Pmap.domain [[E_f1]]) (Pmap.domain [[E_f2]]) }} 
+     {{ lem disjoint (Map.domain [[E_f1]]) (Map.domain [[E_f2]]) }} 
 
    | disjoint doms ( E_t1 , .... , E_tn )                        :: :: E_x_disjoint_many
     {{ hol (FOLDR (\E b. case b of NONE => NONE | SOME s => if DISJOINT (FDOM
        E) s then SOME (FDOM E UNION s) else NONE) (SOME {}) [[E_t1....E_tn]] <> NONE) }}
-     {{ lem disjoint_all (List.map Pmap.domain [[E_t1 .... E_tn]]) }}
+     {{ lem disjoint_all (List.map Map.domain [[E_t1 .... E_tn]]) }}
      {{ com Pairwise disjoint domains }}
 
    | id NOTIN dom ( E_k )                                         :: :: notin_dom_k
      {{ hol ([[id]] NOTIN FDOM [[E_k]]) }}
-     {{ lem Pervasives.not (Pmap.mem [[id]] [[E_k]]) }} 
+     {{ lem Pervasives.not (Map.member [[id]] [[E_k]]) }} 
 
    | id NOTIN dom ( E_t )                                         :: :: notin_dom_t
      {{ hol ([[id]] NOTIN FDOM [[E_t]]) }}
-     {{ lem Pervasives.not (Pmap.mem [[id]] [[E_t]]) }} 
+     {{ lem Pervasives.not (Map.member [[id]] [[E_t]]) }} 
 
    | id0 : t0 .. idn : tn SUBSET id'0 : t'0 .. id'i : t'i       :: :: subsetFields
 

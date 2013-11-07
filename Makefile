@@ -2,8 +2,8 @@
 
 all: src language
 
-src:
-	$(MAKE) -C $@
+src: language
+	$(MAKE) -C $@ update_lem_lib all
 
 language:
 	$(MAKE) -C $@
