@@ -658,7 +658,7 @@ E_e(t) gives { num1 |-> id1 ... numn |-> idn }
 E_d |- vector ne1 ne2 order :t_arg_typ: bit :> enum ne3 ne4 order, { ne3 = zero, ne4 = 2** ne2}
 
 -------------------------------------- :: from_num
-E_d |- enum ne1 ne2 order :> vector ne3 ne4 order :t_arg_typ: bit, {ne3 = zero, ne4 = 2** ne1 + ne2}
+E_d |- enum ne1 ne2 order :> vector ne3 ne4 order :t_arg_typ: bit, {ne3 = zero, id = ne1 + ne2, ne4 = 2** id}
 
 
 defns
