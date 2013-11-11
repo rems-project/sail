@@ -2,7 +2,6 @@ open import Pervasives
 import Map
 import Map_extra
 import Maybe
-open import List (* because bug  inline lookup/lookupBy *)
 import List_extra
 
 open import Interp_ast

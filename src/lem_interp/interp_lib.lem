@@ -1,6 +1,5 @@
 open import Interp ;;
 import Maybe_extra
-open import List
 
 let add v = v ;;
 
