@@ -1,7 +1,7 @@
 true: -traverse, debug
 <**/*.ml>: bin_annot, annot
-<lem_interp> or <test>: include
+<lem_interp> or <test>:  include
 # see http://caml.inria.fr/mantis/view.php?id=4943
-<lem_interp/*> and not <lem_interp/*.cmxa>: use_lem, use_nums
-<test/*> and not <test/*.cmxa>: use_lem, use_nums
+<lem_interp/*> and not <lem_interp/*.cmxa>: use_nums, use_lem
+<test/*> and not <test/*.cmxa>: use_nums, use_lem
 

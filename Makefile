@@ -2,7 +2,7 @@
 
 all: src language
 
-src:
+src: language
 	$(MAKE) -C $@
 
 language:

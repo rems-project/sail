@@ -7,7 +7,7 @@ metavar num ::=
   {{ lex numeric }}
   {{ ocaml int }}
   {{ hol num }}
-  {{ lem num }}
+  {{ lem nat }}
   {{ com Numeric literals }}
 
 metavar hex ::=
@@ -56,25 +56,14 @@ exception Parse_error_locn of l * string
 
 embed
 {{ lem
-open Pmap
-open Pervasives
+open import Map
+open import Maybe
+open import Pervasives
 
 type l =
   | Unknown
-  | Trans of string * option l
-  | Range of num * num
-
-val disjoint : forall 'a . set 'a -> set 'a -> bool
-let disjoint s1 s2 = 
-  let diff = s1 inter s2 in
-  diff = Pervasives.empty
-
-val disjoint_all : forall 'a. list (set 'a) -> bool
-let rec disjoint_all ls = match ls with
-  | [] -> true
-  | [a] -> true
-  | a::b::rs -> (disjoint a b) && (disjoint_all (b::rs))
-end
+  | Trans of string * maybe l
+  | Range of nat * nat
 
 val duplicates : forall 'a. list 'a -> list 'a
 
