@@ -1,8 +1,9 @@
-open import Interp ;;
+open import Interp
+open import Interp_ast
 import Maybe_extra
+open import Num
 
-let add v = v ;;
-
+let add (V_tuple [V_lit(L_num x); V_lit(L_num y)]) = V_lit(L_num (x+y)) ;;
 
 let function_map = [
   ("add", add);
