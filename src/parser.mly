@@ -500,9 +500,9 @@ app_exp:
   | id Lparen Rparen
     { eloc (E_app((E_aux((E_id $1), locn 1 1)), [eloc (E_lit (lloc L_unit))])) }
   | id Lparen exp Rparen
-    { eloc (E_app((E_aux((E_id $1),locn 1 1)),[$3])) }
+    { eloc (E_app((E_aux((E_id $1),locn 1 1)),[ E_aux((E_tuple [$3]),locn 3 3)])) }
   | id Lparen comma_exps Rparen
-    { eloc (E_app((E_aux((E_id $1),locn 1 1)),$3)) }
+    { eloc (E_app((E_aux((E_id $1),locn 1 1)),[E_aux (E_tuple $3,locn 3 3)])) }
 
 right_atomic_exp:
   | If_ exp Then exp Else exp
