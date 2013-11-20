@@ -30,11 +30,10 @@ function nat main _ = {
   MEM(1);
   MEM_GPU(0) := 3;
   MEM_GPU(0);
-  (* extra-parentheses are needed here *)
-  MEM_SIZE( (0,1) ) := 4;
-  MEM_SIZE( (0,1) );
+  MEM_SIZE(0,1) := 4;
+  MEM_SIZE(0,1);
 
   (* extern calls *)
   3 + 39;
-  add((5, 37));
+  add(5, 37);
 }
