@@ -192,7 +192,7 @@ exp_aux =  (* Expression *)
  | E_id of id (* identifier *)
  | E_lit of lit (* literal constant *)
  | E_cast of atyp * exp (* cast *)
- | E_app of exp * (exp) list (* function application *)
+ | E_app of id * (exp) list (* function application *)
  | E_app_infix of exp * id * exp (* infix function application *)
  | E_tuple of (exp) list (* tuple *)
  | E_if of exp * exp * exp (* conditional *)
@@ -248,9 +248,9 @@ naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for va
 
 
 type 
-rec_opt_aux =  (* Optional recursive annotation for functions *)
-   Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
+type_union_aux =  (* Type union constructors *)
+   Tu_id of id
+ | Tu_ty_id of atyp * id
 
 
 type 
@@ -260,14 +260,25 @@ tannot_opt_aux =  (* Optional type annotation for functions *)
 
 
 type 
+effects_opt_aux =  (* Optional effect annotation for functions *)
+   Effects_opt_pure (* sugar for empty effect set *)
+ | Effects_opt_effects of atyp
+
+
+type 
+rec_opt_aux =  (* Optional recursive annotation for functions *)
+   Rec_nonrec (* non-recursive *)
+ | Rec_rec (* recursive *)
+
+
+type 
 funcl_aux =  (* Function clause *)
    FCL_Funcl of id * pat * exp
 
 
 type 
-effects_opt_aux =  (* Optional effect annotation for functions *)
-   Effects_opt_pure (* sugar for empty effect set *)
- | Effects_opt_effects of atyp
+naming_scheme_opt = 
+   Name_sect_aux of naming_scheme_opt_aux * l
 
 
 type 
@@ -281,13 +292,8 @@ and index_range =
 
 
 type 
-naming_scheme_opt = 
-   Name_sect_aux of naming_scheme_opt_aux * l
-
-
-type 
-rec_opt = 
-   Rec_aux of rec_opt_aux * l
+type_union = 
+   Tu_aux of type_union_aux * l
 
 
 type 
@@ -296,13 +302,34 @@ tannot_opt =
 
 
 type 
+effects_opt = 
+   Effects_opt_aux of effects_opt_aux * l
+
+
+type 
+rec_opt = 
+   Rec_aux of rec_opt_aux * l
+
+
+type 
 funcl = 
    FCL_aux of funcl_aux * l
 
 
 type 
-effects_opt = 
-   Effects_opt_aux of effects_opt_aux * l
+val_spec_aux =  (* Value type specification *)
+   VS_val_spec of typschm * id
+ | VS_extern_no_rename of typschm * id
+ | VS_extern_spec of typschm * id * string
+
+
+type 
+type_def_aux =  (* Type definition body *)
+   TD_abbrev of id * naming_scheme_opt * typschm (* type abbreviation *)
+ | TD_record of id * naming_scheme_opt * typquant * ((atyp * id)) list * bool (* struct type definition *)
+ | TD_variant of id * naming_scheme_opt * typquant * (type_union) list * bool (* union type definition *)
+ | TD_enum of id * naming_scheme_opt * (id) list * bool (* enumeration type definition *)
+ | TD_register of id * atyp * atyp * ((index_range * id)) list (* register mutable bitfield type definition *)
 
 
 type 
@@ -312,28 +339,13 @@ default_typing_spec_aux =  (* Default kinding or typing assumption *)
 
 
 type 
-type_def_aux =  (* Type definition body *)
-   TD_abbrev of id * naming_scheme_opt * typschm (* type abbreviation *)
- | TD_record of id * naming_scheme_opt * typquant * ((atyp * id)) list * bool (* struct type definition *)
- | TD_variant of id * naming_scheme_opt * typquant * ((atyp * id)) list * bool (* union type definition *)
- | TD_enum of id * naming_scheme_opt * (id) list * bool (* enumeration type definition *)
- | TD_register of id * atyp * atyp * ((index_range * id)) list (* register mutable bitfield type definition *)
-
-
-type 
-val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_spec of typschm * id * string
-
-
-type 
 fundef_aux =  (* Function definition *)
    FD_function of rec_opt * tannot_opt * effects_opt * (funcl) list
 
 
 type 
-default_typing_spec = 
-   DT_aux of default_typing_spec_aux * l
+val_spec = 
+   VS_aux of val_spec_aux * l
 
 
 type 
@@ -342,8 +354,8 @@ type_def =
 
 
 type 
-val_spec = 
-   VS_aux of val_spec_aux * l
+default_typing_spec = 
+   DT_aux of default_typing_spec_aux * l
 
 
 type 

@@ -218,7 +218,11 @@ typschm =
 
 
 type 
-'a letbind = 
+'a letbind_aux =  (* Let binding *)
+   LB_val_explicit of typschm * 'a pat * 'a exp (* value binding, explicit type ('a pat must be total) *)
+ | LB_val_implicit of 'a pat * 'a exp (* value binding, implicit type ('a pat must be total) *)
+
+and 'a letbind = 
    LB_aux of 'a letbind_aux * 'a annot
 
 and 'a exp_aux =  (* Expression *)
@@ -226,7 +230,7 @@ and 'a exp_aux =  (* Expression *)
  | E_id of id (* identifier *)
  | E_lit of lit (* literal constant *)
  | E_cast of typ * 'a exp (* cast *)
- | E_app of 'a exp * ('a exp) list (* function application *)
+ | E_app of id * ('a exp) list (* function application *)
  | E_app_infix of 'a exp * id * 'a exp (* infix function application *)
  | E_tuple of ('a exp) list (* tuple *)
  | E_if of 'a exp * 'a exp * 'a exp (* conditional *)
@@ -277,31 +281,11 @@ and 'a pexp_aux =  (* Pattern match *)
 and 'a pexp = 
    Pat_aux of 'a pexp_aux * 'a annot
 
-and 'a letbind_aux =  (* Let binding *)
-   LB_val_explicit of typschm * 'a pat * 'a exp (* value binding, explicit type ('a pat must be total) *)
- | LB_val_implicit of 'a pat * 'a exp (* value binding, implicit type ('a pat must be total) *)
-
 
 type 
-'a tannot_opt_aux =  (* Optional type annotation for functions *)
-   Typ_annot_opt_some of typquant * typ
-
-
-type 
-'a funcl_aux =  (* Function clause *)
-   FCL_Funcl of id * 'a pat * 'a exp
-
-
-type 
-'a effects_opt_aux =  (* Optional effect annotation for functions *)
-   Effects_opt_pure (* sugar for empty effect set *)
- | Effects_opt_effects of effects
-
-
-type 
-rec_opt_aux =  (* Optional recursive annotation for functions *)
-   Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
+type_union_aux =  (* Type union constructors *)
+   Tu_id of id
+ | Tu_ty_id of typ * id
 
 
 type 
@@ -311,23 +295,25 @@ naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for va
 
 
 type 
-'a tannot_opt = 
-   Typ_annot_opt_aux of 'a tannot_opt_aux * 'a annot
+'a funcl_aux =  (* Function clause *)
+   FCL_Funcl of id * 'a pat * 'a exp
 
 
 type 
-'a funcl = 
-   FCL_aux of 'a funcl_aux * 'a annot
+rec_opt_aux =  (* Optional recursive annotation for functions *)
+   Rec_nonrec (* non-recursive *)
+ | Rec_rec (* recursive *)
 
 
 type 
-'a effects_opt = 
-   Effects_opt_aux of 'a effects_opt_aux * 'a annot
+'a tannot_opt_aux =  (* Optional type annotation for functions *)
+   Typ_annot_opt_some of typquant * typ
 
 
 type 
-rec_opt = 
-   Rec_aux of rec_opt_aux * l
+'a effects_opt_aux =  (* Optional effect annotation for functions *)
+   Effects_opt_pure (* sugar for empty effect set *)
+ | Effects_opt_effects of effects
 
 
 type 
@@ -341,8 +327,54 @@ and index_range =
 
 
 type 
+type_union = 
+   Tu_aux of type_union_aux * l
+
+
+type 
 naming_scheme_opt = 
    Name_sect_aux of naming_scheme_opt_aux * l
+
+
+type 
+'a funcl = 
+   FCL_aux of 'a funcl_aux * 'a annot
+
+
+type 
+rec_opt = 
+   Rec_aux of rec_opt_aux * l
+
+
+type 
+'a tannot_opt = 
+   Typ_annot_opt_aux of 'a tannot_opt_aux * 'a annot
+
+
+type 
+'a effects_opt = 
+   Effects_opt_aux of 'a effects_opt_aux * 'a annot
+
+
+type 
+'a val_spec_aux =  (* Value type specification *)
+   VS_val_spec of typschm * id
+ | VS_extern_no_rename of typschm * id
+ | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
+
+
+type 
+'a type_def_aux =  (* Type definition body *)
+   TD_abbrev of id * naming_scheme_opt * typschm (* type abbreviation *)
+ | TD_record of id * naming_scheme_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
+ | TD_variant of id * naming_scheme_opt * typquant * (type_union) list * bool (* union type definition *)
+ | TD_enum of id * naming_scheme_opt * (id) list * bool (* enumeration type definition *)
+ | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
+
+
+type 
+'a fundef_aux =  (* Function definition *)
+   FD_function of rec_opt * 'a tannot_opt * 'a effects_opt * ('a funcl) list
 
 
 type 
@@ -352,33 +384,13 @@ type
 
 
 type 
-'a val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
-
-
-type 
-'a fundef_aux =  (* Function definition *)
-   FD_function of rec_opt * 'a tannot_opt * 'a effects_opt * ('a funcl) list
-
-
-type 
-'a type_def_aux =  (* Type definition body *)
-   TD_abbrev of id * naming_scheme_opt * typschm (* type abbreviation *)
- | TD_record of id * naming_scheme_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
- | TD_variant of id * naming_scheme_opt * typquant * ((typ * id)) list * bool (* union type definition *)
- | TD_enum of id * naming_scheme_opt * (id) list * bool (* enumeration type definition *)
- | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
-
-
-type 
-'a default_typing_spec = 
-   DT_aux of 'a default_typing_spec_aux * 'a annot
-
-
-type 
 'a val_spec = 
    VS_aux of 'a val_spec_aux * 'a annot
+
+
+type 
+'a type_def = 
+   TD_aux of 'a type_def_aux * 'a annot
 
 
 type 
@@ -387,8 +399,8 @@ type
 
 
 type 
-'a type_def = 
-   TD_aux of 'a type_def_aux * 'a annot
+'a default_typing_spec = 
+   DT_aux of 'a default_typing_spec_aux * 'a annot
 
 
 type 
@@ -407,17 +419,12 @@ type
 
 
 type 
-'a def = 
-   DEF_aux of 'a def_aux * 'a annot
-
-
-type 
 'a typ_lib_aux =  (* library types and syntactic sugar for them *)
    Typ_lib_unit (* unit type with value $()$ *)
  | Typ_lib_bool (* booleans $_$ and $_$ *)
  | Typ_lib_bit (* pure bit values (not mutable bits) *)
  | Typ_lib_nat (* natural numbers 0,1,2,... *)
- | Typ_lib_string of string (* UTF8 strings *)
+ | Typ_lib_string (* UTF8 strings *)
  | Typ_lib_enum of nexp * nexp * order (* natural numbers nexp .. nexp+nexp-1, ordered by order *)
  | Typ_lib_enum1 of nexp (* sugar for \texttt{enum nexp 0 inc} *)
  | Typ_lib_enum2 of nexp * nexp (* sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} *)
@@ -430,13 +437,18 @@ type
 
 
 type 
-'a defs =  (* Definition sequence *)
-   Defs of ('a def) list
+'a def = 
+   DEF_aux of 'a def_aux * 'a annot
 
 
 type 
 'a typ_lib = 
    Typ_lib_aux of 'a typ_lib_aux * l
+
+
+type 
+'a defs =  (* Definition sequence *)
+   Defs of ('a def) list
 
 
 

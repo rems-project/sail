@@ -52,6 +52,12 @@ and t_arg =
   | TA_eft of effect
   | TA_ord of order 
 
+type tag =
+  | Emp
+  | External
+  | Default
+  | Constructor
+
 (* Constraints for nexps, plus the location which added the constraint, each nexp is either <= 0 = 0 or >= 0 *)
 type nexp_range =
   | LtEq of Parse_ast.l * nexp
@@ -59,6 +65,6 @@ type nexp_range =
   | GtEq of Parse_ast.l * nexp
   | In of Parse_ast.l * nexp * nexp list
 
-type tannot = (t * nexp_range list) option
+type tannot = (t * tag * nexp_range list) option
 
 val initial_kind_env : kind Envmap.t

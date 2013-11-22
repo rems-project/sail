@@ -45,7 +45,7 @@
 (**************************************************************************)
 
 {
-open Parser
+open Pre_parser
 module M = Map.Make(String)
 exception LexError of string * Lexing.position
 
@@ -58,64 +58,69 @@ let kw_table =
     (fun r (x,y) -> M.add x y r)
     M.empty
     [
-     ("and",                     (fun _ -> And));
-     ("as",                      (fun _ -> As));
-     ("bits",                    (fun _ -> Bits));
-     ("by",                      (fun _ -> By));
-     ("case",			 (fun _ -> Case));
-     ("clause",                  (fun _ -> Clause));
-     ("const",			 (fun _ -> Const));
-     ("default",		 (fun _ -> Default));
-     ("effect",                  (fun _ -> Effect));
-     ("Effects",                 (fun _ -> Effects));
-     ("end",                     (fun _ -> End));
-     ("enumerate",		 (fun _ -> Enumerate));
-     ("else",                    (fun _ -> Else));
-     ("extern",                  (fun _ -> Extern));
-     ("false",                   (fun _ -> False));
-     ("forall",                  (fun _ -> Forall));
-     ("foreach",                  (fun _ -> Foreach));
-     ("function",                (fun x -> Function_));
-     ("if",                      (fun x -> If_));
-     ("in",			 (fun x -> In));
-     ("IN",                      (fun x -> IN));
-     ("let",                     (fun x -> Let_));
-     ("member",                  (fun x -> Member));
-     ("Nat",                     (fun x -> Nat));
-     ("Order",                   (fun x -> Order));
-     ("pure",                    (fun x -> Pure));
-     ("rec",			 (fun x -> Rec));
-     ("register",		 (fun x -> Register));
+     ("and",                     (fun _ -> Other));
+     ("as",                      (fun _ -> Other));
+     ("bits",                    (fun _ -> Other));
+     ("by",                      (fun _ -> Other));
+     ("case",			 (fun _ -> Other));
+     ("clause",                  (fun _ -> Other));
+     ("const",			 (fun _ -> Other));
+     ("dec",                     (fun _ -> Other));
+     ("default",		 (fun _ -> Other));
+     ("deinfix",                 (fun _ -> Other));
+     ("effect",                  (fun _ -> Other));
+     ("Effects",                 (fun _ -> Other));
+     ("end",                     (fun _ -> Other));
+     ("enumerate",		 (fun _ -> Other));
+     ("else",                    (fun _ -> Other));
+     ("extern",                  (fun _ -> Other));
+     ("false",                   (fun _ -> Other));
+     ("forall",                  (fun _ -> Other));
+     ("foreach",                 (fun _ -> Other));
+     ("function",                (fun x -> Other));
+     ("if",                      (fun x -> Other));
+     ("in",			 (fun x -> Other));
+     ("IN",                      (fun x -> Other));
+     ("Inc",                     (fun x -> Other));
+     ("let",                     (fun x -> Other));
+     ("member",                  (fun x -> Other));
+     ("Nat",                     (fun x -> Other));
+     ("Order",                   (fun x -> Other));
+     ("pure",                    (fun x -> Other));
+     ("rec",			 (fun x -> Other));
+     ("register",		 (fun x -> Other));
      ("scattered",               (fun x -> Scattered));
-     ("struct",                  (fun x -> Struct));
-     ("switch",			 (fun x -> Switch));
-     ("then",                    (fun x -> Then));
-     ("true",                    (fun x -> True));
-     ("Type",                    (fun x -> TYPE));
+     ("struct",                  (fun x -> Other));
+     ("switch",			 (fun x -> Other));
+     ("then",                    (fun x -> Other));
+     ("true",                    (fun x -> Other));
+     ("Type",                    (fun x -> Other));
      ("typedef",		 (fun x -> Typedef));
-     ("undefined",               (fun x -> Undefined));
-     ("union",			 (fun x -> Union));
-     ("with",                    (fun x -> With));
-     ("val",                     (fun x -> Val));
+     ("undefined",               (fun x -> Other));
+     ("union",			 (fun x -> Other));
+     ("with",                    (fun x -> Other));
+     ("val",                     (fun x -> Other));
 
-     ("AND",			 (fun x -> AND));
-     ("div",			 (fun x -> Div_));
-     ("EOR",			 (fun x -> EOR));
-     ("mod",			 (fun x -> Mod));
-     ("OR",			 (fun x -> OR));
-     ("quot",			 (fun x -> Quot));
-     ("rem",			 (fun x -> Rem));
+     ("AND",			 (fun x -> Other));
+     ("div",			 (fun x -> Other));
+     ("EOR",			 (fun x -> Other));
+     ("mod",			 (fun x -> Other));
+     ("OR",			 (fun x -> Other));
+     ("quot",			 (fun x -> Other));
+     ("rem",			 (fun x -> Other));
 ]
 
 }
 
 let ws = [' ''\t']+
+let lowerletter = ['a'-'z']
+let upperletter = ['A'-'Z']
 let letter = ['a'-'z''A'-'Z']
 let digit = ['0'-'9']
 let binarydigit = ['0'-'1']
 let hexdigit = ['0'-'9''A'-'F''a'-'f']
 let alphanum = letter|digit
-let startident = letter|'_'
+let startident = lowerletter|'_'
 let ident = alphanum|['_''\'']
 let oper_char = ['!''$''%''&''*''+''-''.''/'':''<''=''>''?''@''^''|''~']
 let escape_sequence = ('\\' ['\\''\"''\'''n''t''b''r']) | ('\\' digit digit digit) | ('\\' 'x' hexdigit hexdigit)
@@ -127,84 +132,6 @@ rule token = parse
     { Lexing.new_line lexbuf;
       token lexbuf }
 
-  | "&"					{ (Amp(r"&")) }
-  | "@"					{ (At(r"@")) }
-  | "|"                                 { Bar }
-  | "^"					{ (Carrot(r"^")) }
-  | ":"                                 { Colon }
-  | ","                                 { Comma }
-  | "."                                 { Dot }
-  | "/"			                { (Div(r "/")) }
-  | "="                                 { (Eq(r"=")) }
-  | "!"					{ (Excl(r"!")) }
-  | ">"					{ (Gt(r">")) }
-  | "-"					{ Minus }
-  | "<"					{ (Lt(r"<")) }
-  | "+"					{ (Plus(r"+")) }
-  | ";"                                 { Semi }
-  | "*"                                 { (Star(r"*")) }
-  | "~"					{ (Tilde(r"~")) }
-  | "_"                                 { Under }
-  | "{"                                 { Lcurly }
-  | "}"                                 { Rcurly }
-  | "("                                 { Lparen }
-  | "(:"                                { LparenColon }
-  | ")"                                 { Rparen }
-  | "["                                 { Lsquare }
-  | "]"                                 { Rsquare }
-  | "&&" as i                           { (AmpAmp(r i)) }
-  | "||"                                { BarBar }
-  | "|>"                                { BarGt }
-  | "|]"				{ BarSquare }
-  | "^^"				{ (CarrotCarrot(r"^^")) }
-  | "::" as i                           { (ColonColon(r i)) }
-  | ":="                                { ColonEq }
-  | ".."				{ DotDot }
-  | "=/="				{ (EqDivEq(r"=/=")) }
-  | "=="				{ (EqEq(r"==")) }
-  | "!="				{ (ExclEq(r"!=")) }
-  | "!!"				{ (ExclExcl(r"!!")) }
-  | ">="				{ (GtEq(r">=")) }
-  | ">=+"				{ (GtEqPlus(r">=+")) }
-  | ">>"				{ (GtGt(r">>")) }
-  | ">>>"				{ (GtGtGt(r">>>")) }
-  | ">+"				{ (GtPlus(r">+")) }
-  | "#>>"				{ (HashGtGt(r"#>>")) }
-  | "#<<"				{ (HashLtLt(r"#<<")) }
-  | "->"                                { MinusGt }
-  | "<="				{ (LtEq(r"<=")) }
-  | "<=+"				{ (LtEqPlus(r"<=+")) }
-  | "<>"				{ (LtGt(r"<>")) }
-  | "<<"				{ (LtLt(r"<<")) }
-  | "<<<"				{ (LtLtLt(r"<<<")) }
-  | "<+"				{ (LtPlus(r"<+")) }
-  | "**"				{ (StarStar(r"**")) }
-  | "~^"				{ (TildeCarrot(r"~^")) }
-
-  | ">=_s"				{ (GtEqUnderS(r">=_s")) }
-  | ">=_si"				{ (GtEqUnderSi(r">=_si")) }
-  | ">=_u"				{ (GtEqUnderU(r">=_u")) }
-  | ">=_ui"				{ (GtEqUnderUi(r">=_ui")) }
-  | ">>_u"				{ (GtGtUnderU(r">>_u")) }
-  | ">_s"				{ (GtUnderS(r">_s")) }
-  | ">_si"				{ (GtUnderSi(r">_si")) }
-  | ">_u"				{ (GtUnderU(r">_u")) }
-  | ">_ui"				{ (GtUnderUi(r">_ui")) }
-  | "<=_s"				{ (LtEqUnderS(r"<=_s")) }
-  | "<=_si"				{ (LtEqUnderSi(r"<=_si")) }
-  | "<=_u"				{ (LtEqUnderU(r"<=_u")) }
-  | "<=_ui"				{ (LtEqUnderUi(r"<=_ui")) }
-  | "<_s"				{ (LtUnderS(r"<_s")) }
-  | "<_si"				{ (LtUnderSi(r"<_si")) }
-  | "<_u"				{ (LtUnderU(r"<_u")) }
-  | "<_ui"				{ (LtUnderUi(r"<_ui")) }
-  | "**_s"				{ (StarStarUnderS(r"**_s")) }
-  | "**_si"				{ (StarStarUnderSi(r"**_si")) }
-  | "*_u"				{ (StarUnderU(r"*_u")) }
-  | "*_ui"				{ (StarUnderUi(r"*_ui")) }
-  | "2^"				{ (TwoCarrot(r"2^")) }
-
-
   | "(*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }
   | "*)"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
 
@@ -212,71 +139,13 @@ rule token = parse
                                             (M.find i kw_table) ()
                                           else
                                             Id(r i) }
-  | "&" oper_char+ as i                 { (AmpI(r i)) }
-  | "@" oper_char+ as i                 { (AtI(r i)) }
-  | "^" oper_char+ as i                 { (CarrotI(r i)) }
-  | "/" oper_char+ as i                 { (DivI(r i)) }
-  | "=" oper_char+ as i			{ (EqI(r i)) }
-  | "!" oper_char+ as i                 { (ExclI(r i)) }
-  | ">" oper_char+ as i                 { (GtI(r i)) }
-  | "<" oper_char+ as i			{ (LtI(r i)) }
-  | "+"	oper_char+ as i			{ (PlusI(r i)) }
-  | "*" oper_char+ as i                 { (StarI(r i)) }
-  | "~"	oper_char+ as i			{ (TildeI(r i)) }
-  | "&&" oper_char+ as i                { (AmpAmpI(r i)) }
-  | "^^" oper_char+ as i		{ (CarrotCarrotI(r i)) }
-  | "::" oper_char+ as i                { (ColonColonI(r i)) }
-  | "=/=" oper_char+ as i		{ (EqDivEqI(r i)) }
-  | "==" oper_char+ as i		{ (EqEqI(r i)) }
-  | "!=" oper_char+ as i		{ (ExclEqI(r i)) }
-  | "!!" oper_char+ as i		{ (ExclExclI(r i)) }
-  | ">=" oper_char+ as i		{ (GtEqI(r i)) }
-  | ">=+" oper_char+ as i		{ (GtEqPlusI(r i)) }
-  | ">>" oper_char+ as i		{ (GtGtI(r i)) }
-  | ">>>" oper_char+ as i		{ (GtGtGtI(r i)) }
-  | ">+" oper_char+ as i		{ (GtPlusI(r i)) }
-  | "#>>" oper_char+ as i		{ (HashGtGt(r i)) }
-  | "#<<" oper_char+ as i		{ (HashLtLt(r i)) }
-  | "<=" oper_char+ as i		{ (LtEqI(r i)) }
-  | "<=+" oper_char+ as i		{ (LtEqPlusI(r i)) }
-  | "<<" oper_char+ as i		{ (LtLtI(r i)) }
-  | "<<<" oper_char+ as i		{ (LtLtLtI(r i)) }
-  | "<+" oper_char+ as i		{ (LtPlusI(r i)) }
-  | "**" oper_char+ as i		{ (StarStarI(r i)) }
-  | "~^" oper_char+ as i		{ (TildeCarrot(r i)) }
-
-  | ">=_s" oper_char+ as i				{ (GtEqUnderSI(r i)) }
-  | ">=_si" oper_char+ as i				{ (GtEqUnderSiI(r i)) }
-  | ">=_u" oper_char+ as i				{ (GtEqUnderUI(r i)) }
-  | ">=_ui" oper_char+ as i				{ (GtEqUnderUiI(r i)) }
-  | ">>_u" oper_char+ as i				{ (GtGtUnderUI(r i)) }
-  | ">_s" oper_char+ as i				{ (GtUnderSI(r i)) }
-  | ">_si" oper_char+ as i				{ (GtUnderSiI(r i)) }
-  | ">_u" oper_char+ as i				{ (GtUnderUI(r i)) }
-  | ">_ui" oper_char+ as i				{ (GtUnderUiI(r i)) }
-  | "<=_s" oper_char+ as i				{ (LtEqUnderSI(r i)) }
-  | "<=_si" oper_char+ as i				{ (LtEqUnderSiI(r i)) }
-  | "<=_u" oper_char+ as i				{ (LtEqUnderUI(r i)) }
-  | "<=_ui" oper_char+ as i				{ (LtEqUnderUiI(r i)) }
-  | "<_s" oper_char+ as i				{ (LtUnderSI(r i)) }
-  | "<_si" oper_char+ as i				{ (LtUnderSiI(r i)) }
-  | "<_u" oper_char+ as i				{ (LtUnderUI(r i)) }
-  | "<_ui" oper_char+ as i				{ (LtUnderUiI(r i)) }
-  | "**_s" oper_char+ as i				{ (StarStarUnderSI(r i)) }
-  | "**_si" oper_char+ as i				{ (StarStarUnderSiI(r i)) }
-  | "*_u" oper_char+ as i				{ (StarUnderUI(r i)) }
-  | "*_ui" oper_char+ as i				{ (StarUnderUiI(r i)) }
-  | "2^" oper_char+ as i				{ (TwoCarrotI(r i)) }
-
-  | digit+ as i                         { (Num(int_of_string i)) }
-  | "0b" (binarydigit+ as i)		{ (Bin(i)) }
-  | "0x" (hexdigit+ as i) 		{ (Hex(i)) }
-  | '"'                                 { (String(
-                                           string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf)) }
+  | oper_char+                          { Other }
+  | digit+ as i                         { Other }
+  | '"'                                 { let s =
+                                           string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf) in 
+                                           Other }
   | eof                                 { Eof }
-  | _  as c                             { raise (LexError(
-                                          Printf.sprintf "Unexpected character: %c" c,
-                                          Lexing.lexeme_start_p lexbuf)) }
+  | _  as c                             { Other }
 
 
 and comment pos depth = parse

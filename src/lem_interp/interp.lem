@@ -130,7 +130,7 @@ let rec to_data_constructors (Defs defs) =
     | DEF_type t ->
       match t with 
       | TD_variant id _ tq tid_list _ ->
-        (List.map (fun (x,y) -> (y,x)) tid_list)++(to_data_constructors (Defs defs))
+        (List.map (fun (Tu_ty_id x y) -> (y,x)) tid_list)++(to_data_constructors (Defs defs))
       | _ -> to_data_constructors (Defs defs) end
     | _ -> to_data_constructors (Defs defs) end
    end
@@ -268,7 +268,7 @@ let rec to_exp v =
         E_vector_indexed (snd (List.foldr (fun e (n,acc) -> (n+1,(n, to_exp e)::acc)) (n-(List.length vals),[]) vals))
     | V_record(ivals) -> E_record(FES_Fexps (List.map (fun (id,value) -> (FE_Fexp id (to_exp value))) ivals) false)
     | V_list(vals) -> E_list (List.map to_exp vals)
-    | V_ctor id vals -> E_app (E_id id) [to_exp vals]
+    | V_ctor id vals -> E_app id [to_exp vals]
     end
 
 val find_type_def : defs -> id -> maybe type_def
@@ -634,7 +634,7 @@ and interp_main t_level l_env l_mem exp =
     | E_block(exps) -> interp_block t_level l_env l_env l_mem exps
     | E_app f args ->
       match (f,t_level) with
-      | (E_id(id),(defs,externs,regs,mems,ctors)) -> 
+      | (id,(defs,externs,regs,mems,ctors)) -> 
 	(match find_function defs id with
 	| Just(funcls) -> 
           resolve_outcome (interp_main t_level l_env l_mem (List_extra.head args))

@@ -120,9 +120,9 @@ let star = "*"
 
 /*Terminals with no content*/
 
-%token And As Bits By Case Clause Const Default Dec Effect Effects End Enumerate Else Extern
+%token And As Bits By Case Clause Const Dec Default Deinfix Effect Effects End Enumerate Else Extern
 %token False Forall Foreach Function_ If_ In IN Inc Let_ Member Nat Order Pure Rec Register
-%token Scattered Struct Switch Then True Type TYPE Typedef Undefined Union With Val
+%token Scattered Struct Switch Then True TwoStarStar Type TYPE Typedef Undefined Union With Val
 
 /* Avoid shift/reduce conflict - see right_atomic_exp rule */
 %nonassoc Then
@@ -132,11 +132,11 @@ let star = "*"
 
 %token Bar Colon Comma Dot Eof Minus Semi Under
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare
-%token BarBar BarGt BarSquare DotDot ColonEq ColonGt MinusGt LtBar LparenColon SquareBar
+%token BarBar BarSquare BarBarSquare ColonEq DotDot ColonGt MinusGt LtBar SquareBar SquareBarBar
 
 /*Terminals with content*/
 
-%token <string> Id TickId
+%token <string> Id TickId TyId
 %token <int> Num
 %token <string> String Bin Hex
 
@@ -175,70 +175,74 @@ id:
     { idl (Id($1)) }
   | Tilde
     { idl (Id($1)) }
-  | LparenColon Amp Rparen
-    { idl (DeIid($2)) }
-  | LparenColon At Rparen
-    { idl (DeIid($2)) }
-  | LparenColon Carrot Rparen
-    { idl (DeIid($2)) }
-  | LparenColon Div Rparen
-    { idl (DeIid($2)) }
-  | LparenColon Eq Rparen
-    { Id_aux(DeIid($2),loc ()) }
-  | LparenColon Excl Lparen
-    { idl (DeIid($2)) }
-  | LparenColon Gt Lparen
-    { idl (DeIid($2)) }
-  | LparenColon Lt Lparen
-    { idl (DeIid($2)) }
-  | LparenColon Minus Lparen
+  | Lparen Deinfix Amp Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix At Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix Carrot Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix Div Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix Eq Rparen
+    { Id_aux(DeIid($3),loc ()) }
+  | Lparen Deinfix Excl Lparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix Gt Lparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix Lt Lparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix Minus Lparen
     { idl (DeIid("-")) }
-  | LparenColon Plus Rparen
-    { idl (DeIid($2)) }
-  | LparenColon Star Rparen
-    { idl (DeIid($2)) }
-  | LparenColon AmpAmp Rparen
-    { idl (DeIid($2)) }
-  | LparenColon BarBar Rparen
+  | Lparen Deinfix Plus Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix Star Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix AmpAmp Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix BarBar Rparen
     { idl (DeIid("||")) }
-  | LparenColon CarrotCarrot Rparen
-    { idl (DeIid($2)) }
-  | LparenColon ColonColon Rparen
-    { idl (DeIid($2)) }
-  | LparenColon EqDivEq Rparen
-    { idl (DeIid($2)) }
-  | LparenColon EqEq Rparen
-    { idl (DeIid($2)) }
-  | LparenColon ExclEq Rparen
-    { idl (DeIid($2)) }
-  | LparenColon ExclExcl Rparen
-    { idl (DeIid($2)) }
-  | LparenColon GtEq Rparen
-    { idl (DeIid($2)) }
-  | LparenColon GtEqPlus Rparen
-    { idl (DeIid($2)) }
-  | LparenColon GtGt Rparen
-    { idl (DeIid($2)) }
-  | LparenColon GtGtGt Rparen
-    { idl (DeIid($2)) }
-  | LparenColon GtPlus Rparen
-    { idl (DeIid($2)) }
-  | LparenColon HashGtGt Rparen
-    { idl (DeIid($2)) }
-  | LparenColon HashLtLt Rparen
-    { idl (DeIid($2)) }
-  | LparenColon LtEq Rparen
-    { idl (DeIid($2)) }
-  | LparenColon LtLt Rparen
-    { idl (DeIid($2)) }
-  | LparenColon LtLtLt Rparen
-    { idl (DeIid($2)) }
-  | LparenColon LtPlus Rparen
-    { idl (DeIid($2)) }
-  | LparenColon StarStar Rparen
-    { idl (DeIid($2)) }
-  | LparenColon TildeCarrot Rparen
-    { idl (DeIid($2)) }
+  | Lparen Deinfix CarrotCarrot Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix ColonColon Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix EqDivEq Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix EqEq Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix ExclEq Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix ExclExcl Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix GtEq Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix GtEqPlus Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix GtGt Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix GtGtGt Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix GtPlus Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix HashGtGt Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix HashLtLt Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix LtEq Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix LtLt Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix LtLtLt Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix LtPlus Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix StarStar Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix TildeCarrot Rparen
+    { idl (DeIid($3)) }
+
+tid:
+  | TyId
+    { (idl (Id($1))) }
 
 atomic_kind:
   | TYPE
@@ -283,7 +287,7 @@ effect_list:
     { $1::$3 }
 
 effect_typ:
-  | Effect id
+  | Effect tid
     { tloc (ATyp_efid($2)) }
   | Effect Lcurly effect_list Rcurly
     { tloc (ATyp_set($3)) }
@@ -291,7 +295,7 @@ effect_typ:
     { tloc (ATyp_set([])) }
 
 atomic_typ:
-  | id
+  | tid
     { tloc (ATyp_id $1) }
   | effect_typ
     { $1 }
@@ -299,32 +303,36 @@ atomic_typ:
     { tloc (ATyp_inc) }
   | Dec
     { tloc (ATyp_dec) } 
-  | Lparen typ Rparen
-    { $2 }
   | SquareBar nexp_typ BarSquare
       { tloc (make_enum_sugar $2) }
   | SquareBar nexp_typ Colon nexp_typ BarSquare
       { tloc (make_enum_sugar_bounded $2 $4) }
+  | Lparen typ Rparen
+    { $2 }
 
 vec_typ:
   | atomic_typ
       { $1 }
-  | atomic_typ Lsquare nexp_typ Rsquare
-      { tloc (make_vector_sugar $1 $3) }
-  | atomic_typ Lsquare nexp_typ Colon nexp_typ Rsquare
-      { tloc (make_vector_sugar_bounded $1 $3 $5) }
+  | tid Lsquare nexp_typ Rsquare
+      { tloc (make_vector_sugar (ATyp_aux ((ATyp_id $1), locn 1 1)) $3) }
+  | tid Lsquare nexp_typ Colon nexp_typ Rsquare
+      { tloc (make_vector_sugar_bounded (ATyp_aux ((ATyp_id $1), locn 1 1)) $3 $5) }
 
 app_typs:
   | vec_typ
     { [$1] }
+  | Num
+    { [tloc (ATyp_constant $1)] }
+  | Num app_typs
+    { (ATyp_aux((ATyp_constant $1),locn 1 1))::$2 }
   | vec_typ app_typs
     { $1::$2 }
 
 app_typ:
   | vec_typ
     { $1 }
-  | id app_typs
-    { tloc (ATyp_app($1,$2)) }
+  | tid Lt app_typs Gt
+    { tloc (ATyp_app($1,$3)) }
 
 star_typ_list:
   | app_typ
@@ -342,23 +350,23 @@ star_typ:
 exp_typ:
    | star_typ
      { $1 }
-   | Num StarStar typ
-     { if (2 = $1)
-       then tloc (ATyp_exp($3))
-       else raise (Parse_error_locn(loc (), "Only 2 is a valid exponent base in Nats")) }
+   | Num
+     { tloc (ATyp_constant $1) }
+   | TwoStarStar typ
+     { tloc (ATyp_exp($2)) }
 
 nexp_typ:
-  | Num
-    { tloc (ATyp_constant $1) }
    | exp_typ
      { $1 }
-   | atomic_typ Plus typ
+   | atomic_typ Plus nexp_typ
      { tloc (ATyp_sum($1,$3)) }
+   | Lparen atomic_typ Plus nexp_typ Rparen
+     { tloc (ATyp_sum($2,$4)) }
 
 typ:
-  | nexp_typ
+  | star_typ
     { $1 }
-  | star_typ MinusGt atomic_typ effect_typ
+  | star_typ MinusGt typ effect_typ
     { tloc (ATyp_fn($1,$3,$4)) }
 
 lit:
@@ -387,21 +395,25 @@ atomic_pat:
     { ploc P_wild }
   | Lparen pat As id Rparen
     { ploc (P_as($2,$4)) }
-  | Lt typ Gt atomic_pat
-    { ploc (P_typ($2,$4)) } 
+  | Lparen Lparen typ Rparen atomic_pat Rparen
+    { ploc (P_typ($3,$5)) } 
   | id
     { ploc (P_app($1,[])) }
   | Lcurly fpats Rcurly
     { ploc (P_record((fst $2, snd $2))) }
-  | Lsquare pat Rsquare
-    { ploc (P_vector([$2])) }
   | Lsquare comma_pats Rsquare
     { ploc (P_vector($2)) }
+  | Lsquare pat Rsquare
+    { ploc (P_vector([$2])) }
   | Lsquare npats Rsquare
     { ploc (P_vector_indexed($2)) }
   | Lparen comma_pats Rparen
     { ploc (P_tup($2)) }
-  | SquareBar comma_pats BarSquare
+  | SquareBarBar BarBarSquare
+    { ploc (P_list([])) }
+  | SquareBarBar pat BarBarSquare
+    { ploc (P_list([$2])) }
+  | SquareBarBar comma_pats BarBarSquare
     { ploc (P_list($2)) }
   | Lparen pat Rparen
     { $2 }
@@ -409,10 +421,10 @@ atomic_pat:
 app_pat:
   | atomic_pat
     { $1 }
-  | id Lparen pat Rparen
-    { ploc (P_app($1,[$3])) }
   | id Lparen comma_pats Rparen
     { ploc (P_app($1,$3)) }
+  | id Lparen pat Rparen
+    { ploc (P_app($1,[$3])) }
 
 pat_colons:
   | atomic_pat Colon atomic_pat
@@ -463,7 +475,7 @@ atomic_exp:
     { eloc (E_lit($1)) }
   | Lparen exp Rparen
     { $2 }
-  | Lt typ Gt atomic_exp 
+  | Lparen typ Rparen atomic_exp 
     { eloc (E_cast($2,$4)) }
   | Lparen comma_exps Rparen
     { eloc (E_tuple($2)) }
@@ -475,7 +487,7 @@ atomic_exp:
     { eloc (E_vector_update($2,$4,$6)) }
   | Lsquare exp With atomic_exp Colon atomic_exp Eq exp Rsquare
     { eloc (E_vector_update_subrange($2,$4,$6,$8)) }
-  | SquareBar comma_exps BarSquare
+  | SquareBarBar comma_exps BarBarSquare
     { eloc (E_list($2)) }
   | Switch exp Lcurly case_exps Rcurly
     { eloc (E_case($2,$4)) }
@@ -498,11 +510,11 @@ app_exp:
   | vaccess_exp
     { $1 }
   | id Lparen Rparen
-    { eloc (E_app((E_aux((E_id $1), locn 1 1)), [eloc (E_lit (lloc L_unit))])) }
+    { eloc (E_app($1, [eloc (E_lit (lloc L_unit))])) }
   | id Lparen exp Rparen
-    { eloc (E_app((E_aux((E_id $1),locn 1 1)),[ E_aux((E_tuple [$3]),locn 3 3)])) }
+    { eloc (E_app($1,[ E_aux((E_tuple [$3]),locn 3 3)])) }
   | id Lparen comma_exps Rparen
-    { eloc (E_app((E_aux((E_id $1),locn 1 1)),[E_aux (E_tuple $3,locn 3 3)])) }
+    { eloc (E_app($1,[E_aux (E_tuple $3,locn 3 3)])) }
 
 right_atomic_exp:
   | If_ exp Then exp Else exp
@@ -863,15 +875,19 @@ val_spec:
     { vloc (VS_val_spec(mk_typschm $2 $3 2 3,$4)) }
   | Val atomic_typ id
     { vloc (VS_val_spec(mk_typschm (mk_typqn ()) $2 2 2,$3)) }
+  | Val Extern typquant atomic_typ id
+    { vloc (VS_extern_no_rename (mk_typschm $3 $4 3 4,$5)) }
+  | Val Extern atomic_typ id
+    { vloc (VS_extern_no_rename (mk_typschm (mk_typqn ()) $3 3 3, $4)) }
   | Val Extern typquant atomic_typ id Eq String
     { vloc (VS_extern_spec (mk_typschm $3 $4 3 4,$5,$7)) }
   | Val Extern atomic_typ id Eq String
     { vloc (VS_extern_spec (mk_typschm (mk_typqn ()) $3 3 3,$4, $6)) }
 
 kinded_id:
-  | id
+  | tid
     { kiloc (KOpt_none $1) }
-  | kind id
+  | kind tid
     { kiloc (KOpt_kind($1,$2))}
 
 /*kinded_ids:
@@ -923,6 +939,20 @@ c_def_body:
     { [($1,$2)],true }
   | atomic_typ id Semi c_def_body
     { ($1,$2)::(fst $4), snd $4 }
+
+union_body:
+  | id
+    { [Tu_aux( Tu_id $1, loc())],false }
+  | atomic_typ id
+    { [Tu_aux( Tu_ty_id ($1,$2), loc())],false }
+  | id Semi
+    { [Tu_aux( Tu_id $1, loc())],true }
+  | atomic_typ id Semi
+    { [Tu_aux( Tu_ty_id ($1,$2),loc())],true }
+  | id Semi union_body
+    { (Tu_aux( Tu_id $1, loc()))::(fst $3), snd $3 }
+  | atomic_typ id Semi union_body
+    { (Tu_aux(Tu_ty_id($1,$2),loc()))::(fst $4), snd $4 }
 
 index_range_atomic:
   | Num
@@ -976,13 +1006,13 @@ type_def:
     { tdloc (TD_record($2,mk_namesectn (), $6, fst $8, snd $8)) }
   | Typedef id Eq Const Struct Lcurly c_def_body Rcurly
     { tdloc (TD_record($2, mk_namesectn (), mk_typqn (), fst $7, snd $7)) }
-  | Typedef id name_sect Eq Const Union typquant Lcurly c_def_body Rcurly
+  | Typedef id name_sect Eq Const Union typquant Lcurly union_body Rcurly
     { tdloc (TD_variant($2,$3, $7, fst $9, snd $9)) }
-  | Typedef id Eq Const Union typquant Lcurly c_def_body Rcurly
+  | Typedef id Eq Const Union typquant Lcurly union_body Rcurly
     { tdloc (TD_variant($2,mk_namesectn (), $6, fst $8, snd $8)) }
-  | Typedef id name_sect Eq Const Union Lcurly c_def_body Rcurly
+  | Typedef id name_sect Eq Const Union Lcurly union_body Rcurly
     { tdloc (TD_variant($2, $3, mk_typqn (), fst $8, snd $8)) }
-  | Typedef id Eq Const Union Lcurly c_def_body Rcurly
+  | Typedef id Eq Const Union Lcurly union_body Rcurly
     { tdloc (TD_variant($2, mk_namesectn (), mk_typqn (), fst $7, snd $7)) }
   | Typedef id Eq Enumerate Lcurly enum_body Rcurly
     { tdloc (TD_enum($2, mk_namesectn (), $6,false)) }

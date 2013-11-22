@@ -323,7 +323,7 @@ and to_ast_exp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) 
     | Parse_ast.E_id(id) -> E_id(to_ast_id id)
     | Parse_ast.E_lit(lit) -> E_lit(to_ast_lit lit)
     | Parse_ast.E_cast(typ,exp) -> E_cast(to_ast_typ k_env typ, to_ast_exp k_env exp)
-    | Parse_ast.E_app(f,args) -> E_app(to_ast_exp k_env f, List.map (to_ast_exp k_env) args)
+    | Parse_ast.E_app(f,args) -> E_app(to_ast_id f, List.map (to_ast_exp k_env) args)
     | Parse_ast.E_app_infix(left,op,right) -> E_app_infix(to_ast_exp k_env left, to_ast_id op, to_ast_exp k_env right)
     | Parse_ast.E_tuple(exps) -> E_tuple(List.map (to_ast_exp k_env) exps)
     | Parse_ast.E_if(e1,e2,e3) -> E_if(to_ast_exp k_env e1, to_ast_exp k_env e2, to_ast_exp k_env e3)
@@ -351,9 +351,9 @@ and to_ast_lexp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp)
   LEXP_aux(
     (match exp with
     | Parse_ast.E_id(id) -> LEXP_id(to_ast_id id)
-    | Parse_ast.E_app(Parse_ast.E_aux(f,l'),[exp]) -> 
+    | Parse_ast.E_app((Parse_ast.Id_aux(f,l') as f'),[exp]) -> 
       (match f with
-      | Parse_ast.E_id(id) -> LEXP_memory(to_ast_id id,to_ast_exp k_env exp)
+      | Parse_ast.Id(id) -> LEXP_memory(to_ast_id f',to_ast_exp k_env exp)
       | _ -> typ_error l' "memory call on lefthand side of assignment must begin with an id" None None)
     | Parse_ast.E_vector_access(vexp,exp) -> LEXP_vector(to_ast_lexp k_env vexp, to_ast_exp k_env exp)
     | Parse_ast.E_vector_subrange(vexp,exp1,exp2) -> LEXP_vector_range(to_ast_lexp k_env vexp, to_ast_exp k_env exp1, to_ast_exp k_env exp2)
@@ -466,7 +466,11 @@ let to_ast_typedef (names,k_env,t_env) (td:Parse_ast.type_def) : (tannot type_de
     let id = to_ast_id id in
     let key = id_to_string id in
     let typq,k_env,_ = to_ast_typquant k_env typq in
-    let arms = List.map (fun (atyp,id) -> (to_ast_typ k_env atyp),(to_ast_id id)) arms in (* Add check that all arms have unique names *)
+    let arms = List.map (fun (Parse_ast.Tu_aux(tu,l)) -> 
+                             match tu with
+                             | Parse_ast.Tu_ty_id(atyp,id) -> (Tu_aux(Tu_ty_id ((to_ast_typ k_env atyp),(to_ast_id id)),l))
+                             | Parse_ast.Tu_id id -> (Tu_aux(Tu_id(to_ast_id id),l)) ) 
+               arms in (* Add check that all arms have unique names *)
     let td_var = TD_aux(TD_variant(id,to_ast_namescm name_scm_opt,typq,arms,false),(l,None)) in
     let typ = (match (typquant_to_quantkinds k_env typq) with
       | [ ] -> {k = K_Typ}
@@ -595,7 +599,7 @@ let to_ast_def (names, k_env, t_env) partial_defs def : def_progress envs_out * 
         (match !d with
         | (DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,arms,false),tl)),dl), false) -> 
           let typ = to_ast_typ k typ in
-          d:= (DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,arms@[typ,arm_id],false),tl)),dl),false);
+          d:= (DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,arms@[Tu_aux(Tu_ty_id (typ,arm_id), l)],false),tl)),dl),false);
           (No_def,envs),partial_defs
         | _,true -> typ_error l "Scattered type definition clause extends ended definition" (Some id) None
         | _ -> typ_error l "Scattered type definition clause matches an existing scattered function definition header" (Some id) None))

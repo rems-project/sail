@@ -211,7 +211,7 @@ and pp_exp ppf (E_aux(e,_)) =
   | E_id(id) -> pp_id ppf id
   | E_lit(lit) -> pp_lit ppf lit
   | E_cast(typ,exp) -> fprintf ppf "@[<0>%a%a%a %a@]" kwd "<" pp_typ typ kwd ">" pp_exp exp 
-  | E_app(f,args) -> fprintf ppf "@[<0>%a %a@]" pp_exp f (list_pp pp_exp pp_exp) args
+  | E_app(f,args) -> fprintf ppf "@[<0>%a %a@]" pp_id f (list_pp pp_exp pp_exp) args
   | E_app_infix(l,op,r) -> fprintf ppf "@[<0>%a %a %a@]" pp_exp l pp_id op pp_exp r
   | E_tuple(exps) -> fprintf ppf "@[<0>%a %a %a@]" kwd "(" (list_pp pp_comma_exp pp_exp) exps kwd ")"
   | E_if(c,t,e) -> fprintf ppf "@[<0> %a %a @[<1> %a %a@] @[<1> %a@ %a@]@]" kwd "if " pp_exp c kwd "then" pp_exp t kwd "else" pp_exp e
@@ -288,8 +288,11 @@ let pp_typdef ppf (TD_aux(td,_)) =
     fprintf ppf "@[<0>%a %a %a %a %a %a %a %a@[<1>%a@] %a]@\n" 
       kwd "typedef" pp_id id pp_namescm nm kwd "=" kwd "const" kwd "struct" pp_typquant typq kwd "{" (list_pp f_pp f_pp) fs kwd "}"
   | TD_variant(id,nm,typq,ar,_) ->
-    let a_pp ppf (typ,id) = 
-      fprintf ppf "@[<1>%a %a%a@]" pp_typ typ pp_id id kwd ";" in
+    let a_pp ppf (Tu_aux(typ_u,_)) = 
+      match typ_u with
+      | Tu_ty_id(typ,id) -> fprintf ppf "@[<1>%a %a%a@]" pp_typ typ pp_id id kwd ";" 
+      | Tu_id(id) -> fprintf ppf "@[<1>%a%a@]" pp_id id kwd ";"
+    in
     fprintf ppf "@[<0>%a %a %a %a %a %a %a %a@[<1>%a@] %a]@\n" 
       kwd "typedef" pp_id id pp_namescm nm kwd "=" kwd "const" kwd "union" pp_typquant typq kwd "{" (list_pp a_pp a_pp) ar kwd "}"
   | TD_enum(id,ns,enums,_) ->
@@ -504,7 +507,7 @@ and pp_lem_exp ppf (E_aux(e,_)) =
   | E_id(id) -> fprintf ppf "(%a %a)" kwd "E_id" pp_lem_id id
   | E_lit(lit) -> fprintf ppf "(%a %a)" kwd "E_lit" pp_lem_lit lit
   | E_cast(typ,exp) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "E_cast" pp_lem_typ typ pp_lem_exp exp 
-  | E_app(f,args) -> fprintf ppf "@[<0>(%a %a [%a])@]" kwd "E_app" pp_lem_exp f (list_pp pp_semi_lem_exp pp_lem_exp) args
+  | E_app(f,args) -> fprintf ppf "@[<0>(%a %a [%a])@]" kwd "E_app" pp_lem_id f (list_pp pp_semi_lem_exp pp_lem_exp) args
   | E_app_infix(l,op,r) -> fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "E_app_infix" pp_lem_exp l pp_lem_id op pp_lem_exp r
   | E_tuple(exps) -> fprintf ppf "@[<0>%a [%a] %a@]" kwd "(E_tuple" (list_pp pp_semi_lem_exp pp_lem_exp) exps kwd ")"
   | E_if(c,t,e) -> fprintf ppf "@[<0>(%a %a @[<1>%a@] @[<1> %a@])@]" kwd "E_if" pp_lem_exp c pp_lem_exp t pp_lem_exp e
@@ -584,8 +587,11 @@ let pp_lem_typdef ppf (TD_aux(td,_)) =
     fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]" 
       kwd "TD_record" pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp f_pp f_pp) fs
   | TD_variant(id,nm,typq,ar,_) ->
-    let a_pp ppf (typ,id) = 
-      fprintf ppf "@[<1>(%a, %a)%a@]" pp_lem_typ typ pp_lem_id id kwd ";" in
+    let a_pp ppf (Tu_aux(typ_u,_)) = 
+      match typ_u with
+      | Tu_ty_id(typ,id) -> fprintf ppf "@[<1>(Tu_ty_id %a %a)@]" pp_lem_typ typ pp_lem_id id 
+      | Tu_id(id) -> fprintf ppf "@[<1>(Tu_id %a)@]" pp_id id
+    in
     fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]" 
       kwd "TD_variant" pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp a_pp a_pp) ar 
   | TD_enum(id,ns,enums,_) ->

@@ -111,13 +111,7 @@ id :: '' ::=
   {{ com Identifier }}
   {{ aux _ l }}
   | x                           :: :: id
-  | ( x )                       :: :: deIid {{ com remove infix status }}
-% Note: we have just a single namespace. We don't want the same
-% identifier to be reused as a type name or variable, expression
-% variable, and field name.  We don't enforce any lexical convention
-% on type variables (or variables of other kinds)
-% We don't enforce a lexical convention on infix operators, as some of the 
-% targets use alphabetical infix operators. 
+  | ( deinfix x )                       :: :: deIid {{ com remove infix status }}
   | bool      		   	 :: M :: bool {{ com Built in type identifiers }} {{ ichlo bool_id }}
   | bit				 :: M :: bit {{ ichlo bit_id }} 
   | unit			 :: M :: unit {{ ichlo unit_id }}
@@ -128,6 +122,13 @@ id :: '' ::=
   | list			 :: M :: list {{ ichlo list_id }}
   | set                          :: M :: set {{ ichlo set_id }}
   | reg                          :: M :: reg {{ ichlo reg_id }}
+% Note: we have just a single namespace. We don't want the same
+% identifier to be reused as a type name or variable, expression
+% variable, and field name.  We don't enforce any lexical convention
+% on type variables (or variables of other kinds)
+% We don't enforce a lexical convention on infix operators, as some of the 
+% targets use alphabetical infix operators. 
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -136,74 +137,6 @@ id :: '' ::=
 
 
 grammar
-
-
-% a :: 'A_' ::=
-%                                                 {{ aux _ l }}
-%                                                 {{ ocaml terminal * text }}
-%                                                 {{ lem terminal * string }}
-%                                                 {{ hol string }}
-%   {{ com Type variables }}
-%   | ' x                                         :: :: A
-%     {{ ichlo [[x]] }}
-% 
-% N :: 'N_' ::=
-%                                                    {{ aux _ l }}
-%                                                    {{ ocaml terminal * text }}
-%                                                    {{ lem terminal * string }}
-%                                                    {{ hol string }}
-%     {{ com numeric variables }} 
-%     | ' ' x                                        :: :: N
-%       {{ ichlo [[x]] }}
-% 
-% EN :: 'EN_' ::=
-%                                                    {{ aux _ l }}
-%                                                    {{ ocaml terminal * text }}
-%                                                    {{ lem terminal * string }}
-%                                                    {{ hol string }}
-%     {{ com endianness variables }} 
-%     | ' ' ' x                                     :: :: EN
-%       {{ ichlo [[x]] }}
-% 
-% EFF :: 'EFF_' ::=
-%                                                    {{ aux _ l }}
-%                                                    {{ ocaml terminal * text }}
-%                                                    {{ lem terminal * string }}
-%                                                    {{ hol string }}
-%     {{ com effect set variables }} 
-%     | ' ' ' ' x                                     :: :: EFF
-%       {{ ichlo [[x]] }}
-% % TODO: better concrete syntax!!!!
-% 
-% 
-% tnvar :: '' ::=                         
-%     {{ com variables of the base kinds }}
-%     | a                                 :: :: Av
-%     | N                                 :: :: Nv
-%     | EN                                :: :: ENv
-%     | EFF                               :: :: EFFv
-% 
-% tnvars :: '' ::=                                {{ phantom }}
-%                                                 {{ hol tnvar list }}
-%                                                 {{ ocaml tnvar list }}
-%                                                 {{ lem list tnvar }}
-%   {{ com Type variable lists }}
-%   | tnvar1 .. tnvarn            :: :: Tvars
-%     {{ hol [[tnvar1..tnvarn]] }}
-%     {{ ocaml [[tnvar1..tnvarn]] }}
-%     {{ lem [[tnvar1..tnvarn]] }}
-%     
-% 
-% ids :: '' ::=                                {{ phantom }}
-%                                                 {{ hol id list }}
-%                                                 {{ ocaml id list }}
-%                                                 {{ lem list id }}
-%   {{ com Type variable lists }}
-%   | id1 .. idn            :: :: Tvars
-%     {{ hol [[id1..idn]] }}
-%     {{ ocaml [[id1..idn]] }}
-%     {{ lem [[id1..idn]] }}
-    
 
 base_kind :: 'BK_' ::=  
   {{ com base kind}}
@@ -217,7 +150,7 @@ kind :: 'K_' ::=
   {{ com kinds}}
   {{ aux _ l }}
   | base_kind1 -> ... -> base_kindn            :: :: kind 
-% we'll never use  ...-> Nat
+% we'll never use  ...-> Nat , .. Order , .. or Effects
 
     
 nexp :: 'Nexp_' ::=  
@@ -228,7 +161,7 @@ nexp :: 'Nexp_' ::=
   | nexp1 * nexp2                       :: :: times        {{ com product }}
 %{{ com must be linear after normalisation... except for the type of *, ahem }}
   | nexp1 + nexp2                       :: :: sum          {{ com sum }}
-  | 2 ** nexp                            :: :: exp         {{ com exponential }}
+  | 2** nexp                            :: :: exp         {{ com exponential }}
   | ( nexp )                            :: S :: paren  {{ ichlo [[nexp]] }}
 
 order :: 'Ord_' ::=  
@@ -275,7 +208,7 @@ typ :: 'Typ_' ::=
   | typ1 * .... * typn                          :: :: tup
     {{ com Tuple type }}
 % TODO union in the other kind grammars?  or make a syntax of argument? or glom together the grammars and leave o the typechecker
-  | id typ_arg1 .. typ_argn                     :: :: app
+  | id < typ_arg1 .. typ_argn >                    :: :: app
   {{ com type constructor application }}
   | ( typ )                            :: S :: paren {{ ichlo [[typ]] }} 
 
@@ -293,27 +226,27 @@ typ_lib :: 'Typ_lib_' ::=
   {{ com library types and syntactic sugar for them }}
   {{ aux _ l }} {{ auxparam 'a }}
 % boring base types:
-  | unit :: :: unit {{ com unit type with value $()$ }}
-  | bool :: :: bool {{ com booleans $[[true]]$ and $[[false]]$ }}
-  | bit :: :: bit  {{ com pure bit values (not mutable bits) }}
+  | Unit :: :: unit {{ com unit type with value $()$ }}
+  | Bool :: :: bool {{ com booleans $[[true]]$ and $[[false]]$ }}
+  | Bit :: :: bit  {{ com pure bit values (not mutable bits) }}
 % experimentally trying with two distinct types of bool and bit ...
-  | nat :: :: nat {{ com natural numbers 0,1,2,... }}
-  | string :: :: string {{ com UTF8 strings }}
+  | Nat :: :: nat {{ com natural numbers 0,1,2,... }}
+  | String :: :: string {{ com UTF8 strings }}
 % finite subranges of nat
-  | enum nexp1 nexp2 order :: :: enum  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1, ordered by [[order]] }}
+  | Enum nexp1 nexp2 order :: :: enum  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1, ordered by [[order]] }}
   | [ nexp ]             :: :: enum1 {{ com sugar for \texttt{enum nexp 0 inc} }}
   | [ nexp : nexp' ]  :: :: enum2 {{ com sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} }}
 % use .. not - to avoid ambiguity with nexp -
 % total maps and vectors indexed by finite subranges of nat
-  | vector nexp1 nexp2 order typ :: :: vector {{ com vector of [[typ]], indexed by natural range }}
+  | Vector nexp1 nexp2 order typ :: :: vector {{ com vector of [[typ]], indexed by natural range }}
 % probably some sugar for vector types, using [ ] similarly to enums:
 % (but with .. not : in the former, to avoid confusion...)
   | typ [ nexp ]  :: :: vector2 {{ com sugar for vector indexed by [ [[nexp]] ] }}
   | typ [ nexp : nexp' ] :: :: vector3 {{ com sugar for vector indexed by [ [[nexp]]..[[nexp']] ] }}
 % ...so bit [ nexp ] etc is just an instance of that
-  | list typ :: :: list {{ com list of [[typ]] }}
-  | set typ  :: :: set  {{ com finite set of [[typ]] }}
-  | reg typ  :: :: reg  {{ com mutable register components holding [[typ]] }}
+  | List < typ > :: :: list {{ com list of [[typ]] }}
+  | Set < typ >  :: :: set  {{ com finite set of [[typ]] }}
+  | Reg < typ > :: :: reg  {{ com mutable register components holding [[typ]] }}
 % "reg t" is basically the ML "t ref" 
 % not sure how first-class it should be, though
 % use "reg word32" etc for the types of vanilla registers 
@@ -419,7 +352,7 @@ type_def :: 'TD_' ::=
 %  let the typi be function types (as constructors are not allowed to
 %  take parameters of function types)
 % concrete syntax: to be even closer to C, could have a postfix id rather than prefix id = 
-  | typedef id naming_scheme_opt = const union typquant { typ1 id1 ; ... ; typn idn semi_opt }   :: :: variant
+  | typedef id naming_scheme_opt = const union typquant { type_union1 ; ... ; type_unionn semi_opt }   :: :: variant
     {{ com union type definition}} {{ texlong }}
 
   | typedef id naming_scheme_opt = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
@@ -430,6 +363,11 @@ type_def :: 'TD_' ::=
 
 % also sugar [  nexp ] 
 
+type_union :: 'Tu_' ::=
+  {{ com Type union constructors }}
+  {{ aux _ l }}
+  | id                                                  :: :: id
+  | typ id                                              :: :: ty_id
 
 index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}} 
   {{ aux _ l }}
@@ -498,15 +436,14 @@ pat :: 'P_' ::=
 %  | ( pat : typ )                                       :: :: typ
 %    {{ com Typed patterns }}
 % C-style
-% XXX < > are necessary to make the grammar non ambiguous
-  | ( < typ > pat )                                       :: :: typ
+  | ( ( typ ) pat )                                       :: :: typ
     {{ com typed pattern }}
 
   | id                                      :: :: id
     {{ com identifier  }}
 
 %
-  | id pat1 .. patn                                     :: :: app
+  | id ( pat1 , .. , patn )                                     :: :: app
     {{ com union constructor pattern }}
 
 % OR?  do we invent something ghastly including a union keyword?  Perhaps not...
@@ -532,14 +469,12 @@ pat :: 'P_' ::=
 
   | ( pat1 , .... , patn )                              :: :: tup
     {{ com tuple pattern }}
-  | [| pat1 , .. , patn |]	                        :: :: list
+  | [|| pat1 , .. , patn ||]	                        :: :: list
     {{ com list pattern }}
   | ( pat )                                             :: S :: paren
 {{ ichlo [[pat]] }}
 %  | pat1 '::' pat2                                      :: :: cons
 %    {{ com Cons patterns }}
-%  | id '+' num                                         :: :: num_add
-%    {{ com constant addition patterns }}
 
 % XXX Is this still useful?
 fpat :: 'FP_' ::=
@@ -575,7 +510,7 @@ exp :: 'E_' ::=
   | ( typ ) exp                                         :: :: cast
     {{ com cast }}
 
-  | exp exp1 ... expn                                   :: :: app
+  | id ( exp1 , .. , expn )                                   :: :: app
     {{ com function application }}
 % Note: fully applied function application only
 % We might restrict exp to be an identifier
@@ -627,7 +562,7 @@ exp :: 'E_' ::=
 
 
 % lists 
-  | [| exp1 , ..  , expn |]                           :: :: list
+  | [|| exp1 , ..  , expn ||]                           :: :: list
   {{ com list }}
   | exp1 '::' exp2                                    :: :: cons
     {{ com cons }}
@@ -821,6 +756,7 @@ val_spec :: 'VS_' ::=
   {{ com Value type specification }} 
   {{ aux _ annot }} {{ auxparam 'a }}
   | val typschm id                                  :: :: val_spec
+  | val extern typschm id                           :: :: extern_no_rename
   | val extern typschm id = string                  :: :: extern_spec
     {{ com Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked }}
 

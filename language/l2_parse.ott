@@ -116,7 +116,8 @@ id :: '' ::=
   {{ com Identifier }}
   {{ aux _ l }}
   | x                           :: :: id
-  | ( x )                       :: :: deIid {{ com remove infix status }}
+  | ( deinfix x )                       :: :: deIid {{ com remove infix status }}
+
 % Note: we have just a single namespace. We don't want the same
 % identifier to be reused as a type name or variable, expression
 % variable, and field name.  We don't enforce any lexical convention
@@ -131,8 +132,6 @@ id :: '' ::=
 
 
 grammar
-
-
 
 base_kind :: 'BK_' ::=  
   {{ com base kind}}
@@ -166,7 +165,7 @@ atyp :: 'ATyp_' ::=
   | num                                 :: :: constant     {{ com constant }}
   | atyp1 * atyp2                       :: :: times        {{ com product }}
   | atyp1 + atyp2                       :: :: sum          {{ com sum }}
-  | 2 ** atyp                            :: :: exp         {{ com exponential }}
+  | 2** atyp                            :: :: exp         {{ com exponential }}
   | ( atyp )                            :: S :: paren  {{ icho [[atyp]] }}
 
   | inc                                 :: :: inc  {{ com increasing (little-endian) }}
@@ -181,7 +180,7 @@ atyp :: 'ATyp_' ::=
     {{ com Function type (first-order only in user code), last atyp is an effect }}
   | atyp1 * .... * atypn                          :: :: tup
     {{ com Tuple type }}
-  | id atyp1 .. atypn                     :: :: app
+  | id < atyp1 .. atypn >                    :: :: app
   {{ com type constructor application }}
 
 
@@ -278,6 +277,12 @@ grammar
    |                                                   :: :: none
    | [ name = regexp ]                                 :: :: some
 
+type_union :: 'Tu_' ::=
+  {{ com Type union constructors }}
+  {{ aux _ l }}
+  | id                                                  :: :: id
+  | atyp id                                             :: :: ty_id
+
 type_def :: 'TD_' ::=
   {{ com Type definition body }}
   {{ aux _ l }}
@@ -285,7 +290,7 @@ type_def :: 'TD_' ::=
     {{ com type abbreviation }} {{ texlong }}
   | typedef id naming_scheme_opt = const struct typquant { atyp1 id1 ; ... ; atypn idn semi_opt }     :: :: record
     {{ com struct type definition }} {{ texlong }}
-  | typedef id naming_scheme_opt = const union typquant { atyp1 id1 ; ... ; atypn idn semi_opt }   :: :: variant
+  | typedef id naming_scheme_opt = const union typquant { type_union1 ; ... ; type_unionn semi_opt }   :: :: variant
     {{ com union type definition}} {{ texlong }}
   | typedef id naming_scheme_opt = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
     {{ com enumeration type definition}} {{ texlong }}
@@ -358,13 +363,13 @@ pat :: 'P_' ::=
     {{ com wildcard }}
   | ( pat as id )                                      :: :: as
     {{ com named pattern }}
-  | ( < atyp > pat )                                       :: :: typ
+  | ( ( atyp ) pat )                                       :: :: typ
     {{ com typed pattern }}
 
   | id                                      :: :: id
     {{ com identifier  }}
 
-  | id pat1 .. patn                                     :: :: app
+  | id ( pat1 , .. , patn )                                     :: :: app
     {{ com union constructor pattern }}
 
   | { fpat1 ; ... ; fpatn semi_opt }                  :: :: record
@@ -381,7 +386,7 @@ pat :: 'P_' ::=
 
   | ( pat1 , .... , patn )                              :: :: tup
     {{ com tuple pattern }}
-  | [| pat1 , .. , patn |]	                        :: :: list
+  | [|| pat1 , .. , patn ||]	                        :: :: list
     {{ com list pattern }}
   | ( pat )                                             :: S :: paren
 {{ ichlo [[pat]] }}
@@ -419,7 +424,7 @@ exp :: 'E_' ::=
   | ( atyp ) exp                                         :: :: cast
     {{ com cast }}
 
-  | exp exp1 ... expn                                   :: :: app
+  | id ( exp1 , .. , expn )                                   :: :: app
     {{ com function application }}
 % Note: fully applied function application only
 % We might restrict exp to be an identifier
@@ -471,7 +476,7 @@ exp :: 'E_' ::=
 
 
 % lists 
-  | [| exp1 , ..  , expn |]                           :: :: list
+  | [|| exp1 , ..  , expn ||]                           :: :: list
   {{ com list }}
   | exp1 '::' exp2                                    :: :: cons
     {{ com cons }}
@@ -505,8 +510,6 @@ exp :: 'E_' ::=
 
   | switch exp { case pexp1  ... case pexpn } :: :: case
     {{ com pattern matching }}
-%  | ( typ ) exp                                      :: :: Typed
-%    {{ com Type-annotated expressions }}
   | letbind in exp                                  :: :: let
     {{ com let expression }}
 
@@ -661,7 +664,7 @@ letbind :: 'LB_' ::=
   {{ com Let binding }}
   {{ aux _ l }}
 %  {{ aux _ annot }} {{ auxparam 'a }}
-  | typschm pat = exp                                :: :: val_explicit
+  | let typschm pat = exp                                :: :: val_explicit
     {{ com value binding, explicit type ([[pat]] must be total)}}
   | let pat = exp                                    :: :: val_implicit
     {{ com value binding, implicit type ([[pat]] must be total)}}
@@ -672,6 +675,7 @@ val_spec :: 'VS_' ::=
   {{ aux _ l }}
 %  {{ aux _ annot }} {{ auxparam 'a }}
   | val typschm id                                  :: :: val_spec
+  | val extern typschm id                           :: :: extern_no_rename
   | val extern typschm id = string                  :: :: extern_spec
 
 default_typing_spec :: 'DT_' ::=
