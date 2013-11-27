@@ -54,9 +54,9 @@ let r = fun x -> x (* Ulib.Text.of_latin1 *)
 
 %token Scattered Typedef Other Eof
 
-%token <string> Id 
+%token <string> Id
 %start file
-%type <list string> file
+%type <string list> file
 
 %%
 
@@ -83,4 +83,6 @@ scan_file:
 file:
   | scan_file Eof
     { $1 }
+  | Other Eof
+    { [] }
 

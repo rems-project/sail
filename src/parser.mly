@@ -136,7 +136,7 @@ let star = "*"
 
 /*Terminals with content*/
 
-%token <string> Id TickId TyId
+%token <string> Id TyVar TyId
 %token <int> Num
 %token <string> String Bin Hex
 
@@ -242,6 +242,8 @@ id:
 
 tid:
   | TyId
+    { (idl (Id($1))) }
+  | TyVar
     { (idl (Id($1))) }
 
 atomic_kind:

@@ -61,6 +61,19 @@ let get_lexbuf fn =
     lexbuf
 
 let parse_file (f : string) : Parse_ast.defs =
+  let scanbuf = get_lexbuf f in
+  let type_names = 
+    try
+      Pre_parser.file Pre_lexer.token scanbuf
+    with
+      | Parsing.Parse_error ->
+          let pos = Lexing.lexeme_start_p scanbuf in
+           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "pre")))
+      | Parse_ast.Parse_error_locn(l,m) ->
+          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
+      | Lexer.LexError(s,p) ->
+          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s))) in
+  let _ = Lexer.type_names != ref type_names in
   let lexbuf = get_lexbuf f in
     try
       Parser.file Lexer.token lexbuf
