@@ -10,8 +10,15 @@ type 'a envs_out = 'a * envs
 let id_to_string (Id_aux(id,l)) =
   match id with | Id(x) | DeIid(x) -> x
 
+let var_to_string (Var_aux(Var v,l)) = v
+
 (*placeholder, write in type_internal*)
-let kind_to_string _ = " kind pp place holder "
+let kind_to_string kind = match kind.k with
+  | K_Nat -> "Nat"
+  | K_Typ -> "Type"
+  | K_Ord -> "Order"
+  | K_Efct -> "Effects"
+  | _ -> " kind pp place holder "
 
 let typquant_to_quantkinds k_env typquant = 
   match typquant with
@@ -25,28 +32,32 @@ let typquant_to_quantkinds k_env typquant =
           | QI_const _ -> rst
           | QI_id(ki) -> begin
             match ki with 
-            | KOpt_aux(KOpt_none(id),l) | KOpt_aux(KOpt_kind(_,id),l) -> 
-              (match Envmap.apply k_env (id_to_string id) with
+            | KOpt_aux(KOpt_none(v),l) | KOpt_aux(KOpt_kind(_,v),l) -> 
+              (match Envmap.apply k_env (var_to_string v) with
               | Some(typ) -> typ::rst
               | None -> raise (Reporting_basic.err_unreachable l "Envmap didn't get an entry during typschm processing"))
           end)
         qlist
         [])
 
-let typ_error l msg opt_id opt_kind =
+let typ_error l msg opt_id opt_var opt_kind =
   raise (Reporting_basic.err_typ 
            l
            (msg ^
-              (match opt_id, opt_kind with
-              | Some(id),Some(kind) -> (id_to_string id) ^ " of " ^ (kind_to_string kind)
-              | Some(id),None -> ": " ^ (id_to_string id)
-              | None,Some(kind) -> " " ^ (kind_to_string kind)
-              | None,None -> "")))
+              (match opt_id, opt_var, opt_kind with
+              | Some(id),None,Some(kind) -> (id_to_string id) ^ " of " ^ (kind_to_string kind)
+              | Some(id),None,None -> ": " ^ (id_to_string id)
+              | None,Some(v),Some(kind) -> "'" ^ (var_to_string v) ^ " of " ^ (kind_to_string kind)
+              | None,Some(v),None -> ": '" ^ (var_to_string v)
+              | None,None,Some(kind) -> " " ^ (kind_to_string kind)
+              | _ -> "")))
                 
 let to_ast_id (Parse_ast.Id_aux(id,l)) =
     Id_aux( (match id with
              | Parse_ast.Id(x) -> Id(x)
              | Parse_ast.DeIid(x) -> DeIid(x)) , l)
+
+let to_ast_var (Parse_ast.Var_aux(Parse_ast.Var v,l)) = Var_aux(Var v,l)
 
 let to_ast_base_kind (Parse_ast.BK_aux(k,l')) =
   match k with
@@ -65,7 +76,7 @@ let to_ast_kind (k_env : kind Envmap.t) (Parse_ast.K_aux(Parse_ast.K_kind(klst),
           let ret,args = List.hd reverse_typs, List.rev (List.tl reverse_typs) in
           match ret.k with
           | K_Typ -> K_aux(K_kind(List.map fst k_pairs), l), { k = K_Lam(args,ret) }
-          | _ -> typ_error l "Type constructor must have an -> kind ending in Type" None None
+          | _ -> typ_error l "Type constructor must have an -> kind ending in Type" None None None
 
 let rec to_ast_typ (k_env : kind Envmap.t) (t: Parse_ast.atyp) : Ast.typ =
   match t with
@@ -76,10 +87,19 @@ let rec to_ast_typ (k_env : kind Envmap.t) (t: Parse_ast.atyp) : Ast.typ =
                 let mk = Envmap.apply k_env (id_to_string id) in
                 (match mk with
                 | Some(k) -> (match k.k with
-                              | K_Typ -> Typ_var id
-                              | K_infer -> k.k <- K_Typ; Typ_var id
-                              | _ -> typ_error l "Required a variable with kind Type, encountered " (Some id) (Some k))
-                | None -> typ_error l "Encountered an unbound variable" (Some id) None)
+                              | K_Typ -> Typ_id id
+                              | K_infer -> k.k <- K_Typ; Typ_id id
+                              | _ -> typ_error l "Required an identifier with kind Type, encountered " (Some id) None (Some k))
+                | None -> typ_error l "Encountered an unbound identifier" (Some id) None None)
+              | Parse_ast.ATyp_var(v) -> 
+                let v = to_ast_var v in
+                let mk = Envmap.apply k_env (var_to_string v) in
+                (match mk with
+                | Some(k) -> (match k.k with
+                              | K_Typ -> Typ_var v
+                              | K_infer -> k.k <- K_Typ; Typ_var v
+                              | _ -> typ_error l "Required a variable with kind Type, encountered " None (Some v) (Some k))
+                | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
               | Parse_ast.ATyp_wild -> Typ_wild
               | Parse_ast.ATyp_fn(arg,ret,efct) -> Typ_fn( (to_ast_typ k_env arg),
                                                            (to_ast_typ k_env ret),
@@ -93,10 +113,10 @@ let rec to_ast_typ (k_env : kind Envmap.t) (t: Parse_ast.atyp) : Ast.typ =
 		    if ((List.length args) = (List.length typs))
 		      then
 		      Typ_app(id,(List.map2 (fun k a -> (to_ast_typ_arg k_env k a)) args typs))
-		    else typ_error l "Type constructor given incorrect number of arguments" (Some id) None
-                  | None -> typ_error l "Required a type constructor, encountered an unbound variable" (Some id) None
-                  | _ -> typ_error l "Required a type constructor, encountered a base kind variable" (Some id) None)
-              | _ -> typ_error l "Required an item of kind Type, encountered an illegal form for this kind" None None
+		    else typ_error l "Type constructor given incorrect number of arguments" (Some id) None None
+                  | None -> typ_error l "Required a type constructor, encountered an unbound identifier" (Some id) None None
+                  | _ -> typ_error l "Required a type constructor, encountered a base kind variable" (Some id) None None)
+              | _ -> typ_error l "Required an item of kind Type, encountered an illegal form for this kind" None None None
     ), l)
 
 and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
@@ -110,8 +130,17 @@ and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
                 | Some(k) -> Nexp_aux((match k.k with
                                       | K_Nat -> Nexp_id id
                                       | K_infer -> k.k <- K_Nat; Nexp_id id
-                                      | _ -> typ_error l "Required a variable with kind Nat, encountered " (Some id) (Some k)),l)
-                | None -> typ_error l "Encountered an unbound variable" (Some id) None)
+                                      | _ -> typ_error l "Required a variable with kind Nat, encountered " (Some id) None (Some k)),l)
+                | None -> typ_error l "Encountered an unbound variable" (Some id) None None)
+    | Parse_ast.ATyp_var(v) ->                 
+                let v = to_ast_var v in
+                let mk = Envmap.apply k_env (var_to_string v) in
+                (match mk with
+                | Some(k) -> Nexp_aux((match k.k with
+                                      | K_Nat -> Nexp_var v
+                                      | K_infer -> k.k <- K_Nat; Nexp_var v
+                                      | _ -> typ_error l "Required a variable with kind Nat, encountered " None (Some v) (Some k)),l)
+                | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
     | Parse_ast.ATyp_constant(i) -> Nexp_aux(Nexp_constant(i),l)
     | Parse_ast.ATyp_sum(t1,t2) ->
       let n1 = to_ast_nexp k_env t1 in
@@ -128,7 +157,7 @@ and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
                           (Nexp_aux((Nexp_times(n1,n2)),l)))  (*TODO This needs just a portion of the l, think about adding a way to split*)
       in
       times_loop typs false
-    | _ -> typ_error l "Requred an item of kind Nat, encountered an illegal form for this kind" None None)
+    | _ -> typ_error l "Requred an item of kind Nat, encountered an illegal form for this kind" None None None)
     
 and to_ast_order (k_env : kind Envmap.t) (o: Parse_ast.atyp) : Ast.order =
   match o with
@@ -141,11 +170,20 @@ and to_ast_order (k_env : kind Envmap.t) (o: Parse_ast.atyp) : Ast.order =
                 | Some(k) -> (match k.k with
                               | K_Ord -> Ord_id id
                               | K_infer -> k.k <- K_Ord; Ord_id id
-                              | _ -> typ_error l "Required a variable with kind Order, encountered " (Some id) (Some k))
-                | None -> typ_error l "Encountered an unbound variable" (Some id) None)
+                              | _ -> typ_error l "Required an identifier with kind Order, encountered " (Some id) None (Some k))
+                | None -> typ_error l "Encountered an unbound identifier" (Some id) None None)
+               | Parse_ast.ATyp_var(v) -> 
+                let v = to_ast_var v in
+                let mk = Envmap.apply k_env (var_to_string v) in
+                (match mk with
+                | Some(k) -> (match k.k with
+                              | K_Ord -> Ord_var v
+                              | K_infer -> k.k <- K_Ord; Ord_var v
+                              | _ -> typ_error l "Required a variable with kind Order, encountered " None (Some v) (Some k))
+                | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
                | Parse_ast.ATyp_inc -> Ord_inc
                | Parse_ast.ATyp_dec -> Ord_dec
-               | _ -> typ_error l "Requred an item of kind Order, encountered an illegal form for this kind" None None
+               | _ -> typ_error l "Requred an item of kind Order, encountered an illegal form for this kind" None None None
     ), l)
 
 and to_ast_effects (k_env : kind Envmap.t) (e : Parse_ast.atyp) : Ast.effects =
@@ -157,10 +195,19 @@ and to_ast_effects (k_env : kind Envmap.t) (e : Parse_ast.atyp) : Ast.effects =
                 let mk = Envmap.apply k_env (id_to_string id) in
                 (match mk with
                 | Some(k) -> (match k.k with
-                              | K_Efct -> Effects_var id
-                              | K_infer -> k.k <- K_Efct; Effects_var id
-                              | _ -> typ_error l "Required a variable with kind Effect, encountered " (Some id) (Some k))
-                | None -> typ_error l "Encountered an unbound variable" (Some id) None)
+                              | K_Efct -> Effects_id id
+                              | K_infer -> k.k <- K_Efct; Effects_id id
+                              | _ -> typ_error l "Required a variable with kind Effect, encountered " (Some id) None (Some k))
+                | None -> typ_error l "Encountered an unbound variable" (Some id) None None)
+               | Parse_ast.ATyp_efvar(v) ->  
+                let v = to_ast_var v in
+                let mk = Envmap.apply k_env (var_to_string v) in
+                (match mk with
+                | Some(k) -> (match k.k with
+                              | K_Efct -> Effects_var v
+                              | K_infer -> k.k <- K_Efct; Effects_var v
+                              | _ -> typ_error l "Required a variable with kind Effect, encountered " None (Some v) (Some k))
+                | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
                | Parse_ast.ATyp_set(effects) ->
                  Effects_set( List.map 
                              (fun efct -> match efct with
@@ -174,7 +221,7 @@ and to_ast_effects (k_env : kind Envmap.t) (e : Parse_ast.atyp) : Ast.effects =
                                | Parse_ast.Effect_unspec -> Effect_unspec
                                | Parse_ast.Effect_nondet -> Effect_nondet),l))
                              effects)
-               | _ -> typ_error l "Required an item of kind Effects, encountered an illegal form for this kind" None None
+               | _ -> typ_error l "Required an item of kind Effects, encountered an illegal form for this kind" None None None
     ), l)
 
 and to_ast_typ_arg (k_env : kind Envmap.t) (kind : kind) (arg : Parse_ast.atyp) : Ast.typ_arg =
@@ -211,26 +258,26 @@ let to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.nexp_constrain
 (* Transforms a typquant while building first the kind environment of declared variables, and also the kind environment in context *)
 let to_ast_typquant (k_env: kind Envmap.t) (tq : Parse_ast.typquant) : typquant * kind Envmap.t * kind Envmap.t =
   let opt_kind_to_ast k_env local_names local_env (Parse_ast.KOpt_aux(ki,l)) =
-    let id, key, kind, ktyp =
+    let v, key, kind, ktyp =
       match ki with
-      | Parse_ast.KOpt_none(id) ->
-	let id = to_ast_id id in
-	let key = id_to_string id in
+      | Parse_ast.KOpt_none(v) ->
+	let v = to_ast_var v in
+	let key = var_to_string v in
 	let kind,ktyp = if (Envmap.in_dom key k_env) then None,(Envmap.apply k_env key) else None,(Some{ k = K_infer }) in
-	id,key,kind, ktyp
-      | Parse_ast.KOpt_kind(k,id) ->
-	let id = to_ast_id id in
-	let key = id_to_string id in
+	v,key,kind, ktyp
+      | Parse_ast.KOpt_kind(k,v) ->
+	let v = to_ast_var v in
+	let key = var_to_string v in
 	let kind,ktyp = to_ast_kind k_env k in
-	id,key,Some(kind),Some(ktyp)
+	v,key,Some(kind),Some(ktyp)
     in
     if (Nameset.mem key local_names)
-    then typ_error l "Encountered duplicate name in type scheme" (Some id) None
+    then typ_error l "Encountered duplicate name in type scheme" None (Some v) None
     else 
       let local_names = Nameset.add key local_names in
       let kopt,k_env,k_env_local = (match kind,ktyp with
-        | Some(k),Some(kt) -> KOpt_kind(k,id), (Envmap.insert k_env (key,kt)), (Envmap.insert local_env (key,kt))
-	| None, Some(kt) -> KOpt_none(id), (Envmap.insert k_env (key,kt)), (Envmap.insert local_env (key,kt))
+        | Some(k),Some(kt) -> KOpt_kind(k,v), (Envmap.insert k_env (key,kt)), (Envmap.insert local_env (key,kt))
+	| None, Some(kt) -> KOpt_none(v), (Envmap.insert k_env (key,kt)), (Envmap.insert local_env (key,kt))
 	| _ -> raise (Reporting_basic.err_unreachable l "Envmap in dom is true but apply gives None")) in
       KOpt_aux(kopt,l),k_env,local_names,local_env
   in
@@ -354,11 +401,11 @@ and to_ast_lexp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp)
     | Parse_ast.E_app((Parse_ast.Id_aux(f,l') as f'),[exp]) -> 
       (match f with
       | Parse_ast.Id(id) -> LEXP_memory(to_ast_id f',to_ast_exp k_env exp)
-      | _ -> typ_error l' "memory call on lefthand side of assignment must begin with an id" None None)
+      | _ -> typ_error l' "memory call on lefthand side of assignment must begin with an id" None None None)
     | Parse_ast.E_vector_access(vexp,exp) -> LEXP_vector(to_ast_lexp k_env vexp, to_ast_exp k_env exp)
     | Parse_ast.E_vector_subrange(vexp,exp1,exp2) -> LEXP_vector_range(to_ast_lexp k_env vexp, to_ast_exp k_env exp1, to_ast_exp k_env exp2)
     | Parse_ast.E_field(fexp,id) -> LEXP_field(to_ast_lexp k_env fexp, to_ast_id id)
-    | _ -> typ_error l "Only identifiers, vector accesses, vector slices, and fields can be on the lefthand side of an assignment" None None)
+    | _ -> typ_error l "Only identifiers, vector accesses, vector slices, and fields can be on the lefthand side of an assignment" None None None)
       , (l,None))
 
 and to_ast_case (k_env : kind Envmap.t) (Parse_ast.Pat_aux(pex,l) : Parse_ast.pexp) : tannot pexp =
@@ -376,7 +423,7 @@ and to_ast_fexps (fail_on_error : bool) (k_env : kind Envmap.t) (exps : Parse_as
                     | _  -> None)
                   | None,Some(l,msg) -> 
                     if fail_on_error
-                    then typ_error l msg None None
+                    then typ_error l msg None None None
                     else None
                   | _ -> None)
 
@@ -399,11 +446,11 @@ let to_ast_default (names, k_env, t_env) (default : Parse_ast.default_typing_spe
   match default with
   | Parse_ast.DT_aux(df,l) ->
     (match df with 
-    | Parse_ast.DT_kind(bk,id) ->
+    | Parse_ast.DT_kind(bk,v) ->
       let k,k_typ = to_ast_base_kind bk in
-      let id = to_ast_id id in
-      let key = id_to_string id in
-      DT_aux(DT_kind(k,id),(l,None)),(names,(Envmap.insert k_env (key,k_typ)),t_env)
+      let v = to_ast_var v in
+      let key = var_to_string v in
+      DT_aux(DT_kind(k,v),(l,None)),(names,(Envmap.insert k_env (key,k_typ)),t_env)
     | Parse_ast.DT_typ(typschm,id) ->
       let tps,_,_ = to_ast_typschm k_env typschm in
       DT_aux(DT_typ(tps,to_ast_id id),(l,None)),(names,k_env,t_env) (* Does t_env need to be updated here in this pass? *)
@@ -418,7 +465,10 @@ let to_ast_spec (names,k_env,t_env) (val_:Parse_ast.val_spec) : (tannot val_spec
       VS_aux(VS_val_spec(typsch,to_ast_id id),(l,None)),(names,k_env,t_env)
     | Parse_ast.VS_extern_spec(ts,id,s) ->
       let typsch,_,_ = to_ast_typschm k_env ts in
-      VS_aux(VS_extern_spec(typsch,to_ast_id id,s),(l,None)),(names,k_env,t_env))(*Do names and t_env need updating this pass? *)
+      VS_aux(VS_extern_spec(typsch,to_ast_id id,s),(l,None)),(names,k_env,t_env)
+    | Parse_ast.VS_extern_no_rename(ts,id) ->
+      let typsch,_,_ = to_ast_typschm k_env ts in
+       VS_aux(VS_extern_no_rename(typsch,to_ast_id id),(l,None)),(names,k_env,t_env))(*Do names and t_env need updating this pass? *)
     
 
 let to_ast_namescm (Parse_ast.Name_sect_aux(ns,l)) = 
@@ -567,21 +617,21 @@ let to_ast_def (names, k_env, t_env) partial_defs def : def_progress envs_out * 
       (match (def_in_progress id partial_defs) with
       | None -> let partial_def = ref ((DEF_aux(DEF_fundef(FD_aux(FD_function(rec_opt,tannot,effects_opt,[]),(l,None))),(l,None))),false) in
                 (No_def,envs),((id,(partial_def,k_local))::partial_defs)
-      | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None)
+      | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None None)
     | Parse_ast.DEF_scattered_funcl(funcl) -> 
       (match funcl with
       | Parse_ast.FCL_aux(Parse_ast.FCL_Funcl(id,_,_),_) -> 
         let id = to_ast_id id in
         (match (def_in_progress id partial_defs) with
-        | None -> typ_error l "Scattered function definition clause does not match any exisiting function definition headers" (Some id) None
+        | None -> typ_error l "Scattered function definition clause does not match any exisiting function definition headers" (Some id) None None
         | Some(d,k) ->
           (match !d with
           | DEF_aux(DEF_fundef(FD_aux(FD_function(r,t,e,fcls),fl)),dl),false -> 
             let funcl = to_ast_funcl (names,Envmap.union k k_env,t_env) funcl in 
             d:= (DEF_aux(DEF_fundef(FD_aux(FD_function(r,t,e,fcls@[funcl]),fl)),dl),false);
             (No_def,envs),partial_defs
-          | _,true -> typ_error l "Scattered funciton definition clauses extends ended defintion" (Some id) None
-          | _ -> typ_error l "Scattered function definition clause matches an existing scattered type definition header" (Some id) None)))
+          | _,true -> typ_error l "Scattered funciton definition clauses extends ended defintion" (Some id) None None
+          | _ -> typ_error l "Scattered function definition clause matches an existing scattered type definition header" (Some id) None None)))
     | Parse_ast.DEF_scattered_variant(id,naming_scheme_opt,typquant) -> 
       let id = to_ast_id id in
       let name = to_ast_namescm naming_scheme_opt in
@@ -589,24 +639,24 @@ let to_ast_def (names, k_env, t_env) partial_defs def : def_progress envs_out * 
       (match (def_in_progress id partial_defs) with
       | None -> let partial_def = ref ((DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,None))),(l,None))),false) in
                 (Def_place_holder(id,l),envs),(id,(partial_def,k_env'))::partial_defs
-      | Some(d,k) -> typ_error l "Scattered type definition header name already in use by scattered definition" (Some id) None)
+      | Some(d,k) -> typ_error l "Scattered type definition header name already in use by scattered definition" (Some id) None None)
     | Parse_ast.DEF_scattered_unioncl(id,typ,arm_id) -> 
       let id = to_ast_id id in
       let arm_id = to_ast_id arm_id in
       (match (def_in_progress id partial_defs) with
-      | None -> typ_error l "Scattered type definition clause does not match any existing type definition headers" (Some id) None
+      | None -> typ_error l "Scattered type definition clause does not match any existing type definition headers" (Some id) None None
       | Some(d,k) ->
         (match !d with
         | (DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,arms,false),tl)),dl), false) -> 
           let typ = to_ast_typ k typ in
           d:= (DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,arms@[Tu_aux(Tu_ty_id (typ,arm_id), l)],false),tl)),dl),false);
           (No_def,envs),partial_defs
-        | _,true -> typ_error l "Scattered type definition clause extends ended definition" (Some id) None
-        | _ -> typ_error l "Scattered type definition clause matches an existing scattered function definition header" (Some id) None))
+        | _,true -> typ_error l "Scattered type definition clause extends ended definition" (Some id) None None
+        | _ -> typ_error l "Scattered type definition clause matches an existing scattered function definition header" (Some id) None None))
     | Parse_ast.DEF_scattered_end(id) ->
       let id = to_ast_id id in
       (match (def_in_progress id partial_defs) with
-      | None -> typ_error l "Scattered definition end does not match any open scattered definitions" (Some id) None
+      | None -> typ_error l "Scattered definition end does not match any open scattered definitions" (Some id) None None
       | Some(d,k) ->
         (match !d with
         | (DEF_aux(DEF_type(_),_) as def),false ->
@@ -616,7 +666,7 @@ let to_ast_def (names, k_env, t_env) partial_defs def : def_progress envs_out * 
           d:= (def,true);
           ((Finished def), envs),partial_defs
         | _, true -> 
-          typ_error l "Scattered definition ended multiple times" (Some id) None
+          typ_error l "Scattered definition ended multiple times" (Some id) None None
         | _ -> raise (Reporting_basic.err_unreachable l "Something in partial_defs other than fundef and type")))
     )
 
@@ -633,14 +683,14 @@ let rec to_ast_defs_helper envs partial_defs = function
                 | Some(d,k) -> 
                   if (snd !d) 
                   then (fst !d) :: defs, envs, partial_defs
-                  else typ_error l "Scattered type definition never ended" (Some id) None))                
+                  else typ_error l "Scattered type definition never ended" (Some id) None None))                
 
 let to_ast (default_names : Nameset.t) (kind_env : kind Envmap.t) (typ_env : t Envmap.t) (Parse_ast.Defs(defs)) =
   let defs,_,partial_defs = to_ast_defs_helper (default_names,kind_env,typ_env) [] defs in
   List.iter 
     (fun (id,(d,k)) -> 
       (match !d with
-      | (DEF_aux(_,(l,_)),false) -> typ_error l "Scattered definition never ended" (Some id) None
+      | (DEF_aux(_,(l,_)),false) -> typ_error l "Scattered definition never ended" (Some id) None None
       | (_, true) -> ()))
     partial_defs;
   (Defs defs)

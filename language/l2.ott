@@ -129,7 +129,11 @@ id :: '' ::=
 % We don't enforce a lexical convention on infix operators, as some of the 
 % targets use alphabetical infix operators. 
 
-
+var :: '' ::=
+  {{ com variables with kind, ticked to differntiate from program variables }}
+  {{ aux _ l }}
+  | ' x                       :: :: var
+ 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Kinds and Types                                              %
@@ -157,6 +161,7 @@ nexp :: 'Nexp_' ::=
   {{ com expression of kind $[[Nat]]$, for vector sizes and origins }}
   {{ aux _ l }}
   | id                                  :: :: id          {{ com identifier }}
+  | var                                 :: :: var         {{ com variable }}
   | num                                 :: :: constant     {{ com constant }}
   | nexp1 * nexp2                       :: :: times        {{ com product }}
 %{{ com must be linear after normalisation... except for the type of *, ahem }}
@@ -168,6 +173,7 @@ order :: 'Ord_' ::=
   {{ com vector order specifications, of kind $[[Order]]$}}
   {{ aux _ l }} 
   | id                                  :: :: id  {{ com identifier }}
+  | var                                 :: :: var {{ com variable }} 
   | inc                                 :: :: inc  {{ com increasing (little-endian) }}
   | dec                                 :: :: dec  {{ com decreasing (big-endian) }}
   | ( order )                             :: S :: paren {{ ichlo [[order]] }}
@@ -187,7 +193,8 @@ efct :: 'Effect_' ::=
 effects :: 'Effects_' ::=
   {{ com effect set, of kind $[[Effects]]$ }}
   {{ aux _ l }}
- | effect id                                  :: :: var
+ | effect id                                  :: :: id
+ | effect var                                 :: :: var
  | effect { efct1 , .. , efctn }           :: :: set {{ com effect set }}
  | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ ichlo [] }}
  | effects1 u+ .. u+ effectsn                   :: M :: union {{ com meta operation for combining sets of effects }} {{ ichlo [] }}
@@ -199,7 +206,9 @@ typ :: 'Typ_' ::=
   {{ aux _ l }}
   | _                                           :: :: wild
     {{ com Unspecified type }}
-  | id                                         :: :: var
+  | id                                         :: :: id
+    {{ com Defined type }}
+  | var                                         :: :: var
     {{ com Type variable }}
   | typ1 -> typ2 effects                        :: :: fn
     {{ com Function type (first-order only in user code) }}
@@ -226,12 +235,12 @@ typ_lib :: 'Typ_lib_' ::=
   {{ com library types and syntactic sugar for them }}
   {{ aux _ l }} {{ auxparam 'a }}
 % boring base types:
-  | Unit :: :: unit {{ com unit type with value $()$ }}
-  | Bool :: :: bool {{ com booleans $[[true]]$ and $[[false]]$ }}
-  | Bit :: :: bit  {{ com pure bit values (not mutable bits) }}
+  | unit :: :: unit {{ com unit type with value $()$ }}
+  | bool :: :: bool {{ com booleans $[[true]]$ and $[[false]]$ }}
+  | bit :: :: bit  {{ com pure bit values (not mutable bits) }}
 % experimentally trying with two distinct types of bool and bit ...
-  | Nat :: :: nat {{ com natural numbers 0,1,2,... }}
-  | String :: :: string {{ com UTF8 strings }}
+  | nat :: :: nat {{ com natural numbers 0,1,2,... }}
+  | string :: :: string {{ com UTF8 strings }}
 % finite subranges of nat
   | Enum nexp1 nexp2 order :: :: enum  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1, ordered by [[order]] }}
   | [ nexp ]             :: :: enum1 {{ com sugar for \texttt{enum nexp 0 inc} }}
@@ -275,8 +284,8 @@ nexp_constraint :: 'NC_' ::=
 kinded_id :: 'KOpt_' ::=
   {{ com optionally kind-annotated identifier }}
   {{ aux _ l }}
-  | id	 	    		   	      :: :: none {{ com identifier }}
-  | kind id				      :: :: kind {{ com kind-annotated variable }}
+  | var	 	    		   	      :: :: none {{ com identifier }}
+  | kind var				      :: :: kind {{ com kind-annotated variable }}
 
 quant_item :: 'QI_' ::=
   {{ com Either a kinded identifier or a nexp constraint for a typquant }}
@@ -763,7 +772,7 @@ val_spec :: 'VS_' ::=
 default_typing_spec :: 'DT_' ::=
   {{ com Default kinding or typing assumption }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | default base_kind id    :: :: kind
+  | default base_kind var    :: :: kind
   | default typschm id      :: :: typ
 % The intended semantics of these is that if an id in binding position
 % doesn't have a kind or type annotation, then we look through the

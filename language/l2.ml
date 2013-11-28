@@ -20,8 +20,8 @@ base_kind_aux =  (* base kind *)
 
 
 type 
-base_kind = 
-   BK_aux of base_kind_aux * l
+var_aux =  (* variables with kind, ticked to differntiate from program variables *)
+   Var of x
 
 
 type 
@@ -31,8 +31,13 @@ id_aux =  (* Identifier *)
 
 
 type 
-kind_aux =  (* kinds *)
-   K_kind of (base_kind) list
+base_kind = 
+   BK_aux of base_kind_aux * l
+
+
+type 
+var = 
+   Var_aux of var_aux * l
 
 
 type 
@@ -41,13 +46,14 @@ id =
 
 
 type 
-kind = 
-   K_aux of kind_aux * l
+kind_aux =  (* kinds *)
+   K_kind of (base_kind) list
 
 
 type 
 nexp_aux =  (* expression of kind $_$, for vector sizes and origins *)
    Nexp_id of id (* identifier *)
+ | Nexp_var of var (* variable *)
  | Nexp_constant of int (* constant *)
  | Nexp_times of nexp * nexp (* product *)
  | Nexp_sum of nexp * nexp (* sum *)
@@ -58,9 +64,8 @@ and nexp =
 
 
 type 
-kinded_id_aux =  (* optionally kind-annotated identifier *)
-   KOpt_none of id (* identifier *)
- | KOpt_kind of kind * id (* kind-annotated variable *)
+kind = 
+   K_aux of kind_aux * l
 
 
 type 
@@ -69,6 +74,22 @@ nexp_constraint_aux =  (* constraint over kind $_$ *)
  | NC_bounded_ge of nexp * nexp
  | NC_bounded_le of nexp * nexp
  | NC_nat_set_bounded of id * (int) list
+
+
+type 
+kinded_id_aux =  (* optionally kind-annotated identifier *)
+   KOpt_none of var (* identifier *)
+ | KOpt_kind of kind * var (* kind-annotated variable *)
+
+
+type 
+nexp_constraint = 
+   NC_aux of nexp_constraint_aux * l
+
+
+type 
+kinded_id = 
+   KOpt_aux of kinded_id_aux * l
 
 
 type 
@@ -83,13 +104,9 @@ efct_aux =  (* effect *)
 
 
 type 
-kinded_id = 
-   KOpt_aux of kinded_id_aux * l
-
-
-type 
-nexp_constraint = 
-   NC_aux of nexp_constraint_aux * l
+quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
+   QI_id of kinded_id (* An optionally kinded identifier *)
+ | QI_const of nexp_constraint (* A constraint for this type *)
 
 
 type 
@@ -98,27 +115,29 @@ efct =
 
 
 type 
-quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
-   QI_id of kinded_id (* An optionally kinded identifier *)
- | QI_const of nexp_constraint (* A constraint for this type *)
+quant_item = 
+   QI_aux of quant_item_aux * l
 
 
 type 
 effects_aux =  (* effect set, of kind $_$ *)
-   Effects_var of id
+   Effects_id of id
+ | Effects_var of var
  | Effects_set of (efct) list (* effect set *)
 
 
 type 
 order_aux =  (* vector order specifications, of kind $_$ *)
    Ord_id of id (* identifier *)
+ | Ord_var of var (* variable *)
  | Ord_inc (* increasing (little-endian) *)
  | Ord_dec (* decreasing (big-endian) *)
 
 
 type 
-quant_item = 
-   QI_aux of quant_item_aux * l
+typquant_aux =  (* type quantifiers and constraints *)
+   TypQ_tq of (quant_item) list
+ | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
 type 
@@ -129,12 +148,6 @@ effects =
 type 
 order = 
    Ord_aux of order_aux * l
-
-
-type 
-typquant_aux =  (* type quantifiers and constraints *)
-   TypQ_tq of (quant_item) list
- | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
 type 
@@ -152,9 +165,15 @@ lit_aux =  (* Literal constant *)
 
 
 type 
+typquant = 
+   TypQ_aux of typquant_aux * l
+
+
+type 
 typ_aux =  (* Type expressions, of kind $_$ *)
    Typ_wild (* Unspecified type *)
- | Typ_var of id (* Type variable *)
+ | Typ_id of id (* Defined type *)
+ | Typ_var of var (* Type variable *)
  | Typ_fn of typ * typ * effects (* Function type (first-order only in user code) *)
  | Typ_tup of (typ) list (* Tuple type *)
  | Typ_app of id * (typ_arg) list (* type constructor application *)
@@ -170,11 +189,6 @@ and typ_arg_aux =  (* Type constructor arguments of all kinds *)
 
 and typ_arg = 
    Typ_arg_aux of typ_arg_aux * l
-
-
-type 
-typquant = 
-   TypQ_aux of typquant_aux * l
 
 
 type 
@@ -218,7 +232,38 @@ typschm =
 
 
 type 
-'a letbind_aux =  (* Let binding *)
+'a exp = 
+   E_aux of 'a exp_aux * 'a annot
+
+and 'a lexp_aux =  (* lvalue expression *)
+   LEXP_id of id (* identifier *)
+ | LEXP_memory of id * 'a exp (* memory write via function call *)
+ | LEXP_vector of 'a lexp * 'a exp (* vector element *)
+ | LEXP_vector_range of 'a lexp * 'a exp * 'a exp (* subvector *)
+ | LEXP_field of 'a lexp * id (* struct field *)
+
+and 'a lexp = 
+   LEXP_aux of 'a lexp_aux * 'a annot
+
+and 'a fexp_aux =  (* Field-expression *)
+   FE_Fexp of id * 'a exp
+
+and 'a fexp = 
+   FE_aux of 'a fexp_aux * 'a annot
+
+and 'a fexps_aux =  (* Field-expression list *)
+   FES_Fexps of ('a fexp) list * bool
+
+and 'a fexps = 
+   FES_aux of 'a fexps_aux * 'a annot
+
+and 'a pexp_aux =  (* Pattern match *)
+   Pat_exp of 'a pat * 'a exp
+
+and 'a pexp = 
+   Pat_aux of 'a pexp_aux * 'a annot
+
+and 'a letbind_aux =  (* Let binding *)
    LB_val_explicit of typschm * 'a pat * 'a exp (* value binding, explicit type ('a pat must be total) *)
  | LB_val_implicit of 'a pat * 'a exp (* value binding, implicit type ('a pat must be total) *)
 
@@ -250,53 +295,16 @@ and 'a exp_aux =  (* Expression *)
  | E_let of 'a letbind * 'a exp (* let expression *)
  | E_assign of 'a lexp * 'a exp (* imperative assignment *)
 
-and 'a exp = 
-   E_aux of 'a exp_aux * 'a annot
 
-and 'a lexp_aux =  (* lvalue expression *)
-   LEXP_id of id (* identifier *)
- | LEXP_memory of id * 'a exp (* memory write via function call *)
- | LEXP_vector of 'a lexp * 'a exp (* vector element *)
- | LEXP_vector_range of 'a lexp * 'a exp * 'a exp (* subvector *)
- | LEXP_field of 'a lexp * id (* struct field *)
-
-and 'a lexp = 
-   LEXP_aux of 'a lexp_aux * 'a annot
-
-and 'a fexp_aux =  (* Field-expression *)
-   FE_Fexp of id * 'a exp
-
-and 'a fexp = 
-   FE_aux of 'a fexp_aux * 'a annot
-
-and 'a fexps_aux =  (* Field-expression list *)
-   FES_Fexps of ('a fexp) list * bool
-
-and 'a fexps = 
-   FES_aux of 'a fexps_aux * 'a annot
-
-and 'a pexp_aux =  (* Pattern match *)
-   Pat_exp of 'a pat * 'a exp
-
-and 'a pexp = 
-   Pat_aux of 'a pexp_aux * 'a annot
+type 
+'a effects_opt_aux =  (* Optional effect annotation for functions *)
+   Effects_opt_pure (* sugar for empty effect set *)
+ | Effects_opt_effects of effects
 
 
 type 
-type_union_aux =  (* Type union constructors *)
-   Tu_id of id
- | Tu_ty_id of typ * id
-
-
-type 
-naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
-   Name_sect_none
- | Name_sect_some of string
-
-
-type 
-'a funcl_aux =  (* Function clause *)
-   FCL_Funcl of id * 'a pat * 'a exp
+'a tannot_opt_aux =  (* Optional type annotation for functions *)
+   Typ_annot_opt_some of typquant * typ
 
 
 type 
@@ -306,14 +314,40 @@ rec_opt_aux =  (* Optional recursive annotation for functions *)
 
 
 type 
-'a tannot_opt_aux =  (* Optional type annotation for functions *)
-   Typ_annot_opt_some of typquant * typ
+'a funcl_aux =  (* Function clause *)
+   FCL_Funcl of id * 'a pat * 'a exp
 
 
 type 
-'a effects_opt_aux =  (* Optional effect annotation for functions *)
-   Effects_opt_pure (* sugar for empty effect set *)
- | Effects_opt_effects of effects
+naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
+   Name_sect_none
+ | Name_sect_some of string
+
+
+type 
+type_union_aux =  (* Type union constructors *)
+   Tu_id of id
+ | Tu_ty_id of typ * id
+
+
+type 
+'a effects_opt = 
+   Effects_opt_aux of 'a effects_opt_aux * 'a annot
+
+
+type 
+'a tannot_opt = 
+   Typ_annot_opt_aux of 'a tannot_opt_aux * 'a annot
+
+
+type 
+rec_opt = 
+   Rec_aux of rec_opt_aux * l
+
+
+type 
+'a funcl = 
+   FCL_aux of 'a funcl_aux * 'a annot
 
 
 type 
@@ -327,40 +361,18 @@ and index_range =
 
 
 type 
-type_union = 
-   Tu_aux of type_union_aux * l
-
-
-type 
 naming_scheme_opt = 
    Name_sect_aux of naming_scheme_opt_aux * l
 
 
 type 
-'a funcl = 
-   FCL_aux of 'a funcl_aux * 'a annot
+type_union = 
+   Tu_aux of type_union_aux * l
 
 
 type 
-rec_opt = 
-   Rec_aux of rec_opt_aux * l
-
-
-type 
-'a tannot_opt = 
-   Typ_annot_opt_aux of 'a tannot_opt_aux * 'a annot
-
-
-type 
-'a effects_opt = 
-   Effects_opt_aux of 'a effects_opt_aux * 'a annot
-
-
-type 
-'a val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_no_rename of typschm * id
- | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
+'a fundef_aux =  (* Function definition *)
+   FD_function of rec_opt * 'a tannot_opt * 'a effects_opt * ('a funcl) list
 
 
 type 
@@ -373,24 +385,16 @@ type
 
 
 type 
-'a fundef_aux =  (* Function definition *)
-   FD_function of rec_opt * 'a tannot_opt * 'a effects_opt * ('a funcl) list
-
-
-type 
 'a default_typing_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of base_kind * id
+   DT_kind of base_kind * var
  | DT_typ of typschm * id
 
 
 type 
-'a val_spec = 
-   VS_aux of 'a val_spec_aux * 'a annot
-
-
-type 
-'a type_def = 
-   TD_aux of 'a type_def_aux * 'a annot
+'a val_spec_aux =  (* Value type specification *)
+   VS_val_spec of typschm * id
+ | VS_extern_no_rename of typschm * id
+ | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
 
 
 type 
@@ -399,8 +403,18 @@ type
 
 
 type 
+'a type_def = 
+   TD_aux of 'a type_def_aux * 'a annot
+
+
+type 
 'a default_typing_spec = 
    DT_aux of 'a default_typing_spec_aux * 'a annot
+
+
+type 
+'a val_spec = 
+   VS_aux of 'a val_spec_aux * 'a annot
 
 
 type 
@@ -424,7 +438,7 @@ type
  | Typ_lib_bool (* booleans $_$ and $_$ *)
  | Typ_lib_bit (* pure bit values (not mutable bits) *)
  | Typ_lib_nat (* natural numbers 0,1,2,... *)
- | Typ_lib_string (* UTF8 strings *)
+ | Typ_lib_string of string (* UTF8 strings *)
  | Typ_lib_enum of nexp * nexp * order (* natural numbers nexp .. nexp+nexp-1, ordered by order *)
  | Typ_lib_enum1 of nexp (* sugar for \texttt{enum nexp 0 inc} *)
  | Typ_lib_enum2 of nexp * nexp (* sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} *)

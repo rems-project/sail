@@ -25,6 +25,17 @@ base_kind_aux =  (* base kind *)
 
 
 type 
+id_aux =  (* Identifier *)
+   Id of x
+ | DeIid of x (* remove infix status *)
+
+
+type 
+var_aux =  (* variables with kind, ticked to differntiate from program variables *)
+   Var of x
+
+
+type 
 efct_aux =  (* effect *)
    Effect_rreg (* read register *)
  | Effect_wreg (* write register *)
@@ -36,24 +47,23 @@ efct_aux =  (* effect *)
 
 
 type 
-id_aux =  (* Identifier *)
-   Id of x
- | DeIid of x (* remove infix status *)
-
-
-type 
 base_kind = 
    BK_aux of base_kind_aux * l
 
 
 type 
-efct = 
-   Effect_aux of efct_aux * l
+id = 
+   Id_aux of id_aux * l
 
 
 type 
-id = 
-   Id_aux of id_aux * l
+var = 
+   Var_aux of var_aux * l
+
+
+type 
+efct = 
+   Effect_aux of efct_aux * l
 
 
 type 
@@ -64,6 +74,7 @@ kind_aux =  (* kinds *)
 type 
 atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders, and effects after parsing *)
    ATyp_id of id (* identifier *)
+ | ATyp_var of var (* ticked variable *)
  | ATyp_constant of int (* constant *)
  | ATyp_times of atyp * atyp (* product *)
  | ATyp_sum of atyp * atyp (* sum *)
@@ -71,6 +82,7 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_inc (* increasing (little-endian) *)
  | ATyp_dec (* decreasing (big-endian) *)
  | ATyp_efid of id
+ | ATyp_efvar of var
  | ATyp_set of (efct) list (* effect set *)
  | ATyp_wild (* Unspecified type *)
  | ATyp_fn of atyp * atyp * atyp (* Function type (first-order only in user code), last atyp is an effect *)
@@ -96,8 +108,8 @@ nexp_constraint_aux =  (* constraint over kind $_$ *)
 
 type 
 kinded_id_aux =  (* optionally kind-annotated identifier *)
-   KOpt_none of id (* identifier *)
- | KOpt_kind of kind * id (* kind-annotated variable *)
+   KOpt_none of var (* identifier *)
+ | KOpt_kind of kind * var (* kind-annotated variable *)
 
 
 type 
@@ -128,6 +140,11 @@ typquant_aux =  (* type quantifiers and constraints *)
 
 
 type 
+typquant = 
+   TypQ_aux of typquant_aux * l
+
+
+type 
 lit_aux =  (* Literal constant *)
    L_unit (* $() : _$ *)
  | L_zero (* $_ : _$ *)
@@ -142,8 +159,8 @@ lit_aux =  (* Literal constant *)
 
 
 type 
-typquant = 
-   TypQ_aux of typquant_aux * l
+typschm_aux =  (* type scheme *)
+   TypSchm_ts of typquant * atyp
 
 
 type 
@@ -152,8 +169,8 @@ lit =
 
 
 type 
-typschm_aux =  (* type scheme *)
-   TypSchm_ts of typquant * atyp
+typschm = 
+   TypSchm_aux of typschm_aux * l
 
 
 type 
@@ -179,11 +196,6 @@ and fpat_aux =  (* Field pattern *)
 
 and fpat = 
    FP_aux of fpat_aux * l
-
-
-type 
-typschm = 
-   TypSchm_aux of typschm_aux * l
 
 
 type 
@@ -242,27 +254,21 @@ and letbind =
 
 
 type 
-naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
-   Name_sect_none
- | Name_sect_some of string
-
-
-type 
 type_union_aux =  (* Type union constructors *)
    Tu_id of id
  | Tu_ty_id of atyp * id
 
 
 type 
-tannot_opt_aux =  (* Optional type annotation for functions *)
-   Typ_annot_opt_none
- | Typ_annot_opt_some of typquant * atyp
+naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
+   Name_sect_none
+ | Name_sect_some of string
 
 
 type 
-effects_opt_aux =  (* Optional effect annotation for functions *)
-   Effects_opt_pure (* sugar for empty effect set *)
- | Effects_opt_effects of atyp
+tannot_opt_aux =  (* Optional type annotation for functions *)
+   Typ_annot_opt_none
+ | Typ_annot_opt_some of typquant * atyp
 
 
 type 
@@ -277,8 +283,14 @@ funcl_aux =  (* Function clause *)
 
 
 type 
-naming_scheme_opt = 
-   Name_sect_aux of naming_scheme_opt_aux * l
+effects_opt_aux =  (* Optional effect annotation for functions *)
+   Effects_opt_pure (* sugar for empty effect set *)
+ | Effects_opt_effects of atyp
+
+
+type 
+type_union = 
+   Tu_aux of type_union_aux * l
 
 
 type 
@@ -292,18 +304,13 @@ and index_range =
 
 
 type 
-type_union = 
-   Tu_aux of type_union_aux * l
+naming_scheme_opt = 
+   Name_sect_aux of naming_scheme_opt_aux * l
 
 
 type 
 tannot_opt = 
    Typ_annot_opt_aux of tannot_opt_aux * l
-
-
-type 
-effects_opt = 
-   Effects_opt_aux of effects_opt_aux * l
 
 
 type 
@@ -317,10 +324,8 @@ funcl =
 
 
 type 
-val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_no_rename of typschm * id
- | VS_extern_spec of typschm * id * string
+effects_opt = 
+   Effects_opt_aux of effects_opt_aux * l
 
 
 type 
@@ -334,7 +339,7 @@ type_def_aux =  (* Type definition body *)
 
 type 
 default_typing_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of base_kind * id
+   DT_kind of base_kind * var
  | DT_typ of typschm * id
 
 
@@ -344,8 +349,10 @@ fundef_aux =  (* Function definition *)
 
 
 type 
-val_spec = 
-   VS_aux of val_spec_aux * l
+val_spec_aux =  (* Value type specification *)
+   VS_val_spec of typschm * id
+ | VS_extern_no_rename of typschm * id
+ | VS_extern_spec of typschm * id * string
 
 
 type 
@@ -361,6 +368,11 @@ default_typing_spec =
 type 
 fundef = 
    FD_aux of fundef_aux * l
+
+
+type 
+val_spec = 
+   VS_aux of val_spec_aux * l
 
 
 type 

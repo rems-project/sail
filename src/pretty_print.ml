@@ -50,9 +50,13 @@ let pp_parens is_atomic format =
 let pp_format_id (Id_aux(i,_)) =
   match i with
   | Id(i) -> i
-  | DeIid(x) -> "(:" ^ x ^ ")"
+  | DeIid(x) -> "(deinfix " ^ x ^ ")"
 
 let pp_id ppf id = base ppf (pp_format_id id)
+
+let pp_format_var (Var_aux(Var v,_)) = "'" ^ v
+
+let pp_var ppf var = base ppf (pp_format_var var)
 
 let pp_format_bkind (BK_aux(k,_)) =
   match k with
@@ -70,7 +74,8 @@ let pp_kind ppf k = base ppf (pp_format_kind k)
 
 let rec pp_format_typ (Typ_aux(t,_)) =
   match t with
-  | Typ_var(id) -> pp_format_id id
+  | Typ_id(id) -> pp_format_id id
+  | Typ_var(var) -> pp_format_var var
   | Typ_wild -> "_"
   | Typ_fn(arg,ret,efct) -> "(" ^ (parens is_atomic_typ pp_format_typ arg) ^ " -> " ^ 
                             (parens is_atomic_typ pp_format_typ ret) ^ " " ^
@@ -80,6 +85,7 @@ let rec pp_format_typ (Typ_aux(t,_)) =
 and pp_format_nexp (Nexp_aux(n,_)) = 
   match n with
   | Nexp_id(id) -> pp_format_id id
+  | Nexp_var(var) -> pp_format_var var
   | Nexp_constant(i) -> string_of_int i
   | Nexp_sum(n1,n2) -> "(" ^ (pp_format_nexp n1) ^ " + " ^ (pp_format_nexp n2) ^ ")"
   | Nexp_times(n1,n2) -> "(" ^  (pp_format_nexp n1) ^ " * " ^ (pp_format_nexp n2) ^ ")"
@@ -87,11 +93,13 @@ and pp_format_nexp (Nexp_aux(n,_)) =
 and pp_format_ord (Ord_aux(o,_)) = 
   match o with
   | Ord_id(id) -> pp_format_id id
+  | Ord_var(var) -> pp_format_var var
   | Ord_inc -> "inc"
   | Ord_dec -> "dec"  
 and pp_format_effects (Effects_aux(e,_)) =
   match e with
-  | Effects_var(id) -> "effect " ^ pp_format_id id
+  | Effects_id(id) -> "effect " ^ pp_format_id id
+  | Effects_var(var) -> "effect " ^ pp_format_var var
   | Effects_set(efcts) ->
     if (efcts = []) 
     then "pure"
@@ -137,8 +145,8 @@ let pp_format_qi (QI_aux(qi,_)) =
   | QI_const(n_const) -> pp_format_nexp_constraint n_const
   | QI_id(KOpt_aux(ki,_)) ->
     (match ki with
-    | KOpt_none(id) -> pp_format_id id
-    | KOpt_kind(k,id) -> pp_format_kind k ^ " " ^ pp_format_id id)
+    | KOpt_none(var) -> pp_format_var var
+    | KOpt_kind(k,var) -> pp_format_kind k ^ " " ^ pp_format_var var)
 
 let pp_qi ppf qi = base ppf (pp_format_qi qi)
 
@@ -259,13 +267,14 @@ and pp_lexp ppf (LEXP_aux(lexp,_)) =
 
 let pp_default ppf (DT_aux(df,_)) =
   match df with
-  | DT_kind(bk,id) -> fprintf ppf "@[<0>%a %a %a@]@\n" kwd "default" pp_bkind bk pp_id id
+  | DT_kind(bk,var) -> fprintf ppf "@[<0>%a %a %a@]@\n" kwd "default" pp_bkind bk pp_var var
   | DT_typ(ts,id) -> fprintf ppf "@[<0>%a %a %a@]@\n" kwd "default" pp_typscm ts pp_id id
 
 let pp_spec ppf (VS_aux(v,_)) =
   match v with
   | VS_val_spec(ts,id) -> fprintf ppf "@[<0>%a %a %a@]@\n" kwd "val" pp_typscm ts pp_id id
   | VS_extern_spec(ts,id,s) -> fprintf ppf "@[<0>%a %a %a %a %a \"%s\"@]@\n" kwd "val" kwd "extern" pp_typscm ts pp_id id kwd "=" s
+  | VS_extern_no_rename(ts,id) -> fprintf ppf "@[<0>%a %a %a %a@]@\n" kwd "val" kwd "extern" pp_typscm ts pp_id id
 
 let pp_namescm ppf (Name_sect_aux(ns,_)) =
   match ns with
@@ -352,6 +361,10 @@ let pp_format_id_lem (Id_aux(i,_)) =
 
 let pp_lem_id ppf id = base ppf (pp_format_id_lem id)
 
+let pp_format_var_lem (Var_aux(Var v,_)) = "(Var \"" ^ v ^ "\")"
+
+let pp_lem_var ppf var = base ppf (pp_format_var_lem var)
+
 let pp_format_bkind_lem (BK_aux(k,_)) =
   match k with
   | BK_type -> "BK_type"
@@ -368,7 +381,8 @@ let pp_lem_kind ppf k = base ppf (pp_format_kind_lem k)
 
 let rec pp_format_typ_lem (Typ_aux(t,_)) =
   match t with
-  | Typ_var(id) -> "(Typ_var " ^ pp_format_id_lem id ^ ")"
+  | Typ_id(id) -> "(Typ_id " ^ pp_format_id_lem id ^ ")"
+  | Typ_var(var) -> "(Typ_var " ^ pp_format_var_lem var ^ ")"
   | Typ_fn(arg,ret,efct) -> "(Typ_fn " ^ pp_format_typ_lem arg ^ " " ^ 
                              pp_format_typ_lem ret ^ " " ^
                             (pp_format_effects_lem efct) ^ ")"
@@ -378,6 +392,7 @@ let rec pp_format_typ_lem (Typ_aux(t,_)) =
 and pp_format_nexp_lem (Nexp_aux(n,_)) = 
   match n with
   | Nexp_id(id) -> "(Nexp_id " ^ pp_format_id_lem id ^ ")"
+  | Nexp_var(v) -> "(Nexp_var " ^ pp_format_var_lem v ^ ")"
   | Nexp_constant(i) -> "(Nexp_constant " ^ string_of_int i ^ ")"
   | Nexp_sum(n1,n2) -> "(Nexp_sum " ^ (pp_format_nexp_lem n1) ^ " " ^ (pp_format_nexp_lem n2) ^ ")"
   | Nexp_times(n1,n2) -> "(Nexp_times " ^  (pp_format_nexp_lem n1) ^ " " ^ (pp_format_nexp_lem n2) ^ ")"
@@ -385,11 +400,13 @@ and pp_format_nexp_lem (Nexp_aux(n,_)) =
 and pp_format_ord_lem (Ord_aux(o,_)) = 
   match o with
   | Ord_id(id) -> "(Ord_id " ^ pp_format_id_lem id ^ ")"
+  | Ord_var(v) -> "(Ord_var " ^ pp_format_var_lem v ^ ")"
   | Ord_inc -> "Ord_inc"
   | Ord_dec -> "Ord_dec"  
 and pp_format_effects_lem (Effects_aux(e,_)) =
   match e with
-  | Effects_var(id) -> "(Effects_var " ^ pp_format_id id ^ ")"
+  | Effects_id(id) -> "(Effects_id " ^ pp_format_id id ^ ")"
+  | Effects_var(v) -> "(Effects_var " ^ pp_format_var v ^ ")"
   | Effects_set(efcts) ->
     "(Effects_set [" ^
       (list_format "; " 
@@ -434,8 +451,8 @@ let pp_format_qi_lem (QI_aux(qi,_)) =
   | QI_id(KOpt_aux(ki,_)) ->
     "(QI_id " ^
     (match ki with
-    | KOpt_none(id) -> "(KOpt_none " ^ pp_format_id_lem id ^ ")"
-    | KOpt_kind(k,id) -> "(KOpt_kind " ^ pp_format_kind_lem k ^ " " ^ pp_format_id_lem id ^ ")") ^ ")"
+    | KOpt_none(var) -> "(KOpt_none " ^ pp_format_var_lem var ^ ")"
+    | KOpt_kind(k,var) -> "(KOpt_kind " ^ pp_format_kind_lem k ^ " " ^ pp_format_var_lem var ^ ")") ^ ")"
 
 let pp_lem_qi ppf qi = base ppf (pp_format_qi_lem qi)
 
@@ -558,13 +575,14 @@ and pp_lem_lexp ppf (LEXP_aux(lexp,_)) =
 
 let pp_lem_default ppf (DT_aux(df,_)) =
   match df with
-  | DT_kind(bk,id) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "DT_kind" pp_lem_bkind bk pp_lem_id id
+  | DT_kind(bk,var) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "DT_kind" pp_lem_bkind bk pp_lem_var var
   | DT_typ(ts,id) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "DT_typ" pp_lem_typscm ts pp_lem_id id
 
 let pp_lem_spec ppf (VS_aux(v,_)) =
   match v with
   | VS_val_spec(ts,id) -> fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_val_spec" pp_lem_typscm ts pp_lem_id id
   | VS_extern_spec(ts,id,s) -> fprintf ppf "@[<0>(%a %a %a \"%s\")@]@\n" kwd "VS_extern_spec" pp_lem_typscm ts pp_lem_id id s
+  | VS_extern_no_rename(ts,id) -> fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_extern_no_rename" pp_lem_typscm ts pp_lem_id id
 
 let pp_lem_namescm ppf (Name_sect_aux(ns,_)) =
   match ns with
@@ -589,8 +607,8 @@ let pp_lem_typdef ppf (TD_aux(td,_)) =
   | TD_variant(id,nm,typq,ar,_) ->
     let a_pp ppf (Tu_aux(typ_u,_)) = 
       match typ_u with
-      | Tu_ty_id(typ,id) -> fprintf ppf "@[<1>(Tu_ty_id %a %a)@]" pp_lem_typ typ pp_lem_id id 
-      | Tu_id(id) -> fprintf ppf "@[<1>(Tu_id %a)@]" pp_id id
+      | Tu_ty_id(typ,id) -> fprintf ppf "@[<1>(Tu_ty_id %a %a);@]" pp_lem_typ typ pp_lem_id id 
+      | Tu_id(id) -> fprintf ppf "@[<1>(Tu_id %a);@]" pp_lem_id id
     in
     fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]" 
       kwd "TD_variant" pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp a_pp a_pp) ar 

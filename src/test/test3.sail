@@ -8,9 +8,9 @@ val ( ( nat * nat ) -> nat effect { wmem , rmem } ) MEM_SIZE
 
 (* extern functions *)
 val extern ( ( nat * nat ) -> nat pure ) add = "add"
-val extern ( ( nat * nat ) -> nat pure ) (: + ) = "add_infix"   (* infix plus *)
+val extern ( ( nat * nat ) -> nat pure ) (deinfix + ) = "add_infix"   (* infix plus *)
 
-function nat (: * ) ( < nat > x, < nat > y ) = 42
+function nat (deinfix * ) ( (nat) x, (nat) y ) = 42
 
 function nat main _ = {
   (* left-hand side function call = memory write *)

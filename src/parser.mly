@@ -243,8 +243,10 @@ id:
 tid:
   | TyId
     { (idl (Id($1))) }
+
+tyvar:
   | TyVar
-    { (idl (Id($1))) }
+    { (Var_aux((Var($1)),loc ())) }
 
 atomic_kind:
   | TYPE
@@ -299,6 +301,8 @@ effect_typ:
 atomic_typ:
   | tid
     { tloc (ATyp_id $1) }
+  | tyvar
+    { tloc (ATyp_var $1) }
   | effect_typ
     { $1 }
   | Inc
@@ -319,6 +323,10 @@ vec_typ:
       { tloc (make_vector_sugar (ATyp_aux ((ATyp_id $1), locn 1 1)) $3) }
   | tid Lsquare nexp_typ Colon nexp_typ Rsquare
       { tloc (make_vector_sugar_bounded (ATyp_aux ((ATyp_id $1), locn 1 1)) $3 $5) }
+  | tyvar Lsquare nexp_typ Rsquare
+      { tloc (make_vector_sugar (ATyp_aux ((ATyp_var $1), locn 1 1)) $3) }
+  | tyvar Lsquare nexp_typ Colon nexp_typ Rsquare
+      { tloc (make_vector_sugar_bounded (ATyp_aux ((ATyp_var $1), locn 1 1)) $3 $5) }
 
 app_typs:
   | vec_typ
@@ -397,8 +405,8 @@ atomic_pat:
     { ploc P_wild }
   | Lparen pat As id Rparen
     { ploc (P_as($2,$4)) }
-  | Lparen Lparen typ Rparen atomic_pat Rparen
-    { ploc (P_typ($3,$5)) } 
+  | Lparen typ Rparen atomic_pat
+    { ploc (P_typ($2,$4)) } 
   | id
     { ploc (P_app($1,[])) }
   | Lcurly fpats Rcurly
@@ -844,13 +852,13 @@ funcl_ands:
 
 /* This causes ambiguity because without a type quantifier it's unclear whether the first id is a function name or a type name for the optional types.*/
 fun_def:
-  | Function_ Rec typquant atomic_typ effect_typ funcl_ands
+  | Function_ Rec typquant typ effect_typ funcl_ands
     { funloc (FD_function(mk_rec 2, mk_tannot $3 $4 3 4, mk_eannot $5 5, $6)) }
-  | Function_ Rec typquant atomic_typ funcl_ands
+  | Function_ Rec typquant typ funcl_ands
     { funloc (FD_function(mk_rec 2, mk_tannot $3 $4 3 4, mk_eannotn (), $5)) }
-  | Function_ Rec atomic_typ effect_typ funcl_ands
+  | Function_ Rec typ effect_typ funcl_ands
     { funloc (FD_function(mk_rec 2, mk_tannot (mk_typqn ()) $3 3 3, mk_eannot $4 4, $5)) }
-  | Function_ Rec atomic_typ funcl_ands
+  | Function_ Rec typ funcl_ands
     { match $3 with
       | ATyp_aux(ATyp_efid _, _) | ATyp_aux(ATyp_set _, _) ->
         funloc (FD_function(mk_rec 2,mk_tannotn (), mk_eannot $3 3, $4))
@@ -860,9 +868,9 @@ fun_def:
     { funloc (FD_function(mk_rec 2, mk_tannotn (), mk_eannotn (), $3)) }
 */  | Function_ typquant atomic_typ effect_typ funcl_ands
     { funloc (FD_function(mk_recn (), mk_tannot $2 $3 2 3, mk_eannot $4 4, $5)) }
-  | Function_ typquant atomic_typ funcl_ands
+  | Function_ typquant typ funcl_ands
     { funloc (FD_function(mk_recn (), mk_tannot $2 $3 2 2, mk_eannotn (), $4)) }
-  | Function_ atomic_typ funcl_ands
+  | Function_ typ funcl_ands
     { match $2 with
       | ATyp_aux(ATyp_efid _, _) | ATyp_aux(ATyp_set _, _) ->
         funloc (FD_function(mk_recn (),mk_tannotn (), mk_eannot $2 2, $3))
@@ -873,9 +881,9 @@ fun_def:
 */
 
 val_spec:
-  | Val typquant atomic_typ id
+  | Val typquant typ id
     { vloc (VS_val_spec(mk_typschm $2 $3 2 3,$4)) }
-  | Val atomic_typ id
+  | Val typ id
     { vloc (VS_val_spec(mk_typschm (mk_typqn ()) $2 2 2,$3)) }
   | Val Extern typquant atomic_typ id
     { vloc (VS_extern_no_rename (mk_typschm $3 $4 3 4,$5)) }
@@ -887,9 +895,9 @@ val_spec:
     { vloc (VS_extern_spec (mk_typschm (mk_typqn ()) $3 3 3,$4, $6)) }
 
 kinded_id:
-  | tid
+  | tyvar
     { kiloc (KOpt_none $1) }
-  | kind tid
+  | kind tyvar
     { kiloc (KOpt_kind($1,$2))}
 
 /*kinded_ids:
@@ -1020,12 +1028,12 @@ type_def:
     { tdloc (TD_enum($2, mk_namesectn (), $6,false)) }
   | Typedef id name_sect Eq Enumerate Lcurly enum_body Rcurly
     { tdloc (TD_enum($2,$3,$7,false)) }
-  | Typedef id Eq Register Bits Lsquare typ Colon typ Rsquare Lcurly r_def_body Rcurly
+  | Typedef id Eq Register Bits Lsquare nexp_typ Colon nexp_typ Rsquare Lcurly r_def_body Rcurly
     { tdloc (TD_register($2, $7, $9, $12)) }
 
 
 default_typ:
-  | Default atomic_kind id
+  | Default atomic_kind tyvar
     { defloc (DT_kind($2,$3)) }
   | Default typquant atomic_typ id
     { defloc (DT_typ((mk_typschm $2 $3 2 3),$4)) }
@@ -1033,13 +1041,13 @@ default_typ:
     { defloc (DT_typ((mk_typschm (mk_typqn ()) $2 2 2),$3)) }
 
 scattered_def:
-  | Function_ Rec typquant atomic_typ effect_typ id
+  | Function_ Rec typquant typ effect_typ id
     { (DEF_scattered_function(mk_rec 2, mk_tannot $3 $4 3 4, mk_eannot $5 5, $6)) }
-  | Function_ Rec atomic_typ effect_typ id
+  | Function_ Rec typ effect_typ id
     { (DEF_scattered_function(mk_rec 2, mk_tannot (mk_typqn ()) $3 3 3, mk_eannot $4 4, $5)) }
-  | Function_ Rec typquant atomic_typ id
+  | Function_ Rec typquant typ id
     { (DEF_scattered_function(mk_rec 2, mk_tannot $3 $4 3 4, mk_eannotn (), $5)) }
-  | Function_ Rec atomic_typ id
+  | Function_ Rec typ id
     { match $3 with
       | (ATyp_aux(ATyp_efid _, _)) | (ATyp_aux(ATyp_set _, _)) ->
         (DEF_scattered_function(mk_rec 2, mk_tannotn (), mk_eannot $3 3, $4))
@@ -1047,13 +1055,13 @@ scattered_def:
         (DEF_scattered_function(mk_rec 2,mk_tannot (mk_typqn ()) $3 3 3, mk_eannotn (), $4)) }
   | Function_ Rec id
     { (DEF_scattered_function(mk_rec 2,mk_tannotn (), mk_eannotn (),$3)) }
-  | Function_ typquant atomic_typ effect_typ id
+  | Function_ typquant typ effect_typ id
     { (DEF_scattered_function(mk_recn (),mk_tannot $2 $3 2 3, mk_eannot $4 4, $5)) }
-  | Function_ atomic_typ effect_typ id
+  | Function_ typ effect_typ id
     { (DEF_scattered_function(mk_recn (), mk_tannot (mk_typqn ()) $2 2 2, mk_eannot $3 3, $4)) }
-  | Function_ typquant atomic_typ id
+  | Function_ typquant typ id
     { (DEF_scattered_function(mk_recn (), mk_tannot $2 $3 2 3, mk_eannotn (), $4)) }
-  | Function_ atomic_typ id
+  | Function_ typ id
     { match $2 with
       | (ATyp_aux(ATyp_efid _, _)) | (ATyp_aux(ATyp_set _, _)) ->
         (DEF_scattered_function(mk_recn (), mk_tannotn (), mk_eannot $2 2, $3))

@@ -64,25 +64,29 @@ id:
   | Id
     { $1 }
 
-scan:
+id_found:
   | Typedef id
     { $2 }
-  | Scattered Typedef id
-    { $3 }
-  | id scan
-    { $2 }
-  | Other scan
-    { $2 }
+
+skip:
+  | Scattered
+    { () }
+  | id
+    { () }
+  | Other
+    { () }
 
 scan_file:
-  | scan
+  | id_found
     { [$1] }
-  | scan scan_file
+  | skip
+    { [] }
+  | id_found scan_file
     { $1::$2 }
+  | skip scan_file
+    { $2 }
 
 file:
   | scan_file Eof
     { $1 }
-  | Other Eof
-    { [] }
 

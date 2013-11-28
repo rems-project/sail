@@ -92,6 +92,6 @@ let run (name, test) =
       eprintf "%s: action returned %s\n" name (val_to_string return);
       loop env' (resume test s return)
   | Error e -> eprintf "%s: error: %s\n" name e in
-  let entry = E_app(E_id(Id "main"), [E_lit L_unit]) in
+  let entry = E_app((Id "main"), [E_lit L_unit]) in
   loop (Reg.empty, Mem.empty) (interp test entry)
 ;;

@@ -118,6 +118,12 @@ id :: '' ::=
   | x                           :: :: id
   | ( deinfix x )                       :: :: deIid {{ com remove infix status }}
 
+
+var :: '' ::=
+  {{ com variables with kind, ticked to differntiate from program variables }}
+  {{ aux _ l }}
+  | ' x                       :: :: var
+
 % Note: we have just a single namespace. We don't want the same
 % identifier to be reused as a type name or variable, expression
 % variable, and field name.  We don't enforce any lexical convention
@@ -162,6 +168,7 @@ atyp :: 'ATyp_' ::=
   {{ com expressions of all kinds, to be translated to types, nats, orders, and effects after parsing }}
   {{ aux _ l }}
   | id                                  :: :: id          {{ com identifier }}
+  | var                                 :: :: var         {{ com ticked variable }}
   | num                                 :: :: constant     {{ com constant }}
   | atyp1 * atyp2                       :: :: times        {{ com product }}
   | atyp1 + atyp2                       :: :: sum          {{ com sum }}
@@ -171,6 +178,7 @@ atyp :: 'ATyp_' ::=
   | inc                                 :: :: inc  {{ com increasing (little-endian) }}
   | dec                                 :: :: dec  {{ com decreasing (big-endian) }}
   | effect id                            :: :: efid
+  | effect var                           :: :: efvar
   | effect { efct1 , .. , efctn }           :: :: set {{ com effect set }}
   | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ icho [] }}
 
@@ -237,8 +245,8 @@ nexp_constraint :: 'NC_' ::=
 kinded_id :: 'KOpt_' ::=
   {{ com optionally kind-annotated identifier }}
   {{ aux _ l }}
-  | id	 	    		   	      :: :: none {{ com identifier }}
-  | kind id				      :: :: kind {{ com kind-annotated variable }}
+  | var	 	    		   	      :: :: none {{ com identifier }}
+  | kind var				      :: :: kind {{ com kind-annotated variable }}
 
 quant_item :: 'QI_' ::=
   {{ com Either a kinded identifier or a nexp constraint for a typquant }}
@@ -682,7 +690,7 @@ default_typing_spec :: 'DT_' ::=
   {{ com Default kinding or typing assumption }}
   {{ aux _ l }}
 %  {{ aux _ annot }} {{ auxparam 'a }}
-  | default base_kind id    :: :: kind
+  | default base_kind var    :: :: kind
   | default typschm id      :: :: typ
 % The intended semantics of these is that if an id in binding position
 % doesn't have a kind or type annotation, then we look through the
