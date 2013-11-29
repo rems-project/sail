@@ -2,13 +2,13 @@
 register nat dummy_reg
 (* a function to read from memory; wmem serves no purpose currently,
    memory-writing functions are figured out syntactically. *)
-val ( nat -> nat effect { wmem , rmem } ) MEM
-val ( nat -> nat effect { wmem , rmem } ) MEM_GPU
-val ( ( nat * nat ) -> nat effect { wmem , rmem } ) MEM_SIZE
+val  nat -> nat effect { wmem , rmem }  MEM
+val  nat -> nat effect { wmem , rmem }  MEM_GPU
+val ( nat * nat ) -> nat effect { wmem , rmem }  MEM_SIZE
 
 (* extern functions *)
-val extern ( ( nat * nat ) -> nat pure ) add = "add"
-val extern ( ( nat * nat ) -> nat pure ) (deinfix + ) = "add_infix"   (* infix plus *)
+val extern ( nat * nat ) -> nat pure add = "add"
+val extern ( nat * nat ) -> nat pure (deinfix + ) = "add_infix"   (* infix plus *)
 
 function nat (deinfix * ) ( (nat) x, (nat) y ) = 42
 

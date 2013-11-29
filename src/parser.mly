@@ -885,13 +885,13 @@ val_spec:
     { vloc (VS_val_spec(mk_typschm $2 $3 2 3,$4)) }
   | Val typ id
     { vloc (VS_val_spec(mk_typschm (mk_typqn ()) $2 2 2,$3)) }
-  | Val Extern typquant atomic_typ id
+  | Val Extern typquant typ id
     { vloc (VS_extern_no_rename (mk_typschm $3 $4 3 4,$5)) }
-  | Val Extern atomic_typ id
+  | Val Extern typ id
     { vloc (VS_extern_no_rename (mk_typschm (mk_typqn ()) $3 3 3, $4)) }
-  | Val Extern typquant atomic_typ id Eq String
+  | Val Extern typquant typ id Eq String
     { vloc (VS_extern_spec (mk_typschm $3 $4 3 4,$5,$7)) }
-  | Val Extern atomic_typ id Eq String
+  | Val Extern typ id Eq String
     { vloc (VS_extern_spec (mk_typschm (mk_typqn ()) $3 3 3,$4, $6)) }
 
 kinded_id:
@@ -943,25 +943,25 @@ name_sect:
     { Name_sect_aux(Name_sect_some($4), loc ()) }
 
 c_def_body:
-  | atomic_typ id
+  | typ id
     { [($1,$2)],false }
-  | atomic_typ id Semi
+  | typ id Semi
     { [($1,$2)],true }
-  | atomic_typ id Semi c_def_body
+  | typ id Semi c_def_body
     { ($1,$2)::(fst $4), snd $4 }
 
 union_body:
   | id
     { [Tu_aux( Tu_id $1, loc())],false }
-  | atomic_typ id
+  | typ id
     { [Tu_aux( Tu_ty_id ($1,$2), loc())],false }
   | id Semi
     { [Tu_aux( Tu_id $1, loc())],true }
-  | atomic_typ id Semi
+  | typ id Semi
     { [Tu_aux( Tu_ty_id ($1,$2),loc())],true }
   | id Semi union_body
     { (Tu_aux( Tu_id $1, loc()))::(fst $3), snd $3 }
-  | atomic_typ id Semi union_body
+  | typ id Semi union_body
     { (Tu_aux(Tu_ty_id($1,$2),loc()))::(fst $4), snd $4 }
 
 index_range_atomic:
@@ -1035,9 +1035,9 @@ type_def:
 default_typ:
   | Default atomic_kind tyvar
     { defloc (DT_kind($2,$3)) }
-  | Default typquant atomic_typ id
+  | Default typquant typ id
     { defloc (DT_typ((mk_typschm $2 $3 2 3),$4)) }
-  | Default atomic_typ id
+  | Default typ id
     { defloc (DT_typ((mk_typschm (mk_typqn ()) $2 2 2),$3)) }
 
 scattered_def:
