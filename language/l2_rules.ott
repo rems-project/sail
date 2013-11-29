@@ -18,7 +18,8 @@ k :: 'Ki_' ::=
 
 t , u :: 'T_' ::=                                {{ phantom }}
 {{ com Internal types }}
-   | id                                           :: :: var
+   | id                                           :: :: id
+   | var                                          :: :: var
    | t1 -> t2 effects tag S_N                     :: :: fn  {{ com [[S_N]] are constraints for the function, [[tag]] holds generation data }}
    | ( t1 * .... * tn )                           :: :: tup
    | id t_args                                    :: :: app 
@@ -185,13 +186,18 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
    | k                                        :: :: k
    | k default                                :: :: def
 
+ tid :: 'tid_' ::=
+   {{ com A type identifier or type variable }}
+   | id                                      :: :: id
+   | var                                     :: :: var
+
  E_k {{ tex \ottnt{E}^{\textsc{k} } }} :: 'E_k_' ::=             {{ phantom }}
-                                                                 {{ hol (id-> k) }}
-                                                                 {{ lem map id k }}
+                                                                 {{ hol (tid-> k) }}
+                                                                 {{ lem map tid k }}
    {{ com Kind environments }}
-   | { id1 |-> kinf1 , .. , idn |-> kinfn }    :: :: concrete
-     {{ hol (FOLDR (\(k1,k2) E. E |+ (k1,k2)) FEMPTY [[id1 kinf1 .. idn kinfn]]) }}
-     {{ lem (List.fold_right (fun (x,v) m -> Map.insert x v m) [[id1 kinf1 .. idn kinfn]] Map.empty) }} 
+   | { tid1 |-> kinf1 , .. , tidn |-> kinfn }    :: :: concrete
+     {{ hol (FOLDR (\(k1,k2) E. E |+ (k1,k2)) FEMPTY [[tid1 kinf1 .. tidn kinfn]]) }}
+     {{ lem (List.fold_right (fun (x,v) m -> Map.insert x v m) [[tid1 kinf1 .. tidn kinfn]] Map.empty) }} 
    | E_k1 u+ .. u+ E_kn                                          :: M :: union
      {{ com In a unioning kinf, {k default} u {k} results in {k} (i.e. the default is locally forgotten) }} 
      {{ hol (FOLDR FUNION FEMPTY [[E_k1..E_kn]]) }}
@@ -265,10 +271,10 @@ formula :: formula_ ::=
 
   | formula1 .. formulan                                        :: :: dots
 
-   | E_k ( id ) gives kinf                                      :: :: lookup_k
+   | E_k ( tid ) gives kinf                                      :: :: lookup_k
      {{ com Kind lookup }}
-     {{ hol (FLOOKUP [[E_k]] [[id]] = SOME [[k]]) }}
-     {{ lem Map.lookup [[id]] [[E_k]] = Just [[k]] }} 
+     {{ hol (FLOOKUP [[E_k]] [[tid]] = SOME [[k]]) }}
+     {{ lem Map.lookup [[tid]] [[E_k]] = Just [[k]] }} 
 
    | E_t ( id ) gives tinf                                      :: :: lookup_t
      {{ com Type lookup }}
@@ -535,11 +541,11 @@ by
 
 E_k |- kind ~> k
 ----------------------------------------------------------- :: kind
-<E_k,E_r,E_e> |- kind id ~> {id |-> k}, {}
+<E_k,E_r,E_e> |- kind var ~> {var |-> k}, {}
 
-E_k(id) gives k
+E_k(var) gives k
 ----------------------------------------------------------- :: nokind
-<E_k,E_r,E_e> |- id ~> {id |-> k},{}
+<E_k,E_r,E_e> |- var ~> {var |-> k},{}
 
 |- nexp1 ~> ne1
 |- nexp2 ~> ne2
@@ -579,9 +585,13 @@ E_d |- typ ~> t :: :: convert_typ :: convert_typ_
 {{ com Convert source types to internal types }}
 by
  
-E_k(id) gives K_Typ
+E_k(var) gives K_Typ
 ------------------------------------------------------------ :: var
-<E_k,E_r,E_e> |- :Typ_var: id ~> id
+<E_k,E_r,E_e> |- :Typ_var: var ~> var
+
+E_k(id) gives K_Typ
+------------------------------------------------------------ :: id
+<E_k,E_r,E_e> |- :Typ_id: id ~> id
 
 E_d |- typ1 ~> t1
 E_d |- typ2 ~> t2
@@ -595,7 +605,7 @@ E_d |- typ1 * .... * typn ~> (t1 * .... * tn)
 E_k(id) gives K_Lam (k1..kn -> K_Typ)
 <E_k,E_r,E_e>,k1 |- typ_arg1 ~> t_arg1 .. <E_k,E_r,E_e>,kn |- typ_argn ~> t_argn
 ------------------------------------------------------------ :: app
-<E_k,E_r,E_e> |- id typ_arg1 .. typ_argn ~> id t_arg1 .. t_argn
+<E_k,E_r,E_e> |- id <typ_arg1 .. typ_argn> ~> id t_arg1 .. t_argn
 
 E_d |- typ ~> t1
 E_d |- t1 = t2
@@ -630,7 +640,7 @@ by
 
 |- nexp ~> ne
 ------------------------------------------------------------ :: exp
-|- 2 ** nexp ~> 2 ** ne
+|- 2** nexp ~> 2 ** ne
 
 defn 
 E_d |- t :> t' , S_N :: :: coerce_typ :: coerce_typ_ by
@@ -683,11 +693,11 @@ by
 
  num = bitlength(hex)
  ------------------------------------------------------------ :: hex
- |- hex : vector zero num inc :T_var: bit
+ |- hex : vector zero num inc :T_id: bit
 
  num = bitlength(bin)
  ------------------------------------------------------------ :: bin 
- |- bin  : vector zero num inc :T_var: bit
+ |- bin  : vector zero num inc :T_id: bit
 
  ------------------------------------------------------------ :: unit
  |- () : unit
@@ -728,13 +738,13 @@ E_t(id) gives {}, {}, Default, t
 E_d |- typ ~> t
 <E_t,E_d> |- pat : t gives E_t1,S_N
 ------------------------------------------------------------ :: typ
-<E_t,E_d> |- (<typ> pat) : t gives E_t1,S_N
+<E_t,E_d> |- (typ) pat : t gives E_t1,S_N
 
 E_t(id) gives (t1*..*tn) -> id t_args effect { } Ctor
 <E_t,E_d> |- pat1 : t1 gives E_t1,S_N1 .. <E_t,E_d> |- patn : tn gives E_tn,S_Nn
 disjoint doms(E_t1,..,E_tn)
 ------------------------------------------------------------ :: ident_constr
-<E_t,E_d> |- id pat1 .. patn : id t_args gives u+ E_t1 .. E_tn, S_N1 u+ .. u+ S_Nn
+<E_t,E_d> |- id(pat1, .., patn) : id t_args gives u+ E_t1 .. E_tn, S_N1 u+ .. u+ S_Nn
 
 E_k |-t t ok
 ------------------------------------------------------------ :: var
@@ -788,7 +798,7 @@ E |- (pat1, ...., patn) : (t1 * .... * tn) gives (E_t1 u+ .... u+ E_tn),S_N1 u+ 
 E |- pat1 : t gives E_t1,S_N1 .. E |- patn : t gives E_tn,S_Nn
 disjoint doms(E_t1,..,E_tn)
 ------------------------------------------------------------ :: list
-E |- [|pat1, .., patn |] : list t gives (E_t1 u+ .. u+ E_tn),S_N1 u+ .. u+ S_Nn
+E |- [||pat1, .., patn ||] : list t gives (E_t1 u+ .. u+ E_tn),S_N1 u+ .. u+ S_Nn
 
 
 defns
@@ -825,13 +835,13 @@ t = u [</ui/idi//i/>]
 E_t(id) gives t' -> t effect {} Ctor {} 
 <E_t,E_d> |- exp : t' gives I,E_t
 ------------------------------------------------------------ :: ctor
-<E_t,E_d> |- id exp : t gives I,E_t
+<E_t,E_d> |- id(exp) : t gives I,E_t
 
 % Need to take into account possible type variables on result of id
 E_t(id) gives t' -> t effects tag S_N
 <E_t,E_d> |- exp : t' gives I,E_t
 ------------------------------------------------------------ :: app
-<E_t,E_d> |- id exp : t gives I u+ <S_N,effects>, E_t
+<E_t,E_d> |- id(exp) : t gives I u+ <S_N,effects>, E_t
 
 E_t(id) gives t' -> t effects tag S_N
 <E_t,E_d> |- (exp1,exp2) : t' gives I,E_t
@@ -918,7 +928,7 @@ E |- (exp1, .... , expn) : (t1 * .... * tn) gives I1 u+ .... u+ In,E_t
  
 E |- exp1 : t gives I1,E_t .. E |- expn : t gives In,E_t
 ------------------------------------------------------------ :: list
-E |- [|exp1, .., expn |] : list t gives I1 u+ .. u+ In,E_t
+E |- [||exp1, .., expn ||] : list t gives I1 u+ .. u+ In,E_t
 
 E |- exp1 : bool gives I1,E_t
 E |- exp2 : t gives I2,E_t2
@@ -1046,7 +1056,7 @@ E_k1 = { id |-> K_Lam (k1 .. km -> K_Typ) }
 ----------------------------------------------------------- :: quant_record
 <E_k,E_r,E_e> |- typedef id naming_scheme_opt = const struct forall </quant_itemi//i/> . { typ1 id1 ; .. ; typn idn semi_opt } gives <{},<E_k1,E_r1,{}>>
 
-E_t = { id1 |-> t1 -> :T_var: id pure Ctor {}, ..., idn |-> tn -> :T_var: id pure Ctor {} }
+E_t = { id1 |-> t1 -> :T_id: id pure Ctor {}, ..., idn |-> tn -> :T_id: id pure Ctor {} }
 E_k1 = { id |-> K_Typ }
 <E_k u+ E_k1,E_r,E_e> |- typ1 ~> t1 ... <E_k u+ E_k1,E_r,E_e> |- typn ~> tn
 ------------------------------------------------------------ :: unquant_union
@@ -1181,7 +1191,7 @@ by
 
 E_k |- base_kind ~> k
 ------------------------------------------------------------ :: kind
-<E_k,E_r,E_e> |- default base_kind id gives {}, {id |-> k default }
+<E_k,E_r,E_e> |- default base_kind var gives {}, {var |-> k default }
 
 E_d |- typschm ~> t,E_k1,S_N 
 ------------------------------------------------------------ :: typ
