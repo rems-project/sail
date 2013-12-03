@@ -68,7 +68,7 @@ let kw_table =
      ("default",		 (fun _ -> Default));
      ("deinfix",                 (fun _ -> Deinfix));
      ("effect",                  (fun _ -> Effect));
-     ("Effects",                 (fun _ -> Effects));
+     ("Effect",                 (fun _ -> EFFECT));
      ("end",                     (fun _ -> End));
      ("enumerate",		 (fun _ -> Enumerate));
      ("else",                    (fun _ -> Else));
@@ -106,6 +106,15 @@ let kw_table =
      ("OR",			 (fun x -> OR));
      ("quot",			 (fun x -> Quot));
      ("rem",			 (fun x -> Rem));
+
+     ("rreg",                    (fun x -> Rreg));
+     ("wreg",                    (fun x -> Wreg));
+     ("rmem",                    (fun x -> Rmem));
+     ("wmem",                    (fun x -> Wmem));
+     ("undef",                   (fun x -> Undef));
+     ("unspec",                  (fun x -> Unspec));
+     ("nondet",                  (fun x -> Nondet));
+
 ]
 
 let type_names : string list ref = ref []

@@ -38,7 +38,7 @@ and nexp_aux =
 and effect = { mutable effect : effect_aux }
 and effect_aux =
   | Evar of string
-  | Eset of Ast.efct_aux list
+  | Eset of Ast.base_effect list
   | Euvar of e_uvar
 and order = { mutable order : order_aux }
 and order_aux =

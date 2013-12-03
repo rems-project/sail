@@ -39,7 +39,7 @@ and n_uvar = { nindex : int; mutable nsubst : t option }
 and effect = { mutable effect : effect_aux }
 and effect_aux =
   | Evar of string
-  | Eset of Ast.efct_aux list
+  | Eset of Ast.base_effect list
   | Euvar of e_uvar
 and e_uvar = { eindex : int; mutable esubst : t option }
 and order = { mutable order : order_aux }

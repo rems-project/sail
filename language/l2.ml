@@ -16,18 +16,12 @@ base_kind_aux =  (* base kind *)
    BK_type (* kind of types *)
  | BK_nat (* kind of natural number size expressions *)
  | BK_order (* kind of vector order specifications *)
- | BK_effects (* kind of effect sets *)
+ | BK_effect (* kind of effect sets *)
 
 
 type 
-var_aux =  (* variables with kind, ticked to differntiate from program variables *)
+kid_aux =  (* variables with kind, ticked to differntiate from program variables *)
    Var of x
-
-
-type 
-id_aux =  (* Identifier *)
-   Id of x
- | DeIid of x (* remove infix status *)
 
 
 type 
@@ -36,13 +30,8 @@ base_kind =
 
 
 type 
-var = 
-   Var_aux of var_aux * l
-
-
-type 
-id = 
-   Id_aux of id_aux * l
+kid = 
+   Kid_aux of kid_aux * l
 
 
 type 
@@ -52,8 +41,7 @@ kind_aux =  (* kinds *)
 
 type 
 nexp_aux =  (* expression of kind $_$, for vector sizes and origins *)
-   Nexp_id of id (* identifier *)
- | Nexp_var of var (* variable *)
+   Nexp_var of kid (* variable *)
  | Nexp_constant of int (* constant *)
  | Nexp_times of nexp * nexp (* product *)
  | Nexp_sum of nexp * nexp (* sum *)
@@ -69,22 +57,22 @@ kind =
 
 
 type 
-nexp_constraint_aux =  (* constraint over kind $_$ *)
+n_constraint_aux =  (* constraint over kind $_$ *)
    NC_fixed of nexp * nexp
  | NC_bounded_ge of nexp * nexp
  | NC_bounded_le of nexp * nexp
- | NC_nat_set_bounded of id * (int) list
+ | NC_nat_set_bounded of kid * (int) list
 
 
 type 
 kinded_id_aux =  (* optionally kind-annotated identifier *)
-   KOpt_none of var (* identifier *)
- | KOpt_kind of kind * var (* kind-annotated variable *)
+   KOpt_none of kid (* identifier *)
+ | KOpt_kind of kind * kid (* kind-annotated variable *)
 
 
 type 
-nexp_constraint = 
-   NC_aux of nexp_constraint_aux * l
+n_constraint = 
+   NC_aux of n_constraint_aux * l
 
 
 type 
@@ -93,25 +81,25 @@ kinded_id =
 
 
 type 
-efct_aux =  (* effect *)
-   Effect_rreg (* read register *)
- | Effect_wreg (* write register *)
- | Effect_rmem (* read memory *)
- | Effect_wmem (* write memory *)
- | Effect_undef (* undefined-instruction exception *)
- | Effect_unspec (* unspecified values *)
- | Effect_nondet (* nondeterminism from intra-instruction parallelism *)
+base_effect_aux =  (* effect *)
+   BE_rreg (* read register *)
+ | BE_wreg (* write register *)
+ | BE_rmem (* read memory *)
+ | BE_wmem (* write memory *)
+ | BE_undef (* undefined-instruction exception *)
+ | BE_unspec (* unspecified values *)
+ | BE_nondet (* nondeterminism from intra-instruction parallelism *)
 
 
 type 
 quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
    QI_id of kinded_id (* An optionally kinded identifier *)
- | QI_const of nexp_constraint (* A constraint for this type *)
+ | QI_const of n_constraint (* A constraint for this type *)
 
 
 type 
-efct = 
-   Effect_aux of efct_aux * l
+base_effect = 
+   BE_aux of base_effect_aux * l
 
 
 type 
@@ -120,18 +108,22 @@ quant_item =
 
 
 type 
-effects_aux =  (* effect set, of kind $_$ *)
-   Effects_id of id
- | Effects_var of var
- | Effects_set of (efct) list (* effect set *)
+effect_aux =  (* effect set, of kind $_$ *)
+   Effect_var of kid
+ | Effect_set of (base_effect) list (* effect set *)
 
 
 type 
 order_aux =  (* vector order specifications, of kind $_$ *)
-   Ord_id of id (* identifier *)
- | Ord_var of var (* variable *)
+   Ord_var of kid (* variable *)
  | Ord_inc (* increasing (little-endian) *)
  | Ord_dec (* decreasing (big-endian) *)
+
+
+type 
+id_aux =  (* Identifier *)
+   Id of x
+ | DeIid of x (* remove infix status *)
 
 
 type 
@@ -141,13 +133,18 @@ typquant_aux =  (* type quantifiers and constraints *)
 
 
 type 
-effects = 
-   Effects_aux of effects_aux * l
+effect = 
+   Effect_aux of effect_aux * l
 
 
 type 
 order = 
    Ord_aux of order_aux * l
+
+
+type 
+id = 
+   Id_aux of id_aux * l
 
 
 type 
@@ -173,8 +170,8 @@ type
 typ_aux =  (* Type expressions, of kind $_$ *)
    Typ_wild (* Unspecified type *)
  | Typ_id of id (* Defined type *)
- | Typ_var of var (* Type variable *)
- | Typ_fn of typ * typ * effects (* Function type (first-order only in user code) *)
+ | Typ_var of kid (* Type variable *)
+ | Typ_fn of typ * typ * effect (* Function type (first-order only in user code) *)
  | Typ_tup of (typ) list (* Tuple type *)
  | Typ_app of id * (typ_arg) list (* type constructor application *)
 
@@ -185,7 +182,7 @@ and typ_arg_aux =  (* Type constructor arguments of all kinds *)
    Typ_arg_nexp of nexp
  | Typ_arg_typ of typ
  | Typ_arg_order of order
- | Typ_arg_effects of effects
+ | Typ_arg_effect of effect
 
 and typ_arg = 
    Typ_arg_aux of typ_arg_aux * l
@@ -232,17 +229,7 @@ typschm =
 
 
 type 
-'a exp = 
-   E_aux of 'a exp_aux * 'a annot
-
-and 'a lexp_aux =  (* lvalue expression *)
-   LEXP_id of id (* identifier *)
- | LEXP_memory of id * 'a exp (* memory write via function call *)
- | LEXP_vector of 'a lexp * 'a exp (* vector element *)
- | LEXP_vector_range of 'a lexp * 'a exp * 'a exp (* subvector *)
- | LEXP_field of 'a lexp * id (* struct field *)
-
-and 'a lexp = 
+'a lexp = 
    LEXP_aux of 'a lexp_aux * 'a annot
 
 and 'a fexp_aux =  (* Field-expression *)
@@ -295,11 +282,21 @@ and 'a exp_aux =  (* Expression *)
  | E_let of 'a letbind * 'a exp (* let expression *)
  | E_assign of 'a lexp * 'a exp (* imperative assignment *)
 
+and 'a exp = 
+   E_aux of 'a exp_aux * 'a annot
+
+and 'a lexp_aux =  (* lvalue expression *)
+   LEXP_id of id (* identifier *)
+ | LEXP_memory of id * ('a exp) list (* memory write via function call *)
+ | LEXP_vector of 'a lexp * 'a exp (* vector element *)
+ | LEXP_vector_range of 'a lexp * 'a exp * 'a exp (* subvector *)
+ | LEXP_field of 'a lexp * id (* struct field *)
+
 
 type 
-'a effects_opt_aux =  (* Optional effect annotation for functions *)
-   Effects_opt_pure (* sugar for empty effect set *)
- | Effects_opt_effects of effects
+'a effect_opt_aux =  (* Optional effect annotation for functions *)
+   Effect_opt_pure (* sugar for empty effect set *)
+ | Effect_opt_effect of effect
 
 
 type 
@@ -319,7 +316,7 @@ type
 
 
 type 
-naming_scheme_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
+name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
    Name_sect_none
  | Name_sect_some of string
 
@@ -331,8 +328,8 @@ type_union_aux =  (* Type union constructors *)
 
 
 type 
-'a effects_opt = 
-   Effects_opt_aux of 'a effects_opt_aux * 'a annot
+'a effect_opt = 
+   Effect_opt_aux of 'a effect_opt_aux * 'a annot
 
 
 type 
@@ -351,6 +348,16 @@ type
 
 
 type 
+name_scm_opt = 
+   Name_sect_aux of name_scm_opt_aux * l
+
+
+type 
+type_union = 
+   Tu_aux of type_union_aux * l
+
+
+type 
 index_range_aux =  (* index specification, for bitfields in register types *)
    BF_single of int (* single index *)
  | BF_range of int * int (* index range *)
@@ -361,32 +368,32 @@ and index_range =
 
 
 type 
-naming_scheme_opt = 
-   Name_sect_aux of naming_scheme_opt_aux * l
-
-
-type 
-type_union = 
-   Tu_aux of type_union_aux * l
-
-
-type 
 'a fundef_aux =  (* Function definition *)
-   FD_function of rec_opt * 'a tannot_opt * 'a effects_opt * ('a funcl) list
+   FD_function of rec_opt * 'a tannot_opt * 'a effect_opt * ('a funcl) list
+
+
+type 
+'a scattered_def_aux =  (* Function and type union definitions that can be spread across
+         a file. Each one must end in $_$ *)
+   SD_scattered_function of rec_opt * 'a tannot_opt * 'a effect_opt * id (* scattered function definition header *)
+ | SD_scattered_funcl of 'a funcl (* scattered function definition clause *)
+ | SD_scattered_variant of id * name_scm_opt * typquant (* scattered union definition header *)
+ | SD_scattered_unioncl of id * type_union (* scattered union definition member *)
+ | SD_scattered_end of id (* scattered definition end *)
 
 
 type 
 'a type_def_aux =  (* Type definition body *)
-   TD_abbrev of id * naming_scheme_opt * typschm (* type abbreviation *)
- | TD_record of id * naming_scheme_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
- | TD_variant of id * naming_scheme_opt * typquant * (type_union) list * bool (* union type definition *)
- | TD_enum of id * naming_scheme_opt * (id) list * bool (* enumeration type definition *)
+   TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
+ | TD_record of id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
+ | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
+ | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)
  | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
 
 
 type 
-'a default_typing_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of base_kind * var
+'a default_spec_aux =  (* Default kinding or typing assumption *)
+   DT_kind of base_kind * kid
  | DT_typ of typschm * id
 
 
@@ -403,13 +410,18 @@ type
 
 
 type 
+'a scattered_def = 
+   SD_aux of 'a scattered_def_aux * 'a annot
+
+
+type 
 'a type_def = 
    TD_aux of 'a type_def_aux * 'a annot
 
 
 type 
-'a default_typing_spec = 
-   DT_aux of 'a default_typing_spec_aux * 'a annot
+'a default_spec = 
+   DT_aux of 'a default_spec_aux * 'a annot
 
 
 type 
@@ -423,41 +435,14 @@ type
  | DEF_fundef of 'a fundef (* function definition *)
  | DEF_val of 'a letbind (* value definition *)
  | DEF_spec of 'a val_spec (* top-level type constraint *)
- | DEF_default of 'a default_typing_spec (* default kind and type assumptions *)
+ | DEF_default of 'a default_spec (* default kind and type assumptions *)
+ | DEF_scattered of 'a scattered_def (* scattered function and type definition *)
  | DEF_reg_dec of typ * id (* register declaration *)
- | DEF_scattered_function of rec_opt * 'a tannot_opt * 'a effects_opt * id (* scattered function definition header *)
- | DEF_scattered_funcl of 'a funcl (* scattered function definition clause *)
- | DEF_scattered_variant of id * naming_scheme_opt * typquant (* scattered union definition header *)
- | DEF_scattered_unioncl of id * typ * id (* scattered union definition member *)
- | DEF_scattered_end of id (* scattered definition end *)
-
-
-type 
-'a typ_lib_aux =  (* library types and syntactic sugar for them *)
-   Typ_lib_unit (* unit type with value $()$ *)
- | Typ_lib_bool (* booleans $_$ and $_$ *)
- | Typ_lib_bit (* pure bit values (not mutable bits) *)
- | Typ_lib_nat (* natural numbers 0,1,2,... *)
- | Typ_lib_string of string (* UTF8 strings *)
- | Typ_lib_enum of nexp * nexp * order (* natural numbers nexp .. nexp+nexp-1, ordered by order *)
- | Typ_lib_enum1 of nexp (* sugar for \texttt{enum nexp 0 inc} *)
- | Typ_lib_enum2 of nexp * nexp (* sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} *)
- | Typ_lib_vector of nexp * nexp * order * typ (* vector of typ, indexed by natural range *)
- | Typ_lib_vector2 of typ * nexp (* sugar for vector indexed by [ nexp ] *)
- | Typ_lib_vector3 of typ * nexp * nexp (* sugar for vector indexed by [ nexp..nexp ] *)
- | Typ_lib_list of typ (* list of typ *)
- | Typ_lib_set of typ (* finite set of typ *)
- | Typ_lib_reg of typ (* mutable register components holding typ *)
 
 
 type 
 'a def = 
    DEF_aux of 'a def_aux * 'a annot
-
-
-type 
-'a typ_lib = 
-   Typ_lib_aux of 'a typ_lib_aux * l
 
 
 type 

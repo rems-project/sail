@@ -19,7 +19,7 @@ k :: 'Ki_' ::=
 t , u :: 'T_' ::=                                {{ phantom }}
 {{ com Internal types }}
    | id                                           :: :: id
-   | var                                          :: :: var
+   | 'id                                          :: :: var
    | t1 -> t2 effects tag S_N                     :: :: fn  {{ com [[S_N]] are constraints for the function, [[tag]] holds generation data }}
    | ( t1 * .... * tn )                           :: :: tup
    | id t_args                                    :: :: app 
@@ -36,7 +36,7 @@ tag :: 'Tag_' ::=                                 {{ phantom }}
 
 ne :: 'Ne_' ::=
  {{ com internal numeric expressions }}
-   | id                                           :: :: var
+   | 'id                                           :: :: var
    | num                                 :: :: const
    | ne1 * ne2                           :: :: mult
    | ne1 + ... + nen                     :: :: add
@@ -189,7 +189,7 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
  tid :: 'tid_' ::=
    {{ com A type identifier or type variable }}
    | id                                      :: :: id
-   | var                                     :: :: var
+   | 'id                                     :: :: var
 
  E_k {{ tex \ottnt{E}^{\textsc{k} } }} :: 'E_k_' ::=             {{ phantom }}
                                                                  {{ hol (tid-> k) }}
@@ -541,11 +541,11 @@ by
 
 E_k |- kind ~> k
 ----------------------------------------------------------- :: kind
-<E_k,E_r,E_e> |- kind var ~> {var |-> k}, {}
+<E_k,E_r,E_e> |- kind 'id ~> {'id |-> k}, {}
 
-E_k(var) gives k
+E_k('id) gives k
 ----------------------------------------------------------- :: nokind
-<E_k,E_r,E_e> |- var ~> {var |-> k},{}
+<E_k,E_r,E_e> |- 'id ~> {'id |-> k},{}
 
 |- nexp1 ~> ne1
 |- nexp2 ~> ne2
@@ -585,9 +585,9 @@ E_d |- typ ~> t :: :: convert_typ :: convert_typ_
 {{ com Convert source types to internal types }}
 by
  
-E_k(var) gives K_Typ
+E_k('id) gives K_Typ
 ------------------------------------------------------------ :: var
-<E_k,E_r,E_e> |- :Typ_var: var ~> var
+<E_k,E_r,E_e> |- :Typ_var: 'id ~> 'id
 
 E_k(id) gives K_Typ
 ------------------------------------------------------------ :: id
@@ -623,7 +623,7 @@ defn
 by
  
 ------------------------------------------------------------ :: var
-|- id ~> id
+|- 'id ~> 'id
 
 ------------------------------------------------------------ :: num
 |- num ~> num
@@ -1001,7 +1001,7 @@ E |- exp1 : enum ne1 ne2 order gives I1,E_t
 E |- exp2 : enum ne3 ne4 order gives I2,E_t
 E |- lexp : vector ne5 ne6 order t gives I3,E_t
 ---------------------------------------------------------- :: wslice
-E |- lexp [exp1 : exp2] : vector :Ne_var: id1 :Ne_var: id2 order t gives I1 u+ I2 u+ I3 u+ <{ne5<=ne1, ne1+ne2 <= ne3, ne3+ne4<= ne5+ne6, id1 <= ne1, id2 <= ne2+ne3+ne4},pure> ,E_t
+E |- lexp [exp1 : exp2] : vector :Ne_var: 'id1 :Ne_var: 'id2 order t gives I1 u+ I2 u+ I3 u+ <{ne5<=ne1, ne1+ne2 <= ne3, ne3+ne4<= ne5+ne6, 'id1 <= ne1, 'id2 <= ne2+ne3+ne4},pure> ,E_t
 
 E |- exp1 : enum ne1 ne2 order gives I1,E_t
 E |- exp2 : enum ne3 ne4 order gives I2,E_t

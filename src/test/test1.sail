@@ -2,8 +2,8 @@ default Nat 'i
 default Order 'o
 default bool b
 default forall 'a. list<'a> b
-val forall 'a, 'b . ('a * 'b) -> 'b pure snd
-val forall Type 'i, 'b. ('i * 'b) -> 'i pure fst
+val forall 'a, 'b . ('a * 'b) -> 'b effect pure snd
+val forall Type 'i, 'b. ('i * 'b) -> 'i effect pure fst
 typedef int_list [name = "il"] = list<nat>
 typedef reco = const struct forall 'i, 'a, 'b. { 'a['i] v; 'b w; }
 typedef maybe = const union forall 'a. { Nne; 'a Sme; }

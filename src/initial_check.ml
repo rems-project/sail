@@ -10,14 +10,14 @@ type 'a envs_out = 'a * envs
 let id_to_string (Id_aux(id,l)) =
   match id with | Id(x) | DeIid(x) -> x
 
-let var_to_string (Var_aux(Var v,l)) = v
+let var_to_string (Kid_aux(Var v,l)) = v
 
 (*placeholder, write in type_internal*)
 let kind_to_string kind = match kind.k with
   | K_Nat -> "Nat"
   | K_Typ -> "Type"
   | K_Ord -> "Order"
-  | K_Efct -> "Effects"
+  | K_Efct -> "Effect"
   | _ -> " kind pp place holder "
 
 let typquant_to_quantkinds k_env typquant = 
@@ -57,14 +57,14 @@ let to_ast_id (Parse_ast.Id_aux(id,l)) =
              | Parse_ast.Id(x) -> Id(x)
              | Parse_ast.DeIid(x) -> DeIid(x)) , l)
 
-let to_ast_var (Parse_ast.Var_aux(Parse_ast.Var v,l)) = Var_aux(Var v,l)
+let to_ast_var (Parse_ast.Kid_aux(Parse_ast.Var v,l)) = Kid_aux(Var v,l)
 
 let to_ast_base_kind (Parse_ast.BK_aux(k,l')) =
   match k with
   | Parse_ast.BK_type -> BK_aux(BK_type,l'), { k = K_Typ}
   | Parse_ast.BK_nat -> BK_aux(BK_nat,l'), { k = K_Nat }
   | Parse_ast.BK_order -> BK_aux(BK_order,l'), { k = K_Ord }
-  | Parse_ast.BK_effects -> BK_aux(BK_effects,l'), { k = K_Efct }
+  | Parse_ast.BK_effect -> BK_aux(BK_effect,l'), { k = K_Efct }
 
 let to_ast_kind (k_env : kind Envmap.t) (Parse_ast.K_aux(Parse_ast.K_kind(klst),l)) : (Ast.kind * kind) =
   match klst with
@@ -100,7 +100,6 @@ let rec to_ast_typ (k_env : kind Envmap.t) (t: Parse_ast.atyp) : Ast.typ =
                               | K_infer -> k.k <- K_Typ; Typ_var v
                               | _ -> typ_error l "Required a variable with kind Type, encountered " None (Some v) (Some k))
                 | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
-              | Parse_ast.ATyp_wild -> Typ_wild
               | Parse_ast.ATyp_fn(arg,ret,efct) -> Typ_fn( (to_ast_typ k_env arg),
                                                            (to_ast_typ k_env ret),
                                                            (to_ast_effects k_env efct))
@@ -123,15 +122,6 @@ and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
   match n with
   | Parse_ast.ATyp_aux(t,l) ->
     (match t with
-    | Parse_ast.ATyp_id(id) ->                 
-                let id = to_ast_id id in
-                let mk = Envmap.apply k_env (id_to_string id) in
-                (match mk with
-                | Some(k) -> Nexp_aux((match k.k with
-                                      | K_Nat -> Nexp_id id
-                                      | K_infer -> k.k <- K_Nat; Nexp_id id
-                                      | _ -> typ_error l "Required a variable with kind Nat, encountered " (Some id) None (Some k)),l)
-                | None -> typ_error l "Encountered an unbound variable" (Some id) None None)
     | Parse_ast.ATyp_var(v) ->                 
                 let v = to_ast_var v in
                 let mk = Envmap.apply k_env (var_to_string v) in
@@ -163,15 +153,6 @@ and to_ast_order (k_env : kind Envmap.t) (o: Parse_ast.atyp) : Ast.order =
   match o with
   | Parse_ast.ATyp_aux(t,l) ->
     Ord_aux( (match t with
-               | Parse_ast.ATyp_id(id) -> 
-                let id = to_ast_id id in
-                let mk = Envmap.apply k_env (id_to_string id) in
-                (match mk with
-                | Some(k) -> (match k.k with
-                              | K_Ord -> Ord_id id
-                              | K_infer -> k.k <- K_Ord; Ord_id id
-                              | _ -> typ_error l "Required an identifier with kind Order, encountered " (Some id) None (Some k))
-                | None -> typ_error l "Encountered an unbound identifier" (Some id) None None)
                | Parse_ast.ATyp_var(v) -> 
                 let v = to_ast_var v in
                 let mk = Envmap.apply k_env (var_to_string v) in
@@ -186,40 +167,31 @@ and to_ast_order (k_env : kind Envmap.t) (o: Parse_ast.atyp) : Ast.order =
                | _ -> typ_error l "Requred an item of kind Order, encountered an illegal form for this kind" None None None
     ), l)
 
-and to_ast_effects (k_env : kind Envmap.t) (e : Parse_ast.atyp) : Ast.effects =
+and to_ast_effects (k_env : kind Envmap.t) (e : Parse_ast.atyp) : Ast.effect =
   match e with
   | Parse_ast.ATyp_aux(t,l) ->
-    Effects_aux( (match t with
-               | Parse_ast.ATyp_efid(id) ->  
-                let id = to_ast_id id in
-                let mk = Envmap.apply k_env (id_to_string id) in
-                (match mk with
-                | Some(k) -> (match k.k with
-                              | K_Efct -> Effects_id id
-                              | K_infer -> k.k <- K_Efct; Effects_id id
-                              | _ -> typ_error l "Required a variable with kind Effect, encountered " (Some id) None (Some k))
-                | None -> typ_error l "Encountered an unbound variable" (Some id) None None)
-               | Parse_ast.ATyp_efvar(v) ->  
+    Effect_aux( (match t with
+               | Parse_ast.ATyp_var(v) ->  
                 let v = to_ast_var v in
                 let mk = Envmap.apply k_env (var_to_string v) in
                 (match mk with
                 | Some(k) -> (match k.k with
-                              | K_Efct -> Effects_var v
-                              | K_infer -> k.k <- K_Efct; Effects_var v
+                              | K_Efct -> Effect_var v
+                              | K_infer -> k.k <- K_Efct; Effect_var v
                               | _ -> typ_error l "Required a variable with kind Effect, encountered " None (Some v) (Some k))
                 | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
                | Parse_ast.ATyp_set(effects) ->
-                 Effects_set( List.map 
+                 Effect_set( List.map 
                              (fun efct -> match efct with
-                             | Parse_ast.Effect_aux(e,l) ->
-                               Effect_aux((match e with 
-                               | Parse_ast.Effect_rreg -> Effect_rreg
-                               | Parse_ast.Effect_wreg -> Effect_wreg
-                               | Parse_ast.Effect_rmem -> Effect_rmem
-                               | Parse_ast.Effect_wmem -> Effect_wmem
-                               | Parse_ast.Effect_undef -> Effect_undef
-                               | Parse_ast.Effect_unspec -> Effect_unspec
-                               | Parse_ast.Effect_nondet -> Effect_nondet),l))
+                             | Parse_ast.BE_aux(e,l) ->
+                               BE_aux((match e with 
+                               | Parse_ast.BE_rreg -> BE_rreg
+                               | Parse_ast.BE_wreg -> BE_wreg
+                               | Parse_ast.BE_rmem -> BE_rmem
+                               | Parse_ast.BE_wmem -> BE_wmem
+                               | Parse_ast.BE_undef -> BE_undef
+                               | Parse_ast.BE_unspec -> BE_unspec
+                               | Parse_ast.BE_nondet -> BE_nondet),l))
                              effects)
                | _ -> typ_error l "Required an item of kind Effects, encountered an illegal form for this kind" None None None
     ), l)
@@ -231,11 +203,11 @@ and to_ast_typ_arg (k_env : kind Envmap.t) (kind : kind) (arg : Parse_ast.atyp) 
     | K_Typ -> Typ_arg_typ (to_ast_typ k_env arg)
     | K_Nat  -> Typ_arg_nexp (to_ast_nexp k_env arg)
     | K_Ord -> Typ_arg_order (to_ast_order k_env arg)
-    | K_Efct -> Typ_arg_effects (to_ast_effects k_env arg)
+    | K_Efct -> Typ_arg_effect (to_ast_effects k_env arg)
     | _ -> raise (Reporting_basic.err_unreachable l "To_ast_typ_arg received Lam kind or infer kind")),
     l)
 
-let to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.nexp_constraint) : nexp_constraint =
+let to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) : n_constraint =
   match c with 
   | Parse_ast.NC_aux(nc,l) ->
     NC_aux( (match nc with
@@ -252,7 +224,7 @@ let to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.nexp_constrain
                let n2 = to_ast_nexp k_env t2 in
                NC_bounded_le(n1,n2)
              | Parse_ast.NC_nat_set_bounded(id,bounds) ->
-               NC_nat_set_bounded(to_ast_id id, bounds)
+               NC_nat_set_bounded(to_ast_var id, bounds)
     ), l)               
 
 (* Transforms a typquant while building first the kind environment of declared variables, and also the kind environment in context *)
@@ -398,9 +370,9 @@ and to_ast_lexp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp)
   LEXP_aux(
     (match exp with
     | Parse_ast.E_id(id) -> LEXP_id(to_ast_id id)
-    | Parse_ast.E_app((Parse_ast.Id_aux(f,l') as f'),[exp]) -> 
+    | Parse_ast.E_app((Parse_ast.Id_aux(f,l') as f'),args) -> 
       (match f with
-      | Parse_ast.Id(id) -> LEXP_memory(to_ast_id f',to_ast_exp k_env exp)
+      | Parse_ast.Id(id) -> LEXP_memory(to_ast_id f',List.map (to_ast_exp k_env) args)
       | _ -> typ_error l' "memory call on lefthand side of assignment must begin with an id" None None None)
     | Parse_ast.E_vector_access(vexp,exp) -> LEXP_vector(to_ast_lexp k_env vexp, to_ast_exp k_env exp)
     | Parse_ast.E_vector_subrange(vexp,exp1,exp2) -> LEXP_vector_range(to_ast_lexp k_env vexp, to_ast_exp k_env exp1, to_ast_exp k_env exp2)
@@ -442,7 +414,7 @@ and to_ast_record_try (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_as
   | _ ->
     None,Some(l, "Expected a field assignment to be identifier = expression")
       
-let to_ast_default (names, k_env, t_env) (default : Parse_ast.default_typing_spec) : (tannot default_typing_spec) envs_out =
+let to_ast_default (names, k_env, t_env) (default : Parse_ast.default_typing_spec) : (tannot default_spec) envs_out =
   match default with
   | Parse_ast.DT_aux(df,l) ->
     (match df with 
@@ -486,6 +458,11 @@ let rec to_ast_range (Parse_ast.BF_aux(r,l)) = (* TODO add check that ranges are
     | Parse_ast.BF_concat(ir1,ir2) -> BF_concat( to_ast_range ir1, to_ast_range ir2)),
     l)
 
+let to_ast_type_union k_env (Parse_ast.Tu_aux(tu,l)) =
+  match tu with
+    | Parse_ast.Tu_ty_id(atyp,id) -> (Tu_aux(Tu_ty_id ((to_ast_typ k_env atyp),(to_ast_id id)),l))
+    | Parse_ast.Tu_id id -> (Tu_aux(Tu_id(to_ast_id id),l)) 
+
 let to_ast_typedef (names,k_env,t_env) (td:Parse_ast.type_def) : (tannot type_def) envs_out =
   match td with
   | Parse_ast.TD_aux(td,l) ->
@@ -516,11 +493,7 @@ let to_ast_typedef (names,k_env,t_env) (td:Parse_ast.type_def) : (tannot type_de
     let id = to_ast_id id in
     let key = id_to_string id in
     let typq,k_env,_ = to_ast_typquant k_env typq in
-    let arms = List.map (fun (Parse_ast.Tu_aux(tu,l)) -> 
-                             match tu with
-                             | Parse_ast.Tu_ty_id(atyp,id) -> (Tu_aux(Tu_ty_id ((to_ast_typ k_env atyp),(to_ast_id id)),l))
-                             | Parse_ast.Tu_id id -> (Tu_aux(Tu_id(to_ast_id id),l)) ) 
-               arms in (* Add check that all arms have unique names *)
+    let arms = List.map (to_ast_type_union k_env) arms in (* Add check that all arms have unique names *)
     let td_var = TD_aux(TD_variant(id,to_ast_namescm name_scm_opt,typq,arms,false),(l,None)) in
     let typ = (match (typquant_to_quantkinds k_env typq) with
       | [ ] -> {k = K_Typ}
@@ -555,10 +528,10 @@ let to_ast_tannot_opt (k_env : kind Envmap.t) (Parse_ast.Typ_annot_opt_aux(tp,l)
     let typq,k_env,k_local = to_ast_typquant k_env tq in
     Typ_annot_opt_aux(Typ_annot_opt_some(typq,to_ast_typ k_env typ),(l,None)),k_env,k_local
 
-let to_ast_effects_opt (k_env : kind Envmap.t) (Parse_ast.Effects_opt_aux(e,l)) : tannot effects_opt =
+let to_ast_effects_opt (k_env : kind Envmap.t) (Parse_ast.Effect_opt_aux(e,l)) : tannot effect_opt =
   match e with
-  | Parse_ast.Effects_opt_pure -> Effects_opt_aux(Effects_opt_pure,(l,None))
-  | Parse_ast.Effects_opt_effects(typ) -> Effects_opt_aux(Effects_opt_effects(to_ast_effects k_env typ),(l,None))
+  | Parse_ast.Effect_opt_pure -> Effect_opt_aux(Effect_opt_pure,(l,None))
+  | Parse_ast.Effect_opt_effect(typ) -> Effect_opt_aux(Effect_opt_effect(to_ast_effects k_env typ),(l,None))
 
 let to_ast_funcl (names,k_env,t_env) (Parse_ast.FCL_aux(fcl,l) : Parse_ast.funcl) : (tannot funcl) =
   match fcl with
@@ -609,65 +582,65 @@ let to_ast_def (names, k_env, t_env) partial_defs def : def_progress envs_out * 
       let t = to_ast_typ k_env typ in
       let id = to_ast_id id in
       ((Finished(DEF_aux(DEF_reg_dec(t,id),(l,None)))),envs),partial_defs (*If tracking types here, update tenv and None*)
-    | Parse_ast.DEF_scattered_function(rec_opt, tannot_opt, effects_opt, id) ->
-      let rec_opt = to_ast_rec rec_opt in
-      let tannot,k_env',k_local = to_ast_tannot_opt k_env tannot_opt in
-      let effects_opt = to_ast_effects_opt k_env' effects_opt in
-      let id = to_ast_id id in
-      (match (def_in_progress id partial_defs) with
-      | None -> let partial_def = ref ((DEF_aux(DEF_fundef(FD_aux(FD_function(rec_opt,tannot,effects_opt,[]),(l,None))),(l,None))),false) in
-                (No_def,envs),((id,(partial_def,k_local))::partial_defs)
-      | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None None)
-    | Parse_ast.DEF_scattered_funcl(funcl) -> 
-      (match funcl with
-      | Parse_ast.FCL_aux(Parse_ast.FCL_Funcl(id,_,_),_) -> 
-        let id = to_ast_id id in
-        (match (def_in_progress id partial_defs) with
-        | None -> typ_error l "Scattered function definition clause does not match any exisiting function definition headers" (Some id) None None
-        | Some(d,k) ->
-          (match !d with
-          | DEF_aux(DEF_fundef(FD_aux(FD_function(r,t,e,fcls),fl)),dl),false -> 
-            let funcl = to_ast_funcl (names,Envmap.union k k_env,t_env) funcl in 
-            d:= (DEF_aux(DEF_fundef(FD_aux(FD_function(r,t,e,fcls@[funcl]),fl)),dl),false);
-            (No_def,envs),partial_defs
-          | _,true -> typ_error l "Scattered funciton definition clauses extends ended defintion" (Some id) None None
-          | _ -> typ_error l "Scattered function definition clause matches an existing scattered type definition header" (Some id) None None)))
-    | Parse_ast.DEF_scattered_variant(id,naming_scheme_opt,typquant) -> 
-      let id = to_ast_id id in
-      let name = to_ast_namescm naming_scheme_opt in
-      let typq, k_env',_ = to_ast_typquant k_env typquant in
-      (match (def_in_progress id partial_defs) with
-      | None -> let partial_def = ref ((DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,None))),(l,None))),false) in
-                (Def_place_holder(id,l),envs),(id,(partial_def,k_env'))::partial_defs
-      | Some(d,k) -> typ_error l "Scattered type definition header name already in use by scattered definition" (Some id) None None)
-    | Parse_ast.DEF_scattered_unioncl(id,typ,arm_id) -> 
-      let id = to_ast_id id in
-      let arm_id = to_ast_id arm_id in
-      (match (def_in_progress id partial_defs) with
-      | None -> typ_error l "Scattered type definition clause does not match any existing type definition headers" (Some id) None None
-      | Some(d,k) ->
-        (match !d with
-        | (DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,arms,false),tl)),dl), false) -> 
-          let typ = to_ast_typ k typ in
-          d:= (DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,arms@[Tu_aux(Tu_ty_id (typ,arm_id), l)],false),tl)),dl),false);
-          (No_def,envs),partial_defs
-        | _,true -> typ_error l "Scattered type definition clause extends ended definition" (Some id) None None
-        | _ -> typ_error l "Scattered type definition clause matches an existing scattered function definition header" (Some id) None None))
-    | Parse_ast.DEF_scattered_end(id) ->
-      let id = to_ast_id id in
-      (match (def_in_progress id partial_defs) with
-      | None -> typ_error l "Scattered definition end does not match any open scattered definitions" (Some id) None None
-      | Some(d,k) ->
-        (match !d with
-        | (DEF_aux(DEF_type(_),_) as def),false ->
-          d:= (def,true);
-          (No_def,envs),partial_defs
-        | (DEF_aux(DEF_fundef(_),_) as def),false ->
-          d:= (def,true);
-          ((Finished def), envs),partial_defs
-        | _, true -> 
-          typ_error l "Scattered definition ended multiple times" (Some id) None None
-        | _ -> raise (Reporting_basic.err_unreachable l "Something in partial_defs other than fundef and type")))
+    | Parse_ast.DEF_scattered(Parse_ast.SD_aux(sd,_)) ->
+      (match sd with
+	| Parse_ast.SD_scattered_function(rec_opt, tannot_opt, effects_opt, id) ->
+	  let rec_opt = to_ast_rec rec_opt in
+	  let tannot,k_env',k_local = to_ast_tannot_opt k_env tannot_opt in
+	  let effects_opt = to_ast_effects_opt k_env' effects_opt in
+	  let id = to_ast_id id in
+	  (match (def_in_progress id partial_defs) with
+	    | None -> let partial_def = ref ((DEF_aux(DEF_fundef(FD_aux(FD_function(rec_opt,tannot,effects_opt,[]),(l,None))),(l,None))),false) in
+                      (No_def,envs),((id,(partial_def,k_local))::partial_defs)
+	    | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None None)
+	| Parse_ast.SD_scattered_funcl(funcl) -> 
+	  (match funcl with
+	    | Parse_ast.FCL_aux(Parse_ast.FCL_Funcl(id,_,_),_) -> 
+              let id = to_ast_id id in
+              (match (def_in_progress id partial_defs) with
+		| None -> typ_error l "Scattered function definition clause does not match any exisiting function definition headers" (Some id) None None
+		| Some(d,k) ->
+		  (match !d with
+		    | DEF_aux(DEF_fundef(FD_aux(FD_function(r,t,e,fcls),fl)),dl),false -> 
+		      let funcl = to_ast_funcl (names,Envmap.union k k_env,t_env) funcl in 
+		      d:= (DEF_aux(DEF_fundef(FD_aux(FD_function(r,t,e,fcls@[funcl]),fl)),dl),false);
+		      (No_def,envs),partial_defs
+		    | _,true -> typ_error l "Scattered funciton definition clauses extends ended defintion" (Some id) None None
+		    | _ -> typ_error l "Scattered function definition clause matches an existing scattered type definition header" (Some id) None None)))
+	| Parse_ast.SD_scattered_variant(id,naming_scheme_opt,typquant) -> 
+	  let id = to_ast_id id in
+	  let name = to_ast_namescm naming_scheme_opt in
+	  let typq, k_env',_ = to_ast_typquant k_env typquant in
+	  (match (def_in_progress id partial_defs) with
+	    | None -> let partial_def = ref ((DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,None))),(l,None))),false) in
+                      (Def_place_holder(id,l),envs),(id,(partial_def,k_env'))::partial_defs
+	    | Some(d,k) -> typ_error l "Scattered type definition header name already in use by scattered definition" (Some id) None None)
+	| Parse_ast.SD_scattered_unioncl(id,tu) -> 
+	  let id = to_ast_id id in
+	  (match (def_in_progress id partial_defs) with
+	    | None -> typ_error l "Scattered type definition clause does not match any existing type definition headers" (Some id) None None
+	    | Some(d,k) ->
+              (match !d with
+		| (DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,arms,false),tl)),dl), false) -> 
+		  d:= (DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,arms@[to_ast_type_union k tu],false),tl)),dl),false);
+		  (No_def,envs),partial_defs
+		| _,true -> typ_error l "Scattered type definition clause extends ended definition" (Some id) None None
+		| _ -> typ_error l "Scattered type definition clause matches an existing scattered function definition header" (Some id) None None))
+	| Parse_ast.SD_scattered_end(id) ->
+	  let id = to_ast_id id in
+	  (match (def_in_progress id partial_defs) with
+	    | None -> typ_error l "Scattered definition end does not match any open scattered definitions" (Some id) None None
+	    | Some(d,k) ->
+              (match !d with
+		| (DEF_aux(DEF_type(_),_) as def),false ->
+		  d:= (def,true);
+		  (No_def,envs),partial_defs
+		| (DEF_aux(DEF_fundef(_),_) as def),false ->
+		  d:= (def,true);
+		  ((Finished def), envs),partial_defs
+		| _, true -> 
+		  typ_error l "Scattered definition ended multiple times" (Some id) None None
+		| _ -> raise (Reporting_basic.err_unreachable l "Something in partial_defs other than fundef and type"))))
     )
 
 let rec to_ast_defs_helper envs partial_defs = function

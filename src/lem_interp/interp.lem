@@ -80,14 +80,14 @@ and to_reg_ranges base_id base_reg ranges =
   | (irange,id)::ranges -> (id,(SubReg base_id base_reg irange))::(to_reg_ranges base_id base_reg ranges)
   end
 
-val has_memory_effect : list efct -> bool
+val has_memory_effect : list base_effect -> bool
 let rec has_memory_effect efcts =
   match efcts with
   | [] -> false
   | e::efcts ->
     match e with
-    | Effect_wreg -> true
-    | Effect_wmem -> true
+    | BE_wreg -> true
+    | BE_wmem -> true
     | _ -> has_memory_effect efcts
     end 
   end
@@ -101,7 +101,7 @@ let rec to_memory_ops (Defs defs) =
     match def with
     | DEF_spec valsp ->
       match valsp with
-      | VS_val_spec (TypSchm_ts tq ((Typ_fn a r (Effects_set eff)) as t)) id ->
+      | VS_val_spec (TypSchm_ts tq ((Typ_fn a r (Effect_set eff)) as t)) id ->
         if has_memory_effect eff then (id,t)::(to_memory_ops (Defs defs)) else (to_memory_ops (Defs defs))
       | _ -> to_memory_ops (Defs defs) end
     | _ -> to_memory_ops (Defs defs) end
@@ -633,44 +633,35 @@ and interp_main t_level l_env l_mem exp =
                        (fun vals -> V_vector (List_extra.head indexes) true vals) (*Need to see increasing or not, can look at types later*) l_env l_mem [] exps
     | E_block(exps) -> interp_block t_level l_env l_env l_mem exps
     | E_app f args ->
-      match (f,t_level) with
-      | (id,(defs,externs,regs,mems,ctors)) -> 
-	(match find_function defs id with
-	| Just(funcls) -> 
-          resolve_outcome (interp_main t_level l_env l_mem (List_extra.head args))
-                          (fun argv lm le -> 
-                            (match find_funcl funcls argv with
-	                    | Nothing ->
-                          let name = match id with Id s -> s | DeIid s -> s end in
-                          (Error ("No matching pattern for function " (* XXX ^ name *)),lm,l_env)
-	                    | Just(env,exp) -> 
-                              resolve_outcome (interp_main t_level env lm exp)
-	                                      (fun ret lm le -> (Value ret, lm,l_env))
-                                              (fun a -> update_stack a (fun stack -> (Frame (Id "0") (E_id (Id "0")) l_env lm stack)))
-                             end))
-                          (fun a -> update_stack a (add_to_top_frame (fun a -> (E_app f [a]))))
-	| Nothing -> 
-          (match in_ctors ctors id with
-          | Just(typ) -> 
-            resolve_outcome (interp_main t_level l_env l_mem (List_extra.head args))
-                            (fun argv lm le -> (Value (V_ctor id argv), lm, le))
-                            (fun a -> update_stack a (add_to_top_frame (fun a -> (E_app f [a]))))
+      (match (exp_list t_level (fun es -> E_app f es) V_tuple l_env l_mem [] args) with
+      | (Value v,lm,le) -> 
+         (match (f,t_level) with
+      	 | (id,(defs,externs,regs,mems,ctors)) -> 
+	   (match find_function defs id with
+	   | Just(funcls) -> 
+             (match find_funcl funcls v with
+	     | Nothing -> 
+               let name = match id with Id s -> s | DeIid s -> s end in
+               (Error ("No matching pattern for function " (* XXX ^ name *)),l_mem,l_env)
+	     | Just(env,exp) -> 
+               resolve_outcome (interp_main t_level env l_mem exp)
+	                       (fun ret lm le -> (Value ret, lm,l_env))
+                               (fun a -> update_stack a (fun stack -> (Frame (Id "0") (E_id (Id "0")) l_env l_mem stack)))
+             end)
           | Nothing -> 
-            (match find_memory mems id with
-            | Just(typ) -> 
-              resolve_outcome (interp_main t_level l_env l_mem (List_extra.head args))
-                (fun argv lm le -> (Action (Read_mem id argv Nothing) (Frame (Id "0") (E_id (Id "0")) le lm Top), lm, le))
-                (fun a -> update_stack a (add_to_top_frame (fun a -> (E_app f [a]))))
+            (match in_ctors ctors id with
+            | Just(typ) -> (Value (V_ctor id v), lm, le)
             | Nothing -> 
-              (match find_extern externs id with
-              | Just(str) ->
-                resolve_outcome (interp_main t_level l_env l_mem (List_extra.head args))
-                  (fun argv lm le -> (Action (Call_extern str argv) (Frame (Id "0") (E_id (Id "0")) le lm Top), lm, le))
-                  (fun a -> update_stack a (add_to_top_frame (fun a -> (E_app f [a]))))
-              | Nothing -> (Error "Unknown function call",l_mem,l_env) end)
-	     end) end) end)
-      | _ -> (Error "Application with expression other than identifier",l_mem,l_env)
-      end 
+              (match find_memory mems id with
+              | Just(typ) -> 
+                (Action (Read_mem id v Nothing) (Frame (Id "0") (E_id (Id "0")) le lm Top), lm, le)
+              | Nothing -> 
+                (match find_extern externs id with
+                | Just(str) -> 
+                  (Action (Call_extern str v) (Frame (Id "0") (E_id (Id "0")) le lm Top), lm, le)
+                | Nothing -> (Error "Unknown function call",lm,le) end)
+	       end) end) end) end)
+         | out -> out end)
     | E_app_infix l op r -> 
        let op = match op with
        | Id x -> DeIid x
@@ -751,12 +742,12 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level lexp =
           else ((Error "Undefined id",l_mem,l_env),Nothing)
         end
       end 
-    | LEXP_memory id exp -> 
-      match (interp_main t_level l_env l_mem exp) with
-      | (Value t,lm,le) ->
-        let request = (Action (Write_mem id t Nothing value) (Frame (Id "0") (E_id (Id "0")) l_env lm Top),lm,l_env) in
-        if is_top_level then (request,Nothing) else (request,Just (fun e -> (LEXP_memory id (to_exp t))))
-      | (Action a s,lm, le) -> ((Action a s,lm,le), Just (fun e -> (LEXP_memory id e)))
+    | LEXP_memory id exps -> 
+      match (exp_list t_level E_tuple V_tuple l_env l_mem [] exps) with
+      | (Value (V_tuple vs),lm,le) ->
+        let request = (Action (Write_mem id (V_tuple vs) Nothing value) (Frame (Id "0") (E_id (Id "0")) l_env lm Top),lm,l_env) in
+        if is_top_level then (request,Nothing) else (request,Just (fun e -> (LEXP_memory id (List.map to_exp vs))))
+      | (Action a s,lm, le) -> ((Action a s,lm,le), Just (fun (E_tuple es) -> (LEXP_memory id es)))
       | e -> (e,Nothing) end
     | LEXP_vector lexp exp -> 
       match (interp_main t_level l_env l_mem exp) with
