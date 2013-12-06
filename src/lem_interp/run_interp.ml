@@ -93,5 +93,6 @@ let run (name, test) =
       loop env' (resume test s return)
   | Error e -> eprintf "%s: error: %s\n" name e in
   let entry = E_app((Id "main"), [E_lit L_unit]) in
+  eprintf "%s: starting\n" name;
   loop (Reg.empty, Mem.empty) (interp test entry)
 ;;
