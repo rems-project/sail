@@ -342,7 +342,11 @@ and to_ast_exp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) 
     | Parse_ast.E_id(id) -> E_id(to_ast_id id)
     | Parse_ast.E_lit(lit) -> E_lit(to_ast_lit lit)
     | Parse_ast.E_cast(typ,exp) -> E_cast(to_ast_typ k_env typ, to_ast_exp k_env exp)
-    | Parse_ast.E_app(f,args) -> E_app(to_ast_id f, List.map (to_ast_exp k_env) args)
+    | Parse_ast.E_app(f,args) -> 
+      (match List.map (to_ast_exp k_env) args with
+	| [] -> E_app(to_ast_id f, [])
+	| [E_aux(E_tuple(exps),_)] -> E_app(to_ast_id f, exps)
+	| exps -> E_app(to_ast_id f, exps))
     | Parse_ast.E_app_infix(left,op,right) -> E_app_infix(to_ast_exp k_env left, to_ast_id op, to_ast_exp k_env right)
     | Parse_ast.E_tuple(exps) -> E_tuple(List.map (to_ast_exp k_env) exps)
     | Parse_ast.E_if(e1,e2,e3) -> E_if(to_ast_exp k_env e1, to_ast_exp k_env e2, to_ast_exp k_env e3)
@@ -372,7 +376,11 @@ and to_ast_lexp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp)
     | Parse_ast.E_id(id) -> LEXP_id(to_ast_id id)
     | Parse_ast.E_app((Parse_ast.Id_aux(f,l') as f'),args) -> 
       (match f with
-      | Parse_ast.Id(id) -> LEXP_memory(to_ast_id f',List.map (to_ast_exp k_env) args)
+      | Parse_ast.Id(id) -> 
+	(match List.map (to_ast_exp k_env) args with
+	  | [] -> LEXP_memory(to_ast_id f',[])
+	  | [E_aux(E_tuple exps,_)] -> LEXP_memory(to_ast_id f',exps)
+	  | args -> LEXP_memory(to_ast_id f', args))
       | _ -> typ_error l' "memory call on lefthand side of assignment must begin with an id" None None None)
     | Parse_ast.E_vector_access(vexp,exp) -> LEXP_vector(to_ast_lexp k_env vexp, to_ast_exp k_env exp)
     | Parse_ast.E_vector_subrange(vexp,exp1,exp2) -> LEXP_vector_range(to_ast_lexp k_env vexp, to_ast_exp k_env exp1, to_ast_exp k_env exp2)

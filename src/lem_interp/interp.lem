@@ -130,7 +130,11 @@ let rec to_data_constructors (Defs defs) =
     | DEF_type t ->
       match t with 
       | TD_variant id _ tq tid_list _ ->
-        (List.map (fun (Tu_ty_id x y) -> (y,x)) tid_list)++(to_data_constructors (Defs defs))
+        (List.map 
+	   (fun t ->
+	     match t with
+	    | (Tu_ty_id x y) -> (y,x)
+	    | Tu_id x -> (id,Typ_app (Id "unit") []) end) tid_list)++(to_data_constructors (Defs defs))
       | _ -> to_data_constructors (Defs defs) end
     | _ -> to_data_constructors (Defs defs) end
    end

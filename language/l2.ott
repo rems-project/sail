@@ -53,7 +53,6 @@ embed
 {{ lem
 open import Map
 open import Maybe
-open import Pervasives
 
 type l =
   | Unknown
