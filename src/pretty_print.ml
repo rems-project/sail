@@ -330,7 +330,7 @@ let pp_funcl ppf (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
 
 let pp_fundef ppf (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   let pp_funcls ppf funcl = fprintf ppf "%a %a" kwd "and" pp_funcl funcl in
-  fprintf ppf "@[<0>%a %a%a%a%a@ @[<1>%a@] @]@\n" 
+  fprintf ppf "@[<0>%a %a%a%a %a@ @[<1>%a@] @]@\n"
     kwd "function" pp_rec r pp_tannot_opt typa pp_effects_opt efa pp_funcl (List.hd fcls) (list_pp pp_funcls pp_funcls) (List.tl fcls)
 
 let pp_def ppf (DEF_aux(d,(l,_))) =

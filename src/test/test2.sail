@@ -1,5 +1,5 @@
 function nat id ( n ) = n
 
-function nat main _ = {
+function nat effect pure main _ = {
   id(42);
 }

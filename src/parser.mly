@@ -862,8 +862,8 @@ fun_def:
     { funloc (FD_function(mk_rec 2,mk_tannot (mk_typqn ()) $3 3 3, mk_eannotn (), $4)) }
   | Function_ Rec funcl_ands
     { funloc (FD_function(mk_rec 2, mk_tannotn (), mk_eannotn (), $3)) }
-  | Function_ typquant atomic_typ effect_typ funcl_ands
-    { funloc (FD_function(mk_recn (), mk_tannot $2 $3 2 3, mk_eannot $4 4, $5)) }
+  | Function_ typquant atomic_typ Effect effect_typ funcl_ands
+    { funloc (FD_function(mk_recn (), mk_tannot $2 $3 2 3, mk_eannot $5 5, $6)) }
   | Function_ typquant typ funcl_ands
     { funloc (FD_function(mk_recn (), mk_tannot $2 $3 2 2, mk_eannotn (), $4)) }
   | Function_ Effect effect_typ funcl_ands
