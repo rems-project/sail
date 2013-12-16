@@ -628,7 +628,7 @@ let pp_lem_tannot_opt ppf (Typ_annot_opt_aux(t,_)) =
 let pp_lem_effects_opt ppf (Effect_opt_aux(e,_)) =
   match e with
   | Effect_opt_pure -> fprintf ppf "Effect_opt_pure"
-  | Effect_opt_effect e -> fprintf ppf "(Effect_opt_effects %a)" pp_lem_effects e
+  | Effect_opt_effect e -> fprintf ppf "(Effect_opt_effect %a)" pp_lem_effects e
 
 let pp_lem_funcl ppf (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
   fprintf ppf "@[<0>(%a %a %a %a)@]@\n" kwd "FCL_Funcl" pp_lem_id id pp_lem_pat pat pp_lem_exp exp 
