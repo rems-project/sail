@@ -25,22 +25,18 @@ typedef funcT = const union { unit fADD; ... }
 
 *)
 
-(****
----------------------------------------------
--- State
----------------------------------------------
+(**** State  ****)
 
-declare
-{
-   PC :: addrT          -- Program Counter
-   R :: regT -> wordT   -- Registers
-   IM :: memT           -- Instruction Memory
+addrT         PC    (* Program Counter *)
+regT -> wordT R     (* Registers *)
+memT          IM    (* Instruction Memory *)
 (* not sure the interpreter will recognize rmem through the typedef *)
-   DM :: memT           -- Data Memory
-   InRdy :: bool        -- Input Ready
-   InData :: wordT      -- Input Data
-   OutStrobe :: wordT   -- Output Data
-}
+DM :: memT           (* Data Memory *)
+InRdy :: bool        (* Input Ready *)
+InData :: wordT      (* Input Data *)
+OutStrobe :: wordT   (* Output Data *)
+
+(****
 
 ---------------------------------------------
 -- Operations
