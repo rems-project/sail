@@ -94,5 +94,8 @@ let run (name, test) =
   | Error e -> eprintf "%s: error: %s\n" name e in
   let entry = E_app((Id "main"), [E_lit L_unit]) in
   eprintf "%s: starting\n" name;
-  loop (Reg.empty, Mem.empty) (interp test entry)
+  try
+    loop (Reg.empty, Mem.empty) (interp test entry)
+  with e ->
+    eprintf "%s: interpretor error %s\n" name (Printexc.to_string e)
 ;;
