@@ -65,6 +65,7 @@ let kw_table =
      ("case",			 (fun _ -> Case));
      ("clause",                  (fun _ -> Clause));
      ("const",			 (fun _ -> Const));
+     ("dec",                     (fun _ -> Dec));
      ("default",		 (fun _ -> Default));
      ("deinfix",                 (fun _ -> Deinfix));
      ("effect",                  (fun _ -> Effect));
@@ -79,6 +80,7 @@ let kw_table =
      ("function",                (fun x -> Function_));
      ("if",                      (fun x -> If_));
      ("in",			 (fun x -> In));
+     ("inc",                     (fun _ -> Inc));
      ("IN",                      (fun x -> IN));
      ("let",                     (fun x -> Let_));
      ("member",                  (fun x -> Member));
