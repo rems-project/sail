@@ -132,7 +132,7 @@ let star = "*"
 %nonassoc Then
 %nonassoc Else
 
-%token AND Div_ EOR Mod OR Quot Rem
+%token Div_ Mod Quot Rem
 
 %token Bar Colon Comma Dot Eof Minus Semi Under
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare

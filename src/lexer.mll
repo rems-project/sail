@@ -101,11 +101,8 @@ let kw_table =
      ("with",                    (fun x -> With));
      ("val",                     (fun x -> Val));
 
-     ("AND",			 (fun x -> AND));
      ("div",			 (fun x -> Div_));
-     ("EOR",			 (fun x -> EOR));
      ("mod",			 (fun x -> Mod));
-     ("OR",			 (fun x -> OR));
      ("quot",			 (fun x -> Quot));
      ("rem",			 (fun x -> Rem));
 
