@@ -121,6 +121,8 @@ id :: '' ::=
   | list			 :: M :: list {{ ichlo list_id }}
   | set                          :: M :: set {{ ichlo set_id }}
   | reg                          :: M :: reg {{ ichlo reg_id }}
+  | to_num			 :: M :: tonum {{ com Built in function identifiers }} {{ ichlo to_num }}
+  | to_vec			 :: M :: tovec {{ ichlo to_vec }}
 % Note: we have just a single namespace. We don't want the same
 % identifier to be reused as a type name or variable, expression
 % variable, and field name.  We don't enforce any lexical convention

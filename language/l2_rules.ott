@@ -321,6 +321,9 @@ formula :: formula_ ::=
 
    | num1 gt ... gt numn                                         :: :: decreasing
 
+   | exp1 = exp2    						 :: :: exp_eqn
+     {{ ichl ([[exp1]] = [[exp2]]) }}
+
    | E_k1 = E_k2                                                 :: :: E_k_eqn
      {{ ichl ([[E_k1]] = [[E_k2]]) }}
 
@@ -643,32 +646,36 @@ by
 |- 2** nexp ~> 2 ** ne
 
 defn 
-E_d |- t :> t' , S_N :: :: coerce_typ :: coerce_typ_ by
+E_d |- exp : t :> t' , exp' , S_N :: :: coerce_typ :: coerce_typ_ by
 
 E_d |- t = u
 -------------------------------------- :: eq
-E_d |- t :> u, {}
+E_d |- exp: t :> u, exp, {}
 
-E_d |- t1 :> u1, S_N1 .. E_d |- tn :> un, S_Nn
+E_d |- id1 : t1 :> u1, exp1, S_N1 .. E_d |- idn: tn :> un,expn, S_Nn
+exp' = switch exp { case (id1, .., idn) -> (exp1,..,expn) }
 -------------------------------------- :: tuple
-E_d |- (t1 * .. * tn) :> (u1 * .. * un), S_N1 u+ .. u+ S_Nn
+E_d |- exp : (t1 * .. * tn) :> (u1 * .. * un), exp', S_N1 u+ .. u+ S_Nn
 
 -------------------------------------- :: enum
-E_d |- enum ne1 ne2 order :> enum ne3 ne4 order, {ne3 <= ne1, ne3+ne4 >= ne1 + ne2}
+E_d |- exp: enum ne1 ne2 order :> enum ne3 ne4 order, exp, {ne3 <= ne1, ne3+ne4 >= ne1 + ne2}
 
 E_e(t) gives { </numi |-> idi//i/> num |-> id </num'j |-> id'j//j/> }
 ------------------------------------------------ :: to_enumerate
-<E_k,E_r,E_e> |- enum num zero order :> t, {}
+<E_k,E_r,E_e> |- exp: enum num zero order :> t,id, {}
 
 E_e(t) gives { num1 |-> id1 ... numn |-> idn }
+exp' = switch exp { case id1 -> num1 ... case idn -> numn }
 ------------------------------------------------ :: from_enumerate
-<E_k,E_r,E_e> |- t :> enum num1 numn + (- num1) inc, {}
+<E_k,E_r,E_e> |- exp: t :> enum num1 numn + (- num1) inc, exp', {}
 
+exp' = to_num exp
 -------------------------------------- :: to_num
-E_d |- vector ne1 ne2 order :t_arg_typ: bit :> enum ne3 ne4 order, { ne3 = zero, ne4 = 2** ne2}
+E_d |- exp: vector ne1 ne2 order :t_arg_typ: bit :> enum ne3 ne4 order,exp', { ne3 = zero, ne4 = 2** ne2}
 
+exp' = to_vec exp
 -------------------------------------- :: from_num
-E_d |- enum ne1 ne2 order :> vector ne3 ne4 order :t_arg_typ: bit, {ne3 = zero, 'x = ne1 + ne2, ne4 = 2** 'x}
+E_d |- exp: enum ne1 ne2 order :> vector ne3 ne4 order :t_arg_typ: bit,exp', {ne3 = zero, 'x = ne1 + ne2, ne4 = 2** 'x}
 
 
 defns
@@ -810,7 +817,7 @@ E |- exp : t gives I , E_t :: :: check_exp :: check_exp_
 by
 
 <E_t,E_d> |- exp : u gives <S_N,effect>,E_t1
-E_d |- u :> t, S_N2
+E_d |- exp : u :> t,exp', S_N2
 ------------------------------------------------------------ :: coerce
 <E_t,E_d> |- exp : t gives <S_N u+ S_N2,effect>,E_t1
  
