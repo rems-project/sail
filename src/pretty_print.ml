@@ -216,7 +216,7 @@ and pp_exp ppf (E_aux(e,_)) =
   | E_id(id) -> pp_id ppf id
   | E_lit(lit) -> pp_lit ppf lit
   | E_cast(typ,exp) -> fprintf ppf "@[<0>%a%a%a %a@]" kwd "(" pp_typ typ kwd ")" pp_exp exp 
-  | E_app(f,args) -> fprintf ppf "@[<0>%a(%a)@]" pp_id f (list_pp pp_exp pp_exp) args 
+  | E_app(f,args) -> fprintf ppf "@[<0>%a(%a)@]" pp_id f (list_pp pp_comma_exp pp_exp) args 
   | E_app_infix(l,op,r) -> fprintf ppf "@[<0>%a %a %a@]" pp_exp l pp_id op pp_exp r
   | E_tuple(exps) -> fprintf ppf "@[<0>%a %a %a@]" kwd "(" (list_pp pp_comma_exp pp_exp) exps kwd ")"
   | E_if(c,t,e) -> fprintf ppf "@[<0> %a %a @[<1> %a %a@] @[<1> %a@ %a@]@]" kwd "if " pp_exp c kwd "then" pp_exp t kwd "else" pp_exp e
