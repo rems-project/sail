@@ -16,17 +16,17 @@ k :: 'Ki_' ::=
    | K_infer                                           :: :: infer {{ com Representing an unknown kind, inferred by context }}
    | K_Abbrev t                                        :: :: abbrev {{ com Not really a kind, but a convenient way of tracking type abbreviations }}
 
-t , u :: 'T_' ::=                                {{ phantom }}
+t , u :: 'T_' ::=                                
 {{ com Internal types }}
    | id                                           :: :: id
    | kid                                          :: :: var
-   | t1 -> t2 effect tag S_N                     :: :: fn  {{ com [[S_N]] are constraints for the function, [[tag]] holds generation data }}
+   | t1 -> t2 effect tag S_N                      :: :: fn  {{ com [[S_N]] are constraints for the function, [[tag]] holds generation data }}
    | ( t1 * .... * tn )                           :: :: tup
    | id t_args                                    :: :: app 
    | register t_args                              :: :: reg_app
    | t [ t1 / id1 ... tn / idn ]		  :: :: subst
 
-tag :: 'Tag_' ::=                                 {{ phantom }}
+tag :: 'Tag_' ::=                                 
 {{ com Data indicating where the identifier arises and thus information necessary in compilation }}
    | None                                 :: :: empty 
    | Ctor                                 :: :: ctor {{ com Data constructor from a type union }}
@@ -77,51 +77,26 @@ ne :: 'Ne_' ::=
    | ne >= ne'           :: :: gteq
    | kid 'IN' { num1 , ... , numn } :: :: in
 
-%% %% embed
-%% %% {{ lem
-%% %% 
-%% %% val t_subst_t : list (tnv * t) -> t -> t 
-%% %% val t_subst_tnv : list (tnv * t) -> tnv -> t
-%% %% val ftv_t : t -> list tnv
-%% %% val ftv_tm : list t -> list tnv
-%% %% val ftv_s : list (p*tnv) -> list tnv
-%% %% val compatible_overlap : list (x*t) -> bool
-%% %% 
-%% %% (*TODO Should this normalize following the implementation? And blength and hlength need a means of implementation*)
-%% %% let normalize n = n
-%% %% 
-%% %% let blength (_,bit) = Ne_const 8
-%% %% let hlength (_,bit) = Ne_const 8
-%% %% 
+%%embed
+%%{{ lem
+%%
+%%let blength (bit) = Ne_const 8
+%%let hlength (bit) = Ne_const 8
+
 %% %% let rec sumation_nes nes = match nes with
 %% %%   | [ a; b] -> Ne_add a b 
 %% %%   | x :: y -> Ne_add x (sumation_nes y)
 %% %% end
 %% %% 
-%% %% }}
-%% %% 
-%% %% embed
-%% %% {{ hol
-%% %% load "fmaptreeTheory";
-%% %% val _ = 
-%% %%   Hol_datatype 
-%% %%     `env_body = <| env_p : x|->p; env_f : x|->f_desc; env_v : x|->v_desc |>`;
-%% %% 
-%% %% val _ = Define `
-%% %%   env_union e1 e2 =
-%% %%     let i1 = item e1 in
-%% %%     let m1 = map e1 in
-%% %%     let i2 = item e2 in
-%% %%     let m2 = map e2 in
-%% %%       FTNode <| env_p:=FUNION i1.env_p i2.env_p; 
-%% %%                 env_f:=FUNION i1.env_f i2.env_f;
-%% %%                 env_v:=FUNION i1.env_v i2.env_v |>
-%% %%              (FUNION m1 m2)`;
-%% %% }}
-%% %% {{ lem
-%% %% type env =
-%% %%   | EnvEmp 
-%% %%   | Env of (map x env) * (map x p) * (map x f_desc) * (map x v_desc)
+
+%% type definition_type =
+%%   | DenvEmp
+%%   | Denv of (map tid k_inf)  
+%%
+%% type env =
+%%   | EnvEmp 
+%%   | Env of (map x v_desc) * definition_type
+
 %% %% 
 %% %% val env_union : env -> env -> env
 %% %% let env_union e1 e2 =
@@ -131,9 +106,7 @@ ne :: 'Ne_' ::=
 %% %%    | ((Env Em1 Ep1 Ef1 Ev1),(Env Em2 Ep2 Ef2 Ev2)) ->
 %% %%      Env(union_map Em1 Em2) (union_map Ep1 Ep2) (union_map Ef1 Ef2) (union_map Ev1 Ev2)
 %% %% end
-%% %% 
-%% %% }}
-%% %% 
+%%}}
 
 S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
                                                                     {{ hol nec list }}
