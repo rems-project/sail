@@ -474,8 +474,8 @@ let pp_format_lit_lem (L_aux(l,_)) =
   | L_true -> "L_true"
   | L_false -> "L_false"
   | L_num(i) -> "(L_num " ^ string_of_int i ^ ")"
-  | L_hex(n) -> "(L_hex " ^ n ^ ")"
-  | L_bin(n) -> "(L_bin " ^ n ^ ")"
+  | L_hex(n) -> "(L_hex \"" ^ n ^ "\")"
+  | L_bin(n) -> "(L_bin \"" ^ n ^ "\")"
   | L_undef -> "L_undef"
   | L_string(s) -> "(L_string \"" ^ s ^ "\")" 
 
