@@ -496,7 +496,7 @@ let rec pp_format_pat_lem (P_aux(p,l)) =
                        ^ "])"
   | P_vector(pats) -> "(P_vector [" ^ list_format "; " pp_format_pat_lem pats ^ "])"
   | P_vector_indexed(ipats) ->
-    "(P_vector [" ^ list_format "; " (fun (i,p) -> string_of_int i ^ ", " ^ pp_format_pat_lem p) ipats ^ "])"
+    "(P_vector_indexed [" ^ list_format "; " (fun (i,p) -> Printf.sprintf "(%d, %s)" i (pp_format_pat_lem p)) ipats ^ "])"
   | P_vector_concat(pats) -> "(P_vector_concat [" ^ list_format "; " pp_format_pat_lem pats ^ "])"
   | P_tup(pats) -> "(P_tup [" ^ (list_format "; " pp_format_pat_lem pats) ^ "])"
   | P_list(pats) -> "(P_list [" ^ (list_format "; " pp_format_pat_lem pats) ^ "])"
