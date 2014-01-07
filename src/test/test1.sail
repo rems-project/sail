@@ -13,4 +13,4 @@ let bool e = true
 let bit v = bitzero
 let ( bit [ 32 ] ) v1 = 0b101
 
-function unit main _ = ()
+function bit main _ = v1[0]
