@@ -3,6 +3,7 @@ open import Pervasives
 
 open import Map
 open import Maybe
+open import Set_extra
 
 type l =
   | Unknown
@@ -10,8 +11,6 @@ type l =
   | Range of nat * nat
 
 val duplicates : forall 'a. list 'a -> list 'a
-
-val union_map : forall 'a 'b. map 'a 'b -> map 'a 'b -> map 'a 'b
 
 val set_from_list : forall 'a. list 'a -> set 'a
 
@@ -32,7 +31,7 @@ type base_kind =  (* base kind *)
  | BK_effect (* kind of effect sets *)
 
 
-type nexp =  (* expression of kind $Nat$, for vector sizes and origins *)
+type nexp =  (* expression of kind Nat, for vector sizes and origins *)
  | Nexp_var of kid (* variable *)
  | Nexp_constant of nat (* constant *)
  | Nexp_times of nexp * nexp (* product *)
@@ -54,6 +53,27 @@ type base_effect =  (* effect *)
  | BE_nondet (* nondeterminism from intra-instruction parallelism *)
 
 
+type order =  (* vector order specifications, of kind Order *)
+ | Ord_var of kid (* variable *)
+ | Ord_inc (* increasing (little-endian) *)
+ | Ord_dec (* decreasing (big-endian) *)
+
+
+type effect =  (* effect set, of kind Effects *)
+ | Effect_var of kid
+ | Effect_set of list base_effect (* effect set *)
+
+
+type id =  (* Identifier *)
+ | Id of x
+ | DeIid of x (* remove infix status *)
+
+let effect_union e1 e2 = 
+  match (e1,e2) with
+  | (Effect_set els,Effect_set els2) -> Effect_set (els++els2)
+  end
+
+
 type n_constraint =  (* constraint over kind $Nat$ *)
  | NC_fixed of nexp * nexp
  | NC_bounded_ge of nexp * nexp
@@ -64,22 +84,6 @@ type n_constraint =  (* constraint over kind $Nat$ *)
 type kinded_id =  (* optionally kind-annotated identifier *)
  | KOpt_none of kid (* identifier *)
  | KOpt_kind of kind * kid (* kind-annotated variable *)
-
-
-type order =  (* vector order specifications, of kind $Order$ *)
- | Ord_var of kid (* variable *)
- | Ord_inc (* increasing (little-endian) *)
- | Ord_dec (* decreasing (big-endian) *)
-
-
-type effect =  (* effect set, of kind $Effects$ *)
- | Effect_var of kid
- | Effect_set of list base_effect (* effect set *)
-
-
-type id =  (* Identifier *)
- | Id of x
- | DeIid of x (* remove infix status *)
 
 
 type quant_item =  (* Either a kinded identifier or a nexp constraint for a typquant *)

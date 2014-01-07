@@ -2,7 +2,7 @@ indexvar n , m , i , j ::=
   {{ phantom }}
   {{ com Index variables for meta-lists }}
 
-metavar num , zero ::=
+metavar num ::=
   {{ phantom }}
   {{ lex numeric }}
   {{ ocaml int }}
@@ -53,6 +53,7 @@ embed
 {{ lem
 open import Map
 open import Maybe
+open import Set_extra
 
 type l =
   | Unknown
@@ -60,8 +61,6 @@ type l =
   | Range of nat * nat
 
 val duplicates : forall 'a. list 'a -> list 'a
-
-val union_map : forall 'a 'b. map 'a 'b -> map 'a 'b -> map 'a 'b
 
 val set_from_list : forall 'a. list 'a -> set 'a
 
@@ -111,18 +110,18 @@ id :: '' ::=
   {{ aux _ l }}
   | x                           :: :: id
   | ( deinfix x )                       :: :: deIid {{ com remove infix status }}
-  | bool      		   	 :: M :: bool {{ com Built in type identifiers }} {{ ichlo bool_id }}
-  | bit				 :: M :: bit {{ ichlo bit_id }} 
-  | unit			 :: M :: unit {{ ichlo unit_id }}
-  | nat				 :: M :: nat  {{ ichlo nat_id }}
-  | string                       :: M :: string {{ tex \ottkw{string} }} {{ ichlo string_id }}
-  | enum                         :: M :: enum {{ ichlo enum_id }}
-  | vector			 :: M :: vector {{ ichlo vector_id }}
-  | list			 :: M :: list {{ ichlo list_id }}
-  | set                          :: M :: set {{ ichlo set_id }}
-  | reg                          :: M :: reg {{ ichlo reg_id }}
-  | to_num			 :: M :: tonum {{ com Built in function identifiers }} {{ ichlo to_num }}
-  | to_vec			 :: M :: tovec {{ ichlo to_vec }}
+  | bool      		   	 :: M :: bool {{ com Built in type identifiers }} {{ ichlo (Id "bool") }}
+  | bit				 :: M :: bit {{ ichlo (Id "bit") }} 
+  | unit			 :: M :: unit {{ ichlo (Id "unit") }}
+  | nat				 :: M :: nat  {{ ichlo (Id "nat") }}
+  | string                       :: M :: string {{ tex \ottkw{string} }} {{ ichlo (Id "string") }}
+  | enum                         :: M :: enum {{ ichlo (Id "enum") }}
+  | vector			 :: M :: vector {{ ichlo (Id "vector") }}
+  | list			 :: M :: list {{ ichlo (Id "list") }}
+  | set                          :: M :: set {{ ichlo (Id "set") }}
+  | reg                          :: M :: reg {{ ichlo (Id "reg") }}
+  | to_num			 :: M :: tonum {{ com Built in function identifiers }} {{ ichlo (Id "to_num") }}
+  | to_vec			 :: M :: tovec {{ ichlo (Id "to_vec") }}
 % Note: we have just a single namespace. We don't want the same
 % identifier to be reused as a type name or variable, expression
 % variable, and field name.  We don't enforce any lexical convention
@@ -158,7 +157,7 @@ kind :: 'K_' ::=
 % we'll never use  ...-> Nat , .. Order , .. or Effects
     
 nexp :: 'Nexp_' ::=  
-  {{ com expression of kind $[[Nat]]$, for vector sizes and origins }}
+  {{ com expression of kind Nat, for vector sizes and origins }}
   {{ aux _ l }}
   | kid                                 :: :: var         {{ com variable }}
   | num                                 :: :: constant     {{ com constant }}
@@ -169,7 +168,7 @@ nexp :: 'Nexp_' ::=
   | ( nexp )                            :: S :: paren  {{ ichlo [[nexp]] }}
 
 order :: 'Ord_' ::=  
-  {{ com vector order specifications, of kind $[[Order]]$}}
+  {{ com vector order specifications, of kind Order}}
   {{ aux _ l }} 
   | kid                                 :: :: var {{ com variable }} 
   | inc                                 :: :: inc  {{ com increasing (little-endian) }}
@@ -189,12 +188,24 @@ base_effect :: 'BE_' ::=
 
 
 effect :: 'Effect_' ::=
-  {{ com effect set, of kind $[[Effects]]$ }}
+  {{ com effect set, of kind Effects }}
   {{ aux _ l }}
  | kid                                 :: :: var
  | { base_effect1 , .. , base_effectn }           :: :: set {{ com effect set }}
- | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ ichlo [] }}
- | effect1 u+ .. u+ effectn                   :: M :: union {{ com meta operation for combining sets of effects }} {{ ichlo [] }}
+ | pure                                 :: M :: pure {{ com sugar for empty effect set }} 
+   {{ lem (Effect_set [])  }} {{icho [[{}]] }}
+ | effect1 u+ .. u+ effectn                   :: M :: union {{ com meta operation for combining sets of effects }} {{ icho [] }}
+   {{ lem (List.foldr effect_union (Effect_set []) [[effect1..effectn]]) }}
+
+embed
+{{ lem
+let effect_union e1 e2 = 
+  match (e1,e2) with
+  | (Effect_set els,Effect_set els2) -> Effect_set (els++els2)
+  end
+}}
+
+grammar
 
 % TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.  Yes.  But we think we don't need any interesting effect-set expressions, eg effectset-variable union {rreg}. 
 

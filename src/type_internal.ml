@@ -81,3 +81,6 @@ let initial_kind_env =
     ("enum", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}; {k=K_Ord} ], {k = K_Typ}) });
     ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } )
   ]
+
+let rec type_eq l t1 t2 = (t2,[])
+let rec type_coerce l t1 t2 = (t2,[])

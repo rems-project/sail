@@ -40,7 +40,7 @@ kind_aux =  (* kinds *)
 
 
 type 
-nexp_aux =  (* expression of kind $_$, for vector sizes and origins *)
+nexp_aux =  (* expression of kind Nat, for vector sizes and origins *)
    Nexp_var of kid (* variable *)
  | Nexp_constant of int (* constant *)
  | Nexp_times of nexp * nexp (* product *)
@@ -54,6 +54,56 @@ and nexp =
 type 
 kind = 
    K_aux of kind_aux * l
+
+
+type 
+base_effect_aux =  (* effect *)
+   BE_rreg (* read register *)
+ | BE_wreg (* write register *)
+ | BE_rmem (* read memory *)
+ | BE_wmem (* write memory *)
+ | BE_undef (* undefined-instruction exception *)
+ | BE_unspec (* unspecified values *)
+ | BE_nondet (* nondeterminism from intra-instruction parallelism *)
+
+
+type 
+base_effect = 
+   BE_aux of base_effect_aux * l
+
+
+type 
+effect_aux =  (* effect set, of kind Effects *)
+   Effect_var of kid
+ | Effect_set of (base_effect) list (* effect set *)
+
+
+type 
+order_aux =  (* vector order specifications, of kind Order *)
+   Ord_var of kid (* variable *)
+ | Ord_inc (* increasing (little-endian) *)
+ | Ord_dec (* decreasing (big-endian) *)
+
+
+type 
+id_aux =  (* Identifier *)
+   Id of x
+ | DeIid of x (* remove infix status *)
+
+
+type 
+effect = 
+   Effect_aux of effect_aux * l
+
+
+type 
+order = 
+   Ord_aux of order_aux * l
+
+
+type 
+id = 
+   Id_aux of id_aux * l
 
 
 type 
@@ -81,25 +131,9 @@ kinded_id =
 
 
 type 
-base_effect_aux =  (* effect *)
-   BE_rreg (* read register *)
- | BE_wreg (* write register *)
- | BE_rmem (* read memory *)
- | BE_wmem (* write memory *)
- | BE_undef (* undefined-instruction exception *)
- | BE_unspec (* unspecified values *)
- | BE_nondet (* nondeterminism from intra-instruction parallelism *)
-
-
-type 
 quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
    QI_id of kinded_id (* An optionally kinded identifier *)
  | QI_const of n_constraint (* A constraint for this type *)
-
-
-type 
-base_effect = 
-   BE_aux of base_effect_aux * l
 
 
 type 
@@ -108,43 +142,9 @@ quant_item =
 
 
 type 
-effect_aux =  (* effect set, of kind $_$ *)
-   Effect_var of kid
- | Effect_set of (base_effect) list (* effect set *)
-
-
-type 
-order_aux =  (* vector order specifications, of kind $_$ *)
-   Ord_var of kid (* variable *)
- | Ord_inc (* increasing (little-endian) *)
- | Ord_dec (* decreasing (big-endian) *)
-
-
-type 
-id_aux =  (* Identifier *)
-   Id of x
- | DeIid of x (* remove infix status *)
-
-
-type 
 typquant_aux =  (* type quantifiers and constraints *)
    TypQ_tq of (quant_item) list
  | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
-
-
-type 
-effect = 
-   Effect_aux of effect_aux * l
-
-
-type 
-order = 
-   Ord_aux of order_aux * l
-
-
-type 
-id = 
-   Id_aux of id_aux * l
 
 
 type 

@@ -6,40 +6,26 @@
 embed
 {{ lem
 
-let blength (bit) = Ne_const 8
-let hlength (bit) = Ne_const 8
+let rec remove_one i l =
+  match l with
+  | [] -> []
+  | i2::l2 -> if i2 = i then l2 else i2::(remove_one i l2)
+end
 
-%% %% let rec sumation_nes nes = match nes with
-%% %%   | [ a; b] -> Ne_add a b 
-%% %%   | x :: y -> Ne_add x (sumation_nes y)
-%% %% end
-%% %% 
+let rec remove_from l l2 =
+  match l2 with 
+  | [] -> l
+  | i::l2' -> remove_from (remove_one i l) l2'
+end
 
- type definition_type =
-   | DenvEmp
-   | Denv of (map tid kinf)  (map ... ...) (map ... ...)
+let disjoint s1 s2 = Set.null (s1 inter s2)
 
- type env =
-   | EnvEmp 
-   | Env of (map x v_desc) * definition_type
-
- val denv_union : definition_type -> definition_type -> definition_type
- let denv_union de1 de2 = 
-  match (de1,de2) with
-   | (DenvEmp,de2) -> de2
-   | (de1,DenvEmp) -> de1
-   | ((Denv ke1 re1 ee1),(Denv ke2 re2 ee2)) ->
-      Denv (union_map ke1 ke2) (union_map re1 re2) (union_map ee1 ee2)
-   end
-
- val env_union : env -> env -> env
- let env_union e1 e2 =
-   match (e1,e2) with
-    | (EnvEmp,e2) -> e2
-    | (e1,EnvEmp) -> e1
-    | ((Env te1 de1),(Env te2 de2)) ->
-      Env (union_map te1 te2) (denv_union de1 de2)
- end
+let rec disjoint_all sets =
+  match sets with
+  | [] -> true
+  | s1::[] -> true
+  | s1::s2::sets -> (disjoint s1 s2) && (disjoint_all (s2::sets))
+end
 }}
 
  
@@ -81,6 +67,8 @@ ne :: 'Ne_' ::=
    | ne1 + ... + nen                     :: :: add
    | 2 ** ne				 :: :: exp
    | ( - ne )                            :: :: unary
+   | zero   				 :: M :: zero
+     {{ lem (Ne_const 0) }}
    | bitlength ( bin )                   :: M :: cbin
      {{ ocaml (asssert false) }}
      {{ hol ARB }}
@@ -98,14 +86,14 @@ ne :: 'Ne_' ::=
      {{ ocaml (assert false) }}
      {{ lem (Ne_const (List.length [[exp1...expn]])) }}
  
- t_arg :: 't_arg_' ::=   {{ phantom }}
+ t_arg :: 't_arg_' ::=  
  {{ com Argument to type constructors }}
  | t :: :: typ
  | ne :: :: nexp
  | effect :: :: effect
  | order :: :: order
 
- t_args :: '' ::=   {{ phantom }}
+ t_args :: '' ::=   {{ lem list t_arg }}
   {{ com Arguments to type constructors }}
    | t_arg1 ... t_argn                            :: :: T_args
 
@@ -125,7 +113,7 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
       {{ lem [[nec1 .. necn]] }}
    | S_N1 u+ .. u+ S_Nn                                                    :: M :: SN_union
      {{ hol (FOLDR FUNION FEMPTY [[S_N1..S_Nn]]) }}
-     {{ lem (List.fold_right union_map [[S_N1..S_Nn]] Map.empty) }}
+     {{ lem (List.foldr (++) [] [[S_N1..S_Nn]]) }}
      {{ ocaml (assert false) }}
    | consistent_increase ne1 ne'1 ... nen ne'n                    :: M :: SN_increasing
      {{ com Generates constraints from  pairs of constraints, where the first of each pair is always larger than the sum of the previous pair }}
@@ -136,28 +124,11 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
      {{ ocaml assert false }}
      {{ ichl todo }}
    | resolve ( S_N )                                                :: :: resolution
+     {{ lem [[S_N]] (* Write constraint solver *) }}
  
- I :: '' ::=                                                     {{ phantom }}
-  {{ com Information given by type checking an expression }}
-  | < S_N , effect >                                      :: :: I
-  | Ie                                                           :: :: Iempty {{ com Empty constraints, effect }} {{ tex {\ottnt{I}_{\epsilon} } }}
-  | I1 u+ .. u+ In                                               :: :: Iunion {{ com Unions the constraints and effect }}
 
- E :: '' ::=                                                     
-                                                                 {{ hol ((string,env_body) fmaptree) }}
-                                                                 {{ lem env }}
- {{ com Definition environment and lexical environment }}
- | < E_t , E_d >                                           :: :: E
-  {{ hol arb }}
-  {{ lem (Env [[E_t]] [[E_d]]  }}
- | empty                                                       :: M :: E_empty
-   {{ hol arb }}
-   {{ lem EnvEmp }}
-   {{ ocaml assert false }}
- | E u+ E'                                                      :: :: E_union
-   {{ lem (env_union [[E]] [[E']]) }}
-
- E_d {{ tex {\ottnt{E}^{\textsc{d} } } }} :: 'E_d_' ::=
+ E_d {{ tex {\ottnt{E}^{\textsc{d} } } }} :: 'E_d_' ::=  {{ phantom }}
+                                                         {{ lem definition_env }}
  {{ com Environments storing top level information, such as defined records, enumerations, and kinds }}
  | < E_k , E_r , E_e >	     	       		    	 :: :: base
    {{ hol arb }}
@@ -179,60 +150,35 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
    | id                                      :: :: id
    | kid                                     :: :: var
 
- E_k {{ tex \ottnt{E}^{\textsc{k} } }} :: 'E_k_' ::=             {{ phantom }}
+ E_k {{ tex {\ottnt{E}^{\textsc{k} } } }} :: 'E_k_' ::=             {{ phantom }}
                                                                  {{ hol (tid-> kinf) }}
                                                                  {{ lem (map tid kinf) }}
    {{ com Kind environments }}
    | { tid1 |-> kinf1 , .. , tidn |-> kinfn }    :: :: concrete
      {{ hol (FOLDR (\(k1,k2) E. E |+ (k1,k2)) FEMPTY [[tid1 kinf1 .. tidn kinfn]]) }}
-     {{ lem (List.fold_right (fun (x,v) m -> Map.insert x v m) [[tid1 kinf1 .. tidn kinfn]] Map.empty) }} 
+     {{ lem (List.foldr (fun (x,v) m -> Map.insert x v m) Map.empty [[tid1 kinf1 .. tidn kinfn]]) }} 
    | E_k1 u+ .. u+ E_kn                                          :: M :: union
      {{ com In a unioning kinf, {k default} u {k} results in {k} (i.e. the default is locally forgotten) }} 
      {{ hol (FOLDR FUNION FEMPTY [[E_k1..E_kn]]) }}
-     {{ lem (List.fold_right union_map [[E_k1..E_kn]] Map.empty) }}
+     {{ lem (List.foldr (union) Map.empty [[E_k1..E_kn]]) }}
      {{ ocaml (assert false) }}
    | E_k u- E_k1 .. E_kn                                            :: M :: multi_set_minus
      {{ hol arb }} 
-     {{ lem (remove_from [[E_k]] (List.fold_right union_map [[E_k1..E_kn]] Map.empty)) }} 
+     {{ lem (Map.fromList (remove_from (Set_extra.toList (Map.toSet [[E_k]]))
+                                       (Set_extra.toList (Map.toSet (List.foldr (union) Map.empty [[E_k1..E_kn]]))))) }} 
      {{ ocaml assert false }}
 
  
  tinf :: 'tinf_' ::=                                                 
     {{ com Type variables, type, and constraints, bound to an identifier }}
     | t                                                 :: :: typ
-    | E_k , S_N , tag , t         :: :: quant_typ                                                                 
-
- E_t {{ tex {\ottnt{E}^{\textsc{t} } } }} :: 'E_t_' ::=          {{ phantom }}
-                                                                 {{ hol (id |-> tinf) }}
-                                                                 {{ lem map x f_desc }}
-   {{ com Type environments }}
-   | { id1 |-> tinf1 , .. , idn |-> tinfn }                    :: :: base
-     {{ hol (FOLDR (\x E. E |+ x) FEMPTY [[id1 tinf1 .. idn tinfn]]) }}
-     {{ lem (List.fold_right (fun (x,f) m -> Map.insert x f m) [[id1 tinf1 .. idn tinfn]] Map.empty) }} 
-   | ( E_t1 u+ .... u+ E_tn )                                         :: M :: union
-     {{ hol (FOLDR FUNION FEMPTY [[E_t1....E_tn]]) }}
-     {{ lem (List.fold_right union_map [[E_t1....E_tn]] Map.empty) }}
-     {{ ocaml (assert false) }}
-   | u+ E_t1 .. E_tn                                            :: M :: multi_union
-     {{ hol arb }}
-     {{ lem (List.fold_right union_map [[E_t1..E_tn]] Map.empty) }}
-     {{ ocaml assert false }}
-   | E_t u- E_t1 .. E_tn                                            :: M :: multi_set_minus
-     {{ hol arb }} {{ lem (remove_from [[E_t]] (List.fold_right union_map [[E_t1..E_tn]] Map.empty)) }} {{ ocaml assert false }}
-   | ( E_t1 inter .... inter E_tn )                                  :: M :: intersect
-     {{ hol arb }}
-     {{ lem (List.fold_right intersect_map [[E_t1....E_tn]] Map.empty) }} 
-     {{ ocaml (assert false) }}
-   | inter E_t1 .. E_tn                                            :: M :: multi_inter
-     {{ hol arb }}
-     {{ lem (List.fold_right intersect_map [[E_t1..E_tn]] Map.empty) }}
-     {{ ocaml assert false }}
-
+    | E_k , S_N , tag , t         :: :: quant_typ                                                             
 
  field_typs :: 'FT_' ::=     {{ phantom }}
                              {{ lem list (id * t) }}
  {{ com Record fields }}
  | id1 : t1 , .. , idn : tn :: :: fields
+   {{ lem [[id1 t1..idn tn]] }}
 
  E_r {{ tex \ottnt{E}^{\textsc{r} } }} :: 'E_r_' ::=             {{ phantom }}
                                                                  {{ hol (id*t) |-> tinf) }}
@@ -240,27 +186,137 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
    {{ com Record environments }}
    | { { field_typs1 } |-> tinf1 , .. , { field_typsn } |-> tinfn }                    :: :: concrete
      {{ hol (FOLDR (\x E. E |+ x) FEMPTY) }}
-     {{ lem (List.fold_right (fun (x,f) m -> Map.insert x f m) [[field_typs1 tinf1..field_typsn tinfn]] Map.empty) }} 
+     {{ lem (List.foldr (fun (x,f) m -> Map.insert x f m) Map.empty [[field_typs1 tinf1..field_typsn tinfn]]) }} 
    | E_r1 u+ .. u+ E_rn                                          :: M :: union
      {{ hol (FOLDR FUNION FEMPTY [[E_r1..E_rn]]) }}
-     {{ lem (List.fold_right union_map [[E_r1..E_rn]] Map.empty) }}
+     {{ lem (List.foldr (union) Map.empty [[E_r1..E_rn]]) }}
      {{ ocaml (assert false) }}
 
   enumerate_map :: '' ::=                                        {{ phantom }}
-                                                                 {{ lem (list (num*id)) }}
+                                                                 {{ lem (list (nat*id)) }}
    | { num1 |-> id1 ... numn |-> idn }                           :: :: enum_map
+    {{ lem [[num1 id1...numn idn]] }}
 
   E_e {{ tex \ottnt{E}^{\textsc{e} } }} :: 'E_e_' ::=            {{ phantom }}
-                                                                 {{ lem (map t (list (num*id))) }}
+                                                                 {{ lem (map t (list (nat*id))) }}
    {{ com Enumeration environments }}
    | { t1 |-> enumerate_map1 , .. , tn |-> enumerate_mapn }     :: :: base
-     {{ lem (List.fold_right (fun (x,f) m -> Map.insert x f m) [[t1 enumerate_map1..tn enumerate_mapn]] Map.empty) }} 
+     {{ lem (List.foldr (fun (x,f) m -> Map.insert x f m) Map.empty [[t1 enumerate_map1..tn enumerate_mapn]]) }} 
    | E_e1 u+ .. u+ E_en                                         :: :: union
-     {{ lem (List.fold_right union_map [[E_e1..E_en]] Map.empty) }}
+     {{ lem (List.foldr (union) Map.empty [[E_e1..E_en]]) }}
+
+    
+embed
+{{ lem
+ type definition_env =
+   | DenvEmp
+   | Denv of (map tid kinf) * (map (list (id*t)) tinf) * (map t (list (nat*id)))
+
+}}
+
+grammar
+
+ E_t {{ tex {\ottnt{E}^{\textsc{t} } } }} :: 'E_t_' ::=          {{ phantom }}
+                                                                 {{ hol (id |-> tinf) }}
+                                                                 {{ lem map id tinf }}
+   {{ com Type environments }}
+   | { id1 |-> tinf1 , .. , idn |-> tinfn }                    :: :: base
+     {{ hol (FOLDR (\x E. E |+ x) FEMPTY [[id1 tinf1 .. idn tinfn]]) }}
+     {{ lem (List.foldr (fun (x,f) m -> Map.insert x f m) Map.empty [[id1 tinf1 .. idn tinfn]]) }} 
+   | ( E_t1 u+ .... u+ E_tn )                                         :: M :: union
+     {{ hol (FOLDR FUNION FEMPTY [[E_t1....E_tn]]) }}
+     {{ lem (List.foldr (union) Map.empty [[E_t1....E_tn]]) }}
+     {{ ocaml (assert false) }}
+   | u+ E_t1 .. E_tn                                            :: M :: multi_union
+     {{ hol arb }}
+     {{ lem (List.foldr (union) Map.empty [[E_t1..E_tn]]) }}
+     {{ ocaml assert false }}
+   | E_t u- E_t1 .. E_tn                                            :: M :: multi_set_minus
+     {{ hol arb }} 
+     {{ lem (Map.fromList (remove_from (Set_extra.toList (Map.toSet [[E_t]]))
+                                       (Set_extra.toList (Map.toSet (List.foldr (union) Map.empty [[E_t1..E_tn]]))))) }} 
+     {{ ocaml assert false }}
+   | ( E_t1 inter .... inter E_tn )                                  :: M :: intersect
+     {{ hol arb }}
+     {{ lem (List.foldr (fun a b -> (Map.fromList (Set_extra.toList ((Map.toSet a) inter (Map.toSet b)))))  Map.empty [[E_t1....E_tn]]) }} 
+     {{ ocaml (assert false) }}
+   | inter E_t1 .. E_tn                                            :: M :: multi_inter
+     {{ hol arb }}
+     {{ lem (List.foldr (fun a b -> (Map.fromList (Set_extra.toList ((Map.toSet a) inter (Map.toSet b))))) Map.empty [[E_t1..E_tn]]) }}
+     {{ ocaml assert false }}
+
 
 ts :: ts_ ::=                                     {{ phantom }}
                                                   {{ lem list t }}
   | t1 , .. , tn :: :: lst 
+
+embed
+{{ lem
+let blength (bit) = Ne_const 8
+let hlength (bit) = Ne_const 8
+
+ type env =
+   | EnvEmp 
+   | Env of (map id tinf) * definition_env
+
+ type inf = 
+   | Iemp
+   | Inf of (list nec) * effect
+
+ val denv_union : definition_env -> definition_env -> definition_env
+ let denv_union de1 de2 = 
+  match (de1,de2) with
+   | (DenvEmp,de2) -> de2
+   | (de1,DenvEmp) -> de1
+   | ((Denv ke1 re1 ee1),(Denv ke2 re2 ee2)) ->
+      Denv (ke1 union ke2) (re1 union re2) (ee1 union ee2)
+   end
+
+ val env_union : env -> env -> env
+ let env_union e1 e2 =
+   match (e1,e2) with
+    | (EnvEmp,e2) -> e2
+    | (e1,EnvEmp) -> e1
+    | ((Env te1 de1),(Env te2 de2)) ->
+      Env (te1 union te2) (denv_union de1 de2)
+ end
+
+let inf_union i1 i2 =
+  match (i1,i2) with 
+ | (Iemp,i2) -> i2
+ | (i1,Iemp) -> i1
+ | (Inf n1 e1,Inf n2 e2) -> (Inf (n1++n2) (effect_union e1 e2))
+ end
+
+let fresh_kid denv = Var "x" (*TODO When strings can be manipulated, this should actually build a fresh string*)
+
+}}
+
+grammar
+
+ E :: '' ::=                                                     
+                                                                 {{ hol ((string,env_body) fmaptree) }}
+                                                                 {{ lem env }}
+ {{ com Definition environment and lexical environment }}
+ | < E_t , E_d >                                           :: :: E
+  {{ hol arb }}
+  {{ lem (Env [[E_t]] [[E_d]])  }}
+ | empty                                                       :: M :: E_empty
+   {{ hol arb }}
+   {{ lem EnvEmp }}
+   {{ ocaml assert false }}
+ | E u+ E'                                                      :: :: E_union
+   {{ lem (env_union [[E]] [[E']]) }}
+
+ I :: '' ::=                                                     {{ lem inf }}
+  {{ com Information given by type checking an expression }}
+  | < S_N , effect >                                      :: :: I
+    {{ lem (Inf [[S_N]] [[effect]]) }}
+  | Ie                                                           :: :: Iempty {{ com Empty constraints, effect }} {{ tex {\ottnt{I}_{\epsilon} } }}
+    {{ lem Iemp }}
+  | I1 u+ .. u+ In                                               :: :: Iunion {{ com Unions the constraints and effect }}
+    {{ lem (List.foldr inf_union Iemp [[I1..In]]) }}
+
 
 formula :: formula_ ::=
   | judgement                                                   :: :: judgement
@@ -269,25 +325,30 @@ formula :: formula_ ::=
 
    | E_k ( tid ) gives kinf                                      :: :: lookup_k
      {{ com Kind lookup }}
-     {{ hol (FLOOKUP [[E_k]] [[tid]] = SOME [[k]]) }}
-     {{ lem Map.lookup [[tid]] [[E_k]] = Just [[k]] }} 
+     {{ hol (FLOOKUP [[E_k]] [[tid]] = SOME [[kinf]]) }}
+     {{ lem Map.lookup [[tid]] [[E_k]] = Just [[kinf]] }} 
+
 
    | E_t ( id ) gives tinf                                      :: :: lookup_t
      {{ com Type lookup }}
-     {{ hol (FLOOKUP [[E_t]] [[id]] = SOME [[t]]) }}
-     {{ lem Map.lookup [[id]] [[E_t]] = Just [[t]] }} 
+     {{ hol (FLOOKUP [[E_t]] [[id]] = SOME [[tinf]]) }}
+     {{ lem Map.lookup [[id]] [[E_t]] = Just [[tinf]] }} 
 
   | E_k ( tid ) <-| k						:: :: update_k
      {{ com Update the kind associated with id to k }}        
-
+    {{ lem [[true]] (*TODO: update_k needs to be rewritten*) }}
+    
   | E_r ( id0 .. idn ) gives t , ts                      :: :: lookup_r
      {{ com Record lookup }}
+     {{ lem [[true]] (*TODO write a proper lookup for E_r *) }}
 
   | E_r ( t ) gives id0 : t0 .. idn : tn                 :: :: lookup_rt
     {{ com Record looup by type }}
+    {{ lem [[true]] (* write a proper lookup for E_r *) }}
 
   | E_e ( t ) gives enumerate_map			:: :: lookup_e
     {{ com Enumeration lookup by type }}
+    {{ lem Map.lookup [[t]] [[E_e]] = Just [[enumerate_map]] }}
 
    | dom ( E_t1 ) inter dom ( E_t2 ) = emptyset                  :: :: E_t_disjoint
      {{ hol (DISJOINT (FDOM [[E_t1]]) (FDOM [[E_t2]])) }}
@@ -312,6 +373,7 @@ formula :: formula_ ::=
      {{ lem Pervasives.not (Map.member [[id]] [[E_t]]) }} 
 
    | id0 : t0 .. idn : tn SUBSET id'0 : t'0 .. id'i : t'i       :: :: subsetFields
+     {{ lem ((Set.fromList [[id0 t0..idn tn]]) subset (Set.fromList [[id'0 t'0..id'i t'i]])) }}
 
    | num1 lt ... lt numn                                         :: :: increasing
 
@@ -324,7 +386,8 @@ formula :: formula_ ::=
      {{ ichl ([[E_k1]] = [[E_k2]]) }}
 
    | E_k1 ~= E_k2                                                :: :: E_k_approx
-     {{ ichl arb }}
+     {{ lem ([[E_k1]] = [[E_k2]]) (* Todo, not quite equality *) }}
+     {{ ich arb }}
 
    | E_t1 = E_t2                                                 :: :: E_t_eqn
      {{ ichl ([[E_t1]] = [[E_t2]]) }}
@@ -348,20 +411,22 @@ formula :: formula_ ::=
      {{ ichl ([[I1]] = [[I2]]) }}
 
    | effect1 = effect2                                        :: :: Ef_eqn
-     {{ ichl ([[effects1]] = [[effects2]]) }}
+     {{ ichl ([[effect1]] = [[effect2]]) }}
 
    | t1 = t2                                                     :: :: t_eq
      {{ ichl ([[t1]] = [[t2]]) }}
    | ne1 = ne2							:: :: ne_eq
      {{ ichl ([[ne1]] = [[ne2]]) }}
-
+   | kid = fresh_kid ( E_d )					:: :: kid_eq
+     {{ ichl ([[kid]] = fresh_kid [[E_d]]) }}
 
 defns
 check_t :: '' ::=
 
 defn
 E_k |-t t ok :: :: check_t :: check_t_ 
- {{ com Well-formed types }}
+{{ lemwcf  witness type check_t_witness; check check_t_w_check; }}
+{{ com Well-formed types }}
  by
 
  E_k('x) gives K_Typ
@@ -396,6 +461,7 @@ E_k |-t t ok :: :: check_t :: check_t_
 defn 
 E_k |-e effect ok :: :: check_ef :: check_ef_
 {{ com Well-formed effects }}
+{{ lemwcf  witness type check_ef_witness; check check_ef_w_check; }}
 by
 
 E_k('x) gives K_Efct
@@ -413,6 +479,7 @@ E_k |-e { base_effect1 , .. , base_effectn } ok
 defn 
 E_k |-n ne ok :: :: check_n :: check_n_
 {{ com Well-formed numeric expressions }}
+{{ lemwcf  witness type check_n_witness; check check_n_w_check; }}
 by
 
 E_k('x) gives K_Nat
@@ -444,6 +511,7 @@ E_k |-n 2 ** ne ok
 defn 
 E_k |-o order ok :: :: check_ord :: check_ord_
 {{ com Well-formed numeric expressions }}
+{{ lemwcf  witness type check_ord_witness; check check_ord_w_check; }}
 by
 
 E_k('x) gives K_Ord
@@ -459,6 +527,7 @@ E_k |-o 'x ok
 defn
 E_k , k |- t_arg ok :: :: check_targs :: check_targs_ 
 {{ com Well-formed type arguments kind check matching the application type variable }}
+{{ lemwcf  witness type check_targs_witness; check check_targs_w_check; }}
 by
 
 E_k |-t t ok
@@ -487,6 +556,7 @@ teq :: '' ::=
 defn
 E_d |- t1 = t2 :: :: teq :: teq_ 
 {{ com Type equality }}
+{{ lemwcf  witness type check_teq_witness; check check_teq_w_check; }}
 by
 
 E_k |-t t ok
@@ -510,7 +580,7 @@ E_k(id) gives K_Abbrev u
 E_d |- t1 = t3
 E_d |- t2 = t4
 ------------------------------------------------------------ :: arrow
-E_d |- t1 -> t2 effect tag = t3 -> t4 effect tag
+E_d |- t1 -> t2 effect tag S_N = t3 -> t4 effect tag S_N
  
 E_d |- t1 = u1 .... E_d |- tn = un
 ------------------------------------------------------------ :: tup
@@ -522,13 +592,24 @@ E_k(id) gives K_Lam (k1 .. kn -> K_Typ)
 <E_k,E_r,E_e> |- id t_arg1 .. t_argn = id t_arg'1 .. t_arg'n
 
 defn
-E_d , k |- t_arg = t_arg' :: :: targeq :: targeq_ by
+E_d , k |- t_arg = t_arg' :: :: targeq :: targeq_
+{{ lemwcf  witness type check_targeq_witness; check check_targeq_w_check; }}
+by
+
+E_d |- t = t'
+------------------------------------------------------------ :: typ
+E_d, K_Typ |- t = t'
 
 defns
 convert_kind :: '' ::=
 
 defn
-E_k |- kind ~> k :: :: convert_kind :: convert_kind_ by
+E_k |- kind ~> k :: :: convert_kind :: convert_kind_ 
+{{ lemwcf  witness type convert_kind_witness; check convert_kind_w_check; }}
+by
+
+-------------------- :: Typ
+E_k |- Type ~> K_Typ
 
 defns
 convert_typ :: '' ::=
@@ -536,6 +617,7 @@ convert_typ :: '' ::=
 defn 
 E_d |- quant_item ~> E_k1 , S_N :: :: convert_quants :: convert_quants_
 {{ com Convert source quantifiers to kind environments and constraints }}
+{{ lemwcf  witness type convert_quants_witness; check convert_quants_w_check; }}
 by
 
 E_k |- kind ~> k
@@ -567,6 +649,7 @@ E_d |- 'x IN {num1 , ... , numn} ~> {}, {'x IN {num1 , ..., numn}}
 defn 
 E_d |- typschm ~> t , E_k2 , S_N :: :: convert_typschm :: convert_typschm_
 {{ com Convert source types with typeschemes to internal types and kind environments }}
+{{ lemwcf  witness type convert_typschm_witness; check convert_typschm_w_check; }}
 by
 
 E_d |- typ ~> t
@@ -582,6 +665,7 @@ E_d |- forall quant_item1 , ... , quant_itemn . typ ~> t, E_k, S_N1 u+ ... u+ S_
 defn
 E_d |- typ ~> t :: :: convert_typ :: convert_typ_ 
 {{ com Convert source types to internal types }}
+{{ lemwcf  witness type convert_typ_witness; check convert_typ_w_check; }}
 by
  
 E_k('x) gives K_Typ
@@ -614,11 +698,17 @@ E_d |- typ ~> t2
 defn
 E_d , k |- typ_arg ~> t_arg :: :: convert_targ :: convert_targ_
 {{ com Convert source type arguments to internals }}
+{{ lemwcf  witness type convert_targ_witness; check convert_targ_w_check; }}
 by
  
+E_d |- typ ~> t
+------------------------------------- :: typ
+E_d, K_Typ |- typ ~> t
+
 defn 
 |- nexp ~> ne :: :: convert_nexp :: convert_nexp_ 
 {{ com Convert and normalize numeric expressions }}
+{{ lemwcf  witness type convert_nexp_witness; check convert_nexp_w_check; }}
 by
  
 ------------------------------------------------------------ :: var
@@ -642,7 +732,9 @@ by
 |- 2** nexp ~> 2 ** ne
 
 defn 
-E_d |- exp : t :> t' , exp' , S_N :: :: coerce_typ :: coerce_typ_ by
+E_d |- exp : t :> t' , exp' , S_N :: :: coerce_typ :: coerce_typ_
+{{ lemwcf  witness type coerce_typ_witness; check coerce_typ_w_check; }}
+by
 
 E_d |- t = u
 -------------------------------------- :: eq
@@ -660,16 +752,17 @@ E_e(t) gives { </numi |-> idi//i/> num |-> id </num'j |-> id'j//j/> }
 ------------------------------------------------ :: to_enumerate
 <E_k,E_r,E_e> |- exp: enum num zero order :> t,id, {}
 
-E_e(t) gives { num1 |-> id1 ... numn |-> idn }
-exp' = switch exp { case id1 -> num1 ... case idn -> numn }
+E_e(t) gives { num |-> id </num''i |-> id''i//i/> num' |-> id' }
+exp' = switch exp { case id -> num </case id''i -> num''i//i/> case id' -> num' }
 ------------------------------------------------ :: from_enumerate
-<E_k,E_r,E_e> |- exp: t :> enum num1 numn + (- num1) inc, exp', {}
+<E_k,E_r,E_e> |- exp: t :> enum num num' + (- num) inc, exp', {}
 
-exp' = to_num exp
+exp' = :E_app: to_num(exp)
 -------------------------------------- :: to_num
 E_d |- exp: vector ne1 ne2 order :t_arg_typ: bit :> enum ne3 ne4 order,exp', { ne3 = zero, ne4 = 2** ne2}
 
-exp' = to_vec exp
+exp' = :E_app: to_vec(exp)
+'x = fresh_kid(E_d)
 -------------------------------------- :: from_num
 E_d |- exp: enum ne1 ne2 order :> vector ne3 ne4 order :t_arg_typ: bit,exp', {ne3 = zero, 'x = ne1 + ne2, ne4 = 2** 'x}
 
@@ -769,29 +862,29 @@ length(pat1 .. patn) = num
 ----------------------------------------------------------- :: vector
 E |- [ pat1 , .. , patn ] : vector :t_arg_nexp: 'x num+'x inc t gives (E_t1 u+ .. u+ E_tn),S_N1 u+ .. u+ S_Nn
 
-E |- pat1 : t gives E_t1,S_N1 ... E |- patn : t gives E_tn,S_Nn
-disjoint doms(E_t1 , ... , E_tn)
-num1 lt ... lt numn
------------------------------------------------------------ :: indexedVectorInc
-E |- [ num1 = pat1 , ... , numn = patn ] : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 inc t gives (E_t1 u+ ... u+ E_tn), {'x<=num1, 'x2 >= numn + (- num1)} u+ S_N1 u+ ... u+ S_Nn
+%E |- pat1 : t gives E_t1,S_N1 ... E |- patn : t gives E_tn,S_Nn
+%disjoint doms(E_t1 , ... , E_tn)
+%num1 lt ... lt numn
+%----------------------------------------------------------- :: indexedVectorInc
+%E |- [ num1 = pat1 , ... , numn = patn ] : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 inc t gives (E_t1 u+ ... u+ E_tn), {'x<=num1, 'x2 >= numn + (- num1)} u+ S_N1 u+ ... u+ S_Nn
 
-E |- pat1 : t gives E_t1,S_N1 ... E |- patn : t gives E_tn,S_Nn
-disjoint doms(E_t1 , ... , E_tn)
-num1 gt ... gt numn
------------------------------------------------------------ :: indexedVectorDec
-E |- [ num1 = pat1 , ... , numn = patn ] : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 dec t gives (E_t1 u+ ... u+ E_tn), {'x>=num1,'x2<=num1 +(-numn)} u+ S_N1 u+ ... u+ S_Nn
+%E |- pat1 : t gives E_t1,S_N1 ... E |- patn : t gives E_tn,S_Nn
+%disjoint doms(E_t1 , ... , E_tn)
+%num1 gt ... gt numn
+%----------------------------------------------------------- :: indexedVectorDec
+%E |- [ num1 = pat1 , ... , numn = patn ] : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 dec t gives (E_t1 u+ ... u+ E_tn), {'x>=num1,'x2<=num1 +(-numn)} u+ S_N1 u+ ... u+ S_Nn
 
-E |- pat1 : vector ne1 ne'1 inc t gives E_t1,S_N1 ... E |- patn : vector nen ne'n inc t gives E_tn,S_Nn
-disjoint doms(E_t1 , ... , E_tn)
-S_N0 = consistent_increase ne1 ne'1 ... nen ne'n
------------------------------------------------------------ :: vectorConcatInc
-E |- pat1 : ... : patn : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 inc t gives (E_t1 u+ ... u+ E_tn),{'x<=ne1,'x2>= ne'1 + ... + ne'n} u+ S_N0 u+ S_N1 u+ ... u+ S_Nn
+%E |- pat1 : vector ne1 ne'1 inc t gives E_t1,S_N1 ... E |- patn : vector nen ne'n inc t gives E_tn,S_Nn
+%disjoint doms(E_t1 , ... , E_tn)
+%S_N0 = consistent_increase ne1 ne'1 ... nen ne'n
+%----------------------------------------------------------- :: vectorConcatInc
+%E |- pat1 : ... : patn : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 inc t gives (E_t1 u+ ... u+ E_tn),{'x<=ne1,'x2>= ne'1 + ... + ne'n} u+ S_N0 u+ S_N1 u+ ... u+ S_Nn
 
-E |- pat1 : vector ne1 ne'1 dec t gives E_t1,S_N1 ... E |- patn : vector nen ne'n dec t gives E_tn,S_Nn
-disjoint doms(E_t1 , ... , E_tn)
-S_N0 = consistent_decrease ne1 ne'1 ... nen ne'n
------------------------------------------------------------ :: vectorConcatDec
-E |- pat1 : ... : patn : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 inc t gives (E_t1 u+ ... u+ E_tn),{'x>=ne1,'x2>= ne'1 + ... + ne'n} u+ S_N0 u+ S_N1 u+ ... u+ S_Nn
+%E |- pat1 : vector ne1 ne'1 dec t gives E_t1,S_N1 ... E |- patn : vector nen ne'n dec t gives E_tn,S_Nn
+%disjoint doms(E_t1 , ... , E_tn)
+%S_N0 = consistent_decrease ne1 ne'1 ... nen ne'n
+%----------------------------------------------------------- :: vectorConcatDec
+%E |- pat1 : ... : patn : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 inc t gives (E_t1 u+ ... u+ E_tn),{'x>=ne1,'x2>= ne'1 + ... + ne'n} u+ S_N0 u+ S_N1 u+ ... u+ S_Nn
 
 E |- pat1 : t1 gives E_t1,S_N1 .... E |- patn : tn gives E_tn,S_Nn
 disjoint doms(E_t1,....,E_tn)
@@ -993,7 +1086,7 @@ id NOTIN dom(E_t)
 E_t(id) gives t1 -> t {</base_effecti//i/>, wmem, </base_effect'j//j/>} Extern {}
 <E_t,E_d> |- exp : t1 gives I,E_t1
 ---------------------------------------------------------- :: wmem
-<E_t,E_d> |- id exp : t gives I u+ <{},{wmem}>,E_t
+<E_t,E_d> |- :LEXP_memory: id(exp) : t gives I u+ <{},{wmem}>,E_t
 
 E |- exp : enum ne1 ne2 order gives I1,E_t
 E |- lexp : vector ne3 ne4 order t gives I2,E_t
@@ -1012,8 +1105,8 @@ E |- lexp : vector ne5 ne6 order t gives I3,E_t
 ---------------------------------------------------------- :: wslice_spread
 E |- lexp [exp1 : exp2] : t gives I1 u+ I2 u+ I3 u+ <{ne5<=ne1, ne1+ne2 <= ne3, ne3+ne4<= ne5+ne6},pure> ,E_t
 
-E_r (id1 t_args) gives </idi : ti//i/> id : t </id'j : t'j//j/>
-<E_t,<E_k,E_r,E_e>> |- lexp : id1 t_args gives I,E_t
+E_r (id'' t_args) gives </idi : ti//i/> id : t </id'j : t'j//j/>
+<E_t,<E_k,E_r,E_e>> |- lexp : id'' t_args gives I,E_t
 ---------------------------------------------------------- :: wrecord
 <E_t,<E_k,E_r,E_e>> |- lexp.id : t gives I,E_t
 
@@ -1055,9 +1148,9 @@ E_d |- typedef id name_scm_opt = const struct { typ1 id1 ; .. ; typn idn semi_op
 <E_k u+ </E_ki//i/>,E_r,E_e> |- typ1 ~> t1 .. <E_k u+ </E_ki//i/>,E_r,E_e> |- typn ~> tn
 { id'1 |-> k1, .. ,id'm |-> km } = u+ </E_ki//i/>
 E_r1 = { {id1:t1, .., idn:tn} |-> {id'1 |-> k1, ..,id'm |-> km}, u+</S_Ni//i/>, None, id :t_arg_typ: id'1 ..  :t_arg_typ: id'm }
-E_k1 = { id |-> K_Lam (k1 .. km -> K_Typ) }
+E_k1' = { id |-> K_Lam (k1 .. km -> K_Typ) }
 ----------------------------------------------------------- :: quant_record
-<E_k,E_r,E_e> |- typedef id name_scm_opt = const struct forall </quant_itemi//i/> . { typ1 id1 ; .. ; typn idn semi_opt } gives <{},<E_k1,E_r1,{}>>
+<E_k,E_r,E_e> |- typedef id name_scm_opt = const struct forall </quant_itemi//i/> . { typ1 id1 ; .. ; typn idn semi_opt } gives <{},<E_k',E_r1,{}>>
 
 E_t = { id1 |-> t1 -> :T_id: id pure Ctor {}, ..., idn |-> tn -> :T_id: id pure Ctor {} }
 E_k1 = { id |-> K_Typ }
@@ -1067,12 +1160,12 @@ E_k1 = { id |-> K_Typ }
 
 </ <E_k,E_r,E_e> |- quant_itemi ~> E_ki, S_Ni//i/>
 { id'1 |-> k1, ... , id'm |-> km } = u+ </E_ki//i/>
-E_k1 = { id |-> K_Lam (k1 ... km -> K_Typ) } u+ </E_ki//i/>
-<E_k u+ E_k1,E_r,E_e> |- typ1 ~> t1 ... <E_k u+ E_k1,E_r,E_e> |- typn ~> tn
+E_k' = { id |-> K_Lam (k1 ... km -> K_Typ) } u+ </E_ki//i/>
+<E_k u+ E_k',E_r,E_e> |- typ1 ~> t1 ... <E_k u+ E_k',E_r,E_e> |- typn ~> tn
 t = id :t_arg_typ: id'1 ... :t_arg_typ: id'm
-E_t = { id1 |-> E_k1, u+</S_Ni//i/>, Ctor, t1 -> t pure Ctor {}, ... , idn |-> E_k1, u+</S_Ni//i/>, Ctor, tn -> t pure Ctor {} }
+E_t = { id1 |-> E_k', u+</S_Ni//i/>, Ctor, t1 -> t pure Ctor {}, ... , idn |-> E_k', u+</S_Ni//i/>, Ctor, tn -> t pure Ctor {} }
 ------------------------------------------------------------ :: quant_union
-<E_k,E_r,E_e> |- typedef id name_scm_opt = const union forall </quant_itemi//i/> . { typ1 id1 ; ... ; typn idn semi_opt } gives <E_t,<E_k1,{},{}>>
+<E_k,E_r,E_e> |- typedef id name_scm_opt = const union forall </quant_itemi//i/> . { typ1 id1 ; ... ; typn idn semi_opt } gives <E_t,<E_k',{},{}>>
 
 % Save these as enumerations for coercion
 E_t = {id1 |-> id, ..., idn |-> id}
@@ -1085,61 +1178,61 @@ E |- fundef gives E_t , S_N :: :: check_fd :: check_fd_
 {{ com Check a function definition }}
 by
 
-E_t(id) gives E_k1,S_N1,None, t1 -> t effect None S_N1
+E_t(id) gives E_k',S_N',None, t1 -> t effect None S_N'
 </E_d |- quant_itemi ~> E_ki,S_Ni//i/>
-S_N2 = u+ </S_Ni//i/>
-E_k1 ~= </E_ki//i/>
-E_d1 = <E_k1,{},{}> u+ E_d
+S_N'' = u+ </S_Ni//i/>
+E_k' ~= </E_ki//i/>
+E_d1 = <E_k',{},{}> u+ E_d
 E_d1 |- typ ~> t
-</<E_t,E_d1> |- patj : t1 gives E_tj,S_N'j//j/>
-</<(E_t u+ E_tj),E_d1> |- expj : t gives <S_N''j,effect'j>,E_t'j//j/>
-S_N3 = u+ </S_N'j u+ S_N''j//j/>
+</<E_t,E_d1> |- patj : t1 gives E_tj,S_N'''j//j/>
+</<(E_t u+ E_tj),E_d1> |- expj : t gives <S_N''''j,effect'j>,E_t'j//j/>
+S_N''''' = u+ </S_N'''j u+ S_N''''j//j/>
 effect = u+ </effect'j//j/>
-S_N = resolve ( S_N1 u+ S_N2 u+ S_N3)
+S_N = resolve ( S_N' u+ S_N'' u+ S_N''''')
 ------------------------------------------------------------- :: rec_function
 <E_t,E_d> |- function rec forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives E_t, S_N
 
-E_t(id) gives t1 -> t effect None S_N1
+E_t(id) gives t1 -> t effect None S_N'
 E_d |- typ ~> t
-</<E_t,E_d> |- patj : t1 gives E_tj,S_N'j//j/>
-</<(E_t u+ E_tj),E_d> |- expj : t gives <S_N''j,effect'j>,E_t'j//j/>
+</<E_t,E_d> |- patj : t1 gives E_tj,S_N''j//j/>
+</<(E_t u+ E_tj),E_d> |- expj : t gives <S_N'''j,effect'j>,E_t'j//j/>
 effect = u+ </effect'j//j/>
-S_N = resolve (S_N1 u+ </S_N'j u+ S_N''j//j/>)
+S_N = resolve (S_N' u+ </S_N''j u+ S_N'''j//j/>)
 ------------------------------------------------------------- :: rec_function2
 <E_t,E_d> |- function rec typ effectkw effect </id patj = expj//j/> gives E_t, S_N
 
 </<E_k,E_r,E_e> |- quant_itemi ~> E_ki,S_Ni//i/>
-S_N1 = u+ </S_Ni//i/>
-E_k2 = E_k u+ </E_ki//i/>
-<E_k2,E_r,E_e> |- typ ~> t
-</<E_t,<E_k2,E_r,E_e>> |- patj : t1 gives E_tj,S_N'j//j/>
-E_t2 = (E_t u+ {id |-> t1 -> t effect None S_N1})
-</<(E_t2 u+ E_tj),<E_k2,E_r,E_e>> |- expj : t gives <S_N'j,effect'j>,E_t'j//j/>
+S_N' = u+ </S_Ni//i/>
+E_k' = E_k u+ </E_ki//i/>
+<E_k',E_r,E_e> |- typ ~> t
+</<E_t,<E_k',E_r,E_e>> |- patj : t1 gives E_tj,S_N''j//j/>
+E_t' = (E_t u+ {id |-> t1 -> t effect None S_N'})
+</<(E_t' u+ E_tj),<E_k',E_r,E_e>> |- expj : t gives <S_N'''j,effect'j>,E_t'j//j/>
 effect = u+ </effect'j//j/>
-S_N = resolve (S_N1 u+ </S_N'j u+ S_N''j//j/>)
+S_N = resolve (S_N' u+ </S_N''j u+ S_N'''j//j/>)
 ------------------------------------------------------------- :: rec_function_no_spec
-<E_t,<E_k,E_r,E_e>> |- function rec forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives E_t2, S_N
+<E_t,<E_k,E_r,E_e>> |- function rec forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives E_t', S_N
 
 E_d |- typ ~> t
 </<E_t,E_d> |- patj : t1 gives E_tj,S_N'j//j/>
-E_t2 = (E_t u+ {id |-> t1 -> t effect None {}})
-</<(E_t2 u+ E_tj),E_d> |- expj : t gives <S_N'j,effect'j>,E_t'j//j/>
+E_t' = (E_t u+ {id |-> t1 -> t effect None {}})
+</<(E_t' u+ E_tj),E_d> |- expj : t gives <S_N'j,effect'j>,E_t'j//j/>
 effect = u+ </effect'j//j/>
 S_N = resolve (u+ </S_N'j u+ S_N''j//j/>)
 ------------------------------------------------------------- :: rec_function_no_spec2
-<E_t,E_d> |- function rec typ effectkw effect </id patj = expj//j/> gives E_t2, S_N
+<E_t,E_d> |- function rec typ effectkw effect </id patj = expj//j/> gives E_t', S_N
 
-t2 = t1 -> t effect None S_N1
-E_t(id) gives E_k1,S_N1,None, t2
+t2 = t1 -> t effect None S_N'
+E_t(id) gives E_k',S_N',None, t2
 </<E_k,E_r,E_e> |- quant_itemi ~> E_ki,S_Ni//i/>
-S_N2 = u+ </S_Ni//i/>
-E_k1 ~= </E_ki//i/>
-<E_k1 u+ E_k,E_r,E_e> |- typ ~> t
-</<E_t,<E_k u+ E_k1,E_r,E_e>> |- patj : t1 gives E_tj,S_N'j//j/>
-</<(E_t u- {id |-> t2} u+ E_tj),<E_k u+ E_k1,E_r,E_e>> |- expj : t gives <S_N''j,effect'j>,E_t'j//j/>
-S_N3 = u+ </S_N'j u+ S_N''j//j/>
+S_N'' = u+ </S_Ni//i/>
+E_k'' ~= </E_ki//i/>
+<E_k'' u+ E_k,E_r,E_e> |- typ ~> t
+</<E_t,<E_k u+ E_k'',E_r,E_e>> |- patj : t1 gives E_tj,S_N''j//j/>
+</<(E_t u- {id |-> t2} u+ E_tj),<E_k u+ E_k'',E_r,E_e>> |- expj : t gives <S_N'''j,effect'j>,E_t'j//j/>
+S_N'''' = u+ </S_N''j u+ S_N'''j//j/>
 effect = u+ </effect'j//j/>
-S_N = resolve ( S_N1 u+ S_N2 u+ S_N3)
+S_N = resolve ( S_N' u+ S_N'' u+ S_N'''')
 ------------------------------------------------------------- :: function
 <E_t,<E_k,E_r,E_e>> |- function forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives E_t, S_N
 
@@ -1153,25 +1246,25 @@ S_N = resolve (S_N1 u+ </S_N'j u+ S_N''j//j/>)
 <E_t,E_d> |- function typ effectkw effect </id patj = expj//j/> gives E_t, S_N
 
 </<E_k,E_r,E_e> |- quant_itemi ~> E_ki,S_Ni//i/>
-S_N1 = u+ </S_Ni//i/>
-E_k2 = E_k u+ </E_ki//i/>
-<E_k2,E_r,E_e> |- typ ~> t
-</<E_t,<E_k2,E_r,E_e>> |- patj : t1 gives E_tj,S_N'j//j/>
-E_t2 = (E_t u+ {id |-> t1 -> t effect None S_N1})
-</<(E_t u+ E_tj),<E_k2,E_r,E_e>> |- expj : t gives <S_N'j,effect'j>,E_t'j//j/>
+S_N' = u+ </S_Ni//i/>
+E_k'' = E_k u+ </E_ki//i/>
+<E_k'',E_r,E_e> |- typ ~> t
+</<E_t,<E_k'',E_r,E_e>> |- patj : t1 gives E_tj,S_N''j//j/>
+E_t' = (E_t u+ {id |-> t1 -> t effect None S_N'})
+</<(E_t u+ E_tj),<E_k'',E_r,E_e>> |- expj : t gives <S_N''j,effect'j>,E_t'j//j/>
 effect = u+ </effect'j//j/>
-S_N = resolve (S_N1 u+ </S_N'j u+ S_N''j//j/>)
+S_N = resolve (S_N' u+ </S_N'j u+ S_N''j//j/>)
 ------------------------------------------------------------- :: function_no_spec
-<E_t,<E_k,E_r,E_e>> |- function forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives E_t2, S_N
+<E_t,<E_k,E_r,E_e>> |- function forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives E_t', S_N
 
 E_d |- typ ~> t
 </<E_t,E_d> |- patj : t1 gives E_tj,S_N'j//j/>
-E_t2 = (E_t u+ {id |-> t1 -> t effect None S_N})
+E_t' = (E_t u+ {id |-> t1 -> t effect None S_N})
 </<(E_t u+ E_tj),E_d> |- expj : t gives <S_N'j,effect'j>,E_t'j//j/>
 effect = u+ </effect'j//j/>
 S_N = resolve (u+ </S_N'j u+ S_N''j//j/>)
 ------------------------------------------------------------- :: function_no_spec2
-<E_t,E_d> |- function typ effectkw effect </id patj = expj//j/> gives E_t2, S_N
+<E_t,E_d> |- function typ effectkw effect </id patj = expj//j/> gives E_t', S_N
 
 
 defn

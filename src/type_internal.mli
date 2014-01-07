@@ -68,3 +68,9 @@ type nexp_range =
 type tannot = (t * tag * nexp_range list) option
 
 val initial_kind_env : kind Envmap.t
+
+(* type_eq mutates to unify variables, and will raise an exception if two types cannot be equal *)
+val type_eq : Parse_ast.l -> t -> t -> t * nexp_range list
+
+(* type_eq mutates to unify variables, and will raise an exception if the first type cannot be coerced into the second *)
+val type_coerce : Parse_ast.l -> t -> t -> t * nexp_range list
