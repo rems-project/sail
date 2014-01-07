@@ -10,5 +10,7 @@ typedef maybe = const union forall 'a. { Nne; 'a Sme; }
 typedef colors = enumerate { red; green; blue }
 typedef creg = register bits [5:'i] { 5 : h ; 6..7 : j}
 let bool e = true
+let bit v = bitzero
+let ( bit [ 32 ] ) v1 = 0b101
 
 function unit main _ = ()
