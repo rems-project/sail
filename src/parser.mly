@@ -123,7 +123,7 @@ let star = "*"
 
 /*Terminals with no content*/
 
-%token And As Bits By Case Clause Const Dec Default Deinfix Effect EFFECT End Enumerate Else Extern
+%token And As Bitzero Bitone Bits By Case Clause Const Dec Default Deinfix Effect EFFECT End Enumerate Else Extern
 %token False Forall Foreach Function_ If_ In IN Inc Let_ Member Nat Order Pure Rec Register
 %token Rreg Wreg Rmem Wmem Undef Unspec Nondet
 %token Scattered Struct Switch Then True TwoStarStar Type TYPE Typedef Undefined Union With Val
@@ -394,6 +394,10 @@ lit:
     { lloc (L_hex $1) }
   | Undefined
     { lloc L_undef }
+  | Bitzero
+    { lloc L_zero }
+  | Bitone
+    { lloc L_one }
 
 
 atomic_pat:

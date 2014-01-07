@@ -60,6 +60,8 @@ let kw_table =
     [
      ("and",                     (fun _ -> And));
      ("as",                      (fun _ -> As));
+     ("bitzero",                 (fun _ -> Bitzero));
+     ("bitone",                  (fun _ -> Bitone));
      ("bits",                    (fun _ -> Bits));
      ("by",                      (fun _ -> By));
      ("case",			 (fun _ -> Case));
