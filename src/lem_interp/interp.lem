@@ -12,6 +12,8 @@ open import Interp_ast
 let foldr2 f x l l' = List.foldr (Tuple.uncurry f) x (List.zip l l')
 let map2 f l l' = List.map (Tuple.uncurry f) (List.zip l l')
 
+let get_id id = match id with Id s -> s | DeIid s -> s end
+
 type value =
  | V_boxref of nat 
  | V_lit of lit
@@ -470,7 +472,8 @@ and interp_main t_level l_env l_mem exp =
 			     | Just(regf) -> 
 			       (Action (Read_reg regf Nothing) (Frame (Id "0") (E_id (Id "0")) l_env l_mem Top), l_mem, l_env) 
 			     | Nothing ->                                  
-			       (Error "unbound identifier",l_mem,l_env)
+             let name = get_id id in
+			       (Error "unbound identifier" (* XXX ^ name *),l_mem,l_env)
 			     end 
                             end
 		end
@@ -645,7 +648,7 @@ and interp_main t_level l_env l_mem exp =
 	   | Just(funcls) -> 
              (match find_funcl funcls v with
 	     | Nothing -> 
-               let name = match id with Id s -> s | DeIid s -> s end in
+               let name = get_id id in
                (Error ("No matching pattern for function " (* XXX ^ name *)),l_mem,l_env)
 	     | Just(env,exp) -> 
                resolve_outcome (interp_main t_level env l_mem exp)
