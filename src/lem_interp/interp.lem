@@ -432,8 +432,9 @@ let rec find_case pexps value =
     if is_matching then Just(env,e) else find_case pexps value
   end
 
-(*top_level is a three tuple of (all definitions, external funcitons, declared registers, memory functions (typ expected to be num -> num -> a), and Typedef union constructors) *)
-type top_level = defs * list (id * string) * list (id*reg_form) * list (id * typ) * list (id * typ)
+(*top_level is a tuple of 
+  (all definitions, external functions, letbound values, declared registers, memory functions (typ expected to be num -> num -> a), and Typedef union constructors) *)
+type top_level = Env of defs * list (id * string) * env * list (id*reg_form) * list (id * typ) * list (id * typ)
 
 val interp_main : top_level -> env -> mem -> exp -> (outcome * mem * env)
 val exp_list : top_level -> (list exp -> exp) -> (list value -> value) -> env -> mem -> list value -> list exp -> (outcome * mem * env)
@@ -467,14 +468,18 @@ and interp_main t_level l_env l_mem exp =
 		                  | V_boxref n ->(Value (in_mem l_mem n),l_mem,l_env)
 		                  | _ -> (Value value,l_mem,l_env) end
 		 | Nothing -> match t_level with
-		           | (defs,externs,regs,mems,ctors) ->
-			     match in_reg regs id with
-			     | Just(regf) -> 
-			       (Action (Read_reg regf Nothing) (Frame (Id "0") (E_id (Id "0")) l_env l_mem Top), l_mem, l_env) 
-			     | Nothing ->                                  
-             let name = get_id id in
-			       (Error "unbound identifier" (* XXX ^ name *),l_mem,l_env)
-			     end 
+		           | (Env defs externs lets regs mems ctors) ->
+                             match in_env lets id with
+                             | Just(value) -> (Value value,l_mem,l_env) 
+                             | Nothing -> 
+			       match in_reg regs id with
+			       | Just(regf) -> 
+			         (Action (Read_reg regf Nothing) (Frame (Id "0") (E_id (Id "0")) l_env l_mem Top), l_mem, l_env) 
+			       | Nothing ->                                  
+                                 let name = get_id id in
+			         (Error "unbound identifier" (* XXX ^ name *),l_mem,l_env)
+			        end 
+                              end 
                             end
 		end
     | E_if cond thn els ->
@@ -643,7 +648,7 @@ and interp_main t_level l_env l_mem exp =
       (match (exp_list t_level (fun es -> E_app f es) V_tuple l_env l_mem [] args) with
       | (Value v,lm,le) -> 
          (match (f,t_level) with
-      	 | (id,(defs,externs,regs,mems,ctors)) -> 
+      	 | (id,(Env defs externs lets regs mems ctors)) -> 
 	   (match find_function defs id with
 	   | Just(funcls) -> 
              (match find_funcl funcls v with
@@ -679,7 +684,7 @@ and interp_main t_level l_env l_mem exp =
                          resolve_outcome (interp_main t_level l_env lm r)
                                          (fun rv lm le -> 
 			                   (match t_level with
-			                   | (defs,externs,regs,mems,ctors) ->
+			                   | (Env defs externs lets regs mems ctors) ->
 				             (match find_function defs op with
 				             | Nothing -> 
                                                (match find_extern externs op with
@@ -726,7 +731,7 @@ and interp_main t_level l_env l_mem exp =
     end
 
 and create_write_message_or_update t_level value l_env l_mem is_top_level lexp =
-   let (defs,externs,regs,mems,ctors) = t_level in
+   let (Env defs externs lets regs mems ctors) = t_level in
    match lexp with
     | LEXP_id id -> 
       match in_env l_env id with
@@ -856,11 +861,31 @@ and interp_letbind t_level l_env l_mem lbind =
     | e -> (e,Nothing) end
 end	
 
+let rec to_global_letbinds (Defs defs) t_level =
+  let  (Env defs' externs lets regs mems ctors) = t_level in
+  match defs with
+  | [] -> ((Value (V_lit L_unit), emem, []),t_level)
+  | def ::defs ->
+    match def with
+    | DEF_val lbind ->
+      match interp_letbind t_level [] emem lbind with
+      | ((Value v,lm,le),_) -> to_global_letbinds (Defs defs) (Env defs' externs (lets++le) regs mems ctors)
+      | ((Action a s,lm,le),_) -> ((Error "Top level let may not access memory, registers or (for now) external functions", lm,le),t_level)
+      | (e,_) -> (e,t_level) end
+    | _ -> to_global_letbinds (Defs defs) t_level
+    end
+  end
+
 
 let interp defs exp =
-  let t_level = (defs, to_externs defs,to_registers defs,to_memory_ops defs,to_data_constructors defs) in 
-  match interp_main t_level [] emem exp with
-  | (o,_,_) -> o
+  let t_level = Env defs (to_externs defs) [] (to_registers defs) (to_memory_ops defs) (to_data_constructors defs) in 
+  let (o,t_level) = to_global_letbinds defs t_level in
+  match o with
+  | (Value _,_,_) -> 
+     match interp_main t_level [] emem exp with
+     | (o,_,_) -> o
+     end 
+  | (o,_,_) -> o 
   end
 
 let rec resume_main t_level stack value =
@@ -878,5 +903,10 @@ let rec resume_main t_level stack value =
   end
 
 let resume defs stack value =
-  let t_level = (defs, to_externs defs, to_registers defs,to_memory_ops defs,to_data_constructors defs) in
-  resume_main t_level stack value 
+  let t_level = Env defs (to_externs defs) [] (to_registers defs) (to_memory_ops defs) (to_data_constructors defs) in 
+  let (o,t_level) = to_global_letbinds defs t_level in
+  match o with
+  | (Value _,_,_) -> 
+     resume_main t_level stack value
+  | (o,_,_) -> o 
+  end
