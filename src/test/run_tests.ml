@@ -2,6 +2,7 @@ let tests = [
   "test1", Test1.defs;
   "test2", Test2.defs;
   "test3", Test3.defs;
+  "pattern", Pattern.defs;
   "vectors", Vectors.defs;
 ] ;;
 

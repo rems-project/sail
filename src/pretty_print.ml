@@ -547,17 +547,18 @@ and pp_lem_exp ppf (E_aux(e,_)) =
       kwd "E_record_update" pp_lem_exp exp kwd "FES_Fexps" (list_pp pp_semi_lem_fexp pp_lem_fexp) fexps 
   | E_field(fexp,id) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "E_field" pp_lem_exp fexp pp_lem_id id
   | E_case(exp,pexps) -> 
-    fprintf ppf "@[<0>(%a %a [%a])@]" kwd "E_case" pp_lem_exp exp (list_pp pp_lem_case pp_lem_case) pexps
+    fprintf ppf "@[<0>(%a %a [%a])@]" kwd "E_case" pp_lem_exp exp (list_pp pp_semi_lem_case pp_lem_case) pexps
   | E_let(leb,exp) -> fprintf ppf "@[<0>(%a %a %a) @]" kwd "E_let" pp_lem_let leb pp_lem_exp exp
   | E_assign(lexp,exp) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "E_assign" pp_lem_lexp lexp pp_lem_exp exp
 
 and pp_semi_lem_exp ppf e = fprintf ppf "@[<1>%a%a@]" pp_lem_exp e kwd ";"
 
 and pp_lem_fexp ppf (FE_aux(FE_Fexp(id,exp),_)) = fprintf ppf "@[<1>(%a %a %a)@]" kwd "FE_Fexp" pp_lem_id id pp_lem_exp exp
-and pp_semi_lem_fexp ppf fexp = fprintf ppf "@[<1>(%a %a)@]" pp_lem_fexp fexp kwd ";"
+and pp_semi_lem_fexp ppf fexp = fprintf ppf "@[<1>%a %a@]" pp_lem_fexp fexp kwd ";"
 
 and pp_lem_case ppf (Pat_aux(Pat_exp(pat,exp),_)) = 
-  fprintf ppf "@[<1>(%a %a@ %a)@]" kwd "Pat_exp" pp_lem_pat pat pp_lem_exp exp 
+  fprintf ppf "@[<1>(%a %a@ %a)@]" kwd "Pat_exp" pp_lem_pat pat pp_lem_exp exp
+and pp_semi_lem_case ppf case = fprintf ppf "@[<1>%a %a@]" pp_lem_case case kwd ";"
 
 and pp_lem_lexp ppf (LEXP_aux(lexp,_)) =
   match lexp with
