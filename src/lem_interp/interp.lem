@@ -3,6 +3,7 @@ import Map
 import Map_extra
 import Maybe
 import List_extra
+import String
 
 open import Interp_ast
 
@@ -158,6 +159,14 @@ let update_mem (Mem c m) loc value =
   let m' = Map.delete loc m in
   let m' = Map.insert loc value m' in
   Mem c m'
+
+val litV_to_vec : lit -> value
+let litV_to_vec l =
+  match l with
+  | L_bin s -> 
+    let bits = String.toCharList s in
+    V_vector 0 true []
+  end
 
 val access_vector : value -> nat -> value
 let access_vector v n =
