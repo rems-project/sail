@@ -160,12 +160,25 @@ let update_mem (Mem c m) loc value =
   let m' = Map.insert loc value m' in
   Mem c m'
 
+val is_lit_vector : lit -> bool
+let is_lit_vector l = 
+  match l with
+  | L_bin _ -> true 
+  | L_hex _ -> true
+  | _ -> false
+end
+
 val litV_to_vec : lit -> value
 let litV_to_vec l =
   match l with
+  | L_hex s ->
+    let hexes = String.toCharList s in
+    V_vector 0 true []
   | L_bin s -> 
     let bits = String.toCharList s in
-    V_vector 0 true []
+    let exploded_bits = List.map (fun c -> String.toString [c]) bits in
+    let bits = List.map (fun s -> match s with | "0" -> (V_lit L_zero) | "1" -> (V_lit L_one) end) exploded_bits in
+    V_vector 0 true bits
   end
 
 val access_vector : value -> nat -> value
@@ -313,6 +326,20 @@ val match_pattern : pat -> value -> bool * list (id * value)
 let rec match_pattern p value =
   match p with 
   | P_lit(lit) -> 
+    if is_lit_vector lit then
+      let (V_vector n inc bits) = litV_to_vec lit in
+      match value with
+      | V_lit litv -> 
+        if is_lit_vector litv then 
+          let (V_vector n' inc' bits') = litV_to_vec litv in
+          if n=n' && inc = inc' then (foldr2 (fun l r rest -> (l = r) && rest) true bits bits', [])
+          else (false,[])
+        else (false,[])
+      | V_vector n' inc' bits' -> 
+        if n=n' && inc = inc' then (foldr2 (fun l r rest -> (l=r) && rest) true bits bits',[])
+        else (false,[])
+      | _ -> (false,[]) end
+    else
     match value with
     | V_lit(litv) -> (lit = litv, [])
     | _ -> (false,[])
@@ -470,7 +497,7 @@ let rec exp_list t_level build_e build_v l_env l_mem vals exps =
 
 and interp_main t_level l_env l_mem exp =
     match exp with
-    | E_lit lit -> (Value (V_lit lit), l_mem,l_env)
+    | E_lit lit -> if is_lit_vector lit then (Value (litV_to_vec lit),l_mem,l_env) else (Value (V_lit lit), l_mem,l_env)
     | E_cast typ exp -> interp_main t_level l_env l_mem exp (* Potentially introduce coercions ie vectors and numbers *)
     | E_id id -> match in_env l_env id with
                  | Just(value) -> match value with
