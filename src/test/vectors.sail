@@ -5,10 +5,7 @@ function unit main _ = {
 
   i := [bitzero, bitzero, bitone, bitzero];
   i := 0b101 ;
-  (* unbound identifier *)
   i[0] := bitzero;
-  (* unbound identifier *)
+  (* XXX Vector access of non-vector *)
   v[0];
-
-
 }
