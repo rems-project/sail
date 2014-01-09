@@ -14,3 +14,4 @@ let bit v = bitzero
 let ( bit [ 32 ] ) v1 = 0b101
 
 function bit main _ = v1[0]
+

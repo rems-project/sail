@@ -41,6 +41,18 @@ let rec val_to_string = function
      sprintf "constructor %s %s" (id_to_string id) (val_to_string value)
 ;;
 
+let rec env_to_string = function
+  | [] -> ""
+  | [id,v] -> sprintf "%s |-> %s" (id_to_string id) (val_to_string v)
+  | (id,v)::env -> sprintf "%s |-> %s, %s" (id_to_string id) (val_to_string v) (env_to_string env)
+
+let rec stack_to_string = function
+  | Top -> "Top"
+  | Frame(id,exp,env,mem,s) ->
+    sprintf "(Frame of %s, e, (%s), m, %s)" (id_to_string id) (env_to_string env) (stack_to_string s)
+;;  
+
+
 let reg_to_string = function Reg (id,_) | SubReg (id,_,_) -> id_to_string id ;;
 let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%d, %d)" x y
 let act_to_string = function
@@ -88,6 +100,7 @@ let run (name, test) =
   | Value v -> eprintf "%s: returned %s\n" name (val_to_string v)
   | Action (a, s) ->
       eprintf "%s: suspended on action %s\n" name (act_to_string a);
+      (*eprintf "%s: suspended on action %s, with stack %s\n" name (act_to_string a) (stack_to_string s);*)
       let return, env' = perform_action env a in
       eprintf "%s: action returned %s\n" name (val_to_string return);
       loop env' (resume test s return)

@@ -932,7 +932,7 @@ let rec resume_main t_level stack value =
   | Frame id exp env mem stack ->
     match resume_main t_level stack value with
     | Value v -> 
-      match interp_main t_level ((id,value)::env) mem exp with | (o,_,_) -> o end 
+      match interp_main t_level ((id,v)::env) mem exp with | (o,_,_) -> o end 
     | Action action stack -> Action action (Frame id exp env mem stack)
     | Error s -> Error s
     end  
