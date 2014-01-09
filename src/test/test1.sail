@@ -13,5 +13,7 @@ let bool e = true
 let bit v = bitzero
 let ( bit [ 32 ] ) v1 = 0b101
 
-function bit main _ = v1[0]
+function bit sw s = switch s { case 0 -> bitzero }
+
+function bit main _ = {sw(0); v1[0] }
 

@@ -681,7 +681,7 @@ and interp_main t_level l_env l_mem exp =
                        (fun vals -> V_vector (List_extra.head indexes) true vals) (*Need to see increasing or not, can look at types later*) l_env l_mem [] exps
     | E_block(exps) -> interp_block t_level l_env l_env l_mem exps
     | E_app f args ->
-      (match (exp_list t_level (fun es -> E_app f es) V_tuple l_env l_mem [] args) with
+      (match (exp_list t_level (fun es -> E_app f es) (fun vs -> match vs with | [] -> V_lit L_unit | [v] -> v | vs -> V_tuple vs end) l_env l_mem [] args) with
       | (Value v,lm,le) -> 
          (match (f,t_level) with
       	 | (id,(Env defs externs lets regs mems ctors)) -> 
