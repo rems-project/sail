@@ -22,6 +22,7 @@ and k_aux =
 type t = { mutable t : t_aux }
 and t_aux =
   | Tvar of string
+  | Tid of string
   | Tfn of t * t * effect
   | Ttup of t list
   | Tapp of string * t_arg list
@@ -62,11 +63,11 @@ type tag =
   | Default
   | Constructor
 
-(* Constraints for nexps, plus the location which added the constraint, each nexp is either <= 0 = 0 or >= 0 *)
+(* Constraints for nexps, plus the location which added the constraint *)
 type nexp_range =
-  | LtEq of Parse_ast.l * nexp
-  | Eq of Parse_ast.l * nexp
-  | GtEq of Parse_ast.l * nexp
+  | LtEq of Parse_ast.l * nexp * nexp
+  | Eq of Parse_ast.l * nexp * nexp
+  | GtEq of Parse_ast.l * nexp * nexp
   | In of Parse_ast.l * nexp * nexp list
 
 type tannot = (t * tag * nexp_range list) option
@@ -130,5 +131,46 @@ let effects_eq l e1 e2 =
   | Evar v1, Evar v2 -> if v1 = v2 then e2 else eq_error l ("Effect variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
   | Evar v1, Eset _ -> eq_error l ("Effect variable " ^ v1 ^ " cannot be used where a concrete set of effects is specified")
 
-let rec type_eq l t1 t2 = (t2,[])
+(* Is checking for structural equality only, other forms of equality will be handeled by constraints *)
+let rec nexp_eq n1 n2 =
+  match n1.nexp,n2.nexp with
+  | Nvar v1,Nvar v2 -> v1=v2
+  | Nconst n1,Nconst n2 -> n1=n2
+  | Nadd(nl1,nl2), Nadd(nr1,nr2) -> nexp_eq nl1 nr1 && nexp_eq nl2 nr2
+  | Nmult(nl1,nl2), Nmult(nr1,nr2) -> nexp_eq nl1 nr1 && nexp_eq nl2 nr2
+  | N2n n,N2n n2 -> nexp_eq n n2
+  | Nneg n,Nneg n2 -> nexp_eq n n2
+  | Nuvar _, n -> n1.nexp <- n2.nexp; true
+  | n,Nuvar _ -> n2.nexp <- n1.nexp; true
+  | _,_ -> false
+
+(*Is checking for structural equality amongst the types, building constraints for kind Nat. Note: needs an environment to handle type abbreviations*)
+let rec type_eq l t1 t2 = 
+  match t1.t,t2.t with
+  | Tvar v1,Tvar v2 -> if v1 = v2 then (t2,[]) else eq_error l ("Type variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
+  | Tid v1,Tid v2 -> if v1 = v2 then (t2,[]) else eq_error l ("Type variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified") (*lookup for abbrev*)
+  | Tfn(tin1,tout1,effect1),Tfn(tin2,tout2,effect2) -> 
+    let (tin,cin) = type_eq l tin1 tin2 in
+    let (tout,cout) = type_eq l tout1 tout2 in
+    let effect = effects_eq l effect1 effect2 in
+    (t2,cin@cout)
+  | Ttup t1s, Ttup t2s ->
+    (t2,(List.flatten (List.map snd (List.map2 (type_eq l) t1s t2s))))
+  | Tapp(id1,args1), Tapp(id2,args2) ->
+    if id1=id2 && (List.length args2 = List.length args2) then
+      (t2,(List.flatten (List.map2 (type_arg_eq l) args1 args2)))
+    else eq_error l ("Type application of " ^ id1 ^ " and " ^ id2 ^ " must match")
+  | Tuvar _, t -> t1.t <- t2.t; (t2,[])
+  | t,Tuvar _ -> t2.t <- t1.t; (t2,[])
+  | _,_ -> eq_error l ("Type mismatch")
+
+and type_arg_eq l ta1 ta2 = 
+  match ta1,ta2 with
+  | TA_typ t1,TA_typ t2 -> snd (type_eq l t1 t2)
+  | TA_nexp n1,TA_nexp n2 -> if nexp_eq n1 n2 then [] else [Eq(l,n1,n2)]
+  | TA_eft e1,TA_eft e2 -> (effects_eq l e1 e2;[])
+  | TA_ord o1,TA_ord o2 -> (order_eq l o1 o2;[])
+  | _,_ -> eq_error l "Type arguments must be of the same kind" 
+
+
 let rec type_coerce l t1 t2 = (t2,[])

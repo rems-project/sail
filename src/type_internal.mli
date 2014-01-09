@@ -22,6 +22,7 @@ type o_uvar
 type t = { mutable t : t_aux }
 and t_aux =
   | Tvar of string
+  | Tid of string
   | Tfn of t * t * effect
   | Ttup of t list
   | Tapp of string * t_arg list
@@ -60,9 +61,9 @@ type tag =
 
 (* Constraints for nexps, plus the location which added the constraint, each nexp is either <= 0 = 0 or >= 0 *)
 type nexp_range =
-  | LtEq of Parse_ast.l * nexp
-  | Eq of Parse_ast.l * nexp
-  | GtEq of Parse_ast.l * nexp
+  | LtEq of Parse_ast.l * nexp * nexp
+  | Eq of Parse_ast.l * nexp * nexp
+  | GtEq of Parse_ast.l * nexp * nexp
   | In of Parse_ast.l * nexp * nexp list
 
 type tannot = (t * tag * nexp_range list) option
