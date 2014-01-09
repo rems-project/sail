@@ -409,15 +409,7 @@ let rec match_pattern p value =
        List.foldr 
          (fun pat (matched_p,bounds,r_vals) ->
            match pat with
-           | P_vector pats ->
-             List.foldr
-               (fun pat (matched_p,bounds,r_vals) ->
-                 if matched_p then
-                   match r_vals with
-                   | [] -> (false,[],[])
-                   | v::r_vals -> let (matched_p,new_bounds) = match_pattern pat v in
-                                  (matched_p,bounds++new_bounds,r_vals) end
-                 else (false,[],[])) (true,[],r_vals) pats
+           | P_vector pats -> vec_concat_match pats r_vals
            | P_id id -> (false,[],[]) (*Need to have at least a guess of how many to consume*)
            | _ -> (false,[],[]) end) (true,[],vals) pats in
      if matched_p && ([] = remaining_vals) then (matched_p,bounds) else (false,[]) 
@@ -449,6 +441,18 @@ let rec match_pattern p value =
      else (false,[])
    | _ -> (false,[]) end
  end 
+and vec_concat_match pats r_vals =
+    match pats with
+    | [] -> (true,[],r_vals)
+    | pat::pats -> match r_vals with
+      | [] -> (false,[],[])
+      | r::r_vals -> let (matched_p,new_bounds) = match_pattern pat r in
+                     if matched_p then 
+                       let (matched_p,bounds,r_vals) = vec_concat_match pats r_vals in
+                       (matched_p, new_bounds++bounds,r_vals)
+                     else (false,[],[]) end
+    end
+
 
 val find_funcl : list funcl -> value -> maybe (env * exp)
 let rec find_funcl funcls value =
@@ -791,10 +795,10 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level lexp =
         end
       end 
     | LEXP_memory id exps -> 
-      match (exp_list t_level E_tuple V_tuple l_env l_mem [] exps) with
-      | (Value (V_tuple vs),lm,le) ->
-        let request = (Action (Write_mem id (V_tuple vs) Nothing value) (Frame (Id "0") (E_id (Id "0")) l_env lm Top),lm,l_env) in
-        if is_top_level then (request,Nothing) else (request,Just (fun e -> (LEXP_memory id (List.map to_exp vs))))
+      match (exp_list t_level E_tuple (fun vs -> match vs with | [] -> V_lit L_unit | [v] -> v | vs -> V_tuple vs end) l_env l_mem [] exps) with
+      | (Value v,lm,le) ->
+        let request = (Action (Write_mem id v Nothing value) (Frame (Id "0") (E_id (Id "0")) l_env lm Top),lm,l_env) in
+        if is_top_level then (request,Nothing) else (request,Just (fun e -> (LEXP_memory id (match v with | V_tuple vs -> (List.map to_exp vs) | v -> [to_exp v]end))))
       | (Action a s,lm, le) -> ((Action a s,lm,le), Just (fun (E_tuple es) -> (LEXP_memory id es)))
       | e -> (e,Nothing) end
     | LEXP_vector lexp exp -> 
