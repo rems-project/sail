@@ -406,8 +406,8 @@ let rec match_pattern p value =
    match value with
    | V_vector n inc vals ->
      let (matched_p,bounds,remaining_vals) =
-       List.foldr 
-         (fun pat (matched_p,bounds,r_vals) ->
+       List.foldl 
+         (fun (matched_p,bounds,r_vals) pat ->
            match pat with
            | P_vector pats -> vec_concat_match pats r_vals
            | P_id id -> (false,[],[]) (*Need to have at least a guess of how many to consume*)

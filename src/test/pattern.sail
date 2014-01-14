@@ -14,7 +14,7 @@ function unit main _ = {
     case x -> { x := 99; x }
   }); 
 
-  (* doesn't work - main returns 1 instead of 42 *)
+  (* doesn't work - main returns 1 instead of 99 *)
   n := 3;
   switch n {
     case 0 -> { 21 }
