@@ -528,6 +528,8 @@ and interp_main t_level l_env l_mem exp =
                         match value with
                         | V_lit(L_true) -> interp_main t_level l_env lm thn
                         | V_lit(L_false) -> interp_main t_level l_env lm els
+                        | V_lit(L_one) -> interp_main t_level l_env lm thn
+                        | V_lit(L_zero)  -> interp_main t_level l_env lm els
                         | _ -> (Error "Type error, not provided boolean for if",lm,l_env) end)
                       (fun a -> update_stack a (add_to_top_frame (fun c -> (E_if c thn els))))
     | E_for id from to_ by exp ->
