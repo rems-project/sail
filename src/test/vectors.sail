@@ -35,6 +35,12 @@ function unit main _ = {
     case _ -> match_success := i
   };
 
+  (* indexed match *)
+  switch i {
+    case [0=bitzero, 1=bitzero, 2=bitone, 3=bitzero] -> match_success := 1
+    case _ -> match_success := i
+  };
+
   (* XXX slice access not implemented *)
   i[0] := bitzero;
   (* XXX Vector access of non-vector *)
