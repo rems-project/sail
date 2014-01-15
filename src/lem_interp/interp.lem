@@ -517,7 +517,7 @@ and interp_main t_level l_env l_mem exp =
 			         (Action (Read_reg regf Nothing) (Frame (Id "0") (E_id (Id "0")) l_env l_mem Top), l_mem, l_env) 
 			       | Nothing ->                                  
                                  let name = get_id id in
-			         (Error "unbound identifier" (* XXX ^ name *),l_mem,l_env)
+			         (Error (String.stringAppend "unbound identifier " name ),l_mem,l_env)
 			        end 
                               end 
                             end
@@ -694,7 +694,7 @@ and interp_main t_level l_env l_mem exp =
              (match find_funcl funcls v with
 	     | Nothing -> 
                let name = get_id id in
-               (Error ("No matching pattern for function " (* XXX ^ name *)),l_mem,l_env)
+               (Error (String.stringAppend "No matching pattern for function " name ),l_mem,l_env)
 	     | Just(env,exp) -> 
                resolve_outcome (interp_main t_level env l_mem exp)
 	                       (fun ret lm le -> (Value ret, lm,l_env))
@@ -730,7 +730,10 @@ and interp_main t_level l_env l_mem exp =
                                                (match find_extern externs op with
                                                | Just(str) ->
                                                  (Action (Call_extern str (V_tuple [lv;rv])) (Frame (Id "0") (E_id (Id "0")) le lm Top),lm,le)
-                                               | Nothing -> (Error "No matching function",lm,l_env) end)
+                                               | Nothing ->
+                                                   (Error (String.stringAppend
+                                                   "No matching function "
+                                                   (get_id op)),lm,l_env) end)
 				             | Just (funcls) ->
 				               (match find_funcl funcls (V_tuple [lv;rv]) with 
 				               | Nothing -> (Error "No matching pattern for function",lm,l_env)
