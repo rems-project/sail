@@ -4,7 +4,7 @@ open Ast
 type kind = Type_internal.kind
 type typ = Type_internal.t
 
-type envs = Nameset.t * kind Envmap.t * t Envmap.t
+type envs = Nameset.t * kind Envmap.t * tannot Envmap.t
 type 'a envs_out = 'a * envs
 
 let id_to_string (Id_aux(id,l)) =
@@ -666,12 +666,12 @@ let rec to_ast_defs_helper envs partial_defs = function
                   then (fst !d) :: defs, envs, partial_defs
                   else typ_error l "Scattered type definition never ended" (Some id) None None))                
 
-let to_ast (default_names : Nameset.t) (kind_env : kind Envmap.t) (typ_env : t Envmap.t) (Parse_ast.Defs(defs)) =
-  let defs,_,partial_defs = to_ast_defs_helper (default_names,kind_env,typ_env) [] defs in
+let to_ast (default_names : Nameset.t) (kind_env : kind Envmap.t) (typ_env : tannot Envmap.t) (Parse_ast.Defs(defs)) =
+  let defs,(_,k_env,_),partial_defs = to_ast_defs_helper (default_names,kind_env,typ_env) [] defs in
   List.iter 
     (fun (id,(d,k)) -> 
       (match !d with
       | (DEF_aux(_,(l,_)),false) -> typ_error l "Scattered definition never ended" (Some id) None None
       | (_, true) -> ()))
     partial_defs;
-  (Defs defs)
+  (Defs defs),k_env

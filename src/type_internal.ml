@@ -62,15 +62,17 @@ type tag =
   | External
   | Default
   | Constructor
+  | Enum
 
 (* Constraints for nexps, plus the location which added the constraint *)
 type nexp_range =
   | LtEq of Parse_ast.l * nexp * nexp
   | Eq of Parse_ast.l * nexp * nexp
   | GtEq of Parse_ast.l * nexp * nexp
-  | In of Parse_ast.l * nexp * nexp list
+  | In of Parse_ast.l * string * int list
 
-type tannot = (t * tag * nexp_range list) option
+type t_params = (string * kind) list
+type tannot = ((t_params * t) * tag * nexp_range list) option
 
 let initial_kind_env = 
   Envmap.from_list [ 
@@ -83,6 +85,14 @@ let initial_kind_env =
     ("enum", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}; {k=K_Ord} ], {k = K_Typ}) });
     ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } )
   ]
+
+let nat_typ = {t=Tid "nat"}
+let pure = {effect=Eset []}
+let initial_typ_env =
+  Envmap.from_list [
+    ("+",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure)}),External,[]));
+  ]
+
 
 let eq_error l msg = raise (Reporting_basic.err_typ l msg)
 
@@ -168,9 +178,19 @@ and type_arg_eq l ta1 ta2 =
   match ta1,ta2 with
   | TA_typ t1,TA_typ t2 -> snd (type_eq l t1 t2)
   | TA_nexp n1,TA_nexp n2 -> if nexp_eq n1 n2 then [] else [Eq(l,n1,n2)]
-  | TA_eft e1,TA_eft e2 -> (effects_eq l e1 e2;[])
-  | TA_ord o1,TA_ord o2 -> (order_eq l o1 o2;[])
+  | TA_eft e1,TA_eft e2 -> (ignore(effects_eq l e1 e2);[])
+  | TA_ord o1,TA_ord o2 -> (ignore(order_eq l o1 o2);[])
   | _,_ -> eq_error l "Type arguments must be of the same kind" 
 
 
-let rec type_coerce l t1 t2 = (t2,[])
+let rec type_coerce l t1 t2 = 
+  match t1.t,t2.t with
+  | Tid v1,Tid v2 -> if v1 = v2 then (None,[]) else eq_error l ("Type variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified") (*lookup for abbrev*)
+  | Ttup t1s, Ttup t2s ->
+    (None,(List.flatten (List.map snd (List.map2 (type_eq l) t1s t2s))))
+  | Tapp(id1,args1), Tapp(id2,args2) ->
+    if id1=id2 && (List.length args2 = List.length args2) then
+      (None,(List.flatten (List.map2 (type_arg_eq l) args1 args2)))
+    else eq_error l ("Type application of " ^ id1 ^ " and " ^ id2 ^ " must match")
+  | _,_ -> let (t2,consts) = type_eq l t1 t2 in
+	     (None,consts)

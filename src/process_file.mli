@@ -45,7 +45,8 @@
 (**************************************************************************)
 
 val parse_file : string -> Parse_ast.defs
-val convert_ast : Parse_ast.defs -> Type_internal.tannot Ast.defs
+val convert_ast : Parse_ast.defs -> Type_internal.tannot Ast.defs * Type_internal.kind Type_internal.Envmap.t
+val check_ast: Type_internal.tannot Ast.defs -> Type_internal.kind Type_internal.Envmap.t -> Type_internal.tannot Ast.defs
 
 type out_type =
   | Lem_ast_out

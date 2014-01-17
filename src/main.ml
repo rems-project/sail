@@ -393,12 +393,13 @@ let main() =
   then Printf.printf "L2 pre alpha \n"
   else let parsed = (List.map (fun f -> (f,(parse_file f)))  !opt_file_arguments) in
        let asts = (List.map (fun (f,past) -> (f,convert_ast past)) parsed) in
+       let chkedasts = (List.map (fun (f,(ast,kenv)) -> (f,check_ast ast kenv)) asts) in
        begin 
 	 (if !(opt_print_verbose)
-	  then ((Pretty_print.pp_defs Format.std_formatter) (snd (List.hd asts)))
+	  then ((Pretty_print.pp_defs Format.std_formatter) (snd (List.hd chkedasts)))
 	  else ());
 	 (if !(opt_print_lem)
-	  then output "" Lem_ast_out asts
+	  then output "" Lem_ast_out chkedasts
 	  else ());
        end
 

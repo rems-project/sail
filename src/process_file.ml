@@ -87,8 +87,15 @@ let parse_file (f : string) : Parse_ast.defs =
       | Lexer.LexError(s,p) ->
           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
 
-let convert_ast (defs : Parse_ast.defs) : Type_internal.tannot Ast.defs =
+let convert_ast (defs : Parse_ast.defs) : (Type_internal.tannot Ast.defs * kind Envmap.t)=
   Initial_check.to_ast Nameset.empty Type_internal.initial_kind_env Envmap.empty defs
+
+
+let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) : Type_internal.tannot Ast.defs =
+  let d_env = { Type_check.k_env = k; Type_check.abbrevs = Envmap.empty; 
+		Type_check.namesch = Envmap.empty; Type_check.enum_env = Envmap.empty; 
+		Type_check.rec_env = []; } in
+  Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env)) defs 
 
 let open_output_with_check file_name =
   let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in

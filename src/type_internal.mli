@@ -58,20 +58,23 @@ type tag =
   | External
   | Default
   | Constructor
+  | Enum
 
 (* Constraints for nexps, plus the location which added the constraint, each nexp is either <= 0 = 0 or >= 0 *)
 type nexp_range =
   | LtEq of Parse_ast.l * nexp * nexp
   | Eq of Parse_ast.l * nexp * nexp
   | GtEq of Parse_ast.l * nexp * nexp
-  | In of Parse_ast.l * nexp * nexp list
+  | In of Parse_ast.l * string * int list
 
-type tannot = (t * tag * nexp_range list) option
+type t_params = (string * kind) list
+type tannot = ((t_params * t) * tag * nexp_range list) option
 
 val initial_kind_env : kind Envmap.t
+val initial_typ_env : tannot Envmap.t
 
 (* type_eq mutates to unify variables, and will raise an exception if two types cannot be equal *)
 val type_eq : Parse_ast.l -> t -> t -> t * nexp_range list
 
 (* type_eq mutates to unify variables, and will raise an exception if the first type cannot be coerced into the second *)
-val type_coerce : Parse_ast.l -> t -> t -> t * nexp_range list
+val type_coerce : Parse_ast.l -> t -> t -> t option * nexp_range list
