@@ -63,6 +63,7 @@ type tag =
   | Default
   | Constructor
   | Enum
+  | Spec
 
 (* Constraints for nexps, plus the location which added the constraint *)
 type nexp_range =
@@ -73,6 +74,38 @@ type nexp_range =
 
 type t_params = (string * kind) list
 type tannot = ((t_params * t) * tag * nexp_range list) option
+
+
+let t_count = ref 0
+let n_count = ref 0
+let o_count = ref 0
+let e_count = ref 0
+
+let reset_fresh _ = 
+  begin t_count := 0;
+        n_count := 0;
+	o_count := 0;
+	e_count := 0;
+  end
+let new_t _ = 
+  let i = !t_count in
+  t_count := i + 1;
+  {t = Tuvar { index = i; subst = None }}
+let new_n _ = 
+  let i = !n_count in
+  n_count := i + 1;
+  { nexp = Nuvar { nindex = i; nsubst = None }}
+let new_o _ = 
+  let i = !o_count in
+  o_count := i + 1;
+  { order = Ouvar { oindex = i; osubst = None }}
+let new_e _ =
+  let i = !e_count in
+  e_count := i + 1;
+  { effect = Euvar { eindex = i; esubst = None }}
+  
+
+let nat_t = {t = Tapp("enum",[TA_nexp{nexp= Nconst 0};TA_nexp{nexp = Nconst max_int};TA_ord{order=Oinc}])}
 
 let initial_kind_env = 
   Envmap.from_list [ 
