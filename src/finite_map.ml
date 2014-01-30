@@ -57,6 +57,7 @@ module type Fmap = sig
   val insert : 'a t -> (k * 'a) -> 'a t
   (* Keys from the right argument replace those from the left *)
   val union : 'a t -> 'a t -> 'a t
+  val intersect : 'a t -> 'a t -> 'a t
   val big_union : 'a t list -> 'a t
   val merge : (k -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
   val apply : 'a t -> k -> 'a option
@@ -92,6 +93,7 @@ module Fmap_map(Key : Set.OrderedType) : Fmap
   let insert m (k,v) = M.add k v m
   let union m1 m2 = 
     M.merge (fun k v1 v2 -> match v2 with | None -> v1 | Some _ -> v2) m1 m2
+  let intersect m1 m2 = m2 (*WRITE ME TODO*)
   let merge f m1 m2 = M.merge f m1 m2
   let apply m k = 
     try

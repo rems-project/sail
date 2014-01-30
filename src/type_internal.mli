@@ -4,7 +4,6 @@ module Nameset : sig
   val pp : Format.formatter -> t -> unit
 end
 
-
 type kind = { mutable k : k_aux }
 and k_aux =
   | K_Typ
@@ -71,9 +70,13 @@ type nexp_range =
 type t_params = (string * kind) list
 type tannot = ((t_params * t) * tag * nexp_range list) option
 
+type exp = tannot Ast.exp
+
 val initial_kind_env : kind Envmap.t
 val initial_typ_env : tannot Envmap.t
 val nat_t : t
+val unit_t : t
+val bool_t : t
 
 val reset_fresh : unit -> unit
 val new_t : unit -> t
@@ -81,8 +84,15 @@ val new_n : unit -> nexp
 val new_o : unit -> order
 val new_e : unit -> effect
 
-(* type_eq mutates to unify variables, and will raise an exception if two types cannot be equal *)
-val type_eq : Parse_ast.l -> t -> t -> t * nexp_range list
+val subst : (string * kind) list -> t -> t
+
+
+(* type_consistent is similar to a standard type equality, except in the case of [[consistent t1 t2]] where
+   t1 and t2 are both enum types and t1 is contained within the range of t2: i.e.
+   enum 2 5 inc is consistent with enum 0 10 inc, but not vice versa.
+   type_consistent mutates uvars to perform unification and will raise an error if the [[t1]] and [[t2]] are inconsitent
+*)
+val type_consistent : Parse_ast.l -> t -> t -> t * nexp_range list
 
 (* type_eq mutates to unify variables, and will raise an exception if the first type cannot be coerced into the second *)
-val type_coerce : Parse_ast.l -> t -> t -> t option * nexp_range list
+val type_coerce : Parse_ast.l -> t -> exp -> t -> t * nexp_range list * exp

@@ -75,6 +75,7 @@ type nexp_range =
 type t_params = (string * kind) list
 type tannot = ((t_params * t) * tag * nexp_range list) option
 
+type exp = tannot Ast.exp
 
 let t_count = ref 0
 let n_count = ref 0
@@ -104,8 +105,9 @@ let new_e _ =
   e_count := i + 1;
   { effect = Euvar { eindex = i; esubst = None }}
   
-
 let nat_t = {t = Tapp("enum",[TA_nexp{nexp= Nconst 0};TA_nexp{nexp = Nconst max_int};TA_ord{order=Oinc}])}
+let unit_t = { t = Tid "unit" } 
+let bool_t = {t = Tid "bool" }
 
 let initial_kind_env = 
   Envmap.from_list [ 
@@ -126,6 +128,55 @@ let initial_typ_env =
     ("+",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure)}),External,[]));
   ]
 
+let rec t_subst s_env t =
+  match t.t with
+  | Tvar i -> (match Envmap.apply s_env i with
+               | Some(TA_typ t1) -> t1
+               | _ -> t)
+  | Tid _ | Tuvar _ -> t
+  | Tfn(t1,t2,e) -> {t =Tfn((t_subst s_env t1),(t_subst s_env t2),(e_subst s_env e)) }
+  | Ttup(ts) -> { t= Ttup(List.map (t_subst s_env) ts) }
+  | Tapp(i,args) -> {t= Tapp(i,List.map (ta_subst s_env) args)}
+and ta_subst s_env ta =
+  match ta with
+  | TA_typ t -> TA_typ (t_subst s_env t)
+  | TA_nexp n -> TA_nexp (n_subst s_env n)
+  | TA_eft e -> TA_eft (e_subst s_env e)
+  | TA_ord o -> TA_ord (o_subst s_env o)
+and n_subst s_env n =
+  match n.nexp with
+  | Nvar i -> (match Envmap.apply s_env i with
+               | Some(TA_nexp n1) -> n1
+               | _ -> n)
+  | Nconst _ | Nuvar _ -> n
+  | N2n n1 -> { nexp = N2n (n_subst s_env n1) }
+  | Nneg n1 -> { nexp = Nneg (n_subst s_env n1) }
+  | Nadd(n1,n2) -> { nexp = Nadd(n_subst s_env n1,n_subst s_env n2) }
+  | Nmult(n1,n2) -> { nexp = Nmult(n_subst s_env n1,n_subst s_env n2) }
+and o_subst s_env o =
+  match o.order with
+  | Ovar i -> (match Envmap.apply s_env i with
+               | Some(TA_ord o1) -> o1
+               | _ -> o)
+  | _ -> o
+and e_subst s_env e =
+  match e.effect with
+  | Evar i -> (match Envmap.apply s_env i with
+               | Some(TA_eft e1) -> e1
+               | _ -> e)
+  | _ -> e
+
+let subst k_env t =
+  let subst_env = Envmap.from_list
+    (List.map (fun (id,k) -> (id, 
+                              match k.k with
+                              | K_Typ -> TA_typ (new_t ())
+                              | K_Nat -> TA_nexp (new_n ())
+                              | K_Ord -> TA_ord (new_o ())
+                              | K_Efct -> TA_eft (new_e ())
+                              | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "substitution given an environment with a non-base-kind kind"))) k_env) 
+  in
+  t_subst subst_env t
 
 let eq_error l msg = raise (Reporting_basic.err_typ l msg)
 
@@ -187,20 +238,40 @@ let rec nexp_eq n1 n2 =
   | n,Nuvar _ -> n2.nexp <- n1.nexp; true
   | _,_ -> false
 
-(*Is checking for structural equality amongst the types, building constraints for kind Nat. Note: needs an environment to handle type abbreviations*)
-let rec type_eq l t1 t2 = 
+(*Is checking for structural equality amongst the types, building constraints for kind Nat. 
+  When considering two enum type applications, will check for consistency instead of equality
+  Note: needs an environment to handle type abbreviations*)
+let rec type_consistent l t1 t2 = 
   match t1.t,t2.t with
   | Tvar v1,Tvar v2 -> if v1 = v2 then (t2,[]) else eq_error l ("Type variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
   | Tid v1,Tid v2 -> if v1 = v2 then (t2,[]) else eq_error l ("Type variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified") (*lookup for abbrev*)
   | Tfn(tin1,tout1,effect1),Tfn(tin2,tout2,effect2) -> 
-    let (tin,cin) = type_eq l tin1 tin2 in
-    let (tout,cout) = type_eq l tout1 tout2 in
+    let (tin,cin) = type_consistent l tin1 tin2 in
+    let (tout,cout) = type_consistent l tout1 tout2 in
     let effect = effects_eq l effect1 effect2 in
     (t2,cin@cout)
   | Ttup t1s, Ttup t2s ->
-    (t2,(List.flatten (List.map snd (List.map2 (type_eq l) t1s t2s))))
+    (t2,(List.flatten (List.map snd (List.map2 (type_consistent l) t1s t2s))))
   | Tapp(id1,args1), Tapp(id2,args2) ->
     if id1=id2 && (List.length args2 = List.length args2) then
+      if id1="enum" then
+        (match args1,args2 with
+        | [TA_nexp b1;TA_nexp r1; TA_ord o1],[TA_nexp b2;TA_nexp r2;TA_ord o2] ->
+          (match (order_eq l o1 o2).order with
+          | Oinc -> 
+            if (nexp_eq b1 b2)&&(nexp_eq r1 r2)
+            then (t2,[])
+            else (t2, [GtEq(l,b1,b2);LtEq(l,r1,r2)])
+          | Odec ->
+            if (nexp_eq b1 b2)&&(nexp_eq r1 r2)
+            then (t2,[])
+            else (t2, [LtEq(l,b1,b2);GtEq(l,r1,r2)])
+          | _ ->
+            if (nexp_eq b1 b2)&&(nexp_eq r1 r2)
+            then (t2,[])
+            else (t2, [Eq(l,b1,b2);Eq(l,r1,r2)]))
+        | _ -> raise (Reporting_basic.err_unreachable l "enum application incorrectly kinded"))
+      else          
       (t2,(List.flatten (List.map2 (type_arg_eq l) args1 args2)))
     else eq_error l ("Type application of " ^ id1 ^ " and " ^ id2 ^ " must match")
   | Tuvar _, t -> t1.t <- t2.t; (t2,[])
@@ -209,21 +280,22 @@ let rec type_eq l t1 t2 =
 
 and type_arg_eq l ta1 ta2 = 
   match ta1,ta2 with
-  | TA_typ t1,TA_typ t2 -> snd (type_eq l t1 t2)
+  | TA_typ t1,TA_typ t2 -> snd (type_consistent l t1 t2)
   | TA_nexp n1,TA_nexp n2 -> if nexp_eq n1 n2 then [] else [Eq(l,n1,n2)]
   | TA_eft e1,TA_eft e2 -> (ignore(effects_eq l e1 e2);[])
   | TA_ord o1,TA_ord o2 -> (ignore(order_eq l o1 o2);[])
   | _,_ -> eq_error l "Type arguments must be of the same kind" 
 
 
-let rec type_coerce l t1 t2 = 
-  match t1.t,t2.t with
+let rec type_coerce l t1 e t2 = 
+  (t2,[],e)
+  (*match t1.t,t2.t with
   | Tid v1,Tid v2 -> if v1 = v2 then (None,[]) else eq_error l ("Type variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified") (*lookup for abbrev*)
   | Ttup t1s, Ttup t2s ->
-    (None,(List.flatten (List.map snd (List.map2 (type_eq l) t1s t2s))))
+    (None,(List.flatten (List.map snd (List.map2 (type_consistent l) t1s t2s))))
   | Tapp(id1,args1), Tapp(id2,args2) ->
     if id1=id2 && (List.length args2 = List.length args2) then
       (None,(List.flatten (List.map2 (type_arg_eq l) args1 args2)))
     else eq_error l ("Type application of " ^ id1 ^ " and " ^ id2 ^ " must match")
-  | _,_ -> let (t2,consts) = type_eq l t1 t2 in
-	     (None,consts)
+  | _,_ -> let (t2,consts) = type_consistent l t1 t2 in
+	     (None,consts)*)
