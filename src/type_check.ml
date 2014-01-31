@@ -372,7 +372,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
           let t',cs',e' = type_coerce l t (rebuild (Some((params,t),tag,cs))) expect_t in
           (e',t',t_env,cs@cs')
         )
-      | Some None | None -> typ_error l ("Identifier " ^ (id_to_string id) ^ " is unbound"))
+      | Some None | None -> (* Turned off until lexp is type checked. TURN ME BACK ON:: typ_error l ("Identifier " ^ (id_to_string id) ^ " is unbound")*) (rebuild None,expect_t,t_env,[]))
     | E_lit (L_aux(lit,l')) ->
       let t = (match lit with
         | L_unit  -> {t = Tid "unit"} 

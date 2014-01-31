@@ -16,24 +16,24 @@ function nat main _ = {
   (* left-hand side function call = memory write *)
   MEM(0) := 0;
   (* memory read, thanks to effect { rmem} above *)
-  MEM(0);
+  ignore(MEM(0));
   (* register write, idem *)
   dummy_reg := 1;
   (* register read, thanks to register declaration *)
-  dummy_reg;
+  ignore(dummy_reg);
 
   (* infix call *)
-  7 * 9;
+  ignore(7 * 9);
 
   (* Some more checks *)
   MEM(1) := 2;
-  MEM(1);
+  ignore(MEM(1));
   MEM_GPU(0) := 3;
-  MEM_GPU(0);
+  ignore(MEM_GPU(0));
   MEM_SIZE(0,1) := 4;
-  MEM_SIZE(0,1);
+  ignore(MEM_SIZE(0,1));
 
   (* extern calls *)
-  3 + 39;
+  ignore(3 + 39);
   add(5, 37);
 }

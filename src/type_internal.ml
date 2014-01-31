@@ -77,17 +77,23 @@ type tannot = ((t_params * t) * tag * nexp_range list) option
 
 type exp = tannot Ast.exp
 
+let v_count = ref 0
 let t_count = ref 0
 let n_count = ref 0
 let o_count = ref 0
 let e_count = ref 0
 
 let reset_fresh _ = 
-  begin t_count := 0;
+  begin v_count := 0;
+        t_count := 0;
         n_count := 0;
 	o_count := 0;
 	e_count := 0;
   end
+let new_id _ =
+  let i = !v_count in
+  v_count := i+1;
+  (string_of_int i) ^ "v"
 let new_t _ = 
   let i = !t_count in
   t_count := i + 1;
@@ -125,7 +131,10 @@ let nat_typ = {t=Tid "nat"}
 let pure = {effect=Eset []}
 let initial_typ_env =
   Envmap.from_list [
+    ("ignore",Some(([("a",{k=K_Typ})],{t=Tfn ({t=Tvar "a"},unit_t,pure)}),External,[]));
     ("+",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure)}),External,[]));
+    ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure)}),External,[]));
+    
   ]
 
 let rec t_subst s_env t =
@@ -240,11 +249,11 @@ let rec nexp_eq n1 n2 =
 
 (*Is checking for structural equality amongst the types, building constraints for kind Nat. 
   When considering two enum type applications, will check for consistency instead of equality
-  Note: needs an environment to handle type abbreviations*)
+  Note: needs an environment to handle type abbreviations, and to lookup in the case either is a Tid or Tapp*)
 let rec type_consistent l t1 t2 = 
   match t1.t,t2.t with
   | Tvar v1,Tvar v2 -> if v1 = v2 then (t2,[]) else eq_error l ("Type variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
-  | Tid v1,Tid v2 -> if v1 = v2 then (t2,[]) else eq_error l ("Type variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified") (*lookup for abbrev*)
+  | Tid v1,Tid v2 -> if v1 = v2 then (t2,[]) else eq_error l ("Types " ^ v1 ^ " and " ^ v2 ^ " do not match") (*lookup for abbrev*)
   | Tfn(tin1,tout1,effect1),Tfn(tin2,tout2,effect2) -> 
     let (tin,cin) = type_consistent l tin1 tin2 in
     let (tout,cout) = type_consistent l tout1 tout2 in
@@ -288,14 +297,38 @@ and type_arg_eq l ta1 ta2 =
 
 
 let rec type_coerce l t1 e t2 = 
-  (t2,[],e)
-  (*match t1.t,t2.t with
-  | Tid v1,Tid v2 -> if v1 = v2 then (None,[]) else eq_error l ("Type variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified") (*lookup for abbrev*)
+  match t1.t,t2.t with
   | Ttup t1s, Ttup t2s ->
-    (None,(List.flatten (List.map snd (List.map2 (type_consistent l) t1s t2s))))
-  | Tapp(id1,args1), Tapp(id2,args2) ->
-    if id1=id2 && (List.length args2 = List.length args2) then
-      (None,(List.flatten (List.map2 (type_arg_eq l) args1 args2)))
-    else eq_error l ("Type application of " ^ id1 ^ " and " ^ id2 ^ " must match")
-  | _,_ -> let (t2,consts) = type_consistent l t1 t2 in
-	     (None,consts)*)
+    let tl1,tl2 = List.length t1s,List.length t2s in
+    if tl1=tl2 then 
+      let ids = List.map (fun _ -> Id_aux(Id (new_id ()),l)) t1s in
+      let vars = List.map2 (fun i t -> E_aux(E_id(i),(l,Some(([],t),Emp,[])))) ids t1s in
+      let (coerced_ts,cs,coerced_vars) = 
+        List.fold_right2 (fun v (t1,t2) (ts,cs,es) -> let (t',c',e') = type_coerce l t1 v t2 in
+                                                      ((t'::ts),c'@cs,(e'::es)))
+          vars (List.combine t1s t2s) ([],[],[]) in
+      if vars = coerced_vars then (t2,cs,e)
+      else let e' = E_aux(E_case(e,[(Pat_aux(Pat_exp(P_aux(P_tup (List.map2 (fun i t -> P_aux(P_id i,(l,(Some(([],t),Emp,[]))))) ids t1s),(l,Some(([],t1),Emp,[]))),
+                                               E_aux(E_tuple coerced_vars,(l,Some(([],t2),Emp,cs)))),
+                                             (l,Some(([],t2),Emp,[]))))]),
+                          (l,(Some(([],t2),Emp,[])))) in
+           (t2,cs,e')
+    else eq_error l ("A tuple of length " ^ (string_of_int tl1) ^ " cannot be used where a tuple of length " ^ (string_of_int tl2) ^ " is expected")
+  | Tapp(id1,args1),Tapp(id2,args2) ->
+    if id1=id2 
+    then let t',cs' = type_consistent l t1 t2 in (t',cs',e)
+    else (match id1,id2 with
+    | "vector","enum" -> 
+      (match args1,args2 with
+      | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
+        [TA_nexp b2;TA_nexp r2;TA_ord {order = Oinc}] -> (t2,[],e) (*TODO*)
+      | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
+        [TA_nexp b2;TA_nexp r2;TA_ord {order = Odec}] -> (t2,[],e) (*TODO*)
+      | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> (t2,[],e) (*TODO*)
+      | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
+        eq_error l "Cannot convert non-bit vector into an enum")
+    | "enum","vector" -> (t2,[],e) (*TODO*)
+    | _,_ -> let t',cs' = type_consistent l t1 t2 in (t',cs',e))
+  | Tapp("enum",args1),Tid(i) -> (t2,[],e) (*Need env*)
+  | Tid(i),Tapp("enum",args1) -> (t2,[],e) (*Need env*)
+  | _,_ -> let t',cs = type_consistent l t1 t2 in (t',cs,e)
