@@ -66,17 +66,30 @@ type nexp_range =
   | Eq of Parse_ast.l * nexp * nexp
   | GtEq of Parse_ast.l * nexp * nexp
   | In of Parse_ast.l * string * int list
+  | InS of Parse_ast.l * nexp * int list (* This holds the given value for string after a substitution *)
 
 type t_params = (string * kind) list
 type tannot = ((t_params * t) * tag * nexp_range list) option
+type 'a emap = 'a Envmap.t
+
+type rec_kind = Record | Register
+type def_envs = { 
+  k_env: kind emap; 
+  abbrevs: tannot emap; 
+  namesch : tannot emap; 
+  enum_env : (string list) emap; 
+  rec_env : (string * rec_kind * ((string * tannot) list)) list;
+ }
 
 type exp = tannot Ast.exp
 
 val initial_kind_env : kind Envmap.t
+val initial_abbrev_env : tannot Envmap.t
 val initial_typ_env : tannot Envmap.t
 val nat_t : t
 val unit_t : t
 val bool_t : t
+val bit_t : t
 
 val reset_fresh : unit -> unit
 val new_t : unit -> t
@@ -84,7 +97,7 @@ val new_n : unit -> nexp
 val new_o : unit -> order
 val new_e : unit -> effect
 
-val subst : (string * kind) list -> t -> t
+val subst : (string * kind) list -> t -> nexp_range list -> t * nexp_range list
 
 
 (* type_consistent is similar to a standard type equality, except in the case of [[consistent t1 t2]] where
@@ -92,7 +105,7 @@ val subst : (string * kind) list -> t -> t
    enum 2 5 inc is consistent with enum 0 10 inc, but not vice versa.
    type_consistent mutates uvars to perform unification and will raise an error if the [[t1]] and [[t2]] are inconsitent
 *)
-val type_consistent : Parse_ast.l -> t -> t -> t * nexp_range list
+val type_consistent : Parse_ast.l -> def_envs -> t -> t -> t * nexp_range list
 
 (* type_eq mutates to unify variables, and will raise an exception if the first type cannot be coerced into the second *)
-val type_coerce : Parse_ast.l -> t -> exp -> t -> t * nexp_range list * exp
+val type_coerce : Parse_ast.l -> def_envs -> t -> exp -> t -> t * nexp_range list * exp

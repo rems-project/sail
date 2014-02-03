@@ -92,9 +92,9 @@ let convert_ast (defs : Parse_ast.defs) : (Type_internal.tannot Ast.defs * kind 
 
 
 let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) : Type_internal.tannot Ast.defs =
-  let d_env = { Type_check.k_env = k; Type_check.abbrevs = Envmap.empty; 
-		Type_check.namesch = Envmap.empty; Type_check.enum_env = Envmap.empty; 
-		Type_check.rec_env = []; } in
+  let d_env = { Type_internal.k_env = k; Type_internal.abbrevs = Type_internal.initial_abbrev_env; 
+		Type_internal.namesch = Envmap.empty; Type_internal.enum_env = Envmap.empty; 
+		Type_internal.rec_env = []; } in
   Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env)) defs 
 
 let open_output_with_check file_name =
