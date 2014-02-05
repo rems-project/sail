@@ -134,7 +134,7 @@ let star = "*"
 
 %token Div_ Mod Quot Rem
 
-%token Bar Colon Comma Dot Eof Minus Semi Under
+%token Bar Comma Dot Eof Minus Semi Under
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare
 %token BarBar BarSquare BarBarSquare ColonEq DotDot ColonGt MinusGt LtBar SquareBar SquareBarBar
 
@@ -145,7 +145,7 @@ let star = "*"
 %token <string> String Bin Hex
 
 %token <string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde
-%token <string> AmpAmp CarrotCarrot ColonColon EqDivEq EqEq ExclEq ExclExcl
+%token <string> AmpAmp CarrotCarrot Colon ColonColon EqDivEq EqEq ExclEq ExclExcl
 %token <string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt
 %token <string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar TildeCarrot
 
@@ -206,6 +206,8 @@ id:
   | Lparen Deinfix BarBar Rparen
     { idl (DeIid("||")) }
   | Lparen Deinfix CarrotCarrot Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix Colon Rparen
     { idl (DeIid($3)) }
   | Lparen Deinfix ColonColon Rparen
     { idl (DeIid($3)) }

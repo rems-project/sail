@@ -145,7 +145,7 @@ rule token = parse
   | "@"					{ (At(r"@")) }
   | "|"                                 { Bar }
   | "^"					{ (Carrot(r"^")) }
-  | ":"                                 { Colon }
+  | ":"                                 { Colon(r ":") }
   | ","                                 { Comma }
   | "."                                 { Dot }
   | "/"			                { (Div(r "/")) }
