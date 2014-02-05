@@ -1,4 +1,5 @@
 let (bit[32]) v = 0b101
+let (bit[4]) v2 = [0,1,0,0]
 register (bit[32]) i
 
 register nat match_success

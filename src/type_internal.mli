@@ -91,6 +91,8 @@ val unit_t : t
 val bool_t : t
 val bit_t : t
 
+val t_to_string : t -> string
+
 val reset_fresh : unit -> unit
 val new_t : unit -> t
 val new_n : unit -> nexp

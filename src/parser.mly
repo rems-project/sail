@@ -92,8 +92,7 @@ let mk_eannotn _ = Effect_opt_aux(Effect_opt_pure,Unknown)
 let mk_namesectn _ = Name_sect_aux(Name_sect_none,Unknown)
 
 let make_enum_sugar_bounded typ1 typ2 =
-  ATyp_app(Id_aux(Id("enum"),Unknown),
-           [typ1; typ2; ATyp_aux(ATyp_inc,Unknown)])
+  ATyp_app(Id_aux(Id("enum"),Unknown),[typ1; typ2;])
 let make_enum_sugar typ1 =
   make_enum_sugar_bounded typ1 (ATyp_aux(ATyp_constant(0), Unknown))
 
@@ -101,7 +100,7 @@ let make_vector_sugar_bounded typ typ1 typ2 =
   ATyp_app(Id_aux(Id("vector"),Unknown),
            [typ1;typ2;ATyp_aux(ATyp_inc,Unknown);typ])
 let make_vector_sugar typ typ1 =
-  make_vector_sugar_bounded typ typ1 (ATyp_aux(ATyp_constant(0),Unknown))
+  make_vector_sugar_bounded typ (ATyp_aux(ATyp_constant(0),Unknown)) typ1
     
 
 let space = " "

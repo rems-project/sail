@@ -213,13 +213,18 @@ let subst k_env t cs =
   in
   t_subst subst_env t, cs_subst subst_env cs
 
+let rec string_of_list sep string_of = function
+  | [] -> ""
+  | [x] -> string_of x
+  | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
+
 let rec t_to_string t = 
   match t.t with
     | Tid i -> i
     | Tvar i -> "'" ^ i
     | Tfn(t1,t2,e) -> (t_to_string t1) ^ " -> " ^ (t_to_string t2) ^ " effect " ^ e_to_string e
-    | Ttup(tups) -> "(" ^ (List.fold_right (fun t ts -> ts^ (t_to_string t) ^ " * ") tups "") ^ ")"
-    | Tapp(i,args) -> i ^ "<" ^ (List.fold_right (fun t ts -> ts^(targ_to_string t) ^ ", ") args "") ^ ">"
+    | Ttup(tups) -> "(" ^ string_of_list " * " t_to_string tups ^ ")"
+    | Tapp(i,args) -> i ^ "<" ^  string_of_list ", " targ_to_string args ^ ">"
     | Tuvar({index = i;subst = a}) -> string_of_int i ^ "()"
 and targ_to_string = function
   | TA_typ t -> t_to_string t
@@ -231,8 +236,21 @@ and n_to_string n =
     | Nvar i -> "'" ^ i
     | Nconst i -> string_of_int i
     | Nadd(n1,n2) -> (n_to_string n1) ^ " + " ^ (n_to_string n2)
-and e_to_string e = "effect"
-and o_to_string o = "order"
+    | Nmult(n1,n2) -> (n_to_string n1) ^ " * " ^ (n_to_string n2)
+    | N2n n -> "2**" ^ (n_to_string n)
+    | Nneg n -> "-" ^ (n_to_string n)
+    | Nuvar({nindex=i;nsubst=a}) -> string_of_int i ^ "()"
+and e_to_string e = 
+  match e.effect with
+  | Evar i -> "'" ^ i
+  | Eset es -> if []=es then "pure" else "{" ^ "effects not printing" ^"}"
+  | Euvar({eindex=i;esubst=a}) -> string_of_int i ^ "()"
+and o_to_string o = 
+  match o.order with
+  | Ovar i -> "'" ^ i
+  | Oinc -> "inc"
+  | Odec -> "dec"
+  | Ouvar({oindex=i;osubst=a}) -> string_of_int i ^ "()"
 
 let get_abbrev d_env t =
   match t.t with

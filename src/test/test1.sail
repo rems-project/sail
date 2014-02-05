@@ -31,5 +31,5 @@ end ast
 
 function bit sw s = switch s { case 0 -> bitzero }
 
-function bit main _ = {sw(0); v1[0] }
+function bit main _ = {ignore(sw(0)); v1[0] }
 
