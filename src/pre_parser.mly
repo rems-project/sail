@@ -60,26 +60,22 @@ let r = fun x -> x (* Ulib.Text.of_latin1 *)
 
 %%
 
-id:
-  | Id
-    { $1 }
-
 id_found:
-  | Typedef id
+  | Typedef Id
     { $2 }
 
 skip:
   | Scattered
     { () }
-  | id
+  | Id
     { () }
   | Other
     { () }
 
 scan_file:
-  | id_found
+  | id_found Eof
     { [$1] }
-  | skip
+  | skip Eof
     { [] }
   | id_found scan_file
     { $1::$2 }
@@ -87,6 +83,6 @@ scan_file:
     { $2 }
 
 file:
-  | scan_file Eof
+  | scan_file
     { $1 }
 

@@ -405,7 +405,9 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let t',cs = type_consistent l d_env t expect_t in
       let (e',u,t_env,cs') = check_exp envs t' e in
       (e',t',t_env,cs@cs')
+        
     | E_app(id,parms) -> 
+      (*TODO add a tuple arg to store the function effects in, for eventual checking*)
       let i = id_to_string id in
       (match Envmap.apply t_env i with
       | Some(Some(tp,Enum,cs)) ->

@@ -1000,36 +1000,36 @@ r_def_body:
     { $1::$3 }
 
 type_def:
-  | Typedef id name_sect Eq typquant typ
+  | Typedef tid name_sect Eq typquant typ
     { tdloc (TD_abbrev($2,$3,mk_typschm $5 $6 5 6)) }
-  | Typedef id name_sect Eq typ
+  | Typedef tid name_sect Eq typ
     { tdloc (TD_abbrev($2,$3,mk_typschm (mk_typqn ()) $5 5 5)) }
-  | Typedef id Eq typquant typ
+  | Typedef tid Eq typquant typ
     { tdloc (TD_abbrev($2,mk_namesectn (), mk_typschm $4 $5 4 5))}
-  | Typedef id Eq typ
+  | Typedef tid Eq typ
     { tdloc (TD_abbrev($2,mk_namesectn (),mk_typschm (mk_typqn ()) $4 4 4)) }
   /* The below adds 4 shift/reduce conflicts. Due to c_def_body and confusions in id id and parens  */
-  | Typedef id name_sect Eq Const Struct typquant Lcurly c_def_body Rcurly
+  | Typedef tid name_sect Eq Const Struct typquant Lcurly c_def_body Rcurly
     { tdloc (TD_record($2,$3,$7,fst $9, snd $9)) }
-  | Typedef id name_sect Eq Const Struct Lcurly c_def_body Rcurly
+  | Typedef tid name_sect Eq Const Struct Lcurly c_def_body Rcurly
     { tdloc (TD_record($2,$3,(mk_typqn ()), fst $8, snd $8)) }
-  | Typedef id Eq Const Struct typquant Lcurly c_def_body Rcurly
+  | Typedef tid Eq Const Struct typquant Lcurly c_def_body Rcurly
     { tdloc (TD_record($2,mk_namesectn (), $6, fst $8, snd $8)) }
-  | Typedef id Eq Const Struct Lcurly c_def_body Rcurly
+  | Typedef tid Eq Const Struct Lcurly c_def_body Rcurly
     { tdloc (TD_record($2, mk_namesectn (), mk_typqn (), fst $7, snd $7)) }
-  | Typedef id name_sect Eq Const Union typquant Lcurly union_body Rcurly
+  | Typedef tid name_sect Eq Const Union typquant Lcurly union_body Rcurly
     { tdloc (TD_variant($2,$3, $7, fst $9, snd $9)) }
-  | Typedef id Eq Const Union typquant Lcurly union_body Rcurly
+  | Typedef tid Eq Const Union typquant Lcurly union_body Rcurly
     { tdloc (TD_variant($2,mk_namesectn (), $6, fst $8, snd $8)) }
-  | Typedef id name_sect Eq Const Union Lcurly union_body Rcurly
+  | Typedef tid name_sect Eq Const Union Lcurly union_body Rcurly
     { tdloc (TD_variant($2, $3, mk_typqn (), fst $8, snd $8)) }
-  | Typedef id Eq Const Union Lcurly union_body Rcurly
+  | Typedef tid Eq Const Union Lcurly union_body Rcurly
     { tdloc (TD_variant($2, mk_namesectn (), mk_typqn (), fst $7, snd $7)) }
-  | Typedef id Eq Enumerate Lcurly enum_body Rcurly
+  | Typedef tid Eq Enumerate Lcurly enum_body Rcurly
     { tdloc (TD_enum($2, mk_namesectn (), $6,false)) }
-  | Typedef id name_sect Eq Enumerate Lcurly enum_body Rcurly
+  | Typedef tid name_sect Eq Enumerate Lcurly enum_body Rcurly
     { tdloc (TD_enum($2,$3,$7,false)) }
-  | Typedef id Eq Register Bits Lsquare nexp_typ Colon nexp_typ Rsquare Lcurly r_def_body Rcurly
+  | Typedef tid Eq Register Bits Lsquare nexp_typ Colon nexp_typ Rsquare Lcurly r_def_body Rcurly
     { tdloc (TD_register($2, $7, $9, $12)) }
 
 
@@ -1066,13 +1066,13 @@ scattered_def:
     { sdloc (SD_scattered_function(mk_recn (), mk_tannot (mk_typqn ()) $2 2 2, mk_eannotn (), $3)) }
   | Function_ id
     { sdloc (SD_scattered_function(mk_recn (), mk_tannotn (), mk_eannotn (), $2)) }
-  | Typedef id name_sect Eq Const Union typquant
+  | Typedef tid name_sect Eq Const Union typquant
     { sdloc (SD_scattered_variant($2,$3,$7)) }
-  | Typedef id Eq Const Union typquant
+  | Typedef tid Eq Const Union typquant
     { sdloc (SD_scattered_variant($2,(mk_namesectn ()),$6)) }
-  | Typedef id name_sect Eq Const Union
+  | Typedef tid name_sect Eq Const Union
     { sdloc (SD_scattered_variant($2,$3,mk_typqn ())) }
-  | Typedef id Eq Const Union
+  | Typedef tid Eq Const Union
     { sdloc (SD_scattered_variant($2,mk_namesectn (),mk_typqn ())) }
 
 def:
@@ -1092,11 +1092,13 @@ def:
     { dloc (DEF_scattered $2) }
   | Function_ Clause funcl
     { dloc (DEF_scattered (sdloc (SD_scattered_funcl($3)))) }
-  | Union id Member typ id
+  | Union tid Member typ id
     { dloc (DEF_scattered (sdloc (SD_scattered_unioncl($2,Tu_aux(Tu_ty_id($4,$5), locn 4 5))))) }
-  | Union id Member id
+  | Union tid Member id
     { dloc (DEF_scattered (sdloc (SD_scattered_unioncl($2,Tu_aux(Tu_id($4), locn 4 4))))) }
   | End id
+    { dloc (DEF_scattered (sdloc (SD_scattered_end($2)))) }
+  | End tid
     { dloc (DEF_scattered (sdloc (SD_scattered_end($2)))) }
 
 defs_help:

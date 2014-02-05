@@ -90,7 +90,7 @@ let rec to_ast_typ (k_env : kind Envmap.t) (t: Parse_ast.atyp) : Ast.typ =
                               | K_Typ -> Typ_id id
                               | K_infer -> k.k <- K_Typ; Typ_id id
                               | _ -> typ_error l "Required an identifier with kind Type, encountered " (Some id) None (Some k))
-                | None -> typ_error l "Encountered an unbound identifier" (Some id) None None)
+                | None -> typ_error l "Encountered an unbound type identifier" (Some id) None None)
               | Parse_ast.ATyp_var(v) -> 
                 let v = to_ast_var v in
                 let mk = Envmap.apply k_env (var_to_string v) in
@@ -621,7 +621,7 @@ let to_ast_def (names, k_env, t_env) partial_defs def : def_progress envs_out * 
 	  let typq, k_env',_ = to_ast_typquant k_env typquant in
 	  (match (def_in_progress id partial_defs) with
 	    | None -> let partial_def = ref ((DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,None))),(l,None))),false) in
-                      (Def_place_holder(id,l),envs),(id,(partial_def,k_env'))::partial_defs
+                      (Def_place_holder(id,l),(names,Envmap.insert k_env ((id_to_string id),{k=K_Typ}),t_env)),(id,(partial_def,k_env'))::partial_defs
 	    | Some(d,k) -> typ_error l "Scattered type definition header name already in use by scattered definition" (Some id) None None)
 	| Parse_ast.SD_scattered_unioncl(id,tu) -> 
 	  let id = to_ast_id id in

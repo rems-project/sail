@@ -14,8 +14,8 @@ let bit v = bitzero
 let ( bit [ 32 ] ) v1 = 0b101
 
 (* scattered function definition and union definition *)
-scattered function unit f
 scattered typedef ast = const union
+scattered function unit f
 
 union ast member  bit * bit * bit A
 function clause f (  A (a,b,c) ) = ()
@@ -26,8 +26,8 @@ function clause f (  B (a,b) ) = ()
 union ast member  bit C
 function clause f (  C (a) ) = ()
 
-end f
 end ast
+end f
 
 function bit sw s = switch s { case 0 -> bitzero }
 
