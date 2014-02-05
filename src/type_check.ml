@@ -203,11 +203,17 @@ let rec check_pattern envs (P_aux(p,(l,annot))) : ((tannot pat) * (tannot emap) 
 	    | Tid id -> if pats = [] then 
 		(P_aux(p,(l,Some((params,t),Constructor,constraints))),Envmap.empty,constraints,t)
 	      else typ_error l ("Constructor " ^ i ^ " does not expect arguments")
-	    | Tfn(t1,t2,ef) -> 
-	      let ((P_aux(P_tup(pats'),_)),env,constraints,u) = 
-		check_pattern envs (P_aux(P_tup(pats),(l,annot))) in
-	      let (t',constraint') = type_consistent l d_env u t1 in
-	      (P_aux(P_app(id,pats'),(l,Some((params,t2),Constructor,constraints))),env,constraints,t2)
+	    | Tfn(t1,t2,ef) ->
+              (match pats with
+              | [] -> let t' = type_consistent l d_env unit_t t1 in
+                      (P_aux(P_app(id,[]),(l,Some((params,t2),Constructor,constraints))),Envmap.empty,constraints,t2)
+              | [p] -> let (p',env,constraints,u) = check_pattern envs p in
+                       let (t',constraint') = type_consistent l d_env u t1 in
+                           (P_aux(P_app(id,[p']),(l,Some((params,t2),Constructor,constraint'@constraints))),env,constraints@constraint',t2)
+              | pats -> let ((P_aux(P_tup(pats'),_)),env,constraints,u) = 
+		          check_pattern envs (P_aux(P_tup(pats),(l,annot))) in
+	                let (t',constraint') = type_consistent l d_env u t1 in
+	                (P_aux(P_app(id,pats'),(l,Some((params,t2),Constructor,constraint'@constraints))),env,constraints,t2))
 	    | _ -> typ_error l ("Identifier " ^ i ^ " is not bound to a constructor"))
 	| Some(Some((params,t),tag,constraints)) -> typ_error l ("Identifier " ^ i ^ " used in pattern is not a constructor"))
     | P_record(fpats,_) -> 
