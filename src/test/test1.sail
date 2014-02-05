@@ -15,16 +15,16 @@ let ( bit [ 32 ] ) v1 = 0b101
 
 (* scattered function definition and union definition *)
 scattered typedef ast = const union
-scattered function unit f
+scattered function ast f
 
 union ast member  bit * bit * bit A
-function clause f (  A (a,b,c) ) = ()
+function clause f (  A (a,b,c) ) = C(a)
 
 union ast member  bit * bit B
-function clause f (  B (a,b) ) = ()
+function clause f (  B (a,b) ) = C(a)
 
 union ast member  bit C
-function clause f (  C (a) ) = ()
+function clause f (  C (a) ) = C(a)
 
 end ast
 end f
