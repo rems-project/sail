@@ -1,8 +1,19 @@
+open import Pervasives
 open import Interp
 open import Interp_ast
 import Maybe_extra
 open import Num
 open import List
+
+let compose f g x = f (V_tuple [g x]) ;;
+
+let eq (V_tuple [x; y]) = V_lit (if x = y then L_true else L_false) ;;
+
+let neg (V_tuple [V_lit arg]) = V_lit (match arg with
+  | L_true -> L_false
+  | L_false -> L_true end) ;;
+
+let neq = compose neg eq ;;
 
 let add (V_tuple [V_lit(L_num x); V_lit(L_num y)]) = V_lit(L_num (x+y)) ;;
 
@@ -15,6 +26,7 @@ let rec vec_concat (V_tuple args) = match args with
 let function_map = [
   ("add", add);
   ("add_infix", add);
+  ("=", eq);
   (":", vec_concat);
 ] ;;
 

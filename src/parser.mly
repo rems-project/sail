@@ -242,6 +242,8 @@ id:
     { idl (DeIid($3)) }
   | Lparen Deinfix StarStar Rparen
     { idl (DeIid($3)) }
+  | Lparen Deinfix Tilde Rparen
+    { idl (DeIid($3)) }
   | Lparen Deinfix TildeCarrot Rparen
     { idl (DeIid($3)) }
 
