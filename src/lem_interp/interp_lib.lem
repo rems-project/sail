@@ -2,12 +2,20 @@ open import Interp
 open import Interp_ast
 import Maybe_extra
 open import Num
+open import List
 
 let add (V_tuple [V_lit(L_num x); V_lit(L_num y)]) = V_lit(L_num (x+y)) ;;
+
+let rec vec_concat (V_tuple args) = match args with
+  | [V_vector 0 true l; V_vector 0 true l'] -> V_vector 0 true (l ++ l')
+  | [V_lit l; x] -> vec_concat (V_tuple [litV_to_vec l; x])
+  | [x; V_lit l] -> vec_concat (V_tuple [x; litV_to_vec l])
+  end;;
 
 let function_map = [
   ("add", add);
   ("add_infix", add);
+  (":", vec_concat);
 ] ;;
 
 let eval_external name v = (Maybe_extra.fromJust (List.lookup name function_map)) v ;;

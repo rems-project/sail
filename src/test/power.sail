@@ -1,0 +1,1 @@
+../../../../rsem/idl/power/generated/extract-full.sail
