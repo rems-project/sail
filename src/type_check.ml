@@ -375,8 +375,14 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
     | E_lit (L_aux(lit,l')) ->
       let t,lit' = (match lit with
         | L_unit  -> unit_t,lit
-	| L_zero  -> bit_t,lit
-	| L_one   -> bit_t,lit
+	| L_zero  -> 
+          (match expect_t.t with
+          | Tid "bool" -> bool_t,L_false
+          | _ -> bit_t,lit)
+	| L_one   -> 
+          (match expect_t.t with
+          | Tid "bool" -> bool_t,L_true
+          | _ -> bit_t,lit)
 	| L_true  -> bool_t,lit
 	| L_false -> bool_t,lit
 	| L_num i -> 
@@ -385,7 +391,12 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
             if i = 0 then bit_t,L_zero
 	    else 
 	      if i = 1 then bit_t,L_one
-	      else typ_error l "Expected bit,found a number that cannot be used as a bit"
+	      else typ_error l "Expected bit, found a number that cannot be used as a bit"
+          | Tid "bool" ->
+            if i = 0 then bool_t, L_false
+            else 
+              if i = 1 then bool_t,L_true
+              else typ_error l "Expected bool, found a number that cannot be used as a bit and converted to bool"
           | _ -> {t = Tapp("enum",
 			   [TA_nexp{nexp = Nconst i};TA_nexp{nexp= Nconst 0};])},lit)
 	| L_hex s -> {t = Tapp("vector",
