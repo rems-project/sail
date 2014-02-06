@@ -69,7 +69,7 @@ type nexp_range =
   | InS of Parse_ast.l * nexp * int list (* This holds the given value for string after a substitution *)
 
 type t_params = (string * kind) list
-type tannot = ((t_params * t) * tag * nexp_range list) option
+type tannot = ((t_params * t) * tag * nexp_range list * effect) option
 type 'a emap = 'a Envmap.t
 
 type rec_kind = Record | Register
@@ -83,6 +83,9 @@ type def_envs = {
 
 type exp = tannot Ast.exp
 
+val add_effect : Ast.base_effect -> effect -> effect
+val union_effects : effect -> effect -> effect
+
 val initial_kind_env : kind Envmap.t
 val initial_abbrev_env : tannot Envmap.t
 val initial_typ_env : tannot Envmap.t
@@ -90,6 +93,7 @@ val nat_t : t
 val unit_t : t
 val bool_t : t
 val bit_t : t
+val pure_e : effect
 
 val t_to_string : t -> string
 
@@ -99,7 +103,7 @@ val new_n : unit -> nexp
 val new_o : unit -> order
 val new_e : unit -> effect
 
-val subst : (string * kind) list -> t -> nexp_range list -> t * nexp_range list
+val subst : (string * kind) list -> t -> nexp_range list -> effect -> t * nexp_range list * effect
 
 
 (* type_consistent is similar to a standard type equality, except in the case of [[consistent t1 t2]] where

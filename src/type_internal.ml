@@ -74,7 +74,7 @@ type nexp_range =
   | InS of Parse_ast.l * nexp * int list
 
 type t_params = (string * kind) list
-type tannot = ((t_params * t) * tag * nexp_range list) option
+type tannot = ((t_params * t) * tag * nexp_range list * effect) option
 type 'a emap = 'a Envmap.t
 
 type rec_kind = Record | Register
@@ -87,6 +87,19 @@ type def_envs = {
  }  
 
 type exp = tannot Ast.exp
+
+let add_effect e ef =
+  match ef.effect with
+  | Evar s -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "add_effect given var instead of uvar")
+  | Eset bases -> ef.effect <- Eset (e::bases); ef
+  | Euvar _ -> ef.effect <- Eset [e]; ef
+
+let union_effects e1 e2 =
+  match e1.effect,e2.effect with
+  | Evar s,_ | _,Evar s -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "union_effects given var(s) instead of uvar(s)")
+  | Euvar _,_ -> e1.effect <- e2.effect; e2
+  | _,Euvar _ -> e2.effect <- e1.effect; e2
+  | Eset b1, Eset b2 -> e1.effect <- Eset (b1@b2); e2.effect <- e1.effect; e2  
 
 let v_count = ref 0
 let t_count = ref 0
@@ -140,18 +153,17 @@ let initial_kind_env =
   ]
 
 let nat_typ = {t=Tid "nat"}
-let pure = {effect=Eset []}
+let pure_e = {effect=Eset []}
 let initial_typ_env =
   Envmap.from_list [
-    ("ignore",Some(([("a",{k=K_Typ})],{t=Tfn ({t=Tvar "a"},unit_t,pure)}),External,[]));
-    ("+",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure)}),External,[]));
-    ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure)}),External,[]));
-    
+    ("ignore",Some(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,{effect=Evar "b"})}),External,[],pure_e));
+    ("+",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External,[],pure_e));
+    ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External,[],pure_e));    
   ]
 
 let initial_abbrev_env =
   Envmap.from_list [
-    ("nat",Some(([],nat_t),Emp,[]));
+    ("nat",Some(([],nat_t),Emp,[],pure_e));
   ]
 
 let rec t_subst s_env t =
@@ -201,7 +213,7 @@ let rec cs_subst t_env cs =
     | In(l,s,ns)::cs -> InS(l,n_subst t_env {nexp=Nvar s},ns)::(cs_subst t_env cs)
     | InS(l,n,ns)::cs -> InS(l,n_subst t_env n,ns)::(cs_subst t_env cs)
 
-let subst k_env t cs =
+let subst k_env t cs e =
   let subst_env = Envmap.from_list
     (List.map (fun (id,k) -> (id, 
                               match k.k with
@@ -211,7 +223,7 @@ let subst k_env t cs =
                               | K_Efct -> TA_eft (new_e ())
                               | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "substitution given an environment with a non-base-kind kind"))) k_env) 
   in
-  t_subst subst_env t, cs_subst subst_env cs
+  t_subst subst_env t, cs_subst subst_env cs, e_subst subst_env e
 
 let rec string_of_list sep string_of = function
   | [] -> ""
@@ -256,14 +268,14 @@ let get_abbrev d_env t =
   match t.t with
     | Tid i ->
       (match Envmap.apply d_env.abbrevs i with
-	| Some(Some((params,t),tag,cs)) ->
-	  Some(subst params t cs)
+	| Some(Some((params,t),tag,cs,efct)) ->
+	  Some(subst params t cs efct)
 	| _ -> None)
     | Tapp(i,args) ->
       (match Envmap.apply d_env.abbrevs i with
-	| Some(Some((params,t),tag,cs)) ->
+	| Some(Some((params,t),tag,cs,efct)) ->
 	  let env = Envmap.from_list2 (List.map fst params) args in
-	  Some(t_subst env t, cs_subst env cs)
+	  Some(t_subst env t, cs_subst env cs, e_subst env efct)
 	| _ -> None)
     | _ -> None
 
@@ -338,13 +350,13 @@ let rec type_consistent l d_env t1 t2 =
   | Tid v1,Tid v2 -> 
     if v1 = v2 then (t2,[]) 
     else (match get_abbrev d_env t1,get_abbrev d_env t2 with
-      | Some(t1,cs1),Some(t2,cs2) ->
+      | Some(t1,cs1,e1),Some(t2,cs2,e2) ->
 	let t',cs' = type_consistent l d_env t1 t2 in
 	t',cs1@cs2@cs'
-      | Some(t1,cs1),None ->
+      | Some(t1,cs1,e1),None ->
 	let t',cs' = type_consistent l d_env t1 t2 in
 	t',cs1@cs'
-      | None,Some(t2,cs2) ->
+      | None,Some(t2,cs2,e2) ->
 	let t',cs' = type_consistent l d_env t1 t2 in
 	t',cs2@cs'
       | None,None ->  eq_error l ("Types " ^ v1 ^ " and " ^ v2 ^ " do not match"))
@@ -356,13 +368,13 @@ let rec type_consistent l d_env t1 t2 =
     if id1=id2 && la1 = la2 then (t2,(List.flatten (List.map2 (type_arg_eq l d_env) args1 args2)))
     else
       (match get_abbrev d_env t1,get_abbrev d_env t2 with
-	| Some(t1,cs1),Some(t2,cs2) ->
+	| Some(t1,cs1,e1),Some(t2,cs2,e2) ->
 	  let t',cs' = type_consistent l d_env t1 t2 in
 	  t',cs1@cs2@cs'
-	| Some(t1,cs1),None ->
+	| Some(t1,cs1,e1),None ->
 	  let t',cs' = type_consistent l d_env t1 t2 in
 	  t',cs1@cs'
-	| None,Some(t2,cs2) ->
+	| None,Some(t2,cs2,e2) ->
 	  let t',cs' = type_consistent l d_env t1 t2 in
 	  t',cs2@cs'
 	| None,None -> eq_error l ("Type application of " ^ (t_to_string t1) ^ " and " ^ (t_to_string t2) ^ " must match"))
@@ -377,13 +389,13 @@ let rec type_consistent l d_env t1 t2 =
   | t,Tuvar _ -> t2.t <- t1.t; (t2,[])
   | _,_ ->
     (match get_abbrev d_env t1,get_abbrev d_env t2 with
-      | Some(t1,cs1),Some(t2,cs2) ->
+      | Some(t1,cs1,e1),Some(t2,cs2,e2) ->
 	let t',cs' = type_consistent l d_env t1 t2 in
 	t',cs1@cs2@cs'
-      | Some(t1,cs1),None ->
+      | Some(t1,cs1,e1),None ->
 	let t',cs' = type_consistent l d_env t1 t2 in
 	t',cs1@cs'
-      | None,Some(t2,cs2) ->
+      | None,Some(t2,cs2,e2) ->
 	let t',cs' = type_consistent l d_env t1 t2 in
 	t',cs2@cs'
       | None,None -> eq_error l ("Type mismatch :" ^ (t_to_string t1) ^ " , " ^ (t_to_string t2)))
@@ -402,16 +414,16 @@ let rec type_coerce l d_env t1 e t2 =
     let tl1,tl2 = List.length t1s,List.length t2s in
     if tl1=tl2 then 
       let ids = List.map (fun _ -> Id_aux(Id (new_id ()),l)) t1s in
-      let vars = List.map2 (fun i t -> E_aux(E_id(i),(l,Some(([],t),Emp,[])))) ids t1s in
+      let vars = List.map2 (fun i t -> E_aux(E_id(i),(l,Some(([],t),Emp,[],pure_e)))) ids t1s in
       let (coerced_ts,cs,coerced_vars) = 
         List.fold_right2 (fun v (t1,t2) (ts,cs,es) -> let (t',c',e') = type_coerce l d_env t1 v t2 in
                                                       ((t'::ts),c'@cs,(e'::es)))
           vars (List.combine t1s t2s) ([],[],[]) in
       if vars = coerced_vars then (t2,cs,e)
-      else let e' = E_aux(E_case(e,[(Pat_aux(Pat_exp(P_aux(P_tup (List.map2 (fun i t -> P_aux(P_id i,(l,(Some(([],t),Emp,[]))))) ids t1s),(l,Some(([],t1),Emp,[]))),
-                                               E_aux(E_tuple coerced_vars,(l,Some(([],t2),Emp,cs)))),
-                                             (l,Some(([],t2),Emp,[]))))]),
-                          (l,(Some(([],t2),Emp,[])))) in
+      else let e' = E_aux(E_case(e,[(Pat_aux(Pat_exp(P_aux(P_tup (List.map2 (fun i t -> P_aux(P_id i,(l,(Some(([],t),Emp,[],pure_e))))) ids t1s),(l,Some(([],t1),Emp,[],pure_e))),
+                                               E_aux(E_tuple coerced_vars,(l,Some(([],t2),Emp,cs,pure_e)))),
+                                             (l,Some(([],t2),Emp,[],pure_e))))]),
+                          (l,(Some(([],t2),Emp,[],pure_e)))) in
            (t2,cs,e')
     else eq_error l ("A tuple of length " ^ (string_of_int tl1) ^ " cannot be used where a tuple of length " ^ (string_of_int tl2) ^ " is expected")
   | Tapp(id1,args1),Tapp(id2,args2) ->
@@ -423,11 +435,11 @@ let rec type_coerce l d_env t1 e t2 =
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [Eq(l,b2,{nexp=Nconst 0});Eq(l,r2,{nexp=N2n({nexp=Nadd(b1,r1)})})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_inc",l)),[e]),(l,Some(([],t2),Emp,cs))))
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_inc",l)),[e]),(l,Some(([],t2),Emp,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [Eq(l,b2,{nexp=Nconst 0});Eq(l,r2,{nexp=N2n({nexp=Nadd({nexp=Nneg b1},r1)})})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Some(([],t2),Emp,cs))))
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Some(([],t2),Emp,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert a vector to an enum without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
@@ -438,12 +450,12 @@ let rec type_coerce l d_env t1 e t2 =
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [Eq(l,b1,{nexp=Nconst 0});Eq(l,{nexp=Nadd(b2,r2)},{nexp=N2n r1})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),[e]),(l,Some(([],t2),Emp,cs))))
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),[e]),(l,Some(([],t2),Emp,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [Eq(l,b1,{nexp=N2n{nexp=Nadd(b2,{nexp=Nneg r2})}});
 		  Eq(l,r1,b1)] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Some(([],t2),Emp,cs))))
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Some(([],t2),Emp,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert an enum to a vector without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
@@ -451,26 +463,26 @@ let rec type_coerce l d_env t1 e t2 =
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or enum is not properly kinded"))
     | _,_ -> 
       (match get_abbrev d_env t1,get_abbrev d_env t2 with
-	| Some(t1,cs1),Some(t2,cs2) ->
+	| Some(t1,cs1,ef1),Some(t2,cs2,ef2) ->
 	  let t',cs',e' = type_coerce l d_env t1 e t2 in
 	  (t',cs1@cs2@cs',e')
-	| Some(t1,cs1),None ->
+	| Some(t1,cs1,ef1),None ->
 	  let t',cs',e' = type_coerce l d_env t1 e t2 in
 	  (t',cs1@cs',e')
-	| None,Some(t2,cs2) ->
+	| None,Some(t2,cs2,ef2) ->
 	  let t',cs',e' = type_coerce l d_env t1 e t2 in
 	  (t',cs2@cs',e')
 	| None,None ->
 	  let t',cs' = type_consistent l d_env t1 t2 in (t',cs',e)))
   | Tapp("enum",[TA_nexp b1;TA_nexp r1;]),Tid("bit") ->
     let t',cs'= type_consistent l d_env t1 {t=Tapp("enum",[TA_nexp{nexp=Nconst 0};TA_nexp{nexp=Nconst 1}])} 
-    in (t2,cs',E_aux(E_if(E_aux(E_app(Id_aux(Id "is_zero",l),[e]),(l,Some(([],bool_t),Emp,[]))),
-			  E_aux(E_lit(L_aux(L_zero,l)),(l,Some(([],bit_t),Emp,[]))),
-			  E_aux(E_lit(L_aux(L_one,l)),(l,Some(([],bit_t),Emp,[])))),
-		     (l,Some(([],bit_t),Emp,cs'))))
+    in (t2,cs',E_aux(E_if(E_aux(E_app(Id_aux(Id "is_zero",l),[e]),(l,Some(([],bool_t),Emp,[],pure_e))),
+			  E_aux(E_lit(L_aux(L_zero,l)),(l,Some(([],bit_t),Emp,[],pure_e))),
+			  E_aux(E_lit(L_aux(L_one,l)),(l,Some(([],bit_t),Emp,[],pure_e)))),
+		     (l,Some(([],bit_t),Emp,cs',pure_e))))
   | Tapp("enum",[TA_nexp b1;TA_nexp r1;]),Tid(i) -> 
     (match get_abbrev d_env t2 with
-      | Some(t2,cs2) ->
+      | Some(t2,cs2,ef2) ->
 	let t',cs',e' = type_coerce l d_env t1 e t2 in
 	(t',cs2@cs',e')
       | None -> 
@@ -479,15 +491,15 @@ let rec type_coerce l d_env t1 e t2 =
 	    (t2,[Eq(l,b1,{nexp=Nconst 0});LtEq(l,r1,{nexp=Nconst (List.length enums)})],
 	     E_aux(E_case(e,
 			  List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),
-								      (l,Some(([],t1),Emp,[]))),
+								      (l,Some(([],t1),Emp,[],pure_e))),
 								E_aux(E_id(Id_aux(Id a,l)),
-								      (l,Some(([],t2),Emp,[])))),
-							(l,Some(([],t2),Emp,[])))) enums),
-		   (l,Some(([],t2),Emp,[]))))
+								      (l,Some(([],t2),Emp,[],pure_e)))),
+							(l,Some(([],t2),Emp,[],pure_e)))) enums),
+		   (l,Some(([],t2),Emp,[],pure_e))))
 	  | None -> eq_error l ("Type mismatch: " ^ (t_to_string t1) ^ " , " ^ (t_to_string t2))))
   | Tid(i),Tapp("enum",[TA_nexp b1;TA_nexp r1;]) -> 
     (match get_abbrev d_env t1 with
-      | Some(t1,cs1) ->
+      | Some(t1,cs1,ef1) ->
 	let t',cs',e' = type_coerce l d_env t1 e t2 in
 	(t',cs1@cs',e')
       | None -> 
@@ -496,21 +508,21 @@ let rec type_coerce l d_env t1 e t2 =
 	    (t2,[Eq(l,b1,{nexp=Nconst 0});GtEq(l,r1,{nexp=Nconst (List.length enums)})],
 	     E_aux(E_case(e,
 			  List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_id(Id_aux(Id a,l)),
-								      (l,Some(([],t1),Emp,[]))),
+								      (l,Some(([],t1),Emp,[],pure_e))),
 								E_aux(E_lit(L_aux((L_num i),l)),
-								      (l,Some(([],t2),Emp,[])))),
-							(l,Some(([],t2),Emp,[])))) enums),
-		   (l,Some(([],t2),Emp,[]))))
+								      (l,Some(([],t2),Emp,[],pure_e)))),
+							(l,Some(([],t2),Emp,[],pure_e)))) enums),
+		   (l,Some(([],t2),Emp,[],pure_e))))
 	  | None -> eq_error l ("Type mismatch: " ^ (t_to_string t1) ^ " , " ^ (t_to_string t2))))
   | _,_ -> 
     (match get_abbrev d_env t1,get_abbrev d_env t2 with
-      | Some(t1,cs1),Some(t2,cs2) -> 
+      | Some(t1,cs1,ef1),Some(t2,cs2,ef2) -> 
 	let t',cs',e' = type_coerce l d_env t1 e t2 in
 	(t',cs'@cs1@cs2,e')
-      | Some(t1,cs1),None ->
+      | Some(t1,cs1,ef1),None ->
 	let t',cs',e' = type_coerce l d_env t1 e t2 in
 	(t',cs'@cs1,e')
-      | None,Some(t2,cs2) ->
+      | None,Some(t2,cs2,ef2) ->
 	let t',cs',e' = type_coerce l d_env t1 e t2 in
 	(t',cs'@cs2,e')
       | None,None -> let t',cs = type_consistent l d_env t1 t2 in (t',cs,e))
