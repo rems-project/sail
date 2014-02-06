@@ -483,6 +483,23 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let t = {t = Tapp("vector",[TA_nexp({nexp=Nconst 0});TA_nexp({nexp=Nconst (List.length es)});TA_ord({order=Oinc});TA_typ item_t])} in
       let t',cs',e' = type_coerce l d_env t (E_aux(E_vector es,(l,Some(([],t),Emp,cs,pure_e)))) expect_t in
       (e',t',t_env,cs@cs',pure_e)
+    | E_vector_indexed eis ->
+      let item_t = match expect_t.t with
+        | Tapp("vector",[base;rise;ord;TA_typ item_t]) -> item_t
+          (* TODO: Consider whether an enum should be looked for here*)
+        | _ -> new_t () in
+      let first,last = fst (List.hd eis), fst (List.hd (List.rev eis)) in
+      let is_increasing = first <= last in
+      let es,cs,_ = (List.fold_right 
+                     (fun ((i,e),c) (es,cs,prev) -> 
+                       if is_increasing 
+                       then if prev <= i then (((i,e)::es),(c@cs),i) else (typ_error l "Indexed vector is not consistently increasing")
+                       else if i <= prev then (((i,e)::es),(c@cs),i) else (typ_error l "Indexed vector is not consistently decreasing"))
+                     (List.map (fun (i,e) -> let (e,_,_,cs,eft) = (check_exp envs item_t e) in ((i,e),cs))
+                        eis) ([],[],first)) in
+      let t = {t = Tapp("vector",[TA_nexp({nexp=Nconst first});TA_nexp({nexp=Nconst (List.length eis)});TA_ord({order= if is_increasing then Oinc else Odec});TA_typ item_t])} in
+      let t',cs',e' = type_coerce l d_env t (E_aux(E_vector_indexed es,(l,Some(([],t),Emp,cs,pure_e)))) expect_t in
+      (e',t',t_env,cs@cs',pure_e)
     | E_let(lbind,body) -> 
       let (lb',t_env',cs,ef) = (check_lbind envs lbind) in
       let (e,t,_,cs',_) = check_exp (Env(d_env,Envmap.union t_env t_env')) expect_t body in
