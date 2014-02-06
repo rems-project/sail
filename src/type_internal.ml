@@ -497,6 +497,9 @@ let rec type_coerce l d_env t1 e t2 =
 							(l,Some(([],t2),Emp,[],pure_e)))) enums),
 		   (l,Some(([],t2),Emp,[],pure_e))))
 	  | None -> eq_error l ("Type mismatch: " ^ (t_to_string t1) ^ " , " ^ (t_to_string t2))))
+  | Tid("bit"),Tid("bool") ->
+    let e' = E_aux(E_app((Id_aux(Id "is_one",l)),[e]),(l,Some(([],bool_t),External,[],pure_e))) in
+    (t2,[],e')
   | Tid(i),Tapp("enum",[TA_nexp b1;TA_nexp r1;]) -> 
     (match get_abbrev d_env t1 with
       | Some(t1,cs1,ef1) ->
