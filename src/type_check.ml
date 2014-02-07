@@ -511,6 +511,29 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let t = {t = Tapp("vector",[TA_nexp({nexp=Nconst first});TA_nexp({nexp=Nconst (List.length eis)});TA_ord({order= if is_increasing then Oinc else Odec});TA_typ item_t])} in
       let t',cs',e' = type_coerce l d_env t (E_aux(E_vector_indexed es,(l,Some(([],t),Emp,cs,pure_e)))) expect_t in
       (e',t',t_env,cs@cs',pure_e)
+    | E_vector_access(vec,i) ->
+      let base,rise,ord = new_n(),new_n(),new_o() in
+      let min,m_rise = new_n(),new_n() in
+      let vt = {t= Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord; TA_typ expect_t])} in
+      let (vec',t',_,cs,ef) = check_exp envs vt vec in
+      let it = {t= Tapp("enum",[TA_nexp min;TA_nexp m_rise])} in
+      let (i',ti',_,cs_i,ef_i) = check_exp envs it i in
+      let cs_loc = 
+	match ord.order with
+	  | Oinc ->
+	    [LtEq(l,base,min); LtEq(l,{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,rise)})] 
+	  | Odec -> 
+	    [GtEq(l,base,min); LtEq(l,{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,{nexp=Nneg rise})})]
+	  | _ -> typ_error l "A vector must be either increasing or decreasing to access a single element"
+      in
+      (E_aux(E_vector_access(vec',i'),
+	     (l, Some(([],expect_t),Emp,cs@cs_i@cs_loc,union_effects ef ef_i))),
+       t',t_env,cs_loc@cs_i@cs,union_effects ef ef_i) (*Do I need to know if vector is a register?*)
+(*    | E_vector_subrange(vec,i1,i2) ->
+      let base,rise,ord = new_n(),new_n(),new_o() in
+      let min1,m_rise1 = new_n(),new_n() in
+      let min1,m_rise2 = new_n(),new_n() in
+      let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ expect_t]*)
     | E_let(lbind,body) -> 
       let (lb',t_env',cs,ef) = (check_lbind envs lbind) in
       let (e,t,_,cs',_) = check_exp (Env(d_env,Envmap.union t_env t_env')) expect_t body in

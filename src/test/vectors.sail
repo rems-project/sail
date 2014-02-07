@@ -7,7 +7,7 @@ register nat match_success
 function unit decode ([bitzero, bitzero, bitone, bitzero]) = match_success := 1
 and decode x = match_success := x
 
-function unit main _ = {
+function bit main _ = {
 
   i := [bitzero, bitzero, bitone, bitzero];
 
