@@ -721,8 +721,9 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,annot))) ->
 	let (pat',t_env',constraints',t') = check_pattern (Env(d_env,t_env)) pat in
 	let u,cs = type_consistent l d_env t' param_t in
-	let exp,_,_,constraints,ef = check_exp (Env(d_env,Envmap.union t_env t_env')) ret_t exp in
-	(FCL_aux((FCL_Funcl(id,pat',exp)),(l,tannot)),constraints'@cs@constraints)) funcls) in
+	let exp',_,_,constraints,ef = check_exp (Env(d_env,Envmap.union t_env t_env')) ret_t exp in
+	(*let _ = (Pretty_print.pp_exp Format.std_formatter) exp' in*)
+	(FCL_aux((FCL_Funcl(id,pat',exp')),(l,tannot)),constraints'@cs@constraints)) funcls) in
   match (in_env,tannot) with
     | Some(Some( (params,u),Spec,constraints,eft)), Some( (p',t),Emp,c',eft') ->
       let u,constraints,eft = subst params u constraints eft in
@@ -736,7 +737,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       Env(d_env,Envmap.insert t_env (id,tannot))
     | _ , _-> 
       let t_env = if is_rec then Envmap.insert t_env (id,tannot) else t_env in
-      let funcles,cs = check t_env in
+      let funcls,cs = check t_env in
       let cs' = resolve_constraints cs in
       let tannot = resolve_params tannot in
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),

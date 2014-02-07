@@ -29,6 +29,8 @@ function clause f (  C (a) ) = C(a)
 end ast
 end f
 
+function unit a (bit) b = if b then () else ()
+
 function bit sw s = switch s { case 0 -> bitzero }
 
 function bit main _ = {ignore(sw(0)); v1[0] }

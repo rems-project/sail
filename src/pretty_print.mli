@@ -4,6 +4,7 @@ open Format
 
 (* Prints on formatter the defs following source syntax *)
 val pp_defs : Format.formatter -> tannot defs -> unit
+val pp_exp : Format.formatter -> exp -> unit
 
 (* Prints on formatter the defs as Lem Ast nodes *)
 val pp_lem_defs : Format.formatter -> tannot defs -> unit
