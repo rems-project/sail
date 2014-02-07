@@ -711,7 +711,7 @@ and interp_main t_level l_env l_mem exp =
                 (match find_extern externs id with
                 | Just(str) -> 
                   (Action (Call_extern str v) (Frame (Id "0") (E_id (Id "0")) le lm Top), lm, le)
-                | Nothing -> (Error "Unknown function call",lm,le) end)
+                | Nothing -> (Error (String.stringAppend "Unknown function call " (get_id id)),lm,le) end)
 	       end) end) end) end)
          | out -> out end)
     | E_app_infix l op r -> 
