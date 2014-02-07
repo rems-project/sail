@@ -4,9 +4,9 @@ val extern ( bit * bit ) -> bit effect pure (deinfix : ) = "vec_concat"
 
 val extern forall Type 'a . ( 'a * 'a ) -> bool effect pure (deinfix != ) = "neq"
 
-val extern bit -> bool (* XXX *) effect pure (deinfix ~ ) = "bitwise-not"
+val extern bit -> bit effect pure (deinfix ~ ) = "bitwise-not"
 val extern ( bit * bit ) -> bit effect pure (deinfix ^ ) = "bitwise-xor"
-val extern ( bit * bit ) -> bool (* XXX *) effect pure (deinfix & ) = "bitwise-and"
+val extern ( bit * bit ) -> bit effect pure (deinfix & ) = "bitwise-and"
 
 (* XXX sign extension *)
 function forall Type 'a . 'a exts ( x ) = x
@@ -26,8 +26,8 @@ scattered function ast decode
 
  function clause execute (  Branch  (  AA, LI, LK  )  ) =
   {
-    if  (  AA  !=  bitzero  )  then  NIA  :=  (  exts  (  (  LI  :  0b00  )  ))  else  NIA  :=  (  CIA  +  (  exts  (  (  LI  :  0b00  )  ))  )  ;
-    if  (  LK  !=  bitzero  )  then  LR  :=  (  CIA  +  4  )  ;
+    if  AA  then  NIA  :=  (  exts  (  (  LI  :  0b00  )  ))  else  NIA  :=  (  CIA  +  (  exts  (  (  LI  :  0b00  )  ))  )  ;
+    if  LK  then  LR  :=  (  CIA  +  4  )  ;
   } 
 
 
@@ -43,9 +43,9 @@ scattered function ast decode
     ctr_ok  :=  (  ((  BO  )[  2  ])  |  (  (  ((  CTR  )[  M  ..  63  ])  !=  0  )  ^  ((  BO  )[  3  ])  )  )  ;
     cond_ok  :=  (  ((  BO  )[  0  ])  |  (  ((  CR  )[  (  BI  +  32  )  ])  ^  (  ~  (  ((  BO  )[  1  ])  ))  )  )  ;
     if  (  ctr_ok  &  cond_ok  )  then  {
-      if  (  AA  !=  bitzero  )  then  NIA  :=  (  exts  (  (  BD  :  0b00  )  ))  else  NIA  :=  (  CIA  +  (  exts  (  (  BD  :  0b00  )  ))  )  ;
+      if  AA  then  NIA  :=  (  exts  (  (  BD  :  0b00  )  ))  else  NIA  :=  (  CIA  +  (  exts  (  (  BD  :  0b00  )  ))  )  ;
     }  ;
-    if  (  LK  !=  bitzero  )  then  LR  :=  (  CIA  +  4  )  ;
+    if  LK  then  LR  :=  (  CIA  +  4  )  ;
   } 
 
 
@@ -61,7 +61,7 @@ scattered function ast decode
     ctr_ok  :=  (  ((  BO  )[  2  ])  |  (  (  ((  CTR  )[  M  ..  63  ])  !=  0  )  ^  ((  BO  )[  3  ])  )  )  ;
     cond_ok  :=  (  ((  BO  )[  0  ])  |  (  ((  CR  )[  (  BI  +  32  )  ])  ^  (  ~  (  ((  BO  )[  1  ])  ))  )  )  ;
     if  (  ctr_ok  &  cond_ok  )  then  NIA  :=  (  ((  LR  )[  0  ..  61  ])  :  0b00  )  ;
-    if  (  LK  !=  bitzero  )  then  LR  :=  (  CIA  +  4  )  ;
+    if  LK  then  LR  :=  (  CIA  +  4  )  ;
   } 
 
 
@@ -74,7 +74,7 @@ scattered function ast decode
   {
     cond_ok  :=  (  ((  BO  )[  0  ])  |  (  ((  CR  )[  (  BI  +  32  )  ])  ^  (  ~  (  ((  BO  )[  1  ])  ))  )  )  ;
     if  cond_ok  then  NIA  :=  (  ((  CTR  )[  0  ..  61  ])  :  0b00  )  ;
-    if  (  LK  !=  bitzero  )  then  LR  :=  (  CIA  +  4  )  ;
+    if  LK  then  LR  :=  (  CIA  +  4  )  ;
   } 
 
 
