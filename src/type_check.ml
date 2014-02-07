@@ -529,11 +529,118 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       (E_aux(E_vector_access(vec',i'),
 	     (l, Some(([],expect_t),Emp,cs@cs_i@cs_loc,union_effects ef ef_i))),
        t',t_env,cs_loc@cs_i@cs,union_effects ef ef_i) (*Do I need to know if vector is a register?*)
-(*    | E_vector_subrange(vec,i1,i2) ->
+    | E_vector_subrange(vec,i1,i2) ->
       let base,rise,ord = new_n(),new_n(),new_o() in
       let min1,m_rise1 = new_n(),new_n() in
-      let min1,m_rise2 = new_n(),new_n() in
-      let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ expect_t]*)
+      let min2,m_rise2 = new_n(),new_n() in
+      let base_n,rise_n,ord_n,item_t = match expect_t.t with
+	| Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord_n; TA_typ item_t]) -> base_n,rise_n,ord_n,item_t
+	| _ -> new_n(),new_n(),new_o(),new_t() in
+      let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t])} in
+      let (vec',t',_,cs,ef) = check_exp envs vt vec in
+      let i1t = {t=Tapp("enum",[TA_nexp min1;TA_nexp m_rise1])} in
+      let (i1', ti1, _,cs_i1,ef_i1) = check_exp envs i1t i1 in
+      let i2t = {t=Tapp("enum",[TA_nexp min2;TA_nexp m_rise2])} in
+      let (i2', ti2, _,cs_i2,ef_i2) = check_exp envs i2t i2 in
+      let cs_loc =
+	match ord.order with
+	  | Oinc -> 
+	    [LtEq(l,base,min1); LtEq(l,{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)}); 
+	     LtEq(l,{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,rise)});
+	     LtEq(l,min1,base_n); LtEq(l,base_n,{nexp=Nadd(min1,m_rise1)});
+	     LtEq(l,rise_n,{nexp=Nadd(min2,m_rise2)})]
+	  | Odec ->
+	    [GtEq(l,base,{nexp=Nadd(min1,m_rise1)}); GtEq(l,{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)});
+	     GtEq(l,{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,{nexp=Nneg rise})});
+	     GtEq(l,min1,base_n); GtEq(l,base_n,{nexp=Nadd(min1,m_rise1)});
+	     GtEq(l,rise_n,{nexp=Nadd(min2,m_rise2)})]
+	  | _ -> typ_error l "A vector must be either increasing or decreasing to access a slice" in
+      let nt = {t=Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord;TA_typ item_t])} in
+      let (t,cs3,e') = 
+	type_coerce l d_env nt (E_aux(E_vector_subrange(vec',i1',i2'),
+				      (l,Some(([],nt),Emp,cs@cs_i1@cs_i2@cs_loc,(union_effects ef (union_effects ef_i1 ef_i2))))))
+	            expect_t in
+      (e',t,t_env,cs3@cs@cs_i1@cs_i2@cs_loc,(union_effects ef (union_effects ef_i1 ef_i2)))
+    | E_vector_update(vec,i,e) ->
+      let base,rise,ord = new_n(),new_n(),new_o() in
+      let min,m_rise = new_n(),new_n() in
+      let item_t = match expect_t.t with
+	| Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord_n; TA_typ item_t]) -> item_t
+	| _ -> new_t() in
+      let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t])} in
+      let (vec',t',_,cs,ef) = check_exp envs vt vec in
+      let it = {t=Tapp("enum",[TA_nexp min;TA_nexp m_rise])} in
+      let (i', ti, _,cs_i,ef_i) = check_exp envs it i in
+      let (e', te, _,cs_e,ef_e) = check_exp envs item_t e in
+      let cs_loc = 
+	match ord.order with
+	  | Oinc ->
+	    [LtEq(l,base,min); LtEq(l,{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,rise)})] 
+	  | Odec -> 
+	    [GtEq(l,base,min); LtEq(l,{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,{nexp=Nneg rise})})]
+	  | _ -> typ_error l "A vector must be either increasing or decreasing to change a single element"
+      in      
+      let nt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise; TA_ord ord;TA_typ item_t])} in
+      let (t,cs3,e') = 
+	type_coerce l d_env nt (E_aux(E_vector_update(vec',i',e'),
+				      (l,Some(([],nt),Emp,cs@cs_i@cs_e@cs_loc,(union_effects ef (union_effects ef_i ef_e))))))
+	            expect_t in
+      (e',t,t_env,cs3@cs@cs_i@cs_e@cs_loc,(union_effects ef (union_effects ef_i ef_e)))
+    | E_vector_update_subrange(vec,i1,i2,e) ->
+      let base,rise,ord = new_n(),new_n(),new_o() in
+      let min1,m_rise1 = new_n(),new_n() in
+      let min2,m_rise2 = new_n(),new_n() in
+      let item_t = match expect_t.t with
+	| Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord_n; TA_typ item_t]) -> item_t
+	| _ -> new_t() in
+      let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t])} in
+      let (vec',t',_,cs,ef) = check_exp envs vt vec in
+      let i1t = {t=Tapp("enum",[TA_nexp min1;TA_nexp m_rise1])} in
+      let (i1', ti1, _,cs_i1,ef_i1) = check_exp envs i1t i1 in
+      let i2t = {t=Tapp("enum",[TA_nexp min2;TA_nexp m_rise2])} in
+      let (i2', ti2, _,cs_i2,ef_i2) = check_exp envs i2t i2 in
+      let (e',item_t',_,cs_e,ef_e) =
+	try check_exp envs item_t e with
+	  | _ ->
+	    let (base_e,rise_e) = new_n(),new_n() in
+	    let (e',ti',env_e,cs_e,ef_e) = 
+	      check_exp envs {t=Tapp("vector",[TA_nexp base_e;TA_nexp rise_e;TA_ord ord;TA_typ item_t])} e in
+	    let cs_add = [Eq(l,base_e,min1);LtEq(l,rise,m_rise2)] in
+	    (e',ti',env_e,cs_e@cs_add,ef_e) in	     
+      let cs_loc =
+	match ord.order with
+	  | Oinc -> 
+	    [LtEq(l,base,min1); LtEq(l,{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)}); 
+	     LtEq(l,{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,rise)});]
+	  | Odec ->
+	    [GtEq(l,base,{nexp=Nadd(min1,m_rise1)}); GtEq(l,{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)});
+	     GtEq(l,{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,{nexp=Nneg rise})});]
+	  | _ -> typ_error l "A vector must be either increasing or decreasing to modify a slice" in
+      let nt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise; TA_ord ord;TA_typ item_t])} in
+      let (t,cs3,e') = 
+	type_coerce l d_env nt (E_aux(E_vector_update_subrange(vec',i1',i2',e'),
+				      (l,Some(([],nt),Emp,cs@cs_i1@cs_i2@cs_e@cs_loc,
+					      (union_effects ef (union_effects ef_i1 (union_effects ef_i2 ef_e)))))))
+	            expect_t in
+      (e',t,t_env,cs3@cs@cs_i1@cs_i2@cs_loc@cs_e,(union_effects ef (union_effects ef_i1 (union_effects ef_i2 ef_e))))
+    | E_list(es) ->
+      let item_t = match expect_t.t with
+	| Tapp("list",[TA_typ i]) -> i
+	| _ -> new_t() in
+      let es,cs = (List.fold_right (fun (e,_,_,c,_) (es,cs) -> (e::es),(c@cs)) (List.map (check_exp envs item_t) es) ([],[])) in
+      let t = {t = Tapp("list",[TA_typ item_t])} in
+      let t',cs',e' = type_coerce l d_env t (E_aux(E_list es,(l,Some(([],t),Emp,cs,pure_e)))) expect_t in
+      (e',t',t_env,cs@cs',pure_e)
+    | E_cons(ls,i) ->
+      let item_t = match expect_t.t with
+	| Tapp("list",[TA_typ i]) -> i
+	| _ -> new_t() in
+      let lt = {t=Tapp("list",[TA_typ item_t])} in
+      let (ls',t',_,cs,ef) = check_exp envs lt ls in
+      let (i', ti, _,cs_i,ef_i) = check_exp envs item_t i in
+      let (t',cs',e') = type_coerce l d_env lt (E_aux(E_cons(ls',i'),(l,Some(([],lt),Emp,cs@cs_i,(union_effects ef ef_i))))) expect_t in
+      (e',t',t_env,cs@cs'@cs_i,(union_effects ef ef_i))
+      
     | E_let(lbind,body) -> 
       let (lb',t_env',cs,ef) = (check_lbind envs lbind) in
       let (e,t,_,cs',_) = check_exp (Env(d_env,Envmap.union t_env t_env')) expect_t body in
