@@ -8,6 +8,8 @@ val extern bit -> bit effect pure (deinfix ~ ) = "bitwise-not"
 val extern ( bit * bit ) -> bit effect pure (deinfix ^ ) = "bitwise-xor"
 val extern ( bit * bit ) -> bit effect pure (deinfix & ) = "bitwise-and"
 
+val extern bit -> bool effect pure is_one = "is_one"
+
 (* XXX sign extension *)
 function forall Type 'a . 'a exts ( x ) = x
 

@@ -7,6 +7,8 @@ open import List
 
 let compose f g x = f (V_tuple [g x]) ;;
 
+let is_one (V_lit b) = V_lit (if b = L_one then L_true else L_false) ;;
+
 let eq (V_tuple [x; y]) = V_lit (if x = y then L_true else L_false) ;;
 
 let neg (V_tuple [V_lit arg]) = V_lit (match arg with
@@ -28,6 +30,7 @@ let function_map = [
   ("add_infix", add);
   ("=", eq);
   (":", vec_concat);
+  ("is_one", is_one);
 ] ;;
 
 let eval_external name v = (Maybe_extra.fromJust (List.lookup name function_map)) v ;;
