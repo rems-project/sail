@@ -640,7 +640,14 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let (i', ti, _,cs_i,ef_i) = check_exp envs item_t i in
       let (t',cs',e') = type_coerce l d_env lt (E_aux(E_cons(ls',i'),(l,Some(([],lt),Emp,cs@cs_i,(union_effects ef ef_i))))) expect_t in
       (e',t',t_env,cs@cs'@cs_i,(union_effects ef ef_i))
-      
+    | E_record(fexps) -> (E_aux(e,(l,annot)),expect_t,t_env,[],pure_e)
+    | E_record_update(exp,fexps) -> (E_aux(e,(l,annot)),expect_t,t_env,[],pure_e)
+    | E_field(exp,id) -> (E_aux(e,(l,annot)),expect_t,t_env,[],pure_e)
+    | E_case(exp,pexps) ->
+      let check_t = new_t() in
+      let (e',t',_,cs,ef) = check_exp envs check_t exp in
+      let (pexps',t,cs',ef') = check_cases envs check_t expect_t pexps in
+      (E_aux(E_case(e',pexps'),(l,Some(([],t),Emp,cs@cs',union_effects ef ef'))),t,t_env,cs@cs',union_effects ef ef')
     | E_let(lbind,body) -> 
       let (lb',t_env',cs,ef) = (check_lbind envs lbind) in
       let (e,t,_,cs',_) = check_exp (Env(d_env,Envmap.union t_env t_env')) expect_t body in
@@ -656,6 +663,24 @@ and check_block orig_envs envs expect_t exps : ((tannot exp) list * tannot * tan
     | e::exps -> let (e',t',t_env,sc,ef') = check_exp envs unit_t e in
 		 let (exps',annot',orig_envs,sc',t,ef) = check_block orig_envs (Env(d_env,t_env)) expect_t exps in
 		 ((e'::exps'),annot',orig_envs,sc@sc',t,ef) (* TODO: union effects *)
+
+and check_cases envs check_t expect_t pexps : ((tannot pexp) list * typ * nexp_range list * effect) =
+  let (Env(d_env,t_env)) = envs in
+  match pexps with
+    | [] -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "switch with no cases found")
+    | [(Pat_aux(Pat_exp(pat,exp),(l,annot)))] ->
+      let pat',env,cs_p,u = check_pattern envs pat in
+      let t',cs_p' = type_consistent l d_env u check_t in
+      let (e,t,_,cs2,ef2) = check_exp (Env(d_env,Envmap.union env t_env)) expect_t exp in
+      [Pat_aux(Pat_exp(pat',e),(l,Some(([],t),Emp,cs_p@cs_p'@cs2,ef2)))],t,cs_p@cs_p'@cs2,ef2
+    | ((Pat_aux(Pat_exp(pat,exp),(l,annot)))::pexps) ->
+      let pat',env,cs_p,u = check_pattern envs pat in
+      let t',cs_p' = type_consistent l d_env u check_t in
+      let (e,t,_,cs2,ef2) = check_exp (Env(d_env,Envmap.union env t_env)) expect_t exp in
+      let (pes,t'',csl,efl) = check_cases envs check_t expect_t pexps in
+      ((Pat_aux(Pat_exp(pat',e),(l,(Some(([],t''),Emp,(csl@cs_p@cs_p'@cs2),(union_effects efl ef2))))))::pes,
+       t'',
+       csl@cs_p@cs_p'@cs2,union_effects efl ef2)
 
 and check_lbind envs (LB_aux(lbind,(l,annot))) : tannot letbind * tannot emap * nexp_range list * effect =
   let Env(d_env,t_env) = envs in
