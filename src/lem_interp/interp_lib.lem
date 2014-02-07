@@ -20,16 +20,18 @@ let neq = compose neg eq ;;
 let add (V_tuple [V_lit(L_num x); V_lit(L_num y)]) = V_lit(L_num (x+y)) ;;
 
 let rec vec_concat (V_tuple args) = match args with
-  | [V_vector 0 true l; V_vector 0 true l'] -> V_vector 0 true (l ++ l')
+  | [V_vector n d l; V_vector n' d' l'] ->
+      (* XXX d = d' ? droping n' ? *)
+      V_vector n d (l ++ l')
   | [V_lit l; x] -> vec_concat (V_tuple [litV_to_vec l; x])
   | [x; V_lit l] -> vec_concat (V_tuple [x; litV_to_vec l])
-  end;;
+  end ;;
 
 let function_map = [
   ("add", add);
   ("add_infix", add);
-  ("=", eq);
-  (":", vec_concat);
+  ("eq", eq);
+  ("vec_concat", vec_concat);
   ("is_one", is_one);
 ] ;;
 
