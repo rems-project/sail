@@ -218,7 +218,7 @@ let rec check_pattern envs (P_aux(p,(l,annot))) : ((tannot pat) * (tannot emap) 
 	| Some(Some((params,t),tag,constraints,eft)) -> typ_error l ("Identifier " ^ i ^ " used in pattern is not a constructor"))
     | P_record(fpats,_) -> 
       (match (fields_to_rec fpats d_env.rec_env) with
-	| None -> typ_error l ("No record exists with the listed fields")
+	| None -> typ_error l ("No struct exists with the listed fields")
 	| Some(id,typ_pats) ->
 	  let pat_checks = 
 	    List.map (fun (tan,id,l,pat) -> 
@@ -640,9 +640,123 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let (i', ti, _,cs_i,ef_i) = check_exp envs item_t i in
       let (t',cs',e') = type_coerce l d_env lt (E_aux(E_cons(ls',i'),(l,Some(([],lt),Emp,cs@cs_i,(union_effects ef ef_i))))) expect_t in
       (e',t',t_env,cs@cs'@cs_i,(union_effects ef ef_i))
-    | E_record(fexps) -> (E_aux(e,(l,annot)),expect_t,t_env,[],pure_e)
-    | E_record_update(exp,fexps) -> (E_aux(e,(l,annot)),expect_t,t_env,[],pure_e)
-    | E_field(exp,id) -> (E_aux(e,(l,annot)),expect_t,t_env,[],pure_e)
+    | E_record(FES_aux(FES_Fexps(fexps,_),l')) -> 
+      let u = match (get_abbrev d_env expect_t) with
+	| Some(t,cs,ef) -> t
+	| None -> expect_t in
+      (match u.t with
+	| Tid(n) ->
+	  (match lookup_record_typ n d_env.rec_env with 
+	    | None -> typ_error l ("Expected a value of type " ^ n ^ " but found a struct")
+	    | Some(((i,Record,fields) as r)) -> 
+	      if (List.length fexps = List.length fields) 
+	      then let fexps,cons,ef =
+		     List.fold_right 
+		       (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) (fexps,cons,ef') ->
+			 let i = id_to_string id in
+			 match lookup_field_type i r with
+			   | None -> 
+			     typ_error l ("Expected a struct of type " ^ n ^ ", which should not have a field " ^ i)
+			   | Some((params,et),tag,cs,ef) ->
+			     let (e,t',_,c,ef) = check_exp envs et exp in
+			     (FE_aux(FE_Fexp(id,e),(l,Some(([],t'),tag,cs@c,ef)))::fexps,cons@cs@c,union_effects ef ef'))
+		       fexps ([],[],pure_e) in
+		   E_aux(E_record(FES_aux(FES_Fexps(fexps,false),l')),(l,Some(([],expect_t),Emp,cons,ef))),expect_t,t_env,cons,ef
+	      else typ_error l ("Expected a struct of type " ^ n ^ ", which should have " ^ string_of_int (List.length fields) ^ " fields")
+	    | Some(i,Register,fields) -> typ_error l ("Expected a value with register type, found a struct"))
+	| Tuvar _ ->
+	  let field_names = List.map (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) -> id_to_string id) fexps in
+	  (match lookup_record_fields field_names d_env.rec_env with
+	    | None -> typ_error l "No struct type matches the set of fields given"
+	    | Some(((i,Record,fields) as r)) ->
+	      let fexps,cons,ef =
+		List.fold_right 
+		  (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) (fexps,cons,ef') ->
+		    let i = id_to_string id in
+		    match lookup_field_type i r with
+		      | None -> raise (Reporting_basic.err_unreachable l "field_match didn't have a full match")
+		      | Some((params,et),tag,cs,ef) ->
+			let (e,t',_,c,ef) = check_exp envs et exp in
+			(FE_aux(FE_Fexp(id,e),(l,Some(([],t'),tag,cs@c,ef)))::fexps,cons@cs@c,union_effects ef ef'))
+		  fexps ([],[],pure_e) in
+	      expect_t.t <- Tid i;
+	      E_aux(E_record(FES_aux(FES_Fexps(fexps,false),l')),(l,Some(([],expect_t),Emp,cons,ef))),expect_t,t_env,cons,ef
+	    | Some(i,Register,fields) -> typ_error l "Expected a value with register type, found a struct")
+	| _ -> typ_error l ("Expected an expression of type " ^ t_to_string expect_t ^ " but found a struct"))
+    | E_record_update(exp,FES_aux(FES_Fexps(fexps,_),l')) -> 
+      let (e',t',_,c,ef) = check_exp envs expect_t exp in
+      (match t'.t with
+	| Tid i ->
+	  (match lookup_record_typ i d_env.rec_env with
+	    | None -> typ_error l ("Expected a struct for this update, instead found an expression with type " ^ i)
+	    | Some((i,Register,fields)) ->
+	      typ_error l "Expected a struct for this update, instead found a register"
+	    | Some(((i,Record,fields) as r)) ->
+	      if (List.length fexps <= List.length fields) 
+	      then let fexps,cons,ef =
+		     List.fold_right 
+		       (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) (fexps,cons,ef') ->
+			 let fi = id_to_string id in
+			 match lookup_field_type fi r with
+			   | None -> 
+			     typ_error l ("Expected a struct with type " ^ i ^ ", which does not have a field " ^ fi)
+			   | Some((params,et),tag,cs,ef) ->
+			     let (e,t',_,c,ef) = check_exp envs et exp in
+			     (FE_aux(FE_Fexp(id,e),(l,Some(([],t'),tag,cs@c,ef)))::fexps,cons@cs@c,union_effects ef ef'))
+		       fexps ([],[],pure_e) in
+		   E_aux(E_record_update(e',FES_aux(FES_Fexps(fexps,false),l')),(l,Some(([],expect_t),Emp,cons,ef))),expect_t,t_env,cons,ef
+	      else typ_error l ("Expected fields from struct " ^ i ^ ", given more fields than struct includes"))
+	| Tuvar _ ->
+	  let field_names = List.map (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) -> id_to_string id) fexps in
+	  (match lookup_possible_records field_names d_env.rec_env with
+	    | [] -> typ_error l "No struct matches the set of fields given for this struct update"
+	    | [(((i,Record,fields) as r))] ->
+	      let fexps,cons,ef =
+		List.fold_right 
+		  (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) (fexps,cons,ef') ->
+		    let i = id_to_string id in
+		    match lookup_field_type i r with
+		      | None -> raise (Reporting_basic.err_unreachable l "field_match didn't have a full match")
+		      | Some((params,et),tag,cs,ef) ->
+			let (e,t',_,c,ef) = check_exp envs et exp in
+			(FE_aux(FE_Fexp(id,e),(l,Some(([],t'),tag,cs@c,ef)))::fexps,cons@cs@c,union_effects ef ef'))
+		  fexps ([],[],pure_e) in
+	      expect_t.t <- Tid i;
+	      E_aux(E_record_update(e',FES_aux(FES_Fexps(fexps,false),l')),(l,Some(([],expect_t),Emp,cons,ef))),expect_t,t_env,cons,ef
+	    | [(i,Register,fields)] -> typ_error l "Expected a value with register type, found a struct"
+	    | records -> typ_error l "Multiple structs contain this set of fields, try adding a cast to disambiguate")
+	| _ -> typ_error l ("Expected a struct to update but found an expression of type " ^ t_to_string expect_t))
+    | E_field(exp,id) ->
+      let (e',t',_,c,ef) = check_exp envs (new_t()) exp in
+      (match t'.t with
+	| Tid i ->
+	  (match lookup_record_typ i d_env.rec_env with
+	    | None -> typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i)
+	    | Some(((i,rec_kind,fields) as r)) ->
+	      let fi = id_to_string id in
+	      (match lookup_field_type fi r with
+		| None -> 
+		  typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
+		| Some((params,et),tag,cs,ef) ->
+		  let et,cs,ef = subst params et cs ef in
+		  let (et',c',acc) = type_coerce l d_env et (E_aux(E_field(e',id),(l,Some(([],et),tag,cs,ef)))) expect_t in
+		  (acc,et',t_env,cs@c',ef)))
+	| Tuvar _ ->
+	  let fi = id_to_string id in
+	  (match lookup_possible_records [fi] d_env.rec_env with
+	    | [] -> typ_error l ("No struct has a field " ^ fi)
+	    | [(((i,rkind,fields) as r))] ->
+	      let fi = id_to_string id in
+	      (match lookup_field_type fi r with
+		| None -> 
+		  raise (Reporting_basic.err_unreachable l "lookup_possible_records returned a record that didn't include the field")
+		| Some((params,et),tag,cs,ef) ->
+		  let et,cs,ef = subst params et cs ef in
+		  let (et',c',acc) = type_coerce l d_env et (E_aux(E_field(e',id),(l,Some(([],et),tag,cs,ef)))) expect_t in
+		  t'.t <- Tid i;
+		  (acc,et',t_env,cs@c',ef))
+	    | records -> typ_error l ("Multiple structs contain field " ^ fi ^ ", try adding a cast to disambiguate"))
+	| _ -> typ_error l ("Expected a struct or register for access but found an expression of type " ^ t_to_string t'))
     | E_case(exp,pexps) ->
       let check_t = new_t() in
       let (e',t',_,cs,ef) = check_exp envs check_t exp in

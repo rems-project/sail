@@ -78,20 +78,28 @@ type tannot = ((t_params * t) * tag * nexp_range list * effect) option
 type 'a emap = 'a Envmap.t
 
 type rec_kind = Record | Register
+type rec_env = (string * rec_kind * ((string * tannot) list))
 type def_envs = { 
   k_env: kind emap; 
   abbrevs: tannot emap; 
   namesch : tannot emap; 
   enum_env : (string list) emap; 
-  rec_env : (string * rec_kind * ((string * tannot) list)) list;
+  rec_env : rec_env list;
  }  
 
 type exp = tannot Ast.exp
 
+let rec effect_remove_dups = function
+  | [] -> []
+  | (BE_aux(be,l))::es -> 
+    if (List.exists (fun (BE_aux(be',_)) -> be = be') es)
+    then effect_remove_dups es
+    else (BE_aux(be,l))::(effect_remove_dups es)
+      
 let add_effect e ef =
   match ef.effect with
   | Evar s -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "add_effect given var instead of uvar")
-  | Eset bases -> ef.effect <- Eset (e::bases); ef
+  | Eset bases -> {effect = Eset (effect_remove_dups (e::bases))}
   | Euvar _ -> ef.effect <- Eset [e]; ef
 
 let union_effects e1 e2 =
@@ -99,7 +107,41 @@ let union_effects e1 e2 =
   | Evar s,_ | _,Evar s -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "union_effects given var(s) instead of uvar(s)")
   | Euvar _,_ -> e1.effect <- e2.effect; e2
   | _,Euvar _ -> e2.effect <- e1.effect; e2
-  | Eset b1, Eset b2 -> e1.effect <- Eset (b1@b2); e2.effect <- e1.effect; e2  
+  | Eset b1, Eset b2 -> {effect= Eset (effect_remove_dups (b1@b2))}  
+
+let rec lookup_record_typ (typ : string) (env : rec_env list) : rec_env option =
+  match env with
+    | [] -> None
+    | ((id,_,_) as r)::env -> 
+      if typ = id then Some(r) else lookup_record_typ typ env
+
+let rec fields_match f1 f2 =
+  match f1 with
+    | [] -> true
+    | f::fs -> (List.mem_assoc f f2) && fields_match fs f2
+
+let rec lookup_record_fields (fields : string list) (env : rec_env list) : rec_env option =
+  match env with
+    | [] -> None
+    | ((id,r,fs) as re)::env ->
+      if ((List.length fields) = (List.length fs)) &&
+	 (fields_match fields fs) then
+	Some re
+      else lookup_record_fields fields env
+
+let rec lookup_possible_records (fields : string list) (env : rec_env list) : rec_env list =
+  match env with
+    | [] -> []
+    | ((id,r,fs) as re)::env ->
+      if (((List.length fields) <= (List.length fs)) &&
+	  (fields_match fields fs))
+      then re::(lookup_possible_records fields env)
+      else lookup_possible_records fields env
+
+let lookup_field_type (field: string) ((id,r_kind,fields) : rec_env) : tannot =
+  if List.mem_assoc field fields
+  then List.assoc field fields
+  else None
 
 let v_count = ref 0
 let t_count = ref 0

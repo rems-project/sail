@@ -73,15 +73,21 @@ type tannot = ((t_params * t) * tag * nexp_range list * effect) option
 type 'a emap = 'a Envmap.t
 
 type rec_kind = Record | Register
+type rec_env = (string * rec_kind * ((string * tannot) list))
 type def_envs = { 
   k_env: kind emap; 
   abbrevs: tannot emap; 
   namesch : tannot emap; 
   enum_env : (string list) emap; 
-  rec_env : (string * rec_kind * ((string * tannot) list)) list;
+  rec_env : rec_env list;
  }
 
 type exp = tannot Ast.exp
+
+val lookup_record_typ : string -> rec_env list -> rec_env option
+val lookup_record_fields : string list -> rec_env list -> rec_env option
+val lookup_possible_records : string list -> rec_env list -> rec_env list
+val lookup_field_type : string -> rec_env -> tannot
 
 val add_effect : Ast.base_effect -> effect -> effect
 val union_effects : effect -> effect -> effect
@@ -104,7 +110,7 @@ val new_o : unit -> order
 val new_e : unit -> effect
 
 val subst : (string * kind) list -> t -> nexp_range list -> effect -> t * nexp_range list * effect
-
+val get_abbrev : def_envs -> t -> (t * nexp_range list * effect) option
 
 (* type_consistent is similar to a standard type equality, except in the case of [[consistent t1 t2]] where
    t1 and t2 are both enum types and t1 is contained within the range of t2: i.e.
