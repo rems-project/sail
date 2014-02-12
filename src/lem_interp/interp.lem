@@ -173,12 +173,16 @@ let litV_to_vec l =
   match l with
   | L_hex s ->
     let hexes = String.toCharList s in
+    (* XXX unimplemented *)
     V_vector 0 true []
   | L_bin s -> 
     let bits = String.toCharList s in
     let exploded_bits = List.map (fun c -> String.toString [c]) bits in
     let bits = List.map (fun s -> match s with | "0" -> (V_lit L_zero) | "1" -> (V_lit L_one) end) exploded_bits in
-    V_vector 0 true bits
+    (* XXX assume binary constants are written in big-endian, convert them to
+     * little-endian by default - we might need syntax to change both of those
+     * assumptions. *)
+    V_vector 0 true (List.reverse bits)
   end
 
 (* Like List_extra.nth with a natural instead of nat index -

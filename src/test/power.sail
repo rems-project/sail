@@ -194,6 +194,6 @@ function unit main _ = {
   NIA := 0b0;
 
   (* should decode as Branch *)
-  execute(decode(0b01001000000000000000000000000000));
+  execute(decode(0b00000000000000000000000000010010));
   ()
 }
