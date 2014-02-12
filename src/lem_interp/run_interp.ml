@@ -9,7 +9,7 @@ let lit_to_string = function
  | L_one -> "bitone"
  | L_true -> "true"
  | L_false -> "false"
- | L_num n -> string_of_int n
+ | L_num n -> Big_int.string_of_big_int n
  | L_hex s -> s
  | L_bin s -> s
  | L_undef -> "undefined"
@@ -32,7 +32,7 @@ let rec val_to_string = function
  | V_vector (first_index, msb, l) ->
      let order = if msb then "big-endian" else "little-endian" in
      let repr = String.concat "; " (List.map val_to_string l) in
-     sprintf "vector [%s] (%s, from %d)" repr order first_index
+     sprintf "vector [%s] (%s, from %s)" repr order (Big_int.string_of_big_int first_index)
  | V_record l ->
      let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string value) in
      let repr = String.concat "; " (List.map  pp l) in
@@ -54,7 +54,8 @@ let rec stack_to_string = function
 
 
 let reg_to_string = function Reg (id,_) | SubReg (id,_,_) -> id_to_string id ;;
-let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%d, %d)" x y
+let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%s, %s)"
+  (Big_int.string_of_big_int x) (Big_int.string_of_big_int y)
 let act_to_string = function
  | Read_reg (reg, sub) ->
      sprintf "read_reg %s%s" (reg_to_string reg) (sub_to_string sub)
