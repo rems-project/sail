@@ -1,6 +1,8 @@
 val extern ( nat * nat ) -> nat effect pure (deinfix + ) = "add"
 (* XXX type is wrong *)
-val extern ( bit * bit ) -> bit effect pure (deinfix : ) = "vec_concat"
+val extern forall Type 'a . ( 'a * 'a ) -> 'a effect pure (deinfix : ) = "vec_concat"
+
+val extern forall Type 'a . ( 'a * 'a ) -> bit effect pure (deinfix != ) = "neq"
 
 val extern forall Type 'a . ( 'a * 'a ) -> bool effect pure (deinfix != ) = "neq"
 
@@ -15,6 +17,11 @@ function forall Type 'a . 'a exts ( x ) = x
 
 register (bit[32]) NIA (* next instruction address *)
 register (bit[32]) CIA (* current instruction address *)
+
+(* XXX check me *)
+register (bit[32]) CR
+register (bit[32]) CTR
+register (bit[32]) LR
 
 register bool mode64bit
 
