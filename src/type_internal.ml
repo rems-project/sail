@@ -200,7 +200,9 @@ let initial_typ_env =
   Envmap.from_list [
     ("ignore",Some(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,{effect=Evar "b"})}),External,[],pure_e));
     ("+",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External,[],pure_e));
-    ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External,[],pure_e));    
+    ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External,[],pure_e));
+    ("-",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External,[],pure_e));
+    ("|",Some(([],{t= Tfn ({t=Ttup([bit_t;bit_t])},bit_t,pure_e)}),External,[],pure_e));
   ]
 
 let initial_abbrev_env =

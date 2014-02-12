@@ -766,6 +766,11 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let (lb',t_env',cs,ef) = (check_lbind envs lbind) in
       let (e,t,_,cs',_) = check_exp (Env(d_env,Envmap.union t_env t_env')) expect_t body in
       (E_aux(E_let(lb',e),(l,Some(([],t),Emp,cs@cs',pure_e))),t,t_env,cs@cs',pure_e)
+    | E_assign(lexp,exp) ->
+      let (lexp',t',t_env',tag,ef) = check_lexp envs lexp in
+      let (exp',t'',_,cs,ef) = check_exp envs t' exp in
+      let (t',c') = type_consistent l d_env unit_t expect_t in
+      (E_aux(E_assign(lexp',exp'),(l,(Some(([],unit_t),tag,cs,ef)))),unit_t,t_env',cs,ef)
     | _ -> (E_aux(e,(l,annot)),expect_t,t_env,[],pure_e)
 		    
 and check_block orig_envs envs expect_t exps : ((tannot exp) list * tannot * tannot emap * nexp_range list * t * effect) =
@@ -795,6 +800,15 @@ and check_cases envs check_t expect_t pexps : ((tannot pexp) list * typ * nexp_r
       ((Pat_aux(Pat_exp(pat',e),(l,(Some(([],t''),Emp,(csl@cs_p@cs_p'@cs2),(union_effects efl ef2))))))::pes,
        t'',
        csl@cs_p@cs_p'@cs2,union_effects efl ef2)
+
+and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot emap * tag *effect) =
+  let (Env(d_env,t_env)) = envs in
+  match lexp with
+    | LEXP_id id -> (LEXP_aux(lexp,(l,annot))),new_t(),t_env,Emp,pure_e
+    | LEXP_memory(id,exps) -> (LEXP_aux(lexp,(l,annot)),new_t(),t_env,Emp,pure_e)
+    | LEXP_vector(vec,acc) -> (LEXP_aux(lexp,(l,annot)),new_t(),t_env,Emp,pure_e)
+    | LEXP_vector_range(vec,base,range)-> (LEXP_aux(lexp,(l,annot))),new_t(),t_env,Emp,pure_e
+    | LEXP_field(vec,id)-> (LEXP_aux(lexp,(l,annot))),new_t(),t_env,Emp,pure_e
 
 and check_lbind envs (LB_aux(lbind,(l,annot))) : tannot letbind * tannot emap * nexp_range list * effect =
   let Env(d_env,t_env) = envs in

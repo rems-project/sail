@@ -33,7 +33,7 @@ type base_kind =  (* base kind *)
 
 type nexp =  (* expression of kind Nat, for vector sizes and origins *)
  | Nexp_var of kid (* variable *)
- | Nexp_constant of nat (* constant *)
+ | Nexp_constant of natural (* constant *)
  | Nexp_times of nexp * nexp (* product *)
  | Nexp_sum of nexp * nexp (* sum *)
  | Nexp_exp of nexp (* exponential *)
@@ -78,7 +78,7 @@ type n_constraint =  (* constraint over kind $Nat$ *)
  | NC_fixed of nexp * nexp
  | NC_bounded_ge of nexp * nexp
  | NC_bounded_le of nexp * nexp
- | NC_nat_set_bounded of kid * list nat
+ | NC_nat_set_bounded of kid * list natural
 
 
 type kinded_id =  (* optionally kind-annotated identifier *)
@@ -97,7 +97,7 @@ type lit =  (* Literal constant *)
  | L_one (* $bitone : bit$ *)
  | L_true (* $true : bool$ *)
  | L_false (* $false : bool$ *)
- | L_num of nat (* natural number constant *)
+ | L_num of natural (* natural number constant *)
  | L_hex of string (* bit vector constant, C-style *)
  | L_bin of string (* bit vector constant, C-style *)
  | L_undef (* constant representing undefined values *)
@@ -133,7 +133,7 @@ type pat =  (* Pattern *)
  | P_app of id * list pat (* union constructor pattern *)
  | P_record of list fpat * bool (* struct pattern *)
  | P_vector of list pat (* vector pattern *)
- | P_vector_indexed of list (nat * pat) (* vector pattern (with explicit indices) *)
+ | P_vector_indexed of list (natural * pat) (* vector pattern (with explicit indices) *)
  | P_vector_concat of list pat (* concatenated vector pattern *)
  | P_tup of list pat (* tuple pattern *)
  | P_list of list pat (* list pattern *)
@@ -157,7 +157,7 @@ type exp =  (* Expression *)
  | E_if of exp * exp * exp (* conditional *)
  | E_for of id * exp * exp * exp * exp (* loop *)
  | E_vector of list exp (* vector (indexed from 0) *)
- | E_vector_indexed of list (nat * exp) (* vector (indexed consecutively) *)
+ | E_vector_indexed of list (natural * exp) (* vector (indexed consecutively) *)
  | E_vector_access of exp * exp (* vector access *)
  | E_vector_subrange of exp * exp * exp (* subvector extraction *)
  | E_vector_update of exp * exp * exp (* vector functional update *)
@@ -221,8 +221,8 @@ type tannot_opt =  (* Optional type annotation for functions *)
 
 
 type index_range =  (* index specification, for bitfields in register types *)
- | BF_single of nat (* single index *)
- | BF_range of nat * nat (* index range *)
+ | BF_single of natural (* single index *)
+ | BF_range of natural * natural (* index range *)
  | BF_concat of index_range * index_range (* concatenation of index ranges *)
 
 
