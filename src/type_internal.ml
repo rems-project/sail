@@ -442,7 +442,7 @@ let rec type_consistent l d_env t1 t2 =
       | None,Some(t2,cs2,e2) ->
 	let t',cs' = type_consistent l d_env t1 t2 in
 	t',cs2@cs'
-      | None,None -> eq_error l ("Type mismatch :" ^ (t_to_string t1) ^ " , " ^ (t_to_string t2)))
+      | None,None -> eq_error l ("Type mismatch found " ^ (t_to_string t1) ^ " but expected a " ^ (t_to_string t2)))
 
 and type_arg_eq l d_env ta1 ta2 = 
   match ta1,ta2 with
@@ -540,7 +540,7 @@ let rec type_coerce l d_env t1 e t2 =
 								      (l,Some(([],t2),Emp,[],pure_e)))),
 							(l,Some(([],t2),Emp,[],pure_e)))) enums),
 		   (l,Some(([],t2),Emp,[],pure_e))))
-	  | None -> eq_error l ("Type mismatch: " ^ (t_to_string t1) ^ " , " ^ (t_to_string t2))))
+	  | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2))))
   | Tid("bit"),Tid("bool") ->
     let e' = E_aux(E_app((Id_aux(Id "is_one",l)),[e]),(l,Some(([],bool_t),External,[],pure_e))) in
     (t2,[],e')

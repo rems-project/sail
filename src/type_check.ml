@@ -771,7 +771,6 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let (exp',t'',_,cs,ef) = check_exp envs t' exp in
       let (t',c') = type_consistent l d_env unit_t expect_t in
       (E_aux(E_assign(lexp',exp'),(l,(Some(([],unit_t),tag,cs,ef)))),unit_t,t_env',cs,ef)
-    | _ -> (E_aux(e,(l,annot)),expect_t,t_env,[],pure_e)
 		    
 and check_block orig_envs envs expect_t exps : ((tannot exp) list * tannot * tannot emap * nexp_range list * t * effect) =
   let Env(d_env,t_env) = envs in
@@ -779,8 +778,8 @@ and check_block orig_envs envs expect_t exps : ((tannot exp) list * tannot * tan
     | [] -> ([],None,orig_envs,[],unit_t,pure_e)
     | [e] -> let (E_aux(e',(l,annot)),t,envs,sc,ef) = check_exp envs expect_t e in
 	     ([E_aux(e',(l,annot))],annot,orig_envs,sc,t,ef)
-    | e::exps -> let (e',t',t_env,sc,ef') = check_exp envs unit_t e in
-		 let (exps',annot',orig_envs,sc',t,ef) = check_block orig_envs (Env(d_env,t_env)) expect_t exps in
+    | e::exps -> let (e',t',t_env',sc,ef') = check_exp envs unit_t e in
+		 let (exps',annot',orig_envs,sc',t,ef) = check_block orig_envs (Env(d_env,Envmap.union t_env' t_env)) expect_t exps in
 		 ((e'::exps'),annot',orig_envs,sc@sc',t,ef) (* TODO: union effects *)
 
 and check_cases envs check_t expect_t pexps : ((tannot pexp) list * typ * nexp_range list * effect) =
@@ -804,7 +803,26 @@ and check_cases envs check_t expect_t pexps : ((tannot pexp) list * typ * nexp_r
 and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot emap * tag *effect) =
   let (Env(d_env,t_env)) = envs in
   match lexp with
-    | LEXP_id id -> (LEXP_aux(lexp,(l,annot))),new_t(),t_env,Emp,pure_e
+    | LEXP_id id -> 
+      let i = id_to_string id in
+      (match Envmap.apply t_env i with
+	| Some(Some((parms,t),tag,cs,_)) ->
+	  let t,cs,_ = subst parms t cs pure_e in
+	  let t,cs = match get_abbrev d_env t with
+	    | None -> t,cs
+	    | Some(t,cs,e) -> t,cs in
+	  (match t.t with
+	    | Tapp("register",[TA_typ u]) ->
+	      let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in
+	      (LEXP_aux(lexp,(l,(Some(([],t),External,cs,ef)))),u,Envmap.empty,External,ef)
+	    | Tapp("reg",[TA_typ u]) ->
+	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),u,Envmap.empty,Emp,pure_e)
+	    | _ -> typ_error l ("Can only assign to identifiers with type register or reg, found identifier " ^ i ^ " with type " ^ t_to_string t))
+	| _ -> 
+	  let u = new_t() in
+	  let t = {t=Tapp("reg",[TA_typ u])} in
+	  let tannot = (Some(([],t),Emp,[],pure_e)) in
+	  (LEXP_aux(lexp,(l,tannot)),u,Envmap.from_list [i,tannot],Emp,pure_e))
     | LEXP_memory(id,exps) -> (LEXP_aux(lexp,(l,annot)),new_t(),t_env,Emp,pure_e)
     | LEXP_vector(vec,acc) -> (LEXP_aux(lexp,(l,annot)),new_t(),t_env,Emp,pure_e)
     | LEXP_vector_range(vec,base,range)-> (LEXP_aux(lexp,(l,annot))),new_t(),t_env,Emp,pure_e
@@ -981,7 +999,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,annot))) ->
 	let (pat',t_env',constraints',t') = check_pattern (Env(d_env,t_env)) pat in
 	let u,cs = type_consistent l d_env t' param_t in
-	let exp',_,_,constraints,ef = check_exp (Env(d_env,Envmap.union t_env t_env')) ret_t exp in
+	let exp',_,_,constraints,ef = check_exp (Env(d_env,Envmap.union t_env' t_env)) ret_t exp in
 	(*let _ = (Pretty_print.pp_exp Format.std_formatter) exp' in*)
 	(FCL_aux((FCL_Funcl(id,pat',exp')),(l,tannot)),constraints'@cs@constraints)) funcls) in
   match (in_env,tannot) with
