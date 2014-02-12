@@ -4,8 +4,6 @@ val extern forall Type 'a . ( 'a * 'a ) -> 'a effect pure (deinfix : ) = "vec_co
 
 val extern forall Type 'a . ( 'a * 'a ) -> bit effect pure (deinfix != ) = "neq"
 
-val extern forall Type 'a . ( 'a * 'a ) -> bool effect pure (deinfix != ) = "neq"
-
 val extern bit -> bit effect pure (deinfix ~ ) = "bitwise-not"
 val extern ( bit * bit ) -> bit effect pure (deinfix ^ ) = "bitwise-xor"
 val extern ( bit * bit ) -> bit effect pure (deinfix & ) = "bitwise-and"
