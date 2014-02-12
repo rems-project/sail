@@ -1,6 +1,10 @@
-val extern ( nat * nat ) -> nat effect pure (deinfix + ) = "add"
-(* XXX type is wrong *)
+(* XXX types are wrong *)
+val extern forall Type 'a . ( 'a * 'a ) -> 'a effect pure (deinfix + ) = "add"
 val extern forall Type 'a . ( 'a * 'a ) -> 'a effect pure (deinfix : ) = "vec_concat"
+val extern forall Type 'a . 'a -> nat effect pure to_num_inc = "to_num_inc"
+val extern forall Type 'a . 'a -> nat effect pure to_num_dec = "to_num_dec"
+val extern forall Type 'a . nat -> 'a effect pure to_vec_inc = "to_vec_inc"
+val extern forall Type 'a . nat -> 'a effect pure to_vec_dec = "to_vec_dec"
 
 val extern forall Type 'a . ( 'a * 'a ) -> bit effect pure (deinfix != ) = "neq"
 
@@ -190,8 +194,8 @@ end ast
 
 function unit main _ = {
   (* init *)
-  CIA := 0b0;
-  NIA := 0b0;
+  CIA := 0b10;
+  NIA := 0b11;
 
   (* should decode as Branch *)
   execute(decode(0b00000000000000000000000000010010));

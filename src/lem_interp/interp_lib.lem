@@ -4,6 +4,7 @@ open import Interp_ast
 import Maybe_extra
 open import Num
 open import List
+open import Word
 
 let compose f g x = f (V_tuple [g x]) ;;
 
@@ -17,7 +18,45 @@ let neg (V_tuple [V_lit arg]) = V_lit (match arg with
 
 let neq = compose neg eq ;;
 
-let add (V_tuple [V_lit(L_num x); V_lit(L_num y)]) = V_lit(L_num (x+y)) ;;
+let bit_to_bool b = match b with
+    V_lit L_zero -> false
+  | V_lit L_one -> true
+  end ;;
+let bool_to_bit b = match b with
+    false -> V_lit L_zero
+  | true -> V_lit L_one
+  end ;;
+
+(* XXX always interpret as positive ? *)
+let to_num_dec (V_vector idx false l) =
+  V_lit(L_num(naturalFromBitSeq (BitSeq Nothing false (map bit_to_bool (reverse l)))));;
+let to_num_inc (V_vector idx true l) =
+  V_lit(L_num(naturalFromBitSeq (BitSeq Nothing false (map bit_to_bool l))));;
+
+(* XXX not quite sure about list reversal here - what is the convention for
+ * V_vector? cf. above too *)
+let to_vec_dec len (V_lit(L_num n)) =
+  let BitSeq _ false l = bitSeqFromNatural len n in
+  V_vector 0 false (map bool_to_bit (reverse l)) ;;
+let to_vec_inc len (V_lit(L_num n)) =
+  let BitSeq _ false l = bitSeqFromNatural len n in
+  V_vector 0 true (map bool_to_bit l) ;;
+
+let rec add (V_tuple args) = match args with
+  (* vector case *)
+  | [(V_vector _ d l as v); (V_vector _ d' l' as v')] ->
+      let V_lit (L_num x) = (if d then to_num_inc else to_num_dec) v in
+      let V_lit (L_num y) = (if d' then to_num_inc else to_num_dec) v' in
+      (* XXX how shall I decide this? max? max+1? *)
+      let len = max (List.length l) (List.length l') in
+      (* XXX assume d = d' *)
+      (if d then to_vec_inc else to_vec_dec) (Just len) (V_lit (L_num (x+y)))
+  (* integer case *)
+  | [V_lit(L_num x); V_lit(L_num y)] -> V_lit(L_num (x+y))
+  (* assume other literals are L_bin or L_hex, ie. vectors *)
+  | [V_lit l; x ] -> add (V_tuple [litV_to_vec l; x])
+  | [ x ; V_lit l ] -> add (V_tuple [x; litV_to_vec l])
+  end ;;
 
 let rec vec_concat (V_tuple args) = match args with
   | [V_vector n d l; V_vector n' d' l'] ->
@@ -33,6 +72,10 @@ let function_map = [
   ("eq", eq);
   ("vec_concat", vec_concat);
   ("is_one", is_one);
+  ("to_num_inc", to_num_inc);
+  ("to_num_dec", to_num_dec);
+  ("to_vec_inc", to_vec_inc Nothing);
+  ("to_vec_dec", to_vec_dec Nothing);
 ] ;;
 
 let eval_external name v = (Maybe_extra.fromJust (List.lookup name function_map)) v ;;
