@@ -7,6 +7,31 @@ import String
 
 open import Interp_ast
 
+(* Workaround Lem's inability to scrap my (type classes) boilerplate.
+ * Implementing only Eq, and only for literals - hopefully this will
+ * be enough, but we should in principle implement ordering for everything in
+ * Interp_ast *)
+
+val lit_eq: lit -> lit -> bool
+let lit_eq left right =
+   match (left, right) with
+   | (L_unit, L_unit) -> true
+   | (L_zero, L_zero) -> true
+   | (L_one, L_one) -> true
+   | (L_true, L_true) -> true
+   | (L_false, L_false) -> true
+   | (L_num n, L_num m) -> n = m
+   | (L_hex h, L_hex h') -> h = h'
+   | (L_bin b, L_bin b') -> b = b'
+   | (L_undef, L_undef) -> true
+   | (L_string s, L_string s') -> s = s'
+end
+
+instance (Eq lit)
+  let (=) = lit_eq
+  let (<>) n1 n2 = not (lit_eq n1 n2)
+end
+
 (* type nat = num *)
 
 (* This is different from OCaml: it will drop elements from the longest list. *)
