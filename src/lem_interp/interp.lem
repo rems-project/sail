@@ -25,6 +25,7 @@ let lit_eq left right =
    | (L_bin b, L_bin b') -> b = b'
    | (L_undef, L_undef) -> true
    | (L_string s, L_string s') -> s = s'
+   | (_, _) -> false
 end
 
 instance (Eq lit)
@@ -48,6 +49,28 @@ type value =
  | V_vector of natural * bool * list value (* The nat stores the first index, the bool whether that's most or least significant *)
  | V_record of list (id * value)
  | V_ctor of id * value
+
+ (* seems useless currently:
+let rec id_value_eq (i, v) (i', v') = i = i' && value_eq v v'
+and value_eq left right =
+  match (left, right) with
+  | (V_lit l, V_lit l') -> lit_eq l l'
+  | (V_boxref n, V_boxref m) -> n = m
+  | (V_tuple l, V_tuple l') -> listEqualBy value_eq l l'
+  | (V_list l, V_list l') -> listEqualBy value_eq l l'
+  | (V_vector n b l, V_vector m b' l') ->
+      n = m && b = b' && listEqualBy value_eq l l'
+  | (V_record l, V_record l') ->
+      listEqualBy id_value_eq l l'
+  | (V_ctor i v, V_ctor i' v') -> id_value_eq (i, v) (i', v')
+  | (_, _) -> false
+  end
+
+instance (Eq value)
+  let (=) = lit_value
+  let (<>) n1 n2 = not (lit_value n1 n2)
+end
+*)
 
 type mem = Mem of nat * map nat value
 type env = list (id * value)
