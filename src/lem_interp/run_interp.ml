@@ -109,7 +109,9 @@ let run (name, test) =
   let entry = E_app((Id "main"), [E_lit L_unit]) in
   eprintf "%s: starting\n" name;
   try
+    Printexc.record_backtrace true;
     loop (Reg.empty, Mem.empty) (interp test entry)
   with e ->
-    eprintf "%s: interpretor error %s\n" name (Printexc.to_string e)
+    let trace = Printexc.get_backtrace () in
+    eprintf "%s: interpretor error %s\n%s\n" name (Printexc.to_string e) trace
 ;;
