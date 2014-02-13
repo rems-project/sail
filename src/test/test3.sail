@@ -6,6 +6,8 @@ val  nat -> nat effect { wmem , rmem }  MEM
 val  nat -> nat effect { wmem , rmem }  MEM_GPU
 val ( nat * nat ) -> nat effect { wmem , rmem }  MEM_SIZE
 
+function unit ignore(x) = ()
+
 (* extern functions *)
 val extern ( nat * nat ) -> nat effect pure add = "add"
 val extern ( nat * nat ) -> nat effect pure (deinfix + ) = "add_infix"   (* infix plus *)

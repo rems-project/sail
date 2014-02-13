@@ -13,6 +13,8 @@ let bool e = true
 let bit v = bitzero
 let ( bit [ 32 ] ) v1 = 0b101
 
+function unit ignore(x) = ()
+
 (* scattered function definition and union definition *)
 scattered typedef ast = const union
 scattered function ast f
