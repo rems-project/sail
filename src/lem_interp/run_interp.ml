@@ -3,13 +3,15 @@ open Interp_ast ;;
 open Interp ;;
 open Interp_lib ;;
 
+open Big_int ;;
+
 let lit_to_string = function
  | L_unit -> "unit"
  | L_zero -> "bitzero"
  | L_one -> "bitone"
  | L_true -> "true"
  | L_false -> "false"
- | L_num n -> Big_int.string_of_big_int n
+ | L_num n -> string_of_big_int n
  | L_hex s -> s
  | L_bin s -> s
  | L_undef -> "undefined"
@@ -32,7 +34,7 @@ let rec val_to_string = function
  | V_vector (first_index, inc, l) ->
      let order = if inc then "little-endian" else "big-endian" in
      let repr = String.concat "; " (List.map val_to_string l) in
-     sprintf "vector [%s] (%s, from %s)" repr order (Big_int.string_of_big_int first_index)
+     sprintf "vector [%s] (%s, from %s)" repr order (string_of_big_int first_index)
  | V_record l ->
      let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string value) in
      let repr = String.concat "; " (List.map  pp l) in
@@ -55,7 +57,7 @@ let rec stack_to_string = function
 
 let reg_to_string = function Reg (id,_) | SubReg (id,_,_) -> id_to_string id ;;
 let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%s, %s)"
-  (Big_int.string_of_big_int x) (Big_int.string_of_big_int y)
+  (string_of_big_int x) (string_of_big_int y)
 let act_to_string = function
  | Read_reg (reg, sub) ->
      sprintf "read_reg %s%s" (reg_to_string reg) (sub_to_string sub)
@@ -74,25 +76,34 @@ let act_to_string = function
 
 module Reg = struct
   include Map.Make(struct type t = id let compare = compare end)
-  let update k v m = add k v (if mem k m then remove k m else m)
 end ;;
 
 module Mem = struct
-  include Map.Make(struct type t = id  * value let compare = compare end)
-  let update k v m = add k v (if mem k m then remove k m else m)
+  include Map.Make(struct
+    type t = (id * big_int)
+    let compare (i1, v1) (i2, v2) =
+      match compare i1 i2 with
+      | 0 -> compare_big_int v1 v2
+      | n -> n
+    end)
 end ;;
 
+let slice v = function
+  | None -> v
+  | Some (n, m) -> slice_vector v n m
+;;
+
 let perform_action ((reg, mem) as env) = function
- | Read_reg ((Reg (id, _) | SubReg (id, _, _)), None) ->
-     Reg.find id reg, env
- | Read_mem (id, args, None) ->
-     Mem.find (id, args) mem, env
+ | Read_reg ((Reg (id, _) | SubReg (id, _, _)), sub) ->
+     slice (Reg.find id reg) sub, env
+ | Read_mem (id, V_lit(L_num n), sub) ->
+     slice (Mem.find (id, n) mem) sub, env
  | Write_reg ((Reg (id, _) | SubReg (id, _, _)), None, value) ->
-     V_lit L_unit, (Reg.update id value reg, mem)
- | Write_mem (id, args, None, value) ->
-     V_lit L_unit, (reg, Mem.update (id, args) value mem)
+     V_lit L_unit, (Reg.add id value reg, mem)
+ | Write_mem (id, V_lit(L_num n), None, value) ->
+     V_lit L_unit, (reg, Mem.add (id, n) value mem)
  | Call_extern (name, arg) -> eval_external name arg, env
- | _ -> failwith "partial read/write not implemented" (* XXX *)
+ | _ -> failwith "partial write not implemented" (* XXX *)
 ;;
 
 
