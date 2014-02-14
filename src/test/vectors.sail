@@ -44,6 +44,8 @@ function bit main _ = {
 
   (* slice update *)
   i[0] := bitzero;
+  i[2 .. 3] := [bitone, bitone];
+
   (* slice access of literal *)
   v[0];
 }
