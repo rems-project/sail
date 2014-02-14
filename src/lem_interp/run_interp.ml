@@ -100,6 +100,13 @@ let perform_action ((reg, mem) as env) = function
      slice (Mem.find (id, n) mem) sub, env
  | Write_reg ((Reg (id, _) | SubReg (id, _, _)), None, value) ->
      V_lit L_unit, (Reg.add id value reg, mem)
+ | Write_reg ((Reg (id, _) | SubReg (id, _, _)), Some (start, stop), value) ->
+     (* XXX if updating a single element, wrap value into a vector -
+      * should the typechecker do that coercion for us automatically? *)
+     let value = if eq_big_int start stop then V_vector (zero_big_int, true, [value]) else value in
+     let old_val = Reg.find id reg in
+     let new_val = fupdate_vector_slice old_val value start stop in
+     V_lit L_unit, (Reg.add id new_val reg, mem)
  | Write_mem (id, V_lit(L_num n), None, value) ->
      V_lit L_unit, (reg, Mem.add (id, n) value mem)
  | Call_extern (name, arg) -> eval_external name arg, env

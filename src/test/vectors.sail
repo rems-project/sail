@@ -42,8 +42,8 @@ function bit main _ = {
     case _ -> match_success := i
   };
 
-  (* XXX slice access not implemented *)
+  (* slice update *)
   i[0] := bitzero;
-  (* XXX Vector access of non-vector *)
+  (* slice access of literal *)
   v[0];
 }
