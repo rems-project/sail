@@ -819,7 +819,14 @@ and interp_main t_level l_env l_mem exp =
                       | (outcome,Just lexp_builder) ->
                         resolve_outcome outcome
                                         (fun v lm le -> (Value v,lm,le))
-                                        (fun a -> update_stack a (add_to_top_frame (fun e -> (E_assign (lexp_builder e) (to_exp v))))) end))
+                                        (fun a -> 
+					  (match a with
+					    | (Action (Write_reg regf range value) stack) -> 
+					      (Action (Write_reg regf range value) stack)
+					    | (Action (Write_mem id a range value) stack) -> 
+					      (Action (Write_mem id a range value) stack)
+					    | _ -> update_stack a (add_to_top_frame (fun e -> (E_assign (lexp_builder e) (to_exp v)))) end))
+		       end))
                     (fun a -> update_stack a (add_to_top_frame (fun v -> (E_assign lexp v))))
   end
 

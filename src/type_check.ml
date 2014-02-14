@@ -1005,7 +1005,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,annot))) ->
 	let (pat',t_env',constraints',t') = check_pattern (Env(d_env,t_env)) pat in
 	let u,cs = type_consistent l d_env t' param_t in
-	let exp',_,_,constraints,ef = check_exp (Env(d_env,Envmap.union t_env' t_env)) ret_t exp in
+	let exp',_,_,constraints,ef = check_exp (Env(d_env,Envmap.union t_env t_env')) ret_t exp in
 	(*let _ = (Pretty_print.pp_exp Format.std_formatter) exp' in*)
 	(FCL_aux((FCL_Funcl(id,pat',exp')),(l,tannot)),constraints'@cs@constraints)) funcls) in
   match (in_env,tannot) with
