@@ -93,6 +93,8 @@ let slice v = function
   | Some (n, m) -> slice_vector v n m
 ;;
 
+let vconcat v v' = vec_concat (V_tuple [v; v']) ;;
+
 let perform_action ((reg, mem) as env) = function
  | Read_reg ((Reg (id, _) | SubReg (id, _, _)), sub) ->
      slice (Reg.find id reg) sub, env
@@ -109,6 +111,29 @@ let perform_action ((reg, mem) as env) = function
      V_lit L_unit, (Reg.add id new_val reg, mem)
  | Write_mem (id, V_lit(L_num n), None, value) ->
      V_lit L_unit, (reg, Mem.add (id, n) value mem)
+ (* multi-byte accesses to memory *)
+ (* XXX this doesn't deal with endianess at all, and it seems broken in tests *)
+ | Read_mem (id, V_tuple [V_lit(L_num n); V_lit(L_num size)], sub) ->
+     let rec fetch k acc =
+       if eq_big_int k size then slice acc sub else
+         let slice = Mem.find (id, add_big_int n k) mem in
+         fetch (succ_big_int k) (vconcat acc slice)
+     in
+     fetch zero_big_int (V_vector (zero_big_int, true, [])), env
+ (* XXX no support for multi-byte slice write at the moment - not hard to add,
+  * but we need a function basic read/write first since slice access involves
+  * read, fupdate, write. *)
+ | Write_mem (id, V_tuple [V_lit(L_num n); V_lit(L_num size)], None, value) ->
+     (* assumes smallest unit of memory is 8 bit *)
+     let byte_size = 8 in
+     let rec update k mem =
+       if eq_big_int k size then mem else
+         let slice = slice_vector value
+           (mult_int_big_int byte_size k)
+           (mult_int_big_int byte_size (succ_big_int k)) in
+         let mem' = Mem.add (id, add_big_int n k) slice mem in
+         update (succ_big_int k) mem'
+     in V_lit L_unit, (reg, update zero_big_int mem)
  (* This case probably never happens in the POWER spec anyway *)
  | Write_mem (id, V_lit(L_num n), Some (start, stop), value) ->
      (* XXX if updating a single element, wrap value into a vector -

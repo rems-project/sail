@@ -4,9 +4,15 @@ register nat dummy_reg
    memory-writing functions are figured out syntactically. *)
 val  nat -> nat effect { wmem , rmem }  MEM
 val  nat -> nat effect { wmem , rmem }  MEM_GPU
-val ( nat * nat ) -> nat effect { wmem , rmem }  MEM_SIZE
+val ( nat * nat ) -> (bit[8]) effect { wmem , rmem }  MEM_SIZE
 
 val  nat -> (bit[8]) effect { wmem , rmem }  MEM_WORD
+
+(* XXX types are wrong *)
+val extern forall Type 'a . 'a -> nat effect pure to_num_inc = "to_num_inc"
+val extern forall Type 'a . 'a -> nat effect pure to_num_dec = "to_num_dec"
+val extern forall Type 'a . nat -> 'a effect pure to_vec_inc = "to_vec_inc"
+val extern forall Type 'a . nat -> 'a effect pure to_vec_dec = "to_vec_dec"
 
 function unit ignore(x) = ()
 
@@ -43,8 +49,10 @@ function nat main _ = {
   ignore(MEM(1));
   MEM_GPU(0) := 3;
   ignore(MEM_GPU(0));
-  MEM_SIZE(0,1) := 4;
+  MEM_SIZE(0,1) := 0b11110000;
   ignore(MEM_SIZE(0,1));
+  MEM_SIZE(0,2) := 0b1111000010100000;
+  ignore(MEM_SIZE(0,2));
 
   (* extern calls *)
   ignore(3 + 39);
