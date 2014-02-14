@@ -823,7 +823,13 @@ and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot ema
 	  let t = {t=Tapp("reg",[TA_typ u])} in
 	  let tannot = (Some(([],t),Emp,[],pure_e)) in
 	  (LEXP_aux(lexp,(l,tannot)),u,Envmap.from_list [i,tannot],Emp,pure_e))
-    | LEXP_memory(id,exps) -> (LEXP_aux(lexp,(l,annot)),new_t(),t_env,Emp,pure_e)
+    | LEXP_memory(id,exps) -> 
+      let i = id_to_string id in
+      (match Envmap.apply t_env i with
+	| Some(Some((parms,t),External,cs,ef)) ->
+	  
+	  (LEXP_aux(lexp,(l,annot)),new_t(),t_env,Emp,pure_e)
+	| _ -> (LEXP_aux(lexp,(l,annot)),new_t(),t_env,Emp,pure_e))
     | LEXP_vector(vec,acc) -> (LEXP_aux(lexp,(l,annot)),new_t(),t_env,Emp,pure_e)
     | LEXP_vector_range(vec,base,range)-> (LEXP_aux(lexp,(l,annot))),new_t(),t_env,Emp,pure_e
     | LEXP_field(vec,id)-> (LEXP_aux(lexp,(l,annot))),new_t(),t_env,Emp,pure_e

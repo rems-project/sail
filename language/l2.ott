@@ -567,7 +567,7 @@ exp :: 'E_' ::=
   | exp [ exp' ]                                      :: :: vector_access
   {{ com vector access }}
 
-  | exp [ exp1 : exp2 ]                               :: :: vector_subrange
+  | exp [ exp1 '..' exp2 ]                               :: :: vector_subrange
   {{ com subvector extraction }}
   % do we want to allow a comma-separated list of such thingies?  
 
@@ -632,7 +632,7 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     | id ( exp1 , .. , expn )				  :: :: memory {{ com memory write via function call }}
     | id exp	       	    				  :: S :: mem_tup {{ ichlo [[id (exp)]] }}
     | lexp [ exp ]  :: ::                                 vector  {{ com vector element }}
-    | lexp [ exp1 : exp2 ]  :: ::                         vector_range {{ com subvector }}
+    | lexp [ exp1 '..' exp2 ]  :: ::                         vector_range {{ com subvector }}
     % maybe comma-sep such lists too
     | lexp . id :: :: field                        {{ com struct field }}
 
