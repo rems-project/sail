@@ -109,8 +109,16 @@ let perform_action ((reg, mem) as env) = function
      V_lit L_unit, (Reg.add id new_val reg, mem)
  | Write_mem (id, V_lit(L_num n), None, value) ->
      V_lit L_unit, (reg, Mem.add (id, n) value mem)
+ (* This case probably never happens in the POWER spec anyway *)
+ | Write_mem (id, V_lit(L_num n), Some (start, stop), value) ->
+     (* XXX if updating a single element, wrap value into a vector -
+      * should the typechecker do that coercion for us automatically? *)
+     let value = if eq_big_int start stop then V_vector (zero_big_int, true, [value]) else value in
+     let old_val = Mem.find (id, n) mem in
+     let new_val = fupdate_vector_slice old_val value start stop in
+     V_lit L_unit, (reg, Mem.add (id, n) new_val mem)
  | Call_extern (name, arg) -> eval_external name arg, env
- | _ -> failwith "partial write not implemented" (* XXX *)
+ | _ -> assert false
 ;;
 
 

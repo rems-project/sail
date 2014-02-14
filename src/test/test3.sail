@@ -6,6 +6,8 @@ val  nat -> nat effect { wmem , rmem }  MEM
 val  nat -> nat effect { wmem , rmem }  MEM_GPU
 val ( nat * nat ) -> nat effect { wmem , rmem }  MEM_SIZE
 
+val  nat -> (bit[8]) effect { wmem , rmem }  MEM_WORD
+
 function unit ignore(x) = ()
 
 (* extern functions *)
@@ -23,6 +25,15 @@ function nat main _ = {
   dummy_reg := 1;
   (* register read, thanks to register declaration *)
   ignore(dummy_reg);
+
+
+  MEM_WORD(0) := 0b10101010;
+  (MEM_WORD(0))[3..4] := 0b10;
+  (* XXX this one is broken - I don't what it should do,
+  or even if we should accept it, but the current result
+  is to eat up one bit, ending up with a 7-bit word. *)
+  (MEM_WORD(0))[4..3] := 0b10;
+  ignore(MEM_WORD(0));
 
   (* infix call *)
   ignore(7 * 9);
