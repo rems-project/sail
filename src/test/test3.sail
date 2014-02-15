@@ -2,11 +2,10 @@
 register nat dummy_reg
 (* a function to read from memory; wmem serves no purpose currently,
    memory-writing functions are figured out syntactically. *)
-val  nat -> nat effect { wmem , rmem }  MEM
-val  nat -> nat effect { wmem , rmem }  MEM_GPU
-val ( nat * nat ) -> (bit[8]) effect { wmem , rmem }  MEM_SIZE
-
-val  nat -> (bit[8]) effect { wmem , rmem }  MEM_WORD
+val extern nat -> nat effect { wmem , rmem }  MEM
+val extern nat -> nat effect { wmem , rmem }  MEM_GPU
+val extern ( nat * nat ) -> (bit[8]) effect { wmem , rmem }  MEM_SIZE
+val extern nat -> (bit[8]) effect { wmem , rmem }  MEM_WORD
 
 (* XXX types are wrong *)
 val extern forall Type 'a . 'a -> nat effect pure to_num_inc = "to_num_inc"

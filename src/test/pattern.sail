@@ -11,7 +11,7 @@ function nat main _ = {
   (switch n {
     case 0 -> { x := 21; x }
     case 1 -> { x := 42; x } 
-    case x -> { x := 99; x }
+    case z -> { x := 99; x }
   }); 
 
   (* doesn't work - main returns 1 instead of 99 *)
