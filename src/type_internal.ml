@@ -59,7 +59,7 @@ and t_arg =
 
 type tag =
   | Emp
-  | External
+  | External of string option
   | Default
   | Constructor
   | Enum
@@ -198,11 +198,11 @@ let nat_typ = {t=Tid "nat"}
 let pure_e = {effect=Eset []}
 let initial_typ_env =
   Envmap.from_list [
-    ("ignore",Some(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,{effect=Evar "b"})}),External,[],pure_e));
-    ("+",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External,[],pure_e));
-    ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External,[],pure_e));
-    ("-",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External,[],pure_e));
-    ("|",Some(([],{t= Tfn ({t=Ttup([bit_t;bit_t])},bit_t,pure_e)}),External,[],pure_e));
+    ("ignore",Some(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,{effect=Evar "b"})}),External None,[],pure_e));
+    ("+",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "add"),[],pure_e));
+    ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "multiply"),[],pure_e));
+    ("-",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "minus"),[],pure_e));
+    ("|",Some(([],{t= Tfn ({t=Ttup([bit_t;bit_t])},bit_t,pure_e)}),External (Some "bitwise_or"),[],pure_e));
   ]
 
 let initial_abbrev_env =
@@ -542,7 +542,7 @@ let rec type_coerce l d_env t1 e t2 =
 		   (l,Some(([],t2),Emp,[],pure_e))))
 	  | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2))))
   | Tid("bit"),Tid("bool") ->
-    let e' = E_aux(E_app((Id_aux(Id "is_one",l)),[e]),(l,Some(([],bool_t),External,[],pure_e))) in
+    let e' = E_aux(E_app((Id_aux(Id "is_one",l)),[e]),(l,Some(([],bool_t),External None,[],pure_e))) in
     (t2,[],e')
   | Tid(i),Tapp("enum",[TA_nexp b1;TA_nexp r1;]) -> 
     (match get_abbrev d_env t1 with

@@ -377,12 +377,12 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
         (match t.t,expect_t.t with 
         | Tfn _,_ -> typ_error l ("Identifier " ^ (id_to_string id) ^ " is bound to a function and cannot be used as a value")
         | Tapp("register",[TA_typ(t')]),Tapp("register",[TA_typ(expect_t')]) -> 
-          let tannot = Some(([],t),External,cs,ef) in
+          let tannot = Some(([],t),External (Some "register"),cs,ef) in
           let t',cs',e' = type_coerce l d_env t' (rebuild tannot) expect_t' in
           (e',t',t_env,cs@cs',ef)
         | Tapp("register",[TA_typ(t')]),_ ->
 	  let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
-          let tannot = Some(([],t),External,cs,ef') in
+          let tannot = Some(([],t),External (Some "register"),cs,ef') in
           let t',cs',e' = type_coerce l d_env t' (rebuild tannot) expect_t in
           (e',t',t_env,cs@cs',ef)
         | Tapp("reg",[TA_typ(t)]),_ ->
@@ -866,7 +866,7 @@ and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot ema
 	  (match t.t with
 	    | Tapp("register",[TA_typ u]) ->
 	      let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in
-	      (LEXP_aux(lexp,(l,(Some(([],t),External,cs,ef)))),u,Envmap.empty,External,[],ef)
+	      (LEXP_aux(lexp,(l,(Some(([],t),External (Some "register"),cs,ef)))),u,Envmap.empty,External (Some "register"),[],ef)
 	    | Tapp("reg",[TA_typ u]) ->
 	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),u,Envmap.empty,Emp,[],pure_e)
 	    | _ -> 
@@ -881,7 +881,7 @@ and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot ema
       let i = id_to_string id in
       (match Envmap.apply t_env i with
 	| Some(Some((parms,t),tag,cs,ef)) ->
-	  let is_external = match tag with | External -> true | _ -> false in
+	  let is_external = match tag with | External any -> true | _ -> false in
 	  let t,cs,ef = subst parms t cs ef in
 	  let t,cs,ef = match get_abbrev d_env t with
 	    | None -> t,cs,ef
@@ -1109,11 +1109,11 @@ let check_val_spec envs (VS_aux(vs,(l,annot))) =
       (VS_aux(vs,(l,tannot)),
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot))))
     | VS_extern_no_rename(typs,id) ->
-      let tannot = typschm_to_tannot envs typs External in
+      let tannot = typschm_to_tannot envs typs (External None) in
       (VS_aux(vs,(l,tannot)),
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot))))
     | VS_extern_spec(typs,id,s) ->
-      let tannot = typschm_to_tannot envs typs External in
+      let tannot = typschm_to_tannot envs typs (External (Some s)) in
       (VS_aux(vs,(l,tannot)),
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot))))
 
@@ -1190,8 +1190,9 @@ let check_def envs (DEF_aux(def,(l,annot))) =
 			     (DEF_aux((DEF_default(ds)),(l,annot)),envs)
     | DEF_reg_dec(typ,id) -> 
       let t = (typ_to_t typ) in
-      let tannot = into_register (Some(([],t),External,[],pure_e)) in 
-      (DEF_aux(def,(l,tannot)),(Env(d_env,Envmap.insert t_env ((id_to_string id),tannot))))
+      let i = id_to_string id in
+      let tannot = into_register (Some(([],t),External (Some i),[],pure_e)) in 
+      (DEF_aux(def,(l,tannot)),(Env(d_env,Envmap.insert t_env (i,tannot))))
 
 
 (*val check : envs ->  tannot defs -> tannot defs*)

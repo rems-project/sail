@@ -54,7 +54,7 @@ and t_arg =
 
 type tag =
   | Emp
-  | External
+  | External of string option
   | Default
   | Constructor
   | Enum
