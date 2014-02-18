@@ -590,7 +590,7 @@ and interp_main t_level l_env l_mem exp =
                         | V_lit(L_false) -> interp_main t_level l_env lm els
                         | _ -> (Error "Type error, not provided boolean for if",lm,l_env) end)
                       (fun a -> update_stack a (add_to_top_frame (fun c -> (E_if c thn els))))
-    | E_for id from to_ by exp ->
+    | E_for id from to_ by order exp ->
       resolve_outcome (interp_main t_level l_env l_mem from)
                       (fun from_val lm le ->
                         match from_val with
@@ -608,13 +608,13 @@ and interp_main t_level l_env l_mem exp =
                                                     then (Value(V_lit L_unit),lm,le)
                                                     else interp_main t_level le lm 
                                                       (E_block [(E_let (LB_val_implicit (P_id id) (E_lit (L_num from_num))) exp);
-                                                                (E_for id (E_lit (L_num (from_num + by_num))) (E_lit (L_num to_num)) (E_lit (L_num by_num)) exp)])
+                                                                (E_for id (E_lit (L_num (from_num + by_num))) (E_lit (L_num to_num)) (E_lit (L_num by_num)) order exp)])
                                                   | _ -> (Error "by must be a number",lm,le) end)
-                                                (fun a -> update_stack a (add_to_top_frame (fun b -> (E_for id (E_lit (L_num from_num)) (E_lit (L_num to_num)) b exp))))
+                                                (fun a -> update_stack a (add_to_top_frame (fun b -> (E_for id (E_lit (L_num from_num)) (E_lit (L_num to_num)) b order exp))))
                                             | _ -> (Error "to must be a number",lm,le) end)
-                                           (fun a -> update_stack a (add_to_top_frame (fun t -> (E_for id (E_lit (L_num from_num)) t by exp))))
+                                           (fun a -> update_stack a (add_to_top_frame (fun t -> (E_for id (E_lit (L_num from_num)) t by order exp))))
                         | _ -> (Error "from must be a number",lm,le) end)
-                       (fun a -> update_stack a (add_to_top_frame (fun f -> (E_for id f to_ by exp))))
+                       (fun a -> update_stack a (add_to_top_frame (fun f -> (E_for id f to_ by order exp))))
     | E_case exp pats ->
       resolve_outcome (interp_main t_level l_env l_mem exp)
                       (fun v lm le ->

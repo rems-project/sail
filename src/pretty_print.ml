@@ -221,9 +221,9 @@ and pp_exp ppf (E_aux(e,_)) =
   | E_app_infix(l,op,r) -> fprintf ppf "@[<0>%a %a %a@]" pp_exp l pp_id op pp_exp r
   | E_tuple(exps) -> fprintf ppf "@[<0>%a %a %a@]" kwd "(" (list_pp pp_comma_exp pp_exp) exps kwd ")"
   | E_if(c,t,e) -> fprintf ppf "@[<0>%a %a @[<1>%a %a@] @[<1>%a@ %a@]@]" kwd "if " pp_exp c kwd "then" pp_exp t kwd "else" pp_exp e
-  | E_for(id,exp1,exp2,exp3,exp4) ->
-    fprintf ppf "@[<0> %a %a %a %a %a %a %a %a@ @[<1>%a@]@]" 
-      kwd "foreach " pp_id id kwd " from " pp_exp exp1 kwd " to " pp_exp exp2 kwd "by " pp_exp exp3 pp_exp exp4
+  | E_for(id,exp1,exp2,exp3,order,exp4) ->
+    fprintf ppf "@[<0> %a %a (%a %a %a %a %a %a %a %a)@ @[<1>%a@]@]" 
+      kwd "foreach " pp_id id kwd "from " pp_exp exp1 kwd " to " pp_exp exp2 kwd "by " pp_exp exp3 kwd "in" pp_ord order pp_exp exp4
   | E_vector(exps) -> fprintf ppf "@[<0>%a%a%a@]" kwd "[" (list_pp pp_comma_exp pp_exp) exps kwd "]"
   | E_vector_indexed(iexps) -> 
     let iformat ppf (i,e) = fprintf ppf "@[<1>%i%a %a%a@]" i kwd " = " pp_exp e kwd "," in
@@ -523,9 +523,9 @@ and pp_lem_exp ppf (E_aux(e,_)) =
   | E_app_infix(l,op,r) -> fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "E_app_infix" pp_lem_exp l pp_lem_id op pp_lem_exp r
   | E_tuple(exps) -> fprintf ppf "@[<0>%a [%a] %a@]" kwd "(E_tuple" (list_pp pp_semi_lem_exp pp_lem_exp) exps kwd ")"
   | E_if(c,t,e) -> fprintf ppf "@[<0>(%a %a @[<1>%a@] @[<1> %a@])@]" kwd "E_if" pp_lem_exp c pp_lem_exp t pp_lem_exp e
-  | E_for(id,exp1,exp2,exp3,exp4) ->
-    fprintf ppf "@[<0>(%a %a %a %a %a@ @[<1> %a @])@]" 
-      kwd "E_for" pp_lem_id id pp_lem_exp exp1 pp_lem_exp exp2 pp_lem_exp exp3 pp_lem_exp exp4
+  | E_for(id,exp1,exp2,exp3,order,exp4) ->
+    fprintf ppf "@[<0>(%a %a %a %a %a %a @ @[<1> %a @])@]" 
+      kwd "E_for" pp_lem_id id pp_lem_exp exp1 pp_lem_exp exp2 pp_lem_exp exp3 pp_lem_ord order pp_lem_exp exp4
   | E_vector(exps) -> fprintf ppf "@[<0>(%a [%a])@]" kwd "E_vector" (list_pp pp_semi_lem_exp pp_lem_exp) exps
   | E_vector_indexed(iexps) -> 
     let iformat ppf (i,e) = fprintf ppf "@[<1>(%i %a %a) %a@]" i kwd ", " pp_lem_exp e kwd ";" in

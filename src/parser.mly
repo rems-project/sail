@@ -536,26 +536,33 @@ right_atomic_exp:
     { eloc (E_if($2,$4,$6)) }
   | If_ exp Then exp
     { eloc (E_if($2,$4, eloc (E_lit(lloc L_unit)))) }
-  | Foreach id Id atomic_exp Id atomic_exp By atomic_exp exp
-    { if $3 <> "from" then
+  | Foreach Lparen id Id atomic_exp Id atomic_exp By atomic_exp In typ Rparen exp
+    { if $4 <> "from" then
        raise (Parse_error_locn ((loc ()),"Missing \"from\" in foreach loop"));
-      if $5 <> "to" && $5 <> "downto" then
-       raise (Parse_error_locn ((loc ()),"Missing \"to\" or \"downto\" in foreach loop"));
-      let step =
-        if $5 = "to"
-        then $8
-        else eloc (E_app_infix(eloc (E_lit(lloc (L_num 0))), idl (Id "-"), $8)) in
-      eloc (E_for($2,$4,$6,step,$9)) }
-  | Foreach id Id atomic_exp Id atomic_exp exp
-    { if $3 <> "from" then
+      if $6 <> "to" then
+       raise (Parse_error_locn ((loc ()),"Missing \"to\" in foreach loop"));
+      eloc (E_for($3,$5,$7,$9,$11,$13)) }
+  | Foreach Lparen id Id atomic_exp Id atomic_exp By atomic_exp Rparen exp
+    { if $4 <> "from" then
        raise (Parse_error_locn ((loc ()),"Missing \"from\" in foreach loop"));
-      if $5 <> "to" && $5 <> "downto" then
+      if $6 <> "to" && $6 <> "downto" then
        raise (Parse_error_locn ((loc ()),"Missing \"to\" or \"downto\" in foreach loop"));
-      let step =
-        if $5 = "to"
-        then eloc (E_lit(lloc (L_num 1)))
-        else eloc (E_lit(lloc (L_num (-1)))) in
-      eloc (E_for($2,$4,$6,step,$7)) }
+      let order =
+        if $6 = "to"
+        then ATyp_aux(ATyp_inc,(locn 6 6))
+        else ATyp_aux(ATyp_dec,(locn 6 6)) in
+      eloc (E_for($3,$5,$7,$9,order,$11)) }
+  | Foreach Lparen id Id atomic_exp Id atomic_exp Rparen exp
+    { if $4 <> "from" then
+       raise (Parse_error_locn ((loc ()),"Missing \"from\" in foreach loop"));
+      if $6 <> "to" && $6 <> "downto" then
+       raise (Parse_error_locn ((loc ()),"Missing \"to\" or \"downto\" in foreach loop"));
+      let step = eloc (E_lit(lloc (L_num 1))) in
+      let ord = 
+        if $6 = "to"
+        then ATyp_aux(ATyp_inc,(locn 6 6))
+        else ATyp_aux(ATyp_dec,(locn 6 6)) in
+      eloc (E_for($3,$5,$7,step,ord,$9)) }
   | letbind In exp
     { eloc (E_let($1,$3)) }
 

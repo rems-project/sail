@@ -511,7 +511,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       (E_aux(E_if(cond',then',else'),(l,Some(([],expect_t),Emp,[],pure_e))),
        expect_t,Envmap.intersect then_env else_env,then_c@else_c@c1,
        union_effects ef1 (union_effects then_ef else_ef))
-    | E_for(id,from,to_,step,block) -> 
+    | E_for(id,from,to_,step,order,block) -> 
       (* TODO::: This presently assumes increasing; this should be checked if that's the assumption we want *)
       let fb,fr,tb,tr,sb,sr = new_n(),new_n(),new_n(),new_n(),new_n(),new_n() in
       let ft,tt,st = {t=Tapp("enum",[TA_nexp fb;TA_nexp fr])},
@@ -519,10 +519,19 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let from',from_t,_,from_c,from_ef = check_exp envs ft from in
       let to_',to_t,_,to_c,to_ef = check_exp envs tt to_ in
       let step',step_t,_,step_c,step_ef = check_exp envs st step in
-      let new_annot = Some(([],{t=Tapp("enum",[TA_nexp fb;TA_nexp {nexp=Nadd(tb,tr)}])}),Emp,[],pure_e) in
+      let new_annot,local_cs = 
+	match (aorder_to_ord order).order with
+	  | Oinc ->
+	    (Some(([],{t=Tapp("enum",[TA_nexp fb;TA_nexp {nexp=Nadd(tb,tr)}])}),Emp,[],pure_e),
+	     [LtEq(l,{nexp=Nadd(fb,fr)},{nexp=Nadd(tb,tr)});LtEq(l,fb,tb)])
+	  | Odec ->
+	    (Some(([],{t=Tapp("enum",[TA_nexp tb; TA_nexp {nexp=Nadd(fb,fr)}])}),Emp,[],pure_e),
+	     [GtEq(l,{nexp=Nadd(fb,fr)},{nexp=Nadd(tb,tr)});GtEq(l,fb,tb)])
+	  | _ -> (typ_error l "Order specification in a foreach loop must be either inc or dec, not polymorphic")
+      in
       let (block',b_t,_,b_c,b_ef) = check_exp (Env(d_env,Envmap.insert t_env (id_to_string id,new_annot))) expect_t block in
-      (E_aux(E_for(id,from',to_',step',block'),(l,Some(([],b_t),Emp,[],pure_e))),expect_t,Envmap.empty,
-       b_c@from_c@to_c@step_c,(union_effects b_ef (union_effects step_ef (union_effects to_ef from_ef))))
+      (E_aux(E_for(id,from',to_',step',order,block'),(l,Some(([],b_t),Emp,local_cs,pure_e))),expect_t,Envmap.empty,
+       b_c@from_c@to_c@step_c@local_cs,(union_effects b_ef (union_effects step_ef (union_effects to_ef from_ef))))
     | E_vector(es) ->
       let item_t = match expect_t.t with
         | Tapp("vector",[base;rise;ord;TA_typ item_t]) -> item_t

@@ -545,10 +545,11 @@ exp :: 'E_' ::=
 
   | if exp1 then exp2                                   :: S :: ifnoelse {{ ichlo [[ if exp1 then exp2 else ( ) ]] }}
 
-  | foreach id from exp1 to exp2 by exp3 exp4           ::   :: for {{ com loop }}
-  | foreach id from exp1 to exp2 exp3                   :: S :: forbyone  {{ ichlo [[ foreach id from exp1 to exp2 by 1 exp4 ]] }}
-  | foreach id from exp1 downto exp2 by exp3 exp4       :: S :: fordown {{ ichlo [[ foreach id from exp1 to exp2 by ( - exp3 ) exp4 ]] }}
-  | foreach id from exp1 downto exp2 exp3               :: S :: fordownbyone  {{ ichlo [[ foreach id from exp1 downto exp2 by 1 exp4 ]] }}
+  | foreach ( id from exp1 to exp2 by exp3 in order ) exp4  ::   :: for {{ com loop }}
+  | foreach ( id from exp1 to exp2 by exp3 ) exp4           :: S :: forup {{ ichlo [[ foreach id from exp1 to exp2 by exp3 in inc exp4 ]] }}
+  | foreach ( id from exp1 to exp2 ) exp3                   :: S :: forupbyone  {{ ichlo [[ foreach id from exp1 to exp2 by 1 in inc exp4 ]] }}
+  | foreach ( id from exp1 downto exp2 by exp3 ) exp4       :: S :: fordown {{ ichlo [[ foreach id from exp1 to exp2 by exp3 in dec exp4 ]] }}
+  | foreach ( id from exp1 downto exp2 ) exp3               :: S :: fordownbyone  {{ ichlo [[ foreach id from exp1 downto exp2 by 1 in dec exp4 ]] }}
 
 % vectors
   | [ exp1 , ... , expn ]                             :: :: vector {{ com vector (indexed from 0) }}

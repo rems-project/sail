@@ -444,8 +444,9 @@ exp :: 'E_' ::=
 
   | if exp1 then exp2                                   :: S :: ifnoelse {{ icho [[ if exp1 then exp2 else unit ]] }}
 
-  | foreach id from exp1 to exp2 by exp3 exp4           ::   :: for {{ com loop }}
-  | foreach id from exp1 to exp2 exp3                   :: S :: forbyone  {{ icho [[ foreach id from exp1 to exp2 by 1 exp4 ]] }}
+  | foreach id from exp1 to exp2 by exp3 in atyp exp4   ::   :: for {{ com loop }}
+  | foreach id from exp1 to exp2 by exp3 exp4           :: S :: forup {{ ichlo [[ foreach id from exp1 to exp2 by exp3 in inc exp4 ]] }}
+  | foreach id from exp1 to exp2 exp3                   :: S :: forupbyone  {{ icho [[ foreach id from exp1 to exp2 by 1 exp4 ]] }}
   | foreach id from exp1 downto exp2 by exp3 exp4       :: S :: fordown {{ icho [[ foreach id from exp1 to exp2 by ( - exp3 ) exp4 ]] }}
   | foreach id from exp1 downto exp2 exp3               :: S :: fordownbyone  {{ icho [[ foreach id from exp1 downto exp2 by 1 exp4 ]] }}
 
