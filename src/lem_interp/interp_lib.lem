@@ -68,7 +68,6 @@ let rec vec_concat (V_tuple args) = match args with
 
 let function_map = [
   ("add", add);
-  ("add_infix", add);
   ("eq", eq);
   ("vec_concat", vec_concat);
   ("is_one", is_one);

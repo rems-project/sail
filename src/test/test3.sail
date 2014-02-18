@@ -17,7 +17,7 @@ function unit ignore(x) = ()
 
 (* extern functions *)
 val extern ( nat * nat ) -> nat effect pure add = "add"
-val extern ( nat * nat ) -> nat effect pure (deinfix + ) = "add_infix"   (* infix plus *)
+val extern ( nat * nat ) -> nat effect pure (deinfix + ) = "add"   (* infix plus *)
 
 function nat (deinfix * ) ( (nat) x, (nat) y ) = 42
 
