@@ -154,6 +154,10 @@ let rec to_memory_ops (Defs defs) =
       match valsp with
       | VS_val_spec (TypSchm_ts tq ((Typ_fn a r (Effect_set eff)) as t)) id ->
         if has_memory_effect eff then (id,t)::(to_memory_ops (Defs defs)) else (to_memory_ops (Defs defs))
+      | VS_extern_spec (TypSchm_ts tq ((Typ_fn a r (Effect_set eff)) as t)) id _ ->
+        if has_memory_effect eff then (id,t)::(to_memory_ops (Defs defs)) else (to_memory_ops (Defs defs))
+      | VS_extern_no_rename (TypSchm_ts tq ((Typ_fn a r (Effect_set eff)) as t)) id ->
+        if has_memory_effect eff then (id,t)::(to_memory_ops (Defs defs)) else (to_memory_ops (Defs defs))
       | _ -> to_memory_ops (Defs defs) end
     | _ -> to_memory_ops (Defs defs) end
   end
