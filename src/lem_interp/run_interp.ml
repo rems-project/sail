@@ -22,18 +22,26 @@ let id_to_string = function
   | Id s | DeIid s -> s
 ;;
 
+let bitvec_to_string l = "0b" ^ (String.concat "" (List.map (function
+  | V_lit(L_zero) -> "0"
+  | V_lit(L_one) -> "1"
+  | _ -> assert false) l))
+;;
+
 let rec val_to_string = function
  | V_boxref n -> sprintf "boxref %d" n
- | V_lit l -> sprintf "literal %s" (lit_to_string l)
+ | V_lit l -> sprintf (*"literal %s" *) "%s" (lit_to_string l)
  | V_tuple l ->
      let repr = String.concat ", " (List.map val_to_string l) in
-     sprintf "tuple (%s)" repr
+     sprintf "tuple <%s>" repr
  | V_list l ->
      let repr = String.concat "; " (List.map val_to_string l) in
      sprintf "list [%s]" repr
  | V_vector (first_index, inc, l) ->
      let order = if inc then "little-endian" else "big-endian" in
-     let repr = String.concat "; " (List.map val_to_string l) in
+     let repr =
+       try bitvec_to_string l
+       with Failure _ -> String.concat "; " (List.map val_to_string l) in
      sprintf "vector [%s] (%s, from %s)" repr order (string_of_big_int first_index)
  | V_record l ->
      let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string value) in
