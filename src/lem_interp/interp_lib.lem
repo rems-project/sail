@@ -8,51 +8,51 @@ open import Word
 
 let compose f g x = f (V_tuple [g x]) ;;
 
-let is_one (V_lit b) = V_lit (if b = L_one then L_true else L_false) ;;
+let is_one (V_lit (L_aux b lb)) = V_lit (L_aux (if b = L_one then L_true else L_false) lb) ;;
 
-let eq (V_tuple [x; y]) = V_lit (if x = y then L_true else L_false) ;;
+let eq (V_tuple [x; y]) = V_lit (L_aux (if x = y then L_true else L_false) Unknown) ;;
 
-let neg (V_tuple [V_lit arg]) = V_lit (match arg with
+let neg (V_tuple [V_lit (L_aux arg la)]) = V_lit (L_aux (match arg with
   | L_true -> L_false
-  | L_false -> L_true end) ;;
+  | L_false -> L_true end) la) ;;
 
 let neq = compose neg eq ;;
 
 let bit_to_bool b = match b with
-    V_lit L_zero -> false
-  | V_lit L_one -> true
+    V_lit (L_aux L_zero _) -> false
+  | V_lit (L_aux L_one _) -> true
   end ;;
 let bool_to_bit b = match b with
-    false -> V_lit L_zero
-  | true -> V_lit L_one
+    false -> V_lit (L_aux L_zero Unknown)
+  | true -> V_lit (L_aux L_one Unknown)
   end ;;
 
 (* XXX always interpret as positive ? *)
 let to_num_dec (V_vector idx false l) =
-  V_lit(L_num(naturalFromBitSeq (BitSeq Nothing false (map bit_to_bool (reverse l)))));;
+  V_lit(L_aux (L_num(naturalFromBitSeq (BitSeq Nothing false (map bit_to_bool (reverse l))))) Unknown);;
 let to_num_inc (V_vector idx true l) =
-  V_lit(L_num(naturalFromBitSeq (BitSeq Nothing false (map bit_to_bool l))));;
+  V_lit(L_aux (L_num(naturalFromBitSeq (BitSeq Nothing false (map bit_to_bool l)))) Unknown);;
 
 (* XXX not quite sure about list reversal here - what is the convention for
  * V_vector? cf. above too *)
-let to_vec_dec len (V_lit(L_num n)) =
-  let BitSeq _ false l = bitSeqFromNatural len n in
+let to_vec_dec len (V_lit(L_aux (L_num n) ln)) =
+  let (BitSeq _ false l) = bitSeqFromNatural len n in
   V_vector 0 false (map bool_to_bit (reverse l)) ;;
-let to_vec_inc len (V_lit(L_num n)) =
-  let BitSeq _ false l = bitSeqFromNatural len n in
+let to_vec_inc len (V_lit(L_aux (L_num n) ln)) =
+  let (BitSeq _ false l) = bitSeqFromNatural len n in
   V_vector 0 true (map bool_to_bit l) ;;
 
 let rec add (V_tuple args) = match args with
   (* vector case *)
   | [(V_vector _ d l as v); (V_vector _ d' l' as v')] ->
-      let V_lit (L_num x) = (if d then to_num_inc else to_num_dec) v in
-      let V_lit (L_num y) = (if d' then to_num_inc else to_num_dec) v' in
+      let (V_lit (L_aux (L_num x) lx)) = (if d then to_num_inc else to_num_dec) v in
+      let (V_lit (L_aux (L_num y) ly)) = (if d' then to_num_inc else to_num_dec) v' in
       (* XXX how shall I decide this? max? max+1? *)
       let len = max (List.length l) (List.length l') in
       (* XXX assume d = d' *)
-      (if d then to_vec_inc else to_vec_dec) (Just len) (V_lit (L_num (x+y)))
+      (if d then to_vec_inc else to_vec_dec) (Just len) (V_lit (L_aux (L_num (x+y)) lx))
   (* integer case *)
-  | [V_lit(L_num x); V_lit(L_num y)] -> V_lit(L_num (x+y))
+  | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (x+y)) lx)
   (* assume other literals are L_bin or L_hex, ie. vectors *)
   | [V_lit l; x ] -> add (V_tuple [litV_to_vec l; x])
   | [ x ; V_lit l ] -> add (V_tuple [x; litV_to_vec l])

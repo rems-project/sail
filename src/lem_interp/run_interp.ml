@@ -19,18 +19,18 @@ let lit_to_string = function
 ;;
 
 let id_to_string = function
-  | Id s | DeIid s -> s
+  | Id_aux(Id s,_) | Id_aux(DeIid s,_) -> s
 ;;
 
 let bitvec_to_string l = "0b" ^ (String.concat "" (List.map (function
-  | V_lit(L_zero) -> "0"
-  | V_lit(L_one) -> "1"
+  | V_lit(L_aux(L_zero, _)) -> "0"
+  | V_lit(L_aux(L_one, _)) -> "1"
   | _ -> assert false) l))
 ;;
 
 let rec val_to_string = function
  | V_boxref n -> sprintf "boxref %d" n
- | V_lit l -> sprintf (*"literal %s" *) "%s" (lit_to_string l)
+ | V_lit (L_aux(l,_)) -> sprintf (*"literal %s" *) "%s" (lit_to_string l)
  | V_tuple l ->
      let repr = String.concat ", " (List.map val_to_string l) in
      sprintf "tuple <%s>" repr
@@ -106,22 +106,22 @@ let vconcat v v' = vec_concat (V_tuple [v; v']) ;;
 let perform_action ((reg, mem) as env) = function
  | Read_reg ((Reg (id, _) | SubReg (id, _, _)), sub) ->
      slice (Reg.find id reg) sub, env
- | Read_mem (id, V_lit(L_num n), sub) ->
+ | Read_mem (id, V_lit(L_aux((L_num n),_)), sub) ->
      slice (Mem.find (id, n) mem) sub, env
  | Write_reg ((Reg (id, _) | SubReg (id, _, _)), None, value) ->
-     V_lit L_unit, (Reg.add id value reg, mem)
+     V_lit (L_aux(L_unit,Interp_ast.Unknown)), (Reg.add id value reg, mem)
  | Write_reg ((Reg (id, _) | SubReg (id, _, _)), Some (start, stop), value) ->
      (* XXX if updating a single element, wrap value into a vector -
       * should the typechecker do that coercion for us automatically? *)
      let value = if eq_big_int start stop then V_vector (zero_big_int, true, [value]) else value in
      let old_val = Reg.find id reg in
      let new_val = fupdate_vector_slice old_val value start stop in
-     V_lit L_unit, (Reg.add id new_val reg, mem)
- | Write_mem (id, V_lit(L_num n), None, value) ->
-     V_lit L_unit, (reg, Mem.add (id, n) value mem)
+     V_lit (L_aux(L_unit,Interp_ast.Unknown)), (Reg.add id new_val reg, mem)
+ | Write_mem (id, V_lit(L_aux(L_num n,_)), None, value) ->
+     V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, Mem.add (id, n) value mem)
  (* multi-byte accesses to memory *)
  (* XXX this doesn't deal with endianess at all, and it seems broken in tests *)
- | Read_mem (id, V_tuple [V_lit(L_num n); V_lit(L_num size)], sub) ->
+ | Read_mem (id, V_tuple [V_lit(L_aux(L_num n,_)); V_lit(L_aux(L_num size,_))], sub) ->
      let rec fetch k acc =
        if eq_big_int k size then slice acc sub else
          let slice = Mem.find (id, add_big_int n k) mem in
@@ -131,7 +131,7 @@ let perform_action ((reg, mem) as env) = function
  (* XXX no support for multi-byte slice write at the moment - not hard to add,
   * but we need a function basic read/write first since slice access involves
   * read, fupdate, write. *)
- | Write_mem (id, V_tuple [V_lit(L_num n); V_lit(L_num size)], None, value) ->
+ | Write_mem (id, V_tuple [V_lit(L_aux(L_num n,_)); V_lit(L_aux(L_num size,_))], None, value) ->
      (* assumes smallest unit of memory is 8 bit *)
      let byte_size = 8 in
      let rec update k mem =
@@ -141,15 +141,15 @@ let perform_action ((reg, mem) as env) = function
            (mult_int_big_int byte_size (succ_big_int k)) in
          let mem' = Mem.add (id, add_big_int n k) slice mem in
          update (succ_big_int k) mem'
-     in V_lit L_unit, (reg, update zero_big_int mem)
+     in V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, update zero_big_int mem)
  (* This case probably never happens in the POWER spec anyway *)
- | Write_mem (id, V_lit(L_num n), Some (start, stop), value) ->
+ | Write_mem (id, V_lit(L_aux(L_num n,_)), Some (start, stop), value) ->
      (* XXX if updating a single element, wrap value into a vector -
       * should the typechecker do that coercion for us automatically? *)
      let value = if eq_big_int start stop then V_vector (zero_big_int, true, [value]) else value in
      let old_val = Mem.find (id, n) mem in
      let new_val = fupdate_vector_slice old_val value start stop in
-     V_lit L_unit, (reg, Mem.add (id, n) new_val mem)
+     V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, Mem.add (id, n) new_val mem)
  | Call_extern (name, arg) -> eval_external name arg, env
  | _ -> assert false
 ;;
@@ -165,7 +165,7 @@ let run (name, test) =
       eprintf "%s: action returned %s\n" name (val_to_string return);
       loop env' (resume test s return)
   | Error e -> eprintf "%s: error: %s\n" name e; false in
-  let entry = E_app((Id "main"), [E_lit L_unit]) in
+  let entry = E_aux(E_app(Id_aux((Id "main"),Unknown), [E_aux(E_lit (L_aux(L_unit,Interp_ast.Unknown)),(Unknown,None))]),(Unknown,None)) in
   eprintf "%s: starting\n" name;
   try
     Printexc.record_backtrace true;

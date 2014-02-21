@@ -1141,7 +1141,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
 	| None -> Some(id_to_string id)) funcls None in
   let in_env = Envmap.apply t_env id in 
   let ret_t,param_t,tannot = match tannotopt with
-    | Typ_annot_opt_aux(Typ_annot_opt_some(typq,typ),(l',annot')) ->
+    | Typ_annot_opt_aux(Typ_annot_opt_some(typq,typ),l') ->
       let (ids,constraints) = typq_to_params envs typq in
       let t = typ_to_t typ in
       let p_t = new_t () in
