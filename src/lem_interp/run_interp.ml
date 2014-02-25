@@ -22,6 +22,14 @@ let id_to_string = function
   | Id_aux(Id s,_) | Id_aux(DeIid s,_) -> s
 ;;
 
+let loc_to_string = function
+  | Unknown -> "Unknown"
+  | Trans(s,_) -> s
+  | Range(s,fline,fchar,tline,tchar) -> 
+    "in " ^ s ^ " from line " ^  (string_of_int fline) ^ " character " ^ (string_of_int fchar) ^ 
+      " to line " ^ (string_of_int tline) ^ " character " ^ (string_of_int tchar)
+;;
+
 let bitvec_to_string l = "0b" ^ (String.concat "" (List.map (function
   | V_lit(L_aux(L_zero, _)) -> "0"
   | V_lit(L_aux(L_one, _)) -> "1"
@@ -82,15 +90,22 @@ let act_to_string = function
      sprintf "extern call %s applied to %s" name (val_to_string arg)
 ;;
 
+let id_compare i1 i2 = 
+  match (i1, i1) with 
+    | (Id_aux(Id(i1),_),Id_aux(Id(i2),_)) 
+    | (Id_aux(Id(i1),_),Id_aux(DeIid(i2),_)) 
+    | (Id_aux(DeIid(i1),_),Id_aux(Id(i2),_))
+    | (Id_aux(DeIid(i1),_),Id_aux(DeIid(i2),_)) -> compare i1 i2
+
 module Reg = struct
-  include Map.Make(struct type t = id let compare = compare end)
+  include Map.Make(struct type t = id let compare = id_compare end)
 end ;;
 
 module Mem = struct
   include Map.Make(struct
     type t = (id * big_int)
     let compare (i1, v1) (i2, v2) =
-      match compare i1 i2 with
+      match id_compare i1 i2 with
       | 0 -> compare_big_int v1 v2
       | n -> n
     end)
@@ -164,8 +179,8 @@ let run (name, test) =
       let return, env' = perform_action env a in
       eprintf "%s: action returned %s\n" name (val_to_string return);
       loop env' (resume test s return)
-  | Error e -> eprintf "%s: error: %s\n" name e; false in
-  let entry = E_aux(E_app(Id_aux((Id "main"),Unknown), [E_aux(E_lit (L_aux(L_unit,Interp_ast.Unknown)),(Unknown,None))]),(Unknown,None)) in
+  | Error(l, e) -> eprintf "%s: %s: error: %s\n" name (loc_to_string l) e; false in
+  let entry = E_aux(E_app(Id_aux((Id "main"),Unknown), [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)) in
   eprintf "%s: starting\n" name;
   try
     Printexc.record_backtrace true;
