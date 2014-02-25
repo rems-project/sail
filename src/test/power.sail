@@ -17,13 +17,13 @@ val extern bit -> bool effect pure is_one = "is_one"
 (* XXX sign extension *)
 function forall Type 'a . 'a exts ( x ) = x
 
-register (bit[32]) NIA (* next instruction address *)
-register (bit[32]) CIA (* current instruction address *)
+register (bit[64]) NIA (* next instruction address *)
+register (bit[64]) CIA (* current instruction address *)
 
-(* XXX check me *)
-register (bit[32]) CR
-register (bit[32]) CTR
-register (bit[32]) LR
+(* XXX endianess; also, bit[64] translates to 0:64, not 0:63??? *)
+register (bit[32 : 63]) CR
+register (bit[64]) CTR
+register (bit[64]) LR
 
 register bool mode64bit
 
