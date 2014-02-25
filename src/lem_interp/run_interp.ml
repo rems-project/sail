@@ -37,7 +37,7 @@ let bitvec_to_string l = "0b" ^ (String.concat "" (List.map (function
 ;;
 
 let rec val_to_string = function
- | V_boxref n -> sprintf "boxref %d" n
+ | V_boxref(n, t) -> sprintf "boxref %d" n
  | V_lit (L_aux(l,_)) -> sprintf (*"literal %s" *) "%s" (lit_to_string l)
  | V_tuple l ->
      let repr = String.concat ", " (List.map val_to_string l) in
@@ -51,11 +51,11 @@ let rec val_to_string = function
        try bitvec_to_string l
        with Failure _ -> String.concat "; " (List.map val_to_string l) in
      sprintf "vector [%s] (%s, from %s)" repr order (string_of_big_int first_index)
- | V_record l ->
+ | V_record(_, l) ->
      let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string value) in
      let repr = String.concat "; " (List.map  pp l) in
      sprintf "record {%s}" repr
- | V_ctor (id, value) ->
+ | V_ctor (id,_, value) ->
      sprintf "constructor %s %s" (id_to_string id) (val_to_string value)
 ;;
 

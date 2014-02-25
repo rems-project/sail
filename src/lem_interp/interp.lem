@@ -9,6 +9,14 @@ open import Interp_ast
 
 type tannot = maybe (t * tag * list nec * effect)
 
+val intern_annot : tannot -> tannot
+let intern_annot annot =
+  match annot with
+    | Just (t,_,ncs,effect) ->
+      Just (t,Tag_empty,ncs,Effect_aux (Effect_set []) Unknown)
+    | Nothing -> Nothing
+  end
+
 (* Workaround Lem's inability to scrap my (type classes) boilerplate.
  * Implementing only Eq, and only for literals - hopefully this will
  * be enough, but we should in principle implement ordering for everything in
@@ -44,13 +52,13 @@ let map2 f l l' = List.map (Tuple.uncurry f) (List.zip l l')
 let get_id id = match id with (Id_aux (Id s) _) -> s | (Id_aux (DeIid s) _ ) -> s end
 
 type value =
- | V_boxref of nat 
+ | V_boxref of nat * t  
  | V_lit of lit
  | V_tuple of list value
  | V_list of list value
  | V_vector of natural * bool * list value (* The nat stores the first index, the bool whether that's most or least significant *)
- | V_record of list (id * value)
- | V_ctor of id * value
+ | V_record of t * list (id * value)
+ | V_ctor of id * t * value
 
  (* seems useless currently:
 let rec id_value_eq (i, v) (i', v') = i = i' && value_eq v v'
@@ -303,18 +311,18 @@ end
 val fupdate_record : value -> value -> value
 let fupdate_record base updates = 
   match (base,updates) with
-  | (V_record bs,V_record us) -> V_record (update_field_list bs us) end
+  | (V_record t bs,V_record _ us) -> V_record t (update_field_list bs us) end
 
 val update_vector_slice : value -> value -> mem -> mem
 let rec update_vector_slice vector value mem = 
   match (vector,value) with
   | ((V_vector m inc vs),(V_vector n inc2 vals)) ->
     foldr2 (fun vbox v mem -> match vbox with
-                                       | V_boxref n -> update_mem mem n v end)
+                                       | V_boxref n t -> update_mem mem n v end)
       mem vs vals
   | ((V_vector m inc vs),v) ->
     List.foldr (fun vbox mem -> match vbox with
-                                    | V_boxref n -> update_mem mem n v end)
+                                    | V_boxref n t -> update_mem mem n v end)
       mem vs
 end
 
@@ -362,10 +370,77 @@ let add_to_top_frame e_builder stack =
   | Frame id e env mem stack -> Frame id (e_builder e) env mem stack
   end
 
+let id_of_string s = (Id_aux (Id s) Unknown)
+
+let rec combine_typs ts =
+  match ts with
+  | [] -> T_var (Kid_aux (Var "fresh") Unknown)
+  | [t] -> t
+  | t::ts ->
+    let t' = combine_typs ts in
+    match (t,t') with 
+      | (_,T_var _) -> t
+      | ((T_app (Id_aux (Id "enum") _) (T_args [T_arg_nexp (Ne_const n1); T_arg_nexp (Ne_const r1)])),
+	 (T_app (Id_aux (Id "enum") _) (T_args [T_arg_nexp (Ne_const n2); T_arg_nexp (Ne_const r2)]))) ->
+	let (smaller,larger,larger_r) = if n1 < n2 then (n1,n2,r2) else (n2,n1,r1) in
+	let r = (larger + larger_r) - smaller in
+	T_app (id_of_string "enum") (T_args [T_arg_nexp (Ne_const smaller); T_arg_nexp (Ne_const r)])
+      | ((T_app (Id_aux (Id "vector") _) (T_args [T_arg_nexp (Ne_const b1); T_arg_nexp (Ne_const r1); 
+						  T_arg_order (Ord_aux o1 _); T_arg_typ t1])),
+	 (T_app (Id_aux (Id "vector") _) (T_args [T_arg_nexp (Ne_const b2); T_arg_nexp (Ne_const r2); 
+						  T_arg_order (Ord_aux o2 _); T_arg_typ t2]))) ->
+	let t = combine_typs [t1;t2] in
+	match (o1,o2) with
+	  | (Ord_inc,Ord_inc) ->
+	    let larger_start = if b1 < b2 then b2 else b1 in
+	    let smaller_rise = if r1 < r2 then r1 else r2 in
+	    (T_app (id_of_string "vector") (T_args [T_arg_nexp (Ne_const larger_start); T_arg_nexp (Ne_const smaller_rise);
+						    (T_arg_order (Ord_aux o1 Unknown)); T_arg_typ t]))
+	  | (Ord_dec,Ord_dec) ->
+	    let smaller_start = if b1 < b2 then b1 else b2 in
+	    let smaller_fall = if r1 < r2 then r2 else r2 in
+	    (T_app (id_of_string "vector") (T_args [T_arg_nexp (Ne_const smaller_start); T_arg_nexp (Ne_const smaller_fall);
+						    (T_arg_order (Ord_aux o1 Unknown)); T_arg_typ t]))
+	  | _ -> T_var (Kid_aux (Var "fresh") Unknown)
+	 end 
+      | _ -> t'
+     end 
+   end
+
+
+let rec val_typ v =
+  match v with
+    | V_boxref n t -> T_app (id_of_string "reg") (T_args [T_arg_typ t])
+    | V_lit (L_aux lit _) ->
+      match lit with
+	| L_unit -> T_id (id_of_string "unit")
+	| L_true -> T_id (id_of_string "bool")
+	| L_false -> T_id (id_of_string "bool")
+	| L_one -> T_id (id_of_string "bit")
+	| L_zero -> T_id (id_of_string "bit")
+	| L_string _ -> T_id (id_of_string "string")
+	| L_num n -> T_app (id_of_string "enum") (T_args [T_arg_nexp (Ne_const n); T_arg_nexp (Ne_const 0)])
+	| L_undef -> T_var (Kid_aux (Var "fresh") Unknown)
+      end 
+    | V_tuple vals -> T_tup (List.map val_typ vals)
+    | V_vector n inc vals -> 
+      let ts = List.map val_typ vals in
+      let t = combine_typs ts in
+      T_app (id_of_string "vector") (T_args [T_arg_nexp (Ne_const n); T_arg_nexp (Ne_const (list_length vals));
+					     T_arg_order (Ord_aux (if inc then Ord_inc else Ord_dec) Unknown);
+					     T_arg_typ t])
+    | V_record t ivals -> t
+    | V_list vals -> 
+      let ts = List.map val_typ vals in
+      let t = combine_typs ts in
+      T_app (id_of_string "list") (T_args [T_arg_typ t])
+    | V_ctor id t vals -> t
+  end
+
 let rec to_exp v =
   E_aux
     (match v with
-      | V_boxref n -> E_id (Id_aux (Id ("XXX string_of_num n")) Unknown)
+      | V_boxref n t -> E_id (Id_aux (Id ("XXX string_of_num n")) Unknown)
       | V_lit lit -> E_lit lit
       | V_tuple(vals) -> E_tuple (List.map to_exp vals)
       | V_vector n inc vals -> 
@@ -375,12 +450,12 @@ let rec to_exp v =
           E_vector_indexed (List.reverse (snd (List.foldl (fun (n,acc) e -> (n+1,(n, to_exp e)::acc)) (n,[]) vals)))
 	else 
           E_vector_indexed (snd (List.foldr (fun e (n,acc) -> (n+1,(n, to_exp e)::acc)) (n-(list_length vals),[]) vals))
-      | V_record(ivals) -> 
+      | V_record t ivals -> 
 	E_record(FES_aux (FES_Fexps
 			    (List.map (fun (id,value) -> (FE_aux (FE_Fexp id (to_exp value)) (Unknown,Nothing))) ivals) false) 
 		   (Unknown,Nothing))
       | V_list(vals) -> E_list (List.map to_exp vals)
-      | V_ctor id vals -> E_app id [to_exp vals]
+      | V_ctor id t vals -> E_app id [to_exp vals]
      end)
     (Unknown,Nothing)
 
@@ -438,7 +513,7 @@ let rec match_pattern (P_aux p _) value =
  | P_id id -> (true, [(id,value)])
  | P_app id pats -> 
    match value with
-   | V_ctor cid (V_tuple vals) -> 
+   | V_ctor cid t (V_tuple vals) -> 
      if (id = cid && ((List.length pats) = (List.length vals)))
      then foldr2
           (fun pat value (matched_p,bounds) ->
@@ -450,7 +525,7 @@ let rec match_pattern (P_aux p _) value =
    | _ -> (false,[]) end
  | P_record fpats _ ->
    match value with
-   | V_record fvals ->
+   | V_record t fvals ->
      List.foldr
        (fun (FP_aux (FP_Fpat id pat) _) (matched_p,bounds) ->
          if matched_p then
@@ -600,7 +675,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 	| Tag_empty -> 
 	  match in_env l_env id with
 	    | Just(value) -> match value with
-		             | V_boxref n -> (Value (in_mem l_mem n),l_mem,l_env)
+		             | V_boxref n t -> (Value (in_mem l_mem n),l_mem,l_env)
 			     | _ -> (Value value,l_mem,l_env) end
             | Nothing -> 
               match in_env lets id with
@@ -688,12 +763,12 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 	  (E_aux (E_record 
 		    (FES_aux (FES_Fexps (map2 (fun id exp -> (FE_aux (FE_Fexp id exp) (Unknown,Nothing))) fields es) false) fes_annot))
 	          (l,annot)))
-	(fun vs -> (V_record (List.zip fields vs))) l_env l_mem [] exps
+	(fun vs -> (V_record typ (List.zip fields vs))) l_env l_mem [] exps
     | E_record_update exp (FES_aux (FES_Fexps fexps _) fes_annot) ->
       resolve_outcome (interp_main t_level l_env l_mem exp)
                       (fun rv lm le -> 
                         match rv with
-                        | V_record fvs ->
+                        | V_record t fvs ->
                           let (fields,exps) = List.unzip (List.map (fun (FE_aux (FE_Fexp id exp) _) -> (id,exp)) fexps) in
                           resolve_outcome (exp_list t_level 
 					     (fun es -> 
@@ -702,7 +777,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 								     (map2 (fun id exp -> (FE_aux (FE_Fexp id exp) (Unknown,Nothing)))
 									fields es) false) fes_annot))
 						      (l,annot)))					     
-                                             (fun vs -> (V_record (List.zip fields vs))) l_env l_mem [] exps)
+                                             (fun vs -> (V_record t (List.zip fields vs))) l_env l_mem [] exps)
                                           (fun vs lm le ->
                                             (Value (fupdate_record rv vs), lm, le))
                                           (fun a -> a)
@@ -724,7 +799,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
       resolve_outcome (interp_main t_level l_env l_mem exp)
                       (fun value lm le -> 
                         match value with 
-                        | V_record fexps -> match in_env fexps id with
+                        | V_record t fexps -> match in_env fexps id with
                                             | Just v -> (Value v,lm,l_env)
                                             | Nothing -> (Error l "Field not found in record",lm,le) end
                         | _ -> (Error l "Field access requires a record",lm,le)
@@ -858,7 +933,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
              end)
           | Nothing -> 
             (match in_ctors ctors id with
-            | Just(typ) -> (Value (V_ctor id v), lm, le)
+            | Just(_) -> (Value (V_ctor id typ v), lm, le)
             | Nothing -> 
               (match find_memory mems id with
               | Just(typ) -> 
@@ -953,7 +1028,7 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
       match tag with
 	| Tag_empty ->
 	  match in_env l_env id with
-	    | Just (V_boxref n) -> 
+	    | Just (V_boxref n t) -> 
 	      if is_top_level 
 	      then ((Value (V_lit (L_aux L_unit l)), update_mem l_mem n value, l_env),Nothing)
 	      else ((Value (in_mem l_mem n), l_mem, l_env),Just (fun e -> LEXP_aux (LEXP_id id) (l,annot)))
@@ -965,7 +1040,7 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
               then begin
 		let (Mem c m) = l_mem in
 		let l_mem = (Mem (c+1) m) in
-		((Value (V_lit (L_aux L_unit l)), update_mem l_mem c value, (id,(V_boxref c))::l_env),Nothing)
+		((Value (V_lit (L_aux L_unit l)), update_mem l_mem c value, (id,(V_boxref c typ))::l_env),Nothing)
               end
               else ((Error l (String.stringAppend "Undefined id " (get_id id)),l_mem,l_env),Nothing)
           end 
@@ -1003,9 +1078,9 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
             | V_vector inc m vs -> 
               let nth = access_vector v n in
               (match (nth,is_top_level,maybe_builder) with
-              | (V_boxref n,true,_) -> ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm n value, l_env),Nothing)
+              | (V_boxref n t,true,_) -> ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm n value, l_env),Nothing)
               | (v,true,_) -> ((Error l "Vector does not contain reg values",lm,l_env),Nothing)
-              | ((V_boxref n),false, Just lexp_builder) -> ((Value (in_mem lm n),lm, l_env),Just (next_builder lexp_builder))
+              | ((V_boxref n t),false, Just lexp_builder) -> ((Value (in_mem lm n),lm, l_env),Just (next_builder lexp_builder))
               | (v,false, Just lexp_builder) -> ((Value v,lm,le), Just (next_builder lexp_builder)) end)
             | _ -> ((Error l "Vector access of non-vector",lm,l_env),Nothing) end)
          | ((Action a s,lm,le),Just lexp_builder) ->
@@ -1061,10 +1136,10 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
       | e -> (e,Nothing) end
    | LEXP_field lexp id ->
      (match (create_write_message_or_update t_level value l_env l_mem false lexp) with
-     | ((Value (V_record fexps),lm,le),Just lexp_builder) ->
+     | ((Value (V_record t fexps),lm,le),Just lexp_builder) ->
        match (in_env fexps id,is_top_level) with
-       | (Just (V_boxref n),true) -> ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm n value, l_env),Nothing)
-       | (Just (V_boxref n),false) -> 
+       | (Just (V_boxref n t),true) -> ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm n value, l_env),Nothing)
+       | (Just (V_boxref n t),false) -> 
 	 ((Value (in_mem lm n),lm,l_env),Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot)))
        | (Just v, true) -> ((Error l "Field access requires record",lm,le),Nothing)
        | (Just v,false) -> ((Value v,lm,l_env),Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot)))
