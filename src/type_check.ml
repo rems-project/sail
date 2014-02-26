@@ -456,13 +456,13 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
             let (ret_t,cs_r,e') = type_coerce l d_env ret (rebuild (Some(([],ret),tag,cs@cs',ef))) expect_t in
             (e',ret_t,t_env,cs@cs'@cs_r,ef)
           | [parm] ->
-            let (parm',arg_t,t_env,cs',ef') = check_exp envs arg parm in
-            let (ret_t,cs_r',e') = type_coerce l d_env ret (E_aux(E_app(id,[parm']),(l,(Some(([],ret),tag,cs,ef))))) expect_t in
-            (e',ret_t,t_env,cs@cs'@cs_r',union_effects ef ef')
+            let (parm',arg_t,t_env,cs',ef_p) = check_exp envs arg parm in
+            let (ret_t,cs_r',e') = type_coerce l d_env ret (E_aux(E_app(id,[parm']),(l,(Some(([],ret),tag,cs,ef'))))) expect_t in
+            (e',ret_t,t_env,cs@cs'@cs_r',union_effects ef_p ef')
           | parms -> 
-            let ((E_aux(E_tuple parms',tannot')),arg_t,t_env,cs',ef') = check_exp envs arg (E_aux(E_tuple parms,(l,None))) in
-            let (ret_t,cs_r',e') = type_coerce l d_env ret (E_aux(E_app(id, parms'),(l,(Some(([],ret),tag,cs,ef))))) expect_t in
-            (e',ret_t,t_env,cs@cs'@cs_r',union_effects ef ef'))
+            let ((E_aux(E_tuple parms',tannot')),arg_t,t_env,cs',ef_p) = check_exp envs arg (E_aux(E_tuple parms,(l,None))) in
+            let (ret_t,cs_r',e') = type_coerce l d_env ret (E_aux(E_app(id, parms'),(l,(Some(([],ret),tag,cs,ef'))))) expect_t in
+            (e',ret_t,t_env,cs@cs'@cs_r',union_effects ef_p ef'))
         | _ -> typ_error l ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^ (t_to_string t)))
       | _ -> typ_error l ("Unbound function " ^ i)) 
     | E_app_infix(lft,op,rht) -> 

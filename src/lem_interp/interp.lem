@@ -1,21 +1,25 @@
 open import Pervasives
 import Map
 import Map_extra
-import Maybe
 import List_extra
-import String
+open import String_extra
 
 open import Interp_ast
 
 type tannot = maybe (t * tag * list nec * effect)
 
+val pure : effect
+let pure = Effect_aux(Effect_set []) Unknown
+
 val intern_annot : tannot -> tannot
 let intern_annot annot =
   match annot with
     | Just (t,_,ncs,effect) ->
-      Just (t,Tag_empty,ncs,Effect_aux (Effect_set []) Unknown)
+      Just (t,Tag_empty,ncs,pure)
     | Nothing -> Nothing
   end
+
+let val_annot typ = Just(typ,Tag_empty,[],pure)
 
 (* Workaround Lem's inability to scrap my (type classes) boilerplate.
  * Implementing only Eq, and only for literals - hopefully this will
@@ -163,8 +167,8 @@ let get_effects (Typ_aux t _) =
 
 (*Look for externs as well*)
 val to_memory_ops : defs tannot -> list (id * typ)
-let rec to_memory_ops (Defs defs) =
-  match defs with
+let rec to_memory_ops (Defs defs) = []
+(*  match defs with
   | [] -> []
   | (DEF_aux def _) ::defs ->
     match def with
@@ -184,11 +188,11 @@ let rec to_memory_ops (Defs defs) =
         if has_memory_effect eff then (id,t)::(to_memory_ops (Defs defs)) else (to_memory_ops (Defs defs))
       | _ -> to_memory_ops (Defs defs) end
     | _ -> to_memory_ops (Defs defs) end
-  end
+  end*)
 
 val to_externs : defs tannot -> list (id * string)
-let rec to_externs (Defs defs) =
-  match defs with
+let rec to_externs (Defs defs) = []
+(*  match defs with
   | [] -> []
   | (DEF_aux def _) ::defs ->
     match def with
@@ -198,7 +202,7 @@ let rec to_externs (Defs defs) =
         (id,s)::(to_externs (Defs defs))
       | _ -> to_externs (Defs defs) end
     | _ -> to_externs (Defs defs) end
-  end
+  end*)
 
 val to_data_constructors : defs tannot -> list (id * typ)
 let rec to_data_constructors (Defs defs) =
@@ -253,8 +257,8 @@ let litV_to_vec (L_aux lit l) =
     V_vector 0 true []
   | L_bin s -> 
     let bits = String.toCharList s in
-    let exploded_bits = List.map (fun c -> String.toString [c]) bits in
-    let bits = List.map (fun s -> match s with | "0" -> (V_lit (L_aux L_zero l)) | "1" -> (V_lit (L_aux L_one l)) end) exploded_bits in
+    let exploded_bits = bits in (*List.map (fun c -> String.toString [c]) bits in*)
+    let bits = List.map (fun s -> match s with | #'0' -> (V_lit (L_aux L_zero l)) | #'1' -> (V_lit (L_aux L_one l)) end) exploded_bits in
     (* XXX assume binary constants are written in big-endian, convert them to
      * little-endian by default - we might need syntax to change both of those
      * assumptions. *)
@@ -282,13 +286,15 @@ val from_n_to_n :forall 'a. natural -> natural -> natural -> list 'a -> list 'a
 let rec from_n_to_n from to_ acc ls =
   match ls with
   | [] -> []
-  | l::ls -> 
-    if (acc <= from)
-    then if (from = to_)
-      then [ l ]
-      else l::(from_n_to_n (from + 1) to_ acc ls)
-    else from_n_to_n from to_ (acc + 1) ls
-  end
+  | l::ls ->
+    if from > acc 
+    then from_n_to_n from to_ acc ls
+    else if from = to_
+    then [l]
+    else l::(from_n_to_n from to_ acc ls)
+end 
+
+(*Needs debugging*)
 
 val slice_vector : value -> natural -> natural -> value
 let slice_vector v n1 n2 =
@@ -440,7 +446,7 @@ let rec val_typ v =
 let rec to_exp v =
   E_aux
     (match v with
-      | V_boxref n t -> E_id (Id_aux (Id ("XXX string_of_num n")) Unknown)
+      | V_boxref n t -> E_id (Id_aux (Id (show n)) Unknown)
       | V_lit lit -> E_lit lit
       | V_tuple(vals) -> E_tuple (List.map to_exp vals)
       | V_vector n inc vals -> 
@@ -457,7 +463,7 @@ let rec to_exp v =
       | V_list(vals) -> E_list (List.map to_exp vals)
       | V_ctor id t vals -> E_app id [to_exp vals]
      end)
-    (Unknown,Nothing)
+    (Unknown,(val_annot (val_typ v)))
 
 val find_type_def : defs tannot -> id -> maybe (type_def tannot)
 val find_function : defs tannot -> id -> maybe (list (funcl tannot))
@@ -691,7 +697,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 	  let regf = Reg id typ in
 	  (Action (Read_reg regf Nothing)
 	          (Frame (Id_aux (Id "0") Unknown)
-		         (E_aux (E_id (Id_aux (Id "0") l)) (l,Just(typ,Tag_empty,ncs,effect))) l_env l_mem Top),
+		         (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) l_env l_mem Top),
            l_mem,l_env)
         | _ -> (Error l (String.stringAppend "Internal error: tag other than empty,enum,or extern " name),l_mem,l_env)
         end
@@ -700,54 +706,59 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
                       (fun value lm le -> 
                         match value with
                         | V_lit(L_aux L_true _) -> interp_main t_level l_env lm thn
-                        | V_lit(L_aux L_false _) -> interp_main t_level l_env lm els
-                        | _ -> (Error l "Type error, not provided boolean for if",lm,l_env) end)
+                        | V_lit(L_aux L_false _) -> interp_main t_level l_env lm els end)
                       (fun a -> update_stack a (add_to_top_frame (fun c -> (E_aux (E_if c thn els) (l,annot)))))
-    | E_for id from to_ by order exp ->
+    | E_for id from to_ by ((Ord_aux o _) as order) exp ->
+      let is_inc = match o with
+        | Ord_inc -> true
+        | _ -> false end in
       resolve_outcome (interp_main t_level l_env l_mem from)
                       (fun from_val lm le ->
                         match from_val with
-                        | V_lit(L_aux(L_num from_num) _) -> 
+                        | (V_lit(L_aux(L_num from_num) fl) as fval) -> 
                           resolve_outcome (interp_main t_level le lm to_)
                                           (fun to_val lm le ->
                                             match to_val with
-                                            | V_lit(L_aux (L_num to_num) _) ->
+                                            | (V_lit(L_aux (L_num to_num) tl) as tval) ->
                                               resolve_outcome 
                                                 (interp_main t_level le lm by)
                                                 (fun by_val lm le ->
                                                   match by_val with 
-                                                  | V_lit (L_aux (L_num by_num) _) ->
+                                                  | (V_lit (L_aux (L_num by_num) bl) as bval) ->
                                                     if (from_num = to_num) 
-                                                    then (Value(V_lit (L_aux L_unit Unknown)),lm,le)
-                                                    else interp_main t_level le lm 
-                                                      (E_aux 
-							 (E_block 
-							    [(E_aux (E_let 
-								(LB_aux (LB_val_implicit 
-									  (P_aux (P_id id) (Unknown,Nothing))
-									  (E_aux (E_lit(L_aux(L_num from_num) Unknown)) (Unknown,Nothing)))
-								        (Unknown,Nothing))
-								exp) (Unknown,Nothing));
-                                                             (E_aux (E_for id 
-								       (E_aux (E_lit (L_aux (L_num (from_num + by_num)) Unknown))
-									      (Unknown,Nothing))
-								       (E_aux (E_lit (L_aux (L_num to_num) Unknown)) (Unknown,Nothing))
-								       (E_aux (E_lit (L_aux (L_num by_num) Unknown)) (Unknown,Nothing))
-								       order exp) (l,annot))])
-							 (l,annot))
-                                                  | _ -> (Error l "by must be a number",lm,le) end)
+                                                    then (Value(V_lit (L_aux L_unit l)),lm,le)
+                                                    else
+                                                      let (ftyp,ttyp,btyp) = (val_typ fval,val_typ tval,val_typ bval) in
+                                                      interp_main t_level le lm 
+                                                        (E_aux 
+							   (E_block 
+							      [(E_aux (E_let 
+								         (LB_aux (LB_val_implicit 
+									            (P_aux (P_id id) (fl,val_annot ftyp))
+									            (E_aux (E_lit(L_aux(L_num from_num) fl)) (fl,val_annot ftyp)))
+								            (Unknown,val_annot ftyp))
+								         exp) (l,annot));
+                                                               (E_aux (E_for id 
+                                                                         (if is_inc 
+                                                                          then (E_aux (E_lit (L_aux (L_num (from_num + by_num)) fl)) (fl,val_annot (combine_typs [ftyp;ttyp])))
+                                                                          else (E_aux (E_lit (L_aux (L_num (from_num - by_num)) fl)) (fl,val_annot (combine_typs [ttyp;ftyp]))))
+								         (E_aux (E_lit (L_aux (L_num to_num) tl)) (tl,val_annot ttyp))
+								         (E_aux (E_lit (L_aux (L_num by_num) bl)) (bl,val_annot btyp))
+								         order exp) (l,annot))])
+							   (l,annot))
+                                                  | _ -> (Error l "internal error: by must be a number",lm,le) end)
                                                 (fun a -> update_stack a 
 						  (add_to_top_frame (fun b -> 
 						    (E_aux (E_for id 
-							      (E_aux (E_lit (L_aux (L_num from_num) Unknown)) (Unknown,Nothing))
-							      (E_aux (E_lit (L_aux (L_num to_num) Unknown)) (Unknown,Nothing))
+							      (E_aux (E_lit (L_aux (L_num from_num) fl)) (fl,(val_annot (val_typ fval))))
+							      (E_aux (E_lit (L_aux (L_num to_num) tl)) (tl,(val_annot (val_typ tval))))
 							      b order exp) (l,annot)))))
-                                            | _ -> (Error l "to must be a number",lm,le) end)
+                                            | _ -> (Error l "internal error: to must be a number",lm,le) end)
                                            (fun a -> update_stack a 
 					     (add_to_top_frame (fun t -> 
-					       (E_aux (E_for id (E_aux (E_lit (L_aux (L_num from_num) Unknown)) (Unknown,Nothing))
+					       (E_aux (E_for id (E_aux (E_lit (L_aux (L_num from_num) fl)) (fl,val_annot (val_typ fval)))
 							 t by order exp) (l,annot)))))
-                        | _ -> (Error l "from must be a number",lm,le) end)
+                        | _ -> (Error l "internal error: from must be a number",lm,le) end)
                        (fun a -> update_stack a (add_to_top_frame (fun f -> (E_aux (E_for id f to_ by order exp) (l,annot)))))
     | E_case exp pats ->
       resolve_outcome (interp_main t_level l_env l_mem exp)
@@ -908,77 +919,103 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
       exp_list t_level (fun exps -> E_aux (E_vector exps) (l,annot)) (fun vals -> V_vector 0 true vals) l_env l_mem [] exps
     | E_vector_indexed(iexps) ->
       let (indexes,exps) = List.unzip iexps in
+      let is_inc = match typ with
+        | T_app (Id_aux (Id "vector") _) (T_args [T_arg_nexp _;T_arg_nexp _; T_arg_order (Ord_aux Ord_inc _); _]) -> true
+        | _ -> false end in
       exp_list t_level (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es)) (l,annot))) 
-                       (fun vals -> V_vector (List_extra.head indexes) true vals) (*Need to see increasing or not, can look at types later*) l_env l_mem [] exps
+                       (fun vals -> V_vector (List_extra.head indexes) is_inc vals) l_env l_mem [] exps
     | E_block(exps) -> interp_block t_level l_env l_env l_mem exps
     | E_app f args ->
       (match (exp_list t_level (fun es -> E_aux (E_app f es) (l,annot)) 
 		               (fun vs -> match vs with | [] -> V_lit (L_aux L_unit l) | [v] -> v | vs -> V_tuple vs end) 
 			       l_env l_mem [] args) with
       | (Value v,lm,le) -> 
-         (match (f,t_level) with
-      	 | (id,(Env defs externs lets regs mems ctors)) -> 
-	   (match find_function defs id with
-	   | Just(funcls) -> 
-             (match find_funcl funcls v with
-	     | Nothing -> 
-               let name = get_id id in
-               (Error l (String.stringAppend "No matching pattern for function " name ),l_mem,l_env)
-	     | Just(env,exp) -> 
-               resolve_outcome (interp_main t_level env l_mem exp)
-	                       (fun ret lm le -> (Value ret, lm,l_env))
-                               (fun a -> update_stack a 
-				 (fun stack -> (Frame (Id_aux (Id "0") l) 
-						  (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) l_env l_mem stack)))
+        let name = get_id f in 
+        (match tag with
+        | Tag_empty -> 
+	  (match find_function defs f with
+	  | Just(funcls) -> 
+            (match find_funcl funcls v with
+	    | Nothing -> 
+              (Error l (String.stringAppend "No matching pattern for function " name ),l_mem,l_env)
+	    | Just(env,exp) -> 
+              resolve_outcome (interp_main t_level env l_mem exp)
+	                      (fun ret lm le -> (Value ret, lm,l_env))
+                              (fun a -> update_stack a 
+				(fun stack -> (Frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) l_env l_mem stack)))
              end)
-          | Nothing -> 
-            (match in_ctors ctors id with
-            | Just(_) -> (Value (V_ctor id typ v), lm, le)
-            | Nothing -> 
-              (match find_memory mems id with
-              | Just(typ) -> 
-                (Action (Read_mem id v Nothing) 
-		        (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) le lm Top), lm, le)
-              | Nothing -> 
-                (match find_extern externs id with
-                | Just(str) -> 
-                  (Action (Call_extern str v) 
-		          (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) le lm Top), lm, le)
-                | Nothing -> (Error l (String.stringAppend "Unknown function call " (get_id id)),lm,le) end)
-	       end) end) end) end)
-         | out -> out end)
+          | Nothing -> (Error l (String.stringAppend "Internal error: function with empty tag unfound " name),lm,le) end)
+	| Tag_spec ->  
+          (match find_function defs f with
+	  | Just(funcls) -> 
+            (match find_funcl funcls v with
+	    | Nothing -> 
+              (Error l (String.stringAppend "No matching pattern for function " name ),l_mem,l_env)
+	    | Just(env,exp) -> 
+              resolve_outcome (interp_main t_level env l_mem exp)
+	                      (fun ret lm le -> (Value ret, lm,l_env))
+                              (fun a -> update_stack a 
+				(fun stack -> (Frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) l_env l_mem stack)))
+             end)
+          | Nothing -> (Error l (String.stringAppend "Specified function must be defined before executing " name),lm,le) end)
+        | Tag_ctor ->
+          (match in_ctors ctors f with
+          | Just(_) -> (Value (V_ctor f typ v), lm, le)
+          | Nothing -> (Error l (String.stringAppend "Internal error: function with ctor tag unfound " name),lm,le)
+           end)
+        | Tag_extern opt_name ->
+          let name_ext = match opt_name with | Just s -> s | Nothing -> name end in
+          if has_memory_effect (match effect with | Effect_aux(Effect_set es) _ -> es | _ -> [] end) 
+          then
+            (Action (Read_mem (id_of_string name_ext) v Nothing) 
+	            (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) le lm Top), lm, le)
+          else
+            (Action (Call_extern name_ext v) 
+	            (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) le lm Top), lm, le)
+        | _ -> (Error l (String.stringAppend "Tag other than empty, spec, ctor, or extern on function call " name),lm,le) end)
+      | out -> out end)
     | E_app_infix lft op r -> 
        let op = match op with
        | Id_aux (Id x) il -> Id_aux (DeIid x) il
        | _ -> op
        end in
+      let name = get_id op in
       resolve_outcome (interp_main t_level l_env l_mem lft)
                       (fun lv lm le -> 
                          resolve_outcome (interp_main t_level l_env lm r)
                                          (fun rv lm le -> 
-			                   (match t_level with
-			                   | (Env defs externs lets regs mems ctors) ->
+                                           match tag with
+                                           | Tag_empty -> 
 				             (match find_function defs op with
-				             | Nothing -> 
-                                               (match find_extern externs op with
-                                               | Just(str) ->
-                                                 (Action (Call_extern str (V_tuple [lv;rv])) 
-						         (Frame (Id_aux (Id "0") l) 
-							        (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) le lm Top),lm,le)
-                                               | Nothing ->
-                                                   (Error l (String.stringAppend "No matching function " (get_id op)),lm,l_env) end)
-				             | Just (funcls) ->
+				             | Nothing -> (Error l (String.stringAppend "Internal error, no function def for " name),lm,le)
+                                             | Just (funcls) ->
 				               (match find_funcl funcls (V_tuple [lv;rv]) with 
-				               | Nothing -> (Error l "No matching pattern for function",lm,l_env)
+				               | Nothing -> (Error l (String.stringAppend "No matching pattern for function " name),lm,l_env)
 				               | Just(env,exp) ->
 				                 resolve_outcome (interp_main t_level env emem exp)
-				                 (fun ret lm le -> (Value ret,l_mem,l_env))
-                                                 (fun a -> update_stack a 
-						   (fun stack -> (Frame (Id_aux (Id "0") l)
-								        (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) l_env l_mem stack)))
-				                end)
-				              end)
-			                    end))
+				                   (fun ret lm le -> (Value ret,l_mem,l_env))
+                                                   (fun a -> update_stack a 
+						     (fun stack -> (Frame (Id_aux (Id "0") l)
+								          (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) l_env l_mem stack)))
+				                end)end)
+                                           | Tag_spec ->
+                                             (match find_function defs op with
+				             | Nothing -> (Error l (String.stringAppend "No function definition found for " name),lm,le)
+                                             | Just (funcls) ->
+				               (match find_funcl funcls (V_tuple [lv;rv]) with 
+				               | Nothing -> (Error l (String.stringAppend "No matching pattern for function " name),lm,l_env)
+				               | Just(env,exp) ->
+				                 resolve_outcome (interp_main t_level env emem exp)
+				                   (fun ret lm le -> (Value ret,l_mem,l_env))
+                                                   (fun a -> update_stack a 
+						     (fun stack -> (Frame (Id_aux (Id "0") l)
+								          (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) l_env l_mem stack)))
+				                end)end)
+                                           | Tag_extern ext_name ->
+                                             let ext_name = match ext_name with Just s -> s | Nothing -> name end in
+                                             (Action (Call_extern ext_name (V_tuple [lv;rv])) 
+						     (Frame (Id_aux (Id "0") l) 
+							    (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) le lm Top),lm,le) end)
                                          (fun a -> update_stack a (add_to_top_frame (fun r ->E_aux (E_app_infix (to_exp lv) op r) (l,annot)))))
                        (fun a -> update_stack a (add_to_top_frame (fun lft -> (E_aux (E_app_infix lft op r) (l,annot)))))
   | E_let (lbind : letbind tannot) exp -> 
@@ -1020,8 +1057,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP_aux lexp (l,annot)):lexp tannot) =
    let (Env defs externs lets regs mems ctors) = t_level in
   let (typ,tag,ncs,ef) = match annot with 
-    | Nothing -> (T_var (Kid_aux (Var "fresh_v") Unknown),
-		  Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
+    | Nothing -> (T_var (Kid_aux (Var "fresh_v") Unknown), Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
     | Just(t, tag, ncs, ef) -> (t,tag,ncs,ef) end in
    match lexp with
     | LEXP_id id -> 
@@ -1048,8 +1084,7 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
 	  let regf = Reg id typ in
 	  let request = (Action (Write_reg regf Nothing value) 
 			        (Frame (Id_aux (Id "0") l) 
-				       (E_aux (E_id (Id_aux (Id "0") l)) 
-					      (l,Just(typ,Tag_empty,ncs,ef))) l_env l_mem Top),l_mem,l_env) in
+				       (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) l_env l_mem Top),l_mem,l_env) in
           if is_top_level then (request,Nothing) else (request,Just (fun e -> LEXP_aux (LEXP_id id) (l,annot)))
         | _ -> ((Error l (String.stringAppend "Internal error: writing to id with tag other than extern or empty " (get_id id)),l_mem,l_env),Nothing)
       end 
@@ -1058,11 +1093,14 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
 	              (fun vs -> match vs with | [] -> V_lit (L_aux L_unit Unknown) | [v] -> v | vs -> V_tuple vs end)
 		      l_env l_mem [] exps) with
       | (Value v,lm,le) ->
-        let request = (Action (Write_mem id v Nothing value) 
-                              (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) l_env lm Top),lm,l_env) in
-        if is_top_level then (request,Nothing) 
-	else (request,Just (fun e -> 
-	                     (LEXP_aux (LEXP_memory id (match v with | V_tuple vs -> (List.map to_exp vs) | v -> [to_exp v]end)) (l,annot))))
+        (match tag with
+        | Tag_extern ->
+          let request = (Action (Write_mem id v Nothing value) 
+                                (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) l_env lm Top),lm,l_env) in
+          if is_top_level then (request,Nothing) 
+	  else (request,Just (fun e -> 
+	                       (LEXP_aux (LEXP_memory id (match v with | V_tuple vs -> (List.map to_exp vs) | v -> [to_exp v]end)) (l,annot))))
+         end)
       | (Action a s,lm, le) -> ((Action a s,lm,le), Just (fun (E_aux (E_tuple es) _) -> (LEXP_aux (LEXP_memory id es) (l,annot))))
       | e -> (e,Nothing) end
     | LEXP_vector lexp exp -> 

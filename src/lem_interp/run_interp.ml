@@ -91,7 +91,7 @@ let act_to_string = function
 ;;
 
 let id_compare i1 i2 = 
-  match (i1, i1) with 
+  match (i1, i2) with 
     | (Id_aux(Id(i1),_),Id_aux(Id(i2),_)) 
     | (Id_aux(Id(i1),_),Id_aux(DeIid(i2),_)) 
     | (Id_aux(DeIid(i1),_),Id_aux(Id(i2),_))
