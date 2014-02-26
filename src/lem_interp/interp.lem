@@ -254,25 +254,19 @@ let access_vector v n =
     else list_nth vs (m - n)
   end
 
-val from_n_to_n :forall 'a. natural -> natural -> natural -> list 'a -> list 'a
-let rec from_n_to_n from to_ acc ls =
-  match ls with
-  | [] -> []
-  | l::ls -> 
-    if (acc <= from)
-    then if (from = to_)
-      then [ l ]
-      else l::(from_n_to_n (from + 1) to_ acc ls)
-    else from_n_to_n from to_ (acc + 1) ls
-  end
+val from_n_to_n :forall 'a. natural -> natural -> list 'a -> list 'a
+let from_n_to_n from to_ ls =
+  let from = natFromNatural from in
+  let to_ = natFromNatural to_ in
+  take (to_ - from + 1) (drop from ls)
 
 val slice_vector : value -> natural -> natural -> value
 let slice_vector v n1 n2 =
   match v with
   | V_vector m inc vs ->
     if inc 
-    then V_vector n1 inc (from_n_to_n (n1 - m) (n2 - m) 0 vs)
-    else V_vector n1 inc (from_n_to_n (m - n1) (m - n2) 0 vs)
+    then V_vector n1 inc (from_n_to_n (n1 - m) (n2 - m) vs)
+    else V_vector n1 inc (from_n_to_n (m - n1) (m - n2) vs)
   end
 
 val update_field_list : list (id * value) -> list (id * value) -> list (id * value)
