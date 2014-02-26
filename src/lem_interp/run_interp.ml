@@ -94,6 +94,14 @@ module Mem = struct
       | 0 -> compare_big_int v1 v2
       | n -> n
     end)
+  (* debugging memory accesses *)
+  let add (n, idx) v m =
+    eprintf "%s[%s] <- %s\n" (id_to_string n) (string_of_big_int idx) (val_to_string v);
+    add (n, idx) v m
+  let find (n, idx) m =
+    let v = find (n, idx) m in
+    eprintf "%s[%s] -> %s\n" (id_to_string n) (string_of_big_int idx) (val_to_string v);
+    v
 end ;;
 
 let slice v = function
@@ -120,7 +128,7 @@ let perform_action ((reg, mem) as env) = function
  | Write_mem (id, V_lit(L_num n), None, value) ->
      V_lit L_unit, (reg, Mem.add (id, n) value mem)
  (* multi-byte accesses to memory *)
- (* XXX this doesn't deal with endianess at all, and it seems broken in tests *)
+ (* XXX this doesn't deal with endianess at all *)
  | Read_mem (id, V_tuple [V_lit(L_num n); V_lit(L_num size)], sub) ->
      let rec fetch k acc =
        if eq_big_int k size then slice acc sub else
@@ -131,14 +139,16 @@ let perform_action ((reg, mem) as env) = function
  (* XXX no support for multi-byte slice write at the moment - not hard to add,
   * but we need a function basic read/write first since slice access involves
   * read, fupdate, write. *)
- | Write_mem (id, V_tuple [V_lit(L_num n); V_lit(L_num size)], None, value) ->
+ | Write_mem (id, V_tuple [V_lit(L_num n); V_lit(L_num size)], None, V_vector (m, inc, vs)) ->
+     (* normalize input vector so that it is indexed from 0 - for slices *)
+     let value = V_vector (zero_big_int, inc, vs) in
      (* assumes smallest unit of memory is 8 bit *)
      let byte_size = 8 in
      let rec update k mem =
        if eq_big_int k size then mem else
-         let slice = slice_vector value
-           (mult_int_big_int byte_size k)
-           (mult_int_big_int byte_size (succ_big_int k)) in
+         let n1 = mult_int_big_int byte_size k in
+         let n2 = sub_big_int (mult_int_big_int byte_size (succ_big_int k)) (big_int_of_int 1) in
+         let slice = slice_vector value n1 n2 in
          let mem' = Mem.add (id, add_big_int n k) slice mem in
          update (succ_big_int k) mem'
      in V_lit L_unit, (reg, update zero_big_int mem)
