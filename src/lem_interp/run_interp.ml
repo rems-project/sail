@@ -180,7 +180,11 @@ let perform_action ((reg, mem) as env) = function
 ;;
 
 
-let run (name, test) =
+let run
+  ?(entry=E_aux(E_app(Id_aux((Id "main"),Unknown), [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)))
+  ?(reg=Reg.empty)
+  ?(mem=Mem.empty)
+  (name, test) =
   let rec loop env = function
   | Value v -> eprintf "%s: returned %s\n" name (val_to_string v); true
   | Action (a, s) ->
@@ -190,11 +194,10 @@ let run (name, test) =
       eprintf "%s: action returned %s\n" name (val_to_string return);
       loop env' (resume test s return)
   | Error(l, e) -> eprintf "%s: %s: error: %s\n" name (loc_to_string l) e; false in
-  let entry = E_aux(E_app(Id_aux((Id "main"),Unknown), [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)) in
   eprintf "%s: starting\n" name;
   try
     Printexc.record_backtrace true;
-    loop (Reg.empty, Mem.empty) (interp test entry)
+    loop (reg, mem) (interp test entry)
   with e ->
     let trace = Printexc.get_backtrace () in
     eprintf "%s: interpretor error %s\n%s\n" name (Printexc.to_string e) trace;
