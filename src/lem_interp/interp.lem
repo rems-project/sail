@@ -509,9 +509,9 @@ let rec match_pattern (P_aux p _) value =
 		     else (false,[])
  | P_typ typ pat -> match_pattern pat value (* Might like to destructure against the type to get information *)
  | P_id id -> (true, [(id,value)])
- | P_app id pats -> 
+ | P_app (Id_aux id _) pats -> 
    match value with
-   | V_ctor cid t (V_tuple vals) -> 
+   | V_ctor (Id_aux cid _) t (V_tuple vals) -> 
      if (id = cid && ((List.length pats) = (List.length vals)))
      then foldr2
           (fun pat value (matched_p,bounds) ->
