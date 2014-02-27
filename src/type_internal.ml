@@ -59,7 +59,7 @@ and t_arg =
 
 type tag =
   | Emp
-  | External
+  | External of string option
   | Default
   | Constructor
   | Enum
@@ -198,11 +198,11 @@ let nat_typ = {t=Tid "nat"}
 let pure_e = {effect=Eset []}
 let initial_typ_env =
   Envmap.from_list [
-    ("ignore",Some(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,{effect=Evar "b"})}),External,[],pure_e));
-    ("+",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External,[],pure_e));
-    ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External,[],pure_e));
-    ("-",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External,[],pure_e));
-    ("|",Some(([],{t= Tfn ({t=Ttup([bit_t;bit_t])},bit_t,pure_e)}),External,[],pure_e));
+    ("ignore",Some(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,{effect=Evar "b"})}),External None,[],pure_e));
+    ("+",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "add"),[],pure_e));
+    ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "multiply"),[],pure_e));
+    ("-",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "minus"),[],pure_e));
+    ("|",Some(([],{t= Tfn ({t=Ttup([bit_t;bit_t])},bit_t,pure_e)}),External (Some "bitwise_or"),[],pure_e));
   ]
 
 let initial_abbrev_env =
@@ -307,6 +307,21 @@ and o_to_string o =
   | Oinc -> "inc"
   | Odec -> "dec"
   | Ouvar({oindex=i;osubst=a}) -> string_of_int i ^ "()"
+
+let tag_to_string = function
+  | Emp -> "Emp"
+  | External None -> "External" 
+  | External (Some s) -> "External " ^ s
+  | Default -> "Default"
+  | Constructor -> "Constructor"
+  | Enum -> "Enum"
+  | Spec -> "Spec"
+
+
+let tannot_to_string = function
+  | None -> "No tannot"
+  | Some((vars,t),tag,ncs,ef) ->
+    "Tannot: type = " ^ (t_to_string t) ^ " tag = " ^ tag_to_string tag ^ " constraints = not printing effect = " ^ e_to_string ef
 
 let get_abbrev d_env t =
   match t.t with
@@ -479,11 +494,11 @@ let rec type_coerce l d_env t1 e t2 =
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [Eq(l,b2,{nexp=Nconst 0});Eq(l,r2,{nexp=N2n({nexp=Nadd(b1,r1)})})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_inc",l)),[e]),(l,Some(([],t2),Emp,cs,pure_e))))
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_inc",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [Eq(l,b2,{nexp=Nconst 0});Eq(l,r2,{nexp=N2n({nexp=Nadd({nexp=Nneg b1},r1)})})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Some(([],t2),Emp,cs,pure_e))))
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert a vector to an enum without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
@@ -494,12 +509,12 @@ let rec type_coerce l d_env t1 e t2 =
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [Eq(l,b1,{nexp=Nconst 0});Eq(l,{nexp=Nadd(b2,r2)},{nexp=N2n r1})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),[e]),(l,Some(([],t2),Emp,cs,pure_e))))
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [Eq(l,b1,{nexp=N2n{nexp=Nadd(b2,{nexp=Nneg r2})}});
 		  Eq(l,r1,b1)] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),[e]),(l,Some(([],t2),Emp,cs,pure_e))))
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert an enum to a vector without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
@@ -542,7 +557,7 @@ let rec type_coerce l d_env t1 e t2 =
 		   (l,Some(([],t2),Emp,[],pure_e))))
 	  | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2))))
   | Tid("bit"),Tid("bool") ->
-    let e' = E_aux(E_app((Id_aux(Id "is_one",l)),[e]),(l,Some(([],bool_t),External,[],pure_e))) in
+    let e' = E_aux(E_app((Id_aux(Id "is_one",l)),[e]),(l,Some(([],bool_t),External None,[],pure_e))) in
     (t2,[],e')
   | Tid(i),Tapp("enum",[TA_nexp b1;TA_nexp r1;]) -> 
     (match get_abbrev d_env t1 with

@@ -530,17 +530,17 @@ let to_ast_rec (Parse_ast.Rec_aux(r,l): Parse_ast.rec_opt) : rec_opt =
   | Parse_ast.Rec_rec -> Rec_rec
   ),l)
 
-let to_ast_tannot_opt (k_env : kind Envmap.t) (Parse_ast.Typ_annot_opt_aux(tp,l)) : tannot tannot_opt * kind Envmap.t * kind Envmap.t=
+let to_ast_tannot_opt (k_env : kind Envmap.t) (Parse_ast.Typ_annot_opt_aux(tp,l)) : tannot_opt * kind Envmap.t * kind Envmap.t=
   match tp with
   | Parse_ast.Typ_annot_opt_none -> raise (Reporting_basic.err_unreachable l "Parser generated typ annot opt none")
   | Parse_ast.Typ_annot_opt_some(tq,typ) ->
     let typq,k_env,k_local = to_ast_typquant k_env tq in
-    Typ_annot_opt_aux(Typ_annot_opt_some(typq,to_ast_typ k_env typ),(l,None)),k_env,k_local
+    Typ_annot_opt_aux(Typ_annot_opt_some(typq,to_ast_typ k_env typ),l),k_env,k_local
 
-let to_ast_effects_opt (k_env : kind Envmap.t) (Parse_ast.Effect_opt_aux(e,l)) : tannot effect_opt =
+let to_ast_effects_opt (k_env : kind Envmap.t) (Parse_ast.Effect_opt_aux(e,l)) : effect_opt =
   match e with
-  | Parse_ast.Effect_opt_pure -> Effect_opt_aux(Effect_opt_pure,(l,None))
-  | Parse_ast.Effect_opt_effect(typ) -> Effect_opt_aux(Effect_opt_effect(to_ast_effects k_env typ),(l,None))
+  | Parse_ast.Effect_opt_pure -> Effect_opt_aux(Effect_opt_pure,l)
+  | Parse_ast.Effect_opt_effect(typ) -> Effect_opt_aux(Effect_opt_effect(to_ast_effects k_env typ),l)
 
 let to_ast_funcl (names,k_env,t_env) (Parse_ast.FCL_aux(fcl,l) : Parse_ast.funcl) : (tannot funcl) =
   match fcl with

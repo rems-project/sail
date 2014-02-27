@@ -9,7 +9,7 @@ all: l2.pdf l2_parse.pdf l2.ml l2_parse.ml l2.lem
 %Theory.uo: %Script.sml
 	Holmake --qof -I $(OTTLIB) $@
 
-l2.tex: l2.ott l2_rules.ott
+l2.tex: l2.ott l2_typ.ott l2_rules.ott
 	ott -sort false -generate_aux_rules false -o $@ -picky_multiple_parses true $^
 
 %.tex: %.ott
@@ -21,12 +21,8 @@ l2.tex: l2.ott l2_rules.ott
 %Script.sml: %.ott
 	ott -sort false -generate_aux_rules true -o $@ -picky_multiple_parses true $^
 
-%.lem: %.ott
-	# work around what is probably a bug in -generate_aux_rules true: when we try to generate Lem code with
-	# that turned on, we get some surprising-looking parse failures in a
-	# few rules.  Likely we're not doing the proper transform for rules
-	# generated from inductive relation syntax.
-	ott -sort false -generate_aux_rules false -o $@ -picky_multiple_parses true $^
+l2.lem: l2.ott l2_typ.ott
+	ott -sort false -generate_aux_rules true -o $@ -picky_multiple_parses true $^
 
 clean:
 	rm -rf *~

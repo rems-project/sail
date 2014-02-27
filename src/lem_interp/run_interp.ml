@@ -19,18 +19,26 @@ let lit_to_string = function
 ;;
 
 let id_to_string = function
-  | Id s | DeIid s -> s
+  | Id_aux(Id s,_) | Id_aux(DeIid s,_) -> s
+;;
+
+let loc_to_string = function
+  | Unknown -> "Unknown"
+  | Trans(s,_) -> s
+  | Range(s,fline,fchar,tline,tchar) -> 
+    "in " ^ s ^ " from line " ^  (string_of_int fline) ^ " character " ^ (string_of_int fchar) ^ 
+      " to line " ^ (string_of_int tline) ^ " character " ^ (string_of_int tchar)
 ;;
 
 let bitvec_to_string l = "0b" ^ (String.concat "" (List.map (function
-  | V_lit(L_zero) -> "0"
-  | V_lit(L_one) -> "1"
+  | V_lit(L_aux(L_zero, _)) -> "0"
+  | V_lit(L_aux(L_one, _)) -> "1"
   | _ -> assert false) l))
 ;;
 
 let rec val_to_string = function
- | V_boxref n -> sprintf "boxref %d" n
- | V_lit l -> sprintf (*"literal %s" *) "%s" (lit_to_string l)
+ | V_boxref(n, t) -> sprintf "boxref %d" n
+ | V_lit (L_aux(l,_)) -> sprintf (*"literal %s" *) "%s" (lit_to_string l)
  | V_tuple l ->
      let repr = String.concat ", " (List.map val_to_string l) in
      sprintf "tuple <%s>" repr
@@ -43,11 +51,11 @@ let rec val_to_string = function
        try bitvec_to_string l
        with Failure _ -> String.concat "; " (List.map val_to_string l) in
      sprintf "vector [%s] (%s, from %s)" repr order (string_of_big_int first_index)
- | V_record l ->
+ | V_record(_, l) ->
      let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string value) in
      let repr = String.concat "; " (List.map  pp l) in
      sprintf "record {%s}" repr
- | V_ctor (id, value) ->
+ | V_ctor (id,_, value) ->
      sprintf "constructor %s %s" (id_to_string id) (val_to_string value)
 ;;
 
@@ -82,15 +90,22 @@ let act_to_string = function
      sprintf "extern call %s applied to %s" name (val_to_string arg)
 ;;
 
+let id_compare i1 i2 = 
+  match (i1, i2) with 
+    | (Id_aux(Id(i1),_),Id_aux(Id(i2),_)) 
+    | (Id_aux(Id(i1),_),Id_aux(DeIid(i2),_)) 
+    | (Id_aux(DeIid(i1),_),Id_aux(Id(i2),_))
+    | (Id_aux(DeIid(i1),_),Id_aux(DeIid(i2),_)) -> compare i1 i2
+
 module Reg = struct
-  include Map.Make(struct type t = id let compare = compare end)
+  include Map.Make(struct type t = id let compare = id_compare end)
 end ;;
 
 module Mem = struct
   include Map.Make(struct
     type t = (id * big_int)
     let compare (i1, v1) (i2, v2) =
-      match compare i1 i2 with
+      match id_compare i1 i2 with
       | 0 -> compare_big_int v1 v2
       | n -> n
     end)
@@ -114,22 +129,22 @@ let vconcat v v' = vec_concat (V_tuple [v; v']) ;;
 let perform_action ((reg, mem) as env) = function
  | Read_reg ((Reg (id, _) | SubReg (id, _, _)), sub) ->
      slice (Reg.find id reg) sub, env
- | Read_mem (id, V_lit(L_num n), sub) ->
+ | Read_mem (id, V_lit(L_aux((L_num n),_)), sub) ->
      slice (Mem.find (id, n) mem) sub, env
  | Write_reg ((Reg (id, _) | SubReg (id, _, _)), None, value) ->
-     V_lit L_unit, (Reg.add id value reg, mem)
+     V_lit (L_aux(L_unit,Interp_ast.Unknown)), (Reg.add id value reg, mem)
  | Write_reg ((Reg (id, _) | SubReg (id, _, _)), Some (start, stop), value) ->
      (* XXX if updating a single element, wrap value into a vector -
       * should the typechecker do that coercion for us automatically? *)
      let value = if eq_big_int start stop then V_vector (zero_big_int, true, [value]) else value in
      let old_val = Reg.find id reg in
      let new_val = fupdate_vector_slice old_val value start stop in
-     V_lit L_unit, (Reg.add id new_val reg, mem)
- | Write_mem (id, V_lit(L_num n), None, value) ->
-     V_lit L_unit, (reg, Mem.add (id, n) value mem)
+     V_lit (L_aux(L_unit,Interp_ast.Unknown)), (Reg.add id new_val reg, mem)
+ | Write_mem (id, V_lit(L_aux(L_num n,_)), None, value) ->
+     V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, Mem.add (id, n) value mem)
  (* multi-byte accesses to memory *)
  (* XXX this doesn't deal with endianess at all *)
- | Read_mem (id, V_tuple [V_lit(L_num n); V_lit(L_num size)], sub) ->
+ | Read_mem (id, V_tuple [V_lit(L_aux(L_num n,_)); V_lit(L_aux(L_num size,_))], sub) ->
      let rec fetch k acc =
        if eq_big_int k size then slice acc sub else
          let slice = Mem.find (id, add_big_int n k) mem in
@@ -139,7 +154,7 @@ let perform_action ((reg, mem) as env) = function
  (* XXX no support for multi-byte slice write at the moment - not hard to add,
   * but we need a function basic read/write first since slice access involves
   * read, fupdate, write. *)
- | Write_mem (id, V_tuple [V_lit(L_num n); V_lit(L_num size)], None, V_vector (m, inc, vs)) ->
+ | Write_mem (id, V_tuple [V_lit(L_aux(L_num n,_)); V_lit(L_aux(L_num size,_))], None, V_vector (m, inc, vs)) ->
      (* normalize input vector so that it is indexed from 0 - for slices *)
      let value = V_vector (zero_big_int, inc, vs) in
      (* assumes smallest unit of memory is 8 bit *)
@@ -151,15 +166,15 @@ let perform_action ((reg, mem) as env) = function
          let slice = slice_vector value n1 n2 in
          let mem' = Mem.add (id, add_big_int n k) slice mem in
          update (succ_big_int k) mem'
-     in V_lit L_unit, (reg, update zero_big_int mem)
+     in V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, update zero_big_int mem)
  (* This case probably never happens in the POWER spec anyway *)
- | Write_mem (id, V_lit(L_num n), Some (start, stop), value) ->
+ | Write_mem (id, V_lit(L_aux(L_num n,_)), Some (start, stop), value) ->
      (* XXX if updating a single element, wrap value into a vector -
       * should the typechecker do that coercion for us automatically? *)
      let value = if eq_big_int start stop then V_vector (zero_big_int, true, [value]) else value in
      let old_val = Mem.find (id, n) mem in
      let new_val = fupdate_vector_slice old_val value start stop in
-     V_lit L_unit, (reg, Mem.add (id, n) new_val mem)
+     V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, Mem.add (id, n) new_val mem)
  | Call_extern (name, arg) -> eval_external name arg, env
  | _ -> assert false
 ;;
@@ -174,8 +189,8 @@ let run (name, test) =
       let return, env' = perform_action env a in
       eprintf "%s: action returned %s\n" name (val_to_string return);
       loop env' (resume test s return)
-  | Error e -> eprintf "%s: error: %s\n" name e; false in
-  let entry = E_app((Id "main"), [E_lit L_unit]) in
+  | Error(l, e) -> eprintf "%s: %s: error: %s\n" name (loc_to_string l) e; false in
+  let entry = E_aux(E_app(Id_aux((Id "main"),Unknown), [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)) in
   eprintf "%s: starting\n" name;
   try
     Printexc.record_backtrace true;

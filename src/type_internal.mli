@@ -54,7 +54,7 @@ and t_arg =
 
 type tag =
   | Emp
-  | External
+  | External of string option
   | Default
   | Constructor
   | Enum
@@ -102,6 +102,7 @@ val bit_t : t
 val pure_e : effect
 
 val t_to_string : t -> string
+val tannot_to_string : tannot -> string
 
 val reset_fresh : unit -> unit
 val new_t : unit -> t

@@ -58,7 +58,9 @@ open import Set_extra
 type l =
   | Unknown
   | Trans of string * maybe l
-  | Range of nat * nat
+  | Range of string * nat * nat * nat * nat
+
+type annot 'a = l * 'a
 
 val duplicates : forall 'a. list 'a -> list 'a
 
@@ -102,7 +104,7 @@ l :: '' ::=                                     {{ phantom }}
 annot :: '' ::=
                                                 {{ phantom }}
                                                 {{ ocaml 'a annot }}
-                                                {{ lem annot }}
+                                                {{ lem annot 'a }}
                                                 {{ hol unit }}
 
 id :: '' ::=
@@ -195,13 +197,13 @@ effect :: 'Effect_' ::=
  | pure                                 :: M :: pure {{ com sugar for empty effect set }} 
    {{ lem (Effect_set [])  }} {{icho [[{}]] }}
  | effect1 u+ .. u+ effectn                   :: M :: union {{ com meta operation for combining sets of effects }} {{ icho [] }}
-   {{ lem (List.foldr effect_union (Effect_set []) [[effect1..effectn]]) }}
+   {{ lem (List.foldr effect_union (Effect_aux (Effect_set []) Unknown) [[effect1..effectn]]) }}
 
 embed
 {{ lem
 let effect_union e1 e2 = 
   match (e1,e2) with
-  | (Effect_set els,Effect_set els2) -> Effect_set (els++els2)
+  | ((Effect_aux (Effect_set els) _),(Effect_aux (Effect_set els2) l)) -> Effect_aux (Effect_set (els++els2)) l
   end
 }}
 
@@ -727,7 +729,7 @@ grammar
 
 tannot_opt :: 'Typ_annot_opt_' ::=
   {{ com Optional type annotation for functions}}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }} 
 %  |                                             :: :: none
 % Currently not optional; one issue, do the type parameters apply over the argument types, or should this be the type of the function and not just the return
   | typquant typ                                :: :: some 
@@ -740,7 +742,7 @@ rec_opt :: 'Rec_' ::=
 
 effect_opt :: 'Effect_opt_' ::=
   {{ com Optional effect annotation for functions }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }}
   |                                             :: :: pure {{ com sugar for empty effect set }}
   | effectkw effect                              :: :: effect
 
@@ -835,6 +837,8 @@ defs :: '' ::=
   {{ com Definition sequence }}
   {{ auxparam 'a }}
   | def1  .. defn                 :: :: Defs
+
+
 
 
 terminals :: '' ::=
