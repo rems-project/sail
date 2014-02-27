@@ -36,10 +36,10 @@ let to_num_inc (V_vector idx true l) =
 (* XXX not quite sure about list reversal here - what is the convention for
  * V_vector? cf. above too *)
 let to_vec_dec len (V_lit(L_aux (L_num n) ln)) =
-  let (BitSeq _ false l) = bitSeqFromNatural len n in
+  let l = boolListFrombitSeq len (bitSeqFromNatural Nothing n) in
   V_vector 0 false (map bool_to_bit (reverse l)) ;;
 let to_vec_inc len (V_lit(L_aux (L_num n) ln)) =
-  let (BitSeq _ false l) = bitSeqFromNatural len n in
+  let l = boolListFrombitSeq len (bitSeqFromNatural Nothing n) in
   V_vector 0 true (map bool_to_bit l) ;;
 
 let rec add (V_tuple args) = match args with
@@ -50,7 +50,7 @@ let rec add (V_tuple args) = match args with
       (* XXX how shall I decide this? max? max+1? *)
       let len = max (List.length l) (List.length l') in
       (* XXX assume d = d' *)
-      (if d then to_vec_inc else to_vec_dec) (Just len) (V_lit (L_aux (L_num (x+y)) lx))
+      (if d then to_vec_inc else to_vec_dec) len (V_lit (L_aux (L_num (x+y)) lx))
   (* integer case *)
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (x+y)) lx)
   (* assume other literals are L_bin or L_hex, ie. vectors *)
@@ -73,8 +73,9 @@ let function_map = [
   ("is_one", is_one);
   ("to_num_inc", to_num_inc);
   ("to_num_dec", to_num_dec);
-  ("to_vec_inc", to_vec_inc Nothing);
-  ("to_vec_dec", to_vec_dec Nothing);
+  (* XXX the size of the target vector should be given by the interpreter *)
+  ("to_vec_inc", to_vec_inc 8);
+  ("to_vec_dec", to_vec_dec 8);
 ] ;;
 
 let eval_external name v = (Maybe_extra.fromJust (List.lookup name function_map)) v ;;
