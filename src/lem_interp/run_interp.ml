@@ -105,11 +105,12 @@ module Mem = struct
   include Map.Make(struct
     type t = (id * big_int)
     let compare (i1, v1) (i2, v2) =
-      match id_compare i1 i2 with
-      | 0 -> compare_big_int v1 v2
+      (* optimize for common case: different addresses, same id *)
+      match compare_big_int v1 v2 with
+      | 0 -> id_compare i1 i2
       | n -> n
     end)
-  (* debugging memory accesses *)
+  (* debugging memory accesses
   let add (n, idx) v m =
     eprintf "%s[%s] <- %s\n" (id_to_string n) (string_of_big_int idx) (val_to_string v);
     add (n, idx) v m
@@ -117,6 +118,7 @@ module Mem = struct
     let v = find (n, idx) m in
     eprintf "%s[%s] -> %s\n" (id_to_string n) (string_of_big_int idx) (val_to_string v);
     v
+  *)
 end ;;
 
 let slice v = function

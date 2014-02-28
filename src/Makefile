@@ -7,7 +7,7 @@ test: all
 	./run_tests.native
 
 test_power: all
-	./run_power.native ../../../rsem/idl/power/binary/main.bin
+	../../../rsem/idl/power/binary/run.sh
 
 clean:
 	-ocamlbuild -clean
