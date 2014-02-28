@@ -14,19 +14,14 @@ let rec foldli f acc ?(i=0) = function
   | x::xs -> foldli f (f i acc x) ~i:(i+1) xs
 ;;
 
-let little_endian = false ;;
+let big_endian = true ;;
 
 let hex_to_big_int s = Big_int.big_int_of_int64 (Int64.of_string s) ;;
 
-(* XXX POWER is big-endian - cheating until we have Kathy's switch *)
-let flip_vec (V_vector (i, inc, l)) = V_vector (i, not inc, l)
-
 let big_int_to_vec b size =
-  flip_vec (
-  (if little_endian then to_vec_inc else to_vec_dec) 
+  (if big_endian then to_vec_inc else to_vec_dec)
   size
   (V_lit (L_aux (L_num b, Unknown)))
-  )
 ;;
 
 let mem = ref Mem.empty ;;

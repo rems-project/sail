@@ -46,7 +46,7 @@ let rec val_to_string = function
      let repr = String.concat "; " (List.map val_to_string l) in
      sprintf "list [%s]" repr
  | V_vector (first_index, inc, l) ->
-     let order = if inc then "little-endian" else "big-endian" in
+     let order = if inc then "big-endian" else "little-endian" in
      let repr =
        try bitvec_to_string l
        with Failure _ -> String.concat "; " (List.map val_to_string l) in
@@ -145,7 +145,6 @@ let perform_action ((reg, mem) as env) = function
  | Write_mem (id, V_lit(L_aux(L_num n,_)), None, value) ->
      V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, Mem.add (id, n) value mem)
  (* multi-byte accesses to memory *)
- (* XXX this doesn't deal with endianess at all *)
  | Read_mem (id, V_tuple [V_lit(L_aux(L_num n,_)); V_lit(L_aux(L_num size,_))], sub) ->
      let rec fetch k acc =
        if eq_big_int k size then slice acc sub else
@@ -153,9 +152,7 @@ let perform_action ((reg, mem) as env) = function
          fetch (succ_big_int k) (vconcat acc slice)
      in
      fetch zero_big_int (V_vector (zero_big_int, true, [])), env
- (* XXX no support for multi-byte slice write at the moment - not hard to add,
-  * but we need a function basic read/write first since slice access involves
-  * read, fupdate, write. *)
+ (* XXX no support for multi-byte slice write at the moment *)
  | Write_mem (id, V_tuple [V_lit(L_aux(L_num n,_)); V_lit(L_aux(L_num size,_))], None, V_vector (m, inc, vs)) ->
      (* normalize input vector so that it is indexed from 0 - for slices *)
      let value = V_vector (zero_big_int, inc, vs) in
