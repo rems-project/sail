@@ -4,10 +4,39 @@ open Interp_ast ;;
 open Interp_lib ;;
 open Run_interp ;;
 
-let startaddr = ref 0 ;;
-let mainaddr  = ref 0 ;;
+let startaddr = ref "0" ;;
+let mainaddr  = ref "0" ;;
 let sections = ref [] ;;
 let file = ref "" ;;
+
+let rec foldli f acc ?(i=0) = function
+  | [] -> acc
+  | x::xs -> foldli f (f i acc x) ~i:(i+1) xs
+;;
+
+let little_endian = false ;;
+
+let hex_to_big_int s = Big_int.big_int_of_int64 (Int64.of_string s) ;;
+
+(* XXX POWER is big-endian - cheating until we have Kathy's switch *)
+let flip_vec (V_vector (i, inc, l)) = V_vector (i, not inc, l)
+
+let big_int_to_vec b size =
+  flip_vec (
+  (if little_endian then to_vec_inc else to_vec_dec) 
+  size
+  (V_lit (L_aux (L_num b, Unknown)))
+  )
+;;
+
+let mem = ref Mem.empty ;;
+
+let add_mem byte addr =
+  assert(byte >= 0 && byte < 256);
+  let vector = big_int_to_vec (Big_int.big_int_of_int byte) 8 in
+  let key = Id_aux (Id "MEM", Unknown), addr in
+  mem := Mem.add key vector !mem
+;;
 
 let add_section s =
   match Str.split (Str.regexp ",") s with
@@ -16,29 +45,11 @@ let add_section s =
         sections := (
           int_of_string offset,
           int_of_string size,
-          Big_int.big_int_of_int64 (Int64.of_string addr)) ::
+          hex_to_big_int addr) ::
             !sections
       with Failure msg -> raise (Arg.Bad (msg ^ ": " ^ s))
       end
   | _ -> raise (Arg.Bad ("Wrong section format: "^s))
-;;
-
-let rec foldli f acc ?(i=0) = function
-  | [] -> acc
-  | x::xs -> foldli f (f i acc x) ~i:(i+1) xs
-;;
-
-(* POWER is big-endian *)
-let little_endian = false ;;
-
-let mem = ref Mem.empty ;;
-
-let add_mem byte addr =
-  assert(byte >= 0 && byte < 256);
-  let lit_byte = V_lit (L_aux (L_num (Big_int.big_int_of_int byte), Unknown)) in
-  let vector = (if little_endian then to_vec_inc else to_vec_dec) 8 lit_byte in
-  let key = Id_aux (Id "MEM", Unknown), addr in
-  mem := Mem.add key vector !mem
 ;;
 
 let load_section ic (offset,size,addr) =
@@ -48,12 +59,18 @@ let load_section ic (offset,size,addr) =
   done
 ;;
 
+let init_reg () =
+  List.fold_left (fun r (k,v) -> Reg.add k v r) Reg.empty [
+    Id_aux(Id "CIA", Unknown), big_int_to_vec (hex_to_big_int !startaddr) 64 ;
+  ]
+;;
+
 let args = [
   ("--file", Arg.Set_string file, "filename binary code to load in memory");
   ("--data", Arg.String add_section, "name,offset,size,addr add a data section");
   ("--code", Arg.String add_section, "name,offset,size,addr add a code section");
-  ("--startaddr", Arg.Set_int startaddr, "addr initial address");
-  ("--mainaddr", Arg.Set_int mainaddr, "addr address of the main section");
+  ("--startaddr", Arg.Set_string startaddr, "addr initial address");
+  ("--mainaddr", Arg.Set_string mainaddr, "addr address of the main section");
 ] ;;
 
 let time_it action arg =
@@ -78,7 +95,8 @@ let run () =
   let t = time_it (List.iter (load_section ic)) !sections in
   eprintf "done. (%f seconds)\n%!" t;
   close_in ic;
-  let r = Run_interp.run ~mem:!mem (!file, Power.defs) in
+  let reg = init_reg () in
+  let r = Run_interp.run ~mem:!mem ~reg (!file, Power.defs) in
   eprintf "%s\n" (if r then "SUCCESS" else "FAILURE")
 ;;
 

@@ -74,8 +74,8 @@ let function_map = [
   ("to_num_inc", to_num_inc);
   ("to_num_dec", to_num_dec);
   (* XXX the size of the target vector should be given by the interpreter *)
-  ("to_vec_inc", to_vec_inc 8);
-  ("to_vec_dec", to_vec_dec 8);
+  ("to_vec_inc", to_vec_inc 64);
+  ("to_vec_dec", to_vec_dec 64);
 ] ;;
 
 let eval_external name v = (Maybe_extra.fromJust (List.lookup name function_map)) v ;;

@@ -6,7 +6,7 @@ let tests = [
   "test3", Test3.defs;
   "pattern", Pattern.defs;
   "vectors", Vectors.defs;
-  "power", Power.defs;
+  (*"power", Power.defs;*)
 ] ;;
 
 let run_one ((name, _) as t) = (name, Run_interp.run t)
