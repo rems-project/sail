@@ -1,13 +1,14 @@
-.PHONY: all test clean update_lem_lib power_test
+.PHONY: all test clean update_lem_lib test_power
 
 all:
-	ocamlbuild -classic-display main.native test/run_tests.native test/run_power.native
+	ocamlbuild -classic-display main.native test/run_tests.native
 
 test: all
 	./run_tests.native
 
-test_power: all
+test_power:
 	#../../../rsem/idl/power/binary/run.sh
+	ocamlbuild -classic-display main.native test/run_power.native
 	./run_power.native --file ../../../rsem/idl/power/binary/main.bin
 
 clean:
