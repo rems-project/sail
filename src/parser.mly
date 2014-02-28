@@ -96,27 +96,22 @@ let make_enum_sugar_bounded typ1 typ2 =
 let make_enum_sugar typ1 =
   make_enum_sugar_bounded typ1 (ATyp_aux(ATyp_constant(0), Unknown))
 
-let make_vector_sugar_bounded typ typ1 typ2 = 
-  ATyp_app(Id_aux(Id("vector"),Unknown),
-           [typ1;typ2;ATyp_aux(ATyp_inc,Unknown);typ])
+let make_r bot top =
+  match bot,top with
+    | ATyp_aux(ATyp_constant b,_),ATyp_aux(ATyp_constant t,l) ->
+      ATyp_aux(ATyp_constant ((t-b)+1),l)
+    | bot,(ATyp_aux(_,l) as top) ->
+      ATyp_aux((ATyp_sum ((ATyp_aux (ATyp_sum (top, ATyp_aux(ATyp_constant 1,Unknown)), Unknown)),
+			  (ATyp_aux ((ATyp_neg bot),Unknown)))), l)				   
+
+let make_vector_sugar_bounded is_inc typ typ1 typ2 = 
+  let rise,ord = 
+    if is_inc 
+    then make_r typ1 typ2,ATyp_inc 
+    else make_r typ2 typ1,ATyp_dec in
+  ATyp_app(Id_aux(Id("vector"),Unknown),[typ1;rise;ATyp_aux(ord,Unknown);typ])
 let make_vector_sugar typ typ1 =
-  make_vector_sugar_bounded typ (ATyp_aux(ATyp_constant(0),Unknown)) typ1
-    
-
-let space = " "
-let star = "*"
-
-(*let mk_pre_x_l sk1 (sk2,id) sk3 l =
-  if (sk2 = None || sk2 = Some []) && (sk3 = None || sk3 = Some []) then
-    PreX_l(sk1,(None,id),None,l)
-  else if (sk2 = Some [Ws space] &&
-           sk3 = Some [Ws space] &&
-           (Ulib.Text.left id 1 = star ||
-            Ulib.Text.right id 1 = star)) then
-    PreX_l(sk1,(None,id),None,l)
-  else
-    raise (Parse_error_locn(l, "illegal whitespace in parenthesised infix name"))*)
-
+  make_vector_sugar_bounded true typ (ATyp_aux(ATyp_constant(0),Unknown)) typ1
 
 %}
 
@@ -135,7 +130,7 @@ let star = "*"
 
 %token Bar Comma Dot Eof Minus Semi Under
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare
-%token BarBar BarSquare BarBarSquare ColonEq DotDot ColonGt MinusGt LtBar SquareBar SquareBarBar
+%token BarBar BarSquare BarBarSquare ColonEq DotDot ColonGt MinusGt LtBar LtColon SquareBar SquareBarBar
 
 /*Terminals with content*/
 
@@ -327,11 +322,19 @@ vec_typ:
   | tid Lsquare nexp_typ Rsquare
       { tloc (make_vector_sugar (ATyp_aux ((ATyp_id $1), locn 1 1)) $3) }
   | tid Lsquare nexp_typ Colon nexp_typ Rsquare
-      { tloc (make_vector_sugar_bounded (ATyp_aux ((ATyp_id $1), locn 1 1)) $3 $5) }
+      { tloc (make_vector_sugar_bounded true (ATyp_aux ((ATyp_id $1), locn 1 1)) $3 $5) }
+  | tid Lsquare nexp_typ LtColon nexp_typ Rsquare
+      { tloc (make_vector_sugar_bounded true (ATyp_aux ((ATyp_id $1), locn 1 1)) $3 $5) }
+  | tid Lsquare nexp_typ ColonGt nexp_typ Rsquare
+      { tloc (make_vector_sugar_bounded false (ATyp_aux ((ATyp_id $1), locn 1 1)) $3 $5) }
   | tyvar Lsquare nexp_typ Rsquare
       { tloc (make_vector_sugar (ATyp_aux ((ATyp_var $1), locn 1 1)) $3) }
   | tyvar Lsquare nexp_typ Colon nexp_typ Rsquare
-      { tloc (make_vector_sugar_bounded (ATyp_aux ((ATyp_var $1), locn 1 1)) $3 $5) }
+      { tloc (make_vector_sugar_bounded true (ATyp_aux ((ATyp_var $1), locn 1 1)) $3 $5) }
+  | tyvar Lsquare nexp_typ LtColon nexp_typ Rsquare
+      { tloc (make_vector_sugar_bounded true (ATyp_aux ((ATyp_var $1), locn 1 1)) $3 $5) }
+  | tyvar Lsquare nexp_typ ColonGt nexp_typ Rsquare
+      { tloc (make_vector_sugar_bounded false (ATyp_aux ((ATyp_var $1), locn 1 1)) $3 $5) }
 
 app_typs:
   | nexp_typ

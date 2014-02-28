@@ -78,6 +78,7 @@ and anexp_to_nexp ((Nexp_aux(n,l)) : Ast.nexp) : nexp =
     | Nexp_times(n1,n2) -> {nexp=Nmult(anexp_to_nexp n1,anexp_to_nexp n2)}
     | Nexp_sum(n1,n2) -> {nexp=Nadd(anexp_to_nexp n1,anexp_to_nexp n2)}
     | Nexp_exp n -> {nexp=N2n(anexp_to_nexp n)}
+    | Nexp_neg n -> {nexp=Nneg(anexp_to_nexp n)}
 and aeffect_to_effect ((Effect_aux(e,l)) : Ast.effect) : effect = 
   match e with
     | Effect_var (Kid_aux((Var i),l')) -> {effect = Evar i}

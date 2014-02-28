@@ -46,6 +46,7 @@ nexp_aux =  (* expression of kind Nat, for vector sizes and origins *)
  | Nexp_times of nexp * nexp (* product *)
  | Nexp_sum of nexp * nexp (* sum *)
  | Nexp_exp of nexp (* exponential *)
+ | Nexp_neg of nexp (* For internal use. Not M as a dataconstructor is required *)
 
 and nexp = 
    Nexp_aux of nexp_aux * l

@@ -137,6 +137,7 @@ and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
       let n2 = to_ast_nexp k_env t2 in
       Nexp_aux(Nexp_sum(n1,n2),l)
     | Parse_ast.ATyp_exp(t1) -> Nexp_aux(Nexp_exp(to_ast_nexp k_env t1),l)
+    | Parse_ast.ATyp_neg(t1) -> Nexp_aux(Nexp_neg(to_ast_nexp k_env t1),l)
     | Parse_ast.ATyp_tup(typs) ->
       let rec times_loop (typs : Parse_ast.atyp list) (one_ok : bool) : nexp =
         (match typs,one_ok with

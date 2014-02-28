@@ -71,14 +71,14 @@ let kw_table =
      ("default",		 (fun _ -> Default));
      ("deinfix",                 (fun _ -> Deinfix));
      ("effect",                  (fun _ -> Effect));
-     ("Effect",                 (fun _ -> EFFECT));
+     ("Effect",                  (fun _ -> EFFECT));
      ("end",                     (fun _ -> End));
      ("enumerate",		 (fun _ -> Enumerate));
      ("else",                    (fun _ -> Else));
      ("extern",                  (fun _ -> Extern));
      ("false",                   (fun _ -> False));
      ("forall",                  (fun _ -> Forall));
-     ("foreach",                  (fun _ -> Foreach));
+     ("foreach",                 (fun _ -> Foreach));
      ("function",                (fun x -> Function_));
      ("if",                      (fun x -> If_));
      ("in",			 (fun x -> In));
@@ -171,6 +171,7 @@ rule token = parse
   | "^^"				{ (CarrotCarrot(r"^^")) }
   | "::" as i                           { (ColonColon(r i)) }
   | ":="                                { ColonEq }
+  | ":>"                                { ColonGt }
   | ".."				{ DotDot }
   | "=/="				{ (EqDivEq(r"=/=")) }
   | "=="				{ (EqEq(r"==")) }
@@ -184,6 +185,7 @@ rule token = parse
   | "#>>"				{ (HashGtGt(r"#>>")) }
   | "#<<"				{ (HashLtLt(r"#<<")) }
   | "->"                                { MinusGt }
+  | "<:"                                { LtColon }
   | "<="				{ (LtEq(r"<=")) }
   | "<=+"				{ (LtEqPlus(r"<=+")) }
   | "<>"				{ (LtGt(r"<>")) }

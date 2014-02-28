@@ -106,11 +106,6 @@ l :: '' ::=                                     {{ phantom }}
     {{ lem Unknown }}
     {{ hol () }}
 
-annot :: '' ::=
-                                                {{ phantom }}
-                                                {{ ocaml 'a annot }}
-                                                {{ lem annot }}
-                                                {{ hol unit }}
 
 id :: '' ::=
   {{ com Identifier }}
@@ -173,6 +168,7 @@ atyp :: 'ATyp_' ::=
   | atyp1 * atyp2                       :: :: times        {{ com product }}
   | atyp1 + atyp2                       :: :: sum          {{ com sum }}
   | 2** atyp                            :: :: exp         {{ com exponential }}
+  | neg atyp				:: :: neg	  {{ com Internal (but not M as I want a datatype constructor) negative nexp }}
   | ( atyp )                            :: S :: paren  {{ icho [[atyp]] }}
 
   | inc                                 :: :: inc  {{ com increasing (little-endian) }}

@@ -90,6 +90,7 @@ and pp_format_nexp (Nexp_aux(n,_)) =
   | Nexp_sum(n1,n2) -> "(" ^ (pp_format_nexp n1) ^ " + " ^ (pp_format_nexp n2) ^ ")"
   | Nexp_times(n1,n2) -> "(" ^  (pp_format_nexp n1) ^ " * " ^ (pp_format_nexp n2) ^ ")"
   | Nexp_exp(n1) -> "2** (" ^ (pp_format_nexp n1) ^ ")"
+  | Nexp_neg(n1) -> "(* - *)" ^ (pp_format_nexp n1)
 and pp_format_ord (Ord_aux(o,_)) = 
   match o with
   | Ord_var(var) -> pp_format_var var
@@ -413,7 +414,8 @@ and pp_format_nexp_lem (Nexp_aux(n,l)) =
     | Nexp_constant(i) -> "(Nexp_constant " ^ string_of_int i ^ ")"
     | Nexp_sum(n1,n2) -> "(Nexp_sum " ^ (pp_format_nexp_lem n1) ^ " " ^ (pp_format_nexp_lem n2) ^ ")"
     | Nexp_times(n1,n2) -> "(Nexp_times " ^  (pp_format_nexp_lem n1) ^ " " ^ (pp_format_nexp_lem n2) ^ ")"
-    | Nexp_exp(n1) -> "(Nexp_exp " ^ (pp_format_nexp_lem n1) ^ ")") ^ " " ^
+    | Nexp_exp(n1) -> "(Nexp_exp " ^ (pp_format_nexp_lem n1) ^ ")"
+    | Nexp_neg(n1) -> "(Nexp_neg " ^ (pp_format_nexp_lem n1) ^ ")") ^ " " ^
     (pp_format_l_lem l) ^ ")"
 and pp_format_ord_lem (Ord_aux(o,l)) = 
   "(Ord_aux " ^ 

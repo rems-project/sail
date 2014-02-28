@@ -164,9 +164,9 @@ nexp :: 'Nexp_' ::=
   | kid                                 :: :: var         {{ com variable }}
   | num                                 :: :: constant     {{ com constant }}
   | nexp1 * nexp2                       :: :: times        {{ com product }}
-%{{ com must be linear after normalisation... except for the type of *, ahem }}
   | nexp1 + nexp2                       :: :: sum          {{ com sum }}
   | 2** nexp                            :: :: exp         {{ com exponential }}
+  | neg nexp				:: :: neg	  {{ com For internal use. Not M as a dataconstructor is required }}
   | ( nexp )                            :: S :: paren  {{ ichlo [[nexp]] }}
 
 order :: 'Ord_' ::=  
@@ -240,6 +240,8 @@ typ :: 'Typ_' ::=
 % (but with .. not : in the former, to avoid confusion...)
   | typ [ nexp ]  :: S :: vector2 {{ichlo vector < [[nexp]],0,inc,[[typ]] > }} {{ com sugar for vector indexed by [ [[nexp]] ] }}
   | typ [ nexp : nexp' ] :: S :: vector3 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} {{ com sugar for vector indexed by [ [[nexp]]..[[nexp']] ] }}
+  | typ [ nexp <: nexp' ] :: S :: vector4 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} {{ com sugar for increasing vector indexed as above }}
+  | typ [ nexp :> nexp' ] :: S :: vector5 {{ ichlo vector < [[nexp]],[[nexp']],dec,[[typ]] }} {{ com sugar for decreasing vector indexed as above }}
 % ...so bit [ nexp ] etc is just an instance of that
 %  | List < typ > :: :: list {{ com list of [[typ]] }}
 %  | Set < typ >  :: :: set  {{ com finite set of [[typ]] }}
