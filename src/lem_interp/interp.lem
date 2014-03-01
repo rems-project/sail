@@ -282,7 +282,7 @@ let access_vector v n =
     else list_nth vs (m - n)
   end
 
-val from_n_to_n :forall 'a. natural -> natural -> list 'a -> list 'a
+val from_n_to_n :forall 'a. natural -> natural  -> list 'a -> list 'a
 let from_n_to_n from to_ ls =
   let from = natFromNatural from in
   let to_ = natFromNatural to_ in

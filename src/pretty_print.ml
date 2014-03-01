@@ -646,7 +646,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
 	fprintf ppf "@[<0>(%a [%a]) @]" kwd "E_vector_indexed" (list_pp iformat lformat) iexps
       | E_vector_access(v,e) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "E_vector_access" pp_lem_exp v pp_lem_exp e
       | E_vector_subrange(v,e1,e2) -> 
-	fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "E_vector_subrange" pp_lem_exp v pp_lem_exp e1 pp_lem_exp e1 
+	fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "E_vector_subrange" pp_lem_exp v pp_lem_exp e1 pp_lem_exp e2 
       | E_vector_update(v,e1,e2) -> 
 	fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "E_vector_update" pp_lem_exp v pp_lem_exp e1 pp_lem_exp e2
       | E_vector_update_subrange(v,e1,e2,e3) -> 

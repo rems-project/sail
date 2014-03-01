@@ -3,7 +3,7 @@ let (bit[4]) v2 = [0,1,0,0]
 register (bit[32]) i
 
 let (bit[10]) v3 = 0b0101010111
-register (bit[5]) slice_check
+register (bit[10]) slice_check
 
 register nat match_success
 
