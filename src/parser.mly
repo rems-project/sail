@@ -185,18 +185,22 @@ id:
     { Id_aux(DeIid($3),loc ()) }
   | Lparen Deinfix Excl Lparen
     { idl (DeIid($3)) }
-  | Lparen Deinfix Gt Lparen
+  | Lparen Deinfix Gt Rparen
     { idl (DeIid($3)) }
-  | Lparen Deinfix Lt Lparen
+  | Lparen Deinfix Lt Rparen
     { idl (DeIid($3)) }
-  | Lparen Deinfix Minus Lparen
+  | Lparen Deinfix Minus Rparen
     { idl (DeIid("-")) }
+  | Lparen Deinfix Mod Rparen
+    { idl (DeIid("mod")) }
   | Lparen Deinfix Plus Rparen
     { idl (DeIid($3)) }
   | Lparen Deinfix Star Rparen
     { idl (DeIid($3)) }
   | Lparen Deinfix AmpAmp Rparen
     { idl (DeIid($3)) }
+  | Lparen Deinfix Bar Rparen
+    { idl (DeIid("||")) }
   | Lparen Deinfix BarBar Rparen
     { idl (DeIid("||")) }
   | Lparen Deinfix CarrotCarrot Rparen
