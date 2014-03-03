@@ -74,16 +74,16 @@ base_effect =
 
 
 type 
+effect_aux =  (* effect set, of kind Effects *)
+   Effect_var of kid
+ | Effect_set of (base_effect) list (* effect set *)
+
+
+type 
 order_aux =  (* vector order specifications, of kind Order *)
    Ord_var of kid (* variable *)
  | Ord_inc (* increasing (little-endian) *)
  | Ord_dec (* decreasing (big-endian) *)
-
-
-type 
-effect_aux =  (* effect set, of kind Effects *)
-   Effect_var of kid
- | Effect_set of (base_effect) list (* effect set *)
 
 
 type 
@@ -93,13 +93,13 @@ id_aux =  (* Identifier *)
 
 
 type 
-order = 
-   Ord_aux of order_aux * l
+effect = 
+   Effect_aux of effect_aux * l
 
 
 type 
-effect = 
-   Effect_aux of effect_aux * l
+order = 
+   Ord_aux of order_aux * l
 
 
 type 
@@ -289,6 +289,7 @@ and 'a exp =
 and 'a lexp_aux =  (* lvalue expression *)
    LEXP_id of id (* identifier *)
  | LEXP_memory of id * ('a exp) list (* memory write via function call *)
+ | LEXP_cast of typ * id
  | LEXP_vector of 'a lexp * 'a exp (* vector element *)
  | LEXP_vector_range of 'a lexp * 'a exp * 'a exp (* subvector *)
  | LEXP_field of 'a lexp * id (* struct field *)

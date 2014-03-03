@@ -384,10 +384,12 @@ and to_ast_lexp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp)
 	  | [E_aux(E_tuple exps,_)] -> LEXP_memory(to_ast_id f',exps)
 	  | args -> LEXP_memory(to_ast_id f', args))
       | _ -> typ_error l' "memory call on lefthand side of assignment must begin with an id" None None None)
+    | Parse_ast.E_cast(typ,Parse_ast.E_aux(Parse_ast.E_id(id),l')) ->
+      LEXP_cast(to_ast_typ k_env typ, to_ast_id id)
     | Parse_ast.E_vector_access(vexp,exp) -> LEXP_vector(to_ast_lexp k_env vexp, to_ast_exp k_env exp)
     | Parse_ast.E_vector_subrange(vexp,exp1,exp2) -> LEXP_vector_range(to_ast_lexp k_env vexp, to_ast_exp k_env exp1, to_ast_exp k_env exp2)
     | Parse_ast.E_field(fexp,id) -> LEXP_field(to_ast_lexp k_env fexp, to_ast_id id)
-    | _ -> typ_error l "Only identifiers, vector accesses, vector slices, and fields can be on the lefthand side of an assignment" None None None)
+    | _ -> typ_error l "Only identifiers, cast identifiers, vector accesses, vector slices, and fields can be on the lefthand side of an assignment" None None None)
       , (l,None))
 
 and to_ast_case (k_env : kind Envmap.t) (Parse_ast.Pat_aux(pex,l) : Parse_ast.pexp) : tannot pexp =

@@ -148,10 +148,13 @@ let typschm_to_tannot envs ((TypSchm_aux(typschm,l)):typschm) (tag : tag) : tann
       let (ids,constraints) = typq_to_params envs tq in
       Some((ids,t),tag,constraints,pure_e)
 
-let into_register (t : tannot) : tannot =
+let into_register d_env (t : tannot) : tannot =
   match t with
     | Some((ids,ty),tag,constraints,eft) -> 
-      (match ty.t with 
+      let ty' =  match get_abbrev d_env ty with
+	| Some(t,cs,e) -> t
+	| None -> ty in
+      (match ty'.t with 
 	| Tapp("register",_)-> t
 	| _ -> Some((ids, {t= Tapp("register",[TA_typ ty])}),tag,constraints,eft))
     | None -> None
@@ -375,6 +378,9 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
         typ_error l ("Identifier " ^ i ^ " must be defined, not just specified, before use")
       | Some(Some((params,t),tag,cs,ef)) ->
 	let t,cs,ef = subst params t cs ef in
+	let t,cs,ef = match get_abbrev d_env t with
+	  | Some(t,cs1,ef1) -> t,cs@cs1,union_effects ef ef1
+	  | None -> t,cs,ef in
         (match t.t,expect_t.t with 
         | Tfn _,_ -> typ_error l ("Identifier " ^ (id_to_string id) ^ " is bound to a function and cannot be used as a value")
         | Tapp("register",[TA_typ(t')]),Tapp("register",[TA_typ(expect_t')]) -> 
@@ -513,7 +519,6 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
        expect_t,Envmap.intersect then_env else_env,then_c@else_c@c1,
        union_effects ef1 (union_effects then_ef else_ef))
     | E_for(id,from,to_,step,order,block) -> 
-      (* TODO::: This presently assumes increasing; this should be checked if that's the assumption we want *)
       let fb,fr,tb,tr,sb,sr = new_n(),new_n(),new_n(),new_n(),new_n(),new_n() in
       let ft,tt,st = {t=Tapp("enum",[TA_nexp fb;TA_nexp fr])},
 	{t=Tapp("enum",[TA_nexp tb;TA_nexp tr])},{t=Tapp("enum",[TA_nexp sb;TA_nexp sr])} in     
@@ -922,6 +927,36 @@ and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot ema
 		| _ -> typ_error l ("Memory assignments require functions with declared wmem effect"))
 	    | _ -> typ_error l ("Memory assignments require functions, found " ^ i ^ " which has type " ^ (t_to_string t)))
 	| _ -> typ_error l ("Unbound identifier " ^ i))
+    | LEXP_cast(typ,id) -> 
+      let i = id_to_string id in
+      let ty = typ_to_t typ in
+      (match Envmap.apply t_env i with
+	| Some(Some((parms,t),Default,_,_)) ->
+	  typ_error l ("Identifier " ^ i ^ " cannot be assigned when only a default specification exists")
+	| Some(Some((parms,t),tag,cs,_)) ->
+	  let t,cs,_ = subst parms t cs pure_e in
+	  let t,cs = match get_abbrev d_env t with
+	    | None -> t,cs
+	    | Some(t,cs,e) -> t,cs in
+	  (match t.t with
+	    | Tapp("register",[TA_typ u]) ->
+	      let t',cs = type_consistent l d_env ty u in
+	      let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in
+	      (LEXP_aux(lexp,(l,(Some(([],t),External (Some "register"),cs,ef)))),ty,Envmap.empty,External (Some "register"),[],ef)
+	    | Tapp("reg",[TA_typ u]) ->
+	      let t',cs = type_consistent l d_env ty u in
+	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),ty,Envmap.empty,Emp,[],pure_e)
+	    | Tuvar _ ->
+	      let u' = {t=Tapp("reg",[TA_typ ty])} in
+	      t.t <- u'.t;
+	      (LEXP_aux(lexp,(l,(Some((([],u'),Emp,cs,pure_e))))),ty,Envmap.empty,Emp,[],pure_e)
+	    | _ -> 
+	      typ_error l 
+		("Can only assign to identifiers with type register or reg, found identifier " ^ i ^ " with type " ^ t_to_string t))
+	| _ -> 
+	  let t = {t=Tapp("reg",[TA_typ ty])} in
+	  let tannot = (Some(([],t),Emp,[],pure_e)) in
+	  (LEXP_aux(lexp,(l,tannot)),ty,Envmap.from_list [i,tannot],Emp,[],pure_e))
     | LEXP_vector(vec,acc) -> 
       let (vec',item_t,env,tag,csi,ef) = check_lexp envs vec in
       let item_t,cs = match get_abbrev d_env item_t with
@@ -936,6 +971,7 @@ and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot ema
 	  in
 	  let (e,t',_,cs',ef_e) = check_exp envs acc_t acc in
 	  (LEXP_aux(LEXP_vector(vec',e),(l,Some(([],t),tag,cs@cs',union_effects ef ef_e))),t,env,tag,cs@cs',union_effects ef ef_e)
+	| Tuvar _ -> typ_error l "Assignment to one position expected a vector with a known order, found a polymorphic value, try adding a cast"
 	| _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string item_t))) 
     | LEXP_vector_range(vec,e1,e2)-> 
       let (vec',item_t,env,tag,csi,ef) = check_lexp envs vec in
@@ -965,6 +1001,7 @@ and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot ema
 	  let cs = cs_t@cs@cs1@cs2 in
 	  let ef = union_effects ef (union_effects ef_e ef_e') in
 	  (LEXP_aux(LEXP_vector_range(vec',e1',e2'),(l,Some(([],item_t),tag,cs,ef))),res_t,env,tag,cs,ef)
+	| Tuvar _ -> typ_error l "Assignement to a range of elements requires a vector with a known order, found a polymorphic value, try addinga  cast"
 	| _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string item_t))) 
     | LEXP_field(vec,id)-> 
       let (vec',item_t,env,tag,csi,ef) = check_lexp envs vec in
@@ -1070,7 +1107,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 		   Some(([],{t=Tapp("vector",[TA_nexp base;TA_nexp climb;TA_ord({order=Oinc});TA_typ({t= Tid "bit"})])}),Emp,[],pure_e)))
 		ranges 
 	    in
-	    let tannot = into_register (Some(([],ty),Emp,[],pure_e)) in
+	    let tannot = into_register d_env (Some(([],ty),Emp,[],pure_e)) in
 	    (TD_aux(td,(l,tannot)),
 	     Env({d_env with rec_env = ((id',Register,franges)::d_env.rec_env);
 	       abbrevs = Envmap.insert d_env.abbrevs (id',tannot)},t_env)))
@@ -1097,7 +1134,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 		   Some(([],{t=Tapp("vector",[TA_nexp base;TA_nexp climb;TA_ord({order=Odec});TA_typ({t= Tid "bit"})])}),Emp,[],pure_e)))
 		ranges 
 	    in
-	    let tannot = into_register (Some(([],ty),Emp,[],pure_e)) in
+	    let tannot = into_register d_env (Some(([],ty),Emp,[],pure_e)) in
 	    (TD_aux(td,(l,tannot)),
 	     Env({d_env with rec_env = (id',Register,franges)::d_env.rec_env;
 	       abbrevs = Envmap.insert d_env.abbrevs (id',tannot)},t_env)))
@@ -1192,7 +1229,7 @@ let check_def envs (DEF_aux(def,(l,annot))) =
     | DEF_reg_dec(typ,id) -> 
       let t = (typ_to_t typ) in
       let i = id_to_string id in
-      let tannot = into_register (Some(([],t),External (Some i),[],pure_e)) in 
+      let tannot = into_register d_env (Some(([],t),External (Some i),[],pure_e)) in
       (DEF_aux(def,(l,tannot)),(Env(d_env,Envmap.insert t_env (i,tannot))))
 
 

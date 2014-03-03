@@ -215,7 +215,8 @@ let rec t_subst s_env t =
   | Tvar i -> (match Envmap.apply s_env i with
                | Some(TA_typ t1) -> t1
                | _ -> t)
-  | Tid _ | Tuvar _ -> t
+  | Tuvar _ -> new_t ()
+  | Tid _ -> t
   | Tfn(t1,t2,e) -> {t =Tfn((t_subst s_env t1),(t_subst s_env t2),(e_subst s_env e)) }
   | Ttup(ts) -> { t= Ttup(List.map (t_subst s_env) ts) }
   | Tapp(i,args) -> {t= Tapp(i,List.map (ta_subst s_env) args)}
@@ -230,7 +231,8 @@ and n_subst s_env n =
   | Nvar i -> (match Envmap.apply s_env i with
                | Some(TA_nexp n1) -> n1
                | _ -> n)
-  | Nconst _ | Nuvar _ -> n
+  | Nuvar _ -> new_n ()
+  | Nconst _ -> n
   | N2n n1 -> { nexp = N2n (n_subst s_env n1) }
   | Nneg n1 -> { nexp = Nneg (n_subst s_env n1) }
   | Nadd(n1,n2) -> { nexp = Nadd(n_subst s_env n1,n_subst s_env n2) }
@@ -240,12 +242,14 @@ and o_subst s_env o =
   | Ovar i -> (match Envmap.apply s_env i with
                | Some(TA_ord o1) -> o1
                | _ -> o)
+  | Ouvar _ -> new_o ()
   | _ -> o
 and e_subst s_env e =
   match e.effect with
   | Evar i -> (match Envmap.apply s_env i with
                | Some(TA_eft e1) -> e1
                | _ -> e)
+  | Euvar _ -> new_e ()
   | _ -> e
 
 let rec cs_subst t_env cs =

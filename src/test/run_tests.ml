@@ -6,6 +6,7 @@ let tests = [
   "test3", Test3.defs;
   "pattern", Pattern.defs;
   "vectors", Vectors.defs;
+  "regbits", Regbits.defs;
   (*"power", Power.defs;*)
 ] ;;
 

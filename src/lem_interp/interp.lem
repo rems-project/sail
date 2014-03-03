@@ -1095,6 +1095,34 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
          end)
       | (Action a s,lm, le) -> ((Action a s,lm,le), Just (fun (E_aux (E_tuple es) _) -> (LEXP_aux (LEXP_memory id es) (l,annot))))
       | e -> (e,Nothing) end
+    | LEXP_cast typc id -> 
+      match tag with
+	| Tag_empty ->
+	  match in_env l_env id with
+	    | Just (V_boxref n t) -> 
+	      if is_top_level 
+	      then ((Value (V_lit (L_aux L_unit l)), update_mem l_mem n value, l_env),Nothing)
+	      else ((Value (in_mem l_mem n), l_mem, l_env),Just (fun e -> LEXP_aux (LEXP_cast typc id) (l,annot)))
+	    | Just v -> 
+	      if is_top_level then ((Error l "Writes must be to reg values",l_mem,l_env),Nothing) 
+	      else ((Value v,l_mem,l_env),Just (fun e -> LEXP_aux(LEXP_cast typc id) (l,annot)))
+	    | Nothing -> 	  
+	      if is_top_level 
+              then begin
+		let (Mem c m) = l_mem in
+		let l_mem = (Mem (c+1) m) in
+		((Value (V_lit (L_aux L_unit l)), update_mem l_mem c value, (id,(V_boxref c typ))::l_env),Nothing)
+              end
+              else ((Error l (String.stringAppend "Undefined id " (get_id id)),l_mem,l_env),Nothing)
+          end 
+        | Tag_extern _ ->
+	  let regf = Reg id typ in
+	  let request = (Action (Write_reg regf Nothing value) 
+			        (Frame (Id_aux (Id "0") l) 
+				       (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) l_env l_mem Top),l_mem,l_env) in
+          if is_top_level then (request,Nothing) else (request,Just (fun e -> LEXP_aux (LEXP_cast typc id) (l,annot)))
+        | _ -> ((Error l (String.stringAppend "Internal error: writing to id with tag other than extern or empty " (get_id id)),l_mem,l_env),Nothing)
+      end 
     | LEXP_vector lexp exp -> 
       match (interp_main t_level l_env l_mem exp) with
       | (Value i,lm,le) ->

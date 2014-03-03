@@ -14,6 +14,9 @@ val forall Nat 'a, Nat 'b. bit['a:'b] sliced
 let bit v = bitzero
 let ( bit [ 32 ] ) v1 = 0b101
 
+val forall Type 'a. 'a -> 'a effect pure identity
+function forall Type 'a. 'a identity i = i
+
 function unit ignore(x) = ()
 
 (* scattered function definition and union definition *)
@@ -32,7 +35,7 @@ function clause f (  C (a) ) = C(a)
 end ast
 end f
 
-function unit a (bit) b = if b then () else ()
+function unit a (bit) b = if identity(b) then (identity()) else ()
 
 function bit sw s = switch s { case 0 -> bitzero }
 
