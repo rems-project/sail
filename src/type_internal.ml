@@ -202,7 +202,20 @@ let initial_typ_env =
     ("+",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "add"),[],pure_e));
     ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "multiply"),[],pure_e));
     ("-",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "minus"),[],pure_e));
-    ("|",Some(([],{t= Tfn ({t=Ttup([bit_t;bit_t])},bit_t,pure_e)}),External (Some "bitwise_or"),[],pure_e));
+    (*Type incomplete*)
+    (":",Some(([("a",{k=K_Typ});("b",{k=K_Typ});("c",{k=K_Typ})],
+	       {t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "b"}])},{t=Tvar "c"},pure_e)}),External (Some "vec_concat"),[],pure_e));
+    ("to_num_inc",Some(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,pure_e)}),External None,[],pure_e));
+    ("to_num_dec",Some(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,pure_e)}),External None,[],pure_e));
+    ("to_vec_inc",Some(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},pure_e)}),External None,[],pure_e));
+    ("to_vec_dec",Some(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},pure_e)}),External None,[],pure_e));
+    ("==",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "eq"),[],pure_e));
+    ("neq",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "neq"),[],pure_e));
+    ("is_one",Some(([],{t= Tfn (bit_t,bool_t,pure_e)}),External (Some "is_one"),[],pure_e));
+    ("~",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_not"),[],pure_e));
+    ("|",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_or"),[],pure_e));
+    ("^",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_xor"),[],pure_e));
+    ("&",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_and"),[],pure_e));
   ]
 
 let initial_abbrev_env =
