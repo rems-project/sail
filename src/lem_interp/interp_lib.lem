@@ -54,6 +54,10 @@ let rec add (V_tuple args) = match args with
       (if d then to_vec_inc else to_vec_dec) len (V_lit (L_aux (L_num (x+y)) lx))
   (* integer case *)
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (x+y)) lx)
+  | [(V_lit(L_aux (L_num _) _) as n); (V_vector len d _ as v)] ->
+      add (V_tuple [(if d then to_vec_inc else to_vec_dec) (natFromNatural len) n; v])
+  | [(V_vector len d _ as v); (V_lit(L_aux (L_num _) _) as n)] ->
+      add (V_tuple [v; (if d then to_vec_inc else to_vec_dec) (natFromNatural len) n])
   (* assume other literals are L_bin or L_hex, ie. vectors *)
   | [V_lit l; x ] -> add (V_tuple [litV_to_vec l; x])
   | [ x ; V_lit l ] -> add (V_tuple [x; litV_to_vec l])
