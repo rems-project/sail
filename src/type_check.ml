@@ -384,7 +384,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
         (match t.t,expect_t.t with 
         | Tfn _,_ -> typ_error l ("Identifier " ^ (id_to_string id) ^ " is bound to a function and cannot be used as a value")
         | Tapp("register",[TA_typ(t')]),Tapp("register",[TA_typ(expect_t')]) -> 
-          let tannot = Some(([],t),External (Some "register"),cs,ef) in
+          let tannot = Some(([],t),Emp,cs,ef) in
           let t',cs',e' = type_coerce l d_env t' (rebuild tannot) expect_t' in
           (e',t',t_env,cs@cs',ef)
         | Tapp("register",[TA_typ(t')]),_ ->
@@ -572,7 +572,8 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
     | E_vector_access(vec,i) ->
       let base,rise,ord = new_n(),new_n(),new_o() in
       let min,m_rise = new_n(),new_n() in
-      let vt = {t= Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord; TA_typ expect_t])} in
+      let item_t = new_t () in
+      let vt = {t= Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord; TA_typ item_t])} in
       let (vec',t',_,cs,ef) = check_exp envs vt vec in
       let it = {t= Tapp("enum",[TA_nexp min;TA_nexp m_rise])} in
       let (i',ti',_,cs_i,ef_i) = check_exp envs it i in
@@ -583,9 +584,9 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	  | Odec -> 
 	    [GtEq(l,base,min); LtEq(l,{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,{nexp=Nneg rise})})]
 	  | _ -> typ_error l "A vector must be either increasing or decreasing to access a single element"
-      in
-      (E_aux(E_vector_access(vec',i'),(l, Some(([],expect_t),Emp,cs_loc,pure_e))),
-       t',t_env,cs_loc@cs_i@cs,union_effects ef ef_i)
+      in 
+      let t',cs',e' = type_coerce l d_env item_t (E_aux(E_vector_access(vec',i'),(l,Some(([],item_t),Emp,[],pure_e)))) expect_t in
+      (e',t',t_env,cs_loc@cs_i@cs@cs',union_effects ef ef_i)
     | E_vector_subrange(vec,i1,i2) ->
       let base,rise,ord = new_n(),new_n(),new_o() in
       let min1,m_rise1 = new_n(),new_n() in
@@ -823,7 +824,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let (e,t,_,cs',ef') = check_exp (Env(d_env,Envmap.union t_env t_env')) expect_t body in
       (E_aux(E_let(lb',e),(l,Some(([],t),Emp,[],pure_e))),t,t_env,cs@cs',union_effects ef ef')
     | E_assign(lexp,exp) ->
-      let (lexp',t',t_env',tag,cs,ef) = check_lexp envs lexp in
+      let (lexp',t',t_env',tag,cs,ef) = check_lexp envs true lexp in
       let (exp',t'',_,cs',ef') = check_exp envs t' exp in
       let (t',c') = type_consistent l d_env unit_t expect_t in
       (E_aux(E_assign(lexp',exp'),(l,(Some(([],unit_t),tag,[],ef)))),unit_t,t_env',cs@cs'@c',union_effects ef ef')
@@ -856,7 +857,7 @@ and check_cases envs check_t expect_t pexps : ((tannot pexp) list * typ * nexp_r
        t'',
        csl@cs_p@cs_p'@cs2,union_effects efl ef2)
 
-and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot emap * tag *nexp_range list *effect ) =
+and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot emap * tag *nexp_range list *effect ) =
   let (Env(d_env,t_env)) = envs in
   match lexp with
     | LEXP_id id -> 
@@ -869,15 +870,20 @@ and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot ema
 	  let t,cs = match get_abbrev d_env t with
 	    | None -> t,cs
 	    | Some(t,cs,e) -> t,cs in
-	  (match t.t with
-	    | Tapp("register",[TA_typ u]) ->
+	  (match t.t,is_top with
+	    | Tapp("register",[TA_typ u]),_ ->
 	      let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in
 	      (LEXP_aux(lexp,(l,(Some(([],t),External (Some "register"),cs,ef)))),u,Envmap.empty,External (Some "register"),[],ef)
-	    | Tapp("reg",[TA_typ u]) ->
+	    | Tapp("reg",[TA_typ u]),_ ->
 	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),u,Envmap.empty,Emp,[],pure_e)
-	    | _ -> 
-	      typ_error l 
-		("Can only assign to identifiers with type register or reg, found identifier " ^ i ^ " with type " ^ t_to_string t))
+	    | Tapp("vector",_),false ->
+	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),t,Envmap.empty,Emp,[],pure_e)
+	    | _,_ -> 
+	      if is_top
+	      then typ_error l 
+		("Can only assign to identifiers with type register or reg, found identifier " ^ i ^ " with type " ^ t_to_string t)
+	      else 
+		(LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),t,Envmap.empty,Emp,[],pure_e) (* TODO, make sure this is a record *))
 	| _ -> 
 	  let u = new_t() in
 	  let t = {t=Tapp("reg",[TA_typ u])} in
@@ -938,27 +944,32 @@ and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot ema
 	  let t,cs = match get_abbrev d_env t with
 	    | None -> t,cs
 	    | Some(t,cs,e) -> t,cs in
-	  (match t.t with
-	    | Tapp("register",[TA_typ u]) ->
+	  (match t.t,is_top with
+	    | Tapp("register",[TA_typ u]),_ ->
 	      let t',cs = type_consistent l d_env ty u in
 	      let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in
 	      (LEXP_aux(lexp,(l,(Some(([],t),External (Some "register"),cs,ef)))),ty,Envmap.empty,External (Some "register"),[],ef)
-	    | Tapp("reg",[TA_typ u]) ->
+	    | Tapp("reg",[TA_typ u]),_ ->
 	      let t',cs = type_consistent l d_env ty u in
 	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),ty,Envmap.empty,Emp,[],pure_e)
-	    | Tuvar _ ->
+	    | Tapp("vector",_),false ->
+	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),t,Envmap.empty,Emp,[],pure_e)
+	    | Tuvar _,_ ->
 	      let u' = {t=Tapp("reg",[TA_typ ty])} in
 	      t.t <- u'.t;
 	      (LEXP_aux(lexp,(l,(Some((([],u'),Emp,cs,pure_e))))),ty,Envmap.empty,Emp,[],pure_e)
-	    | _ -> 
-	      typ_error l 
-		("Can only assign to identifiers with type register or reg, found identifier " ^ i ^ " with type " ^ t_to_string t))
+	    | _,_ -> 
+	      if is_top
+	      then typ_error l 
+		("Can only assign to identifiers with type register or reg, found identifier " ^ i ^ " with type " ^ t_to_string t)
+	      else 
+		(LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),t,Envmap.empty,Emp,[],pure_e)) (* TODO, make sure this is a record *)
 	| _ -> 
 	  let t = {t=Tapp("reg",[TA_typ ty])} in
 	  let tannot = (Some(([],t),Emp,[],pure_e)) in
 	  (LEXP_aux(lexp,(l,tannot)),ty,Envmap.from_list [i,tannot],Emp,[],pure_e))
     | LEXP_vector(vec,acc) -> 
-      let (vec',item_t,env,tag,csi,ef) = check_lexp envs vec in
+      let (vec',item_t,env,tag,csi,ef) = check_lexp envs false vec in
       let item_t,cs = match get_abbrev d_env item_t with
 	| None -> item_t,csi
 	| Some(t,cs,ef) -> t,cs@csi in
@@ -970,14 +981,26 @@ and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot ema
 	    | _ -> typ_error l ("Assignment to one vector element requires either inc or dec order")
 	  in
 	  let (e,t',_,cs',ef_e) = check_exp envs acc_t acc in
-	  (LEXP_aux(LEXP_vector(vec',e),(l,Some(([],t),tag,cs@cs',union_effects ef ef_e))),t,env,tag,cs@cs',union_effects ef ef_e)
+	  let t,add_reg_write = 
+	    match t.t with
+	      | Tapp("register",[TA_typ t]) -> t,true
+	      | _ -> t,false in
+	  let ef = if add_reg_write then add_effect (BE_aux(BE_wreg,l)) ef else ef in
+	  (LEXP_aux(LEXP_vector(vec',e),(l,Some(([],t),tag,cs,ef))),t,env,tag,cs@cs',union_effects ef ef_e)
 	| Tuvar _ -> typ_error l "Assignment to one position expected a vector with a known order, found a polymorphic value, try adding a cast"
 	| _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string item_t))) 
     | LEXP_vector_range(vec,e1,e2)-> 
-      let (vec',item_t,env,tag,csi,ef) = check_lexp envs vec in
+      let (vec',item_t,env,tag,csi,ef) = check_lexp envs false vec in
       let item_t,cs = match get_abbrev d_env item_t with
 	| None -> item_t,csi
 	| Some(t,cs,ef) -> t,cs@csi in
+      let item_t,add_reg_write,cs = 
+	match item_t.t with
+	  | Tapp("register",[TA_typ t]) ->
+	    (match get_abbrev d_env t with
+	      | None -> t,true,cs
+	      | Some(t,cs',ef) -> t,true,cs@cs')
+	  | _ -> item_t,false,cs in
       (match item_t.t with
 	| Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ t]) ->
 	  let base_e1,range_e1,base_e2,range_e2 = new_n(),new_n(),new_n(),new_n() in
@@ -1004,7 +1027,7 @@ and check_lexp envs (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot ema
 	| Tuvar _ -> typ_error l "Assignement to a range of elements requires a vector with a known order, found a polymorphic value, try addinga  cast"
 	| _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string item_t))) 
     | LEXP_field(vec,id)-> 
-      let (vec',item_t,env,tag,csi,ef) = check_lexp envs vec in
+      let (vec',item_t,env,tag,csi,ef) = check_lexp envs false vec in
       (match item_t.t with
 	| Tid i ->
 	  (match lookup_record_typ i d_env.rec_env with

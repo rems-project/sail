@@ -57,6 +57,8 @@ let rec val_to_string = function
      sprintf "record {%s}" repr
  | V_ctor (id,_, value) ->
      sprintf "constructor %s %s" (id_to_string id) (val_to_string value)
+ | V_register (Reg (id,_)) ->
+     sprintf "register %s as value" (id_to_string id)
 ;;
 
 let rec env_to_string = function
@@ -185,7 +187,7 @@ let run
   ?(mem=Mem.empty)
   (name, test) =
   let rec loop env = function
-  | Value v -> eprintf "%s: returned %s\n" name (val_to_string v); true
+  | Value (v, _) -> eprintf "%s: returned %s\n" name (val_to_string v); true
   | Action (a, s) ->
       eprintf "%s: suspended on action %s\n" name (act_to_string a);
       (*eprintf "%s: suspended on action %s, with stack %s\n" name (act_to_string a) (stack_to_string s);*)

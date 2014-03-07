@@ -351,6 +351,8 @@ app_typ:
     { $1 }
   | tid Lt app_typs Gt
     { tloc (ATyp_app($1,$3)) }
+  | Register Lt app_typs Gt
+    { tloc (ATyp_app(Id_aux(Id "register", locn 1 1),$3)) }
 
 star_typ_list:
   | app_typ

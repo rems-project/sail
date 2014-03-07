@@ -190,6 +190,7 @@ let initial_kind_env =
     ("bit", {k = K_Typ});
     ("list", {k = K_Lam( [{k = K_Typ}], {k = K_Typ})});
     ("reg", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
+    ("register", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("enum", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}], {k = K_Typ}) });
     ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } )
   ]
@@ -339,6 +340,43 @@ let tannot_to_string = function
   | None -> "No tannot"
   | Some((vars,t),tag,ncs,ef) ->
     "Tannot: type = " ^ (t_to_string t) ^ " tag = " ^ tag_to_string tag ^ " constraints = not printing effect = " ^ e_to_string ef
+
+let rec t_to_typ t =
+  Typ_aux (
+   (match t.t with
+    | Tid i -> Typ_id (Id_aux((Id i), Parse_ast.Unknown))
+    | Tvar i -> Typ_var (Kid_aux((Var i),Parse_ast.Unknown)) 
+    | Tfn(t1,t2,e) -> Typ_fn (t_to_typ t1, t_to_typ t2, e_to_ef e)
+    | Ttup ts -> Typ_tup(List.map t_to_typ ts)
+    | Tapp(i,args) -> Typ_app(Id_aux((Id i), Parse_ast.Unknown),List.map targ_to_typ_arg args)), Parse_ast.Unknown)
+and targ_to_typ_arg targ = 
+ Typ_arg_aux( 
+  (match targ with
+    | TA_nexp n -> Typ_arg_nexp (n_to_nexp n) 
+    | TA_typ t -> Typ_arg_typ (t_to_typ t)
+    | TA_ord o -> Typ_arg_order (o_to_order o)
+    | TA_eft e -> Typ_arg_effect (e_to_ef e)), Parse_ast.Unknown)
+and n_to_nexp n =
+  Nexp_aux(
+  (match n.nexp with
+    | Nvar i -> Nexp_var (Kid_aux((Var i),Parse_ast.Unknown)) 
+    | Nconst i -> Nexp_constant i 
+    | Nmult(n1,n2) -> Nexp_times(n_to_nexp n1,n_to_nexp n2) 
+    | Nadd(n1,n2) -> Nexp_sum(n_to_nexp n1,n_to_nexp n2) 
+    | N2n n -> Nexp_exp (n_to_nexp n) 
+    | Nneg n -> Nexp_neg (n_to_nexp n)), Parse_ast.Unknown)
+and e_to_ef ef =
+ Effect_aux( 
+  (match ef.effect with
+    | Evar i -> Effect_var (Kid_aux((Var i),Parse_ast.Unknown)) 
+    | Eset effects -> Effect_set effects), Parse_ast.Unknown)
+and o_to_order o =
+ Ord_aux( 
+  (match o.order with
+    | Ovar i -> Ord_var (Kid_aux((Var i),Parse_ast.Unknown)) 
+    | Oinc -> Ord_inc 
+    | Odec -> Ord_dec), Parse_ast.Unknown)
+
 
 let get_abbrev d_env t =
   match t.t with
@@ -537,6 +575,12 @@ let rec type_coerce l d_env t1 e t2 =
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert an enum into a non-bit vector"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or enum is not properly kinded"))
+    | "register",_ ->
+      (match args1 with
+	| [TA_typ t] -> 
+	  let t',cs = type_consistent l d_env t t2 in
+	  (t',cs,E_aux(E_cast(t_to_typ t',e),(l,Some(([],t2),External None,cs,pure_e))))
+	| _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))			     
     | _,_ -> 
       (match get_abbrev d_env t1,get_abbrev d_env t2 with
 	| Some(t1,cs1,ef1),Some(t2,cs2,ef2) ->

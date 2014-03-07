@@ -7,6 +7,8 @@ register (bit[10]) slice_check
 
 register nat match_success
 
+let (vector<0,3,inc,(register<(bit[10])>)>) gpr_small = [slice_check,slice_check,slice_check]
+
 function unit decode ([bitzero, bitzero, bitone, bitzero]) = match_success := 1
 and decode x = match_success := x
 
@@ -16,6 +18,9 @@ function bit main _ = {
   slice_check := v3[1..10];
   slice_check := v3[5..10];
 
+  gpr_small[1] := v3;
+  slice_check := gpr_small[1];
+ 
   i := [bitzero, bitzero, bitone, bitzero];
 
   (* literal match *)
