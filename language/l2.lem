@@ -484,6 +484,7 @@ type t =  (* Internal types *)
  | T_fn of t * t * effect
  | T_tup of list t
  | T_app of id * t_args
+ | T_abbrev of t * t
 
 and t_arg =  (* Argument to type constructors *)
  | T_arg_typ of t

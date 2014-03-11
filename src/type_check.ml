@@ -151,12 +151,11 @@ let typschm_to_tannot envs ((TypSchm_aux(typschm,l)):typschm) (tag : tag) : tann
 let into_register d_env (t : tannot) : tannot =
   match t with
     | Some((ids,ty),tag,constraints,eft) -> 
-      let ty' =  match get_abbrev d_env ty with
-	| Some(t,cs,e) -> t
-	| None -> ty in
+      let ty',_,_ =  get_abbrev d_env ty in
       (match ty'.t with 
 	| Tapp("register",_)-> t
-	| _ -> Some((ids, {t= Tapp("register",[TA_typ ty])}),tag,constraints,eft))
+        | Tabbrev(ti,{t=Tapp("register",_)}) -> Some((ids,ty'),tag,constraints,eft)
+	| _ -> Some((ids, {t= Tapp("register",[TA_typ ty'])}),tag,constraints,eft))
     | None -> None
 
 let rec check_pattern envs expect_t (P_aux(p,(l,annot))) : ((tannot pat) * (tannot emap) * nexp_range list * t)  =
@@ -378,10 +377,14 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
         typ_error l ("Identifier " ^ i ^ " must be defined, not just specified, before use")
       | Some(Some((params,t),tag,cs,ef)) ->
 	let t,cs,ef = subst params t cs ef in
-	let ta,cs,ef = match get_abbrev d_env t with
-	  | Some(t,cs1,ef1) -> t,cs@cs1,union_effects ef ef1
-	  | None -> t,cs,ef in
-        (match ta.t,expect_t.t with 
+        let t,cs',ef' = get_abbrev d_env t in
+        let cs,ef = cs@cs',union_effects ef ef' in
+        let t_actual,expect_actual = match t.t,expect_t.t with
+          | Tabbrev(_,t),Tabbrev(_,e) -> t,e
+          | Tabbrev(_,t),_ -> t,expect_t 
+          | _,Tabbrev(_,e) -> t,e
+          | _,_ -> t,expect_t in
+        (match t_actual.t,expect_actual.t with 
         | Tfn _,_ -> typ_error l ("Identifier " ^ (id_to_string id) ^ " is bound to a function and cannot be used as a value")
         | Tapp("register",[TA_typ(t')]),Tapp("register",[TA_typ(expect_t')]) -> 
           let tannot = Some(([],t),Emp,cs,ef) in
@@ -389,13 +392,13 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
           (e',t,t_env,cs@cs',ef)
         | Tapp("register",[TA_typ(t')]),_ ->
 	  let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
-          let tannot = Some(([],ta),External (Some "register"),cs,ef') in
-          let t',cs',e' = type_coerce l d_env t' (rebuild tannot) expect_t in
+          let tannot = Some(([],t),External (Some i),cs,ef') in
+          let t',cs',e' = type_coerce l d_env t' (rebuild tannot) expect_actual in
           (e',t,t_env,cs@cs',ef)
-        | Tapp("reg",[TA_typ(t)]),_ ->
+        | Tapp("reg",[TA_typ(t')]),_ ->
           let tannot = Some(([],t),Emp,cs,pure_e) in
-          let t',cs',e' = type_coerce l d_env t (rebuild tannot) expect_t in
-          (e',t,t_env,cs@cs',pure_e)
+          let t',cs',e' = type_coerce l d_env t' (rebuild tannot) expect_actual in
+          (e',t',t_env,cs@cs',pure_e)
         | _ -> 
           let t',cs',e' = type_coerce l d_env t (rebuild (Some(([],t),tag,cs,pure_e))) expect_t in
           (e',t,t_env,cs@cs',pure_e)
@@ -694,10 +697,9 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let (t',cs',e') = type_coerce l d_env lt (E_aux(E_cons(ls',i'),(l,Some(([],lt),Emp,[],pure_e)))) expect_t in
       (e',t',t_env,cs@cs'@cs_i,(union_effects ef ef_i))
     | E_record(FES_aux(FES_Fexps(fexps,_),l')) -> 
-      let u = match (get_abbrev d_env expect_t) with
-	| Some(t,cs,ef) -> t
-	| None -> expect_t in
-      (match u.t with
+      let u,_,_ = get_abbrev d_env expect_t in
+      let u_actual = match u.t with | Tabbrev(_, u) -> u | _ -> u in
+      (match u_actual.t with
 	| Tid(n) ->
 	  (match lookup_record_typ n d_env.rec_env with 
 	    | None -> typ_error l ("Expected a value of type " ^ n ^ " but found a struct")
@@ -715,7 +717,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 			     let (e,t',_,c,ef) = check_exp envs et exp in
 			     (FE_aux(FE_Fexp(id,e),(l,Some(([],t'),tag,cs@c,ef)))::fexps,cons@cs@c,union_effects ef ef'))
 		       fexps ([],[],pure_e) in
-		   E_aux(E_record(FES_aux(FES_Fexps(fexps,false),l')),(l,Some(([],expect_t),Emp,[],pure_e))),expect_t,t_env,cons,ef
+		   E_aux(E_record(FES_aux(FES_Fexps(fexps,false),l')),(l,Some(([],u),Emp,[],pure_e))),expect_t,t_env,cons,ef
 	      else typ_error l ("Expected a struct of type " ^ n ^ ", which should have " ^ string_of_int (List.length fields) ^ " fields")
 	    | Some(i,Register,fields) -> typ_error l ("Expected a value with register type, found a struct"))
 	| Tuvar _ ->
@@ -741,7 +743,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
     | E_record_update(exp,FES_aux(FES_Fexps(fexps,_),l')) -> 
       let (e',t',_,c,ef) = check_exp envs expect_t exp in
       (match t'.t with
-	| Tid i ->
+	| Tid i | Tabbrev(_, {t=Tid i}) ->
 	  (match lookup_record_typ i d_env.rec_env with
 	    | None -> typ_error l ("Expected a struct for this update, instead found an expression with type " ^ i)
 	    | Some((i,Register,fields)) ->
@@ -786,7 +788,19 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
     | E_field(exp,id) ->
       let (e',t',_,c,ef) = check_exp envs (new_t()) exp in
       (match t'.t with
-	| Tid i ->
+      | Tabbrev({t=Tid i}, t2) ->
+	  (match lookup_record_typ i d_env.rec_env with
+	    | None -> typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i)
+	    | Some(((i,rec_kind,fields) as r)) ->
+	      let fi = id_to_string id in
+	      (match lookup_field_type fi r with
+		| None -> 
+		  typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
+		| Some((params,et),tag,cs,ef) ->
+		  let et,cs,ef = subst params et cs ef in
+		  let (et',c',acc) = type_coerce l d_env et (E_aux(E_field(e',id),(l,Some(([],et),tag,cs,ef)))) expect_t in
+		  (acc,et',t_env,cs@c',ef)))        
+      | Tid i ->
 	  (match lookup_record_typ i d_env.rec_env with
 	    | None -> typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i)
 	    | Some(((i,rec_kind,fields) as r)) ->
@@ -867,23 +881,24 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 	  typ_error l ("Identifier " ^ i ^ " cannot be assigned when only a default specification exists")
 	| Some(Some((parms,t),tag,cs,_)) ->
 	  let t,cs,_ = subst parms t cs pure_e in
-	  let t,cs = match get_abbrev d_env t with
-	    | None -> t,cs
-	    | Some(t,cs,e) -> t,cs in
-	  (match t.t,is_top with
+	  let t,cs',_ = get_abbrev d_env t in
+          let t_actual = match t.t with 
+            | Tabbrev(i,t) -> t
+            | _ -> t in
+	  (match t_actual.t,is_top with
 	    | Tapp("register",[TA_typ u]),_ ->
 	      let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in
-	      (LEXP_aux(lexp,(l,(Some(([],t),External (Some "register"),cs,ef)))),u,Envmap.empty,External (Some "register"),[],ef)
+	      (LEXP_aux(lexp,(l,(Some(([],t),External (Some i),cs@cs',ef)))),u,Envmap.empty,External (Some i),[],ef)
 	    | Tapp("reg",[TA_typ u]),_ ->
-	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),u,Envmap.empty,Emp,[],pure_e)
+	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs@cs',pure_e)))),u,Envmap.empty,Emp,[],pure_e)
 	    | Tapp("vector",_),false ->
-	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),t,Envmap.empty,Emp,[],pure_e)
+	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs@cs',pure_e)))),t,Envmap.empty,Emp,[],pure_e)
 	    | _,_ -> 
 	      if is_top
 	      then typ_error l 
 		("Can only assign to identifiers with type register or reg, found identifier " ^ i ^ " with type " ^ t_to_string t)
 	      else 
-		(LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),t,Envmap.empty,Emp,[],pure_e) (* TODO, make sure this is a record *))
+		(LEXP_aux(lexp,(l,(Some(([],t),Emp,cs@cs',pure_e)))),t,Envmap.empty,Emp,[],pure_e) (* TODO, make sure this is a record *))
 	| _ -> 
 	  let u = new_t() in
 	  let t = {t=Tapp("reg",[TA_typ u])} in
@@ -895,23 +910,16 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 	| Some(Some((parms,t),tag,cs,ef)) ->
 	  let is_external = match tag with | External any -> true | _ -> false in
 	  let t,cs,ef = subst parms t cs ef in
-	  let t,cs,ef = match get_abbrev d_env t with
-	    | None -> t,cs,ef
-	    | Some(t,cs,ef) -> t,cs,ef in
 	  (match t.t with
 	    | Tfn(apps,out,ef') ->
 	      (match ef'.effect with
 		| Eset effects ->
 		  if List.exists (fun (BE_aux(b,_)) -> match b with | BE_wmem -> true | _ -> false) effects 
 		  then
-		    let apps,cs' = match get_abbrev d_env apps with
-		      | None -> apps,[]
-		      | Some(t,cs,_) -> t,cs in
-		    let out,cs'' = match get_abbrev d_env out with
-		      | None -> out,[]
-		      | Some(t,cs,_) -> t,cs in 
-		    (match apps.t with
-		      | Ttup ts -> 
+                    let app,cs_a,_ = get_abbrev d_env apps in
+                    let out,cs_o,_ = get_abbrev d_env out in
+                    (match app.t with
+		      | Ttup ts | Tabbrev(_,{t=Ttup ts}) -> 
 			let (E_aux(E_tuple es,(l',tannot)),t',_,cs',ef_e) = check_exp envs apps (E_aux(E_tuple exps,(l,None))) in
 			let item_t = match out.t with
 			  | Tid "unit" -> {t = Tapp("vector",[TA_nexp (new_n());TA_nexp (new_n()); TA_ord (new_o());TA_typ bit_t])}
@@ -941,19 +949,18 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 	  typ_error l ("Identifier " ^ i ^ " cannot be assigned when only a default specification exists")
 	| Some(Some((parms,t),tag,cs,_)) ->
 	  let t,cs,_ = subst parms t cs pure_e in
-	  let t,cs = match get_abbrev d_env t with
-	    | None -> t,cs
-	    | Some(t,cs,e) -> t,cs in
-	  (match t.t,is_top with
+	  let t,cs',_ = get_abbrev d_env t in
+          let t_actual = match t.t with | Tabbrev(_,t) -> t | _ -> t in
+	  (match t_actual.t,is_top with
 	    | Tapp("register",[TA_typ u]),_ ->
 	      let t',cs = type_consistent l d_env ty u in
 	      let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in
-	      (LEXP_aux(lexp,(l,(Some(([],t),External (Some "register"),cs,ef)))),ty,Envmap.empty,External (Some "register"),[],ef)
+	      (LEXP_aux(lexp,(l,(Some(([],t),External (Some i),cs,ef)))),ty,Envmap.empty,External (Some i),[],ef)
 	    | Tapp("reg",[TA_typ u]),_ ->
 	      let t',cs = type_consistent l d_env ty u in
 	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),ty,Envmap.empty,Emp,[],pure_e)
 	    | Tapp("vector",_),false ->
-	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),t,Envmap.empty,Emp,[],pure_e)
+	      (LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),ty,Envmap.empty,Emp,[],pure_e)
 	    | Tuvar _,_ ->
 	      let u' = {t=Tapp("reg",[TA_typ ty])} in
 	      t.t <- u'.t;
@@ -963,17 +970,16 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 	      then typ_error l 
 		("Can only assign to identifiers with type register or reg, found identifier " ^ i ^ " with type " ^ t_to_string t)
 	      else 
-		(LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),t,Envmap.empty,Emp,[],pure_e)) (* TODO, make sure this is a record *)
+		(LEXP_aux(lexp,(l,(Some(([],t),Emp,cs,pure_e)))),ty,Envmap.empty,Emp,[],pure_e)) (* TODO, make sure this is a record *)
 	| _ -> 
 	  let t = {t=Tapp("reg",[TA_typ ty])} in
 	  let tannot = (Some(([],t),Emp,[],pure_e)) in
 	  (LEXP_aux(lexp,(l,tannot)),ty,Envmap.from_list [i,tannot],Emp,[],pure_e))
     | LEXP_vector(vec,acc) -> 
       let (vec',item_t,env,tag,csi,ef) = check_lexp envs false vec in
-      let item_t,cs = match get_abbrev d_env item_t with
-	| None -> item_t,csi
-	| Some(t,cs,ef) -> t,cs@csi in
-      (match item_t.t with
+      let item_t,cs',_ = get_abbrev d_env item_t in
+      let item_actual = match item_t.t with | Tabbrev(_,t) -> t | _ -> item_t in
+      (match item_actual.t with
 	| Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ t]) ->
 	  let acc_t = match ord.order with
 	    | Oinc -> {t = Tapp("enum",[TA_nexp base;TA_nexp rise])} 
@@ -983,25 +989,23 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 	  let (e,t',_,cs',ef_e) = check_exp envs acc_t acc in
 	  let t,add_reg_write = 
 	    match t.t with
-	      | Tapp("register",[TA_typ t]) -> t,true
+	      | Tapp("register",[TA_typ t]) | Tabbrev(_,{t=Tapp("register",[TA_typ t])}) -> t,true
 	      | _ -> t,false in
 	  let ef = if add_reg_write then add_effect (BE_aux(BE_wreg,l)) ef else ef in
-	  (LEXP_aux(LEXP_vector(vec',e),(l,Some(([],t),tag,cs,ef))),t,env,tag,cs@cs',union_effects ef ef_e)
+	  (LEXP_aux(LEXP_vector(vec',e),(l,Some(([],t),tag,csi,ef))),t,env,tag,csi@cs',union_effects ef ef_e)
 	| Tuvar _ -> typ_error l "Assignment to one position expected a vector with a known order, found a polymorphic value, try adding a cast"
 	| _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string item_t))) 
     | LEXP_vector_range(vec,e1,e2)-> 
       let (vec',item_t,env,tag,csi,ef) = check_lexp envs false vec in
-      let item_t,cs = match get_abbrev d_env item_t with
-	| None -> item_t,csi
-	| Some(t,cs,ef) -> t,cs@csi in
-      let item_t,add_reg_write,cs = 
-	match item_t.t with
+      let item_t,cs,_ = get_abbrev d_env item_t in
+      let item_actual = match item_t.t with | Tabbrev(_,t) -> t | _ -> item_t in
+      let item_actual,add_reg_write,cs = 
+	match item_actual.t with
 	  | Tapp("register",[TA_typ t]) ->
 	    (match get_abbrev d_env t with
-	      | None -> t,true,cs
-	      | Some(t,cs',ef) -> t,true,cs@cs')
-	  | _ -> item_t,false,cs in
-      (match item_t.t with
+	      | {t=Tabbrev(_,t)},cs',_ | t,cs',_ -> t,true,cs@cs')
+	  | _ -> item_actual,false,cs in
+      (match item_actual.t with
 	| Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ t]) ->
 	  let base_e1,range_e1,base_e2,range_e2 = new_n(),new_n(),new_n(),new_n() in
 	  let base_t = {t=Tapp("enum",[TA_nexp base_e1;TA_nexp range_e1])} in
@@ -1029,7 +1033,7 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
     | LEXP_field(vec,id)-> 
       let (vec',item_t,env,tag,csi,ef) = check_lexp envs false vec in
       (match item_t.t with
-	| Tid i ->
+	| Tid i | Tabbrev({t=Tid i},_) ->
 	  (match lookup_record_typ i d_env.rec_env with
 	    | None -> typ_error l ("Expected a register for this update, instead found an expression with type " ^ i)
 	    | Some(((i,rec_kind,fields) as r)) ->

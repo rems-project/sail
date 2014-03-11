@@ -12,6 +12,6 @@ function bit main _ = {
   f := XER;
   (bit[7]) foo := XER[57..63];
   query := XER.SO;
-(*  XER.SO := query;*)
+  (*XER.SO := query;*)
   bitzero }
 

@@ -47,6 +47,7 @@ t , u :: 'T_' ::=
    | t1 -> t2 effect                        :: :: fn 
    | ( t1 * .... * tn )                          :: :: tup
    | id t_args                                  :: :: app 
+   | t |-> t1                                   :: :: abbrev
    | register t_args                         :: S :: reg_app {{ ichlo T_app "register" [[t_args]] }}
    | t [ t1 / id1 ... tn / idn ]            :: M :: subst {{ ichlo "todo" }}
 

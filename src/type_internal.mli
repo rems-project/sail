@@ -25,6 +25,7 @@ and t_aux =
   | Tfn of t * t * effect
   | Ttup of t list
   | Tapp of string * t_arg list
+  | Tabbrev of t * t (* first t is the specified type, which may itself be an abbrev; second is the ground type, never an abbrev *)
   | Tuvar of t_uvar
 and nexp = { mutable nexp : nexp_aux }
 and nexp_aux =
@@ -111,14 +112,14 @@ val new_o : unit -> order
 val new_e : unit -> effect
 
 val subst : (string * kind) list -> t -> nexp_range list -> effect -> t * nexp_range list * effect
-val get_abbrev : def_envs -> t -> (t * nexp_range list * effect) option
+val get_abbrev : def_envs -> t -> (t * nexp_range list * effect)
 
 (* type_consistent is similar to a standard type equality, except in the case of [[consistent t1 t2]] where
    t1 and t2 are both enum types and t1 is contained within the range of t2: i.e.
-   enum 2 5 inc is consistent with enum 0 10 inc, but not vice versa.
-   type_consistent mutates uvars to perform unification and will raise an error if the [[t1]] and [[t2]] are inconsitent
+   enum 2 5 is consistent with enum 0 10, but not vice versa.
+   type_consistent mutates uvars to perform unification and will raise an error if the [[t1]] and [[t2]] are inconsistent
 *)
 val type_consistent : Parse_ast.l -> def_envs -> t -> t -> t * nexp_range list
 
-(* type_eq mutates to unify variables, and will raise an exception if the first type cannot be coerced into the second *)
+(* type_eq mutates to unify variables, and will raise an exception if the first type cannot be coerced into the second and is inconsistent *)
 val type_coerce : Parse_ast.l -> def_envs -> t -> exp -> t -> t * nexp_range list * exp
