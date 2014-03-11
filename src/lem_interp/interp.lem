@@ -118,6 +118,18 @@ type outcome =
 (* interprets the exp sequentially in the presence of a set of top level definitions and returns a value or a memory request *)
 val interp : defs tannot -> exp tannot -> outcome
 
+val to_register_fields : defs tannot -> list (id * list (id * index_range))
+let rec to_register_fields (Defs defs) = 
+  match defs with
+  | [ ] -> [ ]
+  | (DEF_aux def (l,tannot))::defs -> 
+    match def with 
+    | DEF_type (TD_aux (TD_register id n1 n2 indexes) l') ->
+      (id,List.map (fun (a,b) -> (b,a)) indexes)::(to_register_fields (Defs defs))
+    | _ -> to_register_fields (Defs defs)
+    end 
+  end
+
 val to_registers : defs tannot -> env
 let rec to_registers (Defs defs) = 
   match defs with
@@ -166,7 +178,7 @@ let rec to_data_constructors (Defs defs) =
     | _ -> to_data_constructors (Defs defs) end
    end
 
-val in_env : env -> id -> maybe value
+val in_env :forall 'a. (list (id * 'a)) -> id -> maybe 'a
 let rec in_env env id =
  match env with
  | [] -> Nothing
@@ -574,8 +586,8 @@ let rec find_case pexps value =
   end
 
 (*top_level is a tuple of 
-  (all definitions, letbound and enum values, register values, and Typedef union constructors) *)
-type top_level = Env of (defs tannot) * env * env * list (id * typ)
+  (all definitions, letbound and enum values, register values, Typedef union constructors, and sub register mappings) *)
+type top_level = Env of (defs tannot) * env * env * list (id * typ) * list (id * list (id * index_range))
 
 val interp_main : top_level -> env -> mem -> (exp tannot) -> (outcome * mem * env)
 val exp_list : top_level -> (list (exp tannot) -> (exp tannot)) -> (list value -> value) -> env -> mem -> list value -> list (exp tannot) -> (outcome * mem * env)
@@ -607,7 +619,7 @@ let rec exp_list t_level build_e build_v l_env l_mem vals exps =
   end
 
 and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
-  let (Env defs lets regs ctors) = t_level in 
+  let (Env defs lets regs ctors subregs) = t_level in 
   let (typ,tag,ncs,effect) = match annot with 
     | Nothing -> (T_var (Kid_aux (Var "fresh_v") Unknown),
 		  Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
@@ -770,7 +782,19 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
                                             | Nothing -> (Error l "Field not found in record",lm,le) end
                         | _ -> (Error l "Field access of vectors not implemented",lm,le)
                         end )
-                      (fun a -> update_stack a (add_to_top_frame (fun e -> E_aux(E_field e id) (l,annot))))
+                      (fun a -> 
+			match (exp,a) with
+			  | (E_aux _ (l,Just(_,Tag_extern _,_,_)),
+			     (Action (Read_reg ((Reg _ (Just((T_id id'),_,_,_))) as regf) Nothing) s)) ->
+			    match in_env subregs id' with
+			      | Just(indexes) ->
+				match in_env indexes id with
+				  | Just ir -> 
+				    (Action (Read_reg (SubReg id regf ir) Nothing) s)
+				  | _ -> Error l "Internal error, unrecognized read, no id"
+		                end 
+                              | Nothing -> Error l "Internal error, unrecognized read, no reg" end
+                          | _ -> update_stack a (add_to_top_frame (fun e -> E_aux(E_field e id) (l,annot))) end)
     | E_vector_access vec i ->
       (*Need to update to read one position of a register*)
       resolve_outcome (interp_main t_level l_env l_mem i)
@@ -1012,7 +1036,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
     end
 
 and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP_aux lexp (l,annot)):lexp tannot) =
-   let (Env defs lets regs ctors) = t_level in
+   let (Env defs lets regs ctors subregs) = t_level in
   let (typ,tag,ncs,ef) = match annot with 
     | Nothing -> (T_var (Kid_aux (Var "fresh_v") Unknown), Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
     | Just(t, tag, ncs, ef) -> (t,tag,ncs,ef) end in
@@ -1177,7 +1201,7 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
        | (Just (V_boxref n t),true) -> ((Value (V_lit (L_aux L_unit l)) Tag_empty, update_mem lm n value, l_env),Nothing)
        | (Just (V_boxref n t),false) -> 
 	 ((Value (in_mem lm n) Tag_empty,lm,l_env),Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot)))
-       | (Just v, true) -> ((Error l "Field access requires record",lm,le),Nothing)
+       | (Just v, true) -> ((Error l "Mutating a field access requires a reg type",lm,le),Nothing)
        | (Just v,false) -> ((Value v Tag_empty,lm,l_env),Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot)))
        | (Nothing,_) -> ((Error l "Field not found in specified record",lm,le),Nothing) end
      | ((Action a s,lm,le), Just lexp_builder) ->  
@@ -1185,7 +1209,17 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
        | Read_reg _ _ -> ((Action a s,lm,le), Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot)))
        | Read_mem _ _ _ -> ((Action a s,lm,le), Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot)))
        | Call_extern _ _ -> ((Action a s,lm,le), Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot)))
-       | _ -> ((Error l "Unimplemented feature, writing to a field in a register or memory",lm,le),Nothing)
+       | Write_reg ((Reg id' t') as regf) Nothing value -> 
+	 match in_env subregs id' with
+	   | Just(indexes) ->
+	     match in_env indexes id with
+	       | Just ir -> 
+		 ((Action (Write_reg (SubReg id regf ir) Nothing value) s,lm,le), 
+		  (if is_top_level then Nothing else Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot))))
+	       | _ -> ((Error l "Internal error, unrecognized write",lm,le),Nothing)
+		 end 
+            | Nothing -> ((Error l "Internal error, unrecognized write",lm,le),Nothing) end
+       | _ -> ((Error l "Internal error, unrecognized write",lm,le),Nothing)
        end 
      | e -> e end)
      end	
@@ -1212,14 +1246,14 @@ end
 
 (*Beef up to pick up enums as well*)
 let rec to_global_letbinds (Defs defs) t_level =
-  let  (Env defs' lets regs ctors) = t_level in
+  let  (Env defs' lets regs ctors subregs) = t_level in
   match defs with
   | [] -> ((Value (V_lit (L_aux L_unit Unknown)) Tag_empty, emem, []),t_level)
   | (DEF_aux def (l,_))::defs ->
     match def with
     | DEF_val lbind ->
       match interp_letbind t_level [] emem lbind with
-      | ((Value v tag,lm,le),_) -> to_global_letbinds (Defs defs) (Env defs' (lets++le) regs ctors)
+      | ((Value v tag,lm,le),_) -> to_global_letbinds (Defs defs) (Env defs' (lets++le) regs ctors subregs)
       | ((Action a s,lm,le),_) -> 
 	((Error l "Top level let may not access memory, registers or (for now) external functions", lm,le),t_level)
       | (e,_) -> (e,t_level) end
@@ -1229,7 +1263,7 @@ let rec to_global_letbinds (Defs defs) t_level =
 
 
 let interp defs exp =
-  let t_level = Env defs [] (to_registers defs) (to_data_constructors defs) in 
+  let t_level = Env defs [] (to_registers defs) (to_data_constructors defs) (to_register_fields defs) in 
   let (o,t_level) = to_global_letbinds defs t_level in
   match o with
   | (Value _ _,_,_) -> 
@@ -1254,7 +1288,7 @@ let rec resume_main t_level stack value =
   end
 
 let resume defs stack value =
-  let t_level = Env defs [] (to_registers defs) (to_data_constructors defs) in 
+  let t_level = Env defs [] (to_registers defs) (to_data_constructors defs) (to_register_fields defs) in 
   let (o,t_level) = to_global_letbinds defs t_level in
   match o with
   | (Value _ _,_,_) -> 

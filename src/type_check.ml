@@ -378,27 +378,27 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
         typ_error l ("Identifier " ^ i ^ " must be defined, not just specified, before use")
       | Some(Some((params,t),tag,cs,ef)) ->
 	let t,cs,ef = subst params t cs ef in
-	let t,cs,ef = match get_abbrev d_env t with
+	let ta,cs,ef = match get_abbrev d_env t with
 	  | Some(t,cs1,ef1) -> t,cs@cs1,union_effects ef ef1
 	  | None -> t,cs,ef in
-        (match t.t,expect_t.t with 
+        (match ta.t,expect_t.t with 
         | Tfn _,_ -> typ_error l ("Identifier " ^ (id_to_string id) ^ " is bound to a function and cannot be used as a value")
         | Tapp("register",[TA_typ(t')]),Tapp("register",[TA_typ(expect_t')]) -> 
           let tannot = Some(([],t),Emp,cs,ef) in
           let t',cs',e' = type_coerce l d_env t' (rebuild tannot) expect_t' in
-          (e',t',t_env,cs@cs',ef)
+          (e',t,t_env,cs@cs',ef)
         | Tapp("register",[TA_typ(t')]),_ ->
 	  let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
-          let tannot = Some(([],t),External (Some "register"),cs,ef') in
+          let tannot = Some(([],ta),External (Some "register"),cs,ef') in
           let t',cs',e' = type_coerce l d_env t' (rebuild tannot) expect_t in
-          (e',t',t_env,cs@cs',ef)
+          (e',t,t_env,cs@cs',ef)
         | Tapp("reg",[TA_typ(t)]),_ ->
           let tannot = Some(([],t),Emp,cs,pure_e) in
           let t',cs',e' = type_coerce l d_env t (rebuild tannot) expect_t in
-          (e',t',t_env,cs@cs',pure_e)
+          (e',t,t_env,cs@cs',pure_e)
         | _ -> 
           let t',cs',e' = type_coerce l d_env t (rebuild (Some(([],t),tag,cs,pure_e))) expect_t in
-          (e',t',t_env,cs@cs',pure_e)
+          (e',t,t_env,cs@cs',pure_e)
         )
       | Some None | None -> typ_error l ("Identifier " ^ (id_to_string id) ^ " is unbound"))
     | E_lit (L_aux(lit,l')) ->
