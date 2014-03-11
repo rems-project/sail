@@ -61,6 +61,14 @@ let rec add (V_tuple args) = match args with
       let len = List.length l in
       add (V_tuple [v; (if d then to_vec_inc else to_vec_dec) len n])
   (* assume other literals are L_bin or L_hex, ie. vectors *)
+  | [(V_lit (L_aux L_zero _) as l); x] ->
+      add (V_tuple [V_vector 0 true [l]; x])
+  | [(V_lit (L_aux L_one _) as l); x] ->
+      add (V_tuple [V_vector 0 true [l]; x])
+  | [x; (V_lit (L_aux L_zero _) as l)] ->
+      add (V_tuple [x; V_vector 0 true [l]])
+  | [x; (V_lit (L_aux L_one _) as l)] ->
+      add (V_tuple [x; V_vector 0 true [l]])
   | [V_lit l; x ] -> add (V_tuple [litV_to_vec l; x])
   | [ x ; V_lit l ] -> add (V_tuple [x; litV_to_vec l])
   end ;;

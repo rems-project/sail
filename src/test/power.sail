@@ -1,27 +1,27 @@
-(* XXX types are wrong *)
-val extern forall Type 'a, Type 'b, Type 'c . ( 'a * 'b ) -> 'c effect pure (deinfix + ) = "add"
-val extern forall Type 'a . ( 'a * 'a ) -> 'a effect pure (deinfix mod ) = "mod"
-val extern forall Type 'a, Type 'b, Type 'c .
-  ( 'a * 'b ) -> 'c effect pure (deinfix : ) = "vec_concat"
-val extern forall Type 'a . 'a -> nat effect pure to_num_inc = "to_num_inc"
-val extern forall Type 'a . 'a -> nat effect pure to_num_dec = "to_num_dec"
-val extern forall Type 'a . nat -> 'a effect pure to_vec_inc = "to_vec_inc"
-val extern forall Type 'a . nat -> 'a effect pure to_vec_dec = "to_vec_dec"
-
-val extern forall Type 'a . ( 'a * 'a ) -> bit effect pure (deinfix == ) = "eq"
-val extern forall Type 'a . ( 'a * 'a ) -> bit effect pure (deinfix != ) = "neq"
-
-val extern forall Type 'a . 'a -> 'a effect pure (deinfix ~ ) = "bitwise-not"
-val extern forall Type 'a . ( 'a * 'a ) -> 'a effect pure (deinfix ^ ) = "bitwise-xor"
-val extern forall Type 'a . ( 'a * 'a ) -> 'a effect pure (deinfix || ) = "bitwise-or"
-val extern forall Type 'a . ( 'a * 'a ) -> 'a effect pure (deinfix & ) = "bitwise-and"
-
-val extern bit -> bool effect pure is_one = "is_one"
 
 (* XXX sign extension *)
 function forall Type 'a . 'a exts ( x ) = x
 
-register (vector<0, 16, inc, (vector<0, 63, inc, bit>)> ) GPR
+register (vector <0, 63, inc, bit>) GPR0
+register (vector <0, 63, inc, bit>) GPR1
+register (vector <0, 63, inc, bit>) GPR2
+register (vector <0, 63, inc, bit>) GPR3
+register (vector <0, 63, inc, bit>) GPR4
+register (vector <0, 63, inc, bit>) GPR5
+register (vector <0, 63, inc, bit>) GPR6
+register (vector <0, 63, inc, bit>) GPR7
+register (vector <0, 63, inc, bit>) GPR8
+register (vector <0, 63, inc, bit>) GPR9
+register (vector <0, 63, inc, bit>) GPR10
+register (vector <0, 63, inc, bit>) GPR11
+register (vector <0, 63, inc, bit>) GPR12
+register (vector <0, 63, inc, bit>) GPR13
+register (vector <0, 63, inc, bit>) GPR14
+register (vector <0, 63, inc, bit>) GPR15
+
+let (vector <0, 16, inc, (register<(vector<0, 63, inc, bit>)>) >) GPR =
+  [ GPR0, GPR1, GPR2, GPR3, GPR4, GPR5, GPR6, GPR7, GPR8, GPR9, GPR10,
+  GPR11, GPR12, GPR13, GPR14, GPR15 ]
 
 register (bit[64]) NIA (* next instruction address *)
 register (bit[64]) CIA (* current instruction address *)
