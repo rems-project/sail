@@ -4,6 +4,7 @@ register (bit[32]) i
 
 let (bit[10]) v3 = 0b0101010111
 register (bit[10]) slice_check
+register (bit[10]) slice_check_copy
 
 register nat match_success
 
@@ -19,7 +20,7 @@ function bit main _ = {
   slice_check := v3[5..10];
 
   gpr_small[1] := v3;
-  slice_check := gpr_small[1];
+  slice_check_copy := gpr_small[1];
  
   i := [bitzero, bitzero, bitone, bitzero];
 
