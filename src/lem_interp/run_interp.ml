@@ -101,16 +101,6 @@ let id_compare i1 i2 =
 
 module Reg = struct
   include Map.Make(struct type t = id let compare = id_compare end)
-
-  let zero_vec =
-    V_vector (zero_big_int, true, Array.to_list (Array.make 64
-    (V_lit(L_aux(L_zero, Unknown)))))
-
-  let find id reg =
-    try find id reg
-    with Not_found ->
-      (* default to a 64-bit big-endian vector of zero bits *)
-      zero_vec
 end ;;
 
 module Mem = struct
