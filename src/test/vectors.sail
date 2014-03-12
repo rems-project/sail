@@ -19,7 +19,7 @@ function bit main _ = {
   slice_check := v3[1..10];
   slice_check := v3[5..10];
 
-  gpr_small[1] := v3;
+  gpr_small[1] := v3; (*Writes to slice_check*)
   slice_check_copy := gpr_small[1];
  
   i := [bitzero, bitzero, bitone, bitzero];

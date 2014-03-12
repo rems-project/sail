@@ -595,13 +595,7 @@ val interp_lbind : top_level -> env -> mem -> (letbind tannot) -> ((outcome * me
 
 let resolve_outcome to_match value_thunk action_thunk =
   match to_match with
-    | (Value v tag,lm,le) -> 
-      match (tag,v) with 
-	| (Tag_extern _, V_register regform) ->
-	  (Action (Read_reg regform Nothing) 
-	          (Frame (id_of_string "0")
-		         (E_aux (E_id (id_of_string "0")) (Unknown, (val_annot (reg_to_t regform)))) le lm Top), lm,le)
-	| _ -> value_thunk v lm le end
+    | (Value v tag,lm,le) -> value_thunk v lm le
     | (Action action stack,lm,le) -> (action_thunk (Action action stack), lm,le)
     | (Error l s,lm,le) -> (Error l s,lm,le)
   end
@@ -630,7 +624,13 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
       else (Value (V_lit lit) Tag_empty, l_mem,l_env)
     | E_cast typ exp -> 
       resolve_outcome (interp_main t_level l_env l_mem exp)
-	              (fun v lm le -> (Value v tag,lm,le))
+	              (fun v lm le -> 
+                        match (tag,v) with 
+	                | (Tag_extern _, V_register regform) ->
+	                  (Action (Read_reg regform Nothing) 
+	                     (Frame (id_of_string "0")
+		                (E_aux (E_id (id_of_string "0")) (Unknown, (val_annot (reg_to_t regform)))) le lm Top), lm,le)
+                        | _ -> (Value v tag,lm,le) end)
 	              (fun a -> a )
  (* TODO introduce coercions to change offset of vectors *)
     | E_id id -> 
@@ -786,6 +786,16 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 			match (exp,a) with
 			  | (E_aux _ (l,Just(_,Tag_extern _,_,_)),
 			     (Action (Read_reg ((Reg _ (Just((T_id id'),_,_,_))) as regf) Nothing) s)) ->
+			    match in_env subregs id' with
+			      | Just(indexes) ->
+				match in_env indexes id with
+				  | Just ir -> 
+				    (Action (Read_reg (SubReg id regf ir) Nothing) s)
+				  | _ -> Error l "Internal error, unrecognized read, no id"
+		                end 
+                              | Nothing -> Error l "Internal error, unrecognized read, no reg" end
+                         | (E_aux _ (l,Just(_,Tag_extern _,_,_)),
+                            (Action (Read_reg ((Reg _ (Just((T_abbrev (T_id id') _),_,_,_))) as regf) Nothing) s))->
 			    match in_env subregs id' with
 			      | Just(indexes) ->
 				match in_env indexes id with
@@ -1209,17 +1219,27 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
        | Read_reg _ _ -> ((Action a s,lm,le), Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot)))
        | Read_mem _ _ _ -> ((Action a s,lm,le), Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot)))
        | Call_extern _ _ -> ((Action a s,lm,le), Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot)))
-       | Write_reg ((Reg id' t') as regf) Nothing value -> 
+       | Write_reg ((Reg _ (Just(T_id id',_,_,_))) as regf) Nothing value -> 
 	 match in_env subregs id' with
 	   | Just(indexes) ->
 	     match in_env indexes id with
 	       | Just ir -> 
 		 ((Action (Write_reg (SubReg id regf ir) Nothing value) s,lm,le), 
 		  (if is_top_level then Nothing else Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot))))
-	       | _ -> ((Error l "Internal error, unrecognized write",lm,le),Nothing)
+	       | _ -> ((Error l "Internal error, unrecognized write, no field",lm,le),Nothing)
 		 end 
-            | Nothing -> ((Error l "Internal error, unrecognized write",lm,le),Nothing) end
-       | _ -> ((Error l "Internal error, unrecognized write",lm,le),Nothing)
+            | Nothing -> ((Error l "Internal error, unrecognized write, no subreges",lm,le),Nothing) end
+       | Write_reg ((Reg _ (Just((T_abbrev(T_id id') _),_,_,_))) as regf) Nothing value -> 
+	 match in_env subregs id' with
+	   | Just(indexes) ->
+	     match in_env indexes id with
+	       | Just ir -> 
+		 ((Action (Write_reg (SubReg id regf ir) Nothing value) s,lm,le), 
+		  (if is_top_level then Nothing else Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot))))
+	       | _ -> ((Error l "Internal error, unrecognized write, no field",lm,le),Nothing)
+		 end 
+            | Nothing -> ((Error l "Internal error, unrecognized write, no subreges",lm,le),Nothing) end
+       | _ -> ((Error l "Internal error, unrecognized write, no matching action",lm,le),Nothing)
        end 
      | e -> e end)
      end	

@@ -569,10 +569,10 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or enum is not properly kinded"))
     | "register",_ ->
       (match args1 with
-	| [TA_typ t] -> 
-	  let t',cs = type_consistent l d_env t t2 in
-	  (t',cs,E_aux(E_cast(t_to_typ t',e),(l,Some(([],t2),External None,cs,pure_e))))
-	| _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))			     
+	| [TA_typ t] ->
+          let new_e = E_aux(E_cast(t_to_typ t,e),(l,Some(([],t),External None,[],pure_e))) in (*Wrong effect, should be reading a register*)
+	  type_coerce l d_env t new_e t2
+	| _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))
     | _,_ -> 
       let t',cs' = type_consistent l d_env t1 t2 in (t',cs',e))
   | Tapp("enum",[TA_nexp b1;TA_nexp r1;]),Tid("bit") ->

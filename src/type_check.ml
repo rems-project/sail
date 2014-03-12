@@ -1032,10 +1032,13 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 	| _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string item_t))) 
     | LEXP_field(vec,id)-> 
       let (vec',item_t,env,tag,csi,ef) = check_lexp envs false vec in
-      (match item_t.t with
+      let vec_t = match vec' with
+        | LEXP_aux(_,(l',Some((parms,t),_,_,_))) -> t
+        | _ -> item_t in
+      (match vec_t.t with
 	| Tid i | Tabbrev({t=Tid i},_) ->
 	  (match lookup_record_typ i d_env.rec_env with
-	    | None -> typ_error l ("Expected a register for this update, instead found an expression with type " ^ i)
+	    | None -> typ_error l ("Expected a register or struct for this update, instead found an expression with type " ^ i)
 	    | Some(((i,rec_kind,fields) as r)) ->
 	      let fi = id_to_string id in
 	      (match lookup_field_type fi r with
@@ -1043,7 +1046,7 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 		  typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
 		| Some((params,et),_,cs,_) ->
 		  let et,cs,ef = subst params et cs ef in
-		  (LEXP_aux(LEXP_field(vec',id),(l,(Some(([],item_t),tag,csi@cs,ef)))),et,env,tag,csi@cs,ef)))
+		  (LEXP_aux(LEXP_field(vec',id),(l,(Some(([],vec_t),tag,csi@cs,ef)))),et,env,tag,csi@cs,ef)))
 	| _ -> typ_error l ("Expected a register binding here, found " ^ (t_to_string item_t)))
 
 and check_lbind envs (LB_aux(lbind,(l,annot))) : tannot letbind * tannot emap * nexp_range list * effect =
