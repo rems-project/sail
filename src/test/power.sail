@@ -62,8 +62,8 @@ scattered function ast decode
   {
     if  mode64bit  then  M  :=  0  else  M  :=  32  ;
     if  (  ~  (  ((  BO  )[  2  ])  ))  then  CTR  :=  (  CTR  -  1  )  ;
-    ctr_ok  :=  (  ((  BO  )[  2  ])  ||  (  (  ((  CTR  )[  M  ..  63  ])  !=  0  )  ^  ((  BO  )[  3  ])  )  )  ;
-    cond_ok  :=  (  ((  BO  )[  0  ])  ||  (  ((  CR  )[  (  BI  +  32  )  ])  ^  (  ~  (  ((  BO  )[  1  ])  ))  )  )  ;
+    ctr_ok  :=  (  ((  BO  )[  2  ])  |  (  (  ((  CTR  )[  M  ..  63  ])  !=  0  )  ^  ((  BO  )[  3  ])  )  )  ;
+    cond_ok  :=  (  ((  BO  )[  0  ])  |  (  ((  CR  )[  (  BI  +  32  )  ])  ^  (  ~  (  ((  BO  )[  1  ])  ))  )  )  ;
     if  (  ctr_ok  &  cond_ok  )  then  NIA  :=  (  ((  LR  )[  0  ..  61  ])  :  0b00  )  ;
     if  LK  then  LR  :=  (  CIA  +  4  )  ;
   } 
@@ -87,7 +87,7 @@ scattered function ast decode
   OR  (  instr[11..15] (* RA *), instr[16..20] (* RB *), instr[6..10] (* RS *), instr[31] (* Rc *)  ) 
 
  function clause execute (  OR  (  RA, RB, RS, Rc  )  ) =
-  GPR[  RA  ]  :=  (  (GPR[  RS  ])  ||  (GPR[  RB  ])  ) 
+  GPR[  RA  ]  :=  (  (GPR[  RS  ])  |  (GPR[  RB  ])  ) 
 
  union ast member  bit [ 15 ] (* D *) * bit [ 4 ] (* RA *) * bit [ 4 ] (* RS *)  StoreWord 
 
