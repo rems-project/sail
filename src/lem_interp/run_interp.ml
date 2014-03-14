@@ -126,27 +126,42 @@ module Mem = struct
   *)
 end ;;
 
+let vconcat v v' = vec_concat (V_tuple [v; v']) ;;
+
 let slice v = function
   | None -> v
   | Some (n, m) -> slice_vector v n m
 ;;
 
-let vconcat v v' = vec_concat (V_tuple [v; v']) ;;
+let rec slice_ir v = function
+  | BF_single n -> slice_vector v n n
+  | BF_range (n, m) -> slice_vector v n m
+  | BF_concat (BF_aux (ir, _), BF_aux (ir', _)) -> vconcat (slice_ir v ir) (slice_ir v ir')
+;;
 
-let perform_action ((reg, mem) as env) = function
- | Read_reg ((Reg (id, _) | SubReg (id, _, _)), sub) ->
+let rec perform_action ((reg, mem) as env) = function
+ (* registers *)
+ | Read_reg (Reg (id, _), sub) ->
      slice (Reg.find id reg) sub, env
- | Read_mem (id, V_lit(L_aux((L_num n),_)), sub) ->
-     slice (Mem.find (id, n) mem) sub, env
- | Write_reg ((Reg (id, _) | SubReg (id, _, _)), None, value) ->
+ | Write_reg (Reg (id, _), None, value) ->
      V_lit (L_aux(L_unit,Interp_ast.Unknown)), (Reg.add id value reg, mem)
- | Write_reg ((Reg (id, _) | SubReg (id, _, _)), Some (start, stop), value) ->
-     (* XXX if updating a single element, wrap value into a vector -
-      * should the typechecker do that coercion for us automatically? *)
-     let value = if eq_big_int start stop then V_vector (zero_big_int, true, [value]) else value in
+ | Write_reg (Reg (id, _), Some (start, stop), (V_vector _ as value)) ->
      let old_val = Reg.find id reg in
      let new_val = fupdate_vector_slice old_val value start stop in
      V_lit (L_aux(L_unit,Interp_ast.Unknown)), (Reg.add id new_val reg, mem)
+ (* subregisters *)
+ | Read_reg (SubReg (_, Reg (id, _), BF_aux (ir, _)), sub) ->
+     slice (slice_ir (Reg.find id reg) ir) sub, env
+ | Write_reg (SubReg (_, (Reg _ as r), BF_aux (ir, _)), None, value) ->
+     (match ir with
+     | BF_single n ->
+         perform_action env (Write_reg (r, Some(n, n), value))
+     | BF_range (n, m) ->
+         perform_action env (Write_reg (r, Some(n, m), value))
+     | BF_concat _ -> failwith "unimplemented: non-contiguous register write")
+ (* memory *)
+ | Read_mem (id, V_lit(L_aux((L_num n),_)), sub) ->
+     slice (Mem.find (id, n) mem) sub, env
  | Write_mem (id, V_lit(L_aux(L_num n,_)), None, value) ->
      V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, Mem.add (id, n) value mem)
  (* multi-byte accesses to memory *)
@@ -172,13 +187,11 @@ let perform_action ((reg, mem) as env) = function
          update (succ_big_int k) mem'
      in V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, update zero_big_int mem)
  (* This case probably never happens in the POWER spec anyway *)
- | Write_mem (id, V_lit(L_aux(L_num n,_)), Some (start, stop), value) ->
-     (* XXX if updating a single element, wrap value into a vector -
-      * should the typechecker do that coercion for us automatically? *)
-     let value = if eq_big_int start stop then V_vector (zero_big_int, true, [value]) else value in
+ | Write_mem (id, V_lit(L_aux(L_num n,_)), Some (start, stop), (V_vector _ as value)) ->
      let old_val = Mem.find (id, n) mem in
      let new_val = fupdate_vector_slice old_val value start stop in
      V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, Mem.add (id, n) new_val mem)
+ (* extern functions *)
  | Call_extern (name, arg) -> eval_external name arg, env
  | _ -> assert false
 ;;
