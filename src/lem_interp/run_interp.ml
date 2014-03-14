@@ -36,6 +36,11 @@ let bitvec_to_string l = "0b" ^ (String.concat "" (List.rev_map (function
   | _ -> assert false) l))
 ;;
 
+let rec reg_to_string = function
+  | Reg (id,_) -> id_to_string id
+  | SubReg (id,r,_) -> sprintf "%s.%s" (reg_to_string r) (id_to_string id)
+;;
+
 let rec val_to_string = function
  | V_boxref(n, t) -> sprintf "boxref %d" n
  | V_lit (L_aux(l,_)) -> sprintf (*"literal %s" *) "%s" (lit_to_string l)
@@ -57,8 +62,8 @@ let rec val_to_string = function
      sprintf "record {%s}" repr
  | V_ctor (id,_, value) ->
      sprintf "constructor %s %s" (id_to_string id) (val_to_string value)
- | V_register (Reg (id,_)) ->
-     sprintf "register %s as value" (id_to_string id)
+ | V_register r ->
+     sprintf "register %s as value" (reg_to_string r)
 ;;
 
 let rec env_to_string = function
@@ -72,8 +77,6 @@ let rec stack_to_string = function
     sprintf "(Frame of %s, e, (%s), m, %s)" (id_to_string id) (env_to_string env) (stack_to_string s)
 ;;  
 
-
-let reg_to_string = function Reg (id,_) | SubReg (id,_,_) -> id_to_string id ;;
 let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%s, %s)"
   (string_of_big_int x) (string_of_big_int y)
 let act_to_string = function
