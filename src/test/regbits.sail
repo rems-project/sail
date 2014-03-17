@@ -13,7 +13,7 @@ function (bit[64]) main _ = {
   f := XER;
   (bit[7]) foo := XER[57..63];
   query := XER.SO;
-  XER.SO := bitone;
+  XER.SO := 0b1;
   XER.FOOBAR := 0b11;
   XER }
 

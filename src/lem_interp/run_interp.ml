@@ -191,6 +191,11 @@ let rec perform_action ((reg, mem) as env) = function
      let old_val = Mem.find (id, n) mem in
      let new_val = fupdate_vector_slice old_val value start stop in
      V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, Mem.add (id, n) new_val mem)
+ (* special case for slices of size 1: wrap value in a vector *)
+ | Write_reg ((Reg (_, _) as r), (Some (start, stop) as slice), value) when eq_big_int start stop ->
+     perform_action env (Write_reg (r, slice, V_vector(zero_big_int, true, [value])))
+ | Write_mem (id, (V_lit(L_aux(L_num _,_)) as n), (Some (start, stop) as slice), value) when eq_big_int start stop ->
+     perform_action env (Write_mem (id, n, slice, V_vector(zero_big_int, true, [value])))
  (* extern functions *)
  | Call_extern (name, arg) -> eval_external name arg, env
  | _ -> assert false
