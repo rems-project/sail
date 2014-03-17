@@ -1120,21 +1120,20 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 	    let franges = 
 	      List.map 
 		(fun ((BF_aux(idx,l)),id) ->
-		  let (base,climb) =
-		    match idx with
-		      | BF_single i -> 
-			if b <= i && i <= t 
-			then {nexp=Nconst i},{nexp=Nconst 0}
-			else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
-		      | BF_range(i1,i2) -> 
-			if i1<i2 
-			then if b<=i1 && i2<=t 
-			  then {nexp=Nconst i1},{nexp=Nconst (i2 - i1)}
-			  else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
-			else typ_error l ("register type declaration " ^ id' ^ " is not consistently increasing")
-		      | BF_concat _ -> assert false (* What is this supposed to imply again?*) in
 		  ((id_to_string id),
-		   Some(([],{t=Tapp("vector",[TA_nexp base;TA_nexp climb;TA_ord({order=Oinc});TA_typ({t= Tid "bit"})])}),Emp,[],pure_e)))
+		   Some(([],
+			match idx with
+			  | BF_single i -> 
+			    if b <= i && i <= t 
+			    then {t = Tid "bit"}
+			    else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
+			  | BF_range(i1,i2) -> 
+			    if i1<i2 
+			    then if b<=i1 && i2<=t 
+			      then {t=Tapp("vector",[TA_nexp {nexp=Nconst i1}; TA_nexp {nexp=Nconst (i2 - i1)}; TA_ord({order=Oinc}); TA_typ {t=Tid "bit"}])}
+			      else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
+			    else typ_error l ("register type declaration " ^ id' ^ " is not consistently increasing")
+			  | BF_concat _ -> assert false (* What is this supposed to imply again?*)),Emp,[],pure_e)))
 		ranges 
 	    in
 	    let tannot = into_register d_env (Some(([],ty),Emp,[],pure_e)) in

@@ -6,14 +6,14 @@
  }
 
 register (xer) XER
-register (bit[1]) query
+register (bit) query
 
 function (bit[64]) main _ = {
   XER := 0b010101010101010101010101010101010101010101010101010101010101001;
   f := XER;
   (bit[7]) foo := XER[57..63];
   query := XER.SO;
-  XER.SO := bitone;
+  XER.SO := 0;
   XER.FOOBAR := 0b11;
   XER }
 

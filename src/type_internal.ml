@@ -575,6 +575,22 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
 	| _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))
     | _,_ -> 
       let t',cs' = type_consistent l d_env t1 t2 in (t',cs',e))
+  | Tid("bit"),Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]) ->
+    let cs = [Eq(l,r1,{nexp = Nconst 1})] in
+    (t2,cs,E_aux(E_vector_indexed [(i,e)],(l,Some(([],t2),Emp,cs,pure_e))))    
+  | Tapp("vector",[TA_nexp ({nexp=Nconst i} as b1);TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]),Tid("bit") ->
+    let cs = [Eq(l,r1,{nexp = Nconst 1})] in
+    (t2,cs,E_aux((E_vector_access (e,(E_aux(E_lit(L_aux(L_num i,l)),(l,Some(([],{t=Tapp("enum",[TA_nexp b1;TA_nexp {nexp=Nconst 0}])}),Emp,cs,pure_e)))))),
+                 (l,Some(([],t2),Emp,cs,pure_e))))
+  | Tid("bit"),Tapp("enum",[TA_nexp b1;TA_nexp r1]) ->
+    let t',cs'= type_consistent l d_env {t=Tapp("enum",[TA_nexp{nexp=Nconst 0};TA_nexp{nexp=Nconst 1}])} t2 in
+    (t2,cs',E_aux(E_case (e,[Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_zero,l)),(l,Some(([],t1),Emp,[],pure_e))),
+					     E_aux(E_lit(L_aux(L_num 0,l)),(l,Some(([],t2),Emp,[],pure_e)))),
+				     (l,Some(([],t2),Emp,[],pure_e)));
+			     Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_one,l)),(l,Some(([],t1),Emp,[],pure_e))),
+					     E_aux(E_lit(L_aux(L_num 1,l)),(l,Some(([],t2),Emp,[],pure_e)))),
+				     (l,Some(([],t2),Emp,[],pure_e)));]),
+		  (l,Some(([],t2),Emp,[],pure_e))))    
   | Tapp("enum",[TA_nexp b1;TA_nexp r1;]),Tid("bit") ->
     let t',cs'= type_consistent l d_env t1 {t=Tapp("enum",[TA_nexp{nexp=Nconst 0};TA_nexp{nexp=Nconst 1}])} 
     in (t2,cs',E_aux(E_if(E_aux(E_app(Id_aux(Id "is_zero",l),[e]),(l,Some(([],bool_t),Emp,[],pure_e))),
