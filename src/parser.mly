@@ -431,6 +431,8 @@ atomic_pat:
     { ploc (P_vector($2)) }
   | Lsquare pat Rsquare
     { ploc (P_vector([$2])) }
+  | Lsquare Rsquare
+    { ploc (P_vector []) }
   | Lsquare npats Rsquare
     { ploc (P_vector_indexed($2)) }
   | Lparen comma_pats Rparen
@@ -507,6 +509,10 @@ atomic_exp:
     { eloc (E_tuple($2)) }
   | Lcurly exp With semi_exps Rcurly
     { eloc (E_record_update($2,$4)) } 
+  | Lsquare Rsquare
+    { eloc (E_vector([])) }
+  | Lsquare exp Rsquare
+    { eloc (E_vector([$2])) }
   | Lsquare comma_exps Rsquare
     { eloc (E_vector($2)) }
   | Lsquare exp With atomic_exp Eq exp Rsquare

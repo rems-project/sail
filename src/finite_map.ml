@@ -93,11 +93,6 @@ module Fmap_map(Key : Set.OrderedType) : Fmap
   let insert m (k,v) = M.add k v m
   let union m1 m2 = 
     M.merge (fun k v1 v2 -> match v2 with | None -> v1 | Some _ -> v2) m1 m2
-  let intersect m1 m2 = 
-    M.fold (fun k v res -> 
-      if (M.mem k m2)
-      then M.add k v res
-      else res) M.empty m1
   let merge f m1 m2 = M.merge f m1 m2
   let apply m k = 
     try
@@ -117,6 +112,11 @@ module Fmap_map(Key : Set.OrderedType) : Fmap
       None
   let iter f m = M.iter f m
   let fold f m base = M.fold (fun k v res -> f res k v) base m
+  let intersect m1 m2 = 
+    M.fold (fun k v res -> 
+      if (M.mem k m2)
+      then M.add k v res
+      else res) m1 M.empty
   let remove m k = M.remove k m
   let pp_map pp_key pp_val ppf m =
     let l = M.fold (fun k v l -> (k,v)::l) m [] in
