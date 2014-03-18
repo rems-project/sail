@@ -181,6 +181,8 @@ id:
     { idl (DeIid($3)) }
   | Lparen Deinfix Div Rparen
     { idl (DeIid($3)) }
+  | Lparen Deinfix Quot Rparen
+    { idl (DeIid("quot")) }
   | Lparen Deinfix Eq Rparen
     { Id_aux(DeIid($3),loc ()) }
   | Lparen Deinfix Excl Lparen
