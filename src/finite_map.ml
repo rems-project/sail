@@ -53,6 +53,7 @@ module type Fmap = sig
   val empty : 'a t
   val is_empty : 'a t -> bool
   val from_list : (k * 'a) list -> 'a t
+  val to_list : 'a t -> (k * 'a) list 
   val from_list2 : k list -> 'a list -> 'a t
   val insert : 'a t -> (k * 'a) -> 'a t
   (* Keys from the right argument replace those from the left *)
@@ -117,6 +118,7 @@ module Fmap_map(Key : Set.OrderedType) : Fmap
       if (M.mem k m2)
       then M.add k v res
       else res) m1 M.empty
+  let to_list m = M.fold (fun k v res -> (k,v)::res) m []
   let remove m k = M.remove k m
   let pp_map pp_key pp_val ppf m =
     let l = M.fold (fun k v l -> (k,v)::l) m [] in

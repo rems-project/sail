@@ -18,9 +18,6 @@ let typ_error l msg  =
            l
            (msg ))
 
-let resolve_constraints a = a
-let resolve_params a = a
-
 let rec field_equivs fields fmaps = 
   match fields with
     | [] -> Some []
@@ -1061,7 +1058,7 @@ and check_lbind envs (LB_aux(lbind,(l,annot))) : tannot letbind * tannot emap * 
       let t',cs' = type_consistent l d_env u t in
       let (e,t,_,cs2,ef2) = check_exp envs t' e in
       let cs = resolve_constraints cs@cs1@cs'@cs2 in
-      let tannot = resolve_params(Some((params,t),tag,cs,ef)) in
+      let tannot = check_tannot l (Some((params,t),tag,cs,ef)) cs ef (*in top level, must be pure_e*) in
       (LB_aux (LB_val_explicit(typ,pat',e),(l,tannot)),env,cs,ef)
     | None -> raise (Reporting_basic.err_unreachable l "typschm_to_tannot failed to produce a Some"))
   | LB_val_implicit(pat,e) -> 
@@ -1069,7 +1066,7 @@ and check_lbind envs (LB_aux(lbind,(l,annot))) : tannot letbind * tannot emap * 
     let (pat',env,cs1,u) = check_pattern envs (new_t ()) pat in
     let (e,t',_,cs2,ef) = check_exp envs u e in
     let cs = resolve_constraints cs1@cs2 in
-    let tannot = resolve_params(Some(([],t'),Emp,cs,ef)) in
+    let tannot = check_tannot l (Some(([],t'),Emp,cs,ef)) cs ef (* see above *) in
     (LB_aux (LB_val_implicit(pat',e),(l,tannot)), env,cs,ef)
 
 (*val check_type_def : envs -> (tannot type_def) -> (tannot type_def) envs_out*)
@@ -1213,7 +1210,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let t = typ_to_t typ in
       let p_t = new_t () in
       let ef = new_e () in
-      t,p_t,Some((ids,{t=Tfn(p_t,t,ef)}),Emp,constraints,pure_e) in
+      t,p_t,Some((ids,{t=Tfn(p_t,t,ef)}),Emp,constraints,ef) in
   let check t_env =
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,annot))) ->
@@ -1221,23 +1218,25 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
 	let u,cs = type_consistent l d_env t' param_t in
 	let exp',_,_,constraints,ef = check_exp (Env(d_env,Envmap.union t_env t_env')) ret_t exp in
 	(*let _ = (Pretty_print.pp_exp Format.std_formatter) exp' in*)
-	(FCL_aux((FCL_Funcl(id,pat',exp')),(l,tannot)),constraints'@cs@constraints)) funcls) in
+	(FCL_aux((FCL_Funcl(id,pat',exp')),(l,tannot)),((constraints'@cs@constraints),ef))) funcls) in
   match (in_env,tannot) with
     | Some(Some( (params,u),Spec,constraints,eft)), Some( (p',t),Emp,c',eft') ->
       let u,constraints,eft = subst params u constraints eft in
       let t,c',eft' = subst p' t c' eft' in
       let t',cs = type_consistent l d_env t u in
       let t_env = if is_rec then t_env else Envmap.remove t_env id in
-      let funcls,cs = check t_env in
+      let funcls,cs_ef = check t_env in
+      let cs,ef = ((fun (cses,efses) -> (List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
       let cs' = resolve_constraints cs in
-      let tannot = resolve_params tannot in
+      let tannot = check_tannot l tannot cs' ef in
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,Envmap.insert t_env (id,tannot))
     | _ , _-> 
       let t_env = if is_rec then Envmap.insert t_env (id,tannot) else t_env in
-      let funcls,cs = check t_env in
+      let funcls,cs_ef = check t_env in
+      let cs,ef = ((fun (cses,efses) -> (List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
       let cs' = resolve_constraints cs in
-      let tannot = resolve_params tannot in
+      let tannot = check_tannot l tannot cs' ef in
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,(if is_rec then t_env else Envmap.insert t_env (id,tannot)))
 

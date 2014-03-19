@@ -144,6 +144,33 @@ let lookup_field_type (field: string) ((id,r_kind,fields) : rec_env) : tannot =
   then List.assoc field fields
   else None
 
+(* eval an nexp as much as possible *)
+let rec eval_nexp n =
+  match n.nexp with
+    | Nconst i -> n
+    | Nmult(n1,n2) ->
+      (match (eval_nexp n1).nexp,(eval_nexp n2).nexp with
+	| Nconst i1, Nconst i2 -> {nexp=Nconst (i1*i2)}
+	| _,_ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const"))
+    | Nadd(n1,n2) ->
+      (match (eval_nexp n1).nexp,(eval_nexp n2).nexp with
+	| Nconst i1, Nconst i2 -> {nexp=Nconst (i1+i2)}
+	| _,_ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const"))
+    | Nneg n1 ->
+      (match (eval_nexp n1).nexp with
+	| Nconst i -> {nexp = Nconst(- i)}
+	| _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const"))
+    | N2n n1 ->
+      (match (eval_nexp n1).nexp with
+	| Nconst i ->
+	  let rec two_pow = function
+	    | 0 -> 1;
+	    | n -> 2* (two_pow n-1) in
+	  {nexp = Nconst(two_pow i)}
+	| _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const"))
+    | Nvar _ | Nuvar _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const")
+
+
 let v_count = ref 0
 let t_count = ref 0
 let n_count = ref 0
@@ -177,6 +204,25 @@ let new_e _ =
   let i = !e_count in
   e_count := i + 1;
   { effect = Euvar { eindex = i; esubst = None }}
+
+let rec fresh_var i mkr bindings =
+  let v = "v" ^ (string_of_int i) in
+  match Envmap.apply bindings v with
+  | Some _ -> fresh_var (i+1) mkr bindings
+  | None -> mkr v
+
+let fresh_tvar bindings t =
+  match t.t with
+  | Tuvar { index = i } -> fresh_var i (fun v -> t.t <- Tvar v; (v,{k=K_Typ})) bindings
+let fresh_nvar bindings n =
+  match n.nexp with
+  | Nuvar { nindex = i } -> fresh_var i (fun v -> n.nexp <- Nvar v; (v,{k=K_Nat})) bindings
+let fresh_ovar bindings o =
+  match o.order with
+  | Ouvar { oindex = i } -> fresh_var i (fun v -> o.order <- Ovar v; (v,{k=K_Ord})) bindings
+let fresh_evar bindings e =
+  match e.effect with
+  | Euvar { eindex = i } -> fresh_var i (fun v -> e.effect <- Evar v; (v,{k=K_Efct})) bindings
   
 let nat_t = {t = Tapp("enum",[TA_nexp{nexp= Nconst 0};TA_nexp{nexp = Nconst max_int};])}
 let unit_t = { t = Tid "unit" }
@@ -296,6 +342,57 @@ let subst k_env t cs e =
                               | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "substitution given an environment with a non-base-kind kind"))) k_env) 
   in
   t_subst subst_env t, cs_subst subst_env cs, e_subst subst_env e
+
+let rec t_remove_unifications s_env t =
+  match t.t with
+  | Tvar _ | Tid _-> s_env
+  | Tuvar _ -> Envmap.insert s_env (fresh_tvar s_env t)
+  | Tfn(t1,t2,e) -> e_remove_unifications (t_remove_unifications (t_remove_unifications s_env t1) t2) e
+  | Ttup(ts) -> List.fold_right (fun t s_env -> t_remove_unifications s_env t) ts s_env
+  | Tapp(i,args) -> List.fold_right (fun t s_env -> ta_remove_unifications s_env t) args s_env
+  | Tabbrev(ti,ta) -> (t_remove_unifications (t_remove_unifications s_env ti) ta)
+and ta_remove_unifications s_env ta =
+  match ta with
+  | TA_typ t -> (t_remove_unifications s_env t)
+  | TA_nexp n -> (n_remove_unifications s_env n)
+  | TA_eft e -> (e_remove_unifications s_env e)
+  | TA_ord o -> (o_remove_unifications s_env o)
+and n_remove_unifications s_env n =
+  match n.nexp with
+  | Nvar _ | Nconst _-> s_env
+  | Nuvar _ -> Envmap.insert s_env (fresh_nvar s_env n)
+  | N2n n1 | Nneg n1 -> (n_remove_unifications s_env n1)
+  | Nadd(n1,n2) | Nmult(n1,n2) -> (n_remove_unifications (n_remove_unifications s_env n1) n2)
+and o_remove_unifications s_env o =
+  match o.order with
+  | Ouvar _ -> Envmap.insert s_env (fresh_ovar s_env o)
+  | _ -> s_env
+and e_remove_unifications s_env e =
+  match e.effect with
+  | Euvar _ -> Envmap.insert s_env (fresh_evar s_env e)
+  | _ -> s_env
+
+let rec cs_subst t_env cs =
+  match cs with
+    | [] -> []
+    | Eq(l,n1,n2)::cs -> Eq(l,n_subst t_env n1,n_subst t_env n2)::(cs_subst t_env cs)
+    | GtEq(l,n1,n2)::cs -> GtEq(l,n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
+    | LtEq(l,n1,n2)::cs -> LtEq(l,n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
+    | In(l,s,ns)::cs -> InS(l,n_subst t_env {nexp=Nvar s},ns)::(cs_subst t_env cs)
+    | InS(l,n,ns)::cs -> InS(l,n_subst t_env n,ns)::(cs_subst t_env cs)
+
+let subst k_env t cs e =
+  let subst_env = Envmap.from_list
+    (List.map (fun (id,k) -> (id, 
+                              match k.k with
+                              | K_Typ -> TA_typ (new_t ())
+                              | K_Nat -> TA_nexp (new_n ())
+                              | K_Ord -> TA_ord (new_o ())
+                              | K_Efct -> TA_eft (new_e ())
+                              | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "substitution given an environment with a non-base-kind kind"))) k_env) 
+  in
+  t_subst subst_env t, cs_subst subst_env cs, e_subst subst_env e
+
 
 let rec string_of_list sep string_of = function
   | [] -> ""
@@ -634,3 +731,15 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
   | _,_ -> let t',cs = type_consistent l d_env t1 t2 in (t',cs,e)
 
 and type_coerce l d_env t1 e t2 = type_coerce_internal l d_env t1 [] e t2 []
+
+let resolve_constraints a = a
+
+
+let check_tannot l annot constraints efs = 
+  match annot with
+  | Some((params,t),tag,cs,e) -> 
+    effects_eq l efs e;
+    let params = Envmap.to_list (t_remove_unifications (Envmap.from_list params) t) in
+    Some((params,t),tag,cs,e)
+  | None -> raise (Reporting_basic.err_unreachable l "check_tannot given the place holder annotation")
+
