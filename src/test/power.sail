@@ -120,10 +120,24 @@ end ast
 
 register ast instr (* monitor decoded instructions *)
 
-function rec unit main () = {
+(* fetch-decode-execute loop *)
+function rec unit fde_loop () = {
   NIA := CIA + 4;
   instr := decode(MEM(CIA, 4));
   execute(instr);
   CIA := NIA;
-  main ()
+  fde_loop ()
+}
+
+function unit init() = {
+  (* CIA is initialiazed externally, as well as MEM *)
+
+  GPR1 := 0;
+
+
+}
+
+function unit main () = {
+  init();
+  fde_loop();
 }
