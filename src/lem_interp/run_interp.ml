@@ -30,7 +30,7 @@ let loc_to_string = function
       " to line " ^ (string_of_int tline) ^ " character " ^ (string_of_int tchar)
 ;;
 
-let bitvec_to_string l = "0b" ^ (String.concat "" (List.rev_map (function
+let bitvec_to_string l = "0b" ^ (String.concat "" (List.map (function
   | V_lit(L_aux(L_zero, _)) -> "0"
   | V_lit(L_aux(L_one, _)) -> "1"
   | _ -> assert false) l))
@@ -53,7 +53,7 @@ let rec val_to_string = function
  | V_vector (first_index, inc, l) ->
      let order = if inc then "big-endian" else "little-endian" in
      let repr =
-       try bitvec_to_string l
+       try bitvec_to_string (if inc then l else List.rev l)
        with Failure _ -> String.concat "; " (List.map val_to_string l) in
      sprintf "vector [%s] (%s, from %s)" repr order (string_of_big_int first_index)
  | V_record(_, l) ->
