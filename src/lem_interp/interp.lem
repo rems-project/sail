@@ -630,8 +630,8 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 	                  (Action (Read_reg regform Nothing) 
 	                     (Frame (id_of_string "0")
 		                (E_aux (E_id (id_of_string "0")) (Unknown, (val_annot (reg_to_t regform)))) le lm Top), lm,le)
-                        | _ -> (Value v tag,lm,le) end)
-	              (fun a -> a )
+                        | _ -> (Value v Tag_empty,lm,le) end)
+	              (fun a -> update_stack a (add_to_top_frame (fun e -> (E_aux (E_cast typ e) (l,annot)))))
  (* TODO introduce coercions to change offset of vectors *)
     | E_id id -> 
       let name = get_id id in
