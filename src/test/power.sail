@@ -15,10 +15,28 @@ register (vector <0, 63, inc, bit>) GPR12
 register (vector <0, 63, inc, bit>) GPR13
 register (vector <0, 63, inc, bit>) GPR14
 register (vector <0, 63, inc, bit>) GPR15
+register (vector <0, 63, inc, bit>) GPR16
+register (vector <0, 63, inc, bit>) GPR17
+register (vector <0, 63, inc, bit>) GPR18
+register (vector <0, 63, inc, bit>) GPR19
+register (vector <0, 63, inc, bit>) GPR20
+register (vector <0, 63, inc, bit>) GPR21
+register (vector <0, 63, inc, bit>) GPR22
+register (vector <0, 63, inc, bit>) GPR23
+register (vector <0, 63, inc, bit>) GPR24
+register (vector <0, 63, inc, bit>) GPR25
+register (vector <0, 63, inc, bit>) GPR26
+register (vector <0, 63, inc, bit>) GPR27
+register (vector <0, 63, inc, bit>) GPR28
+register (vector <0, 63, inc, bit>) GPR29
+register (vector <0, 63, inc, bit>) GPR30
+register (vector <0, 63, inc, bit>) GPR31
 
-let (vector <0, 16, inc, (register<(vector<0, 63, inc, bit>)>) >) GPR =
+let (vector <0, 32, inc, (register<(vector<0, 63, inc, bit>)>) >) GPR =
   [ GPR0, GPR1, GPR2, GPR3, GPR4, GPR5, GPR6, GPR7, GPR8, GPR9, GPR10,
-  GPR11, GPR12, GPR13, GPR14, GPR15 ]
+  GPR11, GPR12, GPR13, GPR14, GPR15, GPR16, GPR17, GPR18, GPR19, GPR20,
+  GPR21, GPR22, GPR23, GPR24, GPR25, GPR26, GPR27, GPR28, GPR29, GPR30, GPR31
+  ]
 
 register (bit[64]) NIA (* next instruction address *)
 register (bit[64]) CIA (* current instruction address *)
@@ -131,6 +149,7 @@ function unit init() = {
   (* CIA is initialiazed externally, as well as MEM *)
 
   GPR1 := 0;
+  GPR31 := 0;
 
 
 }
