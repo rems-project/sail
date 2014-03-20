@@ -251,7 +251,7 @@ let initial_typ_env =
     ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "multiply"),[],pure_e));
     ("-",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "minus"),[],pure_e));
     ("mod",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "mod"),[],pure_e));
-    ("quot",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "mod"),[],pure_e));
+    ("quot",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "quot"),[],pure_e));
     (*Type incomplete*)
     (":",Some(([("a",{k=K_Typ});("b",{k=K_Typ});("c",{k=K_Typ})],
 	       {t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "b"}])},{t=Tvar "c"},pure_e)}),External (Some "vec_concat"),[],pure_e));
@@ -271,7 +271,7 @@ let initial_typ_env =
     ("^",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_xor"),[],pure_e));
     ("&",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_and"),[],pure_e));
     ("^^",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([bit_t;nat_typ])},{t=Tvar "a"},pure_e)}),External (Some "duplicate"),[],pure_e));
-    ("<<<",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_rightshift"),[],pure_e));
+    ("<<<",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
   ]
 
 let initial_abbrev_env =
