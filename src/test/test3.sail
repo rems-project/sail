@@ -1,5 +1,7 @@
 (* a register containing nat numbers *)
 register nat dummy_reg
+(* and one containing a byte *)
+register (bit[8]) dummy_reg2
 (* a function to read from memory; wmem serves no purpose currently,
    memory-writing functions are figured out syntactically. *)
 val extern nat -> nat effect { wmem , rmem }  MEM
@@ -54,6 +56,11 @@ function nat main _ = {
   ignore(MEM_SIZE(0,2));
 
   (* extern calls *)
-  ignore(3 + 39);
-  add(5, 37);
+  dummy_reg := 3 + 39;
+  dummy_reg := add(5, 37);
+  (* casts and external calls *)
+  dummy_reg := 0b01 + 0b01;
+  dummy_reg2 := dummy_reg;               (* cast from nat to bit[8] *)
+  dummy_reg2 := dummy_reg2 + dummy_reg2; (* cast to nat for add call *)
+  dummy_reg2;                            (* cast again and return 4 *)
 }

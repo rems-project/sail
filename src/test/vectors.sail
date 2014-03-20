@@ -5,6 +5,9 @@ register (bit[32]) i
 let (bit[10]) v3 = 0b0101010111
 register (bit[10]) slice_check
 register (bit[10]) slice_check_copy
+register nat result
+
+function forall Type 'a . 'a id ( x ) = x
 
 register nat match_success
 
@@ -21,6 +24,12 @@ function bit main _ = {
 
   gpr_small[1] := v3; (*Writes to slice_check*)
   slice_check_copy := gpr_small[1];
+  (* check that cast are still inserted for function calls *)
+  result := gpr_small[1] + gpr_small[1];
+  (* idem with type inference for return type *)
+  fresh_var := gpr_small[1] + gpr_small[1];
+  (* id function call - prevents the correct cast currently *)
+  result := gpr_small[1] + id(gpr_small[1]);
  
   i := [bitzero, bitzero, bitone, bitzero];
 
