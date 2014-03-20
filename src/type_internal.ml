@@ -38,20 +38,20 @@ and nexp_aux =
   | N2n of nexp
   | Nneg of nexp (* Unary minus for representing new vector sizes after vector slicing *)
   | Nuvar of n_uvar
-and n_uvar = { nindex : int; mutable nsubst : t option }
+and n_uvar = { nindex : int; mutable nsubst : nexp option }
 and effect = { mutable effect : effect_aux }
 and effect_aux =
   | Evar of string
   | Eset of base_effect list
   | Euvar of e_uvar
-and e_uvar = { eindex : int; mutable esubst : t option }
+and e_uvar = { eindex : int; mutable esubst : effect option }
 and order = { mutable order : order_aux }
 and order_aux =
   | Ovar of string
   | Oinc
   | Odec
   | Ouvar of o_uvar
-and o_uvar = { oindex : int; mutable osubst : t option }
+and o_uvar = { oindex : int; mutable osubst : order option }
 and t_arg =
   | TA_typ of t
   | TA_nexp of nexp
@@ -89,6 +89,60 @@ type def_envs = {
  }  
 
 type exp = tannot Ast.exp
+
+let rec string_of_list sep string_of = function
+  | [] -> ""
+  | [x] -> string_of x
+  | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
+
+let rec t_to_string t = 
+  match t.t with
+    | Tid i -> i
+    | Tvar i -> i
+    | Tfn(t1,t2,e) -> (t_to_string t1) ^ " -> " ^ (t_to_string t2) ^ " effect " ^ e_to_string e
+    | Ttup(tups) -> "(" ^ string_of_list " * " t_to_string tups ^ ")"
+    | Tapp(i,args) -> i ^ "<" ^  string_of_list ", " targ_to_string args ^ ">"
+    | Tabbrev(ti,ta) -> (t_to_string ti) ^ " : " ^ (t_to_string ta)
+    | Tuvar({index = i;subst = a}) -> string_of_int i ^ "("^ (match a with | None -> "None" | Some t -> t_to_string t) ^")"
+and targ_to_string = function
+  | TA_typ t -> t_to_string t
+  | TA_nexp n -> n_to_string n
+  | TA_eft e -> e_to_string e
+  | TA_ord o -> o_to_string o
+and n_to_string n =
+  match n.nexp with
+    | Nvar i -> "'" ^ i
+    | Nconst i -> string_of_int i
+    | Nadd(n1,n2) -> (n_to_string n1) ^ " + " ^ (n_to_string n2)
+    | Nmult(n1,n2) -> (n_to_string n1) ^ " * " ^ (n_to_string n2)
+    | N2n n -> "2**" ^ (n_to_string n)
+    | Nneg n -> "-" ^ (n_to_string n)
+    | Nuvar({nindex=i;nsubst=a}) -> string_of_int i ^ "()"
+and e_to_string e = 
+  match e.effect with
+  | Evar i -> "'" ^ i
+  | Eset es -> if []=es then "pure" else "{" ^ "effects not printing" ^"}"
+  | Euvar({eindex=i;esubst=a}) -> string_of_int i ^ "()"
+and o_to_string o = 
+  match o.order with
+  | Ovar i -> "'" ^ i
+  | Oinc -> "inc"
+  | Odec -> "dec"
+  | Ouvar({oindex=i;osubst=a}) -> string_of_int i ^ "()"
+
+let tag_to_string = function
+  | Emp -> "Emp"
+  | External None -> "External" 
+  | External (Some s) -> "External " ^ s
+  | Default -> "Default"
+  | Constructor -> "Constructor"
+  | Enum -> "Enum"
+  | Spec -> "Spec"
+
+let tannot_to_string = function
+  | None -> "No tannot"
+  | Some((vars,t),tag,ncs,ef) ->
+    "Tannot: type = " ^ (t_to_string t) ^ " tag = " ^ tag_to_string tag ^ " constraints = not printing effect = " ^ e_to_string ef
 
 let rec effect_remove_dups = function
   | [] -> []
@@ -205,25 +259,147 @@ let new_e _ =
   e_count := i + 1;
   { effect = Euvar { eindex = i; esubst = None }}
 
+exception Occurs_exn of t_arg
+let rec resolve_tsubst (t : t) : t = match t.t with
+  | Tuvar({ subst=Some(t') } as u) ->
+    let t'' = resolve_tsubst t' in
+    (match t''.t with
+    | Tuvar(_) -> u.subst <- Some(t''); t''
+    | x -> t.t <- x; t)
+  | _ -> t
+let rec resolve_nsubst (n : nexp) : nexp = match n.nexp with
+  | Nuvar({ nsubst=Some(n') } as u) ->
+    let n'' = resolve_nsubst n' in
+    (match n''.nexp with
+    | Nuvar(_) -> u.nsubst <- Some(n''); n''
+    | x -> n.nexp <- x; n)
+  | _ -> n
+let rec resolve_osubst (o : order) : order = match o.order with
+  | Ouvar({ osubst=Some(o') } as u) ->
+    let o'' = resolve_osubst o' in
+    (match o''.order with
+    | Ouvar(_) -> u.osubst <- Some(o''); o''
+    | x -> o.order <- x; o)
+  | _ -> o
+let rec resolve_esubst (e : effect) : effect = match e.effect with
+  | Euvar({ esubst=Some(e') } as u) ->
+    let e'' = resolve_esubst e' in
+    (match e''.effect with
+    | Euvar(_) -> u.esubst <- Some(e''); e''
+    | x -> e.effect <- x; e)
+  | _ -> e
+
+let rec occurs_check_t (t_box : t) (t : t) : unit =
+  let t = resolve_tsubst t in
+  if t_box == t then
+    raise (Occurs_exn (TA_typ t))
+  else
+    match t.t with
+    | Tfn(t1,t2,_) ->
+      occurs_check_t t_box t1;
+      occurs_check_t t_box t2
+    | Ttup(ts) ->
+      List.iter (occurs_check_t t_box) ts
+    | Tapp(_,targs) -> List.iter (occurs_check_ta (TA_typ t_box)) targs
+    | Tabbrev(t,ta) -> occurs_check_t t_box t; occurs_check_t t_box ta
+    | _ -> ()
+and occurs_check_ta (ta_box : t_arg) (ta : t_arg) : unit =
+  match ta_box,ta with
+  | TA_typ tbox,TA_typ t -> occurs_check_t tbox t
+  | TA_nexp nbox, TA_nexp n -> occurs_check_n nbox n
+  | TA_ord obox, TA_ord o -> occurs_check_o obox o
+  | TA_eft ebox, TA_eft e -> occurs_check_e ebox e
+  | _,_ -> ()
+and occurs_check_n (n_box : nexp) (n : nexp) : unit =
+  let n = resolve_nsubst n in
+  if n_box == n then
+    raise (Occurs_exn (TA_nexp n))
+  else
+    match n.nexp with
+    | Nadd(n1,n2) | Nmult(n1,n2) -> occurs_check_n n_box n1; occurs_check_n n_box n2
+    | N2n n | Nneg n -> occurs_check_n n_box n
+    | _ -> ()
+and occurs_check_o (o_box : order) (o : order) : unit =
+  let o = resolve_osubst o in
+  if o_box == o then
+    raise (Occurs_exn (TA_ord o))
+  else ()
+and occurs_check_e (e_box : effect) (e : effect) : unit =
+  let e = resolve_esubst e in
+  if e_box == e then
+    raise (Occurs_exn (TA_eft e))
+  else ()
+
+ 
+let equate_t (t_box : t) (t : t) : unit =
+  let t = resolve_tsubst t in
+  if t_box == t then ()
+  else
+    (occurs_check_t t_box t;
+     match t.t with
+     | Tuvar(_) ->
+       (match t_box.t with
+       | Tuvar(u) ->
+         u.subst <- Some(t))
+     | _ ->
+       t_box.t <- t.t)
+let equate_n (n_box : nexp) (n : nexp) : unit =
+  let n = resolve_nsubst n in
+  if n_box == n then ()
+  else
+    (occurs_check_n n_box n;
+     match n.nexp with
+     | Nuvar(_) ->
+       (match n_box.nexp with
+       | Nuvar(u) ->
+         u.nsubst <- Some(n))
+     | _ ->
+       n_box.nexp <- n.nexp)
+let equate_o (o_box : order) (o : order) : unit =
+  let o = resolve_osubst o in
+  if o_box == o then ()
+  else
+    (occurs_check_o o_box o;
+     match o.order with
+     | Ouvar(_) ->
+       (match o_box.order with
+       | Ouvar(u) ->
+         u.osubst <- Some(o))
+     | _ ->
+       o_box.order <- o.order)
+let equate_e (e_box : effect) (e : effect) : unit =
+  let e = resolve_esubst e in
+  if e_box == e then ()
+  else
+    (occurs_check_e e_box e;
+     match e.effect with
+     | Euvar(_) ->
+       (match e_box.effect with
+       | Euvar(u) ->
+         u.esubst <- Some(e))
+     | _ ->
+       e_box.effect <- e.effect)
+
 let rec fresh_var i mkr bindings =
-  let v = "v" ^ (string_of_int i) in
+  let v = "'v" ^ (string_of_int i) in
   match Envmap.apply bindings v with
   | Some _ -> fresh_var (i+1) mkr bindings
   | None -> mkr v
 
 let fresh_tvar bindings t =
   match t.t with
-  | Tuvar { index = i } -> fresh_var i (fun v -> t.t <- Tvar v; (v,{k=K_Typ})) bindings
+  | Tuvar { index = i } -> fresh_var i (fun v -> equate_t t {t = (Tvar v)}; (v,{k=K_Typ})) bindings
 let fresh_nvar bindings n =
   match n.nexp with
-  | Nuvar { nindex = i } -> fresh_var i (fun v -> n.nexp <- Nvar v; (v,{k=K_Nat})) bindings
+  | Nuvar { nindex = i } -> fresh_var i (fun v -> equate_n n {nexp = (Nvar v)}; (v,{k=K_Nat})) bindings
 let fresh_ovar bindings o =
   match o.order with
-  | Ouvar { oindex = i } -> fresh_var i (fun v -> o.order <- Ovar v; (v,{k=K_Ord})) bindings
+  | Ouvar { oindex = i } -> fresh_var i (fun v -> equate_o o {order = (Ovar v)}; (v,{k=K_Ord})) bindings
 let fresh_evar bindings e =
   match e.effect with
-  | Euvar { eindex = i } -> fresh_var i (fun v -> e.effect <- Evar v; (v,{k=K_Efct})) bindings
+  | Euvar { eindex = i } -> fresh_var i (fun v -> equate_e e {effect = (Evar v)}; (v,{k=K_Efct})) bindings
   
+
 let nat_t = {t = Tapp("enum",[TA_nexp{nexp= Nconst 0};TA_nexp{nexp = Nconst max_int};])}
 let unit_t = { t = Tid "unit" }
 let bit_t = {t = Tid "bit" }
@@ -284,8 +460,7 @@ let rec t_subst s_env t =
   | Tvar i -> (match Envmap.apply s_env i with
                | Some(TA_typ t1) -> t1
                | _ -> t)
-  | Tuvar _ -> new_t ()
-  | Tid _ -> t
+  | Tuvar _ | Tid _ -> t
   | Tfn(t1,t2,e) -> {t =Tfn((t_subst s_env t1),(t_subst s_env t2),(e_subst s_env e)) }
   | Ttup(ts) -> { t= Ttup(List.map (t_subst s_env) ts) }
   | Tapp(i,args) -> {t= Tapp(i,List.map (ta_subst s_env) args)}
@@ -301,8 +476,7 @@ and n_subst s_env n =
   | Nvar i -> (match Envmap.apply s_env i with
                | Some(TA_nexp n1) -> n1
                | _ -> n)
-  | Nuvar _ -> new_n ()
-  | Nconst _ -> n
+  | Nuvar _ | Nconst _ -> n
   | N2n n1 -> { nexp = N2n (n_subst s_env n1) }
   | Nneg n1 -> { nexp = Nneg (n_subst s_env n1) }
   | Nadd(n1,n2) -> { nexp = Nadd(n_subst s_env n1,n_subst s_env n2) }
@@ -312,14 +486,12 @@ and o_subst s_env o =
   | Ovar i -> (match Envmap.apply s_env i with
                | Some(TA_ord o1) -> o1
                | _ -> o)
-  | Ouvar _ -> new_o ()
   | _ -> o
 and e_subst s_env e =
   match e.effect with
   | Evar i -> (match Envmap.apply s_env i with
                | Some(TA_eft e1) -> e1
                | _ -> e)
-  | Euvar _ -> new_e ()
   | _ -> e
 
 let rec cs_subst t_env cs =
@@ -393,60 +565,6 @@ let subst k_env t cs e =
   in
   t_subst subst_env t, cs_subst subst_env cs, e_subst subst_env e
 
-
-let rec string_of_list sep string_of = function
-  | [] -> ""
-  | [x] -> string_of x
-  | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
-
-let rec t_to_string t = 
-  match t.t with
-    | Tid i -> i
-    | Tvar i -> "'" ^ i
-    | Tfn(t1,t2,e) -> (t_to_string t1) ^ " -> " ^ (t_to_string t2) ^ " effect " ^ e_to_string e
-    | Ttup(tups) -> "(" ^ string_of_list " * " t_to_string tups ^ ")"
-    | Tapp(i,args) -> i ^ "<" ^  string_of_list ", " targ_to_string args ^ ">"
-    | Tabbrev(ti,ta) -> (t_to_string ti) ^ " : " ^ (t_to_string ta)
-    | Tuvar({index = i;subst = a}) -> string_of_int i ^ "()"
-and targ_to_string = function
-  | TA_typ t -> t_to_string t
-  | TA_nexp n -> n_to_string n
-  | TA_eft e -> e_to_string e
-  | TA_ord o -> o_to_string o
-and n_to_string n =
-  match n.nexp with
-    | Nvar i -> "'" ^ i
-    | Nconst i -> string_of_int i
-    | Nadd(n1,n2) -> (n_to_string n1) ^ " + " ^ (n_to_string n2)
-    | Nmult(n1,n2) -> (n_to_string n1) ^ " * " ^ (n_to_string n2)
-    | N2n n -> "2**" ^ (n_to_string n)
-    | Nneg n -> "-" ^ (n_to_string n)
-    | Nuvar({nindex=i;nsubst=a}) -> string_of_int i ^ "()"
-and e_to_string e = 
-  match e.effect with
-  | Evar i -> "'" ^ i
-  | Eset es -> if []=es then "pure" else "{" ^ "effects not printing" ^"}"
-  | Euvar({eindex=i;esubst=a}) -> string_of_int i ^ "()"
-and o_to_string o = 
-  match o.order with
-  | Ovar i -> "'" ^ i
-  | Oinc -> "inc"
-  | Odec -> "dec"
-  | Ouvar({oindex=i;osubst=a}) -> string_of_int i ^ "()"
-
-let tag_to_string = function
-  | Emp -> "Emp"
-  | External None -> "External" 
-  | External (Some s) -> "External " ^ s
-  | Default -> "Default"
-  | Constructor -> "Constructor"
-  | Enum -> "Enum"
-  | Spec -> "Spec"
-
-let tannot_to_string = function
-  | None -> "No tannot"
-  | Some((vars,t),tag,ncs,ef) ->
-    "Tannot: type = " ^ (t_to_string t) ^ " tag = " ^ tag_to_string tag ^ " constraints = not printing effect = " ^ e_to_string ef
 
 let rec t_to_typ t =
   Typ_aux (
@@ -537,8 +655,8 @@ let effect_sort = List.sort compare_effect
 let order_eq l o1 o2 = 
   match (o1.order,o2.order) with 
   | (Oinc,Oinc) | (Odec,Odec) | (Oinc,Ovar _) | (Odec,Ovar _) -> o2
-  | (_,Ouvar i) -> o2.order <- o1.order; o2
-  | (Ouvar i,_) -> o1.order <- o2.order; o2
+  | (Ouvar i,_) -> equate_o o1 o2; o2
+  | (_,Ouvar i) -> equate_o o2 o1; o2
   | (Ovar v1,Ovar v2) -> if v1=v2 then o2 else eq_error l ("Order variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
   | (Oinc,Odec) | (Odec,Oinc) -> eq_error l "Order mismatch of inc and dec"
   | (Ovar v1,Oinc) -> eq_error l ("Polymorphic order " ^ v1 ^ " cannot be used where inc is expected")
@@ -548,8 +666,8 @@ let order_eq l o1 o2 =
 let effects_eq l e1 e2 =
   match e1.effect,e2.effect with
   | Eset _ , Evar _ -> e2
-  | Euvar i,_ -> e1.effect <- e2.effect; e2
-  | _,Euvar i -> e2.effect <- e1.effect; e2
+  | Euvar i,_ -> equate_e e1 e2; e2
+  | _,Euvar i -> equate_e e2 e1; e2
   | Eset es1,Eset es2 -> if ( effect_sort es1 = effect_sort es2 ) then e2 else eq_error l ("Effects must be the same") (*Print out both effect lists?*)
   | Evar v1, Evar v2 -> if v1 = v2 then e2 else eq_error l ("Effect variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
   | Evar v1, Eset _ -> eq_error l ("Effect variable " ^ v1 ^ " cannot be used where a concrete set of effects is specified")
@@ -563,8 +681,8 @@ let rec nexp_eq n1 n2 =
   | Nmult(nl1,nl2), Nmult(nr1,nr2) -> nexp_eq nl1 nr1 && nexp_eq nl2 nr2
   | N2n n,N2n n2 -> nexp_eq n n2
   | Nneg n,Nneg n2 -> nexp_eq n n2
-  | Nuvar _, n -> n1.nexp <- n2.nexp; true
-  | n,Nuvar _ -> n2.nexp <- n1.nexp; true
+  | Nuvar _, n -> equate_n n1 n2; true
+  | n,Nuvar _ -> equate_n n2 n1; true
   | _,_ -> false
 
 (*Is checking for structural equality amongst the types, building constraints for kind Nat. 
@@ -597,8 +715,8 @@ let rec type_consistent_internal l d_env t1 cs1 t2 cs2 =
     (t2,cs1@cs2@cin@cout)
   | Ttup t1s, Ttup t2s ->
     (t2,cs1@cs2@(List.flatten (List.map snd (List.map2 (type_consistent l d_env) t1s t2s))))
-  | Tuvar _, t -> t1.t <- t2.t; (t2,cs1@cs2)
-  | t,Tuvar _ -> t2.t <- t1.t; (t2,cs1@cs2)
+  | Tuvar _, t -> equate_t t1 t2; (t1,cs1@cs2)
+  | t,Tuvar _ -> equate_t t2 t1; (t2,cs1@cs2)
   | _,_ -> eq_error l ("Type mismatch found " ^ (t_to_string t1) ^ " but expected a " ^ (t_to_string t2))
 
 and type_arg_eq l d_env ta1 ta2 = 

@@ -183,10 +183,10 @@ let rec check_pattern envs expect_t (P_aux(p,(l,annot))) : ((tannot pat) * (tann
 				  TA_ord{order = Oinc};TA_typ{t = Tid"bit"}])},lit
 	  | L_string s -> {t = Tid "string"},lit
 	  | L_undef -> typ_error l' "Cannot pattern match on undefined") in
-      (P_aux(P_lit(L_aux(lit,l')),(l,Some(([],t),Emp,[],pure_e))),Envmap.empty,[],t)
+      let t',cs = type_consistent l d_env t expect_t in
+      (P_aux(P_lit(L_aux(lit,l')),(l,Some(([],t),Emp,cs,pure_e))),Envmap.empty,[],t)
     | P_wild -> 
-      let t = new_t () in
-      (P_aux(p,(l,Some(([],t),Emp,[],pure_e))),Envmap.empty,[],t)
+      (P_aux(p,(l,Some(([],expect_t),Emp,[],pure_e))),Envmap.empty,[],expect_t)
     | P_as(pat,id) ->
       let (pat',env,constraints,t) = check_pattern envs expect_t pat in
       let tannot = Some(([],t),Emp,[],pure_e) in
@@ -194,12 +194,11 @@ let rec check_pattern envs expect_t (P_aux(p,(l,annot))) : ((tannot pat) * (tann
     | P_typ(typ,pat) -> 
       let t = typ_to_t typ in
       let (pat',env,constraints,u) = check_pattern envs t pat in
-      let (t',constraint') = type_consistent l d_env u t in
+      let (t',constraint') = type_consistent l d_env u t in (*TODO: This should be a no-op now, should check*)
       (P_aux(P_typ(typ,pat'),(l,Some(([],t'),Emp,[],pure_e))),env,constraints@constraint',t)
     | P_id id -> 
-      let t = new_t () in
-      let tannot = Some(([],t),Emp,[],pure_e) in
-      (P_aux(p,(l,tannot)),Envmap.from_list [(id_to_string id,tannot)],[],t)
+      let tannot = Some(([],expect_t),Emp,[],pure_e) in
+      (P_aux(p,(l,tannot)),Envmap.from_list [(id_to_string id,tannot)],[],expect_t)
     | P_app(id,pats) -> 
       let i = id_to_string id in
       (match Envmap.apply t_env i with
@@ -207,20 +206,24 @@ let rec check_pattern envs expect_t (P_aux(p,(l,annot))) : ((tannot pat) * (tann
 	| Some(Some((params,t),Constructor,constraints,eft)) -> 
           let t,constraints,_ = subst params t constraints eft in
 	  (match t.t with
-	    | Tid id -> if pats = [] then 
-		(P_aux(p,(l,Some((params,t),Constructor,constraints,pure_e))),Envmap.empty,constraints,t)
+	    | Tid id -> if pats = [] then
+                let t',constraints' = type_consistent l d_env t expect_t in
+		(P_aux(p,(l,Some(([],t'),Constructor,constraints,pure_e))),Envmap.empty,constraints@constraints',t')
 	      else typ_error l ("Constructor " ^ i ^ " does not expect arguments")
 	    | Tfn(t1,t2,ef) ->
               (match pats with
-              | [] -> let t' = type_consistent l d_env unit_t t1 in
-                      (P_aux(P_app(id,[]),(l,Some(([],t2),Constructor,constraints,pure_e))),Envmap.empty,constraints,t2)
+              | [] -> let _ = type_consistent l d_env unit_t t1 in
+                      let t',constraints' = type_consistent l d_env t2 expect_t in
+                      (P_aux(P_app(id,[]),(l,Some(([],t'),Constructor,constraints,pure_e))),Envmap.empty,constraints@constraints',t')
               | [p] -> let (p',env,constraints,u) = check_pattern envs t1 p in
-                       let (t',constraint') = type_consistent l d_env u t1 in
-                           (P_aux(P_app(id,[p']),(l,Some(([],t2),Constructor,constraints,pure_e))),env,constraints@constraint',t2)
+                       let (t1',constraint') = type_consistent l d_env u t1 in (*TODO This should be a no-op now, should check *)
+                       let t',constraints' = type_consistent l d_env t2 expect_t in
+                       (P_aux(P_app(id,[p']),(l,Some(([],t'),Constructor,constraints,pure_e))),env,constraints@constraint'@constraints',t')
               | pats -> let ((P_aux(P_tup(pats'),_)),env,constraints,u) = 
 		          check_pattern envs t1 (P_aux(P_tup(pats),(l,annot))) in
-	                let (t',constraint') = type_consistent l d_env u t1 in
-	                (P_aux(P_app(id,pats'),(l,Some(([],t2),Constructor,constraints,pure_e))),env,constraint'@constraints,t2))
+	                let (t1',constraint') = type_consistent l d_env u t1 in (*TODO This should be a no-op now, should check *)
+                        let t',constraints' = type_consistent l d_env t2 expect_t in
+	                (P_aux(P_app(id,pats'),(l,Some(([],t'),Constructor,constraints,pure_e))),env,constraint'@constraints@constraints',t'))
 	    | _ -> typ_error l ("Identifier " ^ i ^ " is not bound to a constructor"))
 	| Some(Some((params,t),tag,constraints,eft)) -> typ_error l ("Identifier " ^ i ^ " used in pattern is not a constructor"))
     | P_record(fpats,_) -> 
@@ -240,9 +243,10 @@ let rec check_pattern envs expect_t (P_aux(p,(l,annot))) : ((tannot pat) * (tann
 	  let env = List.fold_right (fun (_,env,_) env' -> Envmap.union env env') pat_checks Envmap.empty in
 	  let constraints = List.fold_right (fun (_,_,cs) cons -> cs@cons) pat_checks [] in
 	  let t = {t=Tid id} in
-	  (P_aux((P_record(pats',false)),(l,Some(([],t),Emp,constraints,pure_e))),env,constraints,t))
+          let t',cs' = type_consistent l d_env t expect_t in
+	  (P_aux((P_record(pats',false)),(l,Some(([],t'),Emp,constraints@cs',pure_e))),env,constraints@cs',t'))
     | P_vector pats -> 
-      let item_t = match expect_t.t with
+      let item_t = match expect_t.t with (*TODO check for abbrev, throw error if not a vector or tuvar*)
 	| Tapp("vector",[b;r;o;TA_typ i]) -> i
 	| _ -> new_t () in
       let (pats',ts,t_envs,constraints) = 
@@ -1215,8 +1219,10 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,annot))) ->
 	let (pat',t_env',constraints',t') = check_pattern (Env(d_env,t_env)) param_t pat in
+        (*let _ = Printf.printf "about to check that %s and %s are consistent\n" (t_to_string t') (t_to_string param_t) in*)
 	let u,cs = type_consistent l d_env t' param_t in
 	let exp',_,_,constraints,ef = check_exp (Env(d_env,Envmap.union t_env t_env')) ret_t exp in
+        (*let _ = Printf.printf "checked function %s : %s,%s -> %s\n" (id_to_string id) (t_to_string t') (t_to_string param_t) (t_to_string ret_t) in *)
 	(*let _ = (Pretty_print.pp_exp Format.std_formatter) exp' in*)
 	(FCL_aux((FCL_Funcl(id,pat',exp')),(l,tannot)),((constraints'@cs@constraints),ef))) funcls) in
   match (in_env,tannot) with
