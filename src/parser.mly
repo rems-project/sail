@@ -111,7 +111,11 @@ let make_vector_sugar_bounded is_inc typ typ1 typ2 =
     else make_r typ2 typ1,ATyp_dec in
   ATyp_app(Id_aux(Id("vector"),Unknown),[typ1;rise;ATyp_aux(ord,Unknown);typ])
 let make_vector_sugar typ typ1 =
-  make_vector_sugar_bounded true typ (ATyp_aux(ATyp_constant(0),Unknown)) typ1
+  let sub_one = match typ1 with
+    | ATyp_aux(ATyp_constant t,l) -> ATyp_aux(ATyp_constant (t-1),l)
+    | ATyp_aux(_, l) -> ATyp_aux (ATyp_sum (typ1,
+    ATyp_aux(ATyp_neg(ATyp_aux(ATyp_constant 1,Unknown)), Unknown)), l) in
+  make_vector_sugar_bounded true typ (ATyp_aux(ATyp_constant(0),Unknown)) sub_one
 
 %}
 
