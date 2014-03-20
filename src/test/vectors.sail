@@ -10,6 +10,7 @@ register nat result
 function forall Type 'a . 'a id ( x ) = x
 
 register nat match_success
+register nat add_check
 
 let (vector<0,3,inc,(register<(bit[10])>)>) gpr_small = [slice_check,slice_check,slice_check]
 
@@ -31,6 +32,8 @@ function bit main _ = {
   (* id function call - prevents the correct cast currently *)
   result := gpr_small[1] + id(gpr_small[1]);
  
+  add_check := gpr_small[2] + 3;
+
   i := [bitzero, bitzero, bitone, bitzero];
 
   (* literal match *)
