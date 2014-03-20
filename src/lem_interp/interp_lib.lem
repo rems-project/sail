@@ -51,7 +51,7 @@ let rec add (V_tuple args) = match args with
       (* XXX how shall I decide this? max? max+1? *)
       let len = max (List.length l) (List.length l') in
       (* XXX assume d = d' *)
-      (if d then to_vec_inc else to_vec_dec) len (V_lit (L_aux (L_num (x+y)) lx))
+      V_lit (L_aux (L_num (x+y)) lx)
   (* integer case *)
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (x+y)) lx)
   | [(V_lit(L_aux (L_num _) _) as n); (V_vector _ d l as v)] ->
