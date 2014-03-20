@@ -196,11 +196,6 @@ let rec perform_action ((reg, mem) as env) = function
      perform_action env (Write_reg (r, slice, V_vector(zero_big_int, true, [value])))
  | Write_mem (id, (V_lit(L_aux(L_num _,_)) as n), (Some (start, stop) as slice), value) when eq_big_int start stop ->
      perform_action env (Write_mem (id, n, slice, V_vector(zero_big_int, true, [value])))
- (* XXX work-around missing cast *)
- | Write_mem (id, V_tuple (((V_vector (m, true, vs)) as v) :: l), sub, value) ->
-    perform_action env (Write_mem (id, V_tuple ((to_num_inc v) :: l), sub, value))
- | Read_mem (id, V_tuple (((V_vector (m, true, vs)) as v) :: l), sub) ->
-    perform_action env (Read_mem (id, V_tuple ((to_num_inc v) :: l), sub))
  (* extern functions *)
  | Call_extern (name, arg) -> eval_external name arg, env
  | _ -> assert false

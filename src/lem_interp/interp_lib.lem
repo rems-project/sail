@@ -44,33 +44,7 @@ let to_vec_dec len (V_lit(L_aux (L_num n) ln)) =
   V_vector 0 false (map bool_to_bit l) ;;
 
 let rec add (V_tuple args) = match args with
-  (* vector case *)
-  | [(V_vector _ d l as v); (V_vector _ d' l' as v')] ->
-      let (V_lit (L_aux (L_num x) lx)) = (if d then to_num_inc else to_num_dec) v in
-      let (V_lit (L_aux (L_num y) ly)) = (if d' then to_num_inc else to_num_dec) v' in
-      (* XXX how shall I decide this? max? max+1? *)
-      let len = max (List.length l) (List.length l') in
-      (* XXX assume d = d' *)
-      V_lit (L_aux (L_num (x+y)) lx)
-  (* integer case *)
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (x+y)) lx)
-  | [(V_lit(L_aux (L_num _) _) as n); (V_vector _ d l as v)] ->
-      let len = List.length l in
-      add (V_tuple [(if d then to_vec_inc else to_vec_dec) len n; v])
-  | [(V_vector _ d l as v); (V_lit(L_aux (L_num _) _) as n)] ->
-      let len = List.length l in
-      add (V_tuple [v; (if d then to_vec_inc else to_vec_dec) len n])
-  (* assume other literals are L_bin or L_hex, ie. vectors *)
-  | [(V_lit (L_aux L_zero _) as l); x] ->
-      add (V_tuple [V_vector 0 true [l]; x])
-  | [(V_lit (L_aux L_one _) as l); x] ->
-      add (V_tuple [V_vector 0 true [l]; x])
-  | [x; (V_lit (L_aux L_zero _) as l)] ->
-      add (V_tuple [x; V_vector 0 true [l]])
-  | [x; (V_lit (L_aux L_one _) as l)] ->
-      add (V_tuple [x; V_vector 0 true [l]])
-  | [V_lit l; x ] -> add (V_tuple [litV_to_vec l; x])
-  | [ x ; V_lit l ] -> add (V_tuple [x; litV_to_vec l])
   end ;;
 
 let rec vec_concat (V_tuple args) = match args with

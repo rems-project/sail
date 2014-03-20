@@ -1,7 +1,4 @@
 
-(* XXX sign extension *)
-function forall Type 'a . 'a exts ( x ) = x
-
 register (vector <0, 63, inc, bit>) GPR0
 register (vector <0, 63, inc, bit>) GPR1
 register (vector <0, 63, inc, bit>) GPR2
@@ -50,7 +47,7 @@ scattered function ast decode
 
  function clause execute (  AddImmediate  (  RA, RT, SI  )  ) =
   {
-    if  (  RA  ==  0  )  then  GPR[  RT  ]  :=  (  exts  (  SI  ))  else  GPR[  RT  ]  :=  (  (GPR[  RA  ])  +  (  exts  (  SI  ))  )  ;
+    if  (  RA  ==  0  )  then  GPR[  RT  ]  :=  (  (  SI  ))  else  GPR[  RT  ]  :=  (  (GPR[  RA  ])  +  (  (  SI  ))  )  ;
   } 
 
  union ast member  bit [ 1 ] (* BH *) * bit [ 4 ] (* BI *) * bit [ 4 ] (* BO *) * bit (* LK *)  BranchConditionaltoLinkRegister 
@@ -77,7 +74,7 @@ scattered function ast decode
  function clause execute (  LoadWordandZero  (  D, RA, RT  )  ) =
   {
     if  (  RA  ==  0  )  then  b  :=  0  else  b  :=  (GPR[  RA  ])  ;
-    EA  :=  (  b  +  (  exts  (  D  ))  )  ;
+    EA  :=  (  b  +  (  (  D  ))  )  ;
     GPR[  RT  ]  :=  (  0b00000000000000000000000000000000  :  MEM(  EA  ,   4  )  )  ;
   } 
 
@@ -96,8 +93,9 @@ scattered function ast decode
 
  function clause execute (  StoreWord  (  D, RA, RS  )  ) =
   {
+    (bit[64]) b := 0;
     if  (  RA  ==  0  )  then  b  :=  0  else  b  :=  (GPR[  RA  ])  ;
-    EA  :=  (  b  +  (  exts  (  D  ))  )  ;
+    EA  :=  (  b  +  (  (  D  ))  )  ;
     MEM(  EA  ,   4  )  :=  ((  (GPR[  RS  ])  )[  32  ..  63  ])  ;
   } 
 
@@ -108,7 +106,7 @@ scattered function ast decode
 
  function clause execute (  StoreWordwithUpdate  (  D, RA, RS  )  ) =
   {
-    EA  :=  (  (GPR[  RA  ])  +  (  exts  (  D  ))  )  ;
+    EA  :=  (  (GPR[  RA  ])  +  (  (  D  ))  )  ;
     MEM(  EA  ,   4  )  :=  ((  (GPR[  RS  ])  )[  32  ..  63  ])  ;
     GPR[  RA  ]  :=  EA  ;
   } 
