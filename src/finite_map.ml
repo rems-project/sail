@@ -58,8 +58,13 @@ module type Fmap = sig
   val insert : 'a t -> (k * 'a) -> 'a t
   (* Keys from the right argument replace those from the left *)
   val union : 'a t -> 'a t -> 'a t
+  (* Function merges the stored value when a key is in the right and the left map *)
+  val union_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   val intersect : 'a t -> 'a t -> 'a t
+  (* Function merges the stored values for shared keys *)
+  val intersect_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   val big_union : 'a t list -> 'a t
+  val big_union_merge : ('a -> 'a -> 'a) -> 'a t list -> 'a t
   val merge : (k -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
   val apply : 'a t -> k -> 'a option
   val in_dom : k -> 'a t -> bool
@@ -94,6 +99,12 @@ module Fmap_map(Key : Set.OrderedType) : Fmap
   let insert m (k,v) = M.add k v m
   let union m1 m2 = 
     M.merge (fun k v1 v2 -> match v2 with | None -> v1 | Some _ -> v2) m1 m2
+  let union_merge f m1 m2 =
+    M.merge (fun k v1 v2 -> 
+      match v1,v2 with 
+	| None,None -> None
+	| None,Some v | Some v,None -> Some v
+	| Some v1, Some v2 -> Some (f v1 v2)) m1 m2
   let merge f m1 m2 = M.merge f m1 m2
   let apply m k = 
     try
@@ -118,6 +129,11 @@ module Fmap_map(Key : Set.OrderedType) : Fmap
       if (M.mem k m2)
       then M.add k v res
       else res) m1 M.empty
+  let intersect_merge f m1 m2 = 
+    M.fold (fun k v res -> 
+      match (apply m2 k) with
+	| None -> res
+	| Some v2 -> M.add k (f v v2) res) m1 M.empty
   let to_list m = M.fold (fun k v res -> (k,v)::res) m []
   let remove m k = M.remove k m
   let pp_map pp_key pp_val ppf m =
@@ -130,6 +146,7 @@ module Fmap_map(Key : Set.OrderedType) : Fmap
                 pp_val v))
         l
   let big_union l = List.fold_left union empty l
+  let big_union_merge f l = List.fold_left (union_merge f) empty l
   let domains_disjoint maps =
     match D.duplicates (List.concat (List.map (fun m -> List.map fst (M.bindings m)) maps)) with
       | D.No_dups _ -> true

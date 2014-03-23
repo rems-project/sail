@@ -59,7 +59,8 @@ and t_arg =
   | TA_ord of order 
 
 type tag =
-  | Emp
+  | Emp_local
+  | Emp_global
   | External of string option
   | Default
   | Constructor
@@ -131,7 +132,8 @@ and o_to_string o =
   | Ouvar({oindex=i;osubst=a}) -> string_of_int i ^ "()"
 
 let tag_to_string = function
-  | Emp -> "Emp"
+  | Emp_local -> "Emp_local"
+  | Emp_global -> "Emp_global"
   | External None -> "External" 
   | External (Some s) -> "External " ^ s
   | Default -> "Default"
@@ -260,7 +262,9 @@ let new_e _ =
   { effect = Euvar { eindex = i; esubst = None }}
 
 exception Occurs_exn of t_arg
-let rec resolve_tsubst (t : t) : t = match t.t with
+let rec resolve_tsubst (t : t) : t = 
+  (*let _ = Printf.printf "resolve_tsubst on %s\n" (t_to_string t) in*)
+  match t.t with
   | Tuvar({ subst=Some(t') } as u) ->
     let t'' = resolve_tsubst t' in
     (match t''.t with
@@ -340,7 +344,8 @@ let equate_t (t_box : t) (t : t) : unit =
      | Tuvar(_) ->
        (match t_box.t with
        | Tuvar(u) ->
-         u.subst <- Some(t))
+         u.subst <- Some(t)
+       | _ -> assert false)
      | _ ->
        t_box.t <- t.t)
 let equate_n (n_box : nexp) (n : nexp) : unit =
@@ -352,7 +357,8 @@ let equate_n (n_box : nexp) (n : nexp) : unit =
      | Nuvar(_) ->
        (match n_box.nexp with
        | Nuvar(u) ->
-         u.nsubst <- Some(n))
+         u.nsubst <- Some(n)
+       | _ -> assert false)
      | _ ->
        n_box.nexp <- n.nexp)
 let equate_o (o_box : order) (o : order) : unit =
@@ -364,7 +370,8 @@ let equate_o (o_box : order) (o : order) : unit =
      | Ouvar(_) ->
        (match o_box.order with
        | Ouvar(u) ->
-         u.osubst <- Some(o))
+         u.osubst <- Some(o)
+       | _ -> assert false)
      | _ ->
        o_box.order <- o.order)
 let equate_e (e_box : effect) (e : effect) : unit =
@@ -376,7 +383,8 @@ let equate_e (e_box : effect) (e : effect) : unit =
      | Euvar(_) ->
        (match e_box.effect with
        | Euvar(u) ->
-         u.esubst <- Some(e))
+         u.esubst <- Some(e)
+       | _ -> assert false)
      | _ ->
        e_box.effect <- e.effect)
 
@@ -386,19 +394,54 @@ let rec fresh_var i mkr bindings =
   | Some _ -> fresh_var (i+1) mkr bindings
   | None -> mkr v
 
-let fresh_tvar bindings t =
+let rec fresh_tvar bindings t =
   match t.t with
-  | Tuvar { index = i } -> fresh_var i (fun v -> equate_t t {t = (Tvar v)}; (v,{k=K_Typ})) bindings
-let fresh_nvar bindings n =
+  | Tuvar { index = i;subst = None } -> 
+    fresh_var i (fun v -> equate_t t {t=Tvar v};Some (v,{k=K_Typ})) bindings
+  | Tuvar { index = i; subst = Some ({t = Tuvar _} as t') } ->
+    let kv = fresh_tvar bindings t' in
+    equate_t t t';
+    kv
+  | Tuvar { index = i; subst = Some t' } ->
+    t.t <- t'.t;
+    None
+  | _ -> None
+let rec fresh_nvar bindings n =
   match n.nexp with
-  | Nuvar { nindex = i } -> fresh_var i (fun v -> equate_n n {nexp = (Nvar v)}; (v,{k=K_Nat})) bindings
-let fresh_ovar bindings o =
+    | Nuvar { nindex = i;nsubst = None } -> 
+      fresh_var i (fun v -> equate_n n {nexp = (Nvar v)}; Some(v,{k=K_Nat})) bindings
+    | Nuvar { nindex = i; nsubst = Some({nexp=Nuvar _} as n')} ->
+      let kv = fresh_nvar bindings n' in
+      equate_n n n';
+      kv
+    | Nuvar { nindex = i; nsubst = Some n' } ->
+      n.nexp <- n'.nexp;
+      None
+    | _ -> None
+let rec fresh_ovar bindings o =
   match o.order with
-  | Ouvar { oindex = i } -> fresh_var i (fun v -> equate_o o {order = (Ovar v)}; (v,{k=K_Ord})) bindings
-let fresh_evar bindings e =
+    | Ouvar { oindex = i;osubst = None } -> 
+      fresh_var i (fun v -> equate_o o {order = (Ovar v)}; Some(v,{k=K_Nat})) bindings
+    | Ouvar { oindex = i; osubst = Some({order=Ouvar _} as o')} ->
+      let kv = fresh_ovar bindings o' in
+      equate_o o o';
+      kv
+    | Ouvar { oindex = i; osubst = Some o' } ->
+      o.order <- o'.order;
+      None
+    | _ -> None
+let rec fresh_evar bindings e =
   match e.effect with
-  | Euvar { eindex = i } -> fresh_var i (fun v -> equate_e e {effect = (Evar v)}; (v,{k=K_Efct})) bindings
-  
+    | Euvar { eindex = i;esubst = None } -> 
+      fresh_var i (fun v -> equate_e e {effect = (Evar v)}; Some(v,{k=K_Nat})) bindings
+    | Euvar { eindex = i; esubst = Some({effect=Euvar _} as e')} ->
+      let kv = fresh_evar bindings e' in
+      equate_e e e';
+      kv
+    | Euvar { eindex = i; esubst = Some e' } ->
+      e.effect <- e'.effect;
+      None
+    | _ -> None
 
 let nat_t = {t = Tapp("enum",[TA_nexp{nexp= Nconst 0};TA_nexp{nexp = Nconst max_int};])}
 let unit_t = { t = Tid "unit" }
@@ -452,15 +495,17 @@ let initial_typ_env =
 
 let initial_abbrev_env =
   Envmap.from_list [
-    ("nat",Some(([],nat_t),Emp,[],pure_e));
+    ("nat",Some(([],nat_t),Emp_global,[],pure_e));
   ]
 
 let rec t_subst s_env t =
+  (*let _ = Printf.printf "Calling t_subst on %s\n" (t_to_string t) in*)
   match t.t with
   | Tvar i -> (match Envmap.apply s_env i with
                | Some(TA_typ t1) -> t1
                | _ -> t)
-  | Tuvar _ | Tid _ -> t
+  | Tuvar _  -> new_t()
+  | Tid _ -> t
   | Tfn(t1,t2,e) -> {t =Tfn((t_subst s_env t1),(t_subst s_env t2),(e_subst s_env e)) }
   | Ttup(ts) -> { t= Ttup(List.map (t_subst s_env) ts) }
   | Tapp(i,args) -> {t= Tapp(i,List.map (ta_subst s_env) args)}
@@ -476,7 +521,8 @@ and n_subst s_env n =
   | Nvar i -> (match Envmap.apply s_env i with
                | Some(TA_nexp n1) -> n1
                | _ -> n)
-  | Nuvar _ | Nconst _ -> n
+  | Nuvar _ -> new_n()
+  | Nconst _ -> n
   | N2n n1 -> { nexp = N2n (n_subst s_env n1) }
   | Nneg n1 -> { nexp = Nneg (n_subst s_env n1) }
   | Nadd(n1,n2) -> { nexp = Nadd(n_subst s_env n1,n_subst s_env n2) }
@@ -486,12 +532,14 @@ and o_subst s_env o =
   | Ovar i -> (match Envmap.apply s_env i with
                | Some(TA_ord o1) -> o1
                | _ -> o)
+  | Ouvar _ -> new_o ()
   | _ -> o
 and e_subst s_env e =
   match e.effect with
   | Evar i -> (match Envmap.apply s_env i with
                | Some(TA_eft e1) -> e1
                | _ -> e)
+  | Euvar _ -> new_e ()
   | _ -> e
 
 let rec cs_subst t_env cs =
@@ -518,7 +566,9 @@ let subst k_env t cs e =
 let rec t_remove_unifications s_env t =
   match t.t with
   | Tvar _ | Tid _-> s_env
-  | Tuvar _ -> Envmap.insert s_env (fresh_tvar s_env t)
+  | Tuvar _ -> (match fresh_tvar s_env t with
+      | Some ks -> Envmap.insert s_env ks
+      | None -> s_env)
   | Tfn(t1,t2,e) -> e_remove_unifications (t_remove_unifications (t_remove_unifications s_env t1) t2) e
   | Ttup(ts) -> List.fold_right (fun t s_env -> t_remove_unifications s_env t) ts s_env
   | Tapp(i,args) -> List.fold_right (fun t s_env -> ta_remove_unifications s_env t) args s_env
@@ -532,16 +582,22 @@ and ta_remove_unifications s_env ta =
 and n_remove_unifications s_env n =
   match n.nexp with
   | Nvar _ | Nconst _-> s_env
-  | Nuvar _ -> Envmap.insert s_env (fresh_nvar s_env n)
+  | Nuvar _ -> (match fresh_nvar s_env n with
+      | Some ks -> Envmap.insert s_env ks
+      | None -> s_env)
   | N2n n1 | Nneg n1 -> (n_remove_unifications s_env n1)
   | Nadd(n1,n2) | Nmult(n1,n2) -> (n_remove_unifications (n_remove_unifications s_env n1) n2)
 and o_remove_unifications s_env o =
   match o.order with
-  | Ouvar _ -> Envmap.insert s_env (fresh_ovar s_env o)
+  | Ouvar _ -> (match fresh_ovar s_env o with
+      | Some ks -> Envmap.insert s_env ks
+      | None -> s_env)
   | _ -> s_env
 and e_remove_unifications s_env e =
   match e.effect with
-  | Euvar _ -> Envmap.insert s_env (fresh_evar s_env e)
+  | Euvar _ -> (match fresh_evar s_env e with
+      | Some ks -> Envmap.insert s_env ks
+      | None -> s_env)
   | _ -> s_env
 
 let rec cs_subst t_env cs =
@@ -567,13 +623,14 @@ let subst k_env t cs e =
 
 
 let rec t_to_typ t =
-  Typ_aux (
-   (match t.t with
-    | Tid i -> Typ_id (Id_aux((Id i), Parse_ast.Unknown))
-    | Tvar i -> Typ_var (Kid_aux((Var i),Parse_ast.Unknown)) 
-    | Tfn(t1,t2,e) -> Typ_fn (t_to_typ t1, t_to_typ t2, e_to_ef e)
-    | Ttup ts -> Typ_tup(List.map t_to_typ ts)
-    | Tapp(i,args) -> Typ_app(Id_aux((Id i), Parse_ast.Unknown),List.map targ_to_typ_arg args)), Parse_ast.Unknown)
+  match t.t with
+    | Tid i -> Typ_aux(Typ_id (Id_aux((Id i), Parse_ast.Unknown)),Parse_ast.Unknown)
+    | Tvar i -> Typ_aux(Typ_var (Kid_aux((Var i),Parse_ast.Unknown)),Parse_ast.Unknown) 
+    | Tfn(t1,t2,e) -> Typ_aux(Typ_fn (t_to_typ t1, t_to_typ t2, e_to_ef e),Parse_ast.Unknown)
+    | Ttup ts -> Typ_aux(Typ_tup(List.map t_to_typ ts),Parse_ast.Unknown)
+    | Tapp(i,args) -> Typ_aux(Typ_app(Id_aux((Id i), Parse_ast.Unknown),List.map targ_to_typ_arg args),Parse_ast.Unknown)
+    | Tabbrev(t,_) -> t_to_typ t
+    | Tuvar _ -> assert false	      
 and targ_to_typ_arg targ = 
  Typ_arg_aux( 
   (match targ with
@@ -589,18 +646,21 @@ and n_to_nexp n =
     | Nmult(n1,n2) -> Nexp_times(n_to_nexp n1,n_to_nexp n2) 
     | Nadd(n1,n2) -> Nexp_sum(n_to_nexp n1,n_to_nexp n2) 
     | N2n n -> Nexp_exp (n_to_nexp n) 
-    | Nneg n -> Nexp_neg (n_to_nexp n)), Parse_ast.Unknown)
+    | Nneg n -> Nexp_neg (n_to_nexp n)
+    | Nuvar _ -> assert false), Parse_ast.Unknown)
 and e_to_ef ef =
  Effect_aux( 
   (match ef.effect with
     | Evar i -> Effect_var (Kid_aux((Var i),Parse_ast.Unknown)) 
-    | Eset effects -> Effect_set effects), Parse_ast.Unknown)
+    | Eset effects -> Effect_set effects
+    | Euvar _ -> assert false), Parse_ast.Unknown)
 and o_to_order o =
  Ord_aux( 
   (match o.order with
     | Ovar i -> Ord_var (Kid_aux((Var i),Parse_ast.Unknown)) 
     | Oinc -> Ord_inc 
-    | Odec -> Ord_dec), Parse_ast.Unknown)
+    | Odec -> Ord_dec
+    | Ouvar _ -> assert false), Parse_ast.Unknown)
 
 
 let rec get_abbrev d_env t =
@@ -742,18 +802,20 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
     let tl1,tl2 = List.length t1s,List.length t2s in
     if tl1=tl2 then 
       let ids = List.map (fun _ -> Id_aux(Id (new_id ()),l)) t1s in
-      let vars = List.map2 (fun i t -> E_aux(E_id(i),(l,Some(([],t),Emp,[],pure_e)))) ids t1s in
+      let vars = List.map2 (fun i t -> E_aux(E_id(i),(l,Some(([],t),Emp_local,[],pure_e)))) ids t1s in
       let (coerced_ts,cs,coerced_vars) = 
         List.fold_right2 (fun v (t1,t2) (ts,cs,es) -> let (t',c',e') = type_coerce l d_env t1 v t2 in
                                                       ((t'::ts),c'@cs,(e'::es)))
           vars (List.combine t1s t2s) ([],[],[]) in
       if vars = coerced_vars then (t2,cs,e)
-      else let e' = E_aux(E_case(e,[(Pat_aux(Pat_exp(P_aux(P_tup (List.map2 (fun i t -> P_aux(P_id i,(l,(Some(([],t),Emp,[],pure_e))))) ids t1s),(l,Some(([],t1),Emp,[],pure_e))),
-                                               E_aux(E_tuple coerced_vars,(l,Some(([],t2),Emp,cs,pure_e)))),
-                                             (l,Some(([],t2),Emp,[],pure_e))))]),
-                          (l,(Some(([],t2),Emp,[],pure_e)))) in
+      else let e' = E_aux(E_case(e,[(Pat_aux(Pat_exp(P_aux(P_tup (List.map2 
+								    (fun i t -> P_aux(P_id i,(l,(Some(([],t),Emp_local,[],pure_e)))))
+								    ids t1s),(l,Some(([],t1),Emp_local,[],pure_e))),
+						     E_aux(E_tuple coerced_vars,(l,Some(([],t2),Emp_local,cs,pure_e)))),
+                                             (l,Some(([],t2),Emp_local,[],pure_e))))]),
+                          (l,(Some(([],t2),Emp_local,[],pure_e)))) in
            (t2,cs,e')
-    else eq_error l ("A tuple of length " ^ (string_of_int tl1) ^ " cannot be used where a tuple of length " ^ (string_of_int tl2) ^ " is expected")
+    else eq_error l ("Found a tuple of length " ^ (string_of_int tl1) ^ " but expected a tuple of length " ^ (string_of_int tl2))
   | Tapp(id1,args1),Tapp(id2,args2) ->
     if id1=id2 
     then let t',cs' = type_consistent l d_env t1 t2 in (t',cs',e)
@@ -799,37 +861,38 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
       let t',cs' = type_consistent l d_env t1 t2 in (t',cs',e))
   | Tid("bit"),Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]) ->
     let cs = [Eq(l,r1,{nexp = Nconst 1})] in
-    (t2,cs,E_aux(E_vector_indexed [(i,e)],(l,Some(([],t2),Emp,cs,pure_e))))    
+    (t2,cs,E_aux(E_vector_indexed [(i,e)],(l,Some(([],t2),Emp_local,cs,pure_e))))
   | Tapp("vector",[TA_nexp ({nexp=Nconst i} as b1);TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]),Tid("bit") ->
     let cs = [Eq(l,r1,{nexp = Nconst 1})] in
-    (t2,cs,E_aux((E_vector_access (e,(E_aux(E_lit(L_aux(L_num i,l)),(l,Some(([],{t=Tapp("enum",[TA_nexp b1;TA_nexp {nexp=Nconst 0}])}),Emp,cs,pure_e)))))),
-                 (l,Some(([],t2),Emp,cs,pure_e))))
+    (t2,cs,E_aux((E_vector_access (e,(E_aux(E_lit(L_aux(L_num i,l)),
+					   (l,Some(([],{t=Tapp("enum",[TA_nexp b1;TA_nexp {nexp=Nconst 0}])}),Emp_local,cs,pure_e)))))),
+                 (l,Some(([],t2),Emp_local,cs,pure_e))))
   | Tid("bit"),Tapp("enum",[TA_nexp b1;TA_nexp r1]) ->
     let t',cs'= type_consistent l d_env {t=Tapp("enum",[TA_nexp{nexp=Nconst 0};TA_nexp{nexp=Nconst 1}])} t2 in
-    (t2,cs',E_aux(E_case (e,[Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_zero,l)),(l,Some(([],t1),Emp,[],pure_e))),
-					     E_aux(E_lit(L_aux(L_num 0,l)),(l,Some(([],t2),Emp,[],pure_e)))),
-				     (l,Some(([],t2),Emp,[],pure_e)));
-			     Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_one,l)),(l,Some(([],t1),Emp,[],pure_e))),
-					     E_aux(E_lit(L_aux(L_num 1,l)),(l,Some(([],t2),Emp,[],pure_e)))),
-				     (l,Some(([],t2),Emp,[],pure_e)));]),
-		  (l,Some(([],t2),Emp,[],pure_e))))    
+    (t2,cs',E_aux(E_case (e,[Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_zero,l)),(l,Some(([],t1),Emp_local,[],pure_e))),
+					     E_aux(E_lit(L_aux(L_num 0,l)),(l,Some(([],t2),Emp_local,[],pure_e)))),
+				     (l,Some(([],t2),Emp_local,[],pure_e)));
+			     Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_one,l)),(l,Some(([],t1),Emp_local,[],pure_e))),
+					     E_aux(E_lit(L_aux(L_num 1,l)),(l,Some(([],t2),Emp_local,[],pure_e)))),
+				     (l,Some(([],t2),Emp_local,[],pure_e)));]),
+		  (l,Some(([],t2),Emp_local,[],pure_e))))    
   | Tapp("enum",[TA_nexp b1;TA_nexp r1;]),Tid("bit") ->
     let t',cs'= type_consistent l d_env t1 {t=Tapp("enum",[TA_nexp{nexp=Nconst 0};TA_nexp{nexp=Nconst 1}])} 
-    in (t2,cs',E_aux(E_if(E_aux(E_app(Id_aux(Id "is_zero",l),[e]),(l,Some(([],bool_t),Emp,[],pure_e))),
-			  E_aux(E_lit(L_aux(L_zero,l)),(l,Some(([],bit_t),Emp,[],pure_e))),
-			  E_aux(E_lit(L_aux(L_one,l)),(l,Some(([],bit_t),Emp,[],pure_e)))),
-		     (l,Some(([],bit_t),Emp,cs',pure_e))))
+    in (t2,cs',E_aux(E_if(E_aux(E_app(Id_aux(Id "is_one",l),[e]),(l,Some(([],bool_t),External None,[],pure_e))),
+			  E_aux(E_lit(L_aux(L_one,l)),(l,Some(([],bit_t),Emp_local,[],pure_e))),
+			  E_aux(E_lit(L_aux(L_zero,l)),(l,Some(([],bit_t),Emp_local,[],pure_e)))),
+		     (l,Some(([],bit_t),Emp_local,cs',pure_e))))
   | Tapp("enum",[TA_nexp b1;TA_nexp r1;]),Tid(i) -> 
     (match Envmap.apply d_env.enum_env i with
     | Some(enums) -> 
       (t2,[Eq(l,b1,{nexp=Nconst 0});LtEq(l,r1,{nexp=Nconst (List.length enums)})],
        E_aux(E_case(e,
 		    List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),
-								(l,Some(([],t1),Emp,[],pure_e))),
+								(l,Some(([],t1),Emp_local,[],pure_e))),
 							  E_aux(E_id(Id_aux(Id a,l)),
-								(l,Some(([],t2),Emp,[],pure_e)))),
-						  (l,Some(([],t2),Emp,[],pure_e)))) enums),
-	     (l,Some(([],t2),Emp,[],pure_e))))
+								(l,Some(([],t2),Emp_local,[],pure_e)))),
+						  (l,Some(([],t2),Emp_local,[],pure_e)))) enums),
+	     (l,Some(([],t2),Emp_local,[],pure_e))))
     | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
   | Tid("bit"),Tid("bool") ->
     let e' = E_aux(E_app((Id_aux(Id "is_one",l)),[e]),(l,Some(([],bool_t),External None,[],pure_e))) in
@@ -840,11 +903,11 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
       (t2,[Eq(l,b1,{nexp=Nconst 0});GtEq(l,r1,{nexp=Nconst (List.length enums)})],
        E_aux(E_case(e,
 		    List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_id(Id_aux(Id a,l)),
-								(l,Some(([],t1),Emp,[],pure_e))),
+								(l,Some(([],t1),Emp_local,[],pure_e))),
 							  E_aux(E_lit(L_aux((L_num i),l)),
-								(l,Some(([],t2),Emp,[],pure_e)))),
-						  (l,Some(([],t2),Emp,[],pure_e)))) enums),
-	     (l,Some(([],t2),Emp,[],pure_e))))
+								(l,Some(([],t2),Emp_local,[],pure_e)))),
+						  (l,Some(([],t2),Emp_local,[],pure_e)))) enums),
+	     (l,Some(([],t2),Emp_local,[],pure_e))))
     | None -> eq_error l ("Type mismatch: " ^ (t_to_string t1) ^ " , " ^ (t_to_string t2)))
   | _,_ -> let t',cs = type_consistent l d_env t1 t2 in (t',cs,e)
 
@@ -858,6 +921,9 @@ let check_tannot l annot constraints efs =
   | Some((params,t),tag,cs,e) -> 
     effects_eq l efs e;
     let params = Envmap.to_list (t_remove_unifications (Envmap.from_list params) t) in
+    (*let _ = Printf.printf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in *)
     Some((params,t),tag,cs,e)
   | None -> raise (Reporting_basic.err_unreachable l "check_tannot given the place holder annotation")
 
+
+let tannot_merge l denv t_older t_newer = t_newer

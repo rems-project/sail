@@ -54,7 +54,8 @@ and t_arg =
   | TA_ord of order 
 
 type tag =
-  | Emp
+  | Emp_local
+  | Emp_global
   | External of string option
   | Default
   | Constructor
@@ -129,3 +130,6 @@ val type_consistent : Parse_ast.l -> def_envs -> t -> t -> t * nexp_range list
 
 (* type_eq mutates to unify variables, and will raise an exception if the first type cannot be coerced into the second and is inconsistent *)
 val type_coerce : Parse_ast.l -> def_envs -> t -> exp -> t -> t * nexp_range list * exp
+
+(* Merge tannots when intersection or unioning two environments. In case of default types, defer to tannot on right *)
+val tannot_merge : Parse_ast.l -> def_envs -> tannot -> tannot -> tannot 

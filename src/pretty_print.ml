@@ -565,7 +565,7 @@ and pp_format_o o =
   ^ " Unknown)"
 
 let pp_format_tag = function
-  | Emp -> "Tag_empty"
+  | Emp_local | Emp_global -> "Tag_empty"
   | External (Some s) -> "(Tag_extern (Just \""^s^"\"))"
   | External None -> "(Tag_extern Nothing)"
   | Default -> "Tag_default"
