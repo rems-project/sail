@@ -918,12 +918,28 @@ let resolve_constraints a = a
 
 let check_tannot l annot constraints efs = 
   match annot with
-  | Some((params,t),tag,cs,e) -> 
-    effects_eq l efs e;
-    let params = Envmap.to_list (t_remove_unifications (Envmap.from_list params) t) in
+    | Some((params,t),tag,cs,e) -> 
+      ignore(effects_eq l efs e);
+      let params = Envmap.to_list (t_remove_unifications (Envmap.from_list params) t) in
     (*let _ = Printf.printf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in *)
-    Some((params,t),tag,cs,e)
-  | None -> raise (Reporting_basic.err_unreachable l "check_tannot given the place holder annotation")
+      Some((params,t),tag,cs,e)
+    | None -> raise (Reporting_basic.err_unreachable l "check_tannot given the place holder annotation")
+      
 
-
-let tannot_merge l denv t_older t_newer = t_newer
+let tannot_merge l denv t_older t_newer = 
+  match t_older,t_newer with
+    | None,None -> None
+    | None,_ -> t_newer
+    | _,None -> t_older
+    | Some((ps_o,t_o),tag_o,cs_o,ef_o),Some((ps_n,t_n),tag_n,cs_n,ef_n) -> 
+      match tag_o,tag_n with
+	| Default,tag -> 
+	  (match t_n.t with
+	    | Tuvar _ -> let t_o,cs_o,ef_o = subst ps_o t_o cs_o ef_o in
+			 let t,_ = type_consistent l denv t_n t_o in
+			 Some(([],t),tag_n,cs_o,ef_o)
+	    | _ -> t_newer)
+	| Emp_local, Emp_local -> 
+	  let t,cs_b = type_consistent l denv t_n t_o in
+	  Some(([],t),Emp_local,cs_o@cs_n@cs_b,union_effects ef_o ef_n)
+	| _,_ -> t_newer

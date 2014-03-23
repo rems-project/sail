@@ -24,7 +24,7 @@ function unit good2 ((nat)  RA ) =
    yielding to_num_inc(GPR0) instead of to_num_inc(0b0) *)
 function unit bad ((bit[1])  RA ) =
 {
-  LOG(0) := "bad";
+  LOG(0) := "oldbad";
   (nat) x := GPR[RA];
 }
 
@@ -42,7 +42,7 @@ let (vector <0, 2, inc, (register<bit >)>) DCR = [ DCR0, DCR1 ]
    expression *)
 function unit bad2 ((bit[1])  RA ) =
 {
-  LOG(0) := "bad2";
+  LOG(0) := "oldbad2";
   (nat) x := DCR[RA];
 }
 
