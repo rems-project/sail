@@ -282,6 +282,8 @@ and 'a exp_aux =  (* Expression *)
  | E_case of 'a exp * ('a pexp) list (* pattern matching *)
  | E_let of 'a letbind * 'a exp (* let expression *)
  | E_assign of 'a lexp * 'a exp (* imperative assignment *)
+ | E_internal_cast of 'a annot * 'a exp (* This is an internal cast, generated during type checking that will resolve into a syntactic cast after *)
+ | E_internal_exp of 'a annot (* This is an internal use of an nexp (in the annot) for passing length information after resolution of constraints *)
 
 and 'a exp = 
    E_aux of 'a exp_aux * 'a annot

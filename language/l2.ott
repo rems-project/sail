@@ -628,6 +628,8 @@ exp :: 'E_' ::=
     {{ com imperative assignment }}
 
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
+  | ( annot ) exp                                       :: :: internal_cast {{ com This is an internal cast, generated during type checking that will resolve into a syntactic cast after }}
+  | annot                                               :: :: internal_exp {{ com This is an internal use of an nexp (in the annot) for passing length information after resolution of constraints }}
 
 
 lexp :: 'LEXP_' ::= {{ com lvalue expression }}

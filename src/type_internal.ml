@@ -203,6 +203,7 @@ let lookup_field_type (field: string) ((id,r_kind,fields) : rec_env) : tannot =
 
 (* eval an nexp as much as possible *)
 let rec eval_nexp n =
+  (*let _ = Printf.printf "eval_nexp of %s\n" (n_to_string n) in*)
   match n.nexp with
     | Nconst i -> n
     | Nmult(n1,n2) ->
@@ -667,7 +668,7 @@ and n_to_nexp n =
     | Nadd(n1,n2) -> Nexp_sum(n_to_nexp n1,n_to_nexp n2) 
     | N2n n -> Nexp_exp (n_to_nexp n) 
     | Nneg n -> Nexp_neg (n_to_nexp n)
-    | Nuvar _ -> assert false), Parse_ast.Unknown)
+    | Nuvar _ -> Nexp_var (Kid_aux((Var "fresh"),Parse_ast.Unknown))), Parse_ast.Unknown)
 and e_to_ef ef =
  Effect_aux( 
   (match ef.effect with
@@ -847,9 +848,23 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
            (t2,cs,e')
     else eq_error l ("Found a tuple of length " ^ (string_of_int tl1) ^ " but expected a tuple of length " ^ (string_of_int tl2))
   | Tapp(id1,args1),Tapp(id2,args2) ->
-    if id1=id2 
+    if id1=id2 && (id1 <> "vector")
     then let t',cs' = type_consistent l d_env t1 t2 in (t',cs',e)
     else (match id1,id2 with
+    | "vector","vector" ->
+      (match args1,args2 with
+      | [TA_nexp b1;TA_nexp r1;TA_ord o1;TA_typ t1i],
+        [TA_nexp b2;TA_nexp r2;TA_ord o2;TA_typ t2i] ->
+        (match o1.order,o2.order with
+        | Oinc,Oinc | Odec,Odec -> ()
+        | Oinc,Ouvar _ | Odec,Ouvar _ -> o2.order <- o1.order
+        | Ouvar _,Oinc | Ouvar _, Oinc -> o1.order <- o2.order
+        | _,_ -> equate_o o1 o2); 
+        let cs = [Eq(l,r1,r2)]@cs1@cs2 in
+        let t',cs' = type_consistent l d_env t1i t2i in
+        let tannot = Some(([],t2),Emp_local,cs,pure_e) in
+        let e' = E_aux(E_internal_cast ((l,(Some(([],t2),Emp_local,[],pure_e))),e),(l,tannot)) in
+        (t2,cs@cs',e'))
     | "vector","range" -> 
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
@@ -943,7 +958,9 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
 
 and type_coerce l d_env t1 e t2 = type_coerce_internal l d_env t1 [] e t2 []
 
-let rec simple_constraint_check = function
+let rec simple_constraint_check cs = 
+  let _ = Printf.printf "simple_constraint_check\n" in
+  match cs with 
   | [] -> []
   | Eq(l,n1,n2)::cs -> 
     let n1',n2' = eval_nexp n1,eval_nexp n2 in

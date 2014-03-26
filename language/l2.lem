@@ -240,6 +240,8 @@ type exp_aux 'a =  (* Expression *)
  | E_case of (exp 'a) * list (pexp 'a) (* pattern matching *)
  | E_let of (letbind 'a) * (exp 'a) (* let expression *)
  | E_assign of (lexp 'a) * (exp 'a) (* imperative assignment *)
+ | E_internal_cast of annot 'a * (exp 'a) (* This is an internal cast, generated during type checking that will resolve into a syntactic cast after *)
+ | E_internal_exp of annot 'a (* This is an internal use of an nexp (in the annot) for passing length information after resolution of constraints *)
 
 and exp 'a = 
  | E_aux of (exp_aux 'a) * annot 'a

@@ -1118,7 +1118,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
       match basei.nexp,topi.nexp with
 	| Nconst b, Nconst t -> 
 	  if b <= t then (
-	    let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp{nexp=Nconst(t-b)}; 
+	    let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp{nexp=Nconst(t-b+1)}; 
 					 TA_ord({order = Oinc}); TA_typ({t = Tid "bit"});])} in
 	    let franges = 
 	      List.map 
@@ -1133,7 +1133,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 			  | BF_range(i1,i2) -> 
 			    if i1<i2 
 			    then if b<=i1 && i2<=t 
-			      then {t=Tapp("vector",[TA_nexp {nexp=Nconst i1}; TA_nexp {nexp=Nconst (i2 - i1)}; TA_ord({order=Oinc}); TA_typ {t=Tid "bit"}])}
+			      then {t=Tapp("vector",[TA_nexp {nexp=Nconst i1}; TA_nexp {nexp=Nconst ((i2 - i1) +1)}; TA_ord({order=Oinc}); TA_typ {t=Tid "bit"}])}
 			      else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
 			    else typ_error l ("register type declaration " ^ id' ^ " is not consistently increasing")
 			  | BF_concat _ -> assert false (* What is this supposed to imply again?*)),Emp_global,[],pure_e)))
