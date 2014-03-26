@@ -62,7 +62,7 @@ let get_lexbuf fn =
 
 let parse_file (f : string) : Parse_ast.defs =
   let scanbuf = get_lexbuf f in
-  let default_type_names = ["bool";"unit";"vector";"enum";"list";"bit";"nat"] in
+  let default_type_names = ["bool";"unit";"vector";"range";"list";"bit";"nat"] in
   let type_names = 
     try
       Pre_parser.file Pre_lexer.token scanbuf

@@ -91,10 +91,10 @@ let mk_eannot e i = Effect_opt_aux((Effect_opt_effect(e)),(locn i i))
 let mk_eannotn _ = Effect_opt_aux(Effect_opt_pure,Unknown)
 let mk_namesectn _ = Name_sect_aux(Name_sect_none,Unknown)
 
-let make_enum_sugar_bounded typ1 typ2 =
-  ATyp_app(Id_aux(Id("enum"),Unknown),[typ1; typ2;])
-let make_enum_sugar typ1 =
-  make_enum_sugar_bounded typ1 (ATyp_aux(ATyp_constant(0), Unknown))
+let make_range_sugar_bounded typ1 typ2 =
+  ATyp_app(Id_aux(Id("range"),Unknown),[typ1; typ2;])
+let make_range_sugar typ1 =
+  make_range_sugar_bounded typ1 (ATyp_aux(ATyp_constant(0), Unknown))
 
 let make_r bot top =
   match bot,top with
@@ -320,9 +320,9 @@ atomic_typ:
   | Dec
     { tloc (ATyp_dec) } 
   | SquareBar nexp_typ BarSquare
-      { tloc (make_enum_sugar $2) }
+      { tloc (make_range_sugar $2) }
   | SquareBar nexp_typ Colon nexp_typ BarSquare
-      { tloc (make_enum_sugar_bounded $2 $4) }
+      { tloc (make_range_sugar_bounded $2 $4) }
   | Lparen typ Rparen
     { $2 }
 

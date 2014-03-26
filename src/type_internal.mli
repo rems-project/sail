@@ -69,6 +69,7 @@ type nexp_range =
   | GtEq of Parse_ast.l * nexp * nexp
   | In of Parse_ast.l * string * int list
   | InS of Parse_ast.l * nexp * int list (* This holds the given value for string after a substitution *)
+  | InOpen of Parse_ast.l * nexp * int list (* This holds a non-exhaustive value/s for a var or nuvar during constraint gathering *)
 
 type t_params = (string * kind) list
 type tannot = ((t_params * t) * tag * nexp_range list * effect) option
@@ -114,6 +115,8 @@ val new_e : unit -> effect
 
 val subst : (string * kind) list -> t -> nexp_range list -> effect -> t * nexp_range list * effect
 val get_abbrev : def_envs -> t -> (t * nexp_range list * effect)
+
+val eval_nexp : nexp -> nexp
 
 (*May raise an exception if a contradiction is found*)
 val resolve_constraints : nexp_range list -> nexp_range list

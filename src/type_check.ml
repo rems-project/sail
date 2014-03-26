@@ -171,9 +171,9 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	      | Tid "bit" -> 
 		if i = 0 then bit_t,L_zero 
 		else if i = 1 then bit_t,L_one
-		else {t = Tapp("enum",
+		else {t = Tapp("range",
 			       [TA_nexp{nexp = Nconst i};TA_nexp{nexp= Nconst 0};])},lit
-	      | _ -> {t = Tapp("enum",
+	      | _ -> {t = Tapp("range",
 			       [TA_nexp{nexp = Nconst i};TA_nexp{nexp= Nconst 0};])},lit)
 	  | L_hex s -> {t = Tapp("vector",
 				 [TA_nexp{nexp = Nconst 0};TA_nexp{nexp = Nconst ((String.length s)*4)};
@@ -430,7 +430,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
             else 
               if i = 1 then bool_t,L_true,pure_e
               else typ_error l "Expected bool, found a number that cannot be used as a bit and converted to bool"
-          | _ -> {t = Tapp("enum",
+          | _ -> {t = Tapp("range",
 			   [TA_nexp{nexp = Nconst i};TA_nexp{nexp= Nconst 0};])},lit,pure_e)
 	| L_hex s -> {t = Tapp("vector",
 			       [TA_nexp{nexp = Nconst 0};
@@ -524,18 +524,18 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
        union_effects ef1 (union_effects then_ef else_ef))
     | E_for(id,from,to_,step,order,block) -> 
       let fb,fr,tb,tr,sb,sr = new_n(),new_n(),new_n(),new_n(),new_n(),new_n() in
-      let ft,tt,st = {t=Tapp("enum",[TA_nexp fb;TA_nexp fr])},
-	{t=Tapp("enum",[TA_nexp tb;TA_nexp tr])},{t=Tapp("enum",[TA_nexp sb;TA_nexp sr])} in     
+      let ft,tt,st = {t=Tapp("range",[TA_nexp fb;TA_nexp fr])},
+	{t=Tapp("range",[TA_nexp tb;TA_nexp tr])},{t=Tapp("range",[TA_nexp sb;TA_nexp sr])} in     
       let from',from_t,_,from_c,from_ef = check_exp envs ft from in
       let to_',to_t,_,to_c,to_ef = check_exp envs tt to_ in
       let step',step_t,_,step_c,step_ef = check_exp envs st step in
       let new_annot,local_cs = 
 	match (aorder_to_ord order).order with
 	  | Oinc ->
-	    (Some(([],{t=Tapp("enum",[TA_nexp fb;TA_nexp {nexp=Nadd(tb,tr)}])}),Emp_local,[],pure_e),
+	    (Some(([],{t=Tapp("range",[TA_nexp fb;TA_nexp {nexp=Nadd(tb,tr)}])}),Emp_local,[],pure_e),
 	     [LtEq(l,{nexp=Nadd(fb,fr)},{nexp=Nadd(tb,tr)});LtEq(l,fb,tb)])
 	  | Odec ->
-	    (Some(([],{t=Tapp("enum",[TA_nexp tb; TA_nexp {nexp=Nadd(fb,fr)}])}),Emp_local,[],pure_e),
+	    (Some(([],{t=Tapp("range",[TA_nexp tb; TA_nexp {nexp=Nadd(fb,fr)}])}),Emp_local,[],pure_e),
 	     [GtEq(l,{nexp=Nadd(fb,fr)},{nexp=Nadd(tb,tr)});GtEq(l,fb,tb)])
 	  | _ -> (typ_error l "Order specification in a foreach loop must be either inc or dec, not polymorphic")
       in
@@ -545,7 +545,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
     | E_vector(es) ->
       let item_t = match expect_t.t with
         | Tapp("vector",[base;rise;ord;TA_typ item_t]) -> item_t
-          (* TODO: Consider whether an enum should be looked for here*)
+          (* TODO: Consider whether an range should be looked for here*)
         | _ -> new_t () in
       let es,cs,effect = (List.fold_right 
 			    (fun (e,_,_,c,ef) (es,cs,effect) -> (e::es),(c@cs),union_effects ef effect)
@@ -556,7 +556,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
     | E_vector_indexed eis ->
       let item_t = match expect_t.t with
         | Tapp("vector",[base;rise;ord;TA_typ item_t]) -> item_t
-          (* TODO: Consider whether an enum should be looked for here*)
+          (* TODO: Consider whether an range should be looked for here*)
         | _ -> new_t () in
       let first,last = fst (List.hd eis), fst (List.hd (List.rev eis)) in
       let is_increasing = first <= last in
@@ -579,7 +579,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let item_t = new_t () in
       let vt = {t= Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord; TA_typ item_t])} in
       let (vec',t',_,cs,ef) = check_exp envs vt vec in
-      let it = {t= Tapp("enum",[TA_nexp min;TA_nexp m_rise])} in
+      let it = {t= Tapp("range",[TA_nexp min;TA_nexp m_rise])} in
       let (i',ti',_,cs_i,ef_i) = check_exp envs it i in
       let cs_loc = 
 	match ord.order with
@@ -600,9 +600,9 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	| _ -> new_n(),new_n(),new_o(),new_t() in
       let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t])} in
       let (vec',t',_,cs,ef) = check_exp envs vt vec in
-      let i1t = {t=Tapp("enum",[TA_nexp min1;TA_nexp m_rise1])} in
+      let i1t = {t=Tapp("range",[TA_nexp min1;TA_nexp m_rise1])} in
       let (i1', ti1, _,cs_i1,ef_i1) = check_exp envs i1t i1 in
-      let i2t = {t=Tapp("enum",[TA_nexp min2;TA_nexp m_rise2])} in
+      let i2t = {t=Tapp("range",[TA_nexp min2;TA_nexp m_rise2])} in
       let (i2', ti2, _,cs_i2,ef_i2) = check_exp envs i2t i2 in
       let cs_loc =
 	match ord.order with
@@ -629,7 +629,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	| _ -> new_t() in
       let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t])} in
       let (vec',t',_,cs,ef) = check_exp envs vt vec in
-      let it = {t=Tapp("enum",[TA_nexp min;TA_nexp m_rise])} in
+      let it = {t=Tapp("range",[TA_nexp min;TA_nexp m_rise])} in
       let (i', ti, _,cs_i,ef_i) = check_exp envs it i in
       let (e', te, _,cs_e,ef_e) = check_exp envs item_t e in
       let cs_loc = 
@@ -653,9 +653,9 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	| _ -> new_t() in
       let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t])} in
       let (vec',t',_,cs,ef) = check_exp envs vt vec in
-      let i1t = {t=Tapp("enum",[TA_nexp min1;TA_nexp m_rise1])} in
+      let i1t = {t=Tapp("range",[TA_nexp min1;TA_nexp m_rise1])} in
       let (i1', ti1, _,cs_i1,ef_i1) = check_exp envs i1t i1 in
-      let i2t = {t=Tapp("enum",[TA_nexp min2;TA_nexp m_rise2])} in
+      let i2t = {t=Tapp("range",[TA_nexp min2;TA_nexp m_rise2])} in
       let (i2', ti2, _,cs_i2,ef_i2) = check_exp envs i2t i2 in
       let (e',item_t',_,cs_e,ef_e) =
 	try check_exp envs item_t e with
@@ -985,8 +985,8 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
       (match item_actual.t with
 	| Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ t]) ->
 	  let acc_t = match ord.order with
-	    | Oinc -> {t = Tapp("enum",[TA_nexp base;TA_nexp rise])} 
-	    | Odec -> {t = Tapp("enum",[TA_nexp {nexp = Nadd(base,{nexp=Nneg rise})};TA_nexp base])} 
+	    | Oinc -> {t = Tapp("range",[TA_nexp base;TA_nexp rise])} 
+	    | Odec -> {t = Tapp("range",[TA_nexp {nexp = Nadd(base,{nexp=Nneg rise})};TA_nexp base])} 
 	    | _ -> typ_error l ("Assignment to one vector element requires either inc or dec order")
 	  in
 	  let (e,t',_,cs',ef_e) = check_exp envs acc_t acc in
@@ -1011,8 +1011,8 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
       (match item_actual.t with
 	| Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ t]) ->
 	  let base_e1,range_e1,base_e2,range_e2 = new_n(),new_n(),new_n(),new_n() in
-	  let base_t = {t=Tapp("enum",[TA_nexp base_e1;TA_nexp range_e1])} in
-	  let range_t = {t=Tapp("enum",[TA_nexp base_e2;TA_nexp range_e2])} in
+	  let base_t = {t=Tapp("range",[TA_nexp base_e1;TA_nexp range_e1])} in
+	  let range_t = {t=Tapp("range",[TA_nexp base_e2;TA_nexp range_e2])} in
 	  let cs_t,res_t = match ord.order with
 	    | Oinc ->  ([LtEq(l,base,base_e1);
 			 LtEq(l,{nexp=Nadd(base_e1,range_e1)},{nexp=Nadd(base_e2,range_e2)});
@@ -1113,8 +1113,8 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
       (TD_aux(td,(l,ty)),Env({d_env with enum_env = enum_env;},t_env))
     | TD_register(id,base,top,ranges) -> 
       let id' = id_to_string id in
-      let basei = eval_to_nexp_const(anexp_to_nexp base) in
-      let topi = eval_to_nexp_const(anexp_to_nexp top) in
+      let basei = eval_nexp(anexp_to_nexp base) in
+      let topi = eval_nexp(anexp_to_nexp top) in
       match basei.nexp,topi.nexp with
 	| Nconst b, Nconst t -> 
 	  if b <= t then (
@@ -1170,6 +1170,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 	    (TD_aux(td,(l,tannot)),
 	     Env({d_env with rec_env = (id',Register,franges)::d_env.rec_env;
 	       abbrevs = Envmap.insert d_env.abbrevs (id',tannot)},t_env)))
+	| _,_ -> raise (Reporting_basic.err_unreachable l "Nexps in register declaration do not evaluate to constants")
 
 let check_val_spec envs (VS_aux(vs,(l,annot))) = 
   let (Env(d_env,t_env)) = envs in

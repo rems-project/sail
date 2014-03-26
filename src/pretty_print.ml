@@ -580,7 +580,11 @@ let pp_format_nes nes =
        | LtEq(_,n1,n2) -> "(Nec_lteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | Eq(_,n1,n2) -> "(Nec_eq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | GtEq(_,n1,n2) -> "(Nec_gteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
-       | In(_,i,ns) -> "(Nec_in (Kid_aux (Var \"" ^ i ^ "\") Unknown) [" ^ (list_format "; " string_of_int ns)^ "])")
+       | In(_,i,ns) | InS(_,{nexp=Nvar i},ns) |InOpen(_,{nexp=Nvar i},ns)-> 
+	 "(Nec_in (Kid_aux (Var \"" ^ i ^ "\") Unknown) [" ^ (list_format "; " string_of_int ns)^ "])"
+       | InS(_,{nexp = Nuvar _},ns) | InOpen(_,{nexp = Nuvar _},ns) ->  
+	 "(Nec_in (Kid_aux (Var \"fresh\") Unknown) [" ^ (list_format "; " string_of_int ns)^ "])"
+     )
      nes) ^ "]"
 
 let pp_format_annot = function

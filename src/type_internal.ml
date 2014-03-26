@@ -74,6 +74,7 @@ type nexp_range =
   | GtEq of Parse_ast.l * nexp * nexp
   | In of Parse_ast.l * string * int list
   | InS of Parse_ast.l * nexp * int list
+  | InOpen of Parse_ast.l * nexp * int list
 
 type t_params = (string * kind) list
 type tannot = ((t_params * t) * tag * nexp_range list * effect) option
@@ -205,26 +206,37 @@ let rec eval_nexp n =
   match n.nexp with
     | Nconst i -> n
     | Nmult(n1,n2) ->
-      (match (eval_nexp n1).nexp,(eval_nexp n2).nexp with
+      let n1',n2' = (eval_nexp n1),(eval_nexp n2) in
+      (match n1'.nexp,n2'.nexp with
 	| Nconst i1, Nconst i2 -> {nexp=Nconst (i1*i2)}
-	| _,_ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const"))
+	| (Nconst _ as c),Nmult(nl,nr) | Nmult(nl,nr),(Nconst _ as c) -> 
+	  {nexp = Nmult(eval_nexp {nexp = Nmult({nexp = c},nl)},eval_nexp {nexp = Nmult({nexp=c},nr)})}
+	| (Nconst _ as c),Nadd(nl,nr) | Nadd(nl,nr),(Nconst _ as c) ->
+	  {nexp = Nadd(eval_nexp {nexp =Nmult({nexp=c},nl)},eval_nexp {nexp = Nmult({nexp=c},nr)})}
+	| N2n n1, N2n n2 -> {nexp = N2n( eval_nexp {nexp = Nadd(n1,n2)} ) }
+	| _,_ -> {nexp = Nmult(n1',n2') })
     | Nadd(n1,n2) ->
-      (match (eval_nexp n1).nexp,(eval_nexp n2).nexp with
+      let n1',n2' = (eval_nexp n1),(eval_nexp n2) in      
+      (match n1'.nexp,n2'.nexp with
 	| Nconst i1, Nconst i2 -> {nexp=Nconst (i1+i2)}
-	| _,_ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const"))
+	| (Nconst _ as c),Nadd(nl,nr) | Nadd(nl,nr),(Nconst _ as c) ->
+	  {nexp = Nadd(eval_nexp {nexp =Nadd({nexp=c},nl)},eval_nexp {nexp = Nadd({nexp=c},nr)})}
+	| _,_ -> {nexp = Nadd(n1',n2') })
     | Nneg n1 ->
-      (match (eval_nexp n1).nexp with
-	| Nconst i -> {nexp = Nconst(- i)}
-	| _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const"))
+      let n1' = eval_nexp n1 in
+      (match n1'.nexp with
+	| Nconst i -> {nexp = Nconst(i * -1)}
+	| _ -> {nexp = Nneg n1'})
     | N2n n1 ->
-      (match (eval_nexp n1).nexp with
+      let n1' = eval_nexp n1 in
+      (match n1'.nexp with
 	| Nconst i ->
 	  let rec two_pow = function
 	    | 0 -> 1;
 	    | n -> 2* (two_pow n-1) in
 	  {nexp = Nconst(two_pow i)}
-	| _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const"))
-    | Nvar _ | Nuvar _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const")
+	| _ -> {nexp = N2n n1'})
+    | Nvar _ | Nuvar _ -> n
 
 
 let v_count = ref 0
@@ -443,10 +455,19 @@ let rec fresh_evar bindings e =
       None
     | _ -> None
 
-let nat_t = {t = Tapp("enum",[TA_nexp{nexp= Nconst 0};TA_nexp{nexp = Nconst max_int};])}
+let nat_t = {t = Tapp("range",[TA_nexp{nexp= Nconst 0};TA_nexp{nexp = Nconst max_int};])}
 let unit_t = { t = Tid "unit" }
 let bit_t = {t = Tid "bit" }
 let bool_t = {t = Tid "bool" }
+let nat_typ = {t=Tid "nat"}
+let pure_e = {effect=Eset []}
+
+let is_nat_typ t =
+  if t == nat_typ || t == nat_t then true
+  else match t.t with
+    | Tid "nat" -> true
+    | Tapp("range",[TA_nexp{nexp = Nconst 0};TA_nexp{nexp = Nconst i}]) -> i == max_int
+    | _ -> false
 
 let initial_kind_env = 
   Envmap.from_list [ 
@@ -457,12 +478,10 @@ let initial_kind_env =
     ("list", {k = K_Lam( [{k = K_Typ}], {k = K_Typ})});
     ("reg", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("register", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
-    ("enum", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}], {k = K_Typ}) });
+    ("range", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}], {k = K_Typ}) });
     ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } )
   ]
 
-let nat_typ = {t=Tid "nat"}
-let pure_e = {effect=Eset []}
 let initial_typ_env =
   Envmap.from_list [
     ("ignore",Some(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,{effect=Evar "b"})}),External None,[],pure_e));
@@ -608,6 +627,7 @@ let rec cs_subst t_env cs =
     | LtEq(l,n1,n2)::cs -> LtEq(l,n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
     | In(l,s,ns)::cs -> InS(l,n_subst t_env {nexp=Nvar s},ns)::(cs_subst t_env cs)
     | InS(l,n,ns)::cs -> InS(l,n_subst t_env n,ns)::(cs_subst t_env cs)
+    | InOpen(l,n,ns)::cs -> InOpen(l,n_subst t_env n,ns)::(cs_subst t_env cs)
 
 let subst k_env t cs e =
   let subst_env = Envmap.from_list
@@ -733,20 +753,22 @@ let effects_eq l e1 e2 =
   | Evar v1, Eset _ -> eq_error l ("Effect variable " ^ v1 ^ " cannot be used where a concrete set of effects is specified")
 
 (* Is checking for structural equality only, other forms of equality will be handeled by constraints *)
-let rec nexp_eq n1 n2 =
+let rec nexp_eq_check n1 n2 =
   match n1.nexp,n2.nexp with
   | Nvar v1,Nvar v2 -> v1=v2
   | Nconst n1,Nconst n2 -> n1=n2
-  | Nadd(nl1,nl2), Nadd(nr1,nr2) -> nexp_eq nl1 nr1 && nexp_eq nl2 nr2
-  | Nmult(nl1,nl2), Nmult(nr1,nr2) -> nexp_eq nl1 nr1 && nexp_eq nl2 nr2
-  | N2n n,N2n n2 -> nexp_eq n n2
-  | Nneg n,Nneg n2 -> nexp_eq n n2
-  | Nuvar _, n -> equate_n n1 n2; true
-  | n,Nuvar _ -> equate_n n2 n1; true
+  | Nadd(nl1,nl2), Nadd(nr1,nr2) | Nmult(nl1,nl2), Nmult(nr1,nr2) -> nexp_eq_check nl1 nr1 && nexp_eq_check nl2 nr2
+  | N2n n,N2n n2 -> nexp_eq_check n n2
+  | Nneg n,Nneg n2 -> nexp_eq_check n n2
+  | Nuvar {nindex =i1},Nuvar {nindex = i2} -> i1 = i2
   | _,_ -> false
 
+let nexp_eq n1 n2 =
+  nexp_eq_check (eval_nexp n1) (eval_nexp n2)
+
 (*Is checking for structural equality amongst the types, building constraints for kind Nat. 
-  When considering two enum type applications, will check for consistency instead of equality*)
+  When considering two range type applications, will check for consistency instead of equality*)
+(*TODOTODO when t1 range and t2 a tuvar or t2 an range with nuvars, need to not copy directly but issue bound (not eq) constraints for pattern matching against multiple constants ... possibly an in constraint for constants, and then when considering constraints, merge various in statements for same variable *)
 let rec type_consistent_internal l d_env t1 cs1 t2 cs2 = 
   let t1,cs1',_ = get_abbrev d_env t1 in
   let t2,cs2',_ = get_abbrev d_env t2 in
@@ -761,7 +783,7 @@ let rec type_consistent_internal l d_env t1 cs1 t2 cs2 =
   | Tid v1,Tid v2 -> 
     if v1 = v2 then (t2,cs1@cs2) 
     else eq_error l ("Types " ^ v1 ^ " and " ^ v2 ^ " do not match")
-  | Tapp("enum",[TA_nexp b1;TA_nexp r1;]),Tapp("enum",[TA_nexp b2;TA_nexp r2;]) -> 
+  | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tapp("range",[TA_nexp b2;TA_nexp r2;]) -> 
     if (nexp_eq b1 b2)&&(nexp_eq r1 r2) then (t2,[])
     else (t2, cs1@cs2@[GtEq(l,b1,b2);LtEq(l,r1,r2)])
   | Tapp(id1,args1), Tapp(id2,args2) ->
@@ -776,6 +798,14 @@ let rec type_consistent_internal l d_env t1 cs1 t2 cs2 =
   | Ttup t1s, Ttup t2s ->
     (t2,cs1@cs2@(List.flatten (List.map snd (List.map2 (type_consistent l d_env) t1s t2s))))
   | Tuvar _, t -> equate_t t1 t2; (t1,cs1@cs2)
+  | Tapp("range",[TA_nexp b;TA_nexp r]),Tuvar _ ->
+    if is_nat_typ t1 then
+      begin equate_t t2 t1; (t2,cs1@cs2) end
+    else 
+      let b2,r2 = new_n (), new_n () in
+      let t2' = {t=Tapp("range",[TA_nexp b2;TA_nexp r2])} in
+      equate_t t2 t2';
+      (t2,cs1@cs2@[GtEq(l,b,b2);LtEq(l,r,r2)]) (*This and above should maybe be In constraints when constants and nuvars/vars*)
   | t,Tuvar _ -> equate_t t2 t1; (t2,cs1@cs2)
   | _,_ -> eq_error l ("Type mismatch found " ^ (t_to_string t1) ^ " but expected a " ^ (t_to_string t2))
 
@@ -820,7 +850,7 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
     if id1=id2 
     then let t',cs' = type_consistent l d_env t1 t2 in (t',cs',e)
     else (match id1,id2 with
-    | "vector","enum" -> 
+    | "vector","range" -> 
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
@@ -831,11 +861,11 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
 	let cs = [Eq(l,b2,{nexp=Nconst 0});Eq(l,r2,{nexp=N2n({nexp=Nadd({nexp=Nneg b1},r1)})})] in
 	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
-	eq_error l "Cannot convert a vector to an enum without an order"
+	eq_error l "Cannot convert a vector to an range without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
-        eq_error l "Cannot convert non-bit vector into an enum"
-      | _,_ -> raise (Reporting_basic.err_unreachable l "vector or enum is not properly kinded"))
-    | "enum","vector" -> 
+        eq_error l "Cannot convert non-bit vector into an range"
+      | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
+    | "range","vector" -> 
       (match args2,args1 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
@@ -847,10 +877,10 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
 		  Eq(l,r1,b1)] in
 	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
-	eq_error l "Cannot convert an enum to a vector without an order"
+	eq_error l "Cannot convert an range to a vector without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
-        eq_error l "Cannot convert an enum into a non-bit vector"
-      | _,_ -> raise (Reporting_basic.err_unreachable l "vector or enum is not properly kinded"))
+        eq_error l "Cannot convert an range into a non-bit vector"
+      | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
     | "register",_ ->
       (match args1 with
 	| [TA_typ t] ->
@@ -865,10 +895,10 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
   | Tapp("vector",[TA_nexp ({nexp=Nconst i} as b1);TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]),Tid("bit") ->
     let cs = [Eq(l,r1,{nexp = Nconst 1})] in
     (t2,cs,E_aux((E_vector_access (e,(E_aux(E_lit(L_aux(L_num i,l)),
-					   (l,Some(([],{t=Tapp("enum",[TA_nexp b1;TA_nexp {nexp=Nconst 0}])}),Emp_local,cs,pure_e)))))),
+					   (l,Some(([],{t=Tapp("range",[TA_nexp b1;TA_nexp {nexp=Nconst 0}])}),Emp_local,cs,pure_e)))))),
                  (l,Some(([],t2),Emp_local,cs,pure_e))))
-  | Tid("bit"),Tapp("enum",[TA_nexp b1;TA_nexp r1]) ->
-    let t',cs'= type_consistent l d_env {t=Tapp("enum",[TA_nexp{nexp=Nconst 0};TA_nexp{nexp=Nconst 1}])} t2 in
+  | Tid("bit"),Tapp("range",[TA_nexp b1;TA_nexp r1]) ->
+    let t',cs'= type_consistent l d_env {t=Tapp("range",[TA_nexp{nexp=Nconst 0};TA_nexp{nexp=Nconst 1}])} t2 in
     (t2,cs',E_aux(E_case (e,[Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_zero,l)),(l,Some(([],t1),Emp_local,[],pure_e))),
 					     E_aux(E_lit(L_aux(L_num 0,l)),(l,Some(([],t2),Emp_local,[],pure_e)))),
 				     (l,Some(([],t2),Emp_local,[],pure_e)));
@@ -876,13 +906,13 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
 					     E_aux(E_lit(L_aux(L_num 1,l)),(l,Some(([],t2),Emp_local,[],pure_e)))),
 				     (l,Some(([],t2),Emp_local,[],pure_e)));]),
 		  (l,Some(([],t2),Emp_local,[],pure_e))))    
-  | Tapp("enum",[TA_nexp b1;TA_nexp r1;]),Tid("bit") ->
-    let t',cs'= type_consistent l d_env t1 {t=Tapp("enum",[TA_nexp{nexp=Nconst 0};TA_nexp{nexp=Nconst 1}])} 
+  | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tid("bit") ->
+    let t',cs'= type_consistent l d_env t1 {t=Tapp("range",[TA_nexp{nexp=Nconst 0};TA_nexp{nexp=Nconst 1}])} 
     in (t2,cs',E_aux(E_if(E_aux(E_app(Id_aux(Id "is_one",l),[e]),(l,Some(([],bool_t),External None,[],pure_e))),
 			  E_aux(E_lit(L_aux(L_one,l)),(l,Some(([],bit_t),Emp_local,[],pure_e))),
 			  E_aux(E_lit(L_aux(L_zero,l)),(l,Some(([],bit_t),Emp_local,[],pure_e)))),
 		     (l,Some(([],bit_t),Emp_local,cs',pure_e))))
-  | Tapp("enum",[TA_nexp b1;TA_nexp r1;]),Tid(i) -> 
+  | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tid(i) -> 
     (match Envmap.apply d_env.enum_env i with
     | Some(enums) -> 
       (t2,[Eq(l,b1,{nexp=Nconst 0});LtEq(l,r1,{nexp=Nconst (List.length enums)})],
@@ -897,7 +927,7 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
   | Tid("bit"),Tid("bool") ->
     let e' = E_aux(E_app((Id_aux(Id "is_one",l)),[e]),(l,Some(([],bool_t),External None,[],pure_e))) in
     (t2,[],e')
-  | Tid(i),Tapp("enum",[TA_nexp b1;TA_nexp r1;]) -> 
+  | Tid(i),Tapp("range",[TA_nexp b1;TA_nexp r1;]) -> 
     (match Envmap.apply d_env.enum_env i with
     | Some(enums) -> 
       (t2,[Eq(l,b1,{nexp=Nconst 0});GtEq(l,r1,{nexp=Nconst (List.length enums)})],
@@ -913,7 +943,40 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
 
 and type_coerce l d_env t1 e t2 = type_coerce_internal l d_env t1 [] e t2 []
 
-let resolve_constraints a = a
+let rec simple_constraint_check = function
+  | [] -> []
+  | Eq(l,n1,n2)::cs -> 
+    let n1',n2' = eval_nexp n1,eval_nexp n2 in
+    (match n1'.nexp,n2.nexp with
+      | Nconst i1, Nconst i2 -> 
+	if i1==i2 
+	then simple_constraint_check cs
+	else eq_error l ("Type constraint mismatch: constraint arising from here requires " 
+			 ^ string_of_int i1 ^ " to equal " ^ string_of_int i2)
+      | _,_ -> Eq(l,n1',n2')::(simple_constraint_check cs))
+  | GtEq(l,n1,n2)::cs -> 
+    let n1',n2' = eval_nexp n1,eval_nexp n2 in
+    (match n1'.nexp,n2.nexp with
+      | Nconst i1, Nconst i2 -> 
+	if i1>=i2 
+	then simple_constraint_check cs
+	else eq_error l ("Type constraint mismatch: constraint arising from here requires " 
+			 ^ string_of_int i1 ^ " to be greater than or equal to " ^ string_of_int i2)
+      | _,_ -> GtEq(l,n1',n2')::(simple_constraint_check cs))
+  | LtEq(l,n1,n2)::cs -> 
+    let n1',n2' = eval_nexp n1,eval_nexp n2 in
+    (match n1'.nexp,n2.nexp with
+      | Nconst i1, Nconst i2 -> 
+	if i1<=i2 
+	then simple_constraint_check cs
+	else eq_error l ("Type constraint mismatch: constraint arising from here requires " 
+			 ^ string_of_int i1 ^ " to be less than or equal to " ^ string_of_int i2)
+      | _,_ -> LtEq(l,n1',n2')::(simple_constraint_check cs))
+  | x::cs -> x::(simple_constraint_check cs)
+    
+let resolve_constraints cs = 
+  (*let complex_constraints = simple_constraint_check cs in
+  complex_constraints*) cs
 
 
 let check_tannot l annot constraints efs = 
