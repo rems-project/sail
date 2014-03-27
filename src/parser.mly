@@ -66,6 +66,7 @@ let bkloc k = BK_aux(k,loc ())
 let kloc k = K_aux(k,loc ())
 let kiloc ki = KOpt_aux(ki,loc ())
 let tloc t = ATyp_aux(t,loc ())
+let tlocl t l1 l2 = ATyp_aux(t,locn l1 l2)
 let lloc l = L_aux(l,loc ())
 let ploc p = P_aux(p,loc ())
 let fploc p = FP_aux(p,loc ())
@@ -360,10 +361,16 @@ app_typ:
   | Register Lt app_typs Gt
     { tloc (ATyp_app(Id_aux(Id "register", locn 1 1),$3)) }
 
-star_typ_list:
+app_num_typ:
   | app_typ
+    { $1 }
+  | Num
+     { tloc (ATyp_constant $1) }
+
+star_typ_list:
+  | app_num_typ
     { [$1] }
-  | app_typ Star star_typ_list
+  | app_num_typ Star star_typ_list
     { $1::$3 }
 
 star_typ:
@@ -376,9 +383,7 @@ star_typ:
 exp_typ:
    | star_typ
      { $1 }
-   | Num
-     { tloc (ATyp_constant $1) }
-   | TwoStarStar typ
+   | TwoStarStar nexp_typ
      { tloc (ATyp_exp($2)) }
 
 nexp_typ:
@@ -387,12 +392,28 @@ nexp_typ:
    | atomic_typ Plus nexp_typ
      { tloc (ATyp_sum($1,$3)) }
    | Lparen atomic_typ Plus nexp_typ Rparen
-     { tloc (ATyp_sum($2,$4)) }
+     { tloc (ATyp_sum($2,$4)) } 
+   | Num Plus nexp_typ
+     { tloc (ATyp_sum((tlocl (ATyp_constant $1) 1 1),$3)) }
+   | Lparen Num Plus nexp_typ Rparen
+     { tloc (ATyp_sum((tlocl (ATyp_constant $2) 2 2),$4)) } 
+
+tup_typ_list:
+   | app_typ Comma app_typ
+       { [$1;$3] }
+   | app_typ Comma tup_typ_list
+       { $1::$3 }
+
+tup_typ:
+   | app_typ
+     { $1 }
+   | Lparen tup_typ_list Rparen
+     { tloc (ATyp_tup $2) }
 
 typ:
-  | star_typ
+  | tup_typ
     { $1 }
-  | star_typ MinusGt typ Effect effect_typ
+  | tup_typ MinusGt typ Effect effect_typ
     { tloc (ATyp_fn($1,$3,$5)) }
 
 lit:

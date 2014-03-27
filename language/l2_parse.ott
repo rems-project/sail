@@ -177,7 +177,7 @@ atyp :: 'ATyp_' ::=
   | pure                                 :: M :: pure {{ com sugar for empty effect set }} {{ icho [] }}
   | atyp1 -> atyp2 effect atyp3                        :: :: fn
     {{ com Function type (first-order only in user code), last atyp is an effect }}
-  | atyp1 * .... * atypn                          :: :: tup
+  | ( atyp1 , .... , atypn )                        :: :: tup
     {{ com Tuple type }}
   | id < atyp1 , .. , atypn >                    :: :: app
   {{ com type constructor application }}

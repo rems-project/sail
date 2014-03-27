@@ -224,7 +224,7 @@ typ :: 'Typ_' ::=
     {{ com Function type (first-order only in user code) }}
 % TODO: build first-order restriction into AST or just into type rules? neither - see note
 % TODO: concrete syntax for effects in a function type?  needed only for pp, not in user syntax.
-  | typ1 * .... * typn                          :: :: tup
+  | ( typ1 , .... , typn )                          :: :: tup
     {{ com Tuple type }}
 % TODO union in the other kind grammars?  or make a syntax of argument? or glom together the grammars and leave o the typechecker
   | id < typ_arg1 , .. , typ_argn >                    :: :: app

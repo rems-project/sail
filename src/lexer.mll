@@ -193,6 +193,7 @@ rule token = parse
   | "<<<"				{ (LtLtLt(r"<<<")) }
   | "<+"				{ (LtPlus(r"<+")) }
   | "**"				{ (StarStar(r"**")) }
+  | "[|"                                { SquareBar }
   | "~^"				{ (TildeCarrot(r"~^")) }
 
   | ">=_s"				{ (GtEqUnderS(r">=_s")) }

@@ -232,9 +232,10 @@ let rec eval_nexp n =
       let n1' = eval_nexp n1 in
       (match n1'.nexp with
 	| Nconst i ->
-	  let rec two_pow = function
-	    | 0 -> 1;
-	    | n -> 2* (two_pow n-1) in
+	  let rec two_pow n =
+	    match n with 
+	    | 0 -> 1
+	    | n -> (two_pow (n-1)) in
 	  {nexp = Nconst(two_pow i)}
 	| _ -> {nexp = N2n n1'})
     | Nvar _ | Nuvar _ -> n
@@ -959,11 +960,13 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
 and type_coerce l d_env t1 e t2 = type_coerce_internal l d_env t1 [] e t2 []
 
 let rec simple_constraint_check cs = 
-  let _ = Printf.printf "simple_constraint_check\n" in
+(*  let _ = Printf.printf "simple_constraint_check\n" in *)
   match cs with 
   | [] -> []
   | Eq(l,n1,n2)::cs -> 
+(*    let _ = Printf.printf "eq check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = eval_nexp n1,eval_nexp n2 in
+(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
     (match n1'.nexp,n2.nexp with
       | Nconst i1, Nconst i2 -> 
 	if i1==i2 
@@ -972,7 +975,9 @@ let rec simple_constraint_check cs =
 			 ^ string_of_int i1 ^ " to equal " ^ string_of_int i2)
       | _,_ -> Eq(l,n1',n2')::(simple_constraint_check cs))
   | GtEq(l,n1,n2)::cs -> 
+(*    let _ = Printf.printf ">= check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in*)
     let n1',n2' = eval_nexp n1,eval_nexp n2 in
+(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
     (match n1'.nexp,n2.nexp with
       | Nconst i1, Nconst i2 -> 
 	if i1>=i2 
@@ -981,7 +986,9 @@ let rec simple_constraint_check cs =
 			 ^ string_of_int i1 ^ " to be greater than or equal to " ^ string_of_int i2)
       | _,_ -> GtEq(l,n1',n2')::(simple_constraint_check cs))
   | LtEq(l,n1,n2)::cs -> 
+(*    let _ = Printf.printf "<= check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = eval_nexp n1,eval_nexp n2 in
+(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
     (match n1'.nexp,n2.nexp with
       | Nconst i1, Nconst i2 -> 
 	if i1<=i2 
@@ -992,8 +999,8 @@ let rec simple_constraint_check cs =
   | x::cs -> x::(simple_constraint_check cs)
     
 let resolve_constraints cs = 
-  (*let complex_constraints = simple_constraint_check cs in
-  complex_constraints*) cs
+  let complex_constraints = simple_constraint_check cs in
+  complex_constraints (*cs*)
 
 
 let check_tannot l annot constraints efs = 

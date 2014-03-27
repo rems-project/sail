@@ -1,6 +1,6 @@
-let (bit[32]) v = 0b101
+let (bit[3]) v = 0b101
 let (bit[4]) v2 = [0,1,0,0]
-register (bit[32]) i
+register (bit[4]) i
 
 let (bit[10]) v3 = 0b0101010111
 register (bit[10]) slice_check

@@ -2,8 +2,8 @@ default Nat 'i
 default Order 'o
 default bool b
 default forall 'a. list<'a> b
-val forall 'a, 'b . ('a * 'b) -> 'b effect pure snd
-val forall Type 'i, 'b. ('i * 'b) -> 'i effect pure fst
+val forall 'a, 'b . ('a, 'b) -> 'b effect pure snd
+val forall Type 'i, 'b. ('i, 'b) -> 'i effect pure fst
 typedef int_list [name = "il"] = list<nat>
 typedef reco = const struct forall 'i, 'a, 'b. { 'a['i] v; 'b w; }
 typedef maybe = const union forall 'a. { Nne; 'a Sme; }
@@ -23,10 +23,10 @@ function unit ignore(x) = ()
 scattered typedef ast = const union
 scattered function ast f
 
-union ast member  bit * bit * bit A
+union ast member  (bit, bit, bit) A
 function clause f (  A (a,b,c) ) = C(a)
 
-union ast member  bit * bit B
+union ast member  (bit, bit) B
 function clause f (  B (a,b) ) = C(a)
 
 union ast member  bit C

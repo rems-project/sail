@@ -6,7 +6,7 @@ register (bit[8]) dummy_reg2
    memory-writing functions are figured out syntactically. *)
 val extern nat -> nat effect { wmem , rmem }  MEM
 val extern nat -> nat effect { wmem , rmem }  MEM_GPU
-val extern ( nat * nat ) -> (bit[8]) effect { wmem , rmem }  MEM_SIZE
+val extern forall Nat 'n . ( nat, [|'n|] ) -> (bit['n * 8]) effect { wmem , rmem }  MEM_SIZE
 val extern nat -> (bit[8]) effect { wmem , rmem }  MEM_WORD
 
 (* XXX types are wrong *)
@@ -18,8 +18,8 @@ val extern forall Type 'a . nat -> 'a effect pure to_vec_dec = "to_vec_dec"
 function unit ignore(x) = ()
 
 (* extern functions *)
-val extern ( nat * nat ) -> nat effect pure add = "add"
-val extern ( nat * nat ) -> nat effect pure (deinfix + ) = "add"   (* infix plus *)
+val extern ( nat, nat ) -> nat effect pure add = "add"
+val extern ( nat, nat ) -> nat effect pure (deinfix + ) = "add"   (* infix plus *)
 
 function nat (deinfix * ) ( (nat) x, (nat) y ) = 42
 
