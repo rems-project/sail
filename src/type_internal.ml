@@ -489,10 +489,13 @@ let initial_kind_env =
     ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } )
   ]
 
+let mk_range n = {t=Tapp("range",[TA_nexp {nexp=n};TA_nexp {nexp=Nconst 0}])}
 let initial_typ_env =
   Envmap.from_list [
     ("ignore",Some(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,{effect=Evar "b"})}),External None,[],pure_e));
-    ("+",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "add"),[],pure_e));
+    ("+",Some(([("n",{k=K_Nat});("m",{k=K_Nat})],{t= Tfn({t=Ttup([mk_range (Nvar "n");mk_range (Nvar "m")])},
+							 (mk_range (Nadd({nexp=Nvar "n"},{nexp=Nvar "m"}))),
+							 pure_e)}),External (Some "add"),[],pure_e));
     ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "multiply"),[],pure_e));
     ("-",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "minus"),[],pure_e));
     ("mod",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "mod"),[],pure_e));

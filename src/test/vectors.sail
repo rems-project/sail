@@ -76,6 +76,7 @@ function bit main _ = {
 
   (* constraints checking *)
   BA := 12;
+  CR := 0b00000000000000000000000000000000;
   CR[32 + BA] := CR[32 + BA];
 
   (* slice access of literal *)
