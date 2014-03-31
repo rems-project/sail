@@ -621,7 +621,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
     | E_lit lit -> 
       if is_lit_vector lit then (Value (litV_to_vec lit) Tag_empty,l_mem,l_env) 
       else (Value (V_lit lit) Tag_empty, l_mem,l_env)
-    | E_cast typ exp -> 
+    | E_cast ((Typ_aux typ _) as ctyp) exp -> 
       resolve_outcome (interp_main t_level l_env l_mem exp)
 	              (fun v lm le -> 
                         match (tag,v) with 
@@ -629,8 +629,15 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 	                  (Action (Read_reg regform Nothing) 
 	                     (Frame (id_of_string "0")
 		                (E_aux (E_id (id_of_string "0")) (Unknown, (val_annot (reg_to_t regform)))) le lm Top), lm,le)
+			| (_,V_vector start inc items) -> 
+			  (match typ with
+			    | Typ_app (Id_aux (Id "vector") _) [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i) _)) _;_;_;_] ->
+			      if start = i 
+			      then (Value v tag,lm,le)
+			      else (Value (V_vector i inc items) tag,lm,le)
+			    | _ -> (Value v tag,lm,le) end) 
                         | _ -> (Value v Tag_empty,lm,le) end)
-	              (fun a -> update_stack a (add_to_top_frame (fun e -> (E_aux (E_cast typ e) (l,annot)))))
+	              (fun a -> update_stack a (add_to_top_frame (fun e -> (E_aux (E_cast ctyp e) (l,annot)))))
  (* TODO introduce coercions to change offset of vectors *)
     | E_id id -> 
       let name = get_id id in

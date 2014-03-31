@@ -3,6 +3,9 @@ register nat n
 register nat x
 register nat y
 
+typedef wordsize = forall Nat 'n, 'n IN {8,16,32}. [|'n|]
+let forall Nat 'n. (wordsize<'n>) word = 8
+
 function nat main _ = {
 
   (* works - x and y are set to 42 *)
@@ -14,7 +17,12 @@ function nat main _ = {
     case z -> { x := 99; x }
   }); 
 
-  (* doesn't work - main returns 1 instead of 99 *)
+  switch word {
+    case 8 -> { x:= 32; }
+    case 16 -> { x:= 64; }
+    case 32 -> { x:= 128; }
+  };
+
   n := 3;
   switch n {
     case 0 -> { 21 }

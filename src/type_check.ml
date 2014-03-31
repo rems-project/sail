@@ -391,11 +391,16 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
           let tannot = Some(([],t),Emp_local,cs,ef) in
           let t',cs',e' = type_coerce l d_env t' (rebuild tannot) expect_t' in
           (e',t,t_env,cs@cs',ef)
-        | Tapp("register",[TA_typ(t')]),_ ->
+        | Tapp("register",[TA_typ(t')]),Tuvar _ ->
 	  let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
           let tannot = Some(([],t),External (Some i),cs,ef') in
           let t',cs',e' = type_coerce l d_env t' (rebuild tannot) expect_actual in
           (e',t,t_env,cs@cs',ef)
+        | Tapp("register",[TA_typ(t')]),_ ->
+	  let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
+          let tannot = Some(([],t),External (Some i),cs,ef') in
+          let t',cs',e' = type_coerce l d_env t' (rebuild tannot) expect_actual in
+          (e',t',t_env,cs@cs',ef)
         | Tapp("reg",[TA_typ(t')]),_ ->
           let tannot = Some(([],t),Emp_local,cs,pure_e) in
           let t',cs',e' = type_coerce l d_env t' (rebuild tannot) expect_actual in
@@ -832,9 +837,15 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	    | records -> typ_error l ("Multiple structs contain field " ^ fi ^ ", try adding a cast to disambiguate"))
 	| _ -> typ_error l ("Expected a struct or register for access but found an expression of type " ^ t_to_string t'))
     | E_case(exp,pexps) ->
-      let check_t = new_t() in
-      let (e',t',_,cs,ef) = check_exp envs check_t exp in
-      let (pexps',t,cs',ef') = check_cases envs check_t expect_t pexps in
+      (*let check_t = new_t() in*)
+      let (e',t',_,cs,ef) = check_exp envs (new_t()) exp in
+      (*let _ = Printf.printf "Type of pattern after expression check %s\n" (t_to_string t') in*)
+      let t' = 
+	match t'.t with
+	  | Tapp("register",[TA_typ t]) -> t
+	  | _ -> t' in
+      (*let _ = Printf.printf "Type of pattern after register check %s\n" (t_to_string t') in*)
+      let (pexps',t,cs',ef') = check_cases envs t' expect_t pexps in
       (E_aux(E_case(e',pexps'),(l,Some(([],t),Emp_local,[],pure_e))),t,t_env,cs@cs',union_effects ef ef')
     | E_let(lbind,body) -> 
       let (lb',t_env',cs,ef) = (check_lbind envs Emp_local lbind) in
@@ -866,7 +877,7 @@ and check_cases envs check_t expect_t pexps : ((tannot pexp) list * typ * nexp_r
       let (e,t,_,cs2,ef2) = check_exp (Env(d_env,Envmap.union_merge (tannot_merge l d_env) t_env env)) expect_t exp in
       [Pat_aux(Pat_exp(pat',e),(l,Some(([],t),Emp_local,cs_p@cs_p'@cs2,ef2)))],t,cs_p@cs_p'@cs2,ef2
     | ((Pat_aux(Pat_exp(pat,exp),(l,annot)))::pexps) ->
-      let pat',env,cs_p,u = check_pattern envs Emp_local (new_t ()) pat in
+      let pat',env,cs_p,u = check_pattern envs Emp_local check_t pat in
       let t',cs_p' = type_consistent l d_env u check_t in
       let (e,t,_,cs2,ef2) = check_exp (Env(d_env,Envmap.union_merge (tannot_merge l d_env) t_env env)) expect_t exp in
       let (pes,t'',csl,efl) = check_cases envs check_t expect_t pexps in

@@ -210,7 +210,7 @@ let rec pp_let ppf (LB_aux(lb,_)) =
   | LB_val_implicit(pat,exp) -> fprintf ppf "@[<0>%a %a %a@ %a@]" kwd "let" pp_pat_atomic pat kwd " =" pp_exp exp
 
 (* Need an is_atomic? check and insert parens otherwise *)
-and pp_exp ppf (E_aux(e,_)) = 
+and pp_exp ppf (E_aux(e,(_,annot))) = 
   match e with
   | E_block(exps) -> fprintf ppf "@[<0>%a%a@ %a@]" 
                                  kwd "{" 
@@ -220,9 +220,14 @@ and pp_exp ppf (E_aux(e,_)) =
   | E_lit(lit) -> pp_lit ppf lit
   | E_cast(typ,exp) -> fprintf ppf "@[<0>%a%a%a %a@]" kwd "(" pp_typ typ kwd ")" pp_exp exp 
   | E_internal_cast((_,None),e) -> pp_exp ppf e
-  | E_internal_cast((_,Some((_,t),_,_,_)), exp) ->
-    (*check if the internal exp has the same vector start as the annot, and if so, drop *)
-    fprintf ppf "@[<0>%a%a%a %a@]" kwd "(" pp_typ (t_to_typ t) kwd ")" pp_exp exp
+  | E_internal_cast((_,Some((_,t),_,_,_)), (E_aux(_,(_,eannot)) as exp)) ->
+    (match t.t,eannot with
+      | Tapp("vector",[TA_nexp n1;_;_;_]),Some((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_) ->
+	if nexp_eq n1 n2 
+	then pp_exp ppf exp
+	else 
+	  fprintf ppf "@[<0>%a%a%a %a@]" kwd "(" pp_typ (t_to_typ t) kwd ")" pp_exp exp
+      | _ -> fprintf ppf "@[<0>%a%a%a %a@]" kwd "(" pp_typ (t_to_typ t) kwd ")" pp_exp exp)
   | E_app(f,args) -> fprintf ppf "@[<0>%a(%a)@]" pp_id f (list_pp pp_comma_exp pp_exp) args 
   | E_app_infix(l,op,r) -> fprintf ppf "@[<0>%a %a %a@]" pp_exp l pp_id op pp_exp r
   | E_tuple(exps) -> fprintf ppf "@[<0>%a %a %a@]" kwd "(" (list_pp pp_comma_exp pp_exp) exps kwd ")"
@@ -536,7 +541,7 @@ let rec pp_format_t t =
     | Ttup(tups) -> "(T_tup [" ^ (list_format "; " pp_format_t tups) ^ "])"
     | Tapp(i,args) -> "(T_app (Id_aux (Id \"" ^ i ^ "\") Unknown) (T_args [" ^  list_format "; " pp_format_targ args ^ "]))"
     | Tabbrev(ti,ta) -> "(T_abbrev " ^ (pp_format_t ti) ^ " " ^ (pp_format_t ta) ^ ")"
-    | Tuvar(_) -> "(T_var (Kid_aux (Var \"fresh_v\") Unknown))"
+    | Tuvar(_) -> assert false (*"(T_var (Kid_aux (Var \"fresh_v\") Unknown))"*)
 and pp_format_targ = function
   | TA_typ t -> "(T_arg_typ " ^ pp_format_t t ^ ")"
   | TA_nexp n -> "(T_arg_nexp " ^ pp_format_n n ^ ")"
@@ -550,7 +555,7 @@ and pp_format_n n =
     | Nmult(n1,n2) -> "(Ne_mult " ^ (pp_format_n n1) ^ " " ^ (pp_format_n n2) ^ ")"
     | N2n n -> "(Ne_exp " ^ (pp_format_n n) ^ ")"
     | Nneg n -> "(Ne_unary " ^ (pp_format_n n) ^ ")"
-    | Nuvar(_) -> "(Ne_var (Kid_aux (Var \"fresh_v\") Unknown))"
+    | Nuvar _ -> "(Ne_var (Kid_aux (Var \"fresh_v_" ^ string_of_int (get_index n) ^ "\") Unknown))"
 and pp_format_e e = 
   "(Effect_aux " ^
   (match e.effect with
@@ -633,7 +638,7 @@ let rec pp_lem_let ppf (LB_aux(lb,(l,annot))) =
   fprintf ppf "@[<0>(LB_aux %a (%a, %a))@]" print_lb lb pp_lem_l l pp_annot annot
 
 and pp_lem_exp ppf (E_aux(e,(l,annot))) = 
-  let print_e ppf e = 
+  let rec print_e ppf e = 
     match e with
     | E_block(exps) -> fprintf ppf "@[<0>%a [%a] %a@]"
         kwd "(E_block" 
@@ -643,9 +648,13 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_lit(lit) -> fprintf ppf "(%a %a)" kwd "E_lit" pp_lem_lit lit
     | E_cast(typ,exp) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "E_cast" pp_lem_typ typ pp_lem_exp exp 
     | E_internal_cast((_,None),e) -> pp_lem_exp ppf e
-    | E_internal_cast((_,Some((_,t),_,_,_)), exp) ->
-    (*check if the internal exp has the same vector start as the annot, and if so, drop *)
-      fprintf ppf "@[<0>(E_cast %a %a)@]" pp_lem_typ (t_to_typ t) pp_lem_exp exp        
+    | E_internal_cast((_,Some((_,t),_,_,_)), (E_aux(ec,(_,eannot)) as exp)) ->
+      (match t.t,eannot with
+	| Tapp("vector",[TA_nexp n1;_;_;_]),Some((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_) ->
+	  if nexp_eq n1 n2 
+	  then print_e ppf ec
+	  else fprintf ppf "@[<0>(E_cast %a %a)@]" pp_lem_typ (t_to_typ t) pp_lem_exp exp
+	| _ -> fprintf ppf "@[<0>(E_cast %a %a)@]" pp_lem_typ (t_to_typ t) pp_lem_exp exp)
     | E_app(f,args) -> fprintf ppf "@[<0>(%a %a [%a])@]" kwd "E_app" pp_lem_id f (list_pp pp_semi_lem_exp pp_lem_exp) args
     | E_app_infix(l,op,r) -> fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "E_app_infix" pp_lem_exp l pp_lem_id op pp_lem_exp r
     | E_tuple(exps) -> fprintf ppf "@[<0>%a [%a] %a@]" kwd "(E_tuple" (list_pp pp_semi_lem_exp pp_lem_exp) exps kwd ")"

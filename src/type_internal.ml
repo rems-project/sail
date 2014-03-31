@@ -92,6 +92,11 @@ type def_envs = {
 
 type exp = tannot Ast.exp
 
+let get_index n =
+ match n.nexp with
+   | Nuvar {nindex = i} -> i
+   | _ -> assert false
+
 let rec string_of_list sep string_of = function
   | [] -> ""
   | [x] -> string_of x
@@ -772,6 +777,7 @@ let nexp_eq n1 n2 =
   When considering two range type applications, will check for consistency instead of equality*)
 (*TODOTODO when t1 range and t2 a tuvar or t2 an range with nuvars, need to not copy directly but issue bound (not eq) constraints for pattern matching against multiple constants ... possibly an in constraint for constants, and then when considering constraints, merge various in statements for same variable *)
 let rec type_consistent_internal l d_env t1 cs1 t2 cs2 = 
+  (*let _ = Printf.printf "type_consistent_internal called with %s and %s\n" (t_to_string t1) (t_to_string t2) in*)
   let t1,cs1',_ = get_abbrev d_env t1 in
   let t2,cs2',_ = get_abbrev d_env t2 in
   let cs1,cs2 = cs1@cs1',cs2@cs2' in

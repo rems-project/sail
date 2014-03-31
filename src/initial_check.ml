@@ -482,7 +482,7 @@ let to_ast_typedef (names,k_env,t_env) (td:Parse_ast.type_def) : (tannot type_de
   | Parse_ast.TD_abbrev(id,name_scm_opt,typschm) ->
     let id = to_ast_id id in
     let key = id_to_string id in
-    let typschm,_,_ = to_ast_typschm k_env typschm in
+    let typschm,k_env,_ = to_ast_typschm k_env typschm in
     let td_abrv = TD_aux(TD_abbrev(id,to_ast_namescm name_scm_opt,typschm),(l,None)) in
     let typ = (match typschm with 
       | TypSchm_aux(TypSchm_ts(tq,typ), _) ->

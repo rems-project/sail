@@ -118,12 +118,15 @@ val subst : (string * kind) list -> t -> nexp_range list -> effect -> t * nexp_r
 val get_abbrev : def_envs -> t -> (t * nexp_range list * effect)
 
 val eval_nexp : nexp -> nexp
+val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debugging purposes*)
 
 (*May raise an exception if a contradiction is found*)
 val resolve_constraints : nexp_range list -> nexp_range list
 
 (*May raise an exception if effects do not match tannot effects, will lift unification variables to fresh type variables *)
 val check_tannot : Parse_ast.l -> tannot -> nexp_range list -> effect -> tannot
+
+val nexp_eq : nexp -> nexp -> bool
 
 (* type_consistent is similar to a standard type equality, except in the case of [[consistent t1 t2]] where
    t1 and t2 are both enum types and t1 is contained within the range of t2: i.e.
