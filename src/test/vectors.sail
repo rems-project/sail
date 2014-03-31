@@ -17,6 +17,9 @@ let (vector<0,3,inc,(register<(bit[10])>)>) gpr_small = [slice_check,slice_check
 function unit decode ([bitzero, bitzero, bitone, bitzero]) = match_success := 1
 and decode x = match_success := x
 
+register (bit[32 : 63]) CR
+register (bit[5]) BA
+
 function bit main _ = {
 
   slice_check := v3;
@@ -70,6 +73,10 @@ function bit main _ = {
   (* slice update *)
   i[0] := bitzero;
   i[2 .. 3] := [bitone, bitone];
+
+  (* constraints checking *)
+  BA := 12;
+  CR[32 + BA] := CR[32 + BA];
 
   (* slice access of literal *)
   v[0];
