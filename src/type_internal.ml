@@ -778,7 +778,6 @@ let nexp_eq n1 n2 =
 
 (*Is checking for structural equality amongst the types, building constraints for kind Nat. 
   When considering two range type applications, will check for consistency instead of equality*)
-(*TODOTODO when t1 range and t2 a tuvar or t2 an range with nuvars, need to not copy directly but issue bound (not eq) constraints for pattern matching against multiple constants ... possibly an in constraint for constants, and then when considering constraints, merge various in statements for same variable *)
 let rec type_consistent_internal l d_env t1 cs1 t2 cs2 = 
   (*let _ = Printf.printf "type_consistent_internal called with %s and %s\n" (t_to_string t1) (t_to_string t2) in*)
   let t1,cs1',_ = get_abbrev d_env t1 in
@@ -879,11 +878,11 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [Eq(l,b2,{nexp=Nconst 0});Eq(l,r2,{nexp=N2n({nexp=Nadd(b1,r1)})})] in
+	let cs = [Eq(l,b2,{nexp=Nconst 0});GtEq(l,{nexp=Nadd(b2,r2)},{nexp=N2n r1})] in
 	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_inc",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [Eq(l,b2,{nexp=Nconst 0});Eq(l,r2,{nexp=N2n({nexp=Nadd({nexp=Nneg b1},r1)})})] in
+	let cs = [Eq(l,b2,{nexp=Nconst 0});GtEq(l,{nexp=Nadd(b2,r2)},{nexp=N2n r1})] in
 	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert a vector to an range without an order"
@@ -894,12 +893,11 @@ let rec type_coerce_internal l d_env t1 cs1 e t2 cs2 =
       (match args2,args1 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [Eq(l,b1,{nexp=Nconst 0});Eq(l,{nexp=Nadd(b2,r2)},{nexp=N2n r1})] in
+	let cs = [LtEq(l,{nexp=Nadd(b2,r2)},{nexp=N2n r1})] in
 	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [Eq(l,b1,{nexp=N2n{nexp=Nadd(b2,{nexp=Nneg r2})}});
-		  Eq(l,r1,b1)] in
+	let cs = [LtEq(l,{nexp=Nadd(b2,r2)},{nexp=N2n r1})] in
 	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert an range to a vector without an order"
