@@ -64,7 +64,7 @@ type value =
  | V_lit of lit
  | V_tuple of list value
  | V_list of list value
- | V_vector of natural * bool * list value (* The nat stores the first index, the bool whether that's most or least significant *)
+ | V_vector of integer * bool * list value (* The nat stores the first index, the bool whether that's most or least significant *)
  | V_record of t * list (id * value)
  | V_ctor of id * t * value
  | V_register of reg_form (* Value to store register access, when not actively reading or writing *)
@@ -98,10 +98,10 @@ let emem = Mem 1 Map.empty
 
 (* These may need to be refined or expanded based on memory requirement *)
 type action = 
- | Read_reg of reg_form * maybe (natural * natural)
- | Write_reg of reg_form * maybe (natural* natural) * value
- | Read_mem of id * value * maybe (natural * natural)
- | Write_mem of id * value * maybe (natural * natural) * value
+ | Read_reg of reg_form * maybe (integer * integer)
+ | Write_reg of reg_form * maybe (integer* integer) * value
+ | Read_mem of id * value * maybe (integer * integer)
+ | Write_mem of id * value * maybe (integer * integer) * value
  | Call_extern of string * value
 
 (* Inverted call stack, where top item on the stack is waiting for an action and all other frames for the right stack *)
@@ -220,15 +220,15 @@ let litV_to_vec (L_aux lit l) =
     V_vector 0 true bits
   end
 
-(* Like List_extra.nth with a natural instead of nat index -
+(* Like List_extra.nth with a integer instead of nat index -
  * using an unsafe coercion. *)
-val list_nth : forall 'a . list 'a -> natural -> 'a
-let list_nth l n = List_extra.nth l (natFromNatural n)
+val list_nth : forall 'a . list 'a -> integer -> 'a
+let list_nth l n = List_extra.nth l (natFromInteger n)
 
-val list_length : forall 'a . list 'a -> natural
-let list_length l = naturalFromNat (List.length l)
+val list_length : forall 'a . list 'a -> integer
+let list_length l = integerFromNat (List.length l)
 
-val access_vector : value -> natural -> value
+val access_vector : value -> integer -> value
 let access_vector v n =
   match v with
   | V_vector m inc vs -> 
@@ -237,13 +237,13 @@ let access_vector v n =
     else list_nth vs (m - n)
   end
 
-val from_n_to_n :forall 'a. natural -> natural  -> list 'a -> list 'a
+val from_n_to_n :forall 'a. integer -> integer  -> list 'a -> list 'a
 let from_n_to_n from to_ ls =
-  let from = natFromNatural from in
-  let to_ = natFromNatural to_ in
+  let from = natFromInteger from in
+  let to_ = natFromInteger to_ in
   take (to_ - from + 1) (drop from ls)
 
-val slice_vector : value -> natural -> natural -> value
+val slice_vector : value -> integer -> integer -> value
 let slice_vector v n1 n2 =
   match v with
   | V_vector m inc vs ->
@@ -279,14 +279,14 @@ let rec update_vector_slice vector value mem =
       mem vs
 end
 
-val fupdate_vec : value -> natural -> value -> value
+val fupdate_vec : value -> integer -> value -> value
 let fupdate_vec v n vexp =
   match v with
   | V_vector m inc vals -> 
-    V_vector m inc (List.update vals (natFromNatural (if inc then (n-m) else (m-n))) vexp)
+    V_vector m inc (List.update vals (natFromInteger (if inc then (n-m) else (m-n))) vexp)
   end
 
-val replace_is : forall 'a. list 'a -> list 'a -> natural -> natural -> natural -> list 'a
+val replace_is : forall 'a. list 'a -> list 'a -> integer -> integer -> integer -> list 'a
 let rec replace_is ls vs base start stop =
   match (ls,vs) with
   | ([],_) -> []
@@ -298,7 +298,7 @@ let rec replace_is ls vs base start stop =
     else l::(replace_is ls (v::vs) (base+1) start stop)
   end
 
-val fupdate_vector_slice : value -> value -> natural -> natural -> value
+val fupdate_vector_slice : value -> value -> integer -> integer -> value
 let fupdate_vector_slice vec replace start stop =
   match (vec,replace) with
   | (V_vector m inc vals,V_vector _ inc' reps) ->

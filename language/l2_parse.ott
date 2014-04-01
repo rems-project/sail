@@ -7,7 +7,7 @@ metavar num ::=
   {{ lex numeric }}
   {{ ocaml int }}
   {{ hol num }}
-  {{ lem natural }}
+  {{ lem integer }}
   {{ com Numeric literals }}
 
 metavar hex ::=

@@ -51,7 +51,7 @@ type kind =
 
 type nexp_aux =  (* expression of kind Nat, for vector sizes and origins *)
  | Nexp_var of kid (* variable *)
- | Nexp_constant of natural (* constant *)
+ | Nexp_constant of integer (* constant *)
  | Nexp_times of nexp * nexp (* product *)
  | Nexp_sum of nexp * nexp (* sum *)
  | Nexp_exp of nexp (* exponential *)
@@ -117,7 +117,7 @@ type n_constraint_aux =  (* constraint over kind $Nat$ *)
  | NC_fixed of nexp * nexp
  | NC_bounded_ge of nexp * nexp
  | NC_bounded_le of nexp * nexp
- | NC_nat_set_bounded of kid * list natural
+ | NC_nat_set_bounded of kid * list integer
 
 
 type kinded_id = 
@@ -148,7 +148,7 @@ type lit_aux =  (* Literal constant *)
  | L_one (* $bitone : bit$ *)
  | L_true (* $true : bool$ *)
  | L_false (* $false : bool$ *)
- | L_num of natural (* natural number constant *)
+ | L_num of integer (* natural number constant *)
  | L_hex of string (* bit vector constant, C-style *)
  | L_bin of string (* bit vector constant, C-style *)
  | L_undef (* constant representing undefined values *)
@@ -197,7 +197,7 @@ type pat_aux 'a =  (* Pattern *)
  | P_app of id * list (pat 'a) (* union constructor pattern *)
  | P_record of list (fpat 'a) * bool (* struct pattern *)
  | P_vector of list (pat 'a) (* vector pattern *)
- | P_vector_indexed of list (natural * (pat 'a)) (* vector pattern (with explicit indices) *)
+ | P_vector_indexed of list (integer * (pat 'a)) (* vector pattern (with explicit indices) *)
  | P_vector_concat of list (pat 'a) (* concatenated vector pattern *)
  | P_tup of list (pat 'a) (* tuple pattern *)
  | P_list of list (pat 'a) (* list pattern *)
@@ -227,7 +227,7 @@ type exp_aux 'a =  (* Expression *)
  | E_if of (exp 'a) * (exp 'a) * (exp 'a) (* conditional *)
  | E_for of id * (exp 'a) * (exp 'a) * (exp 'a) * order * (exp 'a) (* loop *)
  | E_vector of list (exp 'a) (* vector (indexed from 0) *)
- | E_vector_indexed of list (natural * (exp 'a)) (* vector (indexed consecutively) *)
+ | E_vector_indexed of list (integer * (exp 'a)) (* vector (indexed consecutively) *)
  | E_vector_access of (exp 'a) * (exp 'a) (* vector access *)
  | E_vector_subrange of (exp 'a) * (exp 'a) * (exp 'a) (* subvector extraction *)
  | E_vector_update of (exp 'a) * (exp 'a) * (exp 'a) (* vector functional update *)
@@ -336,8 +336,8 @@ type tannot_opt =
 
 
 type index_range_aux =  (* index specification, for bitfields in register types *)
- | BF_single of natural (* single index *)
- | BF_range of natural * natural (* index range *)
+ | BF_single of integer (* single index *)
+ | BF_range of integer * integer (* index range *)
  | BF_concat of index_range * index_range (* concatenation of index ranges *)
 
 and index_range = 
@@ -447,7 +447,7 @@ type k =  (* Internal kinds *)
 
 type ne =  (* internal numeric expressions *)
  | Ne_var of kid
- | Ne_const of natural
+ | Ne_const of integer
  | Ne_mult of ne * ne
  | Ne_add of list ne
  | Ne_exp of ne
@@ -468,7 +468,7 @@ type nec =  (* Numeric expression constraints *)
  | Nec_lteq of ne * ne
  | Nec_eq of ne * ne
  | Nec_gteq of ne * ne
- | Nec_in of kid * list natural
+ | Nec_in of kid * list integer
 
 
 type tag =  (* Data indicating where the identifier arises and thus information necessary in compilation *)

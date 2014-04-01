@@ -31,16 +31,17 @@ let bool_to_bit b = match b with
  * By convention, MSB is on the left, so increasing = Big-Endian (MSB0),
  * hence MSB first.
  * http://en.wikipedia.org/wiki/Bit_numbering *)
+(* XXX signedness probably broken here *)
 let to_num_inc (V_vector idx true l) =
-  V_lit(L_aux (L_num(naturalFromBitSeq (BitSeq Nothing false (map bit_to_bool (reverse l))))) Unknown);;
+  V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool (reverse l)))))) Unknown);;
 let to_num_dec (V_vector idx false l) =
-  V_lit(L_aux (L_num(naturalFromBitSeq (BitSeq Nothing false (map bit_to_bool l)))) Unknown);;
+  V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown);;
 
 let to_vec_inc len (V_lit(L_aux (L_num n) ln)) =
-  let l = boolListFrombitSeq len (bitSeqFromNatural Nothing n) in
+  let l = boolListFrombitSeq len (bitSeqFromInteger Nothing n) in
   V_vector 0 true (map bool_to_bit (reverse l)) ;;
 let to_vec_dec len (V_lit(L_aux (L_num n) ln)) =
-  let l = boolListFrombitSeq len (bitSeqFromNatural Nothing n) in
+  let l = boolListFrombitSeq len (bitSeqFromInteger Nothing n) in
   V_vector 0 false (map bool_to_bit l) ;;
 
 let rec add (V_tuple args) = match args with
