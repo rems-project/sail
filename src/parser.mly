@@ -965,11 +965,11 @@ nums:
     { $1::$3 }
 
 nexp_constraint:
-  | typ Eq typ
+  | nexp_typ Eq nexp_typ
     { NC_aux(NC_fixed($1,$3), loc () ) }
-  | typ GtEq typ
+  | nexp_typ GtEq nexp_typ
     { NC_aux(NC_bounded_ge($1,$3), loc () ) }
-  | typ LtEq typ
+  | nexp_typ LtEq nexp_typ
     { NC_aux(NC_bounded_le($1,$3), loc () ) }
   | tyvar IN Lcurly nums Rcurly
     { NC_aux(NC_nat_set_bounded($1,$4), loc ()) }
