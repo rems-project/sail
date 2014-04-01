@@ -518,7 +518,10 @@ let initial_typ_env =
     ("|",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_or"),[],pure_e));
     ("^",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_xor"),[],pure_e));
     ("&",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_and"),[],pure_e));
-    ("^^",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([bit_t;nat_typ])},{t=Tvar "a"},pure_e)}),External (Some "duplicate"),[],pure_e));
+    ("^^",Some((["n",{k=K_Nat}],{t= Tfn ({t=Ttup([bit_t;mk_range (Nvar "n")])},
+					  {t=Tapp("vector",[TA_nexp {nexp=Nconst 0}; TA_nexp {nexp=Nvar "n"};
+							    TA_ord {order = Oinc}; TA_typ bit_t])},
+					  pure_e)}),External (Some "duplicate"),[],pure_e));
     ("<<<",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
   ]
 
