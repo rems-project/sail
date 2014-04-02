@@ -940,7 +940,8 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
     | "register",_ ->
       (match args1 with
 	| [TA_typ t] ->
-          let new_e = E_aux(E_cast(t_to_typ t,e),(l,Some(([],t),External None,[],pure_e))) in (*Wrong effect, should be reading a register*)
+          (*let _ = Printf.printf "Adding cast to remove register read\n" in*)
+          let new_e = E_aux(E_cast(t_to_typ t,e),(l,Some(([],t),External None,[],(add_effect (BE_aux(BE_rreg, l)) pure_e)))) in
 	  type_coerce co d_env t new_e t2
 	| _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))
     | _,_ -> 

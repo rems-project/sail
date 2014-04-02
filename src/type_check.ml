@@ -583,12 +583,15 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       (e',t',t_env,cs@cs',effect)
     | E_vector_access(vec,i) ->
       let base,rise,ord = new_n(),new_n(),new_o() in
-      let min,m_rise = new_n(),new_n() in
       let item_t = new_t () in
+      let min,m_rise = new_n(),new_n() in
       let vt = {t= Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord; TA_typ item_t])} in
       let (vec',t',_,cs,ef) = check_exp envs vt vec in
       let it = {t= Tapp("range",[TA_nexp min;TA_nexp m_rise])} in
       let (i',ti',_,cs_i,ef_i) = check_exp envs it i in
+      let ord,item_t = match t'.t with
+        | Tabbrev(_,{t=Tapp("vector",[_;_;TA_ord ord;TA_typ t])}) | Tapp("vector",[_;_;TA_ord ord;TA_typ t]) -> ord,t
+        | _ -> ord,item_t in
       let cs_loc = 
 	match ord.order with
 	  | Oinc ->
@@ -597,6 +600,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	    [GtEq((Expr l),base,min); LtEq((Expr l),{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,{nexp=Nneg rise})})]
 	  | _ -> typ_error l "A vector must be either increasing or decreasing to access a single element"
       in 
+      (*let _ = Printf.printf "Type checking vector access. item_t is %s and expect_t is %s\n" (t_to_string item_t) (t_to_string expect_t) in*)
       let t',cs',e'=type_coerce (Expr l) d_env item_t (E_aux(E_vector_access(vec',i'),(l,Some(([],item_t),Emp_local,[],pure_e)))) expect_t in
       (e',t',t_env,cs_loc@cs_i@cs@cs',union_effects ef ef_i)
     | E_vector_subrange(vec,i1,i2) ->
@@ -902,6 +906,7 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
           let t_actual = match t.t with 
             | Tabbrev(i,t) -> t
             | _ -> t in
+          (*let _ = Printf.printf "Assigning to %s, t is %s\n" i (t_to_string t_actual) in*)
 	  (match t_actual.t,is_top with
 	    | Tapp("register",[TA_typ u]),_ ->
 	      let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in

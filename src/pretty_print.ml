@@ -638,56 +638,56 @@ let rec pp_lem_let ppf (LB_aux(lb,(l,annot))) =
   fprintf ppf "@[<0>(LB_aux %a (%a, %a))@]" print_lb lb pp_lem_l l pp_annot annot
 
 and pp_lem_exp ppf (E_aux(e,(l,annot))) = 
-  let rec print_e ppf e = 
+  let print_e ppf e = 
     match e with
-    | E_block(exps) -> fprintf ppf "@[<0>%a [%a] %a@]"
-        kwd "(E_block" 
-        (list_pp pp_semi_lem_exp pp_lem_exp) exps
-        kwd ")"
-    | E_id(id) -> fprintf ppf "(%a %a)" kwd "E_id" pp_lem_id id
-    | E_lit(lit) -> fprintf ppf "(%a %a)" kwd "E_lit" pp_lem_lit lit
-    | E_cast(typ,exp) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "E_cast" pp_lem_typ typ pp_lem_exp exp 
+    | E_block(exps) -> fprintf ppf "@[<0>(E_aux %a [%a] %a (%a, %a))@]"
+      kwd "(E_block" 
+      (list_pp pp_semi_lem_exp pp_lem_exp) exps
+      kwd ")" pp_lem_l l pp_annot annot
+    | E_id(id) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_id" pp_lem_id id pp_lem_l l pp_annot annot
+    | E_lit(lit) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_lit" pp_lem_lit lit pp_lem_l l pp_annot annot
+    | E_cast(typ,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_cast" pp_lem_typ typ pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_internal_cast((_,None),e) -> pp_lem_exp ppf e
     | E_internal_cast((_,Some((_,t),_,_,_)), (E_aux(ec,(_,eannot)) as exp)) ->
       (match t.t,eannot with
-	| Tapp("vector",[TA_nexp n1;_;_;_]),Some((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_) ->
-	  if nexp_eq n1 n2 
-	  then print_e ppf ec
-	  else fprintf ppf "@[<0>(E_cast %a %a)@]" pp_lem_typ (t_to_typ t) pp_lem_exp exp
-	| _ -> fprintf ppf "@[<0>(E_cast %a %a)@]" pp_lem_typ (t_to_typ t) pp_lem_exp exp)
-    | E_app(f,args) -> fprintf ppf "@[<0>(%a %a [%a])@]" kwd "E_app" pp_lem_id f (list_pp pp_semi_lem_exp pp_lem_exp) args
-    | E_app_infix(l,op,r) -> fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "E_app_infix" pp_lem_exp l pp_lem_id op pp_lem_exp r
-    | E_tuple(exps) -> fprintf ppf "@[<0>%a [%a] %a@]" kwd "(E_tuple" (list_pp pp_semi_lem_exp pp_lem_exp) exps kwd ")"
-    | E_if(c,t,e) -> fprintf ppf "@[<0>(%a %a @[<1>%a@] @[<1> %a@])@]" kwd "E_if" pp_lem_exp c pp_lem_exp t pp_lem_exp e
+      | Tapp("vector",[TA_nexp n1;_;_;_]),Some((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_) ->
+	if nexp_eq n1 n2 
+	  then pp_lem_exp ppf exp
+	else fprintf ppf "@[<0>(E_aux (E_cast %a %a) (%a, %a))@]" pp_lem_typ (t_to_typ t) pp_lem_exp exp pp_lem_l l pp_annot annot
+      | _ -> fprintf ppf "@[<0>(E_aux (E_cast %a %a) (%a, %a))@]" pp_lem_typ (t_to_typ t) pp_lem_exp exp pp_lem_l l pp_annot annot)
+    | E_app(f,args) -> fprintf ppf "@[<0>(E_aux (%a %a [%a]) (%a, %a))@]" kwd "E_app" pp_lem_id f (list_pp pp_semi_lem_exp pp_lem_exp) args pp_lem_l l pp_annot annot
+    | E_app_infix(l',op,r) -> fprintf ppf "@[<0>(E_aux (%a %a %a %a) (%a, %a))@]" kwd "E_app_infix" pp_lem_exp l' pp_lem_id op pp_lem_exp r pp_lem_l l pp_annot annot
+    | E_tuple(exps) -> fprintf ppf "@[<0>(E_aux %a [%a] %a (%a, %a))@]" kwd "(E_tuple" (list_pp pp_semi_lem_exp pp_lem_exp) exps kwd ")" pp_lem_l l pp_annot annot
+    | E_if(c,t,e) -> fprintf ppf "@[<0>(E_aux (%a %a @[<1>%a@] @[<1> %a@]) (%a, %a))@]" kwd "E_if" pp_lem_exp c pp_lem_exp t pp_lem_exp e pp_lem_l l pp_annot annot
     | E_for(id,exp1,exp2,exp3,order,exp4) ->
-      fprintf ppf "@[<0>(%a %a %a %a %a %a @ @[<1> %a @])@]" 
-	kwd "E_for" pp_lem_id id pp_lem_exp exp1 pp_lem_exp exp2 pp_lem_exp exp3 pp_lem_ord order pp_lem_exp exp4
-    | E_vector(exps) -> fprintf ppf "@[<0>(%a [%a])@]" kwd "E_vector" (list_pp pp_semi_lem_exp pp_lem_exp) exps
+      fprintf ppf "@[<0>(E_aux (%a %a %a %a %a %a @ @[<1> %a @]) (%a, %a))@]" 
+	kwd "E_for" pp_lem_id id pp_lem_exp exp1 pp_lem_exp exp2 pp_lem_exp exp3 pp_lem_ord order pp_lem_exp exp4 pp_lem_l l pp_annot annot
+    | E_vector(exps) -> fprintf ppf "@[<0>(E_aux (%a [%a]) (%a, %a))@]" kwd "E_vector" (list_pp pp_semi_lem_exp pp_lem_exp) exps pp_lem_l l pp_annot annot
     | E_vector_indexed(iexps) -> 
       let iformat ppf (i,e) = fprintf ppf "@[<1>(%i %a %a) %a@]" i kwd ", " pp_lem_exp e kwd ";" in
       let lformat ppf (i,e) = fprintf ppf "@[<1>(%i %a %a) @]" i kwd ", " pp_lem_exp e in
-      fprintf ppf "@[<0>(%a [%a]) @]" kwd "E_vector_indexed" (list_pp iformat lformat) iexps
-    | E_vector_access(v,e) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "E_vector_access" pp_lem_exp v pp_lem_exp e
+      fprintf ppf "@[<0>(E_aux (%a [%a]) (%a, %a))@]" kwd "E_vector_indexed" (list_pp iformat lformat) iexps pp_lem_l l pp_annot annot
+    | E_vector_access(v,e) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_vector_access" pp_lem_exp v pp_lem_exp e pp_lem_l l pp_annot annot
     | E_vector_subrange(v,e1,e2) -> 
-      fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "E_vector_subrange" pp_lem_exp v pp_lem_exp e1 pp_lem_exp e2 
+      fprintf ppf "@[<0>(E_aux (%a %a %a %a) (%a, %a))@]" kwd "E_vector_subrange" pp_lem_exp v pp_lem_exp e1 pp_lem_exp e2 pp_lem_l l pp_annot annot
     | E_vector_update(v,e1,e2) -> 
-      fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "E_vector_update" pp_lem_exp v pp_lem_exp e1 pp_lem_exp e2
+      fprintf ppf "@[<0>(E_aux (%a %a %a %a) (%a, %a))@]" kwd "E_vector_update" pp_lem_exp v pp_lem_exp e1 pp_lem_exp e2 pp_lem_l l pp_annot annot
     | E_vector_update_subrange(v,e1,e2,e3) -> 
-      fprintf ppf "@[<0>(%a %a %a %a %a)@]" kwd "E_vector_update_subrange" pp_lem_exp v pp_lem_exp e1 pp_lem_exp e2 pp_lem_exp e3 
-    | E_list(exps) -> fprintf ppf "@[<0>(%a [%a])@]" kwd "E_list" (list_pp pp_semi_lem_exp pp_lem_exp) exps
-    | E_cons(e1,e2) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "E_cons" pp_lem_exp e1 pp_lem_exp e2
+      fprintf ppf "@[<0>(E_aux (%a %a %a %a %a) (%a, %a))@]" kwd "E_vector_update_subrange" pp_lem_exp v pp_lem_exp e1 pp_lem_exp e2 pp_lem_exp e3 pp_lem_l l pp_annot annot
+    | E_list(exps) -> fprintf ppf "@[<0>(E_aux (%a [%a]) (%a, %a))@]" kwd "E_list" (list_pp pp_semi_lem_exp pp_lem_exp) exps pp_lem_l l pp_annot annot
+    | E_cons(e1,e2) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_cons" pp_lem_exp e1 pp_lem_exp e2 pp_lem_l l pp_annot annot
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) -> 
-      fprintf ppf "@[<0>(%a [%a]))@]" kwd "E_record(FES_Fexps" (list_pp pp_semi_lem_fexp pp_lem_fexp) fexps
+      fprintf ppf "@[<0>(E_aux (%a [%a])) (%a, %a))@]" kwd "E_record(FES_Fexps" (list_pp pp_semi_lem_fexp pp_lem_fexp) fexps pp_lem_l l pp_annot annot
     | E_record_update(exp,(FES_aux(FES_Fexps(fexps,_),_))) ->
-      fprintf ppf "@[<0>(%a %a (%a [%a]))@]" 
-	kwd "E_record_update" pp_lem_exp exp kwd "FES_Fexps" (list_pp pp_semi_lem_fexp pp_lem_fexp) fexps 
-    | E_field(fexp,id) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "E_field" pp_lem_exp fexp pp_lem_id id
+      fprintf ppf "@[<0>(E_aux (%a %a (%a [%a])) (%a, %a))@]" 
+	kwd "E_record_update" pp_lem_exp exp kwd "FES_Fexps" (list_pp pp_semi_lem_fexp pp_lem_fexp) fexps pp_lem_l l pp_annot annot
+    | E_field(fexp,id) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_field" pp_lem_exp fexp pp_lem_id id pp_lem_l l pp_annot annot
     | E_case(exp,pexps) -> 
-      fprintf ppf "@[<0>(%a %a [%a])@]" kwd "E_case" pp_lem_exp exp (list_pp pp_semi_lem_case pp_lem_case) pexps
-    | E_let(leb,exp) -> fprintf ppf "@[<0>(%a %a %a) @]" kwd "E_let" pp_lem_let leb pp_lem_exp exp
-    | E_assign(lexp,exp) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "E_assign" pp_lem_lexp lexp pp_lem_exp exp
+      fprintf ppf "@[<0>(E_aux (%a %a [%a]) (%a, %a))@]" kwd "E_case" pp_lem_exp exp (list_pp pp_semi_lem_case pp_lem_case) pexps pp_lem_l l pp_annot annot
+    | E_let(leb,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_let" pp_lem_let leb pp_lem_exp exp pp_lem_l l pp_annot annot
+    | E_assign(lexp,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_assign" pp_lem_lexp lexp pp_lem_exp exp pp_lem_l l pp_annot annot
   in
-  fprintf ppf "@[<0>(E_aux %a (%a, %a))@]" print_e e pp_lem_l l pp_annot annot
+  print_e ppf e
 
 and pp_semi_lem_exp ppf e = fprintf ppf "@[<1>%a%a@]" pp_lem_exp e kwd ";"
 
