@@ -34,7 +34,7 @@ and nexp_aux =
   | Nadd of nexp * nexp
   | Nmult of nexp * nexp
   | N2n of nexp
-  | Nneg of nexp (* Unary minus for representing new sizes after slicing *)
+  | Nneg of nexp
   | Nuvar of n_uvar
 and effect = { mutable effect : effect_aux }
 and effect_aux =
@@ -62,14 +62,22 @@ type tag =
   | Enum
   | Spec
 
-(* Constraints for nexps, plus the location which added the constraint, each nexp is either <= 0 = 0 or >= 0 *)
+type constraint_origin =
+  | Patt of Parse_ast.l
+  | Expr of Parse_ast.l
+  | Abre of Parse_ast.l
+  | Spec of Parse_ast.l
+
+(* Constraints for nexps, plus the location which added the constraint *)
 type nexp_range =
-  | LtEq of Parse_ast.l * nexp * nexp
-  | Eq of Parse_ast.l * nexp * nexp
-  | GtEq of Parse_ast.l * nexp * nexp
-  | In of Parse_ast.l * string * int list
-  | InS of Parse_ast.l * nexp * int list (* This holds the given value for string after a substitution *)
-  | InOpen of Parse_ast.l * nexp * int list (* This holds a non-exhaustive value/s for a var or nuvar during constraint gathering *)
+  | LtEq of constraint_origin * nexp * nexp
+  | Eq of constraint_origin * nexp * nexp
+  | GtEq of constraint_origin * nexp * nexp
+  | In of constraint_origin * string * int list
+  | InS of constraint_origin * nexp * int list (* This holds the given value for string after a substitution *)
+  | InOpen of constraint_origin * nexp * int list (* This holds a non-exhaustive value/s for a var or nuvar during constraint gathering *)
+
+val get_c_loc : constraint_origin -> Parse_ast.l
 
 type t_params = (string * kind) list
 type tannot = ((t_params * t) * tag * nexp_range list * effect) option
@@ -115,7 +123,7 @@ val new_o : unit -> order
 val new_e : unit -> effect
 
 val subst : (string * kind) list -> t -> nexp_range list -> effect -> t * nexp_range list * effect
-val get_abbrev : def_envs -> t -> (t * nexp_range list * effect)
+val get_abbrev : def_envs -> t -> (t * nexp_range list)
 
 val eval_nexp : nexp -> nexp
 val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debugging purposes*)
@@ -135,10 +143,10 @@ val nexp_eq : nexp -> nexp -> bool
    enum 2 5 is consistent with enum 0 10, but not vice versa.
    type_consistent mutates uvars to perform unification and will raise an error if the [[t1]] and [[t2]] are inconsistent
 *)
-val type_consistent : Parse_ast.l -> def_envs -> t -> t -> t * nexp_range list
+val type_consistent : constraint_origin -> def_envs -> t -> t -> t * nexp_range list
 
 (* type_eq mutates to unify variables, and will raise an exception if the first type cannot be coerced into the second and is inconsistent *)
-val type_coerce : Parse_ast.l -> def_envs -> t -> exp -> t -> t * nexp_range list * exp
+val type_coerce : constraint_origin -> def_envs -> t -> exp -> t -> t * nexp_range list * exp
 
 (* Merge tannots when intersection or unioning two environments. In case of default types, defer to tannot on right *)
-val tannot_merge : Parse_ast.l -> def_envs -> tannot -> tannot -> tannot 
+val tannot_merge : constraint_origin -> def_envs -> tannot -> tannot -> tannot 
