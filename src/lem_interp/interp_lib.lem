@@ -10,11 +10,11 @@ let compose f g x = f (V_tuple [g x]) ;;
 
 let is_one (V_lit (L_aux b lb)) = V_lit (L_aux (if b = L_one then L_true else L_false) lb) ;;
 
-let eq (V_tuple [x; y]) = V_lit (L_aux (if x = y then L_true else L_false) Unknown) ;;
+let eq (V_tuple [x; y]) = V_lit (L_aux (if x = y then L_one else L_zero) Unknown) ;;
 
 let neg (V_tuple [V_lit (L_aux arg la)]) = V_lit (L_aux (match arg with
-  | L_true -> L_false
-  | L_false -> L_true end) la) ;;
+  | L_one -> L_zero
+  | L_zero -> L_one end) la) ;;
 
 let neq = compose neg eq ;;
 
