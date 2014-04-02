@@ -42,11 +42,11 @@ k :: 'Ki_' ::=
 
 t , u :: 'T_' ::=                                
 {{ com Internal types }}
-   | id                                            :: :: id
-   | kid                                          :: :: var
+   | x                                            :: :: id
+   | ' x                                          :: :: var
    | t1 -> t2 effect                        :: :: fn 
    | ( t1 * .... * tn )                          :: :: tup
-   | id t_args                                  :: :: app 
+   | x t_args                                  :: :: app 
    | t |-> t1                                   :: :: abbrev
    | register t_args                         :: S :: reg_app {{ ichlo T_app "register" [[t_args]] }}
    | t [ t1 / id1 ... tn / idn ]            :: M :: subst {{ ichlo "todo" }}
@@ -69,7 +69,7 @@ tag :: 'Tag_' ::=
 
 ne :: 'Ne_' ::=
  {{ com internal numeric expressions }}
-   | kid                                 :: :: var
+   | ' x                                 :: :: var
    | num                                 :: :: const
    | ne1 * ne2                           :: :: mult
    | ne1 + ... + nen                     :: :: add
@@ -110,7 +110,7 @@ ne :: 'Ne_' ::=
    | ne <= ne'            :: :: lteq
    | ne = ne'            :: :: eq
    | ne >= ne'           :: :: gteq
-   | kid 'IN' { num1 , ... , numn } :: :: in
+   | ' x 'IN' { num1 , ... , numn } :: :: in
 
 S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
                                                                     {{ hol nec list }}

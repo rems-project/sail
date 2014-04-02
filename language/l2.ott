@@ -57,7 +57,7 @@ open import Set_extra
 
 type l =
   | Unknown
-  | Trans of string * maybe l
+  | Int of string * maybe l (*Internally generated*)
   | Range of string * nat * nat * nat * nat
 
 type annot 'a = l * 'a

@@ -325,34 +325,34 @@ let id_of_string s = (Id_aux (Id s) Unknown)
 
 let rec combine_typs ts =
   match ts with
-  | [] -> T_var (Kid_aux (Var "fresh") Unknown)
+  | [] -> T_var "fresh"
   | [t] -> t
   | t::ts ->
     let t' = combine_typs ts in
     match (t,t') with 
       | (_,T_var _) -> t
-      | ((T_app (Id_aux (Id "enum") _) (T_args [T_arg_nexp (Ne_const n1); T_arg_nexp (Ne_const r1)])),
-	 (T_app (Id_aux (Id "enum") _) (T_args [T_arg_nexp (Ne_const n2); T_arg_nexp (Ne_const r2)]))) ->
+      | ((T_app "enum" (T_args [T_arg_nexp (Ne_const n1); T_arg_nexp (Ne_const r1)])),
+	 (T_app "enum" (T_args [T_arg_nexp (Ne_const n2); T_arg_nexp (Ne_const r2)]))) ->
 	let (smaller,larger,larger_r) = if n1 < n2 then (n1,n2,r2) else (n2,n1,r1) in
 	let r = (larger + larger_r) - smaller in
-	T_app (id_of_string "enum") (T_args [T_arg_nexp (Ne_const smaller); T_arg_nexp (Ne_const r)])
-      | ((T_app (Id_aux (Id "vector") _) (T_args [T_arg_nexp (Ne_const b1); T_arg_nexp (Ne_const r1); 
-						  T_arg_order (Ord_aux o1 _); T_arg_typ t1])),
-	 (T_app (Id_aux (Id "vector") _) (T_args [T_arg_nexp (Ne_const b2); T_arg_nexp (Ne_const r2); 
-						  T_arg_order (Ord_aux o2 _); T_arg_typ t2]))) ->
+	T_app "enum" (T_args [T_arg_nexp (Ne_const smaller); T_arg_nexp (Ne_const r)])
+      | ((T_app "vector" (T_args [T_arg_nexp (Ne_const b1); T_arg_nexp (Ne_const r1); 
+				   T_arg_order (Ord_aux o1 _); T_arg_typ t1])),
+	 (T_app "vector" (T_args [T_arg_nexp (Ne_const b2); T_arg_nexp (Ne_const r2); 
+				  T_arg_order (Ord_aux o2 _); T_arg_typ t2]))) ->
 	let t = combine_typs [t1;t2] in
 	match (o1,o2) with
 	  | (Ord_inc,Ord_inc) ->
 	    let larger_start = if b1 < b2 then b2 else b1 in
 	    let smaller_rise = if r1 < r2 then r1 else r2 in
-	    (T_app (id_of_string "vector") (T_args [T_arg_nexp (Ne_const larger_start); T_arg_nexp (Ne_const smaller_rise);
-						    (T_arg_order (Ord_aux o1 Unknown)); T_arg_typ t]))
+	    (T_app "vector" (T_args [T_arg_nexp (Ne_const larger_start); T_arg_nexp (Ne_const smaller_rise);
+				     (T_arg_order (Ord_aux o1 Unknown)); T_arg_typ t]))
 	  | (Ord_dec,Ord_dec) ->
 	    let smaller_start = if b1 < b2 then b1 else b2 in
 	    let smaller_fall = if r1 < r2 then r2 else r2 in
-	    (T_app (id_of_string "vector") (T_args [T_arg_nexp (Ne_const smaller_start); T_arg_nexp (Ne_const smaller_fall);
-						    (T_arg_order (Ord_aux o1 Unknown)); T_arg_typ t]))
-	  | _ -> T_var (Kid_aux (Var "fresh") Unknown)
+	    (T_app "vector" (T_args [T_arg_nexp (Ne_const smaller_start); T_arg_nexp (Ne_const smaller_fall);
+				     (T_arg_order (Ord_aux o1 Unknown)); T_arg_typ t]))
+	  | _ -> T_var "fresh"
 	 end 
       | _ -> t'
      end 
@@ -361,35 +361,35 @@ let rec combine_typs ts =
 let reg_to_t r =
   match r with
     | Reg id (Just (t,_,_,_)) -> t
-    | _ -> T_var (Kid_aux (Var "fresh") Unknown)
+    | _ -> T_var "fresh"
  end
 
 let rec val_typ v =
   match v with
-    | V_boxref n t -> T_app (id_of_string "reg") (T_args [T_arg_typ t])
+    | V_boxref n t -> T_app "reg" (T_args [T_arg_typ t])
     | V_lit (L_aux lit _) ->
       match lit with
-	| L_unit -> T_id (id_of_string "unit")
-	| L_true -> T_id (id_of_string "bool")
-	| L_false -> T_id (id_of_string "bool")
-	| L_one -> T_id (id_of_string "bit")
-	| L_zero -> T_id (id_of_string "bit")
-	| L_string _ -> T_id (id_of_string "string")
-	| L_num n -> T_app (id_of_string "enum") (T_args [T_arg_nexp (Ne_const n); T_arg_nexp (Ne_const 0)])
-	| L_undef -> T_var (Kid_aux (Var "fresh") Unknown)
+	| L_unit -> T_id "unit"
+	| L_true -> T_id "bool"
+	| L_false -> T_id "bool"
+	| L_one -> T_id "bit"
+	| L_zero -> T_id "bit"
+	| L_string _ -> T_id "string"
+	| L_num n -> T_app "enum" (T_args [T_arg_nexp (Ne_const n); T_arg_nexp (Ne_const 0)])
+	| L_undef -> T_var "fresh"
       end 
     | V_tuple vals -> T_tup (List.map val_typ vals)
     | V_vector n inc vals -> 
       let ts = List.map val_typ vals in
       let t = combine_typs ts in
-      T_app (id_of_string "vector") (T_args [T_arg_nexp (Ne_const n); T_arg_nexp (Ne_const (list_length vals));
-					     T_arg_order (Ord_aux (if inc then Ord_inc else Ord_dec) Unknown);
-					     T_arg_typ t])
+      T_app "vector" (T_args [T_arg_nexp (Ne_const n); T_arg_nexp (Ne_const (list_length vals));
+			      T_arg_order (Ord_aux (if inc then Ord_inc else Ord_dec) Unknown);
+			      T_arg_typ t])
     | V_record t ivals -> t
     | V_list vals -> 
       let ts = List.map val_typ vals in
       let t = combine_typs ts in
-      T_app (id_of_string "list") (T_args [T_arg_typ t])
+      T_app "list" (T_args [T_arg_typ t])
     | V_ctor id t vals -> t
     | V_register reg -> reg_to_t reg
   end
@@ -614,8 +614,7 @@ let rec exp_list t_level build_e build_v l_env l_mem vals exps =
 and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
   let (Env defs lets regs ctors subregs) = t_level in 
   let (typ,tag,ncs,effect) = match annot with 
-    | Nothing -> (T_var (Kid_aux (Var "fresh_v") Unknown),
-		  Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
+    | Nothing -> (T_var "fresh_v", Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
     | Just(t, tag, ncs, ef) -> (t,tag,ncs,ef) end in
   match exp with
     | E_lit lit -> 
@@ -638,7 +637,6 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 			    | _ -> (Value v tag,lm,le) end) 
                         | _ -> (Value v Tag_empty,lm,le) end)
 	              (fun a -> update_stack a (add_to_top_frame (fun e -> (E_aux (E_cast ctyp e) (l,annot)))))
- (* TODO introduce coercions to change offset of vectors *)
     | E_id id -> 
       let name = get_id id in
       match tag with
@@ -792,7 +790,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 			match (exp,a) with
 			  | (E_aux _ (l,Just(_,Tag_extern _,_,_)),
 			     (Action (Read_reg ((Reg _ (Just((T_id id'),_,_,_))) as regf) Nothing) s)) ->
-			    match in_env subregs id' with
+			    match in_env subregs (Id_aux (Id id') Unknown) with
 			      | Just(indexes) ->
 				match in_env indexes id with
 				  | Just ir -> 
@@ -802,7 +800,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
                               | Nothing -> Error l "Internal error, unrecognized read, no reg" end
                          | (E_aux _ (l,Just(_,Tag_extern _,_,_)),
                             (Action (Read_reg ((Reg _ (Just((T_abbrev (T_id id') _),_,_,_))) as regf) Nothing) s))->
-			    match in_env subregs id' with
+			    match in_env subregs (Id_aux (Id id') Unknown) with
 			      | Just(indexes) ->
 				match in_env indexes id with
 				  | Just ir -> 
@@ -917,7 +915,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
     | E_vector_indexed(iexps) ->
       let (indexes,exps) = List.unzip iexps in
       let is_inc = match typ with
-        | T_app (Id_aux (Id "vector") _) (T_args [T_arg_nexp _;T_arg_nexp _; T_arg_order (Ord_aux Ord_inc _); _]) -> true
+        | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp _; T_arg_order (Ord_aux Ord_inc _); _]) -> true
         | _ -> false end in
       exp_list t_level (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es)) (l,annot))) 
                        (fun vals -> V_vector (List_extra.head indexes) is_inc vals) l_env l_mem [] exps
@@ -1054,7 +1052,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP_aux lexp (l,annot)):lexp tannot) =
    let (Env defs lets regs ctors subregs) = t_level in
   let (typ,tag,ncs,ef) = match annot with 
-    | Nothing -> (T_var (Kid_aux (Var "fresh_v") Unknown), Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
+    | Nothing -> (T_var "fresh_v", Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
     | Just(t, tag, ncs, ef) -> (t,tag,ncs,ef) end in
    match lexp with
     | LEXP_id id -> 
@@ -1226,7 +1224,7 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
        | Read_mem _ _ _ -> ((Action a s,lm,le), Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot)))
        | Call_extern _ _ -> ((Action a s,lm,le), Just (fun e -> LEXP_aux (LEXP_field (lexp_builder e) id) (l,annot)))
        | Write_reg ((Reg _ (Just(T_id id',_,_,_))) as regf) Nothing value -> 
-	 match in_env subregs id' with
+	 match in_env subregs (Id_aux (Id id') Unknown) with
 	   | Just(indexes) ->
 	     match in_env indexes id with
 	       | Just ir -> 
@@ -1236,7 +1234,7 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
 		 end 
             | Nothing -> ((Error l "Internal error, unrecognized write, no subreges",lm,le),Nothing) end
        | Write_reg ((Reg _ (Just((T_abbrev(T_id id') _),_,_,_))) as regf) Nothing value -> 
-	 match in_env subregs id' with
+	 match in_env subregs (Id_aux (Id id') Unknown) with
 	   | Just(indexes) ->
 	     match in_env indexes id with
 	       | Just ir -> 

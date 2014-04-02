@@ -7,7 +7,7 @@ open import Set_extra
 
 type l =
   | Unknown
-  | Trans of string * maybe l
+  | Int of string * maybe l (*Internally generated*)
   | Range of string * nat * nat * nat * nat
 
 type annot 'a = l * 'a
@@ -446,7 +446,7 @@ type k =  (* Internal kinds *)
 
 
 type ne =  (* internal numeric expressions *)
- | Ne_var of kid
+ | Ne_var of x
  | Ne_const of integer
  | Ne_mult of ne * ne
  | Ne_add of list ne
@@ -468,7 +468,7 @@ type nec =  (* Numeric expression constraints *)
  | Nec_lteq of ne * ne
  | Nec_eq of ne * ne
  | Nec_gteq of ne * ne
- | Nec_in of kid * list integer
+ | Nec_in of x * list integer
 
 
 type tag =  (* Data indicating where the identifier arises and thus information necessary in compilation *)
@@ -481,11 +481,11 @@ type tag =  (* Data indicating where the identifier arises and thus information 
 
 
 type t =  (* Internal types *)
- | T_id of id
- | T_var of kid
+ | T_id of x
+ | T_var of x
  | T_fn of t * t * effect
  | T_tup of list t
- | T_app of id * t_args
+ | T_app of x * t_args
  | T_abbrev of t * t
 
 and t_arg =  (* Argument to type constructors *)

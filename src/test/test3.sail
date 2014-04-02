@@ -1,5 +1,5 @@
 (* a register containing nat numbers *)
-register nat dummy_reg
+register [|0:256|] dummy_reg
 (* and one containing a byte *)
 register (bit[8]) dummy_reg2
 (* a function to read from memory; wmem serves no purpose currently,
@@ -8,18 +8,6 @@ val extern nat -> nat effect { wmem , rmem }  MEM
 val extern nat -> nat effect { wmem , rmem }  MEM_GPU
 val extern forall Nat 'n . ( nat, [|'n|] ) -> (bit['n * 8]) effect { wmem , rmem }  MEM_SIZE
 val extern nat -> (bit[8]) effect { wmem , rmem }  MEM_WORD
-
-(* XXX types are wrong *)
-val extern forall Type 'a . 'a -> nat effect pure to_num_inc = "to_num_inc"
-val extern forall Type 'a . 'a -> nat effect pure to_num_dec = "to_num_dec"
-val extern forall Type 'a . nat -> 'a effect pure to_vec_inc = "to_vec_inc"
-val extern forall Type 'a . nat -> 'a effect pure to_vec_dec = "to_vec_dec"
-
-function unit ignore(x) = ()
-
-(* extern functions *)
-val extern ( nat, nat ) -> nat effect pure add = "add"
-val extern ( nat, nat ) -> nat effect pure (deinfix + ) = "add"   (* infix plus *)
 
 function nat (deinfix * ) ( (nat) x, (nat) y ) = 42
 
@@ -57,10 +45,10 @@ function nat main _ = {
 
   (* extern calls *)
   dummy_reg := 3 + 39;
-  dummy_reg := add(5, 37);
+  dummy_reg := (deinfix +)(5, 37);
   (* casts and external calls *)
   dummy_reg := 0b01 + 0b01;
-  dummy_reg2 := dummy_reg;               (* cast from nat to bit[8] *)
+  dummy_reg2 := dummy_reg;               (* cast from [|256|] to bit[8] *)
   dummy_reg2 := dummy_reg2 + dummy_reg2; (* cast to nat for add call *)
   dummy_reg2;                            (* cast again and return 4 *)
 }

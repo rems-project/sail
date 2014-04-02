@@ -249,7 +249,7 @@ let rec eval_nexp n =
 	  let rec two_pow n =
 	    match n with 
 	    | 0 -> 1
-	    | n -> (two_pow (n-1)) in
+	    | n -> 2*(two_pow (n-1)) in
 	  {nexp = Nconst(two_pow i)}
 	| _ -> {nexp = N2n n1'})
     | Nvar _ | Nuvar _ -> n
@@ -303,7 +303,7 @@ let rec resolve_nsubst (n : nexp) : nexp = match n.nexp with
   | Nuvar({ nsubst=Some(n') } as u) ->
     let n'' = resolve_nsubst n' in
     (match n''.nexp with
-    | Nuvar(_) -> u.nsubst <- Some(n''); n''
+    | Nuvar(m) -> if u.nin then m.nin <- true else (); u.nsubst <- Some(n''); n''
     | x -> n.nexp <- x; n)
   | _ -> n
 let rec resolve_osubst (o : order) : order = match o.order with
@@ -498,15 +498,23 @@ let initial_kind_env =
     ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } )
   ]
 
-let mk_range n = {t=Tapp("range",[TA_nexp {nexp=n};TA_nexp {nexp=Nconst 0}])}
+let mk_range n1 n2 = {t=Tapp("range",[TA_nexp {nexp=n1};TA_nexp {nexp=n2}])}
 let initial_typ_env =
   Envmap.from_list [
-    ("ignore",Some(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,{effect=Evar "b"})}),External None,[],pure_e));
-    ("+",Some(([("n",{k=K_Nat});("m",{k=K_Nat})],{t= Tfn({t=Ttup([mk_range (Nvar "n");mk_range (Nvar "m")])},
-							 (mk_range (Nadd({nexp=Nvar "n"},{nexp=Nvar "m"}))),
-							 pure_e)}),External (Some "add"),[],pure_e));
+    ("ignore",Some(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,pure_e)}),External None,[],pure_e));
+    ("+",Some(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
+               {t= Tfn({t=Ttup([mk_range (Nvar "n") (Nvar "m");
+                                mk_range (Nvar "o") (Nvar "p")])},
+		       (mk_range (Nadd({nexp=Nvar "n"},{nexp=Nvar "o"})) (Nadd({nexp=Nvar "m"},{nexp=Nvar "p"}))),
+		       pure_e)}),External (Some "add"),[],pure_e));
     ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "multiply"),[],pure_e));
-    ("-",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "minus"),[],pure_e));
+    ("-",Some(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
+               {t= Tfn({t=Ttup([mk_range (Nvar "n") (Nvar "m");
+                                mk_range (Nvar "o") (Nvar "p")])},
+		       (mk_range (Nadd ({nexp=(Nvar "n")},{ nexp = Nneg({nexp=Nvar "o"})})) (Nadd({nexp=Nvar "m"},{nexp =Nneg {nexp=Nvar "p"}}))),
+		       pure_e)}),External (Some "minus"),
+              [GtEq(Spec(Parse_ast.Int("-",None)),{nexp=Nvar "n"},{nexp=Nvar "o"});
+               GtEq(Spec(Parse_ast.Int("-",None)),{nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},{nexp=Nvar "o"})],pure_e));
     ("mod",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "mod"),[],pure_e));
     ("quot",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "quot"),[],pure_e));
     (*Type incomplete*)
@@ -527,10 +535,11 @@ let initial_typ_env =
     ("|",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_or"),[],pure_e));
     ("^",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_xor"),[],pure_e));
     ("&",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_and"),[],pure_e));
-    ("^^",Some((["n",{k=K_Nat}],{t= Tfn ({t=Ttup([bit_t;mk_range (Nvar "n")])},
-					  {t=Tapp("vector",[TA_nexp {nexp=Nconst 0}; TA_nexp {nexp=Nvar "n"};
-							    TA_ord {order = Oinc}; TA_typ bit_t])},
-					  pure_e)}),External (Some "duplicate"),[],pure_e));
+    ("^^",Some(([("n",{k=K_Nat});("m",{k=K_Nat})],
+                {t= Tfn ({t=Ttup([bit_t;mk_range (Nvar "n") (Nvar "m")])},
+			 {t=Tapp("vector",[TA_nexp {nexp=Nconst 0}; TA_nexp {nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})};
+					   TA_ord {order = Oinc}; TA_typ bit_t])},
+			 pure_e)}),External (Some "duplicate"),[],pure_e));
     ("<<<",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
   ]
 
@@ -540,7 +549,6 @@ let initial_abbrev_env =
   ]
 
 let rec t_subst s_env t =
-  (*let _ = Printf.printf "Calling t_subst on %s\n" (t_to_string t) in*)
   match t.t with
   | Tvar i -> (match Envmap.apply s_env i with
                | Some(TA_typ t1) -> t1
@@ -589,7 +597,12 @@ let rec cs_subst t_env cs =
     | Eq(l,n1,n2)::cs -> Eq(l,n_subst t_env n1,n_subst t_env n2)::(cs_subst t_env cs)
     | GtEq(l,n1,n2)::cs -> GtEq(l,n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
     | LtEq(l,n1,n2)::cs -> LtEq(l,n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
-    | In(l,s,ns)::cs -> InS(l,n_subst t_env {nexp=Nvar s},ns)::(cs_subst t_env cs)
+    | In(l,s,ns)::cs -> 
+      let nexp = n_subst t_env {nexp=Nvar s} in
+      (match nexp.nexp with
+      | Nuvar urec -> urec.nin <- true
+      | _ -> ()); 
+      InS(l,nexp,ns)::(cs_subst t_env cs)
     | InS(l,n,ns)::cs -> InS(l,n_subst t_env n,ns)::(cs_subst t_env cs)
 
 let subst k_env t cs e =
@@ -993,19 +1006,29 @@ let rec simple_constraint_check cs =
   | Eq(co,n1,n2)::cs -> 
 (*    let _ = Printf.printf "eq check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = eval_nexp n1,eval_nexp n2 in
-(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
-    (match n1'.nexp,n2.nexp with
+(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+    (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 -> 
       if i1==i2 
       then simple_constraint_check cs
       else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
 			            ^ string_of_int i1 ^ " to equal " ^ string_of_int i2)
+    | Nconst i, Nuvar u ->
+      if u.nin
+      then Eq(co,n1',n2')::(simple_constraint_check cs)
+      else begin equate_n n2' n1'; (simple_constraint_check cs) end
+    | Nuvar u, Nconst i ->
+      if u.nin
+      then Eq(co,n1',n2')::(simple_constraint_check cs)
+      else begin equate_n n1' n2'; (simple_constraint_check cs) end
+    | Nuvar u1, Nuvar u2 ->
+      resolve_nsubst n1; resolve_nsubst n2; equate_n n1' n2'; (simple_constraint_check cs)
     | _,_ -> Eq(co,n1',n2')::(simple_constraint_check cs))
   | GtEq(co,n1,n2)::cs -> 
-(*    let _ = Printf.printf ">= check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in*)
+(*    let _ = Printf.printf ">= check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = eval_nexp n1,eval_nexp n2 in
-(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
-    (match n1'.nexp,n2.nexp with
+(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+    (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 -> 
       if i1>=i2 
       then simple_constraint_check cs
@@ -1013,10 +1036,10 @@ let rec simple_constraint_check cs =
 			            ^ string_of_int i1 ^ " to be greater than or equal to " ^ string_of_int i2)
     | _,_ -> GtEq(co,n1',n2')::(simple_constraint_check cs))
   | LtEq(co,n1,n2)::cs -> 
-    (*    let _ = Printf.printf "<= check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+(*    let _ = Printf.printf "<= check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = eval_nexp n1,eval_nexp n2 in
-    (*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
-    (match n1'.nexp,n2.nexp with
+(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+    (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 -> 
       if i1<=i2 
       then simple_constraint_check cs
@@ -1030,10 +1053,14 @@ let do_resolve_constraints = ref true
 let resolve_constraints cs = 
   if not !do_resolve_constraints
   then cs
-  else begin
-    let complex_constraints = simple_constraint_check cs in
-    complex_constraints (*cs*)
-  end
+  else
+    let rec fix len cs =
+(*      let _ = Printf.printf "Calling simple constraint check, fix check point is %i\n" len in *)
+      let cs' = simple_constraint_check cs in
+      if len > (List.length cs') then fix (List.length cs') cs'
+      else cs' in
+    let complex_constraints = fix (List.length cs) cs in
+    complex_constraints
 
 
 let check_tannot l annot constraints efs = 

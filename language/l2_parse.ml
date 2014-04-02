@@ -5,7 +5,7 @@ type text = string
 
 type l =
   | Unknown
-  | Trans of string * l option
+  | Int of string * l option
   | Range of Lexing.position * Lexing.position
 
 type 'a annot = l * 'a

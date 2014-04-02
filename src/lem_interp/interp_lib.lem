@@ -6,6 +6,8 @@ open import Num
 open import List
 open import Word
 
+let ignore_sail x = V_lit (L_aux L_unit Unknown) ;;
+
 let compose f g x = f (V_tuple [g x]) ;;
 
 let is_one (V_lit (L_aux b lb)) = V_lit (L_aux (if b = L_one then L_true else L_false) lb) ;;
@@ -58,6 +60,7 @@ let rec vec_concat (V_tuple args) = match args with
   end ;;
 
 let function_map = [
+  ("ignore", ignore_sail);            
   ("add", add);
   ("eq", eq);
   ("vec_concat", vec_concat);

@@ -366,8 +366,8 @@ let pp_defs ppf (Defs(defs)) =
 
 let rec pp_format_l_lem = function
   | Parse_ast.Unknown -> "Unknown"
-  | Parse_ast.Trans(s,None) -> "(Trans \"" ^ s ^ "\" Nothing)"
-  | Parse_ast.Trans(s,(Some l)) -> "(Trans \"" ^  s ^ "\" (Just " ^ (pp_format_l_lem l) ^ "))"
+  | Parse_ast.Int(s,None) -> "(Int \"" ^ s ^ "\" Nothing)"
+  | Parse_ast.Int(s,(Some l)) -> "(Int \"" ^  s ^ "\" (Just " ^ (pp_format_l_lem l) ^ "))"
   | Parse_ast.Range(p1,p2) -> "(Range \"" ^ p1.Lexing.pos_fname ^ "\" " ^
                                (string_of_int p1.Lexing.pos_lnum) ^ " " ^ 
                                (string_of_int (p1.Lexing.pos_cnum - p1.Lexing.pos_bol)) ^ " " ^
@@ -535,11 +535,11 @@ let pp_lem_lit ppf l = base ppf (pp_format_lit_lem l)
 
 let rec pp_format_t t =
   match t.t with
-    | Tid i -> "(T_id (Id_aux (Id \"" ^ i ^ "\") Unknown))"
-    | Tvar i -> "(T_var (Kid_aux (Var \"" ^ i ^ "\") Unknown))"
+    | Tid i -> "(T_id \"" ^ i ^ "\")"
+    | Tvar i -> "(T_var \"" ^ i ^ "\")"
     | Tfn(t1,t2,e) -> "(T_fn " ^ (pp_format_t t1) ^ " " ^ (pp_format_t t2) ^ " " ^ pp_format_e e ^ ")"
     | Ttup(tups) -> "(T_tup [" ^ (list_format "; " pp_format_t tups) ^ "])"
-    | Tapp(i,args) -> "(T_app (Id_aux (Id \"" ^ i ^ "\") Unknown) (T_args [" ^  list_format "; " pp_format_targ args ^ "]))"
+    | Tapp(i,args) -> "(T_app \"" ^ i ^ "\" (T_args [" ^  list_format "; " pp_format_targ args ^ "]))"
     | Tabbrev(ti,ta) -> "(T_abbrev " ^ (pp_format_t ti) ^ " " ^ (pp_format_t ta) ^ ")"
     | Tuvar(_) -> assert false (*"(T_var (Kid_aux (Var \"fresh_v\") Unknown))"*)
 and pp_format_targ = function
@@ -549,13 +549,13 @@ and pp_format_targ = function
   | TA_ord o -> "(T_arg_order " ^ pp_format_o o ^ ")"
 and pp_format_n n =
   match n.nexp with
-    | Nvar i -> "(Ne_var (Kid_aux (Var \"" ^ i ^ "\") Unknown))"
+    | Nvar i -> "(Ne_var \"" ^ i ^ "\")"
     | Nconst i -> "(Ne_const " ^ string_of_int i ^ ")"
     | Nadd(n1,n2) -> "(Ne_add [" ^ (pp_format_n n1) ^ "; " ^ (pp_format_n n2) ^ "])"
     | Nmult(n1,n2) -> "(Ne_mult " ^ (pp_format_n n1) ^ " " ^ (pp_format_n n2) ^ ")"
     | N2n n -> "(Ne_exp " ^ (pp_format_n n) ^ ")"
     | Nneg n -> "(Ne_unary " ^ (pp_format_n n) ^ ")"
-    | Nuvar _ -> "(Ne_var (Kid_aux (Var \"fresh_v_" ^ string_of_int (get_index n) ^ "\") Unknown))"
+    | Nuvar _ -> "(Ne_var \"fresh_v_" ^ string_of_int (get_index n) ^ "\")"
 and pp_format_e e = 
   "(Effect_aux " ^
   (match e.effect with
@@ -590,9 +590,9 @@ let pp_format_nes nes =
        | Eq(_,n1,n2) -> "(Nec_eq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | GtEq(_,n1,n2) -> "(Nec_gteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | In(_,i,ns) | InS(_,{nexp=Nvar i},ns) |InOpen(_,{nexp=Nvar i},ns)-> 
-	 "(Nec_in (Kid_aux (Var \"" ^ i ^ "\") Unknown) [" ^ (list_format "; " string_of_int ns)^ "])"
+	 "(Nec_in \"" ^ i ^ "\" [" ^ (list_format "; " string_of_int ns)^ "])"
        | InS(_,{nexp = Nuvar _},ns) | InOpen(_,{nexp = Nuvar _},ns) ->  
-	 "(Nec_in (Kid_aux (Var \"fresh\") Unknown) [" ^ (list_format "; " string_of_int ns)^ "])"
+	 "(Nec_in \"fresh\" [" ^ (list_format "; " string_of_int ns)^ "])"
      )
      nes) ^ "]"
 

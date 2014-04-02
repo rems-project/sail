@@ -24,7 +24,7 @@ let id_to_string = function
 
 let loc_to_string = function
   | Unknown -> "Unknown"
-  | Trans(s,_) -> s
+  | Int(s,_) -> s
   | Range(s,fline,fchar,tline,tchar) -> 
     "in " ^ s ^ " from line " ^  (string_of_int fline) ^ " character " ^ (string_of_int fchar) ^ 
       " to line " ^ (string_of_int tline) ^ " character " ^ (string_of_int tchar)
