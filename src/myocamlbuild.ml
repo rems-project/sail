@@ -3,6 +3,18 @@ open Command ;;
 open Pathname ;;
 open Outcome ;;
 
+let split ch s =
+  let x = ref [] in
+  let rec go s =
+    if not (String.contains s ch) then List.rev (s :: !x)
+    else begin
+      let pos = String.index s ch in
+      x := (String.before s pos)::!x;
+      go (String.after s (pos + 1))
+    end
+  in
+  go s
+
 (* paths relative to _build *)
 let lem_dir = "../../../lem" ;;
 let lem_libdir = lem_dir / "ocaml-lib/_build" ;;
@@ -30,16 +42,20 @@ dispatch begin function
     ~dep: "%.lem"
     (fun env builder -> Seq [
       Cmd (S ([ P lem] @ lem_opts @ [ A "-ocaml"; P (env "%.lem") ]));
-      (* XXX should be unnecessary with new lem
-       * mv (basename (env "%.ml")) (dirname (env "%.ml")) *)
       ]);
 
     rule "sail -> lem"
     ~prod: "%.lem"
     ~deps: ["%.sail"; "main.native"]
-    (fun env builder -> Seq [
-      Cmd (S [ P "./main.native"; A "-lem_ast"; P (env "%.sail") ]);
-      mv (basename (env "%.lem")) (dirname (env "%.lem"))
+    (fun env builder ->
+      let sail_opts = List.map (fun s -> A s) (
+        "-lem_ast" ::
+        try
+          split ',' (Sys.getenv "SAIL_OPTS")
+        with Not_found -> []) in
+      Seq [
+        Cmd (S ([ P "./main.native"] @ sail_opts @ [P (env "%.sail")]));
+        mv (basename (env "%.lem")) (dirname (env "%.lem"))
       ]);
 
 | _ -> ()

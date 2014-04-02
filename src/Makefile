@@ -8,7 +8,7 @@ test: all
 
 test_power:
 	#../../../rsem/idl/power/binary/run.sh
-	ocamlbuild -classic-display main.native test/run_power.native
+	SAIL_OPTS=-skip_constraints ocamlbuild -classic-display main.native test/run_power.native
 	./run_power.native --file ../../../rsem/idl/power/binary/main.bin
 
 clean:
