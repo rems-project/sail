@@ -372,6 +372,9 @@ let options = Arg.align ([
   ( "-lem_ast",
     Arg.Unit (fun b -> opt_print_lem := true),
     " pretty-print a Lem AST representation of the file");
+  ( "-skip_constraints",
+    Arg.Clear Type_internal.do_resolve_constraints,
+    " skip constraint resolution in type-checking");
   ( "-v",
     Arg.Unit (fun b -> opt_print_version := true),
     " print version");

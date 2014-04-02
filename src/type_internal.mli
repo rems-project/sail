@@ -122,6 +122,8 @@ val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debuggi
 
 (*May raise an exception if a contradiction is found*)
 val resolve_constraints : nexp_range list -> nexp_range list
+(* whether to actually perform constraint resolution or not *)
+val do_resolve_constraints : bool ref
 
 (*May raise an exception if effects do not match tannot effects, will lift unification variables to fresh type variables *)
 val check_tannot : Parse_ast.l -> tannot -> nexp_range list -> effect -> tannot

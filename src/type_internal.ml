@@ -1008,9 +1008,15 @@ let rec simple_constraint_check cs =
       | _,_ -> LtEq(l,n1',n2')::(simple_constraint_check cs))
   | x::cs -> x::(simple_constraint_check cs)
     
+let do_resolve_constraints = ref true
+
 let resolve_constraints cs = 
-  let complex_constraints = simple_constraint_check cs in
-  complex_constraints (*cs*)
+  if not !do_resolve_constraints
+  then cs
+  else begin
+    let complex_constraints = simple_constraint_check cs in
+    complex_constraints (*cs*)
+  end
 
 
 let check_tannot l annot constraints efs = 
