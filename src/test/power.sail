@@ -1,6 +1,7 @@
-(* XXX sign extension --- this should really be vector -> int, with
-   negative integers allowed *)
-function forall Type 'a . 'a exts ( x ) = x
+(* XXX sign extension --- note that this produces a signed integer,
+   the constraints on the range of the result is TODO *)
+val extern forall Nat 'n. bit['n] -> nat effect pure exts
+
 (* XXX binary coded decimal *)
 function forall Type 'a . 'a dec_to_bcd ( x ) = x
 function forall Type 'a . 'a bcd_to_dec ( x ) = x

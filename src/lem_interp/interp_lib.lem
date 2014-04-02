@@ -31,10 +31,11 @@ let bool_to_bit b = match b with
  * By convention, MSB is on the left, so increasing = Big-Endian (MSB0),
  * hence MSB first.
  * http://en.wikipedia.org/wiki/Bit_numbering *)
-(* XXX signedness probably broken here *)
-let to_num_inc (V_vector idx true l) =
-  V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool (reverse l)))))) Unknown);;
-let to_num_dec (V_vector idx false l) =
+let to_num signed (V_vector idx inc l) =
+  (* Word library in Lem expects bitseq with LSB first *)
+  let l = if inc then reverse l else l in
+  (* Make sure the last bit is a zero to force unsigned numbers *)
+  let l = if signed then l else l ++ [V_lit (L_aux L_zero Unknown)] in
   V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown);;
 
 let to_vec_inc len (V_lit(L_aux (L_num n) ln)) =
@@ -61,8 +62,9 @@ let function_map = [
   ("eq", eq);
   ("vec_concat", vec_concat);
   ("is_one", is_one);
-  ("to_num_inc", to_num_inc);
-  ("to_num_dec", to_num_dec);
+  ("to_num_inc", to_num false);
+  ("to_num_dec", to_num false);
+  ("exts", to_num true);
   (* XXX the size of the target vector should be given by the interpreter *)
   ("to_vec_inc", to_vec_inc 64);
   ("to_vec_dec", to_vec_dec 64);
