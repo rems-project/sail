@@ -28,8 +28,9 @@ function bit main _ = {
 
   gpr_small[1] := v3; (*Writes to slice_check*)
   slice_check_copy := gpr_small[1];
-  (* check that cast are still inserted for function calls *)
-  result := gpr_small[1] + gpr_small[1];
+  (* check that cast are inserted inside function calls (here +), and that the
+  previous assignment (to slice_check_copy) got the correct cast *)
+  result := gpr_small[1] + slice_check_copy;
   (* idem with type inference for return type *)
   fresh_var := gpr_small[1] + gpr_small[1];
   (* id function call - prevents the correct cast currently *)
