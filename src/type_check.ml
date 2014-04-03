@@ -457,9 +457,10 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       (e',t',t_env,cs',effect)
     | E_cast(typ,e) ->
       let t = typ_to_t typ in
-      let t',cs = type_consistent (Expr l) d_env t expect_t in
-      let (e',u,t_env,cs',ef) = check_exp envs t' e in
-      (e',t',t_env,cs@cs',ef)        
+      let (e',u,t_env,cs,ef) = check_exp envs (new_t ()) e in
+      let t',cs2,e' = type_coerce (Expr l) d_env u e' t in
+      let t',cs3,e'' = type_coerce (Expr l) d_env t e' expect_t in 
+      (e'',t',t_env,cs@cs2@cs3,ef)        
     | E_app(id,parms) -> 
       let i = id_to_string id in
       (match Envmap.apply t_env i with
