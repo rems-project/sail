@@ -69,27 +69,27 @@ type value =
  | V_ctor of id * t * value
  | V_register of reg_form (* Value to store register access, when not actively reading or writing *)
 
- (* seems useless currently:
 let rec id_value_eq (i, v) (i', v') = i = i' && value_eq v v'
 and value_eq left right =
+  (* XXX it is not clear whether t = t' will work in all cases *)
   match (left, right) with
   | (V_lit l, V_lit l') -> lit_eq l l'
-  | (V_boxref n, V_boxref m) -> n = m
+  | (V_boxref n t, V_boxref m t') -> n = m && t = t'
   | (V_tuple l, V_tuple l') -> listEqualBy value_eq l l'
   | (V_list l, V_list l') -> listEqualBy value_eq l l'
   | (V_vector n b l, V_vector m b' l') ->
       n = m && b = b' && listEqualBy value_eq l l'
-  | (V_record l, V_record l') ->
+  | (V_record t l, V_record t' l') ->
+      t = t' &&
       listEqualBy id_value_eq l l'
-  | (V_ctor i v, V_ctor i' v') -> id_value_eq (i, v) (i', v')
+  | (V_ctor i t v, V_ctor i' t' v') -> t = t' && id_value_eq (i, v) (i', v')
   | (_, _) -> false
   end
 
 instance (Eq value)
-  let (=) = lit_value
-  let (<>) n1 n2 = not (lit_value n1 n2)
+  let (=) = value_eq
+  let (<>) n1 n2 = not (value_eq n1 n2)
 end
-*)
 
 type mem = Mem of nat * map nat value
 type env = list (id * value)
