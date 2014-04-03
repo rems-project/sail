@@ -111,10 +111,15 @@ scattered function ast decode
  function clause execute (  BranchConditionaltoLinkRegister  (  BH, BI, BO, LK  )  ) =
   {  {
     if  mode64bit  then  M  :=  0  else  M  :=  32  ;
-    if  (  ~  (  ((  BO  )[  2  ])  ))  then  CTR  :=  (  CTR  -  1  )  ;
+    (bit[1]) tmp := BO[2];
+    (* bug 1: tmp is vector<0,1,inc,bit> but expected vector<0,?,inc,bit> *)
+    if  (  ~  (tmp) )  then  CTR  :=  (  CTR  -  1  )  ;
     ctr_ok  :=  (  ((  BO  )[  2  ])  |  (  (  ((  CTR  )[  M  ..  63  ])  !=  0  )  ^  ((  BO  )[  3  ])  )  )  ;
     cond_ok  :=  (  ((  BO  )[  0  ])  |  (  ((  CR  )[  (  BI  +  32  )  ])  ^  (  ~  (  ((  BO  )[  1  ])  ))  )  )  ;
-    if  (  ctr_ok  &  cond_ok  )  then  NIA  :=  (  ((  LR  )[  0  ..  61  ])  :  0b00  )  ;
+    (* XXX bug2: workaround to force cast; if we substitute tmp inside
+    the if, cast fails *)
+    tmp := (ctr_ok  &  cond_ok );
+    if  ( tmp )  then  NIA  :=  (  ((  LR  )[  0  ..  61  ])  :  0b00  )  ;
     if  LK  then  LR  :=  (  CIA  +  4  )  ;
   }  } 
 
