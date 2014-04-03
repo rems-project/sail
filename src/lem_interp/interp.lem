@@ -248,8 +248,8 @@ let slice_vector v n1 n2 =
   match v with
   | V_vector m inc vs ->
     if inc 
-    then V_vector n1 inc (from_n_to_n (n1 - m) (n2 - m) vs)
-    else V_vector n1 inc (from_n_to_n (m - n1) (m - n2) vs)
+    then V_vector 0 inc (from_n_to_n (n1 - m) (n2 - m) vs)
+    else V_vector (n1 - n2 + 1) inc (from_n_to_n (m - n1) (m - n2) vs)
   end
 
 val update_field_list : list (id * value) -> list (id * value) -> list (id * value)
