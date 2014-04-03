@@ -127,10 +127,10 @@ let rec quants_to_consts (Env (d_env,t_env)) qis : (t_params * nexp_range list) 
 	    | KOpt_kind(kind,Kid_aux((Var i),l'')) -> ((i,kind_to_k kind)::ids,cs))
 	| QI_const(NC_aux(nconst,l')) -> 
 	  (match nconst with
-	    | NC_fixed(n1,n2) -> (ids,Eq(Spec l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
-	    | NC_bounded_ge(n1,n2) -> (ids,GtEq(Spec l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
-	    | NC_bounded_le(n1,n2) -> (ids,LtEq(Spec l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
-	    | NC_nat_set_bounded(Kid_aux((Var i),l''), bounds) -> (ids,In(Spec l',i,bounds)::cs)))
+	    | NC_fixed(n1,n2) -> (ids,Eq(Specc l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
+	    | NC_bounded_ge(n1,n2) -> (ids,GtEq(Specc l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
+	    | NC_bounded_le(n1,n2) -> (ids,LtEq(Specc l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
+	    | NC_nat_set_bounded(Kid_aux((Var i),l''), bounds) -> (ids,In(Specc l',i,bounds)::cs)))
 
 
 let typq_to_params envs (TypQ_aux(tq,l)) =
@@ -1252,7 +1252,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
     | Some(Some( (params,u),Spec,constraints,eft)), Some( (p',t),_,c',eft') ->
       (*let _ = Printf.printf "Function %s is in env\n" id in*)
       let u,constraints,eft = subst params u constraints eft in
-      let t',cs = type_consistent (Spec l) d_env t u in
+      let t',cs = type_consistent (Specc l) d_env t u in
       let t_env = if is_rec then t_env else Envmap.remove t_env id in
       let funcls,cs_ef = check t_env in
       let cs,ef = ((fun (cses,efses) -> (List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in

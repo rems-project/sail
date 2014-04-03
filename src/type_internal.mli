@@ -66,7 +66,7 @@ type constraint_origin =
   | Patt of Parse_ast.l
   | Expr of Parse_ast.l
   | Abre of Parse_ast.l
-  | Spec of Parse_ast.l
+  | Specc of Parse_ast.l
 
 (* Constraints for nexps, plus the location which added the constraint *)
 type nexp_range =

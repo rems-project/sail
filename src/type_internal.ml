@@ -71,7 +71,7 @@ type constraint_origin =
   | Patt of Parse_ast.l
   | Expr of Parse_ast.l
   | Abre of Parse_ast.l
-  | Spec of Parse_ast.l
+  | Specc of Parse_ast.l
 
 (* Constraints for nexps, plus the location which added the constraint *)
 type nexp_range =
@@ -104,7 +104,7 @@ let get_index n =
    | _ -> assert false
 
 let get_c_loc = function
-  | Patt l | Expr l | Abre l | Spec l -> l
+  | Patt l | Expr l | Abre l | Specc l -> l
 
 let rec string_of_list sep string_of = function
   | [] -> ""
@@ -527,8 +527,8 @@ let initial_typ_env =
                                 mk_range (Nvar "o") (Nvar "p")])},
 		       (mk_range (Nadd ({nexp=(Nvar "n")},{ nexp = Nneg({nexp=Nvar "o"})})) (Nadd({nexp=Nvar "m"},{nexp =Nneg {nexp=Nvar "p"}}))),
 		       pure_e)}),External (Some "minus"),
-              [GtEq(Spec(Parse_ast.Int("-",None)),{nexp=Nvar "n"},{nexp=Nvar "o"});
-               GtEq(Spec(Parse_ast.Int("-",None)),{nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},{nexp=Nvar "o"})],pure_e));
+              [GtEq(Specc(Parse_ast.Int("-",None)),{nexp=Nvar "n"},{nexp=Nvar "o"});
+               GtEq(Specc(Parse_ast.Int("-",None)),{nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},{nexp=Nvar "o"})],pure_e));
     ("mod",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "mod"),[],pure_e));
     ("quot",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "quot"),[],pure_e));
     (*Type incomplete*)
@@ -1083,7 +1083,7 @@ let resolve_constraints cs =
 let check_tannot l annot constraints efs = 
   match annot with
     | Some((params,t),tag,cs,e) -> 
-      ignore(effects_eq (Spec l) efs e);
+      ignore(effects_eq (Specc l) efs e);
       let params = Envmap.to_list (t_remove_unifications (Envmap.from_list params) t) in
     (*let _ = Printf.printf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in *)
       Some((params,t),tag,cs,e)
