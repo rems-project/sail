@@ -510,7 +510,8 @@ let mk_bitwise_op name symb arity =
   let ovar = Oinc in
   let vec_typ = mk_vector bit_t ovar (Nconst 0) (Nvar "n") in
   let args = Array.to_list (Array.make arity vec_typ) in
-  (symb,Some((["n",{k=K_Nat}; "o",{k=K_Ord}], {t= Tfn ({t=Ttup args}, vec_typ, pure_e)}),External (Some name),[],pure_e))
+  let arg = if ((List.length args) = 1) then List.hd args else {t= Ttup args} in
+  (symb,Some((["n",{k=K_Nat}; "o",{k=K_Ord}], {t= Tfn (arg, vec_typ, pure_e)}),External (Some name),[],pure_e))
 
 let initial_typ_env =
   Envmap.from_list [
