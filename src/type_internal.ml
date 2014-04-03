@@ -1061,6 +1061,8 @@ let rec simple_constraint_check cs =
 			            ^ string_of_int i1 ^ " to be less than or equal to " ^ string_of_int i2)
     | _,_ -> LtEq(co,n1',n2')::(simple_constraint_check cs))
   | x::cs -> x::(simple_constraint_check cs)
+
+let rec resolve_in_constraints cs = cs
     
 let do_resolve_constraints = ref true
 
