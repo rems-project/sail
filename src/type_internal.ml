@@ -504,6 +504,14 @@ let initial_kind_env =
   ]
 
 let mk_range n1 n2 = {t=Tapp("range",[TA_nexp {nexp=n1};TA_nexp {nexp=n2}])}
+let mk_vector typ order start size = {t=Tapp("vector",[TA_nexp {nexp=start}; TA_nexp {nexp=size}; TA_ord {order}; TA_typ typ])}
+let mk_bitwise_op name symb arity =
+  (* XXX should be Ovar "o" but will not work currently *)
+  let ovar = Oinc in
+  let vec_typ = mk_vector bit_t ovar (Nconst 0) (Nvar "n") in
+  let args = Array.to_list (Array.make arity vec_typ) in
+  (symb,Some((["n",{k=K_Nat}; "o",{k=K_Ord}], {t= Tfn ({t=Ttup args}, vec_typ, pure_e)}),External (Some name),[],pure_e))
+
 let initial_typ_env =
   Envmap.from_list [
     ("ignore",Some(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,pure_e)}),External None,[],pure_e));
@@ -536,15 +544,14 @@ let initial_typ_env =
     ("<_u",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "ltu"),[],pure_e));
     (">_u",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "gtu"),[],pure_e));
     ("is_one",Some(([],{t= Tfn (bit_t,bool_t,pure_e)}),External (Some "is_one"),[],pure_e));
-    ("~",Some((["a",{k=K_Typ}],{t= Tfn ({t=Tvar "a"},{t=Tvar "a"},pure_e)}),External (Some "bitwise_not"),[],pure_e));
-    ("|",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_or"),[],pure_e));
-    ("^",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_xor"),[],pure_e));
-    ("&",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_and"),[],pure_e));
+    mk_bitwise_op "bitwise_not" "~" 1;
+    mk_bitwise_op  "bitwise_or" "|" 2;
+    mk_bitwise_op  "bitwise_xor" "^" 2;
+    mk_bitwise_op  "bitwise_and" "&" 2;
     ("^^",Some(([("n",{k=K_Nat});("m",{k=K_Nat})],
                 {t= Tfn ({t=Ttup([bit_t;mk_range (Nvar "n") (Nvar "m")])},
-			 {t=Tapp("vector",[TA_nexp {nexp=Nconst 0}; TA_nexp {nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})};
-					   TA_ord {order = Oinc}; TA_typ bit_t])},
-			 pure_e)}),External (Some "duplicate"),[],pure_e));
+                mk_vector bit_t Oinc (Nconst 0) (Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})),
+                pure_e)}),External (Some "duplicate"),[],pure_e));
     ("<<<",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
   ]
 
