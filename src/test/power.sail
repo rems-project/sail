@@ -1,7 +1,6 @@
 (* XXX sign extension --- note that this produces a signed integer,
    the constraints on the range of the result is TODO *)
 val extern forall Nat 'n. bit['n] -> nat effect pure exts
-
 (* XXX binary coded decimal *)
 function forall Type 'a . 'a dec_to_bcd ( x ) = x
 function forall Type 'a . 'a bcd_to_dec ( x ) = x
@@ -97,7 +96,8 @@ val extern ( nat , nat ) -> (bit[64]) effect { wmem , rmem } MEM
 (* XXX effect for trap? *)
 val extern unit -> unit effect pure trap
 
-register bool mode64bit
+(* XXX *)
+let (bit) mode64bit = bitone
 
 scattered function unit execute
 scattered typedef ast = const union
@@ -110,17 +110,12 @@ scattered function ast decode
 
  function clause execute (  BranchConditionaltoLinkRegister  (  BH, BI, BO, LK  )  ) =
   {  {
-    if  mode64bit  then  M  :=  0  else  M  :=  32  ;
-    (bit[1]) tmp := BO[2];
-    (* bug 1: tmp is vector<0,1,inc,bit> but expected vector<0,?,inc,bit> *)
-    if  (  ~  (tmp) )  then  CTR  :=  (  CTR  -  1  )  ;
+    if((bit)  mode64bit  ) then  M  :=  0  else  M  :=  32  ;
+    if((bit)  (  ~  (  ((  BO  )[  2  ])  ))  ) then  CTR  :=  (  CTR  -  1  )  ;
     ctr_ok  :=  (  ((  BO  )[  2  ])  |  (  (  ((  CTR  )[  M  ..  63  ])  !=  0  )  ^  ((  BO  )[  3  ])  )  )  ;
     cond_ok  :=  (  ((  BO  )[  0  ])  |  (  ((  CR  )[  (  BI  +  32  )  ])  ^  (  ~  (  ((  BO  )[  1  ])  ))  )  )  ;
-    (* XXX bug2: workaround to force cast; if we substitute tmp inside
-    the if, cast fails *)
-    tmp := (ctr_ok  &  cond_ok );
-    if  ( tmp )  then  NIA  :=  (  ((  LR  )[  0  ..  61  ])  :  0b00  )  ;
-    if  LK  then  LR  :=  (  CIA  +  4  )  ;
+    if((bit)  (  ctr_ok  &  cond_ok  )  ) then  NIA  :=  (  ((  LR  )[  0  ..  61  ])  :  0b00  )  ;
+    if((bit)  LK  ) then  LR  :=  (  CIA  +  4  )  ;
   }  } 
 
 
@@ -131,7 +126,7 @@ scattered function ast decode
 
  function clause execute (  LoadWordandZero  (  D, RA, RT  )  ) =
   {  (bit[64]) EA := 0;  (bit[64]) b := 0;  {
-    if  (  RA  ==  0  )  then  b  :=  0  else  b  :=  (GPR[  RA  ])  ;
+    if((bit)  (  RA  ==  0  )  ) then  b  :=  0  else  b  :=  (GPR[  RA  ])  ;
     EA  :=  (  b  +  (  exts  (  D  ))  )  ;
     GPR[  RT  ]  :=  (  0b00000000000000000000000000000000  :  MEM(  EA  ,   4  )  )  ;
   }  } 
@@ -144,7 +139,7 @@ scattered function ast decode
 
  function clause execute (  StoreWord  (  D, RA, RS  )  ) =
   {  (bit[64]) EA := 0;  (bit[64]) b := 0;  {
-    if  (  RA  ==  0  )  then  b  :=  0  else  b  :=  (GPR[  RA  ])  ;
+    if((bit)  (  RA  ==  0  )  ) then  b  :=  0  else  b  :=  (GPR[  RA  ])  ;
     EA  :=  (  b  +  (  exts  (  D  ))  )  ;
     MEM(  EA  ,   4  )  :=  ((  (GPR[  RS  ])  )[  32  ..  63  ])  ;
   }  } 
@@ -170,7 +165,7 @@ scattered function ast decode
 
  function clause execute (  AddImmediate  (  RA, RT, SI  )  ) =
   {  {
-    if  (  RA  ==  0  )  then  GPR[  RT  ]  :=  (  exts  (  SI  ))  else  GPR[  RT  ]  :=  (  (GPR[  RA  ])  +  (  exts  (  SI  ))  )  ;
+    if((bit)  (  RA  ==  0  )  ) then  GPR[  RT  ]  :=  (  exts  (  SI  ))  else  GPR[  RT  ]  :=  (  (GPR[  RA  ])  +  (  exts  (  SI  ))  )  ;
   }  } 
 
 
