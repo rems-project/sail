@@ -57,8 +57,8 @@ let to_vec_dec len (V_lit(L_aux (L_num n) ln)) =
   let l = boolListFrombitSeq len (bitSeqFromInteger Nothing n) in
   V_vector 0 false (map bool_to_bit l) ;;
 
-let rec add (V_tuple args) = match args with
-  | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (x+y)) lx)
+let arith_op op (V_tuple args) = match args with
+  | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (op x y)) lx)
   end ;;
 
 let rec vec_concat (V_tuple args) = match args with
@@ -71,8 +71,10 @@ let rec vec_concat (V_tuple args) = match args with
 
 let function_map = [
   ("ignore", ignore_sail);            
-  ("add", add);
+  ("add", arith_op (+));
+  ("minus", arith_op (-));
   ("eq", eq);
+  ("neq", neq);
   ("vec_concat", vec_concat);
   ("is_one", is_one);
   ("to_num_inc", to_num false);
