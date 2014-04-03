@@ -96,7 +96,7 @@ val extern ( nat , nat ) -> (bit[64]) effect { wmem , rmem } MEM
 (* XXX effect for trap? *)
 val extern unit -> unit effect pure trap
 
-(* XXX *)
+(* XXX should be register<bool>, this is a workaround for limitations in coercions *)
 let (bit) mode64bit = bitone
 
 scattered function unit execute
@@ -205,6 +205,13 @@ function unit init() = {
   (* initial value of environment pointer - no clue what it is used for,
      only saved in restore in our simple example. *)
   GPR31 := 0;
+
+  (* unused in practice, but must be set for bclr computation *)
+  CTR := 0;
+  CR := 0;
+  (* return address -- I have no idea what to put there, let's make an
+  infinite loop! *)
+  LR := CIA;
 
 
 }
