@@ -114,7 +114,7 @@ let rec string_of_list sep string_of = function
 let rec t_to_string t = 
   match t.t with
     | Tid i -> i
-    | Tvar i -> i
+    | Tvar i -> "'" ^ i
     | Tfn(t1,t2,e) -> (t_to_string t1) ^ " -> " ^ (t_to_string t2) ^ " effect " ^ e_to_string e
     | Ttup(tups) -> "(" ^ string_of_list " * " t_to_string tups ^ ")"
     | Tapp(i,args) -> i ^ "<" ^  string_of_list ", " targ_to_string args ^ ">"
@@ -129,8 +129,8 @@ and n_to_string n =
   match n.nexp with
     | Nvar i -> "'" ^ i
     | Nconst i -> string_of_int i
-    | Nadd(n1,n2) -> (n_to_string n1) ^ " + " ^ (n_to_string n2)
-    | Nmult(n1,n2) -> (n_to_string n1) ^ " * " ^ (n_to_string n2)
+    | Nadd(n1,n2) -> "("^ (n_to_string n1) ^ " + " ^ (n_to_string n2) ^")"
+    | Nmult(n1,n2) -> "(" ^ (n_to_string n1) ^ " * " ^ (n_to_string n2) ^ ")"
     | N2n n -> "2**" ^ (n_to_string n)
     | Nneg n -> "-" ^ (n_to_string n)
     | Nuvar({nindex=i;nsubst=a}) -> string_of_int i ^ "()"
@@ -224,6 +224,7 @@ let rec eval_nexp n =
       let n1',n2' = (eval_nexp n1),(eval_nexp n2) in
       (match n1'.nexp,n2'.nexp with
 	| Nconst i1, Nconst i2 -> {nexp=Nconst (i1*i2)}
+        | Nconst 0,n | n,Nconst 0 -> {nexp = Nconst 0}
 	| (Nconst _ as c),Nmult(nl,nr) | Nmult(nl,nr),(Nconst _ as c) -> 
 	  {nexp = Nmult(eval_nexp {nexp = Nmult({nexp = c},nl)},eval_nexp {nexp = Nmult({nexp=c},nr)})}
 	| (Nconst _ as c),Nadd(nl,nr) | Nadd(nl,nr),(Nconst _ as c) ->
@@ -234,8 +235,12 @@ let rec eval_nexp n =
       let n1',n2' = (eval_nexp n1),(eval_nexp n2) in      
       (match n1'.nexp,n2'.nexp with
 	| Nconst i1, Nconst i2 -> {nexp=Nconst (i1+i2)}
-	| (Nconst _ as c),Nadd(nl,nr) | Nadd(nl,nr),(Nconst _ as c) ->
-	  {nexp = Nadd(eval_nexp {nexp =Nadd({nexp=c},nl)},eval_nexp {nexp = Nadd({nexp=c},nr)})}
+	| (Nconst i as c),Nadd(nl,nr) | Nadd(nl,nr),(Nconst i as c) ->
+          if i = 0 then {nexp = Nadd(nl,nr)}
+	  else 
+            {nexp = Nadd(eval_nexp {nexp =Nadd({nexp=c},nl)},nr)}
+        | Nconst 0,n | n,Nconst 0 -> {nexp = n}
+        | (Nconst _ as c),n | n,(Nconst _ as c) -> {nexp=Nadd({nexp=c},{nexp=n})} 
 	| _,_ -> {nexp = Nadd(n1',n2') })
     | Nneg n1 ->
       let n1' = eval_nexp n1 in
@@ -948,7 +953,8 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
       let t',cs' = type_consistent co d_env t1 t2 in (t',cs',e))
   | Tid("bit"),Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]) ->
     let cs = [Eq(co,r1,{nexp = Nconst 1})] in
-    (t2,cs,E_aux(E_vector_indexed [(i,e)],(l,Some(([],t2),Emp_local,cs,pure_e))))
+    let t2' = {t = Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp {nexp=Nconst 1};TA_ord o;TA_typ {t=Tid "bit"}])} in
+    (t2',cs,E_aux(E_vector_indexed [(i,e)],(l,Some(([],t2),Emp_local,cs,pure_e))))
   | Tapp("vector",[TA_nexp ({nexp=Nconst i} as b1);TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]),Tid("bit") ->
     let cs = [Eq(co,r1,{nexp = Nconst 1})] in
     (t2,cs,E_aux((E_vector_access (e,(E_aux(E_lit(L_aux(L_num i,l)),
@@ -1005,9 +1011,9 @@ let rec simple_constraint_check cs =
   match cs with 
   | [] -> []
   | Eq(co,n1,n2)::cs -> 
-(*    let _ = Printf.printf "eq check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    (*let _ = Printf.printf "eq check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = eval_nexp n1,eval_nexp n2 in
-(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+    (*let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 -> 
       if i1==i2 
