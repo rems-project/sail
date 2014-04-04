@@ -186,37 +186,10 @@ end ast
 
 register ast instr (* monitor decoded instructions *)
 
-(* fetch-decode-execute loop *)
-function rec unit fde_loop () = {
+(* fetch-decode-execute cycle *)
+function unit cycle () = {
   NIA := CIA + 4;
   instr := decode(MEM(CIA, 4));
   execute(instr);
   CIA := NIA;
-  fde_loop ()
-}
-
-function unit init() = {
-  (* CIA is initialiazed externally, as well as MEM *)
-
-  (* initial stack-pointer. stack grows downwards, the first step is to
-  decrement it which should (hopefully) wrap around to the largest
-  possible 64-bit value *)
-  GPR1 := 0;
-  (* initial value of environment pointer - no clue what it is used for,
-     only saved in restore in our simple example. *)
-  GPR31 := 0;
-
-  (* unused in practice, but must be set for bclr computation *)
-  CTR := 0;
-  CR := 0;
-  (* return address -- I have no idea what to put there, let's make an
-  infinite loop! *)
-  LR := CIA;
-
-
-}
-
-function unit main () = {
-  init();
-  fde_loop();
 }

@@ -54,9 +54,23 @@ let load_section ic (offset,size,addr) =
   done
 ;;
 
+(* use zero as a sentinel --- it might prevent a minimal loop from
+ * working in principle, but won't happen in practice *)
+let lr_init_value = Big_int.zero_big_int
+
 let init_reg () =
+  let init name value size =
+    (* fix index - this is necessary for CR, indexed from 32 *)
+    let offset (V_vector(_, inc, v)) =
+      V_vector(Big_int.big_int_of_int (64 - size), inc, v) in
+    Id_aux(Id name, Unknown), offset (big_int_to_vec value size) in
   List.fold_left (fun r (k,v) -> Reg.add k v r) Reg.empty [
-    Id_aux(Id "CIA", Unknown), big_int_to_vec (hex_to_big_int !startaddr) 64 ;
+    init "CIA" (hex_to_big_int !startaddr) 64;
+    init "GPR1" Big_int.zero_big_int 64;
+    init "GPR31" Big_int.zero_big_int 64;
+    init "CTR" Big_int.zero_big_int 64;
+    init "CR" Big_int.zero_big_int 32;
+    init "LR" lr_init_value 64;
   ]
 ;;
 
@@ -75,6 +89,24 @@ let time_it action arg =
   finish_time -. start_time
 ;;
 
+let get_reg reg name =
+  let reg_content = Reg.find (Id_aux(Id name, Unknown)) reg in
+  let V_lit(L_aux(L_num n, Unknown)) = to_num true reg_content in
+  n
+;;
+
+let rec fde_loop count entry mem reg prog =
+  eprintf "\n**** cycle %d  ****\n" count;
+  match Run_interp.run ~entry ~mem ~reg prog with
+  | false, _ -> eprintf "FAILURE\n"; exit 1
+  | true, (reg, mem) ->
+      if Big_int.eq_big_int (get_reg reg "CIA") lr_init_value then
+        eprintf "\nSUCCESS: returned with value %s\n"
+          (Big_int.string_of_big_int (get_reg reg "GPR3"))
+      else
+        fde_loop (count+1) entry mem reg prog
+;;
+
 let run () =
   Arg.parse args (fun _ -> raise (Arg.Bad "anonymous parameter")) "" ;
   if !file = "" then begin
@@ -91,8 +123,10 @@ let run () =
   eprintf "done. (%f seconds)\n%!" t;
   close_in ic;
   let reg = init_reg () in
-  let r = Run_interp.run ~mem:!mem ~reg (!file, Power.defs) in
-  eprintf "%s\n" (if r then "SUCCESS" else "FAILURE")
+  (* entry point: unit -> unit cycle *)
+  let entry = E_aux(E_app(Id_aux((Id "cycle"),Unknown),
+    [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)) in
+  fde_loop 0 entry !mem reg (!file, Power.defs)
 ;;
 
 run () ;;
