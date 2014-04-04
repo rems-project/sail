@@ -201,6 +201,8 @@ let rec perform_action ((reg, mem) as env) = function
  | _ -> assert false
 ;;
 
+let debug = ref true
+let debugf : ('a, out_channel, unit) format -> 'a = function f -> if !debug then eprintf f else ifprintf stderr f
 
 let run
   ?(entry=E_aux(E_app(Id_aux((Id "main"),Unknown), [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)))
@@ -208,20 +210,20 @@ let run
   ?(mem=Mem.empty)
   (name, test) =
   let rec loop env = function
-  | Value (v, _) -> eprintf "%s: returned %s\n" name (val_to_string v); true, env
+  | Value (v, _) -> debugf "%s: returned %s\n" name (val_to_string v); true, env
   | Action (a, s) ->
-      eprintf "%s: suspended on action %s\n" name (act_to_string a);
-      (*eprintf "%s: suspended on action %s, with stack %s\n" name (act_to_string a) (stack_to_string s);*)
+      debugf "%s: suspended on action %s\n" name (act_to_string a);
+      (*debugf "%s: suspended on action %s, with stack %s\n" name (act_to_string a) (stack_to_string s);*)
       let return, env' = perform_action env a in
-      eprintf "%s: action returned %s\n" name (val_to_string return);
+      debugf "%s: action returned %s\n" name (val_to_string return);
       loop env' (resume test s return)
-  | Error(l, e) -> eprintf "%s: %s: error: %s\n" name (loc_to_string l) e; false, env in
-  eprintf "%s: starting\n" name;
+  | Error(l, e) -> debugf "%s: %s: error: %s\n" name (loc_to_string l) e; false, env in
+  debugf "%s: starting\n" name;
   try
     Printexc.record_backtrace true;
     loop (reg, mem) (interp test entry)
   with e ->
     let trace = Printexc.get_backtrace () in
-    eprintf "%s: interpretor error %s\n%s\n" name (Printexc.to_string e) trace;
+    debugf "%s: interpretor error %s\n%s\n" name (Printexc.to_string e) trace;
     false, (reg, mem)
 ;;

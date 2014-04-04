@@ -65,7 +65,8 @@ let init_reg () =
       V_vector(Big_int.big_int_of_int (64 - size), inc, v) in
     Id_aux(Id name, Unknown), offset (big_int_to_vec value size) in
   List.fold_left (fun r (k,v) -> Reg.add k v r) Reg.empty [
-    init "CIA" (hex_to_big_int !startaddr) 64;
+    (* XXX execute main() directly until we can handle the init phase *)
+    init "CIA" (hex_to_big_int !mainaddr) 64;
     init "GPR1" Big_int.zero_big_int 64;
     init "GPR31" Big_int.zero_big_int 64;
     init "CTR" Big_int.zero_big_int 64;
@@ -78,8 +79,9 @@ let args = [
   ("--file", Arg.Set_string file, "filename binary code to load in memory");
   ("--data", Arg.String add_section, "name,offset,size,addr add a data section");
   ("--code", Arg.String add_section, "name,offset,size,addr add a code section");
-  ("--startaddr", Arg.Set_string startaddr, "addr initial address");
-  ("--mainaddr", Arg.Set_string mainaddr, "addr address of the main section");
+  ("--startaddr", Arg.Set_string startaddr, "addr initial address (UNUSED)");
+  ("--mainaddr", Arg.Set_string mainaddr, "addr address of the main section (entry point; default: 0)");
+  ("--quiet", Arg.Clear Run_interp.debug, " do not display interpreter actions");
 ] ;;
 
 let time_it action arg =
@@ -96,7 +98,7 @@ let get_reg reg name =
 ;;
 
 let rec fde_loop count entry mem reg prog =
-  eprintf "\n**** cycle %d  ****\n" count;
+  debugf "\n**** cycle %d  ****\n" count;
   match Run_interp.run ~entry ~mem ~reg prog with
   | false, _ -> eprintf "FAILURE\n"; exit 1
   | true, (reg, mem) ->
@@ -126,7 +128,8 @@ let run () =
   (* entry point: unit -> unit cycle *)
   let entry = E_aux(E_app(Id_aux((Id "cycle"),Unknown),
     [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)) in
-  fde_loop 0 entry !mem reg (!file, Power.defs)
+  let t =time_it (fun () -> fde_loop 0 entry !mem reg (!file, Power.defs)) () in
+  eprintf "Execution time: %f seconds\n" t
 ;;
 
 run () ;;
