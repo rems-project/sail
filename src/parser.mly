@@ -80,7 +80,7 @@ let tdloc td = TD_aux(td, loc())
 let funloc fn = FD_aux(fn, loc())
 let vloc v = VS_aux(v, loc ())
 let sdloc sd = SD_aux(sd, loc ())
-let dloc d = DEF_aux(d,loc ())
+let dloc d = d
 
 let mk_typschm tq t s e = TypSchm_aux((TypSchm_ts(tq,t)),(locn s e))
 let mk_rec i = (Rec_aux((Rec_rec), locn i i))
@@ -1138,7 +1138,7 @@ def:
   | default_typ
     { dloc (DEF_default($1)) }
   | Register atomic_typ id
-    { dloc (DEF_reg_dec($2,$3)) }
+    { dloc (DEF_reg_dec(DEC_aux(DEC_reg($2,$3),loc ()))) }
   | Scattered scattered_def
     { dloc (DEF_scattered $2) }
   | Function_ Clause funcl

@@ -1208,13 +1208,13 @@ let check_val_spec envs (VS_aux(vs,(l,annot))) =
       (VS_aux(vs,(l,tannot)),
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot))))
 
-let check_default envs (DT_aux(ds,(l,annot))) =
+let check_default envs (DT_aux(ds,l)) =
   let (Env(d_env,t_env)) = envs in
   match ds with
-    | DT_kind _ -> ((DT_aux(ds,(l,annot))),envs)
+    | DT_kind _ -> ((DT_aux(ds,l)),envs)
     | DT_typ(typs,id) ->
       let tannot = typschm_to_tannot envs typs Default in
-      (DT_aux(ds,(l,tannot)),
+      (DT_aux(ds,l),
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot))))
 
 let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,annot))) =
@@ -1224,7 +1224,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
               | Rec_aux(Rec_nonrec,_) -> false
 	      | Rec_aux(Rec_rec,_) -> true in
   let Some(id) = List.fold_right 
-    (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,annot))) id' ->
+    (fun (FCL_aux((FCL_Funcl(id,pat,exp)),l)) id' ->
       match id' with
 	| Some(id') -> if id' = id_to_string id then Some(id') 
 	  else typ_error l ("Function declaration expects all definitions to have the same name, " 
@@ -1241,13 +1241,13 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       t,p_t,Some((ids,{t=Tfn(p_t,t,ef)}),Emp_global,constraints,ef) in
   let check t_env =
     List.split
-      (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,annot))) ->
+      (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),l)) ->
 	let (pat',t_env',constraints',t') = check_pattern (Env(d_env,t_env)) Emp_local param_t pat in
         (*let _ = Printf.printf "about to check that %s and %s are consistent\n" (t_to_string t') (t_to_string param_t) in*)
 	let exp',_,_,constraints,ef = check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env) t_env t_env')) ret_t exp in
         (*let _ = Printf.printf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*) 
 	(*let _ = (Pretty_print.pp_exp Format.std_formatter) exp' in*)
-	(FCL_aux((FCL_Funcl(id,pat',exp')),(l,tannot)),((constraints'@constraints),ef))) funcls) in
+	(FCL_aux((FCL_Funcl(id,pat',exp')),l),((constraints'@constraints),ef))) funcls) in
   match (in_env,tannot) with
     | Some(Some( (params,u),Spec,constraints,eft)), Some( (p',t),_,c',eft') ->
       (*let _ = Printf.printf "Function %s is in env\n" id in*)
@@ -1270,24 +1270,24 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       Env(d_env,(if is_rec then t_env else Envmap.insert t_env (id,tannot)))
 
 (*val check_def : envs -> tannot def -> (tannot def) envs_out*)
-let check_def envs (DEF_aux(def,(l,annot))) = 
+let check_def envs def = 
   let (Env(d_env,t_env)) = envs in
   match def with
-    | DEF_type tdef -> let td,envs = check_type_def envs tdef in
-		       (DEF_aux((DEF_type td),(l,annot)),envs)
-    | DEF_fundef fdef -> let fd,envs = check_fundef envs fdef in
-			 (DEF_aux(DEF_fundef(fd),(l,annot)),envs)
-    | DEF_val letdef -> let (letbind,t_env_let,_,eft) = check_lbind envs true Emp_global letdef in
-                        (DEF_aux(DEF_val letbind,(l,annot)),Env(d_env,Envmap.union t_env t_env_let))
-    | DEF_spec spec -> let vs,envs = check_val_spec envs spec in
-		       (DEF_aux(DEF_spec(vs),(l,annot)),envs)
-    | DEF_default default -> let ds,envs = check_default envs default in
-			     (DEF_aux((DEF_default(ds)),(l,annot)),envs)
-    | DEF_reg_dec(typ,id) -> 
-      let t = (typ_to_t typ) in
-      let i = id_to_string id in
-      let tannot = into_register d_env (Some(([],t),External (Some i),[],pure_e)) in
-      (DEF_aux(def,(l,tannot)),(Env(d_env,Envmap.insert t_env (i,tannot))))
+  | DEF_type tdef -> let td,envs = check_type_def envs tdef in
+		     (DEF_type td,envs)
+  | DEF_fundef fdef -> let fd,envs = check_fundef envs fdef in
+		       (DEF_fundef fd,envs)
+  | DEF_val letdef -> let (letbind,t_env_let,_,eft) = check_lbind envs true Emp_global letdef in
+                      (DEF_val letbind,Env(d_env,Envmap.union t_env t_env_let))
+  | DEF_spec spec -> let vs,envs = check_val_spec envs spec in
+		     (DEF_spec vs, envs)
+  | DEF_default default -> let ds,envs = check_default envs default in
+			   (DEF_default ds,envs)
+  | DEF_reg_dec(DEC_aux(DEC_reg(typ,id), (l,annot))) -> 
+    let t = (typ_to_t typ) in
+    let i = id_to_string id in
+    let tannot = into_register d_env (Some(([],t),External (Some i),[],pure_e)) in
+    (DEF_reg_dec(DEC_aux(DEC_reg(typ,id),(l,tannot))),(Env(d_env,Envmap.insert t_env (i,tannot))))
 
 
 (*val check : envs ->  tannot defs -> tannot defs*)

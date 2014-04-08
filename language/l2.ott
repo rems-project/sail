@@ -753,7 +753,7 @@ effect_opt :: 'Effect_opt_' ::=
 
 funcl :: 'FCL_' ::=
   {{ com Function clause }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }} {{ auxparam 'a }}
   | id pat = exp                   :: :: Funcl
 
 
@@ -789,7 +789,7 @@ val_spec :: 'VS_' ::=
 
 default_spec :: 'DT_' ::=
   {{ com Default kinding or typing assumption }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }} {{ auxparam 'a }}
   | default base_kind kid    :: :: kind
   | default typschm id      :: :: typ
 % The intended semantics of these is that if an id in binding position
@@ -815,13 +815,18 @@ scattered_def :: 'SD_' ::=
 {{ com scattered definition end }}
 
 
+dec_spec :: 'DEC_' ::=
+  {{ com Register declarations }}
+  {{ aux _ annot }} {{ auxparam 'a }}
+  | register typ id                                             :: :: reg
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Top-level definitions                                        %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 def :: 'DEF_' ::=
   {{ com Top-level definition }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ auxparam 'a }}
   | type_def                                                    :: :: type
     {{ com type definition }}
   | fundef                                                   :: :: fundef
@@ -834,7 +839,7 @@ def :: 'DEF_' ::=
     {{ com default kind and type assumptions }}
   | scattered_def                                        :: :: scattered
     {{ com scattered function and type definition }}
-  | register typ id                                   :: :: reg_dec
+  | dec_spec                                            :: :: reg_dec
     {{ com register declaration }}
 
 

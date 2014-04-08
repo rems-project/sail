@@ -75,11 +75,6 @@ type base_effect =
  | BE_aux of base_effect_aux * l
 
 
-type id_aux =  (* Identifier *)
- | Id of x
- | DeIid of x (* remove infix status *)
-
-
 type effect_aux =  (* effect set, of kind Effects *)
  | Effect_var of kid
  | Effect_set of list base_effect (* effect set *)
@@ -91,8 +86,9 @@ type order_aux =  (* vector order specifications, of kind Order *)
  | Ord_dec (* decreasing (big-endian) *)
 
 
-type id = 
- | Id_aux of id_aux * l
+type id_aux =  (* Identifier *)
+ | Id of x
+ | DeIid of x (* remove infix status *)
 
 
 type effect = 
@@ -101,6 +97,10 @@ type effect =
 
 type order = 
  | Ord_aux of order_aux * l
+
+
+type id = 
+ | Id_aux of id_aux * l
 
 let effect_union e1 e2 = 
   match (e1,e2) with
@@ -320,7 +320,7 @@ type rec_opt =
 
 
 type funcl 'a = 
- | FCL_aux of (funcl_aux 'a) * annot 'a
+ | FCL_aux of (funcl_aux 'a) * l
 
 
 type name_scm_opt = 
@@ -361,6 +361,10 @@ type type_def_aux 'a =  (* Type definition body *)
  | TD_register of id * nexp * nexp * list (index_range * id) (* register mutable bitfield type definition *)
 
 
+type dec_spec_aux 'a =  (* Register declarations *)
+ | DEC_reg of typ * id
+
+
 type fundef_aux 'a =  (* Function definition *)
  | FD_function of rec_opt * tannot_opt * effect_opt * list (funcl 'a)
 
@@ -384,30 +388,30 @@ type type_def 'a =
  | TD_aux of (type_def_aux 'a) * annot 'a
 
 
+type dec_spec 'a = 
+ | DEC_aux of (dec_spec_aux 'a) * annot 'a
+
+
 type fundef 'a = 
  | FD_aux of (fundef_aux 'a) * annot 'a
 
 
 type default_spec 'a = 
- | DT_aux of (default_spec_aux 'a) * annot 'a
+ | DT_aux of (default_spec_aux 'a) * l
 
 
 type val_spec 'a = 
  | VS_aux of (val_spec_aux 'a) * annot 'a
 
 
-type def_aux 'a =  (* Top-level definition *)
+type def 'a =  (* Top-level definition *)
  | DEF_type of (type_def 'a) (* type definition *)
  | DEF_fundef of (fundef 'a) (* function definition *)
  | DEF_val of (letbind 'a) (* value definition *)
  | DEF_spec of (val_spec 'a) (* top-level type constraint *)
  | DEF_default of (default_spec 'a) (* default kind and type assumptions *)
  | DEF_scattered of (scattered_def 'a) (* scattered function and type definition *)
- | DEF_reg_dec of typ * id (* register declaration *)
-
-
-type def 'a = 
- | DEF_aux of (def_aux 'a) * annot 'a
+ | DEF_reg_dec of (dec_spec 'a) (* register declaration *)
 
 
 type defs 'a =  (* Definition sequence *)
@@ -471,15 +475,6 @@ type nec =  (* Numeric expression constraints *)
  | Nec_in of x * list integer
 
 
-type tag =  (* Data indicating where the identifier arises and thus information necessary in compilation *)
- | Tag_empty
- | Tag_ctor (* Data constructor from a type union *)
- | Tag_extern of maybe string (* External function, specied only with a val statement *)
- | Tag_default (* Type has come from default declaration, identifier may not be bound locally *)
- | Tag_spec
- | Tag_enum
-
-
 type t =  (* Internal types *)
  | T_id of x
  | T_var of x
@@ -496,6 +491,15 @@ and t_arg =  (* Argument to type constructors *)
 
 and t_args =  (* Arguments to type constructors *)
  | T_args of list t_arg
+
+
+type tag =  (* Data indicating where the identifier arises and thus information necessary in compilation *)
+ | Tag_empty
+ | Tag_ctor (* Data constructor from a type union *)
+ | Tag_extern of maybe string (* External function, specied only with a val statement *)
+ | Tag_default (* Type has come from default declaration, identifier may not be bound locally *)
+ | Tag_spec
+ | Tag_enum
 
 
 type tinf =  (* Type variables, type, and constraints, bound to an identifier *)

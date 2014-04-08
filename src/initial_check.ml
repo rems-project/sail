@@ -434,10 +434,10 @@ let to_ast_default (names, k_env, t_env) (default : Parse_ast.default_typing_spe
       let k,k_typ = to_ast_base_kind bk in
       let v = to_ast_var v in
       let key = var_to_string v in
-      DT_aux(DT_kind(k,v),(l,None)),(names,(Envmap.insert k_env (key,k_typ)),t_env)
+      DT_aux(DT_kind(k,v),l),(names,(Envmap.insert k_env (key,k_typ)),t_env)
     | Parse_ast.DT_typ(typschm,id) ->
       let tps,_,_ = to_ast_typschm k_env typschm in
-      DT_aux(DT_typ(tps,to_ast_id id),(l,None)),(names,k_env,t_env) (* Does t_env need to be updated here in this pass? *)
+      DT_aux(DT_typ(tps,to_ast_id id),l),(names,k_env,t_env) (* Does t_env need to be updated here in this pass? *)
     )
 
 let to_ast_spec (names,k_env,t_env) (val_:Parse_ast.val_spec) : (tannot val_spec) envs_out =
@@ -547,7 +547,7 @@ let to_ast_effects_opt (k_env : kind Envmap.t) (Parse_ast.Effect_opt_aux(e,l)) :
 
 let to_ast_funcl (names,k_env,t_env) (Parse_ast.FCL_aux(fcl,l) : Parse_ast.funcl) : (tannot funcl) =
   match fcl with
-  | Parse_ast.FCL_Funcl(id,pat,exp) -> FCL_aux(FCL_Funcl(to_ast_id id, to_ast_pat k_env pat, to_ast_exp k_env exp),(l,None))
+  | Parse_ast.FCL_Funcl(id,pat,exp) -> FCL_aux(FCL_Funcl(to_ast_id id, to_ast_pat k_env pat, to_ast_exp k_env exp),l)
 
 let to_ast_fundef  (names,k_env,t_env) (Parse_ast.FD_aux(fd,l):Parse_ast.fundef) : (tannot fundef) envs_out = 
   match fd with
@@ -569,92 +569,93 @@ let rec def_in_progress (id : id) (partial_defs : (id * partial_def) list) : par
     (match n,id with
     | Id_aux(Id(n),_), Id_aux(Id(i),_) -> if (n = i) then Some(pd) else def_in_progress id defs
     | _,_ -> def_in_progress id defs)
+
+let to_ast_dec (names,k_env,t_env) (Parse_ast.DEC_aux(Parse_ast.DEC_reg(typ,id),l)) =
+  let t = to_ast_typ k_env typ in
+  let id = to_ast_id id in
+  (DEC_aux(DEC_reg(t,id),(l,None)))
       
 let to_ast_def (names, k_env, t_env) partial_defs def : def_progress envs_out * (id * partial_def) list = 
   let envs = (names,k_env,t_env) in
   match def with
-  | Parse_ast.DEF_aux(d,l) ->
-    (match d with
-    | Parse_ast.DEF_type(t_def) -> 
-      let td,envs = to_ast_typedef envs t_def in
-      ((Finished(DEF_aux(DEF_type(td),(l,None)))),envs),partial_defs
-    | Parse_ast.DEF_fundef(f_def) -> 
-      let fd,envs = to_ast_fundef envs f_def in
-      ((Finished(DEF_aux(DEF_fundef(fd),(l,None)))),envs),partial_defs
-    | Parse_ast.DEF_val(lbind) -> 
-      let lb = to_ast_letbind k_env lbind in
-      ((Finished(DEF_aux(DEF_val(lb),(l,None)))),envs),partial_defs
-    | Parse_ast.DEF_spec(val_spec) -> 
-      let vs,envs = to_ast_spec envs val_spec in
-      ((Finished(DEF_aux(DEF_spec(vs),(l,None)))),envs),partial_defs
-    | Parse_ast.DEF_default(typ_spec) -> 
-      let default,envs = to_ast_default envs typ_spec in
-      ((Finished(DEF_aux(DEF_default(default),(l,None)))),envs),partial_defs
-    | Parse_ast.DEF_reg_dec(typ,id) ->
-      let t = to_ast_typ k_env typ in
+  | Parse_ast.DEF_type(t_def) -> 
+    let td,envs = to_ast_typedef envs t_def in
+    ((Finished(DEF_type(td))),envs),partial_defs
+  | Parse_ast.DEF_fundef(f_def) -> 
+    let fd,envs = to_ast_fundef envs f_def in
+    ((Finished(DEF_fundef(fd))),envs),partial_defs
+  | Parse_ast.DEF_val(lbind) -> 
+    let lb = to_ast_letbind k_env lbind in
+    ((Finished(DEF_val(lb))),envs),partial_defs
+  | Parse_ast.DEF_spec(val_spec) -> 
+    let vs,envs = to_ast_spec envs val_spec in
+    ((Finished(DEF_spec(vs))),envs),partial_defs
+  | Parse_ast.DEF_default(typ_spec) -> 
+    let default,envs = to_ast_default envs typ_spec in
+    ((Finished(DEF_default(default))),envs),partial_defs
+  | Parse_ast.DEF_reg_dec(dec) ->
+    let d = to_ast_dec envs dec in
+    ((Finished(DEF_reg_dec(d))),envs),partial_defs
+  | Parse_ast.DEF_scattered(Parse_ast.SD_aux(sd,l)) ->
+    (match sd with
+    | Parse_ast.SD_scattered_function(rec_opt, tannot_opt, effects_opt, id) ->
+      let rec_opt = to_ast_rec rec_opt in
+      let tannot,k_env',k_local = to_ast_tannot_opt k_env tannot_opt in
+      let effects_opt = to_ast_effects_opt k_env' effects_opt in
       let id = to_ast_id id in
-      ((Finished(DEF_aux(DEF_reg_dec(t,id),(l,None)))),envs),partial_defs (*If tracking types here, update tenv and None*)
-    | Parse_ast.DEF_scattered(Parse_ast.SD_aux(sd,_)) ->
-      (match sd with
-	| Parse_ast.SD_scattered_function(rec_opt, tannot_opt, effects_opt, id) ->
-	  let rec_opt = to_ast_rec rec_opt in
-	  let tannot,k_env',k_local = to_ast_tannot_opt k_env tannot_opt in
-	  let effects_opt = to_ast_effects_opt k_env' effects_opt in
-	  let id = to_ast_id id in
-	  (match (def_in_progress id partial_defs) with
-	    | None -> let partial_def = ref ((DEF_aux(DEF_fundef(FD_aux(FD_function(rec_opt,tannot,effects_opt,[]),(l,None))),(l,None))),false) in
-                      (No_def,envs),((id,(partial_def,k_local))::partial_defs)
-	    | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None None)
-	| Parse_ast.SD_scattered_funcl(funcl) -> 
-	  (match funcl with
-	    | Parse_ast.FCL_aux(Parse_ast.FCL_Funcl(id,_,_),_) -> 
-              let id = to_ast_id id in
-              (match (def_in_progress id partial_defs) with
-		| None -> typ_error l "Scattered function definition clause does not match any exisiting function definition headers" (Some id) None None
-		| Some(d,k) ->
-		  (match !d with
-		    | DEF_aux(DEF_fundef(FD_aux(FD_function(r,t,e,fcls),fl)),dl),false -> 
-		      let funcl = to_ast_funcl (names,Envmap.union k k_env,t_env) funcl in 
-		      d:= (DEF_aux(DEF_fundef(FD_aux(FD_function(r,t,e,fcls@[funcl]),fl)),dl),false);
-		      (No_def,envs),partial_defs
-		    | _,true -> typ_error l "Scattered funciton definition clauses extends ended defintion" (Some id) None None
-		    | _ -> typ_error l "Scattered function definition clause matches an existing scattered type definition header" (Some id) None None)))
-	| Parse_ast.SD_scattered_variant(id,naming_scheme_opt,typquant) -> 
-	  let id = to_ast_id id in
-	  let name = to_ast_namescm naming_scheme_opt in
-	  let typq, k_env',_ = to_ast_typquant k_env typquant in
-	  (match (def_in_progress id partial_defs) with
-	    | None -> let partial_def = ref ((DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,None))),(l,None))),false) in
-                      (Def_place_holder(id,l),(names,Envmap.insert k_env ((id_to_string id),{k=K_Typ}),t_env)),(id,(partial_def,k_env'))::partial_defs
-	    | Some(d,k) -> typ_error l "Scattered type definition header name already in use by scattered definition" (Some id) None None)
-	| Parse_ast.SD_scattered_unioncl(id,tu) -> 
-	  let id = to_ast_id id in
-	  (match (def_in_progress id partial_defs) with
-	    | None -> typ_error l "Scattered type definition clause does not match any existing type definition headers" (Some id) None None
-	    | Some(d,k) ->
-              (match !d with
-		| (DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,arms,false),tl)),dl), false) -> 
-		  d:= (DEF_aux(DEF_type(TD_aux(TD_variant(id,name,typq,arms@[to_ast_type_union k tu],false),tl)),dl),false);
-		  (No_def,envs),partial_defs
-		| _,true -> typ_error l "Scattered type definition clause extends ended definition" (Some id) None None
-		| _ -> typ_error l "Scattered type definition clause matches an existing scattered function definition header" (Some id) None None))
-	| Parse_ast.SD_scattered_end(id) ->
-	  let id = to_ast_id id in
-	  (match (def_in_progress id partial_defs) with
-	    | None -> typ_error l "Scattered definition end does not match any open scattered definitions" (Some id) None None
-	    | Some(d,k) ->
-              (match !d with
-		| (DEF_aux(DEF_type(_),_) as def),false ->
-		  d:= (def,true);
-		  (No_def,envs),partial_defs
-		| (DEF_aux(DEF_fundef(_),_) as def),false ->
-		  d:= (def,true);
-		  ((Finished def), envs),partial_defs
-		| _, true -> 
-		  typ_error l "Scattered definition ended multiple times" (Some id) None None
-		| _ -> raise (Reporting_basic.err_unreachable l "Something in partial_defs other than fundef and type"))))
-    )
-
+      (match (def_in_progress id partial_defs) with
+      | None -> let partial_def = ref ((DEF_fundef(FD_aux(FD_function(rec_opt,tannot,effects_opt,[]),(l,None)))),false) in
+                (No_def,envs),((id,(partial_def,k_local))::partial_defs)
+      | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None None)
+    | Parse_ast.SD_scattered_funcl(funcl) -> 
+      (match funcl with
+      | Parse_ast.FCL_aux(Parse_ast.FCL_Funcl(id,_,_),_) -> 
+        let id = to_ast_id id in
+        (match (def_in_progress id partial_defs) with
+	| None -> typ_error l "Scattered function definition clause does not match any exisiting function definition headers" (Some id) None None
+	| Some(d,k) ->
+	  (match !d with
+	  | DEF_fundef(FD_aux(FD_function(r,t,e,fcls),fl)),false -> 
+	    let funcl = to_ast_funcl (names,Envmap.union k k_env,t_env) funcl in 
+	    d:= DEF_fundef(FD_aux(FD_function(r,t,e,fcls@[funcl]),fl)),false;
+	    (No_def,envs),partial_defs
+	  | _,true -> typ_error l "Scattered funciton definition clauses extends ended defintion" (Some id) None None
+	  | _ -> typ_error l "Scattered function definition clause matches an existing scattered type definition header" (Some id) None None)))
+    | Parse_ast.SD_scattered_variant(id,naming_scheme_opt,typquant) -> 
+      let id = to_ast_id id in
+      let name = to_ast_namescm naming_scheme_opt in
+      let typq, k_env',_ = to_ast_typquant k_env typquant in
+      (match (def_in_progress id partial_defs) with
+      | None -> let partial_def = ref ((DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,None)))),false) in
+                (Def_place_holder(id,l),(names,Envmap.insert k_env ((id_to_string id),{k=K_Typ}),t_env)),(id,(partial_def,k_env'))::partial_defs
+      | Some(d,k) -> typ_error l "Scattered type definition header name already in use by scattered definition" (Some id) None None)
+    | Parse_ast.SD_scattered_unioncl(id,tu) -> 
+      let id = to_ast_id id in
+      (match (def_in_progress id partial_defs) with
+      | None -> typ_error l "Scattered type definition clause does not match any existing type definition headers" (Some id) None None
+      | Some(d,k) ->
+        (match !d with
+	| DEF_type(TD_aux(TD_variant(id,name,typq,arms,false),tl)), false -> 
+	  d:= DEF_type(TD_aux(TD_variant(id,name,typq,arms@[to_ast_type_union k tu],false),tl)),false;
+	  (No_def,envs),partial_defs
+	| _,true -> typ_error l "Scattered type definition clause extends ended definition" (Some id) None None
+	| _ -> typ_error l "Scattered type definition clause matches an existing scattered function definition header" (Some id) None None))
+    | Parse_ast.SD_scattered_end(id) ->
+      let id = to_ast_id id in
+      (match (def_in_progress id partial_defs) with
+      | None -> typ_error l "Scattered definition end does not match any open scattered definitions" (Some id) None None
+      | Some(d,k) ->
+        (match !d with
+	| (DEF_type(_) as def),false ->
+	  d:= (def,true);
+	  (No_def,envs),partial_defs
+	| (DEF_fundef(_) as def),false ->
+	  d:= (def,true);
+	  ((Finished def), envs),partial_defs
+	| _, true -> 
+	  typ_error l "Scattered definition ended multiple times" (Some id) None None
+	| _ -> raise (Reporting_basic.err_unreachable l "Something in partial_defs other than fundef and type"))))
+    
 let rec to_ast_defs_helper envs partial_defs = function
   | [] -> ([],envs,partial_defs)
   | d::ds  -> let ((d', envs), partial_defs) = to_ast_def envs partial_defs d in
@@ -675,7 +676,7 @@ let to_ast (default_names : Nameset.t) (kind_env : kind Envmap.t) (typ_env : tan
   List.iter 
     (fun (id,(d,k)) -> 
       (match !d with
-      | (DEF_aux(_,(l,_)),false) -> typ_error l "Scattered definition never ended" (Some id) None None
+      | (d,false) -> typ_error Unknown "Scattered definition never ended" (Some id) None None
       | (_, true) -> ()))
     partial_defs;
   (Defs defs),k_env

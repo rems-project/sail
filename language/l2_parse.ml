@@ -30,6 +30,12 @@ base_kind =
 
 
 type 
+id_aux =  (* Identifier *)
+   Id of x
+ | DeIid of x (* remove infix status *)
+
+
+type 
 kid_aux =  (* identifiers with kind, ticked to differntiate from program variables *)
    Var of x
 
@@ -46,14 +52,13 @@ base_effect_aux =  (* effect *)
 
 
 type 
-id_aux =  (* Identifier *)
-   Id of x
- | DeIid of x (* remove infix status *)
+kind_aux =  (* kinds *)
+   K_kind of (base_kind) list
 
 
 type 
-kind_aux =  (* kinds *)
-   K_kind of (base_kind) list
+id = 
+   Id_aux of id_aux * l
 
 
 type 
@@ -64,11 +69,6 @@ kid =
 type 
 base_effect = 
    BE_aux of base_effect_aux * l
-
-
-type 
-id = 
-   Id_aux of id_aux * l
 
 
 type 
@@ -252,27 +252,27 @@ and letbind =
 
 
 type 
-type_union_aux =  (* Type union constructors *)
-   Tu_id of id
- | Tu_ty_id of atyp * id
-
-
-type 
 name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
    Name_sect_none
  | Name_sect_some of string
 
 
 type 
-effect_opt_aux =  (* Optional effect annotation for functions *)
-   Effect_opt_pure (* sugar for empty effect set *)
- | Effect_opt_effect of atyp
+type_union_aux =  (* Type union constructors *)
+   Tu_id of id
+ | Tu_ty_id of atyp * id
 
 
 type 
 tannot_opt_aux =  (* Optional type annotation for functions *)
    Typ_annot_opt_none
  | Typ_annot_opt_some of typquant * atyp
+
+
+type 
+effect_opt_aux =  (* Optional effect annotation for functions *)
+   Effect_opt_pure (* sugar for empty effect set *)
+ | Effect_opt_effect of atyp
 
 
 type 
@@ -284,6 +284,11 @@ rec_opt_aux =  (* Optional recursive annotation for functions *)
 type 
 funcl_aux =  (* Function clause *)
    FCL_Funcl of id * pat * exp
+
+
+type 
+name_scm_opt = 
+   Name_sect_aux of name_scm_opt_aux * l
 
 
 type 
@@ -302,18 +307,13 @@ type_union =
 
 
 type 
-name_scm_opt = 
-   Name_sect_aux of name_scm_opt_aux * l
+tannot_opt = 
+   Typ_annot_opt_aux of tannot_opt_aux * l
 
 
 type 
 effect_opt = 
    Effect_opt_aux of effect_opt_aux * l
-
-
-type 
-tannot_opt = 
-   Typ_annot_opt_aux of tannot_opt_aux * l
 
 
 type 
@@ -327,6 +327,13 @@ funcl =
 
 
 type 
+val_spec_aux =  (* Value type specification *)
+   VS_val_spec of typschm * id
+ | VS_extern_no_rename of typschm * id
+ | VS_extern_spec of typschm * id * string
+
+
+type 
 type_def_aux =  (* Type definition body *)
    TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
  | TD_record of id * name_scm_opt * typquant * ((atyp * id)) list * bool (* struct type definition *)
@@ -336,9 +343,19 @@ type_def_aux =  (* Type definition body *)
 
 
 type 
+dec_spec_aux =  (* Register declarations *)
+   DEC_reg of atyp * id
+
+
+type 
 default_typing_spec_aux =  (* Default kinding or typing assumption *)
    DT_kind of base_kind * kid
  | DT_typ of typschm * id
+
+
+type 
+fundef_aux =  (* Function definition *)
+   FD_function of rec_opt * tannot_opt * effect_opt * (funcl) list
 
 
 type 
@@ -352,15 +369,8 @@ scattered_def_aux =  (* Function and type union definitions that can be spread a
 
 
 type 
-val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_no_rename of typschm * id
- | VS_extern_spec of typschm * id * string
-
-
-type 
-fundef_aux =  (* Function definition *)
-   FD_function of rec_opt * tannot_opt * effect_opt * (funcl) list
+val_spec = 
+   VS_aux of val_spec_aux * l
 
 
 type 
@@ -369,18 +379,13 @@ type_def =
 
 
 type 
+dec_spec = 
+   DEC_aux of dec_spec_aux * l
+
+
+type 
 default_typing_spec = 
    DT_aux of default_typing_spec_aux * l
-
-
-type 
-scattered_def = 
-   SD_aux of scattered_def_aux * l
-
-
-type 
-val_spec = 
-   VS_aux of val_spec_aux * l
 
 
 type 
@@ -389,24 +394,19 @@ fundef =
 
 
 type 
-def_aux =  (* Top-level definition *)
+scattered_def = 
+   SD_aux of scattered_def_aux * l
+
+
+type 
+def =  (* Top-level definition *)
    DEF_type of type_def (* type definition *)
  | DEF_fundef of fundef (* function definition *)
  | DEF_val of letbind (* value definition *)
  | DEF_spec of val_spec (* top-level type constraint *)
  | DEF_default of default_typing_spec (* default kind and type assumptions *)
  | DEF_scattered of scattered_def (* scattered definition *)
- | DEF_reg_dec of atyp * id (* register declaration *)
-
-
-type 
-def = 
-   DEF_aux of def_aux * l
-
-
-type 
-defs =  (* Definition sequence *)
-   Defs of (def) list
+ | DEF_reg_dec of dec_spec (* register declaration *)
 
 
 type 
@@ -419,6 +419,11 @@ lexp_aux =  (* lvalue expression *)
 
 and lexp = 
    LEXP_aux of lexp_aux * l
+
+
+type 
+defs =  (* Definition sequence *)
+   Defs of (def) list
 
 
 

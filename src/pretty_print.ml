@@ -346,15 +346,18 @@ let pp_fundef ppf (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   fprintf ppf "@[<0>%a %a%a%a @[<1>%a@] @[<1>%a@] @]@\n"
     kwd "function" pp_rec r pp_tannot_opt typa pp_effects_opt efa pp_funcl (List.hd fcls) (list_pp pp_funcls pp_funcls) (List.tl fcls)
 
-let pp_def ppf (DEF_aux(d,(l,_))) =
+let pp_dec ppf (DEC_aux(DEC_reg(typ,id),_)) =
+  fprintf ppf "@[<0>register %a %a@]@\n" pp_typ typ pp_id id
+
+let pp_def ppf d =
   match d with
   | DEF_default(df) -> pp_default ppf df
   | DEF_spec(v_spec) -> pp_spec ppf v_spec
   | DEF_type(t_def) -> pp_typdef ppf t_def
   | DEF_fundef(f_def) -> pp_fundef ppf f_def
   | DEF_val(lbind) -> fprintf ppf "@[<0>%a@]@\n" pp_let lbind
-  | DEF_reg_dec(typ,id) -> fprintf ppf "@[<0>%a %a %a@]@\n" kwd "register" pp_typ typ pp_id id
-  | _ -> raise (Reporting_basic.err_unreachable l "initial_check didn't remove all scattered Defs")
+  | DEF_reg_dec(dec) -> pp_dec ppf dec
+  | _ -> raise (Reporting_basic.err_unreachable Unknown "initial_check didn't remove all scattered Defs")
 
 let pp_defs ppf (Defs(defs)) =
   fprintf ppf "@[%a@]@\n" (list_pp pp_def pp_def) defs
@@ -712,13 +715,13 @@ and pp_lem_lexp ppf (LEXP_aux(lexp,(l,annot))) =
   in
   fprintf ppf "@[(LEXP_aux %a (%a, %a))@]" print_le lexp pp_lem_l l pp_annot annot
 
-let pp_lem_default ppf (DT_aux(df,(l,annot))) =
+let pp_lem_default ppf (DT_aux(df,l)) =
   let print_de ppf df =
     match df with
       | DT_kind(bk,var) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "DT_kind" pp_lem_bkind bk pp_lem_var var
       | DT_typ(ts,id) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "DT_typ" pp_lem_typscm ts pp_lem_id id
   in
-  fprintf ppf "@[<0>(DT_aux %a (%a, %a))@]" print_de df pp_lem_l l pp_annot annot
+  fprintf ppf "@[<0>(DT_aux %a %a)@]" print_de df pp_lem_l l
 
 let pp_lem_spec ppf (VS_aux(v,(l,annot))) =
   let print_spec ppf v =
@@ -786,9 +789,9 @@ let pp_lem_effects_opt ppf (Effect_opt_aux(e,l)) =
   | Effect_opt_pure -> fprintf ppf "(Effect_opt_aux Effect_opt_pure %a)" pp_lem_l l
   | Effect_opt_effect e -> fprintf ppf "(Effect_opt_aux (Effect_opt_effect %a) %a)" pp_lem_effects e pp_lem_l l
 
-let pp_lem_funcl ppf (FCL_aux(FCL_Funcl(id,pat,exp),(l,annot))) =
-  fprintf ppf "@[<0>(FCL_aux (%a %a %a %a) (%a, %a))@]@\n" 
-    kwd "FCL_Funcl" pp_lem_id id pp_lem_pat pat pp_lem_exp exp pp_lem_l l pp_annot annot
+let pp_lem_funcl ppf (FCL_aux(FCL_Funcl(id,pat,exp),l)) =
+  fprintf ppf "@[<0>(FCL_aux (%a %a %a %a) %a)@]@\n" 
+    kwd "FCL_Funcl" pp_lem_id id pp_lem_pat pat pp_lem_exp exp pp_lem_l l
 
 let pp_lem_fundef ppf (FD_aux(FD_function(r, typa, efa, fcls),(l,annot))) =
   let pp_funcls ppf funcl = fprintf ppf "%a %a" pp_lem_funcl funcl kwd ";" in
@@ -796,18 +799,18 @@ let pp_lem_fundef ppf (FD_aux(FD_function(r, typa, efa, fcls),(l,annot))) =
     kwd "FD_function" pp_lem_rec r pp_lem_tannot_opt typa pp_lem_effects_opt efa (list_pp pp_funcls pp_funcls) fcls
     pp_lem_l l pp_annot annot
 
-let pp_lem_def ppf (DEF_aux(d,(l,annot))) =
-  let print_d ppf d = 
-    match d with
-      | DEF_default(df) -> fprintf ppf "(DEF_default %a)" pp_lem_default df
-      | DEF_spec(v_spec) -> fprintf ppf "(DEF_spec %a)" pp_lem_spec v_spec
-      | DEF_type(t_def) -> fprintf ppf "(DEF_type %a)" pp_lem_typdef t_def
-      | DEF_fundef(f_def) -> fprintf ppf "(DEF_fundef %a)" pp_lem_fundef f_def
-      | DEF_val(lbind) -> fprintf ppf "(DEF_val %a)" pp_lem_let lbind
-      | DEF_reg_dec(typ,id) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "DEF_reg_dec" pp_lem_typ typ pp_lem_id id
-      | _ -> raise (Reporting_basic.err_unreachable l "initial_check didn't remove all scattered Defs")
-  in
-  fprintf ppf "@[<0>(DEF_aux %a (%a, %a))@];@\n" print_d d pp_lem_l l pp_annot annot
+let pp_lem_dec ppf (DEC_aux(DEC_reg(typ,id),(l,annot))) =
+  fprintf ppf "@[<0>(DEC_aux (DEC_reg %a %a) (%a,%a))@]" pp_lem_typ typ pp_lem_id id pp_lem_l l pp_annot annot
+
+let pp_lem_def ppf d =
+  match d with
+  | DEF_default(df) -> fprintf ppf "(DEF_default %a);" pp_lem_default df
+  | DEF_spec(v_spec) -> fprintf ppf "(DEF_spec %a);" pp_lem_spec v_spec
+  | DEF_type(t_def) -> fprintf ppf "(DEF_type %a);" pp_lem_typdef t_def
+  | DEF_fundef(f_def) -> fprintf ppf "(DEF_fundef %a);" pp_lem_fundef f_def
+  | DEF_val(lbind) -> fprintf ppf "(DEF_val %a);" pp_lem_let lbind
+  | DEF_reg_dec(dec) -> fprintf ppf "(DEF_reg_dec %a);" pp_lem_dec dec
+  | _ -> raise (Reporting_basic.err_unreachable Unknown "initial_check didn't remove all scattered Defs")
 
 let pp_lem_defs ppf (Defs(defs)) =
   fprintf ppf "Defs [@[%a@]]@\n" (list_pp pp_lem_def pp_lem_def) defs

@@ -200,7 +200,10 @@ typschm_aux =  (* type scheme *)
 
 
 type 
-'a pat_aux =  (* Pattern *)
+'a fpat = 
+   FP_aux of 'a fpat_aux * 'a annot
+
+and 'a pat_aux =  (* Pattern *)
    P_lit of lit (* literal constant pattern *)
  | P_wild (* wildcard *)
  | P_as of 'a pat * id (* named pattern *)
@@ -220,9 +223,6 @@ and 'a pat =
 and 'a fpat_aux =  (* Field pattern *)
    FP_Fpat of id * 'a pat
 
-and 'a fpat = 
-   FP_aux of 'a fpat_aux * 'a annot
-
 
 type 
 typschm = 
@@ -230,35 +230,7 @@ typschm =
 
 
 type 
-'a lexp = 
-   LEXP_aux of 'a lexp_aux * 'a annot
-
-and 'a fexp_aux =  (* Field-expression *)
-   FE_Fexp of id * 'a exp
-
-and 'a fexp = 
-   FE_aux of 'a fexp_aux * 'a annot
-
-and 'a fexps_aux =  (* Field-expression list *)
-   FES_Fexps of ('a fexp) list * bool
-
-and 'a fexps = 
-   FES_aux of 'a fexps_aux * 'a annot
-
-and 'a pexp_aux =  (* Pattern match *)
-   Pat_exp of 'a pat * 'a exp
-
-and 'a pexp = 
-   Pat_aux of 'a pexp_aux * 'a annot
-
-and 'a letbind_aux =  (* Let binding *)
-   LB_val_explicit of typschm * 'a pat * 'a exp (* value binding, explicit type ('a pat must be total) *)
- | LB_val_implicit of 'a pat * 'a exp (* value binding, implicit type ('a pat must be total) *)
-
-and 'a letbind = 
-   LB_aux of 'a letbind_aux * 'a annot
-
-and 'a exp_aux =  (* Expression *)
+'a exp_aux =  (* Expression *)
    E_block of ('a exp) list (* block (parsing conflict with structs?) *)
  | E_id of id (* identifier *)
  | E_lit of lit (* literal constant *)
@@ -295,6 +267,34 @@ and 'a lexp_aux =  (* lvalue expression *)
  | LEXP_vector of 'a lexp * 'a exp (* vector element *)
  | LEXP_vector_range of 'a lexp * 'a exp * 'a exp (* subvector *)
  | LEXP_field of 'a lexp * id (* struct field *)
+
+and 'a lexp = 
+   LEXP_aux of 'a lexp_aux * 'a annot
+
+and 'a fexp_aux =  (* Field-expression *)
+   FE_Fexp of id * 'a exp
+
+and 'a fexp = 
+   FE_aux of 'a fexp_aux * 'a annot
+
+and 'a fexps_aux =  (* Field-expression list *)
+   FES_Fexps of ('a fexp) list * bool
+
+and 'a fexps = 
+   FES_aux of 'a fexps_aux * 'a annot
+
+and 'a pexp_aux =  (* Pattern match *)
+   Pat_exp of 'a pat * 'a exp
+
+and 'a pexp = 
+   Pat_aux of 'a pexp_aux * 'a annot
+
+and 'a letbind_aux =  (* Let binding *)
+   LB_val_explicit of typschm * 'a pat * 'a exp (* value binding, explicit type ('a pat must be total) *)
+ | LB_val_implicit of 'a pat * 'a exp (* value binding, implicit type ('a pat must be total) *)
+
+and 'a letbind = 
+   LB_aux of 'a letbind_aux * 'a annot
 
 
 type 
@@ -348,7 +348,7 @@ rec_opt =
 
 type 
 'a funcl = 
-   FCL_aux of 'a funcl_aux * 'a annot
+   FCL_aux of 'a funcl_aux * l
 
 
 type 
@@ -387,18 +387,23 @@ type
 
 
 type 
-'a type_def_aux =  (* Type definition body *)
-   TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
- | TD_record of id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
- | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
- | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)
- | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
+'a dec_spec_aux =  (* Register declarations *)
+   DEC_reg of typ * id
 
 
 type 
 'a default_spec_aux =  (* Default kinding or typing assumption *)
    DT_kind of base_kind * kid
  | DT_typ of typschm * id
+
+
+type 
+'a type_def_aux =  (* Type definition body *)
+   TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
+ | TD_record of id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
+ | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
+ | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)
+ | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
 
 
 type 
@@ -419,13 +424,18 @@ type
 
 
 type 
-'a type_def = 
-   TD_aux of 'a type_def_aux * 'a annot
+'a dec_spec = 
+   DEC_aux of 'a dec_spec_aux * 'a annot
 
 
 type 
 'a default_spec = 
-   DT_aux of 'a default_spec_aux * 'a annot
+   DT_aux of 'a default_spec_aux * l
+
+
+type 
+'a type_def = 
+   TD_aux of 'a type_def_aux * 'a annot
 
 
 type 
@@ -434,19 +444,14 @@ type
 
 
 type 
-'a def_aux =  (* Top-level definition *)
+'a def =  (* Top-level definition *)
    DEF_type of 'a type_def (* type definition *)
  | DEF_fundef of 'a fundef (* function definition *)
  | DEF_val of 'a letbind (* value definition *)
  | DEF_spec of 'a val_spec (* top-level type constraint *)
  | DEF_default of 'a default_spec (* default kind and type assumptions *)
  | DEF_scattered of 'a scattered_def (* scattered function and type definition *)
- | DEF_reg_dec of typ * id (* register declaration *)
-
-
-type 
-'a def = 
-   DEF_aux of 'a def_aux * 'a annot
+ | DEF_reg_dec of 'a dec_spec (* register declaration *)
 
 
 type 
