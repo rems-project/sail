@@ -584,7 +584,7 @@ let pp_format_tag = function
 
 let pp_format_nes nes = 
   "[" ^ 
-  (list_format "; "
+  (*(list_format "; "
      (fun ne -> match ne with
        | LtEq(_,n1,n2) -> "(Nec_lteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | Eq(_,n1,n2) -> "(Nec_eq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
@@ -594,7 +594,7 @@ let pp_format_nes nes =
        | InS(_,{nexp = Nuvar _},ns) | InOpen(_,{nexp = Nuvar _},ns) ->  
 	 "(Nec_in \"fresh\" [" ^ (list_format "; " string_of_int ns)^ "])"
      )
-     nes) ^ "]"
+     nes) ^*) "]"
 
 let pp_format_annot = function
   | None -> "Nothing"
