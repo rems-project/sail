@@ -544,7 +544,7 @@ let rec pp_format_t t =
     | Ttup(tups) -> "(T_tup [" ^ (list_format "; " pp_format_t tups) ^ "])"
     | Tapp(i,args) -> "(T_app \"" ^ i ^ "\" (T_args [" ^  list_format "; " pp_format_targ args ^ "]))"
     | Tabbrev(ti,ta) -> "(T_abbrev " ^ (pp_format_t ti) ^ " " ^ (pp_format_t ta) ^ ")"
-    | Tuvar(_) -> assert false (*"(T_var (Kid_aux (Var \"fresh_v\") Unknown))"*)
+    | Tuvar(_) -> "(T_var (Kid_aux (Var \"fresh_v\") Unknown))"
 and pp_format_targ = function
   | TA_typ t -> "(T_arg_typ " ^ pp_format_t t ^ ")"
   | TA_nexp n -> "(T_arg_nexp " ^ pp_format_n n ^ ")"
