@@ -530,8 +530,10 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let (cond',_,_,c1,ef1) = check_exp envs bool_t cond in
       let then',then_t,then_env,then_c,then_ef = check_exp envs expect_t then_ in
       let else',else_t,else_env,else_c,else_ef = check_exp envs expect_t else_ in
+      let t_cs = CondCons((Expr l),c1,then_c) in
+      let e_cs = CondCons((Expr l),[],else_c) in
       (E_aux(E_if(cond',then',else'),(l,Some(([],expect_t),Emp_local,[],pure_e))),
-       expect_t,Envmap.intersect_merge (tannot_merge (Expr l) d_env) then_env else_env,then_c@else_c@c1,
+       expect_t,Envmap.intersect_merge (tannot_merge (Expr l) d_env) then_env else_env,[t_cs;e_cs],
        union_effects ef1 (union_effects then_ef else_ef))
     | E_for(id,from,to_,step,order,block) -> 
       let fb,fr,tb,tr,sb,sr = new_n(),new_n(),new_n(),new_n(),new_n(),new_n() in
@@ -883,15 +885,17 @@ and check_cases envs check_t expect_t pexps : ((tannot pexp) list * typ * nexp_r
     | [] -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "switch with no cases found")
     | [(Pat_aux(Pat_exp(pat,exp),(l,annot)))] ->
       let pat',env,cs_p,u = check_pattern envs Emp_local check_t pat in
-      let (e,t,_,cs2,ef) = check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env) t_env env)) expect_t exp in
-      [Pat_aux(Pat_exp(pat',e),(l,Some(([],t),Emp_local,cs_p@cs2,ef)))],t,cs_p@cs2,ef
+      let e,t,_,cs_e,ef = check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env) t_env env)) expect_t exp in
+      let cs = [CondCons(Expr l, cs_p, cs_e)] in
+      [Pat_aux(Pat_exp(pat',e),(l,Some(([],t),Emp_local,cs,ef)))],t,cs,ef
     | ((Pat_aux(Pat_exp(pat,exp),(l,annot)))::pexps) ->
       let pat',env,cs_p,u = check_pattern envs Emp_local check_t pat in
-      let (e,t,_,cs2,ef) = check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env) t_env env)) expect_t exp in
-      let (pes,tl,csl,efl) = check_cases envs check_t expect_t pexps in
-      ((Pat_aux(Pat_exp(pat',e),(l,(Some(([],t),Emp_local,(cs_p@cs2),ef)))))::pes,
+      let (e,t,_,cs_e,ef) = check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env) t_env env)) expect_t exp in
+      let cs = CondCons(Expr l,cs_p,cs_e) in
+      let (pes,tl,csl,efl) = check_cases envs check_t expect_t pexps in      
+      ((Pat_aux(Pat_exp(pat',e),(l,(Some(([],t),Emp_local,[cs],ef)))))::pes,
        tl,
-       csl@cs_p@cs2,union_effects efl ef)
+       cs::csl,union_effects efl ef)
 
 and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tannot emap * tag *nexp_range list *effect ) =
   let (Env(d_env,t_env)) = envs in
@@ -1242,12 +1246,13 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   let check t_env =
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),l)) ->
-	let (pat',t_env',constraints',t') = check_pattern (Env(d_env,t_env)) Emp_local param_t pat in
+	let (pat',t_env',cs_p,t') = check_pattern (Env(d_env,t_env)) Emp_local param_t pat in
         (*let _ = Printf.printf "about to check that %s and %s are consistent\n" (t_to_string t') (t_to_string param_t) in*)
-	let exp',_,_,constraints,ef = check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env) t_env t_env')) ret_t exp in
+	let exp',_,_,cs_e,ef = check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env) t_env t_env')) ret_t exp in
         (*let _ = Printf.printf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*) 
 	(*let _ = (Pretty_print.pp_exp Format.std_formatter) exp' in*)
-	(FCL_aux((FCL_Funcl(id,pat',exp')),l),((constraints'@constraints),ef))) funcls) in
+	let cs = [CondCons(Fun l,cs_p,cs_e)] in
+	(FCL_aux((FCL_Funcl(id,pat',exp')),l),(cs,ef))) funcls) in
   match (in_env,tannot) with
     | Some(Some( (params,u),Spec,constraints,eft)), Some( (p',t),_,c',eft') ->
       (*let _ = Printf.printf "Function %s is in env\n" id in*)
@@ -1256,7 +1261,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let t_env = if is_rec then t_env else Envmap.remove t_env id in
       let funcls,cs_ef = check t_env in
       let cs,ef = ((fun (cses,efses) -> (List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
-      let cs' = resolve_constraints cs in
+      let cs' = resolve_constraints cs@constraints in
       let tannot = check_tannot l tannot cs' ef in
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,Envmap.insert t_env (id,tannot))

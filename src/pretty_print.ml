@@ -357,7 +357,7 @@ let pp_def ppf d =
   | DEF_fundef(f_def) -> pp_fundef ppf f_def
   | DEF_val(lbind) -> fprintf ppf "@[<0>%a@]@\n" pp_let lbind
   | DEF_reg_dec(dec) -> pp_dec ppf dec
-  | _ -> raise (Reporting_basic.err_unreachable Unknown "initial_check didn't remove all scattered Defs")
+  | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "initial_check didn't remove all scattered Defs")
 
 let pp_defs ppf (Defs(defs)) =
   fprintf ppf "@[%a@]@\n" (list_pp pp_def pp_def) defs
@@ -592,9 +592,9 @@ let pp_format_nes nes =
        | LtEq(_,n1,n2) -> "(Nec_lteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | Eq(_,n1,n2) -> "(Nec_eq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | GtEq(_,n1,n2) -> "(Nec_gteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
-       | In(_,i,ns) | InS(_,{nexp=Nvar i},ns) |InOpen(_,{nexp=Nvar i},ns)-> 
+       | In(_,i,ns) | InS(_,{nexp=Nvar i},ns) -> 
 	 "(Nec_in \"" ^ i ^ "\" [" ^ (list_format "; " string_of_int ns)^ "])"
-       | InS(_,{nexp = Nuvar _},ns) | InOpen(_,{nexp = Nuvar _},ns) ->  
+       | InS(_,{nexp = Nuvar _},ns)  ->  
 	 "(Nec_in \"fresh\" [" ^ (list_format "; " string_of_int ns)^ "])"
      )
      nes) ^*) "]"
@@ -810,7 +810,7 @@ let pp_lem_def ppf d =
   | DEF_fundef(f_def) -> fprintf ppf "(DEF_fundef %a);" pp_lem_fundef f_def
   | DEF_val(lbind) -> fprintf ppf "(DEF_val %a);" pp_lem_let lbind
   | DEF_reg_dec(dec) -> fprintf ppf "(DEF_reg_dec %a);" pp_lem_dec dec
-  | _ -> raise (Reporting_basic.err_unreachable Unknown "initial_check didn't remove all scattered Defs")
+  | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "initial_check didn't remove all scattered Defs")
 
 let pp_lem_defs ppf (Defs(defs)) =
   fprintf ppf "Defs [@[%a@]]@\n" (list_pp pp_lem_def pp_lem_def) defs

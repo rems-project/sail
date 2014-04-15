@@ -70,7 +70,7 @@ type tag =
 type constraint_origin =
   | Patt of Parse_ast.l
   | Expr of Parse_ast.l
-  | Abre of Parse_ast.l
+  | Fun of Parse_ast.l
   | Specc of Parse_ast.l
 
 (* Constraints for nexps, plus the location which added the constraint *)
@@ -80,7 +80,7 @@ type nexp_range =
   | GtEq of constraint_origin * nexp * nexp
   | In of constraint_origin * string * int list
   | InS of constraint_origin * nexp * int list (* This holds the given value for string after a substitution *)
-  | InOpen of constraint_origin * nexp * int list (* This holds a non-exhaustive value/s for a var or nuvar during constraint gathering *)
+  | CondCons of constraint_origin * nexp_range list * nexp_range list
 
 type t_params = (string * kind) list
 type tannot = ((t_params * t) * tag * nexp_range list * effect) option
@@ -104,7 +104,7 @@ let get_index n =
    | _ -> assert false
 
 let get_c_loc = function
-  | Patt l | Expr l | Abre l | Specc l -> l
+  | Patt l | Expr l | Specc l -> l
 
 let rec string_of_list sep string_of = function
   | [] -> ""
@@ -675,8 +675,8 @@ let rec cs_subst t_env cs =
     | LtEq(l,n1,n2)::cs -> LtEq(l,n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
     | In(l,s,ns)::cs -> InS(l,n_subst t_env {nexp=Nvar s},ns)::(cs_subst t_env cs)
     | InS(l,n,ns)::cs -> InS(l,n_subst t_env n,ns)::(cs_subst t_env cs)
-    | InOpen(l,n,ns)::cs -> InOpen(l,n_subst t_env n,ns)::(cs_subst t_env cs)
-
+    | CondCons(l, pats, exps)::cs -> CondCons(l, cs_subst t_env pats, cs_subst t_env exps)::(cs_subst t_env cs)
+      
 let subst k_env t cs e =
   let subst_env = Envmap.from_list
     (List.map (fun (id,k) -> (id, 
@@ -1076,9 +1076,12 @@ let rec simple_constraint_check in_env cs =
         then begin resolve_nsubst n1; resolve_nsubst n2; equate_n n1' n2'; None end
         else Some(Eq(co,n1',n2'))
       | _,_ -> Some(Eq(co,n1',n2'))) in
-    (match check_eq true n1 n2 with
-    | None -> (check cs)
-    | Some(c) -> c::(check cs))
+    (match contains_in_vars in_env n1, contains_in_vars in_env n2 with
+      | None,None ->	
+	(match check_eq true n1 n2 with
+	  | None -> (check cs)
+	  | Some(c) -> c::(check cs))
+      | _ -> (Eq(co,n1,n2)::(check cs)))
   | GtEq(co,n1,n2)::cs -> 
 (*    let _ = Printf.printf ">= check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = eval_nexp n1,eval_nexp n2 in

@@ -65,7 +65,7 @@ type tag =
 type constraint_origin =
   | Patt of Parse_ast.l
   | Expr of Parse_ast.l
-  | Abre of Parse_ast.l
+  | Fun of Parse_ast.l
   | Specc of Parse_ast.l
 
 (* Constraints for nexps, plus the location which added the constraint *)
@@ -75,7 +75,7 @@ type nexp_range =
   | GtEq of constraint_origin * nexp * nexp
   | In of constraint_origin * string * int list
   | InS of constraint_origin * nexp * int list (* This holds the given value for string after a substitution *)
-  | InOpen of constraint_origin * nexp * int list (* This holds a non-exhaustive value/s for a var or nuvar during constraint gathering *)
+  | CondCons of constraint_origin * nexp_range list * nexp_range list (* Constraints from one path from a conditional (pattern or if) and the constraints from that conditional *)
 
 val get_c_loc : constraint_origin -> Parse_ast.l
 

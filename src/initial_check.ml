@@ -676,7 +676,7 @@ let to_ast (default_names : Nameset.t) (kind_env : kind Envmap.t) (typ_env : tan
   List.iter 
     (fun (id,(d,k)) -> 
       (match !d with
-      | (d,false) -> typ_error Unknown "Scattered definition never ended" (Some id) None None
+      | (d,false) -> typ_error Parse_ast.Unknown "Scattered definition never ended" (Some id) None None
       | (_, true) -> ()))
     partial_defs;
   (Defs defs),k_env

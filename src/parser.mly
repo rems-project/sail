@@ -95,7 +95,7 @@ let mk_namesectn _ = Name_sect_aux(Name_sect_none,Unknown)
 let make_range_sugar_bounded typ1 typ2 =
   ATyp_app(Id_aux(Id("range"),Unknown),[typ1; typ2;])
 let make_range_sugar typ1 =
-  make_range_sugar_bounded typ1 (ATyp_aux(ATyp_constant(0), Unknown))
+  make_range_sugar_bounded (ATyp_aux(ATyp_constant(0), Unknown)) typ1
 
 let make_r bot top =
   match bot,top with
