@@ -23,6 +23,11 @@ function nat main _ = {
     case 32 -> { x:= 128; }
   };
 
+  switch 0b010101 {
+    case (0b01:(bit[1]) _:0b101) -> n:= 42
+    case _ -> n:=0
+  };
+
   n := 3;
   switch n {
     case 0 -> { 21 }
