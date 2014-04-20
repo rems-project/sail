@@ -520,45 +520,8 @@ let rec match_pattern (P_aux p _) value =
      let (matched_p,bounds,remaining_vals) =
        List.foldl 
          (fun (matched_p,bounds,r_vals) (P_aux pat (l,Just(t,_,_,_))) ->
-           match pat with
-	   | P_lit (L_aux (L_bin bin_string) l') ->
-	     let bin_chars = toCharList bin_string in
-	     let binpats = List.map (fun b -> P_aux (match b with | #'0' -> P_lit (L_aux L_zero l') | #'1' -> P_lit (L_aux L_one l')end) (l',Nothing)) bin_chars in
-	     vec_concat_match binpats r_vals
-           | P_vector pats -> vec_concat_match pats r_vals
-           | P_id id -> (match t with
-	       | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp (Ne_const i);_;_]) ->
-		 let wilds = List.genlist (fun _ -> P_aux P_wild (l,Nothing)) (natFromInteger i) in
-		 vec_concat_match wilds r_vals (*TODO need to add to bounds*)
-	       | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp nc;_;_]) ->
-		 (false,[],[]) (*TODO see if can have some constraint bounds here*)
-	       | _ -> (false,[],[]) end)
-	   | P_wild -> (match t with
-	       | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp (Ne_const i);_;_]) ->
-		 let wilds = List.genlist (fun _ -> P_aux P_wild (l,Nothing)) (natFromInteger i) in
-		 vec_concat_match wilds r_vals (*TODO need to add to bounds*)
-	       | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp nc;_;_]) ->
-		 (false,[],[]) (*TODO see if can have some constraint bounds here*)
-	       | _ -> (false,[],[]) end)
-	   | P_typ _ (P_aux p (l',Just(t',_,_,_))) ->
-	     (match p with
-	       | P_vector pats -> vec_concat_match pats r_vals
-	       | P_id id -> (match t with
-		   | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp (Ne_const i);_;_]) ->
-		     let wilds = List.genlist (fun _ -> P_aux P_wild (l,Nothing)) (natFromInteger i) in
-		     vec_concat_match wilds r_vals (*TODO need to add to bounds*)
-		   | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp nc;_;_]) ->
-		     (false,[],[]) (*TODO see if can have some constraint bounds here*)
-		   | _ -> (false,[],[]) end)
-	       | P_wild -> (match t with
-		   | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp (Ne_const i);_;_]) ->
-		     let wilds = List.genlist (fun _ -> P_aux P_wild (l,Nothing)) (natFromInteger i) in
-		     vec_concat_match wilds r_vals (*TODO need to add to bounds*)
-		   | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp nc;_;_]) ->
-		     (false,[],[]) (*TODO see if can have some constraint bounds here*)
-		   | _ -> (false,[],[]) end)
-	       | _ -> (false,[],[]) end) (*TODO Need to support indexed here, skipping intermediate numbers but consumming r_vals *)
-           | _ -> (false,[],[]) end) (true,[],vals) pats in
+	   let (matched_p,bounds',matcheds,r_vals) = vec_concat_match_plev pat r_vals inc l t in
+	   (matched_p,bounds' ++ bounds,r_vals)) (true,[],vals) pats in
      if matched_p && ([] = remaining_vals) then (matched_p,bounds) else (false,[]) 
    | _ -> (false, []) 
    end
@@ -588,16 +551,51 @@ let rec match_pattern (P_aux p _) value =
      else (false,[])
    | _ -> (false,[]) end
  end 
+
+and vec_concat_match_plev pat r_vals inc l t =
+    match pat with
+      | P_lit (L_aux (L_bin bin_string) l') ->
+	let bin_chars = toCharList bin_string in
+	let binpats = List.map (fun b -> P_aux (match b with | #'0' -> P_lit (L_aux L_zero l') | #'1' -> P_lit (L_aux L_one l')end) (l',Nothing)) bin_chars in
+	vec_concat_match binpats r_vals
+      | P_vector pats -> vec_concat_match pats r_vals
+      | P_id id -> (match t with
+	  | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp (Ne_const i);_;_]) ->
+	    let wilds = List.genlist (fun _ -> P_aux P_wild (l,Nothing)) (natFromInteger i) in
+	    let (matched_p,bounds,matcheds,r_vals) = vec_concat_match wilds r_vals in
+	    if matched_p 
+	    then (matched_p, (id,(V_vector (integerFromNat (if inc then 0 else (List.length matcheds))) inc matcheds))::bounds,matcheds,r_vals)
+	    else (false,[],[],[])
+	  | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp nc;_;_]) ->
+	    (false,[],[],[]) (*TODO see if can have some constraint bounds here*)
+	  | _ -> (false,[],[],[]) end)
+      | P_wild -> (match t with
+	  | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp (Ne_const i);_;_]) ->
+	    let wilds = List.genlist (fun _ -> P_aux P_wild (l,Nothing)) (natFromInteger i) in
+	    vec_concat_match wilds r_vals 
+	  | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp nc;_;_]) ->
+	    (false,[],[],[]) (*TODO see if can have some constraint bounds here*)
+	  | _ -> (false,[],[],[]) end)
+      | P_as (P_aux pat (l',Just(t,_,_,_))) id -> 
+	let (matched_p, bounds,matcheds,r_vals) = vec_concat_match_plev pat r_vals inc l t in
+	if matched_p 
+	then (matched_p, ((id,V_vector (integerFromNat (if inc then 0 else (List.length matcheds))) inc matcheds)::bounds),matcheds,r_vals)
+	else (false,[],[],[])	  
+      | P_typ _ (P_aux p (l',Just(t',_,_,_))) -> vec_concat_match_plev p r_vals inc l t
+      | _ -> (false,[],[],[]) end 
+      (*TODO Need to support indexed here, skipping intermediate numbers but consumming r_vals, and as *)
+
 and vec_concat_match pats r_vals =
     match pats with
-    | [] -> (true,[],r_vals)
+    | [] -> (true,[],[],r_vals)
     | pat::pats -> match r_vals with
-      | [] -> (false,[],[])
-      | r::r_vals -> let (matched_p,new_bounds) = match_pattern pat r in
-                     if matched_p then 
-                       let (matched_p,bounds,r_vals) = vec_concat_match pats r_vals in
-                       (matched_p, new_bounds++bounds,r_vals)
-                     else (false,[],[]) end
+      | [] -> (false,[],[],[])
+      | r::r_vals -> 
+	let (matched_p,new_bounds) = match_pattern pat r in
+        if matched_p then 
+          let (matched_p,bounds,matcheds,r_vals) = vec_concat_match pats r_vals in
+          (matched_p, new_bounds++bounds,matcheds++[r],r_vals)
+        else (false,[],[],[]) end
     end
 
 
