@@ -46,7 +46,7 @@ dispatch begin function
 
     rule "sail -> lem"
     ~prod: "%.lem"
-    ~deps: ["%.sail"; "main.native"]
+    ~deps: ["%.sail"; "sail.native"]
     (fun env builder ->
       let sail_opts = List.map (fun s -> A s) (
         "-lem_ast" ::
@@ -54,7 +54,7 @@ dispatch begin function
           split ',' (Sys.getenv "SAIL_OPTS")
         with Not_found -> []) in
       Seq [
-        Cmd (S ([ P "./main.native"] @ sail_opts @ [P (env "%.sail")]));
+        Cmd (S ([ P "./sail.native"] @ sail_opts @ [P (env "%.sail")]));
         mv (basename (env "%.lem")) (dirname (env "%.lem"))
       ]);
 

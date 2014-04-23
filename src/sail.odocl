@@ -2,7 +2,7 @@ ast
 finite_map
 initial_check
 lexer
-main
+sail
 parse_ast
 parser
 pp

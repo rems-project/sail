@@ -1,14 +1,14 @@
-.PHONY: all test clean doc update_lem_lib test_power
+.PHONY: all test clean doc lib test_power
 
-all:
-	ocamlbuild -classic-display main.native test/run_tests.native
+all: lib doc
+	ocamlbuild -classic-display sail.native test/run_tests.native
 
 test: all
 	./run_tests.native
 
 test_power:
 	#../../../rsem/idl/power/binary/run.sh
-	SAIL_OPTS=-skip_constraints ocamlbuild -classic-display main.native test/run_power.native
+	SAIL_OPTS=-skip_constraints ocamlbuild -classic-display sail.native test/run_power.native
 	./run_power.native --file ../../../rsem/idl/power/binary/main.bin
 
 clean:
@@ -21,3 +21,6 @@ clean:
 
 doc:
 	ocamlbuild sail.docdir/index.html
+
+lib:
+	ocamlbuild pretty_print.cmxa pretty_print.cma
