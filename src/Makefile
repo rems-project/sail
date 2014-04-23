@@ -1,4 +1,4 @@
-.PHONY: all test clean update_lem_lib test_power
+.PHONY: all test clean doc update_lem_lib test_power
 
 all:
 	ocamlbuild -classic-display main.native test/run_tests.native
@@ -17,3 +17,7 @@ clean:
 	-rm -rf html-doc
 	-rm -rf tex-doc
 	-rm -rf lem lib
+	-rm -rf sail.docdir
+
+doc:
+	ocamlbuild sail.docdir/index.html
