@@ -1047,6 +1047,19 @@ let rec subst_nuvars nu nc n =
   | Nneg n -> {nexp= Nneg (subst_nuvars nu nc n)}
   | N2n n -> {nexp = N2n (subst_nuvars nu nc n)}
 
+let rec get_nuvars n =
+  match n.nexp with
+    | Nconst _ | Nvar _ -> []
+    | Nuvar _ -> [n]
+    | Nmult(n1,n2) | Nadd(n1,n2) -> (get_nuvars n1)@(get_nuvars n2)
+    | Nneg n | N2n n -> get_nuvars n
+
+let freshen n = 
+  let nuvars = get_nuvars n in
+  let env_map = List.map (fun nu -> (nu,new_n ())) nuvars in
+  let n = List.fold_right (fun (nu_orig,nu_fresh) n' -> subst_nuvars nu_orig nu_fresh n') env_map n in
+  (n,env_map)
+
 
 let rec simple_constraint_check in_env cs = 
   let check = simple_constraint_check in_env in
