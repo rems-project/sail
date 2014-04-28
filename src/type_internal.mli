@@ -76,11 +76,16 @@ type nexp_range =
   | In of constraint_origin * string * int list
   | InS of constraint_origin * nexp * int list (* This holds the given value for string after a substitution *)
   | CondCons of constraint_origin * nexp_range list * nexp_range list (* Constraints from one path from a conditional (pattern or if) and the constraints from that conditional *)
+  | BranchCons of constraint_origin * nexp_range list (* CondCons constraints from all branches of a conditional; list should be all CondCons *)
 
 val get_c_loc : constraint_origin -> Parse_ast.l
 
 type t_params = (string * kind) list
-type tannot = ((t_params * t) * tag * nexp_range list * effect) option
+type tannot = 
+  | NoTyp
+  | Base of (t_params * t) * tag * nexp_range list * effect
+  | Overload of tannot * tannot list (* First tannot is the most polymorphic version; the list includes all variants. All t to be Tfn *)
+(*type tannot = ((t_params * t) * tag * nexp_range list * effect) option*)
 type 'a emap = 'a Envmap.t
 
 type rec_kind = Record | Register
@@ -127,6 +132,8 @@ val get_abbrev : def_envs -> t -> (t * nexp_range list)
 
 val eval_nexp : nexp -> nexp
 val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debugging purposes*)
+
+val select_overload_variant : def_envs -> tannot list -> t -> tannot
 
 (*May raise an exception if a contradiction is found*)
 val resolve_constraints : nexp_range list -> nexp_range list

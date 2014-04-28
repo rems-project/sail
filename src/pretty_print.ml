@@ -219,10 +219,10 @@ and pp_exp ppf (E_aux(e,(_,annot))) =
   | E_id(id) -> pp_id ppf id
   | E_lit(lit) -> pp_lit ppf lit
   | E_cast(typ,exp) -> fprintf ppf "@[<0>%a%a%a %a@]" kwd "(" pp_typ typ kwd ")" pp_exp exp 
-  | E_internal_cast((_,None),e) -> pp_exp ppf e
-  | E_internal_cast((_,Some((_,t),_,_,_)), (E_aux(_,(_,eannot)) as exp)) ->
+  | E_internal_cast((_,NoTyp),e) -> pp_exp ppf e
+  | E_internal_cast((_,Base((_,t),_,_,_)), (E_aux(_,(_,eannot)) as exp)) ->
     (match t.t,eannot with
-      | Tapp("vector",[TA_nexp n1;_;_;_]),Some((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_) ->
+      | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_) ->
 	if nexp_eq n1 n2 
 	then pp_exp ppf exp
 	else 
@@ -600,8 +600,8 @@ let pp_format_nes nes =
      nes) ^*) "]"
 
 let pp_format_annot = function
-  | None -> "Nothing"
-  | Some((_,t),tag,nes,efct) -> 
+  | NoTyp -> "Nothing"
+  | Base((_,t),tag,nes,efct) -> 
     "(Just (" ^ pp_format_t t ^ ", " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^ pp_format_e efct ^ "))"
 
 let pp_annot ppf ant = base ppf (pp_format_annot ant)
@@ -650,10 +650,10 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_id(id) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_id" pp_lem_id id pp_lem_l l pp_annot annot
     | E_lit(lit) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_lit" pp_lem_lit lit pp_lem_l l pp_annot annot
     | E_cast(typ,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_cast" pp_lem_typ typ pp_lem_exp exp pp_lem_l l pp_annot annot
-    | E_internal_cast((_,None),e) -> pp_lem_exp ppf e
-    | E_internal_cast((_,Some((_,t),_,_,_)), (E_aux(ec,(_,eannot)) as exp)) ->
+    | E_internal_cast((_,NoTyp),e) -> pp_lem_exp ppf e
+    | E_internal_cast((_,Base((_,t),_,_,_)), (E_aux(ec,(_,eannot)) as exp)) ->
       (match t.t,eannot with
-      | Tapp("vector",[TA_nexp n1;_;_;_]),Some((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_) ->
+      | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_) ->
 	if nexp_eq n1 n2 
 	  then pp_lem_exp ppf exp
 	else fprintf ppf "@[<0>(E_aux (E_cast %a %a) (%a, %a))@]" pp_lem_typ (t_to_typ t) pp_lem_exp exp pp_lem_l l pp_annot annot

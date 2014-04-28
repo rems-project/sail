@@ -81,9 +81,15 @@ type nexp_range =
   | In of constraint_origin * string * int list
   | InS of constraint_origin * nexp * int list (* This holds the given value for string after a substitution *)
   | CondCons of constraint_origin * nexp_range list * nexp_range list
+  | BranchCons of constraint_origin * nexp_range list
 
 type t_params = (string * kind) list
-type tannot = ((t_params * t) * tag * nexp_range list * effect) option
+type tannot = 
+  | NoTyp
+  | Base of (t_params * t) * tag * nexp_range list * effect
+  | Overload of tannot * tannot list (* First tannot is the most polymorphic version; the list includes all variants. All t to be Tfn *)
+
+(*type tannot = ((t_params * t) * tag * nexp_range list * effect) option*)
 type 'a emap = 'a Envmap.t
 
 type rec_kind = Record | Register
@@ -104,7 +110,7 @@ let get_index n =
    | _ -> assert false
 
 let get_c_loc = function
-  | Patt l | Expr l | Specc l -> l
+  | Patt l | Expr l | Specc l | Fun l -> l
 
 let rec string_of_list sep string_of = function
   | [] -> ""
@@ -156,10 +162,12 @@ let tag_to_string = function
   | Enum -> "Enum"
   | Spec -> "Spec"
 
-let tannot_to_string = function
-  | None -> "No tannot"
-  | Some((vars,t),tag,ncs,ef) ->
+let rec tannot_to_string = function
+  | NoTyp -> "No tannot"
+  | Base((vars,t),tag,ncs,ef) ->
     "Tannot: type = " ^ (t_to_string t) ^ " tag = " ^ tag_to_string tag ^ " constraints = not printing effect = " ^ e_to_string ef
+  | Overload(poly,variants) ->
+    "Overloaded: poly = " ^ tannot_to_string poly
 
 let rec effect_remove_dups = function
   | [] -> []
@@ -213,7 +221,7 @@ let rec lookup_possible_records (fields : string list) (env : rec_env list) : re
 let lookup_field_type (field: string) ((id,r_kind,fields) : rec_env) : tannot =
   if List.mem_assoc field fields
   then List.assoc field fields
-  else None
+  else NoTyp
 
 (* eval an nexp as much as possible *)
 let rec eval_nexp n =
@@ -511,54 +519,78 @@ let mk_bitwise_op name symb arity =
   let vec_typ = mk_vector bit_t ovar (Nconst 0) (Nvar "n") in
   let args = Array.to_list (Array.make arity vec_typ) in
   let arg = if ((List.length args) = 1) then List.hd args else {t= Ttup args} in
-  (symb,Some((["n",{k=K_Nat}; "o",{k=K_Ord}], {t= Tfn (arg, vec_typ, pure_e)}),External (Some name),[],pure_e))
+  (symb,Base((["n",{k=K_Nat}; "o",{k=K_Ord}], {t= Tfn (arg, vec_typ, pure_e)}),External (Some name),[],pure_e))
 
 let initial_typ_env =
   Envmap.from_list [
-    ("ignore",Some(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,pure_e)}),External None,[],pure_e));
-    ("+",Some(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
+    ("ignore",Base(([("a",{k=K_Typ});("b",{k=K_Efct})],{t=Tfn ({t=Tvar "a"},unit_t,pure_e)}),External None,[],pure_e));
+    ("+",Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
                {t= Tfn({t=Ttup([mk_range (Nvar "n") (Nvar "m");
                                 mk_range (Nvar "o") (Nvar "p")])},
 		       (mk_range (Nadd({nexp=Nvar "n"},{nexp=Nvar "o"})) (Nadd({nexp=Nvar "m"},{nexp=Nvar "p"}))),
 		       pure_e)}),External (Some "add"),[],pure_e));
-    ("*",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "multiply"),[],pure_e));
-    ("-",Some(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
+    ("*",Base(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "multiply"),[],pure_e));
+    ("-",Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
                {t= Tfn({t=Ttup([mk_range (Nvar "n") (Nvar "m");
                                 mk_range (Nvar "o") (Nvar "p")])},
 		       (mk_range (Nadd ({nexp=(Nvar "n")},{ nexp = Nneg({nexp=Nvar "o"})})) (Nadd({nexp=Nvar "m"},{nexp =Nneg {nexp=Nvar "p"}}))),
 		       pure_e)}),External (Some "minus"),
               [GtEq(Specc(Parse_ast.Int("-",None)),{nexp=Nvar "n"},{nexp=Nvar "o"});
                GtEq(Specc(Parse_ast.Int("-",None)),{nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},{nexp=Nvar "o"})],pure_e));
-    ("mod",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "mod"),[],pure_e));
-    ("quot",Some(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "quot"),[],pure_e));
+    ("mod",Base(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "mod"),[],pure_e));
+    ("quot",Base(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "quot"),[],pure_e));
     (*Type incomplete*)
-    (":",Some(([("a",{k=K_Typ});("b",{k=K_Typ});("c",{k=K_Typ})],
+    (":",Base(([("a",{k=K_Typ});("b",{k=K_Typ});("c",{k=K_Typ})],
 	       {t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "b"}])},{t=Tvar "c"},pure_e)}),External (Some "vec_concat"),[],pure_e));
-    ("to_num_inc",Some(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,pure_e)}),External None,[],pure_e));
-    ("to_num_dec",Some(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,pure_e)}),External None,[],pure_e));
-    ("to_vec_inc",Some(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},pure_e)}),External None,[],pure_e));
-    ("to_vec_dec",Some(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},pure_e)}),External None,[],pure_e));
-    ("==",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "eq"),[],pure_e));
-    ("!=",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "neq"),[],pure_e));
-    ("<",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "lt"),[],pure_e));
-    (">",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "gt"),[],pure_e));
-    ("<_u",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "ltu"),[],pure_e));
-    (">_u",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "gtu"),[],pure_e));
-    ("is_one",Some(([],{t= Tfn (bit_t,bool_t,pure_e)}),External (Some "is_one"),[],pure_e));
+    ("to_num_inc",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,pure_e)}),External None,[],pure_e));
+    ("to_num_dec",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,pure_e)}),External None,[],pure_e));
+    ("to_vec_inc",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},pure_e)}),External None,[],pure_e));
+    ("to_vec_dec",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},pure_e)}),External None,[],pure_e));
+    ("==",
+     Overload( Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "eq"),[],pure_e),
+     [Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
+	    {t = Tfn({t=Ttup([mk_range (Nvar "n") (Nvar "m");mk_range (Nvar "o") (Nvar "p")])},bit_t,pure_e)}), External (Some "eq"),
+	   [Eq(Specc(Parse_ast.Int("==",None)),
+	       {nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},
+	       {nexp=Nadd({nexp=Nvar "o"},{nexp=Nvar "p"})})],pure_e);
+      Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "eq"),[],pure_e)]));
+    ("!=",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "neq"),[],pure_e));
+    ("<",
+     Overload(Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "lt"),[],pure_e),
+     [Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
+	    {t = Tfn({t=Ttup([mk_range (Nvar "n") (Nvar "m");mk_range (Nvar "o") (Nvar "p")])},bit_t,pure_e)}), External (Some "lt"),
+	   [LtEq(Specc(Parse_ast.Int("<",None)),
+	       {nexp=Nadd({nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},{nexp=Nconst 1})},
+	       {nexp=Nadd({nexp=Nvar "o"},{nexp=Nvar "p"})})],pure_e);
+      (*Probably should talk about vectors, but of what size restrictions? *)
+      Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "lt"),[],pure_e)])
+     );
+    (">",
+     Overload(Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "gt"),[],pure_e),
+     [Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
+	    {t = Tfn({t=Ttup([mk_range (Nvar "n") (Nvar "m");mk_range (Nvar "o") (Nvar "p")])},bit_t,pure_e)}), External (Some "gt"),
+	   [GtEq(Specc(Parse_ast.Int(">",None)),
+		 {nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},
+		 {nexp=Nadd({nexp=Nadd({nexp=Nvar "o"},{nexp=Nvar "p"})},{nexp=Nconst 1})})],pure_e);
+      Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "gt"),[],pure_e)])
+    );
+    ("<_u",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "ltu"),[],pure_e));
+    (">_u",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "gtu"),[],pure_e));
+    ("is_one",Base(([],{t= Tfn (bit_t,bool_t,pure_e)}),External (Some "is_one"),[],pure_e));
     mk_bitwise_op "bitwise_not" "~" 1;
     mk_bitwise_op  "bitwise_or" "|" 2;
     mk_bitwise_op  "bitwise_xor" "^" 2;
     mk_bitwise_op  "bitwise_and" "&" 2;
-    ("^^",Some(([("n",{k=K_Nat});("m",{k=K_Nat})],
+    ("^^",Base(([("n",{k=K_Nat});("m",{k=K_Nat})],
                 {t= Tfn ({t=Ttup([bit_t;mk_range (Nvar "n") (Nvar "m")])},
                 mk_vector bit_t Oinc (Nconst 0) (Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})),
                 pure_e)}),External (Some "duplicate"),[],pure_e));
-    ("<<<",Some((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
+    ("<<<",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
   ]
 
 let initial_abbrev_env =
   Envmap.from_list [
-    ("nat",Some(([],nat_t),Emp_global,[],pure_e));
+    ("nat",Base(([],nat_t),Emp_global,[],pure_e));
   ]
 
 let rec t_subst s_env t =
@@ -617,6 +649,8 @@ let rec cs_subst t_env cs =
       | _ -> ()); 
       InS(l,nexp,ns)::(cs_subst t_env cs)
     | InS(l,n,ns)::cs -> InS(l,n_subst t_env n,ns)::(cs_subst t_env cs)
+    | CondCons(l,cs_p,cs_e)::cs -> CondCons(l,cs_subst t_env cs_p,cs_subst t_env cs_e)::(cs_subst t_env cs)
+    | BranchCons(l,bs)::cs -> BranchCons(l,cs_subst t_env bs)::(cs_subst t_env cs)
 
 let subst k_env t cs e =
   let subst_env = Envmap.from_list
@@ -667,15 +701,6 @@ and e_remove_unifications s_env e =
       | None -> s_env)
   | _ -> s_env
 
-let rec cs_subst t_env cs =
-  match cs with
-    | [] -> []
-    | Eq(l,n1,n2)::cs -> Eq(l,n_subst t_env n1,n_subst t_env n2)::(cs_subst t_env cs)
-    | GtEq(l,n1,n2)::cs -> GtEq(l,n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
-    | LtEq(l,n1,n2)::cs -> LtEq(l,n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
-    | In(l,s,ns)::cs -> InS(l,n_subst t_env {nexp=Nvar s},ns)::(cs_subst t_env cs)
-    | InS(l,n,ns)::cs -> InS(l,n_subst t_env n,ns)::(cs_subst t_env cs)
-    | CondCons(l, pats, exps)::cs -> CondCons(l, cs_subst t_env pats, cs_subst t_env exps)::(cs_subst t_env cs)
       
 let subst k_env t cs e =
   let subst_env = Envmap.from_list
@@ -735,7 +760,7 @@ let rec get_abbrev d_env t =
   match t.t with
     | Tid i ->
       (match Envmap.apply d_env.abbrevs i with
-	| Some(Some((params,ta),tag,cs,efct)) ->
+	| Some(Base((params,ta),tag,cs,efct)) ->
           let ta,cs,_ = subst params ta cs efct in
           let ta,cs' = get_abbrev d_env ta in
           (match ta.t with
@@ -744,7 +769,7 @@ let rec get_abbrev d_env t =
 	| _ -> t,[])
     | Tapp(i,args) ->
       (match Envmap.apply d_env.abbrevs i with
-	| Some(Some((params,ta),tag,cs,efct)) ->
+	| Some(Base((params,ta),tag,cs,efct)) ->
 	  let env = Envmap.from_list2 (List.map fst params) args in
           let ta,cs' = get_abbrev d_env (t_subst env ta) in
           (match ta.t with
@@ -888,18 +913,18 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
     let tl1,tl2 = List.length t1s,List.length t2s in
     if tl1=tl2 then 
       let ids = List.map (fun _ -> Id_aux(Id (new_id ()),l)) t1s in
-      let vars = List.map2 (fun i t -> E_aux(E_id(i),(l,Some(([],t),Emp_local,[],pure_e)))) ids t1s in
+      let vars = List.map2 (fun i t -> E_aux(E_id(i),(l,Base(([],t),Emp_local,[],pure_e)))) ids t1s in
       let (coerced_ts,cs,coerced_vars) = 
         List.fold_right2 (fun v (t1,t2) (ts,cs,es) -> let (t',c',e') = type_coerce co d_env t1 v t2 in
                                                       ((t'::ts),c'@cs,(e'::es)))
           vars (List.combine t1s t2s) ([],[],[]) in
       if vars = coerced_vars then (t2,cs,e)
       else let e' = E_aux(E_case(e,[(Pat_aux(Pat_exp(P_aux(P_tup (List.map2 
-								    (fun i t -> P_aux(P_id i,(l,(Some(([],t),Emp_local,[],pure_e)))))
-								    ids t1s),(l,Some(([],t1),Emp_local,[],pure_e))),
-						     E_aux(E_tuple coerced_vars,(l,Some(([],t2),Emp_local,cs,pure_e)))),
-                                             (l,Some(([],t2),Emp_local,[],pure_e))))]),
-                          (l,(Some(([],t2),Emp_local,[],pure_e)))) in
+								    (fun i t -> P_aux(P_id i,(l,(Base(([],t),Emp_local,[],pure_e)))))
+								    ids t1s),(l,Base(([],t1),Emp_local,[],pure_e))),
+						     E_aux(E_tuple coerced_vars,(l,Base(([],t2),Emp_local,cs,pure_e)))),
+                                             (l,Base(([],t2),Emp_local,[],pure_e))))]),
+                          (l,(Base(([],t2),Emp_local,[],pure_e)))) in
            (t2,csp@cs,e')
     else eq_error l ("Found a tuple of length " ^ (string_of_int tl1) ^ " but expected a tuple of length " ^ (string_of_int tl2))
   | Tapp(id1,args1),Tapp(id2,args2) ->
@@ -917,19 +942,19 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
         | _,_ -> equate_o o1 o2); 
         let cs = csp@[Eq(co,r1,r2)] in
         let t',cs' = type_consistent co d_env t1i t2i in
-        let tannot = Some(([],t2),Emp_local,cs@cs',pure_e) in
-        let e' = E_aux(E_internal_cast ((l,(Some(([],t2),Emp_local,[],pure_e))),e),(l,tannot)) in
+        let tannot = Base(([],t2),Emp_local,cs@cs',pure_e) in
+        let e' = E_aux(E_internal_cast ((l,(Base(([],t2),Emp_local,[],pure_e))),e),(l,tannot)) in
         (t2,cs@cs',e'))
     | "vector","range" -> 
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [Eq(co,b2,{nexp=Nconst 0});GtEq(co,{nexp=Nadd(b2,r2)},{nexp=N2n r1})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_inc",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_inc",l)),[e]),(l,Base(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [Eq(co,b2,{nexp=Nconst 0});GtEq(co,{nexp=Nadd(b2,r2)},{nexp=N2n r1})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Base(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert a vector to an range without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
@@ -940,11 +965,11 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [LtEq(co,{nexp=Nadd(b2,r2)},{nexp=N2n r1})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),[e]),(l,Base(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [LtEq(co,{nexp=Nadd(b2,r2)},{nexp=N2n r1})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),[e]),(l,Some(([],t2),External None,cs,pure_e))))
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),[e]),(l,Base(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert an range to a vector without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
@@ -955,7 +980,7 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
 	| [TA_typ t] ->
           (*TODO Should this be an internal cast? Probably, make sure it doesn't interfere with the other internal cast and get removed *)
           (*let _ = Printf.printf "Adding cast to remove register read\n" in*)
-          let new_e = E_aux(E_cast(t_to_typ unit_t,e),(l,Some(([],t),External None,[],(add_effect (BE_aux(BE_rreg, l)) pure_e)))) in
+          let new_e = E_aux(E_cast(t_to_typ unit_t,e),(l,Base(([],t),External None,[],(add_effect (BE_aux(BE_rreg, l)) pure_e)))) in
 	  type_coerce co d_env t new_e t2
 	| _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))
     | _,_ -> 
@@ -963,41 +988,41 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
   | Tid("bit"),Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]) ->
     let cs = [Eq(co,r1,{nexp = Nconst 1})] in
     let t2' = {t = Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp {nexp=Nconst 1};TA_ord o;TA_typ {t=Tid "bit"}])} in
-    (t2',cs,E_aux(E_vector_indexed [(i,e)],(l,Some(([],t2),Emp_local,cs,pure_e))))
+    (t2',cs,E_aux(E_vector_indexed [(i,e)],(l,Base(([],t2),Emp_local,cs,pure_e))))
   | Tapp("vector",[TA_nexp ({nexp=Nconst i} as b1);TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]),Tid("bit") ->
     let cs = [Eq(co,r1,{nexp = Nconst 1})] in
     (t2,cs,E_aux((E_vector_access (e,(E_aux(E_lit(L_aux(L_num i,l)),
-					   (l,Some(([],{t=Tapp("range",[TA_nexp b1;TA_nexp {nexp=Nconst 0}])}),Emp_local,cs,pure_e)))))),
-                 (l,Some(([],t2),Emp_local,cs,pure_e))))
+					   (l,Base(([],{t=Tapp("range",[TA_nexp b1;TA_nexp {nexp=Nconst 0}])}),Emp_local,cs,pure_e)))))),
+                 (l,Base(([],t2),Emp_local,cs,pure_e))))
   | Tid("bit"),Tapp("range",[TA_nexp b1;TA_nexp r1]) ->
     let t',cs'= type_consistent co d_env {t=Tapp("range",[TA_nexp{nexp=Nconst 0};TA_nexp{nexp=Nconst 1}])} t2 in
-    (t2,cs',E_aux(E_case (e,[Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_zero,l)),(l,Some(([],t1),Emp_local,[],pure_e))),
-					     E_aux(E_lit(L_aux(L_num 0,l)),(l,Some(([],t2),Emp_local,[],pure_e)))),
-				     (l,Some(([],t2),Emp_local,[],pure_e)));
-			     Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_one,l)),(l,Some(([],t1),Emp_local,[],pure_e))),
-					     E_aux(E_lit(L_aux(L_num 1,l)),(l,Some(([],t2),Emp_local,[],pure_e)))),
-				     (l,Some(([],t2),Emp_local,[],pure_e)));]),
-		  (l,Some(([],t2),Emp_local,[],pure_e))))    
+    (t2,cs',E_aux(E_case (e,[Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_zero,l)),(l,Base(([],t1),Emp_local,[],pure_e))),
+					     E_aux(E_lit(L_aux(L_num 0,l)),(l,Base(([],t2),Emp_local,[],pure_e)))),
+				     (l,Base(([],t2),Emp_local,[],pure_e)));
+			     Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_one,l)),(l,Base(([],t1),Emp_local,[],pure_e))),
+					     E_aux(E_lit(L_aux(L_num 1,l)),(l,Base(([],t2),Emp_local,[],pure_e)))),
+				     (l,Base(([],t2),Emp_local,[],pure_e)));]),
+		  (l,Base(([],t2),Emp_local,[],pure_e))))    
   | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tid("bit") ->
     let t',cs'= type_consistent co d_env t1 {t=Tapp("range",[TA_nexp{nexp=Nconst 0};TA_nexp{nexp=Nconst 1}])} 
-    in (t2,cs',E_aux(E_if(E_aux(E_app(Id_aux(Id "is_one",l),[e]),(l,Some(([],bool_t),External None,[],pure_e))),
-			  E_aux(E_lit(L_aux(L_one,l)),(l,Some(([],bit_t),Emp_local,[],pure_e))),
-			  E_aux(E_lit(L_aux(L_zero,l)),(l,Some(([],bit_t),Emp_local,[],pure_e)))),
-		     (l,Some(([],bit_t),Emp_local,cs',pure_e))))
+    in (t2,cs',E_aux(E_if(E_aux(E_app(Id_aux(Id "is_one",l),[e]),(l,Base(([],bool_t),External None,[],pure_e))),
+			  E_aux(E_lit(L_aux(L_one,l)),(l,Base(([],bit_t),Emp_local,[],pure_e))),
+			  E_aux(E_lit(L_aux(L_zero,l)),(l,Base(([],bit_t),Emp_local,[],pure_e)))),
+		     (l,Base(([],bit_t),Emp_local,cs',pure_e))))
   | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tid(i) -> 
     (match Envmap.apply d_env.enum_env i with
     | Some(enums) -> 
       (t2,[GtEq(co,b1,{nexp=Nconst 0});LtEq(co,r1,{nexp=Nconst (List.length enums)})],
        E_aux(E_case(e,
 		    List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),
-								(l,Some(([],t1),Emp_local,[],pure_e))),
+								(l,Base(([],t1),Emp_local,[],pure_e))),
 							  E_aux(E_id(Id_aux(Id a,l)),
-								(l,Some(([],t2),Emp_local,[],pure_e)))),
-						  (l,Some(([],t2),Emp_local,[],pure_e)))) enums),
-	     (l,Some(([],t2),Emp_local,[],pure_e))))
+								(l,Base(([],t2),Emp_local,[],pure_e)))),
+						  (l,Base(([],t2),Emp_local,[],pure_e)))) enums),
+	     (l,Base(([],t2),Emp_local,[],pure_e))))
     | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
   | Tid("bit"),Tid("bool") ->
-    let e' = E_aux(E_app((Id_aux(Id "is_one",l)),[e]),(l,Some(([],bool_t),External None,[],pure_e))) in
+    let e' = E_aux(E_app((Id_aux(Id "is_one",l)),[e]),(l,Base(([],bool_t),External None,[],pure_e))) in
     (t2,[],e')
   | Tid(i),Tapp("range",[TA_nexp b1;TA_nexp r1;]) -> 
     (match Envmap.apply d_env.enum_env i with
@@ -1005,15 +1030,60 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
       (t2,[Eq(co,b1,{nexp=Nconst 0});GtEq(co,r1,{nexp=Nconst (List.length enums)})],
        E_aux(E_case(e,
 		    List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_id(Id_aux(Id a,l)),
-								(l,Some(([],t1),Emp_local,[],pure_e))),
+								(l,Base(([],t1),Emp_local,[],pure_e))),
 							  E_aux(E_lit(L_aux((L_num i),l)),
-								(l,Some(([],t2),Emp_local,[],pure_e)))),
-						  (l,Some(([],t2),Emp_local,[],pure_e)))) enums),
-	     (l,Some(([],t2),Emp_local,[],pure_e))))
+								(l,Base(([],t2),Emp_local,[],pure_e)))),
+						  (l,Base(([],t2),Emp_local,[],pure_e)))) enums),
+	     (l,Base(([],t2),Emp_local,[],pure_e))))
     | None -> eq_error l ("Type mismatch: " ^ (t_to_string t1) ^ " , " ^ (t_to_string t2)))
   | _,_ -> let t',cs = type_consistent co d_env t1 t2 in (t',cs,e)
 
 and type_coerce co d_env t1 e t2 = type_coerce_internal co d_env t1 [] e t2 [];;
+
+let rec conforms_to_t spec actual =
+  match spec.t,actual.t with
+    | Tuvar _,_ -> true
+    | Ttup ss, Ttup acs -> (List.length ss == List.length acs) && List.for_all2 conforms_to_t ss acs
+    | Tid is, Tid ia -> is == ia
+    | Tapp(is,tas), Tapp(ia, taa) -> (is == ia) && (List.length tas == List.length taa) &&
+                                   List.for_all2 conforms_to_ta tas taa
+    | Tabbrev(_,s),a -> conforms_to_t s actual
+    | s,Tabbrev(_,a) -> conforms_to_t spec a
+    | _,_ -> false
+and conforms_to_ta spec actual =
+  match spec,actual with
+    | TA_typ  s, TA_typ  a -> conforms_to_t s a
+    | TA_nexp s, TA_nexp a -> conforms_to_n s a
+    | TA_ord  s, TA_ord  a -> conforms_to_o s a
+    | TA_eft  s, TA_eft  a -> conforms_to_e s a
+and conforms_to_n spec actual =
+  match spec.nexp,actual.nexp with
+    | Nuvar _,_ -> true
+    | Nconst si,Nconst ai -> si==ai
+    | _,_ -> false
+and conforms_to_o spec actual =
+  match spec.order,actual.order with
+    | Ouvar _,_ | Oinc,Oinc | Odec,Odec -> true
+    | _,_ -> false
+and conforms_to_e spec actual =
+  match spec.effect,actual.effect with
+    | Euvar _,_ -> true
+    | _,Euvar _ -> false
+    | _,_ -> false
+
+let rec select_overload_variant d_env variants actual_type =
+  match variants with
+    | [] -> NoTyp
+    | NoTyp::variants | Overload _::variants -> select_overload_variant d_env variants actual_type
+    | Base((parms,t),tag,cs,ef)::variants ->
+      let t,cs,ef = subst parms t cs ef in
+      let t,cs' = get_abbrev d_env t in
+      (match t.t with
+	| Tfn(a,r,e) ->
+	  if conforms_to_t a actual_type 
+	  then Base(([],t),tag,cs@cs',ef)
+	  else select_overload_variant d_env variants actual_type
+	| _ -> assert false (*Turn into unreachable error*))      
 
 let rec in_constraint_env = function
   | [] -> []
@@ -1117,6 +1187,13 @@ let rec simple_constraint_check in_env cs =
       else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
 			            ^ string_of_int i1 ^ " to be less than or equal to " ^ string_of_int i2)
     | _,_ -> LtEq(co,n1',n2')::(check cs))
+  | CondCons(co,pats,exps):: cs ->
+    let pats' = check pats in
+    let exps' = check exps in
+    (match pats',exps' with
+      | [],[] -> check cs
+      |  _,[] -> check cs
+      | _     -> CondCons(co,pats',exps')::(check cs)) 
   | x::cs -> x::(check cs)
 
 let rec resolve_in_constraints cs = cs
@@ -1138,28 +1215,29 @@ let resolve_constraints cs =
 
 let check_tannot l annot constraints efs = 
   match annot with
-    | Some((params,t),tag,cs,e) -> 
+    | Base((params,t),tag,cs,e) -> 
       ignore(effects_eq (Specc l) efs e);
       let params = Envmap.to_list (t_remove_unifications (Envmap.from_list params) t) in
     (*let _ = Printf.printf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in *)
-      Some((params,t),tag,cs,e)
-    | None -> raise (Reporting_basic.err_unreachable l "check_tannot given the place holder annotation")
+      Base((params,t),tag,cs,e)
+    | NoTyp -> raise (Reporting_basic.err_unreachable l "check_tannot given the place holder annotation")
       
 
 let tannot_merge co denv t_older t_newer = 
   match t_older,t_newer with
-    | None,None -> None
-    | None,_ -> t_newer
-    | _,None -> t_older
-    | Some((ps_o,t_o),tag_o,cs_o,ef_o),Some((ps_n,t_n),tag_n,cs_n,ef_n) -> 
-      match tag_o,tag_n with
+    | NoTyp,NoTyp -> NoTyp
+    | NoTyp,_ -> t_newer
+    | _,NoTyp -> t_older
+    | Base((ps_o,t_o),tag_o,cs_o,ef_o),Base((ps_n,t_n),tag_n,cs_n,ef_n) -> 
+      (match tag_o,tag_n with
 	| Default,tag -> 
 	  (match t_n.t with
 	    | Tuvar _ -> let t_o,cs_o,ef_o = subst ps_o t_o cs_o ef_o in
 			 let t,_ = type_consistent co denv t_n t_o in
-			 Some(([],t),tag_n,cs_o,ef_o)
+			 Base(([],t),tag_n,cs_o,ef_o)
 	    | _ -> t_newer)
 	| Emp_local, Emp_local -> 
 	  let t,cs_b = type_consistent co denv t_n t_o in
-	  Some(([],t),Emp_local,cs_o@cs_n@cs_b,union_effects ef_o ef_n)
-	| _,_ -> t_newer
+	  Base(([],t),Emp_local,cs_o@cs_n@cs_b,union_effects ef_o ef_n)
+	| _,_ -> t_newer)
+    | Overload _, Overload _ -> t_newer

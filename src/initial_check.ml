@@ -313,14 +313,14 @@ let rec to_ast_pat (k_env : kind Envmap.t) (Parse_ast.P_aux(pat,l) : Parse_ast.p
       then P_id (to_ast_id id)
       else P_app(to_ast_id id, List.map (to_ast_pat k_env) pats)
     | Parse_ast.P_record(fpats,_) -> P_record(List.map 
-                                                (fun (Parse_ast.FP_aux(Parse_ast.FP_Fpat(id,fp),l)) -> FP_aux(FP_Fpat(to_ast_id id, to_ast_pat k_env fp),(l,None)))
+                                                (fun (Parse_ast.FP_aux(Parse_ast.FP_Fpat(id,fp),l)) -> FP_aux(FP_Fpat(to_ast_id id, to_ast_pat k_env fp),(l,NoTyp)))
                                                 fpats, false)
     | Parse_ast.P_vector(pats) -> P_vector(List.map (to_ast_pat k_env) pats)
     | Parse_ast.P_vector_indexed(ipats) -> P_vector_indexed(List.map (fun (i,pat) -> i,to_ast_pat k_env pat) ipats)
     | Parse_ast.P_vector_concat(pats) -> P_vector_concat(List.map (to_ast_pat k_env) pats)
     | Parse_ast.P_tup(pats) -> P_tup(List.map (to_ast_pat k_env) pats)
     | Parse_ast.P_list(pats) -> P_list(List.map (to_ast_pat k_env) pats)
-    ), (l,None))
+    ), (l,NoTyp))
 
 
 let rec to_ast_letbind (k_env : kind Envmap.t) (Parse_ast.LB_aux(lb,l) : Parse_ast.letbind) : tannot letbind =
@@ -331,7 +331,7 @@ let rec to_ast_letbind (k_env : kind Envmap.t) (Parse_ast.LB_aux(lb,l) : Parse_a
       LB_val_explicit(typsch,to_ast_pat k_env pat, to_ast_exp k_env exp)
     | Parse_ast.LB_val_implicit(pat,exp) ->
       LB_val_implicit(to_ast_pat k_env pat, to_ast_exp k_env exp)
-    ), (l,None))
+    ), (l,NoTyp))
 
 and to_ast_exp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : tannot exp = 
   E_aux(
@@ -370,7 +370,7 @@ and to_ast_exp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) 
     | Parse_ast.E_case(exp,pexps) -> E_case(to_ast_exp k_env exp, List.map (to_ast_case k_env) pexps)
     | Parse_ast.E_let(leb,exp) -> E_let(to_ast_letbind k_env leb, to_ast_exp k_env exp)
     | Parse_ast.E_assign(lexp,exp) -> E_assign(to_ast_lexp k_env lexp, to_ast_exp k_env exp)
-    ), (l,None))
+    ), (l,NoTyp))
 
 and to_ast_lexp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : tannot lexp = 
   LEXP_aux(
@@ -390,15 +390,15 @@ and to_ast_lexp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp)
     | Parse_ast.E_vector_subrange(vexp,exp1,exp2) -> LEXP_vector_range(to_ast_lexp k_env vexp, to_ast_exp k_env exp1, to_ast_exp k_env exp2)
     | Parse_ast.E_field(fexp,id) -> LEXP_field(to_ast_lexp k_env fexp, to_ast_id id)
     | _ -> typ_error l "Only identifiers, cast identifiers, vector accesses, vector slices, and fields can be on the lefthand side of an assignment" None None None)
-      , (l,None))
+      , (l,NoTyp))
 
 and to_ast_case (k_env : kind Envmap.t) (Parse_ast.Pat_aux(pex,l) : Parse_ast.pexp) : tannot pexp =
   match pex with 
-  | Parse_ast.Pat_exp(pat,exp) -> Pat_aux(Pat_exp(to_ast_pat k_env pat, to_ast_exp k_env exp),(l,None))
+  | Parse_ast.Pat_exp(pat,exp) -> Pat_aux(Pat_exp(to_ast_pat k_env pat, to_ast_exp k_env exp),(l,NoTyp))
 
 and to_ast_fexps (fail_on_error : bool) (k_env : kind Envmap.t) (exps : Parse_ast.exp list) : tannot fexps option =
   match exps with
-  | [] -> Some(FES_aux(FES_Fexps([],false), (Parse_ast.Unknown,None)))
+  | [] -> Some(FES_aux(FES_Fexps([],false), (Parse_ast.Unknown,NoTyp)))
   | fexp::exps -> let maybe_fexp,maybe_error = to_ast_record_try k_env fexp in
                   (match maybe_fexp,maybe_error with
                   | Some(fexp),None -> 
@@ -416,7 +416,7 @@ and to_ast_record_try (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_as
   | Parse_ast.E_app_infix(left,op,r) ->
     (match left, op with
     | Parse_ast.E_aux(Parse_ast.E_id(id),li), Parse_ast.Id_aux(Parse_ast.Id("="),leq) ->
-      Some(FE_aux(FE_Fexp(to_ast_id id, to_ast_exp k_env r), (l,None))),None
+      Some(FE_aux(FE_Fexp(to_ast_id id, to_ast_exp k_env r), (l,NoTyp))),None
     | Parse_ast.E_aux(_,li) , Parse_ast.Id_aux(Parse_ast.Id("="),leq) ->
       None,Some(li,"Expected an identifier to begin this field assignment")
     | Parse_ast.E_aux(Parse_ast.E_id(id),li), Parse_ast.Id_aux(_,leq) ->
@@ -446,13 +446,13 @@ let to_ast_spec (names,k_env,t_env) (val_:Parse_ast.val_spec) : (tannot val_spec
     (match vs with
     | Parse_ast.VS_val_spec(ts,id) ->
       let typsch,_,_ = to_ast_typschm k_env ts in
-      VS_aux(VS_val_spec(typsch,to_ast_id id),(l,None)),(names,k_env,t_env)
+      VS_aux(VS_val_spec(typsch,to_ast_id id),(l,NoTyp)),(names,k_env,t_env)
     | Parse_ast.VS_extern_spec(ts,id,s) ->
       let typsch,_,_ = to_ast_typschm k_env ts in
-      VS_aux(VS_extern_spec(typsch,to_ast_id id,s),(l,None)),(names,k_env,t_env)
+      VS_aux(VS_extern_spec(typsch,to_ast_id id,s),(l,NoTyp)),(names,k_env,t_env)
     | Parse_ast.VS_extern_no_rename(ts,id) ->
       let typsch,_,_ = to_ast_typschm k_env ts in
-       VS_aux(VS_extern_no_rename(typsch,to_ast_id id),(l,None)),(names,k_env,t_env))(*Do names and t_env need updating this pass? *)
+       VS_aux(VS_extern_no_rename(typsch,to_ast_id id),(l,NoTyp)),(names,k_env,t_env))(*Do names and t_env need updating this pass? *)
     
 
 let to_ast_namescm (Parse_ast.Name_sect_aux(ns,l)) = 
@@ -483,7 +483,7 @@ let to_ast_typedef (names,k_env,t_env) (td:Parse_ast.type_def) : (tannot type_de
     let id = to_ast_id id in
     let key = id_to_string id in
     let typschm,k_env,_ = to_ast_typschm k_env typschm in
-    let td_abrv = TD_aux(TD_abbrev(id,to_ast_namescm name_scm_opt,typschm),(l,None)) in
+    let td_abrv = TD_aux(TD_abbrev(id,to_ast_namescm name_scm_opt,typschm),(l,NoTyp)) in
     let typ = (match typschm with 
       | TypSchm_aux(TypSchm_ts(tq,typ), _) ->
         begin match (typquant_to_quantkinds k_env tq) with
@@ -496,7 +496,7 @@ let to_ast_typedef (names,k_env,t_env) (td:Parse_ast.type_def) : (tannot type_de
     let key = id_to_string id in
     let typq,k_env,_ = to_ast_typquant k_env typq in
     let fields = List.map (fun (atyp,id) -> (to_ast_typ k_env atyp),(to_ast_id id)) fields in (* Add check that all arms have unique names locally *)
-    let td_rec = TD_aux(TD_record(id,to_ast_namescm name_scm_opt,typq,fields,false),(l,None)) in
+    let td_rec = TD_aux(TD_record(id,to_ast_namescm name_scm_opt,typq,fields,false),(l,NoTyp)) in
     let typ = (match (typquant_to_quantkinds k_env typq) with
       | [ ] -> {k = K_Typ}
       | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
@@ -506,7 +506,7 @@ let to_ast_typedef (names,k_env,t_env) (td:Parse_ast.type_def) : (tannot type_de
     let key = id_to_string id in
     let typq,k_env,_ = to_ast_typquant k_env typq in
     let arms = List.map (to_ast_type_union k_env) arms in (* Add check that all arms have unique names *)
-    let td_var = TD_aux(TD_variant(id,to_ast_namescm name_scm_opt,typq,arms,false),(l,None)) in
+    let td_var = TD_aux(TD_variant(id,to_ast_namescm name_scm_opt,typq,arms,false),(l,NoTyp)) in
     let typ = (match (typquant_to_quantkinds k_env typq) with
       | [ ] -> {k = K_Typ}
       | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
@@ -516,7 +516,7 @@ let to_ast_typedef (names,k_env,t_env) (td:Parse_ast.type_def) : (tannot type_de
     let key = id_to_string id in
     let enums = List.map to_ast_id enums in
     let keys = List.map id_to_string enums in
-    let td_enum = TD_aux(TD_enum(id,to_ast_namescm name_scm_opt,enums,false),(l,None)) in (* Add check that all enums have unique names *)
+    let td_enum = TD_aux(TD_enum(id,to_ast_namescm name_scm_opt,enums,false),(l,NoTyp)) in (* Add check that all enums have unique names *)
     let k_env = List.fold_right (fun k k_env -> Envmap.insert k_env (k,{k=K_Nat})) keys (Envmap.insert k_env (key,{k=K_Typ})) in
     td_enum, (names,k_env,t_env)
   | Parse_ast.TD_register(id,t1,t2,ranges) -> 
@@ -525,7 +525,7 @@ let to_ast_typedef (names,k_env,t_env) (td:Parse_ast.type_def) : (tannot type_de
     let n1 = to_ast_nexp k_env t1 in
     let n2 = to_ast_nexp k_env t2 in
     let ranges = List.map (fun (range,id) -> (to_ast_range range),to_ast_id id) ranges in
-    TD_aux(TD_register(id,n1,n2,ranges),(l,None)), (names,Envmap.insert k_env (key, {k=K_Typ}),t_env))
+    TD_aux(TD_register(id,n1,n2,ranges),(l,NoTyp)), (names,Envmap.insert k_env (key, {k=K_Typ}),t_env))
 
 let to_ast_rec (Parse_ast.Rec_aux(r,l): Parse_ast.rec_opt) : rec_opt =
   Rec_aux((match r with
@@ -553,7 +553,7 @@ let to_ast_fundef  (names,k_env,t_env) (Parse_ast.FD_aux(fd,l):Parse_ast.fundef)
   match fd with
   | Parse_ast.FD_function(rec_opt,tannot_opt,effects_opt,funcls) -> 
     let tannot_opt, k_env,_ = to_ast_tannot_opt k_env tannot_opt in
-    FD_aux(FD_function(to_ast_rec rec_opt, tannot_opt, to_ast_effects_opt k_env effects_opt, List.map (to_ast_funcl (names, k_env, t_env)) funcls), (l,None)), (names,k_env,t_env)
+    FD_aux(FD_function(to_ast_rec rec_opt, tannot_opt, to_ast_effects_opt k_env effects_opt, List.map (to_ast_funcl (names, k_env, t_env)) funcls), (l,NoTyp)), (names,k_env,t_env)
     
 type def_progress =
     No_def
@@ -573,7 +573,7 @@ let rec def_in_progress (id : id) (partial_defs : (id * partial_def) list) : par
 let to_ast_dec (names,k_env,t_env) (Parse_ast.DEC_aux(Parse_ast.DEC_reg(typ,id),l)) =
   let t = to_ast_typ k_env typ in
   let id = to_ast_id id in
-  (DEC_aux(DEC_reg(t,id),(l,None)))
+  (DEC_aux(DEC_reg(t,id),(l,NoTyp)))
       
 let to_ast_def (names, k_env, t_env) partial_defs def : def_progress envs_out * (id * partial_def) list = 
   let envs = (names,k_env,t_env) in
@@ -604,7 +604,7 @@ let to_ast_def (names, k_env, t_env) partial_defs def : def_progress envs_out * 
       let effects_opt = to_ast_effects_opt k_env' effects_opt in
       let id = to_ast_id id in
       (match (def_in_progress id partial_defs) with
-      | None -> let partial_def = ref ((DEF_fundef(FD_aux(FD_function(rec_opt,tannot,effects_opt,[]),(l,None)))),false) in
+      | None -> let partial_def = ref ((DEF_fundef(FD_aux(FD_function(rec_opt,tannot,effects_opt,[]),(l,NoTyp)))),false) in
                 (No_def,envs),((id,(partial_def,k_local))::partial_defs)
       | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None None)
     | Parse_ast.SD_scattered_funcl(funcl) -> 
@@ -626,7 +626,7 @@ let to_ast_def (names, k_env, t_env) partial_defs def : def_progress envs_out * 
       let name = to_ast_namescm naming_scheme_opt in
       let typq, k_env',_ = to_ast_typquant k_env typquant in
       (match (def_in_progress id partial_defs) with
-      | None -> let partial_def = ref ((DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,None)))),false) in
+      | None -> let partial_def = ref ((DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,NoTyp)))),false) in
                 (Def_place_holder(id,l),(names,Envmap.insert k_env ((id_to_string id),{k=K_Typ}),t_env)),(id,(partial_def,k_env'))::partial_defs
       | Some(d,k) -> typ_error l "Scattered type definition header name already in use by scattered definition" (Some id) None None)
     | Parse_ast.SD_scattered_unioncl(id,tu) -> 
