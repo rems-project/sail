@@ -21,6 +21,11 @@ let neg (V_tuple [V_lit (L_aux arg la)]) = V_lit (L_aux (match arg with
 
 let neq = compose neg eq ;;
 
+let lt_range (V_tuple[V_lit (L_aux (L_num l1) lr);V_lit (L_aux (L_num l2) ll);]) =
+  if l1 < l2
+  then V_lit (L_aux L_one Unknown)
+  else V_lit (L_aux L_zero Unknown)
+
 let bit_to_bool b = match b with
     V_lit (L_aux L_zero _) -> false
   | V_lit (L_aux L_one _) -> true
@@ -60,6 +65,22 @@ let to_vec_dec len (V_lit(L_aux (L_num n) ln)) =
 let arith_op op (V_tuple args) = match args with
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (op x y)) lx)
   end ;;
+let arith_op_vec op (V_tuple args) = match args with
+  | [(V_vector _ _ _ as l1);(V_vector _ _ _ as l2)] ->
+    let (l1',l2') = (to_num true l1,to_num true l2) in
+    arith_op op (V_tuple [l1';l2'])
+end ;;
+let compare_op op (V_tuple args) = match args with
+  | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> 
+    if (op x y)
+    then V_lit(L_aux L_one lx)
+    else V_lit(L_aux L_zero lx)
+end ;;
+let compare_op_vec op (V_tuple args) = match args with
+  | [((V_vector _ _ _) as l1);((V_vector _ _ _) as l2)] ->
+    let (l1',l2') = (to_num true l1, to_num true l2) in
+    compare_op op (V_tuple[l1';l2'])
+end ;;
 
 let rec vec_concat (V_tuple args) = match args with
   | [V_vector n d l; V_vector n' d' l'] ->
@@ -72,7 +93,9 @@ let rec vec_concat (V_tuple args) = match args with
 let function_map = [
   ("ignore", ignore_sail);            
   ("add", arith_op (+));
+  ("add_vec", arith_op_vec (+));
   ("minus", arith_op (-));
+  ("minus_vec", arith_op_vec (-));
   ("eq", eq);
   ("neq", neq);
   ("vec_concat", vec_concat);
@@ -87,6 +110,10 @@ let function_map = [
   ("bitwise_and", bitwise_binop (&&));
   ("bitwise_or", bitwise_binop (||));
   ("bitwise_xor", bitwise_binop xor);
+  ("lt", compare_op (<));
+  ("gt", compare_op (>));
+  ("lt_vec", compare_op_vec (<));
+  ("gt_vec", compare_op_vec (>));
 ] ;;
 
 let eval_external name v = (Maybe_extra.fromJust (List.lookup name function_map)) v ;;

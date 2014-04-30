@@ -489,7 +489,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       | Some(Overload(Base((params,t),tag,cs,ef),variants)) ->
 	let t_p,cs_p,ef_p = subst params t cs ef in
 	let args,arg_t,arg_cs,arg_ef =  
-	  (match t.t with
+	  (match t_p.t with
 	  | Tfn(arg,ret,ef') ->
 	    (match parms with
 	      | [] ->
@@ -536,6 +536,29 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
           let ret_t,cs_r',e' = type_coerce (Expr l) d_env ret (E_aux(E_app_infix(lft',op,rht'),(l,(Base(([],ret),tag,cs,ef))))) expect_t in
           (e',ret_t,t_env,cs@cs'@cs_r',union_effects ef ef')
         | _ -> typ_error l ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^ (t_to_string t)))
+      | Some(Overload(Base((params,t),tag,cs,ef),variants)) ->
+	let t_p,cs_p,ef_p = subst params t cs ef in
+	let lft',rht',arg_t,arg_cs,arg_ef =  
+	  (match t_p.t with
+	  | Tfn(arg,ret,ef') ->
+            let (E_aux(E_tuple [lft';rht'],tannot'),arg_t,t_env,cs',ef') = check_exp envs arg (E_aux(E_tuple [lft;rht],(l,NoTyp))) in
+            (lft',rht',arg_t,cs',ef')
+	  | _ -> typ_error l ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^ (t_to_string t))) in
+	(match (select_overload_variant d_env variants arg_t) with
+	| NoTyp -> typ_error l ("No matching function found with name " ^ i ^ " that expects parameters " ^ (t_to_string arg_t))
+	| Base((params,t),tag,cs,ef) ->
+          let _ = Printf.printf "Selected an overloaded function for %s, variant with function type %s\n" i (t_to_string t) in
+	  (match t.t with
+	  | Tfn(arg,ret,ef') ->
+            (match arg.t,arg_t.t with
+            | Ttup([tlft;trght]),Ttup([tlft_t;trght_t]) ->
+              let (_,cs_lft,lft') = type_coerce (Expr l) d_env tlft_t lft' tlft in
+              let (_,cs_rght,rht') = type_coerce (Expr l) d_env trght_t rht' trght in
+	      let (ret_t,cs_r,e') = 
+	        type_coerce (Expr l) d_env ret (E_aux(E_app_infix(lft',op,rht'),(l,(Base(([],ret),tag,cs,ef))))) expect_t in
+	      (e',ret_t,t_env,cs_p@arg_cs@cs_lft@cs_rght@cs@cs_r,union_effects ef_p (union_effects arg_ef ef'))
+            |_ -> assert false)
+	  | _ -> assert false))
       | _ -> typ_error l ("Unbound infix function " ^ i))
     | E_tuple(exps) ->
       (match expect_t.t with
