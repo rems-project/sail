@@ -1,0 +1,5 @@
+requires = ""
+description = "The PPrint pretty-printing library"
+archive(byte) = "PPrintLib.cma"
+archive(native) = "PPrintLib.cmxa"
+version = "20140424"
