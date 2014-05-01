@@ -36,6 +36,7 @@ dispatch begin function
 | After_rules ->
     (* ocaml_lib "lem_interp/interp"; *)
     ocaml_lib ~extern:true ~dir:lem_libdir  ~tag_name:"use_lem" lem_lib;
+    ocaml_lib ~extern:false ~dir:"pprint/src" ~tag_name:"use_pprint" "pprint/src/PPrintLib";
 
     rule "lem -> ml"
     ~prod: "%.ml"
