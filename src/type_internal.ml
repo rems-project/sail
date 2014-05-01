@@ -548,7 +548,7 @@ let initial_typ_env =
                    Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
                                               mk_range (mk_nv "o") (mk_nv "p")])
-                                     (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
+                                     (mk_range (mk_nv "o") (mk_add (mk_nv "p") {nexp = N2n (mk_nv "m")})))),
                         External (Some "add_vec_range"),
                         [LtEq(Specc(Parse_ast.Int("+",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m")})],pure_e);
                    Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),

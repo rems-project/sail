@@ -70,6 +70,17 @@ let arith_op_vec op (V_tuple args) = match args with
     let (l1',l2') = (to_num true l1,to_num true l2) in
     arith_op op (V_tuple [l1';l2'])
 end ;;
+let arith_op_range_vec op (V_tuple args) = match args with
+  | [l1; (V_vector _ _ _ as l2)] ->
+    let l2 = (to_num true l2) in
+    arith_op op (V_tuple [l1;l2])
+end ;;
+let arith_op_vec_range op (V_tuple args) = match args with
+  | [(V_vector _ _ _ as l1);l2] ->
+    let l1 = (to_num true l1) in
+    arith_op op (V_tuple [l1;l2])
+end ;;
+
 let compare_op op (V_tuple args) = match args with
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> 
     if (op x y)
@@ -94,6 +105,8 @@ let function_map = [
   ("ignore", ignore_sail);            
   ("add", arith_op (+));
   ("add_vec", arith_op_vec (+));
+  ("add_vec_range", arith_op_vec_range (+));
+  ("add_range_vec", arith_op_range_vec (+));
   ("minus", arith_op (-));
   ("minus_vec", arith_op_vec (-));
   ("eq", eq);
