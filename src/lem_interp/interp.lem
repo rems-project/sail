@@ -97,20 +97,39 @@ type env = list (id * value)
 
 let emem = LMem 1 Map.empty
 
-(* These may need to be refined or expanded based on memory requirement *)
+type read_kind = Read_plain | Read_reserve | Read_acquire
+type write_kind = Write_plain | Write_conditional | Write_release
+
+(*type outcome =  (* these should be related to the Sail effect language, obviously...*)
+  | Read_mem of read_kind * value (*the address*) * (value -> instruction_state)      (* the continuation parameterised just on a value or on a write? *)
+  | Write_mem of write_kind * value (*the address*) * value (*the value*) * (bool (*ss wcond success*) -> instruction state)    
+  | Barrier of barrier_kind * instruction_state
+  | Read_reg of reg_name * (value -> instruction_state)
+  | Write_reg of reg_name * value * instruction_state
+  | Write_next_instruction_address of value * instruction_state  (* separate out NIA and _PC from the real Write_reg? *)
+  | Internal of instruction_state   (* normally we'll want the system to eagerly do these, either within the interpreter or outside.  But not always: sometimes we'll want to single-step through them - or at the block-level or somesuch *)
+  | Nondet_choice of list instruction_state    (* for (1) explicit nondet choices of single bits in the ISA, (2) interpreting conditionals that hit a "don't know" value in register/memory footprint calculation, and perhaps (3) interpreting intra-instruction parallelism, eg for load-multiple *)
+  | Done
+  | Error of ...   (* for internal errors that should all be prevented by Sail typechecking and careful writing of the ISA semantics *)
+  | Undefined_instruction of ...   (* for dynamically detected occurrences of UNPREDICTABLE *)
+*)
+
 type action = 
  | Read_reg of reg_form * maybe (integer * integer)
  | Write_reg of reg_form * maybe (integer* integer) * value
  | Read_mem of id * value * maybe (integer * integer)
  | Write_mem of id * value * maybe (integer * integer) * value
+ | Barrier of id * value
+ | Write_next_IA of value
+ | Nondet of list (exp tannot)
+ | Debug of l
  | Call_extern of string * value
 
-(* Inverted call stack, where top item on the stack is waiting for an action and all other frames for the right stack *)
+(* Inverted call stack, where top item on the stack is waiting for an action to resolve and all other frames for the right stack *)
 type stack = 
  | Top
  | Frame of id * exp tannot * env * lmem * stack
 
-(* Either a case must be added for parallel options or action must be tied to a list *)
 type outcome =
  | Value of value * tag (* If tag is external and value is register, then register value should be read *)
  | Action of action * stack

@@ -66,9 +66,12 @@ let arith_op op (V_tuple args) = match args with
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (op x y)) lx)
   end ;;
 let arith_op_vec op (V_tuple args) = match args with
-  | [(V_vector _ _ _ as l1);(V_vector _ _ _ as l2)] ->
+  | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
     let (l1',l2') = (to_num true l1,to_num true l2) in
-    arith_op op (V_tuple [l1';l2'])
+    let n = arith_op op (V_tuple [l1';l2']) in
+    if ord 
+    then to_vec_inc (List.length cs) n
+    else to_vec_dec (List.length cs) n
 end ;;
 let arith_op_range_vec op (V_tuple args) = match args with
   | [l1; (V_vector _ _ _ as l2)] ->

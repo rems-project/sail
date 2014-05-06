@@ -544,7 +544,7 @@ let initial_typ_env =
                    Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
                          (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
                                                mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])
-                                      (mk_range {nexp = Nconst 0} {nexp = N2n (mk_nv "n")}))), External (Some "add_vec"),[],pure_e);
+                                      (mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n")))), External (Some "add_vec"),[],pure_e);
                    Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
                                               mk_range (mk_nv "o") (mk_nv "p")])
@@ -1070,7 +1070,7 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
 and type_coerce co d_env t1 e t2 = type_coerce_internal co d_env t1 [] e t2 [];;
 
 let rec conforms_to_t spec actual =
-  let _ = Printf.printf "conforms_to_t called with %s, %s\n" (t_to_string spec) (t_to_string actual) in
+  (*let _ = Printf.printf "conforms_to_t called with %s, %s\n" (t_to_string spec) (t_to_string actual) in*)
   match spec.t,actual.t with
     | Tuvar _,_ -> true
     | Ttup ss, Ttup acs -> (List.length ss = List.length acs) && List.for_all2 conforms_to_t ss acs
@@ -1080,20 +1080,20 @@ let rec conforms_to_t spec actual =
       then List.for_all2 conforms_to_ta tas [TA_typ t]
       else conforms_to_t spec t
     | Tapp(is,tas), Tapp(ia, taa) -> 
-      let _ = Printf.printf "conforms to given two apps: %b, %b\n" (is = ia) (List.length tas = List.length taa) in
+      (*let _ = Printf.printf "conforms to given two apps: %b, %b\n" (is = ia) (List.length tas = List.length taa) in*)
       (is = ia) && (List.length tas = List.length taa) && (List.for_all2 conforms_to_ta tas taa)
     | Tabbrev(_,s),a -> conforms_to_t s actual
     | s,Tabbrev(_,a) -> conforms_to_t spec a
     | _,_ -> false
 and conforms_to_ta spec actual =
-  let _ = Printf.printf "conforms_to_ta called with %s, %s\n" (targ_to_string spec) (targ_to_string actual) in
+  (*let _ = Printf.printf "conforms_to_ta called with %s, %s\n" (targ_to_string spec) (targ_to_string actual) in*)
   match spec,actual with
     | TA_typ  s, TA_typ  a -> conforms_to_t s a
     | TA_nexp s, TA_nexp a -> conforms_to_n s a
     | TA_ord  s, TA_ord  a -> conforms_to_o s a
     | TA_eft  s, TA_eft  a -> conforms_to_e s a
 and conforms_to_n spec actual =
-  let _ = Printf.printf "conforms_to_n called with %s, %s\n" (n_to_string spec) (n_to_string actual) in
+  (*let _ = Printf.printf "conforms_to_n called with %s, %s\n" (n_to_string spec) (n_to_string actual) in*)
   match spec.nexp,actual.nexp with
     | Nuvar _,_ -> true
     | Nconst si,Nconst ai -> si==ai
