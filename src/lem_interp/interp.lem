@@ -114,6 +114,10 @@ type write_kind = Write_plain | Write_conditional | Write_release
   | Undefined_instruction of ...   (* for dynamically detected occurrences of UNPREDICTABLE *)
 *)
 
+(*top_level is a tuple of 
+  (all definitions, letbound and enum values, register values, Typedef union constructors, and sub register mappings) *)
+type top_level = Env of (defs tannot) * env * env * list (id * typ) * list (id * list (id * index_range))
+
 type action = 
  | Read_reg of reg_form * maybe (integer * integer)
  | Write_reg of reg_form * maybe (integer* integer) * value
@@ -128,7 +132,7 @@ type action =
 (* Inverted call stack, where top item on the stack is waiting for an action to resolve and all other frames for the right stack *)
 type stack = 
  | Top
- | Frame of id * exp tannot * env * lmem * stack
+ | Frame of id * exp tannot * top_level * env * lmem * stack
 
 type outcome =
  | Value of value * tag (* If tag is external and value is register, then register value should be read *)
@@ -338,7 +342,7 @@ end
 
 let add_to_top_frame e_builder stack =
   match stack with
-  | Frame id e env mem stack -> Frame id (e_builder e) env mem stack
+  | Frame id e t_level env mem stack -> Frame id (e_builder e) t_level env mem stack
   end
 
 let id_of_string s = (Id_aux (Id s) Unknown)
@@ -637,10 +641,6 @@ let rec find_case pexps value =
     if is_matching then Just(env,e) else find_case pexps value
   end
 
-(*top_level is a tuple of 
-  (all definitions, letbound and enum values, register values, Typedef union constructors, and sub register mappings) *)
-type top_level = Env of (defs tannot) * env * env * list (id * typ) * list (id * list (id * index_range))
-
 val interp_main : top_level -> env -> lmem -> (exp tannot) -> (outcome * lmem * env)
 val exp_list : top_level -> (list (exp tannot) -> (exp tannot)) -> (list value -> value) -> env -> lmem -> list value -> list (exp tannot) -> (outcome * lmem * env)
 val interp_lbind : top_level -> env -> lmem -> (letbind tannot) -> ((outcome * lmem * env) * (maybe ((exp tannot) -> (letbind tannot))))
@@ -680,7 +680,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 	                | (Tag_extern _, V_register regform) ->
 	                  (Action (Read_reg regform Nothing) 
 	                     (Frame (id_of_string "0")
-		                (E_aux (E_id (id_of_string "0")) (Unknown, (val_annot (reg_to_t regform)))) le lm Top), lm,le)
+		                (E_aux (E_id (id_of_string "0")) (Unknown, (val_annot (reg_to_t regform)))) t_level le lm Top), lm,le)
 			| (_,V_vector start inc items) -> 
 			  (match typ with
 			    | Typ_app (Id_aux (Id "vector") _) [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i) _)) _;_;_;_] ->
@@ -720,7 +720,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 		| _ -> Reg id annot end end in
 	  (Action (Read_reg regf Nothing)
 	          (Frame (Id_aux (Id "0") Unknown)
-		         (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) l_env l_mem Top),
+		         (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),
            l_mem,l_env)
         | _ -> (Error l (String.stringAppend "Internal error: tag other than empty,enum,or extern " name),l_mem,l_env)
         end
@@ -990,7 +990,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
               resolve_outcome (interp_main t_level env l_mem exp)
 	                      (fun ret lm le -> (Value ret Tag_empty, lm,l_env))
                               (fun a -> update_stack a 
-				(fun stack -> (Frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) l_env l_mem stack)))
+				(fun stack -> (Frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
              end)
           | Nothing -> (Error l (String.stringAppend "Internal error: function with empty tag unfound " name),lm,le) end)
 	| Tag_spec ->  
@@ -1003,7 +1003,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
               resolve_outcome (interp_main t_level env l_mem exp)
 	                      (fun ret lm le -> (Value ret Tag_empty, lm,l_env))
                               (fun a -> update_stack a 
-				(fun stack -> (Frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) l_env l_mem stack)))
+				(fun stack -> (Frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
              end)
           | Nothing -> (Error l (String.stringAppend "Specified function must be defined before executing " name),lm,le) end)
         | Tag_ctor ->
@@ -1016,10 +1016,10 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
           if has_memory_effect (match effect with | Effect_aux(Effect_set es) _ -> es | _ -> [] end) 
           then
             (Action (Read_mem (id_of_string name_ext) v Nothing) 
-	            (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) le lm Top), lm, le)
+	            (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
           else
             (Action (Call_extern name_ext v) 
-	            (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) le lm Top), lm, le)
+	            (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
         | _ -> (Error l (String.stringAppend "Tag other than empty, spec, ctor, or extern on function call " name),lm,le) end)
       | out -> out end)
     | E_app_infix lft op r -> 
@@ -1044,7 +1044,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 				                   (fun ret lm le -> (Value ret Tag_empty,l_mem,l_env))
                                                    (fun a -> update_stack a 
 						     (fun stack -> (Frame (Id_aux (Id "0") l)
-								          (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) l_env l_mem stack)))
+								          (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
 				                end)end)
                                            | Tag_spec ->
                                              (match find_function defs op with
@@ -1057,13 +1057,13 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 				                   (fun ret lm le -> (Value ret Tag_empty,l_mem,l_env))
                                                    (fun a -> update_stack a 
 						     (fun stack -> (Frame (Id_aux (Id "0") l)
-								          (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) l_env l_mem stack)))
+								          (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
 				                end)end)
                                            | Tag_extern ext_name ->
                                              let ext_name = match ext_name with Just s -> s | Nothing -> name end in
                                              (Action (Call_extern ext_name (V_tuple [lv;rv])) 
 						     (Frame (Id_aux (Id "0") l) 
-							    (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) le lm Top),lm,le) end)
+							    (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top),lm,le) end)
                                          (fun a -> update_stack a (add_to_top_frame (fun r ->E_aux (E_app_infix (to_exp lv) op r) (l,annot)))))
                        (fun a -> update_stack a (add_to_top_frame (fun lft -> (E_aux (E_app_infix lft op r) (l,annot)))))
   | E_let (lbind : letbind tannot) exp -> 
@@ -1136,7 +1136,7 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
 	  let regf = Reg id annot in
 	  let request = (Action (Write_reg regf Nothing value) 
 			        (Frame (Id_aux (Id "0") l) 
-				       (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) l_env l_mem Top),l_mem,l_env) in
+				       (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
           if is_top_level then (request,Nothing) else (request,Just (fun e -> LEXP_aux (LEXP_id id) (l,annot)))
         | _ -> ((Error l (String.stringAppend "Internal error: writing to id with tag other than extern or empty " (get_id id)),l_mem,l_env),Nothing)
       end 
@@ -1148,7 +1148,7 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
         (match tag with
         | Tag_extern ->
           let request = (Action (Write_mem id v Nothing value) 
-                                (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) l_env lm Top),lm,l_env) in
+                                (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env lm Top),lm,l_env) in
           if is_top_level then (request,Nothing) 
 	  else (request,Just (fun e -> 
 	                       (LEXP_aux (LEXP_memory id (match v with | V_tuple vs -> (List.map to_exp vs) | v -> [to_exp v]end)) (l,annot))))
@@ -1179,7 +1179,7 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
 	  let regf = Reg id annot in
 	  let request = (Action (Write_reg regf Nothing value) 
 			        (Frame (Id_aux (Id "0") l) 
-				       (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) l_env l_mem Top),l_mem,l_env) in
+				       (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
           if is_top_level then (request,Nothing) else (request,Just (fun e -> LEXP_aux (LEXP_cast typc id) (l,annot)))
         | _ -> ((Error l (String.stringAppend "Internal error: writing to id with tag other than extern or empty " (get_id id)),l_mem,l_env),Nothing)
       end 
@@ -1199,11 +1199,11 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
 	      | (V_register regform,true,_) ->
 		((Action (Write_reg regform Nothing value)
 		         (Frame (Id_aux (Id "0") l)
-			        (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) l_env l_mem Top),l_mem,l_env),Nothing)
+			        (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),Nothing)
 	      | (V_register regform,false,Just lexp_builder) ->
 		((Action (Write_reg regform Nothing value)
 		         (Frame (Id_aux (Id "0") l)
-			        (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) l_env l_mem Top),l_mem,l_env),
+			        (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
                  Just (next_builder lexp_builder))
               | (V_boxref n t,true,_) -> ((Value (V_lit (L_aux L_unit Unknown)) Tag_empty, update_mem lm n value, l_env),Nothing)
               | (v,true,_) -> ((Error l "Vector does not contain reg or register values",lm,l_env),Nothing)
@@ -1350,25 +1350,17 @@ let interp defs exp =
   | (o,_,_) -> o 
   end
 
-let rec resume_main t_level stack value =
+let rec resume stack value =
   match stack with
   | Top -> Error Unknown "Top hit without place to put value"
-  | Frame id exp env mem Top -> 
+  | Frame id exp t_level env mem Top -> 
     match interp_main t_level ((id,value)::env) mem exp with | (o,_,_) -> o end 
-  | Frame id exp env mem stack ->
-    match resume_main t_level stack value with
+  | Frame id exp t_level env mem stack ->
+    match resume stack value with
     | Value v tag -> 
       match interp_main t_level ((id,v)::env) mem exp with | (o,_,_) -> o end 
-    | Action action stack -> Action action (Frame id exp env mem stack)
+    | Action action stack -> Action action (Frame id exp t_level env mem stack)
     | Error l s -> Error l s
     end  
   end
 
-let resume defs stack value =
-  let t_level = Env defs [] (to_registers defs) (to_data_constructors defs) (to_register_fields defs) in 
-  let (o,t_level) = to_global_letbinds defs t_level in
-  match o with
-  | (Value _ _,_,_) -> 
-     resume_main t_level stack value
-  | (o,_,_) -> o 
-  end

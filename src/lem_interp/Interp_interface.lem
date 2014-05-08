@@ -1,0 +1,35 @@
+import Interp
+
+type read_kind = Interp.read_kind
+type write_kind = Interp.write_kind
+type barrier_kind = Interp.barrier_kind
+
+type value = 
+| Bitvector of list nat (*Always 0 or 1; should this be a Word.bitSequence? *)
+| Bytevector of list (list nat) (* Should this be a list of Word.bitSequence? *)
+| Unknown
+
+type instruction_state = Interp.stack
+type context = Interp.top_level
+
+type reg_name = Interp.reg_form (*for now...*)
+
+type outcome =
+| Read_mem of read_kind * value * (value -> instruction_state)
+| Write_mem of write_kind * value * value * (bool -> instruction_state)
+| Barrier of barrier_kind * instruction_state
+| Read_reg of reg_name * (value -> instruction_state) (*What about slicing?*)
+| Write_reg of reg_name * value * instruction_state
+| Nondet_choice of list instruction_state
+| Internal of instruction_state
+| Done
+| Error of string
+
+val build_context : Interp.defs -> context
+val initial_instruction_state : context -> string -> value -> instruction_state
+
+type interp_mode = <| eager_eval : bool |>
+val interp : instruction_state -> interp_mode -> outcome
+
+val interp_exhaustive : instruction_state -> list outcome (*not sure what event was ment to be*)
+
