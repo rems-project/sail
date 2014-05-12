@@ -67,6 +67,7 @@ type value =
  | V_vector of integer * bool * list value (* The nat stores the first index, the bool whether that's most or least significant *)
  | V_record of t * list (id * value)
  | V_ctor of id * t * value
+ | V_unknown (* Distinct from undefined, used by memory system *)
  | V_register of reg_form (* Value to store register access, when not actively reading or writing *)
 
 let rec id_value_eq (i, v) (i', v') = i = i' && value_eq v v'
@@ -83,6 +84,7 @@ and value_eq left right =
       t = t' &&
       listEqualBy id_value_eq l l'
   | (V_ctor i t v, V_ctor i' t' v') -> t = t' && id_value_eq (i, v) (i', v')
+  | (V_unknown,V_unknown) -> true
   | (_, _) -> false
   end
 
@@ -93,26 +95,14 @@ end
 
 (* Store for local memory of ref cells *)
 type lmem = LMem of nat * map nat value
+(* Environment for lexical variables *)
 type env = list (id * value)
 
 let emem = LMem 1 Map.empty
 
 type read_kind = Read_plain | Read_reserve | Read_acquire
 type write_kind = Write_plain | Write_conditional | Write_release
-
-(*type outcome =  (* these should be related to the Sail effect language, obviously...*)
-  | Read_mem of read_kind * value (*the address*) * (value -> instruction_state)      (* the continuation parameterised just on a value or on a write? *)
-  | Write_mem of write_kind * value (*the address*) * value (*the value*) * (bool (*ss wcond success*) -> instruction state)    
-  | Barrier of barrier_kind * instruction_state
-  | Read_reg of reg_name * (value -> instruction_state)
-  | Write_reg of reg_name * value * instruction_state
-  | Write_next_instruction_address of value * instruction_state  (* separate out NIA and _PC from the real Write_reg? *)
-  | Internal of instruction_state   (* normally we'll want the system to eagerly do these, either within the interpreter or outside.  But not always: sometimes we'll want to single-step through them - or at the block-level or somesuch *)
-  | Nondet_choice of list instruction_state    (* for (1) explicit nondet choices of single bits in the ISA, (2) interpreting conditionals that hit a "don't know" value in register/memory footprint calculation, and perhaps (3) interpreting intra-instruction parallelism, eg for load-multiple *)
-  | Done
-  | Error of ...   (* for internal errors that should all be prevented by Sail typechecking and careful writing of the ISA semantics *)
-  | Undefined_instruction of ...   (* for dynamically detected occurrences of UNPREDICTABLE *)
-*)
+type barrier_kind = | Barrier_plain  (* ... *) 
 
 (*top_level is a tuple of 
   (all definitions, letbound and enum values, register values, Typedef union constructors, and sub register mappings) *)
@@ -132,15 +122,24 @@ type action =
 (* Inverted call stack, where top item on the stack is waiting for an action to resolve and all other frames for the right stack *)
 type stack = 
  | Top
- | Frame of id * exp tannot * top_level * env * lmem * stack
+ | Frame of maybe id * exp tannot * top_level * env * lmem * stack
 
+(*Internal representation of outcomes from running the interpreter. Actions request an external party to resolve a request *)
 type outcome =
  | Value of value * tag (* If tag is external and value is register, then register value should be read *)
  | Action of action * stack
  | Error of l * string 
 
-(* interprets the exp sequentially in the presence of a set of top level definitions and returns a value or a memory request *)
-val interp : defs tannot -> exp tannot -> outcome
+type interp_mode = <| eager_eval : bool |>
+
+(* Evaluates global let binds and prepares the context for individual expression evaluation in the current model *)
+val to_top_env : defs tannot -> (maybe outcome * top_level)
+
+(* interprets the exp sequentially in the presence of a set of top level definitions and returns a value, a memory request, or other external action *)
+val interp :interp_mode -> defs tannot -> exp tannot -> outcome
+
+(* Takes a paused partially evaluated expression, puts the value into the environment, and runs again *)
+val resume : interp_mode -> stack -> value -> outcome
 
 val to_register_fields : defs tannot -> list (id * list (id * index_range))
 let rec to_register_fields (Defs defs) = 
@@ -641,9 +640,9 @@ let rec find_case pexps value =
     if is_matching then Just(env,e) else find_case pexps value
   end
 
-val interp_main : top_level -> env -> lmem -> (exp tannot) -> (outcome * lmem * env)
-val exp_list : top_level -> (list (exp tannot) -> (exp tannot)) -> (list value -> value) -> env -> lmem -> list value -> list (exp tannot) -> (outcome * lmem * env)
-val interp_lbind : top_level -> env -> lmem -> (letbind tannot) -> ((outcome * lmem * env) * (maybe ((exp tannot) -> (letbind tannot))))
+val interp_main : interp_mode -> top_level -> env -> lmem -> (exp tannot) -> (outcome * lmem * env)
+val exp_list : interp_mode -> top_level -> (list (exp tannot) -> (exp tannot)) -> (list value -> value) -> env -> lmem -> list value -> list (exp tannot) -> (outcome * lmem * env)
+val interp_lbind : interp_mode -> top_level -> env -> lmem -> (letbind tannot) -> ((outcome * lmem * env) * (maybe ((exp tannot) -> (letbind tannot))))
 
 let resolve_outcome to_match value_thunk action_thunk =
   match to_match with
@@ -655,16 +654,16 @@ let resolve_outcome to_match value_thunk action_thunk =
 let update_stack (Action act stack) fn = Action act (fn stack)  
 
 (*Interpret a list of expressions, tracking local state but evaluating in the same scope (i.e. not tracking env) *)
-let rec exp_list t_level build_e build_v l_env l_mem vals exps =
+let rec exp_list mode t_level build_e build_v l_env l_mem vals exps =
   match exps with
   | [ ] -> (Value (build_v vals) Tag_empty, l_mem, l_env)
   | e::exps -> 
-    resolve_outcome (interp_main t_level l_env l_mem e)
-                    (fun value lm le -> exp_list t_level build_e build_v l_env lm (vals++[value]) exps)
+    resolve_outcome (interp_main mode t_level l_env l_mem e)
+                    (fun value lm le -> exp_list mode t_level build_e build_v l_env lm (vals++[value]) exps)
                     (fun a -> update_stack a (add_to_top_frame (fun e -> (build_e ((List.map to_exp vals)++(e::exps))))))
   end
 
-and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
+and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
   let (Env defs lets regs ctors subregs) = t_level in 
   let (typ,tag,ncs,effect) = match annot with 
     | Nothing -> (T_var "fresh_v", Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
@@ -674,12 +673,12 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
       if is_lit_vector lit then (Value (litV_to_vec lit) Tag_empty,l_mem,l_env) 
       else (Value (V_lit lit) Tag_empty, l_mem,l_env)
     | E_cast ((Typ_aux typ _) as ctyp) exp -> 
-      resolve_outcome (interp_main t_level l_env l_mem exp)
+      resolve_outcome (interp_main mode t_level l_env l_mem exp)
 	              (fun v lm le -> 
                         match (tag,v) with 
 	                | (Tag_extern _, V_register regform) ->
 	                  (Action (Read_reg regform Nothing) 
-	                     (Frame (id_of_string "0")
+	                     (Frame (Just (id_of_string "0"))
 		                (E_aux (E_id (id_of_string "0")) (Unknown, (val_annot (reg_to_t regform)))) t_level le lm Top), lm,le)
 			| (_,V_vector start inc items) -> 
 			  (match typ with
@@ -719,32 +718,32 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 		| Just(V_register regform) -> regform
 		| _ -> Reg id annot end end in
 	  (Action (Read_reg regf Nothing)
-	          (Frame (Id_aux (Id "0") Unknown)
+	          (Frame (Just (Id_aux (Id "0") Unknown))
 		         (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),
            l_mem,l_env)
         | _ -> (Error l (String.stringAppend "Internal error: tag other than empty,enum,or extern " name),l_mem,l_env)
         end
     | E_if cond thn els ->
-      resolve_outcome (interp_main t_level l_env l_mem cond)
+      resolve_outcome (interp_main mode t_level l_env l_mem cond)
 	              (fun value lm le -> 
 			match value with
-                          | V_lit(L_aux L_true _) -> interp_main t_level l_env lm thn
-                          | _ -> interp_main t_level l_env lm els end)
+                          | V_lit(L_aux L_true _) -> interp_main mode t_level l_env lm thn
+                          | _ -> interp_main mode t_level l_env lm els end)
                       (fun a -> update_stack a (add_to_top_frame (fun c -> (E_aux (E_if c thn els) (l,annot)))))
     | E_for id from to_ by ((Ord_aux o _) as order) exp ->
       let is_inc = match o with
         | Ord_inc -> true
         | _ -> false end in
-      resolve_outcome (interp_main t_level l_env l_mem from)
+      resolve_outcome (interp_main mode t_level l_env l_mem from)
                       (fun from_val lm le ->
                         match from_val with
                         | (V_lit(L_aux(L_num from_num) fl) as fval) -> 
-                          resolve_outcome (interp_main t_level le lm to_)
+                          resolve_outcome (interp_main mode t_level le lm to_)
                                           (fun to_val lm le ->
                                             match to_val with
                                             | (V_lit(L_aux (L_num to_num) tl) as tval) ->
                                               resolve_outcome 
-                                                (interp_main t_level le lm by)
+                                                (interp_main mode t_level le lm by)
                                                 (fun by_val lm le ->
                                                   match by_val with 
                                                   | (V_lit (L_aux (L_num by_num) bl) as bval) ->
@@ -752,7 +751,7 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
                                                     then (Value(V_lit (L_aux L_unit l)) Tag_empty,lm,le)
                                                     else
                                                       let (ftyp,ttyp,btyp) = (val_typ fval,val_typ tval,val_typ bval) in
-                                                      interp_main t_level le lm 
+                                                      interp_main mode t_level le lm 
                                                         (E_aux 
 							   (E_block 
 							      [(E_aux (E_let 
@@ -784,28 +783,28 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
                         | _ -> (Error l "internal error: from must be a number",lm,le) end)
                        (fun a -> update_stack a (add_to_top_frame (fun f -> (E_aux (E_for id f to_ by order exp) (l,annot)))))
     | E_case exp pats ->
-      resolve_outcome (interp_main t_level l_env l_mem exp)
+      resolve_outcome (interp_main mode t_level l_env l_mem exp)
                       (fun v lm le ->
                         match find_case pats v with
                         | Nothing -> (Error l "No matching patterns in case",lm,le)
-                        | Just (env,exp) -> interp_main t_level (env++l_env) lm exp
+                        | Just (env,exp) -> interp_main mode t_level (env++l_env) lm exp
 		        end)
                       (fun a -> update_stack a (add_to_top_frame (fun e -> (E_aux (E_case e pats) (l,annot)))))
     | E_record(FES_aux (FES_Fexps fexps _) fes_annot) -> 
       let (fields,exps) = List.unzip (List.map (fun (FE_aux (FE_Fexp id exp) _) -> (id,exp)) fexps) in
-      exp_list t_level 
+      exp_list mode t_level 
 	(fun es -> 
 	  (E_aux (E_record 
 		    (FES_aux (FES_Fexps (map2 (fun id exp -> (FE_aux (FE_Fexp id exp) (Unknown,Nothing))) fields es) false) fes_annot))
 	          (l,annot)))
 	(fun vs -> (V_record typ (List.zip fields vs))) l_env l_mem [] exps
     | E_record_update exp (FES_aux (FES_Fexps fexps _) fes_annot) ->
-      resolve_outcome (interp_main t_level l_env l_mem exp)
+      resolve_outcome (interp_main mode t_level l_env l_mem exp)
                       (fun rv lm le -> 
                         match rv with
                         | V_record t fvs ->
                           let (fields,exps) = List.unzip (List.map (fun (FE_aux (FE_Fexp id exp) _) -> (id,exp)) fexps) in
-                          resolve_outcome (exp_list t_level 
+                          resolve_outcome (exp_list mode t_level 
 					     (fun es -> 
 					       (E_aux (E_record_update (to_exp rv) 
 							 (FES_aux (FES_Fexps 
@@ -820,18 +819,18 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
                       (fun a -> update_stack a (add_to_top_frame 
 						  (fun e -> E_aux(E_record_update e (FES_aux(FES_Fexps fexps false) fes_annot)) (l,annot))))
     | E_list(exps) ->
-      exp_list t_level (fun exps -> E_aux (E_list exps) (l,annot)) V_list l_env l_mem [] exps
+      exp_list mode t_level (fun exps -> E_aux (E_list exps) (l,annot)) V_list l_env l_mem [] exps
     | E_cons hd tl ->
-      resolve_outcome (interp_main t_level l_env l_mem hd)
+      resolve_outcome (interp_main mode t_level l_env l_mem hd)
                       (fun hdv lm le -> resolve_outcome
-                                        (interp_main t_level l_env lm tl)
+                                        (interp_main mode t_level l_env lm tl)
                                         (fun tlv lm le -> match tlv with 
                                                    | V_list t -> (Value(V_list (hdv::t)) Tag_empty,lm,le)
                                                    | _ -> (Error l ":: of non-list value",lm,le) end)
                                         (fun a -> update_stack a (add_to_top_frame (fun t ->E_aux (E_cons (to_exp hdv) t) (l,annot)))))
                       (fun a -> update_stack a (add_to_top_frame (fun h -> E_aux (E_cons h tl) (l,annot))))
     | E_field exp id -> 
-      resolve_outcome (interp_main t_level l_env l_mem exp)
+      resolve_outcome (interp_main mode t_level l_env l_mem exp)
                       (fun value lm le -> 
                         match value with 
                         | V_record t fexps -> match in_env fexps id with
@@ -864,11 +863,11 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
                           | _ -> update_stack a (add_to_top_frame (fun e -> E_aux(E_field e id) (l,annot))) end)
     | E_vector_access vec i ->
       (*Need to update to read one position of a register*)
-      resolve_outcome (interp_main t_level l_env l_mem i)
+      resolve_outcome (interp_main mode t_level l_env l_mem i)
                       (fun iv lm le -> 
                         match iv with
                         | V_lit (L_aux (L_num n) ln) -> 
-                          resolve_outcome (interp_main t_level l_env lm vec)
+                          resolve_outcome (interp_main mode t_level l_env lm vec)
                                           (fun vvec lm le ->
                                             match vvec with
                                             | V_vector base inc vals -> (Value (access_vector vvec n) Tag_empty,lm,le)
@@ -879,15 +878,15 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
                       (fun a -> update_stack a (add_to_top_frame (fun i -> E_aux (E_vector_access vec i) (l,annot))))
     | E_vector_subrange vec i1 i2 ->
       (*Need to update to read a slice of a register*)
-      resolve_outcome (interp_main t_level l_env l_mem i1)
+      resolve_outcome (interp_main mode t_level l_env l_mem i1)
                       (fun i1v lm le ->
                         match i1v with
                         | V_lit (L_aux (L_num n1) ln1) ->
-                          resolve_outcome (interp_main t_level l_env lm i2)
+                          resolve_outcome (interp_main mode t_level l_env lm i2)
                                           (fun i2v lm le ->
                                             match i2v with
                                             | V_lit (L_aux (L_num n2) ln2) ->
-                                              resolve_outcome (interp_main t_level l_env lm vec)
+                                              resolve_outcome (interp_main mode t_level l_env lm vec)
                                                               (fun vvec lm le ->
                                                                 match vvec with
                                                                 | V_vector base inc vals -> (Value (slice_vector vvec n1 n2) Tag_empty,lm,le)
@@ -907,13 +906,13 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
                         | _ -> (Error l "Vector slice given non-number for first index",lm,le) end)
                        (fun a -> update_stack a (add_to_top_frame (fun i1 -> (E_aux (E_vector_subrange vec i1 i2) (l,annot)))))
     | E_vector_update vec i exp ->
-      resolve_outcome (interp_main t_level l_env l_mem i)
+      resolve_outcome (interp_main mode t_level l_env l_mem i)
                       (fun vi lm le ->
                         match vi with
                         | V_lit (L_aux (L_num n1) ln1) ->
-                          resolve_outcome (interp_main t_level le lm exp)
+                          resolve_outcome (interp_main mode t_level le lm exp)
                                           (fun vup lm le ->
-                                            resolve_outcome (interp_main t_level le lm vec)
+                                            resolve_outcome (interp_main mode t_level le lm vec)
                                                             (fun vec lm le ->
                                                               match vec with
                                                               | V_vector base inc vals -> (Value (fupdate_vec vec n1 vup) Tag_empty, lm,le)
@@ -930,19 +929,19 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
                         | _ -> (Error l "Update of vector requires number for access",lm,le) end)
                       (fun a -> update_stack a (add_to_top_frame (fun i -> E_aux (E_vector_update vec i exp) (l,annot))))
     | E_vector_update_subrange vec i1 i2 exp ->
-      resolve_outcome (interp_main t_level l_env l_mem i1)
+      resolve_outcome (interp_main mode t_level l_env l_mem i1)
                       (fun vi1 lm le ->
                         match vi1 with
                         | V_lit (L_aux (L_num n1) ln1) ->
                           resolve_outcome 
-                            (interp_main t_level l_env lm i2) 
+                            (interp_main mode t_level l_env lm i2) 
                             (fun vi2 lm le ->
                               match vi2 with
                               | V_lit (L_aux (L_num n2) ln2) ->
-                                resolve_outcome (interp_main t_level l_env lm exp)
+                                resolve_outcome (interp_main mode t_level l_env lm exp)
                                   (fun v_rep lm le ->
                                     (resolve_outcome 
-                                       (interp_main t_level l_env lm vec)
+                                       (interp_main mode t_level l_env lm vec)
                                        (fun vvec lm le ->
                                          match vvec with
                                          | V_vector m inc vals -> (Value (fupdate_vector_slice vvec v_rep n1 n2) Tag_empty,lm,le)
@@ -962,19 +961,19 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
                         | _ -> (Error l "vector update requires number",lm,le) end)
                       (fun a -> update_stack a (add_to_top_frame (fun i1 -> E_aux (E_vector_update_subrange vec i1 i2 exp) (l,annot))))
     | E_tuple(exps) -> 
-      exp_list t_level (fun exps -> E_aux (E_tuple exps) (l,annot)) V_tuple l_env l_mem [] exps
+      exp_list mode t_level (fun exps -> E_aux (E_tuple exps) (l,annot)) V_tuple l_env l_mem [] exps
     | E_vector(exps) ->
-      exp_list t_level (fun exps -> E_aux (E_vector exps) (l,annot)) (fun vals -> V_vector 0 true vals) l_env l_mem [] exps
+      exp_list mode t_level (fun exps -> E_aux (E_vector exps) (l,annot)) (fun vals -> V_vector 0 true vals) l_env l_mem [] exps
     | E_vector_indexed(iexps) ->
       let (indexes,exps) = List.unzip iexps in
       let is_inc = match typ with
         | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp _; T_arg_order (Ord_aux Ord_inc _); _]) -> true
         | _ -> false end in
-      exp_list t_level (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es)) (l,annot))) 
+      exp_list mode t_level (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es)) (l,annot))) 
                        (fun vals -> V_vector (List_extra.head indexes) is_inc vals) l_env l_mem [] exps
-    | E_block(exps) -> interp_block t_level l_env l_env l_mem exps
+    | E_block(exps) -> interp_block mode t_level l_env l_env l_mem exps
     | E_app f args ->
-      (match (exp_list t_level (fun es -> E_aux (E_app f es) (l,annot)) 
+      (match (exp_list mode t_level (fun es -> E_aux (E_app f es) (l,annot)) 
 		               (fun vs -> match vs with | [] -> V_lit (L_aux L_unit l) | [v] -> v | vs -> V_tuple vs end) 
 			       l_env l_mem [] args) with
       | (Value v tag_e,lm,le) -> 
@@ -987,10 +986,10 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 	    | Nothing -> 
               (Error l (String.stringAppend "No matching pattern for function " name ),l_mem,l_env)
 	    | Just(env,exp) -> 
-              resolve_outcome (interp_main t_level env l_mem exp)
+              resolve_outcome (interp_main mode t_level env l_mem exp)
 	                      (fun ret lm le -> (Value ret Tag_empty, lm,l_env))
                               (fun a -> update_stack a 
-				(fun stack -> (Frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
+				(fun stack -> (Frame (Just (id_of_string "0")) (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
              end)
           | Nothing -> (Error l (String.stringAppend "Internal error: function with empty tag unfound " name),lm,le) end)
 	| Tag_spec ->  
@@ -1000,10 +999,10 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 	    | Nothing -> 
               (Error l (String.stringAppend "No matching pattern for function " name ),l_mem,l_env)
 	    | Just(env,exp) -> 
-              resolve_outcome (interp_main t_level env l_mem exp)
+              resolve_outcome (interp_main mode t_level env l_mem exp)
 	                      (fun ret lm le -> (Value ret Tag_empty, lm,l_env))
                               (fun a -> update_stack a 
-				(fun stack -> (Frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
+				(fun stack -> (Frame (Just (id_of_string "0")) (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
              end)
           | Nothing -> (Error l (String.stringAppend "Specified function must be defined before executing " name),lm,le) end)
         | Tag_ctor ->
@@ -1016,10 +1015,10 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
           if has_memory_effect (match effect with | Effect_aux(Effect_set es) _ -> es | _ -> [] end) 
           then
             (Action (Read_mem (id_of_string name_ext) v Nothing) 
-	            (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
+	            (Frame (Just (Id_aux (Id "0") l)) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
           else
             (Action (Call_extern name_ext v) 
-	            (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
+	            (Frame (Just (Id_aux (Id "0") l)) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
         | _ -> (Error l (String.stringAppend "Tag other than empty, spec, ctor, or extern on function call " name),lm,le) end)
       | out -> out end)
     | E_app_infix lft op r -> 
@@ -1028,9 +1027,9 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
        | _ -> op
        end in
       let name = get_id op in
-      resolve_outcome (interp_main t_level l_env l_mem lft)
+      resolve_outcome (interp_main mode t_level l_env l_mem lft)
                       (fun lv lm le -> 
-                         resolve_outcome (interp_main t_level l_env lm r)
+                         resolve_outcome (interp_main mode t_level l_env lm r)
                                          (fun rv lm le -> 
                                            match tag with
                                            | Tag_empty -> 
@@ -1040,10 +1039,10 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 				               (match find_funcl funcls (V_tuple [lv;rv]) with 
 				               | Nothing -> (Error l (String.stringAppend "No matching pattern for function " name),lm,l_env)
 				               | Just(env,exp) ->
-				                 resolve_outcome (interp_main t_level env emem exp)
+				                 resolve_outcome (interp_main mode t_level env emem exp)
 				                   (fun ret lm le -> (Value ret Tag_empty,l_mem,l_env))
                                                    (fun a -> update_stack a 
-						     (fun stack -> (Frame (Id_aux (Id "0") l)
+						     (fun stack -> (Frame (Just (Id_aux (Id "0") l))
 								          (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
 				                end)end)
                                            | Tag_spec ->
@@ -1053,29 +1052,29 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
 				               (match find_funcl funcls (V_tuple [lv;rv]) with 
 				               | Nothing -> (Error l (String.stringAppend "No matching pattern for function " name),lm,l_env)
 				               | Just(env,exp) ->
-				                 resolve_outcome (interp_main t_level env emem exp)
+				                 resolve_outcome (interp_main mode t_level env emem exp)
 				                   (fun ret lm le -> (Value ret Tag_empty,l_mem,l_env))
                                                    (fun a -> update_stack a 
-						     (fun stack -> (Frame (Id_aux (Id "0") l)
+						     (fun stack -> (Frame (Just (Id_aux (Id "0") l))
 								          (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
 				                end)end)
                                            | Tag_extern ext_name ->
                                              let ext_name = match ext_name with Just s -> s | Nothing -> name end in
                                              (Action (Call_extern ext_name (V_tuple [lv;rv])) 
-						     (Frame (Id_aux (Id "0") l) 
+						     (Frame (Just (Id_aux (Id "0") l)) 
 							    (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top),lm,le) end)
                                          (fun a -> update_stack a (add_to_top_frame (fun r ->E_aux (E_app_infix (to_exp lv) op r) (l,annot)))))
                        (fun a -> update_stack a (add_to_top_frame (fun lft -> (E_aux (E_app_infix lft op r) (l,annot)))))
   | E_let (lbind : letbind tannot) exp -> 
-    match (interp_letbind t_level l_env l_mem lbind) with
-    | ((Value v tag_l,lm,le),_) -> interp_main t_level le lm exp                                             
+    match (interp_letbind mode t_level l_env l_mem lbind) with
+    | ((Value v tag_l,lm,le),_) -> interp_main mode t_level le lm exp                                             
     | (((Action a s as o),lm,le),Just lbuild) ->  
       ((update_stack o (add_to_top_frame (fun e -> (E_aux (E_let (lbuild e) exp) (l,annot))))),lm,le)
     | (e,_) -> e end
   | E_assign lexp exp ->
-    resolve_outcome (interp_main t_level l_env l_mem exp)
+    resolve_outcome (interp_main mode t_level l_env l_mem exp)
                     (fun v lm le -> 
-                      (match create_write_message_or_update t_level v l_env lm true lexp with
+                      (match create_write_message_or_update mode t_level v l_env lm true lexp with
                       | (outcome,Nothing) -> outcome
                       | (outcome,Just lexp_builder) ->
                         resolve_outcome outcome
@@ -1092,17 +1091,17 @@ and interp_main t_level l_env l_mem (E_aux exp (l,annot)) =
                     (fun a -> update_stack a (add_to_top_frame (fun v -> (E_aux (E_assign lexp v) (l,annot)))))
   end
 
- and interp_block t_level init_env local_env local_mem exps =
+ and interp_block mode t_level init_env local_env local_mem exps =
    match exps with
     | [ ] -> (Value (V_lit (L_aux (L_unit) Unknown)) Tag_empty, local_mem, init_env)
-    | [ exp ] -> interp_main t_level local_env local_mem exp
+    | [ exp ] -> interp_main mode t_level local_env local_mem exp
     | exp:: exps ->
-      resolve_outcome (interp_main t_level local_env local_mem exp)
-                      (fun _ lm le -> interp_block t_level init_env le lm exps)
+      resolve_outcome (interp_main mode t_level local_env local_mem exp)
+                      (fun _ lm le -> interp_block mode t_level init_env le lm exps)
                       (fun a -> update_stack a (add_to_top_frame (fun e -> (E_aux (E_block(e::exps)) (Unknown,Nothing)))))
     end
 
-and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP_aux lexp (l,annot)):lexp tannot) =
+and create_write_message_or_update mode t_level value l_env l_mem is_top_level ((LEXP_aux lexp (l,annot)):lexp tannot) =
    let (Env defs lets regs ctors subregs) = t_level in
   let (typ,tag,ncs,ef) = match annot with 
     | Nothing -> (T_var "fresh_v", Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
@@ -1135,20 +1134,20 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
         | Tag_extern _ ->
 	  let regf = Reg id annot in
 	  let request = (Action (Write_reg regf Nothing value) 
-			        (Frame (Id_aux (Id "0") l) 
+			        (Frame (Just (Id_aux (Id "0") l)) 
 				       (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
           if is_top_level then (request,Nothing) else (request,Just (fun e -> LEXP_aux (LEXP_id id) (l,annot)))
         | _ -> ((Error l (String.stringAppend "Internal error: writing to id with tag other than extern or empty " (get_id id)),l_mem,l_env),Nothing)
       end 
     | LEXP_memory id exps -> 
-      match (exp_list t_level (fun exps -> E_aux (E_tuple exps) (Unknown,Nothing)) 
+      match (exp_list mode t_level (fun exps -> E_aux (E_tuple exps) (Unknown,Nothing)) 
 	              (fun vs -> match vs with | [] -> V_lit (L_aux L_unit Unknown) | [v] -> v | vs -> V_tuple vs end)
 		      l_env l_mem [] exps) with
       | (Value v tag',lm,le) ->
         (match tag with
         | Tag_extern ->
           let request = (Action (Write_mem id v Nothing value) 
-                                (Frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env lm Top),lm,l_env) in
+                                (Frame (Just (Id_aux (Id "0") l)) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env lm Top),lm,l_env) in
           if is_top_level then (request,Nothing) 
 	  else (request,Just (fun e -> 
 	                       (LEXP_aux (LEXP_memory id (match v with | V_tuple vs -> (List.map to_exp vs) | v -> [to_exp v]end)) (l,annot))))
@@ -1178,19 +1177,19 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
         | Tag_extern _ ->
 	  let regf = Reg id annot in
 	  let request = (Action (Write_reg regf Nothing value) 
-			        (Frame (Id_aux (Id "0") l) 
+			        (Frame (Just (Id_aux (Id "0") l)) 
 				       (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
           if is_top_level then (request,Nothing) else (request,Just (fun e -> LEXP_aux (LEXP_cast typc id) (l,annot)))
         | _ -> ((Error l (String.stringAppend "Internal error: writing to id with tag other than extern or empty " (get_id id)),l_mem,l_env),Nothing)
       end 
     | LEXP_vector lexp exp -> 
-      match (interp_main t_level l_env l_mem exp) with
+      match (interp_main mode t_level l_env l_mem exp) with
       | (Value i tag',lm,le) ->
         (match i with 
         | V_lit (L_aux (L_num n) ln) -> 
           let next_builder le_builder = (fun e -> 
 	                                  LEXP_aux (LEXP_vector (le_builder e) (E_aux (E_lit (L_aux (L_num n) ln)) (ln,Nothing))) (l,annot)) in
-          (match (create_write_message_or_update t_level value l_env lm false lexp) with
+          (match (create_write_message_or_update mode t_level value l_env lm false lexp) with
           | ((Value v tag3,lm,le),maybe_builder) ->
             (match v with 
             | V_vector inc m vs -> 
@@ -1198,11 +1197,11 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
               (match (nth,is_top_level,maybe_builder) with
 	      | (V_register regform,true,_) ->
 		((Action (Write_reg regform Nothing value)
-		         (Frame (Id_aux (Id "0") l)
+		         (Frame (Just (Id_aux (Id "0") l))
 			        (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),Nothing)
 	      | (V_register regform,false,Just lexp_builder) ->
 		((Action (Write_reg regform Nothing value)
-		         (Frame (Id_aux (Id "0") l)
+		         (Frame (Just (Id_aux (Id "0") l))
 			        (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
                  Just (next_builder lexp_builder))
               | (V_boxref n t,true,_) -> ((Value (V_lit (L_aux L_unit Unknown)) Tag_empty, update_mem lm n value, l_env),Nothing)
@@ -1224,11 +1223,11 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
       | (Action a s,lm,le) -> ((Action a s,lm,le), Just (fun e -> (LEXP_aux (LEXP_vector lexp e) (l,annot))))
       | e -> (e,Nothing) end
     | LEXP_vector_range lexp exp1 exp2  ->
-      match (interp_main t_level l_env l_mem exp1) with
+      match (interp_main mode t_level l_env l_mem exp1) with
       | (Value i1 tag_e, lm, le) ->
         (match i1 with
         | V_lit (L_aux (L_num n1) ln1) ->
-          (match (interp_main t_level l_env l_mem exp2) with
+          (match (interp_main mode t_level l_env l_mem exp2) with
           | (Value i2 tag_e2,lm,le) ->
             (match i2 with
             | V_lit (L_aux (L_num n2) ln2) ->
@@ -1236,7 +1235,7 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
 		(fun e -> LEXP_aux (LEXP_vector_range (le_builder e) 
 				                      (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
 						      (E_aux (E_lit (L_aux (L_num n2) ln2)) (ln2,Nothing))) (l,annot)) in
-              (match (create_write_message_or_update t_level value l_env lm false lexp) with
+              (match (create_write_message_or_update mode t_level value l_env lm false lexp) with
               | ((Value v tag_le,lm,le), Just lexp_builder) ->
                 (match (v,is_top_level) with
                 | (V_vector m inc vs,true) -> 
@@ -1262,7 +1261,7 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
         ((Action a s, lm,le), Just (fun e -> LEXP_aux (LEXP_vector_range lexp e exp2) (l,annot)))
       | e -> (e,Nothing) end
    | LEXP_field lexp id ->
-     (match (create_write_message_or_update t_level value l_env l_mem false lexp) with
+     (match (create_write_message_or_update mode t_level value l_env l_mem false lexp) with
      | ((Value (V_record t fexps) tag_le,lm,le),Just lexp_builder) ->
        match (in_env fexps id,is_top_level) with
        | (Just (V_boxref n t),true) -> ((Value (V_lit (L_aux L_unit l)) Tag_empty, update_mem lm n value, l_env),Nothing)
@@ -1301,10 +1300,10 @@ and create_write_message_or_update t_level value l_env l_mem is_top_level ((LEXP
      | e -> e end)
      end	
 
-and interp_letbind t_level l_env l_mem (LB_aux lbind (l,annot)) =
+and interp_letbind mode t_level l_env l_mem (LB_aux lbind (l,annot)) =
   match lbind with
   | LB_val_explicit t pat exp ->
-    match (interp_main t_level l_env l_mem exp) with
+    match (interp_main mode t_level l_env l_mem exp) with
     | (Value v Tag_empty,lm,le) ->
       (match match_pattern pat v with
       | (true,env) -> ((Value (V_lit (L_aux L_unit l)) Tag_empty, lm, env++l_env),Nothing)
@@ -1312,7 +1311,7 @@ and interp_letbind t_level l_env l_mem (LB_aux lbind (l,annot)) =
     | (Action a s,lm,le) -> ((Action a s,lm,le),(Just (fun e ->(LB_aux (LB_val_explicit t pat e) (l,annot)))))
     | e -> (e,Nothing) end
   | LB_val_implicit pat exp ->
-    match (interp_main t_level l_env l_mem exp) with
+    match (interp_main mode t_level l_env l_mem exp) with
     | (Value v Tag_empty,lm,le) ->
       (match match_pattern pat v with
       | (true,env) -> ((Value (V_lit (L_aux L_unit l)) Tag_empty, lm, env++l_env),Nothing)
@@ -1329,7 +1328,7 @@ let rec to_global_letbinds (Defs defs) t_level =
   | def::defs ->
     match def with
     | DEF_val lbind ->
-      match interp_letbind t_level [] emem lbind with
+      match interp_letbind <|eager_eval=true|> t_level [] emem lbind with
       | ((Value v tag,lm,le),_) -> to_global_letbinds (Defs defs) (Env defs' (lets++le) regs ctors subregs)
       | ((Action a s,lm,le),_) -> 
 	((Error Unknown "Top level let may not access memory, registers or (for now) external functions", lm,le),t_level)
@@ -1338,29 +1337,44 @@ let rec to_global_letbinds (Defs defs) t_level =
     end
   end
 
-
-let interp defs exp =
-  let t_level = Env defs [] (to_registers defs) (to_data_constructors defs) (to_register_fields defs) in 
+let to_top_env defs = 
+  let t_level = Env defs [] (to_registers defs) (to_data_constructors defs) (to_register_fields defs) in
   let (o,t_level) = to_global_letbinds defs t_level in
   match o with
-  | (Value _ _,_,_) -> 
-     match interp_main t_level [] emem exp with
-     | (o,_,_) -> o
-     end 
-  | (o,_,_) -> o 
+    | (Value _ _,_,_) -> (Nothing,t_level)
+    | (o,_,_) -> (Just o,t_level)
   end
 
-let rec resume stack value =
+let interp mode defs exp =
+  match (to_top_env defs) with
+    | (Nothing,t_level) -> 
+      match interp_main mode t_level [] emem exp with
+	| (o,_,_) -> o
+      end 
+    | (Just o,_) -> o (* Should do something different for action to allow global lets to call external functions *)
+  end
+
+let rec resume mode stack value =
   match stack with
   | Top -> Error Unknown "Top hit without place to put value"
-  | Frame id exp t_level env mem Top -> 
-    match interp_main t_level ((id,value)::env) mem exp with | (o,_,_) -> o end 
-  | Frame id exp t_level env mem stack ->
-    match resume stack value with
+  | Frame (Just id) exp t_level env mem Top -> 
+    match interp_main mode t_level ((id,value)::env) mem exp with | (o,_,_) -> o end 
+  | Frame Nothing exp t_level env mem Top ->
+    match interp_main mode t_level env mem exp with | (o,_,_) -> o end
+  | Frame (Just id) exp t_level env mem stack ->
+    match resume mode stack value with
     | Value v tag -> 
-      match interp_main t_level ((id,v)::env) mem exp with | (o,_,_) -> o end 
-    | Action action stack -> Action action (Frame id exp t_level env mem stack)
+      match interp_main mode t_level ((id,v)::env) mem exp with | (o,_,_) -> o end 
+    | Action action stack -> Action action (Frame (Just id) exp t_level env mem stack)
     | Error l s -> Error l s
     end  
+  | Frame Nothing exp t_level env mem stack ->
+    match resume mode stack value with
+    | Value v tag -> 
+      match interp_main mode t_level env mem exp with | (o,_,_) -> o end 
+    | Action action stack -> Action action (Frame Nothing exp t_level env mem stack)
+    | Error l s -> Error l s
+    end  
+
   end
 

@@ -25,7 +25,7 @@ type outcome =
 | Done
 | Error of string
 
-val build_context : Interp.defs -> context
+val build_context : Interp.defs Interp.tannot -> context
 val initial_instruction_state : context -> string -> value -> instruction_state
 
 type interp_mode = <| eager_eval : bool |>
@@ -33,3 +33,20 @@ val interp : instruction_state -> interp_mode -> outcome
 
 val interp_exhaustive : instruction_state -> list outcome (*not sure what event was ment to be*)
 
+val intern_value : value -> Interp.value
+val extern_value : Interp.value -> value
+
+let build_context defs = Interp.to_top_env defs
+
+let intern_value v = match v with
+  | Bitvector bs -> Interp.V_vector 0 true (List.map (fun | 0 -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero Interp_ast.Unknown)) 
+							  | _ -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_one Interp_ast.Unknown))) bs)
+  | Unknown -> Interp.V_unknown
+
+let extern_value v = match v with
+  | Interp.V_vector _ true bits -> Bitvector (List.map (fun | Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero _) -> 0
+							    | _ -> 1) bits)
+  | _ -> Unknown
+
+let initial_instruction_state top_level main arg = 
+  Interp.Frame Nothing (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) [ intern_value arg ]) (Interp_ast.Unknown, Nothing)) top_level [] Interp.emem

@@ -73,7 +73,7 @@ let rec env_to_string = function
 
 let rec stack_to_string = function
   | Top -> "Top"
-  | Frame(id,exp,t_level,env,mem,s) ->
+  | Frame(Some id,exp,t_level,env,mem,s) ->
     sprintf "(Frame of %s, e, (%s), m, %s)" (id_to_string id) (env_to_string env) (stack_to_string s)
 ;;  
 
@@ -216,12 +216,12 @@ let run
       (*debugf "%s: suspended on action %s, with stack %s\n" name (act_to_string a) (stack_to_string s);*)
       let return, env' = perform_action env a in
       debugf "%s: action returned %s\n" name (val_to_string return);
-      loop env' (resume s return)
+      loop env' (resume {eager_eval = true} s return)
   | Error(l, e) -> debugf "%s: %s: error: %s\n" name (loc_to_string l) e; false, env in
   debugf "%s: starting\n" name;
   try
     Printexc.record_backtrace true;
-    loop (reg, mem) (interp test entry)
+    loop (reg, mem) (interp {eager_eval = true} test entry)
   with e ->
     let trace = Printexc.get_backtrace () in
     debugf "%s: interpretor error %s\n%s\n" name (Printexc.to_string e) trace;
