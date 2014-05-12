@@ -386,6 +386,7 @@ exp_typ:
    | TwoStarStar nexp_typ
      { tloc (ATyp_exp($2)) }
 
+/* this is wrong - for instance, 2** 3 + 5 is parsed as 2** (3+5) */
 nexp_typ:
    | exp_typ
      { $1 }

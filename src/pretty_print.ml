@@ -255,6 +255,9 @@ and pp_exp ppf (E_aux(e,(_,annot))) =
   | E_case(exp,pexps) -> fprintf ppf "@[<0>%a %a %a %a %a@]" kwd "switch " pp_exp exp kwd "{" (list_pp pp_case pp_case) pexps kwd "}"
   | E_let(leb,exp) -> fprintf ppf "@[<0>%a@ %a@ %a@]" pp_let leb kwd "in" pp_exp exp
   | E_assign(lexp,exp) -> fprintf ppf "@[<0>%a%a%a@]" pp_lexp lexp kwd " := " pp_exp exp
+  (* XXX missing cases *)
+  | E_internal_cast ((_, Overload (_, _)), _) | E_internal_exp _ -> assert false
+
 
 and pp_semi_exp ppf e = fprintf ppf "@[<1>%a%a@]" pp_exp e kwd ";"
 
@@ -603,6 +606,8 @@ let pp_format_annot = function
   | NoTyp -> "Nothing"
   | Base((_,t),tag,nes,efct) -> 
     "(Just (" ^ pp_format_t t ^ ", " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^ pp_format_e efct ^ "))"
+  (* XXX missing case *)
+  | Overload _ -> assert false
 
 let pp_annot ppf ant = base ppf (pp_format_annot ant)
 
@@ -689,6 +694,8 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
       fprintf ppf "@[<0>(E_aux (%a %a [%a]) (%a, %a))@]" kwd "E_case" pp_lem_exp exp (list_pp pp_semi_lem_case pp_lem_case) pexps pp_lem_l l pp_annot annot
     | E_let(leb,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_let" pp_lem_let leb pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assign(lexp,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_assign" pp_lem_lexp lexp pp_lem_exp exp pp_lem_l l pp_annot annot
+  (* XXX missing cases *)
+  | E_internal_cast ((_, Overload (_, _)), _) | E_internal_exp _ -> assert false
   in
   print_e ppf e
 
