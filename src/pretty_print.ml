@@ -821,3 +821,180 @@ let pp_lem_def ppf d =
 
 let pp_lem_defs ppf (Defs(defs)) =
   fprintf ppf "Defs [@[%a@]]@\n" (list_pp pp_lem_def pp_lem_def) defs
+
+
+(** PPrint based source-to-source pretty-printer *)
+
+open PPrint
+
+let kwd s = string s
+let base s = string s
+
+let doc_id (Id_aux(i,_)) =
+  match i with
+  | Id(i) -> string i
+  | DeIid(x) -> string "(deinfix " ^/^ string x ^/^ string ")"
+
+let doc_var (Kid_aux(Var v,_)) = string v
+
+let doc_int i = string (string_of_int i)
+
+let doc_bkind (BK_aux(k,_)) =
+  string (match k with
+  | BK_type -> "Type"
+  | BK_nat -> "Nat"
+  | BK_order -> "Order"
+  | BK_effect -> "Effect")
+
+(* XXX *)
+let blanks op = (blank 1) ^^ op ^^ (blank 1)
+let arrow = string "->"
+let doc_op symb a b = infix 2 1 symb a b
+let doc_unop symb a = prefix 2 1 symb a
+
+let doc_kind (K_aux(K_kind(klst),_)) =
+  separate_map (blanks arrow) doc_bkind klst
+
+let doc_effect (BE_aux (e,_)) =
+  string (match e with
+  | BE_rreg -> "rreg"
+  | BE_wreg -> "wreg"
+  | BE_rmem -> "rmem"
+  | BE_wmem -> "wmem"
+  | BE_undef -> "undef"
+  | BE_unspec -> "unspec"
+  | BE_nondet -> "nondet")
+
+let doc_effects (Effect_aux(e,_)) =
+  match e with
+  | Effect_var v -> doc_var v
+  | Effect_set [] -> string "pure"
+  | Effect_set s -> braces (separate_map comma doc_effect s)
+
+let doc_ord (Ord_aux(o,_)) =
+  match o with
+  | Ord_var v -> doc_var v
+  | Ord_inc -> string "inc"
+  | Ord_dec -> string "dec"
+
+let rec doc_typ ty =
+  (* following the structure of parser for precedence *)
+  let rec typ ty = fn_typ ty
+  and fn_typ ((Typ_aux (t, _)) as ty) = match t with
+  | Typ_fn(arg,ret,efct) ->
+      separate (blank 1) [tup_typ arg; arrow; fn_typ ret; string "effect"; doc_effects efct]
+  | _ -> tup_typ ty
+  and tup_typ ((Typ_aux (t, _)) as ty) = match t with
+  | Typ_tup typs -> parens (separate_map (blanks star) app_typ typs)
+  | _ -> app_typ ty
+  and app_typ ((Typ_aux (t, _)) as ty) = match t with
+  | Typ_app(id,args) -> (doc_id id) ^^ (angles (separate_map comma doc_typ_arg args))
+  | _ -> atomic_typ ty (* for simplicity, skip vec_typ - which is only sugar *)
+  and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
+  | Typ_id id  -> doc_id id
+  | Typ_var v  -> doc_var v
+  | Typ_wild -> underscore
+  | Typ_app _ | Typ_tup _ | Typ_fn _ ->
+      (* exhaustiveness matters here to avoid infinite loops
+       * if we add a new Typ constructor *)
+      group (parens (typ ty))
+  and doc_typ_arg (Typ_arg_aux(t,_)) = match t with
+  (* Be careful here because typ_arg is implemented as nexp in the
+   * parser - in practice falling through app_typ after all the proper nexp
+   * cases; so Typ_arg_typ has the same precedence as a Typ_app *)
+  | Typ_arg_typ t -> app_typ t
+  | Typ_arg_nexp n -> doc_nexp n
+  | Typ_arg_order o -> doc_ord o
+  | Typ_arg_effect e -> doc_effects e
+  in typ ty
+and doc_nexp ne =
+  (* same trick to handle precedence *)
+  let rec nexp ne = sum_typ ne
+  and sum_typ ((Nexp_aux(n,_)) as ne) = match n with
+  | Nexp_sum(n1,n2) -> doc_op plus (sum_typ n1) (star_typ n2)
+  | _ -> star_typ ne
+  and star_typ ((Nexp_aux(n,_)) as ne) = match n with
+  | Nexp_times(n1,n2) -> doc_op star (star_typ n1) (exp_typ n2)
+  | _ -> exp_typ ne
+  and exp_typ ((Nexp_aux(n,_)) as ne) = match n with
+  | Nexp_exp n1 -> doc_unop (string "2**") (neg_typ n1)
+  | _ -> neg_typ ne
+  and neg_typ ((Nexp_aux(n,_)) as ne) = match n with
+  (* this is not valid Sail, only an internal representation *)
+  | Nexp_neg n1 -> doc_unop minus (atomic_typ n1)
+  | _ -> atomic_typ ne
+  and atomic_typ ((Nexp_aux(n,_)) as ne) = match n with
+  | Nexp_var v -> doc_var v
+  | Nexp_constant i -> doc_int i
+  | Nexp_neg _ | Nexp_exp _ | Nexp_times _ | Nexp_sum _ ->
+      group (parens (nexp ne))
+  in nexp ne
+
+let doc_nexp_constraint (NC_aux(nc,_)) =
+  match nc with
+  | NC_fixed(n1,n2) -> doc_op equals (doc_nexp n1) (doc_nexp n2)
+  | NC_bounded_ge(n1,n2) -> doc_op (string ">=") (doc_nexp n1) (doc_nexp n2)
+  | NC_bounded_le(n1,n2) -> doc_op (string "<=") (doc_nexp n1) (doc_nexp n2)
+  | NC_nat_set_bounded(v,bounds) ->
+      (doc_var v) ^/^ (string "In") ^^
+      (braces (separate_map comma doc_int bounds))
+
+let doc_qi (QI_aux(qi,_)) =
+  match qi with
+  | QI_const n_const -> doc_nexp_constraint n_const
+  | QI_id(KOpt_aux(ki,_)) ->
+    match ki with
+    | KOpt_none v -> doc_var v
+    | KOpt_kind(k,v) -> (doc_kind k) ^/^ (doc_var v)
+
+let doc_typquant (TypQ_aux(tq,_)) =
+  match tq with
+  | TypQ_no_forall -> empty
+  | TypQ_tq(qlist) ->
+    string "forall" ^/^
+    (separate_map comma doc_qi qlist) ^^
+    dot
+
+let doc_typscm (TypSchm_aux(TypSchm_ts(tq,t),_)) =
+  (doc_typquant tq) ^^ (doc_typ t)
+
+let doc_lit (L_aux(l,_)) =
+  utf8string (match l with
+  | L_unit  -> "()"
+  | L_zero  -> "0"
+  | L_one   -> "1"
+  | L_true  -> "true"
+  | L_false -> "false"
+  | L_num i -> string_of_int i
+  | L_hex n -> "0x" ^ n
+  | L_bin n -> "0b" ^ n
+  | L_undef -> "undefined"
+  | L_string s -> "\"" ^ s ^ "\"")
+
+let doc_pat pa =
+  let rec pat pa = pat_colons pa
+  and pat_colons ((P_aux(p,l)) as pa) = match p with
+  | P_vector_concat pats  -> separate_map colon atomic_pat pats
+  | _ -> app_pat pa
+  and app_pat ((P_aux(p,l)) as pa) = match p with
+  | P_app(id, ((_ :: _) as pats)) -> doc_id id ^^ parens (separate_map comma atomic_pat pats)
+  | _ -> atomic_pat pa
+  and atomic_pat ((P_aux(p,l)) as pa) = match p with
+  | P_lit lit  -> doc_lit lit
+  | P_wild -> underscore
+  | P_id(id) -> doc_id id
+  | P_as(p,id) -> parens (pat p ^/^ string "as" ^/^ doc_id id)
+  | P_typ(typ,p) -> parens (doc_typ typ) ^/^ pat p
+  | P_app(id,[]) -> doc_id id
+  | P_record(fpats,_) -> braces (separate_map semi fpat fpats)
+  | P_vector pats  -> brackets (separate_map semi atomic_pat pats)
+  | P_vector_indexed ipats  -> brackets (separate_map comma npat ipats)
+  | P_tup pats  -> braces (separate_map comma atomic_pat pats)
+  | P_list pats  ->
+      enclose (string "[||") (string "||]")
+        (separate_map semi atomic_pat pats)
+  | P_app(_, _ :: _) | P_vector_concat _ ->
+      group (parens (pat pa))
+  and fpat (FP_aux(FP_Fpat(id,fpat),_)) = doc_op equals (doc_id id) (pat fpat)
+  and npat (i,p) = doc_op equals (doc_int i) (pat p)
+  in pat pa
