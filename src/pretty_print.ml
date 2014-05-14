@@ -236,7 +236,7 @@ and pp_exp ppf (E_aux(e,(_,annot))) =
     fprintf ppf "@[<0> %a %a (%a %a %a %a %a %a %a %a)@ @[<1>%a@]@]" 
       kwd "foreach " pp_id id kwd "from " pp_exp exp1 kwd " to " pp_exp exp2 kwd "by " pp_exp exp3 kwd "in" pp_ord order pp_exp exp4
   | E_vector(exps) -> fprintf ppf "@[<0>%a%a%a@]" kwd "[" (list_pp pp_comma_exp pp_exp) exps kwd "]"
-  | E_vector_indexed(iexps) -> 
+  | E_vector_indexed(iexps,default) -> 
     let iformat ppf (i,e) = fprintf ppf "@[<1>%i%a %a%a@]" i kwd " = " pp_exp e kwd "," in
     let lformat ppf (i,e) = fprintf ppf "@[<1>%i%a %a@]" i kwd " = " pp_exp e in
     fprintf ppf "@[<0> %a%a%a@]" kwd "[" (list_pp iformat lformat) iexps kwd "]"
@@ -666,7 +666,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
       fprintf ppf "@[<0>(E_aux (%a %a %a %a %a %a @ @[<1> %a @]) (%a, %a))@]" 
 	kwd "E_for" pp_lem_id id pp_lem_exp exp1 pp_lem_exp exp2 pp_lem_exp exp3 pp_lem_ord order pp_lem_exp exp4 pp_lem_l l pp_annot annot
     | E_vector(exps) -> fprintf ppf "@[<0>(E_aux (%a [%a]) (%a, %a))@]" kwd "E_vector" (list_pp pp_semi_lem_exp pp_lem_exp) exps pp_lem_l l pp_annot annot
-    | E_vector_indexed(iexps) -> 
+    | E_vector_indexed(iexps,default) -> (*TODO print out default when it is an nonempty*) 
       let iformat ppf (i,e) = fprintf ppf "@[<1>(%i %a %a) %a@]" i kwd ", " pp_lem_exp e kwd ";" in
       let lformat ppf (i,e) = fprintf ppf "@[<1>(%i %a %a) @]" i kwd ", " pp_lem_exp e in
       fprintf ppf "@[<0>(E_aux (%a [%a]) (%a, %a))@]" kwd "E_vector_indexed" (list_pp iformat lformat) iexps pp_lem_l l pp_annot annot

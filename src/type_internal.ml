@@ -1017,7 +1017,7 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
   | Tid("bit"),Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]) ->
     let cs = [Eq(co,r1,{nexp = Nconst 1})] in
     let t2' = {t = Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp {nexp=Nconst 1};TA_ord o;TA_typ {t=Tid "bit"}])} in
-    (t2',cs,E_aux(E_vector_indexed [(i,e)],(l,Base(([],t2),Emp_local,cs,pure_e))))
+    (t2',cs,E_aux(E_vector_indexed([(i,e)],Def_val_aux(Def_val_empty,(l,NoTyp))) ,(l,Base(([],t2),Emp_local,cs,pure_e))))
   | Tapp("vector",[TA_nexp ({nexp=Nconst i} as b1);TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]),Tid("bit") ->
     let cs = [Eq(co,r1,{nexp = Nconst 1})] in
     (t2,cs,E_aux((E_vector_access (e,(E_aux(E_lit(L_aux(L_num i,l)),
