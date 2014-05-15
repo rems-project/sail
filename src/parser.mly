@@ -1011,7 +1011,10 @@ typquant:
 
 name_sect:
   | Lsquare Id Eq String Rsquare
-    { Name_sect_aux(Name_sect_some($4), loc ()) }
+    {
+      if $2 <> "name" then
+       raise (Parse_error_locn ((loc ()),"Unexpected id \""^$2^"\" in name_sect (should be \"name\")"));
+      Name_sect_aux(Name_sect_some($4), loc ()) }
 
 c_def_body:
   | typ id
