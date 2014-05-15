@@ -1052,7 +1052,7 @@ and doc_exp e =
   and starstar_exp ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id "**",_) as op),r) ->
       doc_op (doc_id op) (starstar_exp l) (app_exp r)
-  | _ -> star_exp expr
+  | _ -> app_exp expr
   and app_exp ((E_aux(e,_)) as expr) = match e with
   | E_app(f,args) ->
       doc_unop (doc_id f) (parens (separate_map comma exp args))
