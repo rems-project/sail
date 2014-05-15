@@ -999,3 +999,155 @@ let doc_pat pa =
   and fpat (FP_aux(FP_Fpat(id,fpat),_)) = doc_op equals (doc_id id) (pat fpat)
   and npat (i,p) = doc_op equals (doc_int i) (pat p)
   in pat pa
+
+let rec doc_let (LB_aux(lb,_)) =
+  match lb with
+  | LB_val_explicit(ts,pat,exp) ->
+      string "let" ^/^ doc_typscm ts ^/^ doc_pat pat ^/^ equals ^/^ doc_exp exp
+  | LB_val_implicit(pat,exp) ->
+      string "let" ^/^ doc_pat pat ^/^ equals ^/^ doc_exp exp
+
+and doc_exp e =
+  let rec exp e = or_exp e
+  and or_exp ((E_aux(e,_)) as expr) = match e with
+  | E_app_infix(l,(Id_aux(Id ("|" | "||"),_) as op),r) ->
+      doc_op (doc_id op) (and_exp l) (or_exp r)
+  | _ -> and_exp expr
+  and and_exp ((E_aux(e,_)) as expr) = match e with
+  | E_app_infix(l,(Id_aux(Id ("&" | "&&"),_) as op),r) ->
+      doc_op (doc_id op) (eq_exp l) (and_exp r)
+  | _ -> eq_exp expr
+  and eq_exp ((E_aux(e,_)) as expr) = match e with
+  | E_app_infix(l,(Id_aux(Id (
+    (* XXX this is not very consistent - is the parser bogus here? *)
+      "=" | "==" | "!="
+    | ">=" | ">=_s" | ">=_u" | ">" | ">_s" | ">_u"
+    | "<=" | "<=_s" | "<" | "<_s" | "<_si" | "<_u"
+    ),_) as op),r) ->
+      doc_op (doc_id op) (eq_exp l) (at_exp r)
+  (* XXX assignment should not have the same precedence as equal etc. *)
+  | E_assign(lexp,exp) -> doc_op coloneq (doc_lexp lexp) (at_exp exp)
+  | _ -> at_exp expr
+  and at_exp ((E_aux(e,_)) as expr) = match e with
+  | E_app_infix(l,(Id_aux(Id ("@" | "^^" | "^" | "~^"),_) as op),r) ->
+      doc_op (doc_id op) (cons_exp l) (at_exp r)
+  | _ -> cons_exp expr
+  and cons_exp ((E_aux(e,_)) as expr) = match e with
+  | E_app_infix(l,(Id_aux(Id (":"),_) as op),r) ->
+      doc_op (doc_id op) (shift_exp l) (cons_exp r)
+  | E_cons(l,r) ->
+      doc_op colon (shift_exp l) (cons_exp r)
+  | _ -> shift_exp expr
+  and shift_exp ((E_aux(e,_)) as expr) = match e with
+  | E_app_infix(l,(Id_aux(Id (">>" | ">>>" | "<<" | "<<<"),_) as op),r) ->
+      doc_op (doc_id op) (shift_exp l) (plus_exp r)
+  | _ -> plus_exp expr
+  and plus_exp ((E_aux(e,_)) as expr) = match e with
+  | E_app_infix(l,(Id_aux(Id ("+" | "-"),_) as op),r) ->
+      doc_op (doc_id op) (plus_exp l) (star_exp r)
+  | _ -> star_exp expr
+  and star_exp ((E_aux(e,_)) as expr) = match e with
+  | E_app_infix(l,(Id_aux(Id (
+      "*" | "/"
+    | "div" | "quot" | "rem" | "mod"
+    | "*_s" | "*_si" | "*_u" | "*_ui"),_) as op),r) ->
+      doc_op (doc_id op) (star_exp l) (starstar_exp r)
+  | _ -> starstar_exp expr
+  and starstar_exp ((E_aux(e,_)) as expr) = match e with
+  | E_app_infix(l,(Id_aux(Id "**",_) as op),r) ->
+      doc_op (doc_id op) (starstar_exp l) (app_exp r)
+  | _ -> star_exp expr
+  and app_exp ((E_aux(e,_)) as expr) = match e with
+  | E_app(f,args) ->
+      doc_unop (doc_id f) (parens (separate_map comma exp args))
+  | _ -> vaccess_exp expr
+  and vaccess_exp ((E_aux(e,_)) as expr) = match e with
+  | E_vector_access(v,e) ->
+      atomic_exp v ^^ brackets (exp e)
+  | E_vector_subrange(v,e1,e2) ->
+      atomic_exp v ^^ brackets (exp e1 ^/^ dotdot ^/^ exp e2)
+  | _ -> field_exp expr
+  and field_exp ((E_aux(e,_)) as expr) = match e with
+  | E_field(fexp,id) -> atomic_exp fexp ^^ dot ^^ doc_id id
+  | _ -> atomic_exp expr
+  and atomic_exp ((E_aux(e,_)) as expr) = match e with
+  | E_block exps ->
+      let exps_doc = separate_map (semi ^^ (break 1)) exp exps in
+      surround 2 1 lbrace exps_doc rbrace
+  | E_id id -> doc_id id
+  | E_lit lit -> doc_lit lit
+  | E_cast(typ,e) -> parens (doc_typ typ) ^/^ atomic_exp e
+  | E_internal_cast((_,NoTyp),e) -> atomic_exp e
+  | E_internal_cast((_,Base((_,t),_,_,_)), (E_aux(_,(_,eannot)) as e)) ->
+      (match t.t,eannot with
+      (* XXX I don't understand why we can hide the internal cast here *)
+      | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_)
+          when nexp_eq n1 n2 -> atomic_exp e
+      | _ -> parens (doc_typ (t_to_typ t)) ^/^ atomic_exp e)
+  | E_tuple exps ->
+      parens (separate_map comma exp exps)
+  | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
+      (* XXX E_record is not handled by parser currently *)
+      braces (separate_map semi doc_fexp fexps)
+  | E_record_update(exp,(FES_aux(FES_Fexps(fexps,_),_))) ->
+      braces (doc_exp exp ^/^ string "with" ^/^ separate_map semi doc_fexp fexps)
+  | E_vector exps ->
+      brackets (separate_map comma exp exps)
+  | E_vector_indexed iexps ->
+      let iexp (i,e) = doc_op equals (doc_int i) (doc_exp e) in
+      brackets (separate_map comma iexp iexps)
+  | E_vector_update(v,e1,e2) ->
+      brackets (doc_exp v ^/^ string "with" ^/^ doc_op equals (atomic_exp e1) (exp e2))
+  | E_vector_update_subrange(v,e1,e2,e3) ->
+      brackets (
+        doc_exp v ^/^ string "with" ^/^
+        doc_op equals (atomic_exp e1 ^/^ colon ^/^ atomic_exp e2) (exp e3))
+  | E_list exps ->
+      squarebarbars (separate_map comma exp exps)
+  | E_case(e,pexps) ->
+      let opening = string "switch" ^/^ exp e ^/^ lbrace in
+      let cases = separate_map (semi ^^ (break 1)) doc_case pexps in
+      surround 2 1 opening cases rbrace
+  (* right_atomic_exp *)
+  | E_if(c,t,e) ->
+      string "if" ^/^ exp c ^/^
+      string "then" ^/^ exp t ^/^
+      string "else" ^/^ exp e
+  | E_for(id,exp1,exp2,exp3,order,exp4) ->
+      string "foreach" ^/^
+      parens (
+        doc_id id ^/^
+        string "from" ^/^ atomic_exp exp1 ^/^
+        string "to" ^/^ atomic_exp exp2 ^/^
+        string "by" ^/^ atomic_exp exp3 ^/^
+        string "in" ^/^ doc_ord order
+      ) ^/^
+      exp exp4
+  | E_let(leb,e) -> doc_let leb ^/^ string "in" ^/^ exp e
+  (* adding parens and loop for lower precedence *)
+  | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
+  | E_cons (_, _)|E_field (_, _)|E_assign (_, _) ->
+      group (parens (exp expr))
+  (* XXX default precedence for app_infix? *)
+  | E_app_infix(l,op,r) ->
+      failwith ("unexpected app_infix operator" ^ (pp_format_id op))
+      (* doc_op (doc_id op) (exp l) (exp r) *)
+  (* XXX missing case *)
+  | E_internal_cast ((_, Overload (_, _)), _) | E_internal_exp _ -> assert false
+  in exp e
+
+and doc_fexp (FE_aux(FE_Fexp(id,exp),_)) = doc_op equals (doc_id id) (doc_exp exp)
+
+and doc_case (Pat_aux(Pat_exp(pat,exp),_)) =
+  string "case" ^/^ doc_pat pat ^/^ arrow ^/^ doc_exp exp
+
+and doc_lexp (LEXP_aux(lexp,_)) =
+  (* XXX TODO change doc_exp to atomic_exp? *)
+  match lexp with
+  | LEXP_id id -> doc_id id
+  | LEXP_memory(id,args) -> doc_id id ^^ parens (separate_map comma doc_exp args)
+  | LEXP_cast(typ,id) -> parens (doc_typ typ) ^/^ doc_id id
+  | LEXP_vector(v,exp) -> doc_lexp v ^^ brackets (doc_exp exp)
+  | LEXP_vector_range(v,e1,e2) ->
+      doc_lexp v ^^ brackets (doc_exp e1 ^^ colon ^^ doc_exp e2)
+  | LEXP_field(v,id) -> doc_lexp v ^^ dot ^^ doc_id id
