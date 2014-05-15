@@ -868,14 +868,12 @@ let doc_effect (BE_aux (e,_)) =
   | BE_unspec -> "unspec"
   | BE_nondet -> "nondet")
 
-let doc_effects (Effect_aux(e,_)) =
-  match e with
+let doc_effects (Effect_aux(e,_)) = match e with
   | Effect_var v -> doc_var v
   | Effect_set [] -> string "pure"
   | Effect_set s -> braces (separate_map comma doc_effect s)
 
-let doc_ord (Ord_aux(o,_)) =
-  match o with
+let doc_ord (Ord_aux(o,_)) = match o with
   | Ord_var v -> doc_var v
   | Ord_inc -> string "inc"
   | Ord_dec -> string "dec"
@@ -933,8 +931,7 @@ and doc_nexp ne =
       group (parens (nexp ne))
   in nexp ne
 
-let doc_nexp_constraint (NC_aux(nc,_)) =
-  match nc with
+let doc_nexp_constraint (NC_aux(nc,_)) = match nc with
   | NC_fixed(n1,n2) -> doc_op equals (doc_nexp n1) (doc_nexp n2)
   | NC_bounded_ge(n1,n2) -> doc_op (string ">=") (doc_nexp n1) (doc_nexp n2)
   | NC_bounded_le(n1,n2) -> doc_op (string "<=") (doc_nexp n1) (doc_nexp n2)
@@ -942,21 +939,21 @@ let doc_nexp_constraint (NC_aux(nc,_)) =
       (doc_var v) ^/^ (string "In") ^^
       (braces (separate_map comma doc_int bounds))
 
-let doc_qi (QI_aux(qi,_)) =
-  match qi with
+let doc_qi (QI_aux(qi,_)) = match qi with
   | QI_const n_const -> doc_nexp_constraint n_const
   | QI_id(KOpt_aux(ki,_)) ->
     match ki with
     | KOpt_none v -> doc_var v
     | KOpt_kind(k,v) -> (doc_kind k) ^/^ (doc_var v)
 
-let doc_typquant (TypQ_aux(tq,_)) =
-  match tq with
+let doc_typquant (TypQ_aux(tq,_)) = match tq with
   | TypQ_no_forall -> empty
+  | TypQ_tq [] -> failwith "TypQ_tq with empty list"
   | TypQ_tq qlist ->
+    (* include trailing break because the caller doesn't know if tq is empty *)
     string "forall" ^/^
     (separate_map comma doc_qi qlist) ^^
-    dot
+    dot ^^ break 1
 
 let doc_typscm (TypSchm_aux(TypSchm_ts(tq,t),_)) =
   (doc_typquant tq) ^^ (doc_typ t)
@@ -1000,8 +997,7 @@ let doc_pat pa =
   and npat (i,p) = doc_op equals (doc_int i) (pat p)
   in pat pa
 
-let rec doc_let (LB_aux(lb,_)) =
-  match lb with
+let rec doc_let (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,exp) ->
       string "let" ^/^ doc_typscm ts ^/^ doc_pat pat ^/^ equals ^/^ doc_exp exp
   | LB_val_implicit(pat,exp) ->
@@ -1072,7 +1068,7 @@ and doc_exp e =
   | _ -> atomic_exp expr
   and atomic_exp ((E_aux(e,_)) as expr) = match e with
   | E_block exps ->
-      let exps_doc = separate_map (semi ^^ (break 1)) exp exps in
+      let exps_doc = separate_map (semi ^^ hardline) exp exps in
       surround 2 1 lbrace exps_doc rbrace
   | E_id id -> doc_id id
   | E_lit lit -> doc_lit lit
@@ -1151,3 +1147,107 @@ and doc_lexp (LEXP_aux(lexp,_)) =
   | LEXP_vector_range(v,e1,e2) ->
       doc_lexp v ^^ brackets (doc_exp e1 ^^ colon ^^ doc_exp e2)
   | LEXP_field(v,id) -> doc_lexp v ^^ dot ^^ doc_id id
+
+let doc_default (DT_aux(df,_)) = match df with
+  | DT_kind(bk,v) -> string "default" ^/^ doc_bkind bk ^/^ doc_var v
+  | DT_typ(ts,id) -> string "default" ^/^ doc_typscm ts ^/^ doc_id id
+
+let doc_spec (VS_aux(v,_)) = match v with
+  | VS_val_spec(ts,id) ->
+      string "val" ^/^ doc_typscm ts ^/^ doc_id id
+  | VS_extern_no_rename(ts,id) ->
+      string "val" ^/^ string "extern" ^/^ doc_typscm ts ^/^ doc_id id
+  | VS_extern_spec(ts,id,s) ->
+      string "val" ^/^ string "extern" ^/^ doc_typscm ts ^/^
+      doc_op equals (doc_id id) (squotes (string s))
+
+let doc_namescm (Name_sect_aux(ns,_)) = match ns with
+  | Name_sect_none -> empty
+  (* include leading break because the caller doesn't know if ns is
+   * empty, and trailing break already added by the following equals *)
+  | Name_sect_some s -> break 1 ^^ brackets (doc_op equals (string "name") (squotes (string s)))
+
+let rec doc_range (BF_aux(r,_)) = match r with
+  | BF_single i -> doc_int i
+  | BF_range(i1,i2) -> doc_op dotdot (doc_int i1) (doc_int i2)
+  | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
+
+let doc_typdef (TD_aux(td,_)) = match td with
+  | TD_abbrev(id,nm,typschm) ->
+      string "typedef" ^/^
+      doc_op equals (doc_id id ^^ doc_namescm nm) (doc_typscm typschm)
+  | TD_record(id,nm,typq,fs,_) ->
+      let f_pp (typ,id) = doc_typ typ ^/^ doc_id id ^^ semi in
+      let fs_doc = separate_map (break 1) f_pp fs in
+      let const = string "const" ^/^ string "struct" in
+      string "typedef" ^/^
+      doc_op equals
+        (doc_id id ^^ doc_namescm nm)
+        (const ^/^ doc_typquant typq ^^ braces fs_doc)
+  | TD_variant(id,nm,typq,ar,_) ->
+      let a_pp (Tu_aux(typ_u,_)) = match typ_u with
+      | Tu_ty_id(typ,id) -> doc_typ typ ^/^ doc_id id ^^ semi
+      | Tu_id id -> doc_id id ^^ semi in
+      let ar_doc = separate_map (break 1) a_pp ar in
+      let const = string "const" ^/^ string "union" in
+      string "typedef" ^/^
+      doc_op equals
+        (doc_id id ^^ doc_namescm nm)
+        (const ^/^ doc_typquant typq ^^ braces ar_doc)
+  | TD_enum(id,nm,enums,_) ->
+      let enums_doc = separate_map (semi ^^ break 1) doc_id enums in
+      string "typedef" ^/^
+      doc_op equals
+        (doc_id id ^^ doc_namescm nm)
+        (string "enumerate" ^/^ braces enums_doc)
+  | TD_register(id,n1,n2,rs) ->
+      let doc_rid (r,id) = doc_range r ^/^ colon ^/^ doc_id id in
+      let doc_rids = separate_map semi doc_rid rs in
+      let regs = string "register" ^/^ string "bits" in
+      string "typedef" ^/^
+      doc_op equals
+        (doc_id id)
+        (regs ^/^ brackets (doc_nexp n1 ^/^ colon ^/^ doc_nexp n2) ^/^ braces doc_rids)
+
+let doc_rec (Rec_aux(r,_)) = match r with
+  | Rec_nonrec -> empty
+  (* include trailing space because caller doesn't know if we return
+   * empty *)
+  | Rec_rec -> string "rec" ^^ break 1
+
+let doc_tannot_opt (Typ_annot_opt_aux(t,_)) = match t with
+  | Typ_annot_opt_some(tq,typ) -> doc_typquant tq ^^ doc_typ typ
+
+let doc_effects_opt (Effect_opt_aux(e,_)) =
+  string "effect" ^/^ (match e with
+  | Effect_opt_pure -> string "pure"
+  | Effect_opt_effect e -> doc_effects e)
+
+let doc_funcl (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
+  doc_op equals (doc_id id ^/^ doc_pat pat) (doc_exp exp)
+
+let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =
+  match fcls with
+  | [] -> failwith "FD_function with empty function list"
+  | _ ->
+      let header =
+        string "function" ^/^ doc_rec r ^^
+        doc_tannot_opt typa ^/^ doc_effects_opt efa in
+      let sep = hardline ^^ string "and" in
+      surround 2 1 header (separate_map sep doc_funcl fcls) empty
+
+let doc_dec (DEC_aux(DEC_reg(typ,id),_)) =
+  string "register" ^/^ doc_typ typ ^/^ doc_id id
+
+let doc_def = function
+  | DEF_default df -> doc_default df
+  | DEF_spec v_spec -> doc_spec v_spec
+  | DEF_type t_def -> doc_typdef t_def
+  | DEF_fundef f_def -> doc_fundef f_def
+  | DEF_val lbind -> doc_let lbind
+  | DEF_reg_dec dec -> doc_dec dec
+  | DEF_scattered _ -> (* XXX *)
+      raise (Reporting_basic.err_unreachable Parse_ast.Unknown "initial_check didn't remove all scattered Defs")
+
+let doc_defs (Defs(defs)) =
+  separate_map hardline doc_def defs
