@@ -827,13 +827,10 @@ let pp_lem_defs ppf (Defs(defs)) =
 
 open PPrint
 
-let kwd s = string s
-let base s = string s
-
 let doc_id (Id_aux(i,_)) =
   match i with
-  | Id(i) -> string i
-  | DeIid(x) -> string "(deinfix " ^/^ string x ^/^ string ")"
+  | Id i -> string i
+  | DeIid x -> string "(deinfix " ^/^ string x ^/^ string ")"
 
 let doc_var (Kid_aux(Var v,_)) = string v
 
@@ -848,9 +845,15 @@ let doc_bkind (BK_aux(k,_)) =
 
 (* XXX *)
 let blanks op = (blank 1) ^^ op ^^ (blank 1)
-let arrow = string "->"
 let doc_op symb a b = infix 2 1 symb a b
 let doc_unop symb a = prefix 2 1 symb a
+
+let arrow = string "->"
+let dotdot = string ".."
+let coloneq = string ":="
+let lsquarebarbar = string "[||"
+let rsquarebarbar = string "||]"
+let squarebarbars = enclose lsquarebarbar rsquarebarbar
 
 let doc_kind (K_aux(K_kind(klst),_)) =
   separate_map (blanks arrow) doc_bkind klst
@@ -950,7 +953,7 @@ let doc_qi (QI_aux(qi,_)) =
 let doc_typquant (TypQ_aux(tq,_)) =
   match tq with
   | TypQ_no_forall -> empty
-  | TypQ_tq(qlist) ->
+  | TypQ_tq qlist ->
     string "forall" ^/^
     (separate_map comma doc_qi qlist) ^^
     dot
@@ -982,7 +985,7 @@ let doc_pat pa =
   and atomic_pat ((P_aux(p,l)) as pa) = match p with
   | P_lit lit  -> doc_lit lit
   | P_wild -> underscore
-  | P_id(id) -> doc_id id
+  | P_id id -> doc_id id
   | P_as(p,id) -> parens (pat p ^/^ string "as" ^/^ doc_id id)
   | P_typ(typ,p) -> parens (doc_typ typ) ^/^ pat p
   | P_app(id,[]) -> doc_id id
@@ -990,9 +993,7 @@ let doc_pat pa =
   | P_vector pats  -> brackets (separate_map semi atomic_pat pats)
   | P_vector_indexed ipats  -> brackets (separate_map comma npat ipats)
   | P_tup pats  -> braces (separate_map comma atomic_pat pats)
-  | P_list pats  ->
-      enclose (string "[||") (string "||]")
-        (separate_map semi atomic_pat pats)
+  | P_list pats  -> squarebarbars (separate_map semi atomic_pat pats)
   | P_app(_, _ :: _) | P_vector_concat _ ->
       group (parens (pat pa))
   and fpat (FP_aux(FP_Fpat(id,fpat),_)) = doc_op equals (doc_id id) (pat fpat)
