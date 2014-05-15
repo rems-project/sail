@@ -1085,18 +1085,18 @@ and doc_exp e =
   | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
       (* XXX E_record is not handled by parser currently *)
       braces (separate_map semi doc_fexp fexps)
-  | E_record_update(exp,(FES_aux(FES_Fexps(fexps,_),_))) ->
-      braces (doc_exp exp ^/^ string "with" ^/^ separate_map semi doc_fexp fexps)
+  | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
+      braces (exp e ^/^ string "with" ^/^ separate_map semi doc_fexp fexps)
   | E_vector exps ->
       brackets (separate_map comma exp exps)
   | E_vector_indexed iexps ->
-      let iexp (i,e) = doc_op equals (doc_int i) (doc_exp e) in
+      let iexp (i,e) = doc_op equals (doc_int i) (exp e) in
       brackets (separate_map comma iexp iexps)
   | E_vector_update(v,e1,e2) ->
-      brackets (doc_exp v ^/^ string "with" ^/^ doc_op equals (atomic_exp e1) (exp e2))
+      brackets (exp v ^/^ string "with" ^/^ doc_op equals (atomic_exp e1) (exp e2))
   | E_vector_update_subrange(v,e1,e2,e3) ->
       brackets (
-        doc_exp v ^/^ string "with" ^/^
+        exp v ^/^ string "with" ^/^
         doc_op equals (atomic_exp e1 ^/^ colon ^/^ atomic_exp e2) (exp e3))
   | E_list exps ->
       squarebarbars (separate_map comma exp exps)
