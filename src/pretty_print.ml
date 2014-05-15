@@ -1286,6 +1286,7 @@ let doc_defs (Defs(defs)) =
   separate_map hardline doc_def defs
 
 let print ?(len=80) channel doc = ToChannel.pretty 1. len channel doc
+let to_buf ?(len=80) buf doc = ToBuffer.pretty 1. len buf doc
 
 let pp_defs f d = print f (doc_defs d)
-let pp_exp f e = print f (doc_exp e)
+let pp_exp b e = to_buf b (doc_exp e)
