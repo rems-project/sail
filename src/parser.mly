@@ -662,7 +662,11 @@ star_right_atomic_exp:
     { eloc (E_app_infix($1,Id_aux(Id("mod"), locn 2 2), $3)) }
   | star_exp StarUnderS starstar_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp StarUnderSi starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | star_exp StarUnderU starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp StarUnderUi starstar_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
 
 plus_exp:
@@ -719,6 +723,8 @@ cons_right_atomic_exp:
     { $1 }
   | shift_exp ColonColon cons_right_atomic_exp
     { eloc (E_cons($1,$3)) }
+  | shift_exp Colon cons_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id(":"), locn 2 2), $3)) }
 
 at_exp:
   | cons_exp
@@ -740,6 +746,8 @@ at_right_atomic_exp:
   | cons_exp CarrotCarrot at_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | cons_exp Carrot at_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | cons_exp TildeCarrot at_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
 
 eq_exp:

@@ -218,6 +218,7 @@ rule token = parse
   | "*_u"				{ (StarUnderU(r"*_u")) }
   | "*_ui"				{ (StarUnderUi(r"*_ui")) }
   | "2^"				{ (TwoCarrot(r"2^")) }
+  | "2**"				{ TwoStarStar }
 
 
   | "(*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }
