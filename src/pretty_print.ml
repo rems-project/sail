@@ -1251,3 +1251,9 @@ let doc_def = function
 
 let doc_defs (Defs(defs)) =
   separate_map hardline doc_def defs
+
+let print ?(len=80) formatter doc =
+  ToFormatter.pretty 1.0 len formatter doc
+
+let pp_defs f d = print f (doc_defs d)
+let pp_exp f e = print f (doc_exp e)
