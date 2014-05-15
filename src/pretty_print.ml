@@ -1122,11 +1122,28 @@ and doc_exp e =
   | E_let(leb,e) -> doc_let leb ^/^ string "in" ^/^ exp e
   (* adding parens and loop for lower precedence *)
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
-  | E_cons (_, _)|E_field (_, _)|E_assign (_, _) ->
+  | E_cons (_, _)|E_field (_, _)|E_assign (_, _)
+  | E_app_infix (_,
+    (* for every app_infix operator caught at a higher precedence,
+     * we need to wrap around with parens *)
+    (Id_aux(Id("|" | "||"
+    | "&" | "&&"
+    | "=" | "==" | "!="
+    | ">=" | ">=_s" | ">=_u" | ">" | ">_s" | ">_u"
+    | "<=" | "<=_s" | "<" | "<_s" | "<_si" | "<_u"
+    | "@" | "^^" | "^" | "~^"
+    | ":"
+    | ">>" | ">>>" | "<<" | "<<<"
+    | "+" | "-"
+    | "*" | "/"
+    | "div" | "quot" | "rem" | "mod"
+    | "*_s" | "*_si" | "*_u" | "*_ui"
+    | "**"), _))
+    , _) ->
       group (parens (exp expr))
   (* XXX default precedence for app_infix? *)
   | E_app_infix(l,op,r) ->
-      failwith ("unexpected app_infix operator" ^ (pp_format_id op))
+      failwith ("unexpected app_infix operator " ^ (pp_format_id op))
       (* doc_op (doc_id op) (exp l) (exp r) *)
   (* XXX missing case *)
   | E_internal_cast ((_, Overload (_, _)), _) | E_internal_exp _ -> assert false
