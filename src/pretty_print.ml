@@ -1272,7 +1272,7 @@ let doc_scattered (SD_aux (sdef, _)) = match sdef with
      string "member" ^/^ doc_type_union tu
  | SD_scattered_end id -> string "end" ^/^ doc_id id
 
-let doc_def = function
+let doc_def def = group (match def with
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def
@@ -1280,6 +1280,7 @@ let doc_def = function
   | DEF_val lbind -> doc_let lbind
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
+  )
 
 let doc_defs (Defs(defs)) =
   separate_map hardline doc_def defs
