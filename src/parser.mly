@@ -533,6 +533,9 @@ atomic_exp:
     { eloc (E_cast($2,$4)) }
   | Lparen comma_exps Rparen
     { eloc (E_tuple($2)) }
+  /* XXX creates many conflicts
+  | Lcurly semi_exps Rcurly
+    { eloc (E_record($2)) }  */
   | Lcurly exp With semi_exps Rcurly
     { eloc (E_record_update($2,$4)) } 
   | Lsquare Rsquare
@@ -569,6 +572,7 @@ app_exp:
     { $1 }
   | id Lparen Rparen
     { eloc (E_app($1, [eloc (E_lit (lloc L_unit))])) }
+  /* we wrap into a tuple here, but this is unwrapped in initial_check.ml */
   | id Lparen exp Rparen
     { eloc (E_app($1,[ E_aux((E_tuple [$3]),locn 3 3)])) }
   | id Lparen comma_exps Rparen
@@ -615,6 +619,9 @@ starstar_exp:
   | starstar_exp StarStar app_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
 
+/* this is where we diverge from the non-right_atomic path;
+   here we go directly to right_atomic whereas the other one
+   goes through app_exp, vaccess_exp and field_exp too. */
 starstar_right_atomic_exp:
   | right_atomic_exp
     { $1 }
@@ -753,6 +760,7 @@ at_right_atomic_exp:
 eq_exp:
   | at_exp
     { $1 }
+  /* XXX check for consistency */
   | eq_exp Eq at_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp EqEq at_exp
@@ -783,6 +791,8 @@ eq_exp:
     { eloc (E_app_infix ($1,Id_aux(Id($2), locn 2 2), $3)) }
   | eq_exp LtUnderU at_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  /* XXX assignement should not have the same precedence as equal,
+  otherwise a := b > c requires extra parens... */
   | eq_exp ColonEq at_exp
     { eloc (E_assign($1,$3)) }
 
