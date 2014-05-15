@@ -1189,6 +1189,10 @@ let rec doc_range (BF_aux(r,_)) = match r with
   | BF_range(i1,i2) -> doc_op dotdot (doc_int i1) (doc_int i2)
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
 
+let doc_type_union (Tu_aux(typ_u,_)) = match typ_u with
+  | Tu_ty_id(typ,id) -> doc_typ typ ^/^ doc_id id ^^ semi
+  | Tu_id id -> doc_id id ^^ semi
+
 let doc_typdef (TD_aux(td,_)) = match td with
   | TD_abbrev(id,nm,typschm) ->
       string "typedef" ^/^
@@ -1202,10 +1206,7 @@ let doc_typdef (TD_aux(td,_)) = match td with
         (doc_id id ^^ doc_namescm nm)
         (const ^/^ doc_typquant typq ^^ braces fs_doc)
   | TD_variant(id,nm,typq,ar,_) ->
-      let a_pp (Tu_aux(typ_u,_)) = match typ_u with
-      | Tu_ty_id(typ,id) -> doc_typ typ ^/^ doc_id id ^^ semi
-      | Tu_id id -> doc_id id ^^ semi in
-      let ar_doc = separate_map (break 1) a_pp ar in
+      let ar_doc = separate_map (break 1) doc_type_union ar in
       let const = string "const" ^/^ string "union" in
       string "typedef" ^/^
       doc_op equals
