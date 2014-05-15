@@ -1250,7 +1250,7 @@ let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =
       let header =
         string "function" ^/^ doc_rec r ^^
         doc_tannot_opt typa ^/^ doc_effects_opt efa in
-      let sep = hardline ^^ string "and" in
+      let sep = hardline ^^ string "and" ^^ space in
       surround 2 1 header (separate_map sep doc_funcl fcls) empty
 
 let doc_dec (DEC_aux(DEC_reg(typ,id),_)) =
