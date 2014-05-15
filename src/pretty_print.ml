@@ -1257,6 +1257,21 @@ let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =
 let doc_dec (DEC_aux(DEC_reg(typ,id),_)) =
   string "register" ^/^ doc_typ typ ^/^ doc_id id
 
+let doc_scattered (SD_aux (sdef, _)) = match sdef with
+ | SD_scattered_function (r, typa, efa, id) ->
+     string "scattered" ^/^ string "function" ^/^ doc_rec r ^^
+     doc_tannot_opt typa ^/^ doc_effects_opt efa ^/^
+     doc_id id
+ | SD_scattered_variant (id, ns, tq) ->
+     string "scattered" ^/^ string "typedef" ^/^
+     doc_op equals (doc_id id ^^ doc_namescm ns) (doc_typquant tq)
+ | SD_scattered_funcl funcl ->
+     string "function" ^/^ string "clause" ^/^ doc_funcl funcl
+ | SD_scattered_unioncl (id, tu) ->
+     string "union" ^/^ doc_id id ^/^
+     string "member" ^/^ doc_type_union tu
+ | SD_scattered_end id -> string "end" ^/^ doc_id id
+
 let doc_def = function
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
@@ -1264,8 +1279,7 @@ let doc_def = function
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_val lbind -> doc_let lbind
   | DEF_reg_dec dec -> doc_dec dec
-  | DEF_scattered _ -> (* XXX *)
-      raise (Reporting_basic.err_unreachable Parse_ast.Unknown "initial_check didn't remove all scattered Defs")
+  | DEF_scattered sdef -> doc_scattered sdef
 
 let doc_defs (Defs(defs)) =
   separate_map hardline doc_def defs
