@@ -399,7 +399,7 @@ let main() =
        let chkedasts = (List.map (fun (f,(ast,kenv)) -> (f,check_ast ast kenv)) asts) in
        begin 
 	 (if !(opt_print_verbose)
-	  then ((Pretty_print.pp_defs Format.std_formatter) (snd (List.hd chkedasts)))
+	  then ((Pretty_print.pp_defs stdout) (snd (List.hd chkedasts)))
 	  else ());
 	 (if !(opt_print_lem)
 	  then output "" Lem_ast_out chkedasts
