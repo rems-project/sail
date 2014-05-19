@@ -367,6 +367,7 @@ app_num_typ:
   | Num
      { tloc (ATyp_constant $1) }
 
+/* XXX this part of the parser makes absolutely no sense to me */
 star_typ_list:
   | app_num_typ
     { [$1] }
@@ -378,6 +379,8 @@ star_typ:
     { match $1 with
         | [] -> assert false
         | [t] -> t
+        (* XXX why is ATyp_tup star-separated here, but comma-separated
+        below? *)
         | ts -> tloc (ATyp_tup(ts)) }
 
 exp_typ:
@@ -386,7 +389,7 @@ exp_typ:
    | TwoStarStar nexp_typ
      { tloc (ATyp_exp($2)) }
 
-/* this is wrong - for instance, 2** 3 + 5 is parsed as 2** (3+5) */
+/* XXX this is wrong - for instance, 2** 3 + 5 is parsed as 2** (3+5) */
 nexp_typ:
    | exp_typ
      { $1 }
@@ -937,7 +940,7 @@ fun_def:
     { funloc (FD_function(mk_rec 2,mk_tannot (mk_typqn ()) $3 3 3, mk_eannotn (), $4)) }
   | Function_ Rec funcl_ands
     { funloc (FD_function(mk_rec 2, mk_tannotn (), mk_eannotn (), $3)) }
-  | Function_ typquant atomic_typ Effect effect_typ funcl_ands
+  | Function_ typquant typ Effect effect_typ funcl_ands
     { funloc (FD_function(mk_recn (), mk_tannot $2 $3 2 3, mk_eannot $5 5, $6)) }
   | Function_ typquant typ funcl_ands
     { funloc (FD_function(mk_recn (), mk_tannot $2 $3 2 2, mk_eannotn (), $4)) }
