@@ -830,7 +830,10 @@ open PPrint
 let doc_id (Id_aux(i,_)) =
   match i with
   | Id i -> string i
-  | DeIid x -> parens (separate space [string "deinfix"; string x])
+  | DeIid x ->
+      (* add an extra space through empty to avoid a closing-comment
+       * token in case of x ending with star. *)
+      parens (separate space [string "deinfix"; string x; empty])
 
 let doc_var (Kid_aux(Var v,_)) = string v
 
@@ -891,7 +894,9 @@ let rec doc_typ ty =
   | Typ_tup typs -> parens (separate_map (spaces star) app_typ typs)
   | _ -> app_typ ty
   and app_typ ((Typ_aux (t, _)) as ty) = match t with
-  | Typ_app(id,args) -> (doc_id id) ^^ (angles (separate_map comma_sp doc_typ_arg args))
+  | Typ_app(id,args) ->
+      (* trailing space to avoid >> token in case of nested app types *)
+      (doc_id id) ^^ (angles (separate_map comma_sp doc_typ_arg args)) ^^ space
   | _ -> atomic_typ ty (* for simplicity, skip vec_typ - which is only sugar *)
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_id id  -> doc_id id
