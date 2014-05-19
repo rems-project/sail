@@ -883,7 +883,7 @@ let doc_ord (Ord_aux(o,_)) = match o with
   | Ord_inc -> string "inc"
   | Ord_dec -> string "dec"
 
-let rec doc_typ ty =
+let doc_typ, doc_atomic_typ, doc_nexp =
   (* following the structure of parser for precedence *)
   let rec typ ty = fn_typ ty
   and fn_typ ((Typ_aux (t, _)) as ty) = match t with
@@ -911,13 +911,12 @@ let rec doc_typ ty =
    * parser - in practice falling through app_typ after all the proper nexp
    * cases; so Typ_arg_typ has the same precedence as a Typ_app *)
   | Typ_arg_typ t -> app_typ t
-  | Typ_arg_nexp n -> doc_nexp n
+  | Typ_arg_nexp n -> nexp n
   | Typ_arg_order o -> doc_ord o
   | Typ_arg_effect e -> doc_effects e
-  in typ ty
-and doc_nexp ne =
-  (* same trick to handle precedence *)
-  let rec nexp ne = sum_typ ne
+
+  (* same trick to handle precedence of nexp *)
+  and nexp ne = sum_typ ne
   and sum_typ ((Nexp_aux(n,_)) as ne) = match n with
   | Nexp_sum(n1,n2) -> doc_op plus (sum_typ n1) (star_typ n2)
   | _ -> star_typ ne
@@ -928,15 +927,20 @@ and doc_nexp ne =
   | Nexp_exp n1 -> doc_unop (string "2**") (neg_typ n1)
   | _ -> neg_typ ne
   and neg_typ ((Nexp_aux(n,_)) as ne) = match n with
-  (* this is not valid Sail, only an internal representation *)
-  | Nexp_neg n1 -> doc_unop minus (atomic_typ n1)
-  | _ -> atomic_typ ne
-  and atomic_typ ((Nexp_aux(n,_)) as ne) = match n with
+  | Nexp_neg n1 ->
+      (* XXX this is not valid Sail, only an internal representation -
+       * work around by commenting it *)
+      let minus = concat [string "(*"; minus; string "*)"] in
+      minus ^^ (atomic_nexp_typ n1)
+  | _ -> atomic_nexp_typ ne
+  and atomic_nexp_typ ((Nexp_aux(n,_)) as ne) = match n with
   | Nexp_var v -> doc_var v
   | Nexp_constant i -> doc_int i
   | Nexp_neg _ | Nexp_exp _ | Nexp_times _ | Nexp_sum _ ->
       group (parens (nexp ne))
-  in nexp ne
+
+  (* expose doc_typ, doc_atomic_typ and doc_nexp *)
+  in typ, atomic_typ, nexp
 
 let doc_nexp_constraint (NC_aux(nc,_)) = match nc with
   | NC_fixed(n1,n2) -> doc_op equals (doc_nexp n1) (doc_nexp n2)
@@ -966,6 +970,9 @@ let doc_typquant (TypQ_aux(tq,_)) typ_doc = match tq with
 let doc_typscm (TypSchm_aux(TypSchm_ts(tq,t),_)) =
   (doc_typquant tq (doc_typ t))
 
+let doc_typscm_atomic (TypSchm_aux(TypSchm_ts(tq,t),_)) =
+  (doc_typquant tq (doc_atomic_typ t))
+
 let doc_lit (L_aux(l,_)) =
   utf8string (match l with
   | L_unit  -> "()"
@@ -979,7 +986,7 @@ let doc_lit (L_aux(l,_)) =
   | L_undef -> "undefined"
   | L_string s -> "\"" ^ s ^ "\"")
 
-let doc_pat pa =
+let doc_pat, doc_atomic_pat =
   let rec pat pa = pat_colons pa
   and pat_colons ((P_aux(p,l)) as pa) = match p with
   | P_vector_concat pats  -> separate_map colon_sp atomic_pat pats
@@ -992,7 +999,7 @@ let doc_pat pa =
   | P_wild -> underscore
   | P_id id -> doc_id id
   | P_as(p,id) -> parens (separate space [pat p; string "as"; doc_id id])
-  | P_typ(typ,p) -> separate space [parens (doc_typ typ); pat p]
+  | P_typ(typ,p) -> separate space [parens (doc_typ typ); atomic_pat p]
   | P_app(id,[]) -> doc_id id
   | P_record(fpats,_) -> braces (separate_map semi_sp fpat fpats)
   | P_vector pats  -> brackets (separate_map comma_sp atomic_pat pats)
@@ -1003,19 +1010,11 @@ let doc_pat pa =
       group (parens (pat pa))
   and fpat (FP_aux(FP_Fpat(id,fpat),_)) = doc_op equals (doc_id id) (pat fpat)
   and npat (i,p) = doc_op equals (doc_int i) (pat p)
-  in pat pa
 
-let rec doc_let (LB_aux(lb,_)) = match lb with
-  | LB_val_explicit(ts,pat,exp) ->
-      prefix 2 1
-        (separate space [string "let"; doc_typscm ts; doc_pat pat; equals])
-        (doc_exp exp)
-  | LB_val_implicit(pat,exp) ->
-      prefix 2 1
-        (separate space [string "let"; doc_pat pat; equals])
-        (doc_exp exp)
+  (* expose doc_pat and doc_atomic_pat *)
+  in pat, atomic_pat
 
-and doc_exp e =
+let doc_exp, doc_let =
   let rec exp e = group (or_exp e)
   and or_exp ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id ("|" | "||"),_) as op),r) ->
@@ -1034,7 +1033,7 @@ and doc_exp e =
     ),_) as op),r) ->
       doc_op (doc_id op) (eq_exp l) (at_exp r)
   (* XXX assignment should not have the same precedence as equal etc. *)
-  | E_assign(lexp,exp) -> doc_op coloneq (doc_lexp lexp) (at_exp exp)
+  | E_assign(le,exp) -> doc_op coloneq (doc_lexp le) (at_exp exp)
   | _ -> at_exp expr
   and at_exp ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id ("@" | "^^" | "^" | "~^"),_) as op),r) ->
@@ -1131,7 +1130,7 @@ and doc_exp e =
         string "in" ^/^ doc_ord order
       ) ^/^
       exp exp4
-  | E_let(leb,e) -> doc_let leb ^/^ string "in" ^/^ exp e
+  | E_let(leb,e) -> let_exp leb ^/^ string "in" ^/^ exp e
   (* adding parens and loop for lower precedence *)
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
   | E_cons (_, _)|E_field (_, _)|E_assign (_, _)
@@ -1159,23 +1158,44 @@ and doc_exp e =
       (* doc_op (doc_id op) (exp l) (exp r) *)
   (* XXX missing case *)
   | E_internal_cast ((_, Overload (_, _)), _) | E_internal_exp _ -> assert false
-  in exp e
 
-and doc_fexp (FE_aux(FE_Fexp(id,exp),_)) = doc_op equals (doc_id id) (doc_exp exp)
+  and let_exp (LB_aux(lb,_)) = match lb with
+  | LB_val_explicit(ts,pat,e) ->
+      prefix 2 1
+        (separate space [string "let"; doc_typscm_atomic ts; doc_atomic_pat pat; equals])
+        (exp e)
+  | LB_val_implicit(pat,e) ->
+      prefix 2 1
+        (separate space [string "let"; doc_atomic_pat pat; equals])
+        (exp e)
 
-and doc_case (Pat_aux(Pat_exp(pat,exp),_)) =
-  string "case" ^/^ doc_pat pat ^/^ arrow ^/^ doc_exp exp
+  and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id id) (exp e)
 
-and doc_lexp (LEXP_aux(lexp,_)) =
-  (* XXX TODO change doc_exp to atomic_exp? *)
-  match lexp with
-  | LEXP_id id -> doc_id id
-  | LEXP_memory(id,args) -> doc_id id ^^ parens (separate_map comma doc_exp args)
-  | LEXP_cast(typ,id) -> parens (doc_typ typ) ^/^ doc_id id
-  | LEXP_vector(v,exp) -> doc_lexp v ^^ brackets (doc_exp exp)
+  and doc_case (Pat_aux(Pat_exp(pat,e),_)) =
+  string "case" ^/^ doc_atomic_pat pat ^/^ arrow ^/^ exp e
+
+  (* lexps are parsed as eq_exp - we need to duplicate the precedence
+   * structure for them *)
+  and doc_lexp le = app_lexp le
+  and app_lexp ((LEXP_aux(lexp,_)) as le) = match lexp with
+  | LEXP_memory(id,args) -> doc_id id ^^ parens (separate_map comma exp args)
+  | _ -> vaccess_lexp le
+  and vaccess_lexp ((LEXP_aux(lexp,_)) as le) = match lexp with
+  | LEXP_vector(v,e) -> atomic_lexp v ^^ brackets (exp e)
   | LEXP_vector_range(v,e1,e2) ->
-      doc_lexp v ^^ brackets (doc_exp e1 ^^ colon ^^ doc_exp e2)
-  | LEXP_field(v,id) -> doc_lexp v ^^ dot ^^ doc_id id
+      atomic_lexp v ^^ brackets (exp e1 ^^ dotdot ^^ exp e2)
+  | _ -> field_lexp le
+  and field_lexp ((LEXP_aux(lexp,_)) as le) = match lexp with
+  | LEXP_field(v,id) -> atomic_lexp v ^^ dot ^^ doc_id id
+  | _ -> atomic_lexp le
+  and atomic_lexp ((LEXP_aux(lexp,_)) as le) = match lexp with
+  | LEXP_id id -> doc_id id
+  | LEXP_cast(typ,id) -> parens (doc_typ typ) ^/^ doc_id id
+  | LEXP_memory _ | LEXP_vector _ | LEXP_vector_range _
+  | LEXP_field _ -> group (parens (doc_lexp le))
+
+  (* expose doc_exp and doc_let *)
+  in exp, let_exp
 
 let doc_default (DT_aux(df,_)) = match df with
   | DT_kind(bk,v) -> string "default" ^/^ doc_bkind bk ^/^ doc_var v
@@ -1253,7 +1273,7 @@ let doc_effects_opt (Effect_opt_aux(e,_)) = match e with
   | Effect_opt_effect e -> doc_effects e
 
 let doc_funcl (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
-  group (doc_op equals (separate space [doc_id id; doc_pat pat]) (doc_exp exp))
+  group (doc_op equals (separate space [doc_id id; doc_atomic_pat pat]) (doc_exp exp))
 
 let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   match fcls with
@@ -1267,22 +1287,25 @@ let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =
         clauses]
 
 let doc_dec (DEC_aux(DEC_reg(typ,id),_)) =
-  string "register" ^/^ doc_typ typ ^/^ doc_id id
+  string "register" ^/^ doc_atomic_typ typ ^/^ doc_id id
 
 let doc_scattered (SD_aux (sdef, _)) = match sdef with
  | SD_scattered_function (r, typa, efa, id) ->
-     string "scattered" ^/^ string "function" ^/^ doc_rec r ^^
-     doc_tannot_opt typa ^/^ string "effect" ^/^ doc_effects_opt efa ^/^
-     doc_id id
+     separate space [
+       string "scattered function";
+       doc_rec r ^^ doc_tannot_opt typa;
+       string "effect"; doc_effects_opt efa;
+       doc_id id]
  | SD_scattered_variant (id, ns, tq) ->
-     string "scattered" ^/^ string "typedef" ^/^
-     doc_op equals (doc_id id ^^ doc_namescm ns) (doc_typquant tq empty)
+     doc_op equals
+       (string "scattered typedef" ^^ space ^^ doc_id id ^^ doc_namescm ns)
+       (doc_typquant tq empty)
  | SD_scattered_funcl funcl ->
-     string "function" ^/^ string "clause" ^/^ doc_funcl funcl
+     string "function clause" ^^ space ^^ doc_funcl funcl
  | SD_scattered_unioncl (id, tu) ->
-     string "union" ^/^ doc_id id ^/^
-     string "member" ^/^ doc_type_union tu
- | SD_scattered_end id -> string "end" ^/^ doc_id id
+     separate space [string "union"; doc_id id;
+     string "member"; doc_type_union tu]
+ | SD_scattered_end id -> string "end" ^^ space ^^ doc_id id
 
 let doc_def def = group (match def with
   | DEF_default df -> doc_default df
