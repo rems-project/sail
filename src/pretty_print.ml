@@ -891,7 +891,7 @@ let rec doc_typ ty =
       separate space [tup_typ arg; arrow; fn_typ ret; string "effect"; doc_effects efct]
   | _ -> tup_typ ty
   and tup_typ ((Typ_aux (t, _)) as ty) = match t with
-  | Typ_tup typs -> parens (separate_map (spaces star) app_typ typs)
+  | Typ_tup typs -> parens (separate_map comma_sp app_typ typs)
   | _ -> app_typ ty
   and app_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_app(id,args) ->
@@ -943,7 +943,7 @@ let doc_nexp_constraint (NC_aux(nc,_)) = match nc with
   | NC_bounded_ge(n1,n2) -> doc_op (string ">=") (doc_nexp n1) (doc_nexp n2)
   | NC_bounded_le(n1,n2) -> doc_op (string "<=") (doc_nexp n1) (doc_nexp n2)
   | NC_nat_set_bounded(v,bounds) ->
-      doc_op (string "In") (doc_var v)
+      doc_op (string "IN") (doc_var v)
         (braces (separate_map comma_sp doc_int bounds))
 
 let doc_qi (QI_aux(qi,_)) = match qi with
@@ -969,8 +969,8 @@ let doc_typscm (TypSchm_aux(TypSchm_ts(tq,t),_)) =
 let doc_lit (L_aux(l,_)) =
   utf8string (match l with
   | L_unit  -> "()"
-  | L_zero  -> "0"
-  | L_one   -> "1"
+  | L_zero  -> "bitzero"
+  | L_one   -> "bitone"
   | L_true  -> "true"
   | L_false -> "false"
   | L_num i -> string_of_int i
@@ -995,9 +995,9 @@ let doc_pat pa =
   | P_typ(typ,p) -> separate space [parens (doc_typ typ); pat p]
   | P_app(id,[]) -> doc_id id
   | P_record(fpats,_) -> braces (separate_map semi_sp fpat fpats)
-  | P_vector pats  -> brackets (separate_map semi_sp atomic_pat pats)
+  | P_vector pats  -> brackets (separate_map comma_sp atomic_pat pats)
   | P_vector_indexed ipats  -> brackets (separate_map comma_sp npat ipats)
-  | P_tup pats  -> braces (separate_map comma_sp atomic_pat pats)
+  | P_tup pats  -> parens (separate_map comma_sp atomic_pat pats)
   | P_list pats  -> squarebarbars (separate_map semi_sp atomic_pat pats)
   | P_app(_, _ :: _) | P_vector_concat _ ->
       group (parens (pat pa))
@@ -1114,7 +1114,7 @@ and doc_exp e =
       squarebarbars (separate_map comma exp exps)
   | E_case(e,pexps) ->
       let opening = string "switch" ^/^ exp e ^/^ lbrace in
-      let cases = separate_map (semi ^^ (break 1)) doc_case pexps in
+      let cases = separate_map (break 1) doc_case pexps in
       surround 2 1 opening cases rbrace
   (* right_atomic_exp *)
   | E_if(c,t,e) ->
@@ -1188,13 +1188,13 @@ let doc_spec (VS_aux(v,_)) = match v with
       string "val" ^/^ string "extern" ^/^ doc_typscm ts ^/^ doc_id id
   | VS_extern_spec(ts,id,s) ->
       string "val" ^/^ string "extern" ^/^ doc_typscm ts ^/^
-      doc_op equals (doc_id id) (squotes (string s))
+      doc_op equals (doc_id id) (dquotes (string s))
 
 let doc_namescm (Name_sect_aux(ns,_)) = match ns with
   | Name_sect_none -> empty
-  (* include leading break because the caller doesn't know if ns is
+  (* include leading space because the caller doesn't know if ns is
    * empty, and trailing break already added by the following equals *)
-  | Name_sect_some s -> break 1 ^^ brackets (doc_op equals (string "name") (squotes (string s)))
+  | Name_sect_some s -> space ^^ brackets (doc_op equals (string "name") (dquotes (string s)))
 
 let rec doc_range (BF_aux(r,_)) = match r with
   | BF_single i -> doc_int i
