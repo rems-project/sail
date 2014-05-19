@@ -1222,42 +1222,38 @@ let rec doc_range (BF_aux(r,_)) = match r with
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
 
 let doc_type_union (Tu_aux(typ_u,_)) = match typ_u with
-  | Tu_ty_id(typ,id) -> doc_typ typ ^/^ doc_id id ^^ semi
+  | Tu_ty_id(typ,id) -> concat [doc_typ typ; space; doc_id id; semi]
   | Tu_id id -> doc_id id ^^ semi
 
 let doc_typdef (TD_aux(td,_)) = match td with
   | TD_abbrev(id,nm,typschm) ->
-      string "typedef" ^/^
-      doc_op equals (doc_id id ^^ doc_namescm nm) (doc_typscm typschm)
+      doc_op equals (concat [string "typedef"; space; doc_id id; doc_namescm nm]) (doc_typscm typschm)
   | TD_record(id,nm,typq,fs,_) ->
-      let f_pp (typ,id) = doc_typ typ ^/^ doc_id id ^^ semi in
-      let fs_doc = separate_map (break 1) f_pp fs in
-      let const = string "const" ^/^ string "struct" in
-      string "typedef" ^/^
+      let f_pp (typ,id) = concat [doc_typ typ; space; doc_id id; semi] in
+      let fs_doc = group (separate_map (break 1) f_pp fs) in
       doc_op equals
-        (doc_id id ^^ doc_namescm nm)
-        (const ^/^ doc_typquant typq (braces fs_doc))
+        (concat [string "typedef"; space; doc_id id; doc_namescm nm])
+        (string "const struct" ^^ space ^^ doc_typquant typq (braces fs_doc))
   | TD_variant(id,nm,typq,ar,_) ->
-      let ar_doc = separate_map (break 1) doc_type_union ar in
-      let const = string "const" ^/^ string "union" in
-      string "typedef" ^/^
+      let ar_doc = group (separate_map (break 1) doc_type_union ar) in
       doc_op equals
-        (doc_id id ^^ doc_namescm nm)
-        (const ^/^ doc_typquant typq (braces ar_doc))
+        (concat [string "typedef"; space; doc_id id; doc_namescm nm])
+        (string "const union" ^^ space ^^ doc_typquant typq (braces ar_doc))
   | TD_enum(id,nm,enums,_) ->
-      let enums_doc = separate_map (semi ^^ break 1) doc_id enums in
-      string "typedef" ^/^
+      let enums_doc = group (separate_map (semi ^^ break 1) doc_id enums) in
       doc_op equals
-        (doc_id id ^^ doc_namescm nm)
-        (string "enumerate" ^/^ braces enums_doc)
+        (concat [string "typedef"; space; doc_id id; doc_namescm nm])
+        (string "enumerate" ^^ space ^^ braces enums_doc)
   | TD_register(id,n1,n2,rs) ->
-      let doc_rid (r,id) = doc_range r ^/^ colon ^/^ doc_id id in
-      let doc_rids = separate_map semi_sp doc_rid rs in
-      let regs = string "register" ^/^ string "bits" in
-      string "typedef" ^/^
+      let doc_rid (r,id) = separate space [doc_range r; colon; doc_id id] ^^ semi in
+      let doc_rids = group (separate_map (break 1) doc_rid rs) in
       doc_op equals
-        (doc_id id)
-        (regs ^/^ brackets (doc_nexp n1 ^/^ colon ^/^ doc_nexp n2) ^/^ braces doc_rids)
+        (string "typedef" ^^ space ^^ doc_id id)
+        (separate space [
+          string "register bits";
+          brackets (doc_nexp n1 ^^ colon ^^ doc_nexp n2);
+          braces doc_rids;
+        ])
 
 let doc_rec (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty
