@@ -133,7 +133,7 @@ let pp_format_nexp_constraint (NC_aux(nc,_)) =
   | NC_bounded_le(n1,n2) -> pp_format_nexp n1 ^ " <= " ^ pp_format_nexp n2
   | NC_nat_set_bounded(var,bounds) -> 
     pp_format_var var ^
-      " In {" ^
+      " IN {" ^
       list_format ", " string_of_int bounds ^
       "}"
 
@@ -167,8 +167,8 @@ let pp_typscm ppf ts = base ppf (pp_format_typscm ts)
 let pp_format_lit (L_aux(l,_)) =
   match l with
   | L_unit -> "()"
-  | L_zero -> "0"
-  | L_one -> "1"
+  | L_zero -> "bitzero"
+  | L_one -> "bitone"
   | L_true -> "true"
   | L_false -> "false"
   | L_num(i) -> string_of_int i
