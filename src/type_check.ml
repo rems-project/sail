@@ -547,7 +547,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	(match (select_overload_variant d_env variants arg_t) with
 	| NoTyp -> typ_error l ("No matching function found with name " ^ i ^ " that expects parameters " ^ (t_to_string arg_t))
 	| Base((params,t),tag,cs,ef) ->
-          let _ = Printf.printf "Selected an overloaded function for %s, variant with function type %s\n" i (t_to_string t) in
+          let _ = Printf.eprintf "Selected an overloaded function for %s, variant with function type %s\n" i (t_to_string t) in
 	  (match t.t with
 	  | Tfn(arg,ret,ef') ->
             (match arg.t,arg_t.t with
@@ -660,7 +660,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	    [GtEq((Expr l),base,min); LtEq((Expr l),{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,{nexp=Nneg rise})})]
 	  | _ -> typ_error l "A vector must be either increasing or decreasing to access a single element"
       in 
-      (*let _ = Printf.printf "Type checking vector access. item_t is %s and expect_t is %s\n" (t_to_string item_t) (t_to_string expect_t) in*)
+      (*let _ = Printf.eprintf "Type checking vector access. item_t is %s and expect_t is %s\n" (t_to_string item_t) (t_to_string expect_t) in*)
       let t',cs',e'=type_coerce (Expr l) d_env item_t (E_aux(E_vector_access(vec',i'),(l,Base(([],item_t),Emp_local,[],pure_e)))) expect_t in
       (e',t',t_env,cs_loc@cs_i@cs@cs',union_effects ef ef_i)
     | E_vector_subrange(vec,i1,i2) ->
@@ -907,12 +907,12 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
     | E_case(exp,pexps) ->
       (*let check_t = new_t() in*)
       let (e',t',_,cs,ef) = check_exp envs (new_t()) exp in
-      (*let _ = Printf.printf "Type of pattern after expression check %s\n" (t_to_string t') in*)
+      (*let _ = Printf.eprintf "Type of pattern after expression check %s\n" (t_to_string t') in*)
       let t' = 
 	match t'.t with
 	  | Tapp("register",[TA_typ t]) -> t
 	  | _ -> t' in
-      (*let _ = Printf.printf "Type of pattern after register check %s\n" (t_to_string t') in*)
+      (*let _ = Printf.eprintf "Type of pattern after register check %s\n" (t_to_string t') in*)
       let (pexps',t,cs',ef') = check_cases envs t' expect_t pexps in
       (E_aux(E_case(e',pexps'),(l,Base(([],t),Emp_local,[],pure_e))),t,t_env,cs@cs',union_effects ef ef')
     | E_let(lbind,body) -> 
@@ -968,7 +968,7 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
           let t_actual = match t.t with 
             | Tabbrev(i,t) -> t
             | _ -> t in
-          (*let _ = Printf.printf "Assigning to %s, t is %s\n" i (t_to_string t_actual) in*)
+          (*let _ = Printf.eprintf "Assigning to %s, t is %s\n" i (t_to_string t_actual) in*)
 	  (match t_actual.t,is_top with
 	    | Tapp("register",[TA_typ u]),_ ->
 	      let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in
@@ -1304,15 +1304,15 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),l)) ->
 	let (pat',t_env',cs_p,t') = check_pattern (Env(d_env,t_env)) Emp_local param_t pat in
-        (*let _ = Printf.printf "about to check that %s and %s are consistent\n" (t_to_string t') (t_to_string param_t) in*)
+        (*let _ = Printf.eprintf "about to check that %s and %s are consistent\n" (t_to_string t') (t_to_string param_t) in*)
 	let exp',_,_,cs_e,ef = check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env) t_env t_env')) ret_t exp in
-        (*let _ = Printf.printf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*) 
+        (*let _ = Printf.eprintf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*) 
 	(*let _ = (Pretty_print.pp_exp Format.std_formatter) exp' in*)
 	let cs = [CondCons(Fun l,cs_p,cs_e)] in
 	(FCL_aux((FCL_Funcl(id,pat',exp')),l),(cs,ef))) funcls) in
   match (in_env,tannot) with
     | Some(Base( (params,u),Spec,constraints,eft)), Base( (p',t),_,c',eft') ->
-      (*let _ = Printf.printf "Function %s is in env\n" id in*)
+      (*let _ = Printf.eprintf "Function %s is in env\n" id in*)
       let u,constraints,eft = subst params u constraints eft in
       let t',cs = type_consistent (Specc l) d_env t u in
       let t_env = if is_rec then t_env else Envmap.remove t_env id in
