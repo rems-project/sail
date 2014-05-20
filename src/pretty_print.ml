@@ -1072,7 +1072,7 @@ let doc_exp, doc_let =
   | E_vector_access(v,e) ->
       atomic_exp v ^^ brackets (exp e)
   | E_vector_subrange(v,e1,e2) ->
-      atomic_exp v ^^ brackets (exp e1 ^/^ dotdot ^/^ exp e2)
+      atomic_exp v ^^ brackets (doc_op dotdot (exp e1) (exp e2))
   | _ -> field_exp expr
   and field_exp ((E_aux(e,_)) as expr) = match e with
   | E_field(fexp,id) -> atomic_exp fexp ^^ dot ^^ doc_id id
@@ -1083,54 +1083,56 @@ let doc_exp, doc_let =
       surround 2 1 lbrace exps_doc rbrace
   | E_id id -> doc_id id
   | E_lit lit -> doc_lit lit
-  | E_cast(typ,e) -> parens (doc_typ typ) ^/^ atomic_exp e
+  | E_cast(typ,e) -> prefix 2 1 (parens (doc_typ typ)) (group (atomic_exp e))
   | E_internal_cast((_,NoTyp),e) -> atomic_exp e
   | E_internal_cast((_,Base((_,t),_,_,_)), (E_aux(_,(_,eannot)) as e)) ->
       (match t.t,eannot with
       (* XXX I don't understand why we can hide the internal cast here *)
       | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_)
           when nexp_eq n1 n2 -> atomic_exp e
-      | _ -> parens (doc_typ (t_to_typ t)) ^/^ atomic_exp e)
+      | _ -> prefix 2 1 (parens (doc_typ (t_to_typ t))) (group (atomic_exp e)))
   | E_tuple exps ->
       parens (separate_map comma exp exps)
   | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
       (* XXX E_record is not handled by parser currently *)
       braces (separate_map semi_sp doc_fexp fexps)
   | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
-      braces (exp e ^/^ string "with" ^/^ separate_map semi_sp doc_fexp fexps)
+      braces (doc_op (string "with") (exp e) (separate_map semi_sp doc_fexp fexps))
   | E_vector exps ->
       brackets (separate_map comma exp exps)
   | E_vector_indexed iexps ->
       let iexp (i,e) = doc_op equals (doc_int i) (exp e) in
       brackets (separate_map comma iexp iexps)
   | E_vector_update(v,e1,e2) ->
-      brackets (exp v ^/^ string "with" ^/^ doc_op equals (atomic_exp e1) (exp e2))
+      brackets (doc_op (string "with") (exp v) (doc_op equals (atomic_exp e1) (exp e2)))
   | E_vector_update_subrange(v,e1,e2,e3) ->
       brackets (
-        exp v ^/^ string "with" ^/^
-        doc_op equals (atomic_exp e1 ^/^ colon ^/^ atomic_exp e2) (exp e3))
+        doc_op (string "with") (exp v)
+        (doc_op equals (atomic_exp e1 ^^ colon ^^ atomic_exp e2) (exp e3)))
   | E_list exps ->
       squarebarbars (separate_map comma exp exps)
   | E_case(e,pexps) ->
-      let opening = string "switch" ^/^ exp e ^/^ lbrace in
+      let opening = separate space [string "switch"; exp e; lbrace] in
       let cases = separate_map (break 1) doc_case pexps in
       surround 2 1 opening cases rbrace
   (* right_atomic_exp *)
   | E_if(c,t,e) ->
-      string "if" ^/^ exp c ^/^
-      string "then" ^/^ exp t ^/^
-      string "else" ^/^ exp e
+      string "if" ^^ space ^^ group (exp c) ^/^
+      string "then" ^^ space ^^ group (exp t) ^/^
+      string "else" ^^ space ^^ group (exp e)
   | E_for(id,exp1,exp2,exp3,order,exp4) ->
-      string "foreach" ^/^
-      parens (
-        doc_id id ^/^
-        string "from" ^/^ atomic_exp exp1 ^/^
-        string "to" ^/^ atomic_exp exp2 ^/^
-        string "by" ^/^ atomic_exp exp3 ^/^
-        string "in" ^/^ doc_ord order
-      ) ^/^
+      string "foreach" ^^ space ^^
+      group (parens (
+        separate (break 1) [
+          doc_id id;
+          string "from " ^^ atomic_exp exp1;
+          string "to " ^^ atomic_exp exp2;
+          string "by " ^^ atomic_exp exp3;
+          string "in " ^^ doc_ord order
+        ]
+      )) ^/^
       exp exp4
-  | E_let(leb,e) -> let_exp leb ^/^ string "in" ^/^ exp e
+  | E_let(leb,e) -> doc_op (string "in") (let_exp leb) (exp e)
   (* adding parens and loop for lower precedence *)
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
   | E_cons (_, _)|E_field (_, _)|E_assign (_, _)
@@ -1172,7 +1174,7 @@ let doc_exp, doc_let =
   and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id id) (exp e)
 
   and doc_case (Pat_aux(Pat_exp(pat,e),_)) =
-  string "case" ^/^ doc_atomic_pat pat ^/^ arrow ^/^ exp e
+    doc_op arrow (separate space [string "case"; doc_atomic_pat pat]) (group (exp e))
 
   (* lexps are parsed as eq_exp - we need to duplicate the precedence
    * structure for them *)
@@ -1190,7 +1192,7 @@ let doc_exp, doc_let =
   | _ -> atomic_lexp le
   and atomic_lexp ((LEXP_aux(lexp,_)) as le) = match lexp with
   | LEXP_id id -> doc_id id
-  | LEXP_cast(typ,id) -> parens (doc_typ typ) ^/^ doc_id id
+  | LEXP_cast(typ,id) -> prefix 2 1 (parens (doc_typ typ)) (doc_id id)
   | LEXP_memory _ | LEXP_vector _ | LEXP_vector_range _
   | LEXP_field _ -> group (parens (doc_lexp le))
 
@@ -1198,17 +1200,17 @@ let doc_exp, doc_let =
   in exp, let_exp
 
 let doc_default (DT_aux(df,_)) = match df with
-  | DT_kind(bk,v) -> string "default" ^/^ doc_bkind bk ^/^ doc_var v
-  | DT_typ(ts,id) -> string "default" ^/^ doc_typscm ts ^/^ doc_id id
+  | DT_kind(bk,v) -> separate space [string "default"; doc_bkind bk; doc_var v]
+  | DT_typ(ts,id) -> separate space [string "default"; doc_typscm ts; doc_id id]
 
 let doc_spec (VS_aux(v,_)) = match v with
   | VS_val_spec(ts,id) ->
-      string "val" ^/^ doc_typscm ts ^/^ doc_id id
+      separate space [string "val"; doc_typscm ts; doc_id id]
   | VS_extern_no_rename(ts,id) ->
-      string "val" ^/^ string "extern" ^/^ doc_typscm ts ^/^ doc_id id
+      separate space [string "val"; string "extern"; doc_typscm ts; doc_id id]
   | VS_extern_spec(ts,id,s) ->
-      string "val" ^/^ string "extern" ^/^ doc_typscm ts ^/^
-      doc_op equals (doc_id id) (dquotes (string s))
+      separate space [string "val"; string "extern"; doc_typscm ts;
+      doc_op equals (doc_id id) (dquotes (string s))]
 
 let doc_namescm (Name_sect_aux(ns,_)) = match ns with
   | Name_sect_none -> empty
@@ -1283,7 +1285,7 @@ let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =
         clauses]
 
 let doc_dec (DEC_aux(DEC_reg(typ,id),_)) =
-  string "register" ^/^ doc_atomic_typ typ ^/^ doc_id id
+  separate space [string "register"; doc_atomic_typ typ; doc_id id]
 
 let doc_scattered (SD_aux (sdef, _)) = match sdef with
  | SD_scattered_function (r, typa, efa, id) ->
