@@ -1063,7 +1063,31 @@ let doc_exp, doc_let =
   and starstar_exp ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id "**",_) as op),r) ->
       doc_op (doc_id op) (starstar_exp l) (app_exp r)
+  | E_if _ | E_for _ | E_let _ -> right_atomic_exp expr
   | _ -> app_exp expr
+  and right_atomic_exp ((E_aux(e,_)) as expr) = match e with
+  (* Special case: omit "else ()" when the else branch is empty. *)
+  | E_if(c,t,E_aux(E_block [], _)) ->
+      string "if" ^^ space ^^ group (exp c) ^/^
+      string "then" ^^ space ^^ group (exp t)
+  | E_if(c,t,e) ->
+      string "if" ^^ space ^^ group (exp c) ^/^
+      string "then" ^^ space ^^ group (exp t) ^/^
+      string "else" ^^ space ^^ group (exp e)
+  | E_for(id,exp1,exp2,exp3,order,exp4) ->
+      string "foreach" ^^ space ^^
+      group (parens (
+        separate (break 1) [
+          doc_id id;
+          string "from " ^^ atomic_exp exp1;
+          string "to " ^^ atomic_exp exp2;
+          string "by " ^^ atomic_exp exp3;
+          string "in " ^^ doc_ord order
+        ]
+      )) ^/^
+      exp exp4
+  | E_let(leb,e) -> doc_op (string "in") (let_exp leb) (exp e)
+  | _ -> group (parens (exp expr))
   and app_exp ((E_aux(e,_)) as expr) = match e with
   | E_app(f,args) ->
       doc_unop (doc_id f) (parens (separate_map comma exp args))
@@ -1078,6 +1102,9 @@ let doc_exp, doc_let =
   | E_field(fexp,id) -> atomic_exp fexp ^^ dot ^^ doc_id id
   | _ -> atomic_exp expr
   and atomic_exp ((E_aux(e,_)) as expr) = match e with
+  (* Special case: an empty block is equivalent to unit, but { } would
+   * be parsed as a struct. *)
+  | E_block [] -> string "()"
   | E_block exps ->
       let exps_doc = separate_map (semi ^^ hardline) exp exps in
       surround 2 1 lbrace exps_doc rbrace
@@ -1115,24 +1142,6 @@ let doc_exp, doc_let =
       let opening = separate space [string "switch"; exp e; lbrace] in
       let cases = separate_map (break 1) doc_case pexps in
       surround 2 1 opening cases rbrace
-  (* right_atomic_exp *)
-  | E_if(c,t,e) ->
-      string "if" ^^ space ^^ group (exp c) ^/^
-      string "then" ^^ space ^^ group (exp t) ^/^
-      string "else" ^^ space ^^ group (exp e)
-  | E_for(id,exp1,exp2,exp3,order,exp4) ->
-      string "foreach" ^^ space ^^
-      group (parens (
-        separate (break 1) [
-          doc_id id;
-          string "from " ^^ atomic_exp exp1;
-          string "to " ^^ atomic_exp exp2;
-          string "by " ^^ atomic_exp exp3;
-          string "in " ^^ doc_ord order
-        ]
-      )) ^/^
-      exp exp4
-  | E_let(leb,e) -> doc_op (string "in") (let_exp leb) (exp e)
   (* adding parens and loop for lower precedence *)
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
   | E_cons (_, _)|E_field (_, _)|E_assign (_, _)
