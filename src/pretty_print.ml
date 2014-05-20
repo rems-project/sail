@@ -900,8 +900,8 @@ let rec doc_range (BF_aux(r,_)) = match r with
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
 
 let doc_type_union (Tu_aux(typ_u,_)) = match typ_u with
-  | Tu_ty_id(typ,id) -> concat [doc_typ typ; space; doc_id id; semi]
-  | Tu_id id -> doc_id id ^^ semi
+  | Tu_ty_id(typ,id) -> separate space [doc_typ typ; doc_id id]
+  | Tu_id id -> doc_id id
 
 let doc_typdef (TD_aux(td,_)) = match td with
   | TD_abbrev(id,nm,typschm) ->
@@ -913,7 +913,7 @@ let doc_typdef (TD_aux(td,_)) = match td with
         (concat [string "typedef"; space; doc_id id; doc_namescm nm])
         (string "const struct" ^^ space ^^ doc_typquant typq (braces fs_doc))
   | TD_variant(id,nm,typq,ar,_) ->
-      let ar_doc = group (separate_map (break 1) doc_type_union ar) in
+      let ar_doc = group (separate_map (semi ^^ break 1) doc_type_union ar) in
       doc_op equals
         (concat [string "typedef"; space; doc_id id; doc_namescm nm])
         (string "const union" ^^ space ^^ doc_typquant typq (braces ar_doc))
