@@ -9,18 +9,33 @@ val extern_value : Interp.value -> value
 
 let build_context defs = Interp.to_top_env defs
 
+let to_bits l = (List.map (fun | false -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero Interp_ast.Unknown)) 
+			       | true ->  (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_one Interp_ast.Unknown))) l)
+let from_bits l = (List.map (fun | Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero _) -> false
+				 | _ -> true) l) 
+let rec to_bytes l = match l with
+  | [] -> []
+  | (a::b::c::d::e::f::g::h::rest) ->
+    (integerFromBoolList [a;b;c;d;e;f;g;h])::(to_bytes rest)
+		   
 let intern_value v = match v with
-  | Bitvector bs -> Interp.V_vector 0 true (List.map (fun | false -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero Interp_ast.Unknown)) 
-							  | true -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_one Interp_ast.Unknown))) bs)
-  | Bytevector bys -> Interp.V_vector 0 true (List.map 
+  | Bitvector bs -> Interp.V_vector 0 true  (to_bits bs)
+  | Bytevector bys -> Interp.V_vector 0 true (to_bits (List.concat (List.map (bitSeqFromInteger 8 Nothing) bys)))
   | Unknown -> Interp.V_unknown
 end
 
-let extern_value v = match v with
-  | Interp.V_vector _ true bits -> Bitvector (List.map (fun | Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero _) -> 0
-							    | _ -> 1) bits)
+let extern_value for_mem v = match v with
+  | Interp.V_vector _ true bits ->
+    if for_mem 
+    then Bytevector (to_bytes (from_bits bits))
+    else Bitvector (from_bits bits)
   | _ -> Unknown
 end
+
+let extern_reg r slice = match (r,slice) with
+  | (Interp.Reg(Id_aux (Id x,_)),Nothing) -> Reg x
+  | (Interp.Reg(Id_aux (Id x,_)),Just(i1,i2)) -> Reg_slice x (i1,i2)
+  | (Interp.SubReg (Id_aux (Id x,_)) (Interp.Reg(Id_aux (Id y,_))) (Interp_ast.BF_aux(Interp_ast.BF_single i) _),Nothing) -> Reg_field x y (i,i)
 
 let initial_instruction_state top_level main arg = 
   Interp.Frame Nothing (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) [ intern_value arg ]) (Interp_ast.Unknown, Nothing)) top_level [] Interp.emem
