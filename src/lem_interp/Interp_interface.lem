@@ -4,49 +4,49 @@ type read_kind = Interp.read_kind
 type write_kind = Interp.write_kind
 type barrier_kind = Interp.barrier_kind
 
+type word8 = nat (* bounded at a byte, for when lem supports it*)
+
 type value = 
-| Bitvector of list nat (*Always 0 or 1; should this be a Word.bitSequence? *)
-| Bytevector of list (list nat) (* Should this be a list of Word.bitSequence? *)
+| Bitvector of list bool (* For register accesses *)
+| Bytevector of list word8 (* For memory accesses *)
 | Unknown
 
 type instruction_state = Interp.stack
 type context = Interp.top_level
 
-type reg_name = Interp.reg_form (*for now...*)
+type slice = (integer * integer)
+
+type reg_name = 
+| Reg of string (*Name of the register, accessing the entire register*)
+| Reg_slice of string * slice (*Name of the register, accessing from the first to second integer of the slice*)
+| Reg_field of string * string * slice (*Name of the register, name of the field of the register accessed, the slice of the field*)
+| Reg_f_slice of string * string * slice * slice (* Same as above but only accessing second slice of the field *)
 
 type outcome =
 | Read_mem of read_kind * value * (value -> instruction_state)
 | Write_mem of write_kind * value * value * (bool -> instruction_state)
 | Barrier of barrier_kind * instruction_state
-| Read_reg of reg_name * (value -> instruction_state) (*What about slicing?*)
+| Read_reg of reg_name * (value -> instruction_state) 
 | Write_reg of reg_name * value * instruction_state
 | Nondet_choice of list instruction_state
 | Internal of instruction_state
 | Done
 | Error of string
 
+type event = 
+| E_read_mem of read_kind * value
+| E_write_mem of write_kind * value
+| E_barrier of barrier_kind
+| E_read_reg of reg_name
+| E_write_reg of reg_name
+(*Should multiple memory accesses be represented with a special form to denote this or potentially merged into one read or left in place*)
+
+
 val build_context : Interp.defs Interp.tannot -> context
 val initial_instruction_state : context -> string -> value -> instruction_state
 
 type interp_mode = <| eager_eval : bool |>
-val interp : instruction_state -> interp_mode -> outcome
+val interp : interp_mode -> instruction_state -> outcome
 
-val interp_exhaustive : instruction_state -> list outcome (*not sure what event was ment to be*)
+val interp_exhaustive : instruction_state -> list event
 
-val intern_value : value -> Interp.value
-val extern_value : Interp.value -> value
-
-let build_context defs = Interp.to_top_env defs
-
-let intern_value v = match v with
-  | Bitvector bs -> Interp.V_vector 0 true (List.map (fun | 0 -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero Interp_ast.Unknown)) 
-							  | _ -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_one Interp_ast.Unknown))) bs)
-  | Unknown -> Interp.V_unknown
-
-let extern_value v = match v with
-  | Interp.V_vector _ true bits -> Bitvector (List.map (fun | Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero _) -> 0
-							    | _ -> 1) bits)
-  | _ -> Unknown
-
-let initial_instruction_state top_level main arg = 
-  Interp.Frame Nothing (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) [ intern_value arg ]) (Interp_ast.Unknown, Nothing)) top_level [] Interp.emem

@@ -354,7 +354,7 @@ and to_ast_exp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) 
     | Parse_ast.E_for(id,e1,e2,e3,atyp,e4) -> 
       E_for(to_ast_id id,to_ast_exp k_env e1, to_ast_exp k_env e2, to_ast_exp k_env e3,to_ast_order k_env atyp, to_ast_exp k_env e4)
     | Parse_ast.E_vector(exps) -> E_vector(List.map (to_ast_exp k_env) exps)
-    | Parse_ast.E_vector_indexed(iexps) -> E_vector_indexed(List.map (fun (i,e) -> (i,to_ast_exp k_env e)) iexps)
+    | Parse_ast.E_vector_indexed(iexps,default) -> E_vector_indexed(List.map (fun (i,e) -> (i,to_ast_exp k_env e)) iexps, Def_val_aux(Def_val_empty,(l,NoTyp))) (*TODO transform the default *)
     | Parse_ast.E_vector_access(vexp,exp) -> E_vector_access(to_ast_exp k_env vexp, to_ast_exp k_env exp)
     | Parse_ast.E_vector_subrange(vex,exp1,exp2) -> E_vector_subrange(to_ast_exp k_env vex, to_ast_exp k_env exp1, to_ast_exp k_env exp2)
     | Parse_ast.E_vector_update(vex,exp1,exp2) -> E_vector_update(to_ast_exp k_env vex, to_ast_exp k_env exp1, to_ast_exp k_env exp2)

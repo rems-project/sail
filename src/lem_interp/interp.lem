@@ -427,9 +427,9 @@ let rec to_exp v =
 	if (inc && n=0) 
 	then E_vector (List.map to_exp vals) 
 	else if inc then
-          E_vector_indexed (List.reverse (snd (List.foldl (fun (n,acc) e -> (n+1,(n, to_exp e)::acc)) (n,[]) vals)))
+          E_vector_indexed (List.reverse (snd (List.foldl (fun (n,acc) e -> (n+1,(n, to_exp e)::acc)) (n,[]) vals))) (Def_val_aux Def_val_empty (Interp_ast.Unknown,Nothing))
 	else 
-          E_vector_indexed (snd (List.foldr (fun e (n,acc) -> (n+1,(n, to_exp e)::acc)) (n-(list_length vals),[]) vals))
+          E_vector_indexed (snd (List.foldr (fun e (n,acc) -> (n+1,(n, to_exp e)::acc)) (n-(list_length vals),[]) vals)) (Def_val_aux Def_val_empty (Interp_ast.Unknown,Nothing))
       | V_record t ivals -> 
 	E_record(FES_aux (FES_Fexps
 			    (List.map (fun (id,value) -> (FE_aux (FE_Fexp id (to_exp value)) (Unknown,Nothing))) ivals) false) 
@@ -964,12 +964,12 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
       exp_list mode t_level (fun exps -> E_aux (E_tuple exps) (l,annot)) V_tuple l_env l_mem [] exps
     | E_vector(exps) ->
       exp_list mode t_level (fun exps -> E_aux (E_vector exps) (l,annot)) (fun vals -> V_vector 0 true vals) l_env l_mem [] exps
-    | E_vector_indexed(iexps) ->
+    | E_vector_indexed iexps default ->
       let (indexes,exps) = List.unzip iexps in
       let is_inc = match typ with
         | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp _; T_arg_order (Ord_aux Ord_inc _); _]) -> true
         | _ -> false end in
-      exp_list mode t_level (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es)) (l,annot))) 
+      exp_list mode t_level (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es) default) (l,annot))) 
                        (fun vals -> V_vector (List_extra.head indexes) is_inc vals) l_env l_mem [] exps
     | E_block(exps) -> interp_block mode t_level l_env l_env l_mem exps
     | E_app f args ->

@@ -74,9 +74,9 @@ base_effect =
 
 
 type 
-effect_aux =  (* effect set, of kind Effects *)
-   Effect_var of kid
- | Effect_set of (base_effect) list (* effect set *)
+id_aux =  (* Identifier *)
+   Id of x
+ | DeIid of x (* remove infix status *)
 
 
 type 
@@ -87,14 +87,14 @@ order_aux =  (* vector order specifications, of kind Order *)
 
 
 type 
-id_aux =  (* Identifier *)
-   Id of x
- | DeIid of x (* remove infix status *)
+effect_aux =  (* effect set, of kind Effects *)
+   Effect_var of kid
+ | Effect_set of (base_effect) list (* effect set *)
 
 
 type 
-effect = 
-   Effect_aux of effect_aux * l
+id = 
+   Id_aux of id_aux * l
 
 
 type 
@@ -103,8 +103,8 @@ order =
 
 
 type 
-id = 
-   Id_aux of id_aux * l
+effect = 
+   Effect_aux of effect_aux * l
 
 
 type 
@@ -163,11 +163,6 @@ lit_aux =  (* Literal constant *)
 
 
 type 
-typquant = 
-   TypQ_aux of typquant_aux * l
-
-
-type 
 typ_aux =  (* Type expressions, of kind $_$ *)
    Typ_wild (* Unspecified type *)
  | Typ_id of id (* Defined type *)
@@ -190,6 +185,11 @@ and typ_arg =
 
 
 type 
+typquant = 
+   TypQ_aux of typquant_aux * l
+
+
+type 
 lit = 
    L_aux of lit_aux * l
 
@@ -200,10 +200,7 @@ typschm_aux =  (* type scheme *)
 
 
 type 
-'a fpat = 
-   FP_aux of 'a fpat_aux * 'a annot
-
-and 'a pat_aux =  (* Pattern *)
+'a pat_aux =  (* Pattern *)
    P_lit of lit (* literal constant pattern *)
  | P_wild (* wildcard *)
  | P_as of 'a pat * id (* named pattern *)
@@ -223,6 +220,9 @@ and 'a pat =
 and 'a fpat_aux =  (* Field pattern *)
    FP_Fpat of id * 'a pat
 
+and 'a fpat = 
+   FP_aux of 'a fpat_aux * 'a annot
+
 
 type 
 typschm = 
@@ -241,7 +241,7 @@ type
  | E_if of 'a exp * 'a exp * 'a exp (* conditional *)
  | E_for of id * 'a exp * 'a exp * 'a exp * order * 'a exp (* loop *)
  | E_vector of ('a exp) list (* vector (indexed from 0) *)
- | E_vector_indexed of ((int * 'a exp)) list (* vector (indexed consecutively) *)
+ | E_vector_indexed of ((int * 'a exp)) list * 'a opt_default (* vector (indexed consecutively) *)
  | E_vector_access of 'a exp * 'a exp (* vector access *)
  | E_vector_subrange of 'a exp * 'a exp * 'a exp (* subvector extraction *)
  | E_vector_update of 'a exp * 'a exp * 'a exp (* vector functional update *)
@@ -282,6 +282,13 @@ and 'a fexps_aux =  (* Field-expression list *)
 
 and 'a fexps = 
    FES_aux of 'a fexps_aux * 'a annot
+
+and 'a opt_default_aux =  (* Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map *)
+   Def_val_empty
+ | Def_val_dec of 'a exp
+
+and 'a opt_default = 
+   Def_val_aux of 'a opt_default_aux * 'a annot
 
 and 'a pexp_aux =  (* Pattern match *)
    Pat_exp of 'a pat * 'a exp

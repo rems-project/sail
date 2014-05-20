@@ -622,7 +622,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let t = {t = Tapp("vector",[TA_nexp({nexp=Nconst 0});TA_nexp({nexp=Nconst (List.length es)});TA_ord({order=Oinc});TA_typ item_t])} in
       let t',cs',e' = type_coerce (Expr l) d_env t (E_aux(E_vector es,(l,Base(([],t),Emp_local,[],pure_e)))) expect_t in
       (e',t',t_env,cs@cs',effect)
-    | E_vector_indexed eis ->
+    | E_vector_indexed(eis,default) ->
       let item_t = match expect_t.t with
         | Tapp("vector",[base;rise;ord;TA_typ item_t]) -> item_t
         | _ -> new_t () in
@@ -639,7 +639,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 				 eis) ([],[],pure_e,first)) in
       let t = {t = Tapp("vector",[TA_nexp({nexp=Nconst first});TA_nexp({nexp=Nconst (List.length eis)});
 				  TA_ord({order= if is_increasing then Oinc else Odec});TA_typ item_t])} in
-      let t',cs',e' = type_coerce (Expr l) d_env t (E_aux(E_vector_indexed es,(l,Base(([],t),Emp_local,[],pure_e)))) expect_t in
+      let t',cs',e' = type_coerce (Expr l) d_env t (E_aux(E_vector_indexed(es,default),(l,Base(([],t),Emp_local,[],pure_e)))) expect_t in
       (e',t',t_env,cs@cs',effect)
     | E_vector_access(vec,i) ->
       let base,rise,ord = new_n(),new_n(),new_o() in

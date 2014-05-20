@@ -1,0 +1,63 @@
+import Interp
+import Interp_lib
+open import Interp_interface
+
+import Num
+
+val intern_value : value -> Interp.value
+val extern_value : Interp.value -> value
+val extern_reg : Interp.reg_form -> maybe (integer * integer) -> reg_name
+
+let build_context defs = Interp.to_top_env defs
+
+let to_bits l = (List.map (fun b -> match b with
+                               | false -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero Interp_ast.Unknown)) 
+			       | true ->  (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_one Interp_ast.Unknown)) end) l)
+let from_bits l = (List.map (fun b -> match b with
+                                 | Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero _) -> false
+				 | _ -> true end) l) 
+let rec to_bytes l = match l with
+  | [] -> []
+  | (a::b::c::d::e::f::g::h::rest) ->
+    (integerFromBoolList [a;b;c;d;e;f;g;h])::(to_bytes rest)
+end
+		   
+let intern_value v = match v with
+  | Bitvector bs -> Interp.V_vector 0 true  (to_bits bs)
+  | Bytevector bys -> Interp.V_vector 0 true (to_bits (List.concat (List.map (bitSeqFromInteger 8 Nothing) bys)))
+  | Unknown -> Interp.V_unknown
+end
+
+let extern_value for_mem v = match v with
+  | Interp.V_vector _ true bits ->
+    if for_mem 
+    then Bytevector (to_bytes (from_bits bits))
+    else Bitvector (from_bits bits)
+  | _ -> Unknown
+end
+
+let extern_reg r slice = match (r,slice) with
+  | (Interp.Reg(Id_aux (Id x,_)),Nothing) -> Reg x
+  | (Interp.Reg(Id_aux (Id x,_)),Just(i1,i2)) -> Reg_slice x (i1,i2)
+  | (Interp.SubReg (Id_aux (Id x,_)) (Interp.Reg(Id_aux (Id y,_))) (Interp_ast.BF_aux(Interp_ast.BF_single i) _),Nothing) -> Reg_field x y (i,i)
+end
+
+let initial_instruction_state top_level main arg = 
+  Interp.Frame Nothing (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) [ intern_value arg ]) (Interp_ast.Unknown, Nothing)) top_level [] Interp.emem
+
+let interp mode i_state = 
+  match Interp.resume mode i_state None with
+  | Interp.Value _ -> Done
+  | Interp.Error l msg -> Error msg (*Todo, add the l information the string format*)
+  | Interp.Action a next_state ->
+    match a with
+    | Interp.Read_reg reg_form slice -> Read_reg reg_form (fun v -> Interp.add_answer_to_stack (intern_value v) next_state)
+    | Interp.Write_reg reg_form slice value -> Write_reg reg_form (extern_value value) next_state
+    | Interp.Read_mem (Id_aux (Id i) _) value slice 
+        (*Need to lookup the Mem function used to determine appropriate value, and possible appropriate read_kind *)
+      -> Read_mem Interp.Read_plain (extern_value value) (fun v -> Interp.add_answer_to_stack (intern_value v) next_state)
+    | Interp.Write_mem (Id_aux (id i) _) loc_val slice write_val ->
+      Write_mem Interp.Write_plain (extern_value loc_val) (extern_value write_val) next_state
+    | Interp.Call_extern id value -> (*Connect here to a list of external functions*) foo
+    end 
+  end

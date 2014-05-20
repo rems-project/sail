@@ -208,7 +208,7 @@ exp_aux =  (* Expression *)
  | E_if of exp * exp * exp (* conditional *)
  | E_for of id * exp * exp * exp * atyp * exp (* loop *)
  | E_vector of (exp) list (* vector (indexed from 0) *)
- | E_vector_indexed of ((int * exp)) list (* vector (indexed consecutively) *)
+ | E_vector_indexed of ((int * exp)) list * opt_default (* vector (indexed consecutively) *)
  | E_vector_access of exp * exp (* vector access *)
  | E_vector_subrange of exp * exp * exp (* subvector extraction *)
  | E_vector_update of exp * exp * exp (* vector functional update *)
@@ -237,6 +237,13 @@ and fexps_aux =  (* Field-expression list *)
 and fexps = 
    FES_aux of fexps_aux * l
 
+and opt_default_aux =  (* Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map *)
+   Def_val_empty
+ | Def_val_dec of exp
+
+and opt_default = 
+   Def_val_aux of opt_default_aux * l
+
 and pexp_aux =  (* Pattern match *)
    Pat_exp of pat * exp
 
@@ -264,6 +271,17 @@ type_union_aux =  (* Type union constructors *)
 
 
 type 
+rec_opt_aux =  (* Optional recursive annotation for functions *)
+   Rec_nonrec (* non-recursive *)
+ | Rec_rec (* recursive *)
+
+
+type 
+funcl_aux =  (* Function clause *)
+   FCL_Funcl of id * pat * exp
+
+
+type 
 tannot_opt_aux =  (* Optional type annotation for functions *)
    Typ_annot_opt_none
  | Typ_annot_opt_some of typquant * atyp
@@ -273,17 +291,6 @@ type
 effect_opt_aux =  (* Optional effect annotation for functions *)
    Effect_opt_pure (* sugar for empty effect set *)
  | Effect_opt_effect of atyp
-
-
-type 
-rec_opt_aux =  (* Optional recursive annotation for functions *)
-   Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
-
-
-type 
-funcl_aux =  (* Function clause *)
-   FCL_Funcl of id * pat * exp
 
 
 type 
@@ -307,16 +314,6 @@ type_union =
 
 
 type 
-tannot_opt = 
-   Typ_annot_opt_aux of tannot_opt_aux * l
-
-
-type 
-effect_opt = 
-   Effect_opt_aux of effect_opt_aux * l
-
-
-type 
 rec_opt = 
    Rec_aux of rec_opt_aux * l
 
@@ -327,10 +324,13 @@ funcl =
 
 
 type 
-val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_no_rename of typschm * id
- | VS_extern_spec of typschm * id * string
+tannot_opt = 
+   Typ_annot_opt_aux of tannot_opt_aux * l
+
+
+type 
+effect_opt = 
+   Effect_opt_aux of effect_opt_aux * l
 
 
 type 
@@ -343,19 +343,13 @@ type_def_aux =  (* Type definition body *)
 
 
 type 
-dec_spec_aux =  (* Register declarations *)
-   DEC_reg of atyp * id
-
-
-type 
-default_typing_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of base_kind * kid
- | DT_typ of typschm * id
-
-
-type 
 fundef_aux =  (* Function definition *)
    FD_function of rec_opt * tannot_opt * effect_opt * (funcl) list
+
+
+type 
+dec_spec_aux =  (* Register declarations *)
+   DEC_reg of atyp * id
 
 
 type 
@@ -369,8 +363,16 @@ scattered_def_aux =  (* Function and type union definitions that can be spread a
 
 
 type 
-val_spec = 
-   VS_aux of val_spec_aux * l
+val_spec_aux =  (* Value type specification *)
+   VS_val_spec of typschm * id
+ | VS_extern_no_rename of typschm * id
+ | VS_extern_spec of typschm * id * string
+
+
+type 
+default_typing_spec_aux =  (* Default kinding or typing assumption *)
+   DT_kind of base_kind * kid
+ | DT_typ of typschm * id
 
 
 type 
@@ -379,23 +381,28 @@ type_def =
 
 
 type 
-dec_spec = 
-   DEC_aux of dec_spec_aux * l
-
-
-type 
-default_typing_spec = 
-   DT_aux of default_typing_spec_aux * l
-
-
-type 
 fundef = 
    FD_aux of fundef_aux * l
 
 
 type 
+dec_spec = 
+   DEC_aux of dec_spec_aux * l
+
+
+type 
 scattered_def = 
    SD_aux of scattered_def_aux * l
+
+
+type 
+val_spec = 
+   VS_aux of val_spec_aux * l
+
+
+type 
+default_typing_spec = 
+   DT_aux of default_typing_spec_aux * l
 
 
 type 
