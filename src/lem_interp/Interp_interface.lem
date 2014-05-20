@@ -14,11 +14,13 @@ type value =
 type instruction_state = Interp.stack
 type context = Interp.top_level
 
+type slice = (integer * integer)
+
 type reg_name = 
 | Reg of string (*Name of the register, accessing the entire register*)
-| Reg_slice of string * integer * integer (*Name of the register, accessing from the first to second integer*)
-| Reg_field of string * string * integer * integer (*Name of the register, name of the field of the register accessed, the index range of the field*)
-| Reg_f_slice of string * string * integer * integer * integer * integer (* Same as above but only accessing from the third to the fourth integer of the field *)
+| Reg_slice of string * slice (*Name of the register, accessing from the first to second integer of the slice*)
+| Reg_field of string * string * slice (*Name of the register, name of the field of the register accessed, the slice of the field*)
+| Reg_f_slice of string * string * slice * slice (* Same as above but only accessing second slice of the field *)
 
 type outcome =
 | Read_mem of read_kind * value * (value -> instruction_state)

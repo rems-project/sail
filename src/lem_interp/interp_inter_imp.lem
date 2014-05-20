@@ -2,14 +2,17 @@ import Interp
 import Interp_lib
 open import Interp_interface
 
+import Num
+
 val intern_value : value -> Interp.value
 val extern_value : Interp.value -> value
 
 let build_context defs = Interp.to_top_env defs
 
 let intern_value v = match v with
-  | Bitvector bs -> Interp.V_vector 0 true (List.map (fun | 0 -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero Interp_ast.Unknown)) 
-							  | _ -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_one Interp_ast.Unknown))) bs)
+  | Bitvector bs -> Interp.V_vector 0 true (List.map (fun | false -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero Interp_ast.Unknown)) 
+							  | true -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_one Interp_ast.Unknown))) bs)
+  | Bytevector bys -> Interp.V_vector 0 true (List.map 
   | Unknown -> Interp.V_unknown
 end
 
