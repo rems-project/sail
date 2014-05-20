@@ -1146,6 +1146,7 @@ let doc_exp, doc_let =
   (* adding parens and loop for lower precedence *)
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
   | E_cons (_, _)|E_field (_, _)|E_assign (_, _)
+  | E_if _ | E_for _ | E_let _
   | E_app_infix (_,
     (* for every app_infix operator caught at a higher precedence,
      * we need to wrap around with parens *)
