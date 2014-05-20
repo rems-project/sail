@@ -775,14 +775,17 @@ let doc_exp, doc_let =
   | E_internal_cast((_,NoTyp),e) -> atomic_exp e
   | E_internal_cast((_,Base((_,t),_,_,_)), (E_aux(_,(_,eannot)) as e)) ->
       (match t.t,eannot with
-      (* XXX I don't understand why we can hide the internal cast here *)
+      (* XXX I don't understand why we can hide the internal cast here
+         AAA Because an internal cast between vectors is only generated to reset the base access;
+             the type checker generates far more than are needed and they're pruned off here, after constraint resolution *)
       | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_)
           when nexp_eq n1 n2 -> atomic_exp e
       | _ -> prefix 2 1 (parens (doc_typ (t_to_typ t))) (group (atomic_exp e)))
   | E_tuple exps ->
       parens (separate_map comma exp exps)
   | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
-      (* XXX E_record is not handled by parser currently *)
+      (* XXX E_record is not handled by parser currently
+         AAA I don't think the parser can handle E_record due to ambiguity with blocks; initial_check looks for blocks that are all field assignments and converts *)
       braces (separate_map semi_sp doc_fexp fexps)
   | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
       braces (doc_op (string "with") (exp e) (separate_map semi_sp doc_fexp fexps))
@@ -830,7 +833,8 @@ let doc_exp, doc_let =
   | E_app_infix(l,op,r) ->
       failwith ("unexpected app_infix operator " ^ (pp_format_id op))
       (* doc_op (doc_id op) (exp l) (exp r) *)
-  (* XXX missing case *)
+  (* XXX missing case
+     AAA internal_cast should never have an overload, if it's been seen it's a bug *)
   | E_internal_cast ((_, Overload (_, _)), _) | E_internal_exp _ -> assert false
 
   and let_exp (LB_aux(lb,_)) = match lb with

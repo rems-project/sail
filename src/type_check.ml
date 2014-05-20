@@ -547,7 +547,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	(match (select_overload_variant d_env variants arg_t) with
 	| NoTyp -> typ_error l ("No matching function found with name " ^ i ^ " that expects parameters " ^ (t_to_string arg_t))
 	| Base((params,t),tag,cs,ef) ->
-          let _ = Printf.eprintf "Selected an overloaded function for %s, variant with function type %s\n" i (t_to_string t) in
+          (*let _ = Printf.eprintf "Selected an overloaded function for %s, variant with function type %s\n" i (t_to_string t) in*)
 	  (match t.t with
 	  | Tfn(arg,ret,ef') ->
             (match arg.t,arg_t.t with
