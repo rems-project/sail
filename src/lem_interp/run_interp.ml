@@ -73,8 +73,10 @@ let rec env_to_string = function
 
 let rec stack_to_string = function
   | Top -> "Top"
-  | Frame(Some id,exp,t_level,env,mem,s) ->
-    sprintf "(Frame of %s, e, (%s), m, %s)" (id_to_string id) (env_to_string env) (stack_to_string s)
+  | Hole_frame(id,exp,t_level,env,mem,s) ->
+    sprintf "(Hole_frame of %s, e, (%s), m, %s)" (id_to_string id) (env_to_string env) (stack_to_string s)
+  | Thunk_frame(exp,t_level,env,mem,s) ->
+    sprintf "(Thunk_frame of e, (%s), m, %s)" (env_to_string env) (stack_to_string s)
 ;;  
 
 let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%s, %s)"
@@ -216,7 +218,7 @@ let run
       (*debugf "%s: suspended on action %s, with stack %s\n" name (act_to_string a) (stack_to_string s);*)
       let return, env' = perform_action env a in
       debugf "%s: action returned %s\n" name (val_to_string return);
-      loop env' (resume {eager_eval = true} s return)
+      loop env' (resume {eager_eval = true} s (Some return))
   | Error(l, e) -> debugf "%s: %s: error: %s\n" name (loc_to_string l) e; false, env in
   debugf "%s: starting\n" name;
   try

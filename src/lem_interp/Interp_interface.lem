@@ -1,4 +1,5 @@
 import Interp
+open import Num
 
 type read_kind = Interp.read_kind
 type write_kind = Interp.write_kind
@@ -42,7 +43,7 @@ type event =
 (*Should multiple memory accesses be represented with a special form to denote this or potentially merged into one read or left in place*)
 
 
-val build_context : Interp.defs Interp.tannot -> context
+val build_context : Interp_ast.defs Interp.tannot -> context
 val initial_instruction_state : context -> string -> value -> instruction_state
 
 type interp_mode = <| eager_eval : bool |>

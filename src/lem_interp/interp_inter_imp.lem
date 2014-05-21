@@ -1,30 +1,30 @@
 import Interp
 import Interp_lib
+open import Interp_ast
 open import Interp_interface
-
-import Num
+open import Pervasives
 
 val intern_value : value -> Interp.value
-val extern_value : Interp.value -> value
+val extern_value : bool -> Interp.value -> value
 val extern_reg : Interp.reg_form -> maybe (integer * integer) -> reg_name
 
 let build_context defs = Interp.to_top_env defs
 
 let to_bits l = (List.map (fun b -> match b with
-                               | false -> (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero Interp_ast.Unknown)) 
-			       | true ->  (Interp.V_lit (Interp_ast.L_aux Interp_ast.L_one Interp_ast.Unknown)) end) l)
+                               | false -> (Interp.V_lit (L_aux L_zero Interp_ast.Unknown)) 
+			       | true ->  (Interp.V_lit (L_aux L_one Interp_ast.Unknown)) end) l)
 let from_bits l = (List.map (fun b -> match b with
-                                 | Interp.V_lit (Interp_ast.L_aux Interp_ast.L_zero _) -> false
+                                 | Interp.V_lit (L_aux L_zero _) -> false
 				 | _ -> true end) l) 
 let rec to_bytes l = match l with
   | [] -> []
   | (a::b::c::d::e::f::g::h::rest) ->
-    (integerFromBoolList [a;b;c;d;e;f;g;h])::(to_bytes rest)
+    (natFromInteger(integerFromBoolList (true,[a;b;c;d;e;f;g;h])))::(to_bytes rest)
 end
 		   
 let intern_value v = match v with
   | Bitvector bs -> Interp.V_vector 0 true  (to_bits bs)
-  | Bytevector bys -> Interp.V_vector 0 true (to_bits (List.concat (List.map (bitSeqFromInteger 8 Nothing) bys)))
+  | Bytevector bys -> Interp.V_vector 0 true (to_bits (List.concat (List.map (fun n -> boolListFrombitSeq 8 (bitSeqFromInteger (Just 8) (integerFromNat n))) bys)))
   | Unknown -> Interp.V_unknown
 end
 
@@ -37,27 +37,40 @@ let extern_value for_mem v = match v with
 end
 
 let extern_reg r slice = match (r,slice) with
-  | (Interp.Reg(Id_aux (Id x,_)),Nothing) -> Reg x
-  | (Interp.Reg(Id_aux (Id x,_)),Just(i1,i2)) -> Reg_slice x (i1,i2)
-  | (Interp.SubReg (Id_aux (Id x,_)) (Interp.Reg(Id_aux (Id y,_))) (Interp_ast.BF_aux(Interp_ast.BF_single i) _),Nothing) -> Reg_field x y (i,i)
+  | (Interp.Reg (Id_aux (Id x) _) _,Nothing) -> Reg x
+  | (Interp.Reg (Id_aux (Id x) _) _,Just(i1,i2)) -> Reg_slice x (i1,i2)
+  | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_single i) _),Nothing) -> Reg_field x y (i,i)
 end
 
 let initial_instruction_state top_level main arg = 
-  Interp.Frame Nothing (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) [ intern_value arg ]) (Interp_ast.Unknown, Nothing)) top_level [] Interp.emem
+  Interp.Thunk_frame (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) [ Interp.to_exp (intern_value arg) ]) (Interp_ast.Unknown, Nothing)) top_level [] Interp.emem
+
+(*For now, append to this list to add more external functions; should add to the mode record for more perhaps *)
+let external_functions = 
+  Interp_lib.function_map
+
+type mem_function = (string * maybe read_kind * maybe write_kind * Interp.value -> value)
+
+let memory_functions =
+  [ ("MEM", Just(Interp.Read_plain), Just(Interp.Write_plain), (fun v -> extern_value true v));
+  ]
 
 let interp mode i_state = 
-  match Interp.resume mode i_state None with
-  | Interp.Value _ -> Done
+  match Interp.resume mode i_state Nothing with
+  | Interp.Value _ _ -> Done
   | Interp.Error l msg -> Error msg (*Todo, add the l information the string format*)
   | Interp.Action a next_state ->
     match a with
-    | Interp.Read_reg reg_form slice -> Read_reg reg_form (fun v -> Interp.add_answer_to_stack (intern_value v) next_state)
-    | Interp.Write_reg reg_form slice value -> Write_reg reg_form (extern_value value) next_state
+    | Interp.Read_reg reg_form slice -> Read_reg (extern_reg reg_form slice) (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
+    | Interp.Write_reg reg_form slice value -> Write_reg (extern_reg reg_form slice) (extern_value false value) next_state
     | Interp.Read_mem (Id_aux (Id i) _) value slice 
         (*Need to lookup the Mem function used to determine appropriate value, and possible appropriate read_kind *)
-      -> Read_mem Interp.Read_plain (extern_value value) (fun v -> Interp.add_answer_to_stack (intern_value v) next_state)
-    | Interp.Write_mem (Id_aux (id i) _) loc_val slice write_val ->
-      Write_mem Interp.Write_plain (extern_value loc_val) (extern_value write_val) next_state
-    | Interp.Call_extern id value -> (*Connect here to a list of external functions*) foo
+      -> Read_mem Interp.Read_plain (extern_value true value) (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
+    | Interp.Write_mem (Id_aux (Id i) _) loc_val slice write_val ->
+      Write_mem Interp.Write_plain (extern_value true loc_val) (extern_value true write_val) (fun b -> next_state)
+    | Interp.Call_extern (Id_aux (Id id) _) value -> 
+      match List.lookup with
+      | Nothing -> Error ("External function not available " ^ id)
+      | Just f  -> Interp.resume mode next_state Just value end
     end 
   end

@@ -122,7 +122,8 @@ type action =
 (* Inverted call stack, where top item on the stack is waiting for an action to resolve and all other frames for the right stack *)
 type stack = 
  | Top
- | Frame of maybe id * exp tannot * top_level * env * lmem * stack
+ | Hole_frame of id * exp tannot * top_level * env * lmem * stack (* Stack frame waiting to fill a hole with a value *)
+ | Thunk_frame of exp tannot * top_level * env * lmem * stack (* Paused stack frame *)
 
 (*Internal representation of outcomes from running the interpreter. Actions request an external party to resolve a request *)
 type outcome =
@@ -139,7 +140,7 @@ val to_top_env : defs tannot -> (maybe outcome * top_level)
 val interp :interp_mode -> defs tannot -> exp tannot -> outcome
 
 (* Takes a paused partially evaluated expression, puts the value into the environment, and runs again *)
-val resume : interp_mode -> stack -> value -> outcome
+val resume : interp_mode -> stack -> maybe value -> outcome
 
 val to_register_fields : defs tannot -> list (id * list (id * index_range))
 let rec to_register_fields (Defs defs) = 
@@ -341,8 +342,21 @@ end
 
 let add_to_top_frame e_builder stack =
   match stack with
-  | Frame id e t_level env mem stack -> Frame id (e_builder e) t_level env mem stack
+  | Top -> Top
+  | Hole_frame id e t_level env mem stack -> Hole_frame id (e_builder e) t_level env mem stack
+  | Thunk_frame e t_level env mem stack -> Thunk_frame (e_builder e) t_level env mem stack
   end
+
+(*Converts a Hole_frame into a Thunk_frame, pushing to almost the top of the stack to insert the value at the innermost context *)
+val add_answer_to_stack : stack -> value -> stack
+let rec add_answer_to_stack stack v = 
+  match stack with
+  | Top -> Top
+  | Hole_frame id e t_level env mem Top -> Thunk_frame e t_level ((id,v)::env) mem Top
+  | Thunk_frame e t_level env mem Top -> Thunk_frame e t_level env mem Top
+  | Hole_frame id e t_level env mem stack -> Hole_frame id e t_level env mem (add_answer_to_stack stack v)
+  | Thunk_frame e t_level env mem stack -> Thunk_frame e t_level env mem (add_answer_to_stack stack v)
+end
 
 let id_of_string s = (Id_aux (Id s) Unknown)
 
@@ -678,7 +692,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                         match (tag,v) with 
 	                | (Tag_extern _, V_register regform) ->
 	                  (Action (Read_reg regform Nothing) 
-	                     (Frame (Just (id_of_string "0"))
+	                     (Hole_frame (id_of_string "0")
 		                (E_aux (E_id (id_of_string "0")) (Unknown, (val_annot (reg_to_t regform)))) t_level le lm Top), lm,le)
 			| (_,V_vector start inc items) -> 
 			  (match typ with
@@ -718,7 +732,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		| Just(V_register regform) -> regform
 		| _ -> Reg id annot end end in
 	  (Action (Read_reg regf Nothing)
-	          (Frame (Just (Id_aux (Id "0") Unknown))
+	          (Hole_frame (Id_aux (Id "0") Unknown)
 		         (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),
            l_mem,l_env)
         | _ -> (Error l (String.stringAppend "Internal error: tag other than empty,enum,or extern " name),l_mem,l_env)
@@ -989,7 +1003,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
               resolve_outcome (interp_main mode t_level env l_mem exp)
 	                      (fun ret lm le -> (Value ret Tag_empty, lm,l_env))
                               (fun a -> update_stack a 
-				(fun stack -> (Frame (Just (id_of_string "0")) (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
+				(fun stack -> (Hole_frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
              end)
           | Nothing -> (Error l (String.stringAppend "Internal error: function with empty tag unfound " name),lm,le) end)
 	| Tag_spec ->  
@@ -1002,7 +1016,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
               resolve_outcome (interp_main mode t_level env l_mem exp)
 	                      (fun ret lm le -> (Value ret Tag_empty, lm,l_env))
                               (fun a -> update_stack a 
-				(fun stack -> (Frame (Just (id_of_string "0")) (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
+				(fun stack -> (Hole_frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
              end)
           | Nothing -> (Error l (String.stringAppend "Specified function must be defined before executing " name),lm,le) end)
         | Tag_ctor ->
@@ -1015,10 +1029,10 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           if has_memory_effect (match effect with | Effect_aux(Effect_set es) _ -> es | _ -> [] end) 
           then
             (Action (Read_mem (id_of_string name_ext) v Nothing) 
-	            (Frame (Just (Id_aux (Id "0") l)) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
+	            (Hole_frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
           else
             (Action (Call_extern name_ext v) 
-	            (Frame (Just (Id_aux (Id "0") l)) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
+	            (Hole_frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
         | _ -> (Error l (String.stringAppend "Tag other than empty, spec, ctor, or extern on function call " name),lm,le) end)
       | out -> out end)
     | E_app_infix lft op r -> 
@@ -1042,7 +1056,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 				                 resolve_outcome (interp_main mode t_level env emem exp)
 				                   (fun ret lm le -> (Value ret Tag_empty,l_mem,l_env))
                                                    (fun a -> update_stack a 
-						     (fun stack -> (Frame (Just (Id_aux (Id "0") l))
+						     (fun stack -> (Hole_frame (Id_aux (Id "0") l)
 								          (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
 				                end)end)
                                            | Tag_spec ->
@@ -1055,13 +1069,13 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 				                 resolve_outcome (interp_main mode t_level env emem exp)
 				                   (fun ret lm le -> (Value ret Tag_empty,l_mem,l_env))
                                                    (fun a -> update_stack a 
-						     (fun stack -> (Frame (Just (Id_aux (Id "0") l))
+						     (fun stack -> (Hole_frame (Id_aux (Id "0") l)
 								          (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
 				                end)end)
                                            | Tag_extern ext_name ->
                                              let ext_name = match ext_name with Just s -> s | Nothing -> name end in
                                              (Action (Call_extern ext_name (V_tuple [lv;rv])) 
-						     (Frame (Just (Id_aux (Id "0") l)) 
+						(Hole_frame (Id_aux (Id "0") l) 
 							    (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top),lm,le) end)
                                          (fun a -> update_stack a (add_to_top_frame (fun r ->E_aux (E_app_infix (to_exp lv) op r) (l,annot)))))
                        (fun a -> update_stack a (add_to_top_frame (fun lft -> (E_aux (E_app_infix lft op r) (l,annot)))))
@@ -1134,8 +1148,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
         | Tag_extern _ ->
 	  let regf = Reg id annot in
 	  let request = (Action (Write_reg regf Nothing value) 
-			        (Frame (Just (Id_aux (Id "0") l)) 
-				       (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
+			        (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
           if is_top_level then (request,Nothing) else (request,Just (fun e -> LEXP_aux (LEXP_id id) (l,annot)))
         | _ -> ((Error l (String.stringAppend "Internal error: writing to id with tag other than extern or empty " (get_id id)),l_mem,l_env),Nothing)
       end 
@@ -1147,7 +1160,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
         (match tag with
         | Tag_extern ->
           let request = (Action (Write_mem id v Nothing value) 
-                                (Frame (Just (Id_aux (Id "0") l)) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env lm Top),lm,l_env) in
+                                (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env lm Top),lm,l_env) in
           if is_top_level then (request,Nothing) 
 	  else (request,Just (fun e -> 
 	                       (LEXP_aux (LEXP_memory id (match v with | V_tuple vs -> (List.map to_exp vs) | v -> [to_exp v]end)) (l,annot))))
@@ -1177,8 +1190,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
         | Tag_extern _ ->
 	  let regf = Reg id annot in
 	  let request = (Action (Write_reg regf Nothing value) 
-			        (Frame (Just (Id_aux (Id "0") l)) 
-				       (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
+			        (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
           if is_top_level then (request,Nothing) else (request,Just (fun e -> LEXP_aux (LEXP_cast typc id) (l,annot)))
         | _ -> ((Error l (String.stringAppend "Internal error: writing to id with tag other than extern or empty " (get_id id)),l_mem,l_env),Nothing)
       end 
@@ -1197,12 +1209,10 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
               (match (nth,is_top_level,maybe_builder) with
 	      | (V_register regform,true,_) ->
 		((Action (Write_reg regform Nothing value)
-		         (Frame (Just (Id_aux (Id "0") l))
-			        (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),Nothing)
+		         (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),Nothing)
 	      | (V_register regform,false,Just lexp_builder) ->
 		((Action (Write_reg regform Nothing value)
-		         (Frame (Just (Id_aux (Id "0") l))
-			        (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
+		         (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
                  Just (next_builder lexp_builder))
               | (V_boxref n t,true,_) -> ((Value (V_lit (L_aux L_unit Unknown)) Tag_empty, update_mem lm n value, l_env),Nothing)
               | (v,true,_) -> ((Error l "Vector does not contain reg or register values",lm,l_env),Nothing)
@@ -1355,26 +1365,25 @@ let interp mode defs exp =
   end
 
 let rec resume mode stack value =
-  match stack with
-  | Top -> Error Unknown "Top hit without place to put value"
-  | Frame (Just id) exp t_level env mem Top -> 
+  match (stack,value) with
+  | (Top,_) -> Error Unknown "Top hit without expression to evaluate"
+  | (Hole_frame id exp t_level env mem Top,Just value) -> 
     match interp_main mode t_level ((id,value)::env) mem exp with | (o,_,_) -> o end 
-  | Frame Nothing exp t_level env mem Top ->
-    match interp_main mode t_level env mem exp with | (o,_,_) -> o end
-  | Frame (Just id) exp t_level env mem stack ->
-    match resume mode stack value with
+  | (Hole_frame id exp t_level env mem stack,Just value) ->
+    match resume mode stack (Just value) with
     | Value v tag -> 
       match interp_main mode t_level ((id,v)::env) mem exp with | (o,_,_) -> o end 
-    | Action action stack -> Action action (Frame (Just id) exp t_level env mem stack)
+    | Action action stack -> Action action (Hole_frame id exp t_level env mem stack)
     | Error l s -> Error l s
     end  
-  | Frame Nothing exp t_level env mem stack ->
+  | (Thunk_frame exp t_level env mem Top,_) ->
+    match interp_main mode t_level env mem exp with | (o,_,_) -> o end
+  | (Thunk_frame exp t_level env mem stack,value) ->
     match resume mode stack value with
     | Value v tag -> 
       match interp_main mode t_level env mem exp with | (o,_,_) -> o end 
-    | Action action stack -> Action action (Frame Nothing exp t_level env mem stack)
+    | Action action stack -> Action action (Thunk_frame exp t_level env mem stack)
     | Error l s -> Error l s
     end  
-
   end
 
