@@ -49,28 +49,38 @@ let initial_instruction_state top_level main arg =
 let external_functions = 
   Interp_lib.function_map
 
-type mem_function = (string * maybe read_kind * maybe write_kind * Interp.value -> value)
+type mem_function = (string * (maybe read_kind * maybe write_kind * Interp.value -> value))
 
+(*List of memory functions; needs to be expanded with all of the memory functions needed for PPCMem.
+  Should probably be expanded into a parameter to mode as with above
+*)
 let memory_functions =
-  [ ("MEM", Just(Interp.Read_plain), Just(Interp.Write_plain), (fun v -> extern_value true v));
+  [ ("MEM", (Just(Interp.Read_plain), Just(Interp.Write_plain), (fun v -> extern_value true v)));
   ]
 
-let interp mode i_state = 
-  match Interp.resume mode i_state Nothing with
+let rec interp_to_outcome mode thunk = 
+  match thunk () with
   | Interp.Value _ _ -> Done
   | Interp.Error l msg -> Error msg (*Todo, add the l information the string format*)
   | Interp.Action a next_state ->
     match a with
     | Interp.Read_reg reg_form slice -> Read_reg (extern_reg reg_form slice) (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
     | Interp.Write_reg reg_form slice value -> Write_reg (extern_reg reg_form slice) (extern_value false value) next_state
-    | Interp.Read_mem (Id_aux (Id i) _) value slice 
-        (*Need to lookup the Mem function used to determine appropriate value, and possible appropriate read_kind *)
-      -> Read_mem Interp.Read_plain (extern_value true value) (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
+    | Interp.Read_mem (Id_aux (Id i) _) value slice ->
+      match List.lookup i memory_functions with
+      | (Just (Just read_k,_,f)) -> Read_mem read_k (f value) (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
+      | _ -> Error ("Memory " ^ i ^ " function with read kind not found")
+      end
     | Interp.Write_mem (Id_aux (Id i) _) loc_val slice write_val ->
-      Write_mem Interp.Write_plain (extern_value true loc_val) (extern_value true write_val) (fun b -> next_state)
-    | Interp.Call_extern (Id_aux (Id id) _) value -> 
-      match List.lookup with
-      | Nothing -> Error ("External function not available " ^ id)
-      | Just f  -> Interp.resume mode next_state Just value end
+      match List.lookup i memory_functions with
+      | (Just (_,Just write_k,f)) -> Write_mem write_k (f loc_val) (extern_value true write_val) (fun b -> next_state) 
+      | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
+      end
+    | Interp.Call_extern i value -> 
+      match List.lookup i external_functions with
+      | Nothing -> Error ("External function not available " ^ i)
+      | Just f  -> interp_to_outcome mode (fun _ -> Interp.resume mode next_state (Just (f value))) end
     end 
-  end
+  end 
+
+let interp mode i_state = interp_to_outcome mode (fun _ -> Interp.resume mode i_state Nothing)
