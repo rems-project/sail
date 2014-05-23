@@ -223,6 +223,33 @@ let lookup_field_type (field: string) ((id,r_kind,fields) : rec_env) : tannot =
   then List.assoc field fields
   else NoTyp
 
+let rec compare_nexps n1 n2 =
+  match n1.nexp,n2.nexp with 
+  | Nconst n1, Nconst n2 -> compare n1 n2
+  | Nconst _ , _        -> -1
+  | _        , Nconst _ ->  1
+  | Nvar i1  , Nvar i2  ->  compare i1 i2
+  | Nvar _   , _        -> -1
+  | _        , Nvar _   ->  1 
+  | Nuvar {nindex = n1}, Nuvar {nindex = n2} -> compare n1 n2
+  | Nuvar _  , _        -> -1
+  | _        , Nuvar _  ->  1
+  | Nmult(_,n1),Nmult(_,n2) -> compare_nexps n1 n2
+  | Nmult _  , _        -> -1
+  | _        , Nmult _  ->  1
+  | Nadd(n1,_),Nadd(n2,_) -> compare_nexps n1 n2
+  | Nadd _   , _        -> -1
+  | _        , Nadd _   ->  1
+  | N2n n1   , N2n n2   -> compare_nexps n1 n2
+  | N2n _    , _        -> -1
+  | _        , N2n _    ->  1
+  | Nneg n1  , Nneg n2  -> compare_nexps n1 n2
+
+let rec two_pow n =
+  match n with 
+  | 0 -> 1
+  | n -> 2*(two_pow (n-1))
+
 (* eval an nexp as much as possible *)
 let rec eval_nexp n =
   (*let _ = Printf.printf "eval_nexp of %s\n" (n_to_string n) in*)
@@ -259,15 +286,117 @@ let rec eval_nexp n =
       let n1' = eval_nexp n1 in
       (match n1'.nexp with
 	| Nconst i ->
-	  let rec two_pow n =
-	    match n with 
-	    | 0 -> 1
-	    | n -> 2*(two_pow (n-1)) in
 	  {nexp = Nconst(two_pow i)}
 	| _ -> {nexp = N2n n1'})
     | Nvar _ | Nuvar _ -> n
 
+let rec get_var n =
+  match n.nexp with
+  | Nvar _ | Nuvar _ -> Some n
+  | Nneg n -> get_var n
+  | Nmult (_,n1) -> get_var n1
+  | _ -> None
 
+let get_factor n =
+  match n.nexp with
+  | Nvar _ | Nuvar _ -> {nexp = Nconst 1}
+  | Nmult (n1,_) | Nneg n1 -> n1
+  | _ -> assert false
+
+let increment_factor n i =
+  match n.nexp with
+  | Nvar _ | Nuvar _ -> 
+    (match i.nexp with
+    | Nconst i -> {nexp = Nmult({nexp = Nconst (i + 1)},n)}
+    | _ -> {nexp = Nmult({nexp = Nadd(i,{nexp = Nconst 1})},n)})
+  | Nmult(n1,n2) ->
+    (match n1.nexp,i.nexp with
+    | Nconst i2,Nconst i -> { nexp = Nmult({nexp = Nconst (i + i2)},n2)}
+    | _ -> { nexp = Nmult({ nexp = Nadd(n1,i)},n2)})
+  | _ -> assert false
+
+let negate n = {nexp = Nmult ({nexp = Nconst (-1)},n)}
+
+let rec normalize_nexp n =
+  match n.nexp with
+  | Nconst _ | Nvar _ | Nuvar _ -> n
+  | Nneg n -> 
+    let n',to_recur,add_neg = (match n.nexp with
+      | Nconst i -> {nexp = Nconst (i*(-1))},false,false
+      | Nadd(n1,n2) -> {nexp = Nadd(negate n1,negate n2)},true,false
+      | Nneg n -> normalize_nexp n,false,false
+      | _ -> n,true,true) in
+    if to_recur 
+    then begin
+      let n' = normalize_nexp n' in
+        match n'.nexp,add_neg with
+        | Nconst i,true -> {nexp = Nconst (i*(-1))}
+        | _,false -> n'
+        | _,true -> negate n'
+    end
+    else n'
+  | N2n n -> 
+    let n' = normalize_nexp n in
+    (match n'.nexp with
+    | Nconst i -> {nexp = Nconst (two_pow i)}
+    | _ -> {nexp = N2n n'})
+  | Nadd(n1,n2) ->
+    let n1',n2' = normalize_nexp n1, normalize_nexp n2 in
+    (match n1'.nexp,n2'.nexp with
+    | Nconst i1, Nconst i2 -> {nexp = Nconst (i1+i2)}
+    | Nconst _, Nvar _ | Nconst _, Nuvar _ | Nconst _, N2n _ | Nconst _, Nneg _ | Nconst _, Nmult _ -> {nexp = Nadd(n2',n1') }
+    | Nvar _, Nconst _ | Nuvar _, Nconst _ | Nmult _, Nconst _ | N2n _, Nconst _ -> {nexp = Nadd(n1',n2')}
+    | Nvar _, Nuvar _ | Nvar _, N2n _ -> {nexp = Nadd (n2',n1')}
+    | Nadd(n11,n12), Nadd(n21,n22) ->
+      (match compare_nexps n11 n21 with
+      | -1 | 0 -> normalize_nexp {nexp = Nadd(n11, {nexp = Nadd(n12,n2')})}
+      | _ -> normalize_nexp {nexp = Nadd(n21, { nexp = Nadd(n22,n1') })})      
+    | Nadd(n11,n12), Nconst _ -> {nexp = Nadd(n11,{nexp = Nadd(n12,n2')}) }
+    | Nconst _, Nadd(n21,n22) -> {nexp = Nadd(n21,{nexp = Nadd(n22,n1')})}
+    | N2n n1, N2n n2 -> 
+      (match compare_nexps n1 n2 with
+      | -1 | 0 -> {nexp = Nadd (n2',n1')}
+      | _ -> { nexp = Nadd (n1',n2')})
+    | _ ->
+      match get_var n1', get_var n2' with
+      | Some(nv1),Some(nv2) ->
+        (match compare_nexps nv1 nv2 with
+        | -1 -> {nexp = Nadd (n2',n1')}
+        | 0 -> increment_factor n1' (get_factor n2')
+        |  _ -> {nexp = Nadd (n1',n2')})
+      | _ -> assert false)
+  | Nmult(n1,n2) ->
+    let n1',n2' = normalize_nexp n1, normalize_nexp n2 in
+    (match n1'.nexp,n2'.nexp with
+    | Nconst i1, Nconst i2 -> {nexp = Nconst (i1*i2)}
+    | Nconst 2, N2n n2 | N2n n2, Nconst 2 -> {nexp =N2n (normalize_nexp {nexp = Nadd(n2, {nexp = Nconst 1})})}
+    | Nconst _, Nvar _ | Nconst _, Nuvar _ | Nconst _, N2n _ | Nvar _, N2n _ -> { nexp = Nmult(n1',n2') }
+    | Nvar _, Nconst _ | Nuvar _, Nconst _ | N2n _, Nconst _ | Nvar _, Nmult _ | Nvar _, Nuvar _ -> { nexp = Nmult(n2',n1') }
+    | N2n n1, N2n n2 -> {nexp = N2n (normalize_nexp {nexp = Nadd(n1,n2)})}
+    | N2n _, Nvar _ | N2n _, Nuvar _ | N2n _, Nmult _ | Nuvar _, N2n _ | Nuvar _, Nmult _ -> {nexp =Nmult(n2',n1')}
+    | Nuvar {nindex = i1}, Nuvar {nindex = i2} ->
+      (match compare i1 i2 with
+      | 0 | 1 -> {nexp = Nmult(n1',n2')}
+      | _ -> {nexp = Nmult(n2',n1')})
+    | Nvar i1, Nvar i2 ->
+      (match compare i1 i2 with
+      | 0 | 1 -> {nexp = Nmult(n1',n2')}
+      | _ -> {nexp = Nmult(n2',n1')})
+    | Nconst _, Nadd(n21,n22) | Nvar _,Nadd(n21,n22) | Nuvar _,Nadd(n21,n22) | N2n _, Nadd(n21,n22) | Nmult _, Nadd(n21,n22) ->
+      normalize_nexp {nexp = Nadd( {nexp = Nmult(n1',n21)}, {nexp = Nmult(n1',n21)})}
+    | Nadd(n11,n12),Nconst _ | Nadd(n11,n12),Nvar _ | Nadd(n11,n12), Nuvar _ | Nadd(n11,n12), N2n _ | Nadd(n11,n12), Nmult _->
+      normalize_nexp {nexp = Nadd( {nexp = Nmult(n11,n2')}, {nexp = Nmult(n12,n2')})}
+    | Nadd(n11,n12),Nadd(n21,n22) ->
+      {nexp = Nadd( {nexp = Nmult(n11,n21)},
+                    {nexp = Nadd ({nexp = Nmult(n11,n22)},
+                                  {nexp = Nadd({nexp = Nmult(n12,n21)},
+                                               {nexp = Nmult(n12,n22)})})})}
+    | Nuvar _, Nvar _ | Nmult _, Nvar _| Nmult _, Nuvar _ | Nmult _, N2n _-> {nexp = Nmult (n1',n2')} 
+    | Nmult(n11,n12), Nconst _ -> {nexp = Nmult({nexp = Nmult(n11,n2')},{nexp = Nmult(n12,n2')})}
+    | Nmult _ ,Nmult(n21,n22) | Nconst _, Nmult(n21,n22) -> {nexp = Nmult({nexp = Nmult(n21,n1')},{nexp = Nmult(n22,n1')})}
+    | Nneg _,_ | _,Nneg _ -> assert false (* If things are normal, neg should be gone. *)
+    )
+    
 let v_count = ref 0
 let t_count = ref 0
 let n_count = ref 0
