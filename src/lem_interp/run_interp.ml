@@ -231,5 +231,5 @@ let run
   with e ->
     let trace = Printexc.get_backtrace () in
     debugf "%s: interpretor error %s\n%s\n" name (Printexc.to_string e) trace;
-    false, (reg, mem
+    false, (reg, mem)
 ;;
