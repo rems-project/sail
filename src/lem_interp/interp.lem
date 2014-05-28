@@ -8,6 +8,8 @@ open import Interp_ast
 
 type tannot = maybe (t * tag * list nec * effect)
 
+let get_exp_l (E_aux e (l,annot)) = l
+
 val pure : effect
 let pure = Effect_aux(Effect_set []) Unknown
 
@@ -667,6 +669,8 @@ let resolve_outcome to_match value_thunk action_thunk =
 
 let update_stack (Action act stack) fn = Action act (fn stack)  
 
+let debug_out e tl lm le = (Action (Debug (get_exp_l e)) (Thunk_frame e tl le lm Top),lm,le)
+
 (*Interpret a list of expressions, tracking local state but evaluating in the same scope (i.e. not tracking env) *)
 let rec exp_list mode t_level build_e build_v l_env l_mem vals exps =
   match exps with
@@ -740,9 +744,11 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     | E_if cond thn els ->
       resolve_outcome (interp_main mode t_level l_env l_mem cond)
 	              (fun value lm le -> 
-			match value with
-                          | V_lit(L_aux L_true _) -> interp_main mode t_level l_env lm thn
-                          | _ -> interp_main mode t_level l_env lm els end)
+			match (value,mode.eager_eval) with
+                          | (V_lit(L_aux L_true _),true) -> interp_main mode t_level l_env lm thn
+			  | (V_lit(L_aux L_true _),false) -> debug_out thn t_level lm l_env 
+                          | (_,true) -> interp_main mode t_level l_env lm els 
+			  | (_,false) -> debug_out els t_level lm l_env end)
                       (fun a -> update_stack a (add_to_top_frame (fun c -> (E_aux (E_if c thn els) (l,annot)))))
     | E_for id from to_ by ((Ord_aux o _) as order) exp ->
       let is_inc = match o with
@@ -764,24 +770,27 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                                                     if (from_num = to_num) 
                                                     then (Value(V_lit (L_aux L_unit l)) Tag_empty,lm,le)
                                                     else
-                                                      let (ftyp,ttyp,btyp) = (val_typ fval,val_typ tval,val_typ bval) in
-                                                      interp_main mode t_level le lm 
-                                                        (E_aux 
-							   (E_block 
-							      [(E_aux (E_let 
-								         (LB_aux (LB_val_implicit 
-									            (P_aux (P_id id) (fl,val_annot ftyp))
-									            (E_aux (E_lit(L_aux(L_num from_num) fl)) (fl,val_annot ftyp)))
-								            (Unknown,val_annot ftyp))
-								         exp) (l,annot));
-                                                               (E_aux (E_for id 
-                                                                         (if is_inc 
-                                                                          then (E_aux (E_lit (L_aux (L_num (from_num + by_num)) fl)) (fl,val_annot (combine_typs [ftyp;ttyp])))
-                                                                          else (E_aux (E_lit (L_aux (L_num (from_num - by_num)) fl)) (fl,val_annot (combine_typs [ttyp;ftyp]))))
-								         (E_aux (E_lit (L_aux (L_num to_num) tl)) (tl,val_annot ttyp))
-								         (E_aux (E_lit (L_aux (L_num by_num) bl)) (bl,val_annot btyp))
-								         order exp) (l,annot))])
-							   (l,annot))
+						      let (ftyp,ttyp,btyp) = (val_typ fval,val_typ tval,val_typ bval) in
+						      let  e = (E_aux 
+								  (E_block 
+								     [(E_aux (E_let 
+										(LB_aux (LB_val_implicit 
+											   (P_aux (P_id id) (fl,val_annot ftyp))
+											   (E_aux (E_lit(L_aux(L_num from_num) fl)) (fl,val_annot ftyp)))
+										   (Unknown,val_annot ftyp))
+										exp) (l,annot));
+								      (E_aux (E_for id 
+										(if is_inc 
+										 then (E_aux (E_lit (L_aux (L_num (from_num + by_num)) fl)) (fl,val_annot (combine_typs [ftyp;ttyp])))
+										 else (E_aux (E_lit (L_aux (L_num (from_num - by_num)) fl)) (fl,val_annot (combine_typs [ttyp;ftyp]))))
+										(E_aux (E_lit (L_aux (L_num to_num) tl)) (tl,val_annot ttyp))
+										(E_aux (E_lit (L_aux (L_num by_num) bl)) (bl,val_annot btyp))
+										order exp) (l,annot))])
+								  (l,annot)) in
+						      if mode.eager_eval
+						      then interp_main mode t_level le lm e 
+						      else debug_out e t_level lm le
+                                                        
                                                   | _ -> (Error l "internal error: by must be a number",lm,le) end)
                                                 (fun a -> update_stack a 
 						  (add_to_top_frame (fun b -> 
@@ -801,7 +810,10 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                       (fun v lm le ->
                         match find_case pats v with
                         | Nothing -> (Error l "No matching patterns in case",lm,le)
-                        | Just (env,exp) -> interp_main mode t_level (env++l_env) lm exp
+                        | Just (env,exp) -> 
+			  if mode.eager_eval
+			  then interp_main mode t_level (env++l_env) lm exp
+			  else debug_out exp t_level lm (env++l_env)
 		        end)
                       (fun a -> update_stack a (add_to_top_frame (fun e -> (E_aux (E_case e pats) (l,annot)))))
     | E_record(FES_aux (FES_Fexps fexps _) fes_annot) -> 
@@ -850,7 +862,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                         | V_record t fexps -> match in_env fexps id with
                                             | Just v -> (Value v Tag_empty,lm,l_env)
                                             | Nothing -> (Error l "Field not found in record",lm,le) end
-                        | _ -> (Error l "Field access of vectors not implemented",lm,le)
+    | _ -> (Error l "Field access of vectors not implemented",lm,le)
                         end )
                       (fun a -> 
 			match (exp,a) with
@@ -985,7 +997,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         | _ -> false end in
       exp_list mode t_level (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es) default) (l,annot))) 
                        (fun vals -> V_vector (List_extra.head indexes) is_inc vals) l_env l_mem [] exps
-    | E_block(exps) -> interp_block mode t_level l_env l_env l_mem exps
+    | E_block(exps) -> interp_block mode t_level l_env l_env l_mem l annot exps
     | E_app f args ->
       (match (exp_list mode t_level (fun es -> E_aux (E_app f es) (l,annot)) 
 		               (fun vs -> match vs with | [] -> V_lit (L_aux L_unit l) | [v] -> v | vs -> V_tuple vs end) 
@@ -1000,8 +1012,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	    | Nothing -> 
               (Error l (String.stringAppend "No matching pattern for function " name ),l_mem,l_env)
 	    | Just(env,exp) -> 
-              resolve_outcome (interp_main mode t_level env l_mem exp)
-	                      (fun ret lm le -> (Value ret Tag_empty, lm,l_env))
+              resolve_outcome (interp_main mode t_level env emem exp)
+	                      (fun ret lm le -> (Value ret Tag_empty, l_mem,l_env))
                               (fun a -> update_stack a 
 				(fun stack -> (Hole_frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
              end)
@@ -1013,8 +1025,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	    | Nothing -> 
               (Error l (String.stringAppend "No matching pattern for function " name ),l_mem,l_env)
 	    | Just(env,exp) -> 
-              resolve_outcome (interp_main mode t_level env l_mem exp)
-	                      (fun ret lm le -> (Value ret Tag_empty, lm,l_env))
+              resolve_outcome (interp_main mode t_level env emem exp)
+	                      (fun ret lm le -> (Value ret Tag_empty, l_mem,l_env))
                               (fun a -> update_stack a 
 				(fun stack -> (Hole_frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
              end)
@@ -1081,7 +1093,10 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                        (fun a -> update_stack a (add_to_top_frame (fun lft -> (E_aux (E_app_infix lft op r) (l,annot)))))
   | E_let (lbind : letbind tannot) exp -> 
     match (interp_letbind mode t_level l_env l_mem lbind) with
-    | ((Value v tag_l,lm,le),_) -> interp_main mode t_level le lm exp                                             
+    | ((Value v tag_l,lm,le),_) ->
+      if mode.eager_eval
+      then interp_main mode t_level le lm exp
+      else debug_out exp t_level lm le                                           
     | (((Action a s as o),lm,le),Just lbuild) ->  
       ((update_stack o (add_to_top_frame (fun e -> (E_aux (E_let (lbuild e) exp) (l,annot))))),lm,le)
     | (e,_) -> e end
@@ -1105,14 +1120,21 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                     (fun a -> update_stack a (add_to_top_frame (fun v -> (E_aux (E_assign lexp v) (l,annot)))))
   end
 
- and interp_block mode t_level init_env local_env local_mem exps =
+(*TODO shrink location information on recursive calls *)
+ and interp_block mode t_level init_env local_env local_mem l tannot exps =
    match exps with
     | [ ] -> (Value (V_lit (L_aux (L_unit) Unknown)) Tag_empty, local_mem, init_env)
-    | [ exp ] -> interp_main mode t_level local_env local_mem exp
+    | [ exp ] -> 
+      if mode.eager_eval
+      then interp_main mode t_level local_env local_mem exp
+      else debug_out exp t_level local_mem local_env
     | exp:: exps ->
       resolve_outcome (interp_main mode t_level local_env local_mem exp)
-                      (fun _ lm le -> interp_block mode t_level init_env le lm exps)
-                      (fun a -> update_stack a (add_to_top_frame (fun e -> (E_aux (E_block(e::exps)) (Unknown,Nothing)))))
+                      (fun _ lm le -> 
+			if mode.eager_eval
+			then interp_block mode t_level init_env le lm l tannot exps
+			else debug_out (E_aux (E_block exps) (l,tannot)) t_level lm le)
+                      (fun a -> update_stack a (add_to_top_frame (fun e -> (E_aux (E_block(e::exps)) (l,tannot)))))
     end
 
 and create_write_message_or_update mode t_level value l_env l_mem is_top_level ((LEXP_aux lexp (l,annot)):lexp tannot) =
@@ -1330,7 +1352,7 @@ and interp_letbind mode t_level l_env l_mem (LB_aux lbind (l,annot)) =
     | e -> (e,Nothing) end
 end	
 
-(*Beef up to pick up enums as well*)
+(*TODO: Beef up to pick up enums as well*)
 let rec to_global_letbinds (Defs defs) t_level =
   let  (Env defs' lets regs ctors subregs) = t_level in
   match defs with

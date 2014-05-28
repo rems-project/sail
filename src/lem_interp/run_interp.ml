@@ -95,6 +95,8 @@ let act_to_string = function
      (sub_to_string sub) (val_to_string value)
  | Call_extern (name, arg) ->
      sprintf "extern call %s applied to %s" name (val_to_string arg)
+ | Debug l ->
+   sprintf "debug, next step at %s" (loc_to_string l)
 ;;
 
 let id_compare i1 i2 = 
@@ -200,6 +202,7 @@ let rec perform_action ((reg, mem) as env) = function
      perform_action env (Write_mem (id, n, slice, V_vector(zero_big_int, true, [value])))
  (* extern functions *)
  | Call_extern (name, arg) -> eval_external name arg, env
+ | Debug l -> V_lit (L_aux(L_unit,Interp_ast.Unknown)),env
  | _ -> assert false
 ;;
 
@@ -211,6 +214,7 @@ let run
   ?(reg=Reg.empty)
   ?(mem=Mem.empty)
   (name, test) =
+  let mode = {eager_eval = false} in
   let rec loop env = function
   | Value (v, _) -> debugf "%s: returned %s\n" name (val_to_string v); true, env
   | Action (a, s) ->
@@ -218,14 +222,14 @@ let run
       (*debugf "%s: suspended on action %s, with stack %s\n" name (act_to_string a) (stack_to_string s);*)
       let return, env' = perform_action env a in
       debugf "%s: action returned %s\n" name (val_to_string return);
-      loop env' (resume {eager_eval = true} s (Some return))
+      loop env' (resume mode s (Some return))
   | Error(l, e) -> debugf "%s: %s: error: %s\n" name (loc_to_string l) e; false, env in
   debugf "%s: starting\n" name;
   try
     Printexc.record_backtrace true;
-    loop (reg, mem) (interp {eager_eval = true} test entry)
+    loop (reg, mem) (interp mode test entry)
   with e ->
     let trace = Printexc.get_backtrace () in
     debugf "%s: interpretor error %s\n%s\n" name (Printexc.to_string e) trace;
-    false, (reg, mem)
+    false, (reg, mem
 ;;

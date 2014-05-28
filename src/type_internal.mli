@@ -34,6 +34,7 @@ and nexp_aux =
   | Nadd of nexp * nexp
   | Nmult of nexp * nexp
   | N2n of nexp
+  | Npow of nexp * int
   | Nneg of nexp
   | Nuvar of n_uvar
 and effect = { mutable effect : effect_aux }

@@ -36,6 +36,7 @@ and nexp_aux =
   | Nadd of nexp * nexp
   | Nmult of nexp * nexp
   | N2n of nexp
+  | Npow of nexp * int (* nexp raised to the nat *)
   | Nneg of nexp (* Unary minus for representing new vector sizes after vector slicing *)
   | Nuvar of n_uvar
 and n_uvar = { nindex : int; mutable nsubst : nexp option; mutable nin : bool; }
@@ -138,6 +139,7 @@ and n_to_string n =
     | Nadd(n1,n2) -> "("^ (n_to_string n1) ^ " + " ^ (n_to_string n2) ^")"
     | Nmult(n1,n2) -> "(" ^ (n_to_string n1) ^ " * " ^ (n_to_string n2) ^ ")"
     | N2n n -> "2**" ^ (n_to_string n)
+    | Npow(n, i) -> "(" ^ (n_to_string n) ^ ")**" ^ (string_of_int i)
     | Nneg n -> "-" ^ (n_to_string n)
     | Nuvar({nindex=i;nsubst=a}) -> "Nu_" ^ string_of_int i ^ "()"
 and e_to_string e = 
@@ -234,21 +236,31 @@ let rec compare_nexps n1 n2 =
   | Nuvar {nindex = n1}, Nuvar {nindex = n2} -> compare n1 n2
   | Nuvar _  , _        -> -1
   | _        , Nuvar _  ->  1
-  | Nmult(_,n1),Nmult(_,n2) -> compare_nexps n1 n2
+  | Nmult(n0,n1),Nmult(n2,n3) -> 
+    (match compare_nexps n0 n2 with
+      | 0 -> compare_nexps n1 n3
+      | a -> a)
   | Nmult _  , _        -> -1
   | _        , Nmult _  ->  1
-  | Nadd(n1,_),Nadd(n2,_) -> compare_nexps n1 n2
+  | Nadd(n1,n12),Nadd(n2,n22) -> 
+    (match compare_nexps n1 n2 with
+      | 0 -> compare_nexps n12 n22 
+      | a -> a)
   | Nadd _   , _        -> -1
   | _        , Nadd _   ->  1
+  | Npow(n1,_),Npow(n2,_)-> compare_nexps n1 n2
+  | Npow _   , _        -> -1
+  | _        , Npow _   ->  1
   | N2n n1   , N2n n2   -> compare_nexps n1 n2
   | N2n _    , _        -> -1
   | _        , N2n _    ->  1
   | Nneg n1  , Nneg n2  -> compare_nexps n1 n2
 
-let rec two_pow n =
+let rec pow_i i n =
   match n with 
   | 0 -> 1
-  | n -> 2*(two_pow (n-1))
+  | n -> i*(pow_i i (n-1))
+let two_pow = pow_i 2
 
 (* eval an nexp as much as possible *)
 let rec eval_nexp n =
@@ -290,6 +302,14 @@ let rec eval_nexp n =
 	| _ -> {nexp = N2n n1'})
     | Nvar _ | Nuvar _ -> n
 
+(* predicate to determine if pushing a constant in for addition or multiplication could change the form *)
+let rec contains_const n =
+  match n.nexp with
+  | Nvar _ | Nuvar _ | Npow _ | N2n _ -> false
+  | Nconst _ -> true
+  | Nneg n -> contains_const n
+  | Nmult(n1,n2) | Nadd(n1,n2) -> (contains_const n1) || (contains_const n2)
+
 let rec get_var n =
   match n.nexp with
   | Nvar _ | Nuvar _ -> Some n
@@ -300,7 +320,7 @@ let rec get_var n =
 let get_factor n =
   match n.nexp with
   | Nvar _ | Nuvar _ -> {nexp = Nconst 1}
-  | Nmult (n1,_) | Nneg n1 -> n1
+  | Nmult (n1,_)  -> n1
   | _ -> assert false
 
 let increment_factor n i =
@@ -335,6 +355,11 @@ let rec normalize_nexp n =
         | _,true -> negate n'
     end
     else n'
+  | Npow(n,i) -> 
+    let n' = normalize_nexp n in
+    (match n'.nexp with
+      | Nconst n -> {nexp = Nconst (pow_i i n)}
+      | _ -> {nexp = Npow(n', i)})    
   | N2n n -> 
     let n' = normalize_nexp n in
     (match n'.nexp with
@@ -344,20 +369,27 @@ let rec normalize_nexp n =
     let n1',n2' = normalize_nexp n1, normalize_nexp n2 in
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 -> {nexp = Nconst (i1+i2)}
-    | Nconst _, Nvar _ | Nconst _, Nuvar _ | Nconst _, N2n _ | Nconst _, Nneg _ | Nconst _, Nmult _ -> {nexp = Nadd(n2',n1') }
-    | Nvar _, Nconst _ | Nuvar _, Nconst _ | Nmult _, Nconst _ | N2n _, Nconst _ -> {nexp = Nadd(n1',n2')}
-    | Nvar _, Nuvar _ | Nvar _, N2n _ -> {nexp = Nadd (n2',n1')}
+    | Nconst _, Nvar _ | Nconst _, Nuvar _ | Nconst _, N2n _ | Nconst _, Npow _ | Nconst _, Nneg _ | Nconst _, Nmult _ -> {nexp = Nadd(n2',n1') }
+    | Nvar _, Nconst _ | Nuvar _, Nconst _ | Nmult _, Nconst _ | N2n _, Nconst _ | Npow _, Nconst _-> {nexp = Nadd(n1',n2')}
+    | Nvar _, Nuvar _ | Nvar _, N2n _ | Nuvar _, Npow _ -> {nexp = Nadd (n2',n1')}
     | Nadd(n11,n12), Nadd(n21,n22) ->
       (match compare_nexps n11 n21 with
-      | -1 | 0 -> normalize_nexp {nexp = Nadd(n11, {nexp = Nadd(n12,n2')})}
-      | _ -> normalize_nexp {nexp = Nadd(n21, { nexp = Nadd(n22,n1') })})      
-    | Nadd(n11,n12), Nconst _ -> {nexp = Nadd(n11,{nexp = Nadd(n12,n2')}) }
-    | Nconst _, Nadd(n21,n22) -> {nexp = Nadd(n21,{nexp = Nadd(n22,n1')})}
+      | -1 -> {nexp = Nadd(n11, (normalize_nexp {nexp = Nadd(n12,n2')}))}
+      | 0  -> normalize_nexp {nexp = Nmult({nexp = Nconst 2},n1')}
+      | _  -> normalize_nexp {nexp = Nadd(n21, { nexp = Nadd(n22,n1') })})      
+    | Nadd(n11,n12), Nconst _ -> {nexp = Nadd(n11,normalize_nexp {nexp = Nadd(n12,n2')})}
+    | Nconst _, Nadd(n21,n22) -> {nexp = Nadd(n21,normalize_nexp {nexp = Nadd(n22,n1')})}
     | N2n n1, N2n n2 -> 
       (match compare_nexps n1 n2 with
-      | -1 | 0 -> {nexp = Nadd (n2',n1')}
-      | _ -> { nexp = Nadd (n1',n2')})
-    | _ ->
+      | -1 -> {nexp = Nadd (n2',n1')}
+      |  0 -> {nexp = N2n (normalize_nexp {nexp = Nadd(n1, {nexp = Nconst 1})})}
+      |  _ -> { nexp = Nadd (n1',n2')})
+    | Npow(n1,i1), Npow (n2,i2) ->
+      (match compare_nexps n1 n2, compare i1 i2 with
+	| -1,-1 | 0,-1 -> {nexp = Nadd (n2',n1')}
+	|  0,0 -> {nexp = Nmult ({nexp = Nconst 2},n1')}
+	|  _ -> {nexp = Nadd (n1',n2')})
+    | _ -> 
       match get_var n1', get_var n2' with
       | Some(nv1),Some(nv2) ->
         (match compare_nexps nv1 nv2 with
@@ -370,29 +402,54 @@ let rec normalize_nexp n =
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 -> {nexp = Nconst (i1*i2)}
     | Nconst 2, N2n n2 | N2n n2, Nconst 2 -> {nexp =N2n (normalize_nexp {nexp = Nadd(n2, {nexp = Nconst 1})})}
-    | Nconst _, Nvar _ | Nconst _, Nuvar _ | Nconst _, N2n _ | Nvar _, N2n _ -> { nexp = Nmult(n1',n2') }
-    | Nvar _, Nconst _ | Nuvar _, Nconst _ | N2n _, Nconst _ | Nvar _, Nmult _ | Nvar _, Nuvar _ -> { nexp = Nmult(n2',n1') }
+    | Nconst _, Nvar _ | Nconst _, Nuvar _ | Nconst _, N2n _ | Nconst _, Npow _ | Nvar _, N2n _ -> { nexp = Nmult(n1',n2') }
+    | Nvar _, Nconst _ | Nuvar _, Nconst _ | N2n _, Nconst _ | Npow _, Nconst _ | Nvar _, Nmult _ | Nvar _, Nuvar _ -> { nexp = Nmult(n2',n1') }
     | N2n n1, N2n n2 -> {nexp = N2n (normalize_nexp {nexp = Nadd(n1,n2)})}
-    | N2n _, Nvar _ | N2n _, Nuvar _ | N2n _, Nmult _ | Nuvar _, N2n _ | Nuvar _, Nmult _ -> {nexp =Nmult(n2',n1')}
+    | N2n _, Nvar _ | N2n _, Nuvar _ | N2n _, Nmult _ | Nuvar _, N2n _ | Nuvar _, Nmult _  -> {nexp =Nmult(n2',n1')}
     | Nuvar {nindex = i1}, Nuvar {nindex = i2} ->
       (match compare i1 i2 with
-      | 0 | 1 -> {nexp = Nmult(n1',n2')}
+      | 0 -> {nexp = Npow(n1', 2)}
+      | 1 -> {nexp = Nmult(n1',n2')}
       | _ -> {nexp = Nmult(n2',n1')})
     | Nvar i1, Nvar i2 ->
       (match compare i1 i2 with
-      | 0 | 1 -> {nexp = Nmult(n1',n2')}
+      | 0 -> {nexp = Npow(n1', 2)} 
+      | 1 -> {nexp = Nmult(n1',n2')}
       | _ -> {nexp = Nmult(n2',n1')})
-    | Nconst _, Nadd(n21,n22) | Nvar _,Nadd(n21,n22) | Nuvar _,Nadd(n21,n22) | N2n _, Nadd(n21,n22) | Nmult _, Nadd(n21,n22) ->
+    | Npow(n1,i1),Npow(n2,i2) ->
+      (match compare_nexps n1 n2 with
+	| 0  -> {nexp = Npow(n1,(i1+i2))}
+	| -1 -> {nexp = Nmult(n2',n1')}
+	| _  -> {nexp = Nmult(n1',n2')})
+    | Nconst _, Nadd(n21,n22) | Nvar _,Nadd(n21,n22) | Nuvar _,Nadd(n21,n22) | N2n _, Nadd(n21,n22) | Npow _,Nadd(n21,n22) | Nmult _, Nadd(n21,n22) ->
       normalize_nexp {nexp = Nadd( {nexp = Nmult(n1',n21)}, {nexp = Nmult(n1',n21)})}
-    | Nadd(n11,n12),Nconst _ | Nadd(n11,n12),Nvar _ | Nadd(n11,n12), Nuvar _ | Nadd(n11,n12), N2n _ | Nadd(n11,n12), Nmult _->
+    | Nadd(n11,n12),Nconst _ | Nadd(n11,n12),Nvar _ | Nadd(n11,n12), Nuvar _ | Nadd(n11,n12), N2n _ | Nadd(n11,n12),Npow _ | Nadd(n11,n12), Nmult _->
       normalize_nexp {nexp = Nadd( {nexp = Nmult(n11,n2')}, {nexp = Nmult(n12,n2')})}
     | Nadd(n11,n12),Nadd(n21,n22) ->
-      {nexp = Nadd( {nexp = Nmult(n11,n21)},
-                    {nexp = Nadd ({nexp = Nmult(n11,n22)},
-                                  {nexp = Nadd({nexp = Nmult(n12,n21)},
-                                               {nexp = Nmult(n12,n22)})})})}
-    | Nuvar _, Nvar _ | Nmult _, Nvar _| Nmult _, Nuvar _ | Nmult _, N2n _-> {nexp = Nmult (n1',n2')} 
+      normalize_nexp {nexp = Nadd( {nexp = Nmult(n11,n21)},
+				   {nexp = Nadd ({nexp = Nmult(n11,n22)},
+						 {nexp = Nadd({nexp = Nmult(n12,n21)},
+							      {nexp = Nmult(n12,n22)})})})}
+    | Nuvar _, Nvar _ | Nmult _, N2n _-> {nexp = Nmult (n1',n2')} 
     | Nmult(n11,n12), Nconst _ -> {nexp = Nmult({nexp = Nmult(n11,n2')},{nexp = Nmult(n12,n2')})}
+    | Nuvar _, Nmult(n1,n2) | Nvar _, Nmult(n1,n2) ->
+      (match get_var n1, get_var n2 with
+	| Some(nv1),Some(nv2) ->
+	  (match compare_nexps nv1 nv2, n2.nexp with
+	    | 0, Nuvar _ | 0, Nvar _ -> {nexp = Nmult(n1, {nexp = Npow(nv1,2)}) }
+	    | 0, Npow(n2',i) -> {nexp = Nmult(n1, {nexp = Npow (n2',(i+1))})}
+	    | -1, Nuvar _ | -1, Nvar _  -> {nexp = Nmult(n2',n1')}
+	    | _,_ | _,_ -> {nexp = Nmult(normalize_nexp {nexp = Nmult(n1,n1')},n2)})
+	| _ -> {nexp = Nmult(normalize_nexp {nexp = Nmult(n1,n1')},n2)})
+    | Npow(n1,i),Nmult(n21,n22) -> 
+      (match get_var n1, get_var n2 with
+	| Some(nv1),Some(nv2) -> 
+	  (match compare_nexps nv1 nv2,n22.nexp with
+	    | 0, Nuvar _ | 0, Nvar _ -> {nexp = Nmult(n21,{nexp = Npow(n1,i+1)})}
+	    | 0, Npow(_,i2) -> {nexp = Nmult(n21,{nexp=Npow(n1,i+i2)})}
+	    | 1,Npow _ -> {nexp = Nmult(normalize_nexp {nexp = Nmult(n21,n1')},n22)}
+	    | _ -> {nexp = Nmult(n2',n1')})
+	| _ -> {nexp = Nmult(normalize_nexp {nexp = Nmult(n1',n21)},n22)})
     | Nmult _ ,Nmult(n21,n22) | Nconst _, Nmult(n21,n22) -> {nexp = Nmult({nexp = Nmult(n21,n1')},{nexp = Nmult(n22,n1')})}
     | Nneg _,_ | _,Nneg _ -> assert false (* If things are normal, neg should be gone. *)
     )
@@ -997,7 +1054,7 @@ let rec nexp_eq_check n1 n2 =
   | _,_ -> false
 
 let nexp_eq n1 n2 =
-  nexp_eq_check (eval_nexp n1) (eval_nexp n2)
+  nexp_eq_check (normalize_nexp n1) (normalize_nexp n2)
 
 (*Is checking for structural equality amongst the types, building constraints for kind Nat. 
   When considering two range type applications, will check for consistency instead of equality*)
@@ -1305,7 +1362,7 @@ let rec simple_constraint_check in_env cs =
   | Eq(co,n1,n2)::cs -> 
     let check_eq ok_to_set n1 n2 = 
       (*let _ = Printf.printf "eq check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
-      let n1',n2' = eval_nexp n1,eval_nexp n2 in
+      let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
       (*let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
       (match n1'.nexp,n2'.nexp with
       | Nconst i1, Nconst i2 -> 
@@ -1333,7 +1390,7 @@ let rec simple_constraint_check in_env cs =
       | _ -> (Eq(co,n1,n2)::(check cs)))
   | GtEq(co,n1,n2)::cs -> 
 (*    let _ = Printf.printf ">= check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
-    let n1',n2' = eval_nexp n1,eval_nexp n2 in
+    let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
 (*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 -> 
@@ -1344,7 +1401,7 @@ let rec simple_constraint_check in_env cs =
     | _,_ -> GtEq(co,n1',n2')::(check cs))
   | LtEq(co,n1,n2)::cs -> 
 (*    let _ = Printf.printf "<= check, about to eval_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
-    let n1',n2' = eval_nexp n1,eval_nexp n2 in
+    let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
 (*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 -> 

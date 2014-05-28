@@ -80,6 +80,7 @@ let rec interp_to_outcome mode thunk =
       match List.lookup i external_functions with
       | Nothing -> Error ("External function not available " ^ i)
       | Just f  -> interp_to_outcome mode (fun _ -> Interp.resume mode next_state (Just (f value))) end
+    | Interp.Debug l -> Internal next_state
     end 
   end 
 
