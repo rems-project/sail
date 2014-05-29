@@ -1,3 +1,4 @@
+open Big_int
 open Ast
 open Type_internal
 type kind = Type_internal.kind
@@ -71,10 +72,10 @@ and typ_arg_to_targ (Typ_arg_aux(ta,l)) =
 and anexp_to_nexp ((Nexp_aux(n,l)) : Ast.nexp) : nexp =
   match n with
     | Nexp_var (Kid_aux((Var i),l')) -> {nexp = Nvar i}
-    | Nexp_constant i -> {nexp=Nconst i}
+    | Nexp_constant i -> {nexp=Nconst (big_int_of_int i)}
     | Nexp_times(n1,n2) -> {nexp=Nmult(anexp_to_nexp n1,anexp_to_nexp n2)}
     | Nexp_sum(n1,n2) -> {nexp=Nadd(anexp_to_nexp n1,anexp_to_nexp n2)}
-    | Nexp_exp n -> {nexp=N2n(anexp_to_nexp n)}
+    | Nexp_exp n -> {nexp=N2n(anexp_to_nexp n,None)}
     | Nexp_neg n -> {nexp=Nneg(anexp_to_nexp n)}
 and aeffect_to_effect ((Effect_aux(e,l)) : Ast.effect) : effect = 
   match e with
@@ -85,32 +86,6 @@ and aorder_to_ord (Ord_aux(o,l) : Ast.order) =
     | Ord_var (Kid_aux((Var i),l')) -> {order = Ovar i}
     | Ord_inc -> {order = Oinc}
     | Ord_dec -> {order = Odec}
-
-let rec eval_to_nexp_const n =
-  match n.nexp with
-    | Nconst i -> n
-    | Nmult(n1,n2) ->
-      (match (eval_to_nexp_const n1).nexp,(eval_to_nexp_const n2).nexp with
-	| Nconst i1, Nconst i2 -> {nexp=Nconst (i1*i2)}
-	| _,_ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const"))
-    | Nadd(n1,n2) ->
-      (match (eval_to_nexp_const n1).nexp,(eval_to_nexp_const n2).nexp with
-	| Nconst i1, Nconst i2 -> {nexp=Nconst (i1+i2)}
-	| _,_ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const"))
-    | Nneg n1 ->
-      (match (eval_to_nexp_const n1).nexp with
-	| Nconst i -> {nexp = Nconst(- i)}
-	| _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const"))
-    | N2n n1 ->
-      (match (eval_to_nexp_const n1).nexp with
-	| Nconst i ->
-	  let rec two_pow = function
-	    | 0 -> 1;
-	    | n -> 2* (two_pow n-1) in
-	  {nexp = Nconst(two_pow i)}
-	| _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const"))
-    | Nvar _ | Nuvar _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Var found in eval_to_nexp_const")
-
 
 let rec quants_to_consts (Env (d_env,t_env)) qis : (t_params * nexp_range list) =
   match qis with 
@@ -174,14 +149,14 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 		if i = 0 then bit_t,L_zero 
 		else if i = 1 then bit_t,L_one
 		else {t = Tapp("range",
-			       [TA_nexp{nexp = Nconst i};TA_nexp{nexp= Nconst 0};])},lit
+			       [TA_nexp{nexp = Nconst (big_int_of_int i)};TA_nexp{nexp= Nconst zero};])},lit
 	      | _ -> {t = Tapp("range",
-			       [TA_nexp{nexp = Nconst i};TA_nexp{nexp= Nconst 0};])},lit)
+			       [TA_nexp{nexp = Nconst (big_int_of_int i)};TA_nexp{nexp= Nconst zero};])},lit)
 	  | L_hex s -> {t = Tapp("vector",
-				 [TA_nexp{nexp = Nconst 0};TA_nexp{nexp = Nconst ((String.length s)*4)};
+				 [TA_nexp{nexp = Nconst zero};TA_nexp{nexp = Nconst (big_int_of_int ((String.length s)*4))};
 				  TA_ord{order = Oinc};TA_typ{t = Tid "bit"}])},lit
 	  | L_bin s -> {t = Tapp("vector",
-				 [TA_nexp{nexp = Nconst 0};TA_nexp{nexp = Nconst(String.length s)};
+				 [TA_nexp{nexp = Nconst zero};TA_nexp{nexp = Nconst(big_int_of_int (String.length s))};
 				  TA_ord{order = Oinc};TA_typ{t = Tid"bit"}])},lit
 	  | L_string s -> {t = Tid "string"},lit
 	  | L_undef -> typ_error l' "Cannot pattern match on undefined") in
@@ -258,7 +233,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	  pats ([],[],[],[]) in
       let env = List.fold_right (fun e env -> Envmap.union e env) t_envs Envmap.empty in (*Need to check for non-duplication of variables*)
       let (u,cs) = List.fold_right (fun u (t,cs) -> let t',cs = type_consistent (Patt l) d_env u t in t',cs) ts (item_t,[]) in
-      let t = {t = Tapp("vector",[(TA_nexp {nexp= Nconst 0});(TA_nexp {nexp= Nconst (List.length ts)});(TA_ord{order=Oinc});(TA_typ u)])} in
+      let t = {t = Tapp("vector",[(TA_nexp {nexp= Nconst zero});(TA_nexp {nexp= Nconst (big_int_of_int (List.length ts))});(TA_ord{order=Oinc});(TA_typ u)])} in
       (P_aux(P_vector(pats'),(l,Base(([],t),Emp_local,cs,pure_e))), env,cs@constraints,t)
     | P_vector_indexed(ipats) -> 
       let item_t = match expect_actual.t with
@@ -292,10 +267,10 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
       let t = {t = Tapp("vector",[(TA_nexp base);(TA_nexp rise);
 				  (TA_ord{order=(if inc_or_dec then Oinc else Odec)});(TA_typ u)])} in
       let cs = if inc_or_dec 
-	then [LtEq(co, base, {nexp = Nconst fst});
-	      GtEq(co,rise, {nexp = Nconst (lst-fst)});]@cs
-	else [GtEq(co,base, {nexp = Nconst fst});
-	      LtEq(co,rise, { nexp = Nconst (fst -lst)});]@cs in
+	then [LtEq(co, base, {nexp = Nconst (big_int_of_int fst)});
+	      GtEq(co,rise, {nexp = Nconst (big_int_of_int (lst-fst))});]@cs
+	else [GtEq(co,base, {nexp = Nconst (big_int_of_int fst)});
+	      LtEq(co,rise, { nexp = Nconst (big_int_of_int (fst -lst))});]@cs in
       (P_aux(P_vector_indexed(pats'),(l,Base(([],t),Emp_local,cs,pure_e))), env,constraints@cs,t)
     | P_tup(pats) -> 
       let item_ts = match expect_actual.t with
@@ -441,14 +416,14 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
               if i = 1 then bool_t,L_true,pure_e
               else typ_error l "Expected bool, found a number that cannot be used as a bit and converted to bool"
           | _ -> {t = Tapp("range",
-			   [TA_nexp{nexp = Nconst i};TA_nexp{nexp= Nconst 0};])},lit,pure_e)
+			   [TA_nexp{nexp = Nconst (big_int_of_int i)};TA_nexp{nexp= Nconst zero};])},lit,pure_e)
 	| L_hex s -> {t = Tapp("vector",
-			       [TA_nexp{nexp = Nconst 0};
-				TA_nexp{nexp = Nconst ((String.length s)*4)};
+			       [TA_nexp{nexp = Nconst zero};
+				TA_nexp{nexp = Nconst (big_int_of_int ((String.length s)*4))};
 				TA_ord{order = Oinc};TA_typ{t = Tid "bit"}])},lit,pure_e
 	| L_bin s -> {t = Tapp("vector",
-			       [TA_nexp{nexp = Nconst 0};
-				TA_nexp{nexp = Nconst(String.length s)};
+			       [TA_nexp{nexp = Nconst zero};
+				TA_nexp{nexp = Nconst (big_int_of_int (String.length s))};
 				TA_ord{order = Oinc};TA_typ{t = Tid"bit"}])},lit,pure_e
 	| L_string s -> {t = Tid "string"},lit,pure_e
 	| L_undef -> new_t (),lit,{effect=Eset[BE_aux(BE_undef,l)]}) in
@@ -619,7 +594,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let es,cs,effect = (List.fold_right 
 			    (fun (e,_,_,c,ef) (es,cs,effect) -> (e::es),(c@cs),union_effects ef effect)
 			    (List.map (check_exp envs item_t) es) ([],[],pure_e)) in
-      let t = {t = Tapp("vector",[TA_nexp({nexp=Nconst 0});TA_nexp({nexp=Nconst (List.length es)});TA_ord({order=Oinc});TA_typ item_t])} in
+      let t = {t = Tapp("vector",[TA_nexp({nexp=Nconst zero});TA_nexp({nexp=Nconst (big_int_of_int (List.length es))});TA_ord({order=Oinc});TA_typ item_t])} in
       let t',cs',e' = type_coerce (Expr l) d_env t (E_aux(E_vector es,(l,Base(([],t),Emp_local,[],pure_e)))) expect_t in
       (e',t',t_env,cs@cs',effect)
     | E_vector_indexed(eis,default) ->
@@ -637,7 +612,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 				else (typ_error l "Indexed vector is not consistently decreasing"))
 			      (List.map (fun (i,e) -> let (e,_,_,cs,eft) = (check_exp envs item_t e) in ((i,e),cs,eft))
 				 eis) ([],[],pure_e,first)) in
-      let t = {t = Tapp("vector",[TA_nexp({nexp=Nconst first});TA_nexp({nexp=Nconst (List.length eis)});
+      let t = {t = Tapp("vector",[TA_nexp({nexp=Nconst (big_int_of_int first)});TA_nexp({nexp=Nconst (big_int_of_int (List.length eis))});
 				  TA_ord({order= if is_increasing then Oinc else Odec});TA_typ item_t])} in
       let t',cs',e' = type_coerce (Expr l) d_env t (E_aux(E_vector_indexed(es,default),(l,Base(([],t),Emp_local,[],pure_e)))) expect_t in
       (e',t',t_env,cs@cs',effect)
@@ -1067,7 +1042,7 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 	| Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ t]) ->
 	  let acc_t = match ord.order with
 	    | Oinc -> {t = Tapp("range",[TA_nexp base;TA_nexp rise])} 
-	    | Odec -> {t = Tapp("range",[TA_nexp {nexp = Nadd(base,{nexp=Nneg rise})};TA_nexp base])} 
+	    | Odec -> {t = Tapp("range",[TA_nexp {nexp = Nadd(base,{nexp=Nneg rise})};TA_nexp rise])} 
 	    | _ -> typ_error l ("Assignment to one vector element requires either inc or dec order")
 	  in
 	  let (e,t',_,cs',ef_e) = check_exp envs acc_t acc in
@@ -1194,12 +1169,12 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
       (TD_aux(td,(l,ty)),Env({d_env with enum_env = enum_env;},t_env))
     | TD_register(id,base,top,ranges) -> 
       let id' = id_to_string id in
-      let basei = eval_nexp(anexp_to_nexp base) in
-      let topi = eval_nexp(anexp_to_nexp top) in
+      let basei = normalize_nexp(anexp_to_nexp base) in
+      let topi = normalize_nexp(anexp_to_nexp top) in
       match basei.nexp,topi.nexp with
 	| Nconst b, Nconst t -> 
-	  if b <= t then (
-	    let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp{nexp=Nconst(t-b+1)}; 
+	  if (le_big_int b t) then (
+	    let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp{nexp=Nconst(add_big_int (sub_big_int t b) (big_int_of_int 1))}; 
 					 TA_ord({order = Oinc}); TA_typ({t = Tid "bit"});])} in
 	    let franges = 
 	      List.map 
@@ -1208,13 +1183,14 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 		   Base(([],
 			match idx with
 			  | BF_single i -> 
-			    if b <= i && i <= t 
+			    if (le_big_int b (big_int_of_int i)) && (le_big_int (big_int_of_int i) t) 
 			    then {t = Tid "bit"}
 			    else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
 			  | BF_range(i1,i2) -> 
 			    if i1<i2 
-			    then if b<=i1 && i2<=t 
-			      then {t=Tapp("vector",[TA_nexp {nexp=Nconst i1}; TA_nexp {nexp=Nconst ((i2 - i1) +1)}; TA_ord({order=Oinc}); TA_typ {t=Tid "bit"}])}
+			    then if (le_big_int b (big_int_of_int i1)) && (le_big_int (big_int_of_int i2) t) 
+			      then {t=Tapp("vector",[TA_nexp {nexp=Nconst (big_int_of_int i1)};
+                                                     TA_nexp {nexp=Nconst (big_int_of_int ((i2 - i1) +1))}; TA_ord({order=Oinc}); TA_typ {t=Tid "bit"}])}
 			      else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
 			    else typ_error l ("register type declaration " ^ id' ^ " is not consistently increasing")
 			  | BF_concat _ -> assert false (* What is this supposed to imply again?*)),Emp_global,[],pure_e)))
@@ -1225,7 +1201,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 	     Env({d_env with rec_env = ((id',Register,franges)::d_env.rec_env);
 	       abbrevs = Envmap.insert d_env.abbrevs (id',tannot)},t_env)))
 	  else (
-	    let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp{nexp=Nconst(b-t)}; 
+	    let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp{nexp=Nconst(sub_big_int b t)}; 
 					 TA_ord({order = Odec}); TA_typ({t = Tid "bit"});])} in
 	    let franges = 
 	      List.map 
@@ -1233,13 +1209,13 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 		  let (base,climb) =
 		    match idx with
 		      | BF_single i -> 
-			if b >= i && i >= t 
-			then {nexp=Nconst i},{nexp=Nconst 0}
+			if (ge_big_int b (big_int_of_int i)) && (ge_big_int (big_int_of_int i) t) 
+			then {nexp=Nconst (big_int_of_int i)},{nexp=Nconst zero}
 			else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
 		      | BF_range(i1,i2) -> 
 			if i1>i2 
-			then if b>=i1 && i2>=t 
-			  then {nexp=Nconst i1},{nexp=Nconst (i1 - i2)}
+			then if (ge_big_int b (big_int_of_int i1)) && (ge_big_int (big_int_of_int i2) t) 
+			  then {nexp=Nconst (big_int_of_int i1)},{nexp=Nconst (big_int_of_int (i1 - i2))}
 			  else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
 			else typ_error l ("register type declaration " ^ id' ^ " is not consistently decreasing")
 		      | BF_concat _ -> assert false (* What is this supposed to imply again?*) in

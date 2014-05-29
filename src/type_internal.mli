@@ -1,8 +1,14 @@
+open Big_int
+
 module Envmap : Finite_map.Fmap with type k = string
 module Nameset : sig
   include Set.S with type elt = string
   val pp : Format.formatter -> t -> unit
 end
+
+val zero : big_int
+val one  : big_int
+val two  : big_int
 
 type kind = { mutable k : k_aux }
 and k_aux =
@@ -30,10 +36,12 @@ and t_aux =
 and nexp = { mutable nexp : nexp_aux }
 and nexp_aux =
   | Nvar of string
-  | Nconst of int
+  | Nconst of big_int
+  | Npos_inf
+  | Nneg_inf
   | Nadd of nexp * nexp
   | Nmult of nexp * nexp
-  | N2n of nexp
+  | N2n of nexp * big_int option
   | Npow of nexp * int
   | Nneg of nexp
   | Nuvar of n_uvar
@@ -131,7 +139,7 @@ val new_e : unit -> effect
 val subst : (string * kind) list -> t -> nexp_range list -> effect -> t * nexp_range list * effect
 val get_abbrev : def_envs -> t -> (t * nexp_range list)
 
-val eval_nexp : nexp -> nexp
+val normalize_nexp : nexp -> nexp
 val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debugging purposes*)
 
 val select_overload_variant : def_envs -> tannot list -> t -> tannot

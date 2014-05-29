@@ -71,6 +71,7 @@ ne :: 'Ne_' ::=
  {{ com internal numeric expressions }}
    | ' x                                 :: :: var
    | num                                 :: :: const
+   | infinity                            :: :: inf
    | ne1 * ne2                           :: :: mult
    | ne1 + ... + nen                     :: :: add
    | 2 ** ne				 :: :: exp
@@ -111,6 +112,8 @@ ne :: 'Ne_' ::=
    | ne = ne'            :: :: eq
    | ne >= ne'           :: :: gteq
    | ' x 'IN' { num1 , ... , numn } :: :: in
+   | nec0 .. necn -> nec'0 ... nec'm :: :: cond
+   | nec0 ... necn                   :: :: branch
 
 S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
                                                                     {{ hol nec list }}

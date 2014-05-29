@@ -1,6 +1,7 @@
 open Type_internal
 open Ast
 open Format
+open Big_int
 
 (****************************************************************************
  * annotated source to Lem ast pretty printer
@@ -215,10 +216,12 @@ and pp_format_targ = function
 and pp_format_n n =
   match n.nexp with
     | Nvar i -> "(Ne_var \"" ^ i ^ "\")"
-    | Nconst i -> "(Ne_const " ^ string_of_int i ^ ")"
+    | Nconst i -> "(Ne_const " ^ string_of_big_int i ^ ")"
+    | Npos_inf -> "Ne_inf"
     | Nadd(n1,n2) -> "(Ne_add [" ^ (pp_format_n n1) ^ "; " ^ (pp_format_n n2) ^ "])"
     | Nmult(n1,n2) -> "(Ne_mult " ^ (pp_format_n n1) ^ " " ^ (pp_format_n n2) ^ ")"
-    | N2n n -> "(Ne_exp " ^ (pp_format_n n) ^ ")"
+    | N2n(n,Some i) -> "(Ne_exp " ^ (pp_format_n n) ^ "(*" ^ string_of_big_int i ^ "*)" ^ ")"
+    | N2n(n,None) -> "(Ne_exp " ^ (pp_format_n n) ^ ")"
     | Nneg n -> "(Ne_unary " ^ (pp_format_n n) ^ ")"
     | Nuvar _ -> "(Ne_var \"fresh_v_" ^ string_of_int (get_index n) ^ "\")"
 and pp_format_e e = 
@@ -247,9 +250,9 @@ let pp_format_tag = function
   | Enum -> "Tag_enum"
   | Spec -> "Tag_spec"
 
-let pp_format_nes nes = 
+let rec pp_format_nes nes = 
   "[" ^ 
-  (*(list_format "; "
+  (list_format "; "
      (fun ne -> match ne with
        | LtEq(_,n1,n2) -> "(Nec_lteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | Eq(_,n1,n2) -> "(Nec_eq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
@@ -258,8 +261,12 @@ let pp_format_nes nes =
 	 "(Nec_in \"" ^ i ^ "\" [" ^ (list_format "; " string_of_int ns)^ "])"
        | InS(_,{nexp = Nuvar _},ns)  ->  
 	 "(Nec_in \"fresh\" [" ^ (list_format "; " string_of_int ns)^ "])"
+       | CondCons(_,nes_c,nes_t) -> 
+         "(Nec_cond " ^ (pp_format_nes nes_c) ^ " " ^ (pp_format_nes nes_t) ^ ")"
+       | BranchCons(_,nes_b) ->
+         "(Nec_branch " ^ (pp_format_nes nes_b) ^ ")"
      )
-     nes) ^*) "]"
+     nes) ^ "]"
 
 let pp_format_annot = function
   | NoTyp -> "Nothing"

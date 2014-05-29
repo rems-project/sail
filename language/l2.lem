@@ -450,6 +450,7 @@ end
 type ne =  (* internal numeric expressions *)
  | Ne_var of x
  | Ne_const of integer
+ | Ne_inf
  | Ne_mult of ne * ne
  | Ne_add of list ne
  | Ne_exp of ne
@@ -470,6 +471,8 @@ type nec =  (* Numeric expression constraints *)
  | Nec_eq of ne * ne
  | Nec_gteq of ne * ne
  | Nec_in of x * list integer
+ | Nec_cond of list nec * list nec
+ | Nec_branch of list nec
 
 
 type kinf =  (* Whether a kind is default or from a local binding *)
