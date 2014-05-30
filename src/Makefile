@@ -1,4 +1,4 @@
-.PHONY: all test clean doc lib test_power
+.PHONY: all test clean doc lib test_power test_idempotence
 
 all: lib doc
 	ocamlbuild -classic-display sail.native test/run_tests.native
@@ -10,6 +10,11 @@ test_power:
 	#../../../rsem/idl/power/binary/run.sh
 	SAIL_OPTS=-skip_constraints ocamlbuild -classic-display sail.native test/run_power.native
 	./run_power.native --file ../../../rsem/idl/power/binary/main.bin
+
+test_idempotence:
+	@cd test; for file in *.sail; do \
+		./idempotence.sh $$file; echo ;\
+	done
 
 clean:
 	-ocamlbuild -clean
