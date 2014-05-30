@@ -460,16 +460,24 @@ let rec normalize_nexp n =
     
 let v_count = ref 0
 let t_count = ref 0
+let tuvars = ref []
 let n_count = ref 0
+let nuvars = ref []
 let o_count = ref 0
+let ouvars = ref []
 let e_count = ref 0
+let euvars = ref []
 
 let reset_fresh _ = 
   begin v_count := 0;
         t_count := 0;
+	tuvars  := [];
         n_count := 0;
+	nuvars  := [];
 	o_count := 0;
+	ouvars  := [];
 	e_count := 0;
+	euvars  := [];
   end
 let new_id _ =
   let i = !v_count in
@@ -478,19 +486,27 @@ let new_id _ =
 let new_t _ = 
   let i = !t_count in
   t_count := i + 1;
-  {t = Tuvar { index = i; subst = None }}
+  let t = {t = Tuvar { index = i; subst = None }} in
+  tuvars := t::!tuvars;
+  t
 let new_n _ = 
   let i = !n_count in
   n_count := i + 1;
-  { nexp = Nuvar { nindex = i; nsubst = None ; nin = false}}
+  let n = { nexp = Nuvar { nindex = i; nsubst = None ; nin = false}} in
+  nuvars := n::!nuvars;
+  n
 let new_o _ = 
   let i = !o_count in
   o_count := i + 1;
-  { order = Ouvar { oindex = i; osubst = None }}
+  let o = { order = Ouvar { oindex = i; osubst = None }} in
+  ouvars := o::!ouvars;
+  o
 let new_e _ =
   let i = !e_count in
   e_count := i + 1;
-  { effect = Euvar { eindex = i; esubst = None }}
+  let e = { effect = Euvar { eindex = i; esubst = None }} in
+  euvars := e::!euvars;
+  e
 
 exception Occurs_exn of t_arg
 let rec resolve_tsubst (t : t) : t = 
@@ -685,7 +701,7 @@ let is_nat_typ t =
   if t == nat_typ || t == nat_t then true
   else match t.t with
     | Tid "nat" -> true
-    | Tapp("range",[TA_nexp{nexp = Nconst zero};TA_nexp{nexp = Nconst i}]) -> i == (big_int_of_int max_int)
+    | Tapp("range",[TA_nexp{nexp = Nconst zero};TA_nexp{nexp =Npos_inf}]) -> true
     | _ -> false
 
 let initial_kind_env = 
@@ -977,6 +993,18 @@ and e_remove_unifications s_env e =
       | None -> s_env)
   | _ -> s_env
 
+let remove_internal_unifications s_env =
+  let rec rem remove s_env u_list = match u_list with
+    | [] -> s_env
+    | i::u_list -> rem remove (remove s_env i) u_list
+  in
+  (rem e_remove_unifications
+     (rem o_remove_unifications 
+	(rem n_remove_unifications 
+	   (rem t_remove_unifications s_env !tuvars)
+	   !nuvars)
+	!ouvars)
+     !euvars)
       
 let subst k_env t cs e =
   let subst_env = Envmap.from_list
@@ -1499,7 +1527,7 @@ let rec simple_constraint_check in_env cs =
       | _     -> CondCons(co,pats',exps')::(check cs))
   | BranchCons(co,branches)::cs ->
     let b' = check branches in
-    if []==b' 
+    if [] = b' 
     then check cs
     else BranchCons(co,b')::(check cs)
   | x::cs -> x::(check cs)
@@ -1525,7 +1553,9 @@ let check_tannot l annot constraints efs =
   match annot with
     | Base((params,t),tag,cs,e) -> 
       ignore(effects_eq (Specc l) efs e);
-      let params = Envmap.to_list (t_remove_unifications (Envmap.from_list params) t) in
+      let s_env = (t_remove_unifications (Envmap.from_list params) t) in
+      let params = Envmap.to_list s_env in
+      ignore (remove_internal_unifications s_env);
     (*let _ = Printf.printf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in *)
       Base((params,t),tag,cs,e)
     | NoTyp -> raise (Reporting_basic.err_unreachable l "check_tannot given the place holder annotation")
