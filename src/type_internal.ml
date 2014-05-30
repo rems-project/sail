@@ -711,16 +711,21 @@ let mk_pure_fun arg ret = {t = Tfn (arg,ret,pure_e)}
 let mk_nv v = {nexp = Nvar v}
 let mk_add n1 n2 = {nexp = Nadd (n1,n2) }
 let mk_sub n1 n2 = {nexp = Nadd (n1, {nexp = Nneg n2})}
+let mk_mult n1 n2 = {nexp = Nmult(n1,n2) }
 
 let mk_range n1 n2 = {t=Tapp("range",[TA_nexp n1;TA_nexp n2])}
 let mk_vector typ order start size = {t=Tapp("vector",[TA_nexp {nexp=start}; TA_nexp {nexp=size}; TA_ord {order}; TA_typ typ])}
 let mk_bitwise_op name symb arity =
-  (* XXX should be Ovar "o" but will not work currently *)
-  let ovar = (*Oinc*) Ovar "o"  in
+  let ovar = Ovar "o"  in
   let vec_typ = mk_vector bit_t ovar (Nconst zero) (Nvar "n") in
-  let args = Array.to_list (Array.make arity vec_typ) in
-  let arg = if ((List.length args) = 1) then List.hd args else mk_tup args in
-  (symb,Base((["n",{k=K_Nat}; "o",{k=K_Ord}], mk_pure_fun arg vec_typ),External (Some name),[],pure_e))
+  let vec_args = Array.to_list (Array.make arity vec_typ) in
+  let bit_args = Array.to_list (Array.make arity bit_t) in
+  let gen_args = Array.to_list (Array.make arity {t = Tvar "a"}) in
+  let varg,barg,garg = if (arity = 1) then List.hd vec_args,List.hd bit_args,List.hd gen_args 
+                       else mk_tup vec_args,mk_tup bit_args, mk_tup gen_args in
+  (symb,Overload(Base(((mk_typ_params ["a"]),mk_pure_fun garg {t=Tvar "a"}), External (Some name),[],pure_e),
+                 [Base((["n",{k=K_Nat}; "o",{k=K_Ord}], mk_pure_fun varg vec_typ),External (Some name),[],pure_e);
+                  Base(([],mk_pure_fun barg bit_t),External (Some (name ^ "_bit")),[],pure_e)]))
 
 let initial_typ_env =
   Envmap.from_list [
@@ -747,19 +752,70 @@ let initial_typ_env =
                                       (mk_range (mk_nv "o") {nexp = N2n (mk_nv "m",None)}))),
                         External (Some "add_range_vec"),
                        [],pure_e); ]));
-    ("*",Base(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "multiply"),[],pure_e));
-    ("-",Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
-               {t= Tfn({t=Ttup([mk_range (mk_nv "n") (mk_nv "m");
-                                mk_range (mk_nv "o") (mk_nv "p")])},
-		       (mk_range (mk_sub (mk_nv "n") (mk_nv "o")) (mk_sub (mk_nv "m") (mk_nv "p"))),
-		       pure_e)}),External (Some "minus"),
-              [GtEq(Specc(Parse_ast.Int("-",None)),{nexp=Nvar "n"},{nexp=Nvar "o"});
-               GtEq(Specc(Parse_ast.Int("-",None)),{nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},{nexp=Nvar "o"})],pure_e));
-    ("mod",Base(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "mod"),[],pure_e));
-    ("quot",Base(([],{t= Tfn ({t=Ttup([nat_typ;nat_typ])},nat_typ,pure_e)}),External (Some "quot"),[],pure_e));
-    (*Type incomplete*)
-    (":",Base(([("a",{k=K_Typ});("b",{k=K_Typ});("c",{k=K_Typ})],
-	       {t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "b"}])},{t=Tvar "c"},pure_e)}),External (Some "vec_concat"),[],pure_e));
+    ("*",Base(((mk_nat_params ["n";"m";"o";"p"]),
+               (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "o") (mk_nv "p")])
+		            (mk_range (mk_mult (mk_nv "n") (mk_nv "o")) (mk_mult (mk_nv "m") (mk_nv "p"))))),
+		        External (Some "multiply"),[],pure_e));
+    ("-",Overload(Base(((mk_typ_params ["a";"b";"c"]),
+                        (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})), External (Some "minus"),[],pure_e),
+                  [Base(((mk_nat_params["n";"m";"o";"p"]),
+                         (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");
+                                               mk_range (mk_nv "o") (mk_nv "p")])
+	                              (mk_range (mk_sub (mk_nv "n") (mk_nv "o")) (mk_sub (mk_nv "m") (mk_nv "p"))))),
+		        External (Some "minus"),
+                        [GtEq(Specc(Parse_ast.Int("-",None)),{nexp=Nvar "n"},{nexp=Nvar "o"});
+                         GtEq(Specc(Parse_ast.Int("-",None)),{nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},{nexp=Nvar "o"})],pure_e);
+                  Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                        (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
+                                              mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])
+                                     (mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n")))), External (Some "minus_vec"),[],pure_e);
+                  Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
+                        (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
+                                              mk_range (mk_nv "o") (mk_nv "p")])
+                           (mk_range (mk_nv "o") (mk_add (mk_nv "p") {nexp = N2n (mk_nv "m",None)})))),
+                       External (Some "minus_vec_range"),
+                        [LtEq(Specc(Parse_ast.Int("-",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
+                   Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
+                         (mk_pure_fun (mk_tup [mk_range (mk_nv "o") (mk_nv "p");
+                                               mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");])
+                                      (mk_range (mk_nv "o") {nexp = N2n (mk_nv "m",None)}))),
+                        External (Some "minus_range_vec"),
+                       [],pure_e); ]));
+    ("mod",
+     Overload(Base(((mk_typ_params ["a";"b";"c"]),
+                    (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
+                   External (Some "mod"),[],pure_e),
+              [Base(((mk_nat_params["n";"m";"o"]),
+                     (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "o") {nexp = Nconst zero}])
+                                  (mk_range {nexp = Nconst zero} (mk_sub (mk_nv "o") {nexp = Nconst one})))),
+                       External (Some "mod"),[GtEq(Specc(Parse_ast.Int("mod",None)),(mk_nv "o"),{nexp = Nconst one})],pure_e);
+               Base(((mk_nat_params["n";"m"])@(mk_ord_params["ord"]),
+                     (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
+                                           mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")])
+                                   (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
+                    External (Some "mod_vec"),[],pure_e)]));
+    ("quot",
+     Overload(Base(((mk_typ_params ["a";"b";"c"]),
+                    (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
+                   External (Some "quot"),[],pure_e),
+              [Base(((mk_nat_params["n";"m";"o";"p";"q";"r"]),
+                     (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "o") (mk_nv "p")])
+                                  (mk_range (mk_nv "q") (mk_nv "r")))),
+                       External (Some "quot"),[GtEq(Specc(Parse_ast.Int("quot",None)),(mk_nv "o"),{nexp = Nconst one});
+                                               LtEq(Specc(Parse_ast.Int("quot",None)),
+                                                    (mk_mult (mk_add (mk_nv "o") (mk_nv "p")) (mk_add (mk_nv "q") (mk_nv "r"))),
+                                                    (mk_add (mk_nv "n") (mk_nv "m")))],pure_e);
+               Base(((mk_nat_params["n";"m"])@(mk_ord_params["ord"]),
+                     (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
+                                           mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")])
+                                   (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
+                    External (Some "quot_vec"),[],pure_e)]));
+    (":",Base(((mk_nat_params["n";"m";"o";"p"]@(mk_ord_params["ord"])@(mk_typ_params ["a"])),
+               (mk_pure_fun (mk_tup [mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "n") (Nvar "m");
+                                     mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "o") (Nvar "p")])
+                            (mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "n") (Nadd((mk_nv "m"), (mk_nv "p")))))),
+              External (Some "vec_concat"),[(*TODO:: This is incorrect when ord is dec, as then n >= m+p is needed *)],pure_e));
+    (* incorrect types, not pressing as the type checker puts in the correct types automatically on a first pass *)
     ("to_num_inc",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,pure_e)}),External None,[],pure_e));
     ("to_num_dec",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,pure_e)}),External None,[],pure_e));
     ("to_vec_inc",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},pure_e)}),External None,[],pure_e));
