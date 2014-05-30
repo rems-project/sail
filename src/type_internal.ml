@@ -1354,7 +1354,7 @@ and conforms_to_n spec actual =
   (*let _ = Printf.printf "conforms_to_n called with %s, %s\n" (n_to_string spec) (n_to_string actual) in*)
   match spec.nexp,actual.nexp with
     | Nuvar _,_ -> true
-    | Nconst si,Nconst ai -> si==ai
+    | Nconst si,Nconst ai -> eq_big_int si ai
     | _,_ -> false
 and conforms_to_o spec actual =
   match spec.order,actual.order with
