@@ -91,7 +91,7 @@ register (vector <0, 64, inc, bit>) DCR1
 let (vector <0, 2, inc, (register<(vector<0, 64, inc, bit>)>) >) DCR =
   [ DCR0, DCR1 ]
 
-val extern ( nat , nat ) -> (bit[64]) effect { wmem , rmem } MEM
+val extern forall Nat 'n. ( nat , [|'n|] ) -> (bit[8 * 'n]) effect { wmem , rmem } MEM
 
 (* XXX effect for trap? *)
 val extern unit -> unit effect pure trap
