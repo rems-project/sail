@@ -39,6 +39,11 @@ let bitwise_not (V_vector idx inc v) =
   let apply x = bool_to_bit(not (bit_to_bool x)) in
   V_vector idx inc (List.map apply v)
 
+let bitwise_not_bit (V_lit (L_aux l loc)) = match l with
+  | L_zero -> (V_lit (L_aux L_one loc))
+  | L_one  -> (V_lit (L_aux L_zero loc))
+end;; 
+
 let bitwise_binop op (V_tuple [V_vector idx inc v; V_vector idx' inc' v']) =
   (* typechecker ensures inc = inc', idx = idx' and length v = length v' *)
   let apply (x, y) = bool_to_bit(op (bit_to_bool x) (bit_to_bool y)) in
@@ -74,14 +79,16 @@ let arith_op_vec op (V_tuple args) = match args with
     else to_vec_dec (List.length cs) n
 end ;;
 let arith_op_range_vec op (V_tuple args) = match args with
-  | [l1; (V_vector _ _ _ as l2)] ->
-    let l2 = (to_num true l2) in
-    arith_op op (V_tuple [l1;l2])
+  | [n; (V_vector _ ord cs as l2)] ->
+    if ord
+    then arith_op_vec op (V_tuple [(to_vec_inc (List.length cs) n);l2])
+    else arith_op_vec op (V_tuple [(to_vec_dec (List.length cs) n);l2])
 end ;;
 let arith_op_vec_range op (V_tuple args) = match args with
-  | [(V_vector _ _ _ as l1);l2] ->
-    let l1 = (to_num true l1) in
-    arith_op op (V_tuple [l1;l2])
+  | [(V_vector _ ord cs as l1);n] ->
+  if ord
+  then arith_op_vec op (V_tuple [l1;(to_vec_inc (List.length cs) n)])
+  else arith_op_vec op (V_tuple [l1;(to_vec_dec (List.length cs) n)])
 end ;;
 
 let compare_op op (V_tuple args) = match args with
@@ -123,6 +130,7 @@ let function_map = [
   ("to_vec_inc", to_vec_inc 64);
   ("to_vec_dec", to_vec_dec 64);
   ("bitwise_not", bitwise_not);
+  ("bitwise_not_bit", bitwise_not_bit);
   ("bitwise_and", bitwise_binop (&&));
   ("bitwise_or", bitwise_binop (||));
   ("bitwise_xor", bitwise_binop xor);

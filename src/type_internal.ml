@@ -759,15 +759,24 @@ let initial_typ_env =
                    Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
                                               mk_range (mk_nv "o") (mk_nv "p")])
-                                     (mk_range (mk_nv "o") (mk_add (mk_nv "p") {nexp = N2n (mk_nv "m",None)})))),
+                                     (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
                         External (Some "add_vec_range"),
                         [LtEq(Specc(Parse_ast.Int("+",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
                    Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
                          (mk_pure_fun (mk_tup [mk_range (mk_nv "o") (mk_nv "p");
                                                mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");])
-                                      (mk_range (mk_nv "o") {nexp = N2n (mk_nv "m",None)}))),
+                                      (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
                         External (Some "add_range_vec"),
-                       [],pure_e); ]));
+                       [LtEq(Specc(Parse_ast.Int("+",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp = N2n (mk_nv "m",None)})],pure_e);
+                  Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
+                        (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p"); bit_t])
+                                     (mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")))),
+                       External (Some "add_vec_bit"), [], pure_e);
+                  Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
+                        (mk_pure_fun (mk_tup [bit_t; mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")])
+                                     (mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")))),
+                       External (Some "add_bit_vec"), [], pure_e);
+                  ]));
     ("*",Base(((mk_nat_params ["n";"m";"o";"p"]),
                (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "o") (mk_nv "p")])
 		            (mk_range (mk_mult (mk_nv "n") (mk_nv "o")) (mk_mult (mk_nv "m") (mk_nv "p"))))),
@@ -788,15 +797,15 @@ let initial_typ_env =
                   Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
                                               mk_range (mk_nv "o") (mk_nv "p")])
-                           (mk_range (mk_nv "o") (mk_add (mk_nv "p") {nexp = N2n (mk_nv "m",None)})))),
+                                     (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
                        External (Some "minus_vec_range"),
                         [LtEq(Specc(Parse_ast.Int("-",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
                    Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
                          (mk_pure_fun (mk_tup [mk_range (mk_nv "o") (mk_nv "p");
                                                mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");])
-                                      (mk_range (mk_nv "o") {nexp = N2n (mk_nv "m",None)}))),
+                                      (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
                         External (Some "minus_range_vec"),
-                       [],pure_e); ]));
+                       [LtEq(Specc(Parse_ast.Int("-",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e); ]));
     ("mod",
      Overload(Base(((mk_typ_params ["a";"b";"c"]),
                     (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
@@ -826,18 +835,13 @@ let initial_typ_env =
                                            mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")])
                                    (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
                     External (Some "quot_vec"),[],pure_e)]));
-    (":",Base(((mk_nat_params["n";"m";"o";"p"]@(mk_ord_params["ord"])@(mk_typ_params ["a"])),
-               (mk_pure_fun (mk_tup [mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "n") (Nvar "m");
-                                     mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "o") (Nvar "p")])
-                            (mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "n") (Nadd((mk_nv "m"), (mk_nv "p")))))),
-              External (Some "vec_concat"),[(*TODO:: This is incorrect when ord is dec, as then n >= m+p is needed *)],pure_e));
     (* incorrect types, not pressing as the type checker puts in the correct types automatically on a first pass *)
     ("to_num_inc",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,pure_e)}),External None,[],pure_e));
     ("to_num_dec",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,pure_e)}),External None,[],pure_e));
     ("to_vec_inc",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},pure_e)}),External None,[],pure_e));
     ("to_vec_dec",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},pure_e)}),External None,[],pure_e));
     ("==",
-     Overload( Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "eq"),[],pure_e),
+     Overload( Base((mk_typ_params ["a";"b"],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),External (Some "eq"),[],pure_e),
      [Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
 	    {t = Tfn({t=Ttup([mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")])},bit_t,pure_e)}), External (Some "eq"),
 	   [Eq(Specc(Parse_ast.Int("==",None)),
@@ -1211,23 +1215,23 @@ and type_arg_eq co d_env ta1 ta2 =
 and type_consistent co d_env t1 t2 =
   type_consistent_internal co d_env t1 [] t2 []
 
-let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 = 
+let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 = 
   let l = get_c_loc co in
   let t1,cs1' = get_abbrev d_env t1 in
   let t2,cs2' = get_abbrev d_env t2 in
   let cs1,cs2 = cs1@cs1',cs2@cs2' in
   let csp = cs1@cs2 in
   match t1.t,t2.t with
-  | Tabbrev(_,t1),Tabbrev(_,t2) -> type_coerce_internal co d_env t1 cs1 e t2 cs2
-  | Tabbrev(_,t1),_ -> type_coerce_internal co d_env t1 cs1 e t2 cs2
-  | _,Tabbrev(_,t2) -> type_coerce_internal co d_env t1 cs1 e t2 cs2
+  | Tabbrev(_,t1),Tabbrev(_,t2) -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
+  | Tabbrev(_,t1),_ -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
+  | _,Tabbrev(_,t2) -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
   | Ttup t1s, Ttup t2s ->
     let tl1,tl2 = List.length t1s,List.length t2s in
     if tl1=tl2 then 
       let ids = List.map (fun _ -> Id_aux(Id (new_id ()),l)) t1s in
       let vars = List.map2 (fun i t -> E_aux(E_id(i),(l,Base(([],t),Emp_local,[],pure_e)))) ids t1s in
       let (coerced_ts,cs,coerced_vars) = 
-        List.fold_right2 (fun v (t1,t2) (ts,cs,es) -> let (t',c',e') = type_coerce co d_env t1 v t2 in
+        List.fold_right2 (fun v (t1,t2) (ts,cs,es) -> let (t',c',e') = type_coerce co d_env is_explicit t1 v t2 in
                                                       ((t'::ts),c'@cs,(e'::es)))
           vars (List.combine t1s t2s) ([],[],[]) in
       if vars = coerced_vars then (t2,cs,e)
@@ -1242,8 +1246,8 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
   | Tapp(id1,args1),Tapp(id2,args2) ->
     if id1=id2 && (id1 <> "vector")
     then let t',cs' = type_consistent co d_env t1 t2 in (t',cs',e)
-    else (match id1,id2 with
-    | "vector","vector" ->
+    else (match id1,id2,is_explicit with
+    | "vector","vector",_ ->
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord o1;TA_typ t1i],
         [TA_nexp b2;TA_nexp r2;TA_ord o2;TA_typ t2i] ->
@@ -1258,7 +1262,7 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
         let e' = E_aux(E_internal_cast ((l,(Base(([],t2),Emp_local,[],pure_e))),e),(l,tannot)) in
         (t2,cs@cs',e')
       | _ -> raise (Reporting_basic.err_unreachable l "vector is not properly kinded"))
-    | "vector","range" -> 
+    | "vector","range",_ -> 
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
@@ -1273,7 +1277,7 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert non-bit vector into an range"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
-    | "range","vector" -> 
+    | "range","vector",true -> 
       (match args2,args1 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
@@ -1288,17 +1292,17 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert an range into a non-bit vector"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
-    | "register",_ ->
+    | "register",_,_ ->
       (match args1 with
 	| [TA_typ t] ->
           (*TODO Should this be an internal cast? Probably, make sure it doesn't interfere with the other internal cast and get removed *)
           (*let _ = Printf.printf "Adding cast to remove register read\n" in*)
           let new_e = E_aux(E_cast(t_to_typ unit_t,e),(l,Base(([],t),External None,[],(add_effect (BE_aux(BE_rreg, l)) pure_e)))) in
-	  type_coerce co d_env t new_e t2
+	  type_coerce co d_env is_explicit t new_e t2
 	| _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))
-    | _,_ -> 
+    | _,_,_ -> 
       let t',cs' = type_consistent co d_env t1 t2 in (t',cs',e))
-  | Tid("bit"),Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]) ->
+  (*| Tid("bit"),Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]) ->
     let cs = [Eq(co,r1,{nexp = Nconst one})] in
     (*WARNING: shrinking i to an int; should add a check*)
     let t2' = {t = Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp {nexp=Nconst one};TA_ord o;TA_typ {t=Tid "bit"}])} in
@@ -1307,7 +1311,7 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
     let cs = [Eq(co,r1,{nexp = Nconst one})] in
     (t2,cs,E_aux((E_vector_access (e,(E_aux(E_lit(L_aux(L_num (int_of_big_int i),l)),
 					   (l,Base(([],{t=Tapp("range",[TA_nexp b1;TA_nexp {nexp=Nconst zero}])}),Emp_local,cs,pure_e)))))),
-                 (l,Base(([],t2),Emp_local,cs,pure_e))))
+                 (l,Base(([],t2),Emp_local,cs,pure_e))))*)
   | Tid("bit"),Tapp("range",[TA_nexp b1;TA_nexp r1]) ->
     let t',cs'= type_consistent co d_env {t=Tapp("range",[TA_nexp{nexp=Nconst zero};TA_nexp{nexp=Nconst one}])} t2 in
     (t2,cs',E_aux(E_case (e,[Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_zero,l)),(l,Base(([],t1),Emp_local,[],pure_e))),
@@ -1352,7 +1356,7 @@ let rec type_coerce_internal co d_env t1 cs1 e t2 cs2 =
     | None -> eq_error l ("Type mismatch: " ^ (t_to_string t1) ^ " , " ^ (t_to_string t2)))
   | _,_ -> let t',cs = type_consistent co d_env t1 t2 in (t',cs,e)
 
-and type_coerce co d_env t1 e t2 = type_coerce_internal co d_env t1 [] e t2 [];;
+and type_coerce co d_env is_explicit t1 e t2 = type_coerce_internal co d_env is_explicit t1 [] e t2 [];;
 
 let rec conforms_to_t spec actual =
   (*let _ = Printf.printf "conforms_to_t called with %s, %s\n" (t_to_string spec) (t_to_string actual) in*)

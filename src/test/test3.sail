@@ -48,7 +48,7 @@ function nat main _ = {
   dummy_reg := (deinfix +)(5, 37);
   (* casts and external calls *)
   dummy_reg := 0b01 + 0b01;
-  dummy_reg2 := dummy_reg;               (* cast from [|256|] to bit[8] *)
+  dummy_reg2 := 0b00000001;
   dummy_reg2 := dummy_reg2 + dummy_reg2; (* cast to nat for add call *)
   dummy_reg2;                            (* cast again and return 4 *)
 }

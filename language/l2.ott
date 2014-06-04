@@ -583,6 +583,8 @@ exp :: 'E_' ::=
   {{ com vector subrange update (with vector)}}
   % do we want a functional update form with a comma-separated list of such?
 
+  | exp : exp2                                        :: :: vector_append
+  {{ com vector concatenation }}
 
 % lists 
   | [|| exp1 , ..  , expn ||]                           :: :: list

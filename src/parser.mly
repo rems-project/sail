@@ -726,7 +726,7 @@ cons_exp:
   | shift_exp ColonColon cons_exp
     { eloc (E_cons($1,$3)) }
   | shift_exp Colon cons_exp
-    { eloc (E_app_infix($1,Id_aux(Id(":"), locn 2 2), $3)) }
+    { eloc (E_vector_append($1, $3)) }
 
 cons_right_atomic_exp:
   | shift_right_atomic_exp
@@ -734,7 +734,7 @@ cons_right_atomic_exp:
   | shift_exp ColonColon cons_right_atomic_exp
     { eloc (E_cons($1,$3)) }
   | shift_exp Colon cons_right_atomic_exp
-    { eloc (E_app_infix($1,Id_aux(Id(":"), locn 2 2), $3)) }
+    { eloc (E_vector_append($1, $3)) }
 
 at_exp:
   | cons_exp

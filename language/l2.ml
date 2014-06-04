@@ -246,6 +246,7 @@ type
  | E_vector_subrange of 'a exp * 'a exp * 'a exp (* subvector extraction *)
  | E_vector_update of 'a exp * 'a exp * 'a exp (* vector functional update *)
  | E_vector_update_subrange of 'a exp * 'a exp * 'a exp * 'a exp (* vector subrange update (with vector) *)
+ | E_vector_append of 'a exp * 'a exp (* vector concatenation *)
  | E_list of ('a exp) list (* list *)
  | E_cons of 'a exp * 'a exp (* cons *)
  | E_record of 'a fexps (* struct *)

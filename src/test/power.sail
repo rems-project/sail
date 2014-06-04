@@ -126,7 +126,7 @@ scattered function ast decode
 
  function clause execute (  LoadWordandZero  (  D, RA, RT  )  ) =
   {  (bit[64]) EA := 0;  (bit[64]) b := 0;  {
-    if((bit)  (  RA  ==  0  )  ) then  b  :=  0  else  b  :=  (GPR[  RA  ])  ;
+    if((bit)  (  (nat) RA  ==  0  )  ) then  b  :=  0  else  b  :=  (GPR[  RA  ])  ;
     EA  :=  (  b  +  (  exts  (  D  ))  )  ;
     GPR[  RT  ]  :=  (  0b00000000000000000000000000000000  :  MEM(  EA  ,   4  )  )  ;
   }  } 
@@ -139,7 +139,7 @@ scattered function ast decode
 
  function clause execute (  StoreWord  (  D, RA, RS  )  ) =
   {  (bit[64]) EA := 0;  (bit[64]) b := 0;  {
-    if((bit)  (  RA  ==  0  )  ) then  b  :=  0  else  b  :=  (GPR[  RA  ])  ;
+    if((bit)  (  (nat) RA  ==  0  )  ) then  b  :=  0  else  b  :=  (GPR[  RA  ])  ;
     EA  :=  (  b  +  (  exts  (  D  ))  )  ;
     MEM(  EA  ,   4  )  :=  ((  (GPR[  RS  ])  )[  32  ..  63  ])  ;
   }  } 
@@ -165,7 +165,7 @@ scattered function ast decode
 
  function clause execute (  AddImmediate  (  RA, RT, SI  )  ) =
   {  {
-    if((bit)  (  RA  ==  0  )  ) then  GPR[  RT  ]  :=  (  exts  (  SI  ))  else  GPR[  RT  ]  :=  (  (GPR[  RA  ])  +  (  exts  (  SI  ))  )  ;
+    if((bit)  (  (nat) RA  ==  0  )  ) then  GPR[  RT  ]  :=  (bit[64]) (  exts  (  SI  ))  else  GPR[  RT  ]  :=  (  (GPR[  RA  ])  +  (  exts  (  SI  ))  )  ;
   }  } 
 
 

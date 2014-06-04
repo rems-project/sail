@@ -986,6 +986,20 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			      update_stack a (add_to_top_frame (fun i2 -> E_aux (E_vector_update_subrange vec (to_exp vi1) i2 exp) (l,annot))))
                         | _ -> (Error l "vector update requires number",lm,le) end)
                       (fun a -> update_stack a (add_to_top_frame (fun i1 -> E_aux (E_vector_update_subrange vec i1 i2 exp) (l,annot))))
+    | E_vector_append e1 e2 ->
+      resolve_outcome (interp_main mode t_level l_env l_mem e1)
+                      (fun v1 lm le ->
+                        match v1 with
+                        | V_vector m inc vals1 ->
+                          (resolve_outcome (interp_main mode t_level l_env lm e2)
+                                            (fun v2 lm le ->
+                                              match v2 with
+                                              | V_vector _ _ vals2 -> (Value (V_vector m inc (vals1++vals2)) Tag_empty,lm,l_env)
+                                              | _ -> (Error l "vector concat requires vector",lm,le) end)
+                                            (fun a -> update_stack a (add_to_top_frame 
+                                                                        (fun e -> E_aux (E_vector_append (to_exp v1) e) (l,annot)))))
+                        | _ -> (Error l "vector concat requires vector",lm,le) end)
+                      (fun a -> update_stack a (add_to_top_frame (fun e -> E_aux (E_vector_append e e2) (l,annot))))
     | E_tuple(exps) -> 
       exp_list mode t_level (fun exps -> E_aux (E_tuple exps) (l,annot)) V_tuple l_env l_mem [] exps
     | E_vector(exps) ->
