@@ -128,7 +128,8 @@ let run () =
   (* entry point: unit -> unit cycle *)
   let entry = E_aux(E_app(Id_aux((Id "cycle"),Unknown),
     [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)) in
-  let t =time_it (fun () -> fde_loop 0 entry !mem reg (!file, Power.defs)) () in
+  let name = Filename.basename !file in
+  let t =time_it (fun () -> fde_loop 0 entry !mem reg (name, Power.defs)) () in
   eprintf "Execution time: %f seconds\n" t
 ;;
 
