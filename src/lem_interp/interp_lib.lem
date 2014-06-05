@@ -44,6 +44,10 @@ let bitwise_not_bit (V_lit (L_aux l loc)) = match l with
   | L_one  -> (V_lit (L_aux L_zero loc))
 end;; 
 
+let bitwise_binop_bit op (V_tuple [x; y]) =
+  bool_to_bit (op (bit_to_bool x) (bit_to_bool y))
+;;
+
 let bitwise_binop op (V_tuple [V_vector idx inc v; V_vector idx' inc' v']) =
   (* typechecker ensures inc = inc', idx = idx' and length v = length v' *)
   let apply (x, y) = bool_to_bit(op (bit_to_bool x) (bit_to_bool y)) in
@@ -66,29 +70,31 @@ let to_vec_inc len (V_lit(L_aux (L_num n) ln)) =
 let to_vec_dec len (V_lit(L_aux (L_num n) ln)) =
   let l = boolListFrombitSeq len (bitSeqFromInteger Nothing n) in
   V_vector 0 false (map bool_to_bit l) ;;
+let to_vec ord len v =
+  if ord
+  then to_vec_inc len v
+  else to_vec_dec len v
+;;
+
+(* XXX work-around to avoid truncating *)
+let to_vec_safe o l v = to_vec o (l+1) v ;;
 
 let arith_op op (V_tuple args) = match args with
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (op x y)) lx)
   end ;;
 let arith_op_vec op (V_tuple args) = match args with
   | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
-    let (l1',l2') = (to_num true l1,to_num true l2) in
+    let (l1',l2') = (to_num false l1,to_num false l2) in
     let n = arith_op op (V_tuple [l1';l2']) in
-    if ord 
-    then to_vec_inc (List.length cs) n
-    else to_vec_dec (List.length cs) n
+    to_vec_safe ord (List.length cs) n
 end ;;
 let arith_op_range_vec op (V_tuple args) = match args with
   | [n; (V_vector _ ord cs as l2)] ->
-    if ord
-    then arith_op_vec op (V_tuple [(to_vec_inc (List.length cs) n);l2])
-    else arith_op_vec op (V_tuple [(to_vec_dec (List.length cs) n);l2])
+    arith_op_vec op (V_tuple [(to_vec_safe ord (List.length cs) n);l2])
 end ;;
 let arith_op_vec_range op (V_tuple args) = match args with
   | [(V_vector _ ord cs as l1);n] ->
-  if ord
-  then arith_op_vec op (V_tuple [l1;(to_vec_inc (List.length cs) n)])
-  else arith_op_vec op (V_tuple [l1;(to_vec_dec (List.length cs) n)])
+  arith_op_vec op (V_tuple [l1;(to_vec_safe ord (List.length cs) n)])
 end ;;
 
 let compare_op op (V_tuple args) = match args with
@@ -134,6 +140,9 @@ let function_map = [
   ("bitwise_and", bitwise_binop (&&));
   ("bitwise_or", bitwise_binop (||));
   ("bitwise_xor", bitwise_binop xor);
+  ("bitwise_and_bit", bitwise_binop_bit (&&));
+  ("bitwise_or_bit", bitwise_binop_bit (||));
+  ("bitwise_xor_bit", bitwise_binop_bit xor);
   ("lt", compare_op (<));
   ("gt", compare_op (>));
   ("lt_vec", compare_op_vec (<));
