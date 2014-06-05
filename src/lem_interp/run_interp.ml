@@ -213,8 +213,9 @@ let run
   ?(entry=E_aux(E_app(Id_aux((Id "main"),Unknown), [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)))
   ?(reg=Reg.empty)
   ?(mem=Mem.empty)
+  ?(eager_eval=true)
   (name, test) =
-  let mode = {eager_eval = true} in
+  let mode = {eager_eval} in
   let rec loop env = function
   | Value (v, _) -> debugf "%s: returned %s\n" name (val_to_string v); true, env
   | Action (a, s) ->

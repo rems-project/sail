@@ -99,7 +99,7 @@ let get_reg reg name =
 
 let rec fde_loop count entry mem reg prog =
   debugf "\n**** cycle %d  ****\n" count;
-  match Run_interp.run ~entry ~mem ~reg prog with
+  match Run_interp.run ~entry ~mem ~reg ~eager_eval:false prog with
   | false, _ -> eprintf "FAILURE\n"; exit 1
   | true, (reg, mem) ->
       if Big_int.eq_big_int (get_reg reg "CIA") lr_init_value then
