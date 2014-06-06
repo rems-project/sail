@@ -7,13 +7,13 @@ open Big_int ;;
 
 let lit_to_string = function
  | L_unit -> "unit"
- | L_zero -> "bitzero"
- | L_one -> "bitone"
+ | L_zero -> "0b0"
+ | L_one -> "0b1"
  | L_true -> "true"
  | L_false -> "false"
  | L_num n -> string_of_big_int n
- | L_hex s -> s
- | L_bin s -> s
+ | L_hex s -> "0x"^s
+ | L_bin s -> "0b"^s
  | L_undef -> "undefined"
  | L_string s -> "\"" ^ s ^ "\""
 ;;
@@ -23,14 +23,20 @@ let id_to_string = function
 ;;
 
 let loc_to_string = function
-  | Unknown -> "Unknown"
+  | Unknown -> "location unknown"
   | Int(s,_) -> s
   | Range(s,fline,fchar,tline,tchar) -> 
-    "in " ^ s ^ " from line " ^  (string_of_int fline) ^ " character " ^ (string_of_int fchar) ^ 
-      " to line " ^ (string_of_int tline) ^ " character " ^ (string_of_int tchar)
+      sprintf "%s:%d:%d-%d:%d" s fline fchar tline tchar
 ;;
 
-let bitvec_to_string l = "0b" ^ (String.concat "" (List.map (function
+let collapse_leading s =
+  let first_bit = s.[0] in
+  let templ = sprintf "%c...%c" first_bit first_bit in
+  let regexp = Str.regexp "^\\(000000*\\|111111*\\)" in
+  Str.replace_first regexp templ s
+;;
+
+let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (function
   | V_lit(L_aux(L_zero, _)) -> "0"
   | V_lit(L_aux(L_one, _)) -> "1"
   | _ -> assert false) l))
@@ -43,34 +49,38 @@ let rec reg_to_string = function
 
 let rec val_to_string = function
  | V_boxref(n, t) -> sprintf "boxref %d" n
- | V_lit (L_aux(l,_)) -> sprintf (*"literal %s" *) "%s" (lit_to_string l)
+ | V_lit (L_aux(l,_)) -> sprintf "%s" (lit_to_string l)
  | V_tuple l ->
      let repr = String.concat ", " (List.map val_to_string l) in
-     sprintf "tuple <%s>" repr
+     sprintf "(%s)" repr
  | V_list l ->
      let repr = String.concat "; " (List.map val_to_string l) in
-     sprintf "list [%s]" repr
+     sprintf "[||%s||]" repr
  | V_vector (first_index, inc, l) ->
-     let order = if inc then "big-endian" else "little-endian" in
+     let last_index = add_int_big_int (if inc then List.length l - 1 else 1 - List.length l) first_index  in
      let repr =
        try bitvec_to_string (if inc then l else List.rev l)
-       with Failure _ -> String.concat "; " (List.map val_to_string l) in
-     sprintf "vector [%s] (%s, from %s)" repr order (string_of_big_int first_index)
+       with Failure _ ->
+         sprintf "[%s]" (String.concat "; " (List.map val_to_string l)) in
+     sprintf "%s [%s..%s]" repr (string_of_big_int first_index) (string_of_big_int last_index)
  | V_record(_, l) ->
      let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string value) in
      let repr = String.concat "; " (List.map  pp l) in
-     sprintf "record {%s}" repr
+     sprintf "{%s}" repr
  | V_ctor (id,_, value) ->
-     sprintf "constructor %s %s" (id_to_string id) (val_to_string value)
+     sprintf "%s %s" (id_to_string id) (val_to_string value)
  | V_register r ->
-     sprintf "register %s as value" (reg_to_string r)
+     sprintf "reg-as-value %s" (reg_to_string r)
+ | V_unknown -> "unknown"
 ;;
 
-let rec env_to_string = function
-  | [] -> ""
-  | [id,v] -> sprintf "%s |-> %s" (id_to_string id) (val_to_string v)
-  | (id,v)::env -> sprintf "%s |-> %s, %s" (id_to_string id) (val_to_string v) (env_to_string env)
+let rec top_frame_exp = function
+  | Top -> raise (Invalid_argument "top_frame_exp")
+  | Thunk_frame(e, _, _, _, Top) -> e
+  | Thunk_frame(_, _, _, _, s)
+  | Hole_frame(_, _, _, _, _, s) -> top_frame_exp s
 
+  (*
 let rec stack_to_string = function
   | Top -> "Top"
   | Hole_frame(id,exp,t_level,env,mem,s) ->
@@ -78,25 +88,10 @@ let rec stack_to_string = function
   | Thunk_frame(exp,t_level,env,mem,s) ->
     sprintf "(Thunk_frame of e, (%s), m, %s)" (env_to_string env) (stack_to_string s)
 ;;  
+*)
 
 let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%s, %s)"
   (string_of_big_int x) (string_of_big_int y)
-let act_to_string = function
- | Read_reg (reg, sub) ->
-     sprintf "read_reg %s%s" (reg_to_string reg) (sub_to_string sub)
- | Write_reg (reg, sub, value) ->
-     sprintf "write_reg %s%s = %s" (reg_to_string reg) (sub_to_string sub)
-     (val_to_string value)
- | Read_mem (id, args, sub) ->
-     sprintf "read_mem %s(%s)%s" (id_to_string id) (val_to_string args)
-     (sub_to_string sub)
- | Write_mem (id, args, sub, value) ->
-     sprintf "write_mem %s(%s)%s = %s" (id_to_string id) (val_to_string args)
-     (sub_to_string sub) (val_to_string value)
- | Call_extern (name, arg) ->
-     sprintf "extern call %s applied to %s" name (val_to_string arg)
- | Debug l ->
-   sprintf "debug, next step at %s" (loc_to_string l)
 ;;
 
 let id_compare i1 i2 = 
@@ -143,16 +138,18 @@ let rec slice_ir v = function
   | BF_concat (BF_aux (ir, _), BF_aux (ir', _)) -> vconcat (slice_ir v ir) (slice_ir v ir')
 ;;
 
+let unit_lit = V_lit (L_aux(L_unit,Interp_ast.Unknown))
+
 let rec perform_action ((reg, mem) as env) = function
  (* registers *)
  | Read_reg (Reg (id, _), sub) ->
      slice (Reg.find id reg) sub, env
  | Write_reg (Reg (id, _), None, value) ->
-     V_lit (L_aux(L_unit,Interp_ast.Unknown)), (Reg.add id value reg, mem)
+     unit_lit, (Reg.add id value reg, mem)
  | Write_reg (Reg (id, _), Some (start, stop), (V_vector _ as value)) ->
      let old_val = Reg.find id reg in
      let new_val = fupdate_vector_slice old_val value start stop in
-     V_lit (L_aux(L_unit,Interp_ast.Unknown)), (Reg.add id new_val reg, mem)
+     unit_lit, (Reg.add id new_val reg, mem)
  (* subregisters *)
  | Read_reg (SubReg (_, Reg (id, _), BF_aux (ir, _)), sub) ->
      slice (slice_ir (Reg.find id reg) ir) sub, env
@@ -167,7 +164,7 @@ let rec perform_action ((reg, mem) as env) = function
  | Read_mem (id, V_lit(L_aux((L_num n),_)), sub) ->
      slice (Mem.find (id, n) mem) sub, env
  | Write_mem (id, V_lit(L_aux(L_num n,_)), None, value) ->
-     V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, Mem.add (id, n) value mem)
+     unit_lit, (reg, Mem.add (id, n) value mem)
  (* multi-byte accesses to memory *)
  | Read_mem (id, V_tuple [V_lit(L_aux(L_num n,_)); V_lit(L_aux(L_num size,_))], sub) ->
      let rec fetch k acc =
@@ -189,12 +186,12 @@ let rec perform_action ((reg, mem) as env) = function
          let slice = slice_vector value n1 n2 in
          let mem' = Mem.add (id, add_big_int n k) slice mem in
          update (succ_big_int k) mem'
-     in V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, update zero_big_int mem)
+     in unit_lit, (reg, update zero_big_int mem)
  (* This case probably never happens in the POWER spec anyway *)
  | Write_mem (id, V_lit(L_aux(L_num n,_)), Some (start, stop), (V_vector _ as value)) ->
      let old_val = Mem.find (id, n) mem in
      let new_val = fupdate_vector_slice old_val value start stop in
-     V_lit (L_aux(L_unit, Interp_ast.Unknown)), (reg, Mem.add (id, n) new_val mem)
+     unit_lit, (reg, Mem.add (id, n) new_val mem)
  (* special case for slices of size 1: wrap value in a vector *)
  | Write_reg ((Reg (_, _) as r), (Some (start, stop) as slice), value) when eq_big_int start stop ->
      perform_action env (Write_reg (r, slice, V_vector(zero_big_int, true, [value])))
@@ -202,7 +199,7 @@ let rec perform_action ((reg, mem) as env) = function
      perform_action env (Write_mem (id, n, slice, V_vector(zero_big_int, true, [value])))
  (* extern functions *)
  | Call_extern (name, arg) -> eval_external name arg, env
- | Debug l -> V_lit (L_aux(L_unit,Interp_ast.Unknown)),env
+ | Debug l -> unit_lit, env
  | _ -> assert false
 ;;
 
@@ -215,20 +212,54 @@ let run
   ?(mem=Mem.empty)
   ?(eager_eval=true)
   (name, test) =
-  let mode = {eager_eval} in
+  let mode = ref eager_eval in
+  (* interactive loop for step-by-step execution *)
+  let usage = "Usage: next, run, stack, environment, memory\n" in
+  let rec interact ((reg, mem) as env) stack =
+    flush_all();
+    begin match Pervasives.read_line () with
+    | "n" | "next" -> ()
+    | "r" | "run" -> mode := true
+    | "e" | "env" | "environment"
+    | "m" | "mem" | "memory"
+    | "s" | "stack" -> () (* XXX *)
+    | _ -> debugf "%s\n" usage; interact env stack
+    end
+  in
   let rec loop env = function
-  | Value (v, _) -> debugf "%s: returned %s\n" name (val_to_string v); true, env
+  | Value (v, _) -> debugf "%s: return %s\n" name (val_to_string v); true, env
   | Action (a, s) ->
-      debugf "%s: suspended on action %s\n" name (act_to_string a);
-      (*debugf "%s: suspended on action %s, with stack %s\n" name (act_to_string a) (stack_to_string s);*)
       let return, env' = perform_action env a in
-      debugf "%s: action returned %s\n" name (val_to_string return);
-      loop env' (resume mode s (Some return))
+      begin match a with
+      | Read_reg (reg, sub) ->
+          debugf "%s: %s%s -> %s\n" name (reg_to_string reg) (sub_to_string sub) (val_to_string return)
+      | Write_reg (reg, sub, value) ->
+          assert (return = unit_lit);
+          debugf "%s: %s%s <- %s\n" name (reg_to_string reg) (sub_to_string sub) (val_to_string value)
+      | Read_mem (id, args, sub) ->
+          debugf "%s: %s%s%s -> %s\n" name (id_to_string id) (val_to_string args) (sub_to_string sub) (val_to_string return)
+      | Write_mem (id, args, sub, value) ->
+          assert (return = unit_lit);
+          debugf "%s: %s%s%s <- %s\n" name (id_to_string id) (val_to_string args) (sub_to_string sub) (val_to_string value)
+      (* distinguish single argument for pretty-printing *)
+      | Call_extern (f, (V_tuple _ as args)) ->
+          debugf "%s: %s%s -> %s\n" name f (val_to_string args) (val_to_string return)
+      | Call_extern (f, arg) ->
+          debugf "%s: %s(%s) -> %s\n" name f (val_to_string arg) (val_to_string return)
+      | Debug l ->
+          assert (return = unit_lit);
+          debugf "%s: breakpoint, next step at %s\n" name (loc_to_string l);
+          debugf "~~~ continuation ~~~\n%s\n" (Pretty_interp.pp_exp (top_frame_exp s));
+          interact env' s
+      | Barrier (_, _) | Write_next_IA _ | Nondet _ ->
+          failwith "unexpected action"
+      end;
+      loop env' (resume {eager_eval = !mode} s (Some return))
   | Error(l, e) -> debugf "%s: %s: error: %s\n" name (loc_to_string l) e; false, env in
-  debugf "%s: starting\n" name;
+  debugf "%s: evaluate %s\n" name (Pretty_interp.pp_exp entry);
   try
     Printexc.record_backtrace true;
-    loop (reg, mem) (interp mode test entry)
+    loop (reg, mem) (interp {eager_eval = !mode} test entry)
   with e ->
     let trace = Printexc.get_backtrace () in
     debugf "%s: interpretor error %s\n%s\n" name (Printexc.to_string e) trace;
