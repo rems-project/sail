@@ -75,6 +75,8 @@ let init_reg () =
   ]
 ;;
 
+let eager_eval = ref true
+
 let args = [
   ("--file", Arg.Set_string file, "filename binary code to load in memory");
   ("--data", Arg.String add_section, "name,offset,size,addr add a data section");
@@ -82,6 +84,7 @@ let args = [
   ("--startaddr", Arg.Set_string startaddr, "addr initial address (UNUSED)");
   ("--mainaddr", Arg.Set_string mainaddr, "addr address of the main section (entry point; default: 0)");
   ("--quiet", Arg.Clear Run_interp.debug, " do not display interpreter actions");
+  ("--interactive", Arg.Clear eager_eval , " interactive execution");
 ] ;;
 
 let time_it action arg =
@@ -99,7 +102,7 @@ let get_reg reg name =
 
 let rec fde_loop count entry mem reg prog =
   debugf "\n**** cycle %d  ****\n" count;
-  match Run_interp.run ~entry ~mem ~reg ~eager_eval:false prog with
+  match Run_interp.run ~entry ~mem ~reg ~eager_eval:!eager_eval prog with
   | false, _ -> eprintf "FAILURE\n"; exit 1
   | true, (reg, mem) ->
       if Big_int.eq_big_int (get_reg reg "CIA") lr_init_value then
@@ -115,6 +118,7 @@ let run () =
     Arg.usage args "";
     exit 1;
   end;
+  if !eager_eval then Run_interp.debug := true;
   let ic = open_in_bin !file in
   if !sections = [] then begin
     sections := [(0, in_channel_length ic, Big_int.zero_big_int)];
