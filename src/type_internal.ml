@@ -691,6 +691,11 @@ let rec fresh_evar bindings e =
     | _ -> None
 
 let nat_t = {t = Tapp("range",[TA_nexp{nexp= Nconst zero};TA_nexp{nexp = Npos_inf};])}
+let uint8_t = {t = Tapp("range",[TA_nexp{nexp = Nconst zero}; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 8)},Some (big_int_of_int 256))}])}
+let uint16_t = {t = Tapp("range",[TA_nexp{nexp = Nconst zero}; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 16)},Some (big_int_of_int 65536))}])}
+let uint32_t = {t = Tapp("range",[TA_nexp{nexp = Nconst zero}; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 32)},Some (big_int_of_int 4294967296))}])}
+let uint64_t = {t = Tapp("range",[TA_nexp{nexp = Nconst zero}; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 64)},Some (big_int_of_string "18446744073709551616"))}])}
+
 let unit_t = { t = Tid "unit" }
 let bit_t = {t = Tid "bit" }
 let bool_t = {t = Tid "bool" }
@@ -708,6 +713,10 @@ let initial_kind_env =
   Envmap.from_list [ 
     ("bool", {k = K_Typ});
     ("nat", {k = K_Typ});
+    ("uint8", {k = K_Typ});
+    ("uint16", {k= K_Typ});
+    ("uint32", {k=K_Typ});
+    ("uint64", {k=K_Typ});
     ("unit", {k = K_Typ});
     ("bit", {k = K_Typ});
     ("list", {k = K_Lam( [{k = K_Typ}], {k = K_Typ})});
@@ -716,6 +725,16 @@ let initial_kind_env =
     ("range", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}], {k = K_Typ}) });
     ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } )
   ]
+
+let initial_abbrev_env =
+  Envmap.from_list [
+    ("nat",Base(([],nat_t),Emp_global,[],pure_e));
+    ("uint8",Base(([],uint8_t),Emp_global,[],pure_e));
+    ("uint16",Base(([],uint16_t),Emp_global,[],pure_e));
+    ("uint32",Base(([],uint32_t),Emp_global,[],pure_e));
+    ("uint64",Base(([],uint64_t),Emp_global,[],pure_e));
+  ]
+
 
 let mk_nat_params l = List.map (fun i -> (i,{k=K_Nat})) l
 let mk_typ_params l = List.map (fun i -> (i,{k=K_Typ})) l
@@ -883,10 +902,6 @@ let initial_typ_env =
     ("<<<",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
   ]
 
-let initial_abbrev_env =
-  Envmap.from_list [
-    ("nat",Base(([],nat_t),Emp_global,[],pure_e));
-  ]
 
 let rec t_subst s_env t =
   match t.t with
