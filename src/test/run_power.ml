@@ -61,8 +61,10 @@ let lr_init_value = Big_int.zero_big_int
 let init_reg () =
   let init name value size =
     (* fix index - this is necessary for CR, indexed from 32 *)
-    let offset (V_vector(_, inc, v)) =
-      V_vector(Big_int.big_int_of_int (64 - size), inc, v) in
+    let offset = function
+      V_vector(_, inc, v) ->
+        V_vector(Big_int.big_int_of_int (64 - size), inc, v)
+     | _ -> assert false in
     Id_aux(Id name, Unknown), offset (big_int_to_vec value size) in
   List.fold_left (fun r (k,v) -> Reg.add k v r) Reg.empty [
     (* XXX execute main() directly until we can handle the init phase *)
@@ -96,8 +98,9 @@ let time_it action arg =
 
 let get_reg reg name =
   let reg_content = Reg.find (Id_aux(Id name, Unknown)) reg in
-  let V_lit(L_aux(L_num n, Unknown)) = to_num true reg_content in
-  n
+  match to_num true reg_content with
+  | V_lit(L_aux(L_num n, Unknown)) -> n
+  |  _ -> assert false
 ;;
 
 let rec fde_loop count entry mem reg prog =
