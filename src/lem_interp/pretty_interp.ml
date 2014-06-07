@@ -4,6 +4,7 @@
  * - string_of_big_int instead of string_of_int
  * - annot does not contain type annotations anymore, so E_internal_cast
  *   is ignored
+ * - special case for holes in doc_id
  * - pp_exp returns a string instead of working on a buffer (should
  *   change this in the original as well, probably)
  * - pp_defs deleted
@@ -26,6 +27,7 @@ open PPrint
 
 let doc_id (Id_aux(i,_)) =
   match i with
+  | Id "0" -> string "[x]" (* internal representation of a hole *)
   | Id i -> string i
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
