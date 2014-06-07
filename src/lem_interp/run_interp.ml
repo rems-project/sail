@@ -26,7 +26,9 @@ let loc_to_string = function
   | Unknown -> "location unknown"
   | Int(s,_) -> s
   | Range(s,fline,fchar,tline,tchar) -> 
-      sprintf "%s:%d:%d-%d:%d" s fline fchar tline tchar
+      if fline = tline
+      then sprintf "%s:%d:%d" s fline fchar
+      else sprintf "%s:%d:%d-%d:%d" s fline fchar tline tchar
 ;;
 
 let collapse_leading s =
@@ -80,15 +82,52 @@ let rec top_frame_exp = function
   | Thunk_frame(_, _, _, _, s)
   | Hole_frame(_, _, _, _, _, s) -> top_frame_exp s
 
-  (*
-let rec stack_to_string = function
-  | Top -> "Top"
-  | Hole_frame(id,exp,t_level,env,mem,s) ->
-    sprintf "(Hole_frame of %s, e, (%s), m, %s)" (id_to_string id) (env_to_string env) (stack_to_string s)
-  | Thunk_frame(exp,t_level,env,mem,s) ->
-    sprintf "(Thunk_frame of e, (%s), m, %s)" (env_to_string env) (stack_to_string s)
+let tunk = Unknown, None
+let ldots = E_aux(E_id (Id_aux (Id "...", Unknown)), tunk)
+let rec compact_exp (E_aux (e, l)) =
+  let wrap e = E_aux (e, l) in
+  match e with
+ | E_block (e :: _) -> compact_exp e
+ | E_if (e, _, _) ->
+     wrap(E_if(compact_exp e, ldots, E_aux(E_block [], tunk)))
+ | E_for (i, e1, e2, e3, o, e4) ->
+    wrap(E_for(i, compact_exp e1, compact_exp e2, compact_exp e3, o, ldots))
+ | E_case (e, _) ->
+     wrap(E_case(compact_exp e, []))
+ | E_let (bind, _) -> wrap(E_let(bind, ldots))
+ | E_cast (_, e) -> compact_exp e
+ | E_app (f, args) -> wrap(E_app(f, List.map compact_exp args))
+ | E_app_infix (l, op, r) -> wrap(E_app_infix(compact_exp l, op, compact_exp r))
+ | E_tuple exps -> wrap(E_tuple(List.map compact_exp exps))
+ | E_vector exps -> wrap(E_vector(List.map compact_exp exps))
+ | E_vector_access (e1, e2) ->
+     wrap(E_vector_access(compact_exp e1, compact_exp e2))
+ | E_vector_subrange (e1, e2, e3) ->
+     wrap(E_vector_subrange(compact_exp e1, compact_exp e2, compact_exp e3))
+ | E_vector_update (e1, e2, e3) ->
+     wrap(E_vector_update(compact_exp e1, compact_exp e2, compact_exp e3))
+ | E_vector_update_subrange (e1, e2, e3, e4) ->
+     wrap(E_vector_update_subrange(compact_exp e1, compact_exp e2, compact_exp e3, compact_exp e4))
+ | E_vector_append (e1, e2) ->
+     wrap(E_vector_append(compact_exp e1, compact_exp e2))
+ | E_list exps -> wrap(E_list(List.map compact_exp exps))
+ | E_cons (e1, e2) ->
+     wrap(E_cons(compact_exp e1, compact_exp e2))
+ | E_record_update (e, fexps) ->
+     wrap(E_record_update (compact_exp e, fexps))
+ | E_field (e, id) ->
+     wrap(E_field(compact_exp e, id))
+ | E_assign (lexp, e) -> wrap(E_assign(lexp, compact_exp e))
+ | E_internal_cast (_, e) -> compact_exp e
+ | _ -> wrap e
+
+(* extract, compact and reverse expressions on the stack;
+ * the top of the stack is the head of the returned list. *)
+let rec compact_stack ?(acc=[]) = function
+  | Top -> acc
+  | Hole_frame(_,e,_,_,_,s)
+  | Thunk_frame(e,_,_,_,s) -> compact_stack ~acc:((compact_exp e) :: acc) s
 ;;  
-*)
 
 let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%s, %s)"
   (string_of_big_int x) (string_of_big_int y)
@@ -213,16 +252,21 @@ let run
   ?(eager_eval=true)
   (name, test) =
   let mode = ref eager_eval in
+  let print_exp e =
+    let (E_aux(_, (l, _)) as e) = compact_exp e in
+    debugf "%s: %s\n" (loc_to_string l) (Pretty_interp.pp_exp e) in
   (* interactive loop for step-by-step execution *)
   let usage = "Usage: next, run, stack, environment, memory\n" in
   let rec interact ((reg, mem) as env) stack =
     flush_all();
     begin match Pervasives.read_line () with
-    | "n" | "next" -> ()
+    | "n" | "next" | "" -> ()
     | "r" | "run" -> mode := true
-    | "e" | "env" | "environment"
-    | "m" | "mem" | "memory"
-    | "s" | "stack" -> () (* XXX *)
+    | "e" | "env" | "environment" -> interact env stack (* XXX *)
+    | "m" | "mem" | "memory" -> interact env stack (* XXX *)
+    | "s" | "stack" ->
+        List.iter print_exp (compact_stack stack);
+        interact env stack
     | _ -> debugf "%s\n" usage; interact env stack
     end
   in
@@ -246,10 +290,9 @@ let run
           debugf "%s: %s%s -> %s\n" name f (val_to_string args) (val_to_string return)
       | Call_extern (f, arg) ->
           debugf "%s: %s(%s) -> %s\n" name f (val_to_string arg) (val_to_string return)
-      | Debug l ->
+      | Debug _ ->
           assert (return = unit_lit);
-          debugf "%s: breakpoint, next step at %s\n" name (loc_to_string l);
-          debugf "~~~ continuation ~~~\n%s\n" (Pretty_interp.pp_exp (top_frame_exp s));
+          print_exp (top_frame_exp s);
           interact env' s
       | Barrier (_, _) | Write_next_IA _ | Nondet _ ->
           failwith "unexpected action"
