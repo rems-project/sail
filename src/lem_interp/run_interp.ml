@@ -214,7 +214,7 @@ let run
   ?(reg=Reg.empty)
   ?(mem=Mem.empty)
   (name, test) =
-  let mode = {eager_eval = true} in
+  let mode = {eager_eval = false} in
   let rec loop env = function
   | Value (v, _) -> debugf "%s: returned %s\n" name (val_to_string v); true, env
   | Action (a, s) ->

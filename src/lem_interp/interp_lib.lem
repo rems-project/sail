@@ -49,6 +49,28 @@ let bitwise_binop op (V_tuple [V_vector idx inc v; V_vector idx' inc' v']) =
   let apply (x, y) = bool_to_bit(op (bit_to_bool x) (bit_to_bool y)) in
   V_vector idx inc (List.map apply (List.zip v v'))
 
+let bitwise_xor_bit (V_tuple [V_lit (L_aux l1 loc1);V_lit (L_aux l2 loc2)]) = match (l1,l2) with
+  | (L_zero,L_zero) -> V_lit (L_aux l1 loc1)
+  | (L_zero,L_one)  -> V_lit (L_aux l2 loc2)
+  | (L_one,L_zero)  -> V_lit (L_aux l1 loc1)
+  | (L_one,L_one)   -> V_lit (L_aux L_zero loc1)
+end;;
+
+let bitwise_or_bit (V_tuple [V_lit (L_aux l1 loc1);V_lit (L_aux l2 loc2)]) = match (l1,l2) with
+  | (L_zero,L_zero) -> V_lit (L_aux l1 loc1)
+  | (L_zero,L_one)  -> V_lit (L_aux l2 loc2)
+  | (L_one,L_zero)  -> V_lit (L_aux l1 loc1)
+  | (L_one,L_one)   -> V_lit (L_aux l1 loc1)
+end;;
+
+let bitwise_and_bit (V_tuple [V_lit (L_aux l1 loc1);V_lit (L_aux l2 loc2)]) = match (l1,l2) with
+  | (L_zero,L_zero) -> V_lit (L_aux l1 loc1)
+  | (L_zero,L_one)  -> V_lit (L_aux l1 loc1)
+  | (L_one,L_zero)  -> V_lit (L_aux l2 loc2)
+  | (L_one,L_one)   -> V_lit (L_aux l1 loc1)
+end;;
+
+
 (* BitSeq expects LSB first.
  * By convention, MSB is on the left, so increasing = Big-Endian (MSB0),
  * hence MSB first.
@@ -91,6 +113,15 @@ let arith_op_vec_range op (V_tuple args) = match args with
   else arith_op_vec op (V_tuple [l1;(to_vec_dec (List.length cs) n)])
 end ;;
 
+let arith_op_range_vec_range op (V_tuple args) = match args with
+  | [n;(V_vector _ _ _ as l2)] ->
+    arith_op op (V_tuple [n;(to_num true l2)])
+end ;;
+let arith_op_vec_range_range op (V_tuple args) = match args with
+  | [(V_vector _ _ _ as l1);n] ->
+    arith_op op (V_tuple [(to_num true l1);n])
+end ;;
+
 let compare_op op (V_tuple args) = match args with
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> 
     if (op x y)
@@ -116,7 +147,9 @@ let function_map = [
   ("add", arith_op (+));
   ("add_vec", arith_op_vec (+));
   ("add_vec_range", arith_op_vec_range (+));
+  ("add_vec_range_range", arith_op_vec_range_range (+));
   ("add_range_vec", arith_op_range_vec (+));
+  ("add_range_vec_range", arith_op_range_vec_range (+));
   ("minus", arith_op (-));
   ("minus_vec", arith_op_vec (-));
   ("eq", eq);
@@ -132,8 +165,11 @@ let function_map = [
   ("bitwise_not", bitwise_not);
   ("bitwise_not_bit", bitwise_not_bit);
   ("bitwise_and", bitwise_binop (&&));
+  ("bitwise_and_bit", bitwise_and_bit);
   ("bitwise_or", bitwise_binop (||));
+  ("bitwise_or_bit", bitwise_or_bit);
   ("bitwise_xor", bitwise_binop xor);
+  ("bitwise_xor_bit", bitwise_xor_bit);
   ("lt", compare_op (<));
   ("gt", compare_op (>));
   ("lt_vec", compare_op_vec (<));

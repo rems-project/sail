@@ -363,7 +363,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_let(leb,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_let" pp_lem_let leb pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assign(lexp,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_assign" pp_lem_lexp lexp pp_lem_exp exp pp_lem_l l pp_annot annot
   (* XXX missing cases *)
-  | E_internal_cast ((_, Overload (_, _)), _) | E_internal_exp _ -> assert false
+  | E_internal_cast ((_, Overload (_,_, _)), _) | E_internal_exp _ -> assert false
   in
   print_e ppf e
 
@@ -844,7 +844,7 @@ let doc_exp, doc_let =
       (* doc_op (doc_id op) (exp l) (exp r) *)
   (* XXX missing case
      AAA internal_cast should never have an overload, if it's been seen it's a bug *)
-  | E_internal_cast ((_, Overload (_, _)), _) | E_internal_exp _ -> assert false
+  | E_internal_cast ((_, Overload (_, _,_ )), _) | E_internal_exp _ -> assert false
 
   and let_exp (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->

@@ -95,7 +95,7 @@ type t_params = (string * kind) list
 type tannot = 
   | NoTyp
   | Base of (t_params * t) * tag * nexp_range list * effect
-  | Overload of tannot * tannot list (* First tannot is the most polymorphic version; the list includes all variants. All t to be Tfn *)
+  | Overload of tannot * bool * tannot list (* First tannot is the most polymorphic version; the boolean indicates whether the overloaded functions can use the return type; the list includes all variants. All t to be Tfn *)
 
 (*type tannot = ((t_params * t) * tag * nexp_range list * effect) option*)
 type 'a emap = 'a Envmap.t
@@ -178,7 +178,7 @@ let rec tannot_to_string = function
   | NoTyp -> "No tannot"
   | Base((vars,t),tag,ncs,ef) ->
     "Tannot: type = " ^ (t_to_string t) ^ " tag = " ^ tag_to_string tag ^ " constraints = not printing effect = " ^ e_to_string ef
-  | Overload(poly,variants) ->
+  | Overload(poly,_,variants) ->
     "Overloaded: poly = " ^ tannot_to_string poly
 
 let rec effect_remove_dups = function
@@ -758,7 +758,7 @@ let mk_bitwise_op name symb arity =
   let gen_args = Array.to_list (Array.make arity {t = Tvar "a"}) in
   let varg,barg,garg = if (arity = 1) then List.hd vec_args,List.hd bit_args,List.hd gen_args 
                        else mk_tup vec_args,mk_tup bit_args, mk_tup gen_args in
-  (symb,Overload(Base(((mk_typ_params ["a"]),mk_pure_fun garg {t=Tvar "a"}), External (Some name),[],pure_e),
+  (symb,Overload(Base(((mk_typ_params ["a"]),mk_pure_fun garg {t=Tvar "a"}), External (Some name),[],pure_e),true,
                  [Base((["n",{k=K_Nat}; "o",{k=K_Ord}], mk_pure_fun varg vec_typ),External (Some name),[],pure_e);
                   Base(([],mk_pure_fun barg bit_t),External (Some (name ^ "_bit")),[],pure_e)]))
 
@@ -767,6 +767,7 @@ let initial_typ_env =
     ("ignore",Base(([("a",{k=K_Typ})],mk_pure_fun {t=Tvar "a"} unit_t),External None,[],pure_e));
     ("+",Overload(Base(((mk_typ_params ["a";"b";"c"]),
                         (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),External (Some "add"),[],pure_e),
+		  true,
                   [Base(((mk_nat_params ["n";"m";"o";"p"]),
                          (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "o") (mk_nv "p")])
 		                      (mk_range (mk_add (mk_nv "n") (mk_nv "o")) (mk_add (mk_nv "m") (mk_nv "p"))))),
@@ -781,12 +782,25 @@ let initial_typ_env =
                                      (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
                         External (Some "add_vec_range"),
                         [LtEq(Specc(Parse_ast.Int("+",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
+		   Base(((mk_nat_params ["n";"m";"o";"p";])@(mk_ord_params ["ord"]),
+			 (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
+					       mk_range (mk_nv "o") (mk_nv "p")])
+			              (mk_range (mk_nv "o") (mk_add (mk_nv "p") {nexp = N2n (mk_nv "m",None)})))),
+			External (Some "add_vec_range_range"),
+			[LtEq(Specc(Parse_ast.Int("+",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
                    Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
                          (mk_pure_fun (mk_tup [mk_range (mk_nv "o") (mk_nv "p");
                                                mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");])
                                       (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
                         External (Some "add_range_vec"),
                        [LtEq(Specc(Parse_ast.Int("+",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp = N2n (mk_nv "m",None)})],pure_e);
+		   Base(((mk_nat_params ["n";"m";"o";"p";])@(mk_ord_params ["ord"]),
+			 (mk_pure_fun (mk_tup [mk_range (mk_nv "o") (mk_nv "p");
+					       mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");])
+			              (mk_range (mk_nv "o") (mk_add (mk_nv "p") {nexp = N2n (mk_nv "m",None)})))),
+			External (Some "add_range_vec_range"),
+			[LtEq(Specc(Parse_ast.Int("+",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
+
                   Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p"); bit_t])
                                      (mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")))),
@@ -802,6 +816,7 @@ let initial_typ_env =
 		        External (Some "multiply"),[],pure_e));
     ("-",Overload(Base(((mk_typ_params ["a";"b";"c"]),
                         (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})), External (Some "minus"),[],pure_e),
+		  true,
                   [Base(((mk_nat_params["n";"m";"o";"p"]),
                          (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");
                                                mk_range (mk_nv "o") (mk_nv "p")])
@@ -829,6 +844,7 @@ let initial_typ_env =
      Overload(Base(((mk_typ_params ["a";"b";"c"]),
                     (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
                    External (Some "mod"),[],pure_e),
+	      true,
               [Base(((mk_nat_params["n";"m";"o"]),
                      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "o") {nexp = Nconst zero}])
                                   (mk_range {nexp = Nconst zero} (mk_sub (mk_nv "o") {nexp = Nconst one})))),
@@ -842,6 +858,7 @@ let initial_typ_env =
      Overload(Base(((mk_typ_params ["a";"b";"c"]),
                     (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
                    External (Some "quot"),[],pure_e),
+	      true,
               [Base(((mk_nat_params["n";"m";"o";"p";"q";"r"]),
                      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "o") (mk_nv "p")])
                                   (mk_range (mk_nv "q") (mk_nv "r")))),
@@ -861,6 +878,7 @@ let initial_typ_env =
     ("to_vec_dec",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},pure_e)}),External None,[],pure_e));
     ("==",
      Overload( Base((mk_typ_params ["a";"b"],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),External (Some "eq"),[],pure_e),
+	       false,
      [Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
 	    {t = Tfn({t=Ttup([mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")])},bit_t,pure_e)}), External (Some "eq"),
 	   [Eq(Specc(Parse_ast.Int("==",None)),
@@ -870,6 +888,7 @@ let initial_typ_env =
     ("!=",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "neq"),[],pure_e));
     ("<",
      Overload(Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "lt"),[],pure_e),
+	      false,
      [Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
 	    {t = Tfn({t=Ttup([mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")])},bit_t,pure_e)}), External (Some "lt_vec"),
 	   [LtEq(Specc(Parse_ast.Int("<",None)),
@@ -880,6 +899,7 @@ let initial_typ_env =
                               mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])},bit_t,pure_e)}), External (Some "lt"),[],pure_e);]));
     (">",
      Overload(Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "gt"),[],pure_e),
+	      false,
      [Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
 	    {t = Tfn({t=Ttup([mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")])},bit_t,pure_e)}), External (Some "gt_vec"),
 	   [GtEq(Specc(Parse_ast.Int(">",None)),
@@ -1374,7 +1394,7 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
 and type_coerce co d_env is_explicit t1 e t2 = type_coerce_internal co d_env is_explicit t1 [] e t2 [];;
 
 let rec conforms_to_t spec actual =
-  (*let _ = Printf.printf "conforms_to_t called with %s, %s\n" (t_to_string spec) (t_to_string actual) in*)
+  let _ = Printf.printf "conforms_to_t called with %s, %s\n" (t_to_string spec) (t_to_string actual) in
   match spec.t,actual.t with
     | Tuvar _,_ -> true
     | Ttup ss, Ttup acs -> (List.length ss = List.length acs) && List.for_all2 conforms_to_t ss acs
@@ -1398,14 +1418,14 @@ and conforms_to_ta spec actual =
     | TA_eft  s, TA_eft  a -> conforms_to_e s a
     | _ -> false
 and conforms_to_n spec actual =
-  (*let _ = Printf.printf "conforms_to_n called with %s, %s\n" (n_to_string spec) (n_to_string actual) in*)
+  let _ = Printf.printf "conforms_to_n called with %s, %s\n" (n_to_string spec) (n_to_string actual) in
   match spec.nexp,actual.nexp with
     | Nuvar _,_ -> true
     | Nconst si,Nconst ai -> eq_big_int si ai
-    | _,_ -> false
+    | _,_ -> true
 and conforms_to_o spec actual =
   match spec.order,actual.order with
-    | Ouvar _,_ | Oinc,Oinc | Odec,Odec -> true
+    | Ouvar _,_ | Oinc,Oinc | Odec,Odec | _, Ouvar _ -> true
     | _,_ -> false
 and conforms_to_e spec actual =
   match spec.effect,actual.effect with
@@ -1413,18 +1433,18 @@ and conforms_to_e spec actual =
     | _,Euvar _ -> false
     | _,_ -> false
 
-let rec select_overload_variant d_env variants actual_type =
+let rec select_overload_variant d_env params_check get_all variants actual_type =
   match variants with
-    | [] -> NoTyp
-    | NoTyp::variants | Overload _::variants -> select_overload_variant d_env variants actual_type
+    | [] -> []
+    | NoTyp::variants | Overload _::variants -> select_overload_variant d_env params_check get_all variants actual_type
     | Base((parms,t),tag,cs,ef)::variants ->
       let t,cs,ef = subst parms t cs ef in
       let t,cs' = get_abbrev d_env t in
       (match t.t with
 	| Tfn(a,r,e) ->
-	  if conforms_to_t a actual_type 
-	  then Base(([],t),tag,cs@cs',ef)
-	  else select_overload_variant d_env variants actual_type
+	  if (if params_check then conforms_to_t a actual_type else conforms_to_t actual_type r)
+	  then (Base(([],t),tag,cs@cs',ef))::(if get_all then (select_overload_variant d_env params_check get_all variants actual_type) else [])
+	  else select_overload_variant d_env params_check get_all variants actual_type
 	| _ -> assert false (*Turn into unreachable error*))      
 
 let rec in_constraint_env = function
