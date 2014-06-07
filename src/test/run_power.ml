@@ -104,7 +104,7 @@ let get_reg reg name =
 ;;
 
 let rec fde_loop count entry mem reg prog =
-  debugf "\n**** cycle %d  ****\n" count;
+  debugf "\n**** instruction %d  ****\n" count;
   match Run_interp.run ~entry ~mem ~reg ~eager_eval:!eager_eval prog with
   | false, _ -> eprintf "FAILURE\n"; exit 1
   | true, (reg, mem) ->
@@ -132,8 +132,8 @@ let run () =
   eprintf "done. (%f seconds)\n%!" t;
   close_in ic;
   let reg = init_reg () in
-  (* entry point: unit -> unit cycle *)
-  let entry = E_aux(E_app(Id_aux((Id "cycle"),Unknown),
+  (* entry point: unit -> unit fde *)
+  let entry = E_aux(E_app(Id_aux((Id "fde"),Unknown),
     [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)) in
   let name = Filename.basename !file in
   let t =time_it (fun () -> fde_loop 0 entry !mem reg (name, Power.defs)) () in

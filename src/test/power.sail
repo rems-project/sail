@@ -193,8 +193,8 @@ end ast
 
 register ast instr (* monitor decoded instructions *)
 
-(* fetch-decode-execute cycle *)
-function unit cycle () = {
+(* fetch-decode-execute *)
+function unit fde () = {
   NIA := CIA + 4;
   instr := decode(MEM(CIA, 4));
   execute(instr);
