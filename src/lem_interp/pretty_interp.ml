@@ -237,8 +237,8 @@ let doc_exp, doc_let =
       doc_op (doc_id op) (cons_exp l) (at_exp r)
   | _ -> cons_exp expr
   and cons_exp ((E_aux(e,_)) as expr) = match e with
-  | E_app_infix(l,(Id_aux(Id (":"),_) as op),r) ->
-      doc_op (doc_id op) (shift_exp l) (cons_exp r)
+  | E_vector_append(l,r) ->
+      doc_op colon (shift_exp l) (cons_exp r)
   | E_cons(l,r) ->
       doc_op colon (shift_exp l) (cons_exp r)
   | _ -> shift_exp expr
@@ -341,6 +341,7 @@ let doc_exp, doc_let =
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
   | E_cons (_, _)|E_field (_, _)|E_assign (_, _)
   | E_if _ | E_for _ | E_let _
+  | E_vector_append _
   | E_app_infix (_,
     (* for every app_infix operator caught at a higher precedence,
      * we need to wrap around with parens *)
@@ -350,7 +351,6 @@ let doc_exp, doc_let =
     | ">=" | ">=_s" | ">=_u" | ">" | ">_s" | ">_u"
     | "<=" | "<=_s" | "<" | "<_s" | "<_si" | "<_u"
     | "@" | "^^" | "^" | "~^"
-    | ":"
     | ">>" | ">>>" | "<<" | "<<<"
     | "+" | "-"
     | "*" | "/"
