@@ -261,7 +261,13 @@ let run
     let (E_aux(_, (l, _)) as e) = compact_exp e in
     debugf "%s: %s\n" (loc_to_string l) (Pretty_interp.pp_exp e) in
   (* interactive loop for step-by-step execution *)
-  let usage = "Usage: next, run, stack, environment, memory\n" in
+  let usage = "Usage:
+    next    go to next break point [default]
+    run     complete current execution,
+    stack   print call stack
+    env     print content of environment
+    mem     print content of memory
+    quit    exit interpreter" in
   let rec interact ((reg, mem) as env) stack =
     flush_all();
     begin match Pervasives.read_line () with
