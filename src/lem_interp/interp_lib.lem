@@ -70,10 +70,14 @@ let to_vec_inc len (V_lit(L_aux (L_num n) ln)) =
 let to_vec_dec len (V_lit(L_aux (L_num n) ln)) =
   let l = boolListFrombitSeq len (bitSeqFromInteger Nothing n) in
   V_vector 0 false (map bool_to_bit l) ;;
-let to_vec ord len v =
+let to_vec ord len n =
   if ord
-  then to_vec_inc len v
-  else to_vec_dec len v
+  then to_vec_inc len n
+  else to_vec_dec len n
+;;
+
+let exts len ((V_vector _ inc _) as v) =
+  to_vec inc len (to_num true v)
 ;;
 
 (* XXX work-around to avoid truncating *)
@@ -131,7 +135,7 @@ let function_map = [
   ("is_one", is_one);
   ("to_num_inc", to_num false);
   ("to_num_dec", to_num false);
-  ("exts", to_num true);
+  ("exts", exts 64);
   (* XXX the size of the target vector should be given by the interpreter *)
   ("to_vec_inc", to_vec_inc 64);
   ("to_vec_dec", to_vec_dec 64);

@@ -1,6 +1,6 @@
 (* XXX sign extension --- note that this produces a signed integer,
    the constraints on the range of the result is TODO *)
-val extern forall Nat 'n. bit['n] -> nat effect pure exts
+val extern forall Nat 'n. bit['n] -> bit[64] effect pure exts
 (* XXX binary coded decimal *)
 function forall Type 'a . 'a dec_to_bcd ( x ) = x
 function forall Type 'a . 'a bcd_to_dec ( x ) = x
@@ -103,80 +103,87 @@ scattered function unit execute
 scattered typedef ast = const union
 scattered function ast decode
 
- union ast member  (  bit [ 2 ] (* BH *) , bit [ 5 ] (* BI *) , bit [ 5 ] (* BO *) , bit (* LK *)  )  BranchConditionaltoLinkRegister 
+union ast member (vector<0, 2, inc, bit> , vector<0, 5, inc, bit> , vector<0, 5, inc, bit> , bit) BranchConditionaltoLinkRegister
 
- function clause decode (([  0 = bitzero, 1 = bitone, 2 = bitzero, 3 = bitzero, 4 = bitone, 5 = bitone, 21 = bitzero, 22 = bitzero, 23 = bitzero, 24 = bitzero, 25 = bitzero, 26 = bitone, 27 = bitzero, 28 = bitzero, 29 = bitzero, 30 = bitzero  ] as instr)) =
-  BranchConditionaltoLinkRegister  (  instr[19..20] (* BH *), instr[11..15] (* BI *), instr[6..10] (* BO *), instr[31] (* LK *)  ) 
+function clause decode ([0 = bitzero, 1 = bitone, 2 = bitzero, 3 = bitzero, 4 =
+  bitone, 5 = bitone, 21 = bitzero, 22 = bitzero, 23 = bitzero, 24 = bitzero, 25 =
+  bitzero, 26 = bitone, 27 = bitzero, 28 = bitzero, 29 = bitzero, 30 = bitzero] as instr) =
+  BranchConditionaltoLinkRegister
+    (instr[19 .. 20],instr[11 .. 15],instr[6 .. 10],instr[31])
 
- function clause execute (  BranchConditionaltoLinkRegister  (  BH, BI, BO, LK  )  ) =
-  {  {
-    if((bit)  mode64bit  ) then  M  :=  0  else  M  :=  32  ;
-    if((bit)  (  ~  (  ((  BO  )[  2  ])  ))  ) then  CTR  :=  (  CTR  -  1  )  ;
-    ctr_ok  :=  (  ((  BO  )[  2  ])  |  (  (  ((  CTR  )[  M  ..  63  ])  !=  0  )  ^  ((  BO  )[  3  ])  )  )  ;
-    cond_ok  :=  (  ((  BO  )[  0  ])  |  (  ((  CR  )[  (  BI  +  32  )  ])  ^  (  ~  (  ((  BO  )[  1  ])  ))  )  )  ;
-    if((bit)  (  ctr_ok  &  cond_ok  )  ) then  NIA  :=  (  ((  LR  )[  0  ..  61  ])  :  0b00  )  ;
-    if((bit)  LK  ) then  LR  :=  (  CIA  +  4  )  ;
-  }  } 
+function clause execute (BranchConditionaltoLinkRegister (BH, BI, BO, LK)) =
+  {
+    if (bit) mode64bit then M := 0 else M := 32;
+    if (bit) (~ (BO[2])) then CTR := CTR - 1;
+    ctr_ok := (BO[2] | (CTR[M .. 63] != 0) ^ BO[3]);
+    cond_ok := (BO[0] | CR[BI + 32] ^ ~ (BO[1]));
+    if (bit) (ctr_ok & cond_ok) then NIA := LR[0 .. 61] : 0b00;
+    if (bit) LK then LR := CIA + 4
+  }
 
+union ast member (vector<0, 16, inc, bit> , vector<0, 5, inc, bit> , vector<0, 5, inc, bit> ) LoadWordandZero
 
- union ast member  (  bit [ 16 ] (* D *) , bit [ 5 ] (* RA *) , bit [ 5 ] (* RT *)  )  LoadWordandZero 
+function clause decode ([0 = bitone, 1 = bitzero, 2 = bitzero, 3 = bitzero, 4 =
+  bitzero, 5 = bitzero] as instr) =
+  LoadWordandZero (instr[16 .. 31],instr[11 .. 15],instr[6 .. 10])
 
- function clause decode (([  0 = bitone, 1 = bitzero, 2 = bitzero, 3 = bitzero, 4 = bitzero, 5 = bitzero  ] as instr)) =
-  LoadWordandZero  (  instr[16..31] (* D *), instr[11..15] (* RA *), instr[6..10] (* RT *)  ) 
+function clause execute (LoadWordandZero (D, RA, RT)) =
+  {
+    (vector<0, 64, inc, bit> ) EA := 0;
+    (vector<0, 64, inc, bit> ) b := 0;
+    if (bit) (RA == 0b00000) then b := 0 else b := GPR[RA];
+    EA := b + exts (D);
+    GPR[RT] := 0b00000000000000000000000000000000 : MEM (EA,4)
+  }
 
- function clause execute (  LoadWordandZero  (  D, RA, RT  )  ) =
-  {  (bit[64]) EA := 0;  (bit[64]) b := 0;  {
-    if((bit)  (  (nat) RA  ==  0  )  ) then  b  :=  0  else  b  :=  (GPR[  RA  ])  ;
-    EA  :=  (  b  +  (  exts  (  D  ))  )  ;
-    GPR[  RT  ]  :=  (  0b00000000000000000000000000000000  :  MEM(  EA  ,   4  )  )  ;
-  }  } 
+union ast member (vector<0, 16, inc, bit> , vector<0, 5, inc, bit> , vector<0, 5, inc, bit> ) StoreWord
 
+function clause decode ([0 = bitone, 1 = bitzero, 2 = bitzero, 3 = bitone, 4 =
+  bitzero, 5 = bitzero] as instr) =
+  StoreWord (instr[16 .. 31],instr[11 .. 15],instr[6 .. 10])
 
- union ast member  (  bit [ 16 ] (* D *) , bit [ 5 ] (* RA *) , bit [ 5 ] (* RS *)  )  StoreWord 
+function clause execute (StoreWord (D, RA, RS)) =
+  {
+    (vector<0, 64, inc, bit> ) EA := 0;
+    (vector<0, 64, inc, bit> ) b := 0;
+    if (bit) (RA == 0b00000) then b := 0 else b := GPR[RA];
+    EA := b + exts (D);
+    MEM(EA,4) := (GPR[RS])[32 .. 63]
+  }
 
- function clause decode (([  0 = bitone, 1 = bitzero, 2 = bitzero, 3 = bitone, 4 = bitzero, 5 = bitzero  ] as instr)) =
-  StoreWord  (  instr[16..31] (* D *), instr[11..15] (* RA *), instr[6..10] (* RS *)  ) 
+union ast member (vector<0, 16, inc, bit> , vector<0, 5, inc, bit> , vector<0, 5, inc, bit> ) StoreWordwithUpdate
 
- function clause execute (  StoreWord  (  D, RA, RS  )  ) =
-  {  (bit[64]) EA := 0;  (bit[64]) b := 0;  {
-    if((bit)  (  (nat) RA  ==  0  )  ) then  b  :=  0  else  b  :=  (GPR[  RA  ])  ;
-    EA  :=  (  b  +  (  exts  (  D  ))  )  ;
-    MEM(  EA  ,   4  )  :=  ((  (GPR[  RS  ])  )[  32  ..  63  ])  ;
-  }  } 
+function clause decode ([0 = bitone, 1 = bitzero, 2 = bitzero, 3 = bitone, 4 =
+  bitzero, 5 = bitone] as instr) =
+  StoreWordwithUpdate (instr[16 .. 31],instr[11 .. 15],instr[6 .. 10])
 
+function clause execute (StoreWordwithUpdate (D, RA, RS)) =
+  {
+    (vector<0, 64, inc, bit> ) EA := 0;
+    EA := GPR[RA] + exts (D);
+    MEM(EA,4) := (GPR[RS])[32 .. 63];
+    GPR[RA] := EA
+  }
 
- union ast member  (  bit [ 16 ] (* D *) , bit [ 5 ] (* RA *) , bit [ 5 ] (* RS *)  )  StoreWordwithUpdate 
+union ast member (vector<0, 5, inc, bit> , vector<0, 5, inc, bit> , vector<0, 16, inc, bit> ) AddImmediate
 
- function clause decode (([  0 = bitone, 1 = bitzero, 2 = bitzero, 3 = bitone, 4 = bitzero, 5 = bitone  ] as instr)) =
-  StoreWordwithUpdate  (  instr[16..31] (* D *), instr[11..15] (* RA *), instr[6..10] (* RS *)  ) 
+function clause decode ([0 = bitzero, 1 = bitzero, 2 = bitone, 3 = bitone, 4 =
+  bitone, 5 = bitzero] as instr) =
+  AddImmediate (instr[11 .. 15],instr[6 .. 10],instr[16 .. 31])
 
- function clause execute (  StoreWordwithUpdate  (  D, RA, RS  )  ) =
-  {  (bit[64]) EA := 0;  {
-    EA  :=  (  (GPR[  RA  ])  +  (  exts  (  D  ))  )  ;
-    MEM(  EA  ,   4  )  :=  ((  (GPR[  RS  ])  )[  32  ..  63  ])  ;
-    GPR[  RA  ]  :=  EA  ;
-  }  } 
+function clause execute (AddImmediate (RA, RT, SI)) =
+  if (bit) (RA == 0b00000)
+  then GPR[RT] := exts (SI)
+  else GPR[RT] := GPR[RA] + exts (SI)
 
+union ast member (vector<0, 5, inc, bit> , vector<0, 5, inc, bit> , vector<0, 5, inc, bit> , bit) OR
 
- union ast member  (  bit [ 5 ] (* RA *) , bit [ 5 ] (* RT *) , bit [ 16 ] (* SI *)  )  AddImmediate 
+function clause decode ([0 = bitzero, 1 = bitone, 2 = bitone, 3 = bitone, 4 =
+  bitone, 5 = bitone, 21 = bitzero, 22 = bitone, 23 = bitone, 24 = bitzero, 25 =
+  bitone, 26 = bitone, 27 = bitone, 28 = bitone, 29 = bitzero, 30 = bitzero] as instr) =
+  OR (instr[11 .. 15],instr[16 .. 20],instr[6 .. 10],instr[31])
 
- function clause decode (([  0 = bitzero, 1 = bitzero, 2 = bitone, 3 = bitone, 4 = bitone, 5 = bitzero  ] as instr)) =
-  AddImmediate  (  instr[11..15] (* RA *), instr[6..10] (* RT *), instr[16..31] (* SI *)  ) 
-
- function clause execute (  AddImmediate  (  RA, RT, SI  )  ) =
-  {  {
-    if((bit)  (  (nat) RA  ==  0  )  ) then  GPR[  RT  ]  :=  (bit[64]) (  exts  (  SI  ))  else  GPR[  RT  ]  :=  (  (GPR[  RA  ])  +  (  exts  (  SI  ))  )  ;
-  }  } 
-
-
- union ast member  (  bit [ 5 ] (* RA *) , bit [ 5 ] (* RB *) , bit [ 5 ] (* RS *) , bit (* Rc *)  )  OR 
-
- function clause decode (([  0 = bitzero, 1 = bitone, 2 = bitone, 3 = bitone, 4 = bitone, 5 = bitone, 21 = bitzero, 22 = bitone, 23 = bitone, 24 = bitzero, 25 = bitone, 26 = bitone, 27 = bitone, 28 = bitone, 29 = bitzero, 30 = bitzero  ] as instr)) =
-  OR  (  instr[11..15] (* RA *), instr[16..20] (* RB *), instr[6..10] (* RS *), instr[31] (* Rc *)  ) 
-
- function clause execute (  OR  (  RA, RB, RS, Rc  )  ) =
-  {  GPR[  RA  ]  :=  (  (GPR[  RS  ])  |  (GPR[  RB  ])  )  } 
-
+function clause execute (OR (RA, RB, RS, Rc)) = GPR[RA] := (GPR[RS] | GPR[RB])
 
 
 end decode
