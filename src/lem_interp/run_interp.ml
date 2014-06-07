@@ -32,6 +32,7 @@ let loc_to_string = function
 ;;
 
 let collapse_leading s =
+  if String.length s <= 8 then s else
   let first_bit = s.[0] in
   let templ = sprintf "%c...%c" first_bit first_bit in
   let regexp = Str.regexp "^\\(000000*\\|111111*\\)" in
@@ -142,6 +143,8 @@ let id_compare i1 i2 =
 
 module Reg = struct
   include Map.Make(struct type t = id let compare = id_compare end)
+  let to_string id v =
+    sprintf "%s -> %s" (id_to_string id) (val_to_string v)
 end ;;
 
 module Mem = struct
@@ -162,6 +165,8 @@ module Mem = struct
     eprintf "%s[%s] -> %s\n" (id_to_string n) (string_of_big_int idx) (val_to_string v);
     v
   *)
+  let to_string (n, idx) v =
+    sprintf "%s[%s] -> %s" (id_to_string n) (string_of_big_int idx) (val_to_string v)
 end ;;
 
 let vconcat v v' = vec_concat (V_tuple [v; v']) ;;
@@ -262,11 +267,16 @@ let run
     begin match Pervasives.read_line () with
     | "n" | "next" | "" -> ()
     | "r" | "run" -> mode := true
-    | "e" | "env" | "environment" -> interact env stack (* XXX *)
-    | "m" | "mem" | "memory" -> interact env stack (* XXX *)
+    | "e" | "env" | "environment" ->
+        Reg.iter (fun k v -> debugf "%s\n" (Reg.to_string k v)) reg;
+        interact env stack
+    | "m" | "mem" | "memory" ->
+        Mem.iter (fun k v -> debugf "%s\n" (Mem.to_string k v)) mem;
+        interact env stack
     | "s" | "stack" ->
         List.iter print_exp (compact_stack stack);
         interact env stack
+    | "q" | "quit" | "exit" -> exit 0
     | _ -> debugf "%s\n" usage; interact env stack
     end
   in
