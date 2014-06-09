@@ -264,6 +264,7 @@ let run
     next    go to next break point [default]
     run     complete current execution,
     stack   print call stack
+    cont    print continuation of the top stack frame
     env     print content of environment
     mem     print content of memory
     quit    exit interpreter" in
@@ -280,6 +281,10 @@ let run
         interact env stack
     | "s" | "stack" ->
         List.iter print_exp (compact_stack stack);
+        interact env stack
+    | "c" | "cont" | "continuation" ->
+        (* print not-compacted continuation *)
+        print_exp (top_frame_exp stack);
         interact env stack
     | "show_casts" ->
         Pretty_interp.ignore_casts := false;
