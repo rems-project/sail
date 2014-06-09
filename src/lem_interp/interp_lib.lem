@@ -80,9 +80,6 @@ let exts len ((V_vector _ inc _) as v) =
   to_vec inc len (to_num true v)
 ;;
 
-(* XXX work-around to avoid truncating *)
-let to_vec_safe o l v = to_vec o 64 v ;;
-
 let arith_op op (V_tuple args) = match args with
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (op x y)) lx)
   end ;;
@@ -90,15 +87,24 @@ let arith_op_vec op (V_tuple args) = match args with
   | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
     let (l1',l2') = (to_num false l1,to_num false l2) in
     let n = arith_op op (V_tuple [l1';l2']) in
-    to_vec_safe ord (List.length cs) n
+    to_vec ord (List.length cs) n
 end ;;
 let arith_op_range_vec op (V_tuple args) = match args with
   | [n; (V_vector _ ord cs as l2)] ->
-    arith_op_vec op (V_tuple [(to_vec_safe ord (List.length cs) n);l2])
+    arith_op_vec op (V_tuple [(to_vec ord (List.length cs) n);l2])
 end ;;
 let arith_op_vec_range op (V_tuple args) = match args with
   | [(V_vector _ ord cs as l1);n] ->
-  arith_op_vec op (V_tuple [l1;(to_vec_safe ord (List.length cs) n)])
+  arith_op_vec op (V_tuple [l1;(to_vec ord (List.length cs) n)])
+end ;;
+
+let arith_op_range_vec_range op (V_tuple args) = match args with
+  | [n;(V_vector _ _ _ as l2)] ->
+    arith_op op (V_tuple [n;(to_num true l2)])
+end ;;
+let arith_op_vec_range_range op (V_tuple args) = match args with
+  | [(V_vector _ _ _ as l1);n] ->
+    arith_op op (V_tuple [(to_num true l1);n])
 end ;;
 
 let compare_op op (V_tuple args) = match args with
@@ -126,7 +132,9 @@ let function_map = [
   ("add", arith_op (+));
   ("add_vec", arith_op_vec (+));
   ("add_vec_range", arith_op_vec_range (+));
+  ("add_vec_range_range", arith_op_vec_range_range (+));
   ("add_range_vec", arith_op_range_vec (+));
+  ("add_range_vec_range", arith_op_range_vec_range (+));
   ("minus", arith_op (-));
   ("minus_vec", arith_op_vec (-));
   ("eq", eq);

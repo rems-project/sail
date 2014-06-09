@@ -93,7 +93,7 @@ type t_params = (string * kind) list
 type tannot = 
   | NoTyp
   | Base of (t_params * t) * tag * nexp_range list * effect
-  | Overload of tannot * tannot list (* First tannot is the most polymorphic version; the list includes all variants. All t to be Tfn *)
+  | Overload of tannot * bool * tannot list (* First tannot is the most polymorphic version; the list includes all variants. All t to be Tfn *)
 (*type tannot = ((t_params * t) * tag * nexp_range list * effect) option*)
 type 'a emap = 'a Envmap.t
 
@@ -142,7 +142,7 @@ val get_abbrev : def_envs -> t -> (t * nexp_range list)
 val normalize_nexp : nexp -> nexp
 val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debugging purposes*)
 
-val select_overload_variant : def_envs -> tannot list -> t -> tannot
+val select_overload_variant : def_envs -> bool -> bool -> tannot list -> t -> tannot list
 
 (*May raise an exception if a contradiction is found*)
 val resolve_constraints : nexp_range list -> nexp_range list
