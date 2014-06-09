@@ -4,6 +4,7 @@
  * - string_of_big_int instead of string_of_int
  * - annot does not contain type annotations anymore, so E_internal_cast
  *   is ignored
+ * - don't print E_cast either by default (controlled by ignore_casts)
  * - special case for holes in doc_id
  * - pp_exp returns a string instead of working on a buffer (should
  *   change this in the original as well, probably)
@@ -13,6 +14,8 @@
 open Interp_ast
 open Format
 open Big_int
+
+let ignore_casts = ref true
 
 let pp_format_id (Id_aux(i,_)) =
   match i with
@@ -309,7 +312,11 @@ let doc_exp, doc_let =
       surround 2 1 lbrace exps_doc rbrace
   | E_id id -> doc_id id
   | E_lit lit -> doc_lit lit
-  | E_cast(typ,e) -> prefix 2 1 (parens (doc_typ typ)) (group (atomic_exp e))
+  | E_cast(typ,e) ->
+      if !ignore_casts then
+        atomic_exp e
+      else
+        prefix 2 1 (parens (doc_typ typ)) (group (atomic_exp e))
   | E_internal_cast(_,e) ->
       (* XXX ignore internal casts in the interpreter *)
       atomic_exp e

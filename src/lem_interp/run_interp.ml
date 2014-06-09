@@ -96,7 +96,6 @@ let rec compact_exp (E_aux (e, l)) =
  | E_case (e, _) ->
      wrap(E_case(compact_exp e, []))
  | E_let (bind, _) -> wrap(E_let(bind, ldots))
- | E_cast (_, e) -> compact_exp e
  | E_app (f, args) -> wrap(E_app(f, List.map compact_exp args))
  | E_app_infix (l, op, r) -> wrap(E_app_infix(compact_exp l, op, compact_exp r))
  | E_tuple exps -> wrap(E_tuple(List.map compact_exp exps))
@@ -119,8 +118,9 @@ let rec compact_exp (E_aux (e, l)) =
  | E_field (e, id) ->
      wrap(E_field(compact_exp e, id))
  | E_assign (lexp, e) -> wrap(E_assign(lexp, compact_exp e))
- | E_internal_cast (_, e) -> compact_exp e
- | _ -> wrap e
+ | E_block [] | E_cast (_, _) | E_internal_cast (_, _)
+ | E_id _|E_lit _|E_vector_indexed (_, _)|E_record _|E_internal_exp _ ->
+     wrap e
 
 (* extract, compact and reverse expressions on the stack;
  * the top of the stack is the head of the returned list. *)
@@ -257,8 +257,7 @@ let run
   ?(eager_eval=true)
   (name, test) =
   let mode = ref eager_eval in
-  let print_exp e =
-    let (E_aux(_, (l, _)) as e) = compact_exp e in
+  let print_exp (E_aux(_, (l, _)) as e) =
     debugf "%s: %s\n" (loc_to_string l) (Pretty_interp.pp_exp e) in
   (* interactive loop for step-by-step execution *)
   let usage = "Usage:
@@ -281,6 +280,12 @@ let run
         interact env stack
     | "s" | "stack" ->
         List.iter print_exp (compact_stack stack);
+        interact env stack
+    | "show_casts" ->
+        Pretty_interp.ignore_casts := false;
+        interact env stack
+    | "hide_casts" ->
+        Pretty_interp.ignore_casts := true;
         interact env stack
     | "q" | "quit" | "exit" -> exit 0
     | _ -> debugf "%s\n" usage; interact env stack
@@ -308,7 +313,7 @@ let run
           debugf "%s: %s(%s) -> %s\n" name f (val_to_string arg) (val_to_string return)
       | Debug _ ->
           assert (return = unit_lit);
-          print_exp (top_frame_exp s);
+          print_exp (compact_exp (top_frame_exp s));
           interact env' s
       | Barrier (_, _) | Write_next_IA _ | Nondet _ ->
           failwith "unexpected action"
