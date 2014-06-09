@@ -5,6 +5,8 @@ POWERISA="../../../rsem/idl/power"
 # restricted set of instructions to translate
 MNEMO="stwu,stw,mr,addi,lwz,bclr,or"
 
+REBUILD=0
+
 run () {
   printf "\n# $1\n"
   printf "$ $2"
@@ -12,17 +14,37 @@ run () {
   eval $2
 }
 
-run "Building Sail" "ocamlbuild sail.native"
+while getopts ":r" opt; do
+  case $opt in
+    r)
+      REBUILD=1
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      ;;
+  esac
+done
 
-run "Generating the Sail interpreter from Power ISA (restricted to: $MNEMO)" \
-  "make -C $POWERISA clean extract EXPORT_MNEMO=$MNEMO"
+rebuild () {
+  run "Building Sail" "ocamlbuild sail.native"
 
-run  "Type-checking Sail Power model" "make -C $POWERISA check"
-run  "Copying Power model locally to run tests" \
-  "cp $POWERISA/generated/extract-full.sail test/power.sail"
-#git diff test/power.sail
+  run "Generating the Sail interpreter from Power ISA (restricted to: $MNEMO)" \
+    "make -C $POWERISA clean extract EXPORT_MNEMO=$MNEMO"
 
-run  "Translating Power model from Sail to OCaml via Lem" "ocamlbuild test/run_power.native"
+  run  "Type-checking Sail Power model" "make -C $POWERISA check"
+  run  "Copying Power model locally to run tests" \
+    "cp $POWERISA/generated/extract-full.sail test/power.sail"
+  #git diff test/power.sail
 
-run  "Starting interactive interpreter (press 'h' for help)" \
-  "./run_power.native --interactive --file test/main.bin"
+  run  "Translating Power model from Sail to OCaml via Lem" "ocamlbuild test/run_power.native"
+}
+
+DEMO="./run_power.native --interactive --file test/main.bin"
+
+if [ $REBUILD -eq 1 ]; then
+  rebuild
+  run  "Starting interactive interpreter (press 'h' for help)" \
+    "$DEMO"
+else
+  $DEMO
+fi
