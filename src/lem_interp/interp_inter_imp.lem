@@ -85,3 +85,22 @@ let rec interp_to_outcome mode thunk =
   end 
 
 let interp mode i_state = interp_to_outcome mode (fun _ -> Interp.resume mode i_state Nothing)
+
+let rec ie_loop mode i_state = 
+  match (interp mode i_state) with
+    | Done -> []
+    | Error msg -> [E_error msg]
+    | Read_reg reg i_state_fun -> 
+      (E_read_reg reg)::(ie_loop mode (i_state_fun Unknown))
+    | Write_reg reg value i_state->
+      (E_write_reg reg value)::(ie_loop mode i_state)
+    | Read_mem read_k loc i_state_fun ->
+      (E_read_mem read_k loc)::(ie_loop mode (i_state_fun Unknown))
+    | Write_mem write_k loc value i_state_fun ->
+      (E_write_mem write_k loc value)::(ie_loop mode (i_state_fun true))
+    | Internal next -> (ie_loop mode next)
+     end ;;
+  
+let interp_exhaustive i_state = 
+  let mode = <| Interp.eager_eval = true |> in
+  ie_loop mode i_state

@@ -36,10 +36,11 @@ type outcome =
 
 type event = 
 | E_read_mem of read_kind * value
-| E_write_mem of write_kind * value
+| E_write_mem of write_kind * value * value
 | E_barrier of barrier_kind
 | E_read_reg of reg_name
-| E_write_reg of reg_name
+| E_write_reg of reg_name * value
+| E_error of string (* Should not happen, but may if the symbolic evaluation doesn't work out*)
 (*Should multiple memory accesses be represented with a special form to denote this or potentially merged into one read or left in place*)
 
 
