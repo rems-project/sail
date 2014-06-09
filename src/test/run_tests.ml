@@ -11,7 +11,9 @@ let tests = [
   (*"power", Power.defs;*)
 ] ;;
 
-let run_one ((name, _) as t) = (name, fst(Run_interp.run t))
+let fst3 (x,_,_) = x
+
+let run_one ((name, _) as t) = (name, fst3(Run_interp.run t))
 
 let run_all () =
   let results = List.map run_one tests in

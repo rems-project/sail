@@ -263,6 +263,7 @@ let run
   ?(reg=Reg.empty)
   ?(mem=Mem.empty)
   ?(eager_eval=true)
+  ?mode
   (name, test) =
   let get_loc (E_aux(_, (l, _))) = loc_to_string l in
   let print_exp  e =
@@ -309,12 +310,19 @@ let run
     end
   in
   let rec loop mode env = function
-  | Value (v, _) -> debugf "%s: return %s\n" name (val_to_string v); true, env
+  | Value (v, _) ->
+      debugf "%s: return %s\n" name (val_to_string v);
+      true, mode, env
   | Action (a, s) ->
       let top_exp = top_frame_exp s in
-      let loc = get_loc top_exp in
+      let loc = get_loc (compact_exp top_exp) in
       let return, env' = perform_action env a in
-      let step () = if mode = Step then interact mode env s else mode in
+      let step ?(force=false) () =
+        if mode = Step || force then begin
+          debugf "%s\n" (Pretty_interp.pp_exp top_exp);
+          interact mode env s
+       end else
+         mode in
       let mode' = begin match a with
       | Read_reg (reg, sub) ->
           debugf "%s: read_reg: %s%s -> %s\n"
@@ -345,20 +353,24 @@ let run
           step ()
       | Debug _ ->
           assert (return = unit_lit);
-          print_exp top_exp;
-          interact mode env' s
+          debugf "%s: breakpoint:\n" loc;
+          step ~force:true ()
       | Barrier (_, _) | Write_next_IA _ | Nondet _ ->
           failwith "unexpected action"
       end in
       loop mode' env' (resume {eager_eval = (mode' = Run)} s (Some return))
-  | Error(l, e) -> debugf "%s: error: %s\n" (loc_to_string l) e; false, env in
+  | Error(l, e) ->
+      debugf "%s: error: %s\n" (loc_to_string l) e;
+      false, mode, env in
   debugf "%s: evaluate %s\n" name (Pretty_interp.pp_exp entry);
+  let mode = match mode with
+  | None -> if eager_eval then Run else Step
+  | Some m -> m in
   try
     Printexc.record_backtrace true;
-    let mode = if eager_eval then Run else Step in
     loop mode (reg, mem) (interp {eager_eval} test entry)
   with e ->
     let trace = Printexc.get_backtrace () in
     debugf "%s: interpretor error %s\n%s\n" name (Printexc.to_string e) trace;
-    false, (reg, mem)
+    false, mode, (reg, mem)
 ;;

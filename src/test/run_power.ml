@@ -103,16 +103,16 @@ let get_reg reg name =
   |  _ -> assert false
 ;;
 
-let rec fde_loop count entry mem reg prog =
+let rec fde_loop count entry mem reg ?mode prog =
   debugf "\n**** instruction %d  ****\n" count;
-  match Run_interp.run ~entry ~mem ~reg ~eager_eval:!eager_eval prog with
-  | false, _ -> eprintf "FAILURE\n"; exit 1
-  | true, (reg, mem) ->
+  match Run_interp.run ~entry ~mem ~reg ~eager_eval:!eager_eval ?mode prog with
+  | false, _, _ -> eprintf "FAILURE\n"; exit 1
+  | true, mode, (reg, mem) ->
       if Big_int.eq_big_int (get_reg reg "CIA") lr_init_value then
         eprintf "\nSUCCESS: returned with value %s\n"
           (Big_int.string_of_big_int (get_reg reg "GPR3"))
       else
-        fde_loop (count+1) entry mem reg prog
+        fde_loop (count+1) entry mem reg ~mode:mode prog
 ;;
 
 let run () =
