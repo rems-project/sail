@@ -1045,10 +1045,14 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	    | Nothing -> 
               (Error l (String.stringAppend "No matching pattern for function " name ),l_mem,l_env)
 	    | Just(env,exp) -> 
-              resolve_outcome (interp_main mode t_level env emem exp)
+	      resolve_outcome (if mode.eager_eval 
+		               then (interp_main mode t_level env emem exp)
+		               else (debug_out exp t_level emem env))  
 	                      (fun ret lm le -> (Value ret Tag_empty, l_mem,l_env))
                               (fun a -> update_stack a 
-				(fun stack -> (Hole_frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
+				(fun stack -> (Hole_frame (id_of_string "0") 
+						          (E_aux (E_id (Id_aux (Id "0") l)) (l,annot))
+							  t_level l_env l_mem stack)))
              end)
           | Nothing -> (Error l (String.stringAppend "Internal error: function with empty tag unfound " name),lm,le) end)
 	| Tag_spec ->  
@@ -1058,7 +1062,9 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	    | Nothing -> 
               (Error l (String.stringAppend "No matching pattern for function " name ),l_mem,l_env)
 	    | Just(env,exp) -> 
-              resolve_outcome (interp_main mode t_level env emem exp)
+              resolve_outcome (if mode.eager_eval 
+		               then (interp_main mode t_level env emem exp)
+                               else (debug_out exp t_level emem env))
 	                      (fun ret lm le -> (Value ret Tag_empty, l_mem,l_env))
                               (fun a -> update_stack a 
 				(fun stack -> (Hole_frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
@@ -1098,7 +1104,9 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 				               (match find_funcl funcls (V_tuple [lv;rv]) with 
 				               | Nothing -> (Error l (String.stringAppend "No matching pattern for function " name),lm,l_env)
 				               | Just(env,exp) ->
-				                 resolve_outcome (interp_main mode t_level env emem exp)
+				                 resolve_outcome (if mode.eager_eval
+						                  then (interp_main mode t_level env emem exp)
+						                  else (debug_out exp t_level emem env)) 
 				                   (fun ret lm le -> (Value ret Tag_empty,l_mem,l_env))
                                                    (fun a -> update_stack a 
 						     (fun stack -> (Hole_frame (Id_aux (Id "0") l)
@@ -1111,7 +1119,9 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 				               (match find_funcl funcls (V_tuple [lv;rv]) with 
 				               | Nothing -> (Error l (String.stringAppend "No matching pattern for function " name),lm,l_env)
 				               | Just(env,exp) ->
-				                 resolve_outcome (interp_main mode t_level env emem exp)
+				                 resolve_outcome (if mode.eager_eval 
+						   then (interp_main mode t_level env emem exp)
+						   else (debug_out exp t_level emem env))
 				                   (fun ret lm le -> (Value ret Tag_empty,l_mem,l_env))
                                                    (fun a -> update_stack a 
 						     (fun stack -> (Hole_frame (Id_aux (Id "0") l)

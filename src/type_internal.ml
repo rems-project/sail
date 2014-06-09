@@ -1394,7 +1394,7 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
 and type_coerce co d_env is_explicit t1 e t2 = type_coerce_internal co d_env is_explicit t1 [] e t2 [];;
 
 let rec conforms_to_t spec actual =
-  let _ = Printf.printf "conforms_to_t called with %s, %s\n" (t_to_string spec) (t_to_string actual) in
+  (*let _ = Printf.printf "conforms_to_t called with %s, %s\n" (t_to_string spec) (t_to_string actual) in*)
   match spec.t,actual.t with
     | Tuvar _,_ -> true
     | Ttup ss, Ttup acs -> (List.length ss = List.length acs) && List.for_all2 conforms_to_t ss acs
@@ -1418,7 +1418,7 @@ and conforms_to_ta spec actual =
     | TA_eft  s, TA_eft  a -> conforms_to_e s a
     | _ -> false
 and conforms_to_n spec actual =
-  let _ = Printf.printf "conforms_to_n called with %s, %s\n" (n_to_string spec) (n_to_string actual) in
+(*  let _ = Printf.printf "conforms_to_n called with %s, %s\n" (n_to_string spec) (n_to_string actual) in*)
   match spec.nexp,actual.nexp with
     | Nuvar _,_ -> true
     | Nconst si,Nconst ai -> eq_big_int si ai
