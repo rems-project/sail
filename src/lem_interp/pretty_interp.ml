@@ -34,7 +34,7 @@ open PPrint
 
 let doc_id (Id_aux(i,_)) =
   match i with
-  | Id "0" -> string "[x]" (* internal representation of a hole *)
+  | Id "0" -> string "\x1b[1;31m[_]\x1b[m" (* internal representation of a hole *)
   | Id i -> string i
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
