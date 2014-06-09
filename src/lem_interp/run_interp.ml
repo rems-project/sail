@@ -79,6 +79,7 @@ let rec val_to_string = function
 
 let rec top_frame_exp = function
   | Top -> raise (Invalid_argument "top_frame_exp")
+  | Hole_frame(_, e, _, _, _, Top)
   | Thunk_frame(e, _, _, _, Top) -> e
   | Thunk_frame(_, _, _, _, s)
   | Hole_frame(_, _, _, _, _, s) -> top_frame_exp s
@@ -250,85 +251,112 @@ let rec perform_action ((reg, mem) as env) = function
 let debug = ref true
 let debugf : ('a, out_channel, unit) format -> 'a = function f -> if !debug then eprintf f else ifprintf stderr f
 
+type interactive_mode = Step | Run | Next
+
+let mode_to_string = function
+  | Step -> "step"
+  | Run -> "run"
+  | Next -> "next"
+
 let run
   ?(entry=E_aux(E_app(Id_aux((Id "main"),Unknown), [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)))
   ?(reg=Reg.empty)
   ?(mem=Mem.empty)
   ?(eager_eval=true)
   (name, test) =
-  let mode = ref eager_eval in
-  let print_exp (E_aux(_, (l, _)) as e) =
-    debugf "%s: %s\n" (loc_to_string l) (Pretty_interp.pp_exp e) in
+  let get_loc (E_aux(_, (l, _))) = loc_to_string l in
+  let print_exp  e =
+    debugf "%s: %s\n" (get_loc e) (Pretty_interp.pp_exp e) in
   (* interactive loop for step-by-step execution *)
   let usage = "Usage:
-    next    go to next break point [default]
+    step    go to next action [default]
+    next    go to next break point
     run     complete current execution,
-    stack   print call stack
+    bt      print call stack
     cont    print continuation of the top stack frame
     env     print content of environment
     mem     print content of memory
     quit    exit interpreter" in
-  let rec interact ((reg, mem) as env) stack =
+  let rec interact mode ((reg, mem) as env) stack =
     flush_all();
-    begin match Pervasives.read_line () with
-    | "n" | "next" | "" -> ()
-    | "r" | "run" -> mode := true
+    let command = Pervasives.read_line () in
+    let command' = if command = "" then mode_to_string mode else command in
+    begin match command' with
+    | "s" | "step" -> Step
+    | "n" | "next" -> Next
+    | "r" | "run" -> Run
     | "e" | "env" | "environment" ->
         Reg.iter (fun k v -> debugf "%s\n" (Reg.to_string k v)) reg;
-        interact env stack
+        interact mode env stack
     | "m" | "mem" | "memory" ->
         Mem.iter (fun k v -> debugf "%s\n" (Mem.to_string k v)) mem;
-        interact env stack
-    | "s" | "stack" ->
+        interact mode env stack
+    | "bt" | "backtrace" | "stack" ->
         List.iter print_exp (compact_stack stack);
-        interact env stack
+        interact mode env stack
     | "c" | "cont" | "continuation" ->
         (* print not-compacted continuation *)
         print_exp (top_frame_exp stack);
-        interact env stack
+        interact mode env stack
     | "show_casts" ->
         Pretty_interp.ignore_casts := false;
-        interact env stack
+        interact mode env stack
     | "hide_casts" ->
         Pretty_interp.ignore_casts := true;
-        interact env stack
+        interact mode env stack
     | "q" | "quit" | "exit" -> exit 0
-    | _ -> debugf "%s\n" usage; interact env stack
+    | _ -> debugf "%s\n" usage; interact mode env stack
     end
   in
-  let rec loop env = function
+  let rec loop mode env = function
   | Value (v, _) -> debugf "%s: return %s\n" name (val_to_string v); true, env
   | Action (a, s) ->
+      let top_exp = top_frame_exp s in
+      let loc = get_loc top_exp in
       let return, env' = perform_action env a in
-      begin match a with
+      let step () = if mode = Step then interact mode env s else mode in
+      let mode' = begin match a with
       | Read_reg (reg, sub) ->
-          debugf "%s: %s%s -> %s\n" name (reg_to_string reg) (sub_to_string sub) (val_to_string return)
+          debugf "%s: read_reg: %s%s -> %s\n"
+            loc (reg_to_string reg) (sub_to_string sub) (val_to_string return);
+          step ()
       | Write_reg (reg, sub, value) ->
           assert (return = unit_lit);
-          debugf "%s: %s%s <- %s\n" name (reg_to_string reg) (sub_to_string sub) (val_to_string value)
+          debugf "%s: write_reg: %s%s <- %s\n"
+            loc (reg_to_string reg) (sub_to_string sub) (val_to_string value);
+          step ()
       | Read_mem (id, args, sub) ->
-          debugf "%s: %s%s%s -> %s\n" name (id_to_string id) (val_to_string args) (sub_to_string sub) (val_to_string return)
+          debugf "%s: read_mem: %s%s%s -> %s\n"
+            loc (id_to_string id) (val_to_string args) (sub_to_string sub) (val_to_string return);
+          step ()
       | Write_mem (id, args, sub, value) ->
           assert (return = unit_lit);
-          debugf "%s: %s%s%s <- %s\n" name (id_to_string id) (val_to_string args) (sub_to_string sub) (val_to_string value)
+          debugf "%s: write_mem: %s%s%s <- %s\n"
+            loc (id_to_string id) (val_to_string args) (sub_to_string sub) (val_to_string value);
+          step ()
       (* distinguish single argument for pretty-printing *)
       | Call_extern (f, (V_tuple _ as args)) ->
-          debugf "%s: %s%s -> %s\n" name f (val_to_string args) (val_to_string return)
+          debugf "%s: call_lib: %s%s -> %s\n"
+            loc f (val_to_string args) (val_to_string return);
+          step ()
       | Call_extern (f, arg) ->
-          debugf "%s: %s(%s) -> %s\n" name f (val_to_string arg) (val_to_string return)
+          debugf "%s: call_lib: %s(%s) -> %s\n"
+            loc f (val_to_string arg) (val_to_string return);
+          step ()
       | Debug _ ->
           assert (return = unit_lit);
-          print_exp (compact_exp (top_frame_exp s));
-          interact env' s
+          print_exp top_exp;
+          interact mode env' s
       | Barrier (_, _) | Write_next_IA _ | Nondet _ ->
           failwith "unexpected action"
-      end;
-      loop env' (resume {eager_eval = !mode} s (Some return))
-  | Error(l, e) -> debugf "%s: %s: error: %s\n" name (loc_to_string l) e; false, env in
+      end in
+      loop mode' env' (resume {eager_eval = (mode' = Run)} s (Some return))
+  | Error(l, e) -> debugf "%s: error: %s\n" (loc_to_string l) e; false, env in
   debugf "%s: evaluate %s\n" name (Pretty_interp.pp_exp entry);
   try
     Printexc.record_backtrace true;
-    loop (reg, mem) (interp {eager_eval = !mode} test entry)
+    let mode = if eager_eval then Run else Step in
+    loop mode (reg, mem) (interp {eager_eval} test entry)
   with e ->
     let trace = Printexc.get_backtrace () in
     debugf "%s: interpretor error %s\n%s\n" name (Printexc.to_string e) trace;

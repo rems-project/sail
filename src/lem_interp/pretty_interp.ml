@@ -9,6 +9,10 @@
  * - pp_exp returns a string instead of working on a buffer (should
  *   change this in the original as well, probably)
  * - pp_defs deleted
+ * - the pretty-printer does not support DeIid; here, we add a
+ *   work-around to make it work, converting back to Id with parens,
+ *   because the stack/continuation contains operators in DeIid form.
+ *   Should maybe backport this one to the original p-p.
  *)
 
 open Interp_ast
@@ -303,7 +307,7 @@ let doc_exp, doc_let =
   and field_exp ((E_aux(e,_)) as expr) = match e with
   | E_field(fexp,id) -> atomic_exp fexp ^^ dot ^^ doc_id id
   | _ -> atomic_exp expr
-  and atomic_exp ((E_aux(e,_)) as expr) = match e with
+  and atomic_exp ((E_aux(e,annot)) as expr) = match e with
   (* Special case: an empty block is equivalent to unit, but { } would
    * be parsed as a struct. *)
   | E_block [] -> string "()"
@@ -368,6 +372,9 @@ let doc_exp, doc_let =
     | "**"), _))
     , _) ->
       group (parens (exp expr))
+  (* XXX fixup deinfix into infix ones *)
+  | E_app_infix(l, (Id_aux((DeIid op), annot')), r) ->
+      group (parens (exp (E_aux ((E_app_infix (l, (Id_aux(Id op, annot')), r)), annot))))
   (* XXX default precedence for app_infix? *)
   | E_app_infix(l,op,r) ->
       failwith ("unexpected app_infix operator " ^ (pp_format_id op))
