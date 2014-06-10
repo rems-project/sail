@@ -322,7 +322,7 @@ let run
   in
   let rec loop mode env = function
   | Value (v, _) ->
-      debugf "%s: return %s\n" name (val_to_string v);
+      debugf "%s: %s %s\n" (grey name) (blue "return") (val_to_string v);
       true, mode, env
   | Action (a, s) ->
       let top_exp = top_frame_exp s in
@@ -370,7 +370,7 @@ let run
   | Error(l, e) ->
       debugf "%s: %s: %s\n" (grey (loc_to_string l)) (red "error") e;
       false, mode, env in
-  debugf "%s: evaluate %s\n" (grey name) (Pretty_interp.pp_exp entry);
+  debugf "%s: %s %s\n" (grey name) (blue "evaluate") (Pretty_interp.pp_exp entry);
   let mode = match mode with
   | None -> if eager_eval then Run else Step
   | Some m -> m in

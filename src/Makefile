@@ -1,6 +1,6 @@
 .PHONY: all sail test clean doc lib power test_power test_idempotence
 
-all: sail test lib power doc
+all: sail lib power doc test
 
 sail:
 	ocamlbuild sail.native
