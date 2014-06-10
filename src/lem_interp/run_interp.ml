@@ -258,6 +258,17 @@ let mode_to_string = function
   | Run -> "run"
   | Next -> "next"
 
+(* ANSI/VT100 colors *)
+let disable_color = ref false
+let color bright code s =
+  if !disable_color then s
+  else sprintf "\x1b[%s3%dm%s\x1b[m" (if bright then "1;" else "") code s
+let red = color true 1
+let green = color false 2
+let yellow = color true 3
+let blue = color true 4
+let grey = color false 7
+
 let run
   ?(entry=E_aux(E_app(Id_aux((Id "main"),Unknown), [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)))
   ?(reg=Reg.empty)
@@ -323,46 +334,43 @@ let run
           interact mode env s
        end else
          mode in
+      let show act lhs arrow rhs = debugf "%s: %s: %s %s %s\n"
+        (grey loc) (green act) lhs (blue arrow) rhs in
+      let left = "<-" and right = "->" in
       let mode' = begin match a with
       | Read_reg (reg, sub) ->
-          debugf "%s: read_reg: %s%s -> %s\n"
-            loc (reg_to_string reg) (sub_to_string sub) (val_to_string return);
+          show "read_reg" (reg_to_string reg ^ sub_to_string sub) right (val_to_string return);
           step ()
       | Write_reg (reg, sub, value) ->
           assert (return = unit_lit);
-          debugf "%s: write_reg: %s%s <- %s\n"
-            loc (reg_to_string reg) (sub_to_string sub) (val_to_string value);
+          show "write_reg" (reg_to_string reg ^ sub_to_string sub) left (val_to_string value);
           step ()
       | Read_mem (id, args, sub) ->
-          debugf "%s: read_mem: %s%s%s -> %s\n"
-            loc (id_to_string id) (val_to_string args) (sub_to_string sub) (val_to_string return);
+          show "read_mem" (id_to_string id ^ val_to_string args ^ sub_to_string sub) right (val_to_string return);
           step ()
       | Write_mem (id, args, sub, value) ->
           assert (return = unit_lit);
-          debugf "%s: write_mem: %s%s%s <- %s\n"
-            loc (id_to_string id) (val_to_string args) (sub_to_string sub) (val_to_string value);
+          show "write_mem" (id_to_string id ^ val_to_string args ^ sub_to_string sub) left (val_to_string value);
           step ()
       (* distinguish single argument for pretty-printing *)
       | Call_extern (f, (V_tuple _ as args)) ->
-          debugf "%s: call_lib: %s%s -> %s\n"
-            loc f (val_to_string args) (val_to_string return);
+          show "call_lib" (f ^ val_to_string args) right (val_to_string return);
           step ()
       | Call_extern (f, arg) ->
-          debugf "%s: call_lib: %s(%s) -> %s\n"
-            loc f (val_to_string arg) (val_to_string return);
+          show "call_lib" (sprintf "%s(%s)" f (val_to_string arg)) right (val_to_string return);
           step ()
       | Debug _ ->
           assert (return = unit_lit);
-          debugf "%s: breakpoint:\n" loc;
+          show "breakpoint" "" "" "";
           step ~force:true ()
       | Barrier (_, _) | Write_next_IA _ | Nondet _ ->
           failwith "unexpected action"
       end in
       loop mode' env' (resume {eager_eval = (mode' = Run)} s (Some return))
   | Error(l, e) ->
-      debugf "%s: error: %s\n" (loc_to_string l) e;
+      debugf "%s: %s: %s\n" (grey (loc_to_string l)) (red "error") e;
       false, mode, env in
-  debugf "%s: evaluate %s\n" name (Pretty_interp.pp_exp entry);
+  debugf "%s: evaluate %s\n" (grey name) (Pretty_interp.pp_exp entry);
   let mode = match mode with
   | None -> if eager_eval then Run else Step
   | Some m -> m in
@@ -371,6 +379,6 @@ let run
     loop mode (reg, mem) (interp {eager_eval} test entry)
   with e ->
     let trace = Printexc.get_backtrace () in
-    debugf "%s: interpretor error %s\n%s\n" name (Printexc.to_string e) trace;
+    debugf "%s: %s %s\n%s\n" (grey name) (red "interpretor error") (Printexc.to_string e) trace;
     false, mode, (reg, mem)
 ;;
