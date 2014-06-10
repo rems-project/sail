@@ -1,17 +1,22 @@
-.PHONY: all test clean doc lib test_power test_idempotence
+.PHONY: all sail test clean doc lib power test_power test_idempotence
 
-all: lib doc
-	ocamlbuild -classic-display sail.native test/run_tests.native
+all: sail test lib power doc
 
-test: all
+sail:
+	ocamlbuild sail.native
+
+test: sail
+	ocamlbuild test/run_tests.native
 	./run_tests.native
 
-test_power:
+power: sail
+	ocamlbuild test/run_power.native
+
+test_power: power
 	#../../../rsem/idl/power/binary/run.sh
-	ocamlbuild -classic-display sail.native test/run_power.native
 	./run_power.native --file ../../../rsem/idl/power/binary/main.bin
 
-test_idempotence:
+test_idempotence: sail
 	@cd test; for file in *.sail; do \
 		./idempotence.sh $$file; echo ;\
 	done

@@ -26,7 +26,7 @@ while getopts ":r" opt; do
 done
 
 rebuild () {
-  run "Building Sail" "ocamlbuild sail.native"
+  run "Building Sail" "make clean sail lib"
 
   run "Generating the Sail interpreter from Power ISA (restricted to: $MNEMO)" \
     "make -C $POWERISA clean extract EXPORT_MNEMO=$MNEMO"
@@ -36,7 +36,7 @@ rebuild () {
     "cp $POWERISA/generated/extract-full.sail test/power.sail"
   #git diff test/power.sail
 
-  run  "Translating Power model from Sail to OCaml via Lem" "ocamlbuild test/run_power.native"
+  run  "Translating Power model from Sail to OCaml via Lem" "make power"
 }
 
 DEMO="./run_power.native --interactive --file test/main.bin"
