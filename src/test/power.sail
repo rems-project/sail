@@ -71,10 +71,13 @@ register (bit[32 : 63]) CR
 register (bit[64]) CTR
 register (bit[64]) LR
 
-register (bit[64]) XER
-let nat SO = 32
-let nat OV = 33
-let nat CA = 34
+typedef xer = register bits [ 0 : 63 ] {
+  32 : SO;
+  33 : OV;
+  34 : CA;
+}
+register (xer) XER
+
 
 (* XXX bogus, length should be 1024 with many more values - cf. mfspr
   definition *)
@@ -113,12 +116,12 @@ function clause decode ([0 = bitzero, 1 = bitone, 2 = bitzero, 3 = bitzero, 4 =
 
 function clause execute (BranchConditionaltoLinkRegister (BH, BI, BO, LK)) =
   {
-    if (bit) mode64bit then M := 0 else M := 32;
-    if (bit) (~ (BO[2])) then CTR := CTR - 1;
+    if mode64bit then M := 0 else M := 32;
+    if ~ (BO[2]) then CTR := CTR - 1;
     ctr_ok := (BO[2] | (CTR[M .. 63] != 0) ^ BO[3]);
     cond_ok := (BO[0] | CR[BI + 32] ^ ~ (BO[1]));
-    if (bit) (ctr_ok & cond_ok) then NIA := LR[0 .. 61] : 0b00;
-    if (bit) LK then LR := CIA + 4
+    if ctr_ok & cond_ok then NIA := LR[0 .. 61] : 0b00;
+    if LK then LR := CIA + 4
   }
 
 union ast member (vector<0, 16, inc, bit> , vector<0, 5, inc, bit> , vector<0, 5, inc, bit> ) LoadWordandZero
@@ -131,7 +134,7 @@ function clause execute (LoadWordandZero (D, RA, RT)) =
   {
     (vector<0, 64, inc, bit> ) EA := 0;
     (vector<0, 64, inc, bit> ) b := 0;
-    if (bit) (RA == 0b00000) then b := 0 else b := GPR[RA];
+    if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + exts (D);
     GPR[RT] := 0b00000000000000000000000000000000 : MEM (EA,4)
   }
@@ -146,7 +149,7 @@ function clause execute (StoreWord (D, RA, RS)) =
   {
     (vector<0, 64, inc, bit> ) EA := 0;
     (vector<0, 64, inc, bit> ) b := 0;
-    if (bit) (RA == 0b00000) then b := 0 else b := GPR[RA];
+    if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + exts (D);
     MEM(EA,4) := (GPR[RS])[32 .. 63]
   }
@@ -172,9 +175,7 @@ function clause decode ([0 = bitzero, 1 = bitzero, 2 = bitone, 3 = bitone, 4 =
   AddImmediate (instr[11 .. 15],instr[6 .. 10],instr[16 .. 31])
 
 function clause execute (AddImmediate (RA, RT, SI)) =
-  if (bit) (RA == 0b00000)
-  then GPR[RT] := exts (SI)
-  else GPR[RT] := GPR[RA] + exts (SI)
+  if RA == 0 then GPR[RT] := exts (SI) else GPR[RT] := GPR[RA] + exts (SI)
 
 union ast member (vector<0, 5, inc, bit> , vector<0, 5, inc, bit> , vector<0, 5, inc, bit> , bit) OR
 
