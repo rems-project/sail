@@ -13,14 +13,6 @@ let compose f g x = f (V_tuple [g x]) ;;
 
 let is_one (V_lit (L_aux b lb)) = V_lit (L_aux (if b = L_one then L_true else L_false) lb) ;;
 
-let eq (V_tuple [x; y]) = V_lit (L_aux (if value_eq x y then L_one else L_zero) Unknown) ;;
-
-let neg (V_tuple [V_lit (L_aux arg la)]) = V_lit (L_aux (match arg with
-  | L_one -> L_zero
-  | L_zero -> L_one end) la) ;;
-
-let neq = compose neg eq ;;
-
 let lt_range (V_tuple[V_lit (L_aux (L_num l1) lr);V_lit (L_aux (L_num l2) ll);]) =
   if l1 < l2
   then V_lit (L_aux L_one Unknown)
@@ -80,6 +72,17 @@ let exts len ((V_vector _ inc _) as v) =
   to_vec inc len (to_num true v)
 ;;
 
+let eq (V_tuple [x; y]) = V_lit (L_aux (if value_eq x y then L_one else L_zero) Unknown) ;;
+(* XXX interpret vectors as unsigned numbers for equality *)
+let eq_vec_range (V_tuple [v; r]) = eq (V_tuple [to_num false v; r]) ;;
+let eq_range_vec (V_tuple [r; v]) = eq (V_tuple [r; to_num false v]) ;;
+
+let neg (V_tuple [V_lit (L_aux arg la)]) = V_lit (L_aux (match arg with
+  | L_one -> L_zero
+  | L_zero -> L_one end) la) ;;
+
+let neq = compose neg eq ;;
+
 let arith_op op (V_tuple args) = match args with
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (op x y)) lx)
   end ;;
@@ -138,6 +141,8 @@ let function_map = [
   ("minus", arith_op (-));
   ("minus_vec", arith_op_vec (-));
   ("eq", eq);
+  ("eq_vec_range", eq_vec_range);
+  ("eq_range_vec", eq_range_vec);
   ("neq", neq);
   ("vec_concat", vec_concat);
   ("is_one", is_one);

@@ -884,6 +884,20 @@ let initial_typ_env =
 	   [Eq(Specc(Parse_ast.Int("==",None)),
 	       {nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},
 	       {nexp=Nadd({nexp=Nvar "o"},{nexp=Nvar "p"})})],pure_e);
+      (* == : bit['n] * [|'o;'p|] -> bit_t *)
+      Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
+           (mk_pure_fun (mk_tup [mk_range (mk_nv "o") (mk_nv "p");
+                                 mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")])
+                        bit_t)),
+           External (Some "eq_range_vec"),
+           [Eq(Specc(Parse_ast.Int("==",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
+      (* == : [|'o;'p|] * bit['n] -> bit_t *)
+      Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
+           (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
+                                 mk_range (mk_nv "o") (mk_nv "p")])
+                        bit_t)),
+           External (Some "eq_vec_range"),
+           [Eq(Specc(Parse_ast.Int("==",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
       Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "eq"),[],pure_e)]));
     ("!=",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "neq"),[],pure_e));
     ("<",
