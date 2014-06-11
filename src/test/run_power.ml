@@ -74,6 +74,7 @@ let init_reg () =
     init "CTR" Big_int.zero_big_int 64;
     init "CR" Big_int.zero_big_int 32;
     init "LR" lr_init_value 64;
+    Id_aux(Id "mode64bit", Unknown), V_lit (L_aux (L_true, Unknown));
   ]
 ;;
 

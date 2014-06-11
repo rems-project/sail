@@ -1,5 +1,3 @@
-(* XXX sign extension --- note that this produces a signed integer,
-   the constraints on the range of the result is TODO *)
 val extern forall Nat 'n. bit['n] -> bit[64] effect pure exts
 (* XXX binary coded decimal *)
 function forall Type 'a . 'a dec_to_bcd ( x ) = x
@@ -99,8 +97,7 @@ val extern forall Nat 'n. ( nat , [|'n|] ) -> (bit[8 * 'n]) effect { wmem , rmem
 (* XXX effect for trap? *)
 val extern unit -> unit effect pure trap
 
-(* XXX should be register<bool>, this is a workaround for limitations in coercions *)
-let (bit) mode64bit = bitone
+register (bool) mode64bit
 
 scattered function unit execute
 scattered typedef ast = const union
