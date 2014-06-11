@@ -1,7 +1,7 @@
 open import Pervasives
 open import Interp
 open import Interp_ast
-import Maybe_extra
+import Assert_extra Maybe_extra
 open import Num
 open import List
 open import Word
@@ -161,4 +161,7 @@ let function_map = [
   ("gt_vec", compare_op_vec (>));
 ] ;;
 
-let eval_external name v = (Maybe_extra.fromJust (List.lookup name function_map)) v ;;
+let eval_external name v = match List.lookup name function_map with
+  | Just f -> f v
+  | Nothing -> Assert_extra.failwith ("missing library function " ^ name)
+  end
