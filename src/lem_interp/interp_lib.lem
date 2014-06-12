@@ -11,12 +11,19 @@ let ignore_sail x = V_lit (L_aux L_unit Unknown) ;;
 
 let compose f g x = f (V_tuple [g x]) ;;
 
-let is_one (V_lit (L_aux b lb)) = V_lit (L_aux (if b = L_one then L_true else L_false) lb) ;;
+let is_one v = match v with 
+  | V_lit (L_aux b lb) -> V_lit (L_aux (if b = L_one then L_true else L_false) lb)
+  | V_unknown -> V_unknown
+end ;;
 
-let lt_range (V_tuple[V_lit (L_aux (L_num l1) lr);V_lit (L_aux (L_num l2) ll);]) =
-  if l1 < l2
-  then V_lit (L_aux L_one Unknown)
-  else V_lit (L_aux L_zero Unknown)
+let lt_range (V_tuple[v1;v2]) = match (v1,v2) with 
+  | (V_lit (L_aux (L_num l1) lr),V_lit (L_aux (L_num l2) ll)) ->
+    if l1 < l2
+    then V_lit (L_aux L_one Unknown)
+    else V_lit (L_aux L_zero Unknown)
+  | (V_unknown,_) -> V_unknown
+  | (_,V_unknown) -> V_unknown
+end ;;
 
 let bit_to_bool b = match b with
     V_lit (L_aux L_zero _) -> false
@@ -84,6 +91,8 @@ let neg (V_tuple [V_lit (L_aux arg la)]) = V_lit (L_aux (match arg with
 let neq = compose neg eq ;;
 
 let arith_op op (V_tuple args) = match args with
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (op x y)) lx)
   end ;;
 let arith_op_vec op (V_tuple args) = match args with

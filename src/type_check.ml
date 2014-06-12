@@ -375,9 +375,9 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
         (match t_actual.t,expect_actual.t with 
         | Tfn _,_ -> typ_error l ("Identifier " ^ (id_to_string id) ^ " is bound to a function and cannot be used as a value")
         | Tapp("register",[TA_typ(t')]),Tapp("register",[TA_typ(expect_t')]) -> 
-          let tannot = Base(([],t),Emp_local,cs,ef) in
-          let t',cs',e' = type_coerce (Expr l) d_env false t' (rebuild tannot) expect_t' in
-          (e',t,t_env,cs@cs',ef)
+          let tannot = Base(([],t),Emp_global,cs,ef) in
+	  let t',cs' = type_consistent (Expr l) d_env t' expect_t' in
+          (rebuild tannot,t,t_env,cs@cs',ef)
         | Tapp("register",[TA_typ(t')]),Tuvar _ ->
 	  let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
           let tannot = Base(([],t),External (Some i),cs,ef') in
@@ -1025,7 +1025,7 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 	    | Tapp("reg",[TA_typ u]),_ ->
 	      (LEXP_aux(lexp,(l,(Base(([],t),Emp_local,cs@cs',pure_e)))),u,Envmap.empty,Emp_local,[],pure_e)
 	    | Tapp("vector",_),false ->
-	      (LEXP_aux(lexp,(l,(Base(([],t),Emp_local,cs@cs',pure_e)))),t,Envmap.empty,Emp_local,[],pure_e)
+	      (LEXP_aux(lexp,(l,(Base(([],t),tag,cs@cs',pure_e)))),t,Envmap.empty,Emp_local,[],pure_e)
 	    | _,_ -> 
 	      if is_top
 	      then typ_error l 

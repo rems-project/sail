@@ -506,6 +506,7 @@ and t_args =  (* Arguments to type constructors *)
 
 type tag =  (* Data indicating where the identifier arises and thus information necessary in compilation *)
  | Tag_empty
+ | Tag_global (* Globally let-bound or enumeration based value/variable *)
  | Tag_ctor (* Data constructor from a type union *)
  | Tag_extern of maybe string (* External function, specied only with a val statement *)
  | Tag_default (* Type has come from default declaration, identifier may not be bound locally *)
