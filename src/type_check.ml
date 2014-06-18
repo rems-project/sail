@@ -440,11 +440,12 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let t',cs',e' = type_coerce (Expr l) d_env false (get_e_typ e) e expect_t in
       (e',t',t_env,cs@cs',effect)
     | E_cast(typ,e) ->
-      let t = typ_to_t typ in
-      let (e',u,t_env,cs,ef) = check_exp envs (new_t ()) e in
-      let t',cs2,e' = type_coerce (Expr l) d_env true u e' t in
-      let t',cs3,e'' = type_coerce (Expr l) d_env false t e' expect_t in 
-      (e'',t',t_env,cs@cs2@cs3,ef)        
+      let cast_t = typ_to_t typ in
+      let cast_t,cs_a = get_abbrev d_env cast_t in
+      let (e',u,t_env,cs,ef) = check_exp envs cast_t e in
+(*      let t',cs2,e' = type_coerce (Expr l) d_env true u e' cast_t in*)
+      let t',cs3,e'' = type_coerce (Expr l) d_env false cast_t e' expect_t in 
+      (e'',t',t_env,cs_a@cs@cs3,ef)
     | E_app(id,parms) -> 
       let i = id_to_string id in
       (match Envmap.apply t_env i with

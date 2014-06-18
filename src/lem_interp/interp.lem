@@ -240,17 +240,43 @@ let is_lit_vector (L_aux l _) =
   | _ -> false
 end
 
+(*Both make an endian assumption, and should use a flag to switch*)
 val litV_to_vec : lit -> value
 let litV_to_vec (L_aux lit l) =
   match lit with
   | L_hex s ->
-    let hexes = String.toCharList s in
-    (* XXX unimplemented *)
-    V_vector 0 true []
+    let to_v b = V_lit (L_aux b l) in
+    let hexes = List.map to_v 
+                 (List.concat 
+		    (List.map 
+		       (fun s -> match s with
+			 | #'0' -> [L_zero;L_zero;L_zero;L_zero]
+			 | #'1' -> [L_zero;L_zero;L_zero;L_one ]
+			 | #'2' -> [L_zero;L_zero;L_one ;L_zero]
+			 | #'3' -> [L_zero;L_zero;L_one ;L_one ]
+			 | #'4' -> [L_zero;L_one ;L_zero;L_zero]
+			 | #'5' -> [L_zero;L_one ;L_zero;L_one ]
+			 | #'6' -> [L_zero;L_one ;L_one ;L_zero]
+			 | #'7' -> [L_zero;L_one ;L_one ;L_one ]
+			 | #'8' -> [L_one ;L_zero;L_zero;L_zero]
+			 | #'9' -> [L_one ;L_zero;L_zero;L_one ]
+			 | #'A' -> [L_one ;L_zero;L_one ;L_zero]
+			 | #'B' -> [L_one ;L_zero;L_one ;L_one ]
+			 | #'C' -> [L_one ;L_one ;L_zero;L_zero]
+			 | #'D' -> [L_one ;L_one ;L_zero;L_one ]
+			 | #'E' -> [L_one ;L_one ;L_one ;L_zero]
+			 | #'F' -> [L_one ;L_one ;L_one ;L_one ]
+			 | #'a' -> [L_one ;L_zero;L_one ;L_zero]
+			 | #'b' -> [L_one ;L_zero;L_one ;L_one ]
+			 | #'c' -> [L_one ;L_one ;L_zero;L_zero]
+			 | #'d' -> [L_one ;L_one ;L_zero;L_one ]
+			 | #'e' -> [L_one ;L_one ;L_one ;L_zero]
+			 | #'f' -> [L_one ;L_one ;L_one ;L_one ] end)
+		       (String.toCharList s))) in
+    (* XXX assumes endianness *)
+    V_vector 0 true hexes
   | L_bin s -> 
-    let bits = String.toCharList s in
-    let exploded_bits = bits in (*List.map (fun c -> String.toString [c]) bits in*)
-    let bits = List.map (fun s -> match s with | #'0' -> (V_lit (L_aux L_zero l)) | #'1' -> (V_lit (L_aux L_one l)) end) exploded_bits in
+    let bits = List.map (fun s -> match s with | #'0' -> (V_lit (L_aux L_zero l)) | #'1' -> (V_lit (L_aux L_one l)) end) (String.toCharList s) in
     (* XXX assume binary constants are written in big-endian,
      * we might need syntax to change this assumption. *)
     V_vector 0 true bits

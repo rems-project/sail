@@ -2,7 +2,7 @@ function nat id ( n ) = n
 
 function unit f() = {
  (if( true ) then 
-   a := 3
+   a := (nat) (3 + 0b01) mod 4
   else 
    a := 4
  );

@@ -32,6 +32,7 @@ and t_aux =
   | Ttup of t list
   | Tapp of string * t_arg list
   | Tabbrev of t * t
+  | Toptions of t * t
   | Tuvar of t_uvar
 and t_uvar = { index : int; mutable subst : t option }
 and nexp = { mutable nexp : nexp_aux }
@@ -125,6 +126,8 @@ let rec string_of_list sep string_of = function
   | [x] -> string_of x
   | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
 
+let debug_mode = ref true;;
+
 let rec t_to_string t = 
   match t.t with
     | Tid i -> i
@@ -133,7 +136,9 @@ let rec t_to_string t =
     | Ttup(tups) -> "(" ^ string_of_list ", " t_to_string tups ^ ")"
     | Tapp(i,args) -> i ^ "<" ^  string_of_list ", " targ_to_string args ^ ">"
     | Tabbrev(ti,ta) -> (t_to_string ti) ^ " : " ^ (t_to_string ta)
-    | Tuvar({index = i;subst = a}) -> "Tu_" ^ string_of_int i ^ "("^ (match a with | None -> "None" | Some t -> t_to_string t) ^")"
+    | Toptions(t1,t2) -> if !debug_mode then ("(either "^ (t_to_string t1) ^ " or " ^ (t_to_string t2) ^ ")") else "_"
+    | Tuvar({index = i;subst = a}) -> 
+      if !debug_mode then "Tu_" ^ string_of_int i ^ "("^ (match a with | None -> "None" | Some t -> t_to_string t) ^")" else "_"
 and targ_to_string = function
   | TA_typ t -> t_to_string t
   | TA_nexp n -> n_to_string n
@@ -151,18 +156,18 @@ and n_to_string n =
     | N2n(n,Some i) -> "2**" ^ (n_to_string n) ^ "(*" ^ (string_of_big_int i) ^ "*)"
     | Npow(n, i) -> "(" ^ (n_to_string n) ^ ")**" ^ (string_of_int i)
     | Nneg n -> "-" ^ (n_to_string n)
-    | Nuvar({nindex=i;nsubst=a}) -> "Nu_" ^ string_of_int i ^ "()"
+    | Nuvar({nindex=i;nsubst=a}) -> if !debug_mode then "Nu_" ^ string_of_int i ^ "()" else "_"
 and e_to_string e = 
   match e.effect with
   | Evar i -> "'" ^ i
   | Eset es -> if []=es then "pure" else "{" ^ "effects not printing" ^"}"
-  | Euvar({eindex=i;esubst=a}) -> string_of_int i ^ "()"
+  | Euvar({eindex=i;esubst=a}) -> if !debug_mode then string_of_int i ^ "()" else "_"
 and o_to_string o = 
   match o.order with
   | Ovar i -> "'" ^ i
   | Oinc -> "inc"
   | Odec -> "dec"
-  | Ouvar({oindex=i;osubst=a}) -> string_of_int i ^ "()"
+  | Ouvar({oindex=i;osubst=a}) -> if !debug_mode then string_of_int i ^ "()" else "_"
 
 let tag_to_string = function
   | Emp_local -> "Emp_local"
@@ -411,6 +416,7 @@ let rec normalize_nexp n =
 	| 0  -> {nexp = Npow(n1,(i1+i2))}
 	| -1 -> {nexp = Nmult(n2',n1')}
 	| _  -> {nexp = Nmult(n1',n2')})
+(*TODO Check and see if the constant should be pushed in, in some of these cases (in others it always should) *)
     | Nconst _, Nadd(n21,n22) | Nvar _,Nadd(n21,n22) | Nuvar _,Nadd(n21,n22) | N2n _, Nadd(n21,n22) | Npow _,Nadd(n21,n22) | Nmult _, Nadd(n21,n22) ->
       normalize_nexp {nexp = Nadd( {nexp = Nmult(n1',n21)}, {nexp = Nmult(n1',n21)})}
     | Nadd(n11,n12),Nconst _ | Nadd(n11,n12),Nvar _ | Nadd(n11,n12), Nuvar _ | Nadd(n11,n12), N2n _ | Nadd(n11,n12),Npow _ | Nadd(n11,n12), Nmult _->
@@ -553,6 +559,7 @@ let rec occurs_check_t (t_box : t) (t : t) : unit =
       List.iter (occurs_check_t t_box) ts
     | Tapp(_,targs) -> List.iter (occurs_check_ta (TA_typ t_box)) targs
     | Tabbrev(t,ta) -> occurs_check_t t_box t; occurs_check_t t_box ta
+    | Toptions(t1,t2) -> occurs_check_t t_box t1; occurs_check_t t_box t2
     | _ -> ()
 and occurs_check_ta (ta_box : t_arg) (ta : t_arg) : unit =
   match ta_box,ta with
@@ -974,6 +981,7 @@ let rec t_subst s_env t =
   | Ttup(ts) -> { t= Ttup(List.map (t_subst s_env) ts) }
   | Tapp(i,args) -> {t= Tapp(i,List.map (ta_subst s_env) args)}
   | Tabbrev(ti,ta) -> {t = Tabbrev(t_subst s_env ti,t_subst s_env ta) }
+  | Toptions(t1,t2) -> {t = Toptions(t_subst s_env t1,t_subst s_env t2) }
 and ta_subst s_env ta =
   match ta with
   | TA_typ t -> TA_typ (t_subst s_env t)
@@ -1045,6 +1053,7 @@ let rec t_remove_unifications s_env t =
   | Ttup(ts) -> List.fold_right (fun t s_env -> t_remove_unifications s_env t) ts s_env
   | Tapp(i,args) -> List.fold_right (fun t s_env -> ta_remove_unifications s_env t) args s_env
   | Tabbrev(ti,ta) -> (t_remove_unifications (t_remove_unifications s_env ti) ta)
+  | Toptions(t1,t2) -> assert false (*This should really be removed by this point*)
 and ta_remove_unifications s_env ta =
   match ta with
   | TA_typ t -> (t_remove_unifications s_env t)
@@ -1106,7 +1115,7 @@ let rec t_to_typ t =
     | Ttup ts -> Typ_aux(Typ_tup(List.map t_to_typ ts),Parse_ast.Unknown)
     | Tapp(i,args) -> Typ_aux(Typ_app(Id_aux((Id i), Parse_ast.Unknown),List.map targ_to_typ_arg args),Parse_ast.Unknown)
     | Tabbrev(t,_) -> t_to_typ t
-    | Tuvar _ -> Typ_aux(Typ_var (Kid_aux((Var "fresh"),Parse_ast.Unknown)),Parse_ast.Unknown)
+    | Tuvar _ | Toptions _ -> Typ_aux(Typ_var (Kid_aux((Var "fresh"),Parse_ast.Unknown)),Parse_ast.Unknown)
 and targ_to_typ_arg targ = 
  Typ_arg_aux( 
   (match targ with
@@ -1232,6 +1241,47 @@ let nexp_eq n1 n2 =
   (*let _ = Printf.printf "compared nexps %s\n" (string_of_bool b) in*)
   b
 
+
+let rec conforms_to_t loosely spec actual =
+(*let _ = Printf.printf "conforms_to_t called, evaluated loosely? %b, with %s and %s\n" loosely (t_to_string spec) (t_to_string actual) in*)
+  match (spec.t,actual.t,loosely) with
+    | (Tuvar _,_,true) -> true
+    | (Ttup ss, Ttup acs,_) -> (List.length ss = List.length acs) && List.for_all2 (conforms_to_t loosely) ss acs
+    | (Tid is, Tid ia,_) -> is = ia
+    | (Tapp(is,tas), Tapp("register",[TA_typ t]),true) ->
+      if is = "register"
+      then List.for_all2 (conforms_to_ta loosely) tas [TA_typ t]
+      else conforms_to_t loosely spec t
+    | (Tapp(is,tas), Tapp(ia, taa),_) -> 
+(*      let _ = Printf.printf "conforms to given two apps: %b, %b\n" (is = ia) (List.length tas = List.length taa) in*)
+      (is = ia) && (List.length tas = List.length taa) && (List.for_all2 (conforms_to_ta loosely) tas taa)
+    | (Tabbrev(_,s),a,_) -> conforms_to_t loosely s actual
+    | (s,Tabbrev(_,a),_) -> conforms_to_t loosely spec a
+    | (_,_,_) -> false
+and conforms_to_ta loosely spec actual =
+(*let _ = Printf.printf "conforms_to_ta called, evaluated loosely? %b, with %s and %s\n" loosely (targ_to_string spec) (targ_to_string actual) in*)
+  match spec,actual with
+    | TA_typ  s, TA_typ  a -> conforms_to_t loosely s a
+    | TA_nexp s, TA_nexp a -> conforms_to_n loosely s a
+    | TA_ord  s, TA_ord  a -> conforms_to_o loosely s a
+    | TA_eft  s, TA_eft  a -> conforms_to_e loosely s a
+    | _ -> false
+and conforms_to_n loosely spec actual =
+(*let _ = Printf.printf "conforms_to_n called, evaluated loosely? %b, with %s and %s\n" loosely (n_to_string spec) (n_to_string actual) in*)
+  match (spec.nexp,actual.nexp,loosely) with
+    | (Nuvar _,_,true) -> true
+    | (Nconst si,Nconst ai,_) -> eq_big_int si ai
+    | _ -> true
+and conforms_to_o loosely spec actual =
+  match (spec.order,actual.order,loosely) with
+    | (Ouvar _,_,true) | (Oinc,Oinc,_) | (Odec,Odec,_) | (_, Ouvar _,true) -> true
+    | _ -> false
+and conforms_to_e loosely spec actual =
+  match (spec.effect,actual.effect,loosely) with
+    | (Euvar _,_,true) -> true
+    | (_,Euvar _,true) -> false
+    | (_,_,true)       -> false (*Should check actual effect equality, using existing function*)
+
 (*Is checking for structural equality amongst the types, building constraints for kind Nat. 
   When considering two range type applications, will check for consistency instead of equality*)
 let rec type_consistent_internal co d_env t1 cs1 t2 cs2 = 
@@ -1300,6 +1350,14 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
   | Tabbrev(_,t1),Tabbrev(_,t2) -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
   | Tabbrev(_,t1),_ -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
   | _,Tabbrev(_,t2) -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
+  | Toptions(to1,to2),_ -> 
+    if (conforms_to_t false to1 t2 || conforms_to_t false to2 t2)
+    then begin t1.t <- t2.t; (t2,csp,e) end
+    else eq_error l ("Neither " ^ (t_to_string to1) ^ " nor " ^ (t_to_string to2) ^ " can match expected type " ^ (t_to_string t2))
+  | _,Toptions(to1,to2) -> 
+    if (conforms_to_t false to1 t1 || conforms_to_t false to2 t1)
+    then begin t2.t <- t1.t; (t1,csp,e) end
+    else eq_error l ((t_to_string t1) ^ " can match neither expexted type " ^ (t_to_string to1) ^ " nor " ^ (t_to_string to2))
   | Ttup t1s, Ttup t2s ->
     let tl1,tl2 = List.length t1s,List.length t2s in
     if tl1=tl2 then 
@@ -1433,46 +1491,6 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
 
 and type_coerce co d_env is_explicit t1 e t2 = type_coerce_internal co d_env is_explicit t1 [] e t2 [];;
 
-let rec conforms_to_t spec actual =
-  (*let _ = Printf.printf "conforms_to_t called with %s, %s\n" (t_to_string spec) (t_to_string actual) in*)
-  match spec.t,actual.t with
-    | Tuvar _,_ -> true
-    | Ttup ss, Ttup acs -> (List.length ss = List.length acs) && List.for_all2 conforms_to_t ss acs
-    | Tid is, Tid ia -> is = ia
-    | Tapp(is,tas), Tapp("register",[TA_typ t]) ->
-      if is = "register"
-      then List.for_all2 conforms_to_ta tas [TA_typ t]
-      else conforms_to_t spec t
-    | Tapp(is,tas), Tapp(ia, taa) -> 
-      (*let _ = Printf.printf "conforms to given two apps: %b, %b\n" (is = ia) (List.length tas = List.length taa) in*)
-      (is = ia) && (List.length tas = List.length taa) && (List.for_all2 conforms_to_ta tas taa)
-    | Tabbrev(_,s),a -> conforms_to_t s actual
-    | s,Tabbrev(_,a) -> conforms_to_t spec a
-    | _,_ -> false
-and conforms_to_ta spec actual =
-  (*let _ = Printf.printf "conforms_to_ta called with %s, %s\n" (targ_to_string spec) (targ_to_string actual) in*)
-  match spec,actual with
-    | TA_typ  s, TA_typ  a -> conforms_to_t s a
-    | TA_nexp s, TA_nexp a -> conforms_to_n s a
-    | TA_ord  s, TA_ord  a -> conforms_to_o s a
-    | TA_eft  s, TA_eft  a -> conforms_to_e s a
-    | _ -> false
-and conforms_to_n spec actual =
-(*  let _ = Printf.printf "conforms_to_n called with %s, %s\n" (n_to_string spec) (n_to_string actual) in*)
-  match spec.nexp,actual.nexp with
-    | Nuvar _,_ -> true
-    | Nconst si,Nconst ai -> eq_big_int si ai
-    | _,_ -> true
-and conforms_to_o spec actual =
-  match spec.order,actual.order with
-    | Ouvar _,_ | Oinc,Oinc | Odec,Odec | _, Ouvar _ -> true
-    | _,_ -> false
-and conforms_to_e spec actual =
-  match spec.effect,actual.effect with
-    | Euvar _,_ -> true
-    | _,Euvar _ -> false
-    | _,_ -> false
-
 let rec select_overload_variant d_env params_check get_all variants actual_type =
   match variants with
     | [] -> []
@@ -1480,12 +1498,18 @@ let rec select_overload_variant d_env params_check get_all variants actual_type 
     | Base((parms,t),tag,cs,ef)::variants ->
       let t,cs,ef = subst parms t cs ef in
       let t,cs' = get_abbrev d_env t in
+      let recur _ = select_overload_variant d_env params_check get_all variants actual_type in
       (match t.t with
 	| Tfn(a,r,e) ->
-	  if (if params_check then conforms_to_t a actual_type else conforms_to_t actual_type r)
-	  then (Base(([],t),tag,cs@cs',ef))::(if get_all then (select_overload_variant d_env params_check get_all variants actual_type) else [])
-	  else select_overload_variant d_env params_check get_all variants actual_type
-	| _ -> assert false (*Turn into unreachable error*))      
+	  let is_matching = 
+	    if params_check then conforms_to_t true a actual_type 
+	    else match actual_type.t with
+	      | Toptions(at1,at2) -> (conforms_to_t false at1 r || conforms_to_t false at2 r)
+	      | _ -> conforms_to_t true actual_type r in
+	  if is_matching 
+	  then (Base(([],t),tag,cs@cs',ef))::(if get_all then (recur ()) else [])
+	  else recur ()
+	| _ -> recur () )
 
 let rec in_constraint_env = function
   | [] -> []

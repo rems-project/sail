@@ -26,12 +26,13 @@ type e_uvar
 type o_uvar
 type t = { mutable t : t_aux }
 and t_aux =
-  | Tvar of string
-  | Tid of string
-  | Tfn of t * t * effect
-  | Ttup of t list
-  | Tapp of string * t_arg list
+  | Tvar of string (* concrete *)
+  | Tid of string  (* concrete *)
+  | Tfn of t * t * effect (* concrete: neither t can ever be fn *)
+  | Ttup of t list (* concrete: no t can be fn *)
+  | Tapp of string * t_arg list (* concrete *)
   | Tabbrev of t * t (* first t is the specified type, which may itself be an abbrev; second is the ground type, never an abbrev *)
+  | Toptions of t * t (* used in overload or cast to specify a set of types to expect; first is always concrete. Should never appear after type checking *)
   | Tuvar of t_uvar
 and nexp = { mutable nexp : nexp_aux }
 and nexp_aux =

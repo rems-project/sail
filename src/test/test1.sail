@@ -14,6 +14,8 @@ val forall Nat 'a, Nat 'b. bit['a:'b] sliced
 let bit v = bitzero
 let ( bit [ 32 ] ) v1 = 0b101
 
+let ( bit [32] ) v2 = 0xABCDEF01
+
 val forall Type 'a. 'a -> 'a effect pure identity
 function forall Type 'a. 'a identity i = i
 
@@ -39,5 +41,5 @@ function unit a (bit) b = if identity(b) then (identity()) else ()
 
 function bit sw s = switch s { case 0 -> bitzero }
 
-function bit main _ = {ignore(sw(0)); v1[0] }
+function bit main _ = {ignore(sw(0)); ignore((nat) v2); v1[0] }
 
