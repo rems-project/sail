@@ -1428,7 +1428,7 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert non-bit vector into an range"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
-    | "range","vector",true -> 
+    | "range","vector",_ -> 
       (match args2,args1 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
@@ -1439,9 +1439,9 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
 	let cs = [LtEq(co,{nexp=Nadd(b2,r2)},{nexp=N2n(r1,None)})] in
 	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),[e]),(l,Base(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
-	eq_error l "Cannot convert an range to a vector without an order"
+	eq_error l "Cannot convert a range to a vector without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
-        eq_error l "Cannot convert an range into a non-bit vector"
+        eq_error l "Cannot convert a range into a non-bit vector"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
     | "register",_,_ ->
       (match args1 with
