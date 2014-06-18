@@ -157,10 +157,24 @@ and n_to_string n =
     | Npow(n, i) -> "(" ^ (n_to_string n) ^ ")**" ^ (string_of_int i)
     | Nneg n -> "-" ^ (n_to_string n)
     | Nuvar({nindex=i;nsubst=a}) -> if !debug_mode then "Nu_" ^ string_of_int i ^ "()" else "_"
+and ef_to_string (Ast.BE_aux(b,l)) =
+    match b with
+      | Ast.BE_rreg  -> "rreg"
+      | Ast.BE_wreg  -> "wreg"
+      | Ast.BE_rmem  -> "rmem"
+      | Ast.BE_wmem  -> "wmem"
+      | Ast.BE_undef -> "undef"
+      | Ast.BE_unspec-> "unspec"
+      | Ast.BE_nondet-> "nondet"
+and efs_to_string es = 
+  match es with
+    | [] -> ""
+    | [ef] -> ef_to_string ef
+    | ef::es -> ef_to_string ef ^ ", " ^ efs_to_string es
 and e_to_string e = 
   match e.effect with
   | Evar i -> "'" ^ i
-  | Eset es -> if []=es then "pure" else "{" ^ "effects not printing" ^"}"
+  | Eset es -> if []=es then "pure" else "{" ^ (efs_to_string es) ^"}"
   | Euvar({eindex=i;esubst=a}) -> if !debug_mode then string_of_int i ^ "()" else "_"
 and o_to_string o = 
   match o.order with
@@ -1200,6 +1214,8 @@ let compare_effect (BE_aux(e1,_)) (BE_aux(e2,_)) =
 
 let effect_sort = List.sort compare_effect
 
+let eq_be_effect (BE_aux (e1,_)) (BE_aux(e2,_)) = e1 = e2
+
 (* Check that o1 is or can be eqaul to o2. In the event that one is polymorphic, inc or dec can be used polymorphically but 'a cannot be used as inc or dec *)
 let order_eq co o1 o2 = 
   let l = get_c_loc co in
@@ -1219,7 +1235,9 @@ let effects_eq co e1 e2 =
   | Eset _ , Evar _ -> e2
   | Euvar i,_ -> equate_e e1 e2; e2
   | _,Euvar i -> equate_e e2 e1; e2
-  | Eset es1,Eset es2 -> if ( effect_sort es1 = effect_sort es2 ) then e2 else eq_error l ("Effects must be the same") (*Print out both effect lists?*)
+  | Eset es1,Eset es2 -> 
+    if (List.for_all2 eq_be_effect (effect_sort es1) (effect_sort es2) ) then e2 
+    else eq_error l ("Effects must be the same, given " ^ efs_to_string es1 ^ " and " ^ efs_to_string es2)
   | Evar v1, Evar v2 -> if v1 = v2 then e2 else eq_error l ("Effect variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
   | Evar v1, Eset _ -> eq_error l ("Effect variable " ^ v1 ^ " cannot be used where a concrete set of effects is specified")
 
