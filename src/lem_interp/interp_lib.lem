@@ -150,7 +150,7 @@ let function_map = [
   ("minus", arith_op (-));
   ("minus_vec", arith_op_vec (-));
   ("mod", arith_op (mod));
-  ("mod_vec_range_range_range", arith_op_vec_range_range (mod));
+  ("mod_vec", arith_op_vec (mod));
   ("eq", eq);
   ("eq_vec_range", eq_vec_range);
   ("eq_range_vec", eq_range_vec);
