@@ -896,6 +896,13 @@ let initial_typ_env =
                      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "o") {nexp = Nconst zero}])
                                   (mk_range {nexp = Nconst zero} (mk_sub (mk_nv "o") {nexp = Nconst one})))),
                        External (Some "mod"),[GtEq(Specc(Parse_ast.Int("mod",None)),(mk_nv "o"),{nexp = Nconst one})],pure_e);
+               Base(((mk_nat_params["n";"m";"o"])@(mk_ord_params["ord"]),
+                     (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
+                                           mk_range (mk_nv "o") {nexp = Nconst zero}])
+                                   (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
+                       External (Some "mod_vec_range"),
+                     [GtEq(Specc(Parse_ast.Int("mod",None)),(mk_nv "o"),{nexp = Nconst one});
+                      LtEq(Specc(Parse_ast.Int("mod",None)),(mk_nv "o"),{nexp = N2n (mk_nv "m", None)})],pure_e);
                Base(((mk_nat_params["n";"m"])@(mk_ord_params["ord"]),
                      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
                                            mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")])
