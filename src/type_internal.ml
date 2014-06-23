@@ -32,7 +32,7 @@ and t_aux =
   | Ttup of t list
   | Tapp of string * t_arg list
   | Tabbrev of t * t
-  | Toptions of t * t
+  | Toptions of t * t option
   | Tuvar of t_uvar
 and t_uvar = { index : int; mutable subst : t option }
 and nexp = { mutable nexp : nexp_aux }
@@ -136,7 +136,8 @@ let rec t_to_string t =
     | Ttup(tups) -> "(" ^ string_of_list ", " t_to_string tups ^ ")"
     | Tapp(i,args) -> i ^ "<" ^  string_of_list ", " targ_to_string args ^ ">"
     | Tabbrev(ti,ta) -> (t_to_string ti) ^ " : " ^ (t_to_string ta)
-    | Toptions(t1,t2) -> if !debug_mode then ("(either "^ (t_to_string t1) ^ " or " ^ (t_to_string t2) ^ ")") else "_"
+    | Toptions(t1,None) -> if !debug_mode then ("optionally " ^ (t_to_string t1)) else (t_to_string t1)
+    | Toptions(t1,Some t2) -> if !debug_mode then ("(either "^ (t_to_string t1) ^ " or " ^ (t_to_string t2) ^ ")") else "_"
     | Tuvar({index = i;subst = a}) -> 
       if !debug_mode then "Tu_" ^ string_of_int i ^ "("^ (match a with | None -> "None" | Some t -> t_to_string t) ^")" else "_"
 and targ_to_string = function
@@ -573,7 +574,8 @@ let rec occurs_check_t (t_box : t) (t : t) : unit =
       List.iter (occurs_check_t t_box) ts
     | Tapp(_,targs) -> List.iter (occurs_check_ta (TA_typ t_box)) targs
     | Tabbrev(t,ta) -> occurs_check_t t_box t; occurs_check_t t_box ta
-    | Toptions(t1,t2) -> occurs_check_t t_box t1; occurs_check_t t_box t2
+    | Toptions(t1,None) -> occurs_check_t t_box t1
+    | Toptions(t1,Some t2) -> occurs_check_t t_box t1; occurs_check_t t_box t2
     | _ -> ()
 and occurs_check_ta (ta_box : t_arg) (ta : t_arg) : unit =
   match ta_box,ta with
@@ -1002,7 +1004,8 @@ let rec t_subst s_env t =
   | Ttup(ts) -> { t= Ttup(List.map (t_subst s_env) ts) }
   | Tapp(i,args) -> {t= Tapp(i,List.map (ta_subst s_env) args)}
   | Tabbrev(ti,ta) -> {t = Tabbrev(t_subst s_env ti,t_subst s_env ta) }
-  | Toptions(t1,t2) -> {t = Toptions(t_subst s_env t1,t_subst s_env t2) }
+  | Toptions(t1,None) -> {t = Toptions(t_subst s_env t1,None)}
+  | Toptions(t1,Some t2) -> {t = Toptions(t_subst s_env t1,Some (t_subst s_env t2)) }
 and ta_subst s_env ta =
   match ta with
   | TA_typ t -> TA_typ (t_subst s_env t)
@@ -1375,14 +1378,16 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
   | Tabbrev(_,t1),Tabbrev(_,t2) -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
   | Tabbrev(_,t1),_ -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
   | _,Tabbrev(_,t2) -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
-  | Toptions(to1,to2),_ -> 
+  | Toptions(to1,Some to2),_ -> 
     if (conforms_to_t false to1 t2 || conforms_to_t false to2 t2)
     then begin t1.t <- t2.t; (t2,csp,e) end
     else eq_error l ("Neither " ^ (t_to_string to1) ^ " nor " ^ (t_to_string to2) ^ " can match expected type " ^ (t_to_string t2))
-  | _,Toptions(to1,to2) -> 
+  | Toptions(to1,None),_ -> (t2,csp,e)
+  | _,Toptions(to1,Some to2) -> 
     if (conforms_to_t false to1 t1 || conforms_to_t false to2 t1)
     then begin t2.t <- t1.t; (t1,csp,e) end
     else eq_error l ((t_to_string t1) ^ " can match neither expexted type " ^ (t_to_string to1) ^ " nor " ^ (t_to_string to2))
+  | _,Toptions(to1,None) -> (t1,csp,e)
   | Ttup t1s, Ttup t2s ->
     let tl1,tl2 = List.length t1s,List.length t2s in
     if tl1=tl2 then 
@@ -1529,7 +1534,8 @@ let rec select_overload_variant d_env params_check get_all variants actual_type 
 	  let is_matching = 
 	    if params_check then conforms_to_t true a actual_type 
 	    else match actual_type.t with
-	      | Toptions(at1,at2) -> (conforms_to_t false at1 r || conforms_to_t false at2 r)
+	      | Toptions(at1,Some at2) -> (conforms_to_t false at1 r || conforms_to_t false at2 r)
+	      | Toptions(at1,None) -> conforms_to_t false at1 r
 	      | _ -> conforms_to_t true actual_type r in
 	  if is_matching 
 	  then (Base(([],t),tag,cs@cs',ef))::(if get_all then (recur ()) else [])

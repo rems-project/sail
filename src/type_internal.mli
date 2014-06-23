@@ -32,7 +32,7 @@ and t_aux =
   | Ttup of t list (* concrete: no t can be fn *)
   | Tapp of string * t_arg list (* concrete *)
   | Tabbrev of t * t (* first t is the specified type, which may itself be an abbrev; second is the ground type, never an abbrev *)
-  | Toptions of t * t (* used in overload or cast to specify a set of types to expect; first is always concrete. Should never appear after type checking *)
+  | Toptions of t * t option (* used in overload or cast to specify a set of types to expect; first is always concrete. Should never appear after type checking *)
   | Tuvar of t_uvar
 and nexp = { mutable nexp : nexp_aux }
 and nexp_aux =

@@ -442,8 +442,9 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
     | E_cast(typ,e) ->
       let cast_t = typ_to_t typ in
       let cast_t,cs_a = get_abbrev d_env cast_t in
-      let (e',u,t_env,cs,ef) = check_exp envs cast_t e in
-(*      let t',cs2,e' = type_coerce (Expr l) d_env true u e' cast_t in*)
+      let ct = {t = Toptions(cast_t,None)} in
+      let (e',u,t_env,cs,ef) = check_exp envs ct e in
+      let t',cs2,e' = type_coerce (Expr l) d_env true u e' cast_t in
       let t',cs3,e'' = type_coerce (Expr l) d_env false cast_t e' expect_t in 
       (e'',t',t_env,cs_a@cs@cs3,ef)
     | E_app(id,parms) -> 
@@ -656,25 +657,38 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let t = {t = Tapp("vector",[TA_nexp({nexp=Nconst zero});TA_nexp({nexp=Nconst (big_int_of_int (List.length es))});TA_ord({order=Oinc});TA_typ item_t])} in
       let t',cs',e' = type_coerce (Expr l) d_env false t (E_aux(E_vector es,(l,Base(([],t),Emp_local,[],pure_e)))) expect_t in
       (e',t',t_env,cs@cs',effect)
-    | E_vector_indexed(eis,default) ->
-      let item_t = match expect_t.t with
-        | Tapp("vector",[base;rise;ord;TA_typ item_t]) -> item_t
-        | _ -> new_t () in
+    | E_vector_indexed(eis,(Def_val_aux(default,(ld,annot)))) ->
+      let item_t,base_n,rise_n = match expect_t.t with
+        | Tapp("vector",[TA_nexp base;TA_nexp rise;ord;TA_typ item_t]) -> item_t,base,rise
+        | _ -> new_t (),new_n (), new_n () in
       let first,last = fst (List.hd eis), fst (List.hd (List.rev eis)) in
       let is_increasing = first <= last in
       let es,cs,effect,_ = (List.fold_right 
 			      (fun ((i,e),c,ef) (es,cs,effect,prev) -> 
+				(*let _ = Printf.printf "Checking increasing %b %i %i\n" is_increasing prev i in*)
 				if is_increasing 
-				then if prev <= i then (((i,e)::es),(c@cs),union_effects ef effect,i) 
+				then if prev >= i then (((i,e)::es),(c@cs),union_effects ef effect,i) 
 				  else (typ_error l "Indexed vector is not consistently increasing")
-				else if i <= prev then (((i,e)::es),(c@cs),union_effects ef effect,i) 
+				else if i >= prev then (((i,e)::es),(c@cs),union_effects ef effect,i) 
 				else (typ_error l "Indexed vector is not consistently decreasing"))
 			      (List.map (fun (i,e) -> let (e,_,_,cs,eft) = (check_exp envs item_t e) in ((i,e),cs,eft))
-				 eis) ([],[],pure_e,first)) in
-      let t = {t = Tapp("vector",[TA_nexp({nexp=Nconst (big_int_of_int first)});TA_nexp({nexp=Nconst (big_int_of_int (List.length eis))});
-				  TA_ord({order= if is_increasing then Oinc else Odec});TA_typ item_t])} in
-      let t',cs',e' = type_coerce (Expr l) d_env false t (E_aux(E_vector_indexed(es,default),(l,Base(([],t),Emp_local,[],pure_e)))) expect_t in
-      (e',t',t_env,cs@cs',effect)
+				 eis) ([],[],pure_e,last)) in
+      let (default',fully_enumerate,cs_d,ef_d) = match default with
+	| Def_val_empty -> (Def_val_aux(Def_val_empty,(ld,Base(([],item_t),Emp_local,[],pure_e))),true,[],pure_e)
+	| Def_val_dec e -> let (de,t,_,cs_d,ef_d) = (check_exp envs item_t e) in
+			   (*Check that ef_d doesn't write to memory or registers? *)
+			   (Def_val_aux(Def_val_dec de,(ld,(Base(([],item_t),Emp_local,cs_d,ef_d)))),false,cs_d,ef_d) in
+      let (base_bound,length_bound,cs_bounds) = 
+	if fully_enumerate
+	then ({nexp=Nconst (big_int_of_int first)},{nexp = Nconst (big_int_of_int (List.length eis))},[])
+	else (base_n,rise_n,[LtEq(Expr l, base_n,{nexp = Nconst (big_int_of_int first)});
+			     GtEq(Expr l,rise_n,{nexp = Nconst (big_int_of_int (List.length eis))})]) in	     
+      let t = {t = Tapp("vector",
+			[TA_nexp(base_bound);TA_nexp length_bound;
+			 TA_ord({order= if is_increasing then Oinc else Odec});TA_typ item_t])} in
+      let t',cs',e' = type_coerce (Expr l) d_env false t 
+	                          (E_aux (E_vector_indexed(es,default'),(l,Base(([],t),Emp_local,[],pure_e)))) expect_t in
+      (e',t',t_env,cs@cs_d@cs_bounds@cs',union_effects ef_d effect)
     | E_vector_access(vec,i) ->
       let base,rise,ord = new_n(),new_n(),new_o() in
       let item_t = new_t () in
@@ -1192,7 +1206,7 @@ and check_lbind envs is_top_level emp_tag (LB_aux(lbind,(l,annot))) : tannot let
     | Base((params,t),tag,cs,ef) ->
       let t,cs,ef = subst params t cs ef in
       let (pat',env,cs1,u) = check_pattern envs emp_tag t pat in
-      let (e,t,_,cs2,ef2) = check_exp envs u e in
+      let (e,t,_,cs2,ef2) = check_exp envs t e in
       let cs = resolve_constraints cs@cs1@cs2 in
       let ef = union_effects ef ef2 in
       let tannot = check_tannot l (Base((params,t),tag,cs,ef)) cs ef (*in top level, must be pure_e*) in

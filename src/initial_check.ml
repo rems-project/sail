@@ -353,8 +353,19 @@ and to_ast_exp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) 
     | Parse_ast.E_if(e1,e2,e3) -> E_if(to_ast_exp k_env e1, to_ast_exp k_env e2, to_ast_exp k_env e3)
     | Parse_ast.E_for(id,e1,e2,e3,atyp,e4) -> 
       E_for(to_ast_id id,to_ast_exp k_env e1, to_ast_exp k_env e2, to_ast_exp k_env e3,to_ast_order k_env atyp, to_ast_exp k_env e4)
-    | Parse_ast.E_vector(exps) -> E_vector(List.map (to_ast_exp k_env) exps)
-    | Parse_ast.E_vector_indexed(iexps,default) -> E_vector_indexed(List.map (fun (i,e) -> (i,to_ast_exp k_env e)) iexps, Def_val_aux(Def_val_empty,(l,NoTyp))) (*TODO transform the default *)
+    | Parse_ast.E_vector(exps) -> 
+      (match to_ast_iexps false k_env exps with
+	| Some([]) -> E_vector([])
+	| Some(iexps) -> E_vector_indexed(iexps, 
+					  Def_val_aux(Def_val_empty,(l,NoTyp)))
+	| None -> E_vector(List.map (to_ast_exp k_env) exps))
+    | Parse_ast.E_vector_indexed(iexps,Parse_ast.Def_val_aux(default,dl)) -> 
+      (match to_ast_iexps true k_env iexps with
+	| Some(iexps) -> E_vector_indexed (iexps, 
+					   Def_val_aux((match default with
+					     | Parse_ast.Def_val_empty -> Def_val_empty
+					     | Parse_ast.Def_val_dec e -> Def_val_dec (to_ast_exp k_env e)),(dl,NoTyp)))
+	| _ -> raise (Reporting_basic.err_unreachable l "to_ast_iexps didn't throw error"))
     | Parse_ast.E_vector_access(vexp,exp) -> E_vector_access(to_ast_exp k_env vexp, to_ast_exp k_env exp)
     | Parse_ast.E_vector_subrange(vex,exp1,exp2) -> E_vector_subrange(to_ast_exp k_env vex, to_ast_exp k_env exp1, to_ast_exp k_env exp2)
     | Parse_ast.E_vector_update(vex,exp1,exp2) -> E_vector_update(to_ast_exp k_env vex, to_ast_exp k_env exp1, to_ast_exp k_env exp2)
@@ -426,6 +437,31 @@ and to_ast_record_try (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_as
       None,Some(l,"Expected a field assignment to be identifier = expression"))
   | _ ->
     None,Some(l, "Expected a field assignment to be identifier = expression")
+
+and to_ast_iexps (fail_on_error : bool) (k_env : kind Envmap.t) (exps : Parse_ast.exp list) : (int * tannot exp) list option =
+ match exps with
+   | [] -> Some([])
+   | iexp::exps -> (match to_iexp_try k_env iexp with
+		     | Some(iexp),None ->
+		       (match to_ast_iexps fail_on_error k_env exps with
+			 | Some(iexps) -> Some(iexp::iexps)
+			 | _ -> None)
+		     | None,Some(l,msg) ->
+		       if fail_on_error
+		       then typ_error l msg None None None
+		       else None
+		     | _ -> None)
+and to_iexp_try (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l): Parse_ast.exp): ((int * tannot exp) option * (l*string) option) =
+  match exp with
+    | Parse_ast.E_app_infix(left,op,r) ->
+      (match left,op with
+	| Parse_ast.E_aux(Parse_ast.E_lit(Parse_ast.L_aux (Parse_ast.L_num i,ll)),cl), Parse_ast.Id_aux(Parse_ast.Id("="),leq) ->
+	  Some(i,to_ast_exp k_env r),None
+	| Parse_ast.E_aux(_,li), Parse_ast.Id_aux (Parse_ast.Id("="),leq) ->
+	  None,(Some(li,"Expected a constant number to begin this indexed vector assignemnt"))
+	| Parse_ast.E_aux(_,cl), Parse_ast.Id_aux(_,leq) ->
+	  None,(Some(leq,"Expected an indexed vector assignment constant = expression")))
+    | _ -> None,(Some(l,"Expected an indexed vector assignment: constant = expression"))
       
 let to_ast_default (names, k_env, t_env) (default : Parse_ast.default_typing_spec) : (tannot default_spec) envs_out =
   match default with

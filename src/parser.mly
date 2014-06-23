@@ -547,6 +547,8 @@ atomic_exp:
     { eloc (E_vector([$2])) }
   | Lsquare comma_exps Rsquare
     { eloc (E_vector($2)) }
+  | Lsquare comma_exps Semi Default Eq exp Rsquare
+    { eloc (E_vector_indexed($2,(Def_val_aux(Def_val_dec $6, locn 3 6)))) }
   | Lsquare exp With atomic_exp Eq exp Rsquare
     { eloc (E_vector_update($2,$4,$6)) }
   | Lsquare exp With atomic_exp Colon atomic_exp Eq exp Rsquare

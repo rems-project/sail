@@ -66,7 +66,10 @@ type value =
  | V_lit of lit
  | V_tuple of list value
  | V_list of list value
- | V_vector of integer * bool * list value (* The nat stores the first index, the bool whether that's most or least significant *)
+ (* A full vector: integer is the first index, bool says if that's most or least significant *)
+ | V_vector of integer * bool * list value 
+ (* A vector with default values, second integer stores length; as above otherwise *)
+ | V_vector_sparse of integer * integer * bool * list (integer * value) * value 
  | V_record of t * list (id * value)
  | V_ctor of id * t * value
  | V_unknown (* Distinct from undefined, used by memory system *)
@@ -82,6 +85,8 @@ and value_eq left right =
   | (V_list l, V_list l') -> listEqualBy value_eq l l'
   | (V_vector n b l, V_vector m b' l') ->
       n = m && b = b' && listEqualBy value_eq l l'
+  | (V_vector_sparse n o b l v, V_vector_sparse m p b' l' v') ->
+    n=m && o=p && b=b' && listEqualBy (fun (i,v) (i',v') -> i=i' && (value_eq v v')) l l' && value_eq v v'
   | (V_record t l, V_record t' l') ->
       t = t' &&
       listEqualBy id_value_eq l l'
@@ -105,7 +110,7 @@ let emem = LMem 1 Map.empty
 
 type read_kind = Read_plain | Read_reserve | Read_acquire
 type write_kind = Write_plain | Write_conditional | Write_release
-type barrier_kind = | Barrier_plain  (* ... *) 
+type barrier_kind = | Barrier_plain  (* ?? *) 
 
 (*top_level is a tuple of 
   (all definitions, letbound and enum values, register values, Typedef union constructors, and sub register mappings) *)
@@ -205,15 +210,6 @@ let rec to_data_constructors (Defs defs) =
     | _ -> to_data_constructors (Defs defs) end
    end
 
-(* Due to type checker, all variables should be in the environment unless an Unknown has matched a pattern,
-   so unfound identifiers propogate Unknown *)
-val in_venv : (list (id * value)) -> id -> value
-let rec in_venv env id =
- match env with
- | [] -> V_unknown
- | (eid,value)::env -> if (get_id eid) = (get_id id) then value else in_venv env id
- end 
-
 val in_env :forall 'a. (list (id * 'a)) -> id -> maybe 'a
 let rec in_env env id =
  match env with
@@ -297,6 +293,10 @@ let access_vector v n =
     if inc then
     list_nth vs (n - m)
     else list_nth vs (m - n)
+  | V_vector_sparse _ _ _ vs d ->
+    match (List.lookup n vs) with
+      | Nothing -> d
+      | Just v  -> v end 
   end
 
 val from_n_to_n :forall 'a. integer -> integer  -> list 'a -> list 'a
@@ -305,6 +305,22 @@ let from_n_to_n from to_ ls =
   let to_ = natFromInteger to_ in
   take (to_ - from + 1) (drop from ls)
 
+val slice_sparse_list : (integer -> integer -> bool) -> (integer -> integer) -> 
+                        list (integer * value) -> integer -> integer -> ((list (integer * value)) * bool)
+let rec slice_sparse_list compare update_n vals n1 n2 = 
+  let sl = slice_sparse_list compare update_n in
+  if n1 = n2 
+  then ([],false)
+  else match vals with
+    | [] -> ([],true)
+    | (i,v)::vals -> 
+      if n1 = i 
+      then let (rest,still_sparse) = (sl vals (update_n n1) n2) in ((i,v)::rest,still_sparse)
+      else if (compare n1 i)
+      then  (sl vals (update_n n1) n2)
+      else let (rest,_) = (sl vals (update_n i) n2) in ((i,v)::rest,true)
+  end
+
 val slice_vector : value -> integer -> integer -> value
 let slice_vector v n1 n2 =
   match v with
@@ -312,6 +328,16 @@ let slice_vector v n1 n2 =
     if inc 
     then V_vector 0 inc (from_n_to_n (n1 - m) (n2 - m) vs)
     else V_vector (n1 - n2 + 1) inc (from_n_to_n (m - n1) (m - n2) vs)
+  | V_vector_sparse m n inc vs d -> 
+    let (slice, still_sparse) = 
+      if inc 
+      then slice_sparse_list (>) (fun i -> i + 1) vs n1 n2
+      else slice_sparse_list (<) (fun i -> i - 1) vs n1 n2 in
+    if still_sparse && inc
+    then V_vector_sparse 0 (n2 - n1) inc slice d
+    else if inc then V_vector 0 inc (List.map snd slice)
+    else if still_sparse then V_vector_sparse (n1 - n2 +1) (n1 - n2) inc slice d
+    else V_vector (n1 - n2 +1) inc (List.map snd slice)
   end
 
 val update_field_list : list (id * value) -> list (id * value) -> list (id * value)
@@ -335,10 +361,30 @@ let rec update_vector_slice vector value mem =
     foldr2 (fun vbox v mem -> match vbox with
                                        | V_boxref n t -> update_mem mem n v end)
       mem vs vals
+  | ((V_vector m inc vs),(V_vector_sparse n o inc2 vals d)) -> 
+    let (_,mem) = foldr (fun vbox (i,mem) ->
+                          match vbox with
+			    | V_boxref n t -> 
+			      (if inc then i+1 else i-1,
+				update_mem mem n (match List.lookup i vals with
+				  | Nothing -> d
+				  | Just v  -> v end))
+                          end) (m,mem) vs in 
+    mem
   | ((V_vector m inc vs),v) ->
     List.foldr (fun vbox mem -> match vbox with
                                     | V_boxref n t -> update_mem mem n v end)
       mem vs
+end
+
+val fupdate_sparse : (integer -> integer -> bool) -> list (integer*value) -> integer -> value -> list (integer*value)
+let rec fupdate_sparse compare vs n vexp =
+  match vs with
+    | [] -> [(n,vexp)]
+    | (i,v)::vs ->
+      if i = n then (i,vexp)::vs
+      else if (compare i n) then (n,vexp)::(i,v)::vs
+      else (i,v)::(fupdate_sparse compare vs n vexp)
 end
 
 val fupdate_vec : value -> integer -> value -> value
@@ -346,6 +392,8 @@ let fupdate_vec v n vexp =
   match v with
   | V_vector m inc vals -> 
     V_vector m inc (List.update vals (natFromInteger (if inc then (n-m) else (m-n))) vexp)
+  | V_vector_sparse m o inc vals d ->
+    V_vector_sparse m o inc (fupdate_sparse (if inc then (>) else (<)) vals n vexp) d
   end
 
 val replace_is : forall 'a. list 'a -> list 'a -> integer -> integer -> integer -> list 'a
@@ -360,6 +408,17 @@ let rec replace_is ls vs base start stop =
     else l::(replace_is ls (v::vs) (base+1) start stop)
   end
 
+val replace_sparse : (integer -> integer -> bool) -> list (integer * value) -> list (integer * value) -> list (integer * value)
+let rec replace_sparse compare vals reps =
+  match (vals,reps) with
+    | ([],rs) -> rs
+    | (vs,[]) -> vs
+    | ((i1,v)::vs,(i2,r)::rs) ->
+      if i1 = i2 then (i2,r)::(replace_sparse compare vs rs)
+      else if (compare i1 i2) then (i1,v)::(replace_sparse compare vs ((i2,r)::rs))
+      else (i2,r)::(replace_sparse compare ((i1,v)::vs) rs)
+end
+
 val fupdate_vector_slice : value -> value -> integer -> integer -> value
 let fupdate_vector_slice vec replace start stop =
   match (vec,replace) with
@@ -369,6 +428,9 @@ let fupdate_vector_slice vec replace start stop =
 	 (if inc=inc' then reps 
 	  else (List.reverse reps)) 
 	 0 (if inc then (start-m) else (m-start)) (if inc then (stop-m) else (m-stop)))
+  | (V_vector_sparse m n inc vals d,V_vector _ _ reps) ->
+    let (_,repsi) = List.foldr (fun r (i,rs) -> ((if inc then i+1 else i-1), (i,r)::rs)) (start,[]) reps in
+    (V_vector_sparse m n inc (replace_sparse (if inc then (<) else (>)) vals repsi) d)
   end
 
 val in_ctors : list (id * typ) -> id -> maybe typ
@@ -460,6 +522,12 @@ let rec val_typ v =
       T_app "vector" (T_args [T_arg_nexp (Ne_const n); T_arg_nexp (Ne_const (list_length vals));
 			      T_arg_order (Ord_aux (if inc then Ord_inc else Ord_dec) Unknown);
 			      T_arg_typ t])
+    | V_vector_sparse n m inc vals d ->
+      let ts = List.map val_typ (d::(List.map snd vals)) in
+      let t = combine_typs ts in
+      T_app "vector" (T_args [T_arg_nexp (Ne_const n); T_arg_nexp (Ne_const m);
+			      T_arg_order (Ord_aux (if inc then Ord_inc else Ord_dec) Unknown);
+			      T_arg_typ t])
     | V_record t ivals -> t
     | V_list vals -> 
       let ts = List.map val_typ vals in
@@ -480,9 +548,15 @@ let rec to_exp v =
 	if (inc && n=0) 
 	then E_vector (List.map to_exp vals) 
 	else if inc then
-          E_vector_indexed (List.reverse (snd (List.foldl (fun (n,acc) e -> (n+1,(n, to_exp e)::acc)) (n,[]) vals))) (Def_val_aux Def_val_empty (Interp_ast.Unknown,Nothing))
+          E_vector_indexed (List.reverse (snd (List.foldl (fun (n,acc) e -> (n+1,(n, to_exp e)::acc)) (n,[]) vals)))
+	                   (Def_val_aux Def_val_empty (Interp_ast.Unknown,Nothing))
 	else 
-          E_vector_indexed (snd (List.foldr (fun e (n,acc) -> (n+1,(n, to_exp e)::acc)) (n-(list_length vals),[]) vals)) (Def_val_aux Def_val_empty (Interp_ast.Unknown,Nothing))
+          E_vector_indexed (snd (List.foldr (fun e (n,acc) -> (n+1,(n, to_exp e)::acc)) (n-(list_length vals),[]) vals)) 
+	                   (Def_val_aux Def_val_empty (Interp_ast.Unknown,Nothing))
+      | V_vector_sparse n m inc vals d ->
+	E_vector_indexed ((if inc then List.reverse else (fun i -> i)) 
+			     (List.map (fun (i,v) -> (i, to_exp v)) vals))
+	                 (Def_val_aux (Def_val_dec (to_exp d)) (Interp_ast.Unknown,Nothing)) (*Can possibly do better*)
       | V_record t ivals -> 
 	E_record(FES_aux (FES_Fexps
 			    (List.map (fun (id,value) -> (FE_aux (FE_Fexp id (to_exp value)) (Unknown,Nothing))) ivals) false) 
@@ -608,6 +682,20 @@ let rec match_pattern (P_aux p _) value =
 	 else (false,false,[]))
        (true,false,[]) (if inc then pats else List.reverse pats) vals
      else (false,false,[])
+   | V_vector_sparse n m inc vals d ->
+     if ((natFromInteger m) = (List.length pats))
+     then let (_,matched_p,used_unknown,bounds) =
+	    foldr
+	      (fun pat (i,matched_p,used_unknown,bounds) ->
+		if matched_p 
+		then let (matched_p,used_unknown',new_bounds) = 
+		       match_pattern pat (match List.lookup i vals with
+			 | Nothing -> d
+			 | Just v  -> v end) in
+		     ((if inc then i+1 else i-1),matched_p,used_unknown||used_unknown',(new_bounds ++ bounds))
+                else (i,false,false,[])) (n,true,false,[]) pats in
+	  (matched_p,used_unknown,bounds)
+     else (false,false,[])
    | V_unknown -> (true,true,[])
    | _ -> (false,false,[])
      end
@@ -620,6 +708,13 @@ let rec match_pattern (P_aux p _) value =
 	   let (matched_p,used_unknown',new_bounds) = match_pattern pat (list_nth vals (if inc then i+n else i-n)) in
 	   (matched_p,used_unknown||used_unknown',new_bounds++bounds)
          else (false,false,[]))
+       (true,false,[]) ipats
+   | V_vector_sparse n m inc vals d ->
+     List.foldr
+       (fun (i,pat) (matched_p,used_unknown,bounds) -> if matched_p && i < m then
+	   let (matched_p,used_unknown',new_bounds) = match_pattern pat (match List.lookup i vals with | Nothing -> d | Just v -> v end) in
+	   (matched_p,used_unknown||used_unknown',new_bounds++bounds)
+	 else (false,false,[]))
        (true,false,[]) ipats
    | V_unknown -> (true,true,[])
    | _ -> (false,false, [])
@@ -793,7 +888,14 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			      if start = i 
 			      then (Value v tag,lm,le)
 			      else (Value (V_vector i inc items) tag,lm,le)
-			    | _ -> (Value v tag,lm,le) end) 
+			    | _ -> (Value v tag,lm,le) end)
+			| (_,V_vector_sparse start inc len items def) ->
+			  (match typ with
+			    | Typ_app (Id_aux (Id "vector") _) [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i) _)) _;_;_;_] ->
+			      if start = i
+			      then (Value v tag,lm,le)
+			      else (Value (V_vector_sparse i inc len items def) tag,lm,le) (*Shoud I trim any actual items*)
+			    | _ -> (Value v tag,lm,le) end)
                         | _ -> (Value v Tag_empty,lm,le) end)
 	              (fun a -> update_stack a (add_to_top_frame (fun e -> (E_aux (E_cast ctyp e) (l,annot)))))
     | E_id id -> 
@@ -998,6 +1100,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                                           (fun vvec lm le ->
                                             match vvec with
                                             | V_vector base inc vals -> (Value (access_vector vvec n) Tag_empty,lm,le)
+					    | V_vector_sparse _ _ _ _ _ -> (Value (access_vector vvec n) Tag_empty,lm,le)
 					    | V_unknown -> (Value V_unknown Tag_empty,lm,le)
                                             | _ -> (Error l "Vector access of non-vector",lm,le)end)
                                           (fun a -> update_stack a 
@@ -1018,7 +1121,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                                               resolve_outcome (interp_main mode t_level l_env lm vec)
                                                               (fun vvec lm le ->
                                                                 match vvec with
-                                                                | V_vector base inc vals -> (Value (slice_vector vvec n1 n2) Tag_empty,lm,le)
+                                                                | V_vector _ _ _ -> (Value (slice_vector vvec n1 n2) Tag_empty,lm,le)
+								| V_vector_sparse _ _ _ _ _ -> (Value (slice_vector vvec n1 n2) Tag_empty, lm,le)
 								| V_unknown -> (Value V_unknown Tag_empty,lm,le)
                                                                 | _ -> (Error l "Vector slice of non-vector",lm,le)end)
                                                               (fun a -> update_stack a 
@@ -1047,7 +1151,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                                             resolve_outcome (interp_main mode t_level le lm vec)
                                                             (fun vec lm le ->
                                                               match vec with
-                                                              | V_vector base inc vals -> (Value (fupdate_vec vec n1 vup) Tag_empty, lm,le)
+                                                              | V_vector _ _ _ -> (Value (fupdate_vec vec n1 vup) Tag_empty, lm,le)
+							      | V_vector_sparse _ _ _ _ _ -> (Value (fupdate_vec vec n1 vup) Tag_empty,lm,le)
 							      | V_unknown -> (Value V_unknown Tag_empty, lm, le)
                                                               | _ -> (Error l "Update of vector given non-vector",lm,le) end)
                                                             (fun a -> update_stack a 
@@ -1078,7 +1183,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                                        (interp_main mode t_level l_env lm vec)
                                        (fun vvec lm le ->
                                          match vvec with
-                                         | V_vector m inc vals -> (Value (fupdate_vector_slice vvec v_rep n1 n2) Tag_empty,lm,le)
+                                         | V_vector _ _ _ -> (Value (fupdate_vector_slice vvec v_rep n1 n2) Tag_empty,lm,le)
+					 | V_vector_sparse _ _ _ _ _ -> (Value (fupdate_vector_slice vvec v_rep n1 n2) Tag_empty,lm,le)
 					 | V_unknown -> (Value V_unknown Tag_empty,lm,le)
                                          | _ -> (Error l "Vector update requires vector",lm,le) end)
                                        (fun a -> update_stack a 
@@ -1106,6 +1212,26 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                                             (fun v2 lm le ->
                                               match v2 with
                                               | V_vector _ _ vals2 -> (Value (V_vector m inc (vals1++vals2)) Tag_empty,lm,l_env)
+					      | V_vector_sparse _ len _ vals2 d ->
+						let original_len = integerFromNat (List.length vals1) in
+						let (_,sparse_vals) = List.foldr (fun v (i,vals) -> (i+1,(i,v)::vals)) (m,[]) vals1 in
+						let sparse_update = List.map (fun (i,v) -> (i+m+original_len,v)) vals2 in
+						(Value (V_vector_sparse m (len+original_len) inc (sparse_vals ++ sparse_update) d) Tag_empty, lm,l_env)
+					      | V_unknown -> (Value V_unknown Tag_empty,lm,l_env)
+                                              | _ -> (Error l "vector concat requires vector",lm,le) end)
+                                            (fun a -> update_stack a (add_to_top_frame 
+                                                                        (fun e -> E_aux (E_vector_append (to_exp v1) e) (l,annot)))))
+			| V_vector_sparse m len inc vals1 d ->
+			  (resolve_outcome (interp_main mode t_level l_env lm e2)
+                                            (fun v2 lm le ->
+                                              match v2 with
+                                              | V_vector _ _ vals2 -> 
+						let new_len = integerFromNat (List.length vals2) in
+						let (_,sparse_vals) = List.foldr (fun v (i,vals) -> (i+1,(i,v)::vals)) (len,[]) vals2 in
+						(Value (V_vector_sparse m (len+new_len) inc (vals1++sparse_vals) d) Tag_empty, lm,l_env)
+					      | V_vector_sparse _ new_len _ vals2 _ ->
+						let sparse_update = List.map (fun (i,v) -> (i+len,v)) vals2 in
+						(Value (V_vector_sparse m (len+new_len) inc (vals1 ++ sparse_update) d) Tag_empty, lm,l_env)
 					      | V_unknown -> (Value V_unknown Tag_empty,lm,l_env)
                                               | _ -> (Error l "vector concat requires vector",lm,le) end)
                                             (fun a -> update_stack a (add_to_top_frame 
@@ -1117,13 +1243,25 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
       exp_list mode t_level (fun exps -> E_aux (E_tuple exps) (l,annot)) V_tuple l_env l_mem [] exps
     | E_vector(exps) ->
       exp_list mode t_level (fun exps -> E_aux (E_vector exps) (l,annot)) (fun vals -> V_vector 0 true vals) l_env l_mem [] exps
-    | E_vector_indexed iexps default ->
+    | E_vector_indexed iexps (Def_val_aux default dannot) ->
       let (indexes,exps) = List.unzip iexps in
-      let is_inc = match typ with
-        | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp _; T_arg_order (Ord_aux Ord_inc _); _]) -> true
-        | _ -> false end in
-      exp_list mode t_level (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es) default) (l,annot))) 
-                       (fun vals -> V_vector (List_extra.head indexes) is_inc vals) l_env l_mem [] exps
+      let (is_inc,base,len) = (match typ with
+        | T_app "vector" (T_args [T_arg_nexp base;T_arg_nexp len; T_arg_order (Ord_aux Ord_inc _); _]) -> (true,base,len)
+        | T_app "vector" (T_args [T_arg_nexp base;T_arg_nexp len; T_arg_order (Ord_aux _ _); _]) -> (false,base,len) end) in
+      (match default with
+	| Def_val_empty ->
+	  exp_list mode t_level (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es) (Def_val_aux default dannot)) (l,annot))) 
+                                (fun vals -> V_vector (List_extra.head indexes) is_inc vals) l_env l_mem [] exps
+	| Def_val_dec default_exp ->
+	  let (b,len) = match (base,len) with
+	    | (Ne_const b,Ne_const l) -> (b,l) end in
+	  resolve_outcome (interp_main mode t_level l_env l_mem default_exp)
+	                  (fun v lm le -> 
+			    exp_list mode t_level (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es)
+								                      (Def_val_aux (Def_val_dec (to_exp v)) dannot))
+								    (l,annot)))
+			                          (fun vs -> (V_vector_sparse b len is_inc (map2 (fun i v -> (i,v)) indexes vs) v)) l_env l_mem [] exps)
+	                 (fun a -> update_stack a (add_to_top_frame (fun e -> E_aux (E_vector_indexed iexps (Def_val_aux (Def_val_dec e) dannot)) (l,annot)))) end)	  
     | E_block(exps) -> interp_block mode t_level l_env l_env l_mem l annot exps
     | E_app f args ->
       (match (exp_list mode t_level (fun es -> E_aux (E_app f es) (l,annot)) 
@@ -1410,6 +1548,20 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
               | (v,true,_) -> ((Error l "Vector does not contain reg or register values",lm,l_env),Nothing)
               | ((V_boxref n t),false, Just lexp_builder) -> ((Value (in_mem lm n) Tag_empty,lm, l_env),Just (next_builder lexp_builder))
               | (v,false, Just lexp_builder) -> ((Value v Tag_empty,lm,le), Just (next_builder lexp_builder)) end)
+	    | V_vector_sparse n m inc vs d ->
+              let nth = access_vector v n in
+              (match (nth,is_top_level,maybe_builder) with
+		| (V_register regform,true,_) ->
+		  ((Action (Write_reg regform Nothing value)
+		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),Nothing)
+		| (V_register regform,false,Just lexp_builder) ->
+		  ((Action (Write_reg regform Nothing value)
+		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
+                   Just (next_builder lexp_builder))
+		| (V_boxref n t,true,_) -> ((Value (V_lit (L_aux L_unit Unknown)) Tag_empty, update_mem lm n value, l_env),Nothing)
+		| (v,true,_) -> ((Error l "Vector does not contain reg or register values",lm,l_env),Nothing)
+		| ((V_boxref n t),false, Just lexp_builder) -> ((Value (in_mem lm n) Tag_empty,lm, l_env),Just (next_builder lexp_builder))
+		| (v,false, Just lexp_builder) -> ((Value v Tag_empty,lm,le), Just (next_builder lexp_builder)) end)
             | _ -> ((Error l "Vector access of non-vector",lm,l_env),Nothing) end)
          | ((Action a s,lm,le),Just lexp_builder) ->
            (match (a,is_top_level) with

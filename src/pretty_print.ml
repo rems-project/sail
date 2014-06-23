@@ -338,10 +338,13 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
       fprintf ppf "@[<0>(E_aux (%a %a %a %a %a %a @ @[<1> %a @]) (%a, %a))@]" 
 	kwd "E_for" pp_lem_id id pp_lem_exp exp1 pp_lem_exp exp2 pp_lem_exp exp3 pp_lem_ord order pp_lem_exp exp4 pp_lem_l l pp_annot annot
     | E_vector(exps) -> fprintf ppf "@[<0>(E_aux (%a [%a]) (%a, %a))@]" kwd "E_vector" (list_pp pp_semi_lem_exp pp_lem_exp) exps pp_lem_l l pp_annot annot
-    | E_vector_indexed(iexps,default) -> (*TODO print out default when it is an nonempty*) 
+    | E_vector_indexed(iexps,(Def_val_aux (default, (dl,dannot)))) -> 
       let iformat ppf (i,e) = fprintf ppf "@[<1>(%i %a %a) %a@]" i kwd ", " pp_lem_exp e kwd ";" in
       let lformat ppf (i,e) = fprintf ppf "@[<1>(%i %a %a) @]" i kwd ", " pp_lem_exp e in
-      fprintf ppf "@[<0>(E_aux (%a [%a]) (%a, %a))@]" kwd "E_vector_indexed" (list_pp iformat lformat) iexps pp_lem_l l pp_annot annot
+      let default_string ppf _ = (match default with
+	| Def_val_empty -> fprintf ppf "(Def_val_aux Def_val_empty (%a,%a))" pp_lem_l dl pp_annot dannot 
+	| Def_val_dec e -> fprintf ppf "(Def_val_aux (Def_val_dec %a) (%a,%a))" pp_lem_exp e pp_lem_l dl pp_annot dannot) in 
+      fprintf ppf "@[<0>(E_aux (%a [%a] %a) (%a, %a))@]" kwd "E_vector_indexed" (list_pp iformat lformat) iexps default_string () pp_lem_l l pp_annot annot
     | E_vector_access(v,e) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_vector_access" pp_lem_exp v pp_lem_exp e pp_lem_l l pp_annot annot
     | E_vector_subrange(v,e1,e2) -> 
       fprintf ppf "@[<0>(E_aux (%a %a %a %a) (%a, %a))@]" kwd "E_vector_subrange" pp_lem_exp v pp_lem_exp e1 pp_lem_exp e2 pp_lem_l l pp_annot annot

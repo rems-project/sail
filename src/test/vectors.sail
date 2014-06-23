@@ -11,8 +11,12 @@ function forall Type 'a . 'a id ( x ) = x
 
 register nat match_success
 register nat add_check
+register bit partial_check
 
 let (vector<0,3,inc,(register<(bit[10])>)>) gpr_small = [slice_check,slice_check,slice_check]
+
+let (bit[3]) indexed = [0=1,1=1,2=0]
+let (bit[50]) partial = [0 = 0, 5=1, 32=0; default = 0]
 
 function unit decode ([bitzero, bitzero, bitone, bitzero]) = match_success := 1
 and decode x = match_success := x
@@ -37,6 +41,8 @@ function bit main _ = {
   result := gpr_small[1] + id(gpr_small[1]);
  
   add_check := gpr_small[2] + 3;
+  partial_check := partial[5];
+  partial_check := partial[49];
 
   i := [bitzero, bitzero, bitone, bitzero];
 
