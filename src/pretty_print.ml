@@ -366,8 +366,14 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
       fprintf ppf "@[<0>(E_aux (%a %a [%a]) (%a, %a))@]" kwd "E_case" pp_lem_exp exp (list_pp pp_semi_lem_case pp_lem_case) pexps pp_lem_l l pp_annot annot
     | E_let(leb,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_let" pp_lem_let leb pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assign(lexp,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_assign" pp_lem_lexp lexp pp_lem_exp exp pp_lem_l l pp_annot annot
-  (* XXX missing cases *)
-  | E_internal_cast ((_, Overload (_,_, _)), _) | E_internal_exp _ -> assert false
+    | E_internal_exp (l, Base((_,t),_,_,_)) ->
+      (match t.t with
+	| Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
+	  match r.nexp with
+	    | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
+	                               kwd (string_of_big_int bi) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e)))
+    (* Should be unreachable *)
+    | E_internal_cast ((_, Overload (_,_, _)), _) | E_internal_exp _ -> assert false
   in
   print_e ppf e
 

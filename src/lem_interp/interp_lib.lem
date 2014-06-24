@@ -63,16 +63,16 @@ let to_num signed (V_vector idx inc l) =
   let l = if signed then l else l ++ [V_lit (L_aux L_zero Unknown)] in
   V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown);;
 
-let to_vec_inc len (V_lit(L_aux (L_num n) ln)) =
-  let l = boolListFrombitSeq len (bitSeqFromInteger Nothing n) in
+let to_vec_inc (V_tuple([V_lit(L_aux (L_num len) _); (V_lit(L_aux (L_num n) ln))])) =
+  let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
   V_vector 0 true (map bool_to_bit (reverse l)) ;;
-let to_vec_dec len (V_lit(L_aux (L_num n) ln)) =
-  let l = boolListFrombitSeq len (bitSeqFromInteger Nothing n) in
+let to_vec_dec (V_tuple([V_lit(L_aux (L_num len) _); (V_lit(L_aux (L_num n) ln))])) =
+  let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
   V_vector 0 false (map bool_to_bit l) ;;
 let to_vec ord len n =
   if ord
-  then to_vec_inc len n
-  else to_vec_dec len n
+  then to_vec_inc (V_tuple ([V_lit(L_aux (L_num (integerFromNat len)) Interp_ast.Unknown); n]))
+  else to_vec_dec (V_tuple ([V_lit(L_aux (L_num (integerFromNat len)) Interp_ast.Unknown); n]))
 ;;
 
 let exts len ((V_vector _ inc _) as v) =
@@ -162,8 +162,8 @@ let function_map = [
   ("to_num_dec", to_num false);
   ("exts", exts 64);
   (* XXX the size of the target vector should be given by the interpreter *)
-  ("to_vec_inc", to_vec_inc 64);
-  ("to_vec_dec", to_vec_dec 64);
+  ("to_vec_inc", to_vec_inc);
+  ("to_vec_dec", to_vec_dec);
   ("bitwise_not", bitwise_not);
   ("bitwise_not_bit", bitwise_not_bit);
   ("bitwise_and", bitwise_binop (&&));

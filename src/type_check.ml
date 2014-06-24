@@ -425,7 +425,8 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
             let t = {t=Tapp("range", [TA_nexp n;TA_nexp {nexp = Nconst zero};])} in
             let cs = [LtEq(Expr l,n,{nexp = N2n(rise,None)})] in
             let f = match o.order with | Oinc -> "to_vec_inc" | Odec -> "to_vec_dec" | _ -> "to_vec_inc" (*Change to follow a default?*) in
-            E_aux(E_app((Id_aux((Id f),l)),[simp_exp e l t]),(l,Base(([],expect_t),External (Some f),cs,pure_e))),cs,pure_e
+	    let tannot = (l,Base(([],expect_t),External (Some f),cs,pure_e)) in
+            E_aux(E_app((Id_aux((Id f),l)),[(E_aux (E_internal_exp tannot, tannot));simp_exp e l t]),tannot),cs,pure_e
           | _ -> simp_exp e l {t = Tapp("range", [TA_nexp{nexp = Nconst (big_int_of_int i)};TA_nexp{nexp= Nconst zero};])},[],pure_e)
 	| L_hex s -> simp_exp e l {t = Tapp("vector",
 			                    [TA_nexp{nexp = Nconst zero};

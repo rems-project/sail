@@ -20,15 +20,15 @@ let hex_to_big_int s = Big_int.big_int_of_int64 (Int64.of_string s) ;;
 
 let big_int_to_vec b size =
   (if big_endian then to_vec_inc else to_vec_dec)
-  size
-  (V_lit (L_aux (L_num b, Unknown)))
+  (V_tuple [(V_lit (L_aux (L_num size, Unknown))); 
+	    (V_lit (L_aux (L_num b, Unknown)))])
 ;;
 
 let mem = ref Mem.empty ;;
 
 let add_mem byte addr =
   assert(byte >= 0 && byte < 256);
-  let vector = big_int_to_vec (Big_int.big_int_of_int byte) 8 in
+  let vector = big_int_to_vec (Big_int.big_int_of_int byte) (Big_int.big_int_of_int 8) in
   let key = Id_aux (Id "MEM", Unknown), addr in
   mem := Mem.add key vector !mem
 ;;
@@ -65,7 +65,7 @@ let init_reg () =
       V_vector(_, inc, v) ->
         V_vector(Big_int.big_int_of_int (64 - size), inc, v)
      | _ -> assert false in
-    Id_aux(Id name, Unknown), offset (big_int_to_vec value size) in
+    Id_aux(Id name, Unknown), offset (big_int_to_vec value (Big_int.big_int_of_int size)) in
   List.fold_left (fun r (k,v) -> Reg.add k v r) Reg.empty [
     (* XXX execute main() directly until we can handle the init phase *)
     init "CIA" (hex_to_big_int !mainaddr) 64;

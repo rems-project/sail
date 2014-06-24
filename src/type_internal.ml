@@ -1260,6 +1260,7 @@ let rec nexp_eq_check n1 n2 =
   | N2n(n,Some i),N2n(n2,Some i2) -> eq_big_int i i2
   | N2n(n,_),N2n(n2,_) -> nexp_eq_check n n2
   | Nneg n,Nneg n2 -> nexp_eq_check n n2
+  | Npow(n1,i1),Npow(n2,i2) -> i1=i2 && nexp_eq_check n1 n2
   | Nuvar {nindex =i1},Nuvar {nindex = i2} -> i1 = i2
   | _,_ -> false
 
@@ -1445,11 +1446,15 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [LtEq(co,{nexp=Nadd(b2,r2)},{nexp=N2n(r1,None)})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),[e]),(l,Base(([],t2),External None,cs,pure_e))))
+	let tannot = (l,Base(([],t2),External None, cs,pure_e)) in
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
+			   [(E_aux(E_internal_exp tannot, tannot));e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [LtEq(co,{nexp=Nadd(b2,r2)},{nexp=N2n(r1,None)})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),[e]),(l,Base(([],t2),External None,cs,pure_e))))
+	let tannot = (l,Base(([],t2),External None,cs,pure_e)) in
+	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
+			   [(E_aux(E_internal_exp tannot, tannot)); e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert a range to a vector without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
