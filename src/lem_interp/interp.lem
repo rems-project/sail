@@ -12,6 +12,7 @@ let get_exp_l (E_aux e (l,annot)) = l
 
 val pure : effect
 let pure = Effect_aux(Effect_set []) Unknown
+let unit_t = Typ_aux(Typ_app (Id_aux (Id "unit") Unknown) []) Unknown
 
 val intern_annot : tannot -> tannot
 let intern_annot annot =
@@ -48,8 +49,6 @@ instance (Eq lit)
   let (=) = lit_eq
   let (<>) n1 n2 = not (lit_eq n1 n2)
 end
-
-(* type nat = num *)
 
 (* This is different from OCaml: it will drop elements from the longest list. *)
 let foldr2 f x l l' = List.foldr (Tuple.uncurry f) x (List.zip l l')
@@ -100,6 +99,9 @@ instance (Eq value)
   let (=) = value_eq
   let (<>) n1 n2 = not (value_eq n1 n2)
 end
+
+(*Constant unit value, for frequent uses in interpreter *)
+let unitv = V_lit (L_aux L_unit Unknown)
 
 (* Store for local memory of ref cells *)
 type lmem = LMem of nat * map nat value
@@ -205,7 +207,7 @@ let rec to_data_constructors (Defs defs) =
 	   (fun (Tu_aux t _) ->
 	     match t with
 	    | (Tu_ty_id x y) -> (y,x)
-	    | Tu_id x -> (id,Typ_aux(Typ_app (Id_aux (Id "unit") Unknown) []) Unknown) end) tid_list)++(to_data_constructors (Defs defs))
+	    | Tu_id x -> (id,unit_t) end) tid_list)++(to_data_constructors (Defs defs))
       | _ -> to_data_constructors (Defs defs) end
     | _ -> to_data_constructors (Defs defs) end
    end
@@ -236,7 +238,7 @@ let is_lit_vector (L_aux l _) =
   | _ -> false
 end
 
-(*Both make an endian assumption, and should use a flag to switch*)
+(* XXX Both make an endian assumption, and should use a flag to switch*)
 val litV_to_vec : lit -> value
 let litV_to_vec (L_aux lit l) =
   match lit with
@@ -269,12 +271,9 @@ let litV_to_vec (L_aux lit l) =
 			 | #'e' -> [L_one ;L_one ;L_one ;L_zero]
 			 | #'f' -> [L_one ;L_one ;L_one ;L_one ] end)
 		       (String.toCharList s))) in
-    (* XXX assumes endianness *)
     V_vector 0 true hexes
   | L_bin s -> 
     let bits = List.map (fun s -> match s with | #'0' -> (V_lit (L_aux L_zero l)) | #'1' -> (V_lit (L_aux L_one l)) end) (String.toCharList s) in
-    (* XXX assume binary constants are written in big-endian,
-     * we might need syntax to change this assumption. *)
     V_vector 0 true bits
   end
 
@@ -447,6 +446,12 @@ let add_to_top_frame e_builder stack =
   | Thunk_frame e t_level env mem stack -> Thunk_frame (e_builder e) t_level env mem stack
   end
 
+let top_hole stack : bool =
+  match stack with
+  | Hole_frame _ (E_aux (E_id (Id_aux (Id "1") _)) _) _ _ _ _ -> true
+  | _ -> false
+end
+
 (*Converts a Hole_frame into a Thunk_frame, pushing to almost the top of the stack to insert the value at the innermost context *)
 val add_answer_to_stack : stack -> value -> stack
 let rec add_answer_to_stack stack v = 
@@ -468,11 +473,11 @@ let rec combine_typs ts =
     let t' = combine_typs ts in
     match (t,t') with 
       | (_,T_var _) -> t
-      | ((T_app "enum" (T_args [T_arg_nexp (Ne_const n1); T_arg_nexp (Ne_const r1)])),
-	 (T_app "enum" (T_args [T_arg_nexp (Ne_const n2); T_arg_nexp (Ne_const r2)]))) ->
+      | ((T_app "range" (T_args [T_arg_nexp (Ne_const n1); T_arg_nexp (Ne_const r1)])),
+	 (T_app "range" (T_args [T_arg_nexp (Ne_const n2); T_arg_nexp (Ne_const r2)]))) ->
 	let (smaller,larger,larger_r) = if n1 < n2 then (n1,n2,r2) else (n2,n1,r1) in
 	let r = (larger + larger_r) - smaller in
-	T_app "enum" (T_args [T_arg_nexp (Ne_const smaller); T_arg_nexp (Ne_const r)])
+	T_app "range" (T_args [T_arg_nexp (Ne_const smaller); T_arg_nexp (Ne_const r)])
       | ((T_app "vector" (T_args [T_arg_nexp (Ne_const b1); T_arg_nexp (Ne_const r1); 
 				   T_arg_order (Ord_aux o1 _); T_arg_typ t1])),
 	 (T_app "vector" (T_args [T_arg_nexp (Ne_const b2); T_arg_nexp (Ne_const r2); 
@@ -512,7 +517,7 @@ let rec val_typ v =
 	| L_one -> T_id "bit"
 	| L_zero -> T_id "bit"
 	| L_string _ -> T_id "string"
-	| L_num n -> T_app "enum" (T_args [T_arg_nexp (Ne_const n); T_arg_nexp (Ne_const 0)])
+	| L_num n -> T_app "range" (T_args [T_arg_nexp (Ne_const n); T_arg_nexp (Ne_const 0)])
 	| L_undef -> T_var "fresh"
       end 
     | V_tuple vals -> T_tup (List.map val_typ vals)
@@ -562,7 +567,11 @@ let rec to_exp v =
 			    (List.map (fun (id,value) -> (FE_aux (FE_Fexp id (to_exp value)) (Unknown,Nothing))) ivals) false) 
 		   (Unknown,Nothing))
       | V_list(vals) -> E_list (List.map to_exp vals)
-      | V_ctor id t vals -> E_app id [to_exp vals]
+      | V_ctor id t vals -> 
+        match vals with
+        | V_lit (L_aux L_unit _) -> E_id id
+        | V_tuple vals -> E_app id (map to_exp vals)
+        | _ -> E_app id [to_exp vals] end
       | V_register (Reg id tan) -> E_id id
       | V_unknown -> E_id (id_of_string "-100")
      end)
@@ -653,6 +662,14 @@ let rec match_pattern (P_aux p _) value =
               let (matched_p,used_unknown',new_bounds) = match_pattern pat value in
               (matched_p, (used_unknown || used_unknown'), (new_bounds ++ bounds))
             else (false,false,[])) (true,false,[]) pats vals
+     else (false,false,[])
+   | V_ctor (Id_aux cid _) t v ->
+     if id = cid
+     then (match (pats,v) with
+     | ([],(V_lit (L_aux L_unit _))) -> (true,true,[])
+     | ([P_aux (P_lit (L_aux L_unit _)) _],(V_lit (L_aux L_unit _))) -> (true,true,[])
+     | ([p],v) -> match_pattern p v
+     | _ -> (false,false,[]) end)
      else (false,false,[])
    | V_unknown -> (true,true,[])
    | _ -> (false,false,[]) end
@@ -1099,7 +1116,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                           resolve_outcome (interp_main mode t_level l_env lm vec)
                                           (fun vvec lm le ->
                                             match vvec with
-                                            | V_vector base inc vals -> (Value (access_vector vvec n) Tag_empty,lm,le)
+                                            | V_vector _ _ _ -> (Value (access_vector vvec n) Tag_empty,lm,le)
 					    | V_vector_sparse _ _ _ _ _ -> (Value (access_vector vvec n) Tag_empty,lm,le)
 					    | V_unknown -> (Value V_unknown Tag_empty,lm,le)
                                             | _ -> (Error l "Vector access of non-vector",lm,le)end)
@@ -1674,7 +1691,6 @@ and interp_letbind mode t_level l_env l_mem (LB_aux lbind (l,annot)) =
     | e -> (e,Nothing) end
 end	
 
-(*TODO: Beef up to pick up enums as well*)
 let rec to_global_letbinds (Defs defs) t_level =
   let  (Env defs' lets regs ctors subregs) = t_level in
   match defs with
@@ -1687,6 +1703,12 @@ let rec to_global_letbinds (Defs defs) t_level =
       | ((Action a s,lm,le),_) -> 
 	((Error Unknown "Top level let may not access memory, registers or (for now) external functions", lm,le),t_level)
       | (e,_) -> (e,t_level) end
+    | DEF_type (TD_aux tdef _) ->
+      match tdef with
+      | TD_enum id ns ids _ -> 
+        let enum_vals = map (fun eid -> (eid,V_ctor eid (T_id (get_id id)) unitv)) ids in
+        to_global_letbinds (Defs defs) (Env defs' (lets++enum_vals) regs ctors subregs)
+      | _ -> to_global_letbinds (Defs defs) t_level end
     | _ -> to_global_letbinds (Defs defs) t_level
     end
   end

@@ -11,6 +11,26 @@ let ignore_sail x = V_lit (L_aux L_unit Unknown) ;;
 
 let compose f g x = f (V_tuple [g x]) ;;
 
+let zeroi = integerFromNat 0
+let onei = integerFromNat 1
+let twoi = integerFromNat 2
+
+let rec sparse_walker update ni processed_length length ls df =
+  if processed_length = length 
+  then []
+  else match ls with
+  | [] -> replicate (natFromInteger (length - processed_length)) df
+  | (i,v)::ls -> 
+    if ni = i 
+    then v::(sparse_walker update (update ni) (processed_length + 1) length ls df)
+    else df::(sparse_walker update (update ni) (processed_length + 1) length ((i,v)::ls) df)
+end
+
+let fill_in_sparse v = match v with
+  | V_vector_sparse first length inc ls df -> 
+    V_vector first inc (sparse_walker (if inc then (fun (x: integer) -> x + onei) else (fun (x: integer) -> x - onei)) first zeroi length ls df)
+end    
+
 let is_one v = match v with 
   | V_lit (L_aux b lb) -> V_lit (L_aux (if b = L_one then L_true else L_false) lb)
   | V_unknown -> V_unknown
@@ -161,7 +181,6 @@ let function_map = [
   ("to_num_inc", to_num false);
   ("to_num_dec", to_num false);
   ("exts", exts 64);
-  (* XXX the size of the target vector should be given by the interpreter *)
   ("to_vec_inc", to_vec_inc);
   ("to_vec_dec", to_vec_dec);
   ("bitwise_not", bitwise_not);
