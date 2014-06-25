@@ -1,7 +1,7 @@
 open import Pervasives
 open import Interp
 open import Interp_ast
-import Assert_extra Maybe_extra
+import Assert_extra Maybe_extra (* For failwith for error reporting while debugging; and for fromJust when we know it's not Nothing *)
 open import Num
 open import List
 open import Word

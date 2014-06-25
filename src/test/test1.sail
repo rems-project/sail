@@ -19,7 +19,7 @@ let ( bit [32] ) v2 = 0xABCDEF01
 val forall Type 'a. 'a -> 'a effect pure identity
 function forall Type 'a. 'a identity i = i
 
-function unit ignore(x) = ()
+(*function unit ignore(x) = ()*)
 
 (* scattered function definition and union definition *)
 scattered typedef ast = const union
@@ -41,5 +41,9 @@ function unit a (bit) b = if identity(b) then (identity()) else ()
 
 function bit sw s = switch s { case 0 -> bitzero }
 
-function bit main _ = {ignore(sw(0)); ignore((nat) v2); v1[0] }
+let colors rgb = red
+
+function bit enu (red) = 0
+
+function bit main _ = {ignore(sw(0)); ignore((nat) v2); ignore(enu(0)); v1[0] }
 

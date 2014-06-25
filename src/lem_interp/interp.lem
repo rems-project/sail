@@ -1,8 +1,8 @@
 open import Pervasives
 import Map
-import Map_extra
-import List_extra
-open import String_extra
+import Map_extra (* For 'find' instead of using lookup and maybe types, as we know it cannot fail *)
+import List_extra (* For 'nth' and 'head' where we know that they cannot fail *)
+open import String_extra (* for 'show' to convert nat to string) *)
 
 open import Interp_ast
 
@@ -100,7 +100,7 @@ instance (Eq value)
   let (<>) n1 n2 = not (value_eq n1 n2)
 end
 
-(*Constant unit value, for frequent uses in interpreter *)
+(*Constant unit value, for use in interpreter *)
 let unitv = V_lit (L_aux L_unit Unknown)
 
 (* Store for local memory of ref cells *)
@@ -448,7 +448,7 @@ let add_to_top_frame e_builder stack =
 
 let top_hole stack : bool =
   match stack with
-  | Hole_frame _ (E_aux (E_id (Id_aux (Id "1") _)) _) _ _ _ _ -> true
+  | Hole_frame _ (E_aux (E_id (Id_aux (Id "0") _)) _) _ _ _ Top -> true
   | _ -> false
 end
 
@@ -1108,7 +1108,6 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                               | Nothing -> Error l "Internal error, unrecognized read, no reg" end
                           | _ -> update_stack a (add_to_top_frame (fun e -> E_aux(E_field e id) (l,annot))) end)
     | E_vector_access vec i ->
-      (*Need to update to read one position of a register*)
       resolve_outcome (interp_main mode t_level l_env l_mem i)
                       (fun iv lm le -> 
                         match iv with
@@ -1120,13 +1119,19 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 					    | V_vector_sparse _ _ _ _ _ -> (Value (access_vector vvec n) Tag_empty,lm,le)
 					    | V_unknown -> (Value V_unknown Tag_empty,lm,le)
                                             | _ -> (Error l "Vector access of non-vector",lm,le)end)
-                                          (fun a -> update_stack a 
-					    (add_to_top_frame (fun v -> (E_aux (E_vector_access v (E_aux (E_lit (L_aux (L_num n) ln)) (ln,Nothing))) (l,annot)))))
+                                          (fun a ->
+                                            match a with
+                                            | Action (Read_reg reg Nothing) stack -> 
+                                              if (top_hole stack) 
+                                              then Action (Read_reg reg (Just(n,n))) stack 
+                                              else Action (Read_reg reg Nothing) (add_to_top_frame (fun v -> (E_aux (E_vector_access v (E_aux (E_lit (L_aux (L_num n) ln)) (ln,Nothing))) (l,annot))) stack)
+                                            | _ -> 
+                                              update_stack a 
+					        (add_to_top_frame (fun v -> (E_aux (E_vector_access v (E_aux (E_lit (L_aux (L_num n) ln)) (ln,Nothing))) (l,annot)))) end)
 			| V_unknown -> (Value V_unknown Tag_empty,lm,le)
                         | _ -> (Error l "Vector access not given a number for index",lm,l_env) end)
                       (fun a -> update_stack a (add_to_top_frame (fun i -> E_aux (E_vector_access vec i) (l,annot))))
     | E_vector_subrange vec i1 i2 ->
-      (*Need to update to read a slice of a register*)
       resolve_outcome (interp_main mode t_level l_env l_mem i1)
                       (fun i1v lm le ->
                         match i1v with
@@ -1142,12 +1147,21 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 								| V_vector_sparse _ _ _ _ _ -> (Value (slice_vector vvec n1 n2) Tag_empty, lm,le)
 								| V_unknown -> (Value V_unknown Tag_empty,lm,le)
                                                                 | _ -> (Error l "Vector slice of non-vector",lm,le)end)
-                                                              (fun a -> update_stack a 
-                                                                (add_to_top_frame 
-								   (fun v -> (E_aux (E_vector_subrange v 
-										       (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
-										       (E_aux (E_lit (L_aux (L_num n2) ln2)) (ln2,Nothing)))
-										(l,annot)))))
+                                                              (fun a -> 
+                                                                match a with 
+                                                                | Action (Read_reg reg Nothing) stack ->
+                                                                  if (top_hole stack)
+                                                                  then Action (Read_reg reg (Just(n1,n2))) stack
+                                                                  else Action (Read_reg reg Nothing) (add_to_top_frame (fun v -> (E_aux (E_vector_subrange v
+                                                                                                                                           (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
+                                                                                                                                           (E_aux (E_lit (L_aux (L_num n2) ln2)) (ln2,Nothing)))
+                                                                                                                                        (l,annot))) stack)
+                                                                | _ -> update_stack a 
+                                                                  (add_to_top_frame 
+								     (fun v -> (E_aux (E_vector_subrange v 
+										         (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
+										         (E_aux (E_lit (L_aux (L_num n2) ln2)) (ln2,Nothing)))
+										  (l,annot)))) end)
 					    | V_unknown -> (Value V_unknown Tag_empty, lm,le)
                                             | _ -> (Error l "vector slice given non number for last index",lm,le) end)
                                           (fun a -> update_stack a 

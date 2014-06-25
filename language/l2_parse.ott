@@ -452,7 +452,7 @@ exp :: 'E_' ::=
 % here the expi are of type 'a and the result is a vector of 'a, whereas in exp1 : ... : expn 
 % the expi and the result are both of type vector of 'a 
 
-  | [ exp1 , ... , expn , opt_default ]               :: :: vector_indexed {{ com vector (indexed consecutively) }}
+  | [ exp1 , ... , expn opt_default ]               :: :: vector_indexed {{ com vector (indexed consecutively) }}
 % num1 .. numn must be a consecutive list of naturals
 
 % we pick [ ] not { } for vector literals for consistency with their
@@ -550,7 +550,7 @@ opt_default :: 'Def_val_' ::=
   {{ com Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map }}
   {{ aux _ l }} 
   |                                                     :: :: empty
-  | default = exp                                       :: :: dec
+  | ; default = exp                                       :: :: dec
 
 pexp :: 'Pat_' ::=
   {{ com Pattern match }}
