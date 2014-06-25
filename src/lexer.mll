@@ -108,6 +108,7 @@ let kw_table =
      ("quot",			 (fun x -> Quot));
      ("rem",			 (fun x -> Rem));
 
+     ("barr",                    (fun x -> Barr));
      ("rreg",                    (fun x -> Rreg));
      ("wreg",                    (fun x -> Wreg));
      ("rmem",                    (fun x -> Rmem));

@@ -19,10 +19,7 @@ let get_e_typ (E_aux(_,(_,a))) =
   | Base((_,t),_,_,_) -> t
   | _ -> new_t ()
 
-let typ_error l msg  =
-  raise (Reporting_basic.err_typ 
-           l
-           (msg ))
+let typ_error l msg  = raise (Reporting_basic.err_typ l msg)
 
 let rec field_equivs fields fmaps = 
   match fields with

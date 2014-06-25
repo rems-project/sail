@@ -186,13 +186,14 @@ and to_ast_effects (k_env : kind Envmap.t) (e : Parse_ast.atyp) : Ast.effect =
                              (fun efct -> match efct with
                              | Parse_ast.BE_aux(e,l) ->
                                BE_aux((match e with 
-                               | Parse_ast.BE_rreg -> BE_rreg
-                               | Parse_ast.BE_wreg -> BE_wreg
-                               | Parse_ast.BE_rmem -> BE_rmem
-                               | Parse_ast.BE_wmem -> BE_wmem
+                               | Parse_ast.BE_barr  -> BE_barr
+                               | Parse_ast.BE_rreg  -> BE_rreg
+                               | Parse_ast.BE_wreg  -> BE_wreg
+                               | Parse_ast.BE_rmem  -> BE_rmem
+                               | Parse_ast.BE_wmem  -> BE_wmem
                                | Parse_ast.BE_undef -> BE_undef
-                               | Parse_ast.BE_unspec -> BE_unspec
-                               | Parse_ast.BE_nondet -> BE_nondet),l))
+                               | Parse_ast.BE_unspec-> BE_unspec
+                               | Parse_ast.BE_nondet-> BE_nondet),l))
                              effects)
                | _ -> typ_error l "Required an item of kind Effects, encountered an illegal form for this kind" None None None
     ), l)

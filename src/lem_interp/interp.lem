@@ -175,17 +175,28 @@ let rec to_registers (Defs defs) =
     end 
   end
 
-val has_memory_effect : list base_effect -> bool
-let rec has_memory_effect efcts =
+val has_rmem_effect : list base_effect -> bool
+val has_barr_effect : list base_effect -> bool
+
+(*General has_effect function that selects which effect searched for based on a numeric selector *)
+let rec has_effect (n : nat) efcts =
   match efcts with
   | [] -> false
   | (BE_aux e _)::efcts ->
-    match e with
-    | BE_wreg -> true
-    | BE_wmem -> true
-    | _ -> has_memory_effect efcts
+    match (n,e) with
+    | (0,BE_rreg)   -> true (* read register *)
+    | (1,BE_wreg)   -> true (* write register *)
+    | (2,BE_rmem)   -> true (* read memory *)
+    | (3,BE_wmem)   -> true (* write memory *)
+    | (4,BE_barr)   -> true (* memory barrier *)
+    | (5,BE_undef)  -> true (* undefined-instruction exception *)
+    | (6,BE_unspec) -> true (* unspecified values *)
+    | (7,BE_nondet) -> true (* nondeterminism from intra-instruction parallelism *)
+    | _ -> has_effect n efcts
     end 
   end
+let has_rmem_effect = has_effect 2
+let has_barr_effect = has_effect 4
 
 let get_typ (TypSchm_aux (TypSchm_ts tq t) _) = t
 let get_effects (Typ_aux t _) =
@@ -1357,10 +1368,14 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
            end)
         | Tag_extern opt_name ->
           let name_ext = match opt_name with | Just s -> s | Nothing -> name end in
-          if has_memory_effect (match effect with | Effect_aux(Effect_set es) _ -> es | _ -> [] end) 
+          if has_rmem_effect (match effect with | Effect_aux(Effect_set es) _ -> es | _ -> [] end) 
           then
             (Action (Read_mem (id_of_string name_ext) v Nothing) 
 	            (Hole_frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
+          else if has_barr_effect (match effect with | Effect_aux(Effect_set es) _ -> es | _ -> [] end)
+          then 
+            (Action (Barrier (id_of_string name_ext) v)
+                    (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
           else
             (Action (Call_extern name_ext v) 
 	            (Hole_frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)

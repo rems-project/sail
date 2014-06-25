@@ -117,7 +117,7 @@ id :: '' ::=
   | unit			 :: M :: unit {{ ichlo (Id "unit") }}
   | nat				 :: M :: nat  {{ ichlo (Id "nat") }}
   | string                       :: M :: string {{ tex \ottkw{string} }} {{ ichlo (Id "string") }}
-  | enum                         :: M :: enum {{ ichlo (Id "enum") }}
+  | range                        :: M :: range {{ ichlo (Id "range") }}
   | vector			 :: M :: vector {{ ichlo (Id "vector") }}
   | list			 :: M :: list {{ ichlo (Id "list") }}
   | set                          :: M :: set {{ ichlo (Id "set") }}
@@ -184,6 +184,7 @@ base_effect :: 'BE_' ::=
   | wreg                                :: :: wreg {{ com write register }}
   | rmem                                :: :: rmem {{ com read memory }}
   | wmem                                :: :: wmem {{ com write memory }}
+  | barr                                :: :: barr {{ com memory barrier }}
   | undef                               :: :: undef {{ com undefined-instruction exception }}
   | unspec                              :: :: unspec {{ com unspecified values }}
   | nondet                              :: :: nondet {{ com nondeterminism from intra-instruction parallelism }}
