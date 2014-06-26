@@ -1434,7 +1434,7 @@ let check_def envs def =
     let i = id_to_string id in
     let tannot = into_register d_env (Base(([],t),External (Some i),[],pure_e)) in
     (DEF_reg_dec(DEC_aux(DEC_reg(typ,id),(l,tannot))),(Env(d_env,Envmap.insert t_env (i,tannot))))
-  | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Unknown "Scattered given to type checker")
+  | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Scattered given to type checker")
 
 
 (*val check : envs ->  tannot defs -> tannot defs*)
