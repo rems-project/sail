@@ -23,7 +23,7 @@ test_idempotence: sail
 
 clean:
 	-ocamlbuild -clean
-	-rm -rf _build
+	-rm -rf _build *.native
 	-rm -rf html-doc
 	-rm -rf tex-doc
 	-rm -rf lem lib
