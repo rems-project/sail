@@ -341,6 +341,7 @@ and to_ast_exp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) 
       (match to_ast_fexps false k_env exps with
       | Some(fexps) -> E_record(fexps)
       | None -> E_block(List.map (to_ast_exp k_env) exps))
+    | Parse_ast.E_nondet(exps) -> E_nondet(List.map (to_ast_exp k_env) exps)
     | Parse_ast.E_id(id) -> E_id(to_ast_id id)
     | Parse_ast.E_lit(lit) -> E_lit(to_ast_lit lit)
     | Parse_ast.E_cast(typ,exp) -> E_cast(to_ast_typ k_env typ, to_ast_exp k_env exp)

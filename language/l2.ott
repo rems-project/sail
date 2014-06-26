@@ -521,8 +521,10 @@ exp :: 'E_' ::=
   {{ com Expression }}
   {{ aux _ annot }} {{ auxparam 'a }}  
 
-  | { exp1 ; ... ; expn }                               :: :: block {{ com block (parsing conflict with structs?) }}
+  | { exp1 ; ... ; expn }                               :: :: block {{ com block }}
 % maybe we really should have indentation-sensitive syntax :-)  (given that some of the targets do)
+
+  | nondet { exp1 ; ... ; expn }                        :: :: nondet {{ com nondeterminisitic block, expressions evaluate in an unspecified order, or concurrently}}
 
   | id                                                  :: :: id
     {{ com identifier }}

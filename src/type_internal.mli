@@ -136,6 +136,7 @@ val new_t : unit -> t
 val new_n : unit -> nexp
 val new_o : unit -> order
 val new_e : unit -> effect
+val equate_t : t -> t -> unit
 
 val subst : (string * kind) list -> t -> nexp_range list -> effect -> t * nexp_range list * effect
 val get_abbrev : def_envs -> t -> (t * nexp_range list)

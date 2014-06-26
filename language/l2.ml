@@ -232,7 +232,8 @@ typschm =
 
 type 
 'a exp_aux =  (* Expression *)
-   E_block of ('a exp) list (* block (parsing conflict with structs?) *)
+   E_block of ('a exp) list (* block *)
+ | E_nondet of ('a exp) list (* nondeterminisitic block, expressions evaluate in an unspecified order, or concurrently *)
  | E_id of id (* identifier *)
  | E_lit of lit (* literal constant *)
  | E_cast of typ * 'a exp (* cast *)

@@ -218,7 +218,8 @@ and fpat 'a =
 
 
 type exp_aux 'a =  (* Expression *)
- | E_block of list (exp 'a) (* block (parsing conflict with structs?) *)
+ | E_block of list (exp 'a) (* block *)
+ | E_nondet of list (exp 'a) (* nondeterminisitic block, expressions evaluate in an unspecified order, or concurrently *)
  | E_id of id (* identifier *)
  | E_lit of lit (* literal constant *)
  | E_cast of typ * (exp 'a) (* cast *)

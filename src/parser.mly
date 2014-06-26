@@ -528,6 +528,8 @@ npats:
 atomic_exp:
   | Lcurly semi_exps Rcurly
     { eloc (E_block $2) }
+  | Nondet Lcurly semi_exps Rcurly
+    { eloc (E_nondet $3) }
   | id
     { eloc (E_id($1)) }
   | lit

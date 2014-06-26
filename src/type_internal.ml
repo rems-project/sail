@@ -164,6 +164,7 @@ and ef_to_string (Ast.BE_aux(b,l)) =
       | Ast.BE_wreg  -> "wreg"
       | Ast.BE_rmem  -> "rmem"
       | Ast.BE_wmem  -> "wmem"
+      | Ast.BE_barr  -> "barr"
       | Ast.BE_undef -> "undef"
       | Ast.BE_unspec-> "unspec"
       | Ast.BE_nondet-> "nondet"
@@ -1214,6 +1215,9 @@ let compare_effect (BE_aux(e1,_)) (BE_aux(e2,_)) =
   | (BE_wmem,BE_wmem) -> 0
   | (BE_wmem,_) -> -1
   | (_,BE_wmem) -> 1
+  | (BE_barr,BE_barr) -> 0
+  | (BE_barr,_) -> 1
+  | (_,BE_barr) -> -1
   | (BE_undef,BE_undef) -> 0
   | (BE_undef,_) -> -1
   | (_,BE_undef) -> 1
@@ -1309,7 +1313,7 @@ and conforms_to_e loosely spec actual =
   match (spec.effect,actual.effect,loosely) with
     | (Euvar _,_,true) -> true
     | (_,Euvar _,true) -> false
-    | (_,_,true)       -> false (*Should check actual effect equality, using existing function*)
+    | _                -> false (*Should check actual effect equality, using existing function*)
 
 (*Is checking for structural equality amongst the types, building constraints for kind Nat. 
   When considering two range type applications, will check for consistency instead of equality*)
@@ -1342,7 +1346,7 @@ let rec type_consistent_internal co d_env t1 cs1 t2 cs2 =
   | Tfn(tin1,tout1,effect1),Tfn(tin2,tout2,effect2) -> 
     let (tin,cin) = type_consistent co d_env tin1 tin2 in
     let (tout,cout) = type_consistent co d_env tout1 tout2 in
-    let effect = effects_eq co effect1 effect2 in
+    let _ = effects_eq co effect1 effect2 in
     (t2,csp@cin@cout)
   | Ttup t1s, Ttup t2s ->
     (t2,csp@(List.flatten (List.map snd (List.map2 (type_consistent co d_env) t1s t2s))))
@@ -1354,7 +1358,7 @@ let rec type_consistent_internal co d_env t1 cs1 t2 cs2 =
       let b2,r2 = new_n (), new_n () in
       let t2' = {t=Tapp("range",[TA_nexp b2;TA_nexp r2])} in
       equate_t t2 t2';
-      (t2,csp@[GtEq(co,b,b2);LtEq(co,r,r2)]) (*This and above should maybe be In constraints when co is patt and tuvar is an in*)
+      (t2,csp@[GtEq(co,b,b2);LtEq(co,r,r2)])
   | t,Tuvar _ -> equate_t t2 t1; (t1,csp)
   | _,_ -> eq_error l ("Type mismatch found " ^ (t_to_string t1) ^ " but expected a " ^ (t_to_string t2))
 
@@ -1698,7 +1702,7 @@ let check_tannot l annot constraints efs =
     (*let _ = Printf.printf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in *)
       Base((params,t),tag,cs,e)
     | NoTyp -> raise (Reporting_basic.err_unreachable l "check_tannot given the place holder annotation")
-      
+    | Overload _ -> raise (Reporting_basic.err_unreachable l "check_tannot given overload")
 
 let tannot_merge co denv t_older t_newer = 
   match t_older,t_newer with
@@ -1717,4 +1721,4 @@ let tannot_merge co denv t_older t_newer =
 	  let t,cs_b = type_consistent co denv t_n t_o in
 	  Base(([],t),Emp_local,cs_o@cs_n@cs_b,union_effects ef_o ef_n)
 	| _,_ -> t_newer)
-    | Overload _, Overload _ -> t_newer
+    | _ -> t_newer

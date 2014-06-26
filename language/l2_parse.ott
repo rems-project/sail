@@ -415,6 +415,8 @@ exp :: 'E_' ::=
   | { exp1 ; ... ; expn }                               :: :: block {{ com block (parsing conflict with structs?) }}
 % maybe we really should have indentation-sensitive syntax :-)  (given that some of the targets do)
 
+  | nondet { exp1 ; ... ; expn }                        :: :: nondet {{ com block that can evaluate the contained expressions in any ordering }}
+
   | id                                                  :: :: id
     {{ com identifier }}
 

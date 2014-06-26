@@ -107,6 +107,7 @@ and pp_format_base_effect_lem (BE_aux(e,l)) =
     | BE_wreg -> "BE_wreg"
     | BE_rmem -> "BE_rmem"
     | BE_wmem -> "BE_wmem"
+    | BE_barr -> "BE_barr"
     | BE_undef -> "BE_undef"
     | BE_unspec -> "BE_unspec"
     | BE_nondet -> "BE_nondet") ^ " " ^
@@ -208,6 +209,7 @@ let rec pp_format_t t =
     | Tapp(i,args) -> "(T_app \"" ^ i ^ "\" (T_args [" ^  list_format "; " pp_format_targ args ^ "]))"
     | Tabbrev(ti,ta) -> "(T_abbrev " ^ (pp_format_t ti) ^ " " ^ (pp_format_t ta) ^ ")"
     | Tuvar(_) -> "(T_var (Kid_aux (Var \"fresh_v\") Unknown))"
+    | Toptions _ -> "(T_var \"fresh_v\" Unknown)"
 and pp_format_targ = function
   | TA_typ t -> "(T_arg_typ " ^ pp_format_t t ^ ")"
   | TA_nexp n -> "(T_arg_nexp " ^ pp_format_n n ^ ")"
@@ -224,6 +226,8 @@ and pp_format_n n =
     | N2n(n,None) -> "(Ne_exp " ^ (pp_format_n n) ^ ")"
     | Nneg n -> "(Ne_unary " ^ (pp_format_n n) ^ ")"
     | Nuvar _ -> "(Ne_var \"fresh_v_" ^ string_of_int (get_index n) ^ "\")"
+    | Nneg_inf -> "(Ne_unary Ne_inf)"
+    | Npow _ -> "power_not_implemented"
 and pp_format_e e = 
   "(Effect_aux " ^
   (match e.effect with
@@ -260,7 +264,7 @@ let rec pp_format_nes nes =
        | GtEq(_,n1,n2) -> "(Nec_gteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | In(_,i,ns) | InS(_,{nexp=Nvar i},ns) -> 
 	 "(Nec_in \"" ^ i ^ "\" [" ^ (list_format "; " string_of_int ns)^ "])"
-       | InS(_,{nexp = Nuvar _},ns)  ->  
+       | InS(_,_,ns)  ->  
 	 "(Nec_in \"fresh\" [" ^ (list_format "; " string_of_int ns)^ "])"
        | CondCons(_,nes_c,nes_t) -> 
          "(Nec_cond " ^ (pp_format_nes nes_c) ^ " " ^ (pp_format_nes nes_t) ^ ")"
@@ -319,6 +323,10 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
       kwd "(E_block" 
       (list_pp pp_semi_lem_exp pp_lem_exp) exps
       kwd ")" pp_lem_l l pp_annot annot
+    | E_nondet(exps) -> fprintf ppf "@[<0>(E_aux %a [%a] %a (%a, %a))@]"
+      kwd "(E_nondet" 
+      (list_pp pp_semi_lem_exp pp_lem_exp) exps
+      kwd ")" pp_lem_l l pp_annot annot
     | E_id(id) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_id" pp_lem_id id pp_lem_l l pp_annot annot
     | E_lit(lit) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_lit" pp_lem_lit lit pp_lem_l l pp_annot annot
     | E_cast(typ,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_cast" pp_lem_typ typ pp_lem_exp exp pp_lem_l l pp_annot annot
@@ -369,11 +377,12 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_internal_exp (l, Base((_,t),_,_,_)) ->
       (match t.t with
 	| Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
-	  match r.nexp with
-	    | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
-	                               kwd (string_of_big_int bi) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e)))
-    (* Should be unreachable *)
-    | E_internal_cast ((_, Overload (_,_, _)), _) | E_internal_exp _ -> assert false
+	  (match r.nexp with
+	  | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
+	                               kwd (string_of_big_int bi) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
+          | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given vector without known length"))
+        | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given non-vector"))
+    | E_internal_cast ((_, Overload (_,_, _)), _) | E_internal_exp _ ->  raise (Reporting_basic.err_unreachable l "Found internal cast or exp with overload")
   in
   print_e ppf e
 
@@ -549,6 +558,7 @@ let doc_effect (BE_aux (e,_)) =
   | BE_wreg -> "wreg"
   | BE_rmem -> "rmem"
   | BE_wmem -> "wmem"
+  | BE_barr -> "barr"
   | BE_undef -> "undef"
   | BE_unspec -> "unspec"
   | BE_nondet -> "nondet")
@@ -788,6 +798,7 @@ let doc_exp, doc_let =
   | E_block exps ->
       let exps_doc = separate_map (semi ^^ hardline) exp exps in
       surround 2 1 lbrace exps_doc rbrace
+(* XXX Need to add E_nondet, not sure how to put the nondet in front of the block *)
   | E_id id -> doc_id id
   | E_lit lit -> doc_lit lit
   | E_cast(typ,e) -> prefix 2 1 (parens (doc_typ typ)) (group (atomic_exp e))

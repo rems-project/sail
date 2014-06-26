@@ -200,6 +200,7 @@ typschm =
 type 
 exp_aux =  (* Expression *)
    E_block of (exp) list (* block (parsing conflict with structs?) *)
+ | E_nondet of (exp) list (* block that can evaluate the contained expressions in any ordering *)
  | E_id of id (* identifier *)
  | E_lit of lit (* literal constant *)
  | E_cast of atyp * exp (* cast *)

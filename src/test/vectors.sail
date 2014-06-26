@@ -17,6 +17,7 @@ let (vector<0,3,inc,(register<(bit[10])>)>) gpr_small = [slice_check,slice_check
 
 let (bit[3]) indexed = [0=1,1=1,2=0]
 let (bit[50]) partial = [0 = 0, 5=1, 32=0; default = 0]
+let (bit[50]) partial_unspec = [0=0, 4=0, 7=1, 49=1]
 
 function unit decode ([bitzero, bitzero, bitone, bitzero]) = match_success := 1
 and decode x = match_success := x

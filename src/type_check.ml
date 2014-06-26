@@ -42,7 +42,6 @@ let rec fields_to_rec fields rec_env =
 	  | None -> fields_to_rec fields rec_env
       else fields_to_rec fields rec_env
 
-(*No checks necessary, unlike conversion in initial_check*)
 let kind_to_k (K_aux((K_kind baseks),l)) =
   let bk_to_k (BK_aux(bk,l')) =
     match bk with
@@ -65,6 +64,7 @@ let rec typ_to_t (Typ_aux(typ,l)) =
     | Typ_fn (ty1,ty2,e) -> {t = Tfn (typ_to_t ty1,typ_to_t ty2,aeffect_to_effect e)}
     | Typ_tup(tys) -> {t = Ttup (List.map typ_to_t tys) }
     | Typ_app(i,args) -> {t = Tapp (id_to_string i,List.map typ_arg_to_targ args) }
+    | Typ_wild -> new_t ()
 and typ_arg_to_targ (Typ_arg_aux(ta,l)) = 
   match ta with
     | Typ_arg_nexp n -> TA_nexp (anexp_to_nexp n)
@@ -246,14 +246,14 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
       let (fst,lst) = (List.hd is),(List.hd (List.rev is)) in
       let inc_or_dec = 
 	if fst < lst then
-	  (let is_increasing = List.fold_left 
+	  (let _ = List.fold_left 
 	     (fun i1 i2 -> if i1 < i2 then i2 
-	       else typ_error l "Indexed vector access was inconsistently increasing") fst (List.tl is) in
+	       else typ_error l "Indexed vector pattern was inconsistently increasing") fst (List.tl is) in
 	   true)
 	else if lst < fst then
-	  (let is_decreasing = List.fold_left
+	  (let _ = List.fold_left
 	     (fun i1 i2 -> if i1 > i2 then i2
-	       else typ_error l "Indexed vector access was inconsistently decreasing") fst (List.tl is) in
+	       else typ_error l "Indexed vector pattern was inconsistently decreasing") fst (List.tl is) in
 	   false)
 	else typ_error l "Indexed vector cannot be determined as either increasing or decreasing" in
       let base,rise = new_n (), new_n () in
@@ -339,10 +339,14 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
   let Env(d_env,t_env) = envs in
   let rebuild annot = E_aux(e,(l,annot)) in
   match e with
-    | E_block(exps) -> 
+    | E_block exps -> 
       let (exps',annot',t_env',sc,t,ef) = check_block t_env envs expect_t exps in
       (E_aux(E_block(exps'),(l,annot')),t, t_env',sc,ef)
-    | E_id(id) -> 
+    | E_nondet exps ->
+      let checked_exps = List.map (check_exp envs unit_t) exps in
+      let (exps',annot',t_env',sc,t,ef) = check_block t_env envs expect_t exps in (* WRONG WRONG, place holder. Needs to be a map, intersection of envs, and each should return unit *)
+      (E_aux(E_nondet(exps'),(l,annot')),t,t_env,sc,ef)
+    | E_id id -> 
       let i = id_to_string id in
       (match Envmap.apply t_env i with
       | Some(Base((params,t),Constructor,cs,ef)) ->
@@ -661,21 +665,28 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
         | _ -> new_t (),new_n (), new_n () in
       let first,last = fst (List.hd eis), fst (List.hd (List.rev eis)) in
       let is_increasing = first <= last in
-      let es,cs,effect,_ = (List.fold_right 
-			      (fun ((i,e),c,ef) (es,cs,effect,prev) -> 
+      let es,cs,effect,contains_skip,_ = (List.fold_right 
+			      (fun ((i,e),c,ef) (es,cs,effect,skips,prev) -> 
 				(*let _ = Printf.printf "Checking increasing %b %i %i\n" is_increasing prev i in*)
-				if is_increasing 
-				then if prev >= i then (((i,e)::es),(c@cs),union_effects ef effect,i) 
-				  else (typ_error l "Indexed vector is not consistently increasing")
-				else if i >= prev then (((i,e)::es),(c@cs),union_effects ef effect,i) 
-				else (typ_error l "Indexed vector is not consistently decreasing"))
+                                let (esn, csn, efn) = (((i,e)::es), (c@cs), union_effects ef effect) in
+				if (is_increasing && prev > i)
+				then (esn,csn,efn,(((prev-i) > 1) || skips),i)
+                                else if prev < i 
+                                then (esn,csn,efn,(((i-prev) > 1) || skips),i)
+                                else if i = prev
+                                then (typ_error l ("Indexed vector contains a duplicate definition of index " ^ (string_of_int i)))
+                                else (typ_error l ("Indexed vector is not consistently " ^ (if is_increasing then "increasing" else "decreasing"))))
 			      (List.map (fun (i,e) -> let (e,_,_,cs,eft) = (check_exp envs item_t e) in ((i,e),cs,eft))
-				 eis) ([],[],pure_e,last)) in
-      let (default',fully_enumerate,cs_d,ef_d) = match default with
-	| Def_val_empty -> (Def_val_aux(Def_val_empty,(ld,Base(([],item_t),Emp_local,[],pure_e))),true,[],pure_e)
-	| Def_val_dec e -> let (de,t,_,cs_d,ef_d) = (check_exp envs item_t e) in
-			   (*Check that ef_d doesn't write to memory or registers? *)
-			   (Def_val_aux(Def_val_dec de,(ld,(Base(([],item_t),Emp_local,cs_d,ef_d)))),false,cs_d,ef_d) in
+				 eis) ([],[],pure_e,false,(if is_increasing then (last+1) else (last-1)))) in
+      let (default',fully_enumerate,cs_d,ef_d) = match (default,contains_skip) with
+	| (Def_val_empty,false) -> (Def_val_aux(Def_val_empty,(ld,Base(([],item_t),Emp_local,[],pure_e))),true,[],pure_e)
+        | (Def_val_empty,true)  -> 
+          let ef = add_effect (BE_aux(BE_unspec,l)) pure_e in
+          (Def_val_aux(Def_val_dec ( (E_aux( E_lit( L_aux(L_undef, l)), (l, (Base(([],item_t),Emp_local,[],ef)))))),
+                       (l,Base(([],item_t),Emp_local,[],pure_e))),false,[],ef)
+	| (Def_val_dec e,_) -> let (de,t,_,cs_d,ef_d) = (check_exp envs item_t e) in
+			       (*Check that ef_d doesn't write to memory or registers? *)
+			       (Def_val_aux(Def_val_dec de,(ld,(Base(([],item_t),Emp_local,cs_d,ef_d)))),false,cs_d,ef_d) in
       let (base_bound,length_bound,cs_bounds) = 
 	if fully_enumerate
 	then ({nexp=Nconst (big_int_of_int first)},{nexp = Nconst (big_int_of_int (List.length eis))},[])
@@ -847,6 +858,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 			 match lookup_field_type i r with
 			   | NoTyp -> 
 			     typ_error l ("Expected a struct of type " ^ n ^ ", which should not have a field " ^ i)
+                           | Overload _ ->  raise (Reporting_basic.err_unreachable l "Field given overload tannot")
 			   | Base((params,et),tag,cs,ef) ->
 			     let et,cs,_ = subst params et cs ef in
 			     let (e,t',_,c,ef) = check_exp envs et exp in
@@ -866,6 +878,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 		    let i = id_to_string id in
 		    match lookup_field_type i r with
 		      | NoTyp -> raise (Reporting_basic.err_unreachable l "field_match didn't have a full match")
+                      | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
 		      | Base((params,et),tag,cs,ef) ->
 			let et,cs,_ = subst params et cs ef in
 			let (e,t',_,c,ef) = check_exp envs et exp in
@@ -892,6 +905,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 			 match lookup_field_type fi r with
 			   | NoTyp -> 
 			     typ_error l ("Expected a struct with type " ^ i ^ ", which does not have a field " ^ fi)
+                           | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
 			   | Base((params,et),tag,cs,ef) ->
 			     let et,cs,_ = subst params et cs ef in
 			     let (e,t',_,c,ef) = check_exp envs et exp in
@@ -911,6 +925,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 		    let i = id_to_string id in
 		    match lookup_field_type i r with
 		      | NoTyp -> raise (Reporting_basic.err_unreachable l "field_match didn't have a full match")
+                      | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
 		      | Base((params,et),tag,cs,ef) ->
 			let et,cs,_ = subst params et cs ef in
 			let (e,t',_,c,ef) = check_exp envs et exp in
@@ -933,6 +948,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	      (match lookup_field_type fi r with
 		| NoTyp -> 
 		  typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
+                | Overload _ ->  raise (Reporting_basic.err_unreachable l "Record given overload annot")
 		| Base((params,et),tag,cs,ef) ->
 		  let et,cs,ef = subst params et cs ef in
 		  let (et',c',acc) = type_coerce (Expr l) d_env false et (E_aux(E_field(e',id),(l,Base(([],et),tag,cs,ef)))) expect_t in
@@ -945,6 +961,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	      (match lookup_field_type fi r with
 		| NoTyp -> 
 		  typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
+                | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
 		| Base((params,et),tag,cs,ef) ->
 		  let et,cs,ef = subst params et cs ef in
 		  let (et',c',acc) = type_coerce (Expr l) d_env false et (E_aux(E_field(e',id),(l,Base(([],et),tag,cs,ef)))) expect_t in
@@ -958,11 +975,13 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	      (match lookup_field_type fi r with
 		| NoTyp -> 
 		  raise (Reporting_basic.err_unreachable l "lookup_possible_records returned a record that didn't include the field")
+                | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
 		| Base((params,et),tag,cs,ef) ->
 		  let et,cs,ef = subst params et cs ef in
 		  let (et',c',acc) = type_coerce (Expr l) d_env false et (E_aux(E_field(e',id),(l,Base(([],et),tag,cs,ef)))) expect_t in
-                  (*TODO tHIS should be equate_t*)
-		  t'.t <- Tid i;
+                  equate_t t' {t=Tid i};
+                  (*TODO tHIS should be equate_t 
+		  t'.t <- Tid i;*)
 		  (acc,et',t_env,cs@c',ef))
 	    | records -> typ_error l ("Multiple structs contain field " ^ fi ^ ", try adding a cast to disambiguate"))
 	| _ -> typ_error l ("Expected a struct or register for access but found an expression of type " ^ t_to_string t'))
@@ -986,6 +1005,7 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let (exp',t'',_,cs',ef') = check_exp envs t' exp in
       let (t',c') = type_consistent (Expr l) d_env unit_t expect_t in
       (E_aux(E_assign(lexp',exp'),(l,(Base(([],unit_t),tag,[],ef)))),unit_t,t_env',cs@cs'@c',union_effects ef ef')
+    | E_internal_cast _ | E_internal_exp _ -> raise (Reporting_basic.err_unreachable l "Internal expression passed back into type checker")
 		    
 and check_block orig_envs envs expect_t exps : ((tannot exp) list * tannot * tannot emap * nexp_range list * t * effect) =
   let Env(d_env,t_env) = envs in
@@ -1185,11 +1205,12 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 	| Tid i | Tabbrev({t=Tid i},_) ->
 	  (match lookup_record_typ i d_env.rec_env with
 	    | None -> typ_error l ("Expected a register or struct for this update, instead found an expression with type " ^ i)
-	    | Some(((i,rec_kind,fields) as r)) ->
+            | Some(((i,rec_kind,fields) as r)) ->
 	      let fi = id_to_string id in
 	      (match lookup_field_type fi r with
 		| NoTyp -> 
 		  typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
+                | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
 		| Base((params,et),_,cs,_) ->
 		  let et,cs,ef = subst params et cs ef in
 		  (LEXP_aux(LEXP_field(vec',id),(l,(Base(([],vec_t),tag,csi@cs,ef)))),et,env,tag,csi@cs,ef)))
@@ -1377,7 +1398,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
     | Some(Base( (params,u),Spec,constraints,eft)), Base( (p',t),_,c',eft') ->
       (*let _ = Printf.eprintf "Function %s is in env\n" id in*)
       let u,constraints,eft = subst params u constraints eft in
-      let t',cs = type_consistent (Specc l) d_env t u in
+      let _,cs = type_consistent (Specc l) d_env t u in
       let t_env = if is_rec then t_env else Envmap.remove t_env id in
       let funcls,cs_ef = check t_env in
       let cs,ef = ((fun (cses,efses) -> (List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
@@ -1413,6 +1434,7 @@ let check_def envs def =
     let i = id_to_string id in
     let tannot = into_register d_env (Base(([],t),External (Some i),[],pure_e)) in
     (DEF_reg_dec(DEC_aux(DEC_reg(typ,id),(l,tannot))),(Env(d_env,Envmap.insert t_env (i,tannot))))
+  | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Unknown "Scattered given to type checker")
 
 
 (*val check : envs ->  tannot defs -> tannot defs*)
