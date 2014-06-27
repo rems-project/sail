@@ -343,9 +343,10 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let (exps',annot',t_env',sc,t,ef) = check_block t_env envs expect_t exps in
       (E_aux(E_block(exps'),(l,annot')),t, t_env',sc,ef)
     | E_nondet exps ->
-      let checked_exps = List.map (check_exp envs unit_t) exps in
-      let (exps',annot',t_env',sc,t,ef) = check_block t_env envs expect_t exps in (* WRONG WRONG, place holder. Needs to be a map, intersection of envs, and each should return unit *)
-      (E_aux(E_nondet(exps'),(l,annot')),t,t_env,sc,ef)
+      let (ces, sc, ef)  = List.fold_right (fun e (es,sc,ef) -> let (e,_,_,sc',ef') = (check_exp envs unit_t e) in
+							   (e::es,sc@sc',union_effects ef ef')) exps ([],[],pure_e) in
+      let _,cs = type_consistent (Expr l) d_env unit_t expect_t in
+      (E_aux (E_nondet ces,(l,Base(([],unit_t), Emp_local,sc,ef))),unit_t,t_env,sc,ef)
     | E_id id -> 
       let i = id_to_string id in
       (match Envmap.apply t_env i with

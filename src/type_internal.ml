@@ -1307,7 +1307,7 @@ and conforms_to_n loosely spec actual =
     | _ -> true
 and conforms_to_o loosely spec actual =
   match (spec.order,actual.order,loosely) with
-    | (Ouvar _,_,true) | (Oinc,Oinc,_) | (Odec,Odec,_) | (_, Ouvar _,true) -> true
+    | (Ouvar _,_,true) | (Oinc,Oinc,_) | (Odec,Odec,_) | (_, Ouvar _,_) -> true
     | _ -> false
 and conforms_to_e loosely spec actual =
   match (spec.effect,actual.effect,loosely) with
