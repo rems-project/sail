@@ -798,7 +798,9 @@ let doc_exp, doc_let =
   | E_block exps ->
       let exps_doc = separate_map (semi ^^ hardline) exp exps in
       surround 2 1 lbrace exps_doc rbrace
-(* XXX Need to add E_nondet, not sure how to put the nondet in front of the block *)
+  | E_nondet exps ->
+    let exps_doc = separate_map (semi ^^ hardline) exp exps in
+    string "nondet" ^^ space ^^ (surround 2 1 lbrace exps_doc rbrace)
   | E_id id -> doc_id id
   | E_lit lit -> doc_lit lit
   | E_cast(typ,e) -> prefix 2 1 (parens (doc_typ typ)) (group (atomic_exp e))

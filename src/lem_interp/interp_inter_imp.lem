@@ -78,6 +78,9 @@ let rec interp_to_outcome mode thunk =
       end 
     | Interp.Barrier (Id_aux (Id i) _) lval ->
       Barrier Interp.Barrier_plain next_state (* TODO set up some barrier functions and see if the value would be anything needed *)
+    | Interp.Nondet exps -> 
+      let nondet_states = List.map (Interp.set_in_context next_state) exps in
+      Nondet_choice nondet_states next_state      
     | Interp.Call_extern i value -> 
       match List.lookup i external_functions with
       | Nothing -> Error ("External function not available " ^ i)

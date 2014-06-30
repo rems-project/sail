@@ -29,7 +29,7 @@ type outcome =
 | Barrier of barrier_kind * instruction_state
 | Read_reg of reg_name * (value -> instruction_state) 
 | Write_reg of reg_name * value * instruction_state
-| Nondet_choice of list instruction_state
+| Nondet_choice of list instruction_state * instruction_state
 | Internal of instruction_state
 | Done
 | Error of string

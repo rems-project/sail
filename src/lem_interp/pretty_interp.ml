@@ -75,6 +75,7 @@ let doc_effect (BE_aux (e,_)) =
   | BE_wreg -> "wreg"
   | BE_rmem -> "rmem"
   | BE_wmem -> "wmem"
+  | BE_barr -> "barr"
   | BE_undef -> "undef"
   | BE_unspec -> "unspec"
   | BE_nondet -> "nondet")
@@ -314,6 +315,9 @@ let doc_exp, doc_let =
   | E_block exps ->
       let exps_doc = separate_map (semi ^^ hardline) exp exps in
       surround 2 1 lbrace exps_doc rbrace
+  | E_nondet exps ->
+    let exps_doc = separate_map (semi ^^ hardline) exp exps in
+    string "nondet" ^^ space ^^ (surround 2 1 lbrace exps_doc rbrace)
   | E_id id -> doc_id id
   | E_lit lit -> doc_lit lit
   | E_cast(typ,e) ->

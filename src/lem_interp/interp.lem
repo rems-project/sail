@@ -179,24 +179,24 @@ val has_rmem_effect : list base_effect -> bool
 val has_barr_effect : list base_effect -> bool
 
 (*General has_effect function that selects which effect searched for based on a numeric selector *)
-let rec has_effect (n : nat) efcts =
+let rec has_effect which efcts =
   match efcts with
   | [] -> false
   | (BE_aux e _)::efcts ->
-    match (n,e) with
-    | (0,BE_rreg)   -> true (* read register *)
-    | (1,BE_wreg)   -> true (* write register *)
-    | (2,BE_rmem)   -> true (* read memory *)
-    | (3,BE_wmem)   -> true (* write memory *)
-    | (4,BE_barr)   -> true (* memory barrier *)
-    | (5,BE_undef)  -> true (* undefined-instruction exception *)
-    | (6,BE_unspec) -> true (* unspecified values *)
-    | (7,BE_nondet) -> true (* nondeterminism from intra-instruction parallelism *)
-    | _ -> has_effect n efcts
+    match (which,e) with
+    | (BE_rreg,BE_rreg)    -> true 
+    | (BE_wreg,BE_wreg)    -> true 
+    | (BE_rmem,BE_rmem)    -> true 
+    | (BE_wmem,BE_wmem)    -> true 
+    | (BE_barr,BE_barr)    -> true 
+    | (BE_undef,BE_undef)  -> true 
+    | (BE_unspec,BE_unspec) -> true 
+    | (BE_nondet,BE_nondet) -> true 
+    | _ -> has_effect which efcts
     end 
   end
-let has_rmem_effect = has_effect 2
-let has_barr_effect = has_effect 4
+let has_rmem_effect = has_effect BE_rmem
+let has_barr_effect = has_effect BE_barr
 
 let get_typ (TypSchm_aux (TypSchm_ts tq t) _) = t
 let get_effects (Typ_aux t _) =
@@ -472,6 +472,16 @@ let rec add_answer_to_stack stack v =
   | Thunk_frame e t_level env mem Top -> Thunk_frame e t_level env mem Top
   | Hole_frame id e t_level env mem stack -> Hole_frame id e t_level env mem (add_answer_to_stack stack v)
   | Thunk_frame e t_level env mem stack -> Thunk_frame e t_level env mem (add_answer_to_stack stack v)
+end
+
+val set_in_context : stack -> exp tannot -> stack
+let rec set_in_context stack e =
+  match stack with
+    | Top -> Top
+    | Hole_frame id oe t_level env mem Top -> Thunk_frame e t_level env mem Top
+    | Thunk_frame oe t_level env mem Top -> Thunk_frame e t_level env mem Top
+    | Hole_frame _ _ _ _ _ s -> set_in_context s e
+    | Thunk_frame _ _ _ _ s -> set_in_context s e
 end
 
 let id_of_string s = (Id_aux (Id s) Unknown)
@@ -1304,7 +1314,9 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 								    (l,annot)))
 			                          (fun vs -> (V_vector_sparse b len is_inc (map2 (fun i v -> (i,v)) indexes vs) v)) l_env l_mem [] exps)
 	                 (fun a -> update_stack a (add_to_top_frame (fun e -> E_aux (E_vector_indexed iexps (Def_val_aux (Def_val_dec e) dannot)) (l,annot)))) end)	  
-    | E_block(exps) -> interp_block mode t_level l_env l_env l_mem l annot exps
+    | E_block exps -> interp_block mode t_level l_env l_env l_mem l annot exps
+    | E_nondet exps ->
+      (Action (Nondet exps) (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,(intern_annot annot))) t_level l_env l_mem Top), l_mem, l_env)
     | E_app f args ->
       (match (exp_list mode t_level (fun es -> E_aux (E_app f es) (l,annot)) 
 		               (fun vs -> match vs with | [] -> V_lit (L_aux L_unit l) | [v] -> v | vs -> V_tuple vs end) 

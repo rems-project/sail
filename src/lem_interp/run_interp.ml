@@ -90,6 +90,7 @@ let rec compact_exp (E_aux (e, l)) =
   let wrap e = E_aux (e, l) in
   match e with
  | E_block (e :: _) -> compact_exp e
+ | E_nondet (e :: _) -> compact_exp e
  | E_if (e, _, _) ->
      wrap(E_if(compact_exp e, ldots, E_aux(E_block [], tunk)))
  | E_for (i, e1, e2, e3, o, e4) ->
@@ -119,7 +120,7 @@ let rec compact_exp (E_aux (e, l)) =
  | E_field (e, id) ->
      wrap(E_field(compact_exp e, id))
  | E_assign (lexp, e) -> wrap(E_assign(lexp, compact_exp e))
- | E_block [] | E_cast (_, _) | E_internal_cast (_, _)
+ | E_block [] | E_nondet [] | E_cast (_, _) | E_internal_cast (_, _)
  | E_id _|E_lit _|E_vector_indexed (_, _)|E_record _|E_internal_exp _ ->
      wrap e
 
@@ -244,7 +245,7 @@ let rec perform_action ((reg, mem) as env) = function
      perform_action env (Write_mem (id, n, slice, V_vector(zero_big_int, true, [value])))
  (* extern functions *)
  | Call_extern (name, arg) -> eval_external name arg, env
- | Debug l -> unit_lit, env
+ | Debug _ | Nondet _ -> unit_lit, env
  | _ -> assert false
 ;;
 
@@ -337,33 +338,41 @@ let run
       let show act lhs arrow rhs = debugf "%s: %s: %s %s %s\n"
         (grey loc) (green act) lhs (blue arrow) rhs in
       let left = "<-" and right = "->" in
-      let mode' = begin match a with
+      let mode',env' = begin match a with
       | Read_reg (reg, sub) ->
           show "read_reg" (reg_to_string reg ^ sub_to_string sub) right (val_to_string return);
-          step ()
+          step (),env'
       | Write_reg (reg, sub, value) ->
           assert (return = unit_lit);
           show "write_reg" (reg_to_string reg ^ sub_to_string sub) left (val_to_string value);
-          step ()
+          step (),env'
       | Read_mem (id, args, sub) ->
           show "read_mem" (id_to_string id ^ val_to_string args ^ sub_to_string sub) right (val_to_string return);
-          step ()
+          step (),env'
       | Write_mem (id, args, sub, value) ->
           assert (return = unit_lit);
           show "write_mem" (id_to_string id ^ val_to_string args ^ sub_to_string sub) left (val_to_string value);
-          step ()
+          step (),env'
       (* distinguish single argument for pretty-printing *)
       | Call_extern (f, (V_tuple _ as args)) ->
           show "call_lib" (f ^ val_to_string args) right (val_to_string return);
-          step ()
+          step (),env'
       | Call_extern (f, arg) ->
           show "call_lib" (sprintf "%s(%s)" f (val_to_string arg)) right (val_to_string return);
-          step ()
+          step (),env'
       | Debug _ ->
           assert (return = unit_lit);
           show "breakpoint" "" "" "";
-          step ~force:true ()
-      | Barrier (_, _) | Write_next_IA _ | Nondet _ ->
+          step ~force:true (),env'
+      | Nondet exps ->
+	let stacks = List.sort (fun (_,i1) (_,i2) -> compare i1 i2)
+	                       (List.combine (List.map (set_in_context s) exps)
+	                                     (List.map (fun _ -> Random.bits ()) exps)) in
+	show "nondeterministic evaluation begun" "" "" "";
+	let (_,_,env') = List.fold_right (fun (stack,_) (_,_,env') -> loop mode env' (resume {eager_eval = (mode = Run)} stack None)) stacks (false,mode,env'); in
+	show "nondeterministic evaluation ended" "" "" "";
+	step (),env'
+      | Barrier (_, _) | Write_next_IA _  ->
           failwith "unexpected action"
       end in
       loop mode' env' (resume {eager_eval = (mode' = Run)} s (Some return))
