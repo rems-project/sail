@@ -180,7 +180,7 @@ let function_map = [
   ("is_one", is_one);
   ("to_num_inc", to_num false);
   ("to_num_dec", to_num false);
-  ("exts", exts 64);
+  ("EXTS", exts 64);
   ("to_vec_inc", to_vec_inc);
   ("to_vec_dec", to_vec_dec);
   ("bitwise_not", bitwise_not);
