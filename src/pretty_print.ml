@@ -584,6 +584,14 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   | Typ_tup typs -> parens (separate_map comma_sp app_typ typs)
   | _ -> app_typ ty
   and app_typ ((Typ_aux (t, _)) as ty) = match t with
+  (* Special case simple vectors to improve legibility
+   * XXX we assume big-endian here, as usual *)
+  | Typ_app(Id_aux (Id "vector", _), [
+      Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
+      Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant m, _)), _);
+      Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_inc, _)), _);
+      Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
+        (doc_id id) ^^ (brackets (if n = 0 then doc_int m else doc_op colon (doc_int n) (doc_int (n+m-1))))
   | Typ_app(id,args) ->
       (* trailing space to avoid >> token in case of nested app types *)
       (doc_id id) ^^ (angles (separate_map comma_sp doc_typ_arg args)) ^^ space
@@ -679,7 +687,9 @@ let doc_lit (L_aux(l,_)) =
 let doc_pat, doc_atomic_pat =
   let rec pat pa = pat_colons pa
   and pat_colons ((P_aux(p,l)) as pa) = match p with
-  | P_vector_concat pats  -> separate_map colon_sp atomic_pat pats
+  (* XXX add leading indentation if not flat - we need to define our own
+   * combinator for that *)
+  | P_vector_concat pats  -> separate_map (space ^^ colon ^^ break 1) atomic_pat pats
   | _ -> app_pat pa
   and app_pat ((P_aux(p,l)) as pa) = match p with
   | P_app(id, ((_ :: _) as pats)) -> doc_unop (doc_id id) (parens (separate_map comma_sp atomic_pat pats))
