@@ -28,7 +28,7 @@ type t = { mutable t : t_aux }
 and t_aux =
   | Tvar of string
   | Tid of string
-  | Tfn of t * t * effect
+  | Tfn of t * t * bool * effect
   | Ttup of t list
   | Tapp of string * t_arg list
   | Tabbrev of t * t
@@ -132,7 +132,7 @@ let rec t_to_string t =
   match t.t with
     | Tid i -> i
     | Tvar i -> "'" ^ i
-    | Tfn(t1,t2,e) -> (t_to_string t1) ^ " -> " ^ (t_to_string t2) ^ " effect " ^ e_to_string e
+    | Tfn(t1,t2,_,e) -> (t_to_string t1) ^ " -> " ^ (t_to_string t2) ^ " effect " ^ e_to_string e
     | Ttup(tups) -> "(" ^ string_of_list ", " t_to_string tups ^ ")"
     | Tapp(i,args) -> i ^ "<" ^  string_of_list ", " targ_to_string args ^ ">"
     | Tabbrev(ti,ta) -> (t_to_string ti) ^ " : " ^ (t_to_string ta)
@@ -568,7 +568,7 @@ let rec occurs_check_t (t_box : t) (t : t) : unit =
     raise (Occurs_exn (TA_typ t))
   else
     match t.t with
-    | Tfn(t1,t2,_) ->
+    | Tfn(t1,t2,_,_) ->
       occurs_check_t t_box t1;
       occurs_check_t t_box t2
     | Ttup(ts) ->
@@ -765,7 +765,8 @@ let mk_typ_params l = List.map (fun i -> (i,{k=K_Typ})) l
 let mk_ord_params l = List.map (fun i -> (i,{k=K_Ord})) l
 
 let mk_tup ts = {t = Ttup ts }
-let mk_pure_fun arg ret = {t = Tfn (arg,ret,pure_e)}
+let mk_pure_fun arg ret = {t = Tfn (arg,ret,false,pure_e)}
+let mk_pure_imp arg reg = {t = Tfn (arg,reg,true,pure_e)}
 
 let mk_nv v = {nexp = Nvar v}
 let mk_add n1 n2 = {nexp = Nadd (n1,n2) }
@@ -929,15 +930,15 @@ let initial_typ_env =
                                    (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
                     External (Some "quot_vec"),[],pure_e)]));
     (* incorrect types, not pressing as the type checker puts in the correct types automatically on a first pass *)
-    ("to_num_inc",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,pure_e)}),External None,[],pure_e));
-    ("to_num_dec",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,pure_e)}),External None,[],pure_e));
-    ("to_vec_inc",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},pure_e)}),External None,[],pure_e));
-    ("to_vec_dec",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},pure_e)}),External None,[],pure_e));
+    ("to_num_inc",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,false,pure_e)}),External None,[],pure_e));
+    ("to_num_dec",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,false,pure_e)}),External None,[],pure_e));
+    ("to_vec_inc",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},true,pure_e)}),External None,[],pure_e));
+    ("to_vec_dec",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},true,pure_e)}),External None,[],pure_e));
     ("==",
      Overload( Base((mk_typ_params ["a";"b"],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),External (Some "eq"),[],pure_e),
 	       false,
      [Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
-	    {t = Tfn({t=Ttup([mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")])},bit_t,pure_e)}), External (Some "eq"),
+	    (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)), External (Some "eq"),
 	   [Eq(Specc(Parse_ast.Int("==",None)),
 	       {nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},
 	       {nexp=Nadd({nexp=Nvar "o"},{nexp=Nvar "p"})})],pure_e);
@@ -955,42 +956,42 @@ let initial_typ_env =
                         bit_t)),
            External (Some "eq_vec_range"),
            [Eq(Specc(Parse_ast.Int("==",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
-      Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "eq"),[],pure_e)]));
-    ("!=",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "neq"),[],pure_e));
+      Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "eq"),[],pure_e)]));
+    ("!=",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,false,pure_e)}),External (Some "neq"),[],pure_e));
     ("<",
-     Overload(Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "lt"),[],pure_e),
+     Overload(Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,false,pure_e)}),External (Some "lt"),[],pure_e),
 	      false,
      [Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
-	    {t = Tfn({t=Ttup([mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")])},bit_t,pure_e)}), External (Some "lt_vec"),
+	    {t = Tfn({t=Ttup([mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")])},bit_t,false,pure_e)}), External (Some "lt_vec"),
 	   [LtEq(Specc(Parse_ast.Int("<",None)),
 	       {nexp=Nadd({nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},{nexp=Nconst one})},
 	       {nexp=Nadd({nexp=Nvar "o"},{nexp=Nvar "p"})})],pure_e);
       Base(([("n",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat});("ord",{k=K_Ord})],
             {t = Tfn({t=Ttup([mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
-                              mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])},bit_t,pure_e)}), External (Some "lt"),[],pure_e);]));
+                              mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])},bit_t,false,pure_e)}), External (Some "lt"),[],pure_e);]));
     (">",
-     Overload(Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "gt"),[],pure_e),
+     Overload(Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,false,pure_e)}),External (Some "gt"),[],pure_e),
 	      false,
      [Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
-	    {t = Tfn({t=Ttup([mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")])},bit_t,pure_e)}), External (Some "gt_vec"),
+	    {t = Tfn({t=Ttup([mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")])},bit_t,false,pure_e)}), External (Some "gt_vec"),
 	   [GtEq(Specc(Parse_ast.Int(">",None)),
 		 {nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},
 		 {nexp=Nadd({nexp=Nadd({nexp=Nvar "o"},{nexp=Nvar "p"})},{nexp=Nconst one})})],pure_e);
       Base(([("n",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat});("ord",{k=K_Ord})],
             {t = Tfn({t=Ttup([mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
-                              mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])},bit_t,pure_e)}), External (Some "lt"),[],pure_e);]));
-    ("<_u",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "ltu"),[],pure_e));
-    (">_u",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,pure_e)}),External (Some "gtu"),[],pure_e));
-    ("is_one",Base(([],{t= Tfn (bit_t,bool_t,pure_e)}),External (Some "is_one"),[],pure_e));
+                              mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])},bit_t,false,pure_e)}), External (Some "lt"),[],pure_e);]));
+    ("<_u",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,false,pure_e)}),External (Some "ltu"),[],pure_e));
+    (">_u",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,false,pure_e)}),External (Some "gtu"),[],pure_e));
+    ("is_one",Base(([],{t= Tfn (bit_t,bool_t,false,pure_e)}),External (Some "is_one"),[],pure_e));
     mk_bitwise_op "bitwise_not" "~" 1;
     mk_bitwise_op  "bitwise_or" "|" 2;
     mk_bitwise_op  "bitwise_xor" "^" 2;
     mk_bitwise_op  "bitwise_and" "&" 2;
     ("^^",Base(([("n",{k=K_Nat});("m",{k=K_Nat})],
                 {t= Tfn ({t=Ttup([bit_t;mk_range (mk_nv "n") (mk_nv "m")])},
-                mk_vector bit_t Oinc (Nconst zero) (Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})),
+                mk_vector bit_t Oinc (Nconst zero) (Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})),false,
                 pure_e)}),External (Some "duplicate"),[],pure_e));
-    ("<<<",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
+    ("<<<",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},false,pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
   ]
 
 
@@ -1001,7 +1002,7 @@ let rec t_subst s_env t =
                | _ -> t)
   | Tuvar _  -> new_t()
   | Tid _ -> t
-  | Tfn(t1,t2,e) -> {t =Tfn((t_subst s_env t1),(t_subst s_env t2),(e_subst s_env e)) }
+  | Tfn(t1,t2,imp,e) -> {t =Tfn((t_subst s_env t1),(t_subst s_env t2),imp,(e_subst s_env e)) }
   | Ttup(ts) -> { t= Ttup(List.map (t_subst s_env) ts) }
   | Tapp(i,args) -> {t= Tapp(i,List.map (ta_subst s_env) args)}
   | Tabbrev(ti,ta) -> {t = Tabbrev(t_subst s_env ti,t_subst s_env ta) }
@@ -1074,7 +1075,7 @@ let rec t_remove_unifications s_env t =
   | Tuvar _ -> (match fresh_tvar s_env t with
       | Some ks -> Envmap.insert s_env ks
       | None -> s_env)
-  | Tfn(t1,t2,e) -> e_remove_unifications (t_remove_unifications (t_remove_unifications s_env t1) t2) e
+  | Tfn(t1,t2,_,e) -> e_remove_unifications (t_remove_unifications (t_remove_unifications s_env t1) t2) e
   | Ttup(ts) -> List.fold_right (fun t s_env -> t_remove_unifications s_env t) ts s_env
   | Tapp(i,args) -> List.fold_right (fun t s_env -> ta_remove_unifications s_env t) args s_env
   | Tabbrev(ti,ta) -> (t_remove_unifications (t_remove_unifications s_env ti) ta)
@@ -1136,7 +1137,7 @@ let rec t_to_typ t =
   match t.t with
     | Tid i -> Typ_aux(Typ_id (Id_aux((Id i), Parse_ast.Unknown)),Parse_ast.Unknown)
     | Tvar i -> Typ_aux(Typ_var (Kid_aux((Var i),Parse_ast.Unknown)),Parse_ast.Unknown) 
-    | Tfn(t1,t2,e) -> Typ_aux(Typ_fn (t_to_typ t1, t_to_typ t2, e_to_ef e),Parse_ast.Unknown)
+    | Tfn(t1,t2,_,e) -> Typ_aux(Typ_fn (t_to_typ t1, t_to_typ t2, e_to_ef e),Parse_ast.Unknown)
     | Ttup ts -> Typ_aux(Typ_tup(List.map t_to_typ ts),Parse_ast.Unknown)
     | Tapp(i,args) -> Typ_aux(Typ_app(Id_aux((Id i), Parse_ast.Unknown),List.map targ_to_typ_arg args),Parse_ast.Unknown)
     | Tabbrev(t,_) -> t_to_typ t
@@ -1343,7 +1344,7 @@ let rec type_consistent_internal co d_env t1 cs1 t2 cs2 =
     if id1=id2 && la1 = la2 
     then (t2,csp@(List.flatten (List.map2 (type_arg_eq co d_env) args1 args2)))
     else eq_error l ("Type application of " ^ (t_to_string t1) ^ " and " ^ (t_to_string t2) ^ " must match")
-  | Tfn(tin1,tout1,effect1),Tfn(tin2,tout2,effect2) -> 
+  | Tfn(tin1,tout1,_,effect1),Tfn(tin2,tout2,_,effect2) -> 
     let (tin,cin) = type_consistent co d_env tin1 tin2 in
     let (tout,cout) = type_consistent co d_env tout1 tout2 in
     let _ = effects_eq co effect1 effect2 in
@@ -1539,7 +1540,7 @@ let rec select_overload_variant d_env params_check get_all variants actual_type 
       let t,cs' = get_abbrev d_env t in
       let recur _ = select_overload_variant d_env params_check get_all variants actual_type in
       (match t.t with
-	| Tfn(a,r,e) ->
+	| Tfn(a,r,_,e) ->
 	  let is_matching = 
 	    if params_check then conforms_to_t true a actual_type 
 	    else match actual_type.t with

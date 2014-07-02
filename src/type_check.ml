@@ -61,7 +61,7 @@ let rec typ_to_t (Typ_aux(typ,l)) =
   match typ with
     | Typ_id i -> {t = Tid (id_to_string i)}
     | Typ_var (Kid_aux((Var i),l')) -> {t = Tvar i}
-    | Typ_fn (ty1,ty2,e) -> {t = Tfn (typ_to_t ty1,typ_to_t ty2,aeffect_to_effect e)}
+    | Typ_fn (ty1,ty2,e) -> {t = Tfn (typ_to_t ty1,typ_to_t ty2,false,aeffect_to_effect e)}
     | Typ_tup(tys) -> {t = Ttup (List.map typ_to_t tys) }
     | Typ_app(i,args) -> {t = Tapp (id_to_string i,List.map typ_arg_to_targ args) }
     | Typ_wild -> new_t ()
@@ -188,7 +188,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
                 let t',constraints' = type_consistent (Patt l) d_env t expect_t in
 		(P_aux(p,(l,Base(([],t'),Constructor,constraints,pure_e))),Envmap.empty,constraints@constraints',t')
 	      else typ_error l ("Constructor " ^ i ^ " does not expect arguments")
-	    | Tfn(t1,t2,ef) ->
+	    | Tfn(t1,t2,false,ef) ->
               (match pats with
               | [] -> let _ = type_consistent (Patt l) d_env unit_t t1 in
                       let t',constraints' = type_consistent (Patt l) d_env t2 expect_t in
@@ -353,10 +353,10 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       | Some(Base((params,t),Constructor,cs,ef)) ->
 	let t,cs,ef = subst params t cs ef in
         (match t.t with
-        | Tfn({t = Tid "unit"},t',ef) -> 
-          let t',cs',e' = type_coerce (Expr l) d_env false t' (rebuild (Base(([],{t=Tfn(unit_t,t',ef)}),Constructor,cs,ef))) expect_t in
+        | Tfn({t = Tid "unit"},t',false,ef) -> 
+          let t',cs',e' = type_coerce (Expr l) d_env false t' (rebuild (Base(([],{t=Tfn(unit_t,t',false,ef)}),Constructor,cs,ef))) expect_t in
           (e',t',t_env,cs@cs',ef)
-        | Tfn(t1,t',e) -> 
+        | Tfn(t1,t',false,e) -> 
           typ_error l ("Constructor " ^ i ^ " expects arguments of type " ^ (t_to_string t) ^ ", found none")
         | _ -> raise (Reporting_basic.err_unreachable l "Constructor tannot does not have function type"))
       | Some(Base((params,t),Enum,cs,ef)) ->
@@ -452,6 +452,35 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       (e'',t',t_env,cs_a@cs@cs3,ef)
     | E_app(id,parms) -> 
       let i = id_to_string id in
+      let check_parms p_typ parms = (match parms with
+        | [] -> let (_,cs') = type_consistent (Expr l) d_env unit_t p_typ in [],unit_t,cs',pure_e 
+        | [parm] -> let (parm',arg_t,t_env,cs',ef_p) = check_exp envs p_typ parm in [parm'],arg_t,cs',ef_p
+        | parms -> 
+          (match check_exp envs p_typ (E_aux (E_tuple parms,(l,NoTyp))) with
+          | ((E_aux(E_tuple parms',tannot')),arg_t,t_env,cs',ef_p) -> parms',arg_t,cs',ef_p
+          | _ -> raise (Reporting_basic.err_unreachable l "check_exp, given a tuple and a tuple type, didn't return a tuple"))) 
+      in
+      let coerce_parms arg_t parms expect_arg_t =
+	(match parms with
+	| [parm] -> let _,cs,parm' = type_coerce (Expr l) d_env false arg_t parm expect_arg_t in [parm'],cs
+	| parms ->
+          (match type_coerce (Expr l) d_env false arg_t (E_aux (E_tuple parms,(l,NoTyp))) expect_arg_t with
+          | (_,cs,(E_aux(E_tuple parms',tannot'))) -> (parms',cs)
+          | _ -> raise (Reporting_basic.err_unreachable l "type coerce given tuple and tuple type returned non-tuple"))) 
+      in
+      let check_result ret imp tag cs ef parms =           
+        if imp 
+        then 
+          let internal_exp =  match expect_t.t,ret.t with 
+            | Tapp("vector",_),_ -> 
+              E_aux (E_internal_exp (l,Base(([],expect_t),Emp_local,[],pure_e)), (l,Base(([],nat_t),Emp_local,[],pure_e)))
+            | _,Tapp("vector",_) -> 
+              E_aux (E_internal_exp (l,Base(([],ret),Emp_local,[],pure_e)), (l,Base(([],nat_t),Emp_local,[],pure_e)))
+            | _ -> typ_error l (i ^ " expected either the return type or the expected type to be a vector") in
+          type_coerce (Expr l) d_env false ret (E_aux (E_app(id, internal_exp::parms),(l,(Base(([],ret),tag,cs,ef))))) expect_t
+        else
+          type_coerce (Expr l) d_env false ret (E_aux (E_app(id, parms),(l,(Base(([],ret),tag,cs,ef))))) expect_t 
+      in
       (match Envmap.apply t_env i with
       | Some(Base(tp,Enum,cs,ef)) ->
         typ_error l ("Expected function with name " ^ i ^ " but found an enumeration identifier")
@@ -460,98 +489,74 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       | Some(Base((params,t),tag,cs,ef)) ->
         let t,cs,ef = subst params t cs ef in
         (match t.t with
-        | Tfn(arg,ret,ef') ->
-          (match parms with
-          | [] -> 
-            let (p',cs') = type_consistent (Expr l) d_env unit_t arg in
-            let (ret_t,cs_r,e') = type_coerce (Expr l) d_env false ret (rebuild (Base(([],ret),tag,cs@cs',ef))) expect_t in
-            (e',ret_t,t_env,cs@cs'@cs_r,ef)
-          | [parm] ->
-            let (parm',arg_t,t_env,cs',ef_p) = check_exp envs arg parm in
-            let (ret_t,cs_r',e') = type_coerce (Expr l) d_env false ret (E_aux(E_app(id,[parm']),(l,(Base(([],ret),tag,cs,ef'))))) expect_t in
-            (e',ret_t,t_env,cs@cs'@cs_r',union_effects ef_p ef')
-          | parms -> 
-            let ((E_aux(E_tuple parms',tannot')),arg_t,t_env,cs',ef_p) = check_exp envs arg (E_aux(E_tuple parms,(l,NoTyp))) in
-            let (ret_t,cs_r',e') = type_coerce (Expr l) d_env false ret (E_aux(E_app(id, parms'),(l,(Base(([],ret),tag,cs,ef'))))) expect_t in
-            (e',ret_t,t_env,cs@cs'@cs_r',union_effects ef_p ef'))
+        | Tfn(arg,ret,imp,ef') ->
+          let parms,arg_t,cs_p,ef_p = check_parms arg parms in
+          let (ret_t,cs_r,e') = check_result ret imp tag cs ef' parms in
+          (e',ret_t,t_env,cs@cs_p@cs_r, union_effects ef' ef_p)
         | _ -> typ_error l ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^ (t_to_string t)))
       | Some(Overload(Base((params,t),tag,cs,ef),overload_return,variants)) ->
 	let t_p,cs_p,ef_p = subst params t cs ef in
-	let args,arg_t,arg_cs,arg_ef =  
+	let args,arg_t,arg_cs,arg_ef = 
 	  (match t_p.t with
-	  | Tfn(arg,ret,ef') ->
-	    (match parms with
-	      | [] ->
-		let (p',cs') = type_consistent (Expr l) d_env unit_t arg in
-		([E_aux(E_lit(L_aux(L_unit, l)), (l,Base(([],unit_t),Emp_local,cs',pure_e)))],p',cs',pure_e)
-	      | [parm] ->
-		let (parm', arg_t,_,cs',ef_p) = check_exp envs arg parm in
-		[parm'],arg_t,cs',ef_p
-	      | parms ->
-		let ((E_aux(E_tuple parms',tannot')),arg_t,_,cs',ef_p) = check_exp envs arg (E_aux(E_tuple parms,(l,NoTyp))) in
-		(parms',arg_t,cs',ef_p))
+	  | Tfn(arg,ret,_,ef') -> check_parms arg parms 
 	  | _ -> typ_error l ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^ (t_to_string t))) in
 	(match (select_overload_variant d_env true overload_return variants arg_t) with
 	  | [] -> typ_error l ("No matching function found with name " ^ i ^ " that expects parameters " ^ (t_to_string arg_t))
 	  | [Base((params,t),tag,cs,ef)] ->
 	    (match t.t with
-	      | Tfn(arg,ret,ef') ->
-		let args',arg_cs' =
-		  (match args with
-		    | [parm] ->
-		      let _,cs,parm' = type_coerce (Expr l) d_env false arg_t parm arg in
-		      [parm'],cs
-		    | parms ->
-		      let (_,cs,(E_aux(E_tuple parms',tannot'))) = 
-			type_coerce (Expr l) d_env false arg_t (E_aux(E_tuple parms,(l,NoTyp))) arg in
-		      parms',cs) in
-		let (ret_t,cs_r,e') = 
-		  type_coerce (Expr l) d_env false ret (E_aux(E_app(id,args'),(l,(Base(([],ret),tag,cs,ef))))) expect_t in
+	      | Tfn(arg,ret,imp,ef') ->
+		let args',arg_cs' = coerce_parms arg_t args arg in
+		let (ret_t,cs_r,e') = check_result ret imp tag cs ef' args' in
 		(e',ret_t,t_env,cs_p@arg_cs@arg_cs'@cs_r,union_effects ef_p (union_effects arg_ef ef'))	   
-	      | _ -> assert false)
+	      | _ -> raise (Reporting_basic.err_unreachable l "Overloaded variant not a function"))
 	  | variants' ->
 	    (match select_overload_variant d_env false true variants' expect_t with
 	      | [] -> typ_error l ("No matching function found with name " ^ i ^ ", expecting parameters " ^ (t_to_string arg_t) ^ " and returning " ^ (t_to_string expect_t))
 	      | [Base((params,t),tag,cs,ef)] ->
 		(match t.t with
-		  |Tfn(arg,ret,ef') ->
-		    let args',arg_cs' = 
-		      (match args with		    
-			| [parm] ->
-			  let _,cs,parm' = type_coerce (Expr l) d_env false arg_t parm arg in
-			  [parm'],cs
-			| parms ->
-			  let (_,cs,(E_aux(E_tuple parms',tannot'))) = 
-			    type_coerce (Expr l) d_env false arg_t (E_aux(E_tuple parms,(l,NoTyp))) arg in
-			  parms',cs) in
-		    let (ret_t,cs_r,e') = 
-		      type_coerce (Expr l) d_env false ret (E_aux(E_app(id,args'),(l,(Base(([],ret),tag,cs,ef))))) expect_t in
+		  |Tfn(arg,ret,imp,ef') ->
+		    let args',arg_cs' = coerce_parms arg_t args arg in 
+		    let (ret_t,cs_r,e') = check_result ret imp tag cs ef' args' in
 		    (e',ret_t,t_env,cs_p@arg_cs@arg_cs'@cs_r,union_effects ef_p (union_effects arg_ef ef'))
-	         | _ -> assert false)
-	      | _ -> typ_error l ("More than one function found with name " ^ i ^ " that expects parameters " ^ (t_to_string arg_t) ^ " and returns " ^ (t_to_string expect_t) ^ ". Try adding a cast")))
+	         | _ -> raise (Reporting_basic.err_unreachable l "Overloaded variant not a function"))
+	      | _ -> 
+                typ_error l ("More than one variant of " ^ i ^ " found with type " ^ (t_to_string arg_t) ^ " -> " ^ (t_to_string expect_t) ^ ". A cast may be required")))
       | _ -> typ_error l ("Unbound function " ^ i)) 
     | E_app_infix(lft,op,rht) -> 
       let i = id_to_string op in
+      let check_parms arg_t lft rht =
+        match check_exp envs arg_t (E_aux(E_tuple [lft;rht],(l,NoTyp))) with
+        | ((E_aux(E_tuple [lft';rht'],_)),arg_t,_,cs',ef') -> (lft',rht',arg_t,cs',ef')
+        | _ -> raise (Reporting_basic.err_unreachable l "check exp given tuple and tuple type and returned non-tuple") in
+      let check_result ret imp tag cs ef lft rht =
+        if imp 
+        then 
+          let internal_exp =  match expect_t.t,ret.t with 
+            | Tapp("vector",_),_ -> 
+              E_aux (E_internal_exp (l,Base(([],expect_t),Emp_local,[],pure_e)), (l,Base(([],nat_t),Emp_local,[],pure_e)))
+            | _,Tapp("vector",_) -> 
+              E_aux (E_internal_exp (l,Base(([],ret),Emp_local,[],pure_e)), (l,Base(([],nat_t),Emp_local,[],pure_e)))
+            | _ -> typ_error l (i ^ " expected either the return type or the expected type to be a vector") in
+          type_coerce (Expr l) d_env false ret (E_aux (E_app(op, [internal_exp;lft;rht]),(l,(Base(([],ret),tag,cs,ef))))) expect_t
+        else
+          type_coerce (Expr l) d_env false ret (E_aux (E_app_infix(lft,op,rht),(l,(Base(([],ret),tag,cs,ef))))) expect_t 
+      in
       (match Envmap.apply t_env i with
-      | Some(Base(tp,Enum,cs,ef)) ->
-        typ_error l ("Expected function with name " ^ i ^ " but found an enumeration identifier")
-      | Some(Base(tp,Default,cs,ef)) ->
-        typ_error l ("Function " ^ i ^ " must be defined, not just declared as a default, before use")
+      | Some(Base(tp,Enum,cs,ef)) -> typ_error l ("Expected function with name " ^ i ^ " but found an enumeration identifier")
+      | Some(Base(tp,Default,cs,ef)) -> typ_error l ("Function " ^ i ^ " must be defined, not just declared as a default, before use")
       | Some(Base((params,t),tag,cs,ef)) ->
         let t,cs,ef = subst params t cs ef in
         (match t.t with
-        | Tfn(arg,ret,ef) -> 
-          let (E_aux(E_tuple [lft';rht'],tannot'),arg_t,t_env,cs',ef') = check_exp envs arg (E_aux(E_tuple [lft;rht],(l,NoTyp))) in
-          let ret_t,cs_r',e' = type_coerce (Expr l) d_env false ret (E_aux(E_app_infix(lft',op,rht'),(l,(Base(([],ret),tag,cs,ef))))) expect_t in
-          (e',ret_t,t_env,cs@cs'@cs_r',union_effects ef ef')
+        | Tfn(arg,ret,imp,ef) -> 
+          let (lft',rht',arg_t,cs_p,ef_p) = check_parms arg lft rht in
+          let ret_t,cs_r',e' = check_result ret imp tag cs ef lft' rht' in
+          (e',ret_t,t_env,cs@cs_p@cs_r',union_effects ef ef_p)
         | _ -> typ_error l ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^ (t_to_string t)))
       | Some(Overload(Base((params,t),tag,cs,ef),overload_return,variants)) ->
 	let t_p,cs_p,ef_p = subst params t cs ef in
 	let lft',rht',arg_t,arg_cs,arg_ef =  
 	  (match t_p.t with
-	  | Tfn(arg,ret,ef') ->
-            let (E_aux(E_tuple [lft';rht'],tannot'),arg_t,t_env,cs',ef') = check_exp envs arg (E_aux(E_tuple [lft;rht],(l,NoTyp))) in
-            (lft',rht',arg_t,cs',ef')
+	  | Tfn(arg,ret,_,ef') -> check_parms arg lft rht
 	  | _ -> typ_error l ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^ (t_to_string t))) in
         (*let _ = Printf.printf "Looking for overloaded function %s, generic type is %s, arg_t is %s\n" i (t_to_string t_p) (t_to_string arg_t) in*)
 	(match (select_overload_variant d_env true overload_return variants arg_t) with
@@ -559,32 +564,31 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	| [Base((params,t),tag,cs,ef)] ->
           (*let _ = Printf.eprintf "Selected an overloaded function for %s, variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in*)
 	  (match t.t with
-	  | Tfn(arg,ret,ef') ->
+	  | Tfn(arg,ret,imp,ef') ->
             (match arg.t,arg_t.t with
             | Ttup([tlft;trght]),Ttup([tlft_t;trght_t]) ->
               let (_,cs_lft,lft') = type_coerce (Expr l) d_env false tlft_t lft' tlft in
               let (_,cs_rght,rht') = type_coerce (Expr l) d_env false trght_t rht' trght in
-	      let (ret_t,cs_r,e') = 
-	        type_coerce (Expr l) d_env false ret (E_aux(E_app_infix(lft',op,rht'),(l,(Base(([],ret),tag,cs,ef))))) expect_t in
+	      let (ret_t,cs_r,e') = check_result ret imp tag cs ef lft' rht' in
 	      (e',ret_t,t_env,cs_p@arg_cs@cs_lft@cs_rght@cs@cs_r,union_effects ef_p (union_effects arg_ef ef'))
-            |_ -> assert false)
-	  | _ -> assert false)
+            |_ -> raise (Reporting_basic.err_unreachable l "function no longer has tuple type"))
+	  | _ -> raise (Reporting_basic.err_unreachable l "overload variant does not have function"))
 	| variants ->
 	  (match (select_overload_variant d_env false true variants expect_t) with
 	    | [] -> typ_error l ("No matching function found with name " ^ i ^ " that expects parameters " ^ (t_to_string arg_t) ^ " returning " ^ (t_to_string expect_t))
 	    | [Base((params,t),tag,cs,ef)] -> 
 	      (match t.t with
-		| Tfn(arg,ret,ef') ->
+		| Tfn(arg,ret,imp,ef') ->
 		  (match arg.t,arg_t.t with
 		    | Ttup([tlft;trght]),Ttup([tlft_t;trght_t]) ->
 		      let (_,cs_lft,lft') = type_coerce (Expr l) d_env false tlft_t lft' tlft in
 		      let (_,cs_rght,rht') = type_coerce (Expr l) d_env false trght_t rht' trght in
-		      let (ret_t,cs_r,e') = 
-			type_coerce (Expr l) d_env false ret (E_aux(E_app_infix(lft',op,rht'),(l,(Base(([],ret),tag,cs,ef))))) expect_t in
+		      let (ret_t,cs_r,e') = check_result ret imp tag cs ef lft' rht' in
 		      (e',ret_t,t_env,cs_p@arg_cs@cs_lft@cs_rght@cs@cs_r,union_effects ef_p (union_effects arg_ef ef'))
-		    |_ -> assert false)
-		| _ -> assert false)
-	    | _ -> typ_error l ("More than one function found with name " ^ i ^ " that expects parameters " ^ (t_to_string arg_t) ^ " returning " ^ (t_to_string expect_t) ^ ". Try adding a cast")))
+		    |_ -> raise (Reporting_basic.err_unreachable l "function no longer has tuple type"))
+		| _ -> raise (Reporting_basic.err_unreachable l "overload variant does not have function"))
+	    | _ -> 
+              typ_error l ("More than one variant of " ^ i ^ " found with type " ^ (t_to_string arg_t) ^ " -> " ^ (t_to_string expect_t) ^ ". A cast may be required")))
       | _ -> typ_error l ("Unbound infix function " ^ i))
     | E_tuple(exps) ->
       (match expect_t.t with
@@ -1078,7 +1082,7 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 	  let is_external = match tag with | External any -> true | _ -> false in
 	  let t,cs,ef = subst parms t cs ef in
 	  (match t.t with
-	    | Tfn(apps,out,ef') ->
+	    | Tfn(apps,out,_,ef') ->
 	      (match ef'.effect with
 		| Eset effects ->
 		  if List.exists (fun (BE_aux(b,_)) -> match b with | BE_wmem -> true | _ -> false) effects 
@@ -1231,7 +1235,7 @@ and check_lbind envs is_top_level emp_tag (LB_aux(lbind,(l,annot))) : tannot let
       let ef = union_effects ef ef2 in
       let tannot = check_tannot l (Base((params,t),tag,cs,ef)) cs ef (*in top level, must be pure_e*) in
       (LB_aux (LB_val_explicit(typ,pat',e),(l,tannot)),env,cs,ef)
-    | NoTyp -> raise (Reporting_basic.err_unreachable l "typschm_to_tannot failed to produce a Some"))
+    | NoTyp | Overload _ -> raise (Reporting_basic.err_unreachable l "typschm_to_tannot failed to produce a Base"))
   | LB_val_implicit(pat,e) -> 
     let t = new_t () in
     let (pat',env,cs1,u) = check_pattern envs emp_tag (new_t ()) pat in
@@ -1260,7 +1264,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
       let (params,constraints) = typq_to_params envs typq in
       let ty = {t=Tid id'} in
       let tyannot = Base((params,ty),Constructor,constraints,pure_e) in
-      let arm_t input = Base((params,{t=Tfn(input,ty,pure_e)}),Constructor,constraints,pure_e) in
+      let arm_t input = Base((params,{t=Tfn(input,ty,false,pure_e)}),Constructor,constraints,pure_e) in
       let arms' = List.map 
 	(fun (Tu_aux(tu,l')) -> 
 	  match tu with 
@@ -1384,7 +1388,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let t,constraints,_ = subst ids t constraints pure_e in
       let p_t = new_t () in
       let ef = new_e () in
-      t,p_t,Base((ids,{t=Tfn(p_t,t,ef)}),Emp_global,constraints,ef) in
+      t,p_t,Base((ids,{t=Tfn(p_t,t,false,ef)}),Emp_global,constraints,ef) in
   let check t_env =
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),l)) ->

@@ -28,7 +28,7 @@ type t = { mutable t : t_aux }
 and t_aux =
   | Tvar of string (* concrete *)
   | Tid of string  (* concrete *)
-  | Tfn of t * t * effect (* concrete: neither t can ever be fn *)
+  | Tfn of t * t * bool * effect (* concrete: neither t can ever be fn, bool indicates if there is an implcit vector length parameter, for library functions only *)
   | Ttup of t list (* concrete: no t can be fn *)
   | Tapp of string * t_arg list (* concrete *)
   | Tabbrev of t * t (* first t is the specified type, which may itself be an abbrev; second is the ground type, never an abbrev *)
