@@ -840,7 +840,7 @@ and vec_concat_match pats r_vals =
 	let (matched_p,used_unknown,new_bounds) = match_pattern pat r in
         if matched_p then 
           let (matched_p,used_unknown',bounds,matcheds,r_vals) = vec_concat_match pats r_vals in
-          (matched_p, used_unknown||used_unknown',new_bounds++bounds,matcheds++[r],r_vals)
+          (matched_p, used_unknown||used_unknown',new_bounds++bounds,r :: matcheds,r_vals)
         else (false,false,[],[],[]) end
     end
 
