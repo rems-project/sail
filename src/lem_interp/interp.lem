@@ -124,7 +124,7 @@ type action =
  | Read_mem of id * value * maybe (integer * integer)
  | Write_mem of id * value * maybe (integer * integer) * value
  | Barrier of id * value
- | Write_next_IA of value
+ | Write_next_IA of value (* Perhaps not needed? *)
  | Nondet of list (exp tannot)
  | Debug of l
  | Call_extern of string * value
@@ -845,37 +845,31 @@ and vec_concat_match pats r_vals =
     end
 
 
-(* If the first match uses an Unknown value, then returns all subsequent matches, otherwise just the first one or [] *)
+(* Returns all matches using Unknown until either there are no more matches or a pattern matches with no Unknowns used *)
 val find_funcl : list (funcl tannot) -> value -> list (env * bool * (exp tannot))
-let rec find_funcl_helper find_all funcls value =
+let rec find_funcl funcls value =
   match funcls with
   | [] -> []
   | (FCL_aux (FCL_Funcl id pat exp) _)::funcls ->
     let (is_matching,used_unknown,env) = match_pattern pat value in
-    if is_matching 
-    then if (used_unknown || find_all) 
-      then (env,used_unknown,exp)::(find_funcl_helper true funcls value)
-      else [(env,used_unknown,exp)]
-    else find_funcl_helper find_all funcls value
+    if (is_matching && used_unknown)
+    then (env,used_unknown,exp)::(find_funcl funcls value)
+    else if is_matching then [(env,used_unknown,exp)]
+    else find_funcl funcls value
   end
-
-let find_funcl = (find_funcl_helper false)
 
 (*see above comment*)
 val find_case : list (pexp tannot) -> value -> list (env * bool * (exp tannot))
-let rec find_case_helper find_all pexps value =
+let rec find_case pexps value =
   match pexps with
   | [] -> []
   | (Pat_aux (Pat_exp p e) _)::pexps -> 
     let (is_matching,used_unknown,env) = match_pattern p value in
-    if is_matching 
-    then if (used_unknown || find_all)
-      then (env,used_unknown,e)::find_case_helper true pexps value
-      else [(env,used_unknown,e)]
-    else find_case_helper find_all pexps value
+    if (is_matching && used_unknown)
+    then (env,used_unknown,e)::find_case pexps value
+    else if is_matching then [(env,used_unknown,e)]
+    else find_case pexps value
   end
-
-let find_case = (find_case_helper false)
 
 val interp_main : interp_mode -> top_level -> env -> lmem -> (exp tannot) -> (outcome * lmem * env)
 val exp_list : interp_mode -> top_level -> (list (exp tannot) -> (exp tannot)) -> (list value -> value) -> env -> lmem -> list value -> list (exp tannot) -> (outcome * lmem * env)
@@ -1339,6 +1333,9 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		      (fun stack -> (Hole_frame (id_of_string "0") 
 				       (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot)))
 				       t_level l_env l_mem stack)))
+                | multi_matches ->
+                  let lets = List.map (fun (env,_,exp) -> env_to_let env exp) multi_matches in
+                  interp_main mode t_level l_env l_mem (E_aux (E_block lets) (l,annot))
                end)
           | Nothing -> (Error l (String.stringAppend "Internal error: function with empty tag unfound " name),lm,le) end)
 	| Tag_empty -> 
