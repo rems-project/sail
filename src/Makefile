@@ -3,7 +3,7 @@
 all: sail lib power doc test
 
 sail:
-	ocamlbuild sail.native
+	ocamlbuild sail.native sail_lib.cma sail_lib.cmxa
 
 test: sail
 	ocamlbuild test/run_tests.native

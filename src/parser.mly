@@ -163,7 +163,7 @@ let make_vector_sugar typ typ1 =
 %token <string> LtEqUnderUiI LtUnderSI LtUnderSiI LtUnderUI LtUnderUiI StarStarUnderSI StarStarUnderSiI StarUnderSI
 %token <string> StarUnderSiI StarUnderUI StarUnderUiI TwoCarrotI
 
-%start file
+%start file exp
 %type <Parse_ast.defs> defs
 %type <Parse_ast.atyp> typ
 %type <Parse_ast.pat> pat

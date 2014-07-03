@@ -119,7 +119,8 @@ let kw_table =
 
 ]
 
-let type_names : string list ref = ref []
+let default_type_names = ["bool";"unit";"vector";"range";"list";"bit";"nat"; "uint8";"uint16";"uint32";"uint64"]
+let custom_type_names : string list ref = ref []
 
 }
 
@@ -228,7 +229,9 @@ rule token = parse
   | tyvar_start startident ident* as i  { TyVar(r i) }
   | startident ident* as i              { if M.mem i kw_table then
                                             (M.find i kw_table) ()
-                                          else if List.mem i !type_names then
+                                          else if
+                                            List.mem i default_type_names ||
+                                            List.mem i !custom_type_names then
 					    TyId(r i)
                                           else Id(r i) }
   | "&" oper_char+ as i                 { (AmpI(r i)) }
