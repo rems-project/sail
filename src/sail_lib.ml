@@ -8,11 +8,11 @@
 
 module Pretty = Pretty_print
 
-let parse_exp s =
+let parse_exps s =
   let lexbuf = Lexing.from_string s in
   try
-  let pre_exp = Parser.exp Lexer.token lexbuf in
-  Initial_check.to_ast_exp Type_internal.initial_kind_env pre_exp
+  let pre_exps = Parser.semi_exps Lexer.token lexbuf in
+  List.map (Initial_check.to_ast_exp Type_internal.initial_kind_env) pre_exps
   with
     | Parsing.Parse_error ->
         let pos = Lexing.lexeme_start_p lexbuf in
