@@ -875,6 +875,14 @@ let doc_exp, doc_let =
   | E_app_infix(l,op,r) ->
       failwith ("unexpected app_infix operator " ^ (pp_format_id op))
       (* doc_op (doc_id op) (exp l) (exp r) *)
+  | E_internal_exp (l, Base((_,t),_,_,_)) ->
+    (match t.t with
+      | Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
+	(match r.nexp with
+	  | Nconst bi -> utf8string (Big_int.string_of_big_int bi)
+          | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given vector without known length"))
+        | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given non-vector"))
+
   (* XXX missing case
      AAA internal_cast should never have an overload, if it's been seen it's a bug *)
   | E_internal_cast ((_, Overload (_, _,_ )), _) | E_internal_exp _ -> assert false
