@@ -1181,11 +1181,19 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 	  let base_e1,range_e1,base_e2,range_e2 = new_n(),new_n(),new_n(),new_n() in
 	  let base_t = {t=Tapp("range",[TA_nexp base_e1;TA_nexp range_e1])} in
 	  let range_t = {t=Tapp("range",[TA_nexp base_e2;TA_nexp range_e2])} in
+	  let (e1',base_t',_,cs1,ef_e) = check_exp envs base_t e1 in
+	  let (e2',range_t',_,cs2,ef_e') = check_exp envs range_t e2 in
+	  let base_e1,range_e1,base_e2,range_e2 = match base_t'.t,range_t'.t with
+	    | (Tapp("range",[TA_nexp base_e1;TA_nexp range_e1]),
+	       Tapp("range",[TA_nexp base_e2;TA_nexp range_e2])) -> base_e1,range_e1,base_e2,range_e2
+	    | _ -> base_e1,range_e1,base_e2,range_e2 in
 	  let cs_t,res_t = match ord.order with
 	    | Oinc ->  ([LtEq((Expr l),base,base_e1);
 			 LtEq((Expr l),{nexp=Nadd(base_e1,range_e1)},{nexp=Nadd(base_e2,range_e2)});
 			 LtEq((Expr l),{nexp=Nadd(base_e1,range_e2)},{nexp=Nadd(base,rise)})],
-			{t=Tapp("vector",[TA_nexp base_e1;TA_nexp {nexp=Nadd(base_e2,range_e2)};TA_ord ord;TA_typ t])})
+			{t=Tapp("vector",[TA_nexp base_e1;
+					  TA_nexp {nexp = Nadd({nexp = Nadd({nexp=Nadd(base_e2,range_e2)},{nexp = Nconst one})},
+							       {nexp=Nneg base_e1})};TA_ord ord;TA_typ t])})
 	    | Odec -> ([GtEq((Expr l),base,base_e1);
 			GtEq((Expr l),{nexp=Nadd(base_e1,range_e1)},{nexp=Nadd(base_e2,range_e2)});
 			GtEq((Expr l),{nexp=Nadd(base_e1,range_e2)},{nexp=Nadd(base,{nexp=Nneg rise})})],
@@ -1194,8 +1202,6 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 					 TA_ord ord; TA_typ t])})
 	    | _ -> typ_error l ("Assignment to a range of vector elements requires either inc or dec order")
 	  in
-	  let (e1',t',_,cs1,ef_e) = check_exp envs base_t e1 in
-	  let (e2',t',_,cs2,ef_e') = check_exp envs range_t e2 in
 	  let cs = cs_t@cs@cs1@cs2 in
 	  let ef = union_effects ef (union_effects ef_e ef_e') in
 	  (LEXP_aux(LEXP_vector_range(vec',e1',e2'),(l,Base(([],item_t),tag,cs,ef))),res_t,env,tag,cs,ef)

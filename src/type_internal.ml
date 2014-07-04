@@ -1338,7 +1338,7 @@ let rec type_consistent_internal co d_env t1 cs1 t2 cs2 =
   | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tapp("range",[TA_nexp b2;TA_nexp r2;]) -> 
     if (nexp_eq b1 b2)&&(nexp_eq r1 r2) 
     then (t2,csp)
-    else (t2, csp@[GtEq(co,b1,b2);LtEq(co,r1,r2)])
+    else (t1, csp@[GtEq(co,b1,b2);LtEq(co,r1,r2)])
   | Tapp(id1,args1), Tapp(id2,args2) ->
     let la1,la2 = List.length args1, List.length args2 in
     if id1=id2 && la1 = la2 

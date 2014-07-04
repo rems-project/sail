@@ -27,7 +27,7 @@ function nat main _ = {
   (* XXX this one is broken - I don't what it should do,
   or even if we should accept it, but the current result
   is to eat up one bit, ending up with a 7-bit word. *)
-  (MEM_WORD(0))[4..3] := 0b10;
+  (*(MEM_WORD(0))[4..3] := 0b10;*) (*We reject this as 4 > 3 not <= *)
   ignore(MEM_WORD(0));
 
   (* infix call *)
