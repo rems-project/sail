@@ -924,11 +924,11 @@ let initial_typ_env =
                                                LtEq(Specc(Parse_ast.Int("quot",None)),
                                                     (mk_mult (mk_add (mk_nv "o") (mk_nv "p")) (mk_add (mk_nv "q") (mk_nv "r"))),
                                                     (mk_add (mk_nv "n") (mk_nv "m")))],pure_e);
-               Base(((mk_nat_params["n";"m"])@(mk_ord_params["ord"]),
+               Base(((mk_nat_params["n";"m";"p";"q"])@(mk_ord_params["ord"]),
                      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
-                                           mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")])
+                                           mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "q")])
                                    (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
-                    External (Some "quot_vec"),[],pure_e)]));
+                    External (Some "quot_vec"),[GtEq(Specc(Parse_ast.Int("quot",None)), mk_nv "m", mk_nv "q")],pure_e)]));
     (* incorrect types, not pressing as the type checker puts in the correct types automatically on a first pass *)
     ("to_num_inc",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,false,pure_e)}),External None,[],pure_e));
     ("to_num_dec",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,false,pure_e)}),External None,[],pure_e));
