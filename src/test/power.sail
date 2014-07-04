@@ -7,8 +7,11 @@ function forall Type 'a . 'a BCD_TO_DEC ( x ) = x
 function bit carry_out ( x ) = bitzero
 (* XXX length *)
 function nat length ( x ) = 64
-(* XXX break *)
-function unit break () = ()
+
+(* XXX *)
+val extern forall Nat 'k, Nat 'r,
+  0 <= 'k, 'k <= 64, 'r + 'k = 64.
+  (bit[64], [|'k|]) -> [|0:'r|] effect pure countLeadingZeroes
 
 function forall Nat 'n, Nat 'm .
   bit['m] EXTS_EXPLICIT((bit['n]) v, ([|'m|]) m) =
@@ -340,7 +343,6 @@ function clause decode ([bitone, bitzero, bitzero, bitzero, bitzero, bitzero] :
 
 function clause execute (Lwz (RT, RA, D)) =
   {
-    (bit[64]) EA := 0;
     (bit[64]) b := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS (D);
@@ -357,7 +359,6 @@ function clause decode ([bitone, bitzero, bitzero, bitone, bitzero, bitzero] :
 
 function clause execute (Stw (RS, RA, D)) =
   {
-    (bit[64]) EA := 0;
     (bit[64]) b := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS (D);
@@ -374,7 +375,6 @@ function clause decode ([bitone, bitzero, bitzero, bitone, bitzero, bitone] :
 
 function clause execute (Stwu (RS, RA, D)) =
   {
-    (bit[64]) EA := 0;
     EA := GPR[RA] + EXTS (D);
     MEM(EA,4) := (GPR[RS])[32 .. 63];
     GPR[RA] := EA
