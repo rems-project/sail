@@ -632,6 +632,9 @@ exp :: 'E_' ::=
   | lexp := exp                                      :: :: assign
     {{ com imperative assignment }}
 
+  | exit exp						:: :: exit
+    {{ com expression to halt all current execution, potentially calling a system, trap, or interrupt handler with exp }}
+
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
   | ( annot ) exp                                       :: :: internal_cast {{ com This is an internal cast, generated during type checking that will resolve into a syntactic cast after }}
   | annot                                               :: :: internal_exp {{ com This is an internal use of an nexp (in the annot) for passing length information after resolution of constraints }}
@@ -825,11 +828,22 @@ scattered_def :: 'SD_' ::=
   | end id  :: :: scattered_end
 {{ com scattered definition end }}
 
+alias_spec :: 'AL_' ::=
+  {{ com Register alias expression forms. Other than where noted, each id must refer to an unaliased register of type vector }}
+  {{ aux _ annot }} {{ auxparam 'a }}
+  | id . id'							:: :: subreg
+  {{ com id must refer to a register, id' to a declared subregister of id }}
+  | id [ exp ] 							:: :: bit
+  | id [ exp '..' exp' ]					:: :: slice
+  | id : id'  	    						:: :: concat
+  {{ com both id and id' must refer to a register }}
 
 dec_spec :: 'DEC_' ::=
   {{ com Register declarations }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | register typ id                                             :: :: reg
+  | register alias id = alias_spec				:: :: alias
+  | register alias typ id = alias_spec				:: :: typ_alias
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Top-level definitions                                        %

@@ -521,6 +521,8 @@ exp :: 'E_' ::=
   | exp := exp'                                      :: :: assign
     {{ com imperative assignment }}
 
+  | exit exp						:: :: exit
+
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
 
 
@@ -723,6 +725,9 @@ dec_spec :: 'DEC_' ::=
   {{ com Register declarations }}
   {{ aux _ l }}
   | register atyp id                                             :: :: reg
+  | register alias id = exp	      	 			 :: :: alias
+  | register alias atyp id = exp	  			 :: :: typ_alias
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Top-level definitions                                        %

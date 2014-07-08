@@ -164,6 +164,11 @@ lit_aux =  (* Literal constant *)
 
 
 type 
+typquant = 
+   TypQ_aux of typquant_aux * l
+
+
+type 
 typ_aux =  (* Type expressions, of kind $_$ *)
    Typ_wild (* Unspecified type *)
  | Typ_id of id (* Defined type *)
@@ -183,11 +188,6 @@ and typ_arg_aux =  (* Type constructor arguments of all kinds *)
 
 and typ_arg = 
    Typ_arg_aux of typ_arg_aux * l
-
-
-type 
-typquant = 
-   TypQ_aux of typquant_aux * l
 
 
 type 
@@ -257,6 +257,7 @@ type
  | E_case of 'a exp * ('a pexp) list (* pattern matching *)
  | E_let of 'a letbind * 'a exp (* let expression *)
  | E_assign of 'a lexp * 'a exp (* imperative assignment *)
+ | E_exit of 'a exp (* expression to halt all current execution, potentially calling a system, trap, or interrupt handler with exp *)
  | E_internal_cast of 'a annot * 'a exp (* This is an internal cast, generated during type checking that will resolve into a syntactic cast after *)
  | E_internal_exp of 'a annot (* This is an internal use of an nexp (in the annot) for passing length information after resolution of constraints *)
 
@@ -308,31 +309,11 @@ and 'a letbind =
 
 
 type 
-effect_opt_aux =  (* Optional effect annotation for functions *)
-   Effect_opt_pure (* sugar for empty effect set *)
- | Effect_opt_effect of effect
-
-
-type 
-tannot_opt_aux =  (* Optional type annotation for functions *)
-   Typ_annot_opt_some of typquant * typ
-
-
-type 
-rec_opt_aux =  (* Optional recursive annotation for functions *)
-   Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
-
-
-type 
-'a funcl_aux =  (* Function clause *)
-   FCL_Funcl of id * 'a pat * 'a exp
-
-
-type 
-name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
-   Name_sect_none
- | Name_sect_some of string
+'a alias_spec_aux =  (* Register alias expression forms. Other than where noted, each id must refer to an unaliased register of type vector *)
+   AL_subreg of id * id (* id must refer to a register, id' to a declared subregister of id *)
+ | AL_bit of id * 'a exp
+ | AL_slice of id * 'a exp * 'a exp
+ | AL_concat of id * id (* both id and id' must refer to a register *)
 
 
 type 
@@ -342,8 +323,41 @@ type_union_aux =  (* Type union constructors *)
 
 
 type 
-effect_opt = 
-   Effect_opt_aux of effect_opt_aux * l
+tannot_opt_aux =  (* Optional type annotation for functions *)
+   Typ_annot_opt_some of typquant * typ
+
+
+type 
+'a funcl_aux =  (* Function clause *)
+   FCL_Funcl of id * 'a pat * 'a exp
+
+
+type 
+effect_opt_aux =  (* Optional effect annotation for functions *)
+   Effect_opt_pure (* sugar for empty effect set *)
+ | Effect_opt_effect of effect
+
+
+type 
+name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
+   Name_sect_none
+ | Name_sect_some of string
+
+
+type 
+rec_opt_aux =  (* Optional recursive annotation for functions *)
+   Rec_nonrec (* non-recursive *)
+ | Rec_rec (* recursive *)
+
+
+type 
+'a alias_spec = 
+   AL_aux of 'a alias_spec_aux * 'a annot
+
+
+type 
+type_union = 
+   Tu_aux of type_union_aux * l
 
 
 type 
@@ -352,13 +366,13 @@ tannot_opt =
 
 
 type 
-rec_opt = 
-   Rec_aux of rec_opt_aux * l
+'a funcl = 
+   FCL_aux of 'a funcl_aux * l
 
 
 type 
-'a funcl = 
-   FCL_aux of 'a funcl_aux * l
+effect_opt = 
+   Effect_opt_aux of effect_opt_aux * l
 
 
 type 
@@ -367,8 +381,8 @@ name_scm_opt =
 
 
 type 
-type_union = 
-   Tu_aux of type_union_aux * l
+rec_opt = 
+   Rec_aux of rec_opt_aux * l
 
 
 type 
@@ -382,8 +396,10 @@ and index_range =
 
 
 type 
-'a fundef_aux =  (* Function definition *)
-   FD_function of rec_opt * tannot_opt * effect_opt * ('a funcl) list
+'a dec_spec_aux =  (* Register declarations *)
+   DEC_reg of typ * id
+ | DEC_alias of id * 'a alias_spec
+ | DEC_typ_alias of typ * id * 'a alias_spec
 
 
 type 
@@ -397,8 +413,12 @@ type
 
 
 type 
-'a dec_spec_aux =  (* Register declarations *)
-   DEC_reg of typ * id
+'a type_def_aux =  (* Type definition body *)
+   TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
+ | TD_record of id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
+ | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
+ | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)
+ | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
 
 
 type 
@@ -408,12 +428,8 @@ type
 
 
 type 
-'a type_def_aux =  (* Type definition body *)
-   TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
- | TD_record of id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
- | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
- | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)
- | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
+'a fundef_aux =  (* Function definition *)
+   FD_function of rec_opt * tannot_opt * effect_opt * ('a funcl) list
 
 
 type 
@@ -424,8 +440,8 @@ type
 
 
 type 
-'a fundef = 
-   FD_aux of 'a fundef_aux * 'a annot
+'a dec_spec = 
+   DEC_aux of 'a dec_spec_aux * 'a annot
 
 
 type 
@@ -434,8 +450,8 @@ type
 
 
 type 
-'a dec_spec = 
-   DEC_aux of 'a dec_spec_aux * 'a annot
+'a type_def = 
+   TD_aux of 'a type_def_aux * 'a annot
 
 
 type 
@@ -444,8 +460,8 @@ type
 
 
 type 
-'a type_def = 
-   TD_aux of 'a type_def_aux * 'a annot
+'a fundef = 
+   FD_aux of 'a fundef_aux * 'a annot
 
 
 type 

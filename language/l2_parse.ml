@@ -224,6 +224,7 @@ exp_aux =  (* Expression *)
  | E_case of exp * (pexp) list (* pattern matching *)
  | E_let of letbind * exp (* let expression *)
  | E_assign of exp * exp (* imperative assignment *)
+ | E_exit of exp
 
 and exp = 
    E_aux of exp_aux * l
@@ -353,6 +354,8 @@ fundef_aux =  (* Function definition *)
 type 
 dec_spec_aux =  (* Register declarations *)
    DEC_reg of atyp * id
+ | DEC_alias of id * exp
+ | DEC_typ_alias of atyp * id * exp
 
 
 type 
