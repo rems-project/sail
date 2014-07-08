@@ -391,6 +391,22 @@ let rec normalize_nexp n =
 	| -1,-1 | 0,-1 -> {nexp = Nadd (n2',n1')}
 	|  0,0 -> {nexp = Nmult ({nexp = Nconst two},n1')}
 	|  _ -> {nexp = Nadd (n1',n2')})
+    | N2n(n11,_),Nadd(n21,n22) ->
+      (match n21.nexp with
+	| N2n(n211,_) ->
+	  (match compare_nexps n11 n211 with
+	    | -1 -> {nexp = Nadd(n1',n2')}
+	    | 0 -> {nexp = Nadd( {nexp = N2n (normalize_nexp {nexp = Nadd(n11, {nexp = Nconst one})},None)}, n22)}
+	    | _ -> {nexp = Nadd(n21, (normalize_nexp {nexp = Nadd(n11,n22)}))})
+	| _ -> {nexp = Nadd(n1',n2')})
+    | Nadd(n11,n12),N2n(n21,_) ->
+      (match n11.nexp with
+	| N2n(n111,_) ->
+	  (match compare_nexps n111 n21 with
+	    | -1 -> {nexp = Nadd(n11,(normalize_nexp {nexp = Nadd(n2',n12)}))}
+	    | 0 -> {nexp = Nadd( {nexp = N2n (normalize_nexp {nexp = Nadd(n111, {nexp = Nconst one})},None)}, n12)}
+	    | _ -> {nexp = Nadd(n2', n1')})
+	| _ -> {nexp = Nadd(n2',n1')})
     | _ -> 
       match get_var n1', get_var n2' with
       | Some(nv1),Some(nv2) ->
