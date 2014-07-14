@@ -1503,7 +1503,7 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
 	| (Tapp("vector",[TA_nexp b1;TA_nexp r; TA_ord {order = Oinc}; TA_typ item_t]),
 	   Tapp("vector",[TA_nexp _ ;TA_nexp r2; TA_ord {order = Oinc}; TA_typ item_t2])) ->
 	  let _ = type_consistent (Specc l) d_env item_t item_t2 in
-	  let t = {t= Tapp("vector",[TA_nexp b1; TA_nexp {nexp = Nadd(r,r2)}; TA_ord {order = Oinc}; TA_typ item_t])} in
+	  let t = {t= Tapp("register",[TA_typ {t= Tapp("vector",[TA_nexp b1; TA_nexp {nexp = Nadd(r,r2)}; TA_ord {order = Oinc}; TA_typ item_t])}])} in
 	  let tannot = Base(([],t),Alias,[],pure_e) in
 	  let d_env = {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, (reg1,tannot))} in
 	  (AL_aux (AL_concat(reg1_a,reg2_a), (l,tannot)), tannot, d_env))
