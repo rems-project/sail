@@ -1041,9 +1041,10 @@ let doc_alias (AL_aux (alspec,_)) =
 let doc_dec (DEC_aux (reg,_)) =
   match reg with
     | DEC_reg(typ,id) -> separate space [string "register"; doc_atomic_typ typ; doc_id id]
-    | DEC_alias(id,alspec) -> separate space [string "register"; string "alias"; doc_id id; equals; doc_alias alspec]
+    | DEC_alias(id,alspec) ->
+        doc_op equals (string "register alias" ^^ space ^^ doc_id id) (doc_alias alspec)
     | DEC_typ_alias(typ,id,alspec) -> 
-      separate space [string "register"; string "alias"; doc_atomic_typ typ; doc_id id; equals; doc_alias alspec]
+        doc_op equals (string "register alias" ^^ space ^^ doc_atomic_typ typ) (doc_alias alspec)
 
 let doc_scattered (SD_aux (sdef, _)) = match sdef with
  | SD_scattered_function (r, typa, efa, id) ->
