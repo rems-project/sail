@@ -74,6 +74,7 @@ type tag =
   | Default
   | Constructor
   | Enum
+  | Alias
   | Spec
 
 type constraint_origin =
@@ -98,7 +99,6 @@ type tannot =
   | Base of (t_params * t) * tag * nexp_range list * effect
   | Overload of tannot * bool * tannot list (* First tannot is the most polymorphic version; the boolean indicates whether the overloaded functions can use the return type; the list includes all variants. All t to be Tfn *)
 
-(*type tannot = ((t_params * t) * tag * nexp_range list * effect) option*)
 type 'a emap = 'a Envmap.t
 
 type rec_kind = Record | Register
@@ -109,6 +109,7 @@ type def_envs = {
   namesch : tannot emap; 
   enum_env : (string list) emap; 
   rec_env : rec_env list;
+  alias_env : (string * tannot) emap;
  }  
 
 type exp = tannot Ast.exp
@@ -193,6 +194,7 @@ let tag_to_string = function
   | Default -> "Default"
   | Constructor -> "Constructor"
   | Enum -> "Enum"
+  | Alias -> "Alias"
   | Spec -> "Spec"
 
 let rec tannot_to_string = function
@@ -496,6 +498,8 @@ let rec normalize_nexp n =
     | Nneg _,_ | _,Nneg _ -> let _ = Printf.printf "neg case still around %s\n" (n_to_string n) in assert false (* If things are normal, neg should be gone. *)
     )
     
+let int_to_nexp i = {nexp = Nconst (big_int_of_int i)}
+
 let v_count = ref 0
 let t_count = ref 0
 let tuvars = ref []

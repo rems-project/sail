@@ -59,6 +59,7 @@ let kw_table =
     M.empty
     [
      ("and",                     (fun _ -> And));
+     ("alias",                   (fun _ -> Alias));
      ("as",                      (fun _ -> As));
      ("bitzero",                 (fun _ -> Bitzero));
      ("bitone",                  (fun _ -> Bitone));
@@ -75,6 +76,7 @@ let kw_table =
      ("end",                     (fun _ -> End));
      ("enumerate",		 (fun _ -> Enumerate));
      ("else",                    (fun _ -> Else));
+     ("exit",                    (fun _ -> Exit));
      ("extern",                  (fun _ -> Extern));
      ("false",                   (fun _ -> False));
      ("forall",                  (fun _ -> Forall));

@@ -70,6 +70,7 @@ type tag =
   | Default
   | Constructor
   | Enum
+  | Alias
   | Spec
 
 type constraint_origin =
@@ -106,6 +107,7 @@ type def_envs = {
   namesch : tannot emap; 
   enum_env : (string list) emap; 
   rec_env : rec_env list;
+  alias_env : (string * tannot) emap;
  }
 
 type exp = tannot Ast.exp
@@ -130,6 +132,8 @@ val pure_e : effect
 val t_to_string : t -> string
 val tannot_to_string : tannot -> string
 val t_to_typ : t -> Ast.typ
+
+val int_to_nexp : int -> nexp
 
 val reset_fresh : unit -> unit
 val new_t : unit -> t

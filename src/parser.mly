@@ -122,10 +122,12 @@ let make_vector_sugar typ typ1 =
 
 /*Terminals with no content*/
 
-%token And As Bitzero Bitone Bits By Case Clause Const Dec Default Deinfix Effect EFFECT End Enumerate Else Extern
-%token False Forall Foreach Function_ If_ In IN Inc Let_ Member Nat Order Pure Rec Register
+%token And Alias As Bitzero Bitone Bits By Case Clause Const Dec Default Deinfix Effect EFFECT End 
+%token Enumerate Else Exit Extern False Forall Foreach Function_ If_ In IN Inc Let_ Member Nat Order 
+%token Pure Rec Register Scattered Struct Switch Then True TwoStarStar Type TYPE Typedef 
+%token Undefined Union With Val
 %token Barr Rreg Wreg Rmem Wmem Undef Unspec Nondet
-%token Scattered Struct Switch Then True TwoStarStar Type TYPE Typedef Undefined Union With Val
+
 
 /* Avoid shift/reduce conflict - see right_atomic_exp rule */
 %nonassoc Then
@@ -541,9 +543,6 @@ atomic_exp:
     { eloc (E_cast($2,$4)) }
   | Lparen comma_exps Rparen
     { eloc (E_tuple($2)) }
-  /* XXX creates many conflicts
-  | Lcurly semi_exps Rcurly
-    { eloc (E_record($2)) }  */
   | Lcurly exp With semi_exps Rcurly
     { eloc (E_record_update($2,$4)) } 
   | Lsquare Rsquare
@@ -562,6 +561,8 @@ atomic_exp:
     { eloc (E_list($2)) }
   | Switch exp Lcurly case_exps Rcurly
     { eloc (E_case($2,$4)) }
+  | Exit atomic_exp
+    { eloc (E_exit $2) }
 
 field_exp:
   | atomic_exp
@@ -1171,6 +1172,10 @@ def:
     { dloc (DEF_default($1)) }
   | Register atomic_typ id
     { dloc (DEF_reg_dec(DEC_aux(DEC_reg($2,$3),loc ()))) }
+  | Register Alias id Eq exp
+    { dloc (DEF_reg_dec(DEC_aux(DEC_alias($3,$5),loc ()))) }
+  | Register Alias atomic_typ id Eq exp
+    { dloc (DEF_reg_dec(DEC_aux(DEC_typ_alias($3,$4,$6), loc ()))) }
   | Scattered scattered_def
     { dloc (DEF_scattered $2) }
   | Function_ Clause funcl

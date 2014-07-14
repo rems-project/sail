@@ -510,6 +510,7 @@ type tag =  (* Data indicating where the identifier arises and thus information 
  | Tag_default (* Type has come from default declaration, identifier may not be bound locally *)
  | Tag_spec
  | Tag_enum
+ | Tag_alias
 
 
 type t =  (* Internal types *)

@@ -384,6 +384,7 @@ and to_ast_exp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) 
     | Parse_ast.E_case(exp,pexps) -> E_case(to_ast_exp k_env exp, List.map (to_ast_case k_env) pexps)
     | Parse_ast.E_let(leb,exp) -> E_let(to_ast_letbind k_env leb, to_ast_exp k_env exp)
     | Parse_ast.E_assign(lexp,exp) -> E_assign(to_ast_lexp k_env lexp, to_ast_exp k_env exp)
+    | Parse_ast.E_exit exp -> E_exit(to_ast_exp k_env exp)
     ), (l,NoTyp))
 
 and to_ast_lexp (k_env : kind Envmap.t) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : tannot lexp = 
@@ -609,10 +610,30 @@ let rec def_in_progress (id : id) (partial_defs : (id * partial_def) list) : par
     | Id_aux(Id(n),_), Id_aux(Id(i),_) -> if (n = i) then Some(pd) else def_in_progress id defs
     | _,_ -> def_in_progress id defs)
 
-let to_ast_dec (names,k_env,t_env) (Parse_ast.DEC_aux(Parse_ast.DEC_reg(typ,id),l)) =
-  let t = to_ast_typ k_env typ in
-  let id = to_ast_id id in
-  (DEC_aux(DEC_reg(t,id),(l,NoTyp)))
+let to_ast_alias_spec k_env (Parse_ast.E_aux(e,le)) = 
+  AL_aux(
+    (match e with
+      | Parse_ast.E_field(Parse_ast.E_aux(Parse_ast.E_id id,li), field) -> 
+	AL_subreg(to_ast_id id,to_ast_id field)
+      | Parse_ast.E_vector_access(Parse_ast.E_aux(Parse_ast.E_id id,li),range) ->
+	AL_bit(to_ast_id id,to_ast_exp k_env range)
+      | Parse_ast.E_vector_subrange(Parse_ast.E_aux(Parse_ast.E_id id,li),base,stop) ->
+	AL_slice(to_ast_id id,to_ast_exp k_env base,to_ast_exp k_env stop)
+      | Parse_ast.E_vector_append(Parse_ast.E_aux(Parse_ast.E_id first,lf),
+				  Parse_ast.E_aux(Parse_ast.E_id second,ls)) ->
+	AL_concat(to_ast_id first,to_ast_id second)
+    ), (le,NoTyp))      
+
+let to_ast_dec (names,k_env,t_env) (Parse_ast.DEC_aux(regdec,l)) =
+  DEC_aux(
+    (match regdec with
+      | Parse_ast.DEC_reg(typ,id) ->
+	DEC_reg(to_ast_typ k_env typ,to_ast_id id)
+      | Parse_ast.DEC_alias(id,e) ->
+	DEC_alias(to_ast_id id,to_ast_alias_spec k_env e)
+      | Parse_ast.DEC_typ_alias(typ,id,e) ->
+	DEC_typ_alias(to_ast_typ k_env typ,to_ast_id id,to_ast_alias_spec k_env e)
+    ),(l,NoTyp))
       
 let to_ast_def (names, k_env, t_env) partial_defs def : def_progress envs_out * (id * partial_def) list = 
   let envs = (names,k_env,t_env) in

@@ -253,6 +253,7 @@ let pp_format_tag = function
   | Default -> "Tag_default"
   | Constructor -> "Tag_ctor"
   | Enum -> "Tag_enum"
+  | Alias -> "Tag_alias"
   | Spec -> "Tag_spec"
 
 let rec pp_format_nes nes = 
@@ -374,6 +375,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
       fprintf ppf "@[<0>(E_aux (%a %a [%a]) (%a, %a))@]" kwd "E_case" pp_lem_exp exp (list_pp pp_semi_lem_case pp_lem_case) pexps pp_lem_l l pp_annot annot
     | E_let(leb,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_let" pp_lem_let leb pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assign(lexp,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_assign" pp_lem_lexp lexp pp_lem_exp exp pp_lem_l l pp_annot annot
+    | E_exit exp -> fprintf ppf "@[<0>(E_aux (E_exit %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_internal_exp (l, Base((_,t),_,_,_)) ->
       (match t.t with
 	| Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
@@ -493,8 +495,25 @@ let pp_lem_fundef ppf (FD_aux(FD_function(r, typa, efa, fcls),(l,annot))) =
     kwd "FD_function" pp_lem_rec r pp_lem_tannot_opt typa pp_lem_effects_opt efa (list_pp pp_funcls pp_funcls) fcls
     pp_lem_l l pp_annot annot
 
-let pp_lem_dec ppf (DEC_aux(DEC_reg(typ,id),(l,annot))) =
-  fprintf ppf "@[<0>(DEC_aux (DEC_reg %a %a) (%a,%a))@]" pp_lem_typ typ pp_lem_id id pp_lem_l l pp_annot annot
+let pp_lem_aspec ppf (AL_aux(aspec,(l,annot))) =
+  match aspec with
+    | AL_subreg(reg,subreg) -> 
+      fprintf ppf "@[<0>(AL_aux (AL_subreg %a %a) (%a,%a))@]" pp_lem_id reg pp_lem_id subreg pp_lem_l l pp_annot annot
+    | AL_bit(reg,ac) ->
+      fprintf ppf "@[<0>(AL_aux (AL_bit %a %a) (%a,%a))@]" pp_lem_id reg pp_lem_exp ac pp_lem_l l pp_annot annot
+    | AL_slice(reg,b,e) ->
+      fprintf ppf "@[<0>(AL_aux (AL_slice %a %a %a) (%a,%a))@]" pp_lem_id reg pp_lem_exp b pp_lem_exp e pp_lem_l l pp_annot annot
+    | AL_concat(f,s) ->
+      fprintf ppf "@[<0>(AL_aux (AL_concat %a %a) (%a,%a))@]" pp_lem_id f pp_lem_id s pp_lem_l l pp_annot annot
+
+let pp_lem_dec ppf (DEC_aux(reg,(l,annot))) =
+  match reg with 
+    | DEC_reg(typ,id) ->
+      fprintf ppf "@[<0>(DEC_aux (DEC_reg %a %a) (%a,%a))@]" pp_lem_typ typ pp_lem_id id pp_lem_l l pp_annot annot
+    | DEC_alias(id,alias_spec) ->
+      fprintf ppf "@[<0>(DEC_aux (DEC_alias %a %a) (%a, %a))@]" pp_lem_id id pp_lem_aspec alias_spec pp_lem_l l pp_annot annot
+    | DEC_typ_alias(typ,id,alias_spec) ->
+      fprintf ppf "@[<0>(DEC_aux (DEC_typ_alias %a %a %a) (%a, %a))@]" pp_lem_typ typ pp_lem_id id pp_lem_aspec alias_spec pp_lem_l l pp_annot annot
 
 let pp_lem_def ppf d =
   match d with
@@ -827,7 +846,7 @@ let doc_exp, doc_let =
       parens (separate_map comma exp exps)
   | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
       (* XXX E_record is not handled by parser currently
-         AAA I don't think the parser can handle E_record due to ambiguity with blocks; initial_check looks for blocks that are all field assignments and converts *)
+         AAA The parser can't handle E_record due to ambiguity with blocks; initial_check looks for blocks that are all field assignments and converts *)
       braces (separate_map semi_sp doc_fexp fexps)
   | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
       braces (doc_op (string "with") (exp e) (separate_map semi_sp doc_fexp fexps))
@@ -849,6 +868,8 @@ let doc_exp, doc_let =
       let opening = separate space [string "switch"; exp e; lbrace] in
       let cases = separate_map (break 1) doc_case pexps in
       surround 2 1 opening cases rbrace
+  | E_exit e ->
+    separate space [string "exit"; exp e;]
   (* adding parens and loop for lower precedence *)
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
   | E_cons (_, _)|E_field (_, _)|E_assign (_, _)
@@ -1010,8 +1031,19 @@ let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =
         string "effect"; doc_effects_opt efa;
         clauses]
 
-let doc_dec (DEC_aux(DEC_reg(typ,id),_)) =
-  separate space [string "register"; doc_atomic_typ typ; doc_id id]
+let doc_alias (AL_aux (alspec,_)) =
+  match alspec with
+    | AL_subreg(id,subid) -> doc_id id ^^ dot ^^ doc_id subid
+    | AL_bit(id,ac) -> doc_id id ^^ brackets (doc_exp ac)
+    | AL_slice(id,b,e) -> doc_id id ^^ brackets (doc_op dotdot (doc_exp b) (doc_exp e))
+    | AL_concat(f,s) -> doc_op colon (doc_id f) (doc_id s)
+
+let doc_dec (DEC_aux (reg,_)) =
+  match reg with
+    | DEC_reg(typ,id) -> separate space [string "register"; doc_atomic_typ typ; doc_id id]
+    | DEC_alias(id,alspec) -> separate space [string "register"; string "alias"; doc_id id; equals; doc_alias alspec]
+    | DEC_typ_alias(typ,id,alspec) -> 
+      separate space [string "register"; string "alias"; doc_atomic_typ typ; doc_id id; equals; doc_alias alspec]
 
 let doc_scattered (SD_aux (sdef, _)) = match sdef with
  | SD_scattered_function (r, typa, efa, id) ->

@@ -116,7 +116,7 @@ type barrier_kind = | Barrier_plain  (* ?? *)
 
 (*top_level is a tuple of 
   (all definitions, letbound and enum values, register values, Typedef union constructors, and sub register mappings) *)
-type top_level = Env of (defs tannot) * env * env * list (id * typ) * list (id * list (id * index_range))
+type top_level = Env of (defs tannot) * env * env * list (id * typ) * list (id * list (id * index_range)) * list (id * (alias_spec tannot))
 
 type action = 
  | Read_reg of reg_form * maybe (integer * integer)
@@ -126,6 +126,7 @@ type action =
  | Barrier of id * value
  | Write_next_IA of value (* Perhaps not needed? *)
  | Nondet of list (exp tannot)
+ | Exit of (exp tannot)
  | Debug of l
  | Call_extern of string * value
 
@@ -173,7 +174,19 @@ let rec to_registers (Defs defs) =
     | DEF_reg_dec (DEC_aux (DEC_reg typ id) (l,tannot)) -> (id, V_register(Reg id tannot)) :: (to_registers (Defs defs))
     | _ -> to_registers (Defs defs)
     end 
-  end
+  end 
+
+val to_aliases : defs tannot -> list (id * (alias_spec tannot))
+let rec to_aliases (Defs defs) =
+  match defs with
+    | [] -> []
+    | def::defs ->
+      match def with
+	| DEF_reg_dec (DEC_aux (DEC_alias id aspec) _) -> (id, aspec) :: (to_aliases (Defs defs))
+	| DEF_reg_dec (DEC_aux (DEC_typ_alias typ id aspec) _) -> (id, aspec) :: (to_aliases (Defs defs))
+	| _ -> to_aliases (Defs defs)
+      end 
+    end
 
 val has_rmem_effect : list base_effect -> bool
 val has_barr_effect : list base_effect -> bool
@@ -874,6 +887,7 @@ let rec find_case pexps value =
 val interp_main : interp_mode -> top_level -> env -> lmem -> (exp tannot) -> (outcome * lmem * env)
 val exp_list : interp_mode -> top_level -> (list (exp tannot) -> (exp tannot)) -> (list value -> value) -> env -> lmem -> list value -> list (exp tannot) -> (outcome * lmem * env)
 val interp_lbind : interp_mode -> top_level -> env -> lmem -> (letbind tannot) -> ((outcome * lmem * env) * (maybe ((exp tannot) -> (letbind tannot))))
+val interp_alias_read : interp_mode -> top_level -> env -> lmem -> (alias_spec tannot) -> (outcome * lmem * env)
 
 let resolve_outcome to_match value_thunk action_thunk =
   match to_match with
@@ -897,7 +911,7 @@ let rec exp_list mode t_level build_e build_v l_env l_mem vals exps =
   end
 
 and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
-  let (Env defs lets regs ctors subregs) = t_level in 
+  let (Env defs lets regs ctors subregs aliases) = t_level in 
   let (typ,tag,ncs,effect) = match annot with 
     | Nothing -> (T_var "fresh_v", Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
     | Just(t, tag, ncs, ef) -> (t,tag,ncs,ef) end in
@@ -962,6 +976,10 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	          (Hole_frame (Id_aux (Id "0") Unknown)
 		         (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level l_env l_mem Top),
            l_mem,l_env)
+        | Tag_alias -> 
+	  match in_env aliases id with
+	    | Just aspec -> interp_alias_read mode t_level l_env l_mem aspec
+	    | _ -> (Error l ("Internal error: alias not found"), l_mem,l_env) end
         | _ -> (Error l (String.stringAppend "Internal error: tag other than empty,enum,or extern " name),l_mem,l_env)
         end
     | E_if cond thn els ->
@@ -1500,7 +1518,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     end
 
 and create_write_message_or_update mode t_level value l_env l_mem is_top_level ((LEXP_aux lexp (l,annot)):lexp tannot) =
-   let (Env defs lets regs ctors subregs) = t_level in
+   let (Env defs lets regs ctors subregs aliases) = t_level in
   let (typ,tag,ncs,ef) = match annot with 
     | Nothing -> (T_var "fresh_v", Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
     | Just(t, tag, ncs, ef) -> (t,tag,ncs,ef) end in
@@ -1729,15 +1747,60 @@ and interp_letbind mode t_level l_env l_mem (LB_aux lbind (l,annot)) =
     | e -> (e,Nothing) end
 end	
 
+and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
+  let (Env defs lets regs ctors subregs aliases) = t_level in 
+  let stack = Hole_frame (Id_aux (Id "0") Unknown)
+		          (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot)))
+			  t_level l_env l_mem Top in
+  match alspec with
+    | AL_subreg reg subreg ->
+      (match in_env regs reg with
+	| Just (V_register (Reg _ (Just((T_id id),_,_,_)))) ->
+	  (match in_env subregs (Id_aux (Id id) Unknown) with
+	    | Just indexes -> 
+	      (match in_env indexes subreg with
+		| Just ir -> (Action (Read_reg (SubReg subreg (Reg reg annot) ir) Nothing) stack, l_mem, l_env)
+		| _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
+	    | _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " id), l_mem, l_env) end)
+	| Just (V_register ((Reg _ (Just((T_abbrev (T_id id) _),_,_,_))) as rf)) ->
+	  (match in_env subregs (Id_aux (Id id) Unknown) with
+	    | Just indexes -> 
+	      (match in_env indexes subreg with
+		| Just ir -> (Action (Read_reg (SubReg subreg rf ir) Nothing) stack, l_mem, l_env)
+		| _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
+	    | _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " id), l_mem, l_env) end)
+	| _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register " (get_id reg)),l_mem,l_env) end)
+ | AL_bit reg e ->
+   resolve_outcome (interp_main mode t_level l_env l_mem e) 
+                   (fun v le lm -> match v with 
+		     | V_lit (L_aux (L_num i) _) -> 
+		       (Action (Read_reg (Reg reg annot) (Just (i,i))) stack, l_mem, l_env) end)
+                   (fun a -> a)
+ | AL_slice reg start stop -> 
+   resolve_outcome (interp_main mode t_level l_env l_mem start)
+                   (fun v lm le -> 
+		     match v with 
+		       | V_lit (L_aux (L_num start) _) ->
+			 (resolve_outcome (interp_main mode t_level l_env lm stop)
+			                  (fun v le lm ->
+					    (match v with
+					      | V_lit (L_aux (L_num stop) _) ->
+						(Action (Read_reg (Reg reg annot) (Just (start,stop))) stack,
+						 l_mem, l_env) end))
+					  (fun a -> a)) end)
+                    (fun a -> a)
+ | AL_concat reg1 reg2 -> (Error l "Unimplemented yet, alias spec concat", l_mem, l_env)
+end
+
 let rec to_global_letbinds (Defs defs) t_level =
-  let  (Env defs' lets regs ctors subregs) = t_level in
+  let  (Env defs' lets regs ctors subregs aliases) = t_level in
   match defs with
   | [] -> ((Value (V_lit (L_aux L_unit Unknown)) Tag_empty, emem, []),t_level)
   | def::defs ->
     match def with
     | DEF_val lbind ->
       match interp_letbind <|eager_eval=true|> t_level [] emem lbind with
-      | ((Value v tag,lm,le),_) -> to_global_letbinds (Defs defs) (Env defs' (lets++le) regs ctors subregs)
+      | ((Value v tag,lm,le),_) -> to_global_letbinds (Defs defs) (Env defs' (lets++le) regs ctors subregs aliases)
       | ((Action a s,lm,le),_) -> 
 	((Error Unknown "Top level let may not access memory, registers or (for now) external functions", lm,le),t_level)
       | (e,_) -> (e,t_level) end
@@ -1745,14 +1808,14 @@ let rec to_global_letbinds (Defs defs) t_level =
       match tdef with
       | TD_enum id ns ids _ -> 
         let enum_vals = map (fun eid -> (eid,V_ctor eid (T_id (get_id id)) unitv)) ids in
-        to_global_letbinds (Defs defs) (Env defs' (lets++enum_vals) regs ctors subregs)
+        to_global_letbinds (Defs defs) (Env defs' (lets++enum_vals) regs ctors subregs aliases)
       | _ -> to_global_letbinds (Defs defs) t_level end
     | _ -> to_global_letbinds (Defs defs) t_level
     end
   end
 
 let to_top_env defs = 
-  let t_level = Env defs [] (to_registers defs) (to_data_constructors defs) (to_register_fields defs) in
+  let t_level = Env defs [] (to_registers defs) (to_data_constructors defs) (to_register_fields defs) (to_aliases defs) in
   let (o,t_level) = to_global_letbinds defs t_level in
   match o with
     | (Value _ _,_,_) -> (Nothing,t_level)

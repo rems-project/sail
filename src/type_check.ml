@@ -28,6 +28,7 @@ let rec field_equivs fields fmaps =
       if (List.mem_assoc (id_to_string id) fmaps)
       then match (field_equivs fields fmaps) with
 	| None -> None
+	| Some [] -> None
 	| Some fs -> Some(((List.assoc (id_to_string id) fmaps),id,l,pat)::fs)
       else None
 
@@ -1010,6 +1011,9 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       let (exp',t'',_,cs',ef') = check_exp envs t' exp in
       let (t',c') = type_consistent (Expr l) d_env unit_t expect_t in
       (E_aux(E_assign(lexp',exp'),(l,(Base(([],unit_t),tag,[],ef)))),unit_t,t_env',cs@cs'@c',union_effects ef ef')
+    | E_exit e ->
+      let (e',t',_,_,_) = check_exp envs (new_t ()) e in
+      (E_aux (E_exit e',(l,(Base(([],expect_t),Emp_local,[],pure_e)))),expect_t,t_env,[],pure_e)
     | E_internal_cast _ | E_internal_exp _ -> raise (Reporting_basic.err_unreachable l "Internal expression passed back into type checker")
 		    
 and check_block orig_envs envs expect_t exps : ((tannot exp) list * tannot * tannot emap * nexp_range list * t * effect) =
@@ -1426,6 +1430,84 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,(if is_rec then t_env else Envmap.insert t_env (id,tannot)))
 
+let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
+  let (Env(d_env,t_env)) = envs in
+  let check_reg (Id_aux(_,l) as id) : (string * typ * typ) =
+    let i = id_to_string id in
+    (match Envmap.apply t_env i with
+      | Some(Base(([],t), External (Some j), [], _)) ->
+	let t,_ = get_abbrev d_env t in
+        let t_actual,t_id = match t.t with 
+          | Tabbrev(i,t) -> t,i
+          | _ -> t,t in
+	(match t_actual.t with 
+	  | Tapp("register",[TA_typ t']) -> 
+	    if i = j then (i,t_id,t')
+	    else assert false
+	  | _ -> typ_error l 
+	    ("register alias " ^ alias ^ " to " ^ i ^ " expected a register, found " ^ (t_to_string t)))
+      | _ -> typ_error l ("register alias " ^ alias ^ " to " ^ i ^ " exepcted a register.")) in
+  match al with
+    | AL_subreg(reg_a,subreg) -> 
+      let (reg,reg_t,t) = check_reg reg_a in 
+      (match reg_t.t with
+	| Tid i ->
+	  (match lookup_record_typ i d_env.rec_env with
+	    | None -> typ_error l ("Expected a register with bit fields, given " ^ i)
+	    | Some(((i,rec_kind,fields) as r)) ->
+	      let fi = id_to_string subreg in
+	      (match lookup_field_type fi r with
+		| NoTyp -> typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
+                | Overload _ ->  raise (Reporting_basic.err_unreachable l "Record given overload annot")
+		| Base(([],et),tag,cs,ef) ->
+		  let tannot = Base(([],et),Alias,[],pure_e) in
+		  let d_env = {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, (reg,tannot))} in
+		  (AL_aux(AL_subreg(reg_a,subreg),(l,tannot)),tannot,d_env)))
+	| _ -> let _ = Printf.printf "%s\n" (t_to_string reg_t) in assert false)
+    | AL_bit(reg_a,bit) -> 
+      let (reg,reg_t,t) = check_reg reg_a in
+      let (E_aux(bit,(le,eannot)),_,_,_,_) = check_exp envs (new_t ()) bit in
+      (match t.t with
+	| Tapp("vector",[TA_nexp base;TA_nexp len;TA_ord order;TA_typ item_t]) ->
+	  match (base.nexp,len.nexp,order.order, bit) with
+	    | (Nconst i,Nconst j,Oinc, E_lit (L_aux((L_num k), ll))) ->
+	      if (int_of_big_int i) <= k && ((int_of_big_int i) + (int_of_big_int j)) >= k 
+	      then let tannot = Base(([],item_t),Alias,[],pure_e) in
+		   let d_env = 
+		     {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, (reg,tannot))} in
+		   (AL_aux(AL_bit(reg_a,(E_aux(bit,(le,eannot)))), (l,tannot)), tannot,d_env)
+	      else typ_error ll ("Alias bit lookup must be in the range of the vector in the register")
+	    | _ -> assert false)
+    | AL_slice(reg_a,sl1,sl2) -> 
+      let (reg,reg_t,t) = check_reg reg_a in 
+      let (E_aux(sl1,(le1,eannot1)),_,_,_,_) = check_exp envs (new_t ()) sl1 in
+      let (E_aux(sl2,(le2,eannot2)),_,_,_,_) = check_exp envs (new_t ()) sl2 in
+      (match t.t with
+	| Tapp("vector",[TA_nexp base;TA_nexp len;TA_ord order;TA_typ item_t]) ->
+	  match (base.nexp,len.nexp,order.order, sl1,sl2) with
+	    | (Nconst i,Nconst j,Oinc, E_lit (L_aux((L_num k), ll)),E_lit (L_aux((L_num k2), ll2))) ->
+	      if (int_of_big_int i) <= k && ((int_of_big_int i) + (int_of_big_int j)) >= k2 && k < k2 
+	      then let t = {t = Tapp("vector",[TA_nexp (int_to_nexp k);TA_nexp (int_to_nexp ((k2-k) +1));
+					      TA_ord order; TA_typ item_t])} in 
+		   let tannot = Base(([],t),Alias,[],pure_e) in
+		   let d_env = 
+		     {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, (reg,tannot))} in
+		   (AL_aux(AL_slice(reg_a,(E_aux(sl1,(le1,eannot1))),(E_aux(sl2,(le2,eannot2)))),
+			   (l,tannot)), tannot,d_env)
+	      else typ_error ll ("Alias slices must be in the range of the vector in the register")
+	    | _ -> assert false)
+    | AL_concat(reg1_a,reg2_a) -> 
+      let (reg1,reg_t,t1) = check_reg reg1_a in
+      let (reg2,reg_t,t2) = check_reg reg2_a in
+      (match (t1.t,t2.t) with
+	| (Tapp("vector",[TA_nexp b1;TA_nexp r; TA_ord {order = Oinc}; TA_typ item_t]),
+	   Tapp("vector",[TA_nexp _ ;TA_nexp r2; TA_ord {order = Oinc}; TA_typ item_t2])) ->
+	  let _ = type_consistent (Specc l) d_env item_t item_t2 in
+	  let t = {t= Tapp("vector",[TA_nexp b1; TA_nexp {nexp = Nadd(r,r2)}; TA_ord {order = Oinc}; TA_typ item_t])} in
+	  let tannot = Base(([],t),Alias,[],pure_e) in
+	  let d_env = {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, (reg1,tannot))} in
+	  (AL_aux (AL_concat(reg1_a,reg2_a), (l,tannot)), tannot, d_env))
+
 (*val check_def : envs -> tannot def -> (tannot def) envs_out*)
 let check_def envs def = 
   let (Env(d_env,t_env)) = envs in
@@ -1445,6 +1527,15 @@ let check_def envs def =
     let i = id_to_string id in
     let tannot = into_register d_env (Base(([],t),External (Some i),[],pure_e)) in
     (DEF_reg_dec(DEC_aux(DEC_reg(typ,id),(l,tannot))),(Env(d_env,Envmap.insert t_env (i,tannot))))
+  | DEF_reg_dec(DEC_aux(DEC_alias(id,aspec), (l,annot))) -> 
+    let i = id_to_string id in
+    let (aspec,tannot,d_env) = check_alias_spec envs i aspec None in
+    (DEF_reg_dec(DEC_aux(DEC_alias(id,aspec),(l,tannot))),(Env(d_env, Envmap.insert t_env (i,tannot))))
+  | DEF_reg_dec(DEC_aux(DEC_typ_alias(typ,id,aspec),(l,tannot))) ->
+    let i = id_to_string id in
+    let t = typ_to_t typ in
+    let (aspec,tannot,d_env) = check_alias_spec envs i aspec (Some t) in
+    (DEF_reg_dec(DEC_aux(DEC_typ_alias(typ,id,aspec),(l,tannot))),(Env(d_env,Envmap.insert t_env (i,tannot))))
   | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Scattered given to type checker")
 
 

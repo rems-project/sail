@@ -67,6 +67,7 @@ tag :: 'Tag_' ::=
    | Default                              :: :: default {{ com Type has come from default declaration, identifier may not be bound locally }}
    | Spec				  :: :: spec
    | Enum				  :: :: enum
+   | Alias				  :: :: alias
 
 ne :: 'Ne_' ::=
  {{ com internal numeric expressions }}
