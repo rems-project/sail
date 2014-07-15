@@ -20,6 +20,7 @@ function (bit[64]) main _ = {
   XER.SO := 0;
   query := CA;
   query := Fo;
+  CA := query;
   XER.FOOBAR := 0b11;
   XER.FOOBAR := foobar;
   XER }
