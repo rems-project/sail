@@ -1430,6 +1430,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,(if is_rec then t_env else Envmap.insert t_env (id,tannot)))
 
+(*TODO Only works for inc vectors, need to add support for dec*)
 let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
   let (Env(d_env,t_env)) = envs in
   let check_reg (Id_aux(_,l) as id) : (string * typ * typ) =
