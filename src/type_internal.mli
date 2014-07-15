@@ -101,13 +101,14 @@ type 'a emap = 'a Envmap.t
 
 type rec_kind = Record | Register
 type rec_env = (string * rec_kind * ((string * tannot) list))
+type alias_kind = OneReg of string * tannot | TwoReg of string * string * tannot | MultiReg of (string list) * tannot
 type def_envs = { 
   k_env: kind emap; 
   abbrevs: tannot emap; 
   namesch : tannot emap; 
   enum_env : (string list) emap; 
   rec_env : rec_env list;
-  alias_env : (string * tannot) emap;
+  alias_env : alias_kind emap;
  }
 
 type exp = tannot Ast.exp
