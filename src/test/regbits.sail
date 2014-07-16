@@ -11,6 +11,7 @@ register (bit) query
 register alias CA = XER.CA
 register alias Fo = XER[35]
 register alias foobar = XER[35..36]
+register alias doub = XER:XER
 
 function (bit[64]) main _ = {
   XER := 0b0101010101010101010101010101010101010101010101010101010101010010;
@@ -23,5 +24,6 @@ function (bit[64]) main _ = {
   CA := query;
   XER.FOOBAR := 0b11;
   XER.FOOBAR := foobar;
+  query := doub[13];
   XER }
 

@@ -147,6 +147,11 @@ module Reg = struct
   include Map.Make(struct type t = id let compare = id_compare end)
   let to_string id v =
     sprintf "%s -> %s" (id_to_string id) (val_to_string v)
+  let find id m =
+    eprintf "reg_find called with %s\n" (id_to_string id);
+    let v = find id m in
+    eprintf "%s -> %s\n" (id_to_string id) (val_to_string v);
+    v
 end ;;
 
 module Mem = struct

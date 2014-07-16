@@ -367,7 +367,9 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       | Some(Base(tp,Default,cs,ef)) | Some(Base(tp,Spec,cs,ef)) ->
         typ_error l ("Identifier " ^ i ^ " must be defined, not just specified, before use")
       | Some(Base((params,t),tag,cs,ef)) ->
-	let t,cs,ef = match tag with | Emp_global | External _ -> subst params t cs ef | Alias -> t,cs, add_effect (BE_aux(BE_rreg, Parse_ast.Unknown)) ef | _ -> t,cs,ef in
+	let ((t,cs,ef),is_alias) = 
+	  match tag with | Emp_global | External _ -> (subst params t cs ef),false 
+	    | Alias -> (t,cs, add_effect (BE_aux(BE_rreg, Parse_ast.Unknown)) ef),true | _ -> (t,cs,ef),false in
         let t,cs' = get_abbrev d_env t in
         let cs = cs@cs' in
         let t_actual,expect_actual = match t.t,expect_t.t with
@@ -383,12 +385,12 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
           (rebuild tannot,t,t_env,cs@cs',ef)
         | Tapp("register",[TA_typ(t')]),Tuvar _ ->
 	  let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
-          let tannot = Base(([],t),External (Some i),cs,ef') in
+          let tannot = Base(([],t),(if is_alias then Alias else External (Some i)),cs,ef') in
           let t',cs',e' = type_coerce (Expr l) d_env false t' (rebuild tannot) expect_actual in
           (e',t,t_env,cs@cs',ef)
         | Tapp("register",[TA_typ(t')]),_ ->
 	  let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
-          let tannot = Base(([],t),External (Some i),cs,ef') in
+          let tannot = Base(([],t),(if is_alias then Alias else External (Some i)),cs,ef') in
           let t',cs',e' = type_coerce (Expr l) d_env false t' (rebuild tannot) expect_actual in
           (e',t',t_env,cs@cs',ef)
         | Tapp("reg",[TA_typ(t')]),_ ->
