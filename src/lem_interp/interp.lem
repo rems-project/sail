@@ -1555,7 +1555,61 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	  let request = (Action (Write_reg regf Nothing value) 
 			        (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
           if is_top_level then (request,Nothing) else (request,Just (fun e -> LEXP_aux (LEXP_id id) (l,annot)))
-        | _ -> ((Error l (String.stringAppend "Internal error: writing to id with tag other than extern or empty " (get_id id)),l_mem,l_env),Nothing)
+	| Tag_alias -> 
+	  let request = 
+	    (match in_env aliases id with
+	      | Just (AL_aux aspec (l,_)) -> 
+		(match aspec with
+		  | AL_subreg reg subreg ->
+		    (match in_env regs reg with
+		      | Just (V_register (Reg _ (Just((T_id id),_,_,_)))) ->
+			(match in_env subregs (Id_aux (Id id) Unknown) with
+			  | Just indexes -> 
+			    (match in_env indexes subreg with
+			      | Just ir -> 
+				(Action (Write_reg (SubReg subreg (Reg reg annot) ir) Nothing value) 
+				   (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
+				      t_level l_env l_mem Top), l_mem, l_env)
+			      | _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
+			    | _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " id), l_mem, l_env) end)
+			| Just (V_register ((Reg _ (Just((T_abbrev (T_id id) _),_,_,_))) as rf)) ->
+			  (match in_env subregs (Id_aux (Id id) Unknown) with
+			    | Just indexes -> 
+			      (match in_env indexes subreg with
+				| Just ir -> 
+				  (Action (Write_reg (SubReg subreg (Reg reg annot) ir) Nothing value) 
+				     (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
+					t_level l_env l_mem Top), l_mem, l_env)
+				| _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
+			    | _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " id), l_mem, l_env) end)
+			| _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register " (get_id reg)),l_mem,l_env) end)
+		    | AL_bit reg e ->
+		      resolve_outcome (interp_main mode t_level l_env l_mem e) 
+			(fun v le lm -> match v with 
+			  | V_lit (L_aux (L_num i) _) -> 
+			    (Action (Write_reg (Reg reg annot) (Just (i,i)) value) 
+			       (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
+				  t_level l_env l_mem Top), l_mem, l_env) end)
+			(fun a -> a)
+		    | AL_slice reg start stop -> 
+		      resolve_outcome (interp_main mode t_level l_env l_mem start)
+			(fun v lm le -> 
+			  match v with 
+			    | V_lit (L_aux (L_num start) _) ->
+			      (resolve_outcome (interp_main mode t_level l_env lm stop)
+			         (fun v le lm ->
+				   (match v with
+				     | V_lit (L_aux (L_num stop) _) ->
+				       (Action (Write_reg (Reg reg annot) (Just (start,stop)) value) 
+					  (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
+					     t_level l_env l_mem Top),
+					l_mem, l_env) end))
+				 (fun a -> a)) end)
+			(fun a -> a)
+		    | AL_concat reg1 reg2 -> (Error l "Unimplemented yet, alias spec concat", l_mem, l_env) end)
+	    | _ -> (Error l (String.stringAppend "Internal error: alias not found for id " (get_id id)),l_mem,l_env) end) in
+	  (request,Nothing)
+        | _ -> ((Error l (String.stringAppend "Internal error: writing to id with tag other than extern, empty, or alias " (get_id id)),l_mem,l_env),Nothing)
       end 
     | LEXP_memory id exps -> 
       match (exp_list mode t_level (fun exps -> E_aux (E_tuple exps) (Unknown,Nothing)) 
