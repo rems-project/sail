@@ -81,16 +81,16 @@ id_aux =  (* Identifier *)
 
 
 type 
+effect_aux =  (* effect set, of kind Effects *)
+   Effect_var of kid
+ | Effect_set of (base_effect) list (* effect set *)
+
+
+type 
 order_aux =  (* vector order specifications, of kind Order *)
    Ord_var of kid (* variable *)
  | Ord_inc (* increasing (little-endian) *)
  | Ord_dec (* decreasing (big-endian) *)
-
-
-type 
-effect_aux =  (* effect set, of kind Effects *)
-   Effect_var of kid
- | Effect_set of (base_effect) list (* effect set *)
 
 
 type 
@@ -99,13 +99,13 @@ id =
 
 
 type 
-order = 
-   Ord_aux of order_aux * l
+effect = 
+   Effect_aux of effect_aux * l
 
 
 type 
-effect = 
-   Effect_aux of effect_aux * l
+order = 
+   Ord_aux of order_aux * l
 
 
 type 
@@ -231,6 +231,11 @@ typschm =
 
 
 type 
+'a reg_id_aux = 
+   RI_id of id
+
+
+type 
 'a exp_aux =  (* Expression *)
    E_block of ('a exp) list (* block *)
  | E_nondet of ('a exp) list (* nondeterminisitic block, expressions evaluate in an unspecified order, or concurrently *)
@@ -309,11 +314,8 @@ and 'a letbind =
 
 
 type 
-'a alias_spec_aux =  (* Register alias expression forms. Other than where noted, each id must refer to an unaliased register of type vector *)
-   AL_subreg of id * id (* id must refer to a register, id' to a declared subregister of id *)
- | AL_bit of id * 'a exp
- | AL_slice of id * 'a exp * 'a exp
- | AL_concat of id * id (* both id and id' must refer to a register *)
+'a reg_id = 
+   RI_aux of 'a reg_id_aux * 'a annot
 
 
 type 
@@ -351,8 +353,11 @@ rec_opt_aux =  (* Optional recursive annotation for functions *)
 
 
 type 
-'a alias_spec = 
-   AL_aux of 'a alias_spec_aux * 'a annot
+'a alias_spec_aux =  (* Register alias expression forms. Other than where noted, each id must refer to an unaliased register of type vector *)
+   AL_subreg of 'a reg_id * id
+ | AL_bit of 'a reg_id * 'a exp
+ | AL_slice of 'a reg_id * 'a exp * 'a exp
+ | AL_concat of 'a reg_id * 'a reg_id
 
 
 type 
@@ -396,10 +401,8 @@ and index_range =
 
 
 type 
-'a dec_spec_aux =  (* Register declarations *)
-   DEC_reg of typ * id
- | DEC_alias of id * 'a alias_spec
- | DEC_typ_alias of typ * id * 'a alias_spec
+'a alias_spec = 
+   AL_aux of 'a alias_spec_aux * 'a annot
 
 
 type 
@@ -433,15 +436,17 @@ type
 
 
 type 
+'a dec_spec_aux =  (* Register declarations *)
+   DEC_reg of typ * id
+ | DEC_alias of id * 'a alias_spec
+ | DEC_typ_alias of typ * id * 'a alias_spec
+
+
+type 
 'a val_spec_aux =  (* Value type specification *)
    VS_val_spec of typschm * id
  | VS_extern_no_rename of typschm * id
  | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
-
-
-type 
-'a dec_spec = 
-   DEC_aux of 'a dec_spec_aux * 'a annot
 
 
 type 
@@ -462,6 +467,11 @@ type
 type 
 'a fundef = 
    FD_aux of 'a fundef_aux * 'a annot
+
+
+type 
+'a dec_spec = 
+   DEC_aux of 'a dec_spec_aux * 'a annot
 
 
 type 

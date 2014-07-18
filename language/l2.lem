@@ -29,24 +29,20 @@ type base_kind_aux =  (* base kind *)
  | BK_effect (* kind of effect sets *)
 
 
-type base_kind = 
- | BK_aux of base_kind_aux * l
-
-
 type kid_aux =  (* variables with kind, ticked to differntiate from program variables *)
  | Var of x
 
 
-type kind_aux =  (* kinds *)
- | K_kind of list base_kind
+type base_kind = 
+ | BK_aux of base_kind_aux * l
 
 
 type kid = 
  | Kid_aux of kid_aux * l
 
 
-type kind = 
- | K_aux of kind_aux * l
+type kind_aux =  (* kinds *)
+ | K_kind of list base_kind
 
 
 type nexp_aux =  (* expression of kind Nat, for vector sizes and origins *)
@@ -59,6 +55,10 @@ type nexp_aux =  (* expression of kind Nat, for vector sizes and origins *)
 
 and nexp = 
  | Nexp_aux of nexp_aux * l
+
+
+type kind = 
+ | K_aux of kind_aux * l
 
 
 type base_effect_aux =  (* effect *)
@@ -109,11 +109,6 @@ let effect_union e1 e2 =
   end
 
 
-type kinded_id_aux =  (* optionally kind-annotated identifier *)
- | KOpt_none of kid (* identifier *)
- | KOpt_kind of kind * kid (* kind-annotated variable *)
-
-
 type n_constraint_aux =  (* constraint over kind $Nat$ *)
  | NC_fixed of nexp * nexp
  | NC_bounded_ge of nexp * nexp
@@ -121,12 +116,17 @@ type n_constraint_aux =  (* constraint over kind $Nat$ *)
  | NC_nat_set_bounded of kid * list integer
 
 
-type kinded_id = 
- | KOpt_aux of kinded_id_aux * l
+type kinded_id_aux =  (* optionally kind-annotated identifier *)
+ | KOpt_none of kid (* identifier *)
+ | KOpt_kind of kind * kid (* kind-annotated variable *)
 
 
 type n_constraint = 
  | NC_aux of n_constraint_aux * l
+
+
+type kinded_id = 
+ | KOpt_aux of kinded_id_aux * l
 
 
 type quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
@@ -141,6 +141,19 @@ type quant_item =
 type typquant_aux =  (* type quantifiers and constraints *)
  | TypQ_tq of list quant_item
  | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
+
+
+type lit_aux =  (* Literal constant *)
+ | L_unit (* $() : unit$ *)
+ | L_zero (* $bitzero : bit$ *)
+ | L_one (* $bitone : bit$ *)
+ | L_true (* $true : bool$ *)
+ | L_false (* $false : bool$ *)
+ | L_num of integer (* natural number constant *)
+ | L_hex of string (* bit vector constant, C-style *)
+ | L_bin of string (* bit vector constant, C-style *)
+ | L_undef (* constant representing undefined values *)
+ | L_string of string (* string constant *)
 
 
 type typquant = 
@@ -168,29 +181,12 @@ and typ_arg =
  | Typ_arg_aux of typ_arg_aux * l
 
 
-type lit_aux =  (* Literal constant *)
- | L_unit (* $() : unit$ *)
- | L_zero (* $bitzero : bit$ *)
- | L_one (* $bitone : bit$ *)
- | L_true (* $true : bool$ *)
- | L_false (* $false : bool$ *)
- | L_num of integer (* natural number constant *)
- | L_hex of string (* bit vector constant, C-style *)
- | L_bin of string (* bit vector constant, C-style *)
- | L_undef (* constant representing undefined values *)
- | L_string of string (* string constant *)
-
-
-type typschm_aux =  (* type scheme *)
- | TypSchm_ts of typquant * typ
-
-
 type lit = 
  | L_aux of lit_aux * l
 
 
-type typschm = 
- | TypSchm_aux of typschm_aux * l
+type typschm_aux =  (* type scheme *)
+ | TypSchm_ts of typquant * typ
 
 
 type pat_aux 'a =  (* Pattern *)
@@ -217,7 +213,22 @@ and fpat 'a =
  | FP_aux of (fpat_aux 'a) * annot 'a
 
 
-type exp_aux 'a =  (* Expression *)
+type typschm = 
+ | TypSchm_aux of typschm_aux * l
+
+
+type reg_id_aux 'a = 
+ | RI_id of id
+
+
+type letbind_aux 'a =  (* Let binding *)
+ | LB_val_explicit of typschm * (pat 'a) * (exp 'a) (* value binding, explicit type ((pat 'a) must be total) *)
+ | LB_val_implicit of (pat 'a) * (exp 'a) (* value binding, implicit type ((pat 'a) must be total) *)
+
+and letbind 'a = 
+ | LB_aux of (letbind_aux 'a) * annot 'a
+
+and exp_aux 'a =  (* Expression *)
  | E_block of list (exp 'a) (* block *)
  | E_nondet of list (exp 'a) (* nondeterminisitic block, expressions evaluate in an unspecified order, or concurrently *)
  | E_id of id (* identifier *)
@@ -286,29 +297,16 @@ and pexp_aux 'a =  (* Pattern match *)
 and pexp 'a = 
  | Pat_aux of (pexp_aux 'a) * annot 'a
 
-and letbind_aux 'a =  (* Let binding *)
- | LB_val_explicit of typschm * (pat 'a) * (exp 'a) (* value binding, explicit type ((pat 'a) must be total) *)
- | LB_val_implicit of (pat 'a) * (exp 'a) (* value binding, implicit type ((pat 'a) must be total) *)
 
-and letbind 'a = 
- | LB_aux of (letbind_aux 'a) * annot 'a
+type reg_id 'a = 
+ | RI_aux of (reg_id_aux 'a) * annot 'a
 
 
 type alias_spec_aux 'a =  (* Register alias expression forms. Other than where noted, each id must refer to an unaliased register of type vector *)
- | AL_subreg of id * id (* id must refer to a register, id' to a declared subregister of id *)
- | AL_bit of id * (exp 'a)
- | AL_slice of id * (exp 'a) * (exp 'a)
- | AL_concat of id * id (* both id and id' must refer to a register *)
-
-
-type type_union_aux =  (* Type union constructors *)
- | Tu_id of id
- | Tu_ty_id of typ * id
-
-
-type name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
- | Name_sect_none
- | Name_sect_some of string
+ | AL_subreg of (reg_id 'a) * id
+ | AL_bit of (reg_id 'a) * (exp 'a)
+ | AL_slice of (reg_id 'a) * (exp 'a) * (exp 'a)
+ | AL_concat of (reg_id 'a) * (reg_id 'a)
 
 
 type rec_opt_aux =  (* Optional recursive annotation for functions *)
@@ -316,29 +314,55 @@ type rec_opt_aux =  (* Optional recursive annotation for functions *)
  | Rec_rec (* recursive *)
 
 
-type effect_opt_aux =  (* Optional effect annotation for functions *)
- | Effect_opt_pure (* sugar for empty effect set *)
- | Effect_opt_effect of effect
+type funcl_aux 'a =  (* Function clause *)
+ | FCL_Funcl of id * (pat 'a) * (exp 'a)
 
 
 type tannot_opt_aux =  (* Optional type annotation for functions *)
  | Typ_annot_opt_some of typquant * typ
 
 
-type funcl_aux 'a =  (* Function clause *)
- | FCL_Funcl of id * (pat 'a) * (exp 'a)
+type effect_opt_aux =  (* Optional effect annotation for functions *)
+ | Effect_opt_pure (* sugar for empty effect set *)
+ | Effect_opt_effect of effect
+
+
+type name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
+ | Name_sect_none
+ | Name_sect_some of string
+
+
+type type_union_aux =  (* Type union constructors *)
+ | Tu_id of id
+ | Tu_ty_id of typ * id
 
 
 type alias_spec 'a = 
  | AL_aux of (alias_spec_aux 'a) * annot 'a
 
 
-type type_union = 
- | Tu_aux of type_union_aux * l
+type rec_opt = 
+ | Rec_aux of rec_opt_aux * l
+
+
+type funcl 'a = 
+ | FCL_aux of (funcl_aux 'a) * l
+
+
+type tannot_opt = 
+ | Typ_annot_opt_aux of tannot_opt_aux * l
+
+
+type effect_opt = 
+ | Effect_opt_aux of effect_opt_aux * l
 
 
 type name_scm_opt = 
  | Name_sect_aux of name_scm_opt_aux * l
+
+
+type type_union = 
+ | Tu_aux of type_union_aux * l
 
 
 type index_range_aux =  (* index specification, for bitfields in register types *)
@@ -350,40 +374,10 @@ and index_range =
  | BF_aux of index_range_aux * l
 
 
-type rec_opt = 
- | Rec_aux of rec_opt_aux * l
-
-
-type effect_opt = 
- | Effect_opt_aux of effect_opt_aux * l
-
-
-type tannot_opt = 
- | Typ_annot_opt_aux of tannot_opt_aux * l
-
-
-type funcl 'a = 
- | FCL_aux of (funcl_aux 'a) * l
-
-
-type val_spec_aux 'a =  (* Value type specification *)
- | VS_val_spec of typschm * id
- | VS_extern_no_rename of typschm * id
- | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
-
-
 type dec_spec_aux 'a =  (* Register declarations *)
  | DEC_reg of typ * id
  | DEC_alias of id * (alias_spec 'a)
  | DEC_typ_alias of typ * id * (alias_spec 'a)
-
-
-type type_def_aux 'a =  (* Type definition body *)
- | TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
- | TD_record of id * name_scm_opt * typquant * list (typ * id) * bool (* struct type definition *)
- | TD_variant of id * name_scm_opt * typquant * list type_union * bool (* union type definition *)
- | TD_enum of id * name_scm_opt * list id * bool (* enumeration type definition *)
- | TD_register of id * nexp * nexp * list (index_range * id) (* register mutable bitfield type definition *)
 
 
 type fundef_aux 'a =  (* Function definition *)
@@ -399,21 +393,27 @@ type scattered_def_aux 'a =  (* Function and type union definitions that can be 
  | SD_scattered_end of id (* scattered definition end *)
 
 
+type type_def_aux 'a =  (* Type definition body *)
+ | TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
+ | TD_record of id * name_scm_opt * typquant * list (typ * id) * bool (* struct type definition *)
+ | TD_variant of id * name_scm_opt * typquant * list type_union * bool (* union type definition *)
+ | TD_enum of id * name_scm_opt * list id * bool (* enumeration type definition *)
+ | TD_register of id * nexp * nexp * list (index_range * id) (* register mutable bitfield type definition *)
+
+
 type default_spec_aux 'a =  (* Default kinding or typing assumption *)
  | DT_kind of base_kind * kid
  | DT_typ of typschm * id
 
 
-type val_spec 'a = 
- | VS_aux of (val_spec_aux 'a) * annot 'a
+type val_spec_aux 'a =  (* Value type specification *)
+ | VS_val_spec of typschm * id
+ | VS_extern_no_rename of typschm * id
+ | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
 
 
 type dec_spec 'a = 
  | DEC_aux of (dec_spec_aux 'a) * annot 'a
-
-
-type type_def 'a = 
- | TD_aux of (type_def_aux 'a) * annot 'a
 
 
 type fundef 'a = 
@@ -424,8 +424,16 @@ type scattered_def 'a =
  | SD_aux of (scattered_def_aux 'a) * annot 'a
 
 
+type type_def 'a = 
+ | TD_aux of (type_def_aux 'a) * annot 'a
+
+
 type default_spec 'a = 
  | DT_aux of (default_spec_aux 'a) * l
+
+
+type val_spec 'a = 
+ | VS_aux of (val_spec_aux 'a) * annot 'a
 
 
 type def 'a =  (* Top-level definition *)
@@ -502,17 +510,6 @@ type tid =  (* A type identifier or type variable *)
  | Tid_var of kid
 
 
-type tag =  (* Data indicating where the identifier arises and thus information necessary in compilation *)
- | Tag_empty
- | Tag_global (* Globally let-bound or enumeration based value/variable *)
- | Tag_ctor (* Data constructor from a type union *)
- | Tag_extern of maybe string (* External function, specied only with a val statement *)
- | Tag_default (* Type has come from default declaration, identifier may not be bound locally *)
- | Tag_spec
- | Tag_enum
- | Tag_alias
-
-
 type t =  (* Internal types *)
  | T_id of x
  | T_var of x
@@ -529,6 +526,17 @@ and t_arg =  (* Argument to type constructors *)
 
 and t_args =  (* Arguments to type constructors *)
  | T_args of list t_arg
+
+
+type tag =  (* Data indicating where the identifier arises and thus information necessary in compilation *)
+ | Tag_empty
+ | Tag_global (* Globally let-bound or enumeration based value/variable *)
+ | Tag_ctor (* Data constructor from a type union *)
+ | Tag_extern of maybe string (* External function, specied only with a val statement *)
+ | Tag_default (* Type has come from default declaration, identifier may not be bound locally *)
+ | Tag_spec
+ | Tag_enum
+ | Tag_alias
 
 
 type tinf =  (* Type variables, type, and constraints, bound to an identifier *)

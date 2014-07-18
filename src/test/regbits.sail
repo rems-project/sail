@@ -25,5 +25,6 @@ function (bit[64]) main _ = {
   XER.FOOBAR := 0b11;
   XER.FOOBAR := foobar;
   query := doub[13];
+  doub := XER:XER;
   XER }
 

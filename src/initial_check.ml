@@ -614,14 +614,15 @@ let to_ast_alias_spec k_env (Parse_ast.E_aux(e,le)) =
   AL_aux(
     (match e with
       | Parse_ast.E_field(Parse_ast.E_aux(Parse_ast.E_id id,li), field) -> 
-	AL_subreg(to_ast_id id,to_ast_id field)
+	AL_subreg(RI_aux(RI_id (to_ast_id id),(li,NoTyp)),to_ast_id field)
       | Parse_ast.E_vector_access(Parse_ast.E_aux(Parse_ast.E_id id,li),range) ->
-	AL_bit(to_ast_id id,to_ast_exp k_env range)
+	AL_bit(RI_aux(RI_id (to_ast_id id),(li,NoTyp)),to_ast_exp k_env range)
       | Parse_ast.E_vector_subrange(Parse_ast.E_aux(Parse_ast.E_id id,li),base,stop) ->
-	AL_slice(to_ast_id id,to_ast_exp k_env base,to_ast_exp k_env stop)
+	AL_slice(RI_aux(RI_id (to_ast_id id),(li,NoTyp)),to_ast_exp k_env base,to_ast_exp k_env stop)
       | Parse_ast.E_vector_append(Parse_ast.E_aux(Parse_ast.E_id first,lf),
 				  Parse_ast.E_aux(Parse_ast.E_id second,ls)) ->
-	AL_concat(to_ast_id first,to_ast_id second)
+	AL_concat(RI_aux(RI_id (to_ast_id first),(lf,NoTyp)),
+		  RI_aux(RI_id (to_ast_id second),(ls,NoTyp)))
     ), (le,NoTyp))      
 
 let to_ast_dec (names,k_env,t_env) (Parse_ast.DEC_aux(regdec,l)) =

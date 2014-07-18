@@ -496,15 +496,17 @@ let pp_lem_fundef ppf (FD_aux(FD_function(r, typa, efa, fcls),(l,annot))) =
     pp_lem_l l pp_annot annot
 
 let pp_lem_aspec ppf (AL_aux(aspec,(l,annot))) =
+  let pp_reg_id ppf (RI_aux((RI_id ri),(l,annot))) =
+    fprintf ppf "@[<0>(RI_aux (RI_id %a) (%a,%a))@]" pp_lem_id ri pp_lem_l l pp_annot annot in
   match aspec with
     | AL_subreg(reg,subreg) -> 
-      fprintf ppf "@[<0>(AL_aux (AL_subreg %a %a) (%a,%a))@]" pp_lem_id reg pp_lem_id subreg pp_lem_l l pp_annot annot
+      fprintf ppf "@[<0>(AL_aux (AL_subreg %a %a) (%a,%a))@]" pp_reg_id reg pp_lem_id subreg pp_lem_l l pp_annot annot
     | AL_bit(reg,ac) ->
-      fprintf ppf "@[<0>(AL_aux (AL_bit %a %a) (%a,%a))@]" pp_lem_id reg pp_lem_exp ac pp_lem_l l pp_annot annot
+      fprintf ppf "@[<0>(AL_aux (AL_bit %a %a) (%a,%a))@]" pp_reg_id reg pp_lem_exp ac pp_lem_l l pp_annot annot
     | AL_slice(reg,b,e) ->
-      fprintf ppf "@[<0>(AL_aux (AL_slice %a %a %a) (%a,%a))@]" pp_lem_id reg pp_lem_exp b pp_lem_exp e pp_lem_l l pp_annot annot
+      fprintf ppf "@[<0>(AL_aux (AL_slice %a %a %a) (%a,%a))@]" pp_reg_id reg pp_lem_exp b pp_lem_exp e pp_lem_l l pp_annot annot
     | AL_concat(f,s) ->
-      fprintf ppf "@[<0>(AL_aux (AL_concat %a %a) (%a,%a))@]" pp_lem_id f pp_lem_id s pp_lem_l l pp_annot annot
+      fprintf ppf "@[<0>(AL_aux (AL_concat %a %a) (%a,%a))@]" pp_reg_id f pp_reg_id s pp_lem_l l pp_annot annot
 
 let pp_lem_dec ppf (DEC_aux(reg,(l,annot))) =
   match reg with 
@@ -1033,10 +1035,10 @@ let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =
 
 let doc_alias (AL_aux (alspec,_)) =
   match alspec with
-    | AL_subreg(id,subid) -> doc_id id ^^ dot ^^ doc_id subid
-    | AL_bit(id,ac) -> doc_id id ^^ brackets (doc_exp ac)
-    | AL_slice(id,b,e) -> doc_id id ^^ brackets (doc_op dotdot (doc_exp b) (doc_exp e))
-    | AL_concat(f,s) -> doc_op colon (doc_id f) (doc_id s)
+    | AL_subreg((RI_aux (RI_id id,_)),subid) -> doc_id id ^^ dot ^^ doc_id subid
+    | AL_bit((RI_aux (RI_id id,_)),ac) -> doc_id id ^^ brackets (doc_exp ac)
+    | AL_slice((RI_aux (RI_id id,_)),b,e) -> doc_id id ^^ brackets (doc_op dotdot (doc_exp b) (doc_exp e))
+    | AL_concat((RI_aux (RI_id f,_)),(RI_aux (RI_id s,_))) -> doc_op colon (doc_id f) (doc_id s)
 
 let doc_dec (DEC_aux (reg,_)) =
   match reg with

@@ -828,15 +828,17 @@ scattered_def :: 'SD_' ::=
   | end id  :: :: scattered_end
 {{ com scattered definition end }}
 
+reg_id :: 'RI_' ::=
+  {{ aux _ annot }} {{ auxparam 'a }}
+  | id								:: :: id
+
 alias_spec :: 'AL_' ::=
   {{ com Register alias expression forms. Other than where noted, each id must refer to an unaliased register of type vector }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | id . id'							:: :: subreg
-  {{ com id must refer to a register, id' to a declared subregister of id }}
-  | id [ exp ] 							:: :: bit
-  | id [ exp '..' exp' ]					:: :: slice
-  | id : id'  	    						:: :: concat
-  {{ com both id and id' must refer to a register }}
+  | reg_id . id							:: :: subreg
+  | reg_id [ exp ] 						:: :: bit
+  | reg_id [ exp '..' exp' ]					:: :: slice
+  | reg_id : reg_id'  	    					:: :: concat
 
 dec_spec :: 'DEC_' ::=
   {{ com Register declarations }}

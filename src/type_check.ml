@@ -1062,7 +1062,9 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
             (LEXP_aux(lexp,(l,(Base(([],t'),Alias,[],ef)))), t, Envmap.empty, External (Some reg),[],ef)
           | Some(TwoReg(reg1,reg2, (Base(([],t'),_,_,_)))) ->
             let ef = {effect=Eset [BE_aux(BE_wreg,l)]} in
-            (LEXP_aux(lexp,(l,Base(([],t'),Alias,[],ef))), t, Envmap.empty, External None,[],ef)
+	    let u = match t.t with
+	      | Tapp("register", [TA_typ u]) -> u in
+            (LEXP_aux(lexp,(l,Base(([],t'),Alias,[],ef))), u, Envmap.empty, External None,[],ef)
           | _ -> assert false)
 	| Some(Base((parms,t),tag,cs,_)) ->
 	  let t,cs,_ = match tag with | External _ | Emp_global -> subst parms t cs pure_e | _ -> t,cs,pure_e in
@@ -1444,7 +1446,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
 (*TODO Only works for inc vectors, need to add support for dec*)
 let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
   let (Env(d_env,t_env)) = envs in
-  let check_reg (Id_aux(_,l) as id) : (string * typ * typ) =
+  let check_reg (RI_aux ((RI_id (Id_aux(_,l) as id)), _)) : (string * tannot reg_id * typ * typ) =
     let i = id_to_string id in
     (match Envmap.apply t_env i with
       | Some(Base(([],t), External (Some j), [], _)) ->
@@ -1454,14 +1456,14 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
           | _ -> t,t in
 	(match t_actual.t with 
 	  | Tapp("register",[TA_typ t']) -> 
-	    if i = j then (i,t_id,t')
+	    if i = j then (i,(RI_aux (RI_id id, (l,Base(([],t),External (Some j), [], pure_e)))),t_id,t')
 	    else assert false
 	  | _ -> typ_error l 
 	    ("register alias " ^ alias ^ " to " ^ i ^ " expected a register, found " ^ (t_to_string t)))
       | _ -> typ_error l ("register alias " ^ alias ^ " to " ^ i ^ " exepcted a register.")) in
   match al with
     | AL_subreg(reg_a,subreg) -> 
-      let (reg,reg_t,t) = check_reg reg_a in 
+      let (reg,reg_a,reg_t,t) = check_reg reg_a in 
       (match reg_t.t with
 	| Tid i ->
 	  (match lookup_record_typ i d_env.rec_env with
@@ -1477,7 +1479,7 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
 		  (AL_aux(AL_subreg(reg_a,subreg),(l,tannot)),tannot,d_env)))
 	| _ -> let _ = Printf.printf "%s\n" (t_to_string reg_t) in assert false)
     | AL_bit(reg_a,bit) -> 
-      let (reg,reg_t,t) = check_reg reg_a in
+      let (reg,reg_a,reg_t,t) = check_reg reg_a in
       let (E_aux(bit,(le,eannot)),_,_,_,_) = check_exp envs (new_t ()) bit in
       (match t.t with
 	| Tapp("vector",[TA_nexp base;TA_nexp len;TA_ord order;TA_typ item_t]) ->
@@ -1491,7 +1493,7 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
 	      else typ_error ll ("Alias bit lookup must be in the range of the vector in the register")
 	    | _ -> assert false)
     | AL_slice(reg_a,sl1,sl2) -> 
-      let (reg,reg_t,t) = check_reg reg_a in 
+      let (reg,reg_a,reg_t,t) = check_reg reg_a in 
       let (E_aux(sl1,(le1,eannot1)),_,_,_,_) = check_exp envs (new_t ()) sl1 in
       let (E_aux(sl2,(le2,eannot2)),_,_,_,_) = check_exp envs (new_t ()) sl2 in
       (match t.t with
@@ -1509,8 +1511,8 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
 	      else typ_error ll ("Alias slices must be in the range of the vector in the register")
 	    | _ -> assert false)
     | AL_concat(reg1_a,reg2_a) -> 
-      let (reg1,reg_t,t1) = check_reg reg1_a in
-      let (reg2,reg_t,t2) = check_reg reg2_a in
+      let (reg1,reg1_a,reg_t,t1) = check_reg reg1_a in
+      let (reg2,reg2_a,reg_t,t2) = check_reg reg2_a in
       (match (t1.t,t2.t) with
 	| (Tapp("vector",[TA_nexp b1;TA_nexp r; TA_ord {order = Oinc}; TA_typ item_t]),
 	   Tapp("vector",[TA_nexp _ ;TA_nexp r2; TA_ord {order = Oinc}; TA_typ item_t2])) ->

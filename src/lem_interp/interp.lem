@@ -1560,53 +1560,62 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	    (match in_env aliases id with
 	      | Just (AL_aux aspec (l,_)) -> 
 		(match aspec with
-		  | AL_subreg reg subreg ->
-		    (match in_env regs reg with
-		      | Just (V_register (Reg _ (Just((T_id id),_,_,_)))) ->
-			(match in_env subregs (Id_aux (Id id) Unknown) with
-			  | Just indexes -> 
-			    (match in_env indexes subreg with
-			      | Just ir -> 
-				(Action (Write_reg (SubReg subreg (Reg reg annot) ir) Nothing value) 
-				   (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
-				      t_level l_env l_mem Top), l_mem, l_env)
-			      | _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
-			    | _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " id), l_mem, l_env) end)
-			| Just (V_register ((Reg _ (Just((T_abbrev (T_id id) _),_,_,_))) as rf)) ->
-			  (match in_env subregs (Id_aux (Id id) Unknown) with
-			    | Just indexes -> 
-			      (match in_env indexes subreg with
-				| Just ir -> 
-				  (Action (Write_reg (SubReg subreg (Reg reg annot) ir) Nothing value) 
-				     (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
-					t_level l_env l_mem Top), l_mem, l_env)
-				| _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
-			    | _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " id), l_mem, l_env) end)
-			| _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register " (get_id reg)),l_mem,l_env) end)
-		    | AL_bit reg e ->
-		      resolve_outcome (interp_main mode t_level l_env l_mem e) 
-			(fun v le lm -> match v with 
-			  | V_lit (L_aux (L_num i) _) -> 
-			    (Action (Write_reg (Reg reg annot) (Just (i,i)) value) 
+		  | AL_subreg (RI_aux (RI_id reg)  (li, ((Just((T_id id),_,_,_)) as annot'))) subreg ->
+		    (match in_env subregs (Id_aux (Id id) Unknown) with
+		      | Just indexes -> 
+			(match in_env indexes subreg with
+			  | Just ir -> 
+			    (Action (Write_reg (SubReg subreg (Reg reg annot') ir) Nothing value) 
 			       (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
-				  t_level l_env l_mem Top), l_mem, l_env) end)
-			(fun a -> a)
-		    | AL_slice reg start stop -> 
-		      resolve_outcome (interp_main mode t_level l_env l_mem start)
-			(fun v lm le -> 
-			  match v with 
-			    | V_lit (L_aux (L_num start) _) ->
-			      (resolve_outcome (interp_main mode t_level l_env lm stop)
-			         (fun v le lm ->
-				   (match v with
-				     | V_lit (L_aux (L_num stop) _) ->
-				       (Action (Write_reg (Reg reg annot) (Just (start,stop)) value) 
-					  (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
-					     t_level l_env l_mem Top),
-					l_mem, l_env) end))
-				 (fun a -> a)) end)
-			(fun a -> a)
-		    | AL_concat reg1 reg2 -> (Error l "Unimplemented yet, alias spec concat", l_mem, l_env) end)
+				  t_level l_env l_mem Top), l_mem, l_env)
+			  | _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
+		      | _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " id), l_mem, l_env) end)
+		  | AL_subreg (RI_aux (RI_id reg) (li, ((Just((T_abbrev (T_id id) _),_,_,_)) as annot'))) subreg ->
+		    (match in_env subregs (Id_aux (Id id) Unknown) with
+		      | Just indexes -> 
+			(match in_env indexes subreg with
+			  | Just ir -> 
+			    (Action (Write_reg (SubReg subreg (Reg reg annot') ir) Nothing value) 
+			       (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
+				  t_level l_env l_mem Top), l_mem, l_env)
+			  | _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
+		      | _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " id), l_mem, l_env) end)
+		  | AL_bit (RI_aux (RI_id reg) (_,annot')) e ->
+		    resolve_outcome (interp_main mode t_level l_env l_mem e) 
+		      (fun v le lm -> match v with 
+			| V_lit (L_aux (L_num i) _) -> 
+			  (Action (Write_reg (Reg reg annot') (Just (i,i)) value) 
+			     (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
+				t_level l_env l_mem Top), l_mem, l_env) end)
+		      (fun a -> a)
+		  | AL_slice (RI_aux (RI_id reg) (_,annot')) start stop -> 
+		    resolve_outcome (interp_main mode t_level l_env l_mem start)
+		      (fun v lm le -> 
+			match v with 
+			  | V_lit (L_aux (L_num start) _) ->
+			    (resolve_outcome (interp_main mode t_level l_env lm stop)
+			       (fun v le lm ->
+				 (match v with
+				   | V_lit (L_aux (L_num stop) _) ->
+				     (Action (Write_reg (Reg reg annot') (Just (start,stop)) value) 
+					(Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
+					   t_level l_env l_mem Top),
+				      l_mem, l_env) end))
+			       (fun a -> a)) end)
+		      (fun a -> a)
+		  | AL_concat (RI_aux (RI_id reg1) (l1,annot1)) (RI_aux (RI_id reg2) annot2) -> 
+		    let val_typ t = match t with
+			  | T_app "register" (T_args [T_arg_typ t]) -> t
+			  | T_abbrev _ (T_app "register" (T_args [T_arg_typ t])) -> t end in
+		    let (t1,t2) = match (annot1,annot2) with
+		      | (Just (t1,_,_,_), (_,(Just (t2,_,_,_)))) -> (val_typ t1,val_typ t2) end in
+                   (match (t1,t2) with
+		      | (T_app "vector" (T_args [T_arg_nexp (Ne_const b1); T_arg_nexp (Ne_const r1); _;_]),
+			 T_app "vector" (T_args [T_arg_nexp (Ne_const b2); T_arg_nexp (Ne_const r2); _;_])) ->
+			(Action (Write_reg (Reg reg1 annot1) Nothing (slice_vector value b1 r1))
+			        (Thunk_frame (E_aux (E_assign (LEXP_aux (LEXP_id reg2) annot2)
+						              (to_exp (slice_vector value (r1+1) r2))) annot2)
+				              t_level l_env l_mem Top), l_mem,l_env) end) end)
 	    | _ -> (Error l (String.stringAppend "Internal error: alias not found for id " (get_id id)),l_mem,l_env) end) in
 	  (request,Nothing)
         | _ -> ((Error l (String.stringAppend "Internal error: writing to id with tag other than extern, empty, or alias " (get_id id)),l_mem,l_env),Nothing)
@@ -1814,43 +1823,38 @@ and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
       | T_abbrev (T_id i) _ -> i
     end in
   match alspec with
-    | AL_subreg reg subreg ->
-      (match in_env regs reg with
-	| Just (V_register (Reg _ (Just (t,_,_,_)))) ->
-	  let reg_ti = get_reg_typ_name t in
-	  (match in_env subregs (Id_aux (Id reg_ti) Unknown) with
-	    | Just indexes -> 
-	      (match in_env indexes subreg with
-		| Just ir -> (Action (Read_reg (SubReg subreg (Reg reg annot) ir) Nothing) stack, l_mem, l_env)
-		| _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
-	    | _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " reg_ti), l_mem, l_env) end)
-	| _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register " (get_id reg)),l_mem,l_env) end)
-    | AL_bit reg e ->
+    | AL_subreg (RI_aux (RI_id reg) (li,((Just (t,_,_,_)) as annot'))) subreg ->
+      let reg_ti = get_reg_typ_name t in
+      (match in_env subregs (Id_aux (Id reg_ti) Unknown) with
+	| Just indexes -> 
+	  (match in_env indexes subreg with
+	    | Just ir -> (Action (Read_reg (SubReg subreg (Reg reg annot') ir) Nothing) stack, l_mem, l_env)
+	    | _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
+	| _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " reg_ti), l_mem, l_env) end)
+    | AL_bit (RI_aux (RI_id reg) (_,annot')) e ->
       resolve_outcome (interp_main mode t_level l_env l_mem e) 
-                      (fun v le lm -> match v with 
-			| V_lit (L_aux (L_num i) _) -> 
-			  (Action (Read_reg (Reg reg annot) (Just (i,i))) stack, l_mem, l_env) end)
-                      (fun a -> a) (*Should not currently happen as type system enforces constants*)
-    | AL_slice reg start stop -> 
+        (fun v le lm -> match v with 
+	  | V_lit (L_aux (L_num i) _) -> 
+	    (Action (Read_reg (Reg reg annot') (Just (i,i))) stack, l_mem, l_env) end)
+        (fun a -> a) (*Should not currently happen as type system enforces constants*)
+    | AL_slice (RI_aux (RI_id reg) (_,annot')) start stop -> 
       resolve_outcome (interp_main mode t_level l_env l_mem start)
-                      (fun v lm le -> 
-			match v with 
-			  | V_lit (L_aux (L_num start) _) ->
-			    (resolve_outcome 
-			       (interp_main mode t_level l_env lm stop)
-			       (fun v le lm ->
-				 (match v with
-				   | V_lit (L_aux (L_num stop) _) ->
-				     (Action (Read_reg (Reg reg annot) (Just (start,stop))) stack, l_mem, l_env) end))
-			       (fun a -> a)) end)
-                      (fun a -> a) (*Neither action function should occur, due to above*)
-    | AL_concat reg1 reg2 -> 
-      (Action (Read_reg (Reg reg1 annot) Nothing)
+        (fun v lm le -> 
+	  match v with 
+	    | V_lit (L_aux (L_num start) _) ->
+	      (resolve_outcome 
+		 (interp_main mode t_level l_env lm stop)
+		 (fun v le lm ->
+		   (match v with
+		     | V_lit (L_aux (L_num stop) _) ->
+		       (Action (Read_reg (Reg reg annot') (Just (start,stop))) stack, l_mem, l_env) end))
+		 (fun a -> a)) end)
+        (fun a -> a) (*Neither action function should occur, due to above*)
+    | AL_concat (RI_aux (RI_id reg1) (l1, annot1)) (RI_aux (RI_id reg2) annot2) -> 
+      (Action (Read_reg (Reg reg1 annot1) Nothing)
 	      (Hole_frame (Id_aux (Id "0") Unknown)
-		          (E_aux (E_vector_append (E_aux (E_id (Id_aux (Id "0") l)) (l, (intern_annot annot)))
-				                  (E_aux (E_id reg2) 
-						         (l, (Just ((T_app "register" (T_args [T_arg_typ (T_var "fresh")])),
-								   (Tag_extern (Just (get_id reg2))), [], pure)))))
+		          (E_aux (E_vector_append (E_aux (E_id (Id_aux (Id "0") l1)) (l1, (intern_annot annot1)))
+    				                  (E_aux (E_id reg2) annot2)) 
 			        (l,(intern_annot annot))) t_level l_env l_mem Top), l_mem,l_env) end
 
 let rec to_global_letbinds (Defs defs) t_level =
