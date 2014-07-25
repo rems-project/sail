@@ -88,6 +88,7 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_neg of atyp (* Internal (but not M as I want a datatype constructor) negative nexp *)
  | ATyp_inc (* increasing (little-endian) *)
  | ATyp_dec (* decreasing (big-endian) *)
+ | ATyp_default_ord (* default order for increasing or decreasing signficant bits *)
  | ATyp_set of (base_effect) list (* effect set *)
  | ATyp_fn of atyp * atyp * atyp (* Function type (first-order only in user code), last atyp is an effect *)
  | ATyp_tup of (atyp) list (* Tuple type *)
@@ -376,8 +377,9 @@ val_spec_aux =  (* Value type specification *)
 
 
 type 
-default_typing_spec_aux =  (* Default kinding or typing assumption *)
+default_typing_spec_aux =  (* Default kinding or typing assumption, and default order for literal vectors and vector shorthands *)
    DT_kind of base_kind * kid
+ | DT_order of base_kind * atyp
  | DT_typ of typschm * id
 
 
