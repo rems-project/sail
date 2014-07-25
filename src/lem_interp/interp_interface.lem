@@ -52,10 +52,10 @@ val interp : interp_mode -> instruction_state -> outcome
 
 val interp_exhaustive : instruction_state -> list event
 
+val rr_interp_exhaustive : instruction_state -> list event -> (outcome * (list event)) (* Like interp_exhaustive but will read registers; the outcome will only ever be a rreg request, done, or error *)
+
 val mem_read_analysis : instruction_state -> list event (*Should record all rreg events where the registers are involved in memory reads to compute the addressses in is*)
 
 val mem_write_analysis : instruction_state -> list event (*Should record all rreg events where the registers are involved in memory writes to compute the address (and value?, in a separate list?)*)
 
 
-(*Questions : isync? any other special instructions that we need to inform the memory model etc. about 
-            : let's look again at conditional memory instructions, based on the book *)
