@@ -1,4 +1,4 @@
-.PHONY: all src language
+.PHONY: all src language clean
 
 all: src language
 
@@ -7,3 +7,6 @@ src: language
 
 language:
 	$(MAKE) -C $@
+
+clean:
+	$(MAKE) -C src clean
