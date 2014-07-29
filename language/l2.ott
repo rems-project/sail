@@ -805,6 +805,7 @@ default_spec :: 'DT_' ::=
   {{ com Default kinding or typing assumption }}
   {{ aux _ l }} {{ auxparam 'a }}
   | default base_kind kid    :: :: kind
+  | default Order order      :: :: order
   | default typschm id      :: :: typ
 % The intended semantics of these is that if an id in binding position
 % doesn't have a kind or type annotation, then we look through the

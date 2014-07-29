@@ -86,14 +86,18 @@ let parse_file (f : string) : Parse_ast.defs =
       | Lexer.LexError(s,p) ->
           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
 
-let convert_ast (defs : Parse_ast.defs) : (Type_internal.tannot Ast.defs * kind Envmap.t)=
-  Initial_check.to_ast Nameset.empty Type_internal.initial_kind_env Envmap.empty defs
+(*Should add a flag to say whether we want to consider Oinc or Odec the default order *)
+let convert_ast (defs : Parse_ast.defs) : (Type_internal.tannot Ast.defs * kind Envmap.t * Ast.order)=
+  Initial_check.to_ast Nameset.empty Type_internal.initial_kind_env (Ast.Ord_aux(Ast.Ord_inc,Parse_ast.Unknown)) defs
 
 
-let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) : Type_internal.tannot Ast.defs =
+let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.order) : Type_internal.tannot Ast.defs =
   let d_env = { Type_internal.k_env = k; Type_internal.abbrevs = Type_internal.initial_abbrev_env; 
 		Type_internal.namesch = Envmap.empty; Type_internal.enum_env = Envmap.empty; 
-		Type_internal.rec_env = []; Type_internal.alias_env = Envmap.empty} in
+		Type_internal.rec_env = []; Type_internal.alias_env = Envmap.empty; 
+		Type_internal.default_o = 
+                {Type_internal.order = (match o with | (Ast.Ord_aux(Ast.Ord_inc,_)) -> Type_internal.Oinc 
+		                                     | (Ast.Ord_aux(Ast.Ord_dec,_)) -> Type_internal.Odec)};} in
   Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env)) defs 
 
 let open_output_with_check file_name =

@@ -224,9 +224,9 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
           let t',cs' = type_consistent (Patt l) d_env t expect_t in
 	  (P_aux((P_record(pats',false)),(l,Base(([],t'),Emp_local,constraints@cs',pure_e))),env,constraints@cs',t'))
     | P_vector pats -> 
-      let item_t = match expect_actual.t with 
-	| Tapp("vector",[b;r;o;TA_typ i]) -> i
-	| Tuvar _ -> new_t () 
+      let (item_t, base, rise, ord) = match expect_actual.t with 
+	| Tapp("vector",[TA_nexp b;TA_nexp r;TA_ord o;TA_typ i]) -> (i,b,r,o)
+	| Tuvar _ -> (new_t (),new_n (),new_n(), d_env.default_o) 
         | _ -> typ_error l ("Expected a vector by pattern form, but a " ^ t_to_string expect_actual ^ " by type") in
       let (pats',ts,t_envs,constraints) = 
 	List.fold_right 
@@ -1385,6 +1385,7 @@ let check_default envs (DT_aux(ds,l)) =
   let (Env(d_env,t_env)) = envs in
   match ds with
     | DT_kind _ -> ((DT_aux(ds,l)),envs)
+    | DT_order ord -> (DT_aux(ds,l), Env({d_env with default_o = (aorder_to_ord ord)},t_env))
     | DT_typ(typs,id) ->
       let tannot = typschm_to_tannot envs typs Default in
       (DT_aux(ds,l),

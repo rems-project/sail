@@ -12,7 +12,7 @@ let parse_exps s =
   let lexbuf = Lexing.from_string s in
   try
   let pre_exps = Parser.nonempty_exp_list Lexer.token lexbuf in
-  List.map (Initial_check.to_ast_exp Type_internal.initial_kind_env) pre_exps
+  List.map (Initial_check.to_ast_exp Type_internal.initial_kind_env (Ast.Ord_aux(Ast.Ord_inc,Parse_ast.Unknown))) pre_exps
   with
     | Parsing.Parse_error ->
         let pos = Lexing.lexeme_start_p lexbuf in

@@ -109,6 +109,7 @@ type def_envs = {
   enum_env : (string list) emap; 
   rec_env : rec_env list;
   alias_env : alias_kind emap;
+  default_o : order;
  }
 
 type exp = tannot Ast.exp

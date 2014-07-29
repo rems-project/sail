@@ -403,6 +403,7 @@ type type_def_aux 'a =  (* Type definition body *)
 
 type default_spec_aux 'a =  (* Default kinding or typing assumption *)
  | DT_kind of base_kind * kid
+ | DT_order of order
  | DT_typ of typschm * id
 
 

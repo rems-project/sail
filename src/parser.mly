@@ -105,18 +105,25 @@ let make_r bot top =
       ATyp_aux((ATyp_sum ((ATyp_aux (ATyp_sum (top, ATyp_aux(ATyp_constant 1,Unknown)), Unknown)),
 			  (ATyp_aux ((ATyp_neg bot),Unknown)))), l)				   
 
-let make_vector_sugar_bounded is_inc typ typ1 typ2 = 
-  let rise,ord = 
-    if is_inc 
-    then make_r typ1 typ2,ATyp_inc 
-    else make_r typ2 typ1,ATyp_dec in
-  ATyp_app(Id_aux(Id("vector"),Unknown),[typ1;rise;ATyp_aux(ord,Unknown);typ])
-let make_vector_sugar typ typ1 =
-  let sub_one = match typ1 with
-    | ATyp_aux(ATyp_constant t,l) -> ATyp_aux(ATyp_constant (t-1),l)
-    | ATyp_aux(_, l) -> ATyp_aux (ATyp_sum (typ1,
-    ATyp_aux(ATyp_neg(ATyp_aux(ATyp_constant 1,Unknown)), Unknown)), l) in
-  make_vector_sugar_bounded true typ (ATyp_aux(ATyp_constant(0),Unknown)) sub_one
+let make_vector_sugar_bounded order_set is_inc name typ typ1 typ2 = 
+  let (rise,ord,name) = 
+    if order_set 
+    then if is_inc 
+      then (make_r typ1 typ2,ATyp_inc,name) 
+      else (make_r typ2 typ1,ATyp_dec,name) 
+    else if name = "vector" 
+    then (typ2, ATyp_default_ord,"vector_sugar_tb") (* rise not calculated, but top and bottom came from specification *)
+    else (typ2, ATyp_default_ord,"vector_sugar_r") (* rise and base not calculated, rise only from specification *) in
+  ATyp_app(Id_aux(Id(name),Unknown),[typ1;rise;ATyp_aux(ord,Unknown);typ])
+let make_vector_sugar order_set is_inc typ typ1 =
+  let zero = (ATyp_aux(ATyp_constant 0,Unknown)) in
+  let (typ1,typ2) = match (order_set,is_inc,typ1) with
+    | (true,true,ATyp_aux(ATyp_constant t,l)) -> zero,ATyp_aux(ATyp_constant (t-1),l)
+    | (true,true,ATyp_aux(_, l)) -> zero,ATyp_aux (ATyp_sum (typ1,
+    ATyp_aux(ATyp_neg(ATyp_aux(ATyp_constant 1,Unknown)), Unknown)), l)
+    | (true,false,_) -> typ1,zero 
+    | (false,_,_) -> zero,typ1 in
+  make_vector_sugar_bounded order_set is_inc "vector_sugar_r" typ typ1 typ2
 
 %}
 
@@ -336,21 +343,21 @@ vec_typ:
   | atomic_typ
       { $1 }
   | tid Lsquare nexp_typ Rsquare
-      { tloc (make_vector_sugar (ATyp_aux ((ATyp_id $1), locn 1 1)) $3) }
+      { tloc (make_vector_sugar false false (ATyp_aux ((ATyp_id $1), locn 1 1)) $3) }
   | tid Lsquare nexp_typ Colon nexp_typ Rsquare
-      { tloc (make_vector_sugar_bounded true (ATyp_aux ((ATyp_id $1), locn 1 1)) $3 $5) }
+      { tloc (make_vector_sugar_bounded false false "vector" (ATyp_aux ((ATyp_id $1), locn 1 1)) $3 $5) }
   | tid Lsquare nexp_typ LtColon nexp_typ Rsquare
-      { tloc (make_vector_sugar_bounded true (ATyp_aux ((ATyp_id $1), locn 1 1)) $3 $5) }
+      { tloc (make_vector_sugar_bounded true true "vector" (ATyp_aux ((ATyp_id $1), locn 1 1)) $3 $5) }
   | tid Lsquare nexp_typ ColonGt nexp_typ Rsquare
-      { tloc (make_vector_sugar_bounded false (ATyp_aux ((ATyp_id $1), locn 1 1)) $3 $5) }
+      { tloc (make_vector_sugar_bounded true false "vector" (ATyp_aux ((ATyp_id $1), locn 1 1)) $3 $5) }
   | tyvar Lsquare nexp_typ Rsquare
-      { tloc (make_vector_sugar (ATyp_aux ((ATyp_var $1), locn 1 1)) $3) }
+      { tloc (make_vector_sugar false false (ATyp_aux ((ATyp_var $1), locn 1 1)) $3) }
   | tyvar Lsquare nexp_typ Colon nexp_typ Rsquare
-      { tloc (make_vector_sugar_bounded true (ATyp_aux ((ATyp_var $1), locn 1 1)) $3 $5) }
+      { tloc (make_vector_sugar_bounded false false "vector" (ATyp_aux ((ATyp_var $1), locn 1 1)) $3 $5) }
   | tyvar Lsquare nexp_typ LtColon nexp_typ Rsquare
-      { tloc (make_vector_sugar_bounded true (ATyp_aux ((ATyp_var $1), locn 1 1)) $3 $5) }
+      { tloc (make_vector_sugar_bounded true true "vector" (ATyp_aux ((ATyp_var $1), locn 1 1)) $3 $5) }
   | tyvar Lsquare nexp_typ ColonGt nexp_typ Rsquare
-      { tloc (make_vector_sugar_bounded false (ATyp_aux ((ATyp_var $1), locn 1 1)) $3 $5) }
+      { tloc (make_vector_sugar_bounded true false "vector" (ATyp_aux ((ATyp_var $1), locn 1 1)) $3 $5) }
 
 app_typs:
   | nexp_typ
@@ -1116,10 +1123,13 @@ type_def:
   | Typedef tid Eq Register Bits Lsquare nexp_typ Colon nexp_typ Rsquare Lcurly r_def_body Rcurly
     { tdloc (TD_register($2, $7, $9, $12)) }
 
-
 default_typ:
   | Default atomic_kind tyvar
     { defloc (DT_kind($2,$3)) }
+  | Default atomic_kind Inc
+    { defloc (DT_order($2, tloc (ATyp_inc))) }
+  | Default atomic_kind Dec
+    { defloc (DT_order($2, tloc (ATyp_dec))) }
   | Default typquant typ id
     { defloc (DT_typ((mk_typschm $2 $3 2 3),$4)) }
   | Default typ id
