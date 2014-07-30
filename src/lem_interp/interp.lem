@@ -263,8 +263,8 @@ let is_lit_vector (L_aux l _) =
 end
 
 (* XXX Both make an endian assumption, and should use a flag to switch*)
-val litV_to_vec : lit -> value
-let litV_to_vec (L_aux lit l) =
+val litV_to_vec : lit -> bool -> value
+let litV_to_vec (L_aux lit l) is_inc =
   match lit with
   | L_hex s ->
     let to_v b = V_lit (L_aux b l) in
@@ -295,10 +295,14 @@ let litV_to_vec (L_aux lit l) =
 			 | #'e' -> [L_one ;L_one ;L_one ;L_zero]
 			 | #'f' -> [L_one ;L_one ;L_one ;L_one ] end)
 		       (String.toCharList s))) in
-    V_vector 0 true hexes
+    if is_inc 
+    then V_vector 0 true hexes
+    else V_vector (integerFromNat ((List.length hexes) -1)) false hexes
   | L_bin s -> 
     let bits = List.map (fun s -> match s with | #'0' -> (V_lit (L_aux L_zero l)) | #'1' -> (V_lit (L_aux L_one l)) end) (String.toCharList s) in
-    V_vector 0 true bits
+    if is_inc
+    then V_vector 0 true bits
+    else V_vector (integerFromNat ((List.length bits) -1)) false bits
   end
 
 (* Like List_extra.nth with a integer instead of nat index -
@@ -660,11 +664,11 @@ let rec match_pattern (P_aux p _) value =
   match p with 
   | P_lit(lit) -> 
     if is_lit_vector lit then
-      let (V_vector n inc bits) = litV_to_vec lit in
+      let (V_vector n inc bits) = litV_to_vec lit true in (*TODO use type annotation to select between increasing and decreasing*)
       match value with
       | V_lit litv -> 
         if is_lit_vector litv then 
-          let (V_vector n' inc' bits') = litV_to_vec litv in
+          let (V_vector n' inc' bits') = litV_to_vec litv true in (*TODO find a way to determine increasing or decreasing *)
           if n=n' && inc = inc' then (foldr2 (fun l r rest -> (l = r) && rest) true bits bits',false, [])
           else (false,false,[])
         else (false,false,[])
@@ -918,7 +922,9 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
   match exp with
     | E_lit lit -> 
       if is_lit_vector lit 
-      then (Value (litV_to_vec lit) Tag_empty,l_mem,l_env) 
+      then 
+        let is_inc = (match typ with | T_app "vector" (T_args [_;_;T_arg_order (Ord_aux Ord_inc _);_]) -> true | _ -> false end) in
+        (Value (litV_to_vec lit is_inc) Tag_empty,l_mem,l_env) 
       else (Value (V_lit lit) Tag_empty, l_mem,l_env)
     | E_cast ((Typ_aux typ _) as ctyp) exp -> 
       resolve_outcome (interp_main mode t_level l_env l_mem exp)
@@ -1306,7 +1312,12 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     | E_tuple(exps) -> 
       exp_list mode t_level (fun exps -> E_aux (E_tuple exps) (l,annot)) V_tuple l_env l_mem [] exps
     | E_vector(exps) ->
-      exp_list mode t_level (fun exps -> E_aux (E_vector exps) (l,annot)) (fun vals -> V_vector 0 true vals) l_env l_mem [] exps
+      let is_inc = (match typ with
+        | T_app "vector" (T_args [ _; _; T_arg_order (Ord_aux Ord_inc _); _]) -> true
+        | _ -> false end) in
+      let base = integerFromNat (if is_inc then 0 else (List.length exps) - 1) in
+      exp_list mode t_level 
+        (fun exps -> E_aux (E_vector exps) (l,annot)) (fun vals -> V_vector base is_inc vals) l_env l_mem [] exps
     | E_vector_indexed iexps (Def_val_aux default dannot) ->
       let (indexes,exps) = List.unzip iexps in
       let (is_inc,base,len) = (match typ with

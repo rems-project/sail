@@ -416,6 +416,7 @@ let pp_lem_default ppf (DT_aux(df,l)) =
     match df with
       | DT_kind(bk,var) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "DT_kind" pp_lem_bkind bk pp_lem_var var
       | DT_typ(ts,id) -> fprintf ppf "@[<0>(%a %a %a)@]" kwd "DT_typ" pp_lem_typscm ts pp_lem_id id
+      | DT_order(ord) -> fprintf ppf "@[<0>(DT_order %a)@]" pp_lem_ord ord
   in
   fprintf ppf "@[<0>(DT_aux %a %a)@]" print_de df pp_lem_l l
 
@@ -951,6 +952,7 @@ let doc_exp, doc_let =
 let doc_default (DT_aux(df,_)) = match df with
   | DT_kind(bk,v) -> separate space [string "default"; doc_bkind bk; doc_var v]
   | DT_typ(ts,id) -> separate space [string "default"; doc_typscm ts; doc_id id]
+  | DT_order(ord) -> separate space [string "default"; string "order"; doc_ord ord]
 
 let doc_spec (VS_aux(v,_)) = match v with
   | VS_val_spec(ts,id) ->

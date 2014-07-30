@@ -1,3 +1,4 @@
+default Order inc
 default Nat 'i
 default Order 'o
 default bool b
@@ -7,7 +8,6 @@ val forall Type 'i, 'b. ('i, 'b) -> 'i effect pure fst
 typedef int_list [name = "il"] = list<nat>
 typedef reco = const struct forall 'i, 'a, 'b. { 'a['i] v; 'b w; }
 typedef maybe = const union forall 'a. { Nne; 'a Sme; }
-typedef colors = enumerate { red; green; blue }
 typedef creg = register bits [5:10] { 5 : h ; 6..7 : j}
 let bool e = true
 val forall Nat 'a, Nat 'b. bit['a:'b] sliced
@@ -40,6 +40,8 @@ end f
 function unit a (bit) b = if identity(b) then (identity()) else ()
 
 function bit sw s = switch s { case 0 -> bitzero }
+
+typedef colors = enumerate { red; green; blue }
 
 let colors rgb = red
 

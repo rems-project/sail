@@ -62,7 +62,7 @@ let rec val_to_string = function
  | V_vector (first_index, inc, l) ->
      let last_index = add_int_big_int (if inc then List.length l - 1 else 1 - List.length l) first_index  in
      let repr =
-       try bitvec_to_string (if inc then l else List.rev l)
+       try bitvec_to_string (* (if inc then l else List.rev l)*) l
        with Failure _ ->
          sprintf "[%s]" (String.concat "; " (List.map val_to_string l)) in
      sprintf "%s [%s..%s]" repr (string_of_big_int first_index) (string_of_big_int last_index)
@@ -148,9 +148,9 @@ module Reg = struct
   let to_string id v =
     sprintf "%s -> %s" (id_to_string id) (val_to_string v)
   let find id m =
-    eprintf "reg_find called with %s\n" (id_to_string id);
+(*    eprintf "reg_find called with %s\n" (id_to_string id);*)
     let v = find id m in
-    eprintf "%s -> %s\n" (id_to_string id) (val_to_string v);
+(*    eprintf "%s -> %s\n" (id_to_string id) (val_to_string v);*)
     v
 end ;;
 

@@ -78,17 +78,23 @@ let bitwise_binop op (V_tuple [V_vector idx inc v; V_vector idx' inc' v']) =
  * http://en.wikipedia.org/wiki/Bit_numbering *)
 let to_num signed (V_vector idx inc l) =
   (* Word library in Lem expects bitseq with LSB first *)
-  let l = if inc then reverse l else l in
+(*TODO: Kathy think more
+  We thought a reverse was needed due to above comments only in inc case.
+  However, we seem to be interpresting bit vectors such that reverse is always needed
+  and despite numbering MSB is on the left.
+*)
+  let l = (*if inc then reverse l else l*) reverse l in
   (* Make sure the last bit is a zero to force unsigned numbers *)
   let l = if signed then l else l ++ [V_lit (L_aux L_zero Unknown)] in
   V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown);;
 
+(*TODO As with above, consider the reverse here in both cases, where we're again always interpreting with the MSB on the left *)
 let to_vec_inc (V_tuple([V_lit(L_aux (L_num len) _); (V_lit(L_aux (L_num n) ln))])) =
   let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
   V_vector 0 true (map bool_to_bit (reverse l)) ;;
 let to_vec_dec (V_tuple([V_lit(L_aux (L_num len) _); (V_lit(L_aux (L_num n) ln))])) =
   let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
-  V_vector 0 false (map bool_to_bit l) ;;
+  V_vector (len - 1) false (map bool_to_bit (reverse l)) ;;
 let to_vec ord len n =
   if ord
   then to_vec_inc (V_tuple ([V_lit(L_aux (L_num (integerFromNat len)) Interp_ast.Unknown); n]))
@@ -131,12 +137,12 @@ let arith_op_vec_range op (V_tuple args) = match args with
 end ;;
 
 let arith_op_range_vec_range op (V_tuple args) = match args with
-  | [n;(V_vector _ _ _ as l2)] ->
-    arith_op op (V_tuple [n;(to_num true l2)])
+  | [n;(V_vector _ ord _ as l2)] ->
+    arith_op op (V_tuple [n;(to_num ord l2)])
 end ;;
 let arith_op_vec_range_range op (V_tuple args) = match args with
-  | [(V_vector _ _ _ as l1);n] ->
-    arith_op op (V_tuple [(to_num true l1);n])
+  | [(V_vector _ ord _ as l1);n] ->
+    arith_op op (V_tuple [(to_num ord l1);n])
 end ;;
 
 let compare_op op (V_tuple args) = match args with
@@ -155,8 +161,8 @@ let rec vec_concat (V_tuple args) = match args with
   | [V_vector n d l; V_vector n' d' l'] ->
       (* XXX d = d' ? droping n' ? *)
       V_vector n d (l ++ l')
-  | [V_lit l; x] -> vec_concat (V_tuple [litV_to_vec l; x])
-  | [x; V_lit l] -> vec_concat (V_tuple [x; litV_to_vec l])
+  | [V_lit l; x] -> vec_concat (V_tuple [litV_to_vec l true; x]) (*TODO, get the correct order*)
+  | [x; V_lit l] -> vec_concat (V_tuple [x; litV_to_vec l true]) (*TODO, get the correct order*)
   end ;;
 
 let function_map = [

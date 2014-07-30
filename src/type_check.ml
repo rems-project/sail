@@ -236,8 +236,22 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	  pats ([],[],[],[]) in
       let env = List.fold_right (fun e env -> Envmap.union e env) t_envs Envmap.empty in (*Need to check for non-duplication of variables*)
       let (u,cs) = List.fold_right (fun u (t,cs) -> let t',cs = type_consistent (Patt l) d_env u t in t',cs) ts (item_t,[]) in
-      let t = {t = Tapp("vector",[(TA_nexp {nexp= Nconst zero});(TA_nexp {nexp= Nconst (big_int_of_int (List.length ts))});(TA_ord{order=Oinc});(TA_typ u)])} in
-      (P_aux(P_vector(pats'),(l,Base(([],t),Emp_local,cs,pure_e))), env,cs@constraints,t)
+      let len = List.length ts in
+      let t = 
+        match (ord.order,d_env.default_o.order) with
+        | (Oinc,_) | (Ovar _, Oinc) | (Ouvar _,Oinc) -> 
+          {t = Tapp("vector",[TA_nexp {nexp= Nconst zero};
+                              TA_nexp {nexp= Nconst (big_int_of_int len)};
+                              TA_ord{order=Oinc};
+                              TA_typ u])}
+        | (Odec,_) | (Ovar _, Odec) | (Ouvar _,Odec) -> 
+          {t= Tapp("vector", [TA_nexp {nexp = Nconst (if len = 0 then zero else (big_int_of_int (len -1)))};
+                              TA_nexp {nexp = Nconst (big_int_of_int len)};
+                              TA_ord{order=Odec};
+                              TA_typ u;])}
+        | _ -> raise (Reporting_basic.err_unreachable l "Default order not set") in
+      (*TODO Should gather the constraints here, with regard to the expected base and rise, and potentially reset them above*)
+      (P_aux(P_vector(pats'),(l,Base(([],t),Emp_local,cs,pure_e))), env,cs@constraints,t) 
     | P_vector_indexed(ipats) -> 
       let item_t = match expect_actual.t with
 	| Tapp("vector",[b;r;o;TA_typ i]) -> i
@@ -265,7 +279,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	    (((i,pat')::pats),(t::ts),(env::t_envs),(cons@constraints)))
 	  ipats ([],[],[],[]) in
       let co = Patt l in
-      let env = List.fold_right (fun e env -> Envmap.union e env) t_envs Envmap.empty in (*Need to check for non-duplication of variables*)
+      let env = List.fold_right (fun e env -> Envmap.union e env) t_envs Envmap.empty in (*TODO Need to check for non-duplication of variables*)
       let (u,cs) = List.fold_right (fun u (t,cs) -> type_consistent co d_env u t) ts (item_t,[]) in
       let t = {t = Tapp("vector",[(TA_nexp base);(TA_nexp rise);
 				  (TA_ord{order=(if inc_or_dec then Oinc else Odec)});(TA_typ u)])} in
@@ -329,7 +343,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	    let (pat',env,cons,t) = check_pattern envs emp_tag item_t pat in 
 	    (pat'::pats,t::ts,env::t_envs,cons@constraints))
 	  pats ([],[],[],[]) in
-      let env = List.fold_right (fun e env -> Envmap.union e env) envs Envmap.empty in (*Need to check for non-duplication of variables*)
+      let env = List.fold_right (fun e env -> Envmap.union e env) envs Envmap.empty in (*TODO Need to check for non-duplication of variables*)
       let u,cs = List.fold_right (fun u (t,cs) -> let t',cs' = type_consistent (Patt l) d_env u t in t',cs@cs') ts (item_t,[]) in
       let t = {t = Tapp("list",[TA_typ u])} in
       (P_aux(P_list(pats'),(l,Base(([],t),Emp_local,cs,pure_e))), env,constraints@cs,t)
@@ -436,11 +450,11 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
 	| L_hex s -> simp_exp e l {t = Tapp("vector",
 			                    [TA_nexp{nexp = Nconst zero};
 				             TA_nexp{nexp = Nconst (big_int_of_int ((String.length s)*4))};
-				             TA_ord{order = Oinc};TA_typ{t = Tid "bit"}])},[],pure_e
+				             TA_ord d_env.default_o;TA_typ{t = Tid "bit"}])},[],pure_e
 	| L_bin s -> simp_exp e l {t = Tapp("vector",
 			                    [TA_nexp{nexp = Nconst zero};
 				             TA_nexp{nexp = Nconst (big_int_of_int (String.length s))};
-				             TA_ord{order = Oinc};TA_typ{t = Tid"bit"}])},[],pure_e
+				             TA_ord d_env.default_o ;TA_typ{t = Tid"bit"}])},[],pure_e
 	| L_string s -> simp_exp e l {t = Tid "string"},[],pure_e
 	| L_undef -> simp_exp e l (new_t ()),[],{effect=Eset[BE_aux(BE_undef,l)]}) in
       let t',cs',e' = type_coerce (Expr l) d_env false (get_e_typ e) e expect_t in
@@ -658,13 +672,21 @@ let rec check_exp envs expect_t (E_aux(e,(l,annot)) : tannot exp) : (tannot exp 
       (E_aux(E_for(id,from',to_',step',order,block'),(l,Base(([],b_t),Emp_local,local_cs,pure_e))),expect_t,Envmap.empty,
        b_c@from_c@to_c@step_c@local_cs,(union_effects b_ef (union_effects step_ef (union_effects to_ef from_ef))))
     | E_vector(es) ->
-      let item_t = match expect_t.t with
-        | Tapp("vector",[base;rise;ord;TA_typ item_t]) -> item_t
-        | _ -> new_t () in
+      let item_t,ord = match expect_t.t with
+        | Tapp("vector",[base;rise;TA_ord ord;TA_typ item_t]) -> item_t,ord
+        | _ -> new_t (),d_env.default_o in
       let es,cs,effect = (List.fold_right 
 			    (fun (e,_,_,c,ef) (es,cs,effect) -> (e::es),(c@cs),union_effects ef effect)
 			    (List.map (check_exp envs item_t) es) ([],[],pure_e)) in
-      let t = {t = Tapp("vector",[TA_nexp({nexp=Nconst zero});TA_nexp({nexp=Nconst (big_int_of_int (List.length es))});TA_ord({order=Oinc});TA_typ item_t])} in
+      let len = List.length es in
+      let t = match ord.order,d_env.default_o.order with
+        | (Oinc,_) | (Ouvar _,Oinc) | (Ovar _,Oinc) -> 
+          {t = Tapp("vector", [TA_nexp {nexp=Nconst zero}; TA_nexp {nexp = Nconst (big_int_of_int len)};
+                               TA_ord {order = Oinc}; TA_typ item_t])}
+        | (Odec,_) | (Ouvar _,Odec) | (Ovar _,Odec) -> 
+          {t = Tapp("vector",[TA_nexp {nexp=Nconst (big_int_of_int (len-1))};
+                              TA_nexp {nexp=Nconst (big_int_of_int len)};
+                              TA_ord {order= Odec}; TA_typ item_t])} in
       let t',cs',e' = type_coerce (Expr l) d_env false t (E_aux(E_vector es,(l,Base(([],t),Emp_local,[],pure_e)))) expect_t in
       (e',t',t_env,cs@cs',effect)
     | E_vector_indexed(eis,(Def_val_aux(default,(ld,annot)))) ->
@@ -1329,7 +1351,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
                                                      TA_nexp {nexp=Nconst (big_int_of_int ((i2 - i1) +1))}; TA_ord({order=Oinc}); TA_typ {t=Tid "bit"}])}
 			      else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
 			    else typ_error l ("register type declaration " ^ id' ^ " is not consistently increasing")
-			  | BF_concat _ -> assert false (* What is this supposed to imply again?*)),Emp_global,[],pure_e)))
+			  | BF_concat _ -> assert false (* TODO: This implies that the variable refers to a concatenation of the different ranges specified; so now I need to implement it thusly*)),Emp_global,[],pure_e)))
 		ranges 
 	    in
 	    let tannot = into_register d_env (Base(([],ty),Emp_global,[],pure_e)) in
