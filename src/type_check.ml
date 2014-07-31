@@ -1124,7 +1124,9 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 	    | Tfn(apps,out,_,ef') ->
 	      (match ef'.effect with
 		| Eset effects ->
-		  if List.exists (fun (BE_aux(b,_)) -> match b with | BE_wmem -> true | _ -> false) effects 
+                  let mem_write = List.exists (fun (BE_aux(b,_)) -> match b with | BE_wmem -> true | _ -> false) effects in
+                  let reg_write = List.exists (fun (BE_aux(b,_)) -> match b with | BE_wreg -> true | _ -> false) effects in
+		  if  (mem_write || reg_write)
 		  then
                     let app,cs_a = get_abbrev d_env apps in
                     let out,cs_o = get_abbrev d_env out in
@@ -1134,7 +1136,7 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 			let item_t = match out.t with
 			  | Tid "unit" -> {t = Tapp("vector",[TA_nexp (new_n());TA_nexp (new_n()); TA_ord (new_o());TA_typ bit_t])}
 			  | _ -> out in
-			let ef = if is_external then add_effect (BE_aux(BE_wmem,l)) ef_e else union_effects ef ef_e in
+			let ef = (*if is_external then add_effect (BE_aux(BE_wmem,l)) ef_e else*) union_effects ef ef_e in
 			(LEXP_aux(LEXP_memory(id,es),(l,Base(([],unit_t),tag,cs@cs',ef))),item_t,Envmap.empty,tag,cs@cs',ef)
 		      | app_t -> 
 			let e = match exps with
