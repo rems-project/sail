@@ -1013,6 +1013,8 @@ let initial_typ_env =
                 {t= Tfn ({t=Ttup([bit_t;mk_range (mk_nv "n") (mk_nv "m")])},
                 mk_vector bit_t Oinc (Nconst zero) (Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})),false,
                 pure_e)}),External (Some "duplicate"),[],pure_e));
+    ("<<",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},false,pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
+    (">>",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},false,pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
     ("<<<",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},false,pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
   ]
 
