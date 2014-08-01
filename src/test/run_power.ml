@@ -29,7 +29,7 @@ let mem = ref Mem.empty ;;
 let add_mem byte addr =
   assert(byte >= 0 && byte < 256);
   let vector = big_int_to_vec (Big_int.big_int_of_int byte) (Big_int.big_int_of_int 8) in
-  let key = Id_aux (Id "MEM", Unknown), addr in
+  let key = (*Id_aux (Id "MEM", Unknown), (* memory map no longer using id, just the address, since read/write id different *)*) addr in
   mem := Mem.add key vector !mem
 ;;
 

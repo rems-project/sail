@@ -606,6 +606,7 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   | Typ_tup typs -> parens (separate_map comma_sp app_typ typs)
   | _ -> app_typ ty
   and app_typ ((Typ_aux (t, _)) as ty) = match t with
+  (*TODO Need to un bid-endian-ify this here, since both can transform to the shorthand, especially with <: and :> *)
   (* Special case simple vectors to improve legibility
    * XXX we assume big-endian here, as usual *)
   | Typ_app(Id_aux (Id "vector", _), [

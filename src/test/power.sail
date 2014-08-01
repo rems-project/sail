@@ -7,6 +7,8 @@ function forall Type 'a . 'a BCD_TO_DEC ( x ) = x
 function bit carry_out ( x ) = bitzero
 (* XXX length *)
 function nat length ( x ) = 64
+(* XXX Storage control *)
+function forall Type 'a . 'a real_addr ( x ) = x
 
 (* XXX *)
 val extern forall Nat 'k, Nat 'r,
@@ -41,13 +43,19 @@ function (bit[64]) ROTL(v, n) = v[n .. 63] : v[0 .. (n-1)]
 (* Branch facility registers *)
 
 typedef cr = register bits [ 32 : 63 ] {
-  32 .. 35 : CR0; (* LT, GT, EQ, SO -- fixed-point *)
-  36 .. 39 : CR1; (* FX, FEX, VX, OX -- (decimal) floating-point *)
+  32 .. 35 : CR0;
+    32 : LT; 33 : GT; 34 : EQ; 35 : SO;
+  36 .. 39 : CR1;
+    36 : FX; 37 : FEX; 38 : VX; 39 : OX;
   40 .. 43 : CR2;
   44 .. 47 : CR3;
   48 .. 51 : CR4;
   52 .. 55 : CR5;
-  56 .. 59 : CR6; (* LT, GT, EQ, SO -- vector *)
+  56 .. 59 : CR6;
+    (* name clashing - do we need hierarchical naming for fields, or do
+    we just don't care? LT, GT, etc. are not used in the code anyway.
+    56 : LT; 57 : GT; 58 : EQ; 59 : SO;
+    *)
   60 .. 63 : CR7;
 }
 register (cr) CR
@@ -61,6 +69,8 @@ typedef xer = register bits [ 0 : 63 ] {
   34 : CA;
 }
 register (xer) XER
+
+register alias CA = XER.CA
 
 (* Fixed-point registers *)
 
@@ -119,14 +129,14 @@ let (vector <0, 10, inc, (register<(bit[64])>) >) SPR =
     LR, CTR
   ]
 
-(* XXX bogus, DCR might be numbered with 64-bit values! -
- and it's implementation-dependent; also, some DCR are only 32 bits
+(* XXX DCR is implementation-dependent; also, some DCR are only 32 bits
  instead of 64, and mtdcrux/mfdcrux do special tricks in that case, not
- shown in pseudo-code (?) *)
+ shown in pseudo-code. We just define two dummy DCR here, using sparse
+ vector definition. *)
 register (vector <0, 64, inc, bit>) DCR0
 register (vector <0, 64, inc, bit>) DCR1
-let (vector <0, 2, inc, (register<(vector<0, 64, inc, bit>)>) >) DCR =
-  [ DCR0, DCR1 ]
+let (vector <0, 2** 64, inc, (register<(vector<0, 64, inc, bit>)>) >) DCR =
+  [ 0=DCR0, 1=DCR1 ]
 
 (* Floating-point registers *)
 
@@ -187,8 +197,8 @@ typedef fpscr = register bits [ 0 : 63 ] {
   46 : FI;
   47 .. 51 : FPRF;
   47 : C;
-  48 .. 51 : FPCC; (* the bits of FPCC are named FL, FG, FE and FU,
-                      but those names are never used in pseudo-code. *)
+  48 .. 51 : FPCC;
+    48 : FL; 49 : FG; 50 : FE; 51 : FU;
   53 : VXSOFT;
   54 : VXSQRT;
   55 : VXCVI;
@@ -201,6 +211,31 @@ typedef fpscr = register bits [ 0 : 63 ] {
   62 .. 63 : RN;
 }
 register (fpscr) FPSCR
+
+(* Pair-wise access to FPR registers *)
+
+register alias FPRp0 = FPR0 : FPR1
+register alias FPRp2 = FPR2 : FPR3
+register alias FPRp4 = FPR4 : FPR5
+register alias FPRp6 = FPR6 : FPR7
+register alias FPRp8 = FPR8 : FPR9
+register alias FPRp10 = FPR10 : FPR11
+register alias FPRp12 = FPR12 : FPR13
+register alias FPRp14 = FPR14 : FPR15
+register alias FPRp16 = FPR16 : FPR17
+register alias FPRp18 = FPR18 : FPR19
+register alias FPRp20 = FPR20 : FPR21
+register alias FPRp22 = FPR22 : FPR23
+register alias FPRp24 = FPR24 : FPR25
+register alias FPRp26 = FPR26 : FPR27
+register alias FPRp28 = FPR28 : FPR29
+register alias FPRp30 = FPR30 : FPR31
+
+let (vector <0, 32, inc, (register<(bit[128])>)>) FPRp =
+  [ 0 = FPRp0, 2 = FPRp2, 4 = FPRp4, 6 = FPRp6, 8 = FPRp8, 10 = FPRp10,
+  12 = FPRp12, 14 = FPRp14, 16 = FPRp16, 18 = FPRp18, 20 = FPRp20, 22 =
+  FPRp22, 24 = FPRp24, 26 = FPRp26, 28 = FPRp28, 30 = FPRp30 ]
+
 
 (* XXX *)
 val extern bit[32] -> bit[64] effect pure DOUBLE
@@ -298,7 +333,8 @@ register (bit[64]) NIA (* next instruction address *)
 register (bit[64]) CIA (* current instruction address *)
 
 
-val extern forall Nat 'n. ( nat , [|'n|] ) -> (bit[8 * 'n]) effect { wmem , rmem } MEM
+val extern forall Nat 'n. ( nat , [|'n|] , bit[8*'n]) -> unit effect { wmem } MEMw
+val extern forall Nat 'n. ( nat , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr
 
 (* XXX effect for trap? *)
 val extern unit -> unit effect pure trap
@@ -314,12 +350,12 @@ scattered function ast decode
 
 union ast member (bit[5], bit[5], bit[2], bit) Bclr
 
-function clause decode ([bitzero, bitone, bitzero, bitzero, bitone, bitone] :
+function clause decode (0b010011 :
 (bit[5]) BO :
 (bit[5]) BI :
 (bit[3]) _ :
 (bit[2]) BH :
-[bitzero, bitzero, bitzero, bitzero, bitzero, bitone, bitzero, bitzero, bitzero, bitzero] :
+0b0000010000 :
 [LK] as instr) =
   Bclr (BO,BI,BH,LK)
 
@@ -335,7 +371,7 @@ function clause execute (Bclr (BO, BI, BH, LK)) =
 
 union ast member (bit[5], bit[5], bit[16]) Lwz
 
-function clause decode ([bitone, bitzero, bitzero, bitzero, bitzero, bitzero] :
+function clause decode (0b100000 :
 (bit[5]) RT :
 (bit[5]) RA :
 (bit[16]) D as instr) =
@@ -346,12 +382,12 @@ function clause execute (Lwz (RT, RA, D)) =
     (bit[64]) b := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS (D);
-    GPR[RT] := 0b00000000000000000000000000000000 : MEM (EA,4)
+    GPR[RT] := 0b00000000000000000000000000000000 : MEMr (EA,4)
   }
 
 union ast member (bit[5], bit[5], bit[16]) Stw
 
-function clause decode ([bitone, bitzero, bitzero, bitone, bitzero, bitzero] :
+function clause decode (0b100100 :
 (bit[5]) RS :
 (bit[5]) RA :
 (bit[16]) D as instr) =
@@ -362,12 +398,12 @@ function clause execute (Stw (RS, RA, D)) =
     (bit[64]) b := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS (D);
-    MEM(EA,4) := (GPR[RS])[32 .. 63]
+    MEMw(EA,4) := (GPR[RS])[32 .. 63]
   }
 
 union ast member (bit[5], bit[5], bit[16]) Stwu
 
-function clause decode ([bitone, bitzero, bitzero, bitone, bitzero, bitone] :
+function clause decode (0b100101 :
 (bit[5]) RS :
 (bit[5]) RA :
 (bit[16]) D as instr) =
@@ -376,13 +412,13 @@ function clause decode ([bitone, bitzero, bitzero, bitone, bitzero, bitone] :
 function clause execute (Stwu (RS, RA, D)) =
   {
     EA := GPR[RA] + EXTS (D);
-    MEM(EA,4) := (GPR[RS])[32 .. 63];
+    MEMw(EA,4) := (GPR[RS])[32 .. 63];
     GPR[RA] := EA
   }
 
 union ast member (bit[5], bit[5], bit[16]) Addi
 
-function clause decode ([bitzero, bitzero, bitone, bitone, bitone, bitzero] :
+function clause decode (0b001110 :
 (bit[5]) RT :
 (bit[5]) RA :
 (bit[16]) SI as instr) =
@@ -393,11 +429,11 @@ function clause execute (Addi (RT, RA, SI)) =
 
 union ast member (bit[5], bit[5], bit[5], bit) Or
 
-function clause decode ([bitzero, bitone, bitone, bitone, bitone, bitone] :
+function clause decode (0b011111 :
 (bit[5]) RS :
 (bit[5]) RA :
 (bit[5]) RB :
-[bitzero, bitone, bitone, bitzero, bitone, bitone, bitone, bitone, bitzero, bitzero] :
+0b0110111100 :
 [Rc] as instr) =
   Or (RS,RA,RB,Rc)
 
@@ -414,7 +450,7 @@ register ast instr (* monitor decoded instructions *)
 (* fetch-decode-execute *)
 function unit fde () = {
   NIA := CIA + 4;
-  instr := decode(MEM(CIA, 4));
+  instr := decode(MEMr(CIA, 4));
   execute(instr);
   CIA := NIA;
 }

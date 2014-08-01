@@ -1,5 +1,5 @@
 (* hack to display log messages. Syntax: LOG(0) := "log message"; *)
-val extern forall Type 'a . nat -> 'a effect { wmem , rmem }  LOG
+val extern forall Type 'a . (nat, 'a) -> unit effect { wmem }  LOG
 
 register (bit[1]) GPR0
 register (bit[1]) GPR1

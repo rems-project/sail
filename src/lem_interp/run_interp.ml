@@ -153,7 +153,7 @@ module Reg = struct
 (*    eprintf "%s -> %s\n" (id_to_string id) (val_to_string v);*)
     v
 end ;;
-
+(* Old Mem, that used the id to map as well as the int... which seems wrong
 module Mem = struct
   include Map.Make(struct
     type t = (id * big_int)
@@ -174,7 +174,26 @@ module Mem = struct
   *)
   let to_string (n, idx) v =
     sprintf "%s[%s] -> %s" (id_to_string n) (string_of_big_int idx) (val_to_string v)
+end ;;*)
+
+module Mem = struct
+  include Map.Make(struct
+    type t = big_int
+    let compare v1 v2 = compare_big_int v1 v2
+  end)
+  (* debugging memory accesses
+  let add idx v m =
+    eprintf "[%s] <- %s\n" (string_of_big_int idx) (val_to_string v);
+    add idx v m
+  let find idx m =
+    let v = find idx m in
+    eprintf "[%s] -> %s\n" (string_of_big_int idx) (val_to_string v);
+    v
+  *)
+  let to_string idx v =
+    sprintf "[%s] -> %s" (string_of_big_int idx) (val_to_string v)
 end ;;
+
 
 let vconcat v v' = vec_concat (V_tuple [v; v']) ;;
 
@@ -213,14 +232,14 @@ let rec perform_action ((reg, mem) as env) = function
      | BF_concat _ -> failwith "unimplemented: non-contiguous register write")
  (* memory *)
  | Read_mem (id, V_lit(L_aux((L_num n),_)), sub) ->
-     slice (Mem.find (id, n) mem) sub, env
+     slice (Mem.find n mem) sub, env
  | Write_mem (id, V_lit(L_aux(L_num n,_)), None, value) ->
-     unit_lit, (reg, Mem.add (id, n) value mem)
+     unit_lit, (reg, Mem.add n value mem)
  (* multi-byte accesses to memory *)
  | Read_mem (id, V_tuple [V_lit(L_aux(L_num n,_)); V_lit(L_aux(L_num size,_))], sub) ->
      let rec fetch k acc =
        if eq_big_int k size then slice acc sub else
-         let slice = Mem.find (id, add_big_int n k) mem in
+         let slice = Mem.find (add_big_int n k) mem in
          fetch (succ_big_int k) (vconcat acc slice)
      in
      fetch zero_big_int (V_vector (zero_big_int, true, [])), env
@@ -235,14 +254,14 @@ let rec perform_action ((reg, mem) as env) = function
          let n1 = mult_int_big_int byte_size k in
          let n2 = sub_big_int (mult_int_big_int byte_size (succ_big_int k)) (big_int_of_int 1) in
          let slice = slice_vector value n1 n2 in
-         let mem' = Mem.add (id, add_big_int n k) slice mem in
+         let mem' = Mem.add (add_big_int n k) slice mem in
          update (succ_big_int k) mem'
      in unit_lit, (reg, update zero_big_int mem)
  (* This case probably never happens in the POWER spec anyway *)
  | Write_mem (id, V_lit(L_aux(L_num n,_)), Some (start, stop), (V_vector _ as value)) ->
-     let old_val = Mem.find (id, n) mem in
+     let old_val = Mem.find n mem in
      let new_val = fupdate_vector_slice old_val value start stop in
-     unit_lit, (reg, Mem.add (id, n) new_val mem)
+     unit_lit, (reg, Mem.add n new_val mem)
  (* special case for slices of size 1: wrap value in a vector *)
  | Write_reg ((Reg (_, _) as r), (Some (start, stop) as slice), value) when eq_big_int start stop ->
      perform_action env (Write_reg (r, slice, V_vector(zero_big_int, true, [value])))

@@ -73,6 +73,7 @@ type value =
  | V_ctor of id * t * value
  | V_unknown (* Distinct from undefined, used by memory system *)
  | V_register of reg_form (* Value to store register access, when not actively reading or writing *)
+ | V_register_alias of (alias_spec tannot) * tannot (* Same as above, but to a concatenation of two registers *)
 
 let rec id_value_eq (i, v) (i', v') = i = i' && value_eq v v'
 and value_eq left right =
@@ -172,6 +173,7 @@ let rec to_registers (Defs defs) =
   | def::defs -> 
     match def with 
     | DEF_reg_dec (DEC_aux (DEC_reg typ id) (l,tannot)) -> (id, V_register(Reg id tannot)) :: (to_registers (Defs defs))
+    | DEF_reg_dec (DEC_aux (DEC_alias id aspec) (l,tannot)) -> (id, V_register_alias aspec tannot) :: (to_registers (Defs defs))
     | _ -> to_registers (Defs defs)
     end 
   end 

@@ -1130,28 +1130,39 @@ and check_lexp envs is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp * typ * tan
 		  then
                     let app,cs_a = get_abbrev d_env apps in
                     let out,cs_o = get_abbrev d_env out in
+		    let cs_call = cs@cs_o@cs_a in
                     (match app.t with
-		      | Ttup ts | Tabbrev(_,{t=Ttup ts}) -> 
-			let (E_aux(E_tuple es,(l',tannot)),t',_,cs',ef_e) = check_exp envs apps (E_aux(E_tuple exps,(l,NoTyp))) in
-			let item_t = match out.t with
-			  | Tid "unit" -> {t = Tapp("vector",[TA_nexp (new_n());TA_nexp (new_n()); TA_ord (new_o());TA_typ bit_t])}
-			  | _ -> out in
-			let ef = (*if is_external then add_effect (BE_aux(BE_wmem,l)) ef_e else*) union_effects ef ef_e in
-			(LEXP_aux(LEXP_memory(id,es),(l,Base(([],unit_t),tag,cs@cs',ef))),item_t,Envmap.empty,tag,cs@cs',ef)
-		      | app_t -> 
+		      | Ttup ts | Tabbrev(_,{t=Ttup ts}) ->
+			let (args,item_t) = ((fun ts -> (List.rev (List.tl ts), List.hd ts)) (List.rev ts)) in
+			let args_t = {t = Ttup args} in
+			let (es, cs_es, ef_es) = 
+			  match args,exps with
+			    | [],[] -> ([],[],pure_e)
+			    | [],[e] -> let (e',_,_,cs_e,ef_e) = check_exp envs unit_t e in ([e'],cs_e,ef_e)
+			    | [],es -> typ_error l ("Expected no arguments for assignment function " ^ i)
+			    | args,[] -> 
+			      typ_error l ("Expected arguments with types " ^ (t_to_string args_t) ^
+					   "for assignment function " ^ i)
+			    | args,es -> 
+			      (match check_exp envs args_t (E_aux (E_tuple exps,(l,NoTyp))) with
+				| (E_aux(E_tuple es,(l',tannot)),_,_,cs_e,ef_e) -> (es,cs_e,ef_e)
+				| _ -> raise (Reporting_basic.err_unreachable l "Gave check_exp a tuple, didn't get a tuple back"))
+			in
+			let ef_all = union_effects ef ef_es in
+			(LEXP_aux(LEXP_memory(id,es),(l,Base(([],out),tag,cs_call,ef))),
+			 item_t,Envmap.empty,tag,cs_call@cs_es,ef_all)
+		      | _ -> 
 			let e = match exps with
 			  | [] -> E_aux(E_lit(L_aux(L_unit,l)),(l,NoTyp))
-			  | [e] -> e
-			  | es -> typ_error l ("Expected only one argument for memory access of " ^ i) in
-			let (e,t',_,cs',ef_e) = check_exp envs apps e in
-			let item_t = match out.t with
-			  | Tid "unit" -> {t = Tapp("vector",[TA_nexp (new_n());TA_nexp (new_n()); TA_ord (new_o());TA_typ bit_t])} 
-			  | _ -> out in
-			  let ef = if is_external then add_effect (BE_aux(BE_wmem,l)) ef_e else union_effects ef ef_e in
-			  (LEXP_aux(LEXP_memory(id,[e]),(l,Base(([],unit_t),tag,cs@cs',ef))), item_t,Envmap.empty,tag,cs@cs',ef))
-		  else typ_error l ("Memory assignments require functions with wmem effect")
-		| _ -> typ_error l ("Memory assignments require functions with declared wmem effect"))
-	    | _ -> typ_error l ("Memory assignments require functions, found " ^ i ^ " which has type " ^ (t_to_string t)))
+			  | [(E_aux(E_lit(L_aux(L_unit,_)),(_,NoTyp)) as e)] -> e
+			  | es -> typ_error l ("Expected no arguments for assignment function " ^ i) in
+			let (e,_,_,cs_e,ef_e) = check_exp envs apps e in
+			let ef_all = union_effects ef ef_e in
+			(LEXP_aux(LEXP_memory(id,[e]),(l,Base(([],out),tag,cs_call,ef))),
+			 app,Envmap.empty,tag,cs_call@cs_e,ef_all))
+		  else typ_error l ("Assignments require functions with a wmem or wreg effect")
+		| _ -> typ_error l ("Assignments require functions with a wmem or wreg effect"))
+	    | _ -> typ_error l ("Assignments require a function here, found " ^ i ^ " which has type " ^ (t_to_string t)))
 	| _ -> typ_error l ("Unbound identifier " ^ i))
     | LEXP_cast(typ,id) -> 
       let i = id_to_string id in
