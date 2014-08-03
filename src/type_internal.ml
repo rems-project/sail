@@ -979,42 +979,50 @@ let initial_typ_env =
            External (Some "eq_vec_range"),
            [Eq(Specc(Parse_ast.Int("==",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
       Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "eq"),[],pure_e)]));
-    ("!=",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,false,pure_e)}),External (Some "neq"),[],pure_e));
+    ("!=",Base((["a",{k=K_Typ}], (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "neq"),[],pure_e));
     ("<",
-     Overload(Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,false,pure_e)}),External (Some "lt"),[],pure_e),
+     Overload(Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "lt"),[],pure_e),
 	      false,
-     [Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
-	    {t = Tfn({t=Ttup([mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")])},bit_t,false,pure_e)}), External (Some "lt_vec"),
+     [Base(((mk_nat_params ["n"; "m"; "o";"p"]),
+	    (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
+	   External (Some "lt_vec"),
 	   [LtEq(Specc(Parse_ast.Int("<",None)),
 	       {nexp=Nadd({nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},{nexp=Nconst one})},
 	       {nexp=Nadd({nexp=Nvar "o"},{nexp=Nvar "p"})})],pure_e);
-      Base(([("n",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat});("ord",{k=K_Ord})],
-            {t = Tfn({t=Ttup([mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
-                              mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])},bit_t,false,pure_e)}), External (Some "lt"),[],pure_e);]));
+      Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
+	    (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
+				  mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")]) bit_t)),
+	   External (Some "lt"),[],pure_e);]));
     (">",
-     Overload(Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,false,pure_e)}),External (Some "gt"),[],pure_e),
+     Overload(Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "gt"),[],pure_e),
 	      false,
-     [Base(([("n",{k=K_Nat});("m",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat})],
-	    {t = Tfn({t=Ttup([mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")])},bit_t,false,pure_e)}), External (Some "gt_vec"),
+     [Base(((mk_nat_params ["n";"m";"o";"p"]), 
+	    (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
+	   External (Some "gt_vec"),
 	   [GtEq(Specc(Parse_ast.Int(">",None)),
 		 {nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},
 		 {nexp=Nadd({nexp=Nadd({nexp=Nvar "o"},{nexp=Nvar "p"})},{nexp=Nconst one})})],pure_e);
-      Base(([("n",{k=K_Nat});("o",{k=K_Nat});("p",{k=K_Nat});("ord",{k=K_Ord})],
-            {t = Tfn({t=Ttup([mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
-                              mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])},bit_t,false,pure_e)}), External (Some "lt"),[],pure_e);]));
-    ("<_u",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,false,pure_e)}),External (Some "ltu"),[],pure_e));
-    (">_u",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};{t=Tvar "a"}])},bit_t,false,pure_e)}),External (Some "gtu"),[],pure_e));
+      Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
+	    (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
+				  mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")]) bit_t)), 
+	   External (Some "lt"),[],pure_e);]));
+    (*Unlikely to be the correct type; probably needs to be bit vectors*)
+    ("<_u",Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "ltu"),[],pure_e));
+    (">_u",Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "gtu"),[],pure_e));
     ("is_one",Base(([],{t= Tfn (bit_t,bool_t,false,pure_e)}),External (Some "is_one"),[],pure_e));
     mk_bitwise_op "bitwise_not" "~" 1;
     mk_bitwise_op  "bitwise_or" "|" 2;
     mk_bitwise_op  "bitwise_xor" "^" 2;
     mk_bitwise_op  "bitwise_and" "&" 2;
-    ("^^",Base(([("n",{k=K_Nat});("m",{k=K_Nat})],
-                {t= Tfn ({t=Ttup([bit_t;mk_range (mk_nv "n") (mk_nv "m")])},
-                mk_vector bit_t Oinc (Nconst zero) (Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})),false,
-                pure_e)}),External (Some "duplicate"),[],pure_e));
-    ("<<",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},false,pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
-    (">>",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},false,pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
+    ("^^",Base((mk_nat_params ["n";"m"],(mk_pure_fun (mk_tup [bit_t;mk_range (mk_nv "n") (mk_nv "m")])
+					   (mk_vector bit_t Oinc (Nconst zero) (Nadd({nexp=Nvar "n"},{nexp=Nvar "m"}))))),
+	       External (Some "duplicate"),[],pure_e));
+    ("<<",Base((((mk_nat_params ["n";"m"])@[("ord",{k=K_Ord})]),
+		(mk_pure_fun (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m"));(mk_range {nexp = Nconst zero} (mk_nv "m"))])
+		             (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),External (Some "bitwise_leftshift"),[],pure_e));
+    (">>",Base((((mk_nat_params ["n";"m"])@[("ord",{k=K_Ord})]),
+		(mk_pure_fun (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m"));(mk_range {nexp = Nconst zero} (mk_nv "m"))])
+		             (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),External (Some "bitwise_rightshift"),[],pure_e));
     ("<<<",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},false,pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
   ]
 
@@ -1300,26 +1308,28 @@ let nexp_eq n1 n2 =
   b
 
 
-let rec conforms_to_t loosely spec actual =
+let rec conforms_to_t d_env loosely spec actual =
 (*let _ = Printf.printf "conforms_to_t called, evaluated loosely? %b, with %s and %s\n" loosely (t_to_string spec) (t_to_string actual) in*)
+  let spec,_ = get_abbrev d_env spec in
+  let actual,_ = get_abbrev d_env actual in
   match (spec.t,actual.t,loosely) with
     | (Tuvar _,_,true) -> true
-    | (Ttup ss, Ttup acs,_) -> (List.length ss = List.length acs) && List.for_all2 (conforms_to_t loosely) ss acs
+    | (Ttup ss, Ttup acs,_) -> (List.length ss = List.length acs) && List.for_all2 (conforms_to_t d_env loosely) ss acs
     | (Tid is, Tid ia,_) -> is = ia
     | (Tapp(is,tas), Tapp("register",[TA_typ t]),true) ->
       if is = "register"
-      then List.for_all2 (conforms_to_ta loosely) tas [TA_typ t]
-      else conforms_to_t loosely spec t
+      then List.for_all2 (conforms_to_ta d_env loosely) tas [TA_typ t]
+      else conforms_to_t d_env loosely spec t
     | (Tapp(is,tas), Tapp(ia, taa),_) -> 
 (*      let _ = Printf.printf "conforms to given two apps: %b, %b\n" (is = ia) (List.length tas = List.length taa) in*)
-      (is = ia) && (List.length tas = List.length taa) && (List.for_all2 (conforms_to_ta loosely) tas taa)
-    | (Tabbrev(_,s),a,_) -> conforms_to_t loosely s actual
-    | (s,Tabbrev(_,a),_) -> conforms_to_t loosely spec a
+      (is = ia) && (List.length tas = List.length taa) && (List.for_all2 (conforms_to_ta d_env loosely) tas taa)
+    | (Tabbrev(_,s),a,_) -> conforms_to_t d_env loosely s actual
+    | (s,Tabbrev(_,a),_) -> conforms_to_t d_env loosely spec a
     | (_,_,_) -> false
-and conforms_to_ta loosely spec actual =
+and conforms_to_ta d_env loosely spec actual =
 (*let _ = Printf.printf "conforms_to_ta called, evaluated loosely? %b, with %s and %s\n" loosely (targ_to_string spec) (targ_to_string actual) in*)
   match spec,actual with
-    | TA_typ  s, TA_typ  a -> conforms_to_t loosely s a
+    | TA_typ  s, TA_typ  a -> conforms_to_t d_env loosely s a
     | TA_nexp s, TA_nexp a -> conforms_to_n loosely s a
     | TA_ord  s, TA_ord  a -> conforms_to_o loosely s a
     | TA_eft  s, TA_eft  a -> conforms_to_e loosely s a
@@ -1409,12 +1419,12 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
   | Tabbrev(_,t1),_ -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
   | _,Tabbrev(_,t2) -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
   | Toptions(to1,Some to2),_ -> 
-    if (conforms_to_t false to1 t2 || conforms_to_t false to2 t2)
+    if (conforms_to_t d_env false to1 t2 || conforms_to_t d_env false to2 t2)
     then begin t1.t <- t2.t; (t2,csp,e) end
     else eq_error l ("Neither " ^ (t_to_string to1) ^ " nor " ^ (t_to_string to2) ^ " can match expected type " ^ (t_to_string t2))
   | Toptions(to1,None),_ -> (t2,csp,e)
   | _,Toptions(to1,Some to2) -> 
-    if (conforms_to_t false to1 t1 || conforms_to_t false to2 t1)
+    if (conforms_to_t d_env false to1 t1 || conforms_to_t d_env false to2 t1)
     then begin t2.t <- t1.t; (t1,csp,e) end
     else eq_error l ((t_to_string t1) ^ " can match neither expexted type " ^ (t_to_string to1) ^ " nor " ^ (t_to_string to2))
   | _,Toptions(to1,None) -> (t1,csp,e)
@@ -1566,11 +1576,11 @@ let rec select_overload_variant d_env params_check get_all variants actual_type 
       (match t.t with
 	| Tfn(a,r,_,e) ->
 	  let is_matching = 
-	    if params_check then conforms_to_t true a actual_type 
+	    if params_check then conforms_to_t d_env true a actual_type 
 	    else match actual_type.t with
-	      | Toptions(at1,Some at2) -> (conforms_to_t false at1 r || conforms_to_t false at2 r)
-	      | Toptions(at1,None) -> conforms_to_t false at1 r
-	      | _ -> conforms_to_t true actual_type r in
+	      | Toptions(at1,Some at2) -> (conforms_to_t d_env false at1 r || conforms_to_t d_env false at2 r)
+	      | Toptions(at1,None) -> conforms_to_t d_env false at1 r
+	      | _ -> conforms_to_t d_env true actual_type r in
 	  if is_matching 
 	  then (Base(([],t),tag,cs@cs',ef))::(if get_all then (recur ()) else [])
 	  else recur ()
