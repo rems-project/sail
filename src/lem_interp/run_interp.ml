@@ -269,7 +269,7 @@ let rec perform_action ((reg, mem) as env) = function
      perform_action env (Write_mem (id, n, slice, V_vector(zero_big_int, true, [value])))
  (* extern functions *)
  | Call_extern (name, arg) -> eval_external name arg, env
- | Debug _ | Nondet _ | Exit _ -> unit_lit, env
+ | Step _ | Nondet _ | Exit _ -> unit_lit, env
  | _ -> assert false
 ;;
 
@@ -346,7 +346,7 @@ let run
     end
   in
   let rec loop mode env = function
-  | Value (v, _) ->
+  | Value v ->
       debugf "%s: %s %s\n" (grey name) (blue "return") (val_to_string v);
       true, mode, env
   | Action (a, s) ->
@@ -384,7 +384,7 @@ let run
       | Call_extern (f, arg) ->
           show "call_lib" (sprintf "%s(%s)" f (val_to_string arg)) right (val_to_string return);
           step (),env',s
-      | Debug _ ->
+      | Step _ ->
           assert (return = unit_lit);
           show "breakpoint" "" "" "";
           step ~force:true (),env',s
@@ -393,7 +393,7 @@ let run
 	                       (List.combine (List.map (set_in_context s) exps)
 	                                     (List.map (fun _ -> Random.bits ()) exps)) in
 	show "nondeterministic evaluation begun" "" "" "";
-	let (_,_,env') = List.fold_right (fun (stack,_) (_,_,env') -> loop mode env' (resume {eager_eval = (mode = Run)} stack None)) stacks (false,mode,env'); in
+	let (_,_,env') = List.fold_right (fun (stack,_) (_,_,env') -> loop mode env' (resume {eager_eval = (mode = Run); track_values = false;} stack None)) stacks (false,mode,env'); in
 	show "nondeterministic evaluation ended" "" "" "";
 	step (),env',s
       | Exit e ->
@@ -402,7 +402,7 @@ let run
       | Barrier (_, _) | Write_next_IA _  ->
           failwith "unexpected action"
       end in
-      loop mode' env' (resume {eager_eval = (mode' = Run)} s (Some return))
+      loop mode' env' (resume {eager_eval = (mode' = Run);track_values = false} s (Some return))
   | Error(l, e) ->
       debugf "%s: %s: %s\n" (grey (loc_to_string l)) (red "error") e;
       false, mode, env in
@@ -412,7 +412,7 @@ let run
   | Some m -> m in
   try
     Printexc.record_backtrace true;
-    loop mode (reg, mem) (interp {eager_eval} test entry)
+    loop mode (reg, mem) (interp {eager_eval = eager_eval; track_values = false} test entry)
   with e ->
     let trace = Printexc.get_backtrace () in
     debugf "%s: %s %s\n%s\n" (grey name) (red "interpretor error") (Printexc.to_string e) trace;
