@@ -28,13 +28,15 @@ type t = { mutable t : t_aux }
 and t_aux =
   | Tvar of string
   | Tid of string
-  | Tfn of t * t * bool * effect
+  | Tfn of t * t * implicit_parm * effect
   | Ttup of t list
   | Tapp of string * t_arg list
   | Tabbrev of t * t
   | Toptions of t * t option
   | Tuvar of t_uvar
 and t_uvar = { index : int; mutable subst : t option }
+and implicit_parm =
+  | IP_none  | IP_length  | IP_start  | IP_var of nexp 
 and nexp = { mutable nexp : nexp_aux }
 and nexp_aux =
   | Nvar of string
@@ -769,7 +771,8 @@ let initial_kind_env =
     ("reg", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("register", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("range", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}], {k = K_Typ}) });
-    ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } )
+    ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } );
+    ("implicit", {k = K_Lam( [{k = K_Nat}], {k=K_Typ})} );
   ]
 
 let initial_abbrev_env =
@@ -787,8 +790,8 @@ let mk_typ_params l = List.map (fun i -> (i,{k=K_Typ})) l
 let mk_ord_params l = List.map (fun i -> (i,{k=K_Ord})) l
 
 let mk_tup ts = {t = Ttup ts }
-let mk_pure_fun arg ret = {t = Tfn (arg,ret,false,pure_e)}
-let mk_pure_imp arg reg = {t = Tfn (arg,reg,true,pure_e)}
+let mk_pure_fun arg ret = {t = Tfn (arg,ret,IP_none,pure_e)}
+let mk_pure_imp arg reg = {t = Tfn (arg,reg,IP_length,pure_e)}
 
 let mk_nv v = {nexp = Nvar v}
 let mk_add n1 n2 = {nexp = Nadd (n1,n2) }
@@ -951,11 +954,12 @@ let initial_typ_env =
                                            mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "q")])
                                    (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
                     External (Some "quot_vec"),[GtEq(Specc(Parse_ast.Int("quot",None)), mk_nv "m", mk_nv "q")],pure_e)]));
-    (* incorrect types, not pressing as the type checker puts in the correct types automatically on a first pass *)
-    ("to_num_inc",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,false,pure_e)}),External None,[],pure_e));
-    ("to_num_dec",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,false,pure_e)}),External None,[],pure_e));
-    ("to_vec_inc",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},true,pure_e)}),External None,[],pure_e));
-    ("to_vec_dec",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},true,pure_e)}),External None,[],pure_e));
+    (* incorrect types for typechecking processed sail code; do we care? *)
+    ("to_num_inc",Base(([("a",{k=K_Typ})],({t= Tfn ({t=Tvar "a"},nat_typ,IP_length,pure_e)})),External None,[],pure_e));
+    ("to_num_dec",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,IP_length,pure_e)}),External None,[],pure_e));
+    (*TODO These should be IP_start *)
+    ("to_vec_inc",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},IP_none,pure_e)}),External None,[],pure_e));
+    ("to_vec_dec",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},IP_none,pure_e)}),External None,[],pure_e));
     ("==",
      Overload( Base((mk_typ_params ["a";"b"],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),External (Some "eq"),[],pure_e),
 	       false,
@@ -1009,7 +1013,7 @@ let initial_typ_env =
     (*Unlikely to be the correct type; probably needs to be bit vectors*)
     ("<_u",Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "ltu"),[],pure_e));
     (">_u",Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "gtu"),[],pure_e));
-    ("is_one",Base(([],{t= Tfn (bit_t,bool_t,false,pure_e)}),External (Some "is_one"),[],pure_e));
+    ("is_one",Base(([],(mk_pure_fun bit_t bool_t)),External (Some "is_one"),[],pure_e));
     mk_bitwise_op "bitwise_not" "~" 1;
     mk_bitwise_op  "bitwise_or" "|" 2;
     mk_bitwise_op  "bitwise_xor" "^" 2;
@@ -1023,7 +1027,10 @@ let initial_typ_env =
     (">>",Base((((mk_nat_params ["n";"m"])@[("ord",{k=K_Ord})]),
 		(mk_pure_fun (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m"));(mk_range {nexp = Nconst zero} (mk_nv "m"))])
 		             (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),External (Some "bitwise_rightshift"),[],pure_e));
-    ("<<<",Base((["a",{k=K_Typ}],{t= Tfn ({t=Ttup([{t=Tvar "a"};nat_typ])},{t=Tvar "a"},false,pure_e)}),External (Some "bitwise_leftshift"),[],pure_e));
+        ("<<<",Base((((mk_nat_params ["n";"m"])@[("ord",{k=K_Ord})]),
+		     (mk_pure_fun (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m"));
+					   (mk_range {nexp = Nconst zero} (mk_nv "m"))])
+		        (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),External (Some "bitwise_rotate"),[],pure_e));
   ]
 
 
@@ -1034,12 +1041,16 @@ let rec t_subst s_env t =
                | _ -> t)
   | Tuvar _  -> new_t()
   | Tid _ -> t
-  | Tfn(t1,t2,imp,e) -> {t =Tfn((t_subst s_env t1),(t_subst s_env t2),imp,(e_subst s_env e)) }
+  | Tfn(t1,t2,imp,e) -> {t =Tfn((t_subst s_env t1),(t_subst s_env t2),(ip_subst s_env imp),(e_subst s_env e)) }
   | Ttup(ts) -> { t= Ttup(List.map (t_subst s_env) ts) }
   | Tapp(i,args) -> {t= Tapp(i,List.map (ta_subst s_env) args)}
   | Tabbrev(ti,ta) -> {t = Tabbrev(t_subst s_env ti,t_subst s_env ta) }
   | Toptions(t1,None) -> {t = Toptions(t_subst s_env t1,None)}
   | Toptions(t1,Some t2) -> {t = Toptions(t_subst s_env t1,Some (t_subst s_env t2)) }
+and ip_subst s_env ip =
+  match ip with
+    | IP_none | IP_length | IP_start -> ip
+    | IP_var n -> IP_var (n_subst s_env n)
 and ta_subst s_env ta =
   match ta with
   | TA_typ t -> TA_typ (t_subst s_env t)

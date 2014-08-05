@@ -25,38 +25,45 @@ type n_uvar
 type e_uvar
 type o_uvar
 type t = { mutable t : t_aux }
+(*No recursive t will ever be Tfn *)
 and t_aux =
   | Tvar of string (* concrete *)
   | Tid of string  (* concrete *)
-  | Tfn of t * t * bool * effect (* concrete: neither t can ever be fn, bool indicates if there is an implcit vector length parameter, for library functions only *)
-  | Ttup of t list (* concrete: no t can be fn *)
+  | Tfn of t * t * implicit_parm * effect  (* concrete *)
+  | Ttup of t list (* concrete *)
   | Tapp of string * t_arg list (* concrete *)
-  | Tabbrev of t * t (* first t is the specified type, which may itself be an abbrev; second is the ground type, never an abbrev *)
-  | Toptions of t * t option (* used in overload or cast to specify a set of types to expect; first is always concrete. Should never appear after type checking *)
-  | Tuvar of t_uvar
+  | Tabbrev of t * t (* first t is the type from the source; second is the actual ground type, never abbrev *)
+  | Toptions of t * t option (* used in overloads or cast; first is always concrete. Removed in type checking *)
+  | Tuvar of t_uvar (* Unification variable *)
+(*Implicit nexp parameters for library and special function calls*)
+and implicit_parm =
+  | IP_none (*Standard function*)
+  | IP_length (*Library function to take length of a vector as first parameter*)
+  | IP_start (*Library functions to take start of a vector as first parameter*)
+  | IP_var of nexp (*Special user functions, must be declared with val, will pass stated parameter to functions as above*)
 and nexp = { mutable nexp : nexp_aux }
 and nexp_aux =
   | Nvar of string
   | Nconst of big_int
-  | Npos_inf
-  | Nneg_inf
+  | Npos_inf (* Used to define nat and int types, does not arise from source otherwise *)
+  | Nneg_inf (* Used to define int type, does not arise from source otherwise *)
   | Nadd of nexp * nexp
   | Nmult of nexp * nexp
-  | N2n of nexp * big_int option
-  | Npow of nexp * int
-  | Nneg of nexp
-  | Nuvar of n_uvar
+  | N2n of nexp * big_int option (* Optionally contains the 2^n result for const n, for different constraint equations *)
+  | Npow of nexp * int (* Does not appear in source *)
+  | Nneg of nexp (* Does not appear in source *)
+  | Nuvar of n_uvar (* Unification variable *)
 and effect = { mutable effect : effect_aux }
 and effect_aux =
   | Evar of string
   | Eset of Ast.base_effect list
-  | Euvar of e_uvar
+  | Euvar of e_uvar (* Unificiation variable *)
 and order = { mutable order : order_aux }
 and order_aux =
   | Ovar of string
   | Oinc
   | Odec
-  | Ouvar of o_uvar
+  | Ouvar of o_uvar (* Unification variable *)
 and t_arg =
   | TA_typ of t
   | TA_nexp of nexp
@@ -64,14 +71,14 @@ and t_arg =
   | TA_ord of order 
 
 type tag =
-  | Emp_local
-  | Emp_global
-  | External of string option
-  | Default
-  | Constructor
-  | Enum
-  | Alias
-  | Spec
+  | Emp_local (* Standard value, variable, expression *)
+  | Emp_global (* Variable from global instead of local scope *)
+  | External of string option (* External function or register name *)
+  | Default (* Variable has default type, has not been bound *)
+  | Constructor (* Variable is a data constructor *)
+  | Enum (* Variable came from an enumeration *)
+  | Alias (* Variable came from a register alias *)
+  | Spec (* Variable came from a val specification *)
 
 type constraint_origin =
   | Patt of Parse_ast.l
