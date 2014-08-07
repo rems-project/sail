@@ -1639,8 +1639,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 					      (Action (Write_mem id a range value) stack)
 					    | _ -> update_stack a (add_to_top_frame 
 								     (fun e env -> 
-                                                                       let (e,env') = (to_exp mode env v) in
-                                                                       (E_aux (E_assign (lexp_builder e) e) (l,annot),env'))) end))
+                                                                       let (ev,env') = (to_exp mode env v) in
+                                                                       (E_aux (E_assign (lexp_builder e) ev) (l,annot),env'))) end))
 		       end))
                     (fun a -> update_stack a (add_to_top_frame (fun v env -> (E_aux (E_assign lexp v) (l,annot), env))))
   end
