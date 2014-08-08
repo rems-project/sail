@@ -1037,29 +1037,35 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         (Value (litV_to_vec lit is_inc),l_mem,l_env) 
       else (Value (V_lit lit), l_mem,l_env)
     | E_cast ((Typ_aux typ _) as ctyp) exp -> 
-      resolve_outcome (interp_main mode t_level l_env l_mem exp)
-	              (fun v lm le -> 
-                        match (tag,v) with 
-	                | (Tag_extern _, V_register regform) ->
-	                  (Action (Read_reg regform Nothing) 
-	                     (Hole_frame (id_of_string "0")
-		                (E_aux (E_id (id_of_string "0")) (Unknown, (val_annot (reg_to_t regform)))) t_level le lm Top), lm,le)
-			| (_,V_vector start inc items) -> 
-			  (match typ with
-			    | Typ_app (Id_aux (Id "vector") _) [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i) _)) _;_;_;_] ->
-			      if start = i 
-			      then (Value v,lm,le)
-			      else (Value (V_vector i inc items),lm,le)
-			    | _ -> (Value v,lm,le) end)
-			| (_,V_vector_sparse start inc len items def) ->
-			  (match typ with
-			    | Typ_app (Id_aux (Id "vector") _) [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i) _)) _;_;_;_] ->
-			      if start = i
-			      then (Value v,lm,le)
-			      else (Value (V_vector_sparse i inc len items def),lm,le) (*Shoud I trim any actual items*)
-			    | _ -> (Value v,lm,le) end)
-                        | _ -> (Value v,lm,le) end)
-	              (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_cast ctyp e) (l,annot), env))))
+      (*Cast is either a no-op, a signal to read a register, or a signal to change the start of a vector *)
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem exp)
+	(fun v lm le -> 
+	  (* Potentially use cast to change vector start position *)
+	  let update_vector_start start update_v =
+	    match typ with
+	      | Typ_app (Id_aux (Id "vector") _) [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i) _)) _;_;_;_] ->
+		if start = i 
+		then (Value v,lm,le)
+		else (Value (update_v i),lm,le)
+	      | _ -> (Value v,lm,le) end in
+          (match (tag,v) with 
+	    (*Cast is telling us to read a register*)
+	    | (Tag_extern _, V_register regform) ->
+	      (Action (Read_reg regform Nothing) 
+	         (Hole_frame (id_of_string "0")
+		    (E_aux (E_id (id_of_string "0")) (Unknown, (val_annot (reg_to_t regform)))) t_level le lm Top), lm,le)
+	    (*Cast is changing vector start position, potentially*)
+	    | (_,V_vector start inc items) -> update_vector_start start (fun i -> (V_vector i inc items))
+	    | (_,V_track (V_vector start inc items) regs) -> 
+	      update_vector_start start (fun i -> (V_track (V_vector i inc items) regs))
+	    (*TODO trim items below if i > (or < for dec) start *)
+	    | (_,V_vector_sparse start inc len items def) -> 
+	      update_vector_start start (fun i -> (V_vector_sparse i inc len items def)) 
+	    | (_,V_track (V_vector_sparse start inc len items def) regs) ->
+	      update_vector_start start (fun i -> (V_track (V_vector_sparse i inc len items def) regs))
+	    | _ -> (Value v,lm,le) end))
+	(fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_cast ctyp e) (l,annot), env))))
     | E_id id -> 
       let name = get_id id in
       match tag with
@@ -1097,75 +1103,89 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         | _ -> (Error l (String.stringAppend "Internal error: tag other than empty,enum,or extern " name),l_mem,l_env)
         end
     | E_if cond thn els ->
-      resolve_outcome (interp_main mode t_level l_env l_mem cond)
-	              (fun value lm le -> 
-			match (value,mode.eager_eval) with
-                          | (V_lit(L_aux L_true _),true) -> interp_main mode t_level l_env lm thn
-			  | (V_lit(L_aux L_true _),false) -> debug_out thn t_level lm l_env 
-			  | (V_unknown,_) -> interp_main mode t_level l_env lm (E_aux (E_block [thn;els]) (l,annot))
-                          | (_,true) -> interp_main mode t_level l_env lm els 
-			  | (_,false) -> debug_out els t_level lm l_env end)
-                      (fun a -> update_stack a (add_to_top_frame (fun c env -> (E_aux (E_if c thn els) (l,annot), env))))
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem cond)
+	(fun value lm le -> 
+	  match (value,mode.eager_eval) with
+            | (V_lit(L_aux L_true _),true) -> interp_main mode t_level l_env lm thn
+	    | (V_track (V_lit (L_aux L_true _)) _, true) -> interp_main mode t_level l_env lm thn
+	    | (V_lit(L_aux L_true _),false) -> debug_out thn t_level lm l_env 
+	    | (V_track (V_lit (L_aux L_true _)) _, false) -> debug_out thn t_level lm l_env
+	    | (V_unknown,_) -> interp_main mode t_level l_env lm (E_aux (E_block [thn;els]) (l,annot))
+            | (_,true) -> interp_main mode t_level l_env lm els 
+	    | (_,false) -> debug_out els t_level lm l_env end)
+        (fun a -> update_stack a (add_to_top_frame (fun c env -> (E_aux (E_if c thn els) (l,annot), env))))
     | E_for id from to_ by ((Ord_aux o _) as order) exp ->
-      let is_inc = match o with
-        | Ord_inc -> true
-        | _ -> false end in
-      resolve_outcome (interp_main mode t_level l_env l_mem from)
-                      (fun from_val lm le ->
-                        match from_val with
-                        | (V_lit(L_aux(L_num from_num) fl) as fval) -> 
-                          resolve_outcome (interp_main mode t_level le lm to_)
-                                          (fun to_val lm le ->
-                                            match to_val with
-                                            | (V_lit(L_aux (L_num to_num) tl) as tval) ->
-                                              resolve_outcome 
-                                                (interp_main mode t_level le lm by)
-                                                (fun by_val lm le ->
-                                                  match by_val with 
-                                                  | (V_lit (L_aux (L_num by_num) bl) as bval) ->
-                                                    if (from_num = to_num) 
-                                                    then (Value(V_lit (L_aux L_unit l)),lm,le)
-                                                    else
-						      let (ftyp,ttyp,btyp) = (val_typ fval,val_typ tval,val_typ bval) in
-						      let  e = (E_aux 
-								  (E_block 
-								     [(E_aux (E_let 
-										(LB_aux (LB_val_implicit 
-											   (P_aux (P_id id) (fl,val_annot ftyp))
-											   (E_aux (E_lit(L_aux(L_num from_num) fl)) (fl,val_annot ftyp)))
-										   (Unknown,val_annot ftyp))
-										exp) (l,annot));
-								      (E_aux (E_for id 
-										(if is_inc 
-										 then (E_aux (E_lit (L_aux (L_num (from_num + by_num)) fl)) (fl,val_annot (combine_typs [ftyp;ttyp])))
-										 else (E_aux (E_lit (L_aux (L_num (from_num - by_num)) fl)) (fl,val_annot (combine_typs [ttyp;ftyp]))))
-										(E_aux (E_lit (L_aux (L_num to_num) tl)) (tl,val_annot ttyp))
-										(E_aux (E_lit (L_aux (L_num by_num) bl)) (bl,val_annot btyp))
-										order exp) (l,annot))])
-								  (l,annot)) in
-						      if mode.eager_eval
-						      then interp_main mode t_level le lm e 
-						      else debug_out e t_level lm le
-                                                  | V_unknown -> let e = (E_aux (E_let 
-										   (LB_aux (LB_val_implicit (P_aux (P_id id) (fl, val_annot (val_typ fval)))
-											      (E_aux (E_lit (L_aux (L_num from_num) fl)) (fl, val_annot (val_typ fval))))
-										   (fl, val_annot (val_typ fval)))
-										   exp) (l,annot)) in
-								 interp_main mode t_level le lm e
-                                                  | _ -> (Error l "internal error: by must be a number",lm,le) end)
-                                                (fun a -> update_stack a 
-						  (add_to_top_frame (fun b env -> 
-						    (E_aux (E_for id 
-							      (E_aux (E_lit (L_aux (L_num from_num) fl)) (fl,(val_annot (val_typ fval))))
-							      (E_aux (E_lit (L_aux (L_num to_num) tl)) (tl,(val_annot (val_typ tval))))
-							      b order exp) (l,annot), env))))
-                                            | _ -> (Error l "internal error: to must be a number",lm,le) end)
-                                           (fun a -> update_stack a 
-					     (add_to_top_frame (fun t env -> 
-					       (E_aux (E_for id (E_aux (E_lit (L_aux (L_num from_num) fl)) (fl,val_annot (val_typ fval)))
-							 t by order exp) (l,annot), env))))
-                        | _ -> (Error l "internal error: from must be a number",lm,le) end)
-                       (fun a -> update_stack a (add_to_top_frame (fun f env -> (E_aux (E_for id f to_ by order exp) (l,annot), env))))
+      let is_inc = match o with | Ord_inc -> true | _ -> false end in
+      let from_eval from_val_whole lm le eval_to = 
+	let from_val = match from_val_whole with | V_track v _ -> v | _ -> from_val_whole end in
+        let (from_e,le) = to_exp mode le from_val_whole in
+	let f_typ = val_typ from_val in
+	match from_val with
+	  | V_lit (L_aux (L_num from_num) fl) ->
+	    eval_to from_val_whole from_e from_num fl f_typ lm le
+	  | V_unknown -> 
+	    let le = add_to_env (id,from_val_whole) le in interp_main mode t_level le lm exp end 
+      in
+      let to_eval from_val_whole from_e from_num fl f_typ to_val_whole lm le eval_for =
+	let to_val = match to_val_whole with | V_track v _ -> v | _ -> to_val_whole end in
+        let (to_e,le) = to_exp mode le to_val_whole in
+	let augment_annot = (fl, val_annot (combine_typs [f_typ;(val_typ to_val)])) in
+	match to_val with 
+	  | V_lit (L_aux (L_num to_num) tl) ->
+	    if from_num = to_num
+	    then (Value(V_lit (L_aux L_unit l)),lm,le)
+	    else eval_for from_val_whole from_num fl from_e f_typ to_e augment_annot lm le
+	  | V_unknown ->
+	    let le = add_to_env (id,from_val_whole) le in interp_main mode t_level le lm exp end
+      in
+      let for_loop from_val_whole from_num fl from_e f_typ to_e augment_annot by_val_whole lm le =
+	let by_val = match by_val_whole with | V_track v _ -> v | _ -> by_val_whole end in
+        let (by_e, le) = to_exp mode le by_val_whole in
+	(match by_val with 
+          | V_lit (L_aux (L_num by_num) bl) ->
+	    let diff = L_aux (L_num (if is_inc then from_num + by_num else from_num - by_num)) fl in
+	    let (augment_e,le) = match (from_val_whole,by_val_whole) with
+	      | (V_lit _, V_lit _) -> ((E_aux (E_lit diff) augment_annot), le)
+	      | (V_track _ rs, V_lit _) -> to_exp mode le (V_track (V_lit diff) rs)
+	      | (V_lit _, V_track _ rs) -> to_exp mode le (V_track (V_lit diff) rs)
+	      | (V_track _ r1, V_track _ r2) -> (to_exp mode le (V_track (V_lit diff) (r1 ++ r2))) end in
+	    let  e = 
+	      (E_aux (E_block 
+			[(E_aux (E_let 
+				   (LB_aux (LB_val_implicit (P_aux (P_id id) (l,val_annot f_typ)) from_e)
+				      (Unknown,val_annot f_typ))
+				   exp) (l,annot));
+			 (E_aux (E_for id augment_e to_e by_e order exp) (l,annot))])
+		 (l,annot)) in
+	    if mode.eager_eval
+	    then interp_main mode t_level le lm e 
+	    else debug_out e t_level lm le
+          | V_unknown -> 
+	    let le = add_to_env (id,from_val_whole) le in interp_main mode t_level le lm exp
+          | _ -> (Error l "internal error: by must be a number",lm,le) end) 
+      in	
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem from)
+        (fun from_val lm le -> 
+	  (from_eval from_val lm le 
+	     (fun from_val_whole from_e from_num fl f_typ lm le ->
+	       resolve_outcome 
+		 (interp_main mode t_level le lm to_)
+		 (fun to_val_whole lm le ->
+		   (to_eval from_val_whole from_e from_num fl f_typ to_val_whole lm le
+		      (fun from_val_whole from_num fl from_e f_typ to_e augment_annot lm le ->
+			resolve_outcome
+			  (interp_main mode t_level le lm by)
+			  (fun by_val_whole lm le -> 
+			    (for_loop from_val_whole from_num fl from_e f_typ to_e augment_annot by_val_whole lm le))
+			  (fun a -> update_stack a 
+			    (add_to_top_frame (fun b env -> (E_aux (E_for id from_e to_e b order exp) (l,annot), env)))))))
+		 (fun a -> update_stack a 
+		   (add_to_top_frame (fun t env -> 
+		     (E_aux (E_for id from_e t by order exp) (l,annot), env)))))))
+	(fun a -> update_stack a
+	  (add_to_top_frame (fun f env -> (E_aux (E_for id f to_ by order exp) (l,annot), env))))
     | E_case exp pats ->
       resolve_outcome (interp_main mode t_level l_env l_mem exp)
                       (fun v lm le ->
