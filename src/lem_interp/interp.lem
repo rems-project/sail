@@ -201,6 +201,7 @@ let rec to_aliases (Defs defs) =
 
 val has_rmem_effect : list base_effect -> bool
 val has_barr_effect : list base_effect -> bool
+val has_wmem_effect : list base_effect -> bool
 let rec has_effect which efcts =
   match efcts with
   | [] -> false
@@ -219,6 +220,7 @@ let rec has_effect which efcts =
   end
 let has_rmem_effect = has_effect BE_rmem
 let has_barr_effect = has_effect BE_barr
+let has_wmem_effect = has_effect BE_wmem
 
 let get_typ (TypSchm_aux (TypSchm_ts tq t) _) = t
 let get_effects (Typ_aux t _) =
@@ -1187,273 +1189,309 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	(fun a -> update_stack a
 	  (add_to_top_frame (fun f env -> (E_aux (E_for id f to_ by order exp) (l,annot), env))))
     | E_case exp pats ->
-      resolve_outcome (interp_main mode t_level l_env l_mem exp)
-                      (fun v lm le ->
-                        match find_case pats v with
-                        | [] -> (Error l "No matching patterns in case",lm,le)
-                        | [(env,used_unknown,exp)] -> 
-			  if mode.eager_eval
-			  then interp_main mode t_level (union_env env l_env) lm exp
-			  else debug_out exp t_level lm (union_env env l_env)
-			| multi_matches ->
-			  let lets = List.map (fun (env,_,exp) -> env_to_let mode env exp) multi_matches in
-			  interp_main mode t_level l_env lm (E_aux (E_block lets) (l,annot))
-		        end)
-                      (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_case e pats) (l,annot), env))))
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem exp)
+        (fun v lm le ->
+          match find_case pats v with
+            | [] -> (Error l "No matching patterns in case",lm,le)
+            | [(env,used_unknown,exp)] -> 
+	      if mode.eager_eval
+	      then interp_main mode t_level (union_env env l_env) lm exp
+	      else debug_out exp t_level lm (union_env env l_env)
+	    | multi_matches ->
+	      let lets = List.map (fun (env,_,exp) -> env_to_let mode env exp) multi_matches in
+	      interp_main mode t_level l_env lm (E_aux (E_block lets) (l,annot))
+	 end)
+        (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_case e pats) (l,annot), env))))
     | E_record(FES_aux (FES_Fexps fexps _) fes_annot) -> 
       let (fields,exps) = List.unzip (List.map (fun (FE_aux (FE_Fexp id exp) _) -> (id,exp)) fexps) in
       exp_list mode t_level 
 	(fun es -> 
-	  (E_aux (E_record 
-		    (FES_aux (FES_Fexps (map2 (fun id exp -> (FE_aux (FE_Fexp id exp) (Unknown,Nothing))) fields es) false) fes_annot))
+	  (E_aux 
+	     (E_record 
+		(FES_aux (FES_Fexps 
+			    (map2 (fun id exp -> (FE_aux (FE_Fexp id exp) (Unknown,Nothing))) fields es) false) fes_annot))
 	          (l,annot)))
 	(fun vs -> (V_record typ (List.zip fields vs))) l_env l_mem [] exps
     | E_record_update exp (FES_aux (FES_Fexps fexps _) fes_annot) ->
-      resolve_outcome (interp_main mode t_level l_env l_mem exp)
-                      (fun rv lm le -> 
-                        match rv with
-                        | V_record t fvs ->
-                          let (fields,exps) = List.unzip (List.map (fun (FE_aux (FE_Fexp id exp) _) -> (id,exp)) fexps) in
-                          resolve_outcome (exp_list mode t_level 
-					     (fun es -> 
-                                               let (e,_) = (to_exp <|mode with track_values = false|> eenv rv) in
-					       (E_aux (E_record_update e 
-							 (FES_aux (FES_Fexps 
-								     (map2 (fun id exp -> (FE_aux (FE_Fexp id exp) (Unknown,Nothing)))
-									fields es) false) fes_annot))
-						      (l,annot)))					     
-                                             (fun vs -> (V_record t (List.zip fields vs))) l_env l_mem [] exps)
-                                          (fun vs lm le ->
-                                            (Value (fupdate_record rv vs), lm, le))
-                                          (fun a -> a)
-			| V_unknown -> (Value V_unknown, lm, le)
-                        | _ -> (Error l "record upate requires record",lm,le) end)
-                      (fun a -> update_stack a (add_to_top_frame 
-						  (fun e env -> (E_aux(E_record_update e (FES_aux(FES_Fexps fexps false) fes_annot)) (l,annot), env))))
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem exp)
+        (fun rv lm le -> match rv with
+          | V_record t fvs ->
+            let (fields,exps) = List.unzip (List.map (fun (FE_aux (FE_Fexp id exp) _) -> (id,exp)) fexps) in
+            resolve_outcome 
+	      (exp_list mode t_level 
+		        (fun es -> 
+                          let (e,_) = (to_exp <|mode with track_values = false|> eenv rv) in
+			  (E_aux (E_record_update e 
+				    (FES_aux (FES_Fexps 
+						(map2 (fun id exp -> (FE_aux (FE_Fexp id exp) (Unknown,Nothing)))
+						   fields es) false) fes_annot))
+			     (l,annot)))
+                        (fun vs -> (V_record t (List.zip fields vs))) l_env l_mem [] exps)
+              (fun vs lm le -> (Value (fupdate_record rv vs), lm, le))
+              (fun a -> a) (*Due to exp_list this should never happen, but needed to perform the functional update on Value *)
+	  | V_unknown -> (Value V_unknown, lm, le)
+          | _ -> (Error l "internal error: record update requires record",lm,le) end)
+        (fun a -> update_stack a 
+	  (add_to_top_frame 
+	     (fun e env -> (E_aux(E_record_update e (FES_aux(FES_Fexps fexps false) fes_annot)) (l,annot), env))))
     | E_list(exps) ->
       exp_list mode t_level (fun exps -> E_aux (E_list exps) (l,annot)) V_list l_env l_mem [] exps
     | E_cons hd tl ->
-      resolve_outcome (interp_main mode t_level l_env l_mem hd)
-                      (fun hdv lm le -> resolve_outcome
-                                        (interp_main mode t_level l_env lm tl)
-                                        (fun tlv lm le -> match tlv with 
-                                                   | V_list t -> (Value(V_list (hdv::t)),lm,le)
-						   | V_unknwon -> (Value V_unknown,lm,le)
-                                                   | _ -> (Error l ":: of non-list value",lm,le) end)
-                                        (fun a -> update_stack a 
-                                          (add_to_top_frame (fun t env -> let (hde,env') = to_exp mode env hdv in 
-                                                                          (E_aux (E_cons hde t) (l,annot),env')))))
-                      (fun a -> update_stack a (add_to_top_frame (fun h env -> (E_aux (E_cons h tl) (l,annot), env))))
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem hd)
+        (fun hdv lm le -> 
+	  resolve_outcome
+            (interp_main mode t_level l_env lm tl)
+            (fun tlv lm le -> match tlv with 
+              | V_list t -> (Value(V_list (hdv::t)),lm,le)
+	      | V_unknwon -> (Value V_unknown,lm,le)
+	      | V_track (V_list t) r -> (Value (V_track (V_list (hdv::t)) r),lm,le)
+              | _ -> (Error l ":: of non-list value",lm,le) end)
+            (fun a -> update_stack a 
+              (add_to_top_frame 
+		 (fun t env -> let (hde,env') = to_exp mode env hdv in (E_aux (E_cons hde t) (l,annot),env')))))
+        (fun a -> update_stack a (add_to_top_frame (fun h env -> (E_aux (E_cons h tl) (l,annot), env))))
     | E_field exp id -> 
-      resolve_outcome (interp_main mode t_level l_env l_mem exp)
-                      (fun value lm le -> 
-                        match value with 
-                        | V_record t fexps -> match in_env fexps id with
-                                            | Just v -> (Value v,lm,l_env)
-                                            | Nothing -> (Error l "Field not found in record",lm,le) end
-                        | V_unknown -> (Value V_unknown,lm,l_env)
-                        | _ -> (Error l "Field access of vectors not implemented",lm,le)
-                        end )
-                      (fun a -> 
-			match (exp,a) with
-			  | (E_aux _ (l,Just(_,Tag_extern _,_,_)),
-			     (Action (Read_reg ((Reg _ (Just((T_id id'),_,_,_))) as regf) Nothing) s)) ->
-			    match in_env subregs (Id_aux (Id id') Unknown) with
-			      | Just(indexes) ->
-				match in_env indexes id with
-				  | Just ir -> 
-				    (Action (Read_reg (SubReg id regf ir) Nothing) s)
-				  | _ -> Error l "Internal error, unrecognized read, no id"
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem exp)
+        (fun value lm le -> 
+          match value with 
+            | V_record t fexps -> 
+	      (match in_env fexps id with
+                | Just v -> (Value v,lm,l_env)
+                | Nothing -> (Error l "Internal_error: Field not found in record",lm,le) end)
+            | V_track (V_record t fexps) r -> 
+	      (match in_env fexps id with
+                | Just v -> (Value (V_track v r),lm,l_env)
+                | Nothing -> (Error l "Internal_error: Field not found in record",lm,le) end)
+	    | V_unknown -> (Value V_unknown,lm,l_env)
+            | _ -> (Error l "Internal error, neither register nor record at field access",lm,le) end)
+        (fun a -> 
+	  match (exp,a) with
+	    | (E_aux _ (l,Just(_,Tag_extern _,_,_)),
+	       (Action (Read_reg ((Reg _ (Just((T_id id'),_,_,_))) as regf) Nothing) s)) ->
+	      match in_env subregs (Id_aux (Id id') Unknown) with
+		| Just(indexes) ->
+		  (match in_env indexes id with
+		    | Just ir -> 
+		      (Action (Read_reg (SubReg id regf ir) Nothing) s)
+		    | _ -> Error l "Internal error, unrecognized read, no id"
+	           end) 
+		| Nothing -> Error l "Internal error, unrecognized read, no reg" end
+            | (E_aux _ (l,Just(_,Tag_extern _,_,_)),
+               (Action (Read_reg ((Reg _ (Just((T_abbrev (T_id id') _),_,_,_))) as regf) Nothing) s))->
+	      match in_env subregs (Id_aux (Id id') Unknown) with
+		| Just(indexes) ->
+		  match in_env indexes id with
+		    | Just ir -> 
+		      (Action (Read_reg (SubReg id regf ir) Nothing) s)
+		    | _ -> Error l "Internal error, unrecognized read, no id"
 		                end 
-                              | Nothing -> Error l "Internal error, unrecognized read, no reg" end
-                         | (E_aux _ (l,Just(_,Tag_extern _,_,_)),
-                            (Action (Read_reg ((Reg _ (Just((T_abbrev (T_id id') _),_,_,_))) as regf) Nothing) s))->
-			    match in_env subregs (Id_aux (Id id') Unknown) with
-			      | Just(indexes) ->
-				match in_env indexes id with
-				  | Just ir -> 
-				    (Action (Read_reg (SubReg id regf ir) Nothing) s)
-				  | _ -> Error l "Internal error, unrecognized read, no id"
-		                end 
-                              | Nothing -> Error l "Internal error, unrecognized read, no reg" end
-                          | _ -> update_stack a (add_to_top_frame (fun e env -> (E_aux(E_field e id) (l,annot),env))) end)
+                | Nothing -> Error l "Internal error, unrecognized read, no reg" end
+                | _ -> update_stack a (add_to_top_frame (fun e env -> (E_aux(E_field e id) (l,annot),env))) end)
     | E_vector_access vec i ->
-      resolve_outcome (interp_main mode t_level l_env l_mem i)
-                      (fun iv lm le -> 
-                        match iv with
-                        | V_lit (L_aux (L_num n) ln) -> 
-                          resolve_outcome (interp_main mode t_level l_env lm vec)
-                                          (fun vvec lm le ->
-                                            match vvec with
-                                            | V_vector _ _ _ -> (Value (access_vector vvec n),lm,le)
-					    | V_vector_sparse _ _ _ _ _ -> (Value (access_vector vvec n),lm,le)
-					    | V_unknown -> (Value V_unknown,lm,le)
-                                            | _ -> (Error l "Vector access of non-vector",lm,le)end)
-                                          (fun a ->
-                                            match a with
-                                            | Action (Read_reg reg Nothing) stack -> 
-                                              if (top_hole stack) 
-                                              then Action (Read_reg reg (Just(n,n))) stack 
-                                              else Action (Read_reg reg Nothing) (add_to_top_frame (fun v env -> (E_aux (E_vector_access v (E_aux (E_lit (L_aux (L_num n) ln)) (ln,Nothing))) (l,annot),env)) stack)
-                                            | _ -> 
-                                              update_stack a 
-					        (add_to_top_frame (fun v env -> (E_aux (E_vector_access v (E_aux (E_lit (L_aux (L_num n) ln)) (ln,Nothing))) (l,annot), env))) end)
-			| V_unknown -> (Value V_unknown,lm,le)
-                        | _ -> (Error l "Vector access not given a number for index",lm,l_env) end)
-                      (fun a -> update_stack a (add_to_top_frame (fun i env -> (E_aux (E_vector_access vec i) (l,annot), env))))
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem i)
+        (fun iv_whole lm le -> 
+	  let iv = match iv_whole with | V_track v _ -> v | _ -> iv_whole end in
+	  let (iv_e, le) = to_exp mode le iv_whole in
+          match iv with
+            | V_lit (L_aux (L_num n) ln) -> 
+              resolve_outcome
+		(interp_main mode t_level l_env lm vec)
+                (fun vvec lm le ->
+                  match vvec with
+                    | V_vector _ _ _ -> (Value (access_vector vvec n),lm,le)
+		    | V_track ((V_vector _ _ _) as vvec) r ->
+		      (match iv_whole with
+			| V_track _ ir -> (Value (V_track (access_vector vvec n) (r++ir)),lm,le)
+			| _ -> (Value (V_track (access_vector vvec n) r),lm,le) end)
+		    | V_vector_sparse _ _ _ _ _ -> (Value (access_vector vvec n),lm,le)
+		    | V_track ((V_vector_sparse _ _ _ _ _) as vvec) r ->
+		      (match iv_whole with
+			| V_track _ ir -> (Value (V_track (access_vector vvec n) (r++ir)),lm,le)
+			| _ -> (Value (V_track (access_vector vvec n) r),lm,le) end)
+		    | V_unknown -> (Value V_unknown,lm,le)
+                    | _ -> (Error l "Vector access of non-vector",lm,le)end)
+                (fun a ->
+                  match a with
+                    | Action (Read_reg reg Nothing) stack -> 
+                      if (top_hole stack) 
+                      then Action (Read_reg reg (Just(n,n))) stack 
+                      else Action (Read_reg reg Nothing) 
+			          (add_to_top_frame 
+				     (fun v env -> (E_aux (E_vector_access v iv_e) (l,annot),env)) stack)
+                    | _ -> 
+                      update_stack a 
+			(add_to_top_frame 
+			   (fun v env -> (E_aux (E_vector_access v iv_e) (l,annot), env))) end)
+	    | V_unknown -> (Value V_unknown,lm,le)
+            | _ -> (Error l "Vector access not given a number for index",lm,l_env) end)
+        (fun a -> update_stack a (add_to_top_frame (fun i env -> (E_aux (E_vector_access vec i) (l,annot), env))))
     | E_vector_subrange vec i1 i2 ->
-      resolve_outcome (interp_main mode t_level l_env l_mem i1)
-                      (fun i1v lm le ->
-                        match i1v with
-                        | V_lit (L_aux (L_num n1) ln1) ->
-                          resolve_outcome (interp_main mode t_level l_env lm i2)
-                                          (fun i2v lm le ->
-                                            match i2v with
-                                            | V_lit (L_aux (L_num n2) ln2) ->
-                                              resolve_outcome (interp_main mode t_level l_env lm vec)
-                                                              (fun vvec lm le ->
-                                                                match vvec with
-                                                                | V_vector _ _ _ -> (Value (slice_vector vvec n1 n2),lm,le)
-								| V_vector_sparse _ _ _ _ _ -> (Value (slice_vector vvec n1 n2), lm,le)
-								| V_unknown -> (Value V_unknown,lm,le)
-                                                                | _ -> (Error l "Vector slice of non-vector",lm,le)end)
-                                                              (fun a -> 
-                                                                match a with 
-                                                                | Action (Read_reg reg Nothing) stack ->
-                                                                  if (top_hole stack)
-                                                                  then Action (Read_reg reg (Just(n1,n2))) stack
-                                                                  else Action (Read_reg reg Nothing) 
-                                                                    (add_to_top_frame (fun v env -> (E_aux (E_vector_subrange v
-                                                                                                              (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
-                                                                                                              (E_aux (E_lit (L_aux (L_num n2) ln2)) (ln2,Nothing)))
-                                                                                                       (l,annot), env)) stack)
-                                                                | _ -> update_stack a 
-                                                                  (add_to_top_frame 
-								     (fun v env -> (E_aux (E_vector_subrange v 
-										         (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
-										         (E_aux (E_lit (L_aux (L_num n2) ln2)) (ln2,Nothing)))
-										      (l,annot), env))) end)
-					    | V_unknown -> (Value V_unknown, lm,le)
-                                            | _ -> (Error l "vector slice given non number for last index",lm,le) end)
-                                          (fun a -> update_stack a 
-					    (add_to_top_frame 
-					       (fun i2 env -> (E_aux (E_vector_subrange vec 
-								        (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
-								        i2) (l,annot), env))))
-			| V_unknown -> (Value V_unknown,lm,le)
-                        | _ -> (Error l "Vector slice given non-number for first index",lm,le) end)
-                       (fun a -> update_stack a (add_to_top_frame (fun i1 env -> (E_aux (E_vector_subrange vec i1 i2) (l,annot), env))))
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem i1)
+        (fun i1v lm le ->
+          match i1v with
+            | V_lit (L_aux (L_num n1) ln1) ->
+              resolve_outcome (interp_main mode t_level l_env lm i2)
+                (fun i2v lm le ->
+                  match i2v with
+                    | V_lit (L_aux (L_num n2) ln2) ->
+                      resolve_outcome (interp_main mode t_level l_env lm vec)
+                        (fun vvec lm le ->
+                          match vvec with
+                            | V_vector _ _ _ -> (Value (slice_vector vvec n1 n2),lm,le)
+			    | V_vector_sparse _ _ _ _ _ -> (Value (slice_vector vvec n1 n2), lm,le)
+			    | V_unknown -> (Value V_unknown,lm,le)
+                            | _ -> (Error l "Vector slice of non-vector",lm,le)end)
+                        (fun a -> 
+                          match a with 
+                            | Action (Read_reg reg Nothing) stack ->
+                              if (top_hole stack)
+                              then Action (Read_reg reg (Just(n1,n2))) stack
+                              else Action (Read_reg reg Nothing) 
+                                (add_to_top_frame (fun v env -> (E_aux (E_vector_subrange v
+                                                                          (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
+                                                                          (E_aux (E_lit (L_aux (L_num n2) ln2)) (ln2,Nothing)))
+                                                                   (l,annot), env)) stack)
+                            | _ -> update_stack a 
+                              (add_to_top_frame 
+				 (fun v env -> (E_aux (E_vector_subrange v 
+							 (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
+							 (E_aux (E_lit (L_aux (L_num n2) ln2)) (ln2,Nothing)))
+						  (l,annot), env))) end)
+		    | V_unknown -> (Value V_unknown, lm,le)
+                    | _ -> (Error l "vector slice given non number for last index",lm,le) end)
+                (fun a -> update_stack a 
+		  (add_to_top_frame 
+		     (fun i2 env -> (E_aux (E_vector_subrange vec 
+					      (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
+					      i2) (l,annot), env))))
+	    | V_unknown -> (Value V_unknown,lm,le)
+            | _ -> (Error l "Vector slice given non-number for first index",lm,le) end)
+        (fun a -> update_stack a (add_to_top_frame (fun i1 env -> (E_aux (E_vector_subrange vec i1 i2) (l,annot), env))))
     | E_vector_update vec i exp ->
-      resolve_outcome (interp_main mode t_level l_env l_mem i)
-                      (fun vi lm le ->
-                        match vi with
-                        | V_lit (L_aux (L_num n1) ln1) ->
-                          resolve_outcome (interp_main mode t_level le lm exp)
-                                          (fun vup lm le ->
-                                            resolve_outcome (interp_main mode t_level le lm vec)
-                                                            (fun vec lm le ->
-                                                              match vec with
-                                                              | V_vector _ _ _ -> (Value (fupdate_vec vec n1 vup), lm,le)
-							      | V_vector_sparse _ _ _ _ _ -> (Value (fupdate_vec vec n1 vup),lm,le)
-							      | V_unknown -> (Value V_unknown, lm, le)
-                                                              | _ -> (Error l "Update of vector given non-vector",lm,le) end)
-                                                            (fun a -> update_stack a 
-							      (add_to_top_frame 
-								 (fun v env ->
-                                                                   let (eup,env') = (to_exp mode env vup) in 
-                                                                   (E_aux (E_vector_update v 
-									     (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing)) 
-									     eup) (l,annot), env')))))
-                                          (fun a -> update_stack a 
-					    (add_to_top_frame (fun e env -> (E_aux (E_vector_update vec 
-										      (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
-										      e) (l,annot), env))))
-			| V_unknown -> (Value V_unknown,lm,l_env)
-                        | _ -> (Error l "Update of vector requires number for access",lm,le) end)
-                      (fun a -> update_stack a (add_to_top_frame (fun i env -> (E_aux (E_vector_update vec i exp) (l,annot), env))))
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem i)
+        (fun vi lm le ->
+          match vi with
+            | V_lit (L_aux (L_num n1) ln1) ->
+              resolve_outcome 
+		(interp_main mode t_level le lm exp)
+                (fun vup lm le ->
+                  resolve_outcome 
+		    (interp_main mode t_level le lm vec)
+                    (fun vec lm le ->
+                      match vec with
+                        | V_vector _ _ _ -> (Value (fupdate_vec vec n1 vup), lm,le)
+			| V_vector_sparse _ _ _ _ _ -> (Value (fupdate_vec vec n1 vup),lm,le)
+			| V_unknown -> (Value V_unknown, lm, le)
+                        | _ -> (Error l "Update of vector given non-vector",lm,le) end)
+                    (fun a -> update_stack a 
+		      (add_to_top_frame 
+			 (fun v env ->
+                           let (eup,env') = (to_exp mode env vup) in 
+                           (E_aux (E_vector_update v 
+				     (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing)) 
+				     eup) (l,annot), env')))))
+                (fun a -> update_stack a 
+		  (add_to_top_frame (fun e env -> (E_aux (E_vector_update vec 
+							    (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
+							    e) (l,annot), env))))
+	    | V_unknown -> (Value V_unknown,lm,l_env)
+            | _ -> (Error l "Update of vector requires number for access",lm,le) end)
+        (fun a -> update_stack a (add_to_top_frame (fun i env -> (E_aux (E_vector_update vec i exp) (l,annot), env))))
     | E_vector_update_subrange vec i1 i2 exp ->
-      resolve_outcome (interp_main mode t_level l_env l_mem i1)
-                      (fun vi1 lm le ->
-                        match vi1 with
-                        | V_lit (L_aux (L_num n1) ln1) ->
-                          resolve_outcome 
-                            (interp_main mode t_level l_env lm i2) 
-                            (fun vi2 lm le ->
-                              match vi2 with
-                              | V_lit (L_aux (L_num n2) ln2) ->
-                                resolve_outcome (interp_main mode t_level l_env lm exp)
-                                  (fun v_rep lm le ->
-                                    (resolve_outcome 
-                                       (interp_main mode t_level l_env lm vec)
-                                       (fun vvec lm le ->
-                                         match vvec with
-                                         | V_vector _ _ _ -> (Value (fupdate_vector_slice vvec v_rep n1 n2),lm,le)
-					 | V_vector_sparse _ _ _ _ _ -> (Value (fupdate_vector_slice vvec v_rep n1 n2),lm,le)
-					 | V_unknown -> (Value V_unknown,lm,le)
-                                         | _ -> (Error l "Vector update requires vector",lm,le) end)
-                                       (fun a -> update_stack a 
-                                         (add_to_top_frame 
-					    (fun v env -> 
-                                              let (e_rep,env') = to_exp mode env v_rep in
-                                              (E_aux (E_vector_update_subrange v 
-							(E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
-							(E_aux (E_lit (L_aux (L_num n2) ln2)) (ln2,Nothing)) 
-							e_rep) (l,annot), env'))))))
-                                  (fun a -> update_stack a 
-                                    (add_to_top_frame 
-				       (fun e env -> 
-                                         let (ei1,env') = to_exp mode env vi1 in
-                                         let (ei2,env') = to_exp mode env' vi2 in
-                                         (E_aux (E_vector_update_subrange vec ei1 ei2 e) (l,annot),env'))))
-			      | V_unknown -> (Value V_unknown,lm,l_env)
-                              | _ -> (Error l "vector update requires number",lm,le) end)
-                            (fun a -> 
-			      update_stack a (add_to_top_frame 
-                                                (fun i2 env -> 
-                                                  let (ei1, env') = to_exp mode env vi1 in
-                                                  (E_aux (E_vector_update_subrange vec ei1 i2 exp) (l,annot), env'))))
-			| V_unknown -> (Value V_unknown,lm,le)
-                        | _ -> (Error l "vector update requires number",lm,le) end)
-                      (fun a -> update_stack a (add_to_top_frame (fun i1 env -> (E_aux (E_vector_update_subrange vec i1 i2 exp) (l,annot), env))))
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem i1)
+        (fun vi1 lm le ->
+          match vi1 with
+            | V_lit (L_aux (L_num n1) ln1) ->
+              resolve_outcome 
+                (interp_main mode t_level l_env lm i2) 
+                (fun vi2 lm le ->
+                  match vi2 with
+                    | V_lit (L_aux (L_num n2) ln2) ->
+                      resolve_outcome 
+			(interp_main mode t_level l_env lm exp)
+                        (fun v_rep lm le ->
+                          (resolve_outcome 
+                             (interp_main mode t_level l_env lm vec)
+                             (fun vvec lm le ->
+                               match vvec with
+                                 | V_vector _ _ _ -> (Value (fupdate_vector_slice vvec v_rep n1 n2),lm,le)
+				 | V_vector_sparse _ _ _ _ _ -> (Value (fupdate_vector_slice vvec v_rep n1 n2),lm,le)
+				 | V_unknown -> (Value V_unknown,lm,le)
+                                 | _ -> (Error l "Vector update requires vector",lm,le) end)
+                             (fun a -> update_stack a 
+                               (add_to_top_frame 
+				  (fun v env -> 
+                                    let (e_rep,env') = to_exp mode env v_rep in
+                                    (E_aux (E_vector_update_subrange v 
+					      (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
+					      (E_aux (E_lit (L_aux (L_num n2) ln2)) (ln2,Nothing)) 
+					      e_rep) (l,annot), env'))))))
+                        (fun a -> update_stack a 
+                          (add_to_top_frame 
+			     (fun e env -> 
+                               let (ei1,env') = to_exp mode env vi1 in
+                               let (ei2,env') = to_exp mode env' vi2 in
+                               (E_aux (E_vector_update_subrange vec ei1 ei2 e) (l,annot),env'))))
+		    | V_unknown -> (Value V_unknown,lm,l_env)
+                    | _ -> (Error l "vector update requires number",lm,le) end)
+                (fun a -> 
+		  update_stack a (add_to_top_frame 
+                                    (fun i2 env -> 
+                                      let (ei1, env') = to_exp mode env vi1 in
+                                      (E_aux (E_vector_update_subrange vec ei1 i2 exp) (l,annot), env'))))
+	    | V_unknown -> (Value V_unknown,lm,le)
+            | _ -> (Error l "vector update requires number",lm,le) end)
+        (fun a -> update_stack a (add_to_top_frame (fun i1 env -> (E_aux (E_vector_update_subrange vec i1 i2 exp) (l,annot), env))))
     | E_vector_append e1 e2 ->
-      resolve_outcome (interp_main mode t_level l_env l_mem e1)
-                      (fun v1 lm le ->
-                        match v1 with
-                        | V_vector m inc vals1 ->
-                          (resolve_outcome (interp_main mode t_level l_env lm e2)
-                                            (fun v2 lm le ->
-                                              match v2 with
-                                              | V_vector _ _ vals2 -> (Value (V_vector m inc (vals1++vals2)),lm,l_env)
-					      | V_vector_sparse _ len _ vals2 d ->
-						let original_len = integerFromNat (List.length vals1) in
-						let (_,sparse_vals) = List.foldr (fun v (i,vals) -> (i+1,(i,v)::vals)) (m,[]) vals1 in
-						let sparse_update = List.map (fun (i,v) -> (i+m+original_len,v)) vals2 in
-						(Value (V_vector_sparse m (len+original_len) inc (sparse_vals ++ sparse_update) d), lm,l_env)
-					      | V_unknown -> (Value V_unknown,lm,l_env)
-                                              | _ -> (Error l "vector concat requires vector",lm,le) end)
-                                            (fun a -> update_stack a (add_to_top_frame 
-                                                                        (fun e env -> 
-                                                                          let (e1,env') = to_exp mode env v1 in
-                                                                          (E_aux (E_vector_append e1 e) (l,annot),env')))))
-			| V_vector_sparse m len inc vals1 d ->
-			  (resolve_outcome (interp_main mode t_level l_env lm e2)
-                                            (fun v2 lm le ->
-                                              match v2 with
-                                              | V_vector _ _ vals2 -> 
-						let new_len = integerFromNat (List.length vals2) in
-						let (_,sparse_vals) = List.foldr (fun v (i,vals) -> (i+1,(i,v)::vals)) (len,[]) vals2 in
-						(Value (V_vector_sparse m (len+new_len) inc (vals1++sparse_vals) d), lm,l_env)
-					      | V_vector_sparse _ new_len _ vals2 _ ->
-						let sparse_update = List.map (fun (i,v) -> (i+len,v)) vals2 in
-						(Value (V_vector_sparse m (len+new_len) inc (vals1 ++ sparse_update) d), lm,l_env)
-					      | V_unknown -> (Value V_unknown,lm,l_env)
-                                              | _ -> (Error l "vector concat requires vector",lm,le) end)
-                                            (fun a -> update_stack a (add_to_top_frame 
-                                                                        (fun e env -> let (e1,env') = to_exp mode env v1 in
-                                                                                      (E_aux (E_vector_append e1 e) (l,annot),env')))))
-			| V_unknown -> (Value V_unknown,lm,l_env)
-                        | _ -> (Error l "vector concat requires vector",lm,le) end)
-                      (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_vector_append e e2) (l,annot),env))))
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem e1)
+        (fun v1 lm le ->
+          match v1 with
+            | V_vector m inc vals1 ->
+              (resolve_outcome 
+		 (interp_main mode t_level l_env lm e2)
+                 (fun v2 lm le ->
+                   match v2 with
+                     | V_vector _ _ vals2 -> (Value (V_vector m inc (vals1++vals2)),lm,l_env)
+		     | V_vector_sparse _ len _ vals2 d ->
+		       let original_len = integerFromNat (List.length vals1) in
+		       let (_,sparse_vals) = List.foldr (fun v (i,vals) -> (i+1,(i,v)::vals)) (m,[]) vals1 in
+		       let sparse_update = List.map (fun (i,v) -> (i+m+original_len,v)) vals2 in
+		       (Value (V_vector_sparse m (len+original_len) inc (sparse_vals ++ sparse_update) d), lm,l_env)
+		     | V_unknown -> (Value V_unknown,lm,l_env)
+                     | _ -> (Error l "vector concat requires vector",lm,le) end)
+                 (fun a -> update_stack a (add_to_top_frame 
+                                             (fun e env -> 
+                                               let (e1,env') = to_exp mode env v1 in
+                                               (E_aux (E_vector_append e1 e) (l,annot),env')))))
+	    | V_vector_sparse m len inc vals1 d ->
+	      (resolve_outcome 
+		 (interp_main mode t_level l_env lm e2)
+                 (fun v2 lm le ->
+                   match v2 with
+                     | V_vector _ _ vals2 -> 
+		       let new_len = integerFromNat (List.length vals2) in
+		       let (_,sparse_vals) = List.foldr (fun v (i,vals) -> (i+1,(i,v)::vals)) (len,[]) vals2 in
+		       (Value (V_vector_sparse m (len+new_len) inc (vals1++sparse_vals) d), lm,l_env)
+		     | V_vector_sparse _ new_len _ vals2 _ ->
+		       let sparse_update = List.map (fun (i,v) -> (i+len,v)) vals2 in
+		       (Value (V_vector_sparse m (len+new_len) inc (vals1 ++ sparse_update) d), lm,l_env)
+		     | V_unknown -> (Value V_unknown,lm,l_env)
+                     | _ -> (Error l "vector concat requires vector",lm,le) end)
+                 (fun a -> update_stack a (add_to_top_frame 
+                                             (fun e env -> let (e1,env') = to_exp mode env v1 in
+                                                           (E_aux (E_vector_append e1 e) (l,annot),env')))))
+	    | V_unknown -> (Value V_unknown,lm,l_env)
+            | _ -> (Error l "vector concat requires vector",lm,le) end)
+        (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_vector_append e e2) (l,annot),env))))
     | E_tuple(exps) -> 
       exp_list mode t_level (fun exps -> E_aux (E_tuple exps) (l,annot)) V_tuple l_env l_mem [] exps
     | E_vector(exps) ->
@@ -1475,19 +1513,21 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	| Def_val_dec default_exp ->
 	  let (b,len) = match (base,len) with
 	    | (Ne_const b,Ne_const l) -> (b,l) end in
-	  resolve_outcome (interp_main mode t_level l_env l_mem default_exp)
-	                  (fun v lm le -> 
-			    exp_list mode t_level 
-                              (fun es -> 
-                                let (ev,_) = to_exp <|mode with track_values = false |> eenv v in
-                                (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es)
-					                 (Def_val_aux (Def_val_dec ev) dannot))
-				       (l,annot)))
-			      (fun vs -> (V_vector_sparse b len is_inc (map2 (fun i v -> (i,v)) indexes vs) v)) l_env l_mem [] exps)
-	                   (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_vector_indexed iexps (Def_val_aux (Def_val_dec e) dannot)) (l,annot), env)))) end)	  
+	  resolve_outcome 
+	    (interp_main mode t_level l_env l_mem default_exp)
+	    (fun v lm le -> 
+	      exp_list mode t_level 
+                (fun es -> 
+                  let (ev,_) = to_exp <|mode with track_values = false |> eenv v in
+                  (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es)
+			    (Def_val_aux (Def_val_dec ev) dannot))
+		     (l,annot)))
+		(fun vs -> (V_vector_sparse b len is_inc (map2 (fun i v -> (i,v)) indexes vs) v)) l_env l_mem [] exps)
+	    (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_vector_indexed iexps (Def_val_aux (Def_val_dec e) dannot)) (l,annot), env)))) end)	  
     | E_block exps -> interp_block mode t_level l_env l_env l_mem l annot exps
     | E_nondet exps ->
-      (Action (Nondet exps) (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,(intern_annot annot))) t_level l_env l_mem Top), l_mem, l_env)
+      (Action (Nondet exps) 
+	      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,(intern_annot annot))) t_level l_env l_mem Top), l_mem, l_env)
     | E_app f args ->
       (match (exp_list mode t_level (fun es -> E_aux (E_app f es) (l,annot)) 
 		               (fun vs -> match vs with | [] -> V_lit (L_aux L_unit l) | [v] -> v | vs -> V_tuple vs end) 
@@ -1539,12 +1579,13 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	    | [] -> 
               (Error l (String.stringAppend "No matching pattern for function " name ),l_mem,l_env)
 	    | [(env,used_unknown,exp)] -> 
-              resolve_outcome (if mode.eager_eval 
-		               then (interp_main mode t_level env emem exp)
-                               else (debug_out exp t_level emem env))
-	                      (fun ret lm le -> (Value ret, l_mem,l_env))
-                              (fun a -> update_stack a 
-				(fun stack -> (Hole_frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot))) t_level l_env l_mem stack)))
+              resolve_outcome 
+		(if mode.eager_eval 
+		 then (interp_main mode t_level env emem exp)
+                 else (debug_out exp t_level emem env))
+	        (fun ret lm le -> (Value ret, l_mem,l_env))
+                (fun a -> update_stack a 
+		  (fun stack -> (Hole_frame (id_of_string "0") (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot))) t_level l_env l_mem stack)))
              end)
           | Nothing -> (Error l (String.stringAppend "Specified function must be defined before executing " name),lm,le) end)
         | Tag_ctor ->
@@ -1553,18 +1594,26 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           | Nothing -> (Error l (String.stringAppend "Internal error: function with ctor tag unfound " name),lm,le)
            end)
         | Tag_extern opt_name ->
+	  let effects = (match effect with | Effect_aux(Effect_set es) _ -> es | _ -> [] end) in
           let name_ext = match opt_name with | Just s -> s | Nothing -> name end in
-          if has_rmem_effect (match effect with | Effect_aux(Effect_set es) _ -> es | _ -> [] end) 
+          if has_rmem_effect effects 
           then
             (Action (Read_mem (id_of_string name_ext) v Nothing) 
-	            (Hole_frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
-          else if has_barr_effect (match effect with | Effect_aux(Effect_set es) _ -> es | _ -> [] end)
+	            (Hole_frame (Id_aux (Id "0") l) 
+                                (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
+          else if has_barr_effect effects
           then 
             (Action (Barrier (id_of_string name_ext) v)
                     (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
-          else
+	  else if has_wmem_effect effects
+	  then 
+	    (Action (Write_mem (id_of_string name_ext) v Nothing v) (*TODO This is wrong, need to split up value or unsplit generally*)
+	            (Hole_frame (Id_aux (Id "0") l)
+		                (E_aux (E_id (Id_aux (Id "0") l)) (l, intern_annot annot)) t_level le lm Top),lm,le)
+          else 
             (Action (Call_extern name_ext v) 
-	            (Hole_frame (Id_aux (Id "0") l) (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
+	            (Hole_frame (Id_aux (Id "0") l) 
+                                (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
         | _ -> (Error l (String.stringAppend "Tag other than empty, spec, ctor, or extern on function call " name),lm,le) end)
       | out -> out end)
     | E_app_infix lft op r -> 
@@ -1573,67 +1622,74 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
        | _ -> op
        end in
       let name = get_id op in
-      resolve_outcome (interp_main mode t_level l_env l_mem lft)
-                      (fun lv lm le -> 
-                         resolve_outcome (interp_main mode t_level l_env lm r)
-                                         (fun rv lm le -> 
-                                           match tag with
-                                           | Tag_global ->
-					     (match find_function defs op with
-				               | Nothing -> (Error l (String.stringAppend "Internal error, no function def for " name),lm,le)
-                                               | Just (funcls) ->
-						 (match find_funcl funcls (V_tuple [lv;rv]) with 
-						   | [] -> (Error l (String.stringAppend "No matching pattern for function " name),lm,l_env)
-						   | [(env,used_unknown,exp)] ->
-				                     resolve_outcome (if mode.eager_eval
-						       then (interp_main mode t_level env emem exp)
-						       else (debug_out exp t_level emem env)) 
-				                       (fun ret lm le -> (Value ret,l_mem,l_env))
-                                                       (fun a -> update_stack a 
-							 (fun stack -> (Hole_frame (Id_aux (Id "0") l)
-								          (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot))) t_level l_env l_mem stack)))
+      resolve_outcome 
+	(interp_main mode t_level l_env l_mem lft)
+        (fun lv lm le -> 
+          resolve_outcome 
+	    (interp_main mode t_level l_env lm r)
+            (fun rv lm le -> 
+              match tag with
+                | Tag_global ->
+		  (match find_function defs op with
+		    | Nothing -> (Error l (String.stringAppend "Internal error, no function def for " name),lm,le)
+                    | Just (funcls) ->
+		      (match find_funcl funcls (V_tuple [lv;rv]) with 
+			| [] -> (Error l (String.stringAppend "No matching pattern for function " name),lm,l_env)
+			| [(env,used_unknown,exp)] ->
+			  resolve_outcome 
+			    (if mode.eager_eval
+			     then (interp_main mode t_level env emem exp)
+			     else (debug_out exp t_level emem env)) 
+			    (fun ret lm le -> (Value ret,l_mem,l_env))
+                            (fun a -> update_stack a 
+			      (fun stack -> 
+				(Hole_frame (Id_aux (Id "0") l)
+				   (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot))) t_level l_env l_mem stack)))
 				                end)end)
-					   | Tag_empty -> 
-				             (match find_function defs op with
-				             | Nothing -> (Error l (String.stringAppend "Internal error, no function def for " name),lm,le)
-                                             | Just (funcls) ->
-				               (match find_funcl funcls (V_tuple [lv;rv]) with 
-				               | [] -> (Error l (String.stringAppend "No matching pattern for function " name),lm,l_env)
-				               | [(env,used_unknown,exp)] ->
-				                 resolve_outcome (if mode.eager_eval
-						                  then (interp_main mode t_level env emem exp)
-						                  else (debug_out exp t_level emem env)) 
-				                   (fun ret lm le -> (Value ret,l_mem,l_env))
-                                                   (fun a -> update_stack a 
-						     (fun stack -> (Hole_frame (Id_aux (Id "0") l)
-								          (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
-				                end)end)
-                                           | Tag_spec ->
-                                             (match find_function defs op with
-				             | Nothing -> (Error l (String.stringAppend "No function definition found for " name),lm,le)
-                                             | Just (funcls) ->
-				               (match find_funcl funcls (V_tuple [lv;rv]) with 
-				               | [] -> (Error l (String.stringAppend "No matching pattern for function " name),lm,l_env)
-				               | [(env,used_unknown,exp)] ->
-				                 resolve_outcome (if mode.eager_eval 
-						   then (interp_main mode t_level env emem exp)
-						   else (debug_out exp t_level emem env))
-				                   (fun ret lm le -> (Value ret,l_mem,l_env))
-                                                   (fun a -> update_stack a 
-						     (fun stack -> (Hole_frame (Id_aux (Id "0") l)
-								          (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot))) t_level l_env l_mem stack)))
-				                end)end)
-                                           | Tag_extern ext_name ->
-                                             let ext_name = match ext_name with Just s -> s | Nothing -> name end in
-                                             (Action (Call_extern ext_name (V_tuple [lv;rv])) 
-						(Hole_frame (Id_aux (Id "0") l) 
-							    (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top),lm,le) end)
-                                         (fun a -> update_stack a 
-                                           (add_to_top_frame 
-                                              (fun r env -> let (el,env') = to_exp mode env lv in (E_aux (E_app_infix el op r) (l,annot), env')))))
-                       (fun a -> update_stack a (add_to_top_frame (fun lft env -> (E_aux (E_app_infix lft op r) (l,annot), env))))
+		| Tag_empty -> 
+		  (match find_function defs op with
+		    | Nothing -> (Error l (String.stringAppend "Internal error, no function def for " name),lm,le)
+                    | Just (funcls) ->
+		      (match find_funcl funcls (V_tuple [lv;rv]) with 
+			| [] -> (Error l (String.stringAppend "No matching pattern for function " name),lm,l_env)
+			| [(env,used_unknown,exp)] ->
+			  resolve_outcome 
+			    (if mode.eager_eval
+			     then (interp_main mode t_level env emem exp)
+			     else (debug_out exp t_level emem env)) 
+			    (fun ret lm le -> (Value ret,l_mem,l_env))
+                            (fun a -> update_stack a 
+			      (fun stack -> (Hole_frame (Id_aux (Id "0") l)
+					       (E_aux (E_id (Id_aux (Id "0") l)) (l,annot)) t_level l_env l_mem stack)))
+		       end)end)
+                | Tag_spec ->
+                  (match find_function defs op with
+		    | Nothing -> (Error l (String.stringAppend "No function definition found for " name),lm,le)
+                    | Just (funcls) ->
+		      (match find_funcl funcls (V_tuple [lv;rv]) with 
+			| [] -> (Error l (String.stringAppend "No matching pattern for function " name),lm,l_env)
+			| [(env,used_unknown,exp)] ->
+			  resolve_outcome 
+			    (if mode.eager_eval 
+			     then (interp_main mode t_level env emem exp)
+			     else (debug_out exp t_level emem env))
+			    (fun ret lm le -> (Value ret,l_mem,l_env))
+                            (fun a -> update_stack a 
+			      (fun stack -> (Hole_frame (Id_aux (Id "0") l)
+					       (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot))) t_level l_env l_mem stack)))
+		       end)end)
+                | Tag_extern ext_name ->
+                  let ext_name = match ext_name with Just s -> s | Nothing -> name end in
+        (Action (Call_extern ext_name (V_tuple [lv;rv])) 
+	   (Hole_frame (Id_aux (Id "0") l) 
+	      (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top),lm,le) end)
+            (fun a -> update_stack a 
+              (add_to_top_frame 
+                 (fun r env -> let (el,env') = to_exp mode env lv in (E_aux (E_app_infix el op r) (l,annot), env')))))
+        (fun a -> update_stack a (add_to_top_frame (fun lft env -> (E_aux (E_app_infix lft op r) (l,annot), env))))
   | E_exit exp ->
-    (Action (Exit exp) (Thunk_frame (E_aux (E_lit (L_aux L_unit Unknown)) (l, intern_annot annot)) t_level l_env l_mem Top),l_mem, l_env)
+    (Action (Exit exp) 
+            (Thunk_frame (E_aux (E_lit (L_aux L_unit Unknown)) (l, intern_annot annot)) t_level l_env l_mem Top),l_mem, l_env)
   | E_let (lbind : letbind tannot) exp -> 
     match (interp_letbind mode t_level l_env l_mem lbind) with
     | ((Value v,lm,le),_) ->
@@ -1644,25 +1700,24 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
       ((update_stack o (add_to_top_frame (fun e env -> (E_aux (E_let (lbuild e) exp) (l,annot), env)))),lm,le)
     | (e,_) -> e end
   | E_assign lexp exp ->
-    resolve_outcome (interp_main mode t_level l_env l_mem exp)
-                    (fun v lm le -> 
-                      (match create_write_message_or_update mode t_level v l_env lm true lexp with
-                      | (outcome,Nothing) -> outcome
-                      | (outcome,Just lexp_builder) ->
-                        resolve_outcome outcome
-                                        (fun v lm le -> (Value v,lm,le))
-                                        (fun a -> 
-					  (match a with
-					    | (Action (Write_reg regf range value) stack) -> 
-					      (Action (Write_reg regf range value) stack)
-					    | (Action (Write_mem id a range value) stack) -> 
-					      (Action (Write_mem id a range value) stack)
-					    | _ -> update_stack a (add_to_top_frame 
-								     (fun e env -> 
-                                                                       let (ev,env') = (to_exp mode env v) in
-                                                                       (E_aux (E_assign (lexp_builder e) ev) (l,annot),env'))) end))
-		       end))
-                    (fun a -> update_stack a (add_to_top_frame (fun v env -> (E_aux (E_assign lexp v) (l,annot), env))))
+    resolve_outcome 
+      (interp_main mode t_level l_env l_mem exp)
+      (fun v lm le -> 
+        (match create_write_message_or_update mode t_level v l_env lm true lexp with
+          | (outcome,Nothing) -> outcome
+          | (outcome,Just lexp_builder) ->
+            resolve_outcome outcome
+              (fun v lm le -> (Value v,lm,le))
+              (fun a -> 
+		(match a with
+		  | (Action (Write_reg regf range value) stack) -> (Action (Write_reg regf range value) stack)
+		  | (Action (Write_mem id a range value) stack) -> (Action (Write_mem id a range value) stack)
+		  | _ -> update_stack a (add_to_top_frame 
+					   (fun e env -> 
+                                             let (ev,env') = (to_exp mode env v) in
+                                             (E_aux (E_assign (lexp_builder e) ev) (l,annot),env'))) end))
+	 end))
+      (fun a -> update_stack a (add_to_top_frame (fun v env -> (E_aux (E_assign lexp v) (l,annot), env))))
   end
 
 (*TODO shrink location information on recursive calls *)
