@@ -43,7 +43,8 @@ let extern_reg r slice = match (r,slice) with
 end
 
 let initial_instruction_state top_level main arg = 
-  Interp.Thunk_frame (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) [ Interp.to_exp (intern_value arg) ]) (Interp_ast.Unknown, Nothing)) top_level [] Interp.emem
+  let (e_arg,env) = Interp.to_exp <| Interp.eager_eval = true; Interp.track_values = false |> Interp.eenv (intern_value arg) in
+  Interp.Thunk_frame (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) [e_arg]) (Interp_ast.Unknown, Nothing)) top_level Interp.eenv Interp.emem
 
 (*For now, append to this list to add more external functions; should add to the mode record for more perhaps *)
 let external_functions = 
@@ -60,7 +61,7 @@ let memory_functions =
 
 let rec interp_to_outcome mode thunk = 
   match thunk () with
-  | Interp.Value _ _ -> Done
+  | Interp.Value _ -> Done
   | Interp.Error l msg -> Error msg (*Todo, add the l information the string format*)
   | Interp.Action a next_state ->
     match a with
@@ -77,7 +78,7 @@ let rec interp_to_outcome mode thunk =
       | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
       end 
     | Interp.Barrier (Id_aux (Id i) _) lval ->
-      Barrier Interp.Barrier_plain next_state (* TODO set up some barrier functions and see if the value would be anything needed *)
+      Barrier Interp.Plain next_state (* TODO set up some barrier functions and see if the value would be anything needed *)
     | Interp.Nondet exps -> 
       let nondet_states = List.map (Interp.set_in_context next_state) exps in
       Nondet_choice nondet_states next_state      
@@ -85,7 +86,7 @@ let rec interp_to_outcome mode thunk =
       match List.lookup i external_functions with
       | Nothing -> Error ("External function not available " ^ i)
       | Just f  -> interp_to_outcome mode (fun _ -> Interp.resume mode next_state (Just (f value))) end
-    | Interp.Debug l -> Internal next_state
+    | Interp.Step l _ _ -> Internal next_state
     end 
   end 
 
@@ -107,5 +108,5 @@ let rec ie_loop mode i_state =
      end ;;
   
 let interp_exhaustive i_state = 
-  let mode = <| Interp.eager_eval = true |> in
+  let mode = <| Interp.eager_eval = true; Interp.track_values = false; |> in
   ie_loop mode i_state

@@ -1014,6 +1014,10 @@ let debug_out e tl lm le = (Action (Step (get_exp_l e) Nothing Nothing) (Thunk_f
 let to_exps mode env vals = 
   List.foldr (fun v (es,env) -> let (e,env') = to_exp mode env v in (e::es, union_env env env')) ([],env) vals
 
+let get_num v = match v with
+  | V_lit (L_aux (L_num n) _) -> n
+  | _ -> 0 end
+
 (*Interpret a list of expressions, tracking local state but evaluating in the same scope (i.e. not tracking env) *)
 let rec exp_list mode t_level build_e build_v l_env l_mem vals exps =
   match exps with
@@ -1119,75 +1123,75 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         (fun a -> update_stack a (add_to_top_frame (fun c env -> (E_aux (E_if c thn els) (l,annot), env))))
     | E_for id from to_ by ((Ord_aux o _) as order) exp ->
       let is_inc = match o with | Ord_inc -> true | _ -> false end in
-      let from_eval from_val_whole lm le eval_to = 
-	let from_val = match from_val_whole with | V_track v _ -> v | _ -> from_val_whole end in
-        let (from_e,le) = to_exp mode le from_val_whole in
-	let f_typ = val_typ from_val in
-	match from_val with
-	  | V_lit (L_aux (L_num from_num) fl) ->
-	    eval_to from_val_whole from_e from_num fl f_typ lm le
-	  | V_unknown -> 
-	    let le = add_to_env (id,from_val_whole) le in interp_main mode t_level le lm exp end 
-      in
-      let to_eval from_val_whole from_e from_num fl f_typ to_val_whole lm le eval_for =
-	let to_val = match to_val_whole with | V_track v _ -> v | _ -> to_val_whole end in
-        let (to_e,le) = to_exp mode le to_val_whole in
-	let augment_annot = (fl, val_annot (combine_typs [f_typ;(val_typ to_val)])) in
-	match to_val with 
-	  | V_lit (L_aux (L_num to_num) tl) ->
-	    if from_num = to_num
-	    then (Value(V_lit (L_aux L_unit l)),lm,le)
-	    else eval_for from_val_whole from_num fl from_e f_typ to_e augment_annot lm le
-	  | V_unknown ->
-	    let le = add_to_env (id,from_val_whole) le in interp_main mode t_level le lm exp end
-      in
-      let for_loop from_val_whole from_num fl from_e f_typ to_e augment_annot by_val_whole lm le =
-	let by_val = match by_val_whole with | V_track v _ -> v | _ -> by_val_whole end in
-        let (by_e, le) = to_exp mode le by_val_whole in
-	(match by_val with 
-          | V_lit (L_aux (L_num by_num) bl) ->
-	    let diff = L_aux (L_num (if is_inc then from_num + by_num else from_num - by_num)) fl in
-	    let (augment_e,le) = match (from_val_whole,by_val_whole) with
-	      | (V_lit _, V_lit _) -> ((E_aux (E_lit diff) augment_annot), le)
-	      | (V_track _ rs, V_lit _) -> to_exp mode le (V_track (V_lit diff) rs)
-	      | (V_lit _, V_track _ rs) -> to_exp mode le (V_track (V_lit diff) rs)
-	      | (V_track _ r1, V_track _ r2) -> (to_exp mode le (V_track (V_lit diff) (r1 ++ r2))) end in
-	    let  e = 
-	      (E_aux (E_block 
-			[(E_aux (E_let 
-				   (LB_aux (LB_val_implicit (P_aux (P_id id) (l,val_annot f_typ)) from_e)
-				      (Unknown,val_annot f_typ))
-				   exp) (l,annot));
-			 (E_aux (E_for id augment_e to_e by_e order exp) (l,annot))])
-		 (l,annot)) in
-	    if mode.eager_eval
-	    then interp_main mode t_level le lm e 
-	    else debug_out e t_level lm le
-          | V_unknown -> 
-	    let le = add_to_env (id,from_val_whole) le in interp_main mode t_level le lm exp
-          | _ -> (Error l "internal error: by must be a number",lm,le) end) 
-      in	
       resolve_outcome 
 	(interp_main mode t_level l_env l_mem from)
-        (fun from_val lm le -> 
-	  (from_eval from_val lm le 
-	     (fun from_val_whole from_e from_num fl f_typ lm le ->
-	       resolve_outcome 
-		 (interp_main mode t_level le lm to_)
-		 (fun to_val_whole lm le ->
-		   (to_eval from_val_whole from_e from_num fl f_typ to_val_whole lm le
-		      (fun from_val_whole from_num fl from_e f_typ to_e augment_annot lm le ->
-			resolve_outcome
-			  (interp_main mode t_level le lm by)
-			  (fun by_val_whole lm le -> 
-			    (for_loop from_val_whole from_num fl from_e f_typ to_e augment_annot by_val_whole lm le))
-			  (fun a -> update_stack a 
-			    (add_to_top_frame (fun b env -> (E_aux (E_for id from_e to_e b order exp) (l,annot), env)))))))
-		 (fun a -> update_stack a 
-		   (add_to_top_frame (fun t env -> 
-		     (E_aux (E_for id from_e t by order exp) (l,annot), env)))))))
-	(fun a -> update_stack a
-	  (add_to_top_frame (fun f env -> (E_aux (E_for id f to_ by order exp) (l,annot), env))))
+        (fun from_val_whole lm le ->
+	  let from_val = match from_val_whole with | V_track v _ -> v | v -> v end in
+          let (from_e,env) = to_exp mode le from_val_whole in
+          match from_val with
+            | V_lit(L_aux(L_num from_num) fl) -> 
+              resolve_outcome 
+		(interp_main mode t_level env lm to_)
+                (fun to_val_whole lm le ->
+		  let to_val = match to_val_whole with | V_track v _ -> v | v -> v end in
+		  let (to_e,env) = to_exp mode le to_val_whole in
+                  match to_val with
+                    | V_lit(L_aux (L_num to_num) tl) ->
+                      resolve_outcome 
+                        (interp_main mode t_level env lm by)
+                        (fun by_val_whole lm le ->
+			  let by_val = match by_val_whole with V_track v _ -> v | v -> v end in
+			  let (by_e,env) = to_exp mode le by_val_whole in
+                          match by_val with 
+                            | V_lit (L_aux (L_num by_num) bl) ->
+                              if (from_num = to_num) 
+                              then (Value(V_lit (L_aux L_unit l)),lm,le)
+                              else
+				let (ftyp,ttyp,btyp) = (val_typ from_val,val_typ to_val,val_typ by_val) in
+				let augment_annot = (fl, val_annot (combine_typs [ftyp;ttyp])) in
+				let diff = L_aux (L_num (if is_inc then from_num + by_num else from_num - by_num)) fl in
+				let (augment_e,env) = match (from_val_whole,by_val_whole) with
+				  | (V_lit _, V_lit _) -> ((E_aux (E_lit diff) augment_annot), env)
+				  | (V_track _ rs, V_lit _) -> to_exp mode env (V_track (V_lit diff) rs)
+				  | (V_lit _, V_track _ rs) -> to_exp mode env (V_track (V_lit diff) rs)
+				  | (V_track _ r1, V_track _ r2) -> (to_exp mode env (V_track (V_lit diff) (r1 ++ r2))) end in
+				let  e = 
+				  (E_aux (E_block 
+					    [(E_aux (E_let 
+						       (LB_aux (LB_val_implicit (P_aux (P_id id) (fl,val_annot ftyp)) from_e)
+							       (Unknown,val_annot ftyp))
+						       exp) (l,annot));
+					     (E_aux (E_for id augment_e to_e by_e order exp) (l,annot))])
+					    (l,annot)) in
+				if mode.eager_eval
+				then interp_main mode t_level env lm e 
+				else debug_out e t_level lm env
+                            | V_unknown -> 
+			      let e = 
+				(E_aux (E_let 
+					  (LB_aux (LB_val_implicit (P_aux (P_id id) (fl, val_annot (val_typ from_val))) from_e)
+					          (fl, val_annot (val_typ from_val)))
+					  exp) (l,annot)) in
+			      interp_main mode t_level env lm e
+                            | _ -> (Error l "internal error: by must be a number",lm,le) end)
+                        (fun a -> update_stack a 
+			  (add_to_top_frame (fun b env -> (E_aux (E_for id from_e to_e b order exp) (l,annot), env))))
+		    | V_unknown -> 
+		      let e =
+			(E_aux (E_let (LB_aux (LB_val_implicit (P_aux (P_id id) (fl, val_annot (val_typ from_val))) from_e)
+					      (fl, val_annot (val_typ from_val))) exp) (l,annot)) in
+		      interp_main mode t_level env lm e
+                    | _ -> (Error l "internal error: to must be a number",lm,env) end)
+                (fun a -> update_stack a 
+		  (add_to_top_frame (fun t env -> 
+		    (E_aux (E_for id from_e t by order exp) (l,annot), env))))
+	    | V_unknown ->
+	      let e =
+		(E_aux (E_let (LB_aux (LB_val_implicit (P_aux (P_id id) (Unknown, val_annot (val_typ from_val))) from_e)
+				      (Unknown, val_annot (val_typ from_val))) exp) (l,annot)) in
+	      interp_main mode t_level env lm e
+            | _ -> (Error l "internal error: from must be a number",lm,le) end)
+        (fun a -> update_stack a (add_to_top_frame (fun f env -> (E_aux (E_for id f to_ by order exp) (l,annot), env))))
     | E_case exp pats ->
       resolve_outcome 
 	(interp_main mode t_level l_env l_mem exp)
@@ -1296,7 +1300,6 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	(interp_main mode t_level l_env l_mem i)
         (fun iv_whole lm le -> 
 	  let iv = match iv_whole with | V_track v _ -> v | _ -> iv_whole end in
-	  let (iv_e, le) = to_exp mode le iv_whole in
           match iv with
             | V_lit (L_aux (L_num n) ln) -> 
               resolve_outcome
@@ -1315,63 +1318,79 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			| _ -> (Value (V_track (access_vector vvec n) r),lm,le) end)
 		    | V_unknown -> (Value V_unknown,lm,le)
                     | _ -> (Error l "Vector access of non-vector",lm,le)end)
-                (fun a ->
+                (fun a ->		  
                   match a with
                     | Action (Read_reg reg Nothing) stack -> 
                       if (top_hole stack) 
                       then Action (Read_reg reg (Just(n,n))) stack 
                       else Action (Read_reg reg Nothing) 
 			          (add_to_top_frame 
-				     (fun v env -> (E_aux (E_vector_access v iv_e) (l,annot),env)) stack)
+				     (fun v env -> 
+				       let (iv_e, env) = to_exp mode env iv_whole in
+				       (E_aux (E_vector_access v iv_e) (l,annot),env)) stack)
                     | _ -> 
                       update_stack a 
 			(add_to_top_frame 
-			   (fun v env -> (E_aux (E_vector_access v iv_e) (l,annot), env))) end)
+			   (fun v env -> 
+			     let (iv_e, env) = to_exp mode env iv_whole in
+			     (E_aux (E_vector_access v iv_e) (l,annot), env))) end)
 	    | V_unknown -> (Value V_unknown,lm,le)
             | _ -> (Error l "Vector access not given a number for index",lm,l_env) end)
         (fun a -> update_stack a (add_to_top_frame (fun i env -> (E_aux (E_vector_access vec i) (l,annot), env))))
     | E_vector_subrange vec i1 i2 ->
       resolve_outcome 
 	(interp_main mode t_level l_env l_mem i1)
-        (fun i1v lm le ->
-          match i1v with
-            | V_lit (L_aux (L_num n1) ln1) ->
-              resolve_outcome (interp_main mode t_level l_env lm i2)
-                (fun i2v lm le ->
-                  match i2v with
-                    | V_lit (L_aux (L_num n2) ln2) ->
-                      resolve_outcome (interp_main mode t_level l_env lm vec)
-                        (fun vvec lm le ->
-                          match vvec with
-                            | V_vector _ _ _ -> (Value (slice_vector vvec n1 n2),lm,le)
-			    | V_vector_sparse _ _ _ _ _ -> (Value (slice_vector vvec n1 n2), lm,le)
-			    | V_unknown -> (Value V_unknown,lm,le)
-                            | _ -> (Error l "Vector slice of non-vector",lm,le)end)
-                        (fun a -> 
-                          match a with 
-                            | Action (Read_reg reg Nothing) stack ->
-                              if (top_hole stack)
-                              then Action (Read_reg reg (Just(n1,n2))) stack
-                              else Action (Read_reg reg Nothing) 
-                                (add_to_top_frame (fun v env -> (E_aux (E_vector_subrange v
-                                                                          (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
-                                                                          (E_aux (E_lit (L_aux (L_num n2) ln2)) (ln2,Nothing)))
-                                                                   (l,annot), env)) stack)
-                            | _ -> update_stack a 
-                              (add_to_top_frame 
-				 (fun v env -> (E_aux (E_vector_subrange v 
-							 (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
-							 (E_aux (E_lit (L_aux (L_num n2) ln2)) (ln2,Nothing)))
-						  (l,annot), env))) end)
-		    | V_unknown -> (Value V_unknown, lm,le)
-                    | _ -> (Error l "vector slice given non number for last index",lm,le) end)
+        (fun i1v_whole lm le ->
+	  let iv1 = (match i1v_whole with | V_track iv1 _ -> iv1 | _ -> i1v_whole end) in
+	  match iv1 with
+	    | V_unknown -> (Value V_unknown,lm,le)
+	    | _ -> 
+              resolve_outcome 
+		(interp_main mode t_level l_env lm i2)
+		(fun i2v_whole lm le ->
+		  let iv2 = (match i2v_whole with | V_track iv2 _ -> iv2 | _ -> i2v_whole end) in
+		  match iv2 with
+		    | V_unknown -> (Value V_unknown,lm,le)
+		    | _ ->
+		      resolve_outcome 
+			(interp_main mode t_level l_env lm vec)
+			(fun vvec lm le ->
+			  let tracking = (match (i1v_whole,i2v_whole) with 
+			    | (V_track _ r1,V_track _ r2) -> (r1++r2)
+			    | (V_track _ r, _) -> r
+			    | (_, V_track _ r) -> r
+			    | _ -> [] end) in
+			  match (iv1,iv2) with
+			    | (V_lit (L_aux (L_num n1) ln1),V_lit (L_aux (L_num n2) ln2)) ->
+			      (match (vvec,tracking) with
+				| (V_vector _ _ _,[]) -> (Value (slice_vector vvec n1 n2),lm,le)
+				| (V_vector _ _ _,tr) -> (Value (V_track (slice_vector vvec n1 n2) tr), lm,le)
+				| (V_track ((V_vector _ _ _) as vvec) r,_) -> 
+				  (Value (V_track (slice_vector vvec n1 n2) (r++tracking)), lm,le)
+				| (V_vector_sparse _ _ _ _ _,[]) -> (Value (slice_vector vvec n1 n2), lm,le)
+				| (V_vector_sparse _ _ _ _ _,tr) -> (Value (V_track (slice_vector vvec n1 n2) tr),lm,le)
+				| (V_track ((V_vector_sparse _ _ _ _ _) as vvec) r,_) ->
+				  (Value (V_track (slice_vector vvec n1 n2) (r++tracking)), lm,le)
+				| (V_unknown,_) -> (Value V_unknown,lm,le)
+				| _ -> (Error l "Vector slice of non-vector",lm,le) end)
+			 end)
+			(fun a -> 
+			  let rebuild v env = let (ie1,env) = to_exp mode env i1v_whole in
+					      let (ie2,env) = to_exp mode env i2v_whole in
+					      (E_aux (E_vector_subrange v ie1 ie2) (l,annot), env) in
+			  match a with 
+			    | Action (Read_reg reg Nothing) stack ->
+			      if (top_hole stack)
+			      then Action (Read_reg reg (Just((get_num iv1),(get_num iv2)))) stack
+			      else Action (Read_reg reg Nothing) (add_to_top_frame rebuild stack)
+                            | _ -> update_stack a (add_to_top_frame rebuild) end)
+		 end)
                 (fun a -> update_stack a 
 		  (add_to_top_frame 
-		     (fun i2 env -> (E_aux (E_vector_subrange vec 
-					      (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
-					      i2) (l,annot), env))))
-	    | V_unknown -> (Value V_unknown,lm,le)
-            | _ -> (Error l "Vector slice given non-number for first index",lm,le) end)
+		     (fun i2 env -> 
+		       let (ie1,env) = to_exp mode env i1v_whole in
+		       (E_aux (E_vector_subrange vec ie1 i2) (l,annot), env))))
+	 end) 
         (fun a -> update_stack a (add_to_top_frame (fun i1 env -> (E_aux (E_vector_subrange vec i1 i2) (l,annot), env))))
     | E_vector_update vec i exp ->
       resolve_outcome 
