@@ -1395,7 +1395,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     | E_vector_update vec i exp ->
       resolve_outcome 
 	(interp_main mode t_level l_env l_mem i)
-        (fun vi lm le ->
+        (fun vi_whole lm le ->
+	  let (vi,tracking) = match vi_whole with V_track v r -> (v,r) | _ -> (vi_whole,[]) end in
           match vi with
             | V_lit (L_aux (L_num n1) ln1) ->
               resolve_outcome 
@@ -1404,34 +1405,40 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                   resolve_outcome 
 		    (interp_main mode t_level le lm vec)
                     (fun vec lm le ->
-                      match vec with
-                        | V_vector _ _ _ -> (Value (fupdate_vec vec n1 vup), lm,le)
-			| V_vector_sparse _ _ _ _ _ -> (Value (fupdate_vec vec n1 vup),lm,le)
-			| V_unknown -> (Value V_unknown, lm, le)
+                      match (vec,tracking) with
+                        | (V_vector _ _ _,[]) -> (Value (fupdate_vec vec n1 vup), lm,le)
+			| (V_track ((V_vector _ _ _) as vvec) r, tracking) ->
+			  (Value (V_track (fupdate_vec vec n1 vup) (r++tracking)),lm,le)
+			| (V_vector_sparse _ _ _ _ _,[]) -> (Value (fupdate_vec vec n1 vup),lm,le)
+			| (V_track ((V_vector_sparse _ _ _ _ _) as vvec) r, tracking) ->
+			  (Value (V_track (fupdate_vec vec n1 vup) (r++tracking)),lm,le)
+			| (V_unknown,_) -> (Value V_unknown, lm, le)
                         | _ -> (Error l "Update of vector given non-vector",lm,le) end)
                     (fun a -> update_stack a 
 		      (add_to_top_frame 
 			 (fun v env ->
                            let (eup,env') = (to_exp mode env vup) in 
-                           (E_aux (E_vector_update v 
-				     (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing)) 
-				     eup) (l,annot), env')))))
+			   let (ei, env') = (to_exp mode env' vi_whole) in
+                           (E_aux (E_vector_update v ei eup) (l,annot), env')))))
                 (fun a -> update_stack a 
-		  (add_to_top_frame (fun e env -> (E_aux (E_vector_update vec 
-							    (E_aux (E_lit (L_aux (L_num n1) ln1)) (ln1,Nothing))
-							    e) (l,annot), env))))
+		  (add_to_top_frame 
+		     (fun e env -> 
+		       let (ei, env) = to_exp mode env vi_whole in
+		       (E_aux (E_vector_update vec ei e) (l,annot), env))))
 	    | V_unknown -> (Value V_unknown,lm,l_env)
             | _ -> (Error l "Update of vector requires number for access",lm,le) end)
         (fun a -> update_stack a (add_to_top_frame (fun i env -> (E_aux (E_vector_update vec i exp) (l,annot), env))))
     | E_vector_update_subrange vec i1 i2 exp ->
       resolve_outcome 
 	(interp_main mode t_level l_env l_mem i1)
-        (fun vi1 lm le ->
+        (fun vi1_whole lm le ->
+	  let (vi1,v1_t) = match vi1_whole with | V_track v r -> (v,r) | _ -> (vi1_whole,[]) end in
           match vi1 with
             | V_lit (L_aux (L_num n1) ln1) ->
               resolve_outcome 
                 (interp_main mode t_level l_env lm i2) 
-                (fun vi2 lm le ->
+                (fun vi2_whole lm le ->
+		  let (vi2,tracking) = match vi2_whole with | V_track v r -> (v,(r++v1_t) | _ -> (vi2_whole,v1_t) end in
                   match vi2 with
                     | V_lit (L_aux (L_num n2) ln2) ->
                       resolve_outcome 
@@ -1440,10 +1447,12 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                           (resolve_outcome 
                              (interp_main mode t_level l_env lm vec)
                              (fun vvec lm le ->
-                               match vvec with
-                                 | V_vector _ _ _ -> (Value (fupdate_vector_slice vvec v_rep n1 n2),lm,le)
-				 | V_vector_sparse _ _ _ _ _ -> (Value (fupdate_vector_slice vvec v_rep n1 n2),lm,le)
-				 | V_unknown -> (Value V_unknown,lm,le)
+                               match (vvec,tracking) with
+                                 | (V_vector _ _ _,[]) -> (Value (fupdate_vector_slice vvec v_rep n1 n2),lm,le)
+				 | (V_track ((V_vector _ _ _) as vvec) r,t) -> 
+				   (Value (V_track (fupdate_vector_slice vvec v_rep n1 n2) (r++tracking)),lm,le)
+				 | (V_vector_sparse _ _ _ _ _,[]) -> (Value (fupdate_vector_slice vvec v_rep n1 n2),lm,le)
+				 | (V_unknown,_) -> (Value V_unknown,lm,le)
                                  | _ -> (Error l "Vector update requires vector",lm,le) end)
                              (fun a -> update_stack a 
                                (add_to_top_frame 
