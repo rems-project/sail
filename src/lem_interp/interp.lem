@@ -1257,7 +1257,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
             (interp_main mode t_level l_env lm tl)
             (fun tlv lm le -> match tlv with 
               | V_list t -> (Value(V_list (hdv::t)),lm,le)
-	      | V_unknwon -> (Value V_unknown,lm,le)
+	      | V_unknown -> (Value V_unknown,lm,le)
 	      | V_track (V_list t) r -> (Value (V_track (V_list (hdv::t)) r),lm,le)
               | _ -> (Error l ":: of non-list value",lm,le) end)
             (fun a -> update_stack a 
