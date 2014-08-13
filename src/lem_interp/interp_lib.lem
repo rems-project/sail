@@ -26,51 +26,80 @@ let rec sparse_walker update ni processed_length length ls df =
     else df::(sparse_walker update (update ni) (processed_length + 1) length ((i,v)::ls) df)
 end
 
-let fill_in_sparse v = match v with
+let rec fill_in_sparse v = match v with
   | V_vector_sparse first length inc ls df -> 
     V_vector first inc (sparse_walker (if inc then (fun (x: integer) -> x + onei) else (fun (x: integer) -> x - onei)) first zeroi length ls df)
+  | V_track v r -> taint (fill_in_sparse v) r
 end    
 
 let is_one v = match v with 
   | V_lit (L_aux b lb) -> V_lit (L_aux (if b = L_one then L_true else L_false) lb)
+  | V_track (V_lit (L_aux b lb)) r -> V_track (V_lit (L_aux (if b = L_one then L_true else L_false) lb)) r
   | V_unknown -> V_unknown
 end ;;
 
-let lt_range (V_tuple[v1;v2]) = match (v1,v2) with 
+let rec lt_range (V_tuple[v1;v2]) = match (v1,v2) with 
   | (V_lit (L_aux (L_num l1) lr),V_lit (L_aux (L_num l2) ll)) ->
     if l1 < l2
     then V_lit (L_aux L_one Unknown)
     else V_lit (L_aux L_zero Unknown)
+  | (V_track v1 r1, V_track v2 r2) -> 
+    taint (lt_range (V_tuple [v1;v2])) (r1++r2)
+  | (V_track v1 r1, v2) ->
+    taint (lt_range (V_tuple [v1;v2])) r1
+  | (v1,V_track v2 r2) ->
+    taint (lt_range (V_tuple [v1;v2])) r2
   | (V_unknown,_) -> V_unknown
   | (_,V_unknown) -> V_unknown
 end ;;
 
 let bit_to_bool b = match b with
-    V_lit (L_aux L_zero _) -> false
+  | V_lit (L_aux L_zero _) -> false
+  | V_track (V_lit (L_aux L_zero _)) _ -> false
   | V_lit (L_aux L_one _) -> true
+  | V_track (V_lit (L_aux L_one _)) _ -> true
   end ;;
 let bool_to_bit b = match b with
     false -> V_lit (L_aux L_zero Unknown)
   | true -> V_lit (L_aux L_one Unknown)
   end ;;
 
-let bitwise_not (V_vector idx inc v) =
-  let apply x = bool_to_bit(not (bit_to_bool x)) in
-  V_vector idx inc (List.map apply v)
+let bitwise_not v =
+  match v with
+  | V_vector idx inc v ->
+    let apply x = bool_to_bit(not (bit_to_bool x)) in
+    V_vector idx inc (List.map apply v)
+  | V_track (V_vector idx inc v) r ->
+    let apply x = bool_to_bit(not (bit_to_bool x)) in
+    V_track (V_vector idx inc (List.map apply v)) r
+end ;;
 
-let bitwise_not_bit (V_lit (L_aux l loc)) = match l with
-  | L_zero -> (V_lit (L_aux L_one loc))
-  | L_one  -> (V_lit (L_aux L_zero loc))
+let bitwise_not_bit v = 
+  let lit_not (L_aux l loc) = match l with
+    | L_zero -> (V_lit (L_aux L_one loc))
+    | L_one  -> (V_lit (L_aux L_zero loc)) end in
+  match v with
+  | V_lit lit -> lit_not lit
+  | V_track (V_lit lit) r -> V_track (lit_not lit) r 
 end;; 
 
-let bitwise_binop_bit op (V_tuple [x; y]) =
-  bool_to_bit (op (bit_to_bool x) (bit_to_bool y))
-;;
+let bitwise_binop_bit op (V_tuple [x; y]) = match (x,y) with
+  | (V_track x rx,V_track y ry) ->
+    V_track (bool_to_bit (op (bit_to_bool x) (bit_to_bool y))) (rx ++ ry)
+  | (V_track x rx,y) ->
+    V_track (bool_to_bit (op (bit_to_bool x) (bit_to_bool y))) rx
+  | (x,V_track y ry) ->
+    V_track (bool_to_bit (op (bit_to_bool x) (bit_to_bool y))) ry
+  | _ -> bool_to_bit (op (bit_to_bool x) (bit_to_bool y))
+end ;;
 
-let bitwise_binop op (V_tuple [V_vector idx inc v; V_vector idx' inc' v']) =
+let bitwise_binop op (V_tuple [v1;v2]) =
+  match (v1,v2) with
+  | (V_vector idx inc v, V_vector idx' inc' v') ->
   (* typechecker ensures inc = inc', idx = idx' and length v = length v' *)
   let apply (x, y) = bool_to_bit(op (bit_to_bool x) (bit_to_bool y)) in
   V_vector idx inc (List.map apply (List.zip v v'))
+end ;;
 
 (* BitSeq expects LSB first.
  * By convention, MSB is on the left, so increasing = Big-Endian (MSB0),
