@@ -18,6 +18,15 @@ test_power: power
 	#../../../rsem/idl/power/binary/run.sh
 	./run_power.native --file ../../../rsem/idl/power/binary/main.bin
 
+test_power_interactive: power
+	./run_power.native --interactive --file ../../../rsem/idl/power/binary/main.bin
+
+test_power_interactive_srcs:
+	ebig ~/rsem/idl/power/generated/power.sail ../../../rsem/idl/power/binary/hello.c  ../../../rsem/idl/power/binary/hello.s 
+
+# or test/power.sail for cut-down one
+
+
 test_idempotence: sail
 	@cd test; for file in *.sail; do \
 		./idempotence.sh $$file; echo ;\

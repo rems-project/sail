@@ -150,20 +150,6 @@ typquant_aux =  (* type quantifiers and constraints *)
 
 
 type 
-lit_aux =  (* Literal constant *)
-   L_unit (* $() : _$ *)
- | L_zero (* $_ : _$ *)
- | L_one (* $_ : _$ *)
- | L_true (* $_ : _$ *)
- | L_false (* $_ : _$ *)
- | L_num of int (* natural number constant *)
- | L_hex of string (* bit vector constant, C-style *)
- | L_bin of string (* bit vector constant, C-style *)
- | L_undef (* constant representing undefined values *)
- | L_string of string (* string constant *)
-
-
-type 
 typquant = 
    TypQ_aux of typquant_aux * l
 
@@ -191,13 +177,32 @@ and typ_arg =
 
 
 type 
-lit = 
-   L_aux of lit_aux * l
+lit_aux =  (* Literal constant *)
+   L_unit (* $() : _$ *)
+ | L_zero (* $_ : _$ *)
+ | L_one (* $_ : _$ *)
+ | L_true (* $_ : _$ *)
+ | L_false (* $_ : _$ *)
+ | L_num of int (* natural number constant *)
+ | L_hex of string (* bit vector constant, C-style *)
+ | L_bin of string (* bit vector constant, C-style *)
+ | L_undef (* constant representing undefined values *)
+ | L_string of string (* string constant *)
 
 
 type 
 typschm_aux =  (* type scheme *)
    TypSchm_ts of typquant * typ
+
+
+type 
+lit = 
+   L_aux of lit_aux * l
+
+
+type 
+typschm = 
+   TypSchm_aux of typschm_aux * l
 
 
 type 
@@ -223,11 +228,6 @@ and 'a fpat_aux =  (* Field pattern *)
 
 and 'a fpat = 
    FP_aux of 'a fpat_aux * 'a annot
-
-
-type 
-typschm = 
-   TypSchm_aux of typschm_aux * l
 
 
 type 
@@ -319,6 +319,12 @@ type
 
 
 type 
+name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
+   Name_sect_none
+ | Name_sect_some of string
+
+
+type 
 type_union_aux =  (* Type union constructors *)
    Tu_id of id
  | Tu_ty_id of typ * id
@@ -330,8 +336,9 @@ tannot_opt_aux =  (* Optional type annotation for functions *)
 
 
 type 
-'a funcl_aux =  (* Function clause *)
-   FCL_Funcl of id * 'a pat * 'a exp
+rec_opt_aux =  (* Optional recursive annotation for functions *)
+   Rec_nonrec (* non-recursive *)
+ | Rec_rec (* recursive *)
 
 
 type 
@@ -341,15 +348,8 @@ effect_opt_aux =  (* Optional effect annotation for functions *)
 
 
 type 
-name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
-   Name_sect_none
- | Name_sect_some of string
-
-
-type 
-rec_opt_aux =  (* Optional recursive annotation for functions *)
-   Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
+'a funcl_aux =  (* Function clause *)
+   FCL_Funcl of id * 'a pat * 'a exp
 
 
 type 
@@ -361,33 +361,13 @@ type
 
 
 type 
-type_union = 
-   Tu_aux of type_union_aux * l
-
-
-type 
-tannot_opt = 
-   Typ_annot_opt_aux of tannot_opt_aux * l
-
-
-type 
-'a funcl = 
-   FCL_aux of 'a funcl_aux * l
-
-
-type 
-effect_opt = 
-   Effect_opt_aux of effect_opt_aux * l
-
-
-type 
 name_scm_opt = 
    Name_sect_aux of name_scm_opt_aux * l
 
 
 type 
-rec_opt = 
-   Rec_aux of rec_opt_aux * l
+type_union = 
+   Tu_aux of type_union_aux * l
 
 
 type 
@@ -401,8 +381,56 @@ and index_range =
 
 
 type 
+tannot_opt = 
+   Typ_annot_opt_aux of tannot_opt_aux * l
+
+
+type 
+rec_opt = 
+   Rec_aux of rec_opt_aux * l
+
+
+type 
+effect_opt = 
+   Effect_opt_aux of effect_opt_aux * l
+
+
+type 
+'a funcl = 
+   FCL_aux of 'a funcl_aux * l
+
+
+type 
 'a alias_spec = 
    AL_aux of 'a alias_spec_aux * 'a annot
+
+
+type 
+'a type_def_aux =  (* Type definition body *)
+   TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
+ | TD_record of id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
+ | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
+ | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)
+ | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
+
+
+type 
+'a fundef_aux =  (* Function definition *)
+   FD_function of rec_opt * tannot_opt * effect_opt * ('a funcl) list
+
+
+type 
+'a val_spec_aux =  (* Value type specification *)
+   VS_val_spec of typschm * id
+ | VS_extern_no_rename of typschm * id
+ | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
+
+
+type 
+'a default_spec_aux =  (* Default kinding or typing assumption *)
+   DT_kind of base_kind * kid
+ | DT_order of order
+ | DT_typ of typschm * id
 
 
 type 
@@ -416,43 +444,10 @@ type
 
 
 type 
-'a type_def_aux =  (* Type definition body *)
-   TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
- | TD_record of id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
- | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
- | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)
- | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
-
-
-type 
-'a default_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of base_kind * kid
- | DT_order of order
- | DT_typ of typschm * id
-
-
-type 
-'a fundef_aux =  (* Function definition *)
-   FD_function of rec_opt * tannot_opt * effect_opt * ('a funcl) list
-
-
-type 
 'a dec_spec_aux =  (* Register declarations *)
    DEC_reg of typ * id
  | DEC_alias of id * 'a alias_spec
  | DEC_typ_alias of typ * id * 'a alias_spec
-
-
-type 
-'a val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_no_rename of typschm * id
- | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
-
-
-type 
-'a scattered_def = 
-   SD_aux of 'a scattered_def_aux * 'a annot
 
 
 type 
@@ -461,23 +456,28 @@ type
 
 
 type 
-'a default_spec = 
-   DT_aux of 'a default_spec_aux * l
-
-
-type 
 'a fundef = 
    FD_aux of 'a fundef_aux * 'a annot
 
 
 type 
-'a dec_spec = 
-   DEC_aux of 'a dec_spec_aux * 'a annot
+'a val_spec = 
+   VS_aux of 'a val_spec_aux * 'a annot
 
 
 type 
-'a val_spec = 
-   VS_aux of 'a val_spec_aux * 'a annot
+'a default_spec = 
+   DT_aux of 'a default_spec_aux * l
+
+
+type 
+'a scattered_def = 
+   SD_aux of 'a scattered_def_aux * 'a annot
+
+
+type 
+'a dec_spec = 
+   DEC_aux of 'a dec_spec_aux * 'a annot
 
 
 type 
