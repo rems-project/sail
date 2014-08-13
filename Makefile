@@ -14,5 +14,8 @@ test:
 power: 
 	$(MAKE) -C src power
 
+test_power_interactive:
+	$(MAKE) -C src test_power_interactive
+
 clean:
 	$(MAKE) -C src clean

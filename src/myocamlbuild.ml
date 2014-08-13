@@ -30,7 +30,13 @@ let lem_deps = List.map ((/) "lem_interp") [
 let lem_opts = List.fold_right (fun s l -> [A "-i"; P s] @ l) lem_deps [] ;;
 
 (* New library magic: *)
-let lem_opts = [A "-lib"; P "../lem_interp"] ;;
+(* All -wl ignores should be removed if you want to see the pattern compilation, exhaustive, and unused var warnings *)
+let lem_opts = [A "-lib"; P "../lem_interp";
+                A "-wl_pat_comp"; P "ign"; 
+                A "-wl_pat_exh";  P "ign"; 
+                A "-wl_pat_fail"; P "ign";
+                A "-wl_unused_vars";   P "ign";
+] ;;
 
 dispatch begin function
 | After_rules ->
