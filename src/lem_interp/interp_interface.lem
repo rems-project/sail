@@ -1,4 +1,5 @@
 import Interp
+open import Pervasives
 open import Num
 
 type read_kind = Interp.read_kind
@@ -24,19 +25,26 @@ type reg_name =
 | Reg_f_slice of string * string * slice * slice (* Same as above but only accessing second slice of the field *)
 
 type outcome =
-| Read_mem of read_kind * value * (value -> instruction_state)
-| Write_mem of write_kind * value * value * (bool -> instruction_state)
+(* Request to read memory, value is location to read followed by registers that location depended on when mode.track_values *)
+| Read_mem of read_kind * value * maybe (list reg_name) *  (value -> instruction_state)
+(* Request to write memory, first value and dependent registers is location, second is the value to write *)
+| Write_mem of write_kind * value * maybe (list reg_name) * value * maybe (list reg_name) * (bool -> instruction_state)
+(* Request a memory barrier *)
 | Barrier of barrier_kind * instruction_state
+(* Request to read register, will track dependency when mode.track_values *)
 | Read_reg of reg_name * (value -> instruction_state) 
+(* Request to write register *)
 | Write_reg of reg_name * value * instruction_state
+(* List of instruciton states to be run in parrallel, any order permitted *)
 | Nondet_choice of list instruction_state * instruction_state
-| Internal of instruction_state
+(* Stop for incremental stepping, function can be used to display function call data *)
+| Internal of (unit -> string) * instruction_state
 | Done
 | Error of string
 
 type event = 
-| E_read_mem of read_kind * value
-| E_write_mem of write_kind * value * value
+| E_read_mem of read_kind * value * maybe (list reg_name) 
+| E_write_mem of write_kind * value * maybe (list reg_name) * value * maybe (list reg_name)
 | E_barrier of barrier_kind
 | E_read_reg of reg_name
 | E_write_reg of reg_name * value
@@ -47,7 +55,7 @@ type event =
 val build_context : Interp_ast.defs Interp.tannot -> context
 val initial_instruction_state : context -> string -> value -> instruction_state
 
-type interp_mode = <| eager_eval : bool |>
+type interp_mode = Interp.interp_mode 
 val interp : interp_mode -> instruction_state -> outcome
 
 val interp_exhaustive : instruction_state -> list event

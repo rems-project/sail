@@ -5,7 +5,7 @@ open import Interp_interface
 open import Pervasives
 
 val intern_value : value -> Interp.value
-val extern_value : bool -> Interp.value -> value
+val extern_value : interp_mode -> bool -> Interp.value -> (value * maybe (list reg_name))
 val extern_reg : Interp.reg_form -> maybe (integer * integer) -> reg_name
 
 let build_context defs = Interp.to_top_env defs
@@ -28,18 +28,25 @@ let intern_value v = match v with
   | Unknown -> Interp.V_unknown
 end
 
-let extern_value for_mem v = match v with
-  | Interp.V_vector _ true bits ->
-    if for_mem 
-    then Bytevector (to_bytes (from_bits bits))
-    else Bitvector (from_bits bits)
-  | _ -> Unknown
-end
-
 let extern_reg r slice = match (r,slice) with
   | (Interp.Reg (Id_aux (Id x) _) _,Nothing) -> Reg x
   | (Interp.Reg (Id_aux (Id x) _) _,Just(i1,i2)) -> Reg_slice x (i1,i2)
   | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_single i) _),Nothing) -> Reg_field x y (i,i)
+end
+
+let extern_value mode for_mem v = match v with
+  | Interp.V_vector _ true bits ->
+    if for_mem 
+    then (Bytevector (to_bytes (from_bits bits)), Nothing)
+    else (Bitvector (from_bits bits), Nothing)
+  | Interp.V_track (Interp.V_vector _ true bits) regs ->
+    if for_mem
+    then (Bytevector (to_bytes (from_bits bits)), 
+          if (mode.Interp.track_values) 
+          then (Just (List.map (fun r -> extern_reg r Nothing) regs))
+          else Nothing)
+    else (Bitvector (from_bits bits), Nothing)
+  | _ -> (Unknown,Nothing)
 end
 
 let initial_instruction_state top_level main arg = 
@@ -50,13 +57,14 @@ let initial_instruction_state top_level main arg =
 let external_functions = 
   Interp_lib.function_map
 
-type mem_function = (string * (maybe read_kind * maybe write_kind * Interp.value -> value))
+type mem_function = (string * 
+                     (maybe read_kind * maybe write_kind * (interp_mode -> Interp.value -> (value * (maybe (list reg_name))))))
 
 (*List of memory functions; needs to be expanded with all of the memory functions needed for PPCMem.
   Should probably be expanded into a parameter to mode as with above
 *)
 let memory_functions =
-  [ ("MEM", (Just(Interp.Read_plain), Just(Interp.Write_plain), (fun v -> extern_value true v)));
+  [ ("MEM", (Just(Interp.Read_plain), Just(Interp.Write_plain), (fun mode v -> extern_value mode true v)));
   ]
 
 let rec interp_to_outcome mode thunk = 
@@ -65,16 +73,27 @@ let rec interp_to_outcome mode thunk =
   | Interp.Error l msg -> Error msg (*Todo, add the l information the string format*)
   | Interp.Action a next_state ->
     match a with
-    | Interp.Read_reg reg_form slice -> Read_reg (extern_reg reg_form slice) (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
-    | Interp.Write_reg reg_form slice value -> Write_reg (extern_reg reg_form slice) (extern_value false value) next_state
+    | Interp.Read_reg reg_form slice -> 
+      Read_reg (extern_reg reg_form slice) 
+               (fun v -> 
+                 let v = (intern_value v) in
+                 let v = if mode.Interp.track_values then (Interp.V_track v [reg_form]) else v in 
+                 Interp.add_answer_to_stack next_state v)
+    | Interp.Write_reg reg_form slice value -> 
+      let (v,_) = extern_value mode false value in Write_reg (extern_reg reg_form slice) v next_state
     | Interp.Read_mem (Id_aux (Id i) _) value slice ->
       match List.lookup i memory_functions with
-      | (Just (Just read_k,_,f)) -> Read_mem read_k (f value) (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
+      | (Just (Just read_k,_,f)) -> 
+        let (location, tracking) = (f mode value) in
+        Read_mem read_k location tracking (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
       | _ -> Error ("Memory " ^ i ^ " function with read kind not found")
       end
     | Interp.Write_mem (Id_aux (Id i) _) loc_val slice write_val ->
       match List.lookup i memory_functions with
-      | (Just (_,Just write_k,f)) -> Write_mem write_k (f loc_val) (extern_value true write_val) (fun b -> next_state) 
+      | (Just (_,Just write_k,f)) -> 
+        let (location, tracking) = (f mode loc_val) in
+        let (value, val_tracking) = (extern_value mode true write_val) in
+        Write_mem write_k location tracking value val_tracking (fun b -> next_state) 
       | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
       end 
     | Interp.Barrier (Id_aux (Id i) _) lval ->
@@ -86,7 +105,7 @@ let rec interp_to_outcome mode thunk =
       match List.lookup i external_functions with
       | Nothing -> Error ("External function not available " ^ i)
       | Just f  -> interp_to_outcome mode (fun _ -> Interp.resume mode next_state (Just (f value))) end
-    | Interp.Step l _ _ -> Internal next_state
+    | Interp.Step l _ _ -> Internal (fun _ -> "Function state to string not implemented yet") next_state 
     end 
   end 
 
@@ -100,11 +119,11 @@ let rec ie_loop mode i_state =
       (E_read_reg reg)::(ie_loop mode (i_state_fun Unknown))
     | Write_reg reg value i_state->
       (E_write_reg reg value)::(ie_loop mode i_state)
-    | Read_mem read_k loc i_state_fun ->
-      (E_read_mem read_k loc)::(ie_loop mode (i_state_fun Unknown))
-    | Write_mem write_k loc value i_state_fun ->
-      (E_write_mem write_k loc value)::(ie_loop mode (i_state_fun true))
-    | Internal next -> (ie_loop mode next)
+    | Read_mem read_k loc tracking i_state_fun ->
+      (E_read_mem read_k loc tracking)::(ie_loop mode (i_state_fun Unknown))
+    | Write_mem write_k loc l_track value v_track i_state_fun ->
+      (E_write_mem write_k loc l_track value v_track)::(ie_loop mode (i_state_fun true))
+    | Internal _ next -> (ie_loop mode next)
      end ;;
   
 let interp_exhaustive i_state = 
