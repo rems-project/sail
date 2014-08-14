@@ -10,6 +10,9 @@ val extern_reg : Interp.reg_form -> maybe (integer * integer) -> reg_name
 
 let build_context defs = Interp.to_top_env defs
 
+let make_mode eager_eval tracking_values = <| Interp.eager_eval = eager_eval; Interp.track_values = tracking_values |>;;
+let tracking_dependencies mode = mode.Interp.track_values
+
 let to_bits l = (List.map (fun b -> match b with
                                | false -> (Interp.V_lit (L_aux L_zero Interp_ast.Unknown)) 
 			       | true ->  (Interp.V_lit (L_aux L_one Interp_ast.Unknown)) end) l)
@@ -64,7 +67,7 @@ type mem_function = (string *
   Should probably be expanded into a parameter to mode as with above
 *)
 let memory_functions =
-  [ ("MEM", (Just(Interp.Read_plain), Just(Interp.Write_plain), (fun mode v -> extern_value mode true v)));
+  [ ("MEM", (Just(Read_plain), Just(Write_plain), (fun mode v -> extern_value mode true v)));
   ]
 
 let rec interp_to_outcome mode thunk = 
@@ -97,7 +100,7 @@ let rec interp_to_outcome mode thunk =
       | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
       end 
     | Interp.Barrier (Id_aux (Id i) _) lval ->
-      Barrier Interp.Plain next_state (* TODO set up some barrier functions and see if the value would be anything needed *)
+      Barrier Plain next_state (* TODO set up some barrier functions and see if the value would be anything needed *)
     | Interp.Nondet exps -> 
       let nondet_states = List.map (Interp.set_in_context next_state) exps in
       Nondet_choice nondet_states next_state      
@@ -126,6 +129,4 @@ let rec ie_loop mode i_state =
     | Internal _ next -> (ie_loop mode next)
      end ;;
   
-let interp_exhaustive i_state = 
-  let mode = <| Interp.eager_eval = true; Interp.track_values = false; |> in
-  ie_loop mode i_state
+let interp_exhaustive mode i_state = ie_loop mode i_state

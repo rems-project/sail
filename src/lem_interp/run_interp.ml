@@ -2,6 +2,8 @@ open Printf ;;
 open Interp_ast ;;
 open Interp ;;
 open Interp_lib ;;
+open Interp_interface ;;
+open Interp_inter_imp ;;
 
 open Big_int ;;
 
@@ -45,33 +47,53 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
   | _ -> assert false) l))
 ;;
 
+let val_to_string v = match v with
+  | Bitvector bools -> "0b" ^ collapse_leading (String.concat "" (List.map (function | true -> "1" | _ -> "0") bools))
+  | Bytevector words ->
+    "0x" ^ (String.concat ""
+	    (List.map (function 
+	      | 10 -> "A"
+	      | 11 -> "B"
+	      | 12 -> "C"
+	      | 13 -> "D"
+	      | 14 -> "E"
+	      | 15 -> "F"
+	      | i  -> string_of_int i) words))		
+  | Unknown0 -> "Unknown"
+
+let reg_name_to_string = function
+  | Reg0 s -> s
+  | Reg_slice(s,(first,second)) -> s (*contemplate putting slice here*)
+  | Reg_field(s,f,_) -> s ^ "." ^ f
+  | Reg_f_slice(s,f,_,(first,second)) -> s ^ "." ^ f
+
 let rec reg_to_string = function
   | Reg (id,_) -> id_to_string id
   | SubReg (id,r,_) -> sprintf "%s.%s" (reg_to_string r) (id_to_string id)
 ;;
 
-let rec val_to_string = function
+let rec val_to_string_internal = function
  | V_boxref(n, t) -> sprintf "boxref %d" n
  | V_lit (L_aux(l,_)) -> sprintf "%s" (lit_to_string l)
  | V_tuple l ->
-     let repr = String.concat ", " (List.map val_to_string l) in
+     let repr = String.concat ", " (List.map val_to_string_internal l) in
      sprintf "(%s)" repr
  | V_list l ->
-     let repr = String.concat "; " (List.map val_to_string l) in
+     let repr = String.concat "; " (List.map val_to_string_internal l) in
      sprintf "[||%s||]" repr
  | V_vector (first_index, inc, l) ->
      let last_index = add_int_big_int (if inc then List.length l - 1 else 1 - List.length l) first_index  in
      let repr =
        try bitvec_to_string (* (if inc then l else List.rev l)*) l
        with Failure _ ->
-         sprintf "[%s]" (String.concat "; " (List.map val_to_string l)) in
+         sprintf "[%s]" (String.concat "; " (List.map val_to_string_internal l)) in
      sprintf "%s [%s..%s]" repr (string_of_big_int first_index) (string_of_big_int last_index)
  | V_record(_, l) ->
-     let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string value) in
+     let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string_internal value) in
      let repr = String.concat "; " (List.map  pp l) in
      sprintf "{%s}" repr
  | V_ctor (id,_, value) ->
-     sprintf "%s %s" (id_to_string id) (val_to_string value)
+     sprintf "%s %s" (id_to_string id) (val_to_string_internal value)
  | V_register r ->
      sprintf "reg-as-value %s" (reg_to_string r)
  | V_unknown -> "unknown"
@@ -146,7 +168,7 @@ let id_compare i1 i2 =
 module Reg = struct
   include Map.Make(struct type t = id let compare = id_compare end)
   let to_string id v =
-    sprintf "%s -> %s" (id_to_string id) (val_to_string v)
+    sprintf "%s -> %s" (id_to_string id) (val_to_string_internal v)
   let find id m =
 (*    eprintf "reg_find called with %s\n" (id_to_string id);*)
     let v = find id m in
@@ -191,7 +213,7 @@ module Mem = struct
     v
   *)
   let to_string idx v =
-    sprintf "[%s] -> %s" (string_of_big_int idx) (val_to_string v)
+    sprintf "[%s] -> %s" (string_of_big_int idx) (val_to_string_internal v)
 end ;;
 
 
@@ -347,7 +369,7 @@ let run
   in
   let rec loop mode env = function
   | Value v ->
-      debugf "%s: %s %s\n" (grey name) (blue "return") (val_to_string v);
+      debugf "%s: %s %s\n" (grey name) (blue "return") (val_to_string_internal v);
       true, mode, env
   | Action (a, s) ->
       let top_exp = top_frame_exp s in
@@ -364,25 +386,25 @@ let run
       let left = "<-" and right = "->" in
       let (mode',env',s) = begin match a with
       | Read_reg (reg, sub) ->
-          show "read_reg" (reg_to_string reg ^ sub_to_string sub) right (val_to_string return);
+          show "read_reg" (reg_to_string reg ^ sub_to_string sub) right (val_to_string_internal return);
           step (),env',s
       | Write_reg (reg, sub, value) ->
           assert (return = unit_lit);
-          show "write_reg" (reg_to_string reg ^ sub_to_string sub) left (val_to_string value);
+          show "write_reg" (reg_to_string reg ^ sub_to_string sub) left (val_to_string_internal value);
           step (),env',s
       | Read_mem (id, args, sub) ->
-          show "read_mem" (id_to_string id ^ val_to_string args ^ sub_to_string sub) right (val_to_string return);
+          show "read_mem" (id_to_string id ^ val_to_string_internal args ^ sub_to_string sub) right (val_to_string_internal return);
           step (),env',s
       | Write_mem (id, args, sub, value) ->
           assert (return = unit_lit);
-          show "write_mem" (id_to_string id ^ val_to_string args ^ sub_to_string sub) left (val_to_string value);
+          show "write_mem" (id_to_string id ^ val_to_string_internal args ^ sub_to_string sub) left (val_to_string_internal value);
           step (),env',s
       (* distinguish single argument for pretty-printing *)
       | Call_extern (f, (V_tuple _ as args)) ->
-          show "call_lib" (f ^ val_to_string args) right (val_to_string return);
+          show "call_lib" (f ^ val_to_string_internal args) right (val_to_string_internal return);
           step (),env',s
       | Call_extern (f, arg) ->
-          show "call_lib" (sprintf "%s(%s)" f (val_to_string arg)) right (val_to_string return);
+          show "call_lib" (sprintf "%s(%s)" f (val_to_string_internal arg)) right (val_to_string_internal return);
           step (),env',s
       | Step _ ->
           assert (return = unit_lit);
