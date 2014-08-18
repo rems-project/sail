@@ -71,7 +71,7 @@ val initial_instruction_state : context -> string -> list value -> instruction_s
 val interp : interp_mode -> instruction_state -> outcome
 
 (* Run the interpreter without external interaction, feeding in Unknown on all reads *)
-val interp_exhaustive : interp_mode -> instruction_state -> list event
+val interp_exhaustive : instruction_state -> list event
 
 (* As above, but will request register reads: outcome will only be rreg, done, or error *)
 val rr_interp_exhaustive : interp_mode -> instruction_state -> list event -> (outcome * (list event)) 

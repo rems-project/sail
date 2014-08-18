@@ -129,4 +129,6 @@ let rec ie_loop mode i_state =
     | Internal _ next -> (ie_loop mode next)
      end ;;
   
-let interp_exhaustive mode i_state = ie_loop mode i_state
+let interp_exhaustive i_state = 
+  let mode = <| eager_eval = false; track_values = false |>in
+  ie_loop mode i_state
