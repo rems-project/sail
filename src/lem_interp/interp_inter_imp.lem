@@ -111,7 +111,7 @@ let rec interp_to_outcome mode thunk =
       | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
       end 
     | Interp.Barrier (Id_aux (Id i) _) lval ->
-      Barrier Plain next_state (* TODO set up some barrier functions and see if the value would be anything needed *)
+      Barrier Sync next_state (* TODO set up some barrier functions and see if the value would be anything needed *)
     | Interp.Nondet exps -> 
       let nondet_states = List.map (Interp.set_in_context next_state) exps in
       Nondet_choice nondet_states next_state      
