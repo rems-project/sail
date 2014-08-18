@@ -2214,6 +2214,13 @@ let rec resume mode stack value =
     | Action action stack -> Action action (Hole_frame id exp t_level env mem stack)
     | Error l s -> Error l s
     end  
+  | (Hole_frame id exp t_level env mem stack, Nothing) ->
+    match resume mode stack Nothing with
+      | Value v ->
+	match interp_main mode t_level (add_to_env (id,v) env) mem exp with | (o,_,_) -> o end
+      | Action action stack -> Action action (Hole_frame id exp t_level env mem stack)
+      | Error l s -> Error l s
+    end
   | (Thunk_frame exp t_level env mem Top,_) ->
     match interp_main mode t_level env mem exp with | (o,_,_) -> o end
   | (Thunk_frame exp t_level env mem stack,value) ->

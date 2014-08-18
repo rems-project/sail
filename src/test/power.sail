@@ -333,8 +333,8 @@ register (bit[64]) NIA (* next instruction address *)
 register (bit[64]) CIA (* current instruction address *)
 
 
-val extern forall Nat 'n. ( nat , [|'n|] , bit[8*'n]) -> unit effect { wmem } MEMw
-val extern forall Nat 'n. ( nat , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmem } MEMw
+val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr
 
 (* XXX effect for trap? *)
 val extern unit -> unit effect pure trap

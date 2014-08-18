@@ -33,7 +33,9 @@ let mem = ref Mem.empty ;;
 
 let add_mem byte addr =
   assert(byte >= 0 && byte < 256);
+  (*Printf.printf "adder is %s, byte is %s\n" (Big_int.string_of_big_int addr) (string_of_int byte);*)
   let addr = big_int_to_vec true addr (Big_int.big_int_of_int 64) in
+  (*Printf.printf "adder is %s byte is %s\n" (val_to_string addr) (string_of_int byte);*)
   match addr with
     | Bytevector addr -> mem := Mem.add addr byte !mem
 ;;

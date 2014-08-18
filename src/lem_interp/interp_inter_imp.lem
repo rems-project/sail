@@ -19,15 +19,17 @@ let to_bits l = (List.map (fun b -> match b with
 let from_bits l = (List.map (fun b -> match b with
                                  | Interp.V_lit (L_aux L_zero _) -> false
 				 | _ -> true end) l) 
-let rec to_bytes l = match l with
+let rec to_bytes l = match (List.reverse l) with
   | [] -> []
   | (a::b::c::d::e::f::g::h::rest) ->
-    (natFromInteger(integerFromBoolList (true,[a;b;c;d;e;f;g;h])))::(to_bytes rest)
+    (natFromInteger(integerFromBoolList (false,[a;b;c;d;e;f;g;h])))::(to_bytes rest)
 end
 		   
 let intern_value v = match v with
   | Bitvector bs -> Interp.V_vector 0 true  (to_bits bs)
-  | Bytevector bys -> Interp.V_vector 0 true (to_bits (List.concat (List.map (fun n -> boolListFrombitSeq 8 (bitSeqFromInteger (Just 8) (integerFromNat n))) bys)))
+  | Bytevector bys -> Interp.V_vector 0 true 
+    (to_bits (List.reverse
+		(List.concat (List.map (fun n -> boolListFrombitSeq 8 (bitSeqFromInteger (Just 8) (integerFromNat n))) bys))))
   | Unknown -> Interp.V_unknown
 end
 
@@ -40,11 +42,11 @@ end
 let extern_value mode for_mem v = match v with
   | Interp.V_vector _ true bits ->
     if for_mem 
-    then (Bytevector (to_bytes (from_bits bits)), Nothing)
+    then (Bytevector (List.reverse (to_bytes (from_bits bits))), Nothing)
     else (Bitvector (from_bits bits), Nothing)
   | Interp.V_track (Interp.V_vector _ true bits) regs ->
     if for_mem
-    then (Bytevector (to_bytes (from_bits bits)), 
+    then (Bytevector (List.reverse (to_bytes (from_bits bits))), 
           if (mode.Interp.track_values) 
           then (Just (List.map (fun r -> extern_reg r Nothing) regs))
           else Nothing)
@@ -72,13 +74,20 @@ type mem_function = (string *
   Should probably be expanded into a parameter to mode as with above
 *)
 let memory_functions =
-  [ ("MEM", (Just(Read_plain), Just(Write_plain), 
+  [ ("MEMr", (Just(Read_plain), Nothing, 
 	     (fun mode v -> match v with
 	       | Interp.V_tuple [location;length] ->
 		 match length with
 		   | Interp.V_lit (L_aux (L_num len) _) ->
 		     let (v,regs) = extern_value mode true location in
 		     (v,len,regs) end end)));
+    ("MEMw", (Nothing, Just(Write_plain), 
+	      (fun mode v -> match v with
+		| Interp.V_tuple [location;length] ->
+		  match length with
+		    | Interp.V_lit (L_aux (L_num len) _) ->
+		      let (v,regs) = extern_value mode true location in
+		      (v,len,regs) end end)));
   ]
 
 let rec interp_to_outcome mode thunk = 
