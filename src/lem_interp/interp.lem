@@ -118,10 +118,6 @@ type lenv = LEnv of nat * env
 let emem = LMem 1 Map.empty
 let eenv = LEnv 1 []
 
-type read_kind = Read_plain | Read_reserve | Read_acquire
-type write_kind = Write_plain | Write_conditional | Write_release
-type barrier_kind = Sync | LwSync | Eieio | Isync | DMB | DMB_ST | DMB_LD | DSB | DSB_ST | DSB_LD | ISB (* PS removed "plain" and added "Isync" and "ISB" *)
-
 (*top_level is a tuple of 
   (all definitions, letbound and enum values, register values, Typedef union constructors, sub register mappings, and register aliases) *)
 type top_level = Env of (defs tannot) * env * env * list (id * typ) * list (id * list (id * index_range)) * list (id * (alias_spec tannot))

@@ -8,7 +8,7 @@ val intern_value : value -> Interp.value
 val extern_value : interp_mode -> bool -> Interp.value -> (value * maybe (list reg_name))
 val extern_reg : Interp.reg_form -> maybe (integer * integer) -> reg_name
 
-let build_context defs = Interp.to_top_env defs
+let build_context defs = match Interp.to_top_env defs with (_,context) -> context end
 
 let make_mode eager_eval tracking_values = <| Interp.eager_eval = eager_eval; Interp.track_values = tracking_values |>;;
 let tracking_dependencies mode = mode.Interp.track_values
@@ -52,9 +52,14 @@ let extern_value mode for_mem v = match v with
   | _ -> (Unknown,Nothing)
 end
 
-let initial_instruction_state top_level main arg = 
-  let (e_arg,env) = Interp.to_exp <| Interp.eager_eval = true; Interp.track_values = false |> Interp.eenv (intern_value arg) in
-  Interp.Thunk_frame (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) [e_arg]) (Interp_ast.Unknown, Nothing)) top_level Interp.eenv Interp.emem
+let initial_instruction_state top_level main args = 
+  let e_args = match args with
+    | [] -> [E_aux (E_lit (L_aux L_unit Interp_ast.Unknown)) (Interp_ast.Unknown,Nothing)]
+    | [arg] -> let (e,_) = Interp.to_exp (make_mode true false) Interp.eenv (intern_value arg) in [e]
+    | args -> List.map fst (List.map (Interp.to_exp (make_mode true false) Interp.eenv)
+			      (List.map intern_value args)) end in
+  Interp.Thunk_frame (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) e_args) (Interp_ast.Unknown, Nothing)) 
+    top_level Interp.eenv Interp.emem Interp.Top
 
 (*For now, append to this list to add more external functions; should add to the mode record for more perhaps *)
 let external_functions = 
@@ -67,7 +72,13 @@ type mem_function = (string *
   Should probably be expanded into a parameter to mode as with above
 *)
 let memory_functions =
-  [ ("MEM", (Just(Read_plain), Just(Write_plain), (fun mode v -> extern_value mode true v)));
+  [ ("MEM", (Just(Read_plain), Just(Write_plain), 
+	     (fun mode v -> match v with
+	       | Interp.V_tuple [location;length] ->
+		 match length with
+		   | Interp.V_lit (L_aux (L_num len) _) ->
+		     let (v,regs) = extern_value mode true location in
+		     (v,len,regs) end end)));
   ]
 
 let rec interp_to_outcome mode thunk = 
@@ -87,16 +98,16 @@ let rec interp_to_outcome mode thunk =
     | Interp.Read_mem (Id_aux (Id i) _) value slice ->
       match List.lookup i memory_functions with
       | (Just (Just read_k,_,f)) -> 
-        let (location, tracking) = (f mode value) in
-        Read_mem read_k location tracking (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
+        let (location, length, tracking) = (f mode value) in
+        Read_mem read_k location length tracking (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
       | _ -> Error ("Memory " ^ i ^ " function with read kind not found")
       end
     | Interp.Write_mem (Id_aux (Id i) _) loc_val slice write_val ->
       match List.lookup i memory_functions with
       | (Just (_,Just write_k,f)) -> 
-        let (location, tracking) = (f mode loc_val) in
+        let (location, length, tracking) = (f mode loc_val) in
         let (value, val_tracking) = (extern_value mode true write_val) in
-        Write_mem write_k location tracking value val_tracking (fun b -> next_state) 
+        Write_mem write_k location length tracking value val_tracking (fun b -> next_state) 
       | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
       end 
     | Interp.Barrier (Id_aux (Id i) _) lval ->
@@ -122,10 +133,10 @@ let rec ie_loop mode i_state =
       (E_read_reg reg)::(ie_loop mode (i_state_fun Unknown))
     | Write_reg reg value i_state->
       (E_write_reg reg value)::(ie_loop mode i_state)
-    | Read_mem read_k loc tracking i_state_fun ->
-      (E_read_mem read_k loc tracking)::(ie_loop mode (i_state_fun Unknown))
-    | Write_mem write_k loc l_track value v_track i_state_fun ->
-      (E_write_mem write_k loc l_track value v_track)::(ie_loop mode (i_state_fun true))
+    | Read_mem read_k loc length tracking i_state_fun ->
+      (E_read_mem read_k loc length tracking)::(ie_loop mode (i_state_fun Unknown))
+    | Write_mem write_k loc length l_track value v_track i_state_fun ->
+      (E_write_mem write_k loc length l_track value v_track)::(ie_loop mode (i_state_fun true))
     | Internal _ next -> (ie_loop mode next)
      end ;;
   

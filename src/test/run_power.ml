@@ -1,8 +1,10 @@
 open Printf ;;
-open Interp ;;
+(*open Interp ;;*)
 open Interp_ast ;;
-open Interp_lib ;;
-open Run_interp ;;
+(*open Interp_lib ;;*)
+open Interp_interface ;;
+open Interp_inter_imp ;;
+open Run_interp_model ;;
 
 let startaddr = ref "0" ;;
 let mainaddr  = ref "0" ;;
@@ -18,19 +20,22 @@ let big_endian = true ;;
 
 let hex_to_big_int s = Big_int.big_int_of_int64 (Int64.of_string s) ;;
 
-let big_int_to_vec b size =
-  (if big_endian then to_vec_inc else to_vec_dec)
-  (V_tuple [(V_lit (L_aux (L_num size, Unknown))); 
-	    (V_lit (L_aux (L_num b, Unknown)))])
+let big_int_to_vec for_mem b size =
+  fst (extern_value
+	 (make_mode true false)
+	 for_mem
+	 ((if big_endian then Interp_lib.to_vec_inc else Interp_lib.to_vec_dec)
+	     (Interp.V_tuple [(Interp.V_lit (L_aux (L_num size, Unknown))); 
+			      (Interp.V_lit (L_aux (L_num b, Unknown)))])))
 ;;
 
 let mem = ref Mem.empty ;;
 
 let add_mem byte addr =
   assert(byte >= 0 && byte < 256);
-  let vector = big_int_to_vec (Big_int.big_int_of_int byte) (Big_int.big_int_of_int 8) in
-  let key = (*Id_aux (Id "MEM", Unknown), (* memory map no longer using id, just the address, since read/write id different *)*) addr in
-  mem := Mem.add key vector !mem
+  let addr = big_int_to_vec true addr (Big_int.big_int_of_int 64) in
+  match addr with
+    | Bytevector addr -> mem := Mem.add addr byte !mem
 ;;
 
 let add_section s =
@@ -61,11 +66,11 @@ let lr_init_value = Big_int.zero_big_int
 let init_reg () =
   let init name value size =
     (* fix index - this is necessary for CR, indexed from 32 *)
-    let offset = function
+(*    let offset = function
       V_vector(_, inc, v) ->
         V_vector(Big_int.big_int_of_int (64 - size), inc, v)
-     | _ -> assert false in
-    Id_aux(Id name, Unknown), offset (big_int_to_vec value (Big_int.big_int_of_int size)) in
+     | _ -> assert false in*)
+    name, (*offset*) (big_int_to_vec false value (Big_int.big_int_of_int size)) in
   List.fold_left (fun r (k,v) -> Reg.add k v r) Reg.empty [
     (* XXX execute main() directly until we can handle the init phase *)
     init "CIA" (hex_to_big_int !mainaddr) 64;
@@ -74,7 +79,7 @@ let init_reg () =
     init "CTR" Big_int.zero_big_int 64;
     init "CR" Big_int.zero_big_int 32;
     init "LR" lr_init_value 64;
-    Id_aux(Id "mode64bit", Unknown), V_lit (L_aux (L_true, Unknown));
+    "mode64bit", Bitvector [true];
   ]
 ;;
 
@@ -98,22 +103,23 @@ let time_it action arg =
 ;;
 
 let get_reg reg name =
-  let reg_content = Reg.find (Id_aux(Id name, Unknown)) reg in
-  match to_num true reg_content with
-  | V_lit(L_aux(L_num n, Unknown)) -> n
-  |  _ -> assert false
+  let reg_content = Reg.find name reg in reg_content
 ;;
 
-let rec fde_loop count entry mem reg ?mode prog =
+let eq_zero = function
+  | Bitvector bools -> List.for_all (not) bools
+;;
+
+let rec fde_loop count main_func parameters mem reg ?mode prog =
   debugf "\n**** instruction %d  ****\n" count;
-  match Run_interp.run ~entry ~mem ~reg ~eager_eval:!eager_eval ?mode prog with
+  match Run_interp_model.run ~main_func ~parameters ~mem ~reg ~eager_eval:!eager_eval ?mode prog with
   | false, _, _ -> eprintf "FAILURE\n"; exit 1
   | true, mode, (reg, mem) ->
-      if Big_int.eq_big_int (get_reg reg "CIA") lr_init_value then
+      if eq_zero (get_reg reg "CIA") then
         eprintf "\nSUCCESS: returned with value %s\n"
-          (Big_int.string_of_big_int (get_reg reg "GPR3"))
+          (Run_interp_model.val_to_string (get_reg reg "GPR3"))
       else
-        fde_loop (count+1) entry mem reg ~mode:mode prog
+        fde_loop (count+1) main_func parameters mem reg ~mode:mode prog
 ;;
 
 let run () =
@@ -134,10 +140,10 @@ let run () =
   close_in ic;
   let reg = init_reg () in
   (* entry point: unit -> unit fde *)
-  let entry = E_aux(E_app(Id_aux((Id "fde"),Unknown),
-    [E_aux(E_lit (L_aux(L_unit,Unknown)),(Unknown,None))]),(Unknown,None)) in
+  let funk_name = "fde" in
+  let args = [] in
   let name = Filename.basename !file in
-  let t =time_it (fun () -> fde_loop 0 entry !mem reg (name, Power.defs)) () in
+  let t =time_it (fun () -> fde_loop 0 funk_name args !mem reg (name, Power.defs)) () in
   eprintf "Execution time: %f seconds\n" t
 ;;
 
