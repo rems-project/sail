@@ -130,5 +130,5 @@ let rec ie_loop mode i_state =
      end ;;
   
 let interp_exhaustive i_state = 
-  let mode = <| eager_eval = false; track_values = false |>in
+  let mode = <| Interp.eager_eval = true; Interp.track_values = false |>in
   ie_loop mode i_state
