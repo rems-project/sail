@@ -37,7 +37,7 @@ let add_mem byte addr =
   let addr = big_int_to_vec true addr (Big_int.big_int_of_int 64) in
   (*Printf.printf "adder is %s byte is %s\n" (val_to_string addr) (string_of_int byte);*)
   match addr with
-    | Bytevector addr -> mem := Mem.add addr byte !mem
+    | Bytevector(addr,_,_) -> mem := Mem.add addr byte !mem
 ;;
 
 let add_section s =
@@ -68,11 +68,11 @@ let lr_init_value = Big_int.zero_big_int
 let init_reg () =
   let init name value size =
     (* fix index - this is necessary for CR, indexed from 32 *)
-(*    let offset = function
-      V_vector(_, inc, v) ->
-        V_vector(Big_int.big_int_of_int (64 - size), inc, v)
-     | _ -> assert false in*)
-    name, (*offset*) (big_int_to_vec false value (Big_int.big_int_of_int size)) in
+    let offset = function
+      | Bitvector(bits,inc,fst) ->
+        Bitvector(bits,inc,Big_int.big_int_of_int (64 - size))
+     | _ -> assert false in
+    name, offset (big_int_to_vec false value (Big_int.big_int_of_int size)) in
   List.fold_left (fun r (k,v) -> Reg.add k v r) Reg.empty [
     (* XXX execute main() directly until we can handle the init phase *)
     init "CIA" (hex_to_big_int !mainaddr) 64;
@@ -81,7 +81,7 @@ let init_reg () =
     init "CTR" Big_int.zero_big_int 64;
     init "CR" Big_int.zero_big_int 32;
     init "LR" lr_init_value 64;
-    "mode64bit", Bitvector [true];
+    "mode64bit", Bitvector([true],true,Big_int.zero_big_int);
   ]
 ;;
 
@@ -109,7 +109,7 @@ let get_reg reg name =
 ;;
 
 let eq_zero = function
-  | Bitvector bools -> List.for_all (not) bools
+  | Bitvector(bools,_,_) -> List.for_all (not) bools
 ;;
 
 let rec fde_loop count main_func parameters mem reg ?mode prog =

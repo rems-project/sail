@@ -26,8 +26,8 @@ let rec to_bytes l = match (List.reverse l) with
 end
 		   
 let intern_value v = match v with
-  | Bitvector bs -> Interp.V_vector 0 true  (to_bits bs)
-  | Bytevector bys -> Interp.V_vector 0 true 
+  | Bitvector bs inc fst   -> Interp.V_vector fst inc  (to_bits bs)
+  | Bytevector bys inc fst -> Interp.V_vector fst inc 
     (to_bits (List.reverse
 		(List.concat (List.map (fun n -> boolListFrombitSeq 8 (bitSeqFromInteger (Just 8) (integerFromNat n))) bys))))
   | Unknown -> Interp.V_unknown
@@ -40,17 +40,17 @@ let extern_reg r slice = match (r,slice) with
 end
 
 let extern_value mode for_mem v = match v with
-  | Interp.V_vector _ true bits ->
+  | Interp.V_vector fst inc bits ->
     if for_mem 
-    then (Bytevector (List.reverse (to_bytes (from_bits bits))), Nothing)
-    else (Bitvector (from_bits bits), Nothing)
-  | Interp.V_track (Interp.V_vector _ true bits) regs ->
+    then (Bytevector (List.reverse (to_bytes (from_bits bits))) inc fst, Nothing)
+    else (Bitvector (from_bits bits) inc fst, Nothing)
+  | Interp.V_track (Interp.V_vector fst inc bits) regs ->
     if for_mem
-    then (Bytevector (List.reverse (to_bytes (from_bits bits))), 
+    then (Bytevector (List.reverse (to_bytes (from_bits bits))) inc fst, 
           if (mode.Interp.track_values) 
           then (Just (List.map (fun r -> extern_reg r Nothing) regs))
           else Nothing)
-    else (Bitvector (from_bits bits), Nothing)
+    else (Bitvector (from_bits bits) inc fst, Nothing)
   | _ -> (Unknown,Nothing)
 end
 

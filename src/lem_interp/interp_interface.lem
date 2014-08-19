@@ -17,12 +17,12 @@ type write_kind = Write_plain | Write_conditional | Write_release
 type barrier_kind = Sync | LwSync | Eieio | Isync | DMB | DMB_ST | DMB_LD | DSB | DSB_ST | DSB_LD | ISB (* PS removed "plain" and added "Isync" and "ISB" *)
 
 type value = 
-| Bitvector of list bool   (* For register accesses *)
+| Bitvector of list bool  * bool * integer (* For register accesses : in conformance with Sail, tracks order and starting lsb number*)
 (*To discuss:  ARM8 uses at least one abstract record form for 
   some special registers, with no clear mapping to bits. Should
   we permit Record of (string * Bitvector) values as well?
 *)
-| Bytevector of list word8 (* For memory accesses *)
+| Bytevector of list word8 * bool * integer (* For memory accesses : see above *)
 | Unknown
 (*To add: an abstract value representing an unknown but named memory address?*)
 

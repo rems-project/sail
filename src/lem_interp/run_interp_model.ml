@@ -48,12 +48,13 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
 ;;
 
 let val_to_string v = match v with
-  | Bitvector bools -> let l = List.length bools in
+  | Bitvector(bools, inc, fst)-> let l = List.length bools in
     (string_of_int l) ^ " bits -- 0b" ^ collapse_leading (String.concat "" (List.map (function | true -> "1" | _ -> "0") bools))
-  | Bytevector words ->
+  | Bytevector(words, inc, fst)->
     let l = List.length words in
-    (String.concat ""
-	    (List.map (fun i -> (Printf.sprintf "0x%x " i)) words))
+    (string_of_int l) ^ " bytes --" ^
+      (String.concat ""
+	 (List.map (fun i -> (Printf.sprintf "0x%x " i)) words))
   | Unknown0 -> "Unknown"
 
 let reg_name_to_string = function
@@ -187,13 +188,19 @@ module Mem = struct
     add key valu m
 
   let to_string loc v =
-    sprintf "[%s] -> %s" (val_to_string (Bytevector loc)) (string_of_int v)
+    sprintf "[%s] -> %x" (val_to_string (Bytevector(loc, true, zero_big_int))) v
 end ;;
 
 let rec slice bitvector (start,stop) = 
   match bitvector with
-    | Bitvector bools -> Bitvector (Interp.from_n_to_n start stop bools)
-    | Bytevector bytes -> Bytevector (Interp.from_n_to_n start stop bytes) (*This is wrong, need to explode and re-encode, but maybe never happens?*)
+    | Bitvector(bools, inc, fst) -> 
+      Bitvector ((Interp.from_n_to_n (if inc then (sub_big_int start fst) else (sub_big_int fst start))
+                                    (if inc then (sub_big_int stop fst) else (sub_big_int fst stop)) bools),
+                 inc,
+                 (if inc then zero_big_int else (add_big_int (sub_big_int stop start) unit_big_int)))
+                
+    | Bytevector(bytes, inc, fst) -> 
+      Bytevector((Interp.from_n_to_n start stop bytes),inc,fst) (*This is wrong, need to explode and re-encode, but maybe never happens?*)
     | Unknown0 -> Unknown0
 ;;
 
@@ -210,15 +217,19 @@ let rec list_update index start stop e vals =
 
 let bool_to_byte = function | true -> 0 | false -> 1
 let bitvector_to_bool = function
-  | Bitvector [b] -> b
-  | Bytevector [0] -> false
-  | Bytevector [1] -> true
+  | Bitvector([b],_,_) -> b
+  | Bytevector([0],_,_) -> false
+  | Bytevector([1],_,_) -> true
 ;;
 
 let fupdate_slice original e (start,stop) =
   match original with
-    | Bitvector bools -> Bitvector (list_update zero_big_int start stop e bools)
-    | Bytevector bytes -> Bytevector (list_update zero_big_int start stop (bool_to_byte e) bytes) (*Probably also wrong, does this happen?*)
+    | Bitvector(bools,inc,fst) -> 
+      Bitvector((list_update zero_big_int 
+                             (if inc then (sub_big_int start fst) else (sub_big_int fst start))
+                             (if inc then (sub_big_int stop fst) else (sub_big_int fst stop)) e bools), inc, fst)
+    | Bytevector(bytes,inc,fst) -> 
+      Bytevector((list_update zero_big_int start stop (bool_to_byte e) bytes),inc,fst) (*Probably also wrong, does this happen?*)
     | Unknown0 -> Unknown0
 ;;
 
@@ -249,13 +260,13 @@ let rec perform_action ((reg, mem) as env) = function
    let old_val = Reg.find id reg in
    let new_val = fupdate_slice old_val (bitvector_to_bool value) (combine_slices range mini_range) in
    (None,(Reg.add id new_val reg,mem))
- | Read_mem0(_,Bytevector location, length, _,_) ->
+ | Read_mem0(_,Bytevector(location,_,_), length, _,_) ->
    let rec reading location length = 
      if eq_big_int length zero_big_int 
      then []
      else (Mem.find location mem)::(reading (increment location) (sub_big_int length unit_big_int)) in
-   (Some (Bytevector (List.rev (reading location length))), env)
- | Write_mem0(_,Bytevector location, length, _, Bytevector(bytes),_,_) ->
+   (Some (Bytevector((List.rev (reading location length)), true, zero_big_int)), env) (*TODO: how to get order back here? *)
+ | Write_mem0(_,(Bytevector(location,_,_)), length, _, (Bytevector(bytes,_,_)),_,_) ->
    let rec writing location length bytes mem = 
      if eq_big_int length zero_big_int
      then mem
