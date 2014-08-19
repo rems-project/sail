@@ -445,7 +445,7 @@ end execute
 end ast
 
 
-register ast instr (* monitor decoded instructions *)
+(*register ast instr (* monitor decoded instructions *)*)
 
 (* fetch-decode-execute *)
 function unit fde () = {
