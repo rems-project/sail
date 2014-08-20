@@ -36,6 +36,7 @@ let lem_opts = [A "-lib"; P "../lem_interp";
                 A "-wl_pat_exh";  P "ign"; 
                 A "-wl_pat_fail"; P "ign";
                 A "-wl_unused_vars";   P "ign";
+(*                A "-suppress_renaming";*)
 ] ;;
 
 dispatch begin function

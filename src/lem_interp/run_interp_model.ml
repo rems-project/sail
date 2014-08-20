@@ -59,9 +59,12 @@ let val_to_string v = match v with
 
 let reg_name_to_string = function
   | Reg0 s -> s
-  | Reg_slice(s,(first,second)) -> s (*contemplate putting slice here*)
+  | Reg_slice(s,(first,second)) -> 
+    s ^ "[" ^ string_of_big_int first ^ (if (eq_big_int first second) then "" else ".." ^ (string_of_big_int second)) ^ "]"
   | Reg_field(s,f,_) -> s ^ "." ^ f
-  | Reg_f_slice(s,f,_,(first,second)) -> s ^ "." ^ f
+  | Reg_f_slice(s,f,_,(first,second)) -> s ^ "." ^ f ^ "]" ^ string_of_big_int first ^ (if (eq_big_int first second) then "" else ".." ^ (string_of_big_int second)) ^ "]"
+
+let dependencies_to_string dependencies = String.concat ", " (List.map reg_name_to_string dependencies)
 
 let rec val_to_string_internal = function
  | Interp.V_boxref(n, t) -> sprintf "boxref %d" n
@@ -305,6 +308,7 @@ let run
   ?(reg=Reg.empty)
   ?(mem=Mem.empty)
   ?(eager_eval=true)
+  ?(track_dependencies= ref false)
   ?mode
   (name, spec) =
   let get_loc (E_aux(_, (l, _))) = loc_to_string l in
@@ -314,7 +318,8 @@ let run
   let usage = "Usage:
     step    go to next action [default]
     next    go to next break point
-    run     complete current execution,
+    run     complete current execution
+    track   begin/end tracking register dependencies
     bt      print call stack
     cont    print continuation of the top stack frame
     reg     print content of environment
@@ -341,6 +346,9 @@ let run
         (* print not-compacted continuation *)
         print_exp (top_frame_exp stack);
         interact mode env stack
+    | "track" | "t" ->
+      track_dependencies := not(!track_dependencies);
+      interact mode env stack
     | "show_casts" ->
         Pretty_interp.ignore_casts := false;
         interact mode env stack
@@ -357,10 +365,10 @@ let run
   let rec loop mode env = function
   | Done ->
     debugf "%s: %s\n" (grey name) (blue "done");
-    (true, mode, env)
+    (true, mode, !track_dependencies, env)
   | Error0 s -> 
     debugf "%s: %s: %s\n" (grey name) (red "error") s;
-    (false, mode, env) 
+    (false, mode, !track_dependencies, env) 
   | action ->
     let step ?(force=false) stack =
       let top_exp = top_frame_exp stack in
@@ -386,13 +394,25 @@ let run
 	| Read_mem0(kind, location, length, dependencies, next_thunk) ->
 	  (match return with
 	    | Some(value) -> 
-	      (*TODO: show length, conditionally show dependencies *)
 	      show "read_mem" (val_to_string location) right (val_to_string value);
+              (match dependencies with
+              | None -> ()
+              | Some(deps) ->
+                show "read_mem address depended on" (dependencies_to_string deps) "" "");
 	      let next = next_thunk value in
 	      (step next, env', next)
 	    | None -> assert false)
 	| Write_mem0(kind,location, length, dependencies, value, val_dependencies, next_thunk) ->
 	  show "write_mem" (val_to_string location) left (val_to_string value);
+          (match (dependencies,val_dependencies) with
+          | (None,None) -> ();
+          | (Some(deps),None) ->
+            show "write_mem address depended on" (dependencies_to_string deps) "" "";
+          | (None,Some(deps)) ->
+            show "write_mem value depended on" (dependencies_to_string deps) "" "";
+          | (Some(deps),Some(vdeps)) ->
+            show "write_mem address depended on" (dependencies_to_string deps) "" "";
+            show "write_mem value depended on" (dependencies_to_string vdeps) "" "";);
 	  let next = next_thunk true in
 	  (step next,env',next)
 	| Barrier0(bkind,next) ->
@@ -406,21 +426,21 @@ let run
 	  let choose_order = List.sort (fun (_,i1) (_,i2) -> compare i1 i2) 
 	    (List.combine nondets (List.map (fun _ -> Random.bits ()) nondets)) in
 	  show "nondeterministic evaluation begun" "" "" "";
-	  let (_,_,env') = List.fold_right (fun (next,_) (_,_,env') -> 
-	    loop mode env' (interp0 (make_mode (mode=Run) false) next)) choose_order (false,mode,env'); in
+	  let (_,_,_,env') = List.fold_right (fun (next,_) (_,_,_,env') -> 
+	    loop mode env' (interp0 (make_mode (mode=Run) !track_dependencies) next)) choose_order (false,mode,!track_dependencies,env'); in
 	  show "nondeterministic evaluation ended" "" "" "";
 	  (step next,env',next)
 (*      | Exit e ->
 	show "exiting current evaluation" "" "" "";
 	step (),env', (set_in_context s e)*)
       in
-      loop mode' env' (interp0 (make_mode (mode' = Run) false) next) in
+      loop mode' env' (interp0 (make_mode (mode' = Run) !track_dependencies) next) in
   let mode = match mode with
   | None -> if eager_eval then Run else Step
   | Some m -> m in
   let context = build_context spec in
   let initial_state = initial_instruction_state context main_func parameters in
-  let imode = make_mode eager_eval false in
+  let imode = make_mode eager_eval !track_dependencies in
   let top_exp = top_frame_exp initial_state in
   debugf "%s: %s %s\n" (grey name) (blue "evaluate") (Pretty_interp.pp_exp top_exp);
   try
@@ -429,5 +449,5 @@ let run
   with e ->
     let trace = Printexc.get_backtrace () in
     debugf "%s: %s %s\n%s\n" (grey name) (red "interpretor error") (Printexc.to_string e) trace;
-    false, mode, (reg, mem)
+    (false, mode, !track_dependencies, (reg, mem))
 ;;

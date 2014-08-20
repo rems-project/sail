@@ -44,7 +44,7 @@ let extern_value mode for_mem v = match v with
     if for_mem 
     then (Bytevector (List.reverse (to_bytes (from_bits bits))) inc fst, Nothing)
     else (Bitvector (from_bits bits) inc fst, Nothing)
-  | Interp.V_track (Interp.V_vector fst inc bits) regs ->
+  | Interp.V_track (Interp.V_vector fst inc bits) regs -> 
     if for_mem
     then (Bytevector (List.reverse (to_bytes (from_bits bits))) inc fst, 
           if (mode.Interp.track_values) 

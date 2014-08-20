@@ -112,16 +112,16 @@ let eq_zero = function
   | Bitvector(bools,_,_) -> List.for_all (not) bools
 ;;
 
-let rec fde_loop count main_func parameters mem reg ?mode prog =
+let rec fde_loop count main_func parameters mem reg ?mode track_dependencies prog =
   debugf "\n**** instruction %d  ****\n" count;
-  match Run_interp_model.run ~main_func ~parameters ~mem ~reg ~eager_eval:!eager_eval ?mode prog with
-  | false, _, _ -> eprintf "FAILURE\n"; exit 1
-  | true, mode, (reg, mem) ->
+  match Run_interp_model.run ~main_func ~parameters ~mem ~reg ~eager_eval:!eager_eval ~track_dependencies:(ref track_dependencies) ?mode prog with
+  | false, _,_, _ -> eprintf "FAILURE\n"; exit 1
+  | true, mode, track_dependencies, (reg, mem) ->
       if eq_zero (get_reg reg "CIA") then
         eprintf "\nSUCCESS: returned with value %s\n"
           (Run_interp_model.val_to_string (get_reg reg "GPR3"))
       else
-        fde_loop (count+1) main_func parameters mem reg ~mode:mode prog
+        fde_loop (count+1) main_func parameters mem reg ~mode:mode track_dependencies prog
 ;;
 
 let run () =
@@ -143,9 +143,9 @@ let run () =
   let reg = init_reg () in
   (* entry point: unit -> unit fde *)
   let funk_name = "fde" in
-  let args = [] in
+  let parms = [] in
   let name = Filename.basename !file in
-  let t =time_it (fun () -> fde_loop 0 funk_name args !mem reg (name, Power.defs)) () in
+  let t =time_it (fun () -> fde_loop 0 funk_name parms !mem reg false (name, Power.defs)) () in
   eprintf "Execution time: %f seconds\n" t
 ;;
 

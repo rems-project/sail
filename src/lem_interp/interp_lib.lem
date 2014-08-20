@@ -80,32 +80,45 @@ let bitwise_not_bit v =
     | L_one  -> (V_lit (L_aux L_zero loc)) end in
   match v with
   | V_lit lit -> lit_not lit
+  | V_unknown -> V_unknown
   | V_track (V_lit lit) r -> V_track (lit_not lit) r 
 end;; 
 
 let bitwise_binop_bit op (V_tuple [x; y]) = match (x,y) with
   | (V_track x rx,V_track y ry) ->
-    V_track (bool_to_bit (op (bit_to_bool x) (bit_to_bool y))) (rx ++ ry)
+    taint (bool_to_bit (op (bit_to_bool x) (bit_to_bool y))) (rx ++ ry)
   | (V_track x rx,y) ->
-    V_track (bool_to_bit (op (bit_to_bool x) (bit_to_bool y))) rx
+    taint (bool_to_bit (op (bit_to_bool x) (bit_to_bool y))) rx
   | (x,V_track y ry) ->
-    V_track (bool_to_bit (op (bit_to_bool x) (bit_to_bool y))) ry
+    taint (bool_to_bit (op (bit_to_bool x) (bit_to_bool y))) ry
+  | (V_unknown,_) -> V_unknown
+  | (_,V_unknown) -> V_unknown
   | _ -> bool_to_bit (op (bit_to_bool x) (bit_to_bool y))
 end ;;
 
-let bitwise_binop op (V_tuple [v1;v2]) =
+let rec bitwise_binop op (V_tuple [v1;v2]) =
   match (v1,v2) with
   | (V_vector idx inc v, V_vector idx' inc' v') ->
   (* typechecker ensures inc = inc', idx = idx' and length v = length v' *)
   let apply (x, y) = bool_to_bit(op (bit_to_bool x) (bit_to_bool y)) in
   V_vector idx inc (List.map apply (List.zip v v'))
+  | (V_track v1 r1, V_track v2 r2) ->
+    taint (bitwise_binop op (V_tuple [v1;v2])) (r1 ++ r2)
+  | (V_track v1 r1,v2) ->
+    taint (bitwise_binop op (V_tuple [v1;v2])) r1
+  | (v1,V_track v2 r2) ->
+    taint (bitwise_binop op (V_tuple [v1;v2])) r2
+  | (V_unknown,_) -> V_unknown
+  | (_,V_unknown) -> V_unknown
 end ;;
 
 (* BitSeq expects LSB first.
  * By convention, MSB is on the left, so increasing = Big-Endian (MSB0),
  * hence MSB first.
  * http://en.wikipedia.org/wiki/Bit_numbering *)
-let to_num signed (V_vector idx inc l) =
+let rec to_num signed v = 
+  match v with
+  | (V_vector idx inc l) ->
   (* Word library in Lem expects bitseq with LSB first *)
 (*TODO: Kathy think more
   We thought a reverse was needed due to above comments only in inc case.
@@ -115,7 +128,10 @@ let to_num signed (V_vector idx inc l) =
   let l = (*if inc then reverse l else l*) reverse l in
   (* Make sure the last bit is a zero to force unsigned numbers *)
   let l = if signed then l else l ++ [V_lit (L_aux L_zero Unknown)] in
-  V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown);;
+  V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown)
+  | V_unknown -> V_unknown
+  | V_track v r -> taint (to_num signed v) r
+end ;;
 
 (*TODO As with above, consider the reverse here in both cases, where we're again always interpreting with the MSB on the left *)
 let to_vec_inc (V_tuple([V_lit(L_aux (L_num len) _); (V_lit(L_aux (L_num n) ln))])) =
@@ -145,31 +161,73 @@ let neg (V_tuple [V_lit (L_aux arg la)]) = V_lit (L_aux (match arg with
 
 let neq = compose neg eq ;;
 
-let arith_op op (V_tuple args) = match args with
+let rec arith_op op (V_tuple args) = match args with
+  | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (op x y)) lx)
+  | [V_track v1 r1;V_track v2 r2] -> taint (arith_op op (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1;v2] -> taint (arith_op op (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] -> taint (arith_op op (V_tuple [v1;v2])) r2
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
-  | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (op x y)) lx)
   end ;;
-let arith_op_vec op (V_tuple args) = match args with
+let rec arith_op_vec op (V_tuple args) = match args with
   | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
     let (l1',l2') = (to_num false l1,to_num false l2) in
     let n = arith_op op (V_tuple [l1';l2']) in
     to_vec ord (List.length cs) n
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (arith_op_vec op (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1;v2] ->
+    taint (arith_op_vec op (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] ->
+    taint (arith_op_vec op (V_tuple [v1;v2])) r2
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
 end ;;
-let arith_op_range_vec op (V_tuple args) = match args with
+let rec arith_op_range_vec op (V_tuple args) = match args with
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (arith_op_range_vec op (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1; v2] ->
+    taint (arith_op_range_vec op (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] -> 
+    taint (arith_op_range_vec op (V_tuple [v1;v2])) r2
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
   | [n; (V_vector _ ord cs as l2)] ->
     arith_op_vec op (V_tuple [(to_vec ord (List.length cs) n);l2])
 end ;;
-let arith_op_vec_range op (V_tuple args) = match args with
+let rec arith_op_vec_range op (V_tuple args) = match args with
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (arith_op_vec_range op (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1; v2] ->
+    taint (arith_op_vec_range op (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] -> 
+    taint (arith_op_vec_range op (V_tuple [v1;v2])) r2
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
   | [(V_vector _ ord cs as l1);n] ->
-  arith_op_vec op (V_tuple [l1;(to_vec ord (List.length cs) n)])
+    arith_op_vec op (V_tuple [l1;(to_vec ord (List.length cs) n)])
 end ;;
-
-let arith_op_range_vec_range op (V_tuple args) = match args with
+let rec arith_op_range_vec_range op (V_tuple args) = match args with
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (arith_op_range_vec_range op (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1; v2] ->
+    taint (arith_op_range_vec_range op (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] -> 
+    taint (arith_op_range_vec_range op (V_tuple [v1;v2])) r2
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
   | [n;(V_vector _ ord _ as l2)] ->
     arith_op op (V_tuple [n;(to_num ord l2)])
 end ;;
-let arith_op_vec_range_range op (V_tuple args) = match args with
+let rec arith_op_vec_range_range op (V_tuple args) = match args with
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (arith_op_vec_range_range op (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1; v2] ->
+    taint (arith_op_vec_range_range op (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] -> 
+    taint (arith_op_vec_range_range op (V_tuple [v1;v2])) r2
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
   | [(V_vector _ ord _ as l1);n] ->
     arith_op op (V_tuple [(to_num ord l1);n])
 end ;;

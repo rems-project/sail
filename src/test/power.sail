@@ -9,6 +9,8 @@ function bit carry_out ( x ) = bitzero
 function nat length ( x ) = 64
 (* XXX Storage control *)
 function forall Type 'a . 'a real_addr ( x ) = x
+(* XXX For stvxl and lvxl - what does that do? *)
+function forall Type 'a . unit mark_as_not_likely_to_be_needed_again_anytime_soon ( x ) = ()
 
 (* XXX *)
 val extern forall Nat 'k, Nat 'r,
@@ -297,10 +299,14 @@ val extern forall Nat 'n, Nat 'm. bit['n] -> bit['m] effect pure EXTZ
 val forall Nat 'n, Nat 'm, 'm <= 'n. (bit['n], [|'m|]) -> bit['m] effect pure Chop
 function forall Nat 'm. (bit['m]) Chop(x, y) = x[0..y]
 
-val forall Nat 'n, Nat 'm, 'n <= 0, 0 <= 'm.
-  (nat, [|'n|], [|'m|]) -> [|'n:'m|] effect { wreg } Clamp
+val forall Nat 'n, Nat 'm, Nat 'p, Nat 'q, Nat 'k, 'n <= 0, 0 <= 'm,
+  'n + 2** 'p = 0, 'm = 2** 'q, 'k = 'p + 'q.
+  (nat, [|'n|], [|'m|]) -> bit['k] effect { wreg } Clamp
 
-function forall Nat 'n, Nat 'm, 'n <= 0, 0 <= 'm. ([|'n:'m|])
+(*
+(*TODO: This is not the right type, Clamp needs the implicit additional parameter *)
+function forall Nat 'n, Nat 'm, Nat 'p, Nat 'q, Nat 'k, 'n <= 0, 0 <= 'm,
+  'n + 2** 'p = 0, 'm = 2** 'q, 'k = 'p + 'q. (bit['k])
 Clamp((nat) x, ([|'n|]) y, ([|'m|]) z) = {
   ([|'n:'m|]) result := 0;
   if (x<y) then {
@@ -312,8 +318,8 @@ Clamp((nat) x, ([|'n|]) y, ([|'m|]) z) = {
   } else {
     result := x;
   };
-  result;
-}
+  (bit['k]) result;
+}*)
 
 (* XXX *)
 val extern bit[32] -> bit[32] effect pure RoundToSPIntCeil
@@ -340,6 +346,7 @@ val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } 
 val extern unit -> unit effect pure trap
 
 register (bool) mode64bit
+register (bool) bigendianmode
 
 scattered function unit execute
 scattered typedef ast = const union
@@ -444,8 +451,6 @@ end decode
 end execute
 end ast
 
-
-(*register ast instr (* monitor decoded instructions *)*)
 
 (* fetch-decode-execute *)
 function unit fde () = {
