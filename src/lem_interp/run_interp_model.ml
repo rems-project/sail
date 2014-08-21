@@ -448,10 +448,15 @@ let run
 	| Barrier0(bkind,next) ->
 	  show "mem_barrier" "" "" "";
 	  (step next, env, next)
-	| Internal(msg, next) ->
+	| Internal(None,None, next) ->
           show "breakpoint" "" "" "";
-	  show (msg ()) "" "" "";
           (step ~force:true next,env',next)
+        | Internal((Some fn),None,next) ->
+          show "breakpoint" fn "" "";
+          (step ~force:true next, env',next)
+        | Internal((Some fn),(Some vdisp),next) ->
+          show "breakpoint" (fn ^ " " ^ (vdisp ())) "" "";
+          (step ~force:true next, env', next)
 	| Nondet_choice(nondets, next) ->
 	  let choose_order = List.sort (fun (_,i1) (_,i2) -> compare i1 i2) 
 	    (List.combine nondets (List.map (fun _ -> Random.bits ()) nondets)) in

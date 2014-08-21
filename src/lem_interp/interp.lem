@@ -76,6 +76,39 @@ type value =
  | V_register_alias of (alias_spec tannot) * tannot (* Same as above, but to a concatenation of two registers *)
  | V_track of value * (list reg_form) (* Used when memory system wants to track what register(s) a value came from *)
 
+let rec list_to_string format sep lst = match lst with 
+  | [] -> ""
+  | [last] -> format last
+  | one::rest -> (format one) ^ sep ^ (list_to_string format sep rest)
+end
+
+let rec string_of_value v = match v with
+  | V_boxref nat t -> "$#" ^ (show nat) ^ "$"
+  | V_lit (L_aux lit _) -> 
+    (match lit with
+    | L_unit -> "()"
+    | L_zero -> "0"
+    | L_one  -> "1"
+    | L_true -> "true"
+    | L_false -> "false"
+    | L_num num -> show (natFromInteger num)
+    | L_hex hex -> "0x" ^ hex
+    | L_bin bin -> "0b" ^ bin
+    | L_undef -> "undefined"
+    | L_string str-> "\"" ^ str ^ "\"" end)
+  | V_tuple vals -> "(" ^ (list_to_string string_of_value "," vals) ^ ")"
+  | V_list vals -> "[||" ^ (list_to_string string_of_value "," vals) ^ "||]"
+  | V_vector i inc vals -> "[" ^ (list_to_string string_of_value "," vals) ^ "]"
+  | V_vector_sparse _ _ _ _ _ -> "sparse_vector"
+  | V_record t vals ->
+    "{" ^ (list_to_string (fun (id,v) -> (get_id id) ^ "=" ^ (string_of_value v)) ";" vals) ^ "}"
+  | V_ctor id t value -> (get_id id) ^ " " ^ string_of_value value     
+  | V_unknown -> "Unknown"
+  | V_register _ -> "register_as_value"
+  | V_register_alias _ _ -> "register_as_value"
+  | V_track v _ -> string_of_value v
+end
+
 let rec id_value_eq (i, v) (i', v') = i = i' && value_eq v v'
 and value_eq left right =
   (* XXX it is not clear whether t = t' will work in all cases *)
@@ -132,7 +165,7 @@ type action =
  | Nondet of list (exp tannot)
  | Call_extern of string * value
  | Exit of (exp tannot)
- (* For stepper, no action needed. String is function called, value is parameter, on next state being a new function body *)
+ (* For stepper, no action needed. String is function called, value is parameter, on next state is a new function body *)
  | Step of l * maybe string * maybe value 
 
 (* Inverted call stack, where top item on the stack is waiting for an action to resolve and all other frames for the right stack *)
@@ -1012,7 +1045,8 @@ let resolve_outcome to_match value_thunk action_thunk =
 
 let update_stack (Action act stack) fn = Action act (fn stack)  
 
-let debug_out e tl lm le = (Action (Step (get_exp_l e) Nothing Nothing) (Thunk_frame e tl le lm Top),lm,le)
+let debug_out fn value e tl lm le = 
+  (Action (Step (get_exp_l e) fn value) (Thunk_frame e tl le lm Top),lm,le)
 
 let to_exps mode env vals = 
   List.foldr (fun v (es,env) -> let (e,env') = to_exp mode env v in (e::es, union_env env env')) ([],env) vals
@@ -1118,11 +1152,11 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	  match (value,mode.eager_eval) with
             | (V_lit(L_aux L_true _),true) -> interp_main mode t_level l_env lm thn
 	    | (V_track (V_lit (L_aux L_true _)) _, true) -> interp_main mode t_level l_env lm thn
-	    | (V_lit(L_aux L_true _),false) -> debug_out thn t_level lm l_env 
-	    | (V_track (V_lit (L_aux L_true _)) _, false) -> debug_out thn t_level lm l_env
+	    | (V_lit(L_aux L_true _),false) -> debug_out Nothing Nothing thn t_level lm l_env 
+	    | (V_track (V_lit (L_aux L_true _)) _, false) -> debug_out Nothing Nothing thn t_level lm l_env
 	    | (V_unknown,_) -> interp_main mode t_level l_env lm (E_aux (E_block [thn;els]) (l,annot))
             | (_,true) -> interp_main mode t_level l_env lm els 
-	    | (_,false) -> debug_out els t_level lm l_env end)
+	    | (_,false) -> debug_out Nothing Nothing els t_level lm l_env end)
         (fun a -> update_stack a (add_to_top_frame (fun c env -> (E_aux (E_if c thn els) (l,annot), env))))
     | E_for id from to_ by ((Ord_aux o _) as order) exp ->
       let is_inc = match o with | Ord_inc -> true | _ -> false end in
@@ -1168,7 +1202,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 					    (l,annot)) in
 				if mode.eager_eval
 				then interp_main mode t_level env lm e 
-				else debug_out e t_level lm env
+				else debug_out Nothing Nothing e t_level lm env
                             | V_unknown -> 
 			      let e = 
 				(E_aux (E_let 
@@ -1204,7 +1238,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
             | [(env,used_unknown,exp)] -> 
 	      if mode.eager_eval
 	      then interp_main mode t_level (union_env env l_env) lm exp
-	      else debug_out exp t_level lm (union_env env l_env)
+	      else debug_out Nothing Nothing exp t_level lm (union_env env l_env)
 	    | multi_matches ->
 	      let lets = List.map (fun (env,_,exp) -> env_to_let mode env exp) multi_matches in
 	      interp_main mode t_level l_env lm (E_aux (E_block lets) (l,annot))
@@ -1610,7 +1644,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		  resolve_outcome 
                     (if mode.eager_eval 
 		     then (interp_main mode t_level env emem exp)
-		     else (debug_out exp t_level emem env))  
+		     else (debug_out (Just name) (Just v) exp t_level emem env))  
 	            (fun ret lm le -> (Value ret, l_mem,l_env))
                     (fun a -> update_stack a 
 		      (fun stack -> (Hole_frame (id_of_string "0") 
@@ -1631,7 +1665,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	      resolve_outcome 
                 (if mode.eager_eval 
 		 then (interp_main mode t_level env emem exp)
-		 else (debug_out exp t_level emem env))  
+		 else (debug_out (Just name) (Just v) exp t_level emem env))  
 	        (fun ret lm le -> (Value ret, l_mem,l_env))
                 (fun a -> update_stack a 
 		  (fun stack -> (Hole_frame (id_of_string "0") 
@@ -1649,7 +1683,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
               resolve_outcome 
 		(if mode.eager_eval 
 		 then (interp_main mode t_level env emem exp)
-                 else (debug_out exp t_level emem env))
+                 else (debug_out (Just name) (Just v) exp t_level emem env))
 	        (fun ret lm le -> (Value ret, l_mem,l_env))
                 (fun a -> update_stack a 
 		  (fun stack -> 
@@ -1708,7 +1742,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			  resolve_outcome 
 			    (if mode.eager_eval
 			     then (interp_main mode t_level env emem exp)
-			     else (debug_out exp t_level emem env)) 
+			     else (debug_out (Just name) (Just (V_tuple [lv;rv])) exp t_level emem env)) 
 			    (fun ret lm le -> (Value ret,l_mem,l_env))
                             (fun a -> update_stack a 
 			      (fun stack -> 
@@ -1725,7 +1759,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			  resolve_outcome 
 			    (if mode.eager_eval
 			     then (interp_main mode t_level env emem exp)
-			     else (debug_out exp t_level emem env)) 
+			     else (debug_out (Just name) (Just (V_tuple [lv;rv])) exp t_level emem env)) 
 			    (fun ret lm le -> (Value ret,l_mem,l_env))
                             (fun a -> update_stack a 
 			      (fun stack -> (Hole_frame (Id_aux (Id "0") l)
@@ -1741,7 +1775,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			  resolve_outcome 
 			    (if mode.eager_eval 
 			     then (interp_main mode t_level env emem exp)
-			     else (debug_out exp t_level emem env))
+			     else (debug_out (Just name) (Just (V_tuple [lv;rv])) exp t_level emem env))
 			    (fun ret lm le -> (Value ret,l_mem,l_env))
                             (fun a -> update_stack a 
 			      (fun stack -> (Hole_frame (Id_aux (Id "0") l)
@@ -1764,7 +1798,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     | ((Value v,lm,le),_) ->
       if mode.eager_eval
       then interp_main mode t_level le lm exp
-      else debug_out exp t_level lm le                                           
+      else debug_out Nothing Nothing exp t_level lm le                                           
     | (((Action a s as o),lm,le),Just lbuild) ->  
       ((update_stack o (add_to_top_frame (fun e env -> (E_aux (E_let (lbuild e) exp) (l,annot), env)))),lm,le)
     | (e,_) -> e end
@@ -1797,13 +1831,13 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     | [ exp ] -> 
       if mode.eager_eval
       then interp_main mode t_level local_env local_mem exp
-      else debug_out exp t_level local_mem local_env
+      else debug_out Nothing Nothing exp t_level local_mem local_env
     | exp:: exps ->
       resolve_outcome (interp_main mode t_level local_env local_mem exp)
                       (fun _ lm le -> 
 			if mode.eager_eval
 			then interp_block mode t_level init_env le lm l tannot exps
-			else debug_out (E_aux (E_block exps) (l,tannot)) t_level lm le)
+			else debug_out Nothing Nothing (E_aux (E_block exps) (l,tannot)) t_level lm le)
                       (fun a -> update_stack a (add_to_top_frame (fun e env-> (E_aux (E_block(e::exps)) (l,tannot), env))))
     end
 

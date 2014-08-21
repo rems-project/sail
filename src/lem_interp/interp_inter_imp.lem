@@ -127,8 +127,18 @@ let rec interp_to_outcome mode thunk =
     | Interp.Call_extern i value -> 
       match List.lookup i external_functions with
       | Nothing -> Error ("External function not available " ^ i)
-      | Just f  -> interp_to_outcome mode (fun _ -> Interp.resume mode next_state (Just (f value))) end
-    | Interp.Step l _ _ -> Internal (fun _ -> "Function state to string not implemented yet") next_state 
+      | Just f  -> 
+        if (mode.Interp.eager_eval)
+        then interp_to_outcome mode (fun _ -> Interp.resume mode next_state (Just (f value))) 
+        else let new_v = f value in
+             Internal (Just i) 
+                      (Just (fun _ -> Interp.string_of_value value))
+                      (Interp.add_answer_to_stack next_state new_v)
+      end
+    | Interp.Step l Nothing Nothing -> Internal Nothing Nothing next_state 
+    | Interp.Step l (Just name) Nothing -> Internal (Just name) Nothing next_state
+    | Interp.Step l (Just name) (Just value) ->
+      Internal (Just name) (Just (fun _ -> Interp.string_of_value value)) next_state
     end 
   end 
 
@@ -146,7 +156,7 @@ let rec ie_loop mode i_state =
       (E_read_mem read_k loc length tracking)::(ie_loop mode (i_state_fun Unknown))
     | Write_mem write_k loc length l_track value v_track i_state_fun ->
       (E_write_mem write_k loc length l_track value v_track)::(ie_loop mode (i_state_fun true))
-    | Internal _ next -> (ie_loop mode next)
+    | Internal _ _ next -> (ie_loop mode next)
      end ;;
   
 let interp_exhaustive i_state = 
@@ -167,7 +177,7 @@ let rec rr_ie_loop mode i_state =
     | Write_mem write_k loc length l_track value v_track i_state_fun ->
       let (events,outcome) = (rr_ie_loop mode (i_state_fun true)) in
       (((E_write_mem write_k loc length l_track value v_track)::events),outcome)
-    | Internal _ next -> (rr_ie_loop mode next)
+    | Internal _ _ next -> (rr_ie_loop mode next)
      end ;;
 
 let rr_interp_exhaustive mode i_state events = 
