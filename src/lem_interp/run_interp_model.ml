@@ -246,6 +246,30 @@ let increment bytes =
 ;;
 let unit_lit = (L_aux(L_unit,Interp_ast.Unknown))
 
+let rec format_events = function
+  | [] -> 
+    "     Done\n"
+  | [E_error s] -> 
+    "     Failed with message : " ^ s ^ "\n"
+  | (E_error s)::events ->
+    "     Failed with message : " ^ s ^ " but continued on erroneously\n"
+  | (E_read_mem(read_kind, location, length, dep))::events ->
+    "     Read_mem at " ^ (val_to_string location) ^ " for " ^ (string_of_big_int length) ^ " bytes \n" ^
+    (format_events events)
+  | (E_write_mem(write_kind,location, length, dep, value, vdep))::events ->
+    "     Write_mem at " ^ (val_to_string location) ^ " writing " ^ (val_to_string value) ^ " across " ^ (string_of_big_int length) ^ " bytes\n" ^
+    (format_events events)
+  | ((E_barrier b_kind)::events) ->
+    "     Memory_barrier occurred\n" ^ 
+    (format_events events)
+  | (E_read_reg reg_name)::events ->
+    "     Read_reg of " ^ (reg_name_to_string reg_name) ^ "\n" ^
+    (format_events events)
+  | (E_write_reg(reg_name, value))::events ->
+    "     Write_reg of " ^ (reg_name_to_string reg_name) ^ " writing " ^ (val_to_string value) ^ "\n" ^
+    (format_events events)
+;;
+
 let rec perform_action ((reg, mem) as env) = function
  (* registers *)
  | Read_reg0((Reg0 id), _) -> (Some(Reg.find id reg), env)
@@ -324,6 +348,7 @@ let run
     cont    print continuation of the top stack frame
     reg     print content of environment
     mem     print content of memory
+    exh     run interpreter exhaustively with unknown and print events 
     quit    exit interpreter" in
   let rec interact mode ((reg, mem) as env) stack =
     flush_all();
@@ -333,7 +358,7 @@ let run
     | "s" | "step" -> Step
     | "n" | "next" -> Next
     | "r" | "run" -> Run
-    | "e" | "reg" | "registers" ->
+    | "rg" | "reg" | "registers" ->
         Reg.iter (fun k v -> debugf "%s\n" (Reg.to_string k v)) reg;
         interact mode env stack
     | "m" | "mem" | "memory" ->
@@ -342,6 +367,11 @@ let run
     | "bt" | "backtrace" | "stack" ->
         List.iter print_exp (compact_stack stack);
         interact mode env stack
+    | "e" | "exh" | "exhaust" ->
+      debugf "interpreting exhaustively from current state\n";
+      let events = interp_exhaustive stack in
+      debugf "%s" (format_events events);
+      interact mode env stack
     | "c" | "cont" | "continuation" ->
         (* print not-compacted continuation *)
         print_exp (top_frame_exp stack);

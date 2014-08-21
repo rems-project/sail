@@ -16,7 +16,7 @@ let split ch s =
   go s
 
 (* paths relative to _build *)
-let lem_dir = "../../../../bitbucket-lem-for-sail/lem" ;;
+let lem_dir = "../../../lem" ;;
 let lem_libdir = lem_dir / "ocaml-lib/_build" ;;
 let lem_lib = lem_libdir / "extract" ;;
 let lem = lem_dir / "lem" ;;

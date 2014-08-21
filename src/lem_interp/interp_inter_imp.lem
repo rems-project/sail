@@ -150,5 +150,25 @@ let rec ie_loop mode i_state =
      end ;;
   
 let interp_exhaustive i_state = 
-  let mode = <| Interp.eager_eval = true; Interp.track_values = false |>in
+  let mode = make_mode true false in
   ie_loop mode i_state
+
+let rec rr_ie_loop mode i_state = 
+  match (interp mode i_state) with
+    | Done -> ([],Done)
+    | Error msg -> ([E_error msg], Error msg)
+    | Read_reg reg i_state_fun -> ([], Read_reg reg i_state_fun)
+    | Write_reg reg value i_state->
+      let (events,outcome) = (rr_ie_loop mode i_state) in
+      (((E_write_reg reg value)::events), outcome)
+    | Read_mem read_k loc length tracking i_state_fun ->
+      let (events,outcome) = (rr_ie_loop mode (i_state_fun Unknown)) in 
+      (((E_read_mem read_k loc length tracking)::events),outcome)
+    | Write_mem write_k loc length l_track value v_track i_state_fun ->
+      let (events,outcome) = (rr_ie_loop mode (i_state_fun true)) in
+      (((E_write_mem write_k loc length l_track value v_track)::events),outcome)
+    | Internal _ next -> (rr_ie_loop mode next)
+     end ;;
+
+let rr_interp_exhaustive mode i_state events = 
+  let (events',outcome) = rr_ie_loop mode i_state in ((events ++ events'),outcome)
