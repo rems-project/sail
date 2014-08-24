@@ -6,3 +6,6 @@ true: -traverse, debug
 # see http://caml.inria.fr/mantis/view.php?id=4943
 <lem_interp/*> and not <lem_interp/*.cmxa>: use_nums, use_lem
 <test/*> and not <test/*.cmxa>: use_nums, use_lem, use_str
+
+# disable partial match and unused variable warnings
+<**/*.ml>: warn_p, warn_y
