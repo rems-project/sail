@@ -16,20 +16,13 @@ let split ch s =
   go s
 
 (* paths relative to _build *)
-let lem_dir = "../../../lem" ;;
+let lem_dir =
+  try Sys.getenv "LEM_DIR" (* LEM_DIR must contain an absolute path *)
+  with Not_found -> "../../../lem" ;;
 let lem_libdir = lem_dir / "ocaml-lib/_build" ;;
 let lem_lib = lem_libdir / "extract" ;;
 let lem = lem_dir / "lem" ;;
 
-(* Order matters - respect dependencies! *)
-let lem_deps = List.map ((/) "lem_interp") [
-  "interp_ast.lem";
-  "interp.lem";
-  "interp_lib.lem";
-  ] ;;
-let lem_opts = List.fold_right (fun s l -> [A "-i"; P s] @ l) lem_deps [] ;;
-
-(* New library magic: *)
 (* All -wl ignores should be removed if you want to see the pattern compilation, exhaustive, and unused var warnings *)
 let lem_opts = [A "-lib"; P "../lem_interp";
                 A "-wl_pat_comp"; P "ign"; 
