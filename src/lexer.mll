@@ -121,7 +121,7 @@ let kw_table =
 
 ]
 
-let default_type_names = ["bool";"unit";"vector";"range";"list";"bit";"nat"; "uint8";"uint16";"uint32";"uint64";"implicit"]
+let default_type_names = ["bool";"unit";"vector";"range";"list";"bit";"nat"; "int"; "uint8";"uint16";"uint32";"uint64";"implicit"]
 let custom_type_names : string list ref = ref []
 
 }

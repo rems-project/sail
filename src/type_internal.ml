@@ -739,6 +739,7 @@ let rec fresh_evar bindings e =
     | _ -> None
 
 let nat_t = {t = Tapp("range",[TA_nexp{nexp= Nconst zero};TA_nexp{nexp = Npos_inf};])}
+let int_t = {t = Tapp("range",[TA_nexp{nexp=Nneg_inf};TA_nexp{nexp = Npos_inf};])}
 let uint8_t = {t = Tapp("range",[TA_nexp{nexp = Nconst zero}; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 8)},Some (big_int_of_int 256))}])}
 let uint16_t = {t = Tapp("range",[TA_nexp{nexp = Nconst zero}; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 16)},Some (big_int_of_int 65536))}])}
 let uint32_t = {t = Tapp("range",[TA_nexp{nexp = Nconst zero}; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 32)},Some (big_int_of_int 4294967296))}])}
@@ -761,6 +762,7 @@ let initial_kind_env =
   Envmap.from_list [ 
     ("bool", {k = K_Typ});
     ("nat", {k = K_Typ});
+    ("int", {k = K_Typ});
     ("uint8", {k = K_Typ});
     ("uint16", {k= K_Typ});
     ("uint32", {k=K_Typ});
@@ -778,6 +780,7 @@ let initial_kind_env =
 let initial_abbrev_env =
   Envmap.from_list [
     ("nat",Base(([],nat_t),Emp_global,[],pure_e));
+    ("int",Base(([],int_t),Emp_global,[],pure_e));
     ("uint8",Base(([],uint8_t),Emp_global,[],pure_e));
     ("uint16",Base(([],uint16_t),Emp_global,[],pure_e));
     ("uint32",Base(([],uint32_t),Emp_global,[],pure_e));
@@ -957,6 +960,11 @@ let initial_typ_env =
     (* incorrect types for typechecking processed sail code; do we care? *)
     ("to_num_inc",Base(([("a",{k=K_Typ})],({t= Tfn ({t=Tvar "a"},nat_typ,IP_length,pure_e)})),External None,[],pure_e));
     ("to_num_dec",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,IP_length,pure_e)}),External None,[],pure_e));
+    ("mask",Base(((mk_typ_params ["a"])@(mk_nat_params["n";"m";"o";"p"])@(mk_ord_params["ord"]),
+		  (mk_pure_imp (mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "n") (Nvar "m"))
+		               (mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "p") (Nvar "o")))),
+		 External (Some "mask"),
+		 [GtEq(Specc(Parse_ast.Int("mask",None)), (mk_nv "m"), (mk_nv "o"))],pure_e));
     (*TODO These should be IP_start *)
     ("to_vec_inc",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},IP_none,pure_e)}),External None,[],pure_e));
     ("to_vec_dec",Base(([("a",{k=K_Typ})],{t= Tfn (nat_typ,{t=Tvar "a"},IP_none,pure_e)}),External None,[],pure_e));

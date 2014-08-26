@@ -27,14 +27,14 @@ val forall Nat 'n, Nat 'm, 0 <= 'n, 'n <= 'm, 'm <= 63 .
   MASK
 
 function (bit[64]) MASK(start, stop) = {
-  (bit[64]) mask := 0;
+  (bit[64]) mask_temp := 0;
   if(start > stop) then {
-    mask[start .. 63] := bitone ^^ (64 - start);
-    mask[0 .. stop] := bitone ^^ (stop + 1);
+    mask_temp[start .. 63] := bitone ^^ (64 - start);
+    mask_temp[0 .. stop] := bitone ^^ (stop + 1);
   } else {
-    mask[start .. stop ] := bitone ^^ (stop - start + 1);
+    mask_temp[start .. stop ] := bitone ^^ (stop - start + 1);
   };
-  mask;
+  mask_temp;
 }
 
 val forall Nat 'n, 0 <= 'n, 'n <= 63 .

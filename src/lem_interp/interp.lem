@@ -1841,7 +1841,6 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                       (fun a -> update_stack a (add_to_top_frame (fun e env-> (E_aux (E_block(e::exps)) (l,tannot), env))))
     end
 
-(*TODO The rebuilder function should take an environment and thread through as in to_exp and add_to_top_frame *)
 and create_write_message_or_update mode t_level value l_env l_mem is_top_level ((LEXP_aux lexp (l,annot)):lexp tannot) : ((outcome * lmem * lenv) * maybe ((exp tannot) -> lenv -> ((lexp tannot) * lenv))) =
    let (Env defs lets regs ctors subregs aliases) = t_level in
   let (typ,tag,ncs,ef) = match annot with 
