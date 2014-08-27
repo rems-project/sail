@@ -221,8 +221,9 @@ let rec list_update index start stop e vals =
 let bool_to_byte = function | true -> 0 | false -> 1
 let bitvector_to_bool = function
   | Bitvector([b],_,_) -> b
+  | Bitvector(bs,_,_) -> false (*TODO fupdate slice got a vector of stuff, not just one new value.*)
   | Bytevector([0],_,_) -> false
-  | Bytevector([1],_,_) -> true
+  | Bytevector(_,_,_) | Unknown0 -> true
 ;;
 
 let fupdate_slice original e (start,stop) =

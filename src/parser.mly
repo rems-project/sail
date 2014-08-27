@@ -172,6 +172,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 %token <string> LtEqUnderUiI LtUnderSI LtUnderSiI LtUnderUI LtUnderUiI StarStarUnderSI StarStarUnderSiI StarUnderSI
 %token <string> StarUnderSiI StarUnderUI StarUnderUiI TwoCarrotI
 
+
 %start file nonempty_exp_list
 %type <Parse_ast.defs> defs
 %type <Parse_ast.atyp> typ
@@ -923,13 +924,13 @@ patsexp:
     { peloc (Pat_exp($1,$3)) }
 
 letbind:
-/*  | Let_ atomic_pat Eq atomic_exp
-    { lbloc (LB_val_implicit($2,$4)) }*/
+  | Let_ atomic_pat Eq atomic_exp
+    { lbloc (LB_val_implicit($2,$4)) }
   | Let_ typquant atomic_typ atomic_pat Eq exp
     { lbloc (LB_val_explicit((mk_typschm $2 $3 2 3),$4,$6)) }
-  /* This is ambiguous causing 4 shift/reduce and 5 reduce/reduce conflicts because the parser can't tell until the end of typ whether it was parsing a type or a pattern, and this seem to be too late. Solutions are to have a different keyword for this and the above solution besides let (while still absolutely having a keyword here) */
-  | Let_ atomic_typ atomic_pat Eq exp
-    { lbloc (LB_val_explicit((mk_typschm (mk_typqn ()) $2 2 2),$3,$5)) } 
+/* This introduces one shift reduce conflict, that basically points out that an atomic_pat with a type declared is the Same as this
+  | Let_ Lparen typ Rparen atomic_pat Eq exp 
+    { assert false (* lbloc (LB_val_explicit((mk_typschm (mk_typqn ()) $2 2 2),$3,$5)) *)} */
 
 funcl:
   | id atomic_pat Eq exp

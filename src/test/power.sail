@@ -355,6 +355,20 @@ val bit[32] -> ast effect pure decode
 
 scattered function ast decode
 
+union ast member (bit[24], bit, bit) B
+
+function clause decode (0b010010 :
+(bit[24]) LI :
+[AA] :
+[LK] as instr) =
+  B (LI,AA,LK)
+
+function clause execute (B (LI, AA, LK)) =
+  {
+    if AA then NIA := EXTS (LI : 0b00) else NIA := CIA + EXTS (LI : 0b00);
+    if LK then LR := CIA + 4
+  }
+
 union ast member (bit[5], bit[5], bit[2], bit) Bclr
 
 function clause decode (0b010011 :
@@ -392,6 +406,23 @@ function clause execute (Lwz (RT, RA, D)) =
     GPR[RT] := 0b00000000000000000000000000000000 : MEMr (EA,4)
   }
 
+union ast member (bit[5], bit[5], bit[14]) Ld
+
+function clause decode (0b111010 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[14]) DS :
+0b00 as instr) =
+  Ld (RT,RA,DS)
+
+function clause execute (Ld (RT, RA, DS)) =
+  {
+    (bit[64]) b := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + EXTS (DS : 0b00);
+    GPR[RT] := MEMr (EA,8)
+  }
+
 union ast member (bit[5], bit[5], bit[16]) Stw
 
 function clause decode (0b100100 :
@@ -423,6 +454,39 @@ function clause execute (Stwu (RS, RA, D)) =
     GPR[RA] := EA
   }
 
+union ast member (bit[5], bit[5], bit[14]) Std
+
+function clause decode (0b111110 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[14]) DS :
+0b00 as instr) =
+  Std (RS,RA,DS)
+
+function clause execute (Std (RS, RA, DS)) =
+  {
+    (bit[64]) b := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + EXTS (DS : 0b00);
+    MEMw(EA,8) := GPR[RS]
+  }
+
+union ast member (bit[5], bit[5], bit[14]) Stdu
+
+function clause decode (0b111110 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[14]) DS :
+0b01 as instr) =
+  Stdu (RS,RA,DS)
+
+function clause execute (Stdu (RS, RA, DS)) =
+  {
+    EA := GPR[RA] + EXTS (DS : 0b00);
+    MEMw(EA,8) := GPR[RS];
+    GPR[RA] := EA
+  }
+
 union ast member (bit[5], bit[5], bit[16]) Addi
 
 function clause decode (0b001110 :
@@ -433,6 +497,20 @@ function clause decode (0b001110 :
 
 function clause execute (Addi (RT, RA, SI)) =
   if RA == 0 then GPR[RT] := EXTS (SI) else GPR[RT] := GPR[RA] + EXTS (SI)
+
+union ast member (bit[5], bit[5], bit[5], bit, bit) Mullw
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[5]) RB :
+[OE] :
+0b011101011 :
+[Rc] as instr) =
+  Mullw (RT,RA,RB,OE,Rc)
+
+function clause execute (Mullw (RT, RA, RB, OE, Rc)) =
+  GPR[RT] := (GPR[RA])[32 .. 63] * (GPR[RB])[32 .. 63]
 
 union ast member (bit[5], bit[5], bit[5], bit) Or
 
@@ -445,6 +523,23 @@ function clause decode (0b011111 :
   Or (RS,RA,RB,Rc)
 
 function clause execute (Or (RS, RA, RB, Rc)) = GPR[RA] := (GPR[RS] | GPR[RB])
+
+union ast member (bit[5], bit[5], bit) Extsw
+
+function clause decode (0b011111 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[5]) _ :
+0b1111011010 :
+[Rc] as instr) =
+  Extsw (RS,RA,Rc)
+
+function clause execute (Extsw (RS, RA, Rc)) =
+  {
+    s := (GPR[RS])[32];
+    (GPR[RA])[32..63] := (GPR[RS])[32 .. 63];
+    (GPR[RA])[0..31] := s ^^ 32
+  }
 
 
 end decode

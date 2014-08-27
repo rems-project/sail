@@ -169,43 +169,43 @@ let rec arith_op op (V_tuple args) = match args with
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
   end ;;
-let rec arith_op_vec op (V_tuple args) = match args with
+let rec arith_op_vec op size (V_tuple args) = match args with
   | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
     let (l1',l2') = (to_num false l1,to_num false l2) in
     let n = arith_op op (V_tuple [l1';l2']) in
-    to_vec ord (List.length cs) n
+    to_vec ord ((List.length cs) * size) n
   | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_vec op (V_tuple [v1;v2])) (r1++r2)
+    taint (arith_op_vec op size (V_tuple [v1;v2])) (r1++r2)
   | [V_track v1 r1;v2] ->
-    taint (arith_op_vec op (V_tuple [v1;v2])) r1
+    taint (arith_op_vec op size (V_tuple [v1;v2])) r1
   | [v1;V_track v2 r2] ->
-    taint (arith_op_vec op (V_tuple [v1;v2])) r2
+    taint (arith_op_vec op size (V_tuple [v1;v2])) r2
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
 end ;;
-let rec arith_op_range_vec op (V_tuple args) = match args with
+let rec arith_op_range_vec op size (V_tuple args) = match args with
   | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_range_vec op (V_tuple [v1;v2])) (r1++r2)
+    taint (arith_op_range_vec op size (V_tuple [v1;v2])) (r1++r2)
   | [V_track v1 r1; v2] ->
-    taint (arith_op_range_vec op (V_tuple [v1;v2])) r1
+    taint (arith_op_range_vec op size (V_tuple [v1;v2])) r1
   | [v1;V_track v2 r2] -> 
-    taint (arith_op_range_vec op (V_tuple [v1;v2])) r2
+    taint (arith_op_range_vec op size (V_tuple [v1;v2])) r2
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
   | [n; (V_vector _ ord cs as l2)] ->
-    arith_op_vec op (V_tuple [(to_vec ord (List.length cs) n);l2])
+    arith_op_vec op size (V_tuple [(to_vec ord (List.length cs) n);l2])
 end ;;
-let rec arith_op_vec_range op (V_tuple args) = match args with
+let rec arith_op_vec_range op size (V_tuple args) = match args with
   | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_vec_range op (V_tuple [v1;v2])) (r1++r2)
+    taint (arith_op_vec_range op size (V_tuple [v1;v2])) (r1++r2)
   | [V_track v1 r1; v2] ->
-    taint (arith_op_vec_range op (V_tuple [v1;v2])) r1
+    taint (arith_op_vec_range op size (V_tuple [v1;v2])) r1
   | [v1;V_track v2 r2] -> 
-    taint (arith_op_vec_range op (V_tuple [v1;v2])) r2
+    taint (arith_op_vec_range op size (V_tuple [v1;v2])) r2
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
   | [(V_vector _ ord cs as l1);n] ->
-    arith_op_vec op (V_tuple [l1;(to_vec ord (List.length cs) n)])
+    arith_op_vec op size (V_tuple [l1;(to_vec ord (List.length cs) n)])
 end ;;
 let rec arith_op_range_vec_range op (V_tuple args) = match args with
   | [V_track v1 r1;V_track v2 r2] ->
@@ -244,6 +244,11 @@ let compare_op_vec op (V_tuple args) = match args with
     compare_op op (V_tuple[l1';l2'])
 end ;;
 
+let rec duplicate (V_tuple args) = match args with
+  | [(V_lit _ as v);(V_lit (L_aux (L_num n) _))] ->
+    (V_vector 0 true (List.replicate (natFromInteger n) v))
+end
+
 let rec vec_concat (V_tuple args) = match args with
   | [V_vector n d l; V_vector n' d' l'] ->
       (* XXX d = d' ? droping n' ? *)
@@ -255,16 +260,18 @@ let rec vec_concat (V_tuple args) = match args with
 let function_map = [
   ("ignore", ignore_sail);            
   ("add", arith_op (+));
-  ("add_vec", arith_op_vec (+));
-  ("add_vec_range", arith_op_vec_range (+));
+  ("add_vec", arith_op_vec (+) 1);
+  ("add_vec_range", arith_op_vec_range (+) 1);
   ("add_vec_range_range", arith_op_vec_range_range (+));
-  ("add_range_vec", arith_op_range_vec (+));
+  ("add_range_vec", arith_op_range_vec (+) 1);
   ("add_range_vec_range", arith_op_range_vec_range (+));
   ("minus", arith_op (-));
-  ("minus_vec", arith_op_vec (-));
+  ("minus_vec", arith_op_vec (-) 1);
+  ("multiply", arith_op ( * ));
+  ("multiply_vec", arith_op_vec ( * ) 2);
   ("mod", arith_op (mod));
-  ("mod_vec", arith_op_vec (mod));
-  ("mod_vec_range", arith_op_vec_range (mod));
+  ("mod_vec", arith_op_vec (mod) 1);
+  ("mod_vec_range", arith_op_vec_range (mod) 1);
   ("eq", eq);
   ("eq_vec_range", eq_vec_range);
   ("eq_range_vec", eq_range_vec);
@@ -288,6 +295,7 @@ let function_map = [
   ("gt", compare_op (>));
   ("lt_vec", compare_op_vec (<));
   ("gt_vec", compare_op_vec (>));
+  ("duplicate", duplicate);
 ] ;;
 
 let eval_external name v = match List.lookup name function_map with
