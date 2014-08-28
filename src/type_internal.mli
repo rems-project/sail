@@ -176,9 +176,10 @@ val nexp_eq : nexp -> nexp -> bool
 *)
 val type_consistent : constraint_origin -> def_envs -> t -> t -> t * nexp_range list
 
-(* type_eq mutates to unify variables, and will raise an exception if the first type cannot be coerced into the second and is inconsistent, 
+(* type_coerce mutates to unify variables, and will raise an exception if the first type cannot
+   be coerced into the second and is additionally inconsistent with the second; 
    bool specifices whether this has arisen from an implicit or explicit type coercion request *)
-val type_coerce : constraint_origin -> def_envs -> bool -> t -> exp -> t -> t * nexp_range list * exp
+val type_coerce : constraint_origin -> def_envs -> bool -> t -> exp -> t -> t * nexp_range list * effect * exp
 
 (* Merge tannots when intersection or unioning two environments. In case of default types, defer to tannot on right *)
 val tannot_merge : constraint_origin -> def_envs -> tannot -> tannot -> tannot 

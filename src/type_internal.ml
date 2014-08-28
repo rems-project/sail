@@ -223,10 +223,13 @@ let add_effect e ef =
 
 let union_effects e1 e2 =
   match e1.effect,e2.effect with
-  | Evar s,_ | _,Evar s -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "union_effects given var(s) instead of uvar(s)")
+  | Evar s,_ | _,Evar s -> 
+    raise (Reporting_basic.err_unreachable Parse_ast.Unknown "union_effects given var(s) instead of uvar(s)")
   | Euvar _,_ -> e1.effect <- e2.effect; e2
   | _,Euvar _ -> e2.effect <- e1.effect; e2
-  | Eset b1, Eset b2 -> {effect= Eset (effect_remove_dups (b1@b2))}  
+  | Eset b1, Eset b2 -> 
+    (*let _ = Printf.eprintf "union effects of length %i and %i\n" (List.length b1) (List.length b2) in*)
+    {effect= Eset (effect_remove_dups (b1@b2))}  
 
 let rec lookup_record_typ (typ : string) (env : rec_env list) : rec_env option =
   match env with
@@ -805,14 +808,18 @@ let mk_range n1 n2 = {t=Tapp("range",[TA_nexp n1;TA_nexp n2])}
 let mk_vector typ order start size = {t=Tapp("vector",[TA_nexp {nexp=start}; TA_nexp {nexp=size}; TA_ord {order}; TA_typ typ])}
 let mk_bitwise_op name symb arity =
   let ovar = Ovar "o"  in
-  let vec_typ = mk_vector bit_t ovar (Nconst zero) (Nvar "n") in
+  let vec_typ = mk_vector bit_t ovar (Nvar "n") (Nvar "m") in
+  let single_bit_vec_typ = mk_vector bit_t ovar (Nvar "n") (Nconst zero) in
   let vec_args = Array.to_list (Array.make arity vec_typ) in
+  let single_bit_vec_args = Array.to_list (Array.make arity single_bit_vec_typ) in
   let bit_args = Array.to_list (Array.make arity bit_t) in
   let gen_args = Array.to_list (Array.make arity {t = Tvar "a"}) in
-  let varg,barg,garg = if (arity = 1) then List.hd vec_args,List.hd bit_args,List.hd gen_args 
-                       else mk_tup vec_args,mk_tup bit_args, mk_tup gen_args in
+  let svarg,varg,barg,garg = if (arity = 1) 
+    then List.hd single_bit_vec_args,List.hd vec_args,List.hd bit_args,List.hd gen_args 
+    else mk_tup single_bit_vec_args,mk_tup vec_args,mk_tup bit_args, mk_tup gen_args in
   (symb,Overload(Base(((mk_typ_params ["a"]),mk_pure_fun garg {t=Tvar "a"}), External (Some name),[],pure_e),true,
-                 [Base((["n",{k=K_Nat}; "o",{k=K_Ord}], mk_pure_fun varg vec_typ),External (Some name),[],pure_e);
+                 [Base((["n",{k=K_Nat};"m",{k=K_Nat}; "o",{k=K_Ord}], mk_pure_fun varg vec_typ),External (Some name),[],pure_e);
+		  Base((["n",{k=K_Nat};"o",{k=K_Ord}], mk_pure_fun svarg bit_t), External(Some (name ^ "_range_bit")),[],pure_e);
                   Base(([],mk_pure_fun barg bit_t),External (Some (name ^ "_bit")),[],pure_e)]))
 
 let initial_typ_env =
@@ -1302,7 +1309,8 @@ let effects_eq co e1 e2 =
   | Euvar i,_ -> equate_e e1 e2; e2
   | _,Euvar i -> equate_e e2 e1; e2
   | Eset es1,Eset es2 -> 
-    if (List.for_all2 eq_be_effect (effect_sort es1) (effect_sort es2) ) then e2 
+    if (List.length es1) = (List.length es2) && (List.for_all2 eq_be_effect (effect_sort es1) (effect_sort es2) ) 
+    then e2 
     else eq_error l ("Effects must be the same, given " ^ efs_to_string es1 ^ " and " ^ efs_to_string es2)
   | Evar v1, Evar v2 -> if v1 = v2 then e2 else eq_error l ("Effect variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
   | Evar v1, Eset _ -> eq_error l ("Effect variable " ^ v1 ^ " cannot be used where a concrete set of effects is specified")
@@ -1439,35 +1447,36 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
   | _,Tabbrev(_,t2) -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
   | Toptions(to1,Some to2),_ -> 
     if (conforms_to_t d_env false to1 t2 || conforms_to_t d_env false to2 t2)
-    then begin t1.t <- t2.t; (t2,csp,e) end
-    else eq_error l ("Neither " ^ (t_to_string to1) ^ " nor " ^ (t_to_string to2) ^ " can match expected type " ^ (t_to_string t2))
-  | Toptions(to1,None),_ -> (t2,csp,e)
+    then begin t1.t <- t2.t; (t2,csp,pure_e,e) end
+    else eq_error l ("Neither " ^ (t_to_string to1) ^
+		     " nor " ^ (t_to_string to2) ^ " can match expected type " ^ (t_to_string t2))
+  | Toptions(to1,None),_ -> (t2,csp,pure_e,e)
   | _,Toptions(to1,Some to2) -> 
     if (conforms_to_t d_env false to1 t1 || conforms_to_t d_env false to2 t1)
-    then begin t2.t <- t1.t; (t1,csp,e) end
+    then begin t2.t <- t1.t; (t1,csp,pure_e,e) end
     else eq_error l ((t_to_string t1) ^ " can match neither expexted type " ^ (t_to_string to1) ^ " nor " ^ (t_to_string to2))
-  | _,Toptions(to1,None) -> (t1,csp,e)
+  | _,Toptions(to1,None) -> (t1,csp,pure_e,e)
   | Ttup t1s, Ttup t2s ->
     let tl1,tl2 = List.length t1s,List.length t2s in
     if tl1=tl2 then 
       let ids = List.map (fun _ -> Id_aux(Id (new_id ()),l)) t1s in
       let vars = List.map2 (fun i t -> E_aux(E_id(i),(l,Base(([],t),Emp_local,[],pure_e)))) ids t1s in
-      let (coerced_ts,cs,coerced_vars) = 
-        List.fold_right2 (fun v (t1,t2) (ts,cs,es) -> let (t',c',e') = type_coerce co d_env is_explicit t1 v t2 in
-                                                      ((t'::ts),c'@cs,(e'::es)))
-          vars (List.combine t1s t2s) ([],[],[]) in
-      if vars = coerced_vars then (t2,cs,e)
+      let (coerced_ts,cs,efs,coerced_vars) = 
+        List.fold_right2 (fun v (t1,t2) (ts,cs,efs,es) -> let (t',c',ef,e') = type_coerce co d_env is_explicit t1 v t2 in
+							  ((t'::ts),c'@cs,union_effects ef efs,(e'::es)))
+          vars (List.combine t1s t2s) ([],[],pure_e,[]) in
+      if vars = coerced_vars then (t2,cs,pure_e,e)
       else let e' = E_aux(E_case(e,[(Pat_aux(Pat_exp(P_aux(P_tup (List.map2 
 								    (fun i t -> P_aux(P_id i,(l,(Base(([],t),Emp_local,[],pure_e)))))
 								    ids t1s),(l,Base(([],t1),Emp_local,[],pure_e))),
 						     E_aux(E_tuple coerced_vars,(l,Base(([],t2),Emp_local,cs,pure_e)))),
                                              (l,Base(([],t2),Emp_local,[],pure_e))))]),
                           (l,(Base(([],t2),Emp_local,[],pure_e)))) in
-           (t2,csp@cs,e')
+           (t2,csp@cs,efs,e')
     else eq_error l ("Found a tuple of length " ^ (string_of_int tl1) ^ " but expected a tuple of length " ^ (string_of_int tl2))
   | Tapp(id1,args1),Tapp(id2,args2) ->
     if id1=id2 && (id1 <> "vector")
-    then let t',cs' = type_consistent co d_env t1 t2 in (t',cs',e)
+    then let t',cs' = type_consistent co d_env t1 t2 in (t',cs',pure_e,e)
     else (match id1,id2,is_explicit with
     | "vector","vector",_ ->
       (match args1,args2 with
@@ -1482,18 +1491,18 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
         let t',cs' = type_consistent co d_env t1i t2i in
         let tannot = Base(([],t2),Emp_local,cs@cs',pure_e) in
         let e' = E_aux(E_internal_cast ((l,(Base(([],t2),Emp_local,[],pure_e))),e),(l,tannot)) in
-        (t2,cs@cs',e')
+        (t2,cs@cs',pure_e,e')
       | _ -> raise (Reporting_basic.err_unreachable l "vector is not properly kinded"))
     | "vector","range",_ -> 
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [Eq(co,b2,{nexp=Nconst zero});GtEq(co,{nexp=Nadd(b2,r2)},{nexp=N2n(r1,None)})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_inc",l)),[e]),(l,Base(([],t2),External None,cs,pure_e))))
+	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num_inc",l)),[e]),(l,Base(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [Eq(co,b2,{nexp=Nconst zero});GtEq(co,{nexp=Nadd(b2,r2)},{nexp=N2n(r1,None)})] in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Base(([],t2),External None,cs,pure_e))))
+	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Base(([],t2),External None,cs,pure_e))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert a vector to an range without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
@@ -1505,14 +1514,14 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [LtEq(co,{nexp=Nadd(b2,r2)},{nexp=N2n(r1,None)})] in
 	let tannot = (l,Base(([],t2),External None, cs,pure_e)) in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
-			   [(E_aux(E_internal_exp tannot, tannot));e]),tannot))
+	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
+				  [(E_aux(E_internal_exp tannot, tannot));e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [LtEq(co,{nexp=Nadd(b2,r2)},{nexp=N2n(r1,None)})] in
 	let tannot = (l,Base(([],t2),External None,cs,pure_e)) in
-	(t2,cs,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
-			   [(E_aux(E_internal_exp tannot, tannot)); e]),tannot))
+	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
+				  [(E_aux(E_internal_exp tannot, tannot)); e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert a range to a vector without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
@@ -1521,13 +1530,16 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
     | "register",_,_ ->
       (match args1 with
 	| [TA_typ t] ->
-          (*TODO Should this be an internal cast? Probably, make sure it doesn't interfere with the other internal cast and get removed *)
-          (*let _ = Printf.printf "Adding cast to remove register read\n" in*)
-          let new_e = E_aux(E_cast(t_to_typ unit_t,e),(l,Base(([],t),External None,[],(add_effect (BE_aux(BE_rreg, l)) pure_e)))) in
-	  type_coerce co d_env is_explicit t new_e t2
+          (*TODO Should this be an internal cast? 
+	    Probably, make sure it doesn't interfere with the other internal cast and get removed *)
+          (*let _ = Printf.eprintf "Adding cast to remove register read\n" in*)
+          let ef = add_effect (BE_aux (BE_rreg, l)) pure_e in
+	  let new_e = E_aux(E_cast(t_to_typ unit_t,e),(l,Base(([],t),External None,[],ef))) in
+	  let (t',cs,ef',e) = type_coerce co d_env is_explicit t new_e t2 in
+	  (t',cs,union_effects ef ef',e)
 	| _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))
     | _,_,_ -> 
-      let t',cs' = type_consistent co d_env t1 t2 in (t',cs',e))
+      let t',cs' = type_consistent co d_env t1 t2 in (t',cs',pure_e,e))
   (*| Tid("bit"),Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]) ->
     let cs = [Eq(co,r1,{nexp = Nconst one})] in
     (*WARNING: shrinking i to an int; should add a check*)
@@ -1540,23 +1552,24 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
                  (l,Base(([],t2),Emp_local,cs,pure_e))))*)
   | Tid("bit"),Tapp("range",[TA_nexp b1;TA_nexp r1]) ->
     let t',cs'= type_consistent co d_env {t=Tapp("range",[TA_nexp{nexp=Nconst zero};TA_nexp{nexp=Nconst one}])} t2 in
-    (t2,cs',E_aux(E_case (e,[Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_zero,l)),(l,Base(([],t1),Emp_local,[],pure_e))),
-					     E_aux(E_lit(L_aux(L_num 0,l)),(l,Base(([],t2),Emp_local,[],pure_e)))),
-				     (l,Base(([],t2),Emp_local,[],pure_e)));
-			     Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_one,l)),(l,Base(([],t1),Emp_local,[],pure_e))),
-					     E_aux(E_lit(L_aux(L_num 1,l)),(l,Base(([],t2),Emp_local,[],pure_e)))),
-				     (l,Base(([],t2),Emp_local,[],pure_e)));]),
-		  (l,Base(([],t2),Emp_local,[],pure_e))))    
+    (t2,cs',pure_e,
+     E_aux(E_case (e,[Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_zero,l)),(l,Base(([],t1),Emp_local,[],pure_e))),
+				      E_aux(E_lit(L_aux(L_num 0,l)),(l,Base(([],t2),Emp_local,[],pure_e)))),
+			      (l,Base(([],t2),Emp_local,[],pure_e)));
+		      Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_one,l)),(l,Base(([],t1),Emp_local,[],pure_e))),
+				      E_aux(E_lit(L_aux(L_num 1,l)),(l,Base(([],t2),Emp_local,[],pure_e)))),
+			      (l,Base(([],t2),Emp_local,[],pure_e)));]),
+	   (l,Base(([],t2),Emp_local,[],pure_e))))    
   | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tid("bit") ->
     let t',cs'= type_consistent co d_env t1 {t=Tapp("range",[TA_nexp{nexp=Nconst zero};TA_nexp{nexp=Nconst one}])} 
-    in (t2,cs',E_aux(E_if(E_aux(E_app(Id_aux(Id "is_one",l),[e]),(l,Base(([],bool_t),External None,[],pure_e))),
-			  E_aux(E_lit(L_aux(L_one,l)),(l,Base(([],bit_t),Emp_local,[],pure_e))),
-			  E_aux(E_lit(L_aux(L_zero,l)),(l,Base(([],bit_t),Emp_local,[],pure_e)))),
-		     (l,Base(([],bit_t),Emp_local,cs',pure_e))))
+    in (t2,cs',pure_e,E_aux(E_if(E_aux(E_app(Id_aux(Id "is_one",l),[e]),(l,Base(([],bool_t),External None,[],pure_e))),
+				 E_aux(E_lit(L_aux(L_one,l)),(l,Base(([],bit_t),Emp_local,[],pure_e))),
+				 E_aux(E_lit(L_aux(L_zero,l)),(l,Base(([],bit_t),Emp_local,[],pure_e)))),
+			    (l,Base(([],bit_t),Emp_local,cs',pure_e))))
   | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tid(i) -> 
     (match Envmap.apply d_env.enum_env i with
     | Some(enums) -> 
-      (t2,[GtEq(co,b1,{nexp=Nconst zero});LtEq(co,r1,{nexp=Nconst (big_int_of_int (List.length enums))})],
+      (t2,[GtEq(co,b1,{nexp=Nconst zero});LtEq(co,r1,{nexp=Nconst (big_int_of_int (List.length enums))})],pure_e,
        E_aux(E_case(e,
 		    List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),
 								(l,Base(([],t1),Emp_local,[],pure_e))),
@@ -1567,11 +1580,11 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
     | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
   | Tid("bit"),Tid("bool") ->
     let e' = E_aux(E_app((Id_aux(Id "is_one",l)),[e]),(l,Base(([],bool_t),External None,[],pure_e))) in
-    (t2,[],e')
+    (t2,[],pure_e,e')
   | Tid(i),Tapp("range",[TA_nexp b1;TA_nexp r1;]) -> 
     (match Envmap.apply d_env.enum_env i with
     | Some(enums) -> 
-      (t2,[Eq(co,b1,{nexp=Nconst zero});GtEq(co,r1,{nexp=Nconst (big_int_of_int (List.length enums))})],
+      (t2,[Eq(co,b1,{nexp=Nconst zero});GtEq(co,r1,{nexp=Nconst (big_int_of_int (List.length enums))})],pure_e,
        E_aux(E_case(e,
 		    List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_id(Id_aux(Id a,l)),
 								(l,Base(([],t1),Emp_local,[],pure_e))),
@@ -1580,7 +1593,7 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
 						  (l,Base(([],t2),Emp_local,[],pure_e)))) enums),
 	     (l,Base(([],t2),Emp_local,[],pure_e))))
     | None -> eq_error l ("Type mismatch: " ^ (t_to_string t1) ^ " , " ^ (t_to_string t2)))
-  | _,_ -> let t',cs = type_consistent co d_env t1 t2 in (t',cs,e)
+  | _,_ -> let t',cs = type_consistent co d_env t1 t2 in (t',cs,pure_e,e)
 
 and type_coerce co d_env is_explicit t1 e t2 = type_coerce_internal co d_env is_explicit t1 [] e t2 [];;
 
