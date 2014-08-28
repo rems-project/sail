@@ -746,9 +746,12 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
       let id = to_ast_id id in
       let name = to_ast_namescm naming_scheme_opt in
       let typq, k_env',_ = to_ast_typquant k_env typquant in
+      let kind = (match (typquant_to_quantkinds k_env' typq) with
+        | [ ] -> {k = K_Typ}
+        | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
       (match (def_in_progress id partial_defs) with
       | None -> let partial_def = ref ((DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,NoTyp)))),false) in
-                (Def_place_holder(id,l),(names,Envmap.insert k_env ((id_to_string id),{k=K_Typ}),def_ord)),(id,(partial_def,k_env'))::partial_defs
+                (Def_place_holder(id,l),(names,Envmap.insert k_env ((id_to_string id),kind),def_ord)),(id,(partial_def,k_env'))::partial_defs
       | Some(d,k) -> typ_error l "Scattered type definition header name already in use by scattered definition" (Some id) None None)
     | Parse_ast.SD_scattered_unioncl(id,tu) -> 
       let id = to_ast_id id in

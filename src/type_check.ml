@@ -75,6 +75,9 @@ let rec extract_if_first recur name (Typ_aux(typ,l)) =
     | (Typ_id i,_) | (Typ_app(i,_),_) -> 
       if name = (id_to_string i) then Some(typ, Typ_aux(Typ_id (Id_aux (Id "unit", l)),l)) else None
     | (Typ_tup[t'],true) -> extract_if_first false name t'
+    | (Typ_tup[t1;t2],true) -> (match extract_if_first false name t1 with
+      | Some(t,_) -> Some(t,t2)
+      | None -> None)
     | (Typ_tup(t'::ts),true) -> (match (extract_if_first false name t') with
 	| Some(t,_) -> Some(t, Typ_aux(Typ_tup ts,l))
 	| None -> None)
@@ -126,37 +129,50 @@ and aorder_to_ord (Ord_aux(o,l) : Ast.order) =
     | Ord_inc -> {order = Oinc}
     | Ord_dec -> {order = Odec}
 
-let rec quants_to_consts (Env (d_env,t_env)) qis : (t_params * nexp_range list) =
+let rec quants_to_consts ((Env (d_env,t_env)) as env) qis : (t_params * t_arg list * nexp_range list) =
   match qis with 
-    | [] -> [],[]
+    | [] -> [],[],[]
     | (QI_aux(qi,l))::qis ->
-      let (ids,cs) = quants_to_consts (Env (d_env,t_env)) qis in
+      let (ids,typarms,cs) = quants_to_consts env qis in
       (match qi with
 	| QI_id(KOpt_aux(ki,l')) -> 
 	  (match ki with 
 	    | KOpt_none (Kid_aux((Var i),l'')) -> 
 	      (match Envmap.apply d_env.k_env i with
-		| Some k -> ((i,k)::ids,cs)
+		| Some k -> 
+                  let targ = match k.k with 
+                    | K_Typ  -> TA_typ {t = Tvar i}
+                    | K_Nat  -> TA_nexp { nexp = Nvar i}                      
+                    | K_Ord  -> TA_ord { order = Ovar i}
+                    | K_Efct -> TA_eft { effect = Evar i} in
+                  ((i,k)::ids,targ::typarms,cs)
 		| None -> raise (Reporting_basic.err_unreachable l'' "Unkinded id without default after initial check"))
-	    | KOpt_kind(kind,Kid_aux((Var i),l'')) -> ((i,kind_to_k kind)::ids,cs))
+	    | KOpt_kind(kind,Kid_aux((Var i),l'')) -> 
+              let k = kind_to_k kind in
+              let targ = match k.k with
+                | K_Typ  -> TA_typ {t = Tvar i}
+                | K_Nat  -> TA_nexp { nexp = Nvar i}                      
+                | K_Ord  -> TA_ord { order = Ovar i}
+                | K_Efct -> TA_eft { effect = Evar i} in
+              ((i,k)::ids,targ::typarms,cs))
 	| QI_const(NC_aux(nconst,l')) -> 
 	  (match nconst with
-	    | NC_fixed(n1,n2) -> (ids,Eq(Specc l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
-	    | NC_bounded_ge(n1,n2) -> (ids,GtEq(Specc l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
-	    | NC_bounded_le(n1,n2) -> (ids,LtEq(Specc l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
-	    | NC_nat_set_bounded(Kid_aux((Var i),l''), bounds) -> (ids,In(Specc l',i,bounds)::cs)))
+	    | NC_fixed(n1,n2) -> (ids,typarms,Eq(Specc l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
+	    | NC_bounded_ge(n1,n2) -> (ids,typarms,GtEq(Specc l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
+	    | NC_bounded_le(n1,n2) -> (ids,typarms,LtEq(Specc l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
+	    | NC_nat_set_bounded(Kid_aux((Var i),l''), bounds) -> (ids,typarms,In(Specc l',i,bounds)::cs)))
 
 
 let typq_to_params envs (TypQ_aux(tq,l)) =
   match tq with
     | TypQ_tq(qis) -> quants_to_consts envs qis
-    | TypQ_no_forall -> [],[]
+    | TypQ_no_forall -> [],[],[]
 
 let typschm_to_tannot envs imp_parm_ok ((TypSchm_aux(typschm,l)):typschm) (tag : tag) : tannot = 
   match typschm with
     | TypSchm_ts(tq,typ) -> 
       let t = typ_to_t imp_parm_ok typ in
-      let (ids,constraints) = typq_to_params envs tq in
+      let (ids,_,constraints) = typq_to_params envs tq in
       Base((ids,t),tag,constraints,pure_e)
 
 let into_register d_env (t : tannot) : tannot =
@@ -1370,15 +1386,18 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
        Env( { d_env with abbrevs = Envmap.insert d_env.abbrevs ((id_to_string id),tan)},t_env))
     | TD_record(id,nmscm,typq,fields,_) -> 
       let id' = id_to_string id in
-      let (params,constraints) = typq_to_params envs typq in
-      let tyannot = Base((params,{t=Tid id'}),Emp_global,constraints,pure_e) in
+      let (params,typarms,constraints) = typq_to_params envs typq in
+      let ty = match typarms with | [] -> {t = Tid id'} | parms -> {t = Tapp(id',parms)} in
+      let tyannot = Base((params,ty),Emp_global,constraints,pure_e) in
       let fields' = List.map 
 	(fun (ty,i)->(id_to_string i),Base((params,(typ_to_t false ty)),Emp_global,constraints,pure_e)) fields in
       (TD_aux(td,(l,tyannot)),Env({d_env with rec_env = (id',Record,fields')::d_env.rec_env},t_env))
     | TD_variant(id,nmscm,typq,arms,_) ->
       let id' = id_to_string id in
-      let (params,constraints) = typq_to_params envs typq in
-      let ty = {t=Tid id'} in
+      let (params,typarms,constraints) = typq_to_params envs typq in
+      let ty = match params with
+        | [] -> {t=Tid id'} 
+        | params -> {t = Tapp(id', typarms) }in
       let tyannot = Base((params,ty),Constructor,constraints,pure_e) in
       let arm_t input = Base((params,{t=Tfn(input,ty,IP_none,pure_e)}),Constructor,constraints,pure_e) in
       let arms' = List.map 
@@ -1500,7 +1519,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   let in_env = Envmap.apply t_env id in 
   let ret_t,param_t,tannot = match tannotopt with
     | Typ_annot_opt_aux(Typ_annot_opt_some(typq,typ),l') ->
-      let (ids,constraints) = typq_to_params envs typq in
+      let (ids,_,constraints) = typq_to_params envs typq in
       let t = typ_to_t false typ in
       let t,constraints,_ = subst ids t constraints pure_e in
       let p_t = new_t () in

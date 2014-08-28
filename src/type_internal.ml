@@ -1336,7 +1336,7 @@ let rec conforms_to_t d_env loosely spec actual =
     | (Ttup ss, Ttup acs,_) -> (List.length ss = List.length acs) && List.for_all2 (conforms_to_t d_env loosely) ss acs
     | (Tid is, Tid ia,_) -> is = ia
     | (Tapp(is,tas), Tapp("register",[TA_typ t]),true) ->
-      if is = "register"
+      if is = "register" && (List.length tas) = 1
       then List.for_all2 (conforms_to_ta d_env loosely) tas [TA_typ t]
       else conforms_to_t d_env loosely spec t
     | (Tapp(is,tas), Tapp(ia, taa),_) -> 

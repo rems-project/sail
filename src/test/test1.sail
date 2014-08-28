@@ -9,9 +9,9 @@ typedef int_list [name = "il"] = list<nat>
 typedef reco = const struct forall 'i, 'a, 'b. { 'a['i] v; 'b w; }
 typedef maybe = const union forall 'a. { Nne; 'a Sme; }
 typedef creg = register bits [5:10] { 5 : h ; 6..7 : j}
-let bool e = true
+let (bool) e = true
 val forall Nat 'a, Nat 'b. bit['a:'b] sliced
-let bit v = bitzero
+let (bit) v = bitzero
 let ( bit [ 32 ] ) v1 = 0b101
 
 let ( bit [32] ) v2 = 0xABCDEF01
@@ -43,7 +43,7 @@ function bit sw s = switch s { case 0 -> bitzero }
 
 typedef colors = enumerate { red; green; blue }
 
-let colors rgb = red
+let (colors) rgb = red
 
 function bit enu (red) = 0
 
