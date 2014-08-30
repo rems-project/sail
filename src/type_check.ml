@@ -207,12 +207,20 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 			       [TA_nexp{nexp = Nconst (big_int_of_int i)};TA_nexp{nexp= Nconst zero};])},lit
 	      | _ -> {t = Tapp("range",
 			       [TA_nexp{nexp = Nconst (big_int_of_int i)};TA_nexp{nexp= Nconst zero};])},lit)
-	  | L_hex s -> {t = Tapp("vector",
-				 [TA_nexp{nexp = Nconst zero};TA_nexp{nexp = Nconst (big_int_of_int ((String.length s)*4))};
-				  TA_ord{order = Oinc};TA_typ{t = Tid "bit"}])},lit
-	  | L_bin s -> {t = Tapp("vector",
-				 [TA_nexp{nexp = Nconst zero};TA_nexp{nexp = Nconst(big_int_of_int (String.length s))};
-				  TA_ord{order = Oinc};TA_typ{t = Tid"bit"}])},lit
+	  | L_hex s -> 
+	    let size = big_int_of_int ((String.length s) * 4) in
+	    let is_inc = match d_env.default_o.order with | Oinc -> true | _ -> false in
+	    {t = Tapp("vector",
+		      [TA_nexp (if is_inc then {nexp = Nconst zero} else {nexp = Nconst (sub_big_int size one)});
+		       TA_nexp {nexp = Nconst size};
+		       TA_ord d_env.default_o; TA_typ{t=Tid "bit"}])},lit
+	  | L_bin s -> 
+	    let size = big_int_of_int (String.length s) in
+	    let is_inc = match d_env.default_o.order with | Oinc -> true | _ -> false in
+	    {t = Tapp("vector",
+		      [TA_nexp(if is_inc then {nexp = Nconst zero} else {nexp = Nconst (sub_big_int size one)});
+		       TA_nexp{nexp = Nconst size};
+		       TA_ord d_env.default_o;TA_typ{t = Tid"bit"}])},lit
 	  | L_string s -> {t = Tid "string"},lit
 	  | L_undef -> typ_error l' "Cannot pattern match on undefined") in
       let t',cs' = type_consistent (Patt l) d_env t expect_t in
@@ -363,7 +371,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	match expect_t.t with 
 	  | Tapp("vector",[TA_nexp(b);TA_nexp(r);TA_ord(o);TA_typ item])
 	  | Tabbrev(_,{t=Tapp("vector",[TA_nexp(b);TA_nexp(r);TA_ord(o);TA_typ item])}) -> item,b,r,o
-	  | _ -> new_t (),new_n (), new_n (), new_o () in
+	  | _ -> new_t (),new_n (), new_n (), d_env.default_o in
       let vec_ti _ = {t= Tapp("vector",[TA_nexp (new_n ());TA_nexp (new_n ());TA_ord order;TA_typ item_t])} in
       let (pats',ts,envs,constraints) = 
 	List.fold_right 
@@ -382,7 +390,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	  match t.t with
 	    | Tapp("vector",[(TA_nexp b);(TA_nexp r);(TA_ord o);(TA_typ u)]) -> {nexp = Nadd(r,rn)}
 	    | _ -> raise (Reporting_basic.err_unreachable l "vector concat pattern impossibility") ) (List.tl ts) r1 in
-      let cs = [Eq((Patt l),base,base_c);Eq((Patt l),rise,range_c)]@cs in
+      let cs = [Eq((Patt l),rise,range_c)]@cs in
       (P_aux(P_vector_concat(pats'),(l,Base(([],t),Emp_local,cs,pure_e))), env,constraints@cs,t)
     | P_list(pats) -> 
       let item_t = match expect_actual.t with
@@ -539,10 +547,11 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
           | (_,cs,ef,(E_aux(E_tuple parms',tannot'))) -> (parms',ef,cs)
           | _ -> raise (Reporting_basic.err_unreachable l "type coerce given tuple and tuple type returned non-tuple"))) 
       in
-      let check_result ret imp tag cs ef parms =           
+      let check_result ret imp tag cs ef parms =    
 	(*TODO How do I want to pass the information about start along?*)
 	match (imp,imp_param) with
 	  | (IP_length,None) | (IP_var _,None) ->
+	    (*let _ = Printf.printf "implicit length or var required, no imp_param\n!" in*)
             let internal_exp =  match expect_t.t,ret.t with 
               | Tapp("vector",_),_ -> 
 		E_aux (E_internal_exp (l,Base(([],expect_t),Emp_local,[],pure_e)), (l,Base(([],nat_t),Emp_local,[],pure_e)))
@@ -551,6 +560,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
               | _ -> typ_error l (i ^ " expected either the return type or the expected type to be a vector") in
             type_coerce (Expr l) d_env false ret (E_aux (E_app(id, internal_exp::parms),(l,(Base(([],ret),tag,cs,ef))))) expect_t
 	  | (IP_length,Some ne) | (IP_var _,Some ne) ->
+	    (*let _ = Printf.printf "implicit length or var required with imp_param\n" in*)
 	    let internal_exp = (match expect_t.t,ret.t with
 	      | Tapp("vector",[_;TA_nexp len;_;_]),_ ->
 		if nexp_eq ne len 
@@ -568,6 +578,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 			    (l,Base(([],nat_t), Emp_local,[],pure_e))) (*TODO as above*)) in
 	    type_coerce (Expr l) d_env false ret (E_aux (E_app(id,internal_exp::parms),(l,(Base(([],ret),tag,cs,ef))))) expect_t
           | (IP_none,_) -> 
+	    (*let _ = Printf.printf "no implicit length or var required\n" in*)
             type_coerce (Expr l) d_env false ret (E_aux (E_app(id, parms),(l,(Base(([],ret),tag,cs,ef))))) expect_t 
       in
       (match Envmap.apply t_env i with
@@ -579,8 +590,11 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         let t,cs,ef = subst params t cs ef in
         (match t.t with
         | Tfn(arg,ret,imp,ef') ->
+	  (*let _ = Printf.printf "Checking funcation call of %s\n" i in*)
           let parms,arg_t,cs_p,ef_p = check_parms arg parms in
+	  (*let _ = Printf.printf "Checked parms of %s\n" i in*)
           let (ret_t,cs_r,ef_r,e') = check_result ret imp tag cs ef' parms in
+	  (*let _ = Printf.printf "Checked result of %s\n" i in*)
           (e',ret_t,t_env,cs@cs_p@cs_r, union_effects ef' (union_effects ef_p ef_r))
         | _ -> typ_error l ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^ (t_to_string t)))
       | Some(Overload(Base((params,t),tag,cs,ef),overload_return,variants)) ->
@@ -1460,21 +1474,23 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 	    let franges = 
 	      List.map 
 		(fun ((BF_aux(idx,l)),id) ->
-		  let (base,climb) =
-		    match idx with
-		      | BF_single i -> 
-			if (ge_big_int b (big_int_of_int i)) && (ge_big_int (big_int_of_int i) t) 
-			then {nexp=Nconst (big_int_of_int i)},{nexp=Nconst zero}
-			else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
-		      | BF_range(i1,i2) -> 
-			if i1>i2 
-			then if (ge_big_int b (big_int_of_int i1)) && (ge_big_int (big_int_of_int i2) t) 
-			  then {nexp=Nconst (big_int_of_int i1)},{nexp=Nconst (big_int_of_int (i1 - i2))}
-			  else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
-			else typ_error l ("register type declaration " ^ id' ^ " is not consistently decreasing")
-		      | BF_concat _ -> assert false (* What is this supposed to imply again?*) in
 		  ((id_to_string id),
-		   Base(([],{t=Tapp("vector",[TA_nexp base;TA_nexp climb;TA_ord({order=Odec});TA_typ({t= Tid "bit"})])}),Emp_global,[],pure_e)))
+		   Base(([],
+			 match idx with
+			   | BF_single i -> 
+			     if (ge_big_int b (big_int_of_int i)) && (ge_big_int (big_int_of_int i) t) 
+			     then {t = Tid "bit"}
+			     else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
+			   | BF_range(i1,i2) -> 
+			     if i1>i2 
+			     then if (ge_big_int b (big_int_of_int i1)) && (ge_big_int (big_int_of_int i2) t) 
+			       then {t = Tapp("vector",[TA_nexp {nexp=Nconst (big_int_of_int i1)};
+							TA_nexp {nexp=Nconst (big_int_of_int (i1 - i2))};
+							TA_ord({order = Odec}); TA_typ({t = Tid "bit"})])}
+			       else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
+			     else typ_error l ("register type declaration " ^ id' ^ " is not consistently decreasing")
+			   | BF_concat _ -> assert false (* What is this supposed to imply again?*)),
+			Emp_global,[],pure_e)))
 		ranges 
 	    in
 	    let tannot = into_register d_env (Base(([],ty),Emp_global,[],pure_e)) in
@@ -1510,6 +1526,7 @@ let check_default envs (DT_aux(ds,l)) =
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot))))
 
 let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,annot))) =
+  (*let _ = Printf.printf "checking fundef\n" in*)
   let Env(d_env,t_env) = envs in
   let _ = reset_fresh () in
   let is_rec = match recopt with
@@ -1535,11 +1552,10 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),l)) ->
 	let (pat',t_env',cs_p,t') = check_pattern (Env(d_env,t_env)) Emp_local param_t pat in
-      (*let _ = Printf.eprintf "about to check that %s and %s are consistent\n" (t_to_string t') (t_to_string param_t) in*)
+	(*let _ = Printf.printf "about to check that %s and %s are consistent\n!" (t_to_string t') (t_to_string param_t) in*)
 	let exp',_,_,cs_e,ef = 
 	  check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env) t_env t_env')) imp_param ret_t exp in
-      (*let _ = Printf.eprintf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
-      (*let _ = (Pretty_print.pp_exp Format.std_formatter) exp' in*)
+	(*let _ = Printf.printf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
 	let cs = [CondCons(Fun l,cs_p,cs_e)] in
 	(FCL_aux((FCL_Funcl(id,pat',exp')),l),(cs,ef))) funcls) in
   let update_pattern var (FCL_aux ((FCL_Funcl(id,(P_aux(pat,t)),exp)),l)) = 
@@ -1551,10 +1567,10 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   in
   match (in_env,tannot) with
     | Some(Base( (params,u),Spec,constraints,eft)), Base( (p',t),_,c',eft') ->
-      (*let _ = Printf.eprintf "Function %s is in env\n" id in*)
+      (*let _ = Printf.printf "Function %s is in env\n" id in*)
       let u,constraints,eft = subst params u constraints eft in
       let _,cs = type_consistent (Specc l) d_env t u in
-      (*let _ = Printf.eprintf "valspec consistent with declared type for %s\n" id in*)
+      (*let _ = Printf.printf "valspec consistent with declared type for %s\n" id in*)
       let imp_param = match u.t with 
 	| Tfn(_,_,IP_var n,_) -> Some n
 	| _ -> None in
@@ -1564,10 +1580,11 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
 	(List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
       let cs' = resolve_constraints cs@constraints in
       let tannot = check_tannot l tannot cs' ef in
-      (*let _ = Printf.eprintf "check_tannot ok for %s\n" id in*)
+      (*let _ = Printf.printf "check_tannot ok for %s\n" id in*)
       let funcls = match imp_param with
 	| None | Some {nexp = Nconst _} -> funcls
 	| Some {nexp = Nvar i} -> List.map (update_pattern i) funcls in
+      (*let _ = Printf.printf "done funcheck case 1\n" in*)
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,Envmap.insert t_env (id,tannot))
     | _ , _-> 
@@ -1576,6 +1593,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let cs,ef = ((fun (cses,efses) -> (List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
       let cs' = resolve_constraints cs in
       let tannot = check_tannot l tannot cs' ef in
+      (*let _ = Printf.printf "done funcheck case2\n" in*)
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,(if is_rec then t_env else Envmap.insert t_env (id,tannot)))
 
@@ -1662,29 +1680,47 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
 let check_def envs def = 
   let (Env(d_env,t_env)) = envs in
   match def with
-  | DEF_type tdef -> let td,envs = check_type_def envs tdef in
-		     (DEF_type td,envs)
-  | DEF_fundef fdef -> let fd,envs = check_fundef envs fdef in
-		       (DEF_fundef fd,envs)
-  | DEF_val letdef -> let (letbind,t_env_let,_,eft) = check_lbind envs None true Emp_global letdef in
-                      (DEF_val letbind,Env(d_env,Envmap.union t_env t_env_let))
-  | DEF_spec spec -> let vs,envs = check_val_spec envs spec in
-		     (DEF_spec vs, envs)
+  | DEF_type tdef ->
+(*    let _ = Printf.printf "checking type def\n" in*)
+    let td,envs = check_type_def envs tdef in
+(*    let _ = Printf.printf "checked type def\n" in*)
+    (DEF_type td,envs)
+  | DEF_fundef fdef -> 
+(*    let _ = Printf.printf "checking fun def\n" in*)
+    let fd,envs = check_fundef envs fdef in
+(*    let _ = Printf.printf "checked fun def\n" in*)
+    (DEF_fundef fd,envs)
+  | DEF_val letdef -> 
+(*    let _ = Printf.printf "checking letdef\n" in*)
+    let (letbind,t_env_let,_,eft) = check_lbind envs None true Emp_global letdef in
+(*    let _ = Printf.printf "checked letdef\n" in*)
+    (DEF_val letbind,Env(d_env,Envmap.union t_env t_env_let))
+  | DEF_spec spec -> 
+(*    let _ = Printf.printf "checking spec\n" in*)
+    let vs,envs = check_val_spec envs spec in
+  (*  let _ = Printf.printf "checked spec\n" in*)
+    (DEF_spec vs, envs)
   | DEF_default default -> let ds,envs = check_default envs default in
 			   (DEF_default ds,envs)
   | DEF_reg_dec(DEC_aux(DEC_reg(typ,id), (l,annot))) -> 
+(*    let _ = Printf.printf "checking reg dec\n" in *)
     let t = (typ_to_t false typ) in
     let i = id_to_string id in
     let tannot = into_register d_env (Base(([],t),External (Some i),[],pure_e)) in
+(*    let _ = Printf.printf "done checking reg dec\n" in*)
     (DEF_reg_dec(DEC_aux(DEC_reg(typ,id),(l,tannot))),(Env(d_env,Envmap.insert t_env (i,tannot))))
   | DEF_reg_dec(DEC_aux(DEC_alias(id,aspec), (l,annot))) -> 
+(*    let _ = Printf.printf "checking reg dec b\n" in*)
     let i = id_to_string id in
     let (aspec,tannot,d_env) = check_alias_spec envs i aspec None in
+  (*  let _ = Printf.printf "done checking reg dec b\n" in *)
     (DEF_reg_dec(DEC_aux(DEC_alias(id,aspec),(l,tannot))),(Env(d_env, Envmap.insert t_env (i,tannot))))
   | DEF_reg_dec(DEC_aux(DEC_typ_alias(typ,id,aspec),(l,tannot))) ->
+(*    let _ = Printf.printf "checking reg dec c\n" in*)
     let i = id_to_string id in
     let t = typ_to_t false typ in
     let (aspec,tannot,d_env) = check_alias_spec envs i aspec (Some t) in
+(*    let _ = Printf.printf "done checking reg dec c\n" in*)
     (DEF_reg_dec(DEC_aux(DEC_typ_alias(typ,id,aspec),(l,tannot))),(Env(d_env,Envmap.insert t_env (i,tannot))))
   | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Scattered given to type checker")
 

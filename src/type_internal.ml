@@ -24,7 +24,7 @@ and k_aux =
   | K_Lam of kind list * kind
   | K_infer
 
-type t = { mutable t : t_aux }
+ type t = { mutable t : t_aux }
 and t_aux =
   | Tvar of string
   | Tid of string
@@ -132,6 +132,12 @@ let rec string_of_list sep string_of = function
   | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
 
 let debug_mode = ref true;;
+
+let co_to_string = function
+  | Patt l -> "Pattern " 
+  | Expr l -> "Expression " 
+  | Fun l -> "Function def " 
+  | Specc l -> "Specification " 
 
 let rec t_to_string t = 
   match t.t with
@@ -378,6 +384,9 @@ let rec normalize_nexp n =
   | Nadd(n1,n2) ->
     let n1',n2' = normalize_nexp n1, normalize_nexp n2 in
     (match n1'.nexp,n2'.nexp with
+    | Nneg_inf, Npos_inf | Npos_inf, Nneg_inf -> {nexp = Nconst zero }
+    | Npos_inf, _ | _, Npos_inf -> { nexp = Npos_inf }
+    | Nneg_inf, _ | _, Nneg_inf -> { nexp = Nneg_inf } 
     | Nconst i1, Nconst i2 | Nconst i1, N2n(_,Some i2) | N2n(_,Some i2), Nconst i1 -> {nexp = Nconst (add_big_int i1 i2)}
     | Nadd(n11,n12), Nconst _ -> {nexp = Nadd(n11,normalize_nexp {nexp = Nadd(n12,n2')})}
     | Nconst _, Nadd(n21,n22) -> {nexp = Nadd(n21,normalize_nexp {nexp = Nadd(n22,n1')})}
@@ -998,7 +1007,7 @@ let initial_typ_env =
            External (Some "eq_vec_range"),
            [Eq(Specc(Parse_ast.Int("==",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
       Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "eq"),[],pure_e)]));
-    ("!=",Base((["a",{k=K_Typ}], (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "neq"),[],pure_e));
+    ("!=",Base((["a",{k=K_Typ}; "b",{k=K_Typ}], (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),External (Some "neq"),[],pure_e));
     ("<",
      Overload(Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "lt"),[],pure_e),
 	      false,
@@ -1461,11 +1470,12 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
     if tl1=tl2 then 
       let ids = List.map (fun _ -> Id_aux(Id (new_id ()),l)) t1s in
       let vars = List.map2 (fun i t -> E_aux(E_id(i),(l,Base(([],t),Emp_local,[],pure_e)))) ids t1s in
-      let (coerced_ts,cs,efs,coerced_vars) = 
-        List.fold_right2 (fun v (t1,t2) (ts,cs,efs,es) -> let (t',c',ef,e') = type_coerce co d_env is_explicit t1 v t2 in
-							  ((t'::ts),c'@cs,union_effects ef efs,(e'::es)))
-          vars (List.combine t1s t2s) ([],[],pure_e,[]) in
-      if vars = coerced_vars then (t2,cs,pure_e,e)
+      let (coerced_ts,cs,efs,coerced_vars,any_coerced) = 
+        List.fold_right2 (fun v (t1,t2) (ts,cs,efs,es,coerced) ->
+	  let (t',c',ef,e') = type_coerce co d_env is_explicit t1 v t2 in
+	  ((t'::ts),c'@cs,union_effects ef efs,(e'::es), coerced || (v == e')))
+          vars (List.combine t1s t2s) ([],[],pure_e,[],false) in
+      if (not any_coerced) then (t2,cs,pure_e,e)
       else let e' = E_aux(E_case(e,[(Pat_aux(Pat_exp(P_aux(P_tup (List.map2 
 								    (fun i t -> P_aux(P_id i,(l,(Base(([],t),Emp_local,[],pure_e)))))
 								    ids t1s),(l,Base(([],t1),Emp_local,[],pure_e))),
@@ -1672,9 +1682,9 @@ let rec simple_constraint_check in_env cs =
   | [] -> []
   | Eq(co,n1,n2)::cs -> 
     let check_eq ok_to_set n1 n2 = 
-      (*let _ = Printf.printf "eq check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+(*      let _ = Printf.printf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in *)
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-      (*let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+(*      let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
       (match n1'.nexp,n2'.nexp with
       | Npos_inf,Npos_inf | Nneg_inf, Nneg_inf -> None
       | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst(i2) -> 
@@ -1772,6 +1782,7 @@ let check_tannot l annot constraints efs =
     | Overload _ -> raise (Reporting_basic.err_unreachable l "check_tannot given overload")
 
 let tannot_merge co denv t_older t_newer = 
+  (*let _ = Printf.printf "tannot_merge called\n" in*)
   match t_older,t_newer with
     | NoTyp,NoTyp -> NoTyp
     | NoTyp,_ -> t_newer
@@ -1785,7 +1796,9 @@ let tannot_merge co denv t_older t_newer =
 			 Base(([],t),tag_n,cs_o,ef_o)
 	    | _ -> t_newer)
 	| Emp_local, Emp_local -> 
+	  (*let _ = Printf.printf "local-local case\n" in*) (*TODO Check conforms to first; if true check consistent, if false replace with t_newer *)
 	  let t,cs_b = type_consistent co denv t_n t_o in
+	  (*let _ = Printf.printf "types consistent\n" in*)
 	  Base(([],t),Emp_local,cs_o@cs_n@cs_b,union_effects ef_o ef_n)
 	| _,_ -> t_newer)
     | _ -> t_newer
