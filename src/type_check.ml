@@ -667,7 +667,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	(match (select_overload_variant d_env true overload_return variants arg_t) with
 	| [] -> typ_error l ("No matching function found with name " ^ i ^ " that expects parameters " ^ (t_to_string arg_t))
 	| [Base((params,t),tag,cs,ef)] ->
-          (*let _ = Printf.eprintf "Selected an overloaded function for %s, variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in*)
+          (*let _ = Printf.printf "Selected an overloaded function for %s, variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in*)
 	  (match t.t with
 	  | Tfn(arg,ret,imp,ef') ->
             (match arg.t,arg_t.t with
@@ -832,10 +832,14 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         | Tabbrev(_,{t=Tapp("vector",[_;_;TA_ord ord;TA_typ t])}) | Tapp("vector",[_;_;TA_ord ord;TA_typ t]) -> ord,t
         | _ -> ord,item_t in
       let cs_loc = 
-	match ord.order with
-	  | Oinc ->
+	match (ord.order,d_env.default_o.order) with
+	  | (Oinc,_) ->
 	    [LtEq((Expr l),base,min); LtEq((Expr l),{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,rise)})] 
-	  | Odec -> 
+	  | (Odec,_) -> 
+	    [GtEq((Expr l),base,min); LtEq((Expr l),{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,{nexp=Nneg rise})})]
+	  | (_,Oinc) -> 
+	    [LtEq((Expr l),base,min); LtEq((Expr l),{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,rise)})] 
+	  | (_,Odec) ->
 	    [GtEq((Expr l),base,min); LtEq((Expr l),{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,{nexp=Nneg rise})})]
 	  | _ -> typ_error l "A vector must be either increasing or decreasing to access a single element"
       in 
@@ -856,13 +860,23 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let i2t = {t=Tapp("range",[TA_nexp min2;TA_nexp m_rise2])} in
       let (i2', ti2, _,cs_i2,ef_i2) = check_exp envs imp_param i2t i2 in
       let cs_loc =
-	match ord.order with
-	  | Oinc -> 
+	match (ord.order,d_env.default_o.order) with
+	  | (Oinc,_) -> 
 	    [LtEq((Expr l),base,min1); LtEq((Expr l),{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)}); 
 	     LtEq((Expr l),{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,rise)});
 	     LtEq((Expr l),min1,base_n); LtEq((Expr l),base_n,{nexp=Nadd(min1,m_rise1)});
 	     LtEq((Expr l),rise_n,{nexp=Nadd(min2,m_rise2)})]
-	  | Odec ->
+	  | (Odec,_) ->
+	    [GtEq((Expr l),base,{nexp=Nadd(min1,m_rise1)}); GtEq((Expr l),{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)});
+	     GtEq((Expr l),{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,{nexp=Nneg rise})});
+	     GtEq((Expr l),min1,base_n); GtEq((Expr l),base_n,{nexp=Nadd(min1,m_rise1)});
+	     GtEq((Expr l),rise_n,{nexp=Nadd(min2,m_rise2)})]
+	  | (_,Oinc) ->
+	    [LtEq((Expr l),base,min1); LtEq((Expr l),{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)}); 
+	     LtEq((Expr l),{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,rise)});
+	     LtEq((Expr l),min1,base_n); LtEq((Expr l),base_n,{nexp=Nadd(min1,m_rise1)});
+	     LtEq((Expr l),rise_n,{nexp=Nadd(min2,m_rise2)})]
+	  | (_,Odec) -> 
 	    [GtEq((Expr l),base,{nexp=Nadd(min1,m_rise1)}); GtEq((Expr l),{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)});
 	     GtEq((Expr l),{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,{nexp=Nneg rise})});
 	     GtEq((Expr l),min1,base_n); GtEq((Expr l),base_n,{nexp=Nadd(min1,m_rise1)});
@@ -884,10 +898,14 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let (i', ti, _,cs_i,ef_i) = check_exp envs imp_param it i in
       let (e', te, _,cs_e,ef_e) = check_exp envs imp_param item_t e in
       let cs_loc = 
-	match ord.order with
-	  | Oinc ->
+	match (ord.order,d_env.default_o.order) with
+	  | (Oinc,_) ->
 	    [LtEq((Expr l),base,min); LtEq((Expr l),{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,rise)})] 
-	  | Odec -> 
+	  | (Odec,_) -> 
+	    [GtEq((Expr l),base,min); LtEq((Expr l),{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,{nexp=Nneg rise})})]
+	  | (_,Oinc) ->
+	    [LtEq((Expr l),base,min); LtEq((Expr l),{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,rise)})]
+	  | (_,Odec) -> 
 	    [GtEq((Expr l),base,min); LtEq((Expr l),{nexp=Nadd(min,m_rise)},{nexp=Nadd(base,{nexp=Nneg rise})})]
 	  | _ -> typ_error l "A vector must be either increasing or decreasing to change a single element"
       in      
@@ -917,11 +935,17 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	    let cs_add = [Eq((Expr l),base_e,min1);LtEq((Expr l),rise,m_rise2)] in
 	    (e',ti',env_e,cs_e@cs_add,ef_e) in	     
       let cs_loc =
-	match ord.order with
-	  | Oinc -> 
+	match (ord.order,d_env.default_o.order) with
+	  | (Oinc,_) -> 
 	    [LtEq((Expr l),base,min1); LtEq((Expr l),{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)}); 
 	     LtEq((Expr l),{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,rise)});]
-	  | Odec ->
+	  | (Odec,_) ->
+	    [GtEq((Expr l),base,{nexp=Nadd(min1,m_rise1)}); GtEq((Expr l),{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)});
+	     GtEq((Expr l),{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,{nexp=Nneg rise})});]
+	  | (_,Oinc) -> 
+	    [LtEq((Expr l),base,min1); LtEq((Expr l),{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)}); 
+	     LtEq((Expr l),{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,rise)});]
+	  | (_,Odec) -> 	    
 	    [GtEq((Expr l),base,{nexp=Nadd(min1,m_rise1)}); GtEq((Expr l),{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)});
 	     GtEq((Expr l),{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,{nexp=Nneg rise})});]
 	  | _ -> typ_error l "A vector must be either increasing or decreasing to modify a slice" in
@@ -1197,6 +1221,15 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp *
 	      (LEXP_aux(lexp,(l,(Base(([],t),Emp_local,cs@cs',pure_e)))),u,Envmap.empty,Emp_local,[],pure_e)
 	    | Tapp("vector",_),false ->
 	      (LEXP_aux(lexp,(l,(Base(([],t),tag,cs@cs',pure_e)))),t,Envmap.empty,Emp_local,[],pure_e)
+	    | (Tfn _ ,_) ->
+	      (match tag with 
+		| External _ | Spec _ | Emp_global -> 
+		  let u = new_t() in
+		  let t = {t = Tapp("reg",[TA_typ u])} in
+		  let tannot = (Base(([],t),Emp_local,[],pure_e)) in
+		  (LEXP_aux(lexp,(l,tannot)),u,Envmap.from_list [i,tannot],Emp_local,[],pure_e)
+		| _ -> 
+		  typ_error l ("Can only assign to identifiers with type register or reg, found identifier " ^ i ^ " with type " ^ t_to_string t)) 
 	    | _,_ -> 
 	      if is_top
 	      then typ_error l 
@@ -1282,6 +1315,15 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp *
 	      let u' = {t=Tapp("reg",[TA_typ ty])} in
 	      t.t <- u'.t;
 	      (LEXP_aux(lexp,(l,(Base((([],u'),Emp_local,cs,pure_e))))),ty,Envmap.empty,Emp_local,[],pure_e)
+	    | (Tfn _ ,_) ->
+	      (match tag with 
+		| External _ | Spec _ | Emp_global -> 
+		  let u = new_t() in
+		  let t = {t = Tapp("reg",[TA_typ u])} in
+		  let tannot = (Base(([],t),Emp_local,[],pure_e)) in
+		  (LEXP_aux(lexp,(l,tannot)),u,Envmap.from_list [i,tannot],Emp_local,[],pure_e)
+		| _ -> 
+		  typ_error l ("Can only assign to identifiers with type register or reg, found identifier " ^ i ^ " with type " ^ t_to_string t)) 
 	    | _,_ -> 
 	      if is_top
 	      then typ_error l 

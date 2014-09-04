@@ -48,7 +48,7 @@ function nat main _ = {
 
   (* extern calls *)
   dummy_reg := 3 + 39;
-  dummy_reg := (deinfix +)(5, 37);
+  (*dummy_reg := (deinfix +)(5, 37);*)
   (* casts and external calls *)
   dummy_reg := 0b01 + 0b01;
   dummy_reg2 := 0b00000001;
