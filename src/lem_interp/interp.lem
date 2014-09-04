@@ -1338,12 +1338,13 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         (fun iv_whole lm le -> 
 	  let iv = match iv_whole with | V_track v _ -> v | _ -> iv_whole end in
           match iv with
+	    | V_unknown -> (Value V_unknown,lm,le)
             | V_lit (L_aux (L_num n) ln) -> 
               resolve_outcome
 		(interp_main mode t_level l_env lm vec)
                 (fun vvec lm le ->
                   match vvec with
-                    | V_vector _ _ _ -> (Value (access_vector vvec n),lm,le)
+		    | V_vector _ _ _ -> (Value (access_vector vvec n),lm,le)
 		    | V_track ((V_vector _ _ _) as vvec) r ->
 		      (match iv_whole with
 			| V_track _ ir -> (Value (taint (access_vector vvec n) (r++ir)),lm,le)
@@ -1994,6 +1995,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
       | (Value i_whole,lm,le) ->
         let i = match i_whole with | V_track v _ -> v | _ -> i_whole end in
         (match i with 
+	| V_unknown -> ((Value V_unknown,lm,le),Nothing)
         | V_lit (L_aux (L_num n) ln) -> 
           let next_builder le_builder = 
             (fun e env -> 

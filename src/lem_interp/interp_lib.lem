@@ -146,8 +146,10 @@ let to_vec ord len n =
   else to_vec_dec (V_tuple ([V_lit(L_aux (L_num (integerFromNat len)) Interp_ast.Unknown); n]))
 ;;
 
-let exts len ((V_vector _ inc _) as v) =
-  to_vec inc len (to_num true v)
+let exts len v = match v with
+  | V_vector _ inc _  -> to_vec inc len (to_num true v)
+  | V_unknown -> V_unknown
+end
 ;;
 
 let eq (V_tuple [x; y]) = V_lit (L_aux (if value_eq x y then L_one else L_zero) Unknown) ;;
@@ -233,18 +235,24 @@ let rec arith_op_vec_range_range op (V_tuple args) = match args with
 end ;;
 
 let compare_op op (V_tuple args) = match args with
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> 
     if (op x y)
     then V_lit(L_aux L_one lx)
     else V_lit(L_aux L_zero lx)
 end ;;
 let compare_op_vec op (V_tuple args) = match args with
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
   | [((V_vector _ _ _) as l1);((V_vector _ _ _) as l2)] ->
     let (l1',l2') = (to_num true l1, to_num true l2) in
     compare_op op (V_tuple[l1';l2'])
 end ;;
 
 let rec duplicate (V_tuple args) = match args with
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
   | [(V_lit _ as v);(V_lit (L_aux (L_num n) _))] ->
     (V_vector 0 true (List.replicate (natFromInteger n) v))
 end
@@ -267,6 +275,7 @@ let function_map = [
   ("add_range_vec_range", arith_op_range_vec_range (+));
   ("minus", arith_op (-));
   ("minus_vec", arith_op_vec (-) 1);
+  ("minus_vec_range", arith_op_vec_range (-) 1);
   ("multiply", arith_op ( * ));
   ("multiply_vec", arith_op_vec ( * ) 2);
   ("mod", arith_op (mod));

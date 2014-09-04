@@ -31,6 +31,7 @@ let intern_value v = match v with
     (to_bits (List.reverse
 		(List.concat (List.map (fun n -> boolListFrombitSeq 8 (bitSeqFromInteger (Just 8) (integerFromNat n))) bys))))
   | Unknown -> Interp.V_unknown
+  | _ -> Interp.V_unknown
 end
 
 let extern_reg r slice = match (r,slice) with
