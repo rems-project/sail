@@ -52,6 +52,7 @@ and nexp_aux =
   | N2n of nexp * big_int option (* Optionally contains the 2^n result for const n, for different constraint equations *)
   | Npow of nexp * int (* Does not appear in source *)
   | Nneg of nexp (* Does not appear in source *)
+  | Ninexact (*Does not appear in source*)
   | Nuvar of n_uvar (* Unification variable *)
 and effect = { mutable effect : effect_aux }
 and effect_aux =

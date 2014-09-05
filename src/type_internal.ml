@@ -48,6 +48,7 @@ and nexp_aux =
   | N2n of nexp * big_int option
   | Npow of nexp * int (* nexp raised to the int *)
   | Nneg of nexp (* Unary minus for representing new vector sizes after vector slicing *)
+  | Ninexact (*Result of +inf + -inf which is neither less than nor greater than other numbers really *)
   | Nuvar of n_uvar
 and n_uvar = { nindex : int; mutable nsubst : nexp option; mutable nin : bool; }
 and effect = { mutable effect : effect_aux }
@@ -326,7 +327,7 @@ let rec contains_const n =
 
 let rec get_var n =
   match n.nexp with
-  | Nvar _ | Nuvar _ -> Some n
+  | Nvar _ | Nuvar _ | N2n _ -> Some n
   | Nneg n -> get_var n
   | Nmult (_,n1) -> get_var n1
   | _ -> None
@@ -341,11 +342,19 @@ let increment_factor n i =
   match n.nexp with
   | Nvar _ | Nuvar _ -> 
     (match i.nexp with
-    | Nconst i -> {nexp = Nmult({nexp = Nconst (add_big_int i one)},n)}
+    | Nconst i -> 
+      let ni = add_big_int i one in
+      if eq_big_int ni zero 
+      then {nexp = Nconst zero }
+      else {nexp = Nmult({nexp = Nconst ni},n)}
     | _ -> {nexp = Nmult({nexp = Nadd(i,{nexp = Nconst one})},n)})
   | Nmult(n1,n2) ->
     (match n1.nexp,i.nexp with
-    | Nconst i2,Nconst i -> { nexp = Nmult({nexp = Nconst (add_big_int i i2)},n2)}
+    | Nconst i2,Nconst i -> 
+      let ni = add_big_int i i2 in
+      if eq_big_int ni zero 
+      then {nexp = Nconst zero }
+      else { nexp = Nmult({nexp = Nconst (add_big_int i i2)},n2)}
     | _ -> { nexp = Nmult({ nexp = Nadd(n1,i)},n2)})
   | _ -> assert false
 
@@ -384,7 +393,7 @@ let rec normalize_nexp n =
   | Nadd(n1,n2) ->
     let n1',n2' = normalize_nexp n1, normalize_nexp n2 in
     (match n1'.nexp,n2'.nexp with
-    | Nneg_inf, Npos_inf | Npos_inf, Nneg_inf -> {nexp = Nconst zero }
+    | Nneg_inf, Npos_inf | Npos_inf, Nneg_inf -> {nexp = Ninexact }
     | Npos_inf, _ | _, Npos_inf -> { nexp = Npos_inf }
     | Nneg_inf, _ | _, Nneg_inf -> { nexp = Nneg_inf } 
     | Nconst i1, Nconst i2 | Nconst i1, N2n(_,Some i2) | N2n(_,Some i2), Nconst i1 -> {nexp = Nconst (add_big_int i1 i2)}
@@ -434,7 +443,19 @@ let rec normalize_nexp n =
         |  _ -> {nexp = Nadd (n1',n2')})
       | Some(nv1),None -> {nexp = Nadd (n2',n1')}
       | None,Some(nv2) -> {nexp = Nadd (n1',n2')}
-      | _ -> let _ = Printf.printf "One term does not have var in %s\n" (n_to_string n) in assert false)
+      | _ -> (match n1'.nexp,n2'.nexp with
+	  | Nadd(n11',n12'), _ -> 
+	    (match compare_nexps n11' n2' with
+	      | -1 -> {nexp = Nadd(n2',n1')}
+	      |  1 -> { nexp = Nadd(n11', normalize_nexp { nexp = Nadd(n12',n2')}) }
+	      | _ -> let _ = Printf.eprintf "Neither term has var but are the same? %s %s\n" (n_to_string n1') (n_to_string n2') in assert false)
+	  | (_, Nadd(n21',n22')) ->
+	    (match compare_nexps n1' n21' with
+	      | -1 -> { nexp = Nadd(n21', normalize_nexp { nexp = Nadd(n1',n22')})}
+	      | 1 -> { nexp = Nadd(n1',n2') }
+	      | _ -> let _ = Printf.eprintf "pattern didn't match unexpextedly here %s %s\n" (n_to_string n1') (n_to_string n2') in assert false)
+	  | _ -> let _ = Printf.eprintf "pattern didn't match here with no vars %s %s\n" (n_to_string n1') (n_to_string n2') in assert false) 
+      ) 
   | Nmult(n1,n2) ->
     let n1',n2' = normalize_nexp n1, normalize_nexp n2 in
     (match n1'.nexp,n2'.nexp with
@@ -1697,11 +1718,13 @@ let rec simple_constraint_check in_env cs =
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
 (*      let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
       (match n1'.nexp,n2'.nexp with
+      | Ninexact,nok | nok,Ninexact -> 
+	eq_error (get_c_loc co) ("Type constraint arising from here requires " ^ n_to_string {nexp = nok} ^ " to be equal to +inf + -inf")
       | Npos_inf,Npos_inf | Nneg_inf, Nneg_inf -> None
       | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst(i2) -> 
         if eq_big_int i1 i2 then None
-        else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
-			              ^ string_of_big_int i1 ^ " to equal " ^ string_of_big_int i2)
+        else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires (" ^ n_to_string n1 ^ "=" 
+			              ^ string_of_big_int i1 ^ ") to equal (" ^ n_to_string n2 ^ " = " ^ string_of_big_int i2)
       | Nconst i, Nuvar u ->
         if not(u.nin) && ok_to_set 
         then begin equate_n n2' n1'; None end
@@ -1714,7 +1737,25 @@ let rec simple_constraint_check in_env cs =
         if ok_to_set
         then begin ignore(resolve_nsubst n1); ignore(resolve_nsubst n2); equate_n n1' n2'; None end
         else Some(Eq(co,n1',n2'))
-      | _,_ -> Some(Eq(co,n1',n2'))) in
+      | _,_ -> 
+	if nexp_eq_check n1' n2'
+	then None
+	else
+	let new_n = normalize_nexp (mk_sub n1' n2') in
+	(match new_n.nexp with
+	  | Nconst i -> 
+	    if eq_big_int i zero
+	    then None
+	    else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires "
+					     ^ n_to_string new_n ^ " to equal 0, not " ^ string_of_big_int i)
+	  | Nuvar u1 ->
+	    if ok_to_set
+	    then begin ignore(resolve_nsubst new_n); equate_n new_n {nexp = Nconst zero}; None end
+	    else Some(Eq(co,new_n,{nexp = Nconst zero}))
+	  | Nadd(new_n1,new_n2) ->
+	    (match new_n1.nexp, new_n2.nexp with
+	      | _ -> Some(Eq(co,n1',n2')))
+	  | _ -> Some(Eq(co,n1',n2')))) in
     (match contains_in_vars in_env n1, contains_in_vars in_env n2 with
       | None,None ->	
 	(match check_eq true n1 n2 with
@@ -1729,12 +1770,21 @@ let rec simple_constraint_check in_env cs =
     | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst i2 -> 
       if ge_big_int i1 i2 
       then check cs
-      else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
+      else eq_error (get_c_loc co) ("Type constraint mismatch: constraint of " ^ n_to_string n1 ^ " >= " ^ n_to_string n2 ^ "  arising from here requires " 
 			            ^ string_of_big_int i1 ^ " to be greater than or equal to " ^ string_of_big_int i2)
     | Npos_inf, Nconst _ | Npos_inf, Npos_inf | Nconst _, Nneg_inf | Nneg_inf, Nneg_inf -> check cs
+    | Ninexact, _ | _, Ninexact -> check cs
     | Nconst _ ,Npos_inf -> eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
                                                 ^ (n_to_string n1') ^ " to be greater than infinity")
-    | _,_ -> GtEq(co,n1',n2')::(check cs))
+    | _,_ -> 
+      let new_n = normalize_nexp (mk_sub n1' n2') in
+	(match new_n.nexp with
+	  | Nconst i -> 
+	    if ge_big_int i zero
+	    then (check cs)
+	    else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires "
+					     ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
+	  | _ -> GtEq(co,n1',n2')::(check cs)))
   | LtEq(co,n1,n2)::cs -> 
     (* let _ = Printf.printf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
