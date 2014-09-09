@@ -995,6 +995,10 @@ let initial_typ_env =
                                    (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
                     External (Some "quot_vec"),[GtEq(Specc(Parse_ast.Int("quot",None)), mk_nv "m", mk_nv "q")],pure_e)]));
     (* incorrect types for typechecking processed sail code; do we care? *)
+    ("length", Base((["a",{k=K_Typ}]@(mk_nat_params["n";"m"])@(mk_ord_params["ord"]),
+		     (mk_pure_fun (mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "n") (Nvar "m"))
+			          (mk_range (mk_nv "m") {nexp = Nconst zero}))),
+		    External (Some "length"),[],pure_e));
     ("to_num_inc",Base(([("a",{k=K_Typ})],({t= Tfn ({t=Tvar "a"},nat_typ,IP_length,pure_e)})),External None,[],pure_e));
     ("to_num_dec",Base(([("a",{k=K_Typ})],{t= Tfn ({t=Tvar "a"},nat_typ,IP_length,pure_e)}),External None,[],pure_e));
     ("mask",Base(((mk_typ_params ["a"])@(mk_nat_params["n";"m";"o";"p"])@(mk_ord_params["ord"]),

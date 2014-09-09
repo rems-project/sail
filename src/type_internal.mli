@@ -140,6 +140,7 @@ val bit_t : t
 val pure_e : effect
 
 val t_to_string : t -> string
+val n_to_string : nexp -> string
 val tannot_to_string : tannot -> string
 val t_to_typ : t -> Ast.typ
 

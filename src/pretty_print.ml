@@ -382,6 +382,8 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
 	  (match r.nexp with
 	  | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
 	                               kwd (string_of_big_int bi) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
+	  | Nvar v -> fprintf ppf  "@[<0>(E_aux (E_id (Id_aux (Id %a) %a)) (%a,%a))@]"
+	                             kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
           | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given vector without known length"))
 	| Tapp("implicit",[TA_nexp r]) ->
 	  (match r.nexp with
@@ -911,8 +913,10 @@ let doc_exp, doc_let =
     (match t.t with
       | Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
 	(match r.nexp with
+	  | Nvar v -> utf8string v
 	  | Nconst bi -> utf8string (Big_int.string_of_big_int bi)
-          | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given vector without known length"))
+          | _ ->  raise (Reporting_basic.err_unreachable l 
+			   ("Internal exp given vector without known length, instead given " ^ n_to_string r)))
       | Tapp("implicit",[TA_nexp r]) ->
 	(match r.nexp with
 	  | Nconst bi -> utf8string (Big_int.string_of_big_int bi)

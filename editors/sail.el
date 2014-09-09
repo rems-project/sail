@@ -1694,6 +1694,22 @@ reindent the line."
     (and electric
          (indent-according-to-mode))))
 
+(defun sail-electric-lt ()
+  "If inserting a > operator or a comment-end at beginning of line,
+reindent the line."
+  (interactive "*")
+  (let ((electric (and sail-electric-indent
+                       (or (sail-in-indentation-p)
+                           (char-equal ?* (preceding-char)))
+                       (not (sail-in-literal-p))
+                       (or (not (sail-in-comment-p))
+                           (save-excursion
+                             (back-to-indentation)
+                             (looking-at "\\*"))))))
+    (self-insert-command 1)
+    (and electric
+         (indent-according-to-mode))))
+
 (defun sail-electric-rc ()
   "If inserting a } operator at beginning of line, reindent the line."
   (interactive "*")
