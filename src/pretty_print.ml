@@ -31,6 +31,7 @@ let pp_format_id (Id_aux(i,_)) =
 let pp_format_var (Kid_aux(Var v,_)) = v
 
 let rec pp_format_l_lem = function
+  | _ -> "Unknown" 
   | Parse_ast.Unknown -> "Unknown"
   | Parse_ast.Int(s,None) -> "(Int \"" ^ s ^ "\" Nothing)"
   | Parse_ast.Int(s,(Some l)) -> "(Int \"" ^  s ^ "\" (Just " ^ (pp_format_l_lem l) ^ "))"
@@ -258,7 +259,7 @@ let pp_format_tag = function
 
 let rec pp_format_nes nes = 
   "[" ^ 
-  (list_format "; "
+  (*(list_format "; "
      (fun ne -> match ne with
        | LtEq(_,n1,n2) -> "(Nec_lteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | Eq(_,n1,n2) -> "(Nec_eq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
@@ -272,7 +273,7 @@ let rec pp_format_nes nes =
        | BranchCons(_,nes_b) ->
          "(Nec_branch " ^ (pp_format_nes nes_b) ^ ")"
      )
-     nes) ^ "]"
+     nes) ^*) "]"
 
 let pp_format_annot = function
   | NoTyp -> "Nothing"

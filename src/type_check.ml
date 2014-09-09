@@ -1375,19 +1375,20 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp *
 	    | (Tapp("range",[TA_nexp base_e1;TA_nexp range_e1]),
 	       Tapp("range",[TA_nexp base_e2;TA_nexp range_e2])) -> base_e1,range_e1,base_e2,range_e2
 	    | _ -> base_e1,range_e1,base_e2,range_e2 in
+          let len = new_n() in
 	  let cs_t,res_t = match ord.order with
 	    | Oinc ->  ([LtEq((Expr l),base,base_e1);
 			 LtEq((Expr l),{nexp=Nadd(base_e1,range_e1)},{nexp=Nadd(base_e2,range_e2)});
-			 LtEq((Expr l),{nexp=Nadd(base_e1,range_e2)},{nexp=Nadd(base,rise)})],
-			{t=Tapp("vector",[TA_nexp base_e1;
-					  TA_nexp {nexp = Nadd({nexp = Nadd({nexp=Nadd(base_e2,range_e2)},{nexp = Nconst one})},
-							       {nexp=Nneg base_e1})};TA_ord ord;TA_typ t])})
+			 LtEq((Expr l),{nexp=Nadd(base_e1,range_e2)},{nexp=Nadd(base,rise)});
+                         LtEq((Expr l),len, {nexp =Nadd({nexp= Nadd({nexp= Nadd(base_e2,range_e2)},{nexp= Nconst one})},
+                                                        {nexp = Nneg({nexp = Nadd(base_e1,range_e1)})})});],
+			{t=Tapp("vector",[TA_nexp base_e1;TA_nexp len;TA_ord ord;TA_typ t])})
 	    | Odec -> ([GtEq((Expr l),base,base_e1);
 			GtEq((Expr l),{nexp=Nadd(base_e1,range_e1)},{nexp=Nadd(base_e2,range_e2)});
-			GtEq((Expr l),{nexp=Nadd(base_e1,range_e2)},{nexp=Nadd(base,{nexp=Nneg rise})})],
-		       {t=Tapp("vector",[TA_nexp {nexp=Nadd(base_e1,range_e1)};
-					 TA_nexp {nexp=Nadd({nexp=Nadd(base_e1,range_e1)},{nexp=Nneg{nexp=Nadd(base_e2,range_e2)}})};
-					 TA_ord ord; TA_typ t])})
+			GtEq((Expr l),{nexp=Nadd(base_e1,range_e2)},{nexp=Nadd(base,{nexp=Nneg rise})});                         
+                        LtEq((Expr l),len, {nexp =Nadd({nexp= Nadd({nexp= Nadd(base_e2,range_e2)},{nexp= Nconst one})},
+                                                        {nexp = Nneg({nexp = Nadd(base_e1,range_e1)})})});],
+                       {t=Tapp("vector",[TA_nexp {nexp=Nadd(base_e1,range_e1)};TA_nexp len;TA_ord ord; TA_typ t])})
 	    | _ -> typ_error l ("Assignment to a range of vector elements requires either inc or dec order")
 	  in
 	  let cs = cs_t@cs@cs1@cs2 in
