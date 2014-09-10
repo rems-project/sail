@@ -23,6 +23,39 @@ let rec list_pp i_format l_format =
 let kwd ppf s = fprintf ppf "%s" s
 let base ppf s = fprintf ppf "%s" s
 
+let lemnum default n = match n with
+  | 0   -> "zero"
+  | 1   -> "one"
+  | 2   -> "two"
+  | 3   -> "three"
+  | 4   -> "four"
+  | 5   -> "five"
+  | 6   -> "six"
+  | 7   -> "seven"
+  | 8   -> "eight" 
+  | 15  -> "fifteen"
+  | 16  -> "sixteen"
+  | 20  -> "twenty"
+  | 23  -> "twentythree"
+  | 24  -> "twentyfour"
+  | 30  -> "thirty"
+  | 31  -> "thirtyone"
+  | 32  -> "thirtytwo"
+  | 35  -> "thirtyfive"
+  | 39  -> "thirtynine"
+  | 40  -> "fourty"
+  | 47  -> "fourtyseven"
+  | 48  -> "fourtyeight"
+  | 55  -> "fiftyfive"
+  | 56  -> "fiftysix"
+  | 57  -> "fiftyseven"
+  | 61  -> "sixtyone"
+  | 63  -> "sixtythree"
+  | 64  -> "sixtyfour"
+  | 127 -> "onetwentyseven"
+  | 128 -> "onetwentyeight"
+  | _   -> default n
+
 let pp_format_id (Id_aux(i,_)) =
   match i with
   | Id(i) -> i
@@ -31,7 +64,6 @@ let pp_format_id (Id_aux(i,_)) =
 let pp_format_var (Kid_aux(Var v,_)) = v
 
 let rec pp_format_l_lem = function
-  | _ -> "Unknown" 
   | Parse_ast.Unknown -> "Unknown"
   | Parse_ast.Int(s,None) -> "(Int \"" ^ s ^ "\" Nothing)"
   | Parse_ast.Int(s,(Some l)) -> "(Int \"" ^  s ^ "\" (Just " ^ (pp_format_l_lem l) ^ "))"
@@ -88,7 +120,7 @@ and pp_format_nexp_lem (Nexp_aux(n,l)) =
   "(Nexp_aux " ^
   (match n with
     | Nexp_var(v) -> "(Nexp_var " ^ pp_format_var_lem v ^ ")"
-    | Nexp_constant(i) -> "(Nexp_constant " ^ string_of_int i ^ ")"
+    | Nexp_constant(i) -> "(Nexp_constant " ^ (lemnum string_of_int i) ^ ")"
     | Nexp_sum(n1,n2) -> "(Nexp_sum " ^ (pp_format_nexp_lem n1) ^ " " ^ (pp_format_nexp_lem n2) ^ ")"
     | Nexp_times(n1,n2) -> "(Nexp_times " ^  (pp_format_nexp_lem n1) ^ " " ^ (pp_format_nexp_lem n2) ^ ")"
     | Nexp_exp(n1) -> "(Nexp_exp " ^ (pp_format_nexp_lem n1) ^ ")"
@@ -191,7 +223,7 @@ let pp_format_lit_lem (L_aux(lit,l)) =
   | L_one -> "L_one"
   | L_true -> "L_true"
   | L_false -> "L_false"
-  | L_num(i) -> "(L_num " ^ string_of_int i ^ ")"
+  | L_num(i) -> "(L_num " ^ (lemnum string_of_int i) ^ ")"
   | L_hex(n) -> "(L_hex \"" ^ n ^ "\")"
   | L_bin(n) -> "(L_bin \"" ^ n ^ "\")"
   | L_undef -> "L_undef"
@@ -219,7 +251,7 @@ and pp_format_targ = function
 and pp_format_n n =
   match n.nexp with
     | Nvar i -> "(Ne_var \"" ^ i ^ "\")"
-    | Nconst i -> "(Ne_const " ^ string_of_big_int i ^ ")"
+    | Nconst i -> "(Ne_const " ^ (lemnum string_of_int (int_of_big_int i)) ^ ")"
     | Npos_inf -> "Ne_inf"
     | Nadd(n1,n2) -> "(Ne_add [" ^ (pp_format_n n1) ^ "; " ^ (pp_format_n n2) ^ "])"
     | Nmult(n1,n2) -> "(Ne_mult " ^ (pp_format_n n1) ^ " " ^ (pp_format_n n2) ^ ")"
@@ -382,14 +414,14 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
 	| Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
 	  (match r.nexp with
 	  | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
-	                               kwd (string_of_big_int bi) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
+	                               kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
 	  | Nvar v -> fprintf ppf  "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
 	                             kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
           | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given vector without known length"))
 	| Tapp("implicit",[TA_nexp r]) ->
 	  (match r.nexp with
 	    | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
-	                               kwd (string_of_big_int bi) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
+	                               kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
 	    | Nvar v -> fprintf ppf "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
 	                             kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
 	    | _ -> raise (Reporting_basic.err_unreachable l "Internal_exp given implicit without variable or const"))
