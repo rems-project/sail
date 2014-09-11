@@ -183,9 +183,9 @@ let output1 libpath out_arg filename defs (* alldoc_accum alldoc_inc_accum alldo
           Format.fprintf o "let thirtytwo  : integer = integerFromNat 32\n";
           Format.fprintf o "let thirtyfive : integer = integerFromNat 35\n";
           Format.fprintf o "let thirtynine : integer = integerFromNat 39\n";
-          Format.fprintf o "let fourty : integer = integerFromNat 40\n";
-          Format.fprintf o "let fourtyseven : integer = integerFromNat 47\n";
-          Format.fprintf o "let fourtyeight : integer = integerFromNat 48\n";
+          Format.fprintf o "let forty : integer = integerFromNat 40\n";
+          Format.fprintf o "let fortyseven : integer = integerFromNat 47\n";
+          Format.fprintf o "let fortyeight : integer = integerFromNat 48\n";
           Format.fprintf o "let fiftyfive  : integer = integerFromNat 55\n";
           Format.fprintf o "let fiftysix   : integer = integerFromNat 56\n";
           Format.fprintf o "let fiftyseven : integer = integerFromNat 57\n";

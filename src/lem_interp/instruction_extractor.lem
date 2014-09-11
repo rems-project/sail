@@ -1,0 +1,25 @@
+open import Interp_ast
+import Interp
+
+type typ = 
+| Bit
+| Bitvector of maybe integer
+| Other
+
+type instruction = 
+|  Instr of string * list (string * typ) * list base_effect
+|  Skipped 
+
+val extract_instructions : string -> string -> defs tannot -> list instruction
+
+let extract_from_decode decoder = []
+
+let extract_effects instrs execute = instrs
+
+let extract_instructions decode_name execute_name defs = 
+  let (Just decoder) = Interp.find_function defs (Id_aux (Id decode_name) Unknown) in
+  let (Just executer) = Interp.find_function defs (Id_aux (Id execute_name) Unknown) in
+  let instr_no_effects = extract_from_decode decoder in
+  let instructions = extract_effects instr_no_effects executer in
+  instructions
+  
