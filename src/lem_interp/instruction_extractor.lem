@@ -1,4 +1,5 @@
 open import Interp_ast
+open import Pervasives
 import Interp
 
 type typ = 
@@ -10,11 +11,49 @@ type instruction =
 |  Instr of string * list (string * typ) * list base_effect
 |  Skipped 
 
-val extract_instructions : string -> string -> defs tannot -> list instruction
+val extract_instructions : string -> string -> defs Interp.tannot -> list instruction
 
-let extract_from_decode decoder = []
+let extract_parm (E_aux e (_,tannot)) =
+  match e with
+    | E_id (Id_aux (Id i) _) ->
+      match tannot with
+	| Just(T_id "bit",_,_,_) -> (i,Bit)
+	| Just(T_app "vector" (T_args [T_arg_nexp _; T_arg_nexp (Ne_const len); _; T_arg_typ (T_id "bit")]),_,_,_) ->
+	  (i,Bitvector (Just len))
+	| Just(T_app "vector" (T_args [T_arg_nexp _; T_arg_nexp _; _; T_arg_typ (T_id "bit")]),_,_,_) ->
+	  (i,Bitvector Nothing)
+	| _ -> (i,Other) end
+    | _ -> ("UNKNOWN_PARM",Other)
+end
 
-let extract_effects instrs execute = instrs
+let rec extract_from_decode decoder = 
+  match decoder with
+    | [] -> []
+    | (FCL_aux (FCL_Funcl _ pat exp) _)::decoder ->
+      (match exp with
+	| E_aux (E_app (Id_aux(Id id) _) parms) (_,(Just (_,Tag_ctor,_,_))) ->
+	  Instr id (List.map extract_parm parms) []
+	| _ -> Skipped end)::(extract_from_decode decoder)
+end 
+
+let rec extract_effects_of_pat id execute = match execute with
+  | [] -> []
+  | FCL_aux (FCL_Funcl _ (P_aux (P_app (Id_aux (Id i) _) _) _) exp) _ :: executes ->
+    if i = id 
+    then match exp with
+      | E_aux e (_,Just(_,_,_,Effect_aux (Effect_set efs) _)) -> efs
+      | _ -> [] end
+    else extract_effects_of_pat id executes
+  | _::executes -> extract_effects_of_pat id executes
+end
+
+let rec extract_effects instrs execute = 
+  match instrs with
+    | [] -> []
+    | Skipped::instrs -> Skipped::(extract_effects instrs execute)
+    | (Instr id parms [])::instrs -> 
+      (Instr id parms (extract_effects_of_pat id execute))::(extract_effects instrs execute)
+end
 
 let extract_instructions decode_name execute_name defs = 
   let (Just decoder) = Interp.find_function defs (Id_aux (Id decode_name) Unknown) in
