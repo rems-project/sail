@@ -63,6 +63,10 @@ let load_section ic (offset,size,addr) =
   done
 ;;
 
+let load_memory (bits,addr) =
+  let (Error.Success(bitsnum,_)) = Ml_bindings.read_unsigned_char Endianness.default_endianness bits in
+  add_mem (Uint32.to_int bitsnum) (Big_int.big_int_of_int addr)
+
 (* use zero as a sentinel --- it might prevent a minimal loop from
  * working in principle, but won't happen in practice *)
 let lr_init_value = Big_int.zero_big_int
@@ -133,15 +137,19 @@ let run () =
     exit 1;
   end;
   if !eager_eval then Run_interp_model.debug := true;
-  let ic = open_in_bin !file in
+(*  let ic = open_in_bin !file in
   if !sections = [] then begin
     sections := [(0, in_channel_length ic, Big_int.zero_big_int)];
   end;
-  let total_size = List.fold_left (fun n (_,s,_) -> n+s) 0 !sections in
+  let total_size = List.fold_left (fun n (_,s,_) -> n+s) 0 !sections in*)
+  let (locations,start_address) = populate !file in
+  mainaddr := Printf.sprintf "0x%x" start_address;
+  let total_size = 8 * (List.length locations) in
   eprintf "Loading binary into memory (%d bytes)... %!" total_size;
-  let t = time_it (List.iter (load_section ic)) !sections in
+(*  let t = time_it (List.iter (load_section ic)) !sections in*)
+  let t = time_it (List.iter load_memory) locations in
   eprintf "done. (%f seconds)\n%!" t;
-  close_in ic;
+(*  close_in ic;*)
   let reg = init_reg () in
   (* entry point: unit -> unit fde *)
   let funk_name = "fde" in
