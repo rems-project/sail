@@ -6,6 +6,8 @@ open Interp_interface ;;
 open Interp_inter_imp ;;
 open Run_interp_model ;;
 
+open Sail_interface ;;
+
 let startaddr = ref "0" ;;
 let mainaddr  = ref "0" ;;
 let sections = ref [] ;;
@@ -93,7 +95,7 @@ let args = [
   ("--code", Arg.String add_section, "name,offset,size,addr add a code section");
   ("--startaddr", Arg.Set_string startaddr, "addr initial address (UNUSED)");
   ("--mainaddr", Arg.Set_string mainaddr, "addr address of the main section (entry point; default: 0)");
-  ("--quiet", Arg.Clear Run_interp.debug, " do not display interpreter actions");
+  ("--quiet", Arg.Clear Run_interp_model.debug, " do not display interpreter actions");
   ("--interactive", Arg.Clear eager_eval , " interactive execution");
 ] ;;
 
@@ -130,7 +132,7 @@ let run () =
     Arg.usage args "";
     exit 1;
   end;
-  if !eager_eval then Run_interp.debug := true;
+  if !eager_eval then Run_interp_model.debug := true;
   let ic = open_in_bin !file in
   if !sections = [] then begin
     sections := [(0, in_channel_length ic, Big_int.zero_big_int)];
