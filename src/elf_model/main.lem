@@ -1,0 +1,41 @@
+open import Function
+open import String
+open import Tuple
+
+open import Bitstring
+open import Error
+open import Missing_pervasives
+open import Show
+
+open import Elf_header
+open import Elf_file1
+open import Elf_executable_file2
+open import Elf_executable_file3
+open import Elf_executable_file4
+open import Elf_executable_file5
+
+open import Sail_interface
+
+let default_os _ =
+  "*Default OS specific print*"
+
+let default_proc _ =
+  "*Default processor specific print*"
+
+let default_user _ =
+  "*Default user specific print*"
+
+let default_hdr_bdl =
+  (default_os, default_proc)
+
+let default_pht_bdl =
+  (default_os, default_proc)
+
+let default_sht_bdl =
+  (default_os, default_proc, default_user)
+
+let _ =
+  let (chunks_addr, entry) = Sail_interface.populate "test/power64-executable-1" in
+  let _ = Missing_pervasives.print ("Entry point: " ^ show entry) in
+  let _ = Missing_pervasives.print ("#Chunks: " ^ show (List.length chunks_addr)) in
+    ()

@@ -1,0 +1,211 @@
+open import Basic_classes
+open import Num
+open import Maybe
+open import String
+
+open import Elf_executable_file2
+open import Elf_header
+open import Elf_types
+open import Elf_section_header_table
+open import Elf_program_header_table
+
+open import Bitstring
+open import Error
+open import Missing_pervasives
+open import Show
+
+(** Type [elf32_executable_file3] represents the lazy unfolding of a 32-bit ELF
+  * file where the header, program header table and optional section header table
+  * have been filled in, with all other data being left uninterpreted.
+  *)
+type elf32_executable_file3 =
+  <| elf32_executable_file3_header               : elf32_header (** The ELF header (mandatory) *)
+   ; elf32_executable_file3_program_header_table : elf32_program_header_table (** The program header table (mandatory) *)
+   ; elf32_executable_file3_section_header_table : maybe elf32_section_header_table (** The section header table (optional) *)
+   ; elf32_executable_file3_body                 : bitstring (** Uninterpreted body *)
+   |>
+
+class (HasElf32ExecutableFile3 'a)
+  val get_elf32_executable_file3 : 'a -> elf32_executable_file3
+end
+
+instance (HasElf32ExecutableFile3 elf32_executable_file3)
+  let get_elf32_executable_file3 f3 = f3
+end
+
+instance (HasElf32ExecutableFile2 elf32_executable_file3)
+  let get_elf32_executable_file2 f3 =
+    <| elf32_executable_file2_header = f3.elf32_executable_file3_header;
+         elf32_executable_file2_program_header_table = f3.elf32_executable_file3_program_header_table;
+         elf32_executable_file2_body = f3.elf32_executable_file3_body |>
+end
+
+instance (HasElf32Header elf32_executable_file3)
+  let get_elf32_header f3 = f3.elf32_executable_file3_header
+end
+
+instance (HasElf32ProgramHeaderTable elf32_executable_file3)
+  let get_elf32_program_header_table f3 =
+    Just (f3.elf32_executable_file3_program_header_table)
+end
+
+instance (HasElf32SectionHeaderTable elf32_executable_file3)
+  let get_elf32_section_header_table f3 =
+    f3.elf32_executable_file3_section_header_table
+end
+
+(** Type [elf64_executable_file3] represents the lazy unfolding of a 64-bit ELF
+  * file where the header, program header table and optional section header table
+  * have been filled in, with all other data being left uninterpreted.
+  *)
+type elf64_executable_file3 =
+  <| elf64_executable_file3_header               : elf64_header (** The ELF header (mandatory) *)
+   ; elf64_executable_file3_program_header_table : elf64_program_header_table (** The program header table (mandatory) *)
+   ; elf64_executable_file3_section_header_table : maybe elf64_section_header_table (** The section header table (optional) *)
+   ; elf64_executable_file3_body                 : bitstring (** Uninterpreted body *)
+   |>
+
+class (HasElf64ExecutableFile3 'a)
+  val get_elf64_executable_file3 : 'a -> elf64_executable_file3
+end
+
+instance (HasElf64ExecutableFile3 elf64_executable_file3)
+  let get_elf64_executable_file3 f3 = f3
+end
+
+instance (HasElf64ExecutableFile2 elf64_executable_file3)
+  let get_elf64_executable_file2 f3 =
+    <| elf64_executable_file2_header = f3.elf64_executable_file3_header;
+         elf64_executable_file2_program_header_table = f3.elf64_executable_file3_program_header_table;
+         elf64_executable_file2_body = f3.elf64_executable_file3_body |>
+end
+
+instance (HasElf64Header elf64_executable_file3)
+  let get_elf64_header f3 = f3.elf64_executable_file3_header
+end
+
+instance (HasElf64ProgramHeaderTable elf64_executable_file3)
+  let get_elf64_program_header_table f3 =
+    Just (f3.elf64_executable_file3_program_header_table)
+end
+
+instance (HasElf64SectionHeaderTable elf64_executable_file3)
+  let get_elf64_section_header_table f3 =
+    f3.elf64_executable_file3_section_header_table
+end
+
+(** [refine_elf32_executable_file2 f2] refines an elf32_executable_file2 [f2] into
+  * an elf32_executable_file3 by adding the optional section header table.
+  *)
+val refine_elf32_executable_file2 : elf32_executable_file2 -> error elf32_executable_file3
+let refine_elf32_executable_file2 f2 =
+  let hdr         = f2.elf32_executable_file2_header in
+  let pht         = f2.elf32_executable_file2_program_header_table in
+  let endian      = get_elf32_header_endianness hdr in
+  let bs1         = f2.elf32_executable_file2_body in
+  let sentries    = nat_of_elf32_half hdr.elf32_shnum in
+  let sentry_size = nat_of_elf32_half hdr.elf32_shentsize * 8 in
+  let ssize       = sentries * sentry_size in
+    if ssize = 0 then
+      return <| elf32_executable_file3_header = hdr;
+        elf32_executable_file3_program_header_table = pht;
+        elf32_executable_file3_section_header_table = Nothing;
+        elf32_executable_file3_body = bs1 |>
+    else
+      let soffset     = nat_of_elf32_off hdr.elf32_shoff * 8 in
+      let (_, scut)   = partition soffset bs1 in
+      let (sexact, _) = partition ssize scut in
+        (* Bitstring irrelevant below as exact size used... *)
+        read_elf32_section_header_table ssize endian sexact >>= fun (sht, _) ->
+          return <| elf32_executable_file3_header = hdr;
+            elf32_executable_file3_program_header_table = pht;
+            elf32_executable_file3_section_header_table = Just sht;
+            elf32_executable_file3_body = bs1 |>
+
+(** [refine_elf64_executable_file2 f2] refines an elf64_executable_file2 [f2] into
+  * an elf64_executable_file3 by adding the optional section header table.
+  *)
+val refine_elf64_executable_file2 : elf64_executable_file2 -> error elf64_executable_file3
+let refine_elf64_executable_file2 f2 =
+  let hdr         = f2.elf64_executable_file2_header in
+  let pht         = f2.elf64_executable_file2_program_header_table in
+  let endian      = get_elf64_header_endianness hdr in
+  let bs1         = f2.elf64_executable_file2_body in
+  let sentries    = nat_of_elf64_half hdr.elf64_shnum in
+  let sentry_size = nat_of_elf64_half hdr.elf64_shentsize * 8 in
+  let ssize       = sentries * sentry_size in
+    if ssize = 0 then
+      return <| elf64_executable_file3_header = hdr;
+        elf64_executable_file3_program_header_table = pht;
+        elf64_executable_file3_section_header_table = Nothing;
+        elf64_executable_file3_body = bs1 |>
+    else
+      let soffset     = nat_of_elf64_off hdr.elf64_shoff * 8 in
+      let (_, scut)   = partition soffset bs1 in
+      let (sexact, _) = partition ssize scut in
+        (* Bitstring irrelevant below as exact size used... *)
+        read_elf64_section_header_table ssize endian sexact >>= fun (sht, _) ->
+          return <| elf64_executable_file3_header = hdr;
+            elf64_executable_file3_program_header_table = pht;
+            elf64_executable_file3_section_header_table = Just sht;
+            elf64_executable_file3_body = bs1 |>
+
+(** [read_elf32_executable_file3 bs0] reads an elf32_executable_file3 from
+  * bitstring [bs0].
+  *)
+val read_elf32_executable_file3 : bitstring -> error elf32_executable_file3
+let read_elf32_executable_file3 bs0 =
+  read_elf32_executable_file2 bs0 >>= refine_elf32_executable_file2
+
+(** [read_elf64_executable_file3 bs0] reads an elf64_executable_file3 from
+  * bitstring [bs0].
+  *)
+val read_elf64_executable_file3 : bitstring -> error elf64_executable_file3
+let read_elf64_executable_file3 bs0 =
+  read_elf64_executable_file2 bs0 >>= refine_elf64_executable_file2
+
+(** string_of_elf32_executable_file3 hdr_os hdr_proc pht_os pht_proc sht_oc sht_proc sht_user f3]
+  * creates a string representation of [f3].
+  *)
+val string_of_elf32_executable_file3 : hdr_print_bundle -> pht_print_bundle -> sht_print_bundle -> elf32_executable_file3 -> string
+let string_of_elf32_executable_file3 hdr_bdl pht_bdl sht_bdl f3 =
+  let sht =
+    match f3.elf32_executable_file3_section_header_table with
+      | Nothing  -> "\tNo section header table present"
+      | Just sht -> string_of_elf32_section_header_table sht_bdl sht
+    end
+  in
+    unlines [
+      "\n*Type elf32_executable_file3:"
+    ; "**Header:"
+    ; string_of_elf32_header hdr_bdl f3.elf32_executable_file3_header
+    ; "**Program header table:"
+    ; string_of_elf32_program_header_table pht_bdl f3.elf32_executable_file3_program_header_table
+    ; "**Section header table:"
+    ; sht
+    ; "**Body:"
+    ; "\tUninterpreted data of length " ^ show (Bitstring.length f3.elf32_executable_file3_body)
+    ]
+
+(** string_of_elf64_executable_file3 hdr_os hdr_proc pht_os pht_proc sht_oc sht_proc sht_user f3]
+  * creates a string representation of [f3].
+  *)
+val string_of_elf64_executable_file3 : hdr_print_bundle -> pht_print_bundle -> sht_print_bundle -> elf64_executable_file3 -> string
+let string_of_elf64_executable_file3 hdr_bdl pht_bdl sht_bdl f3 =
+  let sht =
+    match f3.elf64_executable_file3_section_header_table with
+      | Nothing  -> "\tNo section header table present"
+      | Just sht -> string_of_elf64_section_header_table sht_bdl sht
+    end
+  in
+    unlines [
+      "\n*Type elf64_executable_file3:"
+    ; "**Header:"
+    ; string_of_elf64_header hdr_bdl f3.elf64_executable_file3_header
+    ; "**Program header table:"
+    ; string_of_elf64_program_header_table pht_bdl f3.elf64_executable_file3_program_header_table
+    ; "**Section header table:"
+    ; sht
+    ; "**Body:"
+    ; "\tUninterpreted data of length " ^ show (Bitstring.length f3.elf64_executable_file3_body)
+    ]

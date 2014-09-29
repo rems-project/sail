@@ -1,0 +1,44 @@
+open import Basic_classes
+open import Function
+open import Maybe
+open import String
+open import Tuple
+
+open import Assert_extra
+
+open import Bitstring
+open import Error
+open import Missing_pervasives
+open import Show
+
+open import Elf_header
+open import Elf_executable_file5
+open import Elf_types
+
+val populate : string -> list (bitstring * nat) * nat
+let populate fname =
+  let res =
+    (* Acquire the data from the file... *)
+    Bitstring.acquire fname >>= fun bs0 ->
+    (* Read the magic number and the flags in the header... *)
+    repeatM' Elf_header.ei_nident bs0 (read_unsigned_char Endianness.default_endianness) >>= fun (ident, bs) ->
+      match List.index ident 4 with
+        | Nothing -> fail "populate: ELF ident transcription error"
+        | Just c  ->
+          (* Calculate whether we are dealing with a 32- or 64-bit file based on
+           * what we have read...
+           *)
+          if nat_of_unsigned_char c = Elf_header.elf_class_32 then
+            Elf_executable_file5.read_elf32_executable_file5 bs0 >>=
+            Elf_executable_file5.elf32_construct_image
+          else if nat_of_unsigned_char c = Elf_header.elf_class_64 then
+            Elf_executable_file5.read_elf64_executable_file5 bs0 >>=
+            Elf_executable_file5.elf64_construct_image
+          else
+            fail "populate: ELF class unrecognised"
+      end
+  in
+    match res with
+      | Fail err -> failwith err
+      | Success chunks -> chunks
+    end

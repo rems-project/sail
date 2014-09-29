@@ -1,0 +1,820 @@
+open import Basic_classes
+open import Bool
+open import Function
+open import List
+open import Maybe
+open import Num
+open import String
+
+open import Endianness
+
+open import Elf_types
+
+open import Bitstring
+open import Error
+open import Missing_pervasives
+open import Show
+
+(** ELF object file types.  Enumerates the ELF object file types specified in the
+ *  System V ABI.  Values between [elf_ft_lo_os] and [elf_ft_hi_os] inclusive are
+ *  reserved for operating system specific values typically defined in an
+ *  addendum to the System V ABI for that operating system.  Values between
+ *  [elf_ft_lo_proc] and [elf_ft_hi_proc] inclusive are processor specific and
+ *  are typically defined in an addendum to the System V ABI for that processor
+ *  series.
+ *)
+
+(** No file type *)
+let elf_ft_none : nat = 0
+(** Relocatable file *)
+let elf_ft_rel : nat = 1
+(** Executable file *)
+let elf_ft_exec : nat = 2
+(** Shared object file *)
+let elf_ft_dyn : nat = 3
+(** Core file *)
+let elf_ft_core : nat = 4
+(** Operating-system specific *)
+let elf_ft_lo_os : nat = 65024 (* 0xfe00 *)
+(** Operating-system specific *)
+let elf_ft_hi_os : nat = 65279 (* 0xfeff *)
+(** Processor specific *)
+let elf_ft_lo_proc : nat = 65280 (* 0xff00 *)
+(** Processor specific *)
+let elf_ft_hi_proc : nat = 65535 (* 0xffff *)
+
+(** [string_of_elf_file_type os proc m] produces a string representation of the
+  * numeric encoding [m] of the ELF file type.  For values reserved for OS or
+  * processor specific values, the higher-order functions [os] and [proc] are
+  * used for printing, respectively.
+  *)
+val string_of_elf_file_type : (nat -> string) -> (nat -> string) -> nat -> string
+let string_of_elf_file_type os_specific proc_specific m =
+	if m = elf_ft_none then
+		"No file type"
+	else if m = elf_ft_rel then
+		"Relocatable file type"
+	else if m = elf_ft_exec then
+		"Executable file type"
+	else if m = elf_ft_dyn then
+		"Shared object file type"
+	else if m = elf_ft_core then
+		"Core file type"
+	else if m >= elf_ft_lo_os && m <= elf_ft_hi_os then
+		os_specific m
+	else if m >= elf_ft_lo_proc && m <= elf_ft_hi_proc then
+		proc_specific m
+	else
+		"Invalid file type"
+
+(** [is_operating_specific_file_type_value] checks whether a numeric value is
+  * reserved by the ABI for operating system-specific purposes.
+  *)
+val is_operating_system_specific_object_file_type_value : nat -> bool
+let is_operating_system_specific_object_file_type_value v =
+  v >= 65024 && v <= 65279
+
+(** [is_processor_specific_file_type_value] checks whether a numeric value is
+  * reserved by the ABI for processor-specific purposes.
+  *)
+val is_processor_specific_object_file_type_value : nat -> bool
+let is_processor_specific_object_file_type_value v =
+  v >= 65280 && v <= 65535
+
+(** ELF machine architectures (TODO: complete the conversion of the enumeration.) *)
+
+(** Intel 386 *)
+let elf_ma_386 : nat = 3
+(** IBM PowerPC *)
+let elf_ma_ppc : nat = 20
+(** IBM PowerPC 64 *)
+let elf_ma_ppc64 : nat = 21
+
+(** [string_of_elf_machine_architecture m] produces a string representation of
+  * the numeric encoding [m] of the ELF machine architecture.
+  *)
+val string_of_elf_machine_architecture : nat -> string
+let string_of_elf_machine_architecture m =
+	if m = elf_ma_386 then
+		"Intel 386 architecture"
+  else if m = elf_ma_ppc then
+    "IBM PowerPC"
+  else if m = elf_ma_ppc64 then
+    "IBM PowerPC 64"
+	else
+		"Other architecture"
+
+(* XXX: convert these into top-level definitions later...
+(** [elf_machine_architecture] enumerates all the supported machine architectures
+  * in the System V ABI.
+  *)
+type elf_machine_architecture
+  = ELF_MA_Norc          (* Nanoradio optimised RISC *)
+  | ELF_MA_Cool          (* iCelero CoolEngine *)
+  | ELF_MA_Coge          (* Cognitive Smart Memory Processor *)
+  | ELF_MA_CDP           (* Paneve CDP architecture family *)
+  | ELF_MA_KVARC         (* KM211 KVARC processor *)
+  | ELF_MA_KMX8          (* KM211 KMX8 8-bit processor *)
+  | ELF_MA_KMX16         (* KM211 KMX16 16-bit processor *)
+  | ELF_MA_KMX32         (* KM211 KMX32 32-bit processor *)
+  | ELF_MA_KM32          (* KM211 KM32 32-bit processor *)
+  | ELF_MA_MCHP_PIC      (* Microchip 8-bit PIC(r) family *)
+  | ELF_MA_XCORE         (* XMOS xCORE processor family *)
+  | ELF_MA_BA2           (* Beyond BA2 CPU architecture *)
+  | ELF_MA_BA1           (* Beyond BA1 CPU architecture *)  
+  | ELF_MA_5600EX        (* Freescale 56800EX Digital Signal Controller (DSC) *)
+  | ELF_MA_78KOR         (* 199 Renesas 78KOR family *)
+  | ELF_MA_VideoCore5    (* Broadcom VideoCore V processor *)
+  | ELF_MA_RL78          (* Renesas RL78 family *)
+  | ELF_MA_Open8         (* Open8 8-bit RISC soft processing core *)
+  | ELF_MA_ARC_Compact2  (* Synopsys ARCompact V2 *)
+  | ELF_MA_CoreA_2nd     (* KIPO_KAIST Core-A 2nd generation processor family *)
+  | ELF_MA_CoreA_1st     (* KIPO_KAIST Core-A 1st generation processor family *)
+  | ELF_MA_CloudShield   (* CloudShield architecture family *)
+  | ELF_MA_SLE9X         (* Infineon Technologies SLE9X core *)
+  | ELF_MA_L10M          (* Intel L10M *)
+  | ELF_MA_K10M          (* Intel K10M *)
+  | ELF_MA_AArch64       (* ARM 64-bit architecture (AARCH64) *)
+  | ELF_MA_AVR32         (* Atmel Corporation 32-bit microprocessor family *)
+  | ELF_MA_STM8          (* STMicroelectronics STM8 8-bit microcontroller *)
+  | ELF_MA_TILE64        (* Tilera TILE64 multicore architecture family *)
+  | ELF_MA_TILEPro       (* Tilera TILEPro multicore architecture family *)
+  | ELF_MA_MicroBlaze    (* Xilinix MicroBlaze 32-bit RISC soft processor core *)
+  | ELF_MA_CUDA          (* NVIDIA CUDA architecture *)
+  | ELF_MA_TILEGx        (* Tilera TILE-Gx multicore architecture family *)
+  | ELF_MA_Cypress       (* Cypress M8C microprocessor *)
+  | ELF_MA_R32C          (* Renesas R32C series microprocessors *)
+  | ELF_MA_TriMedia      (* NXP Semiconductors TriMedia architecture family *)
+  | ELF_MA_QDSP6         (* QUALCOMM DSP6 processor *)
+  | ELF_MA_8051          (* Intel 8051 and variants *)
+  | ELF_MA_STXP7X        (* STMicroelectronics STxP7x family of configurable and extensible RISC processors *)
+  | ELF_MA_NDS32         (* Andes Technology compact code size embedded RISC processor family *)
+  | ELF_MA_eCOG1X        (* Cyan Technology eCOG1X family *)
+  | ELF_MA_MAXQ30        (* Dallas Semiconductor MAXQ30 Core Micro-controllers *)
+  | ELF_MA_XIMO16        (* New Japan Radio (NJR) 16-bit DSP Processor *)
+  | ELF_MA_MANIK         (* M2000 Reconfigurable RISC Microprocessor *)
+  | ELF_MA_CrayNV2       (* Cray Inc. NV2 vector architecture *)
+  | ELF_MA_RX            (* Renesas RX family *)
+  | ELF_MA_METAG         (* Imagination Technologies META processor architecture *)
+  | ELF_MA_MCST_Elbrus   (* MCST Elbrus general purpose hardware architecture *)
+  | ELF_MA_eCOG16        (* Cyan Technology eCOG16 family *)
+  | ELF_MA_CR16          (* National Semiconductor CompactRISC CR16 16-bit microprocessor *)
+  | ELF_MA_ETPU          (* Freescale Extended Time Processing Unit *)
+  | ELF_MA_TSK3000       (* Altium TSK3000 core *)
+  | ELF_MA_RS08          (* Freescale RS08 embedded processor *)
+  | ELF_MA_SHARC         (* Analog Devices SHARC family of 32-bit DSP processors *)
+  | ELF_MA_eCOG2         (* Cyan Technology eCOG2 microprocessor *)
+  | ELF_MA_Score7        (* Sunplus S+core7 RISC processor *)
+  | ELF_MA_DSP24         (* New Japan Radio (NJR) 24-bit DSP Processor *)
+  | ELF_MA_VideoCore3    (* Broadcom VideoCore III processor *)
+  | ELF_MA_LatticeMICO32 (* RISC processor for Lattice FPGA architecture *)
+  | ELF_MA_C17           (* Seiko Epson C17 family *)
+  | ELF_MA_C6000         (* The Texas Instruments TMS320C6000 DSP family *)
+  | ELF_MA_C2000         (* The Texas Instruments TMS320C2000 DSP family *)
+  | ELF_MA_C5500         (* The Texas Instruments TMS320C55x DSP family *)
+  | ELF_MA_MMDSP_PLUS    (* STMicroelectronics 64bit VLIW Data Signal Processor *)
+  | ELF_MA_ZSP           (* LSI Logic 16-bit DSP Processor *)
+  | ELF_MA_MMIX          (* Donald Knuth's educational 64-bit processor *)
+  | ELF_MA_HUANY         (* Harvard University machine-independent object files *)
+  | ELF_MA_Prism         (* SiTera Prism *)
+  | ELF_MA_AVR           (* Atmel AVR 8-bit microcontroller *)
+  | ELF_MA_FR30          (* Fujitsu FR30 *)
+  | ELF_MA_D10V          (* Mitsubishi D10V *)
+  | ELF_MA_D30V          (* Mitsubishi D30V *)
+  | ELF_MA_v850          (* NEC v850 *)
+  | ELF_MA_M32R          (* Mitsubishi M32R *)
+  | ELF_MA_MN10300       (* Matsushita MN10300 *)
+  | ELF_MA_MN10200       (* Matsushita MN10200 *)
+  | ELF_MA_pJ            (* picoJava *)
+  | ELF_MA_OpenRISC      (* OpenRISC 32-bit embedded processor *)
+  | ELF_MA_ARC_Compact   (* ARC International ARCompact processor (old spelling/synonym: ELF_MA_ARC_A5) *)
+  | ELF_MA_Xtensa        (* Tensilica Xtensa Architecture *)
+  | ELF_MA_VideoCore     (* Alphamosaic VideoCore processor *)
+  | ELF_MA_TMM_GPP       (* Thompson Multimedia General Purpose Processor *)
+  | ELF_MA_NS32K         (* National Semiconductor 32000 series *)
+  | ELF_MA_TPC           (* Tenor Network TPC processor *)
+  | ELF_MA_SNP1K         (* Trebia SNP 1000 processor *)
+  | ELF_MA_ST200         (* STMicroelectronics ST200 microcontroller *)
+  | ELF_MA_IP2K          (* Ubicom IP2xxx microcontroller family *)
+  | ELF_MA_MAX           (* MAX Processor *)
+  | ELF_MA_CR            (* National Semiconductor CompactRISC microprocessor *)
+  | ELF_MA_F2MC16        (* Fujitsu F2MC16 *)
+  | ELF_MA_MSP430        (* Texas Instruments embedded microcontroller msp430 *)
+  | ELF_MA_Blackfin      (* Analog Devices Blackfin (DSP) processor *)
+  | ELF_MA_SE_C33        (* S1C33 Family of Seiko Epson processors *)
+  | ELF_MA_SEP           (* Sharp embedded microprocessor *)
+  | ELF_MA_Arca          (* Arca RISC Microprocessor *)
+  | ELF_MA_Unicore       (* Microprocessor series from PKU-Unity Ltd. and MPRC of Peking University *)
+  | ELF_MA_eXcess        (* eXcess: 16/32/64-bit configurable embedded CPU *)
+  | ELF_MA_DXP           (* Icera Semiconductor Inc. Deep Execution Processor *)
+  | ELF_MA_Altera_Nios2  (* Altera Nios II soft-core processor *)
+  | ELF_MA_CRX           (* National Semiconductor CompactRISC CRX microprocessor *)
+  | ELF_MA_XGATE         (* Motorola XGATE embedded processor *)
+  | ELF_MA_C166          (* Infineon C16x/XC16x processor *)
+  | ELF_MA_M16C          (* Renesas M16C series microprocessors *)
+  | ELF_MA_dsPIC30F      (* Microchip Technology dsPIC30F Digital Signal Controller *)
+  | ELF_MA_CE            (* Freescale Communication Engine RISC core *)
+  | ELF_MA_M32C          (* Renesas M32C series microprocessors *)
+  | ELF_MA_None          (* No machine *)
+  | ELF_MA_M32           (* AT&T WE 32100 *)
+  | ELF_MA_SPARC         (* SPARC *)
+  | ELF_MA_386           (* Intel 80386 *)
+  | ELF_MA_68K           (* Motorola 68000 *)
+  | ELF_MA_88K           (* Motorola 88000 *)
+  | ELF_MA_860           (* Intel 80860 *)
+  | ELF_MA_MIPS          (* MIPS I Architecture *)
+  | ELF_MA_S370          (* IBM System/370 Processor *)
+  | ELF_MA_MIPS_RS3_LE   (* MIPS RS3000 Little-endian *)
+  | ELF_MA_PARISC        (* Hewlett-Packard PA-RISC *)
+  | ELF_MA_VPP500        (* Fujitsu VPP500 *)
+  | ELF_MA_SPARC32PLUS   (* Enhanced instruction set SPARC *)
+  | ELF_MA_960           (* Intel 80960 *)
+  | ELF_MA_PPC           (* PowerPC *)
+  | ELF_MA_PPC64         (* 64-bit PowerPC *)
+  | ELF_MA_S390          (* IBM System/390 Processor *)
+  | ELF_MA_SPU           (* IBM SPU/SPC *)
+  | ELF_MA_V800          (* NEC V800 *)
+  | ELF_MA_FR20          (* Fujitsu FR20 *)
+  | ELF_MA_RH32          (* TRW RH-32 *)
+  | ELF_MA_RCE           (* Motorola RCE *)
+  | ELF_MA_ARM           (* ARM 32-bit architecture (AARCH32) *)
+  | ELF_MA_Alpha         (* Digital Alpha *)
+  | ELF_MA_SH            (* Hitachi SH *)
+  | ELF_MA_SPARCv9       (* SPARC Version 9 *)
+  | ELF_MA_TriCore       (* Siemens TriCore embedded processor *)
+  | ELF_MA_ARC           (* Argonaut RISC Core, Argonaut Technologies Inc. *)
+  | ELF_MA_H8_300        (* Hitachi H8/300 *)
+  | ELF_MA_H8_300H       (* Hitachi H8/300H *)
+  | ELF_MA_H8S           (* Hitachi H8S *)
+  | ELF_MA_H8_500        (* Hitachi H8/500 *)
+  | ELF_MA_IA_64         (* Intel IA-64 processor architecture *)
+  | ELF_MA_MIPS_X        (* Stanford MIPS-X *)
+  | ELF_MA_ColdFire      (* Motorola ColdFire *)
+  | ELF_MA_68HC12        (* Motorola M68HC12 *)
+  | ELF_MA_MMA           (* Fujitsu MMA Multimedia Accelerator *)
+  | ELF_MA_PCP           (* Siemens PCP *)
+  | ELF_MA_nCPU          (* Sony nCPU embedded RISC processor *)
+  | ELF_MA_NDR1          (* Denso NDR1 microprocessor *)
+  | ELF_MA_StarCore      (* Motorola Star*Core processor *)
+  | ELF_MA_ME16          (* Toyota ME16 processor *)
+  | ELF_MA_ST100         (* STMicroelectronics ST100 processor *)
+  | ELF_MA_TinyJ         (* Advanced Logic Corp. TinyJ embedded processor family *)
+  | ELF_MA_X86_64        (* AMD x86-64 architecture *)
+  | ELF_MA_PDSP          (* Sony DSP Processor *)
+  | ELF_MA_PDP10         (* Digital Equipment Corp. PDP-10 *)
+  | ELF_MA_PDP11         (* Digital Equipment Corp. PDP-11 *)
+  | ELF_MA_FX66          (* Siemens FX66 microcontroller *)
+  | ELF_MA_ST9Plus       (* STMicroelectronics ST9+ 8/16 bit microcontroller *)
+  | ELF_MA_ST7           (* STMicroelectronics ST7 8-bit microcontroller *)
+  | ELF_MA_68HC16        (* Motorola MC68HC16 Microcontroller *)
+  | ELF_MA_68HC11        (* Motorola MC68HC11 Microcontroller *)
+  | ELF_MA_68HC08        (* Motorola MC68HC08 Microcontroller *)
+  | ELF_MA_68HC05        (* Motorola MC68HC05 Microcontroller *)
+  | ELF_MA_SVx           (* Silicon Graphics SVx *)
+  | ELF_MA_ST19          (* STMicroelectronics ST19 8-bit microcontroller *)
+  | ELF_MA_VAX           (* Digital VAX *)
+  | ELF_MA_CRIS          (* Axis Communications 32-bit embedded processor *)
+  | ELF_MA_Javelin       (* Infineon Technologies 32-bit embedded processor *)
+  | ELF_MA_Firepath      (* Element 14 64-bit DSP Processor *)
+  | ELF_MA_Intel209      (* Reserved by Intel *)
+  | ELF_MA_Intel208      (* Reserved by Intel *)
+  | ELF_MA_Intel207      (* Reserved by Intel *)
+  | ELF_MA_Intel206      (* Reserved by Intel *)
+  | ELF_MA_Intel205      (* Reserved by Intel *)
+  | ELF_MA_Intel182      (* Reserved by Intel *)
+  | ELF_MA_ARM184        (* Reserved by ARM *)
+  | ELF_MA_Reserved6     (* Reserved for future use *)
+  | ELF_MA_Reserved11    (* Reserved for future use *)
+  | ELF_MA_Reserved12    (* Reserved for future use *)
+  | ELF_MA_Reserved13    (* Reserved for future use *)
+  | ELF_MA_Reserved14    (* Reserved for future use *)
+  | ELF_MA_Reserved16    (* Reserved for future use *)
+  | ELF_MA_Reserved24    (* Reserved for future use *)
+  | ELF_MA_Reserved25    (* Reserved for future use *)
+  | ELF_MA_Reserved26    (* Reserved for future use *)
+  | ELF_MA_Reserved27    (* Reserved for future use *)
+  | ELF_MA_Reserved28    (* Reserved for future use *)
+  | ELF_MA_Reserved29    (* Reserved for future use *)
+  | ELF_MA_Reserved30    (* Reserved for future use *)
+  | ELF_MA_Reserved31    (* Reserved for future use *)
+  | ELF_MA_Reserved32    (* Reserved for future use *)
+  | ELF_MA_Reserved33    (* Reserved for future use *)
+  | ELF_MA_Reserved34    (* Reserved for future use *)
+  | ELF_MA_Reserved35    (* Reserved for future use *)
+  | ELF_MA_Reserved121   (* Reserved for future use *)
+  | ELF_MA_Reserved122   (* Reserved for future use *)
+  | ELF_MA_Reserved123   (* Reserved for future use *)
+  | ELF_MA_Reserved124   (* Reserved for future use *)
+  | ELF_MA_Reserved125   (* Reserved for future use *)
+  | ELF_MA_Reserved126   (* Reserved for future use *)
+  | ELF_MA_Reserved127   (* Reserved for future use *)
+  | ELF_MA_Reserved128   (* Reserved for future use *)
+  | ELF_MA_Reserved129   (* Reserved for future use *)
+  | ELF_MA_Reserved130   (* Reserved for future use *)
+  | ELF_MA_Reserved143   (* Reserved for future use *)
+  | ELF_MA_Reserved144   (* Reserved for future use *)
+  | ELF_MA_Reserved145   (* Reserved for future use *)
+  | ELF_MA_Reserved146   (* Reserved for future use *)
+  | ELF_MA_Reserved147   (* Reserved for future use *)
+  | ELF_MA_Reserved148   (* Reserved for future use *)
+  | ELF_MA_Reserved149   (* Reserved for future use *)
+  | ELF_MA_Reserved150   (* Reserved for future use *)
+  | ELF_MA_Reserved151   (* Reserved for future use *)
+  | ELF_MA_Reserved152   (* Reserved for future use *)
+  | ELF_MA_Reserved153   (* Reserved for future use *)
+  | ELF_MA_Reserved154   (* Reserved for future use *)
+  | ELF_MA_Reserved155   (* Reserved for future use *)
+  | ELF_MA_Reserved156   (* Reserved for future use *)
+  | ELF_MA_Reserved157   (* Reserved for future use *)
+  | ELF_MA_Reserved158   (* Reserved for future use *)
+  | ELF_MA_Reserved159   (* Reserved for future use *)
+  | ELF_MA_ReservedExt of nat (* Reserved for future use *)
+*)
+
+(** ELF version numbers.  Denotes the ELF version number of an ELF file.  Current is
+  * defined to have a value of 1 with the present specification.  Extensions
+  * may create versions of ELF with higher version numbers.
+  *)
+
+(** Invalid version *)
+let elf_ev_none : nat = 0
+(** Current version *)
+let elf_ev_current : nat = 1
+
+(** [string_of_elf_version_number m] produces a string representation of the
+  * numeric encoding [m] of the ELF version number.
+  *)
+val string_of_elf_version_number : nat -> string
+let string_of_elf_version_number m =
+	if m = elf_ev_none then
+		"Invalid ELF version"
+	else if m = elf_ev_current then
+		"Current ELF version"
+	else
+		"Extended ELF version"
+
+(** Check that an extended version number is correct (i.e. greater than 1). *)
+let is_valid_extended_version_number (n : nat) = n > 1
+
+(** Identification indices.  The initial bytes of an ELF header (and an object
+  * file) correspond to the e_ident member.
+  *)
+
+(** File identification *)
+let elf_ii_mag0 : nat = 0
+(** File identification *)
+let elf_ii_mag1 : nat = 1
+(** File identification *)
+let elf_ii_mag2 : nat = 2
+(** File identification *)
+let elf_ii_mag3 : nat = 3
+(** File class *)
+let elf_ii_class : nat = 4
+(** Data encoding *)
+let elf_ii_data : nat = 5
+(** File version *)
+let elf_ii_version : nat = 6
+(** Operating system/ABI identification *)
+let elf_ii_osabi : nat = 7
+(** ABI version *)
+let elf_ii_abiversion : nat = 8
+(** Start of padding bytes *)
+let elf_ii_pad : nat = 9
+(** Size of e*_ident[] *)
+let elf_ii_nident : nat = 16
+
+(** Magic number indices.  A file's first 4 bytes hold a ``magic number,''
+  * identifying the file as an ELF object file.
+  *)
+
+(** Position: e*_ident[elf_ii_mag0], 0x7f magic number *)
+let elf_mn_mag0 : nat = 127
+(** Position: e*_ident[elf_ii_mag1], 'E' format identifier *)
+let elf_mn_mag1 : nat = 69
+(** Position: e*_ident[elf_ii_mag2], 'L' format identifier *)
+let elf_mn_mag2 : nat = 76
+(** Position: e*_ident[elf_ii_mag3], 'F' format identifier *)
+let elf_mn_mag3 : nat = 70
+
+(** ELf file classes.  The file format is designed to be portable among machines
+  * of various sizes, without imposing the sizes of the largest machine on the
+  * smallest. The class of the file defines the basic types used by the data
+  * structures of the object file container itself.
+  *)
+
+(** Invalid class *)
+let elf_class_none : nat = 0
+(** 32 bit objects *)
+let elf_class_32 : nat = 1
+(** 64 bit objects *)
+let elf_class_64 : nat = 2
+
+(** [string_of_elf_file_class m] produces a string representation of the numeric
+  * encoding [m] of the ELF file class.
+  *)
+val string_of_elf_file_class : nat -> string
+let string_of_elf_file_class m =
+	if m = elf_class_none then
+		"Invalid ELF file class"
+	else if m = elf_class_32 then
+		"32 bit ELF object"
+	else if m = elf_class_64 then
+		"64 bit ELF object"
+	else
+		"Invalid ELF file class"
+
+(** ELF data encodings.  Byte e_ident[elf_ei_data] specifies the encoding of both the
+  * data structures used by object file container and data contained in object
+  * file sections.
+  *)
+
+(** Invalid data encoding *)
+let elf_data_none : nat = 0
+(** Two's complement values, least significant byte occupying lowest address *)
+let elf_data_2lsb : nat = 1
+(** Two's complement values, most significant byte occupying lowest address *)
+let elf_data_2msb : nat = 2
+
+(** [string_of_elf_data_encoding m] produces a string representation of the
+  * numeric encoding [m] of the ELF data encoding.
+  *)
+val string_of_elf_data_encoding : nat -> string
+let string_of_elf_data_encoding m =
+	if m = elf_data_none then
+		"Invalid data encoding"
+	else if m = elf_data_2lsb then
+		"Two's complement values, LSB at lowest address"
+	else if m = elf_data_2msb then
+		"Two's complement values, MSB at lowest address"
+	else
+		"Invalid data encoding"
+
+(** OS and ABI versions.  Byte e_ident[elf_ei_osabi] identifies the OS- or
+  * ABI-specific ELF extensions used by this file. Some fields in other ELF
+  * structures have flags and values that have operating system and/or ABI
+  * specific meanings; the interpretation of those fields is determined by the
+  * value of this byte.
+  *)
+
+(** No extensions or unspecified *)
+let elf_osabi_none : nat = 0
+(** Hewlett-Packard HP-UX *)
+let elf_osabi_hpux : nat = 1
+(** NetBSD *)
+let elf_osabi_netbsd : nat = 2
+(** GNU *)
+let elf_osabi_gnu : nat = 3
+(** Linux, historical alias for GNU *)
+let elf_osabi_linux : nat = 3
+(** Sun Solaris *)
+let elf_osabi_solaris : nat = 6
+(** AIX *)
+let elf_osabi_aix : nat = 7
+(** IRIX *)
+let elf_osabi_irix : nat = 8
+(** FreeBSD *)
+let elf_osabi_freebsd : nat = 9
+(** Compaq Tru64 Unix *)
+let elf_osabi_tru64 : nat = 10
+(** Novell Modesto *)
+let elf_osabi_modesto : nat = 11
+(** OpenBSD *)
+let elf_osabi_openbsd : nat = 12
+(** OpenVMS *)
+let elf_osabi_openvms : nat = 13
+(** Hewlett-Packard Non-stop Kernel *)
+let elf_osabi_nsk : nat = 14
+(** Amiga Research OS *)
+let elf_osabi_aros : nat = 15
+(** FenixOS highly-scalable multi-core OS *)
+let elf_osabi_fenixos : nat = 16
+
+(** [string_of_elf_osabi_version m] produces a string representation of the
+  * numeric encoding [m] of the ELF OSABI version.
+  *)
+val string_of_elf_osabi_version : nat -> string
+let string_of_elf_osabi_version m =
+	if m = elf_osabi_none then
+		"No extension or unspecified"
+	else if m = elf_osabi_netbsd then
+		"Hewlett-Packard HP-UX"
+	else if m = elf_osabi_netbsd then
+		"NetBSD"
+	else if m = elf_osabi_gnu then
+		"GNU"
+	else if m = elf_osabi_linux then
+		"Linux (GNU alias)"
+	else if m = elf_osabi_solaris then
+		"Sun Solaris"
+	else if m = elf_osabi_aix then
+		"AIX"
+	else if m = elf_osabi_irix then
+		"IRIX"
+	else if m = elf_osabi_freebsd then
+		"FreeBSD"
+	else if m = elf_osabi_tru64 then
+		"Compaq Tru64 Unix"
+	else if m = elf_osabi_modesto then
+		"Novell Modesto"
+	else if m = elf_osabi_openbsd then
+		"OpenBSD"
+	else if m = elf_osabi_openvms then
+		"OpenVMS"
+	else if m = elf_osabi_nsk then
+		"Hewlett-Packard Non-stop Kernel"
+	else if m = elf_osabi_aros then
+		"Amiga Research OS"
+	else if m = elf_osabi_fenixos then
+		"FenixOS highly-scalable multi-core OS"
+	else
+		"Invalid OSABI version"
+
+(** Checks an architecture defined OSABI version is correct, i.e. in the range
+  * 64 to 255 inclusive.
+  *)
+let is_valid_architecture_defined_osabi_version (n : nat) = n >= 64 && n <= 255
+
+(** ELF Header type *)
+
+(** [ei_nident] is the fixed length of the identification field in the
+  * [elf32_ehdr] type.
+  *)
+val ei_nident : nat
+let ei_nident = 16
+
+(** [elf32_header] is the type of headers for 32-bit ELF files.
+  *)
+type elf32_header =
+  <| elf32_ident    : list unsigned_char (** Identification field *)
+   ; elf32_type     : elf32_half         (** The object file type *)
+   ; elf32_machine  : elf32_half         (** Required machine architecture *)
+   ; elf32_version  : elf32_word         (** Object file version *)
+   ; elf32_entry    : elf32_addr         (** Virtual address for transfer of control *)
+   ; elf32_phoff    : elf32_off          (** Program header table offset in bytes *)
+   ; elf32_shoff    : elf32_off          (** Section header table offset in bytes *)
+   ; elf32_flags    : elf32_word         (** Processor-specific flags *)
+   ; elf32_ehsize   : elf32_half         (** ELF header size in bytes *)
+   ; elf32_phentsize: elf32_half         (** Program header table entry size in bytes *)
+   ; elf32_phnum    : elf32_half         (** Number of entries in program header table *)
+   ; elf32_shentsize: elf32_half         (** Section header table entry size in bytes *)
+   ; elf32_shnum    : elf32_half         (** Number of entries in section header table *)
+   ; elf32_shstrndx : elf32_half         (** Section header table entry for section name string table *)
+   |>
+
+class (HasElf32Header 'a)
+  val get_elf32_header : 'a -> elf32_header
+end
+
+(** [elf64_header] is the type of headers for 32-bit ELF files.
+  *)
+type elf64_header =
+  <| elf64_ident    : list unsigned_char (** Identification field *)
+   ; elf64_type     : elf64_half         (** The object file type *)
+   ; elf64_machine  : elf64_half         (** Required machine architecture *)
+   ; elf64_version  : elf64_word         (** Object file version *)
+   ; elf64_entry    : elf64_addr         (** Virtual address for transfer of control *)
+   ; elf64_phoff    : elf64_off          (** Program header table offset in bytes *)
+   ; elf64_shoff    : elf64_off          (** Section header table offset in bytes *)
+   ; elf64_flags    : elf64_word         (** Processor-specific flags *)
+   ; elf64_ehsize   : elf64_half         (** ELF header size in bytes *)
+   ; elf64_phentsize: elf64_half         (** Program header table entry size in bytes *)
+   ; elf64_phnum    : elf64_half         (** Number of entries in program header table *)
+   ; elf64_shentsize: elf64_half         (** Section header table entry size in bytes *)
+   ; elf64_shnum    : elf64_half         (** Number of entries in section header table *)
+   ; elf64_shstrndx : elf64_half         (** Section header table entry for section name string table *)
+   |>
+
+class (HasElf64Header 'a)
+  val get_elf64_header : 'a -> elf64_header
+end
+
+(** [deduce_endian] deduces the endianness of an ELF file based on the ELF
+  * header's magic number.
+  *)
+val deduce_endianness : list unsigned_char -> endianness
+let deduce_endianness id =
+  match List.index id 5 with
+    | Nothing -> Little (* XXX: random default as read of magic number has failed! *)
+    | Just v  ->
+      if nat_of_unsigned_char v = elf_data_2lsb then
+        Little
+      else if nat_of_unsigned_char v = elf_data_2msb then
+        Big
+      else
+        Little (* XXX: random default as value is not valid! *)
+  end
+
+val get_elf32_header_endianness : elf32_header -> endianness
+let get_elf32_header_endianness hdr =
+  deduce_endianness (hdr.elf32_ident)
+
+val get_elf64_header_endianness : elf64_header -> endianness
+let get_elf64_header_endianness hdr =
+  deduce_endianness (hdr.elf64_ident)
+
+(** The [hdr_print_bundle] type is used to tidy up other type signatures.  Some of the
+  * top-level string_of_ functions require six or more functions passed to them,
+  * which quickly gets out of hand.  This type is used to reduce that complexity.
+  * The first component of the type is an OS specific print function, the second is
+  * a processor specific print function.
+  *)
+type hdr_print_bundle = (nat -> string) * (nat -> string)
+
+val string_of_elf32_header : hdr_print_bundle -> elf32_header -> string
+let string_of_elf32_header (os, proc) hdr =
+	unlines [
+	  "\t" ^ "Magic number: " ^ show hdr.elf32_ident
+  ; "\t" ^ "Endianness: " ^ show (deduce_endianness hdr.elf32_ident)
+	; "\t" ^ "Type: " ^ string_of_elf_file_type os proc (nat_of_elf32_half hdr.elf32_type)
+  ; "\t" ^ "Version: " ^ string_of_elf_version_number (nat_of_elf32_word hdr.elf32_version)
+	; "\t" ^ "Machine: " ^ string_of_elf_machine_architecture (nat_of_elf32_half hdr.elf32_machine)
+  ; "\t" ^ "Entry point: " ^ show hdr.elf32_entry
+  ; "\t" ^ "Flags: " ^ show hdr.elf32_flags
+  ; "\t" ^ "Entries in program header table: " ^ show hdr.elf32_phnum
+  ; "\t" ^ "Entries in section header table: " ^ show hdr.elf32_shnum
+	]
+
+val string_of_elf64_header : hdr_print_bundle -> elf64_header -> string
+let string_of_elf64_header (os, proc) hdr =
+  unlines [
+    "\t" ^ "Magic number: " ^ show hdr.elf64_ident
+  ; "\t" ^ "Endianness: " ^ show (deduce_endianness hdr.elf64_ident)
+  ; "\t" ^ "Type: " ^ string_of_elf_file_type os proc (nat_of_elf64_half hdr.elf64_type)
+  ; "\t" ^ "Version: " ^ string_of_elf_version_number (nat_of_elf64_word hdr.elf64_version)
+  ; "\t" ^ "Machine: " ^ string_of_elf_machine_architecture (nat_of_elf64_half hdr.elf64_machine)
+  ; "\t" ^ "Entry point: " ^ show hdr.elf64_entry
+  ; "\t" ^ "Flags: " ^ show hdr.elf64_flags
+  ; "\t" ^ "Entries in program header table: " ^ show hdr.elf64_phnum
+  ; "\t" ^ "Entries in section header table: " ^ show hdr.elf64_shnum
+  ]
+
+val string_of_elf32_header_default : elf32_header -> string
+let string_of_elf32_header_default =
+	string_of_elf32_header
+    ((const "*Default OS specific print*"),
+      (const "*Default processor specific print*"))
+
+val string_of_elf64_header_default : elf64_header -> string
+let string_of_elf64_header_default =
+  string_of_elf64_header
+    ((const "*Default OS specific print*"),
+      (const "*Default processor specific print*"))
+	
+instance (Show elf32_header)
+	let show = string_of_elf32_header_default
+end
+
+instance (Show elf64_header)
+  let show = string_of_elf64_header_default
+end
+
+val read_elf32_header : bitstring -> error (elf32_header * bitstring)
+let read_elf32_header bs =
+	repeatM' ei_nident bs (read_unsigned_char default_endianness) >>= fun (ident, bs) ->
+  let endian = deduce_endianness ident in
+	read_elf32_half endian bs >>= fun (typ, bs) ->
+	read_elf32_half endian bs >>= fun (machine, bs) ->
+	read_elf32_word endian bs >>= fun (version, bs) ->
+	read_elf32_addr endian bs >>= fun (entry, bs) ->
+	read_elf32_off  endian bs >>= fun (phoff, bs) ->
+	read_elf32_off  endian bs >>= fun (shoff, bs) ->
+	read_elf32_word endian bs >>= fun (flags, bs) ->
+	read_elf32_half endian bs >>= fun (ehsize, bs) ->
+	read_elf32_half endian bs >>= fun (phentsize, bs) ->
+	read_elf32_half endian bs >>= fun (phnum, bs) ->
+	read_elf32_half endian bs >>= fun (shentsize, bs) ->
+	read_elf32_half endian bs >>= fun (shnum, bs) ->
+	read_elf32_half endian bs >>= fun (shstrndx, bs) ->
+    match List.index ident 4 with
+      | Nothing -> fail "read_elf32_header: transcription of ELF identifier failed"
+      | Just c  ->
+        if nat_of_unsigned_char c = elf_class_32 then
+		      return (<| elf32_ident = ident; elf32_type  = typ;
+                      elf32_machine = machine; elf32_version = version;
+                      elf32_entry = entry; elf32_phoff = phoff;
+                      elf32_shoff = shoff; elf32_flags = flags;
+                      elf32_ehsize = ehsize; elf32_phentsize = phentsize;
+                      elf32_phnum = phnum; elf32_shentsize = shentsize;
+                      elf32_shnum = shnum; elf32_shstrndx = shstrndx |>, bs)
+        else
+          fail "read_elf32_header: not a 32-bit ELF file"
+    end
+
+val read_elf64_header : bitstring -> error (elf64_header * bitstring)
+let read_elf64_header bs =
+  repeatM' ei_nident bs (read_unsigned_char default_endianness) >>= fun (ident, bs) ->
+  let endian = deduce_endianness ident in
+  read_elf64_half endian bs >>= fun (typ, bs) ->
+  read_elf64_half endian bs >>= fun (machine, bs) ->
+  read_elf64_word endian bs >>= fun (version, bs) ->
+  read_elf64_addr endian bs >>= fun (entry, bs) ->
+  read_elf64_off  endian bs >>= fun (phoff, bs) ->
+  read_elf64_off  endian bs >>= fun (shoff, bs) ->
+  read_elf64_word endian bs >>= fun (flags, bs) ->
+  read_elf64_half endian bs >>= fun (ehsize, bs) ->
+  read_elf64_half endian bs >>= fun (phentsize, bs) ->
+  read_elf64_half endian bs >>= fun (phnum, bs) ->
+  read_elf64_half endian bs >>= fun (shentsize, bs) ->
+  read_elf64_half endian bs >>= fun (shnum, bs) ->
+  read_elf64_half endian bs >>= fun (shstrndx, bs) ->
+    match List.index ident 4 with
+      | Nothing -> fail "read_elf64_header: transcription of ELF identifier failed"
+      | Just c  ->
+        if nat_of_unsigned_char c = elf_class_64 then
+          return (<| elf64_ident = ident; elf64_type  = typ;
+                     elf64_machine = machine; elf64_version = version;
+                     elf64_entry = entry; elf64_phoff = phoff;
+                     elf64_shoff = shoff; elf64_flags = flags;
+                     elf64_ehsize = ehsize; elf64_phentsize = phentsize;
+                     elf64_phnum = phnum; elf64_shentsize = shentsize;
+                     elf64_shnum = shnum; elf64_shstrndx = shstrndx |>, bs)
+        else
+          fail "read_elf64_header: not a 64-bit ELF file"
+    end
+
+val is_elf32_header_padding_correct : elf32_header -> bool
+let is_elf32_header_padding_correct ehdr =
+  List.index ehdr.elf32_ident 9  = Just (unsigned_char_of_nat 0) &&
+  List.index ehdr.elf32_ident 10 = Just (unsigned_char_of_nat 0) &&
+  List.index ehdr.elf32_ident 11 = Just (unsigned_char_of_nat 0) &&
+  List.index ehdr.elf32_ident 12 = Just (unsigned_char_of_nat 0) &&
+  List.index ehdr.elf32_ident 13 = Just (unsigned_char_of_nat 0) &&
+  List.index ehdr.elf32_ident 14 = Just (unsigned_char_of_nat 0) &&
+  List.index ehdr.elf32_ident 15 = Just (unsigned_char_of_nat 0)
+
+val is_elf32_header_magic_number_correct : elf32_header -> bool
+let is_elf32_header_magic_number_correct ehdr =
+  List.index ehdr.elf32_ident 0 = Just (unsigned_char_of_nat 127) &&
+  List.index ehdr.elf32_ident 1 = Just (unsigned_char_of_nat 69)  &&
+  List.index ehdr.elf32_ident 2 = Just (unsigned_char_of_nat 76)  &&
+  List.index ehdr.elf32_ident 3 = Just (unsigned_char_of_nat 70)
+
+val is_elf32_header_class_correct : elf32_header -> bool
+let is_elf32_header_class_correct ehdr =
+  List.index ehdr.elf32_ident 4 = Just (unsigned_char_of_nat 1)
+
+val is_elf32_header_version_correct : elf32_header -> bool
+let is_elf32_header_version_correct ehdr =
+  List.index ehdr.elf32_ident 6 = Just (unsigned_char_of_nat 1)
+
+(** [is_valid_elf32_header] checks whether an [elf32_header] value is a valid 32-bit
+  * ELF file header (i.e. [elf32_ident] is [ei_nident] entries long, and other
+  * constraints on headers).
+  *)
+val is_elf32_header_valid : elf32_header -> bool
+let is_elf32_header_valid ehdr =
+  List.length ehdr.elf32_ident = ei_nident &&
+  is_elf32_header_magic_number_correct ehdr &&
+  is_elf32_header_padding_correct ehdr &&
+  is_elf32_header_class_correct ehdr &&
+  is_elf32_header_version_correct ehdr
+
+(** [get_elf32_header_program_table_size] calculates the size of the program table
+  * (entry size x number of entries) based on data in the ELF header.
+  *)
+val get_elf32_header_program_table_size : elf32_header -> nat
+let get_elf32_header_program_table_size ehdr =
+  let phentsize = nat_of_elf32_half ehdr.elf32_phentsize in
+  let phnum     = nat_of_elf32_half ehdr.elf32_phnum in
+    phentsize * phnum
+
+(** [get_elf64_header_program_table_size] calculates the size of the program table
+  * (entry size x number of entries) based on data in the ELF header.
+  *)
+val get_elf64_header_program_table_size : elf64_header -> nat
+let get_elf64_header_program_table_size ehdr =
+  let phentsize = nat_of_elf64_half ehdr.elf64_phentsize in
+  let phnum     = nat_of_elf64_half ehdr.elf64_phnum in
+    phentsize * phnum
+
+(** [is_elf32_header_section_table_present] calculates whether a section table
+  * is present in the ELF file or not.
+  *)
+val is_elf32_header_section_table_present : elf32_header -> bool
+let is_elf32_header_section_table_present ehdr =
+  not (nat_of_elf32_off ehdr.elf32_shoff = 0)
+
+(** [is_elf64_header_section_table_present] calculates whether a section table
+  * is present in the ELF file or not.
+  *)
+val is_elf64_header_section_table_present : elf64_header -> bool
+let is_elf64_header_section_table_present ehdr =
+  not (nat_of_elf64_off ehdr.elf64_shoff = 0)
+
+(** [get_elf32_header_section_table_size] calculates the size of the section table
+  * (entry size x number of entries) based on data in the ELF header.
+  *)
+val get_elf32_header_section_table_size : elf32_header -> nat
+let get_elf32_header_section_table_size ehdr =
+  let shentsize = nat_of_elf32_half ehdr.elf32_shentsize in
+  let shnum     = nat_of_elf32_half ehdr.elf32_shnum in
+    shentsize * shnum
+
+(** [get_elf64_header_section_table_size] calculates the size of the section table
+  * (entry size x number of entries) based on data in the ELF header.
+  *)
+val get_elf64_header_section_table_size : elf64_header -> nat
+let get_elf64_header_section_table_size ehdr =
+  let shentsize = nat_of_elf64_half ehdr.elf64_shentsize in
+  let shnum     = nat_of_elf64_half ehdr.elf64_shnum in
+    shentsize * shnum

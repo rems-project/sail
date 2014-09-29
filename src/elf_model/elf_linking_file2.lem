@@ -1,0 +1,13 @@
+open import Bitstring
+
+open import Elf_header
+open import Elf_section_header_table
+
+open import Maybe
+
+type elf32_linking_file2 =
+  <| elf32_executable_file2_header               : elf32_header
+   ; elf32_executable_file2_program_header_table : maybe elf32_program_header_table
+   ; elf32_executable_file2_body                 : bitstring
+   ; elf32_executable_file2_section_header_table : elf32_section_header_table
+   |>

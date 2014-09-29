@@ -1,0 +1,292 @@
+open import Num
+open import String
+
+open import Endianness
+
+open import Bitstring
+open import Error
+open import Show
+
+(** unsigned char type and bindings *)
+
+type unsigned_char
+
+declare ocaml target_rep type unsigned_char = `Uint32.t`
+
+(** [string_of_unsigned_char uc] provides a string representation of unsigned
+  * char [uc] (in base 10).
+  *)
+val string_of_unsigned_char : unsigned_char -> string
+
+(** [nat_of_unsigned_char uc] converts an unsigned char [uc] into a nat.
+  *)
+val nat_of_unsigned_char : unsigned_char -> nat
+
+(** [unsigned_char_of_nat n] converts a nat [n] into an unsigned char, wrapping
+  * around if the size of the nat exceeds the storage capacity of an unsigned
+  * char.
+  *)
+val unsigned_char_of_nat : nat -> unsigned_char
+
+(** [unsigned_char_land uc0 uc1] bitwise ANDs two unsigned chars, [uc0] and [uc1]
+  * together.
+  *)
+val unsigned_char_land   : unsigned_char -> unsigned_char -> unsigned_char
+
+(** [unsigned_char_lshift uc n] performs a left bitshift of [n] places on unsigned
+  * char [uc].
+  *)
+val unsigned_char_lshift : unsigned_char -> nat -> unsigned_char
+
+(** [unsigned_char_rshift uc n] performs a right bitshift of [n] places on unsigned
+  * char [uc].
+  *)
+val unsigned_char_rshift : unsigned_char -> nat -> unsigned_char
+
+(** [unsigned_char_plus uc0 uc1] adds two unsigned chars, [uc0] and [uc1].
+  *)
+val unsigned_char_plus   : unsigned_char -> unsigned_char -> unsigned_char
+
+(** [read_unsigned_char end bs0] reads an unsigned char from bitstring [bs0]
+  * assuming endianness [end].  Returns the unsigned char and the remainder of
+  * the bitstring.  Fails if an unsigned char cannot be read from the bitstring,
+  * e.g. if [bs0] is too small.
+  *)
+val read_unsigned_char   : endianness -> bitstring -> error (unsigned_char * bitstring)
+
+declare ocaml target_rep function string_of_unsigned_char = `Uint32.to_string`
+declare ocaml target_rep function nat_of_unsigned_char = `Uint32.to_int`
+declare ocaml target_rep function unsigned_char_of_nat = `Uint32.of_int`
+declare ocaml target_rep function unsigned_char_land = `Uint32.logand`
+declare ocaml target_rep function unsigned_char_lshift = `Uint32.shift_left`
+declare ocaml target_rep function unsigned_char_rshift = `Uint64.shift_right`
+declare ocaml target_rep function unsigned_char_plus = `Uint32.add`
+declare ocaml target_rep function read_unsigned_char = `Ml_bindings.read_unsigned_char`
+
+instance (Show unsigned_char)
+	let show = string_of_unsigned_char
+end
+
+(** elf32_addr type and bindings *)
+
+type elf32_addr
+
+declare ocaml target_rep type elf32_addr = `Uint32.t`
+
+val string_of_elf32_addr : elf32_addr -> string
+val nat_of_elf32_addr : elf32_addr -> nat
+val read_elf32_addr : endianness -> bitstring -> error (elf32_addr * bitstring)
+
+declare ocaml target_rep function string_of_elf32_addr = `Uint32.to_string`
+declare ocaml target_rep function read_elf32_addr = `Ml_bindings.read_elf32_addr`
+declare ocaml target_rep function nat_of_elf32_addr = `Uint32.to_int`
+
+instance (Show elf32_addr)
+	let show = string_of_elf32_addr
+end
+
+(** elf64_addr type and bindings *)
+
+type elf64_addr
+
+declare ocaml target_rep type elf64_addr = `Uint64.t`
+
+val string_of_elf64_addr : elf64_addr -> string
+val nat_of_elf64_addr : elf64_addr -> nat
+val read_elf64_addr : endianness -> bitstring -> error (elf64_addr * bitstring)
+
+declare ocaml target_rep function string_of_elf64_addr = `Uint64.to_string`
+declare ocaml target_rep function read_elf64_addr = `Ml_bindings.read_elf64_addr`
+declare ocaml target_rep function nat_of_elf64_addr = `Uint64.to_int`
+
+instance (Show elf64_addr)
+  let show = string_of_elf64_addr
+end
+
+(** elf32_half type and bindings *)
+
+type elf32_half
+
+declare ocaml target_rep type elf32_half = `Uint32.t`
+
+val string_of_elf32_half : elf32_half -> string
+val read_elf32_half : endianness -> bitstring -> error (elf32_half * bitstring)
+val nat_of_elf32_half : elf32_half -> nat
+
+declare ocaml target_rep function string_of_elf32_half = `Uint32.to_string`
+declare ocaml target_rep function read_elf32_half = `Ml_bindings.read_elf32_half`
+declare ocaml target_rep function nat_of_elf32_half = `Uint32.to_int`
+
+instance (Show elf32_half)
+	let show = string_of_elf32_half
+end
+
+(** elf64_half type and bindings *)
+
+type elf64_half
+
+declare ocaml target_rep type elf64_half = `Uint32.t`
+
+val string_of_elf64_half : elf64_half -> string
+val read_elf64_half : endianness -> bitstring -> error (elf64_half * bitstring)
+val nat_of_elf64_half : elf64_half -> nat
+
+declare ocaml target_rep function string_of_elf64_half = `Uint32.to_string`
+declare ocaml target_rep function read_elf64_half = `Ml_bindings.read_elf64_half`
+declare ocaml target_rep function nat_of_elf64_half = `Uint32.to_int`
+
+instance (Show elf64_half)
+  let show = string_of_elf64_half
+end
+
+(** elf32_off type and bindings *)
+
+type elf32_off
+
+declare ocaml target_rep type elf32_off = `Uint32.t`
+
+val string_of_elf32_off : elf32_off -> string
+val nat_of_elf32_off : elf32_off -> nat
+val read_elf32_off : endianness -> bitstring -> error (elf32_off * bitstring)
+
+declare ocaml target_rep function string_of_elf32_off = `Uint32.to_string`
+declare ocaml target_rep function read_elf32_off = `Ml_bindings.read_elf32_off`
+declare ocaml target_rep function nat_of_elf32_off = `Uint32.to_int`
+
+instance (Show elf32_off)
+	let show = string_of_elf32_off
+end
+
+(** elf64_off type and bindings *)
+
+type elf64_off
+
+declare ocaml target_rep type elf64_off = `Uint64.t`
+
+val string_of_elf64_off : elf64_off -> string
+val nat_of_elf64_off : elf64_off -> nat
+val read_elf64_off : endianness -> bitstring -> error (elf64_off * bitstring)
+
+declare ocaml target_rep function string_of_elf64_off = `Uint64.to_string`
+declare ocaml target_rep function read_elf64_off = `Ml_bindings.read_elf64_off`
+declare ocaml target_rep function nat_of_elf64_off = `Uint64.to_int`
+
+instance (Show elf64_off)
+  let show = string_of_elf64_off
+end
+
+(** elf32_word type and bindings *)
+
+type elf32_word
+
+declare ocaml target_rep type elf32_word = `Uint32.t`
+
+val string_of_elf32_word : elf32_word -> string
+val nat_of_elf32_word : elf32_word -> nat
+val elf32_word_of_int32 : int32 -> elf32_word
+val elf32_word_land : elf32_word -> elf32_word -> elf32_word
+val read_elf32_word : endianness -> bitstring -> error (elf32_word * bitstring)
+
+declare ocaml target_rep function string_of_elf32_word = `Uint32.to_string`
+declare ocaml target_rep function read_elf32_word = `Ml_bindings.read_elf32_word`
+declare ocaml target_rep function nat_of_elf32_word = `Uint32.to_int`
+declare ocaml target_rep function elf32_word_of_int32 = `Uint32.of_int32`
+declare ocaml target_rep function elf32_word_land = `Uint32.logand`
+
+instance (Show elf32_word)
+	let show = string_of_elf32_word
+end
+
+(** elf64_word type and bindings *)
+
+type elf64_word
+
+declare ocaml target_rep type elf64_word = `Uint32.t`
+
+val string_of_elf64_word : elf64_word -> string
+val nat_of_elf64_word : elf64_word -> nat
+val elf64_word_of_int32 : int32 -> elf64_word
+val elf64_word_land : elf64_word -> elf64_word -> elf64_word
+val read_elf64_word : endianness -> bitstring -> error (elf64_word * bitstring)
+
+declare ocaml target_rep function string_of_elf64_word = `Uint32.to_string`
+declare ocaml target_rep function read_elf64_word = `Ml_bindings.read_elf64_word`
+declare ocaml target_rep function nat_of_elf64_word = `Uint32.to_int`
+declare ocaml target_rep function elf64_word_of_int32 = `Uint32.of_int32`
+declare ocaml target_rep function elf64_word_land = `Uint32.logand`
+
+instance (Show elf64_word)
+  let show = string_of_elf64_word
+end
+
+(** elf32_sword type and bindings *)
+
+type elf32_sword
+
+declare ocaml target_rep type elf32_sword = `Int32.t`
+
+val string_of_elf32_sword : elf32_sword -> string
+val nat_of_elf32_sword : elf32_sword -> nat
+val read_elf32_sword : endianness -> bitstring -> error (elf32_sword * bitstring)
+
+declare ocaml target_rep function string_of_elf32_sword = `Int32.to_string`
+declare ocaml target_rep function read_elf32_sword = `Ml_bindings.read_elf32_sword`
+declare ocaml target_rep function nat_of_elf32_sword = `Int32.to_int`
+
+instance (Show elf32_sword)
+	let show = string_of_elf32_sword
+end
+
+(** elf64_sword type and bindings *)
+
+type elf64_sword
+
+declare ocaml target_rep type elf64_sword = `Int32.t`
+
+val string_of_elf64_sword : elf64_sword -> string
+val nat_of_elf64_sword : elf64_sword -> nat
+val read_elf64_sword : endianness -> bitstring -> error (elf64_sword * bitstring)
+
+declare ocaml target_rep function string_of_elf64_sword = `Int32.to_string`
+declare ocaml target_rep function read_elf64_sword = `Ml_bindings.read_elf64_sword`
+declare ocaml target_rep function nat_of_elf64_sword = `Int32.to_int`
+
+instance (Show elf64_sword)
+  let show = string_of_elf64_sword
+end
+
+(** elf64_sword type and bindings *)
+
+type elf64_xword
+
+declare ocaml target_rep type elf64_xword = `Uint64.t`
+
+val string_of_elf64_xword : elf64_xword -> string
+val nat_of_elf64_xword : elf64_xword -> nat
+val read_elf64_xword : endianness -> bitstring -> error (elf64_xword * bitstring)
+
+declare ocaml target_rep function string_of_elf64_xword = `Uint64.to_string`
+declare ocaml target_rep function read_elf64_xword = `Ml_bindings.read_elf64_xword`
+declare ocaml target_rep function nat_of_elf64_xword = `Uint64.to_int`
+
+instance (Show elf64_xword)
+  let show = string_of_elf64_xword
+end
+
+(** elf64_sxword type and bindings *)
+
+type elf64_sxword
+
+declare ocaml target_rep type elf64_sxword = `Int64.t`
+
+val string_of_elf64_sxword : elf64_sxword -> string
+val nat_of_elf64_sxword : elf64_sxword -> nat
+val read_elf64_sxword : endianness -> bitstring -> error (elf64_sxword * bitstring)
+
+declare ocaml target_rep function string_of_elf64_sxword = `Int64.to_string`
+declare ocaml target_rep function read_elf64_sxword = `Ml_bindings.read_elf64_sxword`
+declare ocaml target_rep function nat_of_elf64_sxword = `Int64.to_int`
+
+instance (Show elf64_sxword)
+  let show = string_of_elf64_sxword
+end

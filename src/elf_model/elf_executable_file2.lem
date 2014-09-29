@@ -1,0 +1,175 @@
+open import Basic_classes
+open import Bool
+open import Maybe
+open import Num
+open import String
+
+open import Elf_file1
+open import Elf_header
+open import Elf_program_header_table
+open import Elf_types
+
+open import Bitstring
+open import Error
+open import Missing_pervasives
+open import Show
+
+(** Type [elf32_executable_file2] represents the lazy unfolding of a 32-bit ELF
+  * file where the structure of the header, program header table (mandatory).
+  *)
+type elf32_executable_file2 =
+  <| elf32_executable_file2_header               : elf32_header               (** The ELF header (mandatory) *)
+   ; elf32_executable_file2_program_header_table : elf32_program_header_table (** The program header table (mandatory) *)
+   ; elf32_executable_file2_body                 : bitstring                  (** Uninterpreted data *)
+   |>
+
+class (HasElf32ExecutableFile2 'a)
+  val get_elf32_executable_file2 : 'a -> elf32_executable_file2
+end
+
+instance (HasElf32ExecutableFile2 elf32_executable_file2)
+  let get_elf32_executable_file2 f2 = f2
+end
+
+instance (HasElf32File1 elf32_executable_file2)
+  let get_elf32_file1 f2 =
+    <| elf32_file1_header = f2.elf32_executable_file2_header;
+         elf32_file1_body = f2.elf32_executable_file2_body |>
+end
+
+instance (HasElf32Header elf32_executable_file2)
+  let get_elf32_header f2 = f2.elf32_executable_file2_header
+end
+
+instance (HasElf32ProgramHeaderTable elf32_executable_file2)
+  let get_elf32_program_header_table f2 = Just (f2.elf32_executable_file2_program_header_table)
+end
+
+(** Type [elf64_executable_file2] represents the lazy unfolding of a 64-bit ELF
+  * file where the structure of the header, program header table (mandatory).
+  *)
+type elf64_executable_file2 =
+  <| elf64_executable_file2_header               : elf64_header               (** The ELF header (mandatory) *)
+   ; elf64_executable_file2_program_header_table : elf64_program_header_table (** The program header table (mandatory) *)
+   ; elf64_executable_file2_body                 : bitstring                  (** Uninterpreted data *)
+   |>
+
+class (HasElf64ExecutableFile2 'a)
+  val get_elf64_executable_file2 : 'a -> elf64_executable_file2
+end
+
+instance (HasElf64ExecutableFile2 elf64_executable_file2)
+  let get_elf64_executable_file2 f2 = f2
+end
+
+instance (HasElf64File1 elf64_executable_file2)
+  let get_elf64_file1 f2 =
+    <| elf64_file1_header = f2.elf64_executable_file2_header;
+         elf64_file1_body = f2.elf64_executable_file2_body |>
+end
+
+instance (HasElf64Header elf64_executable_file2)
+  let get_elf64_header f2 = f2.elf64_executable_file2_header
+end
+
+instance (HasElf64ProgramHeaderTable elf64_executable_file2)
+  let get_elf64_program_header_table f2 = Just (f2.elf64_executable_file2_program_header_table)
+end
+
+(** [refine_elf32_file1 f1] refines the [elf31_file1] [f1] adding the
+  * mandatory program header table to [f1]'s header.  Fails if [f1]'s header
+  * states that no program header table is present, or if there is some other
+  * transcription error when reading from [f1]'s body.
+  *)
+val refine_elf32_file1 : elf32_file1 -> error elf32_executable_file2
+let refine_elf32_file1 f1 =
+  if not (is_executable_elf32_file1 f1) then
+    Fail "refine_elf32_file1: not an executable file type"
+  else
+    let hdr         = f1.elf32_file1_header in
+    let endian      = get_elf32_header_endianness hdr in
+    let bs1         = f1.elf32_file1_body   in
+    let pentries    = nat_of_elf32_half hdr.elf32_phnum     in
+    let pentry_size = nat_of_elf32_half hdr.elf32_phentsize * 8 in
+    let psize       = pentries * pentry_size in
+      if psize = 0 then
+        Fail "refine_elf32_file1: program header table not present"
+      else
+        let poffset     = nat_of_elf32_off hdr.elf32_phoff * 8 in
+        let (_, pcut)   = partition poffset bs1 in
+        let (pexact, _) = partition psize pcut in
+          (* Bitstring irrelevant below as exact size used... *)
+          read_elf32_program_header_table psize endian pexact >>= fun (pht, _) ->
+            return <| elf32_executable_file2_header = hdr;
+              elf32_executable_file2_program_header_table = pht;
+              elf32_executable_file2_body = bs1 |>
+
+(** [refine_elf64_file1 f1] refines the [elf31_file1] [f1] adding the
+  * mandatory program header table to [f1]'s header.  Fails if [f1]'s header
+  * states that no program header table is present, or if there is some other
+  * transcription error when reading from [f1]'s body.
+  *)
+val refine_elf64_file1 : elf64_file1 -> error elf64_executable_file2
+let refine_elf64_file1 f1 =
+  if not (is_executable_elf64_file1 f1) then
+    Fail "refine_elf64_file1: not an executable file type"
+  else
+    let hdr         = f1.elf64_file1_header in
+    let endian      = get_elf64_header_endianness hdr in
+    let bs1         = f1.elf64_file1_body   in
+    let pentries    = nat_of_elf64_half hdr.elf64_phnum         in
+    let pentry_size = nat_of_elf64_half hdr.elf64_phentsize * 8 in
+    let psize       = pentries * pentry_size in
+      if psize = 0 then
+        Fail "refine_elf64_file1: program header table not present"
+      else
+        let poffset     = nat_of_elf64_off hdr.elf64_phoff * 8 in
+        let (_, pcut)   = partition poffset bs1 in
+        let (pexact, _) = partition psize pcut in
+          (* Bitstring irrelevant below as exact size used... *)
+          read_elf64_program_header_table psize endian pexact >>= fun (pht, _) ->
+            return <| elf64_executable_file2_header = hdr;
+              elf64_executable_file2_program_header_table = pht;
+              elf64_executable_file2_body = bs1 |>
+
+(** [read_elf32_executable_file2 bs0] creates an [elf32_executable_file2] record
+  * directly from the bitstring [bs0].
+  *)
+val read_elf32_executable_file2 : bitstring -> error elf32_executable_file2
+let read_elf32_executable_file2 bs0 =
+  read_elf32_file1 bs0 >>= refine_elf32_file1
+
+(** [read_elf64_executable_file2 bs0] creates an [elf64_executable_file2] record
+  * directly from the bitstring [bs0].
+  *)
+val read_elf64_executable_file2 : bitstring -> error elf64_executable_file2
+let read_elf64_executable_file2 bs0 =
+  read_elf64_file1 bs0 >>= refine_elf64_file1
+
+(** [string_of_elf32_executable_file2 os proc f2] creates a string representation of [f2].
+  *)
+val string_of_elf32_executable_file2 : hdr_print_bundle -> pht_print_bundle -> elf32_executable_file2 -> string
+let string_of_elf32_executable_file2 hdr_bdl pht_bdl f2 =
+  unlines [
+    "\n*Type elf32_executable_file2:"
+  ; "**Header:"
+  ; string_of_elf32_header hdr_bdl f2.elf32_executable_file2_header
+  ; "**Program header table:"
+  ; string_of_elf32_program_header_table pht_bdl f2.elf32_executable_file2_program_header_table
+  ; "**Body:"
+  ; "\tUninterpreted data of length " ^ show (Bitstring.length f2.elf32_executable_file2_body)
+  ]
+
+(** [string_of_elf64_executable_file2 os proc f2] creates a string representation of [f2].
+  *)
+val string_of_elf64_executable_file2 : hdr_print_bundle -> pht_print_bundle -> elf64_executable_file2 -> string
+let string_of_elf64_executable_file2 hdr_bdl pht_bdl f2 =
+  unlines [
+    "\n*Type elf64_executable_file2:"
+  ; "**Header:"
+  ; string_of_elf64_header hdr_bdl f2.elf64_executable_file2_header
+  ; "**Program header table:"
+  ; string_of_elf64_program_header_table pht_bdl f2.elf64_executable_file2_program_header_table
+  ; "**Body:"
+  ; "\tUninterpreted data of length " ^ show (Bitstring.length f2.elf64_executable_file2_body)
+  ]
