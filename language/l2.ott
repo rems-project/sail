@@ -767,7 +767,7 @@ effect_opt :: 'Effect_opt_' ::=
 
 funcl :: 'FCL_' ::=
   {{ com Function clause }}
-  {{ aux _ l }} {{ auxparam 'a }}
+  {{ aux _ annot }} {{ auxparam 'a }}
   | id pat = exp                   :: :: Funcl
 
 

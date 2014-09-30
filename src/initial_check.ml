@@ -646,7 +646,7 @@ let to_ast_effects_opt (k_env : kind Envmap.t) (Parse_ast.Effect_opt_aux(e,l)) :
 let to_ast_funcl (names,k_env,def_ord) (Parse_ast.FCL_aux(fcl,l) : Parse_ast.funcl) : (tannot funcl) =
   match fcl with
   | Parse_ast.FCL_Funcl(id,pat,exp) -> 
-    FCL_aux(FCL_Funcl(to_ast_id id, to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp),l)
+    FCL_aux(FCL_Funcl(to_ast_id id, to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp),(l,NoTyp))
 
 let to_ast_fundef  (names,k_env,def_ord) (Parse_ast.FD_aux(fd,l):Parse_ast.fundef) : (tannot fundef) envs_out = 
   match fd with

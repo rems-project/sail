@@ -1576,7 +1576,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
               | Rec_aux(Rec_nonrec,_) -> false
 	      | Rec_aux(Rec_rec,_) -> true in
   let Some(id) = List.fold_right 
-    (fun (FCL_aux((FCL_Funcl(id,pat,exp)),l)) id' ->
+    (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,annot))) id' ->
       match id' with
 	| Some(id') -> if id' = id_to_string id then Some(id') 
 	  else typ_error l ("Function declaration expects all definitions to have the same name, " 
@@ -1593,20 +1593,20 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       t,p_t,Base((ids,{t=Tfn(p_t,t,IP_none,ef)}),Emp_global,constraints,ef) in
   let check t_env imp_param =
     List.split
-      (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),l)) ->
+      (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,_))) ->
 	let (pat',t_env',cs_p,t') = check_pattern (Env(d_env,t_env)) Emp_local param_t pat in
 	(*let _ = Printf.printf "about to check that %s and %s are consistent\n!" (t_to_string t') (t_to_string param_t) in*)
 	let exp',_,_,cs_e,ef = 
 	  check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env) t_env t_env')) imp_param ret_t exp in
 	(*let _ = Printf.printf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
 	let cs = [CondCons(Fun l,cs_p,cs_e)] in
-	(FCL_aux((FCL_Funcl(id,pat',exp')),l),(cs,ef))) funcls) in
-  let update_pattern var (FCL_aux ((FCL_Funcl(id,(P_aux(pat,t)),exp)),l)) = 
+	(FCL_aux((FCL_Funcl(id,pat',exp')),(l,(Base(([],ret_t),Emp_global,cs,ef)))),(cs,ef))) funcls) in
+  let update_pattern var (FCL_aux ((FCL_Funcl(id,(P_aux(pat,t)),exp)),annot)) = 
     let pat' = match pat with
       | P_lit (L_aux (L_unit,l')) -> P_aux(P_id (Id_aux (Id var, l')), t)
       | P_tup pats -> P_aux(P_tup ((P_aux (P_id (Id_aux (Id var, l)), t))::pats), t)
       | _ ->  P_aux(P_tup [(P_aux (P_id (Id_aux (Id var,l)), t));(P_aux(pat,t))], t)
-    in (FCL_aux ((FCL_Funcl(id,pat',exp)),l))
+    in (FCL_aux ((FCL_Funcl(id,pat',exp)),annot))
   in
   match (in_env,tannot) with
     | Some(Base( (params,u),Spec,constraints,eft)), Base( (p',t),_,c',eft') ->

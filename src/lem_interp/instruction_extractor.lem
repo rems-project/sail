@@ -38,11 +38,9 @@ end
 
 let rec extract_effects_of_pat id execute = match execute with
   | [] -> []
-  | FCL_aux (FCL_Funcl _ (P_aux (P_app (Id_aux (Id i) _) _) _) exp) _ :: executes ->
+  | FCL_aux (FCL_Funcl _ (P_aux (P_app (Id_aux (Id i) _) _) _) _) (_,(Just(_,_,_,Effect_aux(Effect_set efs) _))) :: executes ->
     if i = id 
-    then match exp with
-      | E_aux e (_,Just(_,_,_,Effect_aux (Effect_set efs) _)) -> efs
-      | _ -> [] end
+    then efs
     else extract_effects_of_pat id executes
   | _::executes -> extract_effects_of_pat id executes
 end
