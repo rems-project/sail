@@ -64,8 +64,13 @@ let load_section ic (offset,size,addr) =
 ;;
 
 let load_memory (bits,addr) =
-  let (Error.Success(bitsnum,_)) = Ml_bindings.read_unsigned_char Endianness.default_endianness bits in
-  add_mem (Uint32.to_int bitsnum) (Big_int.big_int_of_int addr)
+  let rec loop bits addr = 
+    if (Bitstring.bitstring_length bits = 0)
+    then ()
+    else let (Error.Success(bitsnum,rest)) = Ml_bindings.read_unsigned_char Endianness.default_endianness bits in
+	 add_mem (Uint32.to_int bitsnum) (Big_int.big_int_of_int addr);
+	 loop rest (1 + addr)
+  in loop bits addr
 
 (* use zero as a sentinel --- it might prevent a minimal loop from
  * working in principle, but won't happen in practice *)
@@ -143,12 +148,20 @@ let run () =
   end;
   let total_size = List.fold_left (fun n (_,s,_) -> n+s) 0 !sections in*)
   let (locations,start_address) = populate !file in
-  mainaddr := Printf.sprintf "0x%x" start_address;
   let total_size = 8 * (List.length locations) in
   eprintf "Loading binary into memory (%d bytes)... %!" total_size;
 (*  let t = time_it (List.iter (load_section ic)) !sections in*)
   let t = time_it (List.iter load_memory) locations in
   eprintf "done. (%f seconds)\n%!" t;
+  let rec reading loc length = 
+    if length = 0  
+    then []
+    else 
+      let location = big_int_to_vec true loc (Big_int.big_int_of_int 64) in
+      match location with
+	| Bytevector(location,_,_) ->
+	  (Mem.find location !mem)::(reading (Big_int.add_big_int loc Big_int.unit_big_int) (length - 1)) in
+  mainaddr := "0x" ^ (List.fold_left (^) "" (List.map (Printf.sprintf "%02x") (reading (Big_int.big_int_of_int start_address) 8)));
 (*  close_in ic;*)
   let reg = init_reg () in
   (* entry point: unit -> unit fde *)
