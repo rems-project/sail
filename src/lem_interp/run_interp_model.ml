@@ -218,22 +218,40 @@ let rec list_update index start stop e vals =
       else x :: (list_update (add_big_int index unit_big_int) start stop e xs)
 ;;
 
-let bool_to_byte = function | true -> 0 | false -> 1
-let bitvector_to_bool = function
-  | Bitvector([b],_,_) -> b
-  | Bitvector(bs,_,_) -> false (*TODO fupdate slice got a vector of stuff, not just one new value.*)
-  | Bytevector([0],_,_) -> false
-  | Bytevector(_,_,_) | Unknown0 -> true
+let rec list_update_list index start stop es vals =
+  match vals with
+  | [] -> []
+  | x :: xs ->
+    match es with
+    | [] -> xs
+    | e::es ->
+      if eq_big_int index stop
+      then e::xs
+      else if ge_big_int index start
+      then e :: (list_update_list (add_big_int index unit_big_int) start stop es xs)
+      else x :: (list_update_list (add_big_int index unit_big_int) start stop (e::es) xs)
 ;;
 
 let fupdate_slice original e (start,stop) =
   match original with
     | Bitvector(bools,inc,fst) -> 
-      Bitvector((list_update zero_big_int 
-                             (if inc then (sub_big_int start fst) else (sub_big_int fst start))
-                             (if inc then (sub_big_int stop fst) else (sub_big_int fst stop)) e bools), inc, fst)
-    | Bytevector(bytes,inc,fst) -> 
-      Bytevector((list_update zero_big_int start stop (bool_to_byte e) bytes),inc,fst) (*Probably also wrong, does this happen?*)
+      (match e with 
+      | Bitvector ([b],_,_) -> 
+        Bitvector((list_update zero_big_int 
+                               (if inc then (sub_big_int start fst) else (sub_big_int fst start))
+                               (if inc then (sub_big_int stop fst) else (sub_big_int fst stop)) b bools), inc, fst)
+      | Bitvector(bs,_,_) -> 
+        Bitvector((list_update_list zero_big_int 
+                                    (if inc then (sub_big_int start fst) else (sub_big_int fst start))
+                                    (if inc then (sub_big_int stop fst) else (sub_big_int fst stop)) bs bools), inc, fst)
+      | _ -> Unknown0)
+    | Bytevector(bytes,inc,fst) -> (*Can this happen?*)
+      (match e with
+      | Bytevector([byte],_,_) -> 
+        Bytevector((list_update zero_big_int start stop byte bytes),inc,fst)
+      | Bytevector(bs,_,_) ->
+        Bytevector((list_update_list zero_big_int start stop bs bytes),inc,fst)
+      | _ -> Unknown0)
     | Unknown0 -> Unknown0
 ;;
 
@@ -282,11 +300,11 @@ let rec perform_action ((reg, mem) as env) = function
  | Write_reg0(Reg_slice(id,range),value, _) 
  | Write_reg0(Reg_field(id,_,range),value,_)->
      let old_val = Reg.find id reg in
-     let new_val = fupdate_slice old_val (bitvector_to_bool value) range in
+     let new_val = fupdate_slice old_val value range in
      (None, (Reg.add id new_val reg, mem))
  | Write_reg0(Reg_f_slice(id,_,range,mini_range),value,_) ->
    let old_val = Reg.find id reg in
-   let new_val = fupdate_slice old_val (bitvector_to_bool value) (combine_slices range mini_range) in
+   let new_val = fupdate_slice old_val value (combine_slices range mini_range) in
    (None,(Reg.add id new_val reg,mem))
  | Read_mem0(_,Bytevector(location,_,_), length, _,_) ->
    let rec reading location length = 
