@@ -1166,7 +1166,8 @@ and check_block orig_envs envs imp_param expect_t exps:((tannot exp) list * tann
 	     ([E_aux(e',(l,annot))],annot,orig_envs,sc,t,ef)
     | e::exps -> let (e',t',t_env',sc,ef') = check_exp envs imp_param unit_t e in
 		 let (exps',annot',orig_envs,sc',t,ef) = 
-                   check_block orig_envs (Env(d_env,Envmap.union_merge (tannot_merge (Expr Parse_ast.Unknown) d_env) t_env t_env')) imp_param expect_t exps in
+                   check_block orig_envs 
+                     (Env(d_env,Envmap.union_merge (tannot_merge (Expr Parse_ast.Unknown) d_env) t_env t_env')) imp_param expect_t exps in
 		 ((e'::exps'),annot',orig_envs,sc@sc',t,union_effects ef ef')
 
 and check_cases envs imp_param check_t expect_t pexps : ((tannot pexp) list * typ * nexp_range list * effect) =
@@ -1275,8 +1276,8 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp *
 				| (E_aux(E_tuple es,(l',tannot)),_,_,cs_e,ef_e) -> (es,cs_e,ef_e)
 				| _ -> raise (Reporting_basic.err_unreachable l "Gave check_exp a tuple, didn't get a tuple back"))
 			in
-			let ef_all = union_effects ef ef_es in
-			(LEXP_aux(LEXP_memory(id,es),(l,Base(([],out),tag,cs_call,ef))),
+			let ef_all = union_effects ef' ef_es in
+			(LEXP_aux(LEXP_memory(id,es),(l,Base(([],out),tag,cs_call,ef'))),
 			 item_t,Envmap.empty,tag,cs_call@cs_es,ef_all)
 		      | _ -> 
 			let e = match exps with

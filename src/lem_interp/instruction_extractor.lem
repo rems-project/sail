@@ -36,7 +36,7 @@ let rec extract_from_decode decoder =
 	| _ -> Skipped end)::(extract_from_decode decoder)
 end 
 
-let rec extract_effects_of_pat id execute = match execute with
+let rec extract_effects_of_fcl id execute = match execute with
   | [] -> []
   | FCL_aux (FCL_Funcl _ (P_aux (P_app (Id_aux (Id i) _) _) _) _) (_,(Just(_,_,_,Effect_aux(Effect_set efs) _))) :: executes ->
     if i = id 
@@ -50,7 +50,7 @@ let rec extract_effects instrs execute =
     | [] -> []
     | Skipped::instrs -> Skipped::(extract_effects instrs execute)
     | (Instr id parms [])::instrs -> 
-      (Instr id parms (extract_effects_of_pat id execute))::(extract_effects instrs execute)
+      (Instr id parms (extract_effects_of_fcl id execute))::(extract_effects instrs execute)
 end
 
 let extract_instructions decode_name execute_name defs = 
