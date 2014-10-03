@@ -91,6 +91,53 @@ let memory_functions =
 		      (v,len,regs) end end)));
   ]
 
+let rec interp_to_value_helper thunk = 
+  match thunk() with
+    | Interp.Value value -> (Just value,Nothing)
+    | Interp.Error l msg -> (Nothing, Just (Internal_error msg))
+    | Interp.Action (Interp.Call_extern i value) stack ->
+      match List.lookup i external_functions with
+	| Nothing -> (Nothing, Just (Internal_error ("External function not available " ^ i)))
+	| Just f  -> 
+          interp_to_value_helper (fun _ -> Interp.resume (make_mode true false) stack (Just (f value)))
+      end 
+    | Interp.Action (Interp.Exit (E_aux e _)) _ ->
+      match e with
+	| E_id (Id_aux (Id "unsupported_instruction") _) -> (Nothing,Just Unsupported_instruction_error)
+	| E_id (Id_aux (Id "no_matching_pattern") _) -> (Nothing,Just Not_an_instruction_error)
+      end 
+    | _ -> (Nothing, Just (Internal_error "Memory or register requested in decode"))
+end
+
+let decode_to_istate top_level value = 
+  let mode = make_mode true false in
+  let (arg,_) = Interp.to_exp mode Interp.eenv (intern_value value) in
+  let (instr_decoded,error) = interp_to_value_helper 
+    (fun _ -> Interp.resume 
+      (make_mode true false) 
+      (Interp.Thunk_frame 
+	 (E_aux (E_app (Id_aux (Id "decode") Interp_ast.Unknown) [arg]) (Interp_ast.Unknown, Nothing)) 
+	 top_level Interp.eenv Interp.emem Interp.Top) Nothing) in
+  match (instr_decoded,error) with
+    | (Just instr, _) -> 
+      let (arg,_) = Interp.to_exp mode Interp.eenv instr in
+      let (instr_decoded,error) = interp_to_value_helper
+	(fun _ -> Interp.resume 
+	 (make_mode true false) 
+	 (Interp.Thunk_frame 
+	 (E_aux (E_app (Id_aux (Id "supported_instructions") Interp_ast.Unknown) [arg]) (Interp_ast.Unknown, Nothing)) 
+	 top_level Interp.eenv Interp.emem Interp.Top) Nothing) in
+      match (instr_decoded,error) with
+	| (Just instr,_) ->
+	  let (arg,_) = Interp.to_exp mode Interp.eenv instr in
+	  Instr (Interp.Thunk_frame
+		   (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) [arg]) (Interp_ast.Unknown,Nothing))
+		   top_level Interp.eenv Interp.emem Interp.Top)
+	| (Nothing, Just err) -> err
+      end 
+    | (Nothing, Just err) -> err
+end
+
 let rec interp_to_outcome mode thunk = 
   match thunk () with
   | Interp.Value _ -> Done
