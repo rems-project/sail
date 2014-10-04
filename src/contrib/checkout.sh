@@ -13,4 +13,4 @@ test -d bitstring || (git clone https://code.google.com/p/bitstring/ && \
 # 4.01.0 via opam, which avoids this problem.
 test -d uint || (git clone https://github.com/andrenth/ocaml-uint.git && \
 	cd ocaml-uint && git checkout 1.1.x)
-(cd ocaml-uint && make)
+(cd ocaml-uint && make configure && make)
