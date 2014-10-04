@@ -291,7 +291,7 @@ let rec perform_action ((reg, mem) as env) = function
      perform_action env (Write_mem (id, n, slice, V_vector(zero_big_int, true, [value])))
  (* extern functions *)
  | Call_extern (name, arg) -> eval_external name arg, env
- | Step _ | Nondet _ | Exit _ -> unit_lit, env
+ | Interp.Step _ | Nondet _ | Exit _ -> unit_lit, env
  | _ -> assert false
 ;;
 
@@ -406,7 +406,7 @@ let run
       | Call_extern (f, arg) ->
           show "call_lib" (sprintf "%s(%s)" f (val_to_string_internal arg)) right (val_to_string_internal return);
           step (),env',s
-      | Step _ ->
+      | Interp.Step _ ->
           assert (return = unit_lit);
           show "breakpoint" "" "" "";
           step ~force:true (),env',s
