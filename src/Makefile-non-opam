@@ -5,9 +5,11 @@ BITSTRING ?= $(srcdir)/contrib/bitstring
 BATTERIES ?= $(srcdir)/contrib/batteries-included/_build/src
 UINT ?= $(srcdir)/contrib/ocaml-uint/_build/lib
 
+export CAML_LD_LIBRARY_PATH := $(BITSTRING) $(CAML_LD_LIBRARY_PATH)
+
 LEM ?= ~/bitbucket/lem/lem
 LEMLIB ?= ~/bitbucket/lem/ocaml-lib/_build/
-OCAMLFLAGS +=  -I $(LEMLIB)/../ocaml-lib/_build # FIXME
+OCAMLFLAGS +=  -I $(LEMLIB) # FIXME
 
 .PHONY: all sail test clean doc lib power test_power test_idempotence contrib install_elf
 all: sail lib doc
@@ -41,8 +43,10 @@ ELF_LEM_SRC := $(addprefix elf_model/,missing_pervasives.lem show.lem endianness
 vpath _build/%.lem .
 vpath _build/%.cmx .
 
-CAMLP4FLAGS += -I $(srcdir)/contrib/bitstring/
-CAMLP4FLAGS += -I $(srcdir)/contrib/bitstring/_
+CAMLP4FLAGS += -nolib 
+CAMLP4FLAGS += -I $(BITSTRING)
+CAMLP4FLAGS += -parser o -parser op -printer p
+CAMLP4FLAGS += unix.cma 
 CAMLP4FLAGS += bitstring.cma 
 CAMLP4FLAGS += bitstring_persistent.cma 
 CAMLP4FLAGS += pa_bitstring.cmo
@@ -55,19 +59,19 @@ ELF_ML_DEPS := $(patsubst %.ml,%.d,$(ELF_ML))
 ELF_CMX := $(patsubst %.ml,%.cmx,$(ELF_ML))
 
 $(ELF_CMX): OCAMLFLAGS += \
--I $(BITSTRING) -pp 'camlp4o $(CAMLP4FLAGS)' \
+-I $(BITSTRING) -pp 'env CAML_LD_LIBRARY_PATH=$(BITSTRING) camlp4o $(CAMLP4FLAGS)' \
 -I $(BATTERIES) \
 -I $(UINT) \
 -I elf_model
 
 $(ELF_ML_DEPS): OCAMLFLAGS += \
--I $(BITSTRING) -pp 'camlp4o $(CAMLP4FLAGS)' \
+-I $(BITSTRING) -pp 'env CAML_LD_LIBRARY_PATH=$(BITSTRING) camlp4o $(CAMLP4FLAGS)' \
 -I $(BATTERIES) \
 -I $(UINT) \
 -I $(srcdir)/elf_model
 
 $(ELF_ML_DEPS): %.d: %.ml
-	ocamlfind ocamldep -native $(OCAMLFLAGS) "$<" > "$@" || (rm -f "$@"; false)
+	ocamldep -native $(OCAMLFLAGS) "$<" > "$@" || (rm -f "$@"; false)
 
 ifneq ($(MAKECMDGOALS),clean)
 -include $(ELF_ML_DEPS)
@@ -83,10 +87,11 @@ elf_extract.cmxa: OCAMLFLAGS += \
 LEM_CMX :=  $(addprefix $(LEMLIB)/../ocaml-lib/,nat_num.cmx lem.cmx lem_function.cmx lem_list.cmx)
 
 %.cmx: %.ml
-	ocamlfind ocamlopt $(OCAMLFLAGS) -c "$<"
+	echo CAML_LD_LIBRARY_PATH is $$CAML_LD_LIBRARY_PATH 
+	ocamlopt $(OCAMLFLAGS) -c "$<"
 
 elf_model/elf_extract.cmxa: $(ELF_CMX)
-	ocamlfind ocamlopt $(OCAMLFLAGS) -a -o "$@" $+
+	ocamlopt $(OCAMLFLAGS) -a -o "$@" $+
 
 elf: $(ELF_CMX) $(LEM_CMX) elf_model/elf_extract.cmxa
 
