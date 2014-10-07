@@ -157,15 +157,15 @@ let rec interp_to_outcome mode thunk =
       match List.lookup i memory_functions with
       | (Just (Just read_k,_,f)) -> 
         let (location, length, tracking) = (f mode value) in
-        Read_mem read_k location tracking length Nothing (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
+        Read_mem read_k location length tracking (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
       | _ -> Error ("Memory " ^ i ^ " function with read kind not found")
       end
     | Interp.Write_mem (Id_aux (Id i) _) loc_val slice write_val ->
       match List.lookup i memory_functions with
       | (Just (_,Just write_k,f)) -> 
         let (location, length, tracking) = (f mode loc_val) in
-        let (value, val_tracking) = (extern_value mode true write_val) in
-        Write_mem write_k location tracking length Nothing value val_tracking (fun b -> next_state) 
+        let (value, v_tracking) = (extern_value mode true write_val) in
+        Write_mem write_k location length tracking value v_tracking (fun b -> next_state) 
       | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
       end 
     | Interp.Barrier (Id_aux (Id i) _) lval ->
@@ -201,10 +201,10 @@ let rec ie_loop mode i_state =
       (E_read_reg reg)::(ie_loop mode (i_state_fun Unknown))
     | Write_reg reg value i_state->
       (E_write_reg reg value)::(ie_loop mode i_state)
-    | Read_mem read_k loc tracking length ltracking i_state_fun ->
-      (E_read_mem read_k loc tracking length ltracking)::(ie_loop mode (i_state_fun Unknown))
-    | Write_mem write_k loc track length l_track value v_track i_state_fun ->
-      (E_write_mem write_k loc track length l_track value v_track)::(ie_loop mode (i_state_fun true))
+    | Read_mem read_k loc length tracking i_state_fun ->
+      (E_read_mem read_k loc length tracking)::(ie_loop mode (i_state_fun Unknown))
+    | Write_mem write_k loc length tracking value v_tracking i_state_fun ->
+      (E_write_mem write_k loc length tracking value v_tracking)::(ie_loop mode (i_state_fun true))
     | Internal _ _ next -> (ie_loop mode next)
      end ;;
   
@@ -220,12 +220,12 @@ let rec rr_ie_loop mode i_state =
     | Write_reg reg value i_state->
       let (events,outcome) = (rr_ie_loop mode i_state) in
       (((E_write_reg reg value)::events), outcome)
-    | Read_mem read_k loc tracking  length ltracking i_state_fun ->
+    | Read_mem read_k loc length tracking i_state_fun ->
       let (events,outcome) = (rr_ie_loop mode (i_state_fun Unknown)) in 
-      (((E_read_mem read_k loc tracking length ltracking)::events),outcome)
-    | Write_mem write_k loc track length l_track value v_track i_state_fun ->
+      (((E_read_mem read_k loc length tracking)::events),outcome)
+    | Write_mem write_k loc length tracking value v_tracking i_state_fun ->
       let (events,outcome) = (rr_ie_loop mode (i_state_fun true)) in
-      (((E_write_mem write_k loc track length l_track value v_track)::events),outcome)
+      (((E_write_mem write_k loc length tracking value v_tracking)::events),outcome)
     | Internal _ _ next -> (rr_ie_loop mode next)
      end ;;
 

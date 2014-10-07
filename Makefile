@@ -1,12 +1,15 @@
-.PHONY: all src language clean power test
+.PHONY: all sail language clean power test
 
-all: src language
+all: sail interpreter language
 
-src: language
-	$(MAKE) -C $@
+sail: language
+	$(MAKE) -C src
 
 language:
-	$(MAKE) -C $@
+	$(MAKE) -C language
+
+interpreter: 
+	$(MAKE) -C src interpreter
 
 test: 
 	$(MAKE) -C src test

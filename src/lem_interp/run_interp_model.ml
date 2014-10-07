@@ -272,10 +272,10 @@ let rec format_events = function
     "     Failed with message : " ^ s ^ "\n"
   | (E_error s)::events ->
     "     Failed with message : " ^ s ^ " but continued on erroneously\n"
-  | (E_read_mem(read_kind, location,depl, length, dep))::events ->
+  | (E_read_mem(read_kind, location, length, tracking))::events ->
     "     Read_mem at " ^ (val_to_string location) ^ " for " ^ (string_of_big_int length) ^ " bytes \n" ^
     (format_events events)
-  | (E_write_mem(write_kind,location,depl, length, dep, value, vdep))::events ->
+  | (E_write_mem(write_kind,location, length, tracking, value, v_tracking))::events ->
     "     Write_mem at " ^ (val_to_string location) ^ " writing " ^ (val_to_string value) ^ " across " ^ (string_of_big_int length) ^ " bytes\n" ^
     (format_events events)
   | ((E_barrier b_kind)::events) ->
@@ -306,13 +306,13 @@ let rec perform_action ((reg, mem) as env) = function
    let old_val = Reg.find id reg in
    let new_val = fupdate_slice old_val value (combine_slices range mini_range) in
    (None,(Reg.add id new_val reg,mem))
- | Read_mem0(_,(Bytevector location),_, length, _,_) ->
+ | Read_mem0(_,(Bytevector location), length, _,_) ->
    let rec reading location length = 
      if eq_big_int length zero_big_int 
      then []
      else (Mem.find location mem)::(reading (increment location) (sub_big_int length unit_big_int)) in
    (Some (Bytevector((List.rev (reading location length)))), env)
- | Write_mem0(_,(Bytevector location),_, length, _, (Bytevector bytes),_,_) ->
+ | Write_mem0(_,(Bytevector location), length, _, (Bytevector bytes),_,_) ->
    let rec writing location length bytes mem = 
      if eq_big_int length zero_big_int
      then mem
@@ -440,20 +440,20 @@ let run
 	| Write_reg0(reg,value,next) ->
 	  show "write_reg" (reg_name_to_string reg) left (val_to_string value);
 	  (step next, env', next)
-	| Read_mem0(kind, location, ldeps, length, dependencies, next_thunk) ->
+	| Read_mem0(kind, location, length, tracking, next_thunk) ->
 	  (match return with
 	    | Some(value) -> 
 	      show "read_mem" (val_to_string location) right (val_to_string value);
-              (match dependencies with
+              (match tracking with
               | None -> ()
               | Some(deps) ->
                 show "read_mem address depended on" (dependencies_to_string deps) "" "");
 	      let next = next_thunk value in
 	      (step next, env', next)
 	    | None -> assert false)
-	| Write_mem0(kind,location, ldeps, length, dependencies, value, val_dependencies, next_thunk) ->
+	| Write_mem0(kind,location, length, tracking, value, v_tracking, next_thunk) ->
 	  show "write_mem" (val_to_string location) left (val_to_string value);
-          (match (dependencies,val_dependencies) with
+          (match (tracking,v_tracking) with
           | (None,None) -> ();
           | (Some(deps),None) ->
             show "write_mem address depended on" (dependencies_to_string deps) "" "";

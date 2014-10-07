@@ -7,11 +7,11 @@ type typ =
 | Bitvector of maybe integer
 | Other
 
-type instruction = 
+type instruction_form = 
 |  Instr of string * list (string * typ) * list base_effect
 |  Skipped 
 
-val extract_instructions : string -> string -> defs tannot -> list instruction
+val extract_instructions : string -> string -> defs tannot -> list instruction_form
 
 let extract_parm (E_aux e (_,tannot)) =
   match e with
