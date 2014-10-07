@@ -7,6 +7,8 @@ open import String_extra (* for 'show' to convert nat to string) *)
 open import Interp_ast
 open import Interp_utilities
 
+open import Instruction_extractor
+
 type tannot = Interp_utilities.tannot
 
 val intern_annot : tannot -> tannot
@@ -112,9 +114,17 @@ type lenv = LEnv of nat * env
 let emem = LMem 1 Map.empty
 let eenv = LEnv 1 []
 
+type sub_reg_map = list (id * index_range)
+
 (*top_level is a tuple of 
-  (all definitions, letbound and enum values, register values, Typedef union constructors, sub register mappings, and register aliases) *)
-type top_level = Env of (defs tannot) * env * env * list (id * typ) * list (id * list (id * index_range)) * list (id * (alias_spec tannot))
+  (all definitions,
+   all extracted instructions (where possible),
+   letbound and enum values, 
+   register values, 
+   Typedef union constructors, 
+   sub register mappings, and register aliases) *)
+type top_level = 
+  | Env of (defs tannot) * list instruction_form * env * env * list (id * typ) * list (id * sub_reg_map) * list (id * (alias_spec tannot))
 
 type action = 
  | Read_reg of reg_form * maybe (integer * integer)
@@ -982,7 +992,7 @@ let rec exp_list mode t_level build_e build_v l_env l_mem vals exps =
   end
 
 and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
-  let (Env defs lets regs ctors subregs aliases) = t_level in 
+  let (Env defs instrs lets regs ctors subregs aliases) = t_level in 
   let (typ,tag,ncs,effect) = match annot with 
     | Nothing -> (T_var "fresh_v", Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
     | Just(t, tag, ncs, ef) -> (t,tag,ncs,ef) end in
@@ -1757,7 +1767,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     end
 
 and create_write_message_or_update mode t_level value l_env l_mem is_top_level ((LEXP_aux lexp (l,annot)):lexp tannot) : ((outcome * lmem * lenv) * maybe ((exp tannot) -> lenv -> ((lexp tannot) * lenv))) =
-   let (Env defs lets regs ctors subregs aliases) = t_level in
+   let (Env defs instrs lets regs ctors subregs aliases) = t_level in
   let (typ,tag,ncs,ef) = match annot with 
     | Nothing -> (T_var "fresh_v", Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
     | Just(t, tag, ncs, ef) -> (t,tag,ncs,ef) end in
@@ -2068,7 +2078,7 @@ and interp_letbind mode t_level l_env l_mem (LB_aux lbind (l,annot)) =
 end	
 
 and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
-  let (Env defs lets regs ctors subregs aliases) = t_level in 
+  let (Env defs instrs lets regs ctors subregs aliases) = t_level in 
   let stack = Hole_frame (Id_aux (Id "0") Unknown)
 		          (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot)))
 			  t_level l_env l_mem Top in
@@ -2113,14 +2123,14 @@ and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
 			        (l,(intern_annot annot))) t_level l_env l_mem Top), l_mem,l_env) end
 
 let rec to_global_letbinds (Defs defs) t_level =
-  let  (Env defs' lets regs ctors subregs aliases) = t_level in
+  let  (Env defs' instrs lets regs ctors subregs aliases) = t_level in
   match defs with
   | [] -> ((Value (V_lit (L_aux L_unit Unknown)), emem, eenv),t_level)
   | def::defs ->
     match def with
     | DEF_val lbind ->
       match interp_letbind <|eager_eval=true; track_values=false;|> t_level eenv emem lbind with
-      | ((Value v,lm,(LEnv _ le)),_) -> to_global_letbinds (Defs defs) (Env defs' (lets++le) regs ctors subregs aliases)
+      | ((Value v,lm,(LEnv _ le)),_) -> to_global_letbinds (Defs defs) (Env defs' instrs (lets++le) regs ctors subregs aliases)
       | ((Action a s,lm,le),_) -> 
 	((Error Unknown "Top level let may not access memory, registers or (for now) external functions", lm,le),t_level)
       | (e,_) -> (e,t_level) end
@@ -2128,14 +2138,17 @@ let rec to_global_letbinds (Defs defs) t_level =
       match tdef with
       | TD_enum id ns ids _ -> 
         let enum_vals = map (fun eid -> (eid,V_ctor eid (T_id (get_id id)) unitv)) ids in
-        to_global_letbinds (Defs defs) (Env defs' (lets++enum_vals) regs ctors subregs aliases)
+        to_global_letbinds (Defs defs) (Env defs' instrs (lets++enum_vals) regs ctors subregs aliases)
       | _ -> to_global_letbinds (Defs defs) t_level end
     | _ -> to_global_letbinds (Defs defs) t_level
     end
   end
 
+(*TODO Contemplate making decode and execute environment variables instead of these constants*)
 let to_top_env defs = 
-  let t_level = Env defs [] (to_registers defs) (to_data_constructors defs) (to_register_fields defs) (to_aliases defs) in
+  let t_level = Env defs (extract_instructions "decode" "execute" defs) 
+                    [] (* empty letbind and enum values, call below will fill in any *) 
+		    (to_registers defs) (to_data_constructors defs) (to_register_fields defs) (to_aliases defs) in
   let (o,t_level) = to_global_letbinds defs t_level in
   match o with
     | (Value _,_,_) -> (Nothing,t_level)

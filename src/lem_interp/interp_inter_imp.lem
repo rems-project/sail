@@ -1,5 +1,6 @@
 import Interp
 import Interp_lib
+import Instruction_extractor
 open import Interp_ast
 open import Interp_interface
 open import Pervasives
@@ -129,7 +130,7 @@ let memory_functions =
 	      end end end)));
   ]
 
-let rec interp_to_value_helper arg thunk = 
+let rec interp_to_value_helper arg instr thunk = 
   match thunk() with
     | Interp.Value value -> (Just value,Nothing)
     | Interp.Error l msg -> (Nothing, Just (Internal_error msg))
@@ -137,20 +138,36 @@ let rec interp_to_value_helper arg thunk =
       match List.lookup i external_functions with
 	| Nothing -> (Nothing, Just (Internal_error ("External function not available " ^ i)))
 	| Just f  -> 
-          interp_to_value_helper arg (fun _ -> Interp.resume (make_mode true false) stack (Just (f value)))
+          interp_to_value_helper arg instr (fun _ -> Interp.resume (make_mode true false) stack (Just (f value)))
       end 
     | Interp.Action (Interp.Exit (E_aux e _)) _ ->
       match e with
-	| E_id (Id_aux (Id "unsupported_instruction") _) -> (Nothing,Just (Unsupported_instruction_error ("",[],[])))
+	| E_id (Id_aux (Id "unsupported_instruction") _) -> (Nothing,Just (Unsupported_instruction_error instr))
 	| E_id (Id_aux (Id "no_matching_pattern") _) -> (Nothing,Just (Not_an_instruction_error arg))
       end 
     | _ -> (Nothing, Just (Internal_error "Memory or register requested in decode"))
 end
 
+let rec find_instruction i = function
+  | [] -> Nothing
+  | Skipped::instrs -> find_instruction i instrs
+  | ((Instruction_extractor.Instr_form name parms effects) as instr)::instrs ->
+      if i = name
+      then Just instr
+      else find_instruction i instrs
+end
+
+let migrate_typ = function
+  | Instruction_extractor.IBit -> Bit
+  | Instruction_extractor.IBitvector len -> Bvector len
+  | Instruction_extractor.IOther -> Other
+end
+
 let decode_to_istate top_level value = 
   let mode = make_mode true false in
   let (arg,_) = Interp.to_exp mode Interp.eenv (intern_value value) in
-  let (instr_decoded,error) = interp_to_value_helper value
+  let (Interp.Env _ instructions _ _ _ _ _) = top_level in
+  let (instr_decoded,error) = interp_to_value_helper value ("",[],[])
     (fun _ -> Interp.resume 
       (make_mode true false) 
       (Interp.Thunk_frame 
@@ -158,8 +175,18 @@ let decode_to_istate top_level value =
 	 top_level Interp.eenv Interp.emem Interp.Top) Nothing) in
   match (instr_decoded,error) with
     | (Just instr, _) -> 
+      let instr_external = match instr with
+	| Interp.V_ctor (Id_aux (Id i) _) _ parm ->
+	  match (find_instruction i instructions) with
+	    | Just(Instruction_extractor.Instr_form name parms effects) -> 
+	      match (parm,parms) with
+		| (Interp.V_lit (L_aux L_unit _),[]) -> (name, [], effects)
+		| (value,[(p_name,ie_typ)]) -> (name, [(p_name,(migrate_typ ie_typ),fst(extern_value mode false value))], effects)
+		| (Interp.V_tuple vals,parms) -> 
+		  (name, (Interp.map2 (fun value (p_name,ie_typ) -> (p_name,(migrate_typ ie_typ),fst(extern_value mode false value))) vals parms), effects)
+          end end end in 
       let (arg,_) = Interp.to_exp mode Interp.eenv instr in
-      let (instr_decoded,error) = interp_to_value_helper value
+      let (instr_decoded,error) = interp_to_value_helper value instr_external
 	(fun _ -> Interp.resume 
 	 (make_mode true false) 
 	 (Interp.Thunk_frame 
@@ -168,7 +195,7 @@ let decode_to_istate top_level value =
       match (instr_decoded,error) with
 	| (Just instr,_) ->
 	  let (arg,_) = Interp.to_exp mode Interp.eenv instr in
-	  Instr ("",[],[])
+	  Instr instr_external
 	    (Interp.Thunk_frame
 		   (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) [arg]) (Interp_ast.Unknown,Nothing))
 		   top_level Interp.eenv Interp.emem Interp.Top)

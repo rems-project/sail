@@ -2,13 +2,13 @@ open import Interp_ast
 open import Interp_utilities
 open import Pervasives
 
-type typ = 
-| Bit
-| Bitvector of maybe integer
-| Other
+type instr_parm_typ = 
+| IBit
+| IBitvector of maybe integer
+| IOther
 
 type instruction_form = 
-|  Instr of string * list (string * typ) * list base_effect
+|  Instr_form of string * list (string * instr_parm_typ) * list base_effect
 |  Skipped 
 
 val extract_instructions : string -> string -> defs tannot -> list instruction_form
@@ -17,13 +17,14 @@ let extract_parm (E_aux e (_,tannot)) =
   match e with
     | E_id (Id_aux (Id i) _) ->
       match tannot with
-	| Just(T_id "bit",_,_,_) -> (i,Bit)
+	| Just(T_id "bit",_,_,_) -> (i,IBit)
+	| Just(T_id "bool",_,_,_) -> (i,IBit)
 	| Just(T_app "vector" (T_args [T_arg_nexp _; T_arg_nexp (Ne_const len); _; T_arg_typ (T_id "bit")]),_,_,_) ->
-	  (i,Bitvector (Just len))
+	  (i,IBitvector (Just len))
 	| Just(T_app "vector" (T_args [T_arg_nexp _; T_arg_nexp _; _; T_arg_typ (T_id "bit")]),_,_,_) ->
-	  (i,Bitvector Nothing)
-	| _ -> (i,Other) end
-    | _ -> ("UNKNOWN_PARM",Other)
+	  (i,IBitvector Nothing)
+	| _ -> (i,IOther) end
+    | _ -> ("UNKNOWN_PARM",IOther)
 end
 
 let rec extract_from_decode decoder = 
@@ -32,7 +33,7 @@ let rec extract_from_decode decoder =
     | (FCL_aux (FCL_Funcl _ pat exp) _)::decoder ->
       (match exp with
 	| E_aux (E_app (Id_aux(Id id) _) parms) (_,(Just (_,Tag_ctor,_,_))) ->
-	  Instr id (List.map extract_parm parms) []
+	  Instr_form id (List.map extract_parm parms) []
 	| _ -> Skipped end)::(extract_from_decode decoder)
 end 
 
@@ -49,8 +50,8 @@ let rec extract_effects instrs execute =
   match instrs with
     | [] -> []
     | Skipped::instrs -> Skipped::(extract_effects instrs execute)
-    | (Instr id parms [])::instrs -> 
-      (Instr id parms (extract_effects_of_fcl id execute))::(extract_effects instrs execute)
+    | (Instr_form id parms [])::instrs -> 
+      (Instr_form id parms (extract_effects_of_fcl id execute))::(extract_effects instrs execute)
 end
 
 let extract_instructions decode_name execute_name defs = 
