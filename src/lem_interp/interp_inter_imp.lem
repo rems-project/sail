@@ -81,14 +81,52 @@ let memory_functions =
 		 match length with
 		   | Interp.V_lit (L_aux (L_num len) _) ->
 		     let (v,regs) = extern_value mode true location in
-		     (v,len,regs) end end)));
+		     (v,len,regs) 
+		   | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
+		     let (v,loc_regs) = extern_value mode true location in
+		     match loc_regs with
+		       | Nothing -> (v,len,Just (List.map (fun r -> extern_reg r Nothing) size_regs))
+		       | Just loc_regs -> (v,len,Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) size_regs)))
+	      end end end)));
+    ("MEMr_reserve", (Just(Read_reserve),Nothing,
+		      (fun mode v -> match v with
+			| Interp.V_tuple [location;length] ->
+			  match length with
+			    | Interp.V_lit (L_aux (L_num len) _) ->
+			      let (v,regs) = extern_value mode true location in
+			      (v,len,regs) 
+			    | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
+			      let (v,loc_regs) = extern_value mode true location in
+			      match loc_regs with
+				| Nothing -> (v,len,Just (List.map (fun r -> extern_reg r Nothing) size_regs))
+				| Just loc_regs -> (v,len,Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) size_regs)))
+		       end end end)));		      
     ("MEMw", (Nothing, Just(Write_plain), 
 	      (fun mode v -> match v with
 		| Interp.V_tuple [location;length] ->
 		  match length with
 		    | Interp.V_lit (L_aux (L_num len) _) ->
 		      let (v,regs) = extern_value mode true location in
-		      (v,len,regs) end end)));
+		      (v,len,regs)
+		    | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
+		      let (v,loc_regs) = extern_value mode true location in
+		      match loc_regs with
+			| Nothing -> (v,len,Just (List.map (fun r -> extern_reg r Nothing) size_regs))
+			| Just loc_regs -> (v,len,Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) size_regs)))
+	       end end end)));
+    ("MEMw_conditional", (Nothing, Just(Write_conditional), 
+	      (fun mode v -> match v with
+		| Interp.V_tuple [location;length] ->
+		  match length with
+		    | Interp.V_lit (L_aux (L_num len) _) ->
+		      let (v,regs) = extern_value mode true location in
+		      (v,len,regs)
+		    | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
+		      let (v,loc_regs) = extern_value mode true location in
+		      match loc_regs with
+			| Nothing -> (v,len,Just (List.map (fun r -> extern_reg r Nothing) size_regs))
+			| Just loc_regs -> (v,len,Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) size_regs)))
+	      end end end)));
   ]
 
 let rec interp_to_value_helper arg thunk = 
