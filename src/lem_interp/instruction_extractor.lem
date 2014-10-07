@@ -1,6 +1,6 @@
 open import Interp_ast
+open import Interp_utilities
 open import Pervasives
-import Interp
 
 type typ = 
 | Bit
@@ -11,7 +11,7 @@ type instruction =
 |  Instr of string * list (string * typ) * list base_effect
 |  Skipped 
 
-val extract_instructions : string -> string -> defs Interp.tannot -> list instruction
+val extract_instructions : string -> string -> defs tannot -> list instruction
 
 let extract_parm (E_aux e (_,tannot)) =
   match e with
@@ -54,8 +54,8 @@ let rec extract_effects instrs execute =
 end
 
 let extract_instructions decode_name execute_name defs = 
-  let (Just decoder) = Interp.find_function defs (Id_aux (Id decode_name) Unknown) in
-  let (Just executer) = Interp.find_function defs (Id_aux (Id execute_name) Unknown) in
+  let (Just decoder) = find_function defs (Id_aux (Id decode_name) Unknown) in
+  let (Just executer) = find_function defs (Id_aux (Id execute_name) Unknown) in
   let instr_no_effects = extract_from_decode decoder in
   let instructions = extract_effects instr_no_effects executer in
   instructions

@@ -27,7 +27,7 @@ end
 		   
 let intern_value v = match v with
   | Bitvector bs inc fst   -> Interp.V_vector fst inc  (to_bits bs)
-  | Bytevector bys inc fst -> Interp.V_vector fst inc 
+  | Bytevector bys -> Interp.V_vector 0 true 
     (to_bits (List.reverse
 		(List.concat (List.map (fun n -> boolListFrombitSeq 8 (bitSeqFromInteger (Just 8) (integerFromNat n))) bys))))
   | Unknown -> Interp.V_unknown
@@ -43,11 +43,11 @@ end
 let extern_value mode for_mem v = match v with
   | Interp.V_vector fst inc bits ->
     if for_mem 
-    then (Bytevector (List.reverse (to_bytes (from_bits bits))) inc fst, Nothing)
+    then (Bytevector (List.reverse (to_bytes (from_bits bits))), Nothing)
     else (Bitvector (from_bits bits) inc fst, Nothing)
   | Interp.V_track (Interp.V_vector fst inc bits) regs -> 
     if for_mem
-    then (Bytevector (List.reverse (to_bytes (from_bits bits))) inc fst, 
+    then (Bytevector (List.reverse (to_bytes (from_bits bits))), 
           if (mode.Interp.track_values) 
           then (Just (List.map (fun r -> extern_reg r Nothing) regs))
           else Nothing)
@@ -103,7 +103,7 @@ let rec interp_to_value_helper thunk =
       end 
     | Interp.Action (Interp.Exit (E_aux e _)) _ ->
       match e with
-	| E_id (Id_aux (Id "unsupported_instruction") _) -> (Nothing,Just Unsupported_instruction_error)
+	| E_id (Id_aux (Id "unsupported_instruction") _) -> (Nothing,Just (Unsupported_instruction_error ("",[],[])))
 	| E_id (Id_aux (Id "no_matching_pattern") _) -> (Nothing,Just Not_an_instruction_error)
       end 
     | _ -> (Nothing, Just (Internal_error "Memory or register requested in decode"))
@@ -133,6 +133,7 @@ let decode_to_istate top_level value =
 	  Instr (Interp.Thunk_frame
 		   (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) [arg]) (Interp_ast.Unknown,Nothing))
 		   top_level Interp.eenv Interp.emem Interp.Top)
+	        ("",[],[])
 	| (Nothing, Just err) -> err
       end 
     | (Nothing, Just err) -> err
@@ -156,7 +157,7 @@ let rec interp_to_outcome mode thunk =
       match List.lookup i memory_functions with
       | (Just (Just read_k,_,f)) -> 
         let (location, length, tracking) = (f mode value) in
-        Read_mem read_k location length tracking (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
+        Read_mem read_k location tracking length Nothing (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
       | _ -> Error ("Memory " ^ i ^ " function with read kind not found")
       end
     | Interp.Write_mem (Id_aux (Id i) _) loc_val slice write_val ->
@@ -164,7 +165,7 @@ let rec interp_to_outcome mode thunk =
       | (Just (_,Just write_k,f)) -> 
         let (location, length, tracking) = (f mode loc_val) in
         let (value, val_tracking) = (extern_value mode true write_val) in
-        Write_mem write_k location length tracking value val_tracking (fun b -> next_state) 
+        Write_mem write_k location tracking length Nothing value val_tracking (fun b -> next_state) 
       | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
       end 
     | Interp.Barrier (Id_aux (Id i) _) lval ->
@@ -200,10 +201,10 @@ let rec ie_loop mode i_state =
       (E_read_reg reg)::(ie_loop mode (i_state_fun Unknown))
     | Write_reg reg value i_state->
       (E_write_reg reg value)::(ie_loop mode i_state)
-    | Read_mem read_k loc length tracking i_state_fun ->
-      (E_read_mem read_k loc length tracking)::(ie_loop mode (i_state_fun Unknown))
-    | Write_mem write_k loc length l_track value v_track i_state_fun ->
-      (E_write_mem write_k loc length l_track value v_track)::(ie_loop mode (i_state_fun true))
+    | Read_mem read_k loc tracking length ltracking i_state_fun ->
+      (E_read_mem read_k loc tracking length ltracking)::(ie_loop mode (i_state_fun Unknown))
+    | Write_mem write_k loc track length l_track value v_track i_state_fun ->
+      (E_write_mem write_k loc track length l_track value v_track)::(ie_loop mode (i_state_fun true))
     | Internal _ _ next -> (ie_loop mode next)
      end ;;
   
@@ -219,12 +220,12 @@ let rec rr_ie_loop mode i_state =
     | Write_reg reg value i_state->
       let (events,outcome) = (rr_ie_loop mode i_state) in
       (((E_write_reg reg value)::events), outcome)
-    | Read_mem read_k loc length tracking i_state_fun ->
+    | Read_mem read_k loc tracking  length ltracking i_state_fun ->
       let (events,outcome) = (rr_ie_loop mode (i_state_fun Unknown)) in 
-      (((E_read_mem read_k loc length tracking)::events),outcome)
-    | Write_mem write_k loc length l_track value v_track i_state_fun ->
+      (((E_read_mem read_k loc tracking length ltracking)::events),outcome)
+    | Write_mem write_k loc track length l_track value v_track i_state_fun ->
       let (events,outcome) = (rr_ie_loop mode (i_state_fun true)) in
-      (((E_write_mem write_k loc length l_track value v_track)::events),outcome)
+      (((E_write_mem write_k loc track length l_track value v_track)::events),outcome)
     | Internal _ _ next -> (rr_ie_loop mode next)
      end ;;
 

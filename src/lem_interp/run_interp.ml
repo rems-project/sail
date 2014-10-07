@@ -49,7 +49,7 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
 
 let val_to_string v = match v with
   | Bitvector(bools, _, _) -> "0b" ^ collapse_leading (String.concat "" (List.map (function | true -> "1" | _ -> "0") bools))
-  | Bytevector(words, _, _)->
+  | Bytevector words->
     "0x" ^ (String.concat ""
 	    (List.map (function 
 	      | 10 -> "A"

@@ -1,4 +1,5 @@
 import Interp
+open import Interp_ast
 open import Pervasives
 open import Num
 
@@ -22,7 +23,7 @@ type value =
   some special registers, with no clear mapping to bits. Should
   we permit Record of (string * Bitvector) values as well?
 *)
-| Bytevector of list word8 * bool * integer (* For memory accesses : see above *)
+| Bytevector of list word8 (* For memory accesses *)
 | Unknown
 (*To add: an abstract value representing an unknown but named memory address?*)
 
@@ -35,10 +36,11 @@ type reg_name =
 | Reg_f_slice of string * string * slice * slice (* Same as above but only accessing second slice of the field *)
 
 type outcome =
-(* Request to read memory, value is location to read followed by registers that location depended on when mode.track_values *)
-| Read_mem of read_kind * value * integer * maybe (list reg_name) *  (value -> instruction_state)
+(* Request to read memory, value is location to read followed by registers that location depended on when mode.track_values,
+   integer is size to read, followed by registers that were used in computing that size *)
+| Read_mem of read_kind * value * maybe (list reg_name) * integer * maybe (list reg_name) *  (value -> instruction_state)
 (* Request to write memory, first value and dependent registers is location, second is the value to write *)
-| Write_mem of write_kind * value * integer * maybe (list reg_name) * value * maybe (list reg_name) * (bool -> instruction_state)
+| Write_mem of write_kind * value * maybe (list reg_name) * integer * maybe (list reg_name) * value * maybe (list reg_name) * (bool -> instruction_state)
 (* Request a memory barrier *)
 | Barrier of barrier_kind * instruction_state
 (* Request to read register, will track dependency when mode.track_values *)
@@ -49,16 +51,19 @@ type outcome =
 | Nondet_choice of list instruction_state * instruction_state
 (* Stop for incremental stepping, function can be used to display function call data *)
 | Internal of maybe string * maybe (unit -> string) * instruction_state
+(* Escape the current instruction, for traps, some sys calls, interrupts, etc. Can optionally provide a handler *)
+| Escape of maybe instruction_state
 | Done
 | Error of string
 
 type event = 
-| E_read_mem of read_kind * value * integer * maybe (list reg_name) 
-| E_write_mem of write_kind * value * integer * maybe (list reg_name) * value * maybe (list reg_name)
+| E_read_mem of read_kind * value * maybe (list reg_name) * integer * maybe (list reg_name)
+| E_write_mem of write_kind * value * maybe (list reg_name) * integer * maybe (list reg_name) * value * maybe (list reg_name)
 | E_barrier of barrier_kind
 | E_read_reg of reg_name
 | E_write_reg of reg_name * value
 | E_error of string (* Should not happen, but may if the symbolic evaluation doesn't work out*)
+(*should there be a representation for escape down here?*)
 (*To discuss: Should multiple memory accesses be represented with a special form to denote this or potentially merged into one read or left in place*)
 
 (* Functions to build up the initial state for interpretation *)
@@ -66,9 +71,20 @@ val build_context : Interp_ast.defs Interp.tannot -> context (*defs should come 
 val initial_instruction_state : context -> string -> list value -> instruction_state 
   (* string is a function name, list of value are the parameters to that function *)
 
+(*Type representint the constructor parameters in instruction_form, other is a type not representable externally*)
+type instr_parm_typ = 
+  | Bit (*A single bit, represented as a one element Bitvector as a value*)
+  | Other (*An unrepresentable type, will be represented as Unknown in instruciton form *)
+  | Bvector of maybe integer (* A bitvector type, with length when statically known *)
+
+(*A representation of the AST node for each instruction in the spec, with concrete values from this call, and the potential static effects from the funcl clause for this instruction 
+Follows the form of the instruction in instruction_extractor, but populates the parameters with actual values
+*)
+type instruction_form = (string * list (string * instr_parm_typ * value) * list base_effect)
+
 type i_state_or_error =
-  | Instr of instruction_state
-  | Unsupported_instruction_error
+  | Instr of instruction_state * instruction_form
+  | Unsupported_instruction_error of instruction_form
   | Not_an_instruction_error
   | Internal_error of string
 
