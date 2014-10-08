@@ -1,5 +1,16 @@
 THIS_MAKEFILE := $(lastword $(MAKEFILE_LIST))
-srcdir := $(realpath $(dir $(THIS_MAKEFILE)))
+# NOTE: it matters that this path is *not* canonicalised (realpath'd).
+# If we realpath it, the ocaml deps files will include realpaths, and
+# make won't know they're the same CMX files that we're building. So
+# will not correctly merge dependency subgraphs, and we will not build
+# stuff in the right order.
+# In general, the lesson is that the whole system needs to use the same
+# path, whether absolute or relative, to name a given file.
+# Sometimes that's difficult. Rules which cd to another directory break
+# if we're using absolute paths. I have used $(realpath $(srcdir)) in
+# those cases. This is not ideal. We shouldn't cd unless we really have to.
+srcdir := $(dir $(THIS_MAKEFILE))
+$(warning srcdir is $(srcdir))
 
 BITSTRING ?= $(srcdir)/contrib/bitstring
 BATTERIES ?= $(srcdir)/contrib/batteries-included/_build/src
@@ -34,15 +45,12 @@ install_elf:
 # HACK: special case for bitstring_local
 elf_model/bitstring_local.ml: elf_model/bitstring.lem
 	$(LEM) -outdir $$(dirname "$<") -ocaml -only_changed_output "$<"
-# HACK: why doesn't ocamldep know this one?
-elf_model/show.cmx: elf_model/missing_pervasives.cmx
 
 ELF_LEM_SRC := $(addprefix elf_model/,missing_pervasives.lem show.lem endianness.lem bitstring.lem elf_types.lem elf_interpreted_segment.lem elf_header.lem elf_file1.lem elf_program_header_table.lem elf_executable_file2.lem elf_section_header_table.lem elf_executable_file3.lem string_table.lem elf_executable_file4.lem elf_executable_file5.lem sail_interface.lem main.lem)
 vpath _build/%.lem .
 vpath _build/%.cmx .
 
 CAMLP4FLAGS += -I $(srcdir)/contrib/bitstring/
-CAMLP4FLAGS += -I $(srcdir)/contrib/bitstring/_
 CAMLP4FLAGS += bitstring.cma 
 CAMLP4FLAGS += bitstring_persistent.cma 
 CAMLP4FLAGS += pa_bitstring.cmo
@@ -58,7 +66,7 @@ $(ELF_CMX): OCAMLFLAGS += \
 -I $(BITSTRING) -pp 'camlp4o $(CAMLP4FLAGS)' \
 -I $(BATTERIES) \
 -I $(UINT) \
--I elf_model
+-I $(srcdir)/elf_model
 
 $(ELF_ML_DEPS): OCAMLFLAGS += \
 -I $(BITSTRING) -pp 'camlp4o $(CAMLP4FLAGS)' \
@@ -70,7 +78,7 @@ $(ELF_ML_DEPS): %.d: %.ml
 	ocamlfind ocamldep -native $(OCAMLFLAGS) "$<" > "$@" || (rm -f "$@"; false)
 
 ifneq ($(MAKECMDGOALS),clean)
--include $(ELF_ML_DEPS)
+include $(ELF_ML_DEPS)
 endif
 
 elf_extract.cmxa: OCAMLFLAGS += \
@@ -109,12 +117,12 @@ _build/test/run_power.native: OCAMLLIBS += \
 $(LEMLIB)/extract.cmxa
 
 _build/test/power.ml: _build/test/power.lem
-	cd _build/test && $(LEM) -ocaml -only_changed_output -lib $(srcdir)/lem_interp/ power.lem
+	cd _build/test && $(LEM) -ocaml -only_changed_output -lib $(realpath $(srcdir))/lem_interp/ power.lem
 	touch "$@" # HACK HACK HACK! why didn't lem update the timestamp?
 
 _build/test/run_power.native: pprint/src/_build/PPrintLib.cmxa _build/lem_interp/extract.cmxa elf_model/elf_extract.cmxa _build/test/power.ml test/run_power.ml
 	cd _build/test && \
-	ocamlopt $(OCAMLFLAGS) $(OCAMLLIBS) $(addprefix $(srcdir)/,$+) -o run_power.native
+	ocamlopt $(OCAMLFLAGS) $(OCAMLLIBS) -I $(realpath $(srcdir))/_build/lem_interp $(addprefix $(realpath $(srcdir))/,$+) -o run_power.native
 
 power: run_power.native
 
