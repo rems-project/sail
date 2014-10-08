@@ -41,18 +41,33 @@ let extern_reg r slice = match (r,slice) with
   | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_single i) _),Nothing) -> Reg_field x y (i,i)
 end
 
-let extern_value mode for_mem v = match v with
+let rec extern_value mode for_mem v = match v with
+  | Interp.V_track v regs -> 
+    let (external_v,_) = extern_value mode for_mem v in
+    (external_v,
+     if (for_mem && mode.Interp.track_values)
+     then (Just (List.map (fun r -> extern_reg r Nothing) regs))
+     else Nothing)
   | Interp.V_vector fst inc bits ->
     if for_mem 
     then (Bytevector (List.reverse (to_bytes (from_bits bits))), Nothing)
     else (Bitvector (from_bits bits) inc fst, Nothing)
-  | Interp.V_track (Interp.V_vector fst inc bits) regs -> 
+  | Interp.V_lit (L_aux L_zero _) -> 
     if for_mem
-    then (Bytevector (List.reverse (to_bytes (from_bits bits))), 
-          if (mode.Interp.track_values) 
-          then (Just (List.map (fun r -> extern_reg r Nothing) regs))
-          else Nothing)
-    else (Bitvector (from_bits bits) inc fst, Nothing)
+    then (Bytevector [0],Nothing)
+    else (Bitvector [false] true 0, Nothing)
+  | Interp.V_lit (L_aux L_false _) ->
+    if for_mem
+    then (Bytevector [0],Nothing)
+    else (Bitvector [false] true 0, Nothing)
+  | Interp.V_lit (L_aux L_one _) -> 
+    if for_mem
+    then (Bytevector [1],Nothing)
+    else (Bitvector [true] true 0, Nothing)
+  | Interp.V_lit (L_aux L_true _) ->
+    if for_mem
+    then (Bytevector [1],Nothing)
+    else (Bitvector [true] true 0, Nothing)
   | _ -> (Unknown,Nothing)
 end
 
