@@ -69,6 +69,48 @@ let rec extern_value mode for_mem v = match v with
     then (Bytevector [1],Nothing)
     else (Bitvector [true] true 0, Nothing)
   | _ -> (Unknown,Nothing)
+end 
+
+let rec slice_value bits start stop = 
+  match bits with
+    | Bitvector bools inc fst -> 
+      Bitvector (Interp.from_n_to_n (if inc then (start - fst) else (fst - start))
+                                    (if inc then (stop - fst) else (fst - stop)) bools)
+                 inc
+                 (if inc then 0 else ((stop - start) + 1))                
+    | Bytevector bytes -> 
+      Bytevector (Interp.from_n_to_n start stop bytes)
+    | Unknown -> Unknown
+end
+
+let append_value left right =
+  match (left,right) with
+    | (Bitvector bools1 inc fst, Bitvector bools2 _ _) -> Bitvector (bools1++bools2) inc fst
+    | (Bytevector bytes1, Bytevector bytes2) -> Bytevector (bytes1++bytes2)
+    | ((Bitvector _ _ _ as bit),(Bytevector _ as byte)) ->
+      (match (intern_value bit,intern_value byte) with
+	| (Interp.V_vector a b bits1,Interp.V_vector _ _ bits2) -> 
+	  (fst (extern_value (make_mode true false) false (Interp.V_vector a b (bits1++bits2))))
+	| _ -> Unknown end)
+    | ((Bytevector _ as byte),(Bitvector _ _ _ as bit)) ->
+      (match (intern_value byte,intern_value bit) with
+	| (Interp.V_vector a b bits1,Interp.V_vector _ _ bits2) -> 
+	  (fst (extern_value (make_mode true false) true (Interp.V_vector a b (bits1++bits2))))
+	| _ -> Unknown end)
+    | _ -> Unknown 
+end
+
+let add_to_address value num =
+  match value with
+    | Unknown -> Unknown
+    | Bitvector _ _ _ -> 
+      fst(extern_value (make_mode true false) false 
+	             (Interp_lib.arith_op_vec_range (+) 1 
+			(Interp.V_tuple [(intern_value value);Interp.V_lit (L_aux (L_num num) Interp_ast.Unknown)])))
+    | Bytevector _ ->
+      fst(extern_value (make_mode true false) true 
+	             (Interp_lib.arith_op_vec_range (+) 1 
+			(Interp.V_tuple [(intern_value value);Interp.V_lit (L_aux (L_num num) Interp_ast.Unknown)])))
 end
 
 let initial_instruction_state top_level main args = 
