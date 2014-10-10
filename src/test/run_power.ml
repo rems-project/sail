@@ -39,7 +39,7 @@ let add_mem byte addr =
   let addr = big_int_to_vec true addr (Big_int.big_int_of_int 64) in
   (*Printf.printf "adder is %s byte is %s\n" (val_to_string addr) (string_of_int byte);*)
   match addr with
-    | Bytevector(addr,_,_) -> mem := Mem.add addr byte !mem
+    | Bytevector addr -> mem := Mem.add addr byte !mem
 ;;
 
 let add_section s =
@@ -159,7 +159,7 @@ let run () =
     else 
       let location = big_int_to_vec true loc (Big_int.big_int_of_int 64) in
       match location with
-	| Bytevector(location,_,_) ->
+	| Bytevector location ->
 	  (Mem.find location !mem)::(reading (Big_int.add_big_int loc Big_int.unit_big_int) (length - 1)) in
   mainaddr := "0x" ^ (List.fold_left (^) "" (List.map (Printf.sprintf "%02x") (reading (Big_int.big_int_of_int start_address) 8)));
 (*  close_in ic;*)
