@@ -146,8 +146,8 @@ let to_vec ord len n =
   else to_vec_dec (V_tuple ([V_lit(L_aux (L_num (integerFromNat len)) Interp_ast.Unknown); n]))
 ;;
 
-let exts len v = match v with
-  | V_vector _ inc _  -> to_vec inc len (to_num true v)
+let exts (V_tuple[V_lit(L_aux (L_num len) _);v]) = match v with
+  | V_vector _ inc _  -> to_vec inc (natFromInteger len) (to_num true v)
   | V_unknown -> V_unknown
 end
 ;;
@@ -278,6 +278,8 @@ let function_map = [
   ("minus_vec_range", arith_op_vec_range (-) 1);
   ("multiply", arith_op ( * ));
   ("multiply_vec", arith_op_vec ( * ) 2);
+  ("mult_range_vec", arith_op_range_vec ( * ) 2);
+  ("mult_vec_range", arith_op_vec_range ( * ) 2);
   ("mod", arith_op (mod));
   ("mod_vec", arith_op_vec (mod) 1);
   ("mod_vec_range", arith_op_vec_range (mod) 1);
@@ -289,7 +291,7 @@ let function_map = [
   ("is_one", is_one);
   ("to_num_inc", to_num false);
   ("to_num_dec", to_num false);
-  ("EXTS", exts 64);
+  ("EXTS", exts);
   ("to_vec_inc", to_vec_inc);
   ("to_vec_dec", to_vec_dec);
   ("bitwise_not", bitwise_not);

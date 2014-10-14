@@ -34,7 +34,7 @@ power: sail interpreter
 	cd _build/test ;\
 	../../sail.native -lem_ast power.sail ;\
 	$(LEM) -ocaml -only_changed_output -lib ../lem_interp/ power.lem;\
-	ocamlfind ocamlopt -package num -package bitstring -package batteries -package uint -I $(LEMLIB) -I ../lem_interp/ -I ../elf_model/ -linkpkg $(LEMLIB)extract.cmxa ../pprint/src/PPrintLib.cmxa ../lem_interp/extract.cmxa elf_extract.cmxa power.ml run_power.ml -o run_power.native
+	env OCAMLRUNPARAM=l=10M ocamlfind ocamlopt -package num -package bitstring -package batteries -package uint -I $(LEMLIB) -I ../lem_interp/ -I ../elf_model/ -linkpkg $(LEMLIB)extract.cmxa ../pprint/src/PPrintLib.cmxa ../lem_interp/extract.cmxa elf_extract.cmxa power.ml run_power.ml -o run_power.native
 	ln -fs _build/test/run_power.native run_power.native
 
 test_power: power

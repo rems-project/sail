@@ -137,7 +137,7 @@ let rec compact_exp (E_aux (e, l)) =
      wrap(E_field(compact_exp e, id))
  | E_assign (lexp, e) -> wrap(E_assign(lexp, compact_exp e))
  | E_block [] | E_nondet [] | E_cast (_, _) | E_internal_cast (_, _)
- | E_id _|E_lit _|E_vector_indexed (_, _)|E_record _|E_internal_exp _ ->
+ | E_id _|E_lit _|E_vector_indexed (_, _)|E_record _|E_internal_exp _ | E_exit _->
      wrap e
 
 (* extract, compact and reverse expressions on the stack;
@@ -157,7 +157,7 @@ module Reg = struct
   let to_string id v = 
     sprintf "%s -> %s" id (val_to_string v)
   let find id m = 
-(*    eprintf "reg_find called with %s\n" id;*)
+(*    eprintf "reg_find called with %s\n" id; *)
     let v = find id m in
 (*    eprintf "%s -> %s\n" id (val_to_string v);*)
     v

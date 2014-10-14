@@ -354,6 +354,7 @@ let doc_exp, doc_let =
       let opening = separate space [string "switch"; exp e; lbrace] in
       let cases = separate_map (break 1) doc_case pexps in
       surround 2 1 opening cases rbrace
+  | E_exit e -> separate space [string "exit"; exp e;]
   (* adding parens and loop for lower precedence *)
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
   | E_cons (_, _)|E_field (_, _)|E_assign (_, _)

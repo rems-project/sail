@@ -38,7 +38,7 @@ end
 let extern_reg r slice = match (r,slice) with
   | (Interp.Reg (Id_aux (Id x) _) _,Nothing) -> Reg x
   | (Interp.Reg (Id_aux (Id x) _) _,Just(i1,i2)) -> Reg_slice x (i1,i2)
-  | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_single i) _),Nothing) -> Reg_field x y (i,i)
+  | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_single i) _),Nothing) -> Reg_field y x (i,i)
 end
 
 let rec extern_value mode for_mem v = match v with

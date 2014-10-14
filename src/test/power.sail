@@ -1,12 +1,10 @@
-val extern forall Nat 'n. bit['n] -> bit[64] effect pure EXTS
+val extern forall Nat 'm, Nat 'n. (implicit<'m>,bit['n]) -> bit['m] effect pure EXTS
 
 (* XXX binary coded decimal *)
 function forall Type 'a . 'a DEC_TO_BCD ( x ) = x
 function forall Type 'a . 'a BCD_TO_DEC ( x ) = x
 (* XXX carry out *)
 function bit carry_out ( x ) = bitzero
-(* XXX length *)
-function nat length ( x ) = 64
 (* XXX Storage control *)
 function forall Type 'a . 'a real_addr ( x ) = x
 (* XXX For stvxl and lvxl - what does that do? *)
@@ -299,27 +297,23 @@ val extern forall Nat 'n, Nat 'm. bit['n] -> bit['m] effect pure EXTZ
 val forall Nat 'n, Nat 'm, 'm <= 'n. (bit['n], [|'m|]) -> bit['m] effect pure Chop
 function forall Nat 'm. (bit['m]) Chop(x, y) = x[0..y]
 
-val forall Nat 'n, Nat 'm, Nat 'p, Nat 'q, Nat 'k, 'n <= 0, 0 <= 'm,
-  'n + 2** 'p = 0, 'm = 2** 'q, 'k = 'p + 'q.
-  (nat, [|'n|], [|'m|]) -> bit['k] effect { wreg } Clamp
+val forall Nat 'n, Nat 'm, Nat 'k, 'n <= 0, 0 <= 'm.
+  (implicit<'k>, int, [|'n|], [|'m|]) -> bit['k] effect { wreg } Clamp
 
-(*
-(*TODO: This is not the right type, Clamp needs the implicit additional parameter *)
-function forall Nat 'n, Nat 'm, Nat 'p, Nat 'q, Nat 'k, 'n <= 0, 0 <= 'm,
-  'n + 2** 'p = 0, 'm = 2** 'q, 'k = 'p + 'q. (bit['k])
-Clamp((nat) x, ([|'n|]) y, ([|'m|]) z) = {
+function forall Nat 'n, Nat 'm, Nat 'k, 'n <= 0, 0 <= 'm. (bit['k])
+Clamp((int) x, ([|'n|]) y, ([|'m|]) z) = {
   ([|'n:'m|]) result := 0;
   if (x<y) then {
     result := y;
-    VSCR.SAT := bitone;
+    VSCR.SAT := 1;
   } else if (x > z) then {
     result := z;
-    VSCR.SAT := bitone;
+    VSCR.SAT := 1;
   } else {
     result := x;
   };
   (bit['k]) result;
-}*)
+}
 
 (* XXX *)
 val extern bit[32] -> bit[32] effect pure RoundToSPIntCeil
@@ -341,12 +335,33 @@ register (bit[64]) CIA (* current instruction address *)
 
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmem } MEMw
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr
+val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_reserve
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> bool effect { wmem } MEMw_conditional
+
+val extern unit -> unit effect { barr } I_Sync
+val extern unit -> unit effect { barr } H_Sync (*corresponds to Sync in barrier kinds*)
+val extern unit -> unit effect { barr } LW_Sync
+val extern unit -> unit effect { barr } EIEIO_Sync
+
 
 (* XXX effect for trap? *)
 val extern unit -> unit effect pure trap
 
 register (bool) mode64bit
 register (bool) bigendianmode
+
+val bit[64] -> unit effect {rreg,wreg} set_overflow_cr0 
+function (unit) set_overflow_cr0(target_register) = {
+  (if mode64bit
+   then m := 0
+   else m := 32);
+  (if target_register[m..63] < 0
+  then c := 0b100
+  else if target_register[m..63] > 0 
+  then c := 0b010
+  else c := 0b001);
+  CR.CR0 := c:[XER.SO]
+}
 
 scattered function unit execute
 scattered typedef ast = const union
@@ -366,7 +381,29 @@ function clause decode (0b010010 :
 function clause execute (B (LI, AA, LK)) =
   {
     if AA then NIA := EXTS (LI : 0b00) else NIA := CIA + EXTS (LI : 0b00);
-    if LK then LR := CIA + 4
+    if LK then LR := CIA + 4 else ()
+  }
+
+union ast member (bit[5], bit[5], bit[14], bit, bit) Bc
+
+function clause decode (0b010000 :
+(bit[5]) BO :
+(bit[5]) BI :
+(bit[14]) BD :
+[AA] :
+[LK] as instr) =
+  Bc (BO,BI,BD,AA,LK)
+
+function clause execute (Bc (BO, BI, BD, AA, LK)) =
+  {
+    if mode64bit then M := 0 else M := 32;
+    if ~ (BO[2]) then CTR := CTR - 1 else ();
+    ctr_ok := (BO[2] | (CTR[M .. 63] != 0) ^ BO[3]);
+    cond_ok := (BO[0] | CR[BI + 32] ^ ~ (BO[1]));
+    if ctr_ok & cond_ok
+    then if AA then NIA := EXTS (BD : 0b00) else NIA := CIA + EXTS (BD : 0b00)
+    else ();
+    if LK then LR := CIA + 4 else ()
   }
 
 union ast member (bit[5], bit[5], bit[2], bit) Bclr
@@ -383,11 +420,11 @@ function clause decode (0b010011 :
 function clause execute (Bclr (BO, BI, BH, LK)) =
   {
     if mode64bit then M := 0 else M := 32;
-    if ~ (BO[2]) then CTR := CTR - 1;
+    if ~ (BO[2]) then CTR := CTR - 1 else ();
     ctr_ok := (BO[2] | (CTR[M .. 63] != 0) ^ BO[3]);
     cond_ok := (BO[0] | CR[BI + 32] ^ ~ (BO[1]));
-    if ctr_ok & cond_ok then NIA := LR[0 .. 61] : 0b00;
-    if LK then LR := CIA + 4
+    if ctr_ok & cond_ok then NIA := LR[0 .. 61] : 0b00 else ();
+    if LK then LR := CIA + 4 else ()
   }
 
 union ast member (bit[5], bit[5], bit[16]) Lwz
@@ -498,6 +535,24 @@ function clause decode (0b001110 :
 function clause execute (Addi (RT, RA, SI)) =
   if RA == 0 then GPR[RT] := EXTS (SI) else GPR[RT] := GPR[RA] + EXTS (SI)
 
+union ast member (bit[5], bit[5], bit[5], bit, bit) Subf
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[5]) RB :
+[OE] :
+0b000101000 :
+[Rc] as instr) =
+  Subf (RT,RA,RB,OE,Rc)
+
+function clause execute (Subf (RT, RA, RB, OE, Rc)) =
+  {
+    (bit[64]) temp := ~ (GPR[RA]) + GPR[RB] + 1;
+    GPR[RT] := temp;
+    if Rc then set_overflow_cr0 (temp) else ()
+  }
+
 union ast member (bit[5], bit[5], bit[5], bit, bit) Mullw
 
 function clause decode (0b011111 :
@@ -510,7 +565,40 @@ function clause decode (0b011111 :
   Mullw (RT,RA,RB,OE,Rc)
 
 function clause execute (Mullw (RT, RA, RB, OE, Rc)) =
-  GPR[RT] := (GPR[RA])[32 .. 63] * (GPR[RB])[32 .. 63]
+  {
+    (bit[64]) temp := (GPR[RA])[32 .. 63] * (GPR[RB])[32 .. 63];
+    GPR[RT] := temp;
+    if Rc then set_overflow_cr0 (temp) else ()
+  }
+
+union ast member (bit[3], bit, bit[5], bit[5]) Cmp
+
+function clause decode (0b011111 :
+(bit[3]) BF :
+(bit[1]) _ :
+[L] :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0000000000 :
+(bit[1]) _ as instr) =
+  Cmp (BF,L,RA,RB)
+
+function clause execute (Cmp (BF, L, RA, RB)) =
+  {
+    (bit[64]) a := 0;
+    (bit[64]) b := 0;
+    if L == 0
+    then {
+      a := EXTS ((GPR[RA])[32 .. 63]);
+      b := EXTS ((GPR[RB])[32 .. 63])
+    }
+    else {
+      a := GPR[RA];
+      b := GPR[RB]
+    };
+    if a < b then c := 0b100 else if a > b then c := 0b010 else c := 0b001;
+    CR[4 * BF + 32..4 * BF + 35] := c : [XER.SO]
+  }
 
 union ast member (bit[5], bit[5], bit[5], bit) Or
 
@@ -541,16 +629,56 @@ function clause execute (Extsw (RS, RA, Rc)) =
     (GPR[RA])[0..31] := s ^^ 32
   }
 
+union ast member (bit[2]) Sync
+
+function clause decode (0b011111 :
+(bit[3]) _ :
+(bit[2]) L :
+(bit[5]) _ :
+(bit[5]) _ :
+0b1001010110 :
+(bit[1]) _ as instr) =
+  Sync (L)
+
+function clause execute (Sync (L)) =
+  switch L { case 0b00 -> { H_Sync (()) } case 0b01 -> { LW_Sync (()) } }
+
+union ast member (bit[5]) Mbar
+
+function clause decode (0b011111 :
+(bit[5]) MO :
+(bit[5]) _ :
+(bit[5]) _ :
+0b1101010110 :
+(bit[1]) _ as instr) =
+  Mbar (MO)
+
+function clause execute (Mbar (MO)) = ()
+
+
+typedef decode_failure = enumerate { no_matching_pattern; unsupported_instruction } 
+
+function clause decode _ = exit no_matching_pattern
 
 end decode
 end execute
 end ast
 
+val ast -> ast effect pure supported_instructions
+function ast supported_instructions ((ast) instr) = {
+  switch instr {
+    case (Mbar(_)) -> exit unsupported_instruction
+    case (Sync(0b10)) -> exit unsupported_instruction
+    case (Sync(0b11)) -> exit unsupported_instruction
+    case _ -> instr
+   }
+}
 
 (* fetch-decode-execute *)
 function unit fde () = {
   NIA := CIA + 4;
   instr := decode(MEMr(CIA, 4));
+  instr := supported_instructions(instr);
   execute(instr);
   CIA := NIA;
 }

@@ -92,6 +92,7 @@ let init_reg () =
     init "CTR" Big_int.zero_big_int 64;
     init "CR" Big_int.zero_big_int 32;
     init "LR" lr_init_value 64;
+    init "XER" Big_int.zero_big_int 64;
     "mode64bit", Bitvector([true],true,Big_int.zero_big_int);
   ]
 ;;
