@@ -175,11 +175,10 @@ let run () =
       match location with
 	| Bytevector location ->
 	  (Mem.find location !mem)::(reading (Big_int.add_big_int loc Big_int.unit_big_int) (length - 1)) in
+  let addr = reading (Big_int.big_int_of_int start_address) 8 in
   let _ = begin
-    startaddr := (match 
-	(big_int_to_vec true (Big_int.big_int_of_int start_address) (Big_int.big_int_of_int 64)) with
-	  | Bytevector location -> location);
-    mainaddr := "0x" ^ (List.fold_left (^) "" (List.map (Printf.sprintf "%02x") (reading (Big_int.big_int_of_int start_address) 8)));
+    startaddr := addr;
+    mainaddr := "0x" ^ (List.fold_left (^) "" (List.map (Printf.sprintf "%02x") addr));
   end in
   let reg = init_reg () in
   (* entry point: unit -> unit fde *)
