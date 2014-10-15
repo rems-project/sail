@@ -8,7 +8,7 @@ open Run_interp_model ;;
 
 open Sail_interface ;;
 
-let startaddr = ref "0" ;;
+let startaddr = ref [] ;;
 let mainaddr  = ref "0" ;;
 let sections = ref [] ;;
 let file = ref "" ;;
@@ -74,16 +74,18 @@ let load_memory (bits,addr) =
 	 loop rest (1 + addr)
   in loop bits addr
 
-let lem_print_memory m = 
-  let preamble = "let instruction_byte_list = [" in
+let lem_print_memory m =
+  let format_addr a = "[" ^ (List.fold_right (fun i r -> "(" ^ (string_of_int i) ^ ": word8);" ^ r) a "") ^ "]" in
+  let preamble = "open import Pervasives\ntype word8 = nat\n" in
+  let start_addr = "let start_adder_address = " ^ format_addr !startaddr ^ ";;\n" in
+  let start_list_def = "let instruction_byte_list = [" in
   let list_elements = 
     Mem.fold (fun key byte rest -> 
-      rest ^ "([" ^ (List.fold_right (fun i r -> (string_of_int i) ^ ";" ^ r) key "") ^ "], " ^
-      (string_of_int byte) ^ ");\n") m "" in
-  let final = "];;" in
+      rest ^ "(" ^ (format_addr key) ^ ", (" ^ (string_of_int byte) ^ ":word8) );\n") m "" in
+  let close_list_def = "];;" in
   let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in
   let o' = Format.formatter_of_out_channel o in
-  Format.fprintf o' "%s" (preamble ^ list_elements ^ final);
+  Format.fprintf o' "%s" (preamble ^ start_addr ^ start_list_def ^ list_elements ^ close_list_def);
   let _ = close_out o in
   Sys.rename temp_file_name !bytes_file 
 
@@ -118,7 +120,7 @@ let args = [
   ("--file", Arg.Set_string file, "filename binary code to load in memory");
   ("--data", Arg.String add_section, "name,offset,size,addr add a data section");
   ("--code", Arg.String add_section, "name,offset,size,addr add a code section");
-  ("--startaddr", Arg.Set_string startaddr, "addr initial address (UNUSED)");
+  (*("--startaddr", Arg.Set_string startaddr, "addr initial address (UNUSED)");*)
   ("--mainaddr", Arg.Set_string mainaddr, "addr address of the main section (entry point; default: 0)");
   ("--quiet", Arg.Clear Run_interp_model.debug, " do not display interpreter actions");
   ("--interactive", Arg.Clear eager_eval , " interactive execution");
@@ -173,7 +175,12 @@ let run () =
       match location with
 	| Bytevector location ->
 	  (Mem.find location !mem)::(reading (Big_int.add_big_int loc Big_int.unit_big_int) (length - 1)) in
-  mainaddr := "0x" ^ (List.fold_left (^) "" (List.map (Printf.sprintf "%02x") (reading (Big_int.big_int_of_int start_address) 8)));
+  let _ = begin
+    startaddr := (match 
+	(big_int_to_vec true (Big_int.big_int_of_int start_address) (Big_int.big_int_of_int 64)) with
+	  | Bytevector location -> location);
+    mainaddr := "0x" ^ (List.fold_left (^) "" (List.map (Printf.sprintf "%02x") (reading (Big_int.big_int_of_int start_address) 8)));
+  end in
   let reg = init_reg () in
   (* entry point: unit -> unit fde *)
   let funk_name = "fde" in
