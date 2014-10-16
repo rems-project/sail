@@ -535,6 +535,19 @@ function clause decode (0b001110 :
 function clause execute (Addi (RT, RA, SI)) =
   if RA == 0 then GPR[RT] := EXTS (SI) else GPR[RT] := GPR[RA] + EXTS (SI)
 
+union ast member (bit[5], bit[5], bit[16]) Addis
+
+function clause decode (0b001111 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[16]) SI as instr) =
+  Addis (RT,RA,SI)
+
+function clause execute (Addis (RT, RA, SI)) =
+  if RA == 0
+  then GPR[RT] := EXTS (SI : 0b0000000000000000)
+  else GPR[RT] := GPR[RA] + EXTS (SI : 0b0000000000000000)
+
 union ast member (bit[5], bit[5], bit[5], bit, bit) Subf
 
 function clause decode (0b011111 :
@@ -600,6 +613,40 @@ function clause execute (Cmp (BF, L, RA, RB)) =
     CR[4 * BF + 32..4 * BF + 35] := c : [XER.SO]
   }
 
+union ast member (bit[5], bit[5], bit[16]) Ori
+
+function clause decode (0b011000 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[16]) UI as instr) =
+  Ori (RS,RA,UI)
+
+function clause execute (Ori (RS, RA, UI)) =
+  GPR[RA] := (GPR[RS] | 0b000000000000000000000000000000000000000000000000 : UI)
+
+union ast member (bit[5], bit[5], bit[16]) Oris
+
+function clause decode (0b011001 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[16]) UI as instr) =
+  Oris (RS,RA,UI)
+
+function clause execute (Oris (RS, RA, UI)) =
+  GPR[RA] :=
+    (GPR[RS] | 0b00000000000000000000000000000000 : UI : 0b0000000000000000)
+
+union ast member (bit[5], bit[5], bit[16]) Xori
+
+function clause decode (0b011010 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[16]) UI as instr) =
+  Xori (RS,RA,UI)
+
+function clause execute (Xori (RS, RA, UI)) =
+  GPR[RA] := GPR[RS] ^ 0b000000000000000000000000000000000000000000000000 : UI
+
 union ast member (bit[5], bit[5], bit[5], bit) Or
 
 function clause decode (0b011111 :
@@ -628,6 +675,220 @@ function clause execute (Extsw (RS, RA, Rc)) =
     (GPR[RA])[32..63] := (GPR[RS])[32 .. 63];
     (GPR[RA])[0..31] := s ^^ 32
   }
+
+union ast member (bit[5], bit[5], bit[6], bit[6], bit) Rldicr
+
+function clause decode (0b011110 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[5]) _ :
+(bit[6]) me :
+0b001 :
+(bit[1]) _ :
+[Rc] as instr) =
+  Rldicr (RS,RA,instr[16 .. 20] : instr[30 .. 30],me,Rc)
+
+function clause execute (Rldicr (RS, RA, sh, me, Rc)) =
+  {
+    n := [sh[5]] : sh[0 .. 4];
+    r := ROTL (GPR[RS],n);
+    e := [me[5]] : me[0 .. 4];
+    m := MASK (0,e);
+    GPR[RA] := (r & m)
+  }
+
+union ast member (bit[5], bit[10]) Mtspr
+
+function clause decode (0b011111 :
+(bit[5]) RS :
+(bit[10]) spr :
+0b0111010011 :
+(bit[1]) _ as instr) =
+  Mtspr (RS,spr)
+
+function clause execute (Mtspr (RS, spr)) =
+  {
+    n := spr[5 .. 9] : spr[0 .. 4];
+    if n == 13
+    then trap ()
+    else if length (SPR[n]) == 64
+    then SPR[n] := GPR[RS]
+    else SPR[n] := (GPR[RS])[32 .. 63]
+  }
+
+union ast member (bit[5], bit[10]) Mfspr
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+(bit[10]) spr :
+0b0101010011 :
+(bit[1]) _ as instr) =
+  Mfspr (RT,spr)
+
+function clause execute (Mfspr (RT, spr)) =
+  {
+    n := spr[5 .. 9] : spr[0 .. 4];
+    if length (SPR[n]) == 64
+    then GPR[RT] := SPR[n]
+    else GPR[RT] := 0b00000000000000000000000000000000 : SPR[n]
+  }
+
+union ast member (bit[5], bit[8]) Mtcrf
+
+function clause decode (0b011111 :
+(bit[5]) RS :
+0b0 :
+(bit[8]) FXM :
+(bit[1]) _ :
+0b0010010000 :
+(bit[1]) _ as instr) =
+  Mtcrf (RS,FXM)
+
+function clause execute (Mtcrf (RS, FXM)) =
+  {
+    mask :=
+      (FXM[0] ^^ 4) :
+        (FXM[1] ^^ 4) :
+          (FXM[2] ^^ 4) :
+            (FXM[3] ^^ 4) :
+              (FXM[4] ^^ 4) : (FXM[5] ^^ 4) : (FXM[6] ^^ 4) : (FXM[7] ^^ 4);
+    CR :=
+      ((bit[32]) ((GPR[RS])[32 .. 63] & mask) |
+        (bit[32]) (CR & ~ ((bit[32]) mask)))
+  }
+
+union ast member (bit[5]) Mfcr
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+0b0 :
+(bit[9]) _ :
+0b0000010011 :
+(bit[1]) _ as instr) =
+  Mfcr (RT)
+
+function clause execute (Mfcr (RT)) =
+  GPR[RT] := 0b00000000000000000000000000000000 : CR
+
+union ast member (bit[5], bit[5], bit[16]) Lfd
+
+function clause decode (0b110010 :
+(bit[5]) FRT :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Lfd (FRT,RA,D)
+
+function clause execute (Lfd (FRT, RA, D)) =
+  {
+    (bit[64]) b := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + EXTS (D);
+    FPR[FRT] := MEMr (EA,8)
+  }
+
+union ast member (bit[5], bit[5], bit[16]) Stfd
+
+function clause decode (0b110110 :
+(bit[5]) FRS :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Stfd (FRS,RA,D)
+
+function clause execute (Stfd (FRS, RA, D)) =
+  {
+    (bit[64]) b := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + EXTS (D);
+    MEMw(EA,8) := FPR[FRS]
+  }
+
+union ast member (bit[5], bit) Mffs
+
+function clause decode (0b111111 :
+(bit[5]) FRT :
+(bit[5]) _ :
+(bit[5]) _ :
+0b1001000111 :
+[Rc] as instr) =
+  Mffs (FRT,Rc)
+
+function clause execute (Mffs (FRT, Rc)) = ()
+
+union ast member (bit[3], bit[3]) Mcrfs
+
+function clause decode (0b111111 :
+(bit[3]) BF :
+(bit[2]) _ :
+(bit[3]) BFA :
+(bit[2]) _ :
+(bit[5]) _ :
+0b0001000000 :
+(bit[1]) _ as instr) =
+  Mcrfs (BF,BFA)
+
+function clause execute (Mcrfs (BF, BFA)) = ()
+
+union ast member (bit[5], bit[5], bit[5]) Lvx
+
+function clause decode (0b011111 :
+(bit[5]) VRT :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0001100111 :
+(bit[1]) _ as instr) =
+  Lvx (VRT,RA,RB)
+
+function clause execute (Lvx (VRT, RA, RB)) =
+  {
+    (bit[64]) b := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + GPR[RB];
+    VR[VRT] :=
+      MEMr
+        (EA & 0b1111111111111111111111111111111111111111111111111111111111110000,16)
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Stvx
+
+function clause decode (0b011111 :
+(bit[5]) VRS :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0011100111 :
+(bit[1]) _ as instr) =
+  Stvx (VRS,RA,RB)
+
+function clause execute (Stvx (VRS, RA, RB)) =
+  {
+    (bit[64]) b := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + GPR[RB];
+    MEMw(EA & 0b1111111111111111111111111111111111111111111111111111111111110000,16) :=
+      VR[VRS]
+  }
+
+union ast member (bit[5]) Mtvscr
+
+function clause decode (0b000100 :
+(bit[10]) _ :
+(bit[5]) VRB :
+0b11001000100 as instr) =
+  Mtvscr (VRB)
+
+function clause execute (Mtvscr (VRB)) = VSCR := (VR[VRB])[96 .. 127]
+
+union ast member (bit[5]) Mfvscr
+
+function clause decode (0b000100 :
+(bit[5]) VRT :
+(bit[10]) _ :
+0b11000000100 as instr) =
+  Mfvscr (VRT)
+
+function clause execute (Mfvscr (VRT)) =
+  VR[VRT] :=
+    0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 :
+      VSCR
 
 union ast member (bit[2]) Sync
 

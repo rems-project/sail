@@ -398,30 +398,6 @@ let rec fupdate_record base updates =
 end
 
 
-val update_vector_slice : value -> value -> lmem -> lmem
-let rec update_vector_slice vector value mem = 
-  match (vector,value) with
-  | ((V_vector m inc vs),(V_vector n inc2 vals)) ->
-    foldr2 (fun vbox v mem -> match vbox with
-                                       | V_boxref n t -> update_mem mem n v end)
-      mem vs vals
-  | ((V_vector m inc vs),(V_vector_sparse n o inc2 vals d)) -> 
-    let (_,mem) = foldr (fun vbox (i,mem) ->
-                          match vbox with
-			    | V_boxref n t -> 
-			      (if inc then i+1 else i-1,
-				update_mem mem n (match List.lookup i vals with
-				  | Nothing -> d
-				  | Just v  -> v end))
-                          end) (m,mem) vs in 
-    mem
-  | ((V_vector m inc vs),v) ->
-    List.foldr (fun vbox mem -> match vbox with
-                                    | V_boxref n t -> update_mem mem n v end)
-      mem vs
-  | (V_track v1 r1, v) -> (update_vector_slice v1 value mem) 
-end
-
 val fupdate_sparse : (integer -> integer -> bool) -> list (integer*value) -> integer -> value -> list (integer*value)
 let rec fupdate_sparse compare vs n vexp =
   match vs with
@@ -444,6 +420,7 @@ let rec fupdate_vec v n vexp =
     | _ -> V_track (fupdate_vec v n vexp) r end)
   end
 
+
 val replace_is : forall 'a. list 'a -> list 'a -> integer -> integer -> integer -> list 'a
 let rec replace_is ls vs base start stop =
   match (ls,vs) with
@@ -451,7 +428,7 @@ let rec replace_is ls vs base start stop =
   | (ls,[]) -> ls
   | (l::ls,v::vs) -> 
     if base >= start then
-      if start >= stop then ls
+      if start >= stop then v::ls
       else v::(replace_is ls vs (base + 1) (start + 1) stop)
     else l::(replace_is ls (v::vs) (base+1) start stop)
   end
@@ -483,6 +460,35 @@ let rec fupdate_vector_slice vec replace start stop =
   | (V_track v r, replace) -> taint (fupdate_vector_slice v replace start stop) r
   | (vec, V_track vr rr) -> taint (fupdate_vector_slice vec vr start stop) rr
   end
+
+val update_vector_slice : value -> value -> integer -> integer -> lmem -> lmem
+let rec update_vector_slice vector value start stop mem = 
+  match (vector,value) with
+  | ((V_boxref n t), v) ->
+    update_mem mem n (fupdate_vector_slice (in_mem mem n) v start stop)    
+  | ((V_vector m inc vs),(V_vector n inc2 vals)) ->
+    let (V_vector m' _ vs') = slice_vector vector start stop in
+    foldr2 (fun vbox v mem -> match vbox with
+      | V_boxref n t -> update_mem mem n v end)
+      mem vs' vals
+  | ((V_vector m inc vs),(V_vector_sparse n o inc2 vals d)) -> 
+    let (V_vector m' _ vs') = slice_vector vector start stop in
+    let (_,mem) = foldr (fun vbox (i,mem) ->
+                          match vbox with
+			    | V_boxref n t -> 
+			      (if inc then i+1 else i-1,
+				update_mem mem n (match List.lookup i vals with
+				  | Nothing -> d
+				  | Just v  -> v end))
+                          end) (m,mem) vs' in 
+    mem
+  | ((V_vector m inc vs),v) ->
+    let (V_vector m' _ vs') = slice_vector vector start stop in
+    List.foldr (fun vbox mem -> match vbox with
+                                    | V_boxref n t -> update_mem mem n v end)
+      mem vs'
+  | (V_track v1 r1, v) -> (update_vector_slice v1 value start stop mem) 
+end
 
 val in_ctors : list (id * typ) -> id -> maybe typ
 let rec in_ctors ctors id =
@@ -1776,10 +1782,10 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
       match tag with
 	| Tag_empty ->
 	  match in_lenv l_env id with
-	    | (V_boxref n t) -> 
+	    | ((V_boxref n t) as v) -> 
 	      if is_top_level 
 	      then ((Value (V_lit (L_aux L_unit l)), update_mem l_mem n value, l_env),Nothing)
-	      else ((Value (in_mem l_mem n), l_mem, l_env),Just (fun e env -> (LEXP_aux (LEXP_id id) (l,annot), env)))
+	      else ((Value v, l_mem, l_env),Just (fun e env -> (LEXP_aux (LEXP_id id) (l,annot), env)))
 	    | V_unknown ->
 	      if is_top_level then
 		let (LMem c m) = l_mem in
@@ -1891,10 +1897,10 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
       match tag with
 	| Tag_empty ->
 	  match in_lenv l_env id with
-	    | V_boxref n t -> 
+	    | ((V_boxref n t) as v) -> 
 	      if is_top_level 
 	      then ((Value (V_lit (L_aux L_unit l)), update_mem l_mem n value, l_env),Nothing)
-	      else ((Value (in_mem l_mem n), l_mem, l_env),Just (fun e env -> (LEXP_aux (LEXP_cast typc id) (l,annot), env)))
+	      else ((Value v, l_mem, l_env),Just (fun e env -> (LEXP_aux (LEXP_cast typc id) (l,annot), env)))
 	    | V_unknown -> 	  
 	      if is_top_level 
               then begin
@@ -1992,7 +1998,9 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
               | ((Value v,lm,le), Just lexp_builder) ->
                 (match (v,is_top_level) with
                 | (V_vector m inc vs,true) -> 
-                  ((Value (V_lit (L_aux L_unit Unknown)), update_vector_slice (slice_vector v n1 n2) value lm, l_env), Nothing)
+                  ((Value (V_lit (L_aux L_unit Unknown)), update_vector_slice v value n1 n2 lm, l_env), Nothing)
+		| (V_boxref _ _, true) -> 
+		  ((Value (V_lit (L_aux L_unit Unknown)), update_vector_slice v value n1 n2 lm, l_env), Nothing)
                 | (V_vector m inc vs,false) ->
                   ((Value (slice_vector v n1 n2),lm,l_env), Just (next_builder lexp_builder))
                 | _ -> ((Error l "Vector required",lm,le),Nothing) end)

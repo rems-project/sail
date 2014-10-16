@@ -104,7 +104,9 @@ let init_reg () =
   List.fold_left (fun r (k,v) -> Reg.add k v r) Reg.empty [
     (* XXX execute main() directly until we can handle the init phase *)
     init "CIA" (hex_to_big_int !mainaddr) 64;
+    init "GPR0" Big_int.zero_big_int 64;
     init "GPR1" Big_int.zero_big_int 64;
+    init "GPR2" Big_int.zero_big_int 64;
     init "GPR31" Big_int.zero_big_int 64;
     init "CTR" Big_int.zero_big_int 64;
     init "CR" Big_int.zero_big_int 32;

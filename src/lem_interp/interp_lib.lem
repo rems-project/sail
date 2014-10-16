@@ -265,8 +265,14 @@ let rec vec_concat (V_tuple args) = match args with
   | [x; V_lit l] -> vec_concat (V_tuple [x; litV_to_vec l true]) (*TODO, get the correct order*)
   end ;;
 
+let v_length v = match v with
+  | V_vector n d l -> V_lit (L_aux (L_num (integerFromNat (List.length l))) Unknown)
+  | V_unknown -> V_unknown
+end ;;
+
 let function_map = [
   ("ignore", ignore_sail);            
+  ("length", v_length);
   ("add", arith_op (+));
   ("add_vec", arith_op_vec (+) 1);
   ("add_vec_range", arith_op_vec_range (+) 1);
