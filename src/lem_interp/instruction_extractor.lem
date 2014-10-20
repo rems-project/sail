@@ -24,7 +24,16 @@ let extract_parm (E_aux e (_,tannot)) =
 	| Just(T_app "vector" (T_args [T_arg_nexp _; T_arg_nexp _; _; T_arg_typ (T_id "bit")]),_,_,_) ->
 	  (i,IBitvector Nothing)
 	| _ -> (i,IOther) end
-    | _ -> ("UNKNOWN_PARM",IOther)
+    | _ -> 
+      let i = "Unnamed" in
+      match tannot with
+	| Just(T_id "bit",_,_,_) -> (i,IBit)
+	| Just(T_id "bool",_,_,_) -> (i,IBit)
+	| Just(T_app "vector" (T_args [T_arg_nexp _; T_arg_nexp (Ne_const len); _; T_arg_typ (T_id "bit")]),_,_,_) ->
+	  (i,IBitvector (Just len))
+	| Just(T_app "vector" (T_args [T_arg_nexp _; T_arg_nexp _; _; T_arg_typ (T_id "bit")]),_,_,_) ->
+	  (i,IBitvector Nothing)
+	| _ -> (i,IOther) end
 end
 
 let rec extract_from_decode decoder = 
