@@ -192,5 +192,10 @@ let get_loc (E_aux(_, (l, (_ : tannot)))) = loc_to_string l
 let print_exp printer e =
   printer ((get_loc e) ^ ": " ^ (Pretty_interp.pp_exp e) ^ "\n")
 
+let instruction_state_to_string stack =
+  List.fold_right (fun e es -> (exp_to_string e) ^ "\n" ^ es) (compact_stack stack) ""
+
+let top_instruction_state_to_string stack = exp_to_string (top_frame_exp stack)
+
 let print_backtrace_compact printer stack = List.iter (print_exp printer) (compact_stack stack)
 let print_continuation printer stack = print_exp printer (top_frame_exp stack)
