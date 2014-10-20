@@ -152,7 +152,7 @@ let rec fde_loop count main_func parameters mem reg ?mode track_dependencies pro
   | true, mode, track_dependencies, (reg, mem) ->
       if eq_zero (get_reg reg "CIA") then
         eprintf "\nSUCCESS: returned with value %s\n"
-          (Run_interp_model.val_to_string (get_reg reg "GPR3"))
+          (Printing_functions.val_to_string (get_reg reg "GPR3"))
       else
         fde_loop (count+1) main_func parameters mem reg ~mode:mode track_dependencies prog
 ;;
