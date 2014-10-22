@@ -9,6 +9,8 @@ val loc_to_string : l -> string
 val get_loc : tannot exp -> string
 (*interp_interface.value to string*)
 val val_to_string : value0 -> string
+(*Force all representations to hex strings instead of a mixture of hex and binary strings*)
+val val_to_hex_string : value0 -> string
 (* format one register *)
 val reg_name_to_string : reg_name -> string
 (* format the register dependencies *)

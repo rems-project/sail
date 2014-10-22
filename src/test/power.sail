@@ -524,6 +524,42 @@ function clause execute (Stdu (RS, RA, DS)) =
     GPR[RA] := EA
   }
 
+union ast member (bit[5], bit[5], bit[5]) Lswi
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[5]) NB :
+0b1001010101 :
+(bit[1]) _ as instr) =
+  Lswi (RT,RA,NB)
+
+function clause execute (Lswi (RT, RA, NB)) =
+  {
+    (bit[64]) EA := 0;
+    if RA == 0 then EA := 0 else EA := GPR[RA];
+    (range<0, 32> ) r := 0;
+    r := RT - 1;
+    (range<0, 32> ) size := if NB == 0 then 32 else NB;
+    (bit[256]) membuffer := MEMr (EA,size);
+    j := 0;
+    i := 32;
+    foreach (n from (if NB == 0 then 32 else NB) to 1 by 1 in dec)
+    {
+      if i == 32
+      then {
+        r := (range<0, 32> ) (r + 1) mod 32;
+        GPR[r] := 0
+      }
+      else ();
+      (GPR[r])[i..i + 7] := membuffer[j .. j + 7];
+      j := j + 8;
+      i := i + 8;
+      if i == 64 then i := 32 else ();
+      EA := EA + 1
+    }
+  }
+
 union ast member (bit[5], bit[5], bit[16]) Addi
 
 function clause decode (0b001110 :
@@ -562,6 +598,24 @@ function clause decode (0b011111 :
 function clause execute (Subf (RT, RA, RB, OE, Rc)) =
   {
     (bit[64]) temp := ~ (GPR[RA]) + GPR[RB] + 1;
+    GPR[RT] := temp;
+    if Rc then set_overflow_cr0 (temp) else ()
+  }
+
+union ast member (bit[5], bit[5], bit, bit) Neg
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[5]) _ :
+[OE] :
+0b001101000 :
+[Rc] as instr) =
+  Neg (RT,RA,OE,Rc)
+
+function clause execute (Neg (RT, RA, OE, Rc)) =
+  {
+    (bit[64]) temp := ~ (GPR[RA]) + 1;
     GPR[RT] := temp;
     if Rc then set_overflow_cr0 (temp) else ()
   }

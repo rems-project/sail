@@ -51,10 +51,41 @@ let val_to_string v = match v with
     (string_of_int l) ^ " bits -- 0b" ^ collapse_leading (String.concat "" (List.map (function | true -> "1" | _ -> "0") bools))
   | Bytevector words ->
     let l = List.length words in
-    (string_of_int l) ^ " bytes --" ^
+    (string_of_int l) ^ " bytes -- 0x" ^
       (String.concat ""
-	 (List.map (fun i -> (Printf.sprintf "0x%x " i)) words))
+	 (List.map (fun i -> let s = (Printf.sprintf "%x" i) in if (String.length s = 1) then "0"^s else s) words))
   | Unknown0 -> "Unknown"
+
+let half_byte_to_hex v = 
+  match v with
+    | [false;false;false;false] -> "0"
+    | [false;false;false;true ] -> "1"
+    | [false;false;true ;false] -> "2"
+    | [false;false;true ;true ] -> "3"
+    | [false;true ;false;false] -> "4"
+    | [false;true ;false;true ] -> "5"
+    | [false;true ;true ;false] -> "6"
+    | [false;true ;true ;true ] -> "7"
+    | [true ;false;false;false] -> "8"
+    | [true ;false;false;true ] -> "9"
+    | [true ;false;true ;false] -> "a"
+    | [true ;false;true ;true ] -> "b"
+    | [true ;true ;false;false] -> "c"
+    | [true ;true ;false;true ] -> "d"
+    | [true ;true ;true ;false] -> "e"
+    | [true ;true ;true ;true ] -> "f"
+
+let rec bit_to_hex v = 
+  match v with
+    | [] -> ""
+    | a::b::c::d::vs -> half_byte_to_hex [a;b;c;d] ^ bit_to_hex vs
+    | _ -> "bitstring given not divisible by 4"
+
+let val_to_hex_string v = match v with
+  | Bitvector(bools, _, _) -> "0x" ^ bit_to_hex bools
+  | Bytevector words -> val_to_string v
+  | Unknown0 -> "Error: cannot turn Unknown into hex"
+;;
 
 let reg_name_to_string = function
   | Reg0 s -> s

@@ -282,6 +282,9 @@ let function_map = [
   ("minus", arith_op (-));
   ("minus_vec", arith_op_vec (-) 1);
   ("minus_vec_range", arith_op_vec_range (-) 1);
+  ("minus_range_vec", arith_op_range_vec (-) 1);
+  ("minus_vec_range_range", arith_op_vec_range_range (-));
+  ("minus_range_vec_range", arith_op_range_vec_range (-));
   ("multiply", arith_op ( * ));
   ("multiply_vec", arith_op_vec ( * ) 2);
   ("mult_range_vec", arith_op_range_vec ( * ) 2);
