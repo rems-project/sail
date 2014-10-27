@@ -39,9 +39,9 @@ let reg = ref (Reg.add "dummy" Unknown0 Reg.empty) ;;
 
 let add_mem byte addr =
   assert(byte >= 0 && byte < 256);
-  (*Printf.printf "adder is %s, byte is %s\n" (string_of_big_int addr) (string_of_int byte);*)
+  Printf.printf "adder is %s, byte is %s\n" (string_of_big_int addr) (string_of_int byte);
   let addr = big_int_to_vec true addr (big_int_of_int 64) in
-  (*Printf.printf "adder is %s byte is %s\n" (val_to_string addr) (string_of_int byte);*)
+  Printf.printf "adder is %s byte is %s\n" (Printing_functions.val_to_string addr) (string_of_int byte);
   match addr with
     | Bytevector addr -> mem := Mem.add addr byte !mem
 ;;
@@ -296,6 +296,8 @@ let run () =
     startaddr := addr;
     mainaddr := "0x" ^ (List.fold_left (^) "" (List.map (Printf.sprintf "%02x") addr));
   end in
+  Printf.printf "start address: %s\n" !mainaddr;
+  Printf.printf "%s\n" (Printing_functions.val_to_string (Bytevector !startaddr));
   let my_reg = init_reg () in
   reg := my_reg;
   (* entry point: unit -> unit fde *)
