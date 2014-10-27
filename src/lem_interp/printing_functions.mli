@@ -39,9 +39,10 @@ val instruction_state_to_string : instruction_state -> string
 (*format just the top of the call stack*)
 val top_instruction_state_to_string : instruction_state -> string
 
+val instruction_to_string : instruction -> string
 
 (*Functions to take a print function and cause a print event for the above functions *)
 val print_exp : (string-> unit) -> tannot exp -> unit 
 val print_backtrace_compact : (string -> unit) -> instruction_state -> unit
 val print_continuation : (string -> unit) -> instruction_state -> unit
-
+val print_instruction : (string -> unit) -> instruction -> unit

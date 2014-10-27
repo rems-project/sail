@@ -101,6 +101,10 @@ let init_reg () =
       init "VRSAVE" zero_big_int 32;
       init "FPSCR" zero_big_int 64;
       init "VSCR" zero_big_int 32;
+      init "SPRG4" zero_big_int 64;
+      init "SPRG5" zero_big_int 64;
+      init "SPRG6" zero_big_int 64;
+      init "SPRG7" zero_big_int 64;
     ] @
     (* Commonly read before written general purpose register *)
       [init "GPR0" zero_big_int 64;
