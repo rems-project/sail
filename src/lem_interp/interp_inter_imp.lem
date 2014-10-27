@@ -20,17 +20,21 @@ let to_bits l = (List.map (fun b -> match b with
 let from_bits l = (List.map (fun b -> match b with
                                  | Interp.V_lit (L_aux L_zero _) -> false
 				 | _ -> true end) l) 
-let rec to_bytes l = match (List.reverse l) with
+let rec to_bytes l = match l with
   | [] -> []
   | (a::b::c::d::e::f::g::h::rest) ->
-    (natFromInteger(integerFromBoolList (false,[a;b;c;d;e;f;g;h])))::(to_bytes rest)
+    (natFromInteger(integerFromBoolList (false,(List.reverse([a;b;c;d;e;f;g;h])))))::(to_bytes rest)
 end
 		   
 let intern_value v = match v with
   | Bitvector bs inc fst   -> Interp.V_vector fst inc  (to_bits bs)
   | Bytevector bys -> Interp.V_vector 0 true 
-    (to_bits (List.reverse
-		(List.concat (List.map (fun n -> boolListFrombitSeq 8 (bitSeqFromInteger (Just 8) (integerFromNat n))) bys))))
+    (List.concat (List.map (fun by -> 
+      match Interp_lib.to_vec_inc (Interp.V_tuple([Interp.V_lit(L_aux (L_num 8) Interp_ast.Unknown);
+						   Interp.V_lit(L_aux (L_num (integerFromNat by)) Interp_ast.Unknown)]))
+      with
+	| Interp.V_vector _ _ bits -> bits 
+	| _ -> [] end) bys))
   | Unknown -> Interp.V_unknown
   | _ -> Interp.V_unknown
 end
@@ -50,7 +54,7 @@ let rec extern_value mode for_mem v = match v with
      else Nothing)
   | Interp.V_vector fst inc bits ->
     if for_mem 
-    then (Bytevector (List.reverse (to_bytes (from_bits bits))), Nothing)
+    then (Bytevector (to_bytes (from_bits bits)), Nothing)
     else (Bitvector (from_bits bits) inc fst, Nothing)
   | Interp.V_lit (L_aux L_zero _) -> 
     if for_mem

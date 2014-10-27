@@ -143,7 +143,7 @@ let rec perform_action ((reg, mem) as env) = function
      if eq_big_int length zero_big_int 
      then []
      else (Mem.find location mem)::(reading (increment location) (sub_big_int length unit_big_int)) in
-   (Some (Bytevector((List.rev (reading location length)))), env)
+   (Some (Bytevector(reading location length)), env)
  | Write_mem0(_,(Bytevector location), length, _, (Bytevector bytes),_,_) ->
    let rec writing location length bytes mem = 
      if eq_big_int length zero_big_int
