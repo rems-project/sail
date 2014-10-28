@@ -266,13 +266,16 @@ let decode_to_istate top_level value =
     | (Nothing, Just err) -> Decode_error err
 end
 
-let instruction_to_istate ((name, parms, _) as instr) = ()
-(*  let get_value (name,typ,v) = v in
-  Instr instr
+let instruction_to_istate top_level ((name, parms, _) as instr) = 
+  let mode = make_mode true false in
+  let get_value (name,typ,v) = let (e,_) = Interp.to_exp mode Interp.eenv (intern_value v) in e in
+  (Instr instr
     (Interp.Thunk_frame
-       (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown)*)
-       
-  
+       (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) 
+		 [(E_aux (E_app (Id_aux (Id name) Interp_ast.Unknown) (List.map get_value parms))
+		        (Interp_ast.Unknown,Interp.ctor_annot (T_id "ast")) (*This type shouldn't be hard-coded*))])
+	      (Interp_ast.Unknown,Nothing))
+       top_level Interp.eenv Interp.emem Interp.Top))
 
 let rec interp_to_outcome mode thunk = 
   match thunk () with

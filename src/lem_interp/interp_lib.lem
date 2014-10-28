@@ -29,13 +29,15 @@ end
 let rec fill_in_sparse v = match v with
   | V_vector_sparse first length inc ls df -> 
     V_vector first inc (sparse_walker (if inc then (fun (x: integer) -> x + onei) else (fun (x: integer) -> x - onei)) first zeroi length ls df)
+  | V_unknown -> V_unknown
   | V_track v r -> taint (fill_in_sparse v) r
 end    
 
 let is_one v = match v with 
   | V_lit (L_aux b lb) -> V_lit (L_aux (if b = L_one then L_true else L_false) lb)
   | V_track (V_lit (L_aux b lb)) r -> V_track (V_lit (L_aux (if b = L_one then L_true else L_false) lb)) r
-  | V_unknown -> V_unknown
+  | V_track V_unkown _ -> v
+  | V_unknown -> v
 end ;;
 
 let rec lt_range (V_tuple[v1;v2]) = match (v1,v2) with 
@@ -67,36 +69,32 @@ let bool_to_bit b = match b with
   | true -> V_lit (L_aux L_one Unknown)
   end ;;
 
-let bitwise_not v =
-  match v with
-  | V_vector idx inc v ->
-    let apply x = bool_to_bit(not (bit_to_bool x)) in
-    V_vector idx inc (List.map apply v)
-  | V_track (V_vector idx inc v) r ->
-    let apply x = bool_to_bit(not (bit_to_bool x)) in
-    V_track (V_vector idx inc (List.map apply v)) r
-(* PS HACKING TO MAKE BUILD *)
-  | V_track V_unknown r -> v
-(* END HACK *)
-end ;;
-
 let bitwise_not_bit v = 
   let lit_not (L_aux l loc) = match l with
     | L_zero -> (V_lit (L_aux L_one loc))
     | L_one  -> (V_lit (L_aux L_zero loc)) end in
   match v with
   | V_lit lit -> lit_not lit
-  | V_unknown -> V_unknown
   | V_track (V_lit lit) r -> V_track (lit_not lit) r 
+  | V_unknown -> v
+  | V_track V_unknown r -> v
 end;; 
 
-let bitwise_binop_bit op (V_tuple [x; y]) = match (x,y) with
+let rec bitwise_not v =
+  match v with
+  | V_vector idx inc v ->
+    V_vector idx inc (List.map bitwise_not_bit v)
+  | V_unknown -> v
+  | V_track bv r -> taint (bitwise_not bv) r
+end ;;
+
+let rec bitwise_binop_bit op (V_tuple [x; y]) = match (x,y) with
   | (V_track x rx,V_track y ry) ->
-    taint (bool_to_bit (op (bit_to_bool x) (bit_to_bool y))) (rx ++ ry)
+    taint ((bitwise_binop_bit op) (V_tuple[x; y])) (rx ++ ry)
   | (V_track x rx,y) ->
-    taint (bool_to_bit (op (bit_to_bool x) (bit_to_bool y))) rx
+    taint ((bitwise_binop_bit op) (V_tuple[x;y])) rx
   | (x,V_track y ry) ->
-    taint (bool_to_bit (op (bit_to_bool x) (bit_to_bool y))) ry
+    taint ((bitwise_binop_bit op) (V_tuple[x;y])) ry
   | (V_unknown,_) -> V_unknown
   | (_,V_unknown) -> V_unknown
   | _ -> bool_to_bit (op (bit_to_bool x) (bit_to_bool y))
@@ -106,8 +104,7 @@ let rec bitwise_binop op (V_tuple [v1;v2]) =
   match (v1,v2) with
   | (V_vector idx inc v, V_vector idx' inc' v') ->
   (* typechecker ensures inc = inc', idx = idx' and length v = length v' *)
-  let apply (x, y) = bool_to_bit(op (bit_to_bool x) (bit_to_bool y)) in
-  V_vector idx inc (List.map apply (List.zip v v'))
+    V_vector idx inc (List.map (fun (x,y) -> (bitwise_binop_bit op (V_tuple[x; y]))) (List.zip v v'))
   | (V_track v1 r1, V_track v2 r2) ->
     taint (bitwise_binop op (V_tuple [v1;v2])) (r1 ++ r2)
   | (V_track v1 r1,v2) ->
@@ -139,25 +136,41 @@ let rec to_num signed v =
   | V_track v r -> taint (to_num signed v) r
 end ;;
 
-(*TODO As with above, consider the reverse here in both cases, where we're again always interpreting with the MSB on the left *)
-let to_vec_inc (V_tuple([V_lit(L_aux (L_num len) _); (V_lit(L_aux (L_num n) ln))])) =
-  let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
-  V_vector 0 true (map bool_to_bit (reverse l)) ;;
-let to_vec_dec (V_tuple([V_lit(L_aux (L_num len) _); (V_lit(L_aux (L_num n) ln))])) =
-  let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
-  V_vector (len - 1) false (map bool_to_bit (reverse l)) ;;
+let rec to_vec_inc (V_tuple[v1;v2]) = match (v1,v2) with
+  | (V_lit(L_aux (L_num len) _), (V_lit(L_aux (L_num n) ln))) ->
+    let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
+    V_vector 0 true (map bool_to_bit (reverse l)) 
+  | (V_track v1 r1,V_track v2 r2) -> taint (to_vec_inc (V_tuple[v1;v2])) (r1++r2)
+  | (V_track v1 r1,v2) -> taint (to_vec_inc (V_tuple[v1;v2])) r1
+  | (v1,V_track v2 r2) -> taint (to_vec_inc (V_tuple[v1;v2])) r2
+  | (V_unknown,_) -> V_unknown
+  | (_,V_unknown) -> V_unknown
+end
+;;
+let rec to_vec_dec (V_tuple([v1;v2])) = match (v1,v2) with 
+  | (V_lit(L_aux (L_num len) _), (V_lit(L_aux (L_num n) ln))) ->
+    let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
+    V_vector (len - 1) false (map bool_to_bit (reverse l)) 
+  | (V_track v1 r1,V_track v2 r2) -> taint (to_vec_dec (V_tuple[v1;v2])) (r1++r2)
+  | (V_track v1 r1,v2) -> taint (to_vec_dec (V_tuple[v1;v2])) r1
+  | (v1,V_track v2 r2) -> taint (to_vec_dec (V_tuple[v1;v2])) r2
+  | (V_unknown,_) -> V_unknown
+  | (_,V_unknown) -> V_unknown
+end
+;;
 let to_vec ord len n =
   if ord
   then to_vec_inc (V_tuple ([V_lit(L_aux (L_num (integerFromNat len)) Interp_ast.Unknown); n]))
   else to_vec_dec (V_tuple ([V_lit(L_aux (L_num (integerFromNat len)) Interp_ast.Unknown); n]))
 ;;
 
-let exts (V_tuple[V_lit(L_aux (L_num len) _);v]) = match v with
-  | V_vector _ inc _  -> to_vec inc (natFromInteger len) (to_num true v)
-  | V_unknown -> V_unknown
-(* PS HACK TO MAKE BUILD *)
-  | V_track v r -> v
-(* END HACK*)
+let rec exts (V_tuple[v1;v]) = match v1 with
+  | V_lit(L_aux (L_num len) _) -> (match v with
+      | V_vector _ inc _  -> to_vec inc (natFromInteger len) (to_num true v)
+      | V_unknown -> V_unknown
+      | V_track v r2 -> taint (exts (V_tuple[v1;v])) r2 end)
+  | V_unknown -> v1
+  | V_track v1 r1 -> taint (exts (V_tuple[v1;v])) r1
 end
 ;;
 
@@ -166,9 +179,15 @@ let eq (V_tuple [x; y]) = V_lit (L_aux (if value_eq x y then L_one else L_zero) 
 let eq_vec_range (V_tuple [v; r]) = eq (V_tuple [to_num false v; r]) ;;
 let eq_range_vec (V_tuple [r; v]) = eq (V_tuple [r; to_num false v]) ;;
 
-let neg (V_tuple [V_lit (L_aux arg la)]) = V_lit (L_aux (match arg with
-  | L_one -> L_zero
-  | L_zero -> L_one end) la) ;;
+let rec neg v = match v with
+  | V_lit (L_aux arg la) -> 
+    V_lit (L_aux (match arg with
+      | L_one -> L_zero
+      | L_zero -> L_one end) la) 
+  | V_unknown -> V_unknown
+  | V_track v r -> taint (neg v) r
+end 
+;;
 
 let neq = compose neg eq ;;
 
@@ -243,7 +262,13 @@ let rec arith_op_vec_range_range op (V_tuple args) = match args with
     arith_op op (V_tuple [(to_num ord l1);n])
 end ;;
 
-let compare_op op (V_tuple args) = match args with
+let rec compare_op op (V_tuple args) = match args with
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (compare_op op (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1;v2] ->
+    taint (compare_op op (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] ->
+    taint (compare_op op (V_tuple [v1;v2])) r2
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> 
@@ -251,7 +276,13 @@ let compare_op op (V_tuple args) = match args with
     then V_lit(L_aux L_one lx)
     else V_lit(L_aux L_zero lx)
 end ;;
-let compare_op_vec op (V_tuple args) = match args with
+let rec compare_op_vec op (V_tuple args) = match args with
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (compare_op_vec op (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1;v2] ->
+    taint (compare_op_vec op (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] ->
+    taint (compare_op_vec op (V_tuple [v1;v2])) r2
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
   | [((V_vector _ _ _) as l1);((V_vector _ _ _) as l2)] ->
@@ -260,14 +291,11 @@ let compare_op_vec op (V_tuple args) = match args with
 end ;;
 
 let rec duplicate (V_tuple args) = match args with
+  | [V_track v1 r1;V_track v2 r2] -> taint (duplicate (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1; v2] -> taint (duplicate (V_tuple[v1;v2])) r1 
+  | [v1;V_track v2 r2] -> taint (duplicate (V_tuple[v1;v2])) r2 
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
-  (* HERE PS HACKING TO MAKE BUILD*)
-  | [V_track v1 r1;V_track v2 r2] -> V_track v1 r1 (* PLACEHOLDER *)
-  | [V_track v1 r1; v2] -> V_track v1 r1 (* PLACEHOLDER *)
-  | [v1;V_track v2 r2] -> v1 (* PLACEHOLDER *)
-  (* END OF HACK *)
-
   | [(V_lit _ as v);(V_lit (L_aux (L_num n) _))] ->
     (V_vector 0 true (List.replicate (natFromInteger n) v))
 end
@@ -276,13 +304,20 @@ let rec vec_concat (V_tuple args) = match args with
   | [V_vector n d l; V_vector n' d' l'] ->
       (* XXX d = d' ? dropping n' ? *)
       V_vector n d (l ++ l')
-  | [V_lit l; x] -> vec_concat (V_tuple [litV_to_vec l true; x]) (*TODO, get the correct order*)
-  | [x; V_lit l] -> vec_concat (V_tuple [x; litV_to_vec l true]) (*TODO, get the correct order*)
+  | [V_lit l; (V_vector n d l' as x)] -> vec_concat (V_tuple [litV_to_vec l d; x])
+  | [(V_vector n d l' as x); V_lit l] -> vec_concat (V_tuple [x; litV_to_vec l d]) 
+  | [V_track v1 r1;V_track v2 r2] -> taint (vec_concat (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1; v2] -> taint (vec_concat (V_tuple[v1;v2])) r1 
+  | [v1; V_track v2 r2] -> taint (vec_concat (V_tuple[v1;v2])) r2 
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
+  
   end ;;
 
-let v_length v = match v with
+let rec v_length v = match v with
   | V_vector n d l -> V_lit (L_aux (L_num (integerFromNat (List.length l))) Unknown)
   | V_unknown -> V_unknown
+  | V_track v r -> taint (v_length v) r
 end ;;
 
 let function_map = [

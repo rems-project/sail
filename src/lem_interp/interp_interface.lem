@@ -95,6 +95,9 @@ type i_state_or_error =
 (*Function to decode an instruction and build the state to run it*)
 val decode_to_istate : context -> value -> i_state_or_error
 
+(*Function to generate the state to run from an instruction form; is always an Instr*)
+val instruction_to_istate : context -> instruction -> i_state_or_error
+
 (* Augment an address by the given value *)
 val add_to_address : value -> nat -> value
 
