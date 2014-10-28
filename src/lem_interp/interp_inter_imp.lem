@@ -211,7 +211,7 @@ end
 
 let rec find_instruction i = function
   | [] -> Nothing
-  | Skipped::instrs -> find_instruction i instrs
+  | Instruction_extractor.Skipped::instrs -> find_instruction i instrs
   | ((Instruction_extractor.Instr_form name parms effects) as instr)::instrs ->
       if i = name
       then Just instr
