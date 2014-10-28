@@ -21,6 +21,8 @@ let intern_annot annot =
 
 let val_annot typ = Just(typ,Tag_empty,[],pure)
 
+let ctor_annot typ = Just(typ,Tag_ctor,[],pure)
+
 (* This is different from OCaml: it will drop elements from the longest list. *)
 let foldr2 f x l l' = List.foldr (Tuple.uncurry f) x (List.zip l l')
 let map2 f l l' = List.map (Tuple.uncurry f) (List.zip l l')
@@ -621,7 +623,8 @@ let rec val_typ v =
 
 (* When mode.track_values keeps tracking on registers by extending environment *)
 let rec to_exp mode env v : (exp tannot * lenv) =
-  let annot = (Interp_ast.Unknown, (val_annot (val_typ v))) in
+  let mk_annot is_ctor = (Interp_ast.Unknown, if is_ctor then (ctor_annot (val_typ v)) else (val_annot (val_typ v))) in
+  let annot = mk_annot false in
   let mapf vs ((LEnv l env) as lenv) : (list (exp tannot) * lenv) =
     let (es, env) = 
       List.foldr (fun v (es,env) -> let (e,ev) = (to_exp mode env v) in
@@ -660,17 +663,17 @@ let rec to_exp mode env v : (exp tannot * lenv) =
   | V_list(vals) -> let (es,env') = mapf vals env in (E_aux (E_list es) annot, env')
   | V_ctor id t vals -> 
     (match vals with
-    | V_lit (L_aux L_unit _) -> (E_aux (E_id id) annot, env)
-    | V_track (V_lit (L_aux L_unit _)) _ -> (E_aux (E_id id) annot, env)
-    | V_tuple vals -> let (es,env') = mapf vals env in (E_aux (E_app id es) annot, env')
-    | V_track (V_tuple vals) _ -> let (es,env') = mapf vals env in (E_aux (E_app id es) annot, env')
+    | V_lit (L_aux L_unit _) -> (E_aux (E_id id) (mk_annot true), env)
+    | V_track (V_lit (L_aux L_unit _)) _ -> (E_aux (E_id id) (mk_annot true), env)
+    | V_tuple vals -> let (es,env') = mapf vals env in (E_aux (E_app id es) (mk_annot true), env')
+    | V_track (V_tuple vals) _ -> let (es,env') = mapf vals env in (E_aux (E_app id es) (mk_annot true), env')
     | V_track _ _ -> 
       if mode.track_values 
       then begin let (fid,env') = fresh_var env in
                  let env' = add_to_env (fid,vals) env' in
-                 (E_aux (E_app id [(E_aux (E_id fid) (Interp_ast.Unknown, (val_annot (val_typ vals))))]) annot, env')
+                 (E_aux (E_app id [(E_aux (E_id fid) (Interp_ast.Unknown, (val_annot (val_typ vals))))]) (mk_annot true), env')
       end 
-      else let (e,env') = (to_exp mode env vals) in (E_aux (E_app id [e]) annot, env') end)
+      else let (e,env') = (to_exp mode env vals) in (E_aux (E_app id [e]) (mk_annot true), env') end)
   | V_register (Reg id tan) -> (E_aux (E_id id) annot, env)
   | V_track v' _ -> 
     if mode.track_values
