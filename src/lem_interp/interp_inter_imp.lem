@@ -251,7 +251,8 @@ let decode_to_istate top_level value =
 	(fun _ -> Interp.resume 
 	 (make_mode true false) 
 	 (Interp.Thunk_frame 
-	 (E_aux (E_app (Id_aux (Id "supported_instructions") Interp_ast.Unknown) [arg]) (Interp_ast.Unknown, Nothing)) 
+	 (E_aux (E_app (Id_aux (Id "supported_instructions") Interp_ast.Unknown) [arg]) 
+	    (Interp_ast.Unknown, Nothing)) 
 	 top_level Interp.eenv Interp.emem Interp.Top) Nothing) in
       match (instr_decoded,error) with
 	| (Just instr,_) ->
@@ -268,7 +269,8 @@ end
 let instruction_to_istate ((name, parms, _) as instr) = ()
 (*  let get_value (name,typ,v) = v in
   Instr instr
-    (Interp.Thunk_frame*)
+    (Interp.Thunk_frame
+       (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown)*)
        
   
 
