@@ -265,6 +265,13 @@ let decode_to_istate top_level value =
     | (Nothing, Just err) -> Decode_error err
 end
 
+let instruction_to_istate ((name, parms, _) as instr) = ()
+(*  let get_value (name,typ,v) = v in
+  Instr instr
+    (Interp.Thunk_frame*)
+       
+  
+
 let rec interp_to_outcome mode thunk = 
   match thunk () with
   | Interp.Value _ -> Done
