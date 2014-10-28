@@ -342,7 +342,7 @@ let rec ie_loop mode i_state =
      end ;;
   
 let interp_exhaustive i_state = 
-  let mode = make_mode true false in
+  let mode = make_mode true true in
   ie_loop mode i_state
 
 let rec rr_ie_loop mode i_state = 

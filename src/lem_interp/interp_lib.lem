@@ -58,6 +58,9 @@ let bit_to_bool b = match b with
   | V_track (V_lit (L_aux L_zero _)) _ -> false
   | V_lit (L_aux L_one _) -> true
   | V_track (V_lit (L_aux L_one _)) _ -> true
+(* PS HACK TO MAKE BUILD *)
+  | _ -> false  (* ARGH - SHOULDN'T HAVE TO CHOOSE *)
+(* END HACK *)
   end ;;
 let bool_to_bit b = match b with
     false -> V_lit (L_aux L_zero Unknown)
@@ -72,6 +75,9 @@ let bitwise_not v =
   | V_track (V_vector idx inc v) r ->
     let apply x = bool_to_bit(not (bit_to_bool x)) in
     V_track (V_vector idx inc (List.map apply v)) r
+(* PS HACKING TO MAKE BUILD *)
+  | V_track V_unknown r -> v
+(* END HACK *)
 end ;;
 
 let bitwise_not_bit v = 
@@ -149,6 +155,9 @@ let to_vec ord len n =
 let exts (V_tuple[V_lit(L_aux (L_num len) _);v]) = match v with
   | V_vector _ inc _  -> to_vec inc (natFromInteger len) (to_num true v)
   | V_unknown -> V_unknown
+(* PS HACK TO MAKE BUILD *)
+  | V_track v r -> v
+(* END HACK*)
 end
 ;;
 
@@ -253,13 +262,19 @@ end ;;
 let rec duplicate (V_tuple args) = match args with
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
+  (* HERE PS HACKING TO MAKE BUILD*)
+  | [V_track v1 r1;V_track v2 r2] -> V_track v1 r1 (* PLACEHOLDER *)
+  | [V_track v1 r1; v2] -> V_track v1 r1 (* PLACEHOLDER *)
+  | [v1;V_track v2 r2] -> v1 (* PLACEHOLDER *)
+  (* END OF HACK *)
+
   | [(V_lit _ as v);(V_lit (L_aux (L_num n) _))] ->
     (V_vector 0 true (List.replicate (natFromInteger n) v))
 end
 
 let rec vec_concat (V_tuple args) = match args with
   | [V_vector n d l; V_vector n' d' l'] ->
-      (* XXX d = d' ? droping n' ? *)
+      (* XXX d = d' ? dropping n' ? *)
       V_vector n d (l ++ l')
   | [V_lit l; x] -> vec_concat (V_tuple [litV_to_vec l true; x]) (*TODO, get the correct order*)
   | [x; V_lit l] -> vec_concat (V_tuple [x; litV_to_vec l true]) (*TODO, get the correct order*)

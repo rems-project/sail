@@ -1288,7 +1288,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			| V_track _ ir -> (Value (taint (access_vector vvec n) (r++ir)),lm,le)
 			| _ -> (Value (taint (access_vector vvec n) r),lm,le) end)
 		    | V_unknown -> (Value V_unknown,lm,le)
-                    | _ -> (Error l "Vector access of non-vector",lm,le)end)
+                    | V_track V_unknown r -> (Value (V_track V_unknown r),lm,le)
+                    | _ -> (Error l "Vector access reading of non-vector",lm,le)end)
                 (fun a ->		  
                   match a with
                     | Action (Read_reg reg Nothing) stack -> 
@@ -1342,6 +1343,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 				| (V_vector_sparse _ _ _ _ _,tr) -> (Value (taint (slice_vector vvec n1 n2) tr),lm,le)
 				| (V_track ((V_vector_sparse _ _ _ _ _) as vvec) r,_) ->
 				  (Value (taint (slice_vector vvec n1 n2) (r++tracking)), lm,le)
+				| (V_track V_unknown r, tr) -> (Value (V_track V_unknown (r++tr)),lm,le)
 				| (V_unknown,_) -> (Value V_unknown,lm,le)
 				| _ -> (Error l "Vector slice of non-vector",lm,le) end)
 			 end)
@@ -1966,7 +1968,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		| (v,true,_) -> ((Error l "Vector does not contain reg or register values",lm,l_env),Nothing)
 		| ((V_boxref n t),false, Just lexp_builder) -> ((Value (in_mem lm n),lm, l_env),Just (next_builder lexp_builder))
 		| (v,false, Just lexp_builder) -> ((Value v,lm,le), Just (next_builder lexp_builder)) end)
-            | _ -> ((Error l "Vector access of non-vector",lm,l_env),Nothing) end)
+            | _ -> ((Error l "Vector access to write of non-vector",lm,l_env),Nothing) end)
          | ((Action a s,lm,le),Just lexp_builder) ->
            (match (a,is_top_level) with
            | ((Write_reg regf Nothing value),true) -> ((Action (Write_reg regf (Just (n,n)) value) s, lm,le), Nothing)
