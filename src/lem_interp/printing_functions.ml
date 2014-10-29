@@ -51,7 +51,7 @@ let val_to_string v = match v with
     (string_of_int l) ^ " bits -- 0b" ^ collapse_leading (String.concat "" (List.map (function | true -> "1" | _ -> "0") bools))
   | Bytevector words ->
     let l = List.length words in
-    (string_of_int l) ^ " bytes -- 0x" ^
+    (*(string_of_int l) ^ " bytes -- " ^*) "0x" ^
       (String.concat ""
 	 (List.map (fun i -> let s = (Printf.sprintf "%x" i) in if (String.length s = 1) then "0"^s else s) words))
   | Unknown0 -> "Unknown"
