@@ -29,11 +29,28 @@ type value =
 
 type slice = (integer * integer)
 
+
 type reg_name = 
 | Reg of string (*Name of the register, accessing the entire register*)
 | Reg_slice of string * slice (*Name of the register, accessing from the first to second integer of the slice*)
 | Reg_field of string * string * slice (*Name of the register, name of the field of the register accessed, the slice of the field*)
 | Reg_f_slice of string * string * slice * slice (* Same as above but only accessing second slice of the field *)
+
+let reg_nameEqual r1 r2 = 
+  match (r1,r2) with
+  | (Reg s1, Reg s2) -> s1=s2
+  | (Reg_slice s1 sl1, Reg_slice s2 sl2) -> s1=s2 && sl1=sl2
+  | (Reg_field s1 f1 sl1, Reg_field s2 f2 sl2) -> s1=s2 && f1=f2 && sl1=sl2
+  | (Reg_f_slice s1 f1 sl1 sl1', Reg_f_slice s2 f2 sl2 sl2') -> s1=s2 && f1=f2 && sl1=sl2 && sl1'=sl2'
+  | _ -> false
+  end
+
+instance  (Eq reg_name)
+  let (=) = reg_nameEqual
+  let (<>) x y = not (reg_nameEqual x y)
+end
+
+
 
 type outcome =
 (* Request to read memory, value is location to read followed by registers that location depended on when mode.track_values,
