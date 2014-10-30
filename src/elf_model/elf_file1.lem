@@ -1,4 +1,5 @@
 open import Basic_classes
+open import Bool
 open import String
 
 open import Endianness
@@ -100,6 +101,34 @@ let is_shared_object_elf32_file1 f1 =
 val is_shared_object_elf64_file1 : elf64_file1 -> bool
 let is_shared_object_elf64_file1 f1 =
   nat_of_elf64_half f1.elf64_file1_header.elf64_type = elf_ft_dyn
+
+(** [is_relocatable_elf32_file1] tests whether the ELF file is a relocatable
+* file type.
+*)
+val is_relocatable_elf32_file1 : elf32_file1 -> bool
+let is_relocatable_elf32_file1 f1 =
+  nat_of_elf32_half f1.elf32_file1_header.elf32_type = elf_ft_rel
+
+(** [is_relocatable_elf64_file1] tests whether the ELF file is a relocatable
+* file type.
+*)
+val is_relocatable_elf64_file1 : elf64_file1 -> bool
+let is_relocatable_elf64_file1 f1 =
+  nat_of_elf64_half f1.elf64_file1_header.elf64_type = elf_ft_rel
+
+(** [is_linkable_elf32_file1] tests whether the ELF file is a linkable (shared
+  * object or relocatable) file type.
+  *)
+val is_linkable_elf32_file1 : elf32_file1 -> bool
+let is_linkable_elf32_file1 f1 =
+  is_shared_object_elf32_file1 f1 || is_relocatable_elf32_file1 f1
+
+(** [is_linkable_elf64_file1] tests whether the ELF file is a linkable (shared
+  * object or relocatable) file type.
+  *)
+val is_linkable_elf64_file1 : elf64_file1 -> bool
+let is_linkable_elf64_file1 f1 =
+  is_shared_object_elf64_file1 f1 || is_relocatable_elf64_file1 f1
 
 (** [read_elf32_file1 bs] lazily unfolds [bs] revealing the ELF file's header,
   * leaving all other data uninterpreted.

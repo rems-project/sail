@@ -3,6 +3,7 @@ open import String
 open import Tuple
 
 open import Bitstring
+open import Default_printing
 open import Error
 open import Missing_pervasives
 open import Show
@@ -11,31 +12,31 @@ open import Elf_header
 open import Elf_file1
 open import Elf_executable_file2
 open import Elf_executable_file3
-open import Elf_executable_file4
-open import Elf_executable_file5
+open import Elf_linking_file2
+open import Elf_linking_file3
 
 open import Sail_interface
 
-let default_os _ =
-  "*Default OS specific print*"
-
-let default_proc _ =
-  "*Default processor specific print*"
-
-let default_user _ =
-  "*Default user specific print*"
-
 let default_hdr_bdl =
-  (default_os, default_proc)
+  (default_os_specific_print, default_proc_specific_print)
 
 let default_pht_bdl =
-  (default_os, default_proc)
+  (default_os_specific_print, default_proc_specific_print)
 
 let default_sht_bdl =
-  (default_os, default_proc, default_user)
+  (default_os_specific_print, default_proc_specific_print, default_user_specific_print)
 
 let _ =
-  let (chunks_addr, entry) = Sail_interface.populate "test/power64-executable-1" in
-  let _ = Missing_pervasives.print ("Entry point: " ^ show entry) in
-  let _ = Missing_pervasives.print ("#Chunks: " ^ show (List.length chunks_addr)) in
-    ()
+  let res =
+    Bitstring.acquire "test/power64-executable-2" >>= fun bs0 ->
+    Elf_executable_file3.read_elf64_executable_file3 bs0 >>= fun f1 ->
+    Elf_executable_file3.get_elf64_symbol_table f1 >>= fun symtab ->
+    Elf_executable_file3.get_elf64_symbol_string_table f1 >>= fun strtab ->
+    Elf_symbol_table.get_elf64_symbol_image_address symtab strtab >>= fun strs ->
+    let _ = Missing_pervasives.print (show strs) in
+    return f1
+  in
+    match res with
+      | Fail err -> Missing_pervasives.print ("[!]: " ^ err)
+      | Success _ -> Missing_pervasives.print "Success..."
+    end

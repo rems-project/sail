@@ -1,0 +1,42 @@
+open import Num
+
+open import Elf_types
+
+type elf32_relocation =
+  <| elf32_r_offset : elf32_addr (** Address at which to relocate *)
+   ; elf32_r_info   : elf32_word (** Symbol table index/type of relocation to apply *)
+   |>
+
+type elf32_relocation_a =
+  <| elf32_ra_offset : elf32_addr  (** Address at which to relocate *)
+   ; elf32_ra_info   : elf32_word  (** Symbol table index/type of reloation to apply *)
+   ; elf32_ra_addend : elf32_sword (** Addend used to compute value to be stored *)
+   |>
+
+type elf64_relocation =
+  <| elf64_r_offset : elf64_addr  (** Address at which to relocate *)
+   ; elf64_r_info   : elf64_xword (** Symbol table index/type of relocation to apply *)
+   |>
+
+type elf64_relocation_a =
+  <| elf64_ra_offset : elf64_addr   (** Address at which to relocate *)
+   ; elf64_ra_info   : elf64_xword  (** Symbol table index/type of reloation to apply *)
+   ; elf64_ra_addend : elf64_sxword (** Addend used to compute value to be stored *)
+   |>
+
+val elf32_relocation_r_sym : elf32_word -> nat
+let elf32_relocation_r_sym w =
+  nat_of_elf32_word (elf32_word_rshift w 8)
+
+val elf32_relocation_r_type : elf32_word -> nat
+let elf32_relocation_r_type w =
+  nat_of_unsigned_char (unsigned_char_of_elf32_word w)
+
+val elf64_relocation_r_sym : elf64_xword -> nat
+let elf64_relocation_r_sym w =
+  nat_of_elf64_xword (elf64_xword_rshift w 32)
+
+val elf64_relocation_r_type : elf64_xword -> nat
+let elf64_relocation_r_type w =
+  let magic = (65536 * 65536) - 1 in (* 0xffffffffL *)
+    nat_of_elf64_xword (elf64_xword_land w (elf64_xword_of_int64 magic))

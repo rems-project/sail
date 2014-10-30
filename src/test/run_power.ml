@@ -277,7 +277,7 @@ let run () =
   end;
   if !eager_eval then Run_interp_model.debug := true;
   if !test_format then Run_interp_model.debug := false;
-  let (locations,start_address) = populate !file in
+  let ((locations,start_address),_) = populate !file in
   let total_size = (List.length locations) in
   if not(!test_format)
   then eprintf "Loading binary into memory (%d sections)... %!" total_size;

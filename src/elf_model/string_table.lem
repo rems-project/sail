@@ -1,3 +1,4 @@
+open import Basic_classes
 open import List
 open import Maybe
 open import Num
@@ -38,6 +39,22 @@ val get_base_string : string_table -> string
 let get_base_string tbl =
   match tbl with
     | Strings (sep, base) -> base
+  end
+
+(** [concat xs] concatenates several string tables into one providing they all
+  * have the same delimiting character.
+  *)
+val concat : list string_table -> error string_table
+let concat xs =
+  match xs with
+    | []    -> return empty
+    | x::xs ->
+      let delim = get_delimiting_character x in
+        if (List.all (fun x -> get_delimiting_character x = delim) (x::xs)) then
+          let base = List.foldr (^) "" (List.map get_base_string (x::xs)) in
+            return (mk_string_table base delim)
+        else
+          fail "concat: string tables must have same delimiting characters"
   end
 
 (** [get_strings tbl] obtains the strings stored in the table, separated using

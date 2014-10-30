@@ -1,0 +1,193 @@
+open import Maybe
+open import Num
+
+open import Bitstring
+open import Error
+open import Missing_pervasives
+open import Show
+open import String
+
+open import Elf_header
+open import Elf_linking_file3
+open import Elf_types
+open import Elf_program_header_table
+open import Elf_section_header_table
+open import String_table
+
+type elf32_linking_file4 =
+  <| elf32_linking_file4_header                      : elf32_header
+   ; elf32_linking_file4_program_header_table        : maybe elf32_program_header_table
+   ; elf32_linking_file4_body                        : bitstring
+   ; elf32_linking_file4_section_header_table        : elf32_section_header_table
+   ; elf32_linking_file4_section_header_string_table : string_table
+   |>
+
+class (HasElf32LinkingFile4 'a)
+  val get_elf32_linking_file4 : 'a -> elf32_linking_file4
+end
+
+instance (HasElf32LinkingFile4 elf32_linking_file4)
+  let get_elf32_linking_file4 f4 = f4
+end
+
+instance (HasElf32LinkingFile3 elf32_linking_file4)
+  let get_elf32_linking_file3 f4 =
+    <| elf32_linking_file3_header = f4.elf32_linking_file4_header;
+         elf32_linking_file3_program_header_table = f4.elf32_linking_file4_program_header_table;
+         elf32_linking_file3_body = f4.elf32_linking_file4_body;
+         elf32_linking_file3_section_header_table = f4.elf32_linking_file4_section_header_table |>
+end
+
+instance (HasElf32Header elf32_linking_file4)
+  let get_elf32_header f4 = f4.elf32_linking_file4_header
+end
+
+instance (HasElf32ProgramHeaderTable elf32_linking_file4)
+  let get_elf32_program_header_table f4 = f4.elf32_linking_file4_program_header_table
+end
+
+instance (HasElf32SectionHeaderTable elf32_linking_file4)
+  let get_elf32_section_header_table f4 = Just f4.elf32_linking_file4_section_header_table
+end
+
+instance (HasElf32SectionHeaderStringTable elf32_linking_file4)
+  let get_elf32_section_header_string_table f4 = f4.elf32_linking_file4_section_header_string_table
+end
+
+val refine_elf32_linking_file3 : elf32_linking_file3 -> error elf32_linking_file4
+let refine_elf32_linking_file3 f3 =
+  let hdr  = f3.elf32_linking_file3_header in
+  let pht  = f3.elf32_linking_file3_program_header_table in
+  let sht  = f3.elf32_linking_file3_section_header_table in
+  let bs0  = f3.elf32_linking_file3_body in
+  let idx  = nat_of_elf32_half hdr.elf32_shstrndx in
+  let sect = List.index sht idx in
+    match sect with
+      | Nothing -> fail "refine_elf32_linking_file3: invalid offset into section header table"
+      | Just sect ->
+        let offset = nat_of_elf32_off sect.elf32_sh_offset * 8 in
+        let size   = nat_of_elf32_word sect.elf32_sh_size * 8 in
+        let (_, cut) = Bitstring.partition offset bs0 in
+        let (rel, _) = Bitstring.partition size cut in
+        let strings  = Bitstring.string_of_bitstring rel in
+          return <| elf32_linking_file4_header = hdr;
+            elf32_linking_file4_program_header_table = pht;
+            elf32_linking_file4_section_header_table = sht;
+            elf32_linking_file4_section_header_string_table = String_table.mk_string_table strings Missing_pervasives.null_char;
+            elf32_linking_file4_body = bs0 |>
+    end
+
+val read_elf32_linking_file4 : bitstring -> error elf32_linking_file4
+let read_elf32_linking_file4 bs0 =
+  read_elf32_linking_file3 bs0 >>= refine_elf32_linking_file3
+
+val string_of_elf32_linking_file4 : hdr_print_bundle -> sht_print_bundle -> pht_print_bundle -> elf32_linking_file4 -> string
+let string_of_elf32_linking_file4 hdr_bdl sht_bdl pht_bdl f4 =
+  let pht =
+    match f4.elf32_linking_file4_program_header_table with
+      | Nothing  -> "\tNo program header table present"
+      | Just pht -> string_of_elf32_program_header_table pht_bdl pht
+    end
+  in
+    unlines [
+      "\n*Type elf32_linking_file4"
+    ; "**Header"
+    ; string_of_elf32_header hdr_bdl f4.elf32_linking_file4_header
+    ; "**Program header table:"
+    ; pht
+    ; "**Section header table:"
+    ; string_of_elf32_section_header_table' sht_bdl f4.elf32_linking_file4_section_header_string_table f4.elf32_linking_file4_section_header_table
+    ; "**Section header string table:"
+    ; unlines (List.map (fun x -> "\t" ^ x) (get_strings f4.elf32_linking_file4_section_header_string_table))
+    ; "**Body:"
+    ; "\tUninterpreted data of length " ^ show (Bitstring.length f4.elf32_linking_file4_body)
+    ]
+
+type elf64_linking_file4 =
+  <| elf64_linking_file4_header                      : elf64_header
+   ; elf64_linking_file4_program_header_table        : maybe elf64_program_header_table
+   ; elf64_linking_file4_body                        : bitstring
+   ; elf64_linking_file4_section_header_table        : elf64_section_header_table
+   ; elf64_linking_file4_section_header_string_table : string_table
+   |>
+
+class (HasElf64LinkingFile4 'a)
+  val get_elf64_linking_file4 : 'a -> elf64_linking_file4
+end
+
+instance (HasElf64LinkingFile4 elf64_linking_file4)
+  let get_elf64_linking_file4 f4 = f4
+end
+
+instance (HasElf64LinkingFile3 elf64_linking_file4)
+  let get_elf64_linking_file3 f4 =
+    <| elf64_linking_file3_header = f4.elf64_linking_file4_header;
+         elf64_linking_file3_program_header_table = f4.elf64_linking_file4_program_header_table;
+         elf64_linking_file3_body = f4.elf64_linking_file4_body;
+         elf64_linking_file3_section_header_table = f4.elf64_linking_file4_section_header_table |>
+end
+
+instance (HasElf64Header elf64_linking_file4)
+  let get_elf64_header f4 = f4.elf64_linking_file4_header
+end
+
+instance (HasElf64ProgramHeaderTable elf64_linking_file4)
+  let get_elf64_program_header_table f4 = f4.elf64_linking_file4_program_header_table
+end
+
+instance (HasElf64SectionHeaderTable elf64_linking_file4)
+  let get_elf64_section_header_table f4 = Just f4.elf64_linking_file4_section_header_table
+end
+
+instance (HasElf64SectionHeaderStringTable elf64_linking_file4)
+  let get_elf64_section_header_string_table f4 = f4.elf64_linking_file4_section_header_string_table
+end
+
+val refine_elf64_linking_file3 : elf64_linking_file3 -> error elf64_linking_file4
+let refine_elf64_linking_file3 f3 =
+  let hdr  = f3.elf64_linking_file3_header in
+  let pht  = f3.elf64_linking_file3_program_header_table in
+  let sht  = f3.elf64_linking_file3_section_header_table in
+  let bs0  = f3.elf64_linking_file3_body in
+  let idx  = nat_of_elf64_half hdr.elf64_shstrndx in
+  let sect = List.index sht idx in
+    match sect with
+      | Nothing -> fail "refine_elf64_linking_file3: invalid offset into section header table"
+      | Just sect ->
+        let offset = nat_of_elf64_off sect.elf64_sh_offset * 8 in
+        let size   = nat_of_elf64_xword sect.elf64_sh_size * 8 in
+        let (_, cut) = Bitstring.partition offset bs0 in
+        let (rel, _) = Bitstring.partition size cut in
+        let strings  = Bitstring.string_of_bitstring rel in
+          return <| elf64_linking_file4_header = hdr;
+            elf64_linking_file4_program_header_table = pht;
+            elf64_linking_file4_section_header_table = sht;
+            elf64_linking_file4_section_header_string_table = String_table.mk_string_table strings Missing_pervasives.null_char;
+            elf64_linking_file4_body = bs0 |>
+    end
+
+val read_elf64_linking_file4 : bitstring -> error elf64_linking_file4
+let read_elf64_linking_file4 bs0 =
+  read_elf64_linking_file3 bs0 >>= refine_elf64_linking_file3
+
+val string_of_elf64_linking_file4 : hdr_print_bundle -> sht_print_bundle -> pht_print_bundle -> elf64_linking_file4 -> string
+let string_of_elf64_linking_file4 hdr_bdl sht_bdl pht_bdl f4 =
+  let pht =
+    match f4.elf64_linking_file4_program_header_table with
+      | Nothing  -> "\tNo program header table present"
+      | Just pht -> string_of_elf64_program_header_table pht_bdl pht
+    end
+  in
+    unlines [
+      "\n*Type elf64_linking_file4"
+    ; "**Header"
+    ; string_of_elf64_header hdr_bdl f4.elf64_linking_file4_header
+    ; "**Program header table:"
+    ; pht
+    ; "**Section header table:"
+    ; string_of_elf64_section_header_table' sht_bdl f4.elf64_linking_file4_section_header_string_table f4.elf64_linking_file4_section_header_table
+    ; "**Section header string table:"
+    ; unlines (List.map (fun x -> "\t" ^ x) (get_strings f4.elf64_linking_file4_section_header_string_table))
+    ; "**Body:"
+    ; "\tUninterpreted data of length " ^ show (Bitstring.length f4.elf64_linking_file4_body)
+    ]

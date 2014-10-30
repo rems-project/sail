@@ -21,16 +21,22 @@ LEMLIB = ~/bitbucket/lem/ocaml-lib/_build/
 install_elf:
 	cp -p ../../system-v-abi/src/*.lem elf_model/
 	cp -p ../../system-v-abi/src/*.ml elf_model/
+	cp -p -r ../../system-v-abi/src/libraries elf_model/libraries
 
-power: sail interpreter
-	mkdir -p _build/test
+elf:
+	$(MAKE) -C elf_model ocaml_native
 	mkdir -p _build/elf_model
-	cp -p test/* _build/test/
-	cp -p elf_model/* _build/elf_model
+	cp -p elf_model/*.cmi _build/elf_model/
+	cp -p elf_model/*.cmx _build/elf_model/
+	cp -p elf_model/*.o _build/elf_model/
 	cd _build/elf_model ;\
-	$(LEM) -ocaml -only_changed_output missing_pervasives.lem show.lem endianness.lem bitstring.lem elf_types.lem elf_interpreted_segment.lem elf_header.lem elf_file1.lem elf_program_header_table.lem elf_executable_file2.lem elf_section_header_table.lem elf_executable_file3.lem string_table.lem elf_executable_file4.lem elf_executable_file5.lem sail_interface.lem main.lem ;\
-	ocamlfind ocamlopt -package bitstring.syntax -package batteries -package uint -package bitstring -syntax camlp4o -I $(LEMLIB) nat_num.cmx lem.cmx lem_function.cmx lem_list.cmx -linkpkg missing_pervasives.ml show.ml endianness.ml error.ml ml_bindings.ml bitstring_local.ml elf_types.ml elf_header.ml elf_file1.ml elf_program_header_table.ml elf_executable_file2.ml string_table.ml elf_section_header_table.ml elf_executable_file3.ml elf_executable_file4.ml elf_interpreted_segment.ml elf_executable_file5.ml sail_interface.ml main.ml ;\
-	ocamlfind ocamlopt -package batteries -package uint -package bitstring -I $(LEMLIB) -a -o elf_extract.cmxa missing_pervasives.cmx show.cmx endianness.cmx error.cmx ml_bindings.cmx bitstring_local.cmx elf_types.cmx elf_header.cmx elf_file1.cmx elf_program_header_table.cmx elf_executable_file2.cmx string_table.cmx elf_section_header_table.cmx elf_executable_file3.cmx elf_executable_file4.cmx elf_interpreted_segment.cmx elf_executable_file5.cmx sail_interface.cmx
+	ocamlfind ocamlopt -package batteries -package uint -package bitstring -I $(LEMLIB) -a -o elf_extract.cmxa missing_pervasives.cmx \
+show.cmx endianness.cmx error.cmx ml_bindings.cmx default_printing.cmx bitstring_local.cmx elf_types.cmx elf_header.cmx elf_file1.cmx elf_program_header_table.cmx elf_executable_file2.cmx string_table.cmx elf_section_header_table.cmx elf_interpreted_segment.cmx elf_symbol_table.cmx elf_executable_file3.cmx elf_linking_file2.cmx elf_linking_file3.cmx elf_relocation.cmx sail_interface.cmx
+
+
+power: sail interpreter elf
+	mkdir -p _build/test
+	cp -p test/* _build/test/
 	cd _build/test ;\
 	../../sail.native -lem_ast power.sail ;\
 	$(LEM) -ocaml -only_changed_output -lib ../lem_interp/ power.lem;\

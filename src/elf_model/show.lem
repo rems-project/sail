@@ -4,6 +4,7 @@
 
 open import Function
 open import List
+open import Maybe
 open import Num
 open import String
 
@@ -44,12 +45,23 @@ end
   *)
 val string_of_list : forall 'a. Show 'a => list 'a -> string
 let string_of_list l =
-  let result = intercalate "," (map show l) in
+  let result = intercalate "," (List.map show l) in
   let folded = foldr (^) "" result in
     "[" ^ folded ^ "]"
 
 instance forall 'a. Show 'a => (Show (list 'a))
 	let show = string_of_list
+end
+
+val string_of_maybe : forall 'a. Show 'a => maybe 'a -> string
+let string_of_maybe m =
+  match m with
+    | Nothing -> "Nothing"
+    | Just e  -> "Just " ^ show e
+  end
+
+instance forall 'a. Show 'a => (Show (maybe 'a))
+  let show = string_of_maybe
 end
 
 instance (Show nat)
