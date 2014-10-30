@@ -186,6 +186,7 @@ let rec neg v = match v with
       | L_zero -> L_one end) la) 
   | V_unknown -> V_unknown
   | V_track v r -> taint (neg v) r
+  | V_tuple [v] -> neg v
 end 
 ;;
 
