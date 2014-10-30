@@ -112,8 +112,8 @@ val append_value : value -> value -> value
 (* When interp_mode has eager_eval false, interpreter is (close to) small step *)
 val interp : interp_mode -> instruction_state -> outcome
 
-(* Run the interpreter without external interaction, feeding in Unknown on all reads *)
-val interp_exhaustive : instruction_state -> list event
+(* Run the interpreter without external interaction, feeding in Unknown on all reads except for those register values provided *)
+val interp_exhaustive : instruction_state -> maybe (list (reg_name * value)) -> list event
 
 (* As above, but will request register reads: outcome will only be rreg, done, or error *)
 val rr_interp_exhaustive : interp_mode -> instruction_state -> list event -> (outcome * (list event)) 

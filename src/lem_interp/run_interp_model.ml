@@ -206,7 +206,7 @@ let run
       interact mode env stack
     | "e" | "exh" | "exhaust" ->
       debugf "interpreting exhaustively from current state\n";
-      let events = interp_exhaustive stack in
+      let events = interp_exhaustive None stack in
       debugf "%s" (format_events events);
       interact mode env stack
     | "c" | "cont" | "continuation" ->

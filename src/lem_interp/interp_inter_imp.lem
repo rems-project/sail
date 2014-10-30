@@ -331,24 +331,43 @@ let rec interp_to_outcome mode thunk =
 
 let interp mode i_state = interp_to_outcome mode (fun _ -> Interp.resume mode i_state Nothing)
 
-let rec ie_loop mode i_state = 
+(*TODO: Only find exact matches, need to look for field/slice sub pieces*)
+let rec find_reg_name reg = function
+  | [] -> Nothing
+  | (reg_name,v)::registers ->
+    match (reg,reg_name) with
+      | (Reg i, Reg n) -> if i = n then v else find_reg_name reg registers
+      | (Reg_slice  i (p1,p2), Reg_slice n (p3,p4)) ->
+	if i=n && p1=p3 && p2 = p4 then v else find_reg_name reg registers
+      | (Reg_field i f _,Reg_field n fn _) ->
+	if i=n && f = fn then v else find_reg_name reg registers
+      | (Reg_f_slice i f _ (p1,p2), Reg_f_slice n fn _ (p3,p4)) ->
+	if i=n && f=fn && p1=p3 && p2=p3 then v else find_reg_name reg registers
+end end
+
+let rec ie_loop mode register_values i_state = 
   match (interp mode i_state) with
     | Done -> []
     | Error msg -> [E_error msg]
     | Read_reg reg i_state_fun -> 
-      (E_read_reg reg)::(ie_loop mode (i_state_fun Unknown))
+      let v =  match register_values with
+	| Nothing -> Unknown
+	| Just(registers) -> match find_reg_name reg registers with
+	    | Nothing -> Unknown
+	    | Just v -> v end end in
+      (E_read_reg reg)::(ie_loop mode register_values (i_state_fun v))
     | Write_reg reg value i_state->
-      (E_write_reg reg value)::(ie_loop mode i_state)
+      (E_write_reg reg value)::(ie_loop mode register_values i_state)
     | Read_mem read_k loc length tracking i_state_fun ->
-      (E_read_mem read_k loc length tracking)::(ie_loop mode (i_state_fun Unknown))
+      (E_read_mem read_k loc length tracking)::(ie_loop mode register_values (i_state_fun Unknown))
     | Write_mem write_k loc length tracking value v_tracking i_state_fun ->
-      (E_write_mem write_k loc length tracking value v_tracking)::(ie_loop mode (i_state_fun true))
-    | Internal _ _ next -> (ie_loop mode next)
+      (E_write_mem write_k loc length tracking value v_tracking)::(ie_loop mode register_values (i_state_fun true))
+    | Internal _ _ next -> (ie_loop mode register_values next)
      end ;;
   
-let interp_exhaustive i_state = 
+let interp_exhaustive register_values i_state = 
   let mode = make_mode true true in
-  ie_loop mode i_state
+  ie_loop mode register_values i_state
 
 let rec rr_ie_loop mode i_state = 
   match (interp mode i_state) with
