@@ -99,6 +99,8 @@ Follows the form of the instruction in instruction_extractor, but populates the 
 *)
 type instruction = (string * list (string * instr_parm_typ * value) * list base_effect)
 
+type v_kind = Bitv | Bytev
+
 type decode_error = 
   | Unsupported_instruction_error of instruction
   | Not_an_instruction_error of value
@@ -108,6 +110,7 @@ type i_state_or_error =
   | Instr of instruction * instruction_state
   | Decode_error of decode_error
 
+val num_to_bits : nat -> v_kind -> integer
 
 (*Function to decode an instruction and build the state to run it*)
 val decode_to_istate : context -> value -> i_state_or_error

@@ -15,6 +15,7 @@ let print_bytes = ref false ;;
 let bytes_file = ref "bytes_out.lem";;
 let test_format = ref false ;;
 let test_file = ref "test.txt";;
+let test_memory_addr = ref (0,[]) ;;
 
 let rec foldli f acc ?(i=0) = function
   | [] -> acc
@@ -76,6 +77,15 @@ let load_memory (bits,addr) =
 	 add_mem (Uint32.to_int bitsnum) (big_int_of_int addr);
 	 loop rest (1 + addr)
   in loop bits addr
+
+let rec read_mem loc length = 
+  if length = 0  
+  then []
+  else 
+    let location = big_int_to_vec true loc (big_int_of_int 64) in
+    match location with
+      | Bytevector location ->
+	(Mem.find location !mem)::(read_mem (add_big_int loc unit_big_int) (length - 1))
 
 let get_reg reg name =
   let reg_content = Reg.find name reg in reg_content
@@ -277,30 +287,29 @@ let run () =
   end;
   if !eager_eval then Run_interp_model.debug := true;
   if !test_format then Run_interp_model.debug := false;
-  let ((locations,start_address),_) = populate !file in
+  let (((locations,start_address),_),(symbol_map)) = populate_and_obtain_symbol_to_address_mapping !file in
   let total_size = (List.length locations) in
   if not(!test_format)
   then eprintf "Loading binary into memory (%d sections)... %!" total_size;
   let t = time_it (List.iter load_memory) locations in
   if not(!test_format)
   then eprintf "done. (%f seconds)\n%!" t;
-  let rec reading loc length = 
-    if length = 0  
-    then []
-    else 
-      let location = big_int_to_vec true loc (big_int_of_int 64) in
-      match location with
-	| Bytevector location ->
-	  (Mem.find location !mem)::(reading (add_big_int loc unit_big_int) (length - 1)) in
-  let addr = reading (big_int_of_int start_address) 8 in
+  let addr = read_mem (big_int_of_int start_address) 8 in
   let _ = begin
     startaddr := addr;
     mainaddr := "0x" ^ (List.fold_left (^) "" (List.map (Printf.sprintf "%02x") addr));
   end in
-  Printf.printf "start address: %s\n" !mainaddr;
-(*  Printf.printf "%s\n" (Printing_functions.val_to_string (Bytevector !startaddr));*)
+  if not(!test_format) then
+    Printf.printf "start address: %s\n" !mainaddr;
   let my_reg = init_reg () in
   reg := my_reg;
+  if !test_format 
+  then if List.mem_assoc "TEST_MEM" symbol_map
+    then test_memory_addr := 
+      let num = (List.assoc "TEST_MEM" symbol_map) in
+      match big_int_to_vec true (big_int_of_int num) (big_int_of_int 64) with
+	| Bytevector location -> (num,location);
+    else ();
   (* entry point: unit -> unit fde *)
   let funk_name = "fde" in
   let parms = [] in
