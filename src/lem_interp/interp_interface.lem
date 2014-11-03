@@ -18,7 +18,12 @@ type write_kind = Write_plain | Write_conditional | Write_release
 type barrier_kind = Sync | LwSync | Eieio | Isync | DMB | DMB_ST | DMB_LD | DSB | DSB_ST | DSB_LD | ISB (* PS removed "plain" and added "Isync" and "ISB" *)
 
 type value = 
-| Bitvector of list bool  * bool * integer (* For register accesses : in conformance with Sail, tracks order and starting lsb number*)
+| Bitvector of list bool  * bool * integer 
+(* In Bitvector bs b n:
+   - the bs are the bits (true represents 1 and false represents 0)
+   - the b specifies whether the indicies are increasing (true) or decreasing (false) along the list (for Power the Bitvector values are always increasing)    
+   - the n is the index of the head of the list
+*)
 (*To discuss:  ARM8 uses at least one abstract record form for 
   some special registers, with no clear mapping to bits. Should
   we permit Record of (string * Bitvector) values as well?
@@ -31,10 +36,22 @@ type slice = (integer * integer)
 
 
 type reg_name = 
-| Reg of string (*Name of the register, accessing the entire register*)
-| Reg_slice of string * slice (*Name of the register, accessing from the first to second integer of the slice*)
-| Reg_field of string * string * slice (*Name of the register, name of the field of the register accessed, the slice of the field*)
-| Reg_f_slice of string * string * slice * slice (* Same as above but only accessing second slice of the field *)
+| Reg of string 
+(*Name of the register, accessing the entire register*)
+
+| Reg_slice of string * slice 
+(* Name of the register, accessing from the bit indexed by the first
+to the bit indexed by the second integer of the slice, inclusive. For
+Power the first will be a smaller number than or equal to the second;
+for other architectures it might be the other way round.  *)
+
+| Reg_field of string * string * slice 
+(*Name of the register and name of the field of the register
+accessed. The slice specifies where this field is in the register*)
+
+| Reg_f_slice of string * string * slice * slice 
+(* The first three components are as in Reg_field; the final slice
+specifies a part of the field, indexed w.r.t. the register as a whole *)
 
 let reg_nameEqual r1 r2 = 
   match (r1,r2) with
@@ -112,6 +129,9 @@ type i_state_or_error =
 
 val num_to_bits : nat -> v_kind -> integer
 
+(** proposed: *)
+val nat_to_bytevector : nat -> list word8 
+
 (*Function to decode an instruction and build the state to run it*)
 val decode_to_istate : context -> value -> i_state_or_error
 
@@ -121,7 +141,7 @@ val instruction_to_istate : context -> instruction -> i_state_or_error
 (* Augment an address by the given value *)
 val add_to_address : value -> nat -> value
 
-(* Slice a value into a smaller vector, starting at first number and going to second according to order
+(* Slice a value into a smaller vector, starting at first number (wrt the indices of the bitvector value, not raw positions in its list of bits) and going to second (inclusive) according to order. 
    For bytevectors, assumes you are slicing at the byte level, not the bit level *)
 val slice_value : value -> nat -> nat -> value
 
