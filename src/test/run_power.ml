@@ -78,14 +78,14 @@ let load_memory (bits,addr) =
 	 loop rest (1 + addr)
   in loop bits addr
 
-let rec read_mem loc length = 
+let rec read_mem mem loc length = 
   if length = 0  
   then []
   else 
     let location = big_int_to_vec true loc (big_int_of_int 64) in
     match location with
       | Bytevector location ->
-	(Mem.find location !mem)::(read_mem (add_big_int loc unit_big_int) (length - 1))
+	(Mem.find location mem)::(read_mem mem (add_big_int loc unit_big_int) (length - 1))
 
 let get_reg reg name =
   let reg_content = Reg.find name reg in reg_content
@@ -231,7 +231,16 @@ let print_test_results final_reg final_mem =
   let gpr_reg = numbered_reg "GPR" 0 31 in
   let vr_reg = numbered_reg "VR" 0 31 in
   let reg_contents = special_reg ^ gpr_reg ^ (format_register "VRSAVE") ^ vr_reg ^ (format_register "VSCR") in
-  let mem_contents = "Memory will go here\n" in
+  let rec memory_crawl curr_index curr_address = 
+    if curr_index >= 100
+    then ""
+    else let mem_orig = Bytevector(read_mem !mem curr_address 8) in
+	 let mem_end = Bytevector(read_mem final_mem curr_address 8) in
+	"MEM_" ^ (string_of_int curr_index) ^ ";\t\t" ^ Printing_functions.val_to_hex_string mem_orig ^ 
+	  ";\t\t\t" ^ Printing_functions.val_to_hex_string mem_end ^ "\n" ^ 
+	  (memory_crawl (curr_index + 1) (add_big_int curr_address unit_big_int))
+  in
+  let mem_contents = memory_crawl 0 (big_int_of_int (fst (!test_memory_addr))) in
   let footer = tilde ^ "\n" in
   let (temp_file_name, o) = Filename.open_temp_file "tt_temp" "" in
   let o' = Format.formatter_of_out_channel o in
@@ -294,7 +303,7 @@ let run () =
   let t = time_it (List.iter load_memory) locations in
   if not(!test_format)
   then eprintf "done. (%f seconds)\n%!" t;
-  let addr = read_mem (big_int_of_int start_address) 8 in
+  let addr = read_mem !mem (big_int_of_int start_address) 8 in
   let _ = begin
     startaddr := addr;
     mainaddr := "0x" ^ (List.fold_left (^) "" (List.map (Printf.sprintf "%02x") addr));
