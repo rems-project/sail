@@ -54,7 +54,7 @@ let rec slice bitvector (start,stop) =
       Bitvector ((Interp.from_n_to_n (if inc then (sub_big_int start fst) else (sub_big_int fst start))
                                     (if inc then (sub_big_int stop fst) else (sub_big_int fst stop)) bools),
                  inc,
-                 (if inc then zero_big_int else (add_big_int (sub_big_int stop start) unit_big_int)))
+                 (if inc then start else (add_big_int (sub_big_int stop start) unit_big_int)))
                 
     | Bytevector bytes -> 
       Bytevector((Interp.from_n_to_n start stop bytes)) (*This is wrong, need to explode and re-encode, but maybe never happens?*)

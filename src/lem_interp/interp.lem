@@ -366,7 +366,7 @@ let rec slice_vector v n1 n2 =
   match v with
   | V_vector m inc vs ->
     if inc 
-    then V_vector 0 inc (from_n_to_n (n1 - m) (n2 - m) vs)
+    then V_vector n1 inc (from_n_to_n (n1 - m) (n2 - m) vs)
     else V_vector (n1 - n2 + 1) inc (from_n_to_n (m - n1) (m - n2) vs)
   | V_vector_sparse m n inc vs d -> 
     let (slice, still_sparse) = 
@@ -374,7 +374,7 @@ let rec slice_vector v n1 n2 =
       then slice_sparse_list (>) (fun i -> i + 1) vs n1 n2
       else slice_sparse_list (<) (fun i -> i - 1) vs n1 n2 in
     if still_sparse && inc
-    then V_vector_sparse 0 (n2 - n1) inc slice d
+    then V_vector_sparse n1 (n2 - n1) inc slice d
     else if inc then V_vector 0 inc (List.map snd slice)
     else if still_sparse then V_vector_sparse (n1 - n2 +1) (n1 - n2) inc slice d
     else V_vector (n1 - n2 +1) inc (List.map snd slice)
