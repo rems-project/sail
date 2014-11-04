@@ -301,16 +301,24 @@ let decode_to_istate top_level value =
     | (Nothing, Just err) -> Decode_error err
 end
 
+
+let decode_to_instruction top_level value = 
+  match decode_to_istate top_level value with
+  | Instr inst is -> IDE_instr inst
+  | Decode_error de -> IDE_decode_error de
+  end
+
+
 let instruction_to_istate top_level ((name, parms, _) as instr) = 
   let mode = make_mode true false in
   let get_value (name,typ,v) = let (e,_) = Interp.to_exp mode Interp.eenv (intern_value v) in e in
-  (Instr instr
+(*  (Instr instr*)
     (Interp.Thunk_frame
        (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) 
 		 [(E_aux (E_app (Id_aux (Id name) Interp_ast.Unknown) (List.map get_value parms))
 		        (Interp_ast.Unknown,Interp.ctor_annot (T_id "ast")) (*This type shouldn't be hard-coded*))])
 	      (Interp_ast.Unknown,Nothing))
-       top_level Interp.eenv Interp.emem Interp.Top))
+       top_level Interp.eenv Interp.emem Interp.Top) (*)*)
 
 let rec interp_to_outcome mode thunk = 
   match thunk () with

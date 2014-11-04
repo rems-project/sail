@@ -123,6 +123,11 @@ type decode_error =
   | Not_an_instruction_error of value
   | Internal_error of string
 
+type instruction_or_decode_error =
+  | IDE_instr of instruction
+  | IDE_decode_error of decode_error
+
+(** propose to remove the following type and use the above instead *)
 type i_state_or_error =
   | Instr of instruction * instruction_state
   | Decode_error of decode_error
@@ -132,8 +137,13 @@ val num_to_bits : nat -> v_kind -> integer
 (** proposed: *)
 val nat_to_bytevector : nat -> list word8 
 
-(*Function to decode an instruction and build the state to run it*)
+
+(** propose to remove this: Function to decode an instruction and build the state to run it*)
 val decode_to_istate : context -> value -> i_state_or_error
+
+(** propose to add this, and then use instruction_to_istate on the result: Function to decode an instruction and build the state to run it*)
+(** PS made a placeholder in interp_inter_imp.lem, but it just uses decode_to_istate and throws away the istate; surely it's easy to just do what's necessary to get the instruction.   This sort-of works, but it crashes on ioid 10 after 167 steps - maybe instruction_to_istate (which I wasn't using directly before) isn't quite right? *)
+val decode_to_instruction : context -> value -> instruction_or_decode_error
 
 (*Function to generate the state to run from an instruction form; is always an Instr*)
 val instruction_to_istate : context -> instruction -> i_state_or_error
