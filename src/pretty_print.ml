@@ -366,12 +366,17 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_cast(typ,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_cast" pp_lem_typ typ pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_internal_cast((_,NoTyp),e) -> pp_lem_exp ppf e
     | E_internal_cast((_,Base((_,t),_,_,_)), (E_aux(ec,(_,eannot)) as exp)) ->
+      let print_cast () = fprintf ppf "@[<0>(E_aux (E_cast %a %a) (%a, %a))@]" 
+	pp_lem_typ (t_to_typ t) pp_lem_exp exp pp_lem_l l pp_annot annot in
       (match t.t,eannot with
       | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_) ->
 	if nexp_eq n1 n2 
 	  then pp_lem_exp ppf exp
-	else fprintf ppf "@[<0>(E_aux (E_cast %a %a) (%a, %a))@]" pp_lem_typ (t_to_typ t) pp_lem_exp exp pp_lem_l l pp_annot annot
-      | _ -> fprintf ppf "@[<0>(E_aux (E_cast %a %a) (%a, %a))@]" pp_lem_typ (t_to_typ t) pp_lem_exp exp pp_lem_l l pp_annot annot)
+	else (match (n1.nexp,n2.nexp) with 
+	  | Nconst i1,Nconst i2 -> if i1=i2 then pp_lem_exp ppf exp else print_cast ()
+	  | Nconst i1,_ -> print_cast ()
+	  | _ -> pp_lem_exp ppf exp)
+      | _ -> pp_lem_exp ppf exp)
     | E_app(f,args) -> fprintf ppf "@[<0>(E_aux (%a %a [%a]) (%a, %a))@]" kwd "E_app" pp_lem_id f (list_pp pp_semi_lem_exp pp_lem_exp) args pp_lem_l l pp_annot annot
     | E_app_infix(l',op,r) -> fprintf ppf "@[<0>(E_aux (%a %a %a %a) (%a, %a))@]" kwd "E_app_infix" pp_lem_exp l' pp_lem_id op pp_lem_exp r pp_lem_l l pp_annot annot
     | E_tuple(exps) -> fprintf ppf "@[<0>(E_aux %a [%a] %a (%a, %a))@]" kwd "(E_tuple" (list_pp pp_semi_lem_exp pp_lem_exp) exps kwd ")" pp_lem_l l pp_annot annot

@@ -1016,9 +1016,9 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
   match exp with
     | E_lit lit -> 
       if is_lit_vector lit 
-      then 
-        let is_inc = (match typ with | T_app "vector" (T_args [_;_;T_arg_order (Ord_aux Ord_inc _);_]) -> true | _ -> false end) in
-        (Value (litV_to_vec lit is_inc),l_mem,l_env) 
+      then let is_inc = (match typ with 
+	| T_app "vector" (T_args [_;_;T_arg_order (Ord_aux Ord_inc _);_]) -> true | _ -> false end) in
+           (Value (litV_to_vec lit is_inc),l_mem,l_env) 
       else (Value (V_lit lit), l_mem,l_env)
     | E_cast ((Typ_aux typ _) as ctyp) exp -> 
       (*Cast is either a no-op, a signal to read a register, or a signal to change the start of a vector *)
@@ -1026,12 +1026,15 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	(interp_main mode t_level l_env l_mem exp)
 	(fun v lm le -> 
 	  (* Potentially use cast to change vector start position *)
-	  let update_vector_start start update_v =
+	  let conditional_update_vstart () =
 	    match typ with
 	      | Typ_app (Id_aux (Id "vector") _) [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i) _)) _;_;_;_] ->
-		if start = i 
-		then (Value v,lm,le)
-		else (Value (update_v i),lm,le)
+		match v with 
+		  | V_vector start inc vs ->
+		    if start = i then (Value v,lm,le) else (Value (update_vector_start i v),lm,le)
+		  | V_track (V_vector start inc vs) r ->
+		    if start = i then (Value v,lm,le) else (Value (update_vector_start i v),lm,le)
+		  | _ -> (Value v,lm,le) end
 	      | _ -> (Value v,lm,le) end in
           (match (tag,v) with 
 	    (*Cast is telling us to read a register*)
@@ -1040,15 +1043,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	         (Hole_frame (id_of_string "0")
 		    (E_aux (E_id (id_of_string "0")) (Unknown, (val_annot (reg_to_t regform)))) t_level le lm Top), lm,le)
 	    (*Cast is changing vector start position, potentially*)
-	    | (_,V_vector start inc items) -> update_vector_start start (fun i -> (V_vector i inc items))
-	    | (_,V_track (V_vector start inc items) regs) -> 
-	      update_vector_start start (fun i -> (taint (V_vector i inc items) regs))
-	    (*TODO trim items below if i > (or < for dec) start *)
-	    | (_,V_vector_sparse start inc len items def) -> 
-	      update_vector_start start (fun i -> (V_vector_sparse i inc len items def)) 
-	    | (_,V_track (V_vector_sparse start inc len items def) regs) ->
-	      update_vector_start start (fun i -> (taint (V_vector_sparse i inc len items def) regs))
-	    | _ -> (Value v,lm,le) end))
+	    | (_,v) -> conditional_update_vstart () end))
 	(fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_cast ctyp e) (l,annot), env))))
     | E_id id -> 
       let name = get_id id in
@@ -1063,17 +1058,17 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	    | Nothing -> 
 	      (match in_env regs id with
 		| Just(value) -> (Value value, l_mem,l_env)
-		| Nothing -> (Error l (String.stringAppend "Internal error: unbound id on Tag_global " name),l_mem,l_env) end) end
+		| Nothing -> (Error l ("Internal error: " ^ name ^ " unbound on Tag_global"),l_mem,l_env) end) end
         | Tag_enum ->
           match in_env lets id with
             | Just(value) -> (Value value,l_mem,l_env)
-	    | Nothing -> (Error l (String.stringAppend "Internal error: unbound id on Tag_enum " name), l_mem,l_env)
+	    | Nothing -> (Error l ("Internal error: " ^ name ^ " unbound on Tag_enum "), l_mem,l_env)
 	    end 
         | Tag_extern _ -> (* update with id here when it's never just "register" *)
-	  let regf = match in_lenv l_env id with
+	  let regf = match in_lenv l_env id with (* Check for local treatment of a register as a value *)
 	    | V_register regform -> regform
 	    | _ -> 
-	      match in_env regs id with
+	      match in_env regs id with (* Register isn't a local value, so pull from global environment *)
 		| Just(V_register regform) -> regform
 		| _ -> Reg id annot end end in
 	  (Action (Read_reg regf Nothing)
@@ -1084,13 +1079,14 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	  match in_env aliases id with
 	    | Just aspec -> interp_alias_read mode t_level l_env l_mem aspec
 	    | _ -> (Error l ("Internal error: alias not found"), l_mem,l_env) end
-        | _ -> (Error l (String.stringAppend "Internal error: tag other than empty,enum,or extern " name),l_mem,l_env)
+        | _ -> (Error l ("Internal error: tag other than empty,enum,or extern for " ^ name),l_mem,l_env)
         end
     | E_if cond thn els ->
       resolve_outcome 
 	(interp_main mode t_level l_env l_mem cond)
 	(fun value lm le -> 
 	  match (value,mode.eager_eval) with
+	    (*TODO remove booleans here when fully removed elsewhere *)
             | (V_lit(L_aux L_true _),true) -> interp_main mode t_level l_env lm thn
 	    | (V_track (V_lit (L_aux L_true _)) _, true) -> interp_main mode t_level l_env lm thn
 	    | (V_lit(L_aux L_one _),true) -> interp_main mode t_level l_env lm thn
@@ -1137,13 +1133,15 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 				  | (V_lit _, V_lit _) -> ((E_aux (E_lit diff) augment_annot), env)
 				  | (V_track _ rs, V_lit _) -> to_exp mode env (V_track (V_lit diff) rs)
 				  | (V_lit _, V_track _ rs) -> to_exp mode env (V_track (V_lit diff) rs)
-				  | (V_track _ r1, V_track _ r2) -> (to_exp mode env (V_track (V_lit diff) (r1 ++ r2))) end in
+				  | (V_track _ r1, V_track _ r2) -> 
+				    (to_exp mode env (V_track (V_lit diff) (r1 ++ r2))) end in
 				let  e = 
 				  (E_aux (E_block 
-					    [(E_aux (E_let 
-						       (LB_aux (LB_val_implicit (P_aux (P_id id) (fl,val_annot ftyp)) from_e)
-							       (Unknown,val_annot ftyp))
-						       exp) (l,annot));
+					    [(E_aux 
+						(E_let 
+						   (LB_aux (LB_val_implicit (P_aux (P_id id) (fl,val_annot ftyp)) from_e)
+						      (Unknown,val_annot ftyp))
+						   exp) (l,annot));
 					     (E_aux (E_for id augment_e to_e by_e order exp) (l,annot))])
 					    (l,annot)) in
 				if mode.eager_eval
@@ -1152,8 +1150,9 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                             | V_unknown -> 
 			      let e = 
 				(E_aux (E_let 
-					  (LB_aux (LB_val_implicit (P_aux (P_id id) (fl, val_annot (val_typ from_val))) from_e)
-					          (fl, val_annot (val_typ from_val)))
+					  (LB_aux 
+					     (LB_val_implicit (P_aux (P_id id) (fl, val_annot (val_typ from_val))) from_e)
+					     (fl, val_annot (val_typ from_val)))
 					  exp) (l,annot)) in
 			      interp_main mode t_level env lm e
                             | _ -> (Error l "internal error: by must be a number",lm,le) end)
@@ -1217,7 +1216,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			     (l,annot)))
                         (fun vs -> (V_record t (List.zip fields vs))) l_env l_mem [] exps)
               (fun vs lm le -> (Value (fupdate_record rv vs), lm, le))
-              (fun a -> a) (*Due to exp_list this should never happen, but needed to perform the functional update on Value *)
+              (fun a -> a) (*Due to exp_list this won't happen, but we want to functionaly update on Value *)
 	  | V_unknown -> (Value V_unknown, lm, le)
           | _ -> (Error l "internal error: record update requires record",lm,le) end)
         (fun a -> update_stack a 
@@ -1236,7 +1235,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	      | V_unknown -> (Value V_unknown,lm,le)
 	      | V_track (V_list t) r -> (Value (V_track (V_list (hdv::t)) r),lm,le)
 	      | V_track V_unknown r -> (Value (V_track V_unknown r),lm,le)
-              | _ -> (Error l ":: of non-list value",lm,le) end)
+              | _ -> (Error l "Internal error '::' of non-list value",lm,le) end)
             (fun a -> update_stack a 
               (add_to_top_frame 
 		 (fun t env -> let (hde,env') = to_exp mode env hdv in (E_aux (E_cons hde t) (l,annot),env')))))
@@ -1279,7 +1278,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		    | _ -> Error l "Internal error, unrecognized read, no id"
 		                end 
                 | Nothing -> Error l "Internal error, unrecognized read, no reg" end
-                | _ -> update_stack a (add_to_top_frame (fun e env -> (E_aux(E_field e id) (l,annot),env))) end)
+             | _ -> update_stack a (add_to_top_frame (fun e env -> (E_aux(E_field e id) (l,annot),env))) end)
     | E_vector_access vec i ->
       resolve_outcome 
 	(interp_main mode t_level l_env l_mem i)
@@ -1305,16 +1304,24 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		    | V_unknown -> (Value V_unknown,lm,le)
                     | V_track V_unknown r -> (Value (V_track V_unknown r),lm,le)
                     | _ -> (Error l "Vector access reading of non-vector",lm,le)end)
-                (fun a ->		  
-                  match a with
+                (fun a ->
+		  match a with
                     | Action (Read_reg reg Nothing) stack -> 
-                      if (top_hole stack) 
-                      then Action (Read_reg reg (Just(n,n))) stack 
-                      else Action (Read_reg reg Nothing) 
-			          (add_to_top_frame 
-				     (fun v env -> 
-				       let (iv_e, env) = to_exp mode env iv_whole in
-				       (E_aux (E_vector_access v iv_e) (l,annot),env)) stack)
+		      match vec with
+			| (E_aux _ (l,Just(_,Tag_extern _,_,_))) -> Action (Read_reg reg (Just(n,n))) stack
+			| _ -> Action (Read_reg reg Nothing) 
+			              (add_to_top_frame 
+					 (fun v env -> 
+					   let (iv_e, env) = to_exp mode env iv_whole in
+					   (E_aux (E_vector_access v iv_e) (l,annot),env)) stack) end
+                    | Action (Read_reg reg (Just (o,p))) stack ->
+		      match vec with
+			| (E_aux _ (l,Just(_,Tag_extern _,_,_))) -> Action (Read_reg reg (Just(n,n))) stack
+			| _ -> Action (Read_reg reg (Just (o,p))) 
+			              (add_to_top_frame 
+					 (fun v env -> 
+					   let (iv_e, env) = to_exp mode env iv_whole in
+					   (E_aux (E_vector_access v iv_e) (l,annot),env)) stack) end
                     | _ -> 
                       update_stack a 
 			(add_to_top_frame 
@@ -1367,9 +1374,15 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 					      (E_aux (E_vector_subrange v ie1 ie2) (l,annot), env) in
 			  match a with 
 			    | Action (Read_reg reg Nothing) stack ->
-			      if (top_hole stack)
-			      then Action (Read_reg reg (Just((get_num iv1),(get_num iv2)))) stack
-			      else Action (Read_reg reg Nothing) (add_to_top_frame rebuild stack)
+			      match vec with
+				| (E_aux _ (l,Just(_,Tag_extern _,_,_))) -> 
+				  Action (Read_reg reg (Just((get_num iv1),(get_num iv2)))) stack
+				| _ -> Action (Read_reg reg Nothing) (add_to_top_frame rebuild stack) end
+		            | Action (Read_reg reg (Just (o,p))) stack ->
+			      match vec with
+				| (E_aux _ (l,Just(_,Tag_extern _,_,_))) -> 
+				  Action (Read_reg reg (Just((get_num iv1),(get_num iv2)))) stack
+				| _ -> Action (Read_reg reg (Just (o,p))) (add_to_top_frame rebuild stack) end
                             | _ -> update_stack a (add_to_top_frame rebuild) end)
 		 end)
                 (fun a -> update_stack a 
