@@ -347,7 +347,7 @@ val extern unit -> unit effect { barr } EIEIO_Sync
 (* XXX effect for trap? *)
 val extern unit -> unit effect pure trap
 
-register (bool) mode64bit
+register (bit[1]) mode64bit
 register (bool) bigendianmode
 
 val bit[64] -> unit effect {rreg,wreg} set_overflow_cr0 

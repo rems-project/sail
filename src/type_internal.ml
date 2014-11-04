@@ -818,6 +818,7 @@ let initial_abbrev_env =
     ("uint16",Base(([],uint16_t),Emp_global,[],pure_e));
     ("uint32",Base(([],uint32_t),Emp_global,[],pure_e));
     ("uint64",Base(([],uint64_t),Emp_global,[],pure_e));
+    ("bool",Base(([],bit_t),Emp_global,[],pure_e));
   ]
 
 
@@ -1602,12 +1603,12 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
     let cs = [Eq(co,r1,{nexp = Nconst one})] in
     (*WARNING: shrinking i to an int; should add a check*)
     let t2' = {t = Tapp("vector",[TA_nexp {nexp=Nconst i};TA_nexp {nexp=Nconst one};TA_ord o;TA_typ {t=Tid "bit"}])} in
-    (t2',cs,E_aux(E_vector_indexed([((int_of_big_int i),e)],Def_val_aux(Def_val_empty,(l,NoTyp))) ,(l,Base(([],t2),Emp_local,cs,pure_e))))
+    (t2',cs,E_aux(E_vector_indexed([((int_of_big_int i),e)],Def_val_aux(Def_val_empty,(l,NoTyp))) ,(l,Base(([],t2),Emp_local,cs,pure_e))))*)
   | Tapp("vector",[TA_nexp ({nexp=Nconst i} as b1);TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]),Tid("bit") ->
     let cs = [Eq(co,r1,{nexp = Nconst one})] in
-    (t2,cs,E_aux((E_vector_access (e,(E_aux(E_lit(L_aux(L_num (int_of_big_int i),l)),
+    (t2,cs,pure_e,E_aux((E_vector_access (e,(E_aux(E_lit(L_aux(L_num (int_of_big_int i),l)),
 					   (l,Base(([],{t=Tapp("range",[TA_nexp b1;TA_nexp {nexp=Nconst zero}])}),Emp_local,cs,pure_e)))))),
-                 (l,Base(([],t2),Emp_local,cs,pure_e))))*)
+                 (l,Base(([],t2),Emp_local,cs,pure_e))))
   | Tid("bit"),Tapp("range",[TA_nexp b1;TA_nexp r1]) ->
     let t',cs'= type_consistent co d_env {t=Tapp("range",[TA_nexp{nexp=Nconst zero};TA_nexp{nexp=Nconst one}])} t2 in
     (t2,cs',pure_e,

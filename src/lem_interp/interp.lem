@@ -492,6 +492,14 @@ let rec update_vector_slice vector value start stop mem =
   | (V_track v1 r1, v) -> (update_vector_slice v1 value start stop mem) 
 end
 
+let rec update_vector_start new_start v = match v with
+  | V_vector m inc vs -> V_vector new_start inc vs
+  (*Note, may need to shrink and check if still sparse *)
+  | V_vector_sparse m n inc vals d -> V_vector_sparse new_start n inc vals d 
+  | V_unknown -> V_unknown
+  | V_track v r -> taint (update_vector_start new_start v) r
+end
+
 val in_ctors : list (id * typ) -> id -> maybe typ
 let rec in_ctors ctors id =
   match ctors with
@@ -1085,8 +1093,12 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	  match (value,mode.eager_eval) with
             | (V_lit(L_aux L_true _),true) -> interp_main mode t_level l_env lm thn
 	    | (V_track (V_lit (L_aux L_true _)) _, true) -> interp_main mode t_level l_env lm thn
+	    | (V_lit(L_aux L_one _),true) -> interp_main mode t_level l_env lm thn
+	    | (V_track (V_lit (L_aux L_one _)) _, true) -> interp_main mode t_level l_env lm thn
 	    | (V_lit(L_aux L_true _),false) -> debug_out Nothing Nothing thn t_level lm l_env 
 	    | (V_track (V_lit (L_aux L_true _)) _, false) -> debug_out Nothing Nothing thn t_level lm l_env
+	    | (V_lit(L_aux L_one _),false) -> debug_out Nothing Nothing thn t_level lm l_env
+	    | (V_track (V_lit(L_aux L_one _)) _, false) -> debug_out Nothing Nothing thn t_level lm l_env
 	    | (V_unknown,_) -> interp_main mode t_level l_env lm (E_aux (E_block [thn;els]) (l,annot))
 	    | (V_track V_unknown _,_) -> interp_main mode t_level l_env lm (E_aux (E_block [thn;els]) (l,annot))
             | (_,true) -> interp_main mode t_level l_env lm els 
@@ -2022,7 +2034,9 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		| (V_unknown,_) -> ((Value v,lm,l_env),Nothing)
                 | _ -> ((Error l "Vector required",lm,le),Nothing) end)
               | ((Action (Write_reg regf Nothing value) s, lm,le), Just lexp_builder) ->
-                ((Action (Write_reg regf (Just (n1,n2)) value) s,lm,le), Just (next_builder lexp_builder))
+                ((Action 
+		    (Write_reg regf (Just (n1,n2)) (update_vector_start n1 value)) s,lm,le),
+		 Just (next_builder lexp_builder))
               | ((Action (Write_mem id a Nothing value) s,lm,le), Just lexp_builder) ->
                 ((Action (Write_mem id a (Just (n1,n2)) value) s,lm,le), Just (next_builder lexp_builder))
               | ((Action a s,lm,le), Just lexp_builder) ->

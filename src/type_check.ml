@@ -722,7 +722,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         let t',cs',ef',e' = type_coerce (Expr l) d_env false t (E_aux(E_tuple(exps),(l,Base(([],t),Emp_local,[],pure_e)))) expect_t in
         (e',t',t_env,consts@cs',union_effects ef' effect))
     | E_if(cond,then_,else_) ->
-      let (cond',_,_,c1,ef1) = check_exp envs imp_param bool_t cond in
+      let (cond',_,_,c1,ef1) = check_exp envs imp_param bit_t cond in
       (match expect_t.t with
       | Tuvar _ -> 
         let then',then_t,then_env,then_c,then_ef = check_exp envs imp_param (new_t ()) then_ in
