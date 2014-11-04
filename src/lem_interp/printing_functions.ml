@@ -230,13 +230,14 @@ let instruction_state_to_string stack =
 let top_instruction_state_to_string stack = exp_to_string (top_frame_exp stack)
 
 let instr_parm_to_string (name, typ, value) = 
+  name ^"="^
   match (typ,value) with
     | Bit, Bitvector ([true],_,_) -> "1"
     | Bit, Bitvector ([false],_,_) -> "0"
     | Other,_ -> "Unrepresentable external value"
     | _, Unknown0 -> "Unknown"
     | _, v -> let intern_v = (Interp_inter_imp.intern_value value) in
-	      match Interp_lib.to_num true intern_v with
+	      match Interp_lib.to_num false intern_v with
 		| V_lit (L_aux(L_num n, _)) -> string_of_big_int n
 		| _ -> val_to_string value
 
