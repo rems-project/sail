@@ -4,6 +4,8 @@ import Instruction_extractor
 open import Interp_ast
 open import Interp_interface
 open import Pervasives
+open import Assert_extra
+
 
 val intern_value : value -> Interp.value
 val extern_value : interp_mode -> bool -> Interp.value -> (value * maybe (list reg_name))
@@ -129,6 +131,26 @@ let add_to_address value num =
 	             (Interp_lib.arith_op_vec_range (+) 1 
 			(Interp.V_tuple [(intern_value value);Interp.V_lit (L_aux (L_num num) Interp_ast.Unknown)])))
 end
+
+
+let coerce_Bytevector_of_Bitvector (v: value) : value =
+  match v with
+  | Bitvector bs b i -> Bytevector (to_bytes bs)
+  | _ -> Assert_extra.failwith "coerce_Bytevector_of_Bitvector given non-Bitvector"
+  end
+
+let coerce_Bitvector_of_Bytevector (v: value) : value =
+  match v with
+  | Bytevector ws -> Bitvector 
+        (List.concatMap 
+           (fun w -> 
+             List.reverse 
+               (boolListFrombitSeq 8 (bitSeqFromNat w)))
+            ws)
+        true
+        0
+  | _ -> Assert_extra.failwith "coerce_Bitvector_of_Bitvector given non-Bytevector"
+  end
 
 let initial_instruction_state top_level main args = 
   let e_args = match args with

@@ -141,6 +141,12 @@ val instruction_to_istate : context -> instruction -> i_state_or_error
 (* Augment an address by the given value *)
 val add_to_address : value -> nat -> value
 
+(* Coerce a Bitvector value (presumed a multiple of 8 bits long) to a Bytevector value *)
+val coerce_Bytevector_of_Bitvector : value -> value
+
+(* Coerce a Bytevector value to a Bitvector value, increasing and starting at zero *)
+val coerce_Bitvector_of_Bytevector : value -> value
+
 (* Slice a value into a smaller vector, starting at first number (wrt the indices of the bitvector value, not raw positions in its list of bits) and going to second (inclusive) according to order. 
    For bytevectors, assumes you are slicing at the byte level, not the bit level *)
 val slice_value : value -> nat -> nat -> value
