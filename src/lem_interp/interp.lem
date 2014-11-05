@@ -681,7 +681,9 @@ let rec to_exp mode env v : (exp tannot * lenv) =
                  let env' = add_to_env (fid,vals) env' in
                  (E_aux (E_app id [(E_aux (E_id fid) (Interp_ast.Unknown, (val_annot (val_typ vals))))]) (mk_annot true), env')
       end 
-      else let (e,env') = (to_exp mode env vals) in (E_aux (E_app id [e]) (mk_annot true), env') end)
+      else let (e,env') = (to_exp mode env vals) in (E_aux (E_app id [e]) (mk_annot true), env') 
+    | _ -> 
+      let (e,env') = (to_exp mode env vals) in (E_aux (E_app id [e]) (mk_annot true),env') end)
   | V_register (Reg id tan) -> (E_aux (E_id id) annot, env)
   | V_track v' _ -> 
     if mode.track_values
