@@ -364,7 +364,7 @@ let rec interp_to_outcome mode thunk =
         then interp_to_outcome mode (fun _ -> Interp.resume mode next_state (Just (f value))) 
         else let new_v = f value in
              Internal (Just i) 
-                      (Just (fun _ -> Interp.string_of_value value))
+                      (Just (fun _ -> (Interp.string_of_value value) ^ "=>" ^ (Interp.string_of_value new_v)))
                       (Interp.add_answer_to_stack next_state new_v)
       end
     | Interp.Step l Nothing Nothing -> Internal Nothing Nothing next_state 
