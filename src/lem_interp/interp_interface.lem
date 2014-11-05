@@ -109,7 +109,7 @@ val initial_instruction_state : context -> string -> list value -> instruction_s
 type instr_parm_typ = 
   | Bit (*A single bit, represented as a one element Bitvector as a value*)
   | Other (*An unrepresentable type, will be represented as Unknown in instruciton form *)
-  | Bvector of maybe integer (* A bitvector type, with length when statically known *)
+  | Bvector of maybe int (* A bitvector type, with length when statically known *)
 
 (*A representation of the AST node for each instruction in the spec, with concrete values from this call, and the potential static effects from the funcl clause for this instruction 
 Follows the form of the instruction in instruction_extractor, but populates the parameters with actual values

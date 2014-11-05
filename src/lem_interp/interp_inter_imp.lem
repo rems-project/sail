@@ -257,7 +257,7 @@ end
 
 let migrate_typ = function
   | Instruction_extractor.IBit -> Bit
-  | Instruction_extractor.IBitvector len -> Bvector len
+  | Instruction_extractor.IBitvector len -> Bvector (match len with Nothing -> Nothing | Just i -> Just (intFromInteger i) end) 
   | Instruction_extractor.IOther -> Other
 end
 
