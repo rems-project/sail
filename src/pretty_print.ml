@@ -610,6 +610,9 @@ let doc_unop symb a = prefix 2 1 symb a
 let arrow = string "->"
 let dotdot = string ".."
 let coloneq = string ":="
+let lsquarebar = string "[|"
+let rsquarebar = string "|]"
+let squarebars = enclose lsquarebar rsquarebar
 let lsquarebarbar = string "[||"
 let rsquarebarbar = string "||]"
 let squarebarbars = enclose lsquarebarbar rsquarebarbar
@@ -662,6 +665,10 @@ let doc_typ, doc_atomic_typ, doc_nexp =
       Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_inc, _)), _);
       Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
         (doc_id id) ^^ (brackets (if n = 0 then doc_int m else doc_op colon (doc_int n) (doc_int (n+m-1))))
+  | Typ_app(Id_aux (Id "range", _), [
+    Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
+    Typ_arg_aux(Typ_arg_nexp m, _);]) ->
+    (squarebars (if n = 0 then nexp m else doc_op colon (doc_int n) (nexp m))) 
   | Typ_app(id,args) ->
       (* trailing space to avoid >> token in case of nested app types *)
       (doc_id id) ^^ (angles (separate_map comma_sp doc_typ_arg args)) ^^ space
@@ -902,7 +909,16 @@ let doc_exp, doc_let =
   | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
       braces (doc_op (string "with") (exp e) (separate_map semi_sp doc_fexp fexps))
   | E_vector exps ->
-      brackets (separate_map comma exp exps)
+    let default_print _ = brackets (separate_map comma exp exps) in
+    (match exps with
+      | [] -> default_print ()
+      | E_aux(e,_)::es ->
+	(match e with
+	  | E_lit (L_aux(L_one, _)) | E_lit (L_aux(L_zero, _)) ->
+	    utf8string
+	      ("0b" ^ 
+		  (List.fold_right (fun (E_aux(E_lit(L_aux(l, _)),_)) rst -> match l with | L_one -> "1"^rst | L_zero -> "0"^rst) exps "")) 
+	  | _ -> default_print ()))
   | E_vector_indexed (iexps, default) ->
       (* XXX TODO print default when it is non-empty *)
       let iexp (i,e) = doc_op equals (doc_int i) (exp e) in

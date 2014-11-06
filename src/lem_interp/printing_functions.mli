@@ -17,7 +17,7 @@ val reg_name_to_string : reg_name -> string
 (* format the register dependencies *)
 val dependencies_to_string : reg_name list -> string
 (* formats an expression, using interp_pretty *)
-val exp_to_string : tannot exp -> string
+val exp_to_string : Interp.lenv -> tannot exp -> string
 
 (* Functions to set the color of parts of the output *)
 val red : string -> string
@@ -29,7 +29,7 @@ val grey : string -> string
 
 (*Functions to modify the instruction state and expression used in printing and in run_model*)
 val compact_exp : tannot exp -> tannot exp
-val top_frame_exp : instruction_state -> tannot exp
+val top_frame_exp_state : instruction_state -> (tannot exp * (Interp.lenv*Interp.lmem))
 
 
 (*functions to format events and instruction_states to strings *)
@@ -43,7 +43,7 @@ val top_instruction_state_to_string : instruction_state -> string
 val instruction_to_string : instruction -> string
 
 (*Functions to take a print function and cause a print event for the above functions *)
-val print_exp : (string-> unit) -> tannot exp -> unit 
+val print_exp : (string-> unit) -> Interp.lenv -> tannot exp -> unit 
 val print_backtrace_compact : (string -> unit) -> instruction_state -> unit
 val print_continuation : (string -> unit) -> instruction_state -> unit
 val print_instruction : (string -> unit) -> instruction -> unit

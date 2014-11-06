@@ -3,10 +3,10 @@ import Map
 import Map_extra (* For 'find' instead of using lookup and maybe types, as we know it cannot fail *)
 import List_extra (* For 'nth' and 'head' where we know that they cannot fail *)
 open import String_extra (* for 'show' to convert nat to string) *)
+import Assert_extra (*For failwith when partiality is known to be unreachable*)
 
 open import Interp_ast
 open import Interp_utilities
-
 open import Instruction_extractor
 
 type tannot = Interp_utilities.tannot
@@ -63,7 +63,16 @@ let rec string_of_value v = match v with
     | L_string str-> "\"" ^ str ^ "\"" end)
   | V_tuple vals -> "(" ^ (list_to_string string_of_value "," vals) ^ ")"
   | V_list vals -> "[||" ^ (list_to_string string_of_value "," vals) ^ "||]"
-  | V_vector i inc vals -> "[" ^ (list_to_string string_of_value "," vals) ^ "]"
+  | V_vector i inc vals -> 
+    let default_format _ = "[" ^ (list_to_string string_of_value "," vals) ^ "]" in
+    let to_bin () = "0b" ^ (List.foldr (fun (V_lit (L_aux l _)) rst -> (match l with | L_one -> "1" | L_zero -> "0" end) ^rst) "" vals) in
+    match vals with
+      | [] -> default_format ()
+      | v::vs ->
+	match v with 
+	  | V_lit (L_aux L_zero _) -> to_bin()
+	  | V_lit (L_aux L_one _) -> to_bin()
+	  | _ -> default_format() end end
   | V_vector_sparse _ _ _ _ _ -> "sparse_vector"
   | V_record t vals ->
     "{" ^ (list_to_string (fun (id,v) -> (get_id id) ^ "=" ^ (string_of_value v)) ";" vals) ^ "}"
@@ -545,6 +554,13 @@ let rec set_in_context stack e =
     | Thunk_frame oe t_level env mem Top -> Thunk_frame e t_level env mem Top
     | Hole_frame _ _ _ _ _ s -> set_in_context s e
     | Thunk_frame _ _ _ _ s -> set_in_context s e
+end
+
+let get_stack_state stack = 
+  match stack with
+    | Top -> Assert_extra.failwith "Top reached in extracting stack state"
+    | Hole_frame id exp top_level lenv lmem stack -> (lenv,lmem)
+    | Thunk_frame exp top_level lenv lmem stack -> (lenv,lmem)
 end
 
 let id_of_string s = (Id_aux (Id s) Unknown)

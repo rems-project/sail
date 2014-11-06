@@ -124,12 +124,12 @@ let rec val_to_string_internal = function
  | Interp.V_unknown -> "unknown"
 ;;
 
-let rec top_frame_exp = function
+let rec top_frame_exp_state = function
   | Interp.Top -> raise (Invalid_argument "top_frame_exp")
-  | Interp.Hole_frame(_, e, _, _, _, Top)
-  | Interp.Thunk_frame(e, _, _, _, Top) -> e
+  | Interp.Hole_frame(_, e, _, env, mem, Top)
+  | Interp.Thunk_frame(e, _, env, mem, Top) -> (e,(env,mem))
   | Interp.Thunk_frame(_, _, _, _, s)
-  | Interp.Hole_frame(_, _, _, _, _, s) -> top_frame_exp s
+  | Interp.Hole_frame(_, _, _, _, _, s) -> top_frame_exp_state s
 
 let tunk = Unknown, None
 let ldots = E_aux(E_id (Id_aux (Id "...", Unknown)), tunk)
@@ -175,8 +175,8 @@ let rec compact_exp (E_aux (e, l)) =
  * the top of the stack is the head of the returned list. *)
 let rec compact_stack ?(acc=[]) = function
   | Interp.Top -> acc
-  | Interp.Hole_frame(_,e,_,_,_,s)
-  | Interp.Thunk_frame(e,_,_,_,s) -> compact_stack ~acc:((compact_exp e) :: acc) s
+  | Interp.Hole_frame(_,e,_,env,mem,s)
+  | Interp.Thunk_frame(e,_,env,mem,s) -> compact_stack ~acc:(((compact_exp e),(env,mem)) :: acc) s
 ;;  
 
 let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%s, %s)"
@@ -218,16 +218,17 @@ let yellow = color true 3
 let blue = color true 4
 let grey = color false 7
 
-let exp_to_string e = Pretty_interp.pp_exp e
+let exp_to_string env e = Pretty_interp.pp_exp env e
 
 let get_loc (E_aux(_, (l, (_ : tannot)))) = loc_to_string l
-let print_exp printer e =
-  printer ((get_loc e) ^ ": " ^ (Pretty_interp.pp_exp e) ^ "\n")
+let print_exp printer env e =
+  printer ((get_loc e) ^ ": " ^ (Pretty_interp.pp_exp env e) ^ "\n")
 
 let instruction_state_to_string stack =
-  List.fold_right (fun e es -> (exp_to_string e) ^ "\n" ^ es) (compact_stack stack) ""
+  let env = () in
+  List.fold_right (fun (e,(env,mem)) es -> (exp_to_string env e) ^ "\n" ^ es) (compact_stack stack) ""
 
-let top_instruction_state_to_string stack = exp_to_string (top_frame_exp stack)
+let top_instruction_state_to_string stack = let (exp,(env,_)) = top_frame_exp_state stack in exp_to_string env exp
 
 let instr_parm_to_string (name, typ, value) = 
   name ^"="^
@@ -250,6 +251,6 @@ let rec instr_parms_to_string ps =
 let instruction_to_string (name, parms, base_effects) = 
   (String.lowercase name) ^ " " ^ instr_parms_to_string parms 
 
-let print_backtrace_compact printer stack = List.iter (print_exp printer) (compact_stack stack)
-let print_continuation printer stack = print_exp printer (top_frame_exp stack)
+let print_backtrace_compact printer stack = List.iter (fun (e,(env,mem)) -> print_exp printer env e) (compact_stack stack)
+let print_continuation printer stack = let (e,(env,mem)) = top_frame_exp_state stack in print_exp printer env e
 let print_instruction printer instr = printer (instruction_to_string instr)

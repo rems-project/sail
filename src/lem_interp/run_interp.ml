@@ -99,12 +99,12 @@ let rec val_to_string_internal = function
  | V_unknown -> "unknown"
 ;;
 
-let rec top_frame_exp = function
+let rec top_frame_exp_state = function
   | Top -> raise (Invalid_argument "top_frame_exp")
-  | Hole_frame(_, e, _, _, _, Top)
-  | Thunk_frame(e, _, _, _, Top) -> e
+  | Hole_frame(_, e, _, env, mem, Top) 
+  | Thunk_frame(e, _, env, mem, Top) -> (e,(env,mem))
   | Thunk_frame(_, _, _, _, s)
-  | Hole_frame(_, _, _, _, _, s) -> top_frame_exp s
+  | Hole_frame(_, _, _, _, _, s) -> top_frame_exp_state s
 
 let tunk = Unknown, None
 let ldots = E_aux(E_id (Id_aux (Id "...", Unknown)), tunk)
@@ -150,8 +150,8 @@ let rec compact_exp (E_aux (e, l)) =
  * the top of the stack is the head of the returned list. *)
 let rec compact_stack ?(acc=[]) = function
   | Top -> acc
-  | Hole_frame(_,e,_,_,_,s)
-  | Thunk_frame(e,_,_,_,s) -> compact_stack ~acc:((compact_exp e) :: acc) s
+  | Hole_frame(_,e,_,env,mem,s)
+  | Thunk_frame(e,_,env,mem,s) -> compact_stack ~acc:(((compact_exp e),(env,mem)) :: acc) s
 ;;  
 
 let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%s, %s)"
@@ -324,8 +324,8 @@ let run
   ?mode
   (name, test) =
   let get_loc (E_aux(_, (l, _))) = loc_to_string l in
-  let print_exp  e =
-    debugf "%s: %s\n" (get_loc e) (Pretty_interp.pp_exp e) in
+  let print_exp env e =
+    debugf "%s: %s\n" (get_loc e) (Pretty_interp.pp_exp env e) in
   (* interactive loop for step-by-step execution *)
   let usage = "Usage:
     step    go to next action [default]
@@ -351,11 +351,12 @@ let run
         Mem.iter (fun k v -> debugf "%s\n" (Mem.to_string k v)) mem;
         interact mode env stack
     | "bt" | "backtrace" | "stack" ->
-        List.iter print_exp (compact_stack stack);
+        List.iter (fun (e,(env,mem)) -> print_exp env e) (compact_stack stack);
         interact mode env stack
     | "c" | "cont" | "continuation" ->
         (* print not-compacted continuation *)
-        print_exp (top_frame_exp stack);
+      let (e,(lenv,lmem)) = top_frame_exp_state stack in
+        print_exp lenv e;
         interact mode env stack
     | "show_casts" ->
         Pretty_interp.ignore_casts := false;
@@ -372,12 +373,12 @@ let run
       debugf "%s: %s %s\n" (grey name) (blue "return") (val_to_string_internal v);
       true, mode, env
   | Action (a, s) ->
-      let top_exp = top_frame_exp s in
+      let (top_exp,(top_env,top_mem)) = top_frame_exp_state s in
       let loc = get_loc (compact_exp top_exp) in
       let return, env' = perform_action env a in
       let step ?(force=false) () =
         if mode = Step || force then begin
-          debugf "%s\n" (Pretty_interp.pp_exp top_exp);
+          debugf "%s\n" (Pretty_interp.pp_exp top_env top_exp);
           interact mode env s
        end else
          mode in
@@ -428,7 +429,7 @@ let run
   | Error(l, e) ->
       debugf "%s: %s: %s\n" (grey (loc_to_string l)) (red "error") e;
       false, mode, env in
-  debugf "%s: %s %s\n" (grey name) (blue "evaluate") (Pretty_interp.pp_exp entry);
+  debugf "%s: %s %s\n" (grey name) (blue "evaluate") (Pretty_interp.pp_exp Interp.eenv entry);
   let mode = match mode with
   | None -> if eager_eval then Run else Step
   | Some m -> m in
