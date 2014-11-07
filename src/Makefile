@@ -16,7 +16,7 @@ test: sail interpreter
 	./run_tests.native
 
 LEM = ~/bitbucket/lem/lem
-LEMLIB = ~/bitbucket/lem/ocaml-lib/_build/
+LEMLIBOCAMl = ~/bitbucket/lem/ocaml-lib/_build/
 
 install_elf:
 	cp -p ../../system-v-abi/src/*.lem elf_model/
@@ -30,7 +30,7 @@ elf:
 	cp -p elf_model/*.cmx _build/elf_model/
 	cp -p elf_model/*.o _build/elf_model/
 	cd _build/elf_model ;\
-	ocamlfind ocamlopt -package batteries -package uint -package bitstring -I $(LEMLIB) -a -o elf_extract.cmxa missing_pervasives.cmx \
+	ocamlfind ocamlopt -package batteries -package uint -package bitstring -I $(LEMLIBOCAML) -a -o elf_extract.cmxa missing_pervasives.cmx \
 show.cmx endianness.cmx error.cmx ml_bindings.cmx default_printing.cmx bitstring_local.cmx elf_types.cmx elf_header.cmx elf_file1.cmx elf_program_header_table.cmx elf_executable_file2.cmx string_table.cmx elf_section_header_table.cmx elf_interpreted_segment.cmx elf_symbol_table.cmx elf_executable_file3.cmx elf_linking_file2.cmx elf_linking_file3.cmx elf_relocation.cmx sail_interface.cmx
 
 
@@ -40,7 +40,7 @@ power: sail interpreter elf
 	cd _build/test ;\
 	../../sail.native -lem_ast power.sail ;\
 	$(LEM) -ocaml -only_changed_output -lib ../lem_interp/ power.lem;\
-	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -package num -package bitstring -package batteries -package uint -I $(LEMLIB) -I ../lem_interp/ -I ../elf_model/ -linkpkg $(LEMLIB)extract.cmxa ../pprint/src/PPrintLib.cmxa ../lem_interp/extract.cmxa elf_extract.cmxa power.ml run_power.ml -o run_power.native
+	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -package num -package bitstring -package batteries -package uint -I $(LEMLIBOCAML) -I ../lem_interp/ -I ../elf_model/ -linkpkg $(LEMLIBOCAML)extract.cmxa ../pprint/src/PPrintLib.cmxa ../lem_interp/extract.cmxa elf_extract.cmxa power.ml run_power.ml -o run_power.native
 	ln -fs _build/test/run_power.native run_power.native
 
 test_power: power

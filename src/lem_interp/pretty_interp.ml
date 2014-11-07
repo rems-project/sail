@@ -332,7 +332,10 @@ let doc_exp, doc_let =
   | E_nondet exps ->
     let exps_doc = separate_map (semi ^^ hardline) (exp env) exps in
     string "nondet" ^^ space ^^ (surround 2 1 lbrace exps_doc rbrace)
-  | E_id id -> (*TODO, use env here*) doc_id id
+  | E_id id -> 
+    (match id with
+      | Id_aux(Id("0"), _) -> (*The evaluation context hole*) doc_id id
+      | _ -> doc_id id)
   | E_lit lit -> doc_lit lit
   | E_cast(typ,e) ->
       if !ignore_casts then
