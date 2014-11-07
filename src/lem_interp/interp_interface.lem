@@ -230,7 +230,7 @@ type i_state_or_error =
   | Instr of instruction * instruction_state
   | Decode_error of decode_error
 
-val num_to_bits : nat -> v_kind -> integer
+val num_to_bits : nat -> v_kind -> integer -> value
 
 (** proposed: *)
 val nat_to_bytevector : nat -> list word8 

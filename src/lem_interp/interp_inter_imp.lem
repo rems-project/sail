@@ -45,14 +45,14 @@ end
 
 let num_to_bits size kind num =
   match kind with
-    | Bitv -> Bitvector (match (Interp_lib.to_vec_inc (Interp.V_tuple([Interp.V_lit(L_aux (L_num size) Interp_ast.Unknown);
-								       Interp.V_lit(L_aux (L_num (integerFromNat num))
-										          Interp_ast.Unknown)]))) with
+    | Bitv -> Bitvector (match (Interp_lib.to_vec_inc 
+				  (Interp.V_tuple([Interp.V_lit(L_aux (L_num (integerFromNat size)) Interp_ast.Unknown);
+						   Interp.V_lit(L_aux (L_num num) Interp_ast.Unknown)]))) with
 	| Interp.V_vector _ _ bits -> from_bits bits end) true 0
     | Bytev -> 
-      Bytevector (match (Interp_lib.to_vec_inc (Interp.V_tuple([Interp.V_lit(L_aux (L_num size) Interp_ast.Unknown);
-								Interp.V_lit(L_aux (L_num (integerFromNat num))
-									       Interp_ast.Unknown)]))) with
+      Bytevector (match (Interp_lib.to_vec_inc 
+			   (Interp.V_tuple([Interp.V_lit(L_aux (L_num (integerFromNat size)) Interp_ast.Unknown);
+					    Interp.V_lit(L_aux (L_num num) Interp_ast.Unknown)]))) with
 	| Interp.V_vector _ _ bits -> (to_bytes (from_bits bits)) end)
 end
 
