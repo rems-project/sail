@@ -232,6 +232,8 @@ type i_state_or_error =
 
 val num_to_bits : nat -> v_kind -> integer -> value
 
+val integer_of_byte_list : list word8 -> integer
+
 (** proposed: *)
 val nat_to_bytevector : nat -> list word8 
 
