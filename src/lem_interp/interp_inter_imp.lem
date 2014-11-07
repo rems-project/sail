@@ -30,7 +30,7 @@ end
 		   
 let intern_value v = match v with
   | Bitvector [true] _ _ -> Interp.V_lit (L_aux L_one Interp_ast.Unknown)
-  | Bitvector [false] _ _ -> Interp.V_lit (L_aux L_(*TODO KG Needs to be an actualy error, as must mean that a variable is multiplied by a variable, somewhere *)zero Interp_ast.Unknown)
+  | Bitvector [false] _ _ -> Interp.V_lit (L_aux L_zero Interp_ast.Unknown)
   | Bitvector bs inc fst   -> Interp.V_vector fst inc  (to_bits bs)
   | Bytevector bys -> Interp.V_vector 0 true 
     (List.concat (List.map (fun by -> 
