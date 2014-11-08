@@ -46,15 +46,27 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
   | _ -> assert false) l))
 ;;
 
+(* pp the bytes of a Bytevector as a hex value *)
+let bytes_to_string bytes = 
+  (String.concat ""
+     (List.map (fun i -> let s = (Printf.sprintf "%x" i) in if (String.length s = 1) then "0"^s else s) bytes))
+
 let val_to_string v = match v with
-  | Bitvector(bools, inc, fst)-> let l = List.length bools in
+  | Bitvector(bools, inc, fst)-> 
+      let l = List.length bools in
+      if List.mem l [8;16;32;64;128] then 
+        let Bytevector bytes = Interp_inter_imp.coerce_Bytevector_of_Bitvector v in
+        "0x" ^
+        "_" ^ (string_of_int (Big_int.int_of_big_int fst)) ^ "'" ^
+        bytes_to_string bytes
+      else
 (*    (string_of_int l) ^ " bits -- 0b" ^ collapse_leading (String.concat "" (List.map (function | true -> "1" | _ -> "0") bools))*)
-    (string_of_int l) ^ "_" ^ (string_of_int (Big_int.int_of_big_int fst)) ^ "'b" ^ collapse_leading (String.concat "" (List.map (function | true -> "1" | _ -> "0") bools))
-  | Bytevector words ->
-    let l = List.length words in
-    (*(string_of_int l) ^ " bytes -- " ^*) "0x" ^
-      (String.concat ""
-	 (List.map (fun i -> let s = (Printf.sprintf "%x" i) in if (String.length s = 1) then "0"^s else s) words))
+        (string_of_int l) ^ "_" ^ (string_of_int (Big_int.int_of_big_int fst)) ^ "'b" ^ collapse_leading (String.concat "" (List.map (function | true -> "1" | _ -> "0") bools))
+  | Bytevector bytes ->
+    (* let l = List.length words in *)
+    (*(string_of_int l) ^ " bytes -- " ^*) 
+      "0x" ^
+      bytes_to_string bytes
   | Unknown0 -> "Unknown"
 
 let half_byte_to_hex v = 
