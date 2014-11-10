@@ -334,7 +334,10 @@ let doc_exp, doc_let =
     string "nondet" ^^ space ^^ (surround 2 1 lbrace exps_doc rbrace)
   | E_id id -> 
     (match id with
-      | Id_aux(Id("0"), _) -> (*The evaluation context hole*) doc_id id
+      | Id_aux(Id("0"), _) -> 
+	(match Interp.in_lenv env id with
+	  | Interp.V_unknown -> doc_id id
+	  | v -> string ("\x1b[1;31m[" ^ Interp.string_of_value v ^ "]\x1b[m"))
       | _ -> doc_id id)
   | E_lit lit -> doc_lit lit
   | E_cast(typ,e) ->
