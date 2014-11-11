@@ -337,7 +337,7 @@ let doc_exp, doc_let =
       | Id_aux(Id("0"), _) -> 
 	(match Interp.in_lenv env id with
 	  | Interp.V_unknown -> doc_id id
-	  | v -> string ("\x1b[1;31m[" ^ Interp.string_of_value v ^ "]\x1b[m"))
+	  | v -> string ("\x1b[1;31m" ^ Interp.string_of_value v ^ "\x1b[m"))
       | _ -> doc_id id)
   | E_lit lit -> doc_lit lit
   | E_cast(typ,e) ->
