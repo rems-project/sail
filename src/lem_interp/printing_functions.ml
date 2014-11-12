@@ -109,28 +109,28 @@ let reg_name_to_string = function
 
 let dependencies_to_string dependencies = String.concat ", " (List.map reg_name_to_string dependencies)
 
-let rec val_to_string_internal = function
- | Interp.V_boxref(n, t) -> sprintf "boxref %d" n
+let rec val_to_string_internal ((Interp.LMem (_,memory)) as mem) = function
+ | Interp.V_boxref(n, t) -> val_to_string_internal mem (Pmap.find n memory)
  | Interp.V_lit (L_aux(l,_)) -> sprintf "%s" (lit_to_string l)
  | Interp.V_tuple l ->
-     let repr = String.concat ", " (List.map val_to_string_internal l) in
+     let repr = String.concat ", " (List.map (val_to_string_internal mem) l) in
      sprintf "(%s)" repr
  | Interp.V_list l ->
-     let repr = String.concat "; " (List.map val_to_string_internal l) in
+     let repr = String.concat "; " (List.map (val_to_string_internal mem) l) in
      sprintf "[||%s||]" repr
  | Interp.V_vector (first_index, inc, l) ->
      let last_index = add_int_big_int (if inc then List.length l - 1 else 1 - List.length l) first_index  in
      let repr =
        try bitvec_to_string l
        with Failure _ ->
-         sprintf "[%s]" (String.concat "; " (List.map val_to_string_internal l)) in
+         sprintf "[%s]" (String.concat "; " (List.map (val_to_string_internal mem) l)) in
      sprintf "%s [%s..%s]" repr (string_of_big_int first_index) (string_of_big_int last_index)
  | Interp.V_record(_, l) ->
-     let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string_internal value) in
+     let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string_internal mem value) in
      let repr = String.concat "; " (List.map  pp l) in
      sprintf "{%s}" repr
  | Interp.V_ctor (id,_, value) ->
-     sprintf "%s %s" (id_to_string id) (val_to_string_internal value)
+     sprintf "%s %s" (id_to_string id) (val_to_string_internal mem value)
  | Interp.V_register r ->
      sprintf "reg-as-value" 
  | Interp.V_unknown -> "unknown"
@@ -241,6 +241,15 @@ let instruction_state_to_string stack =
   List.fold_right (fun (e,(env,mem)) es -> (exp_to_string env e) ^ "\n" ^ es) (compact_stack stack) ""
 
 let top_instruction_state_to_string stack = let (exp,(env,_)) = top_frame_exp_state stack in exp_to_string env exp
+
+let local_variables_to_string stack = 
+  let (_,(env,mem)) = top_frame_exp_state stack in 
+  match env with
+    | LEnv(_,env) -> 
+      List.fold_right (fun (id,value) others -> 
+	match id with
+	  | Id_aux(Id "0",_) -> others (*Let's not print out the context hole again*)
+	  | _ -> id_to_string id ^ "=" ^ val_to_string_internal mem value ^ "; " ^ others) env ""
 
 let instr_parm_to_string (name, typ, value) = 
   name ^"="^

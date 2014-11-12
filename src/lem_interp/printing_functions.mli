@@ -9,7 +9,7 @@ val loc_to_string : l -> string
 val get_loc : tannot exp -> string
 (*interp_interface.value to string*)
 val val_to_string : value0 -> string
-val val_to_string_internal : Interp.value -> string
+val val_to_string_internal : Interp.lmem -> Interp.value -> string
 (*Force all representations to hex strings instead of a mixture of hex and binary strings*)
 val val_to_hex_string : value0 -> string
 (* format one register *)
@@ -39,6 +39,8 @@ val format_events : event list -> string
 val instruction_state_to_string : instruction_state -> string
 (*format just the top of the call stack*)
 val top_instruction_state_to_string : instruction_state -> string
+val local_variables_to_string : instruction_state -> string
+
 
 val instruction_to_string : instruction -> string
 
