@@ -249,7 +249,7 @@ let local_variables_to_string stack =
       List.fold_right (fun (id,value) others -> 
 	match id with
 	  | Id_aux(Id "0",_) -> others (*Let's not print out the context hole again*)
-	  | _ -> id_to_string id ^ "=" ^ val_to_string_internal mem value ^ "; " ^ others) env ""
+	  | _ -> id_to_string id ^ "=" ^ val_to_string_internal mem value ^ ", " ^ others) env ""
 
 let instr_parm_to_string (name, typ, value) = 
   name ^"="^
