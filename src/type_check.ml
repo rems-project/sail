@@ -236,8 +236,19 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
       let (pat',env,constraints,u) = check_pattern envs emp_tag t pat in
       (P_aux(P_typ(typ,pat'),(l,Base(([],t),Emp_local,[],pure_e))),env,cs@constraints,t)
     | P_id id -> 
-      let tannot = Base(([],expect_t),emp_tag,cs,pure_e) in
-      (P_aux(p,(l,tannot)),Envmap.from_list [(id_to_string id,tannot)],cs,expect_t)
+      let i = id_to_string id in
+      (match Envmap.apply t_env i with
+	| Some(Base((params,t),Constructor,cs,ef)) ->
+	  let t,cs,ef = subst params t cs ef in
+          (match t.t with
+            | Tfn({t = Tid "unit"},t',IP_none,ef) -> 
+	      let tp,cp = type_consistent (Expr l) d_env t' expect_t in
+	      (P_aux(P_app(id,[]),(l,(Base(([],t),Constructor,[],pure_e)))),Envmap.empty,cs@cp,tp)
+            | Tfn(t1,t',IP_none,e) -> 
+              typ_error l ("Constructor " ^ i ^ " expects arguments of type " ^ (t_to_string t) ^ ", found none")
+            | _ -> raise (Reporting_basic.err_unreachable l "Constructor tannot does not have function type"))
+	| _ -> let tannot = Base(([],expect_t),emp_tag,cs,pure_e) in
+	       (P_aux(p,(l,tannot)),Envmap.from_list [(id_to_string id,tannot)],cs,expect_t))
     | P_app(id,pats) -> 
       let i = id_to_string id in
       (match Envmap.apply t_env i with
