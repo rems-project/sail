@@ -171,6 +171,8 @@ val check_tannot : Parse_ast.l -> tannot -> nexp_range list -> effect -> tannot
 
 val nexp_eq : nexp -> nexp -> bool
 
+val conforms_to_t : def_envs -> bool -> bool -> t -> t -> bool
+
 (* type_consistent is similar to a standard type equality, except in the case of [[consistent t1 t2]] where
    t1 and t2 are both enum types and t1 is contained within the range of t2: i.e.
    enum 2 5 is consistent with enum 0 10, but not vice versa.

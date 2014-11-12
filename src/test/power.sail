@@ -427,6 +427,20 @@ function clause execute (Bclr (BO, BI, BH, LK)) =
     if LK then LR := CIA + 4 else ()
   }
 
+union ast member (bit[7]) Sc
+
+function clause decode (0b010001 :
+(bit[5]) _ :
+(bit[5]) _ :
+(bit[4]) _ :
+(bit[7]) LEV :
+(bit[3]) _ :
+0b1 :
+(bit[1]) _ as instr) =
+  Sc (LEV)
+
+function clause execute (Sc (LEV)) = ()
+
 union ast member (bit[5], bit[5], bit[16]) Lwz
 
 function clause decode (0b100000 :
@@ -538,9 +552,9 @@ function clause execute (Lswi (RT, RA, NB)) =
   {
     (bit[64]) EA := 0;
     if RA == 0 then EA := 0 else EA := GPR[RA];
-    (range<0, 32> ) r := 0;
+    ([|32|]) r := 0;
     r := RT - 1;
-    (range<0, 32> ) size := if NB == 0 then 32 else NB;
+    ([|32|]) size := if NB == 0 then 32 else NB;
     (bit[256]) membuffer := MEMr (EA,size);
     j := 0;
     i := 32;
@@ -548,7 +562,7 @@ function clause execute (Lswi (RT, RA, NB)) =
     {
       if i == 32
       then {
-        r := (range<0, 32> ) (r + 1) mod 32;
+        r := ([|32|]) (r + 1) mod 32;
         GPR[r] := 0
       }
       else ();
@@ -584,6 +598,24 @@ function clause execute (Addis (RT, RA, SI)) =
   then GPR[RT] := EXTS (SI : 0b0000000000000000)
   else GPR[RT] := GPR[RA] + EXTS (SI : 0b0000000000000000)
 
+union ast member (bit[5], bit[5], bit[5], bit, bit) Add
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[5]) RB :
+[OE] :
+0b100001010 :
+[Rc] as instr) =
+  Add (RT,RA,RB,OE,Rc)
+
+function clause execute (Add (RT, RA, RB, OE, Rc)) =
+  {
+    temp := GPR[RA] + GPR[RB];
+    GPR[RT] := temp;
+    if Rc then set_overflow_cr0 (temp) else ()
+  }
+
 union ast member (bit[5], bit[5], bit[5], bit, bit) Subf
 
 function clause decode (0b011111 :
@@ -601,6 +633,26 @@ function clause execute (Subf (RT, RA, RB, OE, Rc)) =
     GPR[RT] := temp;
     if Rc then set_overflow_cr0 (temp) else ()
   }
+
+union ast member (bit[5], bit[5], bit[16]) Addic
+
+function clause decode (0b001100 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[16]) SI as instr) =
+  Addic (RT,RA,SI)
+
+function clause execute (Addic (RT, RA, SI)) = GPR[RT] := GPR[RA] + EXTS (SI)
+
+union ast member (bit[5], bit[5], bit[16]) Addic
+
+function clause decode (0b001101 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[16]) SI as instr) =
+  Addic (RT,RA,SI)
+
+function clause execute (Addic (RT, RA, SI)) = GPR[RT] := GPR[RA] + EXTS (SI)
 
 union ast member (bit[5], bit[5], bit, bit) Neg
 
@@ -636,6 +688,26 @@ function clause execute (Mullw (RT, RA, RB, OE, Rc)) =
     (bit[64]) temp := (GPR[RA])[32 .. 63] * (GPR[RB])[32 .. 63];
     GPR[RT] := temp;
     if Rc then set_overflow_cr0 (temp) else ()
+  }
+
+union ast member (bit[3], bit, bit[5], bit[16]) Cmpi
+
+function clause decode (0b001011 :
+(bit[3]) BF :
+(bit[1]) _ :
+[L] :
+(bit[5]) RA :
+(bit[16]) SI as instr) =
+  Cmpi (BF,L,RA,SI)
+
+function clause execute (Cmpi (BF, L, RA, SI)) =
+  {
+    (bit[64]) a := 0;
+    if L == 0 then a := EXTS ((GPR[RA])[32 .. 63]) else a := GPR[RA];
+    if a < EXTS (SI)
+    then c := 0b100
+    else if a > EXTS (SI) then c := 0b010 else c := 0b001;
+    CR[4 * BF + 32..4 * BF + 35] := c : [XER.SO]
   }
 
 union ast member (bit[3], bit, bit[5], bit[5]) Cmp
