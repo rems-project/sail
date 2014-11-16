@@ -1086,6 +1086,32 @@ let initial_typ_env =
 	    (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
 				  mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")]) bit_t)), 
 	   External (Some "gt_vec"),[],pure_e);]));
+    ("<=",
+     Overload(Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "lteq"),[],pure_e),
+	      false,
+	      [Base(((mk_nat_params ["n"; "m"; "o";"p"]),
+		     (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
+		    External (Some "lteq"),
+		    [LtEq(Specc(Parse_ast.Int("<=",None)),
+			  {nexp=Nadd({nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},{nexp=Nconst one})},
+			  {nexp=Nadd({nexp=Nvar "o"},{nexp=Nvar "p"})})],pure_e);
+	       Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
+		     (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
+					   mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")]) bit_t)),
+		    External (Some "lteq_vec"),[],pure_e);]));
+    (">=",
+     Overload(Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "gteq"),[],pure_e),
+	      false,
+     [Base(((mk_nat_params ["n";"m";"o";"p"]), 
+	    (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
+	   External (Some "gteq"),
+	   [GtEq(Specc(Parse_ast.Int(">",None)),
+		 {nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},
+		 {nexp=Nadd({nexp=Nadd({nexp=Nvar "o"},{nexp=Nvar "p"})},{nexp=Nconst one})})],pure_e);
+      Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
+	    (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
+				  mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")]) bit_t)), 
+	   External (Some "gteq_vec"),[],pure_e);]));
     (*Unlikely to be the correct type; probably needs to be bit vectors*)
     ("<_u",Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "ltu"),[],pure_e));
     (">_u",Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),External (Some "gtu"),[],pure_e));

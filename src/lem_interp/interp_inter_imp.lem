@@ -175,9 +175,27 @@ let initial_instruction_state top_level main args =
   Interp.Thunk_frame (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) e_args) (Interp_ast.Unknown, Nothing)) 
     top_level Interp.eenv Interp.emem Interp.Top
 
-(*For now, append to this list to add more external functions; should add to the mode record for more perhaps *)
+let rec countLeadingZeros_helper bits =
+  match bits with
+    | (Interp.V_lit (L_aux L_zero _))::bits -> 
+      let (Interp.V_lit (L_aux (L_num n) loc)) = countLeadingZeros_helper bits in
+      Interp.V_lit (L_aux (L_num (n+1)) loc)
+    | _ -> Interp.V_lit (L_aux (L_num 0) Interp_ast.Unknown)
+end
+let rec countLeadingZeros v = match v with
+  | Interp.V_unknown -> Interp.V_unknown
+  | Interp.V_track v r -> Interp.taint (countLeadingZeros v) r
+  | Interp.V_vector _ _ bits -> countLeadingZeros_helper bits
+end
+
+(*Power specific external functions*)
+let power_externs = [
+  ("countLeadingZeros", countLeadingZeros);
+]
+
+(*All external functions*)
 let external_functions = 
-  Interp_lib.function_map
+  Interp_lib.function_map ++ power_externs
 
 type mem_function = (string * 
                      (maybe read_kind * maybe write_kind * (interp_mode -> Interp.value -> (value * (maybe (list reg_name))))))

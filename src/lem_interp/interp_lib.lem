@@ -289,6 +289,32 @@ let rec arith_op_vec_range_range op (V_tuple args) = match args with
   | [(V_vector _ ord _ as l1);n] ->
     arith_op op (V_tuple [(to_num Unsigned l1);n])
 end ;;
+let rec arith_op_no0 op (V_tuple args) = match args with
+  | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> 
+    if y = 0 
+    then V_lit (L_aux L_undef ly)
+    else V_lit(L_aux (L_num (op x y)) lx)
+  | [V_track v1 r1;V_track v2 r2] -> taint (arith_op_no0 op (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1;v2] -> taint (arith_op_no0 op (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] -> taint (arith_op_no0 op (V_tuple [v1;v2])) r2
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
+  end ;;
+let rec arith_op_vec_no0 op size (V_tuple args) = match args with
+  | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
+    let (l1',l2') = (to_num Unsigned l1,to_num Unsigned l2) in
+    let n = arith_op_no0 op (V_tuple [l1';l2']) in
+    to_vec ord ((List.length cs) * size) n
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (arith_op_vec_no0 op size (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1;v2] ->
+    taint (arith_op_vec_no0 op size (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] ->
+    taint (arith_op_vec_no0 op size (V_tuple [v1;v2])) r2
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
+end ;;
+
 
 let rec compare_op op (V_tuple args) = match args with
   | [V_track v1 r1;V_track v2 r2] ->
@@ -317,6 +343,21 @@ let rec compare_op_vec op (V_tuple args) = match args with
     let (l1',l2') = (to_num Signed l1, to_num Signed l2) in
     compare_op op (V_tuple[l1';l2'])
 end ;;
+let rec compare_op_vec_unsigned op (V_tuple args) = match args with
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (compare_op_vec_unsigned op (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1;v2] ->
+    taint (compare_op_vec_unsigned op (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] ->
+    taint (compare_op_vec_unsigned op (V_tuple [v1;v2])) r2
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
+  | [((V_vector _ _ _) as l1);((V_vector _ _ _) as l2)] ->
+    let (l1',l2') = (to_num Unsigned l1, to_num Unsigned l2) in
+    compare_op op (V_tuple[l1';l2'])
+end ;;
+
+
 
 let rec duplicate (V_tuple args) = match args with
   | [V_track v1 r1;V_track v2 r2] -> taint (duplicate (V_tuple [v1;v2])) (r1++r2)
@@ -371,9 +412,11 @@ let function_map = [
   ("mult_range_vec", arith_op_range_vec ( * ) 2);
   ("mult_vec_range", arith_op_vec_range ( * ) 2);
   ("mult_overload_vec", arith_op_overflow_vec ( * ) 2);
-  ("mod", arith_op (mod));
-  ("mod_vec", arith_op_vec (mod) 1);
+  ("mod", arith_op_no0 (mod));
+  ("mod_vec", arith_op_vec_no0 (mod) 1);
   ("mod_vec_range", arith_op_vec_range (mod) 1);
+  ("quot", arith_op_no0 (/));
+  ("quot_vec", arith_op_vec_no0 (/) 1);
   ("eq", eq);
   ("eq_vec_range", eq_vec_range);
   ("eq_range_vec", eq_range_vec);
@@ -395,8 +438,14 @@ let function_map = [
   ("bitwise_xor_bit", bitwise_binop_bit xor);
   ("lt", compare_op (<));
   ("gt", compare_op (>));
+  ("lteq", compare_op (<=));
+  ("gteq", compare_op (>=));
   ("lt_vec", compare_op_vec (<));
   ("gt_vec", compare_op_vec (>));
+  ("lteq_vec", compare_op_vec (<=));
+  ("gteq_vec", compare_op_vec (>=));
+  ("ltu", compare_op_vec_unsigned (<));
+  ("gtu", compare_op_vec_unsigned (>));
   ("duplicate", duplicate);
 ] ;;
 
