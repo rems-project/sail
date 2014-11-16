@@ -334,9 +334,10 @@ val list_length : forall 'a . list 'a -> integer
 let list_length l = integerFromNat (List.length l)
 
 val taint: value -> list reg_form -> value
-let taint value regs = 
+let rec taint value regs = 
   match value with 
   | V_track value rs -> V_track value (regs ++ rs)
+  | V_tuple vals -> V_tuple (List.map (fun v -> taint v regs) vals)
   | _ -> V_track value regs
 end
 

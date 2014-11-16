@@ -58,7 +58,7 @@ end
 
 let integer_of_byte_list bytes =
   let intv = intern_value (Bytevector bytes) in
-  match Interp_lib.to_num false intv with
+  match Interp_lib.to_num Interp_lib.Unsigned intv with
     | Interp.V_lit (L_aux (L_num n) _) -> n
   end
 

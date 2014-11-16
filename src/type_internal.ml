@@ -143,7 +143,7 @@ let co_to_string = function
 let rec t_to_string t = 
   match t.t with
     | Tid i -> i
-    | Tvar i -> "'" ^ i
+    | Tvar i -> i
     | Tfn(t1,t2,_,e) -> (t_to_string t1) ^ " -> " ^ (t_to_string t2) ^ " effect " ^ e_to_string e
     | Ttup(tups) -> "(" ^ string_of_list ", " t_to_string tups ^ ")"
     | Tapp(i,args) -> i ^ "<" ^  string_of_list ", " targ_to_string args ^ ">"
@@ -866,13 +866,25 @@ let initial_typ_env =
                    Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
                          (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
                                                mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])
-                                      (mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n")))), External (Some "add_vec"),[],pure_e);
+                                      (mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n")))),
+			External (Some "add_vec"),[],pure_e);
+		   Base(((mk_nat_params ["n";"o";"p";"q"])@(mk_ord_params ["ord"]),
+                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
+                                               mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])
+                                      (mk_range (mk_nv "q") {nexp = N2n (mk_nv "n",None)}))),
+			External (Some "add_vec_vec_range"),[],pure_e);
+                   
                    Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
                                               mk_range (mk_nv "o") (mk_nv "p")])
                                      (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
                         External (Some "add_vec_range"),
                         [LtEq(Specc(Parse_ast.Int("+",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
+                   Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
+                                               mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])
+                                      (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n")); bit_t]))),
+			External (Some "add_overload_vec"),[],pure_e);
 		   Base(((mk_nat_params ["n";"m";"o";"p";])@(mk_ord_params ["ord"]),
 			 (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
 					       mk_range (mk_nv "o") (mk_nv "p")])
@@ -1102,10 +1114,11 @@ let rec t_subst s_env t =
   match t.t with
   | Tvar i -> (match Envmap.apply s_env i with
                | Some(TA_typ t1) -> t1
-               | _ -> t)
+               | _ -> { t = Tvar i})
   | Tuvar _  -> new_t()
-  | Tid _ -> t
-  | Tfn(t1,t2,imp,e) -> {t =Tfn((t_subst s_env t1),(t_subst s_env t2),(ip_subst s_env imp),(e_subst s_env e)) }
+  | Tid i -> { t = Tid i}
+  | Tfn(t1,t2,imp,e) -> 
+    {t =Tfn((t_subst s_env t1),(t_subst s_env t2),(ip_subst s_env imp),(e_subst s_env e)) }
   | Ttup(ts) -> { t= Ttup(List.map (t_subst s_env) ts) }
   | Tapp(i,args) -> {t= Tapp(i,List.map (ta_subst s_env) args)}
   | Tabbrev(ti,ta) -> {t = Tabbrev(t_subst s_env ti,t_subst s_env ta) }
@@ -1125,7 +1138,7 @@ and n_subst s_env n =
   match n.nexp with
   | Nvar i -> (match Envmap.apply s_env i with
                | Some(TA_nexp n1) -> n1
-               | _ -> n)
+               | _ -> { nexp = Nvar i })
   | Nuvar _ -> new_n()
   | Nconst _ | Npos_inf | Nneg_inf -> n
   | N2n(n1,i) -> { nexp = N2n (n_subst s_env n1,i) }
@@ -1137,14 +1150,14 @@ and o_subst s_env o =
   match o.order with
   | Ovar i -> (match Envmap.apply s_env i with
                | Some(TA_ord o1) -> o1
-               | _ -> o)
+               | _ -> { order = Ovar i })
   | Ouvar _ -> new_o ()
   | _ -> o
 and e_subst s_env e =
   match e.effect with
   | Evar i -> (match Envmap.apply s_env i with
                | Some(TA_eft e1) -> e1
-               | _ -> e)
+               | _ -> {effect = Evar i})
   | Euvar _ -> new_e ()
   | _ -> e
 
@@ -1179,9 +1192,13 @@ let subst k_env t cs e =
 let rec t_remove_unifications s_env t =
   match t.t with
   | Tvar _ | Tid _-> s_env
-  | Tuvar _ -> (match fresh_tvar s_env t with
-      | Some ks -> Envmap.insert s_env ks
-      | None -> s_env)
+  | Tuvar tu -> 
+    (match tu.subst with
+      | None ->
+	(match fresh_tvar s_env t with
+	  | Some ks -> Envmap.insert s_env ks
+	  | None -> s_env)
+      | _ -> resolve_tsubst t; s_env)
   | Tfn(t1,t2,_,e) -> e_remove_unifications (t_remove_unifications (t_remove_unifications s_env t1) t2) e
   | Ttup(ts) -> List.fold_right (fun t s_env -> t_remove_unifications s_env t) ts s_env
   | Tapp(i,args) -> List.fold_right (fun t s_env -> ta_remove_unifications s_env t) args s_env
@@ -1196,9 +1213,16 @@ and ta_remove_unifications s_env ta =
 and n_remove_unifications s_env n =
   match n.nexp with
   | Nvar _ | Nconst _ | Npos_inf | Nneg_inf -> s_env
-  | Nuvar _ -> (match fresh_nvar s_env n with
-      | Some ks -> Envmap.insert s_env ks
-      | None -> s_env)
+  | Nuvar nu -> 
+    let n' = match nu.nsubst with
+      | None -> n
+      | _ -> resolve_nsubst n; n in
+    (match n.nexp with
+      | Nuvar _ -> 
+	(match fresh_nvar s_env n with
+	  | Some ks -> Envmap.insert s_env ks
+	  | None -> s_env)
+      | _ -> s_env)
   | N2n(n1,_) | Npow(n1,_) | Nneg n1 -> (n_remove_unifications s_env n1)
   | Nadd(n1,n2) | Nmult(n1,n2) -> (n_remove_unifications (n_remove_unifications s_env n1) n2)
 and o_remove_unifications s_env o =
@@ -1479,7 +1503,7 @@ let rec type_consistent_internal co d_env t1 cs1 t2 cs2 =
       let t2' = {t=Tapp("range",[TA_nexp b2;TA_nexp r2])} in
       equate_t t2 t2';
       (t2,csp@[GtEq(co,b,b2);LtEq(co,r,r2)])
-  | t,Tuvar _ -> equate_t t2 t1; (t1,csp)
+  | t,Tuvar _ -> equate_t t2 t1; (t2,csp)
   | _,_ -> eq_error l ("Type mismatch found " ^ (t_to_string t1) ^ " but expected a " ^ (t_to_string t2))
 
 and type_arg_eq co d_env ta1 ta2 = 
@@ -1546,6 +1570,10 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
         | Oinc,Ouvar _ | Odec,Ouvar _ -> equate_o o2 o1;
         | Ouvar _,Oinc | Ouvar _, Odec -> equate_o o1 o2;
         | _,_ -> equate_o o1 o2); 
+        (*(match r1.nexp,r2.nexp with
+	  | Nuvar _,_ -> ignore(resolve_nsubst(r1)); equate_n r1 r2;
+	  | _,Nuvar _ -> ignore(resolve_nsubst(r2)); equate_n r2 r1;
+	  | _ -> ());*)
         let cs = csp@[Eq(co,r1,r2)] in
         let t',cs' = type_consistent co d_env t1i t2i in
         let tannot = Base(([],t2),Emp_local,cs@cs',pure_e) in
@@ -1659,18 +1687,21 @@ and type_coerce co d_env is_explicit t1 e t2 = type_coerce_internal co d_env is_
 let rec select_overload_variant d_env params_check get_all variants actual_type =
   match variants with
     | [] -> []
-    | NoTyp::variants | Overload _::variants -> select_overload_variant d_env params_check get_all variants actual_type
-    | Base((parms,t),tag,cs,ef)::variants ->
-      let t,cs,ef = subst parms t cs ef in
+    | NoTyp::variants | Overload _::variants ->
+      select_overload_variant d_env params_check get_all variants actual_type
+    | Base((parms,t_orig),tag,cs,ef)::variants ->
+      (*let _ = Printf.printf "About to check a variant %s\n" (t_to_string t_orig) in*)
+      let t,cs,ef = if parms=[] then t_orig,cs,ef else subst parms t_orig cs ef in
+      (*let _ = Printf.printf "And after substitution %s\n" (t_to_string t) in*)
       let t,cs' = get_abbrev d_env t in
       let recur _ = select_overload_variant d_env params_check get_all variants actual_type in
       (match t.t with
 	| Tfn(a,r,_,e) ->
-	  (*let _ = Printf.printf "About to check a variant\n" in*)
 	  let is_matching = 
 	    if params_check then conforms_to_t d_env true false a actual_type 
 	    else match actual_type.t with
-	      | Toptions(at1,Some at2) -> (conforms_to_t d_env false true at1 r || conforms_to_t d_env false true at2 r)
+	      | Toptions(at1,Some at2) -> 
+		(conforms_to_t d_env false true at1 r || conforms_to_t d_env false true at2 r)
 	      | Toptions(at1,None) -> conforms_to_t d_env false true at1 r
 	      | _ -> conforms_to_t d_env true true actual_type r in
 	  (*let _ = Printf.printf "Checked a variant, matching? %b\n" is_matching in*)

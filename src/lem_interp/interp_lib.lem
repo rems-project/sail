@@ -115,6 +115,8 @@ let rec bitwise_binop op (V_tuple [v1;v2]) =
   | (_,V_unknown) -> V_unknown
 end ;;
 
+type signed = Unsigned | Signed
+
 (* BitSeq expects LSB first.
  * By convention, MSB is on the left, so increasing = Big-Endian (MSB0),
  * hence MSB first.
@@ -123,14 +125,9 @@ let rec to_num signed v =
   match v with
   | (V_vector idx inc l) ->
   (* Word library in Lem expects bitseq with LSB first *)
-(*TODO: Kathy think more
-  We thought a reverse was needed due to above comments only in inc case.
-  However, we seem to be interpresting bit vectors such that reverse is always needed
-  and despite numbering MSB is on the left.
-*)
-  let l = (*if inc then reverse l else l*) reverse l in
+  let l = reverse l in
   (* Make sure the last bit is a zero to force unsigned numbers *)
-  let l = if signed then l else l ++ [V_lit (L_aux L_zero Unknown)] in
+  let l = match signed with | Signed -> l | Unsigned -> l ++ [V_lit (L_aux L_zero Unknown)] end in
   V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown)
   | V_unknown -> V_unknown
   | V_track v r -> taint (to_num signed v) r
@@ -166,7 +163,7 @@ let to_vec ord len n =
 
 let rec exts (V_tuple[v1;v]) = match v1 with
   | V_lit(L_aux (L_num len) _) -> (match v with
-      | V_vector _ inc _  -> to_vec inc (natFromInteger len) (to_num true v)
+      | V_vector _ inc _  -> to_vec inc (natFromInteger len) (to_num Signed v)
       | V_unknown -> V_unknown
       | V_track v r2 -> taint (exts (V_tuple[v1;v])) r2 end)
   | V_unknown -> v1
@@ -176,8 +173,8 @@ end
 
 let eq (V_tuple [x; y]) = V_lit (L_aux (if value_eq x y then L_one else L_zero) Unknown) ;;
 (* XXX interpret vectors as unsigned numbers for equality *)
-let eq_vec_range (V_tuple [v; r]) = eq (V_tuple [to_num false v; r]) ;;
-let eq_range_vec (V_tuple [r; v]) = eq (V_tuple [r; to_num false v]) ;;
+let eq_vec_range (V_tuple [v; r]) = eq (V_tuple [to_num Unsigned v; r]) ;;
+let eq_range_vec (V_tuple [r; v]) = eq (V_tuple [r; to_num Unsigned v]) ;;
 
 let rec neg v = match v with
   | V_lit (L_aux arg la) -> 
@@ -202,7 +199,7 @@ let rec arith_op op (V_tuple args) = match args with
   end ;;
 let rec arith_op_vec op size (V_tuple args) = match args with
   | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
-    let (l1',l2') = (to_num false l1,to_num false l2) in
+    let (l1',l2') = (to_num Unsigned l1,to_num Unsigned l2) in
     let n = arith_op op (V_tuple [l1';l2']) in
     to_vec ord ((List.length cs) * size) n
   | [V_track v1 r1;V_track v2 r2] ->
@@ -213,6 +210,36 @@ let rec arith_op_vec op size (V_tuple args) = match args with
     taint (arith_op_vec op size (V_tuple [v1;v2])) r2
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
+end ;;
+let rec arith_op_vec_vec_range op (V_tuple args) = match args with
+  | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
+    let (l1',l2') = (to_num Unsigned l1,to_num Unsigned l2) in
+    arith_op op (V_tuple [l1';l2'])
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (arith_op_vec_vec_range op (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1;v2] ->
+    taint (arith_op_vec_vec_range op (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] ->
+    taint (arith_op_vec_vec_range op (V_tuple [v1;v2])) r2
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
+end ;;
+let rec arith_op_overflow_vec op size (V_tuple args) = match args with
+  | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
+    let (l1',l2') = (to_num Signed l1,to_num Signed l2) in
+    let n = arith_op op (V_tuple [l1';l2']) in
+    let correct_size_num = to_vec ord ((List.length cs) * size) n in
+    let one_larger = to_num Signed (to_vec ord (((List.length cs) * size) +1) n) in
+    let overflow =  neq (V_tuple [correct_size_num;one_larger]) in
+    V_tuple [correct_size_num;overflow]
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (arith_op_overflow_vec op size (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1;v2] ->
+    taint (arith_op_overflow_vec op size (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] ->
+    taint (arith_op_overflow_vec op size (V_tuple [v1;v2])) r2
+  | [V_unknown;_] -> V_tuple [V_unknown;V_unknown]
+  | [_;V_unknown] -> V_tuple [V_unknown;V_unknown]
 end ;;
 let rec arith_op_range_vec op size (V_tuple args) = match args with
   | [V_track v1 r1;V_track v2 r2] ->
@@ -248,7 +275,7 @@ let rec arith_op_range_vec_range op (V_tuple args) = match args with
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
   | [n;(V_vector _ ord _ as l2)] ->
-    arith_op op (V_tuple [n;(to_num false l2)])
+    arith_op op (V_tuple [n;(to_num Unsigned l2)])
 end ;;
 let rec arith_op_vec_range_range op (V_tuple args) = match args with
   | [V_track v1 r1;V_track v2 r2] ->
@@ -260,7 +287,7 @@ let rec arith_op_vec_range_range op (V_tuple args) = match args with
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
   | [(V_vector _ ord _ as l1);n] ->
-    arith_op op (V_tuple [(to_num false l1);n])
+    arith_op op (V_tuple [(to_num Unsigned l1);n])
 end ;;
 
 let rec compare_op op (V_tuple args) = match args with
@@ -287,7 +314,7 @@ let rec compare_op_vec op (V_tuple args) = match args with
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
   | [((V_vector _ _ _) as l1);((V_vector _ _ _) as l2)] ->
-    let (l1',l2') = (to_num true l1, to_num true l2) in
+    let (l1',l2') = (to_num Signed l1, to_num Signed l2) in
     compare_op op (V_tuple[l1';l2'])
 end ;;
 
@@ -330,16 +357,20 @@ let function_map = [
   ("add_vec_range_range", arith_op_vec_range_range (+));
   ("add_range_vec", arith_op_range_vec (+) 1);
   ("add_range_vec_range", arith_op_range_vec_range (+));
+  ("add_vec_vec_range", arith_op_vec_vec_range (+));
+  ("add_overload_vec", arith_op_overflow_vec (+) 1);
   ("minus", arith_op (-));
   ("minus_vec", arith_op_vec (-) 1);
   ("minus_vec_range", arith_op_vec_range (-) 1);
   ("minus_range_vec", arith_op_range_vec (-) 1);
   ("minus_vec_range_range", arith_op_vec_range_range (-));
   ("minus_range_vec_range", arith_op_range_vec_range (-));
+  ("minus_overload_vec", arith_op_overflow_vec (-) 1);
   ("multiply", arith_op ( * ));
   ("multiply_vec", arith_op_vec ( * ) 2);
   ("mult_range_vec", arith_op_range_vec ( * ) 2);
   ("mult_vec_range", arith_op_vec_range ( * ) 2);
+  ("mult_overload_vec", arith_op_overflow_vec ( * ) 2);
   ("mod", arith_op (mod));
   ("mod_vec", arith_op_vec (mod) 1);
   ("mod_vec_range", arith_op_vec_range (mod) 1);
@@ -349,8 +380,8 @@ let function_map = [
   ("neq", neq);
   ("vec_concat", vec_concat);
   ("is_one", is_one);
-  ("to_num_inc", to_num false);
-  ("to_num_dec", to_num false);
+  ("to_num_inc", to_num Unsigned);
+  ("to_num_dec", to_num Unsigned);
   ("EXTS", exts);
   ("to_vec_inc", to_vec_inc);
   ("to_vec_dec", to_vec_dec);

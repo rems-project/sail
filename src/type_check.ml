@@ -558,7 +558,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       in
       let coerce_parms arg_t parms expect_arg_t =
 	(match parms with
-	| [parm] -> let _,cs,ef,parm' = type_coerce (Expr l) d_env false arg_t parm expect_arg_t in [parm'],ef,cs
+	| [parm] -> 
+	  let _,cs,ef,parm' = type_coerce (Expr l) d_env false arg_t parm expect_arg_t in [parm'],ef,cs
 	| parms ->
           (match type_coerce (Expr l) d_env false arg_t (E_aux (E_tuple parms,(l,NoTyp))) expect_arg_t with
           | (_,cs,ef,(E_aux(E_tuple parms',tannot'))) -> (parms',ef,cs)
@@ -571,6 +572,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	    (*let _ = Printf.printf "implicit length or var required, no imp_param\n!" in*)
             let internal_exp =  match expect_t.t,ret.t with 
               | Tapp("vector",_),_ -> 
+		(*let _ = Printf.printf "adding internal exp on expext_t: %s %s \n" (t_to_string expect_t) (t_to_string ret) in*)
 		E_aux (E_internal_exp (l,Base(([],expect_t),Emp_local,[],pure_e)), (l,Base(([],nat_t),Emp_local,[],pure_e)))
               | _,Tapp("vector",_) -> 
 		E_aux (E_internal_exp (l,Base(([],ret),Emp_local,[],pure_e)), (l,Base(([],nat_t),Emp_local,[],pure_e)))
@@ -619,9 +621,13 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	let args,arg_t,arg_cs,arg_ef = 
 	  (match t_p.t with
 	  | Tfn(arg,ret,_,ef') -> check_parms arg parms 
-	  | _ -> typ_error l ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^ (t_to_string t))) in
+	  | _ -> 
+	    typ_error l ("Expected a function or constructor, found identifier " ^ i
+			 ^ " bound to type " ^ (t_to_string t))) in
 	(match (select_overload_variant d_env true overload_return variants arg_t) with
-	  | [] -> typ_error l ("No matching function found with name " ^ i ^ " that expects parameters " ^ (t_to_string arg_t))
+	  | [] -> typ_error l 
+	    ("No matching function found with name " ^ i ^ " that expects parameters " ^ 
+		(t_to_string arg_t))
 	  | [Base((params,t),tag,cs,ef)] ->
 	    (match t.t with
 	      | Tfn(arg,ret,imp,ef') ->
@@ -632,7 +638,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	      | _ -> raise (Reporting_basic.err_unreachable l "Overloaded variant not a function"))
 	  | variants' ->
 	    (match select_overload_variant d_env false true variants' expect_t with
-	      | [] -> typ_error l ("No matching function found with name " ^ i ^ ", expecting parameters " ^ (t_to_string arg_t) ^ " and returning " ^ (t_to_string expect_t))
+	      | [] ->
+		typ_error l ("No matching function found with name " ^ i ^ ", expecting parameters " ^ (t_to_string arg_t) ^ " and returning " ^ (t_to_string expect_t))
 	      | [Base((params,t),tag,cs,ef)] ->
 		(match t.t with
 		  |Tfn(arg,ret,imp,ef') ->
@@ -679,36 +686,47 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	let lft',rht',arg_t,arg_cs,arg_ef =  
 	  (match t_p.t with
 	  | Tfn(arg,ret,_,ef') -> check_parms arg lft rht
-	  | _ -> typ_error l ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^ (t_to_string t))) in
+	  | _ -> typ_error l ("Expected a function or constructor, found identifier " ^
+				 i ^ " bound to type " ^ (t_to_string t))) in
         (*let _ = Printf.printf "Looking for overloaded function %s, generic type is %s, arg_t is %s\n" i (t_to_string t_p) (t_to_string arg_t) in*)
 	(match (select_overload_variant d_env true overload_return variants arg_t) with
-	| [] -> typ_error l ("No matching function found with name " ^ i ^ " that expects parameters " ^ (t_to_string arg_t))
+	| [] -> 
+	  typ_error l ("No matching function found with name " ^ i ^
+			  " that expects parameters " ^ (t_to_string arg_t))
 	| [Base((params,t),tag,cs,ef)] ->
-          (*let _ = Printf.printf "Selected an overloaded function for %s, variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in*)
+          (*let _ = Printf.printf "Selected an overloaded function for %s,
+	    variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in*)
 	  (match t.t with
 	  | Tfn(arg,ret,imp,ef') ->
             (match arg.t,arg_t.t with
             | Ttup([tlft;trght]),Ttup([tlft_t;trght_t]) ->
-              let (_,cs_lft,ef_lft,lft') = type_coerce (Expr l) d_env false tlft_t lft' tlft in
-              let (_,cs_rght,ef_rght,rht') = type_coerce (Expr l) d_env false trght_t rht' trght in
+	      let (lft',rht',arg_t,cs_p,ef_p) = check_parms arg lft rht in
+              (*let (_,cs_lft,ef_lft,lft') = type_coerce (Expr l) d_env false tlft_t lft' tlft in
+		let (_,cs_rght,ef_rght,rht') = type_coerce (Expr l) d_env false trght_t rht' trght in*)
 	      let (ret_t,cs_r,ef_r,e') = check_result ret imp tag cs ef lft' rht' in
-	      (e',ret_t,t_env,cs_p@arg_cs@cs_lft@cs_rght@cs@cs_r,
-	       union_effects ef_r (union_effects ef_p (union_effects (union_effects (union_effects ef_lft ef_rght) arg_ef) ef')))
+	      (e',ret_t,t_env,cs_p@arg_cs@cs@cs_r,
+	       union_effects ef_r (union_effects ef_p (union_effects arg_ef ef')))
             |_ -> raise (Reporting_basic.err_unreachable l "function no longer has tuple type"))
 	  | _ -> raise (Reporting_basic.err_unreachable l "overload variant does not have function"))
 	| variants ->
+	  (*let _ = Printf.printf "Number of variants found before looking at return value %i\n%!" (List.length variants) in*)
 	  (match (select_overload_variant d_env false true variants expect_t) with
-	    | [] -> typ_error l ("No matching function found with name " ^ i ^ " that expects parameters " ^ (t_to_string arg_t) ^ " returning " ^ (t_to_string expect_t))
+	    | [] -> 
+	      typ_error l ("No matching function found with name " ^ i ^ " that expects parameters " ^
+			      (t_to_string arg_t) ^ " returning " ^ (t_to_string expect_t))
 	    | [Base((params,t),tag,cs,ef)] -> 
+              (*let _ = Printf.printf "Selected an overloaded function for %s,
+	    variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in*)
 	      (match t.t with
 		| Tfn(arg,ret,imp,ef') ->
 		  (match arg.t,arg_t.t with
 		    | Ttup([tlft;trght]),Ttup([tlft_t;trght_t]) ->
-		      let (_,cs_lft,ef_lft,lft') = type_coerce (Expr l) d_env false tlft_t lft' tlft in
+		      let (lft',rht',arg_t,cs_p,ef_p) = check_parms arg lft rht in
+		      (*let (_,cs_lft,ef_lft,lft') = type_coerce (Expr l) d_env false tlft_t lft' tlft in
 		      let (_,cs_rght,ef_rght,rht') = type_coerce (Expr l) d_env false trght_t rht' trght in
-		      let (ret_t,cs_r,ef_r,e') = check_result ret imp tag cs ef lft' rht' in
-		      (e',ret_t,t_env,cs_p@arg_cs@cs_lft@cs_rght@cs@cs_r,
-		       union_effects ef_r (union_effects ef_p (union_effects (union_effects (union_effects ef_lft ef_rght) arg_ef) ef')))
+		      *)let (ret_t,cs_r,ef_r,e') = check_result ret imp tag cs ef lft' rht' in
+		      (e',ret_t,t_env,cs_p@arg_cs@cs@cs_r,
+		       union_effects ef_r (union_effects ef_p (union_effects arg_ef ef')))
 		    |_ -> raise (Reporting_basic.err_unreachable l "function no longer has tuple type"))
 		| _ -> raise (Reporting_basic.err_unreachable l "overload variant does not have function"))
 	    | _ -> 
@@ -1444,17 +1462,23 @@ and check_lbind envs imp_param is_top_level emp_tag (LB_aux(lbind,(l,annot))) : 
       let t,cs,ef = subst params t cs ef in
       let (pat',env,cs1,u) = check_pattern envs emp_tag t pat in
       let (e,t,_,cs2,ef2) = check_exp envs imp_param t e in
-      let cs = resolve_constraints cs@cs1@cs2 in
+      let cs = if is_top_level then resolve_constraints cs@cs1@cs2 else cs@cs1@cs2 in
       let ef = union_effects ef ef2 in
-      let tannot = check_tannot l (Base((params,t),tag,cs,ef)) cs ef (*in top level, must be pure_e*) in
+      let tannot = if is_top_level 
+	then check_tannot l (Base((params,t),tag,cs,ef)) cs ef (*in top level, must be pure_e*) 
+	else (Base ((params,t),tag,cs,ef))
+      in
       (LB_aux (LB_val_explicit(typ,pat',e),(l,tannot)),env,cs,ef)
     | NoTyp | Overload _ -> raise (Reporting_basic.err_unreachable l "typschm_to_tannot failed to produce a Base"))
   | LB_val_implicit(pat,e) -> 
     let t = new_t () in
     let (pat',env,cs1,u) = check_pattern envs emp_tag (new_t ()) pat in
     let (e,t',_,cs2,ef) = check_exp envs imp_param u e in
-    let cs = resolve_constraints cs1@cs2 in
-    let tannot = check_tannot l (Base(([],t'),emp_tag,cs,ef)) cs ef (* see above *) in
+    let cs = if is_top_level then resolve_constraints cs1@cs2 else cs1@cs2 in
+    let tannot = 
+      if is_top_level then check_tannot l (Base(([],t'),emp_tag,cs,ef)) cs ef (* see above *)
+      else (Base (([],t'),emp_tag,cs,ef))
+    in
     (LB_aux (LB_val_implicit(pat',e),(l,tannot)), env,cs,ef)
 
 (*val check_type_def : envs -> (tannot type_def) -> (tannot type_def) envs_out*)
@@ -1613,7 +1637,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,_))) ->
 	let (pat',t_env',cs_p,t') = check_pattern (Env(d_env,t_env)) Emp_local param_t pat in
-	(*let _ = Printf.printf "about to check that %s and %s are consistent\n!" (t_to_string t') (t_to_string param_t) in*)
+	(*let _ = Printf.printf "about to check that %s and %s are consistent\n" (t_to_string t') (t_to_string param_t) in*)
 	let exp',_,_,cs_e,ef = 
 	  check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env) t_env t_env')) imp_param ret_t exp in
 	(*let _ = Printf.printf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)

@@ -259,7 +259,7 @@ let instr_parm_to_string (name, typ, value) =
     | Other,_ -> "Unrepresentable external value"
     | _, Unknown0 -> "Unknown"
     | _, v -> let intern_v = (Interp_inter_imp.intern_value value) in
-	      match Interp_lib.to_num false intern_v with
+	      match Interp_lib.to_num Interp_lib.Unsigned intern_v with
 		| V_lit (L_aux(L_num n, _)) -> string_of_big_int n
 		| _ -> val_to_string value
 

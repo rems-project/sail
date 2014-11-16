@@ -45,7 +45,7 @@ typedef colors = enumerate { red; green; blue }
 
 let (colors) rgb = red
 
-function bit enu (red) = 0
+function bit enu ((colors) red) = let (one, two) = (1,2) in 0
 
 function bit main _ = {ignore(sw(0)); ignore((nat) v2); ignore(enu(0)); v1[0] }
 

@@ -241,8 +241,8 @@ let rec pp_format_t t =
     | Ttup(tups) -> "(T_tup [" ^ (list_format "; " pp_format_t tups) ^ "])"
     | Tapp(i,args) -> "(T_app \"" ^ i ^ "\" (T_args [" ^  list_format "; " pp_format_targ args ^ "]))"
     | Tabbrev(ti,ta) -> "(T_abbrev " ^ (pp_format_t ti) ^ " " ^ (pp_format_t ta) ^ ")"
-    | Tuvar(_) -> "(T_var (Kid_aux (Var \"fresh_v\") Unknown))"
-    | Toptions _ -> "(T_var \"fresh_v\" Unknown)"
+    | Tuvar(_) -> "(T_var \"fresh_v\")"
+    | Toptions _ -> "(T_var \"fresh_v\")"
 and pp_format_targ = function
   | TA_typ t -> "(T_arg_typ " ^ pp_format_t t ^ ")"
   | TA_nexp n -> "(T_arg_nexp " ^ pp_format_n n ^ ")"
@@ -291,7 +291,7 @@ let pp_format_tag = function
 
 let rec pp_format_nes nes = 
   "[" ^ 
-  (*(list_format "; "
+  (list_format "; "
      (fun ne -> match ne with
        | LtEq(_,n1,n2) -> "(Nec_lteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | Eq(_,n1,n2) -> "(Nec_eq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
@@ -305,7 +305,7 @@ let rec pp_format_nes nes =
        | BranchCons(_,nes_b) ->
          "(Nec_branch " ^ (pp_format_nes nes_b) ^ ")"
      )
-     nes) ^*) "]"
+     nes) ^ "]"
 
 let pp_format_annot = function
   | NoTyp -> "Nothing"
@@ -986,11 +986,11 @@ let doc_exp, doc_let =
   | LB_val_explicit(ts,pat,e) ->
       prefix 2 1
         (separate space [string "let"; doc_typscm_atomic ts; doc_atomic_pat pat; equals])
-        (exp e)
+        (atomic_exp e)
   | LB_val_implicit(pat,e) ->
       prefix 2 1
         (separate space [string "let"; doc_atomic_pat pat; equals])
-        (exp e)
+        (atomic_exp e)
 
   and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id id) (exp e)
 
