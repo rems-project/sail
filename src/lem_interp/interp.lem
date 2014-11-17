@@ -249,10 +249,22 @@ let in_lenv (LEnv _ env) id =
   | Just v  -> v 
 end
 
+(*Prefer entries in the first when conflict*)
+let rec list_union first second =
+  match first with
+    | [] -> second
+    | (id,v)::frst ->
+      match in_env second id with
+	| Nothing -> (id,v)::(list_union frst second)
+	| Just _ -> (id,v)::(list_union frst 
+			       (List.deleteBy (fun (id,v) (id2,v2) -> (get_id id) = (get_id id2))
+				  (id,v) second)) end
+end
+
 val union_env : lenv -> lenv -> lenv
 let union_env (LEnv i1 env1) (LEnv i2 env2) = 
   let l = if i1 < i2 then i2 else i1 in
-  LEnv l (env1 ++ env2)
+  LEnv l (list_union env1 env2)
 
 val fresh_var : lenv -> (id * lenv)
 let fresh_var (LEnv i env) =
@@ -897,7 +909,7 @@ let rec match_pattern (P_aux p _) value_whole =
      then foldr2 
        (fun pat v (matched_p,used_unknown,bounds) -> if matched_p then
 	   let (matched_p,used_unknown',new_bounds) = match_pattern pat (taint_pat v) in
-	   (matched_p,used_unknown ||used_unknown', (union_env bounds new_bounds))
+	   (matched_p,used_unknown ||used_unknown', (union_env new_bounds bounds))
 	 else (false,false,eenv))
        (true,false,eenv) pats vals
      else (false,false,eenv)
@@ -911,7 +923,7 @@ let rec match_pattern (P_aux p _) value_whole =
      then foldr2 
        (fun pat v (matched_p,used_unknown,bounds) -> if matched_p then
 	   let (matched_p,used_unknown',new_bounds) = match_pattern pat (taint_pat v) in
-	   (matched_p,used_unknown|| used_unknown', (union_env bounds new_bounds))
+	   (matched_p,used_unknown|| used_unknown', (union_env new_bounds bounds))
 	 else (false,false,eenv))
        (true,false,eenv) pats vals
      else (false,false,eenv)
@@ -1015,7 +1027,7 @@ let debug_out fn value e tl lm le =
   (Action (Step (get_exp_l e) fn value) (Thunk_frame e tl le lm Top),lm,le)
 
 let to_exps mode env vals = 
-  List.foldr (fun v (es,env) -> let (e,env') = to_exp mode env v in (e::es, union_env env env')) ([],env) vals
+  List.foldr (fun v (es,env) -> let (e,env') = to_exp mode env v in (e::es, union_env env' env)) ([],env) vals
 
 let get_num v = match v with
   | V_lit (L_aux (L_num n) _) -> n
