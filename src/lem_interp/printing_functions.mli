@@ -20,6 +20,12 @@ val dependencies_to_string : reg_name list -> string
 val exp_to_string : Interp.lenv -> tannot exp -> string
 
 (* Functions to set the color of parts of the output *)
+type ppmode = 
+  | Interp_latex
+  | Interp_ascii
+  | Interp_html
+val set_interp_ppmode : ppmode -> unit
+
 val red : string -> string
 val blue : string -> string
 val green : string -> string

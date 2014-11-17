@@ -220,11 +220,22 @@ let rec format_events = function
 ;;
 
 (* ANSI/VT100 colors *)
+type ppmode = 
+  | Interp_latex
+  | Interp_ascii
+  | Interp_html
+let ppmode = ref Interp_ascii
+let set_interp_ppmode ppm = ppmode := ppm 
+
 let disable_color = ref false
 let color bright code s =
   if !disable_color then s
   else sprintf "\x1b[%s3%dm%s\x1b[m" (if bright then "1;" else "") code s
-let red = color true 1
+let red s = 
+  match !ppmode with 
+  | Interp_html -> "<fontcolor='red'>"^ s ^"</font>"
+  | Interp_latex -> "\\myred{" ^ s ^"}"
+  | Interp_ascii -> color true 1 s 
 let green = color false 2
 let yellow = color true 3
 let blue = color true 4
@@ -267,10 +278,12 @@ let rec instr_parms_to_string ps =
   match ps with
     | [] -> ""
     | [p] -> instr_parm_to_string p
-    | p::ps -> instr_parm_to_string p ^ ", " ^ instr_parms_to_string ps
+    | p::ps -> instr_parm_to_string p ^ " " ^ instr_parms_to_string ps
+
+let pad n s = if String.length s < n then s ^ String.make (n-String.length s) ' ' else s
 
 let instruction_to_string (name, parms, base_effects) = 
-  (String.lowercase name) ^ " " ^ instr_parms_to_string parms 
+  (pad 5 (String.lowercase name)) ^ " " ^ instr_parms_to_string parms 
 
 let print_backtrace_compact printer stack = List.iter (fun (e,(env,mem)) -> print_exp printer env e) (compact_stack stack)
 let print_continuation printer stack = let (e,(env,mem)) = top_frame_exp_state stack in print_exp printer env e
