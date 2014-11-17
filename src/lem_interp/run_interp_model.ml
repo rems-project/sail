@@ -241,7 +241,7 @@ let run
       let (top_exp,(top_env,top_mem)) = top_frame_exp_state stack in
       let loc = get_loc (compact_exp top_exp) in
       if mode = Step || force then begin
-        debugf "%s\n" (Pretty_interp.pp_exp top_env top_exp);
+        debugf "%s\n" (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
         interact mode env stack
       end else
         mode in
@@ -314,7 +314,8 @@ let run
   let initial_state = initial_instruction_state context main_func parameters in
   let imode = make_mode eager_eval !track_dependencies in
   let (top_exp,(top_env,top_mem)) = top_frame_exp_state initial_state in
-  debugf "%s: %s %s\n" (grey name) (blue "evaluate") (Pretty_interp.pp_exp top_env top_exp);
+  debugf "%s: %s %s\n" (grey name) (blue "evaluate") 
+    (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
   try
     Printexc.record_backtrace true;
     loop mode (reg, mem) (interp0 imode initial_state)

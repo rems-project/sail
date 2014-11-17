@@ -325,7 +325,7 @@ let run
   (name, test) =
   let get_loc (E_aux(_, (l, _))) = loc_to_string l in
   let print_exp env e =
-    debugf "%s: %s\n" (get_loc e) (Pretty_interp.pp_exp env e) in
+    debugf "%s: %s\n" (get_loc e) (Pretty_interp.pp_exp env Printing_functions.red e) in
   (* interactive loop for step-by-step execution *)
   let usage = "Usage:
     step    go to next action [default]
@@ -378,7 +378,7 @@ let run
       let return, env' = perform_action env a in
       let step ?(force=false) () =
         if mode = Step || force then begin
-          debugf "%s\n" (Pretty_interp.pp_exp top_env top_exp);
+          debugf "%s\n" (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
           interact mode env s
        end else
          mode in
@@ -429,7 +429,8 @@ let run
   | Error(l, e) ->
       debugf "%s: %s: %s\n" (grey (loc_to_string l)) (red "error") e;
       false, mode, env in
-  debugf "%s: %s %s\n" (grey name) (blue "evaluate") (Pretty_interp.pp_exp Interp.eenv entry);
+  debugf "%s: %s %s\n" (grey name) (blue "evaluate") 
+    (Pretty_interp.pp_exp Interp.eenv Printing_functions.red entry);
   let mode = match mode with
   | None -> if eager_eval then Run else Step
   | Some m -> m in

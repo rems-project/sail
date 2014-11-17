@@ -241,11 +241,11 @@ let yellow = color true 3
 let blue = color true 4
 let grey = color false 7
 
-let exp_to_string env e = Pretty_interp.pp_exp env e
+let exp_to_string env e = Pretty_interp.pp_exp env red e
 
 let get_loc (E_aux(_, (l, (_ : tannot)))) = loc_to_string l
 let print_exp printer env e =
-  printer ((get_loc e) ^ ": " ^ (Pretty_interp.pp_exp env e) ^ "\n")
+  printer ((get_loc e) ^ ": " ^ (Pretty_interp.pp_exp env red e) ^ "\n")
 
 let instruction_state_to_string stack =
   let env = () in

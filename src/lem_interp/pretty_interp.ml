@@ -237,125 +237,126 @@ let doc_pat, doc_atomic_pat =
   in pat, atomic_pat
 
 let doc_exp, doc_let =
-  let rec exp env e = group (or_exp env e)
-  and or_exp env ((E_aux(e,_)) as expr) = match e with
+  let rec exp env add_red e = group (or_exp env add_red e)
+  and or_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id ("|" | "||"),_) as op),r) ->
-      doc_op (doc_id op) (and_exp env l) (or_exp env r)
-  | _ -> and_exp env expr
-  and and_exp env ((E_aux(e,_)) as expr) = match e with
+      doc_op (doc_id op) (and_exp env add_red l) (or_exp env add_red r)
+  | _ -> and_exp env add_red expr
+  and and_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id ("&" | "&&"),_) as op),r) ->
-      doc_op (doc_id op) (eq_exp env l) (and_exp env r)
-  | _ -> eq_exp env expr
-  and eq_exp env ((E_aux(e,_)) as expr) = match e with
+    doc_op (doc_id op) (eq_exp env add_red l) (and_exp env add_red r)
+  | _ -> eq_exp env add_red expr
+  and eq_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id (
     (* XXX this is not very consistent - is the parser bogus here? *)
       "=" | "==" | "!="
     | ">=" | ">=_s" | ">=_u" | ">" | ">_s" | ">_u"
     | "<=" | "<=_s" | "<" | "<_s" | "<_si" | "<_u"
     ),_) as op),r) ->
-      doc_op (doc_id op) (eq_exp env l) (at_exp env r)
+      doc_op (doc_id op) (eq_exp env add_red l) (at_exp env add_red r)
   (* XXX assignment should not have the same precedence as equal etc. *)
-  | E_assign(le,exp) -> doc_op coloneq (doc_lexp env le) (at_exp env exp)
-  | _ -> at_exp env expr
-  and at_exp env ((E_aux(e,_)) as expr) = match e with
+  | E_assign(le,exp) -> doc_op coloneq (doc_lexp env add_red le) (at_exp env add_red exp)
+  | _ -> at_exp env add_red expr
+  and at_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id ("@" | "^^" | "^" | "~^"),_) as op),r) ->
-      doc_op (doc_id op) (cons_exp env l) (at_exp env r)
-  | _ -> cons_exp env expr
-  and cons_exp env ((E_aux(e,_)) as expr) = match e with
+      doc_op (doc_id op) (cons_exp env add_red l) (at_exp env add_red r)
+  | _ -> cons_exp env add_red expr
+  and cons_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_vector_append(l,r) ->
-      doc_op colon (shift_exp env l) (cons_exp env r)
+      doc_op colon (shift_exp env add_red l) (cons_exp env add_red r)
   | E_cons(l,r) ->
-      doc_op colon (shift_exp env l) (cons_exp env r)
-  | _ -> shift_exp env expr
-  and shift_exp env ((E_aux(e,_)) as expr) = match e with
+      doc_op colon (shift_exp env add_red l) (cons_exp env add_red r)
+  | _ -> shift_exp env add_red expr
+  and shift_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id (">>" | ">>>" | "<<" | "<<<"),_) as op),r) ->
-      doc_op (doc_id op) (shift_exp env l) (plus_exp env r)
-  | _ -> plus_exp env expr
-  and plus_exp env ((E_aux(e,_)) as expr) = match e with
+      doc_op (doc_id op) (shift_exp env add_red l) (plus_exp env add_red r)
+  | _ -> plus_exp env add_red expr
+  and plus_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id ("+" | "-"),_) as op),r) ->
-      doc_op (doc_id op) (plus_exp env l) (star_exp env r)
-  | _ -> star_exp env expr
-  and star_exp env ((E_aux(e,_)) as expr) = match e with
+      doc_op (doc_id op) (plus_exp env add_red l) (star_exp env add_red r)
+  | _ -> star_exp env add_red expr
+  and star_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id (
       "*" | "/"
     | "div" | "quot" | "rem" | "mod"
     | "*_s" | "*_si" | "*_u" | "*_ui"),_) as op),r) ->
-      doc_op (doc_id op) (star_exp env l) (starstar_exp env r)
-  | _ -> starstar_exp env expr
-  and starstar_exp env ((E_aux(e,_)) as expr) = match e with
+      doc_op (doc_id op) (star_exp env add_red l) (starstar_exp env add_red r)
+  | _ -> starstar_exp env add_red expr
+  and starstar_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id "**",_) as op),r) ->
-      doc_op (doc_id op) (starstar_exp env l) (app_exp env r)
-  | E_if _ | E_for _ | E_let _ -> right_atomic_exp env expr
-  | _ -> app_exp env expr
-  and right_atomic_exp env ((E_aux(e,_)) as expr) = match e with
+      doc_op (doc_id op) (starstar_exp env add_red l) (app_exp env add_red r)
+  | E_if _ | E_for _ | E_let _ -> right_atomic_exp env add_red expr
+  | _ -> app_exp env add_red expr
+  and right_atomic_exp env add_red ((E_aux(e,_)) as expr) = match e with
   (* Special case: omit "else ()" when the else branch is empty. *)
   | E_if(c,t,E_aux(E_block [], _)) ->
-      string "if" ^^ space ^^ group (exp env c) ^/^
-      string "then" ^^ space ^^ group (exp env t)
+      string "if" ^^ space ^^ group (exp env add_red c) ^/^
+      string "then" ^^ space ^^ group (exp env add_red t)
   | E_if(c,t,e) ->
-      string "if" ^^ space ^^ group (exp env c) ^/^
-      string "then" ^^ space ^^ group (exp env t) ^/^
-      string "else" ^^ space ^^ group (exp env e)
+      string "if" ^^ space ^^ group (exp env add_red c) ^/^
+      string "then" ^^ space ^^ group (exp env add_red t) ^/^
+      string "else" ^^ space ^^ group (exp env add_red e)
   | E_for(id,exp1,exp2,exp3,order,exp4) ->
       string "foreach" ^^ space ^^
       group (parens (
         separate (break 1) [
           doc_id id;
-          string "from " ^^ (atomic_exp env exp1);
-          string "to " ^^ (atomic_exp env exp2);
-          string "by " ^^ (atomic_exp env exp3);
+          string "from " ^^ (atomic_exp env add_red exp1);
+          string "to " ^^ (atomic_exp env add_red exp2);
+          string "by " ^^ (atomic_exp env add_red exp3);
           string "in " ^^ doc_ord order
         ]
       )) ^/^
-	(exp env exp4)
-  | E_let(leb,e) -> doc_op (string "in") (let_exp env leb) (exp env e)
-  | _ -> group (parens (exp env expr))
-  and app_exp env ((E_aux(e,_)) as expr) = match e with
+	(exp env add_red exp4)
+  | E_let(leb,e) -> doc_op (string "in") (let_exp env add_red leb) (exp env add_red e)
+  | _ -> group (parens (exp env add_red expr))
+  and app_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_app(f,args) ->
-      doc_unop (doc_id f) (parens (separate_map comma (exp env) args))
-  | _ -> vaccess_exp env expr
-  and vaccess_exp env ((E_aux(e,_)) as expr) = match e with
+      doc_unop (doc_id f) (parens (separate_map comma (exp env add_red) args))
+  | _ -> vaccess_exp env add_red expr
+  and vaccess_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_vector_access(v,e) ->
-    (atomic_exp env v) ^^ brackets (exp env e)
+    (atomic_exp env add_red v) ^^ brackets (exp env add_red e)
   | E_vector_subrange(v,e1,e2) ->
-    (atomic_exp env v) ^^ brackets (doc_op dotdot (exp env e1) (exp env e2))
-  | _ -> field_exp env expr
-  and field_exp env ((E_aux(e,_)) as expr) = match e with
-  | E_field(fexp,id) -> (atomic_exp env fexp) ^^ dot ^^ doc_id id
-  | _ -> atomic_exp env expr
-  and atomic_exp env ((E_aux(e,annot)) as expr) = match e with
+    (atomic_exp env add_red v) ^^ brackets (doc_op dotdot (exp env add_red e1) (exp env add_red e2))
+  | _ -> field_exp env add_red expr
+  and field_exp env add_red ((E_aux(e,_)) as expr) = match e with
+  | E_field(fexp,id) -> (atomic_exp env add_red fexp) ^^ dot ^^ doc_id id
+  | _ -> atomic_exp env add_red expr
+  and atomic_exp env add_red ((E_aux(e,annot)) as expr) = match e with
   (* Special case: an empty block is equivalent to unit, but { } is a syntactic struct *)
   | E_block [] -> string "()"
   | E_block exps ->
-      let exps_doc = separate_map (semi ^^ hardline) (exp env) exps in
+      let exps_doc = separate_map (semi ^^ hardline) (exp env add_red) exps in
       surround 2 1 lbrace exps_doc rbrace
   | E_nondet exps ->
-    let exps_doc = separate_map (semi ^^ hardline) (exp env) exps in
+    let exps_doc = separate_map (semi ^^ hardline) (exp env add_red) exps in
     string "nondet" ^^ space ^^ (surround 2 1 lbrace exps_doc rbrace)
   | E_id id -> 
     (match id with
       | Id_aux(Id("0"), _) -> 
 	(match Interp.in_lenv env id with
-	  | Interp.V_unknown -> doc_id id
-	  | v -> string ("\x1b[1;31m" ^ Interp.string_of_value v ^ "\x1b[m"))
+	  | Interp.V_unknown -> string (add_red "[_]")
+	  | v -> (*string ("\x1b[1;31m" ^ Interp.string_of_value v ^ "\x1b[m")*)
+	    string (add_red (Interp.string_of_value v)))
       | _ -> doc_id id)
   | E_lit lit -> doc_lit lit
   | E_cast(typ,e) ->
       if !ignore_casts then
-        atomic_exp env e
+        atomic_exp env add_red e
       else
-        prefix 2 1 (parens (doc_typ typ)) (group (atomic_exp env e))
+        prefix 2 1 (parens (doc_typ typ)) (group (atomic_exp env add_red e))
   | E_internal_cast(_,e) ->
       (* XXX ignore internal casts in the interpreter *)
-      atomic_exp env e
+      atomic_exp env add_red e
   | E_tuple exps ->
-      parens (separate_map comma (exp env) exps)
+      parens (separate_map comma (exp env add_red) exps)
   | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
-      braces (separate_map semi_sp (doc_fexp env) fexps)
+      braces (separate_map semi_sp (doc_fexp env add_red) fexps)
   | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
-      braces (doc_op (string "with") (exp env e) (separate_map semi_sp (doc_fexp env) fexps))
+      braces (doc_op (string "with") (exp env add_red e) (separate_map semi_sp (doc_fexp env add_red) fexps))
   | E_vector exps ->
-    let default_print _ = brackets (separate_map comma (exp env) exps) in
+    let default_print _ = brackets (separate_map comma (exp env add_red) exps) in
     (match exps with
       | [] -> default_print ()
       | E_aux(e,_)::es ->
@@ -367,21 +368,21 @@ let doc_exp, doc_let =
 	  | _ -> default_print ()))
   | E_vector_indexed (iexps, default) ->
       (* XXX TODO print default when it is non-empty *)
-      let iexp (i,e) = doc_op equals (doc_int i) (exp env e) in
+      let iexp (i,e) = doc_op equals (doc_int i) (exp env add_red e) in
       brackets (separate_map comma iexp iexps)
   | E_vector_update(v,e1,e2) ->
-      brackets (doc_op (string "with") (exp env v) (doc_op equals (atomic_exp env e1) (exp env e2)))
+      brackets (doc_op (string "with") (exp env add_red v) (doc_op equals (atomic_exp env add_red e1) (exp env add_red e2)))
   | E_vector_update_subrange(v,e1,e2,e3) ->
       brackets (
-        doc_op (string "with") (exp env v)
-        (doc_op equals ((atomic_exp env e1) ^^ colon ^^ (atomic_exp env e2)) (exp env e3)))
+        doc_op (string "with") (exp env add_red v)
+        (doc_op equals ((atomic_exp env add_red e1) ^^ colon ^^ (atomic_exp env add_red e2)) (exp env add_red e3)))
   | E_list exps ->
-      squarebarbars (separate_map comma (exp env) exps)
+      squarebarbars (separate_map comma (exp env add_red) exps)
   | E_case(e,pexps) ->
-      let opening = separate space [string "switch"; exp env e; lbrace] in
-      let cases = separate_map (break 1) (doc_case env) pexps in
+      let opening = separate space [string "switch"; exp env add_red e; lbrace] in
+      let cases = separate_map (break 1) (doc_case env add_red) pexps in
       surround 2 1 opening cases rbrace
-  | E_exit e -> separate space [string "exit"; exp env e;]
+  | E_exit e -> separate space [string "exit"; exp env add_red e;]
   (* adding parens and loop for lower precedence *)
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
   | E_cons (_, _)|E_field (_, _)|E_assign (_, _)
@@ -403,10 +404,10 @@ let doc_exp, doc_let =
     | "*_s" | "*_si" | "*_u" | "*_ui"
     | "**"), _))
     , _) ->
-      group (parens (exp env expr))
+      group (parens (exp env add_red expr))
   (* XXX fixup deinfix into infix ones *)
   | E_app_infix(l, (Id_aux((DeIid op), annot')), r) ->
-      group (parens (exp env (E_aux ((E_app_infix (l, (Id_aux(Id op, annot')), r)), annot))))
+      group (parens (exp env add_red (E_aux ((E_app_infix (l, (Id_aux(Id op, annot')), r)), annot))))
   (* XXX default precedence for app_infix? *)
   | E_app_infix(l,op,r) ->
       failwith ("unexpected app_infix operator " ^ (pp_format_id op))
@@ -414,40 +415,40 @@ let doc_exp, doc_let =
   (* XXX missing case *)
   | E_internal_exp _ -> assert false
 
-  and let_exp env (LB_aux(lb,_)) = match lb with
+  and let_exp env add_red (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->
       prefix 2 1
         (separate space [string "let"; doc_typscm_atomic ts; doc_atomic_pat pat; equals])
-        (exp env e)
+        (exp env add_red e)
   | LB_val_implicit(pat,e) ->
       prefix 2 1
         (separate space [string "let"; doc_atomic_pat pat; equals])
-        (exp env e)
+        (exp env add_red e)
 
-  and doc_fexp env (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id id) (exp env e)
+  and doc_fexp env add_red (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id id) (exp env add_red e)
 
-  and doc_case env (Pat_aux(Pat_exp(pat,e),_)) =
-    doc_op arrow (separate space [string "case"; doc_atomic_pat pat]) (group (exp env e))
+  and doc_case env add_red (Pat_aux(Pat_exp(pat,e),_)) =
+    doc_op arrow (separate space [string "case"; doc_atomic_pat pat]) (group (exp env add_red e))
 
   (* lexps are parsed as eq_exp - we need to duplicate the precedence
    * structure for them *)
-  and doc_lexp env le = app_lexp env le
-  and app_lexp env ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_memory(id,args) -> doc_id id ^^ parens (separate_map comma (exp env) args)
-  | _ -> vaccess_lexp env le
-  and vaccess_lexp env ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_vector(v,e) -> (atomic_lexp env v) ^^ brackets (exp env e)
+  and doc_lexp env add_red le = app_lexp env add_red le
+  and app_lexp env add_red ((LEXP_aux(lexp,_)) as le) = match lexp with
+  | LEXP_memory(id,args) -> doc_id id ^^ parens (separate_map comma (exp env add_red) args)
+  | _ -> vaccess_lexp env add_red le
+  and vaccess_lexp env add_red ((LEXP_aux(lexp,_)) as le) = match lexp with
+  | LEXP_vector(v,e) -> (atomic_lexp env add_red v) ^^ brackets (exp env add_red e)
   | LEXP_vector_range(v,e1,e2) ->
-      (atomic_lexp env v) ^^ brackets ((exp env e1) ^^ dotdot ^^ (exp env e2))
-  | _ -> field_lexp env le
-  and field_lexp env ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_field(v,id) -> (atomic_lexp env v) ^^ dot ^^ doc_id id
-  | _ -> atomic_lexp env le
-  and atomic_lexp env ((LEXP_aux(lexp,_)) as le) = match lexp with
+      (atomic_lexp env add_red v) ^^ brackets ((exp env add_red e1) ^^ dotdot ^^ (exp env add_red e2))
+  | _ -> field_lexp env add_red le
+  and field_lexp env add_red ((LEXP_aux(lexp,_)) as le) = match lexp with
+  | LEXP_field(v,id) -> (atomic_lexp env add_red v) ^^ dot ^^ doc_id id
+  | _ -> atomic_lexp env add_red le
+  and atomic_lexp env add_red ((LEXP_aux(lexp,_)) as le) = match lexp with
   | LEXP_id id -> doc_id id
   | LEXP_cast(typ,id) -> prefix 2 1 (parens (doc_typ typ)) (doc_id id)
   | LEXP_memory _ | LEXP_vector _ | LEXP_vector_range _
-  | LEXP_field _ -> group (parens (doc_lexp env le))
+  | LEXP_field _ -> group (parens (doc_lexp env add_red le))
 
   (* expose doc_exp and doc_let *)
   in exp, let_exp
@@ -523,15 +524,15 @@ let doc_effects_opt (Effect_opt_aux(e,_)) = match e with
   | Effect_opt_pure -> string "pure"
   | Effect_opt_effect e -> doc_effects e
 
-let doc_funcl env (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
-  group (doc_op equals (separate space [doc_id id; doc_atomic_pat pat]) (doc_exp env exp))
+let doc_funcl env add_red (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
+  group (doc_op equals (separate space [doc_id id; doc_atomic_pat pat]) (doc_exp env add_red exp))
 
-let doc_fundef env (FD_aux(FD_function(r, typa, efa, fcls),_)) =
+let doc_fundef env add_red (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | _ ->
       let sep = hardline ^^ string "and" ^^ space in
-      let clauses = separate_map sep (doc_funcl env) fcls in
+      let clauses = separate_map sep (doc_funcl env add_red) fcls in
       separate space [string "function";
         doc_rec r ^^ doc_tannot_opt typa;
         string "effect"; doc_effects_opt efa;
@@ -540,7 +541,7 @@ let doc_fundef env (FD_aux(FD_function(r, typa, efa, fcls),_)) =
 let doc_dec (DEC_aux(DEC_reg(typ,id),_)) =
   separate space [string "register"; doc_atomic_typ typ; doc_id id]
 
-let doc_scattered env (SD_aux (sdef, _)) = match sdef with
+let doc_scattered env add_red (SD_aux (sdef, _)) = match sdef with
  | SD_scattered_function (r, typa, efa, id) ->
      separate space [
        string "scattered function";
@@ -552,29 +553,29 @@ let doc_scattered env (SD_aux (sdef, _)) = match sdef with
        (string "scattered typedef" ^^ space ^^ doc_id id ^^ doc_namescm ns)
        (doc_typquant tq empty)
  | SD_scattered_funcl funcl ->
-     string "function clause" ^^ space ^^ doc_funcl env funcl
+     string "function clause" ^^ space ^^ doc_funcl env add_red funcl
  | SD_scattered_unioncl (id, tu) ->
      separate space [string "union"; doc_id id;
      string "member"; doc_type_union tu]
  | SD_scattered_end id -> string "end" ^^ space ^^ doc_id id
 
-let doc_def env def = group (match def with
+let doc_def env add_red def = group (match def with
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def
-  | DEF_fundef f_def -> doc_fundef env f_def
-  | DEF_val lbind -> doc_let env lbind
+  | DEF_fundef f_def -> doc_fundef env add_red f_def
+  | DEF_val lbind -> doc_let env add_red lbind
   | DEF_reg_dec dec -> doc_dec dec
-  | DEF_scattered sdef -> doc_scattered env sdef
+  | DEF_scattered sdef -> doc_scattered env add_red sdef
   ) ^^ hardline
 
-let doc_defs env (Defs(defs)) =
-  separate_map hardline (doc_def env) defs
+let doc_defs env add_red (Defs(defs)) =
+  separate_map hardline (doc_def env add_red) defs
 
 let print ?(len=80) channel doc = ToChannel.pretty 1. len channel doc
 let to_buf ?(len=80) buf doc = ToBuffer.pretty 1. len buf doc
 
-let pp_exp env e =
+let pp_exp env add_red e =
   let b = Buffer.create 20 in
-  to_buf b (doc_exp env e);
+  to_buf b (doc_exp env add_red e);
   Buffer.contents b
