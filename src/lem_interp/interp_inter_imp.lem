@@ -190,7 +190,7 @@ end
 
 (*Power specific external functions*)
 let power_externs = [
-  ("countLeadingZeros", countLeadingZeros);
+  ("countLeadingZeroes", countLeadingZeros);
 ]
 
 (*All external functions*)
