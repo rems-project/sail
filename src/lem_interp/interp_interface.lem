@@ -249,7 +249,7 @@ val decode_to_instruction : context -> value -> instruction_or_decode_error
 val instruction_to_istate : context -> instruction -> i_state_or_error
 
 (* Augment an address by the given value *)
-val add_to_address : value -> nat -> value
+val add_to_address : value -> integer -> value
 
 (* Coerce a Bitvector value (presumed a multiple of 8 bits long) to a Bytevector value *)
 val coerce_Bytevector_of_Bitvector : value -> value
