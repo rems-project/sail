@@ -199,6 +199,7 @@ let external_functions =
 
 type mem_function = (string * 
                      (maybe read_kind * maybe write_kind * (interp_mode -> Interp.value -> (value * (maybe (list reg_name))))))
+type barrier_function = (string * barrier_kind)
 
 (*List of memory functions; needs to be expanded with all of the memory functions needed for PPCMem.
   Should probably be expanded into a parameter to mode as with above
@@ -257,6 +258,13 @@ let memory_functions =
 			| Just loc_regs -> (v,len,Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) size_regs)))
 	      end end end)));
   ]
+
+let barrier_functions = [
+  ("I_Sync", Isync);
+  ("H_Sync", Sync);
+  ("LW_Sync", LwSync);
+  ("EIEIO", Eieio);
+]
 
 let rec interp_to_value_helper arg instr thunk = 
   match thunk() with
@@ -383,7 +391,10 @@ let rec interp_to_outcome mode thunk =
       | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
       end 
     | Interp.Barrier (Id_aux (Id i) _) lval ->
-      Barrier Sync next_state (* TODO set up some barrier functions and see if the value would be anything needed *)
+      match List.lookup i barrier_functions with
+	| Just barrier -> 
+	  Barrier barrier next_state
+	| _ -> Error ("Barrier " ^ i ^ " function not found") end
     | Interp.Nondet exps -> 
       let nondet_states = List.map (Interp.set_in_context next_state) exps in
       Nondet_choice nondet_states next_state      
@@ -439,6 +450,8 @@ let rec ie_loop mode register_values i_state =
       (E_read_mem read_k loc length tracking)::(ie_loop mode register_values (i_state_fun Unknown))
     | Write_mem write_k loc length tracking value v_tracking i_state_fun ->
       (E_write_mem write_k loc length tracking value v_tracking)::(ie_loop mode register_values (i_state_fun true))
+    | Barrier barrier_k i_state ->
+      (E_barrier barrier_k)::(ie_loop mode register_values i_state)
     | Internal _ _ next -> (ie_loop mode register_values next)
      end ;;
   
@@ -460,6 +473,9 @@ let rec rr_ie_loop mode i_state =
     | Write_mem write_k loc length tracking value v_tracking i_state_fun ->
       let (events,outcome) = (rr_ie_loop mode (i_state_fun true)) in
       (((E_write_mem write_k loc length tracking value v_tracking)::events),outcome)
+    | Barrier barrier_k i_state ->
+      let (events,outcome) = (rr_ie_loop mode i_state) in
+      (((E_barrier barrier_k)::events),outcome)
     | Internal _ _ next -> (rr_ie_loop mode next)
      end ;;
 
