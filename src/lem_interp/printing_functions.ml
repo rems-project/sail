@@ -131,9 +131,10 @@ let rec val_to_string_internal ((Interp.LMem (_,memory)) as mem) = function
      sprintf "{%s}" repr
  | Interp.V_ctor (id,_, value) ->
      sprintf "%s %s" (id_to_string id) (val_to_string_internal mem value)
- | Interp.V_register r ->
+ | Interp.V_register _ | Interp.V_register_alias _ ->
      sprintf "reg-as-value" 
  | Interp.V_unknown -> "unknown"
+ | Interp.V_track(v,_) -> (val_to_string_internal mem v)
 ;;
 
 let rec top_frame_exp_state = function
