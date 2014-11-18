@@ -289,6 +289,25 @@ let rec arith_op_vec_range_range op (V_tuple args) = match args with
   | [(V_vector _ ord _ as l1);n] ->
     arith_op op (V_tuple [(to_num Unsigned l1);n])
 end ;;
+let rec arith_op_vec_bit op size (V_tuple args) = match args with
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (arith_op_vec_bit op size (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1; v2] ->
+    taint (arith_op_vec_bit op size (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] -> 
+    taint (arith_op_vec_bit op size (V_tuple [v1;v2])) r2
+  | [V_unknown;_] -> V_unknown
+  | [_;V_unknown] -> V_unknown
+  | [(V_vector _ ord cs as l1);V_lit (L_aux bit _)] ->
+    let l1' = to_num Unsigned l1 in
+    let n = arith_op op (V_tuple 
+			   [l1';
+			    V_lit 
+			      (L_aux (L_num (match bit with | L_one -> 1 | L_zero -> 0 end)) Unknown)])
+    in
+    to_vec ord ((List.length cs) * size) n
+end 
+;;
 let rec arith_op_no0 op (V_tuple args) = match args with
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> 
     if y = 0 
@@ -399,6 +418,7 @@ let function_map = [
   ("add_range_vec", arith_op_range_vec (+) 1);
   ("add_range_vec_range", arith_op_range_vec_range (+));
   ("add_vec_vec_range", arith_op_vec_vec_range (+));
+  ("add_vec_bit", arith_op_vec_bit (+) 1);
   ("add_overload_vec", arith_op_overflow_vec (+) 1);
   ("minus", arith_op (-));
   ("minus_vec", arith_op_vec (-) 1);
@@ -406,6 +426,7 @@ let function_map = [
   ("minus_range_vec", arith_op_range_vec (-) 1);
   ("minus_vec_range_range", arith_op_vec_range_range (-));
   ("minus_range_vec_range", arith_op_range_vec_range (-));
+  ("minus_vec_bit", arith_op_vec_bit (-) 1);
   ("minus_overload_vec", arith_op_overflow_vec (-) 1);
   ("multiply", arith_op ( * ));
   ("multiply_vec", arith_op_vec ( * ) 2);

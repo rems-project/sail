@@ -356,6 +356,7 @@ end
 val access_vector : value -> integer -> value
 let rec access_vector v n =
   match v with
+  | V_unknown -> V_unknown (*Likely shoud be unreachable*)
   | V_vector m inc vs -> 
     if inc then
     list_nth vs (n - m)
@@ -480,15 +481,24 @@ let rec fupdate_vector_slice vec replace start stop =
   | (V_vector m inc vals,V_vector _ inc' reps) ->
     V_vector m inc 
       (replace_is vals 
-	 (if inc=inc' then reps 
-	  else (List.reverse reps)) 
+	 (if inc=inc' then reps else (List.reverse reps))
+	 0 (if inc then (start-m) else (m-start)) (if inc then (stop-m) else (m-stop)))
+  | (V_vector m inc vals, V_unknown) ->
+    V_vector m inc
+      (replace_is vals 
+	 (List.replicate (natFromInteger(if inc then (stop-start) else (start-stop))) V_unknown)
 	 0 (if inc then (start-m) else (m-start)) (if inc then (stop-m) else (m-stop)))
   | (V_vector_sparse m n inc vals d,V_vector _ _ reps) ->
     let (_,repsi) = List.foldr (fun r (i,rs) -> ((if inc then i+1 else i-1), (i,r)::rs)) (start,[]) reps in
     (V_vector_sparse m n inc (replace_sparse (if inc then (<) else (>)) vals repsi) d)
+  | (V_vector_sparse m n inc vals d, V_unknown) ->
+    let (_,repsi) = List.foldr (fun r (i,rs) -> ((if inc then i+1 else i-1), (i,r)::rs)) (start,[]) 
+      (List.replicate (natFromInteger (if inc then (stop-start) else (start-stop))) V_unknown) in
+    (V_vector_sparse m n inc (replace_sparse (if inc then (<) else (>)) vals repsi) d)
   | (V_track v r, V_track vr rr) -> (taint (fupdate_vector_slice v vr start stop) (r++rr))
   | (V_track v r, replace) -> taint (fupdate_vector_slice v replace start stop) r
   | (vec, V_track vr rr) -> taint (fupdate_vector_slice vec vr start stop) rr
+  | (V_unknown,_) -> V_unknown
   end
 
 val update_vector_slice : value -> value -> integer -> integer -> lmem -> lmem
@@ -521,6 +531,10 @@ let rec update_vector_slice vector value start stop mem =
 end
 
 let rec update_vector_start new_start v = match v with
+  | V_lit (L_aux L_zero _) ->
+    V_vector new_start true (*TODO: Check for default endianness here*) [v]
+  | V_lit (L_aux L_one _) ->
+    V_vector new_start true [v]
   | V_vector m inc vs -> V_vector new_start inc vs
   (*Note, may need to shrink and check if still sparse *)
   | V_vector_sparse m n inc vals d -> V_vector_sparse new_start n inc vals d 
@@ -1611,8 +1625,11 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         | T_app "vector" (T_args [T_arg_nexp base;T_arg_nexp len; T_arg_order (Ord_aux _ _); _]) -> (false,base,len) end) in
       (match default with
 	| Def_val_empty ->
-	  exp_list mode t_level (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es) (Def_val_aux default dannot)) (l,annot))) 
-                                (fun vals -> V_vector (List_extra.head indexes) is_inc vals) l_env l_mem [] exps
+	  exp_list mode t_level 
+	    (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es) 
+				                (Def_val_aux default dannot)) (l,annot)))
+            (fun vals -> V_vector (if indexes=[] then 0 else (List_extra.head indexes)) is_inc vals)
+	    l_env l_mem [] exps
 	| Def_val_dec default_exp ->
 	  let (b,len) = match (base,len) with
 	    | (Ne_const b,Ne_const l) -> (b,l) end in
@@ -2009,11 +2026,11 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
           (match (create_write_message_or_update mode t_level value l_env lm false lexp) with
           | ((Value v_whole,lm,le),maybe_builder) ->
             let v = (match v_whole with | V_track v _ -> v | _ -> v_whole end) in
-            let nth = (match access_vector v n with | V_track v _ -> v | v -> v end) in
+            let nth _ = (match access_vector v n with | V_track v _ -> v | v -> v end) in
             (match v with 
 	      | V_unknown -> ((Value v_whole,lm,le),Nothing)
               | V_vector inc m vs -> 
-		(match (nth,is_top_level,maybe_builder) with
+		(match (nth(),is_top_level,maybe_builder) with
 		  | (V_register regform,true,_) ->
 		    ((Action (Write_reg regform Nothing value)
 		        (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),Nothing)
@@ -2022,11 +2039,12 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		        (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
                      Just (next_builder lexp_builder))
 		  | (V_boxref n t,true,_) -> ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm n value, l_env),Nothing)
+		  | (V_unknown,true,_) -> ((Value (V_lit (L_aux L_unit Unknown)), lm, l_env),Nothing)
 		  | (v,true,_) -> ((Error l "Vector does not contain reg or register values",lm,l_env),Nothing)
 		  | ((V_boxref n t),false, Just lexp_builder) -> ((Value (in_mem lm n),lm, l_env),Just (next_builder lexp_builder))
 		  | (v,false, Just lexp_builder) -> ((Value v,lm,le), Just (next_builder lexp_builder)) end)
 	      | V_vector_sparse n m inc vs d ->
-              (match (nth,is_top_level,maybe_builder) with
+              (match (nth(),is_top_level,maybe_builder) with
 		| (V_register regform,true,_) ->
 		  ((Action (Write_reg regform Nothing value)
 		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),Nothing)
