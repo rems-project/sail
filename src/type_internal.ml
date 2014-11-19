@@ -775,7 +775,7 @@ let nat_t = {t = Tapp("range",[TA_nexp{nexp= Nconst zero};TA_nexp{nexp = Npos_in
 let int_t = {t = Tapp("range",[TA_nexp{nexp=Nneg_inf};TA_nexp{nexp = Npos_inf};])}
 let uint8_t = {t = Tapp("range",[TA_nexp{nexp = Nconst zero}; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 8)},Some (big_int_of_int 256))}])}
 let uint16_t = {t = Tapp("range",[TA_nexp{nexp = Nconst zero}; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 16)},Some (big_int_of_int 65536))}])}
-let uint32_t = {t = Tapp("range",[TA_nexp{nexp = Nconst zero}; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 32)},Some (big_int_of_int 4294967296))}])}
+let uint32_t = {t = Tapp("range",[TA_nexp{nexp = Nconst zero}; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 32)},Some (big_int_of_string "4294967296"))}])}
 let uint64_t = {t = Tapp("range",[TA_nexp{nexp = Nconst zero}; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 64)},Some (big_int_of_string "18446744073709551616"))}])}
 
 let unit_t = { t = Tid "unit" }
