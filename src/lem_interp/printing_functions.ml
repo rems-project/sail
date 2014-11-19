@@ -125,7 +125,8 @@ let rec val_to_string_internal ((Interp.LMem (_,memory)) as mem) = function
        with Failure _ ->
          sprintf "[%s]" (String.concat "; " (List.map (val_to_string_internal mem) l)) in
      sprintf "%s [%s..%s]" repr (string_of_big_int first_index) (string_of_big_int last_index)
- | Interp.V_vector_sparse(first_index,last_index,inc,l,default) -> "sparse_vector: Didn't think this could happen"
+ | (Interp.V_vector_sparse(first_index,last_index,inc,l,default) as v) -> 
+   val_to_string_internal mem (Interp_lib.fill_in_sparse v)
  | Interp.V_record(_, l) ->
      let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string_internal mem value) in
      let repr = String.concat "; " (List.map  pp l) in
