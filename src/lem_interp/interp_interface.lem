@@ -32,12 +32,31 @@ type value =
 | Unknown
 (*To add: an abstract value representing an unknown but named memory address?*)
 
-instance (Ord value)
+instance (Ord bool)
   let compare = defaultCompare
   let (<) = defaultLess
   let (<=) = defaultLessEq
   let (>) = defaultGreater
   let (>=) = defaultGreaterEq
+end
+
+let valueCompare v1 v2 = 
+  match (v1,v2) with
+  | (Bitvector bits1 inc1 start1, Bitvector bits2 inc2 start2) ->
+    tripleCompare compare compare compare (bits1,inc1,start1) (bits2,inc2,start2)
+  | (Bytevector words1, Bytevector words2) -> compare words1 words2
+  | (Unknown,Unknown) -> EQ
+  | (Bitvector _ _ _, _)  -> LT
+  | (Bytevector _, _) -> LT
+  | (_, _) -> GT
+  end
+
+instance (Ord value)
+  let compare = valueCompare
+  let (<) v1 v2 = (valueCompare v1 v2) = LT
+  let (<=) v1 v2 = (valueCompare v1 v2) <> GT
+  let (>) v1 v2 = (valueCompare v1 v2) = GT
+  let (>=) v1 v2 = (valueCompare v1 v2) <> LT
 end
 
 
