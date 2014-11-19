@@ -234,8 +234,7 @@ val num_to_bits : nat -> v_kind -> integer -> value
 
 val integer_of_byte_list : list word8 -> integer
 
-(** proposed: *)
-val nat_to_bytevector : nat -> list word8 
+val byte_list_of_integer : integer -> integer -> list word8 
 
 
 (** propose to remove this: Function to decode an instruction and build the state to run it*)
