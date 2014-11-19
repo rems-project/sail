@@ -30,6 +30,7 @@ let big_int_to_vec for_mem b size =
   fst (extern_value
 	 (make_mode true false)
 	 for_mem
+	 None
 	 ((if big_endian then Interp_lib.to_vec_inc else Interp_lib.to_vec_dec)
 	     (Interp.V_tuple [(Interp.V_lit (L_aux (L_num size, Unknown))); 
 			      (Interp.V_lit (L_aux (L_num b, Unknown)))])))

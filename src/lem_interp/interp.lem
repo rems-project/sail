@@ -378,7 +378,9 @@ val slice_sparse_list : (integer -> integer -> bool) -> (integer -> integer) ->
                         list (integer * value) -> integer -> integer -> ((list (integer * value)) * bool)
 let rec slice_sparse_list compare update_n vals n1 n2 = 
   let sl = slice_sparse_list compare update_n in
-  if n1 = n2 
+  if (n1 = n2) && (vals = []) 
+  then ([],true)
+  else if (n1=n2)
   then ([],false)
   else match vals with
     | [] -> ([],true)

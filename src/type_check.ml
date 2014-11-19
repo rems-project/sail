@@ -897,8 +897,11 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let cs_loc =
 	match (ord.order,d_env.default_o.order) with
 	  | (Oinc,_) -> 
-	    [LtEq((Expr l),base,min1); LtEq((Expr l),{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)}); 
-	     LtEq((Expr l),{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,rise)});
+	    [LtEq((Expr l),base,min1); 
+	     LtEq((Expr l),{nexp=Nadd({nexp=Nadd(min1,m_rise1)},{nexp=Nconst (Big_int.big_int_of_int 1)})},
+		           {nexp=Nadd(min2,m_rise2)}); 
+	     LtEq((Expr l),{nexp=Nadd({nexp=Nadd(min2,m_rise2)},{nexp=Nconst (Big_int.big_int_of_int 1)})},
+		           {nexp=Nadd(base,rise)});
 	     LtEq((Expr l),min1,base_n); LtEq((Expr l),base_n,{nexp=Nadd(min1,m_rise1)});
 	     LtEq((Expr l),rise_n,{nexp=Nadd(min2,m_rise2)})]
 	  | (Odec,_) ->

@@ -4,7 +4,7 @@ val extern forall Nat 'm, Nat 'n. (implicit<'m>,bit['n]) -> bit['m] effect pure 
 function forall Type 'a . 'a DEC_TO_BCD ( x ) = x
 function forall Type 'a . 'a BCD_TO_DEC ( x ) = x
 (* XXX carry out *)
-function bit carry_out ( x ) = bitzero
+function forall Nat 'a . bit carry_out ( (bit['a]) _,carry ) = carry
 (* XXX Storage control *)
 function forall Type 'a . 'a real_addr ( x ) = x
 (* XXX For stvxl and lvxl - what does that do? *)
@@ -238,8 +238,60 @@ let (vector <0, 32, inc, (register<(bit[128])>)>) FPRp =
 
 
 (* XXX *)
-val extern bit[32] -> bit[64] effect pure DOUBLE
-val extern bit[64] -> bit[32] effect pure SINGLE
+val bit[32] -> bit[64] effect pure DOUBLE
+val bit[64] -> bit[32] effect { undef } SINGLE
+
+function  bit[64] DOUBLE word = {
+  (bit[64]) temp := 0;
+  if word[1..8] > 0 & word[1..8] < 255
+  then {
+    temp[0..1] := word[0..1];
+    temp[2] := ~(word[1]);
+    temp[3] := ~(word[1]);
+    temp[4] := ~(word[1]);
+    temp[5..63] := word[2..31] : 0b00000000000000000000000000000;
+  } else if word[1..8] == 0 & word[9..31] != 0 
+  then {
+    sign := word[0];
+    exp := 0-126;
+    (bit[53]) frac := 0b0 : word[9..31] : 0b00000000000000000000000000000;
+    foreach (i from 0 to 52) {
+      if frac[0] == 0 
+      then { frac[0..52] := frac[1..52] : 0b0;
+             exp := exp -1; }
+      else ()
+     };
+     temp[0] := sign;
+     temp[1..11] := (bit[10]) exp + 1023;
+     temp[12..63] := frac[1..52];
+   } else {
+     temp[0..1] := word[0..1];
+     temp[2] := word[1];
+     temp[3] := word[1];
+     temp[4] := word[1];
+     temp[5..63] := word[2..31] : 0b00000000000000000000000000000;
+   };
+   temp
+}
+
+function bit[32] SINGLE ((bit[64]) frs) = {
+  (bit[32]) word := 0;
+  if (frs[1..11] > 896) | (frs[1..63] == 0) 
+  then { word[0..1] := frs[0..1];
+         word[2..31] := frs[5..34]; }
+  else if (874 <= frs[1..11]) & (frs[1..11] <= 896)
+  then { 
+   sign := frs[0];
+   (bit[10]) exp := frs[1..11] - 1023;
+   (bit[53]) frac := 0b1 : frs[12..63];
+   foreach (i from 0 to 53) {
+     if exp < (0-126) 
+     then { frac[0..52] := 0b0 : frac[0..51];
+            exp := exp + 1; }
+     else ()};
+   } else word := undefined;
+   word   
+}
 
 (* Vector registers *)
 
@@ -397,8 +449,14 @@ function clause decode (0b010000 :
 function clause execute (Bc (BO, BI, BD, AA, LK)) =
   {
     if mode64bit then M := 0 else M := 32;
-    if ~ (BO[2]) then CTR := CTR - 1 else ();
-    ctr_ok := (BO[2] | (CTR[M .. 63] != 0) ^ BO[3]);
+    ctr_temp := CTR;
+    if ~ (BO[2])
+    then {
+      ctr_temp := ctr_temp - 1;
+      CTR := ctr_temp
+    }
+    else ();
+    ctr_ok := (BO[2] | ~ (ctr_temp[M .. 63] == 0) ^ BO[3]);
     cond_ok := (BO[0] | CR[BI + 32] ^ ~ (BO[1]));
     if ctr_ok & cond_ok
     then if AA then NIA := EXTS (BD : 0b00) else NIA := CIA + EXTS (BD : 0b00)
@@ -420,8 +478,14 @@ function clause decode (0b010011 :
 function clause execute (Bclr (BO, BI, BH, LK)) =
   {
     if mode64bit then M := 0 else M := 32;
-    if ~ (BO[2]) then CTR := CTR - 1 else ();
-    ctr_ok := (BO[2] | (CTR[M .. 63] != 0) ^ BO[3]);
+    ctr_temp := CTR;
+    if ~ (BO[2])
+    then {
+      ctr_temp := ctr_temp - 1;
+      CTR := ctr_temp
+    }
+    else ();
+    ctr_ok := (BO[2] | ~ (ctr_temp[M .. 63] == 0) ^ BO[3]);
     cond_ok := (BO[0] | CR[BI + 32] ^ ~ (BO[1]));
     if ctr_ok & cond_ok then NIA := LR[0 .. 61] : 0b00 else ();
     if LK then LR := CIA + 4 else ()
@@ -452,6 +516,7 @@ function clause decode (0b100000 :
 function clause execute (Lwz (RT, RA, D)) =
   {
     (bit[64]) b := 0;
+    (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS (D);
     GPR[RT] := 0b00000000000000000000000000000000 : MEMr (EA,4)
@@ -469,6 +534,7 @@ function clause decode (0b111010 :
 function clause execute (Ld (RT, RA, DS)) =
   {
     (bit[64]) b := 0;
+    (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS (DS : 0b00);
     GPR[RT] := MEMr (EA,8)
@@ -485,6 +551,7 @@ function clause decode (0b100100 :
 function clause execute (Stw (RS, RA, D)) =
   {
     (bit[64]) b := 0;
+    (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS (D);
     MEMw(EA,4) := (GPR[RS])[32 .. 63]
@@ -500,6 +567,7 @@ function clause decode (0b100101 :
 
 function clause execute (Stwu (RS, RA, D)) =
   {
+    (bit[64]) EA := 0;
     EA := GPR[RA] + EXTS (D);
     MEMw(EA,4) := (GPR[RS])[32 .. 63];
     GPR[RA] := EA
@@ -517,6 +585,7 @@ function clause decode (0b111110 :
 function clause execute (Std (RS, RA, DS)) =
   {
     (bit[64]) b := 0;
+    (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS (DS : 0b00);
     MEMw(EA,8) := GPR[RS]
@@ -533,6 +602,7 @@ function clause decode (0b111110 :
 
 function clause execute (Stdu (RS, RA, DS)) =
   {
+    (bit[64]) EA := 0;
     EA := GPR[RA] + EXTS (DS : 0b00);
     MEMw(EA,8) := GPR[RS];
     GPR[RA] := EA
@@ -610,11 +680,11 @@ function clause decode (0b011111 :
   Add (RT,RA,RB,OE,Rc)
 
 function clause execute (Add (RT, RA, RB, OE, Rc)) =
-  {
-    temp := GPR[RA] + GPR[RB];
-    GPR[RT] := temp;
-    if Rc then set_overflow_cr0 (temp) else ()
-  }
+  let (temp, overflow) = (GPR[RA] + GPR[RB]) in
+    {
+      GPR[RT] := temp;
+      if Rc then set_overflow_cr0 (temp) else ()
+    }
 
 union ast member (bit[5], bit[5], bit[5], bit, bit) Subf
 
@@ -628,11 +698,12 @@ function clause decode (0b011111 :
   Subf (RT,RA,RB,OE,Rc)
 
 function clause execute (Subf (RT, RA, RB, OE, Rc)) =
-  {
-    (bit[64]) temp := ~ (GPR[RA]) + GPR[RB] + 1;
-    GPR[RT] := temp;
-    if Rc then set_overflow_cr0 (temp) else ()
-  }
+  let (t, overflow) = (~ (GPR[RA]) + GPR[RB]) in
+    {
+      (bit[64]) temp := t + 1;
+      GPR[RT] := temp;
+      if Rc then set_overflow_cr0 (temp) else ()
+    }
 
 union ast member (bit[5], bit[5], bit[16]) Addic
 
@@ -907,6 +978,7 @@ function clause decode (0b110010 :
 function clause execute (Lfd (FRT, RA, D)) =
   {
     (bit[64]) b := 0;
+    (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS (D);
     FPR[FRT] := MEMr (EA,8)
@@ -923,6 +995,7 @@ function clause decode (0b110110 :
 function clause execute (Stfd (FRS, RA, D)) =
   {
     (bit[64]) b := 0;
+    (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS (D);
     MEMw(EA,8) := FPR[FRS]
@@ -967,6 +1040,7 @@ function clause decode (0b011111 :
 function clause execute (Lvx (VRT, RA, RB)) =
   {
     (bit[64]) b := 0;
+    (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + GPR[RB];
     VR[VRT] :=
@@ -987,6 +1061,7 @@ function clause decode (0b011111 :
 function clause execute (Stvx (VRS, RA, RB)) =
   {
     (bit[64]) b := 0;
+    (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + GPR[RB];
     MEMw(EA & 0b1111111111111111111111111111111111111111111111111111111111110000,16) :=

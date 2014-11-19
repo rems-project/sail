@@ -81,6 +81,8 @@ let rec extern_value mode for_mem optional_start v = match v with
     if for_mem 
     then (Bytevector (to_bytes (from_bits bits)), Nothing)
     else (Bitvector (from_bits bits) inc fst, Nothing)
+  | Interp.V_vector_sparse fst stop inc bits default ->
+    extern_value mode for_mem optional_start (Interp_lib.fill_in_sparse v)
   | Interp.V_lit (L_aux L_zero _) -> 
     if for_mem
     then (Bytevector [0],Nothing)
