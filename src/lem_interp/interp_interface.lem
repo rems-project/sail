@@ -59,6 +59,19 @@ instance (Ord value)
   let (>=) v1 v2 = (valueCompare v1 v2) <> LT
 end
 
+let valueEqual v1 v2 =
+  match (v1,v2) with
+    | (Bitvector bits1 inc1 start1, Bitvector bits2 inc2 start2) ->
+      bits1 = bits2 && inc1 = inc2 && start1 = start2
+    | (Bytevector words1, Bytevector words2) -> words1 = words2
+    | (Unknown,Unknown) -> true
+    | _ -> false
+end 
+
+instance  (Eq value)
+  let (=) = valueEqual
+  let (<>) x y = not (valueEqual x y)
+end
 
 type slice = (integer * integer)
 
@@ -209,8 +222,6 @@ let eventCompare e1 e2 =
 
 
 
-
-
 instance (SetType event)
   let setElemCompare = eventCompare
 end
@@ -228,10 +239,26 @@ type instr_parm_typ =
   | Other (*An unrepresentable type, will be represented as Unknown in instruciton form *)
   | Bvector of maybe int (* A bitvector type, with length when statically known *)
 
+let instr_parm_typEqual ip1 ip2 = match (ip1,ip2) with
+  | (Bit,Bit) -> true
+  | (Other,Other) -> true
+  | (Bvector i1,Bvector i2) -> i1 = i2
+  | _ -> false
+end 
+
+instance (Eq instr_parm_typ) 
+  let (=) = instr_parm_typEqual
+  let (<>) ip1 ip2 = not (instr_parm_typEqual ip1 ip2)
+end 
+
 (*A representation of the AST node for each instruction in the spec, with concrete values from this call, and the potential static effects from the funcl clause for this instruction 
 Follows the form of the instruction in instruction_extractor, but populates the parameters with actual values
 *)
 type instruction = (string * list (string * instr_parm_typ * value) * list base_effect)
+
+let instructionEqual i1 i2 = match (i1,i2) with
+  | ((i1,parms1,effects1),(i2,parms2,effects2)) -> i1=i2 && parms1 = parms2 && effects1 = effects2
+end
 
 type v_kind = Bitv | Bytev
 
