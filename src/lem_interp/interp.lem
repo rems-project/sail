@@ -1889,7 +1889,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	      if is_top_level then ((Error l "Writes must be to reg values",l_mem,l_env),Nothing)
 	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_id id) (l,annot), env)))
 	     end 
-        | Tag_global -> 	     
+        | Tag_global -> 
 	  (match in_env lets id with
 	    | Just v -> 
 	      if is_top_level then ((Error l "Writes must be to reg or registers",l_mem,l_env),Nothing)
@@ -1897,8 +1897,13 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	    | Nothing -> ((Error l (String.stringAppend "Undefined id " (get_id id)),l_mem,l_env),Nothing)
 	   end)
         | Tag_extern _ ->
-	  let regf = Reg id annot in
-	  let start_pos = match typ with
+	  let regf = 
+	    match in_env regs id with (*pull the regform with the most specific type annotation from env *)
+	      | Just(V_register regform) -> regform
+	      | _ -> Assert_extra.failwith "Register not known in regenv" end in
+          let rtyp = match regf with
+	    | Reg _ (Just (t,_,_,_)) -> t end in
+	  let start_pos = match rtyp with
 	    | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
 	    | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
 	    | _ -> Assert_extra.failwith "register didn't have vector or constant start pos"
@@ -2014,10 +2019,17 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_cast typc id) (l,annot), env)))
           end 
         | Tag_extern _ ->
-	  let regf = Reg id annot in
-	  let start_pos = match typ with
+	   let regf = 
+	    match in_env regs id with (*pull the regform with the most specific type annotation from env *)
+	      | Just(V_register regform) -> regform
+	      | _ -> Assert_extra.failwith "Register not known in regenv" end in
+          let rtyp = match regf with
+	    | Reg _ (Just (t,_,_,_)) -> t end in
+	  let start_pos = match rtyp with
 	    | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
-	    | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
+	    | T_app "register" 
+		(T_args [T_arg_typ 
+			    (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
 	    | _ -> Assert_extra.failwith "reg not a vector, not set start, with cast"
 	  end in
 	  let request = 
