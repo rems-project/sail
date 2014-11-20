@@ -430,14 +430,20 @@ let rec interp_to_outcome mode thunk =
 
 let interp mode i_state = interp_to_outcome mode (fun _ -> Interp.resume mode i_state Nothing)
 
-(*TODO: Only find exact matches, need to look for field/slice sub pieces*)
+(*TODO: Only find some sub piece matches, need to look for field/slice sub pieces*)
 let rec find_reg_name reg = function
   | [] -> Nothing
   | (reg_name,v)::registers ->
     match (reg,reg_name) with
       | (Reg i, Reg n) -> if i = n then (Just v) else find_reg_name reg registers
+      | (Reg_slice i (p1,p2), Reg n) -> if i = n then (Just (slice_value v p1 p2)) else find_reg_name reg registers
+      | (Reg_field i f (p1,p2), Reg n) -> if i = n then (Just (slice_value v p1 p2)) else find_reg_name reg registers
       | (Reg_slice  i (p1,p2), Reg_slice n (p3,p4)) ->
-	if i=n && p1=p3 && p2 = p4 then (Just v) else find_reg_name reg registers
+	if i=n 
+	then if p1=p3 && p2 = p4 then (Just v)
+	     else if p1>=p3 && p2<= p4 then (Just (slice_value v p1 p2))
+	     else find_reg_name reg registers
+	  else find_reg_name reg registers
       | (Reg_field i f _,Reg_field n fn _) ->
 	if i=n && f = fn then (Just v) else find_reg_name reg registers
       | (Reg_f_slice i f _ (p1,p2), Reg_f_slice n fn _ (p3,p4)) ->
