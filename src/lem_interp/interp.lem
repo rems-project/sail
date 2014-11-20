@@ -117,6 +117,26 @@ instance (Eq value)
   let (<>) n1 n2 = not (value_eq n1 n2)
 end
 
+let reg_start_pos reg = 
+  match reg with
+    | Reg _ (Just(typ,_,_,_)) -> 
+      let start_from_vec targs = match targs with
+	| T_args [T_arg_nexp (Ne_const s);_;_;_] -> s
+      end in
+      let start_from_reg targs = match targs with
+	| T_args [T_arg_typ (T_app "vector" targs)] -> start_from_vec targs
+      end in
+      let start_from_abbrev t = match t with
+	| T_app "vector" targs -> start_from_vec targs
+	| T_app "register" targs -> start_from_reg targs
+      end in
+      match typ with 
+	| T_app "vector" targs -> start_from_vec targs
+	| T_app "register" targs -> start_from_reg targs
+	| T_abbrev _ t -> start_from_abbrev t
+      end 
+end   
+
 (*Constant unit value, for use in interpreter *)
 let unitv = V_lit (L_aux L_unit Unknown)
 
@@ -1901,13 +1921,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	    match in_env regs id with (*pull the regform with the most specific type annotation from env *)
 	      | Just(V_register regform) -> regform
 	      | _ -> Assert_extra.failwith "Register not known in regenv" end in
-          let rtyp = match regf with
-	    | Reg _ (Just (t,_,_,_)) -> t end in
-	  let start_pos = match rtyp with
-	    | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
-	    | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
-	    | _ -> Assert_extra.failwith "register didn't have vector or constant start pos"
-	  end in
+          let start_pos = reg_start_pos regf in
 	  let request = 
             (Action (Write_reg regf Nothing (update_vector_start start_pos value)) 
 	            (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
@@ -2023,15 +2037,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	    match in_env regs id with (*pull the regform with the most specific type annotation from env *)
 	      | Just(V_register regform) -> regform
 	      | _ -> Assert_extra.failwith "Register not known in regenv" end in
-          let rtyp = match regf with
-	    | Reg _ (Just (t,_,_,_)) -> t end in
-	  let start_pos = match rtyp with
-	    | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
-	    | T_app "register" 
-		(T_args [T_arg_typ 
-			    (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
-	    | _ -> Assert_extra.failwith "reg not a vector, not set start, with cast"
-	  end in
+          let start_pos = reg_start_pos regf in
 	  let request = 
             (Action (Write_reg regf Nothing (update_vector_start start_pos value)) 
 	       (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
@@ -2059,29 +2065,12 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
               | V_vector inc m vs -> 
 		(match (nth(),is_top_level,maybe_builder) with
 		  | (V_register regform,true,_) ->
-		    let typ = match regform with 
-		      | Reg id (Just(t, tag, necs, effect)) -> t
-		    end in
-		    let start_pos = match typ with
-		      | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
-		      | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
-		      |  _ -> 
-			Assert_extra.failwith "Register not a vector, or didn't have a constant for start position in register"
-	            end in
+		    let start_pos = reg_start_pos regform in
 		    ((Action (Write_reg regform Nothing (update_vector_start start_pos value)) 
 		        (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
 		     Nothing)
 		  | (V_register regform,false,Just lexp_builder) ->
-		    let typ = match regform with 
-		      | Reg id (Just(t, tag, necs, effect)) -> t
-                    end in
-		    let start_pos = match typ with
-		      | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
-		      | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
-		      | T_app "vector" _ -> 
-			Assert_extra.failwith "Vector didn't have a constant for start position in register set, regform nested"
-		      | _ -> 0 end
-		    in
+		    let start_pos = reg_start_pos regform in
 		    ((Action (Write_reg regform Nothing (update_vector_start start_pos value)) 
 		        (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
                      Just (next_builder lexp_builder))
@@ -2093,15 +2082,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	      | V_vector_sparse n m inc vs d ->
               (match (nth(),is_top_level,maybe_builder) with
 		| (V_register regform,true,_) ->
-		    let typ = match regform with 
-		      | Reg id (Just(t, tag, necs, effect)) -> t
-                    end in
-		    let start_pos = match typ with
-		      | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
-		      | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
-		      | _ -> 
-			Assert_extra.failwith "Vector didn't have a constant for start position in register set, sparse regform"
-	            end in
+		    let start_pos = reg_start_pos regform in 
 		    ((Action (Write_reg regform Nothing (update_vector_start start_pos value)) 
 		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),Nothing)
 		| (V_register regform,false,Just lexp_builder) ->
