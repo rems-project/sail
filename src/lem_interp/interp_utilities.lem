@@ -91,3 +91,9 @@ let rec find_function (Defs defs) id =
     end end
 
 
+let rec get_first_index_range (BF_aux i _) = match i with
+  | BF_single i -> i
+  | BF_range i j -> i
+  | BF_concat s _ -> get_first_index_range s
+end
+
