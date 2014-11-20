@@ -229,7 +229,7 @@ let rec to_data_constructors (Defs defs) =
 	   (fun (Tu_aux t _) ->
 	     match t with
 	    | (Tu_ty_id x y) -> (y,x)
-	    | Tu_id x -> (id,unit_t) end) tid_list)++(to_data_constructors (Defs defs))
+	    | Tu_id x -> (x,unit_t) end) tid_list)++(to_data_constructors (Defs defs))
       | _ -> to_data_constructors (Defs defs) end
     | _ -> to_data_constructors (Defs defs) end
    end
