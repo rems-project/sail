@@ -1898,13 +1898,13 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	   end)
         | Tag_extern _ ->
 	  let regf = Reg id annot in
-	  let (vec_set,start_pos) = match typ with
-	    | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> (true,s)
-	    | T_app "vector" _ -> Assert_extra.failwith "Vector didn't have a constant for start position in register set, no cast"
-	    | _ -> (false,0) end
-	  in
+	  let start_pos = match typ with
+	    | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
+	    | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
+	    | _ -> Assert_extra.failwith "register didn't have vector or constant start pos"
+	  end in
 	  let request = 
-            (Action (Write_reg regf Nothing (if vec_set then (update_vector_start start_pos value) else value)) 
+            (Action (Write_reg regf Nothing (update_vector_start start_pos value)) 
 	            (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
           if is_top_level then (request,Nothing) else (request,Just (fun e env -> (LEXP_aux (LEXP_id id) (l,annot), env)))
 	| Tag_alias -> 
@@ -2015,13 +2015,13 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
           end 
         | Tag_extern _ ->
 	  let regf = Reg id annot in
-	  let (vec_set,start_pos) = match typ with
-	    | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> (true,s)
-	    | T_app "vector" _ -> Assert_extra.failwith "Vector didn't have a constant for start position in register set, with cast"
-	    | _ -> (false,0) end
-	  in
+	  let start_pos = match typ with
+	    | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
+	    | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
+	    | _ -> Assert_extra.failwith "reg not a vector, not set start, with cast"
+	  end in
 	  let request = 
-            (Action (Write_reg regf Nothing (if vec_set then (update_vector_start start_pos value) else value)) 
+            (Action (Write_reg regf Nothing (update_vector_start start_pos value)) 
 	       (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env) in
           if is_top_level then (request,Nothing) else (request,Just (fun e env -> (LEXP_aux (LEXP_cast typc id) (l,annot), env)))
         | _ -> ((Error l (String.stringAppend "Internal error: writing to id with tag other than extern or empty " (get_id id)),l_mem,l_env),Nothing)
@@ -2050,26 +2050,27 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		    let typ = match regform with 
 		      | Reg id (Just(t, tag, necs, effect)) -> t
 		    end in
-		    let (vec_set,start_pos) = match typ with
-		      | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> (true,s)
-		      | T_app "vector" _ -> 
-			Assert_extra.failwith "Vector didn't have a constant for start position in register set, in regform"
-		      | _ -> (false,0) end
-		    in
-		    ((Action (Write_reg regform Nothing (if vec_set then (update_vector_start start_pos value) else value)) 
+		    let start_pos = match typ with
+		      | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
+		      | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
+		      |  _ -> 
+			Assert_extra.failwith "Register not a vector, or didn't have a constant for start position in register"
+	            end in
+		    ((Action (Write_reg regform Nothing (update_vector_start start_pos value)) 
 		        (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
 		     Nothing)
 		  | (V_register regform,false,Just lexp_builder) ->
 		    let typ = match regform with 
 		      | Reg id (Just(t, tag, necs, effect)) -> t
                     end in
-		    let (vec_set,start_pos) = match typ with
-		      | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> (true,s)
+		    let start_pos = match typ with
+		      | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
+		      | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
 		      | T_app "vector" _ -> 
 			Assert_extra.failwith "Vector didn't have a constant for start position in register set, regform nested"
-		      | _ -> (false,0) end
+		      | _ -> 0 end
 		    in
-		    ((Action (Write_reg regform Nothing (if vec_set then (update_vector_start start_pos value) else value)) 
+		    ((Action (Write_reg regform Nothing (update_vector_start start_pos value)) 
 		        (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
                      Just (next_builder lexp_builder))
 		  | (V_boxref n t,true,_) -> ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm n value, l_env),Nothing)
@@ -2083,25 +2084,25 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		    let typ = match regform with 
 		      | Reg id (Just(t, tag, necs, effect)) -> t
                     end in
-		    let (vec_set,start_pos) = match typ with
-		      | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> (true,s)
-		      | T_app "vector" _ -> 
+		    let start_pos = match typ with
+		      | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
+		      | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
+		      | _ -> 
 			Assert_extra.failwith "Vector didn't have a constant for start position in register set, sparse regform"
-		      | _ -> (false,0) end
-		    in
-		    ((Action (Write_reg regform Nothing (if vec_set then (update_vector_start start_pos value) else value)) 
+	            end in
+		    ((Action (Write_reg regform Nothing (update_vector_start start_pos value)) 
 		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),Nothing)
 		| (V_register regform,false,Just lexp_builder) ->
 		    let typ = match regform with 
 		      | Reg id (Just(t, tag, necs, effect)) -> t
                     end in
-		    let (vec_set,start_pos) = match typ with
-		      | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> (true,s)
-		      | T_app "vector" _ -> 
+		    let start_pos = match typ with
+		      | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
+		      | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
+		      |  _ -> 
 			Assert_extra.failwith "Vector didn't have a constant for start position in register set, sparse regform nest"
-		      | _ -> (false,0) end
-		    in
-		    ((Action (Write_reg regform Nothing (if vec_set then (update_vector_start start_pos value) else value)) 
+		    end in
+		    ((Action (Write_reg regform Nothing (update_vector_start start_pos value)) 
 		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
                    Just (next_builder lexp_builder))
 		| (V_boxref n t,true,_) -> ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm n value, l_env),Nothing)
@@ -2198,7 +2199,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	   | Just(indexes) ->
 	     match in_env indexes id with
 	       | Just ir -> 
-		 ((Action (Write_reg (SubReg id regf ir) Nothing value) s,lm,le), 
+		 ((Action (Write_reg (SubReg id regf ir) Nothing (update_vector_start (get_first_index_range ir) value)) s,lm,le), 
 		  (if is_top_level then Nothing else next_builder))
 	       | _ -> ((Error l "Internal error, unrecognized write, no field",lm,le),Nothing)
 		 end 
@@ -2208,7 +2209,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	   | Just(indexes) ->
 	     match in_env indexes id with
 	       | Just ir -> 
-		 ((Action (Write_reg (SubReg id regf ir) Nothing value) s,lm,le), 
+		 ((Action (Write_reg (SubReg id regf ir) Nothing (update_vector_start (get_first_index_range ir) value)) s,lm,le), 
 		  (if is_top_level then Nothing else next_builder))
 	       | _ -> ((Error l "Internal error, unrecognized write, no field",lm,le),Nothing)
 		 end 
