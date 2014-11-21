@@ -142,6 +142,7 @@ let rec to_vec_inc (V_tuple[v1;v2]) = match (v1,v2) with
   | (v1,V_track v2 r2) -> taint (to_vec_inc (V_tuple[v1;v2])) r2
   | (V_unknown,_) -> V_unknown
   | (_,V_unknown) -> V_unknown
+  | _ -> Assert_extra.failwith ("to_vec_inc parameters were " ^ (string_of_value (V_tuple[v1;v2])))
 end
 ;;
 let rec to_vec_dec (V_tuple([v1;v2])) = match (v1,v2) with 

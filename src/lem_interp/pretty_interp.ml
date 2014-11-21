@@ -366,10 +366,13 @@ let doc_exp, doc_let =
 	      ("0b" ^ 
 	       (List.fold_right (fun (E_aux(E_lit(L_aux(l, _)),_)) rst -> match l with | L_one -> "1"^rst | L_zero -> "0"^rst) exps "")) 
 	  | _ -> default_print ()))
-  | E_vector_indexed (iexps, default) ->
-      (* XXX TODO print default when it is non-empty *)
+  | E_vector_indexed (iexps, (Def_val_aux(default,_))) ->
+    let default_string = 
+      (match default with
+	| Def_val_empty -> string "" 
+	| Def_val_dec e -> concat [semi; space; string "default"; equals; (exp env add_red e)]) in 
       let iexp (i,e) = doc_op equals (doc_int i) (exp env add_red e) in
-      brackets (separate_map comma iexp iexps)
+      brackets (concat [(separate_map comma iexp iexps);default_string])
   | E_vector_update(v,e1,e2) ->
       brackets (doc_op (string "with") (exp env add_red v) (doc_op equals (atomic_exp env add_red e1) (exp env add_red e2)))
   | E_vector_update_subrange(v,e1,e2,e3) ->

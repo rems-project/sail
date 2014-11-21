@@ -43,7 +43,7 @@ let collapse_leading s =
 let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (function
   | Interp.V_lit(L_aux(L_zero, _)) -> "0"
   | Interp.V_lit(L_aux(L_one, _)) -> "1"
-  | _ -> assert false) l))
+  | v -> (Printf.printf "bitvec found a non bit %s%!\n" (Interp.string_of_value v));assert false) l))
 ;;
 
 (* pp the bytes of a Bytevector as a hex value *)
