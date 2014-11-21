@@ -65,13 +65,14 @@ let pp_format_var (Kid_aux(Var v,_)) = v
 
 let rec pp_format_l_lem = function
   | Parse_ast.Unknown -> "Unknown"
-  | Parse_ast.Int(s,None) -> "(Int \"" ^ s ^ "\" Nothing)"
+  | _ -> "Unknown"
+(*  | Parse_ast.Int(s,None) -> "(Int \"" ^ s ^ "\" Nothing)"
   | Parse_ast.Int(s,(Some l)) -> "(Int \"" ^  s ^ "\" (Just " ^ (pp_format_l_lem l) ^ "))"
   | Parse_ast.Range(p1,p2) -> "(Range \"" ^ p1.Lexing.pos_fname ^ "\" " ^
                                (string_of_int p1.Lexing.pos_lnum) ^ " " ^ 
                                (string_of_int (p1.Lexing.pos_cnum - p1.Lexing.pos_bol)) ^ " " ^
                                (string_of_int p2.Lexing.pos_lnum) ^ " " ^
-                               (string_of_int (p2.Lexing.pos_cnum - p2.Lexing.pos_bol)) ^ ")"
+                               (string_of_int (p2.Lexing.pos_cnum - p2.Lexing.pos_bol)) ^ ")"*)
 
 let pp_lem_l ppf l = base ppf (pp_format_l_lem l)
 
@@ -290,7 +291,7 @@ let pp_format_tag = function
   | Spec -> "Tag_spec"
 
 let rec pp_format_nes nes = 
-  "[" ^ 
+  "[" ^ (*
   (list_format "; "
      (fun ne -> match ne with
        | LtEq(_,n1,n2) -> "(Nec_lteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
@@ -305,7 +306,7 @@ let rec pp_format_nes nes =
        | BranchCons(_,nes_b) ->
          "(Nec_branch " ^ (pp_format_nes nes_b) ^ ")"
      )
-     nes) ^ "]"
+     nes) ^*) "]"
 
 let pp_format_annot = function
   | NoTyp -> "Nothing"
@@ -827,7 +828,7 @@ let doc_exp, doc_let =
       doc_op (doc_id op) (shift_exp l) (plus_exp r)
   | _ -> plus_exp expr
   and plus_exp ((E_aux(e,_)) as expr) = match e with
-  | E_app_infix(l,(Id_aux(Id ("+" | "-"),_) as op),r) ->
+  | E_app_infix(l,(Id_aux(Id ("+" | "-" | "+_s" | "-_s"),_) as op),r) ->
       doc_op (doc_id op) (plus_exp l) (star_exp r)
   | _ -> star_exp expr
   and star_exp ((E_aux(e,_)) as expr) = match e with
@@ -955,7 +956,7 @@ let doc_exp, doc_let =
     | "<=" | "<=_s" | "<" | "<_s" | "<_si" | "<_u"
     | "@" | "^^" | "^" | "~^"
     | ">>" | ">>>" | "<<" | "<<<"
-    | "+" | "-"
+    | "+" | "-" | "+_s" | "-_s"
     | "*" | "/"
     | "div" | "quot" | "rem" | "mod"
     | "*_s" | "*_si" | "*_u" | "*_ui"
