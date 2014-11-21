@@ -150,11 +150,11 @@ let add_to_address value num =
     | Unknown -> Unknown
     | Bitvector _ _ _ -> 
       fst(extern_value (make_mode true false) false Nothing
-	             (Interp_lib.arith_op_vec_range (+) 1 
+	             (Interp_lib.arith_op_vec_range (+) Interp_lib.Unsigned 1 
 			(Interp.V_tuple [(intern_value value);Interp.V_lit (L_aux (L_num num) Interp_ast.Unknown)])))
     | Bytevector _ ->
       fst(extern_value (make_mode true false) true Nothing
-	             (Interp_lib.arith_op_vec_range (+) 1 
+	             (Interp_lib.arith_op_vec_range (+) Interp_lib.Unsigned 1 
 			(Interp.V_tuple [(intern_value value);Interp.V_lit (L_aux (L_num num) Interp_ast.Unknown)])))
 end
 

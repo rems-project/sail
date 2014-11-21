@@ -200,6 +200,8 @@ rule token = parse
   | "[|"                                { SquareBar }
   | "~^"				{ (TildeCarrot(r"~^")) }
 
+  | "+_s"                               { (PlusUnderS(r"+_s")) }
+  | "-_s"                               { (MinusUnderS(r"-_s")) }
   | ">=_s"				{ (GtEqUnderS(r">=_s")) }
   | ">=_si"				{ (GtEqUnderSi(r">=_si")) }
   | ">=_u"				{ (GtEqUnderU(r">=_u")) }

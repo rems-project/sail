@@ -160,7 +160,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 %token <string> GtEqUnderS GtEqUnderSi GtEqUnderU GtEqUnderUi GtGtUnderU GtUnderS
 %token <string> GtUnderSi GtUnderU GtUnderUi LtEqUnderS LtEqUnderSi LtEqUnderU
 %token <string> LtEqUnderUi LtUnderS LtUnderSi LtUnderU LtUnderUi StarStarUnderS StarStarUnderSi StarUnderS
-%token <string> StarUnderSi StarUnderU StarUnderUi TwoCarrot
+%token <string> StarUnderSi StarUnderU StarUnderUi TwoCarrot PlusUnderS MinusUnderS
 
 %token <string> AmpI AtI CarrotI  DivI EqI ExclI GtI LtI PlusI StarI TildeI
 %token <string> AmpAmpI CarrotCarrotI ColonColonI EqDivEqI EqEqI ExclEqI ExclExclI
@@ -209,10 +209,14 @@ id:
     { idl (DeIid($3)) }
   | Lparen Deinfix Minus Rparen
     { idl (DeIid("-")) }
+  | Lparen Deinfix MinusUnderS Rparen
+    { idl (DeIid("-_s")) }
   | Lparen Deinfix Mod Rparen
     { idl (DeIid("mod")) }
   | Lparen Deinfix Plus Rparen
     { idl (DeIid($3)) }
+  | Lparen Deinfix PlusUnderS Rparen
+    { idl (DeIid("+_s")) }
   | Lparen Deinfix Star Rparen
     { idl (DeIid($3)) }
   | Lparen Deinfix AmpAmp Rparen
@@ -700,8 +704,12 @@ plus_exp:
     { $1 }
   | plus_exp Plus star_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | plus_exp PlusUnderS star_exp
+    { eloc (E_app_infix($1, Id_aux(Id($2), locn 2 2), $3)) }
   | plus_exp Minus star_exp
     { eloc (E_app_infix($1,Id_aux(Id("-"), locn 2 2), $3)) }
+  | plus_exp MinusUnderS star_exp
+    { eloc (E_app_infix($1,Id_aux(Id("-_s"),locn 2 2), $3)) }
 
 plus_right_atomic_exp:
   | star_right_atomic_exp
