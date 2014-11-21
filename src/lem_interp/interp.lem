@@ -561,6 +561,7 @@ let rec update_vector_start new_start v = match v with
   (*Note, may need to shrink and check if still sparse *)
   | V_vector_sparse m n inc vals d -> V_vector_sparse new_start n inc vals d 
   | V_unknown -> V_unknown
+  | V_lit (L_aux L_undef _) -> v
   | V_track v r -> taint (update_vector_start new_start v) r
 end
 
@@ -2062,6 +2063,18 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
             let nth _ = (match access_vector v n with | V_track v _ -> v | v -> v end) in
             (match v with 
 	      | V_unknown -> ((Value v_whole,lm,le),Nothing)
+	      | V_boxref i _ -> 
+		(match (in_mem lm i,is_top_level,maybe_builder) with
+		  | ((V_vector _ _ _ as vec),true,_) ->
+		    let new_vec = fupdate_vector_slice vec (V_vector 1 true [value]) n n in
+		    ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm i new_vec, l_env), Nothing)
+		  | ((V_track (V_vector _ _ _ as vec) r), true,_) ->
+		    let new_vec = fupdate_vector_slice vec (V_vector 1 true [value])  n n in
+		    ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm i (taint new_vec r),l_env),Nothing)
+		  | ((V_vector _ _ _ as vec),false, Just lexp_builder) ->
+		    ((Value (access_vector vec n), lm, l_env), Just (next_builder lexp_builder))
+		  | (v,_,_) -> Assert_extra.failwith("no vector findable in set bit, found " ^ (string_of_value v))
+		 end )
               | V_vector inc m vs -> 
 		(match (nth(),is_top_level,maybe_builder) with
 		  | (V_register regform,true,_) ->
@@ -2086,15 +2099,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		    ((Action (Write_reg regform Nothing (update_vector_start start_pos value)) 
 		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),Nothing)
 		| (V_register regform,false,Just lexp_builder) ->
-		    let typ = match regform with 
-		      | Reg id (Just(t, tag, necs, effect)) -> t
-                    end in
-		    let start_pos = match typ with
-		      | T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]) -> s
-		      | T_app "register" (T_args [T_arg_typ (T_app "vector" (T_args [T_arg_nexp (Ne_const s);_;_;_]))]) -> s
-		      |  _ -> 
-			Assert_extra.failwith "Vector didn't have a constant for start position in register set, sparse regform nest"
-		    end in
+		    let start_pos = reg_start_pos regform in
 		    ((Action (Write_reg regform Nothing (update_vector_start start_pos value)) 
 		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
                    Just (next_builder lexp_builder))
@@ -2103,7 +2108,9 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		  ((Error l ("Vector does not contain reg or register values " ^ (string_of_value v)),lm,l_env),Nothing)
 		| ((V_boxref n t),false, Just lexp_builder) -> ((Value (in_mem lm n),lm, l_env),Just (next_builder lexp_builder))
 		| (v,false, Just lexp_builder) -> ((Value v,lm,le), Just (next_builder lexp_builder)) end)
-            | _ -> ((Error l "Vector access to write of non-vector",lm,l_env),Nothing) end)
+            | v -> 
+	      ((Error l ("Vector access to write of non-vector" ^ (string_of_value v)),lm,l_env),Nothing)
+	     end)
          | ((Action a s,lm,le),Just lexp_builder) ->
            (match (a,is_top_level) with
            | ((Write_reg regf Nothing value),true) -> 

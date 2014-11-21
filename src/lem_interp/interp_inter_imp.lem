@@ -194,10 +194,15 @@ let rec countLeadingZeros_helper bits =
       Interp.V_lit (L_aux (L_num (n+1)) loc)
     | _ -> Interp.V_lit (L_aux (L_num 0) Interp_ast.Unknown)
 end
-let rec countLeadingZeros v = match v with
-  | Interp.V_unknown -> Interp.V_unknown
-  | Interp.V_track v r -> Interp.taint (countLeadingZeros v) r
-  | Interp.V_vector _ _ bits -> countLeadingZeros_helper bits
+let rec countLeadingZeros (Interp.V_tuple v) = match v with
+  | [Interp.V_track v r;Interp.V_track v2 r2] -> 
+    Interp.taint (countLeadingZeros (Interp.V_tuple [v;v2])) (r++r2)
+  | [Interp.V_track v r;v2] -> Interp.taint (countLeadingZeros (Interp.V_tuple [v;v2])) r
+  | [v;Interp.V_track v2 r2] -> Interp.taint (countLeadingZeros (Interp.V_tuple [v;v2])) r2
+  | [Interp.V_unknown;_] -> Interp.V_unknown
+  | [_;Interp.V_unknown] -> Interp.V_unknown
+  | [Interp.V_vector _ _ bits;Interp.V_lit (L_aux (L_num n) _)] -> 
+    countLeadingZeros_helper (snd (List.splitAt (natFromInteger n) bits))
 end
 
 (*Power specific external functions*)
