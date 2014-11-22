@@ -53,6 +53,7 @@ let rec to_bytes l = match l with
 end 
 
 let all_known l = List.all is_bool l
+let all_known_bytes l = List.all (fun (Byte_lifted bs) -> List.all is_bool bs) l
 
 let bits_to_byte b = 
   if ((List.length b) = 8) && (all_known b)
@@ -98,8 +99,9 @@ let integer_of_byte_list bytes =
 *)
 
 let extern_reg r slice = match (r,slice) with
-  | (Interp.Reg (Id_aux (Id x) _) _,Nothing) -> Reg x
-  | (Interp.Reg (Id_aux (Id x) _) _,Just(i1,i2)) -> Reg_slice x (i1,i2)
+  | (Interp.Reg (Id_aux (Id x) _) (Just(t,_,_,_)),Nothing) -> 
+    Reg x (Interp.reg_size r)
+  | (Interp.Reg (Id_aux (Id x) _) (Just(t,_,_,_)),Just(i1,i2)) -> Reg_slice x (i1,i2)
   | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_single i) _),Nothing) -> 
     Reg_field y x (i,i)
   | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_range i j) _), Nothing) -> 
@@ -471,10 +473,10 @@ let rec find_reg_name reg = function
   | [] -> Nothing
   | (reg_name,v)::registers ->
     match (reg,reg_name) with
-      | (Reg i, Reg n) -> if i = n then (Just v) else find_reg_name reg registers
-      | (Reg_slice i (p1,p2), Reg n) -> 
+      | (Reg i size, Reg n size2) -> if i = n && size = size2 then (Just v) else find_reg_name reg registers
+      | (Reg_slice i (p1,p2), Reg n _) -> 
 	if i = n then (Just (slice_reg_value v p1 p2)) else find_reg_name reg registers
-      | (Reg_field i f (p1,p2), Reg n) -> 
+      | (Reg_field i f (p1,p2), Reg n _) -> 
 	if i = n then (Just (slice_reg_value v p1 p2)) else find_reg_name reg registers
       | (Reg_slice  i (p1,p2), Reg_slice n (p3,p4)) ->
 	if i=n 

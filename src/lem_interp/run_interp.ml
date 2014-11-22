@@ -61,11 +61,11 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
 	      | i  -> string_of_int i) words))		
   | Unknown0 -> "Unknown"*)
 
-let reg_name_to_string = function
+(*let reg_name_to_string = function
   | Reg0 s -> s
   | Reg_slice(s,(first,second)) -> s (*contemplate putting slice here*)
   | Reg_field(s,f,_) -> s ^ "." ^ f
-  | Reg_f_slice(s,f,_,(first,second)) -> s ^ "." ^ f
+  | Reg_f_slice(s,f,_,(first,second)) -> s ^ "." ^ f*)
 
 let rec reg_to_string = function
   | Reg (id,_) -> id_to_string id

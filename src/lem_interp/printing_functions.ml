@@ -119,7 +119,7 @@ let rec bit_to_hex v =
 ;;*)
 
 let reg_name_to_string = function
-  | Reg0 s -> s
+  | Reg0(s,_) -> s
   | Reg_slice(s,(first,second)) -> 
     s ^ "[" ^ string_of_big_int first ^ (if (eq_big_int first second) then "" else ".." ^ (string_of_big_int second)) ^ "]"
   | Reg_field(s,f,_) -> s ^ "." ^ f

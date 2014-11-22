@@ -96,8 +96,8 @@ type slice = (integer * integer)
 
 
 type reg_name = 
-| Reg of string 
-(*Name of the register, accessing the entire register*)
+| Reg of string * integer
+(*Name of the register, accessing the entire register, and the size of this register *)
 
 | Reg_slice of string * slice 
 (* Name of the register, accessing from the bit indexed by the first
@@ -117,7 +117,7 @@ specifies a part of the field, indexed w.r.t. the register as a whole *)
 (* because reg_name contains slice which currently contains Big_int.big_int, the default OCaml comparison is not sufficient and we need to define explicit type classes *)
 let reg_nameEqual r1 r2 = 
   match (r1,r2) with
-  | (Reg s1, Reg s2) -> s1=s2
+  | (Reg s1 l1, Reg s2 l2) -> s1=s2 && l1=l2
   | (Reg_slice s1 sl1, Reg_slice s2 sl2) -> s1=s2 && sl1=sl2
   | (Reg_field s1 f1 sl1, Reg_field s2 f2 sl2) -> s1=s2 && f1=f2 && sl1=sl2
   | (Reg_f_slice s1 f1 sl1 sl1', Reg_f_slice s2 f2 sl2 sl2') -> s1=s2 && f1=f2 && sl1=sl2 && sl1'=sl2'
@@ -131,13 +131,13 @@ end
 
 let reg_nameCompare r1 r2 = 
   match (r1,r2) with
-  | (Reg s1, Reg s2) -> compare s1 s2
+  | (Reg s1 l1, Reg s2 l2) -> pairCompare compare compare (s1,l1) (s2,l2)
   | (Reg_slice s1 sl1, Reg_slice s2 sl2) -> pairCompare compare compare (s1,sl1) (s2,sl2)
   | (Reg_field s1 f1 sl1, Reg_field s2 f2 sl2) -> 
       tripleCompare compare compare compare (s1,f1,sl1) (s2,f2,sl2)
   | (Reg_f_slice s1 f1 sl1 sl1', Reg_f_slice s2 f2 sl2 sl2') -> 
       pairCompare compare (tripleCompare compare compare compare) (s1,(f1,sl1,sl1')) (s2,(f2,sl2,sl2'))
-  | (Reg _, _)  -> LT
+  | (Reg _ _, _)  -> LT
   | (Reg_slice _ _, _) -> LT
   | (Reg_field _ _ _, _) -> LT
   | (_, _) -> GT

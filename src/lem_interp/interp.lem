@@ -135,7 +135,27 @@ let reg_start_pos reg =
 	| T_app "register" targs -> start_from_reg targs
 	| T_abbrev _ t -> start_from_abbrev t
       end 
-end   
+end 
+
+let reg_size reg = 
+  match reg with
+    | Reg _ (Just(typ,_,_,_)) -> 
+      let end_from_vec targs = match targs with
+	| T_args [_;T_arg_nexp (Ne_const s);_;_] -> s
+      end in
+      let end_from_reg targs = match targs with
+	| T_args [T_arg_typ (T_app "vector" targs)] -> end_from_vec targs
+      end in
+      let end_from_abbrev t = match t with
+	| T_app "vector" targs -> end_from_vec targs
+	| T_app "register" targs -> end_from_reg targs
+      end in
+      match typ with 
+	| T_app "vector" targs -> end_from_vec targs
+	| T_app "register" targs -> end_from_reg targs
+	| T_abbrev _ t -> end_from_abbrev t
+      end 
+end 
 
 (*Constant unit value, for use in interpreter *)
 let unitv = V_lit (L_aux L_unit Unknown)
