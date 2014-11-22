@@ -108,6 +108,7 @@ let kw_table =
      ("div",			 (fun x -> Div_));
      ("mod",			 (fun x -> Mod));
      ("quot",			 (fun x -> Quot));
+     ("quot_s",                  (fun x -> QuotUnderS));
      ("rem",			 (fun x -> Rem));
 
      ("barr",                    (fun x -> Barr));
@@ -219,6 +220,7 @@ rule token = parse
   | "<_si"				{ (LtUnderSi(r"<_si")) }
   | "<_u"				{ (LtUnderU(r"<_u")) }
   | "<_ui"				{ (LtUnderUi(r"<_ui")) }
+  | "*_s"                               { (StarUnderS(r"*_s")) }
   | "**_s"				{ (StarStarUnderS(r"**_s")) }
   | "**_si"				{ (StarStarUnderSi(r"**_si")) }
   | "*_u"				{ (StarUnderU(r"*_u")) }

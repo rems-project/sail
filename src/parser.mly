@@ -140,7 +140,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 %nonassoc Then
 %nonassoc Else
 
-%token Div_ Mod Quot Rem
+%token Div_ Mod Quot Rem QuotUnderS
 
 %token Bar Comma Dot Eof Minus Semi Under
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare
@@ -160,7 +160,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 %token <string> GtEqUnderS GtEqUnderSi GtEqUnderU GtEqUnderUi GtGtUnderU GtUnderS
 %token <string> GtUnderSi GtUnderU GtUnderUi LtEqUnderS LtEqUnderSi LtEqUnderU
 %token <string> LtEqUnderUi LtUnderS LtUnderSi LtUnderU LtUnderUi StarStarUnderS StarStarUnderSi StarUnderS
-%token <string> StarUnderSi StarUnderU StarUnderUi TwoCarrot PlusUnderS MinusUnderS
+%token <string> StarUnderSi StarUnderU StarUnderUi TwoCarrot PlusUnderS MinusUnderS 
 
 %token <string> AmpI AtI CarrotI  DivI EqI ExclI GtI LtI PlusI StarI TildeI
 %token <string> AmpAmpI CarrotCarrotI ColonColonI EqDivEqI EqEqI ExclEqI ExclExclI
@@ -199,6 +199,8 @@ id:
     { idl (DeIid($3)) }
   | Lparen Deinfix Quot Rparen
     { idl (DeIid("quot")) }
+  | Lparen Deinfix QuotUnderS Rparen
+    { idl (DeIid("quot_s")) }
   | Lparen Deinfix Eq Rparen
     { Id_aux(DeIid($3),loc ()) }
   | Lparen Deinfix Excl Lparen
@@ -219,6 +221,8 @@ id:
     { idl (DeIid("+_s")) }
   | Lparen Deinfix Star Rparen
     { idl (DeIid($3)) }
+  | Lparen Deinfix StarUnderS Rparen
+    { idl (DeIid("*_s")) }
   | Lparen Deinfix AmpAmp Rparen
     { idl (DeIid($3)) }
   | Lparen Deinfix Bar Rparen
@@ -662,6 +666,8 @@ star_exp:
     { eloc (E_app_infix($1,Id_aux(Id("div"), locn 2 2), $3)) }
   | star_exp Quot starstar_exp
     { eloc (E_app_infix($1,Id_aux(Id("quot"), locn 2 2), $3)) }
+  | star_exp QuotUnderS starstar_exp
+    { eloc (E_app_infix($1,Id_aux(Id("quot_s"), locn 2 2), $3)) }
   | star_exp Rem starstar_exp
     { eloc (E_app_infix($1,Id_aux(Id("rem"), locn 2 2), $3)) }
   | star_exp Mod starstar_exp
@@ -686,6 +692,8 @@ star_right_atomic_exp:
     { eloc (E_app_infix($1,Id_aux(Id("div"), locn 2 2), $3)) }
   | star_exp Quot starstar_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id("quot"), locn 2 2), $3)) }
+  | star_exp QuotUnderS starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id("quot_s"), locn 2 2), $3)) }
   | star_exp Rem starstar_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id("rem"), locn 2 2), $3)) }
   | star_exp Mod starstar_right_atomic_exp
@@ -718,6 +726,10 @@ plus_right_atomic_exp:
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | plus_exp Minus star_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id("-"), locn 2 2), $3)) }
+  | plus_exp PlusUnderS star_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | plus_exp MinusUnderS star_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id("-_s"), locn 2 2), $3)) }
 
 shift_exp:
   | plus_exp

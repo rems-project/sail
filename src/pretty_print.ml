@@ -834,7 +834,7 @@ let doc_exp, doc_let =
   and star_exp ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id (
       "*" | "/"
-    | "div" | "quot" | "rem" | "mod"
+    | "div" | "quot" | "quot_s" | "rem" | "mod"
     | "*_s" | "*_si" | "*_u" | "*_ui"),_) as op),r) ->
       doc_op (doc_id op) (star_exp l) (starstar_exp r)
   | _ -> starstar_exp expr
@@ -958,7 +958,7 @@ let doc_exp, doc_let =
     | ">>" | ">>>" | "<<" | "<<<"
     | "+" | "-" | "+_s" | "-_s"
     | "*" | "/"
-    | "div" | "quot" | "rem" | "mod"
+    | "div" | "quot" | "quot_s" | "rem" | "mod"
     | "*_s" | "*_si" | "*_u" | "*_ui"
     | "**"), _))
     , _) ->

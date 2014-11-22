@@ -481,11 +481,16 @@ let function_map = [
   ("mult_range_vec", arith_op_range_vec ( * ) Unsigned 2);
   ("mult_vec_range", arith_op_vec_range ( * ) Unsigned 2);
   ("mult_overload_vec", arith_op_overflow_vec ( * ) Unsigned 2);
+  ("multiply_vec_signed", arith_op_vec ( * ) Signed 2);
+  ("mult_range_vec_signed", arith_op_range_vec ( * ) Signed 2);
+  ("mult_vec_range_signed", arith_op_vec_range ( * ) Signed 2);
+  ("mult_overflow_vec_signed", arith_op_overflow_vec ( * ) Signed 2);
   ("mod", arith_op_no0 (mod));
   ("mod_vec", arith_op_vec_no0 (mod)  Unsigned 1);
   ("mod_vec_range", arith_op_vec_range_no0 (mod) Unsigned 1);
   ("quot", arith_op_no0 (/));
   ("quot_vec", arith_op_vec_no0 (/)  Unsigned 1);
+  ("quot_vec_signed", arith_op_vec_no0 (/)  Signed 1);
   ("eq", eq);
   ("eq_vec_range", eq_vec_range);
   ("eq_range_vec", eq_range_vec);
