@@ -58,7 +58,7 @@ let bit_lifted_to_string = function
   | Bitl_undef -> "u"
   | Bitl_unknown -> "?"
 
-let reg_val_to_string v = 
+let reg_value_to_string v = 
   let l = List.length v.rv_bits in
   let start = (string_of_int (Big_int.int_of_big_int v.rv_start)) in
   if List.mem l [8;16;32;64;128] then
@@ -67,7 +67,7 @@ let reg_val_to_string v =
   else (string_of_int l) ^ "_" ^ start ^ "'b" ^ 
     collapse_leading (List.fold_right (^) (List.map bit_lifted_to_string v.rv_bits) "")
 
-let mem_val_to_string v = bytes_to_string v
+let mem_value_to_string v = bytes_to_string v
 
 (*let val_to_string v = match v with
   | Bitvector(bools, inc, fst)-> 
@@ -223,11 +223,11 @@ let rec format_events = function
     "     Failed with message : " ^ s ^ "\n"
   | (E_error s)::events ->
     "     Failed with message : " ^ s ^ " but continued on erroneously\n"
-  | (E_read_mem(read_kind, location, length, tracking))::events ->
-    "     Read_mem at " ^ (val_to_string location) ^ " for " ^ (string_of_big_int length) ^ " bytes \n" ^
+  | (E_read_mem(read_kind, (Address_lifted location), length, tracking))::events ->
+    "     Read_mem at " ^ (mem_value_to_string location) ^ " for " ^ (string_of_big_int length) ^ " bytes \n" ^
     (format_events events)
-  | (E_write_mem(write_kind,location, length, tracking, value, v_tracking))::events ->
-    "     Write_mem at " ^ (val_to_string location) ^ " writing " ^ (val_to_string value) ^ " across " ^ (string_of_big_int length) ^ " bytes\n" ^
+  | (E_write_mem(write_kind,(Address_lifted location), length, tracking, value, v_tracking))::events ->
+    "     Write_mem at " ^ (mem_value_to_string location) ^ " writing " ^ (mem_value_to_string value) ^ " across " ^ (string_of_big_int length) ^ " bytes\n" ^
     (format_events events)
   | ((E_barrier b_kind)::events) ->
     "     Memory_barrier occurred\n" ^ 
@@ -236,7 +236,7 @@ let rec format_events = function
     "     Read_reg of " ^ (reg_name_to_string reg_name) ^ "\n" ^
     (format_events events)
   | (E_write_reg(reg_name, value))::events ->
-    "     Write_reg of " ^ (reg_name_to_string reg_name) ^ " writing " ^ (val_to_string value) ^ "\n" ^
+    "     Write_reg of " ^ (reg_name_to_string reg_name) ^ " writing " ^ (reg_value_to_string value) ^ "\n" ^
     (format_events events)
 ;;
 
@@ -285,15 +285,12 @@ let local_variables_to_string stack =
 
 let instr_parm_to_string (name, typ, value) = 
   name ^"="^
-  match (typ,value) with
-    | Bit, Bitvector ([true],_,_) -> "1"
-    | Bit, Bitvector ([false],_,_) -> "0"
-    | Other,_ -> "Unrepresentable external value"
-    | _, Unknown0 -> "Unknown"
-    | _, v -> let intern_v = (Interp_inter_imp.intern_value value) in
+  match typ with
+    | Other -> "Unrepresentable external value"
+    | _ -> let intern_v = (Interp_inter_imp.intern_reg_value value) in
 	      match Interp_lib.to_num Interp_lib.Unsigned intern_v with
 		| V_lit (L_aux(L_num n, _)) -> string_of_big_int n
-		| _ -> val_to_string value
+		| _ -> reg_value_to_string value
 
 let rec instr_parms_to_string ps = 
   match ps with
