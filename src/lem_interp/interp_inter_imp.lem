@@ -62,7 +62,7 @@ let bits_to_byte b =
 		   
 let intern_reg_value v = match v with
   | <| rv_bits=[b] |> -> to_bit b
-  | _ -> Interp.V_vector v.rv_start (v.rv_dir = D_increasing) (to_bits v.rv_bits)
+  | _ -> Interp.V_vector (integerFromInt v.rv_start) (v.rv_dir = D_increasing) (to_bits v.rv_bits)
 end
 
 let intern_mem_value v = 
@@ -113,26 +113,28 @@ end
 let rec extern_reg_value optional_start v = match v with
   | Interp.V_track v regs -> extern_reg_value optional_start v 
   | Interp.V_vector fst inc bits ->
-    <| rv_bits=(from_bits bits); rv_dir=(if inc then D_increasing else D_decreasing); rv_start=fst|>
+    <| rv_bits=(from_bits bits); 
+       rv_dir=(if inc then D_increasing else D_decreasing);
+       rv_start=(intFromInteger fst)|>
   | Interp.V_vector_sparse fst stop inc bits default ->
     extern_reg_value optional_start (Interp_lib.fill_in_sparse v)
   | Interp.V_lit (L_aux L_zero _) -> 
-    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+    let start = match optional_start with | Nothing -> 0 | Just i -> (intFromInteger i) end in
     <| rv_bits=[Bitl_zero]; rv_dir=D_increasing; rv_start=start |>
   | Interp.V_lit (L_aux L_false _) ->
-    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+    let start = match optional_start with | Nothing -> 0 | Just i -> (intFromInteger i) end in
     <| rv_bits=[Bitl_zero]; rv_dir=D_increasing; rv_start=start |>
   | Interp.V_lit (L_aux L_one _) -> 
-    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+    let start = match optional_start with | Nothing -> 0 | Just i -> (intFromInteger i) end in
     <| rv_bits=[Bitl_one]; rv_dir=D_increasing; rv_start=start |>
   | Interp.V_lit (L_aux L_true _) ->
-    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+    let start = match optional_start with | Nothing -> 0 | Just i -> (intFromInteger i) end in
     <| rv_bits=[Bitl_one]; rv_dir=D_increasing; rv_start=start |>
   | Interp.V_lit (L_aux L_undef _) -> 
-    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+    let start = match optional_start with | Nothing -> 0 | Just i -> (intFromInteger i) end in
     <| rv_bits=[Bitl_undef]; rv_dir=D_increasing; rv_start=start |>
   | Interp.V_unknown -> 
-    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+    let start = match optional_start with | Nothing -> 0 | Just i -> (intFromInteger i) end in
     <| rv_bits=[Bitl_unknown]; rv_dir=D_increasing; rv_start=start |>
 end 
 
@@ -148,8 +150,10 @@ end
 
 let rec slice_reg_value v start stop = 
   let inc = v.rv_dir = D_increasing in
-  <| v with rv_bits = (Interp.from_n_to_n (if inc then (start - v.rv_start) else (v.rv_start - start))
-                                          (if inc then (stop - v.rv_start) else (v.rv_start - stop)) v.rv_bits);
+  let start = intFromInteger start in
+  let stop = intFromInteger stop in
+  <| v with rv_bits = (Interp.from_n_to_n (integerFromInt (if inc then (start - v.rv_start) else (v.rv_start - start)))
+                                          (integerFromInt (if inc then (stop - v.rv_start) else (v.rv_start - stop))) v.rv_bits);
             rv_start = (if inc then start else ((stop - start) + 1)) |> 
 
 (*
