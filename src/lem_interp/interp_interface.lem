@@ -1,3 +1,22 @@
+(* PS NOTES FOR KATHY:
+
+pls also change:  
+
+  decode_to_istate
+  decode_to_instruction 
+
+to take an opcode as defined above, instead of a value 
+
+and change 
+
+  type instruction = (string * list (string * instr_parm_typ * value) * list base_effect)
+
+to 
+
+  type instruction = (string * list (string * instr_parm_typ * instruction_field_value) * list base_effect)
+*)
+
+
 import Interp
 open import Interp_ast
 open import Pervasives
@@ -136,6 +155,10 @@ instance (Ord reg_name)
   let (>=) r1 r2 = (reg_nameCompare r1 r2) <> LT
 end
 
+type bit =
+  | Bitc_zero
+  | Bitc_one
+
 type bit_lifted = 
   | Bitl_zero
   | Bitl_one
@@ -150,9 +173,22 @@ type register_value = <| rv_bits: list bit_lifted; rv_dir: direction; rv_start: 
 
 type byte_lifted = Byte_lifted of list bit_lifted (* of length 8 *)
 
+type instruction_field_value = list bit 
+
 type address_lifted = Address_lifted of list byte_lifted (* of length 8 for 64bit machines*)
 
-type memory_value = list byte_lifted (* arbitrary length, > 1 *)
+type memory_byte = byte_lifted
+
+type memory_value = list memory_byte (* the head of the list at the lowest address, of length >=1 *)
+
+(* not sure which of these is more handy yet *)
+type address = Address of list byte (* of length 8 *)
+
+type opcode = Opcode of list byte (* of length 4 *)
+
+
+
+
 
 type outcome =
 (* Request to read memory, value is location to read followed by registers that location depended on when mode.track_values,
@@ -292,17 +328,8 @@ type i_state_or_error =
   | Instr of instruction * instruction_state
   | Decode_error of decode_error
 
-(*val num_to_bits : nat -> v_kind -> integer -> value*)
 
-val byte_to_bits : word8 -> list bit_lifted
-val bits_to_byte : list bit_lifted -> word8
-
-val integer_of_byte_list : list word8 -> integer
-
-val byte_list_of_integer : integer -> integer -> list word8 
-
-
-(** propose to remove this: Function to decode an instruction and build the state to run it*)
+(** PS:I agree. propose to remove this: Function to decode an instruction and build the state to run it*)
 val decode_to_istate : context -> register_value -> i_state_or_error
 
 (** propose to add this, and then use instruction_to_istate on the result: Function to decode an instruction and build the state to run it*)
@@ -337,4 +364,60 @@ val interp_exhaustive : maybe (list (reg_name * register_value)) -> instruction_
 (* As above, but will request register reads: outcome will only be rreg, done, or error *)
 val rr_interp_exhaustive : interp_mode -> instruction_state -> list event -> (outcome * (list event)) 
 
+
+(** operations and coercions on basic values *)
+
+(*val num_to_bits : nat -> v_kind -> integer -> value*)
+
+val byte_to_bits : word8 -> list bit_lifted
+val bits_to_byte : list bit_lifted -> word8
+
+val integer_of_byte_list : list word8 -> integer
+
+val byte_list_of_integer : integer -> integer -> list word8 
+
+
+(* constructing values *)
+
+val register_value : bit_lifted -> direction -> int -> int -> register_value
+let register_value b dir width start_index = 
+  <| rv_bits = List.replicate (natFromInt width) b;
+     rv_dir = dir; (* D_increasing for Power *)
+     rv_start = start_index; |>
+
+val register_value_zeros : direction -> int -> int -> register_value
+let register_value_zeros dir width start_index = 
+  register_value Bitl_zero dir width start_index
+
+val register_value_ones : direction -> int -> int -> register_value
+let register_value_ones dir width start_index = 
+  register_value Bitl_one dir width start_index
+
+val memory_value_unknown : int (*the number of bytes*) -> memory_value
+(*let memory_value_lifted_unknown (width:int) : memory_value_lifted = *)
+
+
+
+val add_address_int : address -> int -> address 
+(* let add_address_int (a:address) (i:int) : address = *)
+
+val clear_low_order_bits_of_address : address -> address 
+
+
+
+(* coercions *)
+val integer_of_address : address -> integer 
+
+val address_of_integer : integer -> address 
+
+val opcode_of_bytes : byte -> byte -> byte -> byte -> opcode
+(*let opcode_of_bytes b0 b1 b2 b3 : maybe opcode = *)
+
+val register_value_of_address : address -> register_value   
+
+val address_lifted_of_register_value : register_value -> maybe address_lifted
+(* returning Nothing iff the register value is not 64 bits wide, but allowing Bitl_undef and Bitl_unknown *)
+
+val address_of_address_lifted : address_lifted -> maybe address
+(* returning Nothing iff the address contains any Bitl_undef or Bitl_unknown *)
 
