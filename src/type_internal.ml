@@ -964,7 +964,11 @@ let initial_typ_env =
                   Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p"); bit_t])
                                      (mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")))),
-                       External (Some "add_vec_bit"), [], pure_e);
+                       External (Some "add_vec_bit_signed"), [], pure_e);
+		  Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
+                        (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p"); bit_t])
+                                     (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")); bit_t]))),
+                       External (Some "add_overflow_vec_bit_signed"), [], pure_e);
                   Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
                         (mk_pure_fun (mk_tup [bit_t; mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")])
                                      (mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")))),

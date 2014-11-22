@@ -242,6 +242,32 @@ let rec arith_op_overflow_vec op sign size (V_tuple args) = match args with
   | [V_unknown;_] -> V_tuple [V_unknown;V_unknown]
   | [_;V_unknown] -> V_tuple [V_unknown;V_unknown]
 end ;;
+let rec arith_op_overflow_vec_bit op sign size (V_tuple args) = match args with
+  | [(V_vector b ord cs as l1);(V_lit (L_aux L_one li))] ->
+    let l1' = to_num sign l1 in
+    let n = arith_op op (V_tuple [l1';(V_lit (L_aux (L_num 1) li))]) in
+    let correct_size_num = to_vec ord ((List.length cs) * size) n in
+    let one_larger = to_num Signed (to_vec ord (((List.length cs) * size) +1) n) in
+    let overflow =  neq (V_tuple [correct_size_num;one_larger]) in
+    V_tuple [correct_size_num;overflow]
+  | [(V_vector b ord cs as l1);(V_lit (L_aux L_zero li))] ->
+    let l1' = to_num sign l1 in
+    let n = arith_op op (V_tuple [l1';(V_lit (L_aux (L_num 0) li))]) in
+    let correct_size_num = to_vec ord ((List.length cs) * size) n in
+    let one_larger = to_num Signed (to_vec ord (((List.length cs) * size) +1) n) in
+    let overflow =  neq (V_tuple [correct_size_num;one_larger]) in
+    V_tuple [correct_size_num;overflow]    
+  | [V_track v1 r1;V_track v2 r2] ->
+    taint (arith_op_overflow_vec_bit op sign size (V_tuple [v1;v2])) (r1++r2)
+  | [V_track v1 r1;v2] ->
+    taint (arith_op_overflow_vec_bit op sign size (V_tuple [v1;v2])) r1
+  | [v1;V_track v2 r2] ->
+    taint (arith_op_overflow_vec_bit op sign size (V_tuple [v1;v2])) r2
+  | [V_unknown;_] -> V_tuple [V_unknown;V_unknown]
+  | [_;V_unknown] -> V_tuple [V_unknown;V_unknown]
+end ;;
+
+
 let rec arith_op_range_vec op sign size (V_tuple args) = match args with
   | [V_track v1 r1;V_track v2 r2] ->
     taint (arith_op_range_vec op sign size (V_tuple [v1;v2])) (r1++r2)
@@ -441,6 +467,7 @@ let function_map = [
   ("add_vec_vec_range_signed", arith_op_vec_vec_range (+) Signed);
   ("add_vec_bit_signed", arith_op_vec_bit (+) Signed 1);
   ("add_overflow_vec_signed", arith_op_overflow_vec (+) Signed 1);
+  ("add_overflow_vec_bit_signed", arith_op_overflow_vec_bit (+) Signed 1);
   ("minus", arith_op (-));
   ("minus_vec", arith_op_vec (-) Unsigned 1);
   ("minus_vec_range", arith_op_vec_range (-) Unsigned 1);
