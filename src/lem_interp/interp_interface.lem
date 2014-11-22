@@ -169,11 +169,13 @@ type direction =
   | D_increasing
   | D_decreasing
 
-type register_value = <| rv_bits: list bit_lifted; rv_dir: direction; rv_start: integer |>
+type register_value = <| rv_bits: list bit_lifted; rv_dir: direction; rv_start: int |>  (* beter for this to be int, not integer *)
 
 type byte_lifted = Byte_lifted of list bit_lifted (* of length 8 *)
 
 type instruction_field_value = list bit 
+
+type byte = Byte of list bit (* of length 8 *)
 
 type address_lifted = Address_lifted of list byte_lifted (* of length 8 for 64bit machines*)
 
