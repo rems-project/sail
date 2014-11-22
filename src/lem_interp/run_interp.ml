@@ -47,7 +47,7 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
   | _ -> assert false) l))
 ;;
 
-let val_to_string v = match v with
+(*let val_to_string v = match v with
   | Bitvector(bools, _, _) -> "0b" ^ collapse_leading (String.concat "" (List.map (function | true -> "1" | _ -> "0") bools))
   | Bytevector words->
     "0x" ^ (String.concat ""
@@ -59,7 +59,7 @@ let val_to_string v = match v with
 	      | 14 -> "E"
 	      | 15 -> "F"
 	      | i  -> string_of_int i) words))		
-  | Unknown0 -> "Unknown"
+  | Unknown0 -> "Unknown"*)
 
 let reg_name_to_string = function
   | Reg0 s -> s

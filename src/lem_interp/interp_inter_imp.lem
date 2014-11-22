@@ -7,8 +7,10 @@ open import Pervasives
 open import Assert_extra
 
 
-val intern_value : value -> Interp.value
-val extern_value : interp_mode -> bool -> maybe integer -> Interp.value -> (value * maybe (list reg_name))
+val intern_reg_value : register_value -> Interp.value
+val intern_mem_value : memory_value -> Interp.value
+val extern_reg_value : maybe integer -> Interp.value -> register_value
+val extern_mem_value : interp_mode -> Interp.value -> (memory_value * maybe (list reg_name))
 val extern_reg : Interp.reg_form -> maybe (integer * integer) -> reg_name
 
 let build_context defs = match Interp.to_top_env defs with (_,context) -> context end
@@ -16,34 +18,56 @@ let build_context defs = match Interp.to_top_env defs with (_,context) -> contex
 let make_mode eager_eval tracking_values = <| Interp.eager_eval = eager_eval; Interp.track_values = tracking_values |>;;
 let tracking_dependencies mode = mode.Interp.track_values
 
-let to_bits l = (List.map (fun b -> match b with
-                               | false -> (Interp.V_lit (L_aux L_zero Interp_ast.Unknown)) 
-			       | true ->  (Interp.V_lit (L_aux L_one Interp_ast.Unknown)) end) l)
-let from_bits l = (List.map (fun b -> match b with
-                                 | Interp.V_lit (L_aux L_zero _) -> false
-				 | _ -> true end) l) 
-let rec to_bytes l = match l with
-  | [] -> []
-  | (a::b::c::d::e::f::g::h::rest) ->
-    (natFromInteger(integerFromBoolList (false,(List.reverse([a;b;c;d;e;f;g;h])))))::(to_bytes rest)
-end
-		   
-let intern_value v = match v with
-  | Bitvector [true] _ _ -> Interp.V_lit (L_aux L_one Interp_ast.Unknown)
-  | Bitvector [false] _ _ -> Interp.V_lit (L_aux L_zero Interp_ast.Unknown)
-  | Bitvector bs inc fst   -> Interp.V_vector fst inc  (to_bits bs)
-  | Bytevector bys -> Interp.V_vector 0 true 
-    (List.concat (List.map (fun by -> 
-      match Interp_lib.to_vec_inc (Interp.V_tuple([Interp.V_lit(L_aux (L_num 8) Interp_ast.Unknown);
-						   Interp.V_lit(L_aux (L_num (integerFromNat by)) Interp_ast.Unknown)]))
-      with
-	| Interp.V_vector _ _ bits -> bits 
-	| _ -> [] end) bys))
-  | Unknown -> Interp.V_unknown
-  | _ -> Interp.V_unknown
+let to_bit = function 
+  | Bitl_zero -> (Interp.V_lit (L_aux L_zero Interp_ast.Unknown)) 
+  | Bitl_one ->  (Interp.V_lit (L_aux L_one Interp_ast.Unknown))
+  | Bitl_undef -> (Interp.V_lit (L_aux L_undef Interp_ast.Unknown))
+  | Bitl_unknown -> Interp.V_unknown 
 end
 
-let byte_list_of_integer size num = 
+let to_bool = function 
+  | Bitl_zero -> false
+  | Bitl_one ->  true
+  | Bitl_undef -> Assert_extra.failwith "to_bool given undef"
+  | Bitl_unknown -> Assert_extra.failwith "to_bool given unknown"
+end
+
+let is_bool = function 
+  | Bitl_zero -> true
+  | Bitl_one ->  true
+  | Bitl_undef -> false
+  | Bitl_unknown -> false
+end
+
+let to_bits l = List.map to_bit l
+let from_bits l = List.map 
+		     (fun b -> match b with
+                       | Interp.V_lit (L_aux L_zero _) -> Bitl_zero
+		       | Interp.V_lit (L_aux L_one _)  -> Bitl_one
+		       | Interp.V_lit (L_aux L_undef _) -> Bitl_undef
+		       | Interp.V_unknown -> Bitl_unknown end) l
+
+let rec to_bytes l = match l with
+  | [] -> []
+  | (a::b::c::d::e::f::g::h::rest) -> (Byte_lifted[a;b;c;d;e;f;g;h])::(to_bytes rest)
+end 
+
+let all_known l = List.all is_bool l
+
+let bits_to_byte b = 
+  if ((List.length b) = 8) && (all_known b)
+  then natFromInteger (integerFromBoolList (false,(List.reverse (List.map to_bool b))))
+  else Assert_extra.failwith "bits_to_byte given a non-8 list or one containing ? and u"
+		   
+let intern_reg_value v = match v with
+  | <| rv_bits=[b] |> -> to_bit b
+  | _ -> Interp.V_vector v.rv_start (v.rv_dir = D_increasing) (to_bits v.rv_bits)
+end
+
+let intern_mem_value v = 
+  Interp.V_vector 0 true (*get a default here*) (List.concatMap (fun (Byte_lifted bits) -> to_bits bits) v)
+
+(*let byte_list_of_integer size num = 
   if (num < 0)
   then failwith "signed integer given to byte_list_of_integer"
   else let internal_value = (Interp_lib.to_vec_inc 
@@ -71,63 +95,62 @@ let integer_of_byte_list bytes =
   match Interp_lib.to_num Interp_lib.Unsigned intv with
     | Interp.V_lit (L_aux (L_num n) _) -> n
   end
+*)
 
 let extern_reg r slice = match (r,slice) with
   | (Interp.Reg (Id_aux (Id x) _) _,Nothing) -> Reg x
   | (Interp.Reg (Id_aux (Id x) _) _,Just(i1,i2)) -> Reg_slice x (i1,i2)
-  | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_single i) _),Nothing) -> Reg_field y x (i,i)
-  | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_range i j) _), Nothing) -> Reg_field y x (i,j)
-  | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_range i j) _), Just(i1,j1)) -> Reg_f_slice y x (i,j) (i1,j1)
+  | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_single i) _),Nothing) -> 
+    Reg_field y x (i,i)
+  | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_range i j) _), Nothing) -> 
+    Reg_field y x (i,j)
+  | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_range i j) _), Just(i1,j1)) ->
+    Reg_f_slice y x (i,j) (i1,j1)
 end
 
-let rec extern_value mode for_mem optional_start v = match v with
-  | Interp.V_track v regs -> 
-    let (external_v,_) = extern_value mode for_mem optional_start v in
-    (external_v,
-     if (for_mem && mode.Interp.track_values)
-     then (Just (List.map (fun r -> extern_reg r Nothing) regs))
-     else Nothing)
+let rec extern_reg_value optional_start v = match v with
+  | Interp.V_track v regs -> extern_reg_value optional_start v 
   | Interp.V_vector fst inc bits ->
-    if for_mem 
-    then (Bytevector (to_bytes (from_bits bits)), Nothing)
-    else (Bitvector (from_bits bits) inc fst, Nothing)
+    <| rv_bits=(from_bits bits); rv_dir=(if inc then D_increasing else D_decreasing); rv_start=fst|>
   | Interp.V_vector_sparse fst stop inc bits default ->
-    extern_value mode for_mem optional_start (Interp_lib.fill_in_sparse v)
+    extern_reg_value optional_start (Interp_lib.fill_in_sparse v)
   | Interp.V_lit (L_aux L_zero _) -> 
-    if for_mem
-    then (Bytevector [0],Nothing)
-    else let start = match optional_start with | Nothing -> 0 | Just i -> i end in
-    (Bitvector [false] true start, Nothing)
+    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+    <| rv_bits=[Bitl_zero]; rv_dir=D_increasing; rv_start=start |>
   | Interp.V_lit (L_aux L_false _) ->
-    if for_mem
-    then (Bytevector [0],Nothing)
-    else let start = match optional_start with | Nothing -> 0 | Just i -> i end in
-      (Bitvector [false] true start, Nothing)
+    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+    <| rv_bits=[Bitl_zero]; rv_dir=D_increasing; rv_start=start |>
   | Interp.V_lit (L_aux L_one _) -> 
-    if for_mem
-    then (Bytevector [1],Nothing)
-    else let start = match optional_start with | Nothing -> 0 | Just i -> i end in    
-    (Bitvector [true] true start, Nothing)
+    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+    <| rv_bits=[Bitl_one]; rv_dir=D_increasing; rv_start=start |>
   | Interp.V_lit (L_aux L_true _) ->
-    if for_mem
-    then (Bytevector [1],Nothing)
-    else let start = match optional_start with | Nothing -> 0 | Just i -> i end in
-    (Bitvector [true] true start, Nothing)
-  | _ -> (Unknown,Nothing)
+    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+    <| rv_bits=[Bitl_one]; rv_dir=D_increasing; rv_start=start |>
+  | Interp.V_lit (L_aux L_undef _) -> 
+    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+    <| rv_bits=[Bitl_undef]; rv_dir=D_increasing; rv_start=start |>
+  | Interp.V_unknown -> 
+    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+    <| rv_bits=[Bitl_unknown]; rv_dir=D_increasing; rv_start=start |>
 end 
 
-let rec slice_value bits start stop = 
-  match bits with
-    | Bitvector bools inc fst -> 
-      Bitvector (Interp.from_n_to_n (if inc then (start - fst) else (fst - start))
-                                    (if inc then (stop - fst) else (fst - stop)) bools)
-                 inc
-                 (if inc then start else ((stop - start) + 1))                
-    | Bytevector bytes -> 
-      Bytevector (Interp.from_n_to_n start stop bytes)
-    | Unknown -> Unknown
-end
+let rec extern_mem_value mode v = match v with
+  | Interp.V_track v regs -> 
+    let (external_v,_) = extern_mem_value mode v in
+    (external_v,
+     if mode.Interp.track_values then (Just (List.map (fun r -> extern_reg r Nothing) regs)) else Nothing)
+  | Interp.V_vector fst inc bits -> (to_bytes (from_bits bits), Nothing)
+  | Interp.V_vector_sparse fst stop inc bits default ->
+    extern_mem_value mode (Interp_lib.fill_in_sparse v)
+end 
 
+let rec slice_reg_value v start stop = 
+  let inc = v.rv_dir = D_increasing in
+  <| v with rv_bits = (Interp.from_n_to_n (if inc then (start - v.rv_start) else (v.rv_start - start))
+                                          (if inc then (stop - v.rv_start) else (v.rv_start - stop)) v.rv_bits);
+            rv_start = (if inc then start else ((stop - start) + 1)) |> 
+
+(*
 let append_value left right =
   match (left,right) with
     | (Bitvector bools1 inc fst, Bitvector bools2 _ _) -> Bitvector (bools1++bools2) inc fst
@@ -177,13 +200,14 @@ let coerce_Bitvector_of_Bytevector (v: value) : value =
         0
   | _ -> Assert_extra.failwith "coerce_Bitvector_of_Bitvector given non-Bytevector"
   end
+*)
 
 let initial_instruction_state top_level main args = 
   let e_args = match args with
     | [] -> [E_aux (E_lit (L_aux L_unit Interp_ast.Unknown)) (Interp_ast.Unknown,Nothing)]
-    | [arg] -> let (e,_) = Interp.to_exp (make_mode true false) Interp.eenv (intern_value arg) in [e]
+    | [arg] -> let (e,_) = Interp.to_exp (make_mode true false) Interp.eenv (intern_reg_value arg) in [e]
     | args -> List.map fst (List.map (Interp.to_exp (make_mode true false) Interp.eenv)
-			      (List.map intern_value args)) end in
+			      (List.map intern_reg_value args)) end in
   Interp.Thunk_frame (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) e_args) (Interp_ast.Unknown, Nothing)) 
     top_level Interp.eenv Interp.emem Interp.Top
 
@@ -211,11 +235,11 @@ let power_externs = [
 ]
 
 (*All external functions*)
-let external_functions = 
-  Interp_lib.function_map ++ power_externs
+let external_functions = Interp_lib.function_map ++ power_externs
 
 type mem_function = (string * 
-                     (maybe read_kind * maybe write_kind * (interp_mode -> Interp.value -> (value * (maybe (list reg_name))))))
+                     (maybe read_kind * maybe write_kind * 
+			(interp_mode -> Interp.value -> (memory_value * (maybe (list reg_name))))))
 type barrier_function = (string * barrier_kind)
 
 (*List of memory functions; needs to be expanded with all of the memory functions needed for PPCMem.
@@ -227,10 +251,10 @@ let memory_functions =
 	       | Interp.V_tuple [location;length] ->
 		 match length with
 		   | Interp.V_lit (L_aux (L_num len) _) ->
-		     let (v,regs) = extern_value mode true Nothing location in
+		     let (v,regs) = extern_mem_value mode location in
 		     (v,len,regs) 
 		   | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
-		     let (v,loc_regs) = extern_value mode true Nothing location in
+		     let (v,loc_regs) = extern_mem_value mode location in
 		     match loc_regs with
 		       | Nothing -> (v,len,Just (List.map (fun r -> extern_reg r Nothing) size_regs))
 		       | Just loc_regs -> (v,len,Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) size_regs)))
@@ -240,10 +264,10 @@ let memory_functions =
 			| Interp.V_tuple [location;length] ->
 			  match length with
 			    | Interp.V_lit (L_aux (L_num len) _) ->
-			      let (v,regs) = extern_value mode true Nothing location in
+			      let (v,regs) = extern_mem_value mode location in
 			      (v,len,regs) 
 			    | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
-			      let (v,loc_regs) = extern_value mode true Nothing location in
+			      let (v,loc_regs) = extern_mem_value mode location in
 			      match loc_regs with
 				| Nothing -> (v,len,Just (List.map (fun r -> extern_reg r Nothing) size_regs))
 				| Just loc_regs -> (v,len,Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) size_regs)))
@@ -253,10 +277,10 @@ let memory_functions =
 		| Interp.V_tuple [location;length] ->
 		  match length with
 		    | Interp.V_lit (L_aux (L_num len) _) ->
-		      let (v,regs) = extern_value mode true Nothing location in
+		      let (v,regs) = extern_mem_value mode location in
 		      (v,len,regs)
 		    | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
-		      let (v,loc_regs) = extern_value mode true Nothing location in
+		      let (v,loc_regs) = extern_mem_value mode location in
 		      match loc_regs with
 			| Nothing -> (v,len,Just (List.map (fun r -> extern_reg r Nothing) size_regs))
 			| Just loc_regs -> (v,len,Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) size_regs)))
@@ -266,10 +290,10 @@ let memory_functions =
 		| Interp.V_tuple [location;length] ->
 		  match length with
 		    | Interp.V_lit (L_aux (L_num len) _) ->
-		      let (v,regs) = extern_value mode true Nothing location in
+		      let (v,regs) = extern_mem_value mode location in
 		      (v,len,regs)
 		    | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
-		      let (v,loc_regs) = extern_value mode true Nothing location in
+		      let (v,loc_regs) = extern_mem_value mode location in
 		      match loc_regs with
 			| Nothing -> (v,len,Just (List.map (fun r -> extern_reg r Nothing) size_regs))
 			| Just loc_regs -> (v,len,Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) size_regs)))
@@ -318,7 +342,7 @@ end
 
 let decode_to_istate top_level value = 
   let mode = make_mode true false in
-  let (arg,_) = Interp.to_exp mode Interp.eenv (intern_value value) in
+  let (arg,_) = Interp.to_exp mode Interp.eenv (intern_reg_value value) in
   let (Interp.Env _ instructions _ _ _ _ _) = top_level in
   let (instr_decoded,error) = interp_to_value_helper value ("",[],[])
     (fun _ -> Interp.resume 
@@ -334,9 +358,9 @@ let decode_to_istate top_level value =
 	    | Just(Instruction_extractor.Instr_form name parms effects) -> 
 	      match (parm,parms) with
 		| (Interp.V_lit (L_aux L_unit _),[]) -> (name, [], effects)
-		| (value,[(p_name,ie_typ)]) -> (name, [(p_name,(migrate_typ ie_typ),fst(extern_value mode false Nothing value))], effects)
+		| (value,[(p_name,ie_typ)]) -> (name, [(p_name,(migrate_typ ie_typ),(extern_reg_value Nothing value))], effects)
 		| (Interp.V_tuple vals,parms) -> 
-		  (name, (Interp.map2 (fun value (p_name,ie_typ) -> (p_name,(migrate_typ ie_typ),fst(extern_value mode false Nothing value))) vals parms), effects)
+		  (name, (Interp.map2 (fun value (p_name,ie_typ) -> (p_name,(migrate_typ ie_typ),(extern_reg_value Nothing value))) vals parms), effects)
           end end end in 
       let (arg,_) = Interp.to_exp mode Interp.eenv instr in
       let (instr_decoded,error) = interp_to_value_helper value instr_external
@@ -368,7 +392,7 @@ let decode_to_instruction top_level value =
 
 let instruction_to_istate top_level ((name, parms, _) as instr) = 
   let mode = make_mode true false in
-  let get_value (name,typ,v) = let (e,_) = Interp.to_exp mode Interp.eenv (intern_value v) in e in
+  let get_value (name,typ,v) = let (e,_) = Interp.to_exp mode Interp.eenv (intern_reg_value v) in e in
 (*  (Instr instr*)
     (Interp.Thunk_frame
        (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) 
@@ -386,25 +410,32 @@ let rec interp_to_outcome mode thunk =
     | Interp.Read_reg reg_form slice -> 
       Read_reg (extern_reg reg_form slice) 
                (fun v -> 
-                 let v = (intern_value v) in
+                 let v = (intern_reg_value v) in
                  let v = if mode.Interp.track_values then (Interp.V_track v [reg_form]) else v in 
                  Interp.add_answer_to_stack next_state v)
     | Interp.Write_reg reg_form slice value ->
-      let optional_start = match slice with | Just (st1,st2) -> if (st1=st2) then Just st1 else Nothing | _ -> Nothing end in
-      let (v,_) = extern_value mode false optional_start value in Write_reg (extern_reg reg_form slice) v next_state
+      let optional_start = 
+	match slice with | Just (st1,st2) -> if (st1=st2) then Just st1 else Nothing | _ -> Nothing end in
+      Write_reg (extern_reg reg_form slice) (extern_reg_value optional_start value) next_state
     | Interp.Read_mem (Id_aux (Id i) _) value slice ->
       match List.lookup i memory_functions with
       | (Just (Just read_k,_,f)) -> 
-        let (location, length, tracking) = (f mode value) in
-        Read_mem read_k location length tracking (fun v -> Interp.add_answer_to_stack next_state (intern_value v))
+        let (location, length, tracking) = (f mode value) in 
+	if (List.length location) = 8
+        then Read_mem read_k (Address_lifted location) length tracking 
+	  (fun v -> Interp.add_answer_to_stack next_state (intern_mem_value v))
+	else Error ("Memory address on read is not 64 bits")
       | _ -> Error ("Memory " ^ i ^ " function with read kind not found")
       end
     | Interp.Write_mem (Id_aux (Id i) _) loc_val slice write_val ->
       match List.lookup i memory_functions with
       | (Just (_,Just write_k,f)) -> 
         let (location, length, tracking) = (f mode loc_val) in
-        let (value, v_tracking) = (extern_value mode true Nothing write_val) in
-        Write_mem write_k location length tracking value v_tracking (fun b -> next_state) 
+        let (value, v_tracking) = (extern_mem_value mode write_val) in
+	if (List.length location) = 8
+        then Write_mem write_k (Address_lifted location) length tracking value v_tracking (fun b -> next_state) 
+	(*Note, does not pass boolean on conditional write, but we're not using that yet anyway*)
+	else Error "Memory address on write is not 64 bits"
       | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
       end 
     | Interp.Barrier (Id_aux (Id i) _) lval ->
@@ -441,12 +472,14 @@ let rec find_reg_name reg = function
   | (reg_name,v)::registers ->
     match (reg,reg_name) with
       | (Reg i, Reg n) -> if i = n then (Just v) else find_reg_name reg registers
-      | (Reg_slice i (p1,p2), Reg n) -> if i = n then (Just (slice_value v p1 p2)) else find_reg_name reg registers
-      | (Reg_field i f (p1,p2), Reg n) -> if i = n then (Just (slice_value v p1 p2)) else find_reg_name reg registers
+      | (Reg_slice i (p1,p2), Reg n) -> 
+	if i = n then (Just (slice_reg_value v p1 p2)) else find_reg_name reg registers
+      | (Reg_field i f (p1,p2), Reg n) -> 
+	if i = n then (Just (slice_reg_value v p1 p2)) else find_reg_name reg registers
       | (Reg_slice  i (p1,p2), Reg_slice n (p3,p4)) ->
 	if i=n 
 	then if p1=p3 && p2 = p4 then (Just v)
-	     else if p1>=p3 && p2<= p4 then (Just (slice_value v p1 p2))
+	     else if p1>=p3 && p2<= p4 then (Just (slice_reg_value v p1 p2))
 	     else find_reg_name reg registers
 	  else find_reg_name reg registers
       | (Reg_field i f _,Reg_field n fn _) ->
@@ -457,20 +490,24 @@ let rec find_reg_name reg = function
 end end
 
 let rec ie_loop mode register_values i_state = 
+  let unknown_reg size =  
+    <| rv_bits = (List.replicate size Bitl_unknown); rv_start = 0; rv_dir = D_increasing |> in
+  let unknown_mem size = List.replicate size (Byte_lifted (List.replicate 8 Bitl_unknown)) in
   match (interp mode i_state) with
     | Done -> []
     | Error msg -> [E_error msg]
     | Read_reg reg i_state_fun -> 
       let v =  match register_values with
-	| Nothing -> Unknown
+	| Nothing -> unknown_reg 64
 	| Just(registers) -> match find_reg_name reg registers with
-	    | Nothing -> Unknown
+	    | Nothing -> unknown_reg 64 (*Wrong in some cases, need to look in reg and store full length of reg*)
 	    | Just v -> v end end in
       (E_read_reg reg)::(ie_loop mode register_values (i_state_fun v))
     | Write_reg reg value i_state->
       (E_write_reg reg value)::(ie_loop mode register_values i_state)
     | Read_mem read_k loc length tracking i_state_fun ->
-      (E_read_mem read_k loc length tracking)::(ie_loop mode register_values (i_state_fun Unknown))
+      (E_read_mem read_k loc length tracking)::
+	(ie_loop mode register_values (i_state_fun (unknown_mem (natFromInteger length))))
     | Write_mem write_k loc length tracking value v_tracking i_state_fun ->
       (E_write_mem write_k loc length tracking value v_tracking)::(ie_loop mode register_values (i_state_fun true))
     | Barrier barrier_k i_state ->
@@ -483,6 +520,9 @@ let interp_exhaustive register_values i_state =
   ie_loop mode register_values i_state
 
 let rec rr_ie_loop mode i_state = 
+  let unknown_reg size =  
+    <| rv_bits = (List.replicate size Bitl_unknown); rv_start = 0; rv_dir = D_increasing |> in
+  let unknown_mem size = List.replicate size (Byte_lifted (List.replicate 8 Bitl_unknown)) in
   match (interp mode i_state) with
     | Done -> ([],Done)
     | Error msg -> ([E_error msg], Error msg)
@@ -491,7 +531,7 @@ let rec rr_ie_loop mode i_state =
       let (events,outcome) = (rr_ie_loop mode i_state) in
       (((E_write_reg reg value)::events), outcome)
     | Read_mem read_k loc length tracking i_state_fun ->
-      let (events,outcome) = (rr_ie_loop mode (i_state_fun Unknown)) in 
+      let (events,outcome) = (rr_ie_loop mode (i_state_fun (unknown_mem (natFromInteger length)))) in 
       (((E_read_mem read_k loc length tracking)::events),outcome)
     | Write_mem write_k loc length tracking value v_tracking i_state_fun ->
       let (events,outcome) = (rr_ie_loop mode (i_state_fun true)) in

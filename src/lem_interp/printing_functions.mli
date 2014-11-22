@@ -8,10 +8,11 @@ val loc_to_string : l -> string
 (*Returns the result of above for the exp's location *)
 val get_loc : tannot exp -> string
 (*interp_interface.value to string*)
-val val_to_string : value0 -> string
+val reg_value_to_string : register_value -> string
 val val_to_string_internal : Interp.lmem -> Interp.value -> string
-(*Force all representations to hex strings instead of a mixture of hex and binary strings*)
-val val_to_hex_string : value0 -> string
+
+(*(*Force all representations to hex strings instead of a mixture of hex and binary strings*)
+val val_to_hex_string : value0 -> string*)
 (* format one register *)
 val reg_name_to_string : reg_name -> string
 (* format the register dependencies *)

@@ -49,9 +49,27 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
 (* pp the bytes of a Bytevector as a hex value *)
 let bytes_to_string bytes = 
   (String.concat ""
-     (List.map (fun i -> let s = (Printf.sprintf "%x" i) in if (String.length s = 1) then "0"^s else s) bytes))
+     (List.map (fun i -> let s = (Printf.sprintf "%x" i) in if (String.length s = 1) then "0"^s else s) 
+	(List.map (fun (Byte_lifted bs) -> bits_to_byte bs) bytes)))
 
-let val_to_string v = match v with
+let bit_lifted_to_string = function
+  | Bitl_zero -> "0"
+  | Bitl_one ->  "1"
+  | Bitl_undef -> "u"
+  | Bitl_unknown -> "?"
+
+let reg_val_to_string v = 
+  let l = List.length v.rv_bits in
+  let start = (string_of_int (Big_int.int_of_big_int v.rv_start)) in
+  if List.mem l [8;16;32;64;128] then
+    let bytes = Interp_inter_imp.to_bytes v.rv_bits in
+    "0x" ^ "_" ^ start ^ "'" ^ bytes_to_string bytes
+  else (string_of_int l) ^ "_" ^ start ^ "'b" ^ 
+    collapse_leading (List.fold_right (^) (List.map bit_lifted_to_string v.rv_bits) "")
+
+let mem_val_to_string v = bytes_to_string v
+
+(*let val_to_string v = match v with
   | Bitvector(bools, inc, fst)-> 
       let l = List.length bools in
       if List.mem l [8;16;32;64;128] then 
@@ -67,7 +85,7 @@ let val_to_string v = match v with
     (*(string_of_int l) ^ " bytes -- " ^*) 
       "0x" ^
       bytes_to_string bytes
-  | Unknown0 -> "Unknown"
+  | Unknown0 -> "Unknown"*)
 
 let half_byte_to_hex v = 
   match v with
@@ -94,11 +112,11 @@ let rec bit_to_hex v =
     | a::b::c::d::vs -> half_byte_to_hex [a;b;c;d] ^ bit_to_hex vs
     | _ -> "bitstring given not divisible by 4"
 
-let val_to_hex_string v = match v with
+(*let val_to_hex_string v = match v with
   | Bitvector(bools, _, _) -> "0x" ^ bit_to_hex bools
   | Bytevector words -> val_to_string v
   | Unknown0 -> "Error: cannot turn Unknown into hex"
-;;
+;;*)
 
 let reg_name_to_string = function
   | Reg0 s -> s
