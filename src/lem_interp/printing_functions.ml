@@ -60,7 +60,7 @@ let bit_lifted_to_string = function
 
 let reg_value_to_string v = 
   let l = List.length v.rv_bits in
-  let start = (string_of_int (Big_int.int_of_big_int v.rv_start)) in
+  let start = string_of_int v.rv_start in
   if List.mem l [8;16;32;64;128] then
     let bytes = Interp_inter_imp.to_bytes v.rv_bits in
     "0x" ^ "_" ^ start ^ "'" ^ bytes_to_string bytes
