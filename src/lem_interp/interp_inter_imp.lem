@@ -176,6 +176,10 @@ let rec extern_ifield_value v = match v with
   | Interp.V_vector fst inc bits -> bits_from_ibits bits
   | Interp.V_vector_sparse fst stop inc bits default ->
     extern_ifield_value (Interp_lib.fill_in_sparse v)
+  | Interp.V_lit (L_aux L_zero _) -> [Bitc_zero]
+  | Interp.V_lit (L_aux L_false _) -> [Bitc_zero]
+  | Interp.V_lit (L_aux L_one _) ->  [Bitc_one]
+  | Interp.V_lit (L_aux L_true _) -> [Bitc_one]
 end 
 
 let rec slice_reg_value v start stop = 
