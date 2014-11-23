@@ -95,5 +95,11 @@ let rec get_first_index_range (BF_aux i _) = match i with
   | BF_single i -> i
   | BF_range i j -> i
   | BF_concat s _ -> get_first_index_range s
+end 
+
+let rec get_index_range_size (BF_aux i _) = match i with
+  | BF_single _ -> 1
+  | BF_range i j -> (abs (i-j)) + 1
+  | BF_concat i j -> (get_index_range_size i) + (get_index_range_size j)
 end
 

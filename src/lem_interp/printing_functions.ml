@@ -58,6 +58,10 @@ let bit_lifted_to_string = function
   | Bitl_undef -> "u"
   | Bitl_unknown -> "?"
 
+let bit_to_string = function
+  | Bitc_zero -> "0"
+  | Bitc_one -> "1"
+
 let reg_value_to_string v = 
   let l = List.length v.rv_bits in
   let start = string_of_int v.rv_start in
@@ -67,6 +71,8 @@ let reg_value_to_string v =
   else (string_of_int l) ^ "_" ^ start ^ "'b" ^ 
     collapse_leading (List.fold_right (^) (List.map bit_lifted_to_string v.rv_bits) "")
 
+let ifield_to_string v =
+  "0b"^ collapse_leading (List.fold_right (^) (List.map bit_to_string v) "")
 
 let register_value_to_string rv = 
   reg_value_to_string rv  
@@ -292,10 +298,10 @@ let instr_parm_to_string (name, typ, value) =
   name ^"="^
   match typ with
     | Other -> "Unrepresentable external value"
-    | _ -> let intern_v = (Interp_inter_imp.intern_reg_value value) in
+    | _ -> let intern_v = (Interp_inter_imp.intern_ifield_value value) in
 	      match Interp_lib.to_num Interp_lib.Unsigned intern_v with
 		| V_lit (L_aux(L_num n, _)) -> string_of_big_int n
-		| _ -> reg_value_to_string value
+		| _ -> ifield_to_string value
 
 let rec instr_parms_to_string ps = 
   match ps with
