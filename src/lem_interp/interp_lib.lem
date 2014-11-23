@@ -94,29 +94,41 @@ let rec bitwise_not v =
   | V_track bv r -> taint (bitwise_not bv) r
 end ;;
 
-let rec bitwise_binop_bit op (V_tuple [x; y]) = match (x,y) with
+let rec bitwise_binop_bit op op_s (V_tuple [x; y]) = match (x,y) with
   | (V_track x rx,V_track y ry) ->
-    taint ((bitwise_binop_bit op) (V_tuple[x; y])) (rx ++ ry)
+    taint ((bitwise_binop_bit op op_s) (V_tuple[x; y])) (rx ++ ry)
   | (V_track x rx,y) ->
-    taint ((bitwise_binop_bit op) (V_tuple[x;y])) rx
+    taint ((bitwise_binop_bit op op_s) (V_tuple[x;y])) rx
   | (x,V_track y ry) ->
-    taint ((bitwise_binop_bit op) (V_tuple[x;y])) ry
+    taint ((bitwise_binop_bit op op_s) (V_tuple[x;y])) ry
   | (V_unknown,_) -> V_unknown
   | (_,V_unknown) -> V_unknown
+  | (V_lit (L_aux L_undef li), v) -> 
+    (match op_s with 
+      | "|" -> y
+      | "&" -> x
+      | "^" -> y
+     end )
+  | (v,V_lit (L_aux L_undef li)) ->
+    (match op_s with
+      | "|" -> x
+      | "&" -> y
+      | "^" -> y
+     end)
   | _ -> bool_to_bit (op (bit_to_bool x) (bit_to_bool y))
 end ;;
 
-let rec bitwise_binop op (V_tuple [v1;v2]) =
+let rec bitwise_binop op op_s (V_tuple [v1;v2]) =
   match (v1,v2) with
   | (V_vector idx inc v, V_vector idx' inc' v') ->
   (* typechecker ensures inc = inc', idx = idx' and length v = length v' *)
-    V_vector idx inc (List.map (fun (x,y) -> (bitwise_binop_bit op (V_tuple[x; y]))) (List.zip v v'))
+    V_vector idx inc (List.map (fun (x,y) -> (bitwise_binop_bit op op_s (V_tuple[x; y]))) (List.zip v v'))
   | (V_track v1 r1, V_track v2 r2) ->
-    taint (bitwise_binop op (V_tuple [v1;v2])) (r1 ++ r2)
+    taint (bitwise_binop op op_s (V_tuple [v1;v2])) (r1 ++ r2)
   | (V_track v1 r1,v2) ->
-    taint (bitwise_binop op (V_tuple [v1;v2])) r1
+    taint (bitwise_binop op op_s (V_tuple [v1;v2])) r1
   | (v1,V_track v2 r2) ->
-    taint (bitwise_binop op (V_tuple [v1;v2])) r2
+    taint (bitwise_binop op op_s (V_tuple [v1;v2])) r2
   | (V_unknown,_) -> V_unknown
   | (_,V_unknown) -> V_unknown
 end ;;
@@ -535,12 +547,12 @@ let function_map = [
   ("to_vec_dec", to_vec_dec);
   ("bitwise_not", bitwise_not);
   ("bitwise_not_bit", bitwise_not_bit);
-  ("bitwise_and", bitwise_binop (&&));
-  ("bitwise_or", bitwise_binop (||));
-  ("bitwise_xor", bitwise_binop xor);
-  ("bitwise_and_bit", bitwise_binop_bit (&&));
-  ("bitwise_or_bit", bitwise_binop_bit (||));
-  ("bitwise_xor_bit", bitwise_binop_bit xor);
+  ("bitwise_and", bitwise_binop (&&) "&");
+  ("bitwise_or", bitwise_binop (||) "|");
+  ("bitwise_xor", bitwise_binop xor "^");
+  ("bitwise_and_bit", bitwise_binop_bit (&&) "&");
+  ("bitwise_or_bit", bitwise_binop_bit (||) "|");
+  ("bitwise_xor_bit", bitwise_binop_bit xor "^");
   ("lt", compare_op (<));
   ("gt", compare_op (>));
   ("lteq", compare_op (<=));
