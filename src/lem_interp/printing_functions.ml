@@ -90,7 +90,7 @@ let hex_int_to_string i =
 
 let bytes_lifted_homogenous_to_string = function
   | Bitslh_concrete bs -> 
-      let i = Big_int.int_of_big_int (Interp_interface.integer_of_bit_list (List.rev bs)) in
+      let i = Big_int.int_of_big_int (Interp_interface.integer_of_bit_list bs) in
       hex_int_to_string i
   | Bitslh_undef -> "uu"
   | Bitslh_unknown -> "??"
@@ -116,7 +116,7 @@ let bit_lifteds_to_string (bls: bit_lifted list) (starto : int option) =
     | None -> (* print as bitvector after all *)
         simple_bit_lifteds_to_string bls starto
     | Some (byteslhs: bits_lifted_homogenous list) -> 
-        let s = String.concat "" (List.map bytes_lifted_homogenous_to_string (List.rev byteslhs)) in
+        let s = String.concat "" (List.map bytes_lifted_homogenous_to_string byteslhs) in
         match starto with 
         | None ->       "0x" ^ s 
         | Some start -> "0x" ^ "_" ^string_of_int start ^"'" ^ s
@@ -397,8 +397,8 @@ let rec instr_parms_to_string ps =
 let pad n s = if String.length s < n then s ^ String.make (n-String.length s) ' ' else s
 
 let instruction_to_string (name, parms, base_effects) = 
-   raise (Failure "TODO instruction_to_string")
-(*  (pad 5 (String.lowercase name)) ^ " " ^ instr_parms_to_string parms *)
+(*   "TODO instruction_to_string"*)
+  (pad 5 (String.lowercase name)) ^ " " ^ instr_parms_to_string parms 
 
 let print_backtrace_compact printer stack = List.iter (fun (e,(env,mem)) -> print_exp printer env e) (compact_stack stack)
 let print_continuation printer stack = let (e,(env,mem)) = top_frame_exp_state stack in print_exp printer env e

@@ -496,15 +496,15 @@ let byte_of_byte_lifted bl =
 val bytes_of_bits : list bit -> list byte (*assumes (length bits) mod 8 = 0*)
 let rec bytes_of_bits bits = match bits with
   | [] -> []
-  | b1::b2::b3::b4::b5::b6::b7::b8::bits -> 
-    (Byte [b1;b2;b3;b4;b5;b6;b7;b8])::(bytes_of_bits bits)
+  | b0::b1::b2::b3::b4::b5::b6::b7::bits -> 
+    (Byte [b0;b1;b2;b3;b4;b5;b6;b7])::(bytes_of_bits bits)
 end
 
 val byte_lifteds_of_bit_lifteds : list bit_lifted -> list byte_lifted (*assumes (length bits) mod 8 = 0*)
 let rec byte_lifteds_of_bit_lifteds bits = match bits with
   | [] -> []
-  | b1::b2::b3::b4::b5::b6::b7::b8::bits -> 
-    (Byte_lifted [b1;b2;b3;b4;b5;b6;b7;b8])::(byte_lifteds_of_bit_lifteds bits)
+  | b0::b1::b2::b3::b4::b5::b6::b7::bits -> 
+    (Byte_lifted [b0;b1;b2;b3;b4;b5;b6;b7])::(byte_lifteds_of_bit_lifteds bits)
 end
 
 
@@ -527,7 +527,7 @@ let integer_of_bit_list b =
 val bit_list_of_integer : int -> integer -> list bit 
 let bit_list_of_integer len b = 
   List.map (fun b -> if b then Bitc_one else Bitc_zero) 
-    (reverse (boolListFrombitSeq (natFromInt len) (bitSeqFromInteger Nothing b))) (* PS really? that reverse seemed to make it worse... *)
+    (reverse (boolListFrombitSeq (natFromInt len) (bitSeqFromInteger Nothing b)))
 
 val integer_of_byte_list : list byte -> integer 
 let integer_of_byte_list bytes = integer_of_bit_list (List.concatMap (fun (Byte bs) -> bs) bytes)
@@ -557,7 +557,7 @@ let rec integerFromIntListAux (acc: integer) (is: list int) =
   | (i :: is') -> integerFromIntListAux ((acc * 256) + integerFromInt i) is'
   end
 let integer_address_of_int_list (is: list int) =
-  integerFromIntListAux 0 (List.reverse is)
+  integerFromIntListAux 0 is
 
 val address_of_byte_list : list byte -> address 
 let address_of_byte_list bs = 
