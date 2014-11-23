@@ -22,6 +22,8 @@ open import Interp_ast
 open import Pervasives
 open import Num
 
+open import Assert_extra
+
 (* maybe isn't a member of type Ord - this should be in the Lem standard library*)
 instance forall 'a. Ord 'a => (Ord (maybe 'a))
   let compare = maybeCompare compare
@@ -415,7 +417,7 @@ let memory_value_unknown (width:int) : memory_value =
 
 
 val add_address_int : address -> int -> address 
-(* TODO: let add_address_int (a:address) (i:int) : address = *)
+(* TODO: *) let add_address_int (a:address) (i:int) : address = failwith "TODO"
 
 val clear_low_order_bits_of_address : address -> address 
 let clear_low_order_bits_of_address a = 
@@ -444,9 +446,10 @@ val lift_byte : byte -> byte_lifted
 let lift_byte (Byte bs) : byte_lifted = Byte_lifted (List.map lift_bit bs)
 
 val integer_of_address : address -> integer 
-(* TODO *)
+(* TODO *)let integer_of_address (a:address):integer = failwith "TODO"
 val address_of_integer : integer -> address 
-(* TODO *)
+(* TODO *)let address_of_integer (a:integer):address = failwith "TODO"
+
 
 val opcode_of_bytes : byte -> byte -> byte -> byte -> opcode
 let opcode_of_bytes b0 b1 b2 b3 : opcode = Opcode [b0;b1;b2;b3]
@@ -459,7 +462,8 @@ let register_value_of_address (Address bytes) : register_value =
 
 val address_lifted_of_register_value : register_value -> maybe address_lifted
 (* returning Nothing iff the register value is not 64 bits wide, but allowing Bitl_undef and Bitl_unknown *)
+(* TODO *)let address_lifted_of_register_value (rv:register_value) : maybe address_lifted = failwith "TODO"
 
 val address_of_address_lifted : address_lifted -> maybe address
 (* returning Nothing iff the address contains any Bitl_undef or Bitl_unknown *)
-
+(*TODO*)let address_of_address_lifted (al:address_lifted): maybe address = failwith "TODO"

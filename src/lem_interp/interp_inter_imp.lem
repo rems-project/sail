@@ -418,6 +418,8 @@ let decode_to_instruction (top_level:context) (value:opcode) : instruction_or_de
   end
 
 val instruction_to_istate : context -> instruction -> instruction_state 
+(* PLACEHOLDER TO GET REST TO BUILD *)
+let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instruction) : instruction_state  = Assert_extra.failwith "TODO instruction_to_istate"
 (*
 let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instruction) : instruction_state  = 
   let mode = make_mode true false in
