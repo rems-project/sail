@@ -1277,7 +1277,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	(interp_main mode t_level l_env l_mem exp)
         (fun v lm le ->
           match find_case pats v with
-            | [] -> (Error l "No matching patterns in case",lm,le)
+            | [] -> (Error l ("No matching patterns in case for value " ^ (string_of_value v)),lm,le)
             | [(env,used_unknown,exp)] -> 
 	      if mode.eager_eval
 	      then interp_main mode t_level (union_env env l_env) lm exp
@@ -1725,7 +1725,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	    | Just(funcls) -> 
               (match find_funcl funcls v with
 		| [] -> 
-		  (Error l (String.stringAppend "No matching pattern for function " name ),l_mem,l_env)
+		  (Error l ("No matching pattern for function " ^ name ^
+			       " on value " ^ (string_of_value v)),l_mem,l_env)
 		| [(env,used_unknown,exp)] -> 
 		  resolve_outcome 
                     (if mode.eager_eval 
