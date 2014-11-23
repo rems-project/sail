@@ -182,19 +182,19 @@ type direction =
   | D_increasing
   | D_decreasing
 
-type register_value = <| rv_bits: list bit_lifted; rv_dir: direction; rv_start: int |>  (* beter for this to be int, not integer *)
+type register_value = <| rv_bits: list bit_lifted (* MSB first, smallest index number *); rv_dir: direction; rv_start: int |>  (* beter for this to be int, not integer *)
 
 type byte_lifted = Byte_lifted of list bit_lifted (* of length 8 *)
 
 type instruction_field_value = list bit
 
-type byte = Byte of list bit (* of length 8 *)
+type byte = Byte of list bit (* of length 8 *)  (*MSB first*) 
 
 type address_lifted = Address_lifted of list byte_lifted (* of length 8 for 64bit machines*)
 
 type memory_byte = byte_lifted
 
-type memory_value = list memory_byte (* the head of the list at the lowest address, of length >=1 *)
+type memory_value = list memory_byte (* the head of the list, most-significant first, at the lowest address, of length >=1 *)
 
 (* not sure which of these is more handy yet *)
 type address = Address of list byte (* of length 8 *)
@@ -522,11 +522,12 @@ let memory_byte_of_byte = byte_lifted_of_byte
 val integer_of_bit_list : list bit -> integer 
 let integer_of_bit_list b =
   integerFromBoolList (false,(List.reverse (List.map bit_to_bool b)))
+  (* integerFromBoolList takes a list with LSB first, so we reverse it *)
 
 val bit_list_of_integer : int -> integer -> list bit 
 let bit_list_of_integer len b = 
   List.map (fun b -> if b then Bitc_one else Bitc_zero) 
-    (boolListFrombitSeq (natFromInt len) (bitSeqFromInteger Nothing b))
+    (reverse (boolListFrombitSeq (natFromInt len) (bitSeqFromInteger Nothing b))) (* PS really? that reverse seemed to make it worse... *)
 
 
 val integer_of_byte_list : list byte -> integer 
@@ -549,7 +550,7 @@ let address_of_integer (i:integer):address =
 
 
 
-(* regarding a list of int as a list of bytes in memory, lowest-address first, convert to an integer *)
+(* regarding a list of int as a list of bytes in memory, MSB lowest-address first, convert to an integer *)
 val integer_address_of_int_list : list int -> integer
 let rec integerFromIntListAux (acc: integer) (is: list int) = 
   match is with 
@@ -557,7 +558,7 @@ let rec integerFromIntListAux (acc: integer) (is: list int) =
   | (i :: is') -> integerFromIntListAux ((acc * 256) + integerFromInt i) is'
   end
 let integer_address_of_int_list (is: list int) =
-  integerFromIntListAux 0 is 
+  integerFromIntListAux 0 (List.reverse is)
 
 val address_of_byte_list : list byte -> address 
 let address_of_byte_list bs = 
