@@ -406,6 +406,7 @@ val add_address_int : address -> int -> address
 val clear_low_order_bits_of_address : address -> address 
 
 
+val memory_value_length : memory_value -> integer
 
 (* coercions *)
 val integer_of_address : address -> integer 
