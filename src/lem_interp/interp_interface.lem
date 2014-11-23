@@ -453,10 +453,6 @@ val integer_address_of_int_list : list int -> integer
 let integer_address_of_int_list (is: list int) = failwith "TODO"
 (* regarding is as a list of bytes in memory, lowest-address first, convert to an integer *)
 
-val integer_of_byte_list : list byte -> integer 
-(* TODO *)let integer_of_byte_list (a:list byte):integer = failwith "TODO"
-val byte_list_of_integer : int -> integer -> list byte 
-(* TODO *)let byte_list_of_integer (len:int) (a:integer):list byte = failwith "TODO"
 
 let bit_to_bool = function
   | Bitc_zero -> false
