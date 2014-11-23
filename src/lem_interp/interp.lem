@@ -2261,7 +2261,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		let len = ((abs (n1-n2)) +1) in
                 ((Action 
 		    (Write_reg regf (Just (n1,n2)) 
-		       (if (vector_length value) > len 
+		       (if (vector_length value) <= len 
 			then (update_vector_start n1 len value)
 			else (slice_vector value n1 n2))) s,lm,le),
 		 Just (next_builder lexp_builder))
