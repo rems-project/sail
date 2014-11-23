@@ -90,7 +90,7 @@ let hex_int_to_string i =
 
 let bytes_lifted_homogenous_to_string = function
   | Bitslh_concrete bs -> 
-      let i = Big_int.int_of_big_int (Interp_interface.integer_of_bit_list bs) in
+      let i = Big_int.int_of_big_int (Interp_interface.integer_of_bit_list (List.rev bs)) in
       hex_int_to_string i
   | Bitslh_undef -> "uu"
   | Bitslh_unknown -> "??"
