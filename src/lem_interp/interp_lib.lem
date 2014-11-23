@@ -101,6 +101,8 @@ let rec bitwise_binop_bit op op_s (V_tuple [x; y]) = match (x,y) with
     taint ((bitwise_binop_bit op op_s) (V_tuple[x;y])) rx
   | (x,V_track y ry) ->
     taint ((bitwise_binop_bit op op_s) (V_tuple[x;y])) ry
+  | (V_vector _ _ [b],y) -> bitwise_binop_bit op op_s (V_tuple [b; y])
+  | (_,V_vector _ _ [b]) -> bitwise_binop_bit op op_s (V_tuple [x; b])
   | (V_unknown,_) -> V_unknown
   | (_,V_unknown) -> V_unknown
   | (V_lit (L_aux L_undef li), v) -> 
