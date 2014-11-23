@@ -417,7 +417,8 @@ let decode_to_instruction (top_level:context) (value:opcode) : instruction_or_de
   | Decode_error de -> IDE_decode_error de
   end
 
-
+val instruction_to_istate : context -> instruction -> instruction_state 
+(*
 let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instruction) : instruction_state  = 
   let mode = make_mode true false in
   let get_value (name,typ,v) = 
@@ -430,6 +431,7 @@ let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instr
 		        (Interp_ast.Unknown,Interp.ctor_annot (T_id "ast")) (*This type shouldn't be hard-coded*))])
 	      (Interp_ast.Unknown,Nothing))
        top_level Interp.eenv Interp.emem Interp.Top) (*)*)
+*)
 
 let rec interp_to_outcome mode thunk = 
   match thunk () with
