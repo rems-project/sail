@@ -582,7 +582,8 @@ let rec update_vector_start new_start expected_size v = match v with
   | V_vector_sparse m n inc vals d -> V_vector_sparse new_start n inc vals d 
   | V_unknown -> 
     V_vector new_start true (List.replicate (natFromInteger expected_size) V_unknown)
-  | V_lit (L_aux L_undef _) -> v
+  | V_lit (L_aux L_undef _) -> 
+    V_vector new_start true (List.replicate (natFromInteger expected_size) v)
   | V_track v r -> taint (update_vector_start new_start expected_size v) r
 end
 
