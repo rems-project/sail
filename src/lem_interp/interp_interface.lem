@@ -203,7 +203,7 @@ type address = Address of list byte (* of length 8 *)
 type opcode = Opcode of list byte (* of length 4 *)
 
 (** typeclass instantiations *)
-(*
+
 let bitCompare (b1:bit) (b2:bit) =
   match (b1,b2) with
   | (Bitc_zero, Bitc_zero) -> EQ
@@ -212,16 +212,35 @@ let bitCompare (b1:bit) (b2:bit) =
   | (_,_) -> GT
   end
 
-let bit_liftedCompare (bl1:bit) (bl2:bit) =
+let bit_liftedCompare (bl1:bit_lifted) (bl2:bit_lifted) =
   match (bl1,bl2) with
   | (Bitl_zero, Bitl_zero) -> EQ
   | (Bitl_one, Bitl_one) -> EQ
-...
+  | (Bitl_undef,Bitl_undef) -> EQ
+  | (Bitl_unknown,Bitl_unknown) -> EQ
+  | (Bitl_zero,_) -> LT
+  | (Bitl_one, _) -> LT
+  | (Bitl_undef, _) -> LT
+  | (_,_) -> GT
   end
-*)
+
+instance (Ord bit_lifted)
+  let compare = bit_liftedCompare
+  let (<)  b1 b2 = (bit_liftedCompare b1 b2) = LT
+  let (<=) b1 b2 = (bit_liftedCompare b1 b2) <> GT
+  let (>)  b1 b2 = (bit_liftedCompare b1 b2) = GT
+  let (>=) b1 b2 = (bit_liftedCompare b1 b2) <> LT
+ end
+
+instance (Ord byte_lifted)
+  let compare = defaultCompare
+  let (<) = defaultLess
+  let (>) = defaultGreater
+  let (<=) = defaultLessEq
+  let (>=) = defaultGreaterEq
+end
 
 let addressCompare = defaultCompare
-
 
 instance (Ord register_value)
   let compare = defaultCompare
@@ -295,26 +314,28 @@ instance (Ord barrier_kind)
   let (>=) = defaultGreaterEq
 end
 
-(*let eventCompare e1 e2 = 
+let eventCompare e1 e2 = 
   match (e1,e2) with
   | (E_read_mem rk1 v1 i1 tr1, E_read_mem rk2 v2 i2 tr2) -> compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2)) 
-  | (E_write_mem wk1 v1 i1 tr1 v1' tr1', E_write_mem wk2 v2 i2 tr2 v2' tr2') -> compare ((wk1,v1,i1),(tr1,v1',tr1'))  ((wk2,v2,i2),(tr2,v2',tr2')) 
+  | (E_write_mem wk1 v1 i1 tr1 v1' tr1', E_write_mem wk2 v2 i2 tr2 v2' tr2') -> 
+    compare ((wk1,v1,i1),(tr1,v1',tr1'))  ((wk2,v2,i2),(tr2,v2',tr2')) 
   | (E_barrier bk1, E_barrier bk2) -> compare bk1 bk2
   | (E_read_reg r1, E_read_reg r2) -> compare r1 r2
   | (E_write_reg r1 v1, E_write_reg r2 v2) -> compare (r1,v1) (r2,v2)
   | (E_error s1, E_error s2) -> compare s1 s2
+  | (E_escape,E_escape) -> EQ
   | (E_read_mem _ _ _ _, _) -> LT
   | (E_write_mem _ _ _ _ _ _, _) -> LT
   | (E_barrier _, _) -> LT
   | (E_read_reg _, _) -> LT
   | (E_write_reg _ _, _) -> LT
   | _ -> GT
-  end*)
+  end
 
 
 
 instance (SetType event)
-  let setElemCompare = defaultCompare
+  let setElemCompare = eventCompare
 end
 
 
