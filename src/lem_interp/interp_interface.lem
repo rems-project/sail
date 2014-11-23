@@ -22,6 +22,15 @@ open import Interp_ast
 open import Pervasives
 open import Num
 
+(* maybe isn't a member of type Ord - this should be in the Lem standard library*)
+instance forall 'a. Ord 'a => (Ord (maybe 'a))
+  let compare = maybeCompare compare
+  let (<)  r1 r2 = (maybeCompare compare r1 r2) = LT
+  let (<=) r1 r2 = (maybeCompare compare r1 r2) <> GT
+  let (>)  r1 r2 = (maybeCompare compare r1 r2) = GT
+  let (>=) r1 r2 = (maybeCompare compare r1 r2) <> LT
+end
+
 type word8 = nat (* bounded at a byte, for when lem supports it*)
 
 (* Abstract types, to be accessed only through this interface *)
@@ -188,9 +197,21 @@ type address = Address of list byte (* of length 8 *)
 
 type opcode = Opcode of list byte (* of length 4 *)
 
+instance (Ord register_value)
+  let compare = defaultCompare
+  let (<) = defaultLess
+  let (<=) = defaultLessEq
+  let (>) = defaultGreater
+  let (>=) = defaultGreaterEq
+end
 
-
-
+instance (Ord address_lifted)
+  let compare = defaultCompare
+  let (<) = defaultLess
+  let (<=) = defaultLessEq
+  let (>) = defaultGreater
+  let (>=) = defaultGreaterEq
+end
 
 type outcome =
 (* Request to read memory, value is location to read followed by registers that location depended on when mode.track_values,
@@ -248,16 +269,6 @@ instance (Ord barrier_kind)
   let (>=) = defaultGreaterEq
 end
 
-(* maybe isn't a member of type Ord - this should be in the Lem standard library*)
-instance forall 'a. Ord 'a => (Ord (maybe 'a))
-  let compare = maybeCompare compare
-  let (<)  r1 r2 = (maybeCompare compare r1 r2) = LT
-  let (<=) r1 r2 = (maybeCompare compare r1 r2) <> GT
-  let (>)  r1 r2 = (maybeCompare compare r1 r2) = GT
-  let (>=) r1 r2 = (maybeCompare compare r1 r2) <> LT
-end
-
-
 (*let eventCompare e1 e2 = 
   match (e1,e2) with
   | (E_read_mem rk1 v1 i1 tr1, E_read_mem rk2 v2 i2 tr2) -> compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2)) 
@@ -272,14 +283,13 @@ end
   | (E_read_reg _, _) -> LT
   | (E_write_reg _ _, _) -> LT
   | _ -> GT
-  end
+  end*)
 
-*)
+
 
 instance (SetType event)
   let setElemCompare = defaultCompare
 end
-
 
 
 (* Functions to build up the initial state for interpretation *)
@@ -308,7 +318,7 @@ end
 (*A representation of the AST node for each instruction in the spec, with concrete values from this call, and the potential static effects from the funcl clause for this instruction 
 Follows the form of the instruction in instruction_extractor, but populates the parameters with actual values
 *)
-type instruction = (string * list (string * instr_parm_typ * register_value) * list base_effect)
+type instruction = (string * list (string * instr_parm_typ * instruction_field_value) * list base_effect)
 
 let instructionEqual i1 i2 = match (i1,i2) with
   | ((i1,parms1,effects1),(i2,parms2,effects2)) -> i1=i2 && parms1 = parms2 && effects1 = effects2
@@ -318,7 +328,7 @@ type v_kind = Bitv | Bytev
 
 type decode_error = 
   | Unsupported_instruction_error of instruction
-  | Not_an_instruction_error of register_value
+  | Not_an_instruction_error of opcode
   | Internal_error of string
 
 type instruction_or_decode_error =
@@ -332,11 +342,11 @@ type i_state_or_error =
 
 
 (** PS:I agree. propose to remove this: Function to decode an instruction and build the state to run it*)
-val decode_to_istate : context -> register_value -> i_state_or_error
+val decode_to_istate : context -> opcode -> i_state_or_error
 
 (** propose to add this, and then use instruction_to_istate on the result: Function to decode an instruction and build the state to run it*)
 (** PS made a placeholder in interp_inter_imp.lem, but it just uses decode_to_istate and throws away the istate; surely it's easy to just do what's necessary to get the instruction.   This sort-of works, but it crashes on ioid 10 after 167 steps - maybe instruction_to_istate (which I wasn't using directly before) isn't quite right? *)
-val decode_to_instruction : context -> register_value -> instruction_or_decode_error
+val decode_to_instruction : context -> opcode -> instruction_or_decode_error
 
 (*Function to generate the state to run from an instruction form; is always an Instr*)
 val instruction_to_istate : context -> instruction -> i_state_or_error

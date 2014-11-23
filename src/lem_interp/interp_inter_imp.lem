@@ -18,11 +18,21 @@ let build_context defs = match Interp.to_top_env defs with (_,context) -> contex
 let make_mode eager_eval tracking_values = <| Interp.eager_eval = eager_eval; Interp.track_values = tracking_values |>;;
 let tracking_dependencies mode = mode.Interp.track_values
 
-let to_bit = function 
+let to_ibit = function 
   | Bitl_zero -> (Interp.V_lit (L_aux L_zero Interp_ast.Unknown)) 
   | Bitl_one ->  (Interp.V_lit (L_aux L_one Interp_ast.Unknown))
   | Bitl_undef -> (Interp.V_lit (L_aux L_undef Interp_ast.Unknown))
   | Bitl_unknown -> Interp.V_unknown 
+end
+
+let to_bit = function 
+  | Bitl_zero -> Bitc_zero 
+  | Bitl_one ->  Bitc_one
+end
+
+let to_lbit = function
+  | Bitc_zero -> Bitl_zero
+  | Bitc_one -> Bitl_one
 end
 
 let to_bool = function 
@@ -39,7 +49,7 @@ let is_bool = function
   | Bitl_unknown -> false
 end
 
-let to_bits l = List.map to_bit l
+let to_ibits l = List.map to_ibit l
 let from_bits l = List.map 
 		     (fun b -> match b with
                        | Interp.V_lit (L_aux L_zero _) -> Bitl_zero
@@ -59,14 +69,24 @@ let bits_to_byte b =
   if ((List.length b) = 8) && (all_known b)
   then natFromInteger (integerFromBoolList (false,(List.reverse (List.map to_bool b))))
   else Assert_extra.failwith "bits_to_byte given a non-8 list or one containing ? and u"
+
+let memval_to_regval v start dir = 
+  <| rv_bits=(List.concatMap (fun (Byte_lifted(bits)) -> bits) v);
+     rv_start=start; rv_dir = dir |>
+
+let opcode_to_regval (Opcode v) start dir =
+  (memval_to_regval (List.map (fun (Byte(bits)) -> Byte_lifted (List.map to_lbit bits)) v) start dir)
+
+let regval_to_ifield v = List.map to_bit v.rv_bits
+
 		   
 let intern_reg_value v = match v with
-  | <| rv_bits=[b] |> -> to_bit b
-  | _ -> Interp.V_vector (integerFromInt v.rv_start) (v.rv_dir = D_increasing) (to_bits v.rv_bits)
+  | <| rv_bits=[b] |> -> to_ibit b
+  | _ -> Interp.V_vector (integerFromInt v.rv_start) (v.rv_dir = D_increasing) (to_ibits v.rv_bits)
 end
 
 let intern_mem_value v = 
-  Interp.V_vector 0 true (*get a default here*) (List.concatMap (fun (Byte_lifted bits) -> to_bits bits) v)
+  Interp.V_vector 0 true (*get a default here*) (List.concatMap (fun (Byte_lifted bits) -> to_ibits bits) v)
 
 (*let byte_list_of_integer size num = 
   if (num < 0)
@@ -346,11 +366,12 @@ let migrate_typ = function
   | Instruction_extractor.IOther -> Other
 end
 
-let decode_to_istate top_level value = 
+let decode_to_istate top_level orig_value = 
+  let value = opcode_to_regval orig_value 0 D_increasing in
   let mode = make_mode true false in
   let (arg,_) = Interp.to_exp mode Interp.eenv (intern_reg_value value) in
   let (Interp.Env _ instructions _ _ _ _ _) = top_level in
-  let (instr_decoded,error) = interp_to_value_helper value ("",[],[])
+  let (instr_decoded,error) = interp_to_value_helper orig_value ("",[],[])
     (fun _ -> Interp.resume 
       (make_mode true false) 
       (Interp.Thunk_frame 
@@ -364,12 +385,13 @@ let decode_to_istate top_level value =
 	    | Just(Instruction_extractor.Instr_form name parms effects) -> 
 	      match (parm,parms) with
 		| (Interp.V_lit (L_aux L_unit _),[]) -> (name, [], effects)
-		| (value,[(p_name,ie_typ)]) -> (name, [(p_name,(migrate_typ ie_typ),(extern_reg_value Nothing value))], effects)
+		| (value,[(p_name,ie_typ)]) -> (name, [(p_name,(migrate_typ ie_typ),
+							(regval_to_ifield (extern_reg_value Nothing value)))], effects)
 		| (Interp.V_tuple vals,parms) -> 
-		  (name, (Interp.map2 (fun value (p_name,ie_typ) -> (p_name,(migrate_typ ie_typ),(extern_reg_value Nothing value))) vals parms), effects)
+		  (name, (Interp.map2 (fun value (p_name,ie_typ) -> (p_name,(migrate_typ ie_typ),(regval_to_ifield (extern_reg_value Nothing value)))) vals parms), effects)
           end end end in 
       let (arg,_) = Interp.to_exp mode Interp.eenv instr in
-      let (instr_decoded,error) = interp_to_value_helper value instr_external
+      let (instr_decoded,error) = interp_to_value_helper orig_value instr_external
 	(fun _ -> Interp.resume 
 	 (make_mode true false) 
 	 (Interp.Thunk_frame 
@@ -398,7 +420,9 @@ let decode_to_instruction top_level value =
 
 let instruction_to_istate top_level ((name, parms, _) as instr) = 
   let mode = make_mode true false in
-  let get_value (name,typ,v) = let (e,_) = Interp.to_exp mode Interp.eenv (intern_reg_value v) in e in
+  let get_value (name,typ,v) = 
+    let (e,_) = 
+      Interp.to_exp mode Interp.eenv (intern_reg_value (opcode_to_regval v 0 D_increasing)) in e in
 (*  (Instr instr*)
     (Interp.Thunk_frame
        (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) 
@@ -495,25 +519,32 @@ let rec find_reg_name reg = function
       | _ -> find_reg_name reg registers
 end end
 
+let reg_size = function
+  | Reg i size -> size
+  | Reg_slice i (p1,p2) -> if p1 < p2 then (p2-p1 +1) else (p1-p2 +1)
+  | Reg_field i f (p1,p2) -> if p1 < p2 then (p2-p1 +1) else (p1-p2 +1)
+  | Reg_f_slice i f _ (p1,p2) -> if p1 < p2 then p2-p1 +1 else p1-p2+1
+end
+
 let rec ie_loop mode register_values i_state = 
   let unknown_reg size =  
-    <| rv_bits = (List.replicate size Bitl_unknown); rv_start = 0; rv_dir = D_increasing |> in
-  let unknown_mem size = List.replicate size (Byte_lifted (List.replicate 8 Bitl_unknown)) in
+    <| rv_bits = (List.replicate (natFromInteger size) Bitl_unknown); rv_start = 0; rv_dir = D_increasing |> in
+  let unknown_mem size = List.replicate (natFromInteger size) (Byte_lifted (List.replicate 8 Bitl_unknown)) in
   match (interp mode i_state) with
     | Done -> []
     | Error msg -> [E_error msg]
     | Read_reg reg i_state_fun -> 
       let v =  match register_values with
-	| Nothing -> unknown_reg 64
+	| Nothing -> unknown_reg (reg_size reg)
 	| Just(registers) -> match find_reg_name reg registers with
-	    | Nothing -> unknown_reg 64 (*Wrong in some cases, need to look in reg and store full length of reg*)
+	    | Nothing -> unknown_reg (reg_size reg)
 	    | Just v -> v end end in
       (E_read_reg reg)::(ie_loop mode register_values (i_state_fun v))
     | Write_reg reg value i_state->
       (E_write_reg reg value)::(ie_loop mode register_values i_state)
     | Read_mem read_k loc length tracking i_state_fun ->
       (E_read_mem read_k loc length tracking)::
-	(ie_loop mode register_values (i_state_fun (unknown_mem (natFromInteger length))))
+	(ie_loop mode register_values (i_state_fun (unknown_mem length)))
     | Write_mem write_k loc length tracking value v_tracking i_state_fun ->
       (E_write_mem write_k loc length tracking value v_tracking)::(ie_loop mode register_values (i_state_fun true))
     | Barrier barrier_k i_state ->
