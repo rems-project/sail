@@ -272,13 +272,13 @@ let doc_exp, doc_let =
       doc_op (doc_id op) (shift_exp env add_red l) (plus_exp env add_red r)
   | _ -> plus_exp env add_red expr
   and plus_exp env add_red ((E_aux(e,_)) as expr) = match e with
-  | E_app_infix(l,(Id_aux(Id ("+" | "-"),_) as op),r) ->
+  | E_app_infix(l,(Id_aux(Id ("+" | "-"| "+_s" | "-_s" ),_) as op),r) ->
       doc_op (doc_id op) (plus_exp env add_red l) (star_exp env add_red r)
   | _ -> star_exp env add_red expr
   and star_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id (
       "*" | "/"
-    | "div" | "quot" | "rem" | "mod"
+    | "div" | "quot" | "rem" | "mod" | "quot_s"
     | "*_s" | "*_si" | "*_u" | "*_ui"),_) as op),r) ->
       doc_op (doc_id op) (star_exp env add_red l) (starstar_exp env add_red r)
   | _ -> starstar_exp env add_red expr
@@ -401,9 +401,9 @@ let doc_exp, doc_let =
     | "<=" | "<=_s" | "<" | "<_s" | "<_si" | "<_u"
     | "@" | "^^" | "^" | "~^"
     | ">>" | ">>>" | "<<" | "<<<"
-    | "+" | "-"
+    | "+" | "+_s" | "-" | "-_s" 
     | "*" | "/"
-    | "div" | "quot" | "rem" | "mod"
+    | "div" | "quot" | "quot_s" | "rem" | "mod"
     | "*_s" | "*_si" | "*_u" | "*_ui"
     | "**"), _))
     , _) ->
