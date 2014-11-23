@@ -166,6 +166,8 @@ instance (Ord reg_name)
   let (>=) r1 r2 = (reg_nameCompare r1 r2) <> LT
 end
 
+(** basic values *)
+
 type bit =
   | Bitc_zero
   | Bitc_one
@@ -184,7 +186,7 @@ type register_value = <| rv_bits: list bit_lifted; rv_dir: direction; rv_start: 
 
 type byte_lifted = Byte_lifted of list bit_lifted (* of length 8 *)
 
-type instruction_field_value = list bit 
+type instruction_field_value = (*SHOULD BE JUST*)  list bit  (*register_value *)
 
 type byte = Byte of list bit (* of length 8 *)
 
@@ -199,6 +201,8 @@ type address = Address of list byte (* of length 8 *)
 (* type address = Address of integer *)
 
 type opcode = Opcode of list byte (* of length 4 *)
+
+(** typeclass instantiations *)
 
 instance (Ord register_value)
   let compare = defaultCompare
@@ -582,6 +586,14 @@ let address_of_register_value (rv:register_value) : maybe address =
       | Just a -> Just a
       end
   end
+
+let address_of_memory_value (mv:memory_value) : maybe address = 
+  match byte_list_of_memory_value mv with
+  | Nothing -> Nothing
+  | Just bs -> 
+      if List.length bs <> 8 then Nothing else
+      Just (address_of_byte_list bs)
+  end 
 
 val byte_of_int : int -> byte
 let byte_of_int (i:int) : byte = 

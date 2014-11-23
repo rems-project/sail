@@ -67,7 +67,12 @@ let reg_value_to_string v =
   else (string_of_int l) ^ "_" ^ start ^ "'b" ^ 
     collapse_leading (List.fold_right (^) (List.map bit_lifted_to_string v.rv_bits) "")
 
-let mem_value_to_string v = bytes_to_string v
+
+let register_value_to_string rv = 
+  reg_value_to_string rv  
+
+let memory_value_to_string mv = 
+  bytes_to_string mv 
 
 (*let val_to_string v = match v with
   | Bitvector(bools, inc, fst)-> 
@@ -224,10 +229,10 @@ let rec format_events = function
   | (E_error s)::events ->
     "     Failed with message : " ^ s ^ " but continued on erroneously\n"
   | (E_read_mem(read_kind, (Address_lifted location), length, tracking))::events ->
-    "     Read_mem at " ^ (mem_value_to_string location) ^ " for " ^ (string_of_big_int length) ^ " bytes \n" ^
+    "     Read_mem at " ^ (memory_value_to_string location) ^ " for " ^ (string_of_big_int length) ^ " bytes \n" ^
     (format_events events)
   | (E_write_mem(write_kind,(Address_lifted location), length, tracking, value, v_tracking))::events ->
-    "     Write_mem at " ^ (mem_value_to_string location) ^ " writing " ^ (mem_value_to_string value) ^ " across " ^ (string_of_big_int length) ^ " bytes\n" ^
+    "     Write_mem at " ^ (memory_value_to_string location) ^ " writing " ^ (memory_value_to_string value) ^ " across " ^ (string_of_big_int length) ^ " bytes\n" ^
     (format_events events)
   | ((E_barrier b_kind)::events) ->
     "     Memory_barrier occurred\n" ^ 

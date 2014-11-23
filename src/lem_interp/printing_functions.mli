@@ -56,3 +56,7 @@ val print_exp : (string-> unit) -> Interp.lenv -> tannot exp -> unit
 val print_backtrace_compact : (string -> unit) -> instruction_state -> unit
 val print_continuation : (string -> unit) -> instruction_state -> unit
 val print_instruction : (string -> unit) -> instruction -> unit
+
+
+val register_value_to_string : register_value -> string
+val memory_value_to_string : memory_value -> string
