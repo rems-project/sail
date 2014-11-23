@@ -157,6 +157,13 @@ let reg_size reg =
       end 
 end 
 
+let vector_length v = match v with
+  | V_vector n inc vals -> integerFromNat(List.length vals)
+  | V_vector_sparse n m inc vals def -> m
+  | V_lit _ -> 1
+  | _ -> 0
+end
+
 (*Constant unit value, for use in interpreter *)
 let unitv = V_lit (L_aux L_unit Unknown)
 
@@ -2197,9 +2204,15 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
          | ((Action a s,lm,le),Just lexp_builder) ->
            (match (a,is_top_level) with
            | ((Write_reg regf Nothing value),true) -> 
-	     ((Action (Write_reg regf (Just (n,n)) (update_vector_start n 1 value)) s, lm,le), Nothing)
+	     ((Action (Write_reg regf (Just (n,n)) 
+			 (if (vector_length value) = 1 
+			  then (update_vector_start n 1 value)
+			  else (access_vector value n))) s, lm,le), Nothing)
            | ((Write_reg regf Nothing value),false) -> 
-	     ((Action (Write_reg regf (Just (n,n)) (update_vector_start n 1 value)) s,lm,le),
+	     ((Action (Write_reg regf (Just (n,n)) 
+			 (if (vector_length value) = 1 
+			  then (update_vector_start n 1 value)
+			  else (access_vector value n))) s,lm,le),
 	      Just  (next_builder lexp_builder))
            | ((Write_mem id a Nothing value),true) -> ((Action (Write_mem id a (Just (n,n)) value) s,lm,le), Nothing)
            | ((Write_mem id a Nothing value),false) -> 
@@ -2245,8 +2258,12 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		  ((Value (V_vector start inc (List.replicate size V_unknown)),lm,l_env),Nothing)
                 | _ -> ((Error l "Vector required",lm,le),Nothing) end)
               | ((Action (Write_reg regf Nothing value) s, lm,le), Just lexp_builder) ->
+		let len = ((abs (n1-n2)) +1) in
                 ((Action 
-		    (Write_reg regf (Just (n1,n2)) (update_vector_start n1 ((abs (n1-n2)) +1) value)) s,lm,le),
+		    (Write_reg regf (Just (n1,n2)) 
+		       (if (vector_length value) > len 
+			then (update_vector_start n1 len value)
+			else (slice_vector value n1 n2))) s,lm,le),
 		 Just (next_builder lexp_builder))
               | ((Action (Write_mem id a Nothing value) s,lm,le), Just lexp_builder) ->
                 ((Action (Write_mem id a (Just (n1,n2)) value) s,lm,le), Just (next_builder lexp_builder))
