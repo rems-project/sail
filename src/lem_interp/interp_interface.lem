@@ -185,6 +185,7 @@ type memory_value = list memory_byte (* the head of the list at the lowest addre
 
 (* not sure which of these is more handy yet *)
 type address = Address of list byte (* of length 8 *)
+(* type address = Address of integer *)
 
 type opcode = Opcode of list byte (* of length 4 *)
 
@@ -395,28 +396,52 @@ val register_value_ones : direction -> int -> int -> register_value
 let register_value_ones dir width start_index = 
   register_value Bitl_one dir width start_index
 
-val memory_value_unknown : int (*the number of bytes*) -> memory_value
-(*let memory_value_lifted_unknown (width:int) : memory_value_lifted = *)
+val byte_lifted_unknown : byte_lifted
+let byte_lifted_unknown = Byte_lifted (List.replicate 8 Bitl_unknown)
 
+val memory_value_unknown : int (*the number of bytes*) -> memory_value
+let memory_value_unknown (width:int) : memory_value_lifted = 
+  List.replicate width byte_lifted_unknown 
 
 
 val add_address_int : address -> int -> address 
-(* let add_address_int (a:address) (i:int) : address = *)
+(* TODO: let add_address_int (a:address) (i:int) : address = *)
 
 val clear_low_order_bits_of_address : address -> address 
-
+let clear_low_order_bits_of_address bytes = 
+  let (Address [b0;b1;b2;b3;b4;b5;b6;b7]) = bytes in
+  let (Byte [bt0;bt1;bt2;bt3;bt4;bt5;bt6;bt7]) = bytes in
+  let b7' = Byte [bt0;bt1;bt2;bt3;bt4;bt5;Bitc_zero;Bitc_zero] in
+  Address [b0;b1;b2;b3;b4;b5;b6;b7']
 
 val memory_value_length : memory_value -> integer
+let memory_value_length (mv:memory_value) = integerFromNat (List.length mv)
 
 (* coercions *)
-val integer_of_address : address -> integer 
 
+val lift_bit : bit -> bit_lifted
+let lift_bit b = 
+  match b with
+  | Bitc_zero -> Bitl_zero
+  | Bitc_one -> Bitl_one
+  end
+
+val lift_byte : byte -> byte_lifted
+let lift_byte (Byte bs) : byte_lifted = Byte_lifted (List.map lift_bit bs)
+
+val integer_of_address : address -> integer 
+(* TODO *)
 val address_of_integer : integer -> address 
+(* TODO *)
 
 val opcode_of_bytes : byte -> byte -> byte -> byte -> opcode
-(*let opcode_of_bytes b0 b1 b2 b3 : maybe opcode = *)
+let opcode_of_bytes b0 b1 b2 b3 : opcode = Opcode [b0;b1;b2;b3]
 
 val register_value_of_address : address -> register_value   
+let register_value_of_address (Address bytes) : register_value = 
+   <| rv_bits = List.concatMap (fun (Byte bs) -> List.map lift_bit bs) bytes;
+      rv_dir = D_increasing;
+      rv_start = 64; |>
 
 val address_lifted_of_register_value : register_value -> maybe address_lifted
 (* returning Nothing iff the register value is not 64 bits wide, but allowing Bitl_undef and Bitl_unknown *)
