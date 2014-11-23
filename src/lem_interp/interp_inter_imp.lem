@@ -104,7 +104,10 @@ let intern_ifield_value v =
 *)
 
 let num_to_bits size kind num =
-  failwith "TODO: num_to_bits needed in src_power_get/trans_sail.gen"
+(* num_to_bits needed in src_power_get/trans_sail.gen - rather than reengineer the generation, we include a wrapper here *) 
+  Interp_interface.bit_list_of_integer size num
+
+
 (*
   match kind with
     | Bitv -> Bitvector (match (Interp_lib.to_vec_inc 
