@@ -448,6 +448,11 @@ val byte_lifted_of_byte : byte -> byte_lifted
 let byte_lifted_of_byte (Byte bs) : byte_lifted = Byte_lifted (List.map bit_lifted_of_bit bs)
 
 
+val integer_address_of_int_list : list int -> integer
+(*TODO*)
+let integer_address_of_int_list (is: list int) = failwith "TODO"
+(* regarding is as a list of bytes in memory, lowest-address first, convert to an integer *)
+
 val integer_of_byte_list : list byte -> integer 
 (* TODO *)let integer_of_byte_list (a:list byte):integer = failwith "TODO"
 val byte_list_of_integer : int -> integer -> list byte 
@@ -531,8 +536,8 @@ let integer_of_register_value (rv:register_value):maybe integer =
 
 
 (* TODO: have to go check the usage points for the length and fix up *)
-val register_value_of_integer : integer -> register_value 
-(* TODO *)let register_value_of_integer (i:integer):register_value = failwith "TODO"
+val register_value_of_integer : int -> integer -> register_value 
+(* TODO *)let register_value_of_integer (len:int) (i:integer):register_value = failwith "TODO"
 
 
 val opcode_of_bytes : byte -> byte -> byte -> byte -> opcode
@@ -570,11 +575,11 @@ let address_of_register_value (rv:register_value) : maybe address =
 val byte_of_int : int -> byte
 let byte_of_int (i:int) : byte = 
   failwith "TODO"
-(*
+
 val memory_byte_of_int : int -> memory_byte
 let memory_byte_of_int (i:int) : memory_byte = 
   failwith "TODO"
-*)
+
 (*
 val int_of_memory_byte : int -> maybe memory_byte
 let int_of_memory_byte (mb:memory_byte) : int = 
