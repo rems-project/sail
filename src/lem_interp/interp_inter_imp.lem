@@ -18,11 +18,16 @@ let build_context defs = match Interp.to_top_env defs with (_,context) -> contex
 let make_mode eager_eval tracking_values = <| Interp.eager_eval = eager_eval; Interp.track_values = tracking_values |>;;
 let tracking_dependencies mode = mode.Interp.track_values
 
-let to_ibit = function 
+let bitl_to_ibit = function 
   | Bitl_zero -> (Interp.V_lit (L_aux L_zero Interp_ast.Unknown)) 
   | Bitl_one ->  (Interp.V_lit (L_aux L_one Interp_ast.Unknown))
   | Bitl_undef -> (Interp.V_lit (L_aux L_undef Interp_ast.Unknown))
   | Bitl_unknown -> Interp.V_unknown 
+end
+
+let bit_to_ibit = function
+  | Bitc_zero -> (Interp.V_lit (L_aux L_zero Interp_ast.Unknown))
+  | Bitc_one -> (Interp.V_lit (L_aux L_one Interp_ast.Unknown))
 end
 
 let to_bit = function 
@@ -49,13 +54,20 @@ let is_bool = function
   | Bitl_unknown -> false
 end
 
-let to_ibits l = List.map to_ibit l
-let from_bits l = List.map 
-		     (fun b -> match b with
-                       | Interp.V_lit (L_aux L_zero _) -> Bitl_zero
-		       | Interp.V_lit (L_aux L_one _)  -> Bitl_one
-		       | Interp.V_lit (L_aux L_undef _) -> Bitl_undef
-		       | Interp.V_unknown -> Bitl_unknown end) l
+let bits_to_ibits l = List.map bit_to_ibit l
+let bitls_to_ibits l = List.map bitl_to_ibit l
+let bitls_from_ibits l = List.map 
+  (fun b -> match b with
+    | Interp.V_lit (L_aux L_zero _) -> Bitl_zero
+    | Interp.V_lit (L_aux L_one _)  -> Bitl_one
+    | Interp.V_lit (L_aux L_undef _) -> Bitl_undef
+    | Interp.V_unknown -> Bitl_unknown end) l
+
+let bits_from_ibits l = List.map 
+  (fun b -> match b with
+    | Interp.V_lit (L_aux L_zero _) -> Bitc_zero
+    | Interp.V_lit (L_aux L_one _)  -> Bitc_one
+   end) l
 
 let rec to_bytes l = match l with
   | [] -> []
@@ -70,23 +82,30 @@ let bits_to_byte b =
   then natFromInteger (integerFromBoolList (false,(List.reverse (List.map to_bool b))))
   else Assert_extra.failwith "bits_to_byte given a non-8 list or one containing ? and u"
 
-let memval_to_regval v start dir = 
+(*let memval_to_regval v start dir = 
   <| rv_bits=(List.concatMap (fun (Byte_lifted(bits)) -> bits) v);
      rv_start=start; rv_dir = dir |>
 
 let opcode_to_regval (Opcode v) start dir =
   (memval_to_regval (List.map (fun (Byte(bits)) -> Byte_lifted (List.map to_lbit bits)) v) start dir)
 
-let regval_to_ifield v = List.map to_bit v.rv_bits
+let regval_to_ifield v = List.map to_bit v.rv_bits*)
 
+(*All but reg_value should take a mode to get direction and start correct*)
+let intern_opcode (Opcode v) =
+  Interp.V_vector 0 true
+    (List.concatMap (fun (Byte(bits)) -> (List.map bit_to_ibit bits)) v)
 		   
 let intern_reg_value v = match v with
-  | <| rv_bits=[b] |> -> to_ibit b
-  | _ -> Interp.V_vector (integerFromInt v.rv_start) (v.rv_dir = D_increasing) (to_ibits v.rv_bits)
+  | <| rv_bits=[b] |> -> bitl_to_ibit b
+  | _ -> Interp.V_vector (integerFromInt v.rv_start) (v.rv_dir = D_increasing) (bitls_to_ibits v.rv_bits)
 end
 
 let intern_mem_value v = 
-  Interp.V_vector 0 true (*get a default here*) (List.concatMap (fun (Byte_lifted bits) -> to_ibits bits) v)
+  Interp.V_vector 0 true (List.concatMap (fun (Byte_lifted bits) -> bitls_to_ibits bits) v)
+
+let intern_ifield_value v =
+  Interp.V_vector 0 true (bits_to_ibits v)
 
 (*let byte_list_of_integer size num = 
   if (num < 0)
@@ -136,7 +155,7 @@ end
 let rec extern_reg_value optional_start v = match v with
   | Interp.V_track v regs -> extern_reg_value optional_start v 
   | Interp.V_vector fst inc bits ->
-    <| rv_bits=(from_bits bits); 
+    <| rv_bits=(bitls_from_ibits bits); 
        rv_dir=(if inc then D_increasing else D_decreasing);
        rv_start=(intFromInteger fst)|>
   | Interp.V_vector_sparse fst stop inc bits default ->
@@ -166,9 +185,16 @@ let rec extern_mem_value mode v = match v with
     let (external_v,_) = extern_mem_value mode v in
     (external_v,
      if mode.Interp.track_values then (Just (List.map (fun r -> extern_reg r Nothing) regs)) else Nothing)
-  | Interp.V_vector fst inc bits -> (to_bytes (from_bits bits), Nothing)
+  | Interp.V_vector fst inc bits -> (to_bytes (bitls_from_ibits bits), Nothing)
   | Interp.V_vector_sparse fst stop inc bits default ->
     extern_mem_value mode (Interp_lib.fill_in_sparse v)
+end 
+
+let rec extern_ifield_value v = match v with
+  | Interp.V_track v regs -> extern_ifield_value v 
+  | Interp.V_vector fst inc bits -> bits_from_ibits bits
+  | Interp.V_vector_sparse fst stop inc bits default ->
+    extern_ifield_value (Interp_lib.fill_in_sparse v)
 end 
 
 let rec slice_reg_value v start stop = 
@@ -365,16 +391,16 @@ end
 
 let migrate_typ = function
   | Instruction_extractor.IBit -> Bit
-  | Instruction_extractor.IBitvector len -> Bvector (match len with Nothing -> Nothing | Just i -> Just (intFromInteger i) end) 
+  | Instruction_extractor.IBitvector len ->
+    Bvector (match len with Nothing -> Nothing | Just i -> Just (intFromInteger i) end) 
   | Instruction_extractor.IOther -> Other
 end
 
-let decode_to_istate top_level orig_value = 
-  let value = opcode_to_regval orig_value 0 D_increasing in
+let decode_to_istate top_level value = 
   let mode = make_mode true false in
-  let (arg,_) = Interp.to_exp mode Interp.eenv (intern_reg_value value) in
+  let (arg,_) = Interp.to_exp mode Interp.eenv (intern_opcode value) in
   let (Interp.Env _ instructions _ _ _ _ _) = top_level in
-  let (instr_decoded,error) = interp_to_value_helper orig_value ("",[],[])
+  let (instr_decoded,error) = interp_to_value_helper value ("",[],[])
     (fun _ -> Interp.resume 
       (make_mode true false) 
       (Interp.Thunk_frame 
@@ -388,13 +414,15 @@ let decode_to_istate top_level orig_value =
 	    | Just(Instruction_extractor.Instr_form name parms effects) -> 
 	      match (parm,parms) with
 		| (Interp.V_lit (L_aux L_unit _),[]) -> (name, [], effects)
-		| (value,[(p_name,ie_typ)]) -> (name, [(p_name,(migrate_typ ie_typ),
-							(regval_to_ifield (extern_reg_value Nothing value)))], effects)
+		| (value,[(p_name,ie_typ)]) -> 
+		  (name, [(p_name,(migrate_typ ie_typ), (extern_ifield_value value))], effects)
 		| (Interp.V_tuple vals,parms) -> 
-		  (name, (Interp.map2 (fun value (p_name,ie_typ) -> (p_name,(migrate_typ ie_typ),(regval_to_ifield (extern_reg_value Nothing value)))) vals parms), effects)
+		  (name, 
+		   (Interp.map2 (fun value (p_name,ie_typ) -> 
+		     (p_name,(migrate_typ ie_typ),(extern_ifield_value value))) vals parms), effects)
           end end end in 
       let (arg,_) = Interp.to_exp mode Interp.eenv instr in
-      let (instr_decoded,error) = interp_to_value_helper orig_value instr_external
+      let (instr_decoded,error) = interp_to_value_helper value instr_external
 	(fun _ -> Interp.resume 
 	 (make_mode true false) 
 	 (Interp.Thunk_frame 
@@ -421,22 +449,16 @@ let decode_to_instruction (top_level:context) (value:opcode) : instruction_or_de
   end
 
 val instruction_to_istate : context -> instruction -> instruction_state 
-(* PLACEHOLDER TO GET REST TO BUILD *)
-let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instruction) : instruction_state  = Assert_extra.failwith "TODO instruction_to_istate"
-(*
 let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instruction) : instruction_state  = 
   let mode = make_mode true false in
   let get_value (name,typ,v) = 
-    let (e,_) = 
-      Interp.to_exp mode Interp.eenv (intern_reg_value ((* SUSPICIOUS?*) opcode_to_regval v 0 D_increasing)) in e in
-(*  (Instr instr*)
+    let (e,_) = Interp.to_exp mode Interp.eenv (intern_ifield_value v) in e in
     (Interp.Thunk_frame
        (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) 
 		 [(E_aux (E_app (Id_aux (Id name) Interp_ast.Unknown) (List.map get_value parms))
 		        (Interp_ast.Unknown,Interp.ctor_annot (T_id "ast")) (*This type shouldn't be hard-coded*))])
 	      (Interp_ast.Unknown,Nothing))
-       top_level Interp.eenv Interp.emem Interp.Top) (*)*)
-*)
+       top_level Interp.eenv Interp.emem Interp.Top) 
 
 let rec interp_to_outcome mode thunk = 
   match thunk () with
