@@ -411,18 +411,18 @@ let decode_to_istate top_level orig_value =
 end
 
 
-let decode_to_instruction top_level value = 
+let decode_to_instruction (top_level:context) (value:opcode) : instruction_or_decode_error  = 
   match decode_to_istate top_level value with
   | Instr inst is -> IDE_instr inst
   | Decode_error de -> IDE_decode_error de
   end
 
 
-let instruction_to_istate top_level ((name, parms, _) as instr) = 
+let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instruction) : instruction_state  = 
   let mode = make_mode true false in
   let get_value (name,typ,v) = 
     let (e,_) = 
-      Interp.to_exp mode Interp.eenv (intern_reg_value (opcode_to_regval v 0 D_increasing)) in e in
+      Interp.to_exp mode Interp.eenv (intern_reg_value ((* SUSPICIOUS?*) opcode_to_regval v 0 D_increasing)) in e in
 (*  (Instr instr*)
     (Interp.Thunk_frame
        (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) 
