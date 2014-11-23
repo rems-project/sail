@@ -410,19 +410,23 @@ val byte_lifted_unknown : byte_lifted
 let byte_lifted_unknown = Byte_lifted (List.replicate 8 Bitl_unknown)
 
 val memory_value_unknown : int (*the number of bytes*) -> memory_value
-let memory_value_unknown (width:int) : memory_value_lifted = 
-  List.replicate width byte_lifted_unknown 
+let memory_value_unknown (width:int) : memory_value = 
+  List.replicate (natFromInt width) byte_lifted_unknown 
 
 
 val add_address_int : address -> int -> address 
 (* TODO: let add_address_int (a:address) (i:int) : address = *)
 
 val clear_low_order_bits_of_address : address -> address 
-let clear_low_order_bits_of_address bytes = 
-  let (Address [b0;b1;b2;b3;b4;b5;b6;b7]) = bytes in
-  let (Byte [bt0;bt1;bt2;bt3;bt4;bt5;bt6;bt7]) = bytes in
-  let b7' = Byte [bt0;bt1;bt2;bt3;bt4;bt5;Bitc_zero;Bitc_zero] in
-  Address [b0;b1;b2;b3;b4;b5;b6;b7']
+let clear_low_order_bits_of_address a = 
+  match a with 
+  | Address [b0;b1;b2;b3;b4;b5;b6;b7] -> 
+      match b7 with
+      | Byte [bt0;bt1;bt2;bt3;bt4;bt5;bt6;bt7] -> 
+          let b7' = Byte [bt0;bt1;bt2;bt3;bt4;bt5;Bitc_zero;Bitc_zero] in
+          Address [b0;b1;b2;b3;b4;b5;b6;b7']
+        end
+  end
 
 val memory_value_length : memory_value -> integer
 let memory_value_length (mv:memory_value) = integerFromNat (List.length mv)
