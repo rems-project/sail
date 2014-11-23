@@ -30,16 +30,6 @@ let bit_to_ibit = function
   | Bitc_one -> (Interp.V_lit (L_aux L_one Interp_ast.Unknown))
 end
 
-let to_bit = function 
-  | Bitl_zero -> Bitc_zero 
-  | Bitl_one ->  Bitc_one
-end
-
-let to_lbit = function
-  | Bitc_zero -> Bitl_zero
-  | Bitc_one -> Bitl_one
-end
-
 let to_bool = function 
   | Bitl_zero -> false
   | Bitl_one ->  true
@@ -77,19 +67,10 @@ end
 let all_known l = List.all is_bool l
 let all_known_bytes l = List.all (fun (Byte_lifted bs) -> List.all is_bool bs) l
 
-let bits_to_byte b = 
+let bits_to_word8 b = 
   if ((List.length b) = 8) && (all_known b)
   then natFromInteger (integerFromBoolList (false,(List.reverse (List.map to_bool b))))
-  else Assert_extra.failwith "bits_to_byte given a non-8 list or one containing ? and u"
-
-(*let memval_to_regval v start dir = 
-  <| rv_bits=(List.concatMap (fun (Byte_lifted(bits)) -> bits) v);
-     rv_start=start; rv_dir = dir |>
-
-let opcode_to_regval (Opcode v) start dir =
-  (memval_to_regval (List.map (fun (Byte(bits)) -> Byte_lifted (List.map to_lbit bits)) v) start dir)
-
-let regval_to_ifield v = List.map to_bit v.rv_bits*)
+  else Assert_extra.failwith "bits_to_word8 given a non-8 list or one containing ? and u"
 
 (*All but reg_value should take a mode to get direction and start correct*)
 let intern_opcode (Opcode v) =

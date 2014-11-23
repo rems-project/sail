@@ -382,17 +382,11 @@ val rr_interp_exhaustive : interp_mode -> instruction_state -> list event -> (ou
 
 (** operations and coercions on basic values *)
 
-(*val num_to_bits : nat -> v_kind -> integer -> value*)
+val word8_to_bitls : word8 -> list bit_lifted
+val bitls_to_word8 : list bit_lifted -> word8
 
-val byte_to_bits : word8 -> list bit_lifted
-val bits_to_byte : list bit_lifted -> word8
-
-(* TODO: rename these, as clash  with the functions below that take types according to their names:
-val integer_of_byte_list : list word8 -> integer
-
-
-val byte_list_of_integer : integer -> integer -> list word8 
-*)
+val integer_of_word8_list : list word8 -> integer
+val word8_list_of_integer : integer -> integer -> list word8 
 
 (* constructing values *)
 
@@ -447,17 +441,33 @@ let bit_lifted_of_bit b =
 val byte_lifted_of_byte : byte -> byte_lifted
 let byte_lifted_of_byte (Byte bs) : byte_lifted = Byte_lifted (List.map bit_lifted_of_bit bs)
 
+val bytes_of_bits : list bit -> list byte (*assumes (length bits) mod 8 = 0*)
+let rec bytes_of_bits bits = match bits with
+  | [] -> []
+  | b1::b2::b3::b4::b5::b6::b7::b8::bits -> 
+    (Byte [b1;b2;b3;b4;b5;b6;b7;b8])::(bytes_of_bits bits)
+end
 
-val integer_of_byte_list : list byte -> integer 
-(* TODO *)let integer_of_byte_list (a:list byte):integer = failwith "TODO"
-val byte_list_of_integer : int -> integer -> list byte 
-(* TODO *)let byte_list_of_integer (len:int) (a:integer):list byte = failwith "TODO"
+let bit_to_bool = function
+  | Bitc_zero -> false
+  | Bitc_one -> true
+end
 
 val integer_of_bit_list : list bit -> integer 
-(* TODO *)let integer_of_bit_list (a:list bit):integer = failwith "TODO"
 val bit_list_of_integer : int -> integer -> list bit 
-(* TODO *)let bit_list_of_integer (len:int) (a:integer):list bit = failwith "TODO"
+let integer_of_bit_list b =
+  integerFromBoolList (false,(List.reverse (List.map bit_to_bool b)))
 
+let bit_list_of_integer len b = 
+  List.map (fun b -> if b then Bitc_one else Bitc_zero) 
+    (boolListFrombitSeq (natFromInt len) (bitSeqFromInteger Nothing b))
+
+val integer_of_byte_list : list byte -> integer 
+let integer_of_byte_list bytes = integer_of_bit_list (List.concatMap (fun (Byte bs) -> bs) bytes)
+
+val byte_list_of_integer : int -> integer -> list byte 
+let byte_list_of_integer (len:int) (a:integer):list byte = 
+  let bits = bit_list_of_integer (len * 8) a in bytes_of_bits bits
 
 val integer_of_address : address -> integer 
 let integer_of_address (a:address):integer = 

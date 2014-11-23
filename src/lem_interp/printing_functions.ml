@@ -50,7 +50,7 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
 let bytes_to_string bytes = 
   (String.concat ""
      (List.map (fun i -> let s = (Printf.sprintf "%x" i) in if (String.length s = 1) then "0"^s else s) 
-	(List.map (fun (Byte_lifted bs) -> bits_to_byte bs) bytes)))
+	(List.map (fun (Byte_lifted bs) -> bits_to_word8 bs) bytes)))
 
 let bit_lifted_to_string = function
   | Bitl_zero -> "0"
