@@ -648,7 +648,7 @@ val register_value_of_address : address -> register_value
 let register_value_of_address (Address bytes) : register_value = 
    <| rv_bits = List.concatMap (fun (Byte bs) -> List.map bit_lifted_of_bit bs) bytes;
       rv_dir = D_increasing;
-      rv_start = 64; |>
+      rv_start = 0; |>
 
 
 
