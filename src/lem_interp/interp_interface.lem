@@ -186,7 +186,7 @@ type register_value = <| rv_bits: list bit_lifted; rv_dir: direction; rv_start: 
 
 type byte_lifted = Byte_lifted of list bit_lifted (* of length 8 *)
 
-type instruction_field_value = (*SHOULD BE JUST*)  list bit  (*register_value *)
+type instruction_field_value = list bit
 
 type byte = Byte of list bit (* of length 8 *)
 
@@ -203,6 +203,25 @@ type address = Address of list byte (* of length 8 *)
 type opcode = Opcode of list byte (* of length 4 *)
 
 (** typeclass instantiations *)
+(*
+let bitCompare (b1:bit) (b2:bit) =
+  match (b1,b2) with
+  | (Bitc_zero, Bitc_zero) -> EQ
+  | (Bitc_one, Bitc_one) -> EQ
+  | (Bitc_zero, _) -> LT
+  | (_,_) -> GT
+  end
+
+let bit_liftedCompare (bl1:bit) (bl2:bit) =
+  match (bl1,bl2) with
+  | (Bitl_zero, Bitl_zero) -> EQ
+  | (Bitl_one, Bitl_one) -> EQ
+...
+  end
+*)
+
+let addressCompare = defaultCompare
+
 
 instance (Ord register_value)
   let compare = defaultCompare
