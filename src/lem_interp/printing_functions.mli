@@ -61,4 +61,9 @@ val print_instruction : (string -> unit) -> instruction -> unit
 val register_value_to_string : register_value -> string
 val memory_value_to_string : memory_value -> string
 
+
+val logfile_register_value_to_string : register_value -> string
+val logfile_memory_value_to_string : memory_value -> string
+val logfile_address_to_string : address -> string
+
 val byte_list_to_string : byte list -> string

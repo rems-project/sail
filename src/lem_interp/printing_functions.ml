@@ -95,51 +95,65 @@ let bytes_lifted_homogenous_to_string = function
   | Bitslh_undef -> "uu"
   | Bitslh_unknown -> "??"
 
-let simple_bit_lifteds_to_string bls (starto : int option) =  
+let simple_bit_lifteds_to_string bls (show_length_and_start:bool) (starto: int option) =  
   let s = 
     String.concat "" (List.map bit_lifted_to_string bls) in
   let s = 
     collapse_leading s in
   let len = string_of_int (List.length bls) in 
-  match starto with 
-  | None ->       len ^ "b" ^s 
-  | Some start -> len ^ "b" ^ "_" ^string_of_int start ^"'" ^ s
+  if show_length_and_start then 
+    match starto with 
+    | None ->       len ^ "b" ^s 
+    | Some start -> len ^ "b" ^ "_" ^string_of_int start ^"'" ^ s
+  else
+    "0b"^s
 
 (* if a multiple of 8 lifted bits and each chunk of 8 is homogenous,
 print as lifted hex, otherwise print as lifted bits *)
-let bit_lifteds_to_string (bls: bit_lifted list) (starto : int option) =  
+let bit_lifteds_to_string (bls: bit_lifted list) (show_length_and_start:bool) (starto: int option) =  
   let l = List.length bls in
   if l mod 8 = 0 then  (*  if List.mem l [8;16;32;64;128] then *)
     let bytesl = List.map (fun (Byte_lifted bs) -> bs) (Interp_interface.byte_lifteds_of_bit_lifteds bls) in
     let byteslhos = List.map bits_lifted_homogenous_of_bit_lifteds bytesl in
     match maybe_all byteslhos with 
     | None -> (* print as bitvector after all *)
-        simple_bit_lifteds_to_string bls starto
+        simple_bit_lifteds_to_string bls show_length_and_start starto
     | Some (byteslhs: bits_lifted_homogenous list) -> 
         let s = String.concat "" (List.map bytes_lifted_homogenous_to_string byteslhs) in
-        match starto with 
-        | None ->       "0x" ^ s 
-        | Some start -> "0x" ^ "_" ^string_of_int start ^"'" ^ s
+        if show_length_and_start then 
+          match starto with 
+          | None ->       "0x" ^ s 
+          | Some start -> "0x" ^ "_" ^string_of_int start ^"'" ^ s
+        else
+          "0x"^s
   else
-    simple_bit_lifteds_to_string bls starto
+    simple_bit_lifteds_to_string bls show_length_and_start starto
 
 
   
 
 let register_value_to_string rv = 
-  bit_lifteds_to_string rv.rv_bits (Some rv.rv_start)   
+  bit_lifteds_to_string rv.rv_bits true (Some rv.rv_start)   
 
 let memory_value_to_string mv = 
   let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) mv)  in
-  bit_lifteds_to_string bls None
+  bit_lifteds_to_string bls true None
+
+let logfile_register_value_to_string rv = 
+  bit_lifteds_to_string rv.rv_bits false (Some rv.rv_start)   
+
+let logfile_memory_value_to_string mv = 
+  let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) mv)  in
+  bit_lifteds_to_string bls false None
 
 let byte_list_to_string bs =
   let bs' = List.map byte_lifted_of_byte bs in
   memory_value_to_string bs' 
 
-
-
-
+let logfile_address_to_string a =
+  let bs' = List.map byte_lifted_of_byte (byte_list_of_address a) in
+  logfile_memory_value_to_string bs'
+  
 
 let bytes_to_string bytes = 
   (String.concat ""
