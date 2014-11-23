@@ -101,8 +101,11 @@ let intern_mem_value v =
 	   then (to_bytes (from_bits bits))
 	   else failwith "byte_list_of_integer given an integer larger than given size"
        end
+*)
 
 let num_to_bits size kind num =
+  failwith "TODO: num_to_bits needed in src_power_get/trans_sail.gen"
+(*
   match kind with
     | Bitv -> Bitvector (match (Interp_lib.to_vec_inc 
 				  (Interp.V_tuple([Interp.V_lit(L_aux (L_num (integerFromNat size)) Interp_ast.Unknown);

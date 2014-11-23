@@ -387,10 +387,12 @@ val rr_interp_exhaustive : interp_mode -> instruction_state -> list event -> (ou
 val byte_to_bits : word8 -> list bit_lifted
 val bits_to_byte : list bit_lifted -> word8
 
+(* TODO: rename these, as clash  with the functions below that take types according to their names:
 val integer_of_byte_list : list word8 -> integer
 
-val byte_list_of_integer : integer -> integer -> list word8 
 
+val byte_list_of_integer : integer -> integer -> list word8 
+*)
 
 (* constructing values *)
 
@@ -435,20 +437,102 @@ let memory_value_length (mv:memory_value) = integerFromNat (List.length mv)
 
 (* coercions *)
 
-val lift_bit : bit -> bit_lifted
-let lift_bit b = 
+val bit_lifted_of_bit : bit -> bit_lifted
+let bit_lifted_of_bit b = 
   match b with
   | Bitc_zero -> Bitl_zero
   | Bitc_one -> Bitl_one
   end
 
-val lift_byte : byte -> byte_lifted
-let lift_byte (Byte bs) : byte_lifted = Byte_lifted (List.map lift_bit bs)
+val byte_lifted_of_byte : byte -> byte_lifted
+let byte_lifted_of_byte (Byte bs) : byte_lifted = Byte_lifted (List.map bit_lifted_of_bit bs)
+
+
+val integer_of_byte_list : list byte -> integer 
+(* TODO *)let integer_of_byte_list (a:list byte):integer = failwith "TODO"
+val byte_list_of_integer : int -> integer -> list byte 
+(* TODO *)let byte_list_of_integer (len:int) (a:integer):list byte = failwith "TODO"
+
+val integer_of_bit_list : list bit -> integer 
+(* TODO *)let integer_of_bit_list (a:list bit):integer = failwith "TODO"
+val bit_list_of_integer : int -> integer -> list bit 
+(* TODO *)let bit_list_of_integer (len:int) (a:integer):list bit = failwith "TODO"
+
 
 val integer_of_address : address -> integer 
-(* TODO *)let integer_of_address (a:address):integer = failwith "TODO"
+let integer_of_address (a:address):integer = 
+  match a with
+  | Address bs -> integer_of_byte_list bs 
+  end
+
 val address_of_integer : integer -> address 
-(* TODO *)let address_of_integer (a:integer):address = failwith "TODO"
+let address_of_integer (i:integer):address =
+  Address (byte_list_of_integer 8 i)
+
+val address_of_byte_list : list byte -> address 
+let address_of_byte_list bs = 
+  if List.length bs <> 8 then failwith "address_of_byte_list given list not of length 8" else 
+  Address bs 
+
+
+val maybe_all : forall 'a.  list (maybe 'a) -> maybe (list 'a)
+let rec maybe_all' xs acc = 
+  match xs with
+  | [] -> Just (List.reverse acc)
+  | Nothing :: _ -> Nothing
+  | (Just y)::xs' -> maybe_all' xs' (y::acc)
+  end
+let maybe_all xs = maybe_all' xs [] 
+
+val bit_of_bit_lifted : bit_lifted -> maybe bit
+let bit_of_bit_lifted bl =
+  match bl with
+  | Bitl_zero -> Just Bitc_zero
+  | Bitl_one -> Just Bitc_one
+  | Bitl_undef -> Nothing
+  | Bitl_unknown -> Nothing
+  end
+
+val byte_of_byte_lifted : byte_lifted -> maybe byte
+let byte_of_byte_lifted bl = 
+  match bl with
+  | Byte_lifted bls -> 
+      match maybe_all (List.map bit_of_bit_lifted bls) with
+      | Nothing -> Nothing
+      | Just bs -> Just (Byte bs)
+      end
+  end
+
+val byte_of_memory_byte : memory_byte -> maybe byte
+let byte_of_memory_byte = byte_of_byte_lifted
+
+val byte_list_of_memory_value : memory_value -> maybe (list byte)
+let byte_list_of_memory_value mv = maybe_all (List.map byte_of_memory_byte mv)
+    
+
+val integer_of_memory_value : memory_value -> maybe integer 
+let integer_of_memory_value (mv:memory_value):maybe integer = 
+  match byte_list_of_memory_value mv with
+  | Just bs -> Just (integer_of_byte_list bs)
+  | Nothing -> Nothing 
+  end
+
+val memory_value_of_integer : int -> integer -> memory_value 
+let memory_value_of_integer (len:int) (i:integer):memory_value =
+  failwith "TODO"
+
+
+val integer_of_register_value : register_value -> maybe integer 
+let integer_of_register_value (rv:register_value):maybe integer = 
+  match maybe_all (List.map bit_of_bit_lifted rv.rv_bits) with
+  | Nothing -> Nothing
+  | Just bs -> Just (integer_of_bit_list bs)
+  end 
+
+
+(* TODO: have to go check the usage points for the length and fix up *)
+val register_value_of_integer : integer -> register_value 
+(* TODO *)let register_value_of_integer (i:integer):register_value = failwith "TODO"
 
 
 val opcode_of_bytes : byte -> byte -> byte -> byte -> opcode
@@ -456,14 +540,65 @@ let opcode_of_bytes b0 b1 b2 b3 : opcode = Opcode [b0;b1;b2;b3]
 
 val register_value_of_address : address -> register_value   
 let register_value_of_address (Address bytes) : register_value = 
-   <| rv_bits = List.concatMap (fun (Byte bs) -> List.map lift_bit bs) bytes;
+   <| rv_bits = List.concatMap (fun (Byte bs) -> List.map bit_lifted_of_bit bs) bytes;
       rv_dir = D_increasing;
       rv_start = 64; |>
 
 val address_lifted_of_register_value : register_value -> maybe address_lifted
 (* returning Nothing iff the register value is not 64 bits wide, but allowing Bitl_undef and Bitl_unknown *)
-(* TODO *)let address_lifted_of_register_value (rv:register_value) : maybe address_lifted = failwith "TODO"
+let address_lifted_of_register_value (rv:register_value) : maybe address_lifted = failwith "TODO"
+(*  if List.length rv.rv_bits <> 64 then Nothing
+  else 
+*)
 
 val address_of_address_lifted : address_lifted -> maybe address
 (* returning Nothing iff the address contains any Bitl_undef or Bitl_unknown *)
 (*TODO*)let address_of_address_lifted (al:address_lifted): maybe address = failwith "TODO"
+
+val address_of_register_value : register_value -> maybe address
+(* returning Nothing iff the register value is not 64 bits wide, or contains Bitl_undef or Bitl_unknown *)
+let address_of_register_value (rv:register_value) : maybe address = 
+  match address_lifted_of_register_value rv with
+  | Nothing -> Nothing
+  | Just al -> 
+      match address_of_address_lifted al with
+      | Nothing -> Nothing
+      | Just a -> Just a
+      end
+  end
+
+val byte_of_int : int -> byte
+let byte_of_int (i:int) : byte = 
+  failwith "TODO"
+(*
+val memory_byte_of_int : int -> memory_byte
+let memory_byte_of_int (i:int) : memory_byte = 
+  failwith "TODO"
+*)
+(*
+val int_of_memory_byte : int -> maybe memory_byte
+let int_of_memory_byte (mb:memory_byte) : int = 
+  failwith "TODO"
+*)
+
+
+
+
+val memory_value_of_address_lifted : address_lifted -> memory_value
+let memory_value_of_address_lifted (al:address_lifted) =
+failwith "TODO"
+(*  match al with
+  | Address bs -> bs
+  end*)
+
+val byte_list_of_address : address -> list byte
+let byte_list_of_address (a:address) : list byte = 
+  match a with
+  | Address bs -> bs
+  end
+
+val byte_list_of_opcode : opcode -> list byte
+let byte_list_of_opcode (opc:opcode) : list byte = 
+  match opc with
+  | Opcode bs -> bs
+  end
