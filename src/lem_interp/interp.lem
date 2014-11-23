@@ -580,9 +580,10 @@ let rec update_vector_start new_start expected_size v = match v with
   | V_vector m inc vs -> V_vector new_start inc vs
   (*Note, may need to shrink and check if still sparse *)
   | V_vector_sparse m n inc vals d -> V_vector_sparse new_start n inc vals d 
-  | V_unknown -> V_unknown
+  | V_unknown -> 
+    V_vector new_start true (List.replicate (natFromInteger expected_size) V_unknown)
   | V_lit (L_aux L_undef _) -> v
-  | V_track v r -> taint (update_vector_start new_start v) r
+  | V_track v r -> taint (update_vector_start new_start expected_size v) r
 end
 
 val in_ctors : list (id * typ) -> id -> maybe typ
@@ -1128,9 +1129,9 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	      | Typ_app (Id_aux (Id "vector") _) [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i) _)) _;_;_;_] ->
 		match v with 
 		  | V_vector start inc vs ->
-		    if start = i then (Value v,lm,le) else (Value (update_vector_start i v),lm,le)
+		    if start = i then (Value v,lm,le) else (Value (update_vector_start i 1 v),lm,le)
 		  | V_track (V_vector start inc vs) r ->
-		    if start = i then (Value v,lm,le) else (Value (update_vector_start i v),lm,le)
+		    if start = i then (Value v,lm,le) else (Value (update_vector_start i 1 v),lm,le)
 		  | _ -> (Value v,lm,le) end
 	      | _ -> (Value v,lm,le) end in
           (match (tag,v) with 
@@ -2168,17 +2169,24 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
               (match (nth(),is_top_level,maybe_builder) with
 		| (V_register regform,true,_) ->
 		    let start_pos = reg_start_pos regform in 
-		    ((Action (Write_reg regform Nothing (update_vector_start start_pos value)) 
-		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),Nothing)
+		    let reg_size = reg_size regform in
+		    ((Action (Write_reg regform Nothing (update_vector_start start_pos reg_size value)) 
+		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),
+		      l_mem,l_env),Nothing)
 		| (V_register regform,false,Just lexp_builder) ->
 		    let start_pos = reg_start_pos regform in
-		    ((Action (Write_reg regform Nothing (update_vector_start start_pos value)) 
-		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env),
+		    let reg_size = reg_size regform in
+		    ((Action (Write_reg regform Nothing (update_vector_start start_pos reg_size value)) 
+		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),
+		      l_mem,l_env),
                    Just (next_builder lexp_builder))
-		| (V_boxref n t,true,_) -> ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm n value, l_env),Nothing)
+		| (V_boxref n t,true,_) -> 
+		  ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm n value, l_env),Nothing)
 		| (v,true,_) -> 
-		  ((Error l ("Vector does not contain reg or register values " ^ (string_of_value v)),lm,l_env),Nothing)
-		| ((V_boxref n t),false, Just lexp_builder) -> ((Value (in_mem lm n),lm, l_env),Just (next_builder lexp_builder))
+		  ((Error l ("Vector does not contain reg or register values " ^ (string_of_value v)),lm,l_env),
+		   Nothing)
+		| ((V_boxref n t),false, Just lexp_builder) -> 
+		  ((Value (in_mem lm n),lm, l_env),Just (next_builder lexp_builder))
 		| (v,false, Just lexp_builder) -> ((Value v,lm,le), Just (next_builder lexp_builder)) end)
             | v -> 
 	      ((Error l ("Vector access to write of non-vector" ^ (string_of_value v)),lm,l_env),Nothing)
@@ -2186,9 +2194,10 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
          | ((Action a s,lm,le),Just lexp_builder) ->
            (match (a,is_top_level) with
            | ((Write_reg regf Nothing value),true) -> 
-	     ((Action (Write_reg regf (Just (n,n)) (update_vector_start n value)) s, lm,le), Nothing)
+	     ((Action (Write_reg regf (Just (n,n)) (update_vector_start n 1 value)) s, lm,le), Nothing)
            | ((Write_reg regf Nothing value),false) -> 
-	     ((Action (Write_reg regf (Just (n,n)) (update_vector_start n value)) s,lm,le), Just  (next_builder lexp_builder))
+	     ((Action (Write_reg regf (Just (n,n)) (update_vector_start n 1 value)) s,lm,le),
+	      Just  (next_builder lexp_builder))
            | ((Write_mem id a Nothing value),true) -> ((Action (Write_mem id a (Just (n,n)) value) s,lm,le), Nothing)
            | ((Write_mem id a Nothing value),false) -> 
 	     ((Action (Write_mem id a (Just (n,n)) value) s,lm,le), Just (next_builder lexp_builder))
@@ -2230,7 +2239,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
                 | _ -> ((Error l "Vector required",lm,le),Nothing) end)
               | ((Action (Write_reg regf Nothing value) s, lm,le), Just lexp_builder) ->
                 ((Action 
-		    (Write_reg regf (Just (n1,n2)) (update_vector_start n1 value)) s,lm,le),
+		    (Write_reg regf (Just (n1,n2)) (update_vector_start n1 ((abs (n1-n2)) +1) value)) s,lm,le),
 		 Just (next_builder lexp_builder))
               | ((Action (Write_mem id a Nothing value) s,lm,le), Just lexp_builder) ->
                 ((Action (Write_mem id a (Just (n1,n2)) value) s,lm,le), Just (next_builder lexp_builder))
@@ -2271,7 +2280,9 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	   | Just(indexes) ->
 	     match in_env indexes id with
 	       | Just ir -> 
-		 ((Action (Write_reg (SubReg id regf ir) Nothing (update_vector_start (get_first_index_range ir) value)) s,lm,le), 
+		 ((Action (Write_reg (SubReg id regf ir) Nothing 
+			     (update_vector_start (get_first_index_range ir) (get_index_range_size ir) value)) s,
+		   lm,le), 
 		  (if is_top_level then Nothing else next_builder))
 	       | _ -> ((Error l "Internal error, unrecognized write, no field",lm,le),Nothing)
 		 end 
@@ -2281,7 +2292,9 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	   | Just(indexes) ->
 	     match in_env indexes id with
 	       | Just ir -> 
-		 ((Action (Write_reg (SubReg id regf ir) Nothing (update_vector_start (get_first_index_range ir) value)) s,lm,le), 
+		 ((Action (Write_reg (SubReg id regf ir) Nothing 
+			     (update_vector_start (get_first_index_range ir) (get_index_range_size ir) value)) s,
+		   lm,le), 
 		  (if is_top_level then Nothing else next_builder))
 	       | _ -> ((Error l "Internal error, unrecognized write, no field",lm,le),Nothing)
 		 end 

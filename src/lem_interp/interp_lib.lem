@@ -15,6 +15,15 @@ let zeroi = integerFromNat 0
 let onei = integerFromNat 1
 let twoi = integerFromNat 2
 
+let is_unknown v = match v with
+  | V_unknown -> true
+  | _ -> false
+end 
+
+let has_unknown v = match v with
+  | V_vector _ _ vs -> List.any is_unknown vs
+end
+
 let rec sparse_walker update ni processed_length length ls df =
   if processed_length = length 
   then []
@@ -60,9 +69,6 @@ let bit_to_bool b = match b with
   | V_track (V_lit (L_aux L_zero _)) _ -> false
   | V_lit (L_aux L_one _) -> true
   | V_track (V_lit (L_aux L_one _)) _ -> true
-(* PS HACK TO MAKE BUILD *)
-  | _ -> false  (* ARGH - SHOULDN'T HAVE TO CHOOSE *)
-(* END HACK *)
   end ;;
 let bool_to_bit b = match b with
     false -> V_lit (L_aux L_zero Unknown)
@@ -124,11 +130,14 @@ type signed = Unsigned | Signed
 let rec to_num signed v = 
   match v with
   | (V_vector idx inc l) ->
+    if has_unknown v 
+    then V_unknown
+    else 
   (* Word library in Lem expects bitseq with LSB first *)
-  let l = reverse l in
+      let l = reverse l in
   (* Make sure the last bit is a zero to force unsigned numbers *)
-  let l = match signed with | Signed -> l | Unsigned -> l ++ [V_lit (L_aux L_zero Unknown)] end in
-  V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown)
+      let l = (match signed with | Signed -> l | Unsigned -> l ++ [V_lit (L_aux L_zero Unknown)] end) in
+      V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown)
   | V_unknown -> V_unknown
   | V_track v r -> taint (to_num signed v) r
 end ;;
@@ -140,7 +149,8 @@ let rec to_vec_inc (V_tuple[v1;v2]) = match (v1,v2) with
   | (V_track v1 r1,V_track v2 r2) -> taint (to_vec_inc (V_tuple[v1;v2])) (r1++r2)
   | (V_track v1 r1,v2) -> taint (to_vec_inc (V_tuple[v1;v2])) r1
   | (v1,V_track v2 r2) -> taint (to_vec_inc (V_tuple[v1;v2])) r2
-  | (V_unknown,_) -> V_unknown
+  | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
+    V_vector 0 true (List.replicate (natFromInteger n) V_unknown)
   | (_,V_unknown) -> V_unknown
   | _ -> Assert_extra.failwith ("to_vec_inc parameters were " ^ (string_of_value (V_tuple[v1;v2])))
 end
@@ -152,7 +162,8 @@ let rec to_vec_dec (V_tuple([v1;v2])) = match (v1,v2) with
   | (V_track v1 r1,V_track v2 r2) -> taint (to_vec_dec (V_tuple[v1;v2])) (r1++r2)
   | (V_track v1 r1,v2) -> taint (to_vec_dec (V_tuple[v1;v2])) r1
   | (v1,V_track v2 r2) -> taint (to_vec_dec (V_tuple[v1;v2])) r2
-  | (V_unknown,_) -> V_unknown
+  | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
+    V_vector (n-1) false (List.replicate (natFromInteger n) V_unknown)
   | (_,V_unknown) -> V_unknown
 end
 ;;
