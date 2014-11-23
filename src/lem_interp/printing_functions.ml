@@ -47,10 +47,37 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
 ;;
 
 (* pp the bytes of a Bytevector as a hex value *)
-let bytes_to_string bytes = 
-  (String.concat ""
-     (List.map (fun i -> let s = (Printf.sprintf "%x" i) in if (String.length s = 1) then "0"^s else s) 
-	(List.map (fun (Byte_lifted bs) -> bits_to_word8 bs) bytes)))
+
+type bits_lifted_homogenous = 
+  | Bitslh_concrete of bit list
+  | Bitslh_undef
+  | Bitslh_unknown
+
+let rec bits_lifted_homogenous_of_bit_lifteds' (bls:bit_lifted list) (acc:bits_lifted_homogenous) = 
+  match (bls,acc) with
+  | ([], _) -> Some acc
+  | (Bitl_zero::bls', Bitslh_concrete bs) -> bits_lifted_homogenous_of_bit_lifteds' bls' (Bitslh_concrete (bs@[Bitc_zero]))
+  | (Bitl_one::bls', Bitslh_concrete bs) -> bits_lifted_homogenous_of_bit_lifteds' bls' (Bitslh_concrete (bs@[Bitc_one]))
+  | (Bitl_undef::bls', Bitslh_undef) ->  bits_lifted_homogenous_of_bit_lifteds' bls' Bitslh_undef
+  | (Bitl_unknown::bls', Bitslh_unknown) ->  bits_lifted_homogenous_of_bit_lifteds' bls' Bitslh_unknown
+  | (_,_) -> None
+
+let bits_lifted_homogenous_of_bit_lifteds (bls:bit_lifted list) : bits_lifted_homogenous option = 
+  let bls',acc0 = 
+    match bls with
+    | [] -> [], Bitslh_concrete [] 
+    | Bitl_zero::bls' -> bls', Bitslh_concrete [Bitc_zero] 
+    | Bitl_one::bls' -> bls', Bitslh_concrete [Bitc_one] 
+    | Bitl_undef::bls' -> bls', Bitslh_undef
+    | Bitl_unknown::bls' ->  bls', Bitslh_unknown in
+  bits_lifted_homogenous_of_bit_lifteds' bls' acc0 
+
+(*let byte_it_lifted_to_string = function
+  | Bitl_zero -> "0"
+  | Bitl_one ->  "1"
+  | Bitl_undef -> "u"
+  | Bitl_unknown -> "?"
+*)
 
 let bit_lifted_to_string = function
   | Bitl_zero -> "0"
@@ -58,9 +85,73 @@ let bit_lifted_to_string = function
   | Bitl_undef -> "u"
   | Bitl_unknown -> "?"
 
+let hex_int_to_string i = 
+  let s = (Printf.sprintf "%x" i) in if (String.length s = 1) then "0"^s else s
+
+let bytes_lifted_homogenous_to_string = function
+  | Bitslh_concrete bs -> 
+      let i = Big_int.int_of_big_int (Interp_interface.integer_of_bit_list bs) in
+      hex_int_to_string i
+  | Bitslh_undef -> "uu"
+  | Bitslh_unknown -> "??"
+
+let simple_bit_lifteds_to_string bls (starto : int option) =  
+  let s = 
+    String.concat "" (List.map bit_lifted_to_string bls) in
+  let s = 
+    collapse_leading s in
+  let len = string_of_int (List.length bls) in 
+  match starto with 
+  | None ->       len ^ "b" ^s 
+  | Some start -> len ^ "b" ^ "_" ^string_of_int start ^"'" ^ s
+
+(* if a multiple of 8 lifted bits and each chunk of 8 is homogenous,
+print as lifted hex, otherwise print as lifted bits *)
+let bit_lifteds_to_string (bls: bit_lifted list) (starto : int option) =  
+  let l = List.length bls in
+  if l mod 8 = 0 then  (*  if List.mem l [8;16;32;64;128] then *)
+    let bytesl = List.map (fun (Byte_lifted bs) -> bs) (Interp_interface.byte_lifteds_of_bit_lifteds bls) in
+    let byteslhos = List.map bits_lifted_homogenous_of_bit_lifteds bytesl in
+    match maybe_all byteslhos with 
+    | None -> (* print as bitvector after all *)
+        simple_bit_lifteds_to_string bls starto
+    | Some (byteslhs: bits_lifted_homogenous list) -> 
+        let s = String.concat "" (List.map bytes_lifted_homogenous_to_string (List.rev byteslhs)) in
+        match starto with 
+        | None ->       "0x" ^ s 
+        | Some start -> "0x" ^ "_" ^string_of_int start ^"'" ^ s
+  else
+    simple_bit_lifteds_to_string bls starto
+
+
+  
+
+let register_value_to_string rv = 
+  bit_lifteds_to_string rv.rv_bits (Some rv.rv_start)   
+
+let memory_value_to_string mv = 
+  let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) mv)  in
+  bit_lifteds_to_string bls None
+
+let byte_list_to_string bs =
+  let bs' = List.map byte_lifted_of_byte bs in
+  memory_value_to_string bs' 
+
+
+
+
+
+let bytes_to_string bytes = 
+  (String.concat ""
+     (List.map (fun i -> hex_int_to_string i) 
+	(List.map (fun (Byte_lifted bs) -> bits_to_word8 bs) bytes)))
+
+
 let bit_to_string = function
   | Bitc_zero -> "0"
   | Bitc_one -> "1"
+
+
 
 let reg_value_to_string v = 
   let l = List.length v.rv_bits in
@@ -73,12 +164,6 @@ let reg_value_to_string v =
 
 let ifield_to_string v =
   "0b"^ collapse_leading (List.fold_right (^) (List.map bit_to_string v) "")
-
-let register_value_to_string rv = 
-  reg_value_to_string rv  
-
-let memory_value_to_string mv = 
-  bytes_to_string mv 
 
 (*let val_to_string v = match v with
   | Bitvector(bools, inc, fst)-> 

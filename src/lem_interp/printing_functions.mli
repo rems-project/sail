@@ -60,3 +60,5 @@ val print_instruction : (string -> unit) -> instruction -> unit
 
 val register_value_to_string : register_value -> string
 val memory_value_to_string : memory_value -> string
+
+val byte_list_to_string : byte list -> string
