@@ -529,7 +529,6 @@ let bit_list_of_integer len b =
   List.map (fun b -> if b then Bitc_one else Bitc_zero) 
     (reverse (boolListFrombitSeq (natFromInt len) (bitSeqFromInteger Nothing b))) (* PS really? that reverse seemed to make it worse... *)
 
-
 val integer_of_byte_list : list byte -> integer 
 let integer_of_byte_list bytes = integer_of_bit_list (List.concatMap (fun (Byte bs) -> bs) bytes)
 
