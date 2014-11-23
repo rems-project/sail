@@ -435,8 +435,141 @@ let memory_value_unknown (width:int) : memory_value =
   List.replicate (natFromInt width) byte_lifted_unknown 
 
 
+(* lengths *)  
+
+val memory_value_length : memory_value -> integer
+let memory_value_length (mv:memory_value) = integerFromNat (List.length mv)
+
+
+(* aux fns *)
+
+val maybe_all : forall 'a.  list (maybe 'a) -> maybe (list 'a)
+let rec maybe_all' xs acc = 
+  match xs with
+  | [] -> Just (List.reverse acc)
+  | Nothing :: _ -> Nothing
+  | (Just y)::xs' -> maybe_all' xs' (y::acc)
+  end
+let maybe_all xs = maybe_all' xs [] 
+
+(** coercions *)
+
+(* bits and bytes *)
+
+let bit_to_bool = function (* TODO: rename bool_of_bit *)
+  | Bitc_zero -> false
+  | Bitc_one -> true
+end
+
+
+val bit_lifted_of_bit : bit -> bit_lifted
+let bit_lifted_of_bit b = 
+  match b with
+  | Bitc_zero -> Bitl_zero
+  | Bitc_one -> Bitl_one
+  end
+
+val bit_of_bit_lifted : bit_lifted -> maybe bit
+let bit_of_bit_lifted bl =
+  match bl with
+  | Bitl_zero -> Just Bitc_zero
+  | Bitl_one -> Just Bitc_one
+  | Bitl_undef -> Nothing
+  | Bitl_unknown -> Nothing
+  end
+
+
+val byte_lifted_of_byte : byte -> byte_lifted
+let byte_lifted_of_byte (Byte bs) : byte_lifted = Byte_lifted (List.map bit_lifted_of_bit bs)
+
+val byte_of_byte_lifted : byte_lifted -> maybe byte
+let byte_of_byte_lifted bl = 
+  match bl with
+  | Byte_lifted bls -> 
+      match maybe_all (List.map bit_of_bit_lifted bls) with
+      | Nothing -> Nothing
+      | Just bs -> Just (Byte bs)
+      end
+  end
+
+
+val bytes_of_bits : list bit -> list byte (*assumes (length bits) mod 8 = 0*)
+let rec bytes_of_bits bits = match bits with
+  | [] -> []
+  | b1::b2::b3::b4::b5::b6::b7::b8::bits -> 
+    (Byte [b1;b2;b3;b4;b5;b6;b7;b8])::(bytes_of_bits bits)
+end
+
+val byte_lifteds_of_bit_lifteds : list bit_lifted -> list byte_lifted (*assumes (length bits) mod 8 = 0*)
+let rec byte_lifteds_of_bit_lifteds bits = match bits with
+  | [] -> []
+  | b1::b2::b3::b4::b5::b6::b7::b8::bits -> 
+    (Byte_lifted [b1;b2;b3;b4;b5;b6;b7;b8])::(byte_lifteds_of_bit_lifteds bits)
+end
+
+
+val byte_of_memory_byte : memory_byte -> maybe byte
+let byte_of_memory_byte = byte_of_byte_lifted
+
+val memory_byte_of_byte : byte -> memory_byte
+let memory_byte_of_byte = byte_lifted_of_byte
+
+
+
+
+(* to and from integer *)
+
+val integer_of_bit_list : list bit -> integer 
+let integer_of_bit_list b =
+  integerFromBoolList (false,(List.reverse (List.map bit_to_bool b)))
+
+val bit_list_of_integer : int -> integer -> list bit 
+let bit_list_of_integer len b = 
+  List.map (fun b -> if b then Bitc_one else Bitc_zero) 
+    (boolListFrombitSeq (natFromInt len) (bitSeqFromInteger Nothing b))
+
+
+val integer_of_byte_list : list byte -> integer 
+let integer_of_byte_list bytes = integer_of_bit_list (List.concatMap (fun (Byte bs) -> bs) bytes)
+
+val byte_list_of_integer : int -> integer -> list byte 
+let byte_list_of_integer (len:int) (a:integer):list byte = 
+  let bits = bit_list_of_integer (len * 8) a in bytes_of_bits bits
+
+
+val integer_of_address : address -> integer 
+let integer_of_address (a:address):integer = 
+  match a with
+  | Address bs -> integer_of_byte_list bs 
+  end
+
+val address_of_integer : integer -> address 
+let address_of_integer (i:integer):address =
+  Address (byte_list_of_integer 8 i)
+
+
+
+(* regarding a list of int as a list of bytes in memory, lowest-address first, convert to an integer *)
+val integer_address_of_int_list : list int -> integer
+let rec integerFromIntListAux (acc: integer) (is: list int) = 
+  match is with 
+  | [] -> acc
+  | (i :: is') -> integerFromIntListAux ((acc * 256) + integerFromInt i) is'
+  end
+let integer_address_of_int_list (is: list int) =
+  integerFromIntListAux 0 is 
+
+val address_of_byte_list : list byte -> address 
+let address_of_byte_list bs = 
+  if List.length bs <> 8 then failwith "address_of_byte_list given list not of length 8" else 
+  Address bs 
+
+
+(* operations on addresses *)
+
 val add_address_int : address -> int -> address 
-(* TODO: *) let add_address_int (a:address) (i:int) : address = failwith "TODO"
+let add_address_int (a:address) (i:int) : address = 
+  address_of_integer ((integer_of_address a) + (integerFromInt i))
 
 val clear_low_order_bits_of_address : address -> address 
 let clear_low_order_bits_of_address a = 
@@ -449,101 +582,7 @@ let clear_low_order_bits_of_address a =
         end
   end
 
-val memory_value_length : memory_value -> integer
-let memory_value_length (mv:memory_value) = integerFromNat (List.length mv)
 
-(* coercions *)
-
-val bit_lifted_of_bit : bit -> bit_lifted
-let bit_lifted_of_bit b = 
-  match b with
-  | Bitc_zero -> Bitl_zero
-  | Bitc_one -> Bitl_one
-  end
-
-val byte_lifted_of_byte : byte -> byte_lifted
-let byte_lifted_of_byte (Byte bs) : byte_lifted = Byte_lifted (List.map bit_lifted_of_bit bs)
-
-val bytes_of_bits : list bit -> list byte (*assumes (length bits) mod 8 = 0*)
-let rec bytes_of_bits bits = match bits with
-  | [] -> []
-  | b1::b2::b3::b4::b5::b6::b7::b8::bits -> 
-    (Byte [b1;b2;b3;b4;b5;b6;b7;b8])::(bytes_of_bits bits)
-end
-
-val integer_address_of_int_list : list int -> integer
-(*TODO*)
-let integer_address_of_int_list (is: list int) = failwith "TODO"
-(* regarding is as a list of bytes in memory, lowest-address first, convert to an integer *)
-
-
-let bit_to_bool = function
-  | Bitc_zero -> false
-  | Bitc_one -> true
-end
-
-val integer_of_bit_list : list bit -> integer 
-val bit_list_of_integer : int -> integer -> list bit 
-let integer_of_bit_list b =
-  integerFromBoolList (false,(List.reverse (List.map bit_to_bool b)))
-
-let bit_list_of_integer len b = 
-  List.map (fun b -> if b then Bitc_one else Bitc_zero) 
-    (boolListFrombitSeq (natFromInt len) (bitSeqFromInteger Nothing b))
-
-val integer_of_byte_list : list byte -> integer 
-let integer_of_byte_list bytes = integer_of_bit_list (List.concatMap (fun (Byte bs) -> bs) bytes)
-
-val byte_list_of_integer : int -> integer -> list byte 
-let byte_list_of_integer (len:int) (a:integer):list byte = 
-  let bits = bit_list_of_integer (len * 8) a in bytes_of_bits bits
-
-val integer_of_address : address -> integer 
-let integer_of_address (a:address):integer = 
-  match a with
-  | Address bs -> integer_of_byte_list bs 
-  end
-
-val address_of_integer : integer -> address 
-let address_of_integer (i:integer):address =
-  Address (byte_list_of_integer 8 i)
-
-val address_of_byte_list : list byte -> address 
-let address_of_byte_list bs = 
-  if List.length bs <> 8 then failwith "address_of_byte_list given list not of length 8" else 
-  Address bs 
-
-
-val maybe_all : forall 'a.  list (maybe 'a) -> maybe (list 'a)
-let rec maybe_all' xs acc = 
-  match xs with
-  | [] -> Just (List.reverse acc)
-  | Nothing :: _ -> Nothing
-  | (Just y)::xs' -> maybe_all' xs' (y::acc)
-  end
-let maybe_all xs = maybe_all' xs [] 
-
-val bit_of_bit_lifted : bit_lifted -> maybe bit
-let bit_of_bit_lifted bl =
-  match bl with
-  | Bitl_zero -> Just Bitc_zero
-  | Bitl_one -> Just Bitc_one
-  | Bitl_undef -> Nothing
-  | Bitl_unknown -> Nothing
-  end
-
-val byte_of_byte_lifted : byte_lifted -> maybe byte
-let byte_of_byte_lifted bl = 
-  match bl with
-  | Byte_lifted bls -> 
-      match maybe_all (List.map bit_of_bit_lifted bls) with
-      | Nothing -> Nothing
-      | Just bs -> Just (Byte bs)
-      end
-  end
-
-val byte_of_memory_byte : memory_byte -> maybe byte
-let byte_of_memory_byte = byte_of_byte_lifted
 
 val byte_list_of_memory_value : memory_value -> maybe (list byte)
 let byte_list_of_memory_value mv = maybe_all (List.map byte_of_memory_byte mv)
@@ -558,7 +597,7 @@ let integer_of_memory_value (mv:memory_value):maybe integer =
 
 val memory_value_of_integer : int -> integer -> memory_value 
 let memory_value_of_integer (len:int) (i:integer):memory_value =
-  failwith "TODO"
+  List.map (byte_lifted_of_byte) (byte_list_of_integer len i)
 
 
 val integer_of_register_value : register_value -> maybe integer 
@@ -568,11 +607,18 @@ let integer_of_register_value (rv:register_value):maybe integer =
   | Just bs -> Just (integer_of_bit_list bs)
   end 
 
+  
+val register_value_of_integer : int -> int -> integer -> register_value 
+let register_value_of_integer (len:int) (start:int) (i:integer):register_value =
+  let bs = bit_list_of_integer len i in
+  <| 
+  rv_bits = List.map bit_lifted_of_bit bs;
+  rv_dir = D_increasing;
+  rv_start = start;
+|> 
 
-(* TODO: have to go check the usage points for the length and fix up *)
-val register_value_of_integer : int -> integer -> register_value 
-(* TODO *)let register_value_of_integer (len:int) (i:integer):register_value = failwith "TODO"
 
+(* *)
 
 val opcode_of_bytes : byte -> byte -> byte -> byte -> opcode
 let opcode_of_bytes b0 b1 b2 b3 : opcode = Opcode [b0;b1;b2;b3]
@@ -583,16 +629,27 @@ let register_value_of_address (Address bytes) : register_value =
       rv_dir = D_increasing;
       rv_start = 64; |>
 
+
+
 val address_lifted_of_register_value : register_value -> maybe address_lifted
-(* returning Nothing iff the register value is not 64 bits wide, but allowing Bitl_undef and Bitl_unknown *)
-let address_lifted_of_register_value (rv:register_value) : maybe address_lifted = failwith "TODO"
-(*  if List.length rv.rv_bits <> 64 then Nothing
+(* returning Nothing iff the register value is not 64 bits wide, but
+allowing Bitl_undef and Bitl_unknown *)
+let address_lifted_of_register_value (rv:register_value) : maybe address_lifted = 
+  if List.length rv.rv_bits <> 64 then Nothing
   else 
-*)
+    Just (Address_lifted (byte_lifteds_of_bit_lifteds rv.rv_bits))
+
 
 val address_of_address_lifted : address_lifted -> maybe address
 (* returning Nothing iff the address contains any Bitl_undef or Bitl_unknown *)
-(*TODO*)let address_of_address_lifted (al:address_lifted): maybe address = failwith "TODO"
+let address_of_address_lifted (al:address_lifted): maybe address =
+  match al with
+  | Address_lifted bls -> 
+      match maybe_all ((List.map byte_of_byte_lifted) bls) with
+      | Nothing -> Nothing
+      | Just bs -> Just (Address bs)
+      end
+  end
 
 val address_of_register_value : register_value -> maybe address
 (* returning Nothing iff the register value is not 64 bits wide, or contains Bitl_undef or Bitl_unknown *)
@@ -616,11 +673,11 @@ let address_of_memory_value (mv:memory_value) : maybe address =
 
 val byte_of_int : int -> byte
 let byte_of_int (i:int) : byte = 
-  failwith "TODO"
+  Byte (bit_list_of_integer 8 (integerFromInt i))
 
 val memory_byte_of_int : int -> memory_byte
 let memory_byte_of_int (i:int) : memory_byte = 
-  failwith "TODO"
+  memory_byte_of_byte (byte_of_int i)
 
 (*
 val int_of_memory_byte : int -> maybe memory_byte
@@ -633,10 +690,9 @@ let int_of_memory_byte (mb:memory_byte) : int =
 
 val memory_value_of_address_lifted : address_lifted -> memory_value
 let memory_value_of_address_lifted (al:address_lifted) =
-failwith "TODO"
-(*  match al with
-  | Address bs -> bs
-  end*)
+  match al with
+  | Address_lifted bs -> bs
+  end
 
 val byte_list_of_address : address -> list byte
 let byte_list_of_address (a:address) : list byte = 
