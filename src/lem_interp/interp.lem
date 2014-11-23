@@ -844,6 +844,7 @@ let rec match_pattern (P_aux p _) value_whole =
     else
     match value with
     | V_lit(litv) -> (lit = litv, false,eenv)
+    | V_vector _ _ [V_lit(litv)] -> (lit = litv,false,eenv)
     | V_unknown -> (true,true,eenv)
     | _ -> (false,false,eenv)
     end
@@ -2236,7 +2237,11 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		  ((Value (V_lit (L_aux L_unit Unknown)), update_vector_slice v value n1 n2 lm, l_env), Nothing)
                 | (V_vector m inc vs,false) ->
                   ((Value (slice_vector v n1 n2),lm,l_env), Just (next_builder lexp_builder))
-		| (V_unknown,_) -> ((Value v,lm,l_env),Nothing)
+		| (V_unknown,_) -> 
+		  let inc =  n1 < n2 in
+		  let start = if inc then n1 else (n2-1) in
+		  let size = natFromInteger ((abs (n1-n2)) + 1) in      
+		  ((Value (V_vector start inc (List.replicate size V_unknown)),lm,l_env),Nothing)
                 | _ -> ((Error l "Vector required",lm,le),Nothing) end)
               | ((Action (Write_reg regf Nothing value) s, lm,le), Just lexp_builder) ->
                 ((Action 

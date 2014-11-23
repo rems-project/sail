@@ -47,16 +47,24 @@ end
 let bits_to_ibits l = List.map bit_to_ibit l
 let bitls_to_ibits l = List.map bitl_to_ibit l
 let bitls_from_ibits l = List.map 
-  (fun b -> match b with
+  (fun b -> 
+    let b = (match b with | Interp.V_track v _ -> v | _ -> b end) in
+    match b with
     | Interp.V_lit (L_aux L_zero _) -> Bitl_zero
+    | Interp.V_vector _ _ [Interp.V_lit (L_aux L_zero _)] -> Bitl_zero
     | Interp.V_lit (L_aux L_one _)  -> Bitl_one
+    | Interp.V_vector _ _ [Interp.V_lit (L_aux L_one _)] -> Bitl_one
     | Interp.V_lit (L_aux L_undef _) -> Bitl_undef
     | Interp.V_unknown -> Bitl_unknown end) l
 
 let bits_from_ibits l = List.map 
-  (fun b -> match b with
+  (fun b -> 
+    let b = (match b with | Interp.V_track v _ -> v | _ -> b end) in
+    match b with
     | Interp.V_lit (L_aux L_zero _) -> Bitc_zero
+    | Interp.V_vector _ _ [Interp.V_lit (L_aux L_zero _)] -> Bitc_zero
     | Interp.V_lit (L_aux L_one _)  -> Bitc_one
+    | Interp.V_vector _ _ [Interp.V_lit (L_aux L_one _)] -> Bitc_one
    end) l
 
 let rec to_bytes l = match l with
