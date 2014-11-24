@@ -432,11 +432,11 @@ let rec compare_op op (V_tuple args) = match args with
 end ;;
 let rec compare_op_vec op sign (V_tuple args) = match args with
   | [V_track v1 r1;V_track v2 r2] ->
-    taint (compare_op_vec op (V_tuple [v1;v2])) (r1++r2)
+    taint (compare_op_vec op sign (V_tuple [v1;v2])) (r1++r2)
   | [V_track v1 r1;v2] ->
-    taint (compare_op_vec op (V_tuple [v1;v2])) r1
+    taint (compare_op_vec op sign (V_tuple [v1;v2])) r1
   | [v1;V_track v2 r2] ->
-    taint (compare_op_vec op (V_tuple [v1;v2])) r2
+    taint (compare_op_vec op sign (V_tuple [v1;v2])) r2
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
   | [((V_vector _ _ _) as l1);((V_vector _ _ _) as l2)] ->
@@ -559,14 +559,14 @@ let function_map = [
   ("gt", compare_op (>));
   ("lteq", compare_op (<=));
   ("gteq", compare_op (>=));
-  ("lt_vec", compare_op_vec Unsigned (<));
-  ("gt_vec", compare_op_vec Unsigned (>));
-  ("lteq_vec", compare_op_vec Unsigned (<=));
-  ("gteq_vec", compare_op_vec Unsigned (>=));
-  ("lt_vec_signed", compare_op_vec Signed (<));
-  ("gt_vec_signed", compare_op_vec Signed (>));
-  ("lteq_vec_signed", compare_op_vec Signed (<=));
-  ("gteq_vec_signed", compare_op_vec Signed (>=));
+  ("lt_vec", compare_op_vec (<) Unsigned);
+  ("gt_vec", compare_op_vec (>) Unsigned);
+  ("lteq_vec", compare_op_vec (<=) Unsigned);
+  ("gteq_vec", compare_op_vec (>=) Unsigned);
+  ("lt_vec_signed", compare_op_vec (<) Signed);
+  ("gt_vec_signed", compare_op_vec (>) Signed);
+  ("lteq_vec_signed", compare_op_vec (<=) Signed);
+  ("gteq_vec_signed", compare_op_vec (>=) Signed);
   ("ltu", compare_op_vec_unsigned (<));
   ("gtu", compare_op_vec_unsigned (>));
   ("duplicate", duplicate);
