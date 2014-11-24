@@ -206,6 +206,7 @@ let eq (V_tuple [x; y]) = V_lit (L_aux (if value_eq x y then L_one else L_zero) 
 (* XXX interpret vectors as unsigned numbers for equality *)
 let eq_vec_range (V_tuple [v; r]) = eq (V_tuple [to_num Unsigned v; r]) ;;
 let eq_range_vec (V_tuple [r; v]) = eq (V_tuple [r; to_num Unsigned v]) ;;
+let eq_vec_vec (V_tuple [v;v2]) = eq (V_tuple [to_num Signed v; to_num Signed v2]);;
 
 let rec neg v = match v with
   | V_lit (L_aux arg la) -> 
@@ -219,6 +220,8 @@ end
 ;;
 
 let neq = compose neg eq ;;
+
+let neq_vec = compose neg eq_vec_vec
 
 let rec arith_op op (V_tuple args) = match args with
   | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (op x y)) lx)
@@ -261,7 +264,7 @@ let rec arith_op_overflow_vec op sign size (V_tuple args) = match args with
     let n = arith_op op (V_tuple [l1';l2']) in
     let correct_size_num = to_vec ord ((List.length cs) * size) n in
     let one_larger = to_num Signed (to_vec ord (((List.length cs) * size) +1) n) in
-    let overflow =  neq (V_tuple [correct_size_num;one_larger]) in
+    let overflow = if (has_unknown l1 || has_unknown l2) then V_unknown else neq_vec (V_tuple [correct_size_num;one_larger]) in
     V_tuple [correct_size_num;overflow]
   | [V_track v1 r1;V_track v2 r2] ->
     taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) (r1++r2)

@@ -155,10 +155,10 @@ let logfile_address_to_string a =
   logfile_memory_value_to_string bs'
   
 
-let bytes_to_string bytes = 
+(*let bytes_to_string bytes = 
   (String.concat ""
      (List.map (fun i -> hex_int_to_string i) 
-	(List.map (fun (Byte_lifted bs) -> bits_to_word8 bs) bytes)))
+	(List.map (fun (Byte_lifted bs) -> bits_to_word8 bs) bytes)))*)
 
 
 let bit_to_string = function
@@ -167,14 +167,14 @@ let bit_to_string = function
 
 
 
-let reg_value_to_string v = 
-  let l = List.length v.rv_bits in
+let reg_value_to_string v = "deprecated"
+(*  let l = List.length v.rv_bits in
   let start = string_of_int v.rv_start in
   if List.mem l [8;16;32;64;128] then
     let bytes = Interp_inter_imp.to_bytes v.rv_bits in
     "0x" ^ "_" ^ start ^ "'" ^ bytes_to_string bytes
   else (string_of_int l) ^ "_" ^ start ^ "'b" ^ 
-    collapse_leading (List.fold_right (^) (List.map bit_lifted_to_string v.rv_bits) "")
+    collapse_leading (List.fold_right (^) (List.map bit_lifted_to_string v.rv_bits) "")*)
 
 let ifield_to_string v =
   "0b"^ collapse_leading (List.fold_right (^) (List.map bit_to_string v) "")
@@ -346,7 +346,7 @@ let rec format_events = function
     "     Read_reg of " ^ (reg_name_to_string reg_name) ^ "\n" ^
     (format_events events)
   | (E_write_reg(reg_name, value))::events ->
-    "     Write_reg of " ^ (reg_name_to_string reg_name) ^ " writing " ^ (reg_value_to_string value) ^ "\n" ^
+    "     Write_reg of " ^ (reg_name_to_string reg_name) ^ " writing " ^ (register_value_to_string value) ^ "\n" ^
     (format_events events)
 ;;
 
