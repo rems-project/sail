@@ -166,6 +166,7 @@ let rec to_vec_inc (V_tuple[v1;v2]) = match (v1,v2) with
   | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
     V_vector 0 true (List.replicate (natFromInteger n) V_unknown)
   | (_,V_unknown) -> V_unknown
+  | (V_unknown,_) -> V_unknown
   | _ -> Assert_extra.failwith ("to_vec_inc parameters were " ^ (string_of_value (V_tuple[v1;v2])))
 end
 ;;
@@ -179,6 +180,8 @@ let rec to_vec_dec (V_tuple([v1;v2])) = match (v1,v2) with
   | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
     V_vector (n-1) false (List.replicate (natFromInteger n) V_unknown)
   | (_,V_unknown) -> V_unknown
+  | (V_unknown,_) -> V_unknown
+  | _ -> Assert_extra.failwith ("to_vec_dec parameters were " ^ (string_of_value (V_tuple[v1;v2])))
 end
 ;;
 let to_vec ord len n =
