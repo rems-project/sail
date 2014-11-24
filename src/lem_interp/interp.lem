@@ -2187,6 +2187,13 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		    ((Action (Write_reg regform Nothing (update_vector_start start_pos reg_size value)) 
 		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),
 		      l_mem,l_env),Nothing)
+		| (V_register regform,false,Just lexp_builder) ->
+		    let start_pos = reg_start_pos regform in
+		    let reg_size = reg_size regform in
+		    ((Action (Write_reg regform Nothing (update_vector_start start_pos reg_size value)) 
+		      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),
+		      l_mem,l_env),
+                     Just (next_builder lexp_builder))				
 		| (V_track (V_register regform) _,false,Just lexp_builder) ->
 		    let start_pos = reg_start_pos regform in
 		    let reg_size = reg_size regform in
