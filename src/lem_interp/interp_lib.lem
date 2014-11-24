@@ -264,7 +264,8 @@ let rec arith_op_overflow_vec op sign size (V_tuple args) = match args with
     let n = arith_op op (V_tuple [l1';l2']) in
     let correct_size_num = to_vec ord ((List.length cs) * size) n in
     let one_larger = to_num Signed (to_vec ord (((List.length cs) * size) +1) n) in
-    let overflow = if (has_unknown l1 || has_unknown l2) then V_unknown else neq_vec (V_tuple [correct_size_num;one_larger]) in
+    let overflow = if (has_unknown l1 || has_unknown l2) then V_unknown 
+      else neq(V_tuple [(to_num Signed correct_size_num);one_larger]) in
     V_tuple [correct_size_num;overflow]
   | [V_track v1 r1;V_track v2 r2] ->
     taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) (r1++r2)
@@ -399,7 +400,8 @@ let rec arith_op_overflow_vec_no0 op sign size (V_tuple args) = match args with
     let n = arith_op_no0 op (V_tuple [l1';l2']) in
     let correct_size_num = to_vec ord ((List.length cs) * size) n in
     let one_larger = to_num sign (to_vec ord (((List.length cs) * size) +1) n) in
-    let overflow =  neq (V_tuple [correct_size_num;one_larger]) in
+    let overflow = if (has_unknown l1 || has_unknown l2) then V_unknown 
+      else neq(V_tuple [(to_num Signed correct_size_num);one_larger]) in
     V_tuple [correct_size_num;overflow]
   | [V_track v1 r1;V_track v2 r2] ->
     taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) (r1++r2)
