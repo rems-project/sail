@@ -85,8 +85,8 @@ let rec string_of_value v = match v with
   | V_ctor id t value -> (get_id id) ^ " " ^ string_of_value value     
   | V_unknown -> "Unknown"
   | V_register _ -> "register_as_value"
-  | V_register_alias _ _ -> "register_as_value"
-  | V_track v _ -> string_of_value v
+  | V_register_alias _ _ -> "register_as_alias"
+  | V_track v _ -> (*"tainted " ^*) (string_of_value v)
 end
 
 let rec id_value_eq (i, v) (i', v') = i = i' && value_eq v v'
