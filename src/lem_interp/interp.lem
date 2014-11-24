@@ -1191,19 +1191,17 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     | E_if cond thn els ->
       resolve_outcome 
 	(interp_main mode t_level l_env l_mem cond)
-	(fun value lm le -> 
+	(fun value_whole lm le -> 
+	  let value = match value_whole with | V_track v _ -> v | _ -> value_whole end in
 	  match (value,mode.eager_eval) with
 	    (*TODO remove booleans here when fully removed elsewhere *)
             | (V_lit(L_aux L_true _),true) -> interp_main mode t_level l_env lm thn
-	    | (V_track (V_lit (L_aux L_true _)) _, true) -> interp_main mode t_level l_env lm thn
 	    | (V_lit(L_aux L_one _),true) -> interp_main mode t_level l_env lm thn
-	    | (V_track (V_lit (L_aux L_one _)) _, true) -> interp_main mode t_level l_env lm thn
 	    | (V_lit(L_aux L_true _),false) -> debug_out Nothing Nothing thn t_level lm l_env 
-	    | (V_track (V_lit (L_aux L_true _)) _, false) -> debug_out Nothing Nothing thn t_level lm l_env
 	    | (V_lit(L_aux L_one _),false) -> debug_out Nothing Nothing thn t_level lm l_env
-	    | (V_track (V_lit(L_aux L_one _)) _, false) -> debug_out Nothing Nothing thn t_level lm l_env
+	    | (V_vector _ _ [(V_lit(L_aux L_one _))],true) -> interp_main mode t_level l_env lm thn
+	    | (V_vector _ _ [(V_lit(L_aux L_one _))],false) -> debug_out Nothing Nothing thn t_level lm l_env
 	    | (V_unknown,_) -> interp_main mode t_level l_env lm (E_aux (E_block [thn;els]) (l,annot))
-	    | (V_track V_unknown _,_) -> interp_main mode t_level l_env lm (E_aux (E_block [thn;els]) (l,annot))
             | (_,true) -> interp_main mode t_level l_env lm els 
 	    | (_,false) -> debug_out Nothing Nothing els t_level lm l_env end)
         (fun a -> update_stack a (add_to_top_frame (fun c env -> (E_aux (E_if c thn els) (l,annot), env))))
