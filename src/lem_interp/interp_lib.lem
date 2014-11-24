@@ -7,6 +7,17 @@ open import List
 open import Word
 open import Bool
 
+val quomod : integer -> integer -> (integer * integer)
+declare ocaml    target_rep function quomod = `Big_int.quomod_big_int`
+
+let hardware_mod a b = 
+ let (q,r) = quomod a b in
+ if q < 0 then r-b else r
+
+let hardware_quot a b = 
+ let (q,r) = quomod a b in
+ if q < 0 then q+1 else q
+
 let ignore_sail x = V_lit (L_aux L_unit Unknown) ;;
 
 let compose f g x = f (V_tuple [g x]) ;;
@@ -539,13 +550,13 @@ let function_map = [
   ("mult_vec_range_signed", arith_op_vec_range ( * ) Signed 2);
   ("mult_overflow_vec_signed", arith_op_overflow_vec ( * ) Signed 2);
   ("mod", arith_op_no0 (mod));
-  ("mod_vec", arith_op_vec_no0 (mod)  Unsigned 1);
-  ("mod_vec_range", arith_op_vec_range_no0 (mod) Unsigned 1);
-  ("quot", arith_op_no0 (/));
-  ("quot_vec", arith_op_vec_no0 (/)  Unsigned 1);
-  ("quot_overflow_vec", arith_op_overflow_vec_no0 (/) Unsigned 1);
-  ("quot_vec_signed", arith_op_vec_no0 (/)  Signed 1);
-  ("quot_overflow_vec_signed", arith_op_overflow_vec_no0 (/) Signed 1);
+  ("mod_vec", arith_op_vec_no0 hardware_mod  Unsigned 1);
+  ("mod_vec_range", arith_op_vec_range_no0 hardware_mod Unsigned 1);
+  ("quot", arith_op_no0 hardware_quot);
+  ("quot_vec", arith_op_vec_no0 hardware_quot  Unsigned 1);
+  ("quot_overflow_vec", arith_op_overflow_vec_no0 hardware_quot Unsigned 1);
+  ("quot_vec_signed", arith_op_vec_no0 hardware_quot  Signed 1);
+  ("quot_overflow_vec_signed", arith_op_overflow_vec_no0 hardware_quot Signed 1);
   ("eq", eq);
   ("eq_vec_range", eq_vec_range);
   ("eq_range_vec", eq_range_vec);
