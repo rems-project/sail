@@ -500,23 +500,23 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         | L_unit  -> (rebuild (Base (([],unit_t), Emp_local,[],pure_e))),[],pure_e
 	| L_zero  -> 
           (match expect_t.t with
-          | Tid "bool" -> simp_exp (E_lit(L_aux(L_false,l'))) l bool_t,[],pure_e
+          | Tid "bool" -> simp_exp (E_lit(L_aux(L_zero,l'))) l bool_t,[],pure_e
           | _ -> simp_exp e l bit_t,[],pure_e)
 	| L_one   -> 
           (match expect_t.t with
-          | Tid "bool" -> simp_exp (E_lit(L_aux(L_true,l'))) l bool_t,[],pure_e
+          | Tid "bool" -> simp_exp (E_lit(L_aux(L_one,l'))) l bool_t,[],pure_e
           | _ -> simp_exp e l bit_t,[],pure_e)
 	| L_true  -> simp_exp e l bool_t,[],pure_e
 	| L_false -> simp_exp e l bool_t,[],pure_e
 	| L_num i -> 
           (match expect_t.t with
-          | Tid "bit" -> 
+          | Tid "bit" | Toptions({t=Tid"bit"},_) -> 
             if i = 0 then simp_exp (E_lit(L_aux(L_zero,l'))) l bit_t,[],pure_e
 	    else if i = 1 then simp_exp (E_lit(L_aux(L_one,l'))) l bit_t,[],pure_e
 	    else typ_error l ("Expected a bit, found " ^ string_of_int i)
-          | Tid "bool" ->
-            if i = 0 then simp_exp (E_lit(L_aux(L_false,l'))) l bool_t,[],pure_e
-            else if i = 1 then simp_exp (E_lit(L_aux(L_true,l'))) l bool_t ,[],pure_e
+          | Tid "bool" | Toptions({t=Tid"bool"},_)->
+            if i = 0 then simp_exp (E_lit(L_aux(L_zero,l'))) l bit_t,[],pure_e
+            else if i = 1 then simp_exp (E_lit(L_aux(L_one,l'))) l bit_t ,[],pure_e
             else typ_error l ("Expected bool or a bit, found " ^ string_of_int i)
           | Tapp ("vector",[TA_nexp base;TA_nexp rise;TA_ord o;(TA_typ {t=Tid "bit"})]) ->
             let n = {nexp = Nconst (big_int_of_int i) } in

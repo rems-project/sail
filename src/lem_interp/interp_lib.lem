@@ -43,8 +43,10 @@ let rec fill_in_sparse v = match v with
 end    
 
 let is_one v = match v with 
-  | V_lit (L_aux b lb) -> V_lit (L_aux (if b = L_one then L_true else L_false) lb)
-  | V_track (V_lit (L_aux b lb)) r -> V_track (V_lit (L_aux (if b = L_one then L_true else L_false) lb)) r
+  | V_lit (L_aux (L_num n) lb) -> V_lit (L_aux (if n=1 then L_one else L_zero) lb)
+  | V_track (V_lit (L_aux (L_num n) lb)) r -> V_track (V_lit (L_aux (if n=1 then L_one else L_zero) lb)) r
+  | V_lit (L_aux b lb) -> V_lit (L_aux (if b = L_one then L_one else L_zero) lb)
+  | V_track (V_lit (L_aux b lb)) r -> V_track (V_lit (L_aux (if b = L_one then L_one else L_zero) lb)) r
   | V_track V_unkown _ -> v
   | V_unknown -> v
 end ;;
