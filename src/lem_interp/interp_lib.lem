@@ -440,50 +440,68 @@ let rec arith_op_no0 op (V_tuple args) = match args with
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
   end ;;
-let rec arith_op_vec_no0 op sign size (V_tuple args) = match args with
+
+let rec arith_op_vec_no0 op op_s sign size (V_tuple args) = match args with
   | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
-    let (l1',l2') = (to_num sign l1,to_num sign l2) in
-    let n = arith_op_no0 op (V_tuple [l1';l2']) in
-    to_vec ord ((List.length cs) * size) n
+    let act_size = (List.length cs) * size in
+    let (is_l1_unknown,is_l2_unknown) = ((has_unknown l1), (has_unknown l2)) in
+    let (l1',l2') = (if is_l1_unknown then V_unknown else (to_num sign l1),
+                     if is_l2_unknown then V_unknown else (to_num sign l2)) in
+    let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
+    let representable = 
+      match n with 
+	| V_lit (L_aux (L_num n') ln) ->  
+	  let rep_size = (if op_s = "quot" then act_size/2 else act_size) in
+	  ((n' <= (get_max_representable_in act_size)) && (n' >= (get_min_representable_in act_size)))
+	| _ -> true end in
+    if representable then to_vec ord act_size n else to_vec ord act_size (V_lit (L_aux L_undef Unknown))
   | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_vec_no0 op sign size (V_tuple [v1;v2])) (r1++r2)
+    taint (arith_op_vec_no0 op op_s sign size (V_tuple [v1;v2])) (r1++r2)
   | [V_track v1 r1;v2] ->
-    taint (arith_op_vec_no0 op sign size (V_tuple [v1;v2])) r1
+    taint (arith_op_vec_no0 op op_s sign size (V_tuple [v1;v2])) r1
   | [v1;V_track v2 r2] ->
-    taint (arith_op_vec_no0 op sign size (V_tuple [v1;v2])) r2
+    taint (arith_op_vec_no0 op op_s sign size (V_tuple [v1;v2])) r2
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
 end ;;
-let rec arith_op_overflow_vec_no0 op sign size (V_tuple args) = match args with
+let rec arith_op_overflow_vec_no0 op op_s sign size (V_tuple args) = match args with
   | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
-    let (l1',l2') = (to_num sign l1,to_num sign l2) in
-    let n = arith_op_no0 op (V_tuple [l1';l2']) in
-    let correct_size_num = to_vec ord ((List.length cs) * size) n in
-    let one_larger = to_num sign (to_vec ord (((List.length cs) * size) +1) n) in
-    let overflow = if (has_unknown l1 || has_unknown l2) then V_unknown 
-      else neq(V_tuple [(to_num Signed correct_size_num);one_larger]) in
+    let act_size = (List.length cs) * size in
+    let (is_l1_unknown,is_l2_unknown) = ((has_unknown l1), (has_unknown l2)) in
+    let (l1',l2') = (if is_l1_unknown then V_unknown else (to_num sign l1),
+                     if is_l2_unknown then V_unknown else (to_num sign l2)) in
+    let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
+    let representable = 
+      match n with 
+	| V_lit (L_aux (L_num n') ln) ->  
+	  let rep_size = (if op_s = "quot" then act_size/2 else act_size) in
+	  ((n' <= (get_max_representable_in act_size)) && (n' >= (get_min_representable_in act_size)))
+	| _ -> true end in
+    let correct_size_num = if representable then to_vec ord act_size n else to_vec ord act_size (V_lit (L_aux L_undef Unknown)) in
+    let overflow = if (has_unknown l1 || has_unknown l2) then V_unknown else 
+	if representable then V_lit (L_aux L_zero Unknown) else V_lit (L_aux L_one Unknown) in
     V_tuple [correct_size_num;overflow;V_lit (L_aux L_zero Unknown)]
   | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) (r1++r2)
+    taint (arith_op_overflow_vec_no0 op op_s sign size (V_tuple [v1;v2])) (r1++r2)
   | [V_track v1 r1;v2] ->
-    taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) r1
+    taint (arith_op_overflow_vec_no0 op op_s sign size (V_tuple [v1;v2])) r1
   | [v1;V_track v2 r2] ->
-    taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) r2
+    taint (arith_op_overflow_vec_no0 op op_s sign size (V_tuple [v1;v2])) r2
   | [V_unknown;_] -> V_tuple [V_unknown;V_unknown;V_unknown]
   | [_;V_unknown] -> V_tuple [V_unknown;V_unknown;V_unknown]
 end ;;
 
-let rec arith_op_vec_range_no0 op sign size (V_tuple args) = match args with
+let rec arith_op_vec_range_no0 op op_s sign size (V_tuple args) = match args with
   | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_vec_range_no0 op sign size (V_tuple [v1;v2])) (r1++r2)
+    taint (arith_op_vec_range_no0 op op_s sign size (V_tuple [v1;v2])) (r1++r2)
   | [V_track v1 r1; v2] ->
-    taint (arith_op_vec_range_no0 op sign size (V_tuple [v1;v2])) r1
+    taint (arith_op_vec_range_no0 op op_s sign size (V_tuple [v1;v2])) r1
   | [v1;V_track v2 r2] -> 
-    taint (arith_op_vec_range_no0 op sign size (V_tuple [v1;v2])) r2
+    taint (arith_op_vec_range_no0 op op_s sign size (V_tuple [v1;v2])) r2
   | [V_unknown;_] -> V_unknown
   | [_;V_unknown] -> V_unknown
   | [(V_vector _ ord cs as l1);n] ->
-    arith_op_vec_no0 op sign size (V_tuple [l1;(to_vec ord (List.length cs) n)])
+    arith_op_vec_no0 op op_s sign size (V_tuple [l1;(to_vec ord (List.length cs) n)])
 end ;;
 
 let rec compare_op op (V_tuple args) = match args with
@@ -599,13 +617,13 @@ let function_map = [
   ("mult_vec_range_signed", arith_op_vec_range ( * ) Signed 2);
   ("mult_overflow_vec_signed", arith_op_overflow_vec ( * ) Signed 2);
   ("mod", arith_op_no0 (mod));
-  ("mod_vec", arith_op_vec_no0 hardware_mod  Unsigned 1);
-  ("mod_vec_range", arith_op_vec_range_no0 hardware_mod Unsigned 1);
+  ("mod_vec", arith_op_vec_no0 hardware_mod "mod" Unsigned 1);
+  ("mod_vec_range", arith_op_vec_range_no0 hardware_mod "mod" Unsigned 1);
   ("quot", arith_op_no0 hardware_quot);
-  ("quot_vec", arith_op_vec_no0 hardware_quot  Unsigned 1);
-  ("quot_overflow_vec", arith_op_overflow_vec_no0 hardware_quot Unsigned 1);
-  ("quot_vec_signed", arith_op_vec_no0 hardware_quot  Signed 1);
-  ("quot_overflow_vec_signed", arith_op_overflow_vec_no0 hardware_quot Signed 1);
+  ("quot_vec", arith_op_vec_no0 hardware_quot "quot" Unsigned 1);
+  ("quot_overflow_vec", arith_op_overflow_vec_no0 hardware_quot "quot" Unsigned 1);
+  ("quot_vec_signed", arith_op_vec_no0 hardware_quot "quot" Signed 1);
+  ("quot_overflow_vec_signed", arith_op_overflow_vec_no0 hardware_quot "quot" Signed 1);
   ("eq", eq);
   ("eq_vec_range", eq_vec_range);
   ("eq_range_vec", eq_range_vec);
