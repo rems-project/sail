@@ -10,14 +10,14 @@ open import Bool
 let hardware_mod (a: integer) (b:integer) : integer = 
  if a < 0 && b < 0
  then (abs a) mod (abs b)
- else if (a < 0 && b >= 0) || (a >= 0 && b < 0) 
+ else if (a < 0 && b >= 0) 
  then (a mod b) - b
  else a mod b
 
 let hardware_quot (a:integer) (b:integer) : integer = 
   if a < 0 && b < 0
   then (abs a) / (abs b)
-  else if (a < 0 && b >= 0) || (a >= 0 && b < 0)
+  else if (a < 0 && b > 0) 
   then (a/b) + 1
   else a/b
 
