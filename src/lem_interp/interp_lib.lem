@@ -25,7 +25,7 @@ val integer_of_string : string -> integer
 declare ocaml target_rep function integer_of_string = `Big_int.big_int_of_string`
 
 let (max_64 : integer) = integer_of_string  "9223372036854775807"
-let (min_64 : integer) = integer_of_string "-9223372036854775807"
+let (min_64 : integer) = integer_of_string "-9223372036854775808"
 let (max_32 : integer) = integer_of_string "2147483647"
 let (min_32 : integer) = integer_of_string "-2147483648"
 let (min_8 : integer) = (integerFromNat 0) - (integerFromNat 128)
