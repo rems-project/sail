@@ -12,11 +12,16 @@ declare ocaml    target_rep function quomod = `Big_int.quomod_big_int`
 
 let hardware_mod a b = 
  let (q,r) = quomod a b in
- if q < 0 then r-b else r
+ if q < 0 then r-b 
+ else 
+   if a > b && a < 0
+   then a else r
 
 let hardware_quot a b = 
  let (q,r) = quomod a b in
- if q < 0 then q+1 else q
+ if q < 0 then q+1 
+ else if a > b && a < 0
+ then 0 else q
 
 let ignore_sail x = V_lit (L_aux L_unit Unknown) ;;
 
