@@ -883,7 +883,7 @@ let initial_typ_env =
                    Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
                          (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
                                                mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])
-                                      (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n")); bit_t]))),
+                                      (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n")); bit_t; bit_t]))),
 			External (Some "add_overflow_vec"),[],pure_e);
 		   Base(((mk_nat_params ["n";"m";"o";"p";])@(mk_ord_params ["ord"]),
 			 (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
@@ -940,7 +940,7 @@ let initial_typ_env =
                    Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
                          (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
                                                mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])
-                                      (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n")); bit_t]))),
+                                      (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n")); bit_t; bit_t]))),
 			External (Some "add_overflow_vec_signed"),[],pure_e);
 		   Base(((mk_nat_params ["n";"m";"o";"p";])@(mk_ord_params ["ord"]),
 			 (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
@@ -967,7 +967,7 @@ let initial_typ_env =
                        External (Some "add_vec_bit_signed"), [], pure_e);
 		  Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p"); bit_t])
-                                     (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")); bit_t]))),
+                                     (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")); bit_t; bit_t]))),
                        External (Some "add_overflow_vec_bit_signed"), [], pure_e);
                   Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
                         (mk_pure_fun (mk_tup [bit_t; mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")])
@@ -1076,7 +1076,7 @@ let initial_typ_env =
                            (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
 						 mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])
                            (* could also use 2*n instead of n+n *)
-                              (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nadd (mk_nv "n", mk_nv "n")));bit_t]))),
+                              (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nadd (mk_nv "n", mk_nv "n")));bit_t;bit_t]))),
                           External (Some "mult_overflow_vec_signed"), [],pure_e);
                      
                     ]));
@@ -1121,7 +1121,7 @@ let initial_typ_env =
                Base(((mk_nat_params["n";"m";"p";"q"])@(mk_ord_params["ord"]),
                      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
                                            mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "q")])
-                                   (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")); bit_t]))),
+                                   (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")); bit_t;bit_t]))),
                     External (Some "quot_overflow_vec"),[GtEq(Specc(Parse_ast.Int("quot",None)), mk_nv "m", mk_nv "q")],pure_e)]));
     ("quot_s",
      Overload(Base(((mk_typ_params ["a";"b";"c"]),
@@ -1143,7 +1143,7 @@ let initial_typ_env =
 	       Base(((mk_nat_params["n";"m";"p";"q"])@(mk_ord_params["ord"]),
                      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
                                            mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "q")])
-                                   (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")); bit_t]))),
+                                   (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")); bit_t;bit_t]))),
                     External (Some "quot_overflow_vec_signed"),[GtEq(Specc(Parse_ast.Int("quot",None)), mk_nv "m", mk_nv "q")],pure_e);
 ]));
     (* incorrect types for typechecking processed sail code; do we care? *)

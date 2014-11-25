@@ -21,6 +21,34 @@ let hardware_quot (a:integer) (b:integer) : integer =
   then (a/b) + 1
   else a/b
 
+val integer_of_string : string -> integer
+declare ocaml target_rep function integer_of_string = `Big_int.big_int_of_string`
+
+let (max_64 : integer) = integer_of_string  "9223372036854775807"
+let (min_64 : integer) = integer_of_string "-9223372036854775807"
+let (max_32 : integer) = integer_of_string "2147483647"
+let (min_32 : integer) = integer_of_string "-2147483648"
+let (min_8 : integer) = (integerFromNat 0) - (integerFromNat 128)
+let (max_8 : integer) = (integerFromNat 127)
+let (min_5 : integer) = (integerFromNat 0)-(integerFromNat 32)
+let (max_5 : integer) = (integerFromNat 32)
+
+val get_max_representable_in : nat -> integer
+let get_max_representable_in n = 
+  if (n = 64) then max_64
+  else if (n=32) then max_32
+  else if (n=8) then max_8
+  else if (n=5) then max_5
+  else 2**n - 1
+
+val get_min_representable_in : nat -> integer
+let get_min_representable_in n = 
+  if (n = 64) then min_64
+  else if (n=32) then min_32
+  else if (n=8) then min_8
+  else if (n=5) then min_5
+  else 0-(2**n)
+
 let ignore_sail x = V_lit (L_aux L_unit Unknown) ;;
 
 let compose f g x = f (V_tuple [g x]) ;;
@@ -273,22 +301,40 @@ let rec arith_op_vec_vec_range op sign (V_tuple args) = match args with
   | [_;V_unknown] -> V_unknown
 end ;;
 let rec arith_op_overflow_vec op sign size (V_tuple args) = match args with
-  | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
-    let (l1',l2') = (to_num sign l1,to_num sign l2) in
-    let n = arith_op op (V_tuple [l1';l2']) in
-    let correct_size_num = to_vec ord ((List.length cs) * size) n in
-    let one_larger = to_num Signed (to_vec ord (((List.length cs) * size) +1) n) in
-    let overflow = if (has_unknown l1 || has_unknown l2) then V_unknown 
-      else neq(V_tuple [(to_num Signed correct_size_num);one_larger]) in
-    V_tuple [correct_size_num;overflow]
+  | [(V_vector b ord cs1 as l1);(V_vector _ _ cs2 as l2)] ->
+    let act_size = (List.length cs1) * size in
+    let (is_l1_unknown,is_l2_unknown) = ((has_unknown l1), (has_unknown l2)) in
+    let (l1',l2') = (if is_l1_unknown then V_unknown else (to_num sign l1),
+                     if is_l2_unknown then V_unknown else (to_num sign l2)) in
+    let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
+    let correct_size_num = to_vec ord act_size n in
+    let overflow = if (is_l1_unknown || is_l2_unknown) then V_unknown 
+      else (match n with 
+	| V_lit (L_aux (L_num n') ln) -> 
+	  if (n' <= (get_max_representable_in act_size)) &&
+	     (n' >= (get_min_representable_in act_size))
+	  then V_lit (L_aux L_zero ln)
+	  else V_lit (L_aux L_one ln)
+	| _ -> V_unknown end) in
+    let carry_out = if (is_l1_unknown || is_l2_unknown) then V_unknown
+      else (match (cs1,cs2) with
+	| (b1::cs1,b2::cs2) ->
+	  let b1 = match b1 with | V_track v _ -> v | _ -> b1 end in
+          let b2 = match b2 with | V_track v _ -> v | _ -> b2 end in
+	  match (b1,b2) with
+	    | (V_lit (L_aux L_one l1),V_lit (L_aux L_one _)) -> V_lit (L_aux L_zero l1)
+	    | (V_lit (L_aux L_one l1),V_lit (L_aux L_zero _)) -> V_lit (L_aux L_one l1)
+	    | (V_lit (L_aux L_zero l1),V_lit (L_aux L_one _)) -> V_lit (L_aux L_one l1)
+	    | (V_lit (L_aux L_zero l1),V_lit (L_aux L_zero _)) -> V_lit (L_aux L_zero l1) end end) in
+    V_tuple [correct_size_num;overflow;carry_out]
   | [V_track v1 r1;V_track v2 r2] ->
     taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) (r1++r2)
   | [V_track v1 r1;v2] ->
     taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) r1
   | [v1;V_track v2 r2] ->
     taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_tuple [V_unknown;V_unknown]
-  | [_;V_unknown] -> V_tuple [V_unknown;V_unknown]
+  | [V_unknown;_] -> V_tuple [V_unknown;V_unknown;V_unknown]
+  | [_;V_unknown] -> V_tuple [V_unknown;V_unknown;V_unknown]
 end ;;
 let rec arith_op_overflow_vec_bit op sign size (V_tuple args) = match args with
   | [(V_vector b ord cs as l1);(V_lit (L_aux L_one li))] ->
@@ -304,15 +350,15 @@ let rec arith_op_overflow_vec_bit op sign size (V_tuple args) = match args with
     let correct_size_num = to_vec ord ((List.length cs) * size) n in
     let one_larger = to_num Signed (to_vec ord (((List.length cs) * size) +1) n) in
     let overflow =  neq (V_tuple [correct_size_num;one_larger]) in
-    V_tuple [correct_size_num;overflow]    
+    V_tuple [correct_size_num;overflow;V_lit (L_aux L_zero Unknown)]    
   | [V_track v1 r1;V_track v2 r2] ->
     taint (arith_op_overflow_vec_bit op sign size (V_tuple [v1;v2])) (r1++r2)
   | [V_track v1 r1;v2] ->
     taint (arith_op_overflow_vec_bit op sign size (V_tuple [v1;v2])) r1
   | [v1;V_track v2 r2] ->
     taint (arith_op_overflow_vec_bit op sign size (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_tuple [V_unknown;V_unknown]
-  | [_;V_unknown] -> V_tuple [V_unknown;V_unknown]
+  | [V_unknown;_] -> V_tuple [V_unknown;V_unknown;V_unknown]
+  | [_;V_unknown] -> V_tuple [V_unknown;V_unknown;V_unknown]
 end ;;
 
 
@@ -416,15 +462,15 @@ let rec arith_op_overflow_vec_no0 op sign size (V_tuple args) = match args with
     let one_larger = to_num sign (to_vec ord (((List.length cs) * size) +1) n) in
     let overflow = if (has_unknown l1 || has_unknown l2) then V_unknown 
       else neq(V_tuple [(to_num Signed correct_size_num);one_larger]) in
-    V_tuple [correct_size_num;overflow]
+    V_tuple [correct_size_num;overflow;V_lit (L_aux L_zero Unknown)]
   | [V_track v1 r1;V_track v2 r2] ->
     taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) (r1++r2)
   | [V_track v1 r1;v2] ->
     taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) r1
   | [v1;V_track v2 r2] ->
     taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_tuple [V_unknown;V_unknown]
-  | [_;V_unknown] -> V_tuple [V_unknown;V_unknown]
+  | [V_unknown;_] -> V_tuple [V_unknown;V_unknown;V_unknown]
+  | [_;V_unknown] -> V_tuple [V_unknown;V_unknown;V_unknown]
 end ;;
 
 let rec arith_op_vec_range_no0 op sign size (V_tuple args) = match args with
@@ -542,12 +588,12 @@ let function_map = [
   ("minus_vec_range_range", arith_op_vec_range_range (-) Unsigned);
   ("minus_range_vec_range", arith_op_range_vec_range (-) Unsigned);
   ("minus_vec_bit", arith_op_vec_bit (-) Unsigned 1);
-  ("minus_overload_vec", arith_op_overflow_vec (-) Unsigned 1);
+  ("minus_overflow_vec", arith_op_overflow_vec (-) Unsigned 1);
   ("multiply", arith_op ( * ));
   ("multiply_vec", arith_op_vec ( * ) Unsigned 2);
   ("mult_range_vec", arith_op_range_vec ( * ) Unsigned 2);
   ("mult_vec_range", arith_op_vec_range ( * ) Unsigned 2);
-  ("mult_overload_vec", arith_op_overflow_vec ( * ) Unsigned 2);
+  ("mult_overflow_vec", arith_op_overflow_vec ( * ) Unsigned 2);
   ("multiply_vec_signed", arith_op_vec ( * ) Signed 2);
   ("mult_range_vec_signed", arith_op_range_vec ( * ) Signed 2);
   ("mult_vec_range_signed", arith_op_vec_range ( * ) Signed 2);
