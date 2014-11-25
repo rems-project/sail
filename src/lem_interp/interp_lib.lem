@@ -49,6 +49,23 @@ let get_min_representable_in n =
   else if (n=5) then min_5
   else 0-(2**n)
 
+
+let rec carry_out v1 v2 c = 
+  (match (v1,v2) with
+    | ([],[]) -> c
+    | (b1::v1,b2::v2) ->
+      (match (b1,b2,c) with
+	| (V_lit (L_aux L_one _), V_lit (L_aux L_one _), V_lit (L_aux L_one _)) -> (carry_out v1 v2 c) (*carry out*)
+	| (V_lit (L_aux L_one _), V_lit (L_aux L_one _), V_lit (L_aux L_zero _)) -> (carry_out v1 v2 b1) (* carry out*)
+	| (V_lit (L_aux L_one _), V_lit (L_aux L_zero _), V_lit (L_aux L_one _)) -> (carry_out v1 v2 c) (* carry out*)
+	| (V_lit (L_aux L_one _), V_lit (L_aux L_zero _), V_lit (L_aux L_zero _)) -> (carry_out v1 v2 c) (* none *)
+	| (V_lit (L_aux L_zero _), V_lit (L_aux L_one _), V_lit (L_aux L_one _)) -> (carry_out v1 v2 c) (* carry out *)
+	| (V_lit (L_aux L_zero _), V_lit (L_aux L_one _), V_lit (L_aux L_zero _)) -> (carry_out v1 v2 c) (* none *)
+	| (V_lit (L_aux L_zero _), V_lit (L_aux L_zero _), V_lit (L_aux L_one _)) -> (carry_out v1 v2 b1) (* none *)
+	| (V_lit (L_aux L_zero _), V_lit (L_aux L_zero _), V_lit (L_aux L_zero _)) -> (carry_out v1 v2 c) (* none *)
+       end)
+   end)
+
 let ignore_sail x = V_lit (L_aux L_unit Unknown) ;;
 
 let compose f g x = f (V_tuple [g x]) ;;
@@ -316,17 +333,10 @@ let rec arith_op_overflow_vec op sign size (V_tuple args) = match args with
 	  then V_lit (L_aux L_zero ln)
 	  else V_lit (L_aux L_one ln)
 	| _ -> V_unknown end) in
-    let carry_out = if (is_l1_unknown || is_l2_unknown) then V_unknown
-      else (match (cs1,cs2) with
-	| (b1::cs1,b2::cs2) ->
-	  let b1 = match b1 with | V_track v _ -> v | _ -> b1 end in
-          let b2 = match b2 with | V_track v _ -> v | _ -> b2 end in
-	  match (b1,b2) with
-	    | (V_lit (L_aux L_one l1),V_lit (L_aux L_one _)) -> V_lit (L_aux L_zero l1)
-	    | (V_lit (L_aux L_one l1),V_lit (L_aux L_zero _)) -> V_lit (L_aux L_one l1)
-	    | (V_lit (L_aux L_zero l1),V_lit (L_aux L_one _)) -> V_lit (L_aux L_one l1)
-	    | (V_lit (L_aux L_zero l1),V_lit (L_aux L_zero _)) -> V_lit (L_aux L_zero l1) end end) in
-    V_tuple [correct_size_num;overflow;carry_out]
+    let c_out = if (is_l1_unknown || is_l2_unknown) then V_unknown
+      else let detaint x = match x with | V_track v _ -> v | _ -> x end in
+      (carry_out (List.reverse (List.map detaint cs1)) (List.reverse (List.map detaint cs2)) (V_lit (L_aux L_zero Unknown))) in
+    V_tuple [correct_size_num;overflow;c_out]
   | [V_track v1 r1;V_track v2 r2] ->
     taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) (r1++r2)
   | [V_track v1 r1;v2] ->
