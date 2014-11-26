@@ -353,7 +353,7 @@ let rec arith_op_overflow_vec_bit op sign size (V_tuple args) = match args with
     let correct_size_num = to_vec ord ((List.length cs) * size) n in
     let one_larger = to_num Signed (to_vec ord (((List.length cs) * size) +1) n) in
     let overflow =  neq (V_tuple [correct_size_num;one_larger]) in
-    V_tuple [correct_size_num;overflow]
+    V_tuple [correct_size_num;overflow;V_lit (L_aux L_zero Unknown)]
   | [(V_vector b ord cs as l1);(V_lit (L_aux L_zero li))] ->
     let l1' = to_num sign l1 in
     let n = arith_op op (V_tuple [l1';(V_lit (L_aux (L_num 0) li))]) in
