@@ -395,24 +395,39 @@ val extern unit -> unit effect { barr } H_Sync (*corresponds to Sync in barrier 
 val extern unit -> unit effect { barr } LW_Sync
 val extern unit -> unit effect { barr } EIEIO_Sync
 
+val forall Nat 'n, Nat 'm, 'n *8 = 'm. (implicit<'m>,(bit['m])) -> (bit['m]) effect pure byte_reverse
+function forall Nat 'n, Nat 'm, 'n*8 = 'm. (bit['m]) effect pure byte_reverse((bit['m]) input) = {
+  (bit['m]) output := 0;
+  j := length(input);
+  foreach (i from 0 to (length(input)) by 8) {
+   output[i..i+7] := input[j-7 ..j];
+   j := j-8; };
+  output
+}  
 
 (* XXX effect for trap? *)
 val extern unit -> unit effect pure trap
 
 register (bit[1]) mode64bit
-register (bool) bigendianmode
+register (bit[1]) bigendianmode
 
-val bit[64] -> unit effect {rreg,wreg} set_overflow_cr0 
-function (unit) set_overflow_cr0(target_register) = {
+val (bit[64],bit) -> unit effect {rreg,wreg} set_overflow_cr0 
+function (unit) set_overflow_cr0(target_register,new_xer_so) = {
   (if mode64bit
    then m := 0
    else m := 32);
-  (if target_register[m..63] < 0
+  (bit[64]) zero := 0;
+  (if target_register[m..63] <_s zero[m..63]
   then c := 0b100
-  else if target_register[m..63] > 0 
+  else if target_register[m..63] >_s zero[m..63] 
   then c := 0b010
   else c := 0b001);
-  CR.CR0 := c:[XER.SO]
+  CR.CR0 := c:[new_xer_so]
+}
+
+function (unit) set_SO_OV(overflow) =  {
+  XER.OV := overflow;
+  XER.SO := (XER.SO | overflow);
 }
 
 scattered function unit execute
@@ -491,6 +506,24 @@ function clause execute (Bclr (BO, BI, BH, LK)) =
     if LK then LR := CIA + 4 else ()
   }
 
+union ast member (bit[5], bit[5], bit[2], bit) Bcctr
+
+function clause decode (0b010011 :
+(bit[5]) BO :
+(bit[5]) BI :
+(bit[3]) _ :
+(bit[2]) BH :
+0b1000010000 :
+[LK] as instr) =
+  Bcctr (BO,BI,BH,LK)
+
+function clause execute (Bcctr (BO, BI, BH, LK)) =
+  {
+    cond_ok := (BO[0] | CR[BI + 32] ^ ~ (BO[1]));
+    if cond_ok then NIA := CTR[0 .. 61] : 0b00 else ();
+    if LK then LR := CIA + 4 else ()
+  }
+
 union ast member (bit[7]) Sc
 
 function clause decode (0b010001 :
@@ -504,6 +537,110 @@ function clause decode (0b010001 :
   Sc (LEV)
 
 function clause execute (Sc (LEV)) = ()
+
+union ast member (bit[5], bit[5], bit[16]) Lbzu
+
+function clause decode (0b100011 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Lbzu (RT,RA,D)
+
+function clause execute (Lbzu (RT, RA, D)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + EXTS (D);
+    GPR[RT] :=
+      0b00000000000000000000000000000000000000000000000000000000 : MEMr (EA,1);
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Lbzux
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0001110111 :
+(bit[1]) _ as instr) =
+  Lbzux (RT,RA,RB)
+
+function clause execute (Lbzux (RT, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    GPR[RT] :=
+      0b00000000000000000000000000000000000000000000000000000000 : MEMr (EA,1);
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[16]) Lhzu
+
+function clause decode (0b101001 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Lhzu (RT,RA,D)
+
+function clause execute (Lhzu (RT, RA, D)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + EXTS (D);
+    GPR[RT] := 0b000000000000000000000000000000000000000000000000 : MEMr (EA,2);
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Lhzux
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0100110111 :
+(bit[1]) _ as instr) =
+  Lhzux (RT,RA,RB)
+
+function clause execute (Lhzux (RT, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    GPR[RT] := 0b000000000000000000000000000000000000000000000000 : MEMr (EA,2);
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[16]) Lhau
+
+function clause decode (0b101011 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Lhau (RT,RA,D)
+
+function clause execute (Lhau (RT, RA, D)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + EXTS (D);
+    GPR[RT] := EXTS (MEMr (EA,2));
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Lhaux
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0101110111 :
+(bit[1]) _ as instr) =
+  Lhaux (RT,RA,RB)
+
+function clause execute (Lhaux (RT, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    GPR[RT] := EXTS (MEMr (EA,2));
+    GPR[RA] := EA
+  }
 
 union ast member (bit[5], bit[5], bit[16]) Lwz
 
@@ -522,6 +659,58 @@ function clause execute (Lwz (RT, RA, D)) =
     GPR[RT] := 0b00000000000000000000000000000000 : MEMr (EA,4)
   }
 
+union ast member (bit[5], bit[5], bit[16]) Lwzu
+
+function clause decode (0b100001 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Lwzu (RT,RA,D)
+
+function clause execute (Lwzu (RT, RA, D)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + EXTS (D);
+    GPR[RT] := 0b00000000000000000000000000000000 : MEMr (EA,4);
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Lwzux
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0000110111 :
+(bit[1]) _ as instr) =
+  Lwzux (RT,RA,RB)
+
+function clause execute (Lwzux (RT, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    GPR[RT] := 0b00000000000000000000000000000000 : MEMr (EA,4);
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Lwaux
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0101110101 :
+(bit[1]) _ as instr) =
+  Lwaux (RT,RA,RB)
+
+function clause execute (Lwaux (RT, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    GPR[RT] := EXTS (MEMr (EA,4));
+    GPR[RA] := EA
+  }
+
 union ast member (bit[5], bit[5], bit[14]) Ld
 
 function clause decode (0b111010 :
@@ -538,6 +727,109 @@ function clause execute (Ld (RT, RA, DS)) =
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS (DS : 0b00);
     GPR[RT] := MEMr (EA,8)
+  }
+
+union ast member (bit[5], bit[5], bit[14]) Ldu
+
+function clause decode (0b111010 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[14]) DS :
+0b01 as instr) =
+  Ldu (RT,RA,DS)
+
+function clause execute (Ldu (RT, RA, DS)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + EXTS (DS : 0b00);
+    GPR[RT] := MEMr (EA,8);
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Ldux
+
+function clause decode (0b011111 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0000110101 :
+(bit[1]) _ as instr) =
+  Ldux (RT,RA,RB)
+
+function clause execute (Ldux (RT, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    GPR[RT] := MEMr (EA,8);
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[16]) Stbu
+
+function clause decode (0b100111 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Stbu (RS,RA,D)
+
+function clause execute (Stbu (RS, RA, D)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + EXTS (D);
+    MEMw(EA,1) := (GPR[RS])[56 .. 63];
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Stbux
+
+function clause decode (0b011111 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0011110111 :
+(bit[1]) _ as instr) =
+  Stbux (RS,RA,RB)
+
+function clause execute (Stbux (RS, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    MEMw(EA,1) := (GPR[RS])[56 .. 63];
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[16]) Sthu
+
+function clause decode (0b101101 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Sthu (RS,RA,D)
+
+function clause execute (Sthu (RS, RA, D)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + EXTS (D);
+    MEMw(EA,2) := (GPR[RS])[48 .. 63];
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Sthux
+
+function clause decode (0b011111 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0110110111 :
+(bit[1]) _ as instr) =
+  Sthux (RS,RA,RB)
+
+function clause execute (Sthux (RS, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    MEMw(EA,2) := (GPR[RS])[48 .. 63];
+    GPR[RA] := EA
   }
 
 union ast member (bit[5], bit[5], bit[16]) Stw
@@ -569,6 +861,24 @@ function clause execute (Stwu (RS, RA, D)) =
   {
     (bit[64]) EA := 0;
     EA := GPR[RA] + EXTS (D);
+    MEMw(EA,4) := (GPR[RS])[32 .. 63];
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Stwux
+
+function clause decode (0b011111 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0010110111 :
+(bit[1]) _ as instr) =
+  Stwux (RS,RA,RB)
+
+function clause execute (Stwux (RS, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
     MEMw(EA,4) := (GPR[RS])[32 .. 63];
     GPR[RA] := EA
   }
@@ -606,6 +916,104 @@ function clause execute (Stdu (RS, RA, DS)) =
     EA := GPR[RA] + EXTS (DS : 0b00);
     MEMw(EA,8) := GPR[RS];
     GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Stdux
+
+function clause decode (0b011111 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[5]) RB :
+0b0010110101 :
+(bit[1]) _ as instr) =
+  Stdux (RS,RA,RB)
+
+function clause execute (Stdux (RS, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    MEMw(EA,8) := GPR[RS];
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[12], bit[4]) Lq
+
+function clause decode (0b111000 :
+(bit[5]) RTp :
+(bit[5]) RA :
+(bit[12]) DQ :
+(bit[4]) PT as instr) =
+  Lq (RTp,RA,DQ,PT)
+
+function clause execute (Lq (RTp, RA, DQ, PT)) =
+  {
+    (bit[64]) EA := 0;
+    (bit[64]) b := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + EXTS (DQ : 0b0000);
+    (bit[128]) mem := MEMr (EA,16);
+    if bigendianmode
+    then {
+      GPR[RTp] := mem[0 .. 63];
+      GPR[RTp + 1] := mem[64 .. 127]
+    }
+    else {
+      (bit[128]) bytereverse := byte_reverse (mem);
+      GPR[RTp] := bytereverse[0 .. 63];
+      GPR[RTp + 1] := bytereverse[64 .. 127]
+    }
+  }
+
+union ast member (bit[5], bit[5], bit[14]) Stq
+
+function clause decode (0b111110 :
+(bit[5]) RSp :
+(bit[5]) RA :
+(bit[14]) DS :
+0b10 as instr) =
+  Stq (RSp,RA,DS)
+
+function clause execute (Stq (RSp, RA, DS)) =
+  {
+    (bit[64]) b := 0;
+    (bit[64]) EA := 0;
+    {
+      (bit[64]) EA := 0;
+      (bit[64]) b := 0;
+      if RA == 0 then b := 0 else b := GPR[RA];
+      EA := b + EXTS (DS : 0b00);
+      (bit[128]) mem := 0;
+      mem[0..63] := GPR[RSp];
+      mem[64..127] := GPR[RSp + 1];
+      if ~ (bigendianmode) then mem := byte_reverse (mem) else ();
+      MEMw(EA,16) := mem
+    };
+    EA := b + EXTS (DS : 0b00);
+    MEMw(EA,8) := RSp
+  }
+
+union ast member (bit[5], bit[5], bit[16]) Lmw
+
+function clause decode (0b101110 :
+(bit[5]) RT :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Lmw (RT,RA,D)
+
+function clause execute (Lmw (RT, RA, D)) =
+  {
+    (bit[64]) b := 0;
+    (bit[64]) EA := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + EXTS (D);
+    size := ([|32|]) (32 - RT) * 4;
+    buffer := MEMr (EA,size);
+    i := 0;
+    foreach (r from RT to 31 by 1 in inc)
+    {
+      GPR[r] := 0b00000000000000000000000000000000 : buffer[i .. i + 31];
+      i := i + 32
+    }
   }
 
 union ast member (bit[5], bit[5], bit[5]) Lswi
@@ -680,10 +1088,17 @@ function clause decode (0b011111 :
   Add (RT,RA,RB,OE,Rc)
 
 function clause execute (Add (RT, RA, RB, OE, Rc)) =
-  let (temp, overflow) = (GPR[RA] + GPR[RB]) in
+  let (temp, overflow, _) = (GPR[RA] +_s GPR[RB]) in
     {
       GPR[RT] := temp;
-      if Rc then set_overflow_cr0 (temp) else ()
+      if Rc
+      then {
+        xer_so := XER.SO;
+        if OE & overflow then xer_so := overflow else ();
+        set_overflow_cr0 (temp,xer_so)
+      }
+      else ();
+      if OE then set_SO_OV (overflow) else ()
     }
 
 union ast member (bit[5], bit[5], bit[5], bit, bit) Subf
@@ -698,11 +1113,18 @@ function clause decode (0b011111 :
   Subf (RT,RA,RB,OE,Rc)
 
 function clause execute (Subf (RT, RA, RB, OE, Rc)) =
-  let (t, overflow) = (~ (GPR[RA]) + GPR[RB]) in
+  let (t, overflow, _) = (~ (GPR[RA]) +_s GPR[RB]) in
     {
       (bit[64]) temp := t + 1;
       GPR[RT] := temp;
-      if Rc then set_overflow_cr0 (temp) else ()
+      if Rc
+      then {
+        xer_so := XER.SO;
+        if OE & overflow then xer_so := overflow else ();
+        set_overflow_cr0 (temp,xer_so)
+      }
+      else ();
+      if OE then set_SO_OV (overflow) else ()
     }
 
 union ast member (bit[5], bit[5], bit[16]) Addic
@@ -713,17 +1135,28 @@ function clause decode (0b001100 :
 (bit[16]) SI as instr) =
   Addic (RT,RA,SI)
 
-function clause execute (Addic (RT, RA, SI)) = GPR[RT] := GPR[RA] + EXTS (SI)
+function clause execute (Addic (RT, RA, SI)) =
+  let (temp, _, carry) = (GPR[RA] +_s EXTS (SI)) in
+    {
+      GPR[RT] := temp;
+      CA := carry
+    }
 
-union ast member (bit[5], bit[5], bit[16]) Addic
+union ast member (bit[5], bit[5], bit[16]) AddicDot
 
 function clause decode (0b001101 :
 (bit[5]) RT :
 (bit[5]) RA :
 (bit[16]) SI as instr) =
-  Addic (RT,RA,SI)
+  AddicDot (RT,RA,SI)
 
-function clause execute (Addic (RT, RA, SI)) = GPR[RT] := GPR[RA] + EXTS (SI)
+function clause execute (AddicDot (RT, RA, SI)) =
+  let (temp, overflow, carry) = (GPR[RA] +_s EXTS (SI)) in
+    {
+      GPR[RT] := temp;
+      CA := carry;
+      set_overflow_cr0 (temp,overflow)
+    }
 
 union ast member (bit[5], bit[5], bit, bit) Neg
 
@@ -737,11 +1170,11 @@ function clause decode (0b011111 :
   Neg (RT,RA,OE,Rc)
 
 function clause execute (Neg (RT, RA, OE, Rc)) =
-  {
-    (bit[64]) temp := ~ (GPR[RA]) + 1;
-    GPR[RT] := temp;
-    if Rc then set_overflow_cr0 (temp) else ()
-  }
+  let (temp, overflow, _) = (~ (GPR[RA]) +_s (bit) 1) in
+    {
+      GPR[RT] := temp;
+      if Rc then set_overflow_cr0 (temp,XER.SO) else ()
+    }
 
 union ast member (bit[5], bit[5], bit[5], bit, bit) Mullw
 
@@ -755,11 +1188,18 @@ function clause decode (0b011111 :
   Mullw (RT,RA,RB,OE,Rc)
 
 function clause execute (Mullw (RT, RA, RB, OE, Rc)) =
-  {
-    (bit[64]) temp := (GPR[RA])[32 .. 63] * (GPR[RB])[32 .. 63];
-    GPR[RT] := temp;
-    if Rc then set_overflow_cr0 (temp) else ()
-  }
+  let (prod, overflow, _) = ((GPR[RA])[32 .. 63] *_s (GPR[RB])[32 .. 63]) in
+    {
+      GPR[RT] := prod;
+      if Rc
+      then {
+        xer_so := XER.SO;
+        if OE & overflow then xer_so := overflow else ();
+        set_overflow_cr0 (prod,xer_so)
+      }
+      else ();
+      if OE then set_SO_OV (overflow) else ()
+    }
 
 union ast member (bit[3], bit, bit[5], bit[16]) Cmpi
 
@@ -854,7 +1294,12 @@ function clause decode (0b011111 :
 [Rc] as instr) =
   Or (RS,RA,RB,Rc)
 
-function clause execute (Or (RS, RA, RB, Rc)) = GPR[RA] := (GPR[RS] | GPR[RB])
+function clause execute (Or (RS, RA, RB, Rc)) =
+  {
+    (bit[64]) temp := (GPR[RS] | GPR[RB]);
+    GPR[RA] := temp;
+    if Rc then set_overflow_cr0 (temp,XER.SO) else ()
+  }
 
 union ast member (bit[5], bit[5], bit) Extsw
 
@@ -869,8 +1314,11 @@ function clause decode (0b011111 :
 function clause execute (Extsw (RS, RA, Rc)) =
   {
     s := (GPR[RS])[32];
-    (GPR[RA])[32..63] := (GPR[RS])[32 .. 63];
-    (GPR[RA])[0..31] := s ^^ 32
+    (bit[64]) temp := 0;
+    temp := (GPR[RS])[32 .. 63];
+    temp := s ^^ 32;
+    if Rc then set_overflow_cr0 (temp,XER.SO) else ();
+    GPR[RA] := temp
   }
 
 union ast member (bit[5], bit[5], bit[6], bit[6], bit) Rldicr
@@ -891,7 +1339,9 @@ function clause execute (Rldicr (RS, RA, sh, me, Rc)) =
     r := ROTL (GPR[RS],n);
     e := [me[5]] : me[0 .. 4];
     m := MASK (0,e);
-    GPR[RA] := (r & m)
+    (bit[64]) temp := (r & m);
+    GPR[RA] := temp;
+    if Rc then set_overflow_cr0 (temp,XER.SO) else ()
   }
 
 union ast member (bit[5], bit[10]) Mtspr
@@ -967,6 +1417,40 @@ function clause decode (0b011111 :
 function clause execute (Mfcr (RT)) =
   GPR[RT] := 0b00000000000000000000000000000000 : CR
 
+union ast member (bit[5], bit[5], bit[16]) Lfsu
+
+function clause decode (0b110001 :
+(bit[5]) FRT :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Lfsu (FRT,RA,D)
+
+function clause execute (Lfsu (FRT, RA, D)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + EXTS (D);
+    FPR[FRT] := DOUBLE (MEMr (EA,4));
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Lfsux
+
+function clause decode (0b011111 :
+(bit[5]) FRT :
+(bit[5]) RA :
+(bit[5]) RB :
+0b1000110111 :
+(bit[1]) _ as instr) =
+  Lfsux (FRT,RA,RB)
+
+function clause execute (Lfsux (FRT, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    FPR[FRT] := DOUBLE (MEMr (EA,4));
+    GPR[RA] := EA
+  }
+
 union ast member (bit[5], bit[5], bit[16]) Lfd
 
 function clause decode (0b110010 :
@@ -984,6 +1468,74 @@ function clause execute (Lfd (FRT, RA, D)) =
     FPR[FRT] := MEMr (EA,8)
   }
 
+union ast member (bit[5], bit[5], bit[16]) Lfdu
+
+function clause decode (0b110011 :
+(bit[5]) FRT :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Lfdu (FRT,RA,D)
+
+function clause execute (Lfdu (FRT, RA, D)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + EXTS (D);
+    FPR[FRT] := MEMr (EA,8);
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Lfdux
+
+function clause decode (0b011111 :
+(bit[5]) FRT :
+(bit[5]) RA :
+(bit[5]) RB :
+0b1001110111 :
+(bit[1]) _ as instr) =
+  Lfdux (FRT,RA,RB)
+
+function clause execute (Lfdux (FRT, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    FPR[FRT] := MEMr (EA,8);
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[16]) Stfsu
+
+function clause decode (0b110101 :
+(bit[5]) FRS :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Stfsu (FRS,RA,D)
+
+function clause execute (Stfsu (FRS, RA, D)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + EXTS (D);
+    MEMw(EA,4) := SINGLE (FPR[FRS]);
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Stfsux
+
+function clause decode (0b011111 :
+(bit[5]) FRS :
+(bit[5]) RA :
+(bit[5]) RB :
+0b1010110111 :
+(bit[1]) _ as instr) =
+  Stfsux (FRS,RA,RB)
+
+function clause execute (Stfsux (FRS, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    MEMw(EA,4) := SINGLE (FPR[FRS]);
+    GPR[RA] := EA
+  }
+
 union ast member (bit[5], bit[5], bit[16]) Stfd
 
 function clause decode (0b110110 :
@@ -999,6 +1551,116 @@ function clause execute (Stfd (FRS, RA, D)) =
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS (D);
     MEMw(EA,8) := FPR[FRS]
+  }
+
+union ast member (bit[5], bit[5], bit[16]) Stfdu
+
+function clause decode (0b110111 :
+(bit[5]) FRS :
+(bit[5]) RA :
+(bit[16]) D as instr) =
+  Stfdu (FRS,RA,D)
+
+function clause execute (Stfdu (FRS, RA, D)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + EXTS (D);
+    MEMw(EA,8) := FPR[FRS];
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Stfdux
+
+function clause decode (0b011111 :
+(bit[5]) FRS :
+(bit[5]) RA :
+(bit[5]) RB :
+0b1011110111 :
+(bit[1]) _ as instr) =
+  Stfdux (FRS,RA,RB)
+
+function clause execute (Stfdux (FRS, RA, RB)) =
+  {
+    (bit[64]) EA := 0;
+    EA := GPR[RA] + GPR[RB];
+    MEMw(EA,8) := FPR[FRS];
+    GPR[RA] := EA
+  }
+
+union ast member (bit[5], bit[5], bit[14]) Lfdp
+
+function clause decode (0b111001 :
+(bit[5]) FRTp :
+(bit[5]) RA :
+(bit[14]) DS :
+0b0 :
+0b0 as instr) =
+  Lfdp (FRTp,RA,DS)
+
+function clause execute (Lfdp (FRTp, RA, DS)) =
+  {
+    (bit[64]) b := 0;
+    (bit[64]) EA := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + EXTS (DS : 0b00);
+    FPRp[FRTp] := MEMr (EA,16)
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Lfdpx
+
+function clause decode (0b011111 :
+(bit[5]) FRTp :
+(bit[5]) RA :
+(bit[5]) RB :
+0b1100010111 :
+(bit[1]) _ as instr) =
+  Lfdpx (FRTp,RA,RB)
+
+function clause execute (Lfdpx (FRTp, RA, RB)) =
+  {
+    (bit[64]) b := 0;
+    (bit[64]) EA := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + GPR[RB];
+    FPRp[FRTp] := MEMr (EA,16)
+  }
+
+union ast member (bit[5], bit[5], bit[14]) Stfdp
+
+function clause decode (0b111101 :
+(bit[5]) FRSp :
+(bit[5]) RA :
+(bit[14]) DS :
+0b0 :
+0b0 as instr) =
+  Stfdp (FRSp,RA,DS)
+
+function clause execute (Stfdp (FRSp, RA, DS)) =
+  {
+    (bit[64]) b := 0;
+    (bit[64]) EA := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + EXTS (DS : 0b00);
+    MEMw(EA,16) := FPRp[FRSp]
+  }
+
+union ast member (bit[5], bit[5], bit[5]) Stfdpx
+
+function clause decode (0b011111 :
+(bit[5]) FRSp :
+(bit[5]) RA :
+(bit[5]) RB :
+0b1110010111 :
+(bit[1]) _ as instr) =
+  Stfdpx (FRSp,RA,RB)
+
+function clause execute (Stfdpx (FRSp, RA, RB)) =
+  {
+    (bit[64]) b := 0;
+    (bit[64]) EA := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + GPR[RB];
+    MEMw(EA,16) := FPRp[FRSp]
   }
 
 union ast member (bit[5], bit) Mffs
@@ -1118,7 +1780,7 @@ function clause decode (0b011111 :
 function clause execute (Mbar (MO)) = ()
 
 
-typedef decode_failure = enumerate { no_matching_pattern; unsupported_instruction } 
+typedef decode_failure = enumerate { no_matching_pattern; unsupported_instruction; illegal_instruction } 
 
 function clause decode _ = exit no_matching_pattern
 
@@ -1135,6 +1797,87 @@ function ast supported_instructions ((ast) instr) = {
     case _ -> instr
    }
 }
+
+val ast -> bit effect pure illegal_instructions_pred
+function bit illegal_instructions_pred ((ast) instr) = {
+     switch instr {
+        case (Bcctr(BO,BI,BH,LK)) -> ~(BO[2])
+        case (Lbzu(RT,RA,D)) -> (RA == 0) | (RA == RT)
+        case (Lbzux(RT,RA,_)) ->(RA == 0) | (RA == RT)
+        case (Lhzu(RT,RA,D)) -> (RA == 0) | (RA == RT)
+        case (Lhzux(RT,RA,RB)) -> (RA == 0) | (RA == RT)
+        case (Lhau(RT,RA,D)) -> (RA == 0) | (RA == RT)
+        case (Lhaux(RT,RA,RB)) -> (RA == 0) | (RA == RT)
+        case (Lwzu(RA,RT,D)) -> (RA == 0) | (RA == RT)
+        case (Lwzux(RT,RA,RB)) -> (RA == 0) | (RA == RT)
+        case (Lwaux(RA,RT,RB)) -> (RA == 0) | (RA == RT)
+        case (Ldu(RT,RA,DS)) -> (RA == 0) | (RA == RT)
+        case (Ldux(RT,RA,RB)) -> (RA == 0) | (RA == RT)
+        case (Stbu(RS,RA,D)) -> (RA == 0)
+        case (Stbux(RS,RA,RB)) -> (RA == 0)
+        case (Sthu(RS,RA,RB)) -> (RA == 0)
+        case (Sthux(RS,RA,RB)) -> (RA == 0)
+        case (Stwu(RS,RA,D)) -> (RA == 0)
+        case (Stwux(RS,RA,RB)) -> (RA == 0)
+        case (Stdu(RS,RA,DS)) -> (RA == 0)
+        case (Stdux(RS,RA,RB)) -> (RA == 0)
+        case (Lmw(RT,RA,D)) -> (RA == 0) | ((RT <= RA) & (RA <= 31))
+        case (Lswi(RT,RA,NB)) ->
+           let (([|32|]) n) = (if ~(NB == 0) then NB else 32) in
+           let ceil =
+             (if (n mod 4) == 0
+             then n quot 4 else (n quot 4) + 1) in
+           (RT <= RA) & (RA <= ((bit[5]) (((bit[5]) (RT + ceil)) -1)))
+        (* Can't read XER at the time meant, so will need to rethink *)
+       (* case (Lswx(RT,RA,RB)) ->
+           let (([|32|]) n) = (XER[57..63]) in
+           let ceil =
+             (if (n mod 4 == 0)
+             then n quot 4 else (n quot 4) + 1) in
+           let ((bit[5]) upper_bound) = (RT + ceil) in
+           (RT <= RA & RA <= upper_bound) |
+           (RT <= RB & RB <= upper_bound) |
+           (RT == RA) | (RT == RB)*)
+        case (Lfsu(FRT,RA,D)) -> (RA == 0)
+        case (Lfsux(FRT,RA,RB)) -> (RA == 0)
+        case (Lfdu(FRT,RA,D)) -> (RA == 0)
+        case (Lfdux(FRT,RA,RB)) -> (RA == 0)
+        case (Stfsu(FRS,RA,D)) -> (RA == 0)
+        case (Stfsux(FRS,RA,RB)) -> (RA == 0)
+        case (Stfdu(FRS,D,RA)) -> (RA == 0)
+        case (Stfdux(FRS,RA,RB)) -> (RA == 0)
+        case (Lfdp(FRTp,RA,DS)) -> (FRTp mod 2 == 1)
+        case (Stfdp(FRSp,RA,DS)) -> (FRSp mod 2 == 1)
+        case (Lfdpx(FRTp,RA,RB)) -> (FRTp mod 2 == 1)
+        case (Stfdpx(FRSp,RA,RB)) -> (FRSp mod 2 == 1)
+        case (Lq(RTp,RA,DQ,Pt)) -> ((RTp mod 2 ==1) | RTp == RA)
+        case (Stq(RSp,RA,RS)) -> (RSp mod 2 == 1)
+        case (Mtspr(RS, spr)) ->
+          ~ ((spr == 1) | (spr == 8) | (spr == 9) | (spr == 256) |
+            (spr == 512) | (spr == 896) | (spr == 898))
+(*One of these causes a stack overflow error, don't want to debug why now*)
+        (*case (Mfspr(RT, spr)) ->
+           ~ ((spr == 1) | (spr == 8) | (spr == 9) | (spr == 136) |
+           (spr == 256) | (spr == 259) | (spr == 260) | (spr == 261) |
+           (spr == 262) | (spr == 263) | (spr == 268) | (spr == 268) |
+           (spr == 269) | (spr == 512) | (spr == 526) | (spr == 526) |
+           (spr == 527) | (spr == 896) | (spr == 898))
+        case (Se_illegal) -> true
+        case (E_lhau(RT,RA,D8)) -> (RA == 0 | RA == RT)
+        case (E_Lhzu(RT,RA,D8)) -> (RA == 0 | RA == RT)
+        case (E_lwzu(RT,RA,D8)) -> (RA == 0 | RA == RT)
+        case (E_stbu(RS,RA,D8)) -> (RA == 0)
+        case (E_sthu(RS,RA,D8)) -> (RA == 0)
+        case (E_stwu(RS,RA,D8)) -> (RA == 0)
+        case (E_lmw(RT,RA,D8)) -> (RT <= RA & RA <= 31)*)
+        case _ -> false
+     }
+}
+
+val ast -> ast effect pure illegal_instructions
+function ast illegal_instructions ((ast) instr) =
+  if (illegal_instructions_pred ((ast) instr))
+  then exit illegal_instruction else instr
 
 (* fetch-decode-execute *)
 function unit fde () = {
