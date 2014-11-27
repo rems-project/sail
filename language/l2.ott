@@ -878,7 +878,6 @@ defs :: '' ::=
 
 
 
-
 terminals :: '' ::=
   | **                                  :: :: starstar
     {{ tex \ensuremath{\mathop{\mathord{*}\mathord{*} } } }}

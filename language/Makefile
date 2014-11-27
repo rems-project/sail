@@ -9,8 +9,15 @@ all: l2.pdf l2_parse.pdf l2.ml l2_parse.ml l2.lem
 %Theory.uo: %Script.sml
 	Holmake --qof -I $(OTTLIB) $@
 
+manual.pdf: doc_in.tex manual.tex
+	pdflatex manual.tex
+	pdflatex manual.tex
+
 l2.tex: l2.ott l2_typ.ott l2_rules.ott
 	ott -sort false -generate_aux_rules false -o $@ -picky_multiple_parses true $^
+
+doc_in.tex: l2.ott primitive_doc.ott l2_typ.ott l2_rules.ott
+	ott -sort false -generate_aux_rules false -tex_wrap false -o $@ -picky_multiple_parses true $^
 
 %.tex: %.ott
 	ott -sort false -generate_aux_rules false -o $@ -picky_multiple_parses true $^
