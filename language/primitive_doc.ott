@@ -95,8 +95,16 @@ functions :: '' ::=
   {{ com bitwise and }}
   | val forall Nat 'n . ( bit [ 'n ] , bit [ 'n ] ) -> bit [ 'n ] : & :: :: andvec
   | val ( bit , bit ) -> bit : ^ :: :: xor
-  {{ com bitwise xor ^ will fix gen later }}
+  {{ com bitwise xor }}
   | val forall Nat 'n . ( bit [ 'n ] , bit [ 'n ] ) -> bit [ 'n ] : '^' :: :: xorvec
+  | val forall Nat 'n . ( bit ,  [| 'n |] ) -> bit [ 'n ] : '^^' :: :: duplicate
+  {{ com duplicate bit into a vector }}
+  | val forall Nat 'n , Nat 'm , 'm <= 'n . ( bit [ 'n ] , [| 'm |] ) -> bit [ 'n ] : << :: :: lshift
+  {{ com left shift }}
+  | val forall Nat 'n , Nat 'm , 'm <= 'n . ( bit [ 'n ] , [| 'm |] ) -> bit [ 'n ] : >> :: :: rshift
+  {{ com right shift }}
+  | val forall Nat 'n , Nat 'm , 'm <= 'n . ( bit [ 'n ] , [| 'm |] ) -> bit [ 'n ] : <<< :: :: rotate
+  {{ com rotate }}
 
 
 functions_with_coercions :: '' ::=
