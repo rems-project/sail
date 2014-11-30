@@ -384,14 +384,22 @@ let instruction_state_to_string stack =
 
 let top_instruction_state_to_string stack = let (exp,(env,_)) = top_frame_exp_state stack in exp_to_string env exp
 
+let rec option_map f xs = 
+  match xs with 
+  | [] -> [] 
+  | x::xs -> 
+      ( match f x with 
+      | None -> option_map f xs 
+      | Some x -> x :: (option_map f xs) ) 
+
 let local_variables_to_string stack = 
   let (_,(env,mem)) = top_frame_exp_state stack in 
   match env with
     | LEnv(_,env) -> 
-      List.fold_right (fun (id,value) others -> 
+      String.concat ", " (option_map (fun (id,value)-> 
 	match id with
-	  | Id_aux(Id "0",_) -> others (*Let's not print out the context hole again*)
-	  | _ -> id_to_string id ^ "=" ^ val_to_string_internal mem value ^ ", " ^ others) env ""
+	  | Id_aux(Id "0",_) -> None (*Let's not print out the context hole again*)
+	  | _ -> Some (id_to_string id ^ "=" ^ val_to_string_internal mem value)) env)
 
 let instr_parm_to_string (name, typ, value) = 
   name ^"="^
@@ -411,7 +419,7 @@ let rec instr_parms_to_string ps =
 let pad n s = if String.length s < n then s ^ String.make (n-String.length s) ' ' else s
 
 let instruction_to_string (name, parms, base_effects) = 
-  (pad 5 (String.lowercase name)) ^ " " ^ instr_parms_to_string parms 
+  ((*pad 5*) (String.lowercase name)) ^ " " ^ instr_parms_to_string parms 
 
 let print_backtrace_compact printer stack = List.iter (fun (e,(env,mem)) -> print_exp printer env e) (compact_stack stack)
 let print_continuation printer stack = let (e,(env,mem)) = top_frame_exp_state stack in print_exp printer env e
