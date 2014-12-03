@@ -10,6 +10,8 @@ formula :: formula_ ::=
      {{ hol (FLOOKUP [[E_k]] [[tid]] = SOME [[kinf]]) }}
      {{ lem Map.lookup [[tid]] [[E_k]] = Just [[kinf]] }} 
 
+  | E_a ( tid ) gives tinf                                     :: :: lookup_a
+
 
    | E_t ( id ) gives tinf                                      :: :: lookup_t
      {{ com Type lookup }}
@@ -61,45 +63,49 @@ formula :: formula_ ::=
 
    | num1 gt ... gt numn                                         :: :: decreasing
 
-   | exp1 = exp2    						 :: :: exp_eqn
+   | exp1 == exp2    						 :: :: exp_eqn
      {{ ichl ([[exp1]] = [[exp2]]) }}
 
-   | E_k1 = E_k2                                                 :: :: E_k_eqn
+   | E_k1 == E_k2                                                 :: :: E_k_eqn
      {{ ichl ([[E_k1]] = [[E_k2]]) }}
 
    | E_k1 ~= E_k2                                                :: :: E_k_approx
      {{ lem ([[E_k1]] = [[E_k2]]) (* Todo, not quite equality *) }}
      {{ ich arb }}
 
-   | E_t1 = E_t2                                                 :: :: E_t_eqn
+   | E_t1 == E_t2                                                 :: :: E_t_eqn
      {{ ichl ([[E_t1]] = [[E_t2]]) }}
 
-   | E_r1 = E_r2                                                :: :: E_r_eqn
+   | E_r1 == E_r2                                                :: :: E_r_eqn
      {{ ichl ([[E_r1]] = [[E_r2]]) }}
 
-   | E_e1 = E_e2						:: :: E_e_eqn
+   | E_e1 == E_e2						:: :: E_e_eqn
      {{ ichl ([[E_e1]] = [[E_e2]]) }}
  
-   | E_d1 = E_d2						:: :: E_d_eqn
+   | E_d1 == E_d2						:: :: E_d_eqn
      {{ ichl ([[E_d1]] = [[E_d2]]) }}
 
-   | E1 = E2                                                     :: :: E_eqn
+   | E1 == E2                                                     :: :: E_eqn
      {{ ichl ([[E1]] = [[E2]]) }}
 
-   | S_N1 = S_N2                                                :: :: S_N_eqn
+   | S_N1 == S_N2                                                :: :: S_N_eqn
      {{ ichl ([[S_N1]] = [[S_N2]]) }}
  
-   | I1 = I2                                                     :: :: I_eqn
+   | id == 'id							:: :: id_eq
+
+   | x1 NOTEQ x2							     :: :: id_neq
+
+   | I1 == I2                                                     :: :: I_eqn
      {{ ichl ([[I1]] = [[I2]]) }}
 
-   | effect1 = effect2                                        :: :: Ef_eqn
+   | effect1 == effect2                                        :: :: Ef_eqn
      {{ ichl ([[effect1]] = [[effect2]]) }}
 
-   | t1 = t2                                                     :: :: t_eq
+   | t1 == t2                                                     :: :: t_eq
      {{ ichl ([[t1]] = [[t2]]) }}
-   | ne1 = ne2							:: :: ne_eq
-     {{ ichl ([[ne1]] = [[ne2]]) }}
-   | kid = fresh_kid ( E_d )					:: :: kid_eq
+   | ne == ne'							:: :: ne_eq
+     {{ ichl ([[ne]] = [[ne']]) }}
+   | kid == fresh_kid ( E_d )					:: :: kid_eq
      {{ ichl ([[kid]] = fresh_kid [[E_d]]) }}
 
 defns
@@ -120,25 +126,20 @@ E_k |-t t ok :: :: check_t :: check_t_
  ------------------------------------------------------------ :: varInfer
  E_k |-t 'x ok
 
- E_k(id) gives K_Abbrev t
- E_k u- {id |-> K_Abbrev t} |-t t ok
- ------------------------------------------------------------ :: varAbbrev
- E_k |-t id ok 
-
  E_k |-t t1 ok
  E_k |-t t2 ok
  E_k |-e effect ok
  ------------------------------------------------------------ :: fn
- E_k |-t t1 -> t2 effect tag S_N ok
+ E_k |-t t1 -> t2 effect ok
 
  E_k |-t t1 ok .... E_k |-t tn ok
  ------------------------------------------------------------ :: tup
- E_k |-t (t1 * .... * tn) ok
+ E_k |-t (t1 , .... , tn) ok
 
- E_k(id) gives K_Lam(k1..kn -> K_Typ)
+ E_k(x) gives K_Lam(k1..kn -> K_Typ)
  E_k,k1 |- t_arg1 ok .. E_k,kn |- t_argn ok
  ------------------------------------------------------------ :: app
- E_k |-t id t_arg1 .. t_argn ok
+ E_k |-t x < t_arg1 .. t_argn > ok
 
 defn 
 E_k |-e effect ok :: :: check_ef :: check_ef_
@@ -228,60 +229,6 @@ E_k |-o order ok
 --------------------------------------------------------- :: ord
 E_k, K_Ord |- order ok
 
-
-%% % 
-%% % %TODO type equality isn't right; neither is type conversion
-%% % 
-defns
-teq :: '' ::=
-
-defn
-E_d |- t1 = t2 :: :: teq :: teq_ 
-{{ com Type equality }}
-{{ lemwcf  witness type check_teq_witness; check check_teq_w_check; }}
-by
-
-E_k |-t t ok
------------------------------------------------------------- :: refl
-<E_k,E_r,E_e> |- t = t
- 
-E_d |- t2 = t1
------------------------------------------------------------- :: sym
-E_d |- t1 = t2
- 
-E_d |- t1 = t2
-E_d |- t2 = t3
------------------------------------------------------------- :: trans
-E_d |- t1 = t3
-
-E_k(id) gives K_Abbrev u
-<E_k,E_r,E_e> |- u = t
------------------------------------------------------------- :: abbrev
-<E_k,E_r,E_e> |- id = t 
- 
-E_d |- t1 = t3
-E_d |- t2 = t4
------------------------------------------------------------- :: arrow
-E_d |- t1 -> t2 effect tag S_N = t3 -> t4 effect tag S_N
- 
-E_d |- t1 = u1 .... E_d |- tn = un
------------------------------------------------------------- :: tup
-E_d |- (t1*....*tn) = (u1*....*un)
-
-E_k(id) gives K_Lam (k1 .. kn -> K_Typ)
-<E_k,E_r,E_e>,k1 |- t_arg1 = t_arg'1 .. <E_k,E_r,E_e>,kn |- t_argn = t_arg'n
------------------------------------------------------------- :: app
-<E_k,E_r,E_e> |- id t_arg1 .. t_argn = id t_arg'1 .. t_arg'n
-
-defn
-E_d , k |- t_arg = t_arg' :: :: targeq :: targeq_
-{{ lemwcf  witness type check_targeq_witness; check check_targeq_w_check; }}
-by
-
-E_d |- t = t'
------------------------------------------------------------- :: typ
-E_d, K_Typ |- t = t'
-
 defns
 convert_kind :: '' ::=
 
@@ -304,11 +251,11 @@ by
 
 E_k |- kind ~> k
 ----------------------------------------------------------- :: kind
-<E_k,E_r,E_e> |- kind 'x ~> {'x |-> k}, {}
+<E_k,E_a,E_r,E_e> |- kind 'x ~> {'x |-> k}, {}
 
 E_k('x) gives k
 ----------------------------------------------------------- :: nokind
-<E_k,E_r,E_e> |- 'x ~> {'x |-> k},{}
+<E_k,E_a,E_r,E_e> |- 'x ~> {'x |-> k},{}
 
 |- nexp1 ~> ne1
 |- nexp2 ~> ne2
@@ -329,7 +276,7 @@ E_d |- nexp1 <= nexp2 ~> {}, {ne1 <= ne2}
 E_d |- 'x IN {num1 , ... , numn} ~> {}, {'x IN {num1 , ..., numn}}
 
 defn 
-E_d |- typschm ~> t , E_k2 , S_N :: :: convert_typschm :: convert_typschm_
+E_d |- typschm ~> t , E_k , S_N :: :: convert_typschm :: convert_typschm_
 {{ com Convert source types with typeschemes to internal types and kind environments }}
 {{ lemwcf  witness type convert_typschm_witness; check convert_typschm_w_check; }}
 by
@@ -339,8 +286,8 @@ E_d |- typ ~> t
 E_d |- typ ~> t,{},{}
 
 E_d |- quant_item1 ~> E_k1, S_N1 ... E_d |- quant_itemn ~> E_kn, S_Nn
-E_k = E_k1 u+ ... u+ E_kn
-E_d u+ <E_k,{},{}> |- typ ~> t
+E_k == E_k1 u+ ... u+ E_kn
+E_d u+ <E_k,{},{},{}> |- typ ~> t
 ----------------------------------------------------------- :: quant
 E_d |- forall quant_item1 , ... , quant_itemn . typ ~> t, E_k, S_N1 u+ ... u+ S_Nn
 
@@ -352,30 +299,25 @@ by
  
 E_k('x) gives K_Typ
 ------------------------------------------------------------ :: var
-<E_k,E_r,E_e> |- 'x ~> 'x
+<E_k,E_a,E_r,E_e> |- 'x ~> 'x
 
-E_k(id) gives K_Typ
+E_k(x) gives K_Typ
 ------------------------------------------------------------ :: id
-<E_k,E_r,E_e> |- id ~> id
+<E_k,E_a,E_r,E_e> |- x ~> x
 
 E_d |- typ1 ~> t1
 E_d |- typ2 ~> t2
 ------------------------------------------------------------ :: fn
-E_d |- typ1->typ2 effectkw effect ~> t1->t2 effect None
+E_d |- typ1->typ2 effectkw effect ~> t1->t2 effect
  
 E_d |- typ1 ~> t1 .... E_d |- typn ~> tn
 ------------------------------------------------------------ :: tup
-E_d |- typ1 * .... * typn ~> (t1 * .... * tn)
+E_d |- ( typ1 , .... , typn ) ~> (t1 , .... , tn)
 
-E_k(id) gives K_Lam (k1..kn -> K_Typ)
-<E_k,E_r,E_e>,k1 |- typ_arg1 ~> t_arg1 .. <E_k,E_r,E_e>,kn |- typ_argn ~> t_argn
+E_k(x) gives K_Lam (k1..kn -> K_Typ)
+<E_k,E_a,E_r,E_e>,k1 |- typ_arg1 ~> t_arg1 .. <E_k,E_a,E_r,E_e>,kn |- typ_argn ~> t_argn
 ------------------------------------------------------------ :: app
-<E_k,E_r,E_e> |- id <typ_arg1, .. ,typ_argn> ~> id t_arg1 .. t_argn
-
-E_d |- typ ~> t1
-E_d |- t1 = t2
------------------------------------------------------------- :: eq
-E_d |- typ ~> t2
+<E_k,E_a,E_r,E_e> |- x <typ_arg1, .. ,typ_argn> ~> x <t_arg1 .. t_argn>
 
 defn
 E_d , k |- typ_arg ~> t_arg :: :: convert_targ :: convert_targ_
@@ -413,61 +355,231 @@ by
 ------------------------------------------------------------ :: exp
 |- 2** nexp ~> 2 ** ne
 
+defn
+E_d |- t ~= t' :: :: conforms_to :: conforms_to_
+by
+
+E_k |-t t ok
+------------------------------------------------------------ :: refl
+<E_k,E_a,E_r,E_e> |- t ~= t
+  
+E_d |- t1 ~= t2
+E_d |- t2 ~= t3
+------------------------------------------------------------ :: trans
+E_d |- t1 ~= t3
+
+------------------------------------------------------------ :: var
+E_d |- 'x ~= t
+
+------------------------------------------------------------ :: var2
+E_d |- t ~= 'x
+
+E_a(x) gives u
+<E_k,E_a,E_r,E_e> |- u ~= t
+------------------------------------------------------------ :: abbrev
+<E_k,E_a,E_r,E_e> |- x ~= t 
+
+E_a(x) gives u
+<E_k,E_a,E_r,E_e> |- t ~= u
+------------------------------------------------------------ :: abbrev2
+<E_k,E_a,E_r,E_e> |- t ~= x 
+
+ 
+E_d |- t1 ~= u1 .... E_d |- tn ~= un
+------------------------------------------------------------ :: tup
+E_d |- (t1,....,tn) ~= (u1,....,un)
+
+E_k(x) gives K_Lam (k1 .. kn -> K_Typ)
+<E_k,E_a,E_r,E_e>,k1 |- t_arg1 ~= t_arg'1 .. <E_k,E_a,E_r,E_e>,kn |- t_argn ~= t_arg'n
+------------------------------------------------------------ :: app
+<E_k,E_a,E_r,E_e> |- x <t_arg1 .. t_argn> ~= x <t_arg'1 .. t_arg'n>
+
+x' NOTEQ x
+E_a(x') gives {tid1|->kinf1, .. ,tidm|->kinfm}, S_N, tag, u
+<E_k,E_a,E_r,E_e> |- x <t_arg1 .. t_argn> ~= u [ t_arg'1/tid1 .. t_arg'm/tidm ]   
+------------------------------------------------------------ :: appAbbrev
+<E_k,E_a,E_r,E_e> |- x < t_arg1 .. t_argn> ~= x' <t_arg'1 .. t_arg'm>
+
+x' NOTEQ x
+E_a(x') gives {tid1|->kinf1, .. ,tidn|->kinfn}, S_N, tag, u
+<E_k,E_a,E_r,E_e> |-  u [ t_arg1/tid1 .. t_argn/tidn ] ~= x <t_arg'1 .. t_arg'm>    
+------------------------------------------------------------ :: appAbbrev2
+<E_k,E_a,E_r,E_e> |- x' < t_arg1 .. t_argn> ~= x <t_arg'1 .. t_arg'm>
+
+E_d |- t ~= u
+------------------------------------------------------------ :: register
+E_d |- register<t> ~= u
+
+defn
+E_d , k |- t_arg ~= t_arg' :: :: targconforms :: targconforms_
+{{ lemwcf  witness type check_targeq_witness; check check_targeq_w_check; }}
+by
+
+E_d |- t ~= t'
+------------------------------------------------------------ :: typ
+E_d, K_Typ |- t ~= t'
+
+----------------------------------------------------------- :: nexp
+E_d, K_Nat |- ne ~= ne'
+
+defn
+E_d |- t ~< t' , S_N :: :: consistent_typ :: consistent_typ_
+by
+
+E_k |-t t ok
+------------------------------------------------------------ :: refl
+<E_k,E_a,E_r,E_e> |- t ~< t,{}
+ 
+E_d |- t1 ~< t2,S_N1
+E_d |- t2 ~< t3,S_N2
+------------------------------------------------------------ :: trans
+E_d |- t1 ~< t3, S_N1 u+ S_N2
+
+E_a(x) gives {},S_N1,tag,u
+<E_k,E_a,E_r,E_e> |- u ~< t,S_N
+------------------------------------------------------------ :: abbrev
+<E_k,E_a,E_r,E_e> |- x ~< t , S_N u+ S_N1
+
+E_a(x) gives {},S_N1,tag,u
+<E_k,E_a,E_r,E_e> |- t ~< u,S_N
+------------------------------------------------------------ :: abbrev2
+<E_k,E_a,E_r,E_e> |- t ~< x , S_N u+ S_N1
+
+------------------------------------------------------------ :: var
+E_d |- 'x ~< t,{}
+
+------------------------------------------------------------ :: var2
+E_d |- t ~< 'x,{} 
+ 
+E_d |- t1 ~< u1, S_N1 .... E_d |- tn ~< un, S_Nn
+------------------------------------------------------------ :: tup
+E_d |- (t1,....,tn) ~< (u1,....,un), S_N1 u+ .... u+ S_Nn
+
+
+----------------------------------------------------------- :: range
+E_d |- range <ne1 ne2> ~< range<ne3 ne4>, { ne3 <= ne1, ne2 <= ne4 }
+
+E_d |- t ~< t', S_N
+---------------------------------------------------------- :: vector
+E_d |- vector <ne1 ne2 ord t> ~< vector <ne3 ne4 ord t'>, {ne1=ne3,ne2=ne3} u+ S_N
+
+E_k(x) gives K_Lam (k1 .. kn -> K_Typ)
+<E_k,E_a,E_r,E_e>,k1 |- t_arg1 ~< t_arg'1,S_N1 .. <E_k,E_a,E_r,E_e>,kn |- t_argn ~< t_arg'n,S_Nn
+------------------------------------------------------------ :: app
+<E_k,E_a,E_r,E_e> |- x <t_arg1 .. t_argn> ~< x <t_arg'1 .. t_arg'n>, S_N1 u+ .. u+ S_Nn
+
+x' NOTEQ x
+E_a(x') gives {tid1|->kinf1, .. ,tidm|->kinfm}, S_N, tag, u
+<E_k,E_a,E_r,E_e> |- x <t_arg1 .. t_argn> ~< u [ t_arg'1/tid1 .. t_arg'm/tidm ] ,S_N2
+------------------------------------------------------------ :: appAbbrev
+<E_k,E_a,E_r,E_e> |- x < t_arg1 .. t_argn> ~< x' <t_arg'1 .. t_arg'm>, S_N u+ S_N2
+
+x' NOTEQ x
+E_a(x') gives {tid1|->kinf1, .. ,tidm|->kinfm}, S_N, tag, u
+<E_k,E_a,E_r,E_e> |-  u [ t_arg'1/tid1 .. t_arg'm/tidm ]  ~< x <t_arg1 .. t_argn> ,S_N2
+------------------------------------------------------------ :: appAbbrev2
+<E_k,E_a,E_r,E_e> |- x' <t_arg'1 .. t_arg'm> ~<  x < t_arg1 .. t_argn> ,  S_N u+ S_N2
+
+defn
+E_d , k |- t_arg ~< t_arg' , S_N :: :: targ_consistent :: targ_consistent_
+by
+
+E_d |- t ~< t', S_N
+------------------------------------------------------------ :: typ
+E_d, K_Typ |- t ~< t',S_N
+
+----------------------------------------------------------- :: nexp
+E_d, K_Nat |- ne ~< ne',{ne=ne'}
+
 defn 
-E_d |- exp : t :> t' , exp' , S_N :: :: coerce_typ :: coerce_typ_
+E_d , t' |- exp : t gives t'' , exp' , S_N , effect :: :: coerce_typ :: coerce_typ_
 {{ lemwcf  witness type coerce_typ_witness; check coerce_typ_w_check; }}
 by
 
-E_d |- t = u
--------------------------------------- :: eq
-E_d |- exp: t :> u, exp, {}
-
-E_d |- id1 : t1 :> u1, exp1, S_N1 .. E_d |- idn: tn :> un,expn, S_Nn
-exp' = switch exp { case (id1, .., idn) -> (exp1,..,expn) }
+E_d, u1 |- id1 : t1 gives u1, exp1, S_N1,effect1 .. E_d, un|- idn: tn gives un,expn, S_Nn,effectn
+exp' == switch exp { case (id1, .., idn) -> (exp1,..,expn) }
 -------------------------------------- :: tuple
-E_d |- exp : (t1 * .. * tn) :> (u1 * .. * un), exp', S_N1 u+ .. u+ S_Nn
+E_d, (u1 , .. , un) |- exp : (t1 , .. , tn) gives (u1 , .. , un), exp', S_N1 u+ .. u+ S_Nn, pure
 
--------------------------------------- :: enum
-E_d |- exp: enum ne1 ne2 order :> enum ne3 ne4 order, exp, {ne3 <= ne1, ne3+ne4 >= ne1 + ne2}
+E_d |- u ~< t,S_N
+exp' == (annot) exp
+------------------------------------------------- :: vectorUpdateStart
+E_d, vector< ne1 ne2 ord t > |- exp : vector <ne3 ne4 ord u> gives vector <ne3 ne4 ord t>, exp', S_N u+ {ne2=ne4}, pure
 
-E_e(t) gives { </numi |-> idi//i/> num |-> id </num'j |-> id'j//j/> }
------------------------------------------------- :: to_enumerate
-<E_k,E_r,E_e> |- exp: enum num zero order :> t,id, {}
+E_d |- u ~< bit, S_N
+exp' == to_num exp 
+-------------------------------------------------- :: toNum
+E_d, range<ne1 ne2> |- exp : vector <ne3 ne4 ord u> gives range<ne1 ne2>, exp', S_N u+ {ne1=zero, ne2 >= 2**ne4}, pure 
 
-E_e(t) gives { num |-> id </num''i |-> id''i//i/> num' |-> id' }
-exp' = switch exp { case id -> num </case id''i -> num''i//i/> case id' -> num' }
------------------------------------------------- :: from_enumerate
-<E_k,E_r,E_e> |- exp: t :> enum num num' + (- num) inc, exp', {}
+exp' == to_vec exp
+-------------------------------------- :: fromNum
+E_d, vector<ne1 ne2 ord bit> |- exp: range<ne3 ne4> gives vector<ne1 ne2 ord bit>,exp', {ne3 = zero, ne4 <= 2** ne2}, pure
 
-exp' = :E_app: to_num(exp)
--------------------------------------- :: to_num
-E_d |- exp: vector ne1 ne2 order :t_arg_typ: bit :> enum ne3 ne4 order,exp', { ne3 = zero, ne4 = 2** ne2}
+E_d |- typ ~> t
+exp' == (typ) exp
+E_d, u |- exp':t gives t',exp'', S_N, pure
+-------------------------------------- :: readReg
+E_d, u |- exp : register<t> gives t', exp'', S_N, {rreg}
 
-exp' = :E_app: to_vec(exp)
-'x = fresh_kid(E_d)
--------------------------------------- :: from_num
-E_d |- exp: enum ne1 ne2 order :> vector ne3 ne4 order :t_arg_typ: bit,exp', {ne3 = zero, 'x = ne1 + ne2, ne4 = 2** 'x}
+exp' == exp[numZero]
+-------------------------------------- :: accessVecBit
+E_d, bit |- exp : vector<ne1 ne2 ord bit> gives bit,exp', { ne1=one},pure
+
+E_d |- range<zero one> ~< range<ne1 ne2>,S_N
+exp' == switch exp { case bitzero -> numZero case bitone -> numOne}
+-------------------------------------- :: bitToNum
+E_d, range<ne1 ne2> |- exp : bit gives range<ne1 ne2>, exp',S_N,pure
+
+E_d |- range<ne1 ne2> ~< range<zero one>,S_N
+exp' == switch exp { case numZero -> bitzero case numOne -> bitone }
+------------------------------------- :: numToBit
+E_d, bit |- range : range<ne1 ne2> gives bit, exp',S_N,pure
+
+E_e(x) gives { </numi |-> idi//i/> }
+exp' == switch exp { </case numi -> idi//i/> }
+ne3 == count( </numi//i/>)
+------------------------------------------------ :: toEnumerate
+<E_k,E_a,E_r,E_e>, x |- exp : range<ne1 ne2> gives x,exp', {ne1<=zero,ne2<=ne3},pure
+
+E_e(x) gives { </numi |-> idi//i/> }
+exp' == switch exp { </case idi -> numi//i/> }
+ne3 == count( </numi//i/>)
+<E_k,E_a,E_r,E_e> |- range<zero ne3> ~< range<ne1 ne2>, S_N
+------------------------------------------------ :: fromEnumerate
+<E_k,E_a,E_r,E_e>,range<ne1 ne2> |- exp: x gives range<zero ne3>, exp', S_N,pure
+
+E_d |- t ~< u, S_N
+-------------------------------------- :: eq
+E_d, u |- exp: t gives t, exp, S_N,pure
 
 
 defns
 check_lit :: '' ::=
  
 defn
-|- lit : t :: :: check_lit :: check_lit_ 
-{{ com Typing literal constants }}
+t |- lit : t' => lit' , S_N  :: :: check_lit :: check_lit_ 
+{{ com Typing literal constants, coercing to expected type t }}
 by
 
  ------------------------------------------------------------ :: true
- |- true : bool
+bit |- true : bool => bitone, {}
 
  ------------------------------------------------------------ :: false
- |- false : bool
+bit |- false : bool => bitzero, {}
  
  ------------------------------------------------------------ :: num
- |- num : enum num zero inc
+range <nexp,nexp'>  |- num : range < num, zero> => num , { nexp <= num, num <= nexp' }
+
+ num = 0
+ ------------------------------------------------------------ :: numbitzero
+ bit  |- num : range < num, zero> => bitzero, {}
+
+ num = 1
+ ------------------------------------------------------------ :: numbitone
+ bit  |- num : range < num, zero> => bitone, {}
  
  ------------------------------------------------------------- :: string
- |- string : string
+ string |- string : string, {}
 
  num = bitlength(hex)
  ------------------------------------------------------------ :: hex
@@ -491,7 +603,7 @@ defns
 check_pat :: '' ::=
  
 defn
-E |- pat : t gives E_t , S_N :: :: check_pat :: check_pat_ 
+E , t |- pat : t' gives pat' , E_t , S_N :: :: check_pat :: check_pat_ 
 {{ com Typing patterns, building their binding environment }}
 by
 
@@ -583,7 +695,7 @@ defns
 check_exp :: '' ::=
  
 defn
-E |- exp : t gives I , E_t :: :: check_exp :: check_exp_ 
+E , t |- exp : t' gives exp' , I , E_t :: :: check_exp :: check_exp_ 
 {{ com Typing expressions, collecting nexp constraints, effects, and new bindings }}
 by
 
@@ -977,7 +1089,7 @@ E_d |- default typschm id gives {id |-> E_k1,S_N,Default,t},{}
 
 defn
  
-E |- def gives E' :: :: check_def :: check_def_ 
+E |- def gives def' , E' :: :: check_def :: check_def_ 
 {{ com Check a definition }}
 by
 

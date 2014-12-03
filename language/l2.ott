@@ -2,7 +2,7 @@ indexvar n , m , i , j ::=
   {{ phantom }}
   {{ com Index variables for meta-lists }}
 
-metavar num ::=
+metavar num,numZero,numOne ::=
   {{ phantom }}
   {{ lex numeric }}
   {{ ocaml int }}
@@ -231,9 +231,9 @@ typ :: 'Typ_' ::=
   | id < typ_arg1 , .. , typ_argn >                    :: :: app
   {{ com type constructor application }}
   | ( typ )                            :: S :: paren {{ ichlo [[typ]] }} 
-%  | enum < nexp1, nexp2, order> :: :: enum  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1, ordered by [[order]] }}
-  | [| nexp |]             :: S :: enum1 {{ichlo enum <[[nexp]], 0, inc> }} {{ com sugar for \texttt{enum nexp 0 inc} }}
-  | [| nexp : nexp' |]  :: S :: enum2 {{ichlo enum <[[nexp]],[[nexp']],inc> }} {{ com sugar for \texttt{enum (nexp'-nexp+1) nexp inc} or \texttt{enum (nexp-nexp'+1) nexp' dec} }}
+%  | range < nexp1, nexp2> :: :: range  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1 }}
+  | [| nexp |]             :: S :: range1 {{ichlo range <[[nexp]], 0, inc> }} {{ com sugar for \texttt{range<0, nexp>} }}
+  | [| nexp : nexp' |]  :: S :: range2 {{ichlo range <[[nexp]],[[nexp']]> }} {{ com sugar for \texttt{range< nexp, nexp'>} }}
 % use .. not - to avoid ambiguity with nexp -
 % total maps and vectors indexed by finite subranges of nat
 %  | vector nexp1 nexp2 order typ :: :: vector {{ com vector of [[typ]], indexed by natural range }}
@@ -924,6 +924,8 @@ terminals :: '' ::=
     {{ tex > }} 
   | ~=                                  :: :: alphaeq
     {{ tex \ensuremath{\approx} }}
+  | ~< 	   			:: :: consist
+    {{ tex \ensuremath{\precapprox} }}
   | |-                                  :: :: vdash
     {{ tex \ensuremath{\vdash} }}
   | |-t					:: :: vdashT
@@ -954,6 +956,8 @@ terminals :: '' ::=
     {{ tex \ottkw{consistent\_increase}~ }}
   | consistent_decrease                 :: :: cd
     {{ tex \ottkw{consistent\_decrease}~ }}
+ | == :: :: equiv
+   {{ tex \equiv }}
 
 
 

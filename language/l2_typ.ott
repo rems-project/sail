@@ -45,11 +45,14 @@ t , u :: 'T_' ::=
    | x                                            :: :: id
    | ' x                                          :: :: var
    | t1 -> t2 effect                        :: :: fn 
-   | ( t1 * .... * tn )                          :: :: tup
-   | x t_args                                  :: :: app 
+   | ( t1 , .... , tn )                           :: :: tup
+   | x < t_args >                           :: :: app 
    | t |-> t1                                   :: :: abbrev
-   | register t_args                         :: S :: reg_app {{ ichlo T_app "register" [[t_args]] }}
-   | t [ t1 / id1 ... tn / idn ]            :: M :: subst {{ ichlo "todo" }}
+   | register < t_arg >                  :: S :: reg_app {{ ichlo T_app "register" [[t_arg]] }}
+   | range < ne ne' > 			  :: S :: range_app {{ ichlo T_app "range" [[ [ ne ; ne' ] ]] }}
+   | vector < ne ne' ord t >           :: S :: vector_app {{ ichlo T_app "vector" [[ [ ne; ne'; ord; t ] ]] }} 
+   | bit      	     	   	       	          :: S :: bit_typ {{ ichlo T_id "bit" }}
+   | t [ t_arg1 / tid1 .. t_argn / tidn ]  :: M :: subst {{ ichlo "todo" }}
 
 optx :: '' ::= {{ phantom }} {{ lem maybe string }} {{ ocaml string option }}
   | x                                            ::  :: optx_x
@@ -80,6 +83,8 @@ ne :: 'Ne_' ::=
    | ( - ne )                            :: :: unary
    | zero   				 :: S :: zero
      {{ lem (Ne_const 0) }}
+   | one				 :: S :: one
+     {{ lem (Ne_const 1) }}
    | bitlength ( bin )                   :: M :: cbin
      {{ ocaml (asssert false) }}
      {{ hol ARB }}
@@ -88,6 +93,7 @@ ne :: 'Ne_' ::=
      {{ ocaml (assert false) }}
      {{ hol ARB }}
      {{ lem (hlength [[hex]]) }}
+   | count ( num0 ... numi )                :: M :: length {{ichlo "todo" }}
    | length ( pat1 ... patn )            :: M :: cpat
      {{ ocaml (assert false) }}
      {{ hol ARB }}
@@ -142,8 +148,8 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
 
  E_d {{ tex {\ottnt{E}^{\textsc{d} } } }} :: 'E_d_' ::=  {{ phantom }}
                                                          {{ lem definition_env }}
- {{ com Environments storing top level information, such as defined records, enumerations, and kinds }}
- | < E_k , E_r , E_e >	     	       		    	 :: :: base
+ {{ com Environments storing top level information, such as defined abbreviations, records, enumerations, and kinds }}
+ | < E_k , E_a , E_r , E_e >	     	       		    	 :: :: base
    {{ hol arb }}
    {{ lem (Denv [[E_k]] [[E_r]] [[E_e]]) }}
  | empty       	     					 :: :: empty
@@ -181,11 +187,16 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
                                        (Set_extra.toList (Map.toSet (List.foldr (union) Map.empty [[E_k1..E_kn]]))))) }} 
      {{ ocaml assert false }}
 
- 
  tinf :: 'tinf_' ::=                                                 
     {{ com Type variables, type, and constraints, bound to an identifier }}
     | t                                                 :: :: typ
     | E_k , S_N , tag , t         :: :: quant_typ                                                             
+
+ E_a {{ tex \ottnt{E}^{\textsc{a} } }} :: 'E_a_' ::=   {{ phantom }}
+                                                                            {{ hol tid |-> tinf}}
+                                                                            {{ lem map tid tinf }} 
+   | { tid1 |-> tinf1 , .. , tidn |-> tinfn } :: :: concrete
+   | E_a1 u+ .. u+ E_an	               :: :: union
 
  field_typs :: 'FT_' ::=     {{ phantom }}
                              {{ lem list (id * t) }}

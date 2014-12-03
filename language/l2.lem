@@ -76,14 +76,14 @@ type base_effect =
  | BE_aux of base_effect_aux * l
 
 
-type effect_aux =  (* effect set, of kind Effects *)
- | Effect_var of kid
- | Effect_set of list base_effect (* effect set *)
-
-
 type id_aux =  (* Identifier *)
  | Id of x
  | DeIid of x (* remove infix status *)
+
+
+type effect_aux =  (* effect set, of kind Effects *)
+ | Effect_var of kid
+ | Effect_set of list base_effect (* effect set *)
 
 
 type order_aux =  (* vector order specifications, of kind Order *)
@@ -92,12 +92,12 @@ type order_aux =  (* vector order specifications, of kind Order *)
  | Ord_dec (* decreasing (big-endian) *)
 
 
-type effect = 
- | Effect_aux of effect_aux * l
-
-
 type id = 
  | Id_aux of id_aux * l
+
+
+type effect = 
+ | Effect_aux of effect_aux * l
 
 
 type order = 
@@ -143,19 +143,6 @@ type typquant_aux =  (* type quantifiers and constraints *)
  | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
-type lit_aux =  (* Literal constant *)
- | L_unit (* $() : unit$ *)
- | L_zero (* $bitzero : bit$ *)
- | L_one (* $bitone : bit$ *)
- | L_true (* $true : bool$ *)
- | L_false (* $false : bool$ *)
- | L_num of integer (* natural number constant *)
- | L_hex of string (* bit vector constant, C-style *)
- | L_bin of string (* bit vector constant, C-style *)
- | L_undef (* constant representing undefined values *)
- | L_string of string (* string constant *)
-
-
 type typquant = 
  | TypQ_aux of typquant_aux * l
 
@@ -181,12 +168,29 @@ and typ_arg =
  | Typ_arg_aux of typ_arg_aux * l
 
 
-type lit = 
- | L_aux of lit_aux * l
+type lit_aux =  (* Literal constant *)
+ | L_unit (* $() : unit$ *)
+ | L_zero (* $bitzero : bit$ *)
+ | L_one (* $bitone : bit$ *)
+ | L_true (* $true : bool$ *)
+ | L_false (* $false : bool$ *)
+ | L_num of integer (* natural number constant *)
+ | L_hex of string (* bit vector constant, C-style *)
+ | L_bin of string (* bit vector constant, C-style *)
+ | L_undef (* constant representing undefined values *)
+ | L_string of string (* string constant *)
 
 
 type typschm_aux =  (* type scheme *)
  | TypSchm_ts of typquant * typ
+
+
+type lit = 
+ | L_aux of lit_aux * l
+
+
+type typschm = 
+ | TypSchm_aux of typschm_aux * l
 
 
 type pat_aux 'a =  (* Pattern *)
@@ -211,10 +215,6 @@ and fpat_aux 'a =  (* Field pattern *)
 
 and fpat 'a = 
  | FP_aux of (fpat_aux 'a) * annot 'a
-
-
-type typschm = 
- | TypSchm_aux of typschm_aux * l
 
 
 type reg_id_aux 'a = 
@@ -318,13 +318,13 @@ type funcl_aux 'a =  (* Function clause *)
  | FCL_Funcl of id * (pat 'a) * (exp 'a)
 
 
-type tannot_opt_aux =  (* Optional type annotation for functions *)
- | Typ_annot_opt_some of typquant * typ
-
-
 type effect_opt_aux =  (* Optional effect annotation for functions *)
  | Effect_opt_pure (* sugar for empty effect set *)
  | Effect_opt_effect of effect
+
+
+type tannot_opt_aux =  (* Optional type annotation for functions *)
+ | Typ_annot_opt_some of typquant * typ
 
 
 type name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
@@ -349,12 +349,12 @@ type funcl 'a =
  | FCL_aux of (funcl_aux 'a) * annot 'a
 
 
-type tannot_opt = 
- | Typ_annot_opt_aux of tannot_opt_aux * l
-
-
 type effect_opt = 
  | Effect_opt_aux of effect_opt_aux * l
+
+
+type tannot_opt = 
+ | Typ_annot_opt_aux of tannot_opt_aux * l
 
 
 type name_scm_opt = 

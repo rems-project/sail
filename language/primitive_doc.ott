@@ -9,7 +9,7 @@ built_in_types :: '' ::=
   | forall Typ 't. register < 't > : Typ -> Typ :: :: registerDec
   | forall Typ 't. reg < 't > : Typ -> Typ :: :: regDec
     {{ com internal reference cell }}
-  | forall Nat 'n. implicit<'n> : Nat -> Typ :: :: implicitDesc
+  | forall Nat 'n . implicit <'n> : Nat -> Typ :: :: implicitDesc
     {{ com see Kathy for explanation }}
 
 built_in_type_abbreviations :: '' ::=
