@@ -92,9 +92,8 @@ formula :: formula_ ::=
      {{ ichl ([[S_N1]] = [[S_N2]]) }}
  
    | id == 'id							:: :: id_eq
-
    | x1 NOTEQ x2							     :: :: id_neq
-
+   | lit1 NOTEQ lit2							     :: ::lit_neq
    | I1 == I2                                                     :: :: I_eqn
      {{ ichl ([[I1]] = [[I2]]) }}
 
@@ -461,7 +460,7 @@ E_d |- range <ne1 ne2> ~< range<ne3 ne4>, { ne3 <= ne1, ne2 <= ne4 }
 
 E_d |- t ~< t', S_N
 ---------------------------------------------------------- :: vector
-E_d |- vector <ne1 ne2 ord t> ~< vector <ne3 ne4 ord t'>, {ne1=ne3,ne2=ne3} u+ S_N
+E_d |- vector <ne1 ne2 order t> ~< vector <ne3 ne4 order t'>, {ne1=ne3,ne2=ne3} u+ S_N
 
 E_k(x) gives K_Lam (k1 .. kn -> K_Typ)
 <E_k,E_a,E_r,E_e>,k1 |- t_arg1 ~< t_arg'1,S_N1 .. <E_k,E_a,E_r,E_e>,kn |- t_argn ~< t_arg'n,S_Nn
@@ -504,16 +503,16 @@ E_d, (u1 , .. , un) |- exp : (t1 , .. , tn) gives (u1 , .. , un), exp', S_N1 u+ 
 E_d |- u ~< t,S_N
 exp' == (annot) exp
 ------------------------------------------------- :: vectorUpdateStart
-E_d, vector< ne1 ne2 ord t > |- exp : vector <ne3 ne4 ord u> gives vector <ne3 ne4 ord t>, exp', S_N u+ {ne2=ne4}, pure
+E_d, vector< ne1 ne2 order t > |- exp : vector <ne3 ne4 order u> gives vector <ne3 ne4 order t>, exp', S_N u+ {ne2=ne4}, pure
 
 E_d |- u ~< bit, S_N
 exp' == to_num exp 
 -------------------------------------------------- :: toNum
-E_d, range<ne1 ne2> |- exp : vector <ne3 ne4 ord u> gives range<ne1 ne2>, exp', S_N u+ {ne1=zero, ne2 >= 2**ne4}, pure 
+E_d, range<ne1 ne2> |- exp : vector <ne3 ne4 order u> gives range<ne1 ne2>, exp', S_N u+ {ne1=zero, ne2 >= 2**ne4}, pure 
 
 exp' == to_vec exp
 -------------------------------------- :: fromNum
-E_d, vector<ne1 ne2 ord bit> |- exp: range<ne3 ne4> gives vector<ne1 ne2 ord bit>,exp', {ne3 = zero, ne4 <= 2** ne2}, pure
+E_d, vector<ne1 ne2 order bit> |- exp: range<ne3 ne4> gives vector<ne1 ne2 order bit>,exp', {ne3 = zero, ne4 <= 2** ne2}, pure
 
 E_d |- typ ~> t
 exp' == (typ) exp
@@ -523,7 +522,7 @@ E_d, u |- exp : register<t> gives t', exp'', S_N, {rreg}
 
 exp' == exp[numZero]
 -------------------------------------- :: accessVecBit
-E_d, bit |- exp : vector<ne1 ne2 ord bit> gives bit,exp', { ne1=one},pure
+E_d, bit |- exp : vector<ne1 ne2 order bit> gives bit,exp', { ne1=one},pure
 
 E_d |- range<zero one> ~< range<ne1 ne2>,S_N
 exp' == switch exp { case bitzero -> numZero case bitone -> numOne}
@@ -557,47 +556,45 @@ defns
 check_lit :: '' ::=
  
 defn
-t |- lit : t' => lit' , S_N  :: :: check_lit :: check_lit_ 
+t |- lit : t' => exp , S_N  :: :: check_lit :: check_lit_ 
 {{ com Typing literal constants, coercing to expected type t }}
 by
-
- ------------------------------------------------------------ :: true
-bit |- true : bool => bitone, {}
-
- ------------------------------------------------------------ :: false
-bit |- false : bool => bitzero, {}
  
+
  ------------------------------------------------------------ :: num
-range <nexp,nexp'>  |- num : range < num, zero> => num , { nexp <= num, num <= nexp' }
+range <ne ne'>  |- num : range < num num> => num , { ne <= num, num <= ne' }
 
- num = 0
+ ------------------------------------------------------------ :: numToVec
+vector <ne ne' order bit>  |- num : range < num num> => to_vec num , { num + one <= 2**ne' }
+
  ------------------------------------------------------------ :: numbitzero
- bit  |- num : range < num, zero> => bitzero, {}
+ bit  |- numZero : range < zero zero> => bitzero, {}
 
- num = 1
  ------------------------------------------------------------ :: numbitone
- bit  |- num : range < num, zero> => bitone, {}
+ bit  |- numOne : range < one one> => bitone, {}
  
  ------------------------------------------------------------- :: string
- string |- string : string, {}
+ string |- :L_string: string : :T_string_typ: string => :E_lit: string, {}
 
- num = bitlength(hex)
+ ne == bitlength(hex)
  ------------------------------------------------------------ :: hex
- |- hex : vector zero num inc :T_id: bit
+ vector<ne1 ne2 order bit> |- hex : vector< ne1 ne order bit> => hex, {ne=ne2}
 
- num = bitlength(bin)
+ne == bitlength(bin)
  ------------------------------------------------------------ :: bin 
- |- bin  : vector zero num inc :T_id: bit
+vector<ne1 ne2 order bit> |- bin : vector< ne1 ne order bit> => bin, {ne=ne2}
 
  ------------------------------------------------------------ :: unit
- |- () : unit
+unit |- () : unit => unit, {}
 
  ------------------------------------------------------------ :: bitzero
- |- bitzero : bit
+bit |- bitzero : bit => bitzero, {}
 
  ------------------------------------------------------------ :: bitone
- |- bitone : bit
+bit  |- bitone : bit => bitzero, {}
 
+------------------------------------------------------------ :: undef
+t |- undefined : t => undefined, {}
 
 defns
 check_pat :: '' ::=
@@ -607,88 +604,111 @@ E , t |- pat : t' gives pat' , E_t , S_N :: :: check_pat :: check_pat_
 {{ com Typing patterns, building their binding environment }}
 by
 
-|- lit : t
+lit NOTEQ undefined
+t |- lit : u => lit',S_N
+E_d |- u ~< t,S_N'
 ------------------------------------------------------------ :: lit
-E |- lit : t gives {}, {}
+<E_t,E_d>, t |- lit : u gives lit', {}, S_N u+ S_N'
 
-E_k |-t t ok
 ------------------------------------------------------------ :: wild
-<E_t,<E_k,E_r,E_e>> |- _ : t gives {}, {}
+E, t |- _ : t gives _, {}, {}
 
-E |- pat : t gives E_t1,S_N
+E,t |- pat : u gives pat',E_t1,S_N
 id NOTIN dom(E_t1)
 ------------------------------------------------------------ :: as
-E |- (pat as id) : t gives (E_t1 u+ {id|->t}),S_N
+E,t |- (pat as id) : u gives (pat' as id), (E_t1 u+ {id|->t}),S_N
 
-<E_t,E_d> |- pat : t gives E_t1,S_N
-E_t(id) gives {}, {}, Default, t
------------------------------------------------------------- :: as_default
-<E_t,E_d> |- (pat as id) : t gives (E_t1 u+ {id|->t}),S_N
+<E_t,E_d>,t' |- pat : t gives pat', E_t1,S_N
+E_t(id) gives {}, {}, Default, t'
+E_d |- t' ~< u,S_N'
+------------------------------------------------------------ :: asDefault
+<E_t,E_d>,u |- (pat as id) : t gives (pat' as id), (E_t1 u+ {id|->t'}),S_N u+ S_N'
 
 E_d |- typ ~> t
-<E_t,E_d> |- pat : t gives E_t1,S_N
+<E_t,E_d>,t |- pat : t gives pat',E_t1,S_N
 ------------------------------------------------------------ :: typ
-<E_t,E_d> |- (typ) pat : t gives E_t1,S_N
+<E_t,E_d>,u |- (typ) pat : t gives pat',E_t1,S_N
 
-E_t(id) gives (t1*..*tn) -> id t_args { } Ctor
-<E_t,E_d> |- pat1 : t1 gives E_t1,S_N1 .. <E_t,E_d> |- patn : tn gives E_tn,S_Nn
+E_t(id) gives {tid1 |-> kinf1 , .. , tidm|-> kinfm}, S_N, Ctor, (u'1,..,u'n) -> x < t_arg1 .. t_argm > pure
+(u1,..,un) -> x <t_args'> pure == (u'1,..,u'n) -> x <t_args> pure [t_arg1/tid1 .. t_argm/tidm]
+<E_t,E_d>,u1 |- pat1 : t1 gives pat'1,E_t1,S_N1 .. <E_t,E_d>,un |- patn : tn gives pat'n,E_tn,S_Nn
 disjoint doms(E_t1,..,E_tn)
------------------------------------------------------------- :: ident_constr
-<E_t,E_d> |- id(pat1, .., patn) : id t_args gives u+ E_t1 .. E_tn, S_N1 u+ .. u+ S_Nn
+E_d |- x <t_args'> ~< t, S_N
+------------------------------------------------------------ :: constr
+<E_t,E_d>,t |- id(pat1, .., patn) : x<t_args'> gives id(pat'1, ..,pat'n), u+ E_t1 .. E_tn, S_N u+ S_N1 u+ .. u+ S_Nn
 
-E_k |-t t ok
------------------------------------------------------------- :: var
-<E_t,<E_k,E_r,E_e>> |- :P_id: id : t gives (E_t u+ {id|->t}),{}
+
+E_t(id) gives {tid1 |-> kinf1 , .. , tidm|-> kinfm}, S_N, Ctor, unit -> x < t_arg1 .. t_argm > pure
+unit -> x <t_args'> pure == unit -> x <t_args> pure [t_arg1/tid1 .. t_argm/tidm]
+E_d |- x <t_args'> ~< t, S_N
+------------------------------------------------------------- :: identConstr
+<E_t,E_d>, t |- :P_id: id : t gives :P_id: id, {}, S_N
 
 E_t(id) gives {},{},Default,t
------------------------------------------------------------- :: var_default
-<E_t,E_d> |- :P_id: id : t gives (E_t u+ {id|->t}),{}
+E_d |- t ~< u, S_N
+------------------------------------------------------------ :: varDefault
+<E_t,E_d>,u |- :P_id: id : t gives :P_id: id, (E_t u+ {id|->t}),S_N
 
-E_r(</idi//i/>) gives id t_args, (</ti//i/>)
-</<E_t,<E_k,E_r,E_e>> |- pati : ti gives E_ti,S_Ni//i/>
+------------------------------------------------------------ :: var
+<E_t,E_d>,t |- :P_id: id : t gives :P_id: id, (E_t u+ {id|->t}),{}
+
+E_r(</idi//i/>) gives x< t_args>, (</ti//i/>)
+</<E_t,<E_k,E_a,E_r,E_e>>,ti |- pati : ui gives pat'i, E_ti,S_Ni//i/>
 disjoint doms(</E_ti//i/>)
+<E_k,E_a,E_r,E_e> |- x<t_args> ~< t,S_N
 ------------------------------------------------------------ :: record
-<E_t,<E_k,E_r,E_e>> |- { </idi = pati//i/> semi_opt } : id t_args gives :E_t_multi_union: u+ </E_ti//i/>, u+ </S_Ni//i/>
+<E_t,<E_k,E_a,E_r,E_e>>,t |- { </idi = pati//i/> semi_opt } : x<t_args> gives {</idi=pat'i//i/> semi_opt }, :E_t_multi_union: u+ </E_ti//i/>, S_N u+ </S_Ni//i/>
  
-E |- pat1 : t gives E_t1,S_N1 .. E |- patn : t gives E_tn,S_Nn
-disjoint doms(E_t1 , .. , E_tn)
-length(pat1 .. patn) = num
+<E_t,E_d>,t |- pat1 : u1 gives pat'1, E_t1,S_N1 ... <E_t,E_d>,t |- patn : un gives pat'n, E_tn,S_Nn
+disjoint doms(E_t1, ... ,E_tn)
+E_d |- u1 ~< t,S_N'1 ... E_d |- un ~< t,S_N'n
+ne4==length(pat1 ... patn) 
+S_N ==S_N1 u+ ... u+ S_Nn
+S_N' == S_N'1 u+ ... u+ S_N'n
 ----------------------------------------------------------- :: vector
-E |- [ pat1 , .. , patn ] : vector :t_arg_nexp: 'x num+'x inc t gives (E_t1 u+ .. u+ E_tn),S_N1 u+ .. u+ S_Nn
+<E_t,E_d>, vector<ne1 ne2 order t> |- [ pat1, ..., patn ] : vector< ne3 ne4 order u> gives [ pat'1, ..., pat'n ], (E_t1 u+ ... u+ E_tn), S_N u+ S_N'  u+ {ne2=ne4}
 
-%E |- pat1 : t gives E_t1,S_N1 ... E |- patn : t gives E_tn,S_Nn
-%disjoint doms(E_t1 , ... , E_tn)
-%num1 lt ... lt numn
-%----------------------------------------------------------- :: indexedVectorInc
-%E |- [ num1 = pat1 , ... , numn = patn ] : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 inc t gives (E_t1 u+ ... u+ E_tn), {'x<=num1, 'x2 >= numn + (- num1)} u+ S_N1 u+ ... u+ S_Nn
+<E_t,E_d>,t |- pat1 : u1 gives pat'1, E_t1,S_N1 ... <E_t,E_d>,t |- patn : un gives pat'n, E_tn,S_Nn
+E_d |- u1 ~< t,S_N'1 ... E_d |- un ~< t,S_N'n
+ne4 == length(pat1 ... patn)
+disjoint doms(E_t1 , ... , E_tn)
+num1 lt ... lt numn
+S_N == S_N1 u+ ... u+ S_Nn
+S_N' == S_N'1 u+ ... u+ S_N'n
+----------------------------------------------------------- :: indexedVectorInc
+<E_t,E_d>, vector<ne1 ne2 inc t>  |- [ num1 = pat1 , ... , numn = patn ] : vector< ne3  ne4 inc t> gives [num1 = pat'1 , ... , numn = pat'n], (E_t1 u+ ... u+ E_tn), {ne1<=num1, ne2 >= ne4} u+ S_N1 u+ ... u+ S_Nn
 
-%E |- pat1 : t gives E_t1,S_N1 ... E |- patn : t gives E_tn,S_Nn
-%disjoint doms(E_t1 , ... , E_tn)
-%num1 gt ... gt numn
-%----------------------------------------------------------- :: indexedVectorDec
-%E |- [ num1 = pat1 , ... , numn = patn ] : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 dec t gives (E_t1 u+ ... u+ E_tn), {'x>=num1,'x2<=num1 +(-numn)} u+ S_N1 u+ ... u+ S_Nn
+<E_t,E_d>,t |- pat1 : u1 gives pat'1, E_t1,S_N1 ... <E_t,E_d>,t |- patn : un gives pat'n, E_tn,S_Nn
+E_d |- u1 ~< t,S_N'1 ... E_d |- un ~< t,S_N'n
+ne4 == length(pat1 ... patn)
+disjoint doms(E_t1 , ... , E_tn)
+num1 gt ... gt numn
+S_N == S_N1 u+ ... u+ S_Nn
+S_N' == S_N'1 u+ ... u+ S_N'n
+----------------------------------------------------------- :: indexedVectorDec
+<E_t,E_d>, vector<ne1 ne2 dec t>  |- [ num1 = pat1 , ... , numn = patn ] : vector< ne3  ne4 dec t> gives [num1 = pat'1 , ... , numn = pat'n], (E_t1 u+ ... u+ E_tn), {ne1>=num1, ne2 >= ne4} u+ S_N1 u+ ... u+ S_Nn
 
-%E |- pat1 : vector ne1 ne'1 inc t gives E_t1,S_N1 ... E |- patn : vector nen ne'n inc t gives E_tn,S_Nn
-%disjoint doms(E_t1 , ... , E_tn)
-%S_N0 = consistent_increase ne1 ne'1 ... nen ne'n
-%----------------------------------------------------------- :: vectorConcatInc
-%E |- pat1 : ... : patn : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 inc t gives (E_t1 u+ ... u+ E_tn),{'x<=ne1,'x2>= ne'1 + ... + ne'n} u+ S_N0 u+ S_N1 u+ ... u+ S_Nn
+<E_t,E_d>, vector<ne''1 ne'''1 order t> |- pat1 : vector< ne''1 ne'1 order u1> gives pat'1, E_t1,S_N1 ... <E_t,E_d>, vector<ne''n ne'''n order t> |- pat1 : vector< ne''n ne'n order u1> gives pat'n, E_tn,S_Nn
+E_d |- u1 ~< t,S_N'1 ... E_d |- un ~< t,S_N'n
+disjoint doms(E_t1 , ... , E_tn)
+S_N == S_N1 u+ ... u+ S_Nn
+S_N' == S_N'1 u+ ... u+ S_N'n
+----------------------------------------------------------- :: vectorConcat
+<E_t,E_d>, vector<ne1 ne2 order t> |- pat1 : ... : patn : vector<ne1 ne4 order t> gives pat'1 : ... : pat'n, (E_t1 u+ ... u+ E_tn),{ne'1 + ... + ne'n <= ne2} u+ S_N u+ S_N'
 
-%E |- pat1 : vector ne1 ne'1 dec t gives E_t1,S_N1 ... E |- patn : vector nen ne'n dec t gives E_tn,S_Nn
-%disjoint doms(E_t1 , ... , E_tn)
-%S_N0 = consistent_decrease ne1 ne'1 ... nen ne'n
-%----------------------------------------------------------- :: vectorConcatDec
-%E |- pat1 : ... : patn : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 inc t gives (E_t1 u+ ... u+ E_tn),{'x>=ne1,'x2>= ne'1 + ... + ne'n} u+ S_N0 u+ S_N1 u+ ... u+ S_Nn
-
-E |- pat1 : t1 gives E_t1,S_N1 .... E |- patn : tn gives E_tn,S_Nn
+E,t1 |- pat1 : u1 gives pat'1,E_t1,S_N1 .... E,tn |- patn : un gives pat'n,E_tn,S_Nn
 disjoint doms(E_t1,....,E_tn)
 ------------------------------------------------------------ :: tup
-E |- (pat1, ...., patn) : (t1 * .... * tn) gives (E_t1 u+ .... u+ E_tn),S_N1 u+ .... u+ S_Nn 
+E,(t1, .... , tn) |- (pat1, ...., patn) : (u1 , .... , un) gives (pat'1, .... , pat'n), (E_t1 u+ .... u+ E_tn),S_N1 u+ .... u+ S_Nn 
 
-E |- pat1 : t gives E_t1,S_N1 .. E |- patn : t gives E_tn,S_Nn
+<E_t,E_d>,t |- pat1 : u1 gives pat'1,E_t1,S_N1 .. <E_t,E_d>,t |- patn : un gives pat'n,E_tn,S_Nn
 disjoint doms(E_t1,..,E_tn)
+E_d |- u1 ~< t,S_N'1 .. E_d |- un ~< t,S_N'n
+disjoint doms(E_t1 , .. , E_tn)
+S_N == S_N1 u+ .. u+ S_Nn
+S_N' == S_N'1 u+ .. u+ S_N'n
 ------------------------------------------------------------ :: list
-E |- [||pat1, .., patn ||] : list t gives (E_t1 u+ .. u+ E_tn),S_N1 u+ .. u+ S_Nn
+<E_t,E_d>, list<t> |- [||pat1, .., patn ||] : list< t> gives [|| pat'1, .. , pat'n ||],(E_t1 u+ .. u+ E_tn),S_N u+ S_N'
 
 
 defns
