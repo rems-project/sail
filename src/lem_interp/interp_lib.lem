@@ -94,42 +94,37 @@ let rec sparse_walker update ni processed_length length ls df =
     else df::(sparse_walker update (update ni) (processed_length + 1) length ((i,v)::ls) df)
 end
 
-let rec fill_in_sparse v = match v with
-  | V_vector_sparse first length inc ls df -> 
-    V_vector first inc (sparse_walker (if inc then (fun (x: integer) -> x + onei) else (fun (x: integer) -> x - onei)) first zeroi length ls df)
-  | V_unknown -> V_unknown
-  | V_track v r -> taint (fill_in_sparse v) r
-end    
+let fill_in_sparse v = 
+  retaint v (match detaint v with
+    | V_vector_sparse first length inc ls df -> 
+      V_vector first inc 
+	(sparse_walker 
+	   (if inc then (fun (x: integer) -> x + onei) else (fun (x: integer) -> x - onei)) first zeroi length ls df)
+    | V_unknown -> V_unknown
+    end)
 
-let is_one v = match v with 
-  | V_lit (L_aux (L_num n) lb) -> V_lit (L_aux (if n=1 then L_one else L_zero) lb)
-  | V_track (V_lit (L_aux (L_num n) lb)) r -> V_track (V_lit (L_aux (if n=1 then L_one else L_zero) lb)) r
-  | V_lit (L_aux b lb) -> V_lit (L_aux (if b = L_one then L_one else L_zero) lb)
-  | V_track (V_lit (L_aux b lb)) r -> V_track (V_lit (L_aux (if b = L_one then L_one else L_zero) lb)) r
-  | V_track V_unkown _ -> v
-  | V_unknown -> v
+let is_one v = 
+  retaint v
+    match detaint v with 
+      | V_lit (L_aux (L_num n) lb) -> V_lit (L_aux (if n=1 then L_one else L_zero) lb)
+      | V_lit (L_aux b lb) -> V_lit (L_aux (if b = L_one then L_one else L_zero) lb)
+      | V_unknown -> v
 end ;;
 
-let rec lt_range (V_tuple[v1;v2]) = match (v1,v2) with 
+let lt_range (V_tuple[v1;v2]) = 
+  let lr_helper v1 v2 = match (v1,v2) with
   | (V_lit (L_aux (L_num l1) lr),V_lit (L_aux (L_num l2) ll)) ->
     if l1 < l2
     then V_lit (L_aux L_one Unknown)
     else V_lit (L_aux L_zero Unknown)
-  | (V_track v1 r1, V_track v2 r2) -> 
-    taint (lt_range (V_tuple [v1;v2])) (r1++r2)
-  | (V_track v1 r1, v2) ->
-    taint (lt_range (V_tuple [v1;v2])) r1
-  | (v1,V_track v2 r2) ->
-    taint (lt_range (V_tuple [v1;v2])) r2
   | (V_unknown,_) -> V_unknown
   | (_,V_unknown) -> V_unknown
-end ;;
+  end in
+  binary_taint lr_helper v1 v2
 
-let bit_to_bool b = match b with
+let bit_to_bool b = match detaint b with
   | V_lit (L_aux L_zero _) -> false
-  | V_track (V_lit (L_aux L_zero _)) _ -> false
   | V_lit (L_aux L_one _) -> true
-  | V_track (V_lit (L_aux L_one _)) _ -> true
   end ;;
 let bool_to_bit b = match b with
     false -> V_lit (L_aux L_zero Unknown)
@@ -140,61 +135,38 @@ let bitwise_not_bit v =
   let lit_not (L_aux l loc) = match l with
     | L_zero -> (V_lit (L_aux L_one loc))
     | L_one  -> (V_lit (L_aux L_zero loc)) end in
-  match v with
+  retaint v (match detaint v with
   | V_lit lit -> lit_not lit
-  | V_track (V_lit lit) r -> V_track (lit_not lit) r 
-  | V_unknown -> v
-  | V_track V_unknown r -> v
-end;; 
+  | V_unknown -> V_unknown end)
 
 let rec bitwise_not v =
-  match v with
+  retaint v (match detaint v with
   | V_vector idx inc v ->
     V_vector idx inc (List.map bitwise_not_bit v)
-  | V_unknown -> v
-  | V_track bv r -> taint (bitwise_not bv) r
-end ;;
+  | V_unknown -> V_unknown end)
 
-let rec bitwise_binop_bit op op_s (V_tuple [x; y]) = match (x,y) with
-  | (V_track x rx,V_track y ry) ->
-    taint ((bitwise_binop_bit op op_s) (V_tuple[x; y])) (rx ++ ry)
-  | (V_track x rx,y) ->
-    taint ((bitwise_binop_bit op op_s) (V_tuple[x;y])) rx
-  | (x,V_track y ry) ->
-    taint ((bitwise_binop_bit op op_s) (V_tuple[x;y])) ry
+let rec bitwise_binop_bit op op_s (V_tuple [x; y]) = 
+  let b_b_b_help x y = match (x,y) with
   | (V_vector _ _ [b],y) -> bitwise_binop_bit op op_s (V_tuple [b; y])
   | (_,V_vector _ _ [b]) -> bitwise_binop_bit op op_s (V_tuple [x; b])
   | (V_unknown,_) -> V_unknown
   | (_,V_unknown) -> V_unknown
   | (V_lit (L_aux L_undef li), v) -> 
-    (match op_s with 
-      | "|" -> y
-      | "&" -> x
-      | "^" -> y
-     end )
+    (match op_s with | "|" -> y | "&" -> x | "^" -> y end )
   | (v,V_lit (L_aux L_undef li)) ->
-    (match op_s with
-      | "|" -> x
-      | "&" -> y
-      | "^" -> y
-     end)
-  | _ -> bool_to_bit (op (bit_to_bool x) (bit_to_bool y))
-end ;;
+    (match op_s with | "|" -> x | "&" -> y | "^" -> y end)
+  | _ -> bool_to_bit (op (bit_to_bool x) (bit_to_bool y)) end in
+  binary_taint b_b_b_help x y
 
 let rec bitwise_binop op op_s (V_tuple [v1;v2]) =
-  match (v1,v2) with
-  | (V_vector idx inc v, V_vector idx' inc' v') ->
-  (* typechecker ensures inc = inc', idx = idx' and length v = length v' *)
-    V_vector idx inc (List.map (fun (x,y) -> (bitwise_binop_bit op op_s (V_tuple[x; y]))) (List.zip v v'))
-  | (V_track v1 r1, V_track v2 r2) ->
-    taint (bitwise_binop op op_s (V_tuple [v1;v2])) (r1 ++ r2)
-  | (V_track v1 r1,v2) ->
-    taint (bitwise_binop op op_s (V_tuple [v1;v2])) r1
-  | (v1,V_track v2 r2) ->
-    taint (bitwise_binop op op_s (V_tuple [v1;v2])) r2
-  | (V_unknown,_) -> V_unknown
-  | (_,V_unknown) -> V_unknown
-end ;;
+  let b_b_help v1 v2 = 
+    match (v1,v2) with
+      | (V_vector idx inc v, V_vector idx' inc' v') ->
+    (* typechecker ensures inc = inc', idx = idx' and length v = length v' *)
+	V_vector idx inc (List.map (fun (x,y) -> (bitwise_binop_bit op op_s (V_tuple[x; y]))) (List.zip v v'))
+      | (V_unknown,_) -> V_unknown
+      | (_,V_unknown) -> V_unknown end in
+  binary_taint b_b_help v1 v2
 
 type signed = Unsigned | Signed
 
@@ -202,127 +174,122 @@ type signed = Unsigned | Signed
  * By convention, MSB is on the left, so increasing = Big-Endian (MSB0),
  * hence MSB first.
  * http://en.wikipedia.org/wiki/Bit_numbering *)
-let rec to_num signed v = 
-  match v with
-  | (V_vector idx inc l) ->
-    if has_unknown v 
-    then V_unknown
-    else 
-  (* Word library in Lem expects bitseq with LSB first *)
-      let l = reverse l in
-  (* Make sure the last bit is a zero to force unsigned numbers *)
-      let l = (match signed with | Signed -> l | Unsigned -> l ++ [V_lit (L_aux L_zero Unknown)] end) in
-      V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown)
-  | V_unknown -> V_unknown
-  | V_track v r -> taint (to_num signed v) r
-end ;;
+let to_num signed v = 
+  retaint v   
+    (match detaint v with
+      | (V_vector idx inc l) ->
+	if has_unknown v 
+	then V_unknown
+	else 
+      (* Word library in Lem expects bitseq with LSB first *)
+	  let l = reverse l in
+      (* Make sure the last bit is a zero to force unsigned numbers *)
+	  let l = (match signed with | Signed -> l | Unsigned -> l ++ [V_lit (L_aux L_zero Unknown)] end) in
+	  V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown)
+      | V_unknown -> V_unknown
+     end)
 
-let rec to_vec_inc (V_tuple[v1;v2]) = match (v1,v2) with
-  | (V_lit(L_aux (L_num len) _), (V_lit(L_aux (L_num n) ln))) ->
-    let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
-    V_vector 0 true (map bool_to_bit (reverse l)) 
-  | (V_track v1 r1,V_track v2 r2) -> taint (to_vec_inc (V_tuple[v1;v2])) (r1++r2)
-  | (V_track v1 r1,v2) -> taint (to_vec_inc (V_tuple[v1;v2])) r1
-  | (v1,V_track v2 r2) -> taint (to_vec_inc (V_tuple[v1;v2])) r2
-  | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
-    V_vector 0 true (List.replicate (natFromInteger n) V_unknown)
-  | (_,V_unknown) -> V_unknown
-  | (V_unknown,_) -> V_unknown
-  | _ -> Assert_extra.failwith ("to_vec_inc parameters were " ^ (string_of_value (V_tuple[v1;v2])))
-end
-;;
-let rec to_vec_dec (V_tuple([v1;v2])) = match (v1,v2) with 
-  | (V_lit(L_aux (L_num len) _), (V_lit(L_aux (L_num n) ln))) ->
-    let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
-    V_vector (len - 1) false (map bool_to_bit (reverse l)) 
-  | (V_track v1 r1,V_track v2 r2) -> taint (to_vec_dec (V_tuple[v1;v2])) (r1++r2)
-  | (V_track v1 r1,v2) -> taint (to_vec_dec (V_tuple[v1;v2])) r1
-  | (v1,V_track v2 r2) -> taint (to_vec_dec (V_tuple[v1;v2])) r2
-  | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
-    V_vector (n-1) false (List.replicate (natFromInteger n) V_unknown)
-  | (_,V_unknown) -> V_unknown
-  | (V_unknown,_) -> V_unknown
-  | _ -> Assert_extra.failwith ("to_vec_dec parameters were " ^ (string_of_value (V_tuple[v1;v2])))
-end
-;;
+let to_vec_inc (V_tuple[v1;v2]) = 
+  let tv_help v1 v2 = 
+    match (v1,v2) with
+      | (V_lit(L_aux (L_num len) _), (V_lit(L_aux (L_num n) ln))) ->
+	let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
+	V_vector 0 true (map bool_to_bit (reverse l)) 
+      | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
+	V_vector 0 true (List.replicate (natFromInteger n) V_unknown)
+      | (_,V_unknown) -> V_unknown
+      | (V_unknown,_) -> V_unknown
+      | _ -> Assert_extra.failwith ("to_vec_inc parameters were " ^ (string_of_value (V_tuple[v1;v2])))
+  end in
+  binary_taint tv_help v1 v2
+
+let to_vec_dec (V_tuple([v1;v2])) =
+  let tv_fun v1 v2 =
+    match (v1,v2) with 
+      | (V_lit(L_aux (L_num len) _), (V_lit(L_aux (L_num n) ln))) ->
+	let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
+	V_vector (len - 1) false (map bool_to_bit (reverse l)) 
+      | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
+	V_vector (n-1) false (List.replicate (natFromInteger n) V_unknown)
+      | (_,V_unknown) -> V_unknown
+      | (V_unknown,_) -> V_unknown
+      | _ -> Assert_extra.failwith ("to_vec_dec parameters were " ^ (string_of_value (V_tuple[v1;v2])))
+   end in
+  binary_taint tv_fun v1 v2
+
 let to_vec ord len n =
   if ord
   then to_vec_inc (V_tuple ([V_lit(L_aux (L_num (integerFromNat len)) Interp_ast.Unknown); n]))
   else to_vec_dec (V_tuple ([V_lit(L_aux (L_num (integerFromNat len)) Interp_ast.Unknown); n]))
 ;;
 
-let rec exts (V_tuple[v1;v]) = match v1 with
-  | V_lit(L_aux (L_num len) _) -> (match v with
-      | V_vector _ inc _  -> to_vec inc (natFromInteger len) (to_num Signed v)
-      | V_unknown -> V_unknown
-      | V_track v r2 -> taint (exts (V_tuple[v1;v])) r2 end)
-  | V_unknown -> v1
-  | V_track v1 r1 -> taint (exts (V_tuple[v1;v])) r1
-end
-;;
+let exts (V_tuple[v1;v]) = 
+  let exts_help v1 v = match (v1,v) with
+    | (V_lit(L_aux (L_num len) _), V_vector _ inc _)-> to_vec inc (natFromInteger len) (to_num Signed v)
+    | (V_lit(L_aux (L_num len) _), V_unknown) -> to_vec true (natFromInteger len) V_unknown
+    | (V_unknown,_) -> V_unknown
+  end in
+  binary_taint exts_help v1 v
 
-let eq (V_tuple [x; y]) = V_lit (L_aux (if value_eq x y then L_one else L_zero) Unknown) ;;
+let eq (V_tuple [x; y]) = 
+  let combo = binary_taint (fun v _ -> v) x y in
+  retaint combo (V_lit (L_aux (if value_eq (detaint x) (detaint y) then L_one else L_zero) Unknown))
+
 (* XXX interpret vectors as unsigned numbers for equality *)
 let eq_vec_range (V_tuple [v; r]) = eq (V_tuple [to_num Unsigned v; r]) ;;
 let eq_range_vec (V_tuple [r; v]) = eq (V_tuple [r; to_num Unsigned v]) ;;
 let eq_vec_vec (V_tuple [v;v2]) = eq (V_tuple [to_num Signed v; to_num Signed v2]);;
 
-let rec neg v = match v with
+let rec neg v = retaint v (match detaint v with
   | V_lit (L_aux arg la) -> 
     V_lit (L_aux (match arg with
       | L_one -> L_zero
       | L_zero -> L_one end) la) 
   | V_unknown -> V_unknown
-  | V_track v r -> taint (neg v) r
   | V_tuple [v] -> neg v
-end 
-;;
+end)
 
 let neq = compose neg eq ;;
 
 let neq_vec = compose neg eq_vec_vec
 
-let rec arith_op op (V_tuple args) = match args with
-  | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> V_lit(L_aux (L_num (op x y)) lx)
-  | [V_track v1 r1;V_track v2 r2] -> taint (arith_op op (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1;v2] -> taint (arith_op op (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] -> taint (arith_op op (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  end ;;
-let rec arith_op_vec op sign size (V_tuple args) = match args with
-  | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
-    let (l1',l2') = (to_num sign l1,to_num sign l2) in
-    let n = arith_op op (V_tuple [l1';l2']) in
-    to_vec ord ((List.length cs) * size) n
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_vec op sign size (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1;v2] ->
-    taint (arith_op_vec op sign size (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] ->
-    taint (arith_op_vec op sign size (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-end ;;
-let rec arith_op_vec_vec_range op sign (V_tuple args) = match args with
-  | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
-    let (l1',l2') = (to_num sign l1,to_num sign l2) in
-    arith_op op (V_tuple [l1';l2'])
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_vec_vec_range op sign (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1;v2] ->
-    taint (arith_op_vec_vec_range op sign (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] ->
-    taint (arith_op_vec_vec_range op sign (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-end ;;
-let rec arith_op_overflow_vec op sign size (V_tuple args) = match args with
-  | [(V_vector b ord cs1 as l1);(V_vector _ _ cs2 as l2)] ->
-    let act_size = (List.length cs1) * size in
-    let (is_l1_unknown,is_l2_unknown) = ((has_unknown l1), (has_unknown l2)) in
-    let (l1',l2') = (if is_l1_unknown then V_unknown else (to_num sign l1),
-                     if is_l2_unknown then V_unknown else (to_num sign l2)) in
+let arith_op op (V_tuple [vl;vr]) = 
+  let arith_op_help vl vr = 
+    match (vl,vr) with
+      | (V_lit(L_aux (L_num x) lx), V_lit(L_aux (L_num y) ly)) -> V_lit(L_aux (L_num (op x y)) lx)
+      | (V_unknown,_) -> V_unknown
+      | (_,V_unknown) -> V_unknown
+  end in 
+  binary_taint arith_op_help vl vr
+let rec arith_op_vec op sign size (V_tuple [vl;vr]) =
+  let arith_op_help vl vr =
+    match (vl,vr) with
+      | ((V_vector b ord cs as l1),(V_vector _ _ _ as l2)) ->
+	let (l1',l2') = (to_num sign l1,to_num sign l2) in
+	let n = arith_op op (V_tuple [l1';l2']) in
+	to_vec ord ((List.length cs) * size) n
+      | (V_unknown,_) -> V_unknown
+      | (_,V_unknown) -> V_unknown
+  end in
+  binary_taint arith_op_help vl vr
+let rec arith_op_vec_vec_range op sign (V_tuple [vl;vr]) = 
+  let arith_op_help vl vr =
+    match (vl,vr) with
+      | (V_vector _ _ _,V_vector _ _ _ ) ->
+	let (l1,l2) = (to_num sign vl,to_num sign vr) in
+	arith_op op (V_tuple [l1;l2])
+      | (V_unknown,_) -> V_unknown
+      | (_,V_unknown) -> V_unknown
+   end in
+   binary_taint arith_op_help vl vr
+let rec arith_op_overflow_vec op sign size (V_tuple [vl;vr]) = 
+  let overflow_help vl vr =
+    match (vl,vr) with
+      | (V_vector b ord cs1,V_vector _ _ cs2) ->
+	let act_size = (List.length cs1) * size in
+	let (is_l1_unknown,is_l2_unknown) = ((has_unknown vl), (has_unknown vr)) in
+	let (l1',l2') = (if is_l1_unknown then V_unknown else (to_num sign vl),
+                         if is_l2_unknown then V_unknown else (to_num sign vr)) in
     let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
     let correct_size_num = to_vec ord act_size n in
     let overflow = if (is_l1_unknown || is_l2_unknown) then V_unknown 
@@ -331,261 +298,209 @@ let rec arith_op_overflow_vec op sign size (V_tuple args) = match args with
 	  if (n' <= (get_max_representable_in act_size)) &&
 	     (n' >= (get_min_representable_in act_size))
 	  then V_lit (L_aux L_zero ln)
-	  else V_lit (L_aux L_one ln)
-	| _ -> V_unknown end) in
+	  else V_lit (L_aux L_one ln) end) in
     let c_out = if (is_l1_unknown || is_l2_unknown) then V_unknown
-      else let detaint x = match x with | V_track v _ -> v | _ -> x end in
-      (carry_out (List.reverse (List.map detaint cs1)) (List.reverse (List.map detaint cs2)) (V_lit (L_aux L_zero Unknown))) in
+      else match to_vec ord (act_size + 1) n with
+	| V_vector _ _ (msb::vs) -> msb end in
     V_tuple [correct_size_num;overflow;c_out]
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1;v2] ->
-    taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] ->
-    taint (arith_op_overflow_vec op sign size (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_tuple [V_unknown;V_unknown;V_unknown]
-  | [_;V_unknown] -> V_tuple [V_unknown;V_unknown;V_unknown]
-end ;;
-let rec arith_op_overflow_vec_bit op sign size (V_tuple args) = match args with
-  | [(V_vector b ord cs as l1);(V_lit (L_aux L_one li))] ->
-    let l1' = to_num sign l1 in
-    let n = arith_op op (V_tuple [l1';(V_lit (L_aux (L_num 1) li))]) in
-    let correct_size_num = to_vec ord ((List.length cs) * size) n in
-    let one_larger = to_num Signed (to_vec ord (((List.length cs) * size) +1) n) in
-    let overflow =  neq (V_tuple [correct_size_num;one_larger]) in
-    V_tuple [correct_size_num;overflow;V_lit (L_aux L_zero Unknown)]
-  | [(V_vector b ord cs as l1);(V_lit (L_aux L_zero li))] ->
-    let l1' = to_num sign l1 in
-    let n = arith_op op (V_tuple [l1';(V_lit (L_aux (L_num 0) li))]) in
-    let correct_size_num = to_vec ord ((List.length cs) * size) n in
-    let one_larger = to_num Signed (to_vec ord (((List.length cs) * size) +1) n) in
-    let overflow =  neq (V_tuple [correct_size_num;one_larger]) in
-    V_tuple [correct_size_num;overflow;V_lit (L_aux L_zero Unknown)]    
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_overflow_vec_bit op sign size (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1;v2] ->
-    taint (arith_op_overflow_vec_bit op sign size (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] ->
-    taint (arith_op_overflow_vec_bit op sign size (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_tuple [V_unknown;V_unknown;V_unknown]
-  | [_;V_unknown] -> V_tuple [V_unknown;V_unknown;V_unknown]
-end ;;
+  | (V_unknown,_) -> V_tuple [V_unknown;V_unknown;V_unknown]
+  | (_,V_unknown) -> V_tuple [V_unknown;V_unknown;V_unknown]
+  end in
+  binary_taint overflow_help vl vr
+let rec arith_op_overflow_vec_bit op sign size (V_tuple [vl;vr]) =
+  let arith_help vl vr = 
+    match (vl,vr) with
+      | (V_vector b ord cs, V_lit (L_aux bit li)) ->
+	let act_size = (List.length cs) * size in
+	let l1' = to_num sign vl in
+	let n = 
+	  arith_op op (V_tuple [l1';(V_lit (L_aux (match bit with | L_one -> L_num 1 | L_zero -> L_num 0 end) li))]) in
+	let correct_size_num = to_vec ord act_size n in
+	let one_larger = to_vec ord (act_size +1) n in
+	let overflow = (match n with 
+	  | V_lit (L_aux (L_num n') ln) -> 
+	    if (n' <= (get_max_representable_in act_size)) &&
+	      (n' >= (get_min_representable_in act_size))
+	    then V_lit (L_aux L_zero ln)
+	    else V_lit (L_aux L_one ln) end) in
+	V_tuple [correct_size_num;overflow;(match one_larger with V_vector _ _ (c::rst) -> c end)]
+      | (V_unknown,_) -> V_tuple [V_unknown;V_unknown;V_unknown]
+      | (_,V_unknown) -> V_tuple [V_unknown;V_unknown;V_unknown]
+      end in
+   binary_taint arith_help vl vr
 
+let rec arith_op_range_vec op sign size (V_tuple [vl;vr]) = 
+  let arith_help vl vr = match (vl,vr) with
+    | (V_unknown,_) -> V_unknown
+    | (_,V_unknown) -> V_unknown
+    | (n, V_vector _ ord cs) ->
+      arith_op_vec op sign size (V_tuple [(to_vec ord (List.length cs) n);vr])
+  end in
+  binary_taint arith_help vl vr
+let rec arith_op_vec_range op sign size (V_tuple [vl;vr]) = 
+  let arith_help vl vr = match (vl,vr) with
+    | (V_unknown,_) -> V_unknown
+    | (_,V_unknown) -> V_unknown
+    | (V_vector _ ord cs,n) ->
+      arith_op_vec op sign size (V_tuple [vl;(to_vec ord (List.length cs) n)])
+  end in
+  binary_taint arith_help vl vr
+let rec arith_op_range_vec_range op sign (V_tuple [vl;vr]) =
+  let arith_help vl vr = match (vl,vr) with
+    | (V_unknown,_) -> V_unknown
+    | (_,V_unknown) -> V_unknown
+    | (n,V_vector _ ord _) ->
+      arith_op op (V_tuple [n;(to_num Unsigned vr)])
+  end in
+  binary_taint arith_help vl vr
+let arith_op_vec_range_range op sign (V_tuple [vl;vr]) = 
+  let arith_help vl vr = match (vl,vr) with
+    | (V_unknown,_) -> V_unknown
+    | (_,V_unknown) -> V_unknown
+    | (V_vector _ ord _ ,n) ->
+      arith_op op (V_tuple [(to_num sign vl);n])
+   end in
+   binary_taint arith_help vl vr
+let rec arith_op_vec_bit op sign size (V_tuple [vl;vr]) =
+  let arith_help vl vr =
+    match (vl,vr) with
+      | (V_unknown,_) -> V_unknown
+      | (_,V_unknown) -> V_unknown
+      | (V_vector _ ord cs,V_lit (L_aux bit _)) ->
+	let l1' = to_num sign vl in
+	let n = arith_op op (V_tuple 
+			       [l1';
+				V_lit 
+				  (L_aux (L_num (match bit with | L_one -> 1 | L_zero -> 0 end)) Unknown)])
+	in
+	to_vec ord ((List.length cs) * size) n
+      end in
+   binary_taint arith_help vl vr 
 
-let rec arith_op_range_vec op sign size (V_tuple args) = match args with
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_range_vec op sign size (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1; v2] ->
-    taint (arith_op_range_vec op sign size (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] -> 
-    taint (arith_op_range_vec op sign size (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  | [n; (V_vector _ ord cs as l2)] ->
-    arith_op_vec op sign size (V_tuple [(to_vec ord (List.length cs) n);l2])
-end ;;
-let rec arith_op_vec_range op sign size (V_tuple args) = match args with
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_vec_range op sign size (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1; v2] ->
-    taint (arith_op_vec_range op sign size (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] -> 
-    taint (arith_op_vec_range op sign size (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  | [(V_vector _ ord cs as l1);n] ->
-    arith_op_vec op sign size (V_tuple [l1;(to_vec ord (List.length cs) n)])
-end ;;
-let rec arith_op_range_vec_range op sign (V_tuple args) = match args with
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_range_vec_range op sign (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1; v2] ->
-    taint (arith_op_range_vec_range op sign (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] -> 
-    taint (arith_op_range_vec_range op sign (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  | [n;(V_vector _ ord _ as l2)] ->
-    arith_op op (V_tuple [n;(to_num Unsigned l2)])
-end ;;
-let rec arith_op_vec_range_range op sign (V_tuple args) = match args with
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_vec_range_range op sign (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1; v2] ->
-    taint (arith_op_vec_range_range op sign (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] -> 
-    taint (arith_op_vec_range_range op sign (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  | [(V_vector _ ord _ as l1);n] ->
-    arith_op op (V_tuple [(to_num sign l1);n])
-end ;;
-let rec arith_op_vec_bit op sign size (V_tuple args) = match args with
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_vec_bit op sign size (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1; v2] ->
-    taint (arith_op_vec_bit op sign size (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] -> 
-    taint (arith_op_vec_bit op sign size (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  | [(V_vector _ ord cs as l1);V_lit (L_aux bit _)] ->
-    let l1' = to_num sign l1 in
-    let n = arith_op op (V_tuple 
-			   [l1';
-			    V_lit 
-			      (L_aux (L_num (match bit with | L_one -> 1 | L_zero -> 0 end)) Unknown)])
-    in
-    to_vec ord ((List.length cs) * size) n
-end 
-;;
-let rec arith_op_no0 op (V_tuple args) = match args with
-  | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> 
-    if y = 0 
-    then V_lit (L_aux L_undef ly)
-    else V_lit(L_aux (L_num (op x y)) lx)
-  | [V_track v1 r1;V_track v2 r2] -> taint (arith_op_no0 op (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1;v2] -> taint (arith_op_no0 op (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] -> taint (arith_op_no0 op (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  end ;;
+let rec arith_op_no0 op (V_tuple [vl;vr]) = 
+  let arith_help vl vr =
+    match (vl,vr) with
+      | (V_lit(L_aux (L_num x) lx), V_lit(L_aux (L_num y) ly)) -> 
+	if y = 0 
+	then V_lit (L_aux L_undef ly)
+	else V_lit(L_aux (L_num (op x y)) lx)
+      | (V_unknown,_) -> V_unknown
+      | (_,V_unknown) -> V_unknown
+  end in 
+  binary_taint arith_help vl vr
 
-let rec arith_op_vec_no0 op op_s sign size (V_tuple args) = match args with
-  | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
-    let act_size = (List.length cs) * size in
-    let (is_l1_unknown,is_l2_unknown) = ((has_unknown l1), (has_unknown l2)) in
-    let (l1',l2') = (if is_l1_unknown then V_unknown else (to_num sign l1),
-                     if is_l2_unknown then V_unknown else (to_num sign l2)) in
-    let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
-    let representable = 
-      match n with 
-	| V_lit (L_aux (L_num n') ln) ->  
-	  let rep_size = (if op_s = "quot" then act_size/2 else act_size) in
-	  ((n' <= (get_max_representable_in act_size)) && (n' >= (get_min_representable_in act_size)))
-	| _ -> true end in
-    if representable then to_vec ord act_size n else to_vec ord act_size (V_lit (L_aux L_undef Unknown))
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_vec_no0 op op_s sign size (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1;v2] ->
-    taint (arith_op_vec_no0 op op_s sign size (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] ->
-    taint (arith_op_vec_no0 op op_s sign size (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-end ;;
-let rec arith_op_overflow_vec_no0 op op_s sign size (V_tuple args) = match args with
-  | [(V_vector b ord cs as l1);(V_vector _ _ _ as l2)] ->
-    let act_size = (List.length cs) * size in
-    let (is_l1_unknown,is_l2_unknown) = ((has_unknown l1), (has_unknown l2)) in
-    let (l1',l2') = (if is_l1_unknown then V_unknown else (to_num sign l1),
-                     if is_l2_unknown then V_unknown else (to_num sign l2)) in
-    let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
-    let representable = 
-      match n with 
-	| V_lit (L_aux (L_num n') ln) ->  
-	  let rep_size = (if op_s = "quot" then act_size/2 else act_size) in
-	  ((n' <= (get_max_representable_in act_size)) && (n' >= (get_min_representable_in act_size)))
-	| _ -> true end in
-    let correct_size_num = if representable then to_vec ord act_size n else to_vec ord act_size (V_lit (L_aux L_undef Unknown)) in
-    let overflow = if (has_unknown l1 || has_unknown l2) then V_unknown else 
-	if representable then V_lit (L_aux L_zero Unknown) else V_lit (L_aux L_one Unknown) in
-    V_tuple [correct_size_num;overflow;V_lit (L_aux L_zero Unknown)]
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_overflow_vec_no0 op op_s sign size (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1;v2] ->
-    taint (arith_op_overflow_vec_no0 op op_s sign size (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] ->
-    taint (arith_op_overflow_vec_no0 op op_s sign size (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_tuple [V_unknown;V_unknown;V_unknown]
-  | [_;V_unknown] -> V_tuple [V_unknown;V_unknown;V_unknown]
-end ;;
+let rec arith_op_vec_no0 op op_s sign size (V_tuple [vl;vr]) = 
+  let arith_help vl vr = 
+    match (vl,vr) with
+      | (V_vector b ord cs, V_vector _ _ _) ->
+	let act_size = (List.length cs) * size in
+	let (is_l1_unknown,is_l2_unknown) = ((has_unknown vl), (has_unknown vr)) in
+	let (l1',l2') = (if is_l1_unknown then V_unknown else (to_num sign vl),
+                         if is_l2_unknown then V_unknown else (to_num sign vr)) in
+	let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
+	let representable = 
+	  match n with 
+	    | V_lit (L_aux (L_num n') ln) ->  
+	      let rep_size = (if op_s = "quot" then act_size/2 else act_size) in
+	      ((n' <= (get_max_representable_in act_size)) && (n' >= (get_min_representable_in act_size)))
+	    | _ -> true end in
+         if representable 
+	 then to_vec ord act_size n else to_vec ord act_size (V_lit (L_aux L_undef Unknown))
+      | (V_unknown,_) -> V_unknown
+      | (_,V_unknown) -> V_unknown
+   end in
+   binary_taint arith_help vl vr
+let rec arith_op_overflow_vec_no0 op op_s sign size (V_tuple [vl;vr]) =
+  let arith_help vl vr = 
+    match (vl,vr) with
+      | (V_vector b ord cs, V_vector _ _ _) ->
+	let act_size = (List.length cs) * size in
+	let (is_l1_unknown,is_l2_unknown) = ((has_unknown vl), (has_unknown vr)) in
+	let (l1',l2') = (if is_l1_unknown then V_unknown else (to_num sign vl),
+                         if is_l2_unknown then V_unknown else (to_num sign vr)) in
+	let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
+	let representable = 
+	  match n with 
+	    | V_lit (L_aux (L_num n') ln) ->  
+	      let rep_size = (if op_s = "quot" then act_size/2 else act_size) in
+	      ((n' <= (get_max_representable_in act_size)) && (n' >= (get_min_representable_in act_size)))
+	    | _ -> true end in
+        let correct_size_num = 
+	  if representable then to_vec ord act_size n else to_vec ord act_size (V_lit (L_aux L_undef Unknown)) in
+	let overflow = if is_l1_unknown || is_l2_unknown then V_unknown else 
+	    if representable then V_lit (L_aux L_zero Unknown) else V_lit (L_aux L_one Unknown) in
+	V_tuple [correct_size_num;overflow;V_lit (L_aux L_zero Unknown)]
+	| (V_unknown,_) -> V_tuple [V_unknown;V_unknown;V_unknown]
+	| (_,V_unknown) -> V_tuple [V_unknown;V_unknown;V_unknown]
+   end in
+  binary_taint arith_help vl vr
 
-let rec arith_op_vec_range_no0 op op_s sign size (V_tuple args) = match args with
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (arith_op_vec_range_no0 op op_s sign size (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1; v2] ->
-    taint (arith_op_vec_range_no0 op op_s sign size (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] -> 
-    taint (arith_op_vec_range_no0 op op_s sign size (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  | [(V_vector _ ord cs as l1);n] ->
-    arith_op_vec_no0 op op_s sign size (V_tuple [l1;(to_vec ord (List.length cs) n)])
-end ;;
+let rec arith_op_vec_range_no0 op op_s sign size (V_tuple [vl;vr]) =
+  let arith_help vl vr =
+    match (vl,vr) with
+      | (V_unknown,_) -> V_unknown
+      | (_,V_unknown) -> V_unknown
+      | (V_vector _ ord cs,n) ->
+	arith_op_vec_no0 op op_s sign size (V_tuple [vl;(to_vec ord (List.length cs) n)])
+  end in
+  binary_taint arith_help vl vr
 
-let rec compare_op op (V_tuple args) = match args with
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (compare_op op (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1;v2] ->
-    taint (compare_op op (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] ->
-    taint (compare_op op (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  | [V_lit(L_aux (L_num x) lx); V_lit(L_aux (L_num y) ly)] -> 
-    if (op x y)
-    then V_lit(L_aux L_one lx)
-    else V_lit(L_aux L_zero lx)
-end ;;
-let rec compare_op_vec op sign (V_tuple args) = match args with
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (compare_op_vec op sign (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1;v2] ->
-    taint (compare_op_vec op sign (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] ->
-    taint (compare_op_vec op sign (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  | [((V_vector _ _ _) as l1);((V_vector _ _ _) as l2)] ->
-    let (l1',l2') = (to_num sign l1, to_num sign l2) in
-    compare_op op (V_tuple[l1';l2'])
-end ;;
-let rec compare_op_vec_unsigned op (V_tuple args) = match args with
-  | [V_track v1 r1;V_track v2 r2] ->
-    taint (compare_op_vec_unsigned op (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1;v2] ->
-    taint (compare_op_vec_unsigned op (V_tuple [v1;v2])) r1
-  | [v1;V_track v2 r2] ->
-    taint (compare_op_vec_unsigned op (V_tuple [v1;v2])) r2
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  | [((V_vector _ _ _) as l1);((V_vector _ _ _) as l2)] ->
-    let (l1',l2') = (to_num Unsigned l1, to_num Unsigned l2) in
-    compare_op op (V_tuple[l1';l2'])
-end ;;
+let rec compare_op op (V_tuple [vl;vr]) =
+  let comp_help vl vr = match (vl,vr) with
+    | (V_unknown,_) -> V_unknown
+    | (_,V_unknown) -> V_unknown
+    | (V_lit(L_aux (L_num x) lx), V_lit(L_aux (L_num y) ly)) -> 
+      if (op x y)
+      then V_lit(L_aux L_one lx)
+      else V_lit(L_aux L_zero lx)
+   end in
+   binary_taint comp_help vl vr
+let rec compare_op_vec op sign (V_tuple [vl;vr]) = 
+  let comp_help vl vr = match (vl,vr) with
+    | (V_unknown,_) -> V_unknown
+    | (_,V_unknown) -> V_unknown
+    | (V_vector _ _ _,V_vector _ _ _) ->
+      let (l1',l2') = (to_num sign vl, to_num sign vr) in
+      compare_op op (V_tuple[l1';l2'])
+   end in
+   binary_taint comp_help vl vr
+let rec compare_op_vec_unsigned op (V_tuple [vl;vr]) = 
+  let comp_help vl vr = match (vl,vr) with
+    | (V_unknown,_) -> V_unknown
+    | (_,V_unknown) -> V_unknown
+    | (V_vector _ _ _,V_vector _ _ _) ->
+      let (l1',l2') = (to_num Unsigned vl, to_num Unsigned vr) in
+      compare_op op (V_tuple[l1';l2'])
+  end in
+  binary_taint comp_help vl vr
 
+let duplicate (V_tuple [vl;vr]) = 
+  let dup_help vl vr =
+    match (vl,vr) with
+      | ((V_lit _ as v),(V_lit (L_aux (L_num n) _))) ->
+	V_vector 0 true (List.replicate (natFromInteger n) v)
+      | (V_unknown,(V_lit (L_aux (L_num n) _))) ->
+	V_vector 0 true (List.replicate (natFromInteger n) V_unknown)
+      | (V_unknown,_) -> V_unknown
+    end in
+  binary_taint dup_help vl vr
 
-
-let rec duplicate (V_tuple args) = match args with
-  | [V_track v1 r1;V_track v2 r2] -> taint (duplicate (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1; v2] -> taint (duplicate (V_tuple[v1;v2])) r1 
-  | [v1;V_track v2 r2] -> taint (duplicate (V_tuple[v1;v2])) r2 
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  | [(V_lit _ as v);(V_lit (L_aux (L_num n) _))] ->
-    (V_vector 0 true (List.replicate (natFromInteger n) v))
-end
-
-let rec vec_concat (V_tuple args) = match args with
-  | [V_vector n d l; V_vector n' d' l'] ->
+let rec vec_concat (V_tuple [vl;vr]) = 
+  let concat_help vl vr = 
+    match (vl,vr) with
+      | (V_vector n d l, V_vector n' d' l') ->
       (* XXX d = d' ? dropping n' ? *)
-      V_vector n d (l ++ l')
-  | [V_lit l; (V_vector n d l' as x)] -> vec_concat (V_tuple [litV_to_vec l d; x])
-  | [(V_vector n d l' as x); V_lit l] -> vec_concat (V_tuple [x; litV_to_vec l d]) 
-  | [V_track v1 r1;V_track v2 r2] -> taint (vec_concat (V_tuple [v1;v2])) (r1++r2)
-  | [V_track v1 r1; v2] -> taint (vec_concat (V_tuple[v1;v2])) r1 
-  | [v1; V_track v2 r2] -> taint (vec_concat (V_tuple[v1;v2])) r2 
-  | [V_unknown;_] -> V_unknown
-  | [_;V_unknown] -> V_unknown
-  
-  end ;;
+	V_vector n d (l ++ l')
+      | (V_lit l, (V_vector n d l' as x)) -> vec_concat (V_tuple [litV_to_vec l d; x])
+      | ((V_vector n d l' as x), V_lit l) -> vec_concat (V_tuple [x; litV_to_vec l d]) 
+      | (V_unknown,_) -> V_unknown
+      | (_,V_unknown) -> V_unknown
+  end in
+  binary_taint concat_help vl vr
 
-let rec v_length v = match v with
+let v_length v = retaint v (match detaint v with
   | V_vector n d l -> V_lit (L_aux (L_num (integerFromNat (List.length l))) Unknown)
-  | V_unknown -> V_unknown
-  | V_track v r -> taint (v_length v) r
-end ;;
+  | V_unknown -> V_unknown end)
 
 let function_map = [
   ("ignore", ignore_sail);            
