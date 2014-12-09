@@ -719,33 +719,29 @@ E , t |- exp : t' gives exp' , I , E_t :: :: check_exp :: check_exp_
 {{ com Typing expressions, collecting nexp constraints, effects, and new bindings }}
 by
 
-<E_t,E_d> |- exp : u gives <S_N,effect>,E_t1
-E_d |- exp : u :> t,exp', S_N2
------------------------------------------------------------- :: coerce
-<E_t,E_d> |- exp : t gives <S_N u+ S_N2,effect>,E_t1
- 
-E_t(id) gives t
------------------------------------------------------------- :: var
-<E_t,E_d> |- id : t gives Ie,E_t
+E_t(id) gives {tid0|->kinf0, .., tidn |-> kinfn}, {},Ctor, unit -> x <t_args> pure
+u == x<t_args> [ t_arg0/tid0 .. t_argn/tidn] 
+E_d |- u ~< t,S_N
+----------------------------------------------------------- :: unaryCtor
+<E_t,E_d>,t |- id : x gives id, <S_N,pure>,{}
 
-E_t(id) gives register t
------------------------------------------------------------- :: reg
-<E_t,E_d> |- id : t gives <{},{rreg}>,E_t
+E_t(id) gives {}, {},tag,u
+E_d,t |- id : u gives t', exp, S_N, effect
+------------------------------------------------------------ :: localVar
+<E_t,E_d>,t |- id : u gives id, <S_N,effect>,{}
 
-E_t(id) gives reg t
------------------------------------------------------------ :: local
-<E_t,E_d> |- id : t gives Ie,E_t
+E_t(id) gives {tid1|->kinf1, .., tidn |-> kinfn}, S_N,tag,u'
+u == u'[t_arg1/tid1 .. t_argn/tidn]
+E_d,t |- id : u gives t', exp, S_N', effect
+------------------------------------------------------------ :: otherVar
+<E_t,E_d>,t |- id : u gives id,<S_N u+ S_N' ,effect>,{}
 
-E_t(id) gives {</idi |-> ki//i/>},S_N,tag,u
-t = u [</ui/idi//i/>]
------------------------------------------------------------ :: ty_app
-<E_t,E_d> |- id : t gives <S_N,pure>,E_t
-
-% Need to take into account possible type variables here
-E_t(id) gives t' -> t {} Ctor {} 
-<E_t,E_d> |- exp : t' gives I,E_t
+E_t(id) gives {tid0|->kinf0, .., tidn |-> kinfn}, {},Ctor, t'' -> x <t_args> pure
+t' -> u pure == t'' -> x<t_args> pure [ t_arg0/tid0 .. t_argn/tidn] 
+E_d |- u ~< t,S_N
+<E_t,E_d>,t' |- exp : u' gives exp, <S_N',effect>,E_t'
 ------------------------------------------------------------ :: ctor
-<E_t,E_d> |- :E_app: id(exp) : t gives I,E_t
+<E_t,E_d>,t |- :E_app: id(exp) : t gives :E_app: id(exp'), <S_N u+ S_N, effect>,{}
 
 % Need to take into account possible type variables on result of id
 E_t(id) gives t' -> t effect tag S_N
@@ -758,10 +754,13 @@ E_t(id) gives t' -> t effect tag S_N
 ------------------------------------------------------------ :: infix_app
 <E_t,E_d> |- :E_app_infix: exp1 id exp2 : t gives I u+ <S_N, effect>, E_t
 
-E_r(</idi//i/>) gives id t_args, </ti//i/>
-</ <E_t,<E_k,E_r,E_e>> |- expi : ti gives Ii,E_t//i/>
+E_r(</idi//i/>) gives x<t_args>, </ti//i/>
+</ <E_t,<E_k,E_a,E_r,E_e>>,ti |- expi : ui gives exp'i,<S_Ni,effecti>,E_t//i/>
+</<E_k,E_a,E_r,E_e> |- ui ~< ti,S_N'i//i/>
+S_N == u+ </S_Ni//i/>
+S_N' == u+ </S_N'i//i/>
 ------------------------------------------------------------ :: record
-<E_t,<E_k,E_r,E_e>> |- { </idi = expi//i/> semi_opt} : id t_args gives u+ </Ii//i/>, E_t
+<E_t,<E_k,E_a,E_r,E_e>>,t |- { </idi = expi//i/> semi_opt} : x<t_args> gives{ </idi=exp'i//i/> semi_opt}, u+ <S_N u+ S_N', u+ </effecti//i/>>, {}
 
 <E_t,<E_k,E_r,E_e>> |- exp : id t_args gives I,E_t
 E_r(id t_args) gives </ id'n:t'n//n/>

@@ -112,6 +112,7 @@ ne :: 'Ne_' ::=
  | ne :: :: nexp
  | effect :: :: effect
  | order :: :: order
+ | fresh :: M :: freshvar {{ lem T_arg (T_var "fresh") }}
 
  t_args :: '' ::=   {{ lem list t_arg }}
   {{ com Arguments to type constructors }}
