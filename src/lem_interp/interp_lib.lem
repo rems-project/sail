@@ -79,7 +79,7 @@ let is_unknown v = match v with
   | _ -> false
 end 
 
-let has_unknown v = match v with
+let has_unknown v = match detaint v with
   | V_vector _ _ vs -> List.any is_unknown vs
 end
 
