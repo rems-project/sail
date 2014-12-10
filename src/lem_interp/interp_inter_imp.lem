@@ -180,6 +180,7 @@ let rec extern_mem_value mode v = match v with
   | Interp.V_vector fst inc bits -> (to_bytes (bitls_from_ibits bits), Nothing)
   | Interp.V_vector_sparse fst stop inc bits default ->
     extern_mem_value mode (Interp_lib.fill_in_sparse v)
+  | _ -> Assert_extra.failwith ("extern_mem_value received non-externable value " ^ (Interp.string_of_value v))
 end 
 
 let rec extern_ifield_value v = match v with

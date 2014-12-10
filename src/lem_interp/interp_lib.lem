@@ -231,6 +231,14 @@ let exts (V_tuple[v1;v]) =
   end in
   binary_taint exts_help v1 v
 
+let extz (V_tuple[v1;v]) = 
+  let extz_help v1 v = match (v1,v) with
+    | (V_lit(L_aux (L_num len) _), V_vector _ inc _)-> to_vec inc (natFromInteger len) (to_num Unsigned v)
+    | (V_lit(L_aux (L_num len) _), V_unknown) -> to_vec true (natFromInteger len) V_unknown
+    | (V_unknown,_) -> V_unknown
+  end in
+  binary_taint extz_help v1 v
+
 let eq (V_tuple [x; y]) = 
   let combo = binary_taint (fun v _ -> v) x y in
   retaint combo (V_lit (L_aux (if value_eq (detaint x) (detaint y) then L_one else L_zero) Unknown))
@@ -317,13 +325,13 @@ let rec arith_op_overflow_vec_bit op sign size (V_tuple [vl;vr]) =
 	  arith_op op (V_tuple [l1';(V_lit (L_aux (match bit with | L_one -> L_num 1 | L_zero -> L_num 0 end) li))]) in
 	let correct_size_num = to_vec ord act_size n in
 	let one_larger = to_vec ord (act_size +1) n in
-	let overflow = (match n with 
+	let overflow = retaint n (match detaint n with 
 	  | V_lit (L_aux (L_num n') ln) -> 
 	    if (n' <= (get_max_representable_in act_size)) &&
 	      (n' >= (get_min_representable_in act_size))
 	    then V_lit (L_aux L_zero ln)
 	    else V_lit (L_aux L_one ln) end) in
-	V_tuple [correct_size_num;overflow;(match one_larger with V_vector _ _ (c::rst) -> c end)]
+	V_tuple [correct_size_num;overflow;(match detaint one_larger with V_vector _ _ (c::rst) -> c end)]
       | (V_unknown,_) -> V_tuple [V_unknown;V_unknown;V_unknown]
       | (_,V_unknown) -> V_tuple [V_unknown;V_unknown;V_unknown]
       end in
@@ -399,7 +407,7 @@ let rec arith_op_vec_no0 op op_s sign size (V_tuple [vl;vr]) =
                          if is_l2_unknown then V_unknown else (to_num sign vr)) in
 	let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
 	let representable = 
-	  match n with 
+	  match detaint n with 
 	    | V_lit (L_aux (L_num n') ln) ->  
 	      let rep_size = (if op_s = "quot" then act_size/2 else act_size) in
 	      ((n' <= (get_max_representable_in act_size)) && (n' >= (get_min_representable_in act_size)))
@@ -420,7 +428,7 @@ let rec arith_op_overflow_vec_no0 op op_s sign size (V_tuple [vl;vr]) =
                          if is_l2_unknown then V_unknown else (to_num sign vr)) in
 	let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
 	let representable = 
-	  match n with 
+	  match detaint n with 
 	    | V_lit (L_aux (L_num n') ln) ->  
 	      let rep_size = (if op_s = "quot" then act_size/2 else act_size) in
 	      ((n' <= (get_max_representable_in act_size)) && (n' >= (get_min_representable_in act_size)))
@@ -444,6 +452,26 @@ let rec arith_op_vec_range_no0 op op_s sign size (V_tuple [vl;vr]) =
 	arith_op_vec_no0 op op_s sign size (V_tuple [vl;(to_vec ord (List.length cs) n)])
   end in
   binary_taint arith_help vl vr
+
+let rec shift_op_vec op (V_tuple [vl;vr]) =
+  let arith_op_help vl vr =
+    match (vl,vr) with
+      | (V_vector b ord cs,V_lit (L_aux (L_num n) _)) ->
+	(match op with
+	  | "<<" -> 
+	    V_vector b ord 
+	      ((from_n_to_n n (integerFromNat ((length cs) - 1)) cs) ++(List.replicate (natFromInteger n) (V_lit (L_aux L_zero Unknown))))
+	  | ">>" ->
+	    V_vector b ord
+	      ((List.replicate (natFromInteger n) (V_lit (L_aux L_zero Unknown))) ++ (from_n_to_n 0 (n-1) cs))
+	  | "<<<" ->
+	    V_vector b ord
+	      ((from_n_to_n n (integerFromNat ((length cs) -1)) cs) ++ (from_n_to_n 0 (n-1) cs)) end)
+      | (V_unknown,_) -> V_unknown
+      | (_,V_unknown) -> V_unknown
+  end in
+  binary_taint arith_op_help vl vr
+
 
 let rec compare_op op (V_tuple [vl;vr]) =
   let comp_help vl vr = match (vl,vr) with
@@ -541,6 +569,9 @@ let function_map = [
   ("mult_range_vec_signed", arith_op_range_vec ( * ) Signed 2);
   ("mult_vec_range_signed", arith_op_vec_range ( * ) Signed 2);
   ("mult_overflow_vec_signed", arith_op_overflow_vec ( * ) Signed 2);
+  ("bitwise_leftshift", shift_op_vec "<<");
+  ("bitwise_rightshift", shift_op_vec ">>");
+  ("bitwise_rotate", shift_op_vec "<<<");
   ("mod", arith_op_no0 (mod));
   ("mod_vec", arith_op_vec_no0 hardware_mod "mod" Unsigned 1);
   ("mod_vec_range", arith_op_vec_range_no0 hardware_mod "mod" Unsigned 1);
@@ -558,6 +589,7 @@ let function_map = [
   ("to_num_inc", to_num Unsigned);
   ("to_num_dec", to_num Unsigned);
   ("EXTS", exts);
+  ("EXTZ", extz);
   ("to_vec_inc", to_vec_inc);
   ("to_vec_dec", to_vec_dec);
   ("bitwise_not", bitwise_not);
