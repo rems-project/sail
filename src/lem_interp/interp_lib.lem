@@ -180,6 +180,8 @@ let to_num signed v =
       | (V_vector idx inc l) ->
 	if has_unknown v 
 	then V_unknown
+	else if l=[]
+	then V_unknown
 	else 
       (* Word library in Lem expects bitseq with LSB first *)
 	  let l = reverse l in
