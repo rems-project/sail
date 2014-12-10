@@ -322,17 +322,19 @@ let rec arith_op_overflow_vec_bit op sign size (V_tuple [vl;vr]) =
     match (vl,vr) with
       | (V_vector b ord cs, V_lit (L_aux bit li)) ->
 	let act_size = (List.length cs) * size in
-	let l1' = to_num sign vl in
-	let n = 
+	let is_v_unknown = has_unknown vl in
+	let l1' = if is_v_unknown then V_unknown else to_num sign vl in
+	let n = if is_v_unknown then V_unknown else
 	  arith_op op (V_tuple [l1';(V_lit (L_aux (match bit with | L_one -> L_num 1 | L_zero -> L_num 0 end) li))]) in
 	let correct_size_num = to_vec ord act_size n in
 	let one_larger = to_vec ord (act_size +1) n in
-	let overflow = retaint n (match detaint n with 
-	  | V_lit (L_aux (L_num n') ln) -> 
-	    if (n' <= (get_max_representable_in act_size)) &&
-	      (n' >= (get_min_representable_in act_size))
-	    then V_lit (L_aux L_zero ln)
-	    else V_lit (L_aux L_one ln) end) in
+	let overflow = if is_v_unknown then V_unknown else
+	    retaint n (match detaint n with 
+	      | V_lit (L_aux (L_num n') ln) -> 
+		if (n' <= (get_max_representable_in act_size)) &&
+		  (n' >= (get_min_representable_in act_size))
+		then V_lit (L_aux L_zero ln)
+		else V_lit (L_aux L_one ln) end) in
 	V_tuple [correct_size_num;overflow;(match detaint one_larger with V_vector _ _ (c::rst) -> c end)]
       | (V_unknown,_) -> V_tuple [V_unknown;V_unknown;V_unknown]
       | (_,V_unknown) -> V_tuple [V_unknown;V_unknown;V_unknown]
