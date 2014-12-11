@@ -535,7 +535,16 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 				             TA_nexp{nexp = Nconst (big_int_of_int (String.length s))};
 				             TA_ord d_env.default_o ;TA_typ{t = Tid"bit"}])},[],pure_e
 	| L_string s -> simp_exp e l {t = Tid "string"},[],pure_e
-	| L_undef -> simp_exp e l (new_t ()),[],{effect=Eset[BE_aux(BE_undef,l)]}) in
+	| L_undef -> 
+	  let ef = {effect=Eset[BE_aux(BE_undef,l)]} in
+          (match expect_t.t with
+            | Tapp ("vector",[TA_nexp base;TA_nexp {nexp=Nconst rise};TA_ord o;(TA_typ {t=Tid "bit"})]) 
+	    | Tapp ("register",[TA_typ {t=Tapp ("vector",[TA_nexp base;TA_nexp {nexp=Nconst rise};
+							  TA_ord o;(TA_typ {t=Tid "bit"})])}])->
+              let f = match o.order with | Oinc -> "to_vec_inc" | Odec -> "to_vec_dec" | _ -> "to_vec_inc" (*Change to follow a default?*) in
+	      let tannot = (l,Base(([],expect_t),External (Some f),[],ef)) in
+              E_aux(E_app((Id_aux((Id f),l)),[(E_aux (E_internal_exp tannot, tannot));simp_exp e l bit_t]),tannot),[],ef
+            | _ -> simp_exp e l (new_t ()),[],ef)) in
       let t',cs',_,e' = type_coerce (Expr l) d_env false (get_e_typ e) e expect_t in
       (e',t',t_env,cs@cs',effect)
     | E_cast(typ,e) ->
@@ -839,8 +848,9 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	| (Def_val_empty,false) -> (Def_val_aux(Def_val_empty,(ld,Base(([],item_t),Emp_local,[],pure_e))),true,[],pure_e)
         | (Def_val_empty,true)  -> 
           let ef = add_effect (BE_aux(BE_unspec,l)) pure_e in
-          (Def_val_aux(Def_val_dec ( (E_aux( E_lit( L_aux(L_undef, l)), (l, (Base(([],item_t),Emp_local,[],ef)))))),
-                       (l,Base(([],item_t),Emp_local,[],pure_e))),false,[],ef)
+	  let (de,_,_,_,ef_d) = check_exp envs imp_param item_t (E_aux(E_lit (L_aux(L_undef,l)), (l,NoTyp))) in
+          (Def_val_aux(Def_val_dec de,
+                       (l,Base(([],item_t),Emp_local,[],ef))),false,[],ef)
 	| (Def_val_dec e,_) -> let (de,t,_,cs_d,ef_d) = (check_exp envs imp_param item_t e) in
 			       (*Check that ef_d doesn't write to memory or registers? *)
 			       (Def_val_aux(Def_val_dec de,(ld,(Base(([],item_t),Emp_local,cs_d,ef_d)))),false,cs_d,ef_d) in

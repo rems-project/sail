@@ -62,7 +62,7 @@ let rec string_of_value v = match v with
     | L_one  -> "1"
     | L_true -> "true"
     | L_false -> "false"
-    | L_num num -> toString(integerToString num [])
+    | L_num num -> if num = 0 then "0" else toString(integerToString num [])
     | L_hex hex -> "0x" ^ hex
     | L_bin bin -> "0b" ^ bin
     | L_undef -> "undefined"
@@ -86,7 +86,7 @@ let rec string_of_value v = match v with
   | V_unknown -> "Unknown"
   | V_register _ -> "register_as_value"
   | V_register_alias _ _ -> "register_as_alias"
-  | V_track v _ -> (*"tainted " ^*) (string_of_value v)
+  | V_track v _ -> "tainted " ^ (string_of_value v)
 end
 
 let rec id_value_eq (i, v) (i', v') = i = i' && value_eq v v'
@@ -218,10 +218,10 @@ type outcome =
 type interp_mode = <| eager_eval : bool; track_values : bool |>
 
 (* Evaluates global let binds and prepares the context for individual expression evaluation in the current model *)
-val to_top_env : defs tannot -> (maybe outcome * top_level)
+val to_top_env : (outcome -> maybe value) -> defs tannot -> (maybe outcome * top_level)
 
 (* interprets the exp sequentially in the presence of a set of top level definitions and returns a value, a memory request, or other external action *)
-val interp :interp_mode -> defs tannot -> exp tannot -> outcome
+val interp :interp_mode -> (outcome -> maybe value) -> defs tannot -> exp tannot -> outcome
 
 (* Takes a paused partially evaluated expression, puts the value into the environment, and runs again *)
 val resume : interp_mode -> stack -> maybe value -> outcome
@@ -1450,15 +1450,18 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			  let slice = binary_taint (fun v1 v2 -> V_tuple[v1;v2]) i1v i2v in
 			  let take_slice vtup vvec =
 			    (match vtup with
-			      | V_tuple [V_lit (L_aux (L_num n1) ln1);V_lit (L_aux (L_num n2) ln2)] ->
-				(match vvec with
-				| V_vector _ _ _ -> slice_vector vvec n1 n2
-				| V_vector_sparse _ _ _ _ _ -> slice_vector vvec n1 n2
-				| V_unknown -> 
-				  let inc = n1 < n2 in
-				  V_vector n1 inc 
-				    (List.replicate (natFromInteger ((if inc then n1-n2 else n2-n1)+1)) V_unknown)
-				| _ -> Assert_extra.failwith ("Vector slice of non-vector " ^ (string_of_value vvec)) end) end) in
+			      | V_tuple [v1;v2] ->
+				(match (detaint v1, detaint v2) with 
+				  | (V_lit (L_aux (L_num n1) ln1),V_lit (L_aux (L_num n2) ln2)) ->
+				    (match vvec with
+				      | V_vector _ _ _ -> slice_vector vvec n1 n2
+				      | V_vector_sparse _ _ _ _ _ -> slice_vector vvec n1 n2
+				      | V_unknown -> 
+					let inc = n1 < n2 in
+					V_vector n1 inc 
+					  (List.replicate (natFromInteger ((if inc then n1-n2 else n2-n1)+1)) V_unknown)
+				      | _ -> Assert_extra.failwith ("Vector slice of non-vector " ^ (string_of_value vvec)) end) end)
+			      | _ -> Assert_extra.failwith("slice not a tuple of nums " ^ (string_of_value vtup)) end) in
 			  (Value (binary_taint take_slice slice vvec), lm,le))
 			(fun a -> 
 			  let rebuild v env = let (ie1,env) = to_exp mode env i1v in
@@ -2309,46 +2312,88 @@ and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
     				                  (E_aux (E_id reg2) annot2)) 
 			        (l,(intern_annot annot))) t_level l_env l_mem Top), l_mem,l_env) end
 
-let rec to_global_letbinds (Defs defs) t_level =
+let rec eval_toplevel_let handle_action tlevel env mem lbind = 
+  match interp_letbind <|eager_eval=true; track_values=false;|> tlevel env mem lbind with
+    | ((Value v, lm, (LEnv _ le)),_) -> Just le
+    | ((Action a s,lm,le), Just le_builder) -> 
+      (match handle_action (Action a s) with
+	| Just value ->
+	  (match s with
+	    | Hole_frame id exp tl lenv lmem s ->
+	      eval_toplevel_let handle_action tl (add_to_env (id,value) lenv) lmem (le_builder exp) end)
+	| Nothing -> Nothing end)
+    | _ -> Nothing end
+
+let rec to_global_letbinds handle_action (Defs defs) t_level =
   let  (Env defs' instrs lets regs ctors subregs aliases) = t_level in
   match defs with
   | [] -> ((Value (V_lit (L_aux L_unit Unknown)), emem, eenv),t_level)
   | def::defs ->
     match def with
     | DEF_val lbind ->
-      match interp_letbind <|eager_eval=true; track_values=false;|> t_level eenv emem lbind with
-      | ((Value v,lm,(LEnv _ le)),_) -> to_global_letbinds (Defs defs) (Env defs' instrs (lets++le) regs ctors subregs aliases)
-      | ((Action a s,lm,le),_) -> 
-	((Error Unknown "Top level let may not access memory, registers or (for now) external functions", lm,le),t_level)
-      | (e,_) -> (e,t_level) end
+      match eval_toplevel_let handle_action t_level eenv emem lbind with
+	| Just le -> 
+	  to_global_letbinds handle_action (Defs defs) (Env defs' instrs (lets++le) regs ctors subregs aliases)
+	| Nothing -> 
+	  to_global_letbinds handle_action (Defs defs) (Env defs' instrs lets regs ctors subregs aliases) end
     | DEF_type (TD_aux tdef _) ->
       match tdef with
       | TD_enum id ns ids _ -> 
         let enum_vals = map (fun eid -> (eid,V_ctor eid (T_id (get_id id)) unitv)) ids in
-        to_global_letbinds (Defs defs) (Env defs' instrs (lets++enum_vals) regs ctors subregs aliases)
-      | _ -> to_global_letbinds (Defs defs) t_level end
-    | _ -> to_global_letbinds (Defs defs) t_level
+        to_global_letbinds handle_action (Defs defs) (Env defs' instrs (lets++enum_vals) regs ctors subregs aliases)
+      | _ -> to_global_letbinds handle_action (Defs defs) t_level end
+    | _ -> to_global_letbinds handle_action (Defs defs) t_level
     end
   end
 
 (*TODO Contemplate making decode and execute environment variables instead of these constants*)
-let to_top_env defs = 
+let to_top_env external_functions defs = 
   let t_level = Env defs (extract_instructions "decode" "execute" defs) 
                     [] (* empty letbind and enum values, call below will fill in any *) 
 		    (to_registers defs) (to_data_constructors defs) (to_register_fields defs) (to_aliases defs) in
-  let (o,t_level) = to_global_letbinds defs t_level in
+  let (o,t_level) = to_global_letbinds external_functions defs t_level in
   match o with
     | (Value _,_,_) -> (Nothing,t_level)
     | (o,_,_) -> (Just o,t_level)
   end
 
-let interp mode defs exp =
-  match (to_top_env defs) with
+let interp mode external_functions defs exp =
+  match (to_top_env external_functions defs) with
     | (Nothing,t_level) -> 
       match interp_main mode t_level eenv emem exp with
 	| (o,_,_) -> o
       end 
     | (Just o,_) -> o (* Should do something different for action to allow global lets to call external functions *)
+  end
+
+let rec resume_with_env mode stack value =
+  match (stack,value) with
+  | (Top,_) -> (Error Unknown "Top hit without expression to evaluate",eenv)
+  | (Hole_frame id exp t_level env mem Top,Just value) -> 
+    match interp_main mode t_level (add_to_env (id,value) env) mem exp with | (o,_,e) -> (o,e) end 
+  | (Hole_frame id exp t_level env mem stack,Just value) ->
+    match resume_with_env mode stack (Just value) with
+    | (Value v,e) -> 
+      match interp_main mode t_level (add_to_env (id,v) env) mem exp with | (o,_,e) -> (o,e) end 
+    | (Action action stack,e) -> (Action action (Hole_frame id exp t_level env mem stack),e)
+    | (Error l s,e) -> (Error l s,e)
+    end  
+  | (Hole_frame id exp t_level env mem stack, Nothing) ->
+    match resume_with_env mode stack Nothing with
+      | (Value v,e) ->
+	match interp_main mode t_level (add_to_env (id,v) env) mem exp with | (o,_,e) -> (o,e) end
+      | (Action action stack,e) -> (Action action (Hole_frame id exp t_level env mem stack),e)
+      | (Error l s,e) -> (Error l s,e)
+    end
+  | (Thunk_frame exp t_level env mem Top,_) ->
+    match interp_main mode t_level env mem exp with | (o,_,e) -> (o,e) end
+  | (Thunk_frame exp t_level env mem stack,value) ->
+    match resume_with_env mode stack value with
+    | (Value v,e) -> 
+      match interp_main mode t_level env mem exp with | (o,_,e) -> (o,e) end 
+    | (Action action stack,e) -> (Action action (Thunk_frame exp t_level env mem stack),e)
+    | (Error l s,e) -> (Error l s,e)
+    end  
   end
 
 let rec resume mode stack value =

@@ -13,7 +13,6 @@ val extern_reg_value : maybe integer -> Interp.value -> register_value
 val extern_mem_value : interp_mode -> Interp.value -> (memory_value * maybe (list reg_name))
 val extern_reg : Interp.reg_form -> maybe (integer * integer) -> reg_name
 
-let build_context defs = match Interp.to_top_env defs with (_,context) -> context end
 
 let make_mode eager_eval tracking_values = <| Interp.eager_eval = eager_eval; Interp.track_values = tracking_values |>;;
 let tracking_dependencies mode = mode.Interp.track_values
@@ -376,6 +375,17 @@ let rec interp_to_value_helper arg instr thunk =
       end 
     | _ -> (Nothing, Just (Internal_error "Memory or register requested in decode"))
 end
+
+let call_external_functions outcome = 
+  match outcome with
+    | Interp.Action (Interp.Call_extern i value) stack ->
+      match List.lookup i external_functions with
+	| Nothing -> Nothing
+	| Just f -> Just (f value) end
+    | _ -> Nothing end
+
+let build_context defs = match Interp.to_top_env call_external_functions defs with (_,context) -> context end
+
 
 let rec find_instruction i = function
   | [] -> Nothing

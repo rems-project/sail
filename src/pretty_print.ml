@@ -417,6 +417,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_exit exp -> fprintf ppf "@[<0>(E_aux (E_exit %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_internal_exp (l, Base((_,t),_,_,_)) ->
       (match t.t with
+	| Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
 	| Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
 	  (match r.nexp with
 	  | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
@@ -969,6 +970,7 @@ let doc_exp, doc_let =
       (* doc_op (doc_id op) (exp l) (exp r) *)
   | E_internal_exp (l, Base((_,t),_,_,_)) ->
     (match t.t with
+      | Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
       | Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
 	(match r.nexp with
 	  | Nvar v -> utf8string v
@@ -980,7 +982,7 @@ let doc_exp, doc_let =
 	  | Nconst bi -> utf8string (Big_int.string_of_big_int bi)
 	  | Nvar v -> utf8string v
 	  | _ -> raise (Reporting_basic.err_unreachable l "Internal exp given implicit without var or const"))
-      | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given non-vector, non-implicit"))
+      | _ ->  raise (Reporting_basic.err_unreachable l ("Internal exp given non-vector, non-implicit " ^ t_to_string t)))
 
   (* XXX missing case
      AAA internal_cast should never have an overload, if it's been seen it's a bug *)

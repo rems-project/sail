@@ -199,6 +199,8 @@ let to_vec_inc (V_tuple[v1;v2]) =
 	V_vector 0 true (map bool_to_bit (reverse l)) 
       | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
 	V_vector 0 true (List.replicate (natFromInteger n) V_unknown)
+      | ((V_lit(L_aux (L_num n) ln)),(V_lit (L_aux L_undef _))) -> 
+	V_vector 0 true (List.replicate (natFromInteger n) v2)
       | (_,V_unknown) -> V_unknown
       | (V_unknown,_) -> V_unknown
       | _ -> Assert_extra.failwith ("to_vec_inc parameters were " ^ (string_of_value (V_tuple[v1;v2])))
@@ -213,6 +215,8 @@ let to_vec_dec (V_tuple([v1;v2])) =
 	V_vector (len - 1) false (map bool_to_bit (reverse l)) 
       | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
 	V_vector (n-1) false (List.replicate (natFromInteger n) V_unknown)
+      | ((V_lit(L_aux (L_num n) ln)),(V_lit (L_aux L_undef _))) -> 
+	V_vector (n-1) false (List.replicate (natFromInteger n) v2)
       | (_,V_unknown) -> V_unknown
       | (V_unknown,_) -> V_unknown
       | _ -> Assert_extra.failwith ("to_vec_dec parameters were " ^ (string_of_value (V_tuple[v1;v2])))
@@ -532,7 +536,8 @@ let rec vec_concat (V_tuple [vl;vr]) =
 
 let v_length v = retaint v (match detaint v with
   | V_vector n d l -> V_lit (L_aux (L_num (integerFromNat (List.length l))) Unknown)
-  | V_unknown -> V_unknown end)
+  | V_unknown -> V_unknown 
+  | _ -> Assert_extra.failwith ("length given unexpected " ^ (string_of_value v)) end)
 
 let function_map = [
   ("ignore", ignore_sail);            

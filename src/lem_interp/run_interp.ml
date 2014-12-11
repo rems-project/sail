@@ -436,7 +436,7 @@ let run
   | Some m -> m in
   try
     Printexc.record_backtrace true;
-    loop mode (reg, mem) (interp {eager_eval = eager_eval; track_values = false} test entry)
+    loop mode (reg, mem) (interp {eager_eval = eager_eval; track_values = false} (fun id -> None) test entry)
   with e ->
     let trace = Printexc.get_backtrace () in
     debugf "%s: %s %s\n%s\n" (grey name) (red "interpretor error") (Printexc.to_string e) trace;
