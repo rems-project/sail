@@ -1964,14 +1964,14 @@ let freshen n =
 
 let rec simple_constraint_check in_env cs = 
   let check = simple_constraint_check in_env in
-  let _ = Printf.printf "simple_constraint_check\n" in 
+(*  let _ = Printf.printf "simple_constraint_check\n" in *)
   match cs with 
   | [] -> []
   | Eq(co,n1,n2)::cs -> 
     let check_eq ok_to_set n1 n2 = 
-      let _ = Printf.printf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in 
+(*      let _ = Printf.printf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in *)
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-      let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in 
+(*      let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
       (match n1'.nexp,n2'.nexp with
       | Ninexact,nok | nok,Ninexact -> 
 	eq_error (get_c_loc co) ("Type constraint arising from here requires " ^ n_to_string {nexp = nok} ^ " to be equal to +inf + -inf")
@@ -2018,9 +2018,9 @@ let rec simple_constraint_check in_env cs =
 	  | Some(c) -> c::(check cs))
       | _ -> (Eq(co,n1,n2)::(check cs)))
   | GtEq(co,n1,n2)::cs -> 
-    let _ = Printf.printf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in 
+(*    let _ = Printf.printf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in
+(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst i2 -> 
       if ge_big_int i1 i2 
@@ -2041,9 +2041,9 @@ let rec simple_constraint_check in_env cs =
 					     ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
 	  | _ -> GtEq(co,n1',n2')::(check cs)))
   | LtEq(co,n1,n2)::cs -> 
-    let _ = Printf.printf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in 
+(*    let _ = Printf.printf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in 
+(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 | Nconst i1, N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst i2 -> 
       if le_big_int i1 i2 
