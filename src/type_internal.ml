@@ -301,7 +301,7 @@ let rec compare_nexps n1 n2 =
   | Npow(n1,_),Npow(n2,_)-> compare_nexps n1 n2
   | Npow _   , _        -> -1
   | _        , Npow _   ->  1
-  | N2n(_,Some i1), N2n(_,Some i2) -> compare i1 i2
+  | N2n(_,Some i1), N2n(_,Some i2) -> compare_big_int i1 i2
   | N2n(n1,_), N2n(n2,_) -> compare_nexps n1 n2
   | N2n _    , _        -> -1
   | _        , N2n _    ->  1
