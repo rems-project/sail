@@ -73,7 +73,7 @@ let parse_file (f : string) : Parse_ast.defs =
           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
       | Lexer.LexError(s,p) ->
           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s))) in
-  let () = Lexer.custom_type_names := type_names in
+  let () = Lexer.custom_type_names := !Lexer.custom_type_names @ type_names in
   let lexbuf = get_lexbuf f in
     try
       Parser.file Lexer.token lexbuf

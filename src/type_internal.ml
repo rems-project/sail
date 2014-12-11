@@ -1080,6 +1080,12 @@ let initial_typ_env =
                           External (Some "mult_overflow_vec_signed"), [],pure_e);
                      
                     ]));
+    ("**",
+     Base(((mk_nat_params ["o";"p"]),
+	   (mk_pure_fun (mk_tup [(mk_range {nexp = Nconst two} {nexp = Nconst two}); 
+				 (mk_range (mk_nv "o") (mk_nv "p"))])
+	                (mk_range {nexp =N2n ((mk_nv "o"), None)} {nexp = N2n ((mk_nv "p"), None)}))),
+	  External (Some "power"), [],pure_e));	      
     ("mod",
      Overload(Base(((mk_typ_params ["a";"b";"c"]),
                     (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
