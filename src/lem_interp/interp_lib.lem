@@ -302,20 +302,21 @@ let rec arith_op_overflow_vec op sign size (V_tuple [vl;vr]) =
       | (V_vector b ord cs1,V_vector _ _ cs2) ->
 	let act_size = (List.length cs1) * size in
 	let (is_l1_unknown,is_l2_unknown) = ((has_unknown vl), (has_unknown vr)) in
-	let (l1',l2') = (if is_l1_unknown then V_unknown else (to_num sign vl),
-                         if is_l2_unknown then V_unknown else (to_num sign vr)) in
-    let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
-    let correct_size_num = to_vec ord act_size n in
-    let overflow = if (is_l1_unknown || is_l2_unknown) then V_unknown 
-      else (match n with 
-	| V_lit (L_aux (L_num n') ln) -> 
-	  if (n' <= (get_max_representable_in act_size)) &&
-	     (n' >= (get_min_representable_in act_size))
-	  then V_lit (L_aux L_zero ln)
-	  else V_lit (L_aux L_one ln) end) in
-    let c_out = if (is_l1_unknown || is_l2_unknown) then V_unknown
-      else match to_vec ord (act_size + 1) n with
-	| V_vector _ _ (msb::vs) -> msb end in
+	if is_l1_unknown || is_l2_unknown 
+	then (V_tuple [ (to_vec ord act_size V_unknown);V_unknown;V_unknown])
+	else 
+	  let (l1_sign,l2_sign) = (to_num sign vl,to_num sign vr) in
+	  let (l1_unsign,l2_unsign) = (to_num Unsigned vl,to_num Unsigned vr) in
+	  let n = arith_op op (V_tuple [l1_sign;l2_sign]) in
+	  let n_unsign = arith_op op (V_tuple[l1_unsign;l2_unsign]) in
+	  let correct_size_num = to_vec ord act_size n in
+	  let overflow = (match n with 
+	    | V_lit (L_aux (L_num n') ln) -> 
+	      if (n' <= (get_max_representable_in act_size)) &&
+		(n' >= (get_min_representable_in act_size))
+	      then V_lit (L_aux L_zero ln)
+	      else V_lit (L_aux L_one ln) end) in
+	  let c_out = carry_out (List.map detaint cs1) (List.map detaint cs2) (V_lit (L_aux L_zero Unknown)) in
     V_tuple [correct_size_num;overflow;c_out]
   | (V_unknown,_) -> V_tuple [V_unknown;V_unknown;V_unknown]
   | (_,V_unknown) -> V_tuple [V_unknown;V_unknown;V_unknown]
