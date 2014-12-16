@@ -7,6 +7,23 @@ open import List
 open import Word
 open import Bool
 
+
+let add_carry_out i1 i2 result = 
+  if (i1 < 0 && i2 < 0) 
+  then if result >= 0 then true else false
+  else (if i1 > 0 && i2 > 0)
+  then if result <= 0 then true else false
+  else if i1 < 0 
+  then if (abs i1) > i2 && result > 0 then true else false
+  else if i2 < 0 
+  then if (abs i2) > i1 && result < 0 then true else false
+  else false
+
+let mult_carry_out i1 i2 result = 
+  if (i1 < 0 && i2 < 0) || (i1 > 0 && i2 > 0) 
+  then if result <= 0 then true else false
+  else if result > 0 then true else false
+
 let hardware_mod (a: integer) (b:integer) : integer = 
  if a < 0 && b < 0
  then (abs a) mod (abs b)

@@ -83,32 +83,36 @@ let rec extract_if_first recur name (Typ_aux(typ,l)) =
 	| None -> None)
     | _ -> None
 
-let rec typ_to_t imp_ok (Typ_aux(typ,l)) =
+let rec typ_to_t imp_ok fun_ok (Typ_aux(typ,l)) =
+  let trans t = typ_to_t false false t in 
   match typ with
     | Typ_id i -> {t = Tid (id_to_string i)}
     | Typ_var (Kid_aux((Var i),l')) -> {t = Tvar i}
-(*Need to look here for the implicit parameter within the ty1, so typ_to_t may need an optional additional return*)
+    (*Need to look here for the implicit parameter within the ty1, so typ_to_t may need an optional additional return*)
     | Typ_fn (ty1,ty2,e) -> 
-      if has_typ_app false "implicit" ty1 
-      then if imp_ok 
-	then (match extract_if_first true "implicit" ty1 with
-	  | Some(imp,new_ty1) -> (match imp with
-	      | Typ_app(_,[Typ_arg_aux(Typ_arg_nexp ((Nexp_aux(n,l')) as ne),_)]) -> 
-		(match n with
-		  | Nexp_var (Kid_aux((Var i),l')) ->
-		    {t = Tfn (typ_to_t false new_ty1, typ_to_t false ty2, IP_var (anexp_to_nexp ne), aeffect_to_effect e)}
-		  | _ -> typ_error l' "Declaring an implicit parameter related to an Nat term must be a variable")
-	      | _ -> typ_error l "Declaring an implicit parameter requires a variable")
-	  | None -> typ_error l "A function type with an implicit parameter must have the implicit declaration first")
-	else typ_error l "This function type has an (possibly two) implicit parameter that is not permitted here"
-      else {t = Tfn (typ_to_t false ty1,typ_to_t false ty2,IP_none,aeffect_to_effect e)}
-    | Typ_tup(tys) -> {t = Ttup (List.map (typ_to_t false) tys) }
+      if fun_ok 
+      then begin
+	if has_typ_app false "implicit" ty1 
+	then if imp_ok 
+	  then (match extract_if_first true "implicit" ty1 with
+	    | Some(imp,new_ty1) -> (match imp with
+		| Typ_app(_,[Typ_arg_aux(Typ_arg_nexp ((Nexp_aux(n,l')) as ne),_)]) -> 
+		  (match n with
+		    | Nexp_var (Kid_aux((Var i),l')) ->
+		      {t = Tfn (trans new_ty1, trans ty2, IP_var (anexp_to_nexp ne), aeffect_to_effect e)}
+		    | _ -> typ_error l' "Declaring an implicit parameter related to an Nat term must be a variable")
+		| _ -> typ_error l "Declaring an implicit parameter requires a variable")
+	    | None -> typ_error l "A function type with an implicit parameter must have the implicit declaration first")
+	  else typ_error l "This function type has an (possibly two) implicit parameter that is not permitted here"
+	else {t = Tfn (trans ty1,trans ty2,IP_none,aeffect_to_effect e)} end
+      else typ_error l "Function types are not permitted here"
+    | Typ_tup(tys) -> {t = Ttup (List.map trans tys) }
     | Typ_app(i,args) -> {t = Tapp (id_to_string i,List.map typ_arg_to_targ args) }
     | Typ_wild -> new_t ()
 and typ_arg_to_targ (Typ_arg_aux(ta,l)) = 
   match ta with
     | Typ_arg_nexp n -> TA_nexp (anexp_to_nexp n)
-    | Typ_arg_typ t -> TA_typ (typ_to_t false t)
+    | Typ_arg_typ t -> TA_typ (typ_to_t false false t)
     | Typ_arg_order o -> TA_ord (aorder_to_ord o)
     | Typ_arg_effect e -> TA_eft (aeffect_to_effect e)
 and anexp_to_nexp ((Nexp_aux(n,l)) : Ast.nexp) : nexp =
@@ -168,10 +172,10 @@ let typq_to_params envs (TypQ_aux(tq,l)) =
     | TypQ_tq(qis) -> quants_to_consts envs qis
     | TypQ_no_forall -> [],[],[]
 
-let typschm_to_tannot envs imp_parm_ok ((TypSchm_aux(typschm,l)):typschm) (tag : tag) : tannot = 
+let typschm_to_tannot envs imp_parm_ok fun_ok ((TypSchm_aux(typschm,l)):typschm) (tag : tag) : tannot = 
   match typschm with
     | TypSchm_ts(tq,typ) -> 
-      let t = typ_to_t imp_parm_ok typ in
+      let t = typ_to_t imp_parm_ok fun_ok typ in
       let (ids,_,constraints) = typq_to_params envs tq in
       Base((ids,t),tag,constraints,pure_e)
 
@@ -232,7 +236,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
       let tannot = Base(([],t),emp_tag,cs,pure_e) in
       (P_aux(P_as(pat',id),(l,tannot)),Envmap.insert env (id_to_string id,tannot),cs@constraints,t)
     | P_typ(typ,pat) -> 
-      let t = typ_to_t false typ in
+      let t = typ_to_t false false typ in
       let (pat',env,constraints,u) = check_pattern envs emp_tag t pat in
       (P_aux(P_typ(typ,pat'),(l,Base(([],t),Emp_local,[],pure_e))),env,cs@constraints,t)
     | P_id id -> 
@@ -548,7 +552,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let t',cs',_,e' = type_coerce (Expr l) d_env false (get_e_typ e) e expect_t in
       (e',t',t_env,cs@cs',effect)
     | E_cast(typ,e) ->
-      let cast_t = typ_to_t false typ in
+      let cast_t = typ_to_t false false typ in
       let cast_t,cs_a = get_abbrev d_env cast_t in
       let ct = {t = Toptions(cast_t,None)} in
       let (e',u,t_env,cs,ef) = check_exp envs imp_param ct e in
@@ -1342,7 +1346,7 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp *
 	| _ -> typ_error l ("Unbound identifier " ^ i))
     | LEXP_cast(typ,id) -> 
       let i = id_to_string id in
-      let ty = typ_to_t false typ in
+      let ty = typ_to_t false false typ in
       (match Envmap.apply t_env i with
 	| Some(Base((parms,t),Default,_,_)) ->
 	  typ_error l ("Identifier " ^ i ^ " cannot be assigned when only a default specification exists")
@@ -1469,7 +1473,7 @@ and check_lbind envs imp_param is_top_level emp_tag (LB_aux(lbind,(l,annot))) : 
   let Env(d_env,t_env) = envs in
   match lbind with
   | LB_val_explicit(typ,pat,e) -> 
-    let tan = typschm_to_tannot envs false typ emp_tag in
+    let tan = typschm_to_tannot envs false false typ emp_tag in
     (match tan with
     | Base((params,t),tag,cs,ef) ->
       let t,cs,ef = subst params t cs ef in
@@ -1499,7 +1503,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
   let (Env(d_env,t_env)) = envs in
   match td with
     | TD_abbrev(id,nmscm,typschm) -> 
-      let tan = typschm_to_tannot envs false typschm Emp_global in
+      let tan = typschm_to_tannot envs false false typschm Emp_global in
       (TD_aux(td,(l,tan)),
        Env( { d_env with abbrevs = Envmap.insert d_env.abbrevs ((id_to_string id),tan)},t_env))
     | TD_record(id,nmscm,typq,fields,_) -> 
@@ -1508,7 +1512,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
       let ty = match typarms with | [] -> {t = Tid id'} | parms -> {t = Tapp(id',parms)} in
       let tyannot = Base((params,ty),Emp_global,constraints,pure_e) in
       let fields' = List.map 
-	(fun (ty,i)->(id_to_string i),Base((params,(typ_to_t false ty)),Emp_global,constraints,pure_e)) fields in
+	(fun (ty,i)->(id_to_string i),Base((params,(typ_to_t false false ty)),Emp_global,constraints,pure_e)) fields in
       (TD_aux(td,(l,tyannot)),Env({d_env with rec_env = (id',Record,fields')::d_env.rec_env},t_env))
     | TD_variant(id,nmscm,typq,arms,_) ->
       let id' = id_to_string id in
@@ -1522,7 +1526,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 	(fun (Tu_aux(tu,l')) -> 
 	  match tu with 
 	    | Tu_id i -> ((id_to_string i),(arm_t unit_t))
-	    | Tu_ty_id(typ,i)-> ((id_to_string i),(arm_t (typ_to_t false typ))))
+	    | Tu_ty_id(typ,i)-> ((id_to_string i),(arm_t (typ_to_t false false typ))))
 	arms in
       let t_env = List.fold_right (fun (id,tann) t_env -> Envmap.insert t_env (id,tann)) arms' t_env in
       (TD_aux(td,(l,tyannot)),(Env (d_env,t_env)))
@@ -1601,15 +1605,15 @@ let check_val_spec envs (VS_aux(vs,(l,annot))) =
   let (Env(d_env,t_env)) = envs in
   match vs with
     | VS_val_spec(typs,id) -> 
-      let tannot = typschm_to_tannot envs true typs Spec in
+      let tannot = typschm_to_tannot envs true true typs Spec in
       (VS_aux(vs,(l,tannot)),
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot))))
     | VS_extern_no_rename(typs,id) ->
-      let tannot = typschm_to_tannot envs true typs (External None) in
+      let tannot = typschm_to_tannot envs true true typs (External None) in
       (VS_aux(vs,(l,tannot)),
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot))))
     | VS_extern_spec(typs,id,s) ->
-      let tannot = typschm_to_tannot envs true typs (External (Some s)) in
+      let tannot = typschm_to_tannot envs true true typs (External (Some s)) in
       (VS_aux(vs,(l,tannot)),
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot))))
 
@@ -1619,7 +1623,7 @@ let check_default envs (DT_aux(ds,l)) =
     | DT_kind _ -> ((DT_aux(ds,l)),envs)
     | DT_order ord -> (DT_aux(ds,l), Env({d_env with default_o = (aorder_to_ord ord)},t_env))
     | DT_typ(typs,id) ->
-      let tannot = typschm_to_tannot envs false typs Default in
+      let tannot = typschm_to_tannot envs false false typs Default in
       (DT_aux(ds,l),
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot))))
 
@@ -1641,7 +1645,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   let ret_t,param_t,tannot = match tannotopt with
     | Typ_annot_opt_aux(Typ_annot_opt_some(typq,typ),l') ->
       let (ids,_,constraints) = typq_to_params envs typq in
-      let t = typ_to_t false typ in
+      let t = typ_to_t false false typ in
       let t,constraints,_ = subst ids t constraints pure_e in
       let p_t = new_t () in
       let ef = new_e () in
@@ -1802,7 +1806,7 @@ let check_def envs def =
 			   (DEF_default ds,envs)
   | DEF_reg_dec(DEC_aux(DEC_reg(typ,id), (l,annot))) -> 
 (*    let _ = Printf.printf "checking reg dec\n" in *)
-    let t = (typ_to_t false typ) in
+    let t = (typ_to_t false false typ) in
     let i = id_to_string id in
     let tannot = into_register d_env (Base(([],t),External (Some i),[],pure_e)) in
 (*    let _ = Printf.printf "done checking reg dec\n" in*)
@@ -1816,7 +1820,7 @@ let check_def envs def =
   | DEF_reg_dec(DEC_aux(DEC_typ_alias(typ,id,aspec),(l,tannot))) ->
 (*    let _ = Printf.printf "checking reg dec c\n" in*)
     let i = id_to_string id in
-    let t = typ_to_t false typ in
+    let t = typ_to_t false false typ in
     let (aspec,tannot,d_env) = check_alias_spec envs i aspec (Some t) in
 (*    let _ = Printf.printf "done checking reg dec c\n" in*)
     (DEF_reg_dec(DEC_aux(DEC_typ_alias(typ,id,aspec),(l,tannot))),(Env(d_env,Envmap.insert t_env (i,tannot))))

@@ -48,8 +48,8 @@ let typ_error l msg opt_id opt_var opt_kind =
               (match opt_id, opt_var, opt_kind with
               | Some(id),None,Some(kind) -> (id_to_string id) ^ " of " ^ (kind_to_string kind)
               | Some(id),None,None -> ": " ^ (id_to_string id)
-              | None,Some(v),Some(kind) -> "'" ^ (var_to_string v) ^ " of " ^ (kind_to_string kind)
-              | None,Some(v),None -> ": '" ^ (var_to_string v)
+              | None,Some(v),Some(kind) -> (var_to_string v) ^ " of " ^ (kind_to_string kind)
+              | None,Some(v),None -> ": " ^ (var_to_string v)
               | None,None,Some(kind) -> " " ^ (kind_to_string kind)
               | _ -> "")))
                 
@@ -80,6 +80,7 @@ let to_ast_kind (k_env : kind Envmap.t) (Parse_ast.K_aux(Parse_ast.K_kind(klst),
           | _ -> typ_error l "Type constructor must have an -> kind ending in Type" None None None
 
 let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp) : Ast.typ =
+(*  let _ = Printf.eprintf "to_ast_typ\n" in*)
   match t with
   | Parse_ast.ATyp_aux(t,l) ->
     Typ_aux( (match t with 
@@ -158,12 +159,14 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
     ), l)
 
 and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
+(*  let _ = Printf.eprintf "to_ast_nexp\n" in*)
   match n with
   | Parse_ast.ATyp_aux(t,l) ->
     (match t with
     | Parse_ast.ATyp_var(v) ->                 
                 let v = to_ast_var v in
                 let mk = Envmap.apply k_env (var_to_string v) in
+(*		let _ = Envmap.iter (fun v' k -> Printf.eprintf "%s -> %s, %s =? %b\n" v' (kind_to_string k) (var_to_string v) ((var_to_string v) = v') ) k_env in *)
                 (match mk with
                 | Some(k) -> Nexp_aux((match k.k with
                                       | K_Nat -> Nexp_var v
@@ -293,7 +296,7 @@ let to_ast_typquant (k_env: kind Envmap.t) (tq : Parse_ast.typquant) : typquant 
         | Some(k),Some(kt) -> KOpt_kind(k,v), (Envmap.insert k_env (key,kt)), (Envmap.insert local_env (key,kt))
 	| None, Some(kt) -> KOpt_none(v), (Envmap.insert k_env (key,kt)), (Envmap.insert local_env (key,kt))
 	| _ -> raise (Reporting_basic.err_unreachable l "Envmap in dom is true but apply gives None")) in
-      KOpt_aux(kopt,l),k_env,local_names,local_env
+      KOpt_aux(kopt,l),k_env,local_names,k_env_local
   in
   match tq with
   | Parse_ast.TypQ_aux(tqa,l) ->
@@ -644,6 +647,7 @@ let to_ast_effects_opt (k_env : kind Envmap.t) (Parse_ast.Effect_opt_aux(e,l)) :
   | Parse_ast.Effect_opt_effect(typ) -> Effect_opt_aux(Effect_opt_effect(to_ast_effects k_env typ),l)
 
 let to_ast_funcl (names,k_env,def_ord) (Parse_ast.FCL_aux(fcl,l) : Parse_ast.funcl) : (tannot funcl) =
+  (*let _ = Printf.eprintf "to_ast_funcl\n" in*)
   match fcl with
   | Parse_ast.FCL_Funcl(id,pat,exp) -> 
     FCL_aux(FCL_Funcl(to_ast_id id, to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp),(l,NoTyp))
@@ -735,6 +739,9 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
         (match (def_in_progress id partial_defs) with
 	| None -> typ_error l "Scattered function definition clause does not match any exisiting function definition headers" (Some id) None None
 	| Some(d,k) ->
+	 (* let _ = Printf.eprintf "SD_scattered_funcl processing\n" in
+	  let _ = Envmap.iter (fun v' k -> Printf.eprintf "%s -> %s\n" v' (kind_to_string k)) k in 
+	  let _ = Envmap.iter (fun v' k -> Printf.eprintf "%s -> %s\n" v' (kind_to_string k) ) (Envmap.union k k_env) in *)
 	  (match !d with
 	  | DEF_fundef(FD_aux(FD_function(r,t,e,fcls),fl)),false -> 
 	    let funcl = to_ast_funcl (names,Envmap.union k k_env,def_ord) funcl in 
