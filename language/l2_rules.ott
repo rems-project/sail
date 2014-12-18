@@ -762,39 +762,52 @@ S_N' == u+ </S_N'i//i/>
 ------------------------------------------------------------ :: record
 <E_t,<E_k,E_a,E_r,E_e>>,t |- { </idi = expi//i/> semi_opt} : x<t_args> gives{ </idi=exp'i//i/> semi_opt}, u+ <S_N u+ S_N', u+ </effecti//i/>>, {}
 
-<E_t,<E_k,E_r,E_e>> |- exp : id t_args gives I,E_t
+<E_t,<E_k,E_r,E_e>>,t |- exp : id t_args gives exp', I,E_t
 E_r(id t_args) gives </ id'n:t'n//n/>
-</ <E_t,<E_k,E_r,E_e>> |- expi : ti gives Ii,E_t//i/>
+</ <E_t,<E_k,E_r,E_e>>,ti |- expi : ui gives expi',Ii,E_t//i/>
 </idi:ti//i/> SUBSET </id'n : t'n//n/>
+</<E_k,E_a,E_r,E_e> |- ui ~< ti,S_N'i//i/>
 ------------------------------------------------------------ :: recup
-<E_t,<E_k,E_r,E_e>> |- { exp with </idi = expi//i/> semi_opt } : id t_args gives I u+ </Ii//i/>, E_t
+<E_t,<E_k,E_r,E_e>> ,t |- { exp with </idi = expi//i/> semi_opt } : id t_args gives {exp' with </idi = exp'i//i/>}, I u+ </Ii//i/>, E_t
 
-E |- exp1 : t gives I1,E_t ... E |- expn : t gives In,E_t
+E,t |- exp1 u1 t gives exp'1,I1,E_t ... E,t |- expn : un gives exp'n,In,E_t
 length(exp1 ... expn) = num
 ------------------------------------------------------------ :: vector
-E |- [ exp1 , ... , expn ] : vector zero num inc t gives I1 u+ ... u+ In, E_t
+E, vector<ne1,ne2,ord,t> |- [ exp1 , ... , expn ] : vector<ne3,num,ord,u> gives [exp'1,...,exp'n], I1 u+ ... u+ In, E_t
  
-E |- exp1 : vector ne ne' inc t gives I1,E_t
-E |- exp2 : enum ne2 ne2' inc gives I2,E_t
+E, vector<ne ne' ord t> |- exp1 : vector<ne1 ne1' inc u> gives exp'1,I1,E_t
+E, range<ne2 ne2'> |- exp2 : range<ne3 ne3'> gives exp'2, I2,E_t
 ------------------------------------------------------------- :: vectorgetInc
-E |- :E_vector_access: exp1 [ exp2 ] : t gives I1 u+ I2 u+ <{ne<=ne2,ne2+ne2'<=ne+ne'},pure>,E_t
+E, t |- :E_vector_access: exp1 [ exp2 ] : u gives exp'1 [ exp'2], I1 u+ I2 u+ <{ne1<=ne3,ne3+ne3'<=ne1+ne1'},pure>,E_t
 
-E |- exp1 : vector ne ne' dec t gives I1,E_t
-E |- exp2 : enum ne2 ne'2 dec gives I2,E_t
+E, vector<ne ne' ord t> |- exp1 : vector<ne1 ne1' dec u> gives exp'1,I1,E_t
+E, range<ne2 ne2'> |- exp2 : range<ne3 ne3'> gives exp'2, I2,E_t
 ------------------------------------------------------------- :: vectorgetDec
-E |- :E_vector_access: exp1 [ exp2 ] : t gives I1 u+ I2 u+ <{ne>=ne2,ne2+(-ne2')<=ne+(-ne')},pure>,E_t
+E, t |- :E_vector_access: exp1 [ exp2 ] : u gives exp'1 [ exp'2], I1 u+ I2 u+ <{ne1>=ne3,ne3+(-ne3')<=ne1+(-ne1')},pure>,E_t
 
-E |- exp1 : vector ne ne' order t gives I1,E_t
-E |- exp2 : enum ne2 ne'2 order gives I2,E_t
-E |- exp3 : enum ne3 ne'3 order gives I3,E_t
-------------------------------------------------------------- :: vectorsub
-E |- :E_vector_subrange: exp1[ exp2 : exp3 ] : vector :t_arg_nexp: 'x :t_arg_nexp: 'x2 order t gives I1 u+ I2 u+ I3 u+ <{ne <= ne2, 'x >= ne2 , 'x <= ne2+ne2', ne2+ne'2<=ne3, ne+ne'>=ne3+ne'3, 'x2 <=ne3 + ne'3},pure>,E_t
+E, vector<ne1 ne'1 inc t> |- exp1 : <vector ne2 ne'2 inc u> gives exp'1, I1,E_t
+E, range<ne3 ne3'> |- exp2 : range< ne4 ne'4> gives exp'2, I2,E_t
+E,range <ne5 ne5'> |- exp3 : range< ne6 ne'6> gives exp'3, I3,E_t
+------------------------------------------------------------- :: vectorsubInc
+E, vector<ne ne' inc t> |- :E_vector_subrange: exp1[ exp2 : exp3 ] : vector<ne7 ne'7 inc u> gives exp'1[exp'2:exp'3], I1 u+ I2 u+ I3 u+ <{ne >= ne4, ne <= ne'4,ne'<=ne4+ne'6,ne4 <= ne2, ne4+ne6' <= ne'2},pure>,E_t
 
-E |- exp : vector ne1 ne2 order t gives I,E_t
-E |- exp1 : enum ne3 ne4 order gives I1,E_t
-E |- exp2 : t gives I2,E_t
------------------------------------------------------------- :: vectorup
-E |- [ exp with exp1 = exp2 ] : vector ne1 ne2 order t gives I u+ I1 u+ I2 u+ <{ne1 <= ne3, ne1 + ne2 >= ne3 + ne4},pure>,E_t
+E, vector<ne1 ne'1 dec t> |- exp1 : <vector ne2 ne'2 dec u> gives exp'1, I1,E_t
+E, range<ne3 ne3'> |- exp2 : range< ne4 ne'4> gives exp'2, I2,E_t
+E,range <ne5 ne5'> |- exp3 : range< ne6 ne'6> gives exp'3, I3,E_t
+------------------------------------------------------------- :: vectorsubDec
+E, vector<ne ne' dec t> |- :E_vector_subrange: exp1[ exp2 : exp3 ] : vector<ne7 ne'7 dec u> gives exp'1[exp'2:exp'3], I1 u+ I2 u+ I3 u+ <{ne <= ne4, ne >= ne'4,ne'<=ne'6+(-ne4),ne4' >= ne2, ne'6+(-ne4) <= ne'2},pure>,E_t
+
+E, vector<ne ne' inc t> |- exp : vector< ne1 ne2 inc u> gives exp',I,E_t
+E, range<ne'1 ne'2> |- exp1 : range<ne3 ne4> gives exp'1,I1,E_t
+E,t |- exp2 : u gives exp'2,I2,E_t
+------------------------------------------------------------ :: vectorupInc
+E, vector<ne ne' inc t> |- [ exp with exp1 = exp2 ] : vector< ne1 ne2 inc u> gives [exp' with exp'1 = exp'2], I u+ I1 u+ I2 u+ <{ne1 <= ne3, ne2 >= ne4},pure>,E_t
+
+E, vector<ne ne' dec t> |- exp : vector <ne1 ne2 dec u> gives exp',I,E_t
+E, range<ne'1 ne'2> |- exp1 : range<ne3 ne4> gives exp'1,I1,E_t
+E,t |- exp2 : u gives exp'2,I2,E_t
+------------------------------------------------------------ :: vectorupDec
+E, vector<ne ne' dec t> |- [ exp with exp1 = exp2 ] : vector< ne1 ne2 dec u> gives [exp' with exp'1 = exp'2], I u+ I1 u+ I2 u+ <{ne1 >= ne3, ne2 >= ne4},pure>,E_t
 
 E |- exp : vector ne1 ne2 order t gives I,E_t
 E |- exp1 : enum ne3 ne4 order gives I1,E_t
@@ -811,20 +824,24 @@ E |- exp3 : t gives I3,E_t
 E |- [ exp with exp1 : exp2 = exp3 ] : vector ne1 ne2 order t gives I u+ I1 u+ I2 u+ I3 u+ <{ne1 <= ne3, ne1 <= ne5,ne3+ne4 <= ne5, ne1 + ne2 <= ne5 + ne6 + (- ne3) + (- ne4)},pure>,E_t
 
 
-E_r (id t_args) gives </idi : ti//i/> id : t </id'j : t'j//j/>
-<E_t,<E_k,E_r,E_e>> |- exp : id t_args gives I,E_t
+E_r (id t_args) gives </idi : ti//i/> id : u </id'j : t'j//j/>
+<E_t,<E_k,E_r,E_e>>,t''  |- exp : id t_args gives exp', I,E_t
+E_d,t |- exp'.id : u gives t', exp1', S_N', effect
 ------------------------------------------------------------ :: field
-<E_t,<E_k,E_r,E_e>> |- exp.id : t gives I,E_t
+<E_t,<E_k,E_r,E_e>>,t |- exp.id : u gives exp1',I u+ <S_N',effect>,E_t
 
-</<E_t,E_d> |- pati : t gives E_ti,S_Ni//i/>
-</<(E_t u+ E_ti),E_d> |- expi : u gives Ii,E_t'i//i/>
-<E_t,E_d> |- exp : t gives I,E_t
+<E_t,E_d>,t'' |- exp : u gives exp',I,E_t
+</<E_t,E_d>,u |- pati : u'i gives pat'i,E_ti,S_Ni//i/>
+</<(E_t u+ E_ti),E_d>,t |- expi : u''i gives exp'i,Ii,E_t'i//i/>
 ------------------------------------------------------------ :: case
-<E_t,E_d> |- switch exp { </case pati -> expi//i/> }: u gives I u+ </Ii u+ <S_Ni,pure>//i/>, inter </E_t'i//i/> u- </E_ti//i/>
+<E_t,E_d>,t |- switch exp { </case pati -> expi//i/> }: u gives switch exp' { </case pat'i -> exp'i//i/> }, I u+ </Ii u+ <S_Ni,pure>//i/>, E_t
 
-<E_t,E_d> |- exp : t gives I,E_t
+<E_t,E_d>,t'' |- exp : u gives exp',I,E_t
+E_d |- typ |-> t'
+E_d,t' |- exp' : u gives u', exp'', S_N,effect
+E_d,t |- exp'' : t' gives u'', exp''', S_N', effect'
 ------------------------------------------------------------ :: typed
-<E_t,E_d> |- (typ) exp : t gives I,E_t
+<E_t,E_d>,t |- (typ) exp : t gives exp''',Iu+<S_N u+ S_N',effect u+ effect'>,E_t
 
 <E_t,E_d> |- letbind gives E_t1, S_N, effect, {}
 <(E_t u+ E_t1),E_d> |- exp : t gives I2, E_t2
