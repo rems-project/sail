@@ -277,7 +277,7 @@ let rec compare_nexps n1 n2 =
   | Nneg_inf , Nneg_inf -> 0
   | Nneg_inf , _        -> -1
   | _        , Nneg_inf ->  1
-  | Nconst n1, Nconst n2 -> compare n1 n2
+  | Nconst n1, Nconst n2 -> compare_big_int n1 n2
   | Nconst _ , _        -> -1
   | _        , Nconst _ ->  1
   | Nvar i1  , Nvar i2  ->  compare i1 i2
