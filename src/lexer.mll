@@ -297,6 +297,7 @@ rule token = parse
   | "2^" oper_char+ as i				{ (TwoCarrotI(r i)) }
 
   | digit+ as i                         { (Num(int_of_string i)) }
+  | "-" digit+ as i                     { (Num(int_of_string i)) }
   | "0b" (binarydigit+ as i)		{ (Bin(i)) }
   | "0x" (hexdigit+ as i) 		{ (Hex(i)) }
   | '"'                                 { (String(
