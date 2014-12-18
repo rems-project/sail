@@ -2,7 +2,8 @@ open import Pervasives
 import Map
 import Map_extra (* For 'find' instead of using lookup and maybe types, as we know it cannot fail *)
 import List_extra (* For 'nth' and 'head' where we know that they cannot fail *)
-open import String_extra (* for 'show' to convert nat to string) *)
+open import Show_extra (* for 'show' to convert nat to string) *)
+open import String_extra (* for chr *)
 import Assert_extra (*For failwith when partiality is known to be unreachable*)
 
 open import Interp_ast
@@ -1403,7 +1404,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		    | (V_vector_sparse _ _ _ _ _,V_unknown) -> V_unknown
 		    | (V_unknown,_) -> V_unknown 
 		    | _ -> Assert_extra.failwith 
-		      ("Vector access error: " ^ (string_of_value vvec) ^ "[" ^ (string_of_integer n) ^ "]") end) in
+		      ("Vector access error: " ^ (string_of_value vvec) ^ "[" ^ (show n) ^ "]") end) in
 		  (Value (binary_taint v_access vvec iv),lm,le))
 		(fun a ->
 		  match a with

@@ -8,10 +8,10 @@ open import Word
 open import Bool
 
 
-let add_carry_out i1 i2 result = 
+let add_carry_out (i1:integer) (i2:integer) (result:integer) = 
   if (i1 < 0 && i2 < 0) 
   then if result >= 0 then true else false
-  else (if i1 > 0 && i2 > 0)
+  else if (i1 > 0 && i2 > 0)
   then if result <= 0 then true else false
   else if i1 < 0 
   then if (abs i1) > i2 && result > 0 then true else false
@@ -19,7 +19,7 @@ let add_carry_out i1 i2 result =
   then if (abs i2) > i1 && result < 0 then true else false
   else false
 
-let mult_carry_out i1 i2 result = 
+let mult_carry_out (i1:integer) (i2:integer) (result:integer) = 
   if (i1 < 0 && i2 < 0) || (i1 > 0 && i2 > 0) 
   then if result <= 0 then true else false
   else if result > 0 then true else false
@@ -313,7 +313,7 @@ let rec arith_op_vec_vec_range op sign (V_tuple [vl;vr]) =
       | (_,V_unknown) -> V_unknown
    end in
    binary_taint arith_op_help vl vr
-let rec arith_op_overflow_vec op sign size (V_tuple [vl;vr]) = 
+let rec arith_op_overflow_vec op over_typ sign size (V_tuple [vl;vr]) = 
   let overflow_help vl vr =
     match (vl,vr) with
       | (V_vector b ord cs1,V_vector _ _ cs2) ->
@@ -333,7 +333,14 @@ let rec arith_op_overflow_vec op sign size (V_tuple [vl;vr]) =
 		(n' >= (get_min_representable_in act_size))
 	      then V_lit (L_aux L_zero ln)
 	      else V_lit (L_aux L_one ln) end) in
-	  let c_out = carry_out (List.map detaint cs1) (List.map detaint cs2) (V_lit (L_aux L_zero Unknown)) in
+	  let out_num = to_num sign correct_size_num in
+	  let c_out = 
+	    match (l1_sign,l2_sign,out_num) with
+	      | (V_lit (L_aux (L_num n1) _),V_lit (L_aux (L_num n2) _), V_lit (L_aux (L_num r) _)) ->
+		if (over_typ = "+" && add_carry_out n1 n2 r) || (over_typ = "*" && mult_carry_out n1 n2 r)
+		then V_lit (L_aux L_one Unknown)
+		else V_lit (L_aux L_zero Unknown)
+	      | _ -> carry_out (List.map detaint cs1) (List.map detaint cs2) (V_lit (L_aux L_zero Unknown)) end in
     V_tuple [correct_size_num;overflow;c_out]
   | (V_unknown,_) -> V_tuple [V_unknown;V_unknown;V_unknown]
   | (_,V_unknown) -> V_tuple [V_unknown;V_unknown;V_unknown]
@@ -568,7 +575,7 @@ let function_map = [
   ("add_range_vec_range", arith_op_range_vec_range (+) Unsigned);
   ("add_vec_vec_range", arith_op_vec_vec_range (+) Unsigned);
   ("add_vec_bit", arith_op_vec_bit (+) Unsigned 1);
-  ("add_overflow_vec", arith_op_overflow_vec (+) Unsigned 1);
+  ("add_overflow_vec", arith_op_overflow_vec (+) "+" Unsigned 1);
   ("add_signed", arith_op (+));
   ("add_vec_signed", arith_op_vec (+) Signed 1);
   ("add_vec_range_signed", arith_op_vec_range (+) Signed 1);
@@ -577,7 +584,7 @@ let function_map = [
   ("add_range_vec_range_signed", arith_op_range_vec_range (+) Signed);
   ("add_vec_vec_range_signed", arith_op_vec_vec_range (+) Signed);
   ("add_vec_bit_signed", arith_op_vec_bit (+) Signed 1);
-  ("add_overflow_vec_signed", arith_op_overflow_vec (+) Signed 1);
+  ("add_overflow_vec_signed", arith_op_overflow_vec (+) "+" Signed 1);
   ("add_overflow_vec_bit_signed", arith_op_overflow_vec_bit (+) Signed 1);
   ("minus", arith_op (-));
   ("minus_vec", arith_op_vec (-) Unsigned 1);
@@ -586,16 +593,16 @@ let function_map = [
   ("minus_vec_range_range", arith_op_vec_range_range (-) Unsigned);
   ("minus_range_vec_range", arith_op_range_vec_range (-) Unsigned);
   ("minus_vec_bit", arith_op_vec_bit (-) Unsigned 1);
-  ("minus_overflow_vec", arith_op_overflow_vec (-) Unsigned 1);
+  ("minus_overflow_vec", arith_op_overflow_vec (-) "+" Unsigned 1);
   ("multiply", arith_op ( * ));
   ("multiply_vec", arith_op_vec ( * ) Unsigned 2);
   ("mult_range_vec", arith_op_range_vec ( * ) Unsigned 2);
   ("mult_vec_range", arith_op_vec_range ( * ) Unsigned 2);
-  ("mult_overflow_vec", arith_op_overflow_vec ( * ) Unsigned 2);
+  ("mult_overflow_vec", arith_op_overflow_vec ( * ) "*" Unsigned 2);
   ("multiply_vec_signed", arith_op_vec ( * ) Signed 2);
   ("mult_range_vec_signed", arith_op_range_vec ( * ) Signed 2);
   ("mult_vec_range_signed", arith_op_vec_range ( * ) Signed 2);
-  ("mult_overflow_vec_signed", arith_op_overflow_vec ( * ) Signed 2);
+  ("mult_overflow_vec_signed", arith_op_overflow_vec ( * ) "*" Signed 2);
   ("bitwise_leftshift", shift_op_vec "<<");
   ("bitwise_rightshift", shift_op_vec ">>");
   ("bitwise_rotate", shift_op_vec "<<<");
