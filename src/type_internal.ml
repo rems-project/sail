@@ -1679,10 +1679,9 @@ let rec type_consistent_internal co d_env t1 cs1 t2 cs2 =
   let t2,cs2' = get_abbrev d_env t2 in
   let cs1,cs2 = cs1@cs1',cs2@cs2' in
   let csp = cs1@cs2 in
-  match t1.t,t2.t with
-  | Tabbrev(_,t1),Tabbrev(_,t2) -> type_consistent_internal co d_env t1 cs1 t2 cs2
-  | Tabbrev(_,t1),_ -> type_consistent_internal co d_env t1 cs1 t2 cs2
-  | _,Tabbrev(_,t2) -> type_consistent_internal co d_env t1 cs1 t2 cs2
+  let t1_actual = match t1.t with | Tabbrev(_,t1) -> t1 | _ -> t1 in
+  let t2_actual = match t2.t with | Tabbrev(_,t2) -> t2 | _ -> t2 in
+  match t1_actual.t,t2_actual.t with
   | Tvar v1,Tvar v2 -> 
     if v1 = v2 then (t2,csp) 
     else eq_error l ("Type variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
@@ -1732,21 +1731,20 @@ let rec type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2 =
   let l = get_c_loc co in
   let t1,cs1' = get_abbrev d_env t1 in
   let t2,cs2' = get_abbrev d_env t2 in
+  let t1_actual = match t1.t with | Tabbrev(_,t1) -> t1 | _ -> t1 in
+  let t2_actual = match t2.t with | Tabbrev(_,t2) -> t2 | _ -> t2 in
   let cs1,cs2 = cs1@cs1',cs2@cs2' in
   let csp = cs1@cs2 in
-  match t1.t,t2.t with
-  | Tabbrev(_,t1),Tabbrev(_,t2) -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
-  | Tabbrev(_,t1),_ -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
-  | _,Tabbrev(_,t2) -> type_coerce_internal co d_env is_explicit t1 cs1 e t2 cs2
+  match t1_actual.t,t2_actual.t with
   | Toptions(to1,Some to2),_ -> 
-    if (conforms_to_t d_env false true to1 t2 || conforms_to_t d_env false true to2 t2)
-    then begin t1.t <- t2.t; (t2,csp,pure_e,e) end
+    if (conforms_to_t d_env false true to1 t2_actual || conforms_to_t d_env false true to2 t2_actual)
+    then begin t1_actual.t <- t2_actual.t; (t2,csp,pure_e,e) end
     else eq_error l ("Neither " ^ (t_to_string to1) ^
 		     " nor " ^ (t_to_string to2) ^ " can match expected type " ^ (t_to_string t2))
   | Toptions(to1,None),_ -> (t2,csp,pure_e,e)
   | _,Toptions(to1,Some to2) -> 
-    if (conforms_to_t d_env false true to1 t1 || conforms_to_t d_env false true to2 t1)
-    then begin t2.t <- t1.t; (t1,csp,pure_e,e) end
+    if (conforms_to_t d_env false true to1 t1_actual || conforms_to_t d_env false true to2 t1_actual)
+    then begin t2_actual.t <- t1_actual.t; (t1,csp,pure_e,e) end
     else eq_error l ((t_to_string t1) ^ " can match neither expexted type " ^ (t_to_string to1) ^ " nor " ^ (t_to_string to2))
   | _,Toptions(to1,None) -> (t1,csp,pure_e,e)
   | Ttup t1s, Ttup t2s ->
