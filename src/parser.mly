@@ -96,6 +96,8 @@ let make_range_sugar_bounded typ1 typ2 =
   ATyp_app(Id_aux(Id("range"),Unknown),[typ1; typ2;])
 let make_range_sugar typ1 =
   make_range_sugar_bounded (ATyp_aux(ATyp_constant(0), Unknown)) typ1
+let make_atom_sugar typ1 =
+  ATyp_app(Id_aux(Id("atom"),Unknown),[typ1])
 
 let make_r bot top =
   match bot,top with
@@ -144,7 +146,8 @@ let make_vector_sugar order_set is_inc typ typ1 =
 
 %token Bar Comma Dot Eof Minus Semi Under
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare
-%token BarBar BarSquare BarBarSquare ColonEq DotDot ColonGt MinusGt LtBar LtColon SquareBar SquareBarBar
+%token BarBar BarSquare BarBarSquare ColonEq ColonGt ColonSquare DotDot
+%token MinusGt LtBar LtColon SquareBar SquareBarBar SquareColon
 
 /*Terminals with content*/
 
@@ -345,6 +348,8 @@ atomic_typ:
       { tloc (make_range_sugar $2) }
   | SquareBar nexp_typ Colon nexp_typ BarSquare
       { tloc (make_range_sugar_bounded $2 $4) }
+  | SquareColon nexp_typ ColonSquare
+      { tloc (make_atom_sugar $2) }
   | Lparen typ Rparen
     { $2 }
 

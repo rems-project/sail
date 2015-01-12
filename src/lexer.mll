@@ -122,7 +122,8 @@ let kw_table =
 
 ]
 
-let default_type_names = ["bool";"unit";"vector";"range";"list";"bit";"nat"; "int"; "uint8";"uint16";"uint32";"uint64";"implicit"]
+let default_type_names = ["bool";"unit";"vector";"range";"list";"bit";"nat"; "int";
+			  "uint8";"uint16";"uint32";"uint64";"atom";"implicit"]
 let custom_type_names : string list ref = ref []
 
 }
@@ -172,11 +173,13 @@ rule token = parse
   | "]"                                 { Rsquare }
   | "&&" as i                           { (AmpAmp(r i)) }
   | "||"                                { BarBar }
+  | "||]"                               { BarBarSquare }
   | "|]"				{ BarSquare }
   | "^^"				{ (CarrotCarrot(r"^^")) }
   | "::" as i                           { (ColonColon(r i)) }
   | ":="                                { ColonEq }
   | ":>"                                { ColonGt }
+  | ":]"                                { ColonSquare }
   | ".."				{ DotDot }
   | "=/="				{ (EqDivEq(r"=/=")) }
   | "=="				{ (EqEq(r"==")) }
@@ -199,6 +202,8 @@ rule token = parse
   | "<+"				{ (LtPlus(r"<+")) }
   | "**"				{ (StarStar(r"**")) }
   | "[|"                                { SquareBar }
+  | "[||"                               { SquareBarBar }
+  | "[:"                                { SquareColon }
   | "~^"				{ (TildeCarrot(r"~^")) }
 
   | "+_s"                               { (PlusUnderS(r"+_s")) }

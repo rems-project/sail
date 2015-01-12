@@ -618,6 +618,9 @@ let squarebars = enclose lsquarebar rsquarebar
 let lsquarebarbar = string "[||"
 let rsquarebarbar = string "||]"
 let squarebarbars = enclose lsquarebarbar rsquarebarbar
+let lsquarecolon = string "[:"
+let rsquarecolon = string ":]"
+let squarecolons = enclose lsquarecolon rsquarecolon
 let spaces op = enclose space space op
 let semi_sp = semi ^^ space
 let comma_sp = comma ^^ space
@@ -671,6 +674,8 @@ let doc_typ, doc_atomic_typ, doc_nexp =
     Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
     Typ_arg_aux(Typ_arg_nexp m, _);]) ->
     (squarebars (if n = 0 then nexp m else doc_op colon (doc_int n) (nexp m))) 
+  | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
+    (squarecolons (nexp n))
   | Typ_app(id,args) ->
       (* trailing space to avoid >> token in case of nested app types *)
       (doc_id id) ^^ (angles (separate_map comma_sp doc_typ_arg args)) ^^ space
@@ -1163,3 +1168,59 @@ let to_buf ?(len=80) buf doc = ToBuffer.pretty 1. len buf doc
 
 let pp_defs f d = print f (doc_defs d)
 let pp_exp b e = to_buf b (doc_exp e)
+
+(****************************************************************************
+ * PPrint-based sail-to-ocaml pretty printer, primarily for types
+****************************************************************************)
+
+let star_sp = star ^^ space
+
+let doc_id_ocaml (Id_aux(i,_)) =
+  match i with
+  | Id("bit") -> string "bool" 
+  | Id i -> string i
+  | DeIid x ->
+      (* add an extra space through empty to avoid a closing-comment
+       * token in case of x ending with star. *)
+      parens (separate space [string "deinfix"; string x; empty])
+
+let doc_typ_ocaml, doc_atomic_typ_ocaml =
+  (* following the structure of parser for precedence *)
+  let rec typ ty = fn_typ ty
+  and fn_typ ((Typ_aux (t, _)) as ty) = match t with
+  | Typ_fn(arg,ret,efct) ->
+      separate space [tup_typ arg; arrow; fn_typ ret]
+  | _ -> tup_typ ty
+  and tup_typ ((Typ_aux (t, _)) as ty) = match t with
+  | Typ_tup typs -> parens (separate_map comma_sp app_typ typs)
+  | _ -> app_typ ty
+  and app_typ ((Typ_aux (t, _)) as ty) = match t with
+  | Typ_app(Id_aux (Id "vector", _), [
+      Typ_arg_aux(Typ_arg_nexp n, _);
+      Typ_arg_aux(Typ_arg_nexp m, _);
+      Typ_arg_aux (Typ_arg_order ord, _);
+      Typ_arg_aux (Typ_arg_typ typ, _)]) ->
+      (atomic_typ typ) ^^ (string "list")
+  | Typ_app(Id_aux (Id "range", _), [
+    Typ_arg_aux(Typ_arg_nexp n, _);
+    Typ_arg_aux(Typ_arg_nexp m, _);]) ->
+    (string "number")
+  | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
+    (string "number")
+  | Typ_app(id,args) ->
+      (separate_map space doc_typ_arg_ocaml args) ^^ (doc_id_ocaml id)
+  | _ -> atomic_typ ty 
+  and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
+  | Typ_id id  -> doc_id_ocaml id
+  | Typ_var v  -> doc_var v
+  | Typ_wild -> underscore
+  | Typ_app _ | Typ_tup _ | Typ_fn _ ->
+      (* exhaustiveness matters here to avoid infinite loops
+       * if we add a new Typ constructor *)
+      group (parens (typ ty))
+  and doc_typ_arg_ocaml (Typ_arg_aux(t,_)) = match t with
+  | Typ_arg_typ t -> app_typ t
+  | Typ_arg_nexp n -> empty
+  | Typ_arg_order o -> empty
+  | Typ_arg_effect e -> empty
+  in typ, atomic_typ

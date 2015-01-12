@@ -5,6 +5,7 @@ built_in_types :: '' ::=
   | bit : Typ :: :: bitDesc
   | unit : Typ :: :: unitDesc
   | forall Nat 'n. Nat 'm. range <'n, 'm> : Nat -> Nat -> Typ :: :: rangeDesc
+  | forall Nat 'n. atom <'n> : Nat -> Typ :: :: atomDesc {{ com singleton number, instead of range<'n,'n> }}
   | forall Nat 'n, Nat 'm, Order 'o, Typ 't. vector < 'n, 'm, 'o, 't > : Nat -> Nat -> Order -> Typ :: :: vectorDesc
   | forall Typ 't. register < 't > : Typ -> Typ :: :: registerDec
   | forall Typ 't. reg < 't > : Typ -> Typ :: :: regDec
@@ -51,17 +52,17 @@ functions :: '' ::=
   {{ com unsigned vector multiplication }}
   | val forall Nat 'n . ( bit [ 'n ] , bit ['n] ) -> bit [ 2*'n ] : *_s :: :: multvecS
   {{ com signed vector multiplication }}
-  | val ( [| 'n '..' 'm |] , [| 'o '..' 'p |] ) -> [| 0 '..' 'p - 1 |] : mod :: :: modbase
-  {{ com arithmetic modulo, 'o $>$ 0 }}
+  | val ( [| 'n '..' 'm |] , [| 1 '..' 'p |] ) -> [| 0 '..' 'p - 1 |] : mod :: :: modbase
+  {{ com arithmetic modulo }}
   | val forall Nat 'n . ( bit [ 'n ] , bit [ 'n ] ) -> bit [ 'n ] : mod :: :: modvec
   {{ com unsigned vector modulo }}
-  | val ( [| 'n '..' 'm |] , [| 'o '..' 'p |] ) -> [| 'q '..' 'r |] : quot :: :: quotbase
-  {{ com arithmetic integer division, 'o $>$ 0 }}
+  | val ( [| 'n '..' 'm |] , [| 1 '..' 'p |] ) -> [| 'q '..' 'r |] : quot :: :: quotbase
+  {{ com arithmetic integer division }}
   | val forall Nat 'n , Nat 'm . ( bit [ 'n ] , bit [ 'm ] ) -> bit [ 'n ] : quot :: :: quotvec
   {{ com unsigned vector division }}
   | val forall Nat 'n , Nat 'm . ( bit [ 'n ] , bit [ 'm ] ) -> bit [ 'n ] : quot_s :: :: quotvecS
   {{ com signed vector division }}
-  | val forall Typ 'a , Nat 'n . ( 'a [' n]  -> [| 'n  '..' 'n |] ) : length :: :: len
+  | val forall Typ 'a , Nat 'n . ( 'a [' n]  -> [: 'n :] ) : length :: :: len
   | val forall Typ 'a , Nat 'n , Nat 'm , 'n <= 'm . ( implicit < 'm > , 'a [ 'n ] ) -> 'a [ 'm ] : mask :: :: mask
   {{ com reduce size of vector, dropping MSBits. Type system supplies implicit parameter, uses may require a cast }}
   | val forall Nat 'n . ( bit [ 'n ] , bit [ 'n ] ) -> bit : == :: :: vecEQ

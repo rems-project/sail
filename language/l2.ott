@@ -118,6 +118,7 @@ id :: '' ::=
   | nat				 :: M :: nat  {{ ichlo (Id "nat") }}
   | string                       :: M :: string {{ tex \ottkw{string} }} {{ ichlo (Id "string") }}
   | range                        :: M :: range {{ ichlo (Id "range") }}
+  | atom			 :: M :: atom {{ ichlo (Id "atom") }}
   | vector			 :: M :: vector {{ ichlo (Id "vector") }}
   | list			 :: M :: list {{ ichlo (Id "list") }}
   | set                          :: M :: set {{ ichlo (Id "set") }}
@@ -232,8 +233,10 @@ typ :: 'Typ_' ::=
   {{ com type constructor application }}
   | ( typ )                            :: S :: paren {{ ichlo [[typ]] }} 
 %  | range < nexp1, nexp2> :: :: range  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1 }}
-  | [| nexp |]             :: S :: range1 {{ichlo range <[[nexp]], 0, inc> }} {{ com sugar for \texttt{range<0, nexp>} }}
+  | [| nexp |]             :: S :: range1 {{ichlo range <[[nexp]], 0> }} {{ com sugar for \texttt{range<0, nexp>} }}
   | [| nexp : nexp' |]  :: S :: range2 {{ichlo range <[[nexp]],[[nexp']]> }} {{ com sugar for \texttt{range< nexp, nexp'>} }}
+% | atom < nexp > :: :: atom {{ com equivalent to range<nexp,nexp> }}
+  | [: nexp :]            :: S :: atom1 {{ichlo atom <[[nexp]]> }} {{ com sugar for \texttt{atom<nexp>} which is special case of \texttt{range<nexp,nexp>} }}
 % use .. not - to avoid ambiguity with nexp -
 % total maps and vectors indexed by finite subranges of nat
 %  | vector nexp1 nexp2 order typ :: :: vector {{ com vector of [[typ]], indexed by natural range }}

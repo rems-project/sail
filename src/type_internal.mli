@@ -174,16 +174,20 @@ val nexp_eq : nexp -> nexp -> bool
 val conforms_to_t : def_envs -> bool -> bool -> t -> t -> bool
 
 (* type_consistent is similar to a standard type equality, except in the case of [[consistent t1 t2]] where
-   t1 and t2 are both enum types and t1 is contained within the range of t2: i.e.
-   enum 2 5 is consistent with enum 0 10, but not vice versa.
+   t1 and t2 are both range types and t1 is contained within the range of t2: i.e.
+   range<2, 5> is consistent with range<0, 10>, but not vice versa.
+   Similar for atom.
+   When widen, two atoms are used to generate a range that contains them (or is defined by them for constants; and an atom and a range may widen the range.
    type_consistent mutates uvars to perform unification and will raise an error if the [[t1]] and [[t2]] are inconsistent
 *)
-val type_consistent : constraint_origin -> def_envs -> t -> t -> t * nexp_range list
+val type_consistent : constraint_origin -> def_envs -> bool -> t -> t -> t * nexp_range list
 
 (* type_coerce mutates to unify variables, and will raise an exception if the first type cannot
    be coerced into the second and is additionally inconsistent with the second; 
    bool specifices whether this has arisen from an implicit or explicit type coercion request *)
-val type_coerce : constraint_origin -> def_envs -> bool -> t -> exp -> t -> t * nexp_range list * effect * exp
+val type_coerce : constraint_origin -> def_envs -> bool -> bool -> t -> exp -> t -> t * nexp_range list * effect * exp
 
-(* Merge tannots when intersection or unioning two environments. In case of default types, defer to tannot on right *)
-val tannot_merge : constraint_origin -> def_envs -> tannot -> tannot -> tannot 
+(* Merge tannots when intersection or unioning two environments. In case of default types, defer to tannot on right 
+   When merging atoms, use bool to control widening. 
+*)
+val tannot_merge : constraint_origin -> def_envs -> bool -> tannot -> tannot -> tannot 

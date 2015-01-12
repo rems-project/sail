@@ -50,6 +50,7 @@ t , u :: 'T_' ::=
    | t |-> t1                                   :: :: abbrev
    | register < t_arg >                  :: S :: reg_app {{ ichlo T_app "register" [[t_arg]] }}
    | range < ne ne' > 			  :: S :: range_app {{ ichlo T_app "range" [[ [ ne ; ne' ] ]] }}
+   | atom < ne >    			  :: S :: atom_app {{ ichlo T_app "atom" [ [[ne]] ] }}
    | vector < ne ne' order t >           :: S :: vector_app {{ ichlo T_app "vector" [[ [ ne; ne'; ord; t ] ]] }} 
    | list < t >      	     		 :: S :: list_app {{ ichlo T_app "list" [[t]] }}
    | bit      	     	   	       	          :: S :: bit_typ {{ ichlo T_id "bit" }}
