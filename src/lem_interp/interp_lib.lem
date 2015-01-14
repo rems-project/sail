@@ -14,9 +14,9 @@ let add_carry_out (i1:integer) (i2:integer) (result:integer) =
   else if (i1 > 0 && i2 > 0)
   then if result <= 0 then true else false
   else if i1 < 0 
-  then if (abs i1) > i2 && result > 0 then true else false
+  then if (abs i1) > i2 && result < 0 then true else false
   else if i2 < 0 
-  then if (abs i2) > i1 && result < 0 then true else false
+  then if (abs i2) > i1 && result > 0 then true else false
   else false
 
 let mult_carry_out (i1:integer) (i2:integer) (result:integer) = 
@@ -327,6 +327,7 @@ let rec arith_op_overflow_vec op over_typ sign size (V_tuple [vl;vr]) =
 	  let n = arith_op op (V_tuple [l1_sign;l2_sign]) in
 	  let n_unsign = arith_op op (V_tuple[l1_unsign;l2_unsign]) in
 	  let correct_size_num = to_vec ord act_size n in
+	  let one_more_size_u = to_vec ord (act_size +1) n_unsign in
 	  let overflow = (match n with 
 	    | V_lit (L_aux (L_num n') ln) -> 
 	      if (n' <= (get_max_representable_in act_size)) &&
@@ -335,12 +336,15 @@ let rec arith_op_overflow_vec op over_typ sign size (V_tuple [vl;vr]) =
 	      else V_lit (L_aux L_one ln) end) in
 	  let out_num = to_num sign correct_size_num in
 	  let c_out = 
-	    match (l1_sign,l2_sign,out_num) with
+	    match detaint one_more_size_u with
+	      | V_vector _ _ (b::bits) -> b 
+              | v -> Assert_extra.failwith ("to_vec returned " ^ (string_of_value v)) end in
+	    (*match (l1_sign,l2_sign,out_num) with
 	      | (V_lit (L_aux (L_num n1) _),V_lit (L_aux (L_num n2) _), V_lit (L_aux (L_num r) _)) ->
 		if (over_typ = "+" && add_carry_out n1 n2 r) || (over_typ = "*" && mult_carry_out n1 n2 r)
 		then V_lit (L_aux L_one Unknown)
 		else V_lit (L_aux L_zero Unknown)
-	      | _ -> carry_out (List.map detaint cs1) (List.map detaint cs2) (V_lit (L_aux L_zero Unknown)) end in
+	      | _ -> carry_out (List.map detaint cs1) (List.map detaint cs2) (V_lit (L_aux L_zero Unknown)) end in*)
     V_tuple [correct_size_num;overflow;c_out]
   | (V_unknown,_) -> V_tuple [V_unknown;V_unknown;V_unknown]
   | (_,V_unknown) -> V_tuple [V_unknown;V_unknown;V_unknown]
