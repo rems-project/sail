@@ -48,7 +48,7 @@ let (min_32 : integer) = integer_of_string "-2147483648"
 let (min_8 : integer) = (integerFromNat 0) - (integerFromNat 128)
 let (max_8 : integer) = (integerFromNat 127)
 let (min_5 : integer) = (integerFromNat 0)-(integerFromNat 32)
-let (max_5 : integer) = (integerFromNat 32)
+let (max_5 : integer) = (integerFromNat 31)
 
 val get_max_representable_in : nat -> integer
 let get_max_representable_in n = 
@@ -356,18 +356,25 @@ let rec arith_op_overflow_vec_bit op sign size (V_tuple [vl;vr]) =
       | (V_vector b ord cs, V_lit (L_aux bit li)) ->
 	let act_size = (List.length cs) * size in
 	let is_v_unknown = has_unknown vl in
-	let l1' = if is_v_unknown then V_unknown else to_num sign vl in
-	let n = if is_v_unknown then V_unknown else
-	  arith_op op (V_tuple [l1';(V_lit (L_aux (match bit with | L_one -> L_num 1 | L_zero -> L_num 0 end) li))]) in
+	if is_v_unknown 
+	then V_tuple [(to_vec ord act_size V_unknown);V_unknown;V_unknown]
+	else
+	  let l1' = to_num sign vl in
+	  let l1_u = to_num Unsigned vl in
+	  let (n,nu,changed) = match bit with
+	    | L_one -> (arith_op op (V_tuple [l1';(V_lit (L_aux (L_num 1) li))]),
+			arith_op op (V_tuple [l1_u;(V_lit (L_aux (L_num 1) li))]), true)
+	    | L_zero -> (l1',l1_u,false) end in
 	let correct_size_num = to_vec ord act_size n in
-	let one_larger = to_vec ord (act_size +1) n in
-	let overflow = if is_v_unknown then V_unknown else
-	    retaint n (match detaint n with 
-	      | V_lit (L_aux (L_num n') ln) -> 
-		if (n' <= (get_max_representable_in act_size)) &&
-		  (n' >= (get_min_representable_in act_size))
-		then V_lit (L_aux L_zero ln)
-		else V_lit (L_aux L_one ln) end) in
+	let one_larger = to_vec ord (act_size +1) l1_u in
+	let overflow = if changed 
+	  then retaint n (match detaint n with 
+	    | V_lit (L_aux (L_num n') ln) -> 
+	      if (n' <= (get_max_representable_in act_size)) &&
+		(n' >= (get_min_representable_in act_size))
+	      then V_lit (L_aux L_zero ln)
+	      else V_lit (L_aux L_one ln) end) 
+          else V_lit (L_aux L_zero Unknown) in
 	V_tuple [correct_size_num;overflow;(match detaint one_larger with V_vector _ _ (c::rst) -> c end)]
       | (V_unknown,_) -> V_tuple [V_unknown;V_unknown;V_unknown]
       | (_,V_unknown) -> V_tuple [V_unknown;V_unknown;V_unknown]
@@ -461,20 +468,27 @@ let rec arith_op_overflow_vec_no0 op op_s sign size (V_tuple [vl;vr]) =
       | (V_vector b ord cs, V_vector _ _ _) ->
 	let act_size = (List.length cs) * size in
 	let (is_l1_unknown,is_l2_unknown) = ((has_unknown vl), (has_unknown vr)) in
-	let (l1',l2') = (if is_l1_unknown then V_unknown else (to_num sign vl),
-                         if is_l2_unknown then V_unknown else (to_num sign vr)) in
-	let n = if is_l1_unknown || is_l2_unknown then V_unknown else arith_op op (V_tuple [l1';l2']) in
-	let representable = 
-	  match detaint n with 
-	    | V_lit (L_aux (L_num n') ln) ->  
-	      let rep_size = (if op_s = "quot" then act_size/2 else act_size) in
-	      ((n' <= (get_max_representable_in act_size)) && (n' >= (get_min_representable_in act_size)))
-	    | _ -> true end in
-        let correct_size_num = 
-	  if representable then to_vec ord act_size n else to_vec ord act_size (V_lit (L_aux L_undef Unknown)) in
-	let overflow = if is_l1_unknown || is_l2_unknown then V_unknown else 
-	    if representable then V_lit (L_aux L_zero Unknown) else V_lit (L_aux L_one Unknown) in
-	V_tuple [correct_size_num;overflow;V_lit (L_aux L_zero Unknown)]
+	if is_l1_unknown || is_l2_unknown
+	then V_tuple [to_vec ord act_size V_unknown;V_unknown;V_unknown]
+	else
+	  let (l1',l2') = ((to_num sign vl),(to_num sign vr)) in
+	  let (l1_u,l2_u) = (to_num Unsigned vl,to_num Unsigned vr) in
+	  let n = arith_op op (V_tuple [l1';l2']) in
+	  let n_u = arith_op op (V_tuple [l1_u;l2_u]) in
+	  let representable = 
+	    match detaint n with 
+	      | V_lit (L_aux (L_num n') ln) ->  
+		let rep_size = (if op_s = "quot" then act_size/2 else act_size) in
+		((n' <= (get_max_representable_in act_size)) && (n' >= (get_min_representable_in act_size)))
+	      | _ -> true end in
+          let (correct_size_num,one_more) = 
+	  if representable then (to_vec ord act_size n,to_vec ord (act_size+1) n_u) 
+	  else let udef = V_lit (L_aux L_undef Unknown) in
+	       (to_vec ord act_size udef, to_vec ord (act_size +1) udef) in
+	  let overflow = if representable then V_lit (L_aux L_zero Unknown) else V_lit (L_aux L_one Unknown) in
+	  let carry = match one_more with
+	    | V_vector _ _ (b::bits) -> b end in
+	  V_tuple [correct_size_num;overflow;carry]
 	| (V_unknown,_) -> V_tuple [V_unknown;V_unknown;V_unknown]
 	| (_,V_unknown) -> V_tuple [V_unknown;V_unknown;V_unknown]
    end in
