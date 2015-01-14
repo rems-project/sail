@@ -317,7 +317,8 @@ let rec arith_op_overflow_vec op over_typ sign size (V_tuple [vl;vr]) =
   let overflow_help vl vr =
     match (vl,vr) with
       | (V_vector b ord cs1,V_vector _ _ cs2) ->
-	let act_size = (List.length cs1) * size in
+	let len = List.length cs1 in
+	let act_size = len * size in
 	let (is_l1_unknown,is_l2_unknown) = ((has_unknown vl), (has_unknown vr)) in
 	if is_l1_unknown || is_l2_unknown 
 	then (V_tuple [ (to_vec ord act_size V_unknown);V_unknown;V_unknown])
@@ -330,8 +331,8 @@ let rec arith_op_overflow_vec op over_typ sign size (V_tuple [vl;vr]) =
 	  let one_more_size_u = to_vec ord (act_size +1) n_unsign in
 	  let overflow = (match n with 
 	    | V_lit (L_aux (L_num n') ln) -> 
-	      if (n' <= (get_max_representable_in act_size)) &&
-		(n' >= (get_min_representable_in act_size))
+	      if (n' <= (get_max_representable_in len)) &&
+		(n' >= (get_min_representable_in len))
 	      then V_lit (L_aux L_zero ln)
 	      else V_lit (L_aux L_one ln) end) in
 	  let out_num = to_num sign correct_size_num in
