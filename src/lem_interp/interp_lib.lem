@@ -366,7 +366,7 @@ let rec arith_op_overflow_vec_bit op sign size (V_tuple [vl;vr]) =
 			arith_op op (V_tuple [l1_u;(V_lit (L_aux (L_num 1) li))]), true)
 	    | L_zero -> (l1',l1_u,false) end in
 	let correct_size_num = to_vec ord act_size n in
-	let one_larger = to_vec ord (act_size +1) l1_u in
+	let one_larger = to_vec ord (act_size +1) nu in
 	let overflow = if changed 
 	  then retaint n (match detaint n with 
 	    | V_lit (L_aux (L_num n') ln) -> 
