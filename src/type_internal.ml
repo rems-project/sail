@@ -975,6 +975,54 @@ let initial_typ_env =
                                      (mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")))),
                        External (Some "add_bit_vec_signed"), [], pure_e);
                   ]));
+    ("-_s",Overload(Base(((mk_typ_params ["a";"b";"c"]),
+                          (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})), External (Some "minus"),[],pure_e),
+		    true,
+                    [Base(((mk_nat_params["n";"m";"o";"p"]),
+                         (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");
+                                               mk_range (mk_nv "o") (mk_nv "p")])
+	                              (mk_range (mk_sub (mk_nv "n") (mk_nv "o")) (mk_sub (mk_nv "m") (mk_nv "p"))))),
+		          External (Some "minus"),
+                          [GtEq(Specc(Parse_ast.Int("-",None)),{nexp=Nvar "n"},{nexp=Nvar "o"});
+                           GtEq(Specc(Parse_ast.Int("-",None)),{nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},{nexp=Nvar "o"})],pure_e);
+                     Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                           (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
+						 mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])
+                              (mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n")))), External (Some "minus_vec_signed"),[],pure_e);
+                  Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
+                        (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
+                                              mk_range (mk_nv "o") (mk_nv "p")])
+                                     (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
+                       External (Some "minus_vec_range_signed"),
+                        [LtEq(Specc(Parse_ast.Int("-",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
+		  Base(((mk_nat_params ["n";"m";"o";"p";])@(mk_ord_params ["ord"]),
+			 (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
+					       mk_range (mk_nv "o") (mk_nv "p")])
+			    (mk_range (mk_nv "o") (mk_add (mk_nv "p") {nexp = N2n (mk_nv "m",None)})))),
+		       External (Some "minus_vec_range_range_signed"),
+		       [LtEq(Specc(Parse_ast.Int("+",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
+                  Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
+                         (mk_pure_fun (mk_tup [mk_range (mk_nv "o") (mk_nv "p");
+                                               mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");])
+                                      (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m")))),
+                        External (Some "minus_range_vec_signed"),
+			[LtEq(Specc(Parse_ast.Int("-",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e); 
+		   Base(((mk_nat_params ["n";"m";"o";"p";])@(mk_ord_params ["ord"]),
+			 (mk_pure_fun (mk_tup [mk_range (mk_nv "o") (mk_nv "p");
+					       mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");])
+			    (mk_range (mk_nv "o") (mk_add (mk_nv "p") {nexp = N2n (mk_nv "m",None)})))),
+			External (Some "minus_range_vec_range_signed"),
+			[LtEq(Specc(Parse_ast.Int("-",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
+		   Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
+                                               mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])
+                            (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n")); bit_t; bit_t]))),
+			External (Some "minus_overflow_vec_signed"),[],pure_e);
+		   Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
+                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p"); bit_t])
+                            (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")); bit_t; bit_t]))),
+			External (Some "minus_overflow_vec_bit_signed"), [], pure_e);
+		  ]));
     ("-",Overload(Base(((mk_typ_params ["a";"b";"c"]),
                         (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})), External (Some "minus"),[],pure_e),
 		  true,

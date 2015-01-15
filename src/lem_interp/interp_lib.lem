@@ -609,6 +609,8 @@ let function_map = [
   ("minus_vec_bit", arith_op_vec_bit (-) Unsigned 1);
   ("minus_overflow_vec", arith_op_overflow_vec (-) "+" Unsigned 1);
   ("minus_overflow_vec_bit", arith_op_overflow_vec_bit (-) Unsigned 1);
+  ("minus_overflow_vec_signed", arith_op_overflow_vec (-) "+" Signed 1);
+  ("minus_overflow_vec_bit_signed", arith_op_overflow_vec_bit (-) Signed 1);
   ("multiply", arith_op ( * ));
   ("multiply_vec", arith_op_vec ( * ) Unsigned 2);
   ("mult_range_vec", arith_op_range_vec ( * ) Unsigned 2);
