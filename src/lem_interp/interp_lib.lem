@@ -340,12 +340,6 @@ let rec arith_op_overflow_vec op over_typ sign size (V_tuple [vl;vr]) =
 	    match detaint one_more_size_u with
 	      | V_vector _ _ (b::bits) -> b 
               | v -> Assert_extra.failwith ("to_vec returned " ^ (string_of_value v)) end in
-	    (*match (l1_sign,l2_sign,out_num) with
-	      | (V_lit (L_aux (L_num n1) _),V_lit (L_aux (L_num n2) _), V_lit (L_aux (L_num r) _)) ->
-		if (over_typ = "+" && add_carry_out n1 n2 r) || (over_typ = "*" && mult_carry_out n1 n2 r)
-		then V_lit (L_aux L_one Unknown)
-		else V_lit (L_aux L_zero Unknown)
-	      | _ -> carry_out (List.map detaint cs1) (List.map detaint cs2) (V_lit (L_aux L_zero Unknown)) end in*)
     V_tuple [correct_size_num;overflow;c_out]
   | (V_unknown,_) -> V_tuple [V_unknown;V_unknown;V_unknown]
   | (_,V_unknown) -> V_tuple [V_unknown;V_unknown;V_unknown]
@@ -466,7 +460,8 @@ let rec arith_op_vec_no0 op op_s sign size (V_tuple [vl;vr]) =
 let rec arith_op_overflow_vec_no0 op op_s sign size (V_tuple [vl;vr]) =
   let arith_help vl vr = 
     match (vl,vr) with
-      | (V_vector b ord cs, V_vector _ _ _) ->
+      | (V_vector b ord cs, V_vector _ _ cs2) ->
+	let rep_size = (List.length cs2) * size in
 	let act_size = (List.length cs) * size in
 	let (is_l1_unknown,is_l2_unknown) = ((has_unknown vl), (has_unknown vr)) in
 	if is_l1_unknown || is_l2_unknown
@@ -479,8 +474,8 @@ let rec arith_op_overflow_vec_no0 op op_s sign size (V_tuple [vl;vr]) =
 	  let representable = 
 	    match detaint n with 
 	      | V_lit (L_aux (L_num n') ln) ->  
-		let rep_size = (if op_s = "quot" then act_size/2 else act_size) in
-		((n' <= (get_max_representable_in act_size)) && (n' >= (get_min_representable_in act_size)))
+		let rep_size = (if op_s = "quot" then rep_size/2 else rep_size) in
+		((n' <= (get_max_representable_in rep_size)) && (n' >= (get_min_representable_in rep_size)))
 	      | _ -> true end in
           let (correct_size_num,one_more) = 
 	  if representable then (to_vec ord act_size n,to_vec ord (act_size+1) n_u) 
@@ -613,6 +608,7 @@ let function_map = [
   ("minus_range_vec_range", arith_op_range_vec_range (-) Unsigned);
   ("minus_vec_bit", arith_op_vec_bit (-) Unsigned 1);
   ("minus_overflow_vec", arith_op_overflow_vec (-) "+" Unsigned 1);
+  ("minus_overflow_vec_bit", arith_op_overflow_vec_bit (-) Unsigned 1);
   ("multiply", arith_op ( * ));
   ("multiply_vec", arith_op_vec ( * ) Unsigned 2);
   ("mult_range_vec", arith_op_range_vec ( * ) Unsigned 2);

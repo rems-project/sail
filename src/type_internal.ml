@@ -1013,7 +1013,15 @@ let initial_typ_env =
 			    (mk_range (mk_nv "o") (mk_add (mk_nv "p") {nexp = N2n (mk_nv "m",None)})))),
 			External (Some "minus_range_vec_range"),
 			[LtEq(Specc(Parse_ast.Int("+",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],pure_e);
-
+		   Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
+                                               mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")])
+                            (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n")); bit_t; bit_t]))),
+			External (Some "minus_overflow_vec"),[],pure_e);
+		   Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
+                         (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p"); bit_t])
+                            (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "p")); bit_t; bit_t]))),
+			External (Some "minus_overflow_vec_bit"), [], pure_e);
 		  ]));
     ("*",Overload(Base(((mk_typ_params ["a";"b";"c"]),
                         (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})), External (Some "multiply"),[],pure_e),
