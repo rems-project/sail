@@ -1238,7 +1238,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			  let (by_e,env) = to_exp mode le by_val_whole in
                           match by_val with 
                             | V_lit (L_aux (L_num by_num) bl) ->
-                              if ((is_inc && (from_num >= to_num)) || (from_num <= to_num))  
+                              if ((is_inc && (from_num >= to_num)) || (not(is_inc) && (from_num <= to_num)))  
                               then (Value(V_lit (L_aux L_unit l)),lm,le)
                               else
 				let (ftyp,ttyp,btyp) = (val_typ from_val,val_typ to_val,val_typ by_val) in
