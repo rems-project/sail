@@ -126,12 +126,14 @@ specifies a part of the field, indexed w.r.t. the register as a whole *)
 
 
 (* because reg_name contains slice which currently contains Big_int.big_int, the default OCaml comparison is not sufficient and we need to define explicit type classes *)
+let slice_eq (s1l,s1r) (s2l,s2r) = (s1l = s2l) && (s1r = s2r)
+
 let reg_nameEqual r1 r2 = 
   match (r1,r2) with
   | (Reg s1 l1, Reg s2 l2) -> s1=s2 && l1=l2
-  | (Reg_slice s1 sl1, Reg_slice s2 sl2) -> s1=s2 && sl1=sl2
-  | (Reg_field s1 f1 sl1, Reg_field s2 f2 sl2) -> s1=s2 && f1=f2 && sl1=sl2
-  | (Reg_f_slice s1 f1 sl1 sl1', Reg_f_slice s2 f2 sl2 sl2') -> s1=s2 && f1=f2 && sl1=sl2 && sl1'=sl2'
+  | (Reg_slice s1 sl1, Reg_slice s2 sl2) -> s1=s2 && (slice_eq sl1 sl2)
+  | (Reg_field s1 f1 sl1, Reg_field s2 f2 sl2) -> s1=s2 && f1=f2 && (slice_eq sl1 sl2)
+  | (Reg_f_slice s1 f1 sl1 sl1', Reg_f_slice s2 f2 sl2 sl2') -> s1=s2 && f1=f2 && (slice_eq sl1 sl2) && (slice_eq sl1' sl2')
   | _ -> false
   end
 
