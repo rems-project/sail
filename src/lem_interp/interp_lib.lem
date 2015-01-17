@@ -474,7 +474,6 @@ let rec arith_op_overflow_vec_no0 op op_s sign size (V_tuple [vl;vr]) =
 	  let representable = 
 	    match detaint n with 
 	      | V_lit (L_aux (L_num n') ln) ->  
-		let rep_size = (if op_s = "quot" then rep_size/2 else rep_size) in
 		((n' <= (get_max_representable_in rep_size)) && (n' >= (get_min_representable_in rep_size)))
 	      | _ -> true end in
           let (correct_size_num,one_more) = 
