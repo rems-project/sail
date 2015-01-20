@@ -54,6 +54,8 @@ let rec integerToString n acc =
   else
     integerToString (n / 10) (chr (natFromInteger (n mod 10 + 48)) :: acc)
 
+let string_of_integer i = if i = 0 then "0" else toString(integerToString i [])
+
 let rec string_of_value v = match v with
   | V_boxref nat t -> "$#" ^ (show nat) ^ "$"
   | V_lit (L_aux lit _) -> 
@@ -63,7 +65,7 @@ let rec string_of_value v = match v with
     | L_one  -> "1"
     | L_true -> "true"
     | L_false -> "false"
-    | L_num num -> if num = 0 then "0" else toString(integerToString num [])
+    | L_num num -> string_of_integer num
     | L_hex hex -> "0x" ^ hex
     | L_bin bin -> "0b" ^ bin
     | L_undef -> "undefined"
@@ -72,7 +74,9 @@ let rec string_of_value v = match v with
   | V_list vals -> "[||" ^ (list_to_string string_of_value "," vals) ^ "||]"
   | V_vector i inc vals -> 
     let default_format _ = "[" ^ (list_to_string string_of_value "," vals) ^ "]" in
-    let to_bin () = "0b" ^ (List.foldr (fun (V_lit (L_aux l _)) rst -> (match l with | L_one -> "1" | L_zero -> "0" end) ^rst) "" vals) in
+    let to_bin () = "0b" ^ 
+      (List.foldr (fun v rst -> (match v with | V_lit (L_aux l _) -> (match l with | L_one -> "1" | L_zero -> "0" | L_undef -> "u" end)
+	                                      | V_unknown -> "?" end) ^rst) "" vals) in
     match vals with
       | [] -> default_format ()
       | v::vs ->
@@ -80,7 +84,9 @@ let rec string_of_value v = match v with
 	  | V_lit (L_aux L_zero _) -> to_bin()
 	  | V_lit (L_aux L_one _) -> to_bin()
 	  | _ -> default_format() end end
-  | V_vector_sparse _ _ _ _ _ -> "sparse_vector"
+  | V_vector_sparse start stop inc vals default -> 
+    "[" ^ (list_to_string (fun (i,v) -> (string_of_integer i) ^ " = " ^ (string_of_value v)) "," vals) ^ "]:" ^
+      string_of_integer start ^ "-" ^string_of_integer  stop ^ "(default of " ^ (string_of_value default) ^ ")"
   | V_record t vals ->
     "{" ^ (list_to_string (fun (id,v) -> (get_id id) ^ "=" ^ (string_of_value v)) ";" vals) ^ "}"
   | V_ctor id t value -> (get_id id) ^ " " ^ string_of_value value     
@@ -399,7 +405,7 @@ let rec taint value regs =
     | [] -> value
     | _ ->
       match value with 
-	| V_track value rs -> V_track value (regs ++ rs)
+	| V_track value rs -> taint value (regs ++ rs)
 	| V_tuple vals -> V_tuple (List.map (fun v -> taint v regs) vals)
 	| _ -> V_track value regs
 end end
@@ -501,13 +507,13 @@ let fupdate_record base updates =
   binary_taint fupdate_record_helper base updates
 
 val fupdate_sparse : (integer -> integer -> bool) -> list (integer*value) -> integer -> value -> list (integer*value)
-let rec fupdate_sparse compare vs n vexp =
+let rec fupdate_sparse comes_after vs n vexp =
   match vs with
     | [] -> [(n,vexp)]
     | (i,v)::vs ->
       if i = n then (i,vexp)::vs
-      else if (compare i n) then (n,vexp)::(i,v)::vs
-      else (i,v)::(fupdate_sparse compare vs n vexp)
+      else if (comes_after i n) then (n,vexp)::(i,v)::vs
+      else (i,v)::(fupdate_sparse comes_after vs n vexp)
 end
 
 val fupdate_vec : value -> integer -> value -> value
@@ -540,7 +546,8 @@ let rec replace_sparse compare vals reps =
     | (vs,[]) -> vs
     | ((i1,v)::vs,(i2,r)::rs) ->
       if i1 = i2 then (i2,r)::(replace_sparse compare vs rs)
-      else if (compare i1 i2) then (i1,v)::(replace_sparse compare vs ((i2,r)::rs))
+      else if (compare i1 i2) 
+      then (i1,v)::(replace_sparse compare vs ((i2,r)::rs))
       else (i2,r)::(replace_sparse compare ((i1,v)::vs) rs)
 end
 
@@ -559,21 +566,21 @@ let fupdate_vector_slice vec replace start stop =
 	   (List.replicate (natFromInteger(if inc then (stop-start) else (start-stop))) V_unknown)
 	   0 (if inc then (start-m) else (m-start)) (if inc then (stop-m) else (m-stop)))
     | (V_vector_sparse m n inc vals d,V_vector _ _ reps) ->
-      let (_,repsi) = List.foldr (fun r (i,rs) -> ((if inc then i+1 else i-1), (i,r)::rs)) (start,[]) reps in
-      (V_vector_sparse m n inc (replace_sparse (if inc then (<) else (>)) vals repsi) d)
+      let (_,repsi) = List.foldl (fun (i,rs) r -> ((if inc then i+1 else i-1), (i,r)::rs)) (start,[]) reps in
+      (V_vector_sparse m n inc (replace_sparse (if inc then (<) else (>)) vals (List.reverse repsi)) d)
     | (V_vector_sparse m n inc vals d, V_unknown) ->
-      let (_,repsi) = List.foldr (fun r (i,rs) -> ((if inc then i+1 else i-1), (i,r)::rs)) (start,[]) 
+      let (_,repsi) = List.foldl (fun (i,rs) r -> ((if inc then i+1 else i-1), (i,r)::rs)) (start,[]) 
 	(List.replicate (natFromInteger (if inc then (stop-start) else (start-stop))) V_unknown) in
-      (V_vector_sparse m n inc (replace_sparse (if inc then (<) else (>)) vals repsi) d)
+      (V_vector_sparse m n inc (replace_sparse (if inc then (<) else (>)) vals (List.reverse repsi)) d)
     | (V_unknown,_) -> V_unknown
      end) in
   binary_taint fupdate_vec_help vec replace
 
 val update_vector_slice : value -> value -> integer -> integer -> lmem -> lmem
 let update_vector_slice vector value start stop mem = 
-  match (detaint vector,value) with
+  match (detaint vector,detaint value) with
   | ((V_boxref n t), v) ->
-    update_mem mem n (fupdate_vector_slice (in_mem mem n) v start stop)    
+    update_mem mem n (fupdate_vector_slice (in_mem mem n) (retaint value v) start stop)    
   | ((V_vector m inc vs),(V_vector n inc2 vals)) ->
     let (V_vector m' _ vs') = slice_vector vector start stop in
     foldr2 (fun vbox v mem -> match vbox with
