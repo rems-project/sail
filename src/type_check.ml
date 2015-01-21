@@ -1485,7 +1485,7 @@ and check_lbind envs imp_param is_top_level emp_tag (LB_aux(lbind,(l,annot))) : 
       let cs = if is_top_level then resolve_constraints cs@cs1@cs2 else cs@cs1@cs2 in
       let ef = union_effects ef ef2 in
       let tannot = if is_top_level 
-	then check_tannot l (Base((params,t),tag,cs,ef)) cs ef (*in top level, must be pure_e*) 
+	then check_tannot l (Base((params,t),tag,cs,ef)) None cs ef (*in top level, must be pure_e*) 
 	else (Base ((params,t),tag,cs,ef))
       in
       (LB_aux (LB_val_explicit(typ,pat',e),(l,tannot)),env,cs,ef)
@@ -1496,7 +1496,7 @@ and check_lbind envs imp_param is_top_level emp_tag (LB_aux(lbind,(l,annot))) : 
     let (e,t',_,cs2,ef) = check_exp envs imp_param u e in
     let cs = if is_top_level then resolve_constraints cs1@cs2 else cs1@cs2 in
     let tannot = 
-      if is_top_level then check_tannot l (Base(([],t'),emp_tag,cs,ef)) cs ef (* see above *)
+      if is_top_level then check_tannot l (Base(([],t'),emp_tag,cs,ef)) None cs ef (* see above *)
       else (Base (([],t'),emp_tag,cs,ef))
     in
     (LB_aux (LB_val_implicit(pat',e),(l,tannot)), env,cs,ef)
@@ -1685,7 +1685,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let cs,ef = ((fun (cses,efses) -> 
 	(List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
       let cs' = resolve_constraints cs@constraints in
-      let tannot = check_tannot l tannot cs' ef in
+      let tannot = check_tannot l tannot imp_param cs' ef in
       (*let _ = Printf.printf "check_tannot ok for %s\n" id in*)
       let funcls = match imp_param with
 	| None | Some {nexp = Nconst _} -> funcls
@@ -1698,7 +1698,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let funcls,cs_ef = check t_env None in
       let cs,ef = ((fun (cses,efses) -> (List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
       let cs' = resolve_constraints cs in
-      let tannot = check_tannot l tannot cs' ef in
+      let tannot = check_tannot l tannot None cs' ef in
       (*let _ = Printf.printf "done funcheck case2\n" in*)
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,(if is_rec then t_env else Envmap.insert t_env (id,tannot)))

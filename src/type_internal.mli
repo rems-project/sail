@@ -167,7 +167,7 @@ val resolve_constraints : nexp_range list -> nexp_range list
 val do_resolve_constraints : bool ref
 
 (*May raise an exception if effects do not match tannot effects, will lift unification variables to fresh type variables *)
-val check_tannot : Parse_ast.l -> tannot -> nexp_range list -> effect -> tannot
+val check_tannot : Parse_ast.l -> tannot -> nexp option -> nexp_range list -> effect -> tannot
 
 val nexp_eq : nexp -> nexp -> bool
 

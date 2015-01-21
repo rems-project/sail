@@ -2240,7 +2240,7 @@ let resolve_constraints cs =
     complex_constraints
 
 
-let check_tannot l annot constraints efs = 
+let check_tannot l annot imp_param constraints efs = 
   match annot with
     | Base((params,t),tag,cs,e) -> 
       ignore(effects_eq (Specc l) efs e);
@@ -2248,7 +2248,10 @@ let check_tannot l annot constraints efs =
       let params = Envmap.to_list s_env in
       ignore (remove_internal_unifications s_env);
     (*let _ = Printf.printf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in *)
-      Base((params,t),tag,cs,e)
+      let t' = match (t.t,imp_param) with
+	| Tfn(p,r,_,e),Some x -> {t = Tfn(p,r,IP_var x,e) }
+	| _ -> t in 
+      Base((params,t'),tag,cs,e)
     | NoTyp -> raise (Reporting_basic.err_unreachable l "check_tannot given the place holder annotation")
     | Overload _ -> raise (Reporting_basic.err_unreachable l "check_tannot given overload")
 
