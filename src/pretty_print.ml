@@ -54,7 +54,7 @@ let lemnum default n = match n with
   | 64  -> "sixtyfour"
   | 127 -> "onetwentyseven"
   | 128 -> "onetwentyeight"
-  | _   -> default n
+  | _   -> if n >= 0 then default n else ("(zero - " ^ (default n) ^ ")")
 
 let pp_format_id (Id_aux(i,_)) =
   match i with
