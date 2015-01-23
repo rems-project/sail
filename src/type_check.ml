@@ -583,6 +583,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       in
       let check_result ret imp tag cs ef parms =    
 	(*TODO How do I want to pass the information about start along?*)
+
+	(* TODO MAJOR!!!! It may be that the return is a tuple or some bigger structure. THIS IS OK. I need to tie the variable in the implicit to the variable in the type and then put that type here. *)
 	match (imp,imp_param) with
 	  | (IP_length,None) | (IP_var _,None) ->
 	    (*let _ = Printf.printf "implicit length or var required, no imp_param\n!" in*)
@@ -900,46 +902,61 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       (e',t',t_env,cs_loc@cs_i@cs@cs',union_effects ef (union_effects ef' ef_i))
     | E_vector_subrange(vec,i1,i2) ->
       let base,rise,ord = new_n(),new_n(),new_o() in
-      let min1,m_rise1 = new_n(),new_n() in
-      let min2,m_rise2 = new_n(),new_n() in
-      let base_n,rise_n,ord_n,item_t = match expect_t.t with
+      let new_base,new_rise = new_n(),new_n() in
+      let n1,min1,max1 = new_n(), new_n(),new_n() in
+      let n2,min2,max2 = new_n(), new_n(),new_n() in
+      let base_e,rise_e,ord_e,item_t = match expect_t.t with
 	| Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord_n; TA_typ item_t]) -> base_n,rise_n,ord_n,item_t
 	| _ -> new_n(),new_n(),new_o(),new_t() in
       let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t])} in
       let (vec',t',_,cs,ef) = check_exp envs imp_param vt vec in
-      let i1t = {t=Tapp("range",[TA_nexp min1;TA_nexp m_rise1])} in
+      let i1t = {t=Tapp("atom",[TA_nexp n1])} in
       let (i1', ti1, _,cs_i1,ef_i1) = check_exp envs imp_param i1t i1 in
-      let i2t = {t=Tapp("range",[TA_nexp min2;TA_nexp m_rise2])} in
+      let i2t = {t=Tapp("atom",[TA_nexp n2])} in
       let (i2', ti2, _,cs_i2,ef_i2) = check_exp envs imp_param i2t i2 in
       let cs_loc =
 	match (ord.order,d_env.default_o.order) with
 	  | (Oinc,_) -> 
-	    [LtEq((Expr l),base,min1); 
-	     LtEq((Expr l),{nexp=Nadd({nexp=Nadd(min1,m_rise1)},{nexp=Nconst (Big_int.big_int_of_int 1)})},
-		           {nexp=Nadd(min2,m_rise2)}); 
-	     LtEq((Expr l),{nexp=Nadd({nexp=Nadd(min2,m_rise2)},{nexp=Nconst (Big_int.big_int_of_int 1)})},
-		           {nexp=Nadd(base,rise)});
-	     LtEq((Expr l),min1,base_n); LtEq((Expr l),base_n,{nexp=Nadd(min1,m_rise1)});
-	     LtEq((Expr l),rise_n,{nexp=Nadd(min2,m_rise2)})]
+	    [Eq((Expr l), new_base, n1);
+	     Eq((Expr l), new_rise, {nexp=Nadd(n2, {nexp = Nneg n1})});
+	     LtEq((Expr l), min1, n1); LtEq((Expr l), n1,max1);
+	     LtEq((Expr l), min2, n2); LtEq((Expr l), n2,max2);
+	     LtEq((Expr l),base,n1); 
+	     LtEq((Expr l),base,max1); 
+	     LtEq((Expr l),n2,{nexp=Nadd(base,rise)});
+	     LtEq((Expr l),max2,{nexp=Nadd(base,rise)});]
 	  | (Odec,_) ->
-	    [GtEq((Expr l),base,{nexp=Nadd(min1,m_rise1)}); GtEq((Expr l),{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)});
-	     GtEq((Expr l),{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,{nexp=Nneg rise})});
-	     GtEq((Expr l),min1,base_n); GtEq((Expr l),base_n,{nexp=Nadd(min1,m_rise1)});
-	     GtEq((Expr l),rise_n,{nexp=Nadd(min2,m_rise2)})]
+	    [Eq((Expr l), new_base, n1);
+	     Eq((Expr l), new_rise, {nexp= Nadd({nexp=Nadd(n1, {nexp = Nneg n2})}, {nexp = Nconst one})});
+	     LtEq((Expr l), min1, n1); LtEq((Expr l), n1,max1);
+	     LtEq((Expr l), min2, n2); LtEq((Expr l), n2,max2);
+	     GtEq((Expr l),base,n1); 
+	     GtEq((Expr l),base,max1); 
+	     LtEq((Expr l),n2,{nexp= Nadd({nexp=Nadd(base, {nexp = Nneg rise})}, {nexp = Nconst one})});
+	     LtEq((Expr l),max2,{nexp= Nadd({nexp=Nadd(base, {nexp = Nneg rise})}, {nexp = Nconst one})});]	     
 	  | (_,Oinc) ->
-	    [LtEq((Expr l),base,min1); LtEq((Expr l),{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)}); 
-	     LtEq((Expr l),{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,rise)});
-	     LtEq((Expr l),min1,base_n); LtEq((Expr l),base_n,{nexp=Nadd(min1,m_rise1)});
-	     LtEq((Expr l),rise_n,{nexp=Nadd(min2,m_rise2)})]
+	    [Eq((Expr l), new_base, n1);
+	     Eq((Expr l), new_rise, {nexp=Nadd(n2, {nexp = Nneg n1})});
+	     LtEq((Expr l), min1, n1); LtEq((Expr l), n1,max1);
+	     LtEq((Expr l), min2, n2); LtEq((Expr l), n2,max2);
+	     LtEq((Expr l),base,n1); 
+	     LtEq((Expr l),base,max1); 
+	     LtEq((Expr l),n2,{nexp=Nadd(base,rise)});
+	     LtEq((Expr l),max2,{nexp=Nadd(base,rise)});]
 	  | (_,Odec) -> 
-	    [GtEq((Expr l),base,{nexp=Nadd(min1,m_rise1)}); GtEq((Expr l),{nexp=Nadd(min1,m_rise1)},{nexp=Nadd(min2,m_rise2)});
-	     GtEq((Expr l),{nexp=Nadd(min2,m_rise2)},{nexp=Nadd(base,{nexp=Nneg rise})});
-	     GtEq((Expr l),min1,base_n); GtEq((Expr l),base_n,{nexp=Nadd(min1,m_rise1)});
-	     GtEq((Expr l),rise_n,{nexp=Nadd(min2,m_rise2)})]
+	    [Eq((Expr l), new_base, n1);
+	     Eq((Expr l), new_rise, {nexp= Nadd({nexp=Nadd(n1, {nexp = Nneg n2})}, {nexp = Nconst one})});
+	     LtEq((Expr l), min1, n1); LtEq((Expr l), n1,max1);
+	     LtEq((Expr l), min2, n2); LtEq((Expr l), n2,max2);
+	     GtEq((Expr l),base,n1); 
+	     GtEq((Expr l),base,max1); 
+	     LtEq((Expr l),n2,{nexp= Nadd({nexp=Nadd(base, {nexp = Nneg rise})}, {nexp = Nconst one})});
+	     LtEq((Expr l),max2,{nexp= Nadd({nexp=Nadd(base, {nexp = Nneg rise})}, {nexp = Nconst one})});]
 	  | _ -> typ_error l "A vector must be either increasing or decreasing to access a slice" in
-      let nt = {t=Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord;TA_typ item_t])} in
+      let nt = {t=Tapp("vector",[TA_nexp new_base;TA_nexp new_rise; TA_ord ord;TA_typ item_t])} in
       let (t,cs3,ef3,e') = 
-	type_coerce (Expr l) d_env false false nt (E_aux(E_vector_subrange(vec',i1',i2'),(l,Base(([],nt),Emp_local,cs_loc,pure_e)))) expect_t in
+	type_coerce (Expr l) d_env false false nt 
+	  (E_aux(E_vector_subrange(vec',i1',i2'),(l,Base(([],nt),Emp_local,cs_loc,pure_e)))) expect_t in
       (e',t,t_env,cs3@cs@cs_i1@cs_i2@cs_loc,(union_effects ef (union_effects ef3 (union_effects ef_i1 ef_i2))))
     | E_vector_update(vec,i,e) ->
       let base,rise,ord = new_n(),new_n(),new_o() in
@@ -1659,6 +1676,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
 	(*let _ = Printf.printf "checking function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
 	let (pat',t_env',cs_p,t') = check_pattern (Env(d_env,t_env)) Emp_local param_t pat in
 	(*let _ = Printf.printf "about to check that %s and %s are consistent\n" (t_to_string t') (t_to_string param_t) in*)
+	let t', _ = type_consistent (Patt l) d_env false param_t t' in
 	let exp',_,_,cs_e,ef = 
 	  check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env true) t_env t_env')) imp_param ret_t exp in
 	(*let _ = Printf.printf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)

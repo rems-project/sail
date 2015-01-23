@@ -1874,6 +1874,7 @@ let rec type_coerce_internal co d_env is_explicit widen t1 cs1 e t2 cs2 =
         let cs = csp@[Eq(co,r1,r2)] in
         let t',cs' = type_consistent co d_env widen t1i t2i in
         let tannot = Base(([],t2),Emp_local,cs@cs',pure_e) in
+	(*let _ = Printf.printf "looking at vector vector coerce, t1 %s, t2 %s\n" (t_to_string t1) (t_to_string t2) in*)
         let e' = E_aux(E_internal_cast ((l,(Base(([],t2),Emp_local,[],pure_e))),e),(l,tannot)) in
         (t2,cs@cs',pure_e,e')
       | _ -> raise (Reporting_basic.err_unreachable l "vector is not properly kinded"))
