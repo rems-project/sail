@@ -1,3 +1,4 @@
+OTT=~/rsem/ott/bin/ott
 OTTLIB=$(dir $(shell which ott))../hol
 
 .PHONY: all
@@ -14,22 +15,22 @@ manual.pdf: doc_in.tex manual.tex
 	pdflatex manual.tex
 
 l2.tex: l2.ott l2_typ.ott l2_rules.ott
-	ott -sort false -generate_aux_rules false -o $@ -picky_multiple_parses true $^
+	$(OTT) -sort false -generate_aux_rules false -o $@ -picky_multiple_parses true $^
 
 doc_in.tex: l2.ott primitive_doc.ott l2_typ.ott l2_rules.ott
-	ott -sort false -generate_aux_rules false -tex_wrap false -o $@ -picky_multiple_parses true $^
+	$(OTT) -sort false -generate_aux_rules false -tex_wrap false -o $@ -picky_multiple_parses true $^
 
 %.tex: %.ott
-	ott -sort false -generate_aux_rules false -o $@ -picky_multiple_parses true $^
+	$(OTT) -sort false -generate_aux_rules false -o $@ -picky_multiple_parses true $^
 
 %.ml: %.ott
-	ott -sort false -generate_aux_rules true -o $@ -picky_multiple_parses true $^
+	$(OTT) -sort false -generate_aux_rules true -o $@ -picky_multiple_parses true $^
 
 %Script.sml: %.ott
-	ott -sort false -generate_aux_rules true -o $@ -picky_multiple_parses true $^
+	$(OTT) -sort false -generate_aux_rules true -o $@ -picky_multiple_parses true $^
 
 l2.lem: l2.ott l2_typ.ott
-	ott -sort false -generate_aux_rules true -o $@ -picky_multiple_parses true $^
+	$(OTT) -sort false -generate_aux_rules true -o $@ -picky_multiple_parses true $^
 
 clean:
 	rm -rf *~
