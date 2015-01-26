@@ -1,4 +1,4 @@
-OTT=~/rsem/ott/bin/ott
+OTT=../../../rsem/ott/bin/ott
 OTTLIB=$(dir $(shell which ott))../hol
 
 .PHONY: all
