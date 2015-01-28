@@ -7,22 +7,7 @@ open import List
 open import Word
 open import Bool
 
-
-let add_carry_out (i1:integer) (i2:integer) (result:integer) = 
-  if (i1 < 0 && i2 < 0) 
-  then if result >= 0 then true else false
-  else if (i1 > 0 && i2 > 0)
-  then if result <= 0 then true else false
-  else if i1 < 0 
-  then if (abs i1) > i2 && result < 0 then true else false
-  else if i2 < 0 
-  then if (abs i2) > i1 && result > 0 then true else false
-  else false
-
-let mult_carry_out (i1:integer) (i2:integer) (result:integer) = 
-  if (i1 < 0 && i2 < 0) || (i1 > 0 && i2 > 0) 
-  then if result <= 0 then true else false
-  else if result > 0 then true else false
+type signed = Unsigned | Signed
 
 let hardware_mod (a: integer) (b:integer) : integer = 
  if a < 0 && b < 0
@@ -41,31 +26,32 @@ let hardware_quot (a:integer) (b:integer) : integer =
 val integer_of_string : string -> integer
 declare ocaml target_rep function integer_of_string = `Big_int.big_int_of_string`
 
+let (max_64u : integer) = integer_of_string "18446744073709551615"
 let (max_64 : integer) = integer_of_string  "9223372036854775807"
 let (min_64 : integer) = integer_of_string "-9223372036854775808"
+let (max_32u : integer) = integer_of_string "4294967295"
 let (max_32 : integer) = integer_of_string "2147483647"
 let (min_32 : integer) = integer_of_string "-2147483648"
-let (min_8 : integer) = (integerFromNat 0) - (integerFromNat 128)
 let (max_8 : integer) = (integerFromNat 127)
-let (min_5 : integer) = (integerFromNat 0)-(integerFromNat 32)
+let (min_8 : integer) = (integerFromNat 0) - (integerFromNat 128)
 let (max_5 : integer) = (integerFromNat 31)
+let (min_5 : integer) = (integerFromNat 0)-(integerFromNat 32)
 
-val get_max_representable_in : nat -> integer
-let get_max_representable_in n = 
-  if (n = 64) then max_64
-  else if (n=32) then max_32
+val get_max_representable_in : signed -> nat -> integer
+let get_max_representable_in sign n = 
+  if (n = 64) then match sign with | Signed -> max_64 | Unsigned -> max_64u end
+  else if (n=32) then match sign with | Signed -> max_32 | Unsigned -> max_32u end
   else if (n=8) then max_8
   else if (n=5) then max_5
-  else 2**n - 1
+  else match sign with | Signed -> 2**n - 1 | Unsigned -> 2**n end
 
-val get_min_representable_in : nat -> integer
-let get_min_representable_in n = 
+val get_min_representable_in : signed -> nat -> integer
+let get_min_representable_in _ n = 
   if (n = 64) then min_64
   else if (n=32) then min_32
   else if (n=8) then min_8
   else if (n=5) then min_5
   else 0-(2**n)
-
 
 let rec carry_out v1 v2 c = 
   (match (v1,v2) with
@@ -184,8 +170,6 @@ let rec bitwise_binop op op_s (V_tuple [v1;v2]) =
       | (V_unknown,_) -> V_unknown
       | (_,V_unknown) -> V_unknown end in
   binary_taint b_b_help v1 v2
-
-type signed = Unsigned | Signed
 
 (* BitSeq expects LSB first.
  * By convention, MSB is on the left, so increasing = Big-Endian (MSB0),
@@ -331,8 +315,8 @@ let rec arith_op_overflow_vec op over_typ sign size (V_tuple [vl;vr]) =
 	  let one_more_size_u = to_vec ord (act_size +1) n_unsign in
 	  let overflow = (match n with 
 	    | V_lit (L_aux (L_num n') ln) -> 
-	      if (n' <= (get_max_representable_in len)) &&
-		(n' >= (get_min_representable_in len))
+	      if (n' <= (get_max_representable_in sign len)) &&
+		(n' >= (get_min_representable_in sign len))
 	      then V_lit (L_aux L_zero ln)
 	      else V_lit (L_aux L_one ln) end) in
 	  let out_num = to_num sign correct_size_num in
@@ -365,8 +349,8 @@ let rec arith_op_overflow_vec_bit op sign size (V_tuple [vl;vr]) =
 	let overflow = if changed 
 	  then retaint n (match detaint n with 
 	    | V_lit (L_aux (L_num n') ln) -> 
-	      if (n' <= (get_max_representable_in act_size)) &&
-		(n' >= (get_min_representable_in act_size))
+	      if (n' <= (get_max_representable_in sign act_size)) &&
+		(n' >= (get_min_representable_in sign act_size))
 	      then V_lit (L_aux L_zero ln)
 	      else V_lit (L_aux L_one ln) end) 
           else V_lit (L_aux L_zero Unknown) in
@@ -448,8 +432,7 @@ let rec arith_op_vec_no0 op op_s sign size (V_tuple [vl;vr]) =
 	let representable = 
 	  match detaint n with 
 	    | V_lit (L_aux (L_num n') ln) ->  
-	      let rep_size = (if op_s = "quot" then act_size/2 else act_size) in
-	      ((n' <= (get_max_representable_in act_size)) && (n' >= (get_min_representable_in act_size)))
+	      ((n' <= (get_max_representable_in sign act_size)) && (n' >= (get_min_representable_in sign act_size)))
 	    | _ -> true end in
          if representable 
 	 then to_vec ord act_size n else to_vec ord act_size (V_lit (L_aux L_undef Unknown))
@@ -474,7 +457,7 @@ let rec arith_op_overflow_vec_no0 op op_s sign size (V_tuple [vl;vr]) =
 	  let representable = 
 	    match detaint n with 
 	      | V_lit (L_aux (L_num n') ln) ->  
-		((n' <= (get_max_representable_in rep_size)) && (n' >= (get_min_representable_in rep_size)))
+		((n' <= (get_max_representable_in sign rep_size)) && (n' >= (get_min_representable_in sign rep_size)))
 	      | _ -> true end in
           let (correct_size_num,one_more) = 
 	  if representable then (to_vec ord act_size n,to_vec ord (act_size+1) n_u) 
