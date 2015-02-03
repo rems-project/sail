@@ -310,10 +310,10 @@ let rec pp_format_nes nes =
 
 let pp_format_annot = function
   | NoTyp -> "Nothing"
-  | Base((_,t),tag,nes,efct) -> 
+  | Base((_,t),tag,nes,efct,_) -> 
+    (*TODO print out bindings for use in pattern match in interpreter*)
     "(Just (" ^ pp_format_t t ^ ", " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^ pp_format_e efct ^ "))"
-  (* XXX missing case *)
-  | Overload _ -> assert false
+  | Overload _ -> "Nothing"
 
 let pp_annot ppf ant = base ppf (pp_format_annot ant)
 
@@ -366,15 +366,16 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_lit(lit) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_lit" pp_lem_lit lit pp_lem_l l pp_annot annot
     | E_cast(typ,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_cast" pp_lem_typ typ pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_internal_cast((_,NoTyp),e) -> pp_lem_exp ppf e
-    | E_internal_cast((_,Base((_,t),_,_,_)), (E_aux(ec,(_,eannot)) as exp)) ->
+    | E_internal_cast((_,Base((_,t),_,_,_,bindings)), (E_aux(ec,(_,eannot)) as exp)) ->
+      (*TODO use bindings*)
       let print_cast () = fprintf ppf "@[<0>(E_aux (E_cast %a %a) (%a, %a))@]" 
 	pp_lem_typ (t_to_typ t) pp_lem_exp exp pp_lem_l l pp_annot annot in
       (match t.t,eannot with
-      | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_) ->
+      | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_,bindings_int) ->
 	if nexp_eq n1 n2 
 	  then pp_lem_exp ppf exp
 	else (match (n1.nexp,n2.nexp) with 
-	  | Nconst i1,Nconst i2 -> if i1=i2 then pp_lem_exp ppf exp else print_cast ()
+	  | Nconst i1,Nconst i2 -> if eq_big_int i1 i2 then pp_lem_exp ppf exp else print_cast ()
 	  | Nconst i1,_ -> print_cast ()
 	  | _ -> pp_lem_exp ppf exp)
       | _ -> pp_lem_exp ppf exp)
@@ -415,22 +416,23 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_let(leb,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_let" pp_lem_let leb pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assign(lexp,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_assign" pp_lem_lexp lexp pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_exit exp -> fprintf ppf "@[<0>(E_aux (E_exit %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
-    | E_internal_exp (l, Base((_,t),_,_,_)) ->
+    | E_internal_exp (l, Base((_,t),_,_,_,bindings)) ->
+      (*TODO use bindings where appropriate*)
       (match t.t with
 	| Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
 	| Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
 	  (match r.nexp with
 	  | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
-	                               kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
+	                               kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,nob))
 	  | Nvar v -> fprintf ppf  "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
-	                             kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
+	                             kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,nob))
           | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given vector without known length"))
 	| Tapp("implicit",[TA_nexp r]) ->
 	  (match r.nexp with
 	    | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
-	                               kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
+	                               kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,nob))
 	    | Nvar v -> fprintf ppf "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
-	                             kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e))
+	                             kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,nob))
 	    | _ -> raise (Reporting_basic.err_unreachable l "Internal_exp given implicit without variable or const"))
         | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given non-vector or implicit"))
     | E_internal_cast ((_, Overload (_,_, _)), _) | E_internal_exp _ ->  raise (Reporting_basic.err_unreachable l "Found internal cast or exp with overload")
@@ -899,12 +901,12 @@ let doc_exp, doc_let =
   | E_lit lit -> doc_lit lit
   | E_cast(typ,e) -> prefix 2 1 (parens (doc_typ typ)) (group (atomic_exp e))
   | E_internal_cast((_,NoTyp),e) -> atomic_exp e
-  | E_internal_cast((_,Base((_,t),_,_,_)), (E_aux(_,(_,eannot)) as e)) ->
+  | E_internal_cast((_,Base((_,t),_,_,_,bindings)), (E_aux(_,(_,eannot)) as e)) ->
       (match t.t,eannot with
       (* XXX I don't understand why we can hide the internal cast here
          AAA Because an internal cast between vectors is only generated to reset the base access;
              the type checker generates far more than are needed and they're pruned off here, after constraint resolution *)
-      | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_)
+      | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_,_)
           when nexp_eq n1 n2 -> atomic_exp e
       | _ -> prefix 2 1 (parens (doc_typ (t_to_typ t))) (group (atomic_exp e)))
   | E_tuple exps ->
@@ -973,7 +975,7 @@ let doc_exp, doc_let =
   | E_app_infix(l,op,r) ->
       failwith ("unexpected app_infix operator " ^ (pp_format_id op))
       (* doc_op (doc_id op) (exp l) (exp r) *)
-  | E_internal_exp (l, Base((_,t),_,_,_)) ->
+  | E_internal_exp (l, Base((_,t),_,_,_,bindings)) -> (*TODO use bindings*)
     (match t.t with
       | Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
       | Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->

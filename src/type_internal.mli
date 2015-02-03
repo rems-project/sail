@@ -99,12 +99,25 @@ type nexp_range =
 
 val get_c_loc : constraint_origin -> Parse_ast.l
 
+val n_zero : nexp
+val n_one : nexp
+val n_two : nexp
+
+type variable_range =
+  | VR_Eq of string * nexp
+  | VR_Range of string * nexp_range list
+
+type bound_env = 
+  | No_bounds
+  | Bounds of variable_range list
+
 type t_params = (string * kind) list
 type tannot = 
   | NoTyp
-  | Base of (t_params * t) * tag * nexp_range list * effect
-  | Overload of tannot * bool * tannot list (* First tannot is the most polymorphic version; the list includes all variants. All t to be Tfn *)
-(*type tannot = ((t_params * t) * tag * nexp_range list * effect) option*)
+  | Base of (t_params * t) * tag * nexp_range list * effect * bound_env
+  (* First tannot is the most polymorphic version; the list includes all variants. All t to be Tfn *)
+  | Overload of tannot * bool * tannot list 
+
 type 'a emap = 'a Envmap.t
 
 type rec_kind = Record | Register
@@ -138,6 +151,12 @@ val unit_t : t
 val bool_t : t
 val bit_t : t
 val pure_e : effect
+val nob : bound_env
+
+val simple_annot : t -> tannot
+val global_annot : t -> tannot
+val tag_annot : t -> tag -> tannot
+val constrained_annot : t -> nexp_range list -> tannot
 
 val t_to_string : t -> string
 val n_to_string : nexp -> string
@@ -155,6 +174,8 @@ val equate_t : t -> t -> unit
 
 val subst : (string * kind) list -> t -> nexp_range list -> effect -> t * nexp_range list * effect
 val get_abbrev : def_envs -> t -> (t * nexp_range list)
+
+val build_binding : def_envs -> string -> t -> bound_env
 
 val normalize_nexp : nexp -> nexp
 val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debugging purposes*)

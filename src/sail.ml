@@ -400,8 +400,7 @@ let main() =
 	 -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
        let (ast,kenv,ord) = convert_ast merged_asts in
        let chkedast = check_ast ast kenv ord in 
-       (*let asts = (List.map (fun (f,past) -> (f,convert_ast past)) parsed) in
-       let chkedasts = (List.map (fun (f,(ast,kenv,ord)) -> (f,check_ast ast kenv ord)) asts) in*)
+       (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
        begin 
 	 (if !(opt_print_verbose)
 	  then ((Pretty_print.pp_defs stdout) chkedast)
