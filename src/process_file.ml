@@ -98,7 +98,7 @@ let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.
 		Type_internal.default_o = 
                 {Type_internal.order = (match o with | (Ast.Ord_aux(Ast.Ord_inc,_)) -> Type_internal.Oinc 
 		                                     | (Ast.Ord_aux(Ast.Ord_dec,_)) -> Type_internal.Odec)};} in
-  Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env)) defs 
+  Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env,Type_internal.nob)) defs 
 
 let open_output_with_check file_name =
   let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in

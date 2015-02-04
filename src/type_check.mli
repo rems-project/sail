@@ -4,7 +4,7 @@ type kind = Type_internal.kind
 type typ = Type_internal.t
 type 'a emap = 'a Envmap.t
 
-type envs = Env of def_envs * tannot emap
+type envs = Env of def_envs * tannot emap * bounds_env
 type 'a envs_out = 'a * envs
 
 

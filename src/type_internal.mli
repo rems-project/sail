@@ -104,17 +104,20 @@ val n_one : nexp
 val n_two : nexp
 
 type variable_range =
-  | VR_Eq of string * nexp
-  | VR_Range of string * nexp_range list
+  | VR_eq of string * nexp
+  | VR_range of string * nexp_range list
+  | VR_vec_eq of string * nexp
+  | VR_vec_r of string * nexp_range list
+  | VR_recheck of string * t (*For cases where inference hasn't yet determined the type of v*)
 
-type bound_env = 
+type bounds_env = 
   | No_bounds
   | Bounds of variable_range list
 
 type t_params = (string * kind) list
 type tannot = 
   | NoTyp
-  | Base of (t_params * t) * tag * nexp_range list * effect * bound_env
+  | Base of (t_params * t) * tag * nexp_range list * effect * bounds_env
   (* First tannot is the most polymorphic version; the list includes all variants. All t to be Tfn *)
   | Overload of tannot * bool * tannot list 
 
@@ -151,12 +154,15 @@ val unit_t : t
 val bool_t : t
 val bit_t : t
 val pure_e : effect
-val nob : bound_env
+val nob : bounds_env
 
 val simple_annot : t -> tannot
 val global_annot : t -> tannot
 val tag_annot : t -> tag -> tannot
 val constrained_annot : t -> nexp_range list -> tannot
+val cons_tag_annot : t -> tag -> nexp_range list -> tannot
+val cons_ef_annot : t -> nexp_range list -> effect -> tannot
+val cons_bs_annot : t -> nexp_range list -> bounds_env -> tannot
 
 val t_to_string : t -> string
 val n_to_string : nexp -> string
@@ -175,7 +181,8 @@ val equate_t : t -> t -> unit
 val subst : (string * kind) list -> t -> nexp_range list -> effect -> t * nexp_range list * effect
 val get_abbrev : def_envs -> t -> (t * nexp_range list)
 
-val build_binding : def_envs -> string -> t -> bound_env
+val extract_bounds : def_envs -> string -> t -> bounds_env
+val merge_bounds : bounds_env -> bounds_env -> bounds_env
 
 val normalize_nexp : nexp -> nexp
 val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debugging purposes*)

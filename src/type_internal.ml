@@ -97,17 +97,20 @@ type nexp_range =
   | BranchCons of constraint_origin * nexp_range list
 
 type variable_range =
-  | VR_Eq of string * nexp
-  | VR_Range of string * nexp_range list
+  | VR_eq of string * nexp
+  | VR_range of string * nexp_range list
+  | VR_vec_eq of string * nexp
+  | VR_vec_r of string * nexp_range list
+  | VR_recheck of string * t (*For cases where inference hasn't yet determined the type of v*)
 
-type bound_env = 
+type bounds_env = 
   | No_bounds
   | Bounds of variable_range list
 
 type t_params = (string * kind) list
 type tannot = 
   | NoTyp
-  | Base of (t_params * t) * tag * nexp_range list * effect * bound_env
+  | Base of (t_params * t) * tag * nexp_range list * effect * bounds_env
   (* First tannot is the most polymorphic version; the list includes all variants. All included t are Tfn *)
   | Overload of tannot * bool * tannot list 
 
@@ -828,6 +831,9 @@ let simple_annot t = Base(([],t),Emp_local,[],pure_e,nob)
 let global_annot t = Base(([],t),Emp_global,[],pure_e,nob)
 let tag_annot t tag = Base(([],t),tag,[],pure_e,nob)
 let constrained_annot t cs = Base(([],t),Emp_local,cs,pure_e,nob)
+let cons_tag_annot t tag cs = Base(([],t),tag,cs,pure_e,nob)
+let cons_ef_annot t cs ef = Base(([],t),Emp_local,cs,ef,nob)
+let cons_bs_annot t cs bs = Base(([],t),Emp_local,cs,pure_e,bs)
 
 let initial_abbrev_env =
   Envmap.from_list [
@@ -1766,20 +1772,22 @@ let build_variable_range d_env v typ =
   let t,_ = get_abbrev d_env typ in
   let t_actual = match t.t with | Tabbrev(_,t) -> t | _ -> t in
   match t_actual.t with
-    | Tapp("atom", [TA_nexp n]) -> Some(VR_Eq(v,n))
-    | Tapp("range", [TA_nexp base;TA_nexp top]) -> Some(VR_Range(v,[LtEq((Patt Unknown),base,top)]))
+    | Tapp("atom", [TA_nexp n]) -> Some(VR_eq(v,n))
+    | Tapp("range", [TA_nexp base;TA_nexp top]) -> Some(VR_range(v,[LtEq((Patt Unknown),base,top)]))
+    | Tapp("vector", [TA_nexp start; TA_nexp rise; _; _]) -> Some(VR_vec_eq(v,rise))
+    | Tuvar _ -> Some(VR_recheck(v,t_actual))
     | _ -> None
 
-let get_vr_var = function | VR_Eq (v,_) | VR_Range(v,_) -> v
+let get_vr_var = function | VR_eq (v,_) | VR_range(v,_) -> v | VR_vec_eq(v,_) -> v | VR_vec_r(v,_) -> v | VR_recheck(v,_) -> v
 
 let compare_variable_range v1 v2 = compare (get_vr_var v1) (get_vr_var v2)
 
-let build_binding d_env v typ = 
+let extract_bounds d_env v typ = 
   match build_variable_range d_env v typ with
     | None -> No_bounds
     | Some vb -> Bounds [vb]
 
-let find_binding v bounds = match bounds with
+let find_bounds v bounds = match bounds with
   | No_bounds -> None
   | Bounds bs ->
     let rec find_rec bs = match bs with
@@ -1787,7 +1795,7 @@ let find_binding v bounds = match bounds with
       | b::bs -> if (get_vr_var b) = v then Some(b) else find_rec bs in
     find_rec bs
 
-let merge_binding b1 b2 =
+let merge_bounds b1 b2 =
   match b1,b2 with
     | No_bounds,b | b,No_bounds -> b
     | Bounds b1s,Bounds b2s ->
@@ -1800,11 +1808,15 @@ let merge_binding b1 b2 =
 	    | -1 -> b1::(merge b1s (b2::b2s))
 	    | 1  -> b2::(merge (b1::b1s) b2s)
 	    | 0  -> (match b1,b2 with
-		| VR_Eq(v,n1),VR_Eq(_,n2) -> 
-		  if nexp_eq n1 n2 then b1 else VR_Range(v,[Eq((Patt Unknown),n1,n2)])
-		| VR_Eq(v,n),VR_Range(_,ranges) | 
-		  VR_Range(v,ranges),VR_Eq(_,n) -> VR_Range(v,(Eq((Patt Unknown),n,n))::ranges)
-		| VR_Range(v,ranges1),VR_Range(_,ranges2) -> VR_Range(v,ranges1@ranges2)
+		| VR_eq(v,n1),VR_eq(_,n2) -> 
+		  if nexp_eq n1 n2 then b1 else VR_range(v,[Eq((Patt Unknown),n1,n2)])
+		| VR_eq(v,n),VR_range(_,ranges) | 
+		  VR_range(v,ranges),VR_eq(_,n) -> VR_range(v,(Eq((Patt Unknown),n,n))::ranges)
+		| VR_range(v,ranges1),VR_range(_,ranges2) -> VR_range(v,ranges1@ranges2)
+		| VR_vec_eq(v,n1),VR_vec_eq(_,n2) ->
+		  if nexp_eq n1 n2 then b1 else VR_vec_r(v,[Eq((Patt Unknown),n1,n2)])
+		| VR_vec_eq(v,n),VR_vec_r(_,ranges) |
+		  VR_vec_r(v,ranges),VR_vec_eq(_,n) -> VR_vec_r(v,(Eq((Patt Unknown),n,n)::ranges))
 	    )::(merge b1s b2s) in
       Bounds (merge b1s b2s)
 
@@ -2389,19 +2401,19 @@ let tannot_merge co denv widen t_older t_newer =
     | NoTyp,NoTyp -> NoTyp
     | NoTyp,_ -> t_newer
     | _,NoTyp -> t_older
-    | Base((ps_o,t_o),tag_o,cs_o,ef_o,bindings_o),Base((ps_n,t_n),tag_n,cs_n,ef_n,bindings_n) -> 
+    | Base((ps_o,t_o),tag_o,cs_o,ef_o,bounds_o),Base((ps_n,t_n),tag_n,cs_n,ef_n,bounds_n) -> 
       (match tag_o,tag_n with
 	| Default,tag -> 
 	  (match t_n.t with
 	    | Tuvar _ -> let t_o,cs_o,ef_o = subst ps_o t_o cs_o ef_o in
 			 let t,_ = type_consistent co denv false t_n t_o in
-			 Base(([],t),tag_n,cs_o,ef_o,bindings_o)
+			 Base(([],t),tag_n,cs_o,ef_o,bounds_o)
 	    | _ -> t_newer)
 	| Emp_local, Emp_local -> 
 	  (*let _ = Printf.printf "local-local case\n" in*) 
 	  (*TODO Check conforms to first; if true check consistent, if false replace with t_newer *)
 	  let t,cs_b = type_consistent co denv widen t_n t_o in
 	  (*let _ = Printf.printf "types consistent\n" in*)
-	  Base(([],t),Emp_local,cs_o@cs_n@cs_b,union_effects ef_o ef_n, merge_binding bindings_o bindings_n)
+	  Base(([],t),Emp_local,cs_o@cs_n@cs_b,union_effects ef_o ef_n, merge_bounds bounds_o bounds_n)
 	| _,_ -> t_newer)
     | _ -> t_newer
