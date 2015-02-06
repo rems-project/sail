@@ -38,9 +38,9 @@ and t_aux =
 (*Implicit nexp parameters for library and special function calls*)
 and implicit_parm =
   | IP_none (*Standard function*)
-  | IP_length (*Library function to take length of a vector as first parameter*)
-  | IP_start (*Library functions to take start of a vector as first parameter*)
-  | IP_var of nexp (*Special user functions, must be declared with val, will pass stated parameter to functions as above*)
+  | IP_length of nexp (*Library function to take length of a vector as first parameter*)
+  | IP_start of nexp (*Library functions to take start of a vector as first parameter*)
+  | IP_user of nexp (*Special user functions, must be declared with val, will pass stated parameter to function from return type*)
 and nexp = { mutable nexp : nexp_aux }
 and nexp_aux =
   | Nvar of string
@@ -186,6 +186,7 @@ val merge_bounds : bounds_env -> bounds_env -> bounds_env
 
 val normalize_nexp : nexp -> nexp
 val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debugging purposes*)
+val get_all_nvar : nexp -> nexp list (*Pull out all of the contained nvar and nuvars in nexp*)
 
 val select_overload_variant : def_envs -> bool -> bool -> tannot list -> t -> tannot list
 

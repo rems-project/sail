@@ -88,24 +88,21 @@ let rec typ_to_t imp_ok fun_ok (Typ_aux(typ,l)) =
   match typ with
     | Typ_id i -> {t = Tid (id_to_string i)}
     | Typ_var (Kid_aux((Var i),l')) -> {t = Tvar i}
-    (*Need to look here for the implicit parameter within the ty1, so typ_to_t may need an optional additional return*)
     | Typ_fn (ty1,ty2,e) -> 
       if fun_ok 
-      then begin
+      then 
 	if has_typ_app false "implicit" ty1 
-	then if imp_ok 
+	then 
+	  if imp_ok 
 	  then (match extract_if_first true "implicit" ty1 with
 	    | Some(imp,new_ty1) -> (match imp with
 		| Typ_app(_,[Typ_arg_aux(Typ_arg_nexp ((Nexp_aux(n,l')) as ne),_)]) -> 
-		  (match n with
-		    | Nexp_var (Kid_aux((Var i),l')) ->
-		      {t = Tfn (trans new_ty1, trans ty2, IP_var (anexp_to_nexp ne), aeffect_to_effect e)}
-		    | _ -> typ_error l' "Declaring an implicit parameter related to an Nat term must be a variable")
-		| _ -> typ_error l "Declaring an implicit parameter requires a variable")
-	    | None -> typ_error l "A function type with an implicit parameter must have the implicit declaration first")
-	  else typ_error l "This function type has an (possibly two) implicit parameter that is not permitted here"
-	else {t = Tfn (trans ty1,trans ty2,IP_none,aeffect_to_effect e)} end
-      else typ_error l "Function types are not permitted here"
+		  {t = Tfn (trans new_ty1, trans ty2, IP_user (anexp_to_nexp ne), aeffect_to_effect e)}
+		| _ -> typ_error l "Declaring an implicit parameter requires a Nat specification")
+	    | None -> typ_error l "A function type with an implicit parameter must declare the implicit first")
+	  else typ_error l "This function has one (or more) implicit parameter(s) not permitted here"
+	else {t = Tfn (trans ty1,trans ty2,IP_none,aeffect_to_effect e)}
+      else typ_error l "Function types are only permitted at the top level."
     | Typ_tup(tys) -> {t = Ttup (List.map trans tys) }
     | Typ_app(i,args) -> {t = Tapp (id_to_string i,List.map typ_arg_to_targ args) }
     | Typ_wild -> new_t ()
@@ -165,7 +162,6 @@ let rec quants_to_consts ((Env (d_env,t_env,b_env)) as env) qis : (t_params * t_
 	    | NC_bounded_ge(n1,n2) -> (ids,typarms,GtEq(Specc l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
 	    | NC_bounded_le(n1,n2) -> (ids,typarms,LtEq(Specc l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
 	    | NC_nat_set_bounded(Kid_aux((Var i),l''), bounds) -> (ids,typarms,In(Specc l',i,bounds)::cs)))
-
 
 let typq_to_params envs (TypQ_aux(tq,l)) =
   match tq with
@@ -591,23 +587,22 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
           | _ -> raise (Reporting_basic.err_unreachable l "type coerce given tuple and tuple type returned non-tuple"))) 
       in
       let check_result ret imp tag cs ef parms =    
-	(*TODO How do I want to pass the information about start along?*)
-
-	(* TODO MAJOR!!!! It may be that the return is a tuple or some bigger structure. THIS IS OK. I need to tie the variable in the implicit to the variable in the type and then put that type here. 
-	COME BACK AND look at return type more, look in bounds etc*)
 	match (imp,imp_param) with
-	  | (IP_length,None) | (IP_var _,None) ->
+	  | (IP_length n ,None) | (IP_user n,None) | (IP_start n,None) ->
 	    (*let _ = Printf.printf "implicit length or var required, no imp_param\n!" in*)
-	    (*TODO may need to use bindings here?*)
-            let internal_exp =  match expect_t.t,ret.t with 
+	    (*let internal_exp = 
+	      let internal_typ = {t= Toptions(expect_t,Some ret)} in
+	      let annot = Base(([],internal_typ),Emp_local,[],pure_e,b_env) in
+	      E_aux(E_internal_exp(l,annot),(l,simple_annot nat_t)) in*)
+	    let internal_exp =  match expect_t.t,ret.t with 
               | Tapp("vector",_),_ -> 
-		(*let _ = Printf.printf "adding internal exp on expext_t: %s %s \n" (t_to_string expect_t) (t_to_string ret) in*)
 		E_aux (E_internal_exp (l,simple_annot expect_t), (l,simple_annot nat_t))
-              | _,Tapp("vector",_) -> 
+              | _,Tapp("vector",_) ->
 		E_aux (E_internal_exp (l,simple_annot ret), (l,simple_annot nat_t))
               | _ -> typ_error l (i ^ " expected either the return type or the expected type to be a vector") in
-            type_coerce (Expr l) d_env false false ret (E_aux (E_app(id, internal_exp::parms),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t
-	  | (IP_length,Some ne) | (IP_var _,Some ne) ->
+            type_coerce (Expr l) 
+	      d_env false false ret (E_aux (E_app(id, internal_exp::parms),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t
+	  | (IP_length n ,Some ne) | (IP_user n,Some ne) | (IP_start n,Some ne) ->
 	    (*let _ = Printf.printf "implicit length or var required with imp_param\n" in*)
 	    let internal_exp = (match expect_t.t,ret.t with
 	      | Tapp("vector",[_;TA_nexp len;_;_]),_ ->
@@ -683,7 +678,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         | _ -> raise (Reporting_basic.err_unreachable l "check exp given tuple and tuple type and returned non-tuple") in
       let check_result ret imp tag cs ef lft rht =
         match imp with
-	  | IP_length ->  
+	  | IP_length _ ->  
             let internal_exp =  match expect_t.t,ret.t with 
               | Tapp("vector",_),_ -> 
 		E_aux (E_internal_exp (l,simple_annot expect_t), (l, simple_annot nat_t))
@@ -1715,7 +1710,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let _,cs = type_consistent (Specc l) d_env false t u in
       (*let _ = Printf.printf "valspec consistent with declared type for %s\n" id in*)
       let imp_param = match u.t with 
-	| Tfn(_,_,IP_var n,_) -> Some n
+	| Tfn(_,_,IP_user n,_) -> Some n
 	| _ -> None in
       let t_env = if is_rec then t_env else Envmap.remove t_env id in
       let funcls,cs_ef = check t_env imp_param in

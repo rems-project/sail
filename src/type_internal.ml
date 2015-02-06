@@ -36,7 +36,7 @@ and t_aux =
   | Tuvar of t_uvar
 and t_uvar = { index : int; mutable subst : t option }
 and implicit_parm =
-  | IP_none  | IP_length  | IP_start  | IP_var of nexp 
+  | IP_none  | IP_length of nexp | IP_start of nexp | IP_user of nexp 
 and nexp = { mutable nexp : nexp_aux }
 and nexp_aux =
   | Nvar of string
@@ -347,6 +347,13 @@ let rec get_var n =
   | Nneg n -> get_var n
   | Nmult (_,n1) -> get_var n1
   | _ -> None
+
+let rec get_all_nvar n = 
+  match n.nexp with
+    | Nvar _ | Nuvar _ -> [n]
+    | Nneg n | N2n(n,_) | Npow(n,_) -> get_all_nvar n
+    | Nmult(n1,n2) | Nadd(n1,n2) -> (get_all_nvar n1)@(get_all_nvar n2)
+    | _ -> []
 
 let get_factor n =
   match n.nexp with
@@ -852,7 +859,7 @@ let mk_ord_params l = List.map (fun i -> (i,{k=K_Ord})) l
 
 let mk_tup ts = {t = Ttup ts }
 let mk_pure_fun arg ret = {t = Tfn (arg,ret,IP_none,pure_e)}
-let mk_pure_imp arg reg = {t = Tfn (arg,reg,IP_length,pure_e)}
+let mk_pure_imp arg ret var = {t = Tfn (arg,ret,IP_length {nexp = Nvar var},pure_e)}
 
 let mk_nv v = {nexp = Nvar v}
 let mk_add n1 n2 = {nexp = Nadd (n1,n2) }
@@ -1266,11 +1273,9 @@ let initial_typ_env =
 			          (mk_range (mk_nv "m") n_zero))),
 		    External (Some "length"),[],pure_e,nob));
     (* incorrect types for typechecking processed sail code; do we care? *)
-    ("to_num_inc",Base(([("a",{k=K_Typ})], (mk_pure_imp {t=Tvar "a"} nat_typ)),External None,[],pure_e,nob));
-    ("to_num_dec",Base(([("a",{k=K_Typ})], (mk_pure_imp {t=Tvar "a"} nat_typ)),External None,[],pure_e,nob));
     ("mask",Base(((mk_typ_params ["a"])@(mk_nat_params["n";"m";"o";"p"])@(mk_ord_params["ord"]),
 		  (mk_pure_imp (mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "n") (Nvar "m"))
-		               (mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "p") (Nvar "o")))),
+		               (mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "p") (Nvar "o")) "o")),
 		 External (Some "mask"),
 		 [GtEq(Specc(Parse_ast.Int("mask",None)), (mk_nv "m"), (mk_nv "o"))],pure_e,nob));
     (*TODO These should be IP_start *)
@@ -1488,8 +1493,10 @@ let rec t_subst s_env t =
   | Toptions(t1,Some t2) -> {t = Toptions(t_subst s_env t1,Some (t_subst s_env t2)) }
 and ip_subst s_env ip =
   match ip with
-    | IP_none | IP_length | IP_start -> ip
-    | IP_var n -> IP_var (n_subst s_env n)
+    | IP_none -> ip
+    | IP_length n -> IP_length (n_subst s_env n)
+    | IP_start n -> IP_start (n_subst s_env n)
+    | IP_user n -> IP_user (n_subst s_env n)
 and ta_subst s_env ta =
   match ta with
   | TA_typ t -> TA_typ (t_subst s_env t)
@@ -1817,6 +1824,7 @@ let merge_bounds b1 b2 =
 		  if nexp_eq n1 n2 then b1 else VR_vec_r(v,[Eq((Patt Unknown),n1,n2)])
 		| VR_vec_eq(v,n),VR_vec_r(_,ranges) |
 		  VR_vec_r(v,ranges),VR_vec_eq(_,n) -> VR_vec_r(v,(Eq((Patt Unknown),n,n)::ranges))
+		| _ -> b1
 	    )::(merge b1s b2s) in
       Bounds (merge b1s b2s)
 
@@ -2389,7 +2397,7 @@ let check_tannot l annot imp_param constraints efs =
       ignore (remove_internal_unifications s_env);
     (*let _ = Printf.printf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in *)
       let t' = match (t.t,imp_param) with
-	| Tfn(p,r,_,e),Some x -> {t = Tfn(p,r,IP_var x,e) }
+	| Tfn(p,r,_,e),Some x -> {t = Tfn(p,r,IP_user x,e) }
 	| _ -> t in 
       Base((params,t'),tag,cs,e,bindings)
     | NoTyp -> raise (Reporting_basic.err_unreachable l "check_tannot given the place holder annotation")
