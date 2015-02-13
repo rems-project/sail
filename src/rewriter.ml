@@ -130,7 +130,16 @@ let rec rewrite_exp (E_aux (exp,(l,annot))) =
 	      (match vars with
 		| [] -> rewrite_nexp_to_exp None l i
 		| vars -> rewrite_nexp_to_exp (Some (match_to_program_vars vars bounds)) l i))
-    | E_internal_exp_user (user_spec,impl) -> assert false
+    | E_internal_exp_user ((l,user_spec),(_,impl)) -> 
+      (match (user_spec,impl) with
+	| (Base((_,tu),_,_,_,_), Base((_,ti),_,_,_,bounds)) ->
+	  match (tu.t,ti.t) with
+	    | (Tapp("implicit", [TA_nexp u]),Tapp("implicit",[TA_nexp i])) ->
+	      let vars = get_all_nvar i in
+	      (match vars with
+		| [] -> rewrite_nexp_to_exp None l i
+		  (*add u to program_vars env; for now it will work out properly by accident*)
+		| vars -> rewrite_nexp_to_exp (Some (match_to_program_vars vars bounds)) l i))
 
 and rewrite_let (LB_aux(letbind,(l,annot))) = match letbind with
   | LB_val_explicit (typschm, pat,exp) ->

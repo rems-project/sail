@@ -1171,11 +1171,12 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	    | records -> typ_error l "Multiple structs contain this set of fields, try adding a cast to disambiguate")
 	| _ -> typ_error l ("Expected a struct to update but found an expression of type " ^ t_to_string expect_t))
     | E_field(exp,id) ->
-      let (e',t',_,c,_,ef) = check_exp envs imp_param (new_t()) exp in
+      let (e',t',_,c_sub,_,ef_sub) = check_exp envs imp_param (new_t()) exp in
       (match t'.t with
       | Tabbrev({t=Tid i}, t2) ->
 	  (match lookup_record_typ i d_env.rec_env with
-	    | None -> typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i)
+	    | None -> 
+	      typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i)
 	    | Some(((i,rec_kind,fields) as r)) ->
 	      let fi = id_to_string id in
 	      (match lookup_field_type fi r with
@@ -1185,11 +1186,13 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 		| Base((params,et),tag,cs,ef,bounds) ->
 		  let et,cs,ef = subst params et cs ef in
 		  let (et',c',ef',acc) = 
-		    type_coerce (Expr l) d_env false false et (E_aux(E_field(e',id),(l,Base(([],et),tag,cs,ef,bounds)))) expect_t in
-		  (acc,et',t_env,cs@c',nob,union_effects ef' ef)))
+		    type_coerce (Expr l) d_env false false et 
+		      (E_aux(E_field(e',id),(l,Base(([],et),tag,cs,ef,bounds)))) expect_t in
+		  (acc,et',t_env,cs@c'@c_sub,nob,union_effects ef' ef_sub)))
       | Tid i ->
 	  (match lookup_record_typ i d_env.rec_env with
-	    | None -> typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i)
+	    | None -> 
+	      typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i)
 	    | Some(((i,rec_kind,fields) as r)) ->
 	      let fi = id_to_string id in
 	      (match lookup_field_type fi r with
@@ -1199,8 +1202,9 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 		| Base((params,et),tag,cs,ef,bounds) ->
 		  let et,cs,ef = subst params et cs ef in
 		  let (et',c',ef',acc) =
-		    type_coerce (Expr l) d_env false false et (E_aux(E_field(e',id),(l,Base(([],et),tag,cs,ef,bounds)))) expect_t in
-		  (acc,et',t_env,cs@c',nob,union_effects ef' ef)))
+		    type_coerce (Expr l) d_env false false et 
+		      (E_aux(E_field(e',id),(l,Base(([],et),tag,cs,ef,bounds)))) expect_t in
+		  (acc,et',t_env,cs@c'@c_sub,nob,union_effects ef' ef_sub)))
 	| Tuvar _ ->
 	  let fi = id_to_string id in
 	  (match lookup_possible_records [fi] d_env.rec_env with
@@ -1214,9 +1218,10 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 		| Base((params,et),tag,cs,ef,bounds) ->
 		  let et,cs,ef = subst params et cs ef in
 		  let (et',c',ef',acc) = 
-		    type_coerce (Expr l) d_env false false et (E_aux(E_field(e',id),(l,Base(([],et),tag,cs,ef,bounds)))) expect_t in
+		    type_coerce (Expr l) d_env false false et (E_aux(E_field(e',id),
+								     (l,Base(([],et),tag,cs,ef,bounds)))) expect_t in
                   equate_t t' {t=Tid i};
-		  (acc,et',t_env,cs@c',nob,union_effects ef' ef))
+		  (acc,et',t_env,cs@c'@c_sub,nob,union_effects ef' ef_sub))
 	    | records -> typ_error l ("Multiple structs contain field " ^ fi ^ ", try adding a cast to disambiguate"))
 	| _ -> typ_error l ("Expected a struct or register for access but found an expression of type " ^ t_to_string t'))
     | E_case(exp,pexps) ->
@@ -1525,10 +1530,12 @@ and check_lbind envs imp_param is_top_level emp_tag (LB_aux(lbind,(l,annot))) : 
       let (e,t,_,cs2,_,ef2) = check_exp envs imp_param t e in
       let cs = if is_top_level then resolve_constraints cs@cs1@cs2 else cs@cs1@cs2 in
       let ef = union_effects ef ef2 in
+      (*let _ = Printf.eprintf "checking tannot in let1\n" in*)
       let tannot = if is_top_level 
 	then check_tannot l (Base((params,t),tag,cs,ef,bounds)) None cs ef (*in top level, must be pure_e*) 
 	else (Base ((params,t),tag,cs,ef,bounds))
       in
+      (*let _ = Printf.eprintf "done checking tannot in let1\n" in*)
       (LB_aux (LB_val_explicit(typ,pat',e),(l,tannot)),env,cs,bounds,ef)
     | NoTyp | Overload _ -> raise (Reporting_basic.err_unreachable l "typschm_to_tannot failed to produce a Base"))
   | LB_val_implicit(pat,e) -> 
@@ -1536,10 +1543,12 @@ and check_lbind envs imp_param is_top_level emp_tag (LB_aux(lbind,(l,annot))) : 
     let (pat',env,cs1,bounds,u) = check_pattern envs emp_tag (new_t ()) pat in
     let (e,t',_,cs2,_,ef) = check_exp envs imp_param u e in
     let cs = if is_top_level then resolve_constraints cs1@cs2 else cs1@cs2 in
+    (*let _ = Printf.eprintf "checking tannot in let2\n" in*)
     let tannot = 
       if is_top_level then check_tannot l (Base(([],t'),emp_tag,cs,ef,bounds)) None cs ef (* see above *)
       else (Base (([],t'),emp_tag,cs,ef,bounds))
     in
+    (*let _ = Printf.eprintf "done checking tannot in let2\n" in*)
     (LB_aux (LB_val_implicit(pat',e),(l,tannot)), env,cs,bounds,ef)
 
 (*val check_type_def : envs -> (tannot type_def) -> (tannot type_def) envs_out*)
@@ -1699,13 +1708,14 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   let check t_env imp_param =
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,_))) ->
-	(*let _ = Printf.printf "checking function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
+	(*let _ = Printf.eprintf "checking function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
 	let (pat',t_env',cs_p,b_env',t') = check_pattern (Env(d_env,t_env,b_env)) Emp_local param_t pat in
 	(*let _ = Printf.printf "about to check that %s and %s are consistent\n" (t_to_string t') (t_to_string param_t) in*)
 	let t', _ = type_consistent (Patt l) d_env false param_t t' in
 	let exp',_,_,cs_e,_,ef = 
 	  check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env true) t_env t_env', merge_bounds b_env b_env')) imp_param ret_t exp in
-	(*let _ = Printf.printf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
+	(*let _ = Printf.eprintf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
+	(*let _ = Printf.eprintf "effects were %s\n" (e_to_string ef) in*)
 	let cs = [CondCons(Fun l,cs_p,cs_e)] in
 	(FCL_aux((FCL_Funcl(id,pat',exp')),(l,(Base(([],ret_t),Emp_global,cs,ef,nob)))),(cs,ef))) funcls) in
   let update_pattern var (FCL_aux ((FCL_Funcl(id,(P_aux(pat,t)),exp)),annot)) = 
@@ -1729,12 +1739,13 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let cs,ef = ((fun (cses,efses) -> 
 	(List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
       let cs' = resolve_constraints cs@constraints in
+      (*let _ = Printf.eprintf "checking tannot for %s 1\n" id in*)
       let tannot = check_tannot l tannot imp_param cs' ef in
-      (*let _ = Printf.printf "check_tannot ok for %s\n" id in*)
+      (*let _ = Printf.eprintf "check_tannot ok for %s\n" id in*)
       let funcls = match imp_param with
 	| None | Some {nexp = Nconst _} -> funcls
 	| Some {nexp = Nvar i} -> List.map (update_pattern i) funcls in
-      (*let _ = Printf.printf "done funcheck case 1\n" in*)
+      (*let _ = Printf.eprintf "done funcheck case 1\n" in*)
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,Envmap.insert t_env (id,tannot),b_env)
     | _ , _-> 
@@ -1742,8 +1753,9 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let funcls,cs_ef = check t_env None in
       let cs,ef = ((fun (cses,efses) -> (List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
       let cs' = resolve_constraints cs in
+      (*let _ = Printf.eprintf "checking tannot for %s 2\n" id in*)
       let tannot = check_tannot l tannot None cs' ef in
-      (*let _ = Printf.printf "done funcheck case2\n" in*)
+      (*let _ = Printf.eprintf "done funcheck case2\n" in*)
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,(if is_rec then t_env else Envmap.insert t_env (id,tannot)),b_env)
 

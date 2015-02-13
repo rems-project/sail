@@ -145,6 +145,7 @@ val lookup_field_type : string -> rec_env -> tannot
 
 val add_effect : Ast.base_effect -> effect -> effect
 val union_effects : effect -> effect -> effect
+val e_to_string : effect -> string
 
 val initial_kind_env : kind Envmap.t
 val initial_abbrev_env : tannot Envmap.t

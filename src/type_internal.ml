@@ -251,7 +251,7 @@ let union_effects e1 e2 =
   | Euvar _,_ -> e1.effect <- e2.effect; e2
   | _,Euvar _ -> e2.effect <- e1.effect; e2
   | Eset b1, Eset b2 -> 
-    (*let _ = Printf.eprintf "union effects of length %i and %i\n" (List.length b1) (List.length b2) in*)
+    (*let _ = Printf.eprintf "union effects of length %s and %s\n" (e_to_string e1) (e_to_string e2) in*)
     {effect= Eset (effect_remove_dups (b1@b2))}  
 
 let rec lookup_record_typ (typ : string) (env : rec_env list) : rec_env option =
@@ -1752,7 +1752,7 @@ let effects_eq co e1 e2 =
   | Eset es1,Eset es2 -> 
     if (List.length es1) = (List.length es2) && (List.for_all2 eq_be_effect (effect_sort es1) (effect_sort es2) ) 
     then e2 
-    else eq_error l ("Effects must be the same, given " ^ efs_to_string es1 ^ " and " ^ efs_to_string es2)
+    else eq_error l ("Effects must be the same, given " ^ e_to_string e1 ^ " and " ^ e_to_string e2)
   | Evar v1, Evar v2 -> if v1 = v2 then e2 else eq_error l ("Effect variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
   | Evar v1, Eset _ -> eq_error l ("Effect variable " ^ v1 ^ " cannot be used where a concrete set of effects is specified")
 
@@ -1969,7 +1969,7 @@ and type_arg_eq co d_env widen ta1 ta2 =
   match ta1,ta2 with
   | TA_typ t1,TA_typ t2 -> snd (type_consistent co d_env widen t1 t2)
   | TA_nexp n1,TA_nexp n2 -> if nexp_eq n1 n2 then [] else [Eq(co,n1,n2)]
-  | TA_eft e1,TA_eft e2 -> (ignore(effects_eq co e1 e2);[])
+  | TA_eft e1,TA_eft e2 -> (ignore(effects_eq co e1 e2); [])
   | TA_ord o1,TA_ord o2 -> (ignore(order_eq co o1 o2);[])
   | _,_ -> eq_error (get_c_loc co) "Type arguments must be of the same kind" 
 
