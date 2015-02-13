@@ -264,7 +264,8 @@ type
  | E_assign of 'a lexp * 'a exp (* imperative assignment *)
  | E_exit of 'a exp (* expression to halt all current execution, potentially calling a system, trap, or interrupt handler with exp *)
  | E_internal_cast of 'a annot * 'a exp (* This is an internal cast, generated during type checking that will resolve into a syntactic cast after *)
- | E_internal_exp of 'a annot (* This is an internal use of an nexp (in the annot) for passing length information after resolution of constraints *)
+ | E_internal_exp of 'a annot (* This is an internal use for passing nexp information  to library functions, postponed for constraint solving *)
+ | E_internal_exp_user of 'a annot * 'a annot (* This is like the above but the user has specified an implicit parameter for the current function *)
 
 and 'a exp = 
    E_aux of 'a exp_aux * 'a annot

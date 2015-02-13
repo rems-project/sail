@@ -416,7 +416,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_let(leb,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_let" pp_lem_let leb pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assign(lexp,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_assign" pp_lem_lexp lexp pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_exit exp -> fprintf ppf "@[<0>(E_aux (E_exit %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
-    | E_internal_exp (l, Base((_,t),_,_,_,bindings)) ->
+    | E_internal_exp ((l, Base((_,t),_,_,_,bindings))) ->
       (*TODO use bindings where appropriate*)
       (match t.t with
 	| Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
@@ -975,7 +975,7 @@ let doc_exp, doc_let =
   | E_app_infix(l,op,r) ->
       failwith ("unexpected app_infix operator " ^ (pp_format_id op))
       (* doc_op (doc_id op) (exp l) (exp r) *)
-  | E_internal_exp (l, Base((_,t),_,_,_,bindings)) -> (*TODO use bindings*)
+  | E_internal_exp((l, Base((_,t),_,_,_,bindings))) -> (*TODO use bindings, and other params*)
     (match t.t with
       | Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
       | Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->

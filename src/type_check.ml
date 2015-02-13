@@ -532,11 +532,13 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
             else typ_error l ("Expected bool or a bit, found " ^ string_of_int i)
           | Tapp ("vector",[TA_nexp base;TA_nexp rise;TA_ord o;(TA_typ {t=Tid "bit"})]) ->
             let n = {nexp = Nconst (big_int_of_int i) } in
-            let t = {t=Tapp("range", [TA_nexp n;TA_nexp {nexp = Nconst zero};])} in
+            let t = {t=Tapp("atom", [TA_nexp n;])} in
             let cs = [LtEq(Expr l,n,{nexp = N2n(rise,None)})] in
-            let f = match o.order with | Oinc -> "to_vec_inc" | Odec -> "to_vec_dec" | _ -> "to_vec_inc" (*Change to follow a default?*) in
+            let f = match o.order with | Oinc -> "to_vec_inc" | Odec -> "to_vec_dec" | _ -> "to_vec_inc" in
+	    let internal_tannot = (l,(cons_bs_annot {t = Tapp("implicit",[TA_nexp rise])} [] b_env)) in
 	    let tannot = (l,cons_tag_annot expect_t (External (Some f)) cs) in
-            E_aux(E_app((Id_aux((Id f),l)),[(E_aux (E_internal_exp tannot, tannot));simp_exp e l t]),tannot),cs,pure_e
+            E_aux(E_app((Id_aux((Id f),l)),
+			[(E_aux (E_internal_exp(internal_tannot), tannot));simp_exp e l t]),tannot),cs,pure_e
           | _ -> simp_exp e l {t = Tapp("atom", [TA_nexp{nexp = Nconst (big_int_of_int i)}])},[],pure_e)
 	| L_hex s -> simp_exp e l {t = Tapp("vector",
 			                    [TA_nexp{nexp = Nconst zero};
@@ -555,7 +557,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 							  TA_ord o;(TA_typ {t=Tid "bit"})])}])->
               let f = match o.order with | Oinc -> "to_vec_inc" | Odec -> "to_vec_dec" | _ -> "to_vec_inc" (*Change to follow a default?*) in
 	      let tannot = (l,Base(([],expect_t),External (Some f),[],ef,nob)) in
-              E_aux(E_app((Id_aux((Id f),l)),[(E_aux (E_internal_exp tannot, tannot));simp_exp e l bit_t]),tannot),[],ef
+              E_aux(E_app((Id_aux((Id f),l)),
+			  [(E_aux (E_internal_exp(tannot), tannot));simp_exp e l bit_t]),tannot),[],ef
             | _ -> simp_exp e l (new_t ()),[],ef)) in
       let t',cs',_,e' = type_coerce (Expr l) d_env false true (get_e_typ e) e expect_t in
       (e',t',t_env,cs@cs',nob,effect)
@@ -590,35 +593,44 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	match (imp,imp_param) with
 	  | (IP_length n ,None) | (IP_user n,None) | (IP_start n,None) ->
 	    (*let _ = Printf.printf "implicit length or var required, no imp_param\n!" in*)
-	    (*let internal_exp = 
-	      let internal_typ = {t= Toptions(expect_t,Some ret)} in
-	      let annot = Base(([],internal_typ),Emp_local,[],pure_e,b_env) in
-	      E_aux(E_internal_exp(l,annot),(l,simple_annot nat_t)) in*)
-	    let internal_exp =  match expect_t.t,ret.t with 
+	    let internal_exp = 
+	      let implicit = {t= Tapp("implicit",[TA_nexp n])} in
+	      let annot_i = Base(([],implicit),Emp_local,[],pure_e,b_env) in
+	      E_aux(E_internal_exp((l,annot_i)),(l,simple_annot nat_t)) in
+	    (*let internal_exp =  match expect_t.t,ret.t with 
               | Tapp("vector",_),_ -> 
 		E_aux (E_internal_exp (l,simple_annot expect_t), (l,simple_annot nat_t))
               | _,Tapp("vector",_) ->
 		E_aux (E_internal_exp (l,simple_annot ret), (l,simple_annot nat_t))
-              | _ -> typ_error l (i ^ " expected either the return type or the expected type to be a vector") in
+              | _ -> typ_error l (i ^ " expected either the return type or the expected type to be a vector") in*)
             type_coerce (Expr l) 
 	      d_env false false ret (E_aux (E_app(id, internal_exp::parms),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t
 	  | (IP_length n ,Some ne) | (IP_user n,Some ne) | (IP_start n,Some ne) ->
 	    (*let _ = Printf.printf "implicit length or var required with imp_param\n" in*)
-	    let internal_exp = (match expect_t.t,ret.t with
+	    (*let internal_exp = (match expect_t.t,ret.t with
 	      | Tapp("vector",[_;TA_nexp len;_;_]),_ ->
 		if nexp_eq ne len 
 		(*TODO This shouldn't be nat_t but should be a range bounded by the length of the vector *)
-		then E_aux (E_internal_exp (l, simple_annot expect_t), (l, simple_annot nat_t)) 
-		else E_aux (E_internal_exp (l, simple_annot {t= Tapp("implicit",[TA_nexp ne])}), (l, simple_annot nat_t))
+		then E_aux (E_internal_exp((l, simple_annot expect_t),(l,NoTyp),(l,NoTyp)), (l, simple_annot nat_t)) 
+		else E_aux (E_internal_exp((l, simple_annot {t= Tapp("implicit",[TA_nexp ne])}),(l,NoTyp),(l,NoTyp)), (l, simple_annot nat_t))
 	      | _,Tapp("vector",[_;TA_nexp len;_;_]) -> 
 		if nexp_eq ne len 
 		then E_aux (E_internal_exp (l, simple_annot ret), (l, simple_annot nat_t)) 
 		else E_aux (E_internal_exp (l, simple_annot {t= Tapp("implicit",[TA_nexp ne])}),(l, simple_annot nat_t))
-	      | _ -> E_aux (E_internal_exp (l, simple_annot {t= Tapp("implicit",[TA_nexp ne])}),(l, simple_annot nat_t))) in
-	    type_coerce (Expr l) d_env false false ret (E_aux (E_app(id,internal_exp::parms),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t
+	      | _ -> E_aux (E_internal_exp (l, simple_annot {t= Tapp("implicit",[TA_nexp ne])}),(l, simple_annot nat_t)))*) 
+	    let internal_exp = 
+	      let implicit_user = {t = Tapp("implicit",[TA_nexp ne])} in
+	      let implicit = {t= Tapp("implicit",[TA_nexp n])} in
+	      let annot_iu = Base(([],implicit_user),Emp_local,[],pure_e,b_env)in
+	      let annot_i = Base(([],implicit),Emp_local,[],pure_e,b_env) in
+	      E_aux (E_internal_exp_user((l, annot_iu),(l,annot_i)), (l,simple_annot nat_t))
+	    in
+	    type_coerce (Expr l) d_env false false ret 
+	      (E_aux (E_app(id,internal_exp::parms),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t
           | (IP_none,_) -> 
 	    (*let _ = Printf.printf "no implicit length or var required\n" in*)
-            type_coerce (Expr l) d_env false false ret (E_aux (E_app(id, parms),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t 
+            type_coerce (Expr l) d_env false false ret 
+	      (E_aux (E_app(id, parms),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t
       in
       (match Envmap.apply t_env i with
       | Some(Base(tp,Enum,_,_,_)) ->
@@ -678,14 +690,14 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         | _ -> raise (Reporting_basic.err_unreachable l "check exp given tuple and tuple type and returned non-tuple") in
       let check_result ret imp tag cs ef lft rht =
         match imp with
-	  | IP_length _ ->  
+	  (*| IP_length _ ->  
             let internal_exp =  match expect_t.t,ret.t with 
               | Tapp("vector",_),_ -> 
 		E_aux (E_internal_exp (l,simple_annot expect_t), (l, simple_annot nat_t))
               | _,Tapp("vector",_) -> 
 		E_aux (E_internal_exp (l,simple_annot ret), (l,simple_annot nat_t))
               | _ -> typ_error l (i ^ " expected either the return type or the expected type to be a vector") in
-            type_coerce (Expr l) d_env false false ret (E_aux (E_app(op, [internal_exp;lft;rht]),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t
+            type_coerce (Expr l) d_env false false ret (E_aux (E_app(op, [internal_exp;lft;rht]),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t*)
           | IP_none -> 
             type_coerce (Expr l) d_env false false ret (E_aux (E_app_infix(lft,op,rht),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t 
       in

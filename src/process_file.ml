@@ -100,6 +100,8 @@ let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.
 		                                     | (Ast.Ord_aux(Ast.Ord_dec,_)) -> Type_internal.Odec)};} in
   Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env,Type_internal.nob)) defs 
 
+let rewrite_ast (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs defs
+
 let open_output_with_check file_name =
   let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in
   let o' = Format.formatter_of_out_channel o in

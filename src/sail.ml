@@ -395,18 +395,19 @@ let main() =
   if !(opt_print_version)
   then Printf.printf "L2 private release \n"
   else let parsed = (List.map (fun f -> (f,(parse_file f)))  !opt_file_arguments) in
-       let merged_asts = 
+       let ast = 
 	 List.fold_right (fun (_,(Parse_ast.Defs ast_nodes)) (Parse_ast.Defs later_nodes) 
 	 -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
-       let (ast,kenv,ord) = convert_ast merged_asts in
-       let chkedast = check_ast ast kenv ord in 
+       let (ast,kenv,ord) = convert_ast ast in
+       let ast = check_ast ast kenv ord in 
+       let ast = rewrite_ast ast in
        (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
        begin 
 	 (if !(opt_print_verbose)
-	  then ((Pretty_print.pp_defs stdout) chkedast)
+	  then ((Pretty_print.pp_defs stdout) ast)
 	  else ());
 	 (if !(opt_print_lem)
-	  then output "" Lem_ast_out [(fst (List.hd parsed)),chkedast]
+	  then output "" Lem_ast_out [(fst (List.hd parsed)),ast]
 	  else ());
        end
 

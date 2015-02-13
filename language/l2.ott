@@ -639,8 +639,10 @@ exp :: 'E_' ::=
     {{ com expression to halt all current execution, potentially calling a system, trap, or interrupt handler with exp }}
 
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
-  | ( annot ) exp                                       :: :: internal_cast {{ com This is an internal cast, generated during type checking that will resolve into a syntactic cast after }}
-  | annot                                               :: :: internal_exp {{ com This is an internal use of an nexp (in the annot) for passing length information after resolution of constraints }}
+  | ( annot ) exp                                   :: :: internal_cast {{ com This is an internal cast, generated during type checking that will resolve into a syntactic cast after }}
+  | annot                       :: :: internal_exp {{ com This is an internal use for passing nexp information  to library functions, postponed for constraint solving }}
+  | annot , annot'           :: :: internal_exp_user {{ com This is like the above but the user has specified an implicit parameter for the current function }} 
+ 
 
 
 lexp :: 'LEXP_' ::= {{ com lvalue expression }}

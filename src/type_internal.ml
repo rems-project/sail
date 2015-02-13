@@ -350,7 +350,7 @@ let rec get_var n =
 
 let rec get_all_nvar n = 
   match n.nexp with
-    | Nvar _ | Nuvar _ -> [n]
+    | Nvar v -> [v]
     | Nneg n | N2n(n,_) | Npow(n,_) -> get_all_nvar n
     | Nmult(n1,n2) | Nadd(n1,n2) -> (get_all_nvar n1)@(get_all_nvar n2)
     | _ -> []
@@ -1785,7 +1785,8 @@ let build_variable_range d_env v typ =
     | Tuvar _ -> Some(VR_recheck(v,t_actual))
     | _ -> None
 
-let get_vr_var = function | VR_eq (v,_) | VR_range(v,_) -> v | VR_vec_eq(v,_) -> v | VR_vec_r(v,_) -> v | VR_recheck(v,_) -> v
+let get_vr_var = 
+  function | VR_eq (v,_) | VR_range(v,_) | VR_vec_eq(v,_) | VR_vec_r(v,_) | VR_recheck(v,_) -> v
 
 let compare_variable_range v1 v2 = compare (get_vr_var v1) (get_vr_var v2)
 
@@ -1800,6 +1801,19 @@ let find_bounds v bounds = match bounds with
     let rec find_rec bs = match bs with
       | [] -> None
       | b::bs -> if (get_vr_var b) = v then Some(b) else find_rec bs in
+    find_rec bs
+
+let find_var_from_nvar v bounds = match bounds with
+  | No_bounds -> None
+  | Bounds bs ->
+    let rec find_rec bs = match bs with
+      | [] -> None
+      | b::bs -> (match b with
+	  | VR_eq(ev,n) | VR_vec_eq (ev,n)->
+	    (match n.nexp with 
+	      | Nvar nv -> if nv = v then Some ev else find_rec bs
+	      | _ -> find_rec bs)
+	  | _ -> find_rec bs) in
     find_rec bs
 
 let merge_bounds b1 b2 =
@@ -2069,13 +2083,13 @@ let rec type_coerce_internal co d_env is_explicit widen t1 cs1 e t2 cs2 =
 	let cs = [LtEq(co,r2,{nexp=N2n(r1,None)})] in
 	let tannot = (l,Base(([],t2),External None, cs,pure_e,nob)) in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
-				  [(E_aux(E_internal_exp tannot, tannot));e]),tannot))
+				  [(E_aux(E_internal_exp(tannot), tannot));e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [LtEq(co,r2,{nexp=N2n(r1,None)})] in
 	let tannot = (l,Base(([],t2),External None,cs,pure_e,nob)) in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
-				  [(E_aux(E_internal_exp tannot, tannot)); e]),tannot))
+				  [(E_aux(E_internal_exp(tannot), tannot)); e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert a range to a vector without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
@@ -2088,13 +2102,13 @@ let rec type_coerce_internal co d_env is_explicit widen t1 cs1 e t2 cs2 =
 	let cs = [LtEq(co,b2,{nexp=N2n(r1,None)})] in
 	let tannot = (l,Base(([],t2),External None, cs,pure_e,nob)) in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
-				  [(E_aux(E_internal_exp tannot, tannot));e]),tannot))
+				  [(E_aux(E_internal_exp(tannot), tannot));e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
 	let cs = [LtEq(co,b2,{nexp=N2n(r1,None)})] in
 	let tannot = (l,Base(([],t2),External None,cs,pure_e,nob)) in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
-				  [(E_aux(E_internal_exp tannot, tannot)); e]),tannot))
+				  [(E_aux(E_internal_exp(tannot), tannot)); e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert a range to a vector without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
