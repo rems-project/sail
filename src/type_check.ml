@@ -503,7 +503,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         | _ -> 
           let t',cs',ef',e' = 
 	    type_coerce (Expr l) d_env false false t (rebuild (Base(([],t),tag,cs,pure_e,bounds))) expect_t in
-          (e',t',t_env,cs@cs',bounds,ef')
+          (e',t',t_env,cs@cs',bounds,union_effects ef ef')
         )
       | Some NoTyp | Some Overload _ | None -> typ_error l ("Identifier " ^ (id_to_string id) ^ " is unbound"))
     | E_lit (L_aux(lit,l')) ->
