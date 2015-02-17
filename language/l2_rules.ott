@@ -17,6 +17,8 @@ formula :: formula_ ::=
      {{ com Type lookup }}
      {{ hol (FLOOKUP [[E_t]] [[id]] = SOME [[tinf]]) }}
      {{ lem Map.lookup [[id]] [[E_t]] = Just [[tinf]] }} 
+  | E_t ( id ) gives overload tinf : tinf1 ... tinfn   :: :: lookup_over_t
+     {{ com Overloaded type lookup }}
 
   | E_k ( tid ) <-| k						:: :: update_k
      {{ com Update the kind associated with id to k }}        
@@ -409,6 +411,7 @@ E_d |- t ~= u
 ------------------------------------------------------------ :: register
 E_d |- register<t> ~= u
 
+
 defn
 E_d , k |- t_arg ~= t_arg' :: :: targconforms :: targconforms_
 {{ lemwcf  witness type check_targeq_witness; check check_targeq_w_check; }}
@@ -420,6 +423,11 @@ E_d, K_Typ |- t ~= t'
 
 ----------------------------------------------------------- :: nexp
 E_d, K_Nat |- ne ~= ne'
+
+defn
+select ( conformsto ( t , t' ) ) of tinflist gives tinf' :: :: selectoverload :: so_
+{{ tex [[select]]_{(\textbf{conformsto} ([[t]],[[t']]))} ([[tinflist]]) [[gives]] [[tinf']] }}
+by
 
 defn
 E_d |- t ~< t' , S_N :: :: consistent_typ :: consistent_typ_
@@ -457,6 +465,15 @@ E_d |- (t1,....,tn) ~< (u1,....,un), S_N1 u+ .... u+ S_Nn
 
 ----------------------------------------------------------- :: range
 E_d |- range <ne1 ne2> ~< range<ne3 ne4>, { ne3 <= ne1, ne2 <= ne4 }
+
+---------------------------------------------------------- :: atomRange
+E_d |- atom <ne> ~< range<ne1 ne2>, { ne1 <= ne, ne <= ne2 }
+
+---------------------------------------------------------- :: atom
+E_d |- atom <ne1> ~< atom<ne2>, { ne1 = ne2 }
+
+---------------------------------------------------------- :: rangeAtom
+E_d |- range<ne1 ne2> ~< atom<'x>, { ne1 <= 'x, 'x <= ne2 }
 
 E_d |- t ~< t', S_N
 ---------------------------------------------------------- :: vector
@@ -562,16 +579,16 @@ by
  
 
  ------------------------------------------------------------ :: num
-range <ne ne'>  |- num : range < num num> => num , { ne <= num, num <= ne' }
+range <ne ne'>  |- num : atom < num > => num , { ne <= num, num <= ne' }
 
  ------------------------------------------------------------ :: numToVec
-vector <ne ne' order bit>  |- num : range < num num> => to_vec num , { num + one <= 2**ne' }
+vector <ne ne' order bit>  |- num : atom < num > => to_vec num , { num + one <= 2**ne' }
 
  ------------------------------------------------------------ :: numbitzero
- bit  |- numZero : range < zero zero> => bitzero, {}
+ bit  |- numZero : atom < zero > => bitzero, {}
 
  ------------------------------------------------------------ :: numbitone
- bit  |- numOne : range < one one> => bitone, {}
+ bit  |- numOne : atom < one > => bitone, {}
  
  ------------------------------------------------------------- :: string
  string |- :L_string: string : :T_string_typ: string => :E_lit: string, {}
@@ -743,16 +760,36 @@ E_d |- u ~< t,S_N
 ------------------------------------------------------------ :: ctor
 <E_t,E_d>,t |- :E_app: id(exp) : t gives :E_app: id(exp'), <S_N u+ S_N, effect>,{}
 
-% Need to take into account possible type variables on result of id
-E_t(id) gives t' -> t effect tag S_N
-<E_t,E_d> |- exp : t' gives I,E_t
+E_t(id) gives {tid0 |-> kinf0, .., tidn |-> kinfn}, S_N, tag, u
+u [t_arg0/tid0 .. t_argn/tidn] == ui -> uj effect
+<E_t,E_d>,ui |- exp : ui' gives exp',I,E_t'
+E_d,t |- :E_app: id (exp') : uj gives uj', exp'',S_N',effect' 
 ------------------------------------------------------------ :: app
-<E_t,E_d> |- :E_app: id(exp) : t gives I u+ <S_N,effect>, E_t
+<E_t,E_d>,t |- :E_app: id(exp) : uj gives exp'', I u+ <S_N,effect>u+ <S_N',effect'>, E_t
 
-E_t(id) gives t' -> t effect tag S_N
-<E_t,E_d> |- (exp1,exp2) : t' gives I,E_t
+E_t(id) gives overload {tid0 |-> kinf0, .., tidn |-> kinfn}, S_N, tag, u : tinf1 ... tinfn
+u [t_arg0/tid0 .. t_argn/tidn] == ui -> uj effect
+<E_t,E_d>,ui |- exp : ui' gives exp',I,E_t'
+select (conformsto( ui', t)) of tinf1 ... tinfn gives tinf  
+<({id |-> tinf} u+ E_t), E_d>, t |- :E_app: id (exp) : t' gives exp'',I', E_t'' 
+------------------------------------------------------------ :: appOverload
+<E_t,E_d>,t |- :E_app: id(exp) : uj gives exp'', I u+ I' u+ <S_N,effect>u+ <S_N',effect'>, E_t
+
+E_t(id) gives {tid0 |-> kinf0, .. ,tidn |-> kinfn}, S_N, tag,  u
+u [t_arg0/tid0 .. t_argn/tidn] == ui -> uj effect
+<E_t,E_d>,ui |- (exp1,exp2) : ui' gives (exp1', exp2'), I,E_t'
+E_d,t |- :E_app_infix: exp1' id exp2' : uj gives uj', exp, S_N', effect' 
 ------------------------------------------------------------ :: infix_app
-<E_t,E_d> |- :E_app_infix: exp1 id exp2 : t gives I u+ <S_N, effect>, E_t
+<E_t,E_d>,t |- :E_app_infix: exp1 id exp2 : t gives exp, I u+ <S_N, effect> u+ <S_N',effect'>, E_t
+
+E_t(id) gives overload {tid0 |-> kinf0, .., tidn |-> kinfn}, S_N, tag, u : tinf1 ... tinfn
+u [t_arg0/tid0 .. t_argn/tidn] == ui -> uj effect
+<E_t,E_d>,ui |- (exp1,exp2) : ui' gives (exp1', exp2'), I,E_t'
+select (conformsto( ui', t)) of tinf1 ... tinfn gives tinf  
+<({id |-> tinf} u+ E_t), E_d>, t |- :E_app_infix: exp1 id exp2 : t' gives exp, I',E_t'' 
+------------------------------------------------------------ :: infix_appOverload
+<E_t,E_d>,t |- :E_app_infix: exp1 id exp2 : t gives exp, I u+ I u+ <S_N, effect> u+ <S_N',effect'>, E_t
+
 
 E_r(</idi//i/>) gives x<t_args>, </ti//i/>
 </ <E_t,<E_k,E_a,E_r,E_e>>,ti |- expi : ui gives exp'i,<S_Ni,effecti>,E_t//i/>
@@ -880,12 +917,15 @@ E |- exp1 :: exp2 : list t gives I1 u+ I2,E_t
 
 <E_t,E_d> |- exp : t gives I, E_t1
 ------------------------------------------------------------ :: blockbase
-<E_t,E_d> |- { exp } : t gives I, E_t
+<E_t,E_d> |- { exp } : unit gives I, E_t
 
 <E_t,E_d> |- exp : u gives I1, E_t1
 <(E_t u+ E_t1),E_d> |- { </expi//i/> } : t gives I2, E_t2
 ------------------------------------------------------------ :: blockrec
 <E_t,E_d> |- { exp ; </expi//i/> } : t gives I1 u+ I2, E_t
+
+
+<E_t,E_d> |- nondet { exp ; </expi//i/> } : unit
 
 E |- exp:t gives I1, E_t1
 E |- lexp:t gives I2, E_t2

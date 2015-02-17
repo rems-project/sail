@@ -949,6 +949,8 @@ terminals :: '' ::=
     {{ tex \ensuremath{\triangleright} }}
   | ~>                                  :: :: leadsto
     {{ tex \ensuremath{\leadsto} }}
+  | select				:: :: select
+   {{ tex \ensuremath{\sigma} }}
   | =>                                  :: :: Rightarrow
     {{ tex \ensuremath{\Rightarrow} }}
   | --                                  :: :: dashdash

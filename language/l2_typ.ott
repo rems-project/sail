@@ -197,6 +197,10 @@ S_N {{ tex {\Sigma^{\textsc{N} } } }} :: '' ::= {{ phantom }}
     | t                                                 :: :: typ
     | E_k , S_N , tag , t         :: :: quant_typ                                                             
 
+tinflist :: 'tinfs_' ::=
+  {{ com In place so that a list of tinfs can be referred to without the dot form }}
+  | tinf1 ... tinfn  :: :: ls
+
  E_a {{ tex \ottnt{E}^{\textsc{a} } }} :: 'E_a_' ::=   {{ phantom }}
                                                                             {{ hol tid |-> tinf}}
                                                                             {{ lem map tid tinf }} 
@@ -252,6 +256,7 @@ grammar
    | { id1 |-> tinf1 , .. , idn |-> tinfn }                    :: :: base
      {{ hol (FOLDR (\x E. E |+ x) FEMPTY [[id1 tinf1 .. idn tinfn]]) }}
      {{ lem (List.foldr (fun (x,f) m -> Map.insert x f m) Map.empty [[id1 tinf1 .. idn tinfn]]) }} 
+   | { id |-> overload tinf : tinf1 , ... , tinfn }        :: :: overload
    | ( E_t1 u+ .... u+ E_tn )                                         :: M :: union
      {{ hol (FOLDR FUNION FEMPTY [[E_t1....E_tn]]) }}
      {{ lem (List.foldr (union) Map.empty [[E_t1....E_tn]]) }}
