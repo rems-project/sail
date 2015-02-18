@@ -908,10 +908,10 @@ E_d,t |- exp'' : t' gives u'', exp''', S_N', effect'
 ------------------------------------------------------------ :: typed
 <E_t,E_d>,t |- (typ) exp : t gives exp''',I u+ <S_N u+ S_N',effect u+ effect'>,E_t
 
-<E_t,E_d> |- letbind gives E_t1, S_N, effect, {}
+<E_t,E_d> |- letbind gives letbind', E_t1, S_N, effect, {}
 <(E_t u+ E_t1),E_d>,t |- exp : u gives exp', I2, E_t2
 ------------------------------------------------------------ :: let
-<E_t,E_d>,t |- letbind in exp : t gives exp', <S_N,effect> u+ I2, E_t
+<E_t,E_d>,t |- letbind in exp : t gives letbind' in exp', <S_N,effect> u+ I2, E_t
  
 E,t1 |- exp1 : u1 gives exp1',I1,E_t1 .... E,tn |- expn : un gives expn',In,E_tn
 ------------------------------------------------------------ :: tup
@@ -990,6 +990,30 @@ id NOTIN dom(E_t)
 ---------------------------------------------------------- :: wnew
 <E_t,E_d> |- id : t gives id,Ie, {id |-> reg<t>}
 
+E_t(id) gives register<t>
+E_d |- typ ~> u
+E_d |- u ~< t, S_N
+---------------------------------------------------------- :: wregCast
+<E_t,E_d> |- (typ) id : t gives id,<S_N,{ wreg }>, E_t
+
+E_t(id) gives reg<t>
+E_d |- typ ~> u
+E_d |- u ~< t, S_N
+---------------------------------------------------------- :: wloclCast
+<E_t,E_d> |- (typ) id : t gives id,<S_N,pure>, E_t
+
+E_t(id) gives t
+E_d |- typ ~> u
+E_d |- u ~< t, S_N
+---------------------------------------------------------- :: varCast
+<E_t,E_d> |- (typ) id : t gives id,<S_N,pure>,E_t
+
+id NOTIN dom(E_t)
+E_d |- typ ~> t
+---------------------------------------------------------- :: wnewCast
+<E_t,E_d> |- (typ) id : t gives id,Ie, {id |-> reg<t>}
+
+
 E_t(id) gives E_k, S_N, Extern, t1 -> t {</base_effecti//i/>, wmem, </base_effect'j//j/>}
 <E_t,E_d>,t1 |- exp : u1 gives exp',I,E_t1
 ---------------------------------------------------------- :: wmem
@@ -1005,38 +1029,40 @@ E |- lexp : vector<ne1 ne2 dec t> gives lexp',I2,E_t
 ---------------------------------------------------------- :: wbitDec
 E |- lexp [exp] : t gives lexp'[exp'], I1 u+ I2 u+ <{ne <= ne1, ne1 + (-ne2) <= ne},pure>,E_t
 
-E |- exp1 : enum ne1 ne2 order gives I1,E_t
-E |- exp2 : enum ne3 ne4 order gives I2,E_t
-E |- lexp : vector ne5 ne6 order t gives I3,E_t
----------------------------------------------------------- :: wslice
-E |- lexp [exp1 : exp2] : vector :Ne_var: 'x :Ne_var: 'x2 order t gives I1 u+ I2 u+ I3 u+ <{ne5<=ne1, ne1+ne2 <= ne3, ne3+ne4<= ne5+ne6, 'x <= ne1, 'x2 <= ne2+ne3+ne4},pure> ,E_t
+E,atom<ne1> |- exp1 : u1 gives exp1',I1,E_t
+E,atom<ne2> |- exp2 : u2 gives exp2',I2,E_t
+E |- lexp : vector<ne3 ne4 inc t> gives lexp',I3,E_t
+---------------------------------------------------------- :: wsliceInc
+E |- lexp [exp1 : exp2] : vector< ne1 ne2 + (-ne1) inc t> gives lexp'[exp1':exp2'],I1 u+ I2 u+ I3 u+ <{ne3<=ne1, ne3+ne4<= ne2 + (-ne1)},pure> ,E_t
 
-E |- exp1 : enum ne1 ne2 order gives I1,E_t
-E |- exp2 : enum ne3 ne4 order gives I2,E_t
-E |- lexp : vector ne5 ne6 order t gives I3,E_t
----------------------------------------------------------- :: wslice_spread
-E |- lexp [exp1 : exp2] : t gives I1 u+ I2 u+ I3 u+ <{ne5<=ne1, ne1+ne2 <= ne3, ne3+ne4<= ne5+ne6},pure> ,E_t
+E,atom<ne1> |- exp1 : u1 gives exp1',I1,E_t
+E,atom<ne2> |- exp2 : u2 gives exp2',I2,E_t
+E |- lexp : vector<ne3 ne4 inc t> gives lexp',I3,E_t
+---------------------------------------------------------- :: wsliceDec
+E |- lexp [exp1 : exp2] : vector< ne1 ne2 + (-ne1) inc t> gives lexp'[exp1':exp2'],I1 u+ I2 u+ I3 u+ <{ne1<=ne3, ne3 + (-ne4)<= ne1 + (-ne2)},pure> ,E_t
 
-E_r (id'' t_args) gives </idi : ti//i/> id : t </id'j : t'j//j/>
-<E_t,<E_k,E_r,E_e>> |- lexp : id'' t_args gives I,E_t
+
+E_r (x<t_args>) gives </idi : ti//i/> id : t </id'j : t'j//j/>
+<E_t,<E_k,E_a,E_r,E_e>> |- lexp : x<t_args> gives lexp',I,E_t
 ---------------------------------------------------------- :: wrecord
-<E_t,<E_k,E_r,E_e>> |- lexp.id : t gives I,E_t
+<E_t,<E_k,E_a,E_r,E_e>> |- lexp.id : t gives lexp'.id,I,E_t
 
 defn
-E |- letbind gives E_t , S_N , effect , E_k :: :: check_letbind :: check_letbind_ 
+E |- letbind gives letbind' , E_t , S_N , effect , E_k :: :: check_letbind :: check_letbind_ 
 {{ com Build the environment for a let binding, collecting index constraints }}
 by
 
-<E_k,E_r,E_e> |- typschm ~> t,E_k2,S_N
-<E_t,<E_k u+ E_k2,E_r,E_e>> |- pat : t gives E_t1, S_N1
-<E_t,<E_k u+ E_k2,E_r,E_e>> |- exp : t gives <S_N2,effect>,E_t2
+<E_k,E_a,E_r,E_e> |- typschm ~> t,E_k2,S_N
+<E_t,<E_k u+ E_k2,E_a,E_r,E_e>>,t |- pat : u gives pat',E_t1, S_N1
+<E_t,<E_k u+ E_k2,E_a,E_r,E_e>>,t |- exp : u' gives exp', <S_N2,effect>,E_t2
+<E_k u+ E_k2,E_a,E_r,E_e> |- u' ~< u, S_N3
 ------------------------------------------------------------ :: val_annot
-<E_t,<E_k,E_r,E_e>> |- let typschm pat = exp gives E_t1, S_N u+ S_N1 u+ S_N2, effect, E_k2
+<E_t,<E_k,E_a,E_r,E_e>> |- let typschm pat = exp gives let typschm pat' = exp', E_t1, S_N u+ S_N1 u+ S_N2 u+ S_N3, effect, E_k2
  
-<E_t,E_d> |- pat : t gives E_t1,S_N1
-<(E_t u+ E_t1),E_d> |- exp : t gives <S_N2,effect>,E_t2
+<E_t,E_d>,t |- pat : u gives pat',E_t1,S_N1
+<(E_t u+ E_t1),E_d>,u |- exp : u' gives exp',<S_N2,effect>,E_t2
 ------------------------------------------------------------ :: val_noannot
-<E_t,E_d> |- let pat = exp gives E_t1, S_N1 u+ S_N2, effect,{}
+<E_t,E_d> |- let pat = exp gives let pat' = exp', E_t1, S_N1 u+ S_N2, effect,{}
 
 defns
 check_defs :: '' ::=
@@ -1046,137 +1072,139 @@ E_d |- type_def gives E :: :: check_td :: check_td_
 {{ com Check a type definition }}
 by
 
-%Does abbrev need a type environment? Ouch if yes
-E_d |- typschm ~> t,E_k1,S_N 
+E_d |- typschm ~> t,E_k,S_N 
 ----------------------------------------------------------- :: abbrev
-E_d |- typedef id name_scm_opt = typschm gives <{},<{id |-> K_Abbrev t},{},{}>>
+E_d |- typedef id name_scm_opt = typschm gives <{},<{},{id |-> E_k, S_N, None,t},{},{}>>
 
 E_d |- typ1 ~> t1 .. E_d |- typn ~> tn
-E_r = { {id1:t1, .., idn:tn} |-> id } 
+E_r == { {id1:t1, .., idn:tn} |-> x } 
 ----------------------------------------------------------- :: unquant_record
-E_d |- typedef id name_scm_opt = const struct { typ1 id1 ; .. ; typn idn semi_opt } gives <{},<{id |-> K_Typ},E_r,{}>>
+E_d |- typedef x name_scm_opt = const struct { typ1 id1 ; .. ; typn idn semi_opt } gives <{},<{x |-> K_Typ},{},E_r,{}>>
 
-</ <E_k,E_r,E_e> |- quant_itemi ~>E_ki, S_Ni//i/>
-<E_k u+ </E_ki//i/>,E_r,E_e> |- typ1 ~> t1 .. <E_k u+ </E_ki//i/>,E_r,E_e> |- typn ~> tn
-{ id'1 |-> k1, .. ,id'm |-> km } = u+ </E_ki//i/>
-E_r1 = { {id1:t1, .., idn:tn} |-> {id'1 |-> k1, ..,id'm |-> km}, u+</S_Ni//i/>, None, id :t_arg_typ: id'1 ..  :t_arg_typ: id'm }
-E_k1' = { id |-> K_Lam (k1 .. km -> K_Typ) }
+</ <E_k,E_a,E_r,E_e> |- quant_itemi ~>E_ki, S_Ni//i/>
+<E_k u+ </E_ki//i/>,E_a,E_r,E_e> |- typ1 ~> t1 .. <E_k u+ </E_ki//i/>,E_a,E_r,E_e> |- typn ~> tn
+{ x'1 |-> k1, .. ,x'm |-> km } == u+ </E_ki//i/>
+E_r1 == { {id1:t1, .., idn:tn} |-> {x'1 |-> k1, ..,x'm |-> km}, u+</S_Ni//i/>, None, x< :t_arg_typ: x'1 ..  :t_arg_typ: x'm> }
+E_k1' == { x |-> K_Lam (k1 .. km -> K_Typ) }
 ----------------------------------------------------------- :: quant_record
-<E_k,E_r,E_e> |- typedef id name_scm_opt = const struct forall </quant_itemi//i/> . { typ1 id1 ; .. ; typn idn semi_opt } gives <{},<E_k',E_r1,{}>>
+<E_k,E_a,E_r,E_e> |- typedef x name_scm_opt = const struct forall </quant_itemi//i/> . { typ1 id1 ; .. ; typn idn semi_opt } gives <{},<E_k',{},E_r1,{}>>
 
-E_t = { id1 |-> t1 -> :T_id: id pure Ctor {}, ..., idn |-> tn -> :T_id: id pure Ctor {} }
-E_k1 = { id |-> K_Typ }
-<E_k u+ E_k1,E_r,E_e> |- typ1 ~> t1 ... <E_k u+ E_k1,E_r,E_e> |- typn ~> tn
+E_t == { id1 |-> {},{},Ctor,t1 -> x pure , ..., idn |-> {},{},Ctor, tn -> x pure }
+E_k1 == { x |-> K_Typ }
+<E_k u+ E_k1,E_a,E_r,E_e> |- typ1 ~> t1 ... <E_k u+ E_k1,E_a,E_r,E_e> |- typn ~> tn
 ------------------------------------------------------------ :: unquant_union
-<E_k,E_r,E_e> |- typedef id name_scm_opt = const union { typ1 id1 ; ... ; typn idn semi_opt } gives <E_t,<E_k1,{},{}>>
+<E_k,E_a,E_r,E_e> |- typedef x name_scm_opt = const union { typ1 id1 ; ... ; typn idn semi_opt } gives <E_t,<E_k1,{},{},{}>>
 
-</ <E_k,E_r,E_e> |- quant_itemi ~> E_ki, S_Ni//i/>
-{ id'1 |-> k1, ... , id'm |-> km } = u+ </E_ki//i/>
-E_k' = { id |-> K_Lam (k1 ... km -> K_Typ) } u+ </E_ki//i/>
-<E_k u+ E_k',E_r,E_e> |- typ1 ~> t1 ... <E_k u+ E_k',E_r,E_e> |- typn ~> tn
-t = id :t_arg_typ: id'1 ... :t_arg_typ: id'm
-E_t = { id1 |-> E_k', u+</S_Ni//i/>, Ctor, t1 -> t pure Ctor {}, ... , idn |-> E_k', u+</S_Ni//i/>, Ctor, tn -> t pure Ctor {} }
+</ <E_k,E_a,E_r,E_e> |- quant_itemi ~> E_ki, S_Ni//i/>
+{ x'1 |-> k1, ... , x'm |-> km } == u+ </E_ki//i/>
+E_k' == { x |-> K_Lam (k1 ... km -> K_Typ) } u+ </E_ki//i/>
+<E_k u+ E_k',E_a,E_r,E_e> |- typ1 ~> t1 ... <E_k u+ E_k',E_a,E_r,E_e> |- typn ~> tn
+t == x < :t_arg_typ: x'1 ... :t_arg_typ: x'm>
+E_t == { id1 |-> E_k', u+</S_Ni//i/>, Ctor, t1 -> t pure, ... , idn |-> E_k', u+</S_Ni//i/>, Ctor, tn -> t pure }
 ------------------------------------------------------------ :: quant_union
-<E_k,E_r,E_e> |- typedef id name_scm_opt = const union forall </quant_itemi//i/> . { typ1 id1 ; ... ; typn idn semi_opt } gives <E_t,<E_k',{},{}>>
+<E_k,E_a,E_r,E_e> |- typedef id name_scm_opt = const union forall </quant_itemi//i/> . { typ1 id1 ; ... ; typn idn semi_opt } gives <E_t,<E_k',{},{},{}>>
 
 % Save these as enumerations for coercion
-E_t = {id1 |-> id, ..., idn |-> id}
-E_e = { id |-> { num1 |-> id1 ... numn |-> idn} }
+E_t == {id1 |-> x, ..., idn |-> x}
+E_e == { x |-> { num1 |-> id1 ... numn |-> idn} }
 ------------------------------------------------------------- :: enumerate
-E_d |- typedef id name_scm_opt = enumerate { id1 ; ... ; idn semi_opt } gives <E_t,<{id |-> K_Typ},{},E_e>>
+E_d |- typedef x name_scm_opt = enumerate { id1 ; ... ; idn semi_opt } gives <E_t,<{id |-> K_Typ},{},{},E_e>>
 
 defn
-E |- fundef gives E_t , S_N :: :: check_fd :: check_fd_
+E |- fundef gives fundef' , E_t , S_N :: :: check_fd :: check_fd_
 {{ com Check a function definition }}
 by
 
-E_t(id) gives E_k',S_N',None, t1 -> t effect None S_N'
+E_t(id) gives E_k',S_N',Global, t1 -> t effect 
 </E_d |- quant_itemi ~> E_ki,S_Ni//i/>
-S_N'' = u+ </S_Ni//i/>
-E_k' ~= </E_ki//i/>
-E_d1 = <E_k',{},{}> u+ E_d
-E_d1 |- typ ~> t
-</<E_t,E_d1> |- patj : t1 gives E_tj,S_N'''j//j/>
-</<(E_t u+ E_tj),E_d1> |- expj : t gives <S_N''''j,effect'j>,E_t'j//j/>
-S_N''''' = u+ </S_N'''j u+ S_N''''j//j/>
-effect = u+ </effect'j//j/>
-S_N = resolve ( S_N' u+ S_N'' u+ S_N''''')
+S_N'' == u+ </S_Ni//i/>
+E_k' == </E_ki//i/>
+E_d1 == <E_k',{},{},{}> u+ E_d
+E_d1 |- typ ~> u
+E_d1 |- u ~< t, S_N2
+</<E_t,E_d1>,t1 |- patj : uj gives patj',E_tj,S_N'''j//j/>
+</<(E_t u+ E_tj),E_d1>,u |- expj : u' gives expj',<S_N''''j,effect'j>,E_t'j//j/>
+S_N''''' == S_N2 u+ </S_N'''j u+ S_N''''j//j/> 
+effect == u+ </effect'j//j/>
+S_N == resolve ( S_N' u+ S_N'' u+ S_N''''')
 ------------------------------------------------------------- :: rec_function
-<E_t,E_d> |- function rec forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives E_t, S_N
+<E_t,E_d> |- function rec forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives function rec forall </quant_itemi//i/>. typ effectkw effect </id patj' = expj'//j/>,E_t, S_N
 
-E_t(id) gives t1 -> t effect None S_N'
-E_d |- typ ~> t
-</<E_t,E_d> |- patj : t1 gives E_tj,S_N''j//j/>
-</<(E_t u+ E_tj),E_d> |- expj : t gives <S_N'''j,effect'j>,E_t'j//j/>
-effect = u+ </effect'j//j/>
-S_N = resolve (S_N' u+ </S_N''j u+ S_N'''j//j/>)
+E_t(id) gives E_k', S_N', Global, t1 -> t effect
+E_d |- typ ~> u
+E_d |- u ~< t, S_N2
+</<E_t,E_d>,t1 |- patj : uj gives pat',E_tj,S_N''j//j/>
+</<(E_t u+ E_tj),E_d>,u |- expj : uj' gives expj',<S_N'''j,effect'j>,E_t'j//j/>
+effect == u+ </effect'j//j/>
+S_N == resolve (S_N2 u+ S_N' u+ </S_N''j u+ S_N'''j//j/>)
 ------------------------------------------------------------- :: rec_function2
-<E_t,E_d> |- function rec typ effectkw effect </id patj = expj//j/> gives E_t, S_N
+<E_t,E_d> |- function rec typ effectkw effect </id patj = expj//j/> gives function rec typ effectkw effect </id patj'=expj'//j/>,E_t, S_N
 
-</<E_k,E_r,E_e> |- quant_itemi ~> E_ki,S_Ni//i/>
-S_N' = u+ </S_Ni//i/>
-E_k' = E_k u+ </E_ki//i/>
-<E_k',E_r,E_e> |- typ ~> t
-</<E_t,<E_k',E_r,E_e>> |- patj : t1 gives E_tj,S_N''j//j/>
-E_t' = (E_t u+ {id |-> t1 -> t effect None S_N'})
-</<(E_t' u+ E_tj),<E_k',E_r,E_e>> |- expj : t gives <S_N'''j,effect'j>,E_t'j//j/>
-effect = u+ </effect'j//j/>
-S_N = resolve (S_N' u+ </S_N''j u+ S_N'''j//j/>)
+</<E_k,E_a,E_r,E_e> |- quant_itemi ~> E_ki,S_Ni//i/>
+S_N' == u+ </S_Ni//i/>
+E_k' == E_k u+ </E_ki//i/>
+<E_k',E_a,E_r,E_e> |- typ ~> t
+</<E_t,<E_k',E_a,E_r,E_e>>, t1 |- patj : uj gives patj', E_tj,S_N''j//j/>
+E_t' == (E_t u+ {id |-> E_k', S_N', Global, t1 -> t effect})
+</<(E_t' u+ E_tj),<E_k',E_a,E_r,E_e>>,t |- expj : u'j gives expj', <S_N'''j,effect'j>,E_t'j//j/>
+effect == u+ </effect'j//j/>
+S_N == resolve (S_N' u+ </S_N''j u+ S_N'''j//j/>)
 ------------------------------------------------------------- :: rec_function_no_spec
-<E_t,<E_k,E_r,E_e>> |- function rec forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives E_t', S_N
+<E_t,<E_k,E_a,E_r,E_e>> |- function rec forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives function rec forall </quant_itemi//i/> . typ effectkw effect </id patj' = expj'//j/>, E_t', S_N
 
 E_d |- typ ~> t
-</<E_t,E_d> |- patj : t1 gives E_tj,S_N'j//j/>
-E_t' = (E_t u+ {id |-> t1 -> t effect None {}})
-</<(E_t' u+ E_tj),E_d> |- expj : t gives <S_N'j,effect'j>,E_t'j//j/>
-effect = u+ </effect'j//j/>
-S_N = resolve (u+ </S_N'j u+ S_N''j//j/>)
+</<E_t,E_d>, t1 |- patj : uj gives patj', E_tj,S_N'j//j/>
+E_t' == (E_t u+ {id |-> {}, {}, Global, t1 -> t effect})
+</<(E_t' u+ E_tj),E_d>,t |- expj : uj' gives expj', <S_N'j,effect'j>,E_t'j//j/>
+effect == u+ </effect'j//j/>
+S_N == resolve (u+ </S_N'j u+ S_N''j//j/>)
 ------------------------------------------------------------- :: rec_function_no_spec2
-<E_t,E_d> |- function rec typ effectkw effect </id patj = expj//j/> gives E_t', S_N
+<E_t,E_d> |- function rec typ effectkw effect </id patj = expj//j/> gives function rec typ effectkw effect </id patj' = expj'//j/>, E_t', S_N
 
-t2 = t1 -> t effect None S_N'
-E_t(id) gives E_k',S_N',None, t2
-</<E_k,E_r,E_e> |- quant_itemi ~> E_ki,S_Ni//i/>
-S_N'' = u+ </S_Ni//i/>
-E_k'' ~= </E_ki//i/>
-<E_k'' u+ E_k,E_r,E_e> |- typ ~> t
-</<E_t,<E_k u+ E_k'',E_r,E_e>> |- patj : t1 gives E_tj,S_N''j//j/>
-</<(E_t u- {id |-> t2} u+ E_tj),<E_k u+ E_k'',E_r,E_e>> |- expj : t gives <S_N'''j,effect'j>,E_t'j//j/>
-S_N'''' = u+ </S_N''j u+ S_N'''j//j/>
-effect = u+ </effect'j//j/>
-S_N = resolve ( S_N' u+ S_N'' u+ S_N'''')
+E_t(id) gives E_k',S_N',Global, t1 -> t effect
+</<E_k,E_a,E_r,E_e> |- quant_itemi ~> E_ki,S_Ni//i/>
+S_N'' == u+ </S_Ni//i/>
+E_k'' == </E_ki//i/>
+<E_k'' u+ E_k,E_a,E_r,E_e> |- typ ~> u
+<E_k'' u+ E_k, E_a,E_r,E_e> |- u ~< t, S_N2
+</<E_t,<E_k u+ E_k'',E_a,E_r,E_e>>, t1 |- patj : uj gives patj', E_tj,S_N''j//j/>
+</<(E_t u- id u+ E_tj),<E_k u+ E_k'',E_a,E_r,E_e>>,t |- expj : uj' gives expj', <S_N'''j,effect'j>,E_t'j//j/>
+S_N'''' == u+ </S_N''j u+ S_N'''j//j/>
+effect == u+ </effect'j//j/>
+S_N == resolve ( S_N' u+ S_N'' u+ S_N'''')
 ------------------------------------------------------------- :: function
-<E_t,<E_k,E_r,E_e>> |- function forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives E_t, S_N
+<E_t,<E_k,E_a,E_r,E_e>> |- function forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives function forall </quant_itemi//i/> . typ effectkw effect </id patj' = expj'//j/>, E_t, S_N
 
-E_t(id) gives t1 -> t effect None S_N1
-E_d |- typ ~> t
-</<E_t,E_d> |- patj : t1 gives E_tj,S_N'j//j/>
-</<(E_t u- {id |-> t1 -> t effect None S_N1} u+ E_tj),E_d> |- expj : t gives <S_N''j,effect'j>,E_t'j//j/>
-effect = u+ </effect'j//j/>
-S_N = resolve (S_N1 u+ </S_N'j u+ S_N''j//j/>)
+E_t(id) gives {}, S_N1, Global, t1 -> t effect
+E_d |- typ ~> u
+E_d |- u ~< t, S_N2
+</<E_t,E_d>,t1 |- patj : uj gives patj,E_tj,S_N'j//j/>
+</<(E_t u- id  u+ E_tj),E_d>, u |- expj : uj' gives expj', <S_N''j,effect'j>,E_t'j//j/>
+effect == u+ </effect'j//j/>
+S_N == resolve (S_N1 u+ S_N2 u+ </S_N'j u+ S_N''j//j/>)
 ------------------------------------------------------------- :: function2
-<E_t,E_d> |- function typ effectkw effect </id patj = expj//j/> gives E_t, S_N
+<E_t,E_d> |- function typ effectkw effect </id patj = expj//j/> gives function typ effectkw effect </id patj' = expj'//j/>, E_t, S_N
 
-</<E_k,E_r,E_e> |- quant_itemi ~> E_ki,S_Ni//i/>
-S_N' = u+ </S_Ni//i/>
-E_k'' = E_k u+ </E_ki//i/>
-<E_k'',E_r,E_e> |- typ ~> t
-</<E_t,<E_k'',E_r,E_e>> |- patj : t1 gives E_tj,S_N''j//j/>
-E_t' = (E_t u+ {id |-> t1 -> t effect None S_N'})
-</<(E_t u+ E_tj),<E_k'',E_r,E_e>> |- expj : t gives <S_N''j,effect'j>,E_t'j//j/>
-effect = u+ </effect'j//j/>
-S_N = resolve (S_N' u+ </S_N'j u+ S_N''j//j/>)
+</<E_k,E_a,E_r,E_e> |- quant_itemi ~> E_ki,S_Ni//i/>
+S_N' == u+ </S_Ni//i/>
+E_k'' == E_k u+ </E_ki//i/>
+<E_k'',E_a,E_r,E_e> |- typ ~> t
+</<E_t,<E_k'',E_a,E_r,E_e>>,t1 |- patj : uj gives patj,E_tj,S_N''j//j/>
+E_t' == (E_t u+ {id |-> E_k'', S_N', Global, t1 -> t effect})
+</<(E_t u+ E_tj),<E_k'',E_a,E_r,E_e>>,t |- expj : uj' gives expj', <S_N''j,effect'j>,E_t'j//j/>
+effect == u+ </effect'j//j/>
+S_N == resolve (S_N' u+ </S_N'j u+ S_N''j//j/>)
 ------------------------------------------------------------- :: function_no_spec
-<E_t,<E_k,E_r,E_e>> |- function forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives E_t', S_N
+<E_t,<E_k,E_a,E_r,E_e>> |- function forall </quant_itemi//i/> . typ effectkw effect </id patj = expj//j/> gives function forall </quant_itemi//i/>. typ effectkw effect </id patj' = expj'//j/>, E_t', S_N
 
 E_d |- typ ~> t
-</<E_t,E_d> |- patj : t1 gives E_tj,S_N'j//j/>
-E_t' = (E_t u+ {id |-> t1 -> t effect None S_N})
-</<(E_t u+ E_tj),E_d> |- expj : t gives <S_N'j,effect'j>,E_t'j//j/>
-effect = u+ </effect'j//j/>
-S_N = resolve (u+ </S_N'j u+ S_N''j//j/>)
+</<E_t,E_d>,t1 |- patj : uj gives patj', E_tj,S_N'j//j/>
+E_t' == (E_t u+ {id |-> {},S_N, Global, t1 -> t effect})
+</<(E_t u+ E_tj),E_d>,t |- expj : uj' gives exp', <S_N'j,effect'j>,E_t'j//j/>
+effect == u+ </effect'j//j/>
+S_N == resolve (u+ </S_N'j u+ S_N''j//j/>)
 ------------------------------------------------------------- :: function_no_spec2
-<E_t,E_d> |- function typ effectkw effect </id patj = expj//j/> gives E_t', S_N
+<E_t,E_d> |- function typ effectkw effect </id patj = expj//j/> gives function typ effectkw effect </id patj' = expj'//j/>, E_t', S_N
 
 
 defn
@@ -1186,7 +1214,7 @@ by
 
 E_d |- typschm ~> t, E_k1, S_N
 -------------------------------------------------------- :: val_spec
-<E_t,E_d> |- val typschm id gives {id |-> E_k1,S_N,None,t }
+<E_t,E_d> |- val typschm id gives {id |-> E_k1,S_N,Global,t }
 
 E_d |- typschm ~> t, E_k1, S_N
 -------------------------------------------------------- :: extern
@@ -1199,7 +1227,7 @@ by
 
 E_k |- base_kind ~> k
 ------------------------------------------------------------ :: kind
-<E_k,E_r,E_e> |- default base_kind 'x gives {}, {'x |-> k default }
+<E_k,E_a,E_r,E_e> |- default base_kind 'x gives {}, {'x |-> k default }
 
 E_d |- typschm ~> t,E_k1,S_N 
 ------------------------------------------------------------ :: typ
@@ -1213,39 +1241,38 @@ by
 
 E_d |- type_def gives E
 --------------------------------------------------------- :: tdef
-<E_t,E_d>|- type_def gives <E_t,E_d> u+ E
+<E_t,E_d>|- type_def gives type_def, <E_t,E_d> u+ E
 
-E |- fundef gives E_t,S_N 
+E |- fundef gives fundef', E_t,S_N 
 --------------------------------------------------------- :: fdef
-E |- fundef gives E u+ <E_t,empty>
+E |- fundef gives fundef', E u+ <E_t,empty>
 
-E |- letbind gives {id1 |-> t1 , .. , idn |-> tn},S_N,pure,E_k 
-S_N1 = resolve(S_N)
+E |- letbind gives letbind', {id1 |-> t1 , .. , idn |-> tn},S_N,pure,E_k 
+S_N1 == resolve(S_N)
 --------------------------------------------------------- :: vdef
-E |- letbind gives E u+ <{id1 |-> E_k,S_N,None,t1 , .. , idn |-> E_k,S_N,None,tn},empty>
+E |- letbind gives letbind', E u+ <{id1 |-> E_k,S_N,None,t1 , .. , idn |-> E_k,S_N,None,tn},empty>
 
 E |- val_spec gives E_t
 --------------------------------------------------------- :: vspec
-E |- val_spec gives E u+ <E_t,empty>
+E |- val_spec gives val_spec, E u+ <E_t,empty>
 
 E_d |- default_spec gives E_t1, E_k1
 --------------------------------------------------------- :: default
-<E_t,E_d> |- default_spec  gives <(E_t u+ E_t1),E_d u+ <E_k1,{},{}>>
+<E_t,E_d> |- default_spec  gives default_spec, <(E_t u+ E_t1),E_d u+ <E_k1,{},{},{}>>
 
 E_d |- typ ~> t
 ---------------------------------------------------------- :: register
-<E_t,E_d> |- register typ id gives <(E_t u+ {id |-> register t}),E_d>
+<E_t,E_d> |- register typ id gives register typ id, <(E_t u+ {id |-> register<t>}),E_d>
+
+%TODO Add alias checking
 
 defn
-E |- defs gives E' :: :: check_defs :: check_defs_ 
+E |- defs gives defs' , E' :: :: check_defs :: check_defs_ 
 {{ com Check definitions, potentially given default environment of built-in library }}
 by
 
------------------------------------------------------------- :: empty
-E |- gives E
-
-:check_def: E |- def gives E1
-E u+ E1 |- </defi// i/> gives E2
+:check_def: E |- def gives def', E1
+E u+ E1 |- </defi// i/> gives </defi'//i/>, E2
 ------------------------------------------------------------ :: defs 
-E |- def </defi// i/> gives E2
+E |- def </defi// i/> gives def' </defi'//i/>, E2
 

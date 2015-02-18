@@ -267,10 +267,10 @@ grammar
      {{ hol arb }}
      {{ lem (List.foldr (union) Map.empty [[E_t1..E_tn]]) }}
      {{ ocaml assert false }}
-   | E_t u- E_t1 .. E_tn                                            :: M :: multi_set_minus
+   | E_t u- id1 .. idn                                            :: M :: multi_set_minus
      {{ hol arb }} 
      {{ lem (Map.fromList (remove_from (Set_extra.toList (Map.toSet [[E_t]]))
-                                       (Set_extra.toList (Map.toSet (List.foldr (union) Map.empty [[E_t1..E_tn]]))))) }} 
+                                       (Set_extra.toList (Map.toSet (List.foldr (union) Map.empty [[id1..idn]]))))) }} 
      {{ ocaml assert false }}
    | ( E_t1 inter .... inter E_tn )                                  :: M :: intersect
      {{ hol arb }}
