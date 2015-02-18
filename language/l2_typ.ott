@@ -53,6 +53,8 @@ t , u :: 'T_' ::=
    | atom < ne >    			  :: S :: atom_app {{ ichlo T_app "atom" [ [[ne]] ] }}
    | vector < ne ne' order t >           :: S :: vector_app {{ ichlo T_app "vector" [[ [ ne; ne'; ord; t ] ]] }} 
    | list < t >      	     		 :: S :: list_app {{ ichlo T_app "list" [[t]] }}
+   | reg < t >				 :: S :: box_app {{ ichlo T_app "reg" [[t]] }}
+   | implicit < ne >                      :: S :: implicit_app {{ ichlo T_app "implicit" [[ne]] }}
    | bit      	     	   	       	          :: S :: bit_typ {{ ichlo T_id "bit" }}
    | string                                    :: S :: string_typ {{ ichlo T_id "string" }}
    | unit                                       :: S :: unit_typ {{ ichlo T_id "unit" }} 
@@ -348,6 +350,7 @@ grammar
     {{ lem (Inf [[S_N]] [[effect]]) }}
   | Ie                                                           :: :: Iempty {{ com Empty constraints, effect }} {{ tex {\ottnt{I}_{\epsilon} } }}
     {{ lem Iemp }}
+  | ( I1 u+ I2 ) :: :: singleunion {{ tex [[I1]] [[u+]] [[I2]] }}
   | I1 u+ .. u+ In                                               :: :: Iunion {{ com Unions the constraints and effect }}
     {{ lem (List.foldr inf_union Iemp [[I1..In]]) }}
 
