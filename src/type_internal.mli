@@ -184,7 +184,7 @@ val get_abbrev : def_envs -> t -> (t * nexp_range list)
 
 val extract_bounds : def_envs -> string -> t -> bounds_env
 val merge_bounds : bounds_env -> bounds_env -> bounds_env
-val find_var_from_nvar : string -> bounds_env -> string option
+val find_var_from_nvar : string -> bounds_env -> (string option * string) option
 
 val normalize_nexp : nexp -> nexp
 val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debugging purposes*)

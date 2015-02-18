@@ -1810,9 +1810,13 @@ let find_var_from_nvar v bounds = match bounds with
     let rec find_rec bs = match bs with
       | [] -> None
       | b::bs -> (match b with
-	  | VR_eq(ev,n) | VR_vec_eq (ev,n)->
+	  | VR_eq(ev,n) ->
 	    (match n.nexp with 
-	      | Nvar nv -> if nv = v then Some ev else find_rec bs
+	      | Nvar nv -> if nv = v then Some (None,ev) else find_rec bs
+	      | _ -> find_rec bs)
+	  | VR_vec_eq (ev,n)->
+	    (match n.nexp with 
+	      | Nvar nv -> if nv = v then Some (Some "length",ev) else find_rec bs
 	      | _ -> find_rec bs)
 	  | _ -> find_rec bs) in
     find_rec bs

@@ -44,14 +44,17 @@ let rec rewrite_nexp_to_exp program_vars l nexp =
 		or vectors *)
 	      (* let _ = Printf.printf "unbound variable here %s\n" v in*) 
 	      E_aux (E_id (Id_aux (Id v,l)),(l,simple_annot typ))
-	    | Some ev -> E_aux (E_id (Id_aux (Id ev,l)), (l, simple_annot typ)))
+	    | Some(None,ev) -> E_aux (E_id (Id_aux (Id ev,l)), (l, simple_annot typ))
+	    | Some(Some f,ev) -> 
+	      E_aux (E_app ((Id_aux (Id f,l)), [ (E_aux (E_id (Id_aux (Id ev,l)), (l,simple_annot typ)))]),
+		     (l, tag_annot typ (External (Some f)))))
 
 let rec match_to_program_vars vs bounds =
   match vs with
     | [] -> []
     | v::vs -> match find_var_from_nvar v bounds with
 	| None -> match_to_program_vars vs bounds
-	| Some ev -> (v,ev)::(match_to_program_vars vs bounds)
+	| Some(augment,ev) -> (v,(augment,ev))::(match_to_program_vars vs bounds)
 
 let rec rewrite_exp (E_aux (exp,(l,annot))) = 
   let rewrap e = E_aux (e,(l,annot)) in
