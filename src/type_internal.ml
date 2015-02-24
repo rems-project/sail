@@ -1478,7 +1478,7 @@ let initial_typ_env =
   ]
 
 
-let rec t_subst s_env t =
+let rec typ_subst s_env t =
   match t.t with
   | Tvar i -> (match Envmap.apply s_env i with
                | Some(TA_typ t1) -> t1
@@ -1486,12 +1486,12 @@ let rec t_subst s_env t =
   | Tuvar _  -> new_t()
   | Tid i -> { t = Tid i}
   | Tfn(t1,t2,imp,e) -> 
-    {t =Tfn((t_subst s_env t1),(t_subst s_env t2),(ip_subst s_env imp),(e_subst s_env e)) }
-  | Ttup(ts) -> { t= Ttup(List.map (t_subst s_env) ts) }
+    {t =Tfn((typ_subst s_env t1),(typ_subst s_env t2),(ip_subst s_env imp),(e_subst s_env e)) }
+  | Ttup(ts) -> { t= Ttup(List.map (typ_subst s_env) ts) }
   | Tapp(i,args) -> {t= Tapp(i,List.map (ta_subst s_env) args)}
-  | Tabbrev(ti,ta) -> {t = Tabbrev(t_subst s_env ti,t_subst s_env ta) }
-  | Toptions(t1,None) -> {t = Toptions(t_subst s_env t1,None)}
-  | Toptions(t1,Some t2) -> {t = Toptions(t_subst s_env t1,Some (t_subst s_env t2)) }
+  | Tabbrev(ti,ta) -> {t = Tabbrev(typ_subst s_env ti,typ_subst s_env ta) }
+  | Toptions(t1,None) -> {t = Toptions(typ_subst s_env t1,None)}
+  | Toptions(t1,Some t2) -> {t = Toptions(typ_subst s_env t1,Some (typ_subst s_env t2)) }
 and ip_subst s_env ip =
   match ip with
     | IP_none -> ip
@@ -1500,7 +1500,7 @@ and ip_subst s_env ip =
     | IP_user n -> IP_user (n_subst s_env n)
 and ta_subst s_env ta =
   match ta with
-  | TA_typ t -> TA_typ (t_subst s_env t)
+  | TA_typ t -> TA_typ (typ_subst s_env t)
   | TA_nexp n -> TA_nexp (n_subst s_env n)
   | TA_eft e -> TA_eft (e_subst s_env e)
   | TA_ord o -> TA_ord (o_subst s_env o)
@@ -1547,7 +1547,7 @@ let rec cs_subst t_env cs =
     | CondCons(l,cs_p,cs_e)::cs -> CondCons(l,cs_subst t_env cs_p,cs_subst t_env cs_e)::(cs_subst t_env cs)
     | BranchCons(l,bs)::cs -> BranchCons(l,cs_subst t_env bs)::(cs_subst t_env cs)
 
-let subst k_env t cs e =
+let subst (k_env : (Envmap.k * kind) list) (t : t) (cs : nexp_range list) (e : effect) : (t * nexp_range list * effect * t_arg emap) =
   let subst_env = Envmap.from_list
     (List.map (fun (id,k) -> (id, 
                               match k.k with
@@ -1557,7 +1557,7 @@ let subst k_env t cs e =
                               | K_Efct -> TA_eft (new_e ())
                               | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "substitution given an environment with a non-base-kind kind"))) k_env) 
   in
-  t_subst subst_env t, cs_subst subst_env cs, e_subst subst_env e
+  (typ_subst subst_env t, cs_subst subst_env cs, e_subst subst_env e, subst_env)
 
 let rec t_remove_unifications s_env t =
   match t.t with
@@ -1621,19 +1621,6 @@ let remove_internal_unifications s_env =
 	!ouvars)
      !euvars)
       
-let subst k_env t cs e =
-  let subst_env = Envmap.from_list
-    (List.map (fun (id,k) -> (id, 
-                              match k.k with
-                              | K_Typ -> TA_typ (new_t ())
-                              | K_Nat -> TA_nexp (new_n ())
-                              | K_Ord -> TA_ord (new_o ())
-                              | K_Efct -> TA_eft (new_e ())
-                              | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "substitution given an environment with a non-base-kind kind"))) k_env) 
-  in
-  t_subst subst_env t, cs_subst subst_env cs, e_subst subst_env e
-
-
 let rec t_to_typ t =
   match t.t with
     | Tid i -> Typ_aux(Typ_id (Id_aux((Id i), Parse_ast.Unknown)),Parse_ast.Unknown)
@@ -1683,7 +1670,7 @@ let rec get_abbrev d_env t =
     | Tid i ->
       (match Envmap.apply d_env.abbrevs i with
 	| Some(Base((params,ta),tag,cs,efct,_)) ->
-          let ta,cs,_ = subst params ta cs efct in
+          let ta,cs,_,_ = subst params ta cs efct in
           let ta,cs' = get_abbrev d_env ta in
           (match ta.t with
           | Tabbrev(t',ta) -> ({t=Tabbrev({t=Tabbrev(t,t')},ta)},cs@cs')
@@ -1693,7 +1680,7 @@ let rec get_abbrev d_env t =
       (match Envmap.apply d_env.abbrevs i with
 	| Some(Base((params,ta),tag,cs,efct,_)) ->
 	  let env = Envmap.from_list2 (List.map fst params) args in
-          let ta,cs' = get_abbrev d_env (t_subst env ta) in
+          let ta,cs' = get_abbrev d_env (typ_subst env ta) in
           (match ta.t with
           | Tabbrev(t',ta) -> ({t=Tabbrev({t=Tabbrev(t,t')},ta)},cs_subst env (cs@cs'))
           | _ -> ({t = Tabbrev(t,ta)},cs_subst env cs))
@@ -1771,9 +1758,9 @@ let rec nexp_eq_check n1 n2 =
   | _,_ -> false
 
 let nexp_eq n1 n2 =
-  (*let _ = Printf.printf "comparing nexps %s and %s\n" (n_to_string n1) (n_to_string n2) in*)
+  let _ = Printf.printf "comparing nexps %s and %s\n" (n_to_string n1) (n_to_string n2) in
   let b = nexp_eq_check (normalize_nexp n1) (normalize_nexp n2) in
-  (*let _ = Printf.printf "compared nexps %s\n" (string_of_bool b) in*)
+  let _ = Printf.printf "compared nexps %s\n" (string_of_bool b) in
   b
 
 let build_variable_range d_env v typ =
@@ -1908,7 +1895,7 @@ and conforms_to_e loosely spec actual =
   When considering two atom type applications, will expand into a range encompasing both when widen is true
 *)
 let rec type_consistent_internal co d_env widen t1 cs1 t2 cs2 = 
-  (*let _ = Printf.printf "type_consistent_internal called with %s and %s\n" (t_to_string t1) (t_to_string t2) in*)
+  let _ = Printf.printf "type_consistent_internal called with %s and %s\n" (t_to_string t1) (t_to_string t2) in
   let l = get_c_loc co in
   let t1,cs1' = get_abbrev d_env t1 in
   let t2,cs2' = get_abbrev d_env t2 in
@@ -1952,6 +1939,7 @@ let rec type_consistent_internal co d_env widen t1 cs1 t2 cs2 =
   | Tfn(tin1,tout1,_,effect1),Tfn(tin2,tout2,_,effect2) -> 
     let (tin,cin) = type_consistent co d_env widen tin1 tin2 in
     let (tout,cout) = type_consistent co d_env widen tout1 tout2 in
+    let _ = Printf.printf "type consistent called on function: parameter type is %s with %i constraints. return type is %s with %i constraints.\n" (t_to_string tin) (List.length cin) (t_to_string tout) (List.length cout) in
     let _ = effects_eq co effect1 effect2 in
     (t2,csp@cin@cout)
   | Ttup t1s, Ttup t2s ->
@@ -2218,7 +2206,7 @@ let rec select_overload_variant d_env params_check get_all variants actual_type 
       select_overload_variant d_env params_check get_all variants actual_type
     | Base((parms,t_orig),tag,cs,ef,bindings)::variants ->
       (*let _ = Printf.printf "About to check a variant %s\n" (t_to_string t_orig) in*)
-      let t,cs,ef = if parms=[] then t_orig,cs,ef else subst parms t_orig cs ef in
+      let t,cs,ef,_ = if parms=[] then t_orig,cs,ef,Envmap.empty else subst parms t_orig cs ef in
       (*let _ = Printf.printf "And after substitution %s\n" (t_to_string t) in*)
       let t,cs' = get_abbrev d_env t in
       let recur _ = select_overload_variant d_env params_check get_all variants actual_type in
@@ -2291,9 +2279,9 @@ let rec simple_constraint_check in_env cs =
   | [] -> []
   | Eq(co,n1,n2)::cs -> 
     let check_eq ok_to_set n1 n2 = 
-(*      let _ = Printf.printf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in *)
+      let _ = Printf.printf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in 
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-(*      let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+      let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in 
       (match n1'.nexp,n2'.nexp with
       | Ninexact,nok | nok,Ninexact -> 
 	eq_error (get_c_loc co) ("Type constraint arising from here requires " ^ n_to_string {nexp = nok} ^ " to be equal to +inf + -inf")
@@ -2311,8 +2299,10 @@ let rec simple_constraint_check in_env cs =
         then begin equate_n n1' n2'; None end
         else Some (Eq(co,n1',n2'))
       | Nuvar u1, Nuvar u2 ->
+	let _ = Printf.printf "setting two nuvars, %s and %s, it is ok_to_set %b\n" (n_to_string n1) (n_to_string n2) ok_to_set in
         if ok_to_set
-        then begin ignore(resolve_nsubst n1); ignore(resolve_nsubst n2); equate_n n1' n2'; None end
+        then begin ignore(resolve_nsubst n1); ignore(resolve_nsubst n2); equate_n n1' n2'; 
+	  let _ = Printf.printf "after setting nuvars, n1 %s and n2 %s\n" (n_to_string n1) (n_to_string n2) in None end
         else Some(Eq(co,n1',n2'))
       | _,_ -> 
 	if nexp_eq_check n1' n2'
@@ -2395,11 +2385,12 @@ let rec resolve_in_constraints cs = cs
 let do_resolve_constraints = ref true
 
 let resolve_constraints cs = 
+  let _ = Printf.printf "called resolve constraints with %i constraints\n" (List.length cs) in
   if not !do_resolve_constraints
   then cs
   else
     let rec fix len cs =
-(*      let _ = Printf.printf "Calling simple constraint check, fix check point is %i\n" len in *)
+      let _ = Printf.printf "Calling simple constraint check, fix check point is %i\n" len in 
       let cs' = simple_constraint_check (in_constraint_env cs) cs in
       if len > (List.length cs') then fix (List.length cs') cs'
       else cs' in
@@ -2432,7 +2423,7 @@ let tannot_merge co denv widen t_older t_newer =
       (match tag_o,tag_n with
 	| Default,tag -> 
 	  (match t_n.t with
-	    | Tuvar _ -> let t_o,cs_o,ef_o = subst ps_o t_o cs_o ef_o in
+	    | Tuvar _ -> let t_o,cs_o,ef_o,_ = subst ps_o t_o cs_o ef_o in
 			 let t,_ = type_consistent co denv false t_n t_o in
 			 Base(([],t),tag_n,cs_o,ef_o,bounds_o)
 	    | _ -> t_newer)
