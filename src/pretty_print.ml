@@ -405,11 +405,12 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
       fprintf ppf "@[<0>(E_aux (E_vector_append %a %a) (%a, %a))@]" pp_lem_exp v1 pp_lem_exp v2 pp_lem_l l pp_annot annot
     | E_list(exps) -> fprintf ppf "@[<0>(E_aux (%a [%a]) (%a, %a))@]" kwd "E_list" (list_pp pp_semi_lem_exp pp_lem_exp) exps pp_lem_l l pp_annot annot
     | E_cons(e1,e2) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_cons" pp_lem_exp e1 pp_lem_exp e2 pp_lem_l l pp_annot annot
-    | E_record(FES_aux(FES_Fexps(fexps,_),_)) -> 
-      fprintf ppf "@[<0>(E_aux (%a [%a])) (%a, %a))@]" kwd "E_record(FES_Fexps" (list_pp pp_semi_lem_fexp pp_lem_fexp) fexps pp_lem_l l pp_annot annot
-    | E_record_update(exp,(FES_aux(FES_Fexps(fexps,_),_))) ->
-      fprintf ppf "@[<0>(E_aux (%a %a (%a [%a])) (%a, %a))@]" 
-	kwd "E_record_update" pp_lem_exp exp kwd "FES_Fexps" (list_pp pp_semi_lem_fexp pp_lem_fexp) fexps pp_lem_l l pp_annot annot
+    | E_record(FES_aux(FES_Fexps(fexps,_),(fl,fannot))) -> 
+      fprintf ppf "@[<0>(E_aux (E_record (FES_aux (FES_Fexps [%a] false) (%a,%a))) (%a, %a))@]"
+	(list_pp pp_semi_lem_fexp pp_lem_fexp) fexps pp_lem_l fl pp_annot fannot pp_lem_l l pp_annot annot
+    | E_record_update(exp,(FES_aux(FES_Fexps(fexps,_),(fl,fannot)))) ->
+      fprintf ppf "@[<0>(E_aux (E_record_update %a (FES_aux (FES_Fexps [%a] false) (%a,%a))) (%a,%a))@]"
+	pp_lem_exp exp (list_pp pp_semi_lem_fexp pp_lem_fexp) fexps pp_lem_l fl pp_annot fannot pp_lem_l l pp_annot annot
     | E_field(fexp,id) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_field" pp_lem_exp fexp pp_lem_id id pp_lem_l l pp_annot annot
     | E_case(exp,pexps) -> 
       fprintf ppf "@[<0>(E_aux (%a %a [%a]) (%a, %a))@]" kwd "E_case" pp_lem_exp exp (list_pp pp_semi_lem_case pp_lem_case) pexps pp_lem_l l pp_annot annot
