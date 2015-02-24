@@ -425,9 +425,20 @@ E_d, K_Typ |- t ~= t'
 E_d, K_Nat |- ne ~= ne'
 
 defn
-select ( conformsto ( t , t' ) ) of tinflist gives tinf' :: :: selectoverload :: so_
-{{ tex [[select]]_{(\textbf{conformsto} ([[t]],[[t']]))} ([[tinflist]]) [[gives]] [[tinf']] }}
+E_d |- select ( conformsto ( t , t' ) ) of tinflist gives tinflist' :: :: selectoverload :: so_
+{{ tex [[select]]_{[[conformsto]] ([[t]],[[t']])} ([[tinflist]]) [[gives]] [[tinflist']] }}
 by
+
+E_d |- ti ~= ti'
+E_d |- tj' ~= tj
+E_d |- select (full(ti,tj)) of tinf0 .. tinfm tinf'0 .. tinf'n gives empty
+--------------------------------------------------------- :: full
+E_d |- select (full( ti, tj)) of tinf0 .. tinfm E_k,S_N,tag, ti' -> tj' effect tinf'0 .. tinf'n gives E_k,S_N,tag,ti' -> tj'
+
+E_d |- ti ~= ti'
+E_d |- select (parm(ti,tj)) of tinf0 .. tinfm gives empty
+-------------------------------------------------------- :: parm
+E_d |- select (parm( ti, tj)) of tinf0 .. tinfm E_k,S_N,tag,ti' -> t effect tinf'0 .. tinf'n gives E_k,S_N,tag,ti' -> t
 
 defn
 E_d |- t ~< t' , S_N :: :: consistent_typ :: consistent_typ_
