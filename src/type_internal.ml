@@ -1758,9 +1758,9 @@ let rec nexp_eq_check n1 n2 =
   | _,_ -> false
 
 let nexp_eq n1 n2 =
-  let _ = Printf.printf "comparing nexps %s and %s\n" (n_to_string n1) (n_to_string n2) in
+(*  let _ = Printf.printf "comparing nexps %s and %s\n" (n_to_string n1) (n_to_string n2) in*)
   let b = nexp_eq_check (normalize_nexp n1) (normalize_nexp n2) in
-  let _ = Printf.printf "compared nexps %s\n" (string_of_bool b) in
+(*  let _ = Printf.printf "compared nexps %s\n" (string_of_bool b) in*)
   b
 
 let build_variable_range d_env v typ =
@@ -1895,7 +1895,7 @@ and conforms_to_e loosely spec actual =
   When considering two atom type applications, will expand into a range encompasing both when widen is true
 *)
 let rec type_consistent_internal co d_env widen t1 cs1 t2 cs2 = 
-  let _ = Printf.printf "type_consistent_internal called with %s and %s\n" (t_to_string t1) (t_to_string t2) in
+(*  let _ = Printf.printf "type_consistent_internal called with %s and %s\n" (t_to_string t1) (t_to_string t2) in*)
   let l = get_c_loc co in
   let t1,cs1' = get_abbrev d_env t1 in
   let t2,cs2' = get_abbrev d_env t2 in
@@ -1939,7 +1939,6 @@ let rec type_consistent_internal co d_env widen t1 cs1 t2 cs2 =
   | Tfn(tin1,tout1,_,effect1),Tfn(tin2,tout2,_,effect2) -> 
     let (tin,cin) = type_consistent co d_env widen tin1 tin2 in
     let (tout,cout) = type_consistent co d_env widen tout1 tout2 in
-    let _ = Printf.printf "type consistent called on function: parameter type is %s with %i constraints. return type is %s with %i constraints.\n" (t_to_string tin) (List.length cin) (t_to_string tout) (List.length cout) in
     let _ = effects_eq co effect1 effect2 in
     (t2,csp@cin@cout)
   | Ttup t1s, Ttup t2s ->
@@ -2279,9 +2278,9 @@ let rec simple_constraint_check in_env cs =
   | [] -> []
   | Eq(co,n1,n2)::cs -> 
     let check_eq ok_to_set n1 n2 = 
-      let _ = Printf.printf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in 
+(*      let _ = Printf.printf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in *)
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-      let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in 
+(*      let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
       (match n1'.nexp,n2'.nexp with
       | Ninexact,nok | nok,Ninexact -> 
 	eq_error (get_c_loc co) ("Type constraint arising from here requires " ^ n_to_string {nexp = nok} ^ " to be equal to +inf + -inf")
@@ -2299,10 +2298,9 @@ let rec simple_constraint_check in_env cs =
         then begin equate_n n1' n2'; None end
         else Some (Eq(co,n1',n2'))
       | Nuvar u1, Nuvar u2 ->
-	let _ = Printf.printf "setting two nuvars, %s and %s, it is ok_to_set %b\n" (n_to_string n1) (n_to_string n2) ok_to_set in
+(*	let _ = Printf.printf "setting two nuvars, %s and %s, it is ok_to_set %b\n" (n_to_string n1) (n_to_string n2) ok_to_set in*)
         if ok_to_set
-        then begin ignore(resolve_nsubst n1); ignore(resolve_nsubst n2); equate_n n1' n2'; 
-	  let _ = Printf.printf "after setting nuvars, n1 %s and n2 %s\n" (n_to_string n1) (n_to_string n2) in None end
+        then begin ignore(resolve_nsubst n1); ignore(resolve_nsubst n2); equate_n n1' n2'; None end
         else Some(Eq(co,n1',n2'))
       | _,_ -> 
 	if nexp_eq_check n1' n2'
@@ -2385,12 +2383,12 @@ let rec resolve_in_constraints cs = cs
 let do_resolve_constraints = ref true
 
 let resolve_constraints cs = 
-  let _ = Printf.printf "called resolve constraints with %i constraints\n" (List.length cs) in
+(*  let _ = Printf.printf "called resolve constraints with %i constraints\n" (List.length cs) in*)
   if not !do_resolve_constraints
   then cs
   else
     let rec fix len cs =
-      let _ = Printf.printf "Calling simple constraint check, fix check point is %i\n" len in 
+(*      let _ = Printf.printf "Calling simple constraint check, fix check point is %i\n" len in *)
       let cs' = simple_constraint_check (in_constraint_env cs) cs in
       if len > (List.length cs') then fix (List.length cs') cs'
       else cs' in
