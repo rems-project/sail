@@ -171,7 +171,7 @@ and targ_to_string = function
   | TA_ord o -> o_to_string o
 and n_to_string n =
   match n.nexp with
-    | Nvar i -> "'" ^ i
+    | Nvar i -> i
     | Nconst i -> string_of_big_int i
     | Npos_inf -> "infinity"
     | Nneg_inf -> "-infinity"

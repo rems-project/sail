@@ -42,9 +42,11 @@ let rec rewrite_nexp_to_exp program_vars l nexp =
 	      (*TODO these need to generate an error as it's a place where there's insufficient specification. 
 		But, for now I need to permit this to make power.sail compile, and most errors are in trap 
 		or vectors *)
-	      (* let _ = Printf.printf "unbound variable here %s\n" v in*) 
+	      (*let _ = Printf.printf "unbound variable here %s\n" v in *)
 	      E_aux (E_id (Id_aux (Id v,l)),(l,simple_annot typ))
-	    | Some(None,ev) -> E_aux (E_id (Id_aux (Id ev,l)), (l, simple_annot typ))
+	    | Some(None,ev) ->
+	      (*let _ = Printf.printf "var case of nvar rewrite, %s\n" ev in*)
+	      E_aux (E_id (Id_aux (Id ev,l)), (l, simple_annot typ))
 	    | Some(Some f,ev) -> 
 	      E_aux (E_app ((Id_aux (Id f,l)), [ (E_aux (E_id (Id_aux (Id ev,l)), (l,simple_annot typ)))]),
 		     (l, tag_annot typ (External (Some f)))))
@@ -119,16 +121,19 @@ let rec rewrite_exp (E_aux (exp,(l,annot))) =
 		| _ -> new_exp)
 	    | _ -> new_exp))
     | E_internal_exp (l,impl) ->
+      (*let _ = Printf.printf "Rewriting internal expression\n" in*) 
       (match impl with
 	| Base((_,t),_,_,_,bounds) ->
 	  match t.t with
 	    (*Old case; should possibly be removed*)
 	    | Tapp("register",[TA_typ {t= Tapp("vector",[ _; TA_nexp r;_;_])}])
 	    | Tapp("vector", [_;TA_nexp r;_;_]) ->
-	      (match r.nexp with
-		| Nconst bi -> rewrap (E_lit (L_aux (L_num (Big_int.int_of_big_int bi),l)))
-		| Nvar v -> rewrap (E_id (Id_aux (Id v,l))))
+	      let vars = get_all_nvar r in
+	      (match vars with
+		| [] -> rewrite_nexp_to_exp None l r
+		| vars -> rewrite_nexp_to_exp (Some (match_to_program_vars vars bounds)) l r)
 	    | Tapp("implicit", [TA_nexp i]) ->
+	      (*let _ = Printf.printf "Implicit case with %s\n" (n_to_string i) in*)
 	      let vars = get_all_nvar i in
 	      (match vars with
 		| [] -> rewrite_nexp_to_exp None l i
@@ -162,6 +167,7 @@ and rewrite_lexp (LEXP_aux(lexp,(l,annot))) =
 
 let rewrite_fun (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,annot))) = 
   let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),(l,annot))) = 
+    (*let _ = Printf.printf "Rewriting function %s\n" (match id with (Id_aux (Id i,_)) -> i) in*)
     (FCL_aux (FCL_Funcl (id,pat,rewrite_exp exp),(l,annot))) 
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,annot))
 
