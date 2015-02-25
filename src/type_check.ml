@@ -1743,7 +1743,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let funcls = match imp_param with
 	| None | Some {nexp = Nconst _} -> funcls
 	| Some {nexp = Nvar i} -> List.map (update_pattern i) funcls in
-      let _ = Printf.printf "done funcheck case 1\n" in
+      (*let _ = Printf.printf "done funcheck case 1\n" in*)
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,Envmap.insert t_env (id,tannot),b_env,tp_env)
     | _ , _-> 
