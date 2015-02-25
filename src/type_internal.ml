@@ -2273,22 +2273,21 @@ let freshen n =
 
 let rec simple_constraint_check in_env cs = 
   let check = simple_constraint_check in_env in
-(*  let _ = Printf.printf "simple_constraint_check\n" in *)
+  (*let _ = Printf.printf "simple_constraint_check\n" in *)
   match cs with 
   | [] -> []
   | Eq(co,n1,n2)::cs -> 
     let check_eq ok_to_set n1 n2 = 
-(*      let _ = Printf.printf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in *)
+      (*let _ = Printf.printf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in *)
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-(*      let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+      (*let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
       (match n1'.nexp,n2'.nexp with
       | Ninexact,nok | nok,Ninexact -> 
 	eq_error (get_c_loc co) ("Type constraint arising from here requires " ^ n_to_string {nexp = nok} ^ " to be equal to +inf + -inf")
       | Npos_inf,Npos_inf | Nneg_inf, Nneg_inf -> None
       | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst(i2) -> 
         if eq_big_int i1 i2 then None
-        else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires (" ^ n_to_string n1 ^ "=" 
-			              ^ string_of_big_int i1 ^ ") to equal (" ^ n_to_string n2 ^ " = " ^ string_of_big_int i2)
+        else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^ " to equal " ^ n_to_string n2 )
       | Nconst i, Nuvar u ->
         if not(u.nin) && ok_to_set 
         then begin equate_n n2' n1'; None end
@@ -2298,7 +2297,7 @@ let rec simple_constraint_check in_env cs =
         then begin equate_n n1' n2'; None end
         else Some (Eq(co,n1',n2'))
       | Nuvar u1, Nuvar u2 ->
-(*	let _ = Printf.printf "setting two nuvars, %s and %s, it is ok_to_set %b\n" (n_to_string n1) (n_to_string n2) ok_to_set in*)
+	(*let _ = Printf.printf "setting two nuvars, %s and %s, it is ok_to_set %b\n" (n_to_string n1) (n_to_string n2) ok_to_set in*)
         if ok_to_set
         then begin ignore(resolve_nsubst n1); ignore(resolve_nsubst n2); equate_n n1' n2'; None end
         else Some(Eq(co,n1',n2'))
@@ -2328,9 +2327,9 @@ let rec simple_constraint_check in_env cs =
 	  | Some(c) -> c::(check cs))
       | _ -> (Eq(co,n1,n2)::(check cs)))
   | GtEq(co,n1,n2)::cs -> 
-(*    let _ = Printf.printf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    (*let _ = Printf.printf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
+    (*let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst i2 -> 
       if ge_big_int i1 i2 
@@ -2351,9 +2350,9 @@ let rec simple_constraint_check in_env cs =
 					     ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
 	  | _ -> GtEq(co,n1',n2')::(check cs)))
   | LtEq(co,n1,n2)::cs -> 
-(*    let _ = Printf.printf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    (*let _ = Printf.printf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-(*    let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+    (*let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 | Nconst i1, N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst i2 -> 
       if le_big_int i1 i2 
@@ -2365,13 +2364,15 @@ let rec simple_constraint_check in_env cs =
                                                         ^ (n_to_string n2'))
     | _,_ -> LtEq(co,n1',n2')::(check cs))
   | CondCons(co,pats,exps):: cs ->
+    (*let _ = Printf.printf "Condcons check length pats %i, length exps %i\n" (List.length pats) (List.length exps) in*)
     let pats' = check pats in
     let exps' = check exps in
+    (*let _ = Printf.printf "Condcons after check length pats' %i, length exps' %i\n" (List.length pats') (List.length exps') in*)
     (match pats',exps' with
       | [],[] -> check cs
-      |  _,[] -> check cs
       | _     -> CondCons(co,pats',exps')::(check cs))
   | BranchCons(co,branches)::cs ->
+(*    let _ = Printf.printf "Branchcons check length branches %i\n" (List.length branches) in*)
     let b' = check branches in
     if [] = b' 
     then check cs
@@ -2379,20 +2380,29 @@ let rec simple_constraint_check in_env cs =
   | x::cs -> x::(check cs)
 
 let rec resolve_in_constraints cs = cs
+
+let rec constraint_size = function
+  | [] -> 0
+  | c::cs -> 
+    match c with 
+      | CondCons(_,ps,es) -> constraint_size ps + constraint_size es
+      | BranchCons(_,bs) -> constraint_size bs
+      | _ -> 1
     
 let do_resolve_constraints = ref true
 
 let resolve_constraints cs = 
-(*  let _ = Printf.printf "called resolve constraints with %i constraints\n" (List.length cs) in*)
+(*  let _ = Printf.printf "called resolve constraints with %i constraints\n" (constraint_size cs) in*)
   if not !do_resolve_constraints
   then cs
   else
     let rec fix len cs =
 (*      let _ = Printf.printf "Calling simple constraint check, fix check point is %i\n" len in *)
       let cs' = simple_constraint_check (in_constraint_env cs) cs in
-      if len > (List.length cs') then fix (List.length cs') cs'
+      let len' = constraint_size cs' in
+      if len > len' then fix len' cs'
       else cs' in
-    let complex_constraints = fix (List.length cs) cs in
+    let complex_constraints = fix (constraint_size cs) cs in
     complex_constraints
 
 
