@@ -220,10 +220,28 @@ let tag_to_string = function
   | Alias -> "Alias"
   | Spec -> "Spec"
 
+let rec constraint_to_string = function
+  | LtEq (co,nexp1,nexp2) ->
+    "LtEq(" ^ co_to_string co ^ ", " ^ n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
+  | Eq (co,nexp1,nexp2) ->
+    "Eq(" ^ co_to_string co ^ ", " ^ n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
+  | GtEq (co,nexp1,nexp2) ->
+    "GtEq(" ^ co_to_string co ^ ", " ^ n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
+  | In(co,var,ints) -> "In of " ^ var
+  | InS(co,n,ints) -> "InS of " ^ n_to_string n
+  | CondCons(co,pats,exps) ->
+    "CondCons(" ^ co_to_string co ^ ", [" ^ constraints_to_string pats ^ "], [" ^ constraints_to_string exps ^ "])"
+  | BranchCons(co,consts) ->
+    "BranchCons(" ^ co_to_string co ^ ", [" ^ constraints_to_string consts ^ "])"
+and constraints_to_string = function
+  | [] -> ""
+  | [c] -> constraint_to_string c
+  | c::cs -> (constraint_to_string c) ^ "; " ^ (constraints_to_string cs)
+
 let rec tannot_to_string = function
   | NoTyp -> "No tannot"
   | Base((vars,t),tag,ncs,ef,bv) ->
-    "Tannot: type = " ^ (t_to_string t) ^ " tag = " ^ tag_to_string tag ^ " constraints = not printing effect = " ^ e_to_string ef ^ "boundv = not printing"
+    "Tannot: type = " ^ (t_to_string t) ^ " tag = " ^ tag_to_string tag ^ " constraints = " ^ constraints_to_string ncs ^ " effect = " ^ e_to_string ef ^ "boundv = not printing"
   | Overload(poly,_,variants) ->
     "Overloaded: poly = " ^ tannot_to_string poly
 
@@ -1932,6 +1950,7 @@ let rec type_consistent_internal co d_env widen t1 cs1 t2 cs2 =
 	     ({t=Tapp("range",[TA_nexp nu1;TA_nexp nu2])},
 	      csp@[LtEq(co,nu1,a1);LtEq(co,nu1,a2);LtEq(co,a1,nu2);LtEq(co,a2,nu2)]))
   | Tapp(id1,args1), Tapp(id2,args2) ->
+    (*let _ = Printf.printf "checking consistency of %s and %s\n" id1 id2 in*)
     let la1,la2 = List.length args1, List.length args2 in
     if id1=id2 && la1 = la2 
     then (t2,csp@(List.flatten (List.map2 (type_arg_eq co d_env widen) args1 args2)))
@@ -2321,7 +2340,7 @@ let rec simple_constraint_check in_env cs =
 	      | _ -> Some(Eq(co,n1',n2')))
 	  | _ -> Some(Eq(co,n1',n2')))) in
     (match contains_in_vars in_env n1, contains_in_vars in_env n2 with
-      | None,None ->	
+      | _,_ ->	
 	(match check_eq true n1 n2 with
 	  | None -> (check cs)
 	  | Some(c) -> c::(check cs))
@@ -2372,7 +2391,7 @@ let rec simple_constraint_check in_env cs =
       | [],[] -> check cs
       | _     -> CondCons(co,pats',exps')::(check cs))
   | BranchCons(co,branches)::cs ->
-(*    let _ = Printf.printf "Branchcons check length branches %i\n" (List.length branches) in*)
+    (*let _ = Printf.printf "Branchcons check length branches %i\n" (List.length branches) in*)
     let b' = check branches in
     if [] = b' 
     then check cs
@@ -2392,12 +2411,12 @@ let rec constraint_size = function
 let do_resolve_constraints = ref true
 
 let resolve_constraints cs = 
-(*  let _ = Printf.printf "called resolve constraints with %i constraints\n" (constraint_size cs) in*)
+  (*let _ = Printf.printf "called resolve constraints with %i constraints\n" (constraint_size cs) in*)
   if not !do_resolve_constraints
   then cs
   else
     let rec fix len cs =
-(*      let _ = Printf.printf "Calling simple constraint check, fix check point is %i\n" len in *)
+      (*let _ = Printf.printf "Calling simple constraint check, fix check point is %i\n" len in *)
       let cs' = simple_constraint_check (in_constraint_env cs) cs in
       let len' = constraint_size cs' in
       if len > len' then fix len' cs'

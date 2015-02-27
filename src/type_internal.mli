@@ -167,6 +167,7 @@ val cons_bs_annot : t -> nexp_range list -> bounds_env -> tannot
 
 val t_to_string : t -> string
 val n_to_string : nexp -> string
+val constraints_to_string : nexp_range list -> string
 val tannot_to_string : tannot -> string
 val t_to_typ : t -> Ast.typ
 

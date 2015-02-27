@@ -349,12 +349,14 @@ val initial_instruction_state : context -> string -> list register_value -> inst
 (*Type representint the constructor parameters in instruction, other is a type not representable externally*)
 type instr_parm_typ = 
   | Bit (*A single bit, represented as a one element Bitvector as a value*)
+  | Range of maybe int (*Internall represented as a number, externally as a bitvector of length int *)
   | Other (*An unrepresentable type, will be represented as Unknown in instruciton form *)
   | Bvector of maybe int (* A bitvector type, with length when statically known *)
 
 let instr_parm_typEqual ip1 ip2 = match (ip1,ip2) with
   | (Bit,Bit) -> true
   | (Other,Other) -> true
+  | (Range i1,Range i2) -> i1 = i2
   | (Bvector i1,Bvector i2) -> i1 = i2
   | _ -> false
 end 

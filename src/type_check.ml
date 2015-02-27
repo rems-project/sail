@@ -266,29 +266,31 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	| _ -> default)
     | P_app(id,pats) -> 
       let i = id_to_string id in
+      (*let _ = Printf.printf "checking constructor pattern %s\n" i in*)
       (match Envmap.apply t_env i with
 	| None | Some NoTyp | Some Overload _ -> typ_error l ("Constructor " ^ i ^ " in pattern is undefined")
 	| Some(Base((params,t),Constructor,constraints,eft,bounds)) -> 
-          let t,constraints,_,_ = subst params t constraints eft in
+          let t,dec_cs,_,_ = subst params t constraints eft in
 	  (match t.t with
 	    | Tid id -> if pats = [] 
-	      then let t',constraints' = type_consistent (Patt l) d_env false t expect_t in
-		   (P_aux(p,(l,cons_tag_annot t' Constructor constraints)), Envmap.empty,constraints@constraints',nob,t')
+	      then let t',ret_cs = type_consistent (Patt l) d_env false t expect_t in
+		   (P_aux(p,(l,cons_tag_annot t' Constructor dec_cs)), Envmap.empty,dec_cs@ret_cs,nob,t')
 	      else typ_error l ("Constructor " ^ i ^ " does not expect arguments")
 	    | Tfn(t1,t2,IP_none,ef) ->
+	      let t',ret_cs = type_consistent (Patt l) d_env false t2 expect_t in
               (match pats with
               | [] -> let _ = type_consistent (Patt l) d_env false unit_t t1 in
-                      let t',constraints' = type_consistent (Patt l) d_env false t2 expect_t in
-                      (P_aux(P_app(id,[]),(l,cons_tag_annot t' Constructor constraints)), Envmap.empty,constraints@constraints',nob,t')
-              | [p] -> let (p',env,constraints,bounds,u) = check_pattern envs emp_tag t1 p in
-                       let t',constraints' = type_consistent (Patt l) d_env false t2 expect_t in
-                       (P_aux(P_app(id,[p']),(l,cons_tag_annot t' Constructor constraints)),env,constraints@constraints',bounds,t')
-              | pats -> let (pats',env,constraints,bounds,u) = 
+                      (P_aux(P_app(id,[]),(l,cons_tag_annot t' Constructor dec_cs)),
+		       Envmap.empty,dec_cs@ret_cs,nob,t')
+              | [p] -> let (p',env,p_cs,bounds,u) = check_pattern envs emp_tag t1 p in
+                       (P_aux(P_app(id,[p']),
+			      (l,cons_tag_annot t' Constructor dec_cs)),env,dec_cs@p_cs@ret_cs,bounds,t')
+              | pats -> let (pats',env,p_cs,bounds,u) = 
                           match check_pattern envs emp_tag t1 (P_aux(P_tup(pats),(l,annot))) with
                           | ((P_aux(P_tup(pats'),_)),env,constraints,bounds,u) -> (pats',env,constraints,bounds,u)
                           | _ -> assert false in
-                        let t',constraints' = type_consistent (Patt l) d_env false t2 expect_t in
-	                (P_aux(P_app(id,pats'),(l,cons_tag_annot t' Constructor constraints)),env,constraints@constraints',bounds,t'))
+	                (P_aux(P_app(id,pats'),
+			       (l,cons_tag_annot t' Constructor dec_cs)),env,dec_cs@p_cs@ret_cs,bounds,t'))
 	    | _ -> typ_error l ("Identifier " ^ i ^ " must be a union constructor"))
 	| Some(Base((params,t),tag,constraints,eft,bounds)) -> 
 	  typ_error l ("Identifier " ^ i ^ " used in pattern is not a union constructor"))
@@ -580,7 +582,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
     | E_app(id,parms) -> 
       let i = id_to_string id in
       let check_parms p_typ parms = (match parms with
-        | [] -> let (_,cs') = type_consistent (Expr l) d_env false unit_t p_typ in [],unit_t,cs',pure_e 
+        | [] | [(E_aux (E_lit (L_aux (L_unit,_)),_))] 
+	  -> let (_,cs') = type_consistent (Expr l) d_env false unit_t p_typ in [],unit_t,cs',pure_e 
         | [parm] -> let (parm',arg_t,t_env,cs',_,ef_p) = check_exp envs imp_param p_typ parm in [parm'],arg_t,cs',ef_p
         | parms -> 
           (match check_exp envs imp_param p_typ (E_aux (E_tuple parms,(l,NoTyp))) with
@@ -589,6 +592,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       in
       let coerce_parms arg_t parms expect_arg_t =
 	(match parms with
+	| [] | [(E_aux (E_lit (L_aux(L_unit, _)), _))] -> [],pure_e,[]
 	| [parm] -> 
 	  let _,cs,ef,parm' = type_coerce (Expr l) d_env false false arg_t parm expect_arg_t in [parm'],ef,cs
 	| parms ->
@@ -1705,8 +1709,9 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   let check t_env tp_env imp_param =
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,_))) ->
-(*	let _ = Printf.printf "checking function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
+	(*let _ = Printf.printf "checking function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
 	let (pat',t_env',cs_p,b_env',t') = check_pattern (Env(d_env,t_env,b_env,tp_env)) Emp_local param_t pat in
+	(*let _ = Printf.printf "cs_p for %s %s\n" (id_to_string id) (constraints_to_string cs_p) in*)
 (*	let _ = Printf.printf "about to check that %s and %s are consistent\n" (t_to_string t') (t_to_string param_t) in*)
 	let t', _ = type_consistent (Patt l) d_env false param_t t' in
 	let exp',_,_,cs_e,_,ef = 

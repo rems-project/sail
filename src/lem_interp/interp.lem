@@ -1851,8 +1851,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
               (fun v lm le -> (Value v,lm,le))
               (fun a -> 
 		(match a with
-		  | (Action (Write_reg regf range value) stack) -> (Action (Write_reg regf range value) stack)
-		  | (Action (Write_mem id a range value) stack) -> (Action (Write_mem id a range value) stack)
+		  | (Action (Write_reg regf range value) stack) -> a
+		  | (Action (Write_mem id a_ range value) stack) -> a
 		  | _ -> update_stack a (add_to_top_frame 
 					   (fun e env -> 
                                              let (ev,env') = (to_exp mode env v) in
@@ -1880,7 +1880,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			(add_to_top_frame (fun e env-> (E_aux (E_block(e::exps)) (l,tannot), env))))
     end
 
-and create_write_message_or_update mode t_level value l_env l_mem is_top_level ((LEXP_aux lexp (l,annot)):lexp tannot) : ((outcome * lmem * lenv) * maybe ((exp tannot) -> lenv -> ((lexp tannot) * lenv))) =
+and create_write_message_or_update mode t_level value l_env l_mem is_top_level ((LEXP_aux lexp (l,annot)):lexp tannot) 
+  : ((outcome * lmem * lenv) * maybe ((exp tannot) -> lenv -> ((lexp tannot) * lenv))) =
    let (Env defs instrs lets regs ctors subregs aliases) = t_level in
   let (typ,tag,ncs,ef) = match annot with 
     | Nothing -> (T_var "fresh_v", Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
@@ -2005,7 +2006,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		      l_env l_mem [] exps) with
       | (Value v,lm,le) ->
         (match tag with
-        | Tag_extern ->
+        | Tag_extern _ ->
           let request = (Action (Write_mem id v Nothing value) 
                            (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env lm Top),
 			 lm,l_env) in
@@ -2015,6 +2016,30 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
              Just (fun e env->
                let (parms,env) = (to_exps mode env (match v with | V_tuple vs -> vs | v -> [v] end)) in
 	       (LEXP_aux (LEXP_memory id parms) (l,annot), env)))
+	| Tag_global ->
+          let name = get_id id in 
+	  (match find_function defs id with
+	    | Just(funcls) -> 
+              (match find_funcl funcls (V_tuple [v;value]) with
+		| [] -> ((Error l ("No matching pattern for function " ^ name ^
+				      " on value " ^ (string_of_value v)),l_mem,l_env),Nothing)
+		| [(env,used_unknown,exp)] -> 
+		  (match (if mode.eager_eval 
+		          then (interp_main mode t_level env emem exp)
+		          else (debug_out (Just name) (Just v) exp t_level emem env)) with
+		    | (Value ret, _,_) -> ((Value ret, l_mem,l_env),Nothing)
+		    | (Action action stack,lm,le) ->
+		      (((update_stack (Action action stack) 
+			  (fun stack -> (Hole_frame (id_of_string "0") 
+					   (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot)))
+					   t_level l_env l_mem stack))), l_mem,l_env), Nothing)
+		    | (e,lm,le) -> ((e,lm,le),Nothing) end)
+                | multi_matches ->
+                  let lets = List.map (fun (env,_,exp) -> env_to_let mode env exp) multi_matches in
+                  (interp_main mode t_level l_env l_mem (E_aux (E_block lets) (l,annot)), Nothing)
+               end)
+            | Nothing -> 
+	      ((Error l ("Internal error: function unfound " ^ name),lm,le),Nothing) end)
          end)
       | (Action a s,lm, le) -> 
 	((Action a s,lm,le), Just (fun (E_aux (E_tuple es) _) env -> (LEXP_aux (LEXP_memory id es) (l,annot), env)))
@@ -2151,7 +2176,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	     ((Action (Write_mem id a (Just (n,n)) value) s,lm,le), Just (next_builder lexp_builder))
            | _ -> ((Action a s,lm,le), Just (next_builder lexp_builder)) end)
          | e -> e end)
-        | _ -> ((Error l "Vector access must be a number",lm,le),Nothing) end)
+        | v -> ((Error l ("Vector access must be a number given " ^ (string_of_value v)),lm,le),Nothing) end)
       | (Action a s,lm,le) -> ((Action a s,lm,le), Just (fun e env -> (LEXP_aux (LEXP_vector lexp e) (l,annot), env)))
       | e -> (e,Nothing) end
     | LEXP_vector_range lexp exp1 exp2  ->
