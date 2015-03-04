@@ -2061,11 +2061,11 @@ let rec type_coerce_internal co d_env is_explicit widen t1 cs1 e t2 cs2 =
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [Eq(co,b2,n_zero);GtEq(co,r2,{nexp=N2n(r1,None)})] in
+	let cs = [Eq(co,b2,n_zero);GtEq(co,r2,{nexp = Nadd({nexp=N2n(r1,None)},{nexp = Nneg n_one})})] in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num_inc",l)),[e]),(l,Base(([],t2),External None,cs,pure_e,nob))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [Eq(co,b2,n_zero);GtEq(co,r2,{nexp=N2n(r1,None)})] in
+	let cs = [Eq(co,b2,n_zero);GtEq(co,r2,{nexp = Nadd({nexp=N2n(r1,None)},{nexp = Nneg n_one})})] in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Base(([],t2),External None,cs,pure_e,nob))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert a vector to an range without an order"
