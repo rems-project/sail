@@ -702,6 +702,24 @@ and occurs_check_e (e_box : effect) (e : effect) : unit =
     raise (Occurs_exn (TA_eft e))
   else ()
 
+(* Is checking for structural equality only, other forms of equality will be handeled by constraints *)
+let rec nexp_eq_check n1 n2 =
+  match n1.nexp,n2.nexp with
+  | Nvar v1,Nvar v2 -> v1=v2
+  | Nconst n1,Nconst n2 -> eq_big_int n1 n2
+  | Nadd(nl1,nl2), Nadd(nr1,nr2) | Nmult(nl1,nl2), Nmult(nr1,nr2) -> nexp_eq_check nl1 nr1 && nexp_eq_check nl2 nr2
+  | N2n(n,Some i),N2n(n2,Some i2) -> eq_big_int i i2
+  | N2n(n,_),N2n(n2,_) -> nexp_eq_check n n2
+  | Nneg n,Nneg n2 -> nexp_eq_check n n2
+  | Npow(n1,i1),Npow(n2,i2) -> i1=i2 && nexp_eq_check n1 n2
+  | Nuvar {nindex =i1},Nuvar {nindex = i2} -> i1 = i2
+  | _,_ -> false
+
+let nexp_eq n1 n2 =
+(*  let _ = Printf.printf "comparing nexps %s and %s\n" (n_to_string n1) (n_to_string n2) in*)
+  let b = nexp_eq_check (normalize_nexp n1) (normalize_nexp n2) in
+(*  let _ = Printf.printf "compared nexps %s\n" (string_of_bool b) in*)
+  b
  
 let equate_t (t_box : t) (t : t) : unit =
   let t = resolve_tsubst t in
@@ -725,9 +743,10 @@ let rec occurs_in_pending_subst n_box n : bool =
       then true
       else occurs_in_pending_subst n' n
     | Nuvar( { nsubst = None } ) -> false
-    | _ -> false
+    | _ -> occurs_in_nexp n_box n
 
-let rec occurs_in_nexp n_box nuvar : bool =
+and occurs_in_nexp n_box nuvar : bool =
+  (*let _ = Printf.eprintf "occurs_in_nexp given n_box %s nuvar %s eq? %b\n" (n_to_string n_box) (n_to_string nuvar) (n_box.nexp == nuvar.nexp) in*)
   if n_box.nexp == nuvar.nexp then true
   else match n_box.nexp with
     | Nuvar _ -> occurs_in_pending_subst n_box nuvar
@@ -735,26 +754,28 @@ let rec occurs_in_nexp n_box nuvar : bool =
     | Nneg nb | N2n(nb,None) | Npow(nb,_) -> occurs_in_nexp nb nuvar
     | _ -> false
 
-let equate_n (n_box : nexp) (n : nexp) : unit =
-  (* let _ = Printf.eprintf "equate_n given n_box %s and n %s\n" (n_to_string n_box) (n_to_string n) in*)
-  if n_box.nexp == n.nexp then ()
+let equate_n (n_box : nexp) (n : nexp) : bool =
+  (*let _ = Printf.eprintf "equate_n given n_box %s and n %s\n" (n_to_string n_box) (n_to_string n) in*)
+  if n_box.nexp == n.nexp then true
   else 
     let n = resolve_nsubst n in
-    if occurs_in_pending_subst n_box n || occurs_in_pending_subst n n_box then ()
+    if occurs_in_pending_subst n_box n || occurs_in_pending_subst n n_box then true
     else 
-      (* let _ = Printf.eprintf "equate_n has does not occur in %s and %s\n" (n_to_string n_box) (n_to_string n)) in *)
-      match n.nexp with
-	| Nuvar(_) ->
-	  (match n_box.nexp with
-	    | Nuvar(u) ->
-	      let rec set_bottom_nsubst u =
-		match u.nsubst with	       
-		  | None -> u.nsubst <- Some(n);
-		  | Some(({nexp = Nuvar(u)} as n1)) -> set_bottom_nsubst u in
-	      set_bottom_nsubst u; 
-	    | _ -> assert false)
-	| _ ->
-	  n_box.nexp <- n.nexp
+      (*let _ = Printf.eprintf "equate_n has does not occur in %s and %s\n" (n_to_string n_box) (n_to_string n) in *)
+      let rec set_bottom_nsubst swap u new_bot = 
+	match u.nsubst with
+	  | None -> u.nsubst <- Some(new_bot); true
+	  | Some({nexp = Nuvar(u)}) -> set_bottom_nsubst swap u new_bot
+	  | Some(n_new) -> 
+	    if swap 
+	    then set_bottom_nsubst false (match new_bot.nexp with | Nuvar u -> u) n_new
+	    else if nexp_eq n_new new_bot then true
+	    else false in
+      match n_box.nexp,n.nexp with
+	| Nuvar(u), Nuvar _ -> set_bottom_nsubst true u n
+	| Nuvar(u), _ -> set_bottom_nsubst false u n
+	| _,Nuvar u -> set_bottom_nsubst false u n_box
+	| _ -> false
 let equate_o (o_box : order) (o : order) : unit =
   let o = resolve_osubst o in
   if o_box == o then ()
@@ -1791,24 +1812,6 @@ let effects_eq co e1 e2 =
   | Evar v1, Evar v2 -> if v1 = v2 then e2 else eq_error l ("Effect variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
   | Evar v1, Eset _ -> eq_error l ("Effect variable " ^ v1 ^ " cannot be used where a concrete set of effects is specified")
 
-(* Is checking for structural equality only, other forms of equality will be handeled by constraints *)
-let rec nexp_eq_check n1 n2 =
-  match n1.nexp,n2.nexp with
-  | Nvar v1,Nvar v2 -> v1=v2
-  | Nconst n1,Nconst n2 -> eq_big_int n1 n2
-  | Nadd(nl1,nl2), Nadd(nr1,nr2) | Nmult(nl1,nl2), Nmult(nr1,nr2) -> nexp_eq_check nl1 nr1 && nexp_eq_check nl2 nr2
-  | N2n(n,Some i),N2n(n2,Some i2) -> eq_big_int i i2
-  | N2n(n,_),N2n(n2,_) -> nexp_eq_check n n2
-  | Nneg n,Nneg n2 -> nexp_eq_check n n2
-  | Npow(n1,i1),Npow(n2,i2) -> i1=i2 && nexp_eq_check n1 n2
-  | Nuvar {nindex =i1},Nuvar {nindex = i2} -> i1 = i2
-  | _,_ -> false
-
-let nexp_eq n1 n2 =
-(*  let _ = Printf.printf "comparing nexps %s and %s\n" (n_to_string n1) (n_to_string n2) in*)
-  let b = nexp_eq_check (normalize_nexp n1) (normalize_nexp n2) in
-(*  let _ = Printf.printf "compared nexps %s\n" (string_of_bool b) in*)
-  b
 
 let build_variable_range d_env v typ =
   let t,_ = get_abbrev d_env typ in
@@ -2342,7 +2345,8 @@ let rec simple_constraint_check in_env cs =
 					^ n_to_string new_n ^ " to equal 0, not " ^ string_of_big_int i)
 	| Nuvar u1 ->
 	  if ok_to_set
-	  then begin ignore(resolve_nsubst new_n); equate_n new_n n_zero; None end
+	  then begin ignore(resolve_nsubst new_n);
+	    if (equate_n new_n n_zero) then None else Some(Eq(co,new_n,n_zero)) end
 	  else Some(Eq(co,new_n,n_zero))
 	| Nadd(new_n1,new_n2) ->
 	  (match new_n1.nexp, new_n2.nexp with
@@ -2353,28 +2357,29 @@ let rec simple_constraint_check in_env cs =
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
       (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
       (match n1'.nexp,n2'.nexp with
-      | Ninexact,nok | nok,Ninexact -> 
-	eq_error (get_c_loc co) ("Type constraint arising from here requires " ^ n_to_string {nexp = nok} ^ " to be equal to +inf + -inf")
+      | Ninexact,nok | nok,Ninexact -> eq_error (get_c_loc co) ("Type constraint arising from here requires " ^ n_to_string {nexp = nok} ^ " to be equal to +inf + -inf")
       | Npos_inf,Npos_inf | Nneg_inf, Nneg_inf -> None
       | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst(i2) -> 
-        if eq_big_int i1 i2 then None
-        else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^ " to equal " ^ n_to_string n2 )
+        if eq_big_int i1 i2 then None else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^ " to equal " ^ n_to_string n2 )
       | Nuvar u1, Nuvar u2 ->
 	(*let _ = Printf.eprintf "setting two nuvars, %s and %s, it is ok_to_set %b\n" (n_to_string n1) (n_to_string n2) ok_to_set in*)
-        if ok_to_set
-        then begin equate_n n1' n2'; None end
+	let occurs = (occurs_in_nexp n1' n2') || (occurs_in_nexp n2' n1') in
+        if ok_to_set && not(occurs) 
+        then begin ignore(resolve_nsubst n1'); ignore(resolve_nsubst n2'); 
+	  if (equate_n n1' n2') then None else Some(Eq(co,n1',n2')) end
+	else if occurs then eq_to_zero ok_to_set n1' n2'
         else Some(Eq(co,n1',n2'))
       | _, Nuvar u ->
 	let occurs = occurs_in_nexp n1' n2' in
         if not(u.nin) && ok_to_set && not(occurs)
-        then begin equate_n n2' n1'; None end
+        then if (equate_n n2' n1') then  None else (Some (Eq(co,n1',n2')))
         else if occurs 
 	then eq_to_zero ok_to_set n1' n2'
 	else Some (Eq(co,n1',n2')) 
       | Nuvar u, _ ->
 	let occurs = occurs_in_nexp n2' n1' in
         if not(u.nin) && ok_to_set && not(occurs)
-        then begin equate_n n1' n2'; None end
+        then if equate_n n1' n2' then None else (Some (Eq(co,n1',n2')))
         else if occurs
 	then eq_to_zero ok_to_set n1' n2'
 	else Some (Eq(co,n1',n2'))
