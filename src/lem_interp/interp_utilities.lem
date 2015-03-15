@@ -73,6 +73,18 @@ let get_effects (Typ_aux t _) =
     | _ -> []
   end
 
+let string_of_tag tag = match tag with
+  | Tag_empty -> "empty"
+  | Tag_global -> "global"
+  | Tag_ctor -> "ctor"
+  | Tag_extern (Just n) -> "extern " ^ n
+  | Tag_extern _ -> "extern"
+  | Tag_default -> "default"
+  | Tag_spec -> "spec"
+  | Tag_enum -> "enum"
+  | Tag_alias -> "alias"
+end      
+
 val find_type_def : defs tannot -> id -> maybe (type_def tannot)
 val find_function : defs tannot -> id -> maybe (list (funcl tannot))
 
@@ -92,14 +104,14 @@ let rec find_function (Defs defs) id =
 
 
 let rec get_first_index_range (BF_aux i _) = match i with
-  | BF_single i -> i
-  | BF_range i j -> i
+  | BF_single i -> (natFromInteger i)
+  | BF_range i j -> (natFromInteger i)
   | BF_concat s _ -> get_first_index_range s
 end 
 
 let rec get_index_range_size (BF_aux i _) = match i with
   | BF_single _ -> 1
-  | BF_range i j -> (abs (i-j)) + 1
+  | BF_range i j -> (natFromInteger (abs (i-j))) + 1
   | BF_concat i j -> (get_index_range_size i) + (get_index_range_size j)
 end
 

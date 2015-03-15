@@ -20,7 +20,7 @@ let rec rewrite_nexp_to_exp program_vars l nexp =
     | Nadd (n1,n2) -> E_aux (E_app_infix (rewrite n1,(Id_aux (Id "+",l)),rewrite n2),
 			     (l, (tag_annot typ (External (Some "add")))))
     | Nmult (n1,n2) -> E_aux (E_app_infix (rewrite n1,(Id_aux (Id "*",l)),rewrite n2),
-			      (l, tag_annot typ (External (Some "mult"))))
+			      (l, tag_annot typ (External (Some "multiply"))))
     | N2n (n, _) -> E_aux (E_app_infix (E_aux (E_lit (L_aux (L_num 2,l)), (l, simple_annot (mk_atom_typ n_two))),
 					(Id_aux (Id "**",l)),
 					rewrite n), (l, tag_annot typ (External (Some "power"))))
@@ -141,6 +141,7 @@ let rec rewrite_exp (E_aux (exp,(l,annot))) =
     | E_internal_exp_user ((l,user_spec),(_,impl)) -> 
       (match (user_spec,impl) with
 	| (Base((_,tu),_,_,_,_), Base((_,ti),_,_,_,bounds)) ->
+	  (*let _ = Printf.eprintf "E_interal_user getting rewritten two types are %s and %s\n" (t_to_string tu) (t_to_string ti) in*)
 	  match (tu.t,ti.t) with
 	    | (Tapp("implicit", [TA_nexp u]),Tapp("implicit",[TA_nexp i])) ->
 	      let vars = get_all_nvar i in

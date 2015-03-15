@@ -143,6 +143,19 @@ type typquant_aux =  (* type quantifiers and constraints *)
  | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
+type lit_aux =  (* Literal constant *)
+ | L_unit (* $() : unit$ *)
+ | L_zero (* $bitzero : bit$ *)
+ | L_one (* $bitone : bit$ *)
+ | L_true (* $true : bool$ *)
+ | L_false (* $false : bool$ *)
+ | L_num of integer (* natural number constant *)
+ | L_hex of string (* bit vector constant, C-style *)
+ | L_bin of string (* bit vector constant, C-style *)
+ | L_undef (* constant representing undefined values *)
+ | L_string of string (* string constant *)
+
+
 type typquant = 
  | TypQ_aux of typquant_aux * l
 
@@ -168,29 +181,12 @@ and typ_arg =
  | Typ_arg_aux of typ_arg_aux * l
 
 
-type lit_aux =  (* Literal constant *)
- | L_unit (* $() : unit$ *)
- | L_zero (* $bitzero : bit$ *)
- | L_one (* $bitone : bit$ *)
- | L_true (* $true : bool$ *)
- | L_false (* $false : bool$ *)
- | L_num of integer (* natural number constant *)
- | L_hex of string (* bit vector constant, C-style *)
- | L_bin of string (* bit vector constant, C-style *)
- | L_undef (* constant representing undefined values *)
- | L_string of string (* string constant *)
-
-
-type typschm_aux =  (* type scheme *)
- | TypSchm_ts of typquant * typ
-
-
 type lit = 
  | L_aux of lit_aux * l
 
 
-type typschm = 
- | TypSchm_aux of typschm_aux * l
+type typschm_aux =  (* type scheme *)
+ | TypSchm_ts of typquant * typ
 
 
 type pat_aux 'a =  (* Pattern *)
@@ -217,11 +213,34 @@ and fpat 'a =
  | FP_aux of (fpat_aux 'a) * annot 'a
 
 
+type typschm = 
+ | TypSchm_aux of typschm_aux * l
+
+
 type reg_id_aux 'a = 
  | RI_id of id
 
 
-type letbind_aux 'a =  (* Let binding *)
+type fexps_aux 'a =  (* Field-expression list *)
+ | FES_Fexps of list (fexp 'a) * bool
+
+and fexps 'a = 
+ | FES_aux of (fexps_aux 'a) * annot 'a
+
+and opt_default_aux 'a =  (* Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map *)
+ | Def_val_empty
+ | Def_val_dec of (exp 'a)
+
+and opt_default 'a = 
+ | Def_val_aux of (opt_default_aux 'a) * annot 'a
+
+and pexp_aux 'a =  (* Pattern match *)
+ | Pat_exp of (pat 'a) * (exp 'a)
+
+and pexp 'a = 
+ | Pat_aux of (pexp_aux 'a) * annot 'a
+
+and letbind_aux 'a =  (* Let binding *)
  | LB_val_explicit of typschm * (pat 'a) * (exp 'a) (* value binding, explicit type ((pat 'a) must be total) *)
  | LB_val_implicit of (pat 'a) * (exp 'a) (* value binding, implicit type ((pat 'a) must be total) *)
 
@@ -279,25 +298,6 @@ and fexp_aux 'a =  (* Field-expression *)
 and fexp 'a = 
  | FE_aux of (fexp_aux 'a) * annot 'a
 
-and fexps_aux 'a =  (* Field-expression list *)
- | FES_Fexps of list (fexp 'a) * bool
-
-and fexps 'a = 
- | FES_aux of (fexps_aux 'a) * annot 'a
-
-and opt_default_aux 'a =  (* Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map *)
- | Def_val_empty
- | Def_val_dec of (exp 'a)
-
-and opt_default 'a = 
- | Def_val_aux of (opt_default_aux 'a) * annot 'a
-
-and pexp_aux 'a =  (* Pattern match *)
- | Pat_exp of (pat 'a) * (exp 'a)
-
-and pexp 'a = 
- | Pat_aux of (pexp_aux 'a) * annot 'a
-
 
 type reg_id 'a = 
  | RI_aux of (reg_id_aux 'a) * annot 'a
@@ -310,15 +310,6 @@ type alias_spec_aux 'a =  (* Register alias expression forms. Other than where n
  | AL_concat of (reg_id 'a) * (reg_id 'a)
 
 
-type rec_opt_aux =  (* Optional recursive annotation for functions *)
- | Rec_nonrec (* non-recursive *)
- | Rec_rec (* recursive *)
-
-
-type funcl_aux 'a =  (* Function clause *)
- | FCL_Funcl of id * (pat 'a) * (exp 'a)
-
-
 type effect_opt_aux =  (* Optional effect annotation for functions *)
  | Effect_opt_pure (* sugar for empty effect set *)
  | Effect_opt_effect of effect
@@ -326,6 +317,15 @@ type effect_opt_aux =  (* Optional effect annotation for functions *)
 
 type tannot_opt_aux =  (* Optional type annotation for functions *)
  | Typ_annot_opt_some of typquant * typ
+
+
+type rec_opt_aux =  (* Optional recursive annotation for functions *)
+ | Rec_nonrec (* non-recursive *)
+ | Rec_rec (* recursive *)
+
+
+type funcl_aux 'a =  (* Function clause *)
+ | FCL_Funcl of id * (pat 'a) * (exp 'a)
 
 
 type name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
@@ -342,20 +342,20 @@ type alias_spec 'a =
  | AL_aux of (alias_spec_aux 'a) * annot 'a
 
 
-type rec_opt = 
- | Rec_aux of rec_opt_aux * l
-
-
-type funcl 'a = 
- | FCL_aux of (funcl_aux 'a) * annot 'a
-
-
 type effect_opt = 
  | Effect_opt_aux of effect_opt_aux * l
 
 
 type tannot_opt = 
  | Typ_annot_opt_aux of tannot_opt_aux * l
+
+
+type rec_opt = 
+ | Rec_aux of rec_opt_aux * l
+
+
+type funcl 'a = 
+ | FCL_aux of (funcl_aux 'a) * annot 'a
 
 
 type name_scm_opt = 
@@ -545,6 +545,16 @@ type tinf =  (* Type variables, type, and constraints, bound to an identifier *)
  | Tinf_typ of t
  | Tinf_quant_typ of (map tid kinf) * list nec * tag * t
 
+
+type conformsto =  (* how much conformance does overloading need *)
+ | Conformsto_full
+ | Conformsto_parm
+
+
+type tinflist =  (* In place so that a list of tinfs can be referred to without the dot form *)
+ | Tinfs_empty
+ | Tinfs_ls of list tinf
+
  type definition_env =
    | DenvEmp
    | Denv of (map tid kinf) * (map (list (id*t)) tinf) * (map t (list (nat*id)))
@@ -590,10 +600,10 @@ let fresh_kid denv = Var "x" (*TODO When strings can be manipulated, this should
 
 
 
-type I = inf
-
-
 type E = env
+
+
+type I = inf
 
 
 

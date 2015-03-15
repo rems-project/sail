@@ -36,7 +36,7 @@ val grey : string -> string
 
 (*Functions to modify the instruction state and expression used in printing and in run_model*)
 val compact_exp : tannot exp -> tannot exp
-val top_frame_exp_state : instruction_state -> (tannot exp * (Interp.lenv*Interp.lmem))
+val top_frame_exp_state : interpreter_state -> (tannot exp * (Interp.lenv*Interp.lmem))
 
 
 (*functions to format events and instruction_states to strings *)

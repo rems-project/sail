@@ -233,9 +233,9 @@ let rec bit_to_hex v =
 let reg_name_to_string = function
   | Reg0(s,_) -> s
   | Reg_slice(s,(first,second)) -> 
-    s ^ "[" ^ string_of_big_int first ^ (if (eq_big_int first second) then "" else ".." ^ (string_of_big_int second)) ^ "]"
+    s ^ "[" ^ string_of_int first ^ (if (first = second) then "" else ".." ^ (string_of_int second)) ^ "]"
   | Reg_field(s,f,_) -> s ^ "." ^ f
-  | Reg_f_slice(s,f,_,(first,second)) -> s ^ "." ^ f ^ "]" ^ string_of_big_int first ^ (if (eq_big_int first second) then "" else ".." ^ (string_of_big_int second)) ^ "]"
+  | Reg_f_slice(s,f,_,(first,second)) -> s ^ "." ^ f ^ "]" ^ string_of_int first ^ (if (first = second) then "" else ".." ^ (string_of_int second)) ^ "]"
 
 let dependencies_to_string dependencies = String.concat ", " (List.map reg_name_to_string dependencies)
 
@@ -249,19 +249,19 @@ let rec val_to_string_internal ((Interp.LMem (_,memory)) as mem) = function
      let repr = String.concat "; " (List.map (val_to_string_internal mem) l) in
      sprintf "[||%s||]" repr
  | Interp.V_vector (first_index, inc, l) ->
-     let last_index = add_int_big_int (if inc then List.length l - 1 else 1 - List.length l) first_index  in
+     let last_index = (if (Interp.IInc = inc) then List.length l - 1 else 1 - List.length l) + first_index  in
      let repr =
        try bitvec_to_string l
        with Failure _ ->
          sprintf "[%s]" (String.concat "; " (List.map (val_to_string_internal mem) l)) in
-     sprintf "%s [%s..%s]" repr (string_of_big_int first_index) (string_of_big_int last_index)
+     sprintf "%s [%s..%s]" repr (string_of_int first_index) (string_of_int last_index)
  | (Interp.V_vector_sparse(first_index,last_index,inc,l,default) as v) -> 
    val_to_string_internal mem (Interp_lib.fill_in_sparse v)
  | Interp.V_record(_, l) ->
      let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string_internal mem value) in
      let repr = String.concat "; " (List.map  pp l) in
      sprintf "{%s}" repr
- | Interp.V_ctor (id,_, value) ->
+ | Interp.V_ctor (id,_,_, value) ->
      sprintf "%s %s" (id_to_string id) (val_to_string_internal mem value)
  | Interp.V_register _ | Interp.V_register_alias _ ->
      sprintf "reg-as-value" 
@@ -336,10 +336,10 @@ let rec format_events = function
   | (E_error s)::events ->
     "     Failed with message : " ^ s ^ " but continued on erroneously\n"
   | (E_read_mem(read_kind, (Address_lifted location), length, tracking))::events ->
-    "     Read_mem at " ^ (memory_value_to_string location) ^ " for " ^ (string_of_big_int length) ^ " bytes \n" ^
+    "     Read_mem at " ^ (memory_value_to_string location) ^ " for " ^ (string_of_int length) ^ " bytes \n" ^
     (format_events events)
   | (E_write_mem(write_kind,(Address_lifted location), length, tracking, value, v_tracking))::events ->
-    "     Write_mem at " ^ (memory_value_to_string location) ^ " writing " ^ (memory_value_to_string value) ^ " across " ^ (string_of_big_int length) ^ " bytes\n" ^
+    "     Write_mem at " ^ (memory_value_to_string location) ^ " writing " ^ (memory_value_to_string value) ^ " across " ^ (string_of_int length) ^ " bytes\n" ^
     (format_events events)
   | ((E_barrier b_kind)::events) ->
     "     Memory_barrier occurred\n" ^ 
@@ -380,11 +380,12 @@ let get_loc (E_aux(_, (l, (_ : tannot)))) = loc_to_string l
 let print_exp printer env e =
   printer ((get_loc e) ^ ": " ^ (Pretty_interp.pp_exp env red e) ^ "\n")
 
-let instruction_state_to_string stack =
+let instruction_state_to_string (IState(stack, _)) =
   let env = () in
   List.fold_right (fun (e,(env,mem)) es -> (exp_to_string env e) ^ "\n" ^ es) (compact_stack stack) ""
 
-let top_instruction_state_to_string stack = let (exp,(env,_)) = top_frame_exp_state stack in exp_to_string env exp
+let top_instruction_state_to_string (IState(stack,_)) = 
+  let (exp,(env,_)) = top_frame_exp_state stack in exp_to_string env exp
 
 let rec option_map f xs = 
   match xs with 
@@ -394,7 +395,7 @@ let rec option_map f xs =
       | None -> option_map f xs 
       | Some x -> x :: (option_map f xs) ) 
 
-let local_variables_to_string stack = 
+let local_variables_to_string (IState(stack,_)) = 
   let (_,(env,mem)) = top_frame_exp_state stack in 
   match env with
     | LEnv(_,env) -> 
@@ -423,6 +424,8 @@ let pad n s = if String.length s < n then s ^ String.make (n-String.length s) ' 
 let instruction_to_string (name, parms, base_effects) = 
   ((*pad 5*) (String.lowercase name)) ^ " " ^ instr_parms_to_string parms 
 
-let print_backtrace_compact printer stack = List.iter (fun (e,(env,mem)) -> print_exp printer env e) (compact_stack stack)
-let print_continuation printer stack = let (e,(env,mem)) = top_frame_exp_state stack in print_exp printer env e
+let print_backtrace_compact printer (IState(stack,_)) =
+  List.iter (fun (e,(env,mem)) -> print_exp printer env e) (compact_stack stack)
+let print_continuation printer (IState(stack,_)) = 
+  let (e,(env,mem)) = top_frame_exp_state stack in print_exp printer env e
 let print_instruction printer instr = printer (instruction_to_string instr)

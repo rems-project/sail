@@ -181,7 +181,7 @@ and n_to_string n =
     | N2n(n,Some i) -> "2**" ^ (n_to_string n) ^ "(*" ^ (string_of_big_int i) ^ "*)"
     | Npow(n, i) -> "(" ^ (n_to_string n) ^ ")**" ^ (string_of_int i)
     | Nneg n -> "-" ^ (n_to_string n)
-    | Nuvar({nindex=i;nsubst=a}) -> if !debug_mode then "Nu_" ^ string_of_int i ^ "()" else "_"
+    | Nuvar({nindex=i;nsubst=a}) -> if !debug_mode then "Nu_" ^ string_of_int i ^ "(" ^ (match a with | None -> "None" | Some n -> n_to_string n) ^ ")" else "_"
 and ef_to_string (Ast.BE_aux(b,l)) =
     match b with
       | Ast.BE_rreg  -> "rreg"
@@ -716,19 +716,45 @@ let equate_t (t_box : t) (t : t) : unit =
        | _ -> assert false)
      | _ ->
        t_box.t <- t.t)
+
+let rec occurs_in_pending_subst n_box n : bool =
+  if n_box.nexp == n.nexp then true 
+  else match n_box.nexp with
+    | Nuvar( { nsubst= Some(n') }) -> 
+      if n'.nexp == n.nexp 
+      then true
+      else occurs_in_pending_subst n' n
+    | Nuvar( { nsubst = None } ) -> false
+    | _ -> false
+
+let rec occurs_in_nexp n_box nuvar : bool =
+  if n_box.nexp == nuvar.nexp then true
+  else match n_box.nexp with
+    | Nuvar _ -> occurs_in_pending_subst n_box nuvar
+    | Nadd (nb1,nb2) | Nmult (nb1,nb2) -> occurs_in_nexp nb1 nuvar || occurs_in_nexp nb2 nuvar
+    | Nneg nb | N2n(nb,None) | Npow(nb,_) -> occurs_in_nexp nb nuvar
+    | _ -> false
+
 let equate_n (n_box : nexp) (n : nexp) : unit =
-  let n = resolve_nsubst n in
-  if n_box == n then ()
-  else
-    (occurs_check_n n_box n;
-     match n.nexp with
-     | Nuvar(_) ->
-       (match n_box.nexp with
-       | Nuvar(u) ->
-         u.nsubst <- Some(n)
-       | _ -> assert false)
-     | _ ->
-       n_box.nexp <- n.nexp)
+  (* let _ = Printf.eprintf "equate_n given n_box %s and n %s\n" (n_to_string n_box) (n_to_string n) in*)
+  if n_box.nexp == n.nexp then ()
+  else 
+    let n = resolve_nsubst n in
+    if occurs_in_pending_subst n_box n || occurs_in_pending_subst n n_box then ()
+    else 
+      (* let _ = Printf.eprintf "equate_n has does not occur in %s and %s\n" (n_to_string n_box) (n_to_string n)) in *)
+      match n.nexp with
+	| Nuvar(_) ->
+	  (match n_box.nexp with
+	    | Nuvar(u) ->
+	      let rec set_bottom_nsubst u =
+		match u.nsubst with	       
+		  | None -> u.nsubst <- Some(n);
+		  | Some(({nexp = Nuvar(u)} as n1)) -> set_bottom_nsubst u in
+	      set_bottom_nsubst u; 
+	    | _ -> assert false)
+	| _ ->
+	  n_box.nexp <- n.nexp
 let equate_o (o_box : order) (o : order) : unit =
   let o = resolve_osubst o in
   if o_box == o then ()
@@ -775,12 +801,13 @@ let rec fresh_tvar bindings t =
     None
   | _ -> None
 let rec fresh_nvar bindings n =
+  (*let _ = Printf.printf "fresh_nvar for %s\n" (n_to_string n) in*)
   match n.nexp with
     | Nuvar { nindex = i;nsubst = None } -> 
-      fresh_var i (fun v -> equate_n n {nexp = (Nvar v)}; Some(v,{k=K_Nat})) bindings
+      fresh_var i (fun v -> n.nexp <- (Nvar v); Some(v,{k=K_Nat})) bindings
     | Nuvar { nindex = i; nsubst = Some({nexp=Nuvar _} as n')} ->
       let kv = fresh_nvar bindings n' in
-      equate_n n n';
+      n.nexp <- n'.nexp;
       kv
     | Nuvar { nindex = i; nsubst = Some n' } ->
       n.nexp <- n'.nexp;
@@ -1599,14 +1626,16 @@ and ta_remove_unifications s_env ta =
   | TA_eft e -> (e_remove_unifications s_env e)
   | TA_ord o -> (o_remove_unifications s_env o)
 and n_remove_unifications s_env n =
+  (*let _ = Printf.eprintf "n_remove_unifications %s\n" (n_to_string n) in*)
   match n.nexp with
   | Nvar _ | Nconst _ | Npos_inf | Nneg_inf -> s_env
   | Nuvar nu -> 
     let n' = match nu.nsubst with
       | None -> n
       | _ -> resolve_nsubst n; n in
-    (match n.nexp with
+    (match n'.nexp with
       | Nuvar _ -> 
+	(*let _ = Printf.eprintf "nuvar is before turning into var %s\n" (n_to_string n') in*)
 	(match fresh_nvar s_env n with
 	  | Some ks -> Envmap.insert s_env ks
 	  | None -> s_env)
@@ -1995,18 +2024,25 @@ let rec type_coerce_internal co d_env is_explicit widen t1 cs1 e t2 cs2 =
   let t2_actual = match t2.t with | Tabbrev(_,t2) -> t2 | _ -> t2 in
   let cs1,cs2 = cs1@cs1',cs2@cs2' in
   let csp = cs1@cs2 in
+  (*let _ = Printf.eprintf "called type_coerce_internal is_explicit %b, turning %s into %s\n" is_explicit (t_to_string t1) (t_to_string t2) in*)
   match t1_actual.t,t2_actual.t with
   | Toptions(to1,Some to2),_ -> 
     if (conforms_to_t d_env false true to1 t2_actual || conforms_to_t d_env false true to2 t2_actual)
     then begin t1_actual.t <- t2_actual.t; (t2,csp,pure_e,e) end
     else eq_error l ("Neither " ^ (t_to_string to1) ^
 		     " nor " ^ (t_to_string to2) ^ " can match expected type " ^ (t_to_string t2))
-  | Toptions(to1,None),_ -> (t2,csp,pure_e,e)
+  | Toptions(to1,None),_ -> 
+    if is_explicit 
+    then type_coerce_internal co d_env is_explicit widen to1 cs1 e t2 cs2
+    else (t2,csp,pure_e,e)
   | _,Toptions(to1,Some to2) -> 
     if (conforms_to_t d_env false true to1 t1_actual || conforms_to_t d_env false true to2 t1_actual)
     then begin t2_actual.t <- t1_actual.t; (t1,csp,pure_e,e) end
     else eq_error l ((t_to_string t1) ^ " can match neither expexted type " ^ (t_to_string to1) ^ " nor " ^ (t_to_string to2))
-  | _,Toptions(to1,None) -> (t1,csp,pure_e,e)
+  | _,Toptions(to1,None) -> 
+    if is_explicit
+    then type_coerce_internal co d_env is_explicit widen t1_actual cs1 e to1 cs2
+    else (t1,csp,pure_e,e)
   | Ttup t1s, Ttup t2s ->
     let tl1,tl2 = List.length t1s,List.length t2s in
     if tl1=tl2 then 
@@ -2053,7 +2089,7 @@ let rec type_coerce_internal co d_env is_explicit widen t1 cs1 e t2 cs2 =
         let cs = csp@[Eq(co,r1,r2)] in
         let t',cs' = type_consistent co d_env widen t1i t2i in
         let tannot = Base(([],t2),Emp_local,cs@cs',pure_e,nob) in
-	(*let _ = Printf.printf "looking at vector vector coerce, t1 %s, t2 %s\n" (t_to_string t1) (t_to_string t2) in*)
+	(*let _ = Printf.eprintf "looking at vector vector coerce, t1 %s, t2 %s\n" (t_to_string t1) (t_to_string t2) in*)
         let e' = E_aux(E_internal_cast ((l,(Base(([],t2),Emp_local,[],pure_e,nob))),e),(l,tannot)) in
         (t2,cs@cs',pure_e,e')
       | _ -> raise (Reporting_basic.err_unreachable l "vector is not properly kinded"))
@@ -2292,14 +2328,30 @@ let freshen n =
 
 let rec simple_constraint_check in_env cs = 
   let check = simple_constraint_check in_env in
-  (*let _ = Printf.printf "simple_constraint_check\n" in *)
+  (*let _ = Printf.eprintf "simple_constraint_check of %s\n" (constraints_to_string cs) in *)
   match cs with 
   | [] -> []
   | Eq(co,n1,n2)::cs -> 
+    let eq_to_zero ok_to_set n1 n2 = 	
+      let new_n = normalize_nexp (mk_sub n1 n2) in
+      (match new_n.nexp with
+	| Nconst i -> 
+	  if eq_big_int i zero
+	  then None
+	  else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires "
+					^ n_to_string new_n ^ " to equal 0, not " ^ string_of_big_int i)
+	| Nuvar u1 ->
+	  if ok_to_set
+	  then begin ignore(resolve_nsubst new_n); equate_n new_n n_zero; None end
+	  else Some(Eq(co,new_n,n_zero))
+	| Nadd(new_n1,new_n2) ->
+	  (match new_n1.nexp, new_n2.nexp with
+	    | _ -> Some(Eq(co,n1,n2)))
+	| _ -> Some(Eq(co,n1,n2))) in
     let check_eq ok_to_set n1 n2 = 
-      (*let _ = Printf.printf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in *)
+      (*let _ = Printf.eprintf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in *)
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-      (*let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+      (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
       (match n1'.nexp,n2'.nexp with
       | Ninexact,nok | nok,Ninexact -> 
 	eq_error (get_c_loc co) ("Type constraint arising from here requires " ^ n_to_string {nexp = nok} ^ " to be equal to +inf + -inf")
@@ -2307,38 +2359,30 @@ let rec simple_constraint_check in_env cs =
       | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst(i2) -> 
         if eq_big_int i1 i2 then None
         else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^ " to equal " ^ n_to_string n2 )
-      | Nconst i, Nuvar u ->
-        if not(u.nin) && ok_to_set 
-        then begin equate_n n2' n1'; None end
-        else Some (Eq(co,n1',n2')) 
-      | Nuvar u, Nconst i ->
-        if not(u.nin) && ok_to_set
-        then begin equate_n n1' n2'; None end
-        else Some (Eq(co,n1',n2'))
       | Nuvar u1, Nuvar u2 ->
-	(*let _ = Printf.printf "setting two nuvars, %s and %s, it is ok_to_set %b\n" (n_to_string n1) (n_to_string n2) ok_to_set in*)
+	(*let _ = Printf.eprintf "setting two nuvars, %s and %s, it is ok_to_set %b\n" (n_to_string n1) (n_to_string n2) ok_to_set in*)
         if ok_to_set
-        then begin ignore(resolve_nsubst n1); ignore(resolve_nsubst n2); equate_n n1' n2'; None end
+        then begin equate_n n1' n2'; None end
         else Some(Eq(co,n1',n2'))
+      | _, Nuvar u ->
+	let occurs = occurs_in_nexp n1' n2' in
+        if not(u.nin) && ok_to_set && not(occurs)
+        then begin equate_n n2' n1'; None end
+        else if occurs 
+	then eq_to_zero ok_to_set n1' n2'
+	else Some (Eq(co,n1',n2')) 
+      | Nuvar u, _ ->
+	let occurs = occurs_in_nexp n2' n1' in
+        if not(u.nin) && ok_to_set && not(occurs)
+        then begin equate_n n1' n2'; None end
+        else if occurs
+	then eq_to_zero ok_to_set n1' n2'
+	else Some (Eq(co,n1',n2'))
       | _,_ -> 
 	if nexp_eq_check n1' n2'
 	then None
-	else
-	let new_n = normalize_nexp (mk_sub n1' n2') in
-	(match new_n.nexp with
-	  | Nconst i -> 
-	    if eq_big_int i zero
-	    then None
-	    else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires "
-					     ^ n_to_string new_n ^ " to equal 0, not " ^ string_of_big_int i)
-	  | Nuvar u1 ->
-	    if ok_to_set
-	    then begin ignore(resolve_nsubst new_n); equate_n new_n n_zero; None end
-	    else Some(Eq(co,new_n,n_zero))
-	  | Nadd(new_n1,new_n2) ->
-	    (match new_n1.nexp, new_n2.nexp with
-	      | _ -> Some(Eq(co,n1',n2')))
-	  | _ -> Some(Eq(co,n1',n2')))) in
+	else eq_to_zero ok_to_set n1' n2')
+    in
     (match contains_in_vars in_env n1, contains_in_vars in_env n2 with
       | _,_ ->	
 	(match check_eq true n1 n2 with
@@ -2346,7 +2390,7 @@ let rec simple_constraint_check in_env cs =
 	  | Some(c) -> c::(check cs))
       | _ -> (Eq(co,n1,n2)::(check cs)))
   | GtEq(co,n1,n2)::cs -> 
-    (*let _ = Printf.printf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    (*let _ = Printf.eprintf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
     (*let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
     (match n1'.nexp,n2'.nexp with
@@ -2369,9 +2413,9 @@ let rec simple_constraint_check in_env cs =
 					     ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
 	  | _ -> GtEq(co,n1',n2')::(check cs)))
   | LtEq(co,n1,n2)::cs -> 
-    (*let _ = Printf.printf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    (*let _ = Printf.eprintf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-    (*let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+    (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 | Nconst i1, N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst i2 -> 
       if le_big_int i1 i2 
@@ -2383,15 +2427,15 @@ let rec simple_constraint_check in_env cs =
                                                         ^ (n_to_string n2'))
     | _,_ -> LtEq(co,n1',n2')::(check cs))
   | CondCons(co,pats,exps):: cs ->
-    (*let _ = Printf.printf "Condcons check length pats %i, length exps %i\n" (List.length pats) (List.length exps) in*)
+    (*let _ = Printf.eprintf "Condcons check length pats %i, length exps %i\n" (List.length pats) (List.length exps) in*)
     let pats' = check pats in
     let exps' = check exps in
-    (*let _ = Printf.printf "Condcons after check length pats' %i, length exps' %i\n" (List.length pats') (List.length exps') in*)
+    (*let _ = Printf.eprintf "Condcons after check length pats' %i, length exps' %i\n" (List.length pats') (List.length exps') in*)
     (match pats',exps' with
       | [],[] -> check cs
       | _     -> CondCons(co,pats',exps')::(check cs))
   | BranchCons(co,branches)::cs ->
-    (*let _ = Printf.printf "Branchcons check length branches %i\n" (List.length branches) in*)
+    (*let _ = Printf.eprintf "Branchcons check length branches %i\n" (List.length branches) in*)
     let b' = check branches in
     if [] = b' 
     then check cs
@@ -2411,17 +2455,18 @@ let rec constraint_size = function
 let do_resolve_constraints = ref true
 
 let resolve_constraints cs = 
-  (*let _ = Printf.printf "called resolve constraints with %i constraints\n" (constraint_size cs) in*)
+  (*let _ = Printf.eprintf "called resolve constraints with %i constraints\n" (constraint_size cs) in*)
   if not !do_resolve_constraints
   then cs
   else
     let rec fix len cs =
-      (*let _ = Printf.printf "Calling simple constraint check, fix check point is %i\n" len in *)
+      (*let _ = Printf.eprintf "Calling simple constraint check, fix check point is %i\n" len in *)
       let cs' = simple_constraint_check (in_constraint_env cs) cs in
       let len' = constraint_size cs' in
       if len > len' then fix len' cs'
       else cs' in
     let complex_constraints = fix (constraint_size cs) cs in
+    (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" (constraint_size complex_constraints) in*)
     complex_constraints
 
 
