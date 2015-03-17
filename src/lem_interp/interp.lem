@@ -2445,8 +2445,8 @@ let rec extract_default_direction (Defs defs) = match defs with
   | [] -> IInc (*When lack of a declared default, go for inc*)
   | def::defs ->
     match def with
-      | DEF_default (DT_aux (DT_order Oinc) _) -> IInc
-      | DEF_default (DT_aux (DT_order Odec) _) -> IDec
+      | DEF_default (DT_aux (DT_order (Ord_aux Ord_inc _)) _) -> IInc
+      | DEF_default (DT_aux (DT_order (Ord_aux Ord_dec _)) _) -> IDec
       | _ -> extract_default_direction (Defs defs) end end
 
 (*TODO Contemplate making decode and execute environment variables instead of these constants*)

@@ -408,7 +408,7 @@ let instr_parm_to_string (name, typ, value) =
   name ^"="^
   match typ with
     | Other -> "Unrepresentable external value"
-    | _ -> let intern_v = (Interp_inter_imp.intern_ifield_value value) in
+    | _ -> let intern_v = (Interp_inter_imp.intern_ifield_value D_increasing value) in
 	      match Interp_lib.to_num Interp_lib.Unsigned intern_v with
 		| V_lit (L_aux(L_num n, _)) -> string_of_big_int n
 		| _ -> ifield_to_string value

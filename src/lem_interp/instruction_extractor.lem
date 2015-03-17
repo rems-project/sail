@@ -5,6 +5,7 @@ open import Pervasives
 type instr_parm_typ = 
 | IBit
 | IBitvector of maybe integer
+| IRange of maybe integer
 | IOther
 
 type instruction_form = 
@@ -13,28 +14,34 @@ type instruction_form =
 
 val extract_instructions : string -> string -> defs tannot -> list instruction_form
 
+let extract_ityp t = match t with
+  | T_id "bit" -> IBit
+  | T_id "bool" -> IBit
+  | T_app "vector" (T_args [_; T_arg_nexp (Ne_const len); _; T_arg_typ (T_id "bit")]) ->
+    IBitvector (Just len)
+  | T_app "vector" (T_args [_;_;_;T_arg_typ (T_id "bit")]) -> IBitvector Nothing
+  | T_app "atom" (T_args [T_arg_nexp (Ne_const num)]) ->
+    IRange (Just num)
+  | T_app "atom" _ -> IRange Nothing
+  | T_app "range" (T_args [_;T_arg_nexp (Ne_const max)]) -> IRange (Just max)
+  | T_app "range" _ -> IRange Nothing
+  | _ -> IOther
+end 
+
 let extract_parm (E_aux e (_,tannot)) =
   match e with
     | E_id (Id_aux (Id i) _) ->
       match tannot with
-	| Just(T_id "bit",_,_,_) -> (i,IBit)
-	| Just(T_id "bool",_,_,_) -> (i,IBit)
-	| Just(T_app "vector" (T_args [T_arg_nexp _; T_arg_nexp (Ne_const len); _; T_arg_typ (T_id "bit")]),_,_,_) ->
-	  (i,IBitvector (Just len))
-	| Just(T_app "vector" (T_args [T_arg_nexp _; T_arg_nexp _; _; T_arg_typ (T_id "bit")]),_,_,_) ->
-	  (i,IBitvector Nothing)
+	| Just(t,_,_,_) -> (i,(extract_ityp t))
 	| _ -> (i,IOther) end
     | _ -> 
       let i = "Unnamed" in
       match tannot with
-	| Just(T_id "bit",_,_,_) -> (i,IBit)
-	| Just(T_id "bool",_,_,_) -> (i,IBit)
-	| Just(T_app "vector" (T_args [T_arg_nexp _; T_arg_nexp (Ne_const len); _; T_arg_typ (T_id "bit")]),_,_,_) ->
-	  (i,IBitvector (Just len))
-	| Just(T_app "vector" (T_args [T_arg_nexp _; T_arg_nexp _; _; T_arg_typ (T_id "bit")]),_,_,_) ->
-	  (i,IBitvector Nothing)
+	| Just(t,_,_,_) -> (i,(extract_ityp t))
 	| _ -> (i,IOther) end
 end
+
+let rec extract_from_ast ast = []
 
 let rec extract_from_decode decoder = 
   match decoder with

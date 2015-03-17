@@ -8,7 +8,7 @@ open import Assert_extra
 
 
 val intern_reg_value : register_value -> Interp.value
-val intern_mem_value : memory_value -> Interp.value
+val intern_mem_value : direction -> memory_value -> Interp.value
 val extern_reg_value : maybe nat -> Interp.value -> register_value
 val extern_mem_value : interp_mode -> Interp.value -> (memory_value * maybe (list reg_name))
 val extern_reg : Interp.reg_form -> maybe (nat * nat) -> reg_name
@@ -79,22 +79,30 @@ let bits_to_word8 b =
   then natFromInteger (integerFromBoolList (false,(List.reverse (List.map to_bool b))))
   else Assert_extra.failwith "bits_to_word8 given a non-8 list or one containing ? and u"
 
-(*!!! All but reg_value should take a mode to get direction and start correct*)
-let intern_opcode (Opcode v) =
-  Interp.V_vector 0 Interp.IInc
-    (List.concatMap (fun (Byte(bits)) -> (List.map bit_to_ibit bits)) v)
+let intern_direction = function
+  | D_increasing -> Interp.IInc
+  | D_decreasing -> Interp.IDec
+end
+
+let intern_opcode direction (Opcode v) =
+  let bits = List.concatMap (fun (Byte(bits)) -> (List.map bit_to_ibit bits)) v in
+  let direction = intern_direction direction in
+  Interp.V_vector (if Interp.is_inc(direction) then 0 else (List.length(bits) - 1)) direction bits
 		   
 let intern_reg_value v = match v with
   | <| rv_bits=[b] |> -> bitl_to_ibit b
-  | _ -> Interp.V_vector v.rv_start (if v.rv_dir = D_increasing then Interp.IInc else Interp.IDec) (bitls_to_ibits v.rv_bits)
+  | _ -> Interp.V_vector v.rv_start (intern_direction v.rv_dir) (bitls_to_ibits v.rv_bits)
 end
 
-(*!!! Another two that need the direction *)
-let intern_mem_value v = 
-  Interp.V_vector 0 Interp.IInc (List.concatMap (fun (Byte_lifted bits) -> bitls_to_ibits bits) v)
+let intern_mem_value direction v = 
+  let bits = (List.concatMap (fun (Byte_lifted bits) -> bitls_to_ibits bits) v) in
+  let direction = intern_direction direction in
+  Interp.V_vector (if Interp.is_inc(direction) then 0 else (List.length(bits) -1)) direction bits
 
-let intern_ifield_value v =
-  Interp.V_vector 0 Interp.IInc (bits_to_ibits v)
+let intern_ifield_value direction v =
+  let bits = bits_to_ibits v in
+  let direction = intern_direction direction in
+  Interp.V_vector (if Interp.is_inc direction then 0 else (List.length(bits) -1)) direction bits
 
 (*let byte_list_of_integer size num = 
   if (num < 0)
@@ -314,8 +322,8 @@ end
 
 let decode_to_istate top_level value = 
   let mode = make_mode true false in
-  let (arg,_) = Interp.to_exp mode Interp.eenv (intern_opcode value) in
   let (Context ((Interp.Env _ instructions _ _ _ _ _ _) as top_env) direction _ _ _ _) = top_level in
+  let (arg,_) = Interp.to_exp mode Interp.eenv (intern_opcode direction value) in
   let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
   let (instr_decoded,error) = interp_to_value_helper value ("",[],[]) internal_direction
     (fun _ -> Interp.resume 
@@ -369,9 +377,9 @@ let decode_to_instruction (top_level:context) (value:opcode) : instruction_or_de
 val instruction_to_istate : context -> instruction -> instruction_state 
 let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instruction) : instruction_state  = 
   let mode = make_mode true false in
-  let (Context top_env _ _ _ _ _) = top_level in
+  let (Context top_env direction _ _ _ _) = top_level in
   let get_value (name,typ,v) = 
-    let vec = intern_ifield_value v in
+    let vec = intern_ifield_value direction v in
     let v = match vec with
       | Interp.V_vector start dir bits ->
 	match typ with
@@ -415,7 +423,7 @@ let rec interp_to_outcome mode context thunk =
         let (location, length, tracking) = (f mode value) in 
 	if (List.length location) = 8
         then Read_mem read_k (Address_lifted location) length tracking 
-	  (fun v -> IState (Interp.add_answer_to_stack next_state (intern_mem_value v)) context)
+	  (fun v -> IState (Interp.add_answer_to_stack next_state (intern_mem_value direction v)) context)
 	else Error ("Memory address on read is not 64 bits")
       | _ -> Error ("Memory " ^ i ^ " function with read kind not found")
       end
