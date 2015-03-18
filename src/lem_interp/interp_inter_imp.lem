@@ -429,13 +429,16 @@ let rec interp_to_outcome mode context thunk =
       end
     | Interp.Write_mem (Id_aux (Id i) _) loc_val slice write_val ->
       match List.lookup i mem_writes with
-      | (Just (MW write_k f _)) -> 
+      | (Just (MW write_k f return)) -> 
         let (location, length, tracking) = (f mode loc_val) in
         let (value, v_tracking) = (extern_mem_value mode write_val) in
 	if (List.length location) = 8
         then Write_mem write_k (Address_lifted location) 
-	  length tracking value v_tracking (fun b -> (IState next_state context)) 
-	(*Note, does not pass boolean on conditional write, but we're not using that yet anyway*)
+	  length tracking value v_tracking 
+	  (fun b -> 
+	    match return with 
+	      | Nothing -> (IState next_state context)
+	      | Just return_bool -> return_bool (IState next_state context) b end)
 	else Error "Memory address on write is not 64 bits"
       | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
       end 
