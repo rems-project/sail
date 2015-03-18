@@ -754,6 +754,16 @@ and occurs_in_nexp n_box nuvar : bool =
     | Nneg nb | N2n(nb,None) | Npow(nb,_) -> occurs_in_nexp nb nuvar
     | _ -> false
 
+let rec reduce_n_unifications n = 
+  match n.nexp with
+    | Nvar _ | Nconst _ | Npos_inf | Nneg_inf -> ()
+    | N2n(n1,_) | Npow(n1,_) | Nneg n1 -> reduce_n_unifications n1
+    | Nadd(n1,n2) | Nmult(n1,n2) -> reduce_n_unifications n1; reduce_n_unifications n2
+    | Nuvar nu ->
+      (match nu.nsubst with
+	| None -> ()
+	| Some(nexp) -> reduce_n_unifications(nexp); n.nexp <- nexp.nexp)
+
 let equate_n (n_box : nexp) (n : nexp) : bool =
   (*let _ = Printf.eprintf "equate_n given n_box %s and n %s\n" (n_to_string n_box) (n_to_string n) in*)
   if n_box.nexp == n.nexp then true
@@ -1573,7 +1583,7 @@ and ta_subst s_env ta =
 and n_subst s_env n =
   match n.nexp with
   | Nvar i -> (match Envmap.apply s_env i with
-               | Some(TA_nexp n1) -> n1
+               | Some(TA_nexp n1) ->  n1
                | _ -> { nexp = Nvar i })
   | Nuvar _ -> new_n()
   | Nconst _ | Npos_inf | Nneg_inf -> n
@@ -1625,6 +1635,28 @@ let subst (k_env : (Envmap.k * kind) list) (t : t) (cs : nexp_range list) (e : e
   in
   (typ_subst subst_env t, cs_subst subst_env cs, e_subst subst_env e, subst_env)
 
+let rec typ_param_eq l spec_param fun_param = 
+  match (spec_param,fun_param) with
+    | ([],[]) -> []
+    | (_,[]) -> raise (Reporting_basic.err_typ l "Specification type variables and function definition variables must match")
+    | ([],_) -> raise (Reporting_basic.err_typ l "Function definition declares more type variables than specification variables")
+    | ((ids,tas)::spec_param,(idf,taf)::fun_param) ->
+      if ids=idf
+      then match (tas,taf) with
+	| (TA_typ tas_t,TA_typ taf_t) -> (equate_t tas_t taf_t); typ_param_eq l spec_param fun_param
+	| (TA_nexp tas_n, TA_nexp taf_n) -> Eq((Specc l),tas_n,taf_n)::typ_param_eq l spec_param fun_param
+	| (TA_ord tas_o,TA_ord taf_o) -> (equate_o tas_o taf_o); typ_param_eq l spec_param fun_param
+	| (TA_eft tas_e,TA_eft taf_e) -> (equate_e tas_e taf_e); typ_param_eq l spec_param fun_param
+	| _ -> raise (Reporting_basic.err_typ l ("Specification and function definition have different kinds for variable " ^ ids))
+      else raise (Reporting_basic.err_typ l ("Specification type variables must match in order and number the function definition type variables, stopped matching at " ^ ids ^ " and " ^ idf))
+
+let type_param_consistent l spec_param fun_param =
+  let specs = Envmap.to_list spec_param in
+  let funs = Envmap.to_list fun_param in
+  match specs,funs with
+    | [],[] | _,[] -> []
+    | _ -> typ_param_eq l specs funs
+
 let rec t_remove_unifications s_env t =
   match t.t with
   | Tvar _ | Tid _-> s_env
@@ -1675,6 +1707,7 @@ and e_remove_unifications s_env e =
       | Some ks -> Envmap.insert s_env ks
       | None -> s_env)
   | _ -> s_env
+	
 
 let remove_internal_unifications s_env =
   let rec rem remove s_env u_list = match u_list with
@@ -2331,7 +2364,7 @@ let freshen n =
 
 let rec simple_constraint_check in_env cs = 
   let check = simple_constraint_check in_env in
-  (*let _ = Printf.eprintf "simple_constraint_check of %s\n" (constraints_to_string cs) in *)
+(*  let _ = Printf.eprintf "simple_constraint_check of %s\n" (constraints_to_string cs) in *)
   match cs with 
   | [] -> []
   | Eq(co,n1,n2)::cs -> 
@@ -2374,14 +2407,14 @@ let rec simple_constraint_check in_env cs =
         if not(u.nin) && ok_to_set && not(occurs)
         then if (equate_n n2' n1') then  None else (Some (Eq(co,n1',n2')))
         else if occurs 
-	then eq_to_zero ok_to_set n1' n2'
+	then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end
 	else Some (Eq(co,n1',n2')) 
       | Nuvar u, _ ->
 	let occurs = occurs_in_nexp n2' n1' in
         if not(u.nin) && ok_to_set && not(occurs)
         then if equate_n n1' n2' then None else (Some (Eq(co,n1',n2')))
         else if occurs
-	then eq_to_zero ok_to_set n1' n2'
+	then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end
 	else Some (Eq(co,n1',n2'))
       | _,_ -> 
 	if nexp_eq_check n1' n2'
@@ -2390,6 +2423,7 @@ let rec simple_constraint_check in_env cs =
     in
     (match contains_in_vars in_env n1, contains_in_vars in_env n2 with
       | _,_ ->	
+	let _ = reduce_n_unifications n1; reduce_n_unifications n2 in
 	(match check_eq true n1 n2 with
 	  | None -> (check cs)
 	  | Some(c) -> c::(check cs))
@@ -2481,6 +2515,9 @@ let check_tannot l annot imp_param constraints efs =
       ignore(effects_eq (Specc l) efs e);
       let s_env = (t_remove_unifications (Envmap.from_list params) t) in
       let params = Envmap.to_list s_env in
+      (*let _ = Printf.eprintf "parameters going to save are " in
+      let _ = List.iter (fun (s,_) -> Printf.eprintf "%s " s) params in
+      let _ = Printf.eprintf "\n" in*)
       ignore (remove_internal_unifications s_env);
     (*let _ = Printf.printf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in *)
       let t' = match (t.t,imp_param) with

@@ -182,6 +182,8 @@ val equate_t : t -> t -> unit
 
 val typ_subst : t_arg emap -> t -> t 
 val subst : (Envmap.k * kind) list -> t -> nexp_range list -> effect -> t * nexp_range list * effect * t_arg emap
+val type_param_consistent : Parse_ast.l -> t_arg emap -> t_arg emap -> nexp_range list
+
 val get_abbrev : def_envs -> t -> (t * nexp_range list)
 
 val extract_bounds : def_envs -> string -> t -> bounds_env
