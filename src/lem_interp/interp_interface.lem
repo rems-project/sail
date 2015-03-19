@@ -197,9 +197,27 @@ end
 
 (* Data structures for building up instructions *)
 
-type read_kind = Read_plain | Read_reserve | Read_acquire
-type write_kind = Write_plain | Write_conditional | Write_release
-type barrier_kind = Sync | LwSync | Eieio | Isync | DMB | DMB_ST | DMB_LD | DSB | DSB_ST | DSB_LD | ISB 
+type read_kind =
+  (* common reads *)
+  Read_plain
+  (* Power reads *)
+  | Read_reserve
+  (* AArch64 reads *)
+  | Read_acquire | Read_exclusive | Read_exclusive_acquire | Read_stream
+
+type write_kind =
+  (* common writes *)
+  Write_plain
+  (* Power writes *)
+  | Write_conditional
+  (* AArch64 writes *)
+  | Write_release | Write_exclusive | Write_exclusive_release
+
+type barrier_kind =
+  (* Power barriers *)
+  Sync | LwSync | Eieio | Isync
+  (* AArch64 barriers *)
+  | DMB | DMB_ST | DMB_LD | DSB | DSB_ST | DSB_LD | ISB 
 
 (*Map between external functions as preceived from a Sail spec and the actual implementation of the function *)
 type external_functions = list (string * (Interp.value -> Interp.value))
