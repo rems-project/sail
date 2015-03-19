@@ -87,11 +87,13 @@ type constraint_origin =
   | Fun of Parse_ast.l
   | Specc of Parse_ast.l
 
+type range_enforcement = Require | Guarantee 
+
 (* Constraints for nexps, plus the location which added the constraint *)
 type nexp_range =
-  | LtEq of constraint_origin * nexp * nexp
+  | LtEq of constraint_origin * range_enforcement * nexp * nexp
   | Eq of constraint_origin * nexp * nexp
-  | GtEq of constraint_origin * nexp * nexp
+  | GtEq of constraint_origin * range_enforcement * nexp * nexp
   | In of constraint_origin * string * int list
   | InS of constraint_origin * nexp * int list (* This holds the given value for string after a substitution *)
   | CondCons of constraint_origin * nexp_range list * nexp_range list (* Constraints from one path from a conditional (pattern or if) and the constraints from that conditional *)
@@ -102,6 +104,8 @@ val get_c_loc : constraint_origin -> Parse_ast.l
 val n_zero : nexp
 val n_one : nexp
 val n_two : nexp
+val mk_add : nexp -> nexp -> nexp
+val mk_sub : nexp -> nexp -> nexp
 
 type variable_range =
   | VR_eq of string * nexp
@@ -215,12 +219,12 @@ val conforms_to_t : def_envs -> bool -> bool -> t -> t -> bool
    When widen, two atoms are used to generate a range that contains them (or is defined by them for constants; and an atom and a range may widen the range.
    type_consistent mutates uvars to perform unification and will raise an error if the [[t1]] and [[t2]] are inconsistent
 *)
-val type_consistent : constraint_origin -> def_envs -> bool -> t -> t -> t * nexp_range list
+val type_consistent : constraint_origin -> def_envs -> range_enforcement -> bool -> t -> t -> t * nexp_range list
 
 (* type_coerce mutates to unify variables, and will raise an exception if the first type cannot
    be coerced into the second and is additionally inconsistent with the second; 
    bool specifices whether this has arisen from an implicit or explicit type coercion request *)
-val type_coerce : constraint_origin -> def_envs -> bool -> bool -> t -> exp -> t -> t * nexp_range list * effect * exp
+val type_coerce : constraint_origin -> def_envs -> range_enforcement -> bool -> bool -> t -> exp -> t -> t * nexp_range list * effect * exp
 
 (* Merge tannots when intersection or unioning two environments. In case of default types, defer to tannot on right 
    When merging atoms, use bool to control widening. 
