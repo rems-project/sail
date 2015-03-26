@@ -393,29 +393,18 @@ app_num_typ:
   | Num
      { tloc (ATyp_constant $1) }
 
-/* XXX this part of the parser makes absolutely no sense to me */
-star_typ_list:
-  | app_num_typ
-    { [$1] }
-  | app_num_typ Star star_typ_list
-    { $1::$3 }
-
 star_typ:
-  | star_typ_list
-    { match $1 with
-        | [] -> assert false
-        | [t] -> t
-        (* XXX why is ATyp_tup star-separated here, but comma-separated
-        below? *)
-        | ts -> tloc (ATyp_tup(ts)) }
+  | app_num_typ
+    { $1 }
+  | app_num_typ Star nexp_typ
+    { tloc (ATyp_times ($1, $3)) }
 
 exp_typ:
    | star_typ
      { $1 }
-   | TwoStarStar nexp_typ
+   | TwoStarStar atomic_typ
      { tloc (ATyp_exp($2)) }
 
-/* XXX this is wrong - for instance, 2** 3 + 5 is parsed as 2** (3+5) */
 nexp_typ:
    | exp_typ
      { $1 }
@@ -427,6 +416,15 @@ nexp_typ:
      { tloc (ATyp_sum((tlocl (ATyp_constant $1) 1 1),$3)) }
    | Lparen Num Plus nexp_typ Rparen
      { tloc (ATyp_sum((tlocl (ATyp_constant $2) 2 2),$4)) } 
+   | atomic_typ Minus nexp_typ
+     { tloc (ATyp_minus($1,$3)) }
+   | Lparen atomic_typ Minus nexp_typ Rparen
+     { tloc (ATyp_minus($2,$4)) } 
+   | Num Minus nexp_typ
+     { tloc (ATyp_minus((tlocl (ATyp_constant $1) 1 1),$3)) }
+   | Lparen Num Minus nexp_typ Rparen
+     { tloc (ATyp_minus((tlocl (ATyp_constant $2) 2 2),$4)) } 
+
 
 tup_typ_list:
    | app_typ Comma app_typ

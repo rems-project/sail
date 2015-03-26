@@ -85,6 +85,7 @@ ne :: 'Ne_' ::=
    | infinity                            :: :: inf
    | ne1 * ne2                           :: :: mult
    | ne1 + ... + nen                     :: :: add
+   | ne1 - ne2 	 		       :: :: minus
    | 2 ** ne				 :: :: exp
    | ( - ne )                            :: :: unary
    | zero   				 :: S :: zero

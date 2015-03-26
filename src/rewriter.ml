@@ -21,6 +21,8 @@ let rec rewrite_nexp_to_exp program_vars l nexp =
 			     (l, (tag_annot typ (External (Some "add")))))
     | Nmult (n1,n2) -> E_aux (E_app_infix (rewrite n1,(Id_aux (Id "*",l)),rewrite n2),
 			      (l, tag_annot typ (External (Some "multiply"))))
+    | Nsub (n1,n2) -> E_aux (E_app_infix (rewrite n1,(Id_aux (Id "-",l)),rewrite n2),
+			     (l, tag_annot typ (External (Some "minus"))))
     | N2n (n, _) -> E_aux (E_app_infix (E_aux (E_lit (L_aux (L_num 2,l)), (l, simple_annot (mk_atom_typ n_two))),
 					(Id_aux (Id "**",l)),
 					rewrite n), (l, tag_annot typ (External (Some "power"))))

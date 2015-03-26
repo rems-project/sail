@@ -123,6 +123,7 @@ and pp_format_nexp_lem (Nexp_aux(n,l)) =
     | Nexp_var(v) -> "(Nexp_var " ^ pp_format_var_lem v ^ ")"
     | Nexp_constant(i) -> "(Nexp_constant " ^ (lemnum string_of_int i) ^ ")"
     | Nexp_sum(n1,n2) -> "(Nexp_sum " ^ (pp_format_nexp_lem n1) ^ " " ^ (pp_format_nexp_lem n2) ^ ")"
+    | Nexp_minus(n1,n2) -> "(Nexp_minus " ^ (pp_format_nexp_lem n1)^ " " ^ (pp_format_nexp_lem n2) ^ ")"
     | Nexp_times(n1,n2) -> "(Nexp_times " ^  (pp_format_nexp_lem n1) ^ " " ^ (pp_format_nexp_lem n2) ^ ")"
     | Nexp_exp(n1) -> "(Nexp_exp " ^ (pp_format_nexp_lem n1) ^ ")"
     | Nexp_neg(n1) -> "(Nexp_neg " ^ (pp_format_nexp_lem n1) ^ ")") ^ " " ^
@@ -255,6 +256,7 @@ and pp_format_n n =
     | Nconst i -> "(Ne_const " ^ (lemnum string_of_int (int_of_big_int i)) ^ ")"
     | Npos_inf -> "Ne_inf"
     | Nadd(n1,n2) -> "(Ne_add [" ^ (pp_format_n n1) ^ "; " ^ (pp_format_n n2) ^ "])"
+    | Nsub(n1,n2) -> "(Ne_minus "^ (pp_format_n n1) ^ " " ^ (pp_format_n n2) ^ ")"
     | Nmult(n1,n2) -> "(Ne_mult " ^ (pp_format_n n1) ^ " " ^ (pp_format_n n2) ^ ")"
     | N2n(n,Some i) -> "(Ne_exp " ^ (pp_format_n n) ^ "(*" ^ string_of_big_int i ^ "*)" ^ ")"
     | N2n(n,None) -> "(Ne_exp " ^ (pp_format_n n) ^ ")"
@@ -704,12 +706,13 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   and nexp ne = sum_typ ne
   and sum_typ ((Nexp_aux(n,_)) as ne) = match n with
   | Nexp_sum(n1,n2) -> doc_op plus (sum_typ n1) (star_typ n2)
+  | Nexp_minus(n1,n2) -> doc_op minus (sum_typ n1) (star_typ n2)
   | _ -> star_typ ne
   and star_typ ((Nexp_aux(n,_)) as ne) = match n with
   | Nexp_times(n1,n2) -> doc_op star (star_typ n1) (exp_typ n2)
   | _ -> exp_typ ne
   and exp_typ ((Nexp_aux(n,_)) as ne) = match n with
-  | Nexp_exp n1 -> doc_unop (string "2**") (neg_typ n1)
+  | Nexp_exp n1 -> doc_unop (string "2**") (atomic_nexp_typ n1)
   | _ -> neg_typ ne
   and neg_typ ((Nexp_aux(n,_)) as ne) = match n with
   | Nexp_neg n1 ->
@@ -721,7 +724,7 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   and atomic_nexp_typ ((Nexp_aux(n,_)) as ne) = match n with
   | Nexp_var v -> doc_var v
   | Nexp_constant i -> doc_int i
-  | Nexp_neg _ | Nexp_exp _ | Nexp_times _ | Nexp_sum _ ->
+  | Nexp_neg _ | Nexp_exp _ | Nexp_times _ | Nexp_sum _ | Nexp_minus _->
       group (parens (nexp ne))
 
   (* expose doc_typ, doc_atomic_typ and doc_nexp *)

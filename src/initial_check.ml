@@ -180,16 +180,14 @@ and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
       Nexp_aux(Nexp_sum(n1,n2),l)
     | Parse_ast.ATyp_exp(t1) -> Nexp_aux(Nexp_exp(to_ast_nexp k_env t1),l)
     | Parse_ast.ATyp_neg(t1) -> Nexp_aux(Nexp_neg(to_ast_nexp k_env t1),l)
-    | Parse_ast.ATyp_tup(typs) ->
-      let rec times_loop (typs : Parse_ast.atyp list) (one_ok : bool) : nexp =
-        (match typs,one_ok with
-        | [],_ | [_],false -> raise (Reporting_basic.err_unreachable l "to_ast_nexp has ATyp_tup with empty list or list with one element")
-        | [t],true -> to_ast_nexp k_env t
-        | (t1::typs),_ -> let n1 = to_ast_nexp k_env t1 in
-                          let n2 = times_loop typs true in 
-                          (Nexp_aux((Nexp_times(n1,n2)),l)))  (*TODO This needs just a portion of the l, think about adding a way to split*)
-      in
-      times_loop typs false
+    | Parse_ast.ATyp_times(t1,t2) ->
+      let n1 = to_ast_nexp k_env t1 in
+      let n2 = to_ast_nexp k_env t2 in
+      Nexp_aux(Nexp_times(n1,n2),l)
+    | Parse_ast.ATyp_minus(t1,t2) ->
+      let n1 = to_ast_nexp k_env t1 in
+      let n2 = to_ast_nexp k_env t2 in
+      Nexp_aux(Nexp_minus(n1,n2),l)
     | _ -> typ_error l "Requred an item of kind Nat, encountered an illegal form for this kind" None None None)
     
 and to_ast_order (k_env : kind Envmap.t) (def_ord : order) (o: Parse_ast.atyp) : Ast.order =

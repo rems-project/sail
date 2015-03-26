@@ -48,6 +48,7 @@ and nexp_aux =
   | Npos_inf (* Used to define nat and int types, does not arise from source otherwise *)
   | Nneg_inf (* Used to define int type, does not arise from source otherwise *)
   | Nadd of nexp * nexp
+  | Nsub of nexp * nexp
   | Nmult of nexp * nexp
   | N2n of nexp * big_int option (* Optionally contains the 2^n result for const n, for different constraint equations *)
   | Npow of nexp * int (* Does not appear in source *)

@@ -168,6 +168,7 @@ atyp :: 'ATyp_' ::=
   | num                                 :: :: constant     {{ com constant }}
   | atyp1 * atyp2                       :: :: times        {{ com product }}
   | atyp1 + atyp2                       :: :: sum          {{ com sum }}
+  | atyp1 - atyp2                        :: :: minus	     {{ com subtraction }}
   | 2** atyp                            :: :: exp         {{ com exponential }}
   | neg atyp				:: :: neg	  {{ com Internal (but not M as I want a datatype constructor) negative nexp }}
   | ( atyp )                            :: S :: paren  {{ icho [[atyp]] }}

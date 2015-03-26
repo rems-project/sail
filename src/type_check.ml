@@ -118,6 +118,7 @@ and anexp_to_nexp ((Nexp_aux(n,l)) : Ast.nexp) : nexp =
     | Nexp_constant i -> {nexp=Nconst (big_int_of_int i)}
     | Nexp_times(n1,n2) -> {nexp=Nmult(anexp_to_nexp n1,anexp_to_nexp n2)}
     | Nexp_sum(n1,n2) -> {nexp=Nadd(anexp_to_nexp n1,anexp_to_nexp n2)}
+    | Nexp_minus(n1,n2) -> {nexp=Nsub(anexp_to_nexp n1,anexp_to_nexp n2)}
     | Nexp_exp n -> {nexp=N2n(anexp_to_nexp n,None)}
     | Nexp_neg n -> {nexp=Nneg(anexp_to_nexp n)}
 and aeffect_to_effect ((Effect_aux(e,l)) : Ast.effect) : effect = 
@@ -188,9 +189,9 @@ let into_register d_env (t : tannot) : tannot =
 
 let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat) * (tannot emap) * nexp_range list * bounds_env * t)  =
   let (Env(d_env,t_env,b_env,tp_env)) = envs in
-  (*let _ = Printf.printf "checking pattern with expected type %s\n" (t_to_string expect_t) in*)
+  (*let _ = Printf.eprintf "checking pattern with expected type %s\n" (t_to_string expect_t) in*)
   let expect_t,cs = get_abbrev d_env expect_t in
-  (*let _ = Printf.printf "check pattern expect_t after abbrev %s\n" (t_to_string expect_t) in*)
+  (*let _ = Printf.eprintf "check pattern expect_t after abbrev %s\n" (t_to_string expect_t) in*)
   let expect_actual = match expect_t.t with | Tabbrev(_,t) -> t | _ -> expect_t in
   match p with
     | P_lit (L_aux(lit,l')) ->
@@ -267,7 +268,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	| _ -> default)
     | P_app(id,pats) -> 
       let i = id_to_string id in
-      (*let _ = Printf.printf "checking constructor pattern %s\n" i in*)
+      let _ = Printf.eprintf "checking constructor pattern %s\n" i in
       (match Envmap.apply t_env i with
 	| None | Some NoTyp | Some Overload _ -> typ_error l ("Constructor " ^ i ^ " in pattern is undefined")
 	| Some(Base((params,t),Constructor,constraints,eft,bounds)) -> 
@@ -577,8 +578,11 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let cast_t = typ_subst tp_env cast_t in
       let ct = {t = Toptions(cast_t,None)} in
       let (e',u,t_env,cs,bounds,ef) = check_exp envs imp_param ct e in
+      let _ = Printf.eprintf "Type checking cast: cast_t is %s constraints after checking e are %s\n" (t_to_string cast_t) (constraints_to_string cs) in
       let t',cs2,ef',e' = type_coerce (Expr l) d_env Require true false u e' cast_t in
+      let _ = Printf.eprintf "Type checking cast: after first coerce t' %s is and constraints are %s\n" (t_to_string t') (constraints_to_string cs2) in
       let t',cs3,ef'',e'' = type_coerce (Expr l) d_env Guarantee false false cast_t e' expect_t in 
+      let _ = Printf.eprintf "Type checking cast: after second coerce t' %s is and constraints are %s\n" (t_to_string t') (constraints_to_string cs3) in
       (e'',t',t_env,cs_a@cs@cs2@cs3,bounds,union_effects ef' (union_effects ef'' ef))
     | E_app(id,parms) -> 
       let i = id_to_string id in
@@ -605,7 +609,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let check_result ret imp tag cs ef parms =    
 	match (imp,imp_param) with
 	  | (IP_length n ,None) | (IP_user n,None) | (IP_start n,None) ->
-	    (*let _ = Printf.eprintf "implicit length or var required, no imp_param %s\n!" (n_to_string n) in*)
+	    let _ = Printf.eprintf "implicit length or var required, no imp_param %s\n!" (n_to_string n) in
 	    let internal_exp = 
 	      let implicit = {t= Tapp("implicit",[TA_nexp n])} in
 	      let annot_i = Base(([],implicit),Emp_local,[],pure_e,b_env) in
@@ -613,8 +617,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
             type_coerce (Expr l) d_env Guarantee false false ret 
 	      (E_aux (E_app(id, internal_exp::parms),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t
 	  | (IP_length n ,Some ne) | (IP_user n,Some ne) | (IP_start n,Some ne) ->
-	    (*let _ = Printf.eprintf "implicit length or var required %s with imp_param %s\n" (n_to_string n) (n_to_string ne) in
-	    let _ = Printf.eprintf "and expected type is %s and return type is %s\n" (t_to_string expect_t) (t_to_string ret) in*)
+	    let _ = Printf.eprintf "implicit length or var required %s with imp_param %s\n" (n_to_string n) (n_to_string ne) in
+	    let _ = Printf.eprintf "and expected type is %s and return type is %s\n" (t_to_string expect_t) (t_to_string ret) in
 	    let internal_exp = 
 	      let implicit_user = {t = Tapp("implicit",[TA_nexp ne])} in
 	      let implicit = {t= Tapp("implicit",[TA_nexp n])} in
@@ -635,16 +639,16 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       | Some(Base(tp,Default,_,_,_)) ->
         typ_error l ("Function " ^ i ^ " must be defined, not just declared as a default, before use")
       | Some(Base((params,t),tag,cs,ef,bounds)) ->
-	(*let _ = Printf.eprintf "Going to check a function call %s with unsubstituted types %s and constraints %s \n" i (t_to_string t) (constraints_to_string cs) in*)
+	let _ = Printf.eprintf "Going to check a function call %s with unsubstituted types %s and constraints %s \n" i (t_to_string t) (constraints_to_string cs) in
         let t,cs,ef,_ = subst params t cs ef in
         (match t.t with
         | Tfn(arg,ret,imp,ef') ->
-	  (*let _ = Printf.eprintf "Checking funcation call of %s\n" i in
-	  let _ = Printf.eprintf "Substituted types and constraints are %s and %s\n" (t_to_string t) (constraints_to_string cs) in*)
+	  let _ = Printf.eprintf "Checking funcation call of %s\n" i in
+	  let _ = Printf.eprintf "Substituted types and constraints are %s and %s\n" (t_to_string t) (constraints_to_string cs) in
           let parms,arg_t,cs_p,ef_p = check_parms arg parms in
-	  (*let _ = Printf.eprintf "Checked parms of %s\n" i in*)
+	  let _ = Printf.eprintf "Checked parms of %s\n" i in
           let (ret_t,cs_r,ef_r,e') = check_result ret imp tag cs ef' parms in
-	  (*let _ = Printf.eprintf "Checked result of %s and constraints are %s\n" i (constraints_to_string cs_r) in*)
+	  let _ = Printf.eprintf "Checked result of %s and constraints are %s\n" i (constraints_to_string cs_r) in
           (e',ret_t,t_env,cs@cs_p@cs_r, bounds,union_effects ef' (union_effects ef_p ef_r))
         | _ -> typ_error l ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^ (t_to_string t)))
       | Some(Overload(Base((params,t),tag,cs,ef,_),overload_return,variants)) ->
@@ -1717,25 +1721,28 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
 			    ^ id_to_string id ^ " differs from other definitions of " ^ id')
 	| None -> Some(id_to_string id)) funcls None in
   let in_env = Envmap.apply t_env id in 
+  let typ_params = match in_env with
+    | Some(Base( (params,u),Spec,constraints,eft,_)) -> params
+    | _ -> [] in
   let ret_t,param_t,tannot,t_param_env = match tannotopt with
     | Typ_annot_opt_aux(Typ_annot_opt_some(typq,typ),l') ->
       let (ids,_,constraints) = typq_to_params envs typq in
       let t = typ_to_t false false typ in
-      let t,constraints,_,t_param_env = subst ids t constraints pure_e in
+      let t,constraints,_,t_param_env = subst (if ids=[] then typ_params else ids) t constraints pure_e in
       let p_t = new_t () in
       let ef = new_e () in
       t,p_t,Base((ids,{t=Tfn(p_t,t,IP_none,ef)}),Emp_global,constraints,ef,nob),t_param_env in
   let check t_env tp_env imp_param =
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,_))) ->
-(*	let _ = Printf.eprintf "checking function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
+	let _ = Printf.eprintf "checking function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in
 	let (pat',t_env',cs_p,b_env',t') = check_pattern (Env(d_env,t_env,b_env,tp_env)) Emp_local param_t pat in
 	let t', _ = type_consistent (Patt l) d_env Require false param_t t' in
 	let exp',_,_,cs_e,_,ef = 
 	  check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env true) t_env t_env', 
 			 merge_bounds b_env b_env',tp_env)) imp_param ret_t exp in
-(*	let _ = Printf.eprintf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in
-	let _ = Printf.eprintf "constraints were %s\n" (constraints_to_string (cs_p@cs_e)) in*)
+	let _ = Printf.eprintf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in
+	let _ = Printf.eprintf "constraints were %s\n" (constraints_to_string (cs_p@cs_e)) in
 	let cs = [CondCons(Fun l,cs_p,cs_e)] in
 	(FCL_aux((FCL_Funcl(id,pat',exp')),(l,(Base(([],ret_t),Emp_global,cs,ef,nob)))),(cs,ef))) funcls) in
   let update_pattern var (FCL_aux ((FCL_Funcl(id,(P_aux(pat,t)),exp)),annot)) = 
@@ -1747,11 +1754,11 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   in
   match (in_env,tannot) with
     | Some(Base( (params,u),Spec,constraints,eft,_)), Base( (p',t),_,c',eft',_) ->
-      (*let _ = Printf.eprintf "Function %s is in env\n" id in*)
+      let _ = Printf.eprintf "Function %s is in env\n" id in
       let u,constraints,eft,t_param_env_spec = subst params u constraints eft in
       let t_param_cs = type_param_consistent l t_param_env_spec t_param_env in
       let _,cs_decs = type_consistent (Specc l) d_env Require false t u in
-      (*let _ = Printf.eprintf "valspec consistent with declared type for %s, %s ~< %s with %s derived constraints and %s stated and %s from environment consistency\n" id (t_to_string t) (t_to_string u) (constraints_to_string cs_decs) (constraints_to_string (constraints@c')) (constraints_to_string t_param_cs) in*)
+      let _ = Printf.eprintf "valspec consistent with declared type for %s, %s ~< %s with %s derived constraints and %s stated and %s from environment consistency\n" id (t_to_string t) (t_to_string u) (constraints_to_string cs_decs) (constraints_to_string (constraints@c')) (constraints_to_string t_param_cs) in
       let imp_param = match u.t with 
 	| Tfn(_,_,IP_user n,_) -> Some n
 	| _ -> None in
@@ -1760,14 +1767,14 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let cs,ef = ((fun (cses,efses) -> 
 	(List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
       let cs' = resolve_constraints (cs@cs_decs@constraints@c'@t_param_cs) in
-      (*let _ = Printf.eprintf "remaining constraints are: %s\n" (constraints_to_string cs') in*)
+      let _ = Printf.eprintf "remaining constraints are: %s\n" (constraints_to_string cs') in
       let tannot = check_tannot l tannot imp_param cs' ef in
-     (*let _ = Printf.eprintf "check_tannot ok for %s val type %s derived type %s \n" id (t_to_string u) (t_to_string t) in*)
+     let _ = Printf.eprintf "check_tannot ok for %s val type %s derived type %s \n" id (t_to_string u) (t_to_string t) in
       let funcls = match imp_param with
 	| Some {nexp = Nvar i} -> List.map (update_pattern i) funcls 
 	| _ -> funcls
       in
-      (*let _ = Printf.eprintf "done funcheck case 1\n" in*)
+      let _ = Printf.eprintf "done funcheck case 1\n" in
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,Envmap.insert t_env (id,tannot),b_env,tp_env)
     | _ , _-> 
@@ -1775,9 +1782,9 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let funcls,cs_ef = check t_env t_param_env None in
       let cs,ef = ((fun (cses,efses) -> (List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
       let cs' = resolve_constraints cs in
-      (*let _ = Printf.eprintf "checking tannot for %s 2  remaining constraints are %s\n" id (constraints_to_string cs') in*)
+      let _ = Printf.eprintf "checking tannot for %s 2  remaining constraints are %s\n" id (constraints_to_string cs') in
       let tannot = check_tannot l tannot None cs' ef in
-      (*let _ = Printf.eprintf "done funcheck case2\n" in*)
+      let _ = Printf.eprintf "done funcheck case2\n" in
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,(if is_rec then t_env else Envmap.insert t_env (id,tannot)),b_env,tp_env)
 

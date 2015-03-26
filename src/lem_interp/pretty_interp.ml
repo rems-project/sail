@@ -141,12 +141,13 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   and nexp ne = sum_typ ne
   and sum_typ ((Nexp_aux(n,_)) as ne) = match n with
   | Nexp_sum(n1,n2) -> doc_op plus (sum_typ n1) (star_typ n2)
+  | Nexp_minus(n1,n2) -> doc_op minus (sum_typ n1) (star_typ n2)
   | _ -> star_typ ne
   and star_typ ((Nexp_aux(n,_)) as ne) = match n with
   | Nexp_times(n1,n2) -> doc_op star (star_typ n1) (exp_typ n2)
   | _ -> exp_typ ne
   and exp_typ ((Nexp_aux(n,_)) as ne) = match n with
-  | Nexp_exp n1 -> doc_unop (string "2**") (neg_typ n1)
+  | Nexp_exp n1 -> doc_unop (string "2**") (atomic_nexp_typ n1)
   | _ -> neg_typ ne
   and neg_typ ((Nexp_aux(n,_)) as ne) = match n with
   | Nexp_neg n1 ->
@@ -158,7 +159,7 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   and atomic_nexp_typ ((Nexp_aux(n,_)) as ne) = match n with
   | Nexp_var v -> doc_var v
   | Nexp_constant i -> doc_int i
-  | Nexp_neg _ | Nexp_exp _ | Nexp_times _ | Nexp_sum _ ->
+  | Nexp_neg _ | Nexp_exp _ | Nexp_times _ | Nexp_sum _ | Nexp_minus _ ->
       group (parens (nexp ne))
 
   (* expose doc_typ, doc_atomic_typ and doc_nexp *)

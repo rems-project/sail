@@ -84,6 +84,7 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_constant of int (* constant *)
  | ATyp_times of atyp * atyp (* product *)
  | ATyp_sum of atyp * atyp (* sum *)
+ | ATyp_minus of atyp * atyp (* subtraction *)
  | ATyp_exp of atyp (* exponential *)
  | ATyp_neg of atyp (* Internal (but not M as I want a datatype constructor) negative nexp *)
  | ATyp_inc (* increasing (little-endian) *)

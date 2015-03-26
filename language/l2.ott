@@ -166,8 +166,9 @@ nexp :: 'Nexp_' ::=
   | num                                 :: :: constant     {{ com constant }}
   | nexp1 * nexp2                       :: :: times        {{ com product }}
   | nexp1 + nexp2                       :: :: sum          {{ com sum }}
+  | nexp1 - nexp2			:: :: minus	   {{ com subtraction, error for nexp1 to be smaller than nexp2 }} 
   | 2** nexp                            :: :: exp         {{ com exponential }}
-  | neg nexp				:: :: neg	  {{ com For internal use. Not M as a dataconstructor is required }}
+  | neg nexp				:: :: neg	  {{ com For internal use }}
   | ( nexp )                            :: S :: paren  {{ ichlo [[nexp]] }}
 
 order :: 'Ord_' ::=  

@@ -44,13 +44,14 @@ and nexp_aux =
   | Npos_inf
   | Nneg_inf
   | Nadd of nexp * nexp
+  | Nsub of nexp * nexp
   | Nmult of nexp * nexp
   | N2n of nexp * big_int option
   | Npow of nexp * int (* nexp raised to the int *)
   | Nneg of nexp (* Unary minus for representing new vector sizes after vector slicing *)
   | Ninexact (*Result of +inf + -inf which is neither less than nor greater than other numbers really *)
   | Nuvar of n_uvar
-and n_uvar = { nindex : int; mutable nsubst : nexp option; mutable nin : bool; }
+and n_uvar = { nindex : int; mutable nsubst : nexp option; mutable nin : bool; mutable leave_var : bool}
 and effect = { mutable effect : effect_aux }
 and effect_aux =
   | Evar of string
@@ -158,7 +159,11 @@ let rec t_to_string t =
   match t.t with
     | Tid i -> i
     | Tvar i -> i
-    | Tfn(t1,t2,_,e) -> (t_to_string t1) ^ " -> " ^ (t_to_string t2) ^ " effect " ^ e_to_string e
+    | Tfn(t1,t2,imp,e) -> 
+      let implicit = match imp with 
+	| IP_none -> "" 
+	| IP_length n | IP_start n | IP_user n -> " with implicit parameter " ^ n_to_string n ^ " " in 
+      (t_to_string t1) ^ " -> " ^ (t_to_string t2) ^ " effect " ^ e_to_string e ^ implicit
     | Ttup(tups) -> "(" ^ string_of_list ", " t_to_string tups ^ ")"
     | Tapp(i,args) -> i ^ "<" ^  string_of_list ", " targ_to_string args ^ ">"
     | Tabbrev(ti,ta) -> (t_to_string ti) ^ " : " ^ (t_to_string ta)
@@ -178,6 +183,7 @@ and n_to_string n =
     | Npos_inf -> "infinity"
     | Nneg_inf -> "-infinity"
     | Nadd(n1,n2) -> "("^ (n_to_string n1) ^ " + " ^ (n_to_string n2) ^")"
+    | Nsub(n1,n2) -> "("^ (n_to_string n1) ^ " - " ^ (n_to_string n2) ^ ")"
     | Nmult(n1,n2) -> "(" ^ (n_to_string n1) ^ " * " ^ (n_to_string n2) ^ ")"
     | N2n(n,None) -> "2**" ^ (n_to_string n)
     | N2n(n,Some i) -> "2**" ^ (n_to_string n) ^ "(*" ^ (string_of_big_int i) ^ "*)"
@@ -338,6 +344,10 @@ let rec compare_nexps n1 n2 =
       | a -> a)
   | Nadd _   , _        -> -1
   | _        , Nadd _   ->  1
+  | Nsub(n1,n12),Nsub(n2,n22) ->
+    (match compare_nexps n1 n2 with
+      | 0 -> compare_nexps n12 n22
+      | a -> a)
   | Npow(n1,_),Npow(n2,_)-> compare_nexps n1 n2
   | Npow _   , _        -> -1
   | _        , Npow _   ->  1
@@ -363,7 +373,7 @@ let rec contains_const n =
   | Nvar _ | Nuvar _ | Npow _ | N2n _ | Npos_inf | Nneg_inf -> false
   | Nconst _ -> true
   | Nneg n -> contains_const n
-  | Nmult(n1,n2) | Nadd(n1,n2) -> (contains_const n1) || (contains_const n2)
+  | Nmult(n1,n2) | Nadd(n1,n2) | Nsub(n1,n2) -> (contains_const n1) || (contains_const n2)
 
 let rec get_var n =
   match n.nexp with
@@ -376,7 +386,7 @@ let rec get_all_nvar n =
   match n.nexp with
     | Nvar v -> [v]
     | Nneg n | N2n(n,_) | Npow(n,_) -> get_all_nvar n
-    | Nmult(n1,n2) | Nadd(n1,n2) -> (get_all_nvar n1)@(get_all_nvar n2)
+    | Nmult(n1,n2) | Nadd(n1,n2) | Nsub(n1,n2) -> (get_all_nvar n1)@(get_all_nvar n2)
     | _ -> []
 
 let get_factor n =
@@ -408,13 +418,14 @@ let increment_factor n i =
 let negate n = {nexp = Nmult ({nexp = Nconst (big_int_of_int (-1))},n)}
 
 let rec normalize_nexp n =
-  (* let _ = Printf.printf "Working on normalizing %s\n" (n_to_string n) in *)
+  (*let _ = Printf.eprintf "Working on normalizing %s\n" (n_to_string n) in *)
   match n.nexp with
   | Nconst _ | Nvar _ | Nuvar _ | Npos_inf | Nneg_inf -> n
   | Nneg n -> 
     let n',to_recur,add_neg = (match n.nexp with
       | Nconst i -> {nexp = Nconst (mult_int_big_int (-1) i)},false,false
       | Nadd(n1,n2) -> {nexp = Nadd(negate n1,negate n2)},true,false
+      | Nsub(n1,n2) -> {nexp = Nsub(n2,n1) },false,false
       | Nneg n -> normalize_nexp n,false,false
       | _ -> n,true,true) in
     if to_recur 
@@ -501,8 +512,33 @@ let rec normalize_nexp n =
 	      | -1 -> { nexp = Nadd(n21', normalize_nexp { nexp = Nadd(n1',n22')})}
 	      | 1 -> { nexp = Nadd(n1',n2') }
 	      | _ -> let _ = Printf.eprintf "pattern didn't match unexpextedly here %s %s\n" (n_to_string n1') (n_to_string n2') in assert false)
-	  | _ -> let _ = Printf.eprintf "pattern didn't match here with no vars %s %s\n" (n_to_string n1') (n_to_string n2') in assert false) 
+	  | _ -> {nexp = Nadd (n1', n2')})
       ) 
+  | Nsub(n1,n2) ->
+    let n1',n2' = normalize_nexp n1, normalize_nexp n2 in
+    (*let _ = Printf.eprintf "Normalizing subtraction of %s - %s \n" (n_to_string n1') (n_to_string n2') in*)
+    (match n1'.nexp,n2'.nexp with
+    | Nneg_inf, Npos_inf | Npos_inf, Nneg_inf -> {nexp = Ninexact }
+    | Npos_inf, _ | _,Nneg_inf -> { nexp = Npos_inf }
+    | Nneg_inf, _ | _,Npos_inf -> { nexp = Nneg_inf } 
+    | Nconst i1, Nconst i2 | Nconst i1, N2n(_,Some i2) | N2n(_,Some i1), Nconst i2 -> 
+      let _ = Printf.eprintf "constant subtraction of %s - %s gives %s" (Big_int.string_of_big_int i1) (Big_int.string_of_big_int i2) (Big_int.string_of_big_int (sub_big_int i1 i2)) in
+      {nexp = Nconst (sub_big_int i1 i2)}
+    | Nadd(n11,n12), Nconst _ -> {nexp = Nadd(n11,normalize_nexp {nexp = Nsub(n12,n2')})}
+    | Nconst _, Nadd(n21,n22) -> {nexp = Nadd(n21,normalize_nexp {nexp = Nsub(n22,n1')})}
+    | Nconst i, _ -> if (eq_big_int i zero) then negate n2' else {nexp = Nsub(n1',n2')}
+    | _, Nconst i -> if (eq_big_int i zero) then n1' else {nexp = Nsub(n1',n2')}
+    | Nvar _, Nuvar _ | Nvar _, N2n _ | Nuvar _, Npow _ -> {nexp = Nsub (n2',n1')}
+    | N2n(_,Some i1),N2n(_,Some i2) -> {nexp = Nconst (sub_big_int i1 i2)}
+    | N2n(n1,_), N2n(n2,_) -> 
+      (match compare_nexps n1 n2 with
+      |  0 -> n_zero
+      |  _ -> { nexp = Nsub (n1',n2')})
+    | Npow(n1,i1), Npow (n2,i2) ->
+      (match compare_nexps n1 n2, compare i1 i2 with
+	|  0,0 -> n_zero
+	|  _ -> {nexp = Nsub (n1',n2')})
+    | _ -> {nexp = Nsub(n1',n2')})
   | Nmult(n1,n2) ->
     let n1',n2' = normalize_nexp n1, normalize_nexp n2 in
     (match n1'.nexp,n2'.nexp with
@@ -617,9 +653,12 @@ let new_t _ =
 let new_n _ = 
   let i = !n_count in
   n_count := i + 1;
-  let n = { nexp = Nuvar { nindex = i; nsubst = None ; nin = false}} in
+  let n = { nexp = Nuvar { nindex = i; nsubst = None ; nin = false ; leave_var = false}} in
   nuvars := n::!nuvars;
   n
+let leave_nuvar n = match n.nexp with
+  | Nuvar u -> u.leave_var <- true; n
+  | _ -> n
 let new_o _ = 
   let i = !o_count in
   o_count := i + 1;
@@ -752,23 +791,34 @@ let rec occurs_in_pending_subst n_box n : bool =
     | _ -> occurs_in_nexp n_box n
 
 and occurs_in_nexp n_box nuvar : bool =
-  (*let _ = Printf.eprintf "occurs_in_nexp given n_box %s nuvar %s eq? %b\n" (n_to_string n_box) (n_to_string nuvar) (n_box.nexp == nuvar.nexp) in*)
+  let _ = Printf.eprintf "occurs_in_nexp given n_box %s nuvar %s eq? %b\n" (n_to_string n_box) (n_to_string nuvar) (n_box.nexp == nuvar.nexp) in
   if n_box.nexp == nuvar.nexp then true
   else match n_box.nexp with
     | Nuvar _ -> occurs_in_pending_subst n_box nuvar
-    | Nadd (nb1,nb2) | Nmult (nb1,nb2) -> occurs_in_nexp nb1 nuvar || occurs_in_nexp nb2 nuvar
+    | Nadd (nb1,nb2) | Nsub(nb1,nb2)| Nmult (nb1,nb2) -> occurs_in_nexp nb1 nuvar || occurs_in_nexp nb2 nuvar
     | Nneg nb | N2n(nb,None) | Npow(nb,_) -> occurs_in_nexp nb nuvar
     | _ -> false
 
 let rec reduce_n_unifications n = 
-  match n.nexp with
+  let _ = Printf.eprintf "reduce_n_unifications %s\n" (n_to_string n) in
+  (match n.nexp with
     | Nvar _ | Nconst _ | Npos_inf | Nneg_inf -> ()
     | N2n(n1,_) | Npow(n1,_) | Nneg n1 -> reduce_n_unifications n1
-    | Nadd(n1,n2) | Nmult(n1,n2) -> reduce_n_unifications n1; reduce_n_unifications n2
+    | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> reduce_n_unifications n1; reduce_n_unifications n2
     | Nuvar nu ->
       (match nu.nsubst with
 	| None -> ()
-	| Some(nexp) -> reduce_n_unifications(nexp); n.nexp <- nexp.nexp)
+	| Some(nexp) -> 
+	  reduce_n_unifications(nexp); if nu.leave_var then ignore(leave_nuvar(nexp)) else (); n.nexp <- nexp.nexp));
+  let _ = Printf.eprintf "n reduced to %s\n" (n_to_string n) in ()
+
+let rec leave_nu_as_var n = 
+  match n.nexp with
+    | Nuvar nu ->
+      (match nu.nsubst with
+	| None -> nu.leave_var
+	| Some(nexp) -> nu.leave_var || leave_nu_as_var nexp)
+    | _ -> false
 
 let equate_n (n_box : nexp) (n : nexp) : bool =
   (*let _ = Printf.eprintf "equate_n given n_box %s and n %s\n" (n_to_string n_box) (n_to_string n) in*)
@@ -819,16 +869,16 @@ let equate_e (e_box : effect) (e : effect) : unit =
      | _ ->
        e_box.effect <- e.effect)
 
-let rec fresh_var i mkr bindings =
-  let v = "'v" ^ (string_of_int i) in
+let fresh_var prefix i mkr bindings =
+  let v = "'" ^ prefix ^ (string_of_int i) in
   match Envmap.apply bindings v with
-  | Some _ -> fresh_var (i+1) mkr bindings
-  | None -> mkr v
+  | Some _ -> mkr v false
+  | None -> mkr v true
 
 let rec fresh_tvar bindings t =
   match t.t with
   | Tuvar { index = i;subst = None } -> 
-    fresh_var i (fun v -> equate_t t {t=Tvar v};Some (v,{k=K_Typ})) bindings
+    fresh_var "tv" i (fun v add -> equate_t t {t=Tvar v}; if add then Some (v,{k=K_Typ}) else None) bindings
   | Tuvar { index = i; subst = Some ({t = Tuvar _} as t') } ->
     let kv = fresh_tvar bindings t' in
     equate_t t t';
@@ -838,10 +888,10 @@ let rec fresh_tvar bindings t =
     None
   | _ -> None
 let rec fresh_nvar bindings n =
-  (*let _ = Printf.printf "fresh_nvar for %s\n" (n_to_string n) in*)
+  let _ = Printf.eprintf "fresh_nvar for %s\n" (n_to_string n) in
   match n.nexp with
     | Nuvar { nindex = i;nsubst = None } -> 
-      fresh_var i (fun v -> n.nexp <- (Nvar v); Some(v,{k=K_Nat})) bindings
+      fresh_var "nv" i (fun v add -> n.nexp <- (Nvar v); (Printf.eprintf "fresh nvar set %i to %s : %s\n" i v (n_to_string n)); if add then Some(v,{k=K_Nat}) else None) bindings
     | Nuvar { nindex = i; nsubst = Some({nexp=Nuvar _} as n')} ->
       let kv = fresh_nvar bindings n' in
       n.nexp <- n'.nexp;
@@ -853,7 +903,7 @@ let rec fresh_nvar bindings n =
 let rec fresh_ovar bindings o =
   match o.order with
     | Ouvar { oindex = i;osubst = None } -> 
-      fresh_var i (fun v -> equate_o o {order = (Ovar v)}; Some(v,{k=K_Nat})) bindings
+      fresh_var "ov" i (fun v add -> equate_o o {order = (Ovar v)}; if add then Some(v,{k=K_Nat}) else None) bindings
     | Ouvar { oindex = i; osubst = Some({order=Ouvar _} as o')} ->
       let kv = fresh_ovar bindings o' in
       equate_o o o';
@@ -865,7 +915,7 @@ let rec fresh_ovar bindings o =
 let rec fresh_evar bindings e =
   match e.effect with
     | Euvar { eindex = i;esubst = None } -> 
-      fresh_var i (fun v -> equate_e e {effect = (Evar v)}; Some(v,{k=K_Nat})) bindings
+      fresh_var "ev" i (fun v add -> equate_e e {effect = (Evar v)}; if add then Some(v,{k=K_Nat}) else None) bindings
     | Euvar { eindex = i; esubst = Some({effect=Euvar _} as e')} ->
       let kv = fresh_evar bindings e' in
       equate_e e e';
@@ -946,7 +996,7 @@ let mk_pure_imp arg ret var = {t = Tfn (arg,ret,IP_length {nexp = Nvar var},pure
 
 let mk_nv v = {nexp = Nvar v}
 let mk_add n1 n2 = {nexp = Nadd (n1,n2) }
-let mk_sub n1 n2 = {nexp = Nadd (n1, {nexp = Nneg n2})}
+let mk_sub n1 n2 = {nexp = Nsub (n1, n2)}
 let mk_mult n1 n2 = {nexp = Nmult(n1,n2) }
 
 let mk_range n1 n2 = {t=Tapp("range",[TA_nexp n1;TA_nexp n2])}
@@ -1322,7 +1372,7 @@ let initial_typ_env =
        ]));
     ("length", Base((["a",{k=K_Typ}]@(mk_nat_params["n";"m"])@(mk_ord_params["ord"]),
 		     (mk_pure_fun (mk_vector {t=Tvar "a"} (Ovar "ord") (Nvar "n") (Nvar "m"))
-			          (mk_range (mk_nv "m") n_zero))),
+			          (mk_range (mk_nv "m") (mk_nv "m")))),
 		    External (Some "length"),[],pure_e,nob));
     (* incorrect types for typechecking processed sail code; do we care? *)
     ("mask",Base(((mk_typ_params ["a"])@(mk_nat_params["n";"m";"o";"p"])@(mk_ord_params["ord"]),
@@ -1545,9 +1595,9 @@ let rec typ_subst s_env t =
 and ip_subst s_env ip =
   match ip with
     | IP_none -> ip
-    | IP_length n -> IP_length (n_subst s_env n)
-    | IP_start n -> IP_start (n_subst s_env n)
-    | IP_user n -> IP_user (n_subst s_env n)
+    | IP_length n -> IP_length (leave_nuvar (n_subst s_env n))
+    | IP_start n -> IP_start (leave_nuvar (n_subst s_env n))
+    | IP_user n -> IP_user (leave_nuvar (n_subst s_env n))
 and ta_subst s_env ta =
   match ta with
   | TA_typ t -> TA_typ (typ_subst s_env t)
@@ -1556,15 +1606,17 @@ and ta_subst s_env ta =
   | TA_ord o -> TA_ord (o_subst s_env o)
 and n_subst s_env n =
   match n.nexp with
-  | Nvar i -> (match Envmap.apply s_env i with
-               | Some(TA_nexp n1) ->  n1
-               | _ -> { nexp = Nvar i })
+  | Nvar i -> 
+    (match Envmap.apply s_env i with
+      | Some(TA_nexp n1) -> n1
+      | _ -> { nexp = Nvar i })
   | Nuvar _ -> new_n()
   | Nconst _ | Npos_inf | Nneg_inf -> n
   | N2n(n1,i) -> { nexp = N2n (n_subst s_env n1,i) }
   | Npow(n1,i) -> { nexp = Npow (n_subst s_env n1,i) }
   | Nneg n1 -> { nexp = Nneg (n_subst s_env n1) }
   | Nadd(n1,n2) -> { nexp = Nadd(n_subst s_env n1,n_subst s_env n2) }
+  | Nsub(n1,n2) -> {nexp = Nsub(n_subst s_env n1,n_subst s_env n2) }
   | Nmult(n1,n2) -> { nexp = Nmult(n_subst s_env n1,n_subst s_env n2) }
 and o_subst s_env o =
   match o.order with
@@ -1640,7 +1692,7 @@ let rec t_remove_unifications s_env t =
 	(match fresh_tvar s_env t with
 	  | Some ks -> Envmap.insert s_env ks
 	  | None -> s_env)
-      | _ -> resolve_tsubst t; s_env)
+      | _ -> ignore(resolve_tsubst t); s_env)
   | Tfn(t1,t2,_,e) -> e_remove_unifications (t_remove_unifications (t_remove_unifications s_env t1) t2) e
   | Ttup(ts) -> List.fold_right (fun t s_env -> t_remove_unifications s_env t) ts s_env
   | Tapp(i,args) -> List.fold_right (fun t s_env -> ta_remove_unifications s_env t) args s_env
@@ -1653,7 +1705,7 @@ and ta_remove_unifications s_env ta =
   | TA_eft e -> (e_remove_unifications s_env e)
   | TA_ord o -> (o_remove_unifications s_env o)
 and n_remove_unifications s_env n =
-  (*let _ = Printf.eprintf "n_remove_unifications %s\n" (n_to_string n) in*)
+  let _ = Printf.eprintf "n_remove_unifications %s\n" (n_to_string n) in
   match n.nexp with
   | Nvar _ | Nconst _ | Npos_inf | Nneg_inf -> s_env
   | Nuvar nu -> 
@@ -1662,13 +1714,13 @@ and n_remove_unifications s_env n =
       | _ -> resolve_nsubst n; n in
     (match n'.nexp with
       | Nuvar _ -> 
-	(*let _ = Printf.eprintf "nuvar is before turning into var %s\n" (n_to_string n') in*)
+	let _ = Printf.eprintf "nuvar is before turning into var %s\n" (n_to_string n') in
 	(match fresh_nvar s_env n with
 	  | Some ks -> Envmap.insert s_env ks
 	  | None -> s_env)
       | _ -> s_env)
   | N2n(n1,_) | Npow(n1,_) | Nneg n1 -> (n_remove_unifications s_env n1)
-  | Nadd(n1,n2) | Nmult(n1,n2) -> (n_remove_unifications (n_remove_unifications s_env n1) n2)
+  | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> (n_remove_unifications (n_remove_unifications s_env n1) n2)
 and o_remove_unifications s_env o =
   match o.order with
   | Ouvar _ -> (match fresh_ovar s_env o with
@@ -1721,6 +1773,7 @@ and n_to_nexp n =
     | Nneg_inf -> Nexp_constant min_int (* see above *)
     | Nmult(n1,n2) -> Nexp_times(n_to_nexp n1,n_to_nexp n2) 
     | Nadd(n1,n2) -> Nexp_sum(n_to_nexp n1,n_to_nexp n2) 
+    | Nsub(n1,n2) -> Nexp_minus(n_to_nexp n1,n_to_nexp n2)
     | N2n(n,_) -> Nexp_exp (n_to_nexp n)
     | Npow(n,1) -> let Nexp_aux(n',_) = n_to_nexp n in n'
     | Npow(n,i) -> Nexp_times(n_to_nexp n,n_to_nexp{nexp = Npow(n,i-1)}) 
@@ -2137,13 +2190,13 @@ let rec type_coerce_internal co d_env enforce is_explicit widen t1 cs1 e t2 cs2 
       (match args2,args1 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)] in
+	let cs = [] (*[LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)] (*This constraint failing should be a warning, but truncation is ok*)*)  in
 	let tannot = (l,Base(([],t2),External None, cs,pure_e,nob)) in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
 				  [(E_aux(E_internal_exp(tannot), tannot));e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)] in
+	let cs = [] (* See above [LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
 	let tannot = (l,Base(([],t2),External None,cs,pure_e,nob)) in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
 				  [(E_aux(E_internal_exp(tannot), tannot)); e]),tannot))
@@ -2156,13 +2209,13 @@ let rec type_coerce_internal co d_env enforce is_explicit widen t1 cs1 e t2 cs2 
       (match args2,args1 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
-	let cs = [LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)] in
+	let cs = [](*[LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
 	let tannot = (l,Base(([],t2),External None, cs,pure_e,nob)) in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
 				  [(E_aux(E_internal_exp(tannot), tannot));e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
-	let cs = [LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)] in
+	let cs = [](*[LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
 	let tannot = (l,Base(([],t2),External None,cs,pure_e,nob)) in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
 				  [(E_aux(E_internal_exp(tannot), tannot)); e]),tannot))
@@ -2302,7 +2355,7 @@ let rec contains_var nu n =
   match n.nexp with
   | Nvar _ | Nuvar _ -> nexp_eq_check nu n
   | Nconst _ | Npos_inf | Nneg_inf -> false
-  | Nadd(n1,n2) | Nmult(n1,n2) -> contains_var nu n1 || contains_var nu n2
+  | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> contains_var nu n1 || contains_var nu n2
   | Nneg n | N2n(n,_) | Npow(n,_) -> contains_var nu n
 
 let rec contains_in_vars in_env n =
@@ -2319,6 +2372,7 @@ let rec subst_nuvars nu nc n =
   | Nuvar _ -> if nexp_eq_check nu n then nc else n
   | Nmult(n1,n2) -> {nexp=Nmult(subst_nuvars nu nc n1,subst_nuvars nu nc n2)}
   | Nadd(n1,n2) -> {nexp=Nadd(subst_nuvars nu nc n1,subst_nuvars nu nc n2)}
+  | Nsub(n1,n2) -> {nexp=Nsub(subst_nuvars nu nc n1,subst_nuvars nu nc n2)}
   | Nneg n -> {nexp= Nneg (subst_nuvars nu nc n)}
   | N2n(n,i) -> {nexp = N2n((subst_nuvars nu nc n),i)}
   | Npow(n,i) -> {nexp = Npow((subst_nuvars nu nc n),i)}
@@ -2327,7 +2381,7 @@ let rec get_nuvars n =
   match n.nexp with
     | Nconst _ | Nvar _ | Npos_inf | Nneg_inf -> []
     | Nuvar _ -> [n]
-    | Nmult(n1,n2) | Nadd(n1,n2) -> (get_nuvars n1)@(get_nuvars n2)
+    | Nmult(n1,n2) | Nadd(n1,n2) | Nsub(n1,n2) -> (get_nuvars n1)@(get_nuvars n2)
     | Nneg n | N2n(n,_) | Npow(n,_) -> get_nuvars n
 
 let freshen n = 
@@ -2337,13 +2391,43 @@ let freshen n =
   (n,env_map)
 
 
+let rec equate_nuvars in_env cs = 
+  let _ = Printf.eprintf "equate_nuvars\n" in
+  let equate = equate_nuvars in_env in
+  match cs with
+    | [] -> []
+    | (Eq(co,n1,n2) as c)::cs ->
+      (match (n1.nexp,n2.nexp) with
+	| Nuvar u1, Nuvar u2 ->
+	  let _ = Printf.eprintf "setting two nuvars, %s and %s in equate\n" (n_to_string n1) (n_to_string n2) in
+	  let occurs = (occurs_in_nexp n1 n2) || (occurs_in_nexp n2 n1) in
+          if not(occurs) 
+          then begin ignore(resolve_nsubst n1); ignore(resolve_nsubst n2); 
+	    if (equate_n n1 n2) then equate cs else c::equate cs end
+	  else c::equate cs
+	| _ -> c::equate cs)
+    | CondCons(co,pats,exps):: cs ->
+      let pats' = equate pats in
+      let exps' = equate exps in
+      (match pats',exps' with
+	| [],[] -> equate cs
+	| _     -> CondCons(co,pats',exps')::(equate cs))
+    | BranchCons(co,branches)::cs ->
+      let b' = equate branches in
+      if [] = b' 
+      then equate cs
+      else BranchCons(co,b')::(equate cs)
+    | x::cs -> x::(equate cs)
+
+
 let rec simple_constraint_check in_env cs = 
   let check = simple_constraint_check in_env in
-(*  let _ = Printf.eprintf "simple_constraint_check of %s\n" (constraints_to_string cs) in *)
+  let _ = Printf.eprintf "simple_constraint_check of %s\n" (constraints_to_string cs) in 
   match cs with 
   | [] -> []
   | Eq(co,n1,n2)::cs -> 
     let eq_to_zero ok_to_set n1 n2 = 	
+      let _ = Printf.eprintf "eq_to_zero called with n1 %s and n2%s\n" (n_to_string n1) (n_to_string n2) in
       let new_n = normalize_nexp (mk_sub n1 n2) in
       (match new_n.nexp with
 	| Nconst i -> 
@@ -2361,16 +2445,16 @@ let rec simple_constraint_check in_env cs =
 	    | _ -> Some(Eq(co,n1,n2)))
 	| _ -> Some(Eq(co,n1,n2))) in
     let check_eq ok_to_set n1 n2 = 
-      (*let _ = Printf.eprintf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in *)
+      let _ = Printf.eprintf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in 
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-      (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+      let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in 
       (match n1'.nexp,n2'.nexp with
       | Ninexact,nok | nok,Ninexact -> eq_error (get_c_loc co) ("Type constraint arising from here requires " ^ n_to_string {nexp = nok} ^ " to be equal to +inf + -inf")
       | Npos_inf,Npos_inf | Nneg_inf, Nneg_inf -> None
       | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst(i2) -> 
         if eq_big_int i1 i2 then None else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^ " to equal " ^ n_to_string n2 )
       | Nuvar u1, Nuvar u2 ->
-	(*let _ = Printf.eprintf "setting two nuvars, %s and %s, it is ok_to_set %b\n" (n_to_string n1) (n_to_string n2) ok_to_set in*)
+	let _ = Printf.eprintf "setting two nuvars, %s and %s, it is ok_to_set %b\n" (n_to_string n1) (n_to_string n2) ok_to_set in
 	let occurs = (occurs_in_nexp n1' n2') || (occurs_in_nexp n2' n1') in
         if ok_to_set && not(occurs) 
         then begin ignore(resolve_nsubst n1'); ignore(resolve_nsubst n2'); 
@@ -2378,15 +2462,21 @@ let rec simple_constraint_check in_env cs =
 	else if occurs then eq_to_zero ok_to_set n1' n2'
         else Some(Eq(co,n1',n2'))
       | _, Nuvar u ->
+	let _ = Printf.eprintf "setting right nuvar\n" in
 	let occurs = occurs_in_nexp n1' n2' in
-        if not(u.nin) && ok_to_set && not(occurs)
+	let leave = leave_nu_as_var n2' in
+	let _ = Printf.eprintf "occurs? %b, leave? %b n1' %s in n2' %s\n" occurs leave (n_to_string n1') (n_to_string n2') in
+        if not(u.nin) && ok_to_set && not(occurs) && not(leave)
         then if (equate_n n2' n1') then  None else (Some (Eq(co,n1',n2')))
         else if occurs 
 	then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end
 	else Some (Eq(co,n1',n2')) 
       | Nuvar u, _ ->
+	let _ = Printf.eprintf "setting left nuvar\n" in
 	let occurs = occurs_in_nexp n2' n1' in
-        if not(u.nin) && ok_to_set && not(occurs)
+	let leave = leave_nu_as_var n1' in
+	let _ = Printf.eprintf "occurs? %b, leave? %b n2' %s in n1' %s\n" occurs leave (n_to_string n2') (n_to_string n1') in
+        if not(u.nin) && ok_to_set && not(occurs) && not(leave)
         then if equate_n n1' n2' then None else (Some (Eq(co,n1',n2')))
         else if occurs
 	then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end
@@ -2404,9 +2494,9 @@ let rec simple_constraint_check in_env cs =
 	  | Some(c) -> c::(check cs))
       | _ -> (Eq(co,n1,n2)::(check cs)))
   | GtEq(co,enforce,n1,n2)::cs -> 
-    (*let _ = Printf.eprintf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    let _ = Printf.eprintf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in 
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-    (*let _ = Printf.printf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
+    let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst i2 -> 
       if ge_big_int i1 i2 
@@ -2427,9 +2517,9 @@ let rec simple_constraint_check in_env cs =
 					     ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
 	  | _ -> GtEq(co,enforce,n1',n2')::(check cs)))
   | LtEq(co,enforce,n1,n2)::cs -> 
-    (*let _ = Printf.eprintf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    let _ = Printf.eprintf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in 
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-    (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+    let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in 
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 | Nconst i1, N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst i2 -> 
       if le_big_int i1 i2 
@@ -2473,13 +2563,14 @@ let resolve_constraints cs =
   if not !do_resolve_constraints
   then cs
   else
-    let rec fix len cs =
+    let rec fix checker len cs =
       (*let _ = Printf.eprintf "Calling simple constraint check, fix check point is %i\n" len in *)
-      let cs' = simple_constraint_check (in_constraint_env cs) cs in
+      let cs' = checker (in_constraint_env cs) cs in
       let len' = constraint_size cs' in
-      if len > len' then fix len' cs'
+      if len > len' then fix checker len' cs'
       else cs' in
-    let complex_constraints = fix (constraint_size cs) cs in
+    let nuvar_equated = fix equate_nuvars (constraint_size cs) cs in
+    let complex_constraints = fix simple_constraint_check (constraint_size nuvar_equated) nuvar_equated in
     (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" (constraint_size complex_constraints) in*)
     complex_constraints
 
@@ -2490,11 +2581,11 @@ let check_tannot l annot imp_param constraints efs =
       ignore(effects_eq (Specc l) efs e);
       let s_env = (t_remove_unifications (Envmap.from_list params) t) in
       let params = Envmap.to_list s_env in
-      (*let _ = Printf.eprintf "parameters going to save are " in
+      let _ = Printf.eprintf "parameters going to save are " in
       let _ = List.iter (fun (s,_) -> Printf.eprintf "%s " s) params in
-      let _ = Printf.eprintf "\n" in*)
+      let _ = Printf.eprintf "\n" in
       ignore (remove_internal_unifications s_env);
-    (*let _ = Printf.printf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in *)
+      let _ = Printf.eprintf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in 
       let t' = match (t.t,imp_param) with
 	| Tfn(p,r,_,e),Some x -> {t = Tfn(p,r,IP_user x,e) }
 	| _ -> t in 
