@@ -2055,7 +2055,7 @@ let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 =
   | Ttup t1s, Ttup t2s ->
     (t2,csp@(List.flatten (List.map snd (List.map2 (type_consistent co d_env enforce widen) t1s t2s))))
   | Tuvar _, t -> equate_t t1 t2; (t1,csp)
-  | Tapp("range",[TA_nexp b;TA_nexp r]),Tuvar _ ->
+  (*| Tapp("range",[TA_nexp b;TA_nexp r]),Tuvar _ ->
     let b2,r2 = new_n (), new_n () in
     let t2' = {t=Tapp("range",[TA_nexp b2;TA_nexp r2])} in
     equate_t t2 t2';
@@ -2064,7 +2064,7 @@ let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 =
     let b,r = new_n (), new_n () in
     let t2' = {t=Tapp("range",[TA_nexp b;TA_nexp r])} in
     equate_t t2 t2';
-    (t2,csp@[GtEq(co,enforce,a,b);LtEq(co,enforce,a,r)])
+    (t2,csp@[GtEq(co,enforce,a,b);LtEq(co,enforce,a,r)])*)
   | t,Tuvar _ -> equate_t t2 t1; (t2,csp)
   | _,_ -> eq_error l ("Type mismatch found " ^ (t_to_string t1) ^ " but expected a " ^ (t_to_string t2))
 
@@ -2506,7 +2506,10 @@ let rec simple_constraint_check in_env cs =
     | Npos_inf, _ | Npos_inf, Npos_inf | _, Nneg_inf | Nneg_inf, Nneg_inf -> check cs
     | Ninexact, _ | _, Ninexact -> check cs
     | Nconst _ ,Npos_inf -> eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
-                                                ^ (n_to_string n1') ^ " to be greater than infinity")
+                                                ^ (n_to_string n1') ^ " to be greater than or equal to infinity")
+    | Nneg_inf,Nuvar _ ->
+      if equate_n n2' n1' then check cs else (GtEq(co,enforce,n1',n2')::check cs)
+    | Nneg_inf, _ -> eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires negative infinity to be greater than or equal to " ^ (n_to_string n2'))
     | _,_ -> 
       let new_n = normalize_nexp (mk_sub n1' n2') in
 	(match new_n.nexp with
@@ -2569,9 +2572,11 @@ let resolve_constraints cs =
       let len' = constraint_size cs' in
       if len > len' then fix checker len' cs'
       else cs' in
+    (*let _ = Printf.eprintf "Original constraints are %s\n" (constraints_to_string cs) in*)
     let nuvar_equated = fix equate_nuvars (constraint_size cs) cs in
     let complex_constraints = fix simple_constraint_check (constraint_size nuvar_equated) nuvar_equated in
-    (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" (constraint_size complex_constraints) in*)
+    (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" (constraint_size complex_constraints) in
+    let _ = Printf.eprintf "%s\n" (constraints_to_string complex_constraints) in*)
     complex_constraints
 
 

@@ -481,6 +481,7 @@ type ne =  (* internal numeric expressions *)
  | Ne_inf
  | Ne_mult of ne * ne
  | Ne_add of list ne
+ | Ne_minus of ne * ne
  | Ne_exp of ne
  | Ne_unary of ne
 
