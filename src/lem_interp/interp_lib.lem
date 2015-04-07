@@ -3,6 +3,7 @@ open import Interp
 open import Interp_ast
 import Assert_extra Maybe_extra (* For failwith for error reporting while debugging; and for fromJust when we know it's not Nothing *)
 open import Num
+import Num_extra
 open import List
 open import Word
 open import Bool
@@ -23,15 +24,13 @@ let hardware_quot (a:integer) (b:integer) : integer =
   then (a/b) + 1
   else a/b
 
-val integer_of_string : string -> integer
-declare ocaml target_rep function integer_of_string = `Big_int.big_int_of_string`
 
-let (max_64u : integer) = integer_of_string "18446744073709551615"
-let (max_64 : integer) = integer_of_string  "9223372036854775807"
-let (min_64 : integer) = integer_of_string "-9223372036854775808"
-let (max_32u : integer) = integer_of_string "4294967295"
-let (max_32 : integer) = integer_of_string "2147483647"
-let (min_32 : integer) = integer_of_string "-2147483648"
+let (max_64u : integer) = Num_extra.integerOfString "18446744073709551615"
+let (max_64 : integer) = Num_extra.integerOfString  "9223372036854775807"
+let (min_64 : integer) = Num_extra.integerOfString "-9223372036854775808"
+let (max_32u : integer) = Num_extra.integerOfString "4294967295"
+let (max_32 : integer) = Num_extra.integerOfString "2147483647"
+let (min_32 : integer) = Num_extra.integerOfString "-2147483648"
 let (max_8 : integer) = (integerFromNat 127)
 let (min_8 : integer) = (integerFromNat 0) - (integerFromNat 128)
 let (max_5 : integer) = (integerFromNat 31)

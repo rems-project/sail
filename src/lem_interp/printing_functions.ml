@@ -4,7 +4,7 @@ open Interp_utilities ;;
 open Interp_interface ;;
 open Interp_inter_imp ;;
 
-open Big_int ;;
+open Nat_big_num ;;
 
 let lit_to_string = function
  | L_unit -> "unit"
@@ -12,7 +12,7 @@ let lit_to_string = function
  | L_one -> "0b1"
  | L_true -> "true"
  | L_false -> "false"
- | L_num n -> string_of_big_int n
+ | L_num n -> to_string n
  | L_hex s -> "0x"^s
  | L_bin s -> "0b"^s
  | L_undef -> "undefined"
@@ -92,7 +92,7 @@ let hex_int_to_string i =
 
 let bytes_lifted_homogenous_to_string = function
   | Bitslh_concrete bs -> 
-      let i = Big_int.int_of_big_int (Interp_interface.integer_of_bit_list bs) in
+      let i = to_int (Interp_interface.integer_of_bit_list bs) in
       hex_int_to_string i
   | Bitslh_undef -> "uu"
   | Bitslh_unknown -> "??"
@@ -325,7 +325,7 @@ let rec compact_stack ?(acc=[]) = function
 ;;  
 
 let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%s, %s)"
-  (string_of_big_int x) (string_of_big_int y)
+  (to_string x) (to_string y)
 ;;
 
 let rec format_events = function
@@ -410,7 +410,7 @@ let instr_parm_to_string (name, typ, value) =
     | Other -> "Unrepresentable external value"
     | _ -> let intern_v = (Interp_inter_imp.intern_ifield_value D_increasing value) in
 	      match Interp_lib.to_num Interp_lib.Unsigned intern_v with
-		| V_lit (L_aux(L_num n, _)) -> string_of_big_int n
+		| V_lit (L_aux(L_num n, _)) -> to_string n
 		| _ -> ifield_to_string value
 
 let rec instr_parms_to_string ps = 

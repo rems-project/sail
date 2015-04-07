@@ -17,9 +17,12 @@
 
 open Interp_ast
 open Format
-open Big_int
+open Nat_big_num
 
 let ignore_casts = ref true
+
+let zero_big = of_int 0
+let one_big = of_int 1
 
 let pp_format_id (Id_aux(i,_)) =
   match i with
@@ -43,7 +46,7 @@ let doc_id (Id_aux(i,_)) =
 
 let doc_var (Kid_aux(Var v,_)) = string v
 
-let doc_int i = string (string_of_big_int i)
+let doc_int i = string (to_string i)
 
 let doc_bkind (BK_aux(k,_)) =
   string (match k with
@@ -113,12 +116,12 @@ let doc_typ, doc_atomic_typ, doc_nexp =
     Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_inc, _)), _);
     Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
     (doc_id id) ^^ 
-      (brackets (if eq_big_int n zero_big_int then doc_int m 
-	         else doc_op colon (doc_int n) (doc_int (add_big_int n (sub_big_int m unit_big_int)))))
+      (brackets (if equal n zero_big then doc_int m 
+	         else doc_op colon (doc_int n) (doc_int (add n (sub m one_big)))))
   | Typ_app(Id_aux (Id "range", _), [
     Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
     Typ_arg_aux(Typ_arg_nexp m, _);]) ->
-    (squarebars (if eq_big_int n zero_big_int then nexp m else doc_op colon (doc_int n) (nexp m))) 
+    (squarebars (if equal n zero_big then nexp m else doc_op colon (doc_int n) (nexp m))) 
   | _ -> atomic_typ ty 
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_id id  -> doc_id id
@@ -203,7 +206,7 @@ let doc_lit (L_aux(l,_)) =
   | L_one   -> "bitone"
   | L_true  -> "true"
   | L_false -> "false"
-  | L_num i -> string_of_big_int i
+  | L_num i -> to_string i
   | L_hex n -> "0x" ^ n
   | L_bin n -> "0b" ^ n
   | L_undef -> "undefined"

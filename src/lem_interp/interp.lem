@@ -64,8 +64,8 @@ type value =
     integerToString (n / 10) (chr (natFromInteger (n mod 10 + 48)) :: acc)
 
 let string_of_integer i = if i = 0 then "0" else toString(integerToString i [])*)
-val string_of_integer : integer -> string
-declare ocaml target_rep function string_of_integer = `Big_int.string_of_big_int`
+(*val string_of_integer : integer -> string
+declare ocaml target_rep function string_of_integer = `Big_int_Z.string_of_big_int`*)
 
 
 let rec string_of_value v = match v with
@@ -77,7 +77,7 @@ let rec string_of_value v = match v with
     | L_one  -> "1"
     | L_true -> "true"
     | L_false -> "false"
-    | L_num num -> string_of_integer num
+    | L_num num -> show num
     | L_hex hex -> "0x" ^ hex
     | L_bin bin -> "0b" ^ bin
     | L_undef -> "undefined"
