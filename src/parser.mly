@@ -404,6 +404,8 @@ exp_typ:
      { $1 }
    | TwoStarStar atomic_typ
      { tloc (ATyp_exp($2)) }
+   | TwoStarStar Num
+     { tloc (ATyp_exp (tloc (ATyp_constant $2))) }
 
 nexp_typ:
    | exp_typ

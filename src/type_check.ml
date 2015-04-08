@@ -800,7 +800,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         let else',else_t,else_env,else_c,else_bs,else_ef = check_exp envs imp_param (new_t ()) else_ in
 	(*TOTHINK Possibly I should first consistency check else and then, with Guarantee, then check against expect_t with Require*)
         let then_t',then_c' = type_consistent (Expr l) d_env Require true then_t expect_t in
-        let else_t',else_c' = type_consistent (Expr l) d_env Require true else_t then_t'  in
+        let else_t',else_c' = type_consistent (Expr l) d_env Require true else_t expect_t  in
         let t_cs = CondCons((Expr l),c1,then_c@then_c') in
         let e_cs = CondCons((Expr l),[],else_c@else_c') in
         (E_aux(E_if(cond',then',else'),(l,simple_annot expect_t)),
@@ -900,26 +900,30 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	                          (E_aux (E_vector_indexed(es,default'),(l,simple_annot t))) expect_t in
       (e',t',t_env,cs@cs_d@cs_bounds@cs',nob,union_effects ef_d (union_effects ef' effect))
     | E_vector_access(vec,i) ->
-      let base,rise,ord = new_n(),new_n(),new_o() in
+      let base,len,ord = new_n(),new_n(),new_o() in
       let item_t = new_t () in
-      let min,m_rise = new_n(),new_n() in
-      let vt = {t= Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord; TA_typ item_t])} in
+      let min,max = new_n(),new_n() in
+      let vt = {t= Tapp("vector",[TA_nexp base;TA_nexp len;TA_ord ord; TA_typ item_t])} in
       let (vec',t',_,cs,_,ef) = check_exp envs imp_param vt vec in
-      let it = {t= Tapp("range",[TA_nexp min;TA_nexp m_rise])} in
+      let it = {t= Tapp("range",[TA_nexp min;TA_nexp max])} in
       let (i',ti',_,cs_i,_,ef_i) = check_exp envs imp_param it i in
       let ord,item_t = match t'.t with
         | Tabbrev(_,{t=Tapp("vector",[_;_;TA_ord ord;TA_typ t])}) | Tapp("vector",[_;_;TA_ord ord;TA_typ t]) -> ord,t
         | _ -> ord,item_t in
+      let oinc_max_access = mk_sub (mk_add base len) n_one in
+      let odec_min_access = mk_sub base len in
       let cs_loc = 
 	match (ord.order,d_env.default_o.order) with
 	  | (Oinc,_) ->
-	    [LtEq((Expr l),Require,base,min); LtEq((Expr l),Require, mk_add min m_rise,mk_add base rise)] 
+	    [LtEq((Expr l),Require,base,min); 
+	     LtEq((Expr l),Require, max,oinc_max_access); LtEq((Expr l),Require, min,oinc_max_access)] 
 	  | (Odec,_) -> 
-	    [GtEq((Expr l),Require,base,min); LtEq((Expr l),Require,mk_add min m_rise,mk_sub base rise)]
+	    [GtEq((Expr l),Require,base,min); LtEq((Expr l),Require,min,odec_min_access); LtEq((Expr l),Require,max,odec_min_access)]
 	  | (_,Oinc) -> 
-	    [LtEq((Expr l),Require,base,min); LtEq((Expr l),Require,mk_add min m_rise, mk_add base rise)] 
+	    [LtEq((Expr l),Require,base,min); 
+	     LtEq((Expr l),Require, max,oinc_max_access); LtEq((Expr l),Require, min,oinc_max_access)] 
 	  | (_,Odec) ->
-	    [GtEq((Expr l),Require,base,min); LtEq((Expr l),Require, mk_add min m_rise, mk_sub base rise)]
+	    [GtEq((Expr l),Require,base,min); LtEq((Expr l),Require,min,odec_min_access); LtEq((Expr l),Require,max,odec_min_access)]
 	  | _ -> typ_error l "A vector must be either increasing or decreasing to access a single element"
       in 
       (*let _ = Printf.eprintf "Type checking vector access. item_t is %s and expect_t is %s\n" (t_to_string item_t) (t_to_string expect_t) in*)
@@ -1467,8 +1471,8 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp *
       (match item_actual.t with
 	| Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ t]) ->
 	  let acc_t = match ord.order with
-	    | Oinc -> {t = Tapp("range",[TA_nexp base;TA_nexp rise])} 
-	    | Odec -> {t = Tapp("range",[TA_nexp (mk_sub base rise);TA_nexp rise])} 
+	    | Oinc -> {t = Tapp("range",[TA_nexp base;TA_nexp (mk_sub (mk_add base rise) n_one)])} 
+	    | Odec -> {t = Tapp("range",[TA_nexp (mk_sub (mk_sub base rise) n_one);TA_nexp (mk_sub base n_one)])} 
 	    | _ -> typ_error l ("Assignment to one vector element requires either inc or dec order")
 	  in
 	  let (e,t',_,cs',_,ef_e) = check_exp envs imp_param acc_t acc in

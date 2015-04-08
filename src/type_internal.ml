@@ -1305,8 +1305,8 @@ let initial_typ_env =
        Base(((mk_typ_params ["a";"b";"c"]),
              (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})), External (Some "mod"),[],pure_e,nob),
        true,
-       [Base(((mk_nat_params["n";"m";"o"]),
-              (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range n_one (mk_nv "o")])
+       [Base(((mk_nat_params["n";"m";"o";"p"]),
+              (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "p") (mk_nv "o")])
                            (mk_range n_zero (mk_sub (mk_nv "o") n_one)))),
              External (Some "mod"),[GtEq(Specc(Parse_ast.Int("mod",None)),Require,(mk_nv "o"),n_one)],pure_e,nob);
         Base(((mk_nat_params["n";"m";"o"])@(mk_ord_params["ord"]),
@@ -1962,13 +1962,13 @@ let rec conforms_to_t d_env loosely within_coercion spec actual =
       conforms_to_t d_env loosely within_coercion ts ta
       && conforms_to_o loosely os oa
       && conforms_to_n false within_coercion eq_big_int rs ra
-    | (Tapp("range",[TA_nexp bs;TA_nexp rs]),Tapp("range",[TA_nexp ba;TA_nexp ra]),_) ->
-      conforms_to_n true within_coercion le_big_int bs ba && conforms_to_n true within_coercion ge_big_int rs ra 
-    | (Tapp("atom",[TA_nexp n]),Tapp("range",[TA_nexp ba;TA_nexp ra]),_) ->
-      conforms_to_n true within_coercion le_big_int ba n && conforms_to_n true within_coercion ge_big_int n ra
-    | (Tapp("range",[TA_nexp bs;TA_nexp rs]),Tapp("atom",[TA_nexp n]),_) ->
+    | (Tapp("range",[TA_nexp bs;TA_nexp rs]),Tapp("range",[TA_nexp ba;TA_nexp ra]),_) -> true (*
+      conforms_to_n true within_coercion le_big_int bs ba && conforms_to_n true within_coercion ge_big_int rs ra *)
+    | (Tapp("atom",[TA_nexp n]),Tapp("range",[TA_nexp ba;TA_nexp ra]),_) -> true (*
+      conforms_to_n true within_coercion le_big_int ba n && conforms_to_n true within_coercion ge_big_int n ra *)
+    | (Tapp("range",[TA_nexp bs;TA_nexp rs]),Tapp("atom",[TA_nexp n]),_) -> true (*
       conforms_to_n true within_coercion le_big_int bs n && conforms_to_n true within_coercion ge_big_int rs n &&
-	conforms_to_n true within_coercion ge_big_int bs n
+	conforms_to_n true within_coercion ge_big_int bs n *)
     | (Tapp(is,tas), Tapp(ia, taa),_) -> 
 (*      let _ = Printf.printf "conforms to given two apps: %b, %b\n" (is = ia) (List.length tas = List.length taa) in*)
       (is = ia) && (List.length tas = List.length taa) && (List.for_all2 (conforms_to_ta d_env loosely within_coercion) tas taa)
@@ -2023,11 +2023,11 @@ let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 =
   | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tapp("range",[TA_nexp b2;TA_nexp r2;]) -> 
     if (nexp_eq b1 b2)&&(nexp_eq r1 r2) 
     then (t2,csp)
-    else (t1, csp@[GtEq(co,enforce,b1,b2);LtEq(co,enforce,r1,r2)])
+    else (t1, csp@[LtEq(co,enforce,b1,b2);LtEq(co,enforce,r1,r2)])
   | Tapp("atom",[TA_nexp a]),Tapp("range",[TA_nexp b1; TA_nexp r1]) ->
     (t1, csp@[GtEq(co,enforce,a,b1);LtEq(co,enforce,a,r1)])
   | Tapp("range",[TA_nexp b1; TA_nexp r1]),Tapp("atom",[TA_nexp a]) ->
-    (t2, csp@[GtEq(co,enforce,b1,a);LtEq(co,enforce,r1,a)])
+    (t2, csp@[LtEq(co,enforce,b1,a);LtEq(co,enforce,r1,a)])
   | Tapp("atom",[TA_nexp a1]),Tapp("atom",[TA_nexp a2]) ->
     if nexp_eq a1 a2
     then (t2,csp)
@@ -2160,11 +2160,11 @@ let rec type_coerce_internal co d_env enforce is_explicit widen t1 cs1 e t2 cs2 
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [Eq(co,b2,n_zero);GtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)] in
+	let cs = [Eq(co,b2,n_zero);LtEq(co,Guarantee,mk_sub {nexp=N2n(r1,None)} n_one,r2)] in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num_inc",l)),[e]),(l,Base(([],t2),External None,cs,pure_e,nob))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [Eq(co,b2,n_zero);GtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)] in
+	let cs = [Eq(co,b2,n_zero);LtEq(co,Guarantee,mk_sub {nexp=N2n(r1,None)} n_one,r2)] in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Base(([],t2),External None,cs,pure_e,nob))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert a vector to an range without an order"
@@ -2175,11 +2175,11 @@ let rec type_coerce_internal co d_env enforce is_explicit widen t1 cs1 e t2 cs2 
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
-	let cs = [GtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)] in
+	let cs = [GtEq(co,Guarantee,b2,n_zero);LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)] in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num_inc",l)),[e]),(l,Base(([],t2),External None,cs,pure_e,nob))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
-	let cs = [GtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)] in
+	let cs = [Eq(co,b2,mk_sub {nexp=N2n(r1,None)} n_one)] in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num_dec",l)),[e]),(l,Base(([],t2),External None,cs,pure_e,nob))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
 	eq_error l "Cannot convert a vector to an range without an order"
