@@ -1472,7 +1472,7 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot))) : (tannot lexp *
 	| Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ t]) ->
 	  let acc_t = match ord.order with
 	    | Oinc -> {t = Tapp("range",[TA_nexp base;TA_nexp (mk_sub (mk_add base rise) n_one)])} 
-	    | Odec -> {t = Tapp("range",[TA_nexp (mk_sub (mk_sub base rise) n_one);TA_nexp (mk_sub base n_one)])} 
+	    | Odec -> {t = Tapp("range",[TA_nexp (mk_sub rise (mk_add base n_one)); TA_nexp base])}
 	    | _ -> typ_error l ("Assignment to one vector element requires either inc or dec order")
 	  in
 	  let (e,t',_,cs',_,ef_e) = check_exp envs imp_param acc_t acc in

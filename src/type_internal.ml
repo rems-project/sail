@@ -1000,6 +1000,7 @@ let mk_sub n1 n2 = {nexp = Nsub (n1, n2)}
 let mk_mult n1 n2 = {nexp = Nmult(n1,n2) }
 
 let mk_range n1 n2 = {t=Tapp("range",[TA_nexp n1;TA_nexp n2])}
+let mk_atom n1 = {t = Tapp("atom",[TA_nexp n1])}
 let mk_vector typ order start size = {t=Tapp("vector",[TA_nexp {nexp=start}; TA_nexp {nexp=size}; TA_ord {order}; TA_typ typ])}
 let mk_bitwise_op name symb arity =
   let ovar = Ovar "o"  in
@@ -1417,14 +1418,14 @@ let initial_typ_env =
 	       External (Some "neq"),[],pure_e,nob));
     ("<",
      Overload(
-       Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
+       Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
 	    External (Some "lt"),[],pure_e,nob),
        false,
        [Base(((mk_nat_params ["n"; "m"; "o";"p"]),
 	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
 	     External (Some "lt"),
-	     [LtEq(Specc(Parse_ast.Int("<",None)),Guarantee, mk_add (mk_nv "n") n_one, mk_nv "o");
-	      LtEq(Specc(Parse_ast.Int("<",None)),Guarantee, mk_add (mk_nv "m") n_one, mk_nv "p")],
+	     [(*LtEq(Specc(Parse_ast.Int("<",None)),Guarantee, mk_add (mk_nv "n") n_one, mk_nv "o");
+	      LtEq(Specc(Parse_ast.Int("<",None)),Guarantee, mk_add (mk_nv "m") n_one, mk_nv "p")*)],
 	     pure_e,nob);
 	Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
 	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
@@ -1449,7 +1450,7 @@ let initial_typ_env =
        ]));
     (">",
      Overload(
-       Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
+       Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
 	    External (Some "gt"),[],pure_e,nob),
        false,
        [Base(((mk_nat_params ["n";"m";"o";"p"]), 
@@ -1556,9 +1557,9 @@ let initial_typ_env =
     mk_bitwise_op  "bitwise_or" "|" 2;
     mk_bitwise_op  "bitwise_xor" "^" 2;
     mk_bitwise_op  "bitwise_and" "&" 2;
-    ("^^",Base((mk_nat_params ["n";"m"],
-		(mk_pure_fun (mk_tup [bit_t;mk_range (mk_nv "n") (mk_nv "m")])
-		             (mk_vector bit_t Oinc (Nconst zero) (Nadd({nexp=Nvar "n"},{nexp=Nvar "m"}))))),
+    ("^^",Base((mk_nat_params ["n"],
+		(mk_pure_fun (mk_tup [bit_t;mk_atom (mk_nv "n")])
+		             (mk_vector bit_t Oinc (Nconst zero) (Nvar "n")))),
 	       External (Some "duplicate"),[],pure_e,nob));
     ("<<",Base((((mk_nat_params ["n";"m"])@[("ord",{k=K_Ord})]),
 		(mk_pure_fun (mk_tup [(mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m"));
@@ -2530,8 +2531,8 @@ let rec simple_constraint_check in_env cs =
       else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
 			            ^ string_of_big_int i1 ^ " to be less than or equal to " ^ string_of_big_int i2)
     | _, Npos_inf | Npos_inf, Npos_inf | Nneg_inf, _ | Nneg_inf, Nneg_inf -> check cs
-    | Npos_inf, Nconst _ -> eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires infinity to be less than "
-                                                        ^ (n_to_string n2'))
+    (*| Npos_inf, Nconst _ -> eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires infinity to be less than or equal to "
+                                                        ^ (n_to_string n2'))*)
     | _,_ -> LtEq(co,enforce,n1',n2')::(check cs))
   | CondCons(co,pats,exps):: cs ->
     (*let _ = Printf.eprintf "Condcons check length pats %i, length exps %i\n" (List.length pats) (List.length exps) in*)
