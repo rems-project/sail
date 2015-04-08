@@ -16,7 +16,7 @@ test: sail interpreter
 	./run_tests.native
 
 LEM = ~/bitbucket/lem/lem
-LEMLIBOCAML = ~/bitbucket/lem/ocaml-lib/_build/
+LEMLIBOCAML = ~/bitbucket/lem/ocaml-lib/
 
 install_elf:
 	cp -p ../../system-v-abi/src/*.lem elf_model/
