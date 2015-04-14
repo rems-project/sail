@@ -527,6 +527,13 @@ let rec compare_op_vec op sign (V_tuple [vl;vr]) =
       compare_op op (V_tuple[l1';l2'])
    end in
    binary_taint comp_help vl vr
+let rec compare_op_vec_range op sign (V_tuple [vl;vr]) = 
+  let comp_help vl vr = match (vl,vr) with
+    | (V_unknown,_) -> V_unknown
+    | (_,V_unknown) -> V_unknown
+    | _ -> compare_op op (V_tuple[(to_num sign vl);vr])
+  end in
+  binary_taint comp_help vl vr
 let rec compare_op_vec_unsigned op (V_tuple [vl;vr]) = 
   let comp_help vl vr = match (vl,vr) with
     | (V_unknown,_) -> V_unknown
@@ -654,6 +661,8 @@ let library_functions direction = [
   ("gteq", compare_op (>=));
   ("lt_vec", compare_op_vec (<) Signed);
   ("gt_vec", compare_op_vec (>) Signed);
+  ("lt_vec_range", compare_op_vec_range (<) Signed);
+  ("gt_vec_range", compare_op_vec_range (>) Signed);
   ("lteq_vec", compare_op_vec (<=) Signed);
   ("gteq_vec", compare_op_vec (>=) Signed);
   ("lt_vec_signed", compare_op_vec (<) Signed);

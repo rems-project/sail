@@ -1609,7 +1609,7 @@ let initial_typ_env =
   ]
 
 
-let rec typ_subst s_env t =
+let rec typ_subst s_env leave_imp t =
   match t.t with
   | Tvar i -> (match Envmap.apply s_env i with
                | Some(TA_typ t1) -> t1
@@ -1617,21 +1617,22 @@ let rec typ_subst s_env t =
   | Tuvar _  -> new_t()
   | Tid i -> { t = Tid i}
   | Tfn(t1,t2,imp,e) -> 
-    {t =Tfn((typ_subst s_env t1),(typ_subst s_env t2),(ip_subst s_env imp),(e_subst s_env e)) }
-  | Ttup(ts) -> { t= Ttup(List.map (typ_subst s_env) ts) }
-  | Tapp(i,args) -> {t= Tapp(i,List.map (ta_subst s_env) args)}
-  | Tabbrev(ti,ta) -> {t = Tabbrev(typ_subst s_env ti,typ_subst s_env ta) }
-  | Toptions(t1,None) -> {t = Toptions(typ_subst s_env t1,None)}
-  | Toptions(t1,Some t2) -> {t = Toptions(typ_subst s_env t1,Some (typ_subst s_env t2)) }
-and ip_subst s_env ip =
+    {t =Tfn((typ_subst s_env false t1),(typ_subst s_env false t2),(ip_subst s_env leave_imp imp),(e_subst s_env e)) }
+  | Ttup(ts) -> { t= Ttup(List.map (typ_subst s_env leave_imp) ts) }
+  | Tapp(i,args) -> {t= Tapp(i,List.map (ta_subst s_env leave_imp) args)}
+  | Tabbrev(ti,ta) -> {t = Tabbrev(typ_subst s_env leave_imp ti,typ_subst s_env leave_imp ta) }
+  | Toptions(t1,None) -> {t = Toptions(typ_subst s_env leave_imp t1,None)}
+  | Toptions(t1,Some t2) -> {t = Toptions(typ_subst s_env leave_imp t1,Some (typ_subst s_env leave_imp t2)) }
+and ip_subst s_env leave_imp ip =
+  let leave_nu = if leave_imp then leave_nuvar else (fun i -> i) in
   match ip with
     | IP_none -> ip
-    | IP_length n -> IP_length (leave_nuvar (n_subst s_env n))
-    | IP_start n -> IP_start (leave_nuvar (n_subst s_env n))
-    | IP_user n -> IP_user (leave_nuvar (n_subst s_env n))
-and ta_subst s_env ta =
+    | IP_length n -> IP_length (leave_nu (n_subst s_env n))
+    | IP_start n -> IP_start (leave_nu (n_subst s_env n))
+    | IP_user n -> IP_user (leave_nu (n_subst s_env n))
+and ta_subst s_env leave_imp ta =
   match ta with
-  | TA_typ t -> TA_typ (typ_subst s_env t)
+  | TA_typ t -> TA_typ (typ_subst s_env leave_imp t)
   | TA_nexp n -> TA_nexp (n_subst s_env n)
   | TA_eft e -> TA_eft (e_subst s_env e)
   | TA_ord o -> TA_ord (o_subst s_env o)
@@ -1680,7 +1681,8 @@ let rec cs_subst t_env cs =
     | CondCons(l,cs_p,cs_e)::cs -> CondCons(l,cs_subst t_env cs_p,cs_subst t_env cs_e)::(cs_subst t_env cs)
     | BranchCons(l,bs)::cs -> BranchCons(l,cs_subst t_env bs)::(cs_subst t_env cs)
 
-let subst (k_env : (Envmap.k * kind) list) (t : t) (cs : nexp_range list) (e : effect) : (t * nexp_range list * effect * t_arg emap) =
+let subst (k_env : (Envmap.k * kind) list) (leave_imp:bool)
+          (t : t) (cs : nexp_range list) (e : effect) : (t * nexp_range list * effect * t_arg emap) =
   let subst_env = Envmap.from_list
     (List.map (fun (id,k) -> (id, 
                               match k.k with
@@ -1690,7 +1692,7 @@ let subst (k_env : (Envmap.k * kind) list) (t : t) (cs : nexp_range list) (e : e
                               | K_Efct -> TA_eft (new_e ())
                               | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "substitution given an environment with a non-base-kind kind"))) k_env) 
   in
-  (typ_subst subst_env t, cs_subst subst_env cs, e_subst subst_env e, subst_env)
+  (typ_subst subst_env leave_imp t, cs_subst subst_env cs, e_subst subst_env e, subst_env)
 
 let rec typ_param_eq l spec_param fun_param = 
   match (spec_param,fun_param) with
@@ -1829,7 +1831,7 @@ let rec get_abbrev d_env t =
     | Tid i ->
       (match Envmap.apply d_env.abbrevs i with
 	| Some(Base((params,ta),tag,cs,efct,_)) ->
-          let ta,cs,_,_ = subst params ta cs efct in
+          let ta,cs,_,_ = subst params false ta cs efct in
           let ta,cs' = get_abbrev d_env ta in
           (match ta.t with
           | Tabbrev(t',ta) -> ({t=Tabbrev({t=Tabbrev(t,t')},ta)},cs@cs')
@@ -1839,7 +1841,7 @@ let rec get_abbrev d_env t =
       (match Envmap.apply d_env.abbrevs i with
 	| Some(Base((params,ta),tag,cs,efct,_)) ->
 	  let env = Envmap.from_list2 (List.map fst params) args in
-          let ta,cs' = get_abbrev d_env (typ_subst env ta) in
+          let ta,cs' = get_abbrev d_env (typ_subst env false ta) in
           (match ta.t with
           | Tabbrev(t',ta) -> ({t=Tabbrev({t=Tabbrev(t,t')},ta)},cs_subst env (cs@cs'))
           | _ -> ({t = Tabbrev(t,ta)},cs_subst env cs))
@@ -2355,7 +2357,7 @@ let rec select_overload_variant d_env params_check get_all variants actual_type 
       select_overload_variant d_env params_check get_all variants actual_type
     | Base((parms,t_orig),tag,cs,ef,bindings)::variants ->
       (*let _ = Printf.printf "About to check a variant %s\n" (t_to_string t_orig) in*)
-      let t,cs,ef,_ = if parms=[] then t_orig,cs,ef,Envmap.empty else subst parms t_orig cs ef in
+      let t,cs,ef,_ = if parms=[] then t_orig,cs,ef,Envmap.empty else subst parms false t_orig cs ef in
       (*let _ = Printf.printf "And after substitution %s\n" (t_to_string t) in*)
       let t,cs' = get_abbrev d_env t in
       let recur _ = select_overload_variant d_env params_check get_all variants actual_type in
@@ -2639,7 +2641,7 @@ let tannot_merge co denv widen t_older t_newer =
       (match tag_o,tag_n with
 	| Default,tag -> 
 	  (match t_n.t with
-	    | Tuvar _ -> let t_o,cs_o,ef_o,_ = subst ps_o t_o cs_o ef_o in
+	    | Tuvar _ -> let t_o,cs_o,ef_o,_ = subst ps_o false t_o cs_o ef_o in
 			 let t,_ = type_consistent co denv Guarantee false t_n t_o in
 			 Base(([],t),tag_n,cs_o,ef_o,bounds_o)
 	    | _ -> t_newer)
