@@ -257,3 +257,9 @@ let same_content_files file1 file2 : bool =
     with Stream.Failure -> stream_is_empty s1 && stream_is_empty s2
   end
 
+(*String formatting *)
+let rec string_of_list sep string_of = function
+  | [] -> ""
+  | [x] -> string_of x
+  | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
+

@@ -1,4 +1,5 @@
 open Ast
+open Util
 open Big_int
 module Envmap = Finite_map.Fmap_map(String)
 module Nameset' = Set.Make(String)
@@ -134,6 +135,8 @@ type def_envs = {
 
 type exp = tannot Ast.exp
 
+(*Getters*)
+
 let get_index n =
  match n.nexp with
    | Nuvar {nindex = i} -> i
@@ -142,11 +145,7 @@ let get_index n =
 let get_c_loc = function
   | Patt l | Expr l | Specc l | Fun l -> l
 
-let rec string_of_list sep string_of = function
-  | [] -> ""
-  | [x] -> string_of x
-  | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
-
+(*To string functions *)
 let debug_mode = ref true;;
 
 let co_to_string = function
@@ -245,10 +244,7 @@ let rec constraint_to_string = function
     "CondCons(" ^ co_to_string co ^ ", [" ^ constraints_to_string pats ^ "], [" ^ constraints_to_string exps ^ "])"
   | BranchCons(co,consts) ->
     "BranchCons(" ^ co_to_string co ^ ", [" ^ constraints_to_string consts ^ "])"
-and constraints_to_string = function
-  | [] -> ""
-  | [c] -> constraint_to_string c
-  | c::cs -> (constraint_to_string c) ^ "; " ^ (constraints_to_string cs)
+and constraints_to_string l = string_of_list "; " constraint_to_string l
 
 let rec tannot_to_string = function
   | NoTyp -> "No tannot"
@@ -257,10 +253,12 @@ let rec tannot_to_string = function
   | Overload(poly,_,variants) ->
     "Overloaded: poly = " ^ tannot_to_string poly
 
+(* nexp constants, commonly used*)
 let n_zero = {nexp = Nconst zero}
 let n_one = {nexp = Nconst one}
 let n_two = {nexp = Nconst two}
 
+(*effect functions*)
 let rec effect_remove_dups = function
   | [] -> []
   | (BE_aux(be,l))::es -> 
@@ -284,6 +282,7 @@ let union_effects e1 e2 =
     (*let _ = Printf.eprintf "union effects of length %s and %s\n" (e_to_string e1) (e_to_string e2) in*)
     {effect= Eset (effect_remove_dups (b1@b2))}  
 
+(*Possibly unused record functions*)
 let rec lookup_record_typ (typ : string) (env : rec_env list) : rec_env option =
   match env with
     | [] -> None
@@ -318,6 +317,7 @@ let lookup_field_type (field: string) ((id,r_kind,fields) : rec_env) : tannot =
   then List.assoc field fields
   else NoTyp
 
+(*comparisons*)
 let rec compare_nexps n1 n2 =
   match n1.nexp,n2.nexp with 
   | Nneg_inf , Nneg_inf -> 0
@@ -925,6 +925,28 @@ let rec fresh_evar bindings e =
       None
     | _ -> None
 
+let rec contains_nuvar_nexp n ne = match ne with
+  | _ -> false
+
+let rec contains_nuvar n cs = match cs with
+  | [] -> []
+  | ((LtEq(_,_,nl,nr) | GtEq(_,_,nl,nr) | Eq(_,nl,nr)) as co)::cs -> 
+    if (contains_nuvar_nexp n nl || contains_nuvar_nexp n nr)
+    then co::(contains_nuvar n cs)
+    else contains_nuvar n cs
+  | CondCons(so,conds,exps)::cs -> 
+    let conds' = contains_nuvar n conds in
+    let exps' = contains_nuvar n exps in
+    (match conds',exps' with
+      | [],[] -> contains_nuvar n cs
+      | _ -> CondCons(so,conds',exps')::contains_nuvar n cs)
+  | BranchCons(so,b_cs)::cs ->
+    (match contains_nuvar n b_cs with
+      | [] -> contains_nuvar n cs
+      | b -> BranchCons(so,b)::contains_nuvar n cs)
+  | _::cs -> contains_nuvar n cs
+    
+
 let nat_t = {t = Tapp("range",[TA_nexp n_zero;TA_nexp{nexp = Npos_inf};])}
 let int_t = {t = Tapp("range",[TA_nexp{nexp=Nneg_inf};TA_nexp{nexp = Npos_inf};])}
 let uint8_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp{nexp = N2n({nexp = Nconst (big_int_of_int 8)},Some (big_int_of_int 256))}])}
@@ -1431,6 +1453,10 @@ let initial_typ_env =
 	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
 				    mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")]) bit_t)),
 	     External (Some "lt_vec"),[],pure_e,nob);
+       Base(((mk_nat_params ["n";"m";"o";"p"]@["ord",{k=K_Ord}]),
+	     (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
+				   mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
+	    External (Some "lt_vec_range"), [], pure_e, nob);
        ]));
     ("<_s",
      Overload(
@@ -1463,6 +1489,10 @@ let initial_typ_env =
 	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
 				    mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")]) bit_t)), 
 	     External (Some "gt_vec"),[],pure_e,nob);
+       Base(((mk_nat_params ["n";"m";"o";"p"]@["ord",{k=K_Ord}]),
+	     (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m");
+				   mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
+	    External (Some "gt_vec_range"), [], pure_e, nob);
        ]));
     (">_s",
      Overload(
