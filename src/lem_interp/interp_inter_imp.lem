@@ -437,7 +437,7 @@ let rec interp_to_outcome mode context thunk =
 	  length tracking value v_tracking 
 	  (fun b -> 
 	    match return with 
-	      | Nothing -> (IState next_state context)
+	      | Nothing -> (IState (Interp.add_answer_to_stack next_state Interp.unitv) context)
 	      | Just return_bool -> return_bool (IState next_state context) b end)
 	else Error "Memory address on write is not 64 bits"
       | _ -> Error ("Memory " ^ i ^ " function with write kind not found")

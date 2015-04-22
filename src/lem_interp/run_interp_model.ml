@@ -3,13 +3,12 @@ open Interp_ast ;;
 open Interp_interface ;;
 open Interp_inter_imp ;;
 
-open Big_int ;;
 open Printing_functions ;;
 
 module Reg = struct
   include Map.Make(struct type t = string let compare = compare end)
   let to_string id v = 
-    sprintf "%s -> %s" id (val_to_string v)
+    sprintf "%s -> %s" id (register_value_to_string v)
   let find id m = 
 (*    eprintf "reg_find called with %s\n" id; *)
     let v = find id m in
@@ -17,13 +16,14 @@ module Reg = struct
     v
 end ;;
 
-let compare_bytes v1 v2 = 
+let compare_addresses v1 v2 = 
   let rec comp v1s v2s = match (v1s,v2s) with
     | ([],[]) -> 0
     | (v1::v1s,v2::v2s) -> 
       match compare v1 v2 with
 	| 0 -> comp v1s v2s
 	| ans -> ans in 
+  
   let l1 = List.length v1 in
   let l2 = List.length v2 in
   if l1 > l2 then 1
@@ -32,8 +32,8 @@ let compare_bytes v1 v2 =
 
 module Mem = struct
   include Map.Make(struct
-    type t = word8 list
-    let compare v1 v2 = compare_bytes v1 v2
+    type t = address_lifted
+    let compare v1 v2 = compare_addresses v1 v2
   end)
   let find idx m = 
 (*    eprintf "mem_find called with %s\n" (val_to_string (Bytevector idx));*)
@@ -45,32 +45,22 @@ module Mem = struct
     add key valu m
 
   let to_string loc v =
-    sprintf "[%s] -> %x" (val_to_string (Bytevector loc)) v
+    sprintf "[%s] -> %s" (memory_value_to_string (memory_value_of_address_lifted loc)) (memory_value_to_string v)
 end ;;
 
-let rec slice bitvector (start,stop) = 
-  match bitvector with
-    | Bitvector(bools, inc, fst) -> 
-      Bitvector ((Interp.from_n_to_n (if inc then (sub_big_int start fst) else (sub_big_int fst start))
-                                    (if inc then (sub_big_int stop fst) else (sub_big_int fst stop)) bools),
-                 inc,
-                 (if inc then start else (add_big_int (sub_big_int stop start) unit_big_int)))
-                
-    | Bytevector bytes -> 
-      Bytevector((Interp.from_n_to_n start stop bytes)) (*This is wrong, need to explode and re-encode, but maybe never happens?*)
-    | Unknown0 -> Unknown0
-;;
+let slice register_vector (start,stop) = slice_reg_value register_vector start stop
+
+let big_num_unit = Nat_big_num.of_int 1
 
 let rec list_update index start stop e vals =  
  match vals with
     | []      -> []
     | x :: xs -> 
-      if eq_big_int index stop 
+      if Nat_big_num.equal index stop 
       then e :: xs 
-      else if ge_big_int index start
-      then e :: (list_update (add_big_int index unit_big_int) start stop e xs)
-      else x :: (list_update (add_big_int index unit_big_int) start stop e xs)
-;;
+      else if Nat_big_num.greater_equal index start
+      then e :: (list_update (Nat_big_num.add index big_num_unit) start stop e xs)
+      else x :: (list_update (Nat_big_num.add index big_num_unit) start stop e xs)
 
 let rec list_update_list index start stop es vals =
   match vals with
@@ -79,56 +69,29 @@ let rec list_update_list index start stop es vals =
     match es with
     | [] -> xs
     | e::es ->
-      if eq_big_int index stop
+      if Nat_big_num.equal index stop
       then e::xs
-      else if ge_big_int index start
-      then e :: (list_update_list (add_big_int index unit_big_int) start stop es xs)
-      else x :: (list_update_list (add_big_int index unit_big_int) start stop (e::es) xs)
-;;
+      else if Nat_big_num.greater_equal index start
+      then e :: (list_update_list (Nat_big_num.add index big_num_unit) start stop es xs)
+      else x :: (list_update_list (Nat_big_num.add index big_num_unit) start stop (e::es) xs)
 
-let fupdate_slice original e (start,stop) =
-  match original with
-    | Bitvector(bools,inc,fst) -> 
-      (match e with 
-      | Bitvector ([b],_,_) -> 
-        Bitvector((list_update zero_big_int 
-                               (if inc then (sub_big_int start fst) else (sub_big_int fst start))
-                               (if inc then (sub_big_int stop fst) else (sub_big_int fst stop)) b bools), inc, fst)
-      | Bitvector(bs,_,_) -> 
-        Bitvector((list_update_list zero_big_int 
-                                    (if inc then (sub_big_int start fst) else (sub_big_int fst start))
-                                    (if inc then (sub_big_int stop fst) else (sub_big_int fst stop)) bs bools), inc, fst)
-      | _ -> Unknown0)
-    | Bytevector bytes -> (*Can this happen?*)
-      (match e with
-      | Bytevector [byte] -> 
-        Bytevector (list_update zero_big_int start stop byte bytes)
-      | Bytevector bs ->
-        Bytevector (list_update_list zero_big_int start stop bs bytes)
-      | _ -> Unknown0)
-    | Unknown0 -> Unknown0
-;;
+let fupdate_slice original e (start,stop) = assert false
 
-let combine_slices (start, stop) (inner_start,inner_stop) = (add_big_int start inner_start, add_big_int start inner_stop)
+let increment address = address (*Need to increment this *)
 
-let increment bytes = 
-  let adder byte (carry_out, bytes) = 
-    let new_byte = carry_out + byte in 
-    if new_byte > 255 then (1,0::bytes) else (0,new_byte::bytes)
-  in (snd (List.fold_right adder bytes (1,[])))
-;;
+let combine_slices (start, stop) (inner_start,inner_stop) = 
+  (start + inner_start, start + inner_stop)
+
 let unit_lit = (L_aux(L_unit,Interp_ast.Unknown))
-
-
 
 let rec perform_action ((reg, mem) as env) = function
  (* registers *)
- | Read_reg0((Reg0 id), _) -> (Some(Reg.find id reg), env)
+ | Read_reg0(Reg0(id,_), _) -> (Some(Reg.find id reg), env)
  | Read_reg0(Reg_slice(id, range), _)
  | Read_reg0(Reg_field(id, _, range), _) -> (Some(slice (Reg.find id reg) range), env)
  | Read_reg0(Reg_f_slice(id, _, range, mini_range), _) ->
    (Some(slice (slice (Reg.find id reg) range) mini_range),env)
- | Write_reg0(Reg0 id, value, _) -> (None, (Reg.add id value reg,mem))
+ | Write_reg0(Reg0(id,_), value, _) -> (None, (Reg.add id value reg,mem))
  | Write_reg0(Reg_slice(id,range),value, _) 
  | Write_reg0(Reg_field(id,_,range),value,_)->
      let old_val = Reg.find id reg in
@@ -138,20 +101,20 @@ let rec perform_action ((reg, mem) as env) = function
    let old_val = Reg.find id reg in
    let new_val = fupdate_slice old_val value (combine_slices range mini_range) in
    (None,(Reg.add id new_val reg,mem))
- | Read_mem0(_,(Bytevector location), length, _,_) ->
+ | Read_mem0(_,location, length, _,_) ->
    let rec reading location length = 
-     if eq_big_int length zero_big_int 
+     if length = 0 
      then []
-     else (Mem.find location mem)::(reading (increment location) (sub_big_int length unit_big_int)) in
-   (Some (Bytevector(reading location length)), env)
- | Write_mem0(_,(Bytevector location), length, _, (Bytevector bytes),_,_) ->
+     else (Mem.find location mem)::(reading (increment location) (length - 1)) in
+   (Some (reading location length), env)
+ | Write_mem0(_,location, length, _, bytes,_,_) ->
    let rec writing location length bytes mem = 
-     if eq_big_int length zero_big_int
+     if length = 0
      then mem
      else match bytes with
        | [] -> mem
        | b::bytes -> 
-	 writing (increment location) (sub_big_int length unit_big_int) bytes (Mem.add location b mem) in
+	 writing (increment location) (length - 1) bytes (Mem.add location b mem) in
    (None,(reg,writing location length bytes mem))
  | _ -> (None, env)
 ;;
