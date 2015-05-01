@@ -231,11 +231,20 @@ let rec bit_to_hex v =
 ;;*)
 
 let reg_name_to_string = function
-  | Reg0(s,_) -> s
-  | Reg_slice(s,(first,second)) -> 
+  | Reg0(s,_,_,_) -> s
+  | Reg_slice(s,start,dir,(first,second)) -> 
+    let first,second = 
+      match dir with
+	| D_increasing -> (first,second) 
+	| D_decreasing -> (start - first, start - second) in	  
     s ^ "[" ^ string_of_int first ^ (if (first = second) then "" else ".." ^ (string_of_int second)) ^ "]"
-  | Reg_field(s,f,_) -> s ^ "." ^ f
-  | Reg_f_slice(s,f,_,(first,second)) -> s ^ "." ^ f ^ "]" ^ string_of_int first ^ (if (first = second) then "" else ".." ^ (string_of_int second)) ^ "]"
+  | Reg_field(s,_,_,f,_) -> s ^ "." ^ f
+  | Reg_f_slice(s,start,dir,f,_,(first,second)) -> 
+    let first,second = 
+      match dir with
+	| D_increasing -> (first,second) 
+	| D_decreasing -> (start - first, start - second) in	  
+    s ^ "." ^ f ^ "]" ^ string_of_int first ^ (if (first = second) then "" else ".." ^ (string_of_int second)) ^ "]"
 
 let dependencies_to_string dependencies = String.concat ", " (List.map reg_name_to_string dependencies)
 
@@ -335,10 +344,10 @@ let rec format_events = function
     "     Failed with message : " ^ s ^ "\n"
   | (E_error s)::events ->
     "     Failed with message : " ^ s ^ " but continued on erroneously\n"
-  | (E_read_mem(read_kind, (Address_lifted location), length, tracking))::events ->
+  | (E_read_mem(read_kind, (Address_lifted(location, _)), length, tracking))::events ->
     "     Read_mem at " ^ (memory_value_to_string location) ^ " for " ^ (string_of_int length) ^ " bytes \n" ^
     (format_events events)
-  | (E_write_mem(write_kind,(Address_lifted location), length, tracking, value, v_tracking))::events ->
+  | (E_write_mem(write_kind,(Address_lifted (location,_)), length, tracking, value, v_tracking))::events ->
     "     Write_mem at " ^ (memory_value_to_string location) ^ " writing " ^ (memory_value_to_string value) ^ " across " ^ (string_of_int length) ^ " bytes\n" ^
     (format_events events)
   | ((E_barrier b_kind)::events) ->
@@ -401,8 +410,8 @@ let local_variables_to_string (IState(stack,_)) =
     | LEnv(_,env) -> 
       String.concat ", " (option_map (fun (id,value)-> 
 	match id with
-	  | Id_aux(Id "0",_) -> None (*Let's not print out the context hole again*)
-	  | _ -> Some (id_to_string id ^ "=" ^ val_to_string_internal mem value)) env)
+	  | "0" -> None (*Let's not print out the context hole again*)
+	  | _ -> Some (id ^ "=" ^ val_to_string_internal mem value)) (Pmap.bindings_list env))
 
 let instr_parm_to_string (name, typ, value) = 
   name ^"="^

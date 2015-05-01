@@ -210,6 +210,7 @@ val do_resolve_constraints : bool ref
 val check_tannot : Parse_ast.l -> tannot -> nexp option -> nexp_range list -> effect -> tannot
 
 val nexp_eq : nexp -> nexp -> bool
+val nexp_one_more_than : nexp -> nexp -> bool
 
 val conforms_to_t : def_envs -> bool -> bool -> t -> t -> bool
 

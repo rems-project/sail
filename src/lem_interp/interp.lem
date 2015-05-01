@@ -1,6 +1,7 @@
 open import Pervasives
 import Map
 import Map_extra (* For 'find' instead of using lookup and maybe types, as we know it cannot fail *)
+import Set_extra (* For 'to_list' because map only goes to set *)
 import List_extra (* For 'nth' and 'head' where we know that they cannot fail *)
 open import Show_extra (* for 'show' to convert nat to string) *)
 open import String_extra (* for chr *)
@@ -36,10 +37,10 @@ let is_inc = function | IInc -> true | _ -> false end
 let id_of_string s = (Id_aux (Id s) Unknown)
 
 type reg_form =
- | Reg of id * tannot
+ | Reg of id * tannot * i_direction
  | SubReg of id * reg_form * index_range
 
-type ctor_kind = C_Enum | C_Union
+type ctor_kind = C_Enum of nat | C_Union
 
 type value =
  | V_boxref of nat * t  
@@ -56,17 +57,6 @@ type value =
  | V_register of reg_form (* Value to store register access, when not actively reading or writing *)
  | V_register_alias of (alias_spec tannot) * tannot (* Same as above, but to a concatenation of two registers *)
  | V_track of value * (list reg_form) (* Used when memory system wants to track what register(s) a value came from *)
-
-(*let rec integerToString n acc =
-  if n = 0 then
-    acc
-  else
-    integerToString (n / 10) (chr (natFromInteger (n mod 10 + 48)) :: acc)
-
-let string_of_integer i = if i = 0 then "0" else toString(integerToString i [])*)
-(*val string_of_integer : integer -> string
-declare ocaml target_rep function string_of_integer = `Big_int_Z.string_of_big_int`*)
-
 
 let rec string_of_value v = match v with
   | V_boxref nat t -> "$#" ^ (show nat) ^ "$"
@@ -124,6 +114,8 @@ and value_eq left right =
       t = t' &&
       listEqualBy id_value_eq l l'
   | (V_ctor i t ckind v, V_ctor i' t' ckind' v') -> t = t' && ckind=ckind' && id_value_eq (i, v) (i', v')
+  | (V_ctor _ _ (C_Enum i) _,V_lit (L_aux (L_num j) _)) -> i = (natFromInteger j)
+  | (V_lit (L_aux (L_num j) _), V_ctor _ _ (C_Enum i) _) -> i = (natFromInteger j)
   | (V_unknown,_) -> true
   | (_,V_unknown) -> true
   | (V_track v _, v2) -> value_eq v v2
@@ -138,7 +130,7 @@ end
 
 let reg_start_pos reg = 
   match reg with
-    | Reg _ (Just(typ,_,_,_)) -> 
+    | Reg _ (Just(typ,_,_,_)) _ -> 
       let start_from_vec targs = match targs with
 	| T_args [T_arg_nexp (Ne_const s);_;_;_] -> natFromInteger s
       end in
@@ -158,7 +150,7 @@ end
 
 let reg_size reg = 
   match reg with
-    | Reg _ (Just(typ,_,_,_)) -> 
+    | Reg _ (Just(typ,_,_,_)) _ -> 
       let end_from_vec targs = match targs with
 	| T_args [_;T_arg_nexp (Ne_const s);_;_] -> natFromInteger s
       end in
@@ -190,17 +182,17 @@ let unitv = V_lit (L_aux L_unit Unknown)
 type lmem = LMem of nat * map nat value
 
 (* Environment for bindings *)
-type env = list (id * value)
+type env = map string value
 (* Environment for lexical bindings, nat is a counter to build new unique variables when necessary *)
 type lenv = LEnv of nat * env
 
 let emem = LMem 1 Map.empty
-let eenv = LEnv 1 []
+let eenv = LEnv 1 Map.empty
 
-type sub_reg_map = list (id * index_range)
+type sub_reg_map = map string index_range
 
 (*top_level is a tuple of 
-  (all definitions,
+  (function definitions environment,
    all extracted instructions (where possible),
    default direction
    letbound and enum values, 
@@ -208,7 +200,14 @@ type sub_reg_map = list (id * index_range)
    Typedef union constructors, 
    sub register mappings, and register aliases) *)
 type top_level = 
-  | Env of (defs tannot) * list instruction_form * i_direction * env * env * list (id * typ) * list (id * sub_reg_map) * list (id * (alias_spec tannot))
+  | Env of map string (list (funcl tannot)) (*function definitions environment*)
+        * list instruction_form (* extracted instructions (where extractable) *)
+        * i_direction (*default direction*)
+        * env (*letbound and enum values*)
+        * env (*register values*) 
+        * map string typ (*typedef union constructors *)
+        * map string sub_reg_map (*sub register mappings*)
+        * map string (alias_spec tannot) (*register aliases*)
 
 type action = 
  | Read_reg of reg_form * maybe (nat * nat)
@@ -220,16 +219,18 @@ type action =
  | Nondet of list (exp tannot)
  | Call_extern of string * value
  | Exit of (exp tannot)
- (* For stepper, no action needed. String is function called, value is parameter, on next state is a new function body *)
+ (* For stepper, no action needed. String is function called, value is parameter where applicable *)
  | Step of l * maybe string * maybe value 
 
-(* Inverted call stack, where top item on the stack is waiting for an action to resolve and all other frames for the right stack *)
+(* Inverted call stack, where the frame with a Top stack waits for an action to resolve and
+   all other frames for their inner stack *)
 type stack = 
  | Top
  | Hole_frame of id * exp tannot * top_level * lenv * lmem * stack (* Stack frame waiting to fill a hole with a value *)
  | Thunk_frame of exp tannot * top_level * lenv * lmem * stack     (* Paused stack frame *)
 
-(*Internal representation of outcomes from running the interpreter. Actions request an external party to resolve a request or pause*)
+(*Internal representation of outcomes from running the interpreter.
+  Actions request an external party to resolve a request *)
 type outcome =
  | Value of value
  | Action of action * stack
@@ -248,91 +249,104 @@ val interp :interp_mode -> (i_direction -> outcome -> maybe value) -> defs tanno
 val resume : interp_mode -> stack -> maybe value -> outcome
 
 (* Internal definitions to setup top_level *)
-val to_register_fields : defs tannot -> list (id * list (id * index_range))
+val to_fdefs : defs tannot -> map string (list (funcl tannot))
+let rec to_fdefs (Defs defs) =
+  match defs with
+    | [] -> Map.empty
+    | def::defs ->
+      match def with
+	| DEF_fundef f -> (match f with
+	    | FD_aux (FD_function _ _ _ fcls) _ ->
+	      match fcls with
+		| [] -> to_fdefs (Defs defs)
+		| (FCL_aux (FCL_Funcl name _ _) _)::_  ->
+		  Map.insert (get_id name) fcls (to_fdefs (Defs defs)) end end)
+	| _ -> to_fdefs (Defs defs) end end
+
+val to_register_fields : defs tannot -> map string (map string index_range)
 let rec to_register_fields (Defs defs) = 
   match defs with
-  | [ ] -> [ ]
+  | [ ] -> Map.empty
   | def::defs -> 
     match def with 
     | DEF_type (TD_aux (TD_register id n1 n2 indexes) l') ->
-      (id,List.map (fun (a,b) -> (b,a)) indexes)::(to_register_fields (Defs defs))
+      Map.insert (get_id id) 
+	         (List.foldr (fun (a,b) imap -> Map.insert (get_id b) a imap) Map.empty indexes)
+	         (to_register_fields (Defs defs))
     | _ -> to_register_fields (Defs defs)
     end 
   end
 
-val to_registers : defs tannot -> env
-let rec to_registers (Defs defs) = 
+val to_registers : i_direction -> defs tannot -> env
+let rec to_registers dd (Defs defs) = 
   match defs with
-  | [ ] -> [ ]
+  | [ ] -> Map.empty
   | def::defs -> 
     match def with 
-    | DEF_reg_dec (DEC_aux (DEC_reg typ id) (l,tannot)) -> (id, V_register(Reg id tannot)) :: (to_registers (Defs defs))
-    | DEF_reg_dec (DEC_aux (DEC_alias id aspec) (l,tannot)) -> (id, V_register_alias aspec tannot) :: (to_registers (Defs defs))
-    | _ -> to_registers (Defs defs)
+    | DEF_reg_dec (DEC_aux (DEC_reg typ id) (l,tannot)) -> 
+      let dir =  match tannot with
+	| Nothing -> dd
+	| Just(t, _, _, _) -> dd (*TODO, lets pull the direction out properly*)
+      end in
+      Map.insert (get_id id) (V_register(Reg id tannot dir)) (to_registers dd (Defs defs))
+    | DEF_reg_dec (DEC_aux (DEC_alias id aspec) (l,tannot)) -> 
+      Map.insert (get_id id) (V_register_alias aspec tannot) (to_registers dd (Defs defs))
+    | _ -> to_registers dd (Defs defs)
     end 
   end 
 
-val to_aliases : defs tannot -> list (id * (alias_spec tannot))
+val to_aliases : defs tannot -> map string (alias_spec tannot)
 let rec to_aliases (Defs defs) =
   match defs with
-    | [] -> []
+    | [] -> Map.empty
     | def::defs ->
       match def with
-	| DEF_reg_dec (DEC_aux (DEC_alias id aspec) _) -> (id, aspec) :: (to_aliases (Defs defs))
-	| DEF_reg_dec (DEC_aux (DEC_typ_alias typ id aspec) _) -> (id, aspec) :: (to_aliases (Defs defs))
+	| DEF_reg_dec (DEC_aux (DEC_alias id aspec) _) -> 
+	  Map.insert (get_id id) aspec (to_aliases (Defs defs))
+	| DEF_reg_dec (DEC_aux (DEC_typ_alias typ id aspec) _) -> 
+	  Map.insert (get_id id) aspec (to_aliases (Defs defs))
 	| _ -> to_aliases (Defs defs)
       end 
     end
 
-val to_data_constructors : defs tannot -> list (id * typ)
+val to_data_constructors : defs tannot -> map string typ
 let rec to_data_constructors (Defs defs) =
   match defs with
-  | [] -> []
+  | [] -> Map.empty
   | def :: defs ->
     match def with
     | DEF_type (TD_aux t _)->
       match t with 
       | TD_variant id _ tq tid_list _ ->
-        (List.map 
-	   (fun (Tu_aux t _) ->
+        (List.foldr 
+	   (fun (Tu_aux t _) map ->
 	     match t with
-	    | (Tu_ty_id x y) -> (y,x)
-	    | Tu_id x -> (x,unit_t) end) tid_list)++(to_data_constructors (Defs defs))
+	       | (Tu_ty_id x y) -> Map.insert (get_id y) x map
+	       | Tu_id x -> Map.insert (get_id x) unit_t map end)
+	   (to_data_constructors (Defs defs))) tid_list
       | _ -> to_data_constructors (Defs defs) end
     | _ -> to_data_constructors (Defs defs) end
    end
 
 (*Memory and environment helper functions*)
-val in_env :forall 'a. (list (id * 'a)) -> id -> maybe 'a
-let rec in_env env id =
- match env with
- | [] -> Nothing
- | (eid,value)::env -> if (get_id eid) = (get_id id) then Just value else in_env env id
- end 
+val env_from_list : list (id * value) -> env
+let env_from_list ls = List.foldr (fun (id,v) env -> Map.insert (get_id id) v env) Map.empty ls
+
+val in_env :forall 'a. map string 'a -> string -> maybe 'a
+let in_env env id = Map.lookup id env
 
 val in_lenv : lenv -> id -> value
 let in_lenv (LEnv _ env) id =
-  match in_env env id with
+  match in_env env (get_id id) with
   | Nothing -> V_unknown
   | Just v  -> v 
 end
 
-(*Prefer entries in the first when conflict*)
-let rec list_union first second =
-  match first with
-    | [] -> second
-    | (id,v)::frst ->
-      match in_env second id with
-	| Nothing -> (id,v)::(list_union frst second)
-	| Just _ -> (id,v)::(list_union frst 
-			       (List.deleteBy (fun (id,v) (id2,v2) -> (get_id id) = (get_id id2))
-				  (id,v) second)) end
-end
-
+(*Prefer entries in the first when in conflict*)
 val union_env : lenv -> lenv -> lenv
 let union_env (LEnv i1 env1) (LEnv i2 env2) = 
   let l = if i1 < i2 then i2 else i1 in
-  LEnv l (list_union env1 env2)
+  LEnv l (Map.(union) env2 env1)
 
 val fresh_var : lenv -> (id * lenv)
 let fresh_var (LEnv i env) =
@@ -340,7 +354,7 @@ let fresh_var (LEnv i env) =
   ((Id_aux (Id ((show i) ^ "var")) Interp_ast.Unknown), lenv)
 
 val add_to_env : (id * value) -> lenv -> lenv
-let add_to_env entry (LEnv i env) = (LEnv i (entry::env))
+let add_to_env (id, entry) (LEnv i env) = (LEnv i (Map.insert (get_id id) entry env))
 
 val in_mem : lmem -> nat -> value
 let in_mem (LMem _ m) n = 
@@ -481,7 +495,7 @@ let slice_vector v n1 n2 =
     | V_vector m dir vs ->
       if is_inc(dir) 
       then V_vector n1 dir (from_n_to_n (n1 - m) (n2 - m) vs)
-      else V_vector (n1 - n2 + 1) dir (from_n_to_n (m - n1) (m - n2) vs)
+      else V_vector n1 dir (from_n_to_n (m - n1) (m - n2) vs)  
     | V_vector_sparse m n dir vs d -> 
       let (slice, still_sparse) = 
 	if is_inc(dir) 
@@ -490,15 +504,15 @@ let slice_vector v n1 n2 =
       if still_sparse && is_inc(dir)
       then V_vector_sparse n1 (n2 - n1) dir slice d
       else if is_inc(dir) then V_vector 0 dir (List.map snd slice)
-      else if still_sparse then V_vector_sparse (n1 - n2 +1) (n1 - n2) dir slice d
-      else V_vector (n1 - n2 +1) dir (List.map snd slice)
+      else if still_sparse then V_vector_sparse n1 (n1 - n2) dir slice d
+      else V_vector n1 dir (List.map snd slice)
  end )
 
-val update_field_list : list (id * value) -> list (id * value) -> list (id * value)
+val update_field_list : list (id * value) -> env -> list (id * value)
 let rec update_field_list base updates =
   match base with
   | [] -> []
-  | (id,v)::bs -> match in_env updates id with
+  | (id,v)::bs -> match in_env updates (get_id id) with
     | Just v -> (id,v)::(update_field_list bs updates)
     | Nothing -> (id,v)::(update_field_list bs updates) end
 end
@@ -507,7 +521,7 @@ val fupdate_record : value -> value -> value
 let fupdate_record base updates = 
   let fupdate_record_helper base updates =
       (match (base,updates) with
-	| (V_record t bs,V_record _ us) -> V_record t (update_field_list bs us) 
+	| (V_record t bs,V_record _ us) -> V_record t (update_field_list bs (env_from_list us)) 
        end) in
   binary_taint fupdate_record_helper base updates
 
@@ -654,7 +668,7 @@ val add_answer_to_stack : stack -> value -> stack
 let rec add_answer_to_stack stack v = 
   match stack with
   | Top -> Top
-  | Hole_frame id e t_level (LEnv i env) mem Top -> Thunk_frame e t_level (LEnv i ((id,v)::env)) mem Top
+  | Hole_frame id e t_level env mem Top -> Thunk_frame e t_level (add_to_env (id,v) env) mem Top
   | Thunk_frame e t_level env mem Top -> Thunk_frame e t_level env mem Top
   | Hole_frame id e t_level env mem stack -> Hole_frame id e t_level env mem (add_answer_to_stack stack v)
   | Thunk_frame e t_level env mem stack -> Thunk_frame e t_level env mem (add_answer_to_stack stack v)
@@ -717,7 +731,7 @@ let rec combine_typs ts =
 
 let reg_to_t r =
   match r with
-    | Reg id (Just (t,_,_,_)) -> t
+    | Reg _ (Just (t,_,_,_)) _ -> t
     | _ -> T_var "fresh"
  end
 
@@ -765,7 +779,7 @@ let rec to_exp mode env v : (exp tannot * lenv) =
     (Interp_ast.Unknown, 
      if is_ctor 
      then match ctor_kind with
-       | Just(C_Enum) -> (enum_annot (val_typ v))
+       | Just(C_Enum _) -> (enum_annot (val_typ v))
        | _ -> (ctor_annot (val_typ v)) end
      else (val_annot (val_typ v))) in
   let annot = mk_annot false Nothing in
@@ -775,7 +789,7 @@ let rec to_exp mode env v : (exp tannot * lenv) =
                                     if mode.track_values 
                                     then ((e::es), union_env ev env)
                                     else ((e::es), env))
-                  ([],(LEnv l [])) vs in
+                  ([],(LEnv l Map.empty)) vs in
     (es, union_env env lenv)
   in
   match v with
@@ -827,7 +841,7 @@ let rec to_exp mode env v : (exp tannot * lenv) =
       else let (e,env') = (to_exp mode env vals) in (E_aux (E_app id [e]) annotation, env') 
     | _ -> 
       let (e,env') = (to_exp mode env vals) in (E_aux (E_app id [e]) annotation,env') end)
-  | V_register (Reg id tan) -> (E_aux (E_id id) annot, env)
+  | V_register (Reg id tan dir) -> (E_aux (E_id id) annot, env)
   | V_track v' _ -> 
     if mode.track_values
     then begin let (fid,env') = fresh_var env in
@@ -845,11 +859,11 @@ let rec env_to_let_help mode env taint_env = match env with
     let tan = (val_annot t) in
     let (e,taint_env) = to_exp mode taint_env v in
     let (rest,taint_env) = env_to_let_help mode env taint_env in
-    ((((P_aux (P_id i) (Unknown,tan)),e),t)::rest, taint_env)
+    ((((P_aux (P_id (id_of_string i)) (Unknown,tan)),e),t)::rest, taint_env)
 end 
 
 let env_to_let mode (LEnv _ env) (E_aux e annot) taint_env = 
-  match env_to_let_help mode env taint_env with
+  match env_to_let_help mode (Set_extra.toList (Map.toSet env)) taint_env with
     | ([],taint_env) -> (E_aux e annot,taint_env)
     | ([((p,e),t)],tain_env) ->
       (E_aux (E_let (LB_aux (LB_val_implicit p e) (Unknown,(val_annot t))) e) annot,taint_env)
@@ -874,11 +888,11 @@ let rec match_pattern (P_aux p _) value_whole =
   match p with 
   | P_lit(lit) -> 
     if is_lit_vector lit then
-      let (V_vector n inc bits) = litV_to_vec lit IInc in (*TODO use type annotation to select between increasing and decreasing*)
+      let (V_vector n inc bits) = litV_to_vec lit IInc in 
       match value with
       | V_lit litv -> 
         if is_lit_vector litv then 
-          let (V_vector n' inc' bits') = litV_to_vec litv IInc in (*TODO use type annotation to select between increasing and decreasing *)
+          let (V_vector n' inc' bits') = litV_to_vec litv IInc in 
           if n=n' && inc = inc' then (foldr2 (fun l r rest -> (l = r) && rest) true bits bits',false, eenv)
           else (false,false,eenv)
         else (false,false,eenv)
@@ -896,12 +910,12 @@ let rec match_pattern (P_aux p _) value_whole =
     end
  | P_wild -> (true,false,eenv)
  | P_as pat id ->  
-   let (matched_p,used_unknown,(LEnv bi bounds)) = match_pattern pat value in
+   let (matched_p,used_unknown,bounds) = match_pattern pat value in
    if matched_p then
-     (matched_p,used_unknown,(LEnv bi ((id,value_whole)::bounds)))
+     (matched_p,used_unknown,(add_to_env (id,value_whole) bounds))
    else (false,false,eenv)
- | P_typ typ pat -> match_pattern pat value_whole (* Might like to destructure against the type to get information, but that's looking less useful *)
- | P_id id -> (true, false, (LEnv 0 [(id,value_whole)]))
+ | P_typ typ pat -> match_pattern pat value_whole 
+ | P_id id -> (true, false, (LEnv 0 (Map.fromList [((get_id id),value_whole)])))
  | P_app (Id_aux id _) pats -> 
    match value with
    | V_ctor (Id_aux cid _) t ckind (V_tuple vals) -> 
@@ -935,10 +949,11 @@ let rec match_pattern (P_aux p _) value_whole =
  | P_record fpats _ ->
    match value with
    | V_record t fvals ->
+     let fvals_env = env_from_list fvals in
      List.foldr
        (fun (FP_aux (FP_Fpat id pat) _) (matched_p,used_unknown,bounds) ->
          if matched_p then
-           let (matched_p,used_unknown',new_bounds) = match in_env fvals id with
+           let (matched_p,used_unknown',new_bounds) = match in_env fvals_env (get_id id) with
                                        | Nothing -> (false,false,eenv)
                                        | Just v -> match_pattern pat v end in
            (matched_p, (used_unknown || used_unknown'), (union_env new_bounds bounds))
@@ -1055,10 +1070,11 @@ and vec_concat_match_plev pat r_vals dir l t =
       | P_id id -> (match t with
 	  | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp (Ne_const i);_;_]) ->
 	    let wilds = List.genlist (fun _ -> P_aux P_wild (l,Nothing)) (natFromInteger i) in
-	    let (matched_p,used_unknown,(LEnv bi bounds),matcheds,r_vals) = vec_concat_match wilds r_vals in
+	    let (matched_p,used_unknown,bounds,matcheds,r_vals) = vec_concat_match wilds r_vals in
 	    if matched_p 
 	    then (matched_p, used_unknown, 
-                  (LEnv bi ((id,(V_vector (if is_inc(dir) then 0 else (List.length matcheds)) dir matcheds))::bounds)),
+                  (add_to_env (id,(V_vector (if is_inc(dir) then 0 else (List.length matcheds)) dir matcheds))
+		              bounds),
                   matcheds,r_vals)
 	    else (false,false,eenv,[],[])
 	  | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp nc;_;_]) ->
@@ -1072,10 +1088,10 @@ and vec_concat_match_plev pat r_vals dir l t =
 	    (false,false,eenv,[],[]) (*TODO see if can have some constraint bounds here*)
 	  | _ -> (false,false,eenv,[],[]) end)
       | P_as (P_aux pat (l',Just(t,_,_,_))) id -> 
-	let (matched_p, used_unknown, (LEnv bi bounds),matcheds,r_vals) = vec_concat_match_plev pat r_vals dir l t in
+	let (matched_p, used_unknown, bounds,matcheds,r_vals) = vec_concat_match_plev pat r_vals dir l t in
 	if matched_p 
 	then (matched_p, used_unknown,
-              (LEnv bi ((id,V_vector (if is_inc(dir) then 0 else (List.length matcheds)) dir matcheds)::bounds)),
+              (add_to_env (id,V_vector (if is_inc(dir) then 0 else (List.length matcheds)) dir matcheds) bounds),
               matcheds,r_vals)
 	else (false,false,eenv,[],[])	  
       | P_typ _ (P_aux p (l',Just(t',_,_,_))) -> vec_concat_match_plev p r_vals dir l t
@@ -1159,7 +1175,7 @@ let rec exp_list mode t_level build_e build_v l_env l_mem vals exps =
   end
 
 and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
-  let (Env defs instrs default_dir lets regs ctors subregs aliases) = t_level in 
+  let (Env fdefs instrs default_dir lets regs ctors subregs aliases) = t_level in 
   let (typ,tag,ncs,effect) = match annot with 
     | Nothing -> (T_var "fresh_v", Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
     | Just(t, tag, ncs, ef) -> (t,tag,ncs,ef) end in
@@ -1184,6 +1200,14 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		  | V_vector start dir vs ->
 		    if start = i then (Value v,lm,le) else (Value (update_vector_start dir i 1 v),lm,le)
 		  | _ -> (Value v,lm,le) end
+	      | Typ_app (Id_aux (Id "vector") _) 
+		  [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_var (Kid_aux (Var "length") _)) _)) _;_;_;_] ->
+		match (detaint v) with 
+		  | V_vector start dir vs ->
+		    let i = (List.length vs) - 1 in
+		    if start = i then (Value v,lm,le) else (Value (update_vector_start dir i 1 v),lm,le)
+		  | _ -> (Value v,lm,le) end
+
 	      | _ -> (Value v,lm,le) end in
           (match (tag,detaint v) with 
 	    (*Cast is telling us to read a register*)
@@ -1202,14 +1226,14 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	  | V_boxref n t -> (Value (in_mem l_mem n),l_mem,l_env)
 	  | value -> (Value value,l_mem,l_env) end
         | Tag_global ->
-	  match in_env lets id with
+	  match in_env lets name with
 	    | Just(value) -> (Value value, l_mem,l_env)
 	    | Nothing -> 
-	      (match in_env regs id with
+	      (match in_env regs name with
 		| Just(value) -> (Value value, l_mem,l_env)
 		| Nothing -> (Error l ("Internal error: " ^ name ^ " unbound on Tag_global"),l_mem,l_env) end) end
         | Tag_enum ->
-          match in_env lets id with
+          match in_env lets name with
             | Just(value) -> (Value value,l_mem,l_env)
 	    | Nothing -> (Error l ("Internal error: " ^ name ^ " unbound on Tag_enum "), l_mem,l_env)
 	    end 
@@ -1217,14 +1241,14 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	  let regf = match in_lenv l_env id with (* Check for local treatment of a register as a value *)
 	    | V_register regform -> regform
 	    | _ -> 
-	      match in_env regs id with (* Register isn't a local value, so pull from global environment *)
+	      match in_env regs name with (* Register isn't a local value, so pull from global environment *)
 		| Just(V_register regform) -> regform
-		| _ -> Reg id annot end end in
+		| _ -> Reg id annot default_dir end end in
 	  (Action (Read_reg regf Nothing)
 	          (Hole_frame redex_id
 		         (E_aux (E_id redex_id) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env)
         | Tag_alias -> 
-	  match in_env aliases id with
+	  match in_env aliases name with
 	    | Just aspec -> interp_alias_read mode t_level l_env l_mem aspec
 	    | _ -> (Error l ("Internal error: alias not found"), l_mem,l_env) end
         | _ -> 
@@ -1393,17 +1417,17 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         (fun value_whole lm le -> 
           match detaint value_whole with 
             | V_record t fexps -> 
-	      (match in_env fexps id with
+	      (match in_env (env_from_list fexps) (get_id id) with
                 | Just v -> (Value (retaint value_whole v),lm,l_env)
                 | Nothing -> (Error l "Internal_error: Field not found in record",lm,le) end)
-	    | V_register ((Reg _ annot) as reg_form) ->
+	    | V_register ((Reg _ annot _) as reg_form) ->
 	      let id' = match annot with
 		| Just((T_id id'),_,_,_) -> id'
 		| Just((T_abbrev (T_id id') _),_,_,_) -> id'
 	      end in
-	      (match in_env subregs (Id_aux (Id id') Unknown) with
+	      (match in_env subregs id' with
 		| Just(indexes) ->
-		  (match in_env indexes id with
+		  (match in_env indexes (get_id id) with
 		    | Just ir ->
 		      let sub_reg = SubReg id reg_form ir in
 		      (Action (Read_reg sub_reg Nothing)
@@ -1418,20 +1442,20 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         (fun a -> 
 	  match (exp,a) with
 	    | (E_aux _ (l,Just(_,Tag_extern _,_,_)),
-	       (Action (Read_reg ((Reg _ (Just((T_id id'),_,_,_))) as regf) Nothing) s)) ->
-	      match in_env subregs (Id_aux (Id id') Unknown) with
+	       (Action (Read_reg ((Reg _ (Just((T_id id'),_,_,_)) _) as regf) Nothing) s)) ->
+	      match in_env subregs id' with
 		| Just(indexes) ->
-		  (match in_env indexes id with
+		  (match in_env indexes (get_id id) with
 		    | Just ir -> 
 		      (Action (Read_reg (SubReg id regf ir) Nothing) s)
 		    | _ -> Error l "Internal error, unrecognized read, no id"
 	           end) 
 		| Nothing -> Error l "Internal error, unrecognized read, no reg" end
             | (E_aux _ (l,Just(_,Tag_extern _,_,_)),
-               (Action (Read_reg ((Reg _ (Just((T_abbrev (T_id id') _),_,_,_))) as regf) Nothing) s))->
-	      match in_env subregs (Id_aux (Id id') Unknown) with
+               (Action (Read_reg ((Reg _ (Just((T_abbrev (T_id id') _),_,_,_)) _) as regf) Nothing) s))->
+	      match in_env subregs id' with
 		| Just(indexes) ->
-		  match in_env indexes id with
+		  match in_env indexes (get_id id) with
 		    | Just ir -> 
 		      (Action (Read_reg (SubReg id regf ir) Nothing) s)
 		    | _ -> Error l "Internal error, unrecognized read, no id"
@@ -1714,7 +1738,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         let name = get_id f in 
         (match tag with
         | Tag_global ->
-	  (match find_function defs f with
+	  (match Map.lookup name fdefs with
 	    | Just(funcls) -> 
               (match find_funcl funcls v with
 		| [] -> 
@@ -1737,9 +1761,9 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		  interp_main mode t_level taint_env lm (E_aux (E_block lets) (l,annot))
 	       end)
             | Nothing -> 
-	      (Error l (String.stringAppend "Internal error: function with empty tag unfound " name),lm,le) end)
+	      (Error l (String.stringAppend "Internal error: function with tag global unfound " name),lm,le) end)
 	| Tag_empty -> 
-	  (match find_function defs f with
+	  (match Map.lookup name fdefs with
 	  | Just(funcls) -> 
             (match find_funcl funcls v with
 	    | [] -> 
@@ -1758,7 +1782,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           | Nothing -> 
 	    (Error l (String.stringAppend "Internal error: function with empty tag unfound " name),lm,le) end)
 	| Tag_spec ->  
-          (match find_function defs f with
+          (match Map.lookup name fdefs with
 	  | Just(funcls) -> 
             (match find_funcl funcls v with
 	    | [] -> 
@@ -1777,7 +1801,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           | Nothing -> 
 	    (Error l (String.stringAppend "Specified function must be defined before executing " name),lm,le) end)
         | Tag_ctor ->
-          (match in_ctors ctors f with
+          (match Map.lookup name ctors with
           | Just(_) -> (Value (V_ctor f typ C_Union v), lm, le)
           | Nothing -> (Error l (String.stringAppend "Internal error: function with ctor tag unfound " name),lm,le)
            end)
@@ -1824,7 +1848,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
             (fun rv lm le -> 
               match tag with
                 | Tag_global ->
-		  (match find_function defs op with
+		  (match Map.lookup name fdefs with
 		    | Nothing -> (Error l ("Internal error, no function def for " ^ name),lm,le)
                     | Just (funcls) ->
 		      (match find_funcl funcls (V_tuple [lv;rv]) with 
@@ -1842,7 +1866,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 				   t_level l_env l_mem stack)))
 				                end)end)
 		| Tag_empty -> 
-		  (match find_function defs op with
+		  (match Map.lookup name fdefs with
 		    | Nothing -> (Error l ("Internal error, no function def for " ^ name),lm,le)
                     | Just (funcls) ->
 		      (match find_funcl funcls (V_tuple [lv;rv]) with 
@@ -1858,7 +1882,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 					       t_level l_env l_mem stack)))
 		       end)end)
                 | Tag_spec ->
-                  (match find_function defs op with
+                  (match Map.lookup name fdefs with
 		    | Nothing -> (Error l ("No function definition found for " ^ name),lm,le)
                     | Just (funcls) ->
 		      (match find_funcl funcls (V_tuple [lv;rv]) with 
@@ -1938,12 +1962,13 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 
 and create_write_message_or_update mode t_level value l_env l_mem is_top_level ((LEXP_aux lexp (l,annot)):lexp tannot) 
   : ((outcome * lmem * lenv) * maybe ((exp tannot) -> lenv -> ((lexp tannot) * lenv))) =
-   let (Env defs instrs default_dir lets regs ctors subregs aliases) = t_level in
+   let (Env fdefs instrs default_dir lets regs ctors subregs aliases) = t_level in
   let (typ,tag,ncs,ef) = match annot with 
     | Nothing -> (T_var "fresh_v", Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
     | Just(t, tag, ncs, ef) -> (t,tag,ncs,ef) end in
    match lexp with
     | LEXP_id id -> 
+      let name = get_id id in
       match tag with
 	| Tag_empty ->
 	  match detaint (in_lenv l_env id) with
@@ -1963,7 +1988,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_id id) (l,annot), env)))
 	     end 
         | Tag_global -> 
-	  (match in_env lets id with
+	  (match in_env lets name with
 	    | Just v -> 
 	      if is_top_level then ((Error l "Writes must be to reg or registers",l_mem,l_env),Nothing)
 	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_id id) (l,annot), env)))
@@ -1971,7 +1996,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	   end)
         | Tag_extern _ ->
 	  let regf = 
-	    match in_env regs id with (*pull the regform with the most specific type annotation from env *)
+	    match in_env regs name with (*pull the regform with the most specific type annotation from env *)
 	      | Just(V_register regform) -> regform
 	      | _ -> Assert_extra.failwith "Register not known in regenv" end in
           let start_pos = reg_start_pos regf in
@@ -1984,16 +2009,16 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	  else (request,Just (fun e env -> (LEXP_aux (LEXP_id id) (l,annot), env)))
 	| Tag_alias -> 
 	  let request = 
-	    (match in_env aliases id with
+	    (match in_env aliases name with
 	      | Just (AL_aux aspec (l,_)) -> 
 		(match aspec with
 		  | AL_subreg (RI_aux (RI_id reg)  (li, ((Just((T_id id),_,_,_)) as annot'))) subreg ->
-		    (match in_env subregs (Id_aux (Id id) Unknown) with
+		    (match in_env subregs id with
 		      | Just indexes -> 
-			(match in_env indexes subreg with
+			(match in_env indexes (get_id subreg) with
 			  | Just ir -> 
 			    (Action 
-			     (Write_reg (SubReg subreg (Reg reg annot') ir) Nothing 
+			     (Write_reg (SubReg subreg (Reg reg annot' default_dir) ir) Nothing 
 			      (update_vector_start default_dir (get_first_index_range ir) (get_index_range_size ir) value))
 			     (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
 				  t_level l_env l_mem Top), l_mem, l_env)
@@ -2001,12 +2026,12 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		      | _ -> 
 			(Error l ("Internal error: alias spec has unknown register type " ^ id), l_mem, l_env) end)
 		  | AL_subreg (RI_aux (RI_id reg) (li, ((Just((T_abbrev (T_id id) _),_,_,_)) as annot'))) subreg ->
-		    (match in_env subregs (Id_aux (Id id) Unknown) with
+		    (match in_env subregs id with
 		      | Just indexes -> 
-			(match in_env indexes subreg with
+			(match in_env indexes (get_id subreg) with
 			  | Just ir -> 
 			    (Action 
-			     (Write_reg (SubReg subreg (Reg reg annot') ir) Nothing 
+			     (Write_reg (SubReg subreg (Reg reg annot' default_dir) ir) Nothing 
 			      (update_vector_start default_dir (get_first_index_range ir) (get_index_range_size ir) value))
 			     (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
 				  t_level l_env l_mem Top), l_mem, l_env)
@@ -2017,7 +2042,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		      (fun v le lm -> match v with 
 			| V_lit (L_aux (L_num i) _) -> 
 			  let i = natFromInteger i in
-			  (Action (Write_reg (Reg reg annot') (Just (i,i)) 
+			  (Action (Write_reg (Reg reg annot' default_dir) (Just (i,i)) 
 				     (update_vector_start default_dir i 1 value)) 
 			          (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
 				     t_level l_env l_mem Top), l_mem, l_env) end)
@@ -2033,7 +2058,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 				   | V_lit (L_aux (L_num stop) _) ->
 				     let (start,stop) = (natFromInteger start,natFromInteger stop) in
 				     let size = if start < stop then stop - start +1 else start -stop +1 in
-				     (Action (Write_reg (Reg reg annot') (Just (start,stop)) 
+				     (Action (Write_reg (Reg reg annot' default_dir) (Just (start,stop)) 
 						(update_vector_start default_dir start size value))
 					(Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
 					   t_level l_env l_mem Top),
@@ -2050,7 +2075,8 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		      | (T_app "vector" (T_args [T_arg_nexp (Ne_const b1); T_arg_nexp (Ne_const r1); _;_]),
 			 T_app "vector" (T_args [T_arg_nexp (Ne_const b2); T_arg_nexp (Ne_const r2); _;_])) ->
 			(Action 
-			 (Write_reg (Reg reg1 annot1) Nothing (slice_vector value (natFromInteger b1) (natFromInteger r1)))
+			 (Write_reg (Reg reg1 annot1 default_dir) Nothing 
+			            (slice_vector value (natFromInteger b1) (natFromInteger r1)))
 			 (Thunk_frame (E_aux (E_assign (LEXP_aux (LEXP_id reg2) annot2)
 						(fst (to_exp <| mode with track_values =false|> eenv 
                                                     (slice_vector value (natFromInteger (r1+1)) (natFromInteger r2)))))
@@ -2080,7 +2106,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	       (LEXP_aux (LEXP_memory id parms) (l,annot), env)))
 	| Tag_global ->
           let name = get_id id in 
-	  (match find_function defs id with
+	  (match Map.lookup name fdefs with
 	    | Just(funcls) -> 
 	      let new_vals = match v with 
 		| V_tuple vs -> V_tuple (vs ++ [value])
@@ -2113,6 +2139,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	((Action a s,lm,le), Just (fun (E_aux (E_tuple es) _) env -> (LEXP_aux (LEXP_memory id es) (l,annot), env)))
       | e -> (e,Nothing) end
     | LEXP_cast typc id -> 
+      let name = get_id id in
       match tag with
 	| Tag_empty ->
 	  match detaint (in_lenv l_env id) with
@@ -2135,7 +2162,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
           end 
         | Tag_extern _ ->
 	   let regf = 
-	    match in_env regs id with (*pull the regform with the most specific type annotation from env *)
+	    match in_env regs name with (*pull the regform with the most specific type annotation from env *)
 	      | Just(V_register regform) -> regform
 	      | _ -> Assert_extra.failwith "Register not known in regenv" end in
           let start_pos = reg_start_pos regf in
@@ -2310,7 +2337,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
      | ((Value (V_record t fexps),lm,le),Just lexp_builder) ->
        let next_builder = Just (fun e env -> let (lexp,env) = (lexp_builder e env) in 
                                              (LEXP_aux (LEXP_field lexp id) (l,annot), env)) in
-       match (in_env fexps id,is_top_level) with
+       match (in_env (env_from_list fexps) (get_id id),is_top_level) with
        | (Just (V_boxref n t),true) -> ((Value (V_lit (L_aux L_unit l)), update_mem lm n value, l_env),Nothing)
        | (Just (V_boxref n t),false) -> ((Value (in_mem lm n),lm,l_env),next_builder)
        | (Just v, true) -> ((Error l "Mutating a field access requires a reg type",lm,le),Nothing)
@@ -2323,10 +2350,10 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
        | Read_reg _ _ -> ((Action a s,lm,le), next_builder)
        | Read_mem _ _ _ -> ((Action a s,lm,le), next_builder)
        | Call_extern _ _ -> ((Action a s,lm,le), next_builder)
-       | Write_reg ((Reg _ (Just(T_id id',_,_,_))) as regf) Nothing value -> 
-	 match in_env subregs (Id_aux (Id id') Unknown) with
+       | Write_reg ((Reg _ (Just(T_id id',_,_,_)) _) as regf) Nothing value -> 
+	 match in_env subregs id' with
 	   | Just(indexes) ->
-	     match in_env indexes id with
+	     match in_env indexes (get_id id) with
 	       | Just ir -> 
 		 ((Action 
 		     (Write_reg (SubReg id regf ir) Nothing 
@@ -2336,10 +2363,10 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	       | _ -> ((Error l "Internal error, unrecognized write, no field",lm,le),Nothing)
 		 end 
             | Nothing -> ((Error l "Internal error, unrecognized write, no subreges",lm,le),Nothing) end
-       | Write_reg ((Reg _ (Just((T_abbrev(T_id id') _),_,_,_))) as regf) Nothing value -> 
-	 match in_env subregs (Id_aux (Id id') Unknown) with
+       | Write_reg ((Reg _ (Just((T_abbrev(T_id id') _),_,_,_)) _) as regf) Nothing value -> 
+	 match in_env subregs id' with
 	   | Just(indexes) ->
-	     match in_env indexes id with
+	     match in_env indexes (get_id id) with
 	       | Just ir -> 
 		 ((Action 
 		     (Write_reg (SubReg id regf ir) Nothing 
@@ -2352,7 +2379,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
        | _ -> ((Error l "Internal error, unrecognized write, no matching action",lm,le),Nothing)
        end 
      | e -> e end)
-     end	
+     end
 
 and interp_letbind mode t_level l_env l_mem (LB_aux lbind (l,annot)) =
   match lbind with
@@ -2385,10 +2412,10 @@ and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
   match alspec with
     | AL_subreg (RI_aux (RI_id reg) (li,((Just (t,_,_,_)) as annot'))) subreg ->
       let reg_ti = get_reg_typ_name t in
-      (match in_env subregs (Id_aux (Id reg_ti) Unknown) with
+      (match in_env subregs reg_ti with
 	| Just indexes -> 
-	  (match in_env indexes subreg with
-	    | Just ir -> (Action (Read_reg (SubReg subreg (Reg reg annot') ir) Nothing) stack, l_mem, l_env)
+	  (match in_env indexes (get_id subreg) with
+	    | Just ir -> (Action (Read_reg (SubReg subreg (Reg reg annot' default_dir) ir) Nothing) stack, l_mem, l_env)
 	    | _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
 	| _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " reg_ti), l_mem, l_env) end)
     | AL_bit (RI_aux (RI_id reg) (_,annot')) e ->
@@ -2396,7 +2423,7 @@ and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
         (fun v le lm -> match v with 
 	  | V_lit (L_aux (L_num i) _) -> 
 	    let i = natFromInteger i in
-	    (Action (Read_reg (Reg reg annot') (Just (i,i))) stack, l_mem, l_env) end)
+	    (Action (Read_reg (Reg reg annot' default_dir) (Just (i,i))) stack, l_mem, l_env) end)
         (fun a -> a) (*Should not currently happen as type system enforces constants*)
     | AL_slice (RI_aux (RI_id reg) (_,annot')) start stop -> 
       resolve_outcome (interp_main mode t_level l_env l_mem start)
@@ -2409,11 +2436,11 @@ and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
 		   (match v with
 		     | V_lit (L_aux (L_num stop) _) ->
 		       let (start,stop) = (natFromInteger start,natFromInteger stop) in
-		       (Action (Read_reg (Reg reg annot') (Just (start,stop))) stack, l_mem, l_env) end))
+		       (Action (Read_reg (Reg reg annot' default_dir) (Just (start,stop))) stack, l_mem, l_env) end))
 		 (fun a -> a)) end)
         (fun a -> a) (*Neither action function should occur, due to above*)
     | AL_concat (RI_aux (RI_id reg1) (l1, annot1)) (RI_aux (RI_id reg2) annot2) -> 
-      (Action (Read_reg (Reg reg1 annot1) Nothing)
+      (Action (Read_reg (Reg reg1 annot1 default_dir) Nothing)
 	      (Hole_frame (Id_aux (Id "0") Unknown)
 		          (E_aux (E_vector_append (E_aux (E_id (Id_aux (Id "0") l1)) (l1, (intern_annot annot1)))
     				                  (E_aux (E_id reg2) annot2)) 
@@ -2432,7 +2459,7 @@ let rec eval_toplevel_let handle_action tlevel env mem lbind =
     | _ -> Nothing end
 
 let rec to_global_letbinds handle_action (Defs defs) t_level =
-  let  (Env defs' instrs default_dir lets regs ctors subregs aliases) = t_level in
+  let  (Env fdefs instrs default_dir lets regs ctors subregs aliases) = t_level in
   match defs with
   | [] -> ((Value (V_lit (L_aux L_unit Unknown)), emem, eenv),t_level)
   | def::defs ->
@@ -2440,15 +2467,22 @@ let rec to_global_letbinds handle_action (Defs defs) t_level =
     | DEF_val lbind ->
       match eval_toplevel_let handle_action t_level eenv emem lbind with
 	| Just le -> 
-	  to_global_letbinds handle_action (Defs defs) (Env defs' instrs default_dir (lets++le) regs ctors subregs aliases)
+	  to_global_letbinds handle_action (Defs defs) 
+	                                   (Env fdefs instrs default_dir (Map.(union) lets le) regs ctors subregs aliases)
 	| Nothing -> 
-	  to_global_letbinds handle_action (Defs defs) (Env defs' instrs default_dir lets regs ctors subregs aliases) end
+	  to_global_letbinds handle_action (Defs defs) 
+	                                   (Env fdefs instrs default_dir lets regs ctors subregs aliases) end
     | DEF_type (TD_aux tdef _) ->
       match tdef with
       | TD_enum id ns ids _ -> 
-        let enum_vals = map (fun eid -> (eid,V_ctor eid (T_id (get_id id)) C_Enum unitv)) ids in
+	let typ = T_id (get_id id) in
+        let enum_vals = 
+	  Map.fromList 
+	    (snd 
+	    (List.foldl (fun (c,rst) eid -> (1+c,(get_id eid,V_ctor eid typ (C_Enum c) unitv)::rst)) (0,[]) ids)) in
         to_global_letbinds 
-	  handle_action (Defs defs) (Env defs' instrs default_dir (lets++enum_vals) regs ctors subregs aliases)
+	  handle_action (Defs defs) 
+                        (Env fdefs instrs default_dir (Map.(union) lets enum_vals) regs ctors subregs aliases)
       | _ -> to_global_letbinds handle_action (Defs defs) t_level end
     | _ -> to_global_letbinds handle_action (Defs defs) t_level
     end
@@ -2465,10 +2499,12 @@ let rec extract_default_direction (Defs defs) = match defs with
 (*TODO Contemplate making decode and execute environment variables instead of these constants*)
 let to_top_env external_functions defs = 
   let direction = (extract_default_direction defs) in
-  let t_level = Env defs (extract_instructions "decode" "execute" defs) 
+  let t_level = Env (to_fdefs defs) 
+                    (extract_instructions "decode" "execute" defs) 
                     direction
-                    [] (* empty letbind and enum values, call below will fill in any *) 
-		    (to_registers defs) (to_data_constructors defs) (to_register_fields defs) (to_aliases defs) in
+                    Map.empty (* empty letbind and enum values, call below will fill in any *) 
+		    (to_registers direction defs) 
+		    (to_data_constructors defs) (to_register_fields defs) (to_aliases defs) in
   let (o,t_level) = to_global_letbinds (external_functions direction) defs t_level in
   match o with
     | (Value _,_,_) -> (Nothing,t_level)

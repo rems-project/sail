@@ -9,13 +9,15 @@ open import Assert_extra
 
 val intern_reg_value : register_value -> Interp.value
 val intern_mem_value : direction -> memory_value -> Interp.value
-val extern_reg_value : maybe nat -> Interp.value -> register_value
+val extern_reg_value : Interp.i_direction -> maybe nat -> Interp.value -> register_value
 val extern_mem_value : interp_mode -> Interp.value -> (memory_value * maybe (list reg_name))
 val extern_reg : Interp.reg_form -> maybe (nat * nat) -> reg_name
 
 
 let make_mode eager_eval tracking_values = <| Interp.eager_eval = eager_eval; Interp.track_values = tracking_values |>;;
 let tracking_dependencies mode = mode.Interp.track_values
+let make_eager_mode mode = <| mode with Interp.eager_eval = true |>;;
+let make_default_mode _ = <| Interp.eager_eval = false; Interp.track_values = false |>;;
 
 let bitl_to_ibit = function 
   | Bitl_zero -> (Interp.V_lit (L_aux L_zero Interp_ast.Unknown)) 
@@ -84,6 +86,11 @@ let intern_direction = function
   | D_decreasing -> Interp.IDec
 end
 
+let extern_direction = function
+  | Interp.IInc -> D_increasing
+  | Interp.IDec -> D_decreasing
+end
+
 let intern_opcode direction (Opcode v) =
   let bits = List.concatMap (fun (Byte(bits)) -> (List.map bit_to_ibit bits)) v in
   let direction = intern_direction direction in
@@ -91,7 +98,7 @@ let intern_opcode direction (Opcode v) =
 		   
 let intern_reg_value v = match v with
   | <| rv_bits=[b] |> -> bitl_to_ibit b
-  | _ -> Interp.V_vector v.rv_start (intern_direction v.rv_dir) (bitls_to_ibits v.rv_bits)
+  | _ -> Interp.V_vector v.rv_start_internal (intern_direction v.rv_dir) (bitls_to_ibits v.rv_bits)
 end
 
 let intern_mem_value direction v = 
@@ -104,81 +111,76 @@ let intern_ifield_value direction v =
   let direction = intern_direction direction in
   Interp.V_vector (if Interp.is_inc direction then 0 else (List.length(bits) -1)) direction bits
 
-(*let byte_list_of_integer size num = 
-  if (num < 0)
-  then failwith "signed integer given to byte_list_of_integer"
-  else let internal_value = (Interp_lib.to_vec_inc 
-			       (Interp.V_tuple([Interp.V_lit(L_aux (L_num (size * 8)) Interp_ast.Unknown);
-						Interp.V_lit(L_aux (L_num num) Interp_ast.Unknown)]))) in
-       let num_check = Interp_lib.to_num Interp_lib.Unsigned internal_value in
-       match (num_check,internal_value) with
-	 | (Interp.V_lit (L_aux (L_num n) _), Interp.V_vector _ _ bits) ->
-	   if num = n
-	   then (to_bytes (from_bits bits))
-	   else failwith "byte_list_of_integer given an integer larger than given size"
-       end
-*)
-
 let num_to_bits size kind num =
 (* num_to_bits needed in src_power_get/trans_sail.gen - rather than reengineer the generation, we include a wrapper here *) 
   Interp_interface.bit_list_of_integer size num
 
-
-(*
-  match kind with
-    | Bitv -> Bitvector (match (Interp_lib.to_vec_inc 
-				  (Interp.V_tuple([Interp.V_lit(L_aux (L_num (integerFromNat size)) Interp_ast.Unknown);
-						   Interp.V_lit(L_aux (L_num num) Interp_ast.Unknown)]))) with
-	| Interp.V_vector _ _ bits -> from_bits bits end) true 0
-    | Bytev -> Bytevector (byte_list_of_integer (integerFromNat (size/8)) num)
-end 
-
-let integer_of_byte_list bytes =
-  let intv = intern_value (Bytevector bytes) in
-  match Interp_lib.to_num Interp_lib.Unsigned intv with
-    | Interp.V_lit (L_aux (L_num n) _) -> n
-  end
-*)
+let extern_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
+  match d with
+    | D_increasing -> (i,j) (*This is the case the thread/concurrecny model expects, so no change needed*)
+    | D_decreasing -> 
+      let slice_i = start - i in 
+      let slice_j = (i - j) + slice_i in
+      (slice_i,slice_j)
+   end 
 
 let extern_reg r slice = match (r,slice) with
-  | (Interp.Reg (Id_aux (Id x) _) (Just(t,_,_,_)),Nothing) -> 
-    Reg x (Interp.reg_size r)
-  | (Interp.Reg (Id_aux (Id x) _) (Just(t,_,_,_)),Just(i1,i2)) -> Reg_slice x (intFromNat i1, intFromNat i2)
-  | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_single i) _),Nothing) -> 
-    let i = intFromInteger i in
-    Reg_field y x (i,i)
-  | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_range i j) _), Nothing) -> 
-    Reg_field y x (intFromInteger i,intFromInteger j)
-  | (Interp.SubReg (Id_aux (Id x) _) (Interp.Reg (Id_aux (Id y) _) _) (BF_aux(BF_range i j) _), Just(i1,j1)) ->
-    Reg_f_slice y x (intFromInteger i,intFromInteger j) (intFromNat i1, intFromNat j1)
+  | (Interp.Reg (Id_aux (Id x) _) (Just(t,_,_,_)) dir,Nothing) -> 
+    Reg x (Interp.reg_start_pos r) (Interp.reg_size r) (extern_direction dir)
+  | (Interp.Reg (Id_aux (Id x) _) (Just(t,_,_,_)) dir,Just(i1,i2)) -> 
+    let start = Interp.reg_start_pos r in
+    let edir = extern_direction dir in
+    Reg_slice x start edir (extern_slice edir start (i1, i2))
+  | (Interp.SubReg (Id_aux (Id x) _) ((Interp.Reg (Id_aux (Id y) _) _ dir) as main_r) (BF_aux(BF_single i) _),Nothing) -> 
+    let i = natFromInteger i in
+    let start = Interp.reg_start_pos main_r in
+    let edir = extern_direction dir in
+    Reg_field y start edir x (extern_slice edir start (i,i))
+  | (Interp.SubReg (Id_aux (Id x) _) ((Interp.Reg (Id_aux (Id y) _) _ dir) as main_r) (BF_aux(BF_range i j) _), Nothing) -> 
+    let start = Interp.reg_start_pos main_r in
+    let edir = extern_direction dir in
+    Reg_field y start edir x (extern_slice edir start (natFromInteger i,natFromInteger j))
+  | (Interp.SubReg (Id_aux (Id x) _) 
+       ((Interp.Reg (Id_aux (Id y) _) _ dir) as main_r) (BF_aux(BF_range i j) _), Just(i1,j1)) ->
+    let start = Interp.reg_start_pos main_r in
+    let edir = extern_direction dir in
+    Reg_f_slice y start edir x (extern_slice edir start (natFromInteger i,natFromInteger j)) 
+                               (extern_slice edir start (i1, j1))
 end
 
-let rec extern_reg_value optional_start v = match v with
-  | Interp.V_track v regs -> extern_reg_value optional_start v 
-  | Interp.V_vector fst dir bits ->
-    <| rv_bits=(bitls_from_ibits bits); 
-       rv_dir=(if Interp.is_inc(dir) then D_increasing else D_decreasing);
-       rv_start=fst|>
-  | Interp.V_vector_sparse fst stop inc bits default ->
-    extern_reg_value optional_start (Interp_lib.fill_in_sparse v)
+let rec extern_reg_value dir optional_start v = 
+  let start = match optional_start with | Nothing -> 0 | Just i -> i end in
+  let is_inc = Interp.is_inc(dir) in 
+  match v with
+    | Interp.V_track v regs -> extern_reg_value dir optional_start v 
+    | Interp.V_vector fst dir bits ->
+      let is_inc = Interp.is_inc(dir) in
+      let width = List.length bits in
+      <| rv_bits=(bitls_from_ibits bits); 
+         rv_dir=(if is_inc then D_increasing else D_decreasing);
+	 rv_start=if is_inc then fst else (fst +1 - width);
+	 rv_start_internal = fst;
+       |>
+    | Interp.V_vector_sparse fst stop inc bits default ->
+      extern_reg_value dir optional_start (Interp_lib.fill_in_sparse v)
   | Interp.V_lit (L_aux L_zero _) -> 
-    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
-    <| rv_bits=[Bitl_zero]; rv_dir=D_increasing; rv_start=start |>
+    <| rv_bits=[Bitl_zero]; rv_dir= if is_inc then D_increasing else D_decreasing;
+       rv_start= start; rv_start_internal=start |>
   | Interp.V_lit (L_aux L_false _) ->
-    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
-    <| rv_bits=[Bitl_zero]; rv_dir=D_increasing; rv_start=start |>
+    <| rv_bits=[Bitl_zero]; rv_dir=if is_inc then D_increasing else D_decreasing; 
+       rv_start=start; rv_start_internal = start |>
   | Interp.V_lit (L_aux L_one _) -> 
-    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
-    <| rv_bits=[Bitl_one]; rv_dir=D_increasing; rv_start=start |>
+    <| rv_bits=[Bitl_one]; rv_dir=if is_inc then D_increasing else D_decreasing;
+       rv_start=start; rv_start_internal = start |>
   | Interp.V_lit (L_aux L_true _) ->
-    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
-    <| rv_bits=[Bitl_one]; rv_dir=D_increasing; rv_start=start |>
+    <| rv_bits=[Bitl_one]; rv_dir=if is_inc then D_increasing else D_decreasing;
+       rv_start=start; rv_start_internal = start |>
   | Interp.V_lit (L_aux L_undef _) -> 
-    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
-    <| rv_bits=[Bitl_undef]; rv_dir=D_increasing; rv_start=start |>
+    <| rv_bits=[Bitl_undef]; rv_dir=if is_inc then D_increasing else D_decreasing;
+       rv_start=start; rv_start_internal = start |>
   | Interp.V_unknown -> 
-    let start = match optional_start with | Nothing -> 0 | Just i -> i end in
-    <| rv_bits=[Bitl_unknown]; rv_dir=D_increasing; rv_start=start |>
+    <| rv_bits=[Bitl_unknown]; rv_dir=if is_inc then D_increasing else D_decreasing;
+       rv_start=start; rv_start_internal = start |>
 end 
 
 let rec extern_mem_value mode v = match v with
@@ -416,14 +418,18 @@ let rec interp_to_outcome mode context thunk =
     | Interp.Write_reg reg_form slice value ->
       let optional_start = 
 	match slice with | Just (st1,st2) -> if (st1=st2) then Just st1 else Nothing | _ -> Nothing end in
-      Write_reg (extern_reg reg_form slice) (extern_reg_value optional_start value) (IState next_state context)
+      Write_reg (extern_reg reg_form slice) 
+                (extern_reg_value internal_direction optional_start value) (IState next_state context)
     | Interp.Read_mem (Id_aux (Id i) _) value slice ->
       match List.lookup i mem_reads with
       | (Just (MR read_k f)) -> 
         let (location, length, tracking) = (f mode value) in 
 	if (List.length location) = 8
-        then Read_mem read_k (Address_lifted location) length tracking 
-	  (fun v -> IState (Interp.add_answer_to_stack next_state (intern_mem_value direction v)) context)
+        then let address_int = match (maybe_all (List.map byte_of_byte_lifted location)) with
+	  | Just bs -> Just (integer_of_byte_list bs)
+	  | _ -> Nothing end in
+          Read_mem read_k (Address_lifted location address_int) length tracking 
+	    (fun v -> IState (Interp.add_answer_to_stack next_state (intern_mem_value direction v)) context)
 	else Error ("Memory address on read is not 64 bits")
       | _ -> Error ("Memory " ^ i ^ " function with read kind not found")
       end
@@ -433,9 +439,12 @@ let rec interp_to_outcome mode context thunk =
         let (location, length, tracking) = (f mode loc_val) in
         let (value, v_tracking) = (extern_mem_value mode write_val) in
 	if (List.length location) = 8
-        then Write_mem write_k (Address_lifted location) 
-	  length tracking value v_tracking 
-	  (fun b -> 
+        then let address_int = match (maybe_all (List.map byte_of_byte_lifted location)) with
+	  | Just bs -> Just (integer_of_byte_list bs)
+	  | _ -> Nothing end in
+          Write_mem write_k (Address_lifted location address_int) 
+	   length tracking value v_tracking 
+	   (fun b -> 
 	    match return with 
 	      | Nothing -> (IState (Interp.add_answer_to_stack next_state Interp.unitv) context)
 	      | Just return_bool -> return_bool (IState next_state context) b end)
@@ -472,40 +481,44 @@ let interp mode (IState interp_state context) =
   interp_to_outcome mode context (fun _ -> Interp.resume mode interp_state Nothing)
 
 (*TODO: Only find some sub piece matches, need to look for field/slice sub pieces*)
+(*TODO immediate: this will be impacted by need to change slicing *)
 let rec find_reg_name reg = function
   | [] -> Nothing
   | (reg_name,v)::registers ->
     match (reg,reg_name) with
-      | (Reg i size, Reg n size2) -> if i = n && size = size2 then (Just v) else find_reg_name reg registers
-      | (Reg_slice i (p1,p2), Reg n _) -> 
-	if i = n then (Just (slice_reg_value v (natFromInt p1) (natFromInt p2))) else find_reg_name reg registers
-      | (Reg_field i f (p1,p2), Reg n _) -> 
-	if i = n then (Just (slice_reg_value v (natFromInt p1) (natFromInt p2))) else find_reg_name reg registers
-      | (Reg_slice  i (p1,p2), Reg_slice n (p3,p4)) ->
+      | (Reg i start size dir, Reg n start2 size2 dir2) -> 
+	if i = n && size = size2 then (Just v) else find_reg_name reg registers
+      | (Reg_slice i _ _ (p1,p2), Reg n _ _ _) -> 
+	if i = n then (Just (slice_reg_value v p1 p2)) else find_reg_name reg registers
+      | (Reg_field i _ _ f (p1,p2), Reg n _ _ _) -> 
+	if i = n then (Just (slice_reg_value v p1 p2)) else find_reg_name reg registers
+      | (Reg_slice  i _ _ (p1,p2), Reg_slice n _ _ (p3,p4)) ->
 	if i=n 
 	then if p1=p3 && p2 = p4 then (Just v)
-	     else if p1>=p3 && p2<= p4 then (Just (slice_reg_value v (natFromInt p1) (natFromInt p2)))
+	     else if p1>=p3 && p2<= p4 then (Just (slice_reg_value v p1 p2))
 	     else find_reg_name reg registers
 	  else find_reg_name reg registers
-      | (Reg_field i f _,Reg_field n fn _) ->
+      | (Reg_field i _ _ f _,Reg_field n _ _ fn _) ->
 	if i=n && f = fn then (Just v) else find_reg_name reg registers
-      | (Reg_f_slice i f _ (p1,p2), Reg_f_slice n fn _ (p3,p4)) ->
+      | (Reg_f_slice i _ _ f _ (p1,p2), Reg_f_slice n _ _ fn _ (p3,p4)) ->
 	if i=n && f=fn && p1=p3 && p2=p3 then (Just v) else find_reg_name reg registers
       | _ -> find_reg_name reg registers
 end end
 
+(*Update slice potentially here*)
 let reg_size = function
-  | Reg i size -> size
-  | Reg_slice i (p1,p2) -> natFromInt (if p1 < p2 then (p2-p1 +1) else (p1-p2 +1))
-  | Reg_field i f (p1,p2) -> natFromInt (if p1 < p2 then (p2-p1 +1) else (p1-p2 +1))
-  | Reg_f_slice i f _ (p1,p2) -> natFromInt (if p1 < p2 then p2-p1 +1 else p1-p2+1)
+  | Reg i _ size _ -> size
+  | Reg_slice i _ _ (p1,p2) -> if p1 < p2 then (p2-p1 +1) else (p1-p2 +1)
+  | Reg_field i _ _ f (p1,p2) -> if p1 < p2 then (p2-p1 +1) else (p1-p2 +1)
+  | Reg_f_slice i _ _ f _ (p1,p2) -> if p1 < p2 then p2-p1 +1 else p1-p2+1
 end
 
 let rec ie_loop mode register_values (IState interp_state context) = 
   let (Context _ direction externs reads writes barriers) = context in
   let unknown_reg size =  
     <| rv_bits = (List.replicate size Bitl_unknown);
-       rv_start = (if direction = D_increasing then 0 else (size-1));
+       rv_start = 0;
+       rv_start_internal = (if direction = D_increasing then 0 else (size-1));
        rv_dir = direction |> in
   let unknown_mem size = List.replicate size (Byte_lifted (List.replicate 8 Bitl_unknown)) in
   match interp mode (IState interp_state context) with
@@ -538,7 +551,8 @@ let rec rr_ie_loop mode i_state =
   let (IState _ (Context _ direction _ _ _ _)) = i_state in
   let unknown_reg size =  
     <| rv_bits = (List.replicate size Bitl_unknown); 
-       rv_start = (if direction=D_increasing then 0 else (size-1));
+       rv_start = 0;
+       rv_start_internal = (if direction=D_increasing then 0 else (size-1));
        rv_dir = direction |> in
   let unknown_mem size = List.replicate size (Byte_lifted (List.replicate 8 Bitl_unknown)) in
   match (interp mode i_state) with

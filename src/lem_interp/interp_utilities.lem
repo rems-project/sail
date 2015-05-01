@@ -22,6 +22,10 @@ let lit_eq (L_aux left _) (L_aux right _) =
    | (L_one, L_one) -> true
    | (L_true, L_true) -> true
    | (L_false, L_false) -> true
+   | (L_zero, L_num i) -> i = 0
+   | (L_num i,L_zero) -> i = 0
+   | (L_one, L_num i) -> i = 1
+   | (L_num i, L_one) -> i = 1
    | (L_num n, L_num m) -> n = m
    | (L_hex h, L_hex h') -> h = h'
    | (L_bin b, L_bin b') -> b = b'

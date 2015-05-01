@@ -765,6 +765,16 @@ let nexp_eq n1 n2 =
   let b = nexp_eq_check (normalize_nexp n1) (normalize_nexp n2) in
 (*  let _ = Printf.printf "compared nexps %s\n" (string_of_bool b) in*)
   b
+
+let nexp_one_more_than n1 n2 =
+  let n1,n2 = normalize_nexp n1, normalize_nexp n2 in
+  match n1.nexp,n2.nexp with
+    | Nconst i, Nconst j -> (int_of_big_int i) = (int_of_big_int j)+1
+    | _, Nsub(n2',{nexp = Nconst i}) ->
+      if (int_of_big_int i) = 1 then nexp_eq n1 n2' else false
+    | _, Nadd(n2',{nexp = Nconst i}) ->
+      if (int_of_big_int i) = -1 then nexp_eq n1 n2' else false
+    | _ -> false 
  
 let equate_t (t_box : t) (t : t) : unit =
   let t = resolve_tsubst t in
@@ -925,8 +935,17 @@ let rec fresh_evar bindings e =
       None
     | _ -> None
 
-let rec contains_nuvar_nexp n ne = match ne with
-  | _ -> false
+let contains_nuvar_nexp n ne = 
+  let compare_to i = match n.nexp with
+    | Nuvar {nindex = i2} -> i = i2
+    | _ -> false in
+  let rec search ne = 
+    match ne.nexp with
+      | Nuvar {nindex =i}-> compare_to i
+      | Nadd(n1,n2) | Nmult(n1,n2) | Nsub(n1,n2) -> search n1 || search n2
+      | N2n(n,_) | Nneg n | Npow(n,_) -> search n
+      | _ -> false in
+  search ne
 
 let rec contains_nuvar n cs = match cs with
   | [] -> []
@@ -945,7 +964,11 @@ let rec contains_nuvar n cs = match cs with
       | [] -> contains_nuvar n cs
       | b -> BranchCons(so,b)::contains_nuvar n cs)
   | _::cs -> contains_nuvar n cs
-    
+
+let refine_guarantees max_lt min_gt id cs =
+  match cs with
+    | [] -> []
+    | cs -> cs
 
 let nat_t = {t = Tapp("range",[TA_nexp n_zero;TA_nexp{nexp = Npos_inf};])}
 let int_t = {t = Tapp("range",[TA_nexp{nexp=Nneg_inf};TA_nexp{nexp = Npos_inf};])}

@@ -53,7 +53,14 @@ type direction =
   | D_increasing
   | D_decreasing
 
-type register_value = <| rv_bits: list bit_lifted (* MSB first, smallest index number *); rv_dir: direction; rv_start: nat |>
+type register_value = <| 
+    rv_bits: list bit_lifted (* MSB first, smallest index number *); 
+    rv_dir: direction; 
+    rv_start: nat ;
+    rv_start_internal: nat; 
+    (*when dir is increasing, rv_start = rv_start_internal. 
+      Otherwise, tells interpreter how to reconstruct a proper decreasing value*)
+    |>
 
 type byte_lifted = Byte_lifted of list bit_lifted (* of length 8 *)
 
@@ -61,14 +68,14 @@ type instruction_field_value = list bit
 
 type byte = Byte of list bit (* of length 8 *)  (*MSB first*) 
 
-type address_lifted = Address_lifted of list byte_lifted (* of length 8 for 64bit machines*)
+type address_lifted = Address_lifted of list byte_lifted (* of length 8 for 64bit machines*) * maybe integer
 
 type memory_byte = byte_lifted
 
 type memory_value = list memory_byte (* the head of the list, most-significant first, at the lowest address, of length >=1 *)
 
 (* not sure which of these is more handy yet *)
-type address = Address of list byte (* of length 8 *)
+type address = Address of list byte (* of length 8 *) * integer
 (* type address = Address of integer *)
 
 type opcode = Opcode of list byte (* of length 4 *)
@@ -130,39 +137,45 @@ instance (Ord address_lifted)
 end
 
 (* Registers *)
-(*Can be nat nat, but finding out where ppcmem doens't like that is maybe not worth the effort *)
-type slice = (int * int)
+type slice = (nat * nat)
 
 type reg_name = 
-| Reg of string * nat
-(*Name of the register, accessing the entire register, and the size of this register *)
+| Reg of string * nat * nat * direction
+(*Name of the register, accessing the entire register, the start and size of this register, and it's direction *)
 
-| Reg_slice of string * slice 
+| Reg_slice of string * nat * direction * slice 
 (* Name of the register, accessing from the bit indexed by the first
 to the bit indexed by the second integer of the slice, inclusive. For
-Power the first will be a smaller number than or equal to the second;
-for other architectures it might be the other way round.  *)
+machineDef* the first is a smaller number or equal to the second, adjusted
+to reflect the correct span direction in the interpreter side.  *)
 
-| Reg_field of string * string * slice 
-(*Name of the register and name of the field of the register
+| Reg_field of string * nat * direction * string * slice 
+(*Name of the register, start and direction, and name of the field of the register
 accessed. The slice specifies where this field is in the register*)
 
-| Reg_f_slice of string * string * slice * slice 
-(* The first three components are as in Reg_field; the final slice
+| Reg_f_slice of string * nat * direction * string * slice * slice 
+(* The first four components are as in Reg_field; the final slice
 specifies a part of the field, indexed w.r.t. the register as a whole *)
 
-
-(* because reg_name contains slice which currently contains Big_int.big_int, the default OCaml comparison is not sufficient and we need to define explicit type classes *)
 let slice_eq (s1l,s1r) (s2l,s2r) = (s1l = s2l) && (s1r = s2r)
 
 let reg_nameEqual r1 r2 = 
   match (r1,r2) with
-  | (Reg s1 l1, Reg s2 l2) -> s1=s2 && l1=l2
-  | (Reg_slice s1 sl1, Reg_slice s2 sl2) -> s1=s2 && (slice_eq sl1 sl2)
-  | (Reg_field s1 f1 sl1, Reg_field s2 f2 sl2) -> s1=s2 && f1=f2 && (slice_eq sl1 sl2)
-  | (Reg_f_slice s1 f1 sl1 sl1', Reg_f_slice s2 f2 sl2 sl2') -> s1=s2 && f1=f2 && (slice_eq sl1 sl2) && (slice_eq sl1' sl2')
+  | (Reg s1 ns1 d1 l1, Reg s2 ns2 d2 l2) -> s1=s2 && ns1 = ns2 && l1=l2 && d1=d2
+  | (Reg_slice s1 ns1 d1 sl1, Reg_slice s2 ns2 d2 sl2) -> s1=s2 && ns1=ns2 && d1=d2 && (slice_eq sl1 sl2)
+  | (Reg_field s1 ns1 d1 f1 sl1, Reg_field s2 ns2 d2 f2 sl2) -> s1=s2 && ns1=ns2 && d1=d2 && f1=f2 && (slice_eq sl1 sl2)
+  | (Reg_f_slice s1 ns1 d1 f1 sl1 sl1', Reg_f_slice s2 ns2 d2 f2 sl2 sl2') -> 
+    s1=s2 && ns1=ns2 && d1=d2 && f1=f2 && (slice_eq sl1 sl2) && (slice_eq sl1' sl2')
   | _ -> false
   end
+
+instance (Ord direction)
+  let compare = defaultCompare
+  let (<) = defaultLess
+  let (<=) = defaultLessEq
+  let (>) = defaultGreater
+  let (>=) = defaultGreaterEq
+end  
 
 instance  (Eq reg_name)
   let (=) = reg_nameEqual
@@ -171,15 +184,15 @@ end
 
 let reg_nameCompare r1 r2 = 
   match (r1,r2) with
-  | (Reg s1 l1, Reg s2 l2) -> pairCompare compare compare (s1,l1) (s2,l2)
-  | (Reg_slice s1 sl1, Reg_slice s2 sl2) -> pairCompare compare compare (s1,sl1) (s2,sl2)
-  | (Reg_field s1 f1 sl1, Reg_field s2 f2 sl2) -> 
+  | (Reg s1 _ _ l1, Reg s2 _ _ l2) -> pairCompare compare compare (s1,l1) (s2,l2)
+  | (Reg_slice s1 _ _ sl1, Reg_slice s2 _ _ sl2) -> pairCompare compare compare (s1,sl1) (s2,sl2)
+  | (Reg_field s1 _ _ f1 sl1, Reg_field s2 _ _ f2 sl2) -> 
       tripleCompare compare compare compare (s1,f1,sl1) (s2,f2,sl2)
-  | (Reg_f_slice s1 f1 sl1 sl1', Reg_f_slice s2 f2 sl2 sl2') -> 
+  | (Reg_f_slice s1 _ _ f1 sl1 sl1', Reg_f_slice s2 _ _ f2 sl2 sl2') -> 
       pairCompare compare (tripleCompare compare compare compare) (s1,(f1,sl1,sl1')) (s2,(f2,sl2,sl2'))
-  | (Reg _ _, _)  -> LT
-  | (Reg_slice _ _, _) -> LT
-  | (Reg_field _ _ _, _) -> LT
+  | (Reg _ _ _ _, _)  -> LT
+  | (Reg_slice _ _ _ _, _) -> LT
+  | (Reg_field _ _ _ _ _, _) -> LT
   | (_, _) -> GT
   end
 
@@ -193,6 +206,20 @@ instance (Ord reg_name)
   let (<=) r1 r2 = (reg_nameCompare r1 r2) <> GT
   let (>)  r1 r2 = (reg_nameCompare r1 r2) = GT
   let (>=) r1 r2 = (reg_nameCompare r1 r2) <> LT
+end
+
+let direction_of_reg_name r = match r with
+  | Reg _ _ _ d -> d
+  | Reg_slice _ _ d _ -> d
+  | Reg_field _ _ d _ _ -> d
+  | Reg_f_slice _ _ d _ _ _ -> d
+ end
+
+let start_of_reg_name r = match r with
+  | Reg _ start _ _ -> start
+  | Reg_slice _ start _ _ -> start
+  | Reg_field _ start _ _ _ -> start
+  | Reg_f_slice _ start _ _ _ _ -> start
 end
 
 (* Data structures for building up instructions *)
@@ -376,20 +403,9 @@ val decode_to_instruction : context -> opcode -> instruction_or_decode_error
 (*Function to generate the state to run from an instruction form; is always an Instr*)
 val instruction_to_istate : context -> instruction -> instruction_state (*i_state_or_error*)
 
-(* Augment an address by the given value *)
-(*val add_to_address : value -> integer -> value
-
-(* Coerce a Bitvector value (presumed a multiple of 8 bits long) to a Bytevector value *)
-val coerce_Bytevector_of_Bitvector : value -> value
-
-(* Coerce a Bytevector value to a Bitvector value, increasing and starting at zero *)
-val coerce_Bitvector_of_Bytevector : value -> value*)
-
 (* Slice a register value into a smaller vector, starting at first number (wrt the indices of the register value, not raw positions in its list of bits) and going to second (inclusive) according to order. *)
 val slice_reg_value : register_value -> nat -> nat -> register_value
 
-(*(*append two vectors (bit x byte -> bit) *)
-val append_value : value -> value -> value *)
 
 (* Big step of the interpreter, to the next request for an external action *)
 (* When interp_mode has eager_eval false, interpreter is (close to) small step *)
@@ -410,13 +426,31 @@ val bitls_to_word8 : list bit_lifted -> word8
 val integer_of_word8_list : list word8 -> integer
 val word8_list_of_integer : integer -> integer -> list word8 
 
+val concretizable_bitl : bit_lifted -> bool
+val concretizable_bytl : byte_lifted -> bool
+val concretizable_bytls : list byte_lifted -> bool
+
+let concretizable_bitl = function
+  | Bitl_zero -> true
+  | Bitl_one -> true
+  | Bitl_undef -> false
+  | Bitl_unknown -> false
+end 
+
+let concretizable_bytl (Byte_lifted bs) = List.all concretizable_bitl bs
+let concretizable_bytls = List.all concretizable_bytl
+
 (* constructing values *)
 
 val register_value : bit_lifted -> direction -> nat -> nat -> register_value
 let register_value b dir width start_index = 
   <| rv_bits = List.replicate width b;
      rv_dir = dir; (* D_increasing for Power, D_decreasing for ARM *)
-     rv_start = start_index; |>
+     rv_start_internal = start_index; 
+     rv_start = if dir = D_increasing 
+       then start_index 
+       else (start_index+1) - width; (* Smaller index, as in Power, for external interaction *)
+  |>
 
 val register_value_zeros : direction -> nat -> nat -> register_value
 let register_value_zeros dir width start_index = 
@@ -429,9 +463,9 @@ let register_value_ones dir width start_index =
 val byte_lifted_unknown : byte_lifted
 let byte_lifted_unknown = Byte_lifted (List.replicate 8 Bitl_unknown)
 
-val memory_value_unknown : int (*the number of bytes*) -> memory_value
-let memory_value_unknown (width:int) : memory_value = 
-  List.replicate (natFromInt width) byte_lifted_unknown 
+val memory_value_unknown : nat (*the number of bytes*) -> memory_value
+let memory_value_unknown (width:nat) : memory_value = 
+  List.replicate width byte_lifted_unknown 
 
 
 (* lengths *)  
@@ -539,13 +573,12 @@ let byte_list_of_integer (len:nat) (a:integer):list byte =
 val integer_of_address : address -> integer 
 let integer_of_address (a:address):integer = 
   match a with
-  | Address bs -> integer_of_byte_list bs 
+  | Address bs i -> i 
   end
 
 val address_of_integer : integer -> address 
 let address_of_integer (i:integer):address =
-  Address (byte_list_of_integer 8 i)
-
+  Address (byte_list_of_integer 8 i) i
 
 
 (* regarding a list of int as a list of bytes in memory, MSB lowest-address first, convert to an integer *)
@@ -561,27 +594,25 @@ let integer_address_of_int_list (is: list int) =
 val address_of_byte_list : list byte -> address 
 let address_of_byte_list bs = 
   if List.length bs <> 8 then failwith "address_of_byte_list given list not of length 8" else 
-  Address bs 
-
+  Address bs (integer_of_byte_list bs)
 
 (* operations on addresses *)
 
-val add_address_int : address -> int -> address 
-let add_address_int (a:address) (i:int) : address = 
-  address_of_integer ((integer_of_address a) + (integerFromInt i))
+val add_address_nat : address -> nat -> address 
+let add_address_nat (a:address) (i:nat) : address = 
+  address_of_integer ((integer_of_address a) + (integerFromNat i))
 
 val clear_low_order_bits_of_address : address -> address 
 let clear_low_order_bits_of_address a = 
   match a with 
-  | Address [b0;b1;b2;b3;b4;b5;b6;b7] -> 
+  | Address [b0;b1;b2;b3;b4;b5;b6;b7] i -> 
       match b7 with
       | Byte [bt0;bt1;bt2;bt3;bt4;bt5;bt6;bt7] -> 
           let b7' = Byte [bt0;bt1;bt2;bt3;bt4;bt5;Bitc_zero;Bitc_zero] in
-          Address [b0;b1;b2;b3;b4;b5;b6;b7']
+	  let bytes = [b0;b1;b2;b3;b4;b5;b6;b7'] in
+          Address bytes (integer_of_byte_list bytes)
         end
   end
-
-
 
 val byte_list_of_memory_value : memory_value -> maybe (list byte)
 let byte_list_of_memory_value mv = maybe_all (List.map byte_of_memory_byte mv)
@@ -605,29 +636,30 @@ let integer_of_register_value (rv:register_value):maybe integer =
   | Nothing -> Nothing
   | Just bs -> Just (integer_of_bit_list bs)
   end 
-
   
-val register_value_of_integer : nat -> nat -> integer -> register_value 
-let register_value_of_integer (len:nat) (start:nat) (i:integer):register_value =
+val register_value_of_integer : nat -> nat -> direction -> integer -> register_value 
+let register_value_of_integer (len:nat) (start:nat) (dir:direction) (i:integer):register_value =
   let bs = bit_list_of_integer len i in
   <| 
   rv_bits = List.map bit_lifted_of_bit bs;
-  rv_dir = D_increasing;
+  rv_dir = dir;
   rv_start = start;
+  rv_start_internal = if dir = D_increasing then start else start + (List.length bs) - 1
 |> 
-
 
 (* *)
 
 val opcode_of_bytes : byte -> byte -> byte -> byte -> opcode
 let opcode_of_bytes b0 b1 b2 b3 : opcode = Opcode [b0;b1;b2;b3]
 
-val register_value_of_address : address -> register_value   
-let register_value_of_address (Address bytes) : register_value = 
-   <| rv_bits = List.concatMap (fun (Byte bs) -> List.map bit_lifted_of_bit bs) bytes;
-      rv_dir = D_increasing;
-      rv_start = 0; |>
-
+val register_value_of_address : address -> direction -> register_value   
+let register_value_of_address (Address bytes _) dir : register_value = 
+  let bits = List.concatMap (fun (Byte bs) -> List.map bit_lifted_of_bit bs) bytes in
+   <| rv_bits = bits;
+      rv_dir = dir;
+      rv_start = 0; 
+      rv_start_internal = if dir = D_increasing then 0 else (List.length bits) - 1
+   |>
 
 
 val address_lifted_of_register_value : register_value -> maybe address_lifted
@@ -636,18 +668,22 @@ allowing Bitl_undef and Bitl_unknown *)
 let address_lifted_of_register_value (rv:register_value) : maybe address_lifted = 
   if List.length rv.rv_bits <> 64 then Nothing
   else 
-    Just (Address_lifted (byte_lifteds_of_bit_lifteds rv.rv_bits))
-
+    Just (Address_lifted (byte_lifteds_of_bit_lifteds rv.rv_bits)
+                         (if List.all concretizable_bitl rv.rv_bits 
+			  then let (Just(bits)) = (maybe_all (List.map bit_of_bit_lifted rv.rv_bits)) in
+			       Just (integer_of_bit_list bits)
+			  else Nothing))
 
 val address_of_address_lifted : address_lifted -> maybe address
 (* returning Nothing iff the address contains any Bitl_undef or Bitl_unknown *)
 let address_of_address_lifted (al:address_lifted): maybe address =
   match al with
-  | Address_lifted bls -> 
+  | Address_lifted bls (Just i)-> 
       match maybe_all ((List.map byte_of_byte_lifted) bls) with
       | Nothing -> Nothing
-      | Just bs -> Just (Address bs)
+      | Just bs -> Just (Address bs i)
       end
+  | _ -> Nothing
   end
 
 val address_of_register_value : register_value -> maybe address
@@ -690,13 +726,13 @@ let int_of_memory_byte (mb:memory_byte) : int =
 val memory_value_of_address_lifted : address_lifted -> memory_value
 let memory_value_of_address_lifted (al:address_lifted) =
   match al with
-  | Address_lifted bs -> bs
+  | Address_lifted bs _ -> bs
   end
 
 val byte_list_of_address : address -> list byte
 let byte_list_of_address (a:address) : list byte = 
   match a with
-  | Address bs -> bs
+  | Address bs _ -> bs
   end
 
 val byte_list_of_opcode : opcode -> list byte

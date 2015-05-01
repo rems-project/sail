@@ -115,11 +115,15 @@ let rec rewrite_exp (E_aux (exp,(l,annot))) =
 	| Base((_,t),_,_,_,_),E_aux(ec,(ecl,Base((_,exp_t),_,_,_,_))) ->
 	  (match t.t,exp_t.t with
 	    (*TODO should pass d_env into here so that I can look at the abbreviations if there are any here*)
-	    | Tapp("vector",[TA_nexp n1;_;_;_]),Tapp("vector",[TA_nexp n2;_;_;_]) ->
-	      if nexp_eq n1 n2 
-	      then new_exp
+	    | Tapp("vector",[TA_nexp n1;TA_nexp nw1;TA_ord o1;_]),
+	      Tapp("vector",[TA_nexp n2;TA_nexp nw2;TA_ord o2;_]) ->
 	      else (match n1.nexp with
-		| Nconst i1 -> rewrap (E_cast (t_to_typ t,new_exp))
+		| Nconst i1 -> if nexp_eq n1 n2 then new_exp else rewrap (E_cast (t_to_typ t,new_exp))
+		| Nadd _ | Nsub -> (match o1.order with
+		    | O_inc -> new_exp
+		    | O_dec -> if nexp_one_more_than nw1 n1 
+		               then rewrap (E_cast (Typ_var (Kid_aux (Var "length") Unknown), new_exp))
+		               else new_exp)
 		| _ -> new_exp)
 	    | _ -> new_exp))
     | E_internal_exp (l,impl) ->
