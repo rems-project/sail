@@ -965,10 +965,70 @@ let rec contains_nuvar n cs = match cs with
       | b -> BranchCons(so,b)::contains_nuvar n cs)
   | _::cs -> contains_nuvar n cs
 
-let refine_guarantees max_lt min_gt id cs =
+let rec refine_guarantees max_lt min_gt id cs =
   match cs with
-    | [] -> []
-    | cs -> cs
+    | [] -> 
+      (match max_lt,min_gt with
+	| None,None -> []
+	| Some(c,i),None -> [LtEq(c,Guarantee,id,i)]
+	| None,Some(c,i) -> [GtEq(c,Guarantee,id,i)]
+	| Some(cl,il),Some(cg,ig) -> [LtEq(cl,Guarantee,id,il);GtEq(cg,Guarantee,id,ig)])
+    | LtEq(c,Guarantee,nes,neb)::cs ->
+      (match nes.nexp,neb.nexp,max_lt with
+	| Nuvar _ , Nconst i,None->
+	  if nexp_eq id nes 
+	  then refine_guarantees (Some(c,neb)) min_gt id cs (*new max*)
+	  else refine_guarantees max_lt min_gt id cs
+	| Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
+	  if nexp_eq id nes && i >= im
+	  then refine_guarantees (Some(c,neb)) min_gt id cs (*replace old max*)
+	  else refine_guarantees max_lt min_gt id cs
+	| _ -> refine_guarantees max_lt min_gt id cs)
+    | GtEq(c,Guarantee,nes,neb)::cs ->
+      (match nes.nexp,neb.nexp,min_gt with
+	| Nuvar _ , Nconst i,None->
+	  if nexp_eq id nes 
+	  then refine_guarantees max_lt (Some(c,neb)) id cs (*new min*)
+	  else refine_guarantees max_lt min_gt id cs
+	| Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
+	  if nexp_eq id nes && i <= im
+	  then refine_guarantees max_lt (Some(c,neb)) id cs (*replace old min*)
+	  else refine_guarantees max_lt min_gt id cs
+	| _ -> refine_guarantees max_lt min_gt id cs)
+    | c::cs -> c::(refine_guarantees max_lt min_gt id cs)
+
+let rec refine_requires min_lt max_gt id cs =
+  match cs with
+    | [] -> 
+      (match min_lt,max_gt with
+	| None,None -> []
+	| Some(c,i),None -> [LtEq(c,Require,id,i)]
+	| None,Some(c,i) -> [GtEq(c,Require,id,i)]
+	| Some(cl,il),Some(cg,ig) -> [LtEq(cl,Require,id,il);GtEq(cg,Require,id,ig)])
+    | LtEq(c,Require,nes,neb)::cs ->
+      (match nes.nexp,neb.nexp,min_lt with
+	| Nuvar _ , Nconst i,None->
+	  if nexp_eq id nes 
+	  then refine_requires(Some(c,neb)) max_gt id cs (*new min*)
+	  else refine_requires min_lt max_gt id cs
+	| Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
+	  if nexp_eq id nes && i <= im
+	  then refine_requires (Some(c,neb)) max_gt id cs (*replace old min*)
+	  else refine_requires min_lt max_gt id cs
+	| _ -> refine_guarantees min_lt max_gt id cs)
+    | GtEq(c,Require,nes,neb)::cs ->
+      (match nes.nexp,neb.nexp,max_gt with
+	| Nuvar _ , Nconst i,None->
+	  if nexp_eq id nes 
+	  then refine_requires min_lt (Some(c,neb)) id cs (*new max*)
+	  else refine_requires min_lt max_gt id cs
+	| Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
+	  if nexp_eq id nes && i >= im
+	  then refine_requires min_lt (Some(c,neb)) id cs (*replace old max*)
+	  else refine_requires min_lt max_gt id cs
+	| _ -> refine_requires min_lt max_gt id cs)
+    | c::cs -> c::(refine_requires min_lt max_gt id cs)
+
 
 let nat_t = {t = Tapp("range",[TA_nexp n_zero;TA_nexp{nexp = Npos_inf};])}
 let int_t = {t = Tapp("range",[TA_nexp{nexp=Nneg_inf};TA_nexp{nexp = Npos_inf};])}
@@ -983,13 +1043,6 @@ let bool_t = {t = Tid "bool" }
 let nat_typ = {t=Tid "nat"}
 let pure_e = {effect=Eset []}
 let nob = No_bounds
-
-let is_nat_typ t =
-  if t == nat_typ || t == nat_t then true
-  else match t.t with
-    | Tid "nat" -> true
-    | Tapp("range",[TA_nexp n_zero;TA_nexp{nexp =Npos_inf}]) -> true
-    | _ -> false
 
 let initial_kind_env = 
   Envmap.from_list [ 
