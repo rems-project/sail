@@ -582,6 +582,7 @@ let mask direction (V_tuple [vsize;v]) = retaint v (match (detaint v,detaint vsi
     let nat_n = natFromInteger n in
     let start_num = if is_inc(direction) then 0 else nat_n -1 in
     V_vector start_num direction (List.replicate nat_n V_unknown)
+  | (_,V_unknown) -> V_unknown
 					  end)
 
 let library_functions direction = [
