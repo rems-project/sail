@@ -143,6 +143,7 @@ and pp_format_base_effect_lem (BE_aux(e,l)) =
     | BE_rmem -> "BE_rmem"
     | BE_wmem -> "BE_wmem"
     | BE_barr -> "BE_barr"
+    | BE_depend -> "BE_depend"
     | BE_undef -> "BE_undef"
     | BE_unspec -> "BE_unspec"
     | BE_nondet -> "BE_nondet") ^ " " ^
@@ -641,6 +642,7 @@ let doc_effect (BE_aux (e,_)) =
   | BE_rmem -> "rmem"
   | BE_wmem -> "wmem"
   | BE_barr -> "barr"
+  | BE_depend -> "depend"
   | BE_undef -> "undef"
   | BE_unspec -> "unspec"
   | BE_nondet -> "nondet")

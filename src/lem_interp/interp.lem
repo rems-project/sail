@@ -215,6 +215,7 @@ type action =
  | Read_mem of id * value * maybe (nat * nat)
  | Write_mem of id * value * maybe (nat * nat) * value
  | Barrier of id * value
+ | Footprint of id * value
  | Write_next_IA of value (* Perhaps not needed? *)
  | Nondet of list (exp tannot)
  | Call_extern of string * value
@@ -1830,6 +1831,10 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           then 
             (Action (Barrier (id_of_string name_ext) v)
                     (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
+	  else if has_depend_effect effects
+	  then 
+	    (Action (Footprint (id_of_string name_ext) v)
+	            (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
 	  else if has_wmem_effect effects
 	  then 
 	    let (wv,v) =

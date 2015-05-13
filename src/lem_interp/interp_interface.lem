@@ -272,6 +272,8 @@ type outcome =
 | Write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name) * (bool -> instruction_state)
 (* Request a memory barrier *)
 | Barrier of barrier_kind * instruction_state
+(* Tell the system to dynamically recalculate dependency footprint *)
+| Footprint of instruction_state
 (* Request to read register, will track dependency when mode.track_values *)
 | Read_reg of reg_name * (register_value -> instruction_state) 
 (* Request to write register *)
@@ -289,6 +291,7 @@ type event =
 | E_read_mem of read_kind * address_lifted * nat * maybe (list reg_name)
 | E_write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name)
 | E_barrier of barrier_kind
+| E_footprint 
 | E_read_reg of reg_name
 | E_write_reg of reg_name * register_value
 | E_escape

@@ -112,6 +112,7 @@ let kw_table =
      ("rem",			 (fun x -> Rem));
 
      ("barr",                    (fun x -> Barr));
+     ("depend",                  (fun x -> Depend));
      ("rreg",                    (fun x -> Rreg));
      ("wreg",                    (fun x -> Wreg));
      ("rmem",                    (fun x -> Rmem));

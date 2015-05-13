@@ -82,6 +82,7 @@ let doc_effect (BE_aux (e,_)) =
   | BE_rmem -> "rmem"
   | BE_wmem -> "wmem"
   | BE_barr -> "barr"
+  | BE_depend -> "depend"
   | BE_undef -> "undef"
   | BE_unspec -> "unspec"
   | BE_nondet -> "nondet")

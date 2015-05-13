@@ -456,6 +456,8 @@ let rec interp_to_outcome mode context thunk =
 	| Just barrier -> 
 	  Barrier barrier (IState next_state context)
 	| _ -> Error ("Barrier " ^ i ^ " function not found") end
+    | Interp.Footprint (Id_aux (Id i) _) lval ->
+      Footprint (IState next_state context)
     | Interp.Nondet exps -> 
       let nondet_states = List.map (Interp.set_in_context next_state) exps in
       Nondet_choice (List.map (fun i -> IState i context) nondet_states) (IState next_state context)
@@ -540,6 +542,8 @@ let rec ie_loop mode register_values (IState interp_state context) =
       (E_write_mem write_k loc length tracking value v_tracking)::(ie_loop mode register_values (i_state_fun true))
     | Barrier barrier_k i_state ->
       (E_barrier barrier_k)::(ie_loop mode register_values i_state)
+    | Footprint i_state ->
+      E_footprint::(ie_loop mode register_values i_state)
     | Internal _ _ next -> (ie_loop mode register_values next)
      end ;;
   

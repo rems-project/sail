@@ -17,18 +17,18 @@ let unit_t = Typ_aux(Typ_app (Id_aux (Id "unit") Unknown) []) Unknown
 val lit_eq: lit -> lit -> bool
 let lit_eq (L_aux left _) (L_aux right _) =
    match (left, right) with
-   | (L_unit, L_unit) -> true
    | (L_zero, L_zero) -> true
    | (L_one, L_one) -> true
-   | (L_true, L_true) -> true
-   | (L_false, L_false) -> true
+   | (L_bin b, L_bin b') -> b = b'
+   | (L_hex h, L_hex h') -> h = h'
    | (L_zero, L_num i) -> i = 0
    | (L_num i,L_zero) -> i = 0
    | (L_one, L_num i) -> i = 1
    | (L_num i, L_one) -> i = 1
    | (L_num n, L_num m) -> n = m
-   | (L_hex h, L_hex h') -> h = h'
-   | (L_bin b, L_bin b') -> b = b'
+   | (L_unit, L_unit) -> true
+   | (L_true, L_true) -> true
+   | (L_false, L_false) -> true
    | (L_undef, L_undef) -> true
    | (L_string s, L_string s') -> s = s'
    | (_, _) -> false
@@ -50,6 +50,7 @@ end
 val has_rmem_effect : list base_effect -> bool
 val has_barr_effect : list base_effect -> bool
 val has_wmem_effect : list base_effect -> bool
+val has_depend_effect : list base_effect -> bool
 let rec has_effect which efcts =
   match efcts with
   | [] -> false
@@ -69,6 +70,7 @@ let rec has_effect which efcts =
 let has_rmem_effect = has_effect BE_rmem
 let has_barr_effect = has_effect BE_barr
 let has_wmem_effect = has_effect BE_wmem
+let has_depend_effect = has_effect BE_depend
 
 let get_typ (TypSchm_aux (TypSchm_ts tq t) _) = t
 let get_effects (Typ_aux t _) =

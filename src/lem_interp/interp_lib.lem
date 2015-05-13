@@ -10,6 +10,11 @@ open import Bool
 
 type signed = Unsigned | Signed
 
+let rec power (a: integer) (b: integer) : integer =
+ if b <= 0 
+ then 1
+ else a * (power a (b-1))
+
 let hardware_mod (a: integer) (b:integer) : integer = 
  if a < 0 && b < 0
  then (abs a) mod (abs b)
@@ -638,6 +643,7 @@ let library_functions direction = [
   ("quot_overflow_vec", arith_op_overflow_vec_no0 hardware_quot "quot" Unsigned 1);
   ("quot_vec_signed", arith_op_vec_no0 hardware_quot "quot" Signed 1);
   ("quot_overflow_vec_signed", arith_op_overflow_vec_no0 hardware_quot "quot" Signed 1);
+  ("power", arith_op power);
   ("eq", eq);
   ("eq_vec_range", eq_vec_range);
   ("eq_range_vec", eq_range_vec);

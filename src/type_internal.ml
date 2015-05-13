@@ -2493,6 +2493,29 @@ let rec get_nuvars n =
     | Nmult(n1,n2) | Nadd(n1,n2) | Nsub(n1,n2) -> (get_nuvars n1)@(get_nuvars n2)
     | Nneg n | N2n(n,_) | Npow(n,_) -> get_nuvars n
 
+module NexpM = 
+ struct
+ type t = nexp
+ let compare = compare_nexps
+end
+module Var_set = Set.Make(NexpM) 
+
+let rec get_all_nuvars_cs cs = match cs with
+  | [] -> Var_set.empty 
+  | (Eq(_,n1,n2) | GtEq(_,_,n1,n2) | LtEq(_,_,n1,n2))::cs -> 
+    let s = get_all_nuvars_cs cs in
+    let n1s = get_nuvars n1 in
+    let n2s = get_nuvars n2 in
+    List.fold_right (fun n s -> Var_set.add n s) (n1s@n2s) s
+  | CondCons(_,pats,exps)::cs ->
+    let s = get_all_nuvars_cs cs in
+    let ps = get_all_nuvars_cs pats in
+    let es = get_all_nuvars_cs exps in
+    Var_set.union s (Var_set.union ps es)
+  | BranchCons(_,c)::cs ->
+    Var_set.union (get_all_nuvars_cs c) (get_all_nuvars_cs cs)
+  | _::cs -> get_all_nuvars_cs cs
+
 let freshen n = 
   let nuvars = get_nuvars n in
   let env_map = List.map (fun nu -> (nu,new_n ())) nuvars in
@@ -2660,13 +2683,31 @@ let rec simple_constraint_check in_env cs =
 
 let rec resolve_in_constraints cs = cs
 
+let check_range_consistent require_lt require_gt guarantee_lt guarantee_gt = 
+  match require_lt,require_gt,guarantee_lt,guarantee_gt with
+    | None,None,None,None 
+    | Some _, None, None, None | None, Some _ , None, None | None, None, Some _ , None | None, None, None, Some _ 
+    | Some _, Some _,None,None | None,None,Some _,Some _ (*earlier check should ensure these*)
+      -> ()
+    | Some(crlt,rlt), Some(crgt,rgt), Some(cglt,glt), Some(cggt,ggt) ->
+      if glt <= rlt (*Can we guarantee that the upper bound is less than the required upper bound*) 
+      then if ggt <= rlt (*Can we guarantee that the lower bound is less than the required upper bound*)
+	then if glt >= rgt (*Can we guarantee that the upper bound is greater than the required lower bound*)
+	  then if ggt >= rgt (*Can we guarantee that the lower bound is greater than the required lower bound*)
+	    then ()
+	    else assert false (*make a good two-location error, all the way down*)
+	  else assert false
+	else assert false
+      else assert false
+      
+
 let rec constraint_size = function
   | [] -> 0
   | c::cs -> 
-    match c with 
+    (match c with 
       | CondCons(_,ps,es) -> constraint_size ps + constraint_size es
       | BranchCons(_,bs) -> constraint_size bs
-      | _ -> 1
+      | _ -> 1) + constraint_size cs
     
 let do_resolve_constraints = ref true
 

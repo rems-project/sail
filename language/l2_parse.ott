@@ -156,6 +156,7 @@ base_effect :: 'BE_' ::=
   | rmem                                :: :: rmem {{ com read memory }}
   | wmem                                :: :: wmem {{ com write memory }}
   | barr                                :: :: barr {{ com memory barrier }}
+  | depend				:: :: depend {{ com dynmically dependent footprint }}
   | undef                               :: :: undef {{ com undefined-instruction exception }}
   | unspec                              :: :: unspec {{ com unspecified values }}
   | nondet                              :: :: nondet {{ com nondeterminism from intra-instruction parallelism }}
