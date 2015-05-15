@@ -63,7 +63,8 @@ let rec has_effect which efcts =
     | (BE_barr,BE_barr)    -> true 
     | (BE_undef,BE_undef)  -> true 
     | (BE_unspec,BE_unspec) -> true 
-    | (BE_nondet,BE_nondet) -> true 
+    | (BE_nondet,BE_nondet) -> true
+    | (BE_depend,BE_depend) -> true 
     | _ -> has_effect which efcts
     end 
   end
