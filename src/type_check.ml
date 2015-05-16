@@ -1576,7 +1576,7 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
                 | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
 		| Base((params,et),_,cs,_,_) ->
 		  let et,cs,ef,_ = subst params false et cs ef in
-		  (LEXP_aux(LEXP_field(vec',id),(l,(Base(([],vec_t),tag,csi@cs,ef,nob)))),et,false,env,tag,csi@cs,bounds,ef)))
+		  (LEXP_aux(LEXP_field(vec',id),(l,(Base(([],et),tag,csi@cs,ef,nob)))),et,false,env,tag,csi@cs,bounds,ef)))
 	| _ -> typ_error l ("Expected a register binding here, found " ^ (t_to_string item_t)))
 
 and check_lbind envs imp_param is_top_level emp_tag (LB_aux(lbind,(l,annot))) : tannot letbind * tannot emap * nexp_range list * bounds_env * effect =
