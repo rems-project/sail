@@ -145,7 +145,8 @@ let bitwise_not_bit v =
     | L_zero -> (V_lit (L_aux L_one loc))
     | L_false -> (V_lit (L_aux L_one loc))
     | L_one  -> (V_lit (L_aux L_zero loc))
-    | L_true -> (V_lit (L_aux L_zero loc)) end in
+    | L_true -> (V_lit (L_aux L_zero loc))
+    | L_undef -> (V_lit (L_aux L_undef loc)) end in
   retaint v (match detaint v with
   | V_lit lit -> lit_not lit
   | V_unknown -> V_unknown end)
