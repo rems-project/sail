@@ -141,7 +141,7 @@ type slice = (nat * nat)
 
 type reg_name = 
 | Reg of string * nat * nat * direction
-(*Name of the register, accessing the entire register, the start and size of this register, and it's direction *)
+(*Name of the register, accessing the entire register, the start and size of this register, and its direction *)
 
 | Reg_slice of string * nat * direction * slice 
 (* Name of the register, accessing from the bit indexed by the first
@@ -184,12 +184,15 @@ end
 
 let reg_nameCompare r1 r2 = 
   match (r1,r2) with
-  | (Reg s1 _ _ l1, Reg s2 _ _ l2) -> pairCompare compare compare (s1,l1) (s2,l2)
-  | (Reg_slice s1 _ _ sl1, Reg_slice s2 _ _ sl2) -> pairCompare compare compare (s1,sl1) (s2,sl2)
-  | (Reg_field s1 _ _ f1 sl1, Reg_field s2 _ _ f2 sl2) -> 
-      tripleCompare compare compare compare (s1,f1,sl1) (s2,f2,sl2)
-  | (Reg_f_slice s1 _ _ f1 sl1 sl1', Reg_f_slice s2 _ _ f2 sl2 sl2') -> 
-      pairCompare compare (tripleCompare compare compare compare) (s1,(f1,sl1,sl1')) (s2,(f2,sl2,sl2'))
+  | (Reg s1 ns1 nz1 l1, Reg s2 ns2 nz2 l2) -> 
+    quadrupleCompare compare compare compare compare (s1,ns1,nz1,l1) (s2,ns2,nz2,l2)
+  | (Reg_slice s1 ns1 d1 sl1, Reg_slice s2 ns2 d2 sl2) -> 
+    quadrupleCompare compare compare compare compare (s1,ns1,d1,sl1) (s2,ns2,d2,sl2)
+  | (Reg_field s1 ns1 d1 f1 sl1, Reg_field s2 ns2 d2 f2 sl2) -> 
+    tripleCompare (tripleCompare compare compare compare) compare compare ((s1,ns1,d2),f1,sl1) ((s2,ns2,d2),f2,sl2)
+  | (Reg_f_slice s1 ns1 d1 f1 sl1 sl1', Reg_f_slice s2 ns2 d2 f2 sl2 sl2') -> 
+    pairCompare (tripleCompare compare compare compare) 
+                (tripleCompare compare compare compare) ((s1,ns1,d1),(f1,sl1,sl1')) ((s2,ns2,d2),(f2,sl2,sl2'))
   | (Reg _ _ _ _, _)  -> LT
   | (Reg_slice _ _ _ _, _) -> LT
   | (Reg_field _ _ _ _ _, _) -> LT

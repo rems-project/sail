@@ -2020,7 +2020,8 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
           let start_pos = reg_start_pos regf in
 	  let reg_size = reg_size regf in
 	  let request = 
-            (Action (Write_reg regf Nothing (update_vector_start default_dir start_pos reg_size value))
+            (Action (Write_reg regf Nothing 
+		       (if is_top_level then (update_vector_start default_dir start_pos reg_size value) else value))
 	       (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),
 	     l_mem,l_env) in
           if is_top_level then (request,Nothing) 
@@ -2186,7 +2187,8 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
           let start_pos = reg_start_pos regf in
 	  let reg_size = reg_size regf in
 	  let request = 
-            (Action (Write_reg regf Nothing (update_vector_start default_dir start_pos reg_size value)) 
+            (Action (Write_reg regf Nothing 
+		       (if is_top_level then (update_vector_start default_dir start_pos reg_size value) else value)) 
 	       (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),
 	     l_mem,l_env) in
           if is_top_level then (request,Nothing)
