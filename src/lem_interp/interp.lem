@@ -462,6 +462,7 @@ val access_vector : value -> nat -> value
 let access_vector v n =
   retaint v (match (detaint v) with
     | V_unknown -> V_unknown 
+    | V_lit (L_aux L_undef _) -> v
     | V_vector m dir vs -> 
       list_nth vs (if is_inc(dir) then (n - m) else (m - n))
     | V_vector_sparse _ _ _ vs d ->
@@ -631,10 +632,8 @@ let update_vector_start default_dir new_start expected_size v =
       | V_lit (L_aux L_one _) -> V_vector new_start default_dir [v]
       | V_vector m inc vs -> V_vector new_start inc vs (*Note, may need to shrink and check if still sparse *)
       | V_vector_sparse m n dir vals d -> V_vector_sparse new_start n dir vals d 
-      | V_unknown -> 
-	V_vector new_start default_dir (List.replicate expected_size V_unknown)
-      | V_lit (L_aux L_undef _) -> 
-	V_vector new_start default_dir (List.replicate expected_size v)
+      | V_unknown -> V_vector new_start default_dir (List.replicate expected_size V_unknown)
+      | V_lit (L_aux L_undef _) -> V_vector new_start default_dir (List.replicate expected_size v)
      end)
 
 val in_ctors : list (id * typ) -> id -> maybe typ
