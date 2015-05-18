@@ -118,7 +118,22 @@ instance (Ord byte_lifted)
   let (>=) = defaultGreaterEq
 end
 
-let addressCompare = defaultCompare
+instance (Ord byte)
+  let compare = defaultCompare
+  let (<) = defaultLess
+  let (>) = defaultGreater
+  let (<=) = defaultLessEq
+  let (>=) = defaultGreaterEq
+end  
+
+let addressCompare (Address b1 i1) (Address b2 i2) = pairCompare compare compare (b1,i1) (b2,i2)
+instance (Ord address)
+  let compare = addressCompare
+  let (<)  a1 a2 = (addressCompare a1 a2) = LT
+  let (<=) a1 a2 = (addressCompare a1 a2) <> GT
+  let (>)  a1 a2 = (addressCompare a1 a2) = GT
+  let (>=) a1 a2 = (addressCompare a1 a2) <> LT
+end
 
 instance (Ord register_value)
   let compare = defaultCompare
