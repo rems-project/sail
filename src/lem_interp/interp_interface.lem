@@ -135,6 +135,14 @@ instance (Ord address)
   let (>=) a1 a2 = (addressCompare a1 a2) <> LT
 end
 
+let addressEqual a1 a2 = (addressCompare a1 a2) = EQ
+
+instance  (Eq address)
+  let (=) = addressEqual
+  let (<>) x y = not (addressEqual x y)
+end
+
+
 instance (Ord register_value)
   let compare = defaultCompare
   let (<) = defaultLess

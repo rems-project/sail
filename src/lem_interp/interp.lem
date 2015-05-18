@@ -463,6 +463,8 @@ let access_vector v n =
   retaint v (match (detaint v) with
     | V_unknown -> V_unknown 
     | V_lit (L_aux L_undef _) -> v
+    | V_lit (L_aux L_zero _) -> v
+    | V_lit (L_aux L_one _ ) -> v
     | V_vector m dir vs -> 
       list_nth vs (if is_inc(dir) then (n - m) else (m - n))
     | V_vector_sparse _ _ _ vs d ->
