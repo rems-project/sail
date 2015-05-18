@@ -697,7 +697,9 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let check_parms arg_t lft rht =
         match check_exp envs imp_param arg_t (E_aux(E_tuple [lft;rht],(l,NoTyp))) with
         | ((E_aux(E_tuple [lft';rht'],_)),arg_t,_,cs',_,ef') -> (lft',rht',arg_t,cs',ef')
-        | _ -> raise (Reporting_basic.err_unreachable l "check exp given tuple and tuple type and returned non-tuple") in
+        | _ -> 
+	  raise (Reporting_basic.err_unreachable l "check exp given tuple and tuple type and returned non-tuple") 
+      in
       let check_result ret imp tag cs ef lft rht =
         match imp with
 	  (*| IP_length _ ->  
@@ -724,14 +726,14 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
           let (lft',rht',arg_t,cs_p,ef_p) = check_parms arg lft rht in
           let ret_t,cs_r',ef_r,e' = check_result ret imp tag cs ef lft' rht' in
           (e',ret_t,t_env,cs@cs_p@cs_r',nob,union_effects ef (union_effects ef_p ef_r))
-        | _ -> typ_error l ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^ (t_to_string t)))
+        | _ -> 
+	  typ_error l ("Expected a function, found identifier " ^ i ^ " bound to type " ^ (t_to_string t)))
       | Some(Overload(Base((params,t),tag,cs,ef,_),overload_return,variants)) ->
 	let t_p,cs_p,ef_p,_ = subst params false t cs ef in
 	let lft',rht',arg_t,arg_cs,arg_ef =  
 	  (match t_p.t with
 	  | Tfn(arg,ret,_,ef') -> check_parms arg lft rht
-	  | _ -> typ_error l ("Expected a function or constructor, found identifier " ^
-				 i ^ " bound to type " ^ (t_to_string t))) in
+	  | _ -> typ_error l ("Expected a function, found identifier " ^ i ^ " bound to type " ^ (t_to_string t))) in
         (*let _ = Printf.eprintf "Looking for overloaded function %s, generic type is %s, arg_t is %s\n" i (t_to_string t_p) (t_to_string arg_t) in*)
 	(match (select_overload_variant d_env true overload_return variants arg_t) with
 	| [] -> 

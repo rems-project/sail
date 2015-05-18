@@ -168,13 +168,6 @@ let reg_size reg =
       end 
 end 
 
-let vector_length v = match v with
-  | V_vector n inc vals -> List.length vals
-  | V_vector_sparse n m inc vals def -> m
-  | V_lit _ -> 1
-  | _ -> 0
-end
-
 (*Constant unit value, for use in interpreter *)
 let unitv = V_lit (L_aux L_unit Unknown)
 
@@ -457,6 +450,13 @@ let rec binary_taint thunk vall valr =
    | (vl,V_track vr rr) -> taint (binary_taint thunk vl vr) rr
    | (vl,vr) -> thunk vl vr
 end 
+
+let vector_length v = match (detaint v) with
+  | V_vector n inc vals -> List.length vals
+  | V_vector_sparse n m inc vals def -> m
+  | V_lit _ -> 1
+  | _ -> 0
+end
 
 val access_vector : value -> nat -> value
 let access_vector v n =
