@@ -36,8 +36,17 @@ let collapse_leading s =
   if String.length s <= 8 then s else
   let first_bit = s.[0] in
   let templ = sprintf "%c...%c" first_bit first_bit in
-  let regexp = Str.regexp "^\\(000000*\\|111111*\\)" in
-  Str.replace_first regexp templ s
+
+  let rec find_first_diff str cha pos =
+    if pos >= String.length str then None
+    else if str.[pos] != cha then Some pos
+    else find_first_diff str cha (pos+1)
+  in
+
+  match find_first_diff s first_bit 0 with
+  | None -> templ
+  | Some pos when pos > 4 -> templ ^ (String.sub s pos ((String.length s)- pos))
+  | _ -> s
 ;;
 
 let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (function
