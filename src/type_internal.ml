@@ -1683,7 +1683,22 @@ let initial_typ_env =
 	     External (Some "gteq_vec_signed"),[],pure_e,nob);
        ]));
     ("is_one",Base(([],(mk_pure_fun bit_t bit_t)),External (Some "is_one"),[],pure_e,nob));
-    (*correct again*)
+    ("signed",Base((mk_nat_params["n";"m";"o"]@[("ord",{k=K_Ord})],
+		    (mk_pure_fun (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m"))
+		                 (mk_atom (mk_nv "o")))),
+		   External (Some "signed"), 
+		  [(GtEq(Specc(Parse_ast.Int("signed",None)),Guarantee, 
+			 mk_nv "o", {nexp = Nneg({nexp = N2n(mk_nv "m",None)})}));
+		   (LtEq(Specc(Parse_ast.Int("signed",None)),Guarantee,
+			 mk_nv "o", mk_sub {nexp = N2n(mk_nv "m",None)} n_one));],pure_e,nob));
+    ("unsigned",Base((mk_nat_params["n";"m";"o"]@[("ord",{k=K_Ord})],
+		    (mk_pure_fun (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m"))
+		                 (mk_atom (mk_nv "o")))),
+		   External (Some "unsigned"), 
+		  [(GtEq(Specc(Parse_ast.Int("unsigned",None)),Guarantee, 
+			 mk_nv "o", n_zero));
+		   (LtEq(Specc(Parse_ast.Int("unsigned",None)),Guarantee,
+			 mk_nv "o", mk_sub {nexp = N2n(mk_nv "m",None)} n_one));],pure_e,nob));
     mk_bitwise_op "bitwise_not" "~" 1;
     mk_bitwise_op  "bitwise_or" "|" 2;
     mk_bitwise_op  "bitwise_xor" "^" 2;
