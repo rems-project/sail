@@ -1550,6 +1550,22 @@ let initial_typ_env =
 				    mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")]) bit_t)),
 	     External (Some "lt_vec_signed"),[],pure_e,nob);
        ]));
+    ("<_u",
+     Overload(
+       Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
+	    External (Some "lt"),[],pure_e,nob),
+       false,
+       [Base(((mk_nat_params ["n"; "m"; "o";"p"]),
+	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
+	     External (Some "lt_unsigned"),
+	     [LtEq(Specc(Parse_ast.Int("<_u",None)),Guarantee, mk_add (mk_nv "n") n_one, mk_nv "o");
+	      LtEq(Specc(Parse_ast.Int("<_u",None)),Guarantee, mk_add (mk_nv "m") n_one, mk_nv "p")],
+	     pure_e,nob);
+	Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
+	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
+				    mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")]) bit_t)),
+	     External (Some "lt_vec_unsigned"),[],pure_e,nob);
+       ]));
     (">",
      Overload(
        Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
@@ -1585,6 +1601,22 @@ let initial_typ_env =
 	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
 				    mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")]) bit_t)), 
 	     External (Some "gt_vec_signed"),[],pure_e,nob);
+       ]));
+    (">_u",
+     Overload(
+       Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
+	    External (Some "gt"),[],pure_e,nob),
+       false,
+       [Base(((mk_nat_params ["n";"m";"o";"p"]), 
+	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
+	     External (Some "gt_unsigned"),
+	     [GtEq(Specc(Parse_ast.Int(">_s",None)),Guarantee, mk_nv "n", mk_add (mk_nv "o") n_one);
+	      GtEq(Specc(Parse_ast.Int(">_s",None)),Guarantee, mk_nv "m", mk_add (mk_nv "p") n_one)],
+	     pure_e,nob);
+	Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
+	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");
+				    mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")]) bit_t)), 
+	     External (Some "gt_vec_unsigned"),[],pure_e,nob);
        ]));
     ("<=",
      Overload(
@@ -1650,15 +1682,23 @@ let initial_typ_env =
 				    mk_vector bit_t (Ovar "ord") (Nvar "p") (Nvar "n")]) bit_t)), 
 	     External (Some "gteq_vec_signed"),[],pure_e,nob);
        ]));
-    (*Unlikely to be the correct type; probably needs to be bit vectors*)
-    ("<_u",Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-		External (Some "ltu"),[],pure_e,nob));
-    ("<_u",Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-		External (Some "ltu"),[],pure_e,nob));
-    (">_u",Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-		External (Some "gtu"),[],pure_e,nob));
     ("is_one",Base(([],(mk_pure_fun bit_t bit_t)),External (Some "is_one"),[],pure_e,nob));
-    (*correct again*)
+    ("signed",Base((mk_nat_params["n";"m";"o"]@[("ord",{k=K_Ord})],
+		    (mk_pure_fun (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m"))
+		                 (mk_atom (mk_nv "o")))),
+		   External (Some "signed"), 
+		  [(GtEq(Specc(Parse_ast.Int("signed",None)),Guarantee, 
+			 mk_nv "o", {nexp = Nneg({nexp = N2n(mk_nv "m",None)})}));
+		   (LtEq(Specc(Parse_ast.Int("signed",None)),Guarantee,
+			 mk_nv "o", mk_sub {nexp = N2n(mk_nv "m",None)} n_one));],pure_e,nob));
+    ("unsigned",Base((mk_nat_params["n";"m";"o"]@[("ord",{k=K_Ord})],
+		    (mk_pure_fun (mk_vector bit_t (Ovar "ord") (Nvar "n") (Nvar "m"))
+		                 (mk_atom (mk_nv "o")))),
+		   External (Some "unsigned"), 
+		  [(GtEq(Specc(Parse_ast.Int("unsigned",None)),Guarantee, 
+			 mk_nv "o", n_zero));
+		   (LtEq(Specc(Parse_ast.Int("unsigned",None)),Guarantee,
+			 mk_nv "o", mk_sub {nexp = N2n(mk_nv "m",None)} n_one));],pure_e,nob));
     mk_bitwise_op "bitwise_not" "~" 1;
     mk_bitwise_op  "bitwise_or" "|" 2;
     mk_bitwise_op  "bitwise_xor" "^" 2;

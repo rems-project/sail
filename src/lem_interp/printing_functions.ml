@@ -54,7 +54,8 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
   | Interp.V_lit(L_aux(L_one, _)) -> "1"
   | Interp.V_lit(L_aux(L_undef, _)) -> "u"
   | Interp.V_unknown -> "?"
-  | v -> (Printf.printf "bitvec found a non bit %s%!\n" (Interp.string_of_value v));assert false) l))
+  | v -> (Printf.printf "bitvec found a non bit %s%!\n" (Interp.string_of_value v));assert false) 
+								      (List.map Interp.detaint l)))
 ;;
 
 (* pp the bytes of a Bytevector as a hex value *)

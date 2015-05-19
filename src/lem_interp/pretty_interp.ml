@@ -364,13 +364,13 @@ let doc_exp, doc_let =
     let default_print _ = brackets (separate_map comma (exp env add_red) exps) in
     (match exps with
       | [] -> default_print ()
-      | E_aux(e,_)::es ->
-	(match e with
-	  | E_lit (L_aux(L_one, _)) | E_lit (L_aux(L_zero, _)) ->
-	    utf8string
-	      ("0b" ^ 
-	       (List.fold_right (fun (E_aux(E_lit(L_aux(l, _)),_)) rst -> match l with | L_one -> "1"^rst | L_zero -> "0"^rst) exps "")) 
-	  | _ -> default_print ()))
+      | es ->
+	if (List.for_all (fun e -> match e with (E_aux(E_lit(L_aux((L_one | L_zero),_)),_)) -> true | _ -> false) es)
+	then
+	  utf8string
+	    ("0b" ^ 
+		(List.fold_right (fun (E_aux(E_lit(L_aux(l, _)),_)) rst -> match l with | L_one -> "1"^rst | L_zero -> "0"^rst | L_undef -> "u"^rst) exps "")) 
+	else default_print ())
   | E_vector_indexed (iexps, (Def_val_aux(default,_))) ->
     let default_string = 
       (match default with

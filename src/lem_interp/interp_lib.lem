@@ -683,6 +683,8 @@ let library_functions direction = [
   ("gt_vec_unsigned", compare_op_vec (>) Unsigned);
   ("lteq_vec_unsigned", compare_op_vec (<=) Unsigned);
   ("gteq_vec_unsigned", compare_op_vec (>=) Unsigned);
+  ("signed", to_num Signed);
+  ("unsigned", to_num Unsigned);
   ("ltu", compare_op_vec_unsigned (<));
   ("gtu", compare_op_vec_unsigned (>));
   ("duplicate", duplicate direction);
