@@ -86,9 +86,18 @@ let is_unknown v = match v with
   | _ -> false
 end 
 
+let is_undef v = match v with
+  | V_lit (L_aux L_undef _) -> true
+  | _ -> false
+end
+
 let has_unknown v = match detaint v with
   | V_vector _ _ vs -> List.any is_unknown vs
 end
+
+let has_undef v = match detaint v with
+  | V_vector _ _ vs -> List.any is_undef vs
+end 
 
 let rec sparse_walker update ni processed_length length ls df =
   if processed_length = length 
@@ -189,13 +198,15 @@ let to_num signed v =
     (match detaint v with
       | (V_vector idx inc l) ->
 	if has_unknown v then V_unknown else if l=[] then V_unknown
-	else 
+	  else if has_undef v then V_lit (L_aux L_undef Unknown)
+	  else 
 	  (* Word library in Lem expects bitseq with LSB first *)
-	  let l = reverse l in
+	    let l = reverse l in
 	  (* Make sure the last bit is a zero to force unsigned numbers *)
-	  let l = (match signed with | Signed -> l | Unsigned -> l ++ [V_lit (L_aux L_zero Unknown)] end) in
-	  V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown)
+	    let l = (match signed with | Signed -> l | Unsigned -> l ++ [V_lit (L_aux L_zero Unknown)] end) in
+	    V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown)
       | V_unknown -> V_unknown
+      | V_lit (L_aux L_undef _) -> v
      end)
 
 let to_vec_inc (V_tuple[v1;v2]) = 
@@ -283,6 +294,8 @@ let arith_op op (V_tuple [vl;vr]) =
       | (V_lit(L_aux (L_num x) lx), V_lit(L_aux (L_num y) ly)) -> V_lit(L_aux (L_num (op x y)) lx)
       | (V_unknown,_) -> V_unknown
       | (_,V_unknown) -> V_unknown
+      | (V_lit (L_aux L_undef lx),_) -> vl
+      | (_, (V_lit (L_aux L_undef ly))) -> vr
   end in 
   binary_taint arith_op_help vl vr
 let rec arith_op_vec op sign size (V_tuple [vl;vr]) =
@@ -651,8 +664,7 @@ let library_functions direction = [
   ("neq", neq);
   ("vec_concat", vec_concat);
   ("is_one", is_one);
-  ("to_num_inc", to_num Unsigned);
-  ("to_num_dec", to_num Unsigned);
+  ("to_num", to_num Unsigned);
   ("EXTS", exts direction);
   ("EXTZ", extz direction);
   ("to_vec_inc", to_vec_inc);

@@ -200,8 +200,8 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	  | L_unit  -> unit_t,lit 
 	  | L_zero  -> bit_t,lit
 	  | L_one   -> bit_t,lit
-	  | L_true  -> bool_t,lit
-	  | L_false -> bool_t,lit
+	  | L_true  -> bit_t,L_one
+	  | L_false -> bit_t,L_zero
 	  | L_num i -> 
 	    (match expect_actual.t with
 	      | Tid "bit" -> 
