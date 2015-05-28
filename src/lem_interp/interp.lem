@@ -903,8 +903,7 @@ let rec match_pattern t_level (P_aux p (_, annot)) value_whole =
           else (false,false,eenv)
         else (false,false,eenv)
       | V_vector n' inc' bits' -> 
-        if n=n' && inc = inc' then (foldr2 (fun l r rest -> (l=r) && rest) true bits bits',false,eenv)
-        else (false,false,eenv)
+        (foldr2 (fun l r rest -> (l=r) && rest) true bits bits',false,eenv)
       | V_unknown -> (true,true,eenv)
       | _ -> (false,false,eenv) end
     else
@@ -1034,12 +1033,12 @@ let rec match_pattern t_level (P_aux p (_, annot)) value_whole =
    end 
  | P_vector_concat pats ->
    match value with
-   | V_vector n inc vals ->
-     let (matched_p,used_unknown,bounds,remaining_vals) =
-       List.foldl 
+   | V_vector n dir vals ->
+     let (matched_p,used_unknown,bounds,remaining_vals) = vec_concat_match_top t_level pats vals dir in
+       (*List.foldl 
          (fun (matched_p,used_unknown,bounds,r_vals) (P_aux pat (l,Just(t,_,_,_))) ->
 	   let (matched_p,used_unknown',bounds',matcheds,r_vals) = vec_concat_match_plev t_level pat r_vals inc l t in
-	   (matched_p,(used_unknown || used_unknown'),(union_env bounds' bounds),r_vals)) (true,false,eenv,vals) pats in
+	   (matched_p,(used_unknown || used_unknown'),(union_env bounds' bounds),r_vals)) (true,false,eenv,vals) pats in*)
      if matched_p && ([] = remaining_vals) then (matched_p,used_unknown,bounds) else (false,false,eenv) 
    | V_unknown -> (true,true,eenv)
    | _ -> (false,false, eenv) 
@@ -1073,7 +1072,21 @@ let rec match_pattern t_level (P_aux p (_, annot)) value_whole =
    | _ -> (false,false,eenv) end
  end 
 
-and vec_concat_match_plev t_level pat r_vals dir l t =
+and vec_concat_match_top t_level pats r_vals dir : ((*matched_p*) bool * (*used_unknown*) bool * lenv * (list value)) =
+  match pats with
+    | [] -> (true,false,eenv,r_vals)
+    | [(P_aux p (l,Just(t,_,_,_)))] -> 
+      let (matched_p,used_unknown,bounds,_,r_vals) = vec_concat_match_plev t_level p r_vals dir l true t in
+      (matched_p,used_unknown,bounds,r_vals)
+    | (P_aux p (l,Just(t,_,_,_)))::pats ->
+      let (matched_p,used_unknown,bounds,matcheds,r_vals) = vec_concat_match_plev t_level p r_vals dir l false t in
+      if matched_p then
+	let (matched_p',used_unknown',bounds',r_vals) = vec_concat_match_top t_level pats r_vals dir in
+	(matched_p',(used_unknown || used_unknown'),union_env bounds' bounds, r_vals)
+      else (false,false,eenv,r_vals)
+end
+
+and vec_concat_match_plev t_level pat r_vals dir l last_pat t =
     match pat with
       | P_lit (L_aux (L_bin bin_string) l') ->
 	let bin_chars = toCharList bin_string in
@@ -1093,23 +1106,37 @@ and vec_concat_match_plev t_level pat r_vals dir l t =
                   matcheds,r_vals)
 	    else (false,false,eenv,[],[])
 	  | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp nc;_;_]) ->
-	    (false,false,eenv,[],[]) (*TODO see if can have some constraint bounds here*)
-	  | _ -> (false,false,eenv,[],[]) end)
+	    if last_pat
+	    then 
+	      (true,false,(add_to_env (id,(V_vector (if is_inc(dir) then 0 else (List.length r_vals)) dir r_vals)) eenv),r_vals,[])
+	    else (false,false,eenv,[],[]) (*TODO use some constraint bounds here*)
+	  | _ -> 
+	    if last_pat
+	    then 
+	      (true,false,(add_to_env (id,(V_vector (if is_inc(dir) then 0 else (List.length r_vals)) dir r_vals)) eenv),r_vals,[])
+	    else (false,false,eenv,[],[]) end)
       | P_wild -> (match t with
 	  | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp (Ne_const i);_;_]) ->
 	    let wilds = List.genlist (fun _ -> P_aux P_wild (l,Nothing)) (natFromInteger i) in
 	    vec_concat_match t_level wilds r_vals 
 	  | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp nc;_;_]) ->
-	    (false,false,eenv,[],[]) (*TODO see if can have some constraint bounds here*)
-	  | _ -> (false,false,eenv,[],[]) end)
+	    if last_pat
+	    then 
+	      (true,false,eenv,r_vals,[])
+	    else (false,false,eenv,[],[]) (*TODO use some constraint bounds here*)
+	  | _ -> 
+	    if last_pat
+	    then 
+	      (true,false,eenv,r_vals,[])
+	    else (false,false,eenv,[],[]) end)
       | P_as (P_aux pat (l',Just(t,_,_,_))) id -> 
-	let (matched_p, used_unknown, bounds,matcheds,r_vals) = vec_concat_match_plev t_level pat r_vals dir l t in
+	let (matched_p, used_unknown, bounds,matcheds,r_vals) = vec_concat_match_plev t_level pat r_vals dir l last_pat t in
 	if matched_p 
 	then (matched_p, used_unknown,
               (add_to_env (id,V_vector (if is_inc(dir) then 0 else (List.length matcheds)) dir matcheds) bounds),
               matcheds,r_vals)
 	else (false,false,eenv,[],[])	  
-      | P_typ _ (P_aux p (l',Just(t',_,_,_))) -> vec_concat_match_plev t_level p r_vals dir l t
+      | P_typ _ (P_aux p (l',Just(t',_,_,_))) -> vec_concat_match_plev t_level p r_vals dir l last_pat t
       | _ -> (false,false,eenv,[],[]) end 
       (*TODO Need to support indexed here, skipping intermediate numbers but consumming r_vals, and as *)
 

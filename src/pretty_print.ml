@@ -786,7 +786,7 @@ let doc_pat, doc_atomic_pat =
   and app_pat ((P_aux(p,l)) as pa) = match p with
   | P_app(id, ((_ :: _) as pats)) -> doc_unop (doc_id id) (parens (separate_map comma_sp atomic_pat pats))
   | _ -> atomic_pat pa
-  and atomic_pat ((P_aux(p,l)) as pa) = match p with
+  and atomic_pat ((P_aux(p,(l,annot))) as pa) = match p with
   | P_lit lit  -> doc_lit lit
   | P_wild -> underscore
   | P_id id -> doc_id id
