@@ -1,4 +1,5 @@
 open import Pervasives
+open import Interp_utilities
 open import Interp
 open import Interp_ast
 import Assert_extra Maybe_extra (* For failwith for error reporting while debugging; and for fromJust when we know it's not Nothing *)
@@ -9,11 +10,6 @@ open import Word
 open import Bool
 
 type signed = Unsigned | Signed
-
-let rec power (a: integer) (b: integer) : integer =
- if b <= 0 
- then 1
- else a * (power a (b-1))
 
 let hardware_mod (a: integer) (b:integer) : integer = 
  if a < 0 && b < 0

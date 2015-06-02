@@ -265,12 +265,12 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	      then typ_error l ("Constructor " ^ i ^ " expects arguments of type " ^ (t_to_string t) ^ ", found none")
 	      else default
             | _ -> raise (Reporting_basic.err_unreachable l "Constructor tannot does not have function type"))
-	| Some(Base((params,t),Enum,cs,ef,bounds)) ->
+	| Some(Base((params,t),Enum max,cs,ef,bounds)) ->
 	  let t,cs,ef,_ = subst params false t cs ef in
 	  if conforms_to_t d_env false false t expect_t
 	  then 
 	    let tp,cp = type_consistent (Expr l) d_env Guarantee false t expect_t in
-	    (P_aux(P_app(id,[]),(l,tag_annot t Enum)),Envmap.empty,cs@cp,bounds,tp)
+	    (P_aux(P_app(id,[]),(l,tag_annot t (Enum max))),Envmap.empty,cs@cp,bounds,tp)
 	  else default
 	| _ -> default)
     | P_app(id,pats) -> 
@@ -476,10 +476,10 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         | Tfn(t1,t',IP_none,e) -> 
           typ_error l ("Constructor " ^ i ^ " expects arguments of type " ^ (t_to_string t) ^ ", found none")
         | _ -> raise (Reporting_basic.err_unreachable l "Constructor tannot does not have function type"))
-      | Some(Base((params,t),Enum,cs,ef,bounds)) ->
+      | Some(Base((params,t),(Enum max),cs,ef,bounds)) ->
         let t',cs,_,_ = subst params false t cs ef in
         let t',cs',ef',e' = 
-	  type_coerce (Expr l) d_env Require false false t' (rebuild (cons_tag_annot t' Enum cs)) expect_t in
+	  type_coerce (Expr l) d_env Require false false t' (rebuild (cons_tag_annot t' (Enum max) cs)) expect_t in
         (e',t',t_env,cs@cs',nob,ef')
       | Some(Base(tp,Default,cs,ef,_)) | Some(Base(tp,Spec,cs,ef,_)) ->
         typ_error l ("Identifier " ^ i ^ " must be defined, not just specified, before use")
@@ -641,7 +641,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	      (E_aux (E_app(id, parms),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t
       in
       (match Envmap.apply t_env i with
-      | Some(Base(tp,Enum,_,_,_)) ->
+      | Some(Base(tp,Enum _,_,_,_)) ->
         typ_error l ("Expected function with name " ^ i ^ " but found an enumeration identifier")
       | Some(Base(tp,Default,_,_,_)) ->
         typ_error l ("Function " ^ i ^ " must be specified, not just declared as a default, before use")
@@ -715,7 +715,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	      (E_aux (E_app_infix(lft,op,rht),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t 
       in
       (match Envmap.apply t_env i with
-      | Some(Base(tp,Enum,cs,ef,b)) -> 
+      | Some(Base(tp,Enum _,cs,ef,b)) -> 
 	typ_error l ("Expected function with name " ^ i ^ " but found an enumeration identifier")
       | Some(Base(tp,Default,cs,ef,b)) -> 
 	typ_error l ("Function " ^ i ^ " must be defined, not just declared as default, before use")
@@ -1651,7 +1651,8 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
     | TD_enum(id,nmscm,ids,_) -> 
       let id' = id_to_string id in
       let ids' = List.map id_to_string ids in
-      let ty = Base (([],{t = Tid id' }),Enum,[],pure_e,nob) in
+      let max = (List.length ids') -1 in
+      let ty = Base (([],{t = Tid id' }),Enum max,[],pure_e,nob) in
       let t_env = List.fold_right (fun id t_env -> Envmap.insert t_env (id,ty)) ids' t_env in
       let enum_env = Envmap.insert d_env.enum_env (id',ids') in
       (TD_aux(td,(l,ty)),Env({d_env with enum_env = enum_env;},t_env,b_env,tp_env))

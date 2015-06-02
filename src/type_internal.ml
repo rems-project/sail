@@ -78,7 +78,7 @@ type tag =
   | External of string option
   | Default
   | Constructor
-  | Enum
+  | Enum of int
   | Alias
   | Spec
 
@@ -223,7 +223,7 @@ let tag_to_string = function
   | External (Some s) -> "External " ^ s
   | Default -> "Default"
   | Constructor -> "Constructor"
-  | Enum -> "Enum"
+  | Enum _ -> "Enum"
   | Alias -> "Alias"
   | Spec -> "Spec"
 

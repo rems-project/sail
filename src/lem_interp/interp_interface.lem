@@ -378,15 +378,17 @@ val initial_instruction_state : context -> string -> list register_value -> inst
 (*Type representint the constructor parameters in instruction, other is a type not representable externally*)
 type instr_parm_typ = 
   | Bit (*A single bit, represented as a one element Bitvector as a value*)
-  | Range of maybe nat (*Internall represented as a number, externally as a bitvector of length int *)
-  | Other (*An unrepresentable type, will be represented as Unknown in instruciton form *)
   | Bvector of maybe nat (* A bitvector type, with length when statically known *)
+  | Range of maybe nat (*Internally represented as a number, externally as a bitvector of length nat *)
+  | Enum of string * nat (*Internally represented as either a number or constructor, externally as a bitvector*)
+  | Other (*An unrepresentable type, will be represented as Unknown in instruciton form *)
 
 let instr_parm_typEqual ip1 ip2 = match (ip1,ip2) with
   | (Bit,Bit) -> true
-  | (Other,Other) -> true
-  | (Range i1,Range i2) -> i1 = i2
   | (Bvector i1,Bvector i2) -> i1 = i2
+  | (Range i1,Range i2) -> i1 = i2
+  | (Enum s1 i1,Enum s2 i2) -> s1 = s2 && i1 = i2
+  | (Other,Other) -> true
   | _ -> false
 end 
 
@@ -394,6 +396,18 @@ instance (Eq instr_parm_typ)
   let (=) = instr_parm_typEqual
   let (<>) ip1 ip2 = not (instr_parm_typEqual ip1 ip2)
 end 
+
+let instr_parm_typShow ip = match ip with
+  | Bit -> "Bit"
+  | Bvector i -> "Bvector " ^ show i
+  | Range i -> "Range " ^ show i
+  | Enum s i -> "Enum " ^ s ^ " " ^ show i
+  | Other -> "Other"
+ end
+
+instance (Show instr_parm_typ)
+let show = instr_parm_typShow
+end
 
 (*A representation of the AST node for each instruction in the spec, with concrete values from this call,
   and the potential static effects from the funcl clause for this instruction 
@@ -768,4 +782,32 @@ val byte_list_of_opcode : opcode -> list byte
 let byte_list_of_opcode (opc:opcode) : list byte = 
   match opc with
   | Opcode bs -> bs
+ end
+
+(** ****************************************** *)
+(** show type class instantiations             *)
+(** ****************************************** *)
+
+let stringFromAddress (Address bs i) = 
+  let i' = integer_of_byte_list bs in
+  if i=i' then
+    show i (*TODO: should be made to match the src/pp.ml pp_address*)
+  else
+    "stringFromAddress bytes and integer mismatch"
+
+instance (Show address)
+  let show = stringFromAddress
+end
+
+let stringFromByte_lifted bl =
+  match byte_of_byte_lifted bl with
+  | Nothing -> "u?"  
+  | Just (Byte bits) -> 
+      let i = integer_of_bit_list bits in
+      show i
   end
+
+instance (Show byte_lifted)
+  let show = stringFromByte_lifted
+end
+

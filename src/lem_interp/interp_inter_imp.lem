@@ -194,15 +194,21 @@ let rec extern_mem_value mode v = match v with
   | _ -> Assert_extra.failwith ("extern_mem_value received non-externable value " ^ (Interp.string_of_value v))
 end 
 
-let rec extern_ifield_value v = match v with
-  | Interp.V_track v regs -> extern_ifield_value v 
-  | Interp.V_vector fst inc bits -> bits_from_ibits bits
-  | Interp.V_vector_sparse fst stop inc bits default ->
-    extern_ifield_value (Interp_lib.fill_in_sparse v)
-  | Interp.V_lit (L_aux L_zero _) -> [Bitc_zero]
-  | Interp.V_lit (L_aux L_false _) -> [Bitc_zero]
-  | Interp.V_lit (L_aux L_one _) ->  [Bitc_one]
-  | Interp.V_lit (L_aux L_true _) -> [Bitc_one]
+let rec extern_ifield_value v ftyp = match (v,ftyp) with
+  | (Interp.V_track v regs,_) -> extern_ifield_value v ftyp
+  | (Interp.V_vector fst inc bits,_) -> bits_from_ibits bits
+  | (Interp.V_vector_sparse fst stop inc bits default,_) ->
+    extern_ifield_value (Interp_lib.fill_in_sparse v) ftyp
+  | (Interp.V_lit (L_aux L_zero _),_) -> [Bitc_zero]
+  | (Interp.V_lit (L_aux L_false _),_) -> [Bitc_zero]
+  | (Interp.V_lit (L_aux L_one _),_) ->  [Bitc_one]
+  | (Interp.V_lit (L_aux L_true _),_) -> [Bitc_one]
+  | (Interp.V_lit (L_aux (L_num i) _),Range (Just n)) -> bit_list_of_integer n i
+  | (Interp.V_lit (L_aux (L_num i) _),Enum _ n) -> bit_list_of_integer n i
+  | (Interp.V_lit (L_aux (L_num i) _),_) -> bit_list_of_integer 64 i
+  | (Interp.V_ctor _ _ (Interp.C_Enum i) _,Enum _ n) -> bit_list_of_integer n (integerFromNat i)
+  | (Interp.V_ctor _ _ (Interp.C_Enum i) _,_) -> bit_list_of_integer 64 (integerFromNat i)
+  | _ -> Assert_extra.failwith ("extern_ifield_value given non-externable " ^ (Interp.string_of_value v) ^ " ftyp is " ^ show ftyp)
 end 
 
 let rec slice_reg_value v start stop = 
@@ -317,8 +323,9 @@ end
 
 let migrate_typ = function
   | Instruction_extractor.IBit -> Bit
-  | Instruction_extractor.IBitvector len ->
-    Bvector (match len with Nothing -> Nothing | Just i -> Just (natFromInteger i) end) 
+  | Instruction_extractor.IBitvector len -> Bvector len  
+  | Instruction_extractor.IRange len -> Range len
+  | Instruction_extractor.IEnum s max -> Enum s max
   | Instruction_extractor.IOther -> Other
 end
 
@@ -342,11 +349,13 @@ let decode_to_istate top_level value =
 	      match (parm,parms) with
 		| (Interp.V_lit (L_aux L_unit _),[]) -> (name, [], effects)
 		| (value,[(p_name,ie_typ)]) -> 
-		  (name, [(p_name,(migrate_typ ie_typ), (extern_ifield_value value))], effects)
+		  let t = migrate_typ ie_typ in
+		  (name, [(p_name,t, (extern_ifield_value value t))], effects)
 		| (Interp.V_tuple vals,parms) -> 
 		  (name, 
 		   (Interp.map2 (fun value (p_name,ie_typ) -> 
-		     (p_name,(migrate_typ ie_typ),(extern_ifield_value value))) vals parms), effects)
+		     let t = migrate_typ ie_typ in
+		     (p_name,t,(extern_ifield_value value t))) vals parms), effects)
           end end end in 
       let (arg,_) = Interp.to_exp mode Interp.eenv instr in
       let (instr_decoded,error) = interp_to_value_helper value instr_external internal_direction

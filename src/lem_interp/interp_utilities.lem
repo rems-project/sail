@@ -1,6 +1,11 @@
 open import Interp_ast
 open import Pervasives
 
+let rec power (a: integer) (b: integer) : integer =
+ if b <= 0 
+ then 1
+ else a * (power a (b-1))
+
 type tannot = maybe (t * tag * list nec * effect)
 
 let get_exp_l (E_aux e (l,annot)) = l
@@ -88,7 +93,7 @@ let string_of_tag tag = match tag with
   | Tag_extern _ -> "extern"
   | Tag_default -> "default"
   | Tag_spec -> "spec"
-  | Tag_enum -> "enum"
+  | Tag_enum i -> "enum"
   | Tag_alias -> "alias"
 end      
 

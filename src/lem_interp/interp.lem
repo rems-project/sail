@@ -25,7 +25,7 @@ let val_annot typ = Just(typ,Tag_empty,[],pure)
 
 let ctor_annot typ = Just(typ,Tag_ctor,[],pure)
 
-let enum_annot typ = Just(typ,Tag_enum,[],pure)
+let enum_annot typ max = Just(typ,Tag_enum max,[],pure)
 
 (* This is different from OCaml: it will drop elements from the longest list. *)
 let foldr2 f x l l' = List.foldr (Tuple.uncurry f) x (List.zip l l')
@@ -781,7 +781,7 @@ let rec to_exp mode env v : (exp tannot * lenv) =
     (Interp_ast.Unknown, 
      if is_ctor 
      then match ctor_kind with
-       | Just(C_Enum _) -> (enum_annot (val_typ v))
+       | Just(C_Enum i) -> (enum_annot (val_typ v) (integerFromNat i))
        | _ -> (ctor_annot (val_typ v)) end
      else (val_annot (val_typ v))) in
   let annot = mk_annot false Nothing in
@@ -951,7 +951,7 @@ let rec match_pattern t_level (P_aux p (_, annot)) value_whole =
      else (false,false,eenv)
    | V_lit (L_aux (L_num i) _) ->
      match tag with 
-       | Tag_enum -> 
+       | Tag_enum _ -> 
 	 match Map.lookup (get_id (Id_aux id Unknown)) lets with
 	   | Just(V_ctor _ t (C_Enum j) _) -> 
 	     if i = (integerFromNat j) then (true,false,eenv)
@@ -1274,7 +1274,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	      (match in_env regs name with
 		| Just(value) -> (Value value, l_mem,l_env)
 		| Nothing -> (Error l ("Internal error: " ^ name ^ " unbound on Tag_global"),l_mem,l_env) end) end
-        | Tag_enum ->
+        | Tag_enum _ ->
           match in_env lets name with
             | Just(value) -> (Value value,l_mem,l_env)
 	    | Nothing -> (Error l ("Internal error: " ^ name ^ " unbound on Tag_enum "), l_mem,l_env)
@@ -2544,11 +2544,11 @@ let rec extract_default_direction (Defs defs) = match defs with
       | DEF_default (DT_aux (DT_order (Ord_aux Ord_dec _)) _) -> IDec
       | _ -> extract_default_direction (Defs defs) end end
 
-(*TODO Contemplate making decode and execute environment variables instead of these constants*)
+(*TODO Contemplate making execute environment variable instead of constant*)
 let to_top_env external_functions defs = 
   let direction = (extract_default_direction defs) in
   let t_level = Env (to_fdefs defs) 
-                    (extract_instructions "decode" "execute" defs) 
+                    (extract_instructions "execute" defs) 
                     direction
                     Map.empty (* empty letbind and enum values, call below will fill in any *) 
 		    (to_registers direction defs) 

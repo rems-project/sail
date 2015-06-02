@@ -289,7 +289,7 @@ let pp_format_tag = function
   | External None -> "(Tag_extern Nothing)"
   | Default -> "Tag_default"
   | Constructor -> "Tag_ctor"
-  | Enum -> "Tag_enum"
+  | Enum i -> "(Tag_enum " ^ (lemnum string_of_int i) ^ ")"
   | Alias -> "Tag_alias"
   | Spec -> "Tag_spec"
 

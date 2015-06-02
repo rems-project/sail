@@ -78,7 +78,7 @@ type tag =
   | External of string option (* External function or register name *)
   | Default (* Variable has default type, has not been bound *)
   | Constructor (* Variable is a data constructor *)
-  | Enum (* Variable came from an enumeration *)
+  | Enum of int (* Variable came from an enumeration, int tells me the highest possible numeric value *)
   | Alias (* Variable came from a register alias *)
   | Spec (* Variable came from a val specification *)
 

@@ -75,7 +75,7 @@ tag :: 'Tag_' ::=
    | Extern optx                              :: :: extern {{ com External function, specied only with a val statement }}
    | Default                              :: :: default {{ com Type has come from default declaration, identifier may not be bound locally }}
    | Spec				  :: :: spec
-   | Enum				  :: :: enum
+   | Enum num				  :: :: enum
    | Alias				  :: :: alias
 
 ne :: 'Ne_' ::=
