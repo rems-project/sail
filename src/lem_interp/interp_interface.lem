@@ -82,15 +82,34 @@ type opcode = Opcode of list byte (* of length 4 *)
 
 (** typeclass instantiations *)
 
-let bitCompare (b1:bit) (b2:bit) =
+let ~{ocaml} bitCompare (b1:bit) (b2:bit) =
   match (b1,b2) with
   | (Bitc_zero, Bitc_zero) -> EQ
   | (Bitc_one, Bitc_one) -> EQ
   | (Bitc_zero, _) -> LT
   | (_,_) -> GT
   end
+let inline {ocaml} bitCompare = defaultCompare
 
-let bit_liftedCompare (bl1:bit_lifted) (bl2:bit_lifted) =
+let ~{ocaml} bitLess b1 b2      = bitCompare b1 b2 =  LT
+let ~{ocaml} bitLessEq b1 b2    = bitCompare b1 b2 <> GT
+let ~{ocaml} bitGreater b1 b2   = bitCompare b1 b2 =  GT
+let ~{ocaml} bitGreaterEq b1 b2 = bitCompare b1 b2 <> LT
+
+let inline {ocaml} bitLess      = defaultLess
+let inline {ocaml} bitLessEq    = defaultLessEq
+let inline {ocaml} bitGreater   = defaultGreater
+let inline {ocaml} bitGreaterEq = defaultGreaterEq
+
+instance (Ord bit)
+  let compare = bitCompare
+  let (<)  = bitLess
+  let (<=) = bitLessEq
+  let (>)  = bitGreater
+  let (>=) = bitGreaterEq
+end
+
+let ~{ocaml} bit_liftedCompare (bl1:bit_lifted) (bl2:bit_lifted) =
   match (bl1,bl2) with
   | (Bitl_zero, Bitl_zero) -> EQ
   | (Bitl_one, Bitl_one) -> EQ
@@ -101,62 +120,169 @@ let bit_liftedCompare (bl1:bit_lifted) (bl2:bit_lifted) =
   | (Bitl_undef, _) -> LT
   | (_,_) -> GT
   end
+let inline {ocaml} bit_liftedCompare = defaultCompare
+
+let ~{ocaml} bit_liftedLess b1 b2      = bit_liftedCompare b1 b2 =  LT
+let ~{ocaml} bit_liftedLessEq b1 b2    = bit_liftedCompare b1 b2 <> GT
+let ~{ocaml} bit_liftedGreater b1 b2   = bit_liftedCompare b1 b2 =  GT
+let ~{ocaml} bit_liftedGreaterEq b1 b2 = bit_liftedCompare b1 b2 <> LT
+
+let inline {ocaml} bit_liftedLess      = defaultLess
+let inline {ocaml} bit_liftedLessEq    = defaultLessEq
+let inline {ocaml} bit_liftedGreater   = defaultGreater
+let inline {ocaml} bit_liftedGreaterEq = defaultGreaterEq
 
 instance (Ord bit_lifted)
   let compare = bit_liftedCompare
-  let (<)  b1 b2 = (bit_liftedCompare b1 b2) = LT
-  let (<=) b1 b2 = (bit_liftedCompare b1 b2) <> GT
-  let (>)  b1 b2 = (bit_liftedCompare b1 b2) = GT
-  let (>=) b1 b2 = (bit_liftedCompare b1 b2) <> LT
- end
+  let (<)  = bit_liftedLess
+  let (<=) = bit_liftedLessEq
+  let (>)  = bit_liftedGreater
+  let (>=) = bit_liftedGreaterEq
+end
+
+let ~{ocaml} byte_liftedCompare (Byte_lifted b1) (Byte_lifted b2) = compare b1 b2
+let inline {ocaml} byte_liftedCompare = defaultCompare
+
+let ~{ocaml} byte_liftedLess b1 b2      = byte_liftedCompare b1 b2 =  LT
+let ~{ocaml} byte_liftedLessEq b1 b2    = byte_liftedCompare b1 b2 <> GT
+let ~{ocaml} byte_liftedGreater b1 b2   = byte_liftedCompare b1 b2 =  GT
+let ~{ocaml} byte_liftedGreaterEq b1 b2 = byte_liftedCompare b1 b2 <> LT
+
+let inline {ocaml} byte_liftedLess      = defaultLess
+let inline {ocaml} byte_liftedLessEq    = defaultLessEq
+let inline {ocaml} byte_liftedGreater   = defaultGreater
+let inline {ocaml} byte_liftedGreaterEq = defaultGreaterEq
 
 instance (Ord byte_lifted)
-  let compare = defaultCompare
-  let (<) = defaultLess
-  let (>) = defaultGreater
-  let (<=) = defaultLessEq
-  let (>=) = defaultGreaterEq
+  let compare = byte_liftedCompare
+  let (<)  = byte_liftedLess
+  let (<=) = byte_liftedLessEq
+  let (>)  = byte_liftedGreater
+  let (>=) = byte_liftedGreaterEq
 end
+
+let ~{ocaml} byteCompare (Byte b1) (Byte b2) = compare b1 b2
+let inline {ocaml} byteCompare = defaultCompare
+
+let ~{ocaml} byteLess b1 b2      = byteCompare b1 b2 =  LT
+let ~{ocaml} byteLessEq b1 b2    = byteCompare b1 b2 <> GT
+let ~{ocaml} byteGreater b1 b2   = byteCompare b1 b2 =  GT
+let ~{ocaml} byteGreaterEq b1 b2 = byteCompare b1 b2 <> LT
+
+let inline {ocaml} byteLess      = defaultLess
+let inline {ocaml} byteLessEq    = defaultLessEq
+let inline {ocaml} byteGreater   = defaultGreater
+let inline {ocaml} byteGreaterEq = defaultGreaterEq
 
 instance (Ord byte)
-  let compare = defaultCompare
-  let (<) = defaultLess
-  let (>) = defaultGreater
-  let (<=) = defaultLessEq
-  let (>=) = defaultGreaterEq
-end  
+  let compare = byteCompare
+  let (<)  = byteLess
+  let (<=) = byteLessEq
+  let (>)  = byteGreater
+  let (>=) = byteGreaterEq
+end
 
-let addressCompare (Address b1 i1) (Address b2 i2) = pairCompare compare compare (b1,i1) (b2,i2)
+let ~{ocaml} addressCompare (Address b1 i1) (Address b2 i2) = compare (b1,i1) (b2,i2)
+let inline {ocaml} addressCompare = defaultCompare
+
+let ~{ocaml} addressLess b1 b2      = addressCompare b1 b2 =  LT
+let ~{ocaml} addressLessEq b1 b2    = addressCompare b1 b2 <> GT
+let ~{ocaml} addressGreater b1 b2   = addressCompare b1 b2 =  GT
+let ~{ocaml} addressGreaterEq b1 b2 = addressCompare b1 b2 <> LT
+
+let inline {ocaml} addressLess      = defaultLess
+let inline {ocaml} addressLessEq    = defaultLessEq
+let inline {ocaml} addressGreater   = defaultGreater
+let inline {ocaml} addressGreaterEq = defaultGreaterEq
+
 instance (Ord address)
   let compare = addressCompare
-  let (<)  a1 a2 = (addressCompare a1 a2) = LT
-  let (<=) a1 a2 = (addressCompare a1 a2) <> GT
-  let (>)  a1 a2 = (addressCompare a1 a2) = GT
-  let (>=) a1 a2 = (addressCompare a1 a2) <> LT
+  let (<)  = addressLess
+  let (<=) = addressLessEq
+  let (>)  = addressGreater
+  let (>=) = addressGreaterEq
 end
 
-let addressEqual a1 a2 = (addressCompare a1 a2) = EQ
+let {coq} addressEqual a1 a2 = (addressCompare a1 a2) = EQ
+let inline ~{coq} addressEqual = unsafe_structural_equality
+
+let {coq} addressInequal a1 a2 = not (addressEqual a1 a2)
+let inline ~{coq} addressInequal = unsafe_structural_inequality
 
 instance  (Eq address)
-  let (=) = addressEqual
-  let (<>) x y = not (addressEqual x y)
+  let (=)  = addressEqual
+  let (<>) = addressInequal
 end
 
+let ~{ocaml} directionCompare d1 d2 =
+  match (d1, d2) with
+  | (D_decreasing, D_increasing) -> GT
+  | (D_increasing, D_decreasing) -> LT
+  | _ -> EQ
+  end
+let inline {ocaml} directionCompare = defaultCompare
+
+let ~{ocaml} directionLess b1 b2      = directionCompare b1 b2 =  LT
+let ~{ocaml} directionLessEq b1 b2    = directionCompare b1 b2 <> GT
+let ~{ocaml} directionGreater b1 b2   = directionCompare b1 b2 =  GT
+let ~{ocaml} directionGreaterEq b1 b2 = directionCompare b1 b2 <> LT
+
+let inline {ocaml} directionLess      = defaultLess
+let inline {ocaml} directionLessEq    = defaultLessEq
+let inline {ocaml} directionGreater   = defaultGreater
+let inline {ocaml} directionGreaterEq = defaultGreaterEq
+
+instance (Ord direction)
+  let compare = directionCompare
+  let (<)  = directionLess
+  let (<=) = directionLessEq
+  let (>)  = directionGreater
+  let (>=) = directionGreaterEq
+end
+
+let ~{ocaml} register_valueCompare rv1 rv2 =
+  compare (rv1.rv_bits, rv1.rv_dir, rv1.rv_start, rv1.rv_start_internal)
+          (rv2.rv_bits, rv2.rv_dir, rv2.rv_start, rv2.rv_start_internal)
+let inline {ocaml} register_valueCompare = defaultCompare
+
+let ~{ocaml} register_valueLess b1 b2      = register_valueCompare b1 b2 =  LT
+let ~{ocaml} register_valueLessEq b1 b2    = register_valueCompare b1 b2 <> GT
+let ~{ocaml} register_valueGreater b1 b2   = register_valueCompare b1 b2 =  GT
+let ~{ocaml} register_valueGreaterEq b1 b2 = register_valueCompare b1 b2 <> LT
+
+let inline {ocaml} register_valueLess      = defaultLess
+let inline {ocaml} register_valueLessEq    = defaultLessEq
+let inline {ocaml} register_valueGreater   = defaultGreater
+let inline {ocaml} register_valueGreaterEq = defaultGreaterEq
 
 instance (Ord register_value)
-  let compare = defaultCompare
-  let (<) = defaultLess
-  let (<=) = defaultLessEq
-  let (>) = defaultGreater
-  let (>=) = defaultGreaterEq
+  let compare = register_valueCompare
+  let (<)  = register_valueLess
+  let (<=) = register_valueLessEq
+  let (>)  = register_valueGreater
+  let (>=) = register_valueGreaterEq
 end
 
+let ~{ocaml} address_liftedCompare (Address_lifted b1 i1) (Address_lifted b2 i2) =
+  compare (b1,i1) (b2,i2)
+let inline {ocaml} address_liftedCompare = defaultCompare
+
+let ~{ocaml} address_liftedLess b1 b2      = address_liftedCompare b1 b2 =  LT
+let ~{ocaml} address_liftedLessEq b1 b2    = address_liftedCompare b1 b2 <> GT
+let ~{ocaml} address_liftedGreater b1 b2   = address_liftedCompare b1 b2 =  GT
+let ~{ocaml} address_liftedGreaterEq b1 b2 = address_liftedCompare b1 b2 <> LT
+
+let inline {ocaml} address_liftedLess      = defaultLess
+let inline {ocaml} address_liftedLessEq    = defaultLessEq
+let inline {ocaml} address_liftedGreater   = defaultGreater
+let inline {ocaml} address_liftedGreaterEq = defaultGreaterEq
+
 instance (Ord address_lifted)
-  let compare = defaultCompare
-  let (<) = defaultLess
-  let (<=) = defaultLessEq
-  let (>) = defaultGreater
-  let (>=) = defaultGreaterEq
+  let compare = address_liftedCompare
+  let (<)  = address_liftedLess
+  let (<=) = address_liftedLessEq
+  let (>)  = address_liftedGreater
+  let (>=) = address_liftedGreaterEq
 end
 
 (* Registers *)
@@ -180,58 +306,54 @@ accessed. The slice specifies where this field is in the register*)
 (* The first four components are as in Reg_field; the final slice
 specifies a part of the field, indexed w.r.t. the register as a whole *)
 
-let slice_eq (s1l,s1r) (s2l,s2r) = (s1l = s2l) && (s1r = s2r)
-
-let reg_nameEqual r1 r2 = 
-  match (r1,r2) with
-  | (Reg s1 ns1 d1 l1, Reg s2 ns2 d2 l2) -> s1=s2 && ns1 = ns2 && l1=l2 && d1=d2
-  | (Reg_slice s1 ns1 d1 sl1, Reg_slice s2 ns2 d2 sl2) -> s1=s2 && ns1=ns2 && d1=d2 && (slice_eq sl1 sl2)
-  | (Reg_field s1 ns1 d1 f1 sl1, Reg_field s2 ns2 d2 f2 sl2) -> s1=s2 && ns1=ns2 && d1=d2 && f1=f2 && (slice_eq sl1 sl2)
-  | (Reg_f_slice s1 ns1 d1 f1 sl1 sl1', Reg_f_slice s2 ns2 d2 f2 sl2 sl2') -> 
-    s1=s2 && ns1=ns2 && d1=d2 && f1=f2 && (slice_eq sl1 sl2) && (slice_eq sl1' sl2')
-  | _ -> false
-  end
-
-instance (Ord direction)
-  let compare = defaultCompare
-  let (<) = defaultLess
-  let (<=) = defaultLessEq
-  let (>) = defaultGreater
-  let (>=) = defaultGreaterEq
-end  
-
-instance  (Eq reg_name)
-  let (=) = reg_nameEqual
-  let (<>) x y = not (reg_nameEqual x y)
-end
-
-let reg_nameCompare r1 r2 = 
+let ~{ocaml} reg_nameCompare r1 r2 = 
   match (r1,r2) with
   | (Reg s1 ns1 nz1 l1, Reg s2 ns2 nz2 l2) -> 
-    quadrupleCompare compare compare compare compare (s1,ns1,nz1,l1) (s2,ns2,nz2,l2)
+     compare (s1,ns1,nz1,l1) (s2,ns2,nz2,l2)
   | (Reg_slice s1 ns1 d1 sl1, Reg_slice s2 ns2 d2 sl2) -> 
-    quadrupleCompare compare compare compare compare (s1,ns1,d1,sl1) (s2,ns2,d2,sl2)
+     compare(s1,ns1,d1,sl1) (s2,ns2,d2,sl2)
   | (Reg_field s1 ns1 d1 f1 sl1, Reg_field s2 ns2 d2 f2 sl2) -> 
-    tripleCompare (tripleCompare compare compare compare) compare compare ((s1,ns1,d2),f1,sl1) ((s2,ns2,d2),f2,sl2)
+     compare ((s1,ns1,d2),f1,sl1) ((s2,ns2,d2),f2,sl2)
   | (Reg_f_slice s1 ns1 d1 f1 sl1 sl1', Reg_f_slice s2 ns2 d2 f2 sl2 sl2') -> 
-    pairCompare (tripleCompare compare compare compare) 
-                (tripleCompare compare compare compare) ((s1,ns1,d1),(f1,sl1,sl1')) ((s2,ns2,d2),(f2,sl2,sl2'))
+     compare ((s1,ns1,d1),(f1,sl1,sl1')) ((s2,ns2,d2),(f2,sl2,sl2'))
   | (Reg _ _ _ _, _)  -> LT
   | (Reg_slice _ _ _ _, _) -> LT
   | (Reg_field _ _ _ _ _, _) -> LT
   | (_, _) -> GT
   end
+let inline {ocaml} reg_nameCompare = defaultCompare
 
-instance (SetType reg_name)
-  let setElemCompare = reg_nameCompare
-end
+let ~{ocaml} reg_nameLess b1 b2      = reg_nameCompare b1 b2 =  LT
+let ~{ocaml} reg_nameLessEq b1 b2    = reg_nameCompare b1 b2 <> GT
+let ~{ocaml} reg_nameGreater b1 b2   = reg_nameCompare b1 b2 =  GT
+let ~{ocaml} reg_nameGreaterEq b1 b2 = reg_nameCompare b1 b2 <> LT
+
+let inline {ocaml} reg_nameLess      = defaultLess
+let inline {ocaml} reg_nameLessEq    = defaultLessEq
+let inline {ocaml} reg_nameGreater   = defaultGreater
+let inline {ocaml} reg_nameGreaterEq = defaultGreaterEq
 
 instance (Ord reg_name)
   let compare = reg_nameCompare
-  let (<)  r1 r2 = (reg_nameCompare r1 r2) = LT
-  let (<=) r1 r2 = (reg_nameCompare r1 r2) <> GT
-  let (>)  r1 r2 = (reg_nameCompare r1 r2) = GT
-  let (>=) r1 r2 = (reg_nameCompare r1 r2) <> LT
+  let (<)  = reg_nameLess
+  let (<=) = reg_nameLessEq
+  let (>)  = reg_nameGreater
+  let (>=) = reg_nameGreaterEq
+end
+
+let {coq} reg_nameEqual a1 a2 = (reg_nameCompare a1 a2) = EQ
+let inline ~{coq} reg_nameEqual = unsafe_structural_equality
+
+let {coq} reg_nameInequal a1 a2 = not (reg_nameEqual a1 a2)
+let inline ~{coq} reg_nameInequal = unsafe_structural_inequality
+
+instance  (Eq reg_name)
+  let (=)  = reg_nameEqual
+  let (<>) = reg_nameInequal
+end
+
+instance (SetType reg_name)
+  let setElemCompare = reg_nameCompare
 end
 
 let direction_of_reg_name r = match r with
@@ -324,31 +446,281 @@ type event =
 | E_error of string (* Should not happen, but may if the symbolic evaluation doesn't work out*)
 
 (* more explicit type classes to work around the occurrences of big_int in reg_name ::no longer necessary?*)
+
+let ~{ocaml} read_kindCompare rk1 rk2 =
+  match (rk1, rk2) with
+  | (Read_plain, Read_plain)             -> EQ
+  | (Read_plain, Read_reserve)           -> LT
+  | (Read_plain, Read_acquire)           -> LT
+  | (Read_plain, Read_exclusive)         -> LT
+  | (Read_plain, Read_exclusive_acquire) -> LT
+  | (Read_plain, Read_stream)            -> LT
+
+  | (Read_reserve, Read_plain)             -> GT
+  | (Read_reserve, Read_reserve)           -> EQ
+  | (Read_reserve, Read_acquire)           -> LT
+  | (Read_reserve, Read_exclusive)         -> LT
+  | (Read_reserve, Read_exclusive_acquire) -> LT
+  | (Read_reserve, Read_stream)            -> LT
+
+  | (Read_acquire, Read_plain)             -> GT
+  | (Read_acquire, Read_reserve)           -> GT
+  | (Read_acquire, Read_acquire)           -> EQ
+  | (Read_acquire, Read_exclusive)         -> LT
+  | (Read_acquire, Read_exclusive_acquire) -> LT
+  | (Read_acquire, Read_stream)            -> LT
+
+  | (Read_exclusive, Read_plain)             -> GT
+  | (Read_exclusive, Read_reserve)           -> GT
+  | (Read_exclusive, Read_acquire)           -> GT
+  | (Read_exclusive, Read_exclusive)         -> EQ
+  | (Read_exclusive, Read_exclusive_acquire) -> LT
+  | (Read_exclusive, Read_stream)            -> LT
+
+  | (Read_exclusive_acquire, Read_plain)             -> GT
+  | (Read_exclusive_acquire, Read_reserve)           -> GT
+  | (Read_exclusive_acquire, Read_acquire)           -> GT
+  | (Read_exclusive_acquire, Read_exclusive)         -> GT
+  | (Read_exclusive_acquire, Read_exclusive_acquire) -> EQ
+  | (Read_exclusive_acquire, Read_stream)            -> GT
+
+  | (Read_stream, Read_plain)             -> GT
+  | (Read_stream, Read_reserve)           -> GT
+  | (Read_stream, Read_acquire)           -> GT
+  | (Read_stream, Read_exclusive)         -> GT
+  | (Read_stream, Read_exclusive_acquire) -> GT
+  | (Read_stream, Read_stream)            -> EQ
+  end
+let inline {ocaml} read_kindCompare = defaultCompare
+
+let ~{ocaml} read_kindLess b1 b2      = read_kindCompare b1 b2 =  LT
+let ~{ocaml} read_kindLessEq b1 b2    = read_kindCompare b1 b2 <> GT
+let ~{ocaml} read_kindGreater b1 b2   = read_kindCompare b1 b2 =  GT
+let ~{ocaml} read_kindGreaterEq b1 b2 = read_kindCompare b1 b2 <> LT
+
+let inline {ocaml} read_kindLess      = defaultLess
+let inline {ocaml} read_kindLessEq    = defaultLessEq
+let inline {ocaml} read_kindGreater   = defaultGreater
+let inline {ocaml} read_kindGreaterEq = defaultGreaterEq
+
 instance (Ord read_kind)
-  let compare = defaultCompare
-  let (<) = defaultLess
-  let (<=) = defaultLessEq
-  let (>) = defaultGreater
-  let (>=) = defaultGreaterEq
-end
-instance (Ord write_kind)
-  let compare = defaultCompare
-  let (<) = defaultLess
-  let (<=) = defaultLessEq
-  let (>) = defaultGreater
-  let (>=) = defaultGreaterEq
-end
-instance (Ord barrier_kind)
-  let compare = defaultCompare
-  let (<) = defaultLess
-  let (<=) = defaultLessEq
-  let (>) = defaultGreater
-  let (>=) = defaultGreaterEq
+  let compare = read_kindCompare
+  let (<)  = read_kindLess
+  let (<=) = read_kindLessEq
+  let (>)  = read_kindGreater
+  let (>=) = read_kindGreaterEq
 end
 
-let eventCompare e1 e2 = 
+let ~{ocaml} write_kindCompare wk1 wk2 =
+  match (wk1, wk2) with
+  | (Write_plain, Write_plain)             -> EQ
+  | (Write_plain, Write_conditional)       -> LT
+  | (Write_plain, Write_release)           -> LT
+  | (Write_plain, Write_exclusive)         -> LT
+  | (Write_plain, Write_exclusive_release) -> LT
+
+  | (Write_conditional, Write_plain)             -> GT
+  | (Write_conditional, Write_conditional)       -> EQ
+  | (Write_conditional, Write_release)           -> LT
+  | (Write_conditional, Write_exclusive)         -> LT
+  | (Write_conditional, Write_exclusive_release) -> LT
+
+  | (Write_release, Write_plain)             -> GT
+  | (Write_release, Write_conditional)       -> GT
+  | (Write_release, Write_release)           -> EQ
+  | (Write_release, Write_exclusive)         -> LT
+  | (Write_release, Write_exclusive_release) -> LT
+
+  | (Write_exclusive, Write_plain)             -> GT
+  | (Write_exclusive, Write_conditional)       -> GT
+  | (Write_exclusive, Write_release)           -> GT
+  | (Write_exclusive, Write_exclusive)         -> EQ
+  | (Write_exclusive, Write_exclusive_release) -> LT
+
+  | (Write_exclusive_release, Write_plain)             -> GT
+  | (Write_exclusive_release, Write_conditional)       -> GT
+  | (Write_exclusive_release, Write_release)           -> GT
+  | (Write_exclusive_release, Write_exclusive)         -> GT
+  | (Write_exclusive_release, Write_exclusive_release) -> EQ
+  end
+let inline {ocaml} write_kindCompare = defaultCompare
+
+let ~{ocaml} write_kindLess b1 b2      = write_kindCompare b1 b2 =  LT
+let ~{ocaml} write_kindLessEq b1 b2    = write_kindCompare b1 b2 <> GT
+let ~{ocaml} write_kindGreater b1 b2   = write_kindCompare b1 b2 =  GT
+let ~{ocaml} write_kindGreaterEq b1 b2 = write_kindCompare b1 b2 <> LT
+
+let inline {ocaml} write_kindLess      = defaultLess
+let inline {ocaml} write_kindLessEq    = defaultLessEq
+let inline {ocaml} write_kindGreater   = defaultGreater
+let inline {ocaml} write_kindGreaterEq = defaultGreaterEq
+
+instance (Ord write_kind)
+  let compare = write_kindCompare
+  let (<)  = write_kindLess
+  let (<=) = write_kindLessEq
+  let (>)  = write_kindGreater
+  let (>=) = write_kindGreaterEq
+end
+
+let ~{ocaml} barrier_kindCompare bk1 bk2 =
+  match (bk1, bk2) with
+  | (Sync, Sync)   -> EQ
+  | (Sync, LwSync) -> LT
+  | (Sync, Eieio)  -> LT
+  | (Sync, Isync)  -> LT
+  | (Sync, DMB)    -> LT
+  | (Sync, DMB_ST) -> LT
+  | (Sync, DMB_LD) -> LT
+  | (Sync, DSB)    -> LT
+  | (Sync, DSB_ST) -> LT
+  | (Sync, DSB_LD) -> LT
+  | (Sync, ISB)    -> LT
+
+  | (LwSync, Sync)   -> GT
+  | (LwSync, LwSync) -> EQ
+  | (LwSync, Eieio)  -> LT
+  | (LwSync, Isync)  -> LT
+  | (LwSync, DMB)    -> LT
+  | (LwSync, DMB_ST) -> LT
+  | (LwSync, DMB_LD) -> LT
+  | (LwSync, DSB)    -> LT
+  | (LwSync, DSB_ST) -> LT
+  | (LwSync, DSB_LD) -> LT
+  | (LwSync, ISB)    -> LT
+
+  | (Eieio, Sync)   -> GT
+  | (Eieio, LwSync) -> GT
+  | (Eieio, Eieio)  -> EQ
+  | (Eieio, Isync)  -> LT
+  | (Eieio, DMB)    -> LT
+  | (Eieio, DMB_ST) -> LT
+  | (Eieio, DMB_LD) -> LT
+  | (Eieio, DSB)    -> LT
+  | (Eieio, DSB_ST) -> LT
+  | (Eieio, DSB_LD) -> LT
+  | (Eieio, ISB)    -> LT
+
+  | (Isync, Sync)   -> GT
+  | (Isync, LwSync) -> GT
+  | (Isync, Eieio)  -> GT
+  | (Isync, Isync)  -> EQ
+  | (Isync, DMB)    -> LT
+  | (Isync, DMB_ST) -> LT
+  | (Isync, DMB_LD) -> LT
+  | (Isync, DSB)    -> LT
+  | (Isync, DSB_ST) -> LT
+  | (Isync, DSB_LD) -> LT
+  | (Isync, ISB)    -> LT
+
+  | (DMB, Sync)   -> GT
+  | (DMB, LwSync) -> GT
+  | (DMB, Eieio)  -> GT
+  | (DMB, ISync)  -> GT
+  | (DMB, DMB)    -> EQ
+  | (DMB, DMB_ST) -> LT
+  | (DMB, DMB_LD) -> LT
+  | (DMB, DSB)    -> LT
+  | (DMB, DSB_ST) -> LT
+  | (DMB, DSB_LD) -> LT
+  | (DMB, ISB)    -> LT
+
+  | (DMB_ST, Sync)   -> GT
+  | (DMB_ST, LwSync) -> GT
+  | (DMB_ST, Eieio)  -> GT
+  | (DMB_ST, ISync)  -> GT
+  | (DMB_ST, DMB)    -> GT
+  | (DMB_ST, DMB_ST) -> EQ
+  | (DMB_ST, DMB_LD) -> LT
+  | (DMB_ST, DSB)    -> LT
+  | (DMB_ST, DSB_ST) -> LT
+  | (DMB_ST, DSB_LD) -> LT
+  | (DMB_ST, ISB)    -> LT
+
+  | (DMB_LD, Sync)   -> GT
+  | (DMB_LD, LwSync) -> GT
+  | (DMB_LD, Eieio)  -> GT
+  | (DMB_LD, ISync)  -> GT
+  | (DMB_LD, DMB)    -> GT
+  | (DMB_LD, DMB_ST) -> GT
+  | (DMB_LD, DMB_LD) -> EQ
+  | (DMB_LD, DSB)    -> LT
+  | (DMB_LD, DSB_ST) -> LT
+  | (DMB_LD, DSB_LD) -> LT
+  | (DMB_LD, ISB)    -> LT
+
+  | (DSB, Sync)   -> GT
+  | (DSB, LwSync) -> GT
+  | (DSB, Eieio)  -> GT
+  | (DSB, ISync)  -> GT
+  | (DSB, DMB)    -> GT
+  | (DSB, DMB_ST) -> GT
+  | (DSB, DMB_LD) -> GT
+  | (DSB, DSB)    -> EQ
+  | (DSB, DSB_ST) -> LT
+  | (DSB, DSB_LD) -> LT
+  | (DSB, ISB)    -> LT
+
+  | (DSB_ST, Sync)   -> GT
+  | (DSB_ST, LwSync) -> GT
+  | (DSB_ST, Eieio)  -> GT
+  | (DSB_ST, ISync)  -> GT
+  | (DSB_ST, DMB)    -> GT
+  | (DSB_ST, DMB_ST) -> GT
+  | (DSB_ST, DMB_LD) -> GT
+  | (DSB_ST, DSB)    -> GT
+  | (DSB_ST, DSB_ST) -> EQ
+  | (DSB_ST, DSB_LD) -> LT
+  | (DSB_ST, ISB)    -> LT
+
+  | (DSB_LD, Sync)   -> GT
+  | (DSB_LD, LwSync) -> GT
+  | (DSB_LD, Eieio)  -> GT
+  | (DSB_LD, ISync)  -> GT
+  | (DSB_LD, DMB)    -> GT
+  | (DSB_LD, DMB_ST) -> GT
+  | (DSB_LD, DMB_LD) -> GT
+  | (DSB_LD, DSB)    -> GT
+  | (DSB_LD, DSB_ST) -> GT
+  | (DSB_LD, DSB_LD) -> EQ
+  | (DSB_LD, ISB)    -> LT
+                          
+  | (ISB, Sync)   -> GT
+  | (ISB, LwSync) -> GT
+  | (ISB, Eieio)  -> GT
+  | (ISB, ISync)  -> GT
+  | (ISB, DMB)    -> GT
+  | (ISB, DMB_ST) -> GT
+  | (ISB, DMB_LD) -> GT
+  | (ISB, DSB)    -> GT
+  | (ISB, DSB_ST) -> GT
+  | (ISB, DSB_LD) -> GT
+  | (ISB, ISB)    -> EQ
+  end
+let inline {ocaml} barrier_kindCompare = defaultCompare
+
+let ~{ocaml} barrier_kindLess b1 b2      = barrier_kindCompare b1 b2 =  LT
+let ~{ocaml} barrier_kindLessEq b1 b2    = barrier_kindCompare b1 b2 <> GT
+let ~{ocaml} barrier_kindGreater b1 b2   = barrier_kindCompare b1 b2 =  GT
+let ~{ocaml} barrier_kindGreaterEq b1 b2 = barrier_kindCompare b1 b2 <> LT
+
+let inline {ocaml} barrier_kindLess      = defaultLess
+let inline {ocaml} barrier_kindLessEq    = defaultLessEq
+let inline {ocaml} barrier_kindGreater   = defaultGreater
+let inline {ocaml} barrier_kindGreaterEq = defaultGreaterEq
+
+instance (Ord barrier_kind)
+  let compare = barrier_kindCompare
+  let (<)  = barrier_kindLess
+  let (<=) = barrier_kindLessEq
+  let (>)  = barrier_kindGreater
+  let (>=) = barrier_kindGreaterEq
+end
+
+let ~{ocaml} eventCompare e1 e2 = 
   match (e1,e2) with
-  | (E_read_mem rk1 v1 i1 tr1, E_read_mem rk2 v2 i2 tr2) -> compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2)) 
+  | (E_read_mem rk1 v1 i1 tr1, E_read_mem rk2 v2 i2 tr2) ->
+     compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2)) 
   | (E_write_mem wk1 v1 i1 tr1 v1' tr1', E_write_mem wk2 v2 i2 tr2 v2' tr2') -> 
     compare ((wk1,v1,i1),(tr1,v1',tr1'))  ((wk2,v2,i2),(tr2,v2',tr2')) 
   | (E_barrier bk1, E_barrier bk2) -> compare bk1 bk2
@@ -363,11 +735,28 @@ let eventCompare e1 e2 =
   | (E_write_reg _ _, _) -> LT
   | _ -> GT
   end
+let inline {ocaml} eventCompare = defaultCompare
 
+let ~{ocaml} eventLess b1 b2      = eventCompare b1 b2 =  LT
+let ~{ocaml} eventLessEq b1 b2    = eventCompare b1 b2 <> GT
+let ~{ocaml} eventGreater b1 b2   = eventCompare b1 b2 =  GT
+let ~{ocaml} eventGreaterEq b1 b2 = eventCompare b1 b2 <> LT
 
+let inline {ocaml} eventLess      = defaultLess
+let inline {ocaml} eventLessEq    = defaultLessEq
+let inline {ocaml} eventGreater   = defaultGreater
+let inline {ocaml} eventGreaterEq = defaultGreaterEq
+
+instance (Ord event)
+  let compare = eventCompare
+  let (<)  = eventLess
+  let (<=) = eventLessEq
+  let (>)  = eventGreater
+  let (>=) = eventGreaterEq
+end
 
 instance (SetType event)
-  let setElemCompare = eventCompare
+  let setElemCompare = compare
 end
 
 (* Functions to build up the initial state for interpretation *)
@@ -383,14 +772,18 @@ type instr_parm_typ =
   | Enum of string * nat (*Internally represented as either a number or constructor, externally as a bitvector*)
   | Other (*An unrepresentable type, will be represented as Unknown in instruciton form *)
 
-let instr_parm_typEqual ip1 ip2 = match (ip1,ip2) with
+let {coq} instr_parm_typEqual ip1 ip2 = match (ip1,ip2) with
   | (Bit,Bit) -> true
   | (Bvector i1,Bvector i2) -> i1 = i2
   | (Range i1,Range i2) -> i1 = i2
   | (Enum s1 i1,Enum s2 i2) -> s1 = s2 && i1 = i2
   | (Other,Other) -> true
   | _ -> false
-end 
+end
+let inline ~{coq} instr_parm_typEqual = unsafe_structural_equality
+
+let {coq} instr_parm_typInequal ip1 ip2 = not (instr_parm_typEqual ip1 ip2)
+let inline ~{coq} instr_parm_typInequal = unsafe_structural_inequality
 
 instance (Eq instr_parm_typ) 
   let (=) = instr_parm_typEqual
@@ -415,9 +808,13 @@ end
 *)
 type instruction = (string * list (string * instr_parm_typ * instruction_field_value) * list base_effect)
 
-let instructionEqual i1 i2 = match (i1,i2) with
+let {coq} instructionEqual i1 i2 = match (i1,i2) with
   | ((i1,parms1,effects1),(i2,parms2,effects2)) -> i1=i2 && parms1 = parms2 && effects1 = effects2
 end
+let inline ~{coq} instructionEqual = unsafe_structural_equality
+
+let {coq} instructionInequal i1 i2 = not (instructionEqual i1 i2)
+let inline ~{coq} instructionInequal = unsafe_structural_inequality
 
 type v_kind = Bitv | Bytev
 
