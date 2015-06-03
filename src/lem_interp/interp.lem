@@ -58,7 +58,7 @@ type value =
  | V_register_alias of (alias_spec tannot) * tannot (* Same as above, but to a concatenation of two registers *)
  | V_track of value * (list reg_form) (* Used when memory system wants to track what register(s) a value came from *)
 
-let rec string_of_value v = match v with
+let rec {ocaml} string_of_value v = match v with
   | V_boxref nat t -> "$#" ^ (show nat) ^ "$"
   | V_lit (L_aux lit _) -> 
     (match lit with
@@ -97,8 +97,9 @@ let rec string_of_value v = match v with
   | V_register_alias _ _ -> "register_as_alias"
   | V_track v _ -> "tainted " ^ (string_of_value v)
 end
+let ~{ocaml} string_of_value _ = ""
 
-let rec id_value_eq (i, v) (i', v') = i = i' && value_eq v v'
+let rec {coq;ocaml} id_value_eq (i, v) (i', v') = i = i' && value_eq v v'
 and value_eq left right =
   (* XXX it is not clear whether t = t' will work in all cases *)
   match (left, right) with
@@ -122,10 +123,15 @@ and value_eq left right =
   | (v,V_track v2 _)  -> value_eq v v2
   | (_, _) -> false
   end
+let {isabelle;hol} id_value_eq = unsafe_structural_equality
+let {isabelle;hol} value_eq = unsafe_structural_equality
+
+let {coq;ocaml} value_ineq n1 n2 = not (value_eq n1 n2)
+let {isabelle;hol} value_ineq = unsafe_structural_inequality
 
 instance (Eq value)
-  let (=) = value_eq
-  let (<>) n1 n2 = not (value_eq n1 n2)
+  let (=)  = value_eq
+  let (<>) = value_ineq
 end
 
 let reg_start_pos reg = 

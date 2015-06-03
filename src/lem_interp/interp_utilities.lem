@@ -20,7 +20,7 @@ let unit_t = Typ_aux(Typ_app (Id_aux (Id "unit") Unknown) []) Unknown
  * Interp_ast *)
 
 val lit_eq: lit -> lit -> bool
-let lit_eq (L_aux left _) (L_aux right _) =
+let {ocaml;coq} lit_eq (L_aux left _) (L_aux right _) =
    match (left, right) with
    | (L_zero, L_zero) -> true
    | (L_one, L_one) -> true
@@ -38,19 +38,24 @@ let lit_eq (L_aux left _) (L_aux right _) =
    | (L_string s, L_string s') -> s = s'
    | (_, _) -> false
 end
+let {isabelle;hol} lit_eq = unsafe_structural_equality
+
+let {ocaml;coq}    lit_ineq n1 n2 = not (lit_eq n1 n2)
+let {isabelle;hol} lit_ineq = unsafe_structural_inequality
 
 instance (Eq lit)
-  let (=) = lit_eq
-  let (<>) n1 n2 = not (lit_eq n1 n2)
+  let (=)  = lit_eq
+  let (<>) = lit_ineq
 end
 
 let get_id id = match id with (Id_aux (Id s) _) -> s | (Id_aux (DeIid s) _ ) -> s end
 
-let rec list_to_string format sep lst = match lst with 
+let rec {ocaml} list_to_string format sep lst = match lst with 
   | [] -> ""
   | [last] -> format last
   | one::rest -> (format one) ^ sep ^ (list_to_string format sep rest)
-end 
+end
+let ~{ocaml} list_to_string format sep list = ""
 
 val has_rmem_effect : list base_effect -> bool
 val has_barr_effect : list base_effect -> bool
@@ -85,7 +90,7 @@ let get_effects (Typ_aux t _) =
     | _ -> []
   end
 
-let string_of_tag tag = match tag with
+let {ocaml} string_of_tag tag = match tag with
   | Tag_empty -> "empty"
   | Tag_global -> "global"
   | Tag_ctor -> "ctor"
@@ -95,7 +100,8 @@ let string_of_tag tag = match tag with
   | Tag_spec -> "spec"
   | Tag_enum i -> "enum"
   | Tag_alias -> "alias"
-end      
+end
+let ~{ocaml} string_of_tag tag = ""
 
 val find_type_def : defs tannot -> id -> maybe (type_def tannot)
 val find_function : defs tannot -> id -> maybe (list (funcl tannot))
