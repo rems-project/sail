@@ -173,6 +173,7 @@ val cons_bs_annot : t -> nexp_range list -> bounds_env -> tannot
 val t_to_string : t -> string
 val n_to_string : nexp -> string
 val constraints_to_string : nexp_range list -> string
+val bounds_to_string : bounds_env -> string
 val tannot_to_string : tannot -> string
 val t_to_typ : t -> Ast.typ
 
@@ -193,8 +194,9 @@ val get_abbrev : def_envs -> t -> (t * nexp_range list)
 
 val extract_bounds : def_envs -> string -> t -> bounds_env
 val merge_bounds : bounds_env -> bounds_env -> bounds_env
-val find_var_from_nvar : string -> bounds_env -> (string option * string) option
+val find_var_from_nexp : nexp -> bounds_env -> (string option * string) option
 
+val expand_nexp : nexp -> nexp list
 val normalize_nexp : nexp -> nexp
 val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debugging purposes*)
 val get_all_nvar : nexp -> string list (*Pull out all of the contained nvar and nuvars in nexp*)
@@ -209,6 +211,7 @@ val do_resolve_constraints : bool ref
 (*May raise an exception if effects do not match tannot effects, will lift unification variables to fresh type variables *)
 val check_tannot : Parse_ast.l -> tannot -> nexp option -> nexp_range list -> effect -> tannot
 
+val nexp_eq_check : nexp -> nexp -> bool (*structural equality only*)
 val nexp_eq : nexp -> nexp -> bool
 val nexp_one_more_than : nexp -> nexp -> bool
 
@@ -226,7 +229,7 @@ val type_consistent : constraint_origin -> def_envs -> range_enforcement -> bool
 (* type_coerce mutates to unify variables, and will raise an exception if the first type cannot
    be coerced into the second and is additionally inconsistent with the second; 
    bool specifices whether this has arisen from an implicit or explicit type coercion request *)
-val type_coerce : constraint_origin -> def_envs -> range_enforcement -> bool -> bool -> t -> exp -> t -> t * nexp_range list * effect * exp
+val type_coerce : constraint_origin -> def_envs -> range_enforcement -> bool -> bool -> bounds_env -> t -> exp -> t -> t * nexp_range list * effect * exp
 
 (* Merge tannots when intersection or unioning two environments. In case of default types, defer to tannot on right 
    When merging atoms, use bool to control widening. 

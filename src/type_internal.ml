@@ -246,10 +246,21 @@ let rec constraint_to_string = function
     "BranchCons(" ^ co_to_string co ^ ", [" ^ constraints_to_string consts ^ "])"
 and constraints_to_string l = string_of_list "; " constraint_to_string l
 
+let variable_range_to_string v = match v with
+  | VR_eq (s,n) -> "vr_eq(" ^ s ^ ", " ^ n_to_string n ^ ")"
+  | VR_range (s,cs) -> "vr_range(" ^ s ^ ", " ^ constraints_to_string cs ^ ")"
+  | VR_vec_eq (s,n) -> "vr_vec_eq(" ^ s ^ ", " ^ n_to_string n ^ ")"
+  | VR_vec_r (s,cs) -> "vr_vec_r(" ^ s ^ ", "^ constraints_to_string cs ^ ")"
+  | VR_recheck (s,t) -> "vr_recheck(" ^ s ^ ", "^ t_to_string t ^ ")"
+
+let bounds_to_string b = match b with
+  | No_bounds -> "Nobounds"
+  | Bounds vs -> "Bounds(" ^ string_of_list "; " variable_range_to_string vs ^ ")"
+
 let rec tannot_to_string = function
   | NoTyp -> "No tannot"
   | Base((vars,t),tag,ncs,ef,bv) ->
-    "Tannot: type = " ^ (t_to_string t) ^ " tag = " ^ tag_to_string tag ^ " constraints = " ^ constraints_to_string ncs ^ " effect = " ^ e_to_string ef ^ "boundv = not printing"
+    "Tannot: type = " ^ (t_to_string t) ^ " tag = " ^ tag_to_string tag ^ " constraints = " ^ constraints_to_string ncs ^ " effect = " ^ e_to_string ef ^ "boundv = " ^ bounds_to_string bv
   | Overload(poly,_,variants) ->
     "Overloaded: poly = " ^ tannot_to_string poly
 
@@ -2050,22 +2061,30 @@ let find_bounds v bounds = match bounds with
       | b::bs -> if (get_vr_var b) = v then Some(b) else find_rec bs in
     find_rec bs
 
-let find_var_from_nvar v bounds = match bounds with
-  | No_bounds -> None
-  | Bounds bs ->
-    let rec find_rec bs = match bs with
-      | [] -> None
-      | b::bs -> (match b with
-	  | VR_eq(ev,n) ->
-	    (match n.nexp with 
-	      | Nvar nv -> if nv = v then Some (None,ev) else find_rec bs
-	      | _ -> find_rec bs)
-	  | VR_vec_eq (ev,n)->
-	    (match n.nexp with 
-	      | Nvar nv -> if nv = v then Some (Some "length",ev) else find_rec bs
-	      | _ -> find_rec bs)
-	  | _ -> find_rec bs) in
-    find_rec bs
+let rec expand_nexp n = match n.nexp with
+  | Nvar _ | Nconst _ | Nuvar _ | Npos_inf | Nneg_inf | Ninexact -> [n]
+  | Nadd (n1,n2) | Nsub (n1,n2) | Nmult (n1,n2) -> n::((expand_nexp n1)@(expand_nexp n2))
+  | N2n (n1,_) | Npow (n1,_) | Nneg n1 -> n::(expand_nexp n1)
+
+let is_nconst n = match n.nexp with | Nconst _ -> true | _ -> false
+
+let find_var_from_nexp n bounds = 
+  (*let _ = Printf.eprintf "finding %s in bounds\n" (n_to_string n) in*)
+  if is_nconst n then None 
+  else match bounds with
+    | No_bounds -> None
+    | Bounds bs ->
+      let rec find_rec bs = match bs with
+	| [] -> None
+	| b::bs -> (match b with
+	    | VR_eq(ev,n1) ->
+	      (*let _ = Printf.eprintf "checking if %s is eq to %s\n" (n_to_string n) (n_to_string n1) in*)
+	      if nexp_eq_check n1 n then Some (None,ev) else find_rec bs
+	    | VR_vec_eq (ev,n1)->
+	      (*let _ = Printf.eprintf "checking if %s is eq to %s\n" (n_to_string n) (n_to_string n1) in*)
+	      if nexp_eq_check n1 n then Some (Some "length",ev) else find_rec bs
+	    | _ -> find_rec bs) in
+      find_rec bs
 
 let merge_bounds b1 b2 =
   match b1,b2 with
@@ -2228,7 +2247,7 @@ and type_arg_eq co d_env enforce widen ta1 ta2 =
 and type_consistent co d_env enforce widen t1 t2 =
   type_consistent_internal co d_env enforce widen t1 [] t2 []
 
-let rec type_coerce_internal co d_env enforce is_explicit widen t1 cs1 e t2 cs2 = 
+let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e t2 cs2 = 
   let l = get_c_loc co in
   let t1,cs1' = get_abbrev d_env t1 in
   let t2,cs2' = get_abbrev d_env t2 in
@@ -2245,7 +2264,7 @@ let rec type_coerce_internal co d_env enforce is_explicit widen t1 cs1 e t2 cs2 
 		     " nor " ^ (t_to_string to2) ^ " can match expected type " ^ (t_to_string t2))
   | Toptions(to1,None),_ -> 
     if is_explicit 
-    then type_coerce_internal co d_env enforce is_explicit widen to1 cs1 e t2 cs2
+    then type_coerce_internal co d_env enforce is_explicit widen bounds to1 cs1 e t2 cs2
     else (t2,csp,pure_e,e)
   | _,Toptions(to1,Some to2) -> 
     if (conforms_to_t d_env false true to1 t1_actual || conforms_to_t d_env false true to2 t1_actual)
@@ -2253,7 +2272,7 @@ let rec type_coerce_internal co d_env enforce is_explicit widen t1 cs1 e t2 cs2 
     else eq_error l ((t_to_string t1) ^ " can match neither expexted type " ^ (t_to_string to1) ^ " nor " ^ (t_to_string to2))
   | _,Toptions(to1,None) -> 
     if is_explicit
-    then type_coerce_internal co d_env enforce is_explicit widen t1_actual cs1 e to1 cs2
+    then type_coerce_internal co d_env enforce is_explicit widen bounds t1_actual cs1 e to1 cs2
     else (t1,csp,pure_e,e)
   | Ttup t1s, Ttup t2s ->
     let tl1,tl2 = List.length t1s,List.length t2s in
@@ -2262,7 +2281,7 @@ let rec type_coerce_internal co d_env enforce is_explicit widen t1 cs1 e t2 cs2 
       let vars = List.map2 (fun i t -> E_aux(E_id(i),(l,Base(([],t),Emp_local,[],pure_e,nob)))) ids t1s in
       let (coerced_ts,cs,efs,coerced_vars,any_coerced) = 
         List.fold_right2 (fun v (t1,t2) (ts,cs,efs,es,coerced) ->
-	  let (t',c',ef,e') = type_coerce co d_env enforce is_explicit widen t1 v t2 in
+	  let (t',c',ef,e') = type_coerce co d_env enforce is_explicit widen bounds t1 v t2 in
 	  ((t'::ts),c'@cs,union_effects ef efs,(e'::es), coerced || (v == e')))
           vars (List.combine t1s t2s) ([],[],pure_e,[],false) in
       if (not any_coerced) then (t2,cs,pure_e,e)
@@ -2330,13 +2349,14 @@ let rec type_coerce_internal co d_env enforce is_explicit widen t1 cs1 e t2 cs2 
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [] (*[LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)] (*This constraint failing should be a warning, but truncation is ok*)*)  in
-	let tannot = (l,Base(([],t2),External None, cs,pure_e,nob)) in
+	let tannot = (l,Base(([],t2),External None, cs,pure_e,bounds)) in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
 				  [(E_aux(E_internal_exp(tannot), tannot));e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
 	let cs = [] (* See above [LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
-	let tannot = (l,Base(([],t2),External None,cs,pure_e,nob)) in
+	let tannot = (l,Base(([],t2),External None,cs,pure_e,bounds)) in
+	(*let _ = Printf.eprintf "Generating to_vec_dec call: bounds are %s\n" (bounds_to_string bounds) in*)
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
 				  [(E_aux(E_internal_exp(tannot), tannot)); e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
@@ -2349,13 +2369,13 @@ let rec type_coerce_internal co d_env enforce is_explicit widen t1 cs1 e t2 cs2 
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
 	let cs = [](*[LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
-	let tannot = (l,Base(([],t2),External None, cs,pure_e,nob)) in
+	let tannot = (l,Base(([],t2),External None, cs,pure_e,bounds)) in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
 				  [(E_aux(E_internal_exp(tannot), tannot));e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
 	let cs = [](*[LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
-	let tannot = (l,Base(([],t2),External None,cs,pure_e,nob)) in
+	let tannot = (l,Base(([],t2),External None,cs,pure_e,bounds)) in
 	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
 				  [(E_aux(E_internal_exp(tannot), tannot)); e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
@@ -2371,7 +2391,7 @@ let rec type_coerce_internal co d_env enforce is_explicit widen t1 cs1 e t2 cs2 
           (*let _ = Printf.eprintf "Adding cast to remove register read\n" in*)
           let ef = add_effect (BE_aux (BE_rreg, l)) pure_e in
 	  let new_e = E_aux(E_cast(t_to_typ unit_t,e),(l,Base(([],t),External None,[],ef,nob))) in
-	  let (t',cs,ef',e) = type_coerce co d_env Guarantee is_explicit widen t new_e t2 in
+	  let (t',cs,ef',e) = type_coerce co d_env Guarantee is_explicit widen bounds t new_e t2 in
 	  (t',cs,union_effects ef ef',e)
 	| _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))
     | _,_,_ -> 
@@ -2453,8 +2473,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen t1 cs1 e t2 cs2 
     | None -> eq_error l ("Type mismatch: " ^ (t_to_string t1) ^ " , " ^ (t_to_string t2)))
   | _,_ -> let t',cs = type_consistent co d_env enforce widen t1 t2 in (t',cs,pure_e,e)
 
-and type_coerce co d_env enforce is_explicit widen t1 e t2 = 
-  type_coerce_internal co d_env enforce is_explicit widen t1 [] e t2 [];;
+and type_coerce co d_env enforce is_explicit widen bounds t1 e t2 = 
+  type_coerce_internal co d_env enforce is_explicit widen bounds t1 [] e t2 [];;
 
 let rec select_overload_variant d_env params_check get_all variants actual_type =
   match variants with
@@ -2623,7 +2643,7 @@ let rec simple_constraint_check in_env cs =
 	  if (equate_n n1' n2') then None else Some(Eq(co,n1',n2')) end
 	else if occurs then eq_to_zero ok_to_set n1' n2'
         else Some(Eq(co,n1',n2'))
-      | _, Nuvar u ->
+      | _, Nuvar u -> 
 	(*let _ = Printf.eprintf "setting right nuvar\n" in*)
 	let occurs = occurs_in_nexp n1' n2' in
 	let leave = leave_nu_as_var n2' in
