@@ -1136,8 +1136,8 @@ and vec_concat_match_plev t_level pat r_vals dir l last_pat t =
 	    then 
 	      (true,false,eenv,r_vals,[])
 	    else (false,false,eenv,[],[]) end)
-      | P_as (P_aux pat (l',Just(t,_,_,_))) id -> 
-	let (matched_p, used_unknown, bounds,matcheds,r_vals) = vec_concat_match_plev t_level pat r_vals dir l last_pat t in
+      | P_as (P_aux pat (l',Just(t',_,_,_))) id -> 
+	let (matched_p, used_unknown, bounds,matcheds,r_vals) = vec_concat_match_plev t_level pat r_vals dir l last_pat t' in
 	if matched_p 
 	then (matched_p, used_unknown,
               (add_to_env (id,V_vector (if is_inc(dir) then 0 else (List.length matcheds)) dir matcheds) bounds),
