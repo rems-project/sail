@@ -449,7 +449,8 @@ let rec detaint value =
     | v -> v
 end
 
-let rec binary_taint thunk vall valr =
+(* the inner lambda is to make Isabelle happier about overlapping patterns *)
+let rec binary_taint thunk = fun vall valr ->
  match (vall,valr) with
    | (V_track vl rl,V_track vr rr) -> taint (binary_taint thunk vl vr) (rl++rr)
    | (V_track vl rl,vr) -> taint (binary_taint thunk vl vr) rl
