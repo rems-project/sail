@@ -209,10 +209,11 @@ let to_vec_inc (V_tuple[v1;v2]) =
   let tv_help v1 v2 = 
     match (v1,v2) with
       | (V_lit(L_aux (L_num len) _), (V_lit(L_aux (L_num n) ln))) ->
-	let l = boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
+	let l = if len < 0 then []
+	  else boolListFrombitSeq (natFromInteger len) (bitSeqFromInteger Nothing n) in
 	V_vector 0 IInc (map bool_to_bit (reverse l)) 
       | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
-	V_vector 0 IInc (List.replicate (natFromInteger n) V_unknown)
+	V_vector 0 IInc (List.replicate (if n < 0 then 0 else (natFromInteger n)) V_unknown)
       | ((V_lit(L_aux (L_num n) ln)),(V_lit (L_aux L_undef _))) -> 
 	V_vector 0 IInc (List.replicate (natFromInteger n) v2)
       | (_,V_unknown) -> V_unknown
@@ -225,15 +226,15 @@ let to_vec_dec (V_tuple([v1;v2])) =
   let tv_fun v1 v2 =
     match (v1,v2) with 
       | (V_lit(L_aux (L_num len) _), (V_lit(L_aux (L_num n) ln))) ->
-	let len = natFromInteger len in
+	let len = if len < 0 then 0 else natFromInteger len in
 	let l = boolListFrombitSeq len (bitSeqFromInteger Nothing n) in
 	V_vector (len - 1) IDec (map bool_to_bit (reverse l)) 
       | ((V_lit(L_aux (L_num n) ln)),V_unknown) -> 
-	let n = natFromInteger n in
-	V_vector (n-1) IDec (List.replicate n V_unknown)
+	let n = if n < 0 then 0 else natFromInteger n in
+	V_vector (if n=0 then 0 else (n-1)) IDec (List.replicate n V_unknown)
       | ((V_lit(L_aux (L_num n) ln)),(V_lit (L_aux L_undef _))) -> 
-	let n = natFromInteger n in
-	V_vector (n-1) IDec (List.replicate n v2)
+	let n = if n < 0 then 0 else natFromInteger n in
+	V_vector (if n = 0 then 0 else (n-1)) IDec (List.replicate n v2)
       | (_,V_unknown) -> V_unknown
       | (V_unknown,_) -> V_unknown
       | _ -> Assert_extra.failwith ("to_vec_dec parameters were " ^ (string_of_value (V_tuple[v1;v2])))
