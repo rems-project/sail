@@ -2164,7 +2164,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	    | Just(funcls) -> 
 	      let new_vals = match v with 
 		| V_tuple vs -> V_tuple (vs ++ [value])
-		| V_lit (L_aux L_unit _) -> value
+		| V_lit (L_aux L_unit _) -> V_tuple [v;value] (*hmmm may be wrong in some code*)
 		| v -> V_tuple [v;value] end in
               (match find_funcl t_level funcls new_vals with
 		| [] -> ((Error l ("No matching pattern for function " ^ name ^
