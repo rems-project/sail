@@ -1710,7 +1710,14 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		 (interp_main mode t_level l_env lm e2)
                  (fun v2 lm le ->
 		   let append v1 v2 = (match (v1,v2) with
-                     | (V_vector m dir vals1, V_vector _ _ vals2) -> V_vector m dir (vals1++vals2)
+                     | (V_vector m dir vals1, V_vector _ _ vals2) -> 
+		       let vals = vals1++vals2 in
+		       let len = List.length vals in
+		       if is_inc(dir) 
+		       then V_vector m dir vals
+		       else if m > len 
+		       then V_vector m dir vals
+		       else V_vector (len-1) dir vals
 		     | (V_vector m dir vals1, V_vector_sparse _ len _ vals2 d) ->
 		       let original_len = List.length vals1 in
 		       let (_,sparse_vals) = List.foldr (fun v (i,vals) -> (i+1,(i,v)::vals)) (m,[]) vals1 in
