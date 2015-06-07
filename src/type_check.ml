@@ -248,8 +248,11 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
     | P_id id -> 
       let i = id_to_string id in
       let default_bounds = extract_bounds d_env i expect_t in
-      let default = let tannot = Base(([],expect_t),emp_tag,cs,pure_e,default_bounds) in
-		    (P_aux(p,(l,tannot)),Envmap.from_list [(i,tannot)],cs,default_bounds,expect_t) in
+      let default = let id_annot = Base(([],expect_t),emp_tag,cs,pure_e,default_bounds) in
+		    let pat_annot = match is_enum_typ d_env expect_t with
+		      | None -> id_annot
+		      | Some n -> Base(([],expect_t), Enum n, cs,pure_e,default_bounds) in
+		    (P_aux(p,(l,pat_annot)),Envmap.from_list [(i,id_annot)],cs,default_bounds,expect_t) in
       (match Envmap.apply t_env i with
 	| Some(Base((params,t),Constructor,cs,ef,bounds)) ->
 	  let t,cs,ef,_ = subst params false t cs ef in

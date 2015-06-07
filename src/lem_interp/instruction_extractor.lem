@@ -30,6 +30,8 @@ let rec extract_ityp t tag = match (t,tag) with
   | (T_app "range" _,_) -> IRange Nothing
   | (T_app i (T_args []),Tag_enum max) ->
     IEnum i (natFromInteger max)
+  | (T_id i,Tag_enum max) ->
+    IEnum i (natFromInteger max)
   | _ -> IOther
 end 
 

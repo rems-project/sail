@@ -192,6 +192,8 @@ val type_param_consistent : Parse_ast.l -> t_arg emap -> t_arg emap -> nexp_rang
 
 val get_abbrev : def_envs -> t -> (t * nexp_range list)
 
+val is_enum_typ : def_envs -> t -> int option
+
 val extract_bounds : def_envs -> string -> t -> bounds_env
 val merge_bounds : bounds_env -> bounds_env -> bounds_env
 val find_var_from_nexp : nexp -> bounds_env -> (string option * string) option

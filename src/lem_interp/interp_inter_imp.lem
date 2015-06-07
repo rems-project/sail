@@ -396,6 +396,7 @@ let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instr
 	match typ with
 	  | Bit -> match bits with | [b] -> b | _ -> Assert_extra.failwith "Expected a bitvector of length 1" end
 	  | Range _ -> Interp_lib.to_num Interp_lib.Unsigned vec
+	  | Enum _ _ -> Interp_lib.to_num Interp_lib.Unsigned vec
 	  | _ -> vec
        end 
     end in

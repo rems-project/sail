@@ -1975,6 +1975,15 @@ let rec get_abbrev d_env t =
 	| _ -> t,[])
     | _ -> t,[]
 
+let is_enum_typ d_env t = 
+  let t,_ = get_abbrev d_env t in
+  let t_actual = match t.t with | Tabbrev(_,ta) -> ta | _ -> t in
+  match t.t with
+    | Tid i -> (match Envmap.apply d_env.enum_env i with
+	| Some(ns) -> Some(List.length ns)
+	| _ -> None)
+    | _ -> None
+
 let eq_error l msg = raise (Reporting_basic.err_typ l msg)
 
 let compare_effect (BE_aux(e1,_)) (BE_aux(e2,_)) =
