@@ -1188,7 +1188,7 @@ let rec find_case t_level pexps value =
   end
 
 val interp_main : interp_mode -> top_level -> lenv -> lmem -> (exp tannot) -> (outcome * lmem * lenv)
-val exp_list : interp_mode -> top_level -> (list (exp tannot) -> (exp tannot)) -> (list value -> value) -> lenv -> lmem -> list value -> list (exp tannot) -> (outcome * lmem * lenv)
+val exp_list : interp_mode -> top_level -> ((list (exp tannot)) -> lenv -> ((exp tannot) * lenv)) -> (list value -> value) -> lenv -> lmem -> list value -> list (exp tannot) -> (outcome * lmem * lenv)
 val interp_lbind : interp_mode -> top_level -> lenv -> lmem -> (letbind tannot) -> ((outcome * lmem * lenv) * (maybe ((exp tannot) -> (letbind tannot))))
 val interp_alias_read : interp_mode -> top_level -> lenv -> lmem -> (alias_spec tannot) -> (outcome * lmem * lenv)
 
@@ -1220,7 +1220,9 @@ let rec exp_list mode t_level build_e build_v l_env l_mem vals exps =
                     (fun value lm le -> exp_list mode t_level build_e build_v l_env lm (vals++[value]) exps)
                     (fun a -> update_stack a (add_to_top_frame 
                                                 (fun e env -> 
-                                                  let (es,env') = to_exps mode env vals in (build_e (es++(e::exps)),env'))))
+                                                  let (es,env') = to_exps mode env vals in 
+						  let (e,env'') = build_e (es++(e::exps)) env' in
+						  (e,env''))))
   end
 
 and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
@@ -1414,12 +1416,13 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     | E_record(FES_aux (FES_Fexps fexps _) fes_annot) -> 
       let (fields,exps) = List.unzip (List.map (fun (FE_aux (FE_Fexp id exp) _) -> (id,exp)) fexps) in
       exp_list mode t_level 
-	(fun es -> 
-	  (E_aux 
-	     (E_record 
-		(FES_aux (FES_Fexps 
-			    (map2 (fun id exp -> (FE_aux (FE_Fexp id exp) (Unknown,Nothing))) fields es) false) fes_annot))
-	          (l,annot)))
+	(fun es env' -> 
+	  ((E_aux 
+	      (E_record 
+		 (FES_aux (FES_Fexps 
+			     (map2 (fun id exp -> (FE_aux (FE_Fexp id exp) (Unknown,Nothing))) fields es)
+			     false) fes_annot))
+	          (l,annot)), env'))
 	(fun vs -> (V_record typ (List.zip fields vs))) l_env l_mem [] exps
     | E_record_update exp (FES_aux (FES_Fexps fexps _) fes_annot) ->
       resolve_outcome 
@@ -1429,13 +1432,13 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
             let (fields,exps) = List.unzip (List.map (fun (FE_aux (FE_Fexp id exp) _) -> (id,exp)) fexps) in
             resolve_outcome 
 	      (exp_list mode t_level 
-		        (fun es -> 
-                          let (e,_) = (to_exp <|mode with track_values = false|> eenv rv) in
-			  (E_aux (E_record_update e 
+		        (fun es env'-> 
+                          let (e,env'') = (to_exp mode env' rv) in
+			  ((E_aux (E_record_update e 
 				    (FES_aux (FES_Fexps 
 						(map2 (fun id exp -> (FE_aux (FE_Fexp id exp) (Unknown,Nothing)))
 						   fields es) false) fes_annot))
-			     (l,annot)))
+			     (l,annot)), env''))
                         (fun vs -> (V_record t (List.zip fields vs))) l_env l_mem [] exps)
               (fun vs lm le -> (Value (fupdate_record rv vs), lm, le))
               (fun a -> a) (*Due to exp_list this won't happen, but we want to functionaly update on Value *)
@@ -1445,7 +1448,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	  (add_to_top_frame 
 	     (fun e env -> (E_aux(E_record_update e (FES_aux(FES_Fexps fexps false) fes_annot)) (l,annot), env))))
     | E_list(exps) ->
-      exp_list mode t_level (fun exps -> E_aux (E_list exps) (l,annot)) V_list l_env l_mem [] exps
+      exp_list mode t_level (fun exps env' -> (E_aux (E_list exps) (l,annot),env')) V_list l_env l_mem [] exps
     | E_cons hd tl ->
       resolve_outcome 
 	(interp_main mode t_level l_env l_mem hd)
@@ -1740,14 +1743,15 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                                                (E_aux (E_vector_append e1 e) (l,annot),env'))))) end)
         (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_vector_append e e2) (l,annot),env))))
     | E_tuple(exps) -> 
-      exp_list mode t_level (fun exps -> E_aux (E_tuple exps) (l,annot)) V_tuple l_env l_mem [] exps
+      exp_list mode t_level (fun exps env' -> (E_aux (E_tuple exps) (l,annot), env')) V_tuple l_env l_mem [] exps
     | E_vector(exps) ->
       let (is_inc,dir) = (match typ with
         | T_app "vector" (T_args [ _; _; T_arg_order (Ord_aux Ord_inc _); _]) -> (true,IInc)
         | _ -> (false,IDec) end) in
       let base = (if is_inc then 0 else (List.length exps) - 1) in
       exp_list mode t_level 
-        (fun exps -> E_aux (E_vector exps) (l,annot)) (fun vals -> V_vector base dir vals) l_env l_mem [] exps
+        (fun exps env' -> (E_aux (E_vector exps) (l,annot),env')) 
+	(fun vals -> V_vector base dir vals) l_env l_mem [] exps
     | E_vector_indexed iexps (Def_val_aux default dannot) ->
       let (indexes,exps) = List.unzip iexps in
       let (dir,base,len) = (match typ with
@@ -1758,8 +1762,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
       (match default with
 	| Def_val_empty ->
 	  exp_list mode t_level 
-	    (fun es -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es) 
-				                (Def_val_aux default dannot)) (l,annot)))
+	    (fun es env' -> (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es) 
+				                (Def_val_aux default dannot)) (l,annot), env'))
             (fun vals -> V_vector (if indexes=[] then 0 else (natFromInteger (List_extra.head indexes))) dir vals)
 	    l_env l_mem [] exps
 	| Def_val_dec default_exp ->
@@ -1769,11 +1773,11 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	    (interp_main mode t_level l_env l_mem default_exp)
 	    (fun v lm le -> 
 	      exp_list mode t_level 
-                (fun es -> 
-                  let (ev,_) = to_exp <|mode with track_values = false |> eenv v in
+                (fun es env' -> 
+                  let (ev,env'') = to_exp mode env' v in
                   (E_aux (E_vector_indexed (map2 (fun i e -> (i,e)) indexes es)
 			    (Def_val_aux (Def_val_dec ev) dannot))
-		     (l,annot)))
+		     (l,annot), env''))
 		(fun vs -> 
 		  (V_vector_sparse b len dir (map2 (fun i v -> ((natFromInteger i),v)) indexes vs) v)) l_env l_mem [] exps)
 	    (fun a -> 
@@ -1787,7 +1791,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
        l_mem, l_env)
     | E_app f args ->
       (match (exp_list mode t_level 
-                (fun es -> E_aux (E_app f es) (l,annot)) 
+                (fun es env -> (E_aux (E_app f es) (l,annot),env))
 		(fun vs -> match vs with | [] -> V_lit (L_aux L_unit l) | [v] -> v | vs -> V_tuple vs end) 
 		l_env l_mem [] args) with
       | (Value v,lm,le) -> 
@@ -2026,6 +2030,13 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
   let (typ,tag,ncs,ef) = match annot with 
     | Nothing -> (T_var "fresh_v", Tag_empty, [], (Effect_aux (Effect_set []) Unknown))
     | Just(t, tag, ncs, ef) -> (t,tag,ncs,ef) end in
+  let recenter_val typ value = match typ with
+    | T_app "reg" (T_args [T_arg_typ 
+	   (T_app "vector" (T_args [T_arg_nexp (Ne_const start); T_arg_nexp (Ne_const size); _; _ ]))]) -> 
+      update_vector_start default_dir (natFromInteger start) (natFromInteger size) value
+    | T_abbrev _ (T_app "vector" (T_args [T_arg_nexp (Ne_const start); T_arg_nexp (Ne_const size); _; _ ])) ->
+      update_vector_start default_dir (natFromInteger start) (natFromInteger size) value
+    | _ -> value end in
    match lexp with
     | LEXP_id id -> 
       let name = get_id id in
@@ -2034,7 +2045,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	  match detaint (in_lenv l_env id) with
 	    | ((V_boxref n t) as v) -> 
 	      if is_top_level 
-	      then ((Value (V_lit (L_aux L_unit l)), update_mem l_mem n value, l_env),Nothing)
+	      then ((Value (V_lit (L_aux L_unit l)), update_mem l_mem n (recenter_val t value), l_env),Nothing)
 	      else ((Value v, l_mem, l_env),Just (fun e env -> (LEXP_aux (LEXP_id id) (l,annot), env)))
 	    | V_unknown ->
 	      if is_top_level then
@@ -2150,7 +2161,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	    l_mem,l_env),Nothing)
       end 
     | LEXP_memory id exps -> 
-      match (exp_list mode t_level (fun exps -> E_aux (E_tuple exps) (Unknown,Nothing)) 
+      match (exp_list mode t_level (fun exps env -> (E_aux (E_tuple exps) (Unknown,Nothing),env)) 
 	              (fun vs -> match vs with | [] -> V_lit (L_aux L_unit Unknown) | [v] -> v | vs -> V_tuple vs end)
 		      l_env l_mem [] exps) with
       | (Value v,lm,le) ->
@@ -2206,7 +2217,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	  match detaint (in_lenv l_env id) with
 	    | ((V_boxref n t) as v) -> 
 	      if is_top_level 
-	      then ((Value (V_lit (L_aux L_unit l)), update_mem l_mem n value, l_env),Nothing)
+	      then ((Value (V_lit (L_aux L_unit l)), update_mem l_mem n (recenter_val t value), l_env),Nothing)
 	      else ((Value v, l_mem, l_env),Just (fun e env -> (LEXP_aux (LEXP_cast typc id) (l,annot), env)))
 	    | V_unknown -> 	  
 	      if is_top_level 
