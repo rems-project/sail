@@ -227,7 +227,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 		       TA_ord d_env.default_o;TA_typ{t = Tid"bit"}])},lit
 	  | L_string s -> {t = Tid "string"},lit
 	  | L_undef -> typ_error l' "Cannot pattern match on undefined") in
-(*      let _ = Printf.printf "checking pattern literal. expected type is %s. t is %s\n" (t_to_string expect_t) (t_to_string t) in*)
+(*      let _ = Printf.eprintf "checking pattern literal. expected type is %s. t is %s\n" (t_to_string expect_t) (t_to_string t) in*)
       let t',cs' = type_consistent (Patt l) d_env Require true t expect_t in
       let cs_l = cs@cs' in
       (P_aux(P_lit(L_aux(lit,l')),(l,cons_tag_annot t emp_tag cs_l)),Envmap.empty,cs_l,nob,t)
@@ -499,7 +499,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
           | Tabbrev(_,t),_ -> t,expect_t 
           | _,Tabbrev(_,e) -> t,e
           | _,_ -> t,expect_t in
-	(*let _ = Printf.printf "On general id check, expect_t %s, t %s, tactual %s, expect_actual %s\n" (t_to_string expect_t) (t_to_string t) (t_to_string t_actual) (t_to_string expect_actual) in*)
+	(*let _ = Printf.eprintf "On general id check, expect_t %s, t %s, tactual %s, expect_actual %s\n" (t_to_string expect_t) (t_to_string t) (t_to_string t_actual) (t_to_string expect_actual) in*)
         (match t_actual.t,expect_actual.t with 
         | Tfn _,_ -> typ_error l ("Identifier " ^ (id_to_string id) ^ " is bound to a function and cannot be used as a value")
         | Tapp("register",[TA_typ(t')]),Tapp("register",[TA_typ(expect_t')]) -> 
@@ -1870,7 +1870,7 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
 		  let tannot = Base(([],et),Alias,[],pure_e,nob) in
 		  let d_env = {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, (OneReg(reg,tannot)))} in
 		  (AL_aux(AL_subreg(reg_a,subreg),(l,tannot)),tannot,d_env)))
-	| _ -> let _ = Printf.printf "%s\n" (t_to_string reg_t) in assert false)
+	| _ -> let _ = Printf.eprintf "%s\n" (t_to_string reg_t) in assert false)
     | AL_bit(reg_a,bit) -> 
       let (reg,reg_a,reg_t,t) = check_reg reg_a in
       let (E_aux(bit,(le,eannot)),_,_,_,_,_) = check_exp envs None (new_t ()) bit in
@@ -1920,14 +1920,14 @@ let check_def envs def =
   let (Env(d_env,t_env,b_env,tp_env)) = envs in
   match def with
   | DEF_type tdef ->
-    (*let _ = Printf.printf "checking type def\n" in*)
+    (*let _ = Printf.eprintf "checking type def\n" in*)
     let td,envs = check_type_def envs tdef in
-    (*let _ = Printf.printf "checked type def\n" in*)
+    (*let _ = Printf.eprintf "checked type def\n" in*)
     (DEF_type td,envs)
   | DEF_fundef fdef -> 
-    (*let _ = Printf.printf "checking fun def\n" in*)
+    (*let _ = Printf.eprintf "checking fun def\n" in*)
     let fd,envs = check_fundef envs fdef in
-    (*let _ = Printf.printf "checked fun def\n" in*)
+    (*let _ = Printf.eprintf "checked fun def\n" in*)
     (DEF_fundef fd,envs)
   | DEF_val letdef -> 
     (*let _ = Printf.eprintf "checking letdef\n" in*)

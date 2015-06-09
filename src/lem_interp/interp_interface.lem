@@ -882,15 +882,19 @@ let concretizable_bytls = List.all concretizable_bytl
 
 (* constructing values *)
 
-val register_value : bit_lifted -> direction -> nat -> nat -> register_value
-let register_value b dir width start_index = 
-  <| rv_bits = List.replicate width b;
+val build_register_value : list bit_lifted -> direction -> nat -> nat -> register_value
+let build_register_value bs dir width start_index =
+  <| rv_bits = bs;
      rv_dir = dir; (* D_increasing for Power, D_decreasing for ARM *)
      rv_start_internal = start_index; 
      rv_start = if dir = D_increasing 
        then start_index 
        else (start_index+1) - width; (* Smaller index, as in Power, for external interaction *)
   |>
+
+val register_value : bit_lifted -> direction -> nat -> nat -> register_value
+let register_value b dir width start_index = 
+  build_register_value (List.replicate width b) dir width start_index
 
 val register_value_zeros : direction -> nat -> nat -> register_value
 let register_value_zeros dir width start_index = 
@@ -1080,12 +1084,7 @@ let integer_of_register_value (rv:register_value):maybe integer =
 val register_value_of_integer : nat -> nat -> direction -> integer -> register_value 
 let register_value_of_integer (len:nat) (start:nat) (dir:direction) (i:integer):register_value =
   let bs = bit_list_of_integer len i in
-  <| 
-  rv_bits = List.map bit_lifted_of_bit bs;
-  rv_dir = dir;
-  rv_start = start;
-  rv_start_internal = if dir = D_increasing then start else start + (List.length bs) - 1
-|> 
+  build_register_value (List.map bit_lifted_of_bit bs) dir len start
 
 (* *)
 

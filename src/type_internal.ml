@@ -625,7 +625,7 @@ let rec normalize_nexp n =
 	    | _ -> {nexp = Nmult(n2',n1')})
 	| _ -> {nexp = Nmult(normalize_nexp {nexp = Nmult(n1',n21)},n22)})
     | Nmult _ ,Nmult(n21,n22) -> {nexp = Nmult({nexp = Nmult(n21,n1')},{nexp = Nmult(n22,n1')})}
-    | Nneg _,_ | _,Nneg _ -> let _ = Printf.printf "neg case still around %s\n" (n_to_string n) in assert false (* If things are normal, neg should be gone. *)
+    | Nneg _,_ | _,Nneg _ -> let _ = Printf.eprintf "neg case still around %s\n" (n_to_string n) in assert false (* If things are normal, neg should be gone. *)
     )
     
 let int_to_nexp i = {nexp = Nconst (big_int_of_int i)}
@@ -685,7 +685,7 @@ let new_e _ =
 
 exception Occurs_exn of t_arg
 let rec resolve_tsubst (t : t) : t = 
-  (*let _ = Printf.printf "resolve_tsubst on %s\n" (t_to_string t) in*)
+  (*let _ = Printf.eprintf "resolve_tsubst on %s\n" (t_to_string t) in*)
   match t.t with
   | Tuvar({ subst=Some(t') } as u) ->
     let t'' = resolve_tsubst t' in
@@ -772,9 +772,9 @@ let rec nexp_eq_check n1 n2 =
   | _,_ -> false
 
 let nexp_eq n1 n2 =
-(*  let _ = Printf.printf "comparing nexps %s and %s\n" (n_to_string n1) (n_to_string n2) in*)
+(*  let _ = Printf.eprintf "comparing nexps %s and %s\n" (n_to_string n1) (n_to_string n2) in*)
   let b = nexp_eq_check (normalize_nexp n1) (normalize_nexp n2) in
-(*  let _ = Printf.printf "compared nexps %s\n" (string_of_bool b) in*)
+(*  let _ = Printf.eprintf "compared nexps %s\n" (string_of_bool b) in*)
   b
 
 let nexp_one_more_than n1 n2 =
@@ -912,7 +912,8 @@ let rec fresh_nvar bindings n =
   (*let _ = Printf.eprintf "fresh_nvar for %s\n" (n_to_string n) in*)
   match n.nexp with
     | Nuvar { nindex = i;nsubst = None } -> 
-      fresh_var "nv" i (fun v add -> n.nexp <- (Nvar v); (*(Printf.eprintf "fresh nvar set %i to %s : %s\n" i v (n_to_string n));*) if add then Some(v,{k=K_Nat}) else None) bindings
+      fresh_var "nv" i (fun v add -> n.nexp <- (Nvar v); 
+(*(Printf.eprintf "fresh nvar set %i to %s : %s\n" i v (n_to_string n));*) if add then Some(v,{k=K_Nat}) else None) bindings
     | Nuvar { nindex = i; nsubst = Some({nexp=Nuvar _} as n')} ->
       let kv = fresh_nvar bindings n' in
       n.nexp <- n'.nexp;
@@ -2182,7 +2183,7 @@ and conforms_to_e loosely spec actual =
   When considering two atom type applications, will expand into a range encompasing both when widen is true
 *)
 let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 = 
-(*  let _ = Printf.printf "type_consistent_internal called with %s and %s\n" (t_to_string t1) (t_to_string t2) in*)
+(*  let _ = Printf.eprintf "type_consistent_internal called with %s and %s\n" (t_to_string t1) (t_to_string t2) in*)
   let l = get_c_loc co in
   let t1,cs1' = get_abbrev d_env t1 in
   let t2,cs2' = get_abbrev d_env t2 in
@@ -2219,7 +2220,7 @@ let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 =
 	     ({t=Tapp("range",[TA_nexp nu1;TA_nexp nu2])},
 	      csp@[LtEq(co,enforce,nu1,a1);LtEq(co,enforce,nu1,a2);LtEq(co,enforce,a1,nu2);LtEq(co,enforce,a2,nu2)]))
   | Tapp(id1,args1), Tapp(id2,args2) ->
-    (*let _ = Printf.printf "checking consistency of %s and %s\n" id1 id2 in*)
+    (*let _ = Printf.eprintf "checking consistency of %s and %s\n" id1 id2 in*)
     let la1,la2 = List.length args1, List.length args2 in
     if id1=id2 && la1 = la2 
     then (t2,csp@(List.flatten (List.map2 (type_arg_eq co d_env enforce widen) args1 args2)))
@@ -2491,9 +2492,9 @@ let rec select_overload_variant d_env params_check get_all variants actual_type 
     | NoTyp::variants | Overload _::variants ->
       select_overload_variant d_env params_check get_all variants actual_type
     | Base((parms,t_orig),tag,cs,ef,bindings)::variants ->
-      (*let _ = Printf.printf "About to check a variant %s\n" (t_to_string t_orig) in*)
+      (*let _ = Printf.eprintf "About to check a variant %s\n" (t_to_string t_orig) in*)
       let t,cs,ef,_ = if parms=[] then t_orig,cs,ef,Envmap.empty else subst parms false t_orig cs ef in
-      (*let _ = Printf.printf "And after substitution %s\n" (t_to_string t) in*)
+      (*let _ = Printf.eprintf "And after substitution %s\n" (t_to_string t) in*)
       let t,cs' = get_abbrev d_env t in
       let recur _ = select_overload_variant d_env params_check get_all variants actual_type in
       (match t.t with
@@ -2505,7 +2506,7 @@ let rec select_overload_variant d_env params_check get_all variants actual_type 
 		(conforms_to_t d_env false true at1 r || conforms_to_t d_env false true at2 r)
 	      | Toptions(at1,None) -> conforms_to_t d_env false true at1 r
 	      | _ -> conforms_to_t d_env true true actual_type r in
-	  (*let _ = Printf.printf "Checked a variant, matching? %b\n" is_matching in*)
+	  (*let _ = Printf.eprintf "Checked a variant, matching? %b\n" is_matching in*)
 	  if is_matching 
 	  then (Base(([],t),tag,cs@cs',ef,bindings))::(if get_all then (recur ()) else [])
 	  else recur ()
@@ -2657,7 +2658,7 @@ let rec simple_constraint_check in_env cs =
 	let occurs = occurs_in_nexp n1' n2' in
 	let leave = leave_nu_as_var n2' in
 	(*let _ = Printf.eprintf "occurs? %b, leave? %b n1' %s in n2' %s\n" occurs leave (n_to_string n1') (n_to_string n2') in*)
-        if not(u.nin) && ok_to_set && not(occurs) && not(leave)
+        if (*not(u.nin) &&*) ok_to_set && not(occurs) && not(leave)
         then if (equate_n n2' n1') then  None else (Some (Eq(co,n1',n2')))
         else if occurs 
 	then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end
@@ -2667,7 +2668,7 @@ let rec simple_constraint_check in_env cs =
 	let occurs = occurs_in_nexp n2' n1' in
 	let leave = leave_nu_as_var n1' in
 	(*let _ = Printf.eprintf "occurs? %b, leave? %b n2' %s in n1' %s\n" occurs leave (n_to_string n2') (n_to_string n1') in*)
-        if not(u.nin) && ok_to_set && not(occurs) && not(leave)
+        if (*not(u.nin) && *)ok_to_set && not(occurs) && not(leave)
         then if equate_n n1' n2' then None else (Some (Eq(co,n1',n2')))
         else if occurs
 	then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end
@@ -2808,7 +2809,7 @@ let check_tannot l annot imp_param constraints efs =
     | Overload _ -> raise (Reporting_basic.err_unreachable l "check_tannot given overload")
 
 let tannot_merge co denv widen t_older t_newer = 
-  (*let _ = Printf.printf "tannot_merge called\n" in*)
+  (*let _ = Printf.eprintf "tannot_merge called\n" in*)
   match t_older,t_newer with
     | NoTyp,NoTyp -> NoTyp
     | NoTyp,_ -> t_newer
@@ -2822,10 +2823,10 @@ let tannot_merge co denv widen t_older t_newer =
 			 Base(([],t),tag_n,cs_o,ef_o,bounds_o)
 	    | _ -> t_newer)
 	| Emp_local, Emp_local -> 
-	  (*let _ = Printf.printf "local-local case\n" in*) 
+	  (*let _ = Printf.eprintf "local-local case\n" in*) 
 	  (*TODO Check conforms to first; if true check consistent, if false replace with t_newer *)
 	  let t,cs_b = type_consistent co denv Guarantee widen t_n t_o in
-	  (*let _ = Printf.printf "types consistent\n" in*)
+	  (*let _ = Printf.eprintf "types consistent\n" in*)
 	  Base(([],t),Emp_local,cs_o@cs_n@cs_b,union_effects ef_o ef_n, merge_bounds bounds_o bounds_n)
 	| _,_ -> t_newer)
     | _ -> t_newer
