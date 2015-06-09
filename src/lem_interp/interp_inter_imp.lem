@@ -486,6 +486,10 @@ let rec interp_to_outcome mode context thunk =
     | Interp.Step l (Just name) Nothing -> Internal (Just name) Nothing (IState next_state context)
     | Interp.Step l (Just name) (Just value) ->
       Internal (Just name) (Just (fun _ -> Interp.string_of_value value)) (IState next_state context)
+    | Interp.Exit e -> 
+      Escape (match e with
+	| E_aux (E_lit (L_aux L_unit _)) _ -> Nothing
+	| _ -> Just (IState (Interp.set_in_context next_state e) context) end) 
     end 
   end 
 
@@ -536,6 +540,8 @@ let rec ie_loop mode register_values (IState interp_state context) =
   match interp mode (IState interp_state context) with
     | Done -> []
     | Error msg -> [E_error msg]
+    | Escape Nothing -> [E_escape]
+    | Escape _ -> [E_escape] (*Do we want to record anything about the escape expression, which may be a function call*)
     | Read_reg reg i_state_fun -> 
       let v =  match register_values with
 	| Nothing -> unknown_reg (reg_size reg)
