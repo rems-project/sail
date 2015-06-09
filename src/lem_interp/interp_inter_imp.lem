@@ -111,6 +111,10 @@ let intern_ifield_value direction v =
   let direction = intern_direction direction in
   Interp.V_vector (if Interp.is_inc direction then 0 else (List.length(bits) -1)) direction bits
 
+let num_to_bits size kind num =
+(* num_to_bits needed in src_power_get/trans_sail.gen - rather than reengineer the generation, we include a wrapper here *) 
+  Interp_interface.bit_list_of_integer size num
+
 let extern_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
   match d with
     | D_increasing -> (i,j) (*This is the case the thread/concurrecny model expects, so no change needed*)
