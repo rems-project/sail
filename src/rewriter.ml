@@ -39,7 +39,7 @@ let rec rewrite_nexp_to_exp program_vars l nexp =
       | Nvar v -> (*TODO these need to generate an error as it's a place where there's insufficient specification. 
 		    But, for now I need to permit this to make power.sail compile, and most errors are in trap 
 		    or vectors *)
-	      (*let _ = Printf.eprintf "unbound variable here %s\n" v in *)
+	      (*let _ = Printf.eprintf "unbound variable here %s\n" v in*) 
 	E_aux (E_id (Id_aux (Id v,l)),(l,simple_annot typ)) in
   match program_vars with
     | None -> actual_rewrite_n nexp
@@ -132,7 +132,7 @@ let rec rewrite_exp (E_aux (exp,(l,annot))) =
     | E_internal_exp (l,impl) ->
       (match impl with
 	| Base((_,t),_,_,_,bounds) ->
-	  (*let _ = Printf.eprintf "Rewriting internal expression, with type %s\n" (t_to_string t) in *)
+	  (*let _ = Printf.eprintf "Rewriting internal expression, with type %s\n" (t_to_string t) in*) 
 	  match t.t with
 	    (*Old case; should possibly be removed*)
 	    | Tapp("register",[TA_typ {t= Tapp("vector",[ _; TA_nexp r;_;_])}])
@@ -179,7 +179,7 @@ and rewrite_lexp (LEXP_aux(lexp,(l,annot))) =
 
 let rewrite_fun (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,annot))) = 
   let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),(l,annot))) = 
-    (*let _ = Printf.eprintf "Rewriting function %s\n" (match id with (Id_aux (Id i,_)) -> i) in*)
+    (*let _ = Printf.eprintf "Rewriting function %s, pattern %s\n" (match id with (Id_aux (Id i,_)) -> i) (Pretty_print.pat_to_string pat) in*)
     (FCL_aux (FCL_Funcl (id,pat,rewrite_exp exp),(l,annot))) 
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,annot))
 

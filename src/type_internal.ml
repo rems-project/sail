@@ -761,9 +761,11 @@ and occurs_check_e (e_box : effect) (e : effect) : unit =
 (* Is checking for structural equality only, other forms of equality will be handeled by constraints *)
 let rec nexp_eq_check n1 n2 =
   match n1.nexp,n2.nexp with
+  | Npos_inf,Npos_inf | Nneg_inf,Nneg_inf | Ninexact,Ninexact -> true 
   | Nvar v1,Nvar v2 -> v1=v2
   | Nconst n1,Nconst n2 -> eq_big_int n1 n2
-  | Nadd(nl1,nl2), Nadd(nr1,nr2) | Nmult(nl1,nl2), Nmult(nr1,nr2) -> nexp_eq_check nl1 nr1 && nexp_eq_check nl2 nr2
+  | Nadd(nl1,nl2), Nadd(nr1,nr2) | Nmult(nl1,nl2), Nmult(nr1,nr2) | Nsub(nl1,nl2),Nsub(nr1,nr2) 
+    -> nexp_eq_check nl1 nr1 && nexp_eq_check nl2 nr2
   | N2n(n,Some i),N2n(n2,Some i2) -> eq_big_int i i2
   | N2n(n,_),N2n(n2,_) -> nexp_eq_check n n2
   | Nneg n,Nneg n2 -> nexp_eq_check n n2
@@ -2088,10 +2090,10 @@ let find_var_from_nexp n bounds =
 	| [] -> None
 	| b::bs -> (match b with
 	    | VR_eq(ev,n1) ->
-	      (*let _ = Printf.eprintf "checking if %s is eq to %s\n" (n_to_string n) (n_to_string n1) in*)
+	      (*let _ = Printf.eprintf "checking if %s is eq to %s, to bind to %s, eq? %b\n" (n_to_string n) (n_to_string n1) ev (nexp_eq_check n1 n) in*)
 	      if nexp_eq_check n1 n then Some (None,ev) else find_rec bs
 	    | VR_vec_eq (ev,n1)->
-	      (*let _ = Printf.eprintf "checking if %s is eq to %s\n" (n_to_string n) (n_to_string n1) in*)
+	      (*let _ = Printf.eprintf "checking if %s is eq to %s, to bind to %s, eq? %b\n" (n_to_string n) (n_to_string n1) ev (nexp_eq_check n1 n) in*)
 	      if nexp_eq_check n1 n then Some (Some "length",ev) else find_rec bs
 	    | _ -> find_rec bs) in
       find_rec bs
@@ -2668,7 +2670,7 @@ let rec simple_constraint_check in_env cs =
 	let occurs = occurs_in_nexp n2' n1' in
 	let leave = leave_nu_as_var n1' in
 	(*let _ = Printf.eprintf "occurs? %b, leave? %b n2' %s in n1' %s\n" occurs leave (n_to_string n2') (n_to_string n1') in*)
-        if (*not(u.nin) && *)ok_to_set && not(occurs) && not(leave)
+        if (*not(u.nin) &&*) ok_to_set && not(occurs) && not(leave)
         then if equate_n n1' n2' then None else (Some (Eq(co,n1',n2')))
         else if occurs
 	then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end

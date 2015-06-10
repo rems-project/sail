@@ -1176,6 +1176,10 @@ let to_buf ?(len=80) buf doc = ToBuffer.pretty 1. len buf doc
 
 let pp_defs f d = print f (doc_defs d)
 let pp_exp b e = to_buf b (doc_exp e)
+let pat_to_string p = 
+  let b = Buffer.create 20 in
+  to_buf b (doc_pat p);
+  Buffer.contents b
 
 (****************************************************************************
  * PPrint-based sail-to-ocaml pretty printer, primarily for types
