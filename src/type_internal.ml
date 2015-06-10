@@ -121,7 +121,7 @@ type tannot =
 type 'a emap = 'a Envmap.t
 
 type rec_kind = Record | Register
-type rec_env = (string * rec_kind * ((string * tannot) list))
+type rec_env = (string * rec_kind * tannot * ((string * t) list))
 type alias_kind = OneReg of string * tannot | TwoReg of string * string * tannot | MultiReg of (string list) * tannot
 type def_envs = { 
   k_env: kind emap; 
@@ -293,11 +293,10 @@ let union_effects e1 e2 =
     (*let _ = Printf.eprintf "union effects of length %s and %s\n" (e_to_string e1) (e_to_string e2) in*)
     {effect= Eset (effect_remove_dups (b1@b2))}  
 
-(*Possibly unused record functions*)
 let rec lookup_record_typ (typ : string) (env : rec_env list) : rec_env option =
   match env with
     | [] -> None
-    | ((id,_,_) as r)::env -> 
+    | ((id,_,_,_) as r)::env -> 
       if typ = id then Some(r) else lookup_record_typ typ env
 
 let rec fields_match f1 f2 =
@@ -308,7 +307,7 @@ let rec fields_match f1 f2 =
 let rec lookup_record_fields (fields : string list) (env : rec_env list) : rec_env option =
   match env with
     | [] -> None
-    | ((id,r,fs) as re)::env ->
+    | ((id,r,t,fs) as re)::env ->
       if ((List.length fields) = (List.length fs)) &&
 	 (fields_match fields fs) then
 	Some re
@@ -317,16 +316,16 @@ let rec lookup_record_fields (fields : string list) (env : rec_env list) : rec_e
 let rec lookup_possible_records (fields : string list) (env : rec_env list) : rec_env list =
   match env with
     | [] -> []
-    | ((id,r,fs) as re)::env ->
+    | ((id,r,t,fs) as re)::env ->
       if (((List.length fields) <= (List.length fs)) &&
 	  (fields_match fields fs))
       then re::(lookup_possible_records fields env)
       else lookup_possible_records fields env
 
-let lookup_field_type (field: string) ((id,r_kind,fields) : rec_env) : tannot =
+let lookup_field_type (field: string) ((id,r_kind,tannot,fields) : rec_env) : t option =
   if List.mem_assoc field fields
-  then List.assoc field fields
-  else NoTyp
+  then Some(List.assoc field fields)
+  else None
 
 (*comparisons*)
 let rec compare_nexps n1 n2 =

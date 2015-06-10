@@ -35,11 +35,11 @@ let rec field_equivs fields fmaps =
 let rec fields_to_rec fields rec_env = 
   match rec_env with
     | [] -> None
-    | (id,Register,fmaps)::rec_env -> fields_to_rec fields rec_env
-    | (id,Record,fmaps)::rec_env ->
+    | (id,Register,tannot,fmaps)::rec_env -> fields_to_rec fields rec_env
+    | (id,Record,tannot,fmaps)::rec_env ->
       if (List.length fields) = (List.length fmaps) then
 	match field_equivs fields fmaps with
-	  | Some(ftyps) -> Some(id,ftyps)
+	  | Some(ftyps) -> Some(id,tannot,ftyps)
 	  | None -> fields_to_rec fields rec_env
       else fields_to_rec fields rec_env
 
@@ -309,22 +309,25 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
     | P_record(fpats,_) -> 
       (match (fields_to_rec fpats d_env.rec_env) with
 	| None -> typ_error l ("No struct exists with the listed fields")
-	| Some(id,typ_pats) ->
-	  let pat_checks = 
-	    List.map (fun (tan,id,l,pat) -> 
-	      let (Base((vs,t),tag,cs,eft,bounds)) = tan in
-	      let t,cs,_,_ = subst vs false t cs eft in
-	      let (pat,env,constraints,new_bounds,u) = check_pattern envs emp_tag t pat in
-	      let pat = FP_aux(FP_Fpat(id,pat),(l,Base(([],t),tag,cs,pure_e,bounds))) in
-	      (pat,env,cs@constraints,merge_bounds bounds new_bounds)) typ_pats in
-	  let pats' = List.map (fun (a,_,_,_) -> a) pat_checks in
-	  (*Need to check for variable duplication here*)
-	  let env = List.fold_right (fun (_,env,_,_) env' -> Envmap.union env env') pat_checks Envmap.empty in
-	  let constraints = (List.fold_right (fun (_,_,cs,_) cons -> cs@cons) pat_checks [])@cs in
-	  let bounds = List.fold_right (fun (_,_,_,bounds) b_env -> merge_bounds bounds b_env) pat_checks nob in
-	  let t = {t=Tid id} in
-          let t',cs' = type_consistent (Patt l) d_env Guarantee false t expect_t in
-	  (P_aux((P_record(pats',false)),(l,cons_tag_annot t' emp_tag (cs@cs'))),env,constraints@cs',bounds,t'))
+	| Some(id,tannot,typ_pats) ->
+	  (match tannot with
+	    | (Base((vs,t),tag,cs,eft,bounds)) ->
+	      let tup = {t = Ttup(List.map (fun (t,_,_,_) -> t) typ_pats)} in
+	      let ft = {t = Tfn(tup,t, IP_none,pure_e) } in
+	      let (ft_subst,cs,_,_) = subst vs false t cs pure_e in
+	      let subst_rtyp,subst_typs = match ft_subst.t with | Tfn({t=Ttup tups},rt,_,_) -> rt,tups in
+	      let pat_checks = 
+		List.map2 (fun (_,id,l,pat) styp -> 
+		  let (pat,env,constraints,new_bounds,u) = check_pattern envs emp_tag styp pat in
+		  let pat = FP_aux(FP_Fpat(id,pat),(l,Base(([],styp),tag,constraints,pure_e,new_bounds))) in
+		  (pat,env,constraints,new_bounds)) typ_pats subst_typs in
+	      let pats' = List.map (fun (a,_,_,_) -> a) pat_checks in
+	      (*Need to check for variable duplication here*)
+	      let env = List.fold_right (fun (_,env,_,_) env' -> Envmap.union env env') pat_checks Envmap.empty in
+	      let constraints = (List.fold_right (fun (_,_,cs,_) cons -> cs@cons) pat_checks [])@cs in
+	      let bounds = List.fold_right (fun (_,_,_,bounds) b_env -> merge_bounds bounds b_env) pat_checks nob in
+              let t',cs' = type_consistent (Patt l) d_env Guarantee false ft_subst expect_t in
+	      (P_aux((P_record(pats',false)),(l,cons_tag_annot t' emp_tag (cs@cs'))),env,constraints@cs',bounds,t')))
     | P_vector pats -> 
       let (item_t, base, rise, ord) = match expect_actual.t with 
 	| Tapp("vector",[TA_nexp b;TA_nexp r;TA_ord o;TA_typ i]) -> (i,b,r,o)
@@ -1118,150 +1121,114 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
     | E_record(FES_aux(FES_Fexps(fexps,_),l')) -> 
       let u,_ = get_abbrev d_env expect_t in
       let u_actual = match u.t with | Tabbrev(_, u) -> u | _ -> u in
+      let field_walker r subst_env bounds tag n =
+	(fun (FE_aux(FE_Fexp(id,exp),(l,annot))) (fexps,cons,ef') ->
+	  let i = id_to_string id in
+	  match lookup_field_type i r with
+	    | None -> 
+	      typ_error l ("Expected a struct of type " ^ n ^ ", which should not have a field " ^ i)
+            | Some(ft) ->
+	      let ft = typ_subst subst_env false ft in
+	      let (e,t',_,c,_,ef) = check_exp envs imp_param ft exp in
+	      (FE_aux(FE_Fexp(id,e),(l,Base(([],t'),tag,c,ef,bounds)))::fexps,cons@c,union_effects ef ef')) in	
       (match u_actual.t with
-	| Tid(n) ->
+	| Tid(n) | Tapp(n,_)->
 	  (match lookup_record_typ n d_env.rec_env with 
 	    | None -> typ_error l ("Expected a value of type " ^ n ^ " but found a struct")
-	    | Some(((i,Record,fields) as r)) -> 
+	    | Some(((i,Record,(Base((params,t),tag,cs,eft,bounds)),fields) as r)) -> 
+	      let (ts,cs,eft,subst_env) = subst params false t cs eft in
 	      if (List.length fexps = List.length fields) 
-	      then let fexps,cons,ef =
-		     List.fold_right 
-		       (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) (fexps,cons,ef') ->
-			 let i = id_to_string id in
-			 match lookup_field_type i r with
-			   | NoTyp -> 
-			     typ_error l ("Expected a struct of type " ^ n ^ ", which should not have a field " ^ i)
-                           | Overload _ ->  raise (Reporting_basic.err_unreachable l "Field given overload tannot")
-			   | Base((params,et),tag,cs,ef,bounds) ->
-			     let et,cs,_,_ = subst params false et cs ef in
-			     let (e,t',_,c,_,ef) = check_exp envs imp_param et exp in
-			     (FE_aux(FE_Fexp(id,e),(l,Base(([],t'),tag,cs@c,ef,bounds)))::fexps,cons@cs@c,union_effects ef ef'))
-		       fexps ([],[],pure_e) in
-		   E_aux(E_record(FES_aux(FES_Fexps(fexps,false),l')),(l,simple_annot u)),expect_t,t_env,cons,nob,ef
+	      then let fexps,cons,ef = List.fold_right (field_walker r subst_env bounds tag n) fexps ([],[],pure_e) in
+		   let e = E_aux(E_record(FES_aux(FES_Fexps(fexps,false),l')),(l,simple_annot u)) in
+		   let (t',cs',ef',e') = type_coerce (Expr l) d_env Guarantee false false b_env ts e expect_t in
+		   (e',t',t_env,cs@cons@cs',nob,union_effects ef ef')
 	      else typ_error l ("Expected a struct of type " ^ n ^ ", which should have " ^ string_of_int (List.length fields) ^ " fields")
-	    | Some(i,Register,fields) -> typ_error l ("Expected a value with register type, found a struct"))
+	    | Some(i,Register,tannot,fields) -> typ_error l ("Expected a value with register type, found a struct"))
 	| Tuvar _ ->
 	  let field_names = List.map (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) -> id_to_string id) fexps in
 	  (match lookup_record_fields field_names d_env.rec_env with
 	    | None -> typ_error l "No struct type matches the set of fields given"
-	    | Some(((i,Record,fields) as r)) ->
-	      let fexps,cons,ef =
-		List.fold_right 
-		  (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) (fexps,cons,ef') ->
-		    let i = id_to_string id in
-		    match lookup_field_type i r with
-		      | NoTyp -> raise (Reporting_basic.err_unreachable l "field_match didn't have a full match")
-                      | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
-		      | Base((params,et),tag,cs,ef,binding) ->
-			let et,cs,_,_ = subst params false et cs ef in
-			let (e,t',_,c,_,ef) = check_exp envs imp_param et exp in
-			(FE_aux(FE_Fexp(id,e),(l,Base(([],t'),tag,cs@c,ef,binding)))::fexps,cons@cs@c,union_effects ef ef'))
-		  fexps ([],[],pure_e) in
-	      expect_t.t <- Tid i; (*TODO THis should use equate_t !!*)
-	      E_aux(E_record(FES_aux(FES_Fexps(fexps,false),l')),(l,simple_annot expect_t)),expect_t,t_env,cons,nob,ef
-	    | Some(i,Register,fields) -> typ_error l "Expected a value with register type, found a struct")
+	    | Some(((i,Record,(Base((params,t),tag,cs,eft,bounds)),fields) as r)) ->
+	      let (ts,cs,eft,subst_env) = subst params false t cs eft in
+	      let fexps,cons,ef = List.fold_right (field_walker r subst_env bounds tag i) fexps ([],[],pure_e) in 
+	      let e = E_aux(E_record(FES_aux(FES_Fexps(fexps,false),l')),(l,simple_annot ts)) in
+	      let (t',cs',ef',e') = type_coerce (Expr l) d_env Guarantee false false b_env ts e expect_t in
+	      (e',t',t_env,cs@cons@cs',nob,union_effects ef ef')
+	    | Some(i,Register,tannot,fields) -> typ_error l "Expected a value with register type, found a struct")
 	| _ -> typ_error l ("Expected an expression of type " ^ t_to_string expect_t ^ " but found a struct"))
     | E_record_update(exp,FES_aux(FES_Fexps(fexps,_),l')) -> 
       let (e',t',_,c,_,ef) = check_exp envs imp_param expect_t exp in
+      let field_walker r subst_env bounds tag i =
+	(fun (FE_aux(FE_Fexp(id,exp),(l,annot))) (fexps,cons,ef') ->
+	  let fi = id_to_string id in
+	  match lookup_field_type fi r with
+	    | None -> typ_error l ("Expected a struct with type " ^ i ^ ", which does not have a field " ^ fi)
+            | Some ft ->
+	      let ft = typ_subst subst_env false ft in
+	      let (e,t',_,c,_,ef) = check_exp envs imp_param ft exp in
+	      (FE_aux(FE_Fexp(id,e),(l,Base(([],t'),tag,c,ef,bounds)))::fexps,cons@c,union_effects ef ef')) in
       (match t'.t with
-	| Tid i | Tabbrev(_, {t=Tid i}) ->
+	| Tid i | Tabbrev(_, {t=Tid i}) | Tapp(i,_) ->
 	  (match lookup_record_typ i d_env.rec_env with
 	    | None -> typ_error l ("Expected a struct for this update, instead found an expression with type " ^ i)
-	    | Some((i,Register,fields)) ->
-	      typ_error l "Expected a struct for this update, instead found a register"
-	    | Some(((i,Record,fields) as r)) ->
+	    | Some((i,Register,tannot,fields)) -> typ_error l "Expected a struct for this update, instead found a register"
+	    | Some(((i,Record,(Base((params,t),tag,cs,eft,bounds)),fields) as r)) ->
 	      if (List.length fexps <= List.length fields) 
-	      then let fexps,cons,ef =
-		     List.fold_right 
-		       (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) (fexps,cons,ef') ->
-			 let fi = id_to_string id in
-			 match lookup_field_type fi r with
-			   | NoTyp -> 
-			     typ_error l ("Expected a struct with type " ^ i ^ ", which does not have a field " ^ fi)
-                           | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
-			   | Base((params,et),tag,cs,ef,bounds) ->
-			     let et,cs,_,_ = subst params false et cs ef in
-			     let (e,t',_,c,_,ef) = check_exp envs imp_param et exp in
-			     (FE_aux(FE_Fexp(id,e),(l,Base(([],t'),tag,cs@c,ef,bounds)))::fexps,cons@cs@c,union_effects ef ef'))
-		       fexps ([],[],pure_e) in
-		   E_aux(E_record_update(e',FES_aux(FES_Fexps(fexps,false),l')), (l,simple_annot expect_t)),expect_t,t_env,cons,nob,ef
+	      then 
+		let (ts,cs,eft,subst_env) = subst params false t cs eft in
+		let fexps,cons,ef = List.fold_right (field_walker r subst_env bounds tag i) fexps ([],[],pure_e) in
+		let e = E_aux(E_record_update(e',FES_aux(FES_Fexps(fexps,false),l')), (l,simple_annot ts)) in
+		let (t',cs',ef',e') = type_coerce (Expr l) d_env Guarantee false false b_env ts e expect_t in
+		(e',t',t_env,cs@cons@cs',nob,union_effects ef ef')
 	      else typ_error l ("Expected fields from struct " ^ i ^ ", given more fields than struct includes"))
 	| Tuvar _ ->
 	  let field_names = List.map (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) -> id_to_string id) fexps in
 	  (match lookup_possible_records field_names d_env.rec_env with
 	    | [] -> typ_error l "No struct matches the set of fields given for this struct update"
-	    | [(((i,Record,fields) as r))] ->
-	      let fexps,cons,ef =
-		List.fold_right 
-		  (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) (fexps,cons,ef') ->
-		    let i = id_to_string id in
-		    match lookup_field_type i r with
-		      | NoTyp -> raise (Reporting_basic.err_unreachable l "field_match didn't have a full match")
-                      | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
-		      | Base((params,et),tag,cs,ef,bounds) ->
-			let et,cs,_,_ = subst params false et cs ef in
-			let (e,t',_,c,_,ef) = check_exp envs imp_param et exp in
-			(FE_aux(FE_Fexp(id,e),(l,Base(([],t'),tag,cs@c,ef,bounds)))::fexps,cons@cs@c,union_effects ef ef'))
-		  fexps ([],[],pure_e) in
-	      expect_t.t <- Tid i; (*Should be equate_t*)
-	      E_aux(E_record_update(e',FES_aux(FES_Fexps(fexps,false),l')), (l,simple_annot expect_t)),expect_t,t_env,cons,nob,ef
-	    | [(i,Register,fields)] -> typ_error l "Expected a value with register type, found a struct"
+	    | [(((i,Record,(Base((params,t),tag,cs,eft,bounds)),fields) as r))] ->
+	      let (ts,cs,eft,subst_env) = subst params false t cs eft in
+	      let fexps,cons,ef = List.fold_right (field_walker r subst_env bounds tag i) fexps ([],[],pure_e) in
+	      let e =  E_aux(E_record_update(e',FES_aux(FES_Fexps(fexps,false),l')), (l,simple_annot ts)) in
+	      let (t',cs',ef',e') = type_coerce (Expr l) d_env Guarantee false false b_env ts e expect_t in
+	      (e',t',t_env,cs@cons@cs',nob,union_effects ef ef')
+	    | [(i,Register,tannot,fields)] -> typ_error l "Expected a value with register type, found a struct"
 	    | records -> typ_error l "Multiple structs contain this set of fields, try adding a cast to disambiguate")
 	| _ -> typ_error l ("Expected a struct to update but found an expression of type " ^ t_to_string expect_t))
     | E_field(exp,id) ->
       let (e',t',_,c_sub,_,ef_sub) = check_exp envs imp_param (new_t()) exp in
+      let fi = id_to_string id in
       (match t'.t with
-      | Tabbrev({t=Tid i}, t2) ->
+      | Tabbrev({t=Tid i}, _) | Tabbrev({t=Tapp(i,_)},_) | Tid i | Tapp(i,_) ->
 	  (match lookup_record_typ i d_env.rec_env with
 	    | None -> 
 	      typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i)
-	    | Some(((i,rec_kind,fields) as r)) ->
-	      let fi = id_to_string id in
+	    | Some(((i,rec_kind,(Base((params,t),tag,cs,eft,bounds)),fields) as r)) ->
+	      let (ts,cs,eft,subst_env) = subst params false t cs eft in
 	      (match lookup_field_type fi r with
-		| NoTyp -> 
-		  typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
-                | Overload _ ->  raise (Reporting_basic.err_unreachable l "Record given overload annot")
-		| Base((params,et),tag,cs,ef,bounds) ->
-		  let et,cs,ef,_ = subst params false et cs ef in
+		| None -> typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
+                | Some t ->
+		  let ft = typ_subst subst_env false t in
+		  let (_,cs_sub') = type_consistent (Expr l) d_env Guarantee false ts t' in
 		  let (et',c',ef',acc) = 
-		    type_coerce (Expr l) d_env Require false false b_env et 
-		      (E_aux(E_field(e',id),(l,Base(([],et),tag,cs,ef,bounds)))) expect_t in
-		  (acc,et',t_env,cs@c'@c_sub,nob,union_effects ef' ef_sub)))
-      | Tid i ->
-	  (match lookup_record_typ i d_env.rec_env with
-	    | None -> 
-	      typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i)
-	    | Some(((i,rec_kind,fields) as r)) ->
-	      let fi = id_to_string id in
-	      (match lookup_field_type fi r with
-		| NoTyp -> 
-		  typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
-                | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
-		| Base((params,et),tag,cs,ef,bounds) ->
-		  let et,cs,ef,_ = subst params false et cs ef in
-		  let (et',c',ef',acc) =
-		    type_coerce (Expr l) d_env Require false false b_env et 
-		      (E_aux(E_field(e',id),(l,Base(([],et),tag,cs,ef,bounds)))) expect_t in
-		  (acc,et',t_env,cs@c'@c_sub,nob,union_effects ef' ef_sub)))
+		    type_coerce (Expr l) d_env Require false false b_env ft 
+		      (E_aux(E_field(e',id),(l,Base(([],ft),tag,cs,eft,bounds)))) expect_t in
+		  (acc,et',t_env,cs@c'@c_sub@cs_sub',nob,union_effects ef' ef_sub)))
 	| Tuvar _ ->
-	  let fi = id_to_string id in
 	  (match lookup_possible_records [fi] d_env.rec_env with
-	    | [] -> typ_error l ("No struct has a field " ^ fi)
-	    | [(((i,rkind,fields) as r))] ->
-	      let fi = id_to_string id in
+	    | [] -> typ_error l ("No struct or register has a field " ^ fi)
+	    | [(((i,rkind,(Base((params,t),tag,cs,eft,bounds)),fields) as r))] ->
+	      let (ts,cs,eft,subst_env) = subst params false t cs eft in
 	      (match lookup_field_type fi r with
-		| NoTyp -> 
+		| None -> 
 		  raise (Reporting_basic.err_unreachable l "lookup_possible_records returned a record that didn't include the field")
-                | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
-		| Base((params,et),tag,cs,ef,bounds) ->
-		  let et,cs,ef,_ = subst params false et cs ef in
+                | Some t ->
+		  let ft = typ_subst subst_env false t in
+		  let (_,cs_sub') = type_consistent (Expr l) d_env Guarantee false ts t' in
 		  let (et',c',ef',acc) = 
-		    type_coerce (Expr l) d_env Guarantee false false b_env et 
-		      (E_aux(E_field(e',id),
-			     (l,Base(([],et),tag,cs,ef,bounds)))) expect_t in
-                  equate_t t' {t=Tid i};
-		  (acc,et',t_env,cs@c'@c_sub,nob,union_effects ef' ef_sub))
-	    | records -> typ_error l ("Multiple structs contain field " ^ fi ^ ", try adding a cast to disambiguate"))
+		    type_coerce (Expr l) d_env Require false false b_env ft 
+		      (E_aux(E_field(e',id),(l,Base(([],ft),tag,cs,eft,bounds)))) expect_t in
+		  (acc,et',t_env,cs@c'@c_sub@cs_sub',nob,union_effects ef' ef_sub))
+	    | records -> typ_error l ("Multiple structs or registers contain field " ^ fi ^ ", try adding a cast to disambiguate"))
 	| _ -> typ_error l ("Expected a struct or register for access but found an expression of type " ^ t_to_string t'))
     | E_case(exp,pexps) ->
       (*let check_t = new_t() in*)
@@ -1572,20 +1539,20 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
       let vec_t = match vec' with
         | LEXP_aux(_,(l',Base((parms,t),_,_,_,_))) -> t
         | _ -> item_t in
+      let fi = id_to_string id in
       (match vec_t.t with
-	| Tid i | Tabbrev({t=Tid i},_) ->
+	| Tid i | Tabbrev({t=Tid i},_) | Tabbrev({t=Tapp(i,_)},_) | Tapp(i,_)->
 	  (match lookup_record_typ i d_env.rec_env with
 	    | None -> 
 	      typ_error l ("Expected a register or struct for this update, instead found an expression with type " ^ i)
-            | Some(((i,rec_kind,fields) as r)) ->
-	      let fi = id_to_string id in
+	    | Some(((i,rec_kind,(Base((params,t),tag,cs,eft,bounds)),fields) as r)) ->
+	      let (ts,cs,eft,subst_env) = subst params false t cs eft in
 	      (match lookup_field_type fi r with
-		| NoTyp -> 
-		  typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
-                | Overload _ -> raise (Reporting_basic.err_unreachable l "Record given overload annot")
-		| Base((params,et),_,cs,_,_) ->
-		  let et,cs,ef,_ = subst params false et cs ef in
-		  (LEXP_aux(LEXP_field(vec',id),(l,(Base(([],et),tag,csi@cs,ef,nob)))),et,false,env,tag,csi@cs,bounds,ef)))
+		| None -> typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
+                | Some t ->
+		  let ft = typ_subst subst_env false t in
+		  let (_,cs_sub') = type_consistent (Expr l) d_env Guarantee false ts vec_t in
+		  (LEXP_aux(LEXP_field(vec',id),(l,(Base(([],ft),tag,csi@cs,eft,nob)))),ft,false,env,tag,csi@cs@cs_sub',bounds,ef)))
 	| _ -> typ_error l ("Expected a register binding here, found " ^ (t_to_string item_t)))
 
 and check_lbind envs imp_param is_top_level emp_tag (LB_aux(lbind,(l,annot))) : tannot letbind * tannot emap * nexp_range list * bounds_env * effect =
@@ -1635,10 +1602,8 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
       let (params,typarms,constraints) = typq_to_params envs typq in
       let ty = match typarms with | [] -> {t = Tid id'} | parms -> {t = Tapp(id',parms)} in
       let tyannot = Base((params,ty),Emp_global,constraints,pure_e,nob) in
-      (*TODO This should create some bindings*)
-      let fields' = List.map 
-	(fun (ty,i)->(id_to_string i),Base((params,(typ_to_t false false ty)),Emp_global,constraints,pure_e,nob)) fields in
-      (TD_aux(td,(l,tyannot)),Env({d_env with rec_env = (id',Record,fields')::d_env.rec_env},t_env,b_env,tp_env))
+      let fields' = List.map (fun (ty,i)->(id_to_string i),(typ_to_t false false ty)) fields in
+      (TD_aux(td,(l,tyannot)),Env({d_env with rec_env = (id',Record,tyannot,fields')::d_env.rec_env},t_env,b_env,tp_env))
     | TD_variant(id,nmscm,typq,arms,_) ->
       let id' = id_to_string id in
       let (params,typarms,constraints) = typq_to_params envs typq in
@@ -1676,25 +1641,24 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 	      List.map 
 		(fun ((BF_aux(idx,l)),id) ->
 		  ((id_to_string id),
-		   Base(([],
-			match idx with
-			  | BF_single i -> 
-			    if (le_big_int b (big_int_of_int i)) && (le_big_int (big_int_of_int i) t) 
-			    then {t = Tid "bit"}
-			    else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
-			  | BF_range(i1,i2) -> 
-			    if i1<i2 
-			    then if (le_big_int b (big_int_of_int i1)) && (le_big_int (big_int_of_int i2) t) 
-			      then {t=Tapp("vector",[TA_nexp {nexp=Nconst (big_int_of_int i1)};
-                                                     TA_nexp {nexp=Nconst (big_int_of_int ((i2 - i1) +1))}; TA_ord({order=Oinc}); TA_typ {t=Tid "bit"}])}
-			      else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
-			    else typ_error l ("register type declaration " ^ id' ^ " is not consistently increasing")
-			  | BF_concat _ -> assert false (* TODO: This implies that the variable refers to a concatenation of the different ranges specified; so now I need to implement it thusly*)),Emp_global,[],pure_e,nob)))
+		   match idx with
+		     | BF_single i -> 
+		       if (le_big_int b (big_int_of_int i)) && (le_big_int (big_int_of_int i) t) 
+		       then {t = Tid "bit"}
+		       else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
+		     | BF_range(i1,i2) -> 
+		       if i1<i2 
+		       then if (le_big_int b (big_int_of_int i1)) && (le_big_int (big_int_of_int i2) t) 
+			 then {t=Tapp("vector",[TA_nexp {nexp=Nconst (big_int_of_int i1)};
+                                                TA_nexp {nexp=Nconst (big_int_of_int ((i2 - i1) +1))}; TA_ord({order=Oinc}); TA_typ {t=Tid "bit"}])}
+			 else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
+		       else typ_error l ("register type declaration " ^ id' ^ " is not consistently increasing")
+		     | BF_concat _ -> assert false (* TODO: This implies that the variable refers to a concatenation of the different ranges specified; so now I need to implement it thusly*)))
 		ranges 
 	    in
 	    let tannot = into_register d_env (Base(([],ty),Emp_global,[],pure_e,nob)) in
 	    (TD_aux(td,(l,tannot)),
-	     Env({d_env with rec_env = ((id',Register,franges)::d_env.rec_env);
+	     Env({d_env with rec_env = ((id',Register,tannot,franges)::d_env.rec_env);
 	       abbrevs = Envmap.insert d_env.abbrevs (id',tannot)},t_env,b_env,tp_env)))
 	  else (
 	    let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp{nexp=Nconst(add_big_int (sub_big_int b t) one)}; 
@@ -1703,27 +1667,25 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 	      List.map 
 		(fun ((BF_aux(idx,l)),id) ->
 		  ((id_to_string id),
-		   Base(([],
-			 match idx with
-			   | BF_single i -> 
-			     if (ge_big_int b (big_int_of_int i)) && (ge_big_int (big_int_of_int i) t) 
-			     then {t = Tid "bit"}
-			     else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
-			   | BF_range(i1,i2) -> 
-			     if i1>i2 
-			     then if (ge_big_int b (big_int_of_int i1)) && (ge_big_int (big_int_of_int i2) t) 
-			       then {t = Tapp("vector",[TA_nexp {nexp=Nconst (big_int_of_int i1)};
-							TA_nexp {nexp=Nconst (big_int_of_int ((i1 - i2) + 1))};
-							TA_ord({order = Odec}); TA_typ({t = Tid "bit"})])}
-			       else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
-			     else typ_error l ("register type declaration " ^ id' ^ " is not consistently decreasing")
-			   | BF_concat _ -> assert false (* What is this supposed to imply again?*)),
-			Emp_global,[],pure_e,nob)))
+		   match idx with
+		     | BF_single i -> 
+		       if (ge_big_int b (big_int_of_int i)) && (ge_big_int (big_int_of_int i) t) 
+		       then {t = Tid "bit"}
+		       else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
+		     | BF_range(i1,i2) -> 
+		       if i1>i2 
+		       then if (ge_big_int b (big_int_of_int i1)) && (ge_big_int (big_int_of_int i2) t) 
+			 then {t = Tapp("vector",[TA_nexp {nexp=Nconst (big_int_of_int i1)};
+						  TA_nexp {nexp=Nconst (big_int_of_int ((i1 - i2) + 1))};
+						  TA_ord({order = Odec}); TA_typ({t = Tid "bit"})])}
+			 else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
+		       else typ_error l ("register type declaration " ^ id' ^ " is not consistently decreasing")
+		     | BF_concat _ -> assert false (* What is this supposed to imply again?*)))
 		ranges 
 	    in
 	    let tannot = into_register d_env (Base(([],ty),Emp_global,[],pure_e,nob)) in
 	    (TD_aux(td,(l,tannot)),
-	     Env({d_env with rec_env = (id',Register,franges)::d_env.rec_env;
+	     Env({d_env with rec_env = (id',Register,tannot,franges)::d_env.rec_env;
 	       abbrevs = Envmap.insert d_env.abbrevs (id',tannot)},t_env,b_env,tp_env)))
 	| _,_ -> raise (Reporting_basic.err_unreachable l "Nexps in register declaration do not evaluate to constants")
 
@@ -1861,12 +1823,11 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
 	| Tid i ->
 	  (match lookup_record_typ i d_env.rec_env with
 	    | None -> typ_error l ("Expected a register with bit fields, given " ^ i)
-	    | Some(((i,rec_kind,fields) as r)) ->
+	    | Some(((i,rec_kind,tannot,fields) as r)) ->
 	      let fi = id_to_string subreg in
 	      (match lookup_field_type fi r with
-		| NoTyp -> typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
-                | Overload _ ->  raise (Reporting_basic.err_unreachable l "Record given overload annot")
-		| Base(([],et),tag,cs,ef,b) ->
+		| None -> typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
+                | Some et ->
 		  let tannot = Base(([],et),Alias,[],pure_e,nob) in
 		  let d_env = {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, (OneReg(reg,tannot)))} in
 		  (AL_aux(AL_subreg(reg_a,subreg),(l,tannot)),tannot,d_env)))

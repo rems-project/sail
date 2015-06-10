@@ -129,7 +129,7 @@ type tannot =
 type 'a emap = 'a Envmap.t
 
 type rec_kind = Record | Register
-type rec_env = (string * rec_kind * ((string * tannot) list))
+type rec_env = (string * rec_kind * tannot * ((string * t) list))
 type alias_kind = OneReg of string * tannot | TwoReg of string * string * tannot | MultiReg of (string list) * tannot
 type def_envs = { 
   k_env: kind emap; 
@@ -146,7 +146,7 @@ type exp = tannot Ast.exp
 val lookup_record_typ : string -> rec_env list -> rec_env option
 val lookup_record_fields : string list -> rec_env list -> rec_env option
 val lookup_possible_records : string list -> rec_env list -> rec_env list
-val lookup_field_type : string -> rec_env -> tannot
+val lookup_field_type : string -> rec_env -> t option
 
 val add_effect : Ast.base_effect -> effect -> effect
 val union_effects : effect -> effect -> effect
