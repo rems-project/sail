@@ -1717,7 +1717,7 @@ let check_default envs (DT_aux(ds,l)) =
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot)),b_env,tp_env))
 
 let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,annot))) =
-  (*let _ = Printf.printf "checking fundef\n" in*)
+  (*let _ = Printf.eprintf "checking fundef\n" in*)
   let Env(d_env,t_env,b_env,tp_env) = envs in
   let _ = reset_fresh () in
   let is_rec = match recopt with
@@ -1733,12 +1733,13 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   let in_env = Envmap.apply t_env id in 
   let typ_params = match in_env with
     | Some(Base( (params,u),Spec,constraints,eft,_)) -> params
-    | _ -> [] in
+    | None -> [] in
   let ret_t,param_t,tannot,t_param_env = match tannotopt with
     | Typ_annot_opt_aux(Typ_annot_opt_some(typq,typ),l') ->
       let (ids,_,constraints) = typq_to_params envs typq in
       let t = typ_to_t false false typ in
-      let t,constraints,_,t_param_env = subst (if ids=[] then typ_params else ids) true t constraints pure_e in
+      (*TODO add check that ids == typ_params*)
+      let t,constraints,_,t_param_env = subst typ_params true t constraints pure_e in
       let p_t = new_t () in
       let ef = new_e () in
       t,p_t,Base((ids,{t=Tfn(p_t,t,IP_none,ef)}),Emp_global,constraints,ef,nob),t_param_env in
@@ -1772,7 +1773,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let imp_param = match u.t with 
 	| Tfn(_,_,IP_user n,_) -> Some n
 	| _ -> None in
-      let t_env = if is_rec then t_env else Envmap.remove t_env id in
+      let (t_env,orig_env) = if is_rec then (t_env,t_env) else (Envmap.remove t_env id,t_env) in
       let funcls,cs_ef = check t_env t_param_env_spec imp_param in
       let cs,ef = ((fun (cses,efses) -> 
 	(List.concat cses),(List.fold_right union_effects efses pure_e)) (List.split cs_ef)) in
@@ -1786,7 +1787,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       in
       (*let _ = Printf.eprintf "done funcheck case 1\n" in*)
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
-      Env(d_env,Envmap.insert t_env (id,tannot),b_env,tp_env)
+      Env(d_env,orig_env (*Envmap.insert t_env (id,tannot)*),b_env,tp_env)
     | _ , _-> 
       let t_env = if is_rec then Envmap.insert t_env (id,tannot) else t_env in
       let funcls,cs_ef = check t_env t_param_env None in

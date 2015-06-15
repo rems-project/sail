@@ -1137,9 +1137,9 @@ let initial_typ_env =
       Base(((mk_typ_params ["a";"b";"c"]),
             (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),External (Some "add"),[],pure_e,nob),
       true,
-      [Base(((mk_nat_params ["n";"m";"o";"p"]),
-             (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "o") (mk_nv "p")])
-		          (mk_range (mk_add (mk_nv "n") (mk_nv "o")) (mk_add (mk_nv "m") (mk_nv "p"))))),
+      [Base(((mk_nat_params ["n";"m"]),
+             (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
+		          (mk_atom (mk_add (mk_nv "n") (mk_nv "m"))))),
 	    External (Some "add"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (Nvar "o") (Nvar "n");

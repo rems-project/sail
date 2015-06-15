@@ -14,12 +14,14 @@ let id_to_string (Id_aux(id,l)) =
 let var_to_string (Kid_aux(Var v,l)) = v
 
 (*placeholder, write in type_internal*)
-let kind_to_string kind = match kind.k with
+let rec kind_to_string kind = match kind.k with
   | K_Nat -> "Nat"
   | K_Typ -> "Type"
   | K_Ord -> "Order"
   | K_Efct -> "Effect"
-  | _ -> " kind pp place holder "
+  | K_infer -> "Infer"
+  | K_Lam (kinds,kind) -> "Lam ... -> " ^ (kind_to_string kind)
+
 
 let typquant_to_quantkinds k_env typquant = 
   match typquant with
@@ -159,14 +161,14 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
     ), l)
 
 and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
-(*  let _ = Printf.eprintf "to_ast_nexp\n" in*)
+  (*let _ = Printf.eprintf "to_ast_nexp\n" in*)
   match n with
   | Parse_ast.ATyp_aux(t,l) ->
     (match t with
     | Parse_ast.ATyp_var(v) ->                 
                 let v = to_ast_var v in
                 let mk = Envmap.apply k_env (var_to_string v) in
-(*		let _ = Envmap.iter (fun v' k -> Printf.eprintf "%s -> %s, %s =? %b\n" v' (kind_to_string k) (var_to_string v) ((var_to_string v) = v') ) k_env in *)
+		(*let _ = Envmap.iter (fun v' k -> Printf.eprintf "%s -> %s, %s =? %b\n" v' (kind_to_string k) (var_to_string v) ((var_to_string v) = v') ) k_env in *)
                 (match mk with
                 | Some(k) -> Nexp_aux((match k.k with
                                       | K_Nat -> Nexp_var v
@@ -545,6 +547,7 @@ let to_ast_spec (names,k_env,default_order) (val_:Parse_ast.val_spec) : (tannot 
   | Parse_ast.VS_aux(vs,l) ->
     (match vs with
     | Parse_ast.VS_val_spec(ts,id) ->
+      (*let _ = Printf.eprintf "to_ast_spec called for internal spec: for %s\n" (id_to_string (to_ast_id id)) in*)
       let typsch,_,_ = to_ast_typschm k_env default_order ts in
       VS_aux(VS_val_spec(typsch,to_ast_id id),(l,NoTyp)),(names,k_env,default_order)
     | Parse_ast.VS_extern_spec(ts,id,s) ->
@@ -654,6 +657,7 @@ let to_ast_funcl (names,k_env,def_ord) (Parse_ast.FCL_aux(fcl,l) : Parse_ast.fun
 let to_ast_fundef  (names,k_env,def_ord) (Parse_ast.FD_aux(fd,l):Parse_ast.fundef) : (tannot fundef) envs_out = 
   match fd with
   | Parse_ast.FD_function(rec_opt,tannot_opt,effects_opt,funcls) -> 
+    (*let _ = Printf.eprintf "to_ast_fundef\n" in*)
     let tannot_opt, k_env,_ = to_ast_tannot_opt k_env def_ord tannot_opt in
     FD_aux(FD_function(to_ast_rec rec_opt, tannot_opt, to_ast_effects_opt k_env effects_opt, List.map (to_ast_funcl (names, k_env, def_ord)) funcls), (l,NoTyp)), (names,k_env,def_ord)
     
