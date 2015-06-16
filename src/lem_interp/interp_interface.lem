@@ -53,6 +53,10 @@ type direction =
   | D_increasing
   | D_decreasing
 
+type end_flag =
+  | E_big_endian
+  | E_little_endian
+
 type register_value = <| 
     rv_bits: list bit_lifted (* MSB first, smallest index number *); 
     rv_dir: direction; 
@@ -62,17 +66,30 @@ type register_value = <|
       Otherwise, tells interpreter how to reconstruct a proper decreasing value*)
     |>
 
-type byte_lifted = Byte_lifted of list bit_lifted (* of length 8 *)
+type byte_lifted = Byte_lifted of list bit_lifted (* of length 8 *) (*MSB first everywhere*)
 
 type instruction_field_value = list bit
 
-type byte = Byte of list bit (* of length 8 *)  (*MSB first*) 
+type byte = Byte of list bit (* of length 8 *)  (*MSB first everywhere*) 
 
 type address_lifted = Address_lifted of list byte_lifted (* of length 8 for 64bit machines*) * maybe integer
 
 type memory_byte = byte_lifted
 
-type memory_value = list memory_byte (* the head of the list, most-significant first, at the lowest address, of length >=1 *)
+type memory_value = list memory_byte
+(* the list is of length >=1 *)
+(* for both big-endian (Power) and little-endian (ARM), the head of the
+     list is the byte stored at the lowest address *)
+(* for big-endian Power the head of the list is the most-significant
+   byte, in both the interpreter and machineDef* code. *)
+(* For little-endian ARM, the head of the list is the
+   least-significant byte in machineDef* code and the
+   most-significant byte in interpreter code, with the switch over
+   (a list-reverse) being done just inside the interpreter interface*)
+(* In other words, in the machineDef* code the lowest-address byte is first,
+   and in the interpreter code the most-significant byte is first *)
+
+
 
 (* not sure which of these is more handy yet *)
 type address = Address of list byte (* of length 8 *) * integer
