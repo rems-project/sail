@@ -2206,6 +2206,36 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
                end)
             | Nothing -> 
 	      ((Error l ("Internal error: function unfound " ^ name),lm,le),Nothing) end)
+	| Tag_spec ->
+          let name = get_id id in 
+	  (match Map.lookup name fdefs with
+	    | Just(funcls) -> 
+	      let new_vals = match v with 
+		| V_tuple vs -> V_tuple (vs ++ [value])
+		| V_lit (L_aux L_unit _) -> V_tuple [v;value] (*hmmm may be wrong in some code*)
+		| v -> V_tuple [v;value] end in
+              (match find_funcl t_level funcls new_vals with
+		| [] -> ((Error l ("No matching pattern for function " ^ name ^
+				      " on value " ^ (string_of_value new_vals)),l_mem,l_env),Nothing)
+		| [(env,used_unknown,exp)] -> 
+		  (match (if mode.eager_eval 
+		          then (interp_main mode t_level env emem exp)
+		          else (debug_out (Just name) (Just new_vals) exp t_level emem env)) with
+		    | (Value ret, _,_) -> ((Value ret, l_mem,l_env),Nothing)
+		    | (Action action stack,lm,le) ->
+		      (((update_stack (Action action stack) 
+			  (fun stack -> (Hole_frame (id_of_string "0") 
+					   (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot)))
+					   t_level l_env l_mem stack))), l_mem,l_env), Nothing)
+		    | (e,lm,le) -> ((e,lm,le),Nothing) end)
+                | multi_matches ->
+		  let (lets,taint_env) = 
+		    List.foldr (fun (env,_,exp) (rst,taint_env) -> 
+		      let (e,t_e) = env_to_let mode env exp taint_env in (e::rst,t_e)) ([],l_env) multi_matches in
+		  (interp_main mode t_level taint_env lm (E_aux (E_block lets) (l,annot)), Nothing)
+               end)
+            | Nothing -> 
+	      ((Error l ("Internal error: function unfound " ^ name),lm,le),Nothing) end)
          end)
       | (Action a s,lm, le) -> 
 	((Action a s,lm,le), Just (fun (E_aux (E_tuple es) _) env -> (LEXP_aux (LEXP_memory id es) (l,annot), env)))
