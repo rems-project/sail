@@ -1081,10 +1081,10 @@ val byte_list_of_memory_value : memory_value -> maybe (list byte)
 let byte_list_of_memory_value mv = maybe_all (List.map byte_of_memory_byte mv)
     
 
-val integer_of_memory_value : memory_value -> maybe integer 
-let integer_of_memory_value (mv:memory_value):maybe integer = 
+val integer_of_memory_value : end_flag -> memory_value -> maybe integer 
+let integer_of_memory_value endian (mv:memory_value):maybe integer = 
   match byte_list_of_memory_value mv with
-  | Just bs -> Just (integer_of_byte_list bs)
+  | Just bs -> Just (integer_of_byte_list (if endian = E_big_endian then bs else List.reverse bs))
   | Nothing -> Nothing 
   end
 
