@@ -147,24 +147,24 @@ let bit_lifteds_to_string (bls: bit_lifted list) (show_length_and_start:bool) (s
 let register_value_to_string rv = 
   bit_lifteds_to_string rv.rv_bits true (Some rv.rv_start)   
 
-let memory_value_to_string mv = 
-  let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) mv)  in
+let memory_value_to_string endian mv = 
+  let bls = List.concat(List.map (fun (Byte_lifted bs) -> (if endian = E_big_endian then bs else (List.rev bs))) mv)  in
   bit_lifteds_to_string bls true None
 
 let logfile_register_value_to_string rv = 
   bit_lifteds_to_string rv.rv_bits false (Some rv.rv_start)   
 
-let logfile_memory_value_to_string mv = 
-  let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) mv)  in
+let logfile_memory_value_to_string endian mv = 
+  let bls = List.concat(List.map (fun (Byte_lifted bs) -> (if endian = E_big_endian then bs else (List.rev bs))) mv)  in
   bit_lifteds_to_string bls false None
 
 let byte_list_to_string bs =
   let bs' = List.map byte_lifted_of_byte bs in
-  memory_value_to_string bs' 
+  memory_value_to_string E_big_endian bs' 
 
 let logfile_address_to_string a =
   let bs' = List.map byte_lifted_of_byte (byte_list_of_address a) in
-  logfile_memory_value_to_string bs'
+  logfile_memory_value_to_string E_big_endian bs'
   
 
 (*let bytes_to_string bytes = 
@@ -355,10 +355,10 @@ let rec format_events = function
   | (E_error s)::events ->
     "     Failed with message : " ^ s ^ " but continued on erroneously\n"
   | (E_read_mem(read_kind, (Address_lifted(location, _)), length, tracking))::events ->
-    "     Read_mem at " ^ (memory_value_to_string location) ^ " for " ^ (string_of_int length) ^ " bytes \n" ^
+    "     Read_mem at " ^ (memory_value_to_string E_big_endian location) ^ " for " ^ (string_of_int length) ^ " bytes \n" ^
     (format_events events)
   | (E_write_mem(write_kind,(Address_lifted (location,_)), length, tracking, value, v_tracking))::events ->
-    "     Write_mem at " ^ (memory_value_to_string location) ^ " writing " ^ (memory_value_to_string value) ^ " across " ^ (string_of_int length) ^ " bytes\n" ^
+    "     Write_mem at " ^ (memory_value_to_string E_big_endian location) ^ " writing " ^ (memory_value_to_string E_big_endian value) ^ " across " ^ (string_of_int length) ^ " bytes\n" ^
     (format_events events)
   | ((E_barrier b_kind)::events) ->
     "     Memory_barrier occurred\n" ^ 
