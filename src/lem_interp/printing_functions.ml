@@ -148,14 +148,14 @@ let register_value_to_string rv =
   bit_lifteds_to_string rv.rv_bits true (Some rv.rv_start)   
 
 let memory_value_to_string endian mv = 
-  let bls = List.concat(List.map (fun (Byte_lifted bs) -> (if endian = E_big_endian then bs else (List.rev bs))) mv)  in
+  let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) (if endian = E_big_endian then mv else (List.rev mv)))  in
   bit_lifteds_to_string bls true None
 
 let logfile_register_value_to_string rv = 
   bit_lifteds_to_string rv.rv_bits false (Some rv.rv_start)   
 
 let logfile_memory_value_to_string endian mv = 
-  let bls = List.concat(List.map (fun (Byte_lifted bs) -> (if endian = E_big_endian then bs else (List.rev bs))) mv)  in
+  let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) (if endian = E_big_endian then mv else (List.rev mv)))  in
   bit_lifteds_to_string bls false None
 
 let byte_list_to_string bs =
