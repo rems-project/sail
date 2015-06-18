@@ -834,12 +834,14 @@ let rec to_exp mode env v : (exp tannot * lenv) =
   | V_list(vals) -> let (es,env') = mapf vals env in (E_aux (E_list es) annot, env')
   | V_ctor id t ckind vals -> 
     let annotation = mk_annot true (Just ckind) in
-    (match vals with
-    | V_lit (L_aux L_unit _) -> (E_aux (E_id id) annotation, env)
-    | V_track (V_lit (L_aux L_unit _)) _ -> (E_aux (E_id id) annotation, env)
-    | V_tuple vals -> let (es,env') = mapf vals env in (E_aux (E_app id es) annotation, env')
-    | V_track (V_tuple vals) _ -> let (es,env') = mapf vals env in (E_aux (E_app id es) annotation, env')
-    | V_track _ _ -> 
+    (match (vals,ckind) with
+    | (V_lit (L_aux L_unit _), C_Union) -> (E_aux (E_app id []) annotation, env)
+    | (V_lit (L_aux L_unit _), C_Enum _) -> (E_aux (E_id id) annotation, env)
+    | (V_track (V_lit (L_aux L_unit _)) _, C_Union) -> (E_aux (E_app id []) annotation, env)
+    | (V_track (V_lit (L_aux L_unit _)) _, C_Enum _) -> (E_aux (E_id id) annotation, env)
+    | (V_tuple vals,_) -> let (es,env') = mapf vals env in (E_aux (E_app id es) annotation, env')
+    | (V_track (V_tuple vals) _,_) -> let (es,env') = mapf vals env in (E_aux (E_app id es) annotation, env')
+    | (V_track _ _,_) -> 
       if mode.track_values 
       then begin let (fid,env') = fresh_var env in
                  let env' = add_to_env (fid,vals) env' in

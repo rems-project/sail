@@ -476,8 +476,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	let t,cs,ef,_ = subst params false t cs ef in
         (match t.t with
         | Tfn({t = Tid "unit"},t',IP_none,ef) -> 
-          let t',cs',ef',e' = type_coerce (Expr l) d_env Require false false b_env t' 
-	    (rebuild (Base(([],{t=Tfn(unit_t,t',IP_none,ef)}),Constructor,cs,ef,bounds))) expect_t in
+	  let e = E_aux(E_app(id, []), (l, (Base(([],{t=Tfn(unit_t,t',IP_none,ef)}), Constructor, cs, ef, bounds)))) in
+          let t',cs',ef',e' = type_coerce (Expr l) d_env Require false false b_env t' e expect_t in
           (e',t',t_env,cs@cs',nob,union_effects ef ef')
         | Tfn(t1,t',IP_none,e) -> 
           typ_error l ("Constructor " ^ i ^ " expects arguments of type " ^ (t_to_string t) ^ ", found none")

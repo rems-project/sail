@@ -376,7 +376,7 @@ let decode_to_istate top_level value =
 	 top_env Interp.eenv Interp.emem Interp.Top) Nothing) in
       match (instr_decoded,error) with
 	| (Just instr,_) ->
-	  let (arg,_) = Interp.to_exp mode Interp.eenv instr in
+	  (*let (arg,_) = Interp.to_exp mode Interp.eenv instr in*)
 	  Instr instr_external
 	    (IState (Interp.Thunk_frame
 		       (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) [arg]) (Interp_ast.Unknown,Nothing))
