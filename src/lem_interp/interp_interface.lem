@@ -1077,20 +1077,23 @@ let clear_low_order_bits_of_address a =
         end
   end
 
-val byte_list_of_memory_value : memory_value -> maybe (list byte)
-let byte_list_of_memory_value mv = maybe_all (List.map byte_of_memory_byte mv)
+val byte_list_of_memory_value : end_flag -> memory_value -> maybe (list byte)
+let byte_list_of_memory_value endian mv = 
+  let mv = if endian = E_big_endian then mv else List.reverse mv in
+  maybe_all (List.map byte_of_memory_byte mv)
     
 
 val integer_of_memory_value : end_flag -> memory_value -> maybe integer 
 let integer_of_memory_value endian (mv:memory_value):maybe integer = 
-  match byte_list_of_memory_value mv with
-  | Just bs -> Just (integer_of_byte_list (if endian = E_big_endian then bs else List.reverse bs))
+  match byte_list_of_memory_value endian mv with
+  | Just bs -> Just (integer_of_byte_list bs)
   | Nothing -> Nothing 
   end
 
-val memory_value_of_integer : nat -> integer -> memory_value 
-let memory_value_of_integer (len:nat) (i:integer):memory_value =
-  List.map (byte_lifted_of_byte) (byte_list_of_integer len i)
+val memory_value_of_integer : end_flag  -> nat -> integer -> memory_value 
+let memory_value_of_integer endian (len:nat) (i:integer):memory_value =
+  let mv = List.map (byte_lifted_of_byte) (byte_list_of_integer len i) in
+  if endian = E_big_endian then mv else List.reverse mv
 
 
 val integer_of_register_value : register_value -> maybe integer 
@@ -1156,8 +1159,8 @@ let address_of_register_value (rv:register_value) : maybe address =
       end
   end
 
-let address_of_memory_value (mv:memory_value) : maybe address = 
-  match byte_list_of_memory_value mv with
+let address_of_memory_value (endian: end_flag) (mv:memory_value) : maybe address = 
+  match byte_list_of_memory_value endian mv with
   | Nothing -> Nothing
   | Just bs -> 
       if List.length bs <> 8 then Nothing else
@@ -1181,10 +1184,10 @@ let int_of_memory_byte (mb:memory_byte) : int =
 
 
 
-val memory_value_of_address_lifted : address_lifted -> memory_value
-let memory_value_of_address_lifted (al:address_lifted) =
+val memory_value_of_address_lifted : end_flag -> address_lifted -> memory_value
+let memory_value_of_address_lifted endian (al:address_lifted) =
   match al with
-  | Address_lifted bs _ -> bs
+  | Address_lifted bs _ -> if endian = E_big_endian then bs else List.reverse bs
   end
 
 val byte_list_of_address : address -> list byte
