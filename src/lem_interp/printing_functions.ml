@@ -285,7 +285,7 @@ let rec val_to_string_internal ((Interp.LMem (_,memory)) as mem) = function
  | Interp.V_register _ | Interp.V_register_alias _ ->
      sprintf "reg-as-value" 
  | Interp.V_unknown -> "unknown"
- | Interp.V_track(v,_) -> (val_to_string_internal mem v)
+ | Interp.V_track(v,rs) -> (*"tainted by {" ^ (Interp_utilities.list_to_string Interp.string_of_reg_form "," rs) ^ "} --" ^ *) (val_to_string_internal mem v)
 ;;
 
 let rec top_frame_exp_state = function
@@ -347,6 +347,10 @@ let sub_to_string = function None -> "" | Some (x, y) -> sprintf " (%s, %s)"
   (to_string x) (to_string y)
 ;;
 
+let format_tracking t = match t with
+  | Some rs -> "{ " ^ (dependencies_to_string rs) ^ "}"
+  | None -> "None"
+
 let rec format_events = function
   | [] -> 
     "     Done\n"
@@ -355,10 +359,13 @@ let rec format_events = function
   | (E_error s)::events ->
     "     Failed with message : " ^ s ^ " but continued on erroneously\n"
   | (E_read_mem(read_kind, (Address_lifted(location, _)), length, tracking))::events ->
-    "     Read_mem at " ^ (memory_value_to_string E_big_endian location) ^ " for " ^ (string_of_int length) ^ " bytes \n" ^
+    "     Read_mem at " ^ (memory_value_to_string E_big_endian location) ^ " based on registers " ^ 
+      format_tracking tracking ^  " for " ^ (string_of_int length) ^ " bytes \n" ^
     (format_events events)
   | (E_write_mem(write_kind,(Address_lifted (location,_)), length, tracking, value, v_tracking))::events ->
-    "     Write_mem at " ^ (memory_value_to_string E_big_endian location) ^ " writing " ^ (memory_value_to_string E_big_endian value) ^ " across " ^ (string_of_int length) ^ " bytes\n" ^
+    "     Write_mem at " ^ (memory_value_to_string E_big_endian location) ^ ", based on registers " ^ 
+      format_tracking tracking ^ ", writing " ^ (memory_value_to_string E_big_endian value) ^
+      ", based on " ^ format_tracking v_tracking ^ " across " ^ (string_of_int length) ^ " bytes\n" ^
     (format_events events)
   | ((E_barrier b_kind)::events) ->
     "     Memory_barrier occurred\n" ^ 
