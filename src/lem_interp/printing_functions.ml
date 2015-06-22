@@ -240,8 +240,12 @@ let rec bit_to_hex v =
   | Unknown0 -> "Error: cannot turn Unknown into hex"
 ;;*)
 
+let dir_to_string = function
+  | D_increasing -> "inc"
+  | D_decreasing -> "dec"
+
 let reg_name_to_string = function
-  | Reg0(s,_,_,_) -> s
+  | Reg0(s,start,size,d) -> s (*^ "(" ^ (string_of_int start) ^ ", " ^ (string_of_int size) ^ ", " ^ (dir_to_string d) ^ ")"*)
   | Reg_slice(s,start,dir,(first,second)) -> 
     let first,second = 
       match dir with

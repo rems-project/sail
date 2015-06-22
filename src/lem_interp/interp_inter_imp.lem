@@ -9,7 +9,7 @@ open import Assert_extra
 
 val intern_reg_value : register_value -> Interp.value
 val intern_mem_value : interp_mode -> direction -> memory_value -> Interp.value
-val extern_reg_value : Interp.i_direction -> maybe nat -> Interp.value -> register_value
+val extern_reg_value : reg_name -> Interp.value -> register_value
 val extern_mem_value : interp_mode -> Interp.value -> (memory_value * maybe (list reg_name))
 val extern_reg : Interp.reg_form -> maybe (nat * nat) -> reg_name
 
@@ -153,39 +153,38 @@ let extern_reg r slice = match (r,slice) with
                                (extern_slice edir start (i1, j1))
 end
 
-let rec extern_reg_value dir optional_start v = 
-  let start = match optional_start with | Nothing -> 0 | Just i -> i end in
-  let is_inc = Interp.is_inc(dir) in 
+let rec extern_reg_value reg_name v = 
   match v with
-    | Interp.V_track v regs -> extern_reg_value dir optional_start v 
-    | Interp.V_vector fst dir bits ->
-      let is_inc = Interp.is_inc(dir) in
-      let width = List.length bits in
-      <| rv_bits=(bitls_from_ibits bits); 
-         rv_dir=(if is_inc then D_increasing else D_decreasing);
-	 rv_start=if is_inc then fst else (fst +1 - width);
-	 rv_start_internal = fst;
-       |>
+    | Interp.V_track v regs -> extern_reg_value reg_name v 
     | Interp.V_vector_sparse fst stop inc bits default ->
-      extern_reg_value dir optional_start (Interp_lib.fill_in_sparse v)
-  | Interp.V_lit (L_aux L_zero _) -> 
-    <| rv_bits=[Bitl_zero]; rv_dir= if is_inc then D_increasing else D_decreasing;
-       rv_start= start; rv_start_internal=start |>
-  | Interp.V_lit (L_aux L_false _) ->
-    <| rv_bits=[Bitl_zero]; rv_dir=if is_inc then D_increasing else D_decreasing; 
-       rv_start=start; rv_start_internal = start |>
-  | Interp.V_lit (L_aux L_one _) -> 
-    <| rv_bits=[Bitl_one]; rv_dir=if is_inc then D_increasing else D_decreasing;
-       rv_start=start; rv_start_internal = start |>
-  | Interp.V_lit (L_aux L_true _) ->
-    <| rv_bits=[Bitl_one]; rv_dir=if is_inc then D_increasing else D_decreasing;
-       rv_start=start; rv_start_internal = start |>
-  | Interp.V_lit (L_aux L_undef _) -> 
-    <| rv_bits=[Bitl_undef]; rv_dir=if is_inc then D_increasing else D_decreasing;
-       rv_start=start; rv_start_internal = start |>
-  | Interp.V_unknown -> 
-    <| rv_bits=[Bitl_unknown]; rv_dir=if is_inc then D_increasing else D_decreasing;
-       rv_start=start; rv_start_internal = start |>
+      extern_reg_value reg_name (Interp_lib.fill_in_sparse v)
+    | _ ->
+      let (internal_start, external_start, direction) =
+	(match reg_name with 
+	  | Reg _ start size dir ->
+	    (start, (if dir = D_increasing then start else (start - (size +1))), dir)
+	  | Reg_slice _ reg_start dir (slice_start, slice_end) ->
+	    ((if dir = D_increasing then slice_start else (reg_start - slice_start)),
+	     slice_start, dir)
+	  | Reg_field _ reg_start dir _ (slice_start, slice_end) ->
+	    ((if dir = D_increasing then slice_start else (reg_start - slice_start)),
+	     slice_start, dir)
+	  | Reg_f_slice _ reg_start dir _ _ (slice_start, slice_end) ->
+	    ((if dir = D_increasing then slice_start else (reg_start - slice_start)),
+	     slice_start, dir) end) in
+      let bit_list = 
+	(match v with 
+	  | Interp.V_vector fst dir bits -> bitls_from_ibits bits
+	  | Interp.V_lit (L_aux L_zero _) -> [Bitl_zero]
+	  | Interp.V_lit (L_aux L_false _) -> [Bitl_zero]
+	  | Interp.V_lit (L_aux L_one _) -> [Bitl_one]
+	  | Interp.V_lit (L_aux L_true _) -> [Bitl_one]
+	  | Interp.V_lit (L_aux L_undef _) -> [Bitl_undef]
+	  | Interp.V_unknown -> [Bitl_unknown] end) in
+      <| rv_bits=bit_list; 
+         rv_dir=direction;
+	 rv_start=external_start;
+	 rv_start_internal = internal_start |>
 end 
 
 let rec extern_mem_value mode v = match v with
@@ -435,10 +434,8 @@ let rec interp_to_outcome mode context thunk =
                  let v = if mode.internal_mode.Interp.track_values then (Interp.V_track v [reg_form]) else v in 
                  IState (Interp.add_answer_to_stack next_state v) context)
     | Interp.Write_reg reg_form slice value ->
-      let optional_start = 
-	match slice with | Just (st1,st2) -> if (st1=st2) then Just st1 else Nothing | _ -> Nothing end in
-      Write_reg (extern_reg reg_form slice) 
-                (extern_reg_value internal_direction optional_start value) (IState next_state context)
+      let reg_name = extern_reg reg_form slice in
+      Write_reg reg_name (extern_reg_value reg_name value) (IState next_state context)
     | Interp.Read_mem (Id_aux (Id i) _) value slice ->
       match List.lookup i mem_reads with
       | (Just (MR read_k f)) -> 
