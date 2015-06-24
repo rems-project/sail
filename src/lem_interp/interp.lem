@@ -218,6 +218,8 @@ type action =
  | Write_reg of reg_form * maybe (nat * nat) * value
  | Read_mem of id * value * maybe (nat * nat)
  | Write_mem of id * value * maybe (nat * nat) * value
+ | Write_ea of id * value
+ | Write_memv of id * value
  | Barrier of id * value
  | Footprint of id * value
  | Write_next_IA of value (* Perhaps not needed? *)
@@ -1875,33 +1877,31 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         | Tag_extern opt_name ->
 	  let effects = (match effect with | Effect_aux(Effect_set es) _ -> es | _ -> [] end) in
           let name_ext = match opt_name with | Just s -> s | Nothing -> name end in
+          let mk_hole_frame act = 
+	    (Action act 
+	            (Hole_frame (Id_aux (Id "0") l) 
+                                (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le) in
+	  let mk_thunk_frame act = 
+            (Action act
+                    (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level le lm Top), lm, le) in
           if has_rmem_effect effects 
-          then
-            (Action (Read_mem (id_of_string name_ext) v Nothing) 
-	            (Hole_frame (Id_aux (Id "0") l) 
-                                (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
+          then mk_hole_frame (Read_mem (id_of_string name_ext) v Nothing) 
           else if has_barr_effect effects
-          then 
-            (Action (Barrier (id_of_string name_ext) v)
-                    (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
+          then mk_thunk_frame (Barrier (id_of_string name_ext) v)
 	  else if has_depend_effect effects
-	  then 
-	    (Action (Footprint (id_of_string name_ext) v)
-	            (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
+	  then mk_thunk_frame (Footprint (id_of_string name_ext) v)
 	  else if has_wmem_effect effects
-	  then 
-	    let (wv,v) =
-	      match v with
-		| V_tuple params_list ->
-		  let reved = List.reverse params_list in
-		  (List_extra.head reved,V_tuple (List.reverse (List_extra.tail reved))) end in 
-	    (Action (Write_mem (id_of_string name_ext) v Nothing wv) 
-	       (Hole_frame (Id_aux (Id "0") l)
-		  (E_aux (E_id (Id_aux (Id "0") l)) (l, intern_annot annot)) t_level le lm Top),lm,le)
-          else 
-            (Action (Call_extern name_ext v) 
-	            (Hole_frame (Id_aux (Id "0") l) 
-                                (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le)
+	  then let (wv,v) =
+		 match v with
+		   | V_tuple params_list ->
+		     let reved = List.reverse params_list in
+		     (List_extra.head reved,V_tuple (List.reverse (List_extra.tail reved))) end in 
+                mk_hole_frame (Write_mem (id_of_string name_ext) v Nothing wv)
+	  else if has_eamem_effect effects
+	  then mk_hole_frame (Write_ea (id_of_string name_ext) v)
+	  else if has_wmv_effect effects
+	  then mk_hole_frame (Write_memv (id_of_string name_ext) v)
+          else mk_hole_frame (Call_extern name_ext v) 
         | _ ->
 	  (Error l (String.stringAppend "Tag not empty, spec, ctor, or extern on function call " name),lm,le) end)
       | out -> out end)
@@ -2004,6 +2004,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		(match a with
 		  | (Action (Write_reg regf range value) stack) -> a
 		  | (Action (Write_mem id a_ range value) stack) -> a
+		  | (Action (Write_memv _ _) stack) -> a
 		  | _ -> update_stack a (add_to_top_frame 
 					   (fun e env -> 
                                              let (ev,env') = (to_exp mode env v) in
@@ -2174,9 +2175,14 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
       | (Value v,lm,le) ->
         (match tag with
         | Tag_extern _ ->
-          let request = (Action (Write_mem id v Nothing value) 
-                           (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env lm Top),
-			 lm,l_env) in
+          let request = 
+	    let effects = (match ef with | Effect_aux(Effect_set es) _ -> es | _ -> [] end) in
+	    let act = if has_wmem_effect effects then (Write_mem id v Nothing value) 
+	              else if has_wmv_effect effects then (Write_memv id value)
+		      else Assert_extra.failwith "LEXP_memory with neither wmem or wmv event" in
+	    (Action act 
+               (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env lm Top),
+	     lm,l_env) in
           if is_top_level then (request,Nothing) 
 	  else 
             (request,

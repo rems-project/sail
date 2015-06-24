@@ -467,6 +467,27 @@ let rec interp_to_outcome mode context thunk =
 	else Error "Memory address on write is not 64 bits"
       | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
       end 
+    | Interp.Write_ea (Id_aux (Id i) _) loc_val ->
+      match List.lookup i mem_write_eas with
+	| (Just (MEA write_k f)) ->
+	  let (location, length, tracking) = (f mode loc_val) in
+	  if (List.length location) = 8
+	  then let address_int = match (maybe_all (List.map byte_of_byte_lifted location)) with
+	    | Just bs -> Just (integer_of_byte_list bs)
+	    | _ -> Nothing end in
+            Write_ea write_k (Address_lifted location address_int) length tracking (IState next_state context)
+          else Error "Memory address for write is not 64 bits"
+        | _ -> Error ("Memory " ^ i ^ " function to signal impending write, not found") end
+    | Interp.Write_memv (Id_aux (Id i) _) write_val ->
+       match List.lookup i mem_write_vals with
+	 | (Just (MV return)) -> 
+	   let (value, v_tracking) = (extern_mem_value mode write_val) in
+	   Write_memv value v_tracking 
+	     (fun b -> 
+	       match return with
+		 | Nothing -> (IState (Interp.add_answer_to_stack next_state Interp.unitv) context)
+		 | Just return_bool -> return_bool (IState next_state context) b end)
+         | _ -> Error ("Memory " ^ i ^ " function with write value kind not found") end
     | Interp.Barrier (Id_aux (Id i) _) lval ->
       match List.lookup i barriers with
 	| Just barrier -> 
@@ -562,6 +583,10 @@ let rec ie_loop mode register_values (IState interp_state context) =
 	(ie_loop mode register_values (i_state_fun (unknown_mem length)))
     | Write_mem write_k loc length tracking value v_tracking i_state_fun ->
       (E_write_mem write_k loc length tracking value v_tracking)::(ie_loop mode register_values (i_state_fun true))
+    | Write_ea write_k loc length tracking i_state ->
+      (E_write_ea write_k loc length tracking)::(ie_loop mode register_values i_state)
+    | Write_memv value tracking i_state_fun ->
+      (E_write_memv value tracking)::(ie_loop mode register_values (i_state_fun true))
     | Barrier barrier_k i_state ->
       (E_barrier barrier_k)::(ie_loop mode register_values i_state)
     | Footprint i_state ->
