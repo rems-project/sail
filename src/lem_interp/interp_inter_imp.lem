@@ -313,11 +313,11 @@ let call_external_functions direction outcome =
 	| Just f -> Just (f value) end
     | _ -> Nothing end
 
-let build_context defs reads writes barriers externs = 
+let build_context defs reads writes write_eas write_vals barriers externs = 
   (*TODO add externs to to_top_env*)
   match Interp.to_top_env call_external_functions defs with 
     | (_,((Interp.Env _ _ dir _ _ _ _ _) as context)) -> 
-      Context context (if Interp.is_inc(dir) then D_increasing else D_decreasing) reads writes barriers externs end
+      Context context (if Interp.is_inc(dir) then D_increasing else D_decreasing) reads writes write_eas write_vals barriers externs end
 
 
 let rec find_instruction i = function
@@ -339,7 +339,7 @@ end
 
 let decode_to_istate top_level value = 
   let mode = make_interp_mode true false in
-  let (Context ((Interp.Env _ instructions _ _ _ _ _ _) as top_env) direction _ _ _ _) = top_level in
+  let (Context ((Interp.Env _ instructions _ _ _ _ _ _) as top_env) direction _ _ _ _ _ _) = top_level in
   let (arg,_) = Interp.to_exp mode Interp.eenv (intern_opcode direction value) in
   let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
   let (instr_decoded,error) = interp_to_value_helper value ("",[],[]) internal_direction
@@ -396,7 +396,7 @@ let decode_to_instruction (top_level:context) (value:opcode) : instruction_or_de
 val instruction_to_istate : context -> instruction -> instruction_state 
 let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instruction) : instruction_state  = 
   let mode = make_interp_mode true false in
-  let (Context top_env direction _ _ _ _) = top_level in
+  let (Context top_env direction _ _ _ _ _ _) = top_level in
   let get_value (name,typ,v) = 
     let vec = intern_ifield_value direction v in
     let v = match vec with
@@ -420,7 +420,7 @@ let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instr
      top_level)
 
 let rec interp_to_outcome mode context thunk = 
-  let (Context _ direction mem_reads mem_writes barriers spec_externs) = context in
+  let (Context _ direction mem_reads mem_writes mem_write_eas mem_write_vals barriers spec_externs) = context in
   let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
   match thunk () with
   | Interp.Value _ -> Done
@@ -536,7 +536,7 @@ let reg_size = function
 end
 
 let rec ie_loop mode register_values (IState interp_state context) = 
-  let (Context _ direction externs reads writes barriers) = context in
+  let (Context _ direction externs reads writes write_eas write_vals barriers) = context in
   let unknown_reg size =  
     <| rv_bits = (List.replicate size Bitl_unknown);
        rv_start = 0;
@@ -574,7 +574,7 @@ let interp_exhaustive register_values i_state =
   ie_loop mode register_values i_state
 
 let rec rr_ie_loop mode i_state = 
-  let (IState _ (Context _ direction _ _ _ _)) = i_state in
+  let (IState _ (Context _ direction _ _ _ _ _ _)) = i_state in
   let unknown_reg size =  
     <| rv_bits = (List.replicate size Bitl_unknown); 
        rv_start = 0;
