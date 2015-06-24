@@ -146,7 +146,7 @@ rule token = parse
                                             (M.find i kw_table) ()
                                           else
                                             Id(r i) }
-  | tyvar_start startident ident* as i   { Other }
+  | tyvar_start startident ident*   { Other }
   | "&" oper_char+ | "@" oper_char+  | "^" oper_char+ | "/" oper_char+ | "=" oper_char+ |
     "!" oper_char+ | ">" oper_char+  | "<" oper_char+ | "+" oper_char+ | "*" oper_char+ |
     "~"	oper_char+ | "&&" oper_char+ | "^^" oper_char+| "::" oper_char+| "=/=" oper_char+ |
@@ -158,9 +158,9 @@ rule token = parse
     ">_ui" oper_char+ | "<=_s" oper_char+ | "<=_si" oper_char+ | "<=_u" oper_char+ | "<=_ui" oper_char+ |
     "<_s" oper_char+ | "<_si" oper_char+ | "<_u" oper_char+ | "<_ui" oper_char+ | "**_s" oper_char+ |
     "**_si" oper_char+ | "*_u" oper_char+ | "*_ui" oper_char+ | "2^" oper_char+  { Other }			
-  | digit+ as i                         { Other }
-  | "0b" (binarydigit+ as i)		{ Other }
-  | "0x" (hexdigit+ as i) 		{ Other }
+  | digit+                              { Other }
+  | "0b" (binarydigit+) 		{ Other }
+  | "0x" (hexdigit+)     		{ Other }
   | '"'                                 { let _ = string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf in Other }
   | eof                                 { Eof }
   | _  as c                             { raise (LexError(

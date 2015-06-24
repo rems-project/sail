@@ -97,6 +97,7 @@ type nexp_range =
   | GtEq of constraint_origin * range_enforcement * nexp * nexp
   | In of constraint_origin * string * int list
   | InS of constraint_origin * nexp * int list (* This holds the given value for string after a substitution *)
+  | Predicate of constraint_origin * nexp_range (* This will treat the inner constraint as holding in positive condcons positions : must be one of LtEq, Eq, or GtEq*)
   | CondCons of constraint_origin * nexp_range list * nexp_range list (* Constraints from one path from a conditional (pattern or if) and the constraints from that conditional *)
   | BranchCons of constraint_origin * nexp_range list (* CondCons constraints from all branches of a conditional; list should be all CondCons *)
 

@@ -20,6 +20,7 @@ let rec kind_to_string kind = match kind.k with
   | K_Ord -> "Order"
   | K_Efct -> "Effect"
   | K_infer -> "Infer"
+  | K_Val -> "Val"
   | K_Lam (kinds,kind) -> "Lam ... -> " ^ (kind_to_string kind)
 
 
@@ -234,6 +235,8 @@ and to_ast_effects (k_env : kind Envmap.t) (e : Parse_ast.atyp) : Ast.effect =
                                | Parse_ast.BE_wreg   -> BE_wreg
                                | Parse_ast.BE_rmem   -> BE_rmem
                                | Parse_ast.BE_wmem   -> BE_wmem
+			       | Parse_ast.BE_wmv    -> BE_wmv
+			       | Parse_ast.BE_eamem  -> BE_eamem
 			       | Parse_ast.BE_depend -> BE_depend
                                | Parse_ast.BE_undef  -> BE_undef
                                | Parse_ast.BE_unspec -> BE_unspec

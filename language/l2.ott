@@ -186,6 +186,8 @@ base_effect :: 'BE_' ::=
   | wreg                                :: :: wreg {{ com write register }}
   | rmem                                :: :: rmem {{ com read memory }}
   | wmem                                :: :: wmem {{ com write memory }}
+  | wmea				:: :: eamem {{ com signal effective address for writing memory }}
+  | wmv					:: :: wmv   {{ com write memory, sending only value }} 
   | barr                                :: :: barr {{ com memory barrier }}
   | depend				:: :: depend {{ com dynamic footprint }}
   | undef                               :: :: undef {{ com undefined-instruction exception }}

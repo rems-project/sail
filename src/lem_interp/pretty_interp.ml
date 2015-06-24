@@ -81,6 +81,8 @@ let doc_effect (BE_aux (e,_)) =
   | BE_wreg -> "wreg"
   | BE_rmem -> "rmem"
   | BE_wmem -> "wmem"
+  | BE_wmv  -> "wmv"
+  | BE_eamem -> "eamem"
   | BE_barr -> "barr"
   | BE_depend -> "depend"
   | BE_undef -> "undef"

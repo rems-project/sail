@@ -40,7 +40,8 @@ let rec rewrite_nexp_to_exp program_vars l nexp =
 		    But, for now I need to permit this to make power.sail compile, and most errors are in trap 
 		    or vectors *)
 	      (*let _ = Printf.eprintf "unbound variable here %s\n" v in*) 
-	E_aux (E_id (Id_aux (Id v,l)),(l,simple_annot typ)) in
+	E_aux (E_id (Id_aux (Id v,l)),(l,simple_annot typ))
+      | _ -> raise (Reporting_basic.err_unreachable l ("rewrite_nexp given n that can't be rewritten: " ^ (n_to_string nexp))) in
   match program_vars with
     | None -> actual_rewrite_n nexp
     | Some program_vars ->
@@ -113,7 +114,6 @@ let rec rewrite_exp (E_aux (exp,(l,annot))) =
     | E_internal_cast ((_,casted_annot),exp) -> 
       let new_exp = rewrite_exp exp in
       (match casted_annot,exp with
-	| NoTyp,_ | Overload _,_ -> new_exp
 	| Base((_,t),_,_,_,_),E_aux(ec,(ecl,Base((_,exp_t),_,_,_,_))) ->
 	  (match t.t,exp_t.t with
 	    (*TODO should pass d_env into here so that I can look at the abbreviations if there are any here*)
@@ -122,18 +122,19 @@ let rec rewrite_exp (E_aux (exp,(l,annot))) =
 	      (match n1.nexp with
 		| Nconst i1 -> if nexp_eq n1 n2 then new_exp else rewrap (E_cast (t_to_typ t,new_exp))
 		| Nadd _ | Nsub _ -> (match o1.order with
-		    | Oinc -> new_exp
 		    | Odec -> 
 		      if nexp_one_more_than nw1 n1 
 		      then rewrap (E_cast (Typ_aux (Typ_var (Kid_aux((Var "length"), Unknown)), Unknown), new_exp))
-		      else new_exp)
+		      else new_exp
+		    | _ -> new_exp)
 		| _ -> new_exp)
-	    | _ -> new_exp))
+	    | _ -> new_exp)
+	| _ -> new_exp)
     | E_internal_exp (l,impl) ->
       (match impl with
 	| Base((_,t),_,_,_,bounds) ->
 	  (*let _ = Printf.eprintf "Rewriting internal expression, with type %s\n" (t_to_string t) in*) 
-	  match t.t with
+	  (match t.t with
 	    (*Old case; should possibly be removed*)
 	    | Tapp("register",[TA_typ {t= Tapp("vector",[ _; TA_nexp r;_;_])}])
 	    | Tapp("vector", [_;TA_nexp r;_;_]) ->
@@ -147,19 +148,27 @@ let rec rewrite_exp (E_aux (exp,(l,annot))) =
 	      let nexps = expand_nexp i in
 	      (match (match_to_program_vars nexps bounds) with
 		| [] -> rewrite_nexp_to_exp None l i
-		| map -> rewrite_nexp_to_exp (Some map) l i))
+		| map -> rewrite_nexp_to_exp (Some map) l i)
+	    | _ -> 
+	      raise (Reporting_basic.err_unreachable l 
+		       ("Internal_exp given unexpected types " ^ (t_to_string t))))
+	| _ -> raise (Reporting_basic.err_unreachable l ("Internal_exp given none Base annot")))
     | E_internal_exp_user ((l,user_spec),(_,impl)) -> 
       (match (user_spec,impl) with
 	| (Base((_,tu),_,_,_,_), Base((_,ti),_,_,_,bounds)) ->
 	  (*let _ = Printf.eprintf "E_interal_user getting rewritten two types are %s and %s\n" (t_to_string tu) (t_to_string ti) in*)
-	  match (tu.t,ti.t) with
+	  (match (tu.t,ti.t) with
 	    | (Tapp("implicit", [TA_nexp u]),Tapp("implicit",[TA_nexp i])) ->
 	      (*let _ = Printf.eprintf "Implicit case with %s\n" (n_to_string i) in*)
 	      let nexps = expand_nexp i in
 	      (match (match_to_program_vars nexps bounds) with
 		| [] -> rewrite_nexp_to_exp None l i
 		  (*add u to program_vars env; for now it will work out properly by accident*)
-		| map -> rewrite_nexp_to_exp (Some map) l i))
+		| map -> rewrite_nexp_to_exp (Some map) l i)
+	    | _ -> 
+	      raise (Reporting_basic.err_unreachable l 
+		       ("Internal_exp_user given unexpected types " ^ (t_to_string tu) ^ ", " ^ (t_to_string ti))))
+	| _ -> raise (Reporting_basic.err_unreachable l ("Internal_exp_user given none Base annot")))
 
 and rewrite_let (LB_aux(letbind,(l,annot))) = match letbind with
   | LB_val_explicit (typschm, pat,exp) ->
@@ -187,6 +196,7 @@ let rewrite_def d = match d with
   | DEF_type _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ -> d
   | DEF_fundef fdef -> DEF_fundef (rewrite_fun fdef)
   | DEF_val letbind -> DEF_val (rewrite_let letbind)
+  | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "DEF_scattered survived to rewritter")
 
 let rewrite_defs (Defs defs) = 
   let rec rewrite ds = match ds with

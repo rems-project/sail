@@ -97,6 +97,7 @@ type nexp_range =
   | GtEq of constraint_origin * range_enforcement * nexp * nexp
   | In of constraint_origin * string * int list
   | InS of constraint_origin * nexp * int list (* This holds the given value for string after a substitution *)
+  | Predicate of constraint_origin * nexp_range (* This will treat the inner constraint as holding in positive condcons positions*)
   | CondCons of constraint_origin * nexp_range list * nexp_range list
   | BranchCons of constraint_origin * nexp_range list
 
@@ -162,10 +163,10 @@ let get_c_loc = function
 let debug_mode = ref true;;
 
 let co_to_string = function
-  | Patt l -> "Pattern " 
-  | Expr l -> "Expression " 
-  | Fun l -> "Function def " 
-  | Specc l -> "Specification " 
+  | Patt l -> "Pattern " (*^ Reporting_basic.loc_to_string l *)
+  | Expr l -> "Expression " (*^ Reporting_basic.loc_to_string l *)
+  | Fun l -> "Function def " (*^ Reporting_basic.loc_to_string l *)
+  | Specc l -> "Specification " (*^ Reporting_basic.loc_to_string l *)
 
 let rec t_to_string t = 
   match t.t with
@@ -194,6 +195,7 @@ and n_to_string n =
     | Nconst i -> string_of_big_int i
     | Npos_inf -> "infinity"
     | Nneg_inf -> "-infinity"
+    | Ninexact -> "infinity - infinity"
     | Nadd(n1,n2) -> "("^ (n_to_string n1) ^ " + " ^ (n_to_string n2) ^")"
     | Nsub(n1,n2) -> "("^ (n_to_string n1) ^ " - " ^ (n_to_string n2) ^ ")"
     | Nmult(n1,n2) -> "(" ^ (n_to_string n1) ^ " * " ^ (n_to_string n2) ^ ")"
@@ -208,8 +210,11 @@ and ef_to_string (Ast.BE_aux(b,l)) =
       | Ast.BE_wreg  -> "wreg"
       | Ast.BE_rmem  -> "rmem"
       | Ast.BE_wmem  -> "wmem"
+      | Ast.BE_wmv   -> "wmv"
+      | Ast.BE_eamem -> "eamem"
       | Ast.BE_barr  -> "barr"
       | Ast.BE_undef -> "undef"
+      | Ast.BE_depend -> "depend"
       | Ast.BE_unspec-> "unspec"
       | Ast.BE_nondet-> "nondet"
 and efs_to_string es = 
@@ -253,6 +258,7 @@ let rec constraint_to_string = function
     "GtEq(" ^ co_to_string co ^ ", " ^ enforce_to_string enforce ^ ", " ^ n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
   | In(co,var,ints) -> "In of " ^ var
   | InS(co,n,ints) -> "InS of " ^ n_to_string n
+  | Predicate(co,cs) -> "Pred(" ^ co_to_string co ^ ", " ^ constraint_to_string cs ^ ")"
   | CondCons(co,pats,exps) ->
     "CondCons(" ^ co_to_string co ^ ", [" ^ constraints_to_string pats ^ "], [" ^ constraints_to_string exps ^ "])"
   | BranchCons(co,consts) ->
@@ -372,6 +378,8 @@ let rec compare_nexps n1 n2 =
     (match compare_nexps n1 n2 with
       | 0 -> compare_nexps n12 n22
       | a -> a)
+  | Nsub _   , _         -> -1
+  | _        , Nsub _    -> 1
   | Npow(n1,_),Npow(n2,_)-> compare_nexps n1 n2
   | Npow _   , _        -> -1
   | _        , Npow _   ->  1
@@ -383,6 +391,9 @@ let rec compare_nexps n1 n2 =
   | Nneg _   , _        -> -1
   | _        , Nneg _   -> 1
   | Npos_inf , Npos_inf -> 0
+  | Npos_inf , _        -> -1
+  | _        , Npos_inf -> 1
+  | Ninexact , Ninexact -> 0
 
 
 let rec pow_i i n =
@@ -394,7 +405,7 @@ let two_pow = pow_i 2
 (* predicate to determine if pushing a constant in for addition or multiplication could change the form *)
 let rec contains_const n =
   match n.nexp with
-  | Nvar _ | Nuvar _ | Npow _ | N2n _ | Npos_inf | Nneg_inf -> false
+  | Nvar _ | Nuvar _ | Npow _ | N2n _ | Npos_inf | Nneg_inf | Ninexact -> false
   | Nconst _ -> true
   | Nneg n -> contains_const n
   | Nmult(n1,n2) | Nadd(n1,n2) | Nsub(n1,n2) -> (contains_const n1) || (contains_const n2)
@@ -446,7 +457,7 @@ let negate n = match n.nexp with
 let rec normalize_nexp n =
   (*let _ = Printf.eprintf "Working on normalizing %s\n" (n_to_string n) in *)
   match n.nexp with
-  | Nconst _ | Nvar _ | Nuvar _ | Npos_inf | Nneg_inf -> n
+  | Nconst _ | Nvar _ | Nuvar _ | Npos_inf | Nneg_inf | Ninexact -> n
   | Nneg n -> 
     let n',to_recur,add_neg = (match n.nexp with
       | Nconst i -> negate n,false,false
@@ -579,8 +590,13 @@ let rec normalize_nexp n =
     let n1',n2' = normalize_nexp n1, normalize_nexp n2 in
     (match n1'.nexp,n2'.nexp with
     | Nneg_inf,Nneg_inf -> {nexp = Npos_inf}
+    | Npos_inf, Nconst i | Nconst i, Npos_inf ->
+      if eq_big_int i zero then n_zero else {nexp = Npos_inf}
+    | Nneg_inf, Nconst i | Nconst i, Nneg_inf ->
+      if eq_big_int i zero then n_zero else {nexp = Nneg_inf}
     | Nneg_inf, _ | _, Nneg_inf -> {nexp = Nneg_inf} (*TODO write a is_negative predicate*)
     | Npos_inf, _ | _, Npos_inf -> {nexp = Npos_inf}
+    | Ninexact, _ | _, Ninexact -> {nexp = Ninexact}
     | Nconst i1, Nconst i2 -> mk_c (mult_big_int i1 i2)
     | Nconst i1, N2n(n,Some i2) | N2n(n,Some i2),Nconst i1 ->
       if eq_big_int i1 two 
@@ -650,6 +666,8 @@ let rec normalize_nexp n =
 	    | _ -> mk_mult n2' n1')
 	| _ -> mk_mult (normalize_nexp (mk_mult n1' n21)) n22)
     | Nmult _ ,Nmult(n21,n22) -> mk_mult (mk_mult n21 n1') (mk_mult n22 n1')
+    | Nsub _, _ | _, Nsub _ -> 
+      let _ = Printf.eprintf "nsub case still around %s\n" (n_to_string n) in assert false 
     | Nneg _,_ | _,Nneg _ -> 
       let _ = Printf.eprintf "neg case still around %s\n" (n_to_string n) in assert false
     (* If things are normal, neg should be gone. *)
@@ -852,7 +870,7 @@ and occurs_in_nexp n_box nuvar : bool =
 let rec reduce_n_unifications n = 
   (*let _ = Printf.eprintf "reduce_n_unifications %s\n" (n_to_string n) in*)
   (match n.nexp with
-    | Nvar _ | Nconst _ | Npos_inf | Nneg_inf -> ()
+    | Nvar _ | Nconst _ | Npos_inf | Nneg_inf | Ninexact-> ()
     | N2n(n1,_) | Npow(n1,_) | Nneg n1 -> reduce_n_unifications n1
     | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> reduce_n_unifications n1; reduce_n_unifications n2
     | Nuvar nu ->
@@ -884,7 +902,7 @@ let equate_n (n_box : nexp) (n : nexp) : bool =
 	  | Some({nexp = Nuvar(u)}) -> set_bottom_nsubst swap u new_bot
 	  | Some(n_new) -> 
 	    if swap 
-	    then set_bottom_nsubst false (match new_bot.nexp with | Nuvar u -> u) n_new
+	    then set_bottom_nsubst false (match new_bot.nexp with | Nuvar u -> u | _ -> assert false) n_new
 	    else if nexp_eq n_new new_bot then true
 	    else false in
       match n_box.nexp,n.nexp with
@@ -1004,6 +1022,11 @@ let rec contains_nuvar n cs = match cs with
     (match contains_nuvar n b_cs with
       | [] -> contains_nuvar n cs
       | b -> BranchCons(so,b)::contains_nuvar n cs)
+  | (Predicate(so,c) as co)::cs ->
+    (match contains_nuvar n [c] with
+      | [] -> contains_nuvar n cs
+      | [c] -> co::contains_nuvar n cs
+      | _ -> assert false)
   | _::cs -> contains_nuvar n cs
 
 let rec refine_guarantees max_lt min_gt id cs =
@@ -1790,7 +1813,7 @@ and n_subst s_env n =
       | Some(TA_nexp n1) -> n1
       | _ -> mk_nv i)
   | Nuvar _ -> new_n()
-  | Nconst _ | Npos_inf | Nneg_inf -> n
+  | Nconst _ | Npos_inf | Nneg_inf | Ninexact -> n
   | N2n(n1,None) -> mk_2n (n_subst s_env n1) 
   | N2n(n1,Some(i)) -> n
   | Npow(n1,i) -> mk_pow (n_subst s_env n1) i
@@ -1826,6 +1849,7 @@ let rec cs_subst t_env cs =
       | _ -> ()); 
       InS(l,nexp,ns)::(cs_subst t_env cs)
     | InS(l,n,ns)::cs -> InS(l,n_subst t_env n,ns)::(cs_subst t_env cs)
+    | Predicate(l, c)::cs -> Predicate(l, List.hd(cs_subst t_env [c]))::(cs_subst t_env cs)
     | CondCons(l,cs_p,cs_e)::cs -> CondCons(l,cs_subst t_env cs_p,cs_subst t_env cs_e)::(cs_subst t_env cs)
     | BranchCons(l,bs)::cs -> BranchCons(l,cs_subst t_env bs)::(cs_subst t_env cs)
 
@@ -1888,7 +1912,7 @@ and ta_remove_unifications s_env ta =
 and n_remove_unifications s_env n =
   (*let _ = Printf.eprintf "n_remove_unifications %s\n" (n_to_string n) in*)
   match n.nexp with
-  | Nvar _ | Nconst _ | Npos_inf | Nneg_inf -> s_env
+  | Nvar _ | Nconst _ | Npos_inf | Nneg_inf | Ninexact -> s_env
   | Nuvar nu -> 
     let n' = match nu.nsubst with
       | None -> n
@@ -1952,6 +1976,7 @@ and n_to_nexp n =
     | Nconst i -> Nexp_constant (int_of_big_int i) (*TODO: Push more bigint around*) 
     | Npos_inf -> Nexp_constant max_int (*TODO: Not right*)
     | Nneg_inf -> Nexp_constant min_int (* see above *)
+    | Ninexact -> Nexp_constant min_int (*and above*)
     | Nmult(n1,n2) -> Nexp_times(n_to_nexp n1,n_to_nexp n2) 
     | Nadd(n1,n2) -> Nexp_sum(n_to_nexp n1,n_to_nexp n2) 
     | Nsub(n1,n2) -> Nexp_minus(n_to_nexp n1,n_to_nexp n2)
@@ -2021,6 +2046,12 @@ let compare_effect (BE_aux(e1,_)) (BE_aux(e2,_)) =
   | (BE_wmem,BE_wmem) -> 0
   | (BE_wmem,_) -> -1
   | (_,BE_wmem) -> 1
+  | (BE_wmv,BE_wmv) -> 0
+  | (BE_wmv, _ ) -> -1
+  | (_,BE_wmv) -> 1
+  | (BE_eamem,BE_eamem) -> 0
+  | (BE_eamem,_) -> -1
+  | (_,BE_eamem) -> 1
   | (BE_barr,BE_barr) -> 0
   | (BE_barr,_) -> 1
   | (_,BE_barr) -> -1
@@ -2031,6 +2062,9 @@ let compare_effect (BE_aux(e1,_)) (BE_aux(e2,_)) =
   | (BE_unspec,_) -> -1
   | (_,BE_unspec) -> 1
   | (BE_nondet,BE_nondet) -> 0
+  | (BE_nondet,_) -> -1
+  | (_,BE_nondet) -> 1
+  | (BE_depend,BE_depend) -> 0
 
 let effect_sort = List.sort compare_effect
 
@@ -2128,7 +2162,7 @@ let merge_bounds b1 b2 =
 	  match compare_variable_range b1 b2 with
 	    | -1 -> b1::(merge b1s (b2::b2s))
 	    | 1  -> b2::(merge (b1::b1s) b2s)
-	    | 0  -> (match b1,b2 with
+	    | _  -> (match b1,b2 with
 		| VR_eq(v,n1),VR_eq(_,n2) -> 
 		  if nexp_eq n1 n2 then b1 else VR_range(v,[Eq((Patt Unknown),n1,n2)])
 		| VR_eq(v,n),VR_range(_,ranges) | 
@@ -2182,7 +2216,7 @@ and conforms_to_ta d_env loosely within_coercion spec actual =
     | TA_eft  s, TA_eft  a -> conforms_to_e loosely s a
     | _ -> false
 and conforms_to_n loosely within_coercion op spec actual =
-(*  let _ = Printf.printf "conforms_to_n called, evaluated loosely? %b, with coercion? %b with %s and %s\n" 
+(*  let _ = Printf.eprintf "conforms_to_n called, evaluated loosely? %b, with coercion? %b with %s and %s\n" 
     loosely within_coercion (n_to_string spec) (n_to_string actual) in*)
   match (spec.nexp,actual.nexp,loosely,within_coercion) with
     | (Nconst si,Nconst ai,_,_) -> op si ai
@@ -2236,9 +2270,13 @@ let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 =
 	if i1 < i2 
 	then ({t= Tapp("range",[TA_nexp a1;TA_nexp a2])},csp)
 	else ({t=Tapp ("range",[TA_nexp a2;TA_nexp a1])},csp)
+      (*| Nconst _, Nuvar _ | Nuvar _, Nconst _->
+	(t1, csp@[Eq(co,a1,a2)])*) (*TODO This is the correct constraint. However, without the proper support for In checks actually working, this will cause specs to not build*)	
       | _ -> let nu1,nu2 = new_n (),new_n () in 
 	     ({t=Tapp("range",[TA_nexp nu1;TA_nexp nu2])},
 	      csp@[LtEq(co,enforce,nu1,a1);LtEq(co,enforce,nu1,a2);LtEq(co,enforce,a1,nu2);LtEq(co,enforce,a2,nu2)]))
+  | Tapp("vector",[TA_nexp _; TA_nexp l1; ord; ty1]),Tapp("vector",[TA_nexp _; TA_nexp l2; ord2; ty2]) ->
+    (t2, Eq(co,l1,l2)::((type_arg_eq co d_env enforce widen ord ord2)@(type_arg_eq co d_env enforce widen ty1 ty2)))
   | Tapp(id1,args1), Tapp(id2,args2) ->
     (*let _ = Printf.eprintf "checking consistency of %s and %s\n" id1 id2 in*)
     let la1,la2 = List.length args1, List.length args2 in
@@ -2543,7 +2581,7 @@ let rec in_constraint_env = function
 let rec contains_var nu n =
   match n.nexp with
   | Nvar _ | Nuvar _ -> nexp_eq_check nu n
-  | Nconst _ | Npos_inf | Nneg_inf -> false
+  | Nconst _ | Npos_inf | Nneg_inf | Ninexact -> false
   | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> contains_var nu n1 || contains_var nu n2
   | Nneg n | N2n(n,_) | Npow(n,_) -> contains_var nu n
 
@@ -2557,7 +2595,7 @@ let rec contains_in_vars in_env n =
 
 let rec subst_nuvars nu nc n =
   match n.nexp with
-  | Nconst _ | Nvar _ | Npos_inf | Nneg_inf -> n
+  | Nconst _ | Nvar _ | Npos_inf | Nneg_inf | Ninexact -> n
   | Nuvar _ -> if nexp_eq_check nu n then nc else n
   | Nmult(n1,n2) -> {nexp=Nmult(subst_nuvars nu nc n1,subst_nuvars nu nc n2)}
   | Nadd(n1,n2) -> {nexp=Nadd(subst_nuvars nu nc n1,subst_nuvars nu nc n2)}
@@ -2568,7 +2606,7 @@ let rec subst_nuvars nu nc n =
 
 let rec get_nuvars n =
   match n.nexp with
-    | Nconst _ | Nvar _ | Npos_inf | Nneg_inf -> []
+    | Nconst _ | Nvar _ | Npos_inf | Nneg_inf | Ninexact-> []
     | Nuvar _ -> [n]
     | Nmult(n1,n2) | Nadd(n1,n2) | Nsub(n1,n2) -> (get_nuvars n1)@(get_nuvars n2)
     | Nneg n | N2n(n,_) | Npow(n,_) -> get_nuvars n

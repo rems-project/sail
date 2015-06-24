@@ -135,7 +135,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 %token Enumerate Else Exit Extern False Forall Foreach Function_ If_ In IN Inc Let_ Member Nat Order 
 %token Pure Rec Register Scattered Struct Switch Then True TwoStarStar Type TYPE Typedef 
 %token Undefined Union With Val
-%token Barr Depend Rreg Wreg Rmem Wmem Undef Unspec Nondet
+%token Barr Depend Rreg Wreg Rmem Wmem Wmv Eamem Undef Unspec Nondet
 
 
 /* Avoid shift/reduce conflict - see right_atomic_exp rule */
@@ -316,6 +316,10 @@ effect:
     { efl BE_rmem } 
   | Wmem
     { efl BE_wmem }
+  | Wmv
+    { efl BE_wmv }
+  | Eamem
+    { efl BE_eamem }
   | Undef
     { efl BE_undef }
   | Unspec

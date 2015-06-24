@@ -117,6 +117,8 @@ let kw_table =
      ("wreg",                    (fun x -> Wreg));
      ("rmem",                    (fun x -> Rmem));
      ("wmem",                    (fun x -> Wmem));
+     ("wmv",                     (fun x -> Wmv));
+     ("eamem",                   (fun x -> Eamem));
      ("undef",                   (fun x -> Undef));
      ("unspec",                  (fun x -> Unspec));
      ("nondet",                  (fun x -> Nondet));

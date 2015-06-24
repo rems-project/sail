@@ -142,6 +142,8 @@ and pp_format_base_effect_lem (BE_aux(e,l)) =
     | BE_wreg -> "BE_wreg"
     | BE_rmem -> "BE_rmem"
     | BE_wmem -> "BE_wmem"
+    | BE_wmv  -> "BE_wmv"
+    | BE_eamem -> "BE_eamem"
     | BE_barr -> "BE_barr"
     | BE_depend -> "BE_depend"
     | BE_undef -> "BE_undef"
@@ -265,6 +267,7 @@ and pp_format_n n =
     | Nuvar _ -> "(Ne_var \"fresh_v_" ^ string_of_int (get_index n) ^ "\")"
     | Nneg_inf -> "(Ne_unary Ne_inf)"
     | Npow _ -> "power_not_implemented"
+    | Ninexact -> "(Ne_add Ne_inf (Ne_unary Ne_inf)"
 and pp_format_e e = 
   "(Effect_aux " ^
   (match e.effect with
@@ -440,6 +443,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
 	    | _ -> raise (Reporting_basic.err_unreachable l "Internal_exp given implicit without variable or const"))
         | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given non-vector or implicit"))
     | E_internal_cast ((_, Overload (_,_, _)), _) | E_internal_exp _ ->  raise (Reporting_basic.err_unreachable l "Found internal cast or exp with overload")
+   | E_internal_exp_user _ -> (raise (Reporting_basic.err_unreachable l "Found non-rewritten internal_exp_user"))
   in
   print_e ppf e
 
@@ -641,6 +645,8 @@ let doc_effect (BE_aux (e,_)) =
   | BE_wreg -> "wreg"
   | BE_rmem -> "rmem"
   | BE_wmem -> "wmem"
+  | BE_wmv  -> "wmv"
+  | BE_eamem -> "eamem"
   | BE_barr -> "barr"
   | BE_depend -> "depend"
   | BE_undef -> "undef"
@@ -932,7 +938,11 @@ let doc_exp, doc_let =
 	  | E_lit (L_aux(L_one, _)) | E_lit (L_aux(L_zero, _)) ->
 	    utf8string
 	      ("0b" ^ 
-		  (List.fold_right (fun (E_aux(E_lit(L_aux(l, _)),_)) rst -> match l with | L_one -> "1"^rst | L_zero -> "0"^rst) exps "")) 
+		  (List.fold_right (fun (E_aux( e,_)) rst ->
+		    (match e with 
+		      | E_lit(L_aux(l, _)) ->
+			((match l with | L_one -> "1" | L_zero -> "0" | L_undef -> "u" | _ -> assert false) ^ rst)
+		      | _ -> assert false)) exps "")) 
 	  | _ -> default_print ()))
   | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
     let default_string = 
@@ -996,9 +1006,7 @@ let doc_exp, doc_let =
 	  | Nvar v -> utf8string v
 	  | _ -> raise (Reporting_basic.err_unreachable l "Internal exp given implicit without var or const"))
       | _ ->  raise (Reporting_basic.err_unreachable l ("Internal exp given non-vector, non-implicit " ^ t_to_string t)))
-
-  (* XXX missing case
-     AAA internal_cast should never have an overload, if it's been seen it's a bug *)
+  | E_internal_exp_user _ -> raise (Reporting_basic.err_unreachable Unknown ("internal_exp_user not rewritten away"))
   | E_internal_cast ((_, Overload (_, _,_ )), _) | E_internal_exp _ -> assert false
 
   and let_exp (LB_aux(lb,_)) = match lb with

@@ -146,7 +146,8 @@ let rec quants_to_consts ((Env (d_env,t_env,b_env,tp_env)) as env) qis : (t_para
                     | K_Typ  -> TA_typ {t = Tvar i}
                     | K_Nat  -> TA_nexp { nexp = Nvar i}                      
                     | K_Ord  -> TA_ord { order = Ovar i}
-                    | K_Efct -> TA_eft { effect = Evar i} in
+                    | K_Efct -> TA_eft { effect = Evar i}
+		    | _ -> raise (Reporting_basic.err_unreachable l'' "illegal kind allowed") in
                   ((i,k)::ids,targ::typarms,cs)
 		| None -> raise (Reporting_basic.err_unreachable l'' "Unkinded id without default after initial check"))
 	    | KOpt_kind(kind,Kid_aux((Var i),l'')) -> 
@@ -155,7 +156,9 @@ let rec quants_to_consts ((Env (d_env,t_env,b_env,tp_env)) as env) qis : (t_para
                 | K_Typ  -> TA_typ {t = Tvar i}
                 | K_Nat  -> TA_nexp { nexp = Nvar i}                      
                 | K_Ord  -> TA_ord { order = Ovar i}
-                | K_Efct -> TA_eft { effect = Evar i} in
+                | K_Efct -> TA_eft { effect = Evar i}
+		| K_Lam _ -> typ_error l'' "kind -> kind not permitted here"
+		| _ -> raise (Reporting_basic.err_unreachable l'' "Kind either infer or internal here")  in
               ((i,k)::ids,targ::typarms,cs))
 	| QI_const(NC_aux(nconst,l')) -> 
 	  (*TODO: somehow the requirement vs best guarantee needs to be derived from user or context*)
@@ -227,7 +230,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 		       TA_ord d_env.default_o;TA_typ{t = Tid"bit"}])},lit
 	  | L_string s -> {t = Tid "string"},lit
 	  | L_undef -> typ_error l' "Cannot pattern match on undefined") in
-(*      let _ = Printf.eprintf "checking pattern literal. expected type is %s. t is %s\n" (t_to_string expect_t) (t_to_string t) in*)
+      (*let _ = Printf.eprintf "checking pattern literal. expected type is %s. t is %s\n" (t_to_string expect_t) (t_to_string t) in*)
       let t',cs' = type_consistent (Patt l) d_env Require true t expect_t in
       let cs_l = cs@cs' in
       (P_aux(P_lit(L_aux(lit,l')),(l,cons_tag_annot t emp_tag cs_l)),Envmap.empty,cs_l,nob,t)
@@ -315,7 +318,9 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	      let tup = {t = Ttup(List.map (fun (t,_,_,_) -> t) typ_pats)} in
 	      let ft = {t = Tfn(tup,t, IP_none,pure_e) } in
 	      let (ft_subst,cs,_,_) = subst vs false t cs pure_e in
-	      let subst_rtyp,subst_typs = match ft_subst.t with | Tfn({t=Ttup tups},rt,_,_) -> rt,tups in
+	      let subst_rtyp,subst_typs = 
+		match ft_subst.t with | Tfn({t=Ttup tups},rt,_,_) -> rt,tups 
+		  | _ -> raise (Reporting_basic.err_unreachable l "fields_to_rec gave a non function type") in
 	      let pat_checks = 
 		List.map2 (fun (_,id,l,pat) styp -> 
 		  let (pat,env,constraints,new_bounds,u) = check_pattern envs emp_tag styp pat in
@@ -327,7 +332,8 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
 	      let constraints = (List.fold_right (fun (_,_,cs,_) cons -> cs@cons) pat_checks [])@cs in
 	      let bounds = List.fold_right (fun (_,_,_,bounds) b_env -> merge_bounds bounds b_env) pat_checks nob in
               let t',cs' = type_consistent (Patt l) d_env Guarantee false ft_subst expect_t in
-	      (P_aux((P_record(pats',false)),(l,cons_tag_annot t' emp_tag (cs@cs'))),env,constraints@cs',bounds,t')))
+	      (P_aux((P_record(pats',false)),(l,cons_tag_annot t' emp_tag (cs@cs'))),env,constraints@cs',bounds,t')
+	    | _ -> raise (Reporting_basic.err_unreachable l "fields_to_rec returned a non Base tannot")))
     | P_vector pats -> 
       let (item_t, base, rise, ord) = match expect_actual.t with 
 	| Tapp("vector",[TA_nexp b;TA_nexp r;TA_ord o;TA_typ i]) -> (i,b,r,o)
@@ -711,15 +717,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       in
       let check_result ret imp tag cs ef lft rht =
         match imp with
-	  (*| IP_length _ ->  
-            let internal_exp =  match expect_t.t,ret.t with 
-              | Tapp("vector",_),_ -> 
-		E_aux (E_internal_exp (l,simple_annot expect_t), (l, simple_annot nat_t))
-              | _,Tapp("vector",_) -> 
-		E_aux (E_internal_exp (l,simple_annot ret), (l,simple_annot nat_t))
-              | _ -> typ_error l (i ^ " expected either the return type or the expected type to be a vector") in
-            type_coerce (Expr l) d_env false false ret (E_aux (E_app(op, [internal_exp;lft;rht]),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t*)
-          | IP_none -> 
+          | _ -> (*implicit isn't allowed at the moment on any infix functions *)
             type_coerce (Expr l) d_env Require false false b_env ret 
 	      (E_aux (E_app_infix(lft,op,rht),(l,(Base(([],ret),tag,cs,ef,nob))))) expect_t 
       in
@@ -874,7 +872,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         | (Odec,_) | (Ouvar _,Odec) | (Ovar _,Odec) -> 
           {t = Tapp("vector",[TA_nexp {nexp=Nconst (big_int_of_int (len-1))};
                               TA_nexp {nexp=Nconst (big_int_of_int len)};
-                              TA_ord {order= Odec}; TA_typ item_t])} in
+                              TA_ord {order= Odec}; TA_typ item_t])} 
+	| _ -> raise (Reporting_basic.err_unreachable l "Default order was neither inc or dec") in
       let t',cs',ef',e' = type_coerce (Expr l) d_env Guarantee false false b_env t 
 	(E_aux(E_vector es,(l,simple_annot t))) expect_t in
       (e',t',t_env,cs@cs',nob,union_effects effect ef')
@@ -886,7 +885,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let is_increasing = first <= last in
       let es,cs,effect,contains_skip,_ = (List.fold_right 
 			      (fun ((i,e),c,ef) (es,cs,effect,skips,prev) -> 
-				(*let _ = Printf.printf "Checking increasing %b %i %i\n" is_increasing prev i in*)
+				(*let _ = Printf.eprintf "Checking increasing %b %i %i\n" is_increasing prev i in*)
                                 let (esn, csn, efn) = (((i,e)::es), (c@cs), union_effects ef effect) in
 				if (is_increasing && prev > i)
 				then (esn,csn,efn,(((prev-i) > 1) || skips),i)
@@ -950,59 +949,44 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	(E_aux(E_vector_access(vec',i'),(l,simple_annot item_t))) expect_t in
       (e',t',t_env,cs_loc@cs_i@cs@cs',nob,union_effects ef (union_effects ef' ef_i))
     | E_vector_subrange(vec,i1,i2) ->
-      let base,rise,ord = new_n(),new_n(),new_o() in
-      let new_base,new_rise = new_n(),new_n() in
-      let n1,min1,max1 = new_n(), new_n(),new_n() in
-      let n2,min2,max2 = new_n(), new_n(),new_n() in
-      let base_e,rise_e,ord_e,item_t = match expect_t.t with
-	| Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord_n; TA_typ item_t]) -> base_n,rise_n,ord_n,item_t
-	| _ -> new_n(),new_n(),new_o(),new_t() in
-      let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t])} in
-      let (vec',t',_,cs,_,ef) = check_exp envs imp_param vt vec in
-      let i1t = {t=Tapp("atom",[TA_nexp n1])} in
+      (*let _ = Printf.eprintf "checking e_vector_subrange: expect_t is %s\n" (t_to_string expect_t) in*)
+      let base,length,ord = new_n(),new_n(),new_o() in
+      let new_length = new_n() in
+      let n1_size = new_n() in
+      let n2_size = new_n() in
+      let item_t = match expect_t.t with
+	| Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord_n; TA_typ item_t]) -> item_t
+	| _ -> new_t() in
+      let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp length;TA_ord ord;TA_typ item_t])} in
+      let (vec',vt',_,cs,_,ef) = check_exp envs imp_param vt vec in      
+      let i1t = {t=Tapp("atom",[TA_nexp n1_size])} in
       let (i1', ti1, _,cs_i1,_,ef_i1) = check_exp envs imp_param i1t i1 in
-      let i2t = {t=Tapp("atom",[TA_nexp n2])} in
+      let i2t = {t=Tapp("atom",[TA_nexp n2_size])} in
       let (i2', ti2, _,cs_i2,_,ef_i2) = check_exp envs imp_param i2t i2 in
       let cs_loc =
 	match (ord.order,d_env.default_o.order) with
 	  | (Oinc,_) -> 
-	    [Eq((Expr l), new_base, n1);
-	     Eq((Expr l), new_rise, mk_sub n2 n1);
-	     LtEq((Expr l),Require, min1, n1); LtEq((Expr l),Require, n1,max1);
-	     LtEq((Expr l),Require, min2, n2); LtEq((Expr l),Require, n2,max2);
-	     LtEq((Expr l),Require,base,n1); 
-	     LtEq((Expr l),Require,base,max1); 
-	     LtEq((Expr l),Require,n2,mk_add base rise);
-	     LtEq((Expr l),Require,max2,mk_add base rise);]
+	    [LtEq((Expr l), Require, base, n1_size);
+	     LtEq((Expr l), Require, n1_size, n2_size);
+	     LtEq((Expr l), Require, n2_size, mk_sub (mk_add base length) n_one);
+	     Eq((Expr l), new_length, mk_add (mk_sub n2_size n1_size) n_one)]
 	  | (Odec,_) ->
-	    [Eq((Expr l), new_base, n1);
-	     Eq((Expr l), new_rise, mk_add (mk_sub n1 n2) n_one);
-	     LtEq((Expr l), Require, min1, n1); LtEq((Expr l),Require, n1,max1);
-	     LtEq((Expr l), Require, min2, n2); LtEq((Expr l),Require, n2,max2);
-	     GtEq((Expr l),Require,base,n1); 
-	     GtEq((Expr l),Require,base,max1); 
-	     LtEq((Expr l),Require,n2,mk_add (mk_sub base rise) n_one);
-	     LtEq((Expr l),Require,max2,mk_add (mk_sub base rise) n_one);]	     
+	    [GtEq((Expr l), Require, base, n1_size);
+	     GtEq((Expr l), Require, n1_size, n2_size);
+	     GtEq((Expr l), Require, n2_size, mk_add (mk_sub base length) n_one);
+	     Eq((Expr l), new_length, mk_add (mk_sub n1_size n2_size) n_one)]	    
 	  | (_,Oinc) ->
-	    [Eq((Expr l), new_base, n1);
-	     Eq((Expr l), new_rise, mk_sub n2 n1);
-	     LtEq((Expr l),Require, min1, n1); LtEq((Expr l),Require, n1,max1);
-	     LtEq((Expr l),Require, min2, n2); LtEq((Expr l),Require, n2,max2);
-	     LtEq((Expr l),Require,base,n1); 
-	     LtEq((Expr l),Require,base,max1); 
-	     LtEq((Expr l),Require,n2,mk_add base rise);
-	     LtEq((Expr l),Require,max2,mk_add base rise);]
+	    [LtEq((Expr l), Require, base, n1_size);
+	     LtEq((Expr l), Require, n1_size, n2_size);
+	     LtEq((Expr l), Require, n2_size, mk_sub (mk_add base length) n_one);
+	     Eq((Expr l), new_length, mk_add (mk_sub n2_size n1_size) n_one)]
 	  | (_,Odec) -> 
-	    [Eq((Expr l), new_base, n1);
-	     Eq((Expr l), new_rise, mk_add (mk_sub n1 n2) n_one);
-	     LtEq((Expr l), Require, min1, n1); LtEq((Expr l),Require, n1,max1);
-	     LtEq((Expr l), Require, min2, n2); LtEq((Expr l),Require, n2,max2);
-	     GtEq((Expr l),Require,base,n1); 
-	     GtEq((Expr l),Require,base,max1); 
-	     LtEq((Expr l),Require,n2,mk_add (mk_sub base rise) n_one);
-	     LtEq((Expr l),Require,max2,mk_add (mk_sub base rise) n_one);]	     
+	    [GtEq((Expr l), Require, base, n1_size);
+	     GtEq((Expr l), Require, n1_size, n2_size);
+	     GtEq((Expr l), Require, n2_size, mk_add (mk_sub base length) n_one);
+	     Eq((Expr l), new_length, mk_add (mk_sub n1_size n2_size) n_one)]
 	  | _ -> typ_error l "A vector must be either increasing or decreasing to access a slice" in
-      let nt = {t=Tapp("vector",[TA_nexp new_base;TA_nexp new_rise; TA_ord ord;TA_typ item_t])} in
+      let nt = {t = Tapp("vector", [TA_nexp n1_size; TA_nexp new_length; TA_ord ord; TA_typ item_t]) } in
       let (t,cs3,ef3,e') = 
 	type_coerce (Expr l) d_env Require false false b_env nt 
 	  (E_aux(E_vector_subrange(vec',i1',i2'),(l,constrained_annot nt cs_loc))) expect_t in
@@ -1134,7 +1118,6 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       (match u_actual.t with
 	| Tid(n) | Tapp(n,_)->
 	  (match lookup_record_typ n d_env.rec_env with 
-	    | None -> typ_error l ("Expected a value of type " ^ n ^ " but found a struct")
 	    | Some(((i,Record,(Base((params,t),tag,cs,eft,bounds)),fields) as r)) -> 
 	      let (ts,cs,eft,subst_env) = subst params false t cs eft in
 	      if (List.length fexps = List.length fields) 
@@ -1143,18 +1126,19 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 		   let (t',cs',ef',e') = type_coerce (Expr l) d_env Guarantee false false b_env ts e expect_t in
 		   (e',t',t_env,cs@cons@cs',nob,union_effects ef ef')
 	      else typ_error l ("Expected a struct of type " ^ n ^ ", which should have " ^ string_of_int (List.length fields) ^ " fields")
-	    | Some(i,Register,tannot,fields) -> typ_error l ("Expected a value with register type, found a struct"))
+	    | Some(i,Register,tannot,fields) -> typ_error l ("Expected a value with register type, found a struct")
+	    | _ -> typ_error l ("Expected a value of type " ^ n ^ " but found a struct"))	    
 	| Tuvar _ ->
 	  let field_names = List.map (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) -> id_to_string id) fexps in
 	  (match lookup_record_fields field_names d_env.rec_env with
-	    | None -> typ_error l "No struct type matches the set of fields given"
 	    | Some(((i,Record,(Base((params,t),tag,cs,eft,bounds)),fields) as r)) ->
 	      let (ts,cs,eft,subst_env) = subst params false t cs eft in
 	      let fexps,cons,ef = List.fold_right (field_walker r subst_env bounds tag i) fexps ([],[],pure_e) in 
 	      let e = E_aux(E_record(FES_aux(FES_Fexps(fexps,false),l')),(l,simple_annot ts)) in
 	      let (t',cs',ef',e') = type_coerce (Expr l) d_env Guarantee false false b_env ts e expect_t in
 	      (e',t',t_env,cs@cons@cs',nob,union_effects ef ef')
-	    | Some(i,Register,tannot,fields) -> typ_error l "Expected a value with register type, found a struct")
+	    | Some(i,Register,tannot,fields) -> typ_error l "Expected a value with register type, found a struct"
+	    | _ -> typ_error l "No struct type matches the set of fields given")
 	| _ -> typ_error l ("Expected an expression of type " ^ t_to_string expect_t ^ " but found a struct"))
     | E_record_update(exp,FES_aux(FES_Fexps(fexps,_),l')) -> 
       let (e',t',_,c,_,ef) = check_exp envs imp_param expect_t exp in
@@ -1170,7 +1154,6 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       (match t'.t with
 	| Tid i | Tabbrev(_, {t=Tid i}) | Tapp(i,_) ->
 	  (match lookup_record_typ i d_env.rec_env with
-	    | None -> typ_error l ("Expected a struct for this update, instead found an expression with type " ^ i)
 	    | Some((i,Register,tannot,fields)) -> typ_error l "Expected a struct for this update, instead found a register"
 	    | Some(((i,Record,(Base((params,t),tag,cs,eft,bounds)),fields) as r)) ->
 	      if (List.length fexps <= List.length fields) 
@@ -1180,7 +1163,9 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 		let e = E_aux(E_record_update(e',FES_aux(FES_Fexps(fexps,false),l')), (l,simple_annot ts)) in
 		let (t',cs',ef',e') = type_coerce (Expr l) d_env Guarantee false false b_env ts e expect_t in
 		(e',t',t_env,cs@cons@cs',nob,union_effects ef ef')
-	      else typ_error l ("Expected fields from struct " ^ i ^ ", given more fields than struct includes"))
+	      else typ_error l ("Expected fields from struct " ^ i ^ ", given more fields than struct includes")
+	    | _ -> 
+	      typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i))
 	| Tuvar _ ->
 	  let field_names = List.map (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) -> id_to_string id) fexps in
 	  (match lookup_possible_records field_names d_env.rec_env with
@@ -1200,8 +1185,6 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       (match t'.t with
       | Tabbrev({t=Tid i}, _) | Tabbrev({t=Tapp(i,_)},_) | Tid i | Tapp(i,_) ->
 	  (match lookup_record_typ i d_env.rec_env with
-	    | None -> 
-	      typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i)
 	    | Some(((i,rec_kind,(Base((params,t),tag,cs,eft,bounds)),fields) as r)) ->
 	      let (ts,cs,eft,subst_env) = subst params false t cs eft in
 	      (match lookup_field_type fi r with
@@ -1212,7 +1195,9 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 		  let (et',c',ef',acc) = 
 		    type_coerce (Expr l) d_env Require false false b_env ft 
 		      (E_aux(E_field(e',id),(l,Base(([],ft),tag,cs,eft,bounds)))) expect_t in
-		  (acc,et',t_env,cs@c'@c_sub@cs_sub',nob,union_effects ef' ef_sub)))
+		  (acc,et',t_env,cs@c'@c_sub@cs_sub',nob,union_effects ef' ef_sub))
+	    | _ -> 
+	      typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i))
 	| Tuvar _ ->
 	  (match lookup_possible_records [fi] d_env.rec_env with
 	    | [] -> typ_error l ("No struct or register has a field " ^ fi)
@@ -1252,12 +1237,12 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let (lexp',t',_,t_env',tag,cs,b_env',ef) = check_lexp envs imp_param true lexp in
       let (exp',t'',_,cs',_,ef') = check_exp envs imp_param t' exp in
       let (t',c') = type_consistent (Expr l) d_env Require false unit_t expect_t in
-      (*let _ = Printf.eprintf "Constraints for E_assign %s\n" (constraints_to_string (cs@cs'@c')) in*)
       (E_aux(E_assign(lexp',exp'),(l,(Base(([],unit_t),tag,[],ef,nob)))),unit_t,t_env',cs@cs'@c',b_env',union_effects ef ef')
     | E_exit e ->
       let (e',t',_,_,_,_) = check_exp envs imp_param (new_t ()) e in
       (E_aux (E_exit e',(l,(simple_annot expect_t))),expect_t,t_env,[],nob,pure_e)
-    | E_internal_cast _ | E_internal_exp _ -> raise (Reporting_basic.err_unreachable l "Internal expression passed back into type checker")
+    | E_internal_cast _ | E_internal_exp _ | E_internal_exp_user _ -> 
+      raise (Reporting_basic.err_unreachable l "Internal expression passed back into type checker")
 		    
 and check_block envs imp_param expect_t exps:((tannot exp) list * tannot * nexp_range list * t * effect) =
   let Env(d_env,t_env,b_env,tp_env) = envs in
@@ -1313,7 +1298,8 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
               (LEXP_aux(lexp,(l,(Base(([],t'),Alias,[],ef,nob)))), t, false, Envmap.empty, External (Some reg),[],nob,ef)
             | Some(TwoReg(reg1,reg2, (Base(([],t'),_,_,_,_)))) ->
 	      let u = match t.t with
-		| Tapp("register", [TA_typ u]) -> u in
+		| Tapp("register", [TA_typ u]) -> u 
+		| _ -> raise (Reporting_basic.err_unreachable l "TwoReg didn't contain a register type") in
               (LEXP_aux(lexp,(l,Base(([],t'),Alias,[],ef,nob))), u, false, Envmap.empty, External None,[],nob,ef)
             | _ -> assert false)
 	| Some(Base((parms,t),tag,cs,_,b)) ->
@@ -1369,8 +1355,9 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
 	      (match ef'.effect with
 		| Eset effects ->
                   let mem_write = List.exists (fun (BE_aux(b,_)) -> match b with | BE_wmem -> true | _ -> false) effects in
+		  let memv_write = List.exists (fun (BE_aux(b,_)) -> match b with |BE_wmv -> true | _ -> false) effects in
                   let reg_write = List.exists (fun (BE_aux(b,_)) -> match b with | BE_wreg -> true | _ -> false) effects in
-		  if  (mem_write || reg_write)
+		  if  (mem_write || memv_write || reg_write)
 		  then
                     let app,cs_a = get_abbrev d_env apps in
                     let out,cs_o = get_abbrev d_env out in
@@ -1406,8 +1393,8 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
 			let ef_all = union_effects ef ef_e in
 			(LEXP_aux(LEXP_memory(id,[e]),(l,Base(([],out),tag,cs_call,ef,nob))),
 			 app,false,Envmap.empty,tag,cs_call@cs_e,nob,ef_all))
-		  else typ_error l ("Assignments require functions with a wmem or wreg effect")
-		| _ -> typ_error l ("Assignments require functions with a wmem or wreg effect"))
+		  else typ_error l ("Assignments require functions with a wmem, wmv, or wreg effect")
+		| _ -> typ_error l ("Assignments require functions with a wmem, wmv, or wreg effect"))
 	    | _ -> typ_error l ("Assignments require a function here, found " ^ i ^ " which has type " ^ (t_to_string t)))
 	| _ -> typ_error l ("Unbound identifier " ^ i))
     | LEXP_cast(typ,id) -> 
@@ -1485,55 +1472,49 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
 	  typ_error l "Assignment expected a vector with a known order, try adding an annotation."
 	| _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string vec_t))) 
     | LEXP_vector_range(vec,e1,e2)-> 
-      let (vec',item_t,reg_required,env,tag,csi,bounds,ef) = check_lexp envs imp_param false vec in
-      let item_t,cs = get_abbrev d_env item_t in
-      let item_actual = match item_t.t with | Tabbrev(_,t) -> t | _ -> item_t in
-      let item_actual,add_reg_write,reg_still_required,cs = 
-	match item_actual.t with
+      let (vec',vec_t,reg_required,env,tag,csi,bounds,ef) = check_lexp envs imp_param false vec in
+      let vec_t,cs = get_abbrev d_env vec_t in
+      let vec_actual = match vec_t.t with | Tabbrev(_,t) -> t | _ -> vec_t in
+      let vec_actual,add_reg_write,reg_still_required,cs = 
+	match vec_actual.t with
 	  | Tapp("register",[TA_typ t]) ->
 	    (match get_abbrev d_env t with | {t=Tabbrev(_,t)},cs' | t,cs' -> t,true,false,cs@cs')
 	  | Tapp("reg",[TA_typ t]) ->
 	    (match get_abbrev d_env t with | {t=Tabbrev(_,t)},cs' | t,cs' -> t,false,false,cs@cs')
-	  | _ -> item_actual,false,true,cs in
-      (match item_actual.t with
+	  | _ -> vec_actual,false,true,cs in
+      (match vec_actual.t with
 	| Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ t]) ->
-	  let base_e1,range_e1,base_e2,range_e2 = new_n(),new_n(),new_n(),new_n() in
-	  let base_t = {t=Tapp("range",[TA_nexp base_e1;TA_nexp range_e1])} in
-	  let range_t = {t=Tapp("range",[TA_nexp base_e2;TA_nexp range_e2])} in
-	  let (e1',base_t',_,cs1,_,ef_e) = check_exp envs imp_param base_t e1 in
-	  let (e2',range_t',_,cs2,_,ef_e') = check_exp envs imp_param range_t e2 in
-	  let base_e1,range_e1,base_e2,range_e2 = match base_t'.t,range_t'.t with
-	    | (Tapp("range",[TA_nexp base_e1;TA_nexp range_e1]),
-	       Tapp("range",[TA_nexp base_e2;TA_nexp range_e2])) -> base_e1,range_e1,base_e2,range_e2
-	    | _ -> base_e1,range_e1,base_e2,range_e2 in
-          let len = new_n() in
+	  let size_e1,size_e2 = new_n(),new_n() in
+	  let e1_t = {t=Tapp("atom",[TA_nexp size_e1])} in
+	  let e2_t = {t=Tapp("atom",[TA_nexp size_e2])} in
+	  let (e1',e1_t',_,cs1,_,ef_e) = check_exp envs imp_param e1_t e1 in
+	  let (e2',e2_t',_,cs2,_,ef_e') = check_exp envs imp_param e2_t e2 in
+	  let len = new_n() in
 	  let needs_reg = match t.t with
 	    | Tapp("reg",_) -> false
 	    | Tapp("register",_) -> false
 	    | _ -> true in
 	  let cs_t,res_t = match ord.order with
-	    | Oinc ->  ([LtEq((Expr l),Require,base,base_e1);
-			 LtEq((Expr l),Require,mk_add base_e1 range_e1, mk_add base_e2 range_e2);
-			 LtEq((Expr l),Require,mk_add base_e1 range_e2, mk_add base rise);
-                         LtEq((Expr l),Require,len, mk_sub (mk_add (mk_add base_e2 range_e2) n_one) 
-			                                   (mk_add base_e1 range_e1))],
-			{t=Tapp("vector",[TA_nexp base_e1;TA_nexp len;TA_ord ord;TA_typ t])})
-	    | Odec -> ([GtEq((Expr l),Require,base,base_e1);
-			GtEq((Expr l),Require,mk_add base_e1 range_e1,mk_add base_e2 range_e2);
-			GtEq((Expr l),Require,mk_add base_e1 range_e2,mk_sub base rise);                         
-                        LtEq((Expr l),Require,len, mk_sub (mk_add (mk_add base_e2 range_e2) n_one)
-			                                  (mk_add base_e1 range_e1));],
-                       {t=Tapp("vector",[TA_nexp {nexp=Nadd(base_e1,range_e1)};TA_nexp len;TA_ord ord; TA_typ t])})
+	    | Oinc ->  ([LtEq((Expr l),Require,base,size_e1);
+			 LtEq((Expr l),Require,size_e1, size_e2);
+			 LtEq((Expr l),Require,size_e2, rise);
+                         Eq((Expr l),len, mk_add (mk_sub size_e2 size_e1) n_one)],
+			{t=Tapp("vector",[TA_nexp size_e1;TA_nexp len;TA_ord ord;TA_typ t])})
+	    | Odec -> ([GtEq((Expr l),Require,base,size_e1);
+			GtEq((Expr l),Require,size_e1,size_e2);
+			GtEq((Expr l),Require,size_e2,mk_sub base rise);                         
+                        Eq((Expr l),len, mk_add (mk_sub size_e1 size_e2) n_one)],
+                       {t=Tapp("vector",[TA_nexp size_e1;TA_nexp len;TA_ord ord; TA_typ t])})
 	    | _ -> typ_error l ("Assignment to a range of vector elements requires either inc or dec order")
 	  in
 	  let cs = cs_t@cs@cs1@cs2 in
 	  let ef = union_effects ef (union_effects ef_e ef_e') in
 	  if is_top && reg_required && reg_still_required && needs_reg 
 	  then typ_error l "Assignment requires a register or a non-parameter, non-letbound local identifier"
-	  else (LEXP_aux(LEXP_vector_range(vec',e1',e2'),(l,Base(([],item_t),tag,cs,ef,nob))),res_t,reg_required&&reg_still_required && needs_reg
-		,env,tag,cs,bounds,ef)
+	  else (LEXP_aux(LEXP_vector_range(vec',e1',e2'),(l,Base(([],res_t),tag,cs,ef,nob))),
+		res_t,reg_required&&reg_still_required && needs_reg,env,tag,cs,bounds,ef)
 	| Tuvar _ -> typ_error l "Assignement to a range of elements requires a vector with a known order, try adding an annotation."
-	| _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string item_t))) 
+	| _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string vec_t))) 
     | LEXP_field(vec,id)-> 
       let (vec',item_t,reg_required,env,tag,csi,bounds,ef) = check_lexp envs imp_param false vec in
       let vec_t = match vec' with
@@ -1543,8 +1524,6 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
       (match vec_t.t with
 	| Tid i | Tabbrev({t=Tid i},_) | Tabbrev({t=Tapp(i,_)},_) | Tapp(i,_)->
 	  (match lookup_record_typ i d_env.rec_env with
-	    | None -> 
-	      typ_error l ("Expected a register or struct for this update, instead found an expression with type " ^ i)
 	    | Some(((i,rec_kind,(Base((params,t),tag,cs,eft,bounds)),fields) as r)) ->
 	      let (ts,cs,eft,subst_env) = subst params false t cs eft in
 	      (match lookup_field_type fi r with
@@ -1552,7 +1531,9 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
                 | Some t ->
 		  let ft = typ_subst subst_env false t in
 		  let (_,cs_sub') = type_consistent (Expr l) d_env Guarantee false ts vec_t in
-		  (LEXP_aux(LEXP_field(vec',id),(l,(Base(([],ft),tag,csi@cs,eft,nob)))),ft,false,env,tag,csi@cs@cs_sub',bounds,ef)))
+		  (LEXP_aux(LEXP_field(vec',id),(l,(Base(([],ft),tag,csi@cs,eft,nob)))),ft,false,env,tag,csi@cs@cs_sub',bounds,ef))
+	    | _ -> 
+	      typ_error l ("Expected a register or struct for this update, instead found an expression with type " ^ i))
 	| _ -> typ_error l ("Expected a register binding here, found " ^ (t_to_string item_t)))
 
 and check_lbind envs imp_param is_top_level emp_tag (LB_aux(lbind,(l,annot))) : tannot letbind * tannot emap * nexp_range list * bounds_env * effect =
@@ -1723,23 +1704,25 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   let is_rec = match recopt with
               | Rec_aux(Rec_nonrec,_) -> false
 	      | Rec_aux(Rec_rec,_) -> true in
-  let Some(id) = List.fold_right 
-    (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,annot))) id' ->
-      match id' with
-	| Some(id') -> if id' = id_to_string id then Some(id') 
-	  else typ_error l ("Function declaration expects all definitions to have the same name, " 
-			    ^ id_to_string id ^ " differs from other definitions of " ^ id')
-	| None -> Some(id_to_string id)) funcls None in
+  let id = match (List.fold_right 
+		    (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,annot))) id' ->
+		      match id' with
+			| Some(id') -> if id' = id_to_string id then Some(id') 
+			  else typ_error l ("Function declaration expects all definitions to have the same name, " 
+					    ^ id_to_string id ^ " differs from other definitions of " ^ id')
+			| None -> Some(id_to_string id)) funcls None) with
+    | Some id -> id 
+    | None -> raise (Reporting_basic.err_unreachable l "funcl list might be empty") in
   let in_env = Envmap.apply t_env id in 
-  let typ_params = match in_env with
-    | Some(Base( (params,u),Spec,constraints,eft,_)) -> params
-    | None -> [] in
+  let (typ_params,has_spec) = match in_env with
+    | Some(Base( (params,u),Spec,constraints,eft,_)) -> params,true
+    | _ -> [],false in
   let ret_t,param_t,tannot,t_param_env = match tannotopt with
     | Typ_annot_opt_aux(Typ_annot_opt_some(typq,typ),l') ->
       let (ids,_,constraints) = typq_to_params envs typq in
       let t = typ_to_t false false typ in
-      (*TODO add check that ids == typ_params*)
-      let t,constraints,_,t_param_env = subst typ_params true t constraints pure_e in
+      (*TODO add check that ids == typ_params when has_spec*)
+      let t,constraints,_,t_param_env = subst (if has_spec then typ_params else ids) true t constraints pure_e in
       let p_t = new_t () in
       let ef = new_e () in
       t,p_t,Base((ids,{t=Tfn(p_t,t,IP_none,ef)}),Emp_global,constraints,ef,nob),t_param_env in
@@ -1753,7 +1736,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
 	  check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env true) t_env t_env', 
 			 merge_bounds b_env b_env',tp_env)) imp_param ret_t exp in
 	(*let _ = Printf.eprintf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in
-	let _ = Printf.eprintf "constraints were %s\n" (constraints_to_string (cs_p@cs_e)) in*)
+	let _ = Printf.eprintf "constraints were pattern: %s\n expression: %s\n" (constraints_to_string cs_p) (constraints_to_string cs_e) in*)
 	let cs = [CondCons(Fun l,cs_p,cs_e)] in
 	(FCL_aux((FCL_Funcl(id,pat',exp')),(l,(Base(([],ret_t),Emp_global,cs,ef,nob)))),(cs,ef))) funcls) in
   let update_pattern var (FCL_aux ((FCL_Funcl(id,(P_aux(pat,t)),exp)),annot)) = 
@@ -1832,13 +1815,13 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
 		  let tannot = Base(([],et),Alias,[],pure_e,nob) in
 		  let d_env = {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, (OneReg(reg,tannot)))} in
 		  (AL_aux(AL_subreg(reg_a,subreg),(l,tannot)),tannot,d_env)))
-	| _ -> let _ = Printf.eprintf "%s\n" (t_to_string reg_t) in assert false)
+	| _ -> typ_error l ("Expected a register with fields, given " ^ (t_to_string reg_t)))
     | AL_bit(reg_a,bit) -> 
       let (reg,reg_a,reg_t,t) = check_reg reg_a in
       let (E_aux(bit,(le,eannot)),_,_,_,_,_) = check_exp envs None (new_t ()) bit in
       (match t.t with
 	| Tapp("vector",[TA_nexp base;TA_nexp len;TA_ord order;TA_typ item_t]) ->
-	  match (base.nexp,len.nexp,order.order, bit) with
+	  (match (base.nexp,len.nexp,order.order, bit) with
 	    | (Nconst i,Nconst j,Oinc, E_lit (L_aux((L_num k), ll))) ->
 	      if (int_of_big_int i) <= k && ((int_of_big_int i) + (int_of_big_int j)) >= k 
 	      then let tannot = Base(([],item_t),Alias,[],pure_e,nob) in
@@ -1846,14 +1829,15 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
 		     {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, (OneReg(reg,tannot)))} in
 		   (AL_aux(AL_bit(reg_a,(E_aux(bit,(le,eannot)))), (l,tannot)), tannot,d_env)
 	      else typ_error ll ("Alias bit lookup must be in the range of the vector in the register")
-	    | _ -> assert false)
+	    | _ -> typ_error l ("Alias bit lookup must have a constant index"))
+	| _ -> typ_error l ("Alias bit lookup must refer to a register with type vector, found " ^ (t_to_string t)))
     | AL_slice(reg_a,sl1,sl2) -> 
       let (reg,reg_a,reg_t,t) = check_reg reg_a in 
       let (E_aux(sl1,(le1,eannot1)),_,_,_,_,_) = check_exp envs None (new_t ()) sl1 in
       let (E_aux(sl2,(le2,eannot2)),_,_,_,_,_) = check_exp envs None (new_t ()) sl2 in
       (match t.t with
 	| Tapp("vector",[TA_nexp base;TA_nexp len;TA_ord order;TA_typ item_t]) ->
-	  match (base.nexp,len.nexp,order.order, sl1,sl2) with
+	  (match (base.nexp,len.nexp,order.order, sl1,sl2) with
 	    | (Nconst i,Nconst j,Oinc, E_lit (L_aux((L_num k), ll)),E_lit (L_aux((L_num k2), ll2))) ->
 	      if (int_of_big_int i) <= k && ((int_of_big_int i) + (int_of_big_int j)) >= k2 && k < k2 
 	      then let t = {t = Tapp("vector",[TA_nexp (int_to_nexp k);TA_nexp (int_to_nexp ((k2-k) +1));
@@ -1864,7 +1848,8 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
 		   (AL_aux(AL_slice(reg_a,(E_aux(sl1,(le1,eannot1))),(E_aux(sl2,(le2,eannot2)))),
 			   (l,tannot)), tannot,d_env)
 	      else typ_error ll ("Alias slices must be in the range of the vector in the register")
-	    | _ -> assert false)
+	    | _ -> typ_error l ("Alias slices must have constant slices"))
+	| _ -> typ_error l ("Alias slices must point to a register with a vector type: found " ^ (t_to_string t)))
     | AL_concat(reg1_a,reg2_a) -> 
       let (reg1,reg1_a,reg_t,t1) = check_reg reg1_a in
       let (reg2,reg2_a,reg_t,t2) = check_reg reg2_a in
@@ -1875,7 +1860,9 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
 	  let t = {t= Tapp("register",[TA_typ {t= Tapp("vector",[TA_nexp b1; TA_nexp {nexp = Nadd(r,r2)}; TA_ord {order = Oinc}; TA_typ item_t])}])} in
 	  let tannot = Base(([],t),Alias,[],pure_e,nob) in
 	  let d_env = {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, TwoReg(reg1,reg2,tannot))} in
-	  (AL_aux (AL_concat(reg1_a,reg2_a), (l,tannot)), tannot, d_env))
+	  (AL_aux (AL_concat(reg1_a,reg2_a), (l,tannot)), tannot, d_env)
+	| _ -> typ_error l 
+	  ("Alias concatentaion must connect two registers with vector type, found " ^ t_to_string t1 ^ " and " ^ t_to_string t2))
 
 (*val check_def : envs -> tannot def -> (tannot def) envs_out*)
 let check_def envs def = 
