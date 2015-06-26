@@ -1245,7 +1245,10 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
       then let is_inc = (match typ with 
 	| T_app "vector" (T_args [_;_;T_arg_order (Ord_aux Ord_inc _);_]) -> IInc | _ -> IDec end) in
            (Value (litV_to_vec lit is_inc),l_mem,l_env) 
-      else (Value (V_lit lit), l_mem,l_env)
+      else (Value (V_lit (match lit with
+	                | L_aux L_false loc -> L_aux L_zero loc
+			| L_aux L_true loc -> L_aux L_one loc
+			| _ -> lit end)), l_mem,l_env)
     | E_cast ((Typ_aux typ _) as ctyp) exp -> 
       (*Cast is either a no-op, a signal to read a register, or a signal to change the start of a vector *)
       resolve_outcome 
@@ -1898,7 +1901,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		     (List_extra.head reved,V_tuple (List.reverse (List_extra.tail reved))) end in 
                 mk_hole_frame (Write_mem (id_of_string name_ext) v Nothing wv)
 	  else if has_eamem_effect effects
-	  then mk_hole_frame (Write_ea (id_of_string name_ext) v)
+	  then mk_thunk_frame (Write_ea (id_of_string name_ext) v)
 	  else if has_wmv_effect effects
 	  then mk_hole_frame (Write_memv (id_of_string name_ext) v)
           else mk_hole_frame (Call_extern name_ext v) 

@@ -481,7 +481,10 @@ let rec interp_to_outcome mode context thunk =
     | Interp.Write_memv (Id_aux (Id i) _) write_val ->
        match List.lookup i mem_write_vals with
 	 | (Just (MV return)) -> 
-	   let (value, v_tracking) = (extern_mem_value mode write_val) in
+	   let (value, v_tracking) = 
+	     match (Interp.detaint write_val) with
+	       | Interp.V_tuple[_;v] -> (extern_mem_value mode (Interp.retaint write_val v))
+	       | _ -> (extern_mem_value mode write_val) end in
 	   Write_memv value v_tracking 
 	     (fun b -> 
 	       match return with
