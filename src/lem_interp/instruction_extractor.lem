@@ -21,7 +21,7 @@ let rec extract_ityp t tag = match (t,tag) with
   | (T_id "bool",_) -> IBit
   | (T_app "vector" (T_args [_; T_arg_nexp (Ne_const len); _; T_arg_typ (T_id "bit")]),_) ->
     IBitvector (Just (natFromInteger len))
-  | (T_app "vector" (T_args [_;_;_;T_arg_typ (T_id "bit")]),_) -> IBitvector Nothing
+  | (T_app "vector" (T_args [_;_;_;T_arg_typ (T_id "bit")]),_) -> IBitvector (Just 64)
   | (T_app "atom" (T_args [T_arg_nexp (Ne_const num)]),_) ->
     IRange (Just (natFromInteger num))
   | (T_app "atom" _,_) -> IRange Nothing

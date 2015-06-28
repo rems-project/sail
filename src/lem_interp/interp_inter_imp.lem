@@ -202,11 +202,11 @@ let rec extern_mem_value mode v = match v with
   | _ -> Assert_extra.failwith ("extern_mem_value received non-externable value " ^ (Interp.string_of_value v))
 end 
 
-let rec extern_ifield_value v ftyp = match (v,ftyp) with
-  | (Interp.V_track v regs,_) -> extern_ifield_value v ftyp
+let rec extern_ifield_value i_name field_name v ftyp = match (v,ftyp) with
+  | (Interp.V_track v regs,_) -> extern_ifield_value i_name field_name v ftyp
   | (Interp.V_vector fst inc bits,_) -> bits_from_ibits bits
   | (Interp.V_vector_sparse fst stop inc bits default,_) ->
-    extern_ifield_value (Interp_lib.fill_in_sparse v) ftyp
+    extern_ifield_value i_name field_name (Interp_lib.fill_in_sparse v) ftyp
   | (Interp.V_lit (L_aux L_zero _),_) -> [Bitc_zero]
   | (Interp.V_lit (L_aux L_false _),_) -> [Bitc_zero]
   | (Interp.V_lit (L_aux L_one _),_) ->  [Bitc_one]
@@ -216,7 +216,7 @@ let rec extern_ifield_value v ftyp = match (v,ftyp) with
   | (Interp.V_lit (L_aux (L_num i) _),_) -> bit_list_of_integer 64 i
   | (Interp.V_ctor _ _ (Interp.C_Enum i) _,Enum _ n) -> bit_list_of_integer n (integerFromNat i)
   | (Interp.V_ctor _ _ (Interp.C_Enum i) _,_) -> bit_list_of_integer 64 (integerFromNat i)
-  | _ -> Assert_extra.failwith ("extern_ifield_value given non-externable " ^ (Interp.string_of_value v) ^ " ftyp is " ^ show ftyp)
+  | _ -> Assert_extra.failwith ("extern_ifield_value of " ^ i_name ^ " for field " ^ field_name ^ " given non-externable " ^ (Interp.string_of_value v) ^ " ftyp is " ^ show ftyp)
 end 
 
 let rec slice_reg_value v start stop = 
@@ -297,10 +297,16 @@ let rec interp_to_value_helper arg instr direction thunk =
 	| Just f  -> 
           interp_to_value_helper arg instr direction (fun _ -> Interp.resume (make_interp_mode true false) stack (Just (f value)))
       end 
-    | Interp.Action (Interp.Exit (E_aux e _)) _ ->
+    | Interp.Action (Interp.Exit (E_aux e _)) stack ->
       match e with
 	| E_id (Id_aux (Id "unsupported_instruction") _) -> (Nothing,Just (Unsupported_instruction_error instr))
 	| E_id (Id_aux (Id "no_matching_pattern") _) -> (Nothing,Just (Not_an_instruction_error arg))
+	| E_lit (L_aux (L_string str) _) -> (Nothing, Just (Internal_error ("Exit called with message: " ^ str)))
+	| E_id _ -> (match (Interp.resume (make_interp_mode true false) stack Nothing) with
+	    | Interp.Value (Interp.V_lit (L_aux (L_string str) _)) ->
+	      (Nothing, Just (Internal_error ("Exit called with message: " ^ str)))
+	    | _ -> (Nothing, Just (Internal_error "Exit called with unrecognized expression bound to an id")) end)
+	| _ -> (Nothing, Just (Internal_error "Exit called with unrecognized expression"))
       end 
     | _ -> (Nothing, Just (Internal_error "Memory or register requested in decode"))
 end
@@ -358,12 +364,12 @@ let decode_to_istate top_level value =
 		| (Interp.V_lit (L_aux L_unit _),[]) -> (name, [], effects)
 		| (value,[(p_name,ie_typ)]) -> 
 		  let t = migrate_typ ie_typ in
-		  (name, [(p_name,t, (extern_ifield_value value t))], effects)
+		  (name, [(p_name,t, (extern_ifield_value name p_name value t))], effects)
 		| (Interp.V_tuple vals,parms) -> 
 		  (name, 
 		   (Interp.map2 (fun value (p_name,ie_typ) -> 
 		     let t = migrate_typ ie_typ in
-		     (p_name,t,(extern_ifield_value value t))) vals parms), effects)
+		     (p_name,t,(extern_ifield_value name p_name value t))) vals parms), effects)
           end end end in 
       let (arg,_) = Interp.to_exp mode Interp.eenv instr in
       let (instr_decoded,error) = interp_to_value_helper value instr_external internal_direction

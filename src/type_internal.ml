@@ -2505,25 +2505,27 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
   | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tid(i) -> 
     (match Envmap.apply d_env.enum_env i with
     | Some(enums) -> 
+      let num_enums = List.length enums in
       (t2,[GtEq(co,Require,b1,n_zero);LtEq(co,Require,r1,{nexp=Nconst (big_int_of_int (List.length enums))})],pure_e,
        E_aux(E_case(e,
 		    List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),
 								(l,Base(([],t1),Emp_local,[],pure_e, nob))),
 							  E_aux(E_id(Id_aux(Id a,l)),
-								(l,Base(([],t2),Emp_local,[],pure_e, nob)))),
+								(l,Base(([],t2),Enum num_enums,[],pure_e, nob)))),
 						  (l,Base(([],t2),Emp_local,[],pure_e,nob)))) enums),
 	     (l,Base(([],t2),Emp_local,[],pure_e,nob))))
     | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
   | Tapp("atom",[TA_nexp b1]),Tid(i) -> 
     (match Envmap.apply d_env.enum_env i with
       | Some(enums) -> 
+	let num_enums = List.length enums in
 	(t2,[GtEq(co,Require,b1,n_zero);
 	     LtEq(co,Require,b1,{nexp=Nconst (big_int_of_int (List.length enums))})],pure_e,
 	 E_aux(E_case(e,
 		      List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),
 								  (l,Base(([],t1),Emp_local,[],pure_e,nob))),
 							    E_aux(E_id(Id_aux(Id a,l)),
-								  (l,Base(([],t2),Emp_local,[],pure_e,nob)))),
+								  (l,Base(([],t2),Enum num_enums,[],pure_e,nob)))),
 						    (l,Base(([],t2),Emp_local,[],pure_e,nob)))) enums),
 	       (l,Base(([],t2),Emp_local,[],pure_e,nob))))
       | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
