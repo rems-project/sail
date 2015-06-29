@@ -89,6 +89,8 @@ end
 
 let has_unknown v = match detaint v with
   | V_vector _ _ vs -> List.any is_unknown vs
+  | V_unknown -> true
+  | _ -> false
 end
 
 let has_undef v = match detaint v with
@@ -265,7 +267,10 @@ let extz direction (V_tuple[v1;v]) =
 
 let eq (V_tuple [x; y]) = 
   let combo = binary_taint (fun v _ -> v) x y in
-  retaint combo (V_lit (L_aux (if value_eq (detaint x) (detaint y) then L_one else L_zero) Unknown))
+  retaint combo 
+    (if has_unknown x || has_unknown y 
+    then V_unknown
+    else (V_lit (L_aux (if value_eq (detaint x) (detaint y) then L_one else L_zero) Unknown)))
 
 (* XXX interpret vectors as unsigned numbers for equality *)
 let eq_vec_range (V_tuple [v; r]) = eq (V_tuple [to_num Unsigned v; r]) ;;
