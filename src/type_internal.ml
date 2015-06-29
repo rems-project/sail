@@ -825,13 +825,15 @@ let nexp_eq n1 n2 =
   b
 
 let nexp_one_more_than n1 n2 =
-  let n1,n2 = normalize_nexp n1, normalize_nexp n2 in
+  let n1,n2 = (normalize_nexp (normalize_nexp n1)), (normalize_nexp (normalize_nexp n2)) in
   match n1.nexp,n2.nexp with
     | Nconst i, Nconst j -> (int_of_big_int i) = (int_of_big_int j)+1
     | _, Nsub(n2',{nexp = Nconst i}) ->
       if (int_of_big_int i) = 1 then nexp_eq n1 n2' else false
     | _, Nadd(n2',{nexp = Nconst i}) ->
       if (int_of_big_int i) = -1 then nexp_eq n1 n2' else false
+    | Nadd(n1',{nexp = Nconst i}),_ ->
+      if (int_of_big_int i) = 1 then nexp_eq n1' n2 else false
     | _ -> false 
  
 let equate_t (t_box : t) (t : t) : unit =

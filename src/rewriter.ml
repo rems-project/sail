@@ -70,7 +70,7 @@ let rec rewrite_exp (E_aux (exp,(l,annot))) =
     | E_nondet exps -> rewrap (E_nondet (List.map rewrite_exp exps))
     | E_id _ | E_lit _  -> rewrap exp
     | E_cast (typ, exp) -> rewrap (E_cast (typ, rewrite_exp exp))
-    | E_app (id,exps) -> rewrap (E_app (id,List.map rewrite_exp exps))
+    | E_app (((Id_aux ((Id name),_)) as id),exps) -> rewrap (E_app (id,List.map rewrite_exp exps))
     | E_app_infix(el,id,er) -> rewrap (E_app_infix(rewrite_exp el,id,rewrite_exp er))
     | E_tuple exps -> rewrap (E_tuple (List.map rewrite_exp exps))
     | E_if (c,t,e) -> rewrap (E_if (rewrite_exp c,rewrite_exp t, rewrite_exp e))
@@ -121,13 +121,14 @@ let rec rewrite_exp (E_aux (exp,(l,annot))) =
 	      Tapp("vector",[TA_nexp n2;TA_nexp nw2;TA_ord o2;_]) ->
 	      (match n1.nexp with
 		| Nconst i1 -> if nexp_eq n1 n2 then new_exp else rewrap (E_cast (t_to_typ t,new_exp))
-		| Nadd _ | Nsub _ -> (match o1.order with
+		| _ -> (match o1.order with
 		    | Odec -> 
+		      (*let _ = Printf.eprintf "Considering removing a cast or not: %s %s, %b\n" (n_to_string nw1) (n_to_string n1) (nexp_one_more_than nw1 n1) in*)
 		      if nexp_one_more_than nw1 n1 
 		      then rewrap (E_cast (Typ_aux (Typ_var (Kid_aux((Var "length"), Unknown)), Unknown), new_exp))
 		      else new_exp
 		    | _ -> new_exp)
-		| _ -> new_exp)
+		| _ ->  new_exp)
 	    | _ -> new_exp)
 	| _ -> new_exp)
     | E_internal_exp (l,impl) ->
