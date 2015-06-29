@@ -77,12 +77,12 @@ let zeroi = integerFromNat 0
 let onei = integerFromNat 1
 let twoi = integerFromNat 2
 
-let is_unknown v = match v with
+let is_unknown v = match detaint v with
   | V_unknown -> true
   | _ -> false
 end 
 
-let is_undef v = match v with
+let is_undef v = match detaint v with
   | V_lit (L_aux L_undef _) -> true
   | _ -> false
 end
@@ -141,6 +141,7 @@ let bit_to_bool b = match detaint b with
   | V_lit (L_aux L_false _) -> false
   | V_lit (L_aux L_one _) -> true
   | V_lit (L_aux L_true _) -> true
+  | _ -> Assert_extra.failwith ("bit_to_bool given unexpected " ^ (string_of_value b))
   end ;;
 let bool_to_bit b = match b with
     false -> V_lit (L_aux L_zero Unknown)
