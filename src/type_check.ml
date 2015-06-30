@@ -952,41 +952,41 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       (*let _ = Printf.eprintf "checking e_vector_subrange: expect_t is %s\n" (t_to_string expect_t) in*)
       let base,length,ord = new_n(),new_n(),new_o() in
       let new_length = new_n() in
-      let n1_size = new_n() in
-      let n2_size = new_n() in
+      let n1_start = new_n() in
+      let n2_end = new_n() in
       let item_t = match expect_t.t with
 	| Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord_n; TA_typ item_t]) -> item_t
 	| _ -> new_t() in
       let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp length;TA_ord ord;TA_typ item_t])} in
       let (vec',vt',_,cs,_,ef) = check_exp envs imp_param vt vec in      
-      let i1t = {t=Tapp("atom",[TA_nexp n1_size])} in
+      let i1t = {t=Tapp("atom",[TA_nexp n1_start])} in
       let (i1', ti1, _,cs_i1,_,ef_i1) = check_exp envs imp_param i1t i1 in
-      let i2t = {t=Tapp("atom",[TA_nexp n2_size])} in
+      let i2t = {t=Tapp("atom",[TA_nexp n2_end])} in
       let (i2', ti2, _,cs_i2,_,ef_i2) = check_exp envs imp_param i2t i2 in
       let cs_loc =
 	match (ord.order,d_env.default_o.order) with
 	  | (Oinc,_) -> 
-	    [LtEq((Expr l), Require, base, n1_size);
-	     LtEq((Expr l), Require, n1_size, n2_size);
-	     LtEq((Expr l), Require, n2_size, mk_sub (mk_add base length) n_one);
-	     Eq((Expr l), new_length, mk_add (mk_sub n2_size n1_size) n_one)]
+	    [LtEq((Expr l), Require, base, n1_start);
+	     LtEq((Expr l), Require, n1_start, n2_end);
+	     LtEq((Expr l), Require, n2_end, mk_sub (mk_add base length) n_one);
+	     Eq((Expr l), new_length, mk_add (mk_sub n2_end n1_start) n_one)]
 	  | (Odec,_) ->
-	    [GtEq((Expr l), Require, base, n1_size);
-	     GtEq((Expr l), Require, n1_size, n2_size);
-	     GtEq((Expr l), Require, n2_size, mk_add (mk_sub base length) n_one);
-	     Eq((Expr l), new_length, mk_add (mk_sub n1_size n2_size) n_one)]	    
+	    [GtEq((Expr l), Require, base, n1_start);
+	     GtEq((Expr l), Require, n1_start, n2_end);
+	     GtEq((Expr l), Require, n2_end, mk_add (mk_sub base length) n_one);
+	     Eq((Expr l), new_length, mk_add (mk_sub n1_start n2_end) n_one)]	    
 	  | (_,Oinc) ->
-	    [LtEq((Expr l), Require, base, n1_size);
-	     LtEq((Expr l), Require, n1_size, n2_size);
-	     LtEq((Expr l), Require, n2_size, mk_sub (mk_add base length) n_one);
-	     Eq((Expr l), new_length, mk_add (mk_sub n2_size n1_size) n_one)]
+	    [LtEq((Expr l), Require, base, n1_start);
+	     LtEq((Expr l), Require, n1_start, n2_end);
+	     LtEq((Expr l), Require, n2_end, mk_sub (mk_add base length) n_one);
+	     Eq((Expr l), new_length, mk_add (mk_sub n2_end n1_start) n_one)]
 	  | (_,Odec) -> 
-	    [GtEq((Expr l), Require, base, n1_size);
-	     GtEq((Expr l), Require, n1_size, n2_size);
-	     GtEq((Expr l), Require, n2_size, mk_add (mk_sub base length) n_one);
-	     Eq((Expr l), new_length, mk_add (mk_sub n1_size n2_size) n_one)]
+	    [GtEq((Expr l), Require, base, n1_start);
+	     GtEq((Expr l), Require, n1_start, n2_end);
+	     GtEq((Expr l), Require, n2_end, mk_add (mk_sub base length) n_one);
+	     Eq((Expr l), new_length, mk_add (mk_sub n1_start n2_end) n_one)]
 	  | _ -> typ_error l "A vector must be either increasing or decreasing to access a slice" in
-      let nt = {t = Tapp("vector", [TA_nexp n1_size; TA_nexp new_length; TA_ord ord; TA_typ item_t]) } in
+      let nt = {t = Tapp("vector", [TA_nexp n1_start; TA_nexp new_length; TA_ord ord; TA_typ item_t]) } in
       let (t,cs3,ef3,e') = 
 	type_coerce (Expr l) d_env Require false false b_env nt 
 	  (E_aux(E_vector_subrange(vec',i1',i2'),(l,constrained_annot nt cs_loc))) expect_t in
@@ -1066,6 +1066,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let item_t,ord = match expect_t.t with
         | Tapp("vector",[_;_;TA_ord o;TA_typ i]) -> i,o
         | Tapp("range",_) -> bit_t,new_o ()
+	| Tapp("atom",_) -> bit_t, new_o ()
         | _ -> new_t (),new_o () in
       let base1,rise1 = new_n(), new_n() in
       let base2,rise2 = new_n(),new_n() in

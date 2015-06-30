@@ -2274,9 +2274,10 @@ let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 =
 	else ({t=Tapp ("range",[TA_nexp a2;TA_nexp a1])},csp)
       (*| Nconst _, Nuvar _ | Nuvar _, Nconst _->
 	(t1, csp@[Eq(co,a1,a2)])*) (*TODO This is the correct constraint. However, without the proper support for In checks actually working, this will cause specs to not build*)	
-      | _ -> let nu1,nu2 = new_n (),new_n () in 
+      | _ -> (*let nu1,nu2 = new_n (),new_n () in 
 	     ({t=Tapp("range",[TA_nexp nu1;TA_nexp nu2])},
-	      csp@[LtEq(co,enforce,nu1,a1);LtEq(co,enforce,nu1,a2);LtEq(co,enforce,a1,nu2);LtEq(co,enforce,a2,nu2)]))
+	      csp@[LtEq(co,enforce,nu1,a1);LtEq(co,enforce,nu1,a2);LtEq(co,enforce,a1,nu2);LtEq(co,enforce,a2,nu2)])*)
+	(t1, csp@[LtEq(co,enforce,a1,a2);(GtEq(co,enforce,a1,a2))])) (*EQ is the right thing to do, but see above. Introducing new free vars here is bad*)
   | Tapp("vector",[TA_nexp _; TA_nexp l1; ord; ty1]),Tapp("vector",[TA_nexp _; TA_nexp l2; ord2; ty2]) ->
     (t2, Eq(co,l1,l2)::((type_arg_eq co d_env enforce widen ord ord2)@(type_arg_eq co d_env enforce widen ty1 ty2)))
   | Tapp(id1,args1), Tapp(id2,args2) ->

@@ -113,24 +113,40 @@ let rec rewrite_exp (E_aux (exp,(l,annot))) =
     | E_exit e -> rewrap (E_exit (rewrite_exp e))
     | E_internal_cast ((_,casted_annot),exp) -> 
       let new_exp = rewrite_exp exp in
+      (*let _ = Printf.eprintf "Removing an internal_cast with %s\n" (tannot_to_string casted_annot) in*)
       (match casted_annot,exp with
 	| Base((_,t),_,_,_,_),E_aux(ec,(ecl,Base((_,exp_t),_,_,_,_))) ->
+	  (*let _ = Printf.eprintf "Considering removing an internal cast where the two types are %s and %s\n" (t_to_string t) (t_to_string exp_t) in*)
 	  (match t.t,exp_t.t with
 	    (*TODO should pass d_env into here so that I can look at the abbreviations if there are any here*)
 	    | Tapp("vector",[TA_nexp n1;TA_nexp nw1;TA_ord o1;_]),
-	      Tapp("vector",[TA_nexp n2;TA_nexp nw2;TA_ord o2;_]) ->
+	      Tapp("vector",[TA_nexp n2;TA_nexp nw2;TA_ord o2;_]) 
+	    | Tapp("vector",[TA_nexp n1;TA_nexp nw1;TA_ord o1;_]),
+	      Tapp("reg",[TA_typ {t=(Tapp("vector",[TA_nexp n2; TA_nexp nw2; TA_ord o2;_]))}]) ->
 	      (match n1.nexp with
 		| Nconst i1 -> if nexp_eq n1 n2 then new_exp else rewrap (E_cast (t_to_typ t,new_exp))
 		| _ -> (match o1.order with
 		    | Odec -> 
 		      (*let _ = Printf.eprintf "Considering removing a cast or not: %s %s, %b\n" (n_to_string nw1) (n_to_string n1) (nexp_one_more_than nw1 n1) in*)
-		      if nexp_one_more_than nw1 n1 
-		      then rewrap (E_cast (Typ_aux (Typ_var (Kid_aux((Var "length"), Unknown)), Unknown), new_exp))
-		      else new_exp
+		      (*if nexp_one_more_than nw1 n1 
+		      then *) rewrap (E_cast (Typ_aux (Typ_var (Kid_aux((Var "length"), Unknown)), Unknown), new_exp))
+		      (*else new_exp*)
 		    | _ -> new_exp)
 		| _ ->  new_exp)
 	    | _ -> new_exp)
-	| _ -> new_exp)
+	| Base((_,t),_,_,_,_),_ ->
+	  (*let _ = Printf.eprintf "Considering removing an internal cast where the remaining type is %s\n%!" (t_to_string t) in*)
+	  (match t.t with
+	    | Tapp("vector",[TA_nexp n1;TA_nexp nw1;TA_ord o1;_]) ->
+	      (match o1.order with
+		| Odec -> 
+		  (*let _ = Printf.eprintf "Considering removing a cast or not: %s %s, %b\n" (n_to_string nw1) (n_to_string n1) (nexp_one_more_than nw1 n1) in
+		  if nexp_one_more_than nw1 n1 
+		  then*) rewrap (E_cast (Typ_aux (Typ_var (Kid_aux((Var "length"), Unknown)), Unknown), new_exp))
+		  (*else new_exp*)
+		| _ -> new_exp)
+	    | _ -> new_exp)
+	| _ -> (*let _ = Printf.eprintf "Not a base match?\n" in*) new_exp)
     | E_internal_exp (l,impl) ->
       (match impl with
 	| Base((_,t),_,_,_,bounds) ->
