@@ -290,7 +290,7 @@ let initial_instruction_state top_level main args =
     top_level Interp.eenv Interp.emem Interp.Top
 
 
-let rec interp_to_value_helper arg instr direction thunk = 
+let rec interp_to_value_helper arg err_str instr direction thunk = 
   match thunk() with
     | Interp.Value value -> (Just value,Nothing)
     | Interp.Error l msg -> (Nothing, Just (Internal_error msg))
@@ -298,20 +298,37 @@ let rec interp_to_value_helper arg instr direction thunk =
       match List.lookup i (Interp_lib.library_functions direction) with
 	| Nothing -> (Nothing, Just (Internal_error ("External function not available " ^ i)))
 	| Just f  -> 
-          interp_to_value_helper arg instr direction (fun _ -> Interp.resume (make_interp_mode true false) stack (Just (f value)))
+          interp_to_value_helper arg err_str instr direction 
+	    (fun _ -> Interp.resume (make_interp_mode true false) stack (Just (f value)))
       end 
-    | Interp.Action (Interp.Exit (E_aux e _)) stack ->
+    | Interp.Action (Interp.Exit ((E_aux e _) as exp)) stack ->
       match e with
 	| E_id (Id_aux (Id "unsupported_instruction") _) -> (Nothing,Just (Unsupported_instruction_error instr))
 	| E_id (Id_aux (Id "no_matching_pattern") _) -> (Nothing,Just (Not_an_instruction_error arg))
 	| E_lit (L_aux (L_string str) _) -> (Nothing, Just (Internal_error ("Exit called with message: " ^ str)))
-	| E_id _ -> (match (Interp.resume (make_interp_mode true false) stack Nothing) with
+	| E_id (Id_aux (Id i) _) -> 
+	  (match (Interp.resume (make_interp_mode true false) (Interp.set_in_context stack exp) Nothing) with
 	    | Interp.Value (Interp.V_lit (L_aux (L_string str) _)) ->
-	      (Nothing, Just (Internal_error ("Exit called with message: " ^ str)))
-	    | _ -> (Nothing, Just (Internal_error "Exit called with unrecognized expression bound to an id")) end)
+	      (Nothing, Just (Internal_error ("Exit called when decoding "^err_str ^" with message: " ^ str)))
+	    | _ -> (Nothing, Just (Internal_error ("Exit called with unrecognized expression bound to an id " ^ i))) end)
 	| _ -> (Nothing, Just (Internal_error "Exit called with unrecognized expression"))
       end 
-    | _ -> (Nothing, Just (Internal_error "Memory or register requested in decode"))
+    | Interp.Action (Interp.Read_reg r _) _ ->
+      let rname = match r with 
+	| Interp.Reg (Id_aux (Id i) _) _ _ -> i
+	| Interp.SubReg (Id_aux (Id i) _) (Interp.Reg (Id_aux (Id i2) _) _ _) _ -> i2 ^ "." ^ i end in
+      (Nothing, Just (Internal_error ("Register read of "^ rname^" request in a decode of " ^ err_str)))
+    | Interp.Action (Interp.Write_reg _ _ _) _ ->
+      (Nothing, Just (Internal_error "Register write request in a decode"))
+    | Interp.Action (Interp.Read_mem _ _ _) _ ->
+      (Nothing, Just (Internal_error "Read memory request in a decode"))
+    | Interp.Action (Interp.Write_mem _ _ _ _) _ ->
+      (Nothing, Just (Internal_error "Write memory request in a decode"))
+    | Interp.Action (Interp.Write_ea _ _) _ ->
+      (Nothing, Just (Internal_error "Write ea request in a decode"))
+    | Interp.Action (Interp.Write_memv _ _) _ ->
+      (Nothing, Just (Internal_error "Write memory value request in a decode"))
+    | _ -> (Nothing, Just (Internal_error "Non expected action in a decode"))
 end
 
 let call_external_functions direction outcome = 
@@ -349,9 +366,11 @@ end
 let decode_to_istate top_level value = 
   let mode = make_interp_mode true false in
   let (Context ((Interp.Env _ instructions _ _ _ _ _ _) as top_env) direction _ _ _ _ _ _) = top_level in
-  let (arg,_) = Interp.to_exp mode Interp.eenv (intern_opcode direction value) in
+  let intern_val = intern_opcode direction value in
+  let val_str = Interp.string_of_value intern_val in
+  let (arg,_) = Interp.to_exp mode Interp.eenv intern_val in
   let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
-  let (instr_decoded,error) = interp_to_value_helper value ("",[],[]) internal_direction
+  let (instr_decoded,error) = interp_to_value_helper value val_str ("",[],[]) internal_direction
     (fun _ -> Interp.resume 
       mode 
       (Interp.Thunk_frame 
@@ -375,7 +394,7 @@ let decode_to_istate top_level value =
 		     (p_name,t,(extern_ifield_value name p_name value t))) vals parms), effects)
           end end end in 
       let (arg,_) = Interp.to_exp mode Interp.eenv instr in
-      let (instr_decoded,error) = interp_to_value_helper value instr_external internal_direction
+      let (instr_decoded,error) = interp_to_value_helper value val_str instr_external internal_direction
 	(fun _ -> Interp.resume 
 	 mode
 	  (Interp.Thunk_frame 

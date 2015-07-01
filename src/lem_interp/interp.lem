@@ -112,8 +112,7 @@ and value_eq left right =
   | (V_boxref n t, V_boxref m t') -> n = m && t = t'
   | (V_tuple l, V_tuple l') -> listEqualBy value_eq l l'
   | (V_list l, V_list l') -> listEqualBy value_eq l l'
-  | (V_vector n b l, V_vector m b' l') ->
-      n = m && b = b' && listEqualBy value_eq l l'
+  | (V_vector n b l, V_vector m b' l') -> b = b' && listEqualBy value_eq l l'
   | (V_vector_sparse n o b l v, V_vector_sparse m p b' l' v') ->
     n=m && o=p && b=b' && listEqualBy (fun (i,v) (i',v') -> i=i' && (value_eq v v')) l l' && value_eq v v'
   | (V_record t l, V_record t' l') ->
