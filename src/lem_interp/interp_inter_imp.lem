@@ -1,6 +1,7 @@
 import Interp
 import Interp_lib
 import Instruction_extractor
+import Set_extra
 open import Interp_ast
 open import Interp_interface
 open import Pervasives
@@ -191,7 +192,9 @@ let rec extern_mem_value mode v = match v with
   | Interp.V_track v regs -> 
     let (external_v,_) = extern_mem_value mode v in
     (external_v,
-     if mode.internal_mode.Interp.track_values then (Just (List.map (fun r -> extern_reg r Nothing) regs)) else Nothing)
+     if mode.internal_mode.Interp.track_values 
+     then (Just (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList regs)))
+     else Nothing)
   | Interp.V_vector fst inc bits -> 
     let bytes = to_bytes (bitls_from_ibits bits) in 
     if mode.endian = E_big_endian 
@@ -437,7 +440,7 @@ let rec interp_to_outcome mode context thunk =
       Read_reg (extern_reg reg_form slice) 
                (fun v -> 
                  let v = (intern_reg_value v) in
-                 let v = if mode.internal_mode.Interp.track_values then (Interp.V_track v [reg_form]) else v in 
+                 let v = if mode.internal_mode.Interp.track_values then (Interp.V_track v (Set.fromList [reg_form])) else v in 
                  IState (Interp.add_answer_to_stack next_state v) context)
     | Interp.Write_reg reg_form slice value ->
       let reg_name = extern_reg reg_form slice in
