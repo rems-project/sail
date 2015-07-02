@@ -999,7 +999,7 @@ let rec match_pattern t_level (P_aux p (_, annot)) value_whole =
 	   let (matched_p,used_unknown',new_bounds) = match_pattern t_level pat (taint_pat value) in
 	   (matched_p, (used_unknown||used_unknown'), (union_env new_bounds bounds))
 	 else (false,false,eenv))
-       (true,false,eenv) (if is_inc(dir) then pats else List.reverse pats) vals
+       (true,false,eenv) pats vals
      else (false,false,eenv)
    | V_vector_sparse n m dir vals d ->
      if (m = (List.length pats))
