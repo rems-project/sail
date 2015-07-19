@@ -122,7 +122,7 @@ let simple_bit_lifteds_to_string bls (show_length_and_start:bool) (starto: int o
 
 (* if a multiple of 8 lifted bits and each chunk of 8 is homogenous,
 print as lifted hex, otherwise print as lifted bits *)
-let bit_lifteds_to_string (bls: bit_lifted list) (show_length_and_start:bool) (starto: int option) =  
+let bit_lifteds_to_string (bls: bit_lifted list) (show_length_and_start:bool) (starto: int option) (abbreviate_zero_to_nine: bool) =  
   let l = List.length bls in
   if l mod 8 = 0 then  (*  if List.mem l [8;16;32;64;128] then *)
     let bytesl = List.map (fun (Byte_lifted bs) -> bs) (Interp_interface.byte_lifteds_of_bit_lifteds bls) in
@@ -131,13 +131,22 @@ let bit_lifteds_to_string (bls: bit_lifted list) (show_length_and_start:bool) (s
     | None -> (* print as bitvector after all *)
         simple_bit_lifteds_to_string bls show_length_and_start starto
     | Some (byteslhs: bits_lifted_homogenous list) -> 
-        let s = String.concat "" (List.map bytes_lifted_homogenous_to_string byteslhs) in
-        if show_length_and_start then 
-          match starto with 
-          | None ->       "0x" ^ s 
-          | Some start -> "0x" ^ "_" ^string_of_int start ^"'" ^ s
-        else
-          "0x"^s
+        (* if abbreviate_zero_to_nine, all bytes are concrete, and the number is <=9, just print that *)  
+        (*   (note that that doesn't print the length or start - it's appropriate only for memory values, where we typically have an explicit footprint also printed *)
+        let nos = List.rev_map (function blh -> match blh with | Bitslh_concrete bs -> Some (Interp_interface.nat_of_bit_list bs) | Bitslh_undef -> None | Bitslh_unknown -> None) byteslhs in 
+        let (lsb,msbs) = ((List.hd nos), List.tl nos) in
+        match (abbreviate_zero_to_nine, List.for_all (fun no -> no=Some 0) msbs, lsb) with 
+        | (true, true, Some n) when n <= 9 -> 
+            string_of_int n
+        | _ -> 
+            (* otherwise, print the bytes as hex *)
+            let s = String.concat "" (List.map bytes_lifted_homogenous_to_string byteslhs) in
+            if show_length_and_start then 
+              match starto with 
+              | None ->       "0x" ^ s 
+              | Some start -> "0x" ^ "_" ^string_of_int start ^"'" ^ s
+            else
+              "0x"^s
   else
     simple_bit_lifteds_to_string bls show_length_and_start starto
 
@@ -145,18 +154,18 @@ let bit_lifteds_to_string (bls: bit_lifted list) (show_length_and_start:bool) (s
   
 
 let register_value_to_string rv = 
-  bit_lifteds_to_string rv.rv_bits true (Some rv.rv_start)   
+  bit_lifteds_to_string rv.rv_bits true (Some rv.rv_start) false  
 
 let memory_value_to_string endian mv = 
   let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) (if endian = E_big_endian then mv else (List.rev mv)))  in
-  bit_lifteds_to_string bls true None
+  bit_lifteds_to_string bls true None true
 
 let logfile_register_value_to_string rv = 
-  bit_lifteds_to_string rv.rv_bits false (Some rv.rv_start)   
+  bit_lifteds_to_string rv.rv_bits false (Some rv.rv_start) false  
 
 let logfile_memory_value_to_string endian mv = 
   let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) (if endian = E_big_endian then mv else (List.rev mv)))  in
-  bit_lifteds_to_string bls false None
+  bit_lifteds_to_string bls false None false
 
 let byte_list_to_string bs =
   let bs' = List.map byte_lifted_of_byte bs in
@@ -388,6 +397,8 @@ let rec format_events = function
   | (E_write_reg(reg_name, value))::events ->
     "     Write_reg of " ^ (reg_name_to_string reg_name) ^ " writing " ^ (register_value_to_string value) ^ "\n" ^
     (format_events events)
+  | (E_escape _)::events ->
+    "     Escape event\n"^ (format_events events)
 ;;
 
 (* ANSI/VT100 colors *)

@@ -1029,6 +1029,24 @@ val memory_byte_of_byte : byte -> memory_byte
 let memory_byte_of_byte = byte_lifted_of_byte
 
 
+(* to and from nat *)
+
+(* this natFromBoolList could move to the Lem word.lem library *)
+val natFromBoolList : list bool -> nat
+let rec natFromBoolListAux (acc : nat) (bl : list bool) = 
+  match bl with 
+    | [] -> acc
+    | (true :: bl') -> natFromBoolListAux ((acc * 2) + 1) bl'
+    | (false :: bl') -> natFromBoolListAux (acc * 2) bl'
+  end
+let natFromBoolList bl = 
+  natFromBoolListAux 0 (List.reverse bl)
+
+
+val nat_of_bit_list : list bit -> nat 
+let nat_of_bit_list b =
+  natFromBoolList (List.reverse (List.map bit_to_bool b))
+  (* natFromBoolList takes a list with LSB first, for consistency with rest of Lem word library, so we reverse it. twice. *)
 
 
 (* to and from integer *)
