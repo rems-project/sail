@@ -1820,8 +1820,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		     else (debug_out (Just name) (Just v) exp t_level emem env))  
 	            (fun ret lm le -> (Value ret, l_mem,l_env))
                     (fun a -> update_stack a 
-		      (fun stack -> (Hole_frame (id_of_string "0") 
-				       (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot)))
+		      (fun stack -> (Hole_frame redex_id (E_aux (E_id redex_id) (l,(intern_annot annot)))
 				       t_level l_env l_mem stack)))
                 | multi_matches ->
 		  let (lets,taint_env) = 
@@ -1844,8 +1843,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		 else (debug_out (Just name) (Just v) exp t_level emem env))  
 	        (fun ret lm le -> (Value ret, l_mem,l_env))
                 (fun a -> update_stack a 
-		  (fun stack -> (Hole_frame (id_of_string "0") 
-				   (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot)))
+		  (fun stack -> (Hole_frame redex_id (E_aux (E_id redex_id) (l,(intern_annot annot)))
 				   t_level l_env l_mem stack)))
              end)
           | Nothing -> 
@@ -1864,8 +1862,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	        (fun ret lm le -> (Value ret, l_mem,l_env))
                 (fun a -> update_stack a 
 		  (fun stack -> 
-                    (Hole_frame (id_of_string "0") 
-                       (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot))) t_level l_env l_mem stack)))
+                    (Hole_frame redex_id 
+                       (E_aux (E_id redex_id) (l,(intern_annot annot))) t_level l_env l_mem stack)))
              end)
           | Nothing -> 
 	    (Error l (String.stringAppend "Specified function must be defined before executing " name),lm,le) end)
@@ -1879,8 +1877,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           let name_ext = match opt_name with | Just s -> s | Nothing -> name end in
           let mk_hole_frame act = 
 	    (Action act 
-	            (Hole_frame (Id_aux (Id "0") l) 
-                                (E_aux (E_id (Id_aux (Id "0") l)) (l,intern_annot annot)) t_level le lm Top), lm, le) in
+	            (Hole_frame redex_id 
+                                (E_aux (E_id redex_id) (l,intern_annot annot)) t_level le lm Top), lm, le) in
 	  let mk_thunk_frame act = 
             (Action act
                     (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level le lm Top), lm, le) in
@@ -1932,8 +1930,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			    (fun ret lm le -> (Value ret,l_mem,l_env))
                             (fun a -> update_stack a 
 			      (fun stack -> 
-				(Hole_frame (Id_aux (Id "0") l)
-				   (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot)))
+				(Hole_frame redex_id (E_aux (E_id redex_id) (l,(intern_annot annot)))
 				   t_level l_env l_mem stack)))
 				                end)end)
 		| Tag_empty -> 
@@ -1965,8 +1962,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			     else (debug_out (Just name) (Just (V_tuple [lv;rv])) exp t_level emem env))
 			    (fun ret lm le -> (Value ret,l_mem,l_env))
                             (fun a -> update_stack a 
-			      (fun stack -> (Hole_frame (Id_aux (Id "0") l)
-					       (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot)))
+			      (fun stack -> (Hole_frame redex_id
+					       (E_aux (E_id redex_id) (l,(intern_annot annot)))
 					       t_level l_env l_mem stack)))
 		       end)end)
                 | Tag_extern ext_name ->
@@ -2207,8 +2204,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		    | (Value ret, _,_) -> ((Value ret, l_mem,l_env),Nothing)
 		    | (Action action stack,lm,le) ->
 		      (((update_stack (Action action stack) 
-			  (fun stack -> (Hole_frame (id_of_string "0") 
-					   (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot)))
+			  (fun stack -> (Hole_frame redex_id (E_aux (E_id redex_id) (l,(intern_annot annot)))
 					   t_level l_env l_mem stack))), l_mem,l_env), Nothing)
 		    | (e,lm,le) -> ((e,lm,le),Nothing) end)
                 | multi_matches ->
@@ -2237,8 +2233,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		    | (Value ret, _,_) -> ((Value ret, l_mem,l_env),Nothing)
 		    | (Action action stack,lm,le) ->
 		      (((update_stack (Action action stack) 
-			  (fun stack -> (Hole_frame (id_of_string "0") 
-					   (E_aux (E_id (Id_aux (Id "0") l)) (l,(intern_annot annot)))
+			  (fun stack -> (Hole_frame redex_id (E_aux (E_id redex_id) (l,(intern_annot annot)))
 					   t_level l_env l_mem stack))), l_mem,l_env), Nothing)
 		    | (e,lm,le) -> ((e,lm,le),Nothing) end)
                 | multi_matches ->
@@ -2557,8 +2552,8 @@ and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
         (fun a -> a) (*Neither action function should occur, due to above*)
     | AL_concat (RI_aux (RI_id reg1) (l1, annot1)) (RI_aux (RI_id reg2) annot2) -> 
       (Action (Read_reg (Reg reg1 annot1 default_dir) Nothing)
-	      (Hole_frame (Id_aux (Id "0") Unknown)
-		          (E_aux (E_vector_append (E_aux (E_id (Id_aux (Id "0") l1)) (l1, (intern_annot annot1)))
+	      (Hole_frame redex_id
+		          (E_aux (E_vector_append (E_aux (E_id redex_id) (l1, (intern_annot annot1)))
     				                  (E_aux (E_id reg2) annot2)) 
 			        (l,(intern_annot annot))) t_level l_env l_mem Top), l_mem,l_env) end
 
