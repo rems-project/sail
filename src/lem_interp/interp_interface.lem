@@ -1079,6 +1079,21 @@ val address_of_integer : integer -> address
 let address_of_integer (i:integer):address =
   Address (byte_list_of_integer 8 i) i
 
+(* to and from signed-integer *)
+
+val signed_integer_of_bit_list : list bit -> integer
+let signed_integer_of_bit_list b =
+  match b with
+  | [] -> failwith "empty bit list"
+  | Bitc_zero :: b' ->
+      integerFromBoolList (false,(List.reverse (List.map bit_to_bool b)))
+  | Bitc_one :: b' ->
+      let b'_val = integerFromBoolList (false,(List.reverse (List.map bit_to_bool b'))) in
+      (* integerFromBoolList takes a list with LSB first, so we reverse it *)
+      let msb_val = integerPow 2 ((List.length b) - 1) in
+      b'_val - msb_val
+  end
+
 
 (* regarding a list of int as a list of bytes in memory, MSB lowest-address first, convert to an integer *)
 val integer_address_of_int_list : list int -> integer
