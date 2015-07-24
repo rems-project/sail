@@ -6,6 +6,9 @@ let rec power (a: integer) (b: integer) : integer =
  then 1
  else a * (power a (b-1))
 
+let foldr2 f x l l' = List.foldr (Tuple.uncurry f) x (List.zip l l')
+let map2 f l l' = List.map (Tuple.uncurry f) (List.zip l l')
+
 type tannot = maybe (t * tag * list nec * effect)
 
 let get_exp_l (E_aux e (l,annot)) = l

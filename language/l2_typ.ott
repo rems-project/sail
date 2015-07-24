@@ -77,6 +77,7 @@ tag :: 'Tag_' ::=
    | Spec				  :: :: spec
    | Enum num				  :: :: enum
    | Alias				  :: :: alias
+   | Unknown_path			  :: :: unknown {{ com Tag to distinguish an unknown path from a non-analysis non deterministic path}}
 
 ne :: 'Ne_' ::=
  {{ com internal numeric expressions }}

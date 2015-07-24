@@ -271,7 +271,7 @@ let eq (V_tuple [x; y]) =
   retaint combo 
     (if has_unknown x || has_unknown y 
     then V_unknown
-    else (V_lit (L_aux (if value_eq (detaint x) (detaint y) then L_one else L_zero) Unknown)))
+    else (V_lit (L_aux (if ((detaint x) = (detaint y)) then L_one else L_zero) Unknown)))
 
 (* XXX interpret vectors as unsigned numbers for equality *)
 let eq_vec_range (V_tuple [v; r]) = eq (V_tuple [to_num Unsigned v; r]) ;;
