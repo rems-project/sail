@@ -457,11 +457,14 @@ type outcome =
 | Write_reg of reg_name * register_value * instruction_state
 (* List of instruciton states to be run in parrallel, any order permitted *)
 | Nondet_choice of list instruction_state * instruction_state
-(* Stop for incremental stepping, function can be used to display function call data *)
-| Internal of maybe string * maybe (unit -> string) * instruction_state
 (* Escape the current instruction, for traps, some sys calls, interrupts, etc. Can optionally provide a handler 
    The non-optional instruction_state is what we would be doing if we're not escaping. This is for exhaustive interp*)
 | Escape of maybe instruction_state * instruction_state
+(* Stop for incremental stepping, function can be used to display function call data *)
+| Internal of maybe string * maybe (unit -> string) * instruction_state
+(* Analysis can lead to non_deterministic evaluation, represented with this outcome *)
+(*Note: this should not be externally visible *)
+| Analysis_non_det of list instruction_state * instruction_state
 | Done
 | Error of string
 
