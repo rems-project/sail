@@ -72,12 +72,12 @@ tag :: 'Tag_' ::=
    | None                                 :: :: empty
    | Global				  :: :: global {{ com Globally let-bound or enumeration based value/variable }} 
    | Ctor                                 :: :: ctor {{ com Data constructor from a type union }}
-   | Extern optx                              :: :: extern {{ com External function, specied only with a val statement }}
+   | Extern optx                          :: :: extern {{ com External function, specied only with a val statement }}
    | Default                              :: :: default {{ com Type has come from default declaration, identifier may not be bound locally }}
    | Spec				  :: :: spec
    | Enum num				  :: :: enum
    | Alias				  :: :: alias
-   | Unknown_path			  :: :: unknown {{ com Tag to distinguish an unknown path from a non-analysis non deterministic path}}
+   | Unknown_path optx			  :: :: unknown {{ com Tag to distinguish an unknown path from a non-analysis non deterministic path}}
 
 ne :: 'Ne_' ::=
  {{ com internal numeric expressions }}

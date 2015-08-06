@@ -1,5 +1,6 @@
 open import Interp_ast
 open import Pervasives
+open import Show_extra
 
 let rec power (a: integer) (b: integer) : integer =
  if b <= 0 
@@ -140,3 +141,9 @@ let rec get_index_range_size (BF_aux i _) = match i with
   | BF_concat i j -> (get_index_range_size i) + (get_index_range_size j)
 end
 
+let rec string_of_loc l = match l with
+  | Unknown -> "Unknown"
+  | Int s Nothing -> "Internal " ^ s
+  | Int s (Just l) -> "Internal " ^ s ^ " " ^ (string_of_loc l) 
+  | Range file n1 n2 n3 n4 -> "File " ^ file ^ ": " ^ (show n1) ^ ": " ^ (show (n2:nat)) ^ ": " ^ (show (n3:nat)) ^ ": " ^ (show (n4:nat))
+end

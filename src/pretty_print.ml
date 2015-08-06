@@ -65,14 +65,14 @@ let pp_format_var (Kid_aux(Var v,_)) = v
 
 let rec pp_format_l_lem = function
   | Parse_ast.Unknown -> "Unknown"
-  | _ -> "Unknown"
-(*  | Parse_ast.Int(s,None) -> "(Int \"" ^ s ^ "\" Nothing)"
+(*  | _ -> "Unknown"*)
+  | Parse_ast.Int(s,None) -> "(Int \"" ^ s ^ "\" Nothing)"
   | Parse_ast.Int(s,(Some l)) -> "(Int \"" ^  s ^ "\" (Just " ^ (pp_format_l_lem l) ^ "))"
   | Parse_ast.Range(p1,p2) -> "(Range \"" ^ p1.Lexing.pos_fname ^ "\" " ^
                                (string_of_int p1.Lexing.pos_lnum) ^ " " ^ 
                                (string_of_int (p1.Lexing.pos_cnum - p1.Lexing.pos_bol)) ^ " " ^
                                (string_of_int p2.Lexing.pos_lnum) ^ " " ^
-                               (string_of_int (p2.Lexing.pos_cnum - p2.Lexing.pos_bol)) ^ ")"*)
+                               (string_of_int (p2.Lexing.pos_cnum - p2.Lexing.pos_bol)) ^ ")"
 
 let pp_lem_l ppf l = base ppf (pp_format_l_lem l)
 

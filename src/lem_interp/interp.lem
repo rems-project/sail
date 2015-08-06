@@ -27,8 +27,8 @@ let ctor_annot typ = Just(typ,Tag_ctor,[],pure)
 
 let enum_annot typ max = Just(typ,Tag_enum max,[],pure)
 
-let non_det_annot annot = match annot with
-  | Just(t,_,cs,ef) -> Just(t,Tag_unknown,cs,ef)
+let non_det_annot annot maybe_id = match annot with
+  | Just(t,_,cs,ef) -> Just(t,Tag_unknown maybe_id,cs,ef)
   | _ -> Nothing
 end
 
@@ -187,15 +187,15 @@ end
 (*Constant unit value, for use in interpreter *)
 let unitv = V_lit (L_aux L_unit Unknown)
 
-(* Store for local memory of ref cells *)
-type lmem = LMem of nat * map nat value
+(* Store for local memory of ref cells, string stores the name of the function the memory is being created for*)
+type lmem = LMem of string * nat * map nat value * set nat
 
 (* Environment for bindings *)
 type env = map string value
 (* Environment for lexical bindings, nat is a counter to build new unique variables when necessary *)
 type lenv = LEnv of nat * env
 
-let emem = LMem 1 Map.empty
+let emem name = LMem name 1 Map.empty Set.empty
 let eenv = LEnv 1 Map.empty
 
 type sub_reg_map = map string index_range
@@ -368,15 +368,19 @@ val add_to_env : (id * value) -> lenv -> lenv
 let add_to_env (id, entry) (LEnv i env) = (LEnv i (Map.insert (get_id id) entry env))
 
 val in_mem : lmem -> nat -> value
-let in_mem (LMem _ m) n = 
+let in_mem (LMem _ _ m _) n = 
   Map_extra.find n m
   (* Map.lookup n m *)
 
-val update_mem : lmem -> nat -> value -> lmem
-let update_mem (LMem c m) loc value =
+val update_mem : bool -> lmem -> nat -> value -> lmem
+let update_mem track (LMem owner c m s) loc value =
   let m' = Map.delete loc m in
   let m' = Map.insert loc value m' in
-  LMem c m'
+  let s' = if track then Set.insert loc s else s in
+  LMem owner c m' s'
+
+val clear_updates : lmem -> lmem
+let clear_updates (LMem owner c m _) = LMem owner c m Set.empty
 
 (*Value helper functions*)
 
@@ -474,7 +478,8 @@ let rec merge_values v1 v2 =
   else match (v1,v2) with
   | (V_lit l, V_lit l') -> if lit_eq l l' then v1 else V_unknown
   | (V_boxref n t, V_boxref m t') -> 
-    if n = m then v1 else V_unknown (*Any change to locations in memory should be handled above this level*)
+    (*Changes to memory handled by merge_mem*)
+    if n = m then v1 else V_unknown
   | (V_tuple l, V_tuple l') -> 
     V_tuple (map2 merge_values l l') 
   | (V_list l, V_list l') -> 
@@ -509,6 +514,29 @@ let rec merge_values v1 v2 =
   | (v1,V_track v2 ts)  -> taint (merge_values v1 v2) ts
   | (_, _) -> V_unknown
 end 
+
+val merge_lmems : lmem -> lmem -> lmem
+let merge_lmems ((LMem owner1 c1 mem1 set1) as lmem1) ((LMem owner2 c2 mem2 set2) as lmem2) = 
+  let diff1 = Set_extra.toList (set1 \ set2) in
+  let diff2 = Set_extra.toList (set2 \ set1) in
+  let inters = Set_extra.toList (set1 inter set2) in
+  let c = max c1 c2 in
+  let mem = LMem owner1 c (if c1 >= c2 then mem1 else mem2) Set.empty in
+  let diff_mem1 = 
+    List.foldr 
+      (fun i mem -> update_mem false mem i 
+	(match Map.lookup i mem2 with
+	  | Nothing -> V_unknown
+	  | Just v -> merge_values (in_mem lmem1 i) v end)) mem diff1 in
+  let diff_mem2 = 
+    List.foldr 
+      (fun i mem -> update_mem false mem i 
+	(match Map.lookup i mem1 with
+	  | Nothing -> V_unknown
+	  | Just v -> merge_values (in_mem lmem2 i) v end)) diff_mem1 diff2 in
+  List.foldr 
+    (fun i mem -> update_mem false mem i (merge_values (in_mem lmem1 i) (in_mem lmem2 i)))
+    diff_mem2 inters
 
 let vector_length v = match (detaint v) with
   | V_vector n inc vals -> List.length vals
@@ -658,15 +686,15 @@ let fupdate_vector_slice vec replace start stop =
      end) in
   binary_taint fupdate_vec_help vec replace
 
-val update_vector_slice : value -> value -> nat -> nat -> lmem -> lmem
-let update_vector_slice vector value start stop mem = 
+val update_vector_slice : bool -> value -> value -> nat -> nat -> lmem -> lmem
+let update_vector_slice track vector value start stop mem = 
   match (detaint vector,detaint value) with
   | ((V_boxref n t), v) ->
-    update_mem mem n (fupdate_vector_slice (in_mem mem n) (retaint value v) start stop)    
+    update_mem track mem n (fupdate_vector_slice (in_mem mem n) (retaint value v) start stop)    
   | ((V_vector m _ vs),(V_vector n _ vals)) ->
     let (V_vector m' _ vs') = slice_vector vector start stop in
     foldr2 (fun vbox v mem -> match vbox with
-      | V_boxref n t -> update_mem mem n v end)
+      | V_boxref n t -> update_mem track mem n v end)
       mem vs' vals
   | ((V_vector m dir vs),(V_vector_sparse n o _ vals d)) -> 
     let (V_vector m' _ vs') = slice_vector vector start stop in
@@ -674,7 +702,7 @@ let update_vector_slice vector value start stop mem =
                           match vbox with
 			    | V_boxref n t -> 
 			      (if is_inc(dir) then i+1 else i-1,
-				update_mem mem n (match List.lookup i vals with
+				update_mem track mem n (match List.lookup i vals with
 				  | Nothing -> d
 				  | Just v  -> v end))
                           end) (m,mem) vs' in 
@@ -682,7 +710,7 @@ let update_vector_slice vector value start stop mem =
   | ((V_vector m _ vs),v) ->
     let (V_vector m' _ vs') = slice_vector vector start stop in
     List.foldr (fun vbox mem -> match vbox with
-                                    | V_boxref n t -> update_mem mem n v end)
+                                    | V_boxref n t -> update_mem track mem n v end)
       mem vs'
 end
 
@@ -753,6 +781,26 @@ let get_stack_state stack =
     | Thunk_frame exp top_level lenv lmem stack -> (lenv,lmem)
 end
 
+let rec update_stack_state stack ((LMem name c mem _) as lmem) =
+  match stack with
+    | Top -> Top
+    | Hole_frame id oe t_level env (LMem _ _ _ s) Top -> 
+      (match Map.lookup (0 : nat) mem with
+	| Nothing -> Thunk_frame oe t_level (add_to_env (id,V_unknown) env) (LMem name c mem s) Top
+	| Just v  -> Thunk_frame oe t_level (add_to_env (id, v) env) (LMem name c (Map.delete (0 : nat) mem) s) Top end)
+    | Thunk_frame e t_level env _ Top -> Thunk_frame e t_level env lmem Top
+    | Hole_frame id e t_level env mem s -> Hole_frame id e t_level env mem (update_stack_state s lmem)
+    | Thunk_frame e t_level env mem s -> Thunk_frame e t_level env mem (update_stack_state s lmem)
+end
+
+let rec clear_stack_state stack =
+  match stack with
+    | Top -> Top
+    | Hole_frame id e t_level env lmem Top -> Hole_frame id e t_level env (clear_updates lmem) Top
+    | Thunk_frame e t_level env lmem Top -> Thunk_frame e t_level env (clear_updates lmem) Top
+    | Hole_frame id e t_level env lmem s -> Hole_frame id e t_level env lmem (clear_stack_state s)
+    | Thunk_frame e t_level env lmem s -> Thunk_frame e t_level env lmem (clear_stack_state s)
+end
 
 (*functions for converting in progress evaluation back into expression for building current continuation*)
 let rec combine_typs ts =
@@ -942,10 +990,14 @@ let env_to_let mode (LEnv _ env) (E_aux e annot) taint_env =
 		    (E_aux e annot))
 	annot, taint_env)
 end 
-(*
+
 let fix_up_nondet typ branches annot = 
- match typ with
-   | T_id "unit" -> *)
+  match typ with
+    | T_id "unit" -> (branches, Nothing)
+    | T_abbrev _ (T_id "unit") -> (branches, Nothing)
+    | _ -> ((List.map 
+      (fun e -> E_aux (E_assign (LEXP_aux (LEXP_id redex_id) annot) e) annot) branches), Just "0")
+end
 
 (* match_pattern returns a tuple of (pattern_matches? , pattern_passed_due_to_unknown?, env_of_pattern *)
 val match_pattern : top_level -> pat tannot -> value -> bool * bool * lenv
@@ -1379,7 +1431,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	    | (V_vector _ _ [(V_lit(L_aux L_one _))],true) -> interp_main mode t_level l_env lm thn
 	    | (V_vector _ _ [(V_lit(L_aux L_one _))],false) -> debug_out Nothing Nothing thn t_level lm l_env
 	    | (V_unknown,_) -> 
-	      interp_main mode t_level l_env lm (E_aux (E_block [thn;els]) (l,annot))
+	      let (branches,maybe_id) = fix_up_nondet typ [thn;els] (l,annot) in
+	      interp_main mode t_level l_env lm (E_aux (E_nondet branches) (l,non_det_annot annot maybe_id))
             | (_,true) -> interp_main mode t_level l_env lm els 
 	    | (_,false) -> debug_out Nothing Nothing els t_level lm l_env end)
         (fun a -> update_stack a (add_to_top_frame (fun c env -> (E_aux (E_if c thn els) (l,annot), env))))
@@ -1471,7 +1524,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	      let (lets,taint_env) = 
 		List.foldr (fun (env,_,exp) (rst,taint_env) -> 
 		  let (e,t_e) = env_to_let mode env exp taint_env in (e::rst,t_e)) ([],l_env) multi_matches in
-	      interp_main mode t_level taint_env lm (E_aux (E_block lets) (l,annot))
+	      let (branches,maybe_id) = fix_up_nondet typ lets (l,annot) in
+	      interp_main mode t_level taint_env lm (E_aux (E_nondet branches) (l,(non_det_annot annot maybe_id)))
 	 end)
         (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_case e pats) (l,annot), env))))
     | E_record(FES_aux (FES_Fexps fexps _) fes_annot) -> 
@@ -1848,7 +1902,11 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     | E_block exps -> interp_block mode t_level l_env l_env l_mem l annot exps
     | E_nondet exps ->
       (Action (Nondet exps tag) 
-	      (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,(intern_annot annot))) t_level l_env l_mem Top),
+	      (match tag with
+		| Tag_unknown (Just id) ->
+		  Hole_frame redex_id (E_aux (E_id redex_id) (l,(intern_annot annot))) t_level l_env l_mem Top
+		| _ -> 
+		  Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,(intern_annot annot))) t_level l_env l_mem Top end),
        l_mem, l_env)
     | E_app f args ->
       (match (exp_list mode t_level 
@@ -1868,8 +1926,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		| [(env,_,exp)] -> 
 		  resolve_outcome 
                     (if mode.eager_eval 
-		     then (interp_main mode t_level env emem exp)
-		     else (debug_out (Just name) (Just v) exp t_level emem env))  
+		     then (interp_main mode t_level env (emem name) exp)
+		     else (debug_out (Just name) (Just v) exp t_level (emem name) env))  
 	            (fun ret lm le -> (Value ret, l_mem,l_env))
                     (fun a -> update_stack a 
 		      (fun stack -> (Hole_frame redex_id (E_aux (E_id redex_id) (l,(intern_annot annot)))
@@ -1878,7 +1936,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		  let (lets,taint_env) = 
 		    List.foldr (fun (env,_,exp) (rst,taint_env) -> 
 		      let (e,t_e) = env_to_let mode env exp taint_env in (e::rst,t_e)) ([],l_env) multi_matches in
-		  interp_main mode t_level taint_env lm (E_aux (E_block lets) (l,annot))
+		  let (branches,maybe_id) = fix_up_nondet typ lets (l,annot) in
+		  interp_main mode t_level taint_env lm (E_aux (E_nondet branches) (l,(non_det_annot annot maybe_id)))
 	       end)
             | Nothing -> 
 	      (Error l (String.stringAppend "Internal error: function with tag global unfound " name),lm,le) end)
@@ -1891,8 +1950,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	    | [(env,used_unknown,exp)] -> 
 	      resolve_outcome 
                 (if mode.eager_eval 
-		 then (interp_main mode t_level env emem exp)
-		 else (debug_out (Just name) (Just v) exp t_level emem env))  
+		 then (interp_main mode t_level env (emem name) exp)
+		 else (debug_out (Just name) (Just v) exp t_level (emem name) env))  
 	        (fun ret lm le -> (Value ret, l_mem,l_env))
                 (fun a -> update_stack a 
 		  (fun stack -> (Hole_frame redex_id (E_aux (E_id redex_id) (l,(intern_annot annot)))
@@ -1909,8 +1968,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	    | [(env,used_unknown,exp)] -> 
               resolve_outcome 
 		(if mode.eager_eval 
-		 then (interp_main mode t_level env emem exp)
-                 else (debug_out (Just name) (Just v) exp t_level emem env))
+		 then (interp_main mode t_level env (emem name) exp)
+                 else (debug_out (Just name) (Just v) exp t_level (emem name) env))
 	        (fun ret lm le -> (Value ret, l_mem,l_env))
                 (fun a -> update_stack a 
 		  (fun stack -> 
@@ -1977,8 +2036,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			| [(env,used_unknown,exp)] ->
 			  resolve_outcome 
 			    (if mode.eager_eval
-			     then (interp_main mode t_level env emem exp)
-			     else (debug_out (Just name) (Just (V_tuple [lv;rv])) exp t_level emem env)) 
+			     then (interp_main mode t_level env (emem name) exp)
+			     else (debug_out (Just name) (Just (V_tuple [lv;rv])) exp t_level (emem name) env)) 
 			    (fun ret lm le -> (Value ret,l_mem,l_env))
                             (fun a -> update_stack a 
 			      (fun stack -> 
@@ -1994,8 +2053,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			| [(env,used_unknown,exp)] ->
 			  resolve_outcome 
 			    (if mode.eager_eval
-			     then (interp_main mode t_level env emem exp)
-			     else (debug_out (Just name) (Just (V_tuple [lv;rv])) exp t_level emem env)) 
+			     then (interp_main mode t_level env (emem name) exp)
+			     else (debug_out (Just name) (Just (V_tuple [lv;rv])) exp t_level (emem name) env)) 
 			    (fun ret lm le -> (Value ret,l_mem,l_env))
                             (fun a -> update_stack a 
 			      (fun stack -> (Hole_frame redex_id (E_aux (E_id redex_id) (l,annot))
@@ -2010,8 +2069,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 			| [(env,used_unknown,exp)] ->
 			  resolve_outcome 
 			    (if mode.eager_eval 
-			     then (interp_main mode t_level env emem exp)
-			     else (debug_out (Just name) (Just (V_tuple [lv;rv])) exp t_level emem env))
+			     then (interp_main mode t_level env (emem name) exp)
+			     else (debug_out (Just name) (Just (V_tuple [lv;rv])) exp t_level (emem name) env))
 			    (fun ret lm le -> (Value ret,l_mem,l_env))
                             (fun a -> update_stack a 
 			      (fun stack -> (Hole_frame redex_id
@@ -2102,17 +2161,28 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	  match detaint (in_lenv l_env id) with
 	    | ((V_boxref n t) as v) -> 
 	      if is_top_level 
-	      then ((Value (V_lit (L_aux L_unit l)), update_mem l_mem n (recenter_val t value), l_env),Nothing)
+	      then ((Value (V_lit (L_aux L_unit l)), 
+		     update_mem mode.track_lmem l_mem n (recenter_val t value), l_env),Nothing)
 	      else ((Value v, l_mem, l_env),Just (fun e env -> (LEXP_aux (LEXP_id id) (l,annot), env)))
 	    | V_unknown ->
 	      if is_top_level then
-		let (LMem c m) = l_mem in
-		let l_mem = (LMem (c+1) m) in
-		((Value (V_lit (L_aux L_unit l)), 
-		  update_mem l_mem c value, (add_to_env (id,(V_boxref c typ)) l_env)),Nothing)
+		if name = "0" then
+		  ((Value (V_lit (L_aux L_unit l)), update_mem true l_mem 0 value, l_env), Nothing)
+		else 
+		  let (LMem owner c m s) = l_mem in
+		  let l_mem = (LMem owner (c+1) m s) in
+		  ((Value (V_lit (L_aux L_unit l)), 
+		    update_mem mode.track_lmem l_mem c value,
+		    (add_to_env (id,(V_boxref c typ)) l_env)),Nothing)
 	      else ((Error l ("Unknown local id " ^ (get_id id)),l_mem,l_env),Nothing)
             | v -> 
-	      if is_top_level then ((Error l "Writes must be to reg values",l_mem,l_env),Nothing)
+	      if is_top_level 
+	      then 
+		if name = "0" then
+		  ((Value (V_lit (L_aux L_unit l)), update_mem true l_mem 0 value, l_env), Nothing)
+		else
+		  ((Error l ("Writes must be to reg values given " ^ (string_of_value v)),l_mem,l_env),
+		   Nothing)
 	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_id id) (l,annot), env)))
 	     end 
         | Tag_global -> 
@@ -2251,8 +2321,8 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 				      " on value " ^ (string_of_value new_vals)),l_mem,l_env),Nothing)
 		| [(env,used_unknown,exp)] -> 
 		  (match (if mode.eager_eval 
-		          then (interp_main mode t_level env emem exp)
-		          else (debug_out (Just name) (Just new_vals) exp t_level emem env)) with
+		          then (interp_main mode t_level env (emem name) exp)
+		          else (debug_out (Just name) (Just new_vals) exp t_level (emem name) env)) with
 		    | (Value ret, _,_) -> ((Value ret, l_mem,l_env),Nothing)
 		    | (Action action stack,lm,le) ->
 		      (((update_stack (Action action stack) 
@@ -2263,7 +2333,9 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		  let (lets,taint_env) = 
 		    List.foldr (fun (env,_,exp) (rst,taint_env) -> 
 		      let (e,t_e) = env_to_let mode env exp taint_env in (e::rst,t_e)) ([],l_env) multi_matches in
-		  (interp_main mode t_level taint_env lm (E_aux (E_block lets) (l,annot)), Nothing)
+		  let (branches,maybe_id) = fix_up_nondet typ lets (l,annot) in
+		  (interp_main mode t_level taint_env lm (E_aux (E_nondet branches) (l,non_det_annot annot maybe_id)),
+		   Nothing)
                end)
             | Nothing -> 
 	      ((Error l ("Internal error: function unfound " ^ name),lm,le),Nothing) end)
@@ -2280,8 +2352,8 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 				      " on value " ^ (string_of_value new_vals)),l_mem,l_env),Nothing)
 		| [(env,used_unknown,exp)] -> 
 		  (match (if mode.eager_eval 
-		          then (interp_main mode t_level env emem exp)
-		          else (debug_out (Just name) (Just new_vals) exp t_level emem env)) with
+		          then (interp_main mode t_level env (emem name) exp)
+		          else (debug_out (Just name) (Just new_vals) exp t_level (emem name) env)) with
 		    | (Value ret, _,_) -> ((Value ret, l_mem,l_env),Nothing)
 		    | (Action action stack,lm,le) ->
 		      (((update_stack (Action action stack) 
@@ -2292,7 +2364,9 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		  let (lets,taint_env) = 
 		    List.foldr (fun (env,_,exp) (rst,taint_env) -> 
 		      let (e,t_e) = env_to_let mode env exp taint_env in (e::rst,t_e)) ([],l_env) multi_matches in
-		  (interp_main mode t_level taint_env lm (E_aux (E_block lets) (l,annot)), Nothing)
+		  let (branches,maybe_id) = fix_up_nondet typ lets (l,annot) in
+		  (interp_main mode t_level taint_env lm (E_aux (E_nondet branches) (l,non_det_annot annot maybe_id)),
+		   Nothing)
                end)
             | Nothing -> 
 	      ((Error l ("Internal error: function unfound " ^ name),lm,le),Nothing) end)
@@ -2307,14 +2381,16 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	  match detaint (in_lenv l_env id) with
 	    | ((V_boxref n t) as v) -> 
 	      if is_top_level 
-	      then ((Value (V_lit (L_aux L_unit l)), update_mem l_mem n (recenter_val t value), l_env),Nothing)
-	      else ((Value v, l_mem, l_env),Just (fun e env -> (LEXP_aux (LEXP_cast typc id) (l,annot), env)))
+	      then ((Value (V_lit (L_aux L_unit l)), 
+		     update_mem mode.track_lmem l_mem n (recenter_val t value), l_env),Nothing)
+	      else ((Value v, l_mem, l_env),
+		    Just (fun e env -> (LEXP_aux (LEXP_cast typc id) (l,annot), env)))
 	    | V_unknown -> 	  
 	      if is_top_level 
               then begin
-		let (LMem c m) = l_mem in
-		let l_mem = (LMem (c+1) m) in
-		((Value (V_lit (L_aux L_unit l)), update_mem l_mem c value, 
+		let (LMem owner c m s) = l_mem in
+		let l_mem = (LMem owner (c+1) m s) in
+		((Value (V_lit (L_aux L_unit l)), update_mem mode.track_lmem l_mem c value, 
 		  (add_to_env (id,(V_boxref c typ)) l_env)),Nothing)
               end
               else ((Error l ("Undefined id " ^ (get_id id)),l_mem,l_env),Nothing)
@@ -2331,13 +2407,16 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	  let reg_size = reg_size regf in
 	  let request = 
             (Action (Write_reg regf Nothing 
-		       (if is_top_level then (update_vector_start default_dir start_pos reg_size value) else value)) 
+		       (if is_top_level 
+			then (update_vector_start default_dir start_pos reg_size value) 
+			else value)) 
 	       (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),
 	     l_mem,l_env) in
           if is_top_level then (request,Nothing)
 	  else (request,Just (fun e env -> (LEXP_aux (LEXP_cast typc id) (l,annot), env)))
         | _ -> 
-	  ((Error l ("Internal error: writing to id not extern or empty " ^(get_id id)),l_mem,l_env),Nothing)
+	  ((Error l ("Internal error: writing to id not extern or empty " ^(get_id id)),l_mem,l_env),
+	   Nothing)
       end 
     | LEXP_vector lexp exp -> 
       match (interp_main mode t_level l_env l_mem exp) with
@@ -2361,13 +2440,16 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		(match (in_mem lm i,is_top_level,maybe_builder) with
 		  | ((V_vector _ _ _ as vec),true,_) ->
 		    let new_vec = fupdate_vector_slice vec (V_vector 1 default_dir [value]) n n in
-		    ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm i new_vec, l_env), Nothing)
+		    ((Value (V_lit (L_aux L_unit Unknown)), 
+		      update_mem mode.track_lmem lm i new_vec, l_env), Nothing)
 		  | ((V_track (V_vector _ _ _ as vec) r), true,_) ->
 		    let new_vec = fupdate_vector_slice vec (V_vector 1 default_dir [value])  n n in
-		    ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm i (taint new_vec r),l_env),Nothing)
+		    ((Value (V_lit (L_aux L_unit Unknown)), 
+		      update_mem mode.track_lmem lm i (taint new_vec r),l_env),Nothing)
 		  | ((V_vector _ _ _ as vec),false, Just lexp_builder) ->
 		    ((Value (access_vector vec n), lm, l_env), Just (next_builder lexp_builder))
-		  | (v,_,_) -> Assert_extra.failwith("no vector findable in set bit, found " ^ (string_of_value v))
+		  | (v,_,_) -> 
+		    Assert_extra.failwith("no vector findable in set bit, found " ^ (string_of_value v))
 		 end )
               | V_vector inc m vs -> 
 		(match (nth(),is_top_level,maybe_builder) with
@@ -2386,11 +2468,15 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		      l_mem,l_env),
                      Just (next_builder lexp_builder))
 		  | (V_boxref n t,true,_) -> 
-		    ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm n value, l_env),Nothing)
+		    ((Value (V_lit (L_aux L_unit Unknown)), update_mem mode.track_lmem lm n value, l_env),
+		     Nothing)
 		  | (V_unknown,true,_) -> ((Value (V_lit (L_aux L_unit Unknown)), lm, l_env),Nothing)
-		  | (v,true,_) -> ((Error l "Vector does not contain reg or register values",lm,l_env),Nothing)
-		  | ((V_boxref n t),false, Just lexp_builder) -> ((Value (in_mem lm n),lm, l_env),Just (next_builder lexp_builder))
-		  | (v,false, Just lexp_builder) -> ((Value v,lm,le), Just (next_builder lexp_builder)) end)
+		  | (v,true,_) -> 
+		    ((Error l "Vector does not contain reg or register values",lm,l_env),Nothing)
+		  | ((V_boxref n t),false, Just lexp_builder) -> 
+		    ((Value (in_mem lm n),lm, l_env),Just (next_builder lexp_builder))
+		  | (v,false, Just lexp_builder) -> 
+		    ((Value v,lm,le), Just (next_builder lexp_builder)) end)
 	      | V_vector_sparse n m inc vs d ->
               (match (nth(),is_top_level,maybe_builder) with
 		| (V_register regform,true,_) ->
@@ -2407,13 +2493,15 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		      l_mem,l_env),
                      Just (next_builder lexp_builder))				
 		| (V_boxref n t,true,_) -> 
-		  ((Value (V_lit (L_aux L_unit Unknown)), update_mem lm n value, l_env),Nothing)
-		| (v,true,_) -> 
-		  ((Error l ("Vector does not contain reg or register values " ^ (string_of_value v)),lm,l_env),
+		  ((Value (V_lit (L_aux L_unit Unknown)), update_mem mode.track_lmem lm n value, l_env),
 		   Nothing)
+		| (v,true,_) -> 
+		  ((Error l ("Vector does not contain reg or register values " ^ (string_of_value v)),
+		    lm,l_env), Nothing)
 		| ((V_boxref n t),false, Just lexp_builder) -> 
 		  ((Value (in_mem lm n),lm, l_env),Just (next_builder lexp_builder))
-		| (v,false, Just lexp_builder) -> ((Value v,lm,le), Just (next_builder lexp_builder)) end)
+		| (v,false, Just lexp_builder) -> 
+		  ((Value v,lm,le), Just (next_builder lexp_builder)) end)
             | v -> 
 	      ((Error l ("Vector access to write of non-vector" ^ (string_of_value v)),lm,l_env),Nothing)
 	     end)
@@ -2430,13 +2518,16 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 			  then (update_vector_start default_dir n 1 value)
 			  else (access_vector value n))) s,lm,le),
 	      Just  (next_builder lexp_builder))
-           | ((Write_mem id a Nothing value),true) -> ((Action (Write_mem id a (Just (n,n)) value) s,lm,le), Nothing)
+           | ((Write_mem id a Nothing value),true) -> 
+	     ((Action (Write_mem id a (Just (n,n)) value) s,lm,le), Nothing)
            | ((Write_mem id a Nothing value),false) -> 
 	     ((Action (Write_mem id a (Just (n,n)) value) s,lm,le), Just (next_builder lexp_builder))
            | _ -> ((Action a s,lm,le), Just (next_builder lexp_builder)) end)
          | e -> e end)
-        | v -> ((Error l ("Vector access must be a number given " ^ (string_of_value v)),lm,le),Nothing) end)
-      | (Action a s,lm,le) -> ((Action a s,lm,le), Just (fun e env -> (LEXP_aux (LEXP_vector lexp e) (l,annot), env)))
+        | v -> 
+	  ((Error l ("Vector access must be a number given " ^ (string_of_value v)),lm,le),Nothing) end)
+      | (Action a s,lm,le) -> 
+	((Action a s,lm,le), Just (fun e env -> (LEXP_aux (LEXP_vector lexp e) (l,annot), env)))
       | e -> (e,Nothing) end
     | LEXP_vector_range lexp exp1 exp2  ->
       match (interp_main mode t_level l_env l_mem exp1) with
@@ -2460,16 +2551,19 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
               | ((Value v,lm,le), Just lexp_builder) ->
 		(match (detaint v,is_top_level) with
                 | (V_vector m inc vs,true) -> 
-                  ((Value (V_lit (L_aux L_unit Unknown)), update_vector_slice v value n1 n2 lm, l_env), Nothing)
+                  ((Value (V_lit (L_aux L_unit Unknown)), 
+		    update_vector_slice mode.track_lmem v value n1 n2 lm, l_env), Nothing)
 		| (V_boxref _ _, true) -> 
-		  ((Value (V_lit (L_aux L_unit Unknown)), update_vector_slice v value n1 n2 lm, l_env), Nothing)
+		  ((Value (V_lit (L_aux L_unit Unknown)), 
+		    update_vector_slice mode.track_lmem v value n1 n2 lm, l_env), Nothing)
                 | (V_vector m inc vs,false) ->
                   ((Value (slice_vector v n1 n2),lm,l_env), Just (next_builder lexp_builder))
 		| (V_unknown,_) -> 
 		  let inc =  n1 < n2 in
 		  let start = if inc then n1 else (n2-1) in
 		  let size = if inc then n2-n1 +1 else n1 -n2 +1 in      
-		  ((Value (V_vector start (if inc then IInc else IDec) (List.replicate size V_unknown)),lm,l_env),Nothing)
+		  ((Value (V_vector start (if inc then IInc else IDec) (List.replicate size V_unknown)),
+		    lm,l_env),Nothing)
                 | _ -> ((Error l "Vector required",lm,le),Nothing) end)
               | ((Action (Write_reg regf Nothing value) s, lm,le), Just lexp_builder) ->
 		let len = (if n1 < n2 then n2 -n1 else n1 - n2) +1 in
@@ -2501,7 +2595,8 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
        let next_builder = Just (fun e env -> let (lexp,env) = (lexp_builder e env) in 
                                              (LEXP_aux (LEXP_field lexp id) (l,annot), env)) in
        match (in_env (env_from_list fexps) (get_id id),is_top_level) with
-       | (Just (V_boxref n t),true) -> ((Value (V_lit (L_aux L_unit l)), update_mem lm n value, l_env),Nothing)
+       | (Just (V_boxref n t),true) -> 
+	 ((Value (V_lit (L_aux L_unit l)), update_mem mode.track_lmem lm n value, l_env),Nothing)
        | (Just (V_boxref n t),false) -> ((Value (in_mem lm n),lm,l_env),next_builder)
        | (Just v, true) -> ((Error l "Mutating a field access requires a reg type",lm,le),Nothing)
        | (Just v,false) -> ((Value v,lm,l_env),next_builder)
@@ -2624,11 +2719,11 @@ let rec eval_toplevel_let handle_action tlevel env mem lbind =
 let rec to_global_letbinds handle_action (Defs defs) t_level =
   let  (Env fdefs instrs default_dir lets regs ctors subregs aliases) = t_level in
   match defs with
-  | [] -> ((Value (V_lit (L_aux L_unit Unknown)), emem, eenv),t_level)
+  | [] -> ((Value (V_lit (L_aux L_unit Unknown)), (emem "global_letbinds"), eenv),t_level)
   | def::defs ->
     match def with
     | DEF_val lbind ->
-      match eval_toplevel_let handle_action t_level eenv emem lbind with
+      match eval_toplevel_let handle_action t_level eenv (emem "global_letbinds") lbind with
 	| Just le -> 
 	  to_global_letbinds handle_action (Defs defs) 
 	                                   (Env fdefs instrs default_dir (Map.(union) lets le) regs ctors subregs aliases)
@@ -2677,8 +2772,8 @@ let to_top_env external_functions defs =
 let interp mode external_functions defs exp =
   match (to_top_env external_functions defs) with
     | (Nothing,t_level) -> 
-      interp_main mode t_level eenv emem exp
-    | (Just o,_) -> (o,emem,eenv) 
+      interp_main mode t_level eenv (emem "top level") exp
+    | (Just o,_) -> (o,(emem "top level error"),eenv) 
   end
 
 let rec resume_with_env mode stack value =
@@ -2713,7 +2808,7 @@ let rec resume_with_env mode stack value =
 
 let rec resume mode stack value =
   match (stack,value) with
-  | (Top,_) -> (Error Unknown "Top hit without expression to evaluate in resume",emem,eenv)
+  | (Top,_) -> (Error Unknown "Top hit without expression to evaluate in resume",(emem "top level error"),eenv)
   | (Hole_frame id exp t_level env mem Top,Just value) -> 
     interp_main mode t_level (add_to_env (id,value) env) mem exp
   | (Hole_frame id exp t_level env mem Top,Nothing) ->

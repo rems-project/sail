@@ -544,7 +544,7 @@ type tag =  (* Data indicating where the identifier arises and thus information 
  | Tag_spec
  | Tag_enum of integer
  | Tag_alias
- | Tag_unknown (* Tag to distinguish an unknown path from a non-analysis non deterministic path *)
+ | Tag_unknown of maybe string (* Tag to distinguish an unknown path from a non-analysis non deterministic path *)
 
 
 type tinf =  (* Type variables, type, and constraints, bound to an identifier *)

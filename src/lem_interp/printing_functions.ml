@@ -271,7 +271,7 @@ let reg_name_to_string = function
 
 let dependencies_to_string dependencies = String.concat ", " (List.map reg_name_to_string dependencies)
 
-let rec val_to_string_internal ((Interp.LMem (_,memory)) as mem) = function
+let rec val_to_string_internal ((Interp.LMem (_,_,memory,_)) as mem) = function
  | Interp.V_boxref(n, t) -> val_to_string_internal mem (Pmap.find n memory)
  | Interp.V_lit (L_aux(l,_)) -> sprintf "%s" (lit_to_string l)
  | Interp.V_tuple l ->
