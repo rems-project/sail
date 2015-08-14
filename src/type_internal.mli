@@ -89,6 +89,7 @@ type constraint_origin =
   | Specc of Parse_ast.l
 
 type range_enforcement = Require | Guarantee 
+type cond_kind = Positive | Negative | Solo | Switch
 
 (* Constraints for nexps, plus the location which added the constraint *)
 type nexp_range =
@@ -98,7 +99,7 @@ type nexp_range =
   | In of constraint_origin * string * int list
   | InS of constraint_origin * nexp * int list (* This holds the given value for string after a substitution *)
   | Predicate of constraint_origin * nexp_range (* This will treat the inner constraint as holding in positive condcons positions : must be one of LtEq, Eq, or GtEq*)
-  | CondCons of constraint_origin * nexp_range list * nexp_range list (* Constraints from one path from a conditional (pattern or if) and the constraints from that conditional *)
+  | CondCons of constraint_origin * cond_kind * nexp_range list * nexp_range list (* Constraints from one path from a conditional (pattern or if) and the constraints from that conditional *)
   | BranchCons of constraint_origin * nexp_range list (* CondCons constraints from all branches of a conditional; list should be all CondCons *)
 
 val get_c_loc : constraint_origin -> Parse_ast.l

@@ -818,8 +818,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	(*TOTHINK Possibly I should first consistency check else and then, with Guarantee, then check against expect_t with Require*)
         let then_t',then_c' = type_consistent (Expr l) d_env Require true then_t expect_t in
         let else_t',else_c' = type_consistent (Expr l) d_env Require true else_t expect_t  in
-        let t_cs = CondCons((Expr l),c1,then_c@then_c') in
-        let e_cs = CondCons((Expr l),[],else_c@else_c') in
+        let t_cs = CondCons((Expr l),Positive,c1,then_c@then_c') in
+        let e_cs = CondCons((Expr l),Negative,[],else_c@else_c') in
         (E_aux(E_if(cond',then',else'),(l,simple_annot expect_t)),
          expect_t,Envmap.intersect_merge (tannot_merge (Expr l) d_env true) then_env else_env,[t_cs;e_cs],
 	 merge_bounds then_bs else_bs, (*TODO Should be an intersecting merge*)
@@ -827,8 +827,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       | _ ->
         let then',then_t,then_env,then_c,then_bs,then_ef = check_exp envs imp_param expect_t then_ in
         let else',else_t,else_env,else_c,else_bs,else_ef = check_exp envs imp_param expect_t else_ in
-        let t_cs = CondCons((Expr l),c1,then_c) in
-        let e_cs = CondCons((Expr l),[],else_c) in
+        let t_cs = CondCons((Expr l),Positive,c1,then_c) in
+        let e_cs = CondCons((Expr l),Negative,[],else_c) in
         (E_aux(E_if(cond',then',else'),(l,simple_annot expect_t)),
          expect_t,Envmap.intersect_merge (tannot_merge (Expr l) d_env true) then_env else_env,[t_cs;e_cs],
 	 merge_bounds then_bs else_bs,
@@ -1225,7 +1225,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
 	  | Tapp("register",[TA_typ t]) -> t
 	  | _ -> t' in
       (*let _ = Printf.eprintf "Type of pattern after register check %s\n" (t_to_string t') in*)
-      let (pexps',t,cs',ef') = check_cases envs imp_param t' expect_t pexps in
+      let (pexps',t,cs',ef') = 
+	check_cases envs imp_param t' expect_t (if (List.length pexps) = 1 then Solo else Switch) pexps in
       (E_aux(E_case(e',pexps'),(l,simple_annot t)),t,t_env,cs@cs',nob,union_effects ef ef')
     | E_let(lbind,body) -> 
       let (lb',t_env',cs,b_env',ef) = (check_lbind envs imp_param false Emp_local lbind) in
@@ -1260,7 +1261,7 @@ and check_block envs imp_param expect_t exps:((tannot exp) list * tannot * nexp_
 			 merge_bounds b_env' b_env, tp_env)) imp_param expect_t exps in
       ((e'::exps'),annot',sc@sc',t,union_effects ef ef')
 
-and check_cases envs imp_param check_t expect_t pexps : ((tannot pexp) list * typ * nexp_range list * effect) =
+and check_cases envs imp_param check_t expect_t kind pexps : ((tannot pexp) list * typ * nexp_range list * effect) =
   let (Env(d_env,t_env,b_env,tp_env)) = envs in
   match pexps with
     | [] -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "switch with no cases found")
@@ -1270,7 +1271,7 @@ and check_cases envs imp_param check_t expect_t pexps : ((tannot pexp) list * ty
 	check_exp (Env(d_env,
 		       Envmap.union_merge (tannot_merge (Expr l) d_env true) t_env env,
 		       merge_bounds b_env bounds, tp_env)) imp_param expect_t exp in
-      let cs = [CondCons(Expr l, cs_p, cs_e)] in
+      let cs = [CondCons(Expr l,kind, cs_p, cs_e)] in
       [Pat_aux(Pat_exp(pat',e),(l,cons_ef_annot t cs ef))],t,cs,ef
     | ((Pat_aux(Pat_exp(pat,exp),(l,annot)))::pexps) ->
       let pat',env,cs_p,bounds,u = check_pattern envs Emp_local check_t pat in
@@ -1278,8 +1279,8 @@ and check_cases envs imp_param check_t expect_t pexps : ((tannot pexp) list * ty
 	check_exp (Env(d_env,
 		       Envmap.union_merge (tannot_merge (Expr l) d_env true) t_env env,
 		       merge_bounds b_env bounds, tp_env)) imp_param expect_t exp in
-      let cs = CondCons(Expr l,cs_p,cs_e) in
-      let (pes,tl,csl,efl) = check_cases envs imp_param check_t expect_t pexps in      
+      let cs = CondCons(Expr l,kind,cs_p,cs_e) in
+      let (pes,tl,csl,efl) = check_cases envs imp_param check_t expect_t kind pexps in      
       ((Pat_aux(Pat_exp(pat',e),(l,cons_ef_annot t [cs] ef)))::pes,tl,cs::csl,union_effects efl ef)
 
 and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot))) 
@@ -1727,6 +1728,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let p_t = new_t () in
       let ef = new_e () in
       t,p_t,Base((ids,{t=Tfn(p_t,t,IP_none,ef)}),Emp_global,constraints,ef,nob),t_param_env in
+  let cond_kind = if (List.length funcls) = 1 then Solo else Switch in
   let check t_env tp_env imp_param =
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,_))) ->
@@ -1738,7 +1740,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
 			 merge_bounds b_env b_env',tp_env)) imp_param ret_t exp in
 	(*let _ = Printf.eprintf "checked function %s : %s -> %s\n" (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in
 	let _ = Printf.eprintf "constraints were pattern: %s\n expression: %s\n" (constraints_to_string cs_p) (constraints_to_string cs_e) in*)
-	let cs = [CondCons(Fun l,cs_p,cs_e)] in
+	let cs = [CondCons(Fun l,cond_kind,cs_p,cs_e)] in
 	(FCL_aux((FCL_Funcl(id,pat',exp')),(l,(Base(([],ret_t),Emp_global,cs,ef,nob)))),(cs,ef))) funcls) in
   let update_pattern var (FCL_aux ((FCL_Funcl(id,(P_aux(pat,t)),exp)),annot)) = 
     let pat' = match pat with
