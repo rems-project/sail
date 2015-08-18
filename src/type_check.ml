@@ -1620,23 +1620,42 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 	  if (le_big_int b t) then (
 	    let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp{nexp=Nconst(add_big_int (sub_big_int t b) (big_int_of_int 1))}; 
 					 TA_ord({order = Oinc}); TA_typ({t = Tid "bit"});])} in
+	    let rec range_to_type_inc (BF_aux(idx,l)) = 
+	      (match idx with
+	      | BF_single i ->
+		if (le_big_int b (big_int_of_int i)) && (le_big_int (big_int_of_int i) t)
+		then {t = Tid "bit"}, i, 1
+		else typ_error l 
+	          ("register type declaration " ^ id' ^
+		      " contains a field specification outside of the declared register size")
+	      | BF_range(i1,i2) -> 
+		if i1<i2 
+		then 
+		  if (le_big_int b (big_int_of_int i1)) && (le_big_int (big_int_of_int i2) t) 
+		  then let size = i2 - i1 + 1 in
+		       ({t=Tapp("vector",[TA_nexp {nexp=Nconst (big_int_of_int i1)};
+                                          TA_nexp {nexp=Nconst (big_int_of_int size)};
+					  TA_ord({order=Oinc}); TA_typ {t=Tid "bit"}])}, i1, size)
+		  else typ_error l ("register type declaration " ^ id' 
+				    ^ " contains a field specification outside of the declared register size")
+		else typ_error l ("register type declaration " ^ id' ^ " is not consistently increasing")
+	      | BF_concat(bf1, bf2) ->
+		(match (range_to_type_inc bf1, range_to_type_inc bf2) with
+		  | ({t = Tid "bit"}, start, size1),({t= Tid "bit"}, start2, size2) 
+		  | (({t = Tid "bit"}, start, size1), ({t= Tapp("vector", _)}, start2, size2)) 
+		  | (({t=Tapp("vector", _)}, start, size1), ({t=Tid "bit"}, start2, size2))
+		  | (({t=Tapp("vector",_)}, start, size1), ({t=Tapp("vector",_)}, start2, size2)) ->
+		    if start < start2
+		    then let size = size1 + size2 in
+			 ({t=Tapp("vector", [TA_nexp {nexp = Nconst (big_int_of_int start)};
+					     TA_nexp {nexp = Nconst (big_int_of_int size)};
+					     TA_ord({order = Oinc}); TA_typ {t=Tid"bit"}])}, start, size)
+		    else typ_error l ("register type declaration " ^ id' ^ " is not consistently increasing")))
+	    in		      
 	    let franges = 
 	      List.map 
-		(fun ((BF_aux(idx,l)),id) ->
-		  ((id_to_string id),
-		   match idx with
-		     | BF_single i -> 
-		       if (le_big_int b (big_int_of_int i)) && (le_big_int (big_int_of_int i) t) 
-		       then {t = Tid "bit"}
-		       else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
-		     | BF_range(i1,i2) -> 
-		       if i1<i2 
-		       then if (le_big_int b (big_int_of_int i1)) && (le_big_int (big_int_of_int i2) t) 
-			 then {t=Tapp("vector",[TA_nexp {nexp=Nconst (big_int_of_int i1)};
-                                                TA_nexp {nexp=Nconst (big_int_of_int ((i2 - i1) +1))}; TA_ord({order=Oinc}); TA_typ {t=Tid "bit"}])}
-			 else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
-		       else typ_error l ("register type declaration " ^ id' ^ " is not consistently increasing")
-		     | BF_concat _ -> assert false (* TODO: This implies that the variable refers to a concatenation of the different ranges specified; so now I need to implement it thusly*)))
+		(fun (bf,id) ->
+		  let (bf_t, _, _) = range_to_type_inc bf in ((id_to_string id),bf_t))
 		ranges 
 	    in
 	    let tannot = into_register d_env (Base(([],ty),Emp_global,[],pure_e,nob)) in
@@ -1646,24 +1665,41 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
 	  else (
 	    let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp{nexp=Nconst(add_big_int (sub_big_int b t) one)}; 
 					 TA_ord({order = Odec}); TA_typ({t = Tid "bit"});])} in
+	    let rec range_to_type_dec (BF_aux(idx,l)) = 
+	      (match idx with
+	      | BF_single i ->
+		if (ge_big_int b (big_int_of_int i)) && (ge_big_int (big_int_of_int i) t)
+		then {t = Tid "bit"}, i, 1
+		else typ_error l 
+	          ("register type declaration " ^ id' ^
+		      " contains a field specification outside of the declared register size")
+	      | BF_range(i1,i2) -> 
+		if i1>i2 
+		then 
+		  if (ge_big_int b (big_int_of_int i1)) && (ge_big_int (big_int_of_int i2) t) 
+		  then let size = (i1 - i2) + 1 in
+		       ({t=Tapp("vector",[TA_nexp {nexp=Nconst (big_int_of_int i1)};
+                                          TA_nexp {nexp=Nconst (big_int_of_int size)};
+					  TA_ord({order=Odec}); TA_typ {t=Tid "bit"}])}, i1, size)
+		  else typ_error l ("register type declaration " ^ id' 
+				    ^ " contains a field specification outside of the declared register size")
+		else typ_error l ("register type declaration " ^ id' ^ " is not consistently decreasing")
+	      | BF_concat(bf1, bf2) ->
+		(match (range_to_type_dec bf1, range_to_type_dec bf2) with
+		  | ({t = Tid "bit"}, start, size1),({t= Tid "bit"}, start2, size2) 
+		  | (({t = Tid "bit"}, start, size1), ({t= Tapp("vector", _)}, start2, size2)) 
+		  | (({t=Tapp("vector", _)}, start, size1), ({t=Tid "bit"}, start2, size2))
+		  | (({t=Tapp("vector",_)}, start, size1), ({t=Tapp("vector",_)}, start2, size2)) ->
+		    if start > start2
+		    then let size = size1 + size2 in
+			 ({t=Tapp("vector", [TA_nexp {nexp = Nconst (big_int_of_int start)};
+					     TA_nexp {nexp = Nconst (big_int_of_int size)};
+					     TA_ord({order = Oinc}); TA_typ {t=Tid"bit"}])}, start, size)
+		    else typ_error l ("register type declaration " ^ id' ^ " is not consistently decreasing")))
+	    in
 	    let franges = 
 	      List.map 
-		(fun ((BF_aux(idx,l)),id) ->
-		  ((id_to_string id),
-		   match idx with
-		     | BF_single i -> 
-		       if (ge_big_int b (big_int_of_int i)) && (ge_big_int (big_int_of_int i) t) 
-		       then {t = Tid "bit"}
-		       else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
-		     | BF_range(i1,i2) -> 
-		       if i1>i2 
-		       then if (ge_big_int b (big_int_of_int i1)) && (ge_big_int (big_int_of_int i2) t) 
-			 then {t = Tapp("vector",[TA_nexp {nexp=Nconst (big_int_of_int i1)};
-						  TA_nexp {nexp=Nconst (big_int_of_int ((i1 - i2) + 1))};
-						  TA_ord({order = Odec}); TA_typ({t = Tid "bit"})])}
-			 else typ_error l ("register type declaration " ^ id' ^ " contains a field specification outside of the declared register size")
-		       else typ_error l ("register type declaration " ^ id' ^ " is not consistently decreasing")
-		     | BF_concat _ -> assert false (* What is this supposed to imply again?*)))
+		(fun (bf,id) -> let (bf_t, _, _) = range_to_type_dec bf in (id_to_string id, bf_t))
 		ranges 
 	    in
 	    let tannot = into_register d_env (Base(([],ty),Emp_global,[],pure_e,nob)) in
