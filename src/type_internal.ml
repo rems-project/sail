@@ -2915,7 +2915,7 @@ let rec make_merged_constraints acc =  function
       cs      
 
 let merge_branch_constraints merge_nuvars constraint_sets =
-  let _ = Printf.eprintf "merge branch constraints\n%!" in
+  (*let _ = Printf.eprintf "merge branch constraints\n%!" in*)
   (*Separate variables into only occurs in one set, or occurs in multiple sets*)
   let merged_constraints = make_merged_constraints Nexpmap.empty constraint_sets in
   let shared_path_distinct_constraints = 
@@ -2923,16 +2923,16 @@ let merge_branch_constraints merge_nuvars constraint_sets =
       (fun sc k v -> match v with
         (*Variables only in one path get the assignments (other than nuvars) made on the path*)
         | One n ->
-          let _ = Printf.eprintf "Variables in one path: merge_nuvars %b, key %s, one %s\n%!" merge_nuvars (n_to_string k) (n_to_string n) in
+          (*let _ = Printf.eprintf "Variables in one path: merge_nuvars %b, key %s, one %s\n%!" merge_nuvars (n_to_string k) (n_to_string n) in*)
           begin (match (k.nexp, n.nexp) with
             | Nuvar _, Nuvar _ -> if merge_nuvars then ignore(equate_n n k) else ()
             | _ -> let occurs = (occurs_in_nexp k n) || (occurs_in_nexp n k) in
                    if not(occurs) then ignore(equate_n k n) else ());
-            (Printf.eprintf "After setting key %s, one %s\n%!" (n_to_string k) (n_to_string n));
+            (*(Printf.eprintf "After setting key %s, one %s\n%!" (n_to_string k) (n_to_string n));*)
             sc end
         (*Variables on two paths get the assignment if they're the same, skipped if both nuvars, kept otherwise for later*)
         | Two(n1,n2) ->
-          let _ = Printf.eprintf "Variables in two paths: merge_nuvars %b, key %s, n1 %s, n2 %s\n%!" merge_nuvars (n_to_string k) (n_to_string n1) (n_to_string n2) in
+          (*let _ = Printf.eprintf "Variables in two paths: merge_nuvars %b, key %s, n1 %s, n2 %s\n%!" merge_nuvars (n_to_string k) (n_to_string n1) (n_to_string n2) in*)
           (match n1.nexp,n2.nexp with
             | Nuvar _, Nuvar _ ->
               if merge_nuvars && equate_n n1 k && equate_n n2 k
@@ -2946,9 +2946,9 @@ let merge_branch_constraints merge_nuvars constraint_sets =
               else Nexpmap.insert sc (k,v))
         (*Same as on two paths but more complicated logic*)
         | Many ns ->
-          let _ = Printf.eprintf "Variables in many paths: merge_nuvars %b, key %s, [" merge_nuvars (n_to_string k) in
+          (*let _ = Printf.eprintf "Variables in many paths: merge_nuvars %b, key %s, [" merge_nuvars (n_to_string k) in
           let _ = List.iter (fun n -> Printf.eprintf "%s " (n_to_string n)) ns in
-          let _ = Printf.eprintf "\n%!" in
+          let _ = Printf.eprintf "\n%!" in*)
           if List.for_all (fun n -> match n.nexp with | Nuvar _ -> true | _ -> false) ns
           then begin (List.iter (fun n -> ignore(merge_nuvars && equate_n n k)) ns); sc end
           else 
@@ -3030,7 +3030,7 @@ let rec constraint_size = function
       
 let rec simple_constraint_check in_env cs = 
   let check = simple_constraint_check in_env in
-  let _ = Printf.eprintf "simple_constraint_check of %i constraints\n%!" (constraint_size cs) in
+(*  let _ = Printf.eprintf "simple_constraint_check of %i constraints\n%!" (constraint_size cs) in*)
   match cs with 
   | [] -> []
   | Eq(co,n1,n2)::cs -> 
@@ -3053,8 +3053,8 @@ let rec simple_constraint_check in_env cs =
             | _ -> Some(Eq(co,n1,n2)))
         | _ -> Some(Eq(co,n1,n2))) in
     let check_eq ok_to_set n1 n2 = 
-      let _ = Printf.eprintf "eq check, about to normalize_nexp of %s, %s arising from %s \n" 
-        (n_to_string n1) (n_to_string n2) (co_to_string co) in
+      (*let _ = Printf.eprintf "eq check, about to normalize_nexp of %s, %s arising from %s \n" 
+        (n_to_string n1) (n_to_string n2) (co_to_string co) in*)
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
       (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
       (match n1'.nexp,n2'.nexp with
@@ -3120,8 +3120,8 @@ let rec simple_constraint_check in_env cs =
           else None
         | _ -> Some(NtEq(co,n1,n2))) in
     let check_not_eq n1 n2 = 
-      let _ = Printf.eprintf "not eq check, about to normalize_nexp of %s, %s arising from %s \n" 
-        (n_to_string n1) (n_to_string n2) (co_to_string co) in
+      (*let _ = Printf.eprintf "not eq check, about to normalize_nexp of %s, %s arising from %s \n"
+        (n_to_string n1) (n_to_string n2) (co_to_string co) in*)
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
       (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
       (match n1'.nexp,n2'.nexp with
@@ -3149,9 +3149,9 @@ let rec simple_constraint_check in_env cs =
       | None -> (check cs)
       | Some(c) -> c::(check cs))
   | GtEq(co,enforce,n1,n2)::cs -> 
-    let _ = Printf.eprintf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in 
+    (*let _ = Printf.eprintf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-    let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in
+    (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst i2 -> 
       if ge_big_int i1 i2 
@@ -3188,7 +3188,7 @@ let rec simple_constraint_check in_env cs =
                  ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
             | _ -> GtEq(co,enforce,n1',n2')::(check cs))))
   | Gt(co,enforce,n1,n2)::cs -> 
-    let _ = Printf.eprintf "> check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in 
+    (*let _ = Printf.eprintf "> check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
     (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
     (match nexp_gt n1' n2' with
@@ -3207,7 +3207,7 @@ let rec simple_constraint_check in_env cs =
                ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
           | _ -> Gt(co,enforce,n1',n2')::(check cs)))
   | LtEq(co,enforce,n1,n2)::cs -> 
-    let _ = Printf.eprintf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in 
+    (*let _ = Printf.eprintf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
     (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
     (match n1'.nexp,n2'.nexp with
@@ -3225,7 +3225,7 @@ let rec simple_constraint_check in_env cs =
               " to be less than or equal to " ^ (n_to_string n2))
         | Maybe -> LtEq(co,enforce,n1',n2')::(check cs)))
   | Lt(co,enforce,n1,n2)::cs -> 
-    let _ = Printf.eprintf "< check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in 
+    (*let _ = Printf.eprintf "< check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
     (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
     (match n1'.nexp,n2'.nexp with
@@ -3243,22 +3243,22 @@ let rec simple_constraint_check in_env cs =
               " to be less than " ^ (n_to_string n2))
         | Maybe -> Lt(co,enforce,n1',n2')::(check cs)))
   | CondCons(co,kind,substs,pats,exps):: cs ->
-    let _ = Printf.eprintf "Condcons check length pats %i, length exps %i\n" (List.length pats) (List.length exps) in
+    (*let _ = Printf.eprintf "Condcons check length pats %i, length exps %i\n" (List.length pats) (List.length exps) in*)
     let pats' = check pats in
     let exps' = check exps in
-    let _ = Printf.eprintf "Condcons after check length pats' %i, length exps' %i\n" (List.length pats') (List.length exps') in
+    (*let _ = Printf.eprintf "Condcons after check length pats' %i, length exps' %i\n" (List.length pats') (List.length exps') in*)
     (match pats',exps' with
       | [],[] -> check cs
       | _     -> CondCons(co,kind,substs,pats',exps')::(check cs))
   | BranchCons(co,sv,branches)::cs ->
     let b = check branches in
-    let _ = Printf.eprintf "Branchcons check length branches before %i and after %i\n"
-      (constraint_size branches) (constraint_size b) in
+    (*let _ = Printf.eprintf "Branchcons check length branches before %i and after %i\n"
+      (constraint_size branches) (constraint_size b) in*)
     if [] = b 
     then check cs
     else BranchCons(co,sv,b)::(check cs)
   | x::cs ->
-    let _ = Printf.eprintf "In default case with %s\n%!" (constraints_to_string [x]) in
+    (*let _ = Printf.eprintf "In default case with %s\n%!" (constraints_to_string [x]) in*)
     x::(check cs)
 
 let rec resolve_in_constraints cs = cs
@@ -3283,15 +3283,15 @@ let check_range_consistent require_lt require_gt guarantee_lt guarantee_gt =
 let do_resolve_constraints = ref true
 
 let resolve_constraints cs = 
-  let _ = Printf.eprintf "called resolve constraints with %i constraints\n" (constraint_size cs) in
+  (*let _ = Printf.eprintf "called resolve constraints with %i constraints\n" (constraint_size cs) in*)
   if not !do_resolve_constraints
   then cs
   else
     let rec fix checker len cs =
-      let _ = Printf.eprintf "Calling fix check thunk, fix check point is %i\n%!" len in 
+      (*let _ = Printf.eprintf "Calling fix check thunk, fix check point is %i\n%!" len in*) 
       let cs' = checker (in_constraint_env cs) cs in
       let len' = constraint_size cs' in
-      let _ = Printf.eprintf "after checker, fix check point is %i\n%!" len' in
+      (*let _ = Printf.eprintf "after checker, fix check point is %i\n%!" len' in*)
       if len > len' then fix checker len' cs'
       else cs' in
 (*    let _ = Printf.eprintf "Original constraints are %s\n%!" (constraints_to_string cs) in*)
