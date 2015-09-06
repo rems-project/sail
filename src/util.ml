@@ -71,6 +71,20 @@ let remove_duplicates l =
   in
   aux [] l'
 
+let remove_dups compare eq l =
+  let l' = List.sort compare l in
+  let rec aux acc l = match (acc, l) with
+      (_, []) -> List.rev acc 
+    | ([], x :: xs) -> aux [x] xs
+    | (y::ys, x :: xs) -> if (eq x y) then aux (y::ys) xs else aux (x::y::ys) xs
+  in
+  aux [] l'
+
+let rec assoc_maybe eq l k =
+  match l with
+    | [] -> None
+    | (k',v)::l -> if (eq k k') then Some v else assoc_maybe eq l k
+
 let rec compare_list f l1 l2 = 
   match (l1,l2) with
     | ([],[]) -> 0

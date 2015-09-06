@@ -41,7 +41,7 @@ and implicit_parm =
   | IP_length of nexp (*Library function to take length of a vector as first parameter*)
   | IP_start of nexp (*Library functions to take start of a vector as first parameter*)
   | IP_user of nexp (*Special user functions, must be declared with val, will pass stated parameter to function from return type*)
-and nexp = { mutable nexp : nexp_aux }
+and nexp = { mutable nexp : nexp_aux ; mutable imp_param : bool}
 and nexp_aux =
   | Nvar of string
   | Nconst of big_int
@@ -72,6 +72,8 @@ and t_arg =
   | TA_eft of effect
   | TA_ord of order 
 
+module Nexpmap : Finite_map.Fmap with type k = nexp
+
 type tag =
   | Emp_local (* Standard value, variable, expression *)
   | Emp_global (* Variable from global instead of local scope *)
@@ -90,25 +92,46 @@ type constraint_origin =
 
 type range_enforcement = Require | Guarantee 
 type cond_kind = Positive | Negative | Solo | Switch
+type 'a many = One of 'a | Two of 'a * 'a | Many of 'a list
 
 (* Constraints for nexps, plus the location which added the constraint *)
 type nexp_range =
   | LtEq of constraint_origin * range_enforcement * nexp * nexp
+  | Lt of constraint_origin * range_enforcement * nexp * nexp
   | Eq of constraint_origin * nexp * nexp
+  | NtEq of constraint_origin * nexp * nexp
   | GtEq of constraint_origin * range_enforcement * nexp * nexp
+  | Gt of constraint_origin * range_enforcement * nexp * nexp
   | In of constraint_origin * string * int list
-  | InS of constraint_origin * nexp * int list (* This holds the given value for string after a substitution *)
-  | Predicate of constraint_origin * nexp_range (* This will treat the inner constraint as holding in positive condcons positions : must be one of LtEq, Eq, or GtEq*)
-  | CondCons of constraint_origin * cond_kind * nexp_range list * nexp_range list (* Constraints from one path from a conditional (pattern or if) and the constraints from that conditional *)
-  | BranchCons of constraint_origin * nexp_range list (* CondCons constraints from all branches of a conditional; list should be all CondCons *)
+   (* InS holds the nuvar after a substitution *)
+  | InS of constraint_origin * nexp * int list
+  (* Predicate treats the first constraint as holding in positive condcons, the second in negative:
+     must be one of LtEq, Eq, or GtEq, never In, Predicate, Cond, or Branch *)
+  | Predicate of constraint_origin * nexp_range * nexp_range 
+  (* Constraints from one path from a conditional (pattern or if) and the constraints from that conditional *)
+  | CondCons of constraint_origin * cond_kind * (nexp Nexpmap.t) option * nexp_range list * nexp_range list 
+  (* CondCons constraints from all branches of a conditional; list should be all CondCons *)
+  | BranchCons of constraint_origin * ((nexp many) Nexpmap.t) option * nexp_range list
 
 val get_c_loc : constraint_origin -> Parse_ast.l
 
 val n_zero : nexp
 val n_one : nexp
 val n_two : nexp
+val mk_nv : string -> nexp
 val mk_add : nexp -> nexp -> nexp
 val mk_sub : nexp -> nexp -> nexp
+val mk_mult : nexp -> nexp -> nexp
+val mk_c : big_int -> nexp 
+val mk_c_int : int -> nexp
+val mk_neg : nexp -> nexp 
+val mk_2n : nexp -> nexp 
+val mk_2nc : nexp -> big_int -> nexp 
+val mk_pow : nexp -> int -> nexp 
+val mk_p_inf : unit -> nexp
+val mk_n_inf : unit -> nexp 
+val mk_inexact : unit -> nexp 
+val set_imp_param : nexp -> unit
 
 type variable_range =
   | VR_eq of string * nexp
@@ -206,6 +229,8 @@ val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debuggi
 val get_all_nvar : nexp -> string list (*Pull out all of the contained nvar and nuvars in nexp*)
 
 val select_overload_variant : def_envs -> bool -> bool -> tannot list -> t -> tannot list
+
+val split_conditional_constraints : nexp_range list -> (nexp_range list * nexp_range list)
 
 (*May raise an exception if a contradiction is found*)
 val resolve_constraints : nexp_range list -> nexp_range list

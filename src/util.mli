@@ -56,6 +56,11 @@ end
     the list l. As a side-effect, the list might be reordered. *)
 val remove_duplicates : 'a list -> 'a list
 
+(** [remove_dups compare eq l] as remove_duplicates but with parameterised comparison and equality *)
+val remove_dups : ('a -> 'a -> int) -> ('a -> 'a -> bool) -> 'a list -> 'a list
+
+val assoc_maybe : ('a -> 'a -> bool) -> ('a * 'b) list -> 'a -> 'b option
+
 (** {2 Option Functions} *)
 
 (** [option_map f None] returns [None], whereas

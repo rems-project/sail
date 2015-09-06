@@ -38,7 +38,7 @@ and t_aux =
 and t_uvar = { index : int; mutable subst : t option }
 and implicit_parm =
   | IP_none  | IP_length of nexp | IP_start of nexp | IP_user of nexp 
-and nexp = { mutable nexp : nexp_aux }
+and nexp = { mutable nexp : nexp_aux; mutable imp_param : bool}
 and nexp_aux =
   | Nvar of string
   | Nconst of big_int
@@ -82,6 +82,61 @@ type tag =
   | Alias
   | Spec
 
+let rec compare_nexps n1 n2 =
+  match n1.nexp,n2.nexp with 
+  | Nneg_inf , Nneg_inf -> 0
+  | Nneg_inf , _        -> -1
+  | _        , Nneg_inf ->  1
+  | Nconst n1, Nconst n2 -> compare_big_int n1 n2
+  | Nconst _ , _        -> -1
+  | _        , Nconst _ ->  1
+  | Nvar i1  , Nvar i2  ->  compare i1 i2
+  | Nvar _   , _        -> -1
+  | _        , Nvar _   ->  1 
+  | Nuvar {nindex = n1}, Nuvar {nindex = n2} -> compare n1 n2
+  | Nuvar _  , _        -> -1
+  | _        , Nuvar _  ->  1
+  | Nmult(n0,n1),Nmult(n2,n3) -> 
+    (match compare_nexps n0 n2 with
+      | 0 -> compare_nexps n1 n3
+      | a -> a)
+  | Nmult _  , _        -> -1
+  | _        , Nmult _  ->  1
+  | Nadd(n1,n12),Nadd(n2,n22) -> 
+    (match compare_nexps n1 n2 with
+      | 0 -> compare_nexps n12 n22 
+      | a -> a)
+  | Nadd _   , _        -> -1
+  | _        , Nadd _   ->  1
+  | Nsub(n1,n12),Nsub(n2,n22) ->
+    (match compare_nexps n1 n2 with
+      | 0 -> compare_nexps n12 n22
+      | a -> a)
+  | Nsub _   , _         -> -1
+  | _        , Nsub _    -> 1
+  | Npow(n1,_),Npow(n2,_)-> compare_nexps n1 n2
+  | Npow _   , _        -> -1
+  | _        , Npow _   ->  1
+  | N2n(_,Some i1), N2n(_,Some i2) -> compare_big_int i1 i2
+  | N2n(n1,_), N2n(n2,_) -> compare_nexps n1 n2
+  | N2n _    , _        -> -1
+  | _        , N2n _    ->  1
+  | Nneg n1  , Nneg n2  -> compare_nexps n1 n2
+  | Nneg _   , _        -> -1
+  | _        , Nneg _   -> 1
+  | Npos_inf , Npos_inf -> 0
+  | Npos_inf , _        -> -1
+  | _        , Npos_inf -> 1
+  | Ninexact , Ninexact -> 0
+
+module NexpM = 
+ struct
+ type t = nexp
+ let compare = compare_nexps
+end
+module Var_set = Set.Make(NexpM) 
+module Nexpmap = Finite_map.Fmap_map(NexpM)
+
 type constraint_origin =
   | Patt of Parse_ast.l
   | Expr of Parse_ast.l
@@ -90,17 +145,21 @@ type constraint_origin =
 
 type range_enforcement = Require | Guarantee 
 type cond_kind = Positive | Negative | Solo | Switch
+type 'a many = One of 'a | Two of 'a * 'a | Many of 'a list
 
 (* Constraints for nexps, plus the location which added the constraint *)
 type nexp_range =
   | LtEq of constraint_origin * range_enforcement * nexp * nexp
+  | Lt of constraint_origin * range_enforcement * nexp * nexp
   | Eq of constraint_origin * nexp * nexp
+  | NtEq of constraint_origin * nexp * nexp
   | GtEq of constraint_origin * range_enforcement * nexp * nexp
+  | Gt of constraint_origin * range_enforcement * nexp * nexp
   | In of constraint_origin * string * int list
-  | InS of constraint_origin * nexp * int list (* This holds the given value for string after a substitution *)
-  | Predicate of constraint_origin * nexp_range (* This will treat the inner constraint as holding in positive condcons positions*)
-  | CondCons of constraint_origin * cond_kind * nexp_range list * nexp_range list
-  | BranchCons of constraint_origin * nexp_range list
+  | InS of constraint_origin * nexp * int list      
+  | Predicate of constraint_origin * nexp_range * nexp_range 
+  | CondCons of constraint_origin * cond_kind * (nexp Nexpmap.t) option * nexp_range list * nexp_range list
+  | BranchCons of constraint_origin * ((nexp many) Nexpmap.t) option * nexp_range list
 
 type variable_range =
   | VR_eq of string * nexp
@@ -141,21 +200,23 @@ let triple_negate = function
   | No    -> Yes
   | Maybe -> Maybe
 
-
 type exp = tannot Ast.exp
 
 (*Nexpression Makers (as built so often)*)
 
-let mk_nv s = {nexp = Nvar s}
-let mk_add n1 n2 = {nexp = Nadd(n1,n2)}
-let mk_sub n1 n2 = {nexp = Nsub(n1,n2)}
-let mk_mult n1 n2 = {nexp = Nmult(n1,n2)}
-let mk_c i = {nexp = Nconst i}
+let mk_nv s = {nexp = Nvar s; imp_param = false}
+let mk_add n1 n2 = {nexp = Nadd(n1,n2); imp_param = false}
+let mk_sub n1 n2 = {nexp = Nsub(n1,n2); imp_param = false}
+let mk_mult n1 n2 = {nexp = Nmult(n1,n2); imp_param = false}
+let mk_c i = {nexp = Nconst i; imp_param = false}
 let mk_c_int i = mk_c (big_int_of_int i)
-let mk_neg n = {nexp = Nneg n}
-let mk_2n n = {nexp = N2n(n, None)}
-let mk_2nc n i = {nexp = N2n(n, Some i)}
-let mk_pow n i = {nexp = Npow(n, i)}
+let mk_neg n = {nexp = Nneg n; imp_param = false}
+let mk_2n n = {nexp = N2n(n, None); imp_param = false}
+let mk_2nc n i = {nexp = N2n(n, Some i); imp_param = false}
+let mk_pow n i = {nexp = Npow(n, i); imp_param = false}
+let mk_p_inf () = {nexp = Npos_inf; imp_param = false}
+let mk_n_inf () = {nexp = Nneg_inf; imp_param = false}
+let mk_inexact () = {nexp = Ninexact; imp_param = false}
 
 (*Getters*)
 
@@ -182,8 +243,8 @@ let rec t_to_string t =
     | Tvar i -> i
     | Tfn(t1,t2,imp,e) -> 
       let implicit = match imp with 
-	| IP_none -> "" 
-	| IP_length n | IP_start n | IP_user n -> " with implicit parameter " ^ n_to_string n ^ " " in 
+        | IP_none -> "" 
+        | IP_length n | IP_start n | IP_user n -> " with implicit parameter " ^ n_to_string n ^ " " in 
       (t_to_string t1) ^ " -> " ^ (t_to_string t2) ^ " effect " ^ e_to_string e ^ implicit
     | Ttup(tups) -> "(" ^ string_of_list ", " t_to_string tups ^ ")"
     | Tapp(i,args) -> i ^ "<" ^  string_of_list ", " targ_to_string args ^ ">"
@@ -265,18 +326,29 @@ let cond_kind_to_string = function
 
 let rec constraint_to_string = function
   | LtEq (co,enforce,nexp1,nexp2) ->
-    "LtEq(" ^ co_to_string co ^ ", " ^ enforce_to_string enforce ^ ", " ^ n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
+    "LtEq(" ^ co_to_string co ^ ", " ^ enforce_to_string enforce ^ ", " ^ 
+      n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
+  | Lt (co,enforce,nexp1, nexp2) ->
+    "Lt(" ^ co_to_string co ^ ", " ^ enforce_to_string enforce ^ ", " ^ 
+      n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
   | Eq (co,nexp1,nexp2) ->
     "Eq(" ^ co_to_string co ^ ", " ^ n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
+  | NtEq(co,nexp1,nexp2) ->
+    "NtEq(" ^ co_to_string co ^ ", " ^ n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
   | GtEq (co,enforce,nexp1,nexp2) ->
-    "GtEq(" ^ co_to_string co ^ ", " ^ enforce_to_string enforce ^ ", " ^ n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
+    "GtEq(" ^ co_to_string co ^ ", " ^ enforce_to_string enforce ^ ", " ^
+      n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
+  | Gt (co,enforce,nexp1,nexp2) ->
+    "Gt(" ^ co_to_string co ^ ", " ^ enforce_to_string enforce ^ ", " ^
+      n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
   | In(co,var,ints) -> "In of " ^ var
   | InS(co,n,ints) -> "InS of " ^ n_to_string n
-  | Predicate(co,cs) -> "Pred(" ^ co_to_string co ^ ", " ^ constraint_to_string cs ^ ")"
-  | CondCons(co,kind,pats,exps) ->
+  | Predicate(co,cp,cn) -> 
+    "Pred(" ^ co_to_string co ^ ", " ^ constraint_to_string cp ^", " ^ constraint_to_string cn ^  ")"
+  | CondCons(co,kind,_,pats,exps) ->
     "CondCons(" ^ co_to_string co ^ ", " ^ cond_kind_to_string kind ^
     ", [" ^ constraints_to_string pats ^ "], [" ^ constraints_to_string exps ^ "])"
-  | BranchCons(co,consts) ->
+  | BranchCons(co,_,consts) ->
     "BranchCons(" ^ co_to_string co ^ ", [" ^ constraints_to_string consts ^ "])"
 and constraints_to_string l = string_of_list "; " constraint_to_string l
 
@@ -344,8 +416,8 @@ let rec lookup_record_fields (fields : string list) (env : rec_env list) : rec_e
     | [] -> None
     | ((id,r,t,fs) as re)::env ->
       if ((List.length fields) = (List.length fs)) &&
-	 (fields_match fields fs) then
-	Some re
+         (fields_match fields fs) then
+        Some re
       else lookup_record_fields fields env
 
 let rec lookup_possible_records (fields : string list) (env : rec_env list) : rec_env list =
@@ -353,7 +425,7 @@ let rec lookup_possible_records (fields : string list) (env : rec_env list) : re
     | [] -> []
     | ((id,r,t,fs) as re)::env ->
       if (((List.length fields) <= (List.length fs)) &&
-	  (fields_match fields fs))
+          (fields_match fields fs))
       then re::(lookup_possible_records fields env)
       else lookup_possible_records fields env
 
@@ -361,55 +433,6 @@ let lookup_field_type (field: string) ((id,r_kind,tannot,fields) : rec_env) : t 
   if List.mem_assoc field fields
   then Some(List.assoc field fields)
   else None
-
-(*comparisons*)
-let rec compare_nexps n1 n2 =
-  match n1.nexp,n2.nexp with 
-  | Nneg_inf , Nneg_inf -> 0
-  | Nneg_inf , _        -> -1
-  | _        , Nneg_inf ->  1
-  | Nconst n1, Nconst n2 -> compare_big_int n1 n2
-  | Nconst _ , _        -> -1
-  | _        , Nconst _ ->  1
-  | Nvar i1  , Nvar i2  ->  compare i1 i2
-  | Nvar _   , _        -> -1
-  | _        , Nvar _   ->  1 
-  | Nuvar {nindex = n1}, Nuvar {nindex = n2} -> compare n1 n2
-  | Nuvar _  , _        -> -1
-  | _        , Nuvar _  ->  1
-  | Nmult(n0,n1),Nmult(n2,n3) -> 
-    (match compare_nexps n0 n2 with
-      | 0 -> compare_nexps n1 n3
-      | a -> a)
-  | Nmult _  , _        -> -1
-  | _        , Nmult _  ->  1
-  | Nadd(n1,n12),Nadd(n2,n22) -> 
-    (match compare_nexps n1 n2 with
-      | 0 -> compare_nexps n12 n22 
-      | a -> a)
-  | Nadd _   , _        -> -1
-  | _        , Nadd _   ->  1
-  | Nsub(n1,n12),Nsub(n2,n22) ->
-    (match compare_nexps n1 n2 with
-      | 0 -> compare_nexps n12 n22
-      | a -> a)
-  | Nsub _   , _         -> -1
-  | _        , Nsub _    -> 1
-  | Npow(n1,_),Npow(n2,_)-> compare_nexps n1 n2
-  | Npow _   , _        -> -1
-  | _        , Npow _   ->  1
-  | N2n(_,Some i1), N2n(_,Some i2) -> compare_big_int i1 i2
-  | N2n(n1,_), N2n(n2,_) -> compare_nexps n1 n2
-  | N2n _    , _        -> -1
-  | _        , N2n _    ->  1
-  | Nneg n1  , Nneg n2  -> compare_nexps n1 n2
-  | Nneg _   , _        -> -1
-  | _        , Nneg _   -> 1
-  | Npos_inf , Npos_inf -> 0
-  | Npos_inf , _        -> -1
-  | _        , Npos_inf -> 1
-  | Ninexact , Ninexact -> 0
-
 
 let rec pow_i i n =
   match n with 
@@ -478,18 +501,18 @@ let rec nexp_negative n =
     | Nneg_inf -> Yes
     | Npos_inf | N2n  _ | Nvar _ | Nuvar _ -> No
     | Nmult(n1,n2) -> (match nexp_negative n1, nexp_negative n2 with
-	| Yes,Yes | No, No -> No
-	| No, Yes | Yes, No -> Yes
-	| Maybe,_ | _, Maybe -> Maybe)
+        | Yes,Yes | No, No -> No
+        | No, Yes | Yes, No -> Yes
+        | Maybe,_ | _, Maybe -> Maybe)
     | Nadd(n1,n2) -> (match nexp_negative n1, nexp_negative n2 with
-	| Yes,Yes -> Yes
-	| No, No -> No
-	| _ -> Maybe)
+        | Yes,Yes -> Yes
+        | No, No -> No
+        | _ -> Maybe)
     | Npow(n1,i) ->
       (match nexp_negative n1 with
-	| Yes -> if odd i then Yes else No
-	| No -> No
-	| Maybe -> if odd i then Maybe else No)
+        | Yes -> if odd i then Yes else No
+        | No -> No
+        | Maybe -> if odd i then Maybe else No)
 
 let rec normalize_n_rec recur_ok n =
   (*let _ = Printf.eprintf "Working on normalizing %s\n" (n_to_string n) in *)
@@ -504,9 +527,9 @@ let rec normalize_n_rec recur_ok n =
       | _ -> n,true,true) in
     if to_recur 
     then (let n' = normalize_n_rec true n' in
-	  if add_neg 
-	  then negate n'
-	  else n')
+          if add_neg 
+          then negate n'
+          else n')
     else n'
   | Npow(n,i) -> 
     let n' = normalize_n_rec true n in
@@ -522,9 +545,9 @@ let rec normalize_n_rec recur_ok n =
   | Nadd(n1,n2) ->
     let n1',n2' = normalize_n_rec true n1, normalize_n_rec true n2 in
     (match n1'.nexp,n2'.nexp, recur_ok with
-    | Nneg_inf, Npos_inf,_ | Npos_inf, Nneg_inf,_ -> {nexp = Ninexact }
-    | Npos_inf, _,_ | _, Npos_inf, _ -> { nexp = Npos_inf }
-    | Nneg_inf, _,_ | _, Nneg_inf, _ -> { nexp = Nneg_inf } 
+    | Nneg_inf, Npos_inf,_ | Npos_inf, Nneg_inf,_ -> mk_inexact()
+    | Npos_inf, _,_ | _, Npos_inf, _ -> mk_p_inf()
+    | Nneg_inf, _,_ | _, Nneg_inf, _ -> mk_n_inf() 
     | Nconst i1, Nconst i2,_ | Nconst i1, N2n(_,Some i2),_ 
     | N2n(_,Some i2), Nconst i1,_ | N2n(_,Some i1),N2n(_,Some i2),_
       -> mk_c (add_big_int i1 i2)
@@ -547,19 +570,19 @@ let rec normalize_n_rec recur_ok n =
       (match compare_nexps n11 n21 with
       | -1 -> normalize_n_rec false (mk_add n11 (normalize_n_rec false (mk_add n12 n2')))
       | 0  -> 
-	(match compare_nexps n12 n22 with
-	  | -1 -> normalize_n_rec true (mk_add (mk_mult n_two n11) (mk_add n22 n12))
-	  | 0 -> normalize_n_rec true (mk_add (mk_mult n_two n11) (mk_mult n_two n12))
-	  | _ -> normalize_n_rec true (mk_add (mk_mult n_two n11) (mk_add n12 n22)))
+        (match compare_nexps n12 n22 with
+          | -1 -> normalize_n_rec true (mk_add (mk_mult n_two n11) (mk_add n22 n12))
+          | 0 -> normalize_n_rec true (mk_add (mk_mult n_two n11) (mk_mult n_two n12))
+          | _ -> normalize_n_rec true (mk_add (mk_mult n_two n11) (mk_add n12 n22)))
       | _  -> normalize_n_rec false (mk_add n21 (normalize_n_rec false (mk_add n22 n1'))))
     | Nadd(n11,n12), Nadd(n21,n22), false ->
       (match compare_nexps n11 n21 with
       | -1 -> mk_add n11 (normalize_n_rec false (mk_add n12 n2'))
       | 0  -> 
-	(match compare_nexps n12 n22 with
-	  | -1 -> normalize_n_rec true (mk_add (mk_mult n_two n11) (mk_add n22 n12))
-	  | 0 -> normalize_n_rec true (mk_add (mk_mult n_two n11) (mk_mult n_two n12))
-	  | _ -> normalize_n_rec true (mk_add (mk_mult n_two n11) (mk_add n12 n22)))
+        (match compare_nexps n12 n22 with
+          | -1 -> normalize_n_rec true (mk_add (mk_mult n_two n11) (mk_add n22 n12))
+          | 0 -> normalize_n_rec true (mk_add (mk_mult n_two n11) (mk_mult n_two n12))
+          | _ -> normalize_n_rec true (mk_add (mk_mult n_two n11) (mk_add n12 n22)))
       | _  -> mk_add n21 (normalize_n_rec false (mk_add n22 n1')))
     | N2n(n11,_), N2n(n21,_),_ -> 
       (match compare_nexps n11 n21 with
@@ -568,29 +591,29 @@ let rec normalize_n_rec recur_ok n =
       |  _ -> mk_add  n1' n2')
     | Npow(n11,i1), Npow (n21,i2),_ ->
       (match compare_nexps n11 n21, compare i1 i2 with
-	| -1,-1 | 0,-1 -> mk_add n2' n1'
-	|  0,0 -> mk_mult n_two n1'
-	|  _ -> mk_add n1' n2')
+        | -1,-1 | 0,-1 -> mk_add n2' n1'
+        |  0,0 -> mk_mult n_two n1'
+        |  _ -> mk_add n1' n2')
     | N2n(n11,Some i),Nadd(n21,n22),_ ->
       normalize_n_rec true (mk_add n21 (mk_add n22 (mk_c i)))
     | Nadd(n11,n12), N2n(n21,Some i),_ ->
       normalize_n_rec true (mk_add n11 (mk_add n12 (mk_c i)))
     | N2n(n11,None),Nadd(n21,n22),_ ->
       (match n21.nexp with
-	| N2n(n211,_) ->
-	  (match compare_nexps n11 n211 with
-	    | -1 -> mk_add n1' n2'
-	    | 0 -> mk_add (mk_2n (normalize_n_rec true (mk_add n11 n_one))) n22
-	    | _ -> mk_add n21 (normalize_n_rec true (mk_add n11 n22)))
-	| _ -> mk_add n1' n2')
+        | N2n(n211,_) ->
+          (match compare_nexps n11 n211 with
+            | -1 -> mk_add n1' n2'
+            | 0 -> mk_add (mk_2n (normalize_n_rec true (mk_add n11 n_one))) n22
+            | _ -> mk_add n21 (normalize_n_rec true (mk_add n11 n22)))
+        | _ -> mk_add n1' n2')
     | Nadd(n11,n12),N2n(n21,None),_ ->
       (match n11.nexp with
-	| N2n(n111,_) ->
-	  (match compare_nexps n111 n21 with
-	    | -1 -> mk_add n11 (normalize_n_rec true (mk_add n2' n12))
-	    | 0 -> mk_add (mk_2n (normalize_n_rec true (mk_add n111 n_one))) n12
-	    | _ -> mk_add n2' n1')
-	| _ -> mk_add n2' n1')
+        | N2n(n111,_) ->
+          (match compare_nexps n111 n21 with
+            | -1 -> mk_add n11 (normalize_n_rec true (mk_add n2' n12))
+            | 0 -> mk_add (mk_2n (normalize_n_rec true (mk_add n111 n_one))) n12
+            | _ -> mk_add n2' n1')
+        | _ -> mk_add n2' n1')
     | _ -> 
       (match get_var n1', get_var n2' with
       | Some(nv1),Some(nv2) ->
@@ -601,30 +624,30 @@ let rec normalize_n_rec recur_ok n =
       | Some(nv1),None -> mk_add n2' n1'
       | None,Some(nv2) -> mk_add n1' n2'
       | _ -> (match n1'.nexp,n2'.nexp with
-	  | Nadd(n11',n12'), _ -> 
-	    (match compare_nexps n11' n2' with
-	      | -1 -> mk_add n2' n1'
-	      |  1 -> mk_add n11' (normalize_n_rec true (mk_add n12' n2'))
-	      | _ -> let _ = Printf.eprintf "Neither term has var but are the same? %s %s\n" 
-		       (n_to_string n1') (n_to_string n2') in assert false)
-	  | (_, Nadd(n21',n22')) ->
-	    (match compare_nexps n1' n21' with
-	      | -1 -> mk_add n21' (normalize_n_rec true (mk_add n1' n22'))
-	      | 1 -> mk_add n1' n2'
-	      | _ -> let _ = Printf.eprintf "pattern didn't match unexpextedly here %s %s\n" 
-		       (n_to_string n1') (n_to_string n2') in assert false)
-	  | _ -> 
-	    (match compare_nexps n1' n2' with
-	      | -1 -> mk_add n2' n1'
-	      | 0 -> normalize_n_rec true (mk_mult n_two n1')
-	      | _ -> mk_add n1' n2'))))
+          | Nadd(n11',n12'), _ -> 
+            (match compare_nexps n11' n2' with
+              | -1 -> mk_add n2' n1'
+              |  1 -> mk_add n11' (normalize_n_rec true (mk_add n12' n2'))
+              | _ -> let _ = Printf.eprintf "Neither term has var but are the same? %s %s\n" 
+                       (n_to_string n1') (n_to_string n2') in assert false)
+          | (_, Nadd(n21',n22')) ->
+            (match compare_nexps n1' n21' with
+              | -1 -> mk_add n21' (normalize_n_rec true (mk_add n1' n22'))
+              | 1 -> mk_add n1' n2'
+              | _ -> let _ = Printf.eprintf "pattern didn't match unexpextedly here %s %s\n" 
+                       (n_to_string n1') (n_to_string n2') in assert false)
+          | _ -> 
+            (match compare_nexps n1' n2' with
+              | -1 -> mk_add n2' n1'
+              | 0 -> normalize_n_rec true (mk_mult n_two n1')
+              | _ -> mk_add n1' n2'))))
   | Nsub(n1,n2) ->
     let n1',n2' = normalize_n_rec true n1, normalize_n_rec true n2 in
     (*let _ = Printf.eprintf "Normalizing subtraction of %s - %s \n" (n_to_string n1') (n_to_string n2') in*)
     (match n1'.nexp,n2'.nexp with
-    | Nneg_inf, Npos_inf | Npos_inf, Nneg_inf -> {nexp = Ninexact }
-    | Npos_inf, _ | _,Nneg_inf -> { nexp = Npos_inf }
-    | Nneg_inf, _ | _,Npos_inf -> { nexp = Nneg_inf } 
+    | Nneg_inf, Npos_inf | Npos_inf, Nneg_inf -> mk_inexact()
+    | Npos_inf, _ | _,Nneg_inf -> mk_p_inf()
+    | Nneg_inf, _ | _,Npos_inf -> mk_n_inf() 
     | Nconst i1, Nconst i2 | Nconst i1, N2n(_,Some i2) | N2n(_,Some i1), Nconst i2 | N2n(_,Some i1), N2n(_,Some i2)-> 
       (*let _ = Printf.eprintf "constant subtraction of %s - %s gives %s" (Big_int.string_of_big_int i1) (Big_int.string_of_big_int i2) (Big_int.string_of_big_int (sub_big_int i1 i2)) in*)
       mk_c (sub_big_int i1 i2)
@@ -644,21 +667,23 @@ let rec normalize_n_rec recur_ok n =
   | Nmult(n1,n2) ->
     let n1',n2' = normalize_n_rec true n1, normalize_n_rec true n2 in
     (match n1'.nexp,n2'.nexp with
-    | Nneg_inf,Nneg_inf -> {nexp = Npos_inf}
+    | Nneg_inf,Nneg_inf -> mk_p_inf()
     | Npos_inf, Nconst i | Nconst i, Npos_inf ->
-      if eq_big_int i zero then n_zero else {nexp = Npos_inf}
+      if eq_big_int i zero then n_zero else mk_p_inf()
     | Nneg_inf, Nconst i | Nconst i, Nneg_inf ->
-      if eq_big_int i zero then n_zero else {nexp = Nneg_inf}
+      if eq_big_int i zero then n_zero 
+      else if lt_big_int i zero then mk_p_inf()
+      else mk_n_inf()
     | Nneg_inf, _ | _, Nneg_inf -> 
       (match nexp_negative n1, nexp_negative n2 with
-	| Yes, Yes -> {nexp = Npos_inf}
-	| _ ->  {nexp = Nneg_inf})
+        | Yes, Yes -> mk_p_inf()
+        | _ ->  mk_n_inf())
     | Npos_inf, _ | _, Npos_inf -> 
       (match nexp_negative n1, nexp_negative n2 with
-	| Yes, Yes -> assert false (*One of them must be Npos_inf, so nexp_negative horribly broken*)
-	| No, Yes | Yes, No -> {nexp = Nneg_inf}
-	| _ -> {nexp = Npos_inf})
-    | Ninexact, _ | _, Ninexact -> {nexp = Ninexact}
+        | Yes, Yes -> assert false (*One of them must be Npos_inf, so nexp_negative horribly broken*)
+        | No, Yes | Yes, No -> mk_n_inf()
+        | _ -> mk_p_inf())
+    | Ninexact, _ | _, Ninexact -> mk_inexact()
     | Nconst i1, Nconst i2 -> mk_c (mult_big_int i1 i2)
     | Nconst i1, N2n(n,Some i2) | N2n(n,Some i2),Nconst i1 ->
       if eq_big_int i1 two 
@@ -680,9 +705,9 @@ let rec normalize_n_rec recur_ok n =
       | _ -> mk_mult n2' n1')
     | Npow(n1,i1),Npow(n2,i2) ->
       (match compare_nexps n1 n2 with
-	| 0  -> mk_pow n1 (i1+i2)
-	| -1 -> mk_mult n2' n1'
-	| _  -> mk_mult n1' n2')
+        | 0  -> mk_pow n1 (i1+i2)
+        | -1 -> mk_mult n2' n1'
+        | _  -> mk_mult n1' n2')
     | Nconst _, Nadd(n21,n22) | Nvar _,Nadd(n21,n22) | Nuvar _,Nadd(n21,n22) | N2n _, Nadd(n21,n22) 
     | Npow _,Nadd(n21,n22) | Nmult _, Nadd(n21,n22) ->
       normalize_n_rec true (mk_add (mk_mult n1' n21) (mk_mult n1' n21))
@@ -700,18 +725,18 @@ let rec normalize_n_rec recur_ok n =
       else mk_mult n2' n1'
     | Nadd(n11,n12),Nadd(n21,n22) ->
       normalize_n_rec true (mk_add (mk_mult n11 n21)
-			     (mk_add (mk_mult n11 n22)
-				(mk_add (mk_mult n12 n21) (mk_mult n12 n22))))
+                             (mk_add (mk_mult n11 n22)
+                                (mk_add (mk_mult n12 n21) (mk_mult n12 n22))))
     | Nuvar _, Nvar _ | Nmult _, N2n _-> mk_mult n1' n2' 
     | Nuvar _, Nmult(n1,n2) | Nvar _, Nmult(n1,n2) ->
       (match get_var n1, get_var n2 with
-	| Some(nv1),Some(nv2) ->
-	  (match compare_nexps nv1 nv2, n2.nexp with
-	    | 0, Nuvar _ | 0, Nvar _    -> mk_mult n1 (mk_pow nv1 2)
-	    | 0, Npow(n2',i)            -> mk_mult n1 (mk_pow n2' (i+1))
-	    | -1, Nuvar _ | -1, Nvar _  -> mk_mult n2' n1'
-	    | _,_ -> mk_mult (normalize_n_rec true (mk_mult n1 n1')) n2)
-	| _ -> mk_mult (normalize_n_rec true (mk_mult n1 n1')) n2)
+        | Some(nv1),Some(nv2) ->
+          (match compare_nexps nv1 nv2, n2.nexp with
+            | 0, Nuvar _ | 0, Nvar _    -> mk_mult n1 (mk_pow nv1 2)
+            | 0, Npow(n2',i)            -> mk_mult n1 (mk_pow n2' (i+1))
+            | -1, Nuvar _ | -1, Nvar _  -> mk_mult n2' n1'
+            | _,_ -> mk_mult (normalize_n_rec true (mk_mult n1 n1')) n2)
+        | _ -> mk_mult (normalize_n_rec true (mk_mult n1 n1')) n2)
     | (Npow (n1, i), (Nvar _ | Nuvar _)) -> 
       (match compare_nexps n1 n2' with
       | 0 -> mk_pow n1 (i+1)
@@ -720,13 +745,13 @@ let rec normalize_n_rec recur_ok n =
     | (N2n (_, _), Npow (_, _)) -> mk_mult n1' n2'
     | Npow(n1,i),Nmult(n21,n22) -> 
       (match get_var n1, get_var n2 with
-	| Some(nv1),Some(nv2) -> 
-	  (match compare_nexps nv1 nv2,n22.nexp with
-	    | 0, Nuvar _ | 0, Nvar _ -> mk_mult n21 (mk_pow n1 (i+1))
-	    | 0, Npow(_,i2)          -> mk_mult n21 (mk_pow n1 (i+i2))
-	    | 1,Npow _ -> mk_mult (normalize_n_rec true (mk_mult n21 n1')) n22
-	    | _ -> mk_mult n2' n1')
-	| _ -> mk_mult (normalize_n_rec true (mk_mult n1' n21)) n22)
+        | Some(nv1),Some(nv2) -> 
+          (match compare_nexps nv1 nv2,n22.nexp with
+            | 0, Nuvar _ | 0, Nvar _ -> mk_mult n21 (mk_pow n1 (i+1))
+            | 0, Npow(_,i2)          -> mk_mult n21 (mk_pow n1 (i+i2))
+            | 1,Npow _ -> mk_mult (normalize_n_rec true (mk_mult n21 n1')) n22
+            | _ -> mk_mult n2' n1')
+        | _ -> mk_mult (normalize_n_rec true (mk_mult n1' n21)) n22)
     | Nmult _ ,Nmult(n21,n22) -> mk_mult (mk_mult n21 n1') (mk_mult n22 n1')
     | Nsub _, _ | _, Nsub _ -> 
       let _ = Printf.eprintf "nsub case still around %s\n" (n_to_string n) in assert false 
@@ -752,13 +777,13 @@ let euvars = ref []
 let reset_fresh _ = 
   begin v_count := 0;
         t_count := 0;
-	tuvars  := [];
+        tuvars  := [];
         n_count := 0;
-	nuvars  := [];
-	o_count := 0;
-	ouvars  := [];
-	e_count := 0;
-	euvars  := [];
+        nuvars  := [];
+        o_count := 0;
+        ouvars  := [];
+        e_count := 0;
+        euvars  := [];
   end
 let new_id _ =
   let i = !v_count in
@@ -773,12 +798,17 @@ let new_t _ =
 let new_n _ = 
   let i = !n_count in
   n_count := i + 1;
-  let n = { nexp = Nuvar { nindex = i; nsubst = None ; nin = false ; leave_var = false}} in
+  let n = { nexp = Nuvar { nindex = i; nsubst = None ; nin = false ; leave_var = false}; imp_param = false} in
   nuvars := n::!nuvars;
   n
 let leave_nuvar n = match n.nexp with
   | Nuvar u -> u.leave_var <- true; n
   | _ -> n
+let set_imp_param n = 
+  match n.nexp with
+    | Nconst _ | Ninexact | Npos_inf | Nneg_inf -> ()
+    | _ -> n.imp_param <- true
+
 let new_o _ = 
   let i = !o_count in
   o_count := i + 1;
@@ -901,60 +931,65 @@ let nexp_one_more_than n1 n2 =
     | _ -> false 
  
 
-let rec nexp_ge n1 n2 = 
+let rec nexp_gt_compare eq_ok n1 n2 = 
   let n1,n2 = (normalize_nexp n1, normalize_nexp n2) in
-  if nexp_eq n1 n2
+  let ge_test = if eq_ok then ge_big_int else gt_big_int in
+  if eq_ok && nexp_eq n1 n2
   then Yes
+  else if (not eq_ok) && nexp_eq n1 n2 then No
   else
     match n1.nexp,n2.nexp with
-      | Nconst i, Nconst j | N2n(_,Some i), N2n(_,Some j)-> if ge_big_int i j then Yes else No
+      | Nconst i, Nconst j | N2n(_,Some i), N2n(_,Some j)-> if ge_test i j then Yes else No
       | Npos_inf, _ | _, Nneg_inf | Nuvar _, Npos_inf | Nneg_inf, Nuvar _ -> Yes
       | Nneg_inf, _ | _, Npos_inf -> No
       | Ninexact, _ | _, Ninexact -> Maybe
-      | N2n(n1,_), N2n(n2,_) -> nexp_ge n1 n2
+      | N2n(n1,_), N2n(n2,_) -> nexp_gt_compare eq_ok n1 n2
       | Nmult(n11,n12), Nmult(n21,n22) ->
-	if nexp_eq n12 n22
-	then nexp_ge n11 n21
-	else Maybe
+        if nexp_eq n12 n22
+        then nexp_gt_compare eq_ok n11 n21
+        else Maybe
       | Nmult(n11,n12), _ -> 
-	if nexp_eq n12 n2 
-	then triple_negate (nexp_negative n11)
-	else Maybe
+        if nexp_eq n12 n2 
+        then triple_negate (nexp_negative n11)
+        else Maybe
       | _, Nmult(n21,n22) ->
-	if nexp_eq n1 n22 
-	then nexp_negative n21 
-	else Maybe
+        if nexp_eq n1 n22 
+        then nexp_negative n21 
+        else Maybe
       | Nadd(n11,n12),Nadd(n21,n22) ->
-	(match (nexp_ge n11 n21, nexp_ge n12 n22, 
-		(nexp_negative n11, nexp_negative n12, nexp_negative n21, nexp_negative n22)) with
-	  | Yes, Yes, (No, No, No, No) -> Yes
-	  | No, No, (No, No, No, No) -> No
-	  | _ -> Maybe)
+        (match (nexp_gt_compare eq_ok n11 n21, nexp_gt_compare eq_ok n12 n22, 
+                (nexp_negative n11, nexp_negative n12, nexp_negative n21, nexp_negative n22)) with
+          | Yes, Yes, (No, No, No, No) -> Yes
+          | No, No, (No, No, No, No) -> No
+          | _ -> Maybe)
       | Nadd(n11,n12), _ ->
-	if nexp_eq n11 n2 
-	then triple_negate (nexp_negative n12)
-	else if nexp_eq n12 n2 
-	then triple_negate (nexp_negative n11)
-	else Maybe
+        if nexp_eq n11 n2 
+        then triple_negate (nexp_negative n12)
+        else if nexp_eq n12 n2 
+        then triple_negate (nexp_negative n11)
+        else Maybe
       | _ , Nadd(n21,n22) ->
-	if nexp_eq n1 n21
-	then nexp_negative n22
-	else if nexp_eq n1 n22
-	then nexp_negative n21
-	else Maybe
+        if nexp_eq n1 n21
+        then nexp_negative n22
+        else if nexp_eq n1 n22
+        then nexp_negative n21
+        else Maybe
       | Npow(n11,i1), Npow(n21, i2) ->
-	if nexp_eq n11 n21
-	then if i1 >= i2 then Yes else No
-	else Maybe
+        if nexp_eq n11 n21
+        then if i1 >= i2 then Yes else No
+        else Maybe
       | Npow(n11,i1), _ ->
-	if nexp_eq n11 n2
-	then if i1 = 0 then No else Yes
-	else Maybe
+        if nexp_eq n11 n2
+        then if i1 = 0 then No else Yes
+        else Maybe
       | _, Npow(n21,i2) ->
-	if nexp_eq n1 n21
-	then if i2 = 0 then Yes else No
-	else Maybe
+        if nexp_eq n1 n21
+        then if i2 = 0 then Yes else No
+        else Maybe
       | _ -> Maybe
+
+let nexp_ge = nexp_gt_compare true
+let nexp_gt = nexp_gt_compare false
 
 let equate_t (t_box : t) (t : t) : unit =
   let t = resolve_tsubst t in
@@ -997,17 +1032,17 @@ let rec reduce_n_unifications n =
     | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> reduce_n_unifications n1; reduce_n_unifications n2
     | Nuvar nu ->
       (match nu.nsubst with
-	| None -> ()
-	| Some(nexp) -> 
-	  reduce_n_unifications(nexp); if nu.leave_var then ignore(leave_nuvar(nexp)) else (); n.nexp <- nexp.nexp));
+        | None -> ()
+        | Some(nexp) -> 
+          reduce_n_unifications(nexp); if nu.leave_var then ignore(leave_nuvar(nexp)) else (); n.nexp <- nexp.nexp));
   (*let _ = Printf.eprintf "n reduced to %s\n" (n_to_string n) in*) ()
 
 let rec leave_nu_as_var n = 
   match n.nexp with
     | Nuvar nu ->
       (match nu.nsubst with
-	| None -> nu.leave_var
-	| Some(nexp) -> nu.leave_var || leave_nu_as_var nexp)
+        | None -> nu.leave_var
+        | Some(nexp) -> nu.leave_var || leave_nu_as_var nexp)
     | _ -> false
 
 let equate_n (n_box : nexp) (n : nexp) : bool =
@@ -1019,19 +1054,19 @@ let equate_n (n_box : nexp) (n : nexp) : bool =
     else 
       (*let _ = Printf.eprintf "equate_n has does not occur in %s and %s\n" (n_to_string n_box) (n_to_string n) in *)
       let rec set_bottom_nsubst swap u new_bot = 
-	match u.nsubst with
-	  | None -> u.nsubst <- Some(new_bot); true
-	  | Some({nexp = Nuvar(u)}) -> set_bottom_nsubst swap u new_bot
-	  | Some(n_new) -> 
-	    if swap 
-	    then set_bottom_nsubst false (match new_bot.nexp with | Nuvar u -> u | _ -> assert false) n_new
-	    else if nexp_eq n_new new_bot then true
-	    else false in
+        match u.nsubst with
+          | None -> u.nsubst <- Some(new_bot); true
+          | Some({nexp = Nuvar(u)}) -> set_bottom_nsubst swap u new_bot
+          | Some(n_new) -> 
+            if swap 
+            then set_bottom_nsubst false (match new_bot.nexp with | Nuvar u -> u | _ -> assert false) n_new
+            else if nexp_eq n_new new_bot then true
+            else false in
       match n_box.nexp,n.nexp with
-	| Nuvar(u), Nuvar _ -> set_bottom_nsubst true u n
-	| Nuvar(u), _ -> set_bottom_nsubst false u n
-	| _,Nuvar u -> set_bottom_nsubst false u n_box
-	| _ -> false
+        | Nuvar(u), Nuvar _ -> set_bottom_nsubst true u n
+        | Nuvar(u), _ -> set_bottom_nsubst false u n
+        | _,Nuvar u -> set_bottom_nsubst false u n_box
+        | _ -> false
 let equate_o (o_box : order) (o : order) : unit =
   let o = resolve_osubst o in
   if o_box == o then ()
@@ -1130,94 +1165,136 @@ let contains_nuvar_nexp n ne =
 
 let rec contains_nuvar n cs = match cs with
   | [] -> []
-  | ((LtEq(_,_,nl,nr) | GtEq(_,_,nl,nr) | Eq(_,nl,nr)) as co)::cs -> 
+  | ((LtEq(_,_,nl,nr) | Lt(_,_,nl,nr) | GtEq(_,_,nl,nr) | Gt(_,_,nl,nr) | Eq(_,nl,nr) | NtEq(_,nl,nr)) as co)::cs ->
     if (contains_nuvar_nexp n nl || contains_nuvar_nexp n nr)
     then co::(contains_nuvar n cs)
     else contains_nuvar n cs
-  | CondCons(so,kind,conds,exps)::cs -> 
+  | CondCons(so,kind,_,conds,exps)::cs -> 
     let conds' = contains_nuvar n conds in
     let exps' = contains_nuvar n exps in
     (match conds',exps' with
       | [],[] -> contains_nuvar n cs
-      | _ -> CondCons(so,kind,conds',exps')::contains_nuvar n cs)
-  | BranchCons(so,b_cs)::cs ->
+      | _ -> CondCons(so,kind,None,conds',exps')::contains_nuvar n cs)
+  | BranchCons(so,_,b_cs)::cs ->
     (match contains_nuvar n b_cs with
       | [] -> contains_nuvar n cs
-      | b -> BranchCons(so,b)::contains_nuvar n cs)
-  | (Predicate(so,c) as co)::cs ->
-    (match contains_nuvar n [c] with
+      | b -> BranchCons(so,None,b)::contains_nuvar n cs)
+  | (Predicate(so,cp,cn) as co)::cs ->
+    (match contains_nuvar n [cp;cn] with
       | [] -> contains_nuvar n cs
-      | [c] -> co::contains_nuvar n cs
-      | _ -> assert false)
+      | _ -> co::contains_nuvar n cs)
   | _::cs -> contains_nuvar n cs
 
 let rec refine_guarantees max_lt min_gt id cs =
   match cs with
     | [] -> 
       (match max_lt,min_gt with
-	| None,None -> []
-	| Some(c,i),None -> [LtEq(c,Guarantee,id,i)]
-	| None,Some(c,i) -> [GtEq(c,Guarantee,id,i)]
-	| Some(cl,il),Some(cg,ig) -> [LtEq(cl,Guarantee,id,il);GtEq(cg,Guarantee,id,ig)])
+        | None,None -> []
+        | Some(c,i),None -> [LtEq(c,Guarantee,id,i)]
+        | None,Some(c,i) -> [GtEq(c,Guarantee,id,i)]
+        | Some(cl,il),Some(cg,ig) -> [LtEq(cl,Guarantee,id,il);GtEq(cg,Guarantee,id,ig)])
     | LtEq(c,Guarantee,nes,neb)::cs ->
       (match nes.nexp,neb.nexp,max_lt with
-	| Nuvar _ , Nconst i,None->
-	  if nexp_eq id nes 
-	  then refine_guarantees (Some(c,neb)) min_gt id cs (*new max*)
-	  else refine_guarantees max_lt min_gt id cs
-	| Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
-	  if nexp_eq id nes && i >= im
-	  then refine_guarantees (Some(c,neb)) min_gt id cs (*replace old max*)
-	  else refine_guarantees max_lt min_gt id cs
-	| _ -> refine_guarantees max_lt min_gt id cs)
+        | Nuvar _ , Nconst i,None->
+          if nexp_eq id nes 
+          then refine_guarantees (Some(c,neb)) min_gt id cs (*new max*)
+          else refine_guarantees max_lt min_gt id cs
+        | Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
+          if nexp_eq id nes && i >= im
+          then refine_guarantees (Some(c,neb)) min_gt id cs (*replace old max*)
+          else refine_guarantees max_lt min_gt id cs
+        | _ -> refine_guarantees max_lt min_gt id cs)
+    | Lt(c,Guarantee,nes,neb)::cs ->
+      (match nes.nexp,neb.nexp,max_lt with
+        | Nuvar _ , Nconst i,None->
+          if nexp_eq id nes 
+          then refine_guarantees (Some(c,neb)) min_gt id cs (*new max*)
+          else refine_guarantees max_lt min_gt id cs
+        | Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
+          if nexp_eq id nes && i > im
+          then refine_guarantees (Some(c,neb)) min_gt id cs (*replace old max*)
+          else refine_guarantees max_lt min_gt id cs
+        | _ -> refine_guarantees max_lt min_gt id cs)
     | GtEq(c,Guarantee,nes,neb)::cs ->
       (match nes.nexp,neb.nexp,min_gt with
-	| Nuvar _ , Nconst i,None->
-	  if nexp_eq id nes 
-	  then refine_guarantees max_lt (Some(c,neb)) id cs (*new min*)
-	  else refine_guarantees max_lt min_gt id cs
-	| Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
-	  if nexp_eq id nes && i <= im
-	  then refine_guarantees max_lt (Some(c,neb)) id cs (*replace old min*)
-	  else refine_guarantees max_lt min_gt id cs
-	| _ -> refine_guarantees max_lt min_gt id cs)
+        | Nuvar _ , Nconst i,None->
+          if nexp_eq id nes 
+          then refine_guarantees max_lt (Some(c,neb)) id cs (*new min*)
+          else refine_guarantees max_lt min_gt id cs
+        | Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
+          if nexp_eq id nes && i <= im
+          then refine_guarantees max_lt (Some(c,neb)) id cs (*replace old min*)
+          else refine_guarantees max_lt min_gt id cs
+        | _ -> refine_guarantees max_lt min_gt id cs)
+    | Gt(c,Guarantee,nes,neb)::cs ->
+      (match nes.nexp,neb.nexp,min_gt with
+        | Nuvar _ , Nconst i,None->
+          if nexp_eq id nes 
+          then refine_guarantees max_lt (Some(c,neb)) id cs (*new min*)
+          else refine_guarantees max_lt min_gt id cs
+        | Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
+          if nexp_eq id nes && i < im
+          then refine_guarantees max_lt (Some(c,neb)) id cs (*replace old min*)
+          else refine_guarantees max_lt min_gt id cs
+        | _ -> refine_guarantees max_lt min_gt id cs)
     | c::cs -> c::(refine_guarantees max_lt min_gt id cs)
 
 let rec refine_requires min_lt max_gt id cs =
   match cs with
     | [] -> 
       (match min_lt,max_gt with
-	| None,None -> []
-	| Some(c,i),None -> [LtEq(c,Require,id,i)]
-	| None,Some(c,i) -> [GtEq(c,Require,id,i)]
-	| Some(cl,il),Some(cg,ig) -> [LtEq(cl,Require,id,il);GtEq(cg,Require,id,ig)])
+        | None,None -> []
+        | Some(c,i),None -> [LtEq(c,Require,id,i)]
+        | None,Some(c,i) -> [GtEq(c,Require,id,i)]
+        | Some(cl,il),Some(cg,ig) -> [LtEq(cl,Require,id,il);GtEq(cg,Require,id,ig)])
     | LtEq(c,Require,nes,neb)::cs ->
       (match nes.nexp,neb.nexp,min_lt with
-	| Nuvar _ , Nconst i,None->
-	  if nexp_eq id nes 
-	  then refine_requires(Some(c,neb)) max_gt id cs (*new min*)
-	  else refine_requires min_lt max_gt id cs
-	| Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
-	  if nexp_eq id nes && i <= im
-	  then refine_requires (Some(c,neb)) max_gt id cs (*replace old min*)
-	  else refine_requires min_lt max_gt id cs
-	| _ -> refine_guarantees min_lt max_gt id cs)
+        | Nuvar _ , Nconst i,None->
+          if nexp_eq id nes 
+          then refine_requires(Some(c,neb)) max_gt id cs (*new min*)
+          else refine_requires min_lt max_gt id cs
+        | Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
+          if nexp_eq id nes && i <= im
+          then refine_requires (Some(c,neb)) max_gt id cs (*replace old min*)
+          else refine_requires min_lt max_gt id cs
+        | _ -> refine_guarantees min_lt max_gt id cs)
+    | Lt(c,Require,nes,neb)::cs ->
+      (match nes.nexp,neb.nexp,min_lt with
+        | Nuvar _ , Nconst i,None->
+          if nexp_eq id nes 
+          then refine_requires(Some(c,neb)) max_gt id cs (*new min*)
+          else refine_requires min_lt max_gt id cs
+        | Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
+          if nexp_eq id nes && i < im
+          then refine_requires (Some(c,neb)) max_gt id cs (*replace old min*)
+          else refine_requires min_lt max_gt id cs
+        | _ -> refine_guarantees min_lt max_gt id cs)
     | GtEq(c,Require,nes,neb)::cs ->
       (match nes.nexp,neb.nexp,max_gt with
-	| Nuvar _ , Nconst i,None->
-	  if nexp_eq id nes 
-	  then refine_requires min_lt (Some(c,neb)) id cs (*new max*)
-	  else refine_requires min_lt max_gt id cs
-	| Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
-	  if nexp_eq id nes && i >= im
-	  then refine_requires min_lt (Some(c,neb)) id cs (*replace old max*)
-	  else refine_requires min_lt max_gt id cs
-	| _ -> refine_requires min_lt max_gt id cs)
+        | Nuvar _ , Nconst i,None->
+          if nexp_eq id nes 
+          then refine_requires min_lt (Some(c,neb)) id cs (*new max*)
+          else refine_requires min_lt max_gt id cs
+        | Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
+          if nexp_eq id nes && i >= im
+          then refine_requires min_lt (Some(c,neb)) id cs (*replace old max*)
+          else refine_requires min_lt max_gt id cs
+        | _ -> refine_requires min_lt max_gt id cs)
+    | Gt(c,Require,nes,neb)::cs ->
+      (match nes.nexp,neb.nexp,max_gt with
+        | Nuvar _ , Nconst i,None->
+          if nexp_eq id nes 
+          then refine_requires min_lt (Some(c,neb)) id cs (*new max*)
+          else refine_requires min_lt max_gt id cs
+        | Nuvar _ , Nconst i, Some(cm, {nexp = Nconst im}) ->
+          if nexp_eq id nes && i > im
+          then refine_requires min_lt (Some(c,neb)) id cs (*replace old max*)
+          else refine_requires min_lt max_gt id cs
+        | _ -> refine_requires min_lt max_gt id cs)
     | c::cs -> c::(refine_requires min_lt max_gt id cs)
 
-
-let nat_t = {t = Tapp("range",[TA_nexp n_zero;TA_nexp{nexp = Npos_inf};])}
-let int_t = {t = Tapp("range",[TA_nexp{nexp=Nneg_inf};TA_nexp{nexp = Npos_inf};])}
+let nat_t = {t = Tapp("range",[TA_nexp n_zero;TA_nexp (mk_p_inf());])}
+let int_t = {t = Tapp("range",[TA_nexp (mk_n_inf());TA_nexp (mk_p_inf());])}
 let uint8_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_2nc (mk_c_int 8) (big_int_of_int 256))])}
 let uint16_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_2nc (mk_c_int 16) (big_int_of_int 65536))])}
 let uint32_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_2nc (mk_c_int 32) (big_int_of_string "4294967296"))])}
@@ -1307,51 +1384,51 @@ let initial_typ_env =
       true,
       [Base(((mk_nat_params ["n";"m"]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
-		          (mk_atom (mk_add (mk_nv "n") (mk_nv "m"))))),
-	    External (Some "add"),[],pure_e,nob);
+                          (mk_atom (mk_add (mk_nv "n") (mk_nv "m"))))),
+            External (Some "add"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")))),
-	    External (Some "add_vec"),[],pure_e,nob);
+            External (Some "add_vec"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p";"q"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_range (mk_nv "q") (mk_2n (mk_nv "n"))))),
-	    External (Some "add_vec_vec_range"),[],pure_e,nob);
+            External (Some "add_vec_vec_range"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                    mk_atom (mk_nv "o")])
                            (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
             External (Some "add_vec_range"),
             [LtEq(Specc(Parse_ast.Int("+",None)),Require, (mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
-	    pure_e,nob);
+            pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")); bit_t; bit_t]))),
-	    External (Some "add_overflow_vec"),[],pure_e,nob);
+            External (Some "add_overflow_vec"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
-	     (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-				   mk_atom (mk_nv "o")])
-		          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-	    External (Some "add_vec_range_range"),
-	    [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
-	    pure_e,nob);
+             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                   mk_atom (mk_nv "o")])
+                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
+            External (Some "add_vec_range_range"),
+            [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
+            pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
             External (Some "add_range_vec"),
             [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
-	    pure_e,nob);
+            pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-	     (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-				   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
-		          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_sub (mk_2n (mk_nv "m")) n_one))))),
-	    External (Some "add_range_vec_range"),
-	    [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
-	    pure_e,nob);
+             (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
+                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_sub (mk_2n (mk_nv "m")) n_one))))),
+            External (Some "add_range_vec_range"),
+            [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
+            pure_e,nob);
        Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")))),
@@ -1367,51 +1444,51 @@ let initial_typ_env =
       true,
       [Base(((mk_nat_params ["n";"m"]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
-		          (mk_atom (mk_add (mk_nv "n") (mk_nv "m"))))),
-	    External (Some "add_signed"),[],pure_e,nob);
+                          (mk_atom (mk_add (mk_nv "n") (mk_nv "m"))))),
+            External (Some "add_signed"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")))),
-	    External (Some "add_vec_signed"),[],pure_e,nob);
+            External (Some "add_vec_signed"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p";"q"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_range (mk_nv "q") (mk_2n (mk_nv "n"))))),
-	    External (Some "add_vec_vec_range_signed"),[],pure_e,nob);
+            External (Some "add_vec_vec_range_signed"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                    mk_atom (mk_nv "o")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
             External (Some "add_vec_range_signed"),
             [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),(mk_sub (mk_2n (mk_nv "m")) n_one))],
-	    pure_e,nob);
+            pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")); bit_t; bit_t]))),
-	    External (Some "add_overflow_vec_signed"),[],pure_e,nob);
+            External (Some "add_overflow_vec_signed"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
-	     (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-				   mk_atom (mk_nv "o")])
-		          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-	    External (Some "add_vec_range_range_signed"),
-	    [LtEq(Specc(Parse_ast.Int("+",None)),Require, (mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
-	    pure_e,nob);
+             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                   mk_atom (mk_nv "o")])
+                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
+            External (Some "add_vec_range_range_signed"),
+            [LtEq(Specc(Parse_ast.Int("+",None)),Require, (mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
+            pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
             External (Some "add_range_vec_signed"),
             [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),(mk_sub (mk_2n (mk_nv "m")) n_one))],
-	    pure_e,nob);
+            pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
-	     (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-				   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
-		          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-	    External (Some "add_range_vec_range_signed"),
-	    [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),(mk_sub (mk_2n (mk_nv "m")) n_one))],
-	    pure_e,nob);
+             (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
+                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
+            External (Some "add_range_vec_range_signed"),
+            [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),(mk_sub (mk_2n (mk_nv "m")) n_one))],
+            pure_e,nob);
        Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")))),
@@ -1431,13 +1508,13 @@ let initial_typ_env =
       true,
       [Base(((mk_nat_params["n";"m"]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
-	                  (mk_atom (mk_sub (mk_nv "n") (mk_nv "m"))))),
-	    External (Some "minus"),[],pure_e,nob);
+                          (mk_atom (mk_sub (mk_nv "n") (mk_nv "m"))))),
+            External (Some "minus"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")))),
-	    External (Some "minus_vec_signed"),[],pure_e,nob);
+            External (Some "minus_vec_signed"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                    mk_atom (mk_nv "o")])
@@ -1445,29 +1522,29 @@ let initial_typ_env =
             External (Some "minus_vec_range_signed"),
             [],pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
-	     (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-				   mk_atom (mk_nv "o")])
-		          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-	    External (Some "minus_vec_range_range_signed"),[],pure_e,nob);
+             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                   mk_atom (mk_nv "o")])
+                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
+            External (Some "minus_vec_range_range_signed"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
             External (Some "minus_range_vec_signed"),[],pure_e,nob); 
        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-	     (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-				   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
-		          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-	    External (Some "minus_range_vec_range_signed"),[],pure_e,nob);
+             (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
+                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
+            External (Some "minus_range_vec_range_signed"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                 (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")); bit_t; bit_t]))),
-	    External (Some "minus_overflow_vec_signed"),[],pure_e,nob);
+            External (Some "minus_overflow_vec_signed"),[],pure_e,nob);
        Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
                           (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")); bit_t; bit_t]))),
-	    External (Some "minus_overflow_vec_bit_signed"), [], pure_e,nob);
+            External (Some "minus_overflow_vec_bit_signed"), [], pure_e,nob);
       ]));
     ("-",Overload(
       Base(((mk_typ_params ["a";"b";"c"]),
@@ -1475,13 +1552,13 @@ let initial_typ_env =
       true,
       [Base(((mk_nat_params["n";"m"]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
-	                  (mk_atom (mk_sub (mk_nv "n") (mk_nv "m"))))),
-	    External (Some "minus"),[],pure_e,nob);
+                          (mk_atom (mk_sub (mk_nv "n") (mk_nv "m"))))),
+            External (Some "minus"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")))),
-	    External (Some "minus_vec"),[],pure_e,nob);
+            External (Some "minus_vec"),[],pure_e,nob);
        Base(((mk_nat_params ["m";"n";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
@@ -1492,29 +1569,29 @@ let initial_typ_env =
                           (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))), 
             External (Some "minus_vec_range"),[],pure_e,nob); (*Need a bound on o?*)
        Base(((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
-	     (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-				   mk_atom (mk_nv "o")])
-		          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-	    External (Some "minus_vec_range_range"),[],pure_e,nob);
+             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                   mk_atom (mk_nv "o")])
+                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
+            External (Some "minus_vec_range_range"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
             External (Some "minus_range_vec"),[],pure_e,nob); 
        Base(((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
-	     (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-				   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
-		          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-	    External (Some "minus_range_vec_range"),[],pure_e,nob);
+             (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
+                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
+            External (Some "minus_range_vec_range"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")); bit_t; bit_t]))),
-	    External (Some "minus_overflow_vec"),[],pure_e,nob);
+            External (Some "minus_overflow_vec"),[],pure_e,nob);
        Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
                           (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")); bit_t; bit_t]))),
-	    External (Some "minus_overflow_vec_bit"), [], pure_e,nob);
+            External (Some "minus_overflow_vec_bit"), [], pure_e,nob);
       ]));
     ("*",Overload(
       Base(((mk_typ_params ["a";"b";"c"]),
@@ -1522,8 +1599,8 @@ let initial_typ_env =
       true,
       [Base(((mk_nat_params["n";"m"]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
-	                  (mk_atom (mk_mult (mk_nv "n") (mk_nv "m"))))),
-	    External (Some "multiply"), [],pure_e,nob);
+                          (mk_atom (mk_mult (mk_nv "n") (mk_nv "m"))))),
+            External (Some "multiply"), [],pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p";"q"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
@@ -1546,35 +1623,35 @@ let initial_typ_env =
       true,
       [Base(((mk_nat_params["n";"m";]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
-	                  (mk_atom (mk_mult (mk_nv "n") (mk_nv "m"))))),
-	    External (Some "multiply_signed"), [],pure_e,nob);
+                          (mk_atom (mk_mult (mk_nv "n") (mk_nv "m"))))),
+            External (Some "multiply_signed"), [],pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p";"m"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_add (mk_nv "n") (mk_nv "n"))))),
             External (Some "multiply_vec_signed"), [],pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-				   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")])
+                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_add (mk_nv "m") (mk_nv "m"))))),
             External (Some "mult_range_vec_signed"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-				   mk_atom (mk_nv "o")])
+                                   mk_atom (mk_nv "o")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_add (mk_nv "m") (mk_nv "m"))))),
             External (Some "mult_vec_range_signed"),[],pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p";"m"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_add (mk_nv "n") (mk_nv "n")));
-				   bit_t;bit_t]))),
+                                   bit_t;bit_t]))),
             External (Some "mult_overflow_vec_signed"), [],pure_e,nob);
       ]));
     ("**",
      Base(((mk_nat_params ["o"]),
-	   (mk_pure_fun (mk_tup [(mk_atom n_two); (mk_atom (mk_nv "o"))])
-	                (mk_atom (mk_2n (mk_nv "o"))))),
-	  External (Some "power"), [],pure_e,nob));
+           (mk_pure_fun (mk_tup [(mk_atom n_two); (mk_atom (mk_nv "o"))])
+                        (mk_atom (mk_2n (mk_nv "o"))))),
+          External (Some "power"), [],pure_e,nob));
     ("mod",
      Overload(
        Base(((mk_typ_params ["a";"b";"c"]),
@@ -1606,20 +1683,20 @@ let initial_typ_env =
              External (Some "quot"),[GtEq(Specc(Parse_ast.Int("quot",None)),Require,(mk_nv "m"),n_one);
                                      LtEq(Specc(Parse_ast.Int("quot",None)),Guarantee,
                                           (mk_mult (mk_nv "n") (mk_nv "o")),(mk_nv "m"))],
-	     pure_e,nob);
+             pure_e,nob);
         Base(((mk_nat_params["n";"m";"p";"q"])@(mk_ord_params["ord"]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "q")])
                            (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
              External (Some "quot_vec"),[GtEq(Specc(Parse_ast.Int("quot",None)),Require, mk_nv "m", mk_nv "q")],
-	     pure_e,nob);
+             pure_e,nob);
         Base(((mk_nat_params["n";"m";"p";"q"])@(mk_ord_params["ord"]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "q")])
                            (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")); bit_t;bit_t]))),
              External (Some "quot_overflow_vec"),
-	     [GtEq(Specc(Parse_ast.Int("quot",None)),Require, mk_nv "m", mk_nv "q")],
-	     pure_e,nob)]));
+             [GtEq(Specc(Parse_ast.Int("quot",None)),Require, mk_nv "m", mk_nv "q")],
+             pure_e,nob)]));
     ("quot_s",
      Overload(
        Base(((mk_typ_params ["a";"b";"c"]), (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
@@ -1629,32 +1706,32 @@ let initial_typ_env =
               (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "o") (mk_nv "p")])
                            (mk_range (mk_nv "q") (mk_nv "r")))),
              External (Some "quot_signed"),
-	     [GtEq(Specc(Parse_ast.Int("quot",None)),Require,(mk_nv "o"),n_one);
-	      LtEq(Specc(Parse_ast.Int("quot",None)),Guarantee,(mk_mult (mk_nv "p") (mk_nv "r")),mk_nv "m")],
-	     pure_e,nob);
+             [GtEq(Specc(Parse_ast.Int("quot",None)),Require,(mk_nv "o"),n_one);
+              LtEq(Specc(Parse_ast.Int("quot",None)),Guarantee,(mk_mult (mk_nv "p") (mk_nv "r")),mk_nv "m")],
+             pure_e,nob);
         Base(((mk_nat_params["n";"m";"p";"q"])@(mk_ord_params["ord"]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "q")])
                            (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
              External (Some "quot_vec_signed"),
-	     [GtEq(Specc(Parse_ast.Int("quot",None)),Require, mk_nv "m", mk_nv "q")],pure_e,nob);
-	Base(((mk_nat_params["n";"m";"p";"q"])@(mk_ord_params["ord"]),
+             [GtEq(Specc(Parse_ast.Int("quot",None)),Require, mk_nv "m", mk_nv "q")],pure_e,nob);
+        Base(((mk_nat_params["n";"m";"p";"q"])@(mk_ord_params["ord"]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "q")])
                            (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")); bit_t;bit_t]))),
              External (Some "quot_overflow_vec_signed"),
-	     [GtEq(Specc(Parse_ast.Int("quot",None)),Require, mk_nv "m", mk_nv "q")],pure_e,nob);
+             [GtEq(Specc(Parse_ast.Int("quot",None)),Require, mk_nv "m", mk_nv "q")],pure_e,nob);
        ]));
     ("length", Base((["a",{k=K_Typ}]@(mk_nat_params["n";"m"])@(mk_ord_params["ord"]),
-		     (mk_pure_fun (mk_vector {t=Tvar "a"} (Ovar "ord") (mk_nv "n") (mk_nv "m"))
-			          (mk_atom (mk_nv "m")))),
-		    External (Some "length"),[],pure_e,nob));
+                     (mk_pure_fun (mk_vector {t=Tvar "a"} (Ovar "ord") (mk_nv "n") (mk_nv "m"))
+                                  (mk_atom (mk_nv "m")))),
+                    External (Some "length"),[],pure_e,nob));
     (* incorrect types for typechecking processed sail code; do we care? *)
     ("mask",Base(((mk_typ_params ["a"])@(mk_nat_params["n";"m";"o";"p"])@(mk_ord_params["ord"]),
-		  (mk_pure_imp (mk_vector {t=Tvar "a"} (Ovar "ord") (mk_nv "n") (mk_nv "m"))
-		               (mk_vector {t=Tvar "a"} (Ovar "ord") (mk_nv "p") (mk_nv "o")) "o")),
-		 External (Some "mask"),
-		 [GtEq(Specc(Parse_ast.Int("mask",None)),Guarantee, (mk_nv "m"), (mk_nv "o"))],pure_e,nob));
+                  (mk_pure_imp (mk_vector {t=Tvar "a"} (Ovar "ord") (mk_nv "n") (mk_nv "m"))
+                               (mk_vector {t=Tvar "a"} (Ovar "ord") (mk_nv "p") (mk_nv "o")) "o")),
+                 External (Some "mask"),
+                 [GtEq(Specc(Parse_ast.Int("mask",None)),Guarantee, (mk_nv "m"), (mk_nv "o"))],pure_e,nob));
     (*TODO These should be IP_start *)
     ("to_vec_inc",Base(([("a",{k=K_Typ})],{t=Tfn(nat_typ,{t=Tvar "a"},IP_none,pure_e)}),External None,[],pure_e,nob));
     ("to_vec_dec",Base(([("a",{k=K_Typ})],{t=Tfn(nat_typ,{t=Tvar "a"},IP_none,pure_e)}),External None,[],pure_e,nob));
@@ -1662,242 +1739,246 @@ let initial_typ_env =
     ("==",
      Overload(
        Base((mk_typ_params ["a";"b"],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-	    External (Some "eq"),[],pure_e,nob),
+            External (Some "eq"),[],pure_e,nob),
        false,
-       [Base((mk_nat_params["n";"m";"o";"p"],
-	      mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t),
-	     External (Some "eq"),
-	     [Eq(Specc(Parse_ast.Int("==",None)), {nexp=Nadd({nexp=Nvar "n"},{nexp=Nvar "m"})},
-		                                  {nexp=Nadd({nexp=Nvar "o"},{nexp=Nvar "p"})})],
-	     pure_e,nob);
-	(* == : bit['n] * [|'o;'p|] -> bit_t *)
-	Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
-              (mk_pure_fun (mk_tup [mk_range (mk_nv "o") (mk_nv "p");
+       [Base((mk_nat_params["n";"m";],
+              mk_pure_fun (mk_tup [mk_atom (mk_nv "n") ;mk_atom (mk_nv "m")]) bit_t),
+             External (Some "eq"),
+             [Predicate(Specc(Parse_ast.Int("==",None)),
+                        Eq(Specc(Parse_ast.Int("==",None)), mk_nv "n", mk_nv "m"),
+                        NtEq(Specc(Parse_ast.Int("==",None)), mk_nv "n", mk_nv "m"))],
+             pure_e,nob);
+        (* == : bit['n] * [:'o:] -> bit_t *)
+        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+              (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")])
                            bit_t)),
-             External (Some "eq_range_vec"),
-             [Eq(Specc(Parse_ast.Int("==",None)),mk_add (mk_nv "o") (mk_nv "p"),{nexp=N2n (mk_nv "m",None)})],
-	     pure_e,nob);
-	(* == : [|'o;'p|] * bit['n] -> bit_t *)
-	Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
+             External (Some "eq_range_vec"),[],pure_e,nob);
+        (* == : [:'o:] * bit['n] -> bit_t *)
+        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-                                    mk_range (mk_nv "o") (mk_nv "p")])
+                                    mk_atom (mk_nv "o")])
                            bit_t)),
-             External (Some "eq_vec_range"),
-             [Eq(Specc(Parse_ast.Int("==",None)),mk_add (mk_nv "o") (mk_nv "p"),mk_2n (mk_nv "m"))],
-	     pure_e,nob);
-	Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-	     External (Some "eq"),[],pure_e,nob)]));
+             External (Some "eq_vec_range"),[],pure_e,nob);
+        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
+             External (Some "eq"),[],pure_e,nob)]));
     ("!=",Base((["a",{k=K_Typ}; "b",{k=K_Typ}], (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-	       External (Some "neq"),[],pure_e,nob));
+               External (Some "neq"),[],pure_e,nob));
     ("<",
      Overload(
        Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-	    External (Some "lt"),[],pure_e,nob),
+            External (Some "lt"),[],pure_e,nob),
        false,
-       [Base(((mk_nat_params ["n"; "m"; "o";"p"]),
-	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-	     External (Some "lt"),
-	     [(*LtEq(Specc(Parse_ast.Int("<",None)),Guarantee, mk_add (mk_nv "n") n_one, mk_nv "o");
-	      LtEq(Specc(Parse_ast.Int("<",None)),Guarantee, mk_add (mk_nv "m") n_one, mk_nv "p")*)],
-	     pure_e,nob);
-	Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
-	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
-	     External (Some "lt_vec"),[],pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o";"p"]@["ord",{k=K_Ord}]),
-	     (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-				   mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-	    External (Some "lt_vec_range"), [], pure_e, nob);
+       [Base(((mk_nat_params ["n"; "m";]),
+              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n") ;mk_atom (mk_nv "m")]) bit_t)),
+             External (Some "lt"),
+             [Predicate(Specc(Parse_ast.Int("<",None)),
+                        Lt(Specc(Parse_ast.Int("<",None)),Guarantee, mk_nv "n", mk_nv "m"),
+                        GtEq(Specc(Parse_ast.Int("<",None)),Guarantee, mk_nv "n", mk_nv "m"))],
+             pure_e,nob);
+        Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
+              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
+             External (Some "lt_vec"),[],pure_e,nob);
+       Base(((mk_nat_params ["n";"m";"o"]@["ord",{k=K_Ord}]),
+             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                   mk_atom (mk_nv "o")]) bit_t)),
+            External (Some "lt_vec_range"), [], pure_e, nob);
        ]));
     ("<_s",
      Overload(
        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-	    External (Some "lt"),[],pure_e,nob),
+            External (Some "lt"),[],pure_e,nob),
        false,
-       [Base(((mk_nat_params ["n"; "m"; "o";"p"]),
-	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-	     External (Some "lt_signed"),
-	     [LtEq(Specc(Parse_ast.Int("<_s",None)),Guarantee, mk_add (mk_nv "n") n_one, mk_nv "o");
-	      LtEq(Specc(Parse_ast.Int("<_s",None)),Guarantee, mk_add (mk_nv "m") n_one, mk_nv "p")],
-	     pure_e,nob);
-	Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
-	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
-	     External (Some "lt_vec_signed"),[],pure_e,nob);
+       [Base(((mk_nat_params ["n"; "m";]),
+              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")]) bit_t)),
+             External (Some "lt_signed"),
+             [Predicate(Specc(Parse_ast.Int("<_s",None)),
+                        Lt(Specc(Parse_ast.Int("<_s",None)),Guarantee, mk_nv "n", mk_nv "m"),
+                        GtEq(Specc(Parse_ast.Int("<_s",None)),Guarantee, mk_nv "n", mk_nv "m"))],
+             pure_e,nob);
+        Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
+              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
+             External (Some "lt_vec_signed"),[],pure_e,nob);
        ]));
     ("<_u",
      Overload(
        Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-	    External (Some "lt"),[],pure_e,nob),
+            External (Some "lt"),[],pure_e,nob),
        false,
-       [Base(((mk_nat_params ["n"; "m"; "o";"p"]),
-	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-	     External (Some "lt_unsigned"),
-	     [LtEq(Specc(Parse_ast.Int("<_u",None)),Guarantee, mk_add (mk_nv "n") n_one, mk_nv "o");
-	      LtEq(Specc(Parse_ast.Int("<_u",None)),Guarantee, mk_add (mk_nv "m") n_one, mk_nv "p")],
-	     pure_e,nob);
-	Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
-	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
-	     External (Some "lt_vec_unsigned"),[],pure_e,nob);
+       [Base(((mk_nat_params ["n"; "m";]),
+              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")]) bit_t)),
+             External (Some "lt_unsigned"),
+             [Predicate(Specc(Parse_ast.Int("<",None)),
+                        Lt(Specc(Parse_ast.Int("<_u",None)),Guarantee, mk_nv "n", mk_nv "m"),
+                        GtEq(Specc(Parse_ast.Int("<_u",None)),Guarantee, mk_nv "n", mk_nv "m"))],
+             pure_e,nob);
+        Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
+              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
+             External (Some "lt_vec_unsigned"),[],pure_e,nob);
        ]));
     (">",
      Overload(
        Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-	    External (Some "gt"),[],pure_e,nob),
+            External (Some "gt"),[],pure_e,nob),
        false,
-       [Base(((mk_nat_params ["n";"m";"o";"p"]), 
-	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-	     External (Some "gt"),
-	     [GtEq(Specc(Parse_ast.Int(">",None)),Guarantee, mk_nv "n", mk_add (mk_nv "o") n_one);
-	      GtEq(Specc(Parse_ast.Int(">",None)),Guarantee, mk_nv "m", mk_add (mk_nv "p") n_one)],
-	     pure_e,nob);
-	Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
-	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
-	     External (Some "gt_vec"),[],pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o";"p"]@["ord",{k=K_Ord}]),
-	     (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-				   mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-	    External (Some "gt_vec_range"), [], pure_e, nob);
+       [Base(((mk_nat_params ["n";"m"]), 
+              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")]) bit_t)),
+             External (Some "gt"),
+             [Predicate(Specc(Parse_ast.Int(">",None)),
+                        Gt(Specc(Parse_ast.Int(">",None)),Guarantee, mk_nv "n", mk_nv "m"),
+                        LtEq(Specc(Parse_ast.Int(">",None)),Guarantee, mk_nv "n", mk_nv "m"))],
+             pure_e,nob);
+        Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
+              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
+             External (Some "gt_vec"),[],pure_e,nob);
+       Base(((mk_nat_params ["n";"m";"o";]@["ord",{k=K_Ord}]),
+             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                   mk_atom (mk_nv "o")]) bit_t)),
+            External (Some "gt_vec_range"), [], pure_e, nob);
        ]));
     (">_s",
      Overload(
        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-	    External (Some "gt"),[],pure_e,nob),
+            External (Some "gt"),[],pure_e,nob),
        false,
-       [Base(((mk_nat_params ["n";"m";"o";"p"]), 
-	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-	     External (Some "gt_signed"),
-	     [GtEq(Specc(Parse_ast.Int(">_s",None)),Guarantee, mk_nv "n", mk_add (mk_nv "o") n_one);
-	      GtEq(Specc(Parse_ast.Int(">_s",None)),Guarantee, mk_nv "m", mk_add (mk_nv "p") n_one)],
-	     pure_e,nob);
-	Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
-	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
-	     External (Some "gt_vec_signed"),[],pure_e,nob);
+       [Base(((mk_nat_params ["n";"m";]), 
+              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")]) bit_t)),
+             External (Some "gt_signed"),
+             [Predicate(Specc(Parse_ast.Int(">_s",None)),
+                        Gt(Specc(Parse_ast.Int(">_s",None)),Guarantee, mk_nv "n", mk_nv "m"),
+                        LtEq(Specc(Parse_ast.Int(">_s",None)),Guarantee, mk_nv "m", mk_nv "m"))],
+             pure_e,nob);
+        Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
+              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
+             External (Some "gt_vec_signed"),[],pure_e,nob);
        ]));
     (">_u",
      Overload(
        Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-	    External (Some "gt"),[],pure_e,nob),
+            External (Some "gt"),[],pure_e,nob),
        false,
-       [Base(((mk_nat_params ["n";"m";"o";"p"]), 
-	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-	     External (Some "gt_unsigned"),
-	     [GtEq(Specc(Parse_ast.Int(">_s",None)),Guarantee, mk_nv "n", mk_add (mk_nv "o") n_one);
-	      GtEq(Specc(Parse_ast.Int(">_s",None)),Guarantee, mk_nv "m", mk_add (mk_nv "p") n_one)],
-	     pure_e,nob);
-	Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
-	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
-	     External (Some "gt_vec_unsigned"),[],pure_e,nob);
+       [Base(((mk_nat_params ["n";"m";]), 
+              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")]) bit_t)),
+             External (Some "gt_unsigned"),
+             [Predicate(Specc(Parse_ast.Int(">_u",None)),
+                        Gt(Specc(Parse_ast.Int(">_u",None)),Guarantee, mk_nv "n", mk_nv "m"),
+                        LtEq(Specc(Parse_ast.Int(">_u",None)),Guarantee, mk_nv "n", mk_nv "n"))],
+             pure_e,nob);
+        Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
+              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
+             External (Some "gt_vec_unsigned"),[],pure_e,nob);
        ]));
     ("<=",
      Overload(
        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-	    External (Some "lteq"),[],pure_e,nob),
+            External (Some "lteq"),[],pure_e,nob),
        false,
-       [Base(((mk_nat_params ["n"; "m"; "o";"p"]),
-	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-	     External (Some "lteq"),
-	     [LtEq(Specc(Parse_ast.Int("<=",None)),Guarantee,mk_nv "n",mk_nv "o");
-	      LtEq(Specc(Parse_ast.Int("<=",None)),Guarantee,mk_nv "m",mk_nv "p")],
-	     pure_e,nob);
-	Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
-	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
-	     External (Some "lteq_vec"),[],pure_e,nob);
+       [Base(((mk_nat_params ["n"; "m";]),
+              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")]) bit_t)),
+             External (Some "lteq"),
+             [Predicate(Specc(Parse_ast.Int("<=",None)),
+                        LtEq(Specc(Parse_ast.Int("<=",None)),Guarantee,mk_nv "n",mk_nv "m"),
+                        Gt(Specc(Parse_ast.Int("<=",None)),Guarantee,mk_nv "n",mk_nv "m"))],
+             pure_e,nob);
+        Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
+              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
+             External (Some "lteq_vec"),[],pure_e,nob);
        ]));
     ("<=_s",
      Overload(
        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-	    External (Some "lteq"),[],pure_e,nob),
+            External (Some "lteq"),[],pure_e,nob),
        false,
-       [Base(((mk_nat_params ["n"; "m"; "o";"p"]),
-	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-	     External (Some "lteq_signed"),
-	     [LtEq(Specc(Parse_ast.Int("<=",None)),Guarantee,mk_nv "n",mk_nv "o");
-	      LtEq(Specc(Parse_ast.Int("<=",None)),Guarantee,mk_nv "m",mk_nv "p")],
-	     pure_e,nob);
-	Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
-	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
-	     External (Some "lteq_vec_signed"),[],pure_e,nob);
+       [Base(((mk_nat_params ["n"; "m";]),
+              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")]) bit_t)),
+             External (Some "lteq_signed"),
+             [LtEq(Specc(Parse_ast.Int("<=",None)),Guarantee,mk_nv "n",mk_nv "o");
+              LtEq(Specc(Parse_ast.Int("<=",None)),Guarantee,mk_nv "m",mk_nv "p")],
+             pure_e,nob);
+        Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
+              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
+             External (Some "lteq_vec_signed"),[],pure_e,nob);
        ]));
     (">=",
      Overload(
        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-	    External (Some "gteq"),[],pure_e,nob),
+            External (Some "gteq"),[],pure_e,nob),
        false,
        [Base(((mk_nat_params ["n";"m";"o";"p"]), 
-	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-	     External (Some "gteq"),
-	     [GtEq(Specc(Parse_ast.Int(">=",None)),Guarantee, mk_nv "n", mk_nv "o");
-	      GtEq(Specc(Parse_ast.Int(">=",None)),Guarantee, mk_nv "m", mk_nv "p")],
-	     pure_e,nob);
-	Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
-	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
-	     External (Some "gteq_vec"),[],pure_e,nob);
+              (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
+             External (Some "gteq"),
+             [GtEq(Specc(Parse_ast.Int(">=",None)),Guarantee, mk_nv "n", mk_nv "o");
+              GtEq(Specc(Parse_ast.Int(">=",None)),Guarantee, mk_nv "m", mk_nv "p")],
+             pure_e,nob);
+        Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
+              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
+             External (Some "gteq_vec"),[],pure_e,nob);
        ]));
     (">=_s",
      Overload(
        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-	    External (Some "gteq"),[],pure_e,nob),
+            External (Some "gteq"),[],pure_e,nob),
        false,
        [Base(((mk_nat_params ["n";"m";"o";"p"]), 
-	      (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-	     External (Some "gteq_signed"),
-	     [GtEq(Specc(Parse_ast.Int(">=_s",None)),Guarantee, mk_nv "n", mk_nv "o");
-	      GtEq(Specc(Parse_ast.Int(">=_s",None)),Guarantee, mk_nv "m", mk_nv "p")],
-	     pure_e,nob);
-	Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
-	      (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-				    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
-	     External (Some "gteq_vec_signed"),[],pure_e,nob);
+              (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
+             External (Some "gteq_signed"),
+             [GtEq(Specc(Parse_ast.Int(">=_s",None)),Guarantee, mk_nv "n", mk_nv "o");
+              GtEq(Specc(Parse_ast.Int(">=_s",None)),Guarantee, mk_nv "m", mk_nv "p")],
+             pure_e,nob);
+        Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
+              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
+             External (Some "gteq_vec_signed"),[],pure_e,nob);
        ]));
     ("is_one",Base(([],(mk_pure_fun bit_t bit_t)),External (Some "is_one"),[],pure_e,nob));
     ("signed",Base((mk_nat_params["n";"m";"o"]@[("ord",{k=K_Ord})],
-		    (mk_pure_fun (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"))
-		                 (mk_atom (mk_nv "o")))),
-		   External (Some "signed"), 
-		  [(GtEq(Specc(Parse_ast.Int("signed",None)),Guarantee, 
-			 mk_nv "o", {nexp = Nneg({nexp = N2n(mk_nv "m",None)})}));
-		   (LtEq(Specc(Parse_ast.Int("signed",None)),Guarantee,
-			 mk_nv "o", mk_sub {nexp = N2n(mk_nv "m",None)} n_one));],pure_e,nob));
+                    (mk_pure_fun (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"))
+                                 (mk_atom (mk_nv "o")))),
+                   External (Some "signed"), 
+                  [(GtEq(Specc(Parse_ast.Int("signed",None)),Guarantee, 
+                         mk_nv "o", mk_neg(mk_2n (mk_nv "m"))));
+                   (LtEq(Specc(Parse_ast.Int("signed",None)),Guarantee,
+                         mk_nv "o", mk_sub (mk_2n (mk_nv "m")) n_one));],pure_e,nob));
     ("unsigned",Base((mk_nat_params["n";"m";"o"]@[("ord",{k=K_Ord})],
-		    (mk_pure_fun (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"))
-		                 (mk_atom (mk_nv "o")))),
-		   External (Some "unsigned"), 
-		  [(GtEq(Specc(Parse_ast.Int("unsigned",None)),Guarantee, 
-			 mk_nv "o", n_zero));
-		   (LtEq(Specc(Parse_ast.Int("unsigned",None)),Guarantee,
-			 mk_nv "o", mk_sub (mk_2n (mk_nv "m")) n_one));],pure_e,nob));
+                    (mk_pure_fun (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"))
+                                 (mk_atom (mk_nv "o")))),
+                   External (Some "unsigned"), 
+                  [(GtEq(Specc(Parse_ast.Int("unsigned",None)),Guarantee, 
+                         mk_nv "o", n_zero));
+                   (LtEq(Specc(Parse_ast.Int("unsigned",None)),Guarantee,
+                         mk_nv "o", mk_sub (mk_2n (mk_nv "m")) n_one));],pure_e,nob));
     mk_bitwise_op "bitwise_not" "~" 1;
     mk_bitwise_op  "bitwise_or" "|" 2;
     mk_bitwise_op  "bitwise_xor" "^" 2;
     mk_bitwise_op  "bitwise_and" "&" 2;
     ("^^",Base((mk_nat_params ["n"],
-		(mk_pure_fun (mk_tup [bit_t;mk_atom (mk_nv "n")])
-		             (mk_vector bit_t Oinc (mk_c zero) (mk_nv "n")))),
-	       External (Some "duplicate"),[],pure_e,nob));
+                (mk_pure_fun (mk_tup [bit_t;mk_atom (mk_nv "n")])
+                             (mk_vector bit_t Oinc (mk_c zero) (mk_nv "n")))),
+               External (Some "duplicate"),[],pure_e,nob));
     ("<<",Base((((mk_nat_params ["n";"m"])@[("ord",{k=K_Ord})]),
-		(mk_pure_fun (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"));
-				      (mk_range n_zero (mk_nv "m"))])
-		             (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-	       External (Some "bitwise_leftshift"),[],pure_e,nob));
+                (mk_pure_fun (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"));
+                                      (mk_range n_zero (mk_nv "m"))])
+                             (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
+               External (Some "bitwise_leftshift"),[],pure_e,nob));
     (">>",Base((((mk_nat_params ["n";"m"])@[("ord",{k=K_Ord})]),
-		(mk_pure_fun (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"));
-				      (mk_range n_zero (mk_nv "m"))])
-		             (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-	       External (Some "bitwise_rightshift"),[],pure_e,nob));
+                (mk_pure_fun (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"));
+                                      (mk_range n_zero (mk_nv "m"))])
+                             (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
+               External (Some "bitwise_rightshift"),[],pure_e,nob));
     ("<<<",Base((((mk_nat_params ["n";"m"])@[("ord",{k=K_Ord})]),
-		     (mk_pure_fun (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"));
-					   (mk_range n_zero (mk_nv "m"))])
-		                  (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-		External (Some "bitwise_rotate"),[],pure_e,nob));
+                     (mk_pure_fun (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"));
+                                           (mk_range n_zero (mk_nv "m"))])
+                                  (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
+                External (Some "bitwise_rotate"),[],pure_e,nob));
   ]
 
 
@@ -1962,18 +2043,23 @@ let rec cs_subst t_env cs =
   match cs with
     | [] -> []
     | Eq(l,n1,n2)::cs -> Eq(l,n_subst t_env n1,n_subst t_env n2)::(cs_subst t_env cs)
+    | NtEq(l,n1,n2)::cs -> NtEq(l, n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
     | GtEq(l,enforce,n1,n2)::cs -> GtEq(l,enforce,n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
+    | Gt(l,enforce,n1,n2)::cs -> Gt(l,enforce,n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
     | LtEq(l,enforce,n1,n2)::cs -> LtEq(l,enforce,n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
+    | Lt(l,enforce,n1,n2)::cs -> Lt(l,enforce,n_subst t_env n1, n_subst t_env n2)::(cs_subst t_env cs)
     | In(l,s,ns)::cs -> 
-      let nexp = n_subst t_env {nexp=Nvar s} in
+      let nexp = n_subst t_env (mk_nv s) in
       (match nexp.nexp with
       | Nuvar urec -> urec.nin <- true
       | _ -> ()); 
       InS(l,nexp,ns)::(cs_subst t_env cs)
     | InS(l,n,ns)::cs -> InS(l,n_subst t_env n,ns)::(cs_subst t_env cs)
-    | Predicate(l, c)::cs -> Predicate(l, List.hd(cs_subst t_env [c]))::(cs_subst t_env cs)
-    | CondCons(l,kind,cs_p,cs_e)::cs -> CondCons(l,kind,cs_subst t_env cs_p,cs_subst t_env cs_e)::(cs_subst t_env cs)
-    | BranchCons(l,bs)::cs -> BranchCons(l,cs_subst t_env bs)::(cs_subst t_env cs)
+    | Predicate(l, cp,cn)::cs -> 
+      Predicate(l, List.hd(cs_subst t_env [cp]), List.hd(cs_subst t_env [cn]))::(cs_subst t_env cs)
+    | CondCons(l,kind,_,cs_p,cs_e)::cs -> 
+      CondCons(l,kind,None,cs_subst t_env cs_p,cs_subst t_env cs_e)::(cs_subst t_env cs)
+    | BranchCons(l,_,bs)::cs -> BranchCons(l,None,cs_subst t_env bs)::(cs_subst t_env cs)
 
 let subst (k_env : (Envmap.k * kind) list) (leave_imp:bool)
           (t : t) (cs : nexp_range list) (e : effect) : (t * nexp_range list * effect * t_arg emap) =
@@ -1991,17 +2077,22 @@ let subst (k_env : (Envmap.k * kind) list) (leave_imp:bool)
 let rec typ_param_eq l spec_param fun_param = 
   match (spec_param,fun_param) with
     | ([],[]) -> []
-    | (_,[]) -> raise (Reporting_basic.err_typ l "Specification type variables and function definition variables must match")
-    | ([],_) -> raise (Reporting_basic.err_typ l "Function definition declares more type variables than specification variables")
+    | (_,[]) -> 
+      raise (Reporting_basic.err_typ l "Specification type variables and function definition variables must match")
+    | ([],_) -> 
+      raise (Reporting_basic.err_typ l "Function definition declares more type variables than specification variables")
     | ((ids,tas)::spec_param,(idf,taf)::fun_param) ->
       if ids=idf
       then match (tas,taf) with
-	| (TA_typ tas_t,TA_typ taf_t) -> (equate_t tas_t taf_t); typ_param_eq l spec_param fun_param
-	| (TA_nexp tas_n, TA_nexp taf_n) -> Eq((Specc l),tas_n,taf_n)::typ_param_eq l spec_param fun_param
-	| (TA_ord tas_o,TA_ord taf_o) -> (equate_o tas_o taf_o); typ_param_eq l spec_param fun_param
-	| (TA_eft tas_e,TA_eft taf_e) -> (equate_e tas_e taf_e); typ_param_eq l spec_param fun_param
-	| _ -> raise (Reporting_basic.err_typ l ("Specification and function definition have different kinds for variable " ^ ids))
-      else raise (Reporting_basic.err_typ l ("Specification type variables must match in order and number the function definition type variables, stopped matching at " ^ ids ^ " and " ^ idf))
+        | (TA_typ tas_t,TA_typ taf_t) -> (equate_t tas_t taf_t); typ_param_eq l spec_param fun_param
+        | (TA_nexp tas_n, TA_nexp taf_n) -> Eq((Specc l),tas_n,taf_n)::typ_param_eq l spec_param fun_param
+        | (TA_ord tas_o,TA_ord taf_o) -> (equate_o tas_o taf_o); typ_param_eq l spec_param fun_param
+        | (TA_eft tas_e,TA_eft taf_e) -> (equate_e tas_e taf_e); typ_param_eq l spec_param fun_param
+        | _ -> 
+          raise (Reporting_basic.err_typ l 
+                   ("Specification and function definition have different kinds for variable " ^ ids))
+      else raise (Reporting_basic.err_typ l 
+                    ("Specification type variables must match in order and number the function definition type variables, stopped matching at " ^ ids ^ " and " ^ idf))
 
 let type_param_consistent l spec_param fun_param =
   let specs = Envmap.to_list spec_param in
@@ -2016,9 +2107,9 @@ let rec t_remove_unifications s_env t =
   | Tuvar tu -> 
     (match tu.subst with
       | None ->
-	(match fresh_tvar s_env t with
-	  | Some ks -> Envmap.insert s_env ks
-	  | None -> s_env)
+        (match fresh_tvar s_env t with
+          | Some ks -> Envmap.insert s_env ks
+          | None -> s_env)
       | _ -> ignore(resolve_tsubst t); s_env)
   | Tfn(t1,t2,_,e) -> e_remove_unifications (t_remove_unifications (t_remove_unifications s_env t1) t2) e
   | Ttup(ts) -> List.fold_right (fun t s_env -> t_remove_unifications s_env t) ts s_env
@@ -2041,10 +2132,10 @@ and n_remove_unifications s_env n =
       | _ -> ignore (resolve_nsubst n); n in
     (match n'.nexp with
       | Nuvar _ -> 
-	(*let _ = Printf.eprintf "nuvar is before turning into var %s\n" (n_to_string n') in*)
-	(match fresh_nvar s_env n with
-	  | Some ks -> Envmap.insert s_env ks
-	  | None -> s_env)
+        (*let _ = Printf.eprintf "nuvar is before turning into var %s\n" (n_to_string n') in*)
+        (match fresh_nvar s_env n with
+          | Some ks -> Envmap.insert s_env ks
+          | None -> s_env)
       | _ -> s_env)
   | N2n(n1,_) | Npow(n1,_) | Nneg n1 -> (n_remove_unifications s_env n1)
   | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> (n_remove_unifications (n_remove_unifications s_env n1) n2)
@@ -2060,7 +2151,7 @@ and e_remove_unifications s_env e =
       | Some ks -> Envmap.insert s_env ks
       | None -> s_env)
   | _ -> s_env
-	
+        
 
 let remove_internal_unifications s_env =
   let rec rem remove s_env u_list = match u_list with
@@ -2069,10 +2160,10 @@ let remove_internal_unifications s_env =
   in
   (rem e_remove_unifications
      (rem o_remove_unifications 
-	(rem n_remove_unifications 
-	   (rem t_remove_unifications s_env !tuvars)
-	   !nuvars)
-	!ouvars)
+        (rem n_remove_unifications 
+           (rem t_remove_unifications s_env !tuvars)
+           !nuvars)
+        !ouvars)
      !euvars)
       
 let rec t_to_typ t =
@@ -2104,7 +2195,7 @@ and n_to_nexp n =
     | Nsub(n1,n2) -> Nexp_minus(n_to_nexp n1,n_to_nexp n2)
     | N2n(n,_) -> Nexp_exp (n_to_nexp n)
     | Npow(n,1) -> let Nexp_aux(n',_) = n_to_nexp n in n'
-    | Npow(n,i) -> Nexp_times(n_to_nexp n,n_to_nexp{nexp = Npow(n,i-1)}) 
+    | Npow(n,i) -> Nexp_times(n_to_nexp n,n_to_nexp( mk_pow n (i-1))) 
     | Nneg n -> Nexp_neg (n_to_nexp n)
     | Nuvar _ -> Nexp_var (Kid_aux((Var "fresh"),Parse_ast.Unknown))), Parse_ast.Unknown)
 and e_to_ef ef =
@@ -2125,22 +2216,22 @@ let rec get_abbrev d_env t =
   match t.t with
     | Tid i ->
       (match Envmap.apply d_env.abbrevs i with
-	| Some(Base((params,ta),tag,cs,efct,_)) ->
+        | Some(Base((params,ta),tag,cs,efct,_)) ->
           let ta,cs,_,_ = subst params false ta cs efct in
           let ta,cs' = get_abbrev d_env ta in
           (match ta.t with
           | Tabbrev(t',ta) -> ({t=Tabbrev({t=Tabbrev(t,t')},ta)},cs@cs')
           | _ -> ({t = Tabbrev(t,ta)},cs))
-	| _ -> t,[])
+        | _ -> t,[])
     | Tapp(i,args) ->
       (match Envmap.apply d_env.abbrevs i with
-	| Some(Base((params,ta),tag,cs,efct,_)) ->
-	  let env = Envmap.from_list2 (List.map fst params) args in
+        | Some(Base((params,ta),tag,cs,efct,_)) ->
+          let env = Envmap.from_list2 (List.map fst params) args in
           let ta,cs' = get_abbrev d_env (typ_subst env false ta) in
           (match ta.t with
           | Tabbrev(t',ta) -> ({t=Tabbrev({t=Tabbrev(t,t')},ta)},cs_subst env (cs@cs'))
           | _ -> ({t = Tabbrev(t,ta)},cs_subst env cs))
-	| _ -> t,[])
+        | _ -> t,[])
     | _ -> t,[]
 
 let is_enum_typ d_env t = 
@@ -2148,8 +2239,8 @@ let is_enum_typ d_env t =
   let t_actual = match t.t with | Tabbrev(_,ta) -> ta | _ -> t in
   match t.t with
     | Tid i -> (match Envmap.apply d_env.enum_env i with
-	| Some(ns) -> Some(List.length ns)
-	| _ -> None)
+        | Some(ns) -> Some(List.length ns)
+        | _ -> None)
     | _ -> None
 
 let eq_error l msg = raise (Reporting_basic.err_typ l msg)
@@ -2192,14 +2283,16 @@ let effect_sort = List.sort compare_effect
 
 let eq_be_effect (BE_aux (e1,_)) (BE_aux(e2,_)) = e1 = e2
 
-(* Check that o1 is or can be eqaul to o2. In the event that one is polymorphic, inc or dec can be used polymorphically but 'a cannot be used as inc or dec *)
+(* Check that o1 is or can be eqaul to o2. 
+   In the event that one is polymorphic, inc or dec can be used polymorphically but 'a cannot be used as inc or dec *)
 let order_eq co o1 o2 = 
   let l = get_c_loc co in
   match (o1.order,o2.order) with 
   | (Oinc,Oinc) | (Odec,Odec) | (Oinc,Ovar _) | (Odec,Ovar _) -> o2
   | (Ouvar i,_) -> equate_o o1 o2; o2
   | (_,Ouvar i) -> equate_o o2 o1; o2
-  | (Ovar v1,Ovar v2) -> if v1=v2 then o2 else eq_error l ("Order variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
+  | (Ovar v1,Ovar v2) -> if v1=v2 then o2 
+    else eq_error l ("Order variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
   | (Oinc,Odec) | (Odec,Oinc) -> eq_error l "Order mismatch of inc and dec"
   | (Ovar v1,Oinc) -> eq_error l ("Polymorphic order " ^ v1 ^ " cannot be used where inc is expected")
   | (Ovar v1,Odec) -> eq_error l ("Polymorhpic order " ^ v1 ^ " cannot be used where dec is expected")
@@ -2215,8 +2308,10 @@ let effects_eq co e1 e2 =
     if (List.length es1) = (List.length es2) && (List.for_all2 eq_be_effect (effect_sort es1) (effect_sort es2) ) 
     then e2 
     else eq_error l ("Effects must be the same, given " ^ e_to_string e1 ^ " and " ^ e_to_string e2)
-  | Evar v1, Evar v2 -> if v1 = v2 then e2 else eq_error l ("Effect variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
-  | Evar v1, Eset _ -> eq_error l ("Effect variable " ^ v1 ^ " cannot be used where a concrete set of effects is specified")
+  | Evar v1, Evar v2 -> if v1 = v2 then e2 
+    else eq_error l ("Effect variables " ^ v1 ^ " and " ^ v2 ^ " do not match and cannot be unified")
+  | Evar v1, Eset _ -> 
+    eq_error l ("Effect variable " ^ v1 ^ " cannot be used where a concrete set of effects is specified")
 
 
 let build_variable_range d_env v typ =
@@ -2261,15 +2356,17 @@ let find_var_from_nexp n bounds =
     | No_bounds -> None
     | Bounds bs ->
       let rec find_rec bs = match bs with
-	| [] -> None
-	| b::bs -> (match b with
-	    | VR_eq(ev,n1) ->
-	      (*let _ = Printf.eprintf "checking if %s is eq to %s, to bind to %s, eq? %b\n" (n_to_string n) (n_to_string n1) ev (nexp_eq_check n1 n) in*)
-	      if nexp_eq_check n1 n then Some (None,ev) else find_rec bs
-	    | VR_vec_eq (ev,n1)->
-	      (*let _ = Printf.eprintf "checking if %s is eq to %s, to bind to %s, eq? %b\n" (n_to_string n) (n_to_string n1) ev (nexp_eq_check n1 n) in*)
-	      if nexp_eq_check n1 n then Some (Some "length",ev) else find_rec bs
-	    | _ -> find_rec bs) in
+        | [] -> None
+        | b::bs -> (match b with
+            | VR_eq(ev,n1) ->
+              (*let _ = Printf.eprintf "checking if %s is eq to %s, to bind to %s, eq? %b\n" 
+                (n_to_string n) (n_to_string n1) ev (nexp_eq_check n1 n) in*)
+              if nexp_eq_check n1 n then Some (None,ev) else find_rec bs
+            | VR_vec_eq (ev,n1)->
+              (*let _ = Printf.eprintf "checking if %s is eq to %s, to bind to %s, eq? %b\n" 
+                (n_to_string n) (n_to_string n1) ev (nexp_eq_check n1 n) in*)
+              if nexp_eq_check n1 n then Some (Some "length",ev) else find_rec bs
+            | _ -> find_rec bs) in
       find_rec bs
 
 let merge_bounds b1 b2 =
@@ -2279,27 +2376,28 @@ let merge_bounds b1 b2 =
       let b1s = List.sort compare_variable_range b1s in
       let b2s = List.sort compare_variable_range b2s in
       let rec merge b1s b2s = match (b1s,b2s) with
-	| [],b | b,[] -> b
-	| b1::b1s,b2::b2s ->
-	  match compare_variable_range b1 b2 with
-	    | -1 -> b1::(merge b1s (b2::b2s))
-	    | 1  -> b2::(merge (b1::b1s) b2s)
-	    | _  -> (match b1,b2 with
-		| VR_eq(v,n1),VR_eq(_,n2) -> 
-		  if nexp_eq n1 n2 then b1 else VR_range(v,[Eq((Patt Unknown),n1,n2)])
-		| VR_eq(v,n),VR_range(_,ranges) | 
-		  VR_range(v,ranges),VR_eq(_,n) -> VR_range(v,(Eq((Patt Unknown),n,n))::ranges)
-		| VR_range(v,ranges1),VR_range(_,ranges2) -> VR_range(v,ranges1@ranges2)
-		| VR_vec_eq(v,n1),VR_vec_eq(_,n2) ->
-		  if nexp_eq n1 n2 then b1 else VR_vec_r(v,[Eq((Patt Unknown),n1,n2)])
-		| VR_vec_eq(v,n),VR_vec_r(_,ranges) |
-		  VR_vec_r(v,ranges),VR_vec_eq(_,n) -> VR_vec_r(v,(Eq((Patt Unknown),n,n)::ranges))
-		| _ -> b1
-	    )::(merge b1s b2s) in
+        | [],b | b,[] -> b
+        | b1::b1s,b2::b2s ->
+          match compare_variable_range b1 b2 with
+            | -1 -> b1::(merge b1s (b2::b2s))
+            | 1  -> b2::(merge (b1::b1s) b2s)
+            | _  -> (match b1,b2 with
+                | VR_eq(v,n1),VR_eq(_,n2) -> 
+                  if nexp_eq n1 n2 then b1 else VR_range(v,[Eq((Patt Unknown),n1,n2)])
+                | VR_eq(v,n),VR_range(_,ranges) | 
+                  VR_range(v,ranges),VR_eq(_,n) -> VR_range(v,(Eq((Patt Unknown),n,n))::ranges)
+                | VR_range(v,ranges1),VR_range(_,ranges2) -> VR_range(v,ranges1@ranges2)
+                | VR_vec_eq(v,n1),VR_vec_eq(_,n2) ->
+                  if nexp_eq n1 n2 then b1 else VR_vec_r(v,[Eq((Patt Unknown),n1,n2)])
+                | VR_vec_eq(v,n),VR_vec_r(_,ranges) |
+                  VR_vec_r(v,ranges),VR_vec_eq(_,n) -> VR_vec_r(v,(Eq((Patt Unknown),n,n)::ranges))
+                | _ -> b1
+            )::(merge b1s b2s) in
       Bounds (merge b1s b2s)
 
 let rec conforms_to_t d_env loosely within_coercion spec actual =
-(*let _ = Printf.printf "conforms_to_t called, evaluated loosely? %b, with %s and %s\n" loosely (t_to_string spec) (t_to_string actual) in*)
+(*let _ = Printf.printf "conforms_to_t called, evaluated loosely? %b, with %s and %s\n"
+  loosely (t_to_string spec) (t_to_string actual) in*)
   let spec,_ = get_abbrev d_env spec in
   let actual,_ = get_abbrev d_env actual in
   match (spec.t,actual.t,loosely) with
@@ -2322,7 +2420,7 @@ let rec conforms_to_t d_env loosely within_coercion spec actual =
       conforms_to_n true within_coercion le_big_int ba n && conforms_to_n true within_coercion ge_big_int n ra *)
     | (Tapp("range",[TA_nexp bs;TA_nexp rs]),Tapp("atom",[TA_nexp n]),_) -> true (*
       conforms_to_n true within_coercion le_big_int bs n && conforms_to_n true within_coercion ge_big_int rs n &&
-	conforms_to_n true within_coercion ge_big_int bs n *)
+        conforms_to_n true within_coercion ge_big_int bs n *)
     | (Tapp(is,tas), Tapp(ia, taa),_) -> 
 (*      let _ = Printf.printf "conforms to given two apps: %b, %b\n" (is = ia) (List.length tas = List.length taa) in*)
       (is = ia) && (List.length tas = List.length taa) && (List.for_all2 (conforms_to_ta d_env loosely within_coercion) tas taa)
@@ -2330,7 +2428,8 @@ let rec conforms_to_t d_env loosely within_coercion spec actual =
     | (s,Tabbrev(_,a),_) -> conforms_to_t d_env loosely within_coercion spec a
     | (_,_,_) -> false
 and conforms_to_ta d_env loosely within_coercion spec actual =
-(*let _ = Printf.printf "conforms_to_ta called, evaluated loosely? %b, with %s and %s\n" loosely (targ_to_string spec) (targ_to_string actual) in*)
+(*let _ = Printf.printf "conforms_to_ta called, evaluated loosely? %b, with %s and %s\n" 
+  loosely (targ_to_string spec) (targ_to_string actual) in*)
   match spec,actual with
     | TA_typ  s, TA_typ  a -> conforms_to_t d_env loosely within_coercion s a
     | TA_nexp s, TA_nexp a -> conforms_to_n loosely within_coercion eq_big_int s a
@@ -2352,7 +2451,9 @@ and conforms_to_e loosely spec actual =
   match (spec.effect,actual.effect,loosely) with
     | (Euvar _,_,true) -> true
     | (_,Euvar _,true) -> false
-    | _                -> false (*Should check actual effect equality, using existing function*)
+    | _                -> 
+      try begin ignore (effects_eq (Specc Unknown) spec actual); true end with
+        | _ -> false
 
 (*Is checking for structural equality amongst the types, building constraints for kind Nat. 
   When considering two range type applications, will check for consistency instead of equality
@@ -2389,15 +2490,15 @@ let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 =
     then (t1, csp@[Eq(co,a1,a2)])
     else (match a1.nexp,a2.nexp with
       | Nconst i1, Nconst i2 ->
-	if i1 < i2 
-	then ({t= Tapp("range",[TA_nexp a1;TA_nexp a2])},csp)
-	else ({t=Tapp ("range",[TA_nexp a2;TA_nexp a1])},csp)
+        if i1 < i2 
+        then ({t= Tapp("range",[TA_nexp a1;TA_nexp a2])},csp)
+        else ({t=Tapp ("range",[TA_nexp a2;TA_nexp a1])},csp)
       (*| Nconst _, Nuvar _ | Nuvar _, Nconst _->
-	(t1, csp@[Eq(co,a1,a2)])*) (*TODO This is the correct constraint. However, without the proper support for In checks actually working, this will cause specs to not build*)	
+        (t1, csp@[Eq(co,a1,a2)])*) (*TODO This is the correct constraint. However, without the proper support for In checks actually working, this will cause specs to not build*)      
       | _ -> (*let nu1,nu2 = new_n (),new_n () in 
-	     ({t=Tapp("range",[TA_nexp nu1;TA_nexp nu2])},
-	      csp@[LtEq(co,enforce,nu1,a1);LtEq(co,enforce,nu1,a2);LtEq(co,enforce,a1,nu2);LtEq(co,enforce,a2,nu2)])*)
-	(t1, csp@[LtEq(co,enforce,a1,a2);(GtEq(co,enforce,a1,a2))])) (*EQ is the right thing to do, but see above. Introducing new free vars here is bad*)
+             ({t=Tapp("range",[TA_nexp nu1;TA_nexp nu2])},
+              csp@[LtEq(co,enforce,nu1,a1);LtEq(co,enforce,nu1,a2);LtEq(co,enforce,a1,nu2);LtEq(co,enforce,a2,nu2)])*)
+        (t1, csp@[LtEq(co,enforce,a1,a2);(GtEq(co,enforce,a1,a2))])) (*EQ is the right thing to do, but see above. Introducing new free vars here is bad*)
   | Tapp("vector",[TA_nexp _; TA_nexp l1; ord; ty1]),Tapp("vector",[TA_nexp _; TA_nexp l2; ord2; ty2]) ->
     (t2, Eq(co,l1,l2)::((type_arg_eq co d_env enforce widen ord ord2)@(type_arg_eq co d_env enforce widen ty1 ty2)))
   | Tapp(id1,args1), Tapp(id2,args2) ->
@@ -2446,13 +2547,14 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
   let t2_actual = match t2.t with | Tabbrev(_,t2) -> t2 | _ -> t2 in
   let cs1,cs2 = cs1@cs1',cs2@cs2' in
   let csp = cs1@cs2 in
-  (*let _ = Printf.eprintf "called type_coerce_internal is_explicit %b, turning %s into %s\n" is_explicit (t_to_string t1) (t_to_string t2) in*)
+  (*let _ = Printf.eprintf "called type_coerce_internal is_explicit %b, turning %s into %s\n" 
+    is_explicit (t_to_string t1) (t_to_string t2) in*)
   match t1_actual.t,t2_actual.t with
   | Toptions(to1,Some to2),_ -> 
     if (conforms_to_t d_env false true to1 t2_actual || conforms_to_t d_env false true to2 t2_actual)
     then begin t1_actual.t <- t2_actual.t; (t2,csp,pure_e,e) end
     else eq_error l ("Neither " ^ (t_to_string to1) ^
-		     " nor " ^ (t_to_string to2) ^ " can match expected type " ^ (t_to_string t2))
+                     " nor " ^ (t_to_string to2) ^ " can match expected type " ^ (t_to_string t2))
   | Toptions(to1,None),_ -> 
     if is_explicit 
     then type_coerce_internal co d_env enforce is_explicit widen bounds to1 cs1 e t2 cs2
@@ -2460,7 +2562,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
   | _,Toptions(to1,Some to2) -> 
     if (conforms_to_t d_env false true to1 t1_actual || conforms_to_t d_env false true to2 t1_actual)
     then begin t2_actual.t <- t1_actual.t; (t1,csp,pure_e,e) end
-    else eq_error l ((t_to_string t1) ^ " can match neither expexted type " ^ (t_to_string to1) ^ " nor " ^ (t_to_string to2))
+    else eq_error l ((t_to_string t1) ^ " can match neither expexted type " ^
+                        (t_to_string to1) ^ " nor " ^ (t_to_string to2))
   | _,Toptions(to1,None) -> 
     if is_explicit
     then type_coerce_internal co d_env enforce is_explicit widen bounds t1_actual cs1 e to1 cs2
@@ -2472,21 +2575,21 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       let vars = List.map2 (fun i t -> E_aux(E_id(i),(l,Base(([],t),Emp_local,[],pure_e,nob)))) ids t1s in
       let (coerced_ts,cs,efs,coerced_vars,any_coerced) = 
         List.fold_right2 (fun v (t1,t2) (ts,cs,efs,es,coerced) ->
-	  let (t',c',ef,e') = type_coerce co d_env enforce is_explicit widen bounds t1 v t2 in
-	  ((t'::ts),c'@cs,union_effects ef efs,(e'::es), coerced || (v == e')))
+          let (t',c',ef,e') = type_coerce co d_env enforce is_explicit widen bounds t1 v t2 in
+          ((t'::ts),c'@cs,union_effects ef efs,(e'::es), coerced || (v == e')))
           vars (List.combine t1s t2s) ([],[],pure_e,[],false) in
       if (not any_coerced) then (t2,cs,pure_e,e)
       else let e' = E_aux(E_case(e,
-				 [(Pat_aux(Pat_exp
-					     (P_aux(P_tup 
-						      (List.map2 
-							 (fun i t -> P_aux(P_id i,
-									   (l,
-								    (*TODO should probably link i and t in bindings*)
-									    (Base(([],t),Emp_local,[],pure_e,nob)))))
-							 ids t1s),(l,Base(([],t1),Emp_local,[],pure_e,nob))),
-						     E_aux(E_tuple coerced_vars,
-							   (l,Base(([],t2),Emp_local,cs,pure_e,nob)))),
+                                 [(Pat_aux(Pat_exp
+                                             (P_aux(P_tup 
+                                                      (List.map2 
+                                                         (fun i t -> P_aux(P_id i,
+                                                                           (l,
+                                                                    (*TODO should probably link i and t in bindings*)
+                                                                            (Base(([],t),Emp_local,[],pure_e,nob)))))
+                                                         ids t1s),(l,Base(([],t1),Emp_local,[],pure_e,nob))),
+                                                     E_aux(E_tuple coerced_vars,
+                                                           (l,Base(([],t2),Emp_local,cs,pure_e,nob)))),
                                              (l,Base(([],t2),Emp_local,[],pure_e,nob))))]),
                           (l,(Base(([],t2),Emp_local,[],pure_e,nob)))) in
            (t2,csp@cs,efs,e')
@@ -2504,14 +2607,10 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
         | Oinc,Ouvar _ | Odec,Ouvar _ -> equate_o o2 o1;
         | Ouvar _,Oinc | Ouvar _, Odec -> equate_o o1 o2;
         | _,_ -> equate_o o1 o2); 
-        (*(match r1.nexp,r2.nexp with
-	  | Nuvar _,_ -> ignore(resolve_nsubst(r1)); equate_n r1 r2;
-	  | _,Nuvar _ -> ignore(resolve_nsubst(r2)); equate_n r2 r1;
-	  | _ -> ());*)
         let cs = csp@[Eq(co,r1,r2)] in
         let t',cs' = type_consistent co d_env enforce widen t1i t2i in
         let tannot = Base(([],t2),Emp_local,cs@cs',pure_e,nob) in
-	(*let _ = Printf.eprintf "looking at vector vector coerce, t1 %s, t2 %s\n" (t_to_string t1) (t_to_string t2) in*)
+        (*let _ = Printf.eprintf "looking at vector vector coerce, t1 %s, t2 %s\n" (t_to_string t1) (t_to_string t2) in*)
         let e' = E_aux(E_internal_cast ((l,(Base(([],t2),Emp_local,[],pure_e,nob))),e),(l,tannot)) in
         (t2,cs@cs',pure_e,e')
       | _ -> raise (Reporting_basic.err_unreachable l "vector is not properly kinded"))
@@ -2519,10 +2618,10 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord _;TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [Eq(co,b2,n_zero);LtEq(co,Guarantee,mk_sub {nexp=N2n(r1,None)} n_one,r2)] in
-	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num",l)),[e]),(l,Base(([],t2),External None,cs,pure_e,nob))))
+        let cs = [Eq(co,b2,n_zero);LtEq(co,Guarantee,mk_sub (mk_2n(r1)) n_one,r2)] in
+        (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num",l)),[e]),(l,Base(([],t2),External None,cs,pure_e,nob))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
-	eq_error l "Cannot convert a vector to an range without an order"
+        eq_error l "Cannot convert a vector to an range without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert non-bit vector into an range"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
@@ -2530,8 +2629,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord _;TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
-	let cs = [GtEq(co,Guarantee,b2,n_zero);LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)] in
-	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num",l)),[e]),(l,Base(([],t2),External None,cs,pure_e,nob))))
+        let cs = [GtEq(co,Guarantee,b2,n_zero);LtEq(co,Guarantee,b2,mk_sub (mk_2n(r1)) n_one)] in
+        (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num",l)),[e]),(l,Base(([],t2),External None,cs,pure_e,nob))))
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert non-bit vector into an range"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
@@ -2539,19 +2638,19 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       (match args2,args1 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [] (*[LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)] (*This constraint failing should be a warning, but truncation is ok*)*)  in
-	let tannot = (l,Base(([],t2),External None, cs,pure_e,bounds)) in
-	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
-				  [(E_aux(E_internal_exp(tannot), tannot));e]),tannot))
+        let cs = [] (*[LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)] (*This constraint failing should be a warning, but truncation is ok*)*)  in
+        let tannot = (l,Base(([],t2),External None, cs,pure_e,bounds)) in
+        (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
+                                  [(E_aux(E_internal_exp(tannot), tannot));e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-	let cs = [] (* See above [LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
-	let tannot = (l,Base(([],t2),External None,cs,pure_e,bounds)) in
-	(*let _ = Printf.eprintf "Generating to_vec_dec call: bounds are %s\n" (bounds_to_string bounds) in*)
-	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
-				  [(E_aux(E_internal_exp(tannot), tannot)); e]),tannot))
+        let cs = [] (* See above [LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
+        let tannot = (l,Base(([],t2),External None,cs,pure_e,bounds)) in
+        (*let _ = Printf.eprintf "Generating to_vec_dec call: bounds are %s\n" (bounds_to_string bounds) in*)
+        (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
+                                  [(E_aux(E_internal_exp(tannot), tannot)); e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
-	eq_error l "Cannot convert a range to a vector without an order"
+        eq_error l "Cannot convert a range to a vector without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert a range into a non-bit vector"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
@@ -2559,110 +2658,110 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       (match args2,args1 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
-	let cs = [](*[LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
-	let tannot = (l,Base(([],t2),External None, cs,pure_e,bounds)) in
-	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
-				  [(E_aux(E_internal_exp(tannot), tannot));e]),tannot))
+        let cs = [](*[LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
+        let tannot = (l,Base(([],t2),External None, cs,pure_e,bounds)) in
+        (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
+                                  [(E_aux(E_internal_exp(tannot), tannot));e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
-	let cs = [](*[LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
-	let tannot = (l,Base(([],t2),External None,cs,pure_e,bounds)) in
-	(t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
-				  [(E_aux(E_internal_exp(tannot), tannot)); e]),tannot))
+        let cs = [](*[LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
+        let tannot = (l,Base(([],t2),External None,cs,pure_e,bounds)) in
+        (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
+                                  [(E_aux(E_internal_exp(tannot), tannot)); e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
-	eq_error l "Cannot convert a range to a vector without an order"
+        eq_error l "Cannot convert a range to a vector without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert a range into a non-bit vector"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
     | "register",_,_ ->
       (match args1 with
-	| [TA_typ t] ->
+        | [TA_typ t] ->
           (*TODO Should this be an internal cast? 
-	    Probably, make sure it doesn't interfere with the other internal cast and get removed *)
+            Probably, make sure it doesn't interfere with the other internal cast and get removed *)
           (*let _ = Printf.eprintf "Adding cast to remove register read\n" in*)
           let ef = add_effect (BE_aux (BE_rreg, l)) pure_e in
-	  let new_e = E_aux(E_cast(t_to_typ unit_t,e),(l,Base(([],t),External None,[],ef,nob))) in
-	  let (t',cs,ef',e) = type_coerce co d_env Guarantee is_explicit widen bounds t new_e t2 in
-	  (t',cs,union_effects ef ef',e)
-	| _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))
+          let new_e = E_aux(E_cast(t_to_typ unit_t,e),(l,Base(([],t),External None,[],ef,nob))) in
+          let (t',cs,ef',e) = type_coerce co d_env Guarantee is_explicit widen bounds t new_e t2 in
+          (t',cs,union_effects ef ef',e)
+        | _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))
     | _,_,_ -> 
       let t',cs' = type_consistent co d_env enforce widen t1 t2 in (t',cs',pure_e,e))
   | Tapp("vector",[TA_nexp ({nexp=Nconst i} as b1);TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]),Tid("bit") ->
     let cs = [Eq(co,r1,n_one)] in
     (t2,cs,pure_e,E_aux((E_vector_access (e,(E_aux(E_lit(L_aux(L_num (int_of_big_int i),l)),
-					   (l,Base(([],{t=Tapp("atom",[TA_nexp b1])}),Emp_local,cs,pure_e,nob)))))),
+                                           (l,Base(([],{t=Tapp("atom",[TA_nexp b1])}),Emp_local,cs,pure_e,nob)))))),
                  (l,Base(([],t2),Emp_local,cs,pure_e,nob))))
   | Tid("bit"),Tapp("range",[TA_nexp b1;TA_nexp r1]) ->
     let t',cs'= type_consistent co d_env enforce false {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} t2 in
     (t2,cs',pure_e,
      E_aux(E_case (e,[Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_zero,l)),(l,Base(([],t1),Emp_local,[],pure_e,nob))),
-				      E_aux(E_lit(L_aux(L_num 0,l)),(l,Base(([],t2),Emp_local,[],pure_e,nob)))),
-			      (l,Base(([],t2),Emp_local,[],pure_e,nob)));
-		      Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_one,l)),(l,Base(([],t1),Emp_local,[],pure_e,nob))),
-				      E_aux(E_lit(L_aux(L_num 1,l)),(l,Base(([],t2),Emp_local,[],pure_e,nob)))),
-			      (l,Base(([],t2),Emp_local,[],pure_e,nob)));]),
-	   (l,Base(([],t2),Emp_local,[],pure_e,nob))))    
+                                      E_aux(E_lit(L_aux(L_num 0,l)),(l,Base(([],t2),Emp_local,[],pure_e,nob)))),
+                              (l,Base(([],t2),Emp_local,[],pure_e,nob)));
+                      Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_one,l)),(l,Base(([],t1),Emp_local,[],pure_e,nob))),
+                                      E_aux(E_lit(L_aux(L_num 1,l)),(l,Base(([],t2),Emp_local,[],pure_e,nob)))),
+                              (l,Base(([],t2),Emp_local,[],pure_e,nob)));]),
+           (l,Base(([],t2),Emp_local,[],pure_e,nob))))    
   | Tid("bit"),Tapp("atom",[TA_nexp b1]) ->
     let t',cs'= type_consistent co d_env enforce false t2 {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} in
     (t2,cs',pure_e,
      E_aux(E_case (e,[Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_zero,l)),(l,Base(([],t1),Emp_local,[],pure_e,nob))),
-				      E_aux(E_lit(L_aux(L_num 0,l)),(l,Base(([],t2),Emp_local,[],pure_e,nob)))),
-			      (l,Base(([],t2),Emp_local,[],pure_e,nob)));
-		      Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_one,l)),(l,Base(([],t1),Emp_local,[],pure_e,nob))),
-				      E_aux(E_lit(L_aux(L_num 1,l)),(l,Base(([],t2),Emp_local,[],pure_e,nob)))),
-			      (l,Base(([],t2),Emp_local,[],pure_e,nob)));]),
-	   (l,Base(([],t2),Emp_local,[],pure_e,nob))))
+                                      E_aux(E_lit(L_aux(L_num 0,l)),(l,Base(([],t2),Emp_local,[],pure_e,nob)))),
+                              (l,Base(([],t2),Emp_local,[],pure_e,nob)));
+                      Pat_aux(Pat_exp(P_aux(P_lit(L_aux(L_one,l)),(l,Base(([],t1),Emp_local,[],pure_e,nob))),
+                                      E_aux(E_lit(L_aux(L_num 1,l)),(l,Base(([],t2),Emp_local,[],pure_e,nob)))),
+                              (l,Base(([],t2),Emp_local,[],pure_e,nob)));]),
+           (l,Base(([],t2),Emp_local,[],pure_e,nob))))
   | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tid("bit") ->
     let t',cs'= type_consistent co d_env enforce false t1 {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} 
     in (t2,cs',pure_e,E_aux(E_if(E_aux(E_app(Id_aux(Id "is_one",l),[e]),(l,Base(([],bit_t),External None,[],pure_e,nob))),
-				 E_aux(E_lit(L_aux(L_one,l)),(l,Base(([],bit_t),Emp_local,[],pure_e,nob))),
-				 E_aux(E_lit(L_aux(L_zero,l)),(l,Base(([],bit_t),Emp_local,[],pure_e,nob)))),
-			    (l,Base(([],bit_t),Emp_local,cs',pure_e,nob))))
+                                 E_aux(E_lit(L_aux(L_one,l)),(l,Base(([],bit_t),Emp_local,[],pure_e,nob))),
+                                 E_aux(E_lit(L_aux(L_zero,l)),(l,Base(([],bit_t),Emp_local,[],pure_e,nob)))),
+                            (l,Base(([],bit_t),Emp_local,cs',pure_e,nob))))
   | Tapp("atom",[TA_nexp b1]),Tid("bit") ->
     let t',cs'= type_consistent co d_env enforce false t1 {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} 
     in (t2,cs',pure_e,E_aux(E_if(E_aux(E_app(Id_aux(Id "is_one",l),[e]),
-				       (l,Base(([],bool_t),External None,[],pure_e,nob))),
-				 E_aux(E_lit(L_aux(L_one,l)),(l,Base(([],bit_t),Emp_local,[],pure_e,nob))),
-				 E_aux(E_lit(L_aux(L_zero,l)),(l,Base(([],bit_t),Emp_local,[],pure_e,nob)))),
-			    (l,Base(([],bit_t),Emp_local,cs',pure_e,nob))))
+                                       (l,Base(([],bool_t),External None,[],pure_e,nob))),
+                                 E_aux(E_lit(L_aux(L_one,l)),(l,Base(([],bit_t),Emp_local,[],pure_e,nob))),
+                                 E_aux(E_lit(L_aux(L_zero,l)),(l,Base(([],bit_t),Emp_local,[],pure_e,nob)))),
+                            (l,Base(([],bit_t),Emp_local,cs',pure_e,nob))))
   | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tid(i) -> 
     (match Envmap.apply d_env.enum_env i with
     | Some(enums) -> 
       let num_enums = List.length enums in
-      (t2,[GtEq(co,Require,b1,n_zero);LtEq(co,Require,r1,{nexp=Nconst (big_int_of_int (List.length enums))})],pure_e,
+      (t2,[GtEq(co,Require,b1,n_zero);LtEq(co,Require,r1,mk_c(big_int_of_int (List.length enums)))],pure_e,
        E_aux(E_case(e,
-		    List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),
-								(l,Base(([],t1),Emp_local,[],pure_e, nob))),
-							  E_aux(E_id(Id_aux(Id a,l)),
-								(l,Base(([],t2),Enum num_enums,[],pure_e, nob)))),
-						  (l,Base(([],t2),Emp_local,[],pure_e,nob)))) enums),
-	     (l,Base(([],t2),Emp_local,[],pure_e,nob))))
+                    List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),
+                                                                (l,Base(([],t1),Emp_local,[],pure_e, nob))),
+                                                          E_aux(E_id(Id_aux(Id a,l)),
+                                                                (l,Base(([],t2),Enum num_enums,[],pure_e, nob)))),
+                                                  (l,Base(([],t2),Emp_local,[],pure_e,nob)))) enums),
+             (l,Base(([],t2),Emp_local,[],pure_e,nob))))
     | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
   | Tapp("atom",[TA_nexp b1]),Tid(i) -> 
     (match Envmap.apply d_env.enum_env i with
       | Some(enums) -> 
-	let num_enums = List.length enums in
-	(t2,[GtEq(co,Require,b1,n_zero);
-	     LtEq(co,Require,b1,{nexp=Nconst (big_int_of_int (List.length enums))})],pure_e,
-	 E_aux(E_case(e,
-		      List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),
-								  (l,Base(([],t1),Emp_local,[],pure_e,nob))),
-							    E_aux(E_id(Id_aux(Id a,l)),
-								  (l,Base(([],t2),Enum num_enums,[],pure_e,nob)))),
-						    (l,Base(([],t2),Emp_local,[],pure_e,nob)))) enums),
-	       (l,Base(([],t2),Emp_local,[],pure_e,nob))))
+        let num_enums = List.length enums in
+        (t2,[GtEq(co,Require,b1,n_zero);
+             LtEq(co,Require,b1,mk_c(big_int_of_int (List.length enums)))],pure_e,
+         E_aux(E_case(e,
+                      List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),
+                                                                  (l,Base(([],t1),Emp_local,[],pure_e,nob))),
+                                                            E_aux(E_id(Id_aux(Id a,l)),
+                                                                  (l,Base(([],t2),Enum num_enums,[],pure_e,nob)))),
+                                                    (l,Base(([],t2),Emp_local,[],pure_e,nob)))) enums),
+               (l,Base(([],t2),Emp_local,[],pure_e,nob))))
       | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
   | Tid(i),Tapp("range",[TA_nexp b1;TA_nexp r1;]) -> 
     (match Envmap.apply d_env.enum_env i with
     | Some(enums) -> 
-      (t2,[Eq(co,b1,n_zero);GtEq(co,Guarantee,r1,{nexp=Nconst (big_int_of_int (List.length enums))})],pure_e,
+      (t2,[Eq(co,b1,n_zero);GtEq(co,Guarantee,r1,mk_c(big_int_of_int (List.length enums)))],pure_e,
        E_aux(E_case(e,
-		    List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_id(Id_aux(Id a,l)),
-								(l,Base(([],t1),Emp_local,[],pure_e,nob))),
-							  E_aux(E_lit(L_aux((L_num i),l)),
-								(l,Base(([],t2),Emp_local,[],pure_e,nob)))),
-						  (l,Base(([],t2),Emp_local,[],pure_e, nob)))) enums),
-	     (l,Base(([],t2),Emp_local,[],pure_e,nob))))
+                    List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_id(Id_aux(Id a,l)),
+                                                                (l,Base(([],t1),Emp_local,[],pure_e,nob))),
+                                                          E_aux(E_lit(L_aux((L_num i),l)),
+                                                                (l,Base(([],t2),Emp_local,[],pure_e,nob)))),
+                                                  (l,Base(([],t2),Emp_local,[],pure_e, nob)))) enums),
+             (l,Base(([],t2),Emp_local,[],pure_e,nob))))
     | None -> eq_error l ("Type mismatch: " ^ (t_to_string t1) ^ " , " ^ (t_to_string t2)))
   | _,_ -> let t',cs = type_consistent co d_env enforce widen t1 t2 in (t',cs,pure_e,e)
 
@@ -2681,26 +2780,35 @@ let rec select_overload_variant d_env params_check get_all variants actual_type 
       let t,cs' = get_abbrev d_env t in
       let recur _ = select_overload_variant d_env params_check get_all variants actual_type in
       (match t.t with
-	| Tfn(a,r,_,e) ->
-	  let is_matching = 
-	    if params_check then conforms_to_t d_env true false a actual_type 
-	    else match actual_type.t with
-	      | Toptions(at1,Some at2) -> 
-		(conforms_to_t d_env false true at1 r || conforms_to_t d_env false true at2 r)
-	      | Toptions(at1,None) -> conforms_to_t d_env false true at1 r
-	      | _ -> conforms_to_t d_env true true actual_type r in
-	  (*let _ = Printf.eprintf "Checked a variant, matching? %b\n" is_matching in*)
-	  if is_matching 
-	  then (Base(([],t),tag,cs@cs',ef,bindings))::(if get_all then (recur ()) else [])
-	  else recur ()
-	| _ -> recur () )
+        | Tfn(a,r,_,e) ->
+          let is_matching = 
+            if params_check then conforms_to_t d_env true false a actual_type 
+            else match actual_type.t with
+              | Toptions(at1,Some at2) -> 
+                (conforms_to_t d_env false true at1 r || conforms_to_t d_env false true at2 r)
+              | Toptions(at1,None) -> conforms_to_t d_env false true at1 r
+              | _ -> conforms_to_t d_env true true actual_type r in
+          (*let _ = Printf.eprintf "Checked a variant, matching? %b\n" is_matching in*)
+          if is_matching 
+          then (Base(([],t),tag,cs@cs',ef,bindings))::(if get_all then (recur ()) else [])
+          else recur ()
+        | _ -> recur () )
+
+let rec split_conditional_constraints = function
+  | [] -> [],[]
+  | Predicate(co,cp,cn)::cs ->
+    let (csp,csn) = split_conditional_constraints cs in
+    (cp::csp, cn::csn)
+  | c::cs ->
+    let (csp,csn) = split_conditional_constraints cs in
+    (c::csp, csn)
 
 let rec in_constraint_env = function
   | [] -> []
   | InS(co,nexp,vals)::cs ->
-    (nexp,(List.map (fun c -> {nexp = Nconst (big_int_of_int c)}) vals))::(in_constraint_env cs)
+    (nexp,(List.map (fun c -> mk_c(big_int_of_int c)) vals))::(in_constraint_env cs)
   | In(co,i,vals)::cs -> 
-    ({nexp = Nvar i},(List.map (fun c -> {nexp = Nconst (big_int_of_int c)}) vals))::(in_constraint_env cs)
+    (mk_nv i,(List.map (fun c -> mk_c(big_int_of_int c)) vals))::(in_constraint_env cs)
   | _::cs -> in_constraint_env cs
 
 let rec contains_var nu n =
@@ -2718,17 +2826,6 @@ let rec contains_in_vars in_env n =
     | None -> if contains_var ne n then Some [ne,vals] else None
     | Some(e_env) -> if contains_var ne n then Some((ne,vals)::e_env) else Some(e_env))
 
-let rec subst_nuvars nu nc n =
-  match n.nexp with
-  | Nconst _ | Nvar _ | Npos_inf | Nneg_inf | Ninexact -> n
-  | Nuvar _ -> if nexp_eq_check nu n then nc else n
-  | Nmult(n1,n2) -> {nexp=Nmult(subst_nuvars nu nc n1,subst_nuvars nu nc n2)}
-  | Nadd(n1,n2) -> {nexp=Nadd(subst_nuvars nu nc n1,subst_nuvars nu nc n2)}
-  | Nsub(n1,n2) -> {nexp=Nsub(subst_nuvars nu nc n1,subst_nuvars nu nc n2)}
-  | Nneg n -> {nexp= Nneg (subst_nuvars nu nc n)}
-  | N2n(n,i) -> {nexp = N2n((subst_nuvars nu nc n),i)}
-  | Npow(n,i) -> {nexp = Npow((subst_nuvars nu nc n),i)}
-
 let rec get_nuvars n =
   match n.nexp with
     | Nconst _ | Nvar _ | Npos_inf | Nneg_inf | Ninexact-> []
@@ -2736,35 +2833,163 @@ let rec get_nuvars n =
     | Nmult(n1,n2) | Nadd(n1,n2) | Nsub(n1,n2) -> (get_nuvars n1)@(get_nuvars n2)
     | Nneg n | N2n(n,_) | Npow(n,_) -> get_nuvars n
 
-module NexpM = 
- struct
- type t = nexp
- let compare = compare_nexps
-end
-module Var_set = Set.Make(NexpM) 
-
 let rec get_all_nuvars_cs cs = match cs with
   | [] -> Var_set.empty 
-  | (Eq(_,n1,n2) | GtEq(_,_,n1,n2) | LtEq(_,_,n1,n2))::cs -> 
+  | (Eq(_,n1,n2) | GtEq(_,_,n1,n2) | LtEq(_,_,n1,n2) | Gt(_,_,n1,n2) | Lt(_,_,n1,n2))::cs -> 
     let s = get_all_nuvars_cs cs in
     let n1s = get_nuvars n1 in
     let n2s = get_nuvars n2 in
     List.fold_right (fun n s -> Var_set.add n s) (n1s@n2s) s
-  | CondCons(_,_,pats,exps)::cs ->
+  | Predicate(_,cp,cn)::cs -> 
+    Var_set.union (get_all_nuvars_cs [cp;cn]) (get_all_nuvars_cs cs)
+  | CondCons(_,_,_,pats,exps)::cs ->
     let s = get_all_nuvars_cs cs in
     let ps = get_all_nuvars_cs pats in
     let es = get_all_nuvars_cs exps in
     Var_set.union s (Var_set.union ps es)
-  | BranchCons(_,c)::cs ->
+  | BranchCons(_,_,c)::cs ->
     Var_set.union (get_all_nuvars_cs c) (get_all_nuvars_cs cs)
   | _::cs -> get_all_nuvars_cs cs
 
-let freshen n = 
-  let nuvars = get_nuvars n in
-  let env_map = List.map (fun nu -> (nu,new_n ())) nuvars in
-  let n = List.fold_right (fun (nu_orig,nu_fresh) n' -> subst_nuvars nu_orig nu_fresh n') env_map n in
-  (n,env_map)
+let rec subst_nuvars nus n =
+  let is_imp_param = n.imp_param in
+  let new_n = 
+    match n.nexp with
+      | Nconst _ | Nvar _ | Npos_inf | Nneg_inf | Ninexact -> n
+      | Nuvar _ -> 
+        (match Nexpmap.apply nus n with
+          | None -> n
+          | Some nc -> nc)
+      | Nmult(n1,n2) -> mk_mult (subst_nuvars nus n1) (subst_nuvars nus n2)
+      | Nadd(n1,n2) -> mk_add (subst_nuvars nus n1) (subst_nuvars nus n2)
+      | Nsub(n1,n2) -> mk_sub (subst_nuvars nus n1) (subst_nuvars nus n2)
+      | Nneg n -> mk_neg (subst_nuvars nus n)
+      | N2n(n,None) -> mk_2n (subst_nuvars nus n)
+      | N2n(n,Some(i)) -> mk_2nc (subst_nuvars nus n) i
+      | Npow(n,i) -> mk_pow (subst_nuvars nus n) i in
+  (if is_imp_param then set_imp_param new_n);
+  new_n
 
+let rec subst_nuvars_cs nus cs = 
+  match cs with
+    | [] -> []
+    | Eq(l,n1,n2)::cs -> Eq(l,subst_nuvars nus n1,subst_nuvars nus n2)::(subst_nuvars_cs nus cs)
+    | NtEq(l,n1,n2)::cs -> NtEq(l, subst_nuvars nus n1, subst_nuvars nus n2)::(subst_nuvars_cs nus cs)
+    | GtEq(l,enforce,n1,n2)::cs -> GtEq(l,enforce,subst_nuvars nus n1, subst_nuvars nus n2)::(subst_nuvars_cs nus cs)
+    | Gt(l,enforce,n1,n2)::cs -> Gt(l,enforce,subst_nuvars nus n1, subst_nuvars nus n2)::(subst_nuvars_cs nus cs)
+    | LtEq(l,enforce,n1,n2)::cs -> LtEq(l,enforce,subst_nuvars nus n1, subst_nuvars nus n2)::(subst_nuvars_cs nus cs)
+    | Lt(l,enforce,n1,n2)::cs -> Lt(l,enforce,subst_nuvars nus n1, subst_nuvars nus n2)::(subst_nuvars_cs nus cs)
+    | In(l,s,ns)::cs -> In(l,s,ns)::(subst_nuvars_cs nus cs)
+    | InS(l,n,ns)::cs -> InS(l,subst_nuvars nus n,ns)::(subst_nuvars_cs nus cs)
+    | Predicate(l, cp,cn)::cs -> 
+      Predicate(l, List.hd(subst_nuvars_cs nus [cp]), List.hd(subst_nuvars_cs nus [cn]))::(subst_nuvars_cs nus cs)
+    | CondCons(l,kind,my_substs,cs_p,cs_e)::cs -> 
+      CondCons(l,kind,my_substs,subst_nuvars_cs nus cs_p,subst_nuvars_cs nus cs_e)::(subst_nuvars_cs nus cs)
+    | BranchCons(l,possible_invars,bs)::cs -> 
+      BranchCons(l,possible_invars,subst_nuvars_cs nus bs)::(subst_nuvars_cs nus cs)
+
+let freshen_constraints cs = 
+  let nuvars = Var_set.fold (fun n map -> Nexpmap.insert map (n,new_n())) (get_all_nuvars_cs cs) Nexpmap.empty in
+  (subst_nuvars_cs nuvars cs,nuvars)
+
+let rec prepare_constraints = function
+  | [] -> []
+  | CondCons(l,(Positive|Negative|Switch as kind),None,cs_p,cs_e)::cs ->
+    let (new_pred_cs,my_substs) = freshen_constraints cs_p in
+    let new_expr_cs = subst_nuvars_cs my_substs cs_e in
+    CondCons(l,kind,Some(my_substs),cs_p,cs_e)::(prepare_constraints cs)
+  | BranchCons(l,_,bs)::cs -> BranchCons(l,None, prepare_constraints bs)::(prepare_constraints cs)
+  | c::cs -> c::(prepare_constraints cs)
+
+let rec make_merged_constraints acc =  function
+  | [] -> acc
+  | c::cs ->
+    make_merged_constraints 
+      (Nexpmap.fold 
+         (fun acc k v -> 
+           match Nexpmap.apply acc k with
+             | None -> Nexpmap.insert acc (k, One v)
+             | Some(One v') -> Nexpmap.insert (Nexpmap.remove acc k) (k, Two(v,v'))
+             | Some(Two(v',v'')) -> Nexpmap.insert (Nexpmap.remove acc k) (k,Many [v;v';v''])
+             | Some(Many vs) -> Nexpmap.insert (Nexpmap.remove acc k) (k,Many (v::vs))) acc c)
+      cs      
+
+let merge_branch_constraints merge_nuvars constraint_sets =
+  let _ = Printf.eprintf "merge branch constraints\n%!" in
+  (*Separate variables into only occurs in one set, or occurs in multiple sets*)
+  let merged_constraints = make_merged_constraints Nexpmap.empty constraint_sets in
+  let shared_path_distinct_constraints = 
+    Nexpmap.fold 
+      (fun sc k v -> match v with
+        (*Variables only in one path get the assignments (other than nuvars) made on the path*)
+        | One n ->
+          let _ = Printf.eprintf "Variables in one path: merge_nuvars %b, key %s, one %s\n%!" merge_nuvars (n_to_string k) (n_to_string n) in
+          begin (match (k.nexp, n.nexp) with
+            | Nuvar _, Nuvar _ -> if merge_nuvars then ignore(equate_n n k) else ()
+            | _ -> let occurs = (occurs_in_nexp k n) || (occurs_in_nexp n k) in
+                   if not(occurs) then ignore(equate_n k n) else ());
+            (Printf.eprintf "After setting key %s, one %s\n%!" (n_to_string k) (n_to_string n));
+            sc end
+        (*Variables on two paths get the assignment if they're the same, skipped if both nuvars, kept otherwise for later*)
+        | Two(n1,n2) ->
+          let _ = Printf.eprintf "Variables in two paths: merge_nuvars %b, key %s, n1 %s, n2 %s\n%!" merge_nuvars (n_to_string k) (n_to_string n1) (n_to_string n2) in
+          (match n1.nexp,n2.nexp with
+            | Nuvar _, Nuvar _ ->
+              if merge_nuvars && equate_n n1 k && equate_n n2 k
+              then sc
+              else sc
+            | _ -> 
+              if nexp_eq n1 n2 
+              then if equate_n k n1 
+                then sc
+                else assert false (*There shouldn't be a reason that equate_n didn't work here*)
+              else Nexpmap.insert sc (k,v))
+        (*Same as on two paths but more complicated logic*)
+        | Many ns ->
+          let _ = Printf.eprintf "Variables in many paths: merge_nuvars %b, key %s, [" merge_nuvars (n_to_string k) in
+          let _ = List.iter (fun n -> Printf.eprintf "%s " (n_to_string n)) ns in
+          let _ = Printf.eprintf "\n%!" in
+          if List.for_all (fun n -> match n.nexp with | Nuvar _ -> true | _ -> false) ns
+          then begin (List.iter (fun n -> ignore(merge_nuvars && equate_n n k)) ns); sc end
+          else 
+            let rec all_eq = function
+              | [] | [_] -> true
+              | n1::n2::ns -> 
+                (nexp_eq n1 n2) && all_eq ns 
+            in 
+            if all_eq ns && not(ns = [])
+            then if equate_n k (List.hd ns) then sc
+              else assert false (*Shouldn't happen, as above*)
+            else Nexpmap.insert sc (k,v)) Nexpmap.empty merged_constraints in
+  (*Find the variables in multiple sets, if not set the same then either skip, or if IN varaiables, check that assignments consistent with ranges; if not IN variables and set to constants, then send these out because they're essentially new IN variables and need to work in any seen range afterwards; if not IN variables, not set to constants, and not set to nuvars then these might be errors or parts that are too hard for the constraint solver. 
+    *)
+  shared_path_distinct_constraints
+
+let rec extract_path_substs = function
+  | [] -> [],[]
+  | CondCons(l,k,Some(substs),ps,es)::cs -> 
+    let set v n = match n.nexp with
+      | Nuvar _ -> ignore(equate_n n v)
+      | _ -> if nexp_eq n v then () else assert false (*Get a location to here*)
+    in
+    let updated_substs = 
+      Nexpmap.fold (fun substs key newvar -> 
+        match key.nexp with
+          | Nuvar _ -> Nexpmap.insert substs (key,newvar)
+          | _ -> begin set key newvar; substs end) substs Nexpmap.empty in
+    let (substs, cs_rest) = extract_path_substs cs in
+    (updated_substs::substs, CondCons(l,k,Some(updated_substs),ps,es)::cs_rest)
+  | c::cs -> 
+    let (substs,cs_rest) = extract_path_substs cs in
+    (substs,c::cs_rest)
+
+let rec merge_paths merge_nuvars = function
+  | [] -> []
+  | BranchCons(co,_,branches)::cs ->
+    let path_substs,branches_up = extract_path_substs branches in
+    let shared_vars = merge_branch_constraints merge_nuvars path_substs in
+    BranchCons(co,Some(shared_vars),branches_up)::(merge_paths merge_nuvars cs)
+  | c::cs -> c::merge_paths merge_nuvars cs
 
 let rec equate_nuvars in_env cs = 
   (*let _ = Printf.eprintf "equate_nuvars\n" in*)
@@ -2773,134 +2998,216 @@ let rec equate_nuvars in_env cs =
     | [] -> []
     | (Eq(co,n1,n2) as c)::cs ->
       (match (n1.nexp,n2.nexp) with
-	| Nuvar u1, Nuvar u2 ->
-	  (*let _ = Printf.eprintf "setting two nuvars, %s and %s in equate\n" (n_to_string n1) (n_to_string n2) in*)
-	  let occurs = (occurs_in_nexp n1 n2) || (occurs_in_nexp n2 n1) in
+        | Nuvar u1, Nuvar u2 ->
+          (*let _ = Printf.eprintf "setting two nuvars, %s and %s in equate\n" (n_to_string n1) (n_to_string n2) in*)
+          let occurs = (occurs_in_nexp n1 n2) || (occurs_in_nexp n2 n1) in
           if not(occurs) 
           then begin ignore(resolve_nsubst n1); ignore(resolve_nsubst n2); 
-	    if (equate_n n1 n2) then equate cs else c::equate cs end
-	  else c::equate cs
-	| _ -> c::equate cs)
-    | (CondCons(co,kind,pats,exps) as c):: cs ->
-      (match kind with
-	| Solo | Positive | Negative (*Wrong, but I'd like to get things working again*)->
-	  (*let _ = Printf.eprintf "equate_nuvars: condcons: %s\n%!" (constraints_to_string [c]) in*)
-	  let pats' = equate pats in
-	  let exps' = equate exps in
-	  (match pats',exps' with
-	    | [],[] -> equate cs
-	    | _     -> CondCons(co,kind,pats',exps')::(equate cs))
-	| _ -> CondCons(co,kind,pats,exps)::(equate cs))
-    | BranchCons(co,branches)::cs ->
+            if (equate_n n1 n2) then equate cs else c::equate cs end
+          else c::equate cs
+        | _ -> c::equate cs)
+    | (CondCons(co,kind,None,pats,exps) as c):: cs ->
+      (*let _ = Printf.eprintf "equate_nuvars: condcons: %s\n%!" (constraints_to_string [c]) in*)
+      let pats' = equate pats in
+      let exps' = equate exps in
+      (match pats',exps' with
+        | [],[] -> equate cs
+        | _     -> CondCons(co,kind,None,pats',exps')::(equate cs))
+    | BranchCons(co,sv,branches)::cs ->
       let b' = equate branches in
       if [] = b' 
       then equate cs
-      else BranchCons(co,b')::(equate cs)
-    | x::cs -> x::(equate cs)
+      else BranchCons(co,sv,b')::(equate cs)
+    | c::cs -> c::(equate cs)
 
-
+let rec constraint_size = function
+  | [] -> 0
+  | c::cs -> 
+    (match c with 
+      | CondCons(_,_,_,ps,es) -> constraint_size ps + constraint_size es
+      | BranchCons(_,_,bs) -> constraint_size bs
+      | _ -> 1) + constraint_size cs
+      
 let rec simple_constraint_check in_env cs = 
   let check = simple_constraint_check in_env in
-  (*let _ = Printf.eprintf "simple_constraint_check of %s\n" (constraints_to_string cs) in *)
+  let _ = Printf.eprintf "simple_constraint_check of %i constraints\n%!" (constraint_size cs) in
   match cs with 
   | [] -> []
   | Eq(co,n1,n2)::cs -> 
-    let eq_to_zero ok_to_set n1 n2 = 	
+    let eq_to_zero ok_to_set n1 n2 =    
       (*let _ = Printf.eprintf "eq_to_zero called with n1 %s and n2%s\n" (n_to_string n1) (n_to_string n2) in*)
       let new_n = normalize_nexp (mk_sub n1 n2) in
       (match new_n.nexp with
-	| Nconst i -> 
-	  if eq_big_int i zero
-	  then None
-	  else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires "
-					^ n_to_string new_n ^ " to equal 0, not " ^ string_of_big_int i)
-	| Nuvar u1 ->
-	  if ok_to_set
-	  then begin ignore(resolve_nsubst new_n);
-	    if (equate_n new_n n_zero) then None else Some(Eq(co,new_n,n_zero)) end
-	  else Some(Eq(co,new_n,n_zero))
-	| Nadd(new_n1,new_n2) ->
-	  (match new_n1.nexp, new_n2.nexp with
-	    | _ -> Some(Eq(co,n1,n2)))
-	| _ -> Some(Eq(co,n1,n2))) in
+        | Nconst i -> 
+          if eq_big_int i zero
+          then None
+          else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires "
+                                        ^ n_to_string new_n ^ " to equal 0, not " ^ string_of_big_int i)
+        | Nuvar u1 ->
+          if ok_to_set
+          then begin ignore(resolve_nsubst new_n);
+            if (equate_n new_n n_zero) then None else Some(Eq(co,new_n,n_zero)) end
+          else Some(Eq(co,new_n,n_zero))
+        | Nadd(new_n1,new_n2) ->
+          (match new_n1.nexp, new_n2.nexp with
+            | _ -> Some(Eq(co,n1,n2)))
+        | _ -> Some(Eq(co,n1,n2))) in
     let check_eq ok_to_set n1 n2 = 
-      (*let _ = Printf.eprintf "eq check, about to normalize_nexp of %s, %s arising from %s \n" (n_to_string n1) (n_to_string n2) (co_to_string co) in*) 
+      let _ = Printf.eprintf "eq check, about to normalize_nexp of %s, %s arising from %s \n" 
+        (n_to_string n1) (n_to_string n2) (co_to_string co) in
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
       (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
       (match n1'.nexp,n2'.nexp with
-      | Ninexact,nok | nok,Ninexact -> eq_error (get_c_loc co) ("Type constraint arising from here requires " ^ n_to_string {nexp = nok} ^ " to be equal to +inf + -inf")
+      | Ninexact,nok | nok,Ninexact -> 
+        eq_error (get_c_loc co) 
+          ("Type constraint arising from here requires " ^ n_to_string {nexp = nok; imp_param = false}
+           ^ " to be equal to +inf + -inf")
       | Npos_inf,Npos_inf | Nneg_inf, Nneg_inf -> None
       | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst(i2) -> 
-        if eq_big_int i1 i2 then None else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^ " to equal " ^ n_to_string n2 )
+        if eq_big_int i1 i2 then None 
+        else eq_error (get_c_loc co) 
+          ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^
+              " to equal " ^ n_to_string n2 )
       | Nuvar u1, Nuvar u2 ->
-	(*let _ = Printf.eprintf "setting two nuvars, %s and %s, it is ok_to_set %b\n" (n_to_string n1) (n_to_string n2) ok_to_set in*)
-	let occurs = (occurs_in_nexp n1' n2') || (occurs_in_nexp n2' n1') in
+        (*let _ = Printf.eprintf "setting two nuvars, %s and %s, it is ok_to_set %b\n" 
+          (n_to_string n1) (n_to_string n2) ok_to_set in*)
+        let occurs = (occurs_in_nexp n1' n2') || (occurs_in_nexp n2' n1') in
         if ok_to_set && not(occurs) 
         then begin ignore(resolve_nsubst n1'); ignore(resolve_nsubst n2'); 
-	  if (equate_n n1' n2') then None else Some(Eq(co,n1',n2')) end
-	else if occurs then eq_to_zero ok_to_set n1' n2'
+          if (equate_n n1' n2') then None else Some(Eq(co,n1',n2')) end
+        else if occurs then eq_to_zero ok_to_set n1' n2'
         else Some(Eq(co,n1',n2'))
       | _, Nuvar u -> 
-	(*let _ = Printf.eprintf "setting right nuvar\n" in*)
-	let occurs = occurs_in_nexp n1' n2' in
-	let leave = leave_nu_as_var n2' in
-	(*let _ = Printf.eprintf "occurs? %b, leave? %b n1' %s in n2' %s\n" occurs leave (n_to_string n1') (n_to_string n2') in*)
+        (*let _ = Printf.eprintf "setting right nuvar\n" in*)
+        let occurs = occurs_in_nexp n1' n2' in
+        let leave = leave_nu_as_var n2' in
+        (*let _ = Printf.eprintf "occurs? %b, leave? %b n1' %s in n2' %s\n" 
+          occurs leave (n_to_string n1') (n_to_string n2') in*)
         if (*not(u.nin) &&*) ok_to_set && not(occurs) && not(leave)
         then if (equate_n n2' n1') then  None else (Some (Eq(co,n1',n2')))
         else if occurs 
-	then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end
-	else Some (Eq(co,n1',n2')) 
+        then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end
+        else Some (Eq(co,n1',n2')) 
       | Nuvar u, _ ->
-	(*let _ = Printf.eprintf "setting left nuvar\n" in*)
-	let occurs = occurs_in_nexp n2' n1' in
-	let leave = leave_nu_as_var n1' in
-	(*let _ = Printf.eprintf "occurs? %b, leave? %b n2' %s in n1' %s\n" occurs leave (n_to_string n2') (n_to_string n1') in*)
+        (*let _ = Printf.eprintf "setting left nuvar\n" in*)
+        let occurs = occurs_in_nexp n2' n1' in
+        let leave = leave_nu_as_var n1' in
+        (*let _ = Printf.eprintf "occurs? %b, leave? %b n2' %s in n1' %s\n"
+          occurs leave (n_to_string n2') (n_to_string n1') in*)
         if (*not(u.nin) &&*) ok_to_set && not(occurs) && not(leave)
         then if equate_n n1' n2' then None else (Some (Eq(co,n1',n2')))
         else if occurs
-	then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end
-	else Some (Eq(co,n1',n2'))
+        then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end
+        else Some (Eq(co,n1',n2'))
       | _,_ -> 
-	if nexp_eq_check n1' n2'
-	then None
-	else eq_to_zero ok_to_set n1' n2')
+        if nexp_eq_check n1' n2'
+        then None
+        else eq_to_zero ok_to_set n1' n2')
     in
     let _ = reduce_n_unifications n1; reduce_n_unifications n2 in
     (match check_eq true n1 n2 with
       | None -> (check cs)
       | Some(c) -> c::(check cs))
+  | NtEq(co,n1,n2)::cs -> 
+    let nt_eq_to_zero n1 n2 =   
+      (*let _ = Printf.eprintf "nt_eq_to_zero called with n1 %s and n2%s\n" (n_to_string n1) (n_to_string n2) in*)
+      let new_n = normalize_nexp (mk_sub n1 n2) in
+      (match new_n.nexp with
+        | Nconst i -> 
+          if eq_big_int i zero
+          then eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires "
+                                        ^ n_to_string new_n ^ " to not equal 0")
+          else None
+        | _ -> Some(NtEq(co,n1,n2))) in
+    let check_not_eq n1 n2 = 
+      let _ = Printf.eprintf "not eq check, about to normalize_nexp of %s, %s arising from %s \n" 
+        (n_to_string n1) (n_to_string n2) (co_to_string co) in
+      let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
+      (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+      (match n1'.nexp,n2'.nexp with
+      | Ninexact,nok | nok,Ninexact -> 
+        eq_error (get_c_loc co) 
+          ("Type constraint arising from here requires " ^ n_to_string {nexp = nok; imp_param = false} ^
+              " to be compared to +inf + -inf")
+      | Npos_inf,Npos_inf | Nneg_inf, Nneg_inf -> 
+        eq_error (get_c_loc co)
+          ("Type constraint arising from here requires " ^ n_to_string n1' ^ " to be not = to " ^ n_to_string n2')
+      | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst(i2) -> 
+        if eq_big_int i1 i2 
+        then eq_error (get_c_loc co) 
+          ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^
+              " to not equal " ^ n_to_string n2 )
+        else None
+      | _,_ -> 
+        if nexp_eq_check n1' n2'
+        then eq_error (get_c_loc co)
+          ("Type constraing mismatch: constraint arising from here requires " ^ n_to_string n1 ^ " to not equal " ^
+              n_to_string n2)
+        else nt_eq_to_zero n1' n2')
+    in
+    (match check_not_eq n1 n2 with
+      | None -> (check cs)
+      | Some(c) -> c::(check cs))
   | GtEq(co,enforce,n1,n2)::cs -> 
-    (*let _ = Printf.eprintf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    let _ = Printf.eprintf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in 
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
-    (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
+    let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in
     (match n1'.nexp,n2'.nexp with
     | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst i2 -> 
       if ge_big_int i1 i2 
       then check cs
-      else eq_error (get_c_loc co) ("Type constraint mismatch: constraint of " ^ n_to_string n1 ^ " >= " ^ n_to_string n2 ^ "  arising from here requires " 
-			            ^ string_of_big_int i1 ^ " to be greater than or equal to " ^ string_of_big_int i2)
+      else eq_error (get_c_loc co) 
+        ("Type constraint mismatch: constraint of " ^ n_to_string n1 ^ " >= " ^ n_to_string n2 ^ 
+            " arising from here requires " 
+         ^ string_of_big_int i1 ^ " to be greater than or equal to " ^ string_of_big_int i2)
     | Npos_inf, _ |  _, Nneg_inf  -> check cs
     | Ninexact, _ | _, Ninexact -> check cs
-    | Nconst _ ,Npos_inf -> eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
-                                                ^ (n_to_string n1') ^ " to be greater than or equal to infinity")
+    | Nconst _ ,Npos_inf -> 
+      eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
+                               ^ (n_to_string n1') ^ " to be greater than or equal to infinity")
     | Nneg_inf,Nuvar _ ->
       if equate_n n2' n1' then check cs else (GtEq(co,enforce,n1',n2')::check cs)
-    | Nneg_inf, _ -> eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires negative infinity to be greater than or equal to " ^ (n_to_string n2'))
+    | Nneg_inf, _ -> 
+      eq_error (get_c_loc co) 
+        ("Type constraint mismatch: constraint arising from here requires negative infinity to be >= to " 
+         ^ (n_to_string n2'))
     | _,_ -> 
       (match nexp_ge n1' n2' with
-	| Yes -> check cs
-	| No -> eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^ " to be greather than or equal to " ^ (n_to_string n2))
-	| Maybe ->
-	  let new_n = normalize_nexp (mk_sub n1' n2') in
-	  (match new_n.nexp with
-	    | Nconst i -> 
-	      if ge_big_int i zero
-	      then (check cs)
-	      else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires "
-					    ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
-	    | _ -> GtEq(co,enforce,n1',n2')::(check cs))))
+        | Yes -> check cs
+        | No -> eq_error (get_c_loc co) 
+          ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^ " to be >= to " ^ 
+              (n_to_string n2))
+        | Maybe ->
+          let new_n = normalize_nexp (mk_sub n1' n2') in
+          (match new_n.nexp with
+            | Nconst i -> 
+              if ge_big_int i zero
+              then (check cs)
+              else eq_error (get_c_loc co) 
+                ("Type constraint mismatch: constraint arising from here requires "
+                 ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
+            | _ -> GtEq(co,enforce,n1',n2')::(check cs))))
+  | Gt(co,enforce,n1,n2)::cs -> 
+    let _ = Printf.eprintf "> check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in 
+    let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
+    (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
+    (match nexp_gt n1' n2' with
+      | Yes -> check cs
+      | No -> eq_error (get_c_loc co)
+          ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^ " to be > to " ^ 
+              (n_to_string n2))
+      | Maybe -> 
+        let new_n = normalize_nexp (mk_sub n1' n2') in
+        (match new_n.nexp with
+          | Nconst i -> 
+            if gt_big_int i zero
+            then (check cs)
+            else eq_error (get_c_loc co) 
+              ("Type constraint mismatch: constraint arising from here requires "
+               ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
+          | _ -> Gt(co,enforce,n1',n2')::(check cs)))
   | LtEq(co,enforce,n1,n2)::cs -> 
-    (*let _ = Printf.eprintf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    let _ = Printf.eprintf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in 
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
     (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
     (match n1'.nexp,n2'.nexp with
@@ -2908,35 +3215,51 @@ let rec simple_constraint_check in_env cs =
       if le_big_int i1 i2 
       then check cs
       else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
-			            ^ string_of_big_int i1 ^ " to be less than or equal to " ^ string_of_big_int i2)
+                                    ^ string_of_big_int i1 ^ " to be less than or equal to " ^ string_of_big_int i2)
     | _, Npos_inf | Nneg_inf, _  -> check cs
-    (*| Npos_inf, Nconst _ -> eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires infinity to be less than or equal to "
-                                                        ^ (n_to_string n2'))*)
     | _,_ ->
       (match nexp_ge n2' n1' with
-	| Yes -> check cs
-	| No -> eq_error (get_c_loc co) 
-	  ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^
-	      " to be less than or equal to " ^ (n_to_string n2))
-	| Maybe -> LtEq(co,enforce,n1',n2')::(check cs)))
-  | CondCons(co,kind,pats,exps):: cs ->
-    (match kind with
-      | Solo | Positive | Negative (*Wrong, but let's get things working again*)->
-    (*let _ = Printf.eprintf "Condcons check length pats %i, length exps %i\n" (List.length pats) (List.length exps) in*)
-	let pats' = check pats in
-	let exps' = check exps in
-    (*let _ = Printf.eprintf "Condcons after check length pats' %i, length exps' %i\n" (List.length pats') (List.length exps') in*)
-	(match pats',exps' with
-	  | [],[] -> check cs
-	  | _     -> CondCons(co,kind,pats',exps')::(check cs))
-      | _ -> CondCons(co,kind,pats,exps)::(check cs))
-  | BranchCons(co,branches)::cs ->
-    (*let _ = Printf.eprintf "Branchcons check length branches %i\n" (List.length branches) in*)
-    let b' = check branches in
-    if [] = b' 
+        | Yes -> check cs
+        | No -> eq_error (get_c_loc co) 
+          ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^
+              " to be less than or equal to " ^ (n_to_string n2))
+        | Maybe -> LtEq(co,enforce,n1',n2')::(check cs)))
+  | Lt(co,enforce,n1,n2)::cs -> 
+    let _ = Printf.eprintf "< check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in 
+    let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
+    (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
+    (match n1'.nexp,n2'.nexp with
+    | Nconst i1, Nconst i2 | Nconst i1, N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst i2 -> 
+      if lt_big_int i1 i2 
+      then check cs
+      else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
+                                    ^ string_of_big_int i1 ^ " to be less than " ^ string_of_big_int i2)
+    | _, Npos_inf | Nneg_inf, _  -> check cs
+    | _,_ ->
+      (match nexp_gt n2' n1' with
+        | Yes -> check cs
+        | No -> eq_error (get_c_loc co) 
+          ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^
+              " to be less than " ^ (n_to_string n2))
+        | Maybe -> Lt(co,enforce,n1',n2')::(check cs)))
+  | CondCons(co,kind,substs,pats,exps):: cs ->
+    let _ = Printf.eprintf "Condcons check length pats %i, length exps %i\n" (List.length pats) (List.length exps) in
+    let pats' = check pats in
+    let exps' = check exps in
+    let _ = Printf.eprintf "Condcons after check length pats' %i, length exps' %i\n" (List.length pats') (List.length exps') in
+    (match pats',exps' with
+      | [],[] -> check cs
+      | _     -> CondCons(co,kind,substs,pats',exps')::(check cs))
+  | BranchCons(co,sv,branches)::cs ->
+    let b = check branches in
+    let _ = Printf.eprintf "Branchcons check length branches before %i and after %i\n"
+      (constraint_size branches) (constraint_size b) in
+    if [] = b 
     then check cs
-    else BranchCons(co,b')::(check cs)
-  | x::cs -> x::(check cs)
+    else BranchCons(co,sv,b)::(check cs)
+  | x::cs ->
+    let _ = Printf.eprintf "In default case with %s\n%!" (constraints_to_string [x]) in
+    x::(check cs)
 
 let rec resolve_in_constraints cs = cs
 
@@ -2949,41 +3272,40 @@ let check_range_consistent require_lt require_gt guarantee_lt guarantee_gt =
     | Some(crlt,rlt), Some(crgt,rgt), Some(cglt,glt), Some(cggt,ggt) ->
       if glt <= rlt (*Can we guarantee that the upper bound is less than the required upper bound*) 
       then if ggt <= rlt (*Can we guarantee that the lower bound is less than the required upper bound*)
-	then if glt >= rgt (*Can we guarantee that the upper bound is greater than the required lower bound*)
-	  then if ggt >= rgt (*Can we guarantee that the lower bound is greater than the required lower bound*)
-	    then ()
-	    else assert false (*make a good two-location error, all the way down*)
-	  else assert false
-	else assert false
+        then if glt >= rgt (*Can we guarantee that the upper bound is greater than the required lower bound*)
+          then if ggt >= rgt (*Can we guarantee that the lower bound is greater than the required lower bound*)
+            then ()
+            else assert false (*make a good two-location error, all the way down*)
+          else assert false
+        else assert false
       else assert false
-      
-
-let rec constraint_size = function
-  | [] -> 0
-  | c::cs -> 
-    (match c with 
-      | CondCons(_,_,ps,es) -> constraint_size ps + constraint_size es
-      | BranchCons(_,bs) -> constraint_size bs
-      | _ -> 1) + constraint_size cs
-    
+          
 let do_resolve_constraints = ref true
 
 let resolve_constraints cs = 
-  (*let _ = Printf.eprintf "called resolve constraints with %i constraints\n" (constraint_size cs) in*)
+  let _ = Printf.eprintf "called resolve constraints with %i constraints\n" (constraint_size cs) in
   if not !do_resolve_constraints
   then cs
   else
     let rec fix checker len cs =
-      (*let _ = Printf.eprintf "Calling simple constraint check, fix check point is %i\n" len in *)
+      let _ = Printf.eprintf "Calling fix check thunk, fix check point is %i\n%!" len in 
       let cs' = checker (in_constraint_env cs) cs in
       let len' = constraint_size cs' in
+      let _ = Printf.eprintf "after checker, fix check point is %i\n%!" len' in
       if len > len' then fix checker len' cs'
       else cs' in
-    (*let _ = Printf.eprintf "Original constraints are %s\n" (constraints_to_string cs) in*)
-    let nuvar_equated = fix equate_nuvars (constraint_size cs) cs in
-    let complex_constraints = fix simple_constraint_check (constraint_size nuvar_equated) nuvar_equated in
-    (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" (constraint_size complex_constraints) in
-    let _ = Printf.eprintf "%s\n" (constraints_to_string complex_constraints) in*)
+(*    let _ = Printf.eprintf "Original constraints are %s\n%!" (constraints_to_string cs) in*)
+    let branch_freshened = prepare_constraints cs in
+    (*let _ = Printf.eprintf "Prepared constraints are %s\n%!" (constraints_to_string branch_freshened) in*)
+    let nuvar_equated = fix equate_nuvars (constraint_size branch_freshened) branch_freshened in
+    (*let _ = Printf.eprintf "Nuvar_equated constraints are %s\n%!" (constraints_to_string nuvar_equated) in*)
+    let complex_constraints =
+      fix (fun in_env cs -> merge_paths false (simple_constraint_check in_env cs))
+        (constraint_size nuvar_equated) nuvar_equated in
+    (*let _ = Printf.eprintf "simple and merge_pathed %s\n%!" (constraints_to_string complex_constraints) in*)
+    let complex_constraints = merge_paths true complex_constraints in
+    (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" (constraint_size complex_constraints) in*)
+    (*let _ = Printf.eprintf "%s\n" (constraints_to_string complex_constraints) in*)
     complex_constraints
 
 
@@ -2999,8 +3321,8 @@ let check_tannot l annot imp_param constraints efs =
       ignore (remove_internal_unifications s_env);
       (*let _ = Printf.eprintf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in*) 
       let t' = match (t.t,imp_param) with
-	| Tfn(p,r,_,e),Some x -> {t = Tfn(p,r,IP_user x,e) }
-	| _ -> t in 
+        | Tfn(p,r,_,e),Some x -> {t = Tfn(p,r,IP_user x,e) }
+        | _ -> t in 
       Base((params,t'),tag,cs,e,bindings)
     | NoTyp -> raise (Reporting_basic.err_unreachable l "check_tannot given the place holder annotation")
     | Overload _ -> raise (Reporting_basic.err_unreachable l "check_tannot given overload")
@@ -3013,17 +3335,17 @@ let tannot_merge co denv widen t_older t_newer =
     | _,NoTyp -> t_older
     | Base((ps_o,t_o),tag_o,cs_o,ef_o,bounds_o),Base((ps_n,t_n),tag_n,cs_n,ef_n,bounds_n) -> 
       (match tag_o,tag_n with
-	| Default,tag -> 
-	  (match t_n.t with
-	    | Tuvar _ -> let t_o,cs_o,ef_o,_ = subst ps_o false t_o cs_o ef_o in
-			 let t,_ = type_consistent co denv Guarantee false t_n t_o in
-			 Base(([],t),tag_n,cs_o,ef_o,bounds_o)
-	    | _ -> t_newer)
-	| Emp_local, Emp_local -> 
-	  (*let _ = Printf.eprintf "local-local case\n" in*) 
-	  (*TODO Check conforms to first; if true check consistent, if false replace with t_newer *)
-	  let t,cs_b = type_consistent co denv Guarantee widen t_n t_o in
-	  (*let _ = Printf.eprintf "types consistent\n" in*)
-	  Base(([],t),Emp_local,cs_o@cs_n@cs_b,union_effects ef_o ef_n, merge_bounds bounds_o bounds_n)
-	| _,_ -> t_newer)
+        | Default,tag -> 
+          (match t_n.t with
+            | Tuvar _ -> let t_o,cs_o,ef_o,_ = subst ps_o false t_o cs_o ef_o in
+                         let t,_ = type_consistent co denv Guarantee false t_n t_o in
+                         Base(([],t),tag_n,cs_o,ef_o,bounds_o)
+            | _ -> t_newer)
+        | Emp_local, Emp_local -> 
+          (*let _ = Printf.eprintf "local-local case\n" in*) 
+          (*TODO Check conforms to first; if true check consistent, if false replace with t_newer *)
+          let t,cs_b = type_consistent co denv Guarantee widen t_n t_o in
+          (*let _ = Printf.eprintf "types consistent\n" in*)
+          Base(([],t),Emp_local,cs_o@cs_n@cs_b,union_effects ef_o ef_n, merge_bounds bounds_o bounds_n)
+        | _,_ -> t_newer)
     | _ -> t_newer

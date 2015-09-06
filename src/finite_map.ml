@@ -65,6 +65,7 @@ module type Fmap = sig
   val intersect_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   val big_union : 'a t list -> 'a t
   val big_union_merge : ('a -> 'a -> 'a) -> 'a t list -> 'a t
+  val difference : 'a t -> 'a t -> 'a t
   val merge : (k -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
   val apply : 'a t -> k -> 'a option
   val in_dom : k -> 'a t -> bool
@@ -124,6 +125,11 @@ module Fmap_map(Key : Set.OrderedType) : Fmap
       None
   let iter f m = M.iter f m
   let fold f m base = M.fold (fun k v res -> f res k v) base m
+  let difference m1 m2 = 
+    M.fold (fun k v res ->
+      if (M.mem k m2) 
+      then res
+      else M.add k v res) m1 M.empty
   let intersect m1 m2 = 
     M.fold (fun k v res -> 
       if (M.mem k m2)

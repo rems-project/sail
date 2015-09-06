@@ -30,7 +30,7 @@ let rec rewrite_nexp_to_exp program_vars l nexp =
       | Npow(n,i) -> E_aux (E_app_infix 
 			      (rewrite n, (Id_aux (Id "**",l)),
 			       E_aux (E_lit (L_aux (L_num i,l)),
-				      (l, simple_annot (mk_atom_typ {nexp = Nconst (big_int_of_int i)})))),
+				      (l, simple_annot (mk_atom_typ (mk_c_int i))))),
 			    (l, tag_annot typ (External (Some "power"))))
       | Nneg(n) -> E_aux (E_app_infix (E_aux (E_lit (L_aux (L_num 0,l)), (l, simple_annot (mk_atom_typ n_zero))),
 				       (Id_aux (Id "-",l)),
