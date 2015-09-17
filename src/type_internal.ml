@@ -52,7 +52,8 @@ and nexp_aux =
   | Nneg of nexp (* Unary minus for representing new vector sizes after vector slicing *)
   | Ninexact (*Result of +inf + -inf which is neither less than nor greater than other numbers really *)
   | Nuvar of n_uvar
-and n_uvar = { nindex : int; mutable nsubst : nexp option; mutable nin : bool; mutable leave_var : bool}
+and n_uvar =
+  { nindex : int; mutable nsubst : nexp option; mutable nin : bool; mutable leave_var : bool; orig_var : string option}
 and effect = { mutable effect : effect_aux }
 and effect_aux =
   | Evar of string
@@ -137,6 +138,8 @@ end
 module Var_set = Set.Make(NexpM) 
 module Nexpmap = Finite_map.Fmap_map(NexpM)
 
+type nexp_map = nexp Nexpmap.t
+
 type constraint_origin =
   | Patt of Parse_ast.l
   | Expr of Parse_ast.l
@@ -170,7 +173,7 @@ type variable_range =
 
 type bounds_env = 
   | No_bounds
-  | Bounds of variable_range list
+  | Bounds of variable_range list * nexp_map option
 
 type t_params = (string * kind) list
 type tannot = 
@@ -217,6 +220,11 @@ let mk_pow n i = {nexp = Npow(n, i); imp_param = false}
 let mk_p_inf () = {nexp = Npos_inf; imp_param = false}
 let mk_n_inf () = {nexp = Nneg_inf; imp_param = false}
 let mk_inexact () = {nexp = Ninexact; imp_param = false}
+
+let merge_option_maps m1 m2 = match m1,m2 with
+  | None,None -> None
+  | None,m | m, None -> m
+  | Some m1, Some m2 -> Some (Nexpmap.union m1 m2) 
 
 (*Getters*)
 
@@ -361,7 +369,7 @@ let variable_range_to_string v = match v with
 
 let bounds_to_string b = match b with
   | No_bounds -> "Nobounds"
-  | Bounds vs -> "Bounds(" ^ string_of_list "; " variable_range_to_string vs ^ ")"
+  | Bounds(vs,map)-> "Bounds(" ^ string_of_list "; " variable_range_to_string vs ^ ")"
 
 let rec tannot_to_string = function
   | NoTyp -> "No tannot"
@@ -448,6 +456,25 @@ let rec contains_const n =
   | Nneg n -> contains_const n
   | Nmult(n1,n2) | Nadd(n1,n2) | Nsub(n1,n2) -> (contains_const n1) || (contains_const n2)
 
+let rec is_all_nuvar n =
+  match n.nexp with
+  | Nuvar { nsubst = None } -> true
+  | Nuvar { nsubst = Some n } -> is_all_nuvar n
+  | _ -> false
+
+let rec first_non_nu n =
+  match n.nexp with
+  | Nuvar {nsubst = None } -> None
+  | Nuvar { nsubst = Some n} -> first_non_nu n
+  | _ -> Some n
+
+let rec change_nuvar_base n new_base =
+  match n.nexp with
+  | Nuvar {nsubst = Some ({nexp= Nuvar _} as in_n)} -> change_nuvar_base in_n new_base
+  | Nuvar ({nsubst = Some _} as nu) -> nu.nsubst <- Some new_base; true    
+  | Nuvar {nsubst = None } -> false
+  | _ -> false
+
 let rec get_var n =
   match n.nexp with
   | Nvar _ | Nuvar _ | N2n _ -> Some n
@@ -513,6 +540,7 @@ let rec nexp_negative n =
         | Yes -> if odd i then Yes else No
         | No -> No
         | Maybe -> if odd i then Maybe else No)
+    | _ -> Maybe
 
 let rec normalize_n_rec recur_ok n =
   (*let _ = Printf.eprintf "Working on normalizing %s\n" (n_to_string n) in *)
@@ -798,7 +826,15 @@ let new_t _ =
 let new_n _ = 
   let i = !n_count in
   n_count := i + 1;
-  let n = { nexp = Nuvar { nindex = i; nsubst = None ; nin = false ; leave_var = false}; imp_param = false} in
+  let n = { nexp = Nuvar { nindex = i; nsubst = None ; nin = false ; leave_var = false; orig_var = None};
+            imp_param = false} in
+  nuvars := n::!nuvars;
+  n
+let new_nv s =
+  let i = !n_count in
+  n_count := i + 1;
+  let n = { nexp = Nuvar { nindex = i; nsubst = None ; nin = false ; leave_var = false ; orig_var = Some s};
+            imp_param = false} in
   nuvars := n::!nuvars;
   n
 let leave_nuvar n = match n.nexp with
@@ -1012,11 +1048,17 @@ let rec occurs_in_pending_subst n_box n : bool =
       if n'.nexp == n.nexp 
       then true
       else occurs_in_pending_subst n' n
-    | Nuvar( { nsubst = None } ) -> false
+    | Nuvar( { nsubst = None } ) ->
+      (match n.nexp with
+       | Nuvar( { nsubst = None }) |  Nvar _ | Nconst _ | Npos_inf | Nneg_inf | Ninexact -> false
+       | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> occurs_in_nexp n_box n1 || occurs_in_nexp n_box n2
+       | Nneg n1 | N2n(n1,_) | Npow(n1,_) -> occurs_in_nexp n_box n1
+       | Nuvar( { nsubst = Some n'}) -> occurs_in_pending_subst n_box n')
     | _ -> occurs_in_nexp n_box n
 
 and occurs_in_nexp n_box nuvar : bool =
-  (*let _ = Printf.eprintf "occurs_in_nexp given n_box %s nuvar %s eq? %b\n" (n_to_string n_box) (n_to_string nuvar) (n_box.nexp == nuvar.nexp) in*)
+(*  let _ = Printf.eprintf "occurs_in_nexp given n_box %s nuvar %s eq? %b\n" 
+    (n_to_string n_box) (n_to_string nuvar) (n_box.nexp == nuvar.nexp) in*)
   if n_box.nexp == nuvar.nexp then true
   else match n_box.nexp with
     | Nuvar _ -> occurs_in_pending_subst n_box nuvar
@@ -1034,7 +1076,9 @@ let rec reduce_n_unifications n =
       (match nu.nsubst with
         | None -> ()
         | Some(nexp) -> 
-          reduce_n_unifications(nexp); if nu.leave_var then ignore(leave_nuvar(nexp)) else (); n.nexp <- nexp.nexp));
+          reduce_n_unifications(nexp);
+          if nu.leave_var then ignore(leave_nuvar(nexp)) else ();
+          n.nexp <- nexp.nexp));
   (*let _ = Printf.eprintf "n reduced to %s\n" (n_to_string n) in*) ()
 
 let rec leave_nu_as_var n = 
@@ -1050,18 +1094,24 @@ let equate_n (n_box : nexp) (n : nexp) : bool =
   if n_box.nexp == n.nexp then true
   else 
     let n = resolve_nsubst n in
-    if occurs_in_pending_subst n_box n || occurs_in_pending_subst n n_box then true
-    else 
-      (*let _ = Printf.eprintf "equate_n has does not occur in %s and %s\n" (n_to_string n_box) (n_to_string n) in *)
-      let rec set_bottom_nsubst swap u new_bot = 
-        match u.nsubst with
-          | None -> u.nsubst <- Some(new_bot); true
-          | Some({nexp = Nuvar(u)}) -> set_bottom_nsubst swap u new_bot
-          | Some(n_new) -> 
-            if swap 
-            then set_bottom_nsubst false (match new_bot.nexp with | Nuvar u -> u | _ -> assert false) n_new
-            else if nexp_eq n_new new_bot then true
-            else false in
+    let n_box = resolve_nsubst n_box in
+    let occur_nbox_n = occurs_in_pending_subst n_box n in
+    let occur_n_nbox = occurs_in_pending_subst n n_box in
+    let rec set_bottom_nsubst swap u new_bot = 
+      match u.nsubst with
+      | None -> u.nsubst <- Some(new_bot); true
+      | Some({nexp = Nuvar(u)}) -> set_bottom_nsubst swap u new_bot
+      | Some(n_new) -> 
+        if swap 
+        then set_bottom_nsubst false (match new_bot.nexp with | Nuvar u -> u | _ -> assert false) n_new
+        else if nexp_eq n_new new_bot then true
+        else false in
+    match (occur_nbox_n,occur_n_nbox) with
+    | true,true -> false
+    | true,false | false,true -> true
+    | false,false ->
+      (*let _ = Printf.eprintf "equate_n has does not occur in %s and %s\n" 
+        (n_to_string n_box) (n_to_string n) in *)      
       match n_box.nexp,n.nexp with
         | Nuvar(u), Nuvar _ -> set_bottom_nsubst true u n
         | Nuvar(u), _ -> set_bottom_nsubst false u n
@@ -1115,9 +1165,14 @@ let rec fresh_tvar bindings t =
 let rec fresh_nvar bindings n =
   (*let _ = Printf.eprintf "fresh_nvar for %s\n" (n_to_string n) in*)
   match n.nexp with
-    | Nuvar { nindex = i;nsubst = None } -> 
+    | Nuvar { nindex = i;nsubst = None ; orig_var = None } -> 
       fresh_var "nv" i (fun v add -> n.nexp <- (Nvar v); 
-(*(Printf.eprintf "fresh nvar set %i to %s : %s\n" i v (n_to_string n));*) if add then Some(v,{k=K_Nat}) else None) bindings
+                         (*(Printf.eprintf "fresh nvar set %i to %s : %s\n" i v (n_to_string n));*)
+                         if add then Some(v,{k=K_Nat}) else None) bindings
+    | Nuvar { nindex = i;nsubst = None ; orig_var = Some v } -> 
+      fresh_var v 0 (fun v add -> n.nexp <- (Nvar v); 
+                      (*(Printf.eprintf "fresh nvar set %i to %s : %s\n" i v (n_to_string n));*)
+                      if add then Some(v,{k=K_Nat}) else None) bindings        
     | Nuvar { nindex = i; nsubst = Some({nexp=Nuvar _} as n')} ->
       let kv = fresh_nvar bindings n' in
       n.nexp <- n'.nexp;
@@ -2061,18 +2116,21 @@ let rec cs_subst t_env cs =
       CondCons(l,kind,None,cs_subst t_env cs_p,cs_subst t_env cs_e)::(cs_subst t_env cs)
     | BranchCons(l,_,bs)::cs -> BranchCons(l,None,cs_subst t_env bs)::(cs_subst t_env cs)
 
+let subst_with_env env leave_imp t cs e =
+  (typ_subst env leave_imp t, cs_subst env cs, e_subst env e, env)
+
 let subst (k_env : (Envmap.k * kind) list) (leave_imp:bool)
           (t : t) (cs : nexp_range list) (e : effect) : (t * nexp_range list * effect * t_arg emap) =
   let subst_env = Envmap.from_list
     (List.map (fun (id,k) -> (id, 
                               match k.k with
                               | K_Typ -> TA_typ (new_t ())
-                              | K_Nat -> TA_nexp (new_n ())
+                              | K_Nat -> TA_nexp (new_n id)
                               | K_Ord -> TA_ord (new_o ())
                               | K_Efct -> TA_eft (new_e ())
                               | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "substitution given an environment with a non-base-kind kind"))) k_env) 
   in
-  (typ_subst subst_env leave_imp t, cs_subst subst_env cs, e_subst subst_env e, subst_env)
+  subst_with_env subst_env leave_imp t cs e
 
 let rec typ_param_eq l spec_param fun_param = 
   match (spec_param,fun_param) with
@@ -2237,7 +2295,7 @@ let rec get_abbrev d_env t =
 let is_enum_typ d_env t = 
   let t,_ = get_abbrev d_env t in
   let t_actual = match t.t with | Tabbrev(_,ta) -> ta | _ -> t in
-  match t.t with
+  match t_actual.t with
     | Tid i -> (match Envmap.apply d_env.enum_env i with
         | Some(ns) -> Some(List.length ns)
         | _ -> None)
@@ -2319,7 +2377,8 @@ let build_variable_range d_env v typ =
   let t_actual = match t.t with | Tabbrev(_,t) -> t | _ -> t in
   match t_actual.t with
     | Tapp("atom", [TA_nexp n]) -> Some(VR_eq(v,n))
-    | Tapp("range", [TA_nexp base;TA_nexp top]) -> Some(VR_range(v,[LtEq((Patt Unknown),Require,base,top)]))
+    | Tapp("range", [TA_nexp base;TA_nexp top]) ->
+      Some(VR_range(v,[LtEq((Patt Parse_ast.Unknown),Require,base,top)]))
     | Tapp("vector", [TA_nexp start; TA_nexp rise; _; _]) -> Some(VR_vec_eq(v,rise))
     | Tuvar _ -> Some(VR_recheck(v,t_actual))
     | _ -> None
@@ -2332,15 +2391,34 @@ let compare_variable_range v1 v2 = compare (get_vr_var v1) (get_vr_var v2)
 let extract_bounds d_env v typ = 
   match build_variable_range d_env v typ with
     | None -> No_bounds
-    | Some vb -> Bounds [vb]
+    | Some vb -> Bounds([vb], None)
 
 let find_bounds v bounds = match bounds with
   | No_bounds -> None
-  | Bounds bs ->
+  | Bounds(bs,maps) ->
     let rec find_rec bs = match bs with
       | [] -> None
       | b::bs -> if (get_vr_var b) = v then Some(b) else find_rec bs in
     find_rec bs
+
+let add_map_to_bounds m bounds = match bounds with
+  | No_bounds -> Bounds([],Some m)
+  | Bounds(bs,None) -> Bounds(bs,Some m)
+  | Bounds(bs,Some m') -> Bounds(bs,Some (Nexpmap.union m m'))
+
+let rec add_map_tannot m tannot = match tannot with
+  | NoTyp -> NoTyp
+  | Base(params,tag,cs,ef,bounds) -> Base(params,tag,cs,ef,add_map_to_bounds m bounds)
+  | Overload(t,r,ts) -> Overload(add_map_tannot m t,r,ts)
+
+let get_map_bounds = function
+  | No_bounds -> None
+  | Bounds(_,m) -> m
+
+let get_map_tannot = function
+  | NoTyp -> None
+  | Base(_,_,_,_,bounds) -> get_map_bounds bounds
+  | Overload _ -> None
 
 let rec expand_nexp n = match n.nexp with
   | Nvar _ | Nconst _ | Nuvar _ | Npos_inf | Nneg_inf | Ninexact -> [n]
@@ -2354,25 +2432,35 @@ let find_var_from_nexp n bounds =
   if is_nconst n then None 
   else match bounds with
     | No_bounds -> None
-    | Bounds bs ->
-      let rec find_rec bs = match bs with
+    | Bounds(bs,map) ->
+      let rec find_rec bs n = match bs with
         | [] -> None
         | b::bs -> (match b with
             | VR_eq(ev,n1) ->
               (*let _ = Printf.eprintf "checking if %s is eq to %s, to bind to %s, eq? %b\n" 
                 (n_to_string n) (n_to_string n1) ev (nexp_eq_check n1 n) in*)
-              if nexp_eq_check n1 n then Some (None,ev) else find_rec bs
+              if nexp_eq_check n1 n then Some (None,ev) else find_rec bs n
             | VR_vec_eq (ev,n1)->
               (*let _ = Printf.eprintf "checking if %s is eq to %s, to bind to %s, eq? %b\n" 
                 (n_to_string n) (n_to_string n1) ev (nexp_eq_check n1 n) in*)
-              if nexp_eq_check n1 n then Some (Some "length",ev) else find_rec bs
-            | _ -> find_rec bs) in
-      find_rec bs
+              if nexp_eq_check n1 n then Some (Some "length",ev) else find_rec bs n
+            | _ -> find_rec bs n) in
+      match find_rec bs n,map with
+      | None, None -> None 
+      | None, Some map ->
+        (match Nexpmap.apply map n with
+          | None    ->  None
+          | Some n' -> find_rec bs n')
+      | s,_ -> s
 
 let merge_bounds b1 b2 =
   match b1,b2 with
     | No_bounds,b | b,No_bounds -> b
-    | Bounds b1s,Bounds b2s ->
+    | Bounds(b1s,map1),Bounds(b2s,map2) ->
+      let merged_map = match map1,map2 with
+        | None, None -> None
+        | None, m | m, None -> m
+        | Some m1, Some m2 -> Some (Nexpmap.union m1 m2) in
       let b1s = List.sort compare_variable_range b1s in
       let b2s = List.sort compare_variable_range b2s in
       let rec merge b1s b2s = match (b1s,b2s) with
@@ -2383,17 +2471,17 @@ let merge_bounds b1 b2 =
             | 1  -> b2::(merge (b1::b1s) b2s)
             | _  -> (match b1,b2 with
                 | VR_eq(v,n1),VR_eq(_,n2) -> 
-                  if nexp_eq n1 n2 then b1 else VR_range(v,[Eq((Patt Unknown),n1,n2)])
+                  if nexp_eq n1 n2 then b1 else VR_range(v,[Eq((Patt Parse_ast.Unknown),n1,n2)])
                 | VR_eq(v,n),VR_range(_,ranges) | 
-                  VR_range(v,ranges),VR_eq(_,n) -> VR_range(v,(Eq((Patt Unknown),n,n))::ranges)
+                  VR_range(v,ranges),VR_eq(_,n) -> VR_range(v,(Eq((Patt Parse_ast.Unknown),n,n))::ranges)
                 | VR_range(v,ranges1),VR_range(_,ranges2) -> VR_range(v,ranges1@ranges2)
                 | VR_vec_eq(v,n1),VR_vec_eq(_,n2) ->
-                  if nexp_eq n1 n2 then b1 else VR_vec_r(v,[Eq((Patt Unknown),n1,n2)])
+                  if nexp_eq n1 n2 then b1 else VR_vec_r(v,[Eq((Patt Parse_ast.Unknown),n1,n2)])
                 | VR_vec_eq(v,n),VR_vec_r(_,ranges) |
-                  VR_vec_r(v,ranges),VR_vec_eq(_,n) -> VR_vec_r(v,(Eq((Patt Unknown),n,n)::ranges))
+                  VR_vec_r(v,ranges),VR_vec_eq(_,n) -> VR_vec_r(v,(Eq((Patt Parse_ast.Unknown),n,n)::ranges))
                 | _ -> b1
             )::(merge b1s b2s) in
-      Bounds (merge b1s b2s)
+      Bounds ((merge b1s b2s),merged_map)
 
 let rec conforms_to_t d_env loosely within_coercion spec actual =
 (*let _ = Printf.printf "conforms_to_t called, evaluated loosely? %b, with %s and %s\n"
@@ -2422,13 +2510,15 @@ let rec conforms_to_t d_env loosely within_coercion spec actual =
       conforms_to_n true within_coercion le_big_int bs n && conforms_to_n true within_coercion ge_big_int rs n &&
         conforms_to_n true within_coercion ge_big_int bs n *)
     | (Tapp(is,tas), Tapp(ia, taa),_) -> 
-(*      let _ = Printf.printf "conforms to given two apps: %b, %b\n" (is = ia) (List.length tas = List.length taa) in*)
-      (is = ia) && (List.length tas = List.length taa) && (List.for_all2 (conforms_to_ta d_env loosely within_coercion) tas taa)
+(*      let _ = Printf.eprintf "conforms to given two apps: %b, %b\n" 
+        (is = ia) (List.length tas = List.length taa) in*)
+      (is = ia) && (List.length tas = List.length taa) &&
+      (List.for_all2 (conforms_to_ta d_env loosely within_coercion) tas taa)
     | (Tabbrev(_,s),a,_) -> conforms_to_t d_env loosely within_coercion s actual
     | (s,Tabbrev(_,a),_) -> conforms_to_t d_env loosely within_coercion spec a
     | (_,_,_) -> false
 and conforms_to_ta d_env loosely within_coercion spec actual =
-(*let _ = Printf.printf "conforms_to_ta called, evaluated loosely? %b, with %s and %s\n" 
+(*let _ = Printf.eprintf "conforms_to_ta called, evaluated loosely? %b, with %s and %s\n" 
   loosely (targ_to_string spec) (targ_to_string actual) in*)
   match spec,actual with
     | TA_typ  s, TA_typ  a -> conforms_to_t d_env loosely within_coercion s a
@@ -2452,7 +2542,7 @@ and conforms_to_e loosely spec actual =
     | (Euvar _,_,true) -> true
     | (_,Euvar _,true) -> false
     | _                -> 
-      try begin ignore (effects_eq (Specc Unknown) spec actual); true end with
+      try begin ignore (effects_eq (Specc Parse_ast.Unknown) spec actual); true end with
         | _ -> false
 
 (*Is checking for structural equality amongst the types, building constraints for kind Nat. 
@@ -2460,7 +2550,8 @@ and conforms_to_e loosely spec actual =
   When considering two atom type applications, will expand into a range encompasing both when widen is true
 *)
 let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 = 
-(*  let _ = Printf.eprintf "type_consistent_internal called with %s and %s\n" (t_to_string t1) (t_to_string t2) in*)
+(*  let _ = Printf.eprintf "type_consistent_internal called with %s and %s\n" 
+    (t_to_string t1) (t_to_string t2) in*)
   let l = get_c_loc co in
   let t1,cs1' = get_abbrev d_env t1 in
   let t2,cs2' = get_abbrev d_env t2 in
@@ -2610,7 +2701,6 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
         let cs = csp@[Eq(co,r1,r2)] in
         let t',cs' = type_consistent co d_env enforce widen t1i t2i in
         let tannot = Base(([],t2),Emp_local,cs@cs',pure_e,nob) in
-        (*let _ = Printf.eprintf "looking at vector vector coerce, t1 %s, t2 %s\n" (t_to_string t1) (t_to_string t2) in*)
         let e' = E_aux(E_internal_cast ((l,(Base(([],t2),Emp_local,[],pure_e,nob))),e),(l,tannot)) in
         (t2,cs@cs',pure_e,e')
       | _ -> raise (Reporting_basic.err_unreachable l "vector is not properly kinded"))
@@ -2888,8 +2978,12 @@ let rec subst_nuvars_cs nus cs =
     | BranchCons(l,possible_invars,bs)::cs -> 
       BranchCons(l,possible_invars,subst_nuvars_cs nus bs)::(subst_nuvars_cs nus cs)
 
-let freshen_constraints cs = 
-  let nuvars = Var_set.fold (fun n map -> Nexpmap.insert map (n,new_n())) (get_all_nuvars_cs cs) Nexpmap.empty in
+let freshen_constraints cs =
+  let nuvars =
+    Var_set.fold (fun n map ->
+        let ne = new_n() in
+        (*let _ = Printf.eprintf "mapping %s to %s\n%!" (n_to_string n) (n_to_string ne) in*)
+        Nexpmap.insert map (n,ne)) (get_all_nuvars_cs cs) Nexpmap.empty in
   (subst_nuvars_cs nuvars cs,nuvars)
 
 let rec prepare_constraints = function
@@ -2897,72 +2991,110 @@ let rec prepare_constraints = function
   | CondCons(l,(Positive|Negative|Switch as kind),None,cs_p,cs_e)::cs ->
     let (new_pred_cs,my_substs) = freshen_constraints cs_p in
     let new_expr_cs = subst_nuvars_cs my_substs cs_e in
-    CondCons(l,kind,Some(my_substs),cs_p,cs_e)::(prepare_constraints cs)
+    CondCons(l,kind,Some(my_substs),cs_p,(prepare_constraints new_expr_cs))::(prepare_constraints cs)
+  | CondCons(l,Solo,None,cs_p,cs_e)::cs ->
+    CondCons(l,Solo,None,cs_p,(prepare_constraints cs_e))::(prepare_constraints cs)
   | BranchCons(l,_,bs)::cs -> BranchCons(l,None, prepare_constraints bs)::(prepare_constraints cs)
   | c::cs -> c::(prepare_constraints cs)
+
+let nexpmap_to_string nmap =
+  Nexpmap.fold (fun acc k v ->
+      match v with
+      | One n -> "(" ^ n_to_string k ^ " |-> " ^ n_to_string n ^ ") " ^ acc
+      | Two(n1,n2) -> "(" ^ n_to_string k ^ " |-> (" ^ n_to_string n1 ^ ", or " ^ n_to_string n2 ^ ")) " ^ acc
+      | Many ns -> "(" ^ n_to_string k ^ " |-> (" ^ string_of_list ", " n_to_string ns ^ ")) " ^ acc) "" nmap
 
 let rec make_merged_constraints acc =  function
   | [] -> acc
   | c::cs ->
+    (*    let _ = Printf.eprintf "merging constraints acc thus far is %s\n%!" (nexpmap_to_string acc) in*)
     make_merged_constraints 
       (Nexpmap.fold 
-         (fun acc k v -> 
-           match Nexpmap.apply acc k with
-             | None -> Nexpmap.insert acc (k, One v)
-             | Some(One v') -> Nexpmap.insert (Nexpmap.remove acc k) (k, Two(v,v'))
-             | Some(Two(v',v'')) -> Nexpmap.insert (Nexpmap.remove acc k) (k,Many [v;v';v''])
-             | Some(Many vs) -> Nexpmap.insert (Nexpmap.remove acc k) (k,Many (v::vs))) acc c)
+         (fun acc k v ->
+(*            let _ = Printf.eprintf "folding over c: we have %s |-> %s for acc of %s\n%!" 
+              (n_to_string k) (n_to_string v) (nexpmap_to_string acc) in*)
+            match Nexpmap.apply acc k with
+            | None -> Nexpmap.insert acc (k, One v)
+            | Some(One v') -> Nexpmap.insert (Nexpmap.remove acc k) (k, Two(v,v'))
+            | Some(Two(v',v'')) -> Nexpmap.insert (Nexpmap.remove acc k) (k,Many [v;v';v''])
+            | Some(Many vs) -> Nexpmap.insert (Nexpmap.remove acc k) (k,Many (v::vs))) acc c)
       cs      
-
+      
 let merge_branch_constraints merge_nuvars constraint_sets =
-  (*let _ = Printf.eprintf "merge branch constraints\n%!" in*)
   (*Separate variables into only occurs in one set, or occurs in multiple sets*)
+  let conditionally_set k n =
+    (occurs_in_nexp k n) || (occurs_in_nexp n k) || equate_n k n in
+  let set_nuvars_on_merge k n =
+    let def_try_set = merge_nuvars && is_all_nuvar n in
+    if def_try_set
+    then (conditionally_set n k),[],None
+    else if merge_nuvars
+    then match first_non_nu n with
+      | Some n' ->
+        if change_nuvar_base n k
+        then (true, [Eq(Patt(Parse_ast.Unknown),k,n')], None)
+        else (false, [Eq(Patt(Parse_ast.Unknown),k,n')], Some(Nexpmap.from_list [n',k]))
+      | None -> (false, [Eq(Patt(Parse_ast.Unknown),k,n)], None)
+    else (false,[],None) in
   let merged_constraints = make_merged_constraints Nexpmap.empty constraint_sets in
+  (*let _ = Printf.eprintf "merge branch constraints: found these shared var mappings %s\n%!"
+      (nexpmap_to_string merged_constraints) in*)
   let shared_path_distinct_constraints = 
     Nexpmap.fold 
-      (fun sc k v -> match v with
-        (*Variables only in one path get the assignments (other than nuvars) made on the path*)
-        | One n ->
-          (*let _ = Printf.eprintf "Variables in one path: merge_nuvars %b, key %s, one %s\n%!" merge_nuvars (n_to_string k) (n_to_string n) in*)
-          begin (match (k.nexp, n.nexp) with
-            | Nuvar _, Nuvar _ -> if merge_nuvars then ignore(equate_n n k) else ()
-            | _ -> let occurs = (occurs_in_nexp k n) || (occurs_in_nexp n k) in
-                   if not(occurs) then ignore(equate_n k n) else ());
-            (*(Printf.eprintf "After setting key %s, one %s\n%!" (n_to_string k) (n_to_string n));*)
-            sc end
-        (*Variables on two paths get the assignment if they're the same, skipped if both nuvars, kept otherwise for later*)
+      (fun (sc,new_cs,new_map) k v -> match v with
+         | One n ->
+         (*let _ = Printf.eprintf "Variables in one path: merge_nuvars %b, key %s, one %s\n%!" 
+           merge_nuvars (n_to_string k) (n_to_string n) in*)
+           let (_,new_cs',nm) =
+             (match (k.nexp, n.nexp) with
+              | Nuvar _, Nuvar _ -> set_nuvars_on_merge k n
+              | _ -> (conditionally_set k n,[],None)) in
+            (sc,new_cs'@new_cs,merge_option_maps nm new_map)
         | Two(n1,n2) ->
-          (*let _ = Printf.eprintf "Variables in two paths: merge_nuvars %b, key %s, n1 %s, n2 %s\n%!" merge_nuvars (n_to_string k) (n_to_string n1) (n_to_string n2) in*)
+          (*let _ = Printf.eprintf "Variables in two paths: merge_nuvars %b, key %s, n1 %s, n2 %s\n%!" 
+            merge_nuvars (n_to_string k) (n_to_string n1) (n_to_string n2) in*)
           (match n1.nexp,n2.nexp with
-            | Nuvar _, Nuvar _ ->
-              if merge_nuvars && equate_n n1 k && equate_n n2 k
-              then sc
-              else sc
-            | _ -> 
-              if nexp_eq n1 n2 
-              then if equate_n k n1 
-                then sc
-                else assert false (*There shouldn't be a reason that equate_n didn't work here*)
-              else Nexpmap.insert sc (k,v))
-        (*Same as on two paths but more complicated logic*)
+           | Nuvar _, Nuvar _ ->
+             let (set1,ncs1,nm1) = set_nuvars_on_merge k n1 in
+             let (set2,ncs2,nm2) = set_nuvars_on_merge k n2 in
+             if (set1 && set2)
+             then (sc,ncs1@ncs2@new_cs,merge_option_maps new_map (merge_option_maps nm1 nm2))
+             else (Nexpmap.insert sc (k,v),new_cs,merge_option_maps new_map (merge_option_maps nm1 nm2))
+           | Nuvar _, _ ->
+             let (_,cs1, nm1) = set_nuvars_on_merge k n1 in
+             (Nexpmap.insert sc (k,v),cs1@new_cs,merge_option_maps new_map nm1)
+           | _, Nuvar _ ->
+             let (_,cs2, nm2) = set_nuvars_on_merge k n2 in
+             (Nexpmap.insert sc (k,v),cs2@new_cs,merge_option_maps new_map nm2)
+           | _ -> 
+             if nexp_eq n1 n2 && conditionally_set k n1 && conditionally_set k n2
+             then (sc,new_cs,new_map)
+             else (Nexpmap.insert sc (k,v),new_cs,new_map))
         | Many ns ->
-          (*let _ = Printf.eprintf "Variables in many paths: merge_nuvars %b, key %s, [" merge_nuvars (n_to_string k) in
+          (*let _ = Printf.eprintf "Variables in many paths: merge_nuvars %b, key %s, [" 
+            merge_nuvars (n_to_string k) in
           let _ = List.iter (fun n -> Printf.eprintf "%s " (n_to_string n)) ns in
-          let _ = Printf.eprintf "\n%!" in*)
-          if List.for_all (fun n -> match n.nexp with | Nuvar _ -> true | _ -> false) ns
-          then begin (List.iter (fun n -> ignore(merge_nuvars && equate_n n k)) ns); sc end
+            let _ = Printf.eprintf "\n%!" in*)
+          let sets = List.map (set_nuvars_on_merge k) ns in
+          let css = (List.flatten (List.map (fun (_,c,_) -> c) sets))@ new_cs in
+          let map = List.fold_right merge_option_maps (List.map (fun (_,_,m) -> m) sets) new_map in
+          if List.for_all (fun (b,_,_) -> b) sets 
+          then (sc,css,map)
           else 
             let rec all_eq = function
               | [] | [_] -> true
               | n1::n2::ns -> 
                 (nexp_eq n1 n2) && all_eq ns 
             in 
-            if all_eq ns && not(ns = [])
-            then if equate_n k (List.hd ns) then sc
-              else assert false (*Shouldn't happen, as above*)
-            else Nexpmap.insert sc (k,v)) Nexpmap.empty merged_constraints in
-  (*Find the variables in multiple sets, if not set the same then either skip, or if IN varaiables, check that assignments consistent with ranges; if not IN variables and set to constants, then send these out because they're essentially new IN variables and need to work in any seen range afterwards; if not IN variables, not set to constants, and not set to nuvars then these might be errors or parts that are too hard for the constraint solver. 
-    *)
+            if (all_eq ns) && not(ns = [])
+            then if List.for_all (conditionally_set k) ns
+              then (sc,css, map)
+              else (Nexpmap.insert sc (k,v),css, map)
+            else (Nexpmap.insert sc (k,v),css, map))
+      (Nexpmap.empty,[],None) merged_constraints in
+  (*let _ = if merge_nuvars then
+      Printf.eprintf "merge branch constraints: shared var mappings after merge %s\n%!"
+        (nexpmap_to_string merged_constraints) in *)
   shared_path_distinct_constraints
 
 let rec extract_path_substs = function
@@ -2976,7 +3108,7 @@ let rec extract_path_substs = function
       Nexpmap.fold (fun substs key newvar -> 
         match key.nexp with
           | Nuvar _ -> Nexpmap.insert substs (key,newvar)
-          | _ -> begin set key newvar; substs end) substs Nexpmap.empty in
+          | _ -> begin set key newvar; substs end) Nexpmap.empty substs in
     let (substs, cs_rest) = extract_path_substs cs in
     (updated_substs::substs, CondCons(l,k,Some(updated_substs),ps,es)::cs_rest)
   | c::cs -> 
@@ -2984,12 +3116,22 @@ let rec extract_path_substs = function
     (substs,c::cs_rest)
 
 let rec merge_paths merge_nuvars = function
-  | [] -> []
+  | [] -> [],None
   | BranchCons(co,_,branches)::cs ->
-    let path_substs,branches_up = extract_path_substs branches in
-    let shared_vars = merge_branch_constraints merge_nuvars path_substs in
-    BranchCons(co,Some(shared_vars),branches_up)::(merge_paths merge_nuvars cs)
-  | c::cs -> c::merge_paths merge_nuvars cs
+    let branches_merged,new_map = merge_paths merge_nuvars branches in
+    let path_substs,branches_up = extract_path_substs branches_merged in
+    let (shared_vars,new_cs,nm) = merge_branch_constraints merge_nuvars path_substs in
+    let (rest_cs,rest_map) = merge_paths merge_nuvars cs in
+    let out_map = merge_option_maps (merge_option_maps new_map nm) rest_map in
+    (BranchCons(co,Some(shared_vars),branches_up)::(new_cs@rest_cs), out_map)
+  | CondCons(co,k,substs,ps,es)::cs ->
+    let (new_es,nm) = merge_paths merge_nuvars es in
+    let (rest_cs,rest_map) = merge_paths merge_nuvars cs in
+    (CondCons(co,k,substs,ps,new_es)::rest_cs,
+     merge_option_maps nm rest_map)
+  | c::cs ->
+    let (rest_cs, rest_map) = merge_paths merge_nuvars cs in
+    (c::rest_cs, rest_map)
 
 let rec equate_nuvars in_env cs = 
   (*let _ = Printf.eprintf "equate_nuvars\n" in*)
@@ -3006,13 +3148,13 @@ let rec equate_nuvars in_env cs =
             if (equate_n n1 n2) then equate cs else c::equate cs end
           else c::equate cs
         | _ -> c::equate cs)
-    | (CondCons(co,kind,None,pats,exps) as c):: cs ->
+    | CondCons(co,kind,substs,pats,exps):: cs ->
       (*let _ = Printf.eprintf "equate_nuvars: condcons: %s\n%!" (constraints_to_string [c]) in*)
       let pats' = equate pats in
       let exps' = equate exps in
       (match pats',exps' with
         | [],[] -> equate cs
-        | _     -> CondCons(co,kind,None,pats',exps')::(equate cs))
+        | _     -> CondCons(co,kind,substs,pats',exps')::(equate cs))
     | BranchCons(co,sv,branches)::cs ->
       let b' = equate branches in
       if [] = b' 
@@ -3030,7 +3172,7 @@ let rec constraint_size = function
       
 let rec simple_constraint_check in_env cs = 
   let check = simple_constraint_check in_env in
-(*  let _ = Printf.eprintf "simple_constraint_check of %i constraints\n%!" (constraint_size cs) in*)
+  (*let _ = Printf.eprintf "simple_constraint_check of %i constraints\n%!" (constraint_size cs) in*)
   match cs with 
   | [] -> []
   | Eq(co,n1,n2)::cs -> 
@@ -3149,7 +3291,8 @@ let rec simple_constraint_check in_env cs =
       | None -> (check cs)
       | Some(c) -> c::(check cs))
   | GtEq(co,enforce,n1,n2)::cs -> 
-    (*let _ = Printf.eprintf ">= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    (*let _ = Printf.eprintf ">= check, about to normalize_nexp of %s, %s\n" 
+      (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
     (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
     (match n1'.nexp,n2'.nexp with
@@ -3188,7 +3331,8 @@ let rec simple_constraint_check in_env cs =
                  ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
             | _ -> GtEq(co,enforce,n1',n2')::(check cs))))
   | Gt(co,enforce,n1,n2)::cs -> 
-    (*let _ = Printf.eprintf "> check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    (*let _ = Printf.eprintf "> check, about to normalize_nexp of %s, %s\n"
+      (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
     (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in*)
     (match nexp_gt n1' n2' with
@@ -3207,7 +3351,8 @@ let rec simple_constraint_check in_env cs =
                ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
           | _ -> Gt(co,enforce,n1',n2')::(check cs)))
   | LtEq(co,enforce,n1,n2)::cs -> 
-    (*let _ = Printf.eprintf "<= check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    (*let _ = Printf.eprintf "<= check, about to normalize_nexp of %s, %s\n" 
+      (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
     (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
     (match n1'.nexp,n2'.nexp with
@@ -3225,7 +3370,8 @@ let rec simple_constraint_check in_env cs =
               " to be less than or equal to " ^ (n_to_string n2))
         | Maybe -> LtEq(co,enforce,n1',n2')::(check cs)))
   | Lt(co,enforce,n1,n2)::cs -> 
-    (*let _ = Printf.eprintf "< check, about to normalize_nexp of %s, %s\n" (n_to_string n1) (n_to_string n2) in *)
+    (*let _ = Printf.eprintf "< check, about to normalize_nexp of %s, %s\n"
+      (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
     (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
     (match n1'.nexp,n2'.nexp with
@@ -3246,7 +3392,8 @@ let rec simple_constraint_check in_env cs =
     (*let _ = Printf.eprintf "Condcons check length pats %i, length exps %i\n" (List.length pats) (List.length exps) in*)
     let pats' = check pats in
     let exps' = check exps in
-    (*let _ = Printf.eprintf "Condcons after check length pats' %i, length exps' %i\n" (List.length pats') (List.length exps') in*)
+    (*let _ = Printf.eprintf "Condcons after check length pats' %i, length exps' %i\n" 
+      (List.length pats') (List.length exps') in*)
     (match pats',exps' with
       | [],[] -> check cs
       | _     -> CondCons(co,kind,substs,pats',exps')::(check cs))
@@ -3257,6 +3404,7 @@ let rec simple_constraint_check in_env cs =
     if [] = b 
     then check cs
     else BranchCons(co,sv,b)::(check cs)
+  | Predicate _::cs -> check cs
   | x::cs ->
     (*let _ = Printf.eprintf "In default case with %s\n%!" (constraints_to_string [x]) in*)
     x::(check cs)
@@ -3285,28 +3433,25 @@ let do_resolve_constraints = ref true
 let resolve_constraints cs = 
   (*let _ = Printf.eprintf "called resolve constraints with %i constraints\n" (constraint_size cs) in*)
   if not !do_resolve_constraints
-  then cs
+  then (cs,None)
   else
     let rec fix checker len cs =
-      (*let _ = Printf.eprintf "Calling fix check thunk, fix check point is %i\n%!" len in*) 
+      (*let _ = Printf.eprintf "Calling fix check thunk, fix check point is %i\n%!" len in *)
       let cs' = checker (in_constraint_env cs) cs in
       let len' = constraint_size cs' in
-      (*let _ = Printf.eprintf "after checker, fix check point is %i\n%!" len' in*)
       if len > len' then fix checker len' cs'
       else cs' in
 (*    let _ = Printf.eprintf "Original constraints are %s\n%!" (constraints_to_string cs) in*)
     let branch_freshened = prepare_constraints cs in
-    (*let _ = Printf.eprintf "Prepared constraints are %s\n%!" (constraints_to_string branch_freshened) in*)
     let nuvar_equated = fix equate_nuvars (constraint_size branch_freshened) branch_freshened in
-    (*let _ = Printf.eprintf "Nuvar_equated constraints are %s\n%!" (constraints_to_string nuvar_equated) in*)
-    let complex_constraints =
-      fix (fun in_env cs -> merge_paths false (simple_constraint_check in_env cs))
+    let complex_constraints = 
+          fix (fun in_env cs -> let (ncs,_) = merge_paths false (simple_constraint_check in_env cs) in ncs)
         (constraint_size nuvar_equated) nuvar_equated in
-    (*let _ = Printf.eprintf "simple and merge_pathed %s\n%!" (constraints_to_string complex_constraints) in*)
-    let complex_constraints = merge_paths true complex_constraints in
-    (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" (constraint_size complex_constraints) in*)
+    let (complex_constraints,map) = merge_paths true complex_constraints in
+    (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" 
+      (constraint_size complex_constraints) in*)
     (*let _ = Printf.eprintf "%s\n" (constraints_to_string complex_constraints) in*)
-    complex_constraints
+    (complex_constraints,map)
 
 
 let check_tannot l annot imp_param constraints efs = 

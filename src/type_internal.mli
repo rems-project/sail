@@ -73,6 +73,7 @@ and t_arg =
   | TA_ord of order 
 
 module Nexpmap : Finite_map.Fmap with type k = nexp
+type nexp_map = nexp Nexpmap.t
 
 type tag =
   | Emp_local (* Standard value, variable, expression *)
@@ -142,7 +143,7 @@ type variable_range =
 
 type bounds_env = 
   | No_bounds
-  | Bounds of variable_range list
+  | Bounds of variable_range list * nexp_map option
 
 type t_params = (string * kind) list
 type tannot = 
@@ -213,6 +214,7 @@ val equate_t : t -> t -> unit
 
 val typ_subst : t_arg emap -> bool -> t -> t 
 val subst : (Envmap.k * kind) list -> bool -> t -> nexp_range list -> effect -> t * nexp_range list * effect * t_arg emap
+val subst_with_env : t_arg emap -> bool -> t -> nexp_range list -> effect -> t * nexp_range list * effect * t_arg emap
 val type_param_consistent : Parse_ast.l -> t_arg emap -> t_arg emap -> nexp_range list
 
 val get_abbrev : def_envs -> t -> (t * nexp_range list)
@@ -222,6 +224,10 @@ val is_enum_typ : def_envs -> t -> int option
 val extract_bounds : def_envs -> string -> t -> bounds_env
 val merge_bounds : bounds_env -> bounds_env -> bounds_env
 val find_var_from_nexp : nexp -> bounds_env -> (string option * string) option
+val add_map_to_bounds : nexp_map -> bounds_env -> bounds_env
+val add_map_tannot : nexp_map -> tannot -> tannot
+val get_map_tannot : tannot -> nexp_map option
+val merge_option_maps : nexp_map option -> nexp_map option -> nexp_map option
 
 val expand_nexp : nexp -> nexp list
 val normalize_nexp : nexp -> nexp
@@ -233,7 +239,7 @@ val select_overload_variant : def_envs -> bool -> bool -> tannot list -> t -> ta
 val split_conditional_constraints : nexp_range list -> (nexp_range list * nexp_range list)
 
 (*May raise an exception if a contradiction is found*)
-val resolve_constraints : nexp_range list -> nexp_range list
+val resolve_constraints : nexp_range list -> (nexp_range list * nexp_map option)
 (* whether to actually perform constraint resolution or not *)
 val do_resolve_constraints : bool ref
 

@@ -6,5 +6,5 @@ type 'a exp = 'a Ast.exp
 type 'a emap = 'a Envmap.t
 type envs = Type_check.envs
 
-val rewrite_exp : tannot exp -> tannot exp
+val rewrite_exp : nexp_map option -> tannot exp -> tannot exp
 val rewrite_defs : tannot defs -> tannot defs
