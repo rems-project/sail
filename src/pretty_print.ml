@@ -287,6 +287,8 @@ and pp_format_o o =
 
 let pp_format_tag = function
   | Emp_local -> "Tag_empty"
+  | Emp_intro -> "Tag_empty" (*TODO carry this out for use in future analysis that doesn't use the interpreter?*)
+  | Emp_set -> "Tag_empty" (* Same as above *)
   | Emp_global -> "Tag_global"
   | External (Some s) -> "(Tag_extern (Just \""^s^"\"))"
   | External None -> "(Tag_extern Nothing)"
@@ -619,6 +621,7 @@ let doc_bkind (BK_aux(k,_)) =
 let doc_op symb a b = infix 2 1 symb a b
 let doc_unop symb a = prefix 2 1 symb a
 
+let pipe = string "|"
 let arrow = string "->"
 let dotdot = string ".."
 let coloneq = string ":="
@@ -1248,18 +1251,24 @@ let doc_typ_ocaml, doc_atomic_typ_ocaml =
 let doc_lit_ocaml (L_aux(l,_)) =
   utf8string (match l with
   | L_unit  -> "()"
-  | L_zero  -> "V0"
-  | L_one   -> "V1"
-  | L_true  -> "V1"
-  | L_false -> "V0"
+  | L_zero  -> "0"
+  | L_one   -> "1"
+  | L_true  -> "1"
+  | L_false -> "0"
   | L_num i -> string_of_int i
   | L_hex n -> "(num_to_vec" ^ ("0x" ^ n) ^ ")"
   | L_bin n -> "(num_to_vec" ^ ("0b" ^ n) ^ ")"
-  | L_undef -> "Vundef"
+  | L_undef -> "2"
   | L_string s -> "\"" ^ s ^ "\"")
 
-(*Note: vector, vector concatenation, literal vectors, indexed vectors, record, and list patterns should 
-  be removed prior to pp. The latter three have never yet been seen
+(* typ_doc is the doc for the type being quantified *)
+let doc_typquant_ocaml (TypQ_aux(tq,_)) typ_doc = typ_doc
+
+let doc_typscm_ocaml (TypSchm_aux(TypSchm_ts(tq,t),_)) =
+  (doc_typquant tq (doc_typ_ocaml t))
+
+(*Note: vector concatenation, literal vectors, indexed vectors, and record should 
+  be removed prior to pp. The latter two have never yet been seen
 *)
 let doc_pat_ocaml, doc_atomic_pat_ocaml =
   let rec pat pa = app_pat pa
@@ -1271,10 +1280,22 @@ let doc_pat_ocaml, doc_atomic_pat_ocaml =
   | P_wild -> underscore
   | P_id id -> doc_id id
   | P_as(p,id) -> parens (separate space [pat p; string "as"; doc_id_ocaml id])
-  | P_typ(typ,p) -> (*separate space [parens (doc_typ typ); atomic_pat p]*) pat p
+  | P_typ(typ,p) -> doc_op colon (pat p) (doc_typ_ocaml typ) 
   | P_app(id,[]) -> doc_id_ocaml id
+  | P_vector pats ->
+    let non_bit_print () = parens (separate space [string "VvectorR"; squarebars (separate_map semi pat pats); underscore ; underscore]) in
+    (match annot with
+     | Base(([],t),_,_,_,_) ->
+      (match t.t with
+      | Tapp("vector",[_;_;_;TA_typ t]) | Tabbrev(_,{t=Tapp("vector",[_;_;_;TA_typ t])}) ->
+        (match t.t with
+         | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) ->          
+          parens (separate space [string "Vvector"; squarebars (separate_map semi pat pats); underscore ; underscore])
+         | _ -> non_bit_print ())
+      | _ -> non_bit_print ())
+     | _ -> non_bit_print ())
   | P_tup pats  -> parens (separate_map comma_sp atomic_pat pats)
-  (* expose doc_pat and doc_atomic_pat *)
+  | P_list pats -> brackets (separate_map semi pat pats) (*Never seen but easy in ocaml*)
   in pat, atomic_pat
 
 let doc_exp_ocaml, doc_let_ocaml =
@@ -1288,9 +1309,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       doc_op coloneq (doc_lexp le) (exp e)
   | E_vector_append(l,r) ->
     group (parens (string "vector_append ") ^^ (exp l) ^^ space ^^ (exp r))
-  | E_cons(l,r) ->
-      doc_op (group (colon^^colon)) (exp l) (exp r)
-  (* Special case: omit "else ()" when the else branch is empty. *)
+  | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
   | E_if(c,t,E_aux(E_block [], _)) ->
       string "if" ^^ space ^^ string "toBool" ^^  (exp c) ^/^
       string "then" ^^ space ^^ (exp t)
@@ -1311,7 +1330,7 @@ let doc_exp_ocaml, doc_let_ocaml =
      | _ -> string "make a while loop")
   | E_let(leb,e) -> doc_op (string "in") (let_exp leb) (exp e)
   | E_app(f,args) ->
-    (*TODO, check for external call*)
+    (*TODO, check for external call, make call-by-copy semantics*)
       doc_unop (doc_id f) (parens (separate_map comma exp args))
   | E_vector_access(v,e) ->
       parens ((string "vector_access") ^^ space ^^ exp v ^^ space ^^ exp e)
@@ -1333,7 +1352,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       braces (doc_op (string "with") (exp e) (separate_map semi_sp doc_fexp fexps))
   | E_vector exps ->
     (*TODO pull out direction and base value*)
-    group ((string "make_vector") ^^ space ^^ brackets (separate_map semi exp exps))
+    group ((string "make_vector") ^^ space ^^ squarebars (separate_map semi exp exps))
   | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
     (*TODO, indexed vectors shouldn't be in anymore by this point*)
     let default_string = 
@@ -1359,7 +1378,7 @@ let doc_exp_ocaml, doc_let_ocaml =
   | E_exit e ->
     separate space [string "exit"; exp e;]
   | E_app_infix (e1,id,e2) ->
-      group (parens (exp e1))
+    separate space [string "get_external_function_name"; parens (separate_map semi exp [e1;e2])]
 
   and let_exp (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->
@@ -1374,28 +1393,103 @@ let doc_exp_ocaml, doc_let_ocaml =
   and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id id) (exp e)
 
   and doc_case (Pat_aux(Pat_exp(pat,e),_)) =
-    doc_op arrow (separate space [string "case"; doc_atomic_pat pat]) (group (exp e))
+    doc_op arrow (separate space [pipe; doc_atomic_pat pat]) (group (exp e))
 
   (* lexps are parsed as eq_exp - we need to duplicate the precedence
    * structure for them *)
-  and doc_lexp le = app_lexp le
-  and app_lexp ((LEXP_aux(lexp,_)) as le) = match lexp with
+  and doc_lexp ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
+    (*TODO: in the case of vector and memory and field, need to lift these up to rewrite them differently. *)
   | LEXP_memory(id,args) -> doc_id id ^^ parens (separate_map comma exp args)
-  | _ -> vaccess_lexp le
-  and vaccess_lexp ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_vector(v,e) -> atomic_lexp v ^^ brackets (exp e)
+  | LEXP_vector(v,e) -> doc_lexp v ^^ brackets (exp e)
   | LEXP_vector_range(v,e1,e2) ->
-      atomic_lexp v ^^ brackets (exp e1 ^^ dotdot ^^ exp e2)
-  | _ -> field_lexp le
-  and field_lexp ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_field(v,id) -> atomic_lexp v ^^ dot ^^ doc_id id
-  | _ -> atomic_lexp le
-  and atomic_lexp ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_id id -> doc_id id
-  | LEXP_cast(typ,id) -> prefix 2 1 (parens (doc_typ typ)) (doc_id id)
-  | LEXP_memory _ | LEXP_vector _ | LEXP_vector_range _
-  | LEXP_field _ -> group (parens (doc_lexp le))
+      doc_lexp v ^^ brackets (exp e1 ^^ dotdot ^^ exp e2)
+  | LEXP_field(v,id) -> doc_lexp v ^^ dot ^^ doc_id id
+  | LEXP_id id -> doc_id_ocaml id
+  | LEXP_cast(typ,id) -> (*prefix 2 1 (parens (doc_typ typ)) *) (doc_id_ocaml id)
 
   (* expose doc_exp and doc_let *)
   in exp, let_exp
 
+(*TODO Upcase and downcase type and constructors as needed*)
+let doc_type_union_ocaml (Tu_aux(typ_u,_)) = match typ_u with
+  | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_ocaml id; string "of"; doc_typ_ocaml typ;]
+  | Tu_id id -> separate space [pipe; doc_id_ocaml id]
+
+let doc_typdef_ocaml (TD_aux(td,_)) = match td with
+  | TD_abbrev(id,nm,typschm) ->
+      doc_op equals (concat [string "type"; space; doc_id id;]) (doc_typscm_ocaml typschm)
+  | TD_record(id,nm,typq,fs,_) ->
+      let f_pp (typ,id) = concat [doc_id id; space; colon; doc_typ_ocaml typ; semi] in
+      let fs_doc = group (separate_map (break 1) f_pp fs) in
+      doc_op equals
+        (concat [string "type"; space; doc_id_ocaml id;]) (doc_typquant_ocaml typq (braces fs_doc))
+  | TD_variant(id,nm,typq,ar,_) ->
+      let ar_doc = group (separate_map (break 1) doc_type_union_ocaml ar) in
+      doc_op equals
+        (concat [string "type"; space; doc_id_ocaml id;])
+        (doc_typquant_ocaml typq ar_doc)
+  | TD_enum(id,nm,enums,_) ->
+      let enums_doc = group (separate_map (break 1 ^^ pipe) doc_id_ocaml enums) in
+      doc_op equals
+        (concat [string "type"; space; doc_id_ocaml id;])
+        (enums_doc)
+  | TD_register(id,n1,n2,rs) ->
+    (*TODO: not sure*)
+      let doc_rid (r,id) = separate space [doc_range r; colon; doc_id id] ^^ semi in
+      let doc_rids = group (separate_map (break 1) doc_rid rs) in
+      string "(*" ^^
+      doc_op equals
+        (string "typedef" ^^ space ^^ doc_id id)
+        (separate space [
+          string "register bits";
+          brackets (doc_nexp n1 ^^ colon ^^ doc_nexp n2);
+          braces doc_rids;
+        ]) ^^ string "*)"
+
+let doc_rec_ocaml (Rec_aux(r,_)) = match r with
+  | Rec_nonrec -> empty
+  (* include trailing space because caller doesn't know if we return
+   * empty *)
+  | Rec_rec -> string "rec" ^^ space
+
+let doc_tannot_opt_ocaml (Typ_annot_opt_aux(t,_)) = match t with
+  | Typ_annot_opt_some(tq,typ) -> doc_typquant_ocaml tq (doc_typ_ocaml typ)
+
+let doc_funcl_ocaml (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
+  group (doc_op arrow (doc_pat_ocaml pat) (doc_exp_ocaml exp))
+
+let get_id = function
+  | [] -> failwith "FD_function with empty list"
+  | (FCL_aux (FCL_Funcl (id,_,_),_))::_ -> id
+
+let doc_fundef_ocaml (FD_aux(FD_function(r, typa, efa, fcls),_)) =
+  match fcls with
+  | [] -> failwith "FD_function with empty function list"
+  | [FCL_aux (FCL_Funcl(id,pat,exp),_)] ->
+    separate space [(string "let"); (doc_rec_ocaml r); (doc_id_ocaml id); (doc_pat_ocaml pat); equals; (doc_exp_ocaml exp)]
+  | _ ->
+    let id = get_id fcls in
+      let sep = hardline ^^ pipe ^^ space in
+      let clauses = separate_map sep doc_funcl fcls in
+      separate space [string "let";
+                      doc_rec_ocaml r;
+                      clauses]
+
+(*Aliases should be removed by here; registers not sure about*)
+(*let doc_dec (DEC_aux (reg,_)) =
+  match reg with
+    | DEC_reg(typ,id) -> separate space [string "register"; doc_atomic_typ typ; doc_id id]
+    | DEC_alias(id,alspec) ->
+        doc_op equals (string "register alias" ^^ space ^^ doc_id id) (doc_alias alspec)
+    | DEC_typ_alias(typ,id,alspec) -> 
+        doc_op equals (string "register alias" ^^ space ^^ doc_atomic_typ typ) (doc_alias alspec)*)
+
+let doc_def_ocaml def = group (match def with
+  | DEF_default df -> empty
+  | DEF_spec v_spec -> empty (*unless we want to have a separate pass to create mli files*)
+  | DEF_type t_def -> doc_typdef_ocaml t_def
+  | DEF_fundef f_def -> doc_fundef_ocaml f_def
+  | DEF_val lbind -> doc_let_ocaml lbind
+  | DEF_reg_dec dec -> empty (*unless we want to have something for the declaration of a register and guess a default init value*)
+  | DEF_scattered sdef -> empty (*shoulnd't still be here*)
+  ) ^^ hardline

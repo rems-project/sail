@@ -78,6 +78,8 @@ type nexp_map = nexp Nexpmap.t
 type tag =
   | Emp_local (* Standard value, variable, expression *)
   | Emp_global (* Variable from global instead of local scope *)
+  | Emp_intro (* Local mutable variable, and this is its introduction *)
+  | Emp_set (* Local mutable expression being set *)
   | External of string option (* External function or register name *)
   | Default (* Variable has default type, has not been bound *)
   | Constructor (* Variable is a data constructor *)
@@ -220,6 +222,7 @@ val type_param_consistent : Parse_ast.l -> t_arg emap -> t_arg emap -> nexp_rang
 val get_abbrev : def_envs -> t -> (t * nexp_range list)
 
 val is_enum_typ : def_envs -> t -> int option
+val is_bit_vector : t -> bool
 
 val extract_bounds : def_envs -> string -> t -> bounds_env
 val merge_bounds : bounds_env -> bounds_env -> bounds_env

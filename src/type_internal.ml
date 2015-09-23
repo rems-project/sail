@@ -76,6 +76,8 @@ and t_arg =
 type tag =
   | Emp_local
   | Emp_global
+  | Emp_intro
+  | Emp_set
   | External of string option
   | Default
   | Constructor
@@ -314,6 +316,8 @@ and o_to_string o =
 let tag_to_string = function
   | Emp_local -> "Emp_local"
   | Emp_global -> "Emp_global"
+  | Emp_intro -> "Emp_intro"
+  | Emp_set -> "Emp_set"
   | External None -> "External" 
   | External (Some s) -> "External " ^ s
   | Default -> "Default"
@@ -321,7 +325,7 @@ let tag_to_string = function
   | Enum _ -> "Enum"
   | Alias -> "Alias"
   | Spec -> "Spec"
-
+    
 let enforce_to_string = function
   | Require -> "require"
   | Guarantee -> "guarantee"
@@ -447,6 +451,13 @@ let rec pow_i i n =
   | 0 -> one
   | n -> mult_int_big_int i (pow_i i (n-1))
 let two_pow = pow_i 2
+
+let is_bit_vector t = match t.t with
+  | Tapp("vector", [_;_;_; TA_typ t]) | Tabbrev(_,{t=Tapp("vector",[_;_;_; TA_typ t])}) ->
+    (match t.t with
+     | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> true
+     | _ -> false)
+  | _ -> false
 
 (* predicate to determine if pushing a constant in for addition or multiplication could change the form *)
 let rec contains_const n =
@@ -3487,10 +3498,12 @@ let tannot_merge co denv widen t_older t_newer =
                          Base(([],t),tag_n,cs_o,ef_o,bounds_o)
             | _ -> t_newer)
         | Emp_local, Emp_local -> 
-          (*let _ = Printf.eprintf "local-local case\n" in*) 
-          (*TODO Check conforms to first; if true check consistent, if false replace with t_newer *)
+          (*let _ = Printf.eprintf "local-local case\n" in*)
+          if conforms_to_t denv true false t_n t_o
+          then
           let t,cs_b = type_consistent co denv Guarantee widen t_n t_o in
           (*let _ = Printf.eprintf "types consistent\n" in*)
           Base(([],t),Emp_local,cs_o@cs_n@cs_b,union_effects ef_o ef_n, merge_bounds bounds_o bounds_n)
+          else Base(([],t_n),Emp_local,cs_n,ef_n,bounds_n)
         | _,_ -> t_newer)
     | _ -> t_newer
