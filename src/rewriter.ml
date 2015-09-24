@@ -72,12 +72,72 @@ let rec match_to_program_vars ns bounds =
           (*let _ = Printf.eprintf "adding n %s to program var %s\n" (n_to_string n) ev in*)
           (n,(augment,ev))::(match_to_program_vars ns bounds)
 
+let explode s =
+  let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
+  exp (String.length s - 1) []
+
+
+let vector_string_to_bit_list lit = 
+
+  let hexchar_to_binlist = function
+    | '0' -> ['0';'0';'0';'0']
+    | '1' -> ['0';'0';'0';'1']
+    | '2' -> ['0';'0';'1';'0']
+    | '3' -> ['0';'0';'1';'1']
+    | '4' -> ['0';'1';'0';'0']
+    | '5' -> ['0';'1';'0';'1']
+    | '6' -> ['0';'1';'1';'0']
+    | '7' -> ['0';'1';'1';'1']
+    | '8' -> ['1';'0';'0';'0']
+    | '9' -> ['1';'0';'0';'1']
+    | 'A' -> ['1';'0';'1';'0']
+    | 'B' -> ['1';'0';'1';'1']
+    | 'C' -> ['1';'1';'0';'0']
+    | 'D' -> ['1';'1';'0';'1']
+    | 'E' -> ['1';'1';'1';'0']
+    | 'F' -> ['1';'1';'1';'1']
+    | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "hexchar_to_binlist given unrecognized character") in
+  
+  let s_bin = match lit with
+    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode s_hex))
+    | L_bin s_bin -> explode (String.uppercase s_bin)
+    | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "s_bin given non vector literal") in
+
+  List.map (function '0' -> L_aux (L_zero, Parse_ast.Unknown)
+                   | '1' -> L_aux (L_one,Parse_ast.Unknown)
+                   | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "binary had non-zero or one")) s_bin
+
+let rewrite_pat rewriters nmap (P_aux (pat,(l,annot))) =
+  let rewrap p = P_aux (p,(l,annot)) in
+  let rewrite = rewriters.rewrite_pat rewriters nmap in
+  match pat with
+  | P_lit (L_aux ((L_hex _ | L_bin _) as lit,_)) ->
+    let ps =  List.map (fun p -> P_aux (P_lit p,(Parse_ast.Unknown,simple_annot {t = Tid "bit"})))
+        (vector_string_to_bit_list lit) in
+    rewrap (P_vector ps)
+  | P_lit _ | P_wild | P_id _ -> rewrap pat
+  | P_as(pat,id) -> rewrap (P_as( rewrite pat, id))
+  | P_typ(typ,pat) -> rewrap (P_typ(typ,rewrite pat))
+  | P_app(id ,pats) -> rewrap (P_app(id, List.map rewrite pats))
+  | P_record(fpats,_) ->
+    rewrap (P_record(List.map (fun (FP_aux(FP_Fpat(id,pat),pannot)) -> FP_aux(FP_Fpat(id, rewrite pat), pannot)) fpats,
+                     false))
+  | P_vector pats -> rewrap (P_vector(List.map rewrite pats))
+  | P_vector_indexed ipats -> rewrap (P_vector_indexed(List.map (fun (i,pat) -> (i, rewrite pat)) ipats))
+  | P_vector_concat pats -> rewrap (P_vector_concat (List.map rewrite pats))
+  | P_tup pats -> rewrap (P_tup (List.map rewrite pats))
+  | P_list pats -> rewrap (P_list (List.map rewrite pats))
+
 let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) = 
   let rewrap e = E_aux (e,(l,annot)) in
   let rewrite = rewriters.rewrite_exp rewriters nmap in
   match exp with
     | E_block exps -> rewrap (E_block (List.map rewrite exps))
     | E_nondet exps -> rewrap (E_nondet (List.map rewrite exps))
+    | E_lit (L_aux ((L_hex _ | L_bin _) as lit,_)) ->
+      let es = List.map (fun p -> E_aux (E_lit p ,(Parse_ast.Unknown,simple_annot {t = Tid "bit"})))
+          (vector_string_to_bit_list lit) in
+      rewrap (E_vector es)
     | E_id _ | E_lit _  -> rewrap exp
     | E_cast (typ, exp) -> rewrap (E_cast (typ, rewrite exp))
     | E_app (id,exps) -> rewrap (E_app (id,List.map rewrite exps))
@@ -241,55 +301,10 @@ let rewrite_defs_base rewriters (Defs defs) =
     | [] -> []
     | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds) in
   Defs (rewrite defs)
-
-let explode s =
-  let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
-  exp (String.length s - 1) []
-
-
-let vector_string_to_bit_list lit = 
-
-  let hexchar_to_binlist = function
-    | '0' -> ['0';'0';'0';'0']
-    | '1' -> ['0';'0';'0';'1']
-    | '2' -> ['0';'0';'1';'0']
-    | '3' -> ['0';'0';'1';'1']
-    | '4' -> ['0';'1';'0';'0']
-    | '5' -> ['0';'1';'0';'1']
-    | '6' -> ['0';'1';'1';'0']
-    | '7' -> ['0';'1';'1';'1']
-    | '8' -> ['1';'0';'0';'0']
-    | '9' -> ['1';'0';'0';'1']
-    | 'A' -> ['1';'0';'1';'0']
-    | 'B' -> ['1';'0';'1';'1']
-    | 'C' -> ['1';'1';'0';'0']
-    | 'D' -> ['1';'1';'0';'1']
-    | 'E' -> ['1';'1';'1';'0']
-    | 'F' -> ['1';'1';'1';'1'] in
-  
-  let s_bin = match lit with
-    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode s_hex))
-    | L_bin s_bin -> explode (String.uppercase s_bin) in
-
-  List.map (function '0' -> L_aux (L_zero, Unknown) | '1' -> L_aux (L_one,Unknown)) s_bin
-
-let remove_vector_string_patterns pat = match pat with
-  | P_lit (L_aux (lit,_)) ->
-     let ps =  List.map (fun p -> P_aux (P_lit p,(Unknown,simple_annot {t = Tid "bit"})))
-                        (vector_string_to_bit_list lit) in
-     P_vector ps
-  | _ -> pat
     
-let remove_vector_string_expressions exp = match exp with
-  | E_lit (L_aux (lit,_)) ->
-     let es = List.map (fun p -> E_aux (E_lit p ,(Unknown,simple_annot {t = Tid "bit"})))
-                       (vector_string_to_bit_list lit) in
-     E_vector es
-  | _ -> exp
-
 let rewrite_defs (Defs defs) = rewrite_defs_base
     {rewrite_exp = rewrite_exp;
-     rewrite_pat = (fun _ _ p -> p);
+     rewrite_pat = rewrite_pat;
      rewrite_let = rewrite_let;
      rewrite_lexp = rewrite_lexp;
      rewrite_fun = rewrite_fun;
