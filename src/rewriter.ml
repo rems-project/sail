@@ -310,3 +310,21 @@ let rewrite_defs (Defs defs) = rewrite_defs_base
      rewrite_fun = rewrite_fun;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} (Defs defs)
+
+let rewrite_exp_lift_assign_intro rewriters nmap ((E_aux (exp,(l,annot))) as full_exp) = 
+  let rewrap e = E_aux (e,(l,annot)) in
+  let rewrite_rec = rewriters.rewrite_exp rewriters nmap in
+  let rewrite_base = rewrite_exp rewriters nmap in
+  match exp with
+  | E_block exps -> rewrap (E_block (List.map rewrite_rec exps))
+  | E_assign _ -> assert false
+  | _ -> rewrite_base full_exp
+
+let rewrite_defs_ocaml defs = rewrite_defs_base
+    {rewrite_exp = rewrite_exp_lift_assign_intro;
+     rewrite_pat = rewrite_pat;
+     rewrite_let = rewrite_let;
+     rewrite_lexp = rewrite_lexp;
+     rewrite_fun = rewrite_fun;
+     rewrite_def = rewrite_def;
+     rewrite_defs = rewrite_defs_base} defs
