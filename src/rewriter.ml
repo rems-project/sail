@@ -228,3 +228,49 @@ let rewrite_defs (Defs defs) =
     | [] -> []
     | d::ds -> (rewrite_def d)::(rewrite ds) in
   Defs (rewrite defs)
+
+
+let explode s =
+  let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
+  exp (String.length s - 1) []
+
+
+let vector_string_to_bit_list lit = 
+
+  let hexchar_to_binlist = function
+    | '0' -> ['0';'0';'0';'0']
+    | '1' -> ['0';'0';'0';'1']
+    | '2' -> ['0';'0';'1';'0']
+    | '3' -> ['0';'0';'1';'1']
+    | '4' -> ['0';'1';'0';'0']
+    | '5' -> ['0';'1';'0';'1']
+    | '6' -> ['0';'1';'1';'0']
+    | '7' -> ['0';'1';'1';'1']
+    | '8' -> ['1';'0';'0';'0']
+    | '9' -> ['1';'0';'0';'1']
+    | 'A' -> ['1';'0';'1';'0']
+    | 'B' -> ['1';'0';'1';'1']
+    | 'C' -> ['1';'1';'0';'0']
+    | 'D' -> ['1';'1';'0';'1']
+    | 'E' -> ['1';'1';'1';'0']
+    | 'F' -> ['1';'1';'1';'1'] in
+  
+  let s_bin = match lit with
+    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode s_hex))
+    | L_bin s_bin -> explode s_bin in
+
+  List.map (function '0' -> L_aux (L_zero, Unknown) | '1' -> L_aux (L_one,Unknown)) s_bin
+
+let remove_vector_string_patterns pat = match pat with
+  | P_lit (L_aux (lit,_)) ->
+     let ps =  List.map (fun p -> P_aux (P_lit p,(Unknown,simple_annot {t = Tid "bit"})))
+                        (vector_string_to_bit_list lit) in
+     P_vector ps
+  | _ -> pat
+    
+let remove_vector_string_expressions exp = match exp with
+  | E_lit (L_aux (lit,_)) ->
+     let es = List.map (fun p -> E_aux (E_lit p ,(Unknown,simple_annot {t = Tid "bit"})))
+                       (vector_string_to_bit_list lit) in
+     E_vector es
+  | _ -> exp
