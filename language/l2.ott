@@ -646,7 +646,7 @@ exp :: 'E_' ::=
   | ( annot ) exp                                   :: :: internal_cast {{ com This is an internal cast, generated during type checking that will resolve into a syntactic cast after }}
   | annot                       :: :: internal_exp {{ com This is an internal use for passing nexp information  to library functions, postponed for constraint solving }}
   | annot , annot'           :: :: internal_exp_user {{ com This is like the above but the user has specified an implicit parameter for the current function }} 
- 
+  | let lexp = exp in exp'    :: :: internal_let {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
 
 
 lexp :: 'LEXP_' ::= {{ com lvalue expression }}

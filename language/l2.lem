@@ -281,6 +281,7 @@ and exp_aux 'a =  (* Expression *)
  | E_internal_cast of annot 'a * (exp 'a) (* This is an internal cast, generated during type checking that will resolve into a syntactic cast after *)
  | E_internal_exp of annot 'a (* This is an internal use for passing nexp information  to library functions, postponed for constraint solving *)
  | E_internal_exp_user of annot 'a * annot 'a (* This is like the above but the user has specified an implicit parameter for the current function *)
+ | E_internal_let of (lexp 'a) * (exp 'a) * (exp 'a) (* This is an internal node for compilation that demonstrates the scope of a local mutable variable *)
 
 and exp 'a = 
  | E_aux of (exp_aux 'a) * annot 'a

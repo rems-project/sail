@@ -1286,13 +1286,9 @@ let doc_pat_ocaml, doc_atomic_pat_ocaml =
     let non_bit_print () = parens (separate space [string "VvectorR"; squarebars (separate_map semi pat pats); underscore ; underscore]) in
     (match annot with
      | Base(([],t),_,_,_,_) ->
-      (match t.t with
-      | Tapp("vector",[_;_;_;TA_typ t]) | Tabbrev(_,{t=Tapp("vector",[_;_;_;TA_typ t])}) ->
-        (match t.t with
-         | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) ->          
-          parens (separate space [string "Vvector"; squarebars (separate_map semi pat pats); underscore ; underscore])
-         | _ -> non_bit_print ())
-      | _ -> non_bit_print ())
+       if is_bit_vector t
+       then parens (separate space [string "Vvector"; squarebars (separate_map semi pat pats); underscore ; underscore])
+       else non_bit_print()
      | _ -> non_bit_print ())
   | P_tup pats  -> parens (separate_map comma_sp atomic_pat pats)
   | P_list pats -> brackets (separate_map semi pat pats) (*Never seen but easy in ocaml*)
@@ -1307,60 +1303,93 @@ let doc_exp_ocaml, doc_let_ocaml =
               if le isn't immediately a ref cell, then maybe have a function to cope?
       *)
       doc_op coloneq (doc_lexp le) (exp e)
-  | E_vector_append(l,r) ->
-    group (parens (string "vector_append ") ^^ (exp l) ^^ space ^^ (exp r))
-  | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
-  | E_if(c,t,E_aux(E_block [], _)) ->
+    | E_vector_append(l,r) ->
+      group (parens (string "vector_append ") ^^ (exp l) ^^ space ^^ (exp r))
+    | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
+    | E_if(c,t,E_aux(E_block [], _)) ->
       string "if" ^^ space ^^ string "toBool" ^^  (exp c) ^/^
       string "then" ^^ space ^^ (exp t)
-  | E_if(c,t,e) ->
+    | E_if(c,t,e) ->
       string "if" ^^ space ^^ string "toBool" ^^ group (exp c) ^/^
       string "then" ^^ space ^^ group (exp t) ^/^
       string "else" ^^ space ^^ group (exp e)
-  | E_for(id,exp1,exp2,(E_aux(exp3, (l3,annot3))),(Ord_aux(order,_)),exp4) ->
-    (match exp3 with
-     | E_lit (L_aux( (L_num 1), _)) ->
-       string "for" ^^ space ^^
-       (group ((doc_id id) ^^ space ^^ equals ^^ (exp exp1))) ^^
+    | E_for(id,exp1,exp2,(E_aux(exp3, (l3,annot3))),(Ord_aux(order,_)),exp4) ->
+      (match exp3 with
+       | E_lit (L_aux( (L_num 1), _)) ->
+         string "for" ^^ space ^^
+         (group ((doc_id id) ^^ space ^^ equals ^^ (exp exp1))) ^^
          (match order with
           | Ord_inc -> (group (string "to" ^^ space ^^ (exp exp2)))
           | _ -> (group (string "downto" ^^ space ^^ (exp exp2)))) ^^
          string "do" ^/^
          exp exp4 ^/^ string "done"
-     | _ -> string "make a while loop")
-  | E_let(leb,e) -> doc_op (string "in") (let_exp leb) (exp e)
-  | E_app(f,args) ->
-    (*TODO, check for external call, make call-by-copy semantics*)
-      doc_unop (doc_id f) (parens (separate_map comma exp args))
-  | E_vector_access(v,e) ->
-      parens ((string "vector_access") ^^ space ^^ exp v ^^ space ^^ exp e)
-  | E_vector_subrange(v,e1,e2) ->
+       | _ -> string "make a while loop")
+    | E_let(leb,e) -> doc_op (string "in") (let_exp leb) (exp e)
+    | E_app(f,args) ->
+      let call = match annot with
+        | Base(_,External (Some n),_,_,_) -> string n
+        | _ -> doc_id_ocaml f in
+      doc_unop call (parens (separate_map comma exp args))
+    | E_vector_access(v,e) ->
+      let call = (match annot with
+          | Base((_,t),_,_,_,_) ->
+            (match t.t with
+             | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> (string "bit_vector_access")
+             | _ -> (string "vector_access"))
+          | _ -> (string "vector_access")) in
+      parens (call ^^ space ^^ exp v ^^ space ^^ exp e)
+    | E_vector_subrange(v,e1,e2) ->
       parens ((string "vector_subrange") ^^ space ^^ exp v ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
-  | E_field(fexp,id) -> exp fexp ^^ dot ^^ doc_id id
-  | E_block [] -> string "()"
-  | E_block exps | E_nondet exps ->
+    | E_field(fexp,id) -> exp fexp ^^ dot ^^ doc_id id
+    | E_block [] -> string "()"
+    | E_block exps | E_nondet exps ->
       let exps_doc = separate_map (semi ^^ hardline) exp exps in
       surround 2 1 (string "begin") exps_doc (string "end")
-  | E_id id -> doc_id id
-  | E_lit lit -> doc_lit lit
-  | E_cast(typ,e) -> (parens (doc_op colon (group (exp e)) (doc_typ typ)))
-  | E_tuple exps ->
+    | E_id id -> doc_id id
+    | E_lit lit -> doc_lit lit
+    | E_cast(typ,e) -> (parens (doc_op colon (group (exp e)) (doc_typ typ)))
+    | E_tuple exps ->
       parens (separate_map comma exp exps)
-  | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
+    | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
       braces (separate_map semi_sp doc_fexp fexps)
-  | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
+    | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
       braces (doc_op (string "with") (exp e) (separate_map semi_sp doc_fexp fexps))
-  | E_vector exps ->
-    (*TODO pull out direction and base value*)
-    group ((string "make_vector") ^^ space ^^ squarebars (separate_map semi exp exps))
-  | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
-    (*TODO, indexed vectors shouldn't be in anymore by this point*)
-    let default_string = 
-      (match default with
-        | Def_val_empty -> string "" 
-        | Def_val_dec e -> concat [semi; space; string "default"; equals; (exp e)]) in 
-      let iexp (i,e) = doc_op equals (doc_int i) (exp e) in
-      brackets (concat [(separate_map comma iexp iexps); default_string])
+    | E_vector exps ->
+      (match annot with
+       | Base((_,t),_,_,_,_) ->
+         match t.t with
+         | Tapp("vector", [TA_nexp start; _; TA_ord order; _]) | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; _; TA_ord order; _])}) ->
+           let call = if is_bit_vector t then (string "make_bit_vector") else (string "make_vector") in
+           let dir,dir_out = match order.order with
+             | Oinc -> true,"true"
+             | _ -> false, "false" in
+           let start = match start.nexp with
+             | Nconst i -> string_of_big_int i
+             | N2n(_,Some i) -> string_of_big_int i
+             | _ -> if dir then "0" else string_of_int (List.length exps) in
+           group (call ^^ space ^^ squarebars (separate_map semi exp exps) ^^ string start ^^ string dir_out))
+    | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
+      (match annot with
+       | Base((_,t),_,_,_,_) ->
+         match t.t with
+         | Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])
+         | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])}) ->
+           let call = if is_bit_vector t then (string "make_indexed_bitv") else (string "make_indexed_v") in
+           let dir,dir_out = match order.order with
+             | Oinc -> true,"true"
+             | _ -> false, "false" in
+           let start = match start.nexp with
+             | Nconst i -> string_of_big_int i
+             | N2n(_,Some i) -> string_of_big_int i
+             | _ -> if dir then "0" else string_of_int (List.length iexps) in
+           let size = match len.nexp with
+             | Nconst i | N2n(_,Some i)-> string_of_big_int i in
+           let default_string = 
+             (match default with
+              | Def_val_empty -> string "None" 
+              | Def_val_dec e -> parens (string "Some " ^^ (exp e))) in 
+           let iexp (i,e) = parens (separate_map comma_sp (fun x -> x) [(doc_int i); (exp e)]) in
+           group (call ^^ (brackets (separate_map semi iexp iexps)) ^^ space ^^ default_string ^^ string start ^^ string size ^^ string dir_out))
   | E_vector_update(v,e1,e2) ->
     (*Has never happened to date*)
       brackets (doc_op (string "with") (exp v) (doc_op equals (exp e1) (exp e2)))
@@ -1378,16 +1407,20 @@ let doc_exp_ocaml, doc_let_ocaml =
   | E_exit e ->
     separate space [string "exit"; exp e;]
   | E_app_infix (e1,id,e2) ->
-    separate space [string "get_external_function_name"; parens (separate_map semi exp [e1;e2])]
+    let call = 
+      match annot with
+      | Base((_,t),External(Some name),_,_,_) -> string name
+      | _ -> doc_id_ocaml id in
+    separate space [call; parens (separate_map semi exp [e1;e2])]
 
   and let_exp (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->
       prefix 2 1
-        (separate space [string "let"; doc_atomic_pat pat; equals])
+        (separate space [string "let"; doc_atomic_pat_ocaml pat; equals])
         (exp e)
   | LB_val_implicit(pat,e) ->
       prefix 2 1
-        (separate space [string "let"; doc_atomic_pat pat; equals])
+        (separate space [string "let"; doc_atomic_pat_ocaml pat; equals])
         (exp e)
 
   and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id id) (exp e)

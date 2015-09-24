@@ -270,6 +270,7 @@ type
  | E_internal_cast of 'a annot * 'a exp (* This is an internal cast, generated during type checking that will resolve into a syntactic cast after *)
  | E_internal_exp of 'a annot (* This is an internal use for passing nexp information  to library functions, postponed for constraint solving *)
  | E_internal_exp_user of 'a annot * 'a annot (* This is like the above but the user has specified an implicit parameter for the current function *)
+ | E_internal_let of 'a lexp * 'a exp * 'a exp (* This is an internal node for compilation that demonstrates the scope of a local mutable variable *)
 
 and 'a exp = 
    E_aux of 'a exp_aux * 'a annot
