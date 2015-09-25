@@ -1296,7 +1296,8 @@ let doc_pat_ocaml, doc_atomic_pat_ocaml =
 
 let doc_exp_ocaml, doc_let_ocaml =
   let rec exp (E_aux (e, (_,annot))) =  match e with
-    | E_assign(le,e) ->
+    | E_assign((LEXP_aux(le_act,tannot) as le),e) ->
+      
       (*TODO: Check the type, if le is a ref cell, then do this.
               if le is a register or a memory function (external), then call out
               if le is a register or a memory function (internal), then replace with call

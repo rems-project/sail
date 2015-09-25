@@ -117,7 +117,7 @@ let rewrite_pat rewriters nmap (P_aux (pat,(l,annot))) =
     rewrap (P_vector ps)
   | P_lit _ | P_wild | P_id _ -> rewrap pat
   | P_as(pat,id) -> rewrap (P_as( rewrite pat, id))
-  | P_typ(typ,pat) -> rewrite pat)
+  | P_typ(typ,pat) -> rewrite pat
   | P_app(id ,pats) -> rewrap (P_app(id, List.map rewrite pats))
   | P_record(fpats,_) ->
     rewrap (P_record(List.map (fun (FP_aux(FP_Fpat(id,pat),pannot)) -> FP_aux(FP_Fpat(id, rewrite pat), pannot)) fpats,
