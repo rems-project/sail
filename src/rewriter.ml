@@ -99,8 +99,8 @@ let vector_string_to_bit_list lit =
     | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "hexchar_to_binlist given unrecognized character") in
   
   let s_bin = match lit with
-    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode s_hex))
-    | L_bin s_bin -> explode (String.uppercase s_bin)
+    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode (String.uppercase s_hex)))
+    | L_bin s_bin -> explode s_bin
     | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "s_bin given non vector literal") in
 
   List.map (function '0' -> L_aux (L_zero, Parse_ast.Unknown)
@@ -310,3 +310,180 @@ let rewrite_defs (Defs defs) = rewrite_defs_base
      rewrite_fun = rewrite_fun;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} (Defs defs)
+
+
+(* signature of patterns *)
+type ('pat,'pat_aux,'fpat,'fpat_aux,'annot) pat_alg =
+  { p_lit : lit -> 'pat_aux
+  ; p_wild : 'pat_aux
+  ; p_as : 'pat * id -> 'pat_aux
+  ; p_typ : Ast.typ * 'pat -> 'pat_aux
+  ; p_id : id -> 'pat_aux
+  ; p_app : id * 'pat list -> 'pat_aux
+  ; p_record : 'fpat list * bool -> 'pat_aux
+  ; p_vector : 'pat list -> 'pat_aux
+  ; p_vector_indexed : (int * 'pat) list -> 'pat_aux
+  ; p_vector_concat : 'pat list -> 'pat_aux
+  ; p_tup : 'pat list -> 'pat_aux
+  ; p_list : 'pat list -> 'pat_aux
+  ; p_aux : 'pat_aux * 'annot -> 'pat
+  ; fP_aux : 'fpat_aux * 'annot -> 'fpat
+  ; fP_Fpat : id * 'pat -> 'fpat_aux
+  }
+
+(* fold from term alg into alg *)
+let rec fold_pat_aux alg = function
+  | P_lit lit -> alg.p_lit lit
+  | P_wild -> alg.p_wild
+  | P_id id -> alg.p_id id
+  | P_as (p,id) -> alg.p_as (fold_pat alg p,id)
+  | P_typ (typ,p) -> alg.p_typ (typ,fold_pat alg p)
+  | P_app (id,ps) -> alg.p_app (id,List.map (fold_pat alg) ps)
+  | P_record (ps,b) -> alg.p_record (List.map (fold_fpat alg) ps, b)
+  | P_vector ps -> alg.p_vector (List.map (fold_pat alg) ps)
+  | P_vector_indexed ps -> alg.p_vector_indexed (List.map (fun (i,p) -> (i, fold_pat alg p)) ps)
+  | P_vector_concat ps -> alg.p_vector_concat (List.map (fold_pat alg) ps)
+  | P_tup ps -> alg.p_tup (List.map (fold_pat alg) ps)
+  | P_list ps -> alg.p_list (List.map (fold_pat alg) ps)
+and fold_pat alg = function
+  | P_aux (pat,annot) -> alg.p_aux (fold_pat_aux alg pat,annot)
+and fold_fpat_aux alg = function
+  | FP_Fpat (id,pat) -> alg.fP_Fpat (id,fold_pat alg pat)
+and fold_fpat alg = function
+  | FP_aux (fpat,annot) -> alg.fP_aux (fold_fpat_aux alg fpat,annot)
+                                      
+(* identity fold from term alg to term alg *)
+let id_f : ('a pat, 'a pat_aux, 'a fpat, 'a fpat_aux, 'a annot) pat_alg = 
+  { p_lit            = (fun lit -> P_lit lit)
+  ; p_wild           = P_wild
+  ; p_as             = (fun (pat,id) -> P_as (pat,id))
+  ; p_typ            = (fun (typ,pat) -> P_typ (typ,pat))
+  ; p_id             = (fun id -> P_id id)
+  ; p_app            = (fun (id,ps) -> P_app (id,ps))
+  ; p_record         = (fun (ps,b) -> P_record (ps,b))
+  ; p_vector         = (fun ps -> P_vector ps)
+  ; p_vector_indexed = (fun ps -> P_vector_indexed ps)
+  ; p_vector_concat  = (fun ps -> P_vector_concat ps)
+  ; p_tup            = (fun ps -> P_tup ps)
+  ; p_list           = (fun ps -> P_list ps)
+  ; p_aux            = (fun (pat,annot) -> P_aux (pat,annot))
+  ; fP_aux           = (fun (fpat,annot) -> FP_aux (fpat,annot))
+  ; fP_Fpat          = (fun (id,pat) -> FP_Fpat (id,pat))
+  }
+  
+let remove_vector_concat_pat pat =
+  
+  let counter = ref 0 in
+  let fresh_name () =
+    let current = !counter in
+    let () = counter := (current + 1) in
+    Id_aux (Id ("__v" ^ string_of_int current), Parse_ast.Unknown) in
+  
+  (* expects that P_typ elements have been removed from AST,
+     that the length of all vectors involved is known,
+     that we don't have indexed vectors *)
+
+  (* introduce names for all patterns of form P_vector_concat *)
+  let name_vector_concat_roots =
+    let p_aux (pat,annot) = match pat with
+      | P_vector_concat pats -> P_aux (P_as (P_aux (pat,annot),fresh_name()),annot)
+      | _ -> P_aux (pat,annot) in 
+    {id_f with p_aux = p_aux} in
+
+  let pat = fold_pat name_vector_concat_roots pat in
+
+  (* introduce names for all unnamed child nodes of P_vector_concat *)
+  let name_vector_concat_elements =
+    let p_vector_concat pats =
+      let aux ((P_aux (p,a)) as pat) = match p with
+        | P_vector _ -> P_aux (P_as (pat,fresh_name()),a)
+     (* | P_vector_concat. cannot happen after fold function name_vector_concat_roots *)
+        | _ -> pat in (* this can only be P_as and P_id *)
+      P_vector_concat (List.map aux pats) in
+    {id_f with p_vector_concat = p_vector_concat} in
+
+  let pat = fold_pat name_vector_concat_elements pat in
+
+  let zip l1 l2 = List.fold_right2 (fun x y acc -> (x,y) :: acc) l1 l2 [] in
+  let unzip l = List.fold_right (fun (a,b) (accA,accB) -> (a :: accA, b :: accB)) l ([],[]) in
+
+  (* remove names from vectors in vector_concat patterns and collect them as declarations for the
+     function body or expression *)
+  let unname_vector_concat_elements : ('a pat * (string list), 'a pat_aux * (string list), 'a fpat * (string list),
+                                       'a fpat_aux * (string list), 'a annot) pat_alg =
+    let p_aux ((pattern,decls),annot) = match pattern with
+      | P_as (P_aux (P_vector_concat pats,_),name) ->
+         let aux (pat_acc,decl_acc,pos) = function
+           | (P_aux (P_as (P_aux (p,annot),name2),
+                     (l,Base(([],{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_)))) ->
+              (pat_acc @ [P_aux (p,annot)],
+               decl_acc @ ["define name2 as vector <name> [pos;pos + length -1]"],
+               add_big_int pos length)
+           | (P_aux (P_id name2,
+                    ((l,Base(([],{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_)) as annot))) ->
+              (pat_acc @ [P_aux (P_id name2,annot)],
+               decl_acc @ ["define name2 as vector <name> [pos;pos + length -1]"],
+               add_big_int pos length)
+           | (P_aux (_,(l,Base(([],{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_))) as p)
+             -> (pat_acc @ [p],decl_acc,add_big_int pos length)
+           | (P_aux (_,(l,_))) -> raise (Reporting_basic.err_unreachable l "Non-vector in vector-concat pattern") in
+         let (pats',decls',_) = List.fold_left aux ([],[],zero_big_int) pats in
+         (P_aux (P_vector_concat pats',annot),decls @ decls')
+      | _ -> (P_aux (pattern,annot),decls) in
+    
+    { p_lit            = (fun lit -> (P_lit lit,[]))
+    ; p_wild           = (P_wild,[])
+    ; p_as             = (fun ((pat,decls),id) -> (P_as (pat,id),decls))
+    ; p_typ            = (fun (typ,(pat,decls)) -> (P_typ (typ,pat),decls))
+    ; p_id             = (fun id -> (P_id id,[]))
+    ; p_app            = (fun (id,ps) -> let (ps,decls) = unzip ps in (P_app (id,ps),List.flatten decls))
+    ; p_record         = (fun (ps,b) -> let (ps,decls) = unzip ps in (P_record (ps,b),List.flatten decls))
+    ; p_vector         = (fun ps -> let (ps,decls) = unzip ps in (P_vector ps,List.flatten decls))
+    ; p_vector_indexed = (fun ps -> let (is,ps) = unzip ps in let (ps,decls) = unzip ps in let ps = zip is ps in
+                                    (P_vector_indexed ps,List.flatten decls))
+    ; p_vector_concat  = (fun ps -> let (ps,decls) = unzip ps in (P_vector_concat ps,List.flatten decls))
+    ; p_tup            = (fun ps -> let (ps,decls) = unzip ps in (P_tup ps,List.flatten decls))
+    ; p_list           = (fun ps -> let (ps,decls) = unzip ps in (P_list ps,List.flatten decls))
+    ; p_aux            = (fun ((pat,decls),annot) -> p_aux ((pat,decls),annot))
+    ; fP_aux           = (fun ((fpat,decls),annot) -> (FP_aux (fpat,annot),decls))
+    ; fP_Fpat          = (fun (id,(pat,decls)) -> (FP_Fpat (id,pat),decls))
+    } in
+
+  let (pat,decls) = fold_pat unname_vector_concat_elements pat in
+             
+    (* at this point shouldn't have P_as patterns in P_vector_concat patterns any more,
+       all P_as and P_id vectors should have their declarations in decls.
+       Now flatten all vector_concat patterns*)
+
+  let flatten =
+    let p_vector_concat ps =
+      let aux p acc = match p with
+        | (P_aux (P_vector_concat pats,_)) -> pats @ acc
+        | pat -> pat :: acc in
+      P_vector_concat (List.fold_right aux ps []) in
+    {id_f with p_vector_concat = p_vector_concat} in
+  
+  let pat = fold_pat flatten pat in
+
+  (* at this point pat should be a flat pattern: no vector_concat patterns
+     with vector_concats patterns as direct child-nodes anymore *)
+
+  let range a b =
+    let rec aux a b = if a > b then [] else a :: aux (a+1) b in
+    if a > b then List.rev (aux b a) else aux a b in
+
+  let remove_vector_concats =
+    let p_vector_concat ps =
+      let aux acc = function
+        | P_aux (P_vector ps,annot) -> acc @ ps
+        | P_aux (P_id name2, (_,Base(([],{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_))) ->
+           let wild _ = P_aux (P_wild,(Parse_ast.Unknown,simple_annot {t = Tid "bit"})) in
+           acc @ (List.map wild (range 0 ((int_of_big_int length) - 1)))
+        | (P_aux (_,(l,_))) -> raise (Reporting_basic.err_unreachable l "Non-vector in vector-concat pattern") in
+      P_vector_concat (List.fold_left aux [] ps) in
+    {id_f with p_vector_concat = p_vector_concat} in
+  
+  let pat = fold_pat remove_vector_concats pat in
+  
+  (pat,decls)
+        
