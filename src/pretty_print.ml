@@ -1296,13 +1296,22 @@ let doc_pat_ocaml, doc_atomic_pat_ocaml =
 
 let doc_exp_ocaml, doc_let_ocaml =
   let rec exp (E_aux (e, (_,annot))) =  match e with
-    | E_assign(le,e) ->
-      (*TODO: Check the type, if le is a ref cell, then do this.
-              if le is a register or a memory function (external), then call out
-              if le is a register or a memory function (internal), then replace with call
-              if le isn't immediately a ref cell, then maybe have a function to cope?
-      *)
-      doc_op coloneq (doc_lexp le) (exp e)
+    | E_assign((LEXP_aux(le_act,tannot) as le),e) ->
+      (match annot with
+       | Base(_,(Emp_local | Emp_set),_,_,_) ->
+         (match le_act with
+          | LEXP_id _ | LEXP_cast _ ->
+            (*Setting local variable fully *)
+            doc_op coloneq (doc_lexp_ocaml le) (exp e)
+          | LEXP_vector _ ->
+            doc_op (string "<-") (doc_lexp_ocaml le) (exp e)
+          | LEXP_vector_range _ ->
+            group ((string "set_vector_range") ^^ space ^^ (doc_lexp_ocaml le) ^^ space ^^ (exp e)))
+       | _ ->
+         (match le_act with
+          | LEXP_vector _ | LEXP_vector_range _ | LEXP_cast _ | LEXP_field _ ->
+            (doc_lexp_rwrite le e)
+          | LEXP_memory _ -> (doc_lexp_fcall le e)))
     | E_vector_append(l,r) ->
       group (parens (string "vector_append ") ^^ (exp l) ^^ space ^^ (exp r))
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
@@ -1340,7 +1349,12 @@ let doc_exp_ocaml, doc_let_ocaml =
       parens (call ^^ space ^^ exp v ^^ space ^^ exp e)
     | E_vector_subrange(v,e1,e2) ->
       parens ((string "vector_subrange") ^^ space ^^ exp v ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
-    | E_field(fexp,id) -> exp fexp ^^ dot ^^ doc_id id
+    | E_field((E_aux(_,(_,fannot)) as fexp),id) ->
+      (match fannot with
+      | Base((_,{t= Tapp("register",_)}),External _,_,_,_) ->
+        parens ((string "get_register_field") ^^ space ^^ exp fexp ^^ space ^^
+                (string "\"") ^^ (doc_id id) ^^ string "\"")
+      | _ -> exp fexp ^^ dot ^^ doc_id id)
     | E_block [] -> string "()"
     | E_block exps | E_nondet exps ->
       let exps_doc = separate_map (semi ^^ hardline) exp exps in
@@ -1412,6 +1426,13 @@ let doc_exp_ocaml, doc_let_ocaml =
       | Base((_,t),External(Some name),_,_,_) -> string name
       | _ -> doc_id_ocaml id in
     separate space [call; parens (separate_map semi exp [e1;e2])]
+  | E_internal_let(lexp, eq_exp, in_exp) ->
+    separate space [string "let";
+                    doc_lexp_ocaml lexp; (*Rewriter/typecheck should ensure this is only cast or id*)
+                    equals;
+                    exp eq_exp;
+                    string "in";
+                    exp in_exp]
 
   and let_exp (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->
@@ -1426,19 +1447,33 @@ let doc_exp_ocaml, doc_let_ocaml =
   and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id id) (exp e)
 
   and doc_case (Pat_aux(Pat_exp(pat,e),_)) =
-    doc_op arrow (separate space [pipe; doc_atomic_pat pat]) (group (exp e))
+    doc_op arrow (separate space [pipe; doc_atomic_pat_ocaml pat]) (group (exp e))
 
-  (* lexps are parsed as eq_exp - we need to duplicate the precedence
-   * structure for them *)
-  and doc_lexp ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
-    (*TODO: in the case of vector and memory and field, need to lift these up to rewrite them differently. *)
-  | LEXP_memory(id,args) -> doc_id id ^^ parens (separate_map comma exp args)
-  | LEXP_vector(v,e) -> doc_lexp v ^^ brackets (exp e)
+  and doc_lexp_ocaml ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
+  | LEXP_vector(v,e) -> parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml v) ^^ dot ^^ parens (exp e)
   | LEXP_vector_range(v,e1,e2) ->
-      doc_lexp v ^^ brackets (exp e1 ^^ dotdot ^^ exp e2)
-  | LEXP_field(v,id) -> doc_lexp v ^^ dot ^^ doc_id id
+      parens ((string "vector_subrange") ^^ space ^^ doc_lexp_ocaml v ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
+  | LEXP_field(v,id) -> doc_lexp_ocaml v ^^ dot ^^ doc_id id
   | LEXP_id id -> doc_id_ocaml id
-  | LEXP_cast(typ,id) -> (*prefix 2 1 (parens (doc_typ typ)) *) (doc_id_ocaml id)
+  | LEXP_cast(typ,id) -> (doc_id_ocaml id)
+
+  and doc_lexp_rwrite ((LEXP_aux(lexp,(l,annot))) as le) e_new_v =
+    match lexp with
+    | LEXP_vector(v,e) ->
+      doc_op (string "<-")
+        (group (parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml v)) ^^ dot ^^ parens (exp e))
+        (exp e_new_v)
+    | LEXP_vector_range(v,e1,e2) ->
+      parens ((string "set_vector_subrange") ^^ space ^^
+              doc_lexp_ocaml v ^^ space ^^ exp e1 ^^ space ^^ exp e2 ^^ space ^^ exp e_new_v)
+    | LEXP_field(v,id) ->
+      parens ((string "set_register_field") ^^ space ^^ doc_lexp_ocaml v ^^ space ^^string "\"" ^^ doc_id id ^^
+              string "\"" ^^ space ^^ exp e_new_v)
+    | LEXP_id id -> doc_id_ocaml id
+    | LEXP_cast(typ,id) -> (doc_id_ocaml id)
+
+  and doc_lexp_fcall ((LEXP_aux(lexp,(l,annot))) as le) e_new_v = match lexp with
+    | LEXP_memory(id,args) -> doc_id_ocaml id ^^ parens (separate_map comma exp (args@[e_new_v]))
 
   (* expose doc_exp and doc_let *)
   in exp, let_exp
@@ -1481,8 +1516,6 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
 
 let doc_rec_ocaml (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty
-  (* include trailing space because caller doesn't know if we return
-   * empty *)
   | Rec_rec -> string "rec" ^^ space
 
 let doc_tannot_opt_ocaml (Typ_annot_opt_aux(t,_)) = match t with
@@ -1502,11 +1535,14 @@ let doc_fundef_ocaml (FD_aux(FD_function(r, typa, efa, fcls),_)) =
     separate space [(string "let"); (doc_rec_ocaml r); (doc_id_ocaml id); (doc_pat_ocaml pat); equals; (doc_exp_ocaml exp)]
   | _ ->
     let id = get_id fcls in
-      let sep = hardline ^^ pipe ^^ space in
-      let clauses = separate_map sep doc_funcl fcls in
-      separate space [string "let";
-                      doc_rec_ocaml r;
-                      clauses]
+    let sep = hardline ^^ pipe ^^ space in
+    let clauses = separate_map sep doc_funcl fcls in
+    separate space [string "let";
+                    doc_rec_ocaml r;
+                    doc_id_ocaml id;
+                    equals;
+                    (string "function");
+                    clauses]
 
 (*Aliases should be removed by here; registers not sure about*)
 (*let doc_dec (DEC_aux (reg,_)) =

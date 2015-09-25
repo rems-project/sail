@@ -117,7 +117,7 @@ let rewrite_pat rewriters nmap (P_aux (pat,(l,annot))) =
     rewrap (P_vector ps)
   | P_lit _ | P_wild | P_id _ -> rewrap pat
   | P_as(pat,id) -> rewrap (P_as( rewrite pat, id))
-  | P_typ(typ,pat) -> rewrap (P_typ(typ,rewrite pat))
+  | P_typ(typ,pat) -> rewrite pat
   | P_app(id ,pats) -> rewrap (P_app(id, List.map rewrite pats))
   | P_record(fpats,_) ->
     rewrap (P_record(List.map (fun (FP_aux(FP_Fpat(id,pat),pannot)) -> FP_aux(FP_Fpat(id, rewrite pat), pannot)) fpats,
@@ -311,8 +311,6 @@ let rewrite_defs (Defs defs) = rewrite_defs_base
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} (Defs defs)
 
-
-(* signature of patterns *)
 type ('pat,'pat_aux,'fpat,'fpat_aux,'annot) pat_alg =
   { p_lit : lit -> 'pat_aux
   ; p_wild : 'pat_aux
@@ -486,4 +484,37 @@ let remove_vector_concat_pat pat =
   let pat = fold_pat remove_vector_concats pat in
   
   (pat,decls)
-        
+
+
+    
+(*Expects to be called after rewrite_defs; thus the following should not appear:
+  internal_exp of any form
+  lit vectors in patterns or expressions
+ *)
+let rewrite_exp_lift_assign_intro rewriters nmap ((E_aux (exp,(l,annot))) as full_exp) = 
+  let rewrap e = E_aux (e,(l,annot)) in
+  let rewrite_rec = rewriters.rewrite_exp rewriters nmap in
+  let rewrite_base = rewrite_exp rewriters nmap in
+  match exp with
+  | E_block exps ->
+    let rec walker exps = match exps with
+      | [] -> []
+      | (E_aux(E_assign(le,e), (l, Base((_,t),Emp_intro,_,_,_))))::exps ->
+        let le' = rewriters.rewrite_lexp rewriters nmap le in
+        let e' = rewrite_base e in
+        let exps' = walker exps in
+        [(E_aux (E_internal_let(le', e', E_aux(E_block exps', (l, simple_annot {t=Tid "unit"}))),
+                 (l, simple_annot t)))]
+      | e::exps -> (rewrite_rec e)::(walker exps)
+    in
+    rewrap (E_block (walker exps))
+  | _ -> rewrite_base full_exp
+
+let rewrite_defs_ocaml defs = rewrite_defs_base
+    {rewrite_exp = rewrite_exp_lift_assign_intro;
+     rewrite_pat = rewrite_pat;
+     rewrite_let = rewrite_let;
+     rewrite_lexp = rewrite_lexp;
+     rewrite_fun = rewrite_fun;
+     rewrite_def = rewrite_def;
+     rewrite_defs = rewrite_defs_base} defs
