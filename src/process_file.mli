@@ -51,25 +51,16 @@ val rewrite_ast: Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.defs
 
 type out_type =
   | Lem_ast_out
-  | Lem_out
+  | Ocaml_out of string option (* If present, the string is a file to open in the ocaml backend*)
 
 val output :
   string ->                           (* The path to the library *)
   out_type ->                         (* Backend kind *)
   (string * Type_internal.tannot Ast.defs) list -> (*File names paired with definitions *)
-(*  (Types.type_defs * instances) -> (* The full environment built after all typechecking, and transforming *)
-  checked_module list ->              (* The typechecked modules *)
-  Ulib.Text.t list ref ->               (* alldoc accumulator *)
-  Ulib.Text.t list ref ->               (* alldoc-inc accumulator *)
-  Ulib.Text.t list ref ->               (* alldoc-use_inc accumulator *) *)
   unit
 
-(*val output_alldoc : string -> string -> Ulib.Text.t list ref -> Ulib.Text.t list ref -> Ulib.Text.t list ref -> unit*)
-
-(** [always_replace_files] determines whether Lem only updates modified files.
+(** [always_replace_files] determines whether Sail only updates modified files.
     If it is set to [true], all output files are written, regardless of whether the
     files existed before. If it is set to [false] and an output file already exists,
-    the output file is only updated, if its content really changes. For some
-    backends like OCaml, HOL, Isabelle, this is benefitial, since it prevents them
-    from reprocessing these unchanged files. *)
+    the output file is only updated, if its content really changes. *)
 val always_replace_files : bool ref

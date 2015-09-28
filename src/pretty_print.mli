@@ -8,3 +8,5 @@ val pat_to_string : tannot pat -> string
 
 (* Prints on formatter the defs as Lem Ast nodes *)
 val pp_lem_defs : Format.formatter -> tannot defs -> unit
+
+val pp_defs_ocaml : out_channel -> tannot defs -> string -> string list -> unit

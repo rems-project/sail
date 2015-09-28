@@ -1585,3 +1585,10 @@ let doc_def_ocaml def = group (match def with
   | DEF_reg_dec dec -> empty (*unless we want to have something for the declaration of a register and guess a default init value*)
   | DEF_scattered sdef -> empty (*shoulnd't still be here*)
   ) ^^ hardline
+
+let doc_defs_ocaml (Defs(defs)) =
+  separate_map hardline doc_def_ocaml defs
+let pp_defs_ocaml f d top_line opens =
+  print f ((string top_line) ^^ hardline ^^
+           (separate_map hardline (fun lib -> (string "open") ^^ space ^^ (string lib)) opens) ^^ 
+           (doc_defs_ocaml d))
