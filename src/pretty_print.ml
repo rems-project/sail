@@ -1316,10 +1316,10 @@ let doc_exp_ocaml, doc_let_ocaml =
       group (parens (string "vector_append ") ^^ (exp l) ^^ space ^^ (exp r))
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
     | E_if(c,t,E_aux(E_block [], _)) ->
-      string "if" ^^ space ^^ string "toBool" ^^  (exp c) ^/^
+      string "if" ^^ space ^^ string "to_bool" ^^  (exp c) ^/^
       string "then" ^^ space ^^ (exp t)
     | E_if(c,t,e) ->
-      string "if" ^^ space ^^ string "toBool" ^^ group (exp c) ^/^
+      string "if" ^^ space ^^ string "to_bool" ^^ group (exp c) ^/^
       string "then" ^^ space ^^ group (exp t) ^/^
       string "else" ^^ space ^^ group (exp e)
     | E_for(id,exp1,exp2,((E_aux(exp3, (l3,annot3))) as full_exp3),(Ord_aux(order,_)),exp4) ->
@@ -1386,8 +1386,9 @@ let doc_exp_ocaml, doc_let_ocaml =
       (match annot with
        | Base((_,t),_,_,_,_) ->
          match t.t with
-         | Tapp("vector", [TA_nexp start; _; TA_ord order; _]) | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; _; TA_ord order; _])}) ->
-           let call = if is_bit_vector t then (string "make_bit_vector") else (string "make_vector") in
+         | Tapp("vector", [TA_nexp start; _; TA_ord order; _])
+         | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; _; TA_ord order; _])}) ->
+           let call = if is_bit_vector t then (string "Vvector") else (string "VvectorR") in
            let dir,dir_out = match order.order with
              | Oinc -> true,"true"
              | _ -> false, "false" in
@@ -1444,6 +1445,7 @@ let doc_exp_ocaml, doc_let_ocaml =
     separate space [string "let";
                     doc_lexp_ocaml lexp; (*Rewriter/typecheck should ensure this is only cast or id*)
                     equals;
+                    string "ref";
                     exp eq_exp;
                     string "in";
                     exp in_exp]
@@ -1497,6 +1499,11 @@ let doc_type_union_ocaml (Tu_aux(typ_u,_)) = match typ_u with
   | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_ocaml id; string "of"; doc_typ_ocaml typ;]
   | Tu_id id -> separate space [pipe; doc_id_ocaml id]
 
+let rec doc_range_ocaml (BF_aux(r,_)) = match r with
+  | BF_single i -> parens (doc_op comma (doc_int i) (doc_int i))
+  | BF_range(i1,i2) -> parens (doc_op comma (doc_int i1) (doc_int i2))
+  | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
+
 let doc_typdef_ocaml (TD_aux(td,_)) = match td with
   | TD_abbrev(id,nm,typschm) ->
       doc_op equals (concat [string "type"; space; doc_id id;]) (doc_typscm_ocaml typschm)
@@ -1517,16 +1524,18 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
         (enums_doc)
   | TD_register(id,n1,n2,rs) ->
     (*TODO: not sure*)
-      let doc_rid (r,id) = separate space [doc_range r; colon; doc_id id] ^^ semi in
-      let doc_rids = group (separate_map (break 1) doc_rid rs) in
-      string "(*" ^^
+    let doc_rid (r,id) = separate comma_sp [string "\"" ^^ doc_id id ^^ string "\""; doc_range_ocaml r;] in
+    let doc_rids = group (separate_map (break 1) doc_rid rs) in
+    match n1,n2 with
+    | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
+      let dir = i1 < i2 in                  
       doc_op equals
-        (string "typedef" ^^ space ^^ doc_id id)
-        (separate space [
-          string "register bits";
-          brackets (doc_nexp n1 ^^ colon ^^ doc_nexp n2);
-          braces doc_rids;
-        ]) ^^ string "*)"
+        ((string "let") ^^ space ^^ doc_id_ocaml id ^^ space ^^ (string "init_val"))
+        (separate space [string "Vregister";
+                         (separate comma_sp [string "init_val";
+                                             doc_nexp n1;
+                                             string (if dir then "true" else "false");
+                                             brackets doc_rids])])
 
 let doc_rec_ocaml (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty
