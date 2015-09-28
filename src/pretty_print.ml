@@ -1322,22 +1322,32 @@ let doc_exp_ocaml, doc_let_ocaml =
       string "if" ^^ space ^^ string "to_bool" ^^ group (exp c) ^/^
       string "then" ^^ space ^^ group (exp t) ^/^
       string "else" ^^ space ^^ group (exp e)
-    | E_for(id,exp1,exp2,((E_aux(exp3, (l3,annot3))) as full_exp3),(Ord_aux(order,_)),exp4) ->
-      (match exp3 with
-       | E_lit (L_aux( (L_num 1), _)) ->
-         string "for" ^^ space ^^
-         (group ((doc_id id) ^^ space ^^ equals ^^ (exp exp1))) ^^
-         (match order with
-          | Ord_inc -> (group (string "to" ^^ space ^^ (exp exp2)))
-          | _ -> (group (string "downto" ^^ space ^^ (exp exp2)))) ^^
-         string "do" ^/^
-         exp exp4 ^/^ string "done"
-       | _ ->
-          let forL = if order = Ord_inc then string "foreach_inc" else string "foreach_dec" in
+    | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
+      let var= doc_id_ocaml id in
+      let (compare,next) = if order = Ord_inc then string "<=",string "+" else string ">=",string "-" in
+      let by = exp exp3 in
+      let stop = exp exp2 in
+      (*takes over two names but doesn't require building a closure*)
+      parens
+        (separate space [(string "let (__stop,__by) = ") ^^ (parens (doc_op comma stop by));
+                             string "in" ^/^ empty;
+                             string "let rec foreach";
+                             var;
+                             equals;
+                             string "if";
+                             parens (doc_op compare var (string "__stop") );
+                             string "then";
+                             parens (exp exp4 ^^ space ^^ semi ^^ (string "foreach") ^^
+                                     parens (doc_op next var (string "__by")));
+                             string "in";
+                             string "foreach";
+                             exp exp1])
+        (*Requires fewer introduced names but introduces a closure*)
+        (*let forL = if order = Ord_inc then string "foreach_inc" else string "foreach_dec" in
           forL ^^ space ^^ (group (exp exp1)) ^^ (group (exp exp2)) ^^ (group (exp full_exp3)) ^/^
           group ((string "fun") ^^ space ^^ (doc_id id) ^^ space ^^ arrow ^/^ (exp exp4))
 
-      (* this requires the following OCaml declarations first
+        (* this way requires the following OCaml declarations first
 
          let rec foreach_inc i stop by body = 
            if i <= stop then (body i; foreach_inc (i + by) stop by body) else ()
@@ -1345,8 +1355,7 @@ let doc_exp_ocaml, doc_let_ocaml =
          let rec foreach_dec i stop by body = 
            if i >= stop then (body i; foreach_dec (i - by) stop by body) else ()
 
-       *)
-      )
+         *)*)
     | E_let(leb,e) -> doc_op (string "in") (let_exp leb) (exp e)
     | E_app(f,args) ->
       let call = match annot with
