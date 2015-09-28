@@ -1316,10 +1316,10 @@ let doc_exp_ocaml, doc_let_ocaml =
       group (parens (string "vector_append ") ^^ (exp l) ^^ space ^^ (exp r))
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
     | E_if(c,t,E_aux(E_block [], _)) ->
-      string "if" ^^ space ^^ string "toBool" ^^  (exp c) ^/^
+      string "if" ^^ space ^^ string "to_bool" ^^  (exp c) ^/^
       string "then" ^^ space ^^ (exp t)
     | E_if(c,t,e) ->
-      string "if" ^^ space ^^ string "toBool" ^^ group (exp c) ^/^
+      string "if" ^^ space ^^ string "to_bool" ^^ group (exp c) ^/^
       string "then" ^^ space ^^ group (exp t) ^/^
       string "else" ^^ space ^^ group (exp e)
     | E_for(id,exp1,exp2,(E_aux(exp3, (l3,annot3))),(Ord_aux(order,_)),exp4) ->
@@ -1372,8 +1372,9 @@ let doc_exp_ocaml, doc_let_ocaml =
       (match annot with
        | Base((_,t),_,_,_,_) ->
          match t.t with
-         | Tapp("vector", [TA_nexp start; _; TA_ord order; _]) | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; _; TA_ord order; _])}) ->
-           let call = if is_bit_vector t then (string "make_bit_vector") else (string "make_vector") in
+         | Tapp("vector", [TA_nexp start; _; TA_ord order; _])
+         | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; _; TA_ord order; _])}) ->
+           let call = if is_bit_vector t then (string "Vvector") else (string "VvectorR") in
            let dir,dir_out = match order.order with
              | Oinc -> true,"true"
              | _ -> false, "false" in
@@ -1430,6 +1431,7 @@ let doc_exp_ocaml, doc_let_ocaml =
     separate space [string "let";
                     doc_lexp_ocaml lexp; (*Rewriter/typecheck should ensure this is only cast or id*)
                     equals;
+                    string "ref";
                     exp eq_exp;
                     string "in";
                     exp in_exp]
