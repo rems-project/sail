@@ -1322,7 +1322,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       string "if" ^^ space ^^ string "toBool" ^^ group (exp c) ^/^
       string "then" ^^ space ^^ group (exp t) ^/^
       string "else" ^^ space ^^ group (exp e)
-    | E_for(id,exp1,exp2,(E_aux(exp3, (l3,annot3))),(Ord_aux(order,_)),exp4) ->
+    | E_for(id,exp1,exp2,((E_aux(exp3, (l3,annot3))) as full_exp3),(Ord_aux(order,_)),exp4) ->
       (match exp3 with
        | E_lit (L_aux( (L_num 1), _)) ->
          string "for" ^^ space ^^
@@ -1332,7 +1332,21 @@ let doc_exp_ocaml, doc_let_ocaml =
           | _ -> (group (string "downto" ^^ space ^^ (exp exp2)))) ^^
          string "do" ^/^
          exp exp4 ^/^ string "done"
-       | _ -> string "make a while loop")
+       | _ ->
+          let forL = if order = Ord_inc then string "foreach_inc" else string "foreach_dec" in
+          forL ^^ space ^^ (group (exp exp1)) ^^ (group (exp exp2)) ^^ (group (exp full_exp3)) ^/^
+          group ((string "fun") ^^ space ^^ (doc_id id) ^^ space ^^ arrow ^/^ (exp exp4))
+
+      (* this requires the following OCaml declarations first
+
+         let rec foreach_inc i stop by body = 
+           if i <= stop then (body i; foreach_inc (i + by) stop by body) else ()
+
+         let rec foreach_dec i stop by body = 
+           if i >= stop then (body i; foreach_dec (i - by) stop by body) else ()
+
+       *)
+      )
     | E_let(leb,e) -> doc_op (string "in") (let_exp leb) (exp e)
     | E_app(f,args) ->
       let call = match annot with
