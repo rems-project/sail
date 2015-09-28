@@ -1485,6 +1485,11 @@ let doc_type_union_ocaml (Tu_aux(typ_u,_)) = match typ_u with
   | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_ocaml id; string "of"; doc_typ_ocaml typ;]
   | Tu_id id -> separate space [pipe; doc_id_ocaml id]
 
+let rec doc_range_ocaml (BF_aux(r,_)) = match r with
+  | BF_single i -> parens (doc_op comma (doc_int i) (doc_int i))
+  | BF_range(i1,i2) -> parens (doc_op comma (doc_int i1) (doc_int i2))
+  | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
+
 let doc_typdef_ocaml (TD_aux(td,_)) = match td with
   | TD_abbrev(id,nm,typschm) ->
       doc_op equals (concat [string "type"; space; doc_id id;]) (doc_typscm_ocaml typschm)
@@ -1505,16 +1510,18 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
         (enums_doc)
   | TD_register(id,n1,n2,rs) ->
     (*TODO: not sure*)
-      let doc_rid (r,id) = separate space [doc_range r; colon; doc_id id] ^^ semi in
-      let doc_rids = group (separate_map (break 1) doc_rid rs) in
-      string "(*" ^^
+    let doc_rid (r,id) = separate comma_sp [string "\"" ^^ doc_id id ^^ string "\""; doc_range_ocaml r;] in
+    let doc_rids = group (separate_map (break 1) doc_rid rs) in
+    match n1,n2 with
+    | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
+      let dir = i1 < i2 in                  
       doc_op equals
-        (string "typedef" ^^ space ^^ doc_id id)
-        (separate space [
-          string "register bits";
-          brackets (doc_nexp n1 ^^ colon ^^ doc_nexp n2);
-          braces doc_rids;
-        ]) ^^ string "*)"
+        ((string "let") ^^ space ^^ doc_id_ocaml id ^^ space ^^ (string "init_val"))
+        (separate space [string "Vregister";
+                         (separate comma_sp [string "init_val";
+                                             doc_nexp n1;
+                                             string (if dir then "true" else "false");
+                                             brackets doc_rids])])
 
 let doc_rec_ocaml (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty
