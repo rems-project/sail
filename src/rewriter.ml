@@ -416,7 +416,7 @@ let remove_vector_concat_pat pat =
     let letbind_vec (rootid,rannot) (child,cannot) (i,j) body =
       let index n =
         let typ = simple_annot {t = Tapp ("atom",[TA_nexp (mk_c (big_int_of_int n))])} in
-        E_aux (E_lit (L_aux (L_num n,Unknown)), (Parse_ast.Unknown,typ)) in
+        E_aux (E_lit (L_aux (L_num n,Parse_ast.Unknown)), (Parse_ast.Unknown,typ)) in
       let subv = E_aux (E_vector_subrange (E_aux (E_id rootid,rannot),index i,index j),cannot) in
       let typ = (Parse_ast.Unknown,simple_annot {t = Tid "unit"}) in
       E_aux (E_let (LB_aux (LB_val_implicit (P_aux (P_id child,cannot),subv),cannot),body),typ) in
@@ -563,7 +563,7 @@ let rewrite_exp_lift_assign_intro rewriters nmap ((E_aux (exp,(l,annot))) as ful
     rewrap (E_block (walker exps))
   | _ -> rewrite_base full_exp
 
-let rewrite_defs_ocaml defs = rewrite_defs_base
+let rewrite_defs_exp_lift_assign defs = rewrite_defs_base
     {rewrite_exp = rewrite_exp_lift_assign_intro;
      rewrite_pat = rewrite_pat;
      rewrite_let = rewrite_let;
@@ -571,3 +571,8 @@ let rewrite_defs_ocaml defs = rewrite_defs_base
      rewrite_fun = rewrite_fun;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} defs
+
+let rewrite_defs_ocaml defs =
+  let defs_vec_concat_removed = rewrite_defs_remove_vector_concat defs in
+  let defs_lifted_assign = rewrite_defs_exp_lift_assign defs_vec_concat_removed in
+  defs_lifted_assign

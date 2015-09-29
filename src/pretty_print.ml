@@ -1374,7 +1374,8 @@ let doc_exp_ocaml, doc_let_ocaml =
       parens ((string "vector_subrange") ^^ space ^^ exp v ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
     | E_field((E_aux(_,(_,fannot)) as fexp),id) ->
       (match fannot with
-      | Base((_,{t= Tapp("register",_)}),External _,_,_,_) ->
+       | Base((_,{t= Tapp("register",_)}),_,_,_,_) |
+         Base((_,{t= Tabbrev(_,{t=Tapp("register",_)})}),_,_,_,_)->
         parens ((string "get_register_field") ^^ space ^^ exp fexp ^^ space ^^
                 (string "\"") ^^ (doc_id id) ^^ string "\"")
       | _ -> exp fexp ^^ dot ^^ doc_id id)
@@ -1541,10 +1542,10 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
       doc_op equals
         ((string "let") ^^ space ^^ doc_id_ocaml id ^^ space ^^ (string "init_val"))
         (separate space [string "Vregister";
-                         (separate comma_sp [string "init_val";
-                                             doc_nexp n1;
-                                             string (if dir then "true" else "false");
-                                             brackets doc_rids])])
+                         (parens (separate comma_sp [string "init_val";
+                                                     doc_nexp n1;
+                                                     string (if dir then "true" else "false");
+                                                     brackets doc_rids]))])
 
 let doc_rec_ocaml (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty

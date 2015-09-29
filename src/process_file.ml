@@ -102,6 +102,7 @@ let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.
   Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env,Type_internal.nob,Envmap.empty)) defs 
 
 let rewrite_ast (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs defs
+let rewrite_ast_ocaml (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs_ocaml defs
 
 let open_output_with_check file_name =
   let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in
@@ -171,12 +172,12 @@ let output1 libpath out_arg filename defs (* alldoc_accum alldoc_inc_accum alldo
 	end
       | Ocaml_out None ->
         let ((o,temp_file_name, filename) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in
-	begin Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["sail_values"];
+	begin Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["Sail_values"];
         close_output_with_check ext_o
         end
       | Ocaml_out (Some lib) ->
         let ((o,temp_file_name, filename) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in
-	Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["sail_values"; lib];
+	Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["Sail_values"; lib];
         close_output_with_check ext_o
 
 
