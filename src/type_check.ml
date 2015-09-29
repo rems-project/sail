@@ -612,10 +612,11 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       (*let _ = Printf.eprintf "Type checking cast: cast_t is %s constraints after checking e are %s\n" 
         (t_to_string cast_t) (constraints_to_string cs) in*)
       let t',cs2,ef',e' = type_coerce (Expr l) d_env Require true false b_env u e' cast_t in
-      (*let _ = Printf.eprintf "Type checking cast: after first coerce with u at %s, and final t' %s is and constraints are %s\n" 
+      (*let _ = Printf.eprintf "Type checking cast: after first coerce with u %s, t' %s is and constraints are %s\n" 
         (t_to_string u) (t_to_string t') (constraints_to_string cs2) in*)
       let t',cs3,ef'',e'' = type_coerce (Expr l) d_env Guarantee false false b_env cast_t e' expect_t in 
-      (*let _ = Printf.eprintf "Type checking cast: after second coerce expect_t is %s, t' %s is and constraints are %s\n" (t_to_string expect_t) (t_to_string t') (constraints_to_string cs3) in*)
+      (*let _ = Printf.eprintf "Type checking cast: after second coerce expect_t %s, t' %s and constraints are %s\n" 
+        (t_to_string expect_t) (t_to_string t') (constraints_to_string cs3) in*)
       (e'',t',t_env,cs_a@cs@cs2@cs3,bounds,union_effects ef' (union_effects ef'' ef))
     | E_app(id,parms) -> 
       let i = id_to_string id in
@@ -626,7 +627,9 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         | parms -> 
           (match check_exp envs imp_param p_typ (E_aux (E_tuple parms,(l,NoTyp))) with
           | ((E_aux(E_tuple parms',tannot')),arg_t,t_env,cs',_,ef_p) -> parms',arg_t,cs',ef_p
-          | _ -> raise (Reporting_basic.err_unreachable l "check_exp, given a tuple and a tuple type, didn't return a tuple"))) 
+          | _ ->
+            raise (Reporting_basic.err_unreachable l
+                     "check_exp, given a tuple and a tuple type, didn't return a tuple"))) 
       in
       let coerce_parms arg_t parms expect_arg_t =
         (match parms with
@@ -678,12 +681,15 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       | Some(Base(tp,Default,_,_,_)) ->
         typ_error l ("Function " ^ i ^ " must be specified, not just declared as a default, before use")
       | Some(Base((params,t),tag,cs,ef,bounds)) ->
-        (*let _ = Printf.eprintf "Going to check a function call %s with unsubstituted types %s and constraints %s \n" i (t_to_string t) (constraints_to_string cs) in*)
+        (*let _ = Printf.eprintf "Going to check a function call %s with unsubstituted types %s and constraints %s \n"
+          i (t_to_string t) (constraints_to_string cs) in*)
         let t,cs,ef,_ = subst params false t cs ef in
         (match t.t with
         | Tfn(arg,ret,imp,ef') ->
           (*let _ = Printf.eprintf "Checking funcation call of %s\n" i in
-          let _ = Printf.eprintf "Substituted types and constraints are %s and %s\n" (t_to_string t) (constraints_to_string cs) in*)
+          let _ = Printf.eprintf "Substituted types and constraints are %s and %s\n" 
+            (t_to_string t) (constraints_to_string cs) in*)
+          let ret,_ = get_abbrev d_env ret in 
           let parms,arg_t,cs_p,ef_p = check_parms arg parms in
           (*let _ = Printf.eprintf "Checked parms of %s\n" i in*)
           let (ret_t,cs_r,ef_r,e') = check_result ret imp tag cs ef' parms in
@@ -705,26 +711,30 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
             ("No function found with name " ^ i ^ " that expects parameters " ^ (t_to_string arg_t))
           | [Base((params,t),tag,cs,ef,bounds)] ->
             (match t.t with
-              | Tfn(arg,ret,imp,ef') ->
-                let args',arg_ef',arg_cs' = coerce_parms arg_t args arg in
-                let (ret_t,cs_r,ef_r,e') = check_result ret imp tag cs ef' args' in
-                (e',ret_t,t_env,cs_p@arg_cs@arg_cs'@cs_r,nob,
-                 union_effects ef_r (union_effects ef_p (union_effects (union_effects arg_ef' arg_ef) ef')))
-              | _ -> raise (Reporting_basic.err_unreachable l "Overloaded variant not a function"))
+             | Tfn(arg,ret,imp,ef') ->
+               let ret,_ = get_abbrev d_env ret in
+               let args',arg_ef',arg_cs' = coerce_parms arg_t args arg in
+               let (ret_t,cs_r,ef_r,e') = check_result ret imp tag cs ef' args' in
+               (e',ret_t,t_env,cs_p@arg_cs@arg_cs'@cs_r,nob,
+                union_effects ef_r (union_effects ef_p (union_effects (union_effects arg_ef' arg_ef) ef')))
+             | _ -> raise (Reporting_basic.err_unreachable l "Overloaded variant not a function"))
           | variants' ->
             (match select_overload_variant d_env false true variants' expect_t with
-              | [] ->
-                typ_error l ("No function found with name " ^ i ^ ", expecting parameters " ^ (t_to_string arg_t) ^ " and returning " ^ (t_to_string expect_t))
-              | [Base((params,t),tag,cs,ef,bounds)] ->
-                (match t.t with
-                  |Tfn(arg,ret,imp,ef') ->
-                    let args',arg_ef',arg_cs' = coerce_parms arg_t args arg in 
-                    let (ret_t,cs_r,ef_r,e') = check_result ret imp tag cs ef' args' in
-                    (e',ret_t,t_env,cs_p@arg_cs@arg_cs'@cs_r,nob,
-                     union_effects ef_r (union_effects ef_p (union_effects (union_effects arg_ef arg_ef') ef')))
-                 | _ -> raise (Reporting_basic.err_unreachable l "Overloaded variant not a function"))
-              | _ -> 
-                typ_error l ("More than one definition of " ^ i ^ " found with type " ^ (t_to_string arg_t) ^ " -> " ^ (t_to_string expect_t) ^ ". A cast may be required")))
+             | [] ->
+               typ_error l ("No function found with name " ^ i ^ ", expecting parameters " ^
+                            (t_to_string arg_t) ^ " and returning " ^ (t_to_string expect_t))
+             | [Base((params,t),tag,cs,ef,bounds)] ->
+               (match t.t with
+                |Tfn(arg,ret,imp,ef') ->
+                  let ret,_ = get_abbrev d_env ret in
+                  let args',arg_ef',arg_cs' = coerce_parms arg_t args arg in 
+                  let (ret_t,cs_r,ef_r,e') = check_result ret imp tag cs ef' args' in
+                  (e',ret_t,t_env,cs_p@arg_cs@arg_cs'@cs_r,nob,
+                   union_effects ef_r (union_effects ef_p (union_effects (union_effects arg_ef arg_ef') ef')))
+                | _ -> raise (Reporting_basic.err_unreachable l "Overloaded variant not a function"))
+             | _ -> 
+               typ_error l ("More than one definition of " ^ i ^ " found with type " ^
+                            (t_to_string arg_t) ^ " -> " ^ (t_to_string expect_t) ^ ". A cast may be required")))
       | _ -> typ_error l ("Unbound function " ^ i))
     | E_app_infix(lft,op,rht) -> 
       let i = id_to_string op in
@@ -1271,7 +1281,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
     | E_exit e ->
       let (e',t',_,_,_,_) = check_exp envs imp_param (new_t ()) e in
       (E_aux (E_exit e',(l,(simple_annot expect_t))),expect_t,t_env,[],nob,pure_e)
-    | E_internal_cast _ | E_internal_exp _ | E_internal_exp_user _ -> 
+    | E_internal_cast _ | E_internal_exp _ | E_internal_exp_user _ | E_internal_let _ -> 
       raise (Reporting_basic.err_unreachable l "Internal expression passed back into type checker")
                     
 and check_block envs imp_param expect_t exps:((tannot exp) list * tannot * nexp_range list * t * effect) =

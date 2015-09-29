@@ -561,6 +561,13 @@ let rewrite_exp_lift_assign_intro rewriters nmap ((E_aux (exp,(l,annot))) as ful
       | e::exps -> (rewrite_rec e)::(walker exps)
     in
     rewrap (E_block (walker exps))
+  | E_assign(le,e) ->
+    (match annot with
+     | Base((_,t),Emp_intro,_,_,_) ->
+       let le' = rewriters.rewrite_lexp rewriters nmap le in
+       let e' = rewrite_base e in
+       rewrap (E_internal_let(le', e', E_aux(E_block [], (l, simple_annot {t=Tid "unit"}))))
+     | _ -> rewrite_base full_exp)         
   | _ -> rewrite_base full_exp
 
 let rewrite_defs_exp_lift_assign defs = rewrite_defs_base

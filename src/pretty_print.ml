@@ -1200,7 +1200,7 @@ let star_sp = star ^^ space
 
 let doc_id_ocaml (Id_aux(i,_)) =
   match i with
-  | Id("bit") -> string "bool" 
+  | Id("bit") -> string "int" 
   | Id i -> string i
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
@@ -1223,7 +1223,7 @@ let doc_typ_ocaml, doc_atomic_typ_ocaml =
       Typ_arg_aux(Typ_arg_nexp m, _);
       Typ_arg_aux (Typ_arg_order ord, _);
       Typ_arg_aux (Typ_arg_typ typ, _)]) ->
-      parens (atomic_typ typ) ^^ (string "list")
+    string "value"
   | Typ_app(Id_aux (Id "range", _), [
     Typ_arg_aux(Typ_arg_nexp n, _);
     Typ_arg_aux(Typ_arg_nexp m, _);]) ->
@@ -1316,10 +1316,10 @@ let doc_exp_ocaml, doc_let_ocaml =
       group (parens (string "vector_append ") ^^ (exp l) ^^ space ^^ (exp r))
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
     | E_if(c,t,E_aux(E_block [], _)) ->
-      string "if" ^^ space ^^ string "to_bool" ^^  (exp c) ^/^
+      string "if" ^^ space ^^ string "to_bool" ^^  parens (exp c) ^/^
       string "then" ^^ space ^^ (exp t)
     | E_if(c,t,e) ->
-      string "if" ^^ space ^^ string "to_bool" ^^ group (exp c) ^/^
+      string "if" ^^ space ^^ string "to_bool" ^^ parens (exp c) ^/^
       string "then" ^^ space ^^ group (exp t) ^/^
       string "else" ^^ space ^^ group (exp e)
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
@@ -1361,7 +1361,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       let call = match annot with
         | Base(_,External (Some n),_,_,_) -> string n
         | _ -> doc_id_ocaml f in
-      doc_unop call (parens (separate_map comma exp args))
+      parens (doc_unop call (parens (separate_map comma exp args)))
     | E_vector_access(v,e) ->
       let call = (match annot with
           | Base((_,t),_,_,_,_) ->
@@ -1371,12 +1371,12 @@ let doc_exp_ocaml, doc_let_ocaml =
           | _ -> (string "vector_access")) in
       parens (call ^^ space ^^ exp v ^^ space ^^ exp e)
     | E_vector_subrange(v,e1,e2) ->
-      parens ((string "vector_subrange") ^^ space ^^ exp v ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
+      parens ((string "vector_subrange") ^^ space ^^ (exp v) ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
     | E_field((E_aux(_,(_,fannot)) as fexp),id) ->
       (match fannot with
        | Base((_,{t= Tapp("register",_)}),_,_,_,_) |
          Base((_,{t= Tabbrev(_,{t=Tapp("register",_)})}),_,_,_,_)->
-        parens ((string "get_register_field") ^^ space ^^ exp fexp ^^ space ^^
+        parens ((string "get_register_field") ^^ space ^^ (exp fexp) ^^ space ^^
                 (string "\"") ^^ (doc_id id) ^^ string "\"")
       | _ -> exp fexp ^^ dot ^^ doc_id id)
     | E_block [] -> string "()"
@@ -1450,7 +1450,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       match annot with
       | Base((_,t),External(Some name),_,_,_) -> string name
       | _ -> doc_id_ocaml id in
-    separate space [call; parens (separate_map semi exp [e1;e2])]
+    separate space [call; parens (separate_map comma exp [e1;e2])]
   | E_internal_let(lexp, eq_exp, in_exp) ->
     separate space [string "let";
                     doc_lexp_ocaml lexp; (*Rewriter/typecheck should ensure this is only cast or id*)
@@ -1533,7 +1533,6 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
         (concat [string "type"; space; doc_id_ocaml id;])
         (enums_doc)
   | TD_register(id,n1,n2,rs) ->
-    (*TODO: not sure*)
     let doc_rid (r,id) = separate comma_sp [string "\"" ^^ doc_id id ^^ string "\""; doc_range_ocaml r;] in
     let doc_rids = group (separate_map (break 1) doc_rid rs) in
     match n1,n2 with
@@ -1599,6 +1598,6 @@ let doc_def_ocaml def = group (match def with
 let doc_defs_ocaml (Defs(defs)) =
   separate_map hardline doc_def_ocaml defs
 let pp_defs_ocaml f d top_line opens =
-  print f ((string top_line) ^^ hardline ^^
-           (separate_map hardline (fun lib -> (string "open") ^^ space ^^ (string lib)) opens) ^^ 
+  print f (string "(*" ^^ (string top_line) ^^ string "*)" ^/^
+           (separate_map hardline (fun lib -> (string "open") ^^ space ^^ (string lib)) opens) ^/^ 
            (doc_defs_ocaml d))
