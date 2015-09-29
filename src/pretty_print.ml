@@ -1200,12 +1200,30 @@ let star_sp = star ^^ space
 
 let doc_id_ocaml (Id_aux(i,_)) =
   match i with
-  | Id("bit") -> string "int" 
-  | Id i -> string i
+  | Id("bit") -> string "vbit" 
+  | Id i -> string (if i.[0] = '\'' then "_" ^ i else i)
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
        * token in case of x ending with star. *)
-      parens (separate space [string ":"; string x; empty])
+      parens (separate space [colon; string x; empty])
+
+let doc_id_ocaml_type (Id_aux(i,_)) =
+  match i with
+  | Id("bit") -> string "vbit" 
+  | Id i -> string (String.uncapitalize i)
+  | DeIid x ->
+      (* add an extra space through empty to avoid a closing-comment
+       * token in case of x ending with star. *)
+      parens (separate space [colon; string (String.uncapitalize x); empty])
+
+let doc_id_ocaml_ctor (Id_aux(i,_)) =
+  match i with
+  | Id("bit") -> string "vbit" 
+  | Id i -> string (String.capitalize i)
+  | DeIid x ->
+      (* add an extra space through empty to avoid a closing-comment
+       * token in case of x ending with star. *)
+      parens (separate space [colon; string (String.capitalize x); empty])
 
 let doc_typ_ocaml, doc_atomic_typ_ocaml =
   (* following the structure of parser for precedence *)
@@ -1231,10 +1249,10 @@ let doc_typ_ocaml, doc_atomic_typ_ocaml =
   | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
     (string "number")
   | Typ_app(id,args) ->
-      (separate_map space doc_typ_arg_ocaml args) ^^ (doc_id_ocaml id)
+      (separate_map space doc_typ_arg_ocaml args) ^^ (doc_id_ocaml_type id)
   | _ -> atomic_typ ty 
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
-  | Typ_id id  -> doc_id_ocaml id
+  | Typ_id id  -> doc_id_ocaml_type id
   | Typ_var v  -> doc_var v
   | Typ_wild -> underscore
   | Typ_app _ | Typ_tup _ | Typ_fn _ ->
@@ -1273,7 +1291,7 @@ let doc_typscm_ocaml (TypSchm_aux(TypSchm_ts(tq,t),_)) =
 let doc_pat_ocaml, doc_atomic_pat_ocaml =
   let rec pat pa = app_pat pa
   and app_pat ((P_aux(p,l)) as pa) = match p with
-  | P_app(id, ((_ :: _) as pats)) -> doc_unop (doc_id_ocaml id) (parens (separate_map comma_sp atomic_pat pats))
+  | P_app(id, ((_ :: _) as pats)) -> doc_unop (doc_id_ocaml_ctor id) (parens (separate_map comma_sp atomic_pat pats))
   | _ -> atomic_pat pa
   and atomic_pat ((P_aux(p,(l,annot))) as pa) = match p with
   | P_lit lit  -> doc_lit lit
@@ -1281,7 +1299,7 @@ let doc_pat_ocaml, doc_atomic_pat_ocaml =
   | P_id id -> doc_id id
   | P_as(p,id) -> parens (separate space [pat p; string "as"; doc_id_ocaml id])
   | P_typ(typ,p) -> doc_op colon (pat p) (doc_typ_ocaml typ) 
-  | P_app(id,[]) -> doc_id_ocaml id
+  | P_app(id,[]) -> doc_id_ocaml_ctor id
   | P_vector pats ->
     let non_bit_print () = parens (separate space [string "VvectorR"; squarebars (separate_map semi pat pats); underscore ; underscore]) in
     (match annot with
@@ -1360,6 +1378,7 @@ let doc_exp_ocaml, doc_let_ocaml =
     | E_app(f,args) ->
       let call = match annot with
         | Base(_,External (Some n),_,_,_) -> string n
+        | Base(_,Constructor,_,_,_) -> doc_id_ocaml_ctor f
         | _ -> doc_id_ocaml f in
       parens (doc_unop call (parens (separate_map comma exp args)))
     | E_vector_access(v,e) ->
@@ -1383,7 +1402,11 @@ let doc_exp_ocaml, doc_let_ocaml =
     | E_block exps | E_nondet exps ->
       let exps_doc = separate_map (semi ^^ hardline) exp exps in
       surround 2 1 (string "begin") exps_doc (string "end")
-    | E_id id -> doc_id id
+    | E_id id ->
+      (match annot with
+      | Base((_, ({t = Tapp("reg",_)} | {t=Tabbrev(_,{t=Tapp("reg",_)})})),_,_,_,_) ->
+        string "!" ^^ doc_id_ocaml id
+      | _ -> doc_id_ocaml id)
     | E_lit lit -> doc_lit lit
     | E_cast(typ,e) -> (parens (doc_op colon (group (exp e)) (doc_typ typ)))
     | E_tuple exps ->
@@ -1470,7 +1493,7 @@ let doc_exp_ocaml, doc_let_ocaml =
         (separate space [string "let"; doc_atomic_pat_ocaml pat; equals])
         (exp e)
 
-  and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id id) (exp e)
+  and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id_ocaml id) (exp e)
 
   and doc_case (Pat_aux(Pat_exp(pat,e),_)) =
     doc_op arrow (separate space [pipe; doc_atomic_pat_ocaml pat]) (group (exp e))
@@ -1479,7 +1502,7 @@ let doc_exp_ocaml, doc_let_ocaml =
   | LEXP_vector(v,e) -> parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml v) ^^ dot ^^ parens (exp e)
   | LEXP_vector_range(v,e1,e2) ->
       parens ((string "vector_subrange") ^^ space ^^ doc_lexp_ocaml v ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
-  | LEXP_field(v,id) -> doc_lexp_ocaml v ^^ dot ^^ doc_id id
+  | LEXP_field(v,id) -> doc_lexp_ocaml v ^^ dot ^^ doc_id_ocaml id
   | LEXP_id id -> doc_id_ocaml id
   | LEXP_cast(typ,id) -> (doc_id_ocaml id)
 
@@ -1506,8 +1529,8 @@ let doc_exp_ocaml, doc_let_ocaml =
 
 (*TODO Upcase and downcase type and constructors as needed*)
 let doc_type_union_ocaml (Tu_aux(typ_u,_)) = match typ_u with
-  | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_ocaml id; string "of"; doc_typ_ocaml typ;]
-  | Tu_id id -> separate space [pipe; doc_id_ocaml id]
+  | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_ocaml_ctor id; string "of"; doc_typ_ocaml typ;]
+  | Tu_id id -> separate space [pipe; doc_id_ocaml_ctor id]
 
 let rec doc_range_ocaml (BF_aux(r,_)) = match r with
   | BF_single i -> parens (doc_op comma (doc_int i) (doc_int i))
@@ -1516,21 +1539,21 @@ let rec doc_range_ocaml (BF_aux(r,_)) = match r with
 
 let doc_typdef_ocaml (TD_aux(td,_)) = match td with
   | TD_abbrev(id,nm,typschm) ->
-      doc_op equals (concat [string "type"; space; doc_id id;]) (doc_typscm_ocaml typschm)
+      doc_op equals (concat [string "type"; space; doc_id_ocaml_type id;]) (doc_typscm_ocaml typschm)
   | TD_record(id,nm,typq,fs,_) ->
-      let f_pp (typ,id) = concat [doc_id id; space; colon; doc_typ_ocaml typ; semi] in
+      let f_pp (typ,id) = concat [doc_id_ocaml_type id; space; colon; doc_typ_ocaml typ; semi] in
       let fs_doc = group (separate_map (break 1) f_pp fs) in
       doc_op equals
-        (concat [string "type"; space; doc_id_ocaml id;]) (doc_typquant_ocaml typq (braces fs_doc))
+        (concat [string "type"; space; doc_id_ocaml_type id;]) (doc_typquant_ocaml typq (braces fs_doc))
   | TD_variant(id,nm,typq,ar,_) ->
       let ar_doc = group (separate_map (break 1) doc_type_union_ocaml ar) in
       doc_op equals
-        (concat [string "type"; space; doc_id_ocaml id;])
+        (concat [string "type"; space; doc_id_ocaml_type id;])
         (doc_typquant_ocaml typq ar_doc)
   | TD_enum(id,nm,enums,_) ->
-      let enums_doc = group (separate_map (break 1 ^^ pipe) doc_id_ocaml enums) in
+      let enums_doc = group (separate_map (break 1 ^^ pipe) doc_id_ocaml_ctor enums) in
       doc_op equals
-        (concat [string "type"; space; doc_id_ocaml id;])
+        (concat [string "type"; space; doc_id_ocaml_type id;])
         (enums_doc)
   | TD_register(id,n1,n2,rs) ->
     let doc_rid (r,id) = separate comma_sp [string "\"" ^^ doc_id id ^^ string "\""; doc_range_ocaml r;] in
