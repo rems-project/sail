@@ -73,6 +73,11 @@ and t_arg =
   | TA_eft of effect
   | TA_ord of order 
 
+type alias_inf =
+  | Alias_field of string * string
+  | Alias_extract of string * int * int
+  | Alias_pair of string * string
+
 type tag =
   | Emp_local
   | Emp_global
@@ -82,7 +87,7 @@ type tag =
   | Default
   | Constructor
   | Enum of int
-  | Alias
+  | Alias of alias_inf
   | Spec
 
 let rec compare_nexps n1 n2 =
@@ -323,7 +328,7 @@ let tag_to_string = function
   | Default -> "Default"
   | Constructor -> "Constructor"
   | Enum _ -> "Enum"
-  | Alias -> "Alias"
+  | Alias _ -> "Alias"
   | Spec -> "Spec"
     
 let enforce_to_string = function

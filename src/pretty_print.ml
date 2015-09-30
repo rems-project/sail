@@ -287,15 +287,15 @@ and pp_format_o o =
 
 let pp_format_tag = function
   | Emp_local -> "Tag_empty"
-  | Emp_intro -> "Tag_empty" (*TODO carry this out for use in future analysis that doesn't use the interpreter?*)
-  | Emp_set -> "Tag_empty" (* Same as above *)
+  | Emp_intro -> "Tag_intro"
+  | Emp_set -> "Tag_set" 
   | Emp_global -> "Tag_global"
   | External (Some s) -> "(Tag_extern (Just \""^s^"\"))"
   | External None -> "(Tag_extern Nothing)"
   | Default -> "Tag_default"
   | Constructor -> "Tag_ctor"
   | Enum i -> "(Tag_enum " ^ (lemnum string_of_int i) ^ ")"
-  | Alias -> "Tag_alias"
+  | Alias alias_inf -> "Tag_alias"
   | Spec -> "Tag_spec"
 
 let rec pp_format_nes nes = 
@@ -634,6 +634,7 @@ let squarebarbars = enclose lsquarebarbar rsquarebarbar
 let lsquarecolon = string "[:"
 let rsquarecolon = string ":]"
 let squarecolons = enclose lsquarecolon rsquarecolon
+let string_lit = enclose dquote dquote
 let spaces op = enclose space space op
 let semi_sp = semi ^^ space
 let comma_sp = comma ^^ space
@@ -1327,7 +1328,7 @@ let doc_exp_ocaml, doc_let_ocaml =
             group ((string "set_vector_range") ^^ space ^^ (doc_lexp_ocaml le) ^^ space ^^ (exp e)))
        | _ ->
          (match le_act with
-          | LEXP_vector _ | LEXP_vector_range _ | LEXP_cast _ | LEXP_field _ ->
+          | LEXP_vector _ | LEXP_vector_range _ | LEXP_cast _ | LEXP_field _ | LEXP_id _ ->
             (doc_lexp_rwrite le e)
           | LEXP_memory _ -> (doc_lexp_fcall le e)))
     | E_vector_append(l,r) ->
@@ -1395,8 +1396,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       (match fannot with
        | Base((_,{t= Tapp("register",_)}),_,_,_,_) |
          Base((_,{t= Tabbrev(_,{t=Tapp("register",_)})}),_,_,_,_)->
-        parens ((string "get_register_field") ^^ space ^^ (exp fexp) ^^ space ^^
-                (string "\"") ^^ (doc_id id) ^^ string "\"")
+        parens ((string "get_register_field") ^^ space ^^ (exp fexp) ^^ space ^^ string_lit (doc_id id))
       | _ -> exp fexp ^^ dot ^^ doc_id id)
     | E_block [] -> string "()"
     | E_block exps | E_nondet exps ->
@@ -1406,6 +1406,15 @@ let doc_exp_ocaml, doc_let_ocaml =
       (match annot with
       | Base((_, ({t = Tapp("reg",_)} | {t=Tabbrev(_,{t=Tapp("reg",_)})})),_,_,_,_) ->
         string "!" ^^ doc_id_ocaml id
+      | Base(_,Alias alias_info,_,_,_) ->
+        (match alias_info with
+         | Alias_field(reg,field) -> parens (string "get_register_field" ^^ space ^^ string reg ^^ string_lit (string field))
+         | Alias_extract(reg,start,stop) ->
+           if start = stop
+           then parens (string "bit_vector_access" ^^ space ^^ string reg ^^ space ^^ doc_int start)
+           else parens (string "vector_subrange" ^^ space ^^ string reg ^^ space ^^ doc_int start ^^ space ^^ doc_int stop)
+         | Alias_pair(reg1,reg2) ->
+           parens (string "vector_append" ^^ space ^^ string reg1 ^^ space ^^ string reg2))        
       | _ -> doc_id_ocaml id)
     | E_lit lit -> doc_lit lit
     | E_cast(typ,e) -> (parens (doc_op colon (group (exp e)) (doc_typ typ)))
@@ -1516,10 +1525,28 @@ let doc_exp_ocaml, doc_let_ocaml =
       parens ((string "set_vector_subrange") ^^ space ^^
               doc_lexp_ocaml v ^^ space ^^ exp e1 ^^ space ^^ exp e2 ^^ space ^^ exp e_new_v)
     | LEXP_field(v,id) ->
-      parens ((string "set_register_field") ^^ space ^^ doc_lexp_ocaml v ^^ space ^^string "\"" ^^ doc_id id ^^
-              string "\"" ^^ space ^^ exp e_new_v)
-    | LEXP_id id -> doc_id_ocaml id
-    | LEXP_cast(typ,id) -> (doc_id_ocaml id)
+      parens ((string "set_register_field") ^^ space ^^
+              doc_lexp_ocaml v ^^ space ^^string_lit (doc_id id) ^^ space ^^ exp e_new_v)
+    | LEXP_id id | LEXP_cast (_,id) ->
+      (match annot with
+       | Base(_,Alias alias_info,_,_,_) ->
+         (match alias_info with
+          | Alias_field(reg,field) ->
+            parens ((string "set_register_field") ^^ space ^^
+                    string reg ^^ space ^^string_lit (string field) ^^ space ^^ exp e_new_v)
+          | Alias_extract(reg,start,stop) ->
+            if start = stop
+            then
+              doc_op (string "<-")
+                (group (parens ((string "get_varray") ^^ space ^^ string reg)) ^^ dot ^^ parens (doc_int start))
+                (exp e_new_v)
+            else 
+              parens ((string "set_vector_subrange") ^^ space ^^
+                      string reg ^^ space ^^ doc_int start ^^ space ^^ doc_int stop ^^ space ^^ exp e_new_v)
+          | Alias_pair(reg1,reg2) ->
+            parens ((string "set_two_regs") ^^ space ^^ string reg1 ^^ space ^^ string reg2 ^^ space ^^ exp e_new_v))              
+       | _ -> 
+         doc_id_ocaml id) 
 
   and doc_lexp_fcall ((LEXP_aux(lexp,(l,annot))) as le) e_new_v = match lexp with
     | LEXP_memory(id,args) -> doc_id_ocaml id ^^ parens (separate_map comma exp (args@[e_new_v]))
@@ -1556,7 +1583,7 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
         (concat [string "type"; space; doc_id_ocaml_type id;])
         (enums_doc)
   | TD_register(id,n1,n2,rs) ->
-    let doc_rid (r,id) = separate comma_sp [string "\"" ^^ doc_id id ^^ string "\""; doc_range_ocaml r;] in
+    let doc_rid (r,id) = separate comma_sp [string_lit (doc_id id); doc_range_ocaml r;] in
     let doc_rids = group (separate_map (break 1) doc_rid rs) in
     match n1,n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->

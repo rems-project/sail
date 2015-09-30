@@ -497,7 +497,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       | Some(Base((params,t),tag,cs,ef,bounds)) ->
         let ((t,cs,ef,_),is_alias) = 
           match tag with | Emp_global | External _ -> (subst params false t cs ef),false 
-            | Alias -> (t,cs, add_effect (BE_aux(BE_rreg, Parse_ast.Unknown)) ef, Envmap.empty),true 
+            | Alias alias_inf -> (t,cs, add_effect (BE_aux(BE_rreg, Parse_ast.Unknown)) ef, Envmap.empty),true 
             | _ -> (t,cs,ef,Envmap.empty),false 
         in
         let t,cs' = get_abbrev d_env t in
@@ -517,12 +517,12 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
           (rebuild tannot,t,t_env,cs@cs',bounds,ef)
         | Tapp("register",[TA_typ(t')]),Tuvar _ ->
           let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
-          let tannot = Base(([],t),(if is_alias then Alias else External (Some i)),cs,ef',bounds) in
+          let tannot = Base(([],t),(if is_alias then tag else External (Some i)),cs,ef',bounds) in
           let t',cs',_,e' = type_coerce (Expr l) d_env Require false false b_env t' (rebuild tannot) expect_actual in
           (e',t,t_env,cs@cs',bounds,ef')
         | Tapp("register",[TA_typ(t')]),_ ->
           let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
-          let tannot = Base(([],t),(if is_alias then Alias else External (Some i)),cs,ef',bounds) in
+          let tannot = Base(([],t),(if is_alias then tag else External (Some i)),cs,ef',bounds) in
           let t',cs',_,e' = type_coerce (Expr l) d_env Require false false b_env t' (rebuild tannot) expect_actual in
           (e',t',t_env,cs@cs',bounds,ef')
         | Tapp("reg",[TA_typ(t')]),_ ->
@@ -1333,16 +1333,16 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
          let bounds = extract_bounds d_env i t in
          let tannot = (Base(([],t),Emp_intro,[],pure_e,bounds)) in
          (LEXP_aux(lexp,(l,tannot)),t,false,Envmap.from_list [i,tannot],Emp_intro,[],bounds,pure_e)
-       | Some(Base(([],t),Alias,_,_,_)) ->
+       | Some(Base(([],t),Alias alias_inf,_,_,_)) ->
          let ef = {effect = Eset[BE_aux(BE_wreg,l)]} in
          (match Envmap.apply d_env.alias_env i with
           | Some(OneReg(reg, (Base(([],t'),_,_,_,_)))) ->
-            (LEXP_aux(lexp,(l,(Base(([],t'),Alias,[],ef,nob)))), t, false, Envmap.empty, External (Some reg),[],nob,ef)
+            (LEXP_aux(lexp,(l,(Base(([],t'),Alias alias_inf,[],ef,nob)))), t, false, Envmap.empty, External (Some reg),[],nob,ef)
           | Some(TwoReg(reg1,reg2, (Base(([],t'),_,_,_,_)))) ->
             let u = match t.t with
               | Tapp("register", [TA_typ u]) -> u 
               | _ -> raise (Reporting_basic.err_unreachable l "TwoReg didn't contain a register type") in
-            (LEXP_aux(lexp,(l,Base(([],t'),Alias,[],ef,nob))), u, false, Envmap.empty, External None,[],nob,ef)
+            (LEXP_aux(lexp,(l,Base(([],t'),Alias alias_inf,[],ef,nob))), u, false, Envmap.empty, External None,[],nob,ef)
           | _ -> assert false)
        | Some(Base((parms,t),tag,cs,_,b)) ->
           let t,cs,_,_ = 
@@ -1907,7 +1907,7 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
               (match lookup_field_type fi r with
                 | None -> typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
                 | Some et ->
-                  let tannot = Base(([],et),Alias,[],pure_e,nob) in
+                  let tannot = Base(([],et),Alias (Alias_field(reg,fi)),[],pure_e,nob) in
                   let d_env = {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, (OneReg(reg,tannot)))} in
                   (AL_aux(AL_subreg(reg_a,subreg),(l,tannot)),tannot,d_env)))
         | _ -> typ_error l ("Expected a register with fields, given " ^ (t_to_string reg_t)))
@@ -1919,7 +1919,7 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
           (match (base.nexp,len.nexp,order.order, bit) with
             | (Nconst i,Nconst j,Oinc, E_lit (L_aux((L_num k), ll))) ->
               if (int_of_big_int i) <= k && ((int_of_big_int i) + (int_of_big_int j)) >= k 
-              then let tannot = Base(([],item_t),Alias,[],pure_e,nob) in
+              then let tannot = Base(([],item_t),Alias (Alias_extract(reg, k,k)),[],pure_e,nob) in
                    let d_env = 
                      {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, (OneReg(reg,tannot)))} in
                    (AL_aux(AL_bit(reg_a,(E_aux(bit,(le,eannot)))), (l,tannot)), tannot,d_env)
@@ -1937,7 +1937,7 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
               if (int_of_big_int i) <= k && ((int_of_big_int i) + (int_of_big_int j)) >= k2 && k < k2 
               then let t = {t = Tapp("vector",[TA_nexp (int_to_nexp k);TA_nexp (int_to_nexp ((k2-k) +1));
                                               TA_ord order; TA_typ item_t])} in 
-                   let tannot = Base(([],t),Alias,[],pure_e,nob) in
+                   let tannot = Base(([],t),Alias (Alias_extract(reg, k, k2)),[],pure_e,nob) in
                    let d_env = 
                      {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, (OneReg(reg,tannot)))} in
                    (AL_aux(AL_slice(reg_a,(E_aux(sl1,(le1,eannot1))),(E_aux(sl2,(le2,eannot2)))),
@@ -1955,7 +1955,7 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
           let t = {t= Tapp("register",
                            [TA_typ {t= Tapp("vector",[TA_nexp b1; TA_nexp (mk_add r r2);
                                                       TA_ord {order = Oinc}; TA_typ item_t])}])} in
-          let tannot = Base(([],t),Alias,[],pure_e,nob) in
+          let tannot = Base(([],t),Alias (Alias_pair(reg1,reg2)),[],pure_e,nob) in
           let d_env = {d_env with alias_env = Envmap.insert (d_env.alias_env) (alias, TwoReg(reg1,reg2,tannot))} in
           (AL_aux (AL_concat(reg1_a,reg2_a), (l,tannot)), tannot, d_env)
         | _ -> typ_error l 

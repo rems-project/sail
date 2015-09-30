@@ -75,6 +75,11 @@ and t_arg =
 module Nexpmap : Finite_map.Fmap with type k = nexp
 type nexp_map = nexp Nexpmap.t
 
+type alias_inf =
+  | Alias_field of string * string
+  | Alias_extract of string * int * int
+  | Alias_pair of string * string
+
 type tag =
   | Emp_local (* Standard value, variable, expression *)
   | Emp_global (* Variable from global instead of local scope *)
@@ -84,7 +89,7 @@ type tag =
   | Default (* Variable has default type, has not been bound *)
   | Constructor (* Variable is a data constructor *)
   | Enum of int (* Variable came from an enumeration, int tells me the highest possible numeric value *)
-  | Alias (* Variable came from a register alias *)
+  | Alias of alias_inf (* Variable came from a register alias *)
   | Spec (* Variable came from a val specification *)
 
 type constraint_origin =

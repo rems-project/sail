@@ -70,6 +70,8 @@ optx :: '' ::= {{ phantom }} {{ lem maybe string }} {{ ocaml string option }}
 tag :: 'Tag_' ::=                                 
 {{ com Data indicating where the identifier arises and thus information necessary in compilation }}
    | None                                 :: :: empty
+   | Intro                                :: :: intro {{ com Denotes an assignment and lexp that introduces a binding }}
+   | Set                                  :: :: set {{ com Denotes an expression that mutates a local variable }}
    | Global				  :: :: global {{ com Globally let-bound or enumeration based value/variable }} 
    | Ctor                                 :: :: ctor {{ com Data constructor from a type union }}
    | Extern optx                          :: :: extern {{ com External function, specied only with a val statement }}
