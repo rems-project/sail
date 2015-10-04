@@ -1651,3 +1651,45 @@ let pp_defs_ocaml f d top_line opens =
   print f (string "(*" ^^ (string top_line) ^^ string "*)" ^/^
            (separate_map hardline (fun lib -> (string "open") ^^ space ^^ (string lib)) opens) ^/^ 
            (doc_defs_ocaml d))
+
+(****************************************************************************
+ * PPrint-based sail-to-lem pretty printer
+****************************************************************************)
+
+
+(*
+  | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
+
+     let updated_vars =
+       let vars = List.map (function Id_aux (Id name,_) -> name
+                                   | Id_aux (DeIid name,_) -> name)
+                           (Analyser.find_updated_vars exp4) in
+       "[" ^ String.concat ";" vars ^ "]" in
+     
+     let start = group (exp exp1) in
+     let stop = group (exp exp2) in
+     let by = group (exp exp3) in
+     let var = doc_id_ocaml id in
+     let body = exp exp4 in
+
+     let forL = if order = Ord_inc then string "foreach_inc" else string "foreach_dec" in
+     forL ^^ space ^^ start ^^ stop ^^ by ^/^
+       group (
+           (string "fun") ^^ space ^^ updated_vars ^^ space var ^^ space ^^ arrow ^/^
+           body ^/^
+           (string "return") ^^ space ^^ updated_vars
+         )
+             
+        (* this way requires the following OCaml declarations first
+
+         let rec foreach_inc i stop by body = 
+           if i <= stop then (body i; foreach_inc (i + by) stop by body) else ()
+
+         let rec foreach_dec i stop by body = 
+           if i >= stop then (body i; foreach_dec (i - by) stop by body) else ()
+
+         and we need to make sure not to use the "ignore bind" function >> for sequentially
+         composing the for-loop with another expression, so we don't "forget" the updated
+         variables
+         *)
+*)

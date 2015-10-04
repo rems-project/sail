@@ -311,7 +311,7 @@ let rewrite_defs (Defs defs) = rewrite_defs_base
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} (Defs defs)
 
-type ('pat,'pat_aux,'fpat,'fpat_aux,'annot) pat_alg =
+type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux
   ; p_wild           : 'pat_aux
   ; p_as             : 'pat * id -> 'pat_aux
@@ -324,13 +324,13 @@ type ('pat,'pat_aux,'fpat,'fpat_aux,'annot) pat_alg =
   ; p_vector_concat  : 'pat list -> 'pat_aux
   ; p_tup            : 'pat list -> 'pat_aux
   ; p_list           : 'pat list -> 'pat_aux
-  ; p_aux            : 'pat_aux * 'annot -> 'pat
-  ; fP_aux           : 'fpat_aux * 'annot -> 'fpat
+  ; p_aux            : 'pat_aux * 'a annot -> 'pat
+  ; fP_aux           : 'fpat_aux * 'a annot -> 'fpat
   ; fP_Fpat          : id * 'pat -> 'fpat_aux
   }
 
-(* fold from term alg into alg *)
-let rec fold_pat_aux alg = function
+let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat_aux -> 'pat_aux =
+  function
   | P_lit lit           -> alg.p_lit lit
   | P_wild              -> alg.p_wild
   | P_id id             -> alg.p_id id
@@ -343,15 +343,20 @@ let rec fold_pat_aux alg = function
   | P_vector_concat ps  -> alg.p_vector_concat (List.map (fold_pat alg) ps)
   | P_tup ps            -> alg.p_tup (List.map (fold_pat alg) ps)
   | P_list ps           -> alg.p_list (List.map (fold_pat alg) ps)
-and fold_pat alg = function
+
+
+and fold_pat (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat -> 'pat =
+  function
   | P_aux (pat,annot)   -> alg.p_aux (fold_pat_aux alg pat,annot)
-and fold_fpat_aux alg = function
+and fold_fpat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a fpat_aux -> 'fpat_aux =
+  function
   | FP_Fpat (id,pat)    -> alg.fP_Fpat (id,fold_pat alg pat)
-and fold_fpat alg = function
+and fold_fpat (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a fpat -> 'fpat =
+  function
   | FP_aux (fpat,annot) -> alg.fP_aux (fold_fpat_aux alg fpat,annot)
                                       
 (* identity fold from term alg to term alg *)
-let id_f : ('a pat, 'a pat_aux, 'a fpat, 'a fpat_aux, 'a annot) pat_alg = 
+let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg = 
   { p_lit            = (fun lit -> P_lit lit)
   ; p_wild           = P_wild
   ; p_as             = (fun (pat,id) -> P_as (pat,id))
@@ -386,7 +391,7 @@ let remove_vector_concat_pat pat =
     let p_aux (pat,annot) = match pat with
       | P_vector_concat pats -> P_aux (P_as (P_aux (pat,annot),fresh_name()),annot)
       | _ -> P_aux (pat,annot) in 
-    {id_f with p_aux = p_aux} in
+    {id_pat_alg with p_aux = p_aux} in
 
   let pat = fold_pat name_vector_concat_roots pat in
 
@@ -398,18 +403,18 @@ let remove_vector_concat_pat pat =
      (* | P_vector_concat. cannot happen after folding function name_vector_concat_roots *)
         | _ -> pat in (* this can only be P_as and P_id *)
       P_vector_concat (List.map aux pats) in
-    {id_f with p_vector_concat = p_vector_concat} in
+    {id_pat_alg with p_vector_concat = p_vector_concat} in
 
   let pat = fold_pat name_vector_concat_elements pat in
 
   (* remove names from vectors in vector_concat patterns and collect them as declarations for the
      function body or expression *)
   let unname_vector_concat_elements :
-        ('a pat *      ((tannot exp -> tannot exp) list),
+        ('a,
+         'a pat *      ((tannot exp -> tannot exp) list),
          'a pat_aux *  ((tannot exp -> tannot exp) list),
          'a fpat *     ((tannot exp -> tannot exp) list),
-         'a fpat_aux * ((tannot exp -> tannot exp) list),
-         'a annot)
+         'a fpat_aux * ((tannot exp -> tannot exp) list))
           pat_alg =
 
     (* build a let-expression of the form "let child = root[i..j] in body" *)
@@ -427,7 +432,8 @@ let remove_vector_concat_pat pat =
            | (_,Base((_,{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_)) ->
               let length  = int_of_big_int length in
               (match p with 
-               (* if we see a named vector pattern, remove the name and remember to declare it later *)
+               (* if we see a named vector pattern, remove the name and remember to 
+                  declare it later *)
                | P_as (P_aux (p,cannot),cname) ->
                   (pos + length, pat_acc @ [P_aux (p,cannot)],
                    decl_acc @ [letbind_vec (rootid,rannot) (cname,cannot) (pos,pos + length - 1)])
@@ -438,7 +444,8 @@ let remove_vector_concat_pat pat =
                (* normal vector patterns are fine *)
                | _ -> (pos + length, pat_acc @ [P_aux (p,cannot)],decl_acc) )
            (* non-vector patterns aren't *)
-           | (l,_) -> raise (Reporting_basic.err_unreachable l "Non-vector in vector-concat pattern") in
+           | (l,_) -> raise (Reporting_basic.err_unreachable
+                               l "Non-vector in vector-concat pattern") in
          let (_,pats',decls') = List.fold_left aux (0,[],[]) pats in
          (P_aux (P_vector_concat pats',rannot),decls @ decls')
       | _ -> (P_aux (pattern,rannot),decls) in
@@ -483,7 +490,7 @@ let remove_vector_concat_pat pat =
         | (P_aux (P_vector_concat pats,_)) -> pats @ acc
         | pat -> pat :: acc in
       P_vector_concat (List.fold_right aux ps []) in
-    {id_f with p_vector_concat = p_vector_concat} in
+    {id_pat_alg with p_vector_concat = p_vector_concat} in
   
   let pat = fold_pat flatten pat in
 
@@ -504,7 +511,7 @@ let remove_vector_concat_pat pat =
            acc @ (List.map wild (range 0 ((int_of_big_int length) - 1)))
         | _,(l,_) -> raise (Reporting_basic.err_unreachable l "Non-vector in vector-concat pattern") in
       P_vector_concat (List.fold_left aux [] ps) in
-    {id_f with p_vector_concat = p_vector_concat} in
+    {id_pat_alg with p_vector_concat = p_vector_concat} in
   
   let pat = fold_pat remove_vector_concats pat in
   
@@ -583,3 +590,367 @@ let rewrite_defs_ocaml defs =
   let defs_vec_concat_removed = rewrite_defs_remove_vector_concat defs in
   let defs_lifted_assign = rewrite_defs_exp_lift_assign defs_vec_concat_removed in
   defs_lifted_assign
+
+
+
+type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
+      'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux,'fpat,'fpat_aux) exp_alg = 
+  { e_block                  : 'exp list -> 'exp_aux
+  ; e_nondet                 : 'exp list -> 'exp_aux
+  ; e_id                     : id -> 'exp_aux
+  ; e_lit                    : lit -> 'exp_aux
+  ; e_cast                   : Ast.typ * 'exp -> 'exp_aux
+  ; e_app                    : id * 'exp list -> 'exp_aux
+  ; e_app_infix              : 'exp * id * 'exp -> 'exp_aux
+  ; e_tuple                  : 'exp list -> 'exp_aux
+  ; e_if                     : 'exp * 'exp * 'exp -> 'exp_aux
+  ; e_for                    : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux
+  ; e_vector                 : 'exp list -> 'exp_aux
+  ; e_vector_indexed         : (int * 'exp) list * 'opt_default -> 'exp_aux
+  ; e_vector_access          : 'exp * 'exp -> 'exp_aux
+  ; e_vector_subrange        : 'exp * 'exp * 'exp -> 'exp_aux
+  ; e_vector_update          : 'exp * 'exp * 'exp -> 'exp_aux
+  ; e_vector_update_subrange : 'exp * 'exp * 'exp * 'exp -> 'exp_aux
+  ; e_vector_append          : 'exp * 'exp -> 'exp_aux
+  ; e_list                   : 'exp list -> 'exp_aux
+  ; e_cons                   : 'exp * 'exp -> 'exp_aux
+  ; e_record                 : 'fexps -> 'exp_aux
+  ; e_record_update          : 'exp * 'fexps -> 'exp_aux
+  ; e_field                  : 'exp * id -> 'exp_aux
+  ; e_case                   : 'exp * 'pexp list -> 'exp_aux
+  ; e_let                    : 'letbind * 'exp -> 'exp_aux
+  ; e_assign                 : 'lexp * 'exp -> 'exp_aux
+  ; e_exit                   : 'exp -> 'exp_aux
+  ; e_internal_cast          : 'a annot * 'exp -> 'exp_aux
+  ; e_internal_exp           : 'a annot -> 'exp_aux
+  ; e_internal_exp_user      : 'a annot * 'a annot -> 'exp_aux
+  ; e_internal_let           : 'lexp * 'exp * 'exp -> 'exp_aux
+  ; e_aux                    : 'exp_aux * 'a annot -> 'exp
+  ; lEXP_id                  : id -> 'lexp_aux
+  ; lEXP_memory              : id * 'exp list -> 'lexp_aux
+  ; lEXP_cast                : Ast.typ * id -> 'lexp_aux
+  ; lEXP_vector              : 'lexp * 'exp -> 'lexp_aux
+  ; lEXP_vector_range        : 'lexp * 'exp * 'exp -> 'lexp_aux
+  ; lEXP_field               : 'lexp * id -> 'lexp_aux
+  ; lEXP_aux                 : 'lexp_aux * 'a annot -> 'lexp
+  ; fE_Fexp                  : id * 'exp -> 'fexp_aux
+  ; fE_aux                   : 'fexp_aux * 'a annot -> 'fexp
+  ; fES_Fexps                : 'fexp list * bool -> 'fexps_aux
+  ; fES_aux                  : 'fexps_aux * 'a annot -> 'fexps
+  ; def_val_empty            : 'opt_default_aux
+  ; def_val_dec              : 'exp -> 'opt_default_aux
+  ; def_val_aux              : 'opt_default_aux * 'a annot -> 'opt_default
+  ; pat_exp                  : 'pat * 'exp -> 'pexp_aux
+  ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
+  ; lB_val_explicit          : typschm * 'pat * 'exp -> 'letbind_aux
+  ; lB_val_implicit          : 'pat * 'exp -> 'letbind_aux
+  ; lB_aux                   : 'letbind_aux * 'a annot -> 'letbind
+  ; pat_alg                  : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg
+  }
+    
+let rec fold_exp_aux alg = function
+  | E_block es -> alg.e_block (List.map (fold_exp alg) es)
+  | E_nondet es -> alg.e_nondet (List.map (fold_exp alg) es)
+  | E_id id -> alg.e_id id
+  | E_lit lit -> alg.e_lit lit
+  | E_cast (typ,e) -> alg.e_cast (typ, fold_exp alg e)
+  | E_app (id,es) -> alg.e_app (id, List.map (fold_exp alg) es)
+  | E_app_infix (e1,id,e2) -> alg.e_app_infix (fold_exp alg e1, id, fold_exp alg e2)
+  | E_tuple es -> alg.e_tuple (List.map (fold_exp alg) es)
+  | E_if (e1,e2,e3) -> alg.e_if (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
+  | E_for (id,e1,e2,e3,order,e4) ->
+     alg.e_for (id,fold_exp alg e1, fold_exp alg e2, fold_exp alg e3, order, fold_exp alg e4)
+  | E_vector es -> alg.e_vector (List.map (fold_exp alg) es)
+  | E_vector_indexed (es,opt) ->
+     alg.e_vector_indexed (List.map (fun (id,e) -> (id,fold_exp alg e)) es, fold_opt_default alg opt)
+  | E_vector_access (e1,e2) -> alg.e_vector_access (fold_exp alg e1, fold_exp alg e2)
+  | E_vector_subrange (e1,e2,e3) ->
+     alg.e_vector_subrange (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
+  | E_vector_update (e1,e2,e3) ->
+     alg.e_vector_update (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
+  | E_vector_update_subrange (e1,e2,e3,e4) ->
+     alg.e_vector_update_subrange (fold_exp alg e1,fold_exp alg e2, fold_exp alg e3, fold_exp alg e4)
+  | E_vector_append (e1,e2) -> alg.e_vector_append (fold_exp alg e1, fold_exp alg e2)
+  | E_list es -> alg.e_list (List.map (fold_exp alg) es)
+  | E_cons (e1,e2) -> alg.e_cons (fold_exp alg e1, fold_exp alg e2)
+  | E_record fexps -> alg.e_record (fold_fexps alg fexps)
+  | E_record_update (e,fexps) -> alg.e_record_update (fold_exp alg e, fold_fexps alg fexps)
+  | E_field (e,id) -> alg.e_field (fold_exp alg e, id)
+  | E_case (e,pexps) -> alg.e_case (fold_exp alg e, List.map (fold_pexp alg) pexps)
+  | E_let (letbind,e) -> alg.e_let (fold_letbind alg letbind, fold_exp alg e)
+  | E_assign (lexp,e) -> alg.e_assign (fold_lexp alg lexp, fold_exp alg e)
+  | E_exit e -> alg.e_exit (fold_exp alg e)
+  | E_internal_cast (annot,e) -> alg.e_internal_cast (annot, fold_exp alg e)
+  | E_internal_exp annot -> alg.e_internal_exp annot
+  | E_internal_exp_user (annot1,annot2) -> alg.e_internal_exp_user (annot1,annot2)
+  | E_internal_let (lexp,e1,e2) ->
+     alg.e_internal_let (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
+and fold_exp alg (E_aux (exp_aux,annot)) = alg.e_aux (fold_exp_aux alg exp_aux, annot)
+and fold_lexp_aux alg = function
+  | LEXP_id id -> alg.lEXP_id id
+  | LEXP_memory (id,es) -> alg.lEXP_memory (id, List.map (fold_exp alg) es)
+  | LEXP_cast (typ,id) -> alg.lEXP_cast (typ,id)
+  | LEXP_vector (lexp,e) -> alg.lEXP_vector (fold_lexp alg lexp, fold_exp alg e)
+  | LEXP_vector_range (lexp,e1,e2) ->
+     alg.lEXP_vector_range (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
+ | LEXP_field (lexp,id) -> alg.lEXP_field (fold_lexp alg lexp, id)
+and fold_lexp alg (LEXP_aux (lexp_aux,annot)) =
+  alg.lEXP_aux (fold_lexp_aux alg lexp_aux, annot)
+and fold_fexp_aux alg (FE_Fexp (id,e)) = alg.fE_Fexp (id, fold_exp alg e)
+and fold_fexp alg (FE_aux (fexp_aux,annot)) = alg.fE_aux (fold_fexp_aux alg fexp_aux,annot)
+and fold_fexps_aux alg (FES_Fexps (fexps,b)) = alg.fES_Fexps (List.map (fold_fexp alg) fexps, b)
+and fold_fexps alg (FES_aux (fexps_aux,annot)) = alg.fES_aux (fold_fexps_aux alg fexps_aux, annot)
+and fold_opt_default_aux alg = function
+  | Def_val_empty -> alg.def_val_empty
+  | Def_val_dec e -> alg.def_val_dec (fold_exp alg e)
+and fold_opt_default alg (Def_val_aux (opt_default_aux,annot)) =
+  alg.def_val_aux (fold_opt_default_aux alg opt_default_aux, annot)
+and fold_pexp_aux alg (Pat_exp (pat,e)) = alg.pat_exp (fold_pat alg.pat_alg pat, fold_exp alg e)
+and fold_pexp alg (Pat_aux (pexp_aux,annot)) = alg.pat_aux (fold_pexp_aux alg pexp_aux, annot)
+and fold_letbind_aux alg = function
+  | LB_val_explicit (t,pat,e) -> alg.lB_val_explicit (t,fold_pat alg.pat_alg pat, fold_exp alg e)
+  | LB_val_implicit (pat,e) -> alg.lB_val_implicit (fold_pat alg.pat_alg pat, fold_exp alg e)
+and fold_letbind alg (LB_aux (letbind_aux,annot)) = alg.lB_aux (fold_letbind_aux alg letbind_aux, annot)
+
+
+
+let normalise_exp exp =
+
+  let compose f g x = f (g x) in
+
+  let counter = ref 0 in
+  let fresh_name () =
+    let current = !counter in
+    let () = counter := (current + 1) in
+    Id_aux (Id ("__w" ^ string_of_int current), Parse_ast.Unknown) in
+  
+  let aux (((E_aux (_,annot)) as e,b) : ('a exp * bool)) : (('a exp -> 'a exp) * 'a exp * bool) =
+    (* for a tuple (e, b = is e effectful) return 
+       1. a function that let-binds e to the argument (body)
+       2. something to access e's value, which is either e itself if b = false or an id to access the
+          value bound to id in the let-expression
+       3. b *)
+
+    let letbind id body =
+      let typ = (Parse_ast.Unknown,simple_annot {t = Tid "unit"}) in
+      E_aux (E_let (LB_aux (LB_val_implicit (P_aux (P_id id,annot),e),annot),body),typ) in
+
+    if b then
+      let freshid = fresh_name () in
+      let decl = letbind freshid in
+      (decl,E_aux (E_id freshid,annot),b)
+    else
+      ((fun x -> x),e,b) in
+
+  let list_aux es =
+    List.fold_left
+      (fun (acc_decl, acc_es, acc_b) e ->
+       let (decl,e,b) = aux e in
+       (compose acc_decl decl, acc_es @ [e], acc_b || b))
+      ((fun x -> x), [], false) es in
+            
+  (* for each expression e: return a tuple (normalised e, does e contain effectful terms) *)
+  fold_exp 
+    { e_block =
+        (fun es ->
+         let (es,effs) = List.split es in
+         ((fun x -> x), E_block es,List.fold_left (||) false effs)
+        )
+    ; e_nondet =
+        (fun es ->
+         let (es,effs) = List.split es in
+         ((fun x -> x), E_block es,List.fold_left (||) false effs)
+        )
+    ; e_id = (fun id -> ((fun x -> x), E_id id,false))
+    ; e_lit = (fun lit -> ((fun x -> x), E_lit lit,false))
+    ; e_cast = (fun (typ,(e,b)) -> ((fun x -> x), E_cast (typ,e),b))
+    ; e_app =
+        (fun (id,es) ->
+         let (decl,params,b) = list_aux es in
+         (decl,E_app (id,params),b)
+        )
+    ; e_app_infix =
+        (fun (e1,id,e2) ->
+         let (decl1,e1,b1) = aux e1 in
+         let (decl2,e2,b2) = aux e2 in
+         (compose decl1 decl2, E_app_infix (e1,id,e2), b1 || b2)
+        )
+    ; e_tuple =
+        (fun es ->
+         let (decl,es,b) = list_aux es in
+         (decl, E_tuple es,b)
+        )
+    ; e_if =
+        (fun (e1,(e2,b2),(e3,b3)) ->
+         let (decl,e1,b1) = aux e1 in
+         (decl, E_if (e1,e2,e3), b1 || b2 || b3)
+        )
+    ; e_for =
+        (fun (id,e1,e2,e3,order,(e4,b4)) ->
+         let (decl1,e1,b1) = aux e1 in
+         let (decl2,e2,b2) = aux e2 in
+         let (decl3,e3,b3) = aux e3 in
+         (compose decl1 (compose decl2 decl3), E_for (id,e1,e2,e3,order,e4), b1 || b2 || b3 || b4)
+        )
+    ; e_vector = 
+        (fun es ->
+         let (decl,es,b) = list_aux es in
+         (decl, E_vector es, b)
+        )
+    ; e_vector_indexed =
+        (fun (es,(decl2,opt2,b2)) ->
+         let (is,es) = List.split es in
+         let (decl1,es,b1) = list_aux es in
+         (compose decl1 decl2, E_vector_indexed (List.combine is es,opt2), b1 || b2)
+        )
+    ; e_vector_access =
+        (function
+          | ((E_aux (E_id _,_) as e1,b1),e2) ->
+            (* then e1 is OK: the whole e_vector_access has to be
+               translated to a monadic expression *)
+             let (decl2,e2,b2) = aux e2 in
+             (decl2, E_vector_access (e1,e2), b1 || b2)
+          | (e1,e2) ->
+             let (decl1,e1,b1) = aux e1 in
+             let (decl2,e2,b2) = aux e2 in
+             (compose decl1 decl2, E_vector_access (e1,e2), b1 || b2)
+        )
+    ; e_vector_subrange = 
+        (function
+          | ((E_aux (E_id _,_) as e1,b1),e2,e3) ->
+            (* then e1 is OK: the whole e_vector_access has to be
+               translated to a monadic expression *)
+             let (decl2,e2,b2) = aux e2 in
+             let (decl3,e3,b3) = aux e3 in
+             (compose decl2 decl3, E_vector_subrange (e1,e2,e3), b1 || b2 || b3)
+          | (e1,e2,e3) ->
+             let (decl1,e1,b1) = aux e1 in
+             let (decl2,e2,b2) = aux e2 in
+             let (decl3,e3,b3) = aux e3 in
+             (compose decl1 (compose decl2 decl3), E_vector_subrange (e1,e2,e3), b1 || b2)
+        )
+    ; e_vector_update =
+        (fun (e1,e2,e3) -> 
+         let (decl1,e1,b1) = aux e1 in
+         let (decl2,e2,b2) = aux e2 in
+         let (decl3,e3,b3) = aux e3 in
+         (compose decl1 (compose decl2 decl3), E_vector_update (e1,e2,e3), b1 || b2)
+        )
+    ; e_vector_update_subrange = 
+        (fun (e1,e2,e3,e4) -> 
+         let (decl1,e1,b1) = aux e1 in
+         let (decl2,e2,b2) = aux e2 in
+         let (decl3,e3,b3) = aux e3 in
+         let (decl4,e4,b4) = aux e4 in
+         (compose decl1 (compose decl2 (compose decl3 decl4)), E_vector_update_subrange (e1,e2,e3,e4),
+          b1 || b2)
+        )
+    ; e_vector_append = 
+        (fun (e1,e2) ->
+         let (decl1,e1,b1) = aux e1 in
+         let (decl2,e2,b2) = aux e2 in
+         (compose decl1 decl2, E_vector_append (e1,e2), b1 || b2)
+        )
+    ; e_list =
+        (fun es ->
+         let (decl,params,b) = list_aux es in
+         (decl, E_list params,b)
+        )
+    ; e_cons = 
+        (fun (e1,e2) ->
+         let (decl1,e1,b1) = aux e1 in
+         let (decl2,e2,b2) = aux e2 in
+         (compose decl1 decl2, E_cons (e1,e2), b1 || b2)
+        )
+    ; e_record = (fun (decl,fexps,b) -> (decl, E_record fexps,b))
+    ; e_record_update =
+        (fun (e1,(decl2,fexp,b2)) ->
+         let (decl1,e1,b1) = aux e1 in
+         (compose decl1 decl2, E_record_update (e1,fexp), b1 || b2)
+        )
+    ; e_field =
+        (fun (e1,id) ->
+         let (decl,e1,b) = aux e1 in
+         (decl, E_field (e1,id),b)
+        )
+    ; e_case =
+        (fun (e1,pexps) ->
+         let (decl,e1,b1) = aux e1 in
+         let (pexps,b2) =
+           List.fold_left
+             (fun (acc,b_acc) (pat,b) -> (acc @ [pat], b_acc || b))
+             ([],false) pexps in
+         (decl, E_case (e1,pexps), b1 || b2)
+        )
+    ; e_let = (fun ((lb,b1),(exp,b2)) -> ((fun x -> x), E_let (lb,exp), b1 || b2))
+    ; e_assign =
+        (fun ((decl1,lexp),e2) ->
+         let (decl2,e2,b2) = aux e2 in
+         (compose decl1 decl2, E_assign (lexp,e2), b2)
+        )
+    ; e_exit = (fun e1 -> let (decl,e1,b) = aux e1 in (decl, E_exit e1,b))
+    ; e_internal_cast = (fun (a,e1) -> let (decl,e1,b) = aux e1 in (decl, E_internal_cast (a,e1),b))
+    ; e_internal_exp = (fun a -> ((fun x -> x), E_internal_exp a,false))
+    ; e_internal_exp_user = (fun (a1,a2) -> ((fun x -> x), E_internal_exp_user (a1,a2),false))
+    ; e_internal_let =
+        (fun ((decl1,lexp), e2, e3) ->
+         let (decl2,e2,b2) = aux e2 in
+         let (decl3,e3,b3) = aux e3 in
+         (compose decl1 (compose decl2 decl3), E_internal_let (lexp,e2,e3), b2 || b3)
+        )
+    ; e_aux = 
+        (fun ((decl,e,b),((_,typ) as a : ('a annot))) ->
+         match typ with
+         | Base (_,_,_, {effect = Eset effs}, _) ->
+            (decl (E_aux (e,a)),
+             List.exists (function BE_aux (BE_undef,_)
+                                 | BE_aux (BE_unspec,_) -> false | _ -> true) effs)
+         | Base (_,_,_, {effect = Evar _},_) ->
+            failwith "Effect_var not supported."
+         | Overload (_,_,_) ->
+            failwith "Overload not supported."
+         | NoTyp -> (decl (E_aux (e,a)),false)
+        )
+    ; lEXP_id = (fun id -> ((fun x -> x), LEXP_id id))
+    ; lEXP_memory =
+        (fun (id,es) ->
+         let (decl,es,_) = list_aux es in
+         (decl, LEXP_memory (id,es))
+        )
+    ; lEXP_cast = (fun (typ,id) -> ((fun x -> x), LEXP_cast (typ,id)))
+    ; lEXP_vector =
+        (fun ((decl1,lexp),e2) ->
+         let (decl2,e2,_) = aux e2 in
+         (compose decl1 decl2, LEXP_vector (lexp,e2))
+        )
+    ; lEXP_vector_range = 
+        (fun ((decl1,lexp),e2,e3) ->
+         let (decl2,e2,_) = aux e2 in
+         let (decl3,e3,_) = aux e3 in
+         (compose decl1 (compose decl2 decl3), LEXP_vector_range (lexp,e2,e3))
+        )
+    ; lEXP_field = (fun ((decl,lexp),id) -> (decl, LEXP_field (lexp,id)))
+    ; lEXP_aux = (fun ((decl,lexp),a) -> (decl,LEXP_aux (lexp,a)))
+    ; fE_Fexp = (fun (id,e) -> let (decl,e,b) = aux e in (decl,FE_Fexp (id,e),b))
+    ; fE_aux = (fun ((decl,fexp,b),annot) -> (decl, FE_aux (fexp,annot),b))
+    ; fES_Fexps =
+        (fun (fexps,bool) ->
+         let (decl,fexps,b) =
+           List.fold_left
+             (fun (acc_decls,acc_fexps,acc_b) (decl,fexp,b) ->
+              (compose acc_decls decl, acc_fexps @ [fexp], acc_b || b))
+             ((fun x -> x), [], false) fexps in
+         (decl, FES_Fexps (fexps,bool), b)
+        )
+    ; fES_aux = (fun ((decl,fexp,b),a) -> (decl, FES_aux (fexp,a), b))
+    ; def_val_empty = ((fun x -> x), Def_val_empty,false)
+    ; def_val_dec = (fun e -> let (decl,e,b) = aux e in (decl, Def_val_dec e, b))
+    ; def_val_aux = (fun ((decl,defval,b),a) -> (decl, Def_val_aux (defval,a), b))
+    ; pat_exp = (fun (pat,(e,b)) -> (Pat_exp (pat,e),b))
+    ; pat_aux = (fun ((pexp,b),a) -> (Pat_aux (pexp,a),b))
+    ; lB_val_explicit = (fun (typ,pat,(e,b)) -> (LB_val_explicit (typ,pat,e),b))
+    ; lB_val_implicit = (fun (pat,(e,b)) -> (LB_val_implicit (pat,e),b))
+    ; lB_aux = (fun ((lb,b),a) -> (LB_aux (lb,a),b))
+    ; pat_alg = id_pat_alg
+    } exp

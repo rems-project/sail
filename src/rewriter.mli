@@ -18,3 +18,87 @@ type 'a rewriters = { rewrite_exp : 'a rewriters -> nexp_map option -> 'a exp ->
 val rewrite_exp : tannot rewriters -> nexp_map option -> tannot exp -> tannot exp
 val rewrite_defs : tannot defs -> tannot defs
 val rewrite_defs_ocaml : tannot defs -> tannot defs (*Perform rewrites to exclude AST nodes not supported for ocaml out*)
+
+(* the type of interpretations of pattern-matching expressions *)
+type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
+  { p_lit            : lit -> 'pat_aux
+  ; p_wild           : 'pat_aux
+  ; p_as             : 'pat * id -> 'pat_aux
+  ; p_typ            : Ast.typ * 'pat -> 'pat_aux
+  ; p_id             : id -> 'pat_aux
+  ; p_app            : id * 'pat list -> 'pat_aux
+  ; p_record         : 'fpat list * bool -> 'pat_aux
+  ; p_vector         : 'pat list -> 'pat_aux
+  ; p_vector_indexed : (int * 'pat) list -> 'pat_aux
+  ; p_vector_concat  : 'pat list -> 'pat_aux
+  ; p_tup            : 'pat list -> 'pat_aux
+  ; p_list           : 'pat list -> 'pat_aux
+  ; p_aux            : 'pat_aux * 'a annot -> 'pat
+  ; fP_aux           : 'fpat_aux * 'a annot -> 'fpat
+  ; fP_Fpat          : id * 'pat -> 'fpat_aux
+  }
+
+(* fold over pat_aux expressions *)
+
+
+(* the type of interpretations of expressions *)
+type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
+      'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux,'fpat,'fpat_aux) exp_alg = 
+ { e_block                  : 'exp list -> 'exp_aux
+ ; e_nondet                 : 'exp list -> 'exp_aux
+ ; e_id                     : id -> 'exp_aux
+ ; e_lit                    : lit -> 'exp_aux
+ ; e_cast                   : Ast.typ * 'exp -> 'exp_aux
+ ; e_app                    : id * 'exp list -> 'exp_aux
+ ; e_app_infix              : 'exp * id * 'exp -> 'exp_aux
+ ; e_tuple                  : 'exp list -> 'exp_aux
+ ; e_if                     : 'exp * 'exp * 'exp -> 'exp_aux
+ ; e_for                    : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux
+ ; e_vector                 : 'exp list -> 'exp_aux
+ ; e_vector_indexed         : (int * 'exp) list * 'opt_default -> 'exp_aux
+ ; e_vector_access          : 'exp * 'exp -> 'exp_aux
+ ; e_vector_subrange        : 'exp * 'exp * 'exp -> 'exp_aux
+ ; e_vector_update          : 'exp * 'exp * 'exp -> 'exp_aux
+ ; e_vector_update_subrange : 'exp * 'exp * 'exp * 'exp -> 'exp_aux
+ ; e_vector_append          : 'exp * 'exp -> 'exp_aux
+ ; e_list                   : 'exp list -> 'exp_aux
+ ; e_cons                   : 'exp * 'exp -> 'exp_aux
+ ; e_record                 : 'fexps -> 'exp_aux
+ ; e_record_update          : 'exp * 'fexps -> 'exp_aux
+ ; e_field                  : 'exp * id -> 'exp_aux
+ ; e_case                   : 'exp * 'pexp list -> 'exp_aux
+ ; e_let                    : 'letbind * 'exp -> 'exp_aux
+ ; e_assign                 : 'lexp * 'exp -> 'exp_aux
+ ; e_exit                   : 'exp -> 'exp_aux
+ ; e_internal_cast          : 'a annot * 'exp -> 'exp_aux
+ ; e_internal_exp           : 'a annot -> 'exp_aux
+ ; e_internal_exp_user      : 'a annot * 'a annot -> 'exp_aux
+ ; e_internal_let           : 'lexp * 'exp * 'exp -> 'exp_aux
+ ; e_aux                    : 'exp_aux * 'a annot -> 'exp
+ ; lEXP_id                  : id -> 'lexp_aux
+ ; lEXP_memory              : id * 'exp list -> 'lexp_aux
+ ; lEXP_cast                : Ast.typ * id -> 'lexp_aux
+ ; lEXP_vector              : 'lexp * 'exp -> 'lexp_aux
+ ; lEXP_vector_range        : 'lexp * 'exp * 'exp -> 'lexp_aux
+ ; lEXP_field               : 'lexp * id -> 'lexp_aux
+ ; lEXP_aux                 : 'lexp_aux * 'a annot -> 'lexp
+ ; fE_Fexp                  : id * 'exp -> 'fexp_aux
+ ; fE_aux                   : 'fexp_aux * 'a annot -> 'fexp
+ ; fES_Fexps                : 'fexp list * bool -> 'fexps_aux
+ ; fES_aux                  : 'fexps_aux * 'a annot -> 'fexps
+ ; def_val_empty            : 'opt_default_aux
+ ; def_val_dec              : 'exp -> 'opt_default_aux
+ ; def_val_aux              : 'opt_default_aux * 'a annot -> 'opt_default
+ ; pat_exp                  : 'pat * 'exp -> 'pexp_aux
+ ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
+ ; lB_val_explicit          : typschm * 'pat * 'exp -> 'letbind_aux
+ ; lB_val_implicit          : 'pat * 'exp -> 'letbind_aux
+ ; lB_aux                   : 'letbind_aux * 'a annot -> 'letbind
+ ; pat_alg                  : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg
+ }
+
+(* fold over expressions *)
+val fold_exp : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
+      'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux,'fpat,'fpat_aux) exp_alg -> 'a exp -> 'exp
