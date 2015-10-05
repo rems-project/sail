@@ -374,6 +374,127 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   ; fP_Fpat          = (fun (id,pat) -> FP_Fpat (id,pat))
   }
   
+type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
+      'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux,'fpat,'fpat_aux) exp_alg = 
+  { e_block                  : 'exp list -> 'exp_aux
+  ; e_nondet                 : 'exp list -> 'exp_aux
+  ; e_id                     : id -> 'exp_aux
+  ; e_lit                    : lit -> 'exp_aux
+  ; e_cast                   : Ast.typ * 'exp -> 'exp_aux
+  ; e_app                    : id * 'exp list -> 'exp_aux
+  ; e_app_infix              : 'exp * id * 'exp -> 'exp_aux
+  ; e_tuple                  : 'exp list -> 'exp_aux
+  ; e_if                     : 'exp * 'exp * 'exp -> 'exp_aux
+  ; e_for                    : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux
+  ; e_vector                 : 'exp list -> 'exp_aux
+  ; e_vector_indexed         : (int * 'exp) list * 'opt_default -> 'exp_aux
+  ; e_vector_access          : 'exp * 'exp -> 'exp_aux
+  ; e_vector_subrange        : 'exp * 'exp * 'exp -> 'exp_aux
+  ; e_vector_update          : 'exp * 'exp * 'exp -> 'exp_aux
+  ; e_vector_update_subrange : 'exp * 'exp * 'exp * 'exp -> 'exp_aux
+  ; e_vector_append          : 'exp * 'exp -> 'exp_aux
+  ; e_list                   : 'exp list -> 'exp_aux
+  ; e_cons                   : 'exp * 'exp -> 'exp_aux
+  ; e_record                 : 'fexps -> 'exp_aux
+  ; e_record_update          : 'exp * 'fexps -> 'exp_aux
+  ; e_field                  : 'exp * id -> 'exp_aux
+  ; e_case                   : 'exp * 'pexp list -> 'exp_aux
+  ; e_let                    : 'letbind * 'exp -> 'exp_aux
+  ; e_assign                 : 'lexp * 'exp -> 'exp_aux
+  ; e_exit                   : 'exp -> 'exp_aux
+  ; e_internal_cast          : 'a annot * 'exp -> 'exp_aux
+  ; e_internal_exp           : 'a annot -> 'exp_aux
+  ; e_internal_exp_user      : 'a annot * 'a annot -> 'exp_aux
+  ; e_internal_let           : 'lexp * 'exp * 'exp -> 'exp_aux
+  ; e_aux                    : 'exp_aux * 'a annot -> 'exp
+  ; lEXP_id                  : id -> 'lexp_aux
+  ; lEXP_memory              : id * 'exp list -> 'lexp_aux
+  ; lEXP_cast                : Ast.typ * id -> 'lexp_aux
+  ; lEXP_vector              : 'lexp * 'exp -> 'lexp_aux
+  ; lEXP_vector_range        : 'lexp * 'exp * 'exp -> 'lexp_aux
+  ; lEXP_field               : 'lexp * id -> 'lexp_aux
+  ; lEXP_aux                 : 'lexp_aux * 'a annot -> 'lexp
+  ; fE_Fexp                  : id * 'exp -> 'fexp_aux
+  ; fE_aux                   : 'fexp_aux * 'a annot -> 'fexp
+  ; fES_Fexps                : 'fexp list * bool -> 'fexps_aux
+  ; fES_aux                  : 'fexps_aux * 'a annot -> 'fexps
+  ; def_val_empty            : 'opt_default_aux
+  ; def_val_dec              : 'exp -> 'opt_default_aux
+  ; def_val_aux              : 'opt_default_aux * 'a annot -> 'opt_default
+  ; pat_exp                  : 'pat * 'exp -> 'pexp_aux
+  ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
+  ; lB_val_explicit          : typschm * 'pat * 'exp -> 'letbind_aux
+  ; lB_val_implicit          : 'pat * 'exp -> 'letbind_aux
+  ; lB_aux                   : 'letbind_aux * 'a annot -> 'letbind
+  ; pat_alg                  : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg
+  }
+    
+let rec fold_exp_aux alg = function
+  | E_block es -> alg.e_block (List.map (fold_exp alg) es)
+  | E_nondet es -> alg.e_nondet (List.map (fold_exp alg) es)
+  | E_id id -> alg.e_id id
+  | E_lit lit -> alg.e_lit lit
+  | E_cast (typ,e) -> alg.e_cast (typ, fold_exp alg e)
+  | E_app (id,es) -> alg.e_app (id, List.map (fold_exp alg) es)
+  | E_app_infix (e1,id,e2) -> alg.e_app_infix (fold_exp alg e1, id, fold_exp alg e2)
+  | E_tuple es -> alg.e_tuple (List.map (fold_exp alg) es)
+  | E_if (e1,e2,e3) -> alg.e_if (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
+  | E_for (id,e1,e2,e3,order,e4) ->
+     alg.e_for (id,fold_exp alg e1, fold_exp alg e2, fold_exp alg e3, order, fold_exp alg e4)
+  | E_vector es -> alg.e_vector (List.map (fold_exp alg) es)
+  | E_vector_indexed (es,opt) ->
+     alg.e_vector_indexed (List.map (fun (id,e) -> (id,fold_exp alg e)) es, fold_opt_default alg opt)
+  | E_vector_access (e1,e2) -> alg.e_vector_access (fold_exp alg e1, fold_exp alg e2)
+  | E_vector_subrange (e1,e2,e3) ->
+     alg.e_vector_subrange (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
+  | E_vector_update (e1,e2,e3) ->
+     alg.e_vector_update (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
+  | E_vector_update_subrange (e1,e2,e3,e4) ->
+     alg.e_vector_update_subrange (fold_exp alg e1,fold_exp alg e2, fold_exp alg e3, fold_exp alg e4)
+  | E_vector_append (e1,e2) -> alg.e_vector_append (fold_exp alg e1, fold_exp alg e2)
+  | E_list es -> alg.e_list (List.map (fold_exp alg) es)
+  | E_cons (e1,e2) -> alg.e_cons (fold_exp alg e1, fold_exp alg e2)
+  | E_record fexps -> alg.e_record (fold_fexps alg fexps)
+  | E_record_update (e,fexps) -> alg.e_record_update (fold_exp alg e, fold_fexps alg fexps)
+  | E_field (e,id) -> alg.e_field (fold_exp alg e, id)
+  | E_case (e,pexps) -> alg.e_case (fold_exp alg e, List.map (fold_pexp alg) pexps)
+  | E_let (letbind,e) -> alg.e_let (fold_letbind alg letbind, fold_exp alg e)
+  | E_assign (lexp,e) -> alg.e_assign (fold_lexp alg lexp, fold_exp alg e)
+  | E_exit e -> alg.e_exit (fold_exp alg e)
+  | E_internal_cast (annot,e) -> alg.e_internal_cast (annot, fold_exp alg e)
+  | E_internal_exp annot -> alg.e_internal_exp annot
+  | E_internal_exp_user (annot1,annot2) -> alg.e_internal_exp_user (annot1,annot2)
+  | E_internal_let (lexp,e1,e2) ->
+     alg.e_internal_let (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
+and fold_exp alg (E_aux (exp_aux,annot)) = alg.e_aux (fold_exp_aux alg exp_aux, annot)
+and fold_lexp_aux alg = function
+  | LEXP_id id -> alg.lEXP_id id
+  | LEXP_memory (id,es) -> alg.lEXP_memory (id, List.map (fold_exp alg) es)
+  | LEXP_cast (typ,id) -> alg.lEXP_cast (typ,id)
+  | LEXP_vector (lexp,e) -> alg.lEXP_vector (fold_lexp alg lexp, fold_exp alg e)
+  | LEXP_vector_range (lexp,e1,e2) ->
+     alg.lEXP_vector_range (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
+ | LEXP_field (lexp,id) -> alg.lEXP_field (fold_lexp alg lexp, id)
+and fold_lexp alg (LEXP_aux (lexp_aux,annot)) =
+  alg.lEXP_aux (fold_lexp_aux alg lexp_aux, annot)
+and fold_fexp_aux alg (FE_Fexp (id,e)) = alg.fE_Fexp (id, fold_exp alg e)
+and fold_fexp alg (FE_aux (fexp_aux,annot)) = alg.fE_aux (fold_fexp_aux alg fexp_aux,annot)
+and fold_fexps_aux alg (FES_Fexps (fexps,b)) = alg.fES_Fexps (List.map (fold_fexp alg) fexps, b)
+and fold_fexps alg (FES_aux (fexps_aux,annot)) = alg.fES_aux (fold_fexps_aux alg fexps_aux, annot)
+and fold_opt_default_aux alg = function
+  | Def_val_empty -> alg.def_val_empty
+  | Def_val_dec e -> alg.def_val_dec (fold_exp alg e)
+and fold_opt_default alg (Def_val_aux (opt_default_aux,annot)) =
+  alg.def_val_aux (fold_opt_default_aux alg opt_default_aux, annot)
+and fold_pexp_aux alg (Pat_exp (pat,e)) = alg.pat_exp (fold_pat alg.pat_alg pat, fold_exp alg e)
+and fold_pexp alg (Pat_aux (pexp_aux,annot)) = alg.pat_aux (fold_pexp_aux alg pexp_aux, annot)
+and fold_letbind_aux alg = function
+  | LB_val_explicit (t,pat,e) -> alg.lB_val_explicit (t,fold_pat alg.pat_alg pat, fold_exp alg e)
+  | LB_val_implicit (pat,e) -> alg.lB_val_implicit (fold_pat alg.pat_alg pat, fold_exp alg e)
+and fold_letbind alg (LB_aux (letbind_aux,annot)) = alg.lB_aux (fold_letbind_aux alg letbind_aux, annot)
+
+
 let remove_vector_concat_pat pat =
   
   let counter = ref 0 in
@@ -538,12 +659,20 @@ let rewrite_exp_remove_vector_concat_pat rewriters nmap (E_aux (exp,(l,annot)) a
                     decls (rewrite_rec body)))
   | exp -> rewrite_base full_exp
 
+let rewrite_fun_remove_vector_concat_pat
+      rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
+  let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),(l,annot))) =
+    let (pat,decls) = remove_vector_concat_pat pat in
+    (FCL_aux (FCL_Funcl (id,pat,rewriters.rewrite_exp rewriters (get_map_tannot fdannot) (decls exp)),(l,annot))) 
+  in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
+
+
 let rewrite_defs_remove_vector_concat defs = rewrite_defs_base
     {rewrite_exp = rewrite_exp_remove_vector_concat_pat;
      rewrite_pat = rewrite_pat;
      rewrite_let = rewrite_let;
      rewrite_lexp = rewrite_lexp;
-     rewrite_fun = rewrite_fun;
+     rewrite_fun = rewrite_fun_remove_vector_concat_pat;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} defs
     
@@ -590,129 +719,6 @@ let rewrite_defs_ocaml defs =
   let defs_vec_concat_removed = rewrite_defs_remove_vector_concat defs in
   let defs_lifted_assign = rewrite_defs_exp_lift_assign defs_vec_concat_removed in
   defs_lifted_assign
-
-
-
-type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
-      'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
-      'pat,'pat_aux,'fpat,'fpat_aux) exp_alg = 
-  { e_block                  : 'exp list -> 'exp_aux
-  ; e_nondet                 : 'exp list -> 'exp_aux
-  ; e_id                     : id -> 'exp_aux
-  ; e_lit                    : lit -> 'exp_aux
-  ; e_cast                   : Ast.typ * 'exp -> 'exp_aux
-  ; e_app                    : id * 'exp list -> 'exp_aux
-  ; e_app_infix              : 'exp * id * 'exp -> 'exp_aux
-  ; e_tuple                  : 'exp list -> 'exp_aux
-  ; e_if                     : 'exp * 'exp * 'exp -> 'exp_aux
-  ; e_for                    : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux
-  ; e_vector                 : 'exp list -> 'exp_aux
-  ; e_vector_indexed         : (int * 'exp) list * 'opt_default -> 'exp_aux
-  ; e_vector_access          : 'exp * 'exp -> 'exp_aux
-  ; e_vector_subrange        : 'exp * 'exp * 'exp -> 'exp_aux
-  ; e_vector_update          : 'exp * 'exp * 'exp -> 'exp_aux
-  ; e_vector_update_subrange : 'exp * 'exp * 'exp * 'exp -> 'exp_aux
-  ; e_vector_append          : 'exp * 'exp -> 'exp_aux
-  ; e_list                   : 'exp list -> 'exp_aux
-  ; e_cons                   : 'exp * 'exp -> 'exp_aux
-  ; e_record                 : 'fexps -> 'exp_aux
-  ; e_record_update          : 'exp * 'fexps -> 'exp_aux
-  ; e_field                  : 'exp * id -> 'exp_aux
-  ; e_case                   : 'exp * 'pexp list -> 'exp_aux
-  ; e_let                    : 'letbind * 'exp -> 'exp_aux
-  ; e_assign                 : 'lexp * 'exp -> 'exp_aux
-  ; e_exit                   : 'exp -> 'exp_aux
-  ; e_internal_cast          : 'a annot * 'exp -> 'exp_aux
-  ; e_internal_exp           : 'a annot -> 'exp_aux
-  ; e_internal_exp_user      : 'a annot * 'a annot -> 'exp_aux
-  ; e_internal_let           : 'lexp * 'exp * 'exp -> 'exp_aux
-  ; e_aux                    : 'exp_aux * 'a annot -> 'exp
-  ; lEXP_id                  : id -> 'lexp_aux
-  ; lEXP_memory              : id * 'exp list -> 'lexp_aux
-  ; lEXP_cast                : Ast.typ * id -> 'lexp_aux
-  ; lEXP_vector              : 'lexp * 'exp -> 'lexp_aux
-  ; lEXP_vector_range        : 'lexp * 'exp * 'exp -> 'lexp_aux
-  ; lEXP_field               : 'lexp * id -> 'lexp_aux
-  ; lEXP_aux                 : 'lexp_aux * 'a annot -> 'lexp
-  ; fE_Fexp                  : id * 'exp -> 'fexp_aux
-  ; fE_aux                   : 'fexp_aux * 'a annot -> 'fexp
-  ; fES_Fexps                : 'fexp list * bool -> 'fexps_aux
-  ; fES_aux                  : 'fexps_aux * 'a annot -> 'fexps
-  ; def_val_empty            : 'opt_default_aux
-  ; def_val_dec              : 'exp -> 'opt_default_aux
-  ; def_val_aux              : 'opt_default_aux * 'a annot -> 'opt_default
-  ; pat_exp                  : 'pat * 'exp -> 'pexp_aux
-  ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
-  ; lB_val_explicit          : typschm * 'pat * 'exp -> 'letbind_aux
-  ; lB_val_implicit          : 'pat * 'exp -> 'letbind_aux
-  ; lB_aux                   : 'letbind_aux * 'a annot -> 'letbind
-  ; pat_alg                  : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg
-  }
-    
-let rec fold_exp_aux alg = function
-  | E_block es -> alg.e_block (List.map (fold_exp alg) es)
-  | E_nondet es -> alg.e_nondet (List.map (fold_exp alg) es)
-  | E_id id -> alg.e_id id
-  | E_lit lit -> alg.e_lit lit
-  | E_cast (typ,e) -> alg.e_cast (typ, fold_exp alg e)
-  | E_app (id,es) -> alg.e_app (id, List.map (fold_exp alg) es)
-  | E_app_infix (e1,id,e2) -> alg.e_app_infix (fold_exp alg e1, id, fold_exp alg e2)
-  | E_tuple es -> alg.e_tuple (List.map (fold_exp alg) es)
-  | E_if (e1,e2,e3) -> alg.e_if (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
-  | E_for (id,e1,e2,e3,order,e4) ->
-     alg.e_for (id,fold_exp alg e1, fold_exp alg e2, fold_exp alg e3, order, fold_exp alg e4)
-  | E_vector es -> alg.e_vector (List.map (fold_exp alg) es)
-  | E_vector_indexed (es,opt) ->
-     alg.e_vector_indexed (List.map (fun (id,e) -> (id,fold_exp alg e)) es, fold_opt_default alg opt)
-  | E_vector_access (e1,e2) -> alg.e_vector_access (fold_exp alg e1, fold_exp alg e2)
-  | E_vector_subrange (e1,e2,e3) ->
-     alg.e_vector_subrange (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
-  | E_vector_update (e1,e2,e3) ->
-     alg.e_vector_update (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
-  | E_vector_update_subrange (e1,e2,e3,e4) ->
-     alg.e_vector_update_subrange (fold_exp alg e1,fold_exp alg e2, fold_exp alg e3, fold_exp alg e4)
-  | E_vector_append (e1,e2) -> alg.e_vector_append (fold_exp alg e1, fold_exp alg e2)
-  | E_list es -> alg.e_list (List.map (fold_exp alg) es)
-  | E_cons (e1,e2) -> alg.e_cons (fold_exp alg e1, fold_exp alg e2)
-  | E_record fexps -> alg.e_record (fold_fexps alg fexps)
-  | E_record_update (e,fexps) -> alg.e_record_update (fold_exp alg e, fold_fexps alg fexps)
-  | E_field (e,id) -> alg.e_field (fold_exp alg e, id)
-  | E_case (e,pexps) -> alg.e_case (fold_exp alg e, List.map (fold_pexp alg) pexps)
-  | E_let (letbind,e) -> alg.e_let (fold_letbind alg letbind, fold_exp alg e)
-  | E_assign (lexp,e) -> alg.e_assign (fold_lexp alg lexp, fold_exp alg e)
-  | E_exit e -> alg.e_exit (fold_exp alg e)
-  | E_internal_cast (annot,e) -> alg.e_internal_cast (annot, fold_exp alg e)
-  | E_internal_exp annot -> alg.e_internal_exp annot
-  | E_internal_exp_user (annot1,annot2) -> alg.e_internal_exp_user (annot1,annot2)
-  | E_internal_let (lexp,e1,e2) ->
-     alg.e_internal_let (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
-and fold_exp alg (E_aux (exp_aux,annot)) = alg.e_aux (fold_exp_aux alg exp_aux, annot)
-and fold_lexp_aux alg = function
-  | LEXP_id id -> alg.lEXP_id id
-  | LEXP_memory (id,es) -> alg.lEXP_memory (id, List.map (fold_exp alg) es)
-  | LEXP_cast (typ,id) -> alg.lEXP_cast (typ,id)
-  | LEXP_vector (lexp,e) -> alg.lEXP_vector (fold_lexp alg lexp, fold_exp alg e)
-  | LEXP_vector_range (lexp,e1,e2) ->
-     alg.lEXP_vector_range (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
- | LEXP_field (lexp,id) -> alg.lEXP_field (fold_lexp alg lexp, id)
-and fold_lexp alg (LEXP_aux (lexp_aux,annot)) =
-  alg.lEXP_aux (fold_lexp_aux alg lexp_aux, annot)
-and fold_fexp_aux alg (FE_Fexp (id,e)) = alg.fE_Fexp (id, fold_exp alg e)
-and fold_fexp alg (FE_aux (fexp_aux,annot)) = alg.fE_aux (fold_fexp_aux alg fexp_aux,annot)
-and fold_fexps_aux alg (FES_Fexps (fexps,b)) = alg.fES_Fexps (List.map (fold_fexp alg) fexps, b)
-and fold_fexps alg (FES_aux (fexps_aux,annot)) = alg.fES_aux (fold_fexps_aux alg fexps_aux, annot)
-and fold_opt_default_aux alg = function
-  | Def_val_empty -> alg.def_val_empty
-  | Def_val_dec e -> alg.def_val_dec (fold_exp alg e)
-and fold_opt_default alg (Def_val_aux (opt_default_aux,annot)) =
-  alg.def_val_aux (fold_opt_default_aux alg opt_default_aux, annot)
-and fold_pexp_aux alg (Pat_exp (pat,e)) = alg.pat_exp (fold_pat alg.pat_alg pat, fold_exp alg e)
-and fold_pexp alg (Pat_aux (pexp_aux,annot)) = alg.pat_aux (fold_pexp_aux alg pexp_aux, annot)
-and fold_letbind_aux alg = function
-  | LB_val_explicit (t,pat,e) -> alg.lB_val_explicit (t,fold_pat alg.pat_alg pat, fold_exp alg e)
-  | LB_val_implicit (pat,e) -> alg.lB_val_implicit (fold_pat alg.pat_alg pat, fold_exp alg e)
-and fold_letbind alg (LB_aux (letbind_aux,annot)) = alg.lB_aux (fold_letbind_aux alg letbind_aux, annot)
-
 
 
 let normalise_exp exp =
