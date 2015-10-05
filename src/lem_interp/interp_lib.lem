@@ -652,7 +652,7 @@ let library_functions direction = [
   ("bitwise_leftshift", shift_op_vec "<<");
   ("bitwise_rightshift", shift_op_vec ">>");
   ("bitwise_rotate", shift_op_vec "<<<");
-  ("mod", arith_op_no0 (mod));
+  ("modulo", arith_op_no0 (mod));
   ("mod_vec", arith_op_vec_no0 hardware_mod "mod" Unsigned 1);
   ("mod_vec_range", arith_op_vec_range_no0 hardware_mod "mod" Unsigned 1);
   ("quot", arith_op_no0 hardware_quot);
