@@ -530,22 +530,23 @@ let remove_vector_concat_pat pat =
 
   (* remove names from vectors in vector_concat patterns and collect them as declarations for the
      function body or expression *)
-  let unname_vector_concat_elements :
+  let unname_vector_concat_elements = (* :
         ('a,
          'a pat *      ((tannot exp -> tannot exp) list),
          'a pat_aux *  ((tannot exp -> tannot exp) list),
          'a fpat *     ((tannot exp -> tannot exp) list),
          'a fpat_aux * ((tannot exp -> tannot exp) list))
-          pat_alg =
+          pat_alg = *)
 
     (* build a let-expression of the form "let child = root[i..j] in body" *)
-    let letbind_vec (rootid,rannot) (child,cannot) (i,j) body =
+    let letbind_vec (rootid,rannot) (child,cannot) (i,j) =
       let index n =
         let typ = simple_annot {t = Tapp ("atom",[TA_nexp (mk_c (big_int_of_int n))])} in
         E_aux (E_lit (L_aux (L_num n,Parse_ast.Unknown)), (Parse_ast.Unknown,typ)) in
       let subv = E_aux (E_vector_subrange (E_aux (E_id rootid,rannot),index i,index j),cannot) in
       let typ = (Parse_ast.Unknown,simple_annot {t = Tid "unit"}) in
-      E_aux (E_let (LB_aux (LB_val_implicit (P_aux (P_id child,cannot),subv),cannot),body),typ) in
+      let letbind = LB_val_implicit (P_aux (P_id child,cannot),subv) in
+      (LB_aux (letbind,typ), (fun body -> E_aux (E_let (LB_aux (letbind,cannot),body),typ))) in
 
     let p_aux ((pattern,decls),rannot) = match pattern with
       | P_as (P_aux (P_vector_concat pats,_),rootid) ->
@@ -556,12 +557,12 @@ let remove_vector_concat_pat pat =
                (* if we see a named vector pattern, remove the name and remember to 
                   declare it later *)
                | P_as (P_aux (p,cannot),cname) ->
-                  (pos + length, pat_acc @ [P_aux (p,cannot)],
-                   decl_acc @ [letbind_vec (rootid,rannot) (cname,cannot) (pos,pos + length - 1)])
+                   let (lb,decl) = letbind_vec (rootid,rannot) (cname,cannot) (pos,pos + length - 1) in
+                   (pos + length, pat_acc @ [P_aux (p,cannot)], decl_acc @ [(lb,decl)])
                (* if we see a P_id variable, remember to declare it later *)
                | P_id cname ->
-                  (pos + length, pat_acc @ [P_aux (P_id cname,cannot)],
-                   decl_acc @ [letbind_vec (rootid,rannot) (cname,cannot) (pos,pos + length - 1)])
+                  let (lb,decl) = letbind_vec (rootid,rannot) (cname,cannot) (pos,pos + length - 1) in
+                  (pos + length, pat_acc @ [P_aux (P_id cname,cannot)], decl_acc @ [(lb,decl)])
                (* normal vector patterns are fine *)
                | _ -> (pos + length, pat_acc @ [P_aux (p,cannot)],decl_acc) )
            (* non-vector patterns aren't *)
@@ -597,9 +598,11 @@ let remove_vector_concat_pat pat =
     ; fP_Fpat          = (fun (id,(pat,decls)) -> (FP_Fpat (id,pat),decls))
     } in
 
-  let (pat,decls_list) = fold_pat unname_vector_concat_elements pat in
+  let (pat,decls) = fold_pat unname_vector_concat_elements pat in
 
-  let decls = List.fold_right (fun f g x -> f (g x)) decls_list (fun b -> b) in
+  let (letbinds,decls) = List.split decls in
+
+  let decls = List.fold_left (fun f g x -> f (g x)) (fun b -> b) decls in
              
   (* at this point shouldn't have P_as patterns in P_vector_concat patterns any more,
      all P_as and P_id vectors should have their declarations in decls.
@@ -636,7 +639,7 @@ let remove_vector_concat_pat pat =
   
   let pat = fold_pat remove_vector_concats pat in
   
-  (pat,decls)
+  (pat,letbinds,decls)
 
 (* assumes there are no more E_internal expressions *)
 let rewrite_exp_remove_vector_concat_pat rewriters nmap (E_aux (exp,(l,annot)) as full_exp) = 
@@ -646,15 +649,15 @@ let rewrite_exp_remove_vector_concat_pat rewriters nmap (E_aux (exp,(l,annot)) a
   match exp with
   | E_case (e,ps) ->
      let aux (Pat_aux (Pat_exp (pat,body),annot')) =
-       let (pat,decls) = remove_vector_concat_pat pat in
+       let (pat,_,decls) = remove_vector_concat_pat pat in
        Pat_aux (Pat_exp (pat,decls (rewrite_rec body)),annot') in
      rewrap (E_case (rewrite_rec e,List.map aux ps))
   | E_let (LB_aux (LB_val_explicit (typ,pat,v),annot'),body) ->
-     let (pat,decls) = remove_vector_concat_pat pat in
+     let (pat,_,decls) = remove_vector_concat_pat pat in
      rewrap (E_let (LB_aux (LB_val_explicit (typ,pat,rewrite_rec v),annot'),
                     decls (rewrite_rec body)))
   | E_let (LB_aux (LB_val_implicit (pat,v),annot'),body) ->
-     let (pat,decls) = remove_vector_concat_pat pat in
+     let (pat,_,decls) = remove_vector_concat_pat pat in
      rewrap (E_let (LB_aux (LB_val_implicit (pat,rewrite_rec v),annot'),
                     decls (rewrite_rec body)))
   | exp -> rewrite_base full_exp
@@ -662,10 +665,22 @@ let rewrite_exp_remove_vector_concat_pat rewriters nmap (E_aux (exp,(l,annot)) a
 let rewrite_fun_remove_vector_concat_pat
       rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
   let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),(l,annot))) =
-    let (pat,decls) = remove_vector_concat_pat pat in
+    let (pat,_,decls) = remove_vector_concat_pat pat in
     (FCL_aux (FCL_Funcl (id,pat,rewriters.rewrite_exp rewriters (get_map_tannot fdannot) (decls exp)),(l,annot))) 
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
+let rewrite_defs_remove_vector_concat_pat rewriters (Defs defs) =
+  let rewrite_def d = match d with
+    | DEF_val (LB_aux (LB_val_explicit (t,pat,exp),a)) ->
+       let (pat,letbinds,_) = remove_vector_concat_pat pat in
+       let defvals = List.map (fun lb -> DEF_val lb) letbinds in
+       [DEF_val (LB_aux (LB_val_explicit (t,pat,exp),a))] @ defvals
+    | DEF_val (LB_aux (LB_val_implicit (pat,exp),a)) -> 
+       let (pat,letbinds,_) = remove_vector_concat_pat pat in
+       let defvals = List.map (fun lb -> DEF_val lb) letbinds in
+       [DEF_val (LB_aux (LB_val_implicit (pat,exp),a))] @ defvals
+    | _ -> [d] in
+  Defs (List.flatten (List.map rewrite_def defs))
 
 let rewrite_defs_remove_vector_concat defs = rewrite_defs_base
     {rewrite_exp = rewrite_exp_remove_vector_concat_pat;
@@ -674,7 +689,7 @@ let rewrite_defs_remove_vector_concat defs = rewrite_defs_base
      rewrite_lexp = rewrite_lexp;
      rewrite_fun = rewrite_fun_remove_vector_concat_pat;
      rewrite_def = rewrite_def;
-     rewrite_defs = rewrite_defs_base} defs
+     rewrite_defs = rewrite_defs_remove_vector_concat_pat} defs
     
 (*Expects to be called after rewrite_defs; thus the following should not appear:
   internal_exp of any form
