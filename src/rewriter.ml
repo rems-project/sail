@@ -636,7 +636,7 @@ let remove_vector_concat_pat pat =
            let wild _ = P_aux (P_wild,(Parse_ast.Unknown,simple_annot {t = Tid "bit"})) in
            acc @ (List.map wild (range 0 ((int_of_big_int length) - 1)))
         | _,(l,_) -> raise (Reporting_basic.err_unreachable l "Non-vector in vector-concat pattern") in
-      P_vector_concat (List.fold_left aux [] ps) in
+      P_vector (List.fold_left aux [] ps) in
     {id_pat_alg with p_vector_concat = p_vector_concat} in
   
   let pat = fold_pat remove_vector_concats pat in
@@ -672,7 +672,9 @@ let rewrite_fun_remove_vector_concat_pat
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
 let rewrite_defs_remove_vector_concat_pat rewriters (Defs defs) =
-  let rewrite_def d = match d with
+  let rewrite_def d =
+    let d = rewriters.rewrite_def rewriters d in
+    match d with
     | DEF_val (LB_aux (LB_val_explicit (t,pat,exp),a)) ->
        let (pat,letbinds,_) = remove_vector_concat_pat pat in
        let defvals = List.map (fun lb -> DEF_val lb) letbinds in
@@ -681,7 +683,7 @@ let rewrite_defs_remove_vector_concat_pat rewriters (Defs defs) =
        let (pat,letbinds,_) = remove_vector_concat_pat pat in
        let defvals = List.map (fun lb -> DEF_val lb) letbinds in
        [DEF_val (LB_aux (LB_val_implicit (pat,exp),a))] @ defvals
-    | _ -> [d] in
+    | d -> [rewriters.rewrite_def rewriters d] in
   Defs (List.flatten (List.map rewrite_def defs))
 
 let rewrite_defs_remove_vector_concat defs = rewrite_defs_base
