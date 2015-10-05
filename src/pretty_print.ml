@@ -1614,7 +1614,7 @@ let doc_fundef_ocaml (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [FCL_aux (FCL_Funcl(id,pat,exp),_)] ->
-    separate space [(string "let"); (doc_rec_ocaml r); (doc_id_ocaml id); (doc_pat_ocaml pat); equals; (doc_exp_ocaml exp)]
+     (separate space [(string "let"); (doc_rec_ocaml r); (doc_id_ocaml id); (doc_pat_ocaml pat); equals]) ^^ hardline ^^ (doc_exp_ocaml exp)
   | _ ->
     let id = get_id fcls in
     let sep = hardline ^^ pipe ^^ space in
