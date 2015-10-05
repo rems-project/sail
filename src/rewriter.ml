@@ -287,7 +287,9 @@ let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls
   let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),(l,annot))) = 
     (*let _ = Printf.eprintf "Rewriting function %s, pattern %s\n" 
       (match id with (Id_aux (Id i,_)) -> i) (Pretty_print.pat_to_string pat) in*)
-    (FCL_aux (FCL_Funcl (id,pat,rewriters.rewrite_exp rewriters (get_map_tannot fdannot) exp),(l,annot))) 
+    let map = get_map_tannot fdannot in
+    (FCL_aux (FCL_Funcl (id,rewriters.rewrite_pat rewriters map pat,
+                            rewriters.rewrite_exp rewriters map exp),(l,annot))) 
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
 let rewrite_def rewriters d = match d with
