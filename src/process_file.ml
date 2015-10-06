@@ -171,12 +171,12 @@ let output1 libpath out_arg filename defs (* alldoc_accum alldoc_inc_accum alldo
 	  close_output_with_check ext_o
 	end
       | Ocaml_out None ->
-        let ((o,temp_file_name, filename) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in
+        let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in
 	begin Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["Sail_values"];
         close_output_with_check ext_o
         end
       | Ocaml_out (Some lib) ->
-        let ((o,temp_file_name, filename) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in
+        let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in
 	Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["Sail_values"; lib];
         close_output_with_check ext_o
 
