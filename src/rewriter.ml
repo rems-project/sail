@@ -685,7 +685,14 @@ let remove_vector_concat_pat pat =
           (_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_)) ->
            let wild _ = P_aux (P_wild,(Parse_ast.Unknown,simple_annot {t = Tid "bit"})) in
            acc @ (List.map wild (range 0 ((int_of_big_int length) - 1)))
-        | _,(l,_) -> raise (Reporting_basic.err_unreachable l "remove_vector_concats: Non-vector in vector-concat pattern") in
+        | P_wild,
+          (_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_)) ->
+           let wild _ = P_aux (P_wild,(Parse_ast.Unknown,simple_annot {t = Tid "bit"})) in
+           acc @ (List.map wild (range 0 ((int_of_big_int length) - 1)))
+        | P_lit _,(l,_) ->
+           raise (Reporting_basic.err_unreachable l "remove_vector_concats: P_lit pattern in vector-concat pattern")
+        | _,(l,_) ->
+           raise (Reporting_basic.err_unreachable l "remove_vector_concats: Non-vector in vector-concat pattern") in
       P_vector (List.fold_left aux [] ps) in
     {id_pat_alg with p_vector_concat = p_vector_concat} in
   
