@@ -1546,7 +1546,7 @@ let doc_exp_ocaml, doc_let_ocaml =
           | Alias_pair(reg1,reg2) ->
             parens ((string "set_two_regs") ^^ space ^^ string reg1 ^^ space ^^ string reg2 ^^ space ^^ exp e_new_v))              
        | _ -> 
-         doc_id_ocaml id) 
+         parens (string "set_named_register" ^^ space ^^ string_lit (doc_id_ocaml id) ^^ space ^^ (exp e_new_v)))
 
   and doc_lexp_fcall ((LEXP_aux(lexp,(l,annot))) as le) e_new_v = match lexp with
     | LEXP_memory(id,args) -> doc_id_ocaml id ^^ parens (separate_map comma exp (args@[e_new_v]))

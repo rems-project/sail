@@ -274,7 +274,7 @@ let rec arith_op_overflow_vec op sign size (l,r) =
   let correct_size_num = to_vec ord act_size n in
   let one_more_size_u = to_vec ord (succ_big_int act_size) n_unsign in
   let overflow = if (le_big_int n (get_max_representable_in sign (int_of_big_int len))) &&
-		    (ge_big_int n (get_min_representable_in sign (int_of_big_int len)))
+                    (ge_big_int n (get_min_representable_in sign (int_of_big_int len)))
     then Vzero
     else Vone in
   let c_out = most_significant one_more_size_u in
@@ -302,11 +302,11 @@ let rec arith_op_overflow_vec_bit op sign size (l,r_bit) =
   let overflow =
     if changed 
     then if (le_big_int n (get_max_representable_in sign (int_of_big_int act_size))) &&
-	    (ge_big_int n (get_min_representable_in sign (int_of_big_int act_size)))
+            (ge_big_int n (get_min_representable_in sign (int_of_big_int act_size)))
       then Vzero
       else Vone 
     else Vone in
-	(correct_size_num,overflow,most_significant one_larger)
+        (correct_size_num,overflow,most_significant one_larger)
 
 let add_overflow_vec_bit_signed = arith_op_overflow_vec_bit add_big_int true unit_big_int
 let minus_overflow_vec_bit = arith_op_overflow_vec_bit sub_big_int false unit_big_int
@@ -336,5 +336,58 @@ let shift_op_vec op (l,r) =
 let bitwise_leftshift = shift_op_vec "<<"
 let bitwise_rightshift = shift_op_vec ">>"
 let bitwise_rotate = shift_op_vec "<<<"
+
+let rec arith_op_no0 op (l,r) = 
+  if eq_big_int r zero_big_int
+  then None
+  else Some (op l r)
+
+let rec arith_op_vec_no0 op sign size (l,r) =
+  let ord = get_ord l in
+  let act_size = int_of_big_int (mult_big_int (length l) size) in
+  let (l',r') = (to_num sign l,to_num sign r) in
+  let n = arith_op op (l',r') in
+  let representable,n' = 
+    match n with 
+    | Some n' ->  
+      ((le_big_int n' (get_max_representable_in sign act_size)) &&
+       (ge_big_int n' (get_min_representable_in sign act_size))), n'
+    | _ -> false,zero_big_int in
+  if representable 
+  then to_vec ord (big_int_of_int act_size) n'
+  else
+    match l with
+    | Vvector(_, start, _) | Vregister(_, start, _, _) ->
+      Vvector((Array.make act_size Vundef), start, ord)
+    | _ -> assert false
+
+let arith_op_overflow_no0_vec op sign size (l,r) =
+  let ord = get_ord l in
+  let rep_size = mult_big_int (length r) size in
+  let act_size = mult_big_int (length l) size in
+  let (l',r') = ((to_num sign l),(to_num sign r)) in
+  let (l_u,r_u) = (to_num false l,to_num false r) in
+  let n = arith_op_no0 op (l',r') in
+  let n_u = arith_op_no0 op (l_u,r_u) in
+  let representable,n',n_u' = 
+    match n, n_u with 
+    | Some n',Some n_u' ->  
+      ((le_big_int n' (get_max_representable_in sign (int_of_big_int rep_size))) &&
+       (ge_big_int n' (get_min_representable_in sign (int_of_big_int rep_size))), n', n_u')
+    | _ -> true,zero_big_int,zero_big_int in
+  let (correct_size_num,one_more) = 
+    if representable then
+      (to_vec ord act_size n',to_vec ord (succ_big_int act_size) n_u')
+    else match l with 
+      | Vvector(_, start, _) | Vregister(_, start, _, _) ->
+        Vvector((Array.make (int_of_big_int act_size) Vundef), start, ord),
+        Vvector((Array.make  ((int_of_big_int act_size) + 1) Vundef), start, ord)
+      | _ -> assert false in
+  let overflow = if representable then Vzero else Vone in
+  (correct_size_num,overflow,most_significant one_more)
+
+let arith_op_vec_range_no0 op sign size (l,r) =
+  let ord = get_ord l in
+  arith_op_vec_no0 op sign size (l,(to_vec ord (length l) r))
 
 
