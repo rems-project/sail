@@ -49,8 +49,10 @@ open Process_file
 let lib = ref []
 let opt_print_version = ref false
 let opt_print_verbose = ref false
+let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
 let opt_print_ocaml = ref false
+let opt_libs_lem = ref ([]:string list)
 let opt_libs_ocaml = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let options = Arg.align ([
@@ -61,14 +63,20 @@ let options = Arg.align ([
     Arg.Unit (fun b -> opt_print_verbose := true),
     " pretty-print out the file");
   ( "-lem_ast",
-    Arg.Unit (fun b -> opt_print_lem := true),
+    Arg.Unit (fun b -> opt_print_lem_ast := true),
     " pretty-print a Lem AST representation of the file");
+  ( "-lem",
+    Arg.Unit (fun b -> opt_print_lem := true),
+    " print a Lem translated version of the specification");
   ( "-ocaml",
     Arg.Unit (fun b -> opt_print_ocaml := true),
     " print an Ocaml translated version of the specification");
   ( "-skip_constraints",
     Arg.Clear Type_internal.do_resolve_constraints,
     " skip constraint resolution in type-checking");
+  ( "-lem_lib",
+    Arg.String (fun l -> opt_libs_lem := l::!opt_libs_lem),
+    " provide additional library to open in Lem output");
   ( "-ocaml_lib",
     Arg.String (fun l -> opt_libs_ocaml := l::!opt_libs_ocaml),
     " provide additional library to open in Ocaml output");
@@ -104,7 +112,7 @@ let main() =
       (if !(opt_print_verbose)
        then ((Pretty_print.pp_defs stdout) ast)
        else ());
-      (if !(opt_print_lem)
+      (if !(opt_print_lem_ast)
        then output "" Lem_ast_out [(fst (List.hd parsed)),ast]
        else ());
       (if !(opt_print_ocaml)
@@ -113,6 +121,12 @@ let main() =
          then output "" (Ocaml_out None) [(fst (List.hd parsed)),ast_ocaml]
          else output "" (Ocaml_out (Some (List.hd !opt_libs_ocaml))) [(fst (List.hd parsed)),ast_ocaml]
        else ());
+      (if !(opt_print_lem)
+       then let ast_lem = rewrite_ast_lem ast in
+         if !(opt_libs_lem) = []
+         then output "" (Lem_out None) [(fst (List.hd parsed)),ast_lem]
+         else output "" (Lem_out (Some (List.hd !opt_libs_lem))) [(fst (List.hd parsed)),ast_lem]
+       else ())
     end
 
 let _ =  try

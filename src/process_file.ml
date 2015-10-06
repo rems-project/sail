@@ -48,6 +48,7 @@ open Type_internal
 
 type out_type =
   | Lem_ast_out
+  | Lem_out of string option
   | Ocaml_out of string option
 
 (* let r = Ulib.Text.of_latin1 *)
@@ -102,6 +103,7 @@ let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.
   Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env,Type_internal.nob,Envmap.empty)) defs 
 
 let rewrite_ast (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs defs
+let rewrite_ast_lem (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs_lem defs
 let rewrite_ast_ocaml (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs_ocaml defs
 
 let open_output_with_check file_name =
@@ -170,6 +172,15 @@ let output1 libpath out_arg filename defs (* alldoc_accum alldoc_inc_accum alldo
 	  Pretty_print.pp_lem_defs o defs;
 	  close_output_with_check ext_o
 	end
+      | Lem_out None ->
+        let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ "embed.lem") in
+	begin Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["Sail_values"];
+        close_output_with_check ext_o
+        end
+      | Lem_out (Some lib) ->
+        let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ "embed.lem") in
+	Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["Sail_values"; lib];
+        close_output_with_check ext_o
       | Ocaml_out None ->
         let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in
 	begin Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["Sail_values"];

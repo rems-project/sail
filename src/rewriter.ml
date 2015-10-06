@@ -499,6 +499,7 @@ and fold_letbind_aux alg = function
 and fold_letbind alg (LB_aux (letbind_aux,annot)) = alg.lB_aux (fold_letbind_aux alg letbind_aux, annot)
 
 
+let remove_vector_concat_pat_counter = ref 0
 let remove_vector_concat_pat pat =
   (* ivc: bool that indicates whether the exp is in a vector_concat pattern *)
   let remove_tannot_in_vector_concats = 
@@ -528,10 +529,9 @@ let remove_vector_concat_pat pat =
 
   let pat = (fold_pat remove_tannot_in_vector_concats pat) false in
 
-  let counter = ref 0 in
   let fresh_name () =
-    let current = !counter in
-    let () = counter := (current + 1) in
+    let current = !remove_vector_concat_pat_counter in
+    let () = remove_vector_concat_pat_counter := (current + 1) in
     Id_aux (Id ("__v" ^ string_of_int current), Parse_ast.Unknown) in
   
   (* expects that P_typ elements have been removed from AST,
@@ -799,14 +799,14 @@ let rewrite_defs_ocaml defs =
   defs_lifted_assign
 
 
-let normalise_exp exp =
+let sequentialise_effects_counter = ref 0
+let sequentialise_effects exp =
 
   let compose f g x = f (g x) in
 
-  let counter = ref 0 in
   let fresh_name () =
-    let current = !counter in
-    let () = counter := (current + 1) in
+    let current = !sequentialise_effects_counter in
+    let () = sequentialise_effects_counter := (current + 1) in
     Id_aux (Id ("__w" ^ string_of_int current), Parse_ast.Unknown) in
   
   let aux (((E_aux (_,annot)) as e,b) : ('a exp * bool)) : (('a exp -> 'a exp) * 'a exp * bool) =
@@ -834,7 +834,8 @@ let normalise_exp exp =
        (compose acc_decl decl, acc_es @ [e], acc_b || b))
       ((fun x -> x), [], false) es in
             
-  (* for each expression e: return a tuple (normalised e, does e contain effectful terms) *)
+  (* for each expression e: return a tuple (e',b) where e' is e rewritten, 
+     b indicates whether e contains effectful terms) *)
   fold_exp 
     { e_block =
         (fun es ->
@@ -1038,3 +1039,18 @@ let normalise_exp exp =
     ; lB_aux = (fun ((lb,b),a) -> (LB_aux (lb,a),b))
     ; pat_alg = id_pat_alg
     } exp
+
+let rewrite_defs_sequentialise_effects (Defs defs) = rewrite_defs_base
+  {rewrite_exp = (fun _ _ exp -> fst (sequentialise_effects exp));
+   rewrite_pat = rewrite_pat;
+   rewrite_let = rewrite_let;
+   rewrite_lexp = rewrite_lexp;
+   rewrite_fun = rewrite_fun;
+   rewrite_def = rewrite_def;
+   rewrite_defs = rewrite_defs_base} (Defs defs)
+
+let rewrite_defs_lem defs =
+  let defs = rewrite_defs_remove_vector_concat defs in
+  let defs = rewrite_defs_exp_lift_assign defs in
+  let defs = rewrite_defs_sequentialise_effects defs in
+  defs
