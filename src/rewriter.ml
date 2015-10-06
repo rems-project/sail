@@ -177,7 +177,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
       rewrap (E_case (rewrite exp,
                       (List.map 
                          (fun (Pat_aux (Pat_exp(p,e),pannot)) -> 
-                           Pat_aux (Pat_exp(p,rewrite e),pannot)) pexps)))
+                           Pat_aux (Pat_exp(rewriters.rewrite_pat rewriters nmap p,rewrite e),pannot)) pexps)))
     | E_let (letbind,body) -> rewrap (E_let(rewriters.rewrite_let rewriters nmap letbind,rewrite body))
     | E_assign (lexp,exp) -> rewrap (E_assign(rewriters.rewrite_lexp rewriters nmap lexp,rewrite exp))
     | E_exit e -> rewrap (E_exit (rewrite e))
@@ -266,9 +266,11 @@ let rewrite_let rewriters map (LB_aux(letbind,(l,annot))) =
   let map = merge_option_maps map (get_map_tannot annot) in
   match letbind with
   | LB_val_explicit (typschm, pat,exp) ->
-    LB_aux(LB_val_explicit (typschm,pat, rewriters.rewrite_exp rewriters map exp),(l,annot))
+    LB_aux(LB_val_explicit (typschm,rewriters.rewrite_pat rewriters map pat,
+                            rewriters.rewrite_exp rewriters map exp),(l,annot))
   | LB_val_implicit ( pat, exp) ->
-    LB_aux(LB_val_implicit (pat,rewriters.rewrite_exp rewriters map exp),(l,annot))
+    LB_aux(LB_val_implicit (rewriters.rewrite_pat rewriters map pat,
+                            rewriters.rewrite_exp rewriters map exp),(l,annot))
 
 let rewrite_lexp rewriters map (LEXP_aux(lexp,(l,annot))) = 
   let rewrap le = LEXP_aux(le,(l,annot)) in
