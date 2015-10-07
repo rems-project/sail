@@ -185,7 +185,8 @@ type bounds_env =
 type t_params = (string * kind) list
 type tannot = 
   | NoTyp
-  | Base of (t_params * t) * tag * nexp_range list * effect * bounds_env
+  (*See .mli for purpose of attributes *)
+  | Base of (t_params * t) * tag * nexp_range list * effect * effect * bounds_env
   (* First tannot is the most polymorphic version; the list includes all variants. All included t are Tfn *)
   | Overload of tannot * bool * tannot list 
 

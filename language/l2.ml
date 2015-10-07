@@ -71,6 +71,7 @@ base_effect_aux =  (* effect *)
  | BE_undef (* undefined-instruction exception *)
  | BE_unspec (* unspecified values *)
  | BE_nondet (* nondeterminism from intra-instruction parallelism *)
+ | BE_lset (* Local mutation happend; not user-writable *)
 
 
 type 
