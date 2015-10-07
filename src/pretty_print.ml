@@ -148,7 +148,8 @@ and pp_format_base_effect_lem (BE_aux(e,l)) =
     | BE_depend -> "BE_depend"
     | BE_undef -> "BE_undef"
     | BE_unspec -> "BE_unspec"
-    | BE_nondet -> "BE_nondet") ^ " " ^
+    | BE_nondet -> "BE_nondet"
+    | BE_lset -> "BE_lset") ^ " " ^
   (pp_format_l_lem l) ^ ")"
 and pp_format_effects_lem (Effect_aux(e,l)) =
   "(Effect_aux " ^
@@ -318,10 +319,10 @@ let rec pp_format_nes nes =
 
 let pp_format_annot = function
   | NoTyp -> "Nothing"
-  | Base((_,t),tag,nes,efct,efctsum,_,_) -> 
+  | Base((_,t),tag,nes,efct,efctsum,_) -> 
     (*TODO print out bindings for use in pattern match in interpreter*)
      "(Just (" ^ pp_format_t t ^ ", " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^
-       pp_format_e efct ", " ^ pp_format_e efctsum ^ "))"
+       pp_format_e efct ^ ", " ^ pp_format_e efctsum ^ "))"
   | Overload _ -> "Nothing"
 
 let pp_annot ppf ant = base ppf (pp_format_annot ant)
@@ -433,16 +434,16 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
         | Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
           (match r.nexp with
           | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
-                                       kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e_sum,nob))
+                                       kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
           | Nvar v -> fprintf ppf  "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
-                                     kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e_sum,nob))
+                                     kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
           | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given vector without known length"))
         | Tapp("implicit",[TA_nexp r]) ->
           (match r.nexp with
             | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
-                                       kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e_sum,nob))
+                                       kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
             | Nvar v -> fprintf ppf "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
-                                     kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e_sum,nob))
+                                     kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
             | _ -> raise (Reporting_basic.err_unreachable l "Internal_exp given implicit without variable or const"))
         | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given non-vector or implicit"))
     | E_internal_cast ((_, Overload (_,_, _)), _) | E_internal_exp _ ->  raise (Reporting_basic.err_unreachable l "Found internal cast or exp with overload")

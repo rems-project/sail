@@ -141,6 +141,8 @@ val mk_n_inf : unit -> nexp
 val mk_inexact : unit -> nexp 
 val set_imp_param : nexp -> unit
 
+val mk_atom : nexp -> t
+
 type variable_range =
   | VR_eq of string * nexp
   | VR_range of string * nexp_range list
