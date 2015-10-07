@@ -185,7 +185,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
       let new_exp = rewrite exp in
       (*let _ = Printf.eprintf "Removing an internal_cast with %s\n" (tannot_to_string casted_annot) in*)
       (match casted_annot,exp with
-       | Base((_,t),_,_,_,_),E_aux(ec,(ecl,Base((_,exp_t),_,_,_,_))) ->
+       | Base((_,t),_,_,_,_,_),E_aux(ec,(ecl,Base((_,exp_t),_,_,_,_,_))) ->
          (*let _ = Printf.eprintf "Considering removing an internal cast where the two types are %s and %s\n" (t_to_string t) (t_to_string exp_t) in*)
          (match t.t,exp_t.t with
           (*TODO should pass d_env into here so that I can look at the abbreviations if there are any here*)
@@ -203,7 +203,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
                                             Parse_ast.Unknown),new_exp))
                  | _ -> new_exp))
           | _ -> new_exp)
-       | Base((_,t),_,_,_,_),_ ->
+       | Base((_,t),_,_,_,_,_),_ ->
          (*let _ = Printf.eprintf "Considering removing an internal cast where the remaining type is %s\n%!"
             (t_to_string t) in*)
          (match t.t with
@@ -219,7 +219,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
        | _ -> (*let _ = Printf.eprintf "Not a base match?\n" in*) new_exp)
     | E_internal_exp (l,impl) ->
       (match impl with
-       | Base((_,t),_,_,_,bounds) ->
+       | Base((_,t),_,_,_,_,bounds) ->
          let bounds = match nmap with | None -> bounds | Some nm -> add_map_to_bounds nm bounds in
          (*let _ = Printf.eprintf "Rewriting internal expression, with type %s\n" (t_to_string t) in*)
           (match t.t with
@@ -244,7 +244,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
         | _ -> raise (Reporting_basic.err_unreachable l ("Internal_exp given none Base annot")))
     | E_internal_exp_user ((l,user_spec),(_,impl)) -> 
       (match (user_spec,impl) with
-        | (Base((_,tu),_,_,_,_), Base((_,ti),_,_,_,bounds)) ->
+        | (Base((_,tu),_,_,_,_,_), Base((_,ti),_,_,_,_,bounds)) ->
           (*let _ = Printf.eprintf "E_interal_user getting rewritten two types are %s and %s\n"
             (t_to_string tu) (t_to_string ti) in*)
           let bounds =  match nmap with | None -> bounds | Some nm -> add_map_to_bounds nm bounds in
@@ -603,7 +603,7 @@ let remove_vector_concat_pat pat =
     let p_aux = function
       | ((P_as (P_aux (P_vector_concat pats,rannot'),rootid),decls),rannot) ->
           let aux (pos,pat_acc,decl_acc) (P_aux (p,cannot)) = match cannot with
-            | (_,Base((_,{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_)) ->
+            | (_,Base((_,{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_)) ->
                let length  = int_of_big_int length in
                (match p with 
                 (* if we see a named vector pattern, remove the name and remember to 
@@ -684,11 +684,11 @@ let remove_vector_concat_pat pat =
       let aux acc (P_aux (p,annot)) = match p,annot with
         | P_vector ps,_ -> acc @ ps
         | P_id _,
-          (_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_)) ->
+          (_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_)) ->
            let wild _ = P_aux (P_wild,(Parse_ast.Unknown,simple_annot {t = Tid "bit"})) in
            acc @ (List.map wild (range 0 ((int_of_big_int length) - 1)))
         | P_wild,
-          (_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_)) ->
+          (_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_)) ->
            let wild _ = P_aux (P_wild,(Parse_ast.Unknown,simple_annot {t = Tid "bit"})) in
            acc @ (List.map wild (range 0 ((int_of_big_int length) - 1)))
         | P_lit _,(l,_) ->
@@ -766,7 +766,7 @@ let rewrite_exp_lift_assign_intro rewriters nmap ((E_aux (exp,(l,annot))) as ful
   | E_block exps ->
     let rec walker exps = match exps with
       | [] -> []
-      | (E_aux(E_assign(le,e), (l, Base((_,t),Emp_intro,_,_,_))))::exps ->
+      | (E_aux(E_assign(le,e), (l, Base((_,t),Emp_intro,_,_,_,_))))::exps ->
         let le' = rewriters.rewrite_lexp rewriters nmap le in
         let e' = rewrite_base e in
         let exps' = walker exps in
@@ -777,7 +777,7 @@ let rewrite_exp_lift_assign_intro rewriters nmap ((E_aux (exp,(l,annot))) as ful
     rewrap (E_block (walker exps))
   | E_assign(le,e) ->
     (match annot with
-     | Base((_,t),Emp_intro,_,_,_) ->
+     | Base((_,t),Emp_intro,_,_,_,_) ->
        let le' = rewriters.rewrite_lexp rewriters nmap le in
        let e' = rewrite_base e in
        rewrap (E_internal_let(le', e', E_aux(E_block [], (l, simple_annot {t=Tid "unit"}))))
@@ -849,11 +849,14 @@ let sequentialise_effects exp =
         )
     ; e_id = (fun id -> ((fun x -> x), E_id id,false))
     ; e_lit = (fun lit -> ((fun x -> x), E_lit lit,false))
-    ; e_cast = (fun (typ,(e,b)) -> ((fun x -> x), E_cast (typ,e),b))
+    ; e_cast =
+        (fun (typ,e) ->
+         let (decl,e,b) = aux e in
+         (decl, E_cast (typ,e),b))
     ; e_app =
         (fun (id,es) ->
-         let (decl,params,b) = list_aux es in
-         (decl,E_app (id,params),b)
+         let (decl,es,b) = list_aux es in
+         (decl,E_app (id,es),b)
         )
     ; e_app_infix =
         (fun (e1,id,e2) ->
@@ -939,8 +942,8 @@ let sequentialise_effects exp =
         )
     ; e_list =
         (fun es ->
-         let (decl,params,b) = list_aux es in
-         (decl, E_list params,b)
+         let (decl,es,b) = list_aux es in
+         (decl, E_list es,b)
         )
     ; e_cons = 
         (fun (e1,e2) ->
@@ -987,11 +990,11 @@ let sequentialise_effects exp =
     ; e_aux = 
         (fun ((decl,e,b),((_,typ) as a : ('a annot))) ->
          match typ with
-         | Base (_,_,_, {effect = Eset effs}, _) ->
+         | Base (_,_,_,{effect = Eset effs},_,_) ->
             (decl (E_aux (e,a)),
-             List.exists (function BE_aux (BE_undef,_)
-                                 | BE_aux (BE_unspec,_) -> false | _ -> true) effs)
-         | Base (_,_,_, {effect = Evar _},_) ->
+             b || List.exists (function BE_aux (BE_undef,_)
+                                      | BE_aux (BE_unspec,_) -> false | _ -> true) effs)
+         | Base (_,_,_,{effect = Evar _},_,_) ->
             failwith "Effect_var not supported."
          | Overload (_,_,_) ->
             failwith "Overload not supported."

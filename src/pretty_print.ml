@@ -318,9 +318,10 @@ let rec pp_format_nes nes =
 
 let pp_format_annot = function
   | NoTyp -> "Nothing"
-  | Base((_,t),tag,nes,efct,_) -> 
+  | Base((_,t),tag,nes,efct,efctsum,_,_) -> 
     (*TODO print out bindings for use in pattern match in interpreter*)
-    "(Just (" ^ pp_format_t t ^ ", " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^ pp_format_e efct ^ "))"
+     "(Just (" ^ pp_format_t t ^ ", " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^
+       pp_format_e efct ", " ^ pp_format_e efctsum ^ "))"
   | Overload _ -> "Nothing"
 
 let pp_annot ppf ant = base ppf (pp_format_annot ant)
@@ -374,12 +375,12 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_lit(lit) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_lit" pp_lem_lit lit pp_lem_l l pp_annot annot
     | E_cast(typ,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_cast" pp_lem_typ typ pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_internal_cast((_,NoTyp),e) -> pp_lem_exp ppf e
-    | E_internal_cast((_,Base((_,t),_,_,_,bindings)), (E_aux(ec,(_,eannot)) as exp)) ->
+    | E_internal_cast((_,Base((_,t),_,_,_,_,bindings)), (E_aux(ec,(_,eannot)) as exp)) ->
       (*TODO use bindings*)
       let print_cast () = fprintf ppf "@[<0>(E_aux (E_cast %a %a) (%a, %a))@]" 
         pp_lem_typ (t_to_typ t) pp_lem_exp exp pp_lem_l l pp_annot annot in
       (match t.t,eannot with
-      | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_,bindings_int) ->
+      | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_,_,bindings_int) ->
         if nexp_eq n1 n2 
           then pp_lem_exp ppf exp
         else (match (n1.nexp,n2.nexp) with 
@@ -425,23 +426,23 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_let(leb,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_let" pp_lem_let leb pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assign(lexp,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_assign" pp_lem_lexp lexp pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_exit exp -> fprintf ppf "@[<0>(E_aux (E_exit %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
-    | E_internal_exp ((l, Base((_,t),_,_,_,bindings))) ->
+    | E_internal_exp ((l, Base((_,t),_,_,_,_,bindings))) ->
       (*TODO use bindings where appropriate*)
       (match t.t with
         | Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
         | Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
           (match r.nexp with
           | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
-                                       kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,nob))
+                                       kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e_sum,nob))
           | Nvar v -> fprintf ppf  "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
-                                     kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,nob))
+                                     kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e_sum,nob))
           | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given vector without known length"))
         | Tapp("implicit",[TA_nexp r]) ->
           (match r.nexp with
             | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
-                                       kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,nob))
+                                       kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e_sum,nob))
             | Nvar v -> fprintf ppf "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
-                                     kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,nob))
+                                     kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e_sum,nob))
             | _ -> raise (Reporting_basic.err_unreachable l "Internal_exp given implicit without variable or const"))
         | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given non-vector or implicit"))
     | E_internal_cast ((_, Overload (_,_, _)), _) | E_internal_exp _ ->  raise (Reporting_basic.err_unreachable l "Found internal cast or exp with overload")
@@ -917,12 +918,12 @@ let doc_exp, doc_let =
   | E_lit lit -> doc_lit lit
   | E_cast(typ,e) -> prefix 2 1 (parens (doc_typ typ)) (group (atomic_exp e))
   | E_internal_cast((_,NoTyp),e) -> atomic_exp e
-  | E_internal_cast((_,Base((_,t),_,_,_,bindings)), (E_aux(_,(_,eannot)) as e)) ->
+  | E_internal_cast((_,Base((_,t),_,_,_,_,bindings)), (E_aux(_,(_,eannot)) as e)) ->
       (match t.t,eannot with
       (* XXX I don't understand why we can hide the internal cast here
          AAA Because an internal cast between vectors is only generated to reset the base access;
              the type checker generates far more than are needed and they're pruned off here, after constraint resolution *)
-      | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_,_)
+      | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_,_,_)
           when nexp_eq n1 n2 -> atomic_exp e
       | _ -> prefix 2 1 (parens (doc_typ (t_to_typ t))) (group (atomic_exp e)))
   | E_tuple exps ->
@@ -995,7 +996,7 @@ let doc_exp, doc_let =
   | E_app_infix(l,op,r) ->
       failwith ("unexpected app_infix operator " ^ (pp_format_id op))
       (* doc_op (doc_id op) (exp l) (exp r) *)
-  | E_internal_exp((l, Base((_,t),_,_,_,bindings))) -> (*TODO use bindings, and other params*)
+  | E_internal_exp((l, Base((_,t),_,_,_,_,bindings))) -> (*TODO use bindings, and other params*)
     (match t.t with
       | Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
       | Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
@@ -1304,7 +1305,7 @@ let doc_pat_ocaml, doc_atomic_pat_ocaml =
   | P_vector pats ->
     let non_bit_print () = parens (separate space [string "VvectorR"; squarebars (separate_map semi pat pats); underscore ; underscore]) in
     (match annot with
-     | Base(([],t),_,_,_,_) ->
+     | Base(([],t),_,_,_,_,_) ->
        if is_bit_vector t
        then parens (separate space [string "Vvector"; squarebars (separate_map semi pat pats); underscore ; underscore])
        else non_bit_print()
@@ -1317,7 +1318,7 @@ let doc_exp_ocaml, doc_let_ocaml =
   let rec exp (E_aux (e, (_,annot))) =  match e with
     | E_assign((LEXP_aux(le_act,tannot) as le),e) ->
       (match annot with
-       | Base(_,(Emp_local | Emp_set),_,_,_) ->
+       | Base(_,(Emp_local | Emp_set),_,_,_,_) ->
          (match le_act with
           | LEXP_id _ | LEXP_cast _ ->
             (*Setting local variable fully *)
@@ -1378,13 +1379,13 @@ let doc_exp_ocaml, doc_let_ocaml =
     | E_let(leb,e) -> doc_op (string "in") (let_exp leb) (exp e)
     | E_app(f,args) ->
       let call = match annot with
-        | Base(_,External (Some n),_,_,_) -> string n
-        | Base(_,Constructor,_,_,_) -> doc_id_ocaml_ctor f
+        | Base(_,External (Some n),_,_,_,_) -> string n
+        | Base(_,Constructor,_,_,_,_) -> doc_id_ocaml_ctor f
         | _ -> doc_id_ocaml f in
       parens (doc_unop call (parens (separate_map comma exp args)))
     | E_vector_access(v,e) ->
       let call = (match annot with
-          | Base((_,t),_,_,_,_) ->
+          | Base((_,t),_,_,_,_,_) ->
             (match t.t with
              | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> (string "bit_vector_access")
              | _ -> (string "vector_access"))
@@ -1394,8 +1395,8 @@ let doc_exp_ocaml, doc_let_ocaml =
       parens ((string "vector_subrange") ^^ space ^^ (exp v) ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
     | E_field((E_aux(_,(_,fannot)) as fexp),id) ->
       (match fannot with
-       | Base((_,{t= Tapp("register",_)}),_,_,_,_) |
-         Base((_,{t= Tabbrev(_,{t=Tapp("register",_)})}),_,_,_,_)->
+       | Base((_,{t= Tapp("register",_)}),_,_,_,_,_) |
+         Base((_,{t= Tabbrev(_,{t=Tapp("register",_)})}),_,_,_,_,_)->
         parens ((string "get_register_field") ^^ space ^^ (exp fexp) ^^ space ^^ string_lit (doc_id id))
       | _ -> exp fexp ^^ dot ^^ doc_id id)
     | E_block [] -> string "()"
@@ -1404,9 +1405,9 @@ let doc_exp_ocaml, doc_let_ocaml =
       surround 2 1 (string "begin") exps_doc (string "end")
     | E_id id ->
       (match annot with
-      | Base((_, ({t = Tapp("reg",_)} | {t=Tabbrev(_,{t=Tapp("reg",_)})})),_,_,_,_) ->
+      | Base((_, ({t = Tapp("reg",_)} | {t=Tabbrev(_,{t=Tapp("reg",_)})})),_,_,_,_,_) ->
         string "!" ^^ doc_id_ocaml id
-      | Base(_,Alias alias_info,_,_,_) ->
+      | Base(_,Alias alias_info,_,_,_,_) ->
         (match alias_info with
          | Alias_field(reg,field) -> parens (string "get_register_field" ^^ space ^^ string reg ^^ string_lit (string field))
          | Alias_extract(reg,start,stop) ->
@@ -1426,7 +1427,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       braces (doc_op (string "with") (exp e) (separate_map semi_sp doc_fexp fexps))
     | E_vector exps ->
       (match annot with
-       | Base((_,t),_,_,_,_) ->
+       | Base((_,t),_,_,_,_,_) ->
          match t.t with
          | Tapp("vector", [TA_nexp start; _; TA_ord order; _])
          | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; _; TA_ord order; _])}) ->
@@ -1441,7 +1442,7 @@ let doc_exp_ocaml, doc_let_ocaml =
            group (call ^^ space ^^ squarebars (separate_map semi exp exps) ^^ string start ^^ string dir_out))
     | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
       (match annot with
-       | Base((_,t),_,_,_,_) ->
+       | Base((_,t),_,_,_,_,_) ->
          match t.t with
          | Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])
          | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])}) ->
@@ -1480,7 +1481,7 @@ let doc_exp_ocaml, doc_let_ocaml =
   | E_app_infix (e1,id,e2) ->
     let call = 
       match annot with
-      | Base((_,t),External(Some name),_,_,_) -> string name
+      | Base((_,t),External(Some name),_,_,_,_) -> string name
       | _ -> doc_id_ocaml id in
     parens (separate space [call; parens (separate_map comma exp [e1;e2])])
   | E_internal_let(lexp, eq_exp, in_exp) ->
@@ -1529,7 +1530,7 @@ let doc_exp_ocaml, doc_let_ocaml =
               doc_lexp_ocaml v ^^ space ^^string_lit (doc_id id) ^^ space ^^ exp e_new_v)
     | LEXP_id id | LEXP_cast (_,id) ->
       (match annot with
-       | Base(_,Alias alias_info,_,_,_) ->
+       | Base(_,Alias alias_info,_,_,_,_) ->
          (match alias_info with
           | Alias_field(reg,field) ->
             parens ((string "set_register_field") ^^ space ^^
