@@ -1482,7 +1482,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       match annot with
       | Base((_,t),External(Some name),_,_,_) -> string name
       | _ -> doc_id_ocaml id in
-    separate space [call; parens (separate_map comma exp [e1;e2])]
+    parens (separate space [call; parens (separate_map comma exp [e1;e2])])
   | E_internal_let(lexp, eq_exp, in_exp) ->
     separate space [string "let";
                     doc_lexp_ocaml lexp; (*Rewriter/typecheck should ensure this is only cast or id*)

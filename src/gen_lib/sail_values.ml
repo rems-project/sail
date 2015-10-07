@@ -6,7 +6,7 @@ type number = Big_int_Z.big_int
 
 type value =
   | Vvector of vbit array * int * bool
-  | VvectorR of value array * int * bool
+  | VvectorR of value ref array * int * bool
   | Vregister of vbit array * int * bool * (string * (int * int)) list
   | Vbit of vbit (*Mostly for Vundef in place of undefined register place holders*)
 
@@ -27,8 +27,8 @@ let get_varray = function
 let vector_access v n = match v with
   | VvectorR(array,start,is_inc) ->
     if is_inc
-    then array.(n-start)
-    else array.(start-n)
+    then !(array.(n-start))
+    else !(array.(start-n))
   | _ -> assert false
       
 let bit_vector_access v n = match v with
@@ -51,7 +51,7 @@ let vector_subrange v n m =
   match v with
   | VvectorR(array,start,is_inc) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
-    VvectorR(builder array length offset (VvectorR([||], 0, is_inc)),n,is_inc)
+    VvectorR(builder array length offset (ref (VvectorR([||], 0, is_inc))),n,is_inc)
   | Vvector(array,start,is_inc) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
     Vvector(builder array length offset Vzero,n,is_inc)
