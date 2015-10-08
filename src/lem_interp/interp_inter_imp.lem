@@ -134,9 +134,9 @@ let extern_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
    end 
 
 let extern_reg r slice = match (r,slice) with
-  | (Interp.Reg (Id_aux (Id x) _) (Just(t,_,_,_)) dir,Nothing) -> 
+  | (Interp.Reg (Id_aux (Id x) _) (Just(t,_,_,_,_)) dir,Nothing) -> 
     Reg x (Interp.reg_start_pos r) (Interp.reg_size r) (extern_direction dir)
-  | (Interp.Reg (Id_aux (Id x) _) (Just(t,_,_,_)) dir,Just(i1,i2)) -> 
+  | (Interp.Reg (Id_aux (Id x) _) (Just(t,_,_,_,_)) dir,Just(i1,i2)) -> 
     let start = Interp.reg_start_pos r in
     let edir = extern_direction dir in
     Reg_slice x start edir (extern_slice edir start (i1, i2))
