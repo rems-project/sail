@@ -839,25 +839,17 @@ let sequentialise_effects exp =
   fold_exp 
     { e_block =
         (fun es ->
-         let (es,effs) = List.split es in
-         ((fun x -> x), E_block es,List.fold_left (||) false effs)
+         let (decls,es) = List.split es in
+         (decls, E_block es)
         )
     ; e_nondet =
-        (fun es ->
-         let (es,effs) = List.split es in
-         ((fun x -> x), E_block es,List.fold_left (||) false effs)
-        )
-    ; e_id = (fun id -> ((fun x -> x), E_id id,false))
-    ; e_lit = (fun lit -> ((fun x -> x), E_lit lit,false))
-    ; e_cast =
-        (fun (typ,e) ->
-         let (decl,e,b) = aux e in
-         (decl, E_cast (typ,e),b))
-    ; e_app =
-        (fun (id,es) ->
-         let (decl,es,b) = list_aux es in
-         (decl,E_app (id,es),b)
-        )
+        (fun es -> 
+         let (decls,es) = List.split es in
+         (decls, E_block es))
+    ; e_id = (fun id -> ((fun x -> x), E_id id))
+    ; e_lit = (fun lit -> ((fun x -> x), E_lit lit))
+    ; e_cast = (fun (typ,e) -> let (decl,e) = aux e in (decl, E_cast (typ,e)))
+    ; e_app = (fun (id,es) -> let (decl,es) = list_aux es in (decl,E_app (id,es)))
     ; e_app_infix =
         (fun (e1,id,e2) ->
          let (decl1,e1,b1) = aux e1 in
@@ -987,19 +979,7 @@ let sequentialise_effects exp =
          let (decl3,e3,b3) = aux e3 in
          (compose decl1 (compose decl2 decl3), E_internal_let (lexp,e2,e3), b2 || b3)
         )
-    ; e_aux = 
-        (fun ((decl,e,b),((_,typ) as a : ('a annot))) ->
-         match typ with
-         | Base (_,_,_,{effect = Eset effs},_,_) ->
-            (decl (E_aux (e,a)),
-             b || List.exists (function BE_aux (BE_undef,_)
-                                      | BE_aux (BE_unspec,_) -> false | _ -> true) effs)
-         | Base (_,_,_,{effect = Evar _},_,_) ->
-            failwith "Effect_var not supported."
-         | Overload (_,_,_) ->
-            failwith "Overload not supported."
-         | NoTyp -> (decl (E_aux (e,a)),false)
-        )
+    ; e_aux = (fun ((decl,e),annot) -> (decl,E_aux (e,annot)))
     ; lEXP_id = (fun id -> ((fun x -> x), LEXP_id id))
     ; lEXP_memory =
         (fun (id,es) ->
