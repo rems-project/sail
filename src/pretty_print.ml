@@ -1272,14 +1272,14 @@ let doc_typ_ocaml, doc_atomic_typ_ocaml =
 let doc_lit_ocaml (L_aux(l,_)) =
   utf8string (match l with
   | L_unit  -> "()"
-  | L_zero  -> "0"
-  | L_one   -> "1"
-  | L_true  -> "1"
-  | L_false -> "0"
+  | L_zero  -> "Vzero"
+  | L_one   -> "Vone"
+  | L_true  -> "Vone"
+  | L_false -> "Vzero"
   | L_num i -> string_of_int i
-  | L_hex n -> "(num_to_vec" ^ ("0x" ^ n) ^ ")"
-  | L_bin n -> "(num_to_vec" ^ ("0b" ^ n) ^ ")"
-  | L_undef -> "2"
+  | L_hex n -> "(num_to_vec" ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)
+  | L_bin n -> "(num_to_vec" ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)
+  | L_undef -> "Vundef"
   | L_string s -> "\"" ^ s ^ "\"")
 
 (* typ_doc is the doc for the type being quantified *)
@@ -1408,9 +1408,12 @@ let doc_exp_ocaml, doc_let_ocaml =
       (match annot with
       | Base((_, ({t = Tapp("reg",_)} | {t=Tabbrev(_,{t=Tapp("reg",_)})})),_,_,_,_,_) ->
         string "!" ^^ doc_id_ocaml id
+      | Base((_,({t=Tapp("register",_)} | {t=Tabbrev(_,{t=Tapp("register",_)})})), External _,_,_,_,_) ->
+        string "!" ^^ doc_id_ocaml id
       | Base(_,Alias alias_info,_,_,_,_) ->
         (match alias_info with
-         | Alias_field(reg,field) -> parens (string "get_register_field" ^^ space ^^ string reg ^^ string_lit (string field))
+         | Alias_field(reg,field) ->
+           parens (string "get_register_field" ^^ space ^^ string reg ^^ string_lit (string field))
          | Alias_extract(reg,start,stop) ->
            if start = stop
            then parens (string "bit_vector_access" ^^ space ^^ string reg ^^ space ^^ doc_int start)
@@ -1419,7 +1422,7 @@ let doc_exp_ocaml, doc_let_ocaml =
            parens (string "vector_append" ^^ space ^^ string reg1 ^^ space ^^ string reg2))        
       | _ -> doc_id_ocaml id)
     | E_lit lit -> doc_lit lit
-    | E_cast(typ,e) -> (parens (doc_op colon (group (exp e)) (doc_typ typ)))
+    | E_cast(typ,e) -> (parens (doc_op colon (group (exp e)) (doc_typ_ocaml typ)))
     | E_tuple exps ->
       parens (separate_map comma exp exps)
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
@@ -1553,8 +1556,8 @@ let doc_exp_ocaml, doc_let_ocaml =
                       string reg ^^ space ^^ doc_int start ^^ space ^^ doc_int stop ^^ space ^^ exp e_new_v)
           | Alias_pair(reg1,reg2) ->
             parens ((string "set_two_regs") ^^ space ^^ string reg1 ^^ space ^^ string reg2 ^^ space ^^ exp e_new_v))              
-       | _ -> 
-         parens (string "set_named_register" ^^ space ^^ string_lit (doc_id_ocaml id) ^^ space ^^ (exp e_new_v)))
+       | _ ->
+         doc_op (string ":=") (doc_id_ocaml id) (exp e_new_v))
 
   and doc_lexp_fcall ((LEXP_aux(lexp,(l,annot))) as le) e_new_v = match lexp with
     | LEXP_memory(id,args) -> doc_id_ocaml id ^^ parens (separate_map comma exp (args@[e_new_v]))
@@ -1596,13 +1599,27 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
     match n1,n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
       let dir = i1 < i2 in                  
+      let size = if dir then i2-i1 -1 else i1-i2 -1 in
       doc_op equals
         ((string "let") ^^ space ^^ doc_id_ocaml id ^^ space ^^ (string "init_val"))
-        (separate space [string "Vregister";
-                         (parens (separate comma_sp [string "init_val";
-                                                     doc_nexp n1;
-                                                     string (if dir then "true" else "false");
-                                                     brackets doc_rids]))])
+        (separate space [string "ref";
+                         string "Vregister";
+                         (parens (separate comma_sp
+                                    [parens (separate space
+                                               [string "match init_val with";
+                                                pipe;
+                                                string "None";
+                                                arrow;
+                                                string "Array.make";
+                                                doc_int size;
+                                                string "Vzero";
+                                                pipe;
+                                                string "Some init_val";
+                                                arrow;
+                                                string "init_val";]);
+                                     doc_nexp n1;
+                                     string (if dir then "true" else "false");
+                                     brackets doc_rids]))])
 
 let doc_rec_ocaml (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty
@@ -1634,14 +1651,42 @@ let doc_fundef_ocaml (FD_aux(FD_function(r, typa, efa, fcls),_)) =
                     (string "function");
                     clauses]
 
-(*Aliases should be removed by here; registers not sure about*)
-(*let doc_dec (DEC_aux (reg,_)) =
+let doc_dec_ocaml (DEC_aux (reg,(l,annot))) =
   match reg with
-    | DEC_reg(typ,id) -> separate space [string "register"; doc_atomic_typ typ; doc_id id]
+  | DEC_reg(typ,id) ->
+    (match annot with
+     | Base((_,t),_,_,_,_,_) ->
+       (match t.t with
+        | Tapp("register", [TA_typ {t= Tapp("vector", [TA_nexp start; TA_nexp size; TA_ord order; TA_typ itemt])}]) ->
+          (match itemt.t,start.nexp,size.nexp with
+           | Tid "bit", Nconst start, Nconst size ->
+             let o = if order.order = Oinc then string "true" else string "false" in
+             separate space [string "let";
+                             doc_id_ocaml id;
+                             equals;
+                             string "ref";
+                             parens (separate space
+                                       [string "Vregister";
+                                        parens (separate comma [doc_int (int_of_big_int start);
+                                                                o;
+                                                                parens (separate space
+                                                                          [string "Array.make";
+                                                                           doc_int (int_of_big_int size);
+                                                                           string "Vzero";
+                                                                           string "[]"])])])]
+           | _ -> empty)
+        | Tapp("register", [TA_typ {t=Tid idt}]) ->
+          separate space [string "let";
+                          doc_id_ocaml id;
+                          equals;
+                          string idt;
+                          string "None"]
+        |_-> empty)
+     | _ ->  empty)
     | DEC_alias(id,alspec) ->
         doc_op equals (string "register alias" ^^ space ^^ doc_id id) (doc_alias alspec)
     | DEC_typ_alias(typ,id,alspec) -> 
-        doc_op equals (string "register alias" ^^ space ^^ doc_atomic_typ typ) (doc_alias alspec)*)
+        doc_op equals (string "register alias" ^^ space ^^ doc_atomic_typ typ) (doc_alias alspec)
 
 let doc_def_ocaml def = group (match def with
   | DEF_default df -> empty
@@ -1649,7 +1694,7 @@ let doc_def_ocaml def = group (match def with
   | DEF_type t_def -> doc_typdef_ocaml t_def
   | DEF_fundef f_def -> doc_fundef_ocaml f_def
   | DEF_val lbind -> doc_let_ocaml lbind
-  | DEF_reg_dec dec -> empty (*unless we want to have something for the declaration of a register and guess a default init value*)
+  | DEF_reg_dec dec -> doc_dec_ocaml dec
   | DEF_scattered sdef -> empty (*shoulnd't still be here*)
   ) ^^ hardline
 
