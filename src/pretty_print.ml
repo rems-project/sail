@@ -1494,6 +1494,12 @@ let doc_exp_ocaml, doc_let_ocaml =
                     string "in";
                     exp in_exp]
 
+  | E_internal_plet (pat,e1,e2) ->
+     doc_op (string "in")
+            (prefix 2 1
+               (separate space [string "letM"; doc_atomic_pat_ocaml pat; equals])
+               (exp e1)
+            ) (exp e2)
   and let_exp (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->
       prefix 2 1

@@ -799,6 +799,9 @@ let rewrite_defs_ocaml defs =
   defs_lifted_assign
 
 
+let compose f g x = f (g x)
+let composeL fs = List.fold_left compose (fun x -> x) fs
+
 let sequentialise_effects_counter = ref 0
 let sequentialise_effects exp =
 
@@ -813,169 +816,285 @@ let sequentialise_effects exp =
       (fun (BE_aux (be,_)) -> match be with BE_nondet | BE_unspec | BE_undef -> false | _ -> true)
       (effs eaux) in
 
-  let compose f g x = f (g x) in
-  let composeL fs = List.fold_left compose (fun x -> x) fs in
+  let dedup l =
+    List.fold_left (fun acc e -> if List.exists (fun e' -> e = e') acc
+                                 then acc else e :: acc) [] l in
+
+  let sum_effs es = {effect = Eset (dedup (List.flatten es))} in
 
   let fresh_name () =
     let current = !sequentialise_effects_counter in
     let () = sequentialise_effects_counter := (current + 1) in
     Id_aux (Id ("__w" ^ string_of_int current), Parse_ast.Unknown) in
-  
-  let aux (E_aux (_,annot) as e) =
+
+
+  let letbind pat e body =
+    let effs = sum_effs [effs e;effs body] in
+    let typ = (Parse_ast.Unknown,simple_annot_efr {t = Tid "unit"} effs) in
+    E_aux (E_internal_plet (pat,e,body),typ) in
+
+  let letbind_pure lb body =
+    let effs =
+      sum_effs
+        [effs body;
+         match lb with
+         | LB_aux (_,(_,Base((_,t),_,_,_,{effect = Eset effs},_))) -> effs
+         | LB_aux (_,(_,NoTyp)) -> []
+         | _ -> failwith "sequentialise_effects doesn't support Overload"] in
+    
+    let typ = (Parse_ast.Unknown,simple_annot_efr {t = Tid "unit"} effs) in
+    E_aux (E_let (lb,body),typ) in
+
+  let aux (decls,(E_aux (_,annot) as e)) =
     (* for a tuple e return 
        1. a function that let-binds e to the argument (body)
        2. something to access e's value, which is either e itself if e is pure or an id to access the
           value bound to id in the let-expression if e is effectful *)
-
-    let letbind id effs body =
-      let typ = (Parse_ast.Unknown,simple_annot_efr {t = Tid "unit"} effs) in
-      E_aux (E_let (LB_aux (LB_val_implicit (P_aux (P_id id,annot),e),annot),body),typ) in
-
     if (effectful e) then
+      let letbind id body =
+        let effs = sum_effs [effs e;effs body] in
+        let typ = (Parse_ast.Unknown,simple_annot_efr {t = Tid "unit"} effs) in
+        E_aux (E_internal_plet (P_aux (P_id id,annot),e,body),typ) in
       let freshid = fresh_name () in
-      let decl = letbind freshid {effect = Eset (effs e)} in
-      (decl,E_aux (E_id freshid,annot))
+      let decl = letbind freshid in
+      (decls @ [decl],E_aux (E_id freshid,annot))
     else
-      ((fun x -> x),e) in
+      ([],e) in
 
   let list_aux es =
-    List.fold_left
-      (fun (acc_decl, acc_es) e ->
-       let (decl,e) = aux e in
-       (compose acc_decl decl, acc_es @ [e]))
-      ((fun x -> x), []) es in
+    let (decls,es) = List.split (List.map aux es) in
+    (List.flatten decls,es) in
             
+  let apply (decls,e) = (composeL decls) e in
+
   (* for each expression e: return a tuple (e',b) where e' is e rewritten, 
      b indicates whether e contains effectful terms) *)
   fold_exp 
-    { e_block = (fun es -> ((fun x -> x), E_block es))
-    ; e_nondet = (fun es -> ((fun x -> x), E_block es))
-    ; e_id = (fun id -> ((fun x -> x), E_id id))
-    ; e_lit = (fun lit -> ((fun x -> x), E_lit lit))
-    ; e_cast = (fun (typ,e) -> let (decl,e) = aux e in (decl, E_cast (typ,e)))
-    ; e_app = (fun (id,es) -> let (decl,es) = list_aux es in (decl,E_app (id,es)))
+    { e_block = (fun es -> ([], E_block (List.map apply es)))
+    ; e_nondet = (fun es -> ([], E_nondet (List.map apply es)))
+    ; e_id = (fun id -> ([], E_id id))
+    ; e_lit = (fun lit -> ([], E_lit lit))
+    ; e_cast =
+        (fun (typ,e) ->
+         let (decls,e) = aux e in
+         (decls, E_cast (typ,e))
+        )
+    ; e_app =
+        (fun (id,es) ->
+         let (decls,es) = list_aux es in
+         (decls, E_app (id,es))
+        )
     ; e_app_infix =
         (fun (e1,id,e2) ->
-         let ((decl1,e1),(decl2,e2)) = (aux e1,aux e2) in
-         (compose decl1 decl2, E_app_infix (e1,id,e2))
+         let ((decls1,e1),(decls2,e2)) = (aux e1,aux e2) in
+         (decls1 @ decls2, E_app_infix (e1,id,e2))
         )
-    ; e_tuple = (fun es -> let (decl,es) = list_aux es in (decl, E_tuple es))
-    ; e_if = (fun (e1,e2,e3) -> let (decl,e1) = aux e1 in (decl, E_if (e1,e2,e3)))
+    ; e_tuple = (fun es -> let (decls,es) = list_aux es in (decls, E_tuple es))
+    ; e_if =
+        (fun (e1,(decls2,e2),(decls3,e3)) ->
+         let (decls1,e1) = aux e1 in
+         if (effectful e2 || effectful e3) then
+           let decls2 = composeL decls2 in
+           let decls3 = composeL decls3 in
+           (decls1, E_if (e1,decls2 e2,decls3 e3))
+         else (decls1 @ decls2 @ decls3, E_if (e1,e2,e3))
+        )
     ; e_for =
-        (fun (id,e1,e2,e3,order,e4) ->
-         let ((decl1,e1),(decl2,e2),(decl3,e3)) = (aux e1,aux e2,aux e3) in
-         (composeL [decl1;decl2;decl3], E_for (id,e1,e2,e3,order,e4))
+        (fun (id,e1,e2,e3,order,(decls4,e4)) ->
+         let ((decls1,e1),(decls2,e2),(decls3,e3)) = (aux e1,aux e2,aux e3) in
+         (decls1 @ decls2 @ decls3 @ decls4 , E_for (id,e1,e2,e3,order,e4))
         )
-    ; e_vector = (fun es -> let (decl,es) = list_aux es in (decl, E_vector es))
+    ; e_vector = (fun es -> let (decls,es) = list_aux es in (decls, E_vector es))
     ; e_vector_indexed =
         (fun (es,(decl2,opt2)) ->
          let (is,es) = List.split es in
          let (decl1,es) = list_aux es in
-         (compose decl1 decl2, E_vector_indexed (List.combine is es,opt2))
+         (decl1 @ decl2, E_vector_indexed (List.combine is es,opt2))
         )
     ; e_vector_access =
         (function
-          | ((E_aux (E_id _,_) as e1),e2) ->
+          | ((decls1,(E_aux (E_id _,_) as e1)),e2) ->
             (* then e1 is OK: the whole e_vector_access has to be
                translated to a monadic expression *)
-             let (decl2,e2) = aux e2 in
-             (decl2, E_vector_access (e1,e2))
+             let (decls2,e2) = aux e2 in
+             (decls1 @ decls2, E_vector_access (e1,e2))
           | (e1,e2) ->
-             let ((decl1,e1),(decl2,e2)) = (aux e1,aux e2) in
-             (compose decl1 decl2, E_vector_access (e1,e2))
+             let ((decls1,e1),(decls2,e2)) = (aux e1,aux e2) in
+             (decls1 @ decls2, E_vector_access (e1,e2))
         )
     ; e_vector_subrange = 
         (function
-          | ((E_aux (E_id _,_) as e1),e2,e3) ->
+          | ((decls1,(E_aux (E_id _,_) as e1)),e2,e3) ->
             (* then e1 is OK: the whole e_vector_access has to be
                translated to a monadic expression *)
-             let ((decl2,e2),(decl3,e3)) = (aux e2,aux e3) in
-             (compose decl2 decl3, E_vector_subrange (e1,e2,e3))
+             let ((decls2,e2),(decls3,e3)) = (aux e2,aux e3) in
+             (decls1 @ decls2 @ decls3, E_vector_subrange (e1,e2,e3))
           | (e1,e2,e3) ->
-             let ((decl1,e1),(decl2,e2),(decl3,e3)) = (aux e1,aux e2,aux e3) in
-             (composeL [decl1;decl2;decl3], E_vector_subrange (e1,e2,e3))
+             let ((decls1,e1),(decls2,e2),(decls3,e3)) = (aux e1,aux e2,aux e3) in
+             (decls1 @ decls2 @ decls3, E_vector_subrange (e1,e2,e3))
         )
     ; e_vector_update =
         (fun (e1,e2,e3) -> 
-         let ((decl1,e1),(decl2,e2),(decl3,e3)) = (aux e1,aux e2,aux e3) in
-         (composeL [decl1;decl2;decl3], E_vector_update (e1,e2,e3))
+         let ((decls1,e1),(decls2,e2),(decls3,e3)) = (aux e1,aux e2,aux e3) in
+         (decls1 @ decls2 @ decls3, E_vector_update (e1,e2,e3))
         )
     ; e_vector_update_subrange = 
         (fun (e1,e2,e3,e4) -> 
-         let ((decl1,e1),(decl2,e2),(decl3,e3),(decl4,e4)) = (aux e1,aux e2,aux e3,aux e4) in
-         (composeL [decl1;decl2;decl3;decl4], E_vector_update_subrange (e1,e2,e3,e4))
+         let ((decls1,e1),(decls2,e2),(decls3,e3),(decls4,e4)) = (aux e1,aux e2,aux e3,aux e4) in
+         (decls1 @ decls2 @ decls3 @ decls4, E_vector_update_subrange (e1,e2,e3,e4))
         )
     ; e_vector_append = 
         (fun (e1,e2) ->
-         let ((decl1,e1),(decl2,e2)) = (aux e1,aux e2) in
-         (compose decl1 decl2, E_vector_append (e1,e2))
+         let ((decls1,e1),(decls2,e2)) = (aux e1,aux e2) in
+         (decls1 @ decls2, E_vector_append (e1,e2))
         )
     ; e_list = (fun es -> let (decl,es) = list_aux es in (decl, E_list es))
     ; e_cons = 
         (fun (e1,e2) ->
-         let ((decl1,e1),(decl2,e2)) = (aux e1,aux e2) in
-         (compose decl1 decl2, E_cons (e1,e2))
+         let ((decls1,e1),(decls2,e2)) = (aux e1,aux e2) in
+         (decls1 @ decls2, E_cons (e1,e2))
         )
-    ; e_record = (fun (decl,fexps) -> (decl, E_record fexps))
+    ; e_record = (fun (decls,fexps) -> (decls, E_record fexps))
     ; e_record_update =
-        (fun (e1,(decl2,fexp)) ->
-         let (decl1,e1) = aux e1 in
-         (compose decl1 decl2, E_record_update (e1,fexp))
+        (fun (e1,(decls2,fexp)) ->
+         let (decls1,e1) = aux e1 in
+         (decls1 @ decls2, E_record_update (e1,fexp))
         )
-    ; e_field = (fun (e1,id) -> let (decl,e1) = aux e1 in (decl, E_field (e1,id)))
-    ; e_case = (fun (e1,pexps) -> let (decl,e1) = aux e1 in (decl, E_case (e1,pexps)))
-    ; e_let = (fun (lb,exp) -> ((fun x -> x), E_let (lb,exp)))
+    ; e_field = (fun (e1,id) -> let (decls1,e1) = aux e1 in (decls1, E_field (e1,id)))
+    ; e_case = (fun (e1,pexps) -> let (decls1,e1) = aux e1 in (decls1, E_case (e1,pexps)))
+    ; e_let =
+        (fun ((decls1,lb),(decls2,(E_aux (e2',_) as e2))) ->
+         let new_lb = 
+           match lb with
+           | LB_aux (LB_val_explicit (_,p,e1),_) ->
+              if (effectful e1) then letbind p e1
+              else letbind_pure lb
+           | LB_aux (LB_val_implicit (p,e1),_) ->
+              if (effectful e1) then letbind p e1
+              else letbind_pure lb
+         in (decls1 @ new_lb :: decls2, e2')
+        )
     ; e_assign =
-        (fun ((decl1,lexp),e2) ->
-         let (decl2,e2) = aux e2 in
-         (compose decl1 decl2, E_assign (lexp,e2))
+        (fun ((decls1,lexp),e2) ->
+         let (decls2,e2) = aux e2 in
+         (decls1 @ decls2, E_assign (lexp,e2))
         )
-    ; e_exit = (fun e1 -> let (decl,e1) = aux e1 in (decl, E_exit e1))
-    ; e_internal_cast = (fun (a,e1) -> let (decl,e1) = aux e1 in (decl, E_internal_cast (a,e1)))
-    ; e_internal_exp = (fun a -> ((fun x -> x), E_internal_exp a))
-    ; e_internal_exp_user = (fun (a1,a2) -> ((fun x -> x), E_internal_exp_user (a1,a2)))
+    ; e_exit = (fun (decls,e1) -> ([], E_exit ((composeL decls) e1)))
+    ; e_internal_cast = (fun (a,e1) -> let (decls,e1) = aux e1 in (decls, E_internal_cast (a,e1)))
+    ; e_internal_exp = (fun a -> ([], E_internal_exp a))
+    ; e_internal_exp_user = (fun (a1,a2) -> ([], E_internal_exp_user (a1,a2)))
     ; e_internal_let =
-        (fun ((decl1,lexp), e2, e3) ->
-         let ((decl2,e2),(decl3,e3)) = (aux e2,aux e3) in
-         (composeL [decl1;decl2;decl3], E_internal_let (lexp,e2,e3))
+        (fun ((decls1,lexp), e2, e3) ->
+         let ((decls2,e2),(decls3,e3)) = (aux e2,aux e3) in
+         (decls1 @ decls2 @ decls3, E_internal_let (lexp,e2,e3))
         )
-    ; e_aux = (fun ((decl,e),annot) -> decl (E_aux (e,annot)))
-    ; lEXP_id = (fun id -> ((fun x -> x), LEXP_id id))
-    ; lEXP_memory = (fun (id,es) -> let (decl,es) = list_aux es in (decl, LEXP_memory (id,es)))
-    ; lEXP_cast = (fun (typ,id) -> ((fun x -> x), LEXP_cast (typ,id)))
+    ; e_aux =
+        (fun ((decls,e), ((l,(Base(t,tag,nexps,local_effect,effects,bounds))) as annot)) ->
+         let annot = 
+           match e with
+           (*pure*)
+           | E_block _
+           | E_nondet _
+           | E_id _
+           | E_lit _
+           | E_exit _
+           | E_internal_exp _
+           | E_internal_exp_user _
+           | E_tuple _
+             -> annot
+           | E_vector _
+           | E_vector_indexed _
+           | E_vector_access _
+           | E_vector_subrange _
+           | E_vector_update _
+           | E_vector_update_subrange _
+           | E_vector_append _
+           | E_list _
+           | E_cons _
+           | E_record _
+           | E_record_update _
+           | E_field _
+           | E_internal_let _
+             -> (l,(Base(t,tag,nexps,local_effect,{effect = Eset []},bounds)))
+           (* take local effect *)
+           | E_cast _
+           | E_app _
+           | E_app_infix _
+           | E_assign _
+             -> (l,(Base(t,tag,nexps,local_effect,local_effect,bounds)))
+           (* parts *)
+           | E_if (c,e1,e2) -> (l,(Base(t,tag,nexps,local_effect,sum_effs [effs e1; effs e2],bounds)))
+           | E_case (_,pexps) ->
+              let effs =
+                sum_effs
+                  (List.map (fun (Pat_aux (_,(_,(Base(_,_,_,_,{effect = Eset eff},_))))) -> eff) pexps) in
+              (l,(Base(t,tag,nexps,local_effect,effs,bounds)))
+           | E_for (_,_,_,_,_,e)
+           | E_let (_,e)
+           | E_internal_cast (_,e)
+             -> (l,(Base(t,tag,nexps,local_effect,{effect = Eset (effs e)},bounds)))
+           | E_internal_plet (_,e1,e2) ->
+              (l,(Base(t,tag,nexps,local_effect,sum_effs [effs e1;effs e2],bounds)))
+         in
+         (decls,E_aux (e,annot))
+        )
+    ; lEXP_id = (fun id -> ([], LEXP_id id))
+    ; lEXP_memory = (fun (id,es) -> let (decls,es) = list_aux es in (decls, LEXP_memory (id,es)))
+    ; lEXP_cast = (fun (typ,id) -> ([], LEXP_cast (typ,id)))
     ; lEXP_vector =
-        (fun ((decl1,lexp),e2) ->
-         let (decl2,e2) = aux e2 in
-         (compose decl1 decl2, LEXP_vector (lexp,e2))
+        (fun ((decls1,lexp),e2) ->
+         let (decls2,e2) = aux e2 in
+         (decls1 @ decls2, LEXP_vector (lexp,e2))
         )
     ; lEXP_vector_range = 
-        (fun ((decl1,lexp),e2,e3) ->
-         let ((decl2,e2),(decl3,e3)) = (aux e2,aux e3) in
-         (composeL [decl1;decl2;decl3], LEXP_vector_range (lexp,e2,e3))
+        (fun ((decls1,lexp),e2,e3) ->
+         let ((decls2,e2),(decls3,e3)) = (aux e2,aux e3) in
+         (decls1 @ decls2 @ decls3, LEXP_vector_range (lexp,e2,e3))
         )
-    ; lEXP_field = (fun ((decl,lexp),id) -> (decl, LEXP_field (lexp,id)))
-    ; lEXP_aux = (fun ((decl,lexp),a) -> (decl,LEXP_aux (lexp,a)))
-    ; fE_Fexp = (fun (id,e) -> let (decl,e) = aux e in (decl,FE_Fexp (id,e)))
-    ; fE_aux = (fun ((decl,fexp),annot) -> (decl, FE_aux (fexp,annot)))
+    ; lEXP_field = (fun ((decls,lexp),id) -> (decls, LEXP_field (lexp,id)))
+    ; lEXP_aux =
+        (fun ((decls,lexp),(l,(Base(t,tag,nexps,local_effect,effects,bounds)))) ->
+         (decls,LEXP_aux (lexp,(l,(Base(t,tag,nexps,local_effect,local_effect,bounds)))))
+        )
+    ; fE_Fexp = (fun (id,e) -> let (decls,e) = aux e in (decls,FE_Fexp (id,e)))
+    ; fE_aux = (fun ((decls,fexp),annot) -> (decls, FE_aux (fexp,annot)))
     ; fES_Fexps =
         (fun (fexps,b) ->
          let (decls,fexps) = List.split fexps in
-         (composeL decls, FES_Fexps (fexps,b))
+         let decls = List.flatten decls in
+         (decls, FES_Fexps (fexps,b))
         )
-    ; fES_aux = (fun ((decl,fexp),a) -> (decl, FES_aux (fexp,a)))
-    ; def_val_empty = ((fun x -> x), Def_val_empty)
-    ; def_val_dec = (fun e -> let (decl,e) = aux e in (decl, Def_val_dec e))
-    ; def_val_aux = (fun ((decl,defval),a) -> (decl, Def_val_aux (defval,a)))
-    ; pat_exp = (fun (pat,e) -> Pat_exp (pat,e))
-    ; pat_aux = (fun (pexp,a) -> Pat_aux (pexp,a))
-    ; lB_val_explicit = (fun (typ,pat,e) -> LB_val_explicit (typ,pat,e))
-    ; lB_val_implicit = (fun (pat,e) -> LB_val_implicit (pat,e))
-    ; lB_aux = (fun (lb,a) -> LB_aux (lb,a))
+    ; fES_aux =
+        (fun ((decls,fexp),(l,(Base(t,tag,nexps,local_effect,effects,bounds)))) ->
+         (decls, FES_aux (fexp,(l,(Base(t,tag,nexps,local_effect,{effect = Eset []},bounds)))))
+        )
+    ; def_val_empty = ([], Def_val_empty)
+    ; def_val_dec = (fun e -> let (decls,e) = aux e in (decls, Def_val_dec e))
+    ; def_val_aux =
+        (fun ((decls,defval),(l,(Base(t,tag,nexps,local_effect,effects,bounds)))) ->
+         (decls, Def_val_aux (defval,(l,(Base(t,tag,nexps,local_effect,{effect = Eset []},bounds)))))
+        )
+    ; pat_exp = (fun (pat,(decls,e)) -> (Pat_exp (pat,(composeL decls) e)))
+    ; pat_aux = (fun (pexp,a) -> (Pat_aux (pexp,a)))
+    ; lB_val_explicit =
+        (fun (typ,pat,e) ->
+         let (decls,e) = aux e in
+         (decls,LB_val_explicit (typ,pat,e))
+        )
+    ; lB_val_implicit =
+        (fun (pat,e) ->
+         let (decls,e) = aux e in
+         (decls,LB_val_implicit (pat,e))
+        )
+    ; lB_aux =
+        (fun ((decls,lb),(l,(Base(t,tag,nexps,local_effect,effects,bounds)))) ->
+         (decls,LB_aux (lb,(l,(Base(t,tag,nexps,local_effect,{effect = Eset []},bounds)))))
+        )
     ; pat_alg = id_pat_alg
     } exp
 
 let rewrite_defs_sequentialise_effects (Defs defs) = rewrite_defs_base
-  {rewrite_exp = (fun _ _ exp -> sequentialise_effects exp);
+  {rewrite_exp = (fun _ _ e -> let (decls,e) = sequentialise_effects e in (composeL decls) e);
    rewrite_pat = rewrite_pat;
    rewrite_let = rewrite_let;
    rewrite_lexp = rewrite_lexp;
