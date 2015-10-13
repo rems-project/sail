@@ -1291,11 +1291,11 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let effects = union_effects ef ef' in
       (E_aux(E_let(lb',e),(l,simple_annot_efr t effects)),t,t_env,cs@cs',nob,effects)
     | E_assign(lexp,exp) ->
-      let (lexp',t',_,t_env',tag,cs,b_env',ef) = check_lexp envs imp_param true lexp in
-      let (exp',t'',_,cs',_,ef') = check_exp envs imp_param t' exp in
+      let (lexp',t',_,t_env',tag,cs,b_env',efl,efr) = check_lexp envs imp_param true lexp in
+      let (exp',t'',_,cs',_,efr') = check_exp envs imp_param t' exp in
       let (t',c') = type_consistent (Expr l) d_env Require false unit_t expect_t in
-      let effects = union_effects ef ef' in
-      (E_aux(E_assign(lexp',exp'),(l,(Base(([],unit_t),tag,[],ef,effects,nob)))),unit_t,t_env',cs@cs'@c',b_env',effects)
+      let effects = union_effects efl (union_effects efr efr') in
+      (E_aux(E_assign(lexp',exp'),(l,(Base(([],unit_t),tag,[],efl,effects,nob)))),unit_t,t_env',cs@cs'@c',b_env',effects)
     | E_exit e ->
       let (e',t',_,_,_,_) = check_exp envs imp_param (new_t ()) e in
       (E_aux (E_exit e',(l,(simple_annot expect_t))),expect_t,t_env,[],nob,pure_e)
@@ -1343,7 +1343,7 @@ and check_cases envs imp_param check_t expect_t kind pexps : ((tannot pexp) list
       ((Pat_aux(Pat_exp(pat',e),(l,cons_efs_annot t [cs] pure_e ef)))::pes,tl,cs::csl,union_effects efl ef)
 
 and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot))) 
-    : (tannot lexp * typ * bool * tannot emap * tag * nexp_range list * bounds_env * effect ) =
+    : (tannot lexp * typ * bool * tannot emap * tag * nexp_range list * bounds_env * effect * effect ) =
   let (Env(d_env,t_env,b_env,tp_env)) = envs in
   match lexp with
     | LEXP_id id -> 
@@ -1353,18 +1353,19 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
          let t = {t=Tapp("reg",[TA_typ t])} in
          let bounds = extract_bounds d_env i t in
          let tannot = (Base(([],t),Emp_intro,[],pure_e,pure_e,bounds)) in
-         (LEXP_aux(lexp,(l,tannot)),t,false,Envmap.from_list [i,tannot],Emp_intro,[],bounds,pure_e)
+         (LEXP_aux(lexp,(l,tannot)),t,false,Envmap.from_list [i,tannot],Emp_intro,[],bounds,pure_e,pure_e)
        | Some(Base(([],t),Alias alias_inf,_,_,_,_)) ->
          let ef = {effect = Eset[BE_aux(BE_wreg,l)]} in
          (match Envmap.apply d_env.alias_env i with
           | Some(OneReg(reg, (Base(([],t'),_,_,_,_,_)))) ->
             (LEXP_aux(lexp,(l,(Base(([],t'),Alias alias_inf,[],ef,ef,nob)))), t, false,
-             Envmap.empty, External (Some reg),[],nob,ef)
+             Envmap.empty, External (Some reg),[],nob,ef,ef)
           | Some(TwoReg(reg1,reg2, (Base(([],t'),_,_,_,_,_)))) ->
             let u = match t.t with
               | Tapp("register", [TA_typ u]) -> u 
               | _ -> raise (Reporting_basic.err_unreachable l "TwoReg didn't contain a register type") in
-            (LEXP_aux(lexp,(l,Base(([],t'),Alias alias_inf,[],ef,ef,nob))),u, false, Envmap.empty, External None,[],nob,ef)
+            (LEXP_aux(lexp,(l,Base(([],t'),Alias alias_inf,[],ef,ef,nob))),
+             u, false, Envmap.empty, External None,[],nob,ef,ef)
           | _ -> assert false)
        | Some(Base((parms,t),tag,cs,_,_,b)) ->
           let t,cs,ef,_ = 
@@ -1379,35 +1380,35 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
            | Tapp("register",[TA_typ u]),_ ->
              let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in
              (LEXP_aux(lexp,(l,(Base(([],t),External (Some i),cs_o,ef,pure_e,nob)))),u,false,
-              Envmap.empty,External (Some i),[],nob,ef)
+              Envmap.empty,External (Some i),[],nob,ef,ef)
            | Tapp("reg",[TA_typ u]),_ ->
-             (LEXP_aux(lexp,(l,(Base(([],t),Emp_set,cs_o,ef,pure_e,b)))),u,false,Envmap.empty,Emp_set,[],nob,ef)
-            | Tapp("vector",_),false ->
-              (LEXP_aux(lexp,(l,(Base(([],t),tag,cs_o,pure_e,ef,b)))),t,true,Envmap.empty,Emp_set,[],nob,ef)
-            | (Tfn _ ,_) ->
-              (match tag with 
-                | External _ | Spec | Emp_global -> 
-                  let u = new_t() in
-                  let t = {t = Tapp("reg",[TA_typ u])} in
-                  let bounds = extract_bounds d_env i t in
-                  let tannot = (Base(([],t),Emp_intro,[],pure_e,pure_e,bounds)) in
-                  (LEXP_aux(lexp,(l,tannot)),u,false,Envmap.from_list [i,tannot],Emp_intro,[],bounds,pure_e)
-                | _ -> 
-                  typ_error l ("Cannot assign to " ^ i ^" with type " ^ t_to_string t ^ 
-                                  ". Assignment must be to registers or non-parameter, non-let-bound local variables."))
-            | _,_ -> 
-              if is_top
-              then 
+             (LEXP_aux(lexp,(l,(Base(([],t),Emp_set,cs_o,ef,pure_e,b)))),u,false,Envmap.empty,Emp_set,[],nob,ef,ef)
+           | Tapp("vector",_),false ->
+             (LEXP_aux(lexp,(l,(Base(([],t),tag,cs_o,pure_e,ef,b)))),t,true,Envmap.empty,Emp_set,[],nob,ef,ef)
+           | (Tfn _ ,_) ->
+             (match tag with 
+              | External _ | Spec | Emp_global -> 
+                let u = new_t() in
+                let t = {t = Tapp("reg",[TA_typ u])} in
+                let bounds = extract_bounds d_env i t in
+                let tannot = (Base(([],t),Emp_intro,[],pure_e,pure_e,bounds)) in
+                (LEXP_aux(lexp,(l,tannot)),u,false,Envmap.from_list [i,tannot],Emp_intro,[],bounds,pure_e,pure_e)
+              | _ -> 
                 typ_error l ("Cannot assign to " ^ i ^" with type " ^ t_to_string t ^ 
-                                ". Assignment must be to registers or non-parameter, non-let-bound local variables.")
-              else 
-                (LEXP_aux(lexp,(l,constrained_annot t cs_o)),t,true,Envmap.empty,Emp_local,[],nob,pure_e))
+                             ". Assignment must be to registers or non-parameter, non-let-bound local variables."))
+           | _,_ -> 
+             if is_top
+             then 
+               typ_error l ("Cannot assign to " ^ i ^" with type " ^ t_to_string t ^ 
+                            ". Assignment must be to registers or non-parameter, non-let-bound local variables.")
+             else 
+               (LEXP_aux(lexp,(l,constrained_annot t cs_o)),t,true,Envmap.empty,Emp_local,[],nob,pure_e,pure_e))
         | _ -> 
           let u = new_t() in
           let t = {t=Tapp("reg",[TA_typ u])} in
           let bounds = extract_bounds d_env i u in
           let tannot = (Base(([],t),Emp_intro,[],pure_e,pure_e,bounds)) in
-          (LEXP_aux(lexp,(l,tannot)),u,false,Envmap.from_list [i,tannot],Emp_intro,[],bounds,pure_e))
+          (LEXP_aux(lexp,(l,tannot)),u,false,Envmap.from_list [i,tannot],Emp_intro,[],bounds,pure_e,pure_e))
     | LEXP_memory(id,exps) -> 
       let i = id_to_string id in
       (match Envmap.apply t_env i with
@@ -1449,7 +1450,7 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
                         in
                         let ef_all = union_effects ef' ef_es in
                         (LEXP_aux(LEXP_memory(id,es),(l,Base(([],out),tag,cs_call,ef',ef_all,nob))),
-                         item_t,false,Envmap.empty,tag,cs_call@cs_es,nob,ef_all)
+                         item_t,false,Envmap.empty,tag,cs_call@cs_es,nob,ef',ef_all)
                       | _ -> 
                         let e = match exps with
                           | [] -> E_aux(E_lit(L_aux(L_unit,l)),(l,NoTyp))
@@ -1458,10 +1459,11 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
                         let (e,_,_,cs_e,_,ef_e) = check_exp envs imp_param apps e in
                         let ef_all = union_effects ef ef_e in
                         (LEXP_aux(LEXP_memory(id,[e]),(l,Base(([],out),tag,cs_call,ef,ef_all,nob))),
-                         app,false,Envmap.empty,tag,cs_call@cs_e,nob,ef_all))
+                         app,false,Envmap.empty,tag,cs_call@cs_e,nob,ef,ef_all))
                   else typ_error l ("Assignments require functions with a wmem, wmv, or wreg effect")
                 | _ -> typ_error l ("Assignments require functions with a wmem, wmv, or wreg effect"))
-            | _ -> typ_error l ("Assignments require a function here, found " ^ i ^ " which has type " ^ (t_to_string t)))
+            | _ ->
+              typ_error l ("Assignments require a function here, found " ^ i ^ " which has type " ^ (t_to_string t)))
         | _ -> typ_error l ("Unbound identifier " ^ i))
     | LEXP_cast(typ,id) -> 
       let i = id_to_string id in
@@ -1482,22 +1484,22 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
               let t',cs = type_consistent (Expr l) d_env Require false ty u in
               let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in
               (LEXP_aux(lexp,(l,(Base(([],t),External (Some i),cs,ef,pure_e,nob)))),ty,false,
-               Envmap.empty,External (Some i),[],nob,ef)
+               Envmap.empty,External (Some i),[],nob,ef,ef)
             | Tapp("reg",[TA_typ u]),_ ->
               let t',cs = type_consistent (Expr l) d_env Require false ty u in
               (LEXP_aux(lexp,(l,(Base(([],t),Emp_set,cs,ef,pure_e,bs)))),ty,false,
-               Envmap.empty,Emp_set,[],bs,ef)
+               Envmap.empty,Emp_set,[],bs,ef,ef)
             | Tapp("vector",_),false ->
-              (LEXP_aux(lexp,(l,(Base(([],t),tag,cs,ef,pure_e,bs)))),ty,true,Envmap.empty,Emp_set,[],bs,ef)
+              (LEXP_aux(lexp,(l,(Base(([],t),tag,cs,ef,pure_e,bs)))),ty,true,Envmap.empty,Emp_set,[],bs,ef,ef)
             | Tuvar _,_ ->
               let u' = {t=Tapp("reg",[TA_typ ty])} in
               equate_t t u';
-              (LEXP_aux(lexp,(l,(Base((([],u'),Emp_set,cs,ef,pure_e,bs))))),ty,false,Envmap.empty,Emp_set,[],bs,ef)
+              (LEXP_aux(lexp,(l,(Base((([],u'),Emp_set,cs,ef,pure_e,bs))))),ty,false,Envmap.empty,Emp_set,[],bs,ef,ef)
             | (Tfn _ ,_) ->
               (match tag with 
                 | External _ | Spec | Emp_global -> 
                   let tannot = (Base(([],ty),Emp_intro,[],pure_e,pure_e,new_bounds)) in
-                  (LEXP_aux(lexp,(l,tannot)),ty,false,Envmap.from_list [i,tannot],Emp_intro,[],new_bounds,pure_e)
+                  (LEXP_aux(lexp,(l,tannot)),ty,false,Envmap.from_list [i,tannot],Emp_intro,[],new_bounds,pure_e,pure_e)
                 | _ -> 
                   typ_error l ("Cannot assign to " ^ i ^ " with type " ^ t_to_string t)) 
             | _,_ -> 
@@ -1508,13 +1510,13 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
               else 
                 (* TODO, make sure this is a record *)
                 (LEXP_aux(lexp,(l,(Base(([],t),Emp_local,cs,pure_e,pure_e,nob)))),
-                 ty,false,Envmap.empty,Emp_local,[],nob,pure_e))
+                 ty,false,Envmap.empty,Emp_local,[],nob,pure_e,pure_e))
         | _ -> 
           let t = {t=Tapp("reg",[TA_typ ty])} in
           let tannot = (Base(([],t),Emp_intro,[],pure_e,pure_e,new_bounds)) in
-          (LEXP_aux(lexp,(l,tannot)),ty,false,Envmap.from_list [i,tannot],Emp_intro,[],new_bounds,pure_e))
+          (LEXP_aux(lexp,(l,tannot)),ty,false,Envmap.from_list [i,tannot],Emp_intro,[],new_bounds,pure_e,pure_e))
     | LEXP_vector(vec,acc) -> 
-      let (vec',vec_t,reg_required,env,tag,csi,bounds,ef) = check_lexp envs imp_param false vec in
+      let (vec',vec_t,reg_required,env,tag,csi,bounds,efl,efr) = check_lexp envs imp_param false vec in
       let vec_t,cs' = get_abbrev d_env vec_t in
       let vec_actual = match vec_t.t with | Tabbrev(_,t) -> t | _ -> vec_t in
       (match vec_actual.t with
@@ -1530,18 +1532,18 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
               | Tapp("register",[TA_typ t]) | Tabbrev(_,{t=Tapp("register",[TA_typ t])}) -> t,true,false
               | Tapp("reg",[TA_typ t]) -> t,false,false
               | _ -> item_t,false,true in
-          let ef = if add_reg_write then add_effect (BE_aux(BE_wreg,l)) ef else ef in
+          let ef = if add_reg_write then add_effect (BE_aux(BE_wreg,l)) efl else efl in
           if is_top && reg_still_required && reg_required
           then typ_error l "Assignment expected a register or non-parameter non-letbound identifier to mutate"
           else
             (LEXP_aux(LEXP_vector(vec',e),(l,Base(([],item_t),tag,csi,ef,ef_e,nob))),
              item_t,reg_required && reg_still_required,
-             env,tag,csi@cs',bounds,union_effects ef ef_e)
+             env,tag,csi@cs',bounds,ef,union_effects ef (union_effects efr ef_e))
         | Tuvar _ -> 
           typ_error l "Assignment expected a vector with a known order, try adding an annotation."
         | _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string vec_t))) 
     | LEXP_vector_range(vec,e1,e2)-> 
-      let (vec',vec_t,reg_required,env,tag,csi,bounds,ef) = check_lexp envs imp_param false vec in
+      let (vec',vec_t,reg_required,env,tag,csi,bounds,efl,efr) = check_lexp envs imp_param false vec in
       let vec_t,cs = get_abbrev d_env vec_t in
       let vec_actual = match vec_t.t with | Tabbrev(_,t) -> t | _ -> vec_t in
       let vec_actual,add_reg_write,reg_still_required,cs = 
@@ -1577,15 +1579,15 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
             | _ -> typ_error l ("Assignment to a range of vector elements requires either inc or dec order")
           in
           let cs = cs_t@cs@cs1@cs2 in
-          let ef = union_effects ef (union_effects ef_e ef_e') in
+          let ef = union_effects efr (union_effects ef_e ef_e') in
           if is_top && reg_required && reg_still_required && needs_reg 
           then typ_error l "Assignment requires a register or a non-parameter, non-letbound local identifier"
-          else (LEXP_aux(LEXP_vector_range(vec',e1',e2'),(l,Base(([],res_t),tag,cs,ef,ef,nob))),
-                res_t,reg_required&&reg_still_required && needs_reg,env,tag,cs,bounds,ef)
+          else (LEXP_aux(LEXP_vector_range(vec',e1',e2'),(l,Base(([],res_t),tag,cs,efl,ef,nob))),
+                res_t,reg_required&&reg_still_required && needs_reg,env,tag,cs,bounds,efl,ef)
         | Tuvar _ -> typ_error l "Assignement to a range of elements requires a vector with a known order, try adding an annotation."
         | _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string vec_t))) 
     | LEXP_field(vec,id)-> 
-      let (vec',item_t,reg_required,env,tag,csi,bounds,ef) = check_lexp envs imp_param false vec in
+      let (vec',item_t,reg_required,env,tag,csi,bounds,efl,efr) = check_lexp envs imp_param false vec in
       let vec_t = match vec' with
         | LEXP_aux(_,(l',Base((parms,t),_,_,_,_,_))) -> t
         | _ -> item_t in
@@ -1600,7 +1602,8 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
                 | Some t ->
                   let ft = typ_subst subst_env false t in
                   let (_,cs_sub') = type_consistent (Expr l) d_env Guarantee false ts vec_t in
-                  (LEXP_aux(LEXP_field(vec',id),(l,(Base(([],ft),tag,csi@cs,eft,ef,nob)))),ft,false,env,tag,csi@cs@cs_sub',bounds,ef))
+                  (LEXP_aux(LEXP_field(vec',id),(l,(Base(([],ft),tag,csi@cs,eft,efl,nob)))),
+                   ft,false,env,tag,csi@cs@cs_sub',bounds,efl,efr))
             | _ -> 
               typ_error l ("Expected a register or struct for this update, instead found an expression with type " ^ i))
         | _ -> typ_error l ("Expected a register binding here, found " ^ (t_to_string item_t)))
