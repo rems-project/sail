@@ -1,8 +1,3 @@
-default Order dec
-
-function nat id ( n ) = n
-
-register (bit[5]) c
 
 function unit f() = {
  (if( true ) then 
@@ -17,7 +12,4 @@ function unit f() = {
  b := a;
 }
 
-function nat effect pure main _ = {
-  f();
-  id(42);
-}
+
