@@ -649,6 +649,7 @@ exp :: 'E_' ::=
   | annot , annot'           :: :: internal_exp_user {{ com This is like the above but the user has specified an implicit parameter for the current function }} 
   | let lexp = exp in exp'    :: :: internal_let {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
   | let pat = exp in exp' :: :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
+  | return ( exp )                                          :: :: internal_return {{ com For internal use to embed into monad definition }}
 
 
 lexp :: 'LEXP_' ::= {{ com lvalue expression }}

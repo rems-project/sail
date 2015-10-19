@@ -261,6 +261,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
                        ("Internal_exp_user given unexpected types " ^ (t_to_string tu) ^ ", " ^ (t_to_string ti))))
         | _ -> raise (Reporting_basic.err_unreachable l ("Internal_exp_user given none Base annot")))
     | E_internal_let _ -> raise (Reporting_basic.err_unreachable l "Internal let found before it should have been introduced")
+    | E_internal_return _ -> raise (Reporting_basic.err_unreachable l "Internal return found before it should have been introduced")
 
 let rewrite_let rewriters map (LB_aux(letbind,(l,annot))) =
   let map = merge_option_maps map (get_map_tannot annot) in
@@ -411,6 +412,8 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_internal_exp           : 'a annot -> 'exp_aux
   ; e_internal_exp_user      : 'a annot * 'a annot -> 'exp_aux
   ; e_internal_let           : 'lexp * 'exp * 'exp -> 'exp_aux
+  ; e_internal_plet          : 'pat * 'exp * 'exp -> 'exp_aux
+  ; e_internal_return        : 'exp -> 'exp_aux
   ; e_aux                    : 'exp_aux * 'a annot -> 'exp
   ; lEXP_id                  : id -> 'lexp_aux
   ; lEXP_memory              : id * 'exp list -> 'lexp_aux
@@ -471,6 +474,9 @@ let rec fold_exp_aux alg = function
   | E_internal_exp_user (annot1,annot2) -> alg.e_internal_exp_user (annot1,annot2)
   | E_internal_let (lexp,e1,e2) ->
      alg.e_internal_let (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
+  | E_internal_plet (pat,e1,e2) ->
+     alg.e_internal_plet (fold_pat alg.pat_alg pat, fold_exp alg e1, fold_exp alg e2)
+  | E_internal_return e -> alg.e_internal_return (fold_exp alg e)
 and fold_exp alg (E_aux (exp_aux,annot)) = alg.e_aux (fold_exp_aux alg exp_aux, annot)
 and fold_lexp_aux alg = function
   | LEXP_id id -> alg.lEXP_id id
@@ -529,6 +535,8 @@ let id_exp_alg =
   ; e_internal_exp = (fun a -> E_internal_exp a)
   ; e_internal_exp_user = (fun (a1,a2) -> E_internal_exp_user (a1,a2))
   ; e_internal_let = (fun (lexp, e2, e3) -> E_internal_let (lexp,e2,e3))
+  ; e_internal_plet = (fun (pat, e1, e2) -> E_internal_plet (pat,e1,e2))
+  ; e_internal_return = (fun e -> E_internal_return e)
   ; e_aux = (fun (e,annot) -> E_aux (e,annot))
   ; lEXP_id = (fun id -> LEXP_id id)
   ; lEXP_memory = (fun (id,es) -> LEXP_memory (id,es))
@@ -936,7 +944,7 @@ let letbind (v : 'a exp) (body : 'a exp -> 'a exp) : 'a exp =
   if effectful v
   then E_aux (E_internal_plet (pat,v,body eid),annot_let)
   else E_aux (E_let (LB_aux (LB_val_implicit (pat,v),annot_lb),body eid),annot_let)
-    
+
 let rec value ((E_aux (exp_aux,_)) as exp) =
   not (effectful exp) &&
     match exp_aux with
@@ -978,6 +986,9 @@ and norm_pexpL (pexps : 'a pexp list) : ('a exp, 'a pexp list) cont =
   norm_list norm_pexp pexps
             
 and norm_exp_to_term (exp : 'a exp) : 'a exp =
+  let (E_aux (_,annot)) = exp in
+  let exp =
+    if effectful exp then E_aux (E_internal_return exp,annot) else exp in
   norm_exp exp (fun exp -> exp)
            
 and norm_fexps (fexps :'a fexps) : ('a exp,'a fexps) cont = 
@@ -1149,20 +1160,30 @@ and norm_exp (exp : 'a exp) : ('a exp,'a exp) cont =
       else norm_exp exp1) >>= fun exp1 ->
      let exp2 = norm_exp_to_term exp2 in
      return (rewrap_effs (geteffs exp2) (E_internal_let (lexp,exp1,exp2)))
+  | E_internal_return exp1 ->
+     norm_exp_to_name exp1 >>= fun exp1 ->
+     return (rewrap_localeff (E_internal_return exp1))
   | E_internal_plet _ -> failwith "E_internal_plet should not be here yet"
                                   
 
-let rewrite_defs_a_normalise (Defs defs) = rewrite_defs_base
-  {rewrite_exp = (fun _ _ e -> norm_exp_to_term (fold_exp remove_blocks_exp_alg e));
-   rewrite_pat = rewrite_pat;
-   rewrite_let = rewrite_let;
-   rewrite_lexp = rewrite_lexp;
-   rewrite_fun = rewrite_fun;
-   rewrite_def = rewrite_def;
-   rewrite_defs = rewrite_defs_base} (Defs defs)
+let rewrite_defs_a_normalise =
+  let rewrite_exp _ _ e =
+    if effectful e then norm_exp_to_term (fold_exp remove_blocks_exp_alg e)
+    else e in
+  rewrite_defs_base
+    {rewrite_exp = rewrite_exp
+    ; rewrite_pat = rewrite_pat
+    ; rewrite_let = rewrite_let
+    ; rewrite_lexp = rewrite_lexp
+    ; rewrite_fun = rewrite_fun
+    ; rewrite_def = rewrite_def
+    ; rewrite_defs = rewrite_defs_base
+    }
 
 let rewrite_defs_lem defs =
   let defs = rewrite_defs_remove_vector_concat defs in
   let defs = rewrite_defs_exp_lift_assign defs in
   let defs = rewrite_defs_a_normalise defs in
   defs
+
+
