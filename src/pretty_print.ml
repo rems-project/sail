@@ -1306,7 +1306,7 @@ let doc_pat_ocaml =
     (match annot with
      | Base(([],t),_,_,_,_,_) ->
        if is_bit_vector t
-       then parens (separate space [string "Vvector"; squarebars (separate_map semi pat pats); underscore ; underscore])
+       then parens (separate space [string "Vvector"; squarebars (separate_map semi pat pats); comma; underscore ; comma; underscore])
        else non_bit_print()
      | _ -> non_bit_print ())
   | P_tup pats  -> parens (separate_map comma_sp pat pats)
@@ -1337,8 +1337,8 @@ let doc_exp_ocaml, doc_let_ocaml =
       parens (string "vector_concat ") ^^ (exp l) ^^ space ^^ (exp r)
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
     | E_if(c,t,E_aux(E_block [], _)) ->
-      string "if" ^^ space ^^ string "to_bool" ^^  parens (exp c) ^/^
-      string "then" ^^ space ^^ (exp t)
+      parnes (string "if" ^^ space ^^ string "to_bool" ^^  parens (exp c) ^/^
+              string "then" ^^ space ^^ (exp t))
     | E_if(c,t,e) ->
       parens (
       string "if" ^^ space ^^ string "to_bool" ^^ parens (exp c) ^/^
