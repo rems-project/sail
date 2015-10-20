@@ -1340,9 +1340,10 @@ let doc_exp_ocaml, doc_let_ocaml =
       string "if" ^^ space ^^ string "to_bool" ^^  parens (exp c) ^/^
       string "then" ^^ space ^^ (exp t)
     | E_if(c,t,e) ->
+      parens (
       string "if" ^^ space ^^ string "to_bool" ^^ parens (exp c) ^/^
       string "then" ^^ space ^^ group (exp t) ^/^
-      string "else" ^^ space ^^ group (exp e)
+      string "else" ^^ space ^^ group (exp e))
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
       let var= doc_id_ocaml id in
       let (compare,next) = if order = Ord_inc then string "<=",string "+" else string ">=",string "-" in
