@@ -1753,12 +1753,12 @@ let initial_typ_env =
      Overload(
        Base(((mk_typ_params ["a";"b";"c"]),
              (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
-            External (Some "mod"),[],pure_e,pure_e,nob),
+            External (Some "modulo"),[],pure_e,pure_e,nob),
        true,
        [Base(((mk_nat_params["n";"o";]),
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "n") ; mk_atom (mk_nv "o")])
                            (mk_range n_zero (mk_sub (mk_nv "o") n_one)))),
-             External (Some "mod"),
+             External (Some "modulo"),
              [GtEq(Specc(Parse_ast.Int("modulo",None)),Require,(mk_nv "o"),n_one)],pure_e,pure_e,nob);
         Base(((mk_nat_params["n";"m";"o"])@(mk_ord_params["ord"]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");

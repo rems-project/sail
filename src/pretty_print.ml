@@ -1201,10 +1201,16 @@ let pat_to_string p =
 
 let star_sp = star ^^ space
 
+let is_number char =
+  char = '0' || char = '1' || char = '2' || char = '3' || char = '4' || char = '5' ||
+  char = '6' || char = '7' || char = '8' || char = '9'
+
 let doc_id_ocaml (Id_aux(i,_)) =
   match i with
   | Id("bit") -> string "vbit" 
-  | Id i -> string (if i.[0] = '\'' then "_" ^ i else String.uncapitalize i)
+  | Id i -> string (if i.[0] = '\'' || is_number(i.[0])
+                    then "_" ^ i
+                    else  String.uncapitalize i)
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
        * token in case of x ending with star. *)
@@ -1302,11 +1308,19 @@ let doc_pat_ocaml =
   | P_typ(typ,p) -> doc_op colon (pat p) (doc_typ_ocaml typ) 
   | P_app(id,[]) -> doc_id_ocaml_ctor id
   | P_vector pats ->
-    let non_bit_print () = parens (separate space [string "VvectorR"; squarebars (separate_map semi pat pats);comma; underscore ; comma; underscore]) in
+    let non_bit_print () =
+      parens
+        (separate space [string "VvectorR";
+                         parens (separate comma_sp [squarebars (separate_map semi pat pats);
+                                                    underscore;
+                                                    underscore])]) in
     (match annot with
      | Base(([],t),_,_,_,_,_) ->
        if is_bit_vector t
-       then parens (separate space [string "Vvector"; squarebars (separate_map semi pat pats); comma; underscore ; comma; underscore])
+       then parens (separate space [string "Vvector";
+                                    parens (separate comma_sp [squarebars (separate_map semi pat pats);
+                                                                underscore;
+                                                                underscore])])
        else non_bit_print()
      | _ -> non_bit_print ())
   | P_tup pats  -> parens (separate_map comma_sp pat pats)
@@ -1337,7 +1351,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       parens (string "vector_concat ") ^^ (exp l) ^^ space ^^ (exp r)
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
     | E_if(c,t,E_aux(E_block [], _)) ->
-      parnes (string "if" ^^ space ^^ string "to_bool" ^^  parens (exp c) ^/^
+      parens (string "if" ^^ space ^^ string "to_bool" ^^  parens (exp c) ^/^
               string "then" ^^ space ^^ (exp t))
     | E_if(c,t,e) ->
       parens (
@@ -1644,7 +1658,7 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
     match n1,n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
       let dir = i1 < i2 in                  
-      let size = if dir then i2-i1 else i1-i2 in
+      let size = if dir then i2-i1 +1 else i1-i2 in
       doc_op equals
         ((string "let") ^^ space ^^ doc_id_ocaml id ^^ space ^^ (string "init_val"))
         (separate space [string "Vregister";
