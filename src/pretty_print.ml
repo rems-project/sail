@@ -1204,7 +1204,7 @@ let star_sp = star ^^ space
 let doc_id_ocaml (Id_aux(i,_)) =
   match i with
   | Id("bit") -> string "vbit" 
-  | Id i -> string (if i.[0] = '\'' then "_" ^ i else i)
+  | Id i -> string (if i.[0] = '\'' then "_" ^ i else String.uncapitalize i)
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
        * token in case of x ending with star. *)
@@ -1252,7 +1252,7 @@ let doc_typ_ocaml, doc_atomic_typ_ocaml =
   | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
     (string "number")
   | Typ_app(id,args) ->
-      (separate_map space doc_typ_arg_ocaml args) ^^ (doc_id_ocaml_type id)
+      (separate_map space doc_typ_arg_ocaml args) ^^ space ^^ (doc_id_ocaml_type id)
   | _ -> atomic_typ ty 
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_id id  -> doc_id_ocaml_type id
@@ -1269,16 +1269,16 @@ let doc_typ_ocaml, doc_atomic_typ_ocaml =
   | Typ_arg_effect e -> empty
   in typ, atomic_typ
 
-let doc_lit_ocaml (L_aux(l,_)) =
+let doc_lit_ocaml in_pat (L_aux(l,_)) =
   utf8string (match l with
   | L_unit  -> "()"
   | L_zero  -> "Vzero"
   | L_one   -> "Vone"
   | L_true  -> "Vone"
   | L_false -> "Vzero"
-  | L_num i -> string_of_int i
-  | L_hex n -> "(num_to_vec" ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)
-  | L_bin n -> "(num_to_vec" ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)
+  | L_num i -> if in_pat then string_of_int i else "(big_int_of_int " ^ string_of_int i ^ ")"
+  | L_hex n -> "(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)
+  | L_bin n -> "(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)
   | L_undef -> "Vundef"
   | L_string s -> "\"" ^ s ^ "\"")
 
@@ -1291,15 +1291,13 @@ let doc_typscm_ocaml (TypSchm_aux(TypSchm_ts(tq,t),_)) =
 (*Note: vector concatenation, literal vectors, indexed vectors, and record should 
   be removed prior to pp. The latter two have never yet been seen
 *)
-let doc_pat_ocaml, doc_atomic_pat_ocaml =
+let doc_pat_ocaml =
   let rec pat pa = app_pat pa
-  and app_pat ((P_aux(p,l)) as pa) = match p with
-  | P_app(id, ((_ :: _) as pats)) -> doc_unop (doc_id_ocaml_ctor id) (parens (separate_map comma_sp atomic_pat pats))
-  | _ -> atomic_pat pa
-  and atomic_pat ((P_aux(p,(l,annot))) as pa) = match p with
-  | P_lit lit  -> doc_lit lit
+  and app_pat ((P_aux(p,(l,annot))) as pa) = match p with
+  | P_app(id, ((_ :: _) as pats)) -> doc_unop (doc_id_ocaml_ctor id) (parens (separate_map comma_sp pat pats))
+  | P_lit lit  -> doc_lit_ocaml true lit
   | P_wild -> underscore
-  | P_id id -> doc_id id
+  | P_id id -> doc_id_ocaml id
   | P_as(p,id) -> parens (separate space [pat p; string "as"; doc_id_ocaml id])
   | P_typ(typ,p) -> doc_op colon (pat p) (doc_typ_ocaml typ) 
   | P_app(id,[]) -> doc_id_ocaml_ctor id
@@ -1311,12 +1309,14 @@ let doc_pat_ocaml, doc_atomic_pat_ocaml =
        then parens (separate space [string "Vvector"; squarebars (separate_map semi pat pats); underscore ; underscore])
        else non_bit_print()
      | _ -> non_bit_print ())
-  | P_tup pats  -> parens (separate_map comma_sp atomic_pat pats)
+  | P_tup pats  -> parens (separate_map comma_sp pat pats)
   | P_list pats -> brackets (separate_map semi pat pats) (*Never seen but easy in ocaml*)
-  in pat, atomic_pat
+  in pat
 
 let doc_exp_ocaml, doc_let_ocaml =
-  let rec exp (E_aux (e, (_,annot))) =  match e with
+  let rec top_exp read_registers (E_aux (e, (_,annot))) =
+    let exp = top_exp read_registers in
+    match e with
     | E_assign((LEXP_aux(le_act,tannot) as le),e) ->
       (match annot with
        | Base(_,(Emp_local | Emp_set),_,_,_,_) ->
@@ -1325,16 +1325,16 @@ let doc_exp_ocaml, doc_let_ocaml =
             (*Setting local variable fully *)
             doc_op coloneq (doc_lexp_ocaml le) (exp e)
           | LEXP_vector _ ->
-            doc_op (string "<-") (doc_lexp_ocaml le) (exp e)
+            doc_op (string "<-") (doc_lexp_array_ocaml le) (exp e)
           | LEXP_vector_range _ ->
-            group ((string "set_vector_range") ^^ space ^^ (doc_lexp_ocaml le) ^^ space ^^ (exp e)))
+            parens ((string "set_vector_range") ^^ space ^^ (doc_lexp_ocaml le) ^^ space ^^ (exp e)))
        | _ ->
          (match le_act with
           | LEXP_vector _ | LEXP_vector_range _ | LEXP_cast _ | LEXP_field _ | LEXP_id _ ->
             (doc_lexp_rwrite le e)
           | LEXP_memory _ -> (doc_lexp_fcall le e)))
     | E_vector_append(l,r) ->
-      group (parens (string "vector_append ") ^^ (exp l) ^^ space ^^ (exp r))
+      parens (string "vector_concat ") ^^ (exp l) ^^ space ^^ (exp r)
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
     | E_if(c,t,E_aux(E_block [], _)) ->
       string "if" ^^ space ^^ string "to_bool" ^^  parens (exp c) ^/^
@@ -1398,7 +1398,12 @@ let doc_exp_ocaml, doc_let_ocaml =
       (match fannot with
        | Base((_,{t= Tapp("register",_)}),_,_,_,_,_) |
          Base((_,{t= Tabbrev(_,{t=Tapp("register",_)})}),_,_,_,_,_)->
-        parens ((string "get_register_field") ^^ space ^^ (exp fexp) ^^ space ^^ string_lit (doc_id id))
+         let field_f = match annot with
+           | Base((_,{t = Tid "bit"}),_,_,_,_,_) |
+             Base((_,{t = Tabbrev(_,{t=Tid "bit"})}),_,_,_,_,_) ->
+             string "get_register_field_bit"
+           | _ -> string "get_register_field_vec" in
+         parens (field_f ^^ space ^^ (exp fexp) ^^ space ^^ string_lit (doc_id id))
       | _ -> exp fexp ^^ dot ^^ doc_id id)
     | E_block [] -> string "()"
     | E_block exps | E_nondet exps ->
@@ -1408,21 +1413,34 @@ let doc_exp_ocaml, doc_let_ocaml =
       (match annot with
       | Base((_, ({t = Tapp("reg",_)} | {t=Tabbrev(_,{t=Tapp("reg",_)})})),_,_,_,_,_) ->
         string "!" ^^ doc_id_ocaml id
-      | Base((_,({t=Tapp("register",_)} | {t=Tabbrev(_,{t=Tapp("register",_)})})), External _,_,_,_,_) ->
-        string "!" ^^ doc_id_ocaml id
-      | Base(_,Alias alias_info,_,_,_,_) ->
+      | Base((_, ({t = Tapp("register",_)} | {t=Tabbrev(_,{t=Tapp("register",_)})})),_,_,_,_,_) ->
+        if read_registers
+        then string "(read_register " ^^ doc_id_ocaml id ^^ string ")"
+        else doc_id_ocaml id
+      | Base(_,(Constructor|Enum _),_,_,_,_) -> doc_id_ocaml_ctor id
+      | Base((_,t),Alias alias_info,_,_,_,_) ->
         (match alias_info with
          | Alias_field(reg,field) ->
-           parens (string "get_register_field" ^^ space ^^ string reg ^^ string_lit (string field))
+           let field_f = match t.t with
+             | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> string "get_register_field_bit"
+             | _ -> string "get_register_field_vec" in
+           parens (separate space [field_f; string reg; string_lit (string field)])
          | Alias_extract(reg,start,stop) ->
            if start = stop
-           then parens (string "bit_vector_access" ^^ space ^^ string reg ^^ space ^^ doc_int start)
-           else parens (string "vector_subrange" ^^ space ^^ string reg ^^ space ^^ doc_int start ^^ space ^^ doc_int stop)
+           then parens (separate space [string "bit_vector_access";string reg;doc_int start])
+           else parens
+               (separate space [string "vector_subrange"; string reg; doc_int start; doc_int stop])
          | Alias_pair(reg1,reg2) ->
-           parens (string "vector_append" ^^ space ^^ string reg1 ^^ space ^^ string reg2))        
+           parens (separate space [string "vector_concat"; string reg1; string reg2]))
       | _ -> doc_id_ocaml id)
-    | E_lit lit -> doc_lit lit
-    | E_cast(typ,e) -> (parens (doc_op colon (group (exp e)) (doc_typ_ocaml typ)))
+    | E_lit lit -> doc_lit_ocaml false lit
+    | E_cast(typ,e) ->
+      (match annot with
+      | Base(_,External _,_,_,_,_) ->
+        if read_registers
+        then parens( string "read_register" ^^ space ^^ exp e)
+        else exp e
+      | _ -> (parens (doc_op colon (group (exp e)) (doc_typ_ocaml typ))))
     | E_tuple exps ->
       parens (separate_map comma exp exps)
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
@@ -1443,7 +1461,9 @@ let doc_exp_ocaml, doc_let_ocaml =
              | Nconst i -> string_of_big_int i
              | N2n(_,Some i) -> string_of_big_int i
              | _ -> if dir then "0" else string_of_int (List.length exps) in
-           group (call ^^ space ^^ squarebars (separate_map semi exp exps) ^^ string start ^^ string dir_out))
+           parens (separate space [call; parens (separate comma_sp [squarebars (separate_map semi exp exps);
+                                                                   string start;
+                                                                   string dir_out])]))
     | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
       (match annot with
        | Base((_,t),_,_,_,_,_) ->
@@ -1455,17 +1475,24 @@ let doc_exp_ocaml, doc_let_ocaml =
              | Oinc -> true,"true"
              | _ -> false, "false" in
            let start = match start.nexp with
-             | Nconst i -> string_of_big_int i
-             | N2n(_,Some i) -> string_of_big_int i
+             | Nconst i | N2n(_,Some i)-> string_of_big_int i
+             | N2n({nexp=Nconst i},_) -> string_of_int (Util.power 2 (int_of_big_int i)) 
              | _ -> if dir then "0" else string_of_int (List.length iexps) in
            let size = match len.nexp with
-             | Nconst i | N2n(_,Some i)-> string_of_big_int i in
+             | Nconst i | N2n(_,Some i)-> string_of_big_int i
+             | N2n({nexp=Nconst i},_) -> string_of_int (Util.power 2 (int_of_big_int i))
+           in
            let default_string = 
              (match default with
               | Def_val_empty -> string "None" 
               | Def_val_dec e -> parens (string "Some " ^^ (exp e))) in 
            let iexp (i,e) = parens (separate_map comma_sp (fun x -> x) [(doc_int i); (exp e)]) in
-           group (call ^^ (brackets (separate_map semi iexp iexps)) ^^ space ^^ default_string ^^ string start ^^ string size ^^ string dir_out))
+           parens (separate space [call;
+                                   (brackets (separate_map semi iexp iexps));
+                                   default_string;
+                                   string start;
+                                   string size;
+                                   string dir_out]))
   | E_vector_update(v,e1,e2) ->
     (*Has never happened to date*)
       brackets (doc_op (string "with") (exp v) (doc_op equals (exp e1) (exp e2)))
@@ -1475,9 +1502,9 @@ let doc_exp_ocaml, doc_let_ocaml =
         doc_op (string "with") (exp v)
         (doc_op equals (exp e1 ^^ colon ^^ exp e2) (exp e3)))
   | E_list exps ->
-      brackets (separate_map comma exp exps)
+      brackets (separate_map semi exp exps)
   | E_case(e,pexps) ->
-      let opening = separate space [string "("; string "match"; exp e; string "with"] in
+      let opening = separate space [string "("; string "match"; top_exp true e; string "with"] in
       let cases = separate_map (break 1) doc_case pexps in
       surround 2 1 opening cases rparen
   | E_exit e ->
@@ -1506,34 +1533,50 @@ let doc_exp_ocaml, doc_let_ocaml =
   and let_exp (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->
       prefix 2 1
-        (separate space [string "let"; doc_atomic_pat_ocaml pat; equals])
-        (exp e)
+        (separate space [string "let"; doc_pat_ocaml pat; equals])
+        (top_exp false e)
   | LB_val_implicit(pat,e) ->
       prefix 2 1
-        (separate space [string "let"; doc_atomic_pat_ocaml pat; equals])
-        (exp e)
+        (separate space [string "let"; doc_pat_ocaml pat; equals])
+        (top_exp false e)
 
-  and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id_ocaml id) (exp e)
+  and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id_ocaml id) (top_exp false e)
 
   and doc_case (Pat_aux(Pat_exp(pat,e),_)) =
-    doc_op arrow (separate space [pipe; doc_atomic_pat_ocaml pat]) (group (exp e))
+    doc_op arrow (separate space [pipe; doc_pat_ocaml pat]) (group (top_exp false e))
 
-  and doc_lexp_ocaml ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
-  | LEXP_vector(v,e) -> parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml v) ^^ dot ^^ parens (exp e)
-  | LEXP_vector_range(v,e1,e2) ->
+  and doc_lexp_ocaml ((LEXP_aux(lexp,(l,annot))) as le) =
+    let exp = top_exp false in
+    match lexp with
+    | LEXP_vector(v,e) -> parens ((string "vector_access") ^^ space ^^ doc_lexp_ocaml v) ^^ dot ^^ parens (exp e)
+    | LEXP_vector_range(v,e1,e2) ->
       parens ((string "vector_subrange") ^^ space ^^ doc_lexp_ocaml v ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
-  | LEXP_field(v,id) -> doc_lexp_ocaml v ^^ dot ^^ doc_id_ocaml id
-  | LEXP_id id -> doc_id_ocaml id
-  | LEXP_cast(typ,id) -> (doc_id_ocaml id)
+    | LEXP_field(v,id) -> doc_lexp_ocaml v ^^ dot ^^ doc_id_ocaml id
+    | LEXP_id id -> doc_id_ocaml id
+    | LEXP_cast(typ,id) -> (doc_id_ocaml id)
+                           
+  and doc_lexp_array_ocaml ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
+  | LEXP_vector(v,e) -> parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml v) ^^ dot ^^ parens (top_exp false e)
+  | _ -> empty
 
   and doc_lexp_rwrite ((LEXP_aux(lexp,(l,annot))) as le) e_new_v =
+    let exp = top_exp false in
+    let is_bit = match e_new_v with
+      | E_aux(_,(_,Base((_,t),_,_,_,_,_))) ->
+        (match t.t with
+         | Tapp("vector", [_;_;_;(TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})}))]) |
+           Tabbrev(_,{t=Tapp("vector",[_;_;_;TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})})])}) ->
+           true
+         | _ -> false)
+      | _ -> false in
     match lexp with
     | LEXP_vector(v,e) ->
       doc_op (string "<-")
-        (group (parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml v)) ^^ dot ^^ parens (exp e))
+        (group (parens ((string (if is_bit then "get_barray" else "get_varray")) ^^ space ^^ doc_lexp_ocaml v)) ^^
+         dot ^^ parens (exp e))
         (exp e_new_v)
     | LEXP_vector_range(v,e1,e2) ->
-      parens ((string "set_vector_subrange") ^^ space ^^
+      parens ((string (if is_bit then "set_vector_subrange_bit" else "set_vector_subrange_v")) ^^ space ^^
               doc_lexp_ocaml v ^^ space ^^ exp e1 ^^ space ^^ exp e2 ^^ space ^^ exp e_new_v)
     | LEXP_field(v,id) ->
       parens ((string "set_register_field") ^^ space ^^
@@ -1543,27 +1586,28 @@ let doc_exp_ocaml, doc_let_ocaml =
        | Base(_,Alias alias_info,_,_,_,_) ->
          (match alias_info with
           | Alias_field(reg,field) ->
-            parens ((string "set_register_field") ^^ space ^^
+            parens ((if is_bit then string "set_register_field_bit" else string "set_register_field_v") ^^ space ^^
                     string reg ^^ space ^^string_lit (string field) ^^ space ^^ exp e_new_v)
           | Alias_extract(reg,start,stop) ->
             if start = stop
             then
               doc_op (string "<-")
-                (group (parens ((string "get_varray") ^^ space ^^ string reg)) ^^ dot ^^ parens (doc_int start))
+                (group (parens ((string (if is_bit then "get_barray" else "get_varray")) ^^ space ^^ string reg)) ^^
+                 dot ^^ parens (doc_int start))
                 (exp e_new_v)
             else 
-              parens ((string "set_vector_subrange") ^^ space ^^
+              parens ((string (if is_bit then "set_vector_subrange_bit" else "set_vector_subrange_v")) ^^ space ^^
                       string reg ^^ space ^^ doc_int start ^^ space ^^ doc_int stop ^^ space ^^ exp e_new_v)
           | Alias_pair(reg1,reg2) ->
             parens ((string "set_two_regs") ^^ space ^^ string reg1 ^^ space ^^ string reg2 ^^ space ^^ exp e_new_v))              
        | _ ->
-         doc_op (string ":=") (doc_id_ocaml id) (exp e_new_v))
+         parens (separate space [string "set_register"; doc_id_ocaml id; exp e_new_v]))
 
   and doc_lexp_fcall ((LEXP_aux(lexp,(l,annot))) as le) e_new_v = match lexp with
-    | LEXP_memory(id,args) -> doc_id_ocaml id ^^ parens (separate_map comma exp (args@[e_new_v]))
+    | LEXP_memory(id,args) -> doc_id_ocaml id ^^ parens (separate_map comma (top_exp false) (args@[e_new_v]))
 
   (* expose doc_exp and doc_let *)
-  in exp, let_exp
+  in top_exp false, let_exp
 
 (*TODO Upcase and downcase type and constructors as needed*)
 let doc_type_union_ocaml (Tu_aux(typ_u,_)) = match typ_u with
@@ -1599,24 +1643,24 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
     match n1,n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
       let dir = i1 < i2 in                  
-      let size = if dir then i2-i1 -1 else i1-i2 -1 in
+      let size = if dir then i2-i1 else i1-i2 in
       doc_op equals
         ((string "let") ^^ space ^^ doc_id_ocaml id ^^ space ^^ (string "init_val"))
-        (separate space [string "ref";
-                         string "Vregister";
+        (separate space [string "Vregister";
                          (parens (separate comma_sp
                                     [parens (separate space
                                                [string "match init_val with";
                                                 pipe;
                                                 string "None";
                                                 arrow;
-                                                string "Array.make";
+                                                string "ref";
+                                                string "(Array.make";
                                                 doc_int size;
-                                                string "Vzero";
+                                                string "Vzero)";
                                                 pipe;
                                                 string "Some init_val";
                                                 arrow;
-                                                string "init_val";]);
+                                                string "ref init_val";]);
                                      doc_nexp n1;
                                      string (if dir then "true" else "false");
                                      brackets doc_rids]))])
@@ -1643,12 +1687,13 @@ let doc_fundef_ocaml (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   | _ ->
     let id = get_id fcls in
     let sep = hardline ^^ pipe ^^ space in
-    let clauses = separate_map sep doc_funcl fcls in
+    let clauses = separate_map sep doc_funcl_ocaml fcls in
     separate space [string "let";
                     doc_rec_ocaml r;
                     doc_id_ocaml id;
                     equals;
                     (string "function");
+                    (hardline^^pipe);
                     clauses]
 
 let doc_dec_ocaml (DEC_aux (reg,(l,annot))) =
@@ -1664,18 +1709,18 @@ let doc_dec_ocaml (DEC_aux (reg,(l,annot))) =
              separate space [string "let";
                              doc_id_ocaml id;
                              equals;
-                             string "ref";
-                             parens (separate space
-                                       [string "Vregister";
-                                        parens (separate comma [doc_int (int_of_big_int start);
-                                                                o;
-                                                                parens (separate space
-                                                                          [string "Array.make";
-                                                                           doc_int (int_of_big_int size);
-                                                                           string "Vzero";
-                                                                           string "[]"])])])]
+                             string "Vregister";
+                             parens (separate comma [separate space [string "ref";
+                                                                     parens (separate space
+                                                                               [string "Array.make";
+                                                                                doc_int (int_of_big_int size);
+                                                                                string "Vzero";])];
+                                                     doc_int (int_of_big_int start);
+                                                     o;                                                     
+                                                     brackets empty])]
            | _ -> empty)
-        | Tapp("register", [TA_typ {t=Tid idt}]) ->
+        | Tapp("register", [TA_typ {t=Tid idt}]) |
+          Tabbrev( {t= Tid idt}, _) ->
           separate space [string "let";
                           doc_id_ocaml id;
                           equals;
@@ -1683,10 +1728,10 @@ let doc_dec_ocaml (DEC_aux (reg,(l,annot))) =
                           string "None"]
         |_-> empty)
      | _ ->  empty)
-    | DEC_alias(id,alspec) ->
-        doc_op equals (string "register alias" ^^ space ^^ doc_id id) (doc_alias alspec)
-    | DEC_typ_alias(typ,id,alspec) -> 
-        doc_op equals (string "register alias" ^^ space ^^ doc_atomic_typ typ) (doc_alias alspec)
+    | DEC_alias(id,alspec) -> empty (*
+        doc_op equals (string "register alias" ^^ space ^^ doc_id id) (doc_alias alspec) *)
+    | DEC_typ_alias(typ,id,alspec) -> empty (*
+        doc_op equals (string "register alias" ^^ space ^^ doc_atomic_typ typ) (doc_alias alspec) *)
 
 let doc_def_ocaml def = group (match def with
   | DEF_default df -> empty

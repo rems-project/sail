@@ -61,6 +61,8 @@ val remove_dups : ('a -> 'a -> int) -> ('a -> 'a -> bool) -> 'a list -> 'a list
 
 val assoc_maybe : ('a -> 'a -> bool) -> ('a * 'b) list -> 'a -> 'b option
 
+val power : int -> int -> int
+
 (** {2 Option Functions} *)
 
 (** [option_map f None] returns [None], whereas

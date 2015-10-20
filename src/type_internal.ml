@@ -2879,7 +2879,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       (t2,[GtEq(co,Require,b1,n_zero);LtEq(co,Require,r1,mk_c(big_int_of_int num_enums))],pure_e,
        E_aux(E_case(e,
                     List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)), (l,simple_annot t1)),
-                                                          E_aux(E_id(Id_aux(Id a,l)), (l, simple_annot t2))),
+                                                          E_aux(E_id(Id_aux(Id a,l)),
+                                                                (l, tag_annot t2 (Enum num_enums)))),
                                                   (l,simple_annot t2))) enums),
              (l,simple_annot_efr t2 (get_cummulative_effects (get_eannot e)))))
     | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
@@ -2891,7 +2892,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
              LtEq(co,Require,b1,mk_c(big_int_of_int num_enums))],pure_e,
          E_aux(E_case(e,
                       List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),(l, simple_annot t1)),
-                                                            E_aux(E_id(Id_aux(Id a,l)),(l, simple_annot t2))),
+                                                            E_aux(E_id(Id_aux(Id a,l)),
+                                                                  (l, tag_annot t2 (Enum num_enums)))),
                                                     (l,simple_annot t2))) enums),
                (l,simple_annot_efr t2 (get_cummulative_effects (get_eannot e)))))
       | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
