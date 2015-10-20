@@ -80,6 +80,11 @@ let remove_dups compare eq l =
   in
   aux [] l'
 
+let rec power i tothe =
+  if tothe <= 0
+  then 1
+  else i * power i (tothe - 1)
+
 let rec assoc_maybe eq l k =
   match l with
     | [] -> None
