@@ -1302,7 +1302,7 @@ let doc_pat_ocaml =
   | P_typ(typ,p) -> doc_op colon (pat p) (doc_typ_ocaml typ) 
   | P_app(id,[]) -> doc_id_ocaml_ctor id
   | P_vector pats ->
-    let non_bit_print () = parens (separate space [string "VvectorR"; squarebars (separate_map semi pat pats); underscore ; underscore]) in
+    let non_bit_print () = parens (separate space [string "VvectorR"; squarebars (separate_map semi pat pats);comma; underscore ; comma; underscore]) in
     (match annot with
      | Base(([],t),_,_,_,_,_) ->
        if is_bit_vector t
@@ -1525,7 +1525,7 @@ let doc_exp_ocaml, doc_let_ocaml =
                     exp in_exp]
 
   | E_internal_plet (pat,e1,e2) ->
-     (separate space [(exp e1); string ">>= fun"; doc_atomic_pat_ocaml pat;arrow]) ^/^
+     (separate space [(exp e1); string ">>= fun"; doc_pat_ocaml pat;arrow]) ^/^
      exp e2
        
   | E_internal_return (e1) ->
