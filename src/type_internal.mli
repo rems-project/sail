@@ -87,7 +87,7 @@ type tag =
   | Emp_set (* Local mutable expression being set *)
   | External of string option (* External function or register name *)
   | Default (* Variable has default type, has not been bound *)
-  | Constructor (* Variable is a data constructor *)
+  | Constructor of int (* Variable is a data constructor, int says how many variants are in this family *)
   | Enum of int (* Variable came from an enumeration, int tells me the highest possible numeric value *)
   | Alias of alias_inf (* Variable came from a register alias *)
   | Spec (* Variable came from a val specification *)

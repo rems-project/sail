@@ -258,14 +258,14 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
                       | Some n -> Base(([],expect_t), Enum n, cs,pure_e,pure_e,default_bounds) in
                     (P_aux(p,(l,pat_annot)),Envmap.from_list [(i,id_annot)],cs,default_bounds,expect_t) in
       (match Envmap.apply t_env i with
-        | Some(Base((params,t),Constructor,cs,efl,efr,bounds)) ->
+        | Some(Base((params,t),Constructor n,cs,efl,efr,bounds)) ->
           let t,cs,ef,_ = subst params false t cs efl in
           (match t.t with
             | Tfn({t = Tid "unit"},t',IP_none,ef) -> 
               if conforms_to_t d_env false false t' expect_t 
               then
                 let tp,cp = type_consistent (Expr l) d_env Guarantee false t' expect_t in
-                (P_aux(P_app(id,[]),(l,tag_annot t Constructor)),Envmap.empty,cs@cp,bounds,tp)
+                (P_aux(P_app(id,[]),(l,tag_annot t (Constructor n))),Envmap.empty,cs@cp,bounds,tp)
               else default
             | Tfn(t1,t',IP_none,e) -> 
               if conforms_to_t d_env false false t' expect_t
@@ -285,28 +285,28 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
       (*let _ = Printf.eprintf "checking constructor pattern %s\n" i in*)
       (match Envmap.apply t_env i with
         | None | Some NoTyp | Some Overload _ -> typ_error l ("Constructor " ^ i ^ " in pattern is undefined")
-        | Some(Base((params,t),Constructor,constraints,efl,efr,bounds)) -> 
+        | Some(Base((params,t),Constructor n,constraints,efl,efr,bounds)) -> 
           let t,dec_cs,_,_ = subst params false t constraints efl in
           (match t.t with
             | Tid id -> if pats = [] 
               then let t',ret_cs = type_consistent (Patt l) d_env Guarantee false t expect_t in
-                   (P_aux(p,(l,cons_tag_annot t' Constructor dec_cs)), Envmap.empty,dec_cs@ret_cs,nob,t')
+                   (P_aux(p,(l,cons_tag_annot t' (Constructor n) dec_cs)), Envmap.empty,dec_cs@ret_cs,nob,t')
               else typ_error l ("Constructor " ^ i ^ " does not expect arguments")
             | Tfn(t1,t2,IP_none,ef) ->
               let t',ret_cs = type_consistent (Patt l) d_env Guarantee false t2 expect_t in
               (match pats with
               | [] -> let _ = type_consistent (Patt l) d_env Guarantee false unit_t t1 in
-                      (P_aux(P_app(id,[]),(l,cons_tag_annot t' Constructor dec_cs)),
+                      (P_aux(P_app(id,[]),(l,cons_tag_annot t' (Constructor n) dec_cs)),
                        Envmap.empty,dec_cs@ret_cs,nob,t')
               | [p] -> let (p',env,p_cs,bounds,u) = check_pattern envs emp_tag t1 p in
                        (P_aux(P_app(id,[p']),
-                              (l,cons_tag_annot t' Constructor dec_cs)),env,dec_cs@p_cs@ret_cs,bounds,t')
+                              (l,cons_tag_annot t' (Constructor n) dec_cs)),env,dec_cs@p_cs@ret_cs,bounds,t')
               | pats -> let (pats',env,p_cs,bounds,u) = 
                           match check_pattern envs emp_tag t1 (P_aux(P_tup(pats),(l,annot))) with
                           | ((P_aux(P_tup(pats'),_)),env,constraints,bounds,u) -> (pats',env,constraints,bounds,u)
                           | _ -> assert false in
                         (P_aux(P_app(id,pats'),
-                               (l,cons_tag_annot t' Constructor dec_cs)),env,dec_cs@p_cs@ret_cs,bounds,t'))
+                               (l,cons_tag_annot t' (Constructor n) dec_cs)),env,dec_cs@p_cs@ret_cs,bounds,t'))
             | _ -> typ_error l ("Identifier " ^ i ^ " must be a union constructor"))
         | Some(Base((params,t),tag,constraints,efl,efr,bounds)) -> 
           typ_error l ("Identifier " ^ i ^ " used in pattern is not a union constructor"))
@@ -478,12 +478,12 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
     | E_id id -> 
       let i = id_to_string id in
       (match Envmap.apply t_env i with
-      | Some(Base((params,t),Constructor,cs,ef,_,bounds)) ->
+      | Some(Base((params,t),(Constructor n),cs,ef,_,bounds)) ->
         let t,cs,ef,_ = subst params false t cs ef in
         (match t.t with
         | Tfn({t = Tid "unit"},t',IP_none,ef) -> 
           let e = E_aux(E_app(id, []),
-                        (l, (Base(([],{t=Tfn(unit_t,t',IP_none,ef)}), Constructor, cs, ef,pure_e, bounds)))) in
+                        (l, (Base(([],{t=Tfn(unit_t,t',IP_none,ef)}), (Constructor n), cs, ef,pure_e, bounds)))) in
           let t',cs',ef',e' = type_coerce (Expr l) d_env Require false false b_env t' e expect_t in
           (e',t',t_env,cs@cs',nob,union_effects ef ef')
         | Tfn(t1,t',IP_none,e) -> 
@@ -596,13 +596,13 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
             | Tapp ("vector",[TA_nexp base;TA_nexp {nexp = rise};TA_ord o;(TA_typ {t=Tid "bit"})]) 
             | Tapp ("register",[TA_typ {t=Tapp ("vector",[TA_nexp base;TA_nexp { nexp = rise};
                                                           TA_ord o;(TA_typ {t=Tid "bit"})])}])->
-              let f = match o.order with | Oinc -> "to_vec_inc" | Odec -> "to_vec_dec" 
+              let f = match o.order with | Oinc -> "to_vec_inc_undef" | Odec -> "to_vec_dec_undef" 
                                          | _ -> (match d_env.default_o.order with
-                                             | Oinc -> "to_vec_inc" | Odec -> "to_vec_dec"
-                                             | _ -> "to_vec_inc") in
+                                             | Oinc -> "to_vec_inc_undef" | Odec -> "to_vec_dec_undef"
+                                             | _ -> "to_vec_inc_undef") in
               let tannot = (l,Base(([],expect_t),External (Some f),[],ef,ef,b_env)) in
               E_aux(E_app((Id_aux((Id f),l)),
-                          [(E_aux (E_internal_exp(tannot), tannot));simp_exp e l bit_t]),tannot),[],ef
+                          [(E_aux (E_internal_exp(tannot), tannot));]),tannot),[],ef
             | _ -> simp_exp e l (new_t ()),[],ef)) in
       let t',cs',_,e' = type_coerce (Expr l) d_env Require false true b_env (get_e_typ e) e expect_t in
       (e',t',t_env,cs@cs',nob,effect)
@@ -775,15 +775,15 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
           (match t_p.t with
           | Tfn(arg,ret,_,ef') -> check_parms arg lft rht
           | _ -> typ_error l ("Expected a function, found identifier " ^ i ^ " bound to type " ^ (t_to_string t))) in
-        (*let _ = Printf.eprintf "Looking for overloaded function %s, generic type is %s, arg_t is %s\n"
-          i (t_to_string t_p) (t_to_string arg_t) in*)
+        let _ = Printf.eprintf "Looking for overloaded function %s, generic type is %s, arg_t is %s\n"
+          i (t_to_string t_p) (t_to_string arg_t) in
         (match (select_overload_variant d_env true overload_return variants arg_t) with
         | [] -> 
           typ_error l ("No function found with name " ^ i ^
                           " that expects parameters " ^ (t_to_string arg_t))
         | [Base((params,t),tag,cs,ef,_,b)] ->
-          (*let _ = Printf.eprintf "Selected an overloaded function for %s,
-            variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in*)
+          let _ = Printf.eprintf "Selected an overloaded function for %s,
+            variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in
           (match t.t with
           | Tfn(arg,ret,imp,ef') ->
             (match arg.t,arg_t.t with
@@ -795,15 +795,15 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
             |_ -> raise (Reporting_basic.err_unreachable l "function no longer has tuple type"))
           | _ -> raise (Reporting_basic.err_unreachable l "overload variant does not have function"))
         | variants ->
-          (*let _ = Printf.eprintf "Number of variants found before looking at return value %i\n%!" 
-            (List.length variants) in*)
+          let _ = Printf.eprintf "Number of variants found before looking at return value %i\n%!" 
+            (List.length variants) in
           (match (select_overload_variant d_env false true variants expect_t) with
             | [] -> 
               typ_error l ("No matching function found with name " ^ i ^ " that expects parameters " ^
                               (t_to_string arg_t) ^ " returning " ^ (t_to_string expect_t))
             | [Base((params,t),tag,cs,ef,_,b)] -> 
-              (*let _ = Printf.eprintf "Selected an overloaded function for %s,
-            variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in*)
+              let _ = Printf.eprintf "Selected an overloaded function for %s,
+            variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in
               (match t.t with
                 | Tfn(arg,ret,imp,ef') ->
                   (match arg.t,arg_t.t with
@@ -859,9 +859,9 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         let t_cs = CondCons((Expr l),Positive,None,c1p,then_c@then_c') in
         let e_cs = CondCons((Expr l),Negative,None,c1n,else_c@else_c') in
         let sub_effects = union_effects ef1 (union_effects then_ef else_ef) in
+        let resulting_env = Envmap.intersect_merge (tannot_merge (Expr l) d_env true) then_env else_env in
         (E_aux(E_if(cond',then',else'),(l,simple_annot_efr expect_t sub_effects)),
-         expect_t,
-         Envmap.intersect_merge (tannot_merge (Expr l) d_env true) then_env else_env,
+         expect_t, resulting_env,
          [BranchCons(Expr l, None, [t_cs;e_cs])],
          merge_bounds then_bs else_bs, (*TODO Should be an intersecting merge*)
          sub_effects)
@@ -1299,7 +1299,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
     | E_exit e ->
       let (e',t',_,_,_,_) = check_exp envs imp_param (new_t ()) e in
       (E_aux (E_exit e',(l,(simple_annot expect_t))),expect_t,t_env,[],nob,pure_e)
-    | E_internal_cast _ | E_internal_exp _ | E_internal_exp_user _ | E_internal_let _ -> 
+    | E_internal_cast _ | E_internal_exp _ | E_internal_exp_user _ | E_internal_let _
+    | E_internal_plet _ | E_internal_return _ -> 
       raise (Reporting_basic.err_unreachable l "Internal expression passed back into type checker")
                     
 and check_block envs imp_param expect_t exps:((tannot exp) list * tannot * nexp_range list * t * effect) =
@@ -1665,11 +1666,12 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
     | TD_variant(id,nmscm,typq,arms,_) ->
       let id' = id_to_string id in
       let (params,typarms,constraints) = typq_to_params envs typq in
+      let num_arms = List.length arms in
       let ty = match params with
         | [] -> {t=Tid id'} 
         | params -> {t = Tapp(id', typarms) }in
-      let tyannot = Base((params,ty),Constructor,constraints,pure_e,pure_e,nob) in
-      let arm_t input = Base((params,{t=Tfn(input,ty,IP_none,pure_e)}),Constructor,constraints,pure_e,pure_e,nob) in
+      let tyannot = Base((params,ty),Constructor num_arms,constraints,pure_e,pure_e,nob) in
+      let arm_t input = Base((params,{t=Tfn(input,ty,IP_none,pure_e)}),Constructor num_arms,constraints,pure_e,pure_e,nob) in
       let arms' = List.map 
         (fun (Tu_aux(tu,l')) -> 
           match tu with 
@@ -1841,8 +1843,8 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   let check t_env tp_env imp_param =
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,_))) ->
-        (*let _ = Printf.eprintf "checking function %s : %s -> %s\n" 
-          (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
+        let _ = Printf.eprintf "checking function %s : %s -> %s\n" 
+          (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in
         let (pat',t_env',cs_p,b_env',t') = check_pattern (Env(d_env,t_env,b_env,tp_env)) Emp_local param_t pat in
         let _, _ = type_consistent (Patt l) d_env Require false param_t t' in
         let exp',_,_,cs_e,_,ef = 

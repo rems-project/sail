@@ -85,7 +85,7 @@ type tag =
   | Emp_set
   | External of string option
   | Default
-  | Constructor
+  | Constructor of int
   | Enum of int
   | Alias of alias_inf
   | Spec
@@ -328,7 +328,7 @@ let tag_to_string = function
   | External None -> "External" 
   | External (Some s) -> "External " ^ s
   | Default -> "Default"
-  | Constructor -> "Constructor"
+  | Constructor _ -> "Constructor"
   | Enum _ -> "Enum"
   | Alias _ -> "Alias"
   | Spec -> "Spec"
@@ -1446,6 +1446,9 @@ let mk_tup ts = {t = Ttup ts }
 let mk_pure_fun arg ret = {t = Tfn (arg,ret,IP_none,pure_e)}
 let mk_pure_imp arg ret var = {t = Tfn (arg,ret,IP_length (mk_nv var),pure_e)}
 
+let lib_tannot param_typs func cs =
+  Base(param_typs, External func, cs, pure_e, pure_e, nob)
+
 let mk_range n1 n2 = {t=Tapp("range",[TA_nexp n1;TA_nexp n2])}
 let mk_atom n1 = {t = Tapp("atom",[TA_nexp n1])}
 let mk_vector typ order start size = {t=Tapp("vector",[TA_nexp start; TA_nexp size; TA_ord {order}; TA_typ typ])}
@@ -1461,326 +1464,313 @@ let mk_bitwise_op name symb arity =
     then List.hd single_bit_vec_args,List.hd vec_args,List.hd bit_args,List.hd gen_args 
     else mk_tup single_bit_vec_args,mk_tup vec_args,mk_tup bit_args, mk_tup gen_args in
   (symb,
-   Overload(Base(((mk_typ_params ["a"]),mk_pure_fun garg {t=Tvar "a"}), External (Some name),[],pure_e,pure_e,nob),true,
-            [Base(((mk_nat_params ["n";"m"]@mk_ord_params["o"]), mk_pure_fun varg vec_typ),
-                  External (Some name),[],pure_e,pure_e,nob);
-             Base((["n",{k=K_Nat};"o",{k=K_Ord}],mk_pure_fun svarg bit_t),
-                  External(Some (name ^ "_range_bit")),[],pure_e,pure_e,nob);
-             Base(([],mk_pure_fun barg bit_t),External (Some (name ^ "_bit")),[],pure_e,pure_e,nob)]))
+   Overload(lib_tannot ((mk_typ_params ["a"]),mk_pure_fun garg {t=Tvar "a"}) (Some name) [], true,
+            [lib_tannot ((mk_nat_params ["n";"m"]@mk_ord_params["o"]), mk_pure_fun varg vec_typ) (Some name) [];
+             lib_tannot (["n",{k=K_Nat};"o",{k=K_Ord}],mk_pure_fun svarg bit_t) (Some (name ^ "_range_bit")) [];
+             lib_tannot ([],mk_pure_fun barg bit_t) (Some (name ^ "_bit")) []]))
 
 let initial_typ_env =
   Envmap.from_list [
-    ("ignore",Base(([("a",{k=K_Typ})],mk_pure_fun {t=Tvar "a"} unit_t),External None,[],pure_e,pure_e,nob));
+    ("ignore",lib_tannot ([("a",{k=K_Typ})],mk_pure_fun {t=Tvar "a"} unit_t) None []);
     ("+",Overload(
-      Base(((mk_typ_params ["a";"b";"c"]),
-            (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),External (Some "add"),[],pure_e,pure_e,nob),
+      lib_tannot ((mk_typ_params ["a";"b";"c"]),
+                  (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})) (Some "add") [],
       true,
-      [Base(((mk_nat_params ["n";"m"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
-                          (mk_atom (mk_add (mk_nv "n") (mk_nv "m"))))),
-            External (Some "add"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")))),
-            External (Some "add_vec"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"o";"p";"q"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
-                          (mk_range (mk_nv "q") (mk_2n (mk_nv "n"))))),
-            External (Some "add_vec_vec_range"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-                                   mk_atom (mk_nv "o")])
-                           (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-            External (Some "add_vec_range"),
-            [LtEq(Specc(Parse_ast.Int("+",None)),Require, (mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
-            pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
-                          (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")); bit_t; bit_t]))),
-            External (Some "add_overflow_vec"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-                                   mk_atom (mk_nv "o")])
-                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-            External (Some "add_vec_range_range"),
-            [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
-            pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-            External (Some "add_range_vec"),
-            [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
-            pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
-                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_sub (mk_2n (mk_nv "m")) n_one))))),
-            External (Some "add_range_vec_range"),
-            [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
-            pure_e,pure_e,nob);
-       Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")))),
-            External (Some "add_vec_bit"), [], pure_e,pure_e,nob);
-       Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
-             (mk_pure_fun (mk_tup [bit_t; mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")))),
-            External (Some "add_bit_vec"), [], pure_e,pure_e,nob);
+      [lib_tannot ((mk_nat_params ["n";"m"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
+                                (mk_atom (mk_add (mk_nv "n") (mk_nv "m")))))
+                  (Some "add") [];
+       lib_tannot ((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n"))))
+                  (Some "add_vec") [];
+       lib_tannot ((mk_nat_params ["n";"o";"p";"q"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                (mk_range (mk_nv "q") (mk_2n (mk_nv "n")))))
+                  (Some "add_vec_vec_range") [];
+       lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                         mk_atom (mk_nv "o")])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"))))
+                  (Some "add_vec_range")
+                  [LtEq(Specc(Parse_ast.Int("+",None)),Require, (mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)];
+       lib_tannot ((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")); bit_t; bit_t])))
+                  (Some "add_overflow_vec") [];
+       lib_tannot ((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                         mk_atom (mk_nv "o")])
+                                (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m"))))))
+                  (Some "add_vec_range_range")
+                  [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)];
+       lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"))))
+                  (Some "add_range_vec")
+                  [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)];
+       lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
+                                (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_sub (mk_2n (mk_nv "m")) n_one)))))
+                  (Some "add_range_vec_range")
+                  [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)];
+       lib_tannot ((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"))))
+                   (Some "add_vec_bit") [];
+       lib_tannot ((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
+                   (mk_pure_fun (mk_tup [bit_t; mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"))))
+                  (Some "add_bit_vec") [];
       ]));
     ("+_s",Overload(
-      Base(((mk_typ_params ["a";"b";"c"]),
-            (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),External (Some "add"),[],pure_e,pure_e,nob),
+      lib_tannot ((mk_typ_params ["a";"b";"c"]),
+                  (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})) (Some "add") [],
       true,
-      [Base(((mk_nat_params ["n";"m"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
-                          (mk_atom (mk_add (mk_nv "n") (mk_nv "m"))))),
-            External (Some "add_signed"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")))),
-            External (Some "add_vec_signed"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"o";"p";"q"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
-                          (mk_range (mk_nv "q") (mk_2n (mk_nv "n"))))),
-            External (Some "add_vec_vec_range_signed"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-                                   mk_atom (mk_nv "o")])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-            External (Some "add_vec_range_signed"),
-            [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),(mk_sub (mk_2n (mk_nv "m")) n_one))],
-            pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
-                          (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")); bit_t; bit_t]))),
-            External (Some "add_overflow_vec_signed"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-                                   mk_atom (mk_nv "o")])
-                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-            External (Some "add_vec_range_range_signed"),
-            [LtEq(Specc(Parse_ast.Int("+",None)),Require, (mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)],
-            pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-            External (Some "add_range_vec_signed"),
-            [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),(mk_sub (mk_2n (mk_nv "m")) n_one))],
-            pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
-                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-            External (Some "add_range_vec_range_signed"),
-            [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),(mk_sub (mk_2n (mk_nv "m")) n_one))],
-            pure_e,pure_e,nob);
-       Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")))),
-            External (Some "add_vec_bit_signed"), [], pure_e,pure_e,nob);
-       Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
-                          (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")); bit_t; bit_t]))),
-            External (Some "add_overflow_vec_bit_signed"), [], pure_e,pure_e,nob);
-       Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
-             (mk_pure_fun (mk_tup [bit_t; mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")))),
-            External (Some "add_bit_vec_signed"), [], pure_e,pure_e,nob);
+      [lib_tannot ((mk_nat_params ["n";"m"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
+                                (mk_atom (mk_add (mk_nv "n") (mk_nv "m")))))
+                  (Some "add_signed") [];
+       lib_tannot ((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                  (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                        mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                               (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n"))))
+                  (Some "add_vec_signed") [];
+       lib_tannot ((mk_nat_params ["n";"o";"p";"q"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                (mk_range (mk_nv "q") (mk_2n (mk_nv "n")))))
+                  (Some "add_vec_vec_range_signed") [];
+       lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                         mk_atom (mk_nv "o")])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"))))
+                  (Some "add_vec_range_signed")
+                  [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),(mk_sub (mk_2n (mk_nv "m")) n_one))];
+       lib_tannot ((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")); bit_t; bit_t])))
+                  (Some "add_overflow_vec_signed") [];
+       lib_tannot ((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                         mk_atom (mk_nv "o")])
+                                (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m"))))))
+                   (Some "add_vec_range_range_signed")
+                   [LtEq(Specc(Parse_ast.Int("+",None)),Require, (mk_nv "o"),mk_sub (mk_2n (mk_nv "m")) n_one)];
+       lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"))))
+                  (Some "add_range_vec_signed")
+                  [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),(mk_sub (mk_2n (mk_nv "m")) n_one))];
+       lib_tannot ((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
+                                (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m"))))))
+                  (Some "add_range_vec_range_signed")
+                  [LtEq(Specc(Parse_ast.Int("+",None)),Require,(mk_nv "o"),(mk_sub (mk_2n (mk_nv "m")) n_one))];
+       lib_tannot ((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"))))
+                  (Some "add_vec_bit_signed") [];
+       lib_tannot ((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
+                                (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")); bit_t; bit_t])))
+                  (Some "add_overflow_vec_bit_signed") [];
+       lib_tannot ((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
+                   (mk_pure_fun (mk_tup [bit_t; mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"))))
+                  (Some "add_bit_vec_signed") [];
       ]));
     ("-_s",Overload(
-      Base(((mk_typ_params ["a";"b";"c"]),
-            (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
-           External (Some "minus"),[],pure_e,pure_e,nob),
+      lib_tannot ((mk_typ_params ["a";"b";"c"]), (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"}))
+                 (Some "minus") [],
       true,
-      [Base(((mk_nat_params["n";"m"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
-                          (mk_atom (mk_sub (mk_nv "n") (mk_nv "m"))))),
-            External (Some "minus"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")))),
-            External (Some "minus_vec_signed"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-                                   mk_atom (mk_nv "o")])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-            External (Some "minus_vec_range_signed"),
-            [],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-                                   mk_atom (mk_nv "o")])
-                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-            External (Some "minus_vec_range_range_signed"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-            External (Some "minus_range_vec_signed"),[],pure_e,pure_e,nob); 
-       Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
-                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-            External (Some "minus_range_vec_range_signed"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
-                (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")); bit_t; bit_t]))),
-            External (Some "minus_overflow_vec_signed"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
-                          (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")); bit_t; bit_t]))),
-            External (Some "minus_overflow_vec_bit_signed"), [], pure_e,pure_e,nob);
+      [lib_tannot ((mk_nat_params["n";"m"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
+                                (mk_atom (mk_sub (mk_nv "n") (mk_nv "m")))))
+                  (Some "minus") [];
+       lib_tannot ((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n"))))
+                  (Some "minus_vec_signed") [];
+       lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                         mk_atom (mk_nv "o")])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"))))
+                  (Some "minus_vec_range_signed") [];
+       lib_tannot ((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                         mk_atom (mk_nv "o")])
+                                (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m"))))))
+                  (Some "minus_vec_range_range_signed") [];
+       lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"))))
+                  (Some "minus_range_vec_signed") []; 
+       lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
+                                (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m"))))))
+                  (Some "minus_range_vec_range_signed") [];
+       lib_tannot ((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")); bit_t; bit_t])))
+                  (Some "minus_overflow_vec_signed") [];
+       lib_tannot ((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
+                                (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")); bit_t; bit_t])))
+                  (Some "minus_overflow_vec_bit_signed") [];
       ]));
     ("-",Overload(
-      Base(((mk_typ_params ["a";"b";"c"]),
-            (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
-           External (Some "minus"),[],pure_e,pure_e,nob),
+      lib_tannot ((mk_typ_params ["a";"b";"c"]), (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"}))
+                 (Some "minus") [],
       true,
-      [Base(((mk_nat_params["n";"m"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
-                          (mk_atom (mk_sub (mk_nv "n") (mk_nv "m"))))),
-            External (Some "minus"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")))),
-            External (Some "minus_vec"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["m";"n";"o";"p"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
-                          (mk_atom (mk_nv "m")))), External (Some "minus_vec_vec_range"),[],pure_e,pure_e,nob); (*Need a bound on m*)
-       Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-                                   mk_atom (mk_nv "o")])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))), 
-            External (Some "minus_vec_range"),[],pure_e,pure_e,nob); (*Need a bound on o?*)
-       Base(((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
-                                   mk_atom (mk_nv "o")])
-                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-            External (Some "minus_vec_range_range"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
-                          (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-            External (Some "minus_range_vec"),[],pure_e,pure_e,nob); 
-       Base(((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
-                          (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m")))))),
-            External (Some "minus_range_vec_range"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
-                                   mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
-                          (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")); bit_t; bit_t]))),
-            External (Some "minus_overflow_vec"),[],pure_e,pure_e,nob);
-       Base(((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
-             (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
-                          (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")); bit_t; bit_t]))),
-            External (Some "minus_overflow_vec_bit"), [], pure_e,pure_e,nob);
+      [lib_tannot ((mk_nat_params["n";"m"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
+                                (mk_atom (mk_sub (mk_nv "n") (mk_nv "m")))))
+                  (Some "minus") [];
+       lib_tannot ((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n"))))
+                  (Some "minus_vec") [];
+       lib_tannot ((mk_nat_params ["m";"n";"o";"p"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                (mk_atom (mk_nv "m")))) (Some "minus_vec_vec_range") [];
+       lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                         mk_atom (mk_nv "o")])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))) 
+                  (Some "minus_vec_range") [];
+       lib_tannot ((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                         mk_atom (mk_nv "o")])
+                                (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m"))))))
+                  (Some "minus_vec_range_range") [];
+       lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
+                                (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"))))
+                  (Some "minus_range_vec") []; 
+       lib_tannot ((mk_nat_params ["n";"m";"o";])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");])
+                                (mk_range (mk_nv "o") (mk_add (mk_nv "o") (mk_2n (mk_nv "m"))))))
+                  (Some "minus_range_vec_range") [];
+       lib_tannot ((mk_nat_params ["n";"o";"p"])@(mk_ord_params ["ord"]),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
+                                         mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
+                                (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n")); bit_t; bit_t])))
+                  (Some "minus_overflow_vec") [];
+       lib_tannot ((mk_nat_params ["o";"p"]@(mk_ord_params["ord"])),
+                   (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
+                                (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "p")); bit_t; bit_t])))
+                   (Some "minus_overflow_vec_bit") [];
       ]));
     ("*",Overload(
-      Base(((mk_typ_params ["a";"b";"c"]),
-            (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]){t=Tvar "c"})),
-           External (Some "multiply"),[],pure_e,pure_e,nob),
+      lib_tannot ((mk_typ_params ["a";"b";"c"]),
+                  (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]){t=Tvar "c"}))
+                 (Some "multiply") [],
       true,
-      [Base(((mk_nat_params["n";"m"]),
-             (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
-                          (mk_atom (mk_mult (mk_nv "n") (mk_nv "m"))))),
-            External (Some "multiply"), [],pure_e,pure_e,nob);
+      [lib_tannot ((mk_nat_params["n";"m"]),
+                   (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
+                                (mk_atom (mk_mult (mk_nv "n") (mk_nv "m")))))
+                  (Some "multiply") [];
        Base(((mk_nat_params ["n";"o";"p";"q"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "q") (mk_add (mk_nv "n") (mk_nv "n"))))),
-            External (Some "multiply_vec"), [],pure_e,pure_e,nob);
+            (External (Some "multiply_vec")), [],pure_e,pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "q") (mk_add (mk_nv "m") (mk_nv "m"))))),
-            External (Some "mult_range_vec"),[],pure_e,pure_e,nob);
+            (External (Some "mult_range_vec")),[],pure_e,pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                    mk_atom (mk_nv "o")])
                            (mk_vector bit_t (Ovar "ord") (mk_nv "q") (mk_add (mk_nv "m") (mk_nv "m"))))),
-            External (Some "mult_vec_range"),[],pure_e,pure_e,nob);
+            (External (Some "mult_vec_range")),[],pure_e,pure_e,nob);
       ]));
     ("*_s",Overload(
       Base(((mk_typ_params ["a";"b";"c"]),
             (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]){t=Tvar "c"})),
-           External (Some "multiply"),[],pure_e,pure_e,nob),
+           (External (Some "multiply")),[],pure_e,pure_e,nob),
       true,
       [Base(((mk_nat_params["n";"m";]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")])
                           (mk_atom (mk_mult (mk_nv "n") (mk_nv "m"))))),
-            External (Some "multiply_signed"), [],pure_e,pure_e,nob);
+            (External (Some "multiply_signed")), [],pure_e,pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p";"m"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_add (mk_nv "n") (mk_nv "n"))))),
-            External (Some "multiply_vec_signed"), [],pure_e,pure_e,nob);
+            (External (Some "multiply_vec_signed")), [],pure_e,pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_add (mk_nv "m") (mk_nv "m"))))),
-            External (Some "mult_range_vec_signed"),[],pure_e,pure_e,nob);
+            (External (Some "mult_range_vec_signed")),[],pure_e,pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o";"p"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                    mk_atom (mk_nv "o")])
                           (mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_add (mk_nv "m") (mk_nv "m"))))),
-            External (Some "mult_vec_range_signed"),[],pure_e,pure_e,nob);
+            (External (Some "mult_vec_range_signed")),[],pure_e,pure_e,nob);
        Base(((mk_nat_params ["n";"o";"p";"m"])@(mk_ord_params ["ord"]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                    mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")])
                           (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_add (mk_nv "n") (mk_nv "n")));
                                    bit_t;bit_t]))),
-            External (Some "mult_overflow_vec_signed"), [],pure_e,pure_e,nob);
+            (External (Some "mult_overflow_vec_signed")), [],pure_e,pure_e,nob);
       ]));
     ("**",
      Base(((mk_nat_params ["o"]),
            (mk_pure_fun (mk_tup [(mk_atom n_two); (mk_atom (mk_nv "o"))])
                         (mk_atom (mk_2n (mk_nv "o"))))),
-          External (Some "power"), [],pure_e,pure_e,nob));
+          (External (Some "power")), [],pure_e,pure_e,nob));
     ("mod",
      Overload(
        Base(((mk_typ_params ["a";"b";"c"]),
              (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
-            External (Some "modulo"),[],pure_e,pure_e,nob),
+            (External (Some "modulo")),[],pure_e,pure_e,nob),
        true,
        [Base(((mk_nat_params["n";"o";]),
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "n") ; mk_atom (mk_nv "o")])
                            (mk_range n_zero (mk_sub (mk_nv "o") n_one)))),
-             External (Some "modulo"),
+             (External (Some "modulo")),
              [GtEq(Specc(Parse_ast.Int("modulo",None)),Require,(mk_nv "o"),n_one)],pure_e,pure_e,nob);
         Base(((mk_nat_params["n";"m";"o"])@(mk_ord_params["ord"]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                     mk_range n_one (mk_nv "o")])
                            (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-             External (Some "mod_vec_range"),
+             (External (Some "mod_vec_range")),
              [GtEq(Specc(Parse_ast.Int("mod",None)),Require,(mk_nv "o"),n_one);],pure_e,pure_e,nob);
         Base(((mk_nat_params["n";"m"])@(mk_ord_params["ord"]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")])
                  (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-             External (Some "mod_vec"),[],pure_e,pure_e,nob)]));
+             (External (Some "mod_vec")),[],pure_e,pure_e,nob)]));
     ("quot",
      Overload(
        Base(((mk_typ_params ["a";"b";"c"]),
              (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
-            External (Some "quot"),[],pure_e,pure_e,nob),
+            (External (Some "quot")),[],pure_e,pure_e,nob),
        true,
        [Base(((mk_nat_params["n";"m";"o";]),
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")])
                            (mk_atom (mk_nv "o")))),
-             External (Some "quot"),[GtEq(Specc(Parse_ast.Int("quot",None)),Require,(mk_nv "m"),n_one);
+             (External (Some "quot")),[GtEq(Specc(Parse_ast.Int("quot",None)),Require,(mk_nv "m"),n_one);
                                      LtEq(Specc(Parse_ast.Int("quot",None)),Guarantee,
                                           (mk_mult (mk_nv "n") (mk_nv "o")),(mk_nv "m"))],
              pure_e,pure_e,nob);
@@ -1788,24 +1778,24 @@ let initial_typ_env =
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "q")])
                            (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-             External (Some "quot_vec"),[GtEq(Specc(Parse_ast.Int("quot",None)),Require, mk_nv "m", mk_nv "q")],
+             (External (Some "quot_vec")),[GtEq(Specc(Parse_ast.Int("quot",None)),Require, mk_nv "m", mk_nv "q")],
              pure_e,pure_e,nob);
         Base(((mk_nat_params["n";"m";"p";"q"])@(mk_ord_params["ord"]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "q")])
                            (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")); bit_t;bit_t]))),
-             External (Some "quot_overflow_vec"),
+             (External (Some "quot_overflow_vec")),
              [GtEq(Specc(Parse_ast.Int("quot",None)),Require, mk_nv "m", mk_nv "q")],
              pure_e,pure_e,nob)]));
     ("quot_s",
      Overload(
        Base(((mk_typ_params ["a";"b";"c"]), (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})),
-            External (Some "quot_signed"),[],pure_e,pure_e,nob),
+            (External (Some "quot_signed")),[],pure_e,pure_e,nob),
        true,
        [Base(((mk_nat_params["n";"m";"o";"p";"q";"r"]),
               (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "o") (mk_nv "p")])
                            (mk_range (mk_nv "q") (mk_nv "r")))),
-             External (Some "quot_signed"),
+             (External (Some "quot_signed")),
              [GtEq(Specc(Parse_ast.Int("quot",None)),Require,(mk_nv "o"),n_one);
               LtEq(Specc(Parse_ast.Int("quot",None)),Guarantee,(mk_mult (mk_nv "p") (mk_nv "r")),mk_nv "m")],
              pure_e,pure_e,nob);
@@ -1813,39 +1803,39 @@ let initial_typ_env =
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "q")])
                            (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
-             External (Some "quot_vec_signed"),
+             (External (Some "quot_vec_signed")),
              [GtEq(Specc(Parse_ast.Int("quot",None)),Require, mk_nv "m", mk_nv "q")],pure_e,pure_e,nob);
         Base(((mk_nat_params["n";"m";"p";"q"])@(mk_ord_params["ord"]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "q")])
                            (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")); bit_t;bit_t]))),
-             External (Some "quot_overflow_vec_signed"),
+             (External (Some "quot_overflow_vec_signed")),
              [GtEq(Specc(Parse_ast.Int("quot",None)),Require, mk_nv "m", mk_nv "q")],pure_e,pure_e,nob);
        ]));
     ("length", Base((["a",{k=K_Typ}]@(mk_nat_params["n";"m"])@(mk_ord_params["ord"]),
                      (mk_pure_fun (mk_vector {t=Tvar "a"} (Ovar "ord") (mk_nv "n") (mk_nv "m"))
                                   (mk_atom (mk_nv "m")))),
-                    External (Some "length"),[],pure_e,pure_e,nob));
+                    (External (Some "length")),[],pure_e,pure_e,nob));
     (* incorrect types for typechecking processed sail code; do we care? *)
     ("mask",Base(((mk_typ_params ["a"])@(mk_nat_params["n";"m";"o";"p"])@(mk_ord_params["ord"]),
                   (mk_pure_imp (mk_vector {t=Tvar "a"} (Ovar "ord") (mk_nv "n") (mk_nv "m"))
                                (mk_vector {t=Tvar "a"} (Ovar "ord") (mk_nv "p") (mk_nv "o")) "o")),
-                 External (Some "mask"),
+                 (External (Some "mask")),
                  [GtEq(Specc(Parse_ast.Int("mask",None)),Guarantee, (mk_nv "m"), (mk_nv "o"))],pure_e,pure_e,nob));
     (*TODO These should be IP_start *)
     ("to_vec_inc",Base(([("a",{k=K_Typ})],{t=Tfn(nat_typ,{t=Tvar "a"},IP_none,pure_e)}),
-                       External None,[],pure_e,pure_e,nob));
+                       (External None),[],pure_e,pure_e,nob));
     ("to_vec_dec",Base(([("a",{k=K_Typ})],{t=Tfn(nat_typ,{t=Tvar "a"},IP_none,pure_e)}),
-                       External None,[],pure_e,pure_e,nob));
+                       (External None),[],pure_e,pure_e,nob));
     (*Correct types again*)
     ("==",
      Overload(
        Base((mk_typ_params ["a";"b"],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-            External (Some "eq"),[],pure_e,pure_e,nob),
+            (External (Some "eq")),[],pure_e,pure_e,nob),
        false,
        [Base((mk_nat_params["n";"m";],
               mk_pure_fun (mk_tup [mk_atom (mk_nv "n") ;mk_atom (mk_nv "m")]) bit_t),
-             External (Some "eq"),
+             (External (Some "eq")),
              [Predicate(Specc(Parse_ast.Int("==",None)),
                         Eq(Specc(Parse_ast.Int("==",None)), mk_nv "n", mk_nv "m"),
                         NtEq(Specc(Parse_ast.Int("==",None)), mk_nv "n", mk_nv "m"))],
@@ -1855,25 +1845,25 @@ let initial_typ_env =
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")])
                            bit_t)),
-             External (Some "eq_range_vec"),[],pure_e,pure_e,nob);
+             (External (Some "eq_range_vec")),[],pure_e,pure_e,nob);
         (* == : [:'o:] * bit['n] -> bit_t *)
         Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                     mk_atom (mk_nv "o")])
                            bit_t)),
-             External (Some "eq_vec_range"),[],pure_e,pure_e,nob);
+             (External (Some "eq_vec_range")),[],pure_e,pure_e,nob);
         Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-             External (Some "eq"),[],pure_e,pure_e,nob)]));
+             (External (Some "eq")),[],pure_e,pure_e,nob)]));
     ("!=",Base((["a",{k=K_Typ}; "b",{k=K_Typ}], (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-               External (Some "neq"),[],pure_e,pure_e,nob));
+               (External (Some "neq")),[],pure_e,pure_e,nob));
     ("<",
      Overload(
        Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-            External (Some "lt"),[],pure_e,pure_e,nob),
+            (External (Some "lt")),[],pure_e,pure_e,nob),
        false,
        [Base(((mk_nat_params ["n"; "m";]),
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "n") ;mk_atom (mk_nv "m")]) bit_t)),
-             External (Some "lt"),
+             (External (Some "lt")),
              [Predicate(Specc(Parse_ast.Int("<",None)),
                         Lt(Specc(Parse_ast.Int("<",None)),Guarantee, mk_nv "n", mk_nv "m"),
                         GtEq(Specc(Parse_ast.Int("<",None)),Guarantee, mk_nv "n", mk_nv "m"))],
@@ -1881,20 +1871,20 @@ let initial_typ_env =
         Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
-             External (Some "lt_vec"),[],pure_e,pure_e,nob);
+             (External (Some "lt_vec")),[],pure_e,pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o"]@["ord",{k=K_Ord}]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                    mk_atom (mk_nv "o")]) bit_t)),
-            External (Some "lt_vec_range"), [], pure_e,pure_e, nob);
+            (External (Some "lt_vec_range")), [], pure_e,pure_e, nob);
        ]));
     ("<_s",
      Overload(
        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-            External (Some "lt"),[],pure_e,pure_e,nob),
+            (External (Some "lt")),[],pure_e,pure_e,nob),
        false,
        [Base(((mk_nat_params ["n"; "m";]),
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")]) bit_t)),
-             External (Some "lt_signed"),
+             (External (Some "lt_signed")),
              [Predicate(Specc(Parse_ast.Int("<_s",None)),
                         Lt(Specc(Parse_ast.Int("<_s",None)),Guarantee, mk_nv "n", mk_nv "m"),
                         GtEq(Specc(Parse_ast.Int("<_s",None)),Guarantee, mk_nv "n", mk_nv "m"))],
@@ -1902,16 +1892,16 @@ let initial_typ_env =
         Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
-             External (Some "lt_vec_signed"),[],pure_e,pure_e,nob);
+             (External (Some "lt_vec_signed")),[],pure_e,pure_e,nob);
        ]));
     ("<_u",
      Overload(
        Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-            External (Some "lt"),[],pure_e,pure_e,nob),
+            (External (Some "lt")),[],pure_e,pure_e,nob),
        false,
        [Base(((mk_nat_params ["n"; "m";]),
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")]) bit_t)),
-             External (Some "lt_unsigned"),
+             (External (Some "lt_unsigned")),
              [Predicate(Specc(Parse_ast.Int("<",None)),
                         Lt(Specc(Parse_ast.Int("<_u",None)),Guarantee, mk_nv "n", mk_nv "m"),
                         GtEq(Specc(Parse_ast.Int("<_u",None)),Guarantee, mk_nv "n", mk_nv "m"))],
@@ -1919,16 +1909,16 @@ let initial_typ_env =
         Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
-             External (Some "lt_vec_unsigned"),[],pure_e,pure_e,nob);
+             (External (Some "lt_vec_unsigned")),[],pure_e,pure_e,nob);
        ]));
     (">",
      Overload(
        Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-            External (Some "gt"),[],pure_e,pure_e,nob),
+            (External (Some "gt")),[],pure_e,pure_e,nob),
        false,
        [Base(((mk_nat_params ["n";"m"]), 
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "n"); mk_atom (mk_nv "m")]) bit_t)),
-             External (Some "gt"),
+             (External (Some "gt")),
              [Predicate(Specc(Parse_ast.Int(">",None)),
                         Gt(Specc(Parse_ast.Int(">",None)),Guarantee, mk_nv "n", mk_nv "m"),
                         LtEq(Specc(Parse_ast.Int(">",None)),Guarantee, mk_nv "n", mk_nv "m"))],
@@ -1936,20 +1926,20 @@ let initial_typ_env =
         Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
-             External (Some "gt_vec"),[],pure_e,pure_e,nob);
+             (External (Some "gt_vec")),[],pure_e,pure_e,nob);
        Base(((mk_nat_params ["n";"m";"o";]@["ord",{k=K_Ord}]),
              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
                                    mk_atom (mk_nv "o")]) bit_t)),
-            External (Some "gt_vec_range"), [], pure_e,pure_e, nob);
+            (External (Some "gt_vec_range")), [], pure_e,pure_e, nob);
        ]));
     (">_s",
      Overload(
        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-            External (Some "gt"),[],pure_e,pure_e,nob),
+            (External (Some "gt")),[],pure_e,pure_e,nob),
        false,
        [Base(((mk_nat_params ["n";"m";]), 
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")]) bit_t)),
-             External (Some "gt_signed"),
+             (External (Some "gt_signed")),
              [Predicate(Specc(Parse_ast.Int(">_s",None)),
                         Gt(Specc(Parse_ast.Int(">_s",None)),Guarantee, mk_nv "n", mk_nv "m"),
                         LtEq(Specc(Parse_ast.Int(">_s",None)),Guarantee, mk_nv "m", mk_nv "m"))],
@@ -1957,16 +1947,16 @@ let initial_typ_env =
         Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
-             External (Some "gt_vec_signed"),[],pure_e,pure_e,nob);
+             (External (Some "gt_vec_signed")),[],pure_e,pure_e,nob);
        ]));
     (">_u",
      Overload(
        Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-            External (Some "gt"),[],pure_e,pure_e,nob),
+            (External (Some "gt")),[],pure_e,pure_e,nob),
        false,
        [Base(((mk_nat_params ["n";"m";]), 
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")]) bit_t)),
-             External (Some "gt_unsigned"),
+             (External (Some "gt_unsigned")),
              [Predicate(Specc(Parse_ast.Int(">_u",None)),
                         Gt(Specc(Parse_ast.Int(">_u",None)),Guarantee, mk_nv "n", mk_nv "m"),
                         LtEq(Specc(Parse_ast.Int(">_u",None)),Guarantee, mk_nv "n", mk_nv "n"))],
@@ -1974,74 +1964,90 @@ let initial_typ_env =
         Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
-             External (Some "gt_vec_unsigned"),[],pure_e,pure_e,nob);
+             (External (Some "gt_vec_unsigned")),[],pure_e,pure_e,nob);
        ]));
     ("<=",
      Overload(
-       Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-            External (Some "lteq"),[],pure_e,pure_e,nob),
+       Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
+            (External (Some "lteq")),[],pure_e,pure_e,nob),
        false,
        [Base(((mk_nat_params ["n"; "m";]),
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")]) bit_t)),
-             External (Some "lteq"),
+             (External (Some "lteq")),
              [Predicate(Specc(Parse_ast.Int("<=",None)),
                         LtEq(Specc(Parse_ast.Int("<=",None)),Guarantee,mk_nv "n",mk_nv "m"),
                         Gt(Specc(Parse_ast.Int("<=",None)),Guarantee,mk_nv "n",mk_nv "m"))],
              pure_e,pure_e,nob);
+        Base(((mk_nat_params ["n";"m";"o";]@["ord",{k=K_Ord}]),
+              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                    mk_atom (mk_nv "o")]) bit_t)),
+             (External (Some "lteq_vec_range")), [], pure_e,pure_e, nob);
+        Base(((mk_nat_params ["n";"m";"o";]@["ord",{k=K_Ord}]),
+              (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                    mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")]) bit_t)),
+             (External (Some "lteq_range_vec")), [], pure_e,pure_e, nob);
         Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
-             External (Some "lteq_vec"),[],pure_e,pure_e,nob);
+             (External (Some "lteq_vec")),[],pure_e,pure_e,nob);
        ]));
     ("<=_s",
      Overload(
        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-            External (Some "lteq"),[],pure_e,pure_e,nob),
+            (External (Some "lteq")),[],pure_e,pure_e,nob),
        false,
        [Base(((mk_nat_params ["n"; "m";]),
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")]) bit_t)),
-             External (Some "lteq_signed"),
+             (External (Some "lteq_signed")),
              [LtEq(Specc(Parse_ast.Int("<=",None)),Guarantee,mk_nv "n",mk_nv "o");
               LtEq(Specc(Parse_ast.Int("<=",None)),Guarantee,mk_nv "m",mk_nv "p")],
              pure_e,pure_e,nob);
         Base((((mk_nat_params ["n";"o";"p"])@["ord",{k=K_Ord}]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
-             External (Some "lteq_vec_signed"),[],pure_e,pure_e,nob);
+             (External (Some "lteq_vec_signed")),[],pure_e,pure_e,nob);
        ]));
     (">=",
      Overload(
        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-            External (Some "gteq"),[],pure_e,pure_e,nob),
+            (External (Some "gteq")),[],pure_e,pure_e,nob),
        false,
        [Base(((mk_nat_params ["n";"m";"o";"p"]), 
               (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-             External (Some "gteq"),
+             (External (Some "gteq")),
              [GtEq(Specc(Parse_ast.Int(">=",None)),Guarantee, mk_nv "n", mk_nv "o");
               GtEq(Specc(Parse_ast.Int(">=",None)),Guarantee, mk_nv "m", mk_nv "p")],
              pure_e,pure_e,nob);
         Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
-             External (Some "gteq_vec"),[],pure_e,pure_e,nob);
+             (External (Some "gteq_vec")),[],pure_e,pure_e,nob);
+        Base(((mk_nat_params ["n";"m";"o";]@["ord",{k=K_Ord}]),
+              (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m");
+                                    mk_atom (mk_nv "o")]) bit_t)),
+             (External (Some "gteq_vec_range")), [], pure_e,pure_e, nob);
+        Base(((mk_nat_params ["n";"m";"o";]@["ord",{k=K_Ord}]),
+              (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                    mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")]) bit_t)),
+             (External (Some "gteq_range_vec")), [], pure_e,pure_e, nob);
        ]));
     (">=_s",
      Overload(
        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-            External (Some "gteq"),[],pure_e,pure_e,nob),
+            (External (Some "gteq")),[],pure_e,pure_e,nob),
        false,
        [Base(((mk_nat_params ["n";"m";"o";"p"]), 
               (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m");mk_range (mk_nv "o") (mk_nv "p")]) bit_t)),
-             External (Some "gteq_signed"),
+             (External (Some "gteq_signed")),
              [GtEq(Specc(Parse_ast.Int(">=_s",None)),Guarantee, mk_nv "n", mk_nv "o");
               GtEq(Specc(Parse_ast.Int(">=_s",None)),Guarantee, mk_nv "m", mk_nv "p")],
              pure_e,pure_e,nob);
         Base((((mk_nat_params ["n";"o";"p"])@[("ord",{k=K_Ord})]),
               (mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n");
                                     mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)), 
-             External (Some "gteq_vec_signed"),[],pure_e,pure_e,nob);
+             (External (Some "gteq_vec_signed")),[],pure_e,pure_e,nob);
        ]));
-    ("is_one",Base(([],(mk_pure_fun bit_t bit_t)),External (Some "is_one"),[],pure_e,pure_e,nob));
+    ("is_one",Base(([],(mk_pure_fun bit_t bit_t)),(External (Some "is_one")),[],pure_e,pure_e,nob));
     ("signed",Base((mk_nat_params["n";"m";"o"]@[("ord",{k=K_Ord})],
                     (mk_pure_fun (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"))
                                  (mk_atom (mk_nv "o")))),
