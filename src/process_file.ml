@@ -174,12 +174,12 @@ let output1 libpath out_arg filename defs (* alldoc_accum alldoc_inc_accum alldo
 	end
       | Lem_out None ->
         let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ "embed.lem") in
-	begin Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["Sail_values";];
+	begin Pretty_print.pp_defs_lem o defs (generated_line filename) ["Sail_values";];
         close_output_with_check ext_o
         end
       | Lem_out (Some lib) ->
         let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ "embed.lem") in
-	Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["Sail_values"; lib];
+	Pretty_print.pp_defs_lem o defs (generated_line filename) ["Sail_values"; lib];
         close_output_with_check ext_o
       | Ocaml_out None ->
         let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in

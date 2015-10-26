@@ -1,0 +1,525 @@
+open import Pervasives
+
+type M 's 'a  = <| runState : 's -> ('a * 's) |>
+
+val return : forall 's 'a. 'a -> M 's 'a
+let return a = <| runState = (fun s -> (a,s)) |>
+
+val bind : forall 's 'a 'b. M 's 'a -> ('a -> M 's 'b) -> M 's 'b
+let bind m f = <| runState = (fun s -> let (a,s) = m.runState s in (f a).runState s) |>
+
+let (>>=) = bind
+let (>>) m n = m >>= fun _ -> n
+
+(* only expected to be 0, 1, 2; 2 represents undef *)
+type bit = Zero | One | Undef
+let is_inc = true
+
+type register =
+  | CR | CR0 | CR1 
+  | CTR
+  | LR
+  | XER | XER_SO | XER_OV | XER_CA
+  | GPR0
+  | GPR1
+  | GPR2
+  | GPR3
+  | GPR4
+  | VRSAVE
+  | SPRG3
+
+type vector = Vector of list bit * nat
+
+(* auto-generate *)
+let GPR = [GPR0;GPR1;GPR2;GPR3;GPR4]
+
+(* auto-generate *)
+type state =
+  <| cr : vector;
+     ctr : vector;
+     lr : vector;
+     xer : vector;
+     gpr0 : vector;
+     gpr1 : vector;
+     gpr2 : vector;
+     gpr3 : vector;
+     gpr4 : vector;
+     vrsave : vector;
+     sprg3 : vector |>
+  
+let to_bool = function
+  | Zero -> false
+  | One  -> true
+(*  | Undef -> assert false *)
+  end
+
+let get_blist (Vector bs _) = bs
+let get_start (Vector _ s) = s
+let length (Vector bs _) = length bs
+
+(* auto-generate *)
+let length_register : register -> nat = function
+  | CR -> 32
+  | CR0 -> 4
+  | CR1 -> 4
+  | CTR -> 64
+  | LR -> 64
+  | XER -> 64
+  | XER_SO -> 1
+  | XER_OV -> 1
+  | XER_CA -> 1
+  | GPR0 -> 64
+  | GPR1 -> 64
+  | GPR2 -> 64
+  | GPR3 -> 64
+  | GPR4 -> 64
+  | VRSAVE -> 32
+  | SPRG3 -> 64
+end
+
+let vector_access (Vector bs start) n =
+  let (Just b) = if is_inc then List.index bs (n - start)
+                 else List.index bs (start - n) in
+  b
+
+
+let read_vector_subrange (Vector bs start) n m =
+  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
+  let (_,suffix) = List.splitAt offset bs in
+  let (subvector,_) = List.splitAt length suffix in
+  Vector subvector n
+
+let write_vector_subrange (Vector bs start) n m (Vector bs' _) =
+  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
+  let (prefix,_) = List.splitAt offset bs in
+  let (_,suffix) = List.splitAt (offset + length) bs in
+  Vector (prefix ++ (List.take length bs') ++ suffix) start
+
+(* auto-generate *)
+let read_register reg =
+  <| runState =
+     fun s ->
+     let v = match reg with
+       | CR -> s.cr
+       | CR0 -> read_vector_subrange s.cr 32 35
+       | CR1 -> read_vector_subrange s.cr 36 39
+       | CTR -> s.ctr
+       | LR -> s.lr
+       | XER -> s.xer
+       | XER_SO -> read_vector_subrange s.xer 32 32
+       | XER_OV -> read_vector_subrange s.xer 33 33
+       | XER_CA -> read_vector_subrange s.xer 34 34
+       | GPR0 -> s.gpr0
+       | GPR1 -> s.gpr1
+       | GPR2 -> s.gpr2
+       | GPR3 -> s.gpr3
+       | GPR4 -> s.gpr4
+       | VRSAVE -> s.vrsave
+       | SPRG3 -> s.sprg3
+     end in
+   (v,s)
+  |>
+
+    (* auto-generate *)
+let write_register reg v =
+  <| runState =
+     fun s ->
+     let s' = 
+       match reg with
+       | CR ->     <| s with cr = write_vector_subrange s.cr 32 64 v |>
+       | CR0 ->    <| s with cr = write_vector_subrange s.cr 32 35 v |>
+       | CR1 ->    <| s with cr = write_vector_subrange s.cr 36 39 v |>
+       | CTR ->    <| s with ctr = write_vector_subrange s.cr 0 64 v |>
+       | LR ->     <| s with lr = write_vector_subrange s.cr 0 64 v |>
+       | XER ->    <| s with xer = write_vector_subrange s.cr 0 64 v |>
+       | XER_SO -> <| s with xer = write_vector_subrange s.xer 32 32 v |>
+       | XER_OV -> <| s with xer = write_vector_subrange s.xer 33 33 v |>
+       | XER_CA -> <| s with xer = write_vector_subrange s.xer 34 34 v |>
+       | GPR0 ->   <| s with gpr0 = write_vector_subrange s.cr 0 64 v |>
+       | GPR1 ->   <| s with gpr1 = write_vector_subrange s.cr 0 64 v |>
+       | GPR2 ->   <| s with gpr2 = write_vector_subrange s.cr 0 64 v |>
+       | GPR3 ->   <| s with gpr3 = write_vector_subrange s.cr 0 64 v |>
+       | GPR4 ->   <| s with gpr4 = write_vector_subrange s.cr 0 64 v |>
+       | VRSAVE -> <| s with vrsave = write_vector_subrange s.vrsave 32 64 v |>
+       | SPRG3 -> <| s with sprg3 = write_vector_subrange s.vrsave 0 64 v |>
+     end in
+   ((),s')
+  |>
+
+let write_two_registers r1 r2 vec =
+  let size = length_register r1 in
+  let start = get_start vec in
+  let vsize = length vec in
+  let r1_v = read_vector_subrange vec start ((if is_inc then size - start else start - size) - 1) in
+  let r2_v =
+    read_vector_subrange
+      vec (if is_inc then size - start else start - size)
+      (if is_inc then vsize - start else start - vsize) in
+  write_register r1 r1_v >> write_register r2 r2_v
+  
+
+let rec replace bs ((n : nat),b') = match (n,bs) with
+  | (_, []) -> []
+  | (0, _::bs) -> b' :: bs
+  | (n+1, b::bs) -> b :: replace bs (n,b')
+  end
+
+let make_indexed_vector entries default start length =
+  let default = match default with Nothing -> Undef | Just v -> v end in
+  Vector (List.foldl replace (replicate length default) entries) start
+
+let vector_concat (Vector bs start) (Vector bs' _) = Vector(bs ++ bs') start
+
+let has_undef (Vector bs _) = List.any (function Undef -> true | _ -> false end) bs
+
+let most_significant (Vector bs _) =
+  let (b :: _) = bs in b
+
+let bitwise_not_bit = function
+  | One -> Zero
+  | Zero -> One
+  | _ -> Undef
+  end
+
+let bitwise_not (Vector bs start) =
+  Vector (List.map bitwise_not_bit bs) start
+
+let bool_to_bit b = if b then One else Zero
+
+let bitwise_binop_bit op = function
+  | (Undef,_) -> Undef (*Do we want to do this or to respect | of One and & of Zero rules?*)
+  | (_,Undef) -> Undef (*Do we want to do this or to respect | of One and & of Zero rules?*)
+  | (x,y) -> bool_to_bit (op (to_bool x) (to_bool y))
+  end
+
+let bitwise_and_bit = bitwise_binop_bit (&&)
+let bitwise_or_bit = bitwise_binop_bit (||)
+let bitwise_xor_bit = bitwise_binop_bit xor
+
+let bitwise_binop op (Vector bsl start, Vector bsr _) =
+  let revbs = foldl (fun acc pair -> bitwise_binop_bit op pair :: acc) [] (zip bsl bsr) in
+  Vector (reverse revbs) start
+
+let bitwise_and = bitwise_binop (&&)
+let bitwise_or = bitwise_binop (||)
+let bitwise_xor = bitwise_binop xor
+
+let unsigned (Vector bs _ as v) : integer =
+  match has_undef v with
+  | true ->
+     fst (List.foldl
+            (fun (acc,exp) b -> (acc + (if b = One then integerPow 2 exp else 0),exp +1)) (0,0) bs)
+  end
+
+let signed v =
+  match most_significant v with
+  | One -> 0 - (1 + (unsigned (bitwise_not v)))
+  | Zero -> unsigned v
+  end
+
+let to_num sign = if sign then signed else unsigned
+  
+let max_64u = (integerPow 2 64) - 1
+let max_64  = (integerPow 2 63) - 1
+let min_64  = 0 - (integerPow 2 63)
+let max_32u = (4294967295 : integer)
+let max_32  = (2147483647 : integer)
+let min_32  = (0 - 2147483648 : integer)
+let max_8   = (127 : integer)
+let min_8   = (0 - 128 : integer)
+let max_5   = (31 : integer)
+let min_5   = (0 - 32 : integer)
+
+let get_max_representable_in sign n = 
+  if (n = 64) then match sign with | true -> max_64 | false -> max_64u end
+  else if (n=32) then match sign with | true -> max_32 | false -> max_32u end
+  else if (n=8) then max_8
+  else if (n=5) then max_5
+  else match sign with | true -> integerPow 2 (n -1)
+                       | false -> integerPow 2 n
+       end
+
+let get_min_representable_in _ n = 
+  if n = 64 then min_64
+  else if n = 32 then min_32
+  else if n = 8 then min_8
+  else if n = 5 then min_5
+  else 0 - (integerPow 2 n)
+
+
+let rec divide_by_2 bs i (n : integer) =
+  if i < 0 || n = 0
+  then bs
+  else
+    if (n mod 2 = 1)
+    then divide_by_2 (replace bs (i,One)) (i - 1) (n / 2)
+    else divide_by_2 bs (i-1) (n div 2)
+
+let rec add_one_bit bs co i =
+  if i < 0 then bs
+  else match (List.index bs i,co) with
+    | (Just Zero,false) -> replace bs (i,One)
+    | (Just Zero,true)  -> add_one_bit (replace bs (i,One)) true (i-1)
+    | (Just One, false) -> add_one_bit (replace bs (i,Zero)) true (i-1)
+    | (Just One, true)  -> add_one_bit bs true (i-1)
+   (*    | Vundef,_ -> assert false*) 
+  end
+
+let to_vec len (n : integer) =
+  let bs = List.replicate len Zero in
+  let start = if is_inc then 0 else len-1 in
+  if n = 0 then Vector bs start
+  else if n > 0
+  then Vector (divide_by_2 bs (len-1) n) start
+  else
+    let abs_bs = divide_by_2 bs (len-1) (abs n) in
+    let (Vector bs start) = bitwise_not (Vector abs_bs start) in
+    Vector (add_one_bit bs false (len-1)) start
+
+
+let to_vec_undef len =
+  Vector (replicate len Undef) (if is_inc then 0 else len-1)
+
+let add = uncurry integerAdd
+let add_signed = uncurry integerAdd
+let minus = uncurry integerMinus
+let multiply = uncurry integerMult
+let modulo = uncurry integerMod
+let quot = uncurry integerDiv
+let power = uncurry integerPow
+
+let arith_op_vec op sign size (l,r) =
+  let (l',r') = (to_num sign l, to_num sign r) in
+  let n = op  l' r' in
+  to_vec (size * (length l)) n
+
+let add_vec = arith_op_vec integerAdd false 1
+let add_vec_signed = arith_op_vec integerAdd true 1
+let minus_vec = arith_op_vec integerMinus false 1
+let multiply_vec = arith_op_vec integerMult false 2
+let multiply_vec_signed = arith_op_vec integerMult true 2
+
+let arith_op_vec_range op sign size (l,r) =
+  arith_op_vec op sign size (l, to_vec (length l) r)
+
+let add_vec_range = arith_op_vec_range integerAdd false 1
+let add_vec_range_signed = arith_op_vec_range integerAdd true 1
+let minus_vec_range = arith_op_vec_range integerMinus false 1
+let mult_vec_range = arith_op_vec_range integerMult false 2
+let mult_vec_range_signed = arith_op_vec_range integerMult true 2
+
+let arith_op_range_vec op sign size (l,r) =
+  arith_op_vec op sign size (to_vec (length r) l, r)
+
+let add_range_vec = arith_op_range_vec integerAdd false 1
+let add_range_vec_signed = arith_op_range_vec integerAdd true 1
+let minus_range_vec = arith_op_range_vec integerMinus false 1
+let mult_range_vec = arith_op_range_vec integerMult false 2
+let mult_range_vec_signed = arith_op_range_vec integerMult true 2
+
+let arith_op_range_vec_range op sign (l,r) = uncurry op (l, to_num sign r)
+
+let add_range_vec_range = arith_op_range_vec_range integerAdd false
+let add_range_vec_range_signed = arith_op_range_vec_range integerAdd true
+let minus_range_vec_range = arith_op_range_vec_range integerMinus false
+
+let arith_op_vec_range_range op sign (l,r) = uncurry op (to_num sign l,r)
+
+let add_vec_range_range = arith_op_vec_range_range integerAdd false
+let add_vec_range_range_signed = arith_op_vec_range_range integerAdd true
+let minus_vec_range_range = arith_op_vec_range_range integerMinus false
+
+let arith_op_vec_vec_range op sign (l,r) = 
+  let (l',r') = (to_num sign l,to_num sign r) in
+  op l' r'
+
+let add_vec_vec_range = arith_op_vec_vec_range integerAdd false
+let add_vec_vec_range_signed = arith_op_vec_vec_range integerAdd true
+
+let arith_op_vec_bit op sign (size : nat) (l,r) =
+  let l' = to_num sign l in
+  let n = op l' match r with | One -> (1 : integer) | _ -> 0 end in
+  to_vec (length l * size) n
+    
+let add_vec_bit = arith_op_vec_bit integerAdd false 1
+let add_vec_bit_signed = arith_op_vec_bit integerAdd true 1
+let minus_vec_bit = arith_op_vec_bit integerMinus true 1
+
+let rec arith_op_overflow_vec (op : integer -> integer -> integer) sign size (l,r) =
+  let len = length l in
+  let act_size = len * size in
+  let (l_sign,r_sign) = (to_num sign l,to_num sign r) in
+  let (l_unsign,r_unsign) = (to_num false l,to_num false r) in
+  let n = op l_sign r_sign in
+  let n_unsign = op l_unsign r_unsign in
+  let correct_size_num = to_vec act_size n in
+  let one_more_size_u = to_vec (act_size + 1) n_unsign in
+  let overflow =
+    if n <= get_max_representable_in sign len &&
+         n >= get_min_representable_in sign len
+    then Zero else One in
+  let c_out = most_significant one_more_size_u in
+  (correct_size_num,overflow,c_out)
+
+let add_overflow_vec = arith_op_overflow_vec integerAdd false 1
+let add_overflow_vec_signed = arith_op_overflow_vec integerAdd true 1
+let minus_overflow_vec = arith_op_overflow_vec integerMinus false 1
+let minus_overflow_vec_signed = arith_op_overflow_vec integerMinus true 1
+let mult_overflow_vec = arith_op_overflow_vec integerMult false 2
+let mult_overflow_vec_signed = arith_op_overflow_vec integerMult true 2
+    
+let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (size : nat) (l,r_bit) =
+  let act_size = length l * size in
+  let l' = to_num sign l in
+  let l_u = to_num false l in
+  let (n,nu,changed) = match r_bit with
+    | One -> (op l' 1, op l_u 1, true)
+    | Zero -> (l',l_u,false)
+    end in
+(*    | _ -> assert false *)
+  let correct_size_num = to_vec act_size n in
+  let one_larger = to_vec (act_size + 1) nu in
+  let overflow =
+    if changed 
+    then
+      if n <= get_max_representable_in sign act_size && n >= get_min_representable_in sign act_size
+      then Zero else One 
+    else One in
+  (correct_size_num,overflow,most_significant one_larger)
+
+let add_overflow_vec_bit_signed = arith_op_overflow_vec_bit integerAdd true 1
+let minus_overflow_vec_bit = arith_op_overflow_vec_bit integerMinus false 1
+let minus_overflow_vec_bit_signed = arith_op_overflow_vec_bit integerMinus true 1
+    
+type shift = LL | RR | LLL
+
+let shift_op_vec op (((Vector bs start) as l),r) =
+  let len = List.length bs in
+  let n = r in
+    match op with
+     | LL (*"<<"*) ->
+       let right_vec = Vector (List.replicate n Zero) 0 in
+       let left_vec = read_vector_subrange l n (if is_inc then len + start else start - len) in
+       vector_concat left_vec right_vec
+     | RR (*">>"*) ->
+       let right_vec = read_vector_subrange l start n in
+       let left_vec = Vector (List.replicate n Zero) 0 in
+       vector_concat left_vec right_vec 
+     | LLL (*"<<<"*) ->
+       let left_vec = read_vector_subrange l n (if is_inc then len + start else start - len) in
+       let right_vec = read_vector_subrange l start n in
+       vector_concat left_vec right_vec
+     end
+
+let bitwise_leftshift = shift_op_vec LL (*"<<"*)
+let bitwise_rightshift = shift_op_vec RR (*">>"*)
+let bitwise_rotate = shift_op_vec LLL (*"<<<"*)
+
+let rec arith_op_no0 (op : integer -> integer -> integer) (l,r) = 
+  if r = 0
+  then Nothing
+  else Just (op l r)
+
+let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size (((Vector _ start) as l),r) =
+  let act_size = length l * size in
+  let (l',r') = (to_num sign l,to_num sign r) in
+  let n = arith_op_no0 op (l',r') in
+  let (representable,n') = 
+    match n with 
+    | Just n' ->  
+      (n' <= get_max_representable_in sign act_size &&
+         n' >= get_min_representable_in sign act_size, n')
+    | _ -> (false,0)
+    end in
+  if representable 
+  then to_vec act_size n'
+  else Vector (List.replicate act_size Undef) start
+
+let mod_vec = arith_op_vec_no0 integerMod false 1
+let quot_vec = arith_op_vec_no0 integerDiv false 1
+let quot_vec_signed = arith_op_vec_no0 integerDiv true 1
+
+let arith_op_overflow_no0_vec op sign size (((Vector _ start) as l),r) =
+  let rep_size = length r * size in
+  let act_size = length l * size in
+  let (l',r') = (to_num sign l,to_num sign r) in
+  let (l_u,r_u) = (to_num false l,to_num false r) in
+  let n = arith_op_no0 op (l',r') in
+  let n_u = arith_op_no0 op (l_u,r_u) in
+  let (representable,n',n_u') = 
+    match (n, n_u) with 
+    | (Just n',Just n_u') ->  
+       ((n' <= get_max_representable_in sign rep_size &&
+           n' >= (get_min_representable_in sign rep_size)), n', n_u')
+    | _ -> (true,0,0)
+    end in
+  let (correct_size_num,one_more) = 
+    if representable then
+      (to_vec act_size n',to_vec (act_size + 1) n_u')
+    else
+      (Vector (List.replicate act_size Undef) start,
+       Vector (List.replicate (act_size + 1) Undef) start) in
+  let overflow = if representable then Zero else One in
+  (correct_size_num,overflow,most_significant one_more)
+
+let quot_overflow_vec = arith_op_overflow_no0_vec integerDiv false 1
+let quot_overflow_vec_signed = arith_op_overflow_no0_vec integerDiv true 1
+
+let arith_op_vec_range_no0 op sign size (l,r) =
+  arith_op_vec_no0 op sign size (l,to_vec (length l) r)
+
+let mod_vec_range = arith_op_vec_range_no0 integerMod false 1
+
+let duplicate (bit,length) =
+  Vector (List.replicate length bit) 0
+
+
+let compare_op op (l,r) = bool_to_bit (op l r)
+
+let lt = compare_op (<)
+let gt = compare_op (>)
+let lteq = compare_op (<=)
+let gteq = compare_op (>=)
+
+
+let compare_op_vec op sign (l,r) = 
+  let (l',r') = (to_num sign l, to_num sign r) in
+  compare_op op (l',r')
+
+let lt_vec = compare_op_vec (>) true
+let gt_vec = compare_op_vec (>) true
+let lteq_vec = compare_op_vec (<=) true
+let gteq_vec = compare_op_vec (>=) true
+let lt_vec_signed = compare_op_vec (<) true
+let gt_vec_signed = compare_op_vec (>) true
+let lteq_vec_signed = compare_op_vec (<=) true
+let gteq_vec_signed = compare_op_vec (>=) true
+let lt_vec_unsigned = compare_op_vec (<) false
+let gt_vec_unsigned = compare_op_vec (>) false
+let lteq_vec_unsigned = compare_op_vec (<=) false
+let gteq_vec_unsigned = compare_op_vec (>=) false
+
+let compare_op_vec_range op sign (l,r) = 
+  compare_op op ((to_num sign l),r)
+
+let lt_vec_range = compare_op_vec_range (<) true
+let gt_vec_range = compare_op_vec_range (>) true
+let lteq_vec_range = compare_op_vec_range (<=) true
+let gteq_vec_range = compare_op_vec_range (>=) true
+
+let compare_op_range_vec op sign (l,r) =
+  compare_op op (l, (to_num sign r))
+
+let lt_range_vec = compare_op_range_vec (<) true
+let gt_range_vec = compare_op_range_vec (>) true
+let lteq_range_vec = compare_op_range_vec (<=) true
+let gteq_range_vec = compare_op_range_vec (>=) true
+
+let eq (l,r) = bool_to_bit (l = r)
+let eq_vec_range (l,r) = eq (to_num false l,r)
+let eq_range_vec (l,r) = eq (l, to_num false r)
+let eq_vec_vec (l,r) = eq (to_num true l, to_num true r)
+
+let neq (l,r) = bitwise_not_bit (eq (l,r))
+let neq_vec (l,r) = bitwise_not_bit (eq_vec_vec (l,r))
+
