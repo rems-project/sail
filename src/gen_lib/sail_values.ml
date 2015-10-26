@@ -131,11 +131,11 @@ let set_vector_subrange_bit v n m new_v =
       done;
     end
   in
-  match v with
-  | Vvector(array,start,is_inc) ->
+  match v,new_v with
+  | Vvector(array,start,is_inc),Vvector(new_v,_,_) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
     walker array length offset new_v
-  | Vregister(array,start,is_inc,fields) ->
+  | Vregister(array,start,is_inc,fields),Vvector(new_v,_,_) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
     walker !array length offset new_v
   | _ -> ()
@@ -240,6 +240,44 @@ let bitwise_not = function
   | Vregister(array,s,d,_) -> Vvector( Array.map bitwise_not_bit !array,s,d)
   | _ -> assert false 
 
+let bool_to_bit b = if b then Vone else Vzero
+
+let bitwise_binop_bit op (l,r) =
+  match l,r with
+  | Vundef,_ | _,Vundef -> Vundef (*Do we want to do this or to respect | of One and & of Zero rules?*)
+  | Vone,Vone -> bool_to_bit (op true true)
+  | Vone,Vzero -> bool_to_bit (op true false)
+  | Vzero,Vone -> bool_to_bit (op false true)
+  | Vzero,Vzero -> bool_to_bit (op false false)
+
+let bitwise_and_bit = bitwise_binop_bit (&&)
+let bitwise_or_bit = bitwise_binop_bit (||)
+let bitwise_xor_bit = bitwise_binop_bit (fun x y -> (1 = (if x then 1 else 0) lxor (if y then 0 else 1)))
+
+let bitwise_binop op (l,r) =
+  let bop l arrayl arrayr =
+    let array = Array.make l Vzero in
+    begin
+      for i = 0 to l do
+        array.(i) <- bitwise_binop_bit op (arrayl.(i), arrayr.(i))
+      done;
+      array
+    end in
+  match l,r with
+  | Vvector(arrayl, start, dir), Vvector(arrayr,_,_) ->
+    Vvector(bop (Array.length arrayl) arrayl arrayr, start,dir)
+  | Vvector(arrayl, start, dir), Vregister(arrayr,_,_,_) ->
+    Vvector(bop (Array.length arrayl) arrayl !arrayr, start, dir)
+  | Vregister(arrayl, start,dir,_), Vvector(arrayr,_,_) ->
+    Vvector(bop (Array.length arrayr) !arrayl arrayr, start,dir)
+  | Vregister(arrayl, start, dir, _), Vregister(arrayr,_,_,_) ->
+    Vvector(bop (Array.length !arrayl) !arrayl !arrayr, start,dir)
+  | _ -> Vbit Vundef
+
+let bitwise_and = bitwise_binop (&&)
+let bitwise_or = bitwise_binop (||)
+let bitwise_xor = bitwise_binop (fun x y -> (1 = (if x then 1 else 0) lxor (if y then 0 else 1)))
+
 let unsigned = function
   | (Vvector(array,_,_) as v) ->
     if has_undef v
@@ -342,6 +380,14 @@ let to_vec ord len n =
 let to_vec_inc (len,n) = to_vec true len n
 let to_vec_dec (len,n) = to_vec false len n
 
+let to_vec_undef ord len = 
+  let len = int_of_big_int len in
+  let array = Array.make len Vundef in
+  let start = if ord then 0 else len-1 in
+  Vvector(array, start, ord)
+
+let to_vec_inc_undef len = to_vec_undef true len
+let to_vec_dec_undef len = to_vec_undef false len
 
 let arith_op op (l,r) = op l r
 let add = arith_op add_big_int
@@ -493,11 +539,14 @@ let rec arith_op_no0 op (l,r) =
   then None
   else Some (op l r)
 
+let modulo = arith_op_no0 mod_big_int
+let quot = arith_op_no0 div_big_int
+
 let rec arith_op_vec_no0 op sign size (l,r) =
   let ord = get_ord l in
   let act_size = int_of_big_int (mult_big_int (length l) size) in
   let (l',r') = (to_num sign l,to_num sign r) in
-  let n = arith_op op (l',r') in
+  let n = arith_op_no0 op (l',r') in
   let representable,n' = 
     match n with 
     | Some n' ->  
@@ -511,6 +560,10 @@ let rec arith_op_vec_no0 op sign size (l,r) =
     | Vvector(_, start, _) | Vregister(_, start, _, _) ->
       Vvector((Array.make act_size Vundef), start, ord)
     | _ -> assert false
+
+let mod_vec = arith_op_vec_no0 mod_big_int false unit_big_int
+let quot_vec = arith_op_vec_no0 div_big_int false unit_big_int
+let quot_vec_signed = arith_op_vec_no0 div_big_int true unit_big_int
 
 let arith_op_overflow_no0_vec op sign size (l,r) =
   let ord = get_ord l in
@@ -537,8 +590,67 @@ let arith_op_overflow_no0_vec op sign size (l,r) =
   let overflow = if representable then Vzero else Vone in
   (correct_size_num,overflow,most_significant one_more)
 
+let quot_overflow_vec = arith_op_overflow_no0_vec div_big_int false unit_big_int 
+let quot_overflow_vec_signed = arith_op_overflow_no0_vec div_big_int true unit_big_int 
+
 let arith_op_vec_range_no0 op sign size (l,r) =
   let ord = get_ord l in
   arith_op_vec_no0 op sign size (l,(to_vec ord (length l) r))
 
+let mod_vec_range = arith_op_vec_range_no0 mod_big_int false unit_big_int
 
+(*Need to have a default top level direction reference I think*)
+let duplicate (bit,length) =
+  Vvector((Array.make (int_of_big_int length) bit), 0, true)
+
+
+let compare_op op (l,r) =
+  if (op l r)
+  then Vone
+  else Vzero
+
+let lt = compare_op lt_big_int
+let gt = compare_op gt_big_int
+let lteq = compare_op le_big_int
+let gteq = compare_op ge_big_int
+
+let compare_op_vec op sign (l,r) = 
+  let (l',r') = (to_num sign l, to_num sign r) in
+  compare_op op (l',r')
+
+let lt_vec = compare_op_vec lt_big_int true
+let gt_vec = compare_op_vec gt_big_int true
+let lteq_vec = compare_op_vec le_big_int true
+let gteq_vec = compare_op_vec ge_big_int true
+let lt_vec_signed = compare_op_vec lt_big_int true
+let gt_vec_signed = compare_op_vec gt_big_int true
+let lteq_vec_signed = compare_op_vec le_big_int true
+let gteq_vec_signed = compare_op_vec ge_big_int true
+let lt_vec_unsigned = compare_op_vec lt_big_int false
+let gt_vec_unsigned = compare_op_vec gt_big_int false
+let lteq_vec_unsigned = compare_op_vec le_big_int false
+let gteq_vec_unsigned = compare_op_vec ge_big_int false
+
+let compare_op_vec_range op sign (l,r) = 
+  compare_op op ((to_num sign l),r)
+
+let lt_vec_range = compare_op_vec_range lt_big_int true
+let gt_vec_range = compare_op_vec_range gt_big_int true
+let lteq_vec_range = compare_op_vec_range le_big_int true
+let gteq_vec_range = compare_op_vec_range ge_big_int true
+
+let compare_op_range_vec op sign (l,r) =
+  compare_op op (l, (to_num sign r))
+
+let lt_range_vec = compare_op_range_vec lt_big_int true
+let gt_range_vec = compare_op_range_vec gt_big_int true
+let lteq_range_vec = compare_op_range_vec le_big_int true
+let gteq_range_vec = compare_op_range_vec ge_big_int true
+
+let eq (l,r) = if l == r then Vone else Vzero
+let eq_vec_range (l,r) = eq (to_num false l,r)
+let eq_range_vec (l,r) = eq (l, to_num false r)
+let eq_vec_vec (l,r) = eq (to_num true l, to_num true r)
+
+let neq (l,r) = bitwise_not_bit (eq (l,r))
+let neq_vec (l,r) = bitwise_not_bit (eq_vec_vec(l,r))

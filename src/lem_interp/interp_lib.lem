@@ -244,6 +244,24 @@ let to_vec_dec (V_tuple([v1;v2])) =
    end in
   binary_taint tv_fun v1 v2
 
+let rec to_vec_inc_undef v1 =
+  retaint v1
+    match detaint v1 with
+    | V_lit(L_aux (L_num len) _) ->
+      let len = if len < 0 then 0 else natFromInteger len in
+      V_vector 0 IInc (List.replicate len (V_lit (L_aux L_undef Unknown)))
+    | _ -> V_unknown
+end
+
+let rec to_vec_dec_undef v1 =
+  retaint v1
+    match detaint v1 with
+    | V_lit(L_aux (L_num len) _) ->
+      let len = if len < 0 then 0 else natFromInteger len in
+      V_vector (len - 1) IDec (List.replicate len (V_lit (L_aux L_undef Unknown)))
+    | _ -> V_unknown
+end
+
 let to_vec ord len n =
   if is_inc(ord)
   then to_vec_inc (V_tuple ([V_lit(L_aux (L_num len) Interp_ast.Unknown); n]))
@@ -530,7 +548,7 @@ let rec shift_op_vec op (V_tuple [vl;vr]) =
   binary_taint arith_op_help vl vr
 
 
-let rec compare_op op (V_tuple [vl;vr]) =
+let compare_op op (V_tuple [vl;vr]) =
   let comp_help vl vr = match (vl,vr) with
     | (V_unknown,_) -> V_unknown
     | (_,V_unknown) -> V_unknown
@@ -540,7 +558,7 @@ let rec compare_op op (V_tuple [vl;vr]) =
       else V_lit(L_aux L_zero lx)
    end in
    binary_taint comp_help vl vr
-let rec compare_op_vec op sign (V_tuple [vl;vr]) = 
+let compare_op_vec op sign (V_tuple [vl;vr]) = 
   let comp_help vl vr = match (vl,vr) with
     | (V_unknown,_) -> V_unknown
     | (_,V_unknown) -> V_unknown
@@ -549,14 +567,21 @@ let rec compare_op_vec op sign (V_tuple [vl;vr]) =
       compare_op op (V_tuple[l1';l2'])
    end in
    binary_taint comp_help vl vr
-let rec compare_op_vec_range op sign (V_tuple [vl;vr]) = 
+let compare_op_vec_range op sign (V_tuple [vl;vr]) = 
   let comp_help vl vr = match (vl,vr) with
     | (V_unknown,_) -> V_unknown
     | (_,V_unknown) -> V_unknown
     | _ -> compare_op op (V_tuple[(to_num sign vl);vr])
   end in
   binary_taint comp_help vl vr
-let rec compare_op_vec_unsigned op (V_tuple [vl;vr]) = 
+let compare_op_range_vec op sign (V_tuple [vl;vr]) = 
+  let comp_help vl vr = match (vl,vr) with
+    | (V_unknown,_) -> V_unknown
+    | (_,V_unknown) -> V_unknown
+    | _ -> compare_op op (V_tuple[vl;(to_num sign vr)])
+  end in
+  binary_taint comp_help vl vr
+let compare_op_vec_unsigned op (V_tuple [vl;vr]) = 
   let comp_help vl vr = match (vl,vr) with
     | (V_unknown,_) -> V_unknown
     | (_,V_unknown) -> V_unknown
@@ -671,7 +696,9 @@ let library_functions direction = [
   ("EXTS", exts direction);
   ("EXTZ", extz direction);
   ("to_vec_inc", to_vec_inc);
-  ("to_vec_dec", to_vec_dec);
+  ("to_vec_inc_undef", to_vec_inc_undef);
+  ("to_vec_dec", to_vec_dec_undef);
+  ("to_vec_dec_undef", to_vec_dec);
   ("bitwise_not", bitwise_not);
   ("bitwise_not_bit", bitwise_not_bit);
   ("bitwise_and", bitwise_binop (&&) "&");
@@ -688,6 +715,12 @@ let library_functions direction = [
   ("gt_vec", compare_op_vec (>) Signed);
   ("lt_vec_range", compare_op_vec_range (<) Signed);
   ("gt_vec_range", compare_op_vec_range (>) Signed);
+  ("lt_range_vec", compare_op_range_vec (<) Signed);
+  ("gt_range_vec", compare_op_range_vec (>) Signed);
+  ("lteq_vec_range", compare_op_vec_range (<=) Signed);
+  ("gteq_vec_range", compare_op_vec_range (>=) Signed);
+  ("lteq_range_vec", compare_op_vec_range (<=) Signed);
+  ("gteq_range_vec", compare_op_vec_range (>=) Signed);
   ("lteq_vec", compare_op_vec (<=) Signed);
   ("gteq_vec", compare_op_vec (>=) Signed);
   ("lt_vec_signed", compare_op_vec (<) Signed);
