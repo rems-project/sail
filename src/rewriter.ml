@@ -5,8 +5,9 @@ type typ = Type_internal.t
 type 'a exp = 'a Ast.exp
 type 'a emap = 'a Envmap.t
 type envs = Type_check.envs
+type nameset = Nameset.t
 
-type 'a rewriters = { rewrite_exp : 'a rewriters -> nexp_map option -> 'a exp -> 'a exp;
+type 'a rewriters = { rewrite_exp  : 'a rewriters -> nexp_map option -> 'a exp -> 'a exp;
                       rewrite_lexp : 'a rewriters -> nexp_map option -> 'a lexp -> 'a lexp;
                       rewrite_pat  : 'a rewriters -> nexp_map option -> 'a pat -> 'a pat;
                       rewrite_let  : 'a rewriters -> nexp_map option -> 'a letbind -> 'a letbind;
@@ -262,6 +263,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
         | _ -> raise (Reporting_basic.err_unreachable l ("Internal_exp_user given none Base annot")))
     | E_internal_let _ -> raise (Reporting_basic.err_unreachable l "Internal let found before it should have been introduced")
     | E_internal_return _ -> raise (Reporting_basic.err_unreachable l "Internal return found before it should have been introduced")
+    | E_internal_plet _ -> raise (Reporting_basic.err_unreachable l " Internal plet found before it should have been introduced")
 
 let rewrite_let rewriters map (LB_aux(letbind,(l,annot))) =
   let map = merge_option_maps map (get_map_tannot annot) in
@@ -315,6 +317,22 @@ let rewrite_defs (Defs defs) = rewrite_defs_base
      rewrite_fun = rewrite_fun;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} (Defs defs)
+
+
+let rec introduced_variables (E_aux (exp,(l,annot))) =
+  match exp with
+  | E_cast (typ, exp) -> introduced_variables exp
+  | E_if (c,t,e) -> Nameset.inter (introduced_variables t) (introduced_variables e)
+  | E_assign (lexp,exp) -> introduced_vars_le lexp
+  | _ -> Nameset.empty
+
+and introduced_vars_le (LEXP_aux(lexp,(l,annot))) = 
+  match lexp with
+  | LEXP_id (Id_aux (Id id,_))  | LEXP_cast(_,(Id_aux (Id id,_))) ->
+    (match annot with
+     | Base(_,Emp_intro,_,_,_,_) -> Nameset.singleton id
+     | _ -> Nameset.empty)
+  | _ -> Nameset.empty
 
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux
@@ -887,10 +905,11 @@ let effectful_effs {effect = Eset effs} =
 let effectful eaux =
   effectful_effs (geteffs eaux)
 
-let eff_union e1 e2 =
-  let {effect = Eset effs_e1} = geteffs e1 in 
+let eff_union e1 e2 = union_effects (geteffs e1) (geteffs e2)
+(*KATHY:CHANGE: Not sure why the more general effect union is bad here?*)
+(*  let {effect = Eset effs_e1} = geteffs e1 in 
   let {effect = Eset effs_e2} = geteffs e2 in
-  {effect = Eset (dedup (effs_e1 @ effs_e2))}
+  {effect = Eset (dedup (effs_e1 @ effs_e2))}*)
 
 let remove_blocks_exp_alg =
 
