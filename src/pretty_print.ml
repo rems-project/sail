@@ -2042,8 +2042,8 @@ let doc_exp_lem, doc_let_lem =
     match lexp with
     | LEXP_vector(v,e) -> parens ((string "vector_access") ^^ space ^^ doc_lexp_lem false v) ^^ dot ^^ parens (exp e)
     | LEXP_vector_range(v,e1,e2) ->
-       parens ((string "vector_subrange") ^^ space ^^ (doc_lexp_ocaml false v) ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
-    | LEXP_field(v,id) -> (doc_lexp_ocaml false v) ^^ dot ^^ doc_id_ocaml id
+       parens ((string "vector_subrange") ^^ space ^^ (doc_lexp_lem false v) ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
+    | LEXP_field(v,id) -> (doc_lexp_lem false v) ^^ dot ^^ doc_id_ocaml id
     | LEXP_id id
     | LEXP_cast(_,id) ->
        let name = doc_id_ocaml id in
@@ -2061,10 +2061,10 @@ let doc_exp_lem, doc_let_lem =
            let t_act = match t.t with | Tapp("reg",[TA_typ t]) | Tabbrev(_,{t=Tapp("reg",[TA_typ t])}) -> t | _ -> t in
            (match t_act.t with
             | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) ->
-                           parens ((string "get_barray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens (top_exp false e)
-            | _ -> parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens (top_exp false e))
+                           parens ((string "get_barray") ^^ space ^^ doc_lexp_lem false v) ^^ dot ^^ parens (top_exp false e)
+            | _ -> parens ((string "get_varray") ^^ space ^^ doc_lexp_lem false v) ^^ dot ^^ parens (top_exp false e))
         | _ ->
-           parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens (top_exp false e))
+           parens ((string "get_varray") ^^ space ^^ doc_lexp_lem false v) ^^ dot ^^ parens (top_exp false e))
     | _ -> empty
              
   and doc_lexp_rwrite ((LEXP_aux(lexp,(l,annot))) as le) e_new_v =
@@ -2081,15 +2081,15 @@ let doc_exp_lem, doc_let_lem =
     match lexp with
     | LEXP_vector(v,e) ->
       doc_op (string "<-")
-        (group (parens ((string (if is_bit then "get_barray" else "get_varray")) ^^ space ^^ doc_lexp_ocaml false v)) ^^
+        (group (parens ((string (if is_bit then "get_barray" else "get_varray")) ^^ space ^^ doc_lexp_lem false v)) ^^
          dot ^^ parens (exp e))
         (exp e_new_v)
     | LEXP_vector_range(v,e1,e2) ->
        parens ((string (if is_bitv then "set_vector_subrange_bit" else "set_vector_subrange_v")) ^^ space ^^
-                 doc_lexp_ocaml false v ^^ space ^^ exp e1 ^^ space ^^ exp e2 ^^ space ^^ exp e_new_v)
+                 doc_lexp_lem false v ^^ space ^^ exp e1 ^^ space ^^ exp e2 ^^ space ^^ exp e_new_v)
     | LEXP_field(v,id) ->
        parens ((string (if is_bit then "set_register_field_bit" else "set_register_field_v")) ^^ space ^^
-                 doc_lexp_ocaml false v ^^ space ^^string_lit (doc_id id) ^^ space ^^ exp e_new_v)
+                 doc_lexp_lem false v ^^ space ^^string_lit (doc_id id) ^^ space ^^ exp e_new_v)
     | LEXP_id id | LEXP_cast (_,id) ->
       (match annot with
        | Base(_,Alias alias_info,_,_,_,_) ->
