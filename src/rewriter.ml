@@ -5,17 +5,17 @@ type typ = Type_internal.t
 type 'a exp = 'a Ast.exp
 type 'a emap = 'a Envmap.t
 type envs = Type_check.envs
-type nameset = Nameset.t
+type 'a namemap = (typ * 'a exp) emap
 
-type 'a rewriters = { rewrite_exp  : 'a rewriters -> (nexp_map * nameset) option -> 'a exp -> 'a exp;
-                      rewrite_lexp : 'a rewriters -> (nexp_map * nameset) option -> 'a lexp -> 'a lexp;
-                      rewrite_pat  : 'a rewriters -> (nexp_map * nameset) option -> 'a pat -> 'a pat;
-                      rewrite_let  : 'a rewriters -> (nexp_map * nameset) option -> 'a letbind -> 'a letbind;
+type 'a rewriters = { rewrite_exp  : 'a rewriters -> (nexp_map * 'a namemap) option -> 'a exp -> 'a exp;
+                      rewrite_lexp : 'a rewriters -> (nexp_map * 'a namemap) option -> 'a lexp -> 'a lexp;
+                      rewrite_pat  : 'a rewriters -> (nexp_map * 'a namemap) option -> 'a pat -> 'a pat;
+                      rewrite_let  : 'a rewriters -> (nexp_map * 'a namemap) option -> 'a letbind -> 'a letbind;
                       rewrite_fun  : 'a rewriters -> 'a fundef -> 'a fundef;
                       rewrite_def  : 'a rewriters -> 'a def -> 'a def;
                       rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
                     }
-
+                    
 let rec partial_assoc (eq: 'a -> 'a -> bool) (v: 'a) (ls : ('a *'b) list ) : 'b option  = match ls with
   | [] -> None
   | (v1,v2)::ls -> if (eq v1 v) then Some v2 else partial_assoc eq v ls
@@ -270,7 +270,7 @@ let rewrite_let rewriters map (LB_aux(letbind,(l,annot))) =
   let map =
     match map,local_map with
     | None,None -> None
-    | None,Some m -> Some(m, Nameset.empty)
+    | None,Some m -> Some(m, Envmap.empty)
     | Some(m,s), None -> Some(m,s)
     | Some(m,s), Some m' -> match merge_option_maps (Some m) local_map with
       | None -> Some(m,s) (*Shouldn't happen*)
@@ -304,7 +304,7 @@ let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls
   let map =
     match map with
     | None -> None
-    | Some m -> Some(m, Nameset.empty) in
+    | Some m -> Some(m, Envmap.empty) in
   (FCL_aux (FCL_Funcl (id,rewriters.rewrite_pat rewriters map pat,
                          rewriters.rewrite_exp rewriters map exp),(l,annot))) 
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
@@ -334,17 +334,18 @@ let rewrite_defs (Defs defs) = rewrite_defs_base
 let rec introduced_variables (E_aux (exp,(l,annot))) =
   match exp with
   | E_cast (typ, exp) -> introduced_variables exp
-  | E_if (c,t,e) -> Nameset.inter (introduced_variables t) (introduced_variables e)
-  | E_assign (lexp,exp) -> introduced_vars_le lexp
-  | _ -> Nameset.empty
+  | E_if (c,t,e) -> Envmap.intersect (introduced_variables t) (introduced_variables e)
+  | E_assign (lexp,exp) -> introduced_vars_le lexp exp
+  | _ -> Envmap.empty
 
-and introduced_vars_le (LEXP_aux(lexp,(l,annot))) = 
+and introduced_vars_le (LEXP_aux(lexp,(l,annot))) exp = 
   match lexp with
   | LEXP_id (Id_aux (Id id,_))  | LEXP_cast(_,(Id_aux (Id id,_))) ->
     (match annot with
-     | Base(_,Emp_intro,_,_,_,_) -> Nameset.singleton id
-     | _ -> Nameset.empty)
-  | _ -> Nameset.empty
+     | Base((_,t),Emp_intro,_,_,_,_) ->
+       Envmap.insert Envmap.empty (id,(t,exp))
+     | _ -> Envmap.empty)
+  | _ -> Envmap.empty
 
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux

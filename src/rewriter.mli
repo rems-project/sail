@@ -5,18 +5,18 @@ type typ = Type_internal.t
 type 'a exp = 'a Ast.exp
 type 'a emap = 'a Envmap.t
 type envs = Type_check.envs
-type nameset = Nameset.t
+type 'a namemap = (typ * 'a exp) emap
 
-type 'a rewriters = { rewrite_exp  : 'a rewriters -> (nexp_map * nameset) option -> 'a exp -> 'a exp;
-                      rewrite_lexp : 'a rewriters -> (nexp_map * nameset) option -> 'a lexp -> 'a lexp;
-                      rewrite_pat  : 'a rewriters -> (nexp_map * nameset) option -> 'a pat -> 'a pat;
-                      rewrite_let  : 'a rewriters -> (nexp_map * nameset) option -> 'a letbind -> 'a letbind;
+type 'a rewriters = { rewrite_exp  : 'a rewriters -> (nexp_map * 'a namemap) option -> 'a exp -> 'a exp;
+                      rewrite_lexp : 'a rewriters -> (nexp_map * 'a namemap) option -> 'a lexp -> 'a lexp;
+                      rewrite_pat  : 'a rewriters -> (nexp_map * 'a namemap) option -> 'a pat -> 'a pat;
+                      rewrite_let  : 'a rewriters -> (nexp_map * 'a namemap) option -> 'a letbind -> 'a letbind;
                       rewrite_fun  : 'a rewriters -> 'a fundef -> 'a fundef;
                       rewrite_def  : 'a rewriters -> 'a def -> 'a def;
                       rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
                     }
                     
-val rewrite_exp : tannot rewriters -> (nexp_map * nameset) option -> tannot exp -> tannot exp
+val rewrite_exp : tannot rewriters -> (nexp_map * tannot namemap) option -> tannot exp -> tannot exp
 val rewrite_defs : tannot defs -> tannot defs
 val rewrite_defs_ocaml : tannot defs -> tannot defs (*Perform rewrites to exclude AST nodes not supported for ocaml out*)
 val rewrite_defs_lem : tannot defs -> tannot defs (*Perform rewrites to exclude AST nodes not supported for lem out*)
