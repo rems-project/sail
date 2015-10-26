@@ -7,10 +7,10 @@ type 'a emap = 'a Envmap.t
 type envs = Type_check.envs
 type nameset = Nameset.t
 
-type 'a rewriters = { rewrite_exp  : 'a rewriters -> nexp_map option -> 'a exp -> 'a exp;
-                      rewrite_lexp : 'a rewriters -> nexp_map option -> 'a lexp -> 'a lexp;
-                      rewrite_pat  : 'a rewriters -> nexp_map option -> 'a pat -> 'a pat;
-                      rewrite_let  : 'a rewriters -> nexp_map option -> 'a letbind -> 'a letbind;
+type 'a rewriters = { rewrite_exp  : 'a rewriters -> (nexp_map * nameset) option -> 'a exp -> 'a exp;
+                      rewrite_lexp : 'a rewriters -> (nexp_map * nameset) option -> 'a lexp -> 'a lexp;
+                      rewrite_pat  : 'a rewriters -> (nexp_map * nameset) option -> 'a pat -> 'a pat;
+                      rewrite_let  : 'a rewriters -> (nexp_map * nameset) option -> 'a letbind -> 'a letbind;
                       rewrite_fun  : 'a rewriters -> 'a fundef -> 'a fundef;
                       rewrite_def  : 'a rewriters -> 'a def -> 'a def;
                       rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
@@ -221,7 +221,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
     | E_internal_exp (l,impl) ->
       (match impl with
        | Base((_,t),_,_,_,_,bounds) ->
-         let bounds = match nmap with | None -> bounds | Some nm -> add_map_to_bounds nm bounds in
+         let bounds = match nmap with | None -> bounds | Some (nm,_) -> add_map_to_bounds nm bounds in
          (*let _ = Printf.eprintf "Rewriting internal expression, with type %s\n" (t_to_string t) in*)
           (match t.t with
             (*Old case; should possibly be removed*)
@@ -248,7 +248,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
         | (Base((_,tu),_,_,_,_,_), Base((_,ti),_,_,_,_,bounds)) ->
           (*let _ = Printf.eprintf "E_interal_user getting rewritten two types are %s and %s\n"
             (t_to_string tu) (t_to_string ti) in*)
-          let bounds =  match nmap with | None -> bounds | Some nm -> add_map_to_bounds nm bounds in
+          let bounds =  match nmap with | None -> bounds | Some (nm,_) -> add_map_to_bounds nm bounds in
           (match (tu.t,ti.t) with
             | (Tapp("implicit", [TA_nexp u]),Tapp("implicit",[TA_nexp i])) ->
               (*let _ = Printf.eprintf "Implicit case with %s\n" (n_to_string i) in*)
@@ -266,7 +266,15 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
     | E_internal_plet _ -> raise (Reporting_basic.err_unreachable l " Internal plet found before it should have been introduced")
 
 let rewrite_let rewriters map (LB_aux(letbind,(l,annot))) =
-  let map = merge_option_maps map (get_map_tannot annot) in
+  let local_map = get_map_tannot annot in
+  let map =
+    match map,local_map with
+    | None,None -> None
+    | None,Some m -> Some(m, Nameset.empty)
+    | Some(m,s), None -> Some(m,s)
+    | Some(m,s), Some m' -> match merge_option_maps (Some m) local_map with
+      | None -> Some(m,s) (*Shouldn't happen*)
+      | Some new_m -> Some(new_m,s) in
   match letbind with
   | LB_val_explicit (typschm, pat,exp) ->
     LB_aux(LB_val_explicit (typschm,rewriters.rewrite_pat rewriters map pat,
@@ -292,9 +300,13 @@ let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls
   let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),(l,annot))) = 
     (*let _ = Printf.eprintf "Rewriting function %s, pattern %s\n" 
       (match id with (Id_aux (Id i,_)) -> i) (Pretty_print.pat_to_string pat) in*)
-    let map = get_map_tannot fdannot in
-    (FCL_aux (FCL_Funcl (id,rewriters.rewrite_pat rewriters map pat,
-                            rewriters.rewrite_exp rewriters map exp),(l,annot))) 
+  let map = get_map_tannot fdannot in
+  let map =
+    match map with
+    | None -> None
+    | Some m -> Some(m, Nameset.empty) in
+  (FCL_aux (FCL_Funcl (id,rewriters.rewrite_pat rewriters map pat,
+                         rewriters.rewrite_exp rewriters map exp),(l,annot))) 
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
 let rewrite_def rewriters d = match d with
@@ -807,7 +819,7 @@ let rewrite_fun_remove_vector_concat_pat
       rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
   let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),(l,annot))) =
     let (pat,_,decls) = remove_vector_concat_pat pat in
-    (FCL_aux (FCL_Funcl (id,pat,rewriters.rewrite_exp rewriters (get_map_tannot fdannot) (decls exp)),(l,annot))) 
+    (FCL_aux (FCL_Funcl (id,pat,rewriters.rewrite_exp rewriters None (decls exp)),(l,annot))) 
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
 let rewrite_defs_remove_vector_concat_pat rewriters (Defs defs) =
