@@ -907,9 +907,6 @@ let gettype (E_aux (_,(_,a))) =
   | _ -> failwith "a_normalise doesn't support Overload"
 
     
-let dedup = List.fold_left (fun acc e -> if List.exists ((=) e) acc then acc else e :: acc) []
-
-
 let effectful_effs {effect = Eset effs} =
   List.exists
     (fun (BE_aux (be,_)) -> match be with BE_nondet | BE_unspec | BE_undef -> false | _ -> true)
@@ -919,10 +916,6 @@ let effectful eaux =
   effectful_effs (geteffs eaux)
 
 let eff_union e1 e2 = union_effects (geteffs e1) (geteffs e2)
-(*KATHY:CHANGE: Not sure why the more general effect union is bad here?*)
-(*  let {effect = Eset effs_e1} = geteffs e1 in 
-  let {effect = Eset effs_e2} = geteffs e2 in
-  {effect = Eset (dedup (effs_e1 @ effs_e2))}*)
 
 let remove_blocks_exp_alg =
 
@@ -1148,8 +1141,8 @@ and n_exp (exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
   | E_case (exp1,pexps) ->
      n_exp_name exp1 (fun exp1 -> 
      n_pexpL pexps (fun pexps ->
-     let geteffs (Pat_aux (_,(_,Base (_,_,_,_,{effect = Eset effs},_)))) = effs in
-     let effsum = {effect = Eset (dedup (List.flatten (List.map geteffs pexps)))} in
+     let geteffs (Pat_aux (_,(_,Base (_,_,_,_,eff,_)))) = eff in
+     let effsum = List.fold_left union_effects {effect = Eset []} (List.map geteffs pexps) in
      k (rewrap_effs effsum (E_case (exp1,pexps)))))
   | E_let (lb,body) ->
      n_lb lb (fun lb -> 

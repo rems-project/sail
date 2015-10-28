@@ -1,52 +1,8 @@
 open import Pervasives
+open import State
+open import Vector
+open import Arch
 
-type M 's 'a  = <| runState : 's -> ('a * 's) |>
-
-val return : forall 's 'a. 'a -> M 's 'a
-let return a = <| runState = (fun s -> (a,s)) |>
-
-val bind : forall 's 'a 'b. M 's 'a -> ('a -> M 's 'b) -> M 's 'b
-let bind m f = <| runState = (fun s -> let (a,s) = m.runState s in (f a).runState s) |>
-
-let (>>=) = bind
-let (>>) m n = m >>= fun _ -> n
-
-(* only expected to be 0, 1, 2; 2 represents undef *)
-type bit = Zero | One | Undef
-let is_inc = true
-
-type register =
-  | CR | CR0 | CR1 
-  | CTR
-  | LR
-  | XER | XER_SO | XER_OV | XER_CA
-  | GPR0
-  | GPR1
-  | GPR2
-  | GPR3
-  | GPR4
-  | VRSAVE
-  | SPRG3
-
-type vector = Vector of list bit * nat
-
-(* auto-generate *)
-let GPR = [GPR0;GPR1;GPR2;GPR3;GPR4]
-
-(* auto-generate *)
-type state =
-  <| cr : vector;
-     ctr : vector;
-     lr : vector;
-     xer : vector;
-     gpr0 : vector;
-     gpr1 : vector;
-     gpr2 : vector;
-     gpr3 : vector;
-     gpr4 : vector;
-     vrsave : vector;
-     sprg3 : vector |>
-  
 let to_bool = function
   | Zero -> false
   | One  -> true
@@ -57,25 +13,6 @@ let get_blist (Vector bs _) = bs
 let get_start (Vector _ s) = s
 let length (Vector bs _) = length bs
 
-(* auto-generate *)
-let length_register : register -> nat = function
-  | CR -> 32
-  | CR0 -> 4
-  | CR1 -> 4
-  | CTR -> 64
-  | LR -> 64
-  | XER -> 64
-  | XER_SO -> 1
-  | XER_OV -> 1
-  | XER_CA -> 1
-  | GPR0 -> 64
-  | GPR1 -> 64
-  | GPR2 -> 64
-  | GPR3 -> 64
-  | GPR4 -> 64
-  | VRSAVE -> 32
-  | SPRG3 -> 64
-end
 
 let vector_access (Vector bs start) n =
   let (Just b) = if is_inc then List.index bs (n - start)
@@ -83,76 +20,13 @@ let vector_access (Vector bs start) n =
   b
 
 
-let read_vector_subrange (Vector bs start) n m =
-  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
-  let (_,suffix) = List.splitAt offset bs in
-  let (subvector,_) = List.splitAt length suffix in
-  Vector subvector n
-
-let write_vector_subrange (Vector bs start) n m (Vector bs' _) =
-  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
-  let (prefix,_) = List.splitAt offset bs in
-  let (_,suffix) = List.splitAt (offset + length) bs in
-  Vector (prefix ++ (List.take length bs') ++ suffix) start
-
-(* auto-generate *)
-let read_register reg =
-  <| runState =
-     fun s ->
-     let v = match reg with
-       | CR -> s.cr
-       | CR0 -> read_vector_subrange s.cr 32 35
-       | CR1 -> read_vector_subrange s.cr 36 39
-       | CTR -> s.ctr
-       | LR -> s.lr
-       | XER -> s.xer
-       | XER_SO -> read_vector_subrange s.xer 32 32
-       | XER_OV -> read_vector_subrange s.xer 33 33
-       | XER_CA -> read_vector_subrange s.xer 34 34
-       | GPR0 -> s.gpr0
-       | GPR1 -> s.gpr1
-       | GPR2 -> s.gpr2
-       | GPR3 -> s.gpr3
-       | GPR4 -> s.gpr4
-       | VRSAVE -> s.vrsave
-       | SPRG3 -> s.sprg3
-     end in
-   (v,s)
-  |>
-
-    (* auto-generate *)
-let write_register reg v =
-  <| runState =
-     fun s ->
-     let s' = 
-       match reg with
-       | CR ->     <| s with cr = write_vector_subrange s.cr 32 64 v |>
-       | CR0 ->    <| s with cr = write_vector_subrange s.cr 32 35 v |>
-       | CR1 ->    <| s with cr = write_vector_subrange s.cr 36 39 v |>
-       | CTR ->    <| s with ctr = write_vector_subrange s.cr 0 64 v |>
-       | LR ->     <| s with lr = write_vector_subrange s.cr 0 64 v |>
-       | XER ->    <| s with xer = write_vector_subrange s.cr 0 64 v |>
-       | XER_SO -> <| s with xer = write_vector_subrange s.xer 32 32 v |>
-       | XER_OV -> <| s with xer = write_vector_subrange s.xer 33 33 v |>
-       | XER_CA -> <| s with xer = write_vector_subrange s.xer 34 34 v |>
-       | GPR0 ->   <| s with gpr0 = write_vector_subrange s.cr 0 64 v |>
-       | GPR1 ->   <| s with gpr1 = write_vector_subrange s.cr 0 64 v |>
-       | GPR2 ->   <| s with gpr2 = write_vector_subrange s.cr 0 64 v |>
-       | GPR3 ->   <| s with gpr3 = write_vector_subrange s.cr 0 64 v |>
-       | GPR4 ->   <| s with gpr4 = write_vector_subrange s.cr 0 64 v |>
-       | VRSAVE -> <| s with vrsave = write_vector_subrange s.vrsave 32 64 v |>
-       | SPRG3 -> <| s with sprg3 = write_vector_subrange s.vrsave 0 64 v |>
-     end in
-   ((),s')
-  |>
-
 let write_two_registers r1 r2 vec =
   let size = length_register r1 in
   let start = get_start vec in
   let vsize = length vec in
-  let r1_v = read_vector_subrange vec start ((if is_inc then size - start else start - size) - 1) in
+  let r1_v = read_vector_subrange is_inc vec start ((if is_inc then size - start else start - size) - 1) in
   let r2_v =
-    read_vector_subrange
+    read_vector_subrange is_inc
       vec (if is_inc then size - start else start - size)
       (if is_inc then vsize - start else start - vsize) in
   write_register r1 r1_v >> write_register r2 r2_v
@@ -399,15 +273,15 @@ let shift_op_vec op (((Vector bs start) as l),r) =
     match op with
      | LL (*"<<"*) ->
        let right_vec = Vector (List.replicate n Zero) 0 in
-       let left_vec = read_vector_subrange l n (if is_inc then len + start else start - len) in
+       let left_vec = read_vector_subrange is_inc l n (if is_inc then len + start else start - len) in
        vector_concat left_vec right_vec
      | RR (*">>"*) ->
-       let right_vec = read_vector_subrange l start n in
+       let right_vec = read_vector_subrange is_inc l start n in
        let left_vec = Vector (List.replicate n Zero) 0 in
        vector_concat left_vec right_vec 
      | LLL (*"<<<"*) ->
-       let left_vec = read_vector_subrange l n (if is_inc then len + start else start - len) in
-       let right_vec = read_vector_subrange l start n in
+       let left_vec = read_vector_subrange is_inc l n (if is_inc then len + start else start - len) in
+       let right_vec = read_vector_subrange is_inc l start n in
        vector_concat left_vec right_vec
      end
 
@@ -522,4 +396,3 @@ let eq_vec_vec (l,r) = eq (to_num true l, to_num true r)
 
 let neq (l,r) = bitwise_not_bit (eq (l,r))
 let neq_vec (l,r) = bitwise_not_bit (eq_vec_vec (l,r))
-

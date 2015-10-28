@@ -1,0 +1,16 @@
+open import Pervasives
+
+type bit = Zero | One | Undef
+type vector = Vector of list bit * nat
+
+let read_vector_subrange is_inc (Vector bs start) n m =
+  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
+  let (_,suffix) = List.splitAt offset bs in
+  let (subvector,_) = List.splitAt length suffix in
+  Vector subvector n
+
+let write_vector_subrange is_inc (Vector bs start) n m (Vector bs' _) =
+  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
+  let (prefix,_) = List.splitAt offset bs in
+  let (_,suffix) = List.splitAt (offset + length) bs in
+  Vector (prefix ++ (List.take length bs') ++ suffix) start
