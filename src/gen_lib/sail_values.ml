@@ -15,6 +15,11 @@ let to_bool = function
   | Vone  -> true
   | Vundef -> assert false
 
+let is_one i =
+  if eq_big_int i unit_big_int
+  then Vone
+  else Vzero
+
 let get_barray  = function
   | Vvector(a,_,_) -> a
   | Vregister(a,_,_,_) -> !a
@@ -117,8 +122,8 @@ let set_vector_subrange_vec v n m new_v =
       done;
     end
   in
-  match v with
-  | VvectorR(array,start,is_inc) ->
+  match v, new_v with
+  | VvectorR(array,start,is_inc),VvectorR(new_v,_,_) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
     walker array length offset new_v
   | _ -> ()

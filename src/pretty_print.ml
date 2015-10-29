@@ -1447,14 +1447,16 @@ let doc_exp_ocaml, doc_let_ocaml =
            let field_f = match t.t with
              | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> string "get_register_field_bit"
              | _ -> string "get_register_field_vec" in
-           parens (separate space [field_f; string reg; string_lit (string field)])
+           parens (separate space [field_f; string (String.uncapitalize reg); string_lit (string field)])
          | Alias_extract(reg,start,stop) ->
            if start = stop
-           then parens (separate space [string "bit_vector_access";string reg;doc_int start])
+           then parens (separate space [string "bit_vector_access";string (String.uncapitalize reg);doc_int start])
            else parens
-               (separate space [string "vector_subrange"; string reg; doc_int start; doc_int stop])
+               (separate space [string "vector_subrange"; string (String.uncapitalize reg); doc_int start; doc_int stop])
          | Alias_pair(reg1,reg2) ->
-           parens (separate space [string "vector_concat"; string reg1; string reg2]))
+           parens (separate space [string "vector_concat";
+                                   string (String.uncapitalize reg1);
+                                   string (String.uncapitalize reg2)]))
       | _ -> doc_id_ocaml id)
     | E_lit lit -> doc_lit_ocaml false lit
     | E_cast(typ,e) ->
@@ -1492,7 +1494,8 @@ let doc_exp_ocaml, doc_let_ocaml =
        | Base((_,t),_,_,_,_,_) ->
          match t.t with
          | Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])
-         | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])}) ->
+         | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])})
+         | Tapp("reg", [TA_typ {t =Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])}]) ->
            let call = if is_bit_vector t then (string "make_indexed_bitv") else (string "make_indexed_v") in
            let dir,dir_out = match order.order with
              | Oinc -> true,"true"
@@ -1571,7 +1574,7 @@ let doc_exp_ocaml, doc_let_ocaml =
   and doc_lexp_ocaml top_call ((LEXP_aux(lexp,(l,annot))) as le) =
     let exp = top_exp false in
     match lexp with
-    | LEXP_vector(v,e) -> parens ((string "vector_access") ^^ space ^^ (doc_lexp_ocaml false v)) ^^ dot ^^ parens (exp e)
+    | LEXP_vector(v,e) -> doc_lexp_array_ocaml le
     | LEXP_vector_range(v,e1,e2) ->
       parens ((string "vector_subrange") ^^ space ^^ (doc_lexp_ocaml false v) ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
     | LEXP_field(v,id) -> (doc_lexp_ocaml false v) ^^ dot ^^ doc_id_ocaml id
@@ -1601,9 +1604,12 @@ let doc_exp_ocaml, doc_let_ocaml =
       | E_aux(_,(_,Base((_,t),_,_,_,_,_))) ->
         (match t.t with
          | Tapp("vector", [_;_;_;(TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})}))]) |
-           Tabbrev(_,{t=Tapp("vector",[_;_;_;TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})})])}) ->
+           Tabbrev(_,{t=Tapp("vector",[_;_;_;TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})})])}) |
+           Tapp("reg", [TA_typ {t= Tapp("vector", [_;_;_;(TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})}))])}])
+           ->
            (false,true)
-         | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> (true,false)
+         | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) | Tapp("reg",[TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})})])
+           -> (true,false)
          | _ -> (false,false))
       | _ -> (false,false) in
     match lexp with
@@ -1613,7 +1619,7 @@ let doc_exp_ocaml, doc_let_ocaml =
          dot ^^ parens (exp e))
         (exp e_new_v)
     | LEXP_vector_range(v,e1,e2) ->
-      parens ((string (if is_bitv then "set_vector_subrange_bit" else "set_vector_subrange_v")) ^^ space ^^
+      parens ((string (if is_bitv then "set_vector_subrange_bit" else "set_vector_subrange_vec")) ^^ space ^^
               doc_lexp_ocaml false v ^^ space ^^ exp e1 ^^ space ^^ exp e2 ^^ space ^^ exp e_new_v)
     | LEXP_field(v,id) ->
       parens ((string (if is_bit then "set_register_field_bit" else "set_register_field_v")) ^^ space ^^
@@ -1624,7 +1630,7 @@ let doc_exp_ocaml, doc_let_ocaml =
          (match alias_info with
           | Alias_field(reg,field) ->
             parens ((if is_bit then string "set_register_field_bit" else string "set_register_field_v") ^^ space ^^
-                    string reg ^^ space ^^string_lit (string field) ^^ space ^^ exp e_new_v)
+                    string (String.uncapitalize reg) ^^ space ^^string_lit (string field) ^^ space ^^ exp e_new_v)
           | Alias_extract(reg,start,stop) ->
             if start = stop
             then
@@ -1633,7 +1639,7 @@ let doc_exp_ocaml, doc_let_ocaml =
                  dot ^^ parens (doc_int start))
                 (exp e_new_v)
             else 
-              parens ((string (if is_bitv then "set_vector_subrange_bit" else "set_vector_subrange_v")) ^^ space ^^
+              parens ((string (if is_bitv then "set_vector_subrange_bit" else "set_vector_subrange_vec")) ^^ space ^^
                       string reg ^^ space ^^ doc_int start ^^ space ^^ doc_int stop ^^ space ^^ exp e_new_v)
           | Alias_pair(reg1,reg2) ->
             parens ((string "set_two_regs") ^^ space ^^ string reg1 ^^ space ^^ string reg2 ^^ space ^^ exp e_new_v))              
@@ -2185,9 +2191,12 @@ let doc_exp_lem, doc_let_lem =
       | E_aux(_,(_,Base((_,t),_,_,_,_,_))) ->
         (match t.t with
          | Tapp("vector", [_;_;_;(TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})}))]) |
-           Tabbrev(_,{t=Tapp("vector",[_;_;_;TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})})])}) ->
-           (false,true)
-         | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> (true,false)
+           Tabbrev(_,{t=Tapp("vector",[_;_;_;TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})})])}) | 
+           Tapp("reg",[TA_typ {t = Tapp("vector", [_;_;_;(TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})}))])}])
+           ->
+            (false,true)
+         | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) | Tapp("reg",[TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})})])
+           -> (true,false)
          | _ -> (false,false))
       | _ -> (false,false) in
     match lexp with

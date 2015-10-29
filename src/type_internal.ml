@@ -467,9 +467,11 @@ let rec pow_i i n =
 let two_pow = pow_i 2
 
 let is_bit_vector t = match t.t with
-  | Tapp("vector", [_;_;_; TA_typ t]) | Tabbrev(_,{t=Tapp("vector",[_;_;_; TA_typ t])}) ->
+  | Tapp("vector", [_;_;_; TA_typ t])
+  | Tabbrev(_,{t=Tapp("vector",[_;_;_; TA_typ t])})
+  | Tapp("reg", [TA_typ {t=Tapp("vector",[_;_;_; TA_typ t])}])->
     (match t.t with
-     | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> true
+     | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) | Tapp("reg",[TA_typ {t=Tid "bit"}]) -> true
      | _ -> false)
   | _ -> false
 
@@ -2767,10 +2769,10 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       | [TA_nexp b1;TA_nexp r1;TA_ord _;TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
         let cs = [Eq(co,b2,n_zero);LtEq(co,Guarantee,mk_sub (mk_2n(r1)) n_one,r2)] in
-        (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num",l)),[e]),
+        (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "unsigned",l)),[e]),
                             (l, constrained_annot_efr t2 cs (get_cummulative_effects (get_eannot e)))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
-        eq_error l "Cannot convert a vector to an range without an order"
+        eq_error l "Cannot convert a vector to a range without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert non-bit vector into an range"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
@@ -2779,7 +2781,7 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       | [TA_nexp b1;TA_nexp r1;TA_ord _;TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
         let cs = [GtEq(co,Guarantee,b2,n_zero);LtEq(co,Guarantee,b2,mk_sub (mk_2n(r1)) n_one)] in
-        (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_num",l)),[e]),
+        (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "unsigned",l)),[e]),
                             (l, constrained_annot_efr t2 cs (get_cummulative_effects (get_eannot e)))))
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert non-bit vector into an range"

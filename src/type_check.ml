@@ -593,16 +593,18 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         | L_undef -> 
           let ef = {effect=Eset[BE_aux(BE_undef,l)]} in
           (match expect_t.t with
-            | Tapp ("vector",[TA_nexp base;TA_nexp {nexp = rise};TA_ord o;(TA_typ {t=Tid "bit"})]) 
-            | Tapp ("register",[TA_typ {t=Tapp ("vector",[TA_nexp base;TA_nexp { nexp = rise};
-                                                          TA_ord o;(TA_typ {t=Tid "bit"})])}])->
+            | Tapp ("vector",[TA_nexp base;TA_nexp rise;TA_ord o;(TA_typ {t=Tid "bit"})]) 
+            | Toptions({t = Tapp ("vector",[TA_nexp base;TA_nexp rise;TA_ord o;(TA_typ {t=Tid "bit"})])}, None) ->
               let f = match o.order with | Oinc -> "to_vec_inc_undef" | Odec -> "to_vec_dec_undef" 
                                          | _ -> (match d_env.default_o.order with
                                              | Oinc -> "to_vec_inc_undef" | Odec -> "to_vec_dec_undef"
                                              | _ -> "to_vec_inc_undef") in
-              let tannot = (l,Base(([],expect_t),External (Some f),[],ef,ef,b_env)) in
+              let _ = set_imp_param rise in
+              let internal_tannot = (l,(cons_bs_annot {t = Tapp("implicit",[TA_nexp rise])} [] b_env)) in
+              let tannot = (l,Base(([],{t = Tapp("vector",[TA_nexp base; TA_nexp rise; TA_ord o; TA_typ bit_t])}),
+                                   External (Some f),[],ef,ef,b_env)) in
               E_aux(E_app((Id_aux((Id f),l)),
-                          [(E_aux (E_internal_exp(tannot), tannot));]),tannot),[],ef
+                          [(E_aux (E_internal_exp(internal_tannot), tannot));]),tannot),[],ef
             | _ -> simp_exp e l (new_t ()),[],ef)) in
       let t',cs',_,e' = type_coerce (Expr l) d_env Require false true b_env (get_e_typ e) e expect_t in
       (e',t',t_env,cs@cs',nob,effect)
@@ -775,15 +777,15 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
           (match t_p.t with
           | Tfn(arg,ret,_,ef') -> check_parms arg lft rht
           | _ -> typ_error l ("Expected a function, found identifier " ^ i ^ " bound to type " ^ (t_to_string t))) in
-        let _ = Printf.eprintf "Looking for overloaded function %s, generic type is %s, arg_t is %s\n"
-          i (t_to_string t_p) (t_to_string arg_t) in
+        (*let _ = Printf.eprintf "Looking for overloaded function %s, generic type is %s, arg_t is %s\n"
+          i (t_to_string t_p) (t_to_string arg_t) in*)
         (match (select_overload_variant d_env true overload_return variants arg_t) with
         | [] -> 
           typ_error l ("No function found with name " ^ i ^
                           " that expects parameters " ^ (t_to_string arg_t))
         | [Base((params,t),tag,cs,ef,_,b)] ->
-          let _ = Printf.eprintf "Selected an overloaded function for %s,
-            variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in
+          (*let _ = Printf.eprintf "Selected an overloaded function for %s,
+            variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in*)
           (match t.t with
           | Tfn(arg,ret,imp,ef') ->
             (match arg.t,arg_t.t with
@@ -795,15 +797,15 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
             |_ -> raise (Reporting_basic.err_unreachable l "function no longer has tuple type"))
           | _ -> raise (Reporting_basic.err_unreachable l "overload variant does not have function"))
         | variants ->
-          let _ = Printf.eprintf "Number of variants found before looking at return value %i\n%!" 
-            (List.length variants) in
+          (*let _ = Printf.eprintf "Number of variants found before looking at return value %i\n%!" 
+            (List.length variants) in*)
           (match (select_overload_variant d_env false true variants expect_t) with
             | [] -> 
               typ_error l ("No matching function found with name " ^ i ^ " that expects parameters " ^
                               (t_to_string arg_t) ^ " returning " ^ (t_to_string expect_t))
             | [Base((params,t),tag,cs,ef,_,b)] -> 
-              let _ = Printf.eprintf "Selected an overloaded function for %s,
-            variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in
+          (*let _ = Printf.eprintf "Selected an overloaded function for %s,
+            variant with function type %s for actual type %s\n" i (t_to_string t) (t_to_string arg_t) in*)
               (match t.t with
                 | Tfn(arg,ret,imp,ef') ->
                   (match arg.t,arg_t.t with
@@ -943,7 +945,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         | (Def_val_empty,false) -> (Def_val_aux(Def_val_empty,(ld,simple_annot item_t)),true,[],pure_e)
         | (Def_val_empty,true)  -> 
           let ef = add_effect (BE_aux(BE_unspec,l)) pure_e in
-          let (de,_,_,_,_,ef_d) = check_exp envs imp_param item_t (E_aux(E_lit (L_aux(L_undef,l)), (l,NoTyp))) in
+          let de = E_aux(E_lit (L_aux(L_undef,l)), (l,simple_annot item_t)) in
           (Def_val_aux(Def_val_dec de, (l, cons_efs_annot item_t [] ef ef)),false,[],ef)
         | (Def_val_dec e,_) -> let (de,t,_,cs_d,_,ef_d) = (check_exp envs imp_param item_t e) in
           (*Check that ef_d doesn't write to memory or registers? *)
@@ -1292,6 +1294,9 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       (E_aux(E_let(lb',e),(l,simple_annot_efr t effects)),t,t_env,cs@cs',nob,effects)
     | E_assign(lexp,exp) ->
       let (lexp',t',_,t_env',tag,cs,b_env',efl,efr) = check_lexp envs imp_param true lexp in
+      let t' = match t'.t with | Tapp("reg",[TA_typ t]) | Tapp("register",[TA_typ t])
+                               | Tabbrev(_,{t=Tapp("register",[TA_typ t])}) -> t
+                               | _ -> t' in
       let (exp',t'',_,cs',_,efr') = check_exp envs imp_param t' exp in
       let (t',c') = type_consistent (Expr l) d_env Require false unit_t expect_t in
       let effects = union_effects efl (union_effects efr efr') in
@@ -1843,8 +1848,8 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   let check t_env tp_env imp_param =
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,_))) ->
-        let _ = Printf.eprintf "checking function %s : %s -> %s\n" 
-          (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in
+        (*let _ = Printf.eprintf "checking function %s : %s -> %s\n" 
+          (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
         let (pat',t_env',cs_p,b_env',t') = check_pattern (Env(d_env,t_env,b_env,tp_env)) Emp_local param_t pat in
         let _, _ = type_consistent (Patt l) d_env Require false param_t t' in
         let exp',_,_,cs_e,_,ef = 
