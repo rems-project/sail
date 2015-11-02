@@ -1388,9 +1388,9 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
              (LEXP_aux(lexp,(l,(Base(([],t),External (Some i),cs_o,ef,pure_e,nob)))),u,false,
               Envmap.empty,External (Some i),[],nob,ef,ef)
            | Tapp("reg",[TA_typ u]),_ ->
-             (LEXP_aux(lexp,(l,(Base(([],t),Emp_set,cs_o,ef,pure_e,b)))),u,false,Envmap.empty,Emp_set,[],nob,ef,ef)
+             (LEXP_aux(lexp,(l,(Base(([],t),Emp_set,cs_o,ef,ef,b)))),u,false,Envmap.empty,Emp_set,[],nob,ef,ef)
            | Tapp("vector",_),false ->
-             (LEXP_aux(lexp,(l,(Base(([],t),tag,cs_o,pure_e,ef,b)))),t,true,Envmap.empty,Emp_set,[],nob,ef,ef)
+             (LEXP_aux(lexp,(l,(Base(([],t),tag,cs_o,ef,ef,b)))),t,true,Envmap.empty,Emp_set,[],nob,ef,ef)
            | (Tfn _ ,_) ->
              (match tag with 
               | External _ | Spec | Emp_global -> 
