@@ -1,6 +1,7 @@
 open Big_int
 open Ast
 open Type_internal
+open Spec_analysis
 type typ = Type_internal.t
 type 'a exp = 'a Ast.exp
 type 'a emap = 'a Envmap.t
