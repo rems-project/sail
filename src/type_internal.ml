@@ -1154,7 +1154,7 @@ let equate_o (o_box : order) (o : order) : unit =
        (match o_box.order with
        | Ouvar(u) ->
          u.osubst <- Some(o)
-       | _ -> assert false)
+       | _ -> o.order <- o_box.order)
      | _ ->
        o_box.order <- o.order)
 let equate_e (e_box : effect) (e : effect) : unit =

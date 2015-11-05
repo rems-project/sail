@@ -10,6 +10,10 @@ val zero : big_int
 val one  : big_int
 val two  : big_int
 
+(*Trinary replacement for boolean, as sometimes we do want to distinguish we just don't know from a certain yes or no*)
+type triple = Yes | No | Maybe
+val triple_negate : triple -> triple
+
 type kind = { mutable k : k_aux }
 and k_aux =
   | K_Typ
