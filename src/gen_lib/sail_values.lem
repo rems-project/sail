@@ -4,12 +4,12 @@ open import Vector
 open import Arch
 
 let to_bool = function
-  | Zero -> false
-  | One  -> true
-(*  | Undef -> assert false *)
+  | B0 -> false
+  | B1  -> true
+(*  | BU -> assert false *)
   end
 
-let get_blist (Vector bs _) = bs
+let get_elements (Vector elements _) = elements
 let get_start (Vector _ s) = s
 let length (Vector bs _) = length bs
 
@@ -18,7 +18,6 @@ let vector_access (Vector bs start) n =
   let (Just b) = if is_inc then List.index bs (n - start)
                  else List.index bs (start - n) in
   b
-
 
 let write_two_registers r1 r2 vec =
   let size = length_register r1 in
@@ -39,30 +38,30 @@ let rec replace bs ((n : nat),b') = match (n,bs) with
   end
 
 let make_indexed_vector entries default start length =
-  let default = match default with Nothing -> Undef | Just v -> v end in
+  let default = match default with Nothing -> BU | Just v -> v end in
   Vector (List.foldl replace (replicate length default) entries) start
 
 let vector_concat (Vector bs start) (Vector bs' _) = Vector(bs ++ bs') start
 
-let has_undef (Vector bs _) = List.any (function Undef -> true | _ -> false end) bs
+let has_undef (Vector bs _) = List.any (function BU -> true | _ -> false end) bs
 
 let most_significant (Vector bs _) =
   let (b :: _) = bs in b
 
 let bitwise_not_bit = function
-  | One -> Zero
-  | Zero -> One
-  | _ -> Undef
+  | B1 -> B0
+  | B0 -> B1
+  | _ -> BU
   end
 
 let bitwise_not (Vector bs start) =
   Vector (List.map bitwise_not_bit bs) start
 
-let bool_to_bit b = if b then One else Zero
+let bool_to_bit b = if b then B1 else B0
 
 let bitwise_binop_bit op = function
-  | (Undef,_) -> Undef (*Do we want to do this or to respect | of One and & of Zero rules?*)
-  | (_,Undef) -> Undef (*Do we want to do this or to respect | of One and & of Zero rules?*)
+  | (BU,_) -> BU (*Do we want to do this or to respect | of B1 and & of B0 rules?*)
+  | (_,BU) -> BU (*Do we want to do this or to respect | of B1 and & of B0 rules?*)
   | (x,y) -> bool_to_bit (op (to_bool x) (to_bool y))
   end
 
@@ -82,13 +81,13 @@ let unsigned (Vector bs _ as v) : integer =
   match has_undef v with
   | true ->
      fst (List.foldl
-            (fun (acc,exp) b -> (acc + (if b = One then integerPow 2 exp else 0),exp +1)) (0,0) bs)
+            (fun (acc,exp) b -> (acc + (if b = B1 then integerPow 2 exp else 0),exp +1)) (0,0) bs)
   end
 
 let signed v =
   match most_significant v with
-  | One -> 0 - (1 + (unsigned (bitwise_not v)))
-  | Zero -> unsigned v
+  | B1 -> 0 - (1 + (unsigned (bitwise_not v)))
+  | B0 -> unsigned v
   end
 
 let to_num sign = if sign then signed else unsigned
@@ -126,21 +125,21 @@ let rec divide_by_2 bs i (n : integer) =
   then bs
   else
     if (n mod 2 = 1)
-    then divide_by_2 (replace bs (i,One)) (i - 1) (n / 2)
+    then divide_by_2 (replace bs (i,B1)) (i - 1) (n / 2)
     else divide_by_2 bs (i-1) (n div 2)
 
 let rec add_one_bit bs co i =
   if i < 0 then bs
   else match (List.index bs i,co) with
-    | (Just Zero,false) -> replace bs (i,One)
-    | (Just Zero,true)  -> add_one_bit (replace bs (i,One)) true (i-1)
-    | (Just One, false) -> add_one_bit (replace bs (i,Zero)) true (i-1)
-    | (Just One, true)  -> add_one_bit bs true (i-1)
+    | (Just B0,false) -> replace bs (i,B1)
+    | (Just B0,true)  -> add_one_bit (replace bs (i,B1)) true (i-1)
+    | (Just B1, false) -> add_one_bit (replace bs (i,B0)) true (i-1)
+    | (Just B1, true)  -> add_one_bit bs true (i-1)
    (*    | Vundef,_ -> assert false*) 
   end
 
 let to_vec len (n : integer) =
-  let bs = List.replicate len Zero in
+  let bs = List.replicate len B0 in
   let start = if is_inc then 0 else len-1 in
   if n = 0 then Vector bs start
   else if n > 0
@@ -152,7 +151,7 @@ let to_vec len (n : integer) =
 
 
 let to_vec_undef len =
-  Vector (replicate len Undef) (if is_inc then 0 else len-1)
+  Vector (replicate len BU) (if is_inc then 0 else len-1)
 
 let add = uncurry integerAdd
 let add_signed = uncurry integerAdd
@@ -212,7 +211,7 @@ let add_vec_vec_range_signed = arith_op_vec_vec_range integerAdd true
 
 let arith_op_vec_bit op sign (size : nat) (l,r) =
   let l' = to_num sign l in
-  let n = op l' match r with | One -> (1 : integer) | _ -> 0 end in
+  let n = op l' match r with | B1 -> (1 : integer) | _ -> 0 end in
   to_vec (length l * size) n
     
 let add_vec_bit = arith_op_vec_bit integerAdd false 1
@@ -231,7 +230,7 @@ let rec arith_op_overflow_vec (op : integer -> integer -> integer) sign size (l,
   let overflow =
     if n <= get_max_representable_in sign len &&
          n >= get_min_representable_in sign len
-    then Zero else One in
+    then B0 else B1 in
   let c_out = most_significant one_more_size_u in
   (correct_size_num,overflow,c_out)
 
@@ -247,8 +246,8 @@ let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (siz
   let l' = to_num sign l in
   let l_u = to_num false l in
   let (n,nu,changed) = match r_bit with
-    | One -> (op l' 1, op l_u 1, true)
-    | Zero -> (l',l_u,false)
+    | B1 -> (op l' 1, op l_u 1, true)
+    | B0 -> (l',l_u,false)
     end in
 (*    | _ -> assert false *)
   let correct_size_num = to_vec act_size n in
@@ -257,8 +256,8 @@ let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (siz
     if changed 
     then
       if n <= get_max_representable_in sign act_size && n >= get_min_representable_in sign act_size
-      then Zero else One 
-    else One in
+      then B0 else B1 
+    else B1 in
   (correct_size_num,overflow,most_significant one_larger)
 
 let add_overflow_vec_bit_signed = arith_op_overflow_vec_bit integerAdd true 1
@@ -272,12 +271,12 @@ let shift_op_vec op (((Vector bs start) as l),r) =
   let n = r in
     match op with
      | LL (*"<<"*) ->
-       let right_vec = Vector (List.replicate n Zero) 0 in
+       let right_vec = Vector (List.replicate n B0) 0 in
        let left_vec = read_vector_subrange is_inc l n (if is_inc then len + start else start - len) in
        vector_concat left_vec right_vec
      | RR (*">>"*) ->
        let right_vec = read_vector_subrange is_inc l start n in
-       let left_vec = Vector (List.replicate n Zero) 0 in
+       let left_vec = Vector (List.replicate n B0) 0 in
        vector_concat left_vec right_vec 
      | LLL (*"<<<"*) ->
        let left_vec = read_vector_subrange is_inc l n (if is_inc then len + start else start - len) in
@@ -307,7 +306,7 @@ let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size (((Vecto
     end in
   if representable 
   then to_vec act_size n'
-  else Vector (List.replicate act_size Undef) start
+  else Vector (List.replicate act_size BU) start
 
 let mod_vec = arith_op_vec_no0 integerMod false 1
 let quot_vec = arith_op_vec_no0 integerDiv false 1
@@ -331,9 +330,9 @@ let arith_op_overflow_no0_vec op sign size (((Vector _ start) as l),r) =
     if representable then
       (to_vec act_size n',to_vec (act_size + 1) n_u')
     else
-      (Vector (List.replicate act_size Undef) start,
-       Vector (List.replicate (act_size + 1) Undef) start) in
-  let overflow = if representable then Zero else One in
+      (Vector (List.replicate act_size BU) start,
+       Vector (List.replicate (act_size + 1) BU) start) in
+  let overflow = if representable then B0 else B1 in
   (correct_size_num,overflow,most_significant one_more)
 
 let quot_overflow_vec = arith_op_overflow_no0_vec integerDiv false 1

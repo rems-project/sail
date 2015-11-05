@@ -1,3 +1,5 @@
+open import Pervasives
+
 type M 's 'a  = <| runState : 's -> ('a * 's) |>
 
 val return : forall 's 'a. 'a -> M 's 'a
@@ -8,3 +10,19 @@ let bind m f = <| runState = (fun s -> let (a,s) = m.runState s in (f a).runStat
 
 let (>>=) = bind
 let (>>) m n = m >>= fun _ -> n
+
+
+val foreach_inc : forall 's 'vars. (nat * nat * nat) -> (nat -> 'vars -> M 's 'vars) ->
+                  'vars -> M 's 'vars
+let rec foreach_inc (i,stop,by) body vars = 
+  if i <= stop
+  then (body i vars >>= fun vars -> foreach_inc (i + by,stop,by) body vars)
+  else return vars
+
+
+val foreach_dec : forall 's 'vars. (nat * nat * nat) -> (nat -> 'vars -> M 's 'vars) ->
+                  'vars -> M 's 'vars
+let rec foreach_dec (i,stop,by) body vars = 
+  if i >= stop
+  then (body i vars >>= fun vars -> foreach_dec (i - by,stop,by) body vars)
+  else return vars
