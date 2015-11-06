@@ -999,8 +999,8 @@ let remove_blocks_exp_alg =
     E_aux (E_let (LB_aux (LB_val_implicit (P_aux (P_wild,annot_pat),v),annot_lb),body),annot_let) in
 
     let rec f = function
+      | [] -> E_aux (E_lit (L_aux (L_unit,Unknown)), (Unknown,simple_annot ({t = Tid "unit"})))
       | [e] -> e  (* check with Kathy if that annotation is fine *)
-      | e -> E_aux (E_lit (L_aux (L_unit,Unknown)), (Unknown,simple_annot ({t = Tid "unit"})))
       | e :: es -> letbind_wild e (f es) in
 
     let e_aux = function
