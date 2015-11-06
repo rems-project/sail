@@ -13,11 +13,14 @@ let get_elements (Vector elements _) = elements
 let get_start (Vector _ s) = s
 let length (Vector bs _) = length bs
 
+let rec nth n xs = match (n,l) with
+  | (0,x :: xs) -> x
+  | (n + 1,x :: xs) -> nth n xs
+end
 
 let vector_access (Vector bs start) n =
-  let (Just b) = if is_inc then List.index bs (n - start)
-                 else List.index bs (start - n) in
-  b
+  if is_inc then nth bs (n - start) else nth bs (start - n)
+
 
 let write_two_registers r1 r2 vec =
   let size = length_register r1 in
@@ -130,11 +133,11 @@ let rec divide_by_2 bs i (n : integer) =
 
 let rec add_one_bit bs co i =
   if i < 0 then bs
-  else match (List.index bs i,co) with
-    | (Just B0,false) -> replace bs (i,B1)
-    | (Just B0,true)  -> add_one_bit (replace bs (i,B1)) true (i-1)
-    | (Just B1, false) -> add_one_bit (replace bs (i,B0)) true (i-1)
-    | (Just B1, true)  -> add_one_bit bs true (i-1)
+  else match (nth bs i,co) with
+    | (B0,false) -> replace bs (i,B1)
+    | (B0,true)  -> add_one_bit (replace bs (i,B1)) true (i-1)
+    | (B1,false) -> add_one_bit (replace bs (i,B0)) true (i-1)
+    | (B1,true)  -> add_one_bit bs true (i-1)
    (*    | Vundef,_ -> assert false*) 
   end
 

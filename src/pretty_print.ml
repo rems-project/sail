@@ -1940,12 +1940,12 @@ let doc_exp_lem, doc_let_lem =
     | E_assign((LEXP_aux(le_act,tannot) as le),e) ->
       (match annot with
        | Base(_,(Emp_local | Emp_set),_,_,_,_) ->
-         (match le_act with
+          (match le_act with
           | LEXP_id _ | LEXP_cast _ ->
             (*Setting local variable fully *)
-            doc_op coloneq (doc_lexp_lem true le) (exp e)
+            doc_op coloneq (doc_lexp_lem true le) (exp e) 
           | LEXP_vector _ ->
-            doc_op (string "<-") (doc_lexp_array_lem le) (exp e)
+             separate space [string "write_register";parens (doc_lexp_array_lem le);exp e]
           | LEXP_vector_range _ ->
             doc_lexp_rwrite le e)
        | _ ->
@@ -2158,14 +2158,9 @@ let doc_exp_lem, doc_let_lem =
     match lexp with
     | LEXP_vector(v,e) -> doc_lexp_array_lem le
     | LEXP_vector_range(v,e1,e2) ->
-      parens ((string "vector_subrange") ^^ space ^^ (doc_lexp_lem false v) ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
+      parens (string "vector_subrange" ^^ space ^^ (doc_lexp_lem false v) ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
     | LEXP_field(v,id) -> (doc_lexp_lem false v) ^^ dot ^^ doc_id_lem id
-    | LEXP_id id | LEXP_cast(_,id) ->
-      let name = doc_id_lem id in
-      match annot,top_call with
-      | Base((_,{t=Tapp("reg",_)}),Emp_set,_,_,_,_),false | Base((_,{t=Tabbrev(_,{t=Tapp("reg",_)})}),Emp_set,_,_,_,_),false ->
-        string "!" ^^ name
-      | _ -> name
+    | LEXP_id id | LEXP_cast(_,id) -> doc_id_lem id
                            
   and doc_lexp_array_lem ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
     | LEXP_vector(v,e) ->
@@ -2175,12 +2170,15 @@ let doc_exp_lem, doc_let_lem =
          (match t_act.t with
           | Tid "bit"
           | Tabbrev(_,{t=Tid "bit"}) ->
-             parens (string "get_elements" ^^ space ^^ doc_lexp_lem false v) ^^ dot ^^
-               parens (top_exp e)
-          | _ -> parens (string "get_elements" ^^ space ^^ doc_lexp_lem false v) ^^ dot ^^
-                   parens (top_exp e))
+             separate space [string "nth";
+                             parens (string "get_elements" ^^ space ^^ doc_lexp_lem false v);
+                             parens (top_exp e)]
+          | _ ->
+             separate space [string "nth";
+                             parens (string "get_elements" ^^ space ^^ doc_lexp_lem false v);
+                             parens (top_exp e)]
        | _ ->
-         parens ((string "get_varray") ^^ space ^^ doc_lexp_lem false v) ^^ dot ^^ parens (top_exp e))
+         parens ((string "get_elements") ^^ space ^^ doc_lexp_lem false v) ^^ dot ^^ parens (top_exp e)))
     | _ -> empty
 
   and doc_lexp_rwrite ((LEXP_aux(lexp,(l,annot))) as le) e_new_v =
@@ -2199,12 +2197,12 @@ let doc_exp_lem, doc_let_lem =
       | _ -> (false,false) in
     match lexp with
     | LEXP_vector(v,e) ->
-      doc_op (string "<-")
+      doc_op (string "write_register")
         (group (parens (string "get_elements" ^^ space ^^ doc_lexp_lem false v)) ^^
            dot ^^ parens (exp e))
         (exp e_new_v)
     | LEXP_vector_range(v,e1,e2) ->
-      parens (string "write_vector_subrange" ^^ space ^^
+      parens (string "write_register_subrange" ^^ space ^^
                 doc_lexp_lem false v ^^ space ^^ exp e1 ^^ space ^^ exp e2 ^^ space ^^ exp e_new_v)
     | LEXP_field(v,id) ->
       parens (string "write_register" ^^ space ^^
@@ -2219,7 +2217,7 @@ let doc_exp_lem, doc_let_lem =
           | Alias_extract(reg,start,stop) ->
             if start = stop
             then
-              doc_op (string "<-")
+              doc_op (string "write_register")
                 (group (parens (string "get_elements" ^^ space ^^ string reg)) ^^
                  dot ^^ parens (doc_int start))
                 (exp e_new_v)
@@ -2322,7 +2320,14 @@ let doc_def_lem def = match def with
 
 
 
-let reg_decls defs = 
+let reg_decls (Defs defs) = 
+
+  let dirpp =
+    let b = match Spec_analysis.default_order (Defs defs) with
+      | {order = Oinc} -> "true"
+      | {order = Odec} -> "false"
+      | {order = _} -> failwith "Can't deal with variable order" in
+    separate space [string "let";string "is_inc";equals;string "true"] in
 
   let (regtyps,typedregs,simpleregs,defs) =
     List.fold_left
@@ -2341,8 +2346,6 @@ let reg_decls defs =
          Nexp_aux (Nexp_constant 0,Unknown),
          Nexp_aux (Nexp_constant 63,Unknown),
          name) in
-
-  let dirpp = separate space [string "let";string "is_inc";equals;string "true"] in
 
   let reg_decls =
     (List.map default simpleregs) @
@@ -2489,8 +2492,8 @@ let reg_decls defs =
   (separate (hardline ^^ hardline) [dirpp;regspp;statepp;lengthpp;read_register_pp;write_register_pp],defs)
 
 
-let doc_defs_lem (Defs(defs)) =
-  let (decls,defs) = reg_decls defs in
+let doc_defs_lem (Defs defs) =
+  let (decls,defs) = reg_decls (Defs defs) in
   (decls,separate_map empty doc_def_lem defs)
 
 
