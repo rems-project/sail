@@ -13,15 +13,7 @@ let get_elements (Vector elements _) = elements
 let get_start (Vector _ s) = s
 let length (Vector bs _) = length bs
 
-let rec nth n xs = match (n,l) with
-  | (0,x :: xs) -> x
-  | (n + 1,x :: xs) -> nth n xs
-end
-
-let vector_access (Vector bs start) n =
-  if is_inc then nth bs (n - start) else nth bs (start - n)
-
-
+(*
 let write_two_registers r1 r2 vec =
   let size = length_register r1 in
   let start = get_start vec in
@@ -32,7 +24,7 @@ let write_two_registers r1 r2 vec =
       vec (if is_inc then size - start else start - size)
       (if is_inc then vsize - start else start - vsize) in
   write_register r1 r1_v >> write_register r2 r2_v
-  
+ *)
 
 let rec replace bs ((n : nat),b') = match (n,bs) with
   | (_, []) -> []
@@ -141,7 +133,7 @@ let rec add_one_bit bs co i =
    (*    | Vundef,_ -> assert false*) 
   end
 
-let to_vec len (n : integer) =
+let to_vec (len,(n : integer)) =
   let bs = List.replicate len B0 in
   let start = if is_inc then 0 else len-1 in
   if n = 0 then Vector bs start
@@ -152,6 +144,8 @@ let to_vec len (n : integer) =
     let (Vector bs start) = bitwise_not (Vector abs_bs start) in
     Vector (add_one_bit bs false (len-1)) start
 
+let to_vec_inc = to_vec
+let to_vec_dec = to_vec
 
 let to_vec_undef len =
   Vector (replicate len BU) (if is_inc then 0 else len-1)
@@ -167,7 +161,7 @@ let power = uncurry integerPow
 let arith_op_vec op sign size (l,r) =
   let (l',r') = (to_num sign l, to_num sign r) in
   let n = op  l' r' in
-  to_vec (size * (length l)) n
+  to_vec (size * (length l),n)
 
 let add_vec = arith_op_vec integerAdd false 1
 let add_vec_signed = arith_op_vec integerAdd true 1
@@ -176,7 +170,7 @@ let multiply_vec = arith_op_vec integerMult false 2
 let multiply_vec_signed = arith_op_vec integerMult true 2
 
 let arith_op_vec_range op sign size (l,r) =
-  arith_op_vec op sign size (l, to_vec (length l) r)
+  arith_op_vec op sign size (l, to_vec (length l,r))
 
 let add_vec_range = arith_op_vec_range integerAdd false 1
 let add_vec_range_signed = arith_op_vec_range integerAdd true 1
@@ -185,7 +179,7 @@ let mult_vec_range = arith_op_vec_range integerMult false 2
 let mult_vec_range_signed = arith_op_vec_range integerMult true 2
 
 let arith_op_range_vec op sign size (l,r) =
-  arith_op_vec op sign size (to_vec (length r) l, r)
+  arith_op_vec op sign size (to_vec (length r, l), r)
 
 let add_range_vec = arith_op_range_vec integerAdd false 1
 let add_range_vec_signed = arith_op_range_vec integerAdd true 1
@@ -215,7 +209,7 @@ let add_vec_vec_range_signed = arith_op_vec_vec_range integerAdd true
 let arith_op_vec_bit op sign (size : nat) (l,r) =
   let l' = to_num sign l in
   let n = op l' match r with | B1 -> (1 : integer) | _ -> 0 end in
-  to_vec (length l * size) n
+  to_vec (length l * size,n)
     
 let add_vec_bit = arith_op_vec_bit integerAdd false 1
 let add_vec_bit_signed = arith_op_vec_bit integerAdd true 1
@@ -228,8 +222,8 @@ let rec arith_op_overflow_vec (op : integer -> integer -> integer) sign size (l,
   let (l_unsign,r_unsign) = (to_num false l,to_num false r) in
   let n = op l_sign r_sign in
   let n_unsign = op l_unsign r_unsign in
-  let correct_size_num = to_vec act_size n in
-  let one_more_size_u = to_vec (act_size + 1) n_unsign in
+  let correct_size_num = to_vec (act_size,n) in
+  let one_more_size_u = to_vec (act_size + 1,n_unsign) in
   let overflow =
     if n <= get_max_representable_in sign len &&
          n >= get_min_representable_in sign len
@@ -253,8 +247,8 @@ let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (siz
     | B0 -> (l',l_u,false)
     end in
 (*    | _ -> assert false *)
-  let correct_size_num = to_vec act_size n in
-  let one_larger = to_vec (act_size + 1) nu in
+  let correct_size_num = to_vec (act_size,n) in
+  let one_larger = to_vec (act_size + 1,nu) in
   let overflow =
     if changed 
     then
@@ -308,7 +302,7 @@ let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size (((Vecto
     | _ -> (false,0)
     end in
   if representable 
-  then to_vec act_size n'
+  then to_vec (act_size,n')
   else Vector (List.replicate act_size BU) start
 
 let mod_vec = arith_op_vec_no0 integerMod false 1
@@ -331,7 +325,7 @@ let arith_op_overflow_no0_vec op sign size (((Vector _ start) as l),r) =
     end in
   let (correct_size_num,one_more) = 
     if representable then
-      (to_vec act_size n',to_vec (act_size + 1) n_u')
+      (to_vec (act_size,n'),to_vec (act_size + 1,n_u'))
     else
       (Vector (List.replicate act_size BU) start,
        Vector (List.replicate (act_size + 1) BU) start) in
@@ -342,7 +336,7 @@ let quot_overflow_vec = arith_op_overflow_no0_vec integerDiv false 1
 let quot_overflow_vec_signed = arith_op_overflow_no0_vec integerDiv true 1
 
 let arith_op_vec_range_no0 op sign size (l,r) =
-  arith_op_vec_no0 op sign size (l,to_vec (length l) r)
+  arith_op_vec_no0 op sign size (l,to_vec (length l,r))
 
 let mod_vec_range = arith_op_vec_range_no0 integerMod false 1
 

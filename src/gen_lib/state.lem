@@ -1,12 +1,12 @@
 open import Pervasives
 
-type M 's 'a  = <| runState : 's -> ('a * 's) |>
+type M 's 'a = 's -> ('a * 's)
 
 val return : forall 's 'a. 'a -> M 's 'a
-let return a = <| runState = (fun s -> (a,s)) |>
+let return a = fun s -> (a,s)
 
 val bind : forall 's 'a 'b. M 's 'a -> ('a -> M 's 'b) -> M 's 'b
-let bind m f = <| runState = (fun s -> let (a,s) = m.runState s in (f a).runState s) |>
+let bind m f s = let (a,s') = m s in f a s'
 
 let (>>=) = bind
 let (>>) m n = m >>= fun _ -> n

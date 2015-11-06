@@ -1,8 +1,15 @@
 open import Pervasives
 
 type bit = B0 | B1 | BU
-type vector = Vector of list bit * nat
+type vector 'a = Vector of list 'a * nat
 
+let rec nth xs (n : nat) = match (n,xs) with
+  | (0,x :: xs) -> x
+  | (n + 1,x :: xs) -> nth xs n
+end
+
+let vector_access is_inc (Vector bs start) n =
+  if is_inc then nth bs (n - start) else nth bs (start - n)
 
 let read_vector_subrange is_inc (Vector bs start) n m =
   let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
@@ -15,5 +22,8 @@ let write_vector_subrange is_inc (Vector bs start) n m (Vector bs' _) =
   let (prefix,_) = List.splitAt offset bs in
   let (_,suffix) = List.splitAt (offset + length) bs in
   Vector (prefix ++ (List.take length bs') ++ suffix) start
+
+let write_vector_bit is_inc v n (Vector [b] 0) =
+  write_vector_subrange is_inc v n n b
 
 let hd (x :: xs) = x
