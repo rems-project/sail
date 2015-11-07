@@ -987,6 +987,17 @@ let effectful_effs {effect = Eset effs} =
 let effectful eaux =
   effectful_effs (geteffs eaux)
 
+let updates_vars_effs {effect = Eset effs} =
+  List.exists
+    (fun (BE_aux (be,_)) ->
+     match be with
+     | BE_lset -> true
+     | _ -> false
+    ) effs
+
+let updates_vars eaux =
+  updates_vars_effs (geteffs eaux)
+
 let eff_union e1 e2 = union_effects (geteffs e1) (geteffs e2)
 
 let remove_blocks_exp_alg =
@@ -1010,7 +1021,6 @@ let remove_blocks_exp_alg =
     { id_exp_alg with e_aux = e_aux }
 
 
-
 let fresh_id annot =
   let current = fresh_name () in
   let id = Id_aux (Id ("__w" ^ string_of_int current), Parse_ast.Unknown) in
@@ -1019,21 +1029,35 @@ let fresh_id annot =
 
 let letbind (v : 'a exp) (body : 'a exp -> 'a exp) : 'a exp =
   (* body is a function : E_id variable -> actual body *)
-  let (E_aux (_,annot)) = v in
-  let ((E_aux (E_id id,_)) as e_id) = fresh_id annot in
-  let body = body e_id in
-  
-  let annot_pat = (Parse_ast.Unknown,simple_annot (gettype v)) in
-  let annot_lb = annot_pat in
-  let annot_let = (Parse_ast.Unknown,simple_annot_efr (gettype body) (eff_union v body)) in
-  let pat = P_aux (P_id id,annot_pat) in
-  
-  if effectful v
-  then E_aux (E_internal_plet (pat,v,body),annot_let)
-  else E_aux (E_let (LB_aux (LB_val_implicit (pat,v),annot_lb),body),annot_let)
+  match gettype v with
+  | {t = Tid "unit"} ->
+     let (E_aux (_,annot)) = v in
+     let e = E_aux (E_lit (L_aux (L_unit,Unknown)),(Unknown,simple_annot unit_t))  in
+     let body = body e in
+     let annot_pat = (Parse_ast.Unknown,simple_annot unit_t) in
+     let annot_lb = annot_pat in
+     let annot_let = (Parse_ast.Unknown,simple_annot_efr (gettype body) (eff_union v body)) in
+     let pat = P_aux (P_wild,annot_pat) in
+     
+     if effectful v
+     then E_aux (E_internal_plet (pat,v,body),annot_let)
+     else E_aux (E_let (LB_aux (LB_val_implicit (pat,v),annot_lb),body),annot_let)
+  | _ -> 
+     let (E_aux (_,annot)) = v in
+     let ((E_aux (E_id id,_)) as e_id) = fresh_id annot in
+     let body = body e_id in
+     
+     let annot_pat = (Parse_ast.Unknown,simple_annot (gettype v)) in
+     let annot_lb = annot_pat in
+     let annot_let = (Parse_ast.Unknown,simple_annot_efr (gettype body) (eff_union v body)) in
+     let pat = P_aux (P_id id,annot_pat) in
+     
+     if effectful v
+     then E_aux (E_internal_plet (pat,v,body),annot_let)
+     else E_aux (E_let (LB_aux (LB_val_implicit (pat,v),annot_lb),body),annot_let)
 
 let rec value ((E_aux (exp_aux,_)) as exp) =
-  not (effectful exp) &&
+  not (effectful exp) && not (updates_vars exp) &&
     match exp_aux with
     | E_id _
     | E_lit _ -> true
@@ -1058,7 +1082,7 @@ let rec n_exp_name (exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
   n_exp exp (fun exp -> if value exp then k exp else letbind exp k)
 
 and n_exp_pure (exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
-  n_exp exp (fun exp -> if not (effectful exp) then k exp else letbind exp k)
+  n_exp exp (fun exp -> if not (effectful exp || updates_vars exp) then k exp else letbind exp k)
            
 and n_exp_nameL (exps : 'a exp list) (k : 'a exp list -> 'a exp) : 'a exp =
   mapCont n_exp_name exps k
@@ -1124,7 +1148,10 @@ and n_lexp (lexp : 'a lexp) (k : 'a lexp -> 'a exp) : 'a exp =
             
 and n_exp_term (new_return : bool) (exp : 'a exp) : 'a exp =
   let (E_aux (_,annot)) = exp in
-  let exp = if new_return then E_aux (E_internal_return exp,annot) else exp in
+  let exp =
+    if new_return
+    then E_aux (E_internal_return exp,(Unknown,simple_annot_efr (gettype exp) (geteffs exp)))
+    else exp in
   (* changed this from n_exp to n_exp_name so that when we return updated variables 
    * from a for-loop, for example, we can just add those into the returned tuple and
    * don't need to a-normalise again *)
@@ -1144,7 +1171,7 @@ and n_exp (exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
     E_aux (exp_aux,only_local_eff annot) in
   
   match exp_aux with
-  | E_block _ -> failwith "E_block should have been removed till now"
+  | E_block es -> failwith "E_block should have been removed till now"
   | E_nondet _ -> failwith "E_nondet not supported"
   | E_id id -> k exp (* if value exp then return exp else letbind exp *)
   | E_lit _ -> k exp
@@ -1275,6 +1302,10 @@ let rewrite_defs_a_normalise =
     ; rewrite_defs = rewrite_defs_base
     }
 
+(* Now all expressions have no blocks anymore, any term is a sequence of let-expressions,
+ * internal let-expressions, or internal plet-expressions ended by a term that does not
+ * access memory or registers and does not update variables *)
+
 let dedup eq = List.fold_left (fun acc e -> if List.exists (eq e) acc then acc else e :: acc) []
 
 let eqidtyp (id1,_) (id2,_) =
@@ -1355,8 +1386,6 @@ let find_updated_vars exp =
       } exp in
   dedup eqidtyp names
 
-
-
 let swaptyp t (l,(Base ((t_params,_),tag,nexps,eff,effsum,bounds))) = 
   (l,Base ((t_params,t),tag,nexps,eff,effsum,bounds))
 
@@ -1378,17 +1407,22 @@ let mktup_pat es =
     P_aux (P_tup pats,(Parse_ast.Unknown,simple_annot {t = Ttup typs}))
 
 
-let rec rewrite_for_if_case ((E_aux (expaux,annot)) as exp) =
+let rec rewrite_var_updates ((E_aux (expaux,annot)) as exp) =
 
-  let rec add_vars ((E_aux (expaux,annot)) as exp) vars =
-    let rewrap expaux = E_aux (expaux,annot) in
+  let rec add_vars (*overwrite*) ((E_aux (expaux,annot)) as exp) vars =
     match expaux with
-    | E_let (lb,exp) -> rewrap (E_let (lb,add_vars exp vars))
-    | E_internal_let (lexp,exp1,exp2) -> rewrap (E_internal_let (lexp,exp1,add_vars exp2 vars))
-    | E_internal_plet (pat,exp1,exp2) -> rewrap (E_internal_plet (pat,exp1,add_vars exp2 vars))
+    | E_let (lb,exp) ->
+       let exp = add_vars (*overwrite*) exp vars in
+       E_aux (E_let (lb,exp),swaptyp (gettype exp) annot)
+    | E_internal_let (lexp,exp1,exp2) ->
+       let exp2 = add_vars (*overwrite*) exp2 vars in
+       E_aux (E_internal_let (lexp,exp1,exp2), swaptyp (gettype exp2) annot)
+    | E_internal_plet (pat,exp1,exp2) ->
+       let exp2 = add_vars (*overwrite*) exp2 vars in
+       E_aux (E_internal_plet (pat,exp1,exp2), swaptyp (gettype exp2) annot)
     | E_internal_return exp2 ->
-       E_aux (E_internal_return (add_vars exp2 vars),
-              swaptyp {t = Ttup [gettype exp;gettype vars]} annot)
+       let exp2 = add_vars (*overwrite*) exp2 vars in
+       E_aux (E_internal_return exp2,swaptyp (gettype exp2) annot)
     | _ ->
        (* after a-normalisation this will be pure: 
         * if the whole body of the function/if-expression/case-expression/for-loop was 
@@ -1397,30 +1431,54 @@ let rec rewrite_for_if_case ((E_aux (expaux,annot)) as exp) =
         * value must be pure
         *)
        let () = assert (not (effectful exp)) in
-       E_aux (E_tuple [exp;vars],swaptyp {t = Ttup [gettype exp;gettype vars]} annot)in
+(*       if overwrite then
+(*         let () = match expaux with
+           | E_id _ when gettype exp = {t = Tid "unit"} -> ()
+           | _ -> failwith "nono" in  *)
+         vars
+       else*)
+         E_aux (E_tuple [exp;vars],swaptyp {t = Ttup [gettype exp;gettype vars]} annot) in
   
-  let rewrite (E_aux (eaux,annot)) =
+  let rewrite (E_aux (eaux,annot)) (P_aux (_,pannot) as pat) =
     match eaux with
     | E_for(id,exp1,exp2,exp3,order,exp4) ->
        let vars = List.map (fun (var,(l,t)) -> E_aux (E_id var,(l,t))) (find_updated_vars exp4) in
        let vartuple = mktup vars in
-       let exp4 = rewrite_for_if_case (add_vars exp4 vartuple) in
+(*       let overwrite = match gettype exp with
+         | {t = Tid "unit"} -> true
+         | _ -> false in*)
+       let exp4 = rewrite_var_updates (add_vars (*overwrite*) exp4 vartuple) in
        let funcl = match order with
          | Ord_aux (Ord_inc,_) -> Id_aux (Id "foreach_inc",Unknown)
          | Ord_aux (Ord_dec,_) -> Id_aux (Id "foreach_dec",Unknown) in
-       Some (E_aux (E_app (funcl,[mktup [exp1;exp2;exp3];exp4;vartuple]),
-                    swaptyp (gettype exp4) annot),vars) 
+       let v = E_aux (E_app (funcl,[mktup [exp1;exp2;exp3];exp4;vartuple]),
+                      (Unknown,simple_annot_efr (gettype exp4) (geteffs exp4))) in
+       let pat =
+(*         if overwrite then
+           mktup_pat vars
+         else *)
+           P_aux (P_tup [pat; mktup_pat vars], (Unknown,simple_annot (gettype v))) in
+       Some (v,pat)
     | E_if (c,e1,e2) ->
        let vars = List.map (fun (var,(l,t)) -> E_aux (E_id var,(l,t)))
                            (dedup eqidtyp (find_updated_vars e1 @ find_updated_vars e2)) in
        if vars = [] then None else
          let vartuple = mktup vars in
-         let e1 = rewrite_for_if_case (add_vars e1 vartuple) in
-         let e2 = rewrite_for_if_case (add_vars e2 vartuple) in
+(*         let overwrite = match gettype exp with
+           | {t = Tid "unit"} -> true
+           | _ -> false in *)
+         let e1 = rewrite_var_updates (add_vars (*overwrite*) e1 vartuple) in
+         let e2 = rewrite_var_updates (add_vars (*overwrite*) e2 vartuple) in
          (* after a-normalisation c shouldn't need rewriting *)
          let t = gettype e1 in
          (* let () = assert (simple_annot t = simple_annot (gettype e2)) in *)
-         Some (E_aux (E_if (c,e1,e2), swaptyp t annot),vars)
+         let v = E_aux (E_if (c,e1,e2), (Unknown,simple_annot_efr t (eff_union e1 e2))) in
+         let pat =
+(*           if overwrite then
+             mktup_pat vars
+           else*)
+             P_aux (P_tup [pat; mktup_pat vars],(Unknown,simple_annot (gettype v))) in
+         Some (v,pat)
     | E_case (e1,ps) ->
        (* after a-normalisation e1 shouldn't need rewriting *)
        let vars =
@@ -1429,18 +1487,56 @@ let rec rewrite_for_if_case ((E_aux (expaux,annot)) as exp) =
                   (dedup eqidtyp (List.fold_left f [] ps)) in
        if vars = [] then None else
          let vartuple = mktup vars in
+(*         let overwrite = match gettype exp with
+           | {t = Tid "unit"} -> true
+           | _ -> false in*)
          let typ = 
            let (Pat_aux (Pat_exp (_,first),_)) = List.hd ps in
            gettype first in
-         let (ps,typ) =
-           let f (acc,typ) (Pat_aux (Pat_exp (p,e),pannot)) =
+         let (ps,typ,effs) =
+           let f (acc,typ,effs) (Pat_aux (Pat_exp (p,e),pannot)) =
              let etyp = gettype e in
              let () = assert (simple_annot etyp = simple_annot typ) in
-             let e = rewrite_for_if_case (add_vars e vartuple) in
-             let pannot =  swaptyp (gettype e) pannot in
-             (acc @ [Pat_aux (Pat_exp (p,e),pannot)],typ) in
-           List.fold_left f ([],typ) ps in
-         Some (E_aux (E_case (e1,ps), swaptyp typ annot),vars)
+             let e = rewrite_var_updates (add_vars (*overwrite*) e vartuple) in
+             let pannot = (Parse_ast.Unknown,simple_annot (gettype e)) in
+             let effs = union_effects effs (geteffs e) in
+             let p =
+(*               if overwrite then
+                 mktup_pat vars
+               else*)
+                 P_aux (P_tup [pat; mktup_pat vars],(Unknown,simple_annot (gettype e))) in
+             let pat' = Pat_aux (Pat_exp (p,e),pannot) in
+             (acc @ [pat'],typ,effs) in
+           List.fold_left f ([],typ,{effect = Eset []}) ps in
+         let v = E_aux (E_case (e1,ps), (Unknown,simple_annot_efr typ effs)) in
+         let pat =
+(*           if overwrite then
+             P_aux (P_tup [mktup_pat vars],(Unknown,simple_annot (gettype v)))
+           else*)
+             P_aux (P_tup [pat; mktup_pat vars],(Unknown,simple_annot (gettype v))) in
+         Some (v,pat)
+    | E_assign (lexp,vexp) ->
+       let {effect = Eset effs} = geteffs_annot annot in
+       if not (List.exists (function BE_aux (BE_lset,_) -> true | _ -> false) effs)
+       then None else 
+         (match lexp with
+          | LEXP_aux (LEXP_id id,annot) ->
+             let pat = P_aux (P_id id,(Unknown,simple_annot (gettype vexp))) in
+             Some (vexp,pat)
+          | LEXP_aux (LEXP_cast (_,id),annot) ->
+             let pat = P_aux (P_id id,(Unknown,simple_annot (gettype vexp))) in
+             Some (vexp,pat)
+          | LEXP_aux (LEXP_vector (LEXP_aux (LEXP_id id,annot2),i),annot) ->
+             let eid = E_aux (E_id id,(Unknown,simple_annot (gettype_annot annot2))) in
+             let vexp = E_aux (E_vector_update (eid,i,vexp),(Unknown,simple_annot (gettype_annot annot))) in
+             let pat = P_aux (P_id id,(Unknown,simple_annot (gettype vexp))) in
+             Some (vexp,pat)
+          | LEXP_aux (LEXP_vector_range (LEXP_aux (LEXP_id id,annot2),i,j),annot) -> 
+             let eid = E_aux (E_id id,(Unknown,simple_annot (gettype_annot annot2))) in
+             let vexp = E_aux (E_vector_update_subrange (eid,i,j,vexp),
+                               (Unknown,simple_annot (gettype_annot annot))) in
+             let pat = P_aux (P_id id,(Unknown,simple_annot (gettype vexp))) in
+             Some (vexp,pat))
     | _ ->
        (* assumes everying's a-normlised: an expression is a sequence of let-expressions,
         * "control-flow" structures and a return value, possibly wrapped in E_return *)
@@ -1448,62 +1544,55 @@ let rec rewrite_for_if_case ((E_aux (expaux,annot)) as exp) =
 
   match expaux with
   | E_let (lb,body) ->
-     let body = rewrite_for_if_case body in
-     let lb = match lb with
+     let body = rewrite_var_updates body in
+     let (eff,lb) = match lb with
        | LB_aux (LB_val_implicit (pat,v),lbannot) ->
-          (match rewrite v with
-           | Some (v,vars) ->
-              let varpat = mktup_pat vars in
-              let (P_aux (_,pannot)) = pat in
-              let pat = P_aux (P_tup [pat;varpat],swaptyp (gettype v) annot) in
-              let lbannot = swaptyp (gettype v) lbannot in
-              LB_aux (LB_val_implicit (pat,v),lbannot)
-           | None -> lb)
+          (match rewrite v pat with
+           | Some (v,pat) ->
+              let lbannot = (Parse_ast.Unknown,simple_annot (gettype v)) in
+              (geteffs v,LB_aux (LB_val_implicit (pat,v),lbannot))
+           | None -> (geteffs v,lb))
        | LB_aux (LB_val_explicit (typ,pat,v),lbannot) ->
-          (match rewrite v with 
-           | Some (v,vars) ->
-              let varpat = mktup_pat vars in
-              let (P_aux (_,pannot)) = pat in
-              let pat = P_aux (P_tup [pat;varpat],swaptyp (gettype v) annot) in
-              let lbannot = swaptyp (gettype v) lbannot in
-              LB_aux (LB_val_implicit (pat,v),lbannot)
-           | None -> lb) in
-     (* as let-expressions have type unit exp's annot doesn't need to change *)
-     E_aux (E_let (lb,body),annot)
+          (match rewrite v pat with 
+           | Some (v,pat) ->
+              let lbannot = (Parse_ast.Unknown,simple_annot (gettype v)) in
+              (geteffs v,LB_aux (LB_val_implicit (pat,v),lbannot))
+           | None -> (geteffs v,lb)) in
+     E_aux (E_let (lb,body),
+            (Unknown,simple_annot_efr (gettype body) (union_effects eff (geteffs body))))
   | E_internal_plet (pat,v,body) ->
-     let body = rewrite_for_if_case body in
-     (match rewrite v with 
-      | Some (v,vars) ->
-         let varpat = mktup_pat vars in
-         let (P_aux (_,pannot)) = pat in
-         let pat = P_aux (P_tup [pat;varpat],swaptyp (gettype v) annot) in
-         (* as let-expressions have type unit exp's annot doesn't need to change *)
-         E_aux (E_internal_plet (pat,v,body),annot)
+     let body = rewrite_var_updates body in
+     (match rewrite v pat with 
+      | Some (v,pat) ->
+         E_aux (E_internal_plet (pat,v,body),
+                (Unknown,simple_annot_efr (gettype body) (eff_union v body)))
       | None -> E_aux (E_internal_plet (pat,v,body),annot))
   | E_internal_let (lexp,v,body) ->
   (* because we need patterns and internal_plets are needed to distinguish monadic
    * expressions E_internal_lets are rewritten to E_lets. We only need them for OCaml
    * anyways. *)
-     let body = rewrite_for_if_case body in
+     let body = rewrite_var_updates body in
      let id = match lexp with
        | LEXP_aux (LEXP_id id,_) -> id
        | LEXP_aux (LEXP_cast (_,id),_) -> id in
      let pat = P_aux (P_id id, (Parse_ast.Unknown,simple_annot (gettype v))) in
-     let lb = (match rewrite v with
-       | Some (v,vars) ->
-          let varpat = mktup_pat vars in
-          let (P_aux (_,pannot)) = pat in
-          let pat = P_aux (P_tup [pat;varpat],swaptyp (gettype v) annot) in
+     let lb = (match rewrite v pat with
+       | Some (v,pat) ->
           let lbannot = (Parse_ast.Unknown,simple_annot_efr (gettype v) (geteffs v)) in
           LB_aux (LB_val_implicit (pat,v),lbannot)
        | None -> 
           let lbannot = (Parse_ast.Unknown,simple_annot_efr (gettype v) (geteffs v)) in
           LB_aux (LB_val_implicit (pat,v),lbannot)) in
-     E_aux (E_let (lb,body),annot)
-  (* In tail-position only for-loops matter: if if-expressions or pattern-matching expressions
-   * are in tail-position their updated variables won't be read anyways. For for-loops, however,
-   * we do have to rewrite but also make sure the return type is as expected. *)
-  | E_for _ ->
+     E_aux (E_let (lb,body),(Unknown,simple_annot_efr (gettype body) (eff_union v body)))
+  (* In tail-position there shouldn't be anything we need to do as the terms after
+   * a-normalisation are pure and don't update local variables. There can't be any variable
+   * assignments in tail-position (because of the effect), there could be pure pattern-match 
+   * expressions, if-expressions that don't need rewriting. For-loops still need rewriting,
+   * but it would be pointless to have them in tail-position if they don't access memory or
+   * update variables. *)
+  | _ -> exp
+
+(*  | E_for _ ->
      let (Some (exp,_)) = rewrite exp in
      let annot_pat = (Parse_ast.Unknown,simple_annot (gettype exp)) in
      let pat = (P_aux (P_wild,annot_pat)) in
@@ -1512,11 +1601,10 @@ let rec rewrite_for_if_case ((E_aux (expaux,annot)) as exp) =
      let annot_let = (Parse_ast.Unknown,simple_annot unit_t) in
      if effectful exp
      then E_aux (E_internal_plet (pat,exp,body),annot_let)
-     else E_aux (E_let (LB_aux (LB_val_implicit (pat,exp),annot_lb),body),annot_let)
+     else E_aux (E_let (LB_aux (LB_val_implicit (pat,exp),annot_lb),body),annot_let) *)
 
-  | _ -> exp
-
-let replace_var_update_e_assign = 
+(*
+let replace_var_update_e_assign =
 
   let e_aux (expaux,annot) = 
     
@@ -1569,6 +1657,7 @@ let replace_var_update_e_assign =
     | _ -> E_aux (expaux,annot) in
 
   { id_exp_alg with e_aux = e_aux }
+ *)
 
 let replace_memwrite_e_assign =
   let e_aux = fun (expaux,annot) ->
@@ -1580,7 +1669,7 @@ let replace_memwrite_e_assign =
 let rewrite_defs_remove_e_assign =
   let rewrite_exp _ _ e =
     (fold_exp replace_memwrite_e_assign)
-      ((fold_exp replace_var_update_e_assign) (rewrite_for_if_case e)) in
+      ((rewrite_var_updates e)) in
   rewrite_defs_base
     {rewrite_exp = rewrite_exp
     ; rewrite_pat = rewrite_pat
@@ -1598,5 +1687,3 @@ let rewrite_defs_lem defs =
   let defs = rewrite_defs_a_normalise defs in
   let defs = rewrite_defs_remove_e_assign defs in
   defs
-
-

@@ -2015,7 +2015,7 @@ let doc_exp_lem, doc_let_lem =
         doc_id_lem id
       | Base((_, ({t = Tapp("register",_)} | {t=Tabbrev(_,{t=Tapp("register",_)})})),tag,_,_,_,_) ->
          (match tag with
-          | External _ -> string "(read_register " ^^ doc_id_lem id ^^ string ")"
+          | External _ -> separate space [string "read_register";doc_id_lem id]
           | _ -> doc_id_lem id)
       | Base(_,(Constructor i |Enum i),_,_,_,_) -> doc_id_lem_ctor id
       | Base((_,t),Alias alias_info,_,_,_,_) ->
@@ -2024,7 +2024,7 @@ let doc_exp_lem, doc_let_lem =
            let field_f = match t.t with
              | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> string "read_register_field_bit"
              | _ -> string "read_register_field" in
-           parens (separate space [field_f; string reg; string_lit (string field)])
+           separate space [field_f; string reg; string_lit (string field)]
          | Alias_extract(reg,start,stop) ->
            if start = stop
            then parens (separate space [string "vector_access";string reg;doc_int start])
@@ -2054,7 +2054,7 @@ let doc_exp_lem, doc_let_lem =
     | E_lit lit -> doc_lit_lem false lit
     | E_cast(typ,e) ->
       (match annot with
-      | Base(_,External _,_,_,_,_) -> parens( string "read_register" ^^ space ^^ exp e)
+      | Base(_,External _,_,_,_,_) -> string "read_register" ^^ space ^^ exp e
       | _ -> exp e) (*(parens (doc_op colon (group (exp e)) (doc_typ_lem typ)))) *)
     | E_tuple exps ->
       parens (separate_map comma exp exps)
@@ -2135,30 +2135,14 @@ let doc_exp_lem, doc_let_lem =
          exp eq_exp;
          string "in"]) ^/^
        exp in_exp
-(*  | E_internal_plet (_,E_aux (E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4),_),e2) ->
-     let updated_vars = parens (separate_map comma (fun x -> string x) (find_updated_vars exp4)) in
-     let start = group (exp exp1) in
-     let stop = group (exp exp2) in
-     let by = group (exp exp3) in
-     let var = doc_id_lem id in
-     let body = exp exp4 in
-     let forL = if order = Ord_inc then string "foreach_inc" else string "foreach_dec" in
-     parens (
-         prefix
-           2 1
-           (forL ^^ space ^^ start ^^ stop ^^ by)
-           (group (
-                prefix
-                  2 1
-                  (separate space [string "fun";updated_vars;var;arrow])
-                  (parens (body ^/^
-                             (string "return") ^^ space ^^ updated_vars))
-              )
-           )
-       ) ^^ space ^^ (separate space [string ">>=";string "fun";arrow]) *)
   | E_internal_plet (pat,e1,e2) ->
-     (separate space [exp e1; string ">>= fun"; doc_pat_lem pat;arrow]) ^/^
-     exp e2
+     (match pat with
+      | P_aux (P_wild,_) ->
+         (separate space [exp e1; string ">>"]) ^/^
+           exp e2
+      | _ ->
+         (separate space [exp e1; string ">>= fun"; doc_pat_lem pat;arrow]) ^/^
+           exp e2)
   | E_internal_return (e1) ->
      separate space [string "return"; exp e1;]
   and let_exp (LB_aux(lb,_)) = match lb with
@@ -2247,7 +2231,7 @@ let doc_exp_lem, doc_let_lem =
           | Alias_pair(reg1,reg2) ->
             parens ((string "write_two_regs") ^^ space ^^ string reg1 ^^ space ^^ string reg2 ^^ space ^^ exp e_new_v))         
        | _ ->
-         parens (separate space [string "write_register"; doc_id_lem id; exp e_new_v]))
+         separate space [string "write_register"; doc_id_lem id; exp e_new_v])
 
   and doc_lexp_fcall ((LEXP_aux(lexp,(l,annot))) as le) e_new_v = match lexp with
     | LEXP_memory(id,args) -> doc_id_lem id ^^ parens (separate_map comma top_exp (args@[e_new_v]))
@@ -2388,10 +2372,6 @@ let reg_decls (Defs defs) =
   let regs_per_type : (string option * string list) list =
     (None,simpleregs) ::
       (List.map (fun (name,regs) -> (Some name,regs)) typedregs_per_type) in
-
-  let _ = List.map (fun (name,regs) ->
-                    let name = match name with Some name -> name | None -> "register" in
-                    print_endline (name ^ " " ^ String.concat " " regs)) regs_per_type in
 
   (* maybe we need a function that analyses the spec for this as well *)
   let default =
