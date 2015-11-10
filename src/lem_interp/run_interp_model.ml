@@ -1,12 +1,13 @@
-open Printf ;;
-open Interp_ast ;;
-open Interp_interface ;;
-open Interp_inter_imp ;;
+open Printf
+open Interp_ast
+open Interp_interface
+open Interp_inter_imp
 
-open Printing_functions ;;
+open Printing_functions
+open Nat_big_num
 
 module Reg = struct
-  include Map.Make(struct type t = string let compare = compare end)
+  include Map.Make(struct type t = string let compare = String.compare end)
   let to_string id v = 
     sprintf "%s -> %s" id (register_value_to_string v)
   let find id m = 
@@ -16,41 +17,46 @@ module Reg = struct
     v
 end ;;
 
-let compare_addresses v1 v2 = 
+let compare_addresses (Address_lifted(v1,n1)) (Address_lifted(v2,n2)) = 
   let rec comp v1s v2s = match (v1s,v2s) with
-    | ([],[]) -> 0
+    | ([],[]) ->  0
+    | ([],_)  -> -1
+    | (_,[])  ->  1
     | (v1::v1s,v2::v2s) -> 
-      match compare v1 v2 with
-	| 0 -> comp v1s v2s
-	| ans -> ans in 
-  
-  let l1 = List.length v1 in
-  let l2 = List.length v2 in
-  if l1 > l2 then 1
-  else if l1 < l2 then -1
-  else comp v1 v2
+      match Pervasives.compare v1 v2 with
+        | 0 -> comp v1s v2s
+        | ans -> ans in 
+  match n1,n2 with
+  | Some(n1),Some(n2) -> compare n1 n2
+  | _ ->
+    let l1 = List.length v1 in
+    let l2 = List.length v2 in
+    if l1 > l2 then 1
+    else if l1 < l2 then -1
+    else comp v1 v2
+
+let default_endian = ref E_big_endian
+let default_order = ref D_increasing
 
 module Mem = struct
   include Map.Make(struct
-    type t = address_lifted
-    let compare v1 v2 = compare_addresses v1 v2
-  end)
-  let find idx m = 
-(*    eprintf "mem_find called with %s\n" (val_to_string (Bytevector idx));*)
+      type t = num
+      let compare v1 v2 = compare v1 v2
+    end)
+(*  let find idx m = 
     let v = find idx m in
-(*    eprintf "mem_find found with %s |-> %i\n" (val_to_string (Bytevector idx)) v;*)
     v
-  let add key valu m =
-(*    eprintf "mem_add called with %s |-> %s\n" (val_to_string (Bytevector key)) (string_of_int valu);*)
-    add key valu m
+    let add key valu m =
+    add key valu m*)
 
   let to_string loc v =
-    sprintf "[%s] -> %s" (memory_value_to_string (memory_value_of_address_lifted loc)) (memory_value_to_string v)
-end ;;
+    sprintf "[%s] -> %s" (to_string loc)
+                         (memory_value_to_string !default_endian v)
+end
 
 let slice register_vector (start,stop) = slice_reg_value register_vector start stop
 
-let big_num_unit = Nat_big_num.of_int 1
+let big_num_unit = of_int 1
 
 let rec list_update index start stop e vals =  
  match vals with
@@ -77,8 +83,6 @@ let rec list_update_list index start stop es vals =
 
 let fupdate_slice original e (start,stop) = assert false
 
-let increment address = address (*Need to increment this *)
-
 let combine_slices (start, stop) (inner_start,inner_stop) = 
   (start + inner_start, start + inner_stop)
 
@@ -86,36 +90,44 @@ let unit_lit = (L_aux(L_unit,Interp_ast.Unknown))
 
 let rec perform_action ((reg, mem) as env) = function
  (* registers *)
- | Read_reg0(Reg0(id,_), _) -> (Some(Reg.find id reg), env)
- | Read_reg0(Reg_slice(id, range), _)
- | Read_reg0(Reg_field(id, _, range), _) -> (Some(slice (Reg.find id reg) range), env)
- | Read_reg0(Reg_f_slice(id, _, range, mini_range), _) ->
+ | Read_reg0(Reg0(id,_,_,_), _) -> (Some(Reg.find id reg), env)
+ | Read_reg0(Reg_slice(id, _, _, range), _)
+ | Read_reg0(Reg_field(id, _, _, _, range), _) -> (Some(slice (Reg.find id reg) range), env)
+ | Read_reg0(Reg_f_slice(id, _,_,_, range, mini_range), _) ->
    (Some(slice (slice (Reg.find id reg) range) mini_range),env)
- | Write_reg0(Reg0(id,_), value, _) -> (None, (Reg.add id value reg,mem))
- | Write_reg0(Reg_slice(id,range),value, _) 
- | Write_reg0(Reg_field(id,_,range),value,_)->
+ | Write_reg0(Reg0(id,_,_,_), value, _) -> (None, (Reg.add id value reg,mem))
+ | Write_reg0(Reg_slice(id,_,_,range),value, _) 
+ | Write_reg0(Reg_field(id,_,_,_,range),value,_)->
      let old_val = Reg.find id reg in
      let new_val = fupdate_slice old_val value range in
      (None, (Reg.add id new_val reg, mem))
- | Write_reg0(Reg_f_slice(id,_,range,mini_range),value,_) ->
+ | Write_reg0(Reg_f_slice(id,_,_,_,range,mini_range),value,_) ->
    let old_val = Reg.find id reg in
    let new_val = fupdate_slice old_val value (combine_slices range mini_range) in
    (None,(Reg.add id new_val reg,mem))
  | Read_mem0(_,location, length, _,_) ->
-   let rec reading location length = 
+   let address = match address_of_address_lifted location with
+     | Some a -> a
+     | None -> assert false (*TODO remember how to report an error *)in
+   let naddress = integer_of_address address in 
+   let rec reading (n : num) length = 
      if length = 0 
      then []
-     else (Mem.find location mem)::(reading (increment location) (length - 1)) in
-   (Some (reading location length), env)
+     else (Mem.find n mem)@(reading (add n big_num_unit) (length - 1)) in
+   (Some (register_value_of_memory_value (reading naddress length) !default_order), env)
  | Write_mem0(_,location, length, _, bytes,_,_) ->
+   let address = match address_of_address_lifted location with
+     | Some a -> a
+     | None -> assert false (*TODO remember how to report an error *)in
+   let naddress = integer_of_address address in 
    let rec writing location length bytes mem = 
      if length = 0
      then mem
      else match bytes with
        | [] -> mem
        | b::bytes -> 
-	 writing (increment location) (length - 1) bytes (Mem.add location b mem) in
-   (None,(reg,writing location length bytes mem))
+         writing (add location big_num_unit) (length - 1) bytes (Mem.add location [b] mem) in
+   (None,(reg,writing naddress length bytes mem))
  | _ -> (None, env)
 ;;
 
@@ -137,7 +149,9 @@ let run
   ?(eager_eval=true)
   ?(track_dependencies= ref false)
   ?mode
-  (name, spec) =
+  (name, spec, external_functions) =
+  let context = build_context spec [] [] [] [] [] external_functions in
+  let put_in_context stack = IState(stack,context) in
   (* interactive loop for step-by-step execution *)
   let usage = "Usage:
     step    go to next action [default]
@@ -155,100 +169,104 @@ let run
     let command = Pervasives.read_line () in
     let command' = if command = "" then mode_to_string mode else command in
     begin match command' with
-    | "s" | "step" -> Step
-    | "n" | "next" -> Next
-    | "r" | "run" -> Run
-    | "rg" | "reg" | "registers" ->
+      | "s" | "step" -> Step
+      | "n" | "next" -> Next
+      | "r" | "run" -> Run
+      | "rg" | "reg" | "registers" ->
         Reg.iter (fun k v -> debugf "%s\n" (Reg.to_string k v)) reg;
         interact mode env stack
-    | "m" | "mem" | "memory" ->
+      | "m" | "mem" | "memory" ->
         Mem.iter (fun k v -> debugf "%s\n" (Mem.to_string k v)) mem;
         interact mode env stack
-    | "bt" | "backtrace" | "stack" ->
-      print_backtrace_compact (fun s -> debugf "%s" s) stack;
-      interact mode env stack
-    | "e" | "exh" | "exhaust" ->
-      debugf "interpreting exhaustively from current state\n";
-      let events = interp_exhaustive None stack in
-      debugf "%s" (format_events events);
-      interact mode env stack
-    | "c" | "cont" | "continuation" ->
+      | "bt" | "backtrace" | "stack" ->
+        print_backtrace_compact (fun s -> debugf "%s" s) stack;
+        interact mode env stack
+      | "e" | "exh" | "exhaust" ->
+        debugf "interpreting exhaustively from current state\n";
+        let events = interp_exhaustive None stack in
+        debugf "%s" (format_events events);
+        interact mode env stack
+      | "c" | "cont" | "continuation" ->
         (* print not-compacted continuation *)
         print_continuation (fun s -> debugf "%s" s) stack;
         interact mode env stack
-    | "track" | "t" ->
-      track_dependencies := not(!track_dependencies);
-      interact mode env stack
-    | "show_casts" ->
+      | "track" | "t" ->
+        track_dependencies := not(!track_dependencies);
+        interact mode env stack
+      | "show_casts" ->
         Pretty_interp.ignore_casts := false;
         interact mode env stack
-    | "hide_casts" ->
+      | "hide_casts" ->
         Pretty_interp.ignore_casts := true;
         interact mode env stack
-    | "q" | "quit" | "exit" -> exit 0
-    | _ -> debugf "%s\n" usage; interact mode env stack
+      | "q" | "quit" | "exit" -> exit 0
+      | _ -> debugf "%s\n" usage; interact mode env stack
     end
   in
   let show act lhs arrow rhs = debugf "%s: %s %s %s\n"
-    (green act) lhs (blue arrow) rhs in
+      (green act) lhs (blue arrow) rhs in
   let left = "<-" and right = "->" in
   let rec loop mode env = function
-  | Done ->
-    debugf "%s: %s\n" (grey name) (blue "done");
-    (true, mode, !track_dependencies, env)
-  | Error0 s -> 
-    debugf "%s: %s: %s\n" (grey name) (red "error") s;
-    (false, mode, !track_dependencies, env) 
-  | action ->
-    let step ?(force=false) stack =
-      let (top_exp,(top_env,top_mem)) = top_frame_exp_state stack in
-      let loc = get_loc (compact_exp top_exp) in
-      if mode = Step || force then begin
-        debugf "%s\n" (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
-        interact mode env stack
-      end else
-        mode in
-    let (return,env') = perform_action env action in
-    let (mode', env', next) =
-      match action with    
-	| Read_reg0(reg,next_thunk) ->
-	  (match return with
-	    | Some(value) -> 
-	      show "read_reg" (reg_name_to_string reg) right (val_to_string value);
-	      let next = next_thunk value in
-	      (step next, env', next)
-	    | None -> assert false)
-	| Write_reg0(reg,value,next) ->
-	  show "write_reg" (reg_name_to_string reg) left (val_to_string value);
-	  (step next, env', next)
-	| Read_mem0(kind, location, length, tracking, next_thunk) ->
-	  (match return with
-	    | Some(value) -> 
-	      show "read_mem" (val_to_string location) right (val_to_string value);
-              (match tracking with
+    | Done ->
+      debugf "%s: %s\n" (grey name) (blue "done");
+      (true, mode, !track_dependencies, env)
+    | Error0 s -> 
+      debugf "%s: %s: %s\n" (grey name) (red "error") s;
+      (false, mode, !track_dependencies, env) 
+    | action ->
+      let step ?(force=false) (state: instruction_state) =
+        let stack = match state with IState(stack,_) -> stack in
+        let (top_exp,(top_env,top_mem)) = top_frame_exp_state stack in
+        let loc = get_loc (compact_exp top_exp) in
+        if mode = Step || force then begin
+          debugf "%s\n" (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
+          interact mode env state
+        end else
+          mode in
+      let (return,env') = perform_action env action in
+      let (mode', env', next) =
+        match action with    
+        | Read_reg0(reg,next_thunk) ->
+          (match return with
+           | Some(value) -> 
+             show "read_reg" (reg_name_to_string reg) right (register_value_to_string value);
+             let next = next_thunk value in
+             (step next, env', next)
+           | None -> assert false)
+        | Write_reg0(reg,value,next) ->
+          show "write_reg" (reg_name_to_string reg) left (register_value_to_string value);
+          (step next, env', next)
+        | Read_mem0(kind, (Address_lifted(location,_)), length, tracking, next_thunk) ->
+          (match return with
+           | Some(value) -> 
+             show "read_mem"
+               (memory_value_to_string !default_endian location) right
+               (register_value_to_string value);
+             (match tracking with
               | None -> ()
               | Some(deps) ->
                 show "read_mem address depended on" (dependencies_to_string deps) "" "");
-	      let next = next_thunk value in
-	      (step next, env', next)
-	    | None -> assert false)
-	| Write_mem0(kind,location, length, tracking, value, v_tracking, next_thunk) ->
-	  show "write_mem" (val_to_string location) left (val_to_string value);
+             let next = next_thunk (memory_value_of_register_value value) in
+             (step next, env', next)
+           | None -> assert false)
+        | Write_mem0(kind,(Address_lifted(location,_)), length, tracking, value, v_tracking, next_thunk) ->
+          show "write_mem" (memory_value_to_string !default_endian location) left
+            (memory_value_to_string !default_endian value);
           (match (tracking,v_tracking) with
-          | (None,None) -> ();
-          | (Some(deps),None) ->
-            show "write_mem address depended on" (dependencies_to_string deps) "" "";
-          | (None,Some(deps)) ->
-            show "write_mem value depended on" (dependencies_to_string deps) "" "";
-          | (Some(deps),Some(vdeps)) ->
-            show "write_mem address depended on" (dependencies_to_string deps) "" "";
-            show "write_mem value depended on" (dependencies_to_string vdeps) "" "";);
-	  let next = next_thunk true in
-	  (step next,env',next)
-	| Barrier0(bkind,next) ->
-	  show "mem_barrier" "" "" "";
-	  (step next, env, next)
-	| Internal(None,None, next) ->
+           | (None,None) -> ();
+           | (Some(deps),None) ->
+             show "write_mem address depended on" (dependencies_to_string deps) "" "";
+           | (None,Some(deps)) ->
+             show "write_mem value depended on" (dependencies_to_string deps) "" "";
+           | (Some(deps),Some(vdeps)) ->
+             show "write_mem address depended on" (dependencies_to_string deps) "" "";
+             show "write_mem value depended on" (dependencies_to_string vdeps) "" "";);
+          let next = next_thunk true in
+          (step next,env',next)
+        | Barrier0(bkind,next) ->
+          show "mem_barrier" "" "" "";
+          (step next, env, next)
+        | Internal(None,None, next) ->
           show "breakpoint" "" "" "";
           (step ~force:true next,env',next)
         | Internal((Some fn),None,next) ->
@@ -257,31 +275,33 @@ let run
         | Internal((Some fn),(Some vdisp),next) ->
           show "breakpoint" (fn ^ " " ^ (vdisp ())) "" "";
           (step ~force:true next, env', next)
-	| Nondet_choice(nondets, next) ->
-	  let choose_order = List.sort (fun (_,i1) (_,i2) -> compare i1 i2) 
-	    (List.combine nondets (List.map (fun _ -> Random.bits ()) nondets)) in
-	  show "nondeterministic evaluation begun" "" "" "";
-	  let (_,_,_,env') = List.fold_right (fun (next,_) (_,_,_,env') -> 
-	    loop mode env' (interp0 (make_mode (mode=Run) !track_dependencies) next)) choose_order (false,mode,!track_dependencies,env'); in
-	  show "nondeterministic evaluation ended" "" "" "";
-	  (step next,env',next)
-(*      | Exit e ->
-	show "exiting current evaluation" "" "" "";
-	step (),env', (set_in_context s e)*)
+        | Nondet_choice(nondets, next) ->
+          let choose_order = List.sort (fun (_,i1) (_,i2) -> Pervasives.compare i1 i2) 
+              (List.combine nondets (List.map (fun _ -> Random.bits ()) nondets)) in
+          show "nondeterministic evaluation begun" "" "" "";
+          let (_,_,_,env') = List.fold_right (fun (next,_) (_,_,_,env') -> 
+              loop mode env' (interp0 (make_mode (mode=Run) !track_dependencies !default_endian) next))
+              choose_order (false,mode,!track_dependencies,env'); in
+          show "nondeterministic evaluation ended" "" "" "";
+          (step next,env',next)
+        | Escape(Some e,_) ->
+          show "exiting current evaluation" "" "" "";
+          step e,env', e
+        | _ -> assert false        
       in
-      loop mode' env' (interp0 (make_mode (mode' = Run) !track_dependencies) next) in
+      loop mode' env' (interp0 (make_mode (mode' = Run) !track_dependencies !default_endian) next) in
   let mode = match mode with
   | None -> if eager_eval then Run else Step
   | Some m -> m in
-  let context = build_context spec in
-  let initial_state = initial_instruction_state context main_func parameters in
-  let imode = make_mode eager_eval !track_dependencies in
+  let Context(top_level,direction,_,_,_,_,_,_) = context in
+  let initial_state = Interp_inter_imp.initial_instruction_state top_level main_func parameters in
+  let imode = make_mode eager_eval !track_dependencies !default_endian in
   let (top_exp,(top_env,top_mem)) = top_frame_exp_state initial_state in
   debugf "%s: %s %s\n" (grey name) (blue "evaluate") 
     (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
   try
     Printexc.record_backtrace true;
-    loop mode (reg, mem) (interp0 imode initial_state)
+    loop mode (reg, mem) (interp0 imode (put_in_context initial_state))
   with e ->
     let trace = Printexc.get_backtrace () in
     debugf "%s: %s %s\n%s\n" (grey name) (red "interpretor error") (Printexc.to_string e) trace;

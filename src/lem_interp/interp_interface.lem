@@ -1176,7 +1176,19 @@ let register_value_of_address (Address bytes _) dir : register_value =
       rv_start_internal = if dir = D_increasing then 0 else (List.length bits) - 1
    |>
 
+val register_value_of_memory_value : memory_value -> direction -> register_value
+let register_value_of_memory_value bytes dir : register_value =
+  let bitls = List.concatMap (fun (Byte_lifted bs) -> bs) bytes in
+  <| rv_bits = bitls;
+     rv_dir = dir;
+     rv_start = 0;
+     rv_start_internal = if dir = D_increasing then 0 else (List.length bitls) - 1
+   |>                                                     
 
+val memory_value_of_register_value: register_value -> memory_value
+let memory_value_of_register_value r =
+  (byte_lifteds_of_bit_lifteds r.rv_bits)
+   
 val address_lifted_of_register_value : register_value -> maybe address_lifted
 (* returning Nothing iff the register value is not 64 bits wide, but
 allowing Bitl_undef and Bitl_unknown *)

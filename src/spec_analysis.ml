@@ -60,10 +60,34 @@ let check_in_range (candidate : big_int) (range : typ) : bool =
     in le_big_int min candidate && le_big_int candidate max
   | _ -> assert false
 
-       
+(*Rmove me when switch to zarith*)
+let rec power_big_int b n =
+  if eq_big_int n zero_big_int
+  then unit_big_int
+  else mult_big_int b (power_big_int b (sub_big_int n unit_big_int))
+
 let is_within_range candidate range constraints =
   match candidate.t with
   | Tapp("atom", [TA_nexp n]) ->
     (match n.nexp with
-     | Nconst i -> if check_in_range i range then Yes else No
+     | Nconst i | N2n(_,Some i) -> if check_in_range i range then Yes else No
      | _ -> Maybe)
+  | Tapp("range", [TA_nexp bot; TA_nexp top]) ->
+    (match bot.nexp,top.nexp with
+     | Nconst b, Nconst t | Nconst b, N2n(_,Some t) | N2n(_, Some b), Nconst t | N2n(_,Some b), N2n(_, Some t) ->
+       let at_least_in = check_in_range b range in
+       let at_most_in = check_in_range t range in
+       if at_least_in && at_most_in
+       then Yes
+       else if at_least_in || at_most_in
+       then Maybe
+       else No
+     | _ -> Maybe)
+  | Tapp("vector", [_; TA_nexp size ; _; _]) ->
+    (match size.nexp with
+     | Nconst i | N2n(_, Some i) ->
+       if check_in_range (power_big_int (big_int_of_int 2) i) range
+       then Yes
+       else No
+     | _ -> Maybe)
+  | _ -> Maybe
