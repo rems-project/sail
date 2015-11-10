@@ -1538,7 +1538,8 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
               | Tapp("register",[TA_typ t]) | Tabbrev(_,{t=Tapp("register",[TA_typ t])}) -> t,true,false
               | Tapp("reg",[TA_typ t]) -> t,false,false
               | _ -> item_t,false,true in
-          let ef,tag = if add_reg_write then (add_effect (BE_aux(BE_wreg,l)) efl,External None) else (efl,tag) in
+          let ef,tag = if add_reg_write then (add_effect (BE_aux(BE_wreg,l)) efl,External None)
+            else match tag with | External _ -> (efl,Emp_local) | _ ->  (efl,tag) in
           if is_top && reg_still_required && reg_required
           then typ_error l "Assignment expected a register or non-parameter non-letbound identifier to mutate"
           else
