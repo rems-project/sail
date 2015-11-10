@@ -1098,10 +1098,10 @@ and n_pexp (new_return : bool) (pexp : 'a pexp) (k : 'a pexp -> 'a exp) : 'a exp
   let (Pat_aux (Pat_exp (pat,exp),annot)) = pexp in
   k (Pat_aux (Pat_exp (pat,n_exp_term new_return exp), annot))
             
-and n_pexpL (pexps : 'a pexp list) (k : 'a pexp list -> 'a exp) : 'a exp =
+and n_pexpL (newreturn : bool) (pexps : 'a pexp list) (k : 'a pexp list -> 'a exp) : 'a exp =
   let geteffs (Pat_aux (_,(_,Base (_,_,_,_,{effect = Eset effs},_)))) = effs in
   let effs = {effect = Eset (List.flatten (List.map geteffs pexps))} in
-  mapCont (n_pexp (effectful_effs effs)) pexps k
+  mapCont (n_pexp newreturn) pexps k
            
 and n_fexps (fexps : 'a fexps) (k : 'a fexps -> 'a exp) : 'a exp = 
   let (FES_aux (FES_Fexps (fexps_aux,b),annot)) = fexps in
@@ -1200,7 +1200,7 @@ and n_exp (exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
      n_exp_name start (fun start -> 
      n_exp_name stop (fun stop ->
      n_exp_name by (fun by ->
-     let body = n_exp_term (false) body in
+     let body = n_exp_term (effectful body) body in
      k (rewrap_effs (geteffs body) (E_for (id,start,stop,by,dir,body))))))
   | E_vector exps ->
      n_exp_nameL exps (fun exps ->
@@ -1254,8 +1254,12 @@ and n_exp (exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
      k (rewrap_localeff (E_field (exp1,id))))
   | E_case (exp1,pexps) ->
      (* PROBABLY NEED to insert E_returns here *)
+     let newreturn =
+       List.fold_left
+         (fun b (Pat_aux (_,(_,Base (_,_,_,_,effs,_)))) -> b || effectful_effs effs)
+         false pexps in
      n_exp_name exp1 (fun exp1 -> 
-     n_pexpL pexps (fun pexps ->
+     n_pexpL newreturn pexps (fun pexps ->
      let geteffs (Pat_aux (_,(_,Base (_,_,_,_,eff,_)))) = eff in
      let effsum = List.fold_left union_effects {effect = Eset []} (List.map geteffs pexps) in
      k (rewrap_effs effsum (E_case (exp1,pexps)))))
