@@ -1,4 +1,6 @@
 open import Pervasives
+open import Vector
+open import Arch
 
 type M 's 'a = 's -> ('a * 's)
 
@@ -11,18 +13,111 @@ let bind m f s = let (a,s') = m s in f a s'
 let (>>=) = bind
 let (>>) m n = m >>= fun _ -> n
 
-
-val foreach_inc : forall 's 'vars. (nat * nat * nat) -> (nat -> 'vars -> M 's 'vars) ->
-                  'vars -> M 's 'vars
-let rec foreach_inc (i,stop,by) body vars = 
+val foreach_inc : forall 's 'vars. (nat * nat * nat) -> 'vars ->
+                  (nat -> 'vars -> (unit * 'vars)) -> (unit * 'vars)
+let rec foreach_inc (i,stop,by) vars body = 
   if i <= stop
-  then (body i vars >>= fun vars -> foreach_inc (i + by,stop,by) body vars)
-  else return vars
+  then
+    let (_,vars) = body i vars in
+    foreach_inc (i + by,stop,by) vars body
+  else ((),vars)
 
 
-val foreach_dec : forall 's 'vars. (nat * nat * nat) -> (nat -> 'vars -> M 's 'vars) ->
-                  'vars -> M 's 'vars
-let rec foreach_dec (i,stop,by) body vars = 
+val foreach_dec : forall 's 'vars. (nat * nat * nat) -> 'vars ->
+                  (nat -> 'vars -> (unit * 'vars)) -> (unit * 'vars)
+let rec foreach_dec (i,stop,by) vars body = 
   if i >= stop
-  then (body i vars >>= fun vars -> foreach_dec (i - by,stop,by) body vars)
-  else return vars
+  then
+    let (_,vars) = body i vars in
+    foreach_dec (i - by,stop,by) vars body
+  else ((),vars)
+
+
+val foreachM_inc : forall 's 'vars. (nat * nat * nat) -> 'vars ->
+                  (nat -> 'vars -> M 's (unit * 'vars)) -> M 's (unit * 'vars)
+let rec foreachM_inc (i,stop,by) vars body = 
+  if i <= stop
+  then
+    body i vars >>= fun (_,vars) ->
+    foreachM_inc (i + by,stop,by) vars body
+  else return ((),vars)
+
+
+val foreachM_dec : forall 's 'vars. (nat * nat * nat) -> 'vars ->
+                  (nat -> 'vars -> M 's (unit * 'vars)) -> M 's (unit * 'vars)
+let rec foreachM_dec (i,stop,by) vars body = 
+  if i >= stop
+  then
+    body i vars >>= fun (_,vars) ->
+    foreachM_dec (i - by,stop,by) vars body
+  else return ((),vars)
+
+
+
+let slice (Vector bs start) n m =
+  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
+  let (_,suffix) = List.splitAt offset bs in
+  let (subvector,_) = List.splitAt length suffix in
+  Vector subvector n
+
+let update (Vector bs start) n m (Vector bs' _) =
+  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
+  let (prefix,_) = List.splitAt offset bs in
+  let (_,suffix) = List.splitAt (offset + length) bs in
+  Vector (prefix ++ (List.take length bs') ++ suffix) start
+
+let hd (x :: _) = x
+
+val access : forall 'a. vector 'a -> nat -> 'a
+let access (Vector bs start) n =
+  if is_inc then nth bs (n - start) else nth bs (start - n)
+
+val update_pos : forall 'a. vector 'a -> nat -> 'a -> vector 'a
+let update_pos v n b =
+  update v n n (Vector [b] 0)
+
+val read_reg_range : register -> (nat * nat) -> M state (vector bit)
+let read_reg_range reg (i,j) s =
+  let v = slice (read_regstate s reg) i j in
+  (v,s)
+
+val read_reg_bit : register -> nat -> M state bit
+let read_reg_bit reg i s =
+  let v = access (read_regstate s reg) i in
+  (v,s)
+
+val write_reg_range : register -> (nat * nat) -> vector bit -> M state unit
+let write_reg_range (reg : register) (i,j) (v : vector bit) s =
+  let v' = update (read_regstate s reg) i j v in
+  let s' = write_regstate s reg v' in
+  ((),s')
+
+val write_reg_bit : register -> nat -> bit -> M state unit
+let write_reg_bit reg i bit s =
+  let v = read_regstate s reg in
+  let v' = update_pos v i bit in
+  let s' = write_regstate s reg v' in
+  ((),s')
+  
+
+val read_reg : register -> M state (vector bit)
+let read_reg reg s =
+  let v = read_regstate s reg in
+  (v,s)
+
+val write_reg : register -> vector bit -> M state unit
+let write_reg reg v s =
+  let s' = write_regstate s reg v in
+  ((),s')
+
+val read_reg_field : register -> register_field -> M state (vector bit)
+let read_reg_field reg rfield = read_reg_range reg (field_indices rfield)
+
+val write_reg_field : register -> register_field -> vector bit -> M state unit
+let write_reg_field reg rfield = write_reg_range reg (field_indices rfield)
+
+val read_reg_field_bit : register -> register_field_bit -> M state bit
+let read_reg_field_bit reg rbit = read_reg_bit reg (field_index_bit rbit)
+
+val write_reg_field_bit : register -> register_field_bit -> bit -> M state unit
+let write_reg_field_bit reg rbit = write_reg_bit reg (field_index_bit rbit)

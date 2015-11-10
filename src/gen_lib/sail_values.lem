@@ -9,22 +9,22 @@ let to_bool = function
 (*  | BU -> assert false *)
   end
 
-let get_elements (Vector elements _) = elements
 let get_start (Vector _ s) = s
 let length (Vector bs _) = length bs
 
-(*
-let write_two_registers r1 r2 vec =
-  let size = length_register r1 in
+let write_two_regs r1 r2 vec =
+  let size = length_reg r1 in
   let start = get_start vec in
   let vsize = length vec in
-  let r1_v = read_vector_subrange is_inc vec start ((if is_inc then size - start else start - size) - 1) in
+  let r1_v =
+    (slice vec)
+      start
+      ((if is_inc then size - start else start - size) - 1) in
   let r2_v =
-    read_vector_subrange is_inc
-      vec (if is_inc then size - start else start - size)
+    (slice vec)
+      (if is_inc then size - start else start - size)
       (if is_inc then vsize - start else start - vsize) in
-  write_register r1 r1_v >> write_register r2 r2_v
- *)
+  write_reg r1 r1_v >> write_reg r2 r2_v
 
 let rec replace bs ((n : nat),b') = match (n,bs) with
   | (_, []) -> []
@@ -269,15 +269,15 @@ let shift_op_vec op (((Vector bs start) as l),r) =
     match op with
      | LL (*"<<"*) ->
        let right_vec = Vector (List.replicate n B0) 0 in
-       let left_vec = read_vector_subrange is_inc l n (if is_inc then len + start else start - len) in
+       let left_vec = slice l n (if is_inc then len + start else start - len) in
        vector_concat left_vec right_vec
      | RR (*">>"*) ->
-       let right_vec = read_vector_subrange is_inc l start n in
+       let right_vec = slice l start n in
        let left_vec = Vector (List.replicate n B0) 0 in
        vector_concat left_vec right_vec 
      | LLL (*"<<<"*) ->
-       let left_vec = read_vector_subrange is_inc l n (if is_inc then len + start else start - len) in
-       let right_vec = read_vector_subrange is_inc l start n in
+       let left_vec = slice l n (if is_inc then len + start else start - len) in
+       let right_vec = slice l start n in
        vector_concat left_vec right_vec
      end
 
