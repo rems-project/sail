@@ -1538,7 +1538,7 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
               | Tapp("register",[TA_typ t]) | Tabbrev(_,{t=Tapp("register",[TA_typ t])}) -> t,true,false
               | Tapp("reg",[TA_typ t]) -> t,false,false
               | _ -> item_t,false,true in
-          let ef = if add_reg_write then add_effect (BE_aux(BE_wreg,l)) efl else efl in
+          let ef,tag = if add_reg_write then (add_effect (BE_aux(BE_wreg,l)) efl,External None) else (efl,tag) in
           if is_top && reg_still_required && reg_required
           then typ_error l "Assignment expected a register or non-parameter non-letbound identifier to mutate"
           else
@@ -1739,7 +1739,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
                   let (bf_t, _, _) = range_to_type_inc bf in ((id_to_string id),bf_t))
                 ranges 
             in
-            let tannot = into_register d_env (Base(([],ty),Emp_global,[],pure_e,pure_e,nob)) in
+            let tannot = into_register d_env (Base(([],ty),External None,[],pure_e,pure_e,nob)) in
             (TD_aux(td,(l,tannot)),
              Env({d_env with rec_env = ((id',Register,tannot,franges)::d_env.rec_env);
                abbrevs = Envmap.insert d_env.abbrevs (id',tannot)},t_env,b_env,tp_env)))
@@ -1782,7 +1782,7 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
                 (fun (bf,id) -> let (bf_t, _, _) = range_to_type_dec bf in (id_to_string id, bf_t))
                 ranges 
             in
-            let tannot = into_register d_env (Base(([],ty),Emp_global,[],pure_e,pure_e,nob)) in
+            let tannot = into_register d_env (Base(([],ty),External None,[],pure_e,pure_e,nob)) in
             (TD_aux(td,(l,tannot)),
              Env({d_env with rec_env = (id',Register,tannot,franges)::d_env.rec_env;
                abbrevs = Envmap.insert d_env.abbrevs (id',tannot)},t_env,b_env,tp_env)))

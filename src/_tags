@@ -3,9 +3,15 @@ true: -traverse, debug
 <lem_interp> or <test>:  include
 <sail.{byte,native}>: use_pprint, use_nums
 <pprint> or <pprint/src>: include
+<{src_elf,src_elf/abis,src_elf/abis/power64,src_elf/abis/amd64,src_elf/abis/aarch64,src_elf/adaptors}> : include
+
 # see http://caml.inria.fr/mantis/view.php?id=4943
 <lem_interp/*> and not <lem_interp/*.cmxa>: use_nums, use_lem
-<test/*> and not <test/*.cmxa>: use_nums, use_lem, use_str
+<test/*> and not <test/*.cmxa>: use_nums, use_lem, use_str, use_batteries
+<src_elf/*.ml> : use_batteries, use_lem, use_nums
+<src_elf/abis/*.ml> : use_batteries, use_lem, use_nums
+<src_elf/abis/*/*.ml> : use_batteries, use_lem, use_nums
+<src_elf/adaptors/*.ml> : use_batteries, use_lem, use_nums, use_unix
 
 # disable partial match and unused variable warnings
 <**/*.ml>: warn_y

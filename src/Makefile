@@ -11,6 +11,9 @@ interpreter:
 	ocamlbuild lem_interp/extract.cmxa
 	ocamlbuild lem_interp/extract.cma
 
+elf:
+	ocamlbuild -use-ocamlfind -pkgs batteries,uint src_elf/main_elf.native
+
 test: sail interpreter
 	ocamlbuild test/run_tests.native
 	./run_tests.native
@@ -22,16 +25,6 @@ install_elf:
 	cp -p ../../system-v-abi/src/*.lem elf_model/
 	cp -p ../../system-v-abi/src/*.ml elf_model/
 	cp -p -r ../../system-v-abi/src/libraries elf_model/libraries
-
-elf:
-	$(MAKE) -C elf_model ocaml_native
-	mkdir -p _build/elf_model
-	cp -p elf_model/*.cmi _build/elf_model/
-	cp -p elf_model/*.cmx _build/elf_model/
-	cp -p elf_model/*.o _build/elf_model/
-	cd _build/elf_model ;\
-	ocamlfind ocamlopt -package batteries -package uint -package bitstring -I $(LEMLIBOCAML) -a -o elf_extract.cmxa missing_pervasives.cmx \
-show.cmx endianness.cmx error.cmx ml_bindings.cmx default_printing.cmx bitstring_local.cmx elf_types.cmx elf_header.cmx elf_file1.cmx elf_program_header_table.cmx elf_executable_file2.cmx string_table.cmx elf_section_header_table.cmx elf_interpreted_segment.cmx elf_symbol_table.cmx elf_executable_file3.cmx elf_linking_file2.cmx elf_linking_file3.cmx elf_relocation.cmx sail_interface.cmx
 
 
 power: sail interpreter elf
