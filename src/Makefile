@@ -12,7 +12,7 @@ interpreter:
 	ocamlbuild lem_interp/extract.cma
 
 elf:
-	ocamlbuild -use-ocamlfind -pkgs batteries,uint src_elf/main_elf.native
+	ocamlbuild -use-ocamlfind -pkgs batteries,uint,unix,zarith src_elf/main_elf.native
 
 test: sail interpreter
 	ocamlbuild test/run_tests.native

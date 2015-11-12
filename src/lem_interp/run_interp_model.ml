@@ -51,7 +51,7 @@ module Mem = struct
 
   let to_string loc v =
     sprintf "[%s] -> %s" (to_string loc)
-                         (memory_value_to_string !default_endian v)
+                         (memory_value_to_string !default_endian [v])
 end
 
 let slice register_vector (start,stop) = slice_reg_value register_vector start stop
@@ -113,7 +113,7 @@ let rec perform_action ((reg, mem) as env) = function
    let rec reading (n : num) length = 
      if length = 0 
      then []
-     else (Mem.find n mem)@(reading (add n big_num_unit) (length - 1)) in
+     else (Mem.find n mem)::(reading (add n big_num_unit) (length - 1)) in
    (Some (register_value_of_memory_value (reading naddress length) !default_order), env)
  | Write_mem0(_,location, length, _, bytes,_,_) ->
    let address = match address_of_address_lifted location with
@@ -126,7 +126,7 @@ let rec perform_action ((reg, mem) as env) = function
      else match bytes with
        | [] -> mem
        | b::bytes -> 
-         writing (add location big_num_unit) (length - 1) bytes (Mem.add location [b] mem) in
+         writing (add location big_num_unit) (length - 1) bytes (Mem.add location b mem) in
    (None,(reg,writing naddress length bytes mem))
  | _ -> (None, env)
 ;;

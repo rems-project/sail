@@ -509,13 +509,14 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
           | Tabbrev(_,t),_ -> t,expect_t 
           | _,Tabbrev(_,e) -> t,e
           | _,_ -> t,expect_t in
-        (*let _ = Printf.eprintf "On general id check, expect_t %s, t %s, tactual %s, expect_actual %s\n" 
-          (t_to_string expect_t) (t_to_string t) (t_to_string t_actual) (t_to_string expect_actual) in*)
+        (*let _ = Printf.eprintf "On general id check of %s, expect_t %s, t %s, tactual %s, expect_actual %s\n"
+            (id_to_string id)
+            (t_to_string expect_t) (t_to_string t) (t_to_string t_actual) (t_to_string expect_actual) in*)
         (match t_actual.t,expect_actual.t with 
          | Tfn _,_ -> typ_error l
                         ("Identifier " ^ (id_to_string id) ^ " is bound to a function and cannot be used as a value")
          | Tapp("register",[TA_typ(t')]),Tapp("register",[TA_typ(expect_t')]) -> 
-           let tannot = Base(([],t),Emp_global,cs,ef,ef,bounds) in
+           let tannot = Base(([],t),Emp_global,cs,pure_e,pure_e,bounds) in
            let t',cs' = type_consistent (Expr l) d_env Require false t' expect_t' in
            (rebuild tannot,t,t_env,cs@cs',bounds,ef)
          | Tapp("register",[TA_typ(t')]),Tuvar _ ->
