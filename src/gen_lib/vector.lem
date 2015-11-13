@@ -1,7 +1,7 @@
 open import Pervasives
 
-type bit = B0 | B1 | BU
-type vector 'a = Vector of list 'a * nat
+type bit = O | I | U
+type vector 'a = V of list 'a * nat * bool
 
 let rec nth xs (n : nat) = match (n,xs) with
   | (0,x :: xs) -> x

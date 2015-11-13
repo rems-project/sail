@@ -54,27 +54,27 @@ let rec foreachM_dec (i,stop,by) vars body =
 
 
 
-let slice (Vector bs start) n m =
+let slice (V bs start is_inc) n m =
   let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
   let (_,suffix) = List.splitAt offset bs in
   let (subvector,_) = List.splitAt length suffix in
-  Vector subvector n
+  V subvector n is_inc
 
-let update (Vector bs start) n m (Vector bs' _) =
+let update (V bs start is_inc) n m (V bs' _ _) =
   let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
   let (prefix,_) = List.splitAt offset bs in
   let (_,suffix) = List.splitAt (offset + length) bs in
-  Vector (prefix ++ (List.take length bs') ++ suffix) start
+  V (prefix ++ (List.take length bs') ++ suffix) start is_inc
 
 let hd (x :: _) = x
 
 val access : forall 'a. vector 'a -> nat -> 'a
-let access (Vector bs start) n =
+let access (V bs start is_inc) n =
   if is_inc then nth bs (n - start) else nth bs (start - n)
 
 val update_pos : forall 'a. vector 'a -> nat -> 'a -> vector 'a
 let update_pos v n b =
-  update v n n (Vector [b] 0)
+  update v n n (V [b] 0 defaultDir)
 
 val read_reg_range : register -> (nat * nat) -> M state (vector bit)
 let read_reg_range reg (i,j) s =

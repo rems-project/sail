@@ -1057,14 +1057,37 @@ let letbind (v : 'a exp) (body : 'a exp -> 'a exp) : 'a exp =
      else E_aux (E_let (LB_aux (LB_val_implicit (pat,v),annot_lb),body),annot_let)
 
 let rec value ((E_aux (exp_aux,_)) as exp) =
-  not (effectful exp) && not (updates_vars exp) &&
+  not (effectful exp) (* && not (updates_vars exp) *) && 
     match exp_aux with
     | E_id _
     | E_lit _ -> true
     | E_tuple es
     | E_vector es
     | E_list es -> List.fold_left (&&) true (List.map value es)
+
+    (* the ones below are debatable *)
+    | E_app (_,es) -> List.fold_left (fun b e -> b && value e) true es
+    | E_app_infix (e1,_,e2) -> value e1 && value e2
+
+    | E_cast (_,e) -> value e
+    | E_vector_indexed (ies,optdefault) ->
+       List.fold_left (fun b (i,e) -> b && value e) true ies && value_optdefault optdefault
+    | E_vector_append (e1,e2) 
+    | E_vector_access (e1,e2) -> value e1 && value e2
+    | E_vector_subrange (e1,e2,e3) 
+    | E_vector_update (e1,e2,e3) -> value e1 && value e2 && value e3
+    | E_vector_update_subrange (e1,e2,e3,e4) -> value e1 && value e2 && value e3 && value e4
+    | E_cons (e1,e2) -> value e1 && value e2
+    | E_record fexps -> value_fexps fexps
+    | E_record_update (e1,fexps) -> value e1 && value_fexps fexps
+    | E_field (e1,_) -> value e1
+
     | _ -> false
+and value_optdefault (Def_val_aux (o,_)) = match o with
+  | Def_val_empty -> true
+  | Def_val_dec e -> value e
+and value_fexps (FES_aux (FES_Fexps (fexps,_),_)) =
+  List.fold_left (fun b (FE_aux (FE_Fexp (_,e),_)) -> b && value e) true fexps
     
 let only_local_eff (l,(Base ((t_params,t),tag,nexps,eff,effsum,bounds))) =
   (l,Base ((t_params,t),tag,nexps,eff,eff,bounds))
@@ -1531,11 +1554,6 @@ let rec rewrite_var_updates ((E_aux (expaux,annot)) as exp) =
              let e = rewrite_var_updates (add_vars (*overwrite*) e vartuple) in
              let pannot = (Parse_ast.Unknown,simple_annot (gettype e)) in
              let effs = union_effects effs (geteffs e) in
-             let p =
-(*               if overwrite then
-                 mktup_pat vars
-               else*)
-                 P_aux (P_tup [pat; mktup_pat vars],(Unknown,simple_annot (gettype e))) in
              let pat' = Pat_aux (Pat_exp (p,e),pannot) in
              (acc @ [pat'],typ,effs) in
            List.fold_left f ([],typ,{effect = Eset []}) ps in
