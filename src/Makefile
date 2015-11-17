@@ -13,6 +13,8 @@ interpreter:
 
 elf:
 	ocamlbuild -use-ocamlfind -pkgs batteries,uint,unix,zarith src_elf/main_elf.native
+	ocamlbuild -use-ocamlfind -pkgs batteries,uint,unix,zarith src_elf/abis/power64/abi_power64.cmxa
+	ocamlbuild -use-ocamlfind -pkgs batteries,uint,unix,zarith src_elf/abis/aarch64/abi_aarch64_le.cmxa
 
 test: sail interpreter
 	ocamlbuild test/run_tests.native

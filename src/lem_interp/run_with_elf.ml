@@ -81,6 +81,11 @@ let register_state_zero register_data rbn : register_value =
 type model = PPC | AArch64 | MIPS
 
 let ppc_register_data_all =  [
+  (*Pseudo registers*)
+  ("CIA",   (D_increasing, 64, 0));
+  ("NIA",   (D_increasing, 64, 0));
+  ("mode64bit", (D_increasing, 1, 0));
+  ("bigendianmode", (D_increasing, 1, 0));
   (* special registers *)
   ("CR",    (D_increasing, 32, 32));
   ("CTR",   (D_increasing, 64, 0 ));
@@ -437,6 +442,8 @@ let initial_stack_and_reg_data_of_AAarch64_elf_file e_entry all_data_memory =
 
   (initial_stack_data, initial_register_abi_data)
 
+let initial_reg_file reg_data init =
+  List.iter (fun (reg_name, _) -> reg := Reg.add reg_name (init reg_name) !reg) reg_data
 
 let initial_system_state_of_elf_file name = 
 
@@ -467,7 +474,7 @@ let initial_system_state_of_elf_file name =
       data_mem := Mem.empty;
       load_memory_segments segments;
 
-      let (isa_defs, isa_memory_access, isa_externs, startaddr,
+      let (isa_defs, isa_memory_access, isa_externs, isa_model, model_reg_d, startaddr,
            initial_stack_data, initial_register_abi_data, register_data_all) =
         match Nat_big_num.to_int e_machine with
         | 21  (* EM_PPC64 *) ->
@@ -481,35 +488,39 @@ let initial_system_state_of_elf_file name =
             initial_stack_and_reg_data_of_PPC_elf_file e_entry !data_mem in
 
             (Power.defs,
-              (Power_extras.read_memory_functions,Power_extras.memory_writes,[],[],Power_extras.barrier_functions),
-              Power_extras.power_externs,
-              startaddr,
-              initial_stack_data,
-              initial_register_abi_data,
-              ppc_register_data_all)
-
-        | 183 (* EM_AARCH64 *) ->
-            let startaddr =
-              let e_entry = Uint64.of_int64 (Nat_big_num.to_int64 e_entry) in
-              match Abi_aarch64_le.abi_aarch64_le_compute_program_entry_point segments e_entry with
-                | Error.Fail s -> failwith "Failed computing entry point"
-                | Error.Success s -> Nat_big_num.of_int64 (Uint64.to_int64 s)
-            in
-
-            let (initial_stack_data, initial_register_abi_data) =
-              initial_stack_and_reg_data_of_AAarch64_elf_file e_entry !data_mem in
-            
-            (ArmV8.defs,
-             (ArmV8_extras.aArch64_read_memory_functions,
-              ArmV8_extras.aArch64_memory_writes,
-	      ArmV8_extras.aArch64_memory_eas,
-	      ArmV8_extras.aArch64_memory_vals,
-              ArmV8_extras.aArch64_barrier_functions),
-             [],
+             (Power_extras.read_memory_functions,Power_extras.memory_writes,[],[],Power_extras.barrier_functions),
+             Power_extras.power_externs,
+             PPC,
+             D_increasing,
              startaddr,
              initial_stack_data,
              initial_register_abi_data,
-             aarch64_register_data_all)
+             ppc_register_data_all)
+
+        | 183 (* EM_AARCH64 *) ->
+          let startaddr =
+            let e_entry = Uint64.of_int64 (Nat_big_num.to_int64 e_entry) in
+            match Abi_aarch64_le.abi_aarch64_le_compute_program_entry_point segments e_entry with
+            | Error.Fail s -> failwith "Failed computing entry point"
+            | Error.Success s -> Nat_big_num.of_int64 (Uint64.to_int64 s)
+          in
+          
+          let (initial_stack_data, initial_register_abi_data) =
+            initial_stack_and_reg_data_of_AAarch64_elf_file e_entry !data_mem in
+          
+          (ArmV8.defs,
+           (ArmV8_extras.aArch64_read_memory_functions,
+            ArmV8_extras.aArch64_memory_writes,
+	    ArmV8_extras.aArch64_memory_eas,
+	    ArmV8_extras.aArch64_memory_vals,
+            ArmV8_extras.aArch64_barrier_functions),
+           [],
+           AArch64,
+           D_decreasing,
+           startaddr,
+           initial_stack_data,
+           initial_register_abi_data,
+           aarch64_register_data_all)
 
         | _ -> failwith (Printf.sprintf "Sail sequential interpreter can't handle the e_machine value %s, only EM_PPC64 and EM_AARCH64 are supported." (Nat_big_num.to_string e_machine))
       in
@@ -635,18 +646,22 @@ let initial_system_state_of_elf_file name =
               (register_state_zero register_data_all) rbn
       in
 
-      (* construct initial system state *)
-      let initial_system_state =
-        (isa_defs,
-	  isa_memory_access,
-	  isa_externs,
-          register_data_all,
-          initial_register_state,
-          (Interp_interface.address_of_integer startaddr))
-      in
-
-      (initial_system_state, symbol_table_pp)
-
+      begin
+        (initial_reg_file register_data_all initial_register_state);
+        
+        (* construct initial system state *)
+        let initial_system_state =
+          (isa_defs,
+	   isa_memory_access,
+	   isa_externs,
+           isa_model,
+           model_reg_d,
+           startaddr,
+           (Interp_interface.address_of_integer startaddr))
+        in
+        
+        (initial_system_state, symbol_table_pp)
+      end
     end
 
 let eager_eval = ref true
@@ -662,25 +677,128 @@ let time_it action arg =
   ignore (action arg);
   let finish_time = Sys.time () in
   finish_time -. start_time
-;;
 
-let eq_zero = function
-  | Bitvector(bools,_,_) -> List.for_all (not) bools
-;;
+let stop_condition_met model instr =
+  match model with
+  | PPC ->
+    (match instr with
+     | ("Sc", [("Lev", _, arg)], []) ->
+       Nat_big_num.equal (integer_of_bit_list arg) (Nat_big_num.of_int 32)
+     | _ -> false)
+  | AArch64 -> (match instr with
+    | ("ImplementationDefinedStopFetching", _, _) -> true
+    | _ -> false)
+  | MIPS -> false
 
-let rec fde_loop count main_func parameters mem reg ?mode track_dependencies prog =
+let is_branch model instruction =
+  let (name,_,_) = instruction in
+  match (model , name) with
+  | (PPC, "B") -> true
+  | (PPC, "Bc") -> true
+  | (PPC, "Bclr") -> true
+  | (PPC, "Bcctr") -> true
+  | (PPC, _) -> false
+  | (AArch64, "BranchImmediate") -> true
+  | (AArch64, "BranchConditional") -> true
+  | (AArch64, "CompareAndBranch") -> true
+  | (AArch64, "TestBitAndBranch") -> true
+  | (AArch64, "BranchRegister") -> true
+  | (AArch64, _) -> false
+  | (MIPS,_) -> false (*todo,fill this in*)
+
+let set_next_instruction_address model =
+  match model with
+  | PPC ->
+    let cia = Reg.find "CIA" !reg in
+    let cia_addr = address_of_register_value cia in
+    (match cia_addr with
+    | Some cia_addr ->
+      let nia_addr = add_address_nat cia_addr 4 in 
+      let nia = register_value_of_address nia_addr Interp_interface.D_increasing in
+      reg := Reg.add "NIA" nia !reg
+    | _ -> failwith "CIA address contains unknown or undefined")
+  | AArch64 ->
+    let pc = Reg.find "_PC" !reg in
+    let pc_addr = address_of_register_value pc in
+    (match pc_addr with
+     | Some pc_addr ->
+       let n_addr = add_address_nat pc_addr 4 in
+       let n_pc = register_value_of_address n_addr D_decreasing in
+       reg := Reg.add "_PC" n_pc !reg
+     | _ -> failwith "_PC address contains unknown or undefined")
+  | MIPS -> ()
+
+let add1 = Nat_big_num.add (Nat_big_num.of_int 1)
+
+let fetch_instruction_opcode_and_update_ia model =
+  match model with
+  | PPC ->
+    let cia = Reg.find "CIA" !reg in
+    let cia_addr = address_of_register_value cia in
+    (match cia_addr with
+     | Some cia_addr ->
+       let cia_a = integer_of_address cia_addr in
+       let opcode = List.map (fun b -> match b with
+           | Some b -> b
+           | None -> failwith "A byte in opcode contained unknown or undef")
+           (List.map byte_of_memory_byte
+              [Mem.find cia_a !prog_mem;
+               Mem.find (add1 cia_a) !prog_mem;
+               Mem.find (add1 (add1 cia_a)) !prog_mem;
+               Mem.find (add1 (add1 (add1 cia_a))) !prog_mem]) in
+       begin
+         reg := Reg.add "CIA" (Reg.find "NIA" !reg) !reg;
+         Opcode opcode
+       end
+     | None -> failwith "CIA address contains unknown or undefined")
+  | AArch64 ->
+    let pc = Reg.find "_PC" !reg in
+    let pc_addr = address_of_register_value pc in
+    (match pc_addr with
+     | Some pc_addr ->
+       let pc_a = integer_of_address pc_addr in
+       let opcode =  List.map (fun b -> match b with
+           | Some b -> b
+           | None -> failwith "A byte in opcode contained unknown or undef")
+           (List.map byte_of_memory_byte
+              ([Mem.find pc_a !prog_mem;
+                Mem.find (add1 pc_a) !prog_mem;
+                Mem.find (add1 (add1 pc_a)) !prog_mem;
+                Mem.find (add1 (add1 (add1 pc_a))) !prog_mem])) in
+       Opcode opcode       
+     | None -> failwith "_PC address contains unknown or undefined")
+  | _ -> assert false
+                 
+    
+
+let rec fde_loop count context model mode track_dependencies opcode =
   debugf "\n**** instruction %d  ****\n" count;
-  match Run_interp_model.run ~main_func ~parameters ~mem ~reg ~eager_eval:!eager_eval ~track_dependencies:(ref track_dependencies) ?mode prog with
-  | false, _,_, _ -> eprintf "FAILURE\n"; exit 1
-  | true, mode, track_dependencies, (my_reg, my_mem) ->
-      if eq_zero (get_reg my_reg "CIA") then
-        (if not(!test_format) 
-	 then eprintf "\nSUCCESS: returned with value %s\n"
-          (Printing_functions.val_to_string (get_reg my_reg "GPR3"))
-	 else print_test_results my_reg my_mem)	    
-      else
-        fde_loop (count+1) main_func parameters my_mem my_reg ~mode:mode track_dependencies prog
-;;
+  let (instruction,istate) = match Interp_inter_imp.decode_to_istate context opcode with
+    | Instr(instruction,istate) ->
+      debugf "\n**** Running: %s ****\n" (Printing_functions.instruction_to_string instruction);
+      (instruction,istate)
+    | Decode_error d ->
+      (match d with
+       | Interp_interface.Unsupported_instruction_error instr ->
+         debugf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instr)
+       | Interp_interface.Not_an_instruction_error op ->
+         debugf "\n**** Encountered non-decodeable opcode ****\n"
+       | Internal_error s -> debugf "\n**** Internal error on decode: %s ****\n" s);
+      exit 1
+  in
+  if stop_condition_met model instruction
+  then eprintf "\nSUCCESS program terminated\n"
+  else
+    begin
+      set_next_instruction_address model;
+      match Run_interp_model.run  istate !reg !data_mem !eager_eval track_dependencies mode "execute" with
+      | false, _,_, _ -> eprintf "FAILURE\n"; exit 1
+      | true, mode, track_dependencies, (my_reg, my_mem) ->
+        reg := my_reg;
+        data_mem := my_mem;
+        let opcode = fetch_instruction_opcode_and_update_ia model in
+          fde_loop (count + 1) context model (Some mode) (ref track_dependencies) opcode
+    end
 
 let run () =
   Arg.parse args (fun _ -> raise (Arg.Bad "anonymous parameter")) "" ;
@@ -690,35 +808,28 @@ let run () =
   end;
   if !eager_eval then Run_interp_model.debug := true;
 
-  let (((locations,start_address),_),(symbol_map)) = populate_and_obtain_symbol_to_address_mapping !file in
-  let total_size = (List.length locations) in
+  let ((isa_defs,
+       (isa_m0, isa_m1, isa_m2, isa_m3,isa_m4),
+        isa_externs,
+        isa_model,
+        model_reg_d,
+        startaddr,
+        startaddr_internal), pp_symbol_map) = initial_system_state_of_elf_file !file in
 
-  let t = time_it (List.iter load_memory) locations in
-
-  let addr = read_mem !mem (big_int_of_int start_address) 8 in
-  let _ = begin
-    startaddr := addr;
-    mainaddr := "0x" ^ (List.fold_left (^) "" (List.map (Printf.sprintf "%02x") addr));
-  end in
-  if not(!test_format) then
-    Printf.printf "start address: %s\n" !mainaddr;
-  let my_reg = init_reg () in
-  reg := my_reg;
-  if !test_format 
-  then if List.mem_assoc "TEST_MEM" symbol_map
-    then test_memory_addr := 
-      let num = (List.assoc "TEST_MEM" symbol_map) in
-      match big_int_to_vec true (big_int_of_int num) (big_int_of_int 64) with
-	| Bytevector location -> (num,location);
-    else ();
+  let initial_opcode = Opcode (List.map (fun b -> match b with
+      | Some b -> b
+      | None -> failwith "A byte in opcode contained unknown or undef")
+      (List.map byte_of_memory_byte
+         [Mem.find startaddr !prog_mem;
+          Mem.find (add1 startaddr) !prog_mem;
+          Mem.find (add1 (add1 startaddr)) !prog_mem;
+          Mem.find (add1 (add1 (add1 startaddr))) !prog_mem])) in
+  let context = build_context isa_defs isa_m0 isa_m1 isa_m2 isa_m3 isa_m4 isa_externs in
+  reg := Reg.add "PC" (register_value_of_address startaddr_internal model_reg_d ) !reg;
+  
   (* entry point: unit -> unit fde *)
-  let funk_name = "fde" in
-  let parms = [] in
   let name = Filename.basename !file in
-  if !print_bytes 
-  then lem_print_memory !mem
-  else let t =time_it (fun () -> fde_loop 0 funk_name parms !mem !reg false (name, Power.defs)) () in
-       if not(!test_format) then eprintf "Execution time: %f seconds\n" t
-;;
+  let t =time_it (fun () -> fde_loop 0 context isa_model (Some Run) (ref false) initial_opcode) () in
+  eprintf "Execution time for file %s: %f seconds\n" name t
 
 run () ;;
