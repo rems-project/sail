@@ -14,7 +14,9 @@ interpreter:
 elf:
 	ocamlbuild -use-ocamlfind -pkgs batteries,uint,unix,zarith src_elf/main_elf.native
 	ocamlbuild -use-ocamlfind -pkgs batteries,uint,unix,zarith src_elf/abis/power64/abi_power64.cmxa
+	ocamlbuild -use-ocamlfind -pkgs batteries,uint,unix,zarith src_elf/abis/power64/abi_power64.cma
 	ocamlbuild -use-ocamlfind -pkgs batteries,uint,unix,zarith src_elf/abis/aarch64/abi_aarch64_le.cmxa
+	ocamlbuild -use-ocamlfind -pkgs batteries,uint,unix,zarith src_elf/abis/aarch64/abi_aarch64_le.cma
 
 test: sail interpreter
 	ocamlbuild test/run_tests.native
@@ -23,10 +25,39 @@ test: sail interpreter
 LEM = ~/bitbucket/lem/lem
 LEMLIBOCAML = ~/bitbucket/lem/ocaml-lib/
 
-install_elf:
-	cp -p ../../system-v-abi/src/*.lem elf_model/
-	cp -p ../../system-v-abi/src/*.ml elf_model/
-	cp -p -r ../../system-v-abi/src/libraries elf_model/libraries
+ELF_DIR= ../../../bitbucket/linksem
+
+get_elf:
+	-chmod u+w src_elf/*.ml*
+	-chmod u+w src_elf/abis/*.ml*	
+	-chmod u+w src_elf/abis/amd64/*.ml*
+	-chmod u+w src_elf/abis/power64/*.ml*
+	-chmod u+w src_elf/abis/aarch64/*.ml*
+	-chmod u+w src_elf/adaptors/*.ml*
+	-chmod u+w src_elf/gnu_extensions/*.ml*
+	rm -rf src_elf/*.ml*
+	rm -rf src_elf/abis/*.ml*
+	rm -rf src_elf/abis/amd64/*.ml*
+	rm -rf src_elf/abis/power64/*.ml*
+	rm -rf src_elf/abis/aarch64/*.ml*
+	rm -rf src_elf/adaptors/*.ml*
+	rm -rf src_elf/gnu_extensions/*.ml*
+	$(MAKE) -C $(ELFDIR)/src clean
+	$(MAKE) -C $(ELFDIR)/src lem-all-ocaml
+	cp -a $(ELFDIR)/src/*.ml src_elf
+	cp -a $(ELFDIR)/src/abis/*.ml src_elf/abis
+	cp -a $(ELFDIR)/src/abis/amd64/*.ml src_elf/abis/amd64
+	cp -a $(ELFDIR)/src/abis/power64/*.ml src_elf/abis/power64
+	cp -a $(ELFDIR)/src/abis/aarch64/*.ml src_elf/abis/aarch64
+	cp -a $(ELFDIR)/src/adaptors/*.ml src_elf/adaptors
+	cp -a $(ELFDIR)/src/gnu_extensions/*.ml*
+	chmod ugo-w src_elf/*.ml*
+	chmod ugo-w src_elf/abis/*.ml*
+	chmod ugo-w src_elf/abis/amd64/*.ml*
+	chmod ugo-w src_elf/abis/power64/*.ml*
+	chmod ugo-w src_elf/abis/aarch64/*.ml*
+	chmod ugo-w src_elf/adaptors/*.ml*
+	chmod ugo-w src_elf/gnu_extensions/*.ml*
 
 
 power: sail interpreter elf
