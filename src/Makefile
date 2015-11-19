@@ -25,7 +25,7 @@ test: sail interpreter
 LEM = ~/bitbucket/lem/lem
 LEMLIBOCAML = ~/bitbucket/lem/ocaml-lib/
 
-ELF_DIR= ../../../bitbucket/linksem
+ELFDIR= ../../../bitbucket/linksem
 
 get_elf:
 	-chmod u+w src_elf/*.ml*
