@@ -1185,8 +1185,8 @@ let doc_def def = group (match def with
 let doc_defs (Defs(defs)) =
   separate_map hardline doc_def defs
 
-let print ?(len=80) channel doc = ToChannel.pretty 1. len channel doc
-let to_buf ?(len=80) buf doc = ToBuffer.pretty 1. len buf doc
+let print ?(len=100) channel doc = ToChannel.pretty 1. len channel doc
+let to_buf ?(len=100) buf doc = ToBuffer.pretty 1. len buf doc
 
 let pp_defs f d = print f (doc_defs d)
 let pp_exp b e = to_buf b (doc_exp e)
@@ -1826,14 +1826,15 @@ let doc_id_lem_type (Id_aux(i,_)) =
       * token in case of x ending with star. *)
      parens (separate space [colon; string x; empty])
 
-let doc_id_lem_ctor (Id_aux(i,_)) =
+let doc_id_lem_ctor aexp_needed (Id_aux(i,_)) =
   match i with
   | Id("bit") -> string "bit" 
   | Id i -> string (String.capitalize i)
   | DeIid x ->
      (* add an extra space through empty to avoid a closing-comment
       * token in case of x ending with star. *)
-     parens (separate space [colon; string (String.capitalize x); empty])
+     let epp = separate space [colon; string (String.capitalize x); empty] in
+     if aexp_needed then parens epp else epp
 
 let doc_typ_lem, doc_atomic_typ_lem =
   (* following the structure of parser for precedence *)
@@ -1850,8 +1851,8 @@ let doc_typ_lem, doc_atomic_typ_lem =
       Typ_arg_aux(Typ_arg_nexp n, _);
       Typ_arg_aux(Typ_arg_nexp m, _);
       Typ_arg_aux (Typ_arg_order ord, _);
-      Typ_arg_aux (Typ_arg_typ typ, _)]) ->
-    string "vector"
+      Typ_arg_aux (Typ_arg_typ typa, _)]) ->
+    string "vector" ^^ space ^^ parens (typ typa)
   | Typ_app(Id_aux (Id "range", _), [
     Typ_arg_aux(Typ_arg_nexp n, _);
     Typ_arg_aux(Typ_arg_nexp m, _);]) ->
@@ -1883,7 +1884,10 @@ let doc_lit_lem in_pat (L_aux(l,_)) =
   | L_one   -> "I"
   | L_false -> "O"
   | L_true  -> "I"
-  | L_num i -> if i < 0 then "(0 " ^ string_of_int i ^ ")" else string_of_int i
+  | L_num i ->
+     let ipp = string_of_int i in
+     (if i < 0 then "((0"^ipp^") : integer)"
+      else "("^ipp^" : integer)")
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef -> "U"
@@ -1904,7 +1908,7 @@ let doc_pat_lem apat_needed =
     | P_app(id, ((_ :: _) as pats)) ->
       (match annot with
        | Base(_,Constructor _,_,_,_,_) ->
-         doc_unop (doc_id_lem_ctor id) (separate_map space pat pats)
+         doc_unop (doc_id_lem_ctor true id) (separate_map space pat pats)
        | _ -> empty)
   | P_lit lit  -> doc_lit_lem true lit
   | P_wild -> underscore
@@ -1913,7 +1917,7 @@ let doc_pat_lem apat_needed =
   | P_typ(typ,p) -> doc_op colon (pat p) (doc_typ_lem typ) 
   | P_app(id,[]) ->
     (match annot with
-     | Base(_,Constructor n,_,_,_,_) -> doc_id_lem_ctor id
+     | Base(_,Constructor n,_,_,_,_) -> doc_id_lem_ctor apat_needed id
      | _ -> empty)
   | P_vector pats ->
     let non_bit_print () =
@@ -1938,33 +1942,56 @@ let doc_pat_lem apat_needed =
      | P_list pats -> brackets (separate_map semi pat pats) (*Never seen but easy in lem*)
   in pat
 
+let rec getregtyp (LEXP_aux (le,(_,annot))) = match le with
+  | LEXP_id _
+  | LEXP_cast _ ->
+     let (Base ((_,t),_,_,_,_,_)) = annot in
+     (match t with
+     | {t = Tabbrev ({t = Tid name},_)} -> name)
+  | LEXP_memory _ -> failwith "This lexp writes memory"
+  | LEXP_vector (le,_)
+  | LEXP_vector_range (le,_,_)
+  | LEXP_field (le,_) ->
+     getregtyp le
+
 let doc_exp_lem, doc_let_lem =
   let rec top_exp (aexp_needed : bool) (E_aux (e, (_,annot))) =
     let exp = top_exp true in
     match e with
     | E_assign((LEXP_aux(le_act,tannot) as le),e) ->
        (* can only be register writes *)
-       let (_,(Base ((_,_),tag,_,_,_,_))) = tannot in
-       (separate space)
+       let (_,(Base ((_,{t = t}),tag,_,_,_,_))) = tannot in
+       let E_aux (_,(_,(Base ((_,{t = et}),_,_,_,_,_)))) = e in
+       let (f,args) = 
          (match tag with
           | External _ ->
              (match le_act with
               | LEXP_vector (le,e2) ->
-                 [string "write_reg_bit";doc_lexp_deref_lem le;exp e2;exp e]
+                 (string "write_reg_bit",[doc_lexp_deref_lem le;exp e2;exp e])
               | LEXP_vector_range (le,e2,e3) ->
-                 [string "write_reg_range";doc_lexp_deref_lem le;exp e2;exp e3;exp e]
+                 (string "write_reg_range",[doc_lexp_deref_lem le;
+                                            parens (exp e2 ^^ comma ^^ exp e3);
+                                            exp e])
               | LEXP_field (lexp,id) ->
-                 let (Base ((_,{t = t}),_,_,_,_,_)) = annot in
-                 (match t with
-                  | Tid "bit" ->
-                     [string "write_reg_field_bit";doc_lexp_deref_lem le;doc_id_lem id;exp e]
-                  | _ -> 
-                     [string "write_reg_field";doc_lexp_deref_lem le;doc_id_lem id;exp e])
-              | (LEXP_id _ | LEXP_cast _) -> [string "write_reg";doc_lexp_deref_lem le;exp e])
-          | _ -> [string "write_reg";doc_lexp_deref_lem le;exp e]
-         )
+                 let typprefix = String.uncapitalize (getregtyp lexp) ^ "_" in
+                 (match et with
+                  | Tid "bit"
+                  | Tabbrev (_,{t=Tid "bit"}) ->
+                     (string "write_reg_field_bit"),
+                     [doc_lexp_deref_lem lexp;string typprefix ^^ doc_id_lem id;exp e]
+                  | Tapp ("vector",_)
+                  | Tabbrev (_,{t=Tapp ("vector",_)}) ->
+                     (string "write_reg_field",
+                      [doc_lexp_deref_lem lexp;string typprefix ^^ doc_id_lem id;exp e])
+                  | _ -> failwith (t_to_string {t = et})
+                 )
+              | (LEXP_id _ | LEXP_cast _) -> (string "write_reg",[doc_lexp_deref_lem le;exp e]))
+          | _ -> (string "write_reg",[doc_lexp_deref_lem le;exp e])
+         ) in
+       prefix 2 1 f (separate (break 1) args)
     | E_vector_append(l,r) ->
-       let epp = (separate space [exp l;string "^^";exp r]) in
+       let epp =
+         separate space [exp l;string "^^"] ^//^ exp r in
        if aexp_needed then parens epp else epp
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
     | E_if(c,t,e) ->
@@ -1975,9 +2002,9 @@ let doc_exp_lem, doc_let_lem =
               | Base ((_,({t = Tid "bit"})),_,_,_,_,_) ->
                  separate space [string "if";string "to_bool";exp c]
               | _ -> separate space [string "if";exp c])
-             ^/^
-               (prefix 2 1 (string "then") (exp t)) ^^ (break 1) ^^
-               (prefix 2 1 (string "else") (exp e))) in
+             ^^ break 1 ^^ 
+               (prefix 2 1 (string "then") (top_exp false t)) ^^ (break 1) ^^
+               (prefix 2 1 (string "else") (top_exp false e))) in
        if aexp_needed then parens epp else epp
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
        failwith "E_for should have been removed till now"
@@ -2002,19 +2029,28 @@ let doc_exp_lem, doc_let_lem =
                 )
              )
         | _ ->
-           let call = match annot with
-             | Base(_,External (Some n),_,_,_,_) ->
-                (match n with
-                 | "bitwise_not_bit" -> string "~"
-                 | _ -> string n)
-             | Base(_,Constructor _,_,_,_,_) -> doc_id_lem_ctor f
-             | _ -> doc_id_lem f in
-           let epp =
-             (doc_unop call)
-               (match args with
-                | [a] -> exp a
-                | args -> parens (separate_map comma exp args)) in
-           if aexp_needed then parens epp else epp
+           (match annot with
+            | Base (_,Constructor _,_,_,_,_) ->
+               let epp = separate space [doc_id_lem f;separate_map space (top_exp true) args] in
+               if aexp_needed then parens epp else epp
+            | Base (_,External (Some "bitwise_not_bit"),_,_,_,_) ->
+               let [a] = args in
+               let epp = string "~" ^^ exp a in
+               if aexp_needed then parens epp else epp
+            | _ -> 
+               let call = match annot with
+                 | Base(_,External (Some n),_,_,_,_) ->
+                    (match n with
+                     | _ -> string n)
+                 | Base(_,Constructor _,_,_,_,_) -> doc_id_lem_ctor false f
+                 | _ -> doc_id_lem f in
+               let epp =
+                 (doc_unop call)
+                   (match args with
+                    | [a] -> exp a
+                    | args -> parens (separate_map comma (top_exp false) args)) in
+               if aexp_needed then parens epp else epp
+           )
        )
     | E_vector_access(v,e) ->
        let epp = separate space [string "access";exp v;exp e] in
@@ -2023,16 +2059,16 @@ let doc_exp_lem, doc_let_lem =
        let epp = (string "slice") ^^ space ^^ (exp v) ^^ space ^^ (exp e1) ^^ space ^^ (exp e2) in
        if aexp_needed then parens epp else epp
     | E_field((E_aux(_,(_,fannot)) as fexp),id) ->
-      (match fannot with
-       | Base((_,{t= Tapp("register",_)}),_,_,_,_,_) |
-         Base((_,{t= Tabbrev(_,{t=Tapp("register",_)})}),_,_,_,_,_)->
-         let field_f = match annot with
-           | Base((_,{t = Tid "bit"}),_,_,_,_,_) |
-             Base((_,{t = Tabbrev(_,{t=Tid "bit"})}),_,_,_,_,_) ->
+       let (Base ((_,{t = t}),_,_,_,_,_)) = fannot in
+      (match t with
+       | Tabbrev({t = Tid regtyp},{t=Tapp("register",_)}) ->
+          let field_f = match annot with
+            | Base((_,{t = Tid "bit"}),_,_,_,_,_)
+            | Base((_,{t = Tabbrev(_,{t=Tid "bit"})}),_,_,_,_,_) ->
              string "read_reg_field_bit"
-             | _ -> string "read_reg_field" in
-         
-         let epp = field_f ^^ space ^^ (exp fexp) ^^ space ^^ string_lit (doc_id_lem id) in
+            | _ -> string "read_reg_field" in
+          let epp = field_f ^^ space ^^ (exp fexp) ^^ space ^^
+                      string (regtyp ^ "_") ^^ doc_id_lem id in
          if aexp_needed then parens epp else epp
       | _ -> exp fexp ^^ dot ^^ doc_id_lem id)
     | E_block [] -> string "()"
@@ -2046,7 +2082,7 @@ let doc_exp_lem, doc_let_lem =
          (match tag with
           | External _ -> separate space [string "read_reg";doc_id_lem id]
           | _ -> doc_id_lem id)
-      | Base(_,(Constructor i |Enum i),_,_,_,_) -> doc_id_lem_ctor id
+      | Base(_,(Constructor i |Enum i),_,_,_,_) -> doc_id_lem_ctor aexp_needed id
       | Base((_,t),Alias alias_info,_,_,_,_) ->
          (match alias_info with
          | Alias_field(reg,field) ->
@@ -2108,6 +2144,7 @@ let doc_exp_lem, doc_let_lem =
              | Nconst i -> string_of_big_int i
              | N2n(_,Some i) -> string_of_big_int i
              | _ -> if dir then "0" else string_of_int (List.length exps) in
+
            let epp = group (separate space [string "V"; brackets (separate_map (semi) exp exps);
                                      string start;string dir_out]) in
            if aexp_needed then parens epp else epp
@@ -2149,7 +2186,7 @@ let doc_exp_lem, doc_let_lem =
                       | _ ->
                          raise (Reporting_basic.err_unreachable dl "nono") in
                     parens (string "Just " ^^ parens (string ("UndefinedReg " ^ string_of_big_int n)))) in 
-            let iexp (i,e) = parens (separate_map comma_sp (fun x -> x) [(doc_int i); (exp e)]) in
+            let iexp (i,e) = parens (separate_map comma (fun x -> x) [(doc_int i); (exp e)]) in
             let epp =
               (separate space)
                 [call;(brackets (separate_map semi iexp iexps));
@@ -2178,12 +2215,12 @@ let doc_exp_lem, doc_let_lem =
      (match annot with
       | Base((_,t),External(Some name),_,_,_,_) ->
          let epp = match name with
-           | "bitwise_and_bit" -> separate space [exp e1;string "&.";exp e2]
-           | "bitwise_or_bit" -> separate space [exp e1;string "|.";exp e2]
-          | "bitwise_xor_bit" -> separate space [exp e1;string "+.";exp e2]
-          | "add" -> separate space [exp e1;string "+";exp e2]
-          | "minus" -> separate space [exp e1;string "-";exp e2]
-          | "multiply" -> separate space [exp e1;string "*";exp e2]
+           | "bitwise_and_bit" -> separate space [exp e1;string "&."] ^//^ exp e2
+           | "bitwise_or_bit" -> separate space [exp e1;string "|."] ^//^ exp e2
+           | "bitwise_xor_bit" -> separate space [exp e1;string "+."] ^//^ exp e2
+           | "add" -> separate space [exp e1;string "+";exp e2]
+           | "minus" -> separate space [exp e1;string "-";exp e2]
+           | "multiply" -> separate space [exp e1;string "*";exp e2]
       (*    | "lt" -> separate space [exp e1;string "<";exp e2]
           | "gt" -> separate space [exp e1;string ">";exp e2]
           | "lteq" -> separate space [exp e1;string "<=";exp e2]
@@ -2192,29 +2229,32 @@ let doc_exp_lem, doc_let_lem =
           | "gt_vec" -> separate space [exp e1;string ">";exp e2]
           | "lteq_vec" -> separate space [exp e1;string "<=";exp e2]
           | "gteq_vec" -> separate space [exp e1;string ">=";exp e2] *)
-          | _ -> separate space [string name; parens (separate_map comma exp [e1;e2])] in
+          | _ -> separate space [string name; parens (separate_map comma (top_exp false) [e1;e2])] in
           if aexp_needed then parens epp else epp
       | _ -> 
-         let epp = separate space [doc_id_lem id; parens (separate_map comma exp [e1;e2])] in
+         let epp = separate space [doc_id_lem id; parens (separate_map comma (top_exp false) [e1;e2])] in
          if aexp_needed then parens epp else epp)
   | E_internal_let(lexp, eq_exp, in_exp) ->
-     failwith "E_internal_lets should have been removed till now"
-(*     (separate
+     (*     failwith "E_internal_lets should have been removed till now" *)
+     (separate
         space
-        [string "let TAKTAK";
-         doc_lexp_lem true lexp; (*Rewriter/typecheck should ensure this is only cast or id*)
+        [string "let internal";
+         (match lexp with (LEXP_aux ((LEXP_id id | LEXP_cast (_,id)),_)) -> doc_id_lem id);
          coloneq;
          exp eq_exp;
          string "in"]) ^/^
-       exp in_exp *)
+       exp in_exp
   | E_internal_plet (pat,e1,e2) ->
-     (match pat with
-      | P_aux (P_wild,_) ->
-         (separate space [exp e1; string ">>"]) ^/^
-           top_exp false e2
-      | _ ->
-         (separate space [exp e1; string ">>= fun"; doc_pat_lem true pat;arrow]) ^/^
-           top_exp false e2)
+     let epp =
+       let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
+       match pat with
+       | P_aux (P_wild,_) ->
+          (separate space [top_exp b e1; string ">>"]) ^/^
+            top_exp false e2
+       | _ ->
+          (separate space [top_exp b e1; string ">>= fun"; doc_pat_lem true pat;arrow]) ^/^
+            top_exp false e2 in
+     if aexp_needed then parens epp else epp
   | E_internal_return (e1) ->
      separate space [string "return"; exp e1;]
   and let_exp (LB_aux(lb,_)) = match lb with
@@ -2242,8 +2282,8 @@ let doc_exp_lem, doc_let_lem =
 
 (*TODO Upcase and downcase type and constructors as needed*)
 let doc_type_union_lem (Tu_aux(typ_u,_)) = match typ_u with
-  | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_lem_ctor id; string "of"; doc_typ_lem typ;]
-  | Tu_id id -> separate space [pipe; doc_id_lem_ctor id]
+  | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_lem_ctor false id; string "of"; doc_typ_lem typ;]
+  | Tu_id id -> separate space [pipe; doc_id_lem_ctor false id]
 
 let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_single i -> parens (doc_op comma (doc_int i) (doc_int i))
@@ -2265,7 +2305,7 @@ let doc_typdef_lem (TD_aux(td,_)) = match td with
       (concat [string "type"; space; doc_id_lem_type id;])
       (doc_typquant_lem typq ar_doc)
   | TD_enum(id,nm,enums,_) ->
-    let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) doc_id_lem_ctor enums) in
+    let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_id_lem_ctor false) enums) in
     doc_op equals
       (concat [string "type"; space; doc_id_lem_type id;])
       (enums_doc)
@@ -2279,7 +2319,7 @@ let doc_tannot_opt_lem (Typ_annot_opt_aux(t,_)) = match t with
   | Typ_annot_opt_some(tq,typ) -> doc_typquant_lem tq (doc_typ_lem typ)
 
 let doc_funcl_lem (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
-  group (doc_op arrow (doc_pat_lem false pat) (doc_exp_lem false exp))
+  group (prefix 3 1 ((doc_pat_lem false pat) ^^ space ^^ arrow) (doc_exp_lem false exp))
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
@@ -2352,16 +2392,22 @@ let reg_decls (Defs defs) =
        | _ -> (regtypes,rsranges,rsbits,defs @ [def])
       ) ([],[],[],[]) defs in
 
-  let (regs,defs) =
+  let (regs,regaliases,defs) =
     List.fold_left
-      (fun (regs,defs) def ->
+      (fun (regs,regaliases,defs) def ->
        match def with
        | DEF_reg_dec (DEC_aux (DEC_reg(Typ_aux (Typ_id (Id_aux (Id typ,_)),_),Id_aux (Id name,_)),_)) ->
-          (regs @ [(name,Some typ)],defs)
+          (regs @ [(name,Some typ)],regaliases,defs)
        | DEF_reg_dec (DEC_aux (DEC_reg(_, Id_aux (Id name,_)),_)) ->
-          (regs @ [(name,None)],defs)
-       | def -> (regs,defs @ [def])
-      ) ([],[]) defs in
+          (regs @ [(name,None)],regaliases,defs)
+       | DEF_reg_dec
+           (DEC_aux (DEC_alias
+                       (Id_aux (Id name1,_),
+                        AL_aux (AL_concat (RI_aux (RI_id (Id_aux (Id name2,_)),_),
+                                           RI_aux (RI_id (Id_aux (Id name3,_)),_)),_)),_)) ->
+          (regs,regaliases @ [(name1,(name2,name3))],defs)
+       | def -> (regs,regaliases,defs @ [def])
+      ) ([],[],[]) defs in
 
   (* maybe we need a function that analyses the spec for this as well *)
   let default =
@@ -2373,7 +2419,8 @@ let reg_decls (Defs defs) =
     (prefix 2 1)
       (separate space [string "type";string "register";equals])
       ((separate_map space (fun (reg,_) -> pipe ^^ space ^^ string reg) regs)
-       ^^ space ^^ pipe ^^ space ^^ string "UndefinedReg of nat") in
+       ^^ space ^^ pipe ^^ space ^^ string "UndefinedReg of integer" ^^
+         pipe ^^ space ^^ string "RegisterPair of register * register") in
   
   let regfields_pp =
     (prefix 2 1)
@@ -2387,6 +2434,12 @@ let reg_decls (Defs defs) =
       (separate_map space (fun (fname,tname,_) ->
                            pipe ^^ space ^^ string (tname ^ "_" ^ fname)) rsbits) in
 
+  let regalias_pp =
+    (separate_map (break 1))
+      (fun (name1,(name2,name3)) ->
+       separate space [string "let";string name1;equals;string "RegisterPair";string name2;string name3])
+      regaliases in
+
   let state_pp =
     (prefix 2 1)
       (separate space [string "type";string "state";equals])
@@ -2397,10 +2450,10 @@ let reg_decls (Defs defs) =
          )) in
 
   let length_pp =
-    (separate space [string "val";string "length_reg";colon;string "register";arrow;string "nat"])
+    (separate space [string "val";string "length_reg";colon;string "register";arrow;string "integer"])
     ^/^
     (prefix 2 1)
-      (separate space [string "let";string "length_reg";equals;string "function"])
+      (separate space [string "let rec";string "length_reg";string "reg";equals;string "match reg with"])
       (((separate_map (break 1))
            (fun (name,typ) ->
             let ((n1,n2,_,_),typname) =
@@ -2412,13 +2465,15 @@ let reg_decls (Defs defs) =
            regs) ^/^
          separate space [pipe;string "UndefinedReg n";arrow;
                         string "failwith \"Trying to compute length of undefined register\""] ^/^
+         separate space [pipe;string "RegisterPair r1 r2";arrow;
+                         string "length_reg r1 + length_reg r2"] ^/^
       string "end") in
 
 
   let field_indices_pp =
     (prefix 2 1)
       ((separate space) [string "let";string "field_indices";
-                         colon;string "register_field";arrow;string "(nat * nat)";
+                         colon;string "register_field";arrow;string "(integer * integer)";
                          equals;string "function"])
       (
         ((separate_map (break 1))
@@ -2433,7 +2488,7 @@ let reg_decls (Defs defs) =
 let field_index_bit_pp =
     (prefix 2 1)
       ((separate space) [string "let";string "field_index_bit";
-                         colon;string "register_field_bit";arrow;string "nat";
+                         colon;string "register_field_bit";arrow;string "integer";
                          equals;string "function"])
       (
         ((separate_map (break 1))
@@ -2447,7 +2502,7 @@ let field_index_bit_pp =
       
   let read_regstate_pp =
     (prefix 2 1)
-      (separate space [string "let";string "read_regstate";string "s";equals;string "function"])
+      (separate space [string "let rec";string "read_regstate";string "s";equals;string "function"])
       (
         ((separate_map (break 1))
            (fun (name,_) ->
@@ -2455,11 +2510,13 @@ let field_index_bit_pp =
            regs) ^/^
           separate space [pipe;string "UndefinedReg n";arrow;
                           string "failwith \"Trying to read from undefined register\""] ^/^
+          separate space [pipe;string "RegisterPair r1 r2";arrow;
+                          string "read_regstate s r1 ^^ read_regstate s r2"] ^/^
           string "end" ^^ hardline ) in
 
   let write_regstate_pp =
     (prefix 2 1)
-      (separate space [string "let";string "write_regstate";string "s";string "reg";string "v";
+      (separate space [string "let rec";string "write_regstate";string "s";string "reg";string "v";
                        equals;string "match reg with"])
       (
         ((separate_map (break 1))
@@ -2474,11 +2531,26 @@ let field_index_bit_pp =
            ) regs) ^/^
           separate space [pipe;string "UndefinedReg n";arrow;
                           string "failwith \"Trying to write to undefined register\""]  ^/^
+          ((prefix 3 1)
+             (separate space [pipe;string "RegisterPair r1 r2";arrow])
+             ((separate (break 1))
+                [
+                  string "let size = length_reg r1 in";
+                  string "let start = get_start v in";
+                  string "let vsize = length v in";
+                  string "let vsize = integerFromNat vsize in";
+                  string ("let r1_v = slice v start " ^
+                    (if is_inc then "(size - start - 1) in" else "(start - size) - 1) in"));
+                  string ("let r2_v = slice v " ^
+                         (if is_inc then "(size - start)" else "(start - size)") ^
+                           (if is_inc then "(vsize - start) in" else ("start - vsize) in")));
+                  string "write_regstate (write_regstate s r1 r1_v) r2 r2_v"
+                ])) ^/^
           string "end" ^^ hardline ) in
 
   (separate (hardline ^^ hardline)
             [dir_pp;regs_pp;regfields_pp;regfieldsbit_pp;field_index_bit_pp;field_indices_pp;
-             state_pp;length_pp;read_regstate_pp;write_regstate_pp],defs)
+             regalias_pp;state_pp;length_pp;read_regstate_pp;write_regstate_pp],defs)
     
 let doc_defs_lem (Defs defs) =
   let (decls,defs) = reg_decls (Defs defs) in

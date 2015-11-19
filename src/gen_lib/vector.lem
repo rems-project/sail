@@ -1,9 +1,72 @@
 open import Pervasives
 
 type bit = O | I | U
-type vector 'a = V of list 'a * nat * bool
+type vector 'a = V of list 'a * integer * bool
 
-let rec nth xs (n : nat) = match (n,xs) with
+let rec nth xs (n : integer) = match (n,xs) with
   | (0,x :: xs) -> x
   | (n + 1,x :: xs) -> nth xs n
 end
+
+
+let to_bool = function
+  | O -> false
+  | I  -> true
+  end
+
+let get_start (V _ s _) = s
+let length (V bs _ _) = length bs
+
+let rec replace bs ((n : nat),b') = match (n,bs) with
+  | (_, []) -> []
+  | (0, _::bs) -> b' :: bs
+  | (n+1, b::bs) -> b :: replace bs (n,b')
+  end
+
+let make_indexed_vector_reg entries default start length =
+  let (Just v) = default in
+  V (List.foldl replace (replicate length v) entries) start
+
+let make_indexed_vector_bit entries default start length =
+  let default = match default with Nothing -> U | Just v -> v end in
+  V (List.foldl replace (replicate length default) entries) start
+
+let make_bitvector_undef length =
+  V (replicate length U) 0 true
+
+let vector_concat (V bs start is_inc) (V bs' _ _) =
+  V (bs ++ bs') start is_inc
+
+let (^^) = vector_concat
+
+val slice : vector bit -> integer -> integer -> vector bit
+let slice (V bs start is_inc) n m =
+  let n = natFromInteger n in
+  let m = natFromInteger m in
+  let start = natFromInteger start in
+  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
+  let (_,suffix) = List.splitAt offset bs in
+  let (subvector,_) = List.splitAt length suffix in
+  let n = integerFromNat n in
+  V subvector n is_inc
+
+let update (V bs start is_inc) n m (V bs' _ _) =
+  let n = natFromInteger n in
+  let m = natFromInteger m in
+  let start = natFromInteger start in
+  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
+  let (prefix,_) = List.splitAt offset bs in
+  let (_,suffix) = List.splitAt (offset + length) bs in
+  let start = integerFromNat start in
+  V (prefix ++ (List.take length bs') ++ suffix) start is_inc
+
+let hd (x :: _) = x
+
+
+val access : forall 'a. vector 'a -> (*nat*) integer -> 'a
+let access (V bs start is_inc) n =
+  if is_inc then nth bs (n - start) else nth bs (start - n)
+
+val update_pos : forall 'a. vector 'a -> (*nat*) integer -> 'a -> vector 'a
+let update_pos v n b =
+  update v n n (V [b] 0 true)
