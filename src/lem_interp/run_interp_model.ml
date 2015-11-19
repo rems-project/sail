@@ -142,16 +142,13 @@ let mode_to_string = function
   | Next -> "next"
 
 let run
-  ?(main_func = "main")
-  ?(parameters = [])
-  ?(reg=Reg.empty)
-  ?(mem=Mem.empty)
-  ?(eager_eval=true)
-  ?(track_dependencies= ref false)
-  ?mode
-  (name, spec, external_functions) =
-  let context = build_context spec [] [] [] [] [] external_functions in
-  let put_in_context stack = IState(stack,context) in
+  (istate : instruction_state)
+  reg
+  mem
+  eager_eval
+  track_dependencies
+  mode
+  name =
   (* interactive loop for step-by-step execution *)
   let usage = "Usage:
     step    go to next action [default]
@@ -289,19 +286,18 @@ let run
           step e,env', e
         | _ -> assert false        
       in
-      loop mode' env' (interp0 (make_mode (mode' = Run) !track_dependencies !default_endian) next) in
+      loop mode' env' (Interp_inter_imp.interp0 (make_mode (mode' = Run) !track_dependencies !default_endian) next) in
   let mode = match mode with
   | None -> if eager_eval then Run else Step
   | Some m -> m in
-  let Context(top_level,direction,_,_,_,_,_,_) = context in
-  let initial_state = Interp_inter_imp.initial_instruction_state top_level main_func parameters in
   let imode = make_mode eager_eval !track_dependencies !default_endian in
-  let (top_exp,(top_env,top_mem)) = top_frame_exp_state initial_state in
+  let (IState(instr_state,context)) = istate in
+  let (top_exp,(top_env,top_mem)) = top_frame_exp_state instr_state in
   debugf "%s: %s %s\n" (grey name) (blue "evaluate") 
     (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
   try
     Printexc.record_backtrace true;
-    loop mode (reg, mem) (interp0 imode (put_in_context initial_state))
+    loop mode (reg, mem) (Interp_inter_imp.interp0 imode istate)
   with e ->
     let trace = Printexc.get_backtrace () in
     debugf "%s: %s %s\n%s\n" (grey name) (red "interpretor error") (Printexc.to_string e) trace;
