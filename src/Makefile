@@ -50,7 +50,7 @@ get_elf:
 	cp -a $(ELFDIR)/src/abis/power64/*.ml src_elf/abis/power64
 	cp -a $(ELFDIR)/src/abis/aarch64/*.ml src_elf/abis/aarch64
 	cp -a $(ELFDIR)/src/adaptors/*.ml src_elf/adaptors
-	cp -a $(ELFDIR)/src/gnu_extensions/*.ml*
+	cp -a $(ELFDIR)/src/gnu_extensions/*.ml* src_elf/gnu_extensions
 	chmod ugo-w src_elf/*.ml*
 	chmod ugo-w src_elf/abis/*.ml*
 	chmod ugo-w src_elf/abis/amd64/*.ml*
