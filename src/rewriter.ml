@@ -24,6 +24,8 @@ let fresh_name () =
   let current = !fresh_name_counter in
   let () = fresh_name_counter := (current + 1) in
   current
+let reset_fresh_name_counter () =
+  fresh_name_counter := 0
 
 let geteffs_annot (_,t) = match t with
   | Base (_,_,_,_,effs,_) -> effs
@@ -344,7 +346,8 @@ let rewrite_lexp rewriters map (LEXP_aux(lexp,(l,annot))) =
   | LEXP_field (lexp,id) -> rewrap (LEXP_field (rewriters.rewrite_lexp rewriters map lexp,id))
 
 let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
-  let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),(l,annot))) = 
+  let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),(l,annot))) =
+    let _ = reset_fresh_name_counter () in
     (*let _ = Printf.eprintf "Rewriting function %s, pattern %s\n" 
       (match id with (Id_aux (Id i,_)) -> i) (Pretty_print.pat_to_string pat) in*)
   let map = get_map_tannot fdannot in
@@ -736,7 +739,11 @@ let remove_vector_concat_pat pat =
       let subv = E_aux (E_vector_subrange (E_aux (E_id rootid,rannot),index i,index j),cannot) in
       let typ = (Parse_ast.Unknown,simple_annot {t = Tid "unit"}) in
       let letbind = LB_val_implicit (P_aux (P_id child,cannot),subv) in
-      (LB_aux (letbind,typ), (fun body -> E_aux (E_let (LB_aux (letbind,cannot),body),typ))) in
+      let (Id_aux (Id rootname,_)) = rootid in
+      let (Id_aux (Id childname,_)) = child in
+      (LB_aux (letbind,typ),
+       (fun body -> E_aux (E_let (LB_aux (letbind,cannot),body),typ)),
+       (rootname,childname)) in
 
     let p_aux = function
       | ((P_as (P_aux (P_vector_concat pats,rannot'),rootid),decls),rannot) ->
@@ -747,12 +754,12 @@ let remove_vector_concat_pat pat =
                 (* if we see a named vector pattern, remove the name and remember to 
                   declare it later *)
                 | P_as (P_aux (p,cannot),cname) ->
-                   let (lb,decl) = letbind_vec (rootid,rannot) (cname,cannot) (pos,pos + length - 1) in
-                   (pos + length, pat_acc @ [P_aux (p,cannot)], decl_acc @ [(lb,decl)])
+                   let (lb,decl,info) = letbind_vec (rootid,rannot) (cname,cannot) (pos,pos + length - 1) in
+                   (pos + length, pat_acc @ [P_aux (p,cannot)], decl_acc @ [((lb,decl),info)])
                 (* if we see a P_id variable, remember to declare it later *)
                 | P_id cname ->
-                   let (lb,decl) = letbind_vec (rootid,rannot) (cname,cannot) (pos,pos + length - 1) in
-                   (pos + length, pat_acc @ [P_aux (P_id cname,cannot)], decl_acc @ [(lb,decl)])
+                   let (lb,decl,info) = letbind_vec (rootid,rannot) (cname,cannot) (pos,pos + length - 1) in
+                   (pos + length, pat_acc @ [P_aux (P_id cname,cannot)], decl_acc @ [((lb,decl),info)])
                 (* normal vector patterns are fine *)
                 | _ -> (pos + length, pat_acc @ [P_aux (p,cannot)],decl_acc) )
             (* non-vector patterns aren't *)
@@ -792,7 +799,30 @@ let remove_vector_concat_pat pat =
 
   let (pat,decls) = fold_pat unname_vector_concat_elements pat in
 
-  let (letbinds,decls) = List.split decls in
+  let decls =
+    let module S = Set.Make(String) in
+
+    let roots_needed =
+      List.fold_right
+        (fun (_,(rootid,childid)) roots_needed ->
+         if S.mem childid roots_needed then
+           (* let _ = print_endline rootid in *)
+           S.add rootid roots_needed
+         else if String.length childid >= 3 && String.sub childid 0 2 = String.sub "__v" 0 2 then
+           roots_needed
+         else
+           S.add rootid roots_needed
+        ) decls S.empty in
+    List.filter
+      (fun (_,(_,childid)) ->
+       S.mem childid roots_needed ||
+         String.length childid < 3 ||
+           not (String.sub childid 0 2 = String.sub "__v" 0 2))
+      decls in
+
+  let (letbinds,decls) =
+    let (decls,_) = List.split decls in
+    List.split decls in
 
   let decls = List.fold_left (fun f g x -> f (g x)) (fun b -> b) decls in
              
@@ -1315,7 +1345,7 @@ and n_exp (exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
   | E_internal_plet _ -> failwith "E_internal_plet should not be here yet"
                                   
 
-let rewrite_defs_a_normalise =
+let rewrite_defs_a_normalise =  
   let rewrite_exp _ _ e =
     let e = remove_blocks e in
     n_exp_term (effectful e) e in
@@ -1325,7 +1355,7 @@ let rewrite_defs_a_normalise =
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
     ; rewrite_fun = rewrite_fun
-    ; rewrite_def = rewrite_def
+    ; rewrite_def = (fun rws def -> let _ = reset_fresh_name_counter () in rewrite_def rws def)
     ; rewrite_defs = rewrite_defs_base
     }
 

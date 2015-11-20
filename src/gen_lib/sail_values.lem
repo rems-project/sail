@@ -3,16 +3,18 @@ open import State
 open import Vector
 open import Arch
 
+type i = integer
+
 let length l = integerFromNat (length l)
 
-let has_undef (V bs _ _) = List.any (function U -> true | _ -> false end) bs
+let has_undef (V bs _ _) = List.any (function Undef -> true | _ -> false end) bs
 
 let most_significant (V bs _ _) = let (b :: _) = bs in b
 
 let bitwise_not_bit = function
   | I -> O
   | O -> I
-  | _ -> U
+  | _ -> Undef
   end
 
 let (~) = bitwise_not_bit
@@ -23,8 +25,8 @@ let bitwise_not (V bs start is_inc) =
 let bool_to_bit b = if b then I else O
 
 let bitwise_binop_bit op = function
-  | (U,_) -> U (*Do we want to do this or to respect | of I and & of B0 rules?*)
-  | (_,U) -> U (*Do we want to do this or to respect | of I and & of B0 rules?*)
+  | (Undef,_) -> Undef (*Do we want to do this or to respect | of I and & of B0 rules?*)
+  | (_,Undef) -> Undef (*Do we want to do this or to respect | of I and & of B0 rules?*)
   | (x,y) -> bool_to_bit (op (to_bool x) (to_bool y))
   end
 
@@ -131,7 +133,7 @@ let to_vec_inc = to_vec true
 let to_vec_dec = to_vec false
 
 let to_vec_undef is_inc (len : integer) =
-  V (replicate (natFromInteger len) U) (if is_inc then 0 else len-1) is_inc
+  V (replicate (natFromInteger len) Undef) (if is_inc then 0 else len-1) is_inc
 
 let to_vec_inc_undef = to_vec_undef true
 let to_vec_dec_undef = to_vec_undef false
@@ -289,7 +291,7 @@ let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size (((V _ s
     end in
   if representable 
   then to_vec is_inc (act_size,n')
-  else V (List.replicate (natFromInteger act_size) U) start is_inc
+  else V (List.replicate (natFromInteger act_size) Undef) start is_inc
 
 let mod_vec = arith_op_vec_no0 integerMod false 1
 let quot_vec = arith_op_vec_no0 integerDiv false 1
@@ -313,8 +315,8 @@ let arith_op_overflow_no0_vec op sign size (((V _ start is_inc) as l),r) =
     if representable then
       (to_vec is_inc (act_size,n'),to_vec is_inc (act_size + 1,n_u'))
     else
-      (V (List.replicate (natFromInteger act_size) U) start is_inc,
-       V (List.replicate (natFromInteger (act_size + 1)) U) start is_inc) in
+      (V (List.replicate (natFromInteger act_size) Undef) start is_inc,
+       V (List.replicate (natFromInteger (act_size + 1)) Undef) start is_inc) in
   let overflow = if representable then O else I in
   (correct_size_num,overflow,most_significant one_more)
 

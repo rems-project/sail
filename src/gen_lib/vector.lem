@@ -1,6 +1,6 @@
 open import Pervasives
 
-type bit = O | I | U
+type bit = O | I | Undef
 type vector 'a = V of list 'a * integer * bool
 
 let rec nth xs (n : integer) = match (n,xs) with
@@ -28,11 +28,11 @@ let make_indexed_vector_reg entries default start length =
   V (List.foldl replace (replicate length v) entries) start
 
 let make_indexed_vector_bit entries default start length =
-  let default = match default with Nothing -> U | Just v -> v end in
+  let default = match default with Nothing -> Undef | Just v -> v end in
   V (List.foldl replace (replicate length default) entries) start
 
 let make_bitvector_undef length =
-  V (replicate length U) 0 true
+  V (replicate length Undef) 0 true
 
 let vector_concat (V bs start is_inc) (V bs' _ _) =
   V (bs ++ bs') start is_inc

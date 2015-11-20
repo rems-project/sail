@@ -1886,11 +1886,11 @@ let doc_lit_lem in_pat (L_aux(l,_)) =
   | L_true  -> "I"
   | L_num i ->
      let ipp = string_of_int i in
-     (if i < 0 then "((0"^ipp^") : integer)"
-      else "("^ipp^" : integer)")
+     (if i < 0 then "((0"^ipp^") : i)"
+      else "("^ipp^" : i)")
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
-  | L_undef -> "U"
+  | L_undef -> "Undef"
   | L_string s -> "\"" ^ s ^ "\"")
 
 (* typ_doc is the doc for the type being quantified *)
@@ -2012,22 +2012,35 @@ let doc_exp_lem, doc_let_lem =
     | E_app(f,args) ->
        (match f with
         (* temporary hack to make the loop body a function of the temporary variables *)
-        | Id_aux ((Id (("foreach_inc" | "foreach_dec") as loopf),_)) ->
+        | Id_aux ((Id (("foreach_inc" | "foreach_dec" |
+                        "foreachM_inc" | "foreachM_dec" ) as loopf),_)) ->
            let call = doc_id_lem in
-           let [id;indices;body;E_aux (E_tuple vars,_) as e5] = args in
-           let vars = List.map (fun (E_aux (E_id (Id_aux (Id name,_)),_)) -> string name) vars in
-           let varspp =
-             match vars with
-             | [v] -> v
-             | _ -> parens (separate comma vars) in
-           (prefix 2 1)
-             (parens ((separate space) [string loopf;exp indices;exp e5]))
-             (parens
-                ((prefix 1 1)
-                   (separate space [string "fun";exp id;varspp;arrow])
-                   (exp body)
-                )
-             )
+           let [id;indices;body;e5] = args in
+           (match e5 with
+            | E_aux (E_tuple vars,_) ->
+               let vars = List.map (fun (E_aux (E_id (Id_aux (Id name,_)),_)) -> string name) vars in
+               let varspp =
+                 match vars with
+                 | [v] -> v
+                 | _ -> parens (separate comma vars) in
+               (prefix 2 1)
+                 (parens ((separate space) [string loopf;exp indices;exp e5]))
+                 (parens
+                    ((prefix 1 1)
+                       (separate space [string "fun";exp id;varspp;arrow])
+                       (top_exp false body)
+                    )
+                 )
+            | E_aux (E_lit (L_aux (L_unit,_)),_) ->
+               (prefix 2 1)
+                 (parens ((separate space) [string loopf;exp indices;exp e5]))
+                 (parens
+                    ((prefix 1 1)
+                       (separate space [string "fun";exp id;string "_";arrow])
+                       (top_exp false body)
+                    )
+                 )
+           )
         | _ ->
            (match annot with
             | Base (_,Constructor _,_,_,_,_) ->
@@ -2416,31 +2429,44 @@ let reg_decls (Defs defs) =
      [],[]) in
   
   let regs_pp =
-    (prefix 2 1)
-      (separate space [string "type";string "register";equals])
-      ((separate_map space (fun (reg,_) -> pipe ^^ space ^^ string reg) regs)
-       ^^ space ^^ pipe ^^ space ^^ string "UndefinedReg of integer" ^^
-         pipe ^^ space ^^ string "RegisterPair of register * register") in
+    if regs = [] then
+      string "type register = NO_REGISTERS"
+    else
+      (prefix 2 1)
+        (separate space [string "type";string "register";equals])
+        ((separate_map space (fun (reg,_) -> pipe ^^ space ^^ string reg) regs)
+         ^^ space ^^ pipe ^^ space ^^ string "UndefinedReg of integer" ^^
+           pipe ^^ space ^^ string "RegisterPair of register * register") in
   
   let regfields_pp =
+    if rsranges = [] then
+      string "type register_field = | NO_REGISTER_FIELDS"
+    else
     (prefix 2 1)
       (separate space [string "type";string "register_field";equals])
       (separate_map space (fun (fname,tname,_,_) ->
                            pipe ^^ space ^^ string (tname ^ "_" ^ fname)) rsranges) in
 
   let regfieldsbit_pp =
+    if rsbits = [] then
+      string "type register_field_bit = | NO_REGISTER_FIELD_BITS"
+    else
     (prefix 2 1)
       (separate space [string "type";string "register_field_bit";equals])
       (separate_map space (fun (fname,tname,_) ->
                            pipe ^^ space ^^ string (tname ^ "_" ^ fname)) rsbits) in
 
   let regalias_pp =
+    if regaliases = [] then empty else
     (separate_map (break 1))
       (fun (name1,(name2,name3)) ->
        separate space [string "let";string name1;equals;string "RegisterPair";string name2;string name3])
       regaliases in
 
   let state_pp =
+    if regs = [] then
+      string "type state = EMPTY_STATE"
+    else
     (prefix 2 1)
       (separate space [string "type";string "state";equals])
       (anglebars
@@ -2450,6 +2476,9 @@ let reg_decls (Defs defs) =
          )) in
 
   let length_pp =
+    if regs = [] then
+      string "length_reg _ = (0 : integer)"
+    else
     (separate space [string "val";string "length_reg";colon;string "register";arrow;string "integer"])
     ^/^
     (prefix 2 1)
@@ -2471,6 +2500,9 @@ let reg_decls (Defs defs) =
 
 
   let field_indices_pp =
+    if rsranges = [] then
+      string "let field_indices _ = ((0 : integer),(0 : integer))"
+    else
     (prefix 2 1)
       ((separate space) [string "let";string "field_indices";
                          colon;string "register_field";arrow;string "(integer * integer)";
@@ -2485,7 +2517,10 @@ let reg_decls (Defs defs) =
         ) ^/^ string "end" ^^ hardline
       ) in
 
-let field_index_bit_pp =
+  let field_index_bit_pp =
+    if rsbits = [] then
+      string "let field_index_bit _ = (0 : integer)"
+    else
     (prefix 2 1)
       ((separate space) [string "let";string "field_index_bit";
                          colon;string "register_field_bit";arrow;string "integer";
@@ -2501,6 +2536,9 @@ let field_index_bit_pp =
 
       
   let read_regstate_pp =
+    if regs = [] then
+      string "let read_regstate _ _ -> Vector 0 0 true"
+    else
     (prefix 2 1)
       (separate space [string "let rec";string "read_regstate";string "s";equals;string "function"])
       (
@@ -2515,6 +2553,9 @@ let field_index_bit_pp =
           string "end" ^^ hardline ) in
 
   let write_regstate_pp =
+    if regs = [] then
+      string "let write_regstate _ _ _ -> EMPTY_STATE"
+    else
     (prefix 2 1)
       (separate space [string "let rec";string "write_regstate";string "s";string "reg";string "v";
                        equals;string "match reg with"])
