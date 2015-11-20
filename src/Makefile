@@ -46,6 +46,8 @@ get_elf:
 	rm -rf src_elf/gnu_extensions/*.ml*
 	$(MAKE) -C $(ELFDIR)/src clean
 	$(MAKE) -C $(ELFDIR)/src lem-all-ocaml
+	mkdir -p src_elf/{adaptors,gnu_extensions}
+	mkdir -p src_elf/abis/{aarch64,amd64,power64,x86}
 	cp -a $(ELFDIR)/src/*.ml src_elf
 	cp -a $(ELFDIR)/src/abis/*.ml src_elf/abis
 	cp -a $(ELFDIR)/src/abis/amd64/*.ml src_elf/abis/amd64
