@@ -1304,7 +1304,8 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       (E_aux(E_assign(lexp',exp'),(l,(Base(([],unit_t),tag,[],efl,effects,nob)))),unit_t,t_env',cs@cs'@c',b_env',effects)
     | E_exit e ->
       let (e',t',_,_,_,_) = check_exp envs imp_param (new_t ()) e in
-      (E_aux (E_exit e',(l,(simple_annot expect_t))),expect_t,t_env,[],nob,pure_e)
+      let efs = add_effect (BE_aux(BE_escape, l)) pure_e in
+      (E_aux (E_exit e',(l,(simple_annot_efr expect_t efs))),expect_t,t_env,[],nob,efs)
     | E_internal_cast _ | E_internal_exp _ | E_internal_exp_user _ | E_internal_let _
     | E_internal_plet _ | E_internal_return _ -> 
       raise (Reporting_basic.err_unreachable l "Internal expression passed back into type checker")

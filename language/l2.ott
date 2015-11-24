@@ -194,6 +194,7 @@ base_effect :: 'BE_' ::=
   | unspec                              :: :: unspec {{ com unspecified values }}
   | nondet                              :: :: nondet {{ com nondeterminism from intra-instruction parallelism }}
   | lset                                :: :: lset {{ com Local mutation happend; not user-writable }}
+  | escape                              :: :: escape {{ com Internal tracking of expressions and functions that might call exit }}
 
 
 effect :: 'Effect_' ::=

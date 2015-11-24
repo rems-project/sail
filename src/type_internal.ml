@@ -303,6 +303,7 @@ and ef_to_string (Ast.BE_aux(b,l)) =
       | Ast.BE_unspec-> "unspec"
       | Ast.BE_nondet-> "nondet"
       | Ast.BE_lset  -> "lset"
+      | Ast.BE_escape -> "escape" 
 and efs_to_string es = 
   match es with
     | [] -> ""
@@ -2403,6 +2404,9 @@ let compare_effect (BE_aux(e1,_)) (BE_aux(e2,_)) =
   | (BE_depend,_) -> -1
   | (_,BE_depend) -> 1
   | (BE_lset,BE_lset) -> 0
+  | (BE_lset,_) -> -1
+  | (_,BE_lset) -> 1
+  | (BE_escape,BE_escape) -> 0
 
 let effect_sort = List.sort compare_effect
 
