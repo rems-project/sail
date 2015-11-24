@@ -2426,6 +2426,12 @@ let order_eq co o1 o2 =
   | (Ovar v1,Oinc) -> eq_error l ("Polymorphic order " ^ v1 ^ " cannot be used where inc is expected")
   | (Ovar v1,Odec) -> eq_error l ("Polymorhpic order " ^ v1 ^ " cannot be used where dec is expected")
 
+let rec remove_internal_effects = function
+  | [] -> []
+  | (BE_aux(BE_lset,_))::effects
+  | (BE_aux(BE_escape,_))::effects -> remove_internal_effects effects
+  | b::effects -> b::(remove_internal_effects effects)
+
 (*Similarly to above.*)
 let effects_eq co e1 e2 =
   let l = get_c_loc co in
@@ -2433,7 +2439,8 @@ let effects_eq co e1 e2 =
   | Eset _ , Evar _ -> e2
   | Euvar i,_ -> equate_e e1 e2; e2
   | _,Euvar i -> equate_e e2 e1; e2
-  | Eset es1,Eset es2 -> 
+  | Eset es1,Eset es2 ->
+    let es1, es2 = remove_internal_effects es1, remove_internal_effects es2 in
     if (List.length es1) = (List.length es2) && (List.for_all2 eq_be_effect (effect_sort es1) (effect_sort es2) ) 
     then e2 
     else eq_error l ("Effects must be the same, given " ^ e_to_string e1 ^ " and " ^ e_to_string e2)
