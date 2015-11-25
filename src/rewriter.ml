@@ -32,6 +32,11 @@ let get_effsum_annot (_,t) = match t with
   | NoTyp -> failwith "no effect information" 
   | _ -> failwith "a_normalise doesn't support Overload"
 
+let get_localeff_annot (_,t) = match t with
+  | Base (_,_,_,eff,_,_) -> eff
+  | NoTyp -> failwith "no effect information" 
+  | _ -> failwith "a_normalise doesn't support Overload"
+
 let get_type_annot (_,t) = match t with
   | Base((_,t),_,_,_,_,_) -> t
   | NoTyp -> failwith "no type information" 
@@ -1428,16 +1433,23 @@ and n_exp (E_aux (exp_aux,annot) as exp : 'a exp) (k : 'a exp -> 'a exp) : 'a ex
                                   
 
 let rewrite_defs_a_normalise =  
-  let rewrite_exp _ _ e =
-    let e = remove_blocks e in
-    n_exp_term (effectful e) e in
+
+  let rewrite_fun _ (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),fdannot)) = 
+    let newreturn =
+      List.fold_left
+        (fun b (FCL_aux (FCL_Funcl(id,pat,exp),annot)) ->
+         b || effectful_effs (get_localeff_annot annot)) false funcls in
+    let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),annot)) =
+      let _ = reset_fresh_name_counter () in
+      FCL_aux (FCL_Funcl (id,pat,n_exp_term newreturn (remove_blocks exp)),annot)
+    in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),fdannot) in
   rewrite_defs_base
     {rewrite_exp = rewrite_exp
     ; rewrite_pat = rewrite_pat
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
     ; rewrite_fun = rewrite_fun
-    ; rewrite_def = (fun rws def -> let _ = reset_fresh_name_counter () in rewrite_def rws def)
+    ; rewrite_def = rewrite_def
     ; rewrite_defs = rewrite_defs_base
     }
 

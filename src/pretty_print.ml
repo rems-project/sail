@@ -1992,20 +1992,19 @@ let doc_exp_lem, doc_let_lem =
        prefix 2 1 f (separate (break 1) args)
     | E_vector_append(l,r) ->
        let epp =
-         separate space [exp l;string "^^"] ^//^ exp r in
+         align (separate space [exp l;string "^^"] ^//^ exp r) in
        if aexp_needed then parens epp else epp
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
     | E_if(c,t,e) ->
        let (E_aux (_,(_,cannot))) = c in
        let epp = 
-         group (
-             (match cannot with
-              | Base ((_,({t = Tid "bit"})),_,_,_,_,_) ->
-                 separate space [string "if";string "to_bool";exp c]
-              | _ -> separate space [string "if";exp c])
-             ^^ break 1 ^^ 
-               (prefix 2 1 (string "then") (top_exp false t)) ^^ (break 1) ^^
-               (prefix 2 1 (string "else") (top_exp false e))) in
+         (match cannot with
+          | Base ((_,({t = Tid "bit"})),_,_,_,_,_) ->
+             separate space [string "if";string "to_bool";exp c]
+          | _ -> separate space [string "if";exp c])
+         ^^ break 1 ^^ 
+           (prefix 2 1 (string "then") (top_exp false t)) ^^ (break 1) ^^
+             (prefix 2 1 (string "else") (top_exp false e)) in
        if aexp_needed then parens epp else epp
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
        failwith "E_for should have been removed till now"
@@ -2049,7 +2048,7 @@ let doc_exp_lem, doc_let_lem =
                if aexp_needed then parens epp else epp
             | Base (_,External (Some "bitwise_not_bit"),_,_,_,_) ->
                let [a] = args in
-               let epp = string "~" ^^ exp a in
+               let epp = align (string "~" ^^ exp a) in
                if aexp_needed then parens epp else epp
             | _ -> 
                let call = match annot with
@@ -2059,10 +2058,14 @@ let doc_exp_lem, doc_let_lem =
                  | Base(_,Constructor _,_,_,_,_) -> doc_id_lem_ctor false f
                  | _ -> doc_id_lem f in
                let epp =
-                 (doc_unop call)
-                   (match args with
-                    | [a] -> exp a
-                    | args -> parens (separate_map comma (top_exp false) args)) in
+                 align
+                   (call ^//^
+                      (match args with
+                       | [a] -> exp a
+                       | args -> (parens (separate_map (comma ^^ break 1) exp args))
+                      )
+                   )
+               in
                if aexp_needed then parens epp else epp
            )
        )
@@ -2136,11 +2139,11 @@ let doc_exp_lem, doc_let_lem =
     | E_cast(typ,e) ->
       (match annot with
       | Base(_,External _,_,_,_,_) -> string "read_reg" ^^ space ^^ exp e
-      | _ -> exp e) (*(parens (doc_op colon (group (exp e)) (doc_typ_lem typ)))) *)
+      | _ -> top_exp aexp_needed e) (*(parens (doc_op colon (group (exp e)) (doc_typ_lem typ)))) *)
     | E_tuple exps ->
        (match exps with
-        | [e] -> exp e
-        | _ -> parens (separate_map comma exp exps))
+        | [e] -> top_exp aexp_needed e
+        | _ -> parens (separate_map comma (top_exp false) exps))
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
       anglebars (separate_map semi_sp doc_fexp fexps)
     | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
@@ -2158,9 +2161,18 @@ let doc_exp_lem, doc_let_lem =
              | Nconst i -> string_of_big_int i
              | N2n(_,Some i) -> string_of_big_int i
              | _ -> if dir then "0" else string_of_int (List.length exps) in
-
-           let epp = group (separate space [string "V"; brackets (separate_map (semi) exp exps);
-                                     string start;string dir_out]) in
+           let expspp =
+             match exps with
+             | [] -> empty
+             | e :: es ->
+                let (expspp,_) =
+                  List.fold_left
+                    (fun (pp,count) e ->
+                     (pp ^^ semi ^^ (if count = 20 then break 0 else empty) ^^ top_exp false e),
+                     if count = 20 then 0 else count + 1)
+                    (top_exp false e,0) exps in
+                align (group expspp) in
+           let epp = group (separate space [string "V"; brackets expspp;string start;string dir_out]) in
            if aexp_needed then parens epp else epp
       )
     | E_vector_indexed (iexps, (Def_val_aux (default,(dl,dannot)))) ->
@@ -2200,7 +2212,7 @@ let doc_exp_lem, doc_let_lem =
                       | _ ->
                          raise (Reporting_basic.err_unreachable dl "nono") in
                     parens (string "Just " ^^ parens (string ("UndefinedReg " ^ string_of_big_int n)))) in 
-            let iexp (i,e) = parens (separate_map comma (fun x -> x) [(doc_int i); (exp e)]) in
+            let iexp (i,e) = parens (separate_map comma (fun x -> x) [(doc_int i); top_exp false e]) in
             let epp =
               (separate space)
                 [call;(brackets (separate_map semi iexp iexps));
@@ -2215,10 +2227,10 @@ let doc_exp_lem, doc_let_lem =
      let epp = separate space [string "update";exp v;exp e1;exp e2;exp e3] in
      if aexp_needed then parens epp else epp
   | E_list exps ->
-      brackets (separate_map semi exp exps)
+      brackets (separate_map semi (top_exp false) exps)
   | E_case(e,pexps) ->
      let epp = 
-       (prefix 2 1)
+       (prefix 0 1)
          (separate space [string "match"; exp e; string "with"])
          (separate_map (break 1) doc_case pexps) ^^ (break 1) ^^
          (string "end" ^^ (break 1)) in
@@ -2228,36 +2240,71 @@ let doc_exp_lem, doc_let_lem =
   | E_app_infix (e1,id,e2) ->
      (match annot with
       | Base((_,t),External(Some name),_,_,_,_) ->
-         let epp = match name with
-           | "bitwise_and_bit" -> separate space [exp e1;string "&."] ^//^ exp e2
-           | "bitwise_or_bit" -> separate space [exp e1;string "|."] ^//^ exp e2
-           | "bitwise_xor_bit" -> separate space [exp e1;string "+."] ^//^ exp e2
-           | "add" -> separate space [exp e1;string "+";exp e2]
-           | "minus" -> separate space [exp e1;string "-";exp e2]
-           | "multiply" -> separate space [exp e1;string "*";exp e2]
-      (*    | "lt" -> separate space [exp e1;string "<";exp e2]
-          | "gt" -> separate space [exp e1;string ">";exp e2]
-          | "lteq" -> separate space [exp e1;string "<=";exp e2]
-          | "gteq" -> separate space [exp e1;string ">=";exp e2]
-          | "lt_vec" -> separate space [exp e1;string "<";exp e2]
-          | "gt_vec" -> separate space [exp e1;string ">";exp e2]
-          | "lteq_vec" -> separate space [exp e1;string "<=";exp e2]
-          | "gteq_vec" -> separate space [exp e1;string ">=";exp e2] *)
-          | _ -> separate space [string name; parens (separate_map comma (top_exp false) [e1;e2])] in
-          if aexp_needed then parens epp else epp
+         let epp =
+           let aux name = exp e1 ^//^ string name ^//^ exp e2 in
+           let aux2 name = string name ^//^ exp e1 ^//^ exp e2 in
+           align
+             (match name with
+              | "bitwise_and_bit" -> aux "&."
+              | "bitwise_or_bit" -> aux "|."
+              | "bitwise_xor_bit" -> aux "+."
+              | "add" -> aux "+"
+              | "minus" -> aux "-"
+              | "multiply" -> aux "*"
+              | "quot" -> aux "/"
+              | "modulo" -> aux "(mod)"
+
+              | "add_vec" -> aux2 "add_VVV"
+              | "add_vec_signed" -> aux2 "addS_VVV"
+              | "minus_vec" -> aux2 "minus_VVV"
+              | "multiply_vec" -> aux2 "mult_VVV"
+              | "multiply_vec_signed" -> aux2 "multS_VVV"
+              | "add_vec_range" -> aux2 "add_VIV"
+              | "add_vec_range_signed" -> aux2 "addS_VIV"
+              | "minus_vec_range" -> aux2 "minus_VIV"
+              | "mult_vec_range" -> aux2 "mult_VIV"
+              | "mult_vec_range_signed" -> aux2 "multS_VIV"
+              | "add_range_vec" -> aux2 "add_IVV"
+              | "add_range_vec_signed" -> aux2 "addS_IVV"
+              | "minus_range_vec" -> aux2 "minus_IVV"
+              | "mult_range_vec" -> aux2 "mult_IVV"
+              | "mult_range_vec_signed" -> aux2 "multS_IVV"
+              | "add_range_vec_range" -> aux2 "add_IVI"
+              | "add_range_vec_range_signed" -> aux2 "addS_IVI"
+              | "minus_range_vec_range" -> aux2 "minus_IVI"
+              | "add_vec_range_range" -> aux2 "add_VII"
+              | "add_vec_range_range_signed" -> aux2 "addS_VII"
+              | "minus_vec_range_range" -> aux2 "minus_VII"
+              | "add_vec_bit" -> aux2 "add_VBV"
+              | "add_vec_bit_signed" -> aux2 "addS_VBV"
+              | "minus_vec_bit_signed" -> aux2 "minus_VBV"
+              | "add_overflow_vec" -> aux2 "addO_VVV"
+              | "add_overflow_vec_signed" -> aux2 "addSO_VVV"
+              | "minus_overflow_vec" -> aux2 "minusO_VVV"
+              | "minus_overflow_vec_signed" -> aux2 "minusSO_VVV"
+              | "mult_overflow_vec" -> aux2 "multO_VVV"
+              | "mult_overflow_vec_signed" -> aux2 "multSO_VVV"
+              | "add_overflow_vec_bit_signed" -> aux2 "addSO_VBV"
+              | "minus_overflow_vec_bit" -> aux2 "minusO_VBV"
+              | "minus_overflow_vec_bit_signed" -> aux2 "minusSO_VBV"
+
+              | _ ->
+                 string name ^//^ parens (top_exp false e1 ^^ comma ^//^ top_exp false e2)) in
+         if aexp_needed then parens epp else epp
       | _ -> 
-         let epp = separate space [doc_id_lem id; parens (separate_map comma (top_exp false) [e1;e2])] in
+         let epp =
+           align (doc_id_lem id ^//^ parens (top_exp false e1 ^^ comma ^//^ top_exp false e2)) in
          if aexp_needed then parens epp else epp)
   | E_internal_let(lexp, eq_exp, in_exp) ->
-     (*     failwith "E_internal_lets should have been removed till now" *)
-     (separate
+     failwith "E_internal_lets should have been removed till now"
+(*     (separate
         space
         [string "let internal";
          (match lexp with (LEXP_aux ((LEXP_id id | LEXP_cast (_,id)),_)) -> doc_id_lem id);
          coloneq;
          exp eq_exp;
          string "in"]) ^/^
-       exp in_exp
+       exp in_exp *)
   | E_internal_plet (pat,e1,e2) ->
      let epp =
        let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
@@ -2281,7 +2328,7 @@ let doc_exp_lem, doc_let_lem =
   and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id_lem id) (top_exp false e)
 
   and doc_case (Pat_aux(Pat_exp(pat,e),_)) =
-    doc_op arrow (separate space [pipe; doc_pat_lem false pat]) (group (top_exp false e))
+    group (prefix 3 1 (separate space [pipe; doc_pat_lem false pat;arrow]) (group (top_exp false e)))
 
   and doc_lexp_deref_lem ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
     | LEXP_field (le,id) ->

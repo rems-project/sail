@@ -138,72 +138,107 @@ let to_vec_undef is_inc (len : integer) =
 let to_vec_inc_undef = to_vec_undef true
 let to_vec_dec_undef = to_vec_undef false
 
-let add = uncurry integerAdd
-let add_signed = uncurry integerAdd
-let minus = uncurry integerMinus
-let multiply = uncurry integerMult
-let modulo = uncurry integerMod
-let quot = uncurry integerDiv
-let power = uncurry integerPow
 
-let arith_op_vec op sign (size : integer) ((V _ _ is_inc as l),r) =
+let add = integerAdd
+let add_signed = integerAdd
+let minus = integerMinus
+let multiply = integerMult
+let modulo = integerMod
+let quot = integerDiv
+let power = integerPow
+
+let arith_op_vec op sign (size : integer) (V _ _ is_inc as l) r =
   let (l',r') = (to_num sign l, to_num sign r) in
   let n = op  l' r' in
   to_vec is_inc (size * (length l),n)
 
-let add_vec = arith_op_vec integerAdd false 1
-let add_vec_signed = arith_op_vec integerAdd true 1
-let minus_vec = arith_op_vec integerMinus false 1
-let multiply_vec = arith_op_vec integerMult false 2
-let multiply_vec_signed = arith_op_vec integerMult true 2
 
-let arith_op_vec_range op sign size ((V _ _ is_inc as l),r) =
-  arith_op_vec op sign size (l, to_vec is_inc (length l,r))
+(* add_vec
+ * add_vec_signed
+ * minus_vec 
+ * multiply_vec 
+ * multiply_vec_signed
+ *)
+let add_VVV = arith_op_vec integerAdd false 1
+let addS_VVV = arith_op_vec integerAdd true 1
+let minus_VVV = arith_op_vec integerMinus false 1
+let mult_VVV = arith_op_vec integerMult false 2
+let multS_VVV = arith_op_vec integerMult true 2
 
-let add_vec_range = arith_op_vec_range integerAdd false 1
-let add_vec_range_signed = arith_op_vec_range integerAdd true 1
-let minus_vec_range = arith_op_vec_range integerMinus false 1
-let mult_vec_range = arith_op_vec_range integerMult false 2
-let mult_vec_range_signed = arith_op_vec_range integerMult true 2
+let arith_op_vec_range op sign size (V _ _ is_inc as l) r =
+  arith_op_vec op sign size l (to_vec is_inc (length l,r))
 
-let arith_op_range_vec op sign size (l,(V _ _ is_inc as r)) =
-  arith_op_vec op sign size (to_vec is_inc (length r, l), r)
+(* add_vec_range
+ * add_vec_range_signed
+ * minus_vec_range 
+ * mult_vec_range 
+ * mult_vec_range_signed
+ *)
+let add_VIV = arith_op_vec_range integerAdd false 1
+let addS_VIV = arith_op_vec_range integerAdd true 1
+let minus_VIV = arith_op_vec_range integerMinus false 1
+let mult_VIV = arith_op_vec_range integerMult false 2
+let multS_VIV = arith_op_vec_range integerMult true 2
 
-let add_range_vec = arith_op_range_vec integerAdd false 1
-let add_range_vec_signed = arith_op_range_vec integerAdd true 1
-let minus_range_vec = arith_op_range_vec integerMinus false 1
-let mult_range_vec = arith_op_range_vec integerMult false 2
-let mult_range_vec_signed = arith_op_range_vec integerMult true 2
+let arith_op_range_vec op sign size l (V _ _ is_inc as r) =
+  arith_op_vec op sign size (to_vec is_inc (length r, l)) r
 
-let arith_op_range_vec_range op sign (l,r) = uncurry op (l, to_num sign r)
+(* add_range_vec
+ * add_range_vec_signed
+ * minus_range_vec 
+ * mult_range_vec
+ * mult_range_vec_signed
+ *)
+let add_IVV = arith_op_range_vec integerAdd false 1
+let addS_IVV = arith_op_range_vec integerAdd true 1
+let minus_IVV = arith_op_range_vec integerMinus false 1
+let mult_IVV = arith_op_range_vec integerMult false 2
+let multS_IVV = arith_op_range_vec integerMult true 2
 
-let add_range_vec_range = arith_op_range_vec_range integerAdd false
-let add_range_vec_range_signed = arith_op_range_vec_range integerAdd true
-let minus_range_vec_range = arith_op_range_vec_range integerMinus false
+let arith_op_range_vec_range op sign l r = op l (to_num sign r)
 
-let arith_op_vec_range_range op sign (l,r) = uncurry op (to_num sign l,r)
+(* add_range_vec_range
+ * add_range_vec_range_signed
+ * minus_range_vec_range 
+ *)
+let add_IVI = arith_op_range_vec_range integerAdd false
+let addS_IVI = arith_op_range_vec_range integerAdd true
+let minus_IVI = arith_op_range_vec_range integerMinus false
 
-let add_vec_range_range = arith_op_vec_range_range integerAdd false
-let add_vec_range_range_signed = arith_op_vec_range_range integerAdd true
-let minus_vec_range_range = arith_op_vec_range_range integerMinus false
+let arith_op_vec_range_range op sign l r = op (to_num sign l) r
 
-let arith_op_vec_vec_range op sign ((V _ _ is_inc as l),r) = 
+(* add_vec_range_range
+ * add_vec_range_range_signed
+ * minus_vec_range_range
+ *)
+let add_VII = arith_op_vec_range_range integerAdd false
+let addS_VII = arith_op_vec_range_range integerAdd true
+let minus_VII = arith_op_vec_range_range integerMinus false
+
+let arith_op_vec_vec_range op sign (V _ _ is_inc as l) r = 
   let (l',r') = (to_num sign l,to_num sign r) in
   op l' r'
 
-let add_vec_vec_range = arith_op_vec_vec_range integerAdd false
-let add_vec_vec_range_signed = arith_op_vec_vec_range integerAdd true
+(* add_vec_vec_range
+ * add_vec_vec_range_signed
+ *)
+let add_VVI = arith_op_vec_vec_range integerAdd false
+let addS_VVI = arith_op_vec_vec_range integerAdd true
 
-let arith_op_vec_bit op sign (size : integer) ((V _ _ is_inc as l),r) =
+let arith_op_vec_bit op sign (size : integer) (V _ _ is_inc as l)r =
   let l' = to_num sign l in
-  let n = op l' match r with | I -> (1 : integer) | _ -> 0 end in
+  let n = op l' (match r with | I -> (1 : integer) | _ -> 0 end) in
   to_vec is_inc (length l * size,n)
     
-let add_vec_bit = arith_op_vec_bit integerAdd false 1
-let add_vec_bit_signed = arith_op_vec_bit integerAdd true 1
-let minus_vec_bit = arith_op_vec_bit integerMinus true 1
+(* add_vec_bit
+ * add_vec_bit_signed
+ * minus_vec_bit_signed
+ *)
+let add_VBV = arith_op_vec_bit integerAdd false 1
+let addS_VBV = arith_op_vec_bit integerAdd true 1
+let minus_VBV = arith_op_vec_bit integerMinus true 1
 
-let rec arith_op_overflow_vec (op : integer -> integer -> integer) sign size ((V _ _ is_inc as l),r) =
+let rec arith_op_overflow_vec (op : integer -> integer -> integer) sign size (V _ _ is_inc as l) r =
   let len = length l in
   let act_size = len * size in
   let (l_sign,r_sign) = (to_num sign l,to_num sign r) in
@@ -219,15 +254,22 @@ let rec arith_op_overflow_vec (op : integer -> integer -> integer) sign size ((V
   let c_out = most_significant one_more_size_u in
   (correct_size_num,overflow,c_out)
 
-let add_overflow_vec = arith_op_overflow_vec integerAdd false 1
-let add_overflow_vec_signed = arith_op_overflow_vec integerAdd true 1
-let minus_overflow_vec = arith_op_overflow_vec integerMinus false 1
-let minus_overflow_vec_signed = arith_op_overflow_vec integerMinus true 1
-let mult_overflow_vec = arith_op_overflow_vec integerMult false 2
-let mult_overflow_vec_signed = arith_op_overflow_vec integerMult true 2
+(* add_overflow_vec
+ * add_overflow_vec_signed
+ * minus_overflow_vec
+ * minus_overflow_vec_signed
+ * mult_overflow_vec
+ * mult_overflow_vec_signed
+ *)
+let addO_VVV = arith_op_overflow_vec integerAdd false 1
+let addSO_VVV = arith_op_overflow_vec integerAdd true 1
+let minusO_VVV = arith_op_overflow_vec integerMinus false 1
+let minusSO_VVV = arith_op_overflow_vec integerMinus true 1
+let multO_VVV = arith_op_overflow_vec integerMult false 2
+let multSO_VVV = arith_op_overflow_vec integerMult true 2
     
 let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (size : integer)
-                                  ((V _ _ is_inc as l),r_bit) =
+                                  (V _ _ is_inc as l) r_bit =
   let act_size = length l * size in
   let l' = to_num sign l in
   let l_u = to_num false l in
@@ -246,9 +288,13 @@ let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (siz
     else I in
   (correct_size_num,overflow,most_significant one_larger)
 
-let add_overflow_vec_bit_signed = arith_op_overflow_vec_bit integerAdd true 1
-let minus_overflow_vec_bit = arith_op_overflow_vec_bit integerMinus false 1
-let minus_overflow_vec_bit_signed = arith_op_overflow_vec_bit integerMinus true 1
+(* add_overflow_vec_bit_signed
+ * minus_overflow_vec_bit
+ * minus_overflow_vec_bit_signed 
+ *)
+let addSO_VBV = arith_op_overflow_vec_bit integerAdd true 1
+let minusO_VBV = arith_op_overflow_vec_bit integerMinus false 1
+let minusSO_VBV = arith_op_overflow_vec_bit integerMinus true 1
     
 type shift = LL | RR | LLL
 
@@ -293,9 +339,9 @@ let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size (((V _ s
   then to_vec is_inc (act_size,n')
   else V (List.replicate (natFromInteger act_size) Undef) start is_inc
 
-let mod_vec = arith_op_vec_no0 integerMod false 1
-let quot_vec = arith_op_vec_no0 integerDiv false 1
-let quot_vec_signed = arith_op_vec_no0 integerDiv true 1
+let mod_VVV = arith_op_vec_no0 integerMod false 1
+let quot_VVV = arith_op_vec_no0 integerDiv false 1
+let quotS_VVV = arith_op_vec_no0 integerDiv true 1
 
 let arith_op_overflow_no0_vec op sign size (((V _ start is_inc) as l),r) =
   let rep_size = length r * size in
@@ -320,13 +366,13 @@ let arith_op_overflow_no0_vec op sign size (((V _ start is_inc) as l),r) =
   let overflow = if representable then O else I in
   (correct_size_num,overflow,most_significant one_more)
 
-let quot_overflow_vec = arith_op_overflow_no0_vec integerDiv false 1
-let quot_overflow_vec_signed = arith_op_overflow_no0_vec integerDiv true 1
+let quotO_VVV = arith_op_overflow_no0_vec integerDiv false 1
+let quotSO_VVV = arith_op_overflow_no0_vec integerDiv true 1
 
 let arith_op_vec_range_no0 op sign size ((V _ _ is_inc as l),r) =
   arith_op_vec_no0 op sign size (l,to_vec is_inc (length l,r))
 
-let mod_vec_range = arith_op_vec_range_no0 integerMod false 1
+let mod_VIV = arith_op_vec_range_no0 integerMod false 1
 
 let duplicate (bit,length) =
   V (List.replicate (natFromInteger length) bit) 0 true
@@ -352,7 +398,7 @@ let lt_vec_signed = compare_op_vec (<) true
 let gt_vec_signed = compare_op_vec (>) true
 let lteq_vec_signed = compare_op_vec (<=) true
 let gteq_vec_signed = compare_op_vec (>=) true
-let lt_vec_unsignedp = compare_op_vec (<) false
+let lt_vec_unsigned = compare_op_vec (<) false
 let gt_vec_unsigned = compare_op_vec (>) false
 let lteq_vec_unsigned = compare_op_vec (<=) false
 let gteq_vec_unsigned = compare_op_vec (>=) false
