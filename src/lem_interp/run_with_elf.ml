@@ -79,7 +79,7 @@ let register_state_zero register_data rbn : register_value =
   in register_value_zeros dir width start_index
 
 type model = PPC | AArch64 | MIPS
-
+(*
 let ppc_register_data_all =  [
   (*Pseudo registers*)
   ("CIA",   (D_increasing, 64, 0));
@@ -441,6 +441,60 @@ let initial_stack_and_reg_data_of_AAarch64_elf_file e_entry all_data_memory =
   in
 
   (initial_stack_data, initial_register_abi_data)
+*)
+
+let mips_register_data_all =  [
+  (*Pseudo registers*)
+  ("branchPending", (D_decreasing, 1, 0));
+  ("inBranchDelay", (D_decreasing, 1, 0));
+  ("exceptionSignalled", (D_decreasing, 1, 0));
+  ("delayedPC", (D_decreasing, 64, 0));
+  (* General purpose registers *)
+  ("GPR0", (D_decreasing, 64, 0));
+  ("GPR1", (D_decreasing, 64, 0));
+  ("GPR2", (D_decreasing, 64, 0));
+  ("GPR3", (D_decreasing, 64, 0));
+  ("GPR4", (D_decreasing, 64, 0));
+  ("GPR5", (D_decreasing, 64, 0));
+  ("GPR6", (D_decreasing, 64, 0));
+  ("GPR7", (D_decreasing, 64, 0));
+  ("GPR8", (D_decreasing, 64, 0));
+  ("GPR9", (D_decreasing, 64, 0));
+  ("GPR10", (D_decreasing, 64, 0));
+  ("GPR11", (D_decreasing, 64, 0));
+  ("GPR12", (D_decreasing, 64, 0));
+  ("GPR13", (D_decreasing, 64, 0));
+  ("GPR14", (D_decreasing, 64, 0));
+  ("GPR15", (D_decreasing, 64, 0));
+  ("GPR16", (D_decreasing, 64, 0));
+  ("GPR17", (D_decreasing, 64, 0));
+  ("GPR18", (D_decreasing, 64, 0));
+  ("GPR19", (D_decreasing, 64, 0));
+  ("GPR20", (D_decreasing, 64, 0));
+  ("GPR21", (D_decreasing, 64, 0));
+  ("GPR22", (D_decreasing, 64, 0));
+  ("GPR23", (D_decreasing, 64, 0));
+  ("GPR24", (D_decreasing, 64, 0));
+  ("GPR25", (D_decreasing, 64, 0));
+  ("GPR26", (D_decreasing, 64, 0));
+  ("GPR27", (D_decreasing, 64, 0));
+  ("GPR28", (D_decreasing, 64, 0));
+  ("GPR29", (D_decreasing, 64, 0));
+  ("GPR30", (D_decreasing, 64, 0));
+  ("GPR31", (D_decreasing, 64, 0));
+  (* special registers for mul/div *)
+  ("HI", (D_decreasing, 64, 0));
+  ("LO", (D_decreasing, 64, 0));
+  (* control registers *)
+  ("CP0Status", (D_decreasing, 32, 0));
+  ("CP0Cause", (D_decreasing, 32, 0));
+  ("CP0EPC", (D_decreasing, 64, 0));
+]
+
+let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
+  let initial_stack_data = [] in 
+  let initial_register_abi_data : (string * Interp_interface.register_value) = [] in
+  (initial_stack_data, initial_register_abi_data)
 
 let initial_reg_file reg_data init =
   List.iter (fun (reg_name, _) -> reg := Reg.add reg_name (init reg_name) !reg) reg_data
@@ -477,7 +531,7 @@ let initial_system_state_of_elf_file name =
       let (isa_defs, isa_memory_access, isa_externs, isa_model, model_reg_d, startaddr,
            initial_stack_data, initial_register_abi_data, register_data_all) =
         match Nat_big_num.to_int e_machine with
-        | 21  (* EM_PPC64 *) ->
+(*        | 21  (* EM_PPC64 *) ->
           let startaddr =
             let e_entry = Uint64.of_int64 (Nat_big_num.to_int64 e_entry) in
             match Abi_power64.abi_power64_compute_program_entry_point segments e_entry with
@@ -520,9 +574,32 @@ let initial_system_state_of_elf_file name =
            startaddr,
            initial_stack_data,
            initial_register_abi_data,
-           aarch64_register_data_all)
+           aarch64_register_data_all) *)
+        | 8 (* EM_MIPS *) ->
+          let startaddr =
+            let e_entry = Uint64.of_int64 (Nat_big_num.to_int64 e_entry) in
+            match Abi_aarch64_le.abi_aarch64_le_compute_program_entry_point segments e_entry with
+            | Error.Fail s -> failwith "Failed computing entry point"
+            | Error.Success s -> Nat_big_num.of_int64 (Uint64.to_int64 s)
+          in
+          let (initial_stack_data, initial_register_abi_data) =
+            initial_stack_and_reg_data_of_MIPS_elf_file e_entry !data_mem in
+          
+          (MIPS.defs,
+           (ArmV8_extras.aArch64_read_memory_functions,
+            ArmV8_extras.aArch64_memory_writes,
+	    ArmV8_extras.aArch64_memory_eas,
+	    ArmV8_extras.aArch64_memory_vals,
+            ArmV8_extras.aArch64_barrier_functions),
+           [],
+           MIPS,
+           D_decreasing,
+           startaddr,
+           initial_stack_data,
+           initial_register_abi_data,
+           mips_register_data_all)
 
-        | _ -> failwith (Printf.sprintf "Sail sequential interpreter can't handle the e_machine value %s, only EM_PPC64 and EM_AARCH64 are supported." (Nat_big_num.to_string e_machine))
+        | _ -> failwith (Printf.sprintf "Sail sequential interpreter can't handle the e_machine value %s, only EM_PPC64, EM_AARCH64 and EM_MIPS are supported." (Nat_big_num.to_string e_machine))
       in
       
       (* pull the object symbols from the symbol table *)
@@ -688,7 +765,9 @@ let stop_condition_met model instr =
   | AArch64 -> (match instr with
     | ("ImplementationDefinedStopFetching", _, _) -> true
     | _ -> false)
-  | MIPS -> false
+  | MIPS -> (match instr with 
+    | ("HCF", _, _) -> true
+    | _ -> false)
 
 let is_branch model instruction =
   let (name,_,_) = instruction in
@@ -704,7 +783,7 @@ let is_branch model instruction =
   | (AArch64, "TestBitAndBranch") -> true
   | (AArch64, "BranchRegister") -> true
   | (AArch64, _) -> false
-  | (MIPS,_) -> false (*todo,fill this in*)
+  | (MIPS, _) -> false (*todo,fill this in*)
 
 let set_next_instruction_address model =
   match model with
@@ -726,7 +805,23 @@ let set_next_instruction_address model =
        let n_pc = register_value_of_address n_addr D_decreasing in
        reg := Reg.add "_PC" n_pc !reg
      | _ -> failwith "_PC address contains unknown or undefined")
-  | MIPS -> ()
+  | MIPS -> 
+    let pc_addr       = address_of_register_value (Reg.find "PC" !reg) in
+    let inBranchDelay = integer_value_of_register (Reg.find "inBranchDelay" !reg) in
+    let branchPending = Reg.find "branchPending" !reg in
+    let branchPending_val = integer_value_of_register (Reg.find "branchPending" !reg) in
+    let delayedPC     = address_of_register_value (Reg.find "delayedPC" !reg) in
+    (match (pc_addr, branchPending, inBranchDelay, delayedPC) with
+     | (Some pc_addr, Some 0, Some 0, _) -> (* normal *)
+       let n_addr = add_address_nat pc_addr 4 in
+       let n_pc = register_value_of_address n_addr D_decreasing in
+       begin
+         reg := Reg.add "PC" n_pc !reg
+         reg := Reg.add "inBranchDelay" branchPending_val !reg
+         reg := Reg.add "branchPending" (register_value_of_integer 0) !reg
+       end
+     | (Some pc_addr, Some 1, Some 1, _) (* delay slot *)
+     | (_, _, _, _, _) -> failwith "PC address contains unknown or undefined")
 
 let add1 = Nat_big_num.add (Nat_big_num.of_int 1)
 
@@ -767,9 +862,23 @@ let fetch_instruction_opcode_and_update_ia model =
                 Mem.find (add1 (add1 (add1 pc_a))) !prog_mem])) in
        Opcode opcode       
      | None -> failwith "_PC address contains unknown or undefined")
-  | _ -> assert false
-                 
-    
+  | MIPS -> 
+    let pc = Reg.find "PC" !reg in
+    let pc_addr = address_of_register_value pc in
+    (match pc_addr with
+    | Some pc_addr ->
+      let pc_a = integer_of_address pc_addr in
+      let opcode = List.map (fun b -> match b with
+        | Some b -> b
+        | None -> failwith "A byte in opcode contained unknown or undef")
+        (List.map byte_of_memory_byte
+           (([Mem.find pc_a !prog_mem;
+                Mem.find (add1 pc_a) !prog_mem;
+                Mem.find (add1 (add1 pc_a)) !prog_mem;
+                Mem.find (add1 (add1 (add1 pc_a))) !prog_mem])) in
+       Opcode opcode
+     | None -> failwith "PC address contains unknown or undefined")
+  |  _ -> assert false
 
 let rec fde_loop count context model mode track_dependencies opcode =
   debugf "\n**** instruction %d  ****\n" count;

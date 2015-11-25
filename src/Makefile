@@ -75,6 +75,15 @@ power: sail interpreter elf
 	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -package num -package bitstring -package batteries -package uint -I $(LEMLIBOCAML) -I ../lem_interp/ -I ../elf_model/ -linkpkg $(LEMLIBOCAML)extract.cmxa ../pprint/src/PPrintLib.cmxa ../lem_interp/extract.cmxa elf_extract.cmxa power.ml run_power.ml -o run_power.native
 	ln -fs _build/test/run_power.native run_power.native
 
+#	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -package num -package bitstring -package batteries -package uint -I $(LEMLIBOCAML) -I ../lem_interp/ -I ../elf_model/ -linkpkg $(LEMLIBOCAML)extract.cmxa ../pprint/src/PPrintLib.cmxa ../lem_interp/extract.cmxa elf_extract.cmxa power.ml run_power.ml -o run_power.native
+mips: sail interpreter elf
+	mkdir -p _build/test
+	cp -p test/* _build/test/
+	cd _build/test ;\
+	../../sail.native -lem_ast mips.sail ;\
+	$(LEM) -ocaml -only_changed_output -lib ../lem_interp/ power.lem;\
+	ln -fs _build/test/run_power.native run_power.native
+
 test_power: power
 	./run_power.native --file ../../../rsem/idl/power/binary/main.bin
 

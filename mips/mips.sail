@@ -1478,6 +1478,10 @@ function clause decode (0b000000 : 0b00000 : 0b00000 : 0b00000 : (regno) stype :
 function clause execute(SYNC) =
   MEM_sync()
 
+union ast member unit HCF
+function clause decode (0b010000 : 0b00100 : (regno) rt : 0b10111 : 0b00000000000) =
+  HCF() (* simulator halt instruction "MTC0 rt, $23" (cheri specific behaviour) *)
+
 function clause decode _ = exit no_matching_pattern
 
 end decode
@@ -1505,8 +1509,8 @@ function unit fde() =
   else if inBranchDelay then
     {
       PC := delayedPC;
-      inBranchDelay := 1;
-      branchPending := 1;
+      inBranchDelay := 0;
+      branchPending := 0;
     }
   else 
     {
