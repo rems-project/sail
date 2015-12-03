@@ -1,4 +1,4 @@
-open import Pervasives
+open import Pervasives_extra
 open import State
 open import Vector
 open import Arch
@@ -9,7 +9,10 @@ let length l = integerFromNat (length l)
 
 let has_undef (V bs _ _) = List.any (function Undef -> true | _ -> false end) bs
 
-let most_significant (V bs _ _) = let (b :: _) = bs in b
+let most_significant = function
+  | (V (b :: _) _ _) -> b
+  | _ -> failwith "most_significant applied to empty vector"
+  end
 
 let bitwise_not_bit = function
   | I -> O
@@ -57,16 +60,15 @@ let bitwise_or = bitwise_binop (||)
 let bitwise_xor = bitwise_binop xor
 
 let unsigned (V bs _ _ as v) : integer =
-  match has_undef v with
-  | true ->
-     fst (List.foldl
-            (fun (acc,exp) b -> (acc + (if b = I then integerPow 2 exp else 0),exp +1)) (0,0) bs)
-  end
+  if has_undef v then failwith "unsigned applied to vector with undefined bits" else
+    fst (List.foldl
+           (fun (acc,exp) b -> (acc + (if b = I then integerPow 2 exp else 0),exp +1)) (0,0) bs)
 
 let signed v : integer =
   match most_significant v with
   | I -> 0 - (1 + (unsigned (bitwise_not v)))
   | O -> unsigned v
+  | _ -> failwith "signed applied to vector with undefined bits"
   end
 
 let to_num sign = if sign then signed else unsigned
@@ -114,6 +116,7 @@ let rec add_one_bit bs co (i : integer) =
     | (O,true)  -> add_one_bit (replace bs (natFromInteger i,I)) true (i-1)
     | (I,false) -> add_one_bit (replace bs (natFromInteger i,O)) true (i-1)
     | (I,true)  -> add_one_bit bs true (i-1)
+    | _ -> failwith "add_one_bit applied to list with undefined bit"
    (*    | Vundef,_ -> assert false*) 
   end
 
@@ -215,7 +218,7 @@ let add_VII = arith_op_vec_range_range integerAdd false
 let addS_VII = arith_op_vec_range_range integerAdd true
 let minus_VII = arith_op_vec_range_range integerMinus false
 
-let arith_op_vec_vec_range op sign (V _ _ is_inc as l) r = 
+let arith_op_vec_vec_range op sign l r = 
   let (l',r') = (to_num sign l,to_num sign r) in
   op l' r'
 
@@ -276,6 +279,7 @@ let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (siz
   let (n,nu,changed) = match r_bit with
     | I -> (op l' 1, op l_u 1, true)
     | O -> (l',l_u,false)
+    | _ -> failwith "arith_op_overflow_vec_bit applied to undefined bit"
     end in
 (*    | _ -> assert false *)
   let correct_size_num = to_vec is_inc (act_size,n) in

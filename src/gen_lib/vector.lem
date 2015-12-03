@@ -1,17 +1,18 @@
-open import Pervasives
+open import Pervasives_extra
 
 type bit = O | I | Undef
 type vector 'a = V of list 'a * integer * bool
 
-let rec nth xs (n : integer) = match (n,xs) with
-  | (0,x :: xs) -> x
-  | (n + 1,x :: xs) -> nth xs n
-end
-
+let rec nth xs (n : integer) =
+  match xs with
+  | x :: xs -> if n = 0 then x else nth xs (n - 1)
+  | _ -> failwith "nth applied to empty list"
+  end
 
 let to_bool = function
   | O -> false
   | I  -> true
+  | Undef -> failwith "to_bool applied to Undef"
   end
 
 let get_start (V _ s _) = s
@@ -24,8 +25,10 @@ let rec replace bs ((n : nat),b') = match (n,bs) with
   end
 
 let make_indexed_vector_reg entries default start length =
-  let (Just v) = default in
-  V (List.foldl replace (replicate length v) entries) start
+  match default with
+  | Just v -> V (List.foldl replace (replicate length v) entries) start
+  | Nothing -> failwith "make_indexed_vector used without default value"
+  end
 
 let make_indexed_vector_bit entries default start length =
   let default = match default with Nothing -> Undef | Just v -> v end in
@@ -59,9 +62,6 @@ let update (V bs start is_inc) n m (V bs' _ _) =
   let (_,suffix) = List.splitAt (offset + length) bs in
   let start = integerFromNat start in
   V (prefix ++ (List.take length bs') ++ suffix) start is_inc
-
-let hd (x :: _) = x
-
 
 val access : forall 'a. vector 'a -> (*nat*) integer -> 'a
 let access (V bs start is_inc) n =

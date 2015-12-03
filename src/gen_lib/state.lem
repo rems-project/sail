@@ -1,9 +1,25 @@
-open import Pervasives
+open import Pervasives_extra
 open import Vector
 open import Arch
 
 (* 'a is result type, 'e is error type *)
 type M 's 'e 'a = 's -> (either 'a 'e * 's)
+
+type memstate = map integer (list bit)
+
+type state =
+  <| regstate : regstate;
+     memstate : memstate;
+     writeEA : integer * integer|>
+
+let compose f g x = f (g x)
+
+val ints_aux : list integer -> integer -> list integer
+let rec ints_aux acc x = 
+  if x = 0 then []
+  else ints_aux ((x - 1) :: acc) (x - 1)
+
+let ints = ints_aux []
 
 val return : forall 's 'e 'a. 'a -> M 's 'e 'a
 let return a s = (Left a,s)
@@ -19,6 +35,44 @@ let exit e s = (Right e,s)
 
 let (>>=) = bind
 let (>>) m n = m >>= fun _ -> n
+
+val read_writeEA : forall 'e. unit -> M state 'e (integer * integer)
+let read_writeEA () s = (Left s.writeEA,s)
+
+val write_writeEA : forall 'e. integer -> integer -> M state 'e unit
+let write_writeEA addr l s = (Left (), <| s with writeEA = (addr,l) |>)
+
+val byte_chunks : forall 'a. integer -> list 'a -> list (list 'a)
+let rec byte_chunks n l =
+  if n = 0 then []
+  else
+    match l with
+    | a::b::c::d::e::f::g::h::rest -> [a;b;c;d;e;f;g;h] :: byte_chunks (n - 1) rest
+    | _ -> failwith "byte_chunks not given enough bits"
+    end
+
+val read_regstate : state -> register -> vector bit
+let read_regstate s = read_regstate_aux s.regstate
+
+val write_regstate : state -> register -> vector bit -> state
+let write_regstate s reg v = <| s with regstate = (write_regstate_aux s.regstate reg v) |>
+
+val read_memstate : memstate -> integer -> list bit
+let read_memstate s addr = findWithDefault addr (replicate 8 Undef) s
+
+val write_memstate : memstate -> (integer * list bit) -> memstate
+let write_memstate s (addr,bits) = Map.insert addr bits s
+
+val read_memory : forall 'e. integer -> integer -> M state 'e (vector bit)
+let read_memory addr l s =
+  let bytes = List.map (compose (read_memstate s.memstate) ((+) addr)) (ints l) in
+  (Left (V (foldl (++) [] bytes) 0 defaultDir),s)
+
+val write_memory : forall 'e. integer -> integer -> vector bit -> M state 'e unit
+let write_memory addr l (V bits _ _) s =
+  let addrs = List.map ((+) addr) (ints l) in
+  let bytes = byte_chunks l bits in
+  (Left (), <| s with memstate = foldl write_memstate s.memstate (zip addrs bytes) |>)
 
 val read_reg_range : forall 'e. register -> (integer * integer) (*(nat * nat)*) -> M state 'e (vector bit)
 let read_reg_range reg (i,j) s =
