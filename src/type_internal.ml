@@ -1437,6 +1437,8 @@ let constrained_annot_efr t cs efr = Base(([],t),Emp_local,cs,pure_e,efr,nob)
 let cons_tag_annot t tag cs = Base(([],t),tag,cs,pure_e,pure_e,nob)
 let cons_efl_annot t cs ef = Base(([],t),Emp_local,cs,ef,pure_e,nob)
 let cons_efs_annot t cs efl efr = Base(([],t),Emp_local,cs,efl,efr,nob)
+let efs_annot t efl efr = Base(([],t),Emp_local,[],efl,efr,nob)
+let tag_efs_annot t tag efl efr = Base(([],t),tag,[],efl,efr,nob)
 let cons_bs_annot t cs bs = Base(([],t),Emp_local,cs,pure_e,pure_e,bs)
 
 let initial_abbrev_env =
@@ -2431,6 +2433,19 @@ let rec remove_internal_effects = function
   | (BE_aux(BE_lset,_))::effects
   | (BE_aux(BE_escape,_))::effects -> remove_internal_effects effects
   | b::effects -> b::(remove_internal_effects effects)
+
+let has_effect searched_for eff =
+  match eff.effect with
+    | Eset es ->
+      List.exists (eq_be_effect searched_for) es
+    | _ -> false
+
+let has_rreg_effect = has_effect (BE_aux(BE_rreg, Parse_ast.Unknown))
+let has_wreg_effect = has_effect (BE_aux(BE_wreg, Parse_ast.Unknown))
+let has_rmem_effect = has_effect (BE_aux(BE_rmem, Parse_ast.Unknown))
+let has_wmem_effect = has_effect (BE_aux(BE_wmem, Parse_ast.Unknown))
+let has_eamem_effect = has_effect (BE_aux(BE_eamem, Parse_ast.Unknown))
+let has_memv_effect = has_effect (BE_aux(BE_wmv, Parse_ast.Unknown))
 
 (*Similarly to above.*)
 let effects_eq co e1 e2 =

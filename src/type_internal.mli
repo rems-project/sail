@@ -193,7 +193,13 @@ val lookup_field_type : string -> rec_env -> t option
 val add_effect : Ast.base_effect -> effect -> effect
 val union_effects : effect -> effect -> effect
 val e_to_string : effect -> string
-
+val has_rreg_effect : effect -> bool
+val has_wreg_effect : effect -> bool
+val has_rmem_effect : effect -> bool
+val has_wmem_effect : effect -> bool
+val has_eamem_effect : effect -> bool
+val has_memv_effect : effect -> bool
+  
 val initial_kind_env : kind Envmap.t
 val initial_abbrev_env : tannot Envmap.t
 val initial_typ_env : tannot Envmap.t
@@ -214,6 +220,8 @@ val constrained_annot_efr : t -> nexp_range list -> effect -> tannot
 val cons_tag_annot : t -> tag -> nexp_range list -> tannot
 val cons_efl_annot : t -> nexp_range list -> effect -> tannot
 val cons_efs_annot : t -> nexp_range list -> effect -> effect -> tannot
+val efs_annot : t -> effect -> effect -> tannot
+val tag_efs_annot: t -> tag -> effect -> effect -> tannot
 val cons_bs_annot : t -> nexp_range list -> bounds_env -> tannot
 
 

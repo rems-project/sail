@@ -180,14 +180,17 @@ let typschm_to_tannot envs imp_parm_ok fun_ok ((TypSchm_aux(typschm,l)):typschm)
       let (ids,_,constraints) = typq_to_params envs tq in
       Base((ids,t),tag,constraints,pure_e,pure_e,nob)
 
+let into_register_typ t =
+  match t.t with
+    | Tapp("register",_) -> t
+    | Tabbrev(ti,{t=Tapp("register",_)}) -> t
+    | _ -> {t=Tapp("register",[TA_typ t])}
+        
 let into_register d_env (t : tannot) : tannot =
   match t with
     | Base((ids,ty),tag,constraints,eftl,eftr,bindings) -> 
       let ty',_ =  get_abbrev d_env ty in
-      (match ty'.t with 
-        | Tapp("register",_)-> t
-        | Tabbrev(ti,{t=Tapp("register",_)}) -> Base((ids,ty'),tag,constraints,eftl,eftr,bindings)
-        | _ -> Base((ids, {t= Tapp("register",[TA_typ ty'])}),tag,constraints,eftl,eftr,bindings))
+      Base((ids,into_register_typ ty'),tag,constraints,eftl,eftr,bindings)
     | t -> t
 
 let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat) * (tannot emap) * nexp_range list * bounds_env * t)  =
@@ -969,11 +972,23 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let item_t = new_t () in
       let index = new_n () in
       let vt = {t= Tapp("vector",[TA_nexp base;TA_nexp len;TA_ord ord; TA_typ item_t])} in
-      let (vec',t',_,cs,_,ef) = check_exp envs imp_param vt vec in
+      let (vec',t',cs,ef),va_lef,tag =
+        match check_exp envs imp_param vt vec with
+          | vec',t',_,cs,_,ef ->
+            match vec' with
+              | E_aux(_, (_, Base(_, External _, _, leff, ceff, _))) ->
+                 if has_rreg_effect leff
+                 then let (vec',t',_,cs,_,ef) = check_exp envs imp_param (into_register_typ t') vec in
+                      (vec',t',cs,ef),(add_effect (BE_aux(BE_rreg,l)) pure_e),External None
+                 else (vec',t',cs,ef),pure_e, Emp_local
+              | _ -> (vec',t',cs,ef),pure_e, Emp_local
+      in
       let it = mk_atom index in
       let (i',ti',_,cs_i,_,ef_i) = check_exp envs imp_param it i in
       let ord,item_t = match t'.t with
-        | Tabbrev(_,{t=Tapp("vector",[_;_;TA_ord ord;TA_typ t])}) | Tapp("vector",[_;_;TA_ord ord;TA_typ t]) -> ord,t
+        | Tabbrev(_,{t=Tapp("vector",[_;_;TA_ord ord;TA_typ t])}) | Tapp("vector",[_;_;TA_ord ord;TA_typ t])
+        | Tabbrev(_,{t=Tapp("register",[TA_typ{t=Tapp ("vector",[_;_;TA_ord ord;TA_typ t])}])})
+        | Tapp("register", [TA_typ{t=Tapp ("vector",[_;_;TA_ord ord;TA_typ t])}]) -> ord,t
         | _ -> ord,item_t in
       let oinc_max_access = mk_sub (mk_add base len) n_one in
       let odec_min_access = mk_sub base len in
@@ -991,9 +1006,9 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       in 
       (*let _ = Printf.eprintf "Type checking vector access. item_t is %s and expect_t is %s\n" 
         (t_to_string item_t) (t_to_string expect_t) in*)
-      let sub_effects = union_effects ef ef_i in
+      let sub_effects = union_effects (union_effects va_lef ef) ef_i in
       let t',cs',ef',e'=type_coerce (Expr l) d_env Require false false b_env item_t 
-        (E_aux(E_vector_access(vec',i'),(l,simple_annot_efr item_t sub_effects))) expect_t in
+        (E_aux(E_vector_access(vec',i'),(l,tag_efs_annot item_t tag va_lef sub_effects))) expect_t in
       (e',t',t_env,cs_loc@cs_i@cs@cs',nob,union_effects ef' sub_effects)
     | E_vector_subrange(vec,i1,i2) ->
       (*let _ = Printf.eprintf "checking e_vector_subrange: expect_t is %s\n" (t_to_string expect_t) in*)
@@ -1236,7 +1251,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
             | records -> typ_error l "Multiple structs contain this set of fields, try adding a cast to disambiguate")
         | _ -> typ_error l ("Expected a struct to update but found an expression of type " ^ t_to_string expect_t))
     | E_field(exp,id) ->
-      let (e',t',_,c_sub,_,ef_sub) = check_exp envs imp_param (new_t()) exp in
+      let (e',t',env_sub,c_sub,bounds,ef_sub) = check_exp envs imp_param (new_t()) exp in
       let fi = id_to_string id in
       (match t'.t with
       | Tabbrev({t=Tid i}, _) | Tabbrev({t=Tapp(i,_)},_) | Tid i | Tapp(i,_) ->
@@ -1248,16 +1263,24 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
                 | Some t ->
                   let ft = typ_subst subst_env false t in
                   let (_,cs_sub') = type_consistent (Expr l) d_env Guarantee false ts t' in
+                  let (e',t',_,c_sub,_,ef_sub),ef_update =
+                    match rec_kind with
+                      | Register ->
+                        (check_exp envs imp_param (into_register_typ t') exp, add_effect (BE_aux(BE_rreg, l)) pure_e)
+                      | Record -> ((e',t',env_sub,c_sub,bounds,ef_sub), pure_e) in
                   let (et',c',ef',acc) = 
                     type_coerce (Expr l) d_env Require false false b_env ft 
-                      (E_aux(E_field(e',id),(l,Base(([],ft),tag,cs,eft,ef_sub,bounds)))) expect_t in
-                  (acc,et',t_env,cs@c'@c_sub@cs_sub',nob,union_effects ef' ef_sub))
+                      (E_aux(E_field(e',id),
+                             (l,Base(([],ft),
+                                     tag,cs,union_effects eft ef_update,union_effects ef_sub ef_update,bounds))))
+                      expect_t in
+                  (acc,et',t_env,cs@c'@c_sub@cs_sub',nob,union_effects ef' (union_effects ef_update ef_sub)))
             | _ -> 
               typ_error l ("Expected a struct or register for this access, instead found an expression with type " ^ i))
       | Tuvar _ ->
         (match lookup_possible_records [fi] d_env.rec_env with
          | [] -> typ_error l ("No struct or register has a field " ^ fi)
-         | [(((i,rkind,(Base((params,t),tag,cs,eft,_,bounds)),fields) as r))] ->
+         | [(((i,rec_kind,(Base((params,t),tag,cs,eft,_,bounds)),fields) as r))] ->
            let (ts,cs,eft,subst_env) = subst params false t cs eft in
            (match lookup_field_type fi r with
             | None -> 
@@ -1266,10 +1289,17 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
             | Some t ->
               let ft = typ_subst subst_env false t in
               let (_,cs_sub') = type_consistent (Expr l) d_env Guarantee false ts t' in
+              let (e',t',_,c_sub,_,ef_sub),ef_update =
+                match rec_kind with
+                  | Register ->
+                    (check_exp envs imp_param (into_register_typ t') exp, add_effect (BE_aux(BE_rreg, l)) pure_e)
+                  | Record -> ((e',t',env_sub,c_sub,bounds,ef_sub), pure_e) in
               let (et',c',ef',acc) = 
                 type_coerce (Expr l) d_env Require false false b_env ft 
-                  (E_aux(E_field(e',id),(l,Base(([],ft),tag,cs,eft,ef_sub,bounds)))) expect_t in
-              (acc,et',t_env,cs@c'@c_sub@cs_sub',nob,union_effects ef' ef_sub))
+                  (E_aux(E_field(e',id),
+                         (l,Base(([],ft),tag,
+                                 cs,union_effects eft ef_update,union_effects ef_sub ef_update,bounds)))) expect_t in
+              (acc,et',t_env,cs@c'@c_sub@cs_sub',nob,union_effects ef' (union_effects ef_update ef_sub)))
          | records ->
            typ_error l ("Multiple structs or registers contain field " ^ fi ^ ", try adding a cast to disambiguate"))
       | _ -> typ_error l ("Expected a struct or register for access but found an expression of type " ^ t_to_string t'))
