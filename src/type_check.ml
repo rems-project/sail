@@ -972,17 +972,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let item_t = new_t () in
       let index = new_n () in
       let vt = {t= Tapp("vector",[TA_nexp base;TA_nexp len;TA_ord ord; TA_typ item_t])} in
-      let (vec',t',cs,ef),va_lef,tag =
-        match check_exp envs imp_param vt vec with
-          | vec',t',_,cs,_,ef ->
-            match vec' with
-              | E_aux(_, (_, Base(_, External _, _, leff, ceff, _))) ->
-                 if has_rreg_effect leff
-                 then let (vec',t',_,cs,_,ef) = check_exp envs imp_param (into_register_typ t') vec in
-                      (vec',t',cs,ef),(add_effect (BE_aux(BE_rreg,l)) pure_e),External None
-                 else (vec',t',cs,ef),pure_e, Emp_local
-              | _ -> (vec',t',cs,ef),pure_e, Emp_local
-      in
+      let (vec',t',cs,ef),va_lef,tag = recheck_for_register envs imp_param vt vec in
       let it = mk_atom index in
       let (i',ti',_,cs_i,_,ef_i) = check_exp envs imp_param it i in
       let ord,item_t = match t'.t with
@@ -1020,7 +1010,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
         | Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord_n; TA_typ item_t]) -> item_t
         | _ -> new_t() in
       let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp length;TA_ord ord;TA_typ item_t])} in
-      let (vec',vt',_,cs,_,ef) = check_exp envs imp_param vt vec in      
+      let (vec',vt',cs,ef),v_efs,tag = recheck_for_register envs imp_param vt vec in      
       let i1t = {t=Tapp("atom",[TA_nexp n1_start])} in
       let (i1', ti1, _,cs_i1,_,ef_i1) = check_exp envs imp_param i1t i1 in
       let i2t = {t=Tapp("atom",[TA_nexp n2_end])} in
@@ -1049,10 +1039,10 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
              Eq((Expr l), new_length, mk_add (mk_sub n1_start n2_end) n_one)]
           | _ -> typ_error l "A vector must be either increasing or decreasing to access a slice" in
       let nt = {t = Tapp("vector", [TA_nexp n1_start; TA_nexp new_length; TA_ord ord; TA_typ item_t]) } in
-      let sub_effects = union_effects ef (union_effects ef_i1 ef_i2) in
+      let sub_effects = union_effects v_efs (union_effects ef (union_effects ef_i1 ef_i2)) in
       let (t,cs3,ef3,e') = 
         type_coerce (Expr l) d_env Require false false b_env nt 
-          (E_aux(E_vector_subrange(vec',i1',i2'),(l,constrained_annot_efr nt cs_loc sub_effects))) expect_t in
+          (E_aux(E_vector_subrange(vec',i1',i2'),(l,Base(([], nt),tag, cs_loc,v_efs, sub_effects,nob)))) expect_t in
       (e',t,t_env,cs3@cs@cs_i1@cs_i2@cs_loc,nob,union_effects ef3 sub_effects)
     | E_vector_update(vec,i,e) ->
       let base,rise,ord = new_n(),new_n(),new_o() in
@@ -1339,7 +1329,19 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
     | E_internal_cast _ | E_internal_exp _ | E_internal_exp_user _ | E_internal_let _
     | E_internal_plet _ | E_internal_return _ -> 
       raise (Reporting_basic.err_unreachable l "Internal expression passed back into type checker")
-                    
+
+and recheck_for_register envs imp_param expect_t exp = 
+  match check_exp envs imp_param expect_t exp with
+  | exp',t',_,cs,_,ef ->
+    match exp' with
+    | E_aux(_, (l, Base(_, _, _, leff, ceff, _))) ->
+      if has_rreg_effect ceff
+      then try let (exp',t',_,cs,_,ef) = check_exp envs imp_param (into_register_typ t') exp in
+          (exp',t',cs,ef),(add_effect (BE_aux(BE_rreg,l)) pure_e),External None
+        with | _ -> (exp',t',cs,ef),pure_e, Emp_local
+      else (exp',t',cs,ef),pure_e, Emp_local
+    | _ -> (exp',t',cs,ef),pure_e, Emp_local
+
 and check_block envs imp_param expect_t exps:((tannot exp) list * tannot * nexp_range list * t * effect) =
   let Env(d_env,t_env,b_env,tp_env) = envs in
   match exps with

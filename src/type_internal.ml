@@ -2795,7 +2795,7 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
         | _,_ -> equate_o o1 o2); 
         let cs = csp@[Eq(co,r1,r2)] in
         let t',cs' = type_consistent co d_env enforce widen t1i t2i in
-        let tannot = Base(([],t2),Emp_local,cs@cs',pure_e,pure_e,nob) in
+        let tannot = Base(([],t2),Emp_local,cs@cs',pure_e,(get_cummulative_effects (get_eannot e)),nob) in
         let e' = E_aux(E_internal_cast ((l,(Base(([],t2),Emp_local,[],pure_e,pure_e,nob))),e),(l,tannot)) in
         (t2,cs@cs',pure_e,e')
       | _ -> raise (Reporting_basic.err_unreachable l "vector is not properly kinded"))
@@ -2865,7 +2865,7 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
         | [TA_typ t] ->
           (*TODO Should this be an internal cast? 
             Probably, make sure it doesn't interfere with the other internal cast and get removed *)
-          (*let _ = Printf.eprintf "Adding cast to remove register read\n" in*)
+          (*let _ = Printf.eprintf "Adding cast to remove register read: t %s ; t2 %s\n" (t_to_string t) (t_to_string t2) in*)
           let efc = (BE_aux (BE_rreg, l)) in
           let ef = add_effect efc pure_e in
           let new_e = E_aux(E_cast(t_to_typ unit_t,e),
