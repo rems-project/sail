@@ -751,6 +751,10 @@ let top_hole stack : bool =
 end
 
 let redex_id = id_of_string "0"
+let mk_hole l annot t_level l_env l_mem = 
+  Hole_frame redex_id (E_aux (E_id redex_id) (l,(intern_annot annot))) t_level l_env l_mem Top
+let mk_thunk l annot t_level l_env l_mem =
+  Thunk_frame  (E_aux (E_lit (L_aux L_unit l)) (l,(intern_annot annot))) t_level l_env l_mem Top
 
 (*Converts a Hole_frame into a Thunk_frame, pushing to the top of the stack to insert the value at the innermost context *)
 val add_answer_to_stack : stack -> value -> stack
@@ -1376,9 +1380,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           (match (tag,detaint v) with 
 	    (*Cast is telling us to read a register*)
 	    | (Tag_extern _, V_register regform) ->
-	      (Action (Read_reg regform Nothing) 
-	         (Hole_frame redex_id
-		    (E_aux (E_id redex_id) (Unknown, (val_annot (reg_to_t regform)))) t_level le lm Top), lm,le)
+	      (Action (Read_reg regform Nothing) (mk_hole l (val_annot (reg_to_t regform)) t_level le lm), lm,le)
 	    (*Cast is changing vector start position, potentially*)
 	    | (_,v) -> conditional_update_vstart () end))
 	(fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_cast ctyp e) (l,annot), env))))
@@ -1408,9 +1410,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 	      match in_env regs name with (* Register isn't a local value, so pull from global environment *)
 		| Just(V_register regform) -> regform
 		| _ -> Reg id annot default_dir end end in
-	  (Action (Read_reg regf Nothing)
-	          (Hole_frame redex_id
-		         (E_aux (E_id redex_id) (l,intern_annot annot)) t_level l_env l_mem Top),l_mem,l_env)
+	  (Action (Read_reg regf Nothing) (mk_hole l annot t_level l_env l_mem), l_mem, l_env)
         | Tag_alias -> 
 	  match in_env aliases name with
 	    | Just aspec -> interp_alias_read mode t_level l_env l_mem aspec
@@ -1598,10 +1598,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 		  (match in_env indexes (get_id id) with
 		    | Just ir ->
 		      let sub_reg = SubReg id reg_form ir in
-		      (Action (Read_reg sub_reg Nothing)
-			 (Hole_frame redex_id
-			    (E_aux (E_id redex_id) 
-			       (Unknown, (val_annot (reg_to_t sub_reg)))) t_level le lm Top), lm,le)
+		      (Action (Read_reg sub_reg Nothing) (mk_hole l (val_annot (reg_to_t sub_reg)) t_level le lm),lm,le)
 		    | _ -> (Error l "internal error, unrecognized read, no id",lm,le) end) end)
 	    | V_unknown -> (Value (retaint value_whole V_unknown),lm,l_env)
             | _ -> 
@@ -1641,16 +1638,17 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
               resolve_outcome
 		(interp_main mode t_level l_env lm vec)
 		(fun vvec lm le ->
-		  let v_access vvec num = (match (vvec,num) with
-		    | (V_vector _ _ _,V_lit _) -> access_vector vvec n
-		    | (V_vector_sparse _ _ _ _ _,V_lit _) -> access_vector vvec n
-		    | (V_vector _ _ _,V_unknown) -> V_unknown
-		    | (V_vector_sparse _ _ _ _ _,V_unknown) -> V_unknown
-		    | (V_unknown,_) -> V_unknown 
+		  let v_access vvec num = (match (detaint vvec, detaint num) with
+		    | (V_vector _ _ _,V_lit _) -> Value (access_vector vvec n)
+		    | (V_vector_sparse _ _ _ _ _,V_lit _) -> Value (access_vector vvec n)
+                    | (V_register reg, V_lit _) ->
+                      Action (Read_reg reg (Just (n,n))) (mk_hole l annot t_level l_env lm) 
+		    | (V_unknown,_) -> Value V_unknown 
 		    | _ -> Assert_extra.failwith 
 		      ("Vector access error: " ^ (string_of_value vvec) ^ "[" ^ (show n) ^ "]") end) in
-		  (Value (binary_taint v_access vvec iv),lm,le))
-		(fun a ->
+		  (v_access (retaint iv vvec) iv,lm,le))
+                (fun a ->
+                 (*TODO I think this pattern match is no longer necessary *)
 		  match a with
 		    | Action (Read_reg reg Nothing) stack -> 
 		      (match vec with
@@ -1700,20 +1698,22 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 				  | (V_lit (L_aux (L_num n1) ln1),V_lit (L_aux (L_num n2) ln2)) ->
 				    let (n1,n2) = (natFromInteger n1,natFromInteger n2) in
 				    (match vvec with
-				      | V_vector _ _ _ -> slice_vector vvec n1 n2
-				      | V_vector_sparse _ _ _ _ _ -> 
-					slice_vector vvec n1 n2
+				      | V_vector _ _ _ -> Value (slice_vector vvec n1 n2)
+				      | V_vector_sparse _ _ _ _ _ -> Value (slice_vector vvec n1 n2)
 				      | V_unknown -> 
 					let inc = n1 < n2 in
-					V_vector n1 (if inc then IInc else IDec) 
-					  (List.replicate ((if inc then n1-n2 else n2-n1)+1) V_unknown)
+                                        Value (retaint vvec (V_vector n1 (if inc then IInc else IDec) 
+		                                               (List.replicate ((if inc then n1-n2 else n2-n1)+1) V_unknown)))
+                                      | V_register reg ->
+                                        Action (Read_reg reg (Just (n1,n2))) (mk_hole l annot t_level le lm)
 				      | _ -> Assert_extra.failwith ("Vector slice of non-vector " ^ (string_of_value vvec)) end) end)
 			      | _ -> Assert_extra.failwith("slice not a tuple of nums " ^ (string_of_value vtup)) end) in
-			  (Value (binary_taint take_slice slice vvec), lm,le))
+			  ((take_slice slice (retaint slice vvec)), lm,le))
 			(fun a -> 
 			  let rebuild v env = let (ie1,env) = to_exp mode env i1v in
 					      let (ie2,env) = to_exp mode env i2v in
-					      (E_aux (E_vector_subrange v ie1 ie2) (l,annot), env) in
+                           (E_aux (E_vector_subrange v ie1 ie2) (l,annot), env) in
+                          (*TODO this pattern match should no longer be needed*)
 			  match a with 
 			    | Action (Read_reg reg Nothing) stack ->
 			      match vec with
@@ -1904,10 +1904,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     | E_nondet exps ->
       (Action (Nondet exps tag) 
 	      (match tag with
-		| Tag_unknown (Just id) ->
-		  Hole_frame redex_id (E_aux (E_id redex_id) (l,(intern_annot annot))) t_level l_env l_mem Top
-		| _ -> 
-		  Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,(intern_annot annot))) t_level l_env l_mem Top end),
+		| Tag_unknown (Just id) -> mk_hole l annot t_level l_env l_mem 
+		| _ -> mk_thunk l annot t_level l_env l_mem end),
        l_mem, l_env)
     | E_app f args ->
       (match (exp_list mode t_level 
@@ -1987,13 +1985,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         | Tag_extern opt_name ->
 	  let effects = (match effect with | Effect_aux(Effect_set es) _ -> es | _ -> [] end) in
           let name_ext = match opt_name with | Just s -> s | Nothing -> name end in
-          let mk_hole_frame act = 
-	    (Action act 
-	            (Hole_frame redex_id 
-                                (E_aux (E_id redex_id) (l,intern_annot annot)) t_level le lm Top), lm, le) in
-	  let mk_thunk_frame act = 
-            (Action act
-                    (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level le lm Top), lm, le) in
+          let mk_hole_frame act = (Action act (mk_hole l annot t_level le lm), lm, le) in
+	  let mk_thunk_frame act = (Action act (mk_thunk l annot t_level le lm), lm, le) in
           if has_rmem_effect effects 
           then mk_hole_frame (Read_mem (id_of_string name_ext) v Nothing) 
           else if has_barr_effect effects
@@ -2088,9 +2081,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                  (fun r env -> let (el,env') = to_exp mode env lv in (E_aux (E_app_infix el op r) (l,annot), env')))))
         (fun a -> update_stack a (add_to_top_frame (fun lft env -> (E_aux (E_app_infix lft op r) (l,annot), env))))
   | E_exit exp ->
-    (Action (Exit exp) 
-            (Thunk_frame (E_aux (E_lit (L_aux L_unit Unknown)) (l, intern_annot annot)) 
-	       t_level l_env l_mem Top),l_mem, l_env)
+    (Action (Exit exp) (mk_thunk l annot t_level l_env l_mem),l_mem, l_env)
   | E_let (lbind : letbind tannot) exp -> 
     match (interp_letbind mode t_level l_env l_mem lbind) with
     | ((Value v,lm,le),_) ->
