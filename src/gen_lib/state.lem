@@ -74,8 +74,8 @@ let write_memory addr l (V bits _ _) s =
   let bytes = byte_chunks l bits in
   (Left (), <| s with memstate = foldl write_memstate s.memstate (zip addrs bytes) |>)
 
-val read_reg_range : forall 'e. register -> (integer * integer) (*(nat * nat)*) -> M state 'e (vector bit)
-let read_reg_range reg (i,j) s =
+val read_reg_range : forall 'e. register -> integer -> integer (*(nat * nat)*) -> M state 'e (vector bit)
+let read_reg_range reg i j s =
   let v = slice (read_regstate s reg) i j in
   (Left v,s)
 
@@ -84,8 +84,8 @@ let read_reg_bit reg i s =
   let v = access (read_regstate s reg) i in
   (Left v,s)
 
-val write_reg_range : forall 'e. register -> (integer * integer) (*(nat * nat)*) -> vector bit -> M state 'e unit
-let write_reg_range (reg : register) (i,j) (v : vector bit) s =
+val write_reg_range : forall 'e. register -> integer -> integer (*(nat * nat)*) -> vector bit -> M state 'e unit
+let write_reg_range reg i j v s =
   let v' = update (read_regstate s reg) i j v in
   let s' = write_regstate s reg v' in
   (Left (),s')
@@ -148,10 +148,10 @@ let rec foreachM_dec (i,stop,by) vars body =
   else return ((),vars)
 
 val read_reg_field : forall 'e. register -> register_field -> M state 'e (vector bit)
-let read_reg_field reg rfield = read_reg_range reg (field_indices rfield)
+let read_reg_field reg rfield = uncurry (read_reg_range reg) (field_indices rfield)
 
 val write_reg_field : forall 'e. register -> register_field -> vector bit -> M state 'e unit
-let write_reg_field reg rfield = write_reg_range reg (field_indices rfield)
+let write_reg_field reg rfield = uncurry (write_reg_range reg) (field_indices rfield)
 
 val read_reg_field_bit : forall 'e. register -> register_field_bit -> M state 'e bit
 let read_reg_field_bit reg rbit = read_reg_bit reg (field_index_bit rbit)

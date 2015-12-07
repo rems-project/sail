@@ -2082,25 +2082,35 @@ let doc_exp_lem, doc_let_lem =
                if aexp_needed then parens (align epp) else epp
            )
        )
-    | E_vector_access(v,e) ->
-       let epp = separate space [string "access";exp v;exp e] in
+    | E_vector_access (v,e) ->
+       let (Base (_,_,_,_,eff,_)) = annot in
+       let epp =
+         if has_rreg_effect eff then
+           separate space [string "read_reg_bit";exp v;exp e]
+         else
+           separate space [string "access";exp v;exp e] in
        if aexp_needed then parens (align epp) else epp
-    | E_vector_subrange(v,e1,e2) ->
-       let epp = align (string "slice" ^^ space ^^ exp v ^//^ exp e1 ^//^ exp e2) in
+    | E_vector_subrange (v,e1,e2) ->
+       let (Base (_,_,_,_,eff,_)) = annot in
+       let epp =
+         if has_rreg_effect eff then
+           align (string "read_reg_range" ^^ space ^^ exp v ^//^ exp e1 ^//^ exp e2)
+         else
+           align (string "slice" ^^ space ^^ exp v ^//^ exp e1 ^//^ exp e2) in
        if aexp_needed then parens (align epp) else epp
     | E_field((E_aux(_,(_,fannot)) as fexp),id) ->
        let (Base ((_,{t = t}),_,_,_,_,_)) = fannot in
-      (match t with
-       | Tabbrev({t = Tid regtyp},{t=Tapp("register",_)}) ->
-          let field_f = match annot with
-            | Base((_,{t = Tid "bit"}),_,_,_,_,_)
-            | Base((_,{t = Tabbrev(_,{t=Tid "bit"})}),_,_,_,_,_) ->
-             string "read_reg_field_bit"
-            | _ -> string "read_reg_field" in
-          let epp = field_f ^^ space ^^ (exp fexp) ^^ space ^^
-                      string (regtyp ^ "_") ^^ doc_id_lem id in
-         if aexp_needed then parens (align epp) else epp
-      | _ -> exp fexp ^^ dot ^^ doc_id_lem id)
+       (match t with
+        | Tabbrev({t = Tid regtyp},{t=Tapp("register",_)}) ->
+           let field_f = match annot with
+             | Base((_,{t = Tid "bit"}),_,_,_,_,_)
+               | Base((_,{t = Tabbrev(_,{t=Tid "bit"})}),_,_,_,_,_) ->
+                string "read_reg_field_bit"
+             | _ -> string "read_reg_field" in
+           let epp = field_f ^^ space ^^ (exp fexp) ^^ space ^^
+                       string (regtyp ^ "_") ^^ doc_id_lem id in
+           if aexp_needed then parens (align epp) else epp
+        | _ -> exp fexp ^^ dot ^^ doc_id_lem id)
     | E_block [] -> string "()"
     | E_block exps -> failwith "Blocks should have been removed till now."
     | E_nondet exps -> failwith "Nondet blocks not supported."
