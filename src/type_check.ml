@@ -909,9 +909,9 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let item_t,ord = match expect_t.t with
         | Tapp("vector",[base;rise;TA_ord ord;TA_typ item_t]) -> item_t,ord
         | _ -> new_t (),d_env.default_o in
-      let es,cs,effect = (List.fold_right 
-                            (fun (e,_,_,c,_,ef) (es,cs,effect) -> (e::es),(c@cs),union_effects ef effect)
-                            (List.map (check_exp envs imp_param item_t) es) ([],[],pure_e)) in
+      let es,cs,effect,item_t = (List.fold_left 
+                            (fun (es,cs,effect,_) (e,t,_,c,_,ef) -> (e::es),(c@cs),union_effects ef effect,t)
+                            ([],[],pure_e,item_t) (List.map (check_exp envs imp_param item_t) es)) in
       let len = List.length es in
       let t = match ord.order,d_env.default_o.order with
         | (Oinc,_) | (Ouvar _,Oinc) | (Ovar _,Oinc) -> 
@@ -923,7 +923,7 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
                               TA_ord {order= Odec}; TA_typ item_t])} 
         | _ -> raise (Reporting_basic.err_unreachable l "Default order was neither inc or dec") in
       let t',cs',ef',e' = type_coerce (Expr l) d_env Guarantee false false b_env t 
-        (E_aux(E_vector es,(l,simple_annot_efr t effect))) expect_t in
+          (E_aux(E_vector es,(l,simple_annot_efr t effect))) expect_t in
       (e',t',t_env,cs@cs',nob,union_effects effect ef')
     | E_vector_indexed(eis,(Def_val_aux(default,(ld,annot)))) ->
       let item_t,base_n,rise_n = match expect_t.t with
@@ -1143,14 +1143,14 @@ let rec check_exp envs (imp_param:nexp option) (expect_t:t) (E_aux(e,(l,annot)):
       let item_t = match expect_t.t with
         | Tapp("list",[TA_typ i]) -> i
         | _ -> new_t() in
-      let es,cs,effect = 
-        (List.fold_right (fun (e,_,_,c,_,ef) (es,cs,effect) -> (e::es),(c@cs),union_effects ef effect) 
-           (List.map (check_exp envs imp_param item_t) es) ([],[],pure_e)) in
+      let es,cs,effect,item_t = 
+        (List.fold_left (fun (es,cs,effect,_) (e,t,_,c,_,ef) -> (e::es),(c@cs),union_effects ef effect,t) 
+           ([],[],pure_e,item_t) (List.map (check_exp envs imp_param item_t) es) ) in
       let t = {t = Tapp("list",[TA_typ item_t])} in
       let t',cs',ef',e' = type_coerce (Expr l) d_env Require false false b_env t 
         (E_aux(E_list es,(l,simple_annot_efr t effect))) expect_t in
       (e',t',t_env,cs@cs',nob,union_effects ef' effect)
-    | E_cons(ls,i) ->
+    | E_cons(i, ls) ->
       let item_t = match expect_t.t with
         | Tapp("list",[TA_typ i]) -> i
         | _ -> new_t() in
@@ -1417,10 +1417,13 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
           let cs_o = cs@cs' in
           (*let _ = Printf.eprintf "Assigning to %s, t is %s\n" i (t_to_string t_actual) in*)
           (match t_actual.t,is_top with
-           | Tapp("register",[TA_typ u]),_ ->
+           | Tapp("register",[TA_typ u]),true ->
              let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in
              (LEXP_aux(lexp,(l,(Base(([],t),External (Some i),cs_o,ef,pure_e,nob)))),u,false,
               Envmap.empty,External (Some i),[],nob,ef,ef)
+           | Tapp("register",[TA_typ u]),false ->
+             (LEXP_aux(lexp,(l,(Base(([],t), Emp_global, cs_o, pure_e,pure_e,nob)))), t,false,
+              Envmap.empty, Emp_global, [],nob,pure_e,pure_e)
            | Tapp("reg",[TA_typ u]),_ ->
              (LEXP_aux(lexp,(l,(Base(([],t),Emp_set,cs_o,ef,ef,b)))),u,false,Envmap.empty,Emp_set,[],nob,ef,ef)
            | Tapp("vector",_),false ->
@@ -1520,11 +1523,14 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
           let t_actual = match t.t with | Tabbrev(_,t) -> t | _ -> t in
           let bs = merge_bounds bounds new_bounds in
           (match t_actual.t,is_top with
-            | Tapp("register",[TA_typ u]),_ ->
+            | Tapp("register",[TA_typ u]),true ->
               let t',cs = type_consistent (Expr l) d_env Require false ty u in
               let ef = {effect=Eset[BE_aux(BE_wreg,l)]} in
               (LEXP_aux(lexp,(l,(Base(([],t),External (Some i),cs,ef,pure_e,nob)))),ty,false,
                Envmap.empty,External (Some i),[],nob,ef,ef)
+            | Tapp("register",[TA_typ u]),false ->
+              (LEXP_aux(lexp,(l,(Base(([],t), Emp_global, cs', pure_e,pure_e,nob)))), t,false,
+               Envmap.empty, Emp_global, [],nob,pure_e,pure_e)              
             | Tapp("reg",[TA_typ u]),_ ->
               let t',cs = type_consistent (Expr l) d_env Require false ty u in
               (LEXP_aux(lexp,(l,(Base(([],t),Emp_set,cs,ef,pure_e,bs)))),ty,false,
@@ -1558,7 +1564,9 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
     | LEXP_vector(vec,acc) -> 
       let (vec',vec_t,reg_required,env,tag,csi,bounds,efl,efr) = check_lexp envs imp_param false vec in
       let vec_t,cs' = get_abbrev d_env vec_t in
-      let vec_actual = match vec_t.t with | Tabbrev(_,t) -> t | _ -> vec_t in
+      let vec_actual,writing_reg_bit = match vec_t.t with
+        | Tapp("register",[TA_typ {t=Tabbrev(_,t)}]) | Tapp("register",[TA_typ t]) -> t,true
+        | Tabbrev(_,t) -> t,false | _ -> vec_t,false in
       (match vec_actual.t with
         | Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t]) ->
           let acc_t = match ord.order with
