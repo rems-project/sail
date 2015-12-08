@@ -1565,10 +1565,11 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
       let (vec',vec_t,reg_required,env,tag,csi,bounds,efl,efr) = check_lexp envs imp_param false vec in
       let vec_t,cs' = get_abbrev d_env vec_t in
       let vec_actual,writing_reg_bit = match vec_t.t with
-        | Tapp("register",[TA_typ {t=Tabbrev(_,t)}]) | Tapp("register",[TA_typ t]) -> t,true
+        | Tapp("register",[TA_typ {t=Tabbrev(_,t)}]) | Tapp("register",[TA_typ t])
+        | Tabbrev(_,{t=Tapp("register",[TA_typ t])}) -> t,true
         | Tabbrev(_,t) -> t,false | _ -> vec_t,false in
       (match vec_actual.t with
-        | Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t]) ->
+       | Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t]) ->
           let acc_t = match ord.order with
             | Oinc -> {t = Tapp("range",[TA_nexp base;TA_nexp (mk_sub (mk_add base rise) n_one)])} 
             | Odec -> {t = Tapp("range",[TA_nexp (mk_sub rise (mk_add base n_one)); TA_nexp base])}
@@ -1579,10 +1580,10 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
             match item_t.t with
               | Tapp("register",[TA_typ t]) | Tabbrev(_,{t=Tapp("register",[TA_typ t])}) -> t,true,false
               | Tapp("reg",[TA_typ t]) -> t,false,false
-              | _ -> item_t,false,true in
-          let ef,tag = if add_reg_write then (add_effect (BE_aux(BE_wreg,l)) efl,External None)
+              | _ -> item_t,false,not(writing_reg_bit) in
+          let ef,tag = if add_reg_write || writing_reg_bit then (add_effect (BE_aux(BE_wreg,l)) efl,External None)
             else match tag with | External _ -> (efl,Emp_local) | _ ->  (efl,tag) in
-          if is_top && reg_still_required && reg_required
+          if is_top && reg_still_required && reg_required && not(writing_reg_bit)
           then typ_error l "Assignment expected a register or non-parameter non-letbound identifier to mutate"
           else
             (LEXP_aux(LEXP_vector(vec',e),(l,Base(([],item_t),tag,csi,ef,ef_e,nob))),
@@ -1594,7 +1595,10 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
     | LEXP_vector_range(vec,e1,e2)-> 
       let (vec',vec_t,reg_required,env,tag,csi,bounds,efl,efr) = check_lexp envs imp_param false vec in
       let vec_t,cs = get_abbrev d_env vec_t in
-      let vec_actual = match vec_t.t with | Tabbrev(_,t) -> t | _ -> vec_t in
+      let vec_actual,writing_reg_bits = match vec_t.t with
+        | Tapp("register",[TA_typ {t=Tabbrev(_,t)}]) | Tapp("register",[TA_typ t])
+        | Tabbrev(_,{t=Tapp("register",[TA_typ t])}) -> t,true
+        | Tabbrev(_,t) -> t,false | _ -> vec_t,false in
       let vec_actual,add_reg_write,reg_still_required,cs = 
         match vec_actual.t with
           | Tapp("register",[TA_typ t]) ->
@@ -1627,9 +1631,11 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
                        {t=Tapp("vector",[TA_nexp size_e1;TA_nexp len;TA_ord ord; TA_typ t])})
             | _ -> typ_error l ("Assignment to a range of vector elements requires either inc or dec order")
           in
+          let ef,tag = if add_reg_write || writing_reg_bits then (add_effect (BE_aux(BE_wreg,l)) efl,External None)
+            else match tag with | External _ -> (efl,Emp_local) | _ ->  (efl,tag) in
           let cs = cs_t@cs@cs1@cs2 in
           let ef = union_effects efr (union_effects ef_e ef_e') in
-          if is_top && reg_required && reg_still_required && needs_reg 
+          if is_top && reg_required && reg_still_required && needs_reg && not(writing_reg_bits)  
           then typ_error l "Assignment requires a register or a non-parameter, non-letbound local identifier"
           else (LEXP_aux(LEXP_vector_range(vec',e1',e2'),(l,Base(([],res_t),tag,cs,efl,ef,nob))),
                 res_t,reg_required&&reg_still_required && needs_reg,env,tag,cs,bounds,efl,ef)
@@ -1649,10 +1655,12 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
               (match lookup_field_type fi r with
                 | None -> typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
                 | Some t ->
+                  let eft = if rec_kind = Register then add_effect (BE_aux(BE_wreg, l)) eft else eft in
+                  let efr = union_effects eft efr in
                   let ft = typ_subst subst_env false t in
                   let (_,cs_sub') = type_consistent (Expr l) d_env Guarantee false ts vec_t in
-                  (LEXP_aux(LEXP_field(vec',id),(l,(Base(([],ft),tag,csi@cs,eft,efl,nob)))),
-                   ft,false,env,tag,csi@cs@cs_sub',bounds,efl,efr))
+                  (LEXP_aux(LEXP_field(vec',id),(l,(Base(([],ft),tag,csi@cs,eft,efr,nob)))),
+                   ft,false,env,tag,csi@cs@cs_sub',bounds,eft,efr))
             | _ -> 
               typ_error l ("Expected a register or struct for this update, instead found an expression with type " ^ i))
         | _ -> typ_error l ("Expected a register binding here, found " ^ (t_to_string item_t)))

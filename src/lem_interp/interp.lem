@@ -2550,6 +2550,13 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		    update_vector_slice mode.track_lmem v value n1 n2 lm, l_env), Nothing)
                 | (V_vector m inc vs,false) ->
                   ((Value (slice_vector v n1 n2),lm,l_env), Just (next_builder lexp_builder))
+                | (V_register regform,true) ->
+		  let start_pos = reg_start_pos regform in
+                  let reg_size = reg_size regform in
+		  ((Action (Write_reg regform (Just (n1,n2)) (update_vector_start default_dir start_pos reg_size v)) 
+		      (mk_thunk l annot t_level l_env l_mem),
+		      l_mem,l_env),
+                     Just (next_builder lexp_builder))
 		| (V_unknown,_) -> 
 		  let inc =  n1 < n2 in
 		  let start = if inc then n1 else (n2-1) in
