@@ -1581,14 +1581,15 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
               | Tapp("register",[TA_typ t]) | Tabbrev(_,{t=Tapp("register",[TA_typ t])}) -> t,true,false
               | Tapp("reg",[TA_typ t]) -> t,false,false
               | _ -> item_t,false,not(writing_reg_bit) in
-          let ef,tag = if add_reg_write || writing_reg_bit then (add_effect (BE_aux(BE_wreg,l)) efl,External None)
+          let efl,tag = if add_reg_write || writing_reg_bit then (add_effect (BE_aux(BE_wreg,l)) efl,External None)
             else match tag with | External _ -> (efl,Emp_local) | _ ->  (efl,tag) in
+          let efr = union_effects efl (union_effects efr ef_e) in
           if is_top && reg_still_required && reg_required && not(writing_reg_bit)
           then typ_error l "Assignment expected a register or non-parameter non-letbound identifier to mutate"
           else
-            (LEXP_aux(LEXP_vector(vec',e),(l,Base(([],item_t),tag,csi,ef,ef_e,nob))),
+            (LEXP_aux(LEXP_vector(vec',e),(l,Base(([],item_t),tag,csi,efl,efr,nob))),
              item_t,reg_required && reg_still_required,
-             env,tag,csi@cs',bounds,ef,union_effects ef (union_effects efr ef_e))
+             env,tag,csi@cs',bounds,efl,efr)
         | Tuvar _ -> 
           typ_error l "Assignment expected a vector with a known order, try adding an annotation."
         | _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string vec_t))) 
@@ -1600,14 +1601,16 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
         | Tabbrev(_,{t=Tapp("register",[TA_typ t])}) -> t,true
         | Tabbrev(_,t) -> t,false | _ -> vec_t,false in
       let vec_actual,add_reg_write,reg_still_required,cs = 
-        match vec_actual.t with
-          | Tapp("register",[TA_typ t]) ->
+        match vec_actual.t,is_top with
+          | Tapp("register",[TA_typ t]),true ->
             (match get_abbrev d_env t with | {t=Tabbrev(_,t)},cs' | t,cs' -> t,true,false,cs@cs')
-          | Tapp("reg",[TA_typ t]) ->
+          | Tapp("register",[TA_typ t]),false -> vec_actual,false,false,cs
+          | Tapp("reg",[TA_typ t]),_ ->
             (match get_abbrev d_env t with | {t=Tabbrev(_,t)},cs' | t,cs' -> t,false,false,cs@cs')
           | _ -> vec_actual,false,true,cs in
       (match vec_actual.t with
-        | Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ t]) ->
+       | Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ t])
+       | Tapp("register", [TA_typ {t= Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ t])}]) ->
           let size_e1,size_e2 = new_n(),new_n() in
           let e1_t = {t=Tapp("atom",[TA_nexp size_e1])} in
           let e2_t = {t=Tapp("atom",[TA_nexp size_e2])} in
@@ -1623,18 +1626,24 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
                          LtEq((Expr l),Require,size_e1, size_e2);
                          LtEq((Expr l),Require,size_e2, rise);
                          Eq((Expr l),len, mk_add (mk_sub size_e2 size_e1) n_one)],
-                        {t=Tapp("vector",[TA_nexp size_e1;TA_nexp len;TA_ord ord;TA_typ t])})
+                        if is_top
+                        then {t=Tapp("vector",[TA_nexp size_e1;TA_nexp len;TA_ord ord;TA_typ t])}
+                        else vec_actual)
             | Odec -> ([GtEq((Expr l),Require,base,size_e1);
                         GtEq((Expr l),Require,size_e1,size_e2);
                         GtEq((Expr l),Require,size_e2,mk_sub base rise);                         
                         Eq((Expr l),len, mk_add (mk_sub size_e1 size_e2) n_one)],
-                       {t=Tapp("vector",[TA_nexp size_e1;TA_nexp len;TA_ord ord; TA_typ t])})
+                       if is_top
+                       then {t=Tapp("vector",[TA_nexp size_e1;TA_nexp len;TA_ord ord; TA_typ t])}
+                       else vec_actual)
             | _ -> typ_error l ("Assignment to a range of vector elements requires either inc or dec order")
           in
-          let ef,tag = if add_reg_write || writing_reg_bits then (add_effect (BE_aux(BE_wreg,l)) efl,External None)
+          let efl,tag =
+            if add_reg_write || writing_reg_bits
+            then (add_effect (BE_aux(BE_wreg,l)) efl,External None)
             else match tag with | External _ -> (efl,Emp_local) | _ ->  (efl,tag) in
           let cs = cs_t@cs@cs1@cs2 in
-          let ef = union_effects efr (union_effects ef_e ef_e') in
+          let ef = union_effects efl (union_effects efr (union_effects ef_e ef_e')) in
           if is_top && reg_required && reg_still_required && needs_reg && not(writing_reg_bits)  
           then typ_error l "Assignment requires a register or a non-parameter, non-letbound local identifier"
           else (LEXP_aux(LEXP_vector_range(vec',e1',e2'),(l,Base(([],res_t),tag,cs,efl,ef,nob))),
