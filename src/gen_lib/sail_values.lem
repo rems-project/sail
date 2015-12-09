@@ -25,6 +25,10 @@ let (~) = bitwise_not_bit
 let bitwise_not (V bs start is_inc) =
   V (List.map bitwise_not_bit bs) start is_inc
 
+val is_one : integer -> bit
+let is_one i =
+  if i = 1 then I else O
+
 let bool_to_bit b = if b then I else O
 
 let bitwise_binop_bit op = function
@@ -106,15 +110,15 @@ let rec divide_by_2 bs (i : integer) (n : integer) =
   then bs
   else
     if (n mod 2 = 1)
-    then divide_by_2 (replace bs (natFromInteger i,I)) (i - 1) (n / 2)
+    then divide_by_2 (replace bs (i,I)) (i - 1) (n / 2)
     else divide_by_2 bs (i-1) (n div 2)
 
 let rec add_one_bit bs co (i : integer) =
   if i < 0 then bs
   else match (nth bs i,co) with
-    | (O,false) -> replace bs (natFromInteger i,I)
-    | (O,true)  -> add_one_bit (replace bs (natFromInteger i,I)) true (i-1)
-    | (I,false) -> add_one_bit (replace bs (natFromInteger i,O)) true (i-1)
+    | (O,false) -> replace bs (i,I)
+    | (O,true)  -> add_one_bit (replace bs (i,I)) true (i-1)
+    | (I,false) -> add_one_bit (replace bs (i,O)) true (i-1)
     | (I,true)  -> add_one_bit bs true (i-1)
     | _ -> failwith "add_one_bit applied to list with undefined bit"
    (*    | Vundef,_ -> assert false*) 
@@ -218,6 +222,8 @@ let add_VII = arith_op_vec_range_range integerAdd false
 let addS_VII = arith_op_vec_range_range integerAdd true
 let minus_VII = arith_op_vec_range_range integerMinus false
 
+
+
 let arith_op_vec_vec_range op sign l r = 
   let (l',r') = (to_num sign l,to_num sign r) in
   op l' r'
@@ -270,7 +276,7 @@ let minusO_VVV = arith_op_overflow_vec integerMinus false 1
 let minusSO_VVV = arith_op_overflow_vec integerMinus true 1
 let multO_VVV = arith_op_overflow_vec integerMult false 2
 let multSO_VVV = arith_op_overflow_vec integerMult true 2
-    
+
 let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (size : integer)
                                   (V _ _ is_inc as l) r_bit =
   let act_size = length l * size in
@@ -373,7 +379,7 @@ let arith_op_overflow_no0_vec op sign size (((V _ start is_inc) as l),r) =
 let quotO_VVV = arith_op_overflow_no0_vec integerDiv false 1
 let quotSO_VVV = arith_op_overflow_no0_vec integerDiv true 1
 
-let arith_op_vec_range_no0 op sign size ((V _ _ is_inc as l),r) =
+let arith_op_vec_range_no0 op sign size (V _ _ is_inc as l) r =
   arith_op_vec_no0 op sign size (l,to_vec is_inc (length l,r))
 
 let mod_VIV = arith_op_vec_range_no0 integerMod false 1
@@ -438,3 +444,25 @@ let EXTS (v1,(V _ _ is_inc as v)) =
   to_vec is_inc (v1,signed v)
 
 let EXTZ = EXTS
+
+val make_indexed_vector_reg : list (integer * register) -> maybe register -> integer -> integer ->
+                              vector register
+let make_indexed_vector_reg entries default start length =
+  let length = natFromInteger length in
+  match default with
+  | Just v -> V (List.foldl replace (replicate length v) entries) start defaultDir
+  | Nothing -> failwith "make_indexed_vector used without default value"
+  end
+
+val make_indexed_vector_bit : list (integer * bit) -> maybe bit -> integer -> integer -> vector bit
+let make_indexed_vector_bit entries default start length =
+  let length = natFromInteger length in
+  let default = match default with Nothing -> Undef | Just v -> v end in
+  V (List.foldl replace (replicate length default) entries) start defaultDir
+
+val make_bit_vector_undef : integer -> vector bit
+let make_bitvector_undef length =
+  V (replicate (natFromInteger length) Undef) 0 true
+
+
+let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n)

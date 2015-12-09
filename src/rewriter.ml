@@ -1285,14 +1285,15 @@ and n_lexp (lexp : 'a lexp) (k : 'a lexp -> 'a exp) : 'a exp =
      k (fix_effsum_lexp (LEXP_aux (LEXP_memory (id,es),annot))))
   | LEXP_cast (typ,id) -> 
      k (fix_effsum_lexp (LEXP_aux (LEXP_cast (typ,id),annot)))
-  | LEXP_vector (lexp,id) ->
+  | LEXP_vector (lexp,e) ->
      n_lexp lexp (fun lexp -> 
-     k (fix_effsum_lexp (LEXP_aux (LEXP_vector (lexp,id),annot))))
-  | LEXP_vector_range (lexp,exp1,exp2) ->
+     n_exp_name e (fun e -> 
+     k (fix_effsum_lexp (LEXP_aux (LEXP_vector (lexp,e),annot))))
+  | LEXP_vector_range (lexp,e1,e2) ->
      n_lexp lexp (fun lexp ->
-     n_exp_name exp1 (fun exp1 ->
-     n_exp_name exp2 (fun exp2 ->
-     k (fix_effsum_lexp (LEXP_aux (LEXP_vector_range (lexp,exp1,exp2),annot))))))
+     n_exp_name exp1 (fun e1 ->
+     n_exp_name exp2 (fun e2 ->
+     k (fix_effsum_lexp (LEXP_aux (LEXP_vector_range (lexp,e1,e2),annot))))))
   | LEXP_field (lexp,id) ->
      n_lexp lexp (fun lexp ->
      k (fix_effsum_lexp (LEXP_aux (LEXP_field (lexp,id),annot))))

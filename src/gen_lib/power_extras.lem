@@ -1,4 +1,5 @@
 open import Pervasives
+open import Vector
 open import State
 open import Sail_values
 
@@ -33,3 +34,13 @@ let H_Sync () = return ()
 let LW_Sync () = return ()
 let EIEIO_Sync () = return ()
 
+let recalculate_dependency () = return ()
+
+let trap () = ()
+(* this needs to change, but for that we'd have to make the type checker know about trap 
+ * as an effect *)
+
+val countLeadingZeroes : vector bit * integer -> integer
+let countLeadingZeroes (V bits _ _ ,n)  = 
+  let (_,bits) = List.splitAt (natFromInteger n) bits in
+  integerFromNat (List.length (takeWhile ((=) O) bits))

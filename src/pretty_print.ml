@@ -1443,7 +1443,7 @@ let doc_exp_ocaml, doc_let_ocaml =
         else doc_id_ocaml id
       | Base(_,(Constructor i |Enum i),_,_,_,_) -> doc_id_ocaml_ctor i id
       | Base((_,t),Alias alias_info,_,_,_,_) ->
-        (match alias_info with
+         (match alias_info with
          | Alias_field(reg,field) ->
            let field_f = match t.t with
              | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> string "get_register_field_bit"
@@ -1943,12 +1943,13 @@ let doc_pat_lem apat_needed =
      | P_list pats -> brackets (separate_map semi pat pats) (*Never seen but easy in lem*)
   in pat
 
+let rec getregtyp_annot (Base ((_,t),_,_,_,_,_)) = 
+  match t with
+   | {t = Tabbrev ({t = Tid name},_)} -> name
+
 let rec getregtyp (LEXP_aux (le,(_,annot))) = match le with
   | LEXP_id _
-  | LEXP_cast _ ->
-     let (Base ((_,t),_,_,_,_,_)) = annot in
-     (match t with
-     | {t = Tabbrev ({t = Tid name},_)} -> name)
+  | LEXP_cast _ -> getregtyp_annot annot
   | LEXP_memory _ -> failwith "This lexp writes memory"
   | LEXP_vector (le,_)
   | LEXP_vector_range (le,_,_)
@@ -1962,47 +1963,69 @@ let doc_exp_lem, doc_let_lem =
     | E_assign((LEXP_aux(le_act,tannot) as le),e) ->
        (* can only be register writes *)
        let (_,(Base ((_,{t = t}),tag,_,_,_,_))) = tannot in
-       let E_aux (_,(_,(Base ((_,{t = et}),_,_,_,_,_)))) = e in
-       (match tag with
-        | External _ ->
-           (match le_act with
-            | LEXP_vector (le,e2) ->
-               (prefix 2 1)
-                 (string "write_reg_bit")
-                 (doc_lexp_deref_lem le ^^ space ^^
-                    exp e2 ^/^ exp e)
-            | LEXP_vector_range (le,e2,e3) ->
+       (match le_act, t, tag with
+        | LEXP_vector_range (le,e2,e3),_,_ ->
+           (match le with
+            | LEXP_aux (LEXP_field (le,id), (_,((Base ((_,{t = t}),_,_,_,_,_))))) ->
+               if t = Tid "bit" then
+                 failwith "indexing a register's (single bit) bitfield not supported"
+               else
+                 let typprefix = String.uncapitalize (getregtyp le) ^ "_" in
+                 (prefix 2 1)
+                   (string "write_reg_field_range")
+                   (align (doc_lexp_deref_lem le ^^ space ^^ string typprefix ^^
+                             doc_id_lem id ^/^ exp e2 ^/^ exp e3 ^/^ exp e))
+            | _ ->
                (prefix 2 1)
                  (string "write_reg_range")
-                 (align (doc_lexp_deref_lem le ^^ space ^^
-                           (parens (group (align (exp e2 ^^ comma ^^ break 0 ^^ exp e3)))) ^/^
-                             exp e))
-            | LEXP_field (lexp,id) ->
-               let typprefix = String.uncapitalize (getregtyp lexp) ^ "_" in
-               (match et with
-                | Tid "bit"
-                | Tabbrev (_,{t=Tid "bit"}) ->
-                   (prefix 2 1)
-                     (string "write_reg_field_bit")
-                     (doc_lexp_deref_lem lexp ^^ space ^^ string typprefix ^^ doc_id_lem id ^/^
-                        exp e)
-                | Tapp ("vector",_)
-                | Tabbrev (_,{t=Tapp ("vector",_)}) ->
-                   (prefix 2 1)
-                     (string "write_reg_field")
-                     (doc_lexp_deref_lem lexp ^^ space ^^ string typprefix ^^ doc_id_lem id ^/^
-                        exp e)
-                | _ -> failwith (t_to_string {t = et})
-               )
-            | (LEXP_id _ | LEXP_cast _) ->
+                 (align (doc_lexp_deref_lem le ^^ space ^^ exp e2 ^/^ exp e3 ^/^ exp e))
+           )
+        | LEXP_vector (le,e2), (Tid "bit" | Tabbrev (_,{t=Tid "bit"})),_ ->
+           (match le with
+            | LEXP_aux (LEXP_field (le,id), (_,((Base ((_,{t = t}),_,_,_,_,_))))) ->
+               if t = Tid "bit" then
+                 failwith "indexing a register's (single bit) bitfield not supported"
+               else
+                 let typprefix = String.uncapitalize (getregtyp le) ^ "_" in
+                 (prefix 2 1)
+                   (string "write_reg_field_bit")
+                   (align (doc_lexp_deref_lem le ^^ space ^^ string typprefix ^^
+                             doc_id_lem id ^/^ exp e2 ^/^ exp e))
+            | _ ->
                (prefix 2 1)
-                 (string "write_reg")
-                 (doc_lexp_deref_lem le ^/^ exp e))
-        | _ ->
-           (prefix 2 1)
-             (string "write_reg")
-             (doc_lexp_deref_lem le ^/^ exp e)
-       )
+                 (string "write_reg_bit")
+                 (doc_lexp_deref_lem le ^^ space ^^ exp e2 ^/^ exp e)
+           )
+          | LEXP_field (le,id), (Tid "bit"| Tabbrev (_,{t=Tid "bit"})), _ ->
+             let typprefix = String.uncapitalize (getregtyp le) ^ "_" in
+             (prefix 2 1)
+               (string "write_reg_bitfield")
+               (doc_lexp_deref_lem le ^^ space ^^ string typprefix ^^
+                  doc_id_lem id ^/^ exp e)
+          | LEXP_field (le,id), _, _ ->
+             let typprefix = String.uncapitalize (getregtyp le) ^ "_" in
+             (prefix 2 1)
+               (string "write_reg_field")
+               (doc_lexp_deref_lem le ^^ space ^^ string typprefix ^^
+                  doc_id_lem id ^/^ exp e)
+          | (LEXP_id id | LEXP_cast (_,id)), t, Alias alias_info ->
+             (match alias_info with
+              | Alias_field(reg,field) ->
+                 let f = match t with
+                   | (Tid "bit" | Tabbrev (_,{t=Tid "bit"})) ->
+                      string "write_reg_bitfield"
+                   | _ -> string "write_reg_bitfield" in
+                 (prefix 2 1)
+                   f
+                   (separate space [string reg;string (String.lowercase reg ^ "_" ^ field);exp e])
+                    (* the type should go instead of the lowercase reg *)
+              | Alias_pair(reg1,reg2) ->
+                 string "write_two_regs" ^^ space ^^ string reg1 ^^ space ^^
+                   string reg2 ^^ space ^^ exp e)
+          | _ ->
+             (prefix 2 1)
+               (string "write_reg")
+               (doc_lexp_deref_lem le ^/^ exp e))
     | E_vector_append(l,r) ->
        let epp =
          align (separate space [exp l;string "^^"] ^/^ exp r) in
@@ -2036,22 +2059,26 @@ let doc_exp_lem, doc_let_lem =
                  match vars with
                  | [v] -> v
                  | _ -> parens (separate comma vars) in
-               (prefix 2 1)
-                 (parens ((separate space) [string loopf;group (exp indices);exp e5]))
-                 (parens
-                    ((prefix 1 1)
-                       (separate space [string "fun";exp id;varspp;arrow])
-                       (top_exp false body)
-                    )
+               parens (
+                   (prefix 2 1)
+                     ((separate space) [string loopf;group (exp indices);exp e5])
+                     (parens
+                        ((prefix 1 1)
+                           (separate space [string "fun";exp id;varspp;arrow])
+                           (top_exp false body)
+                        )
+                     )
                  )
             | E_aux (E_lit (L_aux (L_unit,_)),_) ->
-               (prefix 2 1)
-                 (parens ((separate space) [string loopf;group (exp indices);exp e5]))
-                 (parens
-                    ((prefix 1 1)
-                       (separate space [string "fun";exp id;string "_";arrow])
-                       (top_exp false body)
-                    )
+               parens (
+                   (prefix 2 1)
+                     ((separate space) [string loopf;group (exp indices);exp e5])
+                     (parens
+                        ((prefix 1 1)
+                           (separate space [string "fun";exp id;string "_";arrow])
+                           (top_exp false body)
+                        )
+                     )
                  )
            )
         | _ ->
@@ -2105,7 +2132,7 @@ let doc_exp_lem, doc_let_lem =
            let field_f = match annot with
              | Base((_,{t = Tid "bit"}),_,_,_,_,_)
                | Base((_,{t = Tabbrev(_,{t=Tid "bit"})}),_,_,_,_,_) ->
-                string "read_reg_field_bit"
+                string "read_reg_bitfield"
              | _ -> string "read_reg_field" in
            let epp = field_f ^^ space ^^ (exp fexp) ^^ space ^^
                        string (regtyp ^ "_") ^^ doc_id_lem id in
@@ -2115,49 +2142,42 @@ let doc_exp_lem, doc_let_lem =
     | E_block exps -> failwith "Blocks should have been removed till now."
     | E_nondet exps -> failwith "Nondet blocks not supported."
     | E_id id ->
-      (match annot with
-      | Base((_, ({t = Tapp("reg",_)} | {t=Tabbrev(_,{t=Tapp("reg",_)})})),_,_,_,_,_) ->
-        doc_id_lem id
-      | Base((_, ({t = Tapp("register",_)} | {t=Tabbrev(_,{t=Tapp("register",_)})})),tag,_,_,_,_) ->
-         (match tag with
-          | External _ -> separate space [string "read_reg";doc_id_lem id]
-          | _ -> doc_id_lem id)
-      | Base(_,(Constructor i |Enum i),_,_,_,_) -> doc_id_lem_ctor aexp_needed id
-      | Base((_,t),Alias alias_info,_,_,_,_) ->
-         (match alias_info with
-         | Alias_field(reg,field) ->
-           let field_f = match t.t with
-             | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> string "read_reg_field_bit"
-             | _ -> string "read_reg_field" in
-           separate space [field_f; string reg; string_lit (string field)]
-         | Alias_extract(reg,start,stop) ->
-            let epp =
-              if start = stop then
-                separate space [string "access";string reg;doc_int start]
-              else
-                separate space [string "slice"; string reg; doc_int start; doc_int stop] in
-            if aexp_needed then parens (align epp) else epp
-         | Alias_pair(reg1,reg2) ->
-            let epp = separate space [string "vector_concat";string reg1;string reg2] in
-            if aexp_needed then parens (align epp) else epp
-         | Alias_extract(reg,start,stop) ->
-            let epp = 
-              if start = stop then
-                (separate space)
-                  [string "access";doc_int start;
-                   parens (string "read_reg" ^^ space ^^ string reg)]
-              else
-                (separate space)
-                  [string "slice"; doc_int start; doc_int stop;
-                   parens (string "read_reg" ^^ space ^^ string reg)] in
-            if aexp_needed then parens (align epp) else epp
-         | Alias_pair(reg1,reg2) ->
-            let epp = separate space [string "vector_concat";
-                            parens (string "read_reg" ^^ space ^^ string reg1);
-                            parens (string "read_reg" ^^ space ^^ string reg2)] in
-            if aexp_needed then parens (align epp) else epp
-         )
-      | _ -> doc_id_lem id)
+       (match annot with
+        | Base((_, ({t = Tapp("register",_)} | {t=Tabbrev(_,{t=Tapp("register",_)})})),
+               External _,_,eff,_,_) ->
+           separate space [string "read_reg";doc_id_lem id]
+        | Base(_,(Constructor i |Enum i),_,_,_,_) -> doc_id_lem_ctor aexp_needed id
+        | Base((_,t),Alias alias_info,_,_,_,_) ->
+           (match alias_info with
+            | Alias_field(reg,field) ->
+               let epp = match t.t with
+                 | Tid "bit" | Tabbrev (_,{t=Tid "bit"}) -> 
+                    (separate space)
+                      [string "read_reg_bitfield"; string reg;
+                       string (String.lowercase reg ^ "_" ^ field)]
+                 (* the type should go instead of the lowercase reg *)
+                 | _ -> 
+                    (separate space)
+                      [string "read_reg_field"; string reg;
+                       string (String.lowercase reg ^ "_" ^ field)] in
+                 (* the type should go instead of the lowercase reg *)
+               if aexp_needed then parens (align epp) else epp
+            | Alias_pair(reg1,reg2) ->
+               let epp = separate space [string "read_two_regs";string reg1;string reg2] in
+               if aexp_needed then parens (align epp) else epp
+            | Alias_extract(reg,start,stop) ->
+               let epp = 
+                 if start = stop then
+                   (separate space)
+                     [string "access";doc_int start;
+                      parens (string "read_reg" ^^ space ^^ string reg)]
+                 else
+                   (separate space)
+                     [string "slice"; doc_int start; doc_int stop;
+                      parens (string "read_reg" ^^ space ^^ string reg)] in
+               if aexp_needed then parens (align epp) else epp
+           )
+        | _ -> doc_id_lem id)
     | E_lit lit -> doc_lit_lem false lit
     | E_cast(typ,e) ->
       (match annot with
@@ -2287,7 +2307,7 @@ let doc_exp_lem, doc_let_lem =
               | "minus" -> aux "-"
               | "multiply" -> aux "*"
               | "quot" -> aux "/"
-              | "modulo" -> aux "(mod)"
+              | "modulo" -> aux "mod"
 
               | "add_vec" -> aux2 "add_VVV"
               | "add_vec_signed" -> aux2 "addS_VVV"
@@ -2299,6 +2319,7 @@ let doc_exp_lem, doc_let_lem =
               | "minus_vec_range" -> aux2 "minus_VIV"
               | "mult_vec_range" -> aux2 "mult_VIV"
               | "mult_vec_range_signed" -> aux2 "multS_VIV"
+              | "mod_vec_range" -> aux2 "minus_VIV"
               | "add_range_vec" -> aux2 "add_IVV"
               | "add_range_vec_signed" -> aux2 "addS_IVV"
               | "minus_range_vec" -> aux2 "minus_IVV"
@@ -2310,6 +2331,8 @@ let doc_exp_lem, doc_let_lem =
               | "add_vec_range_range" -> aux2 "add_VII"
               | "add_vec_range_range_signed" -> aux2 "addS_VII"
               | "minus_vec_range_range" -> aux2 "minus_VII"
+              | "add_vec_vec_range" -> aux2 "add_VVI"
+              | "add_vec_vec_range_signed" -> aux2 "addS_VVI"
               | "add_vec_bit" -> aux2 "add_VBV"
               | "add_vec_bit_signed" -> aux2 "addS_VBV"
               | "minus_vec_bit_signed" -> aux2 "minus_VBV"
@@ -2319,6 +2342,8 @@ let doc_exp_lem, doc_let_lem =
               | "minus_overflow_vec_signed" -> aux2 "minusSO_VVV"
               | "mult_overflow_vec" -> aux2 "multO_VVV"
               | "mult_overflow_vec_signed" -> aux2 "multSO_VVV"
+              | "quot_overflow_vec" -> aux2 "quotO_VVV"
+              | "quot_overflow_vec_signed" -> aux2 "quot_SO_VVV"
               | "add_overflow_vec_bit_signed" -> aux2 "addSO_VBV"
               | "minus_overflow_vec_bit" -> aux2 "minusO_VBV"
               | "minus_overflow_vec_bit_signed" -> aux2 "minusSO_VBV"
@@ -2371,8 +2396,9 @@ let doc_exp_lem, doc_let_lem =
     | LEXP_vector(le,e) ->
        parens ((separate space) [string "access";doc_lexp_deref_lem le;top_exp true e])
     | LEXP_id id -> doc_id_lem id
-    | _ -> empty
-
+    | LEXP_cast (typ,id) -> doc_id_lem id
+    | _ -> 
+       raise (Reporting_basic.err_unreachable l ("doc_lexp_deref_lem: Shouldn't happen"))
   (* expose doc_exp_lem and doc_let *)
   in top_exp, let_exp
 
@@ -2599,7 +2625,7 @@ let reg_decls (Defs defs) =
     if rsbits = [] then empty
     else
       (prefix 2 1)
-        (separate space [string "let";string "register_field_bit_to_string";
+        (separate space [string "let";string "register_bitfield_to_string";
                          equals;string "function"])
         ((separate_map (break 1))
            (fun (fname,tname,_) ->
@@ -2618,10 +2644,10 @@ let reg_decls (Defs defs) =
 
   let regfieldsbit_pp =
     if rsbits = [] then
-      string "type register_field_bit = | NO_REGISTER_FIELD_BITS"
+      string "type register_bitfield = | no_REGISTER_BITFIELDS"
     else
     (prefix 2 1)
-      (separate space [string "type";string "register_field_bit";equals])
+      (separate space [string "type";string "register_bitfield";equals])
       (separate_map space (fun (fname,tname,_) ->
                            pipe ^^ space ^^ string (tname ^ "_" ^ fname)) rsbits) in
 
@@ -2668,7 +2694,7 @@ let reg_decls (Defs defs) =
     else
     (prefix 2 1)
       ((separate space) [string "let";string "field_index_bit";
-                         colon;string "register_field_bit";arrow;string "integer";
+                         colon;string "register_bitfield";arrow;string "integer";
                          equals;string "function"])
       (
         ((separate_map (break 1))
@@ -2751,10 +2777,9 @@ let pp_defs_lem f_arch f d top_line opens =
   print f
         (string "(*" ^^ (string top_line) ^^ string "*)" ^/^
            ((separate_map hardline)
-              (fun lib -> separate space [string "open import";string lib])
-              ("Pervasives" :: "Vector" :: "State" :: "Arch" :: opens)) ^/^ defs);
+              (fun lib -> separate space [string "open import";string lib]) opens) ^/^ hardline ^^ defs);
   print f_arch
         (string "(*" ^^ (string top_line) ^^ string "*)" ^/^
            ((separate_map hardline)
               (fun lib -> separate space [string "open import";string lib])
-              ["Pervasives";"Assert_extra";"Vector"]) ^/^ decls)
+              ["Pervasives";"Assert_extra";"Vector"]) ^/^ hardline ^^ decls)
