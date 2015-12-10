@@ -1288,11 +1288,11 @@ and n_lexp (lexp : 'a lexp) (k : 'a lexp -> 'a exp) : 'a exp =
   | LEXP_vector (lexp,e) ->
      n_lexp lexp (fun lexp -> 
      n_exp_name e (fun e -> 
-     k (fix_effsum_lexp (LEXP_aux (LEXP_vector (lexp,e),annot))))
+     k (fix_effsum_lexp (LEXP_aux (LEXP_vector (lexp,e),annot)))))
   | LEXP_vector_range (lexp,e1,e2) ->
      n_lexp lexp (fun lexp ->
-     n_exp_name exp1 (fun e1 ->
-     n_exp_name exp2 (fun e2 ->
+     n_exp_name e1 (fun e1 ->
+     n_exp_name e2 (fun e2 ->
      k (fix_effsum_lexp (LEXP_aux (LEXP_vector_range (lexp,e1,e2),annot))))))
   | LEXP_field (lexp,id) ->
      n_lexp lexp (fun lexp ->
