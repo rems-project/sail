@@ -6,6 +6,7 @@ type text = string
 type l =
   | Unknown
   | Int of string * l option
+  | Generated of l
   | Range of Lexing.position * Lexing.position
 
 type 'a annot = l * 'a
