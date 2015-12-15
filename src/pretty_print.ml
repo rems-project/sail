@@ -1903,45 +1903,33 @@ let doc_typscm_lem (TypSchm_aux(TypSchm_ts(tq,t),_)) =
 (*Note: vector concatenation, literal vectors, indexed vectors, and record should 
   be removed prior to pp. The latter two have never yet been seen
 *)
-let doc_pat_lem apat_needed =
-  let rec pat pa = app_pat pa
-  and app_pat ((P_aux(p,(l,annot))) as pa) = match p with
-    | P_app(id, ((_ :: _) as pats)) ->
-      (match annot with
-       | Base(_,Constructor _,_,_,_,_) ->
-         doc_unop (doc_id_lem_ctor true id) (separate_map space pat pats)
-       | _ -> empty)
+let rec doc_pat_lem apat_needed (P_aux (p,(l,annot)) as pa) = match p with
+  | P_app(id, ((_ :: _) as pats)) ->
+     (match annot with
+      | Base(_,Constructor _,_,_,_,_) ->
+         let ppp = doc_unop (doc_id_lem_ctor true id)
+                            (separate_map space (doc_pat_lem true) pats) in
+         if apat_needed then parens ppp else ppp
+      | _ -> empty)
   | P_lit lit  -> doc_lit_lem true lit
   | P_wild -> underscore
   | P_id id -> doc_id_lem id
-  | P_as(p,id) -> parens (separate space [pat p; string "as"; doc_id_lem id])
-  | P_typ(typ,p) -> doc_op colon (pat p) (doc_typ_lem typ) 
+  | P_as(p,id) -> parens (separate space [doc_pat_lem true p; string "as"; doc_id_lem id])
+  | P_typ(typ,p) -> doc_op colon (doc_pat_lem true p) (doc_typ_lem typ) 
   | P_app(id,[]) ->
     (match annot with
      | Base(_,Constructor n,_,_,_,_) -> doc_id_lem_ctor apat_needed id
      | _ -> empty)
   | P_vector pats ->
-    let non_bit_print () =
-      parens
-        (separate space [string "V";
-                         (separate space [brackets (separate_map semi pat pats);
-                                          underscore;underscore])]) in
-    (match annot with
-     | Base(([],t),_,_,_,_,_) ->
-       if is_bit_vector t
-       then
-         let ppp =
-           (separate space)
-             [string "V";brackets (separate_map semi pat pats);underscore;underscore] in
-         if apat_needed then parens ppp else ppp
-       else non_bit_print()
-     | _ -> non_bit_print ())
+     let ppp =
+       (separate space)
+         [string "V";brackets (separate_map semi (doc_pat_lem true) pats);underscore;underscore] in
+     if apat_needed then parens ppp else ppp
   | P_tup pats  ->
      (match pats with
-      | [p] -> pat p
-      | _ -> parens (separate_map comma_sp pat pats))
-     | P_list pats -> brackets (separate_map semi pat pats) (*Never seen but easy in lem*)
-  in pat
+      | [p] -> doc_pat_lem apat_needed p
+      | _ -> parens (separate_map comma_sp (doc_pat_lem false) pats))
+     | P_list pats -> brackets (separate_map semi (doc_pat_lem false) pats) (*Never seen but easy in lem*)
 
 let rec getregtyp_annot (Base ((_,t),_,_,_,_,_)) = 
   match t with
@@ -2343,7 +2331,7 @@ let doc_exp_lem, doc_let_lem =
               | "mult_overflow_vec" -> aux2 "multO_VVV"
               | "mult_overflow_vec_signed" -> aux2 "multSO_VVV"
               | "quot_overflow_vec" -> aux2 "quotO_VVV"
-              | "quot_overflow_vec_signed" -> aux2 "quot_SO_VVV"
+              | "quot_overflow_vec_signed" -> aux2 "quotSO_VVV"
               | "add_overflow_vec_bit_signed" -> aux2 "addSO_VBV"
               | "minus_overflow_vec_bit" -> aux2 "minusO_VBV"
               | "minus_overflow_vec_bit_signed" -> aux2 "minusSO_VBV"

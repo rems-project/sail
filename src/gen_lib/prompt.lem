@@ -133,25 +133,26 @@ type M 'a = outcome 'a
 val return : forall 'a. 'a -> M 'a
 let return a = Done a
 
-val bind : forall 'a 'b. M 'a -> ('a -> M 'b) -> M 'b
-let rec bind m f = match m with
+val (>>=) : forall 'a 'b. M 'a -> ('a -> M 'b) -> M 'b
+val (>>>) : forall 'a 'b 'c. ('a -> M 'b) -> ('b -> M 'c) -> ('a -> M 'c)
+
+let rec (>>=) m f = match m with
   | Done a -> f a
-  | Read_mem rk addr sz rs k ->        Read_mem rk addr sz rs        (fun v -> bind (k v) f)
-  | Write_mem wk addr sz rs v rs2 k -> Write_mem wk addr sz rs v rs2 (fun b -> bind (k b) f)
-  | Write_ea wk addr sz rs k ->        Write_ea wk addr sz rs        (bind k f)
-  | Write_memv v rs k ->               Write_memv v rs               (fun b -> bind (k b) f)
-  | Barrier bk k ->                    Barrier bk                    (bind k f)
-  | Footprint k ->                     Footprint                     (bind k f)
-  | Read_reg reg k ->                  Read_reg reg                  (fun v -> bind (k v) f)
-  | Write_reg reg v k ->               Write_reg reg v               (bind k f)
-  | Nondet_choice actions k ->         Nondet_choice actions         (fun c -> bind (k c) f)
+  | Read_mem rk addr sz rs k ->        Read_mem rk addr sz rs        (fun v -> (k v) >>= f)
+  | Write_mem wk addr sz rs v rs2 k -> Write_mem wk addr sz rs v rs2 (fun b -> (k b) >>= f)
+  | Write_ea wk addr sz rs k ->        Write_ea wk addr sz rs        (k >>= f)
+  | Write_memv v rs k ->               Write_memv v rs               (fun b -> (k b) >>= f)
+  | Barrier bk k ->                    Barrier bk                    (k >>= f)
+  | Footprint k ->                     Footprint                     (k >>= f)
+  | Read_reg reg k ->                  Read_reg reg                  (fun v -> (k v) >>= f)
+  | Write_reg reg v k ->               Write_reg reg v               (k >>= f)
+  | Nondet_choice actions k ->         Nondet_choice actions         (fun c -> (k c) >>= f)
   | Escape -> Escape
   end
 
 val exit : forall 'a 'e. 'e -> M 'a
 let exit _ = Escape
 
-let (>>=) = bind
 let (>>) m n = m >>= fun _ -> n
 
 val byte_chunks : forall 'a. nat -> list 'a -> list (list 'a)
@@ -240,11 +241,11 @@ let read_reg_field reg rfield =
 val write_reg_field : register -> register_field -> vector bit -> M unit
 let write_reg_field reg rfield = write_reg_range reg (field_indices rfield)
 
-val read_reg_field_bit : register -> register_field_bit -> M bit
-let read_reg_field_bit reg rbit = read_reg_bit reg (field_index_bit rbit)
+val read_reg_bitfield : register -> register_bitfield -> M bit
+let read_reg_bitfield reg rbit = read_reg_bit reg (field_index_bit rbit)
 
-val write_reg_field_bit : register -> register_field_bit -> bit -> M unit
-let write_reg_field_bit reg rbit = write_reg_bit reg (field_index_bit rbit)
+val write_reg_bitfield : register -> register_bitfield -> bit -> M unit
+let write_reg_bitfield reg rbit = write_reg_bit reg (field_index_bit rbit)
 
 val foreach_inc :  forall 'vars. (integer * integer * integer) (*(nat * nat * nat)*) -> 'vars ->
                   (integer (*nat*) -> 'vars -> (unit * 'vars)) -> (unit * 'vars)

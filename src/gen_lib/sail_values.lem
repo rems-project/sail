@@ -329,15 +329,15 @@ let bitwise_leftshift = shift_op_vec LL (*"<<"*)
 let bitwise_rightshift = shift_op_vec RR (*">>"*)
 let bitwise_rotate = shift_op_vec LLL (*"<<<"*)
 
-let rec arith_op_no0 (op : integer -> integer -> integer) (l,r) = 
+let rec arith_op_no0 (op : integer -> integer -> integer) l r = 
   if r = 0
   then Nothing
   else Just (op l r)
 
-let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size (((V _ start is_inc) as l),r) =
+let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size ((V _ start is_inc) as l) r =
   let act_size = length l * size in
   let (l',r') = (to_num sign l,to_num sign r) in
-  let n = arith_op_no0 op (l',r') in
+  let n = arith_op_no0 op l' r' in
   let (representable,n') = 
     match n with 
     | Just n' ->  
@@ -353,13 +353,13 @@ let mod_VVV = arith_op_vec_no0 integerMod false 1
 let quot_VVV = arith_op_vec_no0 integerDiv false 1
 let quotS_VVV = arith_op_vec_no0 integerDiv true 1
 
-let arith_op_overflow_no0_vec op sign size (((V _ start is_inc) as l),r) =
+let arith_op_overflow_no0_vec op sign size ((V _ start is_inc) as l) r =
   let rep_size = length r * size in
   let act_size = length l * size in
   let (l',r') = (to_num sign l,to_num sign r) in
   let (l_u,r_u) = (to_num false l,to_num false r) in
-  let n = arith_op_no0 op (l',r') in
-  let n_u = arith_op_no0 op (l_u,r_u) in
+  let n = arith_op_no0 op l' r' in
+  let n_u = arith_op_no0 op l_u r_u in
   let (representable,n',n_u') = 
     match (n, n_u) with 
     | (Just n',Just n_u') ->  
@@ -380,7 +380,7 @@ let quotO_VVV = arith_op_overflow_no0_vec integerDiv false 1
 let quotSO_VVV = arith_op_overflow_no0_vec integerDiv true 1
 
 let arith_op_vec_range_no0 op sign size (V _ _ is_inc as l) r =
-  arith_op_vec_no0 op sign size (l,to_vec is_inc (length l,r))
+  arith_op_vec_no0 op sign size l (to_vec is_inc (length l,r))
 
 let mod_VIV = arith_op_vec_range_no0 integerMod false 1
 
