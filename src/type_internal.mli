@@ -293,7 +293,9 @@ val type_consistent : constraint_origin -> def_envs -> range_enforcement -> bool
 
 (* type_coerce mutates to unify variables, and will raise an exception if the first type cannot
    be coerced into the second and is additionally inconsistent with the second; 
-   bool specifices whether this has arisen from an implicit or explicit type coercion request *)
+   bool specifices whether this has arisen from an implicit or explicit type coercion request
+   type_coerce origin envs enforce is_explicit (ie came from user) widen bounds t exp expect_t
+ *)
 val type_coerce : constraint_origin -> def_envs -> range_enforcement -> bool -> bool -> bounds_env -> t -> exp -> t -> t * nexp_range list * effect * exp
 
 (* Merge tannots when intersection or unioning two environments. In case of default types, defer to tannot on right 
