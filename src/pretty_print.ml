@@ -1864,18 +1864,19 @@ let doc_typ_lem, doc_atomic_typ_lem =
       (doc_id_lem_type id) ^^ space ^^ (separate_map space doc_typ_arg_lem args)
   | _ -> atomic_typ ty 
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
-  | Typ_id id  -> doc_id_lem_type id
-  | Typ_var v  -> doc_var v
-  | Typ_wild -> underscore
-  | Typ_app _ | Typ_tup _ | Typ_fn _ ->
-      (* exhaustiveness matters here to avoid infinite loops
-       * if we add a new Typ constructor *)
-      group (parens (typ ty))
+    | Typ_id (Id_aux ((Id "bool"),_)) -> string "bit"
+    | Typ_id id  -> doc_id_lem_type id
+    | Typ_var v  -> doc_var v
+    | Typ_wild -> underscore
+    | Typ_app _ | Typ_tup _ | Typ_fn _ ->
+       (* exhaustiveness matters here to avoid infinite loops
+        * if we add a new Typ constructor *)
+       group (parens (typ ty))
   and doc_typ_arg_lem (Typ_arg_aux(t,_)) = match t with
-  | Typ_arg_typ t -> app_typ t
-  | Typ_arg_nexp n -> empty
-  | Typ_arg_order o -> empty
-  | Typ_arg_effect e -> empty
+    | Typ_arg_typ t -> app_typ t
+    | Typ_arg_nexp n -> empty
+    | Typ_arg_order o -> empty
+    | Typ_arg_effect e -> empty
   in typ, atomic_typ
 
 let doc_lit_lem in_pat (L_aux(l,_)) =
@@ -1906,20 +1907,20 @@ let doc_typscm_lem (TypSchm_aux(TypSchm_ts(tq,t),_)) =
 let rec doc_pat_lem apat_needed (P_aux (p,(l,annot)) as pa) = match p with
   | P_app(id, ((_ :: _) as pats)) ->
      (match annot with
-      | Base(_,Constructor _,_,_,_,_) ->
+      | Base(_,(Constructor _ | Enum _),_,_,_,_) ->
          let ppp = doc_unop (doc_id_lem_ctor true id)
-                            (separate_map space (doc_pat_lem true) pats) in
+                            (parens (separate_map comma (doc_pat_lem true) pats)) in
          if apat_needed then parens ppp else ppp
       | _ -> empty)
+  | P_app(id,[]) ->
+    (match annot with
+     | Base(_,(Constructor _| Enum _),_,_,_,_) -> doc_id_lem_ctor apat_needed id
+     | _ -> empty)
   | P_lit lit  -> doc_lit_lem true lit
   | P_wild -> underscore
   | P_id id -> doc_id_lem id
   | P_as(p,id) -> parens (separate space [doc_pat_lem true p; string "as"; doc_id_lem id])
   | P_typ(typ,p) -> doc_op colon (doc_pat_lem true p) (doc_typ_lem typ) 
-  | P_app(id,[]) ->
-    (match annot with
-     | Base(_,Constructor n,_,_,_,_) -> doc_id_lem_ctor apat_needed id
-     | _ -> empty)
   | P_vector pats ->
      let ppp =
        (separate space)
@@ -1958,7 +1959,7 @@ let doc_exp_lem, doc_let_lem =
                if t = Tid "bit" then
                  failwith "indexing a register's (single bit) bitfield not supported"
                else
-                 let typprefix = String.uncapitalize (getregtyp le) ^ "_" in
+                 let typprefix = getregtyp le ^ "_" in
                  (prefix 2 1)
                    (string "write_reg_field_range")
                    (align (doc_lexp_deref_lem le ^^ space ^^ string typprefix ^^
@@ -1974,7 +1975,7 @@ let doc_exp_lem, doc_let_lem =
                if t = Tid "bit" then
                  failwith "indexing a register's (single bit) bitfield not supported"
                else
-                 let typprefix = String.uncapitalize (getregtyp le) ^ "_" in
+                 let typprefix = getregtyp le ^ "_" in
                  (prefix 2 1)
                    (string "write_reg_field_bit")
                    (align (doc_lexp_deref_lem le ^^ space ^^ string typprefix ^^
@@ -1985,13 +1986,13 @@ let doc_exp_lem, doc_let_lem =
                  (doc_lexp_deref_lem le ^^ space ^^ exp e2 ^/^ exp e)
            )
           | LEXP_field (le,id), (Tid "bit"| Tabbrev (_,{t=Tid "bit"})), _ ->
-             let typprefix = String.uncapitalize (getregtyp le) ^ "_" in
+             let typprefix = getregtyp le ^ "_" in
              (prefix 2 1)
                (string "write_reg_bitfield")
                (doc_lexp_deref_lem le ^^ space ^^ string typprefix ^^
                   doc_id_lem id ^/^ exp e)
           | LEXP_field (le,id), _, _ ->
-             let typprefix = String.uncapitalize (getregtyp le) ^ "_" in
+             let typprefix = getregtyp le ^ "_" in
              (prefix 2 1)
                (string "write_reg_field")
                (doc_lexp_deref_lem le ^^ space ^^ string typprefix ^^
@@ -2005,7 +2006,7 @@ let doc_exp_lem, doc_let_lem =
                    | _ -> string "write_reg_bitfield" in
                  (prefix 2 1)
                    f
-                   (separate space [string reg;string (String.lowercase reg ^ "_" ^ field);exp e])
+                   (separate space [string reg;string (reg ^ "_" ^ field);exp e])
                     (* the type should go instead of the lowercase reg *)
               | Alias_pair(reg1,reg2) ->
                  string "write_two_regs" ^^ space ^^ string reg1 ^^ space ^^
@@ -2072,7 +2073,7 @@ let doc_exp_lem, doc_let_lem =
         | _ ->
            (match annot with
             | Base (_,Constructor _,_,_,_,_) ->
-               let epp = separate space [doc_id_lem f;separate_map space (top_exp true) args] in
+               let epp = doc_id_lem f ^^ space ^^ parens (separate_map comma (top_exp true) args) in
                if aexp_needed then parens (align epp) else epp
             | Base (_,External (Some "bitwise_not_bit"),_,_,_,_) ->
                let [a] = args in
@@ -2142,12 +2143,12 @@ let doc_exp_lem, doc_let_lem =
                  | Tid "bit" | Tabbrev (_,{t=Tid "bit"}) -> 
                     (separate space)
                       [string "read_reg_bitfield"; string reg;
-                       string (String.lowercase reg ^ "_" ^ field)]
+                       string (reg ^ "_" ^ field)]
                  (* the type should go instead of the lowercase reg *)
                  | _ -> 
                     (separate space)
                       [string "read_reg_field"; string reg;
-                       string (String.lowercase reg ^ "_" ^ field)] in
+                       string (reg ^ "_" ^ field)] in
                  (* the type should go instead of the lowercase reg *)
                if aexp_needed then parens (align epp) else epp
             | Alias_pair(reg1,reg2) ->
@@ -2392,7 +2393,7 @@ let doc_exp_lem, doc_let_lem =
 
 (*TODO Upcase and downcase type and constructors as needed*)
 let doc_type_union_lem (Tu_aux(typ_u,_)) = match typ_u with
-  | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_lem_ctor false id; string "of"; doc_typ_lem typ;]
+  | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_lem_ctor false id; string "of"; parens (doc_typ_lem typ)]
   | Tu_id id -> separate space [pipe; doc_id_lem_ctor false id]
 
 let rec doc_range_lem (BF_aux(r,_)) = match r with
@@ -2545,10 +2546,12 @@ let reg_decls (Defs defs) =
     (prefix 2 1)
       (separate space [string "let rec";string "length_reg";string "reg";equals;string "match reg with"])
       (((separate_map (break 1))
-           (fun (name,typ) ->
+          (fun (name,typ) ->
             let ((n1,n2,_,_),typname) =
               match typ with
-              | Some typname -> (List.assoc typname regtypes,"register_" ^ typname)
+              | Some typname ->
+                 (try (List.assoc typname regtypes,"register_" ^ typname) with
+                  | Not_found -> failwith ("Couldn't find register type " ^ typname))
               | None -> (default,"register") in
             separate space [pipe;string name;arrow;doc_nexp (if is_inc then n2 else n1);
                             minus;doc_nexp (if is_inc then n1 else n2);plus;string "1"])
@@ -2740,10 +2743,10 @@ let reg_decls (Defs defs) =
                   string "let vsize = length v in";
                   string "let vsize = integerFromNat vsize in";
                   string ("let r1_v = slice v start " ^
-                    (if is_inc then "(size - start - 1) in" else "(start - size) - 1) in"));
+                    (if is_inc then "(size - start - 1) in" else "(start - size - 1) in"));
                   string ("let r2_v = slice v " ^
-                         (if is_inc then "(size - start)" else "(start - size)") ^
-                           (if is_inc then "(vsize - start) in" else ("start - vsize) in")));
+                         (if is_inc then "(size - start) " else "(start - size) ") ^
+                           (if is_inc then "(vsize - start) in" else ("(start - vsize) in")));
                   string "write_regstate_aux (write_regstate_aux s r1 r1_v) r2 r2_v"
                 ])) ^/^
           string "end" ^^ hardline ) in

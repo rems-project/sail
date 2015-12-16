@@ -44,17 +44,18 @@ let get_type_annot (_,t) = match t with
 
 let get_type (E_aux (_,a)) = get_type_annot a
 
+let union_effs effs =
+  List.fold_left (fun acc eff -> union_effects acc eff) pure_e effs
+
 let get_effsum_exp (E_aux (_,a)) = get_effsum_annot a
 let get_effsum_fpat (FP_aux (_,a)) = get_effsum_annot a
 let get_effsum_lexp (LEXP_aux (_,a)) = get_effsum_annot a
 let get_effsum_fexp (FE_aux (_,a)) = get_effsum_annot a
-let get_effsum_fexps (FES_aux (_,a)) = get_effsum_annot a
+let get_effsum_fexps (FES_aux (FES_Fexps (fexps,_),_)) =
+  union_effs (List.map get_effsum_fexp fexps)
 let get_effsum_opt_default (Def_val_aux (_,a)) = get_effsum_annot a
 let get_effsum_pexp (Pat_aux (_,a)) = get_effsum_annot a
 let get_effsum_lb (LB_aux (_,a)) = get_effsum_annot a
-
-let union_effs effs =
-  List.fold_left (fun acc eff -> union_effects acc eff) pure_e effs
 
 let eff_union_exps es =
   union_effs (List.map get_effsum_exp es)
@@ -117,14 +118,7 @@ let fix_effsum_fexp (FE_aux (fexp,(l,annot))) =
     | FE_Fexp (_,e) -> get_effsum_exp e in
   FE_aux (fexp,(l,(Base (t,tag,nexps,eff,union_effects eff effsum,bounds))))
 
-let fix_effsum_fexps (FES_aux (fexps,(l,annot))) =
-  match annot with
-  | NoTyp ->
-     raise ((Reporting_basic.err_unreachable l) ("fix_effsum_fexps missing type information"))
-  | Base (t,tag,nexps,eff,_,bounds) ->
-     let effsum = match fexps with
-       | FES_Fexps (fexps,_) -> union_effs (List.map get_effsum_fexp fexps) in
-     FES_aux (fexps,(l,(Base (t,tag,nexps,eff,union_effects eff effsum,bounds))))
+let fix_effsum_fexps fexps = fexps (* FES_aux have no effect information *)
 
 let fix_effsum_opt_default (Def_val_aux (opt_default,(l,annot))) =
   let (Base (t,tag,nexps,eff,_,bounds)) = annot in
@@ -745,33 +739,18 @@ let id_exp_alg =
   
 
 let remove_vector_concat_pat pat =
-  (* ivc: bool that indicates whether the exp is in a vector_concat pattern *)
-  let remove_tannot_in_vector_concats = 
-    { p_lit = (fun lit ivc -> P_lit lit)
-    ; p_wild = (fun ivc -> P_wild)
-    ; p_as = (fun (pat,id) ivc -> P_as (pat ivc,id))
-    ; p_typ =
-        (fun (typ,pat) ivc ->
-         let P_aux (p,annot) = pat ivc in
-         if ivc then p else P_typ (typ,P_aux (p,annot))
-        )
-    ; p_id  = (fun id ivc -> P_id id)
-    ; p_app = (fun (id,ps) ivc -> P_app (id, List.map (fun p -> p ivc) ps))
-    ; p_record =
-        (fun (fpats,b) ivc -> P_record (List.map (fun f -> f false) fpats, b))
-    ; p_vector = (fun ps ivc -> P_vector (List.map (fun p -> p ivc) ps))
-    ; p_vector_indexed =
-        (fun ps ivc -> P_vector_indexed (List.map (fun (i,p) -> (i,p ivc)) ps))
-    ; p_vector_concat  =
-        (fun ps ivc -> P_vector_concat (List.map (fun p -> p true) ps))
-    ; p_tup = (fun ps ivc -> P_tup (List.map (fun p -> p ivc) ps))
-    ; p_list = (fun ps ivc -> P_list (List.map (fun p -> p ivc) ps))
-    ; p_aux = (fun (p,annot) ivc -> P_aux (p ivc,annot))
-    ; fP_aux = (fun (fpat,annot) ivc -> FP_aux (fpat false,annot))
-    ; fP_Fpat = (fun (id,p) ivc -> FP_Fpat (id,p false))
-    } in
 
-  let pat = (fold_pat remove_tannot_in_vector_concats pat) false in
+  (* ivc: bool that indicates whether the exp is in a vector_concat pattern *)
+  let remove_typed_patterns =
+    fold_pat { id_pat_alg with
+               p_aux = (function
+                        | (P_typ (_,P_aux (p,_)),annot)
+                        | (p,annot) -> 
+                           P_aux (p,annot)
+                       )
+             } in
+  
+  let pat = remove_typed_patterns pat in
 
   let fresh_name l =
     let current = fresh_name () in
@@ -784,9 +763,9 @@ let remove_vector_concat_pat pat =
   (* introduce names for all patterns of form P_vector_concat *)
   let name_vector_concat_roots =
     { p_lit = (fun lit -> P_lit lit)
+    ; p_typ = (fun (typ,p) -> P_typ (typ,p false)) (* cannot happen *)
     ; p_wild = P_wild
     ; p_as = (fun (pat,id) -> P_as (pat true,id))
-    ; p_typ = (fun (typ,pat) -> P_typ (typ,pat false))
     ; p_id  = (fun id -> P_id id)
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
     ; p_record = (fun (fpats,b) -> P_record (fpats, b))
@@ -797,17 +776,16 @@ let remove_vector_concat_pat pat =
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
     ; p_aux =
         (fun (pat,((l,_) as annot)) contained_in_p_as ->
-               match pat with
-               | P_vector_concat pats ->
-                  (if contained_in_p_as
-                   then P_aux (pat,annot)
-                   else P_aux (P_as (P_aux (pat,annot),fresh_name l),annot))
-               | _ -> P_aux (pat,annot)
+          match pat with
+          | P_vector_concat pats ->
+             (if contained_in_p_as
+              then P_aux (pat,annot)
+              else P_aux (P_as (P_aux (pat,annot),fresh_name l),annot))
+          | _ -> P_aux (pat,annot)
         )
     ; fP_aux = (fun (fpat,annot) -> FP_aux (fpat,annot))
     ; fP_Fpat = (fun (id,p) -> FP_Fpat (id,p false))
     } in
-    
 
   let pat = (fold_pat name_vector_concat_roots pat) false in
 
@@ -816,8 +794,12 @@ let remove_vector_concat_pat pat =
     let p_vector_concat pats =
       let aux ((P_aux (p,((l,_) as a))) as pat) = match p with
         | P_vector _ -> P_aux (P_as (pat,fresh_name l),a)
-     (* | P_vector_concat. cannot happen after folding function name_vector_concat_roots *)
-        | _ -> pat in (* this can only be P_as and P_id *)
+        | P_id id -> P_aux (P_id id,a)
+        | P_as (p,id) -> P_aux (P_as (p,id),a)
+        | _ ->
+           raise
+             (Reporting_basic.err_unreachable
+                l "name_vector_concat_elements: Non-vector in vector-concat pattern") in
       P_vector_concat (List.map aux pats) in
     {id_pat_alg with p_vector_concat = p_vector_concat} in
 
@@ -851,7 +833,8 @@ let remove_vector_concat_pat pat =
     let p_aux = function
       | ((P_as (P_aux (P_vector_concat pats,rannot'),rootid),decls),rannot) ->
           let aux (pos,pat_acc,decl_acc) (P_aux (p,cannot)) = match cannot with
-            | (_,Base((_,{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_)) ->
+            | (_,Base((_,{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_))
+            | (_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])})}),_,_,_,_,_)) ->
                let length  = int_of_big_int length in
                (match p with 
                 (* if we see a named vector pattern, remove the name and remember to 
@@ -866,10 +849,12 @@ let remove_vector_concat_pat pat =
                 (* normal vector patterns are fine *)
                 | _ -> (pos + length, pat_acc @ [P_aux (p,cannot)],decl_acc) )
             (* non-vector patterns aren't *)
-            | (l,_) ->
+            | (l,Base((_,t),_,_,_,_,_)) ->
                raise
                  (Reporting_basic.err_unreachable
-                    l "unname_vector_concat_elements: Non-vector in vector-concat pattern") in
+                    l ("unname_vector_concat_elements: Non-vector in vector-concat pattern:" ^
+                       t_to_string t)
+                 ) in
           let (_,pats',decls') = List.fold_left aux (0,[],[]) pats in
           (P_aux (P_as (P_aux (P_vector_concat pats',rannot'),rootid),rannot), decls @ decls')
       | ((p,decls),annot) -> (P_aux (p,annot),decls) in
@@ -957,11 +942,15 @@ let remove_vector_concat_pat pat =
         match p,annot with
         | P_vector ps,_ -> acc @ ps
         | P_id _,
-          (_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_)) ->
+          (_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_))
+        | P_id _,
+          (_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])})}),_,_,_,_,_)) ->
            let wild _ = P_aux (P_wild,(Parse_ast.Generated l,simple_annot {t = Tid "bit"})) in
            acc @ (List.map wild (range 0 ((int_of_big_int length) - 1)))
         | P_wild,
-          (_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_)) ->
+          (_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_))
+        | P_wild,
+          (_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])})}),_,_,_,_,_)) ->
            let wild _ = P_aux (P_wild,(Parse_ast.Generated l,simple_annot {t = Tid "bit"})) in
            acc @ (List.map wild (range 0 ((int_of_big_int length) - 1)))
         | P_lit _,(l,_) ->

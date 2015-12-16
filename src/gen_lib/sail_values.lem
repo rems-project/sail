@@ -466,3 +466,7 @@ let make_bitvector_undef length =
 
 
 let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n)
+
+let mask (n,V bits start dir) =
+  let current_size = List.length bits in
+  V (drop (current_size - (natFromInteger n)) bits) (if dir then 0 else (n-1)) dir
