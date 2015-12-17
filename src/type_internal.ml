@@ -2101,6 +2101,14 @@ let initial_typ_env =
                                            (mk_range n_zero (mk_nv "m"))])
                                   (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
                 External (Some "bitwise_rotate"),[],pure_e,pure_e,nob));
+    ("EXTS",Base((((mk_nat_params ["n";"m";"o";"p"])@["ord",{k=K_Ord}]),
+                  (mk_pure_imp (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n"))
+                     (mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "m")) "m")),
+                 External (Some "EXTS"),[],pure_e,pure_e,nob));
+    ("EXTZ",Base((((mk_nat_params ["n";"m";"o";"p"])@["ord",{k=K_Ord}]),
+                  (mk_pure_imp (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n"))
+                     (mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "m")) "m")),
+                 External (Some "EXTZ"),[],pure_e,pure_e,nob));
   ]
 
 

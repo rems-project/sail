@@ -1,10 +1,10 @@
 (* bit vectors have indices decreasing from left i.e. msb is highest index *)
 default Order dec
 
-(* external functions *)
+(*(* external functions *)
 val extern forall Nat 'm, Nat 'n. (implicit<'m>,bit['n]) -> bit['m] effect pure EXTS (* Sign extend *)
 val extern forall Nat 'n, Nat 'm. (implicit<'m>,bit['n]) -> bit['m] effect pure EXTZ (* Zero extend *)
-
+*)
 register (bit[64]) PC
 
 (* CP0 Registers *)

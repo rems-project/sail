@@ -15,9 +15,9 @@ endif
 # the order of the files is important
 MIPSSOURCES= mips.sail
 
-all: $(BUILDDIR)/mips.ml $(BUILDDIR)/mips_extras.ml
+all: $(BUILDDIR)mips.ml $(BUILDDIR)mips_extras.ml
 
-lem: $(BUILDDIR)/mips.lem
+lem: $(BUILDDIR)mips.lem
 
 # this will force build everything, including the tools
 full:
@@ -38,7 +38,7 @@ $(LEM):
 $(BUILDDIR):
 	mkdir -p $@
 
-$(BUILDDIR)/mips.lem: $(MIPSSOURCES) $(SAIL) | $(BUILDDIR)
+$(BUILDDIR)mips.lem: $(MIPSSOURCES) $(SAIL) | $(BUILDDIR)
 # if bash is detected we can print nicer errors
 ifeq ($(SHELL),/bin/bash)
 # 	the test at the end is so we return the exit code of sail and not parse_sail.sh
@@ -49,13 +49,13 @@ endif
 #       sail uses the name of the first file on the list
 	@mv $(<:.sail=.lem) $(BUILDDIR)mips.lem
 
-$(BUILDDIR)/mips.ml: $(BUILDDIR)mips.lem $(LEM)
+$(BUILDDIR)mips.ml: $(BUILDDIR)mips.lem $(LEM)
 	$(LEM) -ocaml -only_changed_output -lib $(SAILDIR)/src/lem_interp/ $<
 # 	FIXME: lem bug, does not change modification time
 	touch $@
 
-$(BUILDDIR)/mips_extras.ml: $(BUILDDIR)mips_extras.lem $(LEM)
-	cp mips_extras.lem $<
+$(BUILDDIR)mips_extras.ml: 
+	cp mips_extras.lem $@
 	$(LEM) -ocaml -only_changed_output -lib $(SAILDIR)/src/lem_interp/ $<
 	touch $@
 
