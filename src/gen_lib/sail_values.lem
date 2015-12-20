@@ -4,6 +4,7 @@ open import Vector
 open import Arch
 
 type i = integer
+type number = integer
 
 let length l = integerFromNat (length l)
 

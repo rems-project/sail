@@ -16,7 +16,6 @@ type 'a rewriters = { rewrite_exp  : 'a rewriters -> (nexp_map * 'a namemap) opt
                       rewrite_def  : 'a rewriters -> 'a def -> 'a def;
                       rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
                     }
-                    
 
 let fresh_name_counter = ref 0
 
@@ -796,6 +795,7 @@ let remove_vector_concat_pat pat =
         | P_vector _ -> P_aux (P_as (pat,fresh_name l),a)
         | P_id id -> P_aux (P_id id,a)
         | P_as (p,id) -> P_aux (P_as (p,id),a)
+        | P_wild -> P_aux (P_wild,a)
         | _ ->
            raise
              (Reporting_basic.err_unreachable
@@ -849,6 +849,11 @@ let remove_vector_concat_pat pat =
                 (* normal vector patterns are fine *)
                 | _ -> (pos + length, pat_acc @ [P_aux (p,cannot)],decl_acc) )
             (* non-vector patterns aren't *)
+            | (l,Base((_,{t = Tapp ("vector",[_;_;_;_])}),_,_,_,_,_))
+            | (l,Base((_,{t = Tabbrev (_,{t = Tapp ("vector",[_;_;_;_])})}),_,_,_,_,_)) ->
+               raise
+                 (Reporting_basic.err_unreachable
+                    l ("unname_vector_concat_elements: vector of unspecified length in vector-concat pattern"))
             | (l,Base((_,t),_,_,_,_,_)) ->
                raise
                  (Reporting_basic.err_unreachable

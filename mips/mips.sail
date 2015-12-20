@@ -547,7 +547,7 @@ function clause decode (0b000000 : 0b00000 : (regno) rt : (regno) rd : (bit[5]) 
   DSLL32(rt, rd, sa)
 function clause execute (DSLL32 (rt, rd, sa)) =
   {
-    wGPR(rd) := (rGPR(rt) << (1 : sa)) (* make tuareg mode less blue >> *)
+    wGPR(rd) := (rGPR(rt) << (0b1 : sa)) (* make tuareg mode less blue >> *)
   }
 
 (* DSLLV reg, reg, reg *)
@@ -557,7 +557,7 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b0000
   DSLLV(rs, rt, rd)
 function clause execute (DSLLV (rs, rt, rd)) =
   {
-    wGPR(rd) := (rGPR(rs) << ((rGPR(rt))[5:0])) (* make tuareg mode less blue >> *)
+    wGPR(rd) := (rGPR(rs) << ((rGPR(rt))[5 .. 0])) (* make tuareg mode less blue >> *)
   }
 
 (* DSRA arithmetic shift duplicating sign bit - reg, reg, imm5 *)
@@ -1482,7 +1482,7 @@ union ast member unit HCF
 function clause decode (0b010000 : 0b00100 : (regno) rt : 0b10111 : 0b00000000000) =
   HCF() (* simulator halt instruction "MTC0 rt, $23" (cheri specific behaviour) *)
 
-function clause decode _ = exit no_matching_pattern
+function clause decode _ = {exit no_matching_pattern; HCF()}
 
 end decode
 end execute

@@ -163,8 +163,7 @@ let (vector <0, 32, inc, (register<(bit[64])>) >) GPR =
   GPR21, GPR22, GPR23, GPR24, GPR25, GPR26, GPR27, GPR28, GPR29, GPR30, GPR31
   ]
 
-(* adapted to make type checker accept SPR definition *)
-register (bit[(* 32 *) 0:63]) VRSAVE
+register (bit[32:63]) VRSAVE
 
 register (bit[64]) SPRG3
 register (bit[64]) SPRG4
@@ -173,7 +172,7 @@ register (bit[64]) SPRG6
 register (bit[64]) SPRG7
 
 let (vector <0, 1024, inc, (register<(bit[64])>) >) SPR =
-  [ 1=XER, 8=LR, 9=CTR, 256=VRSAVE, 259=SPRG3, 260=SPRG4, 261=SPRG5, 262=SPRG6, 263=SPRG7
+  [ 1=XER, 8=LR, 9=CTR(*, 256=VRSAVE (*32 bit, so not 64, caught by type checker at last*)*), 259=SPRG3, 260=SPRG4, 261=SPRG5, 262=SPRG6, 263=SPRG7
   ]
 
 (* XXX DCR is implementation-dependent; also, some DCR are only 32 bits
@@ -299,7 +298,7 @@ function  bit[64] DOUBLE word = {
   } else if word[1..8] == 0 & word[9..31] != 0 
   then {
     sign := word[0];
-    exp := 0 - 126;
+    exp := -126;
     (bit[53]) frac := 0b0 : word[9..31] : 0b00000000000000000000000000000;
     foreach (i from 0 to 52) {
       if frac[0] == 0 
@@ -308,7 +307,7 @@ function  bit[64] DOUBLE word = {
       else ()
      };
      temp[0] := sign;
-     temp[1..11] := (bit[10]) exp + 1023;
+     temp[1..11] := (bit[11]) exp + 1023;
      temp[12..63] := frac[1..52];
    } else {
      temp[0..1] := word[0..1];
@@ -328,7 +327,7 @@ function bit[32] SINGLE ((bit[64]) frs) = {
   else if (874 <= frs[1..11]) & (frs[1..11] <= 896)
   then { 
    sign := frs[0];
-   (bit[10]) exp := frs[1..11] - 1023;
+   (bit[11]) exp := frs[1..11] - 1023;
    (bit[53]) frac := 0b1 : frs[12..63];
    foreach (i from 0 to 53) {
      if exp < (0 - 126) 
@@ -1422,7 +1421,6 @@ function clause execute (Stdux (RS, RA, RB)) =
     MEMw(EA,8) := GPR[RS]
   }
 
-(*
 union ast member (bit[5], bit[5], bit[12], bit[4]) Lq
 
 function clause decode (0b111000 :
@@ -1450,9 +1448,7 @@ function clause execute (Lq (RTp, RA, DQ, PT)) =
       GPR[RTp + 1] := bytereverse[64 .. 127]
     }
   }
-*)
 
-(*
 union ast member (bit[5], bit[5], bit[14]) Stq
 
 function clause decode (0b111110 :
@@ -1461,7 +1457,6 @@ function clause decode (0b111110 :
 (bit[14]) DS :
 0b10 as instr) =
   Stq (RSp,RA,DS)
-
 
 function clause execute (Stq (RSp, RA, DS)) =
   {
@@ -1481,7 +1476,6 @@ function clause execute (Stq (RSp, RA, DS)) =
     EA := b + EXTS (DS : 0b00);
     MEMw(EA,8) := RSp
   }
-*)
 
 union ast member (bit[5], bit[5], bit[5]) Lhbrx
 
@@ -2229,7 +2223,6 @@ function clause execute (Mullw (RT, RA, RB, OE, Rc)) =
       if OE then set_SO_OV (overflow) else ()
     }
 
-(*
 union ast member (bit[5], bit[5], bit[5], bit) Mulhw
 
 function clause decode (0b011111 :
@@ -2251,7 +2244,7 @@ function clause execute (Mulhw (RT, RA, RB, Rc)) =
         overflow := o
       };
     (GPR[RT])[32..63] := prod[0 .. 31];
-    (GPR[RT])[0..31] := undefined;
+    (GPR[RT])[0..31] := (bit[32]) undefined;
     if Rc
     then {
       xer_so := XER.SO;
@@ -2261,9 +2254,7 @@ function clause execute (Mulhw (RT, RA, RB, Rc)) =
     }
     else ()
   }
-*)
 
-(*
 union ast member (bit[5], bit[5], bit[5], bit) Mulhwu
 
 function clause decode (0b011111 :
@@ -2279,7 +2270,7 @@ function clause execute (Mulhwu (RT, RA, RB, Rc)) =
   {
     (bit[64]) prod := (GPR[RA])[32 .. 63] * (GPR[RB])[32 .. 63];
     (GPR[RT])[32..63] := prod[0 .. 31];
-    (GPR[RT])[0..31] := undefined;
+    (GPR[RT])[0..31] := (bit[32]) undefined;
     if Rc
     then {
       xer_so := XER.SO;
@@ -2289,9 +2280,7 @@ function clause execute (Mulhwu (RT, RA, RB, Rc)) =
     }
     else ()
   }
-*)
 
-(*
 union ast member (bit[5], bit[5], bit[5], bit, bit) Divw
 
 function clause decode (0b011111 :
@@ -2316,7 +2305,7 @@ function clause execute (Divw (RT, RA, RB, OE, Rc)) =
         overflow := o
       };
     (GPR[RT])[32..63] := divided[32 .. 63];
-    (GPR[RT])[0..31] := undefined;
+    (GPR[RT])[0..31] := (bit[32]) undefined;
     if Rc
     then {
       xer_so := XER.SO;
@@ -2328,7 +2317,6 @@ function clause execute (Divw (RT, RA, RB, OE, Rc)) =
     else ();
     if OE then set_SO_OV (overflow) else ()
   }
-
 
 union ast member (bit[5], bit[5], bit[5], bit, bit) Divwu
 
@@ -2354,7 +2342,7 @@ function clause execute (Divwu (RT, RA, RB, OE, Rc)) =
         overflow := o
       };
     (GPR[RT])[32..63] := divided[32 .. 63];
-    (GPR[RT])[0..31] := undefined;
+    (GPR[RT])[0..31] := (bit[32]) undefined;
     if Rc
     then {
       xer_so := XER.SO;
@@ -2392,7 +2380,7 @@ function clause execute (Divwe (RT, RA, RB, OE, Rc)) =
         overflow := o
       };
     (GPR[RT])[32..63] := divided[32 .. 63];
-    (GPR[RT])[0..31] := undefined;
+    (GPR[RT])[0..31] := (bit[32]) undefined;
     if Rc
     then {
       xer_so := XER.SO;
@@ -2430,7 +2418,7 @@ function clause execute (Divweu (RT, RA, RB, OE, Rc)) =
         overflow := o
       };
     (GPR[RT])[32..63] := divided[32 .. 63];
-    (GPR[RT])[0..31] := undefined;
+    (GPR[RT])[0..31] := (bit[32]) undefined;
     if Rc
     then {
       xer_so := XER.SO;
@@ -2442,7 +2430,6 @@ function clause execute (Divweu (RT, RA, RB, OE, Rc)) =
     else ();
     if OE then set_SO_OV (overflow) else ()
   }
-*)
 
 union ast member (bit[5], bit[5], bit[5], bit, bit) Mulld
 
@@ -2745,7 +2732,6 @@ function clause execute (Cmpl (BF, L, RA, RB)) =
     CR[4 * BF + 32..4 * BF + 35] := c : [XER.SO]
   }
 
-(*
 union ast member (bit[5], bit[5], bit[16]) Twi
 
 function clause decode (0b000011 :
@@ -2784,7 +2770,6 @@ function clause execute (Tw (TO, RA, RB)) =
     if a <_u b & TO[3] then trap () else ();
     if a >_u b & TO[4] then trap () else ()
   }
-*)
 
 union ast member (bit[5], bit[5], bit[16]) Tdi
 
@@ -3413,7 +3398,7 @@ function clause execute (Rldic (RS, RA, sh, mb, Rc)) =
     n := [sh[5]] : sh[0 .. 4];
     r := ROTL (GPR[RS],n);
     b := [mb[5]] : mb[0 .. 4];
-    m := MASK (b,(bit[5]) (~ (n)));
+    m := MASK (b,(bit[6]) (~ (n)));
     (bit[64]) temp := (r & m);
     GPR[RA] := temp;
     if Rc then set_overflow_cr0 (temp,XER.SO) else ()
@@ -3480,7 +3465,7 @@ function clause execute (Rldimi (RS, RA, sh, mb, Rc)) =
     n := [sh[5]] : sh[0 .. 4];
     r := ROTL (GPR[RS],n);
     b := [mb[5]] : mb[0 .. 4];
-    m := MASK (b,(bit[5]) (~ (n)));
+    m := MASK (b,(bit[6]) (~ (n)));
     (bit[64]) temp := (r & m | GPR[RA] & ~ (m));
     GPR[RA] := temp;
     if Rc then set_overflow_cr0 (temp,XER.SO) else ()
@@ -3640,7 +3625,7 @@ function clause execute (Sradi (RS, RA, sh, Rc)) =
     (bit[64]) temp := (r & m | s ^^ 64 & ~ (m));
     GPR[RA] := temp;
     if Rc then set_overflow_cr0 (temp,XER.SO) else ();
-    XER.CA := if n >_u (bit[5]) 0 then s & ~ ((r & ~ (m)) == 0) else 0
+    XER.CA := if n >_u (bit[6]) 0 then s & ~ ((r & ~ (m)) == 0) else 0
   }
 
 union ast member (bit[5], bit[5], bit[5], bit) Srad
@@ -3664,7 +3649,7 @@ function clause execute (Srad (RS, RA, RB, Rc)) =
     (bit[64]) temp := (r & m | s ^^ 64 & ~ (m));
     GPR[RA] := temp;
     if Rc then set_overflow_cr0 (temp,XER.SO) else ();
-    XER.CA := if n >_u (bit[5]) 0 then s & ~ ((r & ~ (m)) == 0) else 0
+    XER.CA := if n >_u (bit[6]) 0 then s & ~ ((r & ~ (m)) == 0) else 0
   }
 
 union ast member (bit[5], bit[5]) Cdtbcd
@@ -3769,7 +3754,7 @@ function clause execute (Mtspr (RS, spr)) =
     }
     else if length (SPR[n]) == 64
     then SPR[n] := GPR[RS]
-    else SPR[n] := (GPR[RS])[32 .. 63]
+    else SPR[n] := ((bit[32]) 0):(GPR[RS])[32 .. 63]
   }
 
 union ast member (bit[5], bit[10]) Mfspr
@@ -5920,7 +5905,6 @@ function clause decode (0b011111 :
 
 function clause execute (Lvsr (VRT, RA, RB)) = ()
 
-(*
 union ast member (bit[5], bit[5], bit[5]) Vpkpx
 
 function clause decode (0b000100 :
@@ -5942,7 +5926,6 @@ function clause execute (Vpkpx (VRT, VRA, VRB)) =
     (VR[VRT])[i + 70..i + 74] := (VR[VRB])[i * 2 + 16 .. i * 2 + 20];
     (VR[VRT])[i + 75..i + 79] := (VR[VRB])[i * 2 + 24 .. i * 2 + 28]
   }
-
 
 union ast member (bit[5], bit[5], bit[5]) Vpkshss
 
@@ -6022,7 +6005,6 @@ function clause execute (Vpkswus (VRT, VRA, VRB)) =
         31]
   }
 
-
 union ast member (bit[5], bit[5], bit[5]) Vpkuhum
 
 function clause decode (0b000100 :
@@ -6038,7 +6020,6 @@ function clause execute (Vpkuhum (VRT, VRA, VRB)) =
     (VR[VRT])[i..i + 7] := (VR[VRA])[i * 2 + 8 .. i * 2 + 15];
     (VR[VRT])[i + 64..i + 71] := (VR[VRB])[i * 2 + 8 .. i * 2 + 15]
   }
-
 
 union ast member (bit[5], bit[5], bit[5]) Vpkuhus
 
@@ -6058,7 +6039,6 @@ function clause execute (Vpkuhus (VRT, VRA, VRB)) =
       (Clamp (EXTZ ((VR[VRB])[i * 2 .. i * 2 + 15]),0,255))[24 .. 31]
   }
 
-
 union ast member (bit[5], bit[5], bit[5]) Vpkuwum
 
 function clause decode (0b000100 :
@@ -6074,7 +6054,6 @@ function clause execute (Vpkuwum (VRT, VRA, VRB)) =
     (VR[VRT])[i..i + 15] := (VR[VRA])[i * 2 + 16 .. i * 2 + 31];
     (VR[VRT])[i + 64..i + 79] := (VR[VRB])[i * 2 + 16 .. i * 2 + 31]
   }
-
 
 union ast member (bit[5], bit[5], bit[5]) Vpkuwus
 
@@ -10376,8 +10355,6 @@ function clause decode (0b011111 :
   Dcbf (L,RA,RB)
 
 function clause execute (Dcbf (L, RA, RB)) = ()
-*)
-
 
 union ast member Isync
 
@@ -10640,8 +10617,8 @@ function bit illegal_instructions_pred ((ast) instr) = {
         case (Stfdp(FRSp,RA,DS)) -> (FRSp mod 2 == 1)
         case (Lfdpx(FRTp,RA,RB)) -> (FRTp mod 2 == 1)
         case (Stfdpx(FRSp,RA,RB)) -> (FRSp mod 2 == 1)
-                                       (*case (Lq(RTp,RA,DQ,Pt)) -> ((RTp mod 2 ==1) | RTp == RA)
-        case (Stq(RSp,RA,RS)) -> (RSp mod 2 == 1) *)
+        case (Lq(RTp,RA,DQ,Pt)) -> ((RTp mod 2 ==1) | RTp == RA)
+        case (Stq(RSp,RA,RS)) -> (RSp mod 2 == 1)
         case (Mtspr(RS, spr)) ->
           ~ ((spr == 1) | (spr == 8) | (spr == 9) | (spr == 256) |
             (spr == 512) | (spr == 896) | (spr == 898))

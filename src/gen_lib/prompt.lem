@@ -83,7 +83,7 @@ type reg_name =
    * specifies a part of the field, indexed w.r.t. the register as a whole *)
   | Reg_f_slice of string * nat * direction * string * slice * slice 
 
-type outcome 'a =
+type outcome 'e 'a =
   (* Request to read memory, value is location to read followed by registers that location depended 
    * on when mode.track_values, integer is size to read, followed by registers that were used in 
    * computing that size *)
@@ -123,14 +123,14 @@ type outcome 'a =
                                                 
   (* Escape the current instruction, for traps, some sys calls, interrupts, etc. Can optionally 
    * provide a handler. *)
-  | Escape (* currently without handlers *) (* of maybe (unit -> outcome 'a) *)
+  | Escape 'e (* currently without handlers *) (* of maybe (unit -> outcome 'a) *)
 
   (* Stop for incremental stepping, function can be used to display function call data *)
   | Done of 'a
 
-type M 'a = outcome 'a
+type M 'e 'a = outcome 'e 'a
 
-val return : forall 'a. 'a -> M 'a
+val return : forall 'e 'a. 'a -> M 'e 'a
 let return a = Done a
 
 val (>>=) : forall 'a 'b. M 'a -> ('a -> M 'b) -> M 'b

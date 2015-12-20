@@ -3,7 +3,7 @@ open import Vector
 open import Arch
 
 (* 'a is result type, 'e is error type *)
-type M 's 'e 'a = 's -> (either 'a 'e * 's)
+type State 's 'e 'a = 's -> (either 'a 'e * 's)
 
 type memstate = map integer (list bit)
 
@@ -21,25 +21,27 @@ let rec ints_aux acc x =
 
 let ints = ints_aux []
 
-val return : forall 's 'e 'a. 'a -> M 's 'e 'a
+val return : forall 's 'e 'a. 'a -> State 's 'e 'a
 let return a s = (Left a,s)
 
-val bind : forall 's 'e 'a 'b. M 's 'e 'a -> ('a -> M 's 'e 'b) -> M 's 'e 'b
+val bind : forall 's 'e 'a 'b. State 's 'e 'a -> ('a -> State 's 'e 'b) -> State 's 'e 'b
 let bind m f s = match m s with
   | (Left a,s') -> f a s'
   | (Right error,s') -> (Right error,s')
   end
 
-val exit : forall 's 'e 'a. 'e -> M 's 'e 'a
+val exit : forall 's 'e. 'e -> State 's 'e unit
 let exit e s = (Right e,s)
 
 let (>>=) = bind
+
+val (>>): forall 's 'e 'a 'b. State 's 'e 'a -> State 's 'e 'b -> State 's 'e 'b
 let (>>) m n = m >>= fun _ -> n
 
-val read_writeEA : forall 'e. unit -> M state 'e (integer * integer)
+val read_writeEA : forall 'e. unit -> State state 'e (integer * integer)
 let read_writeEA () s = (Left s.writeEA,s)
 
-val write_writeEA : forall 'e. integer -> integer -> M state 'e unit
+val write_writeEA : forall 'e. integer -> integer -> State state 'e unit
 let write_writeEA addr l s = (Left (), <| s with writeEA = (addr,l) |>)
 
 val byte_chunks : forall 'a. integer -> list 'a -> list (list 'a)
@@ -63,46 +65,46 @@ let read_memstate s addr = findWithDefault addr (replicate 8 Undef) s
 val write_memstate : memstate -> (integer * list bit) -> memstate
 let write_memstate s (addr,bits) = Map.insert addr bits s
 
-val read_memory : forall 'e. integer -> integer -> M state 'e (vector bit)
+val read_memory : forall 'e. integer -> integer -> State state 'e (vector bit)
 let read_memory addr l s =
   let bytes = List.map (compose (read_memstate s.memstate) ((+) addr)) (ints l) in
   (Left (V (foldl (++) [] bytes) 0 defaultDir),s)
 
-val write_memory : forall 'e. integer -> integer -> vector bit -> M state 'e unit
+val write_memory : forall 'e. integer -> integer -> vector bit -> State state 'e unit
 let write_memory addr l (V bits _ _) s =
   let addrs = List.map ((+) addr) (ints l) in
   let bytes = byte_chunks l bits in
   (Left (), <| s with memstate = foldl write_memstate s.memstate (zip addrs bytes) |>)
 
-val read_reg_range : forall 'e. register -> integer -> integer (*(nat * nat)*) -> M state 'e (vector bit)
+val read_reg_range : forall 'e. register -> integer -> integer (*(nat * nat)*) -> State state 'e (vector bit)
 let read_reg_range reg i j s =
   let v = slice (read_regstate s reg) i j in
   (Left v,s)
 
-val read_reg_bit : forall 'e. register -> integer (*nat*) -> M state 'e bit
+val read_reg_bit : forall 'e. register -> integer (*nat*) -> State state 'e bit
 let read_reg_bit reg i s =
   let v = access (read_regstate s reg) i in
   (Left v,s)
 
-val write_reg_range : forall 'e. register -> integer -> integer (*(nat * nat)*) -> vector bit -> M state 'e unit
+val write_reg_range : forall 'e. register -> integer -> integer (*(nat * nat)*) -> vector bit -> State state 'e unit
 let write_reg_range reg i j v s =
   let v' = update (read_regstate s reg) i j v in
   let s' = write_regstate s reg v' in
   (Left (),s')
 
-val write_reg_bit : forall 'e. register -> integer (*nat*) -> bit -> M state 'e unit
+val write_reg_bit : forall 'e. register -> integer (*nat*) -> bit -> State state 'e unit
 let write_reg_bit reg i bit s =
   let v = read_regstate s reg in
   let v' = update_pos v i bit in
   let s' = write_regstate s reg v' in
   (Left (),s')
 
-val read_reg : forall 'e. register -> M state 'e (vector bit)
+val read_reg : forall 'e. register -> State state 'e (vector bit)
 let read_reg reg s =
   let v = read_regstate s reg in
   (Left v,s)
 
-val write_reg : forall 'e. register -> vector bit -> M state 'e unit
+val write_reg : forall 'e. register -> vector bit -> State state 'e unit
 let write_reg reg v s =
   let s' = write_regstate s reg v in
   (Left (),s')
@@ -128,45 +130,45 @@ let rec foreach_dec (i,stop,by) vars body =
   else ((),vars)
 
 
-val foreachM_inc : forall 's 'e 'vars. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> M 's 'e (unit * 'vars)) -> M 's 'e (unit * 'vars)
-let rec foreachM_inc (i,stop,by) vars body = 
+val foreachState_inc : forall 's 'e 'vars. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> State 's 'e (unit * 'vars)) -> State 's 'e (unit * 'vars)
+let rec foreachState_inc (i,stop,by) vars body = 
   if i <= stop
   then
     body i vars >>= fun (_,vars) ->
-    foreachM_inc (i + by,stop,by) vars body
+    foreachState_inc (i + by,stop,by) vars body
   else return ((),vars)
 
 
-val foreachM_dec : forall 's 'e 'vars. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> M 's 'e (unit * 'vars)) -> M 's 'e (unit * 'vars)
-let rec foreachM_dec (i,stop,by) vars body = 
+val foreachState_dec : forall 's 'e 'vars. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> State 's 'e (unit * 'vars)) -> State 's 'e (unit * 'vars)
+let rec foreachState_dec (i,stop,by) vars body = 
   if i >= stop
   then
     body i vars >>= fun (_,vars) ->
-    foreachM_dec (i - by,stop,by) vars body
+    foreachState_dec (i - by,stop,by) vars body
   else return ((),vars)
 
-val read_reg_field : forall 'e. register -> register_field -> M state 'e (vector bit)
+val read_reg_field : forall 'e. register -> register_field -> State state 'e (vector bit)
 let read_reg_field reg rfield = uncurry (read_reg_range reg) (field_indices rfield)
 
-val write_reg_field : forall 'e. register -> register_field -> vector bit -> M state 'e unit
+val write_reg_field : forall 'e. register -> register_field -> vector bit -> State state 'e unit
 let write_reg_field reg rfield = uncurry (write_reg_range reg) (field_indices rfield)
 
-val read_reg_bitfield : forall 'e. register -> register_bitfield -> M state 'e bit
+val read_reg_bitfield : forall 'e. register -> register_bitfield -> State state 'e bit
 let read_reg_bitfield reg rbit = read_reg_bit reg (field_index_bit rbit)
 
-val write_reg_bitfield : forall 'e. register -> register_bitfield -> bit -> M state 'e unit
+val write_reg_bitfield : forall 'e. register -> register_bitfield -> bit -> State state 'e unit
 let write_reg_bitfield reg rbit = write_reg_bit reg (field_index_bit rbit)
 
 val write_reg_field_range : forall 'e. register -> register_field -> integer -> integer ->
-                            vector bit -> M state 'e unit
+                            vector bit -> State state 'e unit
 let write_reg_field_range reg rfield i j v =
   let (i',j') = field_indices rfield in
   write_reg_range reg i' j' v
 
 val write_reg_field_bit : forall 'e. register -> register_field -> integer ->
-                            bit -> M state 'e unit
+                            bit -> State state 'e unit
 let write_reg_field_bit reg rfield i v =
   let (i',_) = field_indices rfield in
   write_reg_bit reg (i + i') v
@@ -190,3 +192,5 @@ let read_two_regs r1 r2 =
   read_reg r1 >>= fun v1 ->
   read_reg r2 >>= fun v2 ->
   return (v1 ^^ v2)
+
+type M 'e 'a = State state 'e 'a
