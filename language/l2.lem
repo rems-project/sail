@@ -7,7 +7,7 @@ open import Set_extra
 
 type l =
   | Unknown
-  | Int of string * l option (*internal types, functions*)
+  | Int of string * maybe l (*internal types, functions*)
   | Range of string * nat * nat * nat * nat
   | Generated of l (*location for a generated node, where l is the location of the closest original source*)
 
