@@ -15,7 +15,11 @@ endif
 # the order of the files is important
 MIPSSOURCES= mips.sail
 
-all: $(BUILDDIR)mips.ml $(BUILDDIR)mips_extras.ml
+all: $(BUILDDIR)mips.ml $(BUILDDIR)mips_extras.ml run_native
+
+run_native: run_with_elf.native
+
+run_byte: run_with_elf.byte
 
 lem: $(BUILDDIR)mips.lem
 
@@ -59,8 +63,14 @@ $(BUILDDIR)mips_extras.ml:
 	$(LEM) -ocaml -only_changed_output -lib $(SAILDIR)/src/lem_interp/ $<
 	touch $@
 
-$(BUILDDIR)run_with_elf.ml:
-	cp $(SAILDIR)/src/lem_interp/run_with_elf.ml $@
+run_with_elf.ml: $(SAILDIR)/src/lem_interp/run_with_elf.ml
+	cp $< $@
+
+run_with_elf.native: run_with_elf.ml
+	ocamlbuild -use-ocamlfind run_with_elf.native
+
+run_with_elf.byte: run_with_elf.ml
+	ocamlbuild -use-ocamlfind run_with_elf.byte
 
 $(BUILDDIR)/test.lem: test.sail $(SAIL) | $(BUILDDIR)
 # if bash is detected we can print nicer errors
@@ -74,4 +84,4 @@ endif
 clean:
 	rm -rf $(BUILDDIR)
 
-.PHONY: all full clean test
+.PHONY: all full clean test 

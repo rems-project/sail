@@ -875,7 +875,7 @@ let fetch_instruction_opcode_and_update_ia model =
            (([Mem.find pc_a !prog_mem;
                 Mem.find (add1 pc_a) !prog_mem;
                 Mem.find (add1 (add1 pc_a)) !prog_mem;
-                Mem.find (add1 (add1 (add1 pc_a))) !prog_mem])) in
+                Mem.find (add1 (add1 (add1 pc_a))) !prog_mem]))) in
        Opcode opcode
      | None -> failwith "PC address contains unknown or undefined")
   |  _ -> assert false
