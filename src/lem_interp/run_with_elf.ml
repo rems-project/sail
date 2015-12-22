@@ -578,19 +578,19 @@ let initial_system_state_of_elf_file name =
         | 8 (* EM_MIPS *) ->
           let startaddr =
             let e_entry = Uint64.of_int64 (Nat_big_num.to_int64 e_entry) in
-            match Abi_aarch64_le.abi_aarch64_le_compute_program_entry_point segments e_entry with
+            match Abi_mips64.abi_mips64_compute_program_entry_point segments e_entry with
             | Error.Fail s -> failwith "Failed computing entry point"
             | Error.Success s -> Nat_big_num.of_int64 (Uint64.to_int64 s)
           in
           let (initial_stack_data, initial_register_abi_data) =
             initial_stack_and_reg_data_of_MIPS_elf_file e_entry !data_mem in
           
-          (MIPS.defs,
-           (ArmV8_extras.aArch64_read_memory_functions,
-            ArmV8_extras.aArch64_memory_writes,
-	    ArmV8_extras.aArch64_memory_eas,
-	    ArmV8_extras.aArch64_memory_vals,
-            ArmV8_extras.aArch64_barrier_functions),
+          (Mips.defs,
+           (Mips_extras.read_memory_functions,
+            Mips_extras.memory_writes,
+	    [],
+	    [],
+            Mips_extras.barrier_functions),
            [],
            MIPS,
            D_decreasing,

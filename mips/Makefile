@@ -59,6 +59,9 @@ $(BUILDDIR)mips_extras.ml:
 	$(LEM) -ocaml -only_changed_output -lib $(SAILDIR)/src/lem_interp/ $<
 	touch $@
 
+$(BUILDDIR)run_with_elf.ml:
+	cp $(SAILDIR)/src/lem_interp/run_with_elf.ml $@
+
 $(BUILDDIR)/test.lem: test.sail $(SAIL) | $(BUILDDIR)
 # if bash is detected we can print nicer errors
 ifeq ($(SHELL),/bin/bash)
