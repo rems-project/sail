@@ -560,6 +560,10 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b0000
 function clause execute (DSLLV (rs, rt, rd)) =
   {
     wGPR(rd) := (rGPR(rs) << ((rGPR(rt))[5 .. 0])) (* make tuareg mode less blue >> *)
+    (* alternative slicing based version of above 
+    sa       := (rGPR(rt))[5 .. 0];
+    v        := rGPR(rs);
+    wGPR(rd) := v[(63-sa) .. 0] : (0b0 ^^ sa)  *)
   }
 
 (* DSRA arithmetic shift duplicating sign bit - reg, reg, imm5 *)
