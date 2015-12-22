@@ -34,6 +34,7 @@ get_elf:
 	-chmod u+w src_elf/abis/power64/*.ml*
 	-chmod u+w src_elf/abis/aarch64/*.ml*
 	-chmod u+w src_elf/abis/x86/*.ml*
+	-chmod u+w src_elf/abis/mips64/*.ml*
 	-chmod u+w src_elf/adaptors/*.ml*
 	-chmod u+w src_elf/gnu_extensions/*.ml*
 	rm -rf src_elf/*.ml*
@@ -42,18 +43,20 @@ get_elf:
 	rm -rf src_elf/abis/power64/*.ml*
 	rm -rf src_elf/abis/aarch64/*.ml*
 	rm -rf src_elf/abis/x86/*.ml*
+	rm -rf src_elf/abis/mips64/*.ml*
 	rm -rf src_elf/adaptors/*.ml*
 	rm -rf src_elf/gnu_extensions/*.ml*
 	$(MAKE) -C $(ELFDIR)/src clean
 	$(MAKE) -C $(ELFDIR)/src lem-all-ocaml
 	mkdir -p src_elf/{abis,adaptors,gnu_extensions}
-	mkdir -p src_elf/abis/{aarch64,amd64,power64,x86}
+	mkdir -p src_elf/abis/{aarch64,amd64,power64,x86,mips64}
 	cp -a $(ELFDIR)/src/*.ml src_elf
 	cp -a $(ELFDIR)/src/abis/*.ml src_elf/abis
 	cp -a $(ELFDIR)/src/abis/amd64/*.ml src_elf/abis/amd64
 	cp -a $(ELFDIR)/src/abis/power64/*.ml src_elf/abis/power64
 	cp -a $(ELFDIR)/src/abis/aarch64/*.ml src_elf/abis/aarch64
 	cp -a $(ELFDIR)/src/abis/x86/*.ml src_elf/abis/x86
+	cp -a $(ELFDIR)/src/abis/mips64/*.ml src_elf/abis/mips64
 	cp -a $(ELFDIR)/src/adaptors/*.ml src_elf/adaptors
 	cp -a $(ELFDIR)/src/gnu_extensions/*.ml* src_elf/gnu_extensions
 	chmod ugo-w src_elf/*.ml*
@@ -62,6 +65,7 @@ get_elf:
 	chmod ugo-w src_elf/abis/power64/*.ml*
 	chmod ugo-w src_elf/abis/aarch64/*.ml*
 	chmod ugo-w src_elf/abis/x86/*.ml*
+	chmod ugo-w src_elf/abis/mips64/*.ml*
 	chmod ugo-w src_elf/adaptors/*.ml*
 	chmod ugo-w src_elf/gnu_extensions/*.ml*
 
