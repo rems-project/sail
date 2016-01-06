@@ -428,6 +428,8 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_let(leb,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_let" pp_lem_let leb pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assign(lexp,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_assign" pp_lem_lexp lexp pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_exit exp -> fprintf ppf "@[<0>(E_aux (E_exit %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
+    | E_assert(c,msg) ->
+      fprintf ppf "@[<0>(E_aux (E_assert %a %a) (%a, %a))@]" pp_lem_exp c pp_lem_exp msg pp_lem_l l pp_annot annot
     | E_internal_exp ((l, Base((_,t),_,_,_,_,bindings))) ->
       (*TODO use bindings where appropriate*)
       (match t.t with
@@ -972,6 +974,8 @@ let doc_exp, doc_let =
       surround 2 1 opening cases rbrace
   | E_exit e ->
     separate space [string "exit"; exp e;]
+  | E_assert(c,m) ->
+    separate space [string "assert"; parens (separate comma [exp c; exp m])]
   (* adding parens and loop for lower precedence *)
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
   | E_cons (_, _)|E_field (_, _)|E_assign (_, _)

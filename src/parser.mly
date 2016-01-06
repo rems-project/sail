@@ -131,11 +131,11 @@ let make_vector_sugar order_set is_inc typ typ1 =
 
 /*Terminals with no content*/
 
-%token And Alias As Bitzero Bitone Bits By Case Clause Const Dec Default Deinfix Effect EFFECT End 
+%token And Alias As Assert Bitzero Bitone Bits By Case Clause Const Dec Default Deinfix Effect EFFECT End 
 %token Enumerate Else Exit Extern False Forall Foreach Function_ If_ In IN Inc Let_ Member Nat Order 
 %token Pure Rec Register Scattered Struct Switch Then True TwoStarStar Type TYPE Typedef 
 %token Undefined Union With Val
-%token Barr Depend Rreg Wreg Rmem Wmem Wmv Eamem Undef Unspec Nondet
+%token Barr Depend Rreg Wreg Rmem Wmem Wmv Eamem Undef Unspec Nondet Escape
 
 
 /* Avoid shift/reduce conflict - see right_atomic_exp rule */
@@ -325,7 +325,9 @@ effect:
   | Unspec
     { efl BE_unspec }
   | Nondet
-    { efl BE_nondet }
+      { efl BE_nondet }
+  | Escape
+      { efl BE_escape }
 
 effect_list:
   | effect
@@ -589,7 +591,9 @@ atomic_exp:
   | Switch exp Lcurly case_exps Rcurly
     { eloc (E_case($2,$4)) }
   | Exit atomic_exp
-    { eloc (E_exit $2) }
+      { eloc (E_exit $2) }
+  | Assert Lparen exp Comma exp Rparen
+      { eloc (E_assert ($3,$5)) }
 
 field_exp:
   | atomic_exp

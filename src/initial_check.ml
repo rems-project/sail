@@ -240,7 +240,8 @@ and to_ast_effects (k_env : kind Envmap.t) (e : Parse_ast.atyp) : Ast.effect =
 			       | Parse_ast.BE_depend -> BE_depend
                                | Parse_ast.BE_undef  -> BE_undef
                                | Parse_ast.BE_unspec -> BE_unspec
-                               | Parse_ast.BE_nondet -> BE_nondet),l))
+                               | Parse_ast.BE_nondet -> BE_nondet
+                               | Parse_ast.BE_escape -> BE_escape),l))
                              effects)
                | _ -> typ_error l "Required an item of kind Effects, encountered an illegal form for this kind" None None None
     ), l)
@@ -440,6 +441,7 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
     | Parse_ast.E_let(leb,exp) -> E_let(to_ast_letbind k_env def_ord leb, to_ast_exp k_env def_ord exp)
     | Parse_ast.E_assign(lexp,exp) -> E_assign(to_ast_lexp k_env def_ord lexp, to_ast_exp k_env def_ord exp)
     | Parse_ast.E_exit exp -> E_exit(to_ast_exp k_env def_ord exp)
+    | Parse_ast.E_assert(cond,msg) -> E_assert(to_ast_exp k_env def_ord cond, to_ast_exp k_env def_ord msg)
     ), (l,NoTyp))
 
 and to_ast_lexp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : tannot lexp = 

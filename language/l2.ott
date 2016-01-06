@@ -194,8 +194,8 @@ base_effect :: 'BE_' ::=
   | undef                               :: :: undef {{ com undefined-instruction exception }}
   | unspec                              :: :: unspec {{ com unspecified values }}
   | nondet                              :: :: nondet {{ com nondeterminism from intra-instruction parallelism }}
+  | escape                              :: :: escape {{ com Tracking of expressions and functions that might call exit }}
   | lset                                :: :: lset {{ com Local mutation happend; not user-writable }}
-  | escape                              :: :: escape {{ com Internal tracking of expressions and functions that might call exit }}
 
 
 effect :: 'Effect_' ::=
@@ -644,7 +644,8 @@ exp :: 'E_' ::=
 
   | exit exp						:: :: exit
     {{ com expression to halt all current execution, potentially calling a system, trap, or interrupt handler with exp }}
-
+  | assert ( exp , exp' )                            :: :: assert
+    {{ com expression to halt with error, when the first expression is true, reporting the optional string as an error }}
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
   | ( annot ) exp                                   :: :: internal_cast {{ com This is an internal cast, generated during type checking that will resolve into a syntactic cast after }}
   | annot                       :: :: internal_exp {{ com This is an internal use for passing nexp information  to library functions, postponed for constraint solving }}

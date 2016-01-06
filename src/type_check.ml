@@ -1332,6 +1332,11 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       let (e',t',_,_,_,_) = check_exp envs imp_param true (new_t ()) e in
       let efs = add_effect (BE_aux(BE_escape, l)) pure_e in
       (E_aux (E_exit e',(l,(simple_annot_efr expect_t efs))),expect_t,t_env,[],nob,efs)
+    | E_assert(cond,msg) ->
+      let (cond',t',_,_,_,_) = check_exp envs imp_param true bit_t cond in
+      let (msg',mt',_,_,_,_) = check_exp envs imp_param true {t= Tapp("option",[TA_typ string_t])} msg in
+      let (t',c') = type_consistent (Expr l) d_env Require false unit_t expect_t in
+      (E_aux (E_assert(cond',msg'), (l, (simple_annot expect_t))), expect_t,t_env,c',nob,pure_e)
     | E_internal_cast _ | E_internal_exp _ | E_internal_exp_user _ | E_internal_let _
     | E_internal_plet _ | E_internal_return _ -> 
       raise (Reporting_basic.err_unreachable l "Internal expression passed back into type checker")

@@ -1396,6 +1396,7 @@ let unit_t = { t = Tid "unit" }
 let bit_t = {t = Tid "bit" }
 let bool_t = {t = Tid "bool" }
 let nat_typ = {t=Tid "nat"}
+let string_t = {t = Tid "string"}
 let pure_e = {effect=Eset []}
 let nob = No_bounds
 
@@ -1424,6 +1425,7 @@ let initial_kind_env =
     ("range", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}], {k = K_Typ}) });
     ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } );
     ("atom", {k = K_Lam( [ {k=K_Nat} ], {k=K_Typ})});
+    ("option", { k = K_Lam( [{k=K_Typ}], {k=K_Typ}) });
     ("implicit", {k = K_Lam( [{k = K_Nat}], {k=K_Typ})} );
   ]
 
@@ -1486,6 +1488,10 @@ let mk_bitwise_op name symb arity =
 let initial_typ_env =
   Envmap.from_list [
     ("ignore",lib_tannot ([("a",{k=K_Typ})],mk_pure_fun {t=Tvar "a"} unit_t) None []);
+    ("Some", Base((["a",{k=K_Typ}], mk_pure_fun {t=Tvar "a"} {t=Tapp("option", [TA_typ {t=Tvar "a"}])}),
+                  Constructor 2,[],pure_e,pure_e,nob));
+    ("None", Base((["a", {k=K_Typ}], mk_pure_fun unit_t {t=Tapp("option", [TA_typ {t=Tvar "a"}])}),
+                  Constructor 2,[],pure_e,pure_e,nob));
     ("+",Overload(
       lib_tannot ((mk_typ_params ["a";"b";"c"]),
                   (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})) (Some "add") [],
@@ -2438,8 +2444,7 @@ let order_eq co o1 o2 =
 
 let rec remove_internal_effects = function
   | [] -> []
-  | (BE_aux(BE_lset,_))::effects
-  | (BE_aux(BE_escape,_))::effects -> remove_internal_effects effects
+  | (BE_aux(BE_lset,_))::effects -> remove_internal_effects effects
   | b::effects -> b::(remove_internal_effects effects)
 
 let has_effect searched_for eff =

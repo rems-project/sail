@@ -207,6 +207,7 @@ val nat_t : t
 val unit_t : t
 val bool_t : t
 val bit_t : t
+val string_t : t
 val pure_e : effect
 val nob : bounds_env
 

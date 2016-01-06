@@ -71,8 +71,8 @@ base_effect_aux =  (* effect *)
  | BE_undef (* undefined-instruction exception *)
  | BE_unspec (* unspecified values *)
  | BE_nondet (* nondeterminism from intra-instruction parallelism *)
+ | BE_escape (* Tracking of expressions and functions that might call exit *)
  | BE_lset (* Local mutation happend; not user-writable *)
- | BE_escape (* Internal tracking of expressions and functions that might call exit *)
 
 
 type 
@@ -269,6 +269,7 @@ type
  | E_let of 'a letbind * 'a exp (* let expression *)
  | E_assign of 'a lexp * 'a exp (* imperative assignment *)
  | E_exit of 'a exp (* expression to halt all current execution, potentially calling a system, trap, or interrupt handler with exp *)
+ | E_assert of 'a exp * 'a exp (* expression to halt with error, when the first expression is true, reporting the optional string as an error *)
  | E_internal_cast of 'a annot * 'a exp (* This is an internal cast, generated during type checking that will resolve into a syntactic cast after *)
  | E_internal_exp of 'a annot (* This is an internal use for passing nexp information  to library functions, postponed for constraint solving *)
  | E_internal_exp_user of 'a annot * 'a annot (* This is like the above but the user has specified an implicit parameter for the current function *)

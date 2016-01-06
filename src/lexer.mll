@@ -61,6 +61,7 @@ let kw_table =
      ("and",                     (fun _ -> And));
      ("alias",                   (fun _ -> Alias));
      ("as",                      (fun _ -> As));
+     ("assert",                  (fun _ -> Assert));
      ("bitzero",                 (fun _ -> Bitzero));
      ("bitone",                  (fun _ -> Bitone));
      ("bits",                    (fun _ -> Bits));
@@ -122,11 +123,12 @@ let kw_table =
      ("undef",                   (fun x -> Undef));
      ("unspec",                  (fun x -> Unspec));
      ("nondet",                  (fun x -> Nondet));
+     ("escape",                  (fun x -> Escape));
 
 ]
 
 let default_type_names = ["bool";"unit";"vector";"range";"list";"bit";"nat"; "int";
-			  "uint8";"uint16";"uint32";"uint64";"atom";"implicit";"string"]
+			  "uint8";"uint16";"uint32";"uint64";"atom";"implicit";"string";"option"]
 let custom_type_names : string list ref = ref []
 
 }

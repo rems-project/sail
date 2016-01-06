@@ -163,6 +163,7 @@ base_effect :: 'BE_' ::=
   | undef                               :: :: undef {{ com undefined-instruction exception }}
   | unspec                              :: :: unspec {{ com unspecified values }}
   | nondet                              :: :: nondet {{ com nondeterminism from intra-instruction parallelism }}
+  | escape                              :: :: escape
 
 atyp :: 'ATyp_' ::=
   {{ com expressions of all kinds, to be translated to types, nats, orders, and effects after parsing }}
@@ -528,6 +529,7 @@ exp :: 'E_' ::=
     {{ com imperative assignment }}
 
   | exit exp						:: :: exit
+  | assert ( exp , exp' )                               :: :: assert
 
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
 

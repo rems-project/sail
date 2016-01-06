@@ -54,6 +54,7 @@ base_effect_aux =  (* effect *)
  | BE_undef (* undefined-instruction exception *)
  | BE_unspec (* unspecified values *)
  | BE_nondet (* nondeterminism from intra-instruction parallelism *)
+ | BE_escape
 
 
 type 
@@ -231,6 +232,7 @@ exp_aux =  (* Expression *)
  | E_let of letbind * exp (* let expression *)
  | E_assign of exp * exp (* imperative assignment *)
  | E_exit of exp
+ | E_assert of exp * exp
 
 and exp = 
    E_aux of exp_aux * l
