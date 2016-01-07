@@ -257,7 +257,7 @@ let rewrite_pat rewriters nmap (P_aux (pat,(l,annot))) =
   let rewrite = rewriters.rewrite_pat rewriters nmap in
   match pat with
   | P_lit (L_aux ((L_hex _ | L_bin _) as lit,_)) ->
-    let ps =  List.map (fun p -> P_aux (P_lit p,(Generated l,simple_annot {t = Tid "bit"})))
+    let ps =  List.map (fun p -> P_aux (P_lit p,(Parse_ast.Generated l,simple_annot {t = Tid "bit"})))
         (vector_string_to_bit_list l lit) in
     rewrap (P_vector ps)
   | P_lit _ | P_wild | P_id _ -> rewrap pat
@@ -280,7 +280,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
     | E_block exps -> rewrap (E_block (List.map rewrite exps))
     | E_nondet exps -> rewrap (E_nondet (List.map rewrite exps))
     | E_lit (L_aux ((L_hex _ | L_bin _) as lit,_)) ->
-      let es = List.map (fun p -> E_aux (E_lit p ,(Generated l,simple_annot {t = Tid "bit"})))
+      let es = List.map (fun p -> E_aux (E_lit p ,(Parse_ast.Generated l,simple_annot {t = Tid "bit"})))
           (vector_string_to_bit_list l lit) in
       rewrap (E_vector es)
     | E_id _ | E_lit _  -> rewrap exp
@@ -326,6 +326,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
     | E_let (letbind,body) -> rewrap (E_let(rewriters.rewrite_let rewriters nmap letbind,rewrite body))
     | E_assign (lexp,exp) -> rewrap (E_assign(rewriters.rewrite_lexp rewriters nmap lexp,rewrite exp))
     | E_exit e -> rewrap (E_exit (rewrite e))
+    | E_assert(e1,e2) -> rewrap (E_assert(rewrite e1,rewrite e2))
     | E_internal_cast ((l,casted_annot),exp) -> 
       let new_exp = rewrite exp in
       (*let _ = Printf.eprintf "Removing an internal_cast with %s\n" (tannot_to_string casted_annot) in*)
@@ -344,8 +345,8 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
                  | Odec -> 
                    (*let _ = Printf.eprintf "Considering removing a cast or not: %s %s, %b\n" 
                      (n_to_string nw1) (n_to_string n1) (nexp_one_more_than nw1 n1) in*)
-                   rewrap (E_cast (Typ_aux (Typ_var (Kid_aux((Var "length"),Generated l)),
-                                            Generated l),new_exp))
+                   rewrap (E_cast (Typ_aux (Typ_var (Kid_aux((Var "length"),Parse_ast.Generated l)),
+                                            Parse_ast.Generated l),new_exp))
                  | _ -> new_exp))
           | _ -> new_exp)
        | Base((_,t),_,_,_,_,_),_ ->
@@ -357,8 +358,8 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
              | Odec -> 
                (*let _ = Printf.eprintf "Considering removing a cast or not: %s %s, %b\n" 
                  (n_to_string nw1) (n_to_string n1) (nexp_one_more_than nw1 n1) in*)
-               rewrap (E_cast (Typ_aux (Typ_var (Kid_aux((Var "length"), Generated l)),
-                                        Generated l), new_exp))
+               rewrap (E_cast (Typ_aux (Typ_var (Kid_aux((Var "length"), Parse_ast.Generated l)),
+                                        Parse_ast.Generated l), new_exp))
              | _ -> new_exp)
           | _ -> new_exp)
        | _ -> (*let _ = Printf.eprintf "Not a base match?\n" in*) new_exp)
@@ -584,6 +585,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_let                    : 'letbind * 'exp -> 'exp_aux
   ; e_assign                 : 'lexp * 'exp -> 'exp_aux
   ; e_exit                   : 'exp -> 'exp_aux
+  ; e_assert                 : 'exp * 'exp -> 'exp_aux
   ; e_internal_cast          : 'a annot * 'exp -> 'exp_aux
   ; e_internal_exp           : 'a annot -> 'exp_aux
   ; e_internal_exp_user      : 'a annot * 'a annot -> 'exp_aux
@@ -645,6 +647,7 @@ let rec fold_exp_aux alg = function
   | E_let (letbind,e) -> alg.e_let (fold_letbind alg letbind, fold_exp alg e)
   | E_assign (lexp,e) -> alg.e_assign (fold_lexp alg lexp, fold_exp alg e)
   | E_exit e -> alg.e_exit (fold_exp alg e)
+  | E_assert(e1,e2) -> alg.e_assert (fold_exp alg e1, fold_exp alg e2)
   | E_internal_cast (annot,e) -> alg.e_internal_cast (annot, fold_exp alg e)
   | E_internal_exp annot -> alg.e_internal_exp annot
   | E_internal_exp_user (annot1,annot2) -> alg.e_internal_exp_user (annot1,annot2)
@@ -707,6 +710,7 @@ let id_exp_alg =
   ; e_let = (fun (lb,e2) -> E_let (lb,e2))
   ; e_assign = (fun (lexp,e2) -> E_assign (lexp,e2))
   ; e_exit = (fun e1 -> E_exit (e1))
+  ; e_assert = (fun (e1,e2) -> E_assert(e1,e2)) 
   ; e_internal_cast = (fun (a,e1) -> E_internal_cast (a,e1))
   ; e_internal_exp = (fun a -> E_internal_exp a)
   ; e_internal_exp_user = (fun (a1,a2) -> E_internal_exp_user (a1,a2))
@@ -753,7 +757,7 @@ let remove_vector_concat_pat pat =
 
   let fresh_name l =
     let current = fresh_name () in
-    Id_aux (Id ("__v" ^ string_of_int current), Generated l) in
+    Id_aux (Id ("__v" ^ string_of_int current), Parse_ast.Generated l) in
   
   (* expects that P_typ elements have been removed from AST,
      that the length of all vectors involved is known,
@@ -1504,6 +1508,7 @@ let find_updated_vars exp =
       ; e_let = (fun (lb,e2) -> lb @@ e2)
       ; e_assign = (fun ((ids,acc),e2) -> ([],ids) @@ acc @@ e2)
       ; e_exit = (fun e1 -> ([],[]))
+      ; e_assert = (fun (e1,e2) -> ([],[]))
       ; e_internal_cast = (fun (_,e1) -> e1)
       ; e_internal_exp = (fun _ -> ([],[]))
       ; e_internal_exp_user = (fun _ -> ([],[]))
