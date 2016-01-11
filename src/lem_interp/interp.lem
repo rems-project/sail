@@ -185,7 +185,9 @@ let reg_size reg =
 end 
 
 (*Constant unit value, for use in interpreter *)
+let unit_ty = T_id "unit"
 let unitv = V_lit (L_aux L_unit Unknown)
+let unit_e = E_aux (E_lit (L_aux L_unit Unknown)) (Unknown, val_annot unit_ty)
 
 (* Store for local memory of ref cells, string stores the name of the function the memory is being created for*)
 type lmem = LMem of string * nat * map nat value * set nat
@@ -2082,6 +2084,25 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         (fun a -> update_stack a (add_to_top_frame (fun lft env -> (E_aux (E_app_infix lft op r) (l,annot), env))))
   | E_exit exp ->
     (Action (Exit exp) (mk_thunk l annot t_level l_env l_mem),l_mem, l_env)
+  | E_assert cond msg ->
+    resolve_outcome 
+      (interp_main mode t_level l_env l_mem msg)
+      (fun v lm le ->
+         let (e,env') = to_exp mode l_env v in
+         resolve_outcome
+           (interp_main mode t_level l_env lm cond)
+           (fun c lm le ->
+              (match c with
+               | V_lit (L_aux L_one _) -> (Value unitv,lm,l_env)
+               | V_lit (L_aux L_true _) -> (Value unitv,lm,l_env)
+               | V_lit (L_aux L_zero _) -> (Action (Exit e) (mk_thunk l annot t_level l_env l_mem), lm,env')
+               | V_lit (L_aux L_false _) -> (Action (Exit e) (mk_thunk l annot t_level l_env l_mem), lm,env')
+               | V_unknown -> 
+	         let (branches,maybe_id) = fix_up_nondet typ [unit_e;E_aux (E_exit e) (l,annot)] (l,annot) in
+	         interp_main mode t_level l_env lm (E_aux (E_nondet branches) (l,non_det_annot annot maybe_id))
+               end))
+            (fun a -> update_stack a (add_to_top_frame (fun c env -> (E_aux (E_assert c e) (l,annot), env)))))
+      (fun a -> update_stack a (add_to_top_frame (fun m env -> (E_aux (E_assert cond m) (l,annot), env))))
   | E_let (lbind : letbind tannot) exp -> 
     match (interp_letbind mode t_level l_env l_mem lbind) with
     | ((Value v,lm,le),_) ->
