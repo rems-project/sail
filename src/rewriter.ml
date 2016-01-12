@@ -89,6 +89,7 @@ let fix_effsum_exp (E_aux (e,(l,annot))) =
     | E_let (lb,e) -> union_effs [get_effsum_lb lb;get_effsum_exp e]
     | E_assign (lexp,e) -> union_effs [get_effsum_lexp lexp;get_effsum_exp e]
     | E_exit e -> get_effsum_exp e
+    | E_assert (c,m) -> pure_e
     | E_internal_cast (_,e) -> get_effsum_exp e
     | E_internal_exp _ -> pure_e
     | E_internal_exp_user _ -> pure_e
@@ -343,7 +344,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
              | Nconst i1 -> if nexp_eq n1 n2 then new_exp else rewrap (E_cast (t_to_typ t,new_exp))
              | _ -> (match o1.order with
                  | Odec -> 
-                   (*let _ = Printf.eprintf "Considering removing a cast or not: %s %s, %b\n" 
+               (*let _ = Printf.eprintf "Considering removing a cast or not: %s %s, %b\n" 
                      (n_to_string nw1) (n_to_string n1) (nexp_one_more_than nw1 n1) in*)
                    rewrap (E_cast (Typ_aux (Typ_var (Kid_aux((Var "length"),Parse_ast.Generated l)),
                                             Parse_ast.Generated l),new_exp))
@@ -356,8 +357,8 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
           | Tapp("vector",[TA_nexp n1;TA_nexp nw1;TA_ord o1;_]) ->
             (match o1.order with
              | Odec -> 
-               (*let _ = Printf.eprintf "Considering removing a cast or not: %s %s, %b\n" 
-                 (n_to_string nw1) (n_to_string n1) (nexp_one_more_than nw1 n1) in*)
+               let _ = Printf.eprintf "Considering removing a cast or not: %s %s, %b\n" 
+                 (n_to_string nw1) (n_to_string n1) (nexp_one_more_than nw1 n1) in
                rewrap (E_cast (Typ_aux (Typ_var (Kid_aux((Var "length"), Parse_ast.Generated l)),
                                         Parse_ast.Generated l), new_exp))
              | _ -> new_exp)
@@ -367,7 +368,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
       (match impl with
        | Base((_,t),_,_,_,_,bounds) ->
          let bounds = match nmap with | None -> bounds | Some (nm,_) -> add_map_to_bounds nm bounds in
-         (*let _ = Printf.eprintf "Rewriting internal expression, with type %s\n" (t_to_string t) in*)
+         (*let _ = Printf.eprintf "Rewriting internal expression, with type %s, and bounds %s\n" (t_to_string t) (bounds_to_string bounds) in*)
           (match t.t with
             (*Old case; should possibly be removed*)
             | Tapp("register",[TA_typ {t= Tapp("vector",[ _; TA_nexp r;_;_])}])

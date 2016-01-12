@@ -1442,6 +1442,7 @@ let cons_efs_annot t cs efl efr = Base(([],t),Emp_local,cs,efl,efr,nob)
 let efs_annot t efl efr = Base(([],t),Emp_local,[],efl,efr,nob)
 let tag_efs_annot t tag efl efr = Base(([],t),tag,[],efl,efr,nob)
 let cons_bs_annot t cs bs = Base(([],t),Emp_local,cs,pure_e,pure_e,bs)
+let cons_bs_annot_efr t cs bs efr = Base(([],t), Emp_local, cs, pure_e, efr, bs)
 
 let initial_abbrev_env =
   Envmap.from_list [
@@ -2839,13 +2840,13 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
         let cs = [] (*[LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)] (*This constraint failing should be a warning, but truncation is ok*)*)  in
-        let tannot = (l, constrained_annot_efr t2 cs (get_cummulative_effects (get_eannot e))) in
+        let tannot = (l, cons_bs_annot_efr t2 cs bounds (get_cummulative_effects (get_eannot e))) in
         (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
                                   [(E_aux(E_internal_exp(tannot), tannot));e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
         let cs = [] (* See above [LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
-        let tannot = (l, constrained_annot_efr t2 cs (get_cummulative_effects (get_eannot e))) in
+        let tannot = (l, cons_bs_annot_efr t2 cs bounds (get_cummulative_effects (get_eannot e))) in
         (*let _ = Printf.eprintf "Generating to_vec_dec call: bounds are %s\n" (bounds_to_string bounds) in*)
         (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
                                   [(E_aux(E_internal_exp(tannot), tannot)); e]),tannot))
@@ -2859,13 +2860,14 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
         let cs = [](*[LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
-        let tannot = (l, constrained_annot_efr t2 cs (get_cummulative_effects (get_eannot e))) in
+        let tannot = (l, cons_bs_annot_efr t2 cs bounds (get_cummulative_effects (get_eannot e))) in
         (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
                                   [(E_aux(E_internal_exp(tannot), tannot));e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Odec};TA_typ {t=Tid "bit"}],
         [TA_nexp b2] -> 
         let cs = [](*[LtEq(co,Guarantee,b2,mk_sub {nexp=N2n(r1,None)} n_one)]*) in
-        let tannot = (l, constrained_annot_efr t2 cs (get_cummulative_effects (get_eannot e))) in
+        let tannot = (l, cons_bs_annot_efr t2 cs bounds (get_cummulative_effects (get_eannot e))) in
+        (*let _ = Printf.eprintf "Generating to_vec_dec call: bounds are %s\n" (bounds_to_string bounds) in*)
         (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_dec",l)),
                                   [(E_aux(E_internal_exp(tannot), tannot)); e]),tannot))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
