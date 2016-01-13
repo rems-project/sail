@@ -525,9 +525,10 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
            let t',cs' = type_consistent (Expr l) d_env Require false t' expect_t' in
            (rebuild tannot,t,t_env,cs@cs',bounds,ef)
          | Tapp("register",[TA_typ(t')]),Tuvar _ ->
-           let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
-           let tannot = Base(([],t),(if is_alias then tag else External (Some i)),cs,ef',ef',bounds) in
-           let t',cs',_,e' = type_coerce (Expr l) d_env Require false false b_env t' (rebuild tannot) expect_actual in
+           (*let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
+             let tannot = Base(([],t),(if is_alias then tag else External (Some i)),cs,ef',ef',bounds) in*)
+           let tannot = Base(([],t),(if is_alias then tag else Emp_global),cs,pure_e,pure_e,bounds) in
+           let _,cs',ef',e' = type_coerce (Expr l) d_env Require false false b_env t' (rebuild tannot) expect_actual in
            (e',t,t_env,cs@cs',bounds,ef')
          | Tapp("register",[TA_typ(t')]),_ ->
            let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
@@ -683,7 +684,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
             type_coerce (Expr l) d_env Require false false b_env ret 
               (E_aux (E_app(id,internal_exp::parms),(l,(Base(([],ret),tag,cs,ef,efr,nob))))) expect_t
           | (IP_none,_) -> 
-            (*let _ = Printf.printf "no implicit length or var required\n" in*)
+            (*let _ = Printf.eprintf "no implicit length or var required: ret %s and expect_t %s\n" (t_to_string ret) (t_to_string expect_t) in*)
             type_coerce (Expr l) d_env Require false false b_env ret 
               (E_aux (E_app(id, parms),(l,(Base(([],ret),tag,cs,ef,efr,nob))))) expect_t
       in

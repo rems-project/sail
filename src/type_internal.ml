@@ -1437,6 +1437,7 @@ let tag_annot_efr t tag efr = Base(([],t),tag,[],pure_e,efr,nob)
 let constrained_annot t cs = Base(([],t),Emp_local,cs,pure_e,pure_e,nob)
 let constrained_annot_efr t cs efr = Base(([],t),Emp_local,cs,pure_e,efr,nob)
 let cons_tag_annot t tag cs = Base(([],t),tag,cs,pure_e,pure_e,nob)
+let cons_tag_annot_efr t tag cs efr = Base(([],t),tag,cs,pure_e,efr,nob)
 let cons_efl_annot t cs ef = Base(([],t),Emp_local,cs,ef,pure_e,nob)
 let cons_efs_annot t cs efl efr = Base(([],t),Emp_local,cs,efl,efr,nob)
 let efs_annot t efl efr = Base(([],t),Emp_local,[],efl,efr,nob)
@@ -1483,7 +1484,7 @@ let mk_bitwise_op name symb arity =
   (symb,
    Overload(lib_tannot ((mk_typ_params ["a"]),mk_pure_fun garg {t=Tvar "a"}) (Some name) [], true,
             [lib_tannot ((mk_nat_params ["n";"m"]@mk_ord_params["o"]), mk_pure_fun varg vec_typ) (Some name) [];
-             lib_tannot (["n",{k=K_Nat};"o",{k=K_Ord}],mk_pure_fun svarg bit_t) (Some (name ^ "_range_bit")) [];
+             (*lib_tannot (["n",{k=K_Nat};"o",{k=K_Ord}],mk_pure_fun svarg single_bit_vec_typ) (Some name) [];*)
              lib_tannot ([],mk_pure_fun barg bit_t) (Some (name ^ "_bit")) []]))
 
 let initial_typ_env =
@@ -1493,6 +1494,9 @@ let initial_typ_env =
                   Constructor 2,[],pure_e,pure_e,nob));
     ("None", Base((["a", {k=K_Typ}], mk_pure_fun unit_t {t=Tapp("option", [TA_typ {t=Tvar "a"}])}),
                   Constructor 2,[],pure_e,pure_e,nob));
+    ("most_significant", lib_tannot ((mk_nat_params ["n";"m"]@(mk_ord_params ["ord"])),
+                                     (mk_pure_fun (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")) bit_t))
+                                    None []);
     ("+",Overload(
       lib_tannot ((mk_typ_params ["a";"b";"c"]),
                   (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"})) (Some "add") [],
@@ -2591,8 +2595,8 @@ let merge_bounds b1 b2 =
       Bounds ((merge b1s b2s),merged_map)
 
 let rec conforms_to_t d_env loosely within_coercion spec actual =
-(*let _ = Printf.printf "conforms_to_t called, evaluated loosely? %b, with %s and %s\n"
-  loosely (t_to_string spec) (t_to_string actual) in*)
+  (*let _ = Printf.eprintf "conforms_to_t called, evaluated loosely? %b & within_coercion? %b, with spec %s and actual %s\n"
+  within_coercion loosely (t_to_string spec) (t_to_string actual) in*)
   let spec,_ = get_abbrev d_env spec in
   let actual,_ = get_abbrev d_env actual in
   match (spec.t,actual.t,loosely) with
@@ -2621,6 +2625,9 @@ let rec conforms_to_t d_env loosely within_coercion spec actual =
         (is = ia) (List.length tas = List.length taa) in*)
       (is = ia) && (List.length tas = List.length taa) &&
       (List.for_all2 (conforms_to_ta d_env loosely within_coercion) tas taa)
+    | (Tid "bit", Tapp("vector",[_;_;_;TA_typ ti]), _) ->
+      within_coercion &&
+      conforms_to_t d_env loosely within_coercion spec ti
     | (Tabbrev(_,s),a,_) -> conforms_to_t d_env loosely within_coercion s actual
     | (s,Tabbrev(_,a),_) -> conforms_to_t d_env loosely within_coercion spec a
     | (_,_,_) -> false
@@ -2891,11 +2898,10 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
         | _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))
     | _,_,_ -> 
       let t',cs' = type_consistent co d_env enforce widen t1 t2 in (t',cs',pure_e,e))
-  | Tapp("vector",[TA_nexp ({nexp=Nconst i} as b1);TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]),Tid("bit") ->
+  | Tapp("vector",[TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]),Tid("bit") ->
     let cs = [Eq(co,r1,n_one)] in
-    (t2,cs,pure_e,E_aux((E_vector_access (e,(E_aux(E_lit(L_aux(L_num (int_of_big_int i),l)),
-                                                   (l,simple_annot {t=Tapp("atom",[TA_nexp b1])}))))),
-                 (l,constrained_annot_efr t2 cs (get_cummulative_effects (get_eannot e)))))
+    (t2,cs,pure_e,E_aux((E_app ((Id_aux (Id "most_significant", l)), [e])),
+                        (l, cons_tag_annot_efr t2 (External (Some "most_significant")) cs (get_cummulative_effects (get_eannot e)))))
   | Tid("bit"),Tapp("range",[TA_nexp b1;TA_nexp r1]) ->
     let t',cs'= type_consistent co d_env enforce false {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} t2 in
     (t2,cs',pure_e,

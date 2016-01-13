@@ -219,6 +219,7 @@ val tag_annot_efr : t -> tag -> effect -> tannot
 val constrained_annot : t -> nexp_range list -> tannot
 val constrained_annot_efr : t -> nexp_range list -> effect -> tannot
 val cons_tag_annot : t -> tag -> nexp_range list -> tannot
+val cons_tag_annot_efr : t -> tag -> nexp_range list -> effect -> tannot
 val cons_efl_annot : t -> nexp_range list -> effect -> tannot
 val cons_efs_annot : t -> nexp_range list -> effect -> effect -> tannot
 val efs_annot : t -> effect -> effect -> tannot

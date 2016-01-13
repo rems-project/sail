@@ -125,6 +125,14 @@ let is_one v =
       | V_unknown -> v
 end ;;
 
+let rec most_significant v =
+  retaint v
+    match detaint v with
+    | V_vector _ _ (v::vs) -> v
+    | V_vector_sparse _ _ _ _ _ -> most_significant (fill_in_sparse v)
+    | V_unknown -> V_unknown
+end;;                       
+
 let lt_range (V_tuple[v1;v2]) = 
   let lr_helper v1 v2 = match (v1,v2) with
   | (V_lit (L_aux (L_num l1) lr),V_lit (L_aux (L_num l2) ll)) ->
@@ -737,6 +745,7 @@ let library_functions direction = [
   ("gtu", compare_op_vec_unsigned (>));
   ("duplicate", duplicate direction);
   ("mask", mask direction);
+  ("most_significant", most_significant);
 ] ;;
 
 let eval_external name v = match List.lookup name (library_functions IInc) with
