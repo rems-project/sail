@@ -1049,10 +1049,10 @@ let rewrite_exp_lift_assign_intro rewriters nmap ((E_aux (exp,(l,annot))) as ful
         [E_aux (E_internal_let(le', e', E_aux(E_block exps', (l, simple_annot_efr {t=Tid "unit"} effects))),
                  (l, simple_annot_efr t (eff_union_exps (e::exps'))))]
       | ((E_aux(E_if(c,t,e),(l,annot))) as exp)::exps ->
-         let vars_t = introduced_variables t in
-         let vars_e = introduced_variables e in
-         let new_vars = Envmap.intersect vars_t vars_e in
-         if Envmap.is_empty new_vars
+        let vars_t = introduced_variables t in
+        let vars_e = introduced_variables e in
+        let new_vars = Envmap.intersect vars_t vars_e in
+        if Envmap.is_empty new_vars
          then (rewrite_base exp)::walker exps
          else
            let new_nmap = match nmap with
@@ -1097,14 +1097,17 @@ let rewrite_exp_lift_assign_intro rewriters nmap ((E_aux (exp,(l,annot))) as ful
     (match annot with
      | Base((_,t),Emp_intro,_,_,_,_) ->
        let le' = rewriters.rewrite_lexp rewriters nmap le in
+       let e' = rewrite_base e in
+       let effects = get_effsum_exp e' in
        (match le' with
         | LEXP_aux(_, (_,Base(_,Emp_intro,_,_,_,_))) ->
-           let e' = rewrite_base e in
-           let effects = get_effsum_exp e' in
-           rewrap_effects
-             (E_internal_let(le', e', E_aux(E_block [], (l, simple_annot_efr unit_t effects))))
-             effects
-        | _ -> E_aux((E_assign(le', rewrite_base e)),(l, tag_annot unit_t Emp_set)))
+          rewrap_effects
+            (E_internal_let(le', e', E_aux(E_block [], (l, simple_annot_efr unit_t effects))))
+            effects
+        | LEXP_aux(_, (_,Base(_,_,_,_,efr,_))) ->
+          let effects' = union_effects effects efr in
+          E_aux((E_assign(le', e')),(l, tag_annot_efr unit_t Emp_set effects'))
+        | _ -> assert false)
      | _ -> rewrite_base full_exp)
   | _ -> rewrite_base full_exp
 
