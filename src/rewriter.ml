@@ -1089,7 +1089,7 @@ let rewrite_exp_lift_assign_intro rewriters nmap ((E_aux (exp,(l,annot))) as ful
                                         set_exp,
                                         E_aux (E_block res, (Parse_ast.Generated l, (simple_annot_efr unit_t effects)))),
                         (Parse_ast.Generated l, simple_annot_efr unit_t unioneffs))],unioneffs)))
-             (E_aux(E_if(c',t',e'),(Parse_ast.Generated l, annot))::exps',eff_union_exps exps') new_vars)
+             (E_aux(E_if(c',t',e'),(Parse_ast.Generated l, annot))::exps',eff_union_exps (c'::t'::e'::exps')) new_vars)
       | e::exps -> (rewrite_rec e)::(walker exps)
     in
     rewrap (E_block (walker exps))
