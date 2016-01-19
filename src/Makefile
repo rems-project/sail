@@ -79,6 +79,15 @@ power: sail interpreter elf
 	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -package num -package bitstring -package batteries -package uint -I $(LEMLIBOCAML) -I ../lem_interp/ -I ../elf_model/ -linkpkg $(LEMLIBOCAML)extract.cmxa ../pprint/src/PPrintLib.cmxa ../lem_interp/extract.cmxa elf_extract.cmxa power.ml run_power.ml -o run_power.native
 	ln -fs _build/test/run_power.native run_power.native
 
+mips.lem: ../mips/mips.sail sail
+	./sail.native -lem_ast $<
+
+%.ml: %.lem
+	$(LEM) -ocaml -only_changed_output -lib lem_interp/ $<
+
+run_mips.native: mips.ml ../mips/mips_extras.ml interpreter
+	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -package zarith -package num -package batteries -package uint -I $(LEMLIBOCAML) -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I ../mips -linkpkg $(LEMLIBOCAML)extract.cmxa $(ELFDIR)/src/linksem.cmxa _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa mips.ml ../mips/mips_extras.ml lem_interp/run_with_elf.ml  -o run_mips.native
+
 #	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -package num -package bitstring -package batteries -package uint -I $(LEMLIBOCAML) -I ../lem_interp/ -I ../elf_model/ -linkpkg $(LEMLIBOCAML)extract.cmxa ../pprint/src/PPrintLib.cmxa ../lem_interp/extract.cmxa elf_extract.cmxa power.ml run_power.ml -o run_power.native
 mips: sail interpreter elf
 	mkdir -p _build/test

@@ -493,7 +493,7 @@ let mips_register_data_all =  [
 
 let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
   let initial_stack_data = [] in 
-  let initial_register_abi_data : (string * Interp_interface.register_value) = [] in
+  let initial_register_abi_data : (string * Interp_interface.register_value) list = [] in
   (initial_stack_data, initial_register_abi_data)
 
 let initial_reg_file reg_data init =
@@ -785,6 +785,10 @@ let is_branch model instruction =
   | (AArch64, _) -> false
   | (MIPS, _) -> false (*todo,fill this in*)
 
+let option_int_of_option_integer i = match i with
+  | Some i -> Some (Nat_big_num.to_int i)
+  | None -> None
+
 let set_next_instruction_address model =
   match model with
   | PPC ->
@@ -807,21 +811,28 @@ let set_next_instruction_address model =
      | _ -> failwith "_PC address contains unknown or undefined")
   | MIPS -> 
     let pc_addr       = address_of_register_value (Reg.find "PC" !reg) in
-    let inBranchDelay = integer_value_of_register (Reg.find "inBranchDelay" !reg) in
-    let branchPending = Reg.find "branchPending" !reg in
-    let branchPending_val = integer_value_of_register (Reg.find "branchPending" !reg) in
+    let inBranchDelay = integer_of_register_value (Reg.find "inBranchDelay" !reg) in
+    let branchPending = integer_of_register_value (Reg.find "branchPending" !reg) in
     let delayedPC     = address_of_register_value (Reg.find "delayedPC" !reg) in
-    (match (pc_addr, branchPending, inBranchDelay, delayedPC) with
-     | (Some pc_addr, Some 0, Some 0, _) -> (* normal *)
-       let n_addr = add_address_nat pc_addr 4 in
+    (match (pc_addr, option_int_of_option_integer branchPending, option_int_of_option_integer inBranchDelay, delayedPC) with
+     | (Some pc_val, Some branchPending_val, Some 0, _) -> 
+       (* normal -- increment PC and update inBranchDelay *)
+       let n_addr = add_address_nat pc_val 4 in
        let n_pc = register_value_of_address n_addr D_decreasing in
        begin
-         reg := Reg.add "PC" n_pc !reg
-         reg := Reg.add "inBranchDelay" branchPending_val !reg
-         reg := Reg.add "branchPending" (register_value_of_integer 0) !reg
+         reg := Reg.add "PC" n_pc !reg;
+         reg := Reg.add "inBranchDelay" (register_value_of_integer 1 1 Interp_interface.D_decreasing (Nat_big_num.of_int branchPending_val)) !reg;
+         reg := Reg.add "branchPending" (register_value_of_integer 1 1 Interp_interface.D_decreasing Nat_big_num.zero) !reg
        end
-     | (Some pc_addr, Some 1, Some 1, _) (* delay slot *)
-     | (_, _, _, _, _) -> failwith "PC address contains unknown or undefined")
+     | (Some pc_val, Some 0, Some 1, Some delayedPC) -> 
+       (* delay slot -- branch to delayed PC and clear inBranchDelay *)
+       begin 
+         reg := Reg.add "PC" (register_value_of_address delayedPC D_decreasing) !reg;
+         reg := Reg.add "inBranchDelay" (register_value_of_integer 1 1 Interp_interface.D_decreasing Nat_big_num.zero) !reg
+       end
+     | (_, Some 1, Some 1, _) ->
+       failwith "Undefined behaviour: branch in branch delay slot"
+     | (_, _, _, _) -> failwith "PC address contains unknown or undefined")
 
 let add1 = Nat_big_num.add (Nat_big_num.of_int 1)
 
@@ -938,7 +949,7 @@ let run () =
   
   (* entry point: unit -> unit fde *)
   let name = Filename.basename !file in
-  let t =time_it (fun () -> fde_loop 0 context isa_model (Some Run) (ref false) initial_opcode) () in
-  eprintf "Execution time for file %s: %f seconds\n" name t
+  let t = time_it (fun () -> fde_loop 0 context isa_model (Some Run) (ref false) initial_opcode) () in
+  () (*Printf.eprintf "Execution time for file %s: %f seconds\n" name t*);;
 
 run () ;;
