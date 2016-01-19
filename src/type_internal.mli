@@ -283,6 +283,23 @@ val nexp_eq_check : nexp -> nexp -> bool (*structural equality only*)
 val nexp_eq : nexp -> nexp -> bool
 val nexp_one_more_than : nexp -> nexp -> bool
 
+(*Selects the subset of given list where an nexp_range contains the given nexp, presumed to be an nvar*)
+val contains_nvar : nexp -> nexp_range list -> nexp_range list
+(*As above but with nuvars*)
+val contains_nuvar : nexp -> nexp_range list -> nexp_range list
+(*Removes first nexp from second nexp, when first nexp is a nuvar or nvar. 
+If it isn't possible to remove the first nexp fully and leave integral values on the resulting nexp
+(i.e. if we have isolate_nexp 'i (8*i) + 3), then we return the nexp and any non-removable factors
+(this may include 2 ^^ 'x) 
+*)
+val isolate_nexp : nexp -> nexp -> (nexp * nexp)
+val refine_requires: bool -> (constraint_origin * nexp) option -> (constraint_origin * nexp) option -> Nexpmap.k -> nexp_range list -> nexp_range list
+val refine_guarantees: bool -> (constraint_origin * nexp) option -> (constraint_origin * nexp) option -> Nexpmap.k -> nexp_range list -> nexp_range list
+
+
+
+(*type relations*)
+
 val conforms_to_t : def_envs -> bool -> bool -> t -> t -> bool
 
 (* type_consistent is similar to a standard type equality, except in the case of [[consistent t1 t2]] where

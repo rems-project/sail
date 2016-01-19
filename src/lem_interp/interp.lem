@@ -325,7 +325,10 @@ let rec to_aliases (Defs defs) =
 val to_data_constructors : defs tannot -> map string typ
 let rec to_data_constructors (Defs defs) =
   match defs with
-  | [] -> Map.empty
+  | [] ->
+    (*Prime environment with built-in constructors*)
+    Map.insert "Some" (Typ_aux (Typ_var (Kid_aux (Var "a") Unknown)) Unknown) 
+      (Map.insert "None" unit_t Map.empty)
   | def :: defs ->
     match def with
     | DEF_type (TD_aux t _)->

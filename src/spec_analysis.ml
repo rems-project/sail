@@ -66,6 +66,12 @@ let rec power_big_int b n =
   then unit_big_int
   else mult_big_int b (power_big_int b (sub_big_int n unit_big_int))
 
+let unpower_of_2 b =
+  let two = big_int_of_int 2 in
+  let four = big_int_of_int 4 in
+  let eight = big_int_of_int 8 in
+  ()
+
 let is_within_range candidate range constraints =
   match candidate.t with
   | Tapp("atom", [TA_nexp n]) ->
