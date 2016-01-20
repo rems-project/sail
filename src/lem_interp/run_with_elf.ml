@@ -902,7 +902,9 @@ let rec fde_loop count context model mode track_dependencies opcode =
        | Interp_interface.Unsupported_instruction_error instr ->
          debugf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instr)
        | Interp_interface.Not_an_instruction_error op ->
-         debugf "\n**** Encountered non-decodeable opcode ****\n"
+         (match op with
+          | Opcode bytes ->
+            debugf "\n**** Encountered non-decodeable opcode: %s ****\n" (Printing_functions.byte_list_to_string bytes))
        | Internal_error s -> debugf "\n**** Internal error on decode: %s ****\n" s);
       exit 1
   in
