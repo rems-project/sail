@@ -37,7 +37,6 @@ dispatch begin function
     (* ocaml_lib "lem_interp/interp"; *)
     ocaml_lib ~extern:true ~dir:lem_libdir  ~tag_name:"use_lem" lem_lib;
     ocaml_lib ~extern:false ~dir:"pprint/src" ~tag_name:"use_pprint" "pprint/src/PPrintLib";
-    ocaml_lib ~extern:true ~dir:"src_elf_libraries/batteries/_build/src" ~tag_name:"use_batteries" "src_elf_libraries/batteries";
     
     rule "lem -> ml"
     ~prod: "%.ml"
