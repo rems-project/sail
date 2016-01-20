@@ -914,9 +914,9 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       let item_t,ord = match expect_t.t with
         | Tapp("vector",[base;rise;TA_ord ord;TA_typ item_t]) -> item_t,ord
         | _ -> new_t (),d_env.default_o in
-      let es,cs,effect,item_t = (List.fold_left 
-                            (fun (es,cs,effect,_) (e,t,_,c,_,ef) -> (e::es),(c@cs),union_effects ef effect,t)
-                            ([],[],pure_e,item_t) (List.map (check_exp envs imp_param true item_t) es)) in
+      let es,cs,effect,item_t = (List.fold_right 
+                            (fun (e,t,_,c,_,ef) (es,cs,effect,_) -> (e::es),(c@cs),union_effects ef effect,t)
+                            (List.map (check_exp envs imp_param true item_t) es) ([],[],pure_e,item_t)) in
       let len = List.length es in
       let t = match ord.order,d_env.default_o.order with
         | (Oinc,_) | (Ouvar _,Oinc) | (Ovar _,Oinc) -> 
