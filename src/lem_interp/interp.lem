@@ -2186,7 +2186,59 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
     | LEXP_id id -> 
       let name = get_id id in
       match tag with
-	| Tag_empty ->
+      | Tag_intro ->
+        match detaint (in_lenv l_env id) with
+	    | V_unknown ->
+	      if is_top_level then
+		if name = "0" then
+		  ((Value (V_lit (L_aux L_unit l)), update_mem true l_mem 0 value, l_env), Nothing)
+		else 
+		  let (LMem owner c m s) = l_mem in
+		  let l_mem = (LMem owner (c+1) m s) in
+		  ((Value (V_lit (L_aux L_unit l)), 
+		    update_mem mode.track_lmem l_mem c value,
+		    (add_to_env (id,(V_boxref c typ)) l_env)),Nothing)
+	      else ((Error l ("Unknown local id " ^ (get_id id)),l_mem,l_env),Nothing)
+            | v -> 
+	      if is_top_level 
+	      then 
+		if name = "0" then
+		  ((Value (V_lit (L_aux L_unit l)), update_mem true l_mem 0 value, l_env), Nothing)
+		else
+		  ((Error l ("Writes must be to reg values given " ^ (string_of_value v)),l_mem,l_env),
+		   Nothing)
+	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_id id) (l,annot), env)))
+        end
+      | Tag_set ->        
+	  match detaint (in_lenv l_env id) with
+	    | ((V_boxref n t) as v) -> 
+	      if is_top_level 
+	      then ((Value (V_lit (L_aux L_unit l)), 
+		     update_mem mode.track_lmem l_mem n (recenter_val t value), l_env),Nothing)
+	      else ((Value v, l_mem, l_env),Just (fun e env -> (LEXP_aux (LEXP_id id) (l,annot), env)))
+	    | V_unknown ->
+	      if is_top_level then
+		if name = "0" then
+		  ((Value (V_lit (L_aux L_unit l)), update_mem true l_mem 0 value, l_env), Nothing)
+		else 
+		  let (LMem owner c m s) = l_mem in
+		  let l_mem = (LMem owner (c+1) m s) in
+		  ((Value (V_lit (L_aux L_unit l)), 
+		    update_mem mode.track_lmem l_mem c value,
+		    (add_to_env (id,(V_boxref c typ)) l_env)),Nothing)
+	      else ((Error l ("Unknown local id " ^ (get_id id)),l_mem,l_env),Nothing)
+            | v -> 
+	      if is_top_level 
+	      then 
+		if name = "0" then
+		  ((Value (V_lit (L_aux L_unit l)), update_mem true l_mem 0 value, l_env), Nothing)
+		else
+		  ((Error l ("Writes must be to reg values given " ^ (string_of_value v)),l_mem,l_env),
+		   Nothing)
+	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_id id) (l,annot), env)))
+	     end 
+
+      | Tag_empty ->        
 	  match detaint (in_lenv l_env id) with
 	    | ((V_boxref n t) as v) -> 
 	      if is_top_level 
@@ -2406,6 +2458,42 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
     | LEXP_cast typc id -> 
       let name = get_id id in
       match tag with
+      | Tag_intro ->
+	  match detaint (in_lenv l_env id) with
+	    | V_unknown -> 	  
+	      if is_top_level 
+              then begin
+		let (LMem owner c m s) = l_mem in
+		let l_mem = (LMem owner (c+1) m s) in
+		((Value (V_lit (L_aux L_unit l)), update_mem mode.track_lmem l_mem c value, 
+		  (add_to_env (id,(V_boxref c typ)) l_env)),Nothing)
+              end
+              else ((Error l ("Undefined id " ^ (get_id id)),l_mem,l_env),Nothing)
+            | v -> 
+	      if is_top_level then ((Error l "Writes must be to reg values",l_mem,l_env),Nothing) 
+	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_cast typc id) (l,annot), env)))
+          end
+       | Tag_set ->
+	  match detaint (in_lenv l_env id) with
+	    | ((V_boxref n t) as v) -> 
+	      if is_top_level 
+	      then ((Value (V_lit (L_aux L_unit l)), 
+		     update_mem mode.track_lmem l_mem n (recenter_val t value), l_env),Nothing)
+	      else ((Value v, l_mem, l_env),
+		    Just (fun e env -> (LEXP_aux (LEXP_cast typc id) (l,annot), env)))
+	    | V_unknown -> 	  
+	      if is_top_level 
+              then begin
+		let (LMem owner c m s) = l_mem in
+		let l_mem = (LMem owner (c+1) m s) in
+		((Value (V_lit (L_aux L_unit l)), update_mem mode.track_lmem l_mem c value, 
+		  (add_to_env (id,(V_boxref c typ)) l_env)),Nothing)
+              end
+              else ((Error l ("Undefined id " ^ (get_id id)),l_mem,l_env),Nothing)
+            | v -> 
+	      if is_top_level then ((Error l "Writes must be to reg values",l_mem,l_env),Nothing) 
+	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_cast typc id) (l,annot), env)))
+          end 
 	| Tag_empty ->
 	  match detaint (in_lenv l_env id) with
 	    | ((V_boxref n t) as v) -> 

@@ -222,7 +222,7 @@ let run
           mode in
       let (return,env') = perform_action env action in
       let (mode', env', next) =
-        match action with    
+        (match action with    
         | Read_reg0(reg,next_thunk) ->
           (match return with
            | Some(value) -> 
@@ -269,6 +269,9 @@ let run
         | Internal((Some fn),None,next) ->
           show "breakpoint" fn "" "";
           (step ~force:true next, env',next)
+        | Internal(None,Some vdisp,next) ->
+          show "breakpoint" (vdisp ()) "" "";
+          (step ~force:true next,env', next)
         | Internal((Some fn),(Some vdisp),next) ->
           show "breakpoint" (fn ^ " " ^ (vdisp ())) "" "";
           (step ~force:true next, env', next)
@@ -281,10 +284,29 @@ let run
               choose_order (false,mode,!track_dependencies,env'); in
           show "nondeterministic evaluation ended" "" "" "";
           (step next,env',next)
+        | Analysis_non_det (possible_istates, i_state) ->
+          let choose_order = List.sort (fun (_,i1) (_,i2) -> Pervasives.compare i1 i2) 
+              (List.combine possible_istates (List.map (fun _ -> Random.bits ()) possible_istates)) in
+          if possible_istates = []
+          then (step i_state,env',i_state)
+          else begin
+            show "undefined triggered a non_det" "" "" "";
+            let (_,_,_,env') = List.fold_right (fun (next,_) (_,_,_,env') -> 
+              loop mode env' (interp0 (make_mode (mode=Run) !track_dependencies !default_endian) next))
+              choose_order (false,mode,!track_dependencies,env'); in
+            (step i_state,env',i_state) end
         | Escape(Some e,_) ->
           show "exiting current evaluation" "" "" "";
           step e,env', e
-        | _ -> assert false        
+        | Escape _ -> assert false
+        | Error0 _ -> assert false
+        | Done ->
+          show "done evalution" "" "" "";
+          assert false
+        | Footprint0 _ -> assert false
+        | Write_ea0 _ -> assert false
+        | Write_memv0 _ -> assert false)
+        (*| _ -> assert false*)
       in
       loop mode' env' (Interp_inter_imp.interp0 (make_mode (mode' = Run) !track_dependencies !default_endian) next) in
   let mode = match mode with

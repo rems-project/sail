@@ -235,7 +235,7 @@ let to_vec_inc (V_tuple[v1;v2]) =
 
 let to_vec_dec (V_tuple([v1;v2])) =
   let tv_fun v1 v2 =
-    match (v1,v2) with 
+    match (v1,v2) with
       | (V_lit(L_aux (L_num len) _), (V_lit(L_aux (L_num n) ln))) ->
 	let len = if len < 0 then 0 else natFromInteger len in
 	let l = boolListFrombitSeq len (bitSeqFromInteger Nothing n) in
@@ -705,8 +705,8 @@ let library_functions direction = [
   ("EXTZ", extz direction);
   ("to_vec_inc", to_vec_inc);
   ("to_vec_inc_undef", to_vec_inc_undef);
-  ("to_vec_dec", to_vec_dec_undef);
-  ("to_vec_dec_undef", to_vec_dec);
+  ("to_vec_dec", to_vec_dec);
+  ("to_vec_dec_undef", to_vec_dec_undef);
   ("bitwise_not", bitwise_not);
   ("bitwise_not_bit", bitwise_not_bit);
   ("bitwise_and", bitwise_binop (&&) "&");
