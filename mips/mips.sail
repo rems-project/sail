@@ -47,16 +47,16 @@ register (bit[64]) delayedPC
 
 (* General purpose registers *)
 
-register (bit[64]) GPR0 (* should never be read or written *)
-register (bit[64]) GPR1
-register (bit[64]) GPR2
-register (bit[64]) GPR3
-register (bit[64]) GPR4
-register (bit[64]) GPR5
-register (bit[64]) GPR6
-register (bit[64]) GPR7
-register (bit[64]) GPR8
-register (bit[64]) GPR9
+register (bit[64]) GPR00 (* should never be read or written *)
+register (bit[64]) GPR01
+register (bit[64]) GPR02
+register (bit[64]) GPR03
+register (bit[64]) GPR04
+register (bit[64]) GPR05
+register (bit[64]) GPR06
+register (bit[64]) GPR07
+register (bit[64]) GPR08
+register (bit[64]) GPR09
 register (bit[64]) GPR10
 register (bit[64]) GPR11
 register (bit[64]) GPR12
@@ -85,7 +85,7 @@ register (bit[64]) HI
 register (bit[64]) LO
 
 let (vector <0, 32, inc, (register<(bit[64])>) >) GPR =
-  [ GPR0, GPR1, GPR2, GPR3, GPR4, GPR5, GPR6, GPR7, GPR8, GPR9, GPR10,
+  [ GPR00, GPR01, GPR02, GPR03, GPR04, GPR05, GPR06, GPR07, GPR08, GPR09, GPR10,
   GPR11, GPR12, GPR13, GPR14, GPR15, GPR16, GPR17, GPR18, GPR19, GPR20,
   GPR21, GPR22, GPR23, GPR24, GPR25, GPR26, GPR27, GPR28, GPR29, GPR30, GPR31
   ]

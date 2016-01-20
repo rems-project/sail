@@ -450,16 +450,16 @@ let mips_register_data_all =  [
   ("exceptionSignalled", (D_decreasing, 1, 0));
   ("delayedPC", (D_decreasing, 64, 0));
   (* General purpose registers *)
-  ("GPR0", (D_decreasing, 64, 0));
-  ("GPR1", (D_decreasing, 64, 0));
-  ("GPR2", (D_decreasing, 64, 0));
-  ("GPR3", (D_decreasing, 64, 0));
-  ("GPR4", (D_decreasing, 64, 0));
-  ("GPR5", (D_decreasing, 64, 0));
-  ("GPR6", (D_decreasing, 64, 0));
-  ("GPR7", (D_decreasing, 64, 0));
-  ("GPR8", (D_decreasing, 64, 0));
-  ("GPR9", (D_decreasing, 64, 0));
+  ("GPR00", (D_decreasing, 64, 0));
+  ("GPR01", (D_decreasing, 64, 0));
+  ("GPR02", (D_decreasing, 64, 0));
+  ("GPR03", (D_decreasing, 64, 0));
+  ("GPR04", (D_decreasing, 64, 0));
+  ("GPR05", (D_decreasing, 64, 0));
+  ("GPR06", (D_decreasing, 64, 0));
+  ("GPR07", (D_decreasing, 64, 0));
+  ("GPR08", (D_decreasing, 64, 0));
+  ("GPR09", (D_decreasing, 64, 0));
   ("GPR10", (D_decreasing, 64, 0));
   ("GPR11", (D_decreasing, 64, 0));
   ("GPR12", (D_decreasing, 64, 0));
