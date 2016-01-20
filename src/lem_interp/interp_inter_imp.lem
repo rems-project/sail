@@ -324,6 +324,7 @@ let migrate_typ = function
   | Instruction_extractor.IOther -> Other
 end
 
+
 let decode_to_istate top_level value = 
   let mode = make_interp_mode true false in
   let (Context ((Interp.Env _ instructions _ _ _ _ _ _) as top_env) direction _ _ _ _ _ _) = top_level in
@@ -340,7 +341,7 @@ let decode_to_istate top_level value =
   match (instr_decoded,error) with
     | (Just instr, _) -> 
       let instr_external = match instr with
-	| Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_ctor (Id_aux (Id i) _) _ _ parm) ->
+	| Interp.V_ctor (Id_aux (Id i) _) _ _ parm ->
 	  match (find_instruction i instructions) with
 	    | Just(Instruction_extractor.Instr_form name parms effects) -> 
 	      match (parm,parms) with

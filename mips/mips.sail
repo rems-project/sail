@@ -357,7 +357,7 @@ function clause execute (ADDU(rs, rt, rd)) =
 
 union ast member regregimm16 ADDIU
 
-function clause decode (0b001000 : (regno) rs : (regno) rt : (imm16) imm) =
+function clause decode (0b001001 : (regno) rs : (regno) rt : (imm16) imm) =
   Some(ADDIU(rs, rt, imm))
 
 function clause execute (ADDIU(rs, rt, imm)) = 
@@ -1494,6 +1494,8 @@ end decode
 end execute
 end ast
 
+function option<ast> supported_instructions (instr) = Some(instr)
+  
 (* fetch decode execute *)
 function unit fde() =
 {
