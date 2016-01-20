@@ -211,16 +211,16 @@ let run
       debugf "%s: %s: %s\n" (grey name) (red "error") s;
       (false, mode, !track_dependencies, env) 
     | action ->
+      let (return,env') = perform_action env action in
       let step ?(force=false) (state: instruction_state) =
         let stack = match state with IState(stack,_) -> stack in
         let (top_exp,(top_env,top_mem)) = top_frame_exp_state stack in
         let loc = get_loc (compact_exp top_exp) in
         if mode = Step || force then begin
           debugf "%s\n" (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
-          interact mode env state
+          interact mode env' state
         end else
           mode in
-      let (return,env') = perform_action env action in
       let (mode', env', next) =
         (match action with    
         | Read_reg0(reg,next_thunk) ->
