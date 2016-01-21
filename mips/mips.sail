@@ -205,20 +205,23 @@ function bool compare ((Comparison)cmp, (bit[64]) valA, (bit[64]) valB) =
     case LTU -> valA <    valB
   }
 typedef WordType = enumerate { B; H; W; D}
-function nat wordWidthBytes((WordType) w) =
+
+function forall Nat 'r, 'r IN {1,2,4,8}.[:'r:] wordWidthBytes((WordType) w) =
   switch(w) {
     case B -> 1
     case H -> 2
     case W -> 4
     case D -> 8
   }
-function nat logWordWidth((WordType) w) =
-  switch(w) {
-    case B -> 0
-    case H -> 1
-    case W -> 2
-    case D -> 3
+
+function bool isAddressAligned(addr, (WordType) wordType) =
+  switch (wordType) {
+    case B -> true
+    case H -> (addr[0]    == 0b0)
+    case W -> (addr[1..0] == 0b00)
+    case D -> (addr[2..0] == 0b000)
   }
+
 scattered function unit execute
 scattered typedef ast = const union
 
@@ -1220,7 +1223,7 @@ function clause decode (0b110100 : (regno) base : (regno) rt : (imm16) offset) =
 function clause execute (Load(width, signed, linked, base, rt, offset)) =
   {
     (bit[64]) vAddr := EXTS(offset) + rGPR(base);
-    if (vAddr[logWordWidth(width) .. 0] != 0) then
+    if ~ (isAddressAligned(vAddr, width)) then
       SignalException(AdEL) (* unaligned access *)
     else
       let (ex, pAddr) = (TranslateAddress(vAddr, LoadData)) in
@@ -1253,7 +1256,7 @@ function clause decode (0b111100 : (regno) base : (regno) rt : (imm16) offset) =
 function clause execute (Store(width, conditional, base, rt, offset)) =
       {
         (bit[64]) vAddr := EXTS(offset) + rGPR(base);
-        if (vAddr[logWordWidth(width)..0] != 0) then
+        if ~ (isAddressAligned(vAddr, width)) then
           SignalException(AdES) (* unaligned access *)
         else
           let (ex, pAddr) = (TranslateAddress(vAddr, StoreData)) in
