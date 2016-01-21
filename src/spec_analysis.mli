@@ -17,3 +17,4 @@ val default_order : tannot defs -> order
   suitable unwrapping of abbreviations, reg, and registers). 
 *)
 val is_within_range: typ -> typ -> nexp_range list -> triple
+val is_within_machine64 : typ -> nexp_range list -> triple

@@ -1138,11 +1138,56 @@ let rewrite_defs_exp_lift_assign defs = rewrite_defs_base
      rewrite_fun = rewrite_fun;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} defs
+    
+let rewrite_exp_separate_ints rewriters nmap ((E_aux (exp,(l,annot))) as full_exp) =
+  let tparms,t,tag,nexps,eff,cum_eff,bounds = match annot with
+    | Base((tparms,t),tag,nexps,eff,cum_eff,bounds) -> tparms,t,tag,nexps,eff,cum_eff,bounds
+    | _ -> [],unit_t,Emp_local,[],pure_e,pure_e,nob in
+  let rewrap e = E_aux (e,(l,annot)) in
+  let rewrap_effects e effsum =
+    E_aux (e,(l,Base ((tparms,t),tag,nexps,eff,effsum,bounds))) in
+  let rewrite_rec = rewriters.rewrite_exp rewriters nmap in
+  let rewrite_base = rewrite_exp rewriters nmap in
+  match exp with
+  | E_lit (L_aux (((L_num _) as lit),_)) ->
+    (match (is_within_machine64 t nexps) with
+     | Yes | Maybe -> rewrite_base full_exp
+     | No -> E_aux(E_app(Id_aux (Id "integer_of_int",l),[rewrite_base full_exp]),
+                   (l, Base((tparms,t),External(None),nexps,eff,cum_eff,bounds))))
+  | E_cast (typ, exp) -> rewrap (E_cast (typ, rewrite_rec exp))
+  | E_app (id,exps) -> rewrap (E_app (id,List.map rewrite_rec exps))
+  | E_app_infix(el,id,er) -> rewrap (E_app_infix(rewrite_rec el,id,rewrite_rec er))
+  | E_for (id, e1, e2, e3, o, body) ->
+      rewrap (E_for (id, rewrite_rec e1, rewrite_rec e2, rewrite_rec e3, o, rewrite_rec body))
+  | E_vector_access (vec,index) -> rewrap (E_vector_access (rewrite_rec vec,rewrite_rec index))
+  | E_vector_subrange (vec,i1,i2) ->
+    rewrap (E_vector_subrange (rewrite_rec vec,rewrite_rec i1,rewrite_rec i2))
+  | E_vector_update (vec,index,new_v) -> 
+    rewrap (E_vector_update (rewrite_rec vec,rewrite_rec index,rewrite_rec new_v))
+  | E_vector_update_subrange (vec,i1,i2,new_v) ->
+    rewrap (E_vector_update_subrange (rewrite_rec vec,rewrite_rec i1,rewrite_rec i2,rewrite_rec new_v))
+  | E_case (exp ,pexps) -> 
+    rewrap (E_case (rewrite_rec exp,
+                    (List.map 
+                       (fun (Pat_aux (Pat_exp(p,e),pannot)) -> 
+                          Pat_aux (Pat_exp(rewriters.rewrite_pat rewriters nmap p,rewrite_rec e),pannot)) pexps)))
+  | E_let (letbind,body) -> rewrap (E_let(rewriters.rewrite_let rewriters nmap letbind,rewrite_rec body))
+  | _ -> rewrite_rec full_exp
+
+let rewrite_defs_separate_numbs defs = rewrite_defs_base
+    {rewrite_exp = rewrite_exp_separate_ints;
+     rewrite_pat = rewrite_pat;
+     rewrite_let = rewrite_let; (*will likely need a new one?*)
+     rewrite_lexp = rewrite_lexp; (*will likely need a new one?*)
+     rewrite_fun = rewrite_fun;
+     rewrite_def = rewrite_def;
+     rewrite_defs = rewrite_defs_base} defs
 
 let rewrite_defs_ocaml defs =
   let defs_vec_concat_removed = rewrite_defs_remove_vector_concat defs in
   let defs_lifted_assign = rewrite_defs_exp_lift_assign defs_vec_concat_removed in
-  defs_lifted_assign
+  let defs_separate_nums = rewrite_defs_separate_numbs defs_lifted_assign in
+  defs_separate_nums
 
 let remove_blocks =
 
