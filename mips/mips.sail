@@ -1488,6 +1488,12 @@ union ast member unit HCF
 function clause decode (0b010000 : 0b00100 : (regno) rt : 0b10111 : 0b00000000000) =
   Some(HCF()) (* simulator halt instruction "MTC0 rt, $23" (cheri specific behaviour) *)
 
+function clause decode (0b010000 : 0b00100 : (regno) rt : 0b11010 : 0b00000000000) =
+  Some(HCF()) (* simulator halt instruction "MTC0 rt, $26" (cheri specific behaviour) *)
+
+function clause execute (HCF) =
+  () (* halt instruction actually executed by interpreter framework *)
+
 function clause decode _ = None
 
 end decode
