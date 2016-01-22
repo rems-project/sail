@@ -271,9 +271,9 @@ function clause execute (DADDI (rs, rt, imm)) =
   {
     let (temp, overflow, _) = (rGPR(rs) +_s EXTS(imm)) in (* XXX is this the same definition of overflow as in spec? *)
     {
-      (*if overflow then
+      if overflow then
         SignalException(Ov)
-      else*)
+      else
         wGPR(rt) := temp
     }
   }
