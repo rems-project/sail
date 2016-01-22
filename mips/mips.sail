@@ -6,6 +6,7 @@ val extern forall Nat 'm, Nat 'n. (implicit<'m>,bit['n]) -> bit['m] effect pure 
 val extern forall Nat 'n, Nat 'm. (implicit<'m>,bit['n]) -> bit['m] effect pure EXTZ (* Zero extend *)
 *)
 register (bit[64]) PC
+register (bit[64]) nextPC
 
 (* CP0 Registers *)
 
@@ -41,7 +42,6 @@ register (StatusReg) CP0Status
 
 (* Implementation registers -- not ISA defined *)
 register (bit[1])  branchPending
-register (bit[1])  inBranchDelay
 register (bit[1])  exceptionSignalled
 register (bit[64]) delayedPC
 
@@ -147,7 +147,7 @@ function unit SignalException ((Exception) ex) =
     (* Only update EPC and BD if not already in EXL mode *)
     if (~ (CP0Status.EXL)) then 
       {
-        if (inBranchDelay) then
+        if (branchPending) then
           {
             CP0EPC := PC - 4;
             CP0Cause.BD := 1;
@@ -168,7 +168,7 @@ function unit SignalException ((Exception) ex) =
                    0xFFFFFFFFBFC00200
                 else
                    0xFFFFFFFF80000000;
-      PC := vectorBase + EXTS(vectorOffset);
+      nextPC := vectorBase + EXTS(vectorOffset);
   }
 
 typedef MemAccessType = enumerate {Instruction; LoadData; StoreData}
@@ -271,9 +271,9 @@ function clause execute (DADDI (rs, rt, imm)) =
   {
     let (temp, overflow, _) = (rGPR(rs) +_s EXTS(imm)) in (* XXX is this the same definition of overflow as in spec? *)
     {
-      if overflow then
+      (*if overflow then
         SignalException(Ov)
-      else
+      else*)
         wGPR(rt) := temp
     }
   }
@@ -1095,7 +1095,7 @@ function clause execute (BEQ(rs, rd, imm, ne, likely)) =
     else
       {
         if (likely) then
-          PC := PC + 4; (* skip branch delay *)
+          nextPC := PC + 8; (* skip branch delay *)
       }
   }
 
@@ -1138,7 +1138,7 @@ function clause execute (BCMPZ(rs, imm, cmp, link, likely)) =
       }
     else if (likely) then
       {
-        PC := PC + 4  (* skip branch delay *)
+        nextPC := PC + 8  (* skip branch delay *)
       };
     if (link) then
       wGPR(31) := linkVal
@@ -1504,37 +1504,3 @@ end execute
 end ast
 
 function option<ast> supported_instructions (instr) = Some(instr)
-  
-(* fetch decode execute *)
-function unit fde() =
-{
-  let (ex, pAddr) = (TranslateAddress (PC, Instruction)) in
-  if (~ (ex)) then
-    {
-      opcode := MEMr(pAddr, 4);
-      instr  := decode(opcode);
-      (switch instr {
-       case (Some(instr)) -> execute(instr)
-       case None -> exit "no matching pattern on decode"});
-    };
-  (* Compute the next PC to execute *)
-  if exceptionSignalled then
-    {
-      (* new PC computed in SignalException based on exception type *)
-      inBranchDelay := 1;
-      branchPending := 1;
-      exceptionSignalled := 1;
-    }
-  else if inBranchDelay then
-    {
-      PC := delayedPC;
-      inBranchDelay := 0;
-      branchPending := 0;
-    }
-  else 
-    {
-      PC := PC + 4;
-      if branchPending then
-          inBranchDelay := 1
-    };
-}
