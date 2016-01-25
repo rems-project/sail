@@ -269,12 +269,12 @@ function clause decode (0b011000 : (regno) rs : (regno) rt : (imm16) imm) =
 
 function clause execute (DADDI (rs, rt, imm)) =
   {
-    let (temp, overflow, _) = (rGPR(rs) +_s EXTS(imm)) in (* XXX is this the same definition of overflow as in spec? *)
+    let (bit[65]) sum65 = (EXTS(rGPR(rs)) + EXTS(imm)) in
     {
-      if overflow then
+      if (sum65[64] != sum65[63]) then
         SignalException(Ov)
       else
-        wGPR(rt) := temp
+        wGPR(rt) := sum65[63..0]
     }
   }
 
@@ -288,12 +288,12 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b0000
 
 function clause execute (DADD (rs, rt, rd)) =
   {
-    let (temp, overflow, _) = (rGPR(rs) +_s rGPR(rt)) in
+    let (bit[65]) sum65 = (EXTS(rGPR(rs)) + EXTS(rGPR(rt))) in
     {
-      if overflow then
+      if sum65[64] != sum65[63] then
         SignalException(Ov)
       else
-        wGPR(rd) := temp
+        wGPR(rd) := sum65[63..0]
     }
   }
 
@@ -311,11 +311,11 @@ function clause execute (ADD(rs, rt, rd)) =
     if NotWordVal(opA) | NotWordVal(opB) then
       wGPR(rd) := undefined (* XXX could exit instead *)
     else
-      let ((bit[32]) temp, overflow, _) = ((opA[31 .. 0]) +_s (opB[31 .. 0])) in
-        if overflow then
+      let (bit[33]) sum33 = (EXTS(opA[31 .. 0]) + EXTS(opB[31 .. 0])) in
+        if sum33[32] != sum33[31] then
           SignalException(Ov)
         else
-          wGPR(rd) := EXTS(temp)
+          wGPR(rd) := EXTS(sum33[31..0])
   }
 
 (* ADDI  32-bit add immediate -- reg, reg, imm with possible undefined behaviour or exception *)
@@ -331,11 +331,11 @@ function clause execute (ADDI(rs, rt, imm)) =
     if NotWordVal(opA) then
       wGPR(rt) := undefined (* XXX could exit instead *)
     else
-      let ((bit[32]) temp, overflow, _) = ((opA[31 .. 0]) +_s EXTS(imm)) in
-        if overflow then
+      let (bit[33]) sum33 = (EXTS(opA[31 .. 0]) + EXTS(imm)) in
+        if sum33[32] != sum33[31] then
           SignalException(Ov)
         else
-          wGPR(rt) := EXTS(temp)
+          wGPR(rt) := EXTS(sum33[31..0])
   }
 
 (* ADDU  32-bit add immediate -- reg, reg, reg with possible undefined behaviour *)
@@ -369,11 +369,7 @@ function clause execute (ADDIU(rs, rt, imm)) =
     if NotWordVal(opA) then
       wGPR(rt) := undefined (* XXX could exit instead *)
     else
-      let ((bit[32]) temp, overflow, _) = ((opA[31 .. 0]) +_s EXTS(imm)) in
-        if overflow then
-          SignalException(Ov)
-        else
-          wGPR(rt) := EXTS(temp)
+      wGPR(rt) := EXTS((opA[31 .. 0]) + EXTS(imm))
   }
 
 (**************************************************************************************)
@@ -401,12 +397,12 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b0000
 
 function clause execute (DSUB (rs, rt, rd)) =
   {
-    let (temp, overflow, _) = (rGPR(rs) -_s rGPR(rt)) in
+    let (bit[65]) temp65 = (EXTS(rGPR(rs)) - EXTS(rGPR(rt))) in
     {
-      if overflow then
+      if temp65[64] != temp65[63] then
         SignalException(Ov)
       else
-        wGPR(rd) := temp
+        wGPR(rd) := temp65[63..0]
     }
   }
 
@@ -424,11 +420,11 @@ function clause execute (SUB(rs, rt, rd)) =
     if NotWordVal(opA) | NotWordVal(opB) then
       wGPR(rd) := undefined (* XXX could exit instead *)
     else
-      let ((bit[32]) temp, overflow, _) = ((opA[31 .. 0]) -_s (opB[31 .. 0])) in
-        if overflow then
-          SignalException(Ov)
-        else
-          wGPR(rd) := EXTS(temp)
+      let (bit[33]) temp33 = (EXTS(opA[31..0]) - EXTS(opB[31..0])) in
+      if temp33[32] != temp33[31] then
+        SignalException(Ov)
+      else
+        wGPR(rd) := EXTS(temp33[31..0])
   }
 
 (* SUBU  32-bit 'unsigned' sub -- reg, reg, reg with possible undefined behaviour *)
