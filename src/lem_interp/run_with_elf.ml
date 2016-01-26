@@ -1,4 +1,5 @@
 open Printf ;;
+open Format ;;
 open Big_int ;;
 open Interp_ast ;;
 open Interp_interface ;;
@@ -26,7 +27,7 @@ let reg = ref Reg.empty ;;
 
 let add_mem byte addr mem =
   assert(byte >= 0 && byte < 256);
-  (*Printf.printf "adder is %s, byte is %s\n" (string_of_big_int addr) (string_of_int byte);*)
+  (*Printf.printf "add_mem %s: 0x%02x\n" (Uint64.to_string_hex (Uint64.of_string (Nat_big_num.to_string addr))) byte;*)
   let mem_byte = memory_byte_of_int byte in
   mem := Mem.add addr mem_byte !mem
 
@@ -527,7 +528,12 @@ let initial_system_state_of_elf_file name =
       prog_mem := Mem.empty;
       data_mem := Mem.empty;
       load_memory_segments segments;
-
+      (*
+      debugf "prog_mem\n";
+      Mem.iter (fun k v -> debugf "%s\n" (Mem.to_string k v)) !prog_mem;
+      debugf "data_mem\n";
+      Mem.iter (fun k v -> debugf "%s\n" (Mem.to_string k v)) !data_mem;
+      *)
       let (isa_defs, isa_memory_access, isa_externs, isa_model, model_reg_d, startaddr,
            initial_stack_data, initial_register_abi_data, register_data_all) =
         match Nat_big_num.to_int e_machine with
@@ -755,6 +761,17 @@ let time_it action arg =
   let finish_time = Sys.time () in
   finish_time -. start_time
 
+let hex_of_reg_val reg_val =
+  match(integer_of_register_value reg_val) with
+  | Some i -> Uint64.to_string_hex (Uint64.of_string (Nat_big_num.to_string i))
+  | None   -> "None"
+
+let rec debug_print_gprs start stop =
+  debugf "DEBUG MIPS REG %.2d 0x%s\n" start (hex_of_reg_val (Reg.find (Format.sprintf "GPR%02d" start) !reg));
+  if start < stop
+  then debug_print_gprs (start + 1) stop
+  else ()
+
 let stop_condition_met model instr =
   match model with
   | PPC ->
@@ -766,7 +783,9 @@ let stop_condition_met model instr =
     | ("ImplementationDefinedStopFetching", _, _) -> true
     | _ -> false)
   | MIPS -> (match instr with 
-    | ("HCF", _, _) -> true
+    | ("HCF", _, _) -> 
+      debug_print_gprs 0 31;
+      true
     | _ -> false)
 
 let is_branch model instruction =
@@ -911,11 +930,11 @@ let rec fde_loop count context model mode track_dependencies opcode =
   else
     begin
       set_next_instruction_address model;
-      match Run_interp_model.run  istate !reg !data_mem !eager_eval track_dependencies mode "execute" with
+      match Run_interp_model.run  istate !reg !prog_mem !eager_eval track_dependencies mode "execute" with
       | false, _,_, _ -> eprintf "FAILURE\n"; exit 1
       | true, mode, track_dependencies, (my_reg, my_mem) ->
         reg := my_reg;
-        data_mem := my_mem;
+        prog_mem := my_mem;
         let opcode = fetch_instruction_opcode_and_update_ia model in
           fde_loop (count + 1) context model (Some mode) (ref track_dependencies) opcode
     end
