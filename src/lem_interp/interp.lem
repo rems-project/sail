@@ -923,10 +923,12 @@ let rec to_exp mode env v : (exp tannot * lenv) =
     then (E_aux (E_vector_indexed 
 		   (List.reverse (snd (List.foldl (fun (n,acc) e -> (n+1,((integerFromNat n),e)::acc)) (n,[]) es)))
 	           (Def_val_aux Def_val_empty (Interp_ast.Unknown,Nothing))) annot, env')
-    else 
+    else if n= List.length vals
+    then (E_aux (E_vector es) annot, env')
+    else     
       (E_aux (E_vector_indexed 
 		(snd (List.foldr (fun e (n,acc) -> (n+1,((integerFromNat n),e)::acc)) (n-(List.length es),[]) es)) 
-	        (Def_val_aux Def_val_empty (Interp_ast.Unknown,Nothing))) annot, env')
+                (Def_val_aux Def_val_empty (Interp_ast.Unknown,Nothing))) annot, env')
   | V_vector_sparse n m dir vals d ->
     let ((es : (list (exp tannot))),env') = mapf (List.map (fun (i,v) -> v) vals) env in
     let ((d : (exp tannot)),env')  = to_exp mode env' d in
