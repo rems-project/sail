@@ -488,7 +488,7 @@ let mips_register_data_all =  [
   ("LO", (D_decreasing, 64, 0));
   (* control registers *)
   ("CP0Status", (D_decreasing, 32, 0));
-  ("CP0Cause", (D_decreasing, 32, 0));
+  ("CP0Cause", (D_decreasing, 32, 31));
   ("CP0EPC", (D_decreasing, 64, 0));
 ]
 

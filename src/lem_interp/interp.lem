@@ -2271,8 +2271,20 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 	    | Just v -> 
 	      if is_top_level then ((Error l "Writes must be to reg or registers",l_mem,l_env),Nothing)
 	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_id id) (l,annot), env)))
-	    | Nothing -> ((Error l ("Undefined id " ^ (get_id id)),l_mem,l_env),Nothing)
-	   end)
+            | Nothing ->
+	      let regf = 
+	       match in_env regs name with (*pull the regform with the most specific type annotation from env *)
+	       | Just(V_register regform) -> regform
+	       | _ -> Assert_extra.failwith "Register not known in regenv" end in
+              let start_pos = reg_start_pos regf in
+              let reg_size = reg_size regf in 
+              let request = 
+               (Action (Write_reg regf Nothing 
+		       (if is_top_level then (update_vector_start default_dir start_pos reg_size value) else value))
+	       (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),
+	        l_mem,l_env) in
+              if is_top_level then (request,Nothing) 
+	      else (request,Just (fun e env -> (LEXP_aux (LEXP_id id) (l,annot), env))) end)
         | Tag_extern _ ->
 	  let regf = 
 	    match in_env regs name with (*pull the regform with the most specific type annotation from env *)
@@ -2468,7 +2480,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		((Value (V_lit (L_aux L_unit l)), update_mem mode.track_lmem l_mem c value, 
 		  (add_to_env (id,(V_boxref c typ)) l_env)),Nothing)
               end
-              else ((Error l ("Undefined id " ^ (get_id id)),l_mem,l_env),Nothing)
+              else ((Error l ("LEXP:cast1: Undefined id " ^ (get_id id)),l_mem,l_env),Nothing)
             | v -> 
 	      if is_top_level then ((Error l "Writes must be to reg values",l_mem,l_env),Nothing) 
 	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_cast typc id) (l,annot), env)))
@@ -2489,7 +2501,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		((Value (V_lit (L_aux L_unit l)), update_mem mode.track_lmem l_mem c value, 
 		  (add_to_env (id,(V_boxref c typ)) l_env)),Nothing)
               end
-              else ((Error l ("Undefined id " ^ (get_id id)),l_mem,l_env),Nothing)
+              else ((Error l ("LEXP:cast2: Undefined id " ^ (get_id id)),l_mem,l_env),Nothing)
             | v -> 
 	      if is_top_level then ((Error l "Writes must be to reg values",l_mem,l_env),Nothing) 
 	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_cast typc id) (l,annot), env)))
@@ -2510,7 +2522,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		((Value (V_lit (L_aux L_unit l)), update_mem mode.track_lmem l_mem c value, 
 		  (add_to_env (id,(V_boxref c typ)) l_env)),Nothing)
               end
-              else ((Error l ("Undefined id " ^ (get_id id)),l_mem,l_env),Nothing)
+              else ((Error l ("LEXP:cast3: Undefined id " ^ (get_id id)),l_mem,l_env),Nothing)
             | v -> 
 	      if is_top_level then ((Error l "Writes must be to reg values",l_mem,l_env),Nothing) 
 	      else ((Value v,l_mem,l_env),Just (fun e env -> (LEXP_aux(LEXP_cast typc id) (l,annot), env)))

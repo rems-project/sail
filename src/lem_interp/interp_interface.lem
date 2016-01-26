@@ -885,6 +885,8 @@ val instruction_to_istate : context -> instruction -> instruction_state (*i_stat
 
 (* Slice a register value into a smaller vector, starting at first number (wrt the indices of the register value, not raw positions in its list of bits) and going to second (inclusive) according to order. *)
 val slice_reg_value : register_value -> nat -> nat -> register_value
+(*Create a new register value where the contents of nat to nat are replaced by the second register_value *)  
+val update_reg_value_slice : reg_name -> register_value -> nat -> nat -> register_value -> register_value
 
 
 (* Big step of the interpreter, to the next request for an external action *)

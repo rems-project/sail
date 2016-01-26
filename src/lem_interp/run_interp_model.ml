@@ -61,7 +61,7 @@ let slice register_vector (start,stop) =
     (*Interface turns start and stop into forms for 
       increasing because ppcmem only speaks increasing, so here we turn it back *)
     let startd = register_vector.rv_start_internal- start in
-    let stopd = startd - stop in
+    let stopd = startd - (stop - start) in
     (*let _ = Printf.eprintf "slice decreasing with %i, %i, %i\n" startd stopd register_vector.rv_start in*)
     slice_reg_value {register_vector with rv_start=register_vector.rv_start_internal} startd stopd
 
@@ -90,7 +90,16 @@ let rec list_update_list index start stop es vals =
       then e :: (list_update_list (Nat_big_num.add index big_num_unit) start stop es xs)
       else x :: (list_update_list (Nat_big_num.add index big_num_unit) start stop (e::es) xs)
 
-let fupdate_slice original e (start,stop) = assert false
+let fupdate_slice reg_name original e (start,stop) =
+  if original.rv_dir = D_increasing
+  then update_reg_value_slice reg_name original start stop e
+  else
+    (*Interface turns start and stop into forms for 
+      increasing because ppcmem only speaks increasing, so here we turn it back *)
+    let startd = original.rv_start_internal- start in
+    let stopd = startd - (stop - start) in
+    (*let _ = Printf.eprintf "fupdate_slice: starts at %i, %i ->  %i,%i ->  %i\n" original.rv_start_internal start startd  stop stopd in*) 
+    update_reg_value_slice reg_name {original with rv_start=original.rv_start_internal} startd stopd e
 
 let combine_slices (start, stop) (inner_start,inner_stop) = 
   (start + inner_start, start + inner_stop)
@@ -105,14 +114,14 @@ let rec perform_action ((reg, mem) as env) = function
  | Read_reg0(Reg_f_slice(id, _,_,_, range, mini_range), _) ->
    (Some(slice (slice (Reg.find id reg) range) mini_range),env)
  | Write_reg0(Reg0(id,_,_,_), value, _) -> (None, (Reg.add id value reg,mem))
- | Write_reg0(Reg_slice(id,_,_,range),value, _) 
- | Write_reg0(Reg_field(id,_,_,_,range),value,_)->
+ | Write_reg0((Reg_slice(id,_,_,range) as reg_n),value, _) 
+ | Write_reg0((Reg_field(id,_,_,_,range) as reg_n),value,_)->
      let old_val = Reg.find id reg in
-     let new_val = fupdate_slice old_val value range in
+     let new_val = fupdate_slice reg_n old_val value range in
      (None, (Reg.add id new_val reg, mem))
- | Write_reg0(Reg_f_slice(id,_,_,_,range,mini_range),value,_) ->
+ | Write_reg0((Reg_f_slice(id,_,_,_,range,mini_range) as reg_n),value,_) ->
    let old_val = Reg.find id reg in
-   let new_val = fupdate_slice old_val value (combine_slices range mini_range) in
+   let new_val = fupdate_slice reg_n old_val value (combine_slices range mini_range) in
    (None,(Reg.add id new_val reg,mem))
  | Read_mem0(_,location, length, _,_) ->
    let address = match address_of_address_lifted location with
