@@ -448,48 +448,48 @@ let mips_register_data_all =  [
   (*Pseudo registers*)
   ("branchPending", (D_decreasing, 1, 0));
   ("exceptionSignalled", (D_decreasing, 1, 0));
-  ("delayedPC", (D_decreasing, 64, 0));
-  ("nextPC", (D_decreasing, 64, 0));
+  ("delayedPC", (D_decreasing, 64, 63));
+  ("nextPC", (D_decreasing, 64, 63));
   (* General purpose registers *)
-  ("GPR00", (D_decreasing, 64, 0));
-  ("GPR01", (D_decreasing, 64, 0));
-  ("GPR02", (D_decreasing, 64, 0));
-  ("GPR03", (D_decreasing, 64, 0));
-  ("GPR04", (D_decreasing, 64, 0));
-  ("GPR05", (D_decreasing, 64, 0));
-  ("GPR06", (D_decreasing, 64, 0));
-  ("GPR07", (D_decreasing, 64, 0));
-  ("GPR08", (D_decreasing, 64, 0));
-  ("GPR09", (D_decreasing, 64, 0));
-  ("GPR10", (D_decreasing, 64, 0));
-  ("GPR11", (D_decreasing, 64, 0));
-  ("GPR12", (D_decreasing, 64, 0));
-  ("GPR13", (D_decreasing, 64, 0));
-  ("GPR14", (D_decreasing, 64, 0));
-  ("GPR15", (D_decreasing, 64, 0));
-  ("GPR16", (D_decreasing, 64, 0));
-  ("GPR17", (D_decreasing, 64, 0));
-  ("GPR18", (D_decreasing, 64, 0));
-  ("GPR19", (D_decreasing, 64, 0));
-  ("GPR20", (D_decreasing, 64, 0));
-  ("GPR21", (D_decreasing, 64, 0));
-  ("GPR22", (D_decreasing, 64, 0));
-  ("GPR23", (D_decreasing, 64, 0));
-  ("GPR24", (D_decreasing, 64, 0));
-  ("GPR25", (D_decreasing, 64, 0));
-  ("GPR26", (D_decreasing, 64, 0));
-  ("GPR27", (D_decreasing, 64, 0));
-  ("GPR28", (D_decreasing, 64, 0));
-  ("GPR29", (D_decreasing, 64, 0));
-  ("GPR30", (D_decreasing, 64, 0));
-  ("GPR31", (D_decreasing, 64, 0));
+  ("GPR00", (D_decreasing, 64, 63));
+  ("GPR01", (D_decreasing, 64, 63));
+  ("GPR02", (D_decreasing, 64, 63));
+  ("GPR03", (D_decreasing, 64, 63));
+  ("GPR04", (D_decreasing, 64, 63));
+  ("GPR05", (D_decreasing, 64, 63));
+  ("GPR06", (D_decreasing, 64, 63));
+  ("GPR07", (D_decreasing, 64, 63));
+  ("GPR08", (D_decreasing, 64, 63));
+  ("GPR09", (D_decreasing, 64, 63));
+  ("GPR10", (D_decreasing, 64, 63));
+  ("GPR11", (D_decreasing, 64, 63));
+  ("GPR12", (D_decreasing, 64, 63));
+  ("GPR13", (D_decreasing, 64, 63));
+  ("GPR14", (D_decreasing, 64, 63));
+  ("GPR15", (D_decreasing, 64, 63));
+  ("GPR16", (D_decreasing, 64, 63));
+  ("GPR17", (D_decreasing, 64, 63));
+  ("GPR18", (D_decreasing, 64, 63));
+  ("GPR19", (D_decreasing, 64, 63));
+  ("GPR20", (D_decreasing, 64, 63));
+  ("GPR21", (D_decreasing, 64, 63));
+  ("GPR22", (D_decreasing, 64, 63));
+  ("GPR23", (D_decreasing, 64, 63));
+  ("GPR24", (D_decreasing, 64, 63));
+  ("GPR25", (D_decreasing, 64, 63));
+  ("GPR26", (D_decreasing, 64, 63));
+  ("GPR27", (D_decreasing, 64, 63));
+  ("GPR28", (D_decreasing, 64, 63));
+  ("GPR29", (D_decreasing, 64, 63));
+  ("GPR30", (D_decreasing, 64, 63));
+  ("GPR31", (D_decreasing, 64, 63));
   (* special registers for mul/div *)
-  ("HI", (D_decreasing, 64, 0));
-  ("LO", (D_decreasing, 64, 0));
+  ("HI", (D_decreasing, 64, 63));
+  ("LO", (D_decreasing, 64, 63));
   (* control registers *)
-  ("CP0Status", (D_decreasing, 32, 0));
+  ("CP0Status", (D_decreasing, 32, 31));
   ("CP0Cause", (D_decreasing, 32, 31));
-  ("CP0EPC", (D_decreasing, 64, 0));
+  ("CP0EPC", (D_decreasing, 64, 63));
 ]
 
 let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
