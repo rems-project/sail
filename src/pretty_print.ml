@@ -1287,7 +1287,7 @@ let doc_lit_ocaml in_pat (L_aux(l,_)) =
   | L_one   -> "Vone"
   | L_true  -> "Vone"
   | L_false -> "Vzero"
-  | L_num i -> if in_pat then string_of_int i else "(big_int_of_int " ^ string_of_int i ^ ")"
+  | L_num i -> string_of_int i
   | L_hex n -> "(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)
   | L_bin n -> "(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)
   | L_undef -> "Vundef"
@@ -1407,11 +1407,19 @@ let doc_exp_ocaml, doc_let_ocaml =
          *)*)
     | E_let(leb,e) -> doc_op (string "in") (let_exp leb) (exp e)
     | E_app(f,args) ->
-      let call = match annot with
-        | Base(_,External (Some n),_,_,_,_) -> string n
-        | Base(_,Constructor i,_,_,_,_) -> doc_id_ocaml_ctor i f
-        | _ -> doc_id_ocaml f in
-      parens (doc_unop call (parens (separate_map comma exp args)))
+      let call,ctor = match annot with
+        | Base(_,External (Some n),_,_,_,_) -> string n,false
+        | Base(_,Constructor i,_,_,_,_) -> doc_id_ocaml_ctor i f,true
+        | _ -> doc_id_ocaml f,false in
+      let base_print () = parens (doc_unop call (parens (separate_map comma exp args))) in
+      if not(ctor)
+      then base_print ()
+      else (match args with
+        | [] -> call
+        | [arg] -> (match arg with
+            | E_aux(E_lit (L_aux(L_unit,_)),_) -> call
+            | _ -> base_print())
+        | args ->  base_print())
     | E_vector_access(v,e) ->
       let call = (match annot with
           | Base((_,t),_,_,_,_,_) ->

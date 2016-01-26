@@ -1151,8 +1151,9 @@ let rewrite_exp_separate_ints rewriters nmap ((E_aux (exp,(l,annot))) as full_ex
   match exp with
   | E_lit (L_aux (((L_num _) as lit),_)) ->
     (match (is_within_machine64 t nexps) with
-     | Yes | Maybe -> rewrite_base full_exp
-     | No -> E_aux(E_app(Id_aux (Id "integer_of_int",l),[rewrite_base full_exp]),
+     | Yes -> let _ = Printf.eprintf "Rewriter of num_const, within 64bit int yes\n" in rewrite_base full_exp
+     | Maybe -> let _ = Printf.eprintf "Rewriter of num_const, within 64bit int maybe\n" in rewrite_base full_exp
+     | No -> let _ = Printf.eprintf "Rewriter of num_const, within 64bit int no\n" in E_aux(E_app(Id_aux (Id "integer_of_int",l),[rewrite_base full_exp]),
                    (l, Base((tparms,t),External(None),nexps,eff,cum_eff,bounds))))
   | E_cast (typ, exp) -> rewrap (E_cast (typ, rewrite_rec exp))
   | E_app (id,exps) -> rewrap (E_app (id,List.map rewrite_rec exps))
@@ -1172,7 +1173,9 @@ let rewrite_exp_separate_ints rewriters nmap ((E_aux (exp,(l,annot))) as full_ex
                        (fun (Pat_aux (Pat_exp(p,e),pannot)) -> 
                           Pat_aux (Pat_exp(rewriters.rewrite_pat rewriters nmap p,rewrite_rec e),pannot)) pexps)))
   | E_let (letbind,body) -> rewrap (E_let(rewriters.rewrite_let rewriters nmap letbind,rewrite_rec body))
-  | _ -> rewrite_rec full_exp
+  | E_internal_let (lexp,exp,body) ->
+    rewrap (E_internal_let (rewriters.rewrite_lexp rewriters nmap lexp, rewrite_rec exp, rewrite_rec body))
+  | _ -> rewrite_base full_exp
 
 let rewrite_defs_separate_numbs defs = rewrite_defs_base
     {rewrite_exp = rewrite_exp_separate_ints;
