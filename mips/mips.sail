@@ -217,7 +217,7 @@ function forall Nat 'r, 'r IN {1,2,4,8}.[:'r:] wordWidthBytes((WordType) w) =
 function bool isAddressAligned(addr, (WordType) wordType) =
   switch (wordType) {
     case B -> true
-    case H -> (addr[0]    == 0b0)
+    case H -> (addr[0]    == 0)
     case W -> (addr[1..0] == 0b00)
     case D -> (addr[2..0] == 0b000)
   }
