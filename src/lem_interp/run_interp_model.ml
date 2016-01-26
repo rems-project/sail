@@ -54,7 +54,16 @@ module Mem = struct
                          (memory_value_to_string !default_endian [v])
 end
 
-let slice register_vector (start,stop) = slice_reg_value register_vector start stop
+let slice register_vector (start,stop) =
+  if register_vector.rv_dir = D_increasing
+  then slice_reg_value register_vector start stop
+  else
+    (*Interface turns start and stop into forms for 
+      increasing because ppcmem only speaks increasing, so here we turn it back *)
+    let startd = register_vector.rv_start_internal- start in
+    let stopd = startd - stop in
+    (*let _ = Printf.eprintf "slice decreasing with %i, %i, %i\n" startd stopd register_vector.rv_start in*)
+    slice_reg_value {register_vector with rv_start=register_vector.rv_start_internal} startd stopd
 
 let big_num_unit = of_int 1
 
