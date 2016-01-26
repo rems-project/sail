@@ -614,7 +614,7 @@ function clause execute (DSRL (rt, rd, sa)) =
 
 union ast member regregreg DSRL32
 function clause decode (0b000000 : 0b00000 : (regno) rt : (regno) rd : (bit[5]) sa : 0b111110) = 
-  Some(DSRA32(rt, rd, sa))
+  Some(DSRL32(rt, rd, sa))
 function clause execute (DSRL32 (rt, rd, sa)) =
   {
     temp     := rGPR(rt);
@@ -631,7 +631,7 @@ function clause execute (DSRLV (rs, rt, rd)) =
   {
     temp     := rGPR(rt);
     sa       := (rGPR(rs)) [5..0];
-    wGPR(rd) := ((bitone ^^ sa) : temp[63 .. sa])
+    wGPR(rd) := ((bitzero ^^ sa) : temp[63 .. sa])
   }
 
 (**************************************************************************************)
