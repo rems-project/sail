@@ -1490,6 +1490,20 @@ function clause decode (0b010000 : 0b00100 : (regno) rt : 0b10111 : 0b0000000000
 function clause decode (0b010000 : 0b00100 : (regno) rt : 0b11010 : 0b00000000000) =
   Some(HCF()) (* simulator halt instruction "MTC0 rt, $26" (cheri specific behaviour) *)
 
+union ast member (regno, regno, bit[3], bool) MFC0
+function clause decode (0b010000 : 0b00000 : (regno) rt : (regno) rd : 0b00000000 : (bit[3]) sel) =
+  Some(MFC0(rt, rd, sel, false) (* MCF0 *))
+function clause decode (0b010000 : 0b00001 : (regno) rt : (regno) rd : 0b00000000 : (bit[3]) sel) =
+  Some(MFC0(rt, rd, sel, true)  (* DMCF0 *))
+function clause execute (MFC0(rt, rd, sel, double)) = 
+  let (bit[64]) result = switch (rd, sel)
+        {
+          case (0b01111,0b000) -> 0 (* 15: PrID *)
+          case _               -> {SignalException(ResI); 0}
+        } in
+  wGPR(rt) := if (double) then result else EXTS(result[31..0])
+  
+
 function clause execute (HCF) =
   () (* halt instruction actually executed by interpreter framework *)
 
