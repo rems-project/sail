@@ -761,13 +761,8 @@ let time_it action arg =
   let finish_time = Sys.time () in
   finish_time -. start_time
 
-let hex_of_reg_val reg_val =
-  match(integer_of_register_value reg_val) with
-  | Some i -> Uint64.to_string_hex (Uint64.of_string (Nat_big_num.to_string i))
-  | None   -> "None"
-
 let rec debug_print_gprs start stop =
-  debugf "DEBUG MIPS REG %.2d 0x%s\n" start (hex_of_reg_val (Reg.find (Format.sprintf "GPR%02d" start) !reg));
+  debugf "DEBUG MIPS REG %.2d %s\n" start (Printing_functions.logfile_register_value_to_string (Reg.find (Format.sprintf "GPR%02d" start) !reg));
   if start < stop
   then debug_print_gprs (start + 1) stop
   else ()
@@ -784,6 +779,7 @@ let stop_condition_met model instr =
     | _ -> false)
   | MIPS -> (match instr with 
     | ("HCF", _, _) -> 
+      debugf "DEBUG MIPS PC %s\n"  (Printing_functions.logfile_register_value_to_string (Reg.find "PC" !reg));
       debug_print_gprs 0 31;
       true
     | _ -> false)
@@ -969,6 +965,6 @@ let run () =
   (* entry point: unit -> unit fde *)
   let name = Filename.basename !file in
   let t = time_it (fun () -> fde_loop 0 context isa_model (Some Run) (ref false) initial_opcode) () in
-  () (*Printf.eprintf "Execution time for file %s: %f seconds\n" name t*);;
+  Printf.eprintf "Execution time for file %s: %f seconds\n" name t;;
 
 run () ;;
