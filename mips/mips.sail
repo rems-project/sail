@@ -590,7 +590,7 @@ function clause execute (DSRA32 (rt, rd, sa)) =
 
 (* DSRAV reg, reg, reg *)
 union ast member regregreg DSRAV
-function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b00000 : 0b101111) = 
+function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b00000 : 0b010111) =
   Some(DSRAV(rs, rt, rd))
 function clause execute (DSRAV (rs, rt, rd)) =
   {
