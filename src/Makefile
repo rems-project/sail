@@ -7,6 +7,8 @@ full: sail lib power doc test
 sail:
 	ocamlbuild sail.native sail_lib.cma sail_lib.cmxa
 
+sail.native: sail
+
 interpreter: 
 	ocamlbuild lem_interp/extract.cmxa
 	ocamlbuild lem_interp/extract.cma
@@ -34,13 +36,13 @@ _build/run_with_elf.ml: lem_interp/run_with_elf.ml
 	mkdir -p _build
 	cp $< $@
 
-_build/mips.lem: _build/mips.sail sail
+_build/mips.lem: _build/mips.sail ./sail.native
 	mkdir -p _build
 	cd _build ;\
 	../sail.native -lem_ast $(notdir $<)
 
 %.ml: %.lem
-	$(LEM) -ocaml -lib lem_interp/ $<
+	$(LEM) -only_changed_output -ocaml -lib lem_interp/ $<
 
 run_mips.native: _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml interpreter
 	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -g -package zarith -package num -package batteries -package uint -I $(LEMLIBOCAML) -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(LEMLIBOCAML)extract.cmxa $(ELFDIR)/src/linksem.cmxa _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml  -o run_mips.native
