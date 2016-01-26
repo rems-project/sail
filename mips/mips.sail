@@ -1214,7 +1214,7 @@ function clause decode (0b100101 : (regno) base : (regno) rt : (imm16) offset) =
 function clause decode (0b100011 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(W, true,  false, base, rt, offset)) (* LW *)
 function clause decode (0b100111 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(W, false, false, base, rt, offset)) (* LWU *)
 function clause decode (0b110111 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(D, false, false, base, rt, offset)) (* LD *)
-function clause decode (0b110000 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(W, false, true, base, rt, offset))  (* LL *)
+function clause decode (0b110000 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(W, true,  true, base, rt, offset))  (* LL *)
 function clause decode (0b110100 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(D, false, true, base, rt, offset))  (* LLD *)
 function clause execute (Load(width, signed, linked, base, rt, offset)) =
   {
