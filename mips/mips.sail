@@ -972,7 +972,7 @@ function clause execute (DIV(rs, rt)) =
   {
     rsVal := rGPR(rs);
     rtVal := rGPR(rt);
-    let ((bit[32]) q, (bit[32])r) = (if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
+    let ((bit[32]) q, (bit[32])r) = (if (NotWordVal(rsVal) | NotWordVal(rtVal) | (rtVal == 0)) then
         (undefined, undefined)
       else
         ((rsVal[31..0]) quot_s (rtVal[31..0]), (rsVal[31..0]) mod (rtVal[31..0])))
@@ -991,7 +991,7 @@ function clause execute (DIVU(rs, rt)) =
   {
     rsVal := rGPR(rs);
     rtVal := rGPR(rt);
-    let ((bit[32]) q, (bit[32])r) = (if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
+    let ((bit[32]) q, (bit[32])r) = (if (NotWordVal(rsVal) | NotWordVal(rtVal) | rtVal == 0) then
         (undefined, undefined)
       else
         ((rsVal[31..0]) quot (rtVal[31..0]), (rsVal[31..0]) mod (rtVal[31..0])))
@@ -1010,8 +1010,13 @@ function clause execute (DDIV(rs, rt)) =
   {
     rsVal := rGPR(rs);
     rtVal := rGPR(rt);
-    LO    := rsVal quot_s rtVal;
-    HI    := rsVal mod rtVal; (* signed? *)
+    let ((bit[64])q, (bit[64])r) = (if (rtVal == 0)
+      then (undefined, undefined) 
+      else (rsVal quot_s rtVal, rsVal mod rtVal)) in
+    {
+      LO    := q;
+      HI    := r; (* signed? *)
+    }
   }
 
 (* DDIV 64-bit divide into HI/LO *)
@@ -1022,8 +1027,13 @@ function clause execute (DDIVU(rs, rt)) =
   {
     rsVal := rGPR(rs);
     rtVal := rGPR(rt);
-    LO    := rsVal quot rtVal;
-    HI    := rsVal mod rtVal;
+    let ((bit[64])q, (bit[64])r) = (if (rtVal == 0)
+      then (undefined, undefined) 
+      else (rsVal quot rtVal, rsVal mod rtVal)) in
+    {
+      LO    := q;
+      HI    := r;
+    }
   }
 
 (**************************************************************************************)
