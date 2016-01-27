@@ -748,11 +748,14 @@ let initial_system_state_of_elf_file name =
     end
 
 let eager_eval = ref true
+let break_point = ref false
+let break_instr = ref 0
 
 let args = [
   ("--file", Arg.Set_string file, "filename binary code to load in memory");
   ("--quiet", Arg.Clear Run_interp_model.debug, "do not display interpreter actions");
   ("--interactive", Arg.Clear eager_eval , "interactive execution");
+  ("--breakpoint", Arg.Int (fun i -> break_point := true; break_instr:= i), "run to instruction number i, then run interactively");
 ]
 
 let time_it action arg =
