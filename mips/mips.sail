@@ -1331,9 +1331,9 @@ function clause execute(LWR(base, rt, offset)) =
             reg_val   := rGPR(rt);
             wGPR(rt)  := EXTS(switch(vAddr[1..0]) (* it is acceptable to sign extend in all cases *)
               {
-                case 0b00 -> reg_val[31..8]  : mem_val[7..0]
-                case 0b01 -> reg_val[31..16] : mem_val[15..0]
-                case 0b10 -> reg_val[31..24] : mem_val[23..0]
+                case 0b00 -> reg_val[31..8]  : mem_val[31..24]
+                case 0b01 -> reg_val[31..16] : mem_val[31..16]
+                case 0b10 -> reg_val[31..24] : mem_val[31..8]
                 case 0b11 -> mem_val
               });
           }
@@ -1421,13 +1421,13 @@ function clause execute(LDR(base, rt, offset)) =
         reg_val   := rGPR(rt);
         wGPR(rt)  := switch(vAddr[2..0])
               {
-                case 0b000 -> reg_val[55..0] : mem_val[07..0]
-                case 0b001 -> reg_val[47..0] : mem_val[15..0]
-                case 0b010 -> reg_val[39..0] : mem_val[23..0]
-                case 0b011 -> reg_val[31..0] : mem_val[31..0]
-                case 0b100 -> reg_val[23..0] : mem_val[39..0]
-                case 0b101 -> reg_val[15..0] : mem_val[47..0]
-                case 0b110 -> reg_val[07..0] : mem_val[55..0]
+                case 0b000 -> reg_val[63..08] : mem_val[63..56]
+                case 0b001 -> reg_val[63..16] : mem_val[63..48]
+                case 0b010 -> reg_val[63..24] : mem_val[63..40]
+                case 0b011 -> reg_val[63..32] : mem_val[63..32]
+                case 0b100 -> reg_val[63..40] : mem_val[63..24]
+                case 0b101 -> reg_val[63..48] : mem_val[63..16]
+                case 0b110 -> reg_val[63..56] : mem_val[63..08]
                 case 0b111 -> mem_val
               };
       }
