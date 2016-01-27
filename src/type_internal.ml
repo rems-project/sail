@@ -3587,7 +3587,8 @@ let rec simple_constraint_check in_env cs =
     (match check_not_eq n1 n2 with
       | None -> (check cs)
       | Some(c) -> c::(check cs))
-  | GtEq(co,enforce,n1,n2)::cs -> 
+  | GtEq(co,enforce,n1,n2)::cs ->
+    let n1,n2 = resolve_nsubst n1, resolve_nsubst n2 in
     (*let _ = Printf.eprintf ">= check, about to normalize_nexp of %s, %s\n" 
       (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
@@ -3627,7 +3628,8 @@ let rec simple_constraint_check in_env cs =
                 ("Type constraint mismatch: constraint arising from here requires "
                  ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
             | _ -> GtEq(co,enforce,n1',n2')::(check cs))))
-  | Gt(co,enforce,n1,n2)::cs -> 
+  | Gt(co,enforce,n1,n2)::cs ->
+    let n1,n2 = resolve_nsubst n1, resolve_nsubst n2 in
     (*let _ = Printf.eprintf "> check, about to normalize_nexp of %s, %s\n"
       (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
@@ -3647,7 +3649,8 @@ let rec simple_constraint_check in_env cs =
               ("Type constraint mismatch: constraint arising from here requires "
                ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
           | _ -> Gt(co,enforce,n1',n2')::(check cs)))
-  | LtEq(co,enforce,n1,n2)::cs -> 
+  | LtEq(co,enforce,n1,n2)::cs ->
+    let n1,n2 = resolve_nsubst n1, resolve_nsubst n2 in
     (*let _ = Printf.eprintf "<= check, about to normalize_nexp of %s, %s\n" 
       (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
@@ -3666,7 +3669,8 @@ let rec simple_constraint_check in_env cs =
           ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^
               " to be less than or equal to " ^ (n_to_string n2))
         | Maybe -> LtEq(co,enforce,n1',n2')::(check cs)))
-  | Lt(co,enforce,n1,n2)::cs -> 
+  | Lt(co,enforce,n1,n2)::cs ->
+    let n1,n2 = resolve_nsubst n1, resolve_nsubst n2 in
     (*let _ = Printf.eprintf "< check, about to normalize_nexp of %s, %s\n"
       (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in

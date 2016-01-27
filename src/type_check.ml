@@ -1583,9 +1583,12 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
         | Tabbrev(_,t) -> t,false | _ -> vec_t,false in
       (match vec_actual.t with
        | Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t]) ->
-          let acc_t = match ord.order with
-            | Oinc -> {t = Tapp("range",[TA_nexp base;TA_nexp (mk_sub (mk_add base rise) n_one)])} 
-            | Odec -> {t = Tapp("range",[TA_nexp (mk_sub rise (mk_add base n_one)); TA_nexp base])}
+         let acc_n = new_n () in
+         let acc_t,cs_t = match ord.order with
+           | Oinc -> mk_atom acc_n, [LtEq(Specc l, Require, base, acc_n);
+                                     LtEq(Specc l, Require, acc_n, (mk_sub (mk_add base rise) n_one))]
+           | Odec -> mk_atom acc_n, [GtEq(Specc l, Require, base, acc_n);
+                                     GtEq(Specc l, Require, acc_n, (mk_sub (mk_add base n_one) rise))] 
             | _ -> typ_error l ("Assignment to one vector element requires a non-polymorphic order")
           in
           let (e,acc_t',_,cs',_,ef_e) = check_exp envs imp_param false acc_t acc in
@@ -1602,7 +1605,7 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
           else
             (LEXP_aux(LEXP_vector(vec',e),(l,Base(([],item_t),tag,csi,efl,efr,nob))),
              item_t,reg_required && reg_still_required,
-             env,tag,csi@cs',bounds,efl,efr)
+             env,tag,csi@cs'@cs_t,bounds,efl,efr)
         | Tuvar _ -> 
           typ_error l "Assignment expected a vector with a known order, try adding an annotation."
         | _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string vec_t))) 
