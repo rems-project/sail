@@ -915,6 +915,7 @@ let fetch_instruction_opcode_and_update_ia model =
 
 let rec fde_loop count context model mode track_dependencies opcode =
   interactf "\n**** instruction %d  ****\n" count;
+  if !break_point && count = !break_instr then begin break_point := false; eager_eval := false end;
   let (instruction,istate) = match Interp_inter_imp.decode_to_istate context opcode with
     | Instr(instruction,istate) ->
       interactf "\n**** Running: %s ****\n" (Printing_functions.instruction_to_string instruction);
@@ -931,7 +932,7 @@ let rec fde_loop count context model mode track_dependencies opcode =
       exit 1
   in
   if stop_condition_met model instruction
-  then resultf "\nSUCCESS program terminated\n"
+  then resultf "\nSUCCESS program terminated after %d instructions\n" count
   else
     begin
       set_next_instruction_address model;
@@ -950,7 +951,7 @@ let run () =
     Arg.usage args "";
     exit 1;
   end;
-  (*if !eager_eval then Run_interp_model.debug := true;*)
+  if !break_point then eager_eval := true;
 
   let ((isa_defs,
        (isa_m0, isa_m1, isa_m2, isa_m3,isa_m4),
