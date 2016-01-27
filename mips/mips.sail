@@ -1046,7 +1046,7 @@ function clause decode (0b000010 : (bit[26]) offset) =
   Some(J(offset))
 function clause execute (J(offset)) = 
   {
-    delayedPC     := PC[63..28] : offset : 0b00;
+    delayedPC     := (PC + 4)[63..28] : offset : 0b00;
     branchPending := 1
   }
 
@@ -1056,7 +1056,7 @@ function clause decode (0b000011 : (bit[26]) offset) =
   Some(JAL(offset))
 function clause execute (JAL(offset)) = 
   {
-    delayedPC     := PC[63..28] : offset : 0b00;
+    delayedPC     := (PC + 4)[63..28] : offset : 0b00;
     branchPending := 1;
     wGPR(31)      := PC + 8;
   }
@@ -1096,7 +1096,8 @@ function clause execute (BEQ(rs, rd, imm, ne, likely)) =
   {
     if ((rGPR(rs) == rGPR(rd)) ^ ne) then
       {
-        delayedPC     := PC + EXTS(imm : 0b00);
+        let (bit[64]) offset = (EXTS(imm : 0b00) + 4) in
+        delayedPC     := PC + offset;
         branchPending := 1;
       }
     else
@@ -1140,7 +1141,8 @@ function clause execute (BCMPZ(rs, imm, cmp, link, likely)) =
     condition := compare(cmp, regVal, 0);
     if (condition) then
       {
-        delayedPC := PC + EXTS(imm : 0b00);
+        let (bit[64]) offset = (EXTS(imm : 0b00) + 4) in
+        delayedPC     :=  PC + offset;
         branchPending := 1;
       }
     else if (likely) then
@@ -1514,6 +1516,14 @@ function clause execute (MFC0(rt, rd, sel, double)) =
           case (0b01111,0b000) -> EXTZ(0x00000400) (* 15, sel 0: PrID processor ID *)
           case (0b01111,0b110) -> 0                (* 15, sel 6: CHERI core ID *)
           case (0b01111,0b111) -> 0                (* 15, sel 7: CHERI thread ID *)
+          case (0b10000,0b000) -> 0b1 (* M *)      (* 16, sel 0: Config0 *)
+                                  : 0b000000000000000 (* Impl *) 
+                                  : 0b1 (* BE *) 
+                                  : 0b10 (* AT *) 
+                                  : 0b000 (* AR *)
+                                  : 0b000 (* 0 *)
+                                  : 0b000 (* K0 TODO should be writable*)
+          case (0b10000,0b001) -> 0                (* 16, sel 1: Config1 *)
           case _               -> {SignalException(ResI); 0}
         } in
   wGPR(rt) := if (double) then result else EXTS(result[31..0])
