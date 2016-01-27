@@ -555,7 +555,7 @@ function clause execute (DSLL32 (rt, rd, sa)) =
 (* DSLLV reg, reg, reg *)
 
 union ast member regregreg DSLLV
-function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b00000 : 0b101100) = 
+function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b00000 : 0b010100) = 
   Some(DSLLV(rs, rt, rd))
 function clause execute (DSLLV (rs, rt, rd)) =
   {
