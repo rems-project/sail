@@ -1265,6 +1265,7 @@ function clause decode (0b111100 : (regno) base : (regno) rt : (imm16) offset) =
 function clause execute (Store(width, conditional, base, rt, offset)) =
       {
         (bit[64]) vAddr := EXTS(offset) + rGPR(base);
+        (bit[64]) rt_val := rGPR(rt);
         if ~ (isAddressAligned(vAddr, width)) then
           SignalException(AdES) (* unaligned access *)
         else
@@ -1274,11 +1275,23 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
               {
                 if (conditional) then
                   {
-                    success  := (MEMw_conditional(vAddr, wordWidthBytes(width), rGPR(rt)));
+                    success := switch(width)
+                    {
+                      case B -> MEMw_conditional(vAddr, 1, rt_val[7..0])
+                      case H -> MEMw_conditional(vAddr, 2, rt_val[15..0])
+                      case W -> MEMw_conditional(vAddr, 4, rt_val[31..0])
+                      case D -> MEMw_conditional(vAddr, 8, rt_val)
+                    };
                     wGPR(rt) := EXTZ([success])
                   }
                 else
-                  MEMw(vAddr, wordWidthBytes(width)) := rGPR(rt)
+                  switch(width)
+                    {
+                      case B -> MEMw(vAddr, 1) := rt_val[7..0]
+                      case H -> MEMw(vAddr, 2) := rt_val[15..0]
+                      case W -> MEMw(vAddr, 4) := rt_val[31..0]
+                      case D -> MEMw(vAddr, 8) := rt_val
+                    }
               }
           }
       }
