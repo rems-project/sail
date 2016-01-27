@@ -750,6 +750,8 @@ let initial_system_state_of_elf_file name =
 let eager_eval = ref true
 let break_point = ref false
 let break_instr = ref 0
+let max_cut_off = ref false
+let max_instr = ref 0
 
 let args = [
   ("--file", Arg.Set_string file, "filename binary code to load in memory");
@@ -761,6 +763,7 @@ let args = [
   ("--no_result", Arg.Clear Run_interp_model.result_print, "do not display final register values");
   ("--interactive", Arg.Clear eager_eval , "interactive execution");
   ("--breakpoint", Arg.Int (fun i -> break_point := true; break_instr:= i), "run to instruction number i, then run interactively");
+  ("--max_instruction", Arg.Int (fun i -> max_cut_off := true; max_instr := i), "only run i instructions, then stop");
 ]
 
 let time_it action arg =
@@ -914,37 +917,41 @@ let fetch_instruction_opcode_and_update_ia model =
   |  _ -> assert false
 
 let rec fde_loop count context model mode track_dependencies opcode =
-  interactf "\n**** instruction %d  ****\n" count;
-  if !break_point && count = !break_instr then begin break_point := false; eager_eval := false end;
-  let (instruction,istate) = match Interp_inter_imp.decode_to_istate context opcode with
-    | Instr(instruction,istate) ->
-      interactf "\n**** Running: %s ****\n" (Printing_functions.instruction_to_string instruction);
-      (instruction,istate)
-    | Decode_error d ->
-      (match d with
-       | Interp_interface.Unsupported_instruction_error instr ->
-         errorf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instr)
-       | Interp_interface.Not_an_instruction_error op ->
-         (match op with
-          | Opcode bytes ->
-            errorf "\n**** Encountered non-decodeable opcode: %s ****\n" (Printing_functions.byte_list_to_string bytes))
-       | Internal_error s -> errorf "\n**** Internal error on decode: %s ****\n" s);
-      exit 1
-  in
-  if stop_condition_met model instruction
-  then resultf "\nSUCCESS program terminated after %d instructions\n" count
-  else
-    begin
-      set_next_instruction_address model;
-      match Run_interp_model.run  istate !reg !prog_mem !eager_eval track_dependencies mode "execute" with
-      | false, _,_, _ -> errorf "FAILURE\n"; exit 1
-      | true, mode, track_dependencies, (my_reg, my_mem) ->
-        reg := my_reg;
-        prog_mem := my_mem;
-        let opcode = fetch_instruction_opcode_and_update_ia model in
+  if !max_cut_off && count = !max_instr
+  then resultf "\n Ending evaluation due to reaching cut off point of %d instructions\n" count
+  else begin
+    interactf "\n**** instruction %d  ****\n" count;
+    if !break_point && count = !break_instr then begin break_point := false; eager_eval := false end;
+    let (instruction,istate) = match Interp_inter_imp.decode_to_istate context opcode with
+      | Instr(instruction,istate) ->
+        interactf "\n**** Running: %s ****\n" (Printing_functions.instruction_to_string instruction);
+        (instruction,istate)
+      | Decode_error d ->
+        (match d with
+         | Interp_interface.Unsupported_instruction_error instr ->
+           errorf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instr)
+         | Interp_interface.Not_an_instruction_error op ->
+           (match op with
+            | Opcode bytes ->
+              errorf "\n**** Encountered non-decodeable opcode: %s ****\n" (Printing_functions.byte_list_to_string bytes))
+         | Internal_error s -> errorf "\n**** Internal error on decode: %s ****\n" s);
+        exit 1
+    in
+    if stop_condition_met model instruction
+    then resultf "\nSUCCESS program terminated after %d instructions\n" count
+    else
+      begin
+        set_next_instruction_address model;
+        match Run_interp_model.run  istate !reg !prog_mem !eager_eval track_dependencies mode "execute" with
+        | false, _,_, _ -> errorf "FAILURE\n"; exit 1
+        | true, mode, track_dependencies, (my_reg, my_mem) ->
+          reg := my_reg;
+          prog_mem := my_mem;
+          let opcode = fetch_instruction_opcode_and_update_ia model in
           fde_loop (count + 1) context model (Some mode) (ref track_dependencies) opcode
-    end
-
+      end
+  end
+  
 let run () =
   Arg.parse args (fun _ -> raise (Arg.Bad "anonymous parameter")) "" ;
   if !file = "" then begin
