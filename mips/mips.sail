@@ -23,8 +23,9 @@ typedef CauseReg = register bits [ 31 : 0 ] {
   6 .. 2   : ExcCode; (* code of last exception *)
   (*1 .. 0   : Z4;*)
 }
+register (bit[32])  CP0Compare
 register (CauseReg) CP0Cause
-register (bit[64]) CP0EPC
+register (bit[64])  CP0EPC
 
 typedef StatusReg = register bits [31:0] {
   31 .. 28        : CU;  (* co-processor enable bits *)
@@ -1492,17 +1493,38 @@ function clause decode (0b010000 : 0b00100 : (regno) rt : 0b11010 : 0b0000000000
 
 union ast member (regno, regno, bit[3], bool) MFC0
 function clause decode (0b010000 : 0b00000 : (regno) rt : (regno) rd : 0b00000000 : (bit[3]) sel) =
-  Some(MFC0(rt, rd, sel, false) (* MCF0 *))
+  Some(MFC0(rt, rd, sel, false)) (* MFC0 *)
 function clause decode (0b010000 : 0b00001 : (regno) rt : (regno) rd : 0b00000000 : (bit[3]) sel) =
-  Some(MFC0(rt, rd, sel, true)  (* DMCF0 *))
+  Some(MFC0(rt, rd, sel, true))  (* DMFC0 *)
 function clause execute (MFC0(rt, rd, sel, double)) = 
   let (bit[64]) result = switch (rd, sel)
         {
-          case (0b01111,0b000) -> 0 (* 15: PrID *)
+          case (0b01011,0b000) -> EXTZ(CP0Compare) (* 11, Compare reg *)
+          case (0b01100,0b000) -> EXTZ(CP0Status)  (* 12, Status reg *)
+          case (0b01111,0b000) -> EXTZ(0x00000400) (* 15, sel 0: PrID processor ID *)
+          case (0b01111,0b110) -> 0                (* 15, sel 6: CHERI core ID *)
+          case (0b01111,0b111) -> 0                (* 15, sel 7: CHERI thread ID *)
           case _               -> {SignalException(ResI); 0}
         } in
   wGPR(rt) := if (double) then result else EXTS(result[31..0])
   
+
+union ast member (regno, regno, bit[3], bool) MTC0
+function clause decode (0b010000 : 0b00100 : (regno) rt : (regno) rd : 0b00000000 : (bit[3]) sel) =
+  Some(MTC0(rt, rd, sel, false)) (* MTC0 *)
+function clause decode (0b010000 : 0b00101 : (regno) rt : (regno) rd : 0b00000000 : (bit[3]) sel) =
+  Some(MTC0(rt, rd, sel, true))  (* DMTC0 *)
+function clause execute (MTC0(rt, rd, sel, double)) = 
+  let reg_val = (rGPR(rt)) in
+  switch (rd, sel)
+    {
+      case (0b01011,0b000) -> {CP0Compare := reg_val[31..0]; (CP0Cause.IP)[0] := 0} (* 11, sel 0: Compare reg *)
+      case (0b01100,0b000) -> CP0Status := reg_val[31..0]
+      case (0b01111,0b000) -> ()         (* 15, sel 0: PrID processor ID *)
+      case (0b01111,0b110) -> ()         (* 15, sel 6: CHERI core ID *)
+      case (0b01111,0b111) -> ()         (* 15, sel 7: CHERI thread ID *)
+      case _               -> SignalException(ResI)
+    }
 
 function clause execute (HCF) =
   () (* halt instruction actually executed by interpreter framework *)
