@@ -1518,7 +1518,7 @@ function clause execute (MTC0(rt, rd, sel, double)) =
   let reg_val = (rGPR(rt)) in
   switch (rd, sel)
     {
-      case (0b01011,0b000) -> {CP0Compare := reg_val[31..0]; (CP0Cause.IP)[0] := 0} (* 11, sel 0: Compare reg *)
+      case (0b01011,0b000) -> {CP0Compare := reg_val[31..0]; (CP0Cause.IP)[8] := 0} (* 11, sel 0: Compare reg *)
       case (0b01100,0b000) -> CP0Status := reg_val[31..0]
       case (0b01111,0b000) -> ()         (* 15, sel 0: PrID processor ID *)
       case (0b01111,0b110) -> ()         (* 15, sel 6: CHERI core ID *)
