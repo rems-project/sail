@@ -753,7 +753,12 @@ let break_instr = ref 0
 
 let args = [
   ("--file", Arg.Set_string file, "filename binary code to load in memory");
-  ("--quiet", Arg.Clear Run_interp_model.debug, "do not display interpreter actions");
+  ("--quiet", Arg.Clear Run_interp_model.interact_print, "do not display per-instruction actions");
+  ("--silent", Arg.Tuple [Arg.Clear Run_interp_model.error_print;
+                          Arg.Clear Run_interp_model.interact_print;
+                          Arg.Clear Run_interp_model.result_print],
+   "do not dispaly error messages, per-instruction actions, or results");
+  ("--no_result", Arg.Clear Run_interp_model.result_print, "do not display final register values");
   ("--interactive", Arg.Clear eager_eval , "interactive execution");
   ("--breakpoint", Arg.Int (fun i -> break_point := true; break_instr:= i), "run to instruction number i, then run interactively");
 ]
@@ -764,8 +769,9 @@ let time_it action arg =
   let finish_time = Sys.time () in
   finish_time -. start_time
 
+(*TODO MIPS specific, should print final register values under all models*)
 let rec debug_print_gprs start stop =
-  debugf "DEBUG MIPS REG %.2d %s\n" start (Printing_functions.logfile_register_value_to_string (Reg.find (Format.sprintf "GPR%02d" start) !reg));
+  resultf "DEBUG MIPS REG %.2d %s\n" start (Printing_functions.logfile_register_value_to_string (Reg.find (Format.sprintf "GPR%02d" start) !reg));
   if start < stop
   then debug_print_gprs (start + 1) stop
   else ()
@@ -782,7 +788,7 @@ let stop_condition_met model instr =
     | _ -> false)
   | MIPS -> (match instr with 
     | ("HCF", _, _) -> 
-      debugf "DEBUG MIPS PC %s\n"  (Printing_functions.logfile_register_value_to_string (Reg.find "PC" !reg));
+      resultf "DEBUG MIPS PC %s\n"  (Printing_functions.logfile_register_value_to_string (Reg.find "PC" !reg));
       debug_print_gprs 0 31;
       true
     | _ -> false)
@@ -845,7 +851,7 @@ let set_next_instruction_address model =
          reg := Reg.add "nextPC" (register_value_of_address delayedPC D_decreasing) !reg;
          reg := Reg.add "branchPending" (register_value_of_integer 1 1 Interp_interface.D_decreasing Nat_big_num.zero) !reg
        end
-     | (_, _, _) -> failwith "PC address contains unknown or undefined")
+     | (_, _, _) -> errorf "PC address contains unknown or undefined"; exit 1)
 
 let add1 = Nat_big_num.add (Nat_big_num.of_int 1)
 
@@ -904,33 +910,33 @@ let fetch_instruction_opcode_and_update_ia model =
         reg := Reg.add "PC" nextPC !reg;
         Opcode opcode
       end
-     | None -> failwith "nextPC contains unknown or undefined")
+     | None -> errorf "nextPC contains unknown or undefined"; exit 1)
   |  _ -> assert false
 
 let rec fde_loop count context model mode track_dependencies opcode =
-  debugf "\n**** instruction %d  ****\n" count;
+  interactf "\n**** instruction %d  ****\n" count;
   let (instruction,istate) = match Interp_inter_imp.decode_to_istate context opcode with
     | Instr(instruction,istate) ->
-      debugf "\n**** Running: %s ****\n" (Printing_functions.instruction_to_string instruction);
+      interactf "\n**** Running: %s ****\n" (Printing_functions.instruction_to_string instruction);
       (instruction,istate)
     | Decode_error d ->
       (match d with
        | Interp_interface.Unsupported_instruction_error instr ->
-         debugf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instr)
+         errorf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instr)
        | Interp_interface.Not_an_instruction_error op ->
          (match op with
           | Opcode bytes ->
-            debugf "\n**** Encountered non-decodeable opcode: %s ****\n" (Printing_functions.byte_list_to_string bytes))
-       | Internal_error s -> debugf "\n**** Internal error on decode: %s ****\n" s);
+            errorf "\n**** Encountered non-decodeable opcode: %s ****\n" (Printing_functions.byte_list_to_string bytes))
+       | Internal_error s -> errorf "\n**** Internal error on decode: %s ****\n" s);
       exit 1
   in
   if stop_condition_met model instruction
-  then eprintf "\nSUCCESS program terminated\n"
+  then resultf "\nSUCCESS program terminated\n"
   else
     begin
       set_next_instruction_address model;
       match Run_interp_model.run  istate !reg !prog_mem !eager_eval track_dependencies mode "execute" with
-      | false, _,_, _ -> eprintf "FAILURE\n"; exit 1
+      | false, _,_, _ -> errorf "FAILURE\n"; exit 1
       | true, mode, track_dependencies, (my_reg, my_mem) ->
         reg := my_reg;
         prog_mem := my_mem;
@@ -944,7 +950,7 @@ let run () =
     Arg.usage args "";
     exit 1;
   end;
-  if !eager_eval then Run_interp_model.debug := true;
+  (*if !eager_eval then Run_interp_model.debug := true;*)
 
   let ((isa_defs,
        (isa_m0, isa_m1, isa_m2, isa_m3,isa_m4),
@@ -956,7 +962,7 @@ let run () =
 
   let initial_opcode = Opcode (List.map (fun b -> match b with
       | Some b -> b
-      | None -> failwith "A byte in opcode contained unknown or undef")
+      | None -> errorf "A byte in opcode contained unknown or undef"; exit 1)
       (List.map byte_of_memory_byte
          [Mem.find startaddr !prog_mem;
           Mem.find (add1 startaddr) !prog_mem;
@@ -968,6 +974,6 @@ let run () =
   (* entry point: unit -> unit fde *)
   let name = Filename.basename !file in
   let t = time_it (fun () -> fde_loop 0 context isa_model (Some Run) (ref false) initial_opcode) () in
-  Printf.eprintf "Execution time for file %s: %f seconds\n" name t;;
+  resultf "Execution time for file %s: %f seconds\n" name t;;
 
 run () ;;

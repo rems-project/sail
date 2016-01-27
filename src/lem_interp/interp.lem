@@ -688,6 +688,7 @@ let fupdate_vector_slice vec replace start stop =
 	(List.replicate (if is_inc(dir) then (stop-start) else (start-stop)) V_unknown) in
       (V_vector_sparse m n dir (replace_sparse (if is_inc(dir) then (<) else (>)) vals (List.reverse repsi)) d)
     | (V_unknown,_) -> V_unknown
+    | _ -> Assert_extra.failwith ("fupdate vector slice given " ^ (string_of_value vec) ^ " and " ^ (string_of_value replace))
      end) in
   binary_taint fupdate_vec_help vec replace
 

@@ -149,8 +149,15 @@ let rec perform_action ((reg, mem) as env) = function
  | _ -> (None, env)
 ;;
 
-let debug = ref true
-let debugf : ('a, out_channel, unit) format -> 'a = function f -> if !debug then eprintf f else ifprintf stderr f
+let interact_print = ref true
+let result_print = ref true
+let error_print = ref true
+let interactf : ('a, out_channel, unit) format -> 'a =
+  function f -> if !interact_print then eprintf f else ifprintf stderr f
+let errorf : ('a, out_channel, unit) format -> 'a =
+  function f -> if !error_print then eprintf f else ifprintf stderr f
+let resultf : ('a, out_channel, unit) format -> 'a =
+  function f -> if !result_print then eprintf f else ifprintf stderr f
 
 type interactive_mode = Step | Run | Next
 
@@ -188,22 +195,22 @@ let run
       | "n" | "next" -> Next
       | "r" | "run" -> Run
       | "rg" | "reg" | "registers" ->
-        Reg.iter (fun k v -> debugf "%s\n" (Reg.to_string k v)) reg;
+        Reg.iter (fun k v -> interactf "%s\n" (Reg.to_string k v)) reg;
         interact mode env stack
       | "m" | "mem" | "memory" ->
-        Mem.iter (fun k v -> debugf "%s\n" (Mem.to_string k v)) mem;
+        Mem.iter (fun k v -> interactf "%s\n" (Mem.to_string k v)) mem;
         interact mode env stack
       | "bt" | "backtrace" | "stack" ->
-        print_backtrace_compact (fun s -> debugf "%s" s) stack;
+        print_backtrace_compact (fun s -> interactf "%s" s) stack;
         interact mode env stack
       | "e" | "exh" | "exhaust" ->
-        debugf "interpreting exhaustively from current state\n";
+        interactf "interpreting exhaustively from current state\n";
         let events = interp_exhaustive None stack in
-        debugf "%s" (format_events events);
+        interactf "%s" (format_events events);
         interact mode env stack
       | "c" | "cont" | "continuation" ->
         (* print not-compacted continuation *)
-        print_continuation (fun s -> debugf "%s" s) stack;
+        print_continuation (fun s -> interactf "%s" s) stack;
         interact mode env stack
       | "track" | "t" ->
         track_dependencies := not(!track_dependencies);
@@ -215,18 +222,18 @@ let run
         Pretty_interp.ignore_casts := true;
         interact mode env stack
       | "q" | "quit" | "exit" -> exit 0
-      | _ -> debugf "%s\n" usage; interact mode env stack
+      | _ -> interactf "%s\n" usage; interact mode env stack
     end
   in
-  let show act lhs arrow rhs = debugf "%s: %s %s %s\n"
+  let show act lhs arrow rhs = interactf "%s: %s %s %s\n"
       (green act) lhs (blue arrow) rhs in
   let left = "<-" and right = "->" in
   let rec loop mode env = function
     | Done ->
-      debugf "%s: %s\n" (grey name) (blue "done");
+      interactf "%s: %s\n" (grey name) (blue "done");
       (true, mode, !track_dependencies, env)
     | Error0 s -> 
-      debugf "%s: %s: %s\n" (grey name) (red "error") s;
+      errorf "%s: %s: %s\n" (grey name) (red "error") s;
       (false, mode, !track_dependencies, env) 
     | action ->
       let (return,env') = perform_action env action in
@@ -235,7 +242,7 @@ let run
         let (top_exp,(top_env,top_mem)) = top_frame_exp_state stack in
         let loc = get_loc (compact_exp top_exp) in
         if mode = Step || force then begin
-          debugf "%s\n" (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
+          interactf "%s\n" (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
           interact mode env' state
         end else
           mode in
@@ -282,16 +289,16 @@ let run
           show "mem_barrier" "" "" "";
           (step next, env, next)
         | Internal(None,None, next) ->
-          show "breakpoint" "" "" "";
+          show "stepped" "" "" "";
           (step ~force:true next,env',next)
         | Internal((Some fn),None,next) ->
-          show "breakpoint" fn "" "";
+          show "evaluated" fn "" "";
           (step ~force:true next, env',next)
         | Internal(None,Some vdisp,next) ->
-          show "breakpoint" (vdisp ()) "" "";
+          show "evaluated" (vdisp ()) "" "";
           (step ~force:true next,env', next)
         | Internal((Some fn),(Some vdisp),next) ->
-          show "breakpoint" (fn ^ " " ^ (vdisp ())) "" "";
+          show "evaluated" (fn ^ " " ^ (vdisp ())) "" "";
           (step ~force:true next, env', next)
         | Nondet_choice(nondets, next) ->
           let choose_order = List.sort (fun (_,i1) (_,i2) -> Pervasives.compare i1 i2) 
@@ -333,13 +340,13 @@ let run
   let imode = make_mode eager_eval !track_dependencies !default_endian in
   let (IState(instr_state,context)) = istate in
   let (top_exp,(top_env,top_mem)) = top_frame_exp_state instr_state in
-  debugf "%s: %s %s\n" (grey name) (blue "evaluate") 
+  interactf "%s: %s %s\n" (grey name) (blue "evaluate") 
     (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
   try
     Printexc.record_backtrace true;
     loop mode (reg, mem) (Interp_inter_imp.interp0 imode istate)
   with e ->
     let trace = Printexc.get_backtrace () in
-    debugf "%s: %s %s\n%s\n" (grey name) (red "interpretor error") (Printexc.to_string e) trace;
+    interactf "%s: %s %s\n%s\n" (grey name) (red "interpretor error") (Printexc.to_string e) trace;
     (false, mode, !track_dependencies, (reg, mem))
 ;;

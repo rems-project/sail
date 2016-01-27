@@ -234,7 +234,11 @@ let rec slice_reg_value v start stop =
 let update_reg_value_slice reg_name v start stop v2 =
   let v_internal = intern_reg_value v in
   let v2_internal = intern_reg_value v2 in
-  extern_reg_value reg_name (Interp.fupdate_vector_slice v_internal v2_internal start stop)
+  extern_reg_value reg_name
+    (if start = stop then
+      (Interp.fupdate_vec v_internal start v2_internal)
+    else
+      (Interp.fupdate_vector_slice v_internal v2_internal start stop))
 
 let initial_instruction_state top_level main args = 
   let e_args = match args with
