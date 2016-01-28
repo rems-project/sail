@@ -185,7 +185,7 @@ function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr,
         case (0b1111111111111111111111111111111, 0b00) -> (None, Some(EXTZ(vAddr[28..0]))) (* kseg0 unmapped cached 32-bit compat *)
         case (_, _) -> (err, None)  (* xkseg mapped TODO *)
       }
-      case 0b10 -> (None, Some(EXTZ(vAddr[58..0]))) (* xkphys bits 61-59 are cache mode which we ignore *)
+      case 0b10 -> (None, Some(vAddr)) (* xkphys bits 61-59 are cache mode which we ignore *)
       case 0b01 -> (err, None) (* xsseg - supervisor mapped TODO *)
       case 0b00 -> (err, None) (* xuseg - user mapped TODO *)
     }
@@ -765,7 +765,7 @@ function clause execute (SLTI(rs, rt, imm)) =
 
 union ast member regregreg SLTU
 function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b00000 : 0b101011) = 
-  Some(SLT(rs, rt, rd))
+  Some(SLTU(rs, rt, rd))
 function clause execute (SLTU(rs, rt, rd)) =
   {
     wGPR(rd) := if (rGPR(rs) < rGPR(rt)) then 1 else 0
