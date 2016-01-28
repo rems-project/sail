@@ -173,9 +173,28 @@ function unit SignalException ((Exception) ex) =
   }
 
 typedef MemAccessType = enumerate {Instruction; LoadData; StoreData}
-function (bool, bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) = 
+typedef AccessLevel   = enumerate {Kernel; Supervisor; User}
+function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) = 
   {
-    (false, vAddr)
+    err := (if (accessType == StoreData) then Some(AdES) else Some(AdEL));
+    switch(vAddr[63..62]) {
+      case 0b11 -> switch(vAddr[61..31], vAddr[30..29]) { (* xkseg *)
+        case (0b1111111111111111111111111111111, 0b11) -> (err, None)  (* kseg3 mapped 32-bit compat TODO *)
+        case (0b1111111111111111111111111111111, 0b10) -> (err, None)  (* sseg  mapped 32-bit compat TODO *)
+        case (0b1111111111111111111111111111111, 0b01) -> (None, Some(EXTZ(vAddr[28..0]))) (* kseg1 unmapped uncached 32-bit compat *)
+        case (0b1111111111111111111111111111111, 0b00) -> (None, Some(EXTZ(vAddr[28..0]))) (* kseg0 unmapped cached 32-bit compat *)
+        case (_, _) -> (err, None)  (* xkseg mapped TODO *)
+      }
+      case 0b10 -> (None, Some(EXTZ(vAddr[58..0]))) (* xkphys bits 61-59 are cache mode which we ignore *)
+      case 0b01 -> (err, None) (* xsseg - supervisor mapped TODO *)
+      case 0b00 -> (err, None) (* xuseg - user mapped TODO *)
+    }
+  }
+
+function bit[64] TranslateOrExit((bit[64]) vAddr, (MemAccessType) accessType) =
+  switch (TranslateAddress(vAddr, accessType)) {
+    case ((Some(ex)), _)    -> (exit (SignalException (ex)))
+    case (_, (Some(pAddr))) -> pAddr
   }
 
 typedef regno = bit[5]                      (* a register number *)
@@ -1235,9 +1254,7 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
     if ~ (isAddressAligned(vAddr, width)) then
       SignalException(AdEL) (* unaligned access *)
     else
-      let (ex, pAddr) = (TranslateAddress(vAddr, LoadData)) in
-      {
-        if ~ (ex) then
+      let pAddr = (TranslateOrExit(vAddr, LoadData)) in
           {
             memResult := if (linked) then
                 MEMr_reserve(pAddr, wordWidthBytes(width))
@@ -1248,7 +1265,6 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
             else
               wGPR(rt) := EXTZ(memResult)
           }
-      }
   }
 
 (**************************************************************************************)
@@ -1269,30 +1285,27 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
         if ~ (isAddressAligned(vAddr, width)) then
           SignalException(AdES) (* unaligned access *)
         else
-          let (ex, pAddr) = (TranslateAddress(vAddr, StoreData)) in
+          let pAddr = (TranslateOrExit(vAddr, StoreData)) in
           {
-            if ~ (ex) then
-              {
                 if (conditional) then
                   {
                     success := switch(width)
                     {
-                      case B -> MEMw_conditional(vAddr, 1, rt_val[7..0])
-                      case H -> MEMw_conditional(vAddr, 2, rt_val[15..0])
-                      case W -> MEMw_conditional(vAddr, 4, rt_val[31..0])
-                      case D -> MEMw_conditional(vAddr, 8, rt_val)
+                      case B -> MEMw_conditional(pAddr, 1, rt_val[7..0])
+                      case H -> MEMw_conditional(pAddr, 2, rt_val[15..0])
+                      case W -> MEMw_conditional(pAddr, 4, rt_val[31..0])
+                      case D -> MEMw_conditional(pAddr, 8, rt_val)
                     };
                     wGPR(rt) := EXTZ([success])
                   }
                 else
                   switch(width)
                     {
-                      case B -> MEMw(vAddr, 1) := rt_val[7..0]
-                      case H -> MEMw(vAddr, 2) := rt_val[15..0]
-                      case W -> MEMw(vAddr, 4) := rt_val[31..0]
-                      case D -> MEMw(vAddr, 8) := rt_val
+                      case B -> MEMw(pAddr, 1) := rt_val[7..0]
+                      case H -> MEMw(pAddr, 2) := rt_val[15..0]
+                      case W -> MEMw(pAddr, 4) := rt_val[31..0]
+                      case D -> MEMw(pAddr, 8) := rt_val
                     }
-              }
           }
       }
 
@@ -1304,8 +1317,7 @@ function clause decode(0b100010 : (regno) base : (regno) rt : (imm16) offset) =
 function clause execute(LWL(base, rt, offset)) = 
       {
         (bit[64]) vAddr := EXTS(offset) + rGPR(base);
-        let (ex, pAddr) = (TranslateAddress(vAddr, LoadData)) in
-        if ~ (ex) then
+        let pAddr = (TranslateOrExit(vAddr, LoadData)) in
           {
             mem_val   := MEMr (pAddr[63..2] : 0b00, 4); (* read word of interest *)
             reg_val   := rGPR(rt);
@@ -1324,8 +1336,7 @@ function clause decode(0b100110 : (regno) base : (regno) rt : (imm16) offset) =
 function clause execute(LWR(base, rt, offset)) = 
       {
         (bit[64]) vAddr := EXTS(offset) + rGPR(base);
-        let (ex, pAddr) = (TranslateAddress(vAddr, LoadData)) in
-        if ~ (ex) then
+        let pAddr = (TranslateOrExit(vAddr, LoadData)) in
           {
             mem_val   := MEMr (pAddr[63..2] : 0b00, 4); (* read word of interest *)
             reg_val   := rGPR(rt);
@@ -1346,8 +1357,7 @@ function clause decode(0b101010 : (regno) base : (regno) rt : (imm16) offset) =
 function clause execute(SWL(base, rt, offset)) = 
       {
         (bit[64]) vAddr := EXTS(offset) + rGPR(base);
-        let (ex, pAddr) = (TranslateAddress(vAddr, StoreData)) in
-        if ~ (ex) then
+        let pAddr = (TranslateOrExit(vAddr, StoreData)) in
           {
             reg_val   := rGPR(rt);
             switch (vAddr[1..0])
@@ -1366,8 +1376,7 @@ function clause decode(0b101110 : (regno) base : (regno) rt : (imm16) offset) =
 function clause execute(SWR(base, rt, offset)) = 
       {
         (bit[64]) vAddr := EXTS(offset) + rGPR(base);
-        let (ex, pAddr) = (TranslateAddress(vAddr, StoreData)) in
-        if ~ (ex) then
+        let (pAddr) = (TranslateOrExit(vAddr, StoreData)) in
           {
             wordAddr := pAddr[63..2] : 0b00;
             reg_val   := rGPR(rt);
@@ -1388,8 +1397,7 @@ function clause decode(0b011010 : (regno) base : (regno) rt : (imm16) offset) =
 function clause execute(LDL(base, rt, offset)) = 
   {
     (bit[64]) vAddr := EXTS(offset) + rGPR(base);
-    let (ex, pAddr) = (TranslateAddress(vAddr, StoreData)) in
-    if ~ (ex) then
+    let pAddr = (TranslateOrExit(vAddr, StoreData)) in
       {
         mem_val   := MEMr (pAddr[63..3] : 0b000, 8); (* read double of interest *)
         reg_val   := rGPR(rt);
@@ -1414,8 +1422,7 @@ function clause decode(0b011011 : (regno) base : (regno) rt : (imm16) offset) =
 function clause execute(LDR(base, rt, offset)) = 
   {
     (bit[64]) vAddr := EXTS(offset) + rGPR(base);
-    let (ex, pAddr) = (TranslateAddress(vAddr, StoreData)) in
-    if ~ (ex) then
+    let pAddr = (TranslateOrExit(vAddr, StoreData)) in
       {
         mem_val   := MEMr (pAddr[63..3] : 0b000, 8); (* read double of interest *)
         reg_val   := rGPR(rt);
@@ -1440,8 +1447,7 @@ function clause decode(0b101100 : (regno) base : (regno) rt : (imm16) offset) =
 function clause execute(SDL(base, rt, offset)) = 
       {
         (bit[64]) vAddr := EXTS(offset) + rGPR(base);
-        let (ex, pAddr) = (TranslateAddress(vAddr, StoreData)) in
-        if ~ (ex) then
+        let pAddr = (TranslateOrExit(vAddr, StoreData)) in
           {
             reg_val := rGPR(rt);
             switch (vAddr[2..0])
@@ -1466,8 +1472,7 @@ function clause decode(0b101101 : (regno) base : (regno) rt : (imm16) offset) =
 function clause execute(SDR(base, rt, offset)) = 
       {
         (bit[64]) vAddr := EXTS(offset) + rGPR(base);
-        let (ex, pAddr) = (TranslateAddress(vAddr, StoreData)) in
-        if ~ (ex) then
+        let pAddr = (TranslateOrExit(vAddr, StoreData)) in
           {
             reg_val := rGPR(rt);
             wordAddr := pAddr[63..3] : 0b000;
