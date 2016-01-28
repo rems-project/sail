@@ -918,7 +918,7 @@ let fetch_instruction_opcode_and_update_ia model =
 
 let rec fde_loop count context model mode track_dependencies opcode =
   if !max_cut_off && count = !max_instr
-  then resultf "\n Ending evaluation due to reaching cut off point of %d instructions\n" count
+  then resultf "\nEnding evaluation due to reaching cut off point of %d instructions\n" count
   else begin
     interactf "\n**** instruction %d  ****\n" count;
     if !break_point && count = !break_instr then begin break_point := false; eager_eval := false end;

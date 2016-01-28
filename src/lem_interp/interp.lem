@@ -232,6 +232,8 @@ type action =
  | Nondet of list (exp tannot) * tag
  | Call_extern of string * value
  | Exit of (exp tannot)
+ (* For the error case of a failed assert, carries up an optional error message*)
+ | Fail of value 
  (* For stepper, no action needed. String is function called, value is parameter where applicable *)
  | Step of l * maybe string * maybe value 
 
@@ -2107,20 +2109,22 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     resolve_outcome 
       (interp_main mode t_level l_env l_mem msg)
       (fun v lm le ->
-         let (e,env') = to_exp mode l_env v in
          resolve_outcome
            (interp_main mode t_level l_env lm cond)
            (fun c lm le ->
               (match c with
                | V_lit (L_aux L_one _) -> (Value unitv,lm,l_env)
                | V_lit (L_aux L_true _) -> (Value unitv,lm,l_env)
-               | V_lit (L_aux L_zero _) -> (Action (Exit e) (mk_thunk l annot t_level l_env l_mem), lm,env')
-               | V_lit (L_aux L_false _) -> (Action (Exit e) (mk_thunk l annot t_level l_env l_mem), lm,env')
+               | V_lit (L_aux L_zero _) -> (Action (Fail v) (mk_thunk l annot t_level l_env l_mem), lm,le)
+               | V_lit (L_aux L_false _) -> (Action (Fail v) (mk_thunk l annot t_level l_env l_mem), lm,le)
                | V_unknown -> 
-	         let (branches,maybe_id) = fix_up_nondet typ [unit_e;E_aux (E_exit e) (l,annot)] (l,annot) in
+	         let (branches,maybe_id) =
+                        fix_up_nondet typ [unit_e;
+                                           E_aux (E_assert (E_aux (E_lit (L_aux L_zero l))
+                                                                  (l,val_annot (T_id "bit"))) msg) (l,annot)] (l,annot) in
 	         interp_main mode t_level l_env lm (E_aux (E_nondet branches) (l,non_det_annot annot maybe_id))
                end))
-            (fun a -> update_stack a (add_to_top_frame (fun c env -> (E_aux (E_assert c e) (l,annot), env)))))
+            (fun a -> update_stack a (add_to_top_frame (fun c env -> (E_aux (E_assert c msg) (l,annot), env)))))
       (fun a -> update_stack a (add_to_top_frame (fun m env -> (E_aux (E_assert cond m) (l,annot), env))))
   | E_let (lbind : letbind tannot) exp -> 
     match (interp_letbind mode t_level l_env l_mem lbind) with

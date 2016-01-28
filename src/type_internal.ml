@@ -2292,11 +2292,11 @@ let initial_typ_env =
     ("EXTS",Base((((mk_nat_params ["n";"m";"o";"p"])@["ord",{k=K_Ord}]),
                   (mk_pure_imp (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n"))
                      (mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "m")) "m")),
-                 External (Some "EXTS"),[],pure_e,pure_e,nob));
+                 External (Some "exts"),[],pure_e,pure_e,nob));
     ("EXTZ",Base((((mk_nat_params ["n";"m";"o";"p"])@["ord",{k=K_Ord}]),
                   (mk_pure_imp (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n"))
                      (mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "m")) "m")),
-                 External (Some "EXTZ"),[],pure_e,pure_e,nob));
+                 External (Some "extz"),[],pure_e,pure_e,nob));
   ]
 
 
@@ -2901,12 +2901,15 @@ let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 =
     let b2,r2 = new_n (), new_n () in
     let t2' = {t=Tapp("range",[TA_nexp b2;TA_nexp r2])} in
     equate_t t2 t2';
-    (t2,csp@[GtEq(co,enforce,b,b2);LtEq(co,enforce,r,r2)])
+    (t2,csp@[GtEq(co,enforce,b,b2);LtEq(co,enforce,r,r2)])*)
   | Tapp("atom",[TA_nexp a]),Tuvar _ ->
-    let b,r = new_n (), new_n () in
-    let t2' = {t=Tapp("range",[TA_nexp b;TA_nexp r])} in
-    equate_t t2 t2';
-    (t2,csp@[GtEq(co,enforce,a,b);LtEq(co,enforce,a,r)])*)
+    if widen
+    then
+      let b,r = new_n (), new_n () in
+      let t2' = {t=Tapp("range",[TA_nexp b;TA_nexp r])} in
+      begin equate_t t2 t2';
+        (t2,csp@[GtEq(co,enforce,a,b);LtEq(co,enforce,a,r)]) end
+    else begin equate_t t2 t1; (t2,csp) end
   | t,Tuvar _ -> equate_t t2 t1; (t2,csp)
   | _,_ -> eq_error l ("Type mismatch found " ^ (t_to_string t1) ^ " but expected a " ^ (t_to_string t2))
 

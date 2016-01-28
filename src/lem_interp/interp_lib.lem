@@ -701,8 +701,8 @@ let library_functions direction = [
   ("vec_concat", vec_concat);
   ("is_one", is_one);
   ("to_num", to_num Unsigned);
-  ("EXTS", exts direction);
-  ("EXTZ", extz direction);
+  ("exts", exts direction);
+  ("extz", extz direction);
   ("to_vec_inc", to_vec_inc);
   ("to_vec_inc_undef", to_vec_inc_undef);
   ("to_vec_dec", to_vec_dec);

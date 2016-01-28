@@ -490,6 +490,12 @@ let to_vec_dec_undef len = to_vec_undef false len
 let to_vec_inc_undef_big len = to_vec_undef_big true len
 let to_vec_dec_undef_big len = to_vec_undef_big false len
 
+let exts (len, vec) = to_vec (get_ord vec) len (signed vec)
+let extz (len, vec) = to_vec (get_ord vec) len (unsigned vec)
+
+let exts_big (len,vec) = to_vec_big (get_ord vec) len (signed_big vec)
+let extz_big (len,vec) = to_vec_big (get_ord vec) len (unsigned_big vec)
+
 let arith_op op (l,r) = op l r
 let add_big = arith_op add_big_int
 let add_signed_big = arith_op add_big_int

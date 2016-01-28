@@ -234,7 +234,13 @@ let run
       (true, mode, !track_dependencies, env)
     | Error0 s -> 
       errorf "%s: %s: %s\n" (grey name) (red "error") s;
-      (false, mode, !track_dependencies, env) 
+      (false, mode, !track_dependencies, env)
+    | Fail0 (Some s) ->
+      errorf "%s: %s: %s\n" (grey name) (red "assertion failed") s;
+      (false, mode, !track_dependencies, env)
+    | Fail0 None ->
+      errorf "%s: %s: %s\n" (grey name) (red "assertion failed") "No message provided";
+      (false, mode, !track_dependencies, env)
     | action ->
       let (return,env') = perform_action env action in
       let step ?(force=false) (state: instruction_state) =
