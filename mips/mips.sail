@@ -26,6 +26,9 @@ typedef CauseReg = register bits [ 31 : 0 ] {
 register (bit[32])  CP0Compare
 register (CauseReg) CP0Cause
 register (bit[64])  CP0EPC
+register (bit[64])  CP0ErrorEPC
+register (bit[1])   CP0LLBit
+
 
 typedef StatusReg = register bits [31:0] {
   31 .. 28        : CU;  (* co-processor enable bits *)
@@ -33,7 +36,9 @@ typedef StatusReg = register bits [31:0] {
   22              : BEV; (* use boot exception vectors XXX initialise to one *)
   (* TS/SR/NMI not implemented *)
   15 .. 8         : IM;  (* Interrupt mask *)
-  (* KX/SX/UX not implemented (XXX initialise to one) *)
+  7               : KX;  (* kernel 64-bit enable *)
+  6               : SX;  (* supervisor 64-bit enable *)
+  5               : UX;  (* user 64-bit enable *)
   4 .. 3          : KSU; (* Processor mode *)
   2               : ERL; (* error level XXX initialise to one *)
   1               : EXL; (* exception level *)
@@ -142,13 +147,10 @@ function (bit[5]) ExceptionCode ((Exception) ex) =
 
 function unit SignalException ((Exception) ex) = 
   {
-    CP0Cause.ExcCode := ExceptionCode(ex);
-    CP0Status.EXL         := 1;
-    exceptionSignalled    := 1;
     (* Only update EPC and BD if not already in EXL mode *)
     if (~ (CP0Status.EXL)) then 
       {
-        if (branchPending) then
+        if (branchPending == 0b1) then
           {
             CP0EPC := PC - 4;
             CP0Cause.BD := 1;
@@ -170,6 +172,9 @@ function unit SignalException ((Exception) ex) =
                 else
                    0xFFFFFFFF80000000;
       nextPC := vectorBase + EXTS(vectorOffset);
+      CP0Cause.ExcCode      := ExceptionCode(ex);
+      CP0Status.EXL         := 1;
+      exceptionSignalled    := 1;
   }
 
 typedef MemAccessType = enumerate {Instruction; LoadData; StoreData}
@@ -181,8 +186,8 @@ function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr,
       case 0b11 -> switch(vAddr[61..31], vAddr[30..29]) { (* xkseg *)
         case (0b1111111111111111111111111111111, 0b11) -> (err, None)  (* kseg3 mapped 32-bit compat TODO *)
         case (0b1111111111111111111111111111111, 0b10) -> (err, None)  (* sseg  mapped 32-bit compat TODO *)
-        case (0b1111111111111111111111111111111, 0b01) -> (None, Some(EXTZ(vAddr[28..0]))) (* kseg1 unmapped uncached 32-bit compat *)
-        case (0b1111111111111111111111111111111, 0b00) -> (None, Some(EXTZ(vAddr[28..0]))) (* kseg0 unmapped cached 32-bit compat *)
+        case (0b1111111111111111111111111111111, 0b01) -> (None, Some(vAddr)) (* kseg1 unmapped uncached 32-bit compat *)
+        case (0b1111111111111111111111111111111, 0b00) -> (None, Some(vAddr)) (* kseg0 unmapped cached 32-bit compat *)
         case (_, _) -> (err, None)  (* xkseg mapped TODO *)
       }
       case 0b10 -> (None, Some(vAddr)) (* xkphys bits 61-59 are cache mode which we ignore *)
@@ -1263,7 +1268,10 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
       let pAddr = (TranslateOrExit(vAddr, LoadData)) in
           {
             memResult := if (linked) then
-                MEMr_reserve(pAddr, wordWidthBytes(width))
+                {
+                  CP0LLBit := 0b1;
+                  MEMr_reserve(pAddr, wordWidthBytes(width));
+                }
               else
                 MEMr(pAddr, wordWidthBytes(width));
             if (signed) then
@@ -1295,13 +1303,13 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
           {
                 if (conditional) then
                   {
-                    success := switch(width)
+                    success := if (CP0LLBit) then switch(width)
                     {
                       case B -> MEMw_conditional(pAddr, 1, rt_val[7..0])
                       case H -> MEMw_conditional(pAddr, 2, rt_val[15..0])
                       case W -> MEMw_conditional(pAddr, 4, rt_val[31..0])
                       case D -> MEMw_conditional(pAddr, 8, rt_val)
-                    };
+                    } else false;
                     wGPR(rt) := EXTZ([success])
                   }
                 else
@@ -1537,6 +1545,8 @@ function clause execute (MFC0(rt, rd, sel, double)) =
         {
           case (0b01011,0b000) -> EXTZ(CP0Compare) (* 11, Compare reg *)
           case (0b01100,0b000) -> EXTZ(CP0Status)  (* 12, Status reg *)
+          case (0b01101,0b000) -> EXTZ(CP0Cause)   (* 13, Cause reg *)
+          case (0b01110,0b000) -> CP0EPC           (* 14, EPC *)
           case (0b01111,0b000) -> EXTZ(0x00000400) (* 15, sel 0: PrID processor ID *)
           case (0b01111,0b110) -> 0                (* 15, sel 6: CHERI core ID *)
           case (0b01111,0b111) -> 0                (* 15, sel 7: CHERI thread ID *)
@@ -1562,13 +1572,47 @@ function clause execute (MTC0(rt, rd, sel, double)) =
   let reg_val = (rGPR(rt)) in
   switch (rd, sel)
     {
-      case (0b01011,0b000) -> {CP0Compare := reg_val[31..0]; (CP0Cause.IP)[8] := 0} (* 11, sel 0: Compare reg *)
-      case (0b01100,0b000) -> CP0Status := reg_val[31..0]
-      case (0b01111,0b000) -> ()         (* 15, sel 0: PrID processor ID *)
-      case (0b01111,0b110) -> ()         (* 15, sel 6: CHERI core ID *)
-      case (0b01111,0b111) -> ()         (* 15, sel 7: CHERI thread ID *)
+      case (0b01011,0b000) -> {  (* 11, sel 0: Compare reg *)
+        CP0Compare := reg_val[31..0]; 
+        (CP0Cause.IP)[8] := 0
+      }
+      case (0b01100,0b000) -> {  (* 12 Status *)
+        (CP0Status.CU)  := reg_val[31..28];
+        (CP0Status.BEV) := reg_val[22];
+        (CP0Status.IM)  := reg_val[15..8];
+        (CP0Status.KX)  := reg_val[7];
+        (CP0Status.SX)  := reg_val[6];
+        (CP0Status.UX)  := reg_val[5];
+        (CP0Status.KSU) := reg_val[4..3];
+        (CP0Status.ERL) := reg_val[2];
+        (CP0Status.EXL) := reg_val[1];
+        (CP0Status.IE)  := reg_val[0];
+      }
+      case (0b01100,0b000) -> {   (* 13 Cause *)
+        CP0Cause.IV := reg_val[23]; (* TODO special interrupt vector not implemeneted *)
+        CP0Cause.IP := reg_val[9..8];
+      }
+      case (0b01110,0b000) -> CP0EPC      := reg_val         (* 14, EPC *)
       case _               -> SignalException(ResI)
     }
+
+union ast member unit ERET
+function clause decode (0b010000 : 0b1 : 0b0000000000000000000 : 0b011000) =
+      Some(ERET)
+function clause execute (ERET) =
+      {
+        if (CP0Status.ERL == bitone) then
+          {
+            nextPC := CP0ErrorEPC;
+            CP0Status.ERL := 0;
+          }
+        else
+          {
+            CP0LLBit := 0b0;
+            nextPC := CP0EPC;
+            CP0Status.EXL := 0;
+          }
+      }
 
 function clause execute (HCF) =
   () (* halt instruction actually executed by interpreter framework *)
