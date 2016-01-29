@@ -1137,7 +1137,7 @@ let clear_low_order_bits_of_address a =
         end
   end
 
-val translate_address : string -> addres -> maybe address * maybe nat
+val translate_address : string -> address -> maybe address * maybe nat
 
 val byte_list_of_memory_value : end_flag -> memory_value -> maybe (list byte)
 let byte_list_of_memory_value endian mv = 
