@@ -214,15 +214,17 @@ typedef Comparison = enumerate {
   LTU;(* unsigned less than or qual *) 
 }
 function bool compare ((Comparison)cmp, (bit[64]) valA, (bit[64]) valB) =
+  let valA65 = (0b0 : valA) in (* sail comparisons are signed so extend to 65 bits for unsigned comparisons *)
+  let valB65 = (0b0 : valB) in
   switch(cmp) {
     case EQ  -> valA ==   valB
     case NE  -> valA !=   valB
-    case GE  -> valA >=_s valB
-    case GEU -> valA >=   valB
+    case GE  -> valA >=   valB
+    case GEU -> valA65 >= valB65
     case GT  -> valA >    valB
-    case LE  -> valA <=_s valB
-    case LT  -> valA <_s  valB
-    case LTU -> valA <    valB
+    case LE  -> valA <=   valB
+    case LT  -> valA <    valB
+    case LTU -> valA65 <  valB65
   }
 typedef WordType = enumerate { B; H; W; D}
 
@@ -768,7 +770,9 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b0000
   Some(SLTU(rs, rt, rd))
 function clause execute (SLTU(rs, rt, rd)) =
   {
-    wGPR(rd) := if (rGPR(rs) < rGPR(rt)) then 1 else 0
+    let rs_val = (0b0 : (rGPR(rs))) in
+    let rt_val = (0b0 : (rGPR(rt))) in
+    wGPR(rd) := (if (rs_val < rt_val) then 1 else 0)
   }
 
 (* SLTIU set if less than immediate unsigned *)
@@ -778,7 +782,9 @@ function clause decode (0b001011 : (regno) rs : (regno) rt : (imm16) imm) =
   Some(SLTIU(rs, rt, imm))
 function clause execute (SLTIU(rs, rt, imm)) =
   {
-    wGPR(rt) := if (rGPR(rs) < EXTS(imm)) then 1 else 0
+    let rs_val  = (0b0 : (rGPR(rs))) in
+    let imm_val = (0b0 : ((bit[64])(EXTS(imm)))) in
+    wGPR(rt) := (if (rs_val < imm_val) then 1 else 0)
   }
 
 (* MOVN move if non-zero *)
