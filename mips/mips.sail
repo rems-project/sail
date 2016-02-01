@@ -1557,13 +1557,14 @@ function clause execute (MFC0(rt, rd, sel, double)) =
           case (0b01111,0b000) -> EXTZ(0x00000400) (* 15, sel 0: PrID processor ID *)
           case (0b01111,0b110) -> 0                (* 15, sel 6: CHERI core ID *)
           case (0b01111,0b111) -> 0                (* 15, sel 7: CHERI thread ID *)
-          case (0b10000,0b000) -> 0b1 (* M *)      (* 16, sel 0: Config0 *)
+          case (0b10000,0b000) -> EXTZ(0b1 (* M *)      (* 16, sel 0: Config0 *)
                                   : 0b000000000000000 (* Impl *) 
                                   : 0b1 (* BE *) 
                                   : 0b10 (* AT *) 
                                   : 0b000 (* AR *)
-                                  : 0b000 (* 0 *)
-                                  : 0b000 (* K0 TODO should be writable*)
+                                  : 0b000 (* MT no MMU *)
+                                  : 0b0000 (* zero *)
+                                  : 0b000) (* K0 TODO should be writable*)
           case (0b10000,0b001) -> 0                (* 16, sel 1: Config1 *)
           case _               -> {SignalException(ResI); 0}
         } in
