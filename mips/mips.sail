@@ -805,7 +805,7 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b0000
   Some(MOVN(rs, rt, rd))
 function clause execute (MOVN(rs, rt, rd)) =
   {
-    if (rGPR(rt) != 0) then 
+    if (rGPR(rt) != 0x0000000000000000) then 
       wGPR(rd) := rGPR(rs)
   }
 
@@ -816,7 +816,7 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b0000
   Some(MOVZ(rs, rt, rd))
 function clause execute (MOVZ(rs, rt, rd)) =
   {
-    if (rGPR(rt) == 0) then 
+    if (rGPR(rt) == 0x0000000000000000) then 
       wGPR(rd) := rGPR(rs)
   }
 
