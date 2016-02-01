@@ -1119,7 +1119,7 @@ function clause execute (JALR(rs, rd)) =
 
 union ast member (regno, regno, imm16, bool, bool) BEQ
 function clause decode (0b000100 : (regno) rs : (regno) rt : (imm16) imm) =  Some(BEQ(rs, rt, imm, false, false))  (* BEQ  *)
-function clause decode (0b000100 : (regno) rs : (regno) rt : (imm16) imm) =  Some(BEQ(rs, rt, imm, false, true))   (* BEQL *)
+function clause decode (0b010100 : (regno) rs : (regno) rt : (imm16) imm) =  Some(BEQ(rs, rt, imm, false, true))   (* BEQL *)
 function clause decode (0b000101 : (regno) rs : (regno) rt : (imm16) imm) =  Some(BEQ(rs, rt, imm, true , false))  (* BNE  *)
 function clause decode (0b010101 : (regno) rs : (regno) rt : (imm16) imm) =  Some(BEQ(rs, rt, imm, true , true))   (* BNEL *)
 function clause execute (BEQ(rs, rd, imm, ne, likely)) =
