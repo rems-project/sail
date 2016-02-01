@@ -1590,7 +1590,7 @@ function clause execute (MTC0(rt, rd, sel, double)) =
       }
       case (0b01100,0b000) -> {   (* 13 Cause *)
         CP0Cause.IV := reg_val[23]; (* TODO special interrupt vector not implemeneted *)
-        CP0Cause.IP := reg_val[9..8];
+        (CP0Cause.IP)[9..8] := reg_val[9..8];
       }
       case (0b01110,0b000) -> CP0EPC      := reg_val         (* 14, EPC *)
       case _               -> SignalException(ResI)
