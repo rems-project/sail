@@ -28,7 +28,7 @@ register (CauseReg) CP0Cause
 register (bit[64])  CP0EPC
 register (bit[64])  CP0ErrorEPC
 register (bit[1])   CP0LLBit
-
+register (bit[64])  CP0BadVAddr
 
 typedef StatusReg = register bits [31:0] {
   31 .. 28        : CU;  (* co-processor enable bits *)
@@ -177,6 +177,12 @@ function unit SignalException ((Exception) ex) =
       exceptionSignalled    := 1;
   }
 
+function unit SignalExceptionBadAddr((Exception) ex, (bit[64]) badAddr) =
+  {
+    CP0BadVAddr := badAddr;
+    SignalException(ex);
+  }
+
 typedef MemAccessType = enumerate {Instruction; LoadData; StoreData}
 typedef AccessLevel   = enumerate {Kernel; Supervisor; User}
 function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) = 
@@ -198,7 +204,7 @@ function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr,
 
 function bit[64] TranslateOrExit((bit[64]) vAddr, (MemAccessType) accessType) =
   switch (TranslateAddress(vAddr, accessType)) {
-    case ((Some(ex)), _)    -> (exit (SignalException (ex)))
+    case ((Some(ex)), _)    -> (exit (SignalExceptionBadAddr (ex, vAddr)))
     case (_, (Some(pAddr))) -> pAddr
   }
 
@@ -1263,7 +1269,7 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
   {
     (bit[64]) vAddr := EXTS(offset) + rGPR(base);
     if ~ (isAddressAligned(vAddr, width)) then
-      SignalException(AdEL) (* unaligned access *)
+      SignalExceptionBadAddr(AdEL, vAddr) (* unaligned access *)
     else
       let pAddr = (TranslateOrExit(vAddr, LoadData)) in
           {
@@ -1297,7 +1303,7 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
         (bit[64]) vAddr := EXTS(offset) + rGPR(base);
         (bit[64]) rt_val := rGPR(rt);
         if ~ (isAddressAligned(vAddr, width)) then
-          SignalException(AdES) (* unaligned access *)
+          SignalExceptionBadAddr(AdES, vAddr) (* unaligned access *)
         else
           let pAddr = (TranslateOrExit(vAddr, StoreData)) in
           {
@@ -1543,6 +1549,7 @@ function clause decode (0b010000 : 0b00001 : (regno) rt : (regno) rd : 0b0000000
 function clause execute (MFC0(rt, rd, sel, double)) = 
   let (bit[64]) result = switch (rd, sel)
         {
+          case (0b01000,0b000) -> CP0BadVAddr      (* 8, BadVAddr reg *)
           case (0b01011,0b000) -> EXTZ(CP0Compare) (* 11, Compare reg *)
           case (0b01100,0b000) -> EXTZ(CP0Status)  (* 12, Status reg *)
           case (0b01101,0b000) -> EXTZ(CP0Cause)   (* 13, Cause reg *)
