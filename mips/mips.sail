@@ -1238,8 +1238,8 @@ function clause execute (TRAPREG(rs, rt, cmp)) =
 union ast member (regno, imm16, Comparison) TRAPIMM
 function clause decode (0b000001 : (regno) rs : 0b01100 : (imm16) imm) = Some(TRAPIMM(rs, imm, EQ)) (* TEQI *)
 function clause decode (0b000001 : (regno) rs : 0b01110 : (imm16) imm) = Some(TRAPIMM(rs, imm, NE)) (* TNEI *)
-function clause decode (0b000001 : (regno) rs : 0b10000 : (imm16) imm) = Some(TRAPIMM(rs, imm, GE)) (* TGEI *)
-function clause decode (0b000001 : (regno) rs : 0b10001 : (imm16) imm) = Some(TRAPIMM(rs, imm, GEU)) (* TGEIU *)
+function clause decode (0b000001 : (regno) rs : 0b01000 : (imm16) imm) = Some(TRAPIMM(rs, imm, GE)) (* TGEI *)
+function clause decode (0b000001 : (regno) rs : 0b01001 : (imm16) imm) = Some(TRAPIMM(rs, imm, GEU)) (* TGEIU *)
 function clause decode (0b000001 : (regno) rs : 0b01010 : (imm16) imm) = Some(TRAPIMM(rs, imm, LT))  (* TLTI *)
 function clause decode (0b000001 : (regno) rs : 0b01011 : (imm16) imm) = Some(TRAPIMM(rs, imm, LTU))  (* TLTIU *)
 function clause execute (TRAPIMM(rs, imm, cmp)) =
