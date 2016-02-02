@@ -847,12 +847,14 @@ let set_next_instruction_address model =
        let n_pc = register_value_of_address n_addr D_decreasing in
        begin
          reg := Reg.add "nextPC" n_pc !reg;
+         reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
        end
      | (Some pc_val, Some 1, Some delayedPC) -> 
        (* delay slot -- branch to delayed PC and clear branchPending *)
        begin 
          reg := Reg.add "nextPC" (register_value_of_address delayedPC D_decreasing) !reg;
-         reg := Reg.add "branchPending" (register_value_of_integer 1 1 Interp_interface.D_decreasing Nat_big_num.zero) !reg
+         reg := Reg.add "branchPending" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
+         reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Interp_interface.D_decreasing (Nat_big_num.of_int 1)) !reg;
        end
      | (_, _, _) -> errorf "PC address contains unknown or undefined"; exit 1)
 

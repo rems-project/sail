@@ -47,9 +47,9 @@ typedef StatusReg = register bits [31:0] {
 register (StatusReg) CP0Status
 
 (* Implementation registers -- not ISA defined *)
-register (bit[1])  branchPending
-register (bit[1])  exceptionSignalled
-register (bit[64]) delayedPC
+register (bit[1])  branchPending      (* Set by branch instructions to implement branch delay *)
+register (bit[1])  inBranchDelay      (* Needs to be set by outside world when in branch delay slot *)
+register (bit[64]) delayedPC          (* Set by branch instructions to implement branch delay *)
 
 (* General purpose registers *)
 
@@ -150,7 +150,7 @@ function unit SignalException ((Exception) ex) =
     (* Only update EPC and BD if not already in EXL mode *)
     if (~ (CP0Status.EXL)) then 
       {
-        if (branchPending == 0b1) then
+        if (inBranchDelay[0]) then
           {
             CP0EPC := PC - 4;
             CP0Cause.BD := 1;
@@ -174,7 +174,6 @@ function unit SignalException ((Exception) ex) =
       nextPC := vectorBase + EXTS(vectorOffset);
       CP0Cause.ExcCode      := ExceptionCode(ex);
       CP0Status.EXL         := 1;
-      exceptionSignalled    := 1;
   }
 
 function unit SignalExceptionBadAddr((Exception) ex, (bit[64]) badAddr) =
