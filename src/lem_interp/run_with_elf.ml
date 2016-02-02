@@ -916,11 +916,18 @@ let fetch_instruction_opcode_and_update_ia model =
      | None -> errorf "nextPC contains unknown or undefined"; exit 1)
   |  _ -> assert false
 
+let get_pc_address = function
+  | MIPS -> Reg.find "PC" !reg
+  | PPC  -> Reg.find "CIA" !reg
+  | AArch64 -> Reg.find "_PC" !reg
+        
+
 let rec fde_loop count context model mode track_dependencies opcode =
   if !max_cut_off && count = !max_instr
   then resultf "\nEnding evaluation due to reaching cut off point of %d instructions\n" count
   else begin
-    interactf "\n**** instruction %d  ****\n" count;
+    interactf "\n**** instruction %d from address %s ****\n"
+      count (Printing_functions.register_value_to_string (get_pc_address model));
     if !break_point && count = !break_instr then begin break_point := false; eager_eval := false end;
     let (instruction,istate) = match Interp_inter_imp.decode_to_istate context opcode with
       | Instr(instruction,istate) ->
