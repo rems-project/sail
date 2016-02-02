@@ -196,7 +196,7 @@ function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr,
         case (0b1111111111111111111111111111111, 0b00) -> (None, Some(vAddr)) (* kseg0 unmapped cached 32-bit compat *)
         case (_, _) -> (err, None)  (* xkseg mapped TODO *)
       }
-      case 0b10 -> (None, Some(vAddr)) (* xkphys bits 61-59 are cache mode which we ignore *)
+      case 0b10 -> (None, Some(0b10010 : (vAddr[58..0]))) (* xkphys bits 61-59 are cache mode which we ignore *)
       case 0b01 -> (err, None) (* xsseg - supervisor mapped TODO *)
       case 0b00 -> (err, None) (* xuseg - user mapped TODO *)
     }
