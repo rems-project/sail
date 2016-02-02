@@ -1308,7 +1308,7 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
           {
                 if (conditional) then
                   {
-                    success := if (CP0LLBit) then switch(width)
+                    success := if (CP0LLBit[0]) then switch(width)
                     {
                       case B -> MEMw_conditional(pAddr, 1, rt_val[7..0])
                       case H -> MEMw_conditional(pAddr, 2, rt_val[15..0])
