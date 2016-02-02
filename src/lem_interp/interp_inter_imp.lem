@@ -336,24 +336,28 @@ let translate_address top_level end_flag thunk_name address =
     (fun _ -> Interp.resume 
       int_mode 
       (Interp.Thunk_frame 
-         (E_aux (E_app (Id_aux (Id thunk_name) Interp_ast.Unknown) [arg]) (Interp_ast.Unknown, Nothing)) 
+         (E_aux (E_app (Id_aux (Id thunk_name) Interp_ast.Unknown)
+                   [arg;E_aux (E_lit (L_aux (L_num 0) Interp_ast.Unknown)) (Interp_ast.Unknown,Nothing)])
+            (Interp_ast.Unknown, Nothing)) 
          top_env Interp.eenv (Interp.emem "translate top level") Interp.Top) Nothing) in
   match (address,error) with
   | (Just addr, _) ->
     (match addr with
-     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _ v;
-                      Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_lit (L_aux (L_num n) _))] ->
+     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_lit (L_aux (L_num n) _));
+                      Interp.V_ctor (Id_aux (Id "Some") _) _ _ v] ->
        let (mem_v,_) = extern_mem_value mode v in 
        ((address_of_memory_value end_flag mem_v), Just n)
-     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _ v;
-                      Interp.V_ctor (Id_aux (Id "None") _) _ _ _] ->
+     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "None") _) _ _ _;
+                      Interp.V_ctor (Id_aux (Id "Some") _) _ _ v] ->
        let (mem_v,_) = extern_mem_value mode v in
        ((address_of_memory_value end_flag mem_v), Nothing)
-     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "None") _) _ _ _;
-                      Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_lit (L_aux (L_num n) _))] ->
+     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_lit (L_aux (L_num n) _));
+                      Interp.V_ctor (Id_aux (Id "None") _) _ _ _] ->
        (Nothing, Just n)
      | _ -> (Nothing,Nothing) end)       
-    | (Nothing, Just err) -> (Nothing,Nothing)
+   | (Nothing, Just err) -> match err with
+     | Internal_error msg -> Assert_extra.failwith msg
+     | _ -> Assert_extra.failwith "Not an internal error either" end 
 end
 
 
