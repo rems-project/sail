@@ -968,6 +968,15 @@ let run () =
         startaddr,
         startaddr_internal), pp_symbol_map) = initial_system_state_of_elf_file !file in
 
+  let context = build_context isa_defs isa_m0 isa_m1 isa_m2 isa_m3 isa_m4 isa_externs in
+  (*NOTE: this is likely MIPS specific, so should probably pull from initial_system_state info on to translate or not, 
+          endian mode, and translate function name 
+  *)
+  let addr_trans = translate_address context E_big_endian "translate_address" in
+  let startaddr,startaddr_internal = match addr_trans startaddr_internal with
+    | Some a, _ -> integer_of_address a, a
+    | None, _ -> failwith "Address translation failed in some way"
+  in
   let initial_opcode = Opcode (List.map (fun b -> match b with
       | Some b -> b
       | None -> errorf "A byte in opcode contained unknown or undef"; exit 1)
@@ -976,7 +985,6 @@ let run () =
           Mem.find (add1 startaddr) !prog_mem;
           Mem.find (add1 (add1 startaddr)) !prog_mem;
           Mem.find (add1 (add1 (add1 startaddr))) !prog_mem])) in
-  let context = build_context isa_defs isa_m0 isa_m1 isa_m2 isa_m3 isa_m4 isa_externs in
   reg := Reg.add "PC" (register_value_of_address startaddr_internal model_reg_d ) !reg;
   
   (* entry point: unit -> unit fde *)

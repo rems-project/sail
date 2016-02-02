@@ -1137,7 +1137,7 @@ let clear_low_order_bits_of_address a =
         end
   end
 
-val translate_address : string -> address -> maybe address * maybe nat
+val translate_address : context -> end_flag -> string -> address -> maybe address * maybe nat
 
 val byte_list_of_memory_value : end_flag -> memory_value -> maybe (list byte)
 let byte_list_of_memory_value endian mv = 
@@ -1219,7 +1219,7 @@ let address_of_address_lifted (al:address_lifted): maybe address =
       | Just bs -> Just (Address bs i)
       end
   | _ -> Nothing
-  end
+end
 
 val address_of_register_value : register_value -> maybe address
 (* returning Nothing iff the register value is not 64 bits wide, or contains Bitl_undef or Bitl_unknown *)
@@ -1268,6 +1268,12 @@ val byte_list_of_address : address -> list byte
 let byte_list_of_address (a:address) : list byte = 
   match a with
   | Address bs _ -> bs
+  end
+
+val memory_value_of_address : end_flag -> address -> memory_value
+let memory_value_of_address endian addr =
+  match addr with
+  | Address bs _ -> List.map byte_lifted_of_byte (if endian = E_big_endian then bs else List.reverse bs)
   end
 
 val byte_list_of_opcode : opcode -> list byte

@@ -14,18 +14,18 @@ val extern_reg_value : reg_name -> Interp.value -> register_value
 val extern_mem_value : interp_mode -> Interp.value -> (memory_value * maybe (list reg_name))
 val extern_reg : Interp.reg_form -> maybe (nat * nat) -> reg_name
 
-let make_interp_mode eager_eval tracking_values = 
+let make_interpreter_mode eager_eval tracking_values = 
   <| Interp.eager_eval = eager_eval; Interp.track_values = tracking_values; Interp.track_lmem = false|>;;
 
 let make_mode eager_eval tracking_values endian = 
-  <|internal_mode = make_interp_mode eager_eval tracking_values;
+  <|internal_mode = make_interpreter_mode eager_eval tracking_values;
     endian = endian|>;;
 let make_mode_exhaustive endian = 
   <| internal_mode = <| Interp.eager_eval = true; Interp.track_values = true; Interp.track_lmem = true|>;
      endian = endian |>;;
 let tracking_dependencies mode = mode.internal_mode.Interp.track_values
 let make_eager_mode mode = <| mode with internal_mode = <|mode.internal_mode with Interp.eager_eval = true |> |>;;
-let make_default_mode _ = <|internal_mode = make_interp_mode false false; endian = E_big_endian|>;;
+let make_default_mode _ = <|internal_mode = make_interpreter_mode false false; endian = E_big_endian|>;;
 
 let bitl_to_ibit = function 
   | Bitl_zero -> (Interp.V_lit (L_aux L_zero Interp_ast.Unknown)) 
@@ -243,42 +243,50 @@ let update_reg_value_slice reg_name v start stop v2 =
 let initial_instruction_state top_level main args = 
   let e_args = match args with
     | [] -> [E_aux (E_lit (L_aux L_unit Interp_ast.Unknown)) (Interp_ast.Unknown,Nothing)]
-    | [arg] -> let (e,_) = Interp.to_exp (make_interp_mode true false) Interp.eenv (intern_reg_value arg) in [e]
-    | args -> List.map fst (List.map (Interp.to_exp (make_interp_mode true false) Interp.eenv)
+    | [arg] -> let (e,_) = Interp.to_exp (make_interpreter_mode true false) Interp.eenv (intern_reg_value arg) in [e]
+    | args -> List.map fst (List.map (Interp.to_exp (make_interpreter_mode true false) Interp.eenv)
                               (List.map intern_reg_value args)) end in
   Interp.Thunk_frame (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) e_args) (Interp_ast.Unknown, Nothing)) 
     top_level Interp.eenv (Interp.emem "istate top level") Interp.Top
 
-type interp_value_helper_mode = Ivh_decode | Ivh_unsupported | Ivh_illegal
+type interp_value_helper_mode = Ivh_translate | Ivh_decode | Ivh_unsupported | Ivh_illegal
 
-let rec interp_to_value_helper arg ivh_mode err_str instr direction thunk = 
+let rec interp_to_value_helper arg ivh_mode err_str instr direction thunk =
+  let errk_str = match ivh_mode with
+    | Ivh_translate -> "translate"
+    | Ivh_decode -> "decode"
+    | Ivh_unsupported -> "supported_instructions"
+    | Ivh_illegal -> "illegal instruction" end in
   match thunk() with
   | (Interp.Value value,_,_) ->
     (match value with
      | Interp.V_ctor (Id_aux (Id "Some") _) _ _ vinstr -> (Just vinstr,Nothing)
      | Interp.V_ctor (Id_aux (Id "None") _) _ _ _ ->
-       match ivh_mode with
+       (match ivh_mode with
        | Ivh_decode -> (Nothing, Just (Not_an_instruction_error arg))
        | Ivh_illegal -> (Nothing, Just (Not_an_instruction_error arg))
        | Ivh_unsupported -> (Nothing, Just (Unsupported_instruction_error instr))
-      end end)
+     end)
+     | Interp.V_tuple [v1;v2] ->
+       (match ivh_mode with
+        | Ivh_translate -> (Just value,Nothing)
+        | _ -> (Nothing, Just (Internal_error ("Found a tuple for this " ^ errk_str))) end)
+    end)
   | (Interp.Error l msg,_,_) -> (Nothing, Just (Internal_error msg))
     | (Interp.Action (Interp.Call_extern i value) stack,_,_) ->
       match List.lookup i (Interp_lib.library_functions direction) with
         | Nothing -> (Nothing, Just (Internal_error ("External function not available " ^ i)))
         | Just f  -> 
           interp_to_value_helper arg ivh_mode err_str instr direction 
-            (fun _ -> Interp.resume (make_interp_mode true false) stack (Just (f value)))
+            (fun _ -> Interp.resume (make_interpreter_mode true false) stack (Just (f value)))
       end 
     | (Interp.Action (Interp.Exit ((E_aux e _) as exp)) stack,_,_) ->
       match e with
-        (*| E_id (Id_aux (Id "unsupported_instruction") _) -> (Nothing,Just (Unsupported_instruction_error instr))
-        | E_id (Id_aux (Id "no_matching_pattern") _) -> (Nothing,Just (Not_an_instruction_error arg))*)
         | E_lit (L_aux (L_string str) _) -> (Nothing, Just (Internal_error ("Exit called with message: " ^ str)))
         | E_id (Id_aux (Id i) _) -> 
-          (match (Interp.resume (make_interp_mode true false) (Interp.set_in_context stack exp) Nothing) with
+          (match (Interp.resume (make_interpreter_mode true false) (Interp.set_in_context stack exp) Nothing) with
             | (Interp.Value (Interp.V_lit (L_aux (L_string str) _)),_,_) ->
-              (Nothing, Just (Internal_error ("Exit called when decoding "^err_str ^" with message: " ^ str)))
+              (Nothing, Just (Internal_error ("Exit called when processing "^err_str ^" with message: " ^ str)))
             | _ -> (Nothing, Just (Internal_error ("Exit called with unrecognized expression bound to an id " ^ i))) end)
         | _ -> (Nothing, Just (Internal_error "Exit called with unrecognized expression"))
       end 
@@ -286,18 +294,18 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction thunk =
       let rname = match r with 
         | Interp.Reg (Id_aux (Id i) _) _ _ -> i
         | Interp.SubReg (Id_aux (Id i) _) (Interp.Reg (Id_aux (Id i2) _) _ _) _ -> i2 ^ "." ^ i end in
-      (Nothing, Just (Internal_error ("Register read of "^ rname^" request in a decode of " ^ err_str)))
+      (Nothing, Just (Internal_error ("Register read of "^ rname^" request in a " ^ errk_str ^ " of " ^ err_str)))
     | (Interp.Action (Interp.Write_reg _ _ _) _,_,_) ->
-      (Nothing, Just (Internal_error "Register write request in a decode"))
+      (Nothing, Just (Internal_error ("Register write request in a " ^ errk_str)))
     | (Interp.Action (Interp.Read_mem _ _ _) _,_,_) ->
-      (Nothing, Just (Internal_error "Read memory request in a decode"))
+      (Nothing, Just (Internal_error ("Read memory request in a " ^ errk_str)))
     | (Interp.Action (Interp.Write_mem _ _ _ _) _,_,_) ->
-      (Nothing, Just (Internal_error "Write memory request in a decode"))
+      (Nothing, Just (Internal_error ("Write memory request in a " ^ errk_str)))
     | (Interp.Action (Interp.Write_ea _ _) _,_,_) ->
-      (Nothing, Just (Internal_error "Write ea request in a decode"))
+      (Nothing, Just (Internal_error ("Write ea request in a " ^ errk_str)))
     | (Interp.Action (Interp.Write_memv _ _) _,_,_) ->
-      (Nothing, Just (Internal_error "Write memory value request in a decode"))
-    | _ -> (Nothing, Just (Internal_error "Non expected action in a decode"))
+      (Nothing, Just (Internal_error ("Write memory value request in a " ^ errk_str)))
+    | _ -> (Nothing, Just (Internal_error ("Non expected action in a " ^ errk_str)))
 end
 
 let call_external_functions direction outcome = 
@@ -313,6 +321,40 @@ let build_context defs reads writes write_eas write_vals barriers externs =
   match Interp.to_top_env call_external_functions defs with 
     | (_,((Interp.Env _ _ dir _ _ _ _ _) as context)) -> 
       Context context (if Interp.is_inc(dir) then D_increasing else D_decreasing) reads writes write_eas write_vals barriers externs end
+
+
+let translate_address top_level end_flag thunk_name address =
+  let (Address bytes i) = address in
+  let mode = make_mode true false end_flag in
+  let int_mode = mode.internal_mode in
+  let (Context top_env direction _ _ _ _ _ _) = top_level in
+  let intern_val = intern_mem_value mode direction (memory_value_of_address end_flag address) in
+  let val_str = Interp.string_of_value intern_val in
+  let (arg,_) = Interp.to_exp int_mode Interp.eenv intern_val in
+  let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
+  let (address,error) = interp_to_value_helper (Opcode bytes) Ivh_translate val_str ("",[],[]) internal_direction
+    (fun _ -> Interp.resume 
+      int_mode 
+      (Interp.Thunk_frame 
+         (E_aux (E_app (Id_aux (Id thunk_name) Interp_ast.Unknown) [arg]) (Interp_ast.Unknown, Nothing)) 
+         top_env Interp.eenv (Interp.emem "translate top level") Interp.Top) Nothing) in
+  match (address,error) with
+  | (Just addr, _) ->
+    (match addr with
+     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _ v;
+                      Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_lit (L_aux (L_num n) _))] ->
+       let (mem_v,_) = extern_mem_value mode v in 
+       ((address_of_memory_value end_flag mem_v), Just n)
+     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _ v;
+                      Interp.V_ctor (Id_aux (Id "None") _) _ _ _] ->
+       let (mem_v,_) = extern_mem_value mode v in
+       ((address_of_memory_value end_flag mem_v), Nothing)
+     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "None") _) _ _ _;
+                      Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_lit (L_aux (L_num n) _))] ->
+       (Nothing, Just n)
+     | _ -> (Nothing,Nothing) end)       
+    | (Nothing, Just err) -> (Nothing,Nothing)
+end
 
 
 let rec find_instruction i = function
@@ -334,7 +376,7 @@ end
 
 
 let decode_to_istate top_level value = 
-  let mode = make_interp_mode true false in
+  let mode = make_interpreter_mode true false in
   let (Context ((Interp.Env _ instructions _ _ _ _ _ _) as top_env) direction _ _ _ _ _ _) = top_level in
   let intern_val = intern_opcode direction value in
   let val_str = Interp.string_of_value intern_val in
@@ -393,7 +435,7 @@ let decode_to_instruction (top_level:context) (value:opcode) : instruction_or_de
 
 val instruction_to_istate : context -> instruction -> instruction_state 
 let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instruction) : instruction_state  = 
-  let mode = make_interp_mode true false in
+  let mode = make_interpreter_mode true false in
   let (Context top_env direction _ _ _ _ _ _) = top_level in
   let get_value (name,typ,v) = 
     let vec = intern_ifield_value direction v in
