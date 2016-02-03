@@ -46,7 +46,7 @@ let rec load_memory_segment' (bytes,addr) mem =
 
 let rec load_memory_segment (segment: Elf_interpreted_segment.elf64_interpreted_segment) mem =
   let (Byte_sequence.Sequence bytes) = segment.Elf_interpreted_segment.elf64_segment_body in
-  let addr = segment.Elf_interpreted_segment.elf64_segment_base in
+  let addr = segment.Elf_interpreted_segment.elf64_segment_paddr in
   load_memory_segment' (bytes,addr) mem
 
 
@@ -862,7 +862,7 @@ let set_next_instruction_address model =
 
 let add1 = Nat_big_num.add (Nat_big_num.of_int 1)
 
-let fetch_instruction_opcode_and_update_ia model =
+let fetch_instruction_opcode_and_update_ia model addr_trans =
   match model with
   | PPC ->
     let cia = Reg.find "CIA" !reg in
@@ -904,7 +904,10 @@ let fetch_instruction_opcode_and_update_ia model =
     let pc_addr = address_of_register_value nextPC in
     (match pc_addr with
     | Some pc_addr ->
-      let pc_a = integer_of_address pc_addr in
+      let pc_a = match addr_trans pc_addr with
+        | Some a, _ -> integer_of_address a
+        | None, Some i -> failwith ("Address translation failed with error code " ^ (Nat_big_num.to_string i))
+        | _ -> failwith "Neither an address or a code on translate address" in
       let opcode = List.map (fun b -> match b with
         | Some b -> b
         | None -> failwith "A byte in opcode contained unknown or undef")
@@ -926,7 +929,7 @@ let get_pc_address = function
   | AArch64 -> Reg.find "_PC" !reg
         
 
-let rec fde_loop count context model mode track_dependencies opcode =
+let rec fde_loop count context model mode track_dependencies opcode addr_trans =
   if !max_cut_off && count = !max_instr
   then resultf "\nEnding evaluation due to reaching cut off point of %d instructions\n" count
   else begin
@@ -958,8 +961,8 @@ let rec fde_loop count context model mode track_dependencies opcode =
         | true, mode, track_dependencies, (my_reg, my_mem) ->
           reg := my_reg;
           prog_mem := my_mem;
-          let opcode = fetch_instruction_opcode_and_update_ia model in
-          fde_loop (count + 1) context model (Some mode) (ref track_dependencies) opcode
+          let opcode = fetch_instruction_opcode_and_update_ia model addr_trans in
+          fde_loop (count + 1) context model (Some mode) (ref track_dependencies) opcode addr_trans
       end
   end
   
@@ -984,8 +987,8 @@ let run () =
           endian mode, and translate function name 
   *)
   let addr_trans = translate_address context E_big_endian "TranslateAddress" in
-  let startaddr,startaddr_internal = match addr_trans startaddr_internal with
-    | Some a, _ -> integer_of_address a, a
+  let startaddr = match addr_trans startaddr_internal with
+    | Some a, _ -> integer_of_address a
     | None, Some i -> failwith ("Address translation failed with error code " ^ (Nat_big_num.to_string i))
     | _ -> failwith "Neither an address or a code on translate address"
   in
@@ -1001,7 +1004,7 @@ let run () =
   
   (* entry point: unit -> unit fde *)
   let name = Filename.basename !file in
-  let t = time_it (fun () -> fde_loop 0 context isa_model (Some Run) (ref false) initial_opcode) () in
+  let t = time_it (fun () -> fde_loop 0 context isa_model (Some Run) (ref false) initial_opcode addr_trans) () in
   resultf "Execution time for file %s: %f seconds\n" name t;;
 
 run () ;;

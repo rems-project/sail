@@ -192,11 +192,11 @@ function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr,
       case 0b11 -> switch(vAddr[61..31], vAddr[30..29]) { (* xkseg *)
         case (0b1111111111111111111111111111111, 0b11) -> (err, None)  (* kseg3 mapped 32-bit compat TODO *)
         case (0b1111111111111111111111111111111, 0b10) -> (err, None)  (* sseg  mapped 32-bit compat TODO *)
-        case (0b1111111111111111111111111111111, 0b01) -> (None, Some(vAddr)) (* kseg1 unmapped uncached 32-bit compat *)
-        case (0b1111111111111111111111111111111, 0b00) -> (None, Some(vAddr)) (* kseg0 unmapped cached 32-bit compat *)
+        case (0b1111111111111111111111111111111, 0b01) -> (None, Some(EXTZ(vAddr[28..0]))) (* kseg1 unmapped uncached 32-bit compat *)
+        case (0b1111111111111111111111111111111, 0b00) -> (None, Some(EXTZ(vAddr[28..0]))) (* kseg0 unmapped cached 32-bit compat *)
         case (_, _) -> (err, None)  (* xkseg mapped TODO *)
       }
-      case 0b10 -> (None, Some(0b10010 : (vAddr[58..0]))) (* xkphys bits 61-59 are cache mode which we ignore *)
+      case 0b10 -> (None, Some(EXTZ(vAddr[58..0]))) (* xkphys bits 61-59 are cache mode which we ignore *)
       case 0b01 -> (err, None) (* xsseg - supervisor mapped TODO *)
       case 0b00 -> (err, None) (* xuseg - user mapped TODO *)
     }
