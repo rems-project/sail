@@ -28,6 +28,7 @@ register (CauseReg) CP0Cause
 register (bit[64])  CP0EPC
 register (bit[64])  CP0ErrorEPC
 register (bit[1])   CP0LLBit
+register (bit[64])  CP0LLAddr
 register (bit[64])  CP0BadVAddr
 
 typedef StatusReg = register bits [31:0] {
@@ -1274,7 +1275,8 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
           {
             memResult := if (linked) then
                 {
-                  CP0LLBit := 0b1;
+                  CP0LLBit  := 0b1;
+                  CP0LLAddr := pAddr;
                   MEMr_reserve(pAddr, wordWidthBytes(width));
                 }
               else
@@ -1565,6 +1567,7 @@ function clause execute (MFC0(rt, rd, sel, double)) =
                                   : 0b0000 (* zero *)
                                   : 0b000) (* K0 TODO should be writable*)
           case (0b10000,0b001) -> 0                (* 16, sel 1: Config1 *)
+          case (0b10001,0b000) -> CP0LLAddr        (* 17, sel 0: LLAddr *)
           case _               -> {SignalException(ResI); 0}
         } in
   wGPR(rt) := if (double) then result else EXTS(result[31..0])

@@ -447,7 +447,7 @@ let initial_stack_and_reg_data_of_AAarch64_elf_file e_entry all_data_memory =
 let mips_register_data_all =  [
   (*Pseudo registers*)
   ("branchPending", (D_decreasing, 1, 0));
-  ("exceptionSignalled", (D_decreasing, 1, 0));
+  ("inBranchDelay", (D_decreasing, 1, 0));
   ("delayedPC", (D_decreasing, 64, 63));
   ("nextPC", (D_decreasing, 64, 63));
   (* General purpose registers *)
@@ -490,6 +490,8 @@ let mips_register_data_all =  [
   ("CP0Status", (D_decreasing, 32, 31));
   ("CP0Cause", (D_decreasing, 32, 31));
   ("CP0EPC", (D_decreasing, 64, 63));
+  ("CP0LLAddr", (D_decreasing, 64, 63));
+  ("CP0LLBit", (D_decreasing, 1, 0));
 ]
 
 let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
