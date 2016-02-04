@@ -1999,7 +1999,7 @@ let initial_typ_env =
               (mk_pure_fun (mk_tup [mk_range (mk_nv "n") (mk_nv "m"); mk_range (mk_nv "o") (mk_nv "p")])
                            (mk_range (mk_nv "q") (mk_nv "r")))),
              (External (Some "quot_signed")),
-             [GtEq(Specc(Parse_ast.Int("quot",None)),Require,(mk_nv "o"),n_one);
+             [(*GtEq(Specc(Parse_ast.Int("quot",None)),Require,(mk_nv "o"),n_one);*)
               LtEq(Specc(Parse_ast.Int("quot",None)),Guarantee,(mk_mult (mk_nv "p") (mk_nv "r")),mk_nv "m")],
              pure_e,pure_e,nob);
         Base(((mk_nat_params["n";"m";"p";"q"])@(mk_ord_params["ord"]),
