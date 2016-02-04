@@ -688,6 +688,8 @@ let library_functions direction = [
   ("modulo", arith_op_no0 (mod));
   ("mod_vec", arith_op_vec_no0 hardware_mod "mod" Unsigned 1);
   ("mod_vec_range", arith_op_vec_range_no0 hardware_mod "mod" Unsigned 1);
+  ("mod_signed_vec", arith_op_vec_no0 hardware_mod "mod" Signed 1);
+  ("mod_signed_vec_range", arith_op_vec_range_no0 hardware_mod "mod" Signed 1);
   ("quot", arith_op_no0 hardware_quot);
   ("quot_signed", arith_op_no0 hardware_quot);
   ("quot_vec", arith_op_vec_no0 hardware_quot "quot" Unsigned 1);
