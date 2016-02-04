@@ -1010,10 +1010,15 @@ function clause execute (DIV(rs, rt)) =
   {
     rsVal := rGPR(rs);
     rtVal := rGPR(rt);
-    let ((bit[32]) q, (bit[32])r) = (if (NotWordVal(rsVal) | NotWordVal(rtVal) | (rtVal == 0)) then
+    let ((bit[32]) q, (bit[32])r) = (
+      if (NotWordVal(rsVal) | NotWordVal(rtVal) | (rtVal == 0)) then
         (undefined, undefined)
       else
-        ((rsVal[31..0]) quot_s (rtVal[31..0]), (rsVal[31..0]) mod (rtVal[31..0])))
+        let si = (signed((rsVal[31..0]))) in
+        let ti = (signed((rtVal[31..0]))) in
+        let qi = (si quot_s ti)  in
+        let ri = (si mod_s ti)   in
+        ((bit[32]) qi, (bit[32]) ri))
     in
     {
       HI := EXTS(r);
@@ -1029,10 +1034,15 @@ function clause execute (DIVU(rs, rt)) =
   {
     rsVal := rGPR(rs);
     rtVal := rGPR(rt);
-    let ((bit[32]) q, (bit[32])r) = (if (NotWordVal(rsVal) | NotWordVal(rtVal) | rtVal == 0) then
+    let ((bit[32]) q, (bit[32])r) = (
+      if (NotWordVal(rsVal) | NotWordVal(rtVal) | rtVal == 0) then
         (undefined, undefined)
       else
-        ((rsVal[31..0]) quot (rtVal[31..0]), (rsVal[31..0]) mod (rtVal[31..0])))
+        let si = ((int)(rsVal[31..0])) in
+        let ti = ((int)(rtVal[31..0])) in
+        let qi = (si quot ti)  in
+        let ri = (si mod ti)   in
+        ((bit[32]) qi, (bit[32]) ri))
     in
     {
       HI := EXTS(r);
@@ -1046,14 +1056,17 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : 0b00000 : 0b00000 :
   Some(DDIV(rs, rt))
 function clause execute (DDIV(rs, rt)) =
   {
-    rsVal := rGPR(rs);
-    rtVal := rGPR(rt);
+    rsVal := signed(rGPR(rs));
+    rtVal := signed(rGPR(rt));
     let ((bit[64])q, (bit[64])r) = (if (rtVal == 0)
       then (undefined, undefined) 
-      else (rsVal quot_s rtVal, rsVal mod rtVal)) in
+      else 
+           let qi = (rsVal quot_s rtVal) in
+           let ri = (rsVal mod_s rtVal) in
+           ((bit[64]) qi, (bit[64]) ri)) in
     {
       LO    := q;
-      HI    := r; (* signed? *)
+      HI    := r;
     }
   }
 
@@ -1063,11 +1076,13 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : 0b00000 : 0b00000 :
   Some(DDIVU(rs, rt))
 function clause execute (DDIVU(rs, rt)) =
   {
-    rsVal := rGPR(rs);
-    rtVal := rGPR(rt);
+    (int) rsVal := rGPR(rs);
+    (int) rtVal := rGPR(rt);
     let ((bit[64])q, (bit[64])r) = (if (rtVal == 0)
       then (undefined, undefined) 
-      else (rsVal quot rtVal, rsVal mod rtVal)) in
+      else let qi = (rsVal quot rtVal) in
+           let ri = (rsVal mod rtVal) in
+           ((bit[64]) qi, (bit[64]) ri)) in
     {
       LO    := q;
       HI    := r;
