@@ -873,9 +873,11 @@ function clause execute (MUL(rs, rt, rd)) =
         undefined
       else
         EXTS(result[31..0]);
-    (* HI and LO are always undefined after MUL *)
+    (* HI and LO are technically undefined after MUL, but this causes problems with tests and 
+       (potentially) context switch so just leave them alone
     HI := undefined;
     LO := undefined;
+    *)
   }
 
 (* MULT 32-bit multiply into HI/LO *)
