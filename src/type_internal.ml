@@ -1971,8 +1971,9 @@ let initial_typ_env =
        true,
        [Base(((mk_nat_params["n";"m";"o";]),
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")])
-                           (mk_atom (mk_nv "o")))),
-             (External (Some "quot")),[GtEq(Specc(Parse_ast.Int("quot",None)),Require,(mk_nv "m"),n_one);
+                 (mk_atom (mk_nv "o")))),
+             (*This should really be != to 0, as negative is just fine*)
+             (External (Some "quot")),[(*GtEq(Specc(Parse_ast.Int("quot",None)),Require,(mk_nv "m"),n_one);*)
                                      LtEq(Specc(Parse_ast.Int("quot",None)),Guarantee,
                                           (mk_mult (mk_nv "n") (mk_nv "o")),(mk_nv "m"))],
              pure_e,pure_e,nob);
