@@ -285,7 +285,7 @@ let doc_exp, doc_let =
   and star_exp env add_red ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id (
       "*" | "/"
-    | "div" | "quot" | "rem" | "mod" | "quot_s"
+    | "div" | "quot" | "rem" | "mod" | "quot_s" | "mod_s" 
     | "*_s" | "*_si" | "*_u" | "*_ui"),_) as op),r) ->
       doc_op (doc_id op) (star_exp env add_red l) (starstar_exp env add_red r)
   | _ -> starstar_exp env add_red expr
@@ -410,7 +410,7 @@ let doc_exp, doc_let =
     | ">>" | ">>>" | "<<" | "<<<"
     | "+" | "+_s" | "-" | "-_s" 
     | "*" | "/"
-    | "div" | "quot" | "quot_s" | "rem" | "mod"
+    | "div" | "quot" | "quot_s" | "rem" | "mod" | "mod_s" 
     | "*_s" | "*_si" | "*_u" | "*_ui"
     | "**"), _))
     , _) ->
