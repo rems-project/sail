@@ -142,7 +142,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 %nonassoc Then
 %nonassoc Else
 
-%token Div_ Mod Quot Rem QuotUnderS
+%token Div_ Mod ModUnderS Quot Rem QuotUnderS
 
 %token Bar Comma Dot Eof Minus Semi Under
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare
@@ -686,7 +686,9 @@ star_exp:
   | star_exp Rem starstar_exp
     { eloc (E_app_infix($1,Id_aux(Id("rem"), locn 2 2), $3)) }
   | star_exp Mod starstar_exp
-    { eloc (E_app_infix($1,Id_aux(Id("mod"), locn 2 2), $3)) }
+      { eloc (E_app_infix($1,Id_aux(Id("mod"), locn 2 2), $3)) }
+  | star_exp ModUnderS starstar_exp
+      { eloc (E_app_infix($1,Id_aux(Id("mod_s"), locn 2 2), $3)) }
   | star_exp StarUnderS starstar_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | star_exp StarUnderSi starstar_exp
@@ -713,6 +715,8 @@ star_right_atomic_exp:
     { eloc (E_app_infix($1,Id_aux(Id("rem"), locn 2 2), $3)) }
   | star_exp Mod starstar_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id("mod"), locn 2 2), $3)) }
+  | star_exp ModUnderS starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id("mod_s"), locn 2 2), $3)) }
   | star_exp StarUnderS starstar_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | star_exp StarUnderSi starstar_right_atomic_exp

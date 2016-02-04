@@ -108,6 +108,7 @@ let kw_table =
 
      ("div",			 (fun x -> Div_));
      ("mod",			 (fun x -> Mod));
+     ("mod_s",                   (fun x -> ModUnderS));
      ("quot",			 (fun x -> Quot));
      ("quot_s",                  (fun x -> QuotUnderS));
      ("rem",			 (fun x -> Rem));
