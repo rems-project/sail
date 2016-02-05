@@ -686,7 +686,7 @@ let library_functions direction = [
   ("bitwise_rightshift", shift_op_vec ">>");
   ("bitwise_rotate", shift_op_vec "<<<");
   ("modulo", arith_op_no0 (mod));
-  ("mod_signed", arith_op_no0 hardwaer_mod);
+  ("mod_signed", arith_op_no0 hardware_mod);
   ("mod_vec", arith_op_vec_no0 hardware_mod "mod" Unsigned 1);
   ("mod_vec_range", arith_op_vec_range_no0 hardware_mod "mod" Unsigned 1);
   ("mod_signed_vec", arith_op_vec_no0 hardware_mod "mod" Signed 1);
