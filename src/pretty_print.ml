@@ -691,11 +691,26 @@ let doc_typ, doc_atomic_typ, doc_nexp =
       Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant m, _)), _);
       Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_inc, _)), _);
       Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
-        (doc_id id) ^^ (brackets (if n = 0 then doc_int m else doc_op colon (doc_int n) (doc_int (n+m-1))))
+    (doc_id id) ^^ (brackets (if n = 0 then doc_int m else doc_op colon (doc_int n) (doc_int (n+m-1))))
+  | Typ_app(Id_aux (Id "vector", _), [
+      Typ_arg_aux(Typ_arg_nexp
+                    (Nexp_aux(Nexp_minus (Nexp_aux(Nexp_constant n, _),
+                                          Nexp_aux(Nexp_constant 1, _)),_)),_);
+      Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant m, _)), _);
+      Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_dec, _)), _);
+      Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
+    (doc_id id) ^^ (brackets (if n = m then doc_int m else doc_op colon (doc_int m) (doc_int (n-1))))
+  | Typ_app(Id_aux (Id "vector", _), [
+      Typ_arg_aux(Typ_arg_nexp
+                  (Nexp_aux(Nexp_minus (n', Nexp_aux((Nexp_constant 1), _)),_) as n_n),_);
+      Typ_arg_aux(Typ_arg_nexp m_nexp, _);
+      Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_dec, _)), _);
+      Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
+    (doc_id id) ^^ (brackets (if n' = m_nexp then nexp m_nexp else doc_op colon (nexp m_nexp) (nexp n_n)))
   | Typ_app(Id_aux (Id "range", _), [
     Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
     Typ_arg_aux(Typ_arg_nexp m, _);]) ->
-    (squarebars (if n = 0 then nexp m else doc_op colon (doc_int n) (nexp m))) 
+    (squarebars (if n = 0 then nexp m else doc_op colon (doc_int n) (nexp m)))
   | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
     (squarecolons (nexp n))
   | Typ_app(id,args) ->
@@ -1139,10 +1154,13 @@ let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   | _ ->
       let sep = hardline ^^ string "and" ^^ space in
       let clauses = separate_map sep doc_funcl fcls in
-      separate space [string "function";
-        doc_rec r ^^ doc_tannot_opt typa;
-        string "effect"; doc_effects_opt efa;
-        clauses]
+      separate space ([string "function";
+                      doc_rec r ^^ doc_tannot_opt typa;]@
+                      (match efa with
+                       | Effect_opt_aux (Effect_opt_pure,_) -> []
+                       | _ -> [string "effect";
+                               doc_effects_opt efa;])
+                      @[clauses])
 
 let doc_alias (AL_aux (alspec,_)) =
   match alspec with
@@ -1161,11 +1179,13 @@ let doc_dec (DEC_aux (reg,_)) =
 
 let doc_scattered (SD_aux (sdef, _)) = match sdef with
  | SD_scattered_function (r, typa, efa, id) ->
-     separate space [
+     separate space ([
        string "scattered function";
-       doc_rec r ^^ doc_tannot_opt typa;
-       string "effect"; doc_effects_opt efa;
-       doc_id id]
+       doc_rec r ^^ doc_tannot_opt typa;]@
+       (match efa with
+        | Effect_opt_aux (Effect_opt_pure,_) -> []
+        | _ -> [string "effect"; doc_effects_opt efa;])
+         @[doc_id id])
  | SD_scattered_variant (id, ns, tq) ->
      doc_op equals
        (string "scattered typedef" ^^ space ^^ doc_id id ^^ doc_namescm ns)
