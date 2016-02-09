@@ -1189,7 +1189,7 @@ let doc_scattered (SD_aux (sdef, _)) = match sdef with
  | SD_scattered_variant (id, ns, tq) ->
      doc_op equals
        (string "scattered typedef" ^^ space ^^ doc_id id ^^ doc_namescm ns)
-       (doc_typquant tq empty)
+       (string "const union" ^^ space ^^ (doc_typquant tq empty))
  | SD_scattered_funcl funcl ->
      string "function clause" ^^ space ^^ doc_funcl funcl
  | SD_scattered_unioncl (id, tu) ->
