@@ -1567,7 +1567,18 @@ function clause decode (0b010000 : 0b00001 : (regno) rt : (regno) rd : 0b0000000
 function clause execute (MFC0(rt, rd, sel, double)) = 
   let (bit[64]) result = switch (rd, sel)
         {
+          case (0b00000,0b000) -> 0                (* 0, TLB Index *)
+          case (0b00001,0b000) -> 0                (* 1, TLB Random *)
+          case (0b00010,0b000) -> 0                (* 2, TLB EntryLo0 *)
+          case (0b00011,0b000) -> 0                (* 3, TLB EntryLo1 *)
+          case (0b00100,0b000) -> 0                (* 4, TLB Context *)
+          case (0b00101,0b000) -> 0                (* 5, TLB PageMask *)
+          case (0b00110,0b000) -> 0                (* 6, TLB Wired *)
+          case (0b00111,0b000) -> 0                (* 6, HWREna *)
           case (0b01000,0b000) -> CP0BadVAddr      (* 8, BadVAddr reg *)
+          case (0b01000,0b001) -> 0                (* 8, BadInstr reg XXX TODO *)
+          case (0b01001,0b000) -> 0                (* 9, Count reg XXX TODO *)
+          case (0b01010,0b000) -> 0                (* 10, TLB EntryHi *)
           case (0b01011,0b000) -> EXTZ(CP0Compare) (* 11, Compare reg *)
           case (0b01100,0b000) -> EXTZ(CP0Status)  (* 12, Status reg *)
           case (0b01101,0b000) -> EXTZ(CP0Cause)   (* 13, Cause reg *)
@@ -1585,6 +1596,9 @@ function clause execute (MFC0(rt, rd, sel, double)) =
                                   : 0b000) (* K0 TODO should be writable*)
           case (0b10000,0b001) -> 0                (* 16, sel 1: Config1 *)
           case (0b10001,0b000) -> CP0LLAddr        (* 17, sel 0: LLAddr *)
+          case (0b10010,0b000) -> 0                (* 18, WatchLo *)
+          case (0b10011,0b000) -> 0                (* 19, WatchHi *)
+          case (0b10100,0b000) -> 0                (* 20, XContext *)
           case _               -> {exit (SignalException(ResI)); 0}
         } in
   wGPR(rt) := if (double) then result else EXTS(result[31..0])
