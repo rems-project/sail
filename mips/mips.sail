@@ -1658,7 +1658,10 @@ function clause execute (ERET) =
 function clause execute (HCF) =
   () (* halt instruction actually executed by interpreter framework *)
 
-function clause decode _ = None
+union ast member unit RI
+function clause decode _ = Some(RI)
+function clause execute (RI) =
+      exit (SignalException (ResI))
 
 end decode
 end execute
