@@ -305,7 +305,7 @@ function clause execute (DADDI (rs, rt, imm)) =
     let (bit[65]) sum65 = (EXTS(rGPR(rs)) + EXTS(imm)) in
     {
       if (sum65[64] != sum65[63]) then
-        SignalException(Ov)
+        exit (SignalException(Ov))
       else
         wGPR(rt) := sum65[63..0]
     }
@@ -324,7 +324,7 @@ function clause execute (DADD (rs, rt, rd)) =
     let (bit[65]) sum65 = (EXTS(rGPR(rs)) + EXTS(rGPR(rt))) in
     {
       if sum65[64] != sum65[63] then
-        SignalException(Ov)
+        exit (SignalException(Ov))
       else
         wGPR(rd) := sum65[63..0]
     }
@@ -346,7 +346,7 @@ function clause execute (ADD(rs, rt, rd)) =
     else
       let (bit[33]) sum33 = (EXTS(opA[31 .. 0]) + EXTS(opB[31 .. 0])) in
         if sum33[32] != sum33[31] then
-          SignalException(Ov)
+          exit (SignalException(Ov))
         else
           wGPR(rd) := EXTS(sum33[31..0])
   }
@@ -366,7 +366,7 @@ function clause execute (ADDI(rs, rt, imm)) =
     else
       let (bit[33]) sum33 = (EXTS(opA[31 .. 0]) + EXTS(imm)) in
         if sum33[32] != sum33[31] then
-          SignalException(Ov)
+          exit (SignalException(Ov))
         else
           wGPR(rt) := EXTS(sum33[31..0])
   }
@@ -433,7 +433,7 @@ function clause execute (DSUB (rs, rt, rd)) =
     let (bit[65]) temp65 = (EXTS(rGPR(rs)) - EXTS(rGPR(rt))) in
     {
       if temp65[64] != temp65[63] then
-        SignalException(Ov)
+        exit (SignalException(Ov))
       else
         wGPR(rd) := temp65[63..0]
     }
@@ -455,7 +455,7 @@ function clause execute (SUB(rs, rt, rd)) =
     else
       let (bit[33]) temp33 = (EXTS(opA[31..0]) - EXTS(opB[31..0])) in
       if temp33[32] != temp33[31] then
-        SignalException(Ov)
+        exit (SignalException(Ov))
       else
         wGPR(rd) := EXTS(temp33[31..0])
   }
@@ -1215,7 +1215,7 @@ function clause decode (0b000000 : (bit[20]) code : 0b001100) =
   Some(SYSCALL) (* code is ignored *)
 function clause execute (SYSCALL) =
   {
-    SignalException(Sys)
+    exit (SignalException(Sys))
   }
 
 (* BREAK is identical to SYSCALL exception for the exception raised *)
@@ -1224,7 +1224,7 @@ function clause decode (0b000000 : (bit[20]) code : 0b001101) =
   Some(BREAK) (* code is ignored *)
 function clause execute (BREAK) =
   {
-    SignalException(Bp)
+    exit (SignalException(Bp))
   }
 
 (* Accept WAIT as a NOP *)
@@ -1247,7 +1247,7 @@ function clause execute (TRAPREG(rs, rt, cmp)) =
     rt_val := rGPR(rt);
     condition := compare(cmp, rs_val, rt_val);
     if (condition) then
-      SignalException(Tr)
+      exit (SignalException(Tr))
   }
 
 
@@ -1265,7 +1265,7 @@ function clause execute (TRAPIMM(rs, imm, cmp)) =
     imm_val := EXTS(imm);
     condition := compare(cmp, rs_val, imm_val);
     if (condition) then
-      SignalException(Tr)
+      exit (SignalException(Tr))
   }
 
 (**************************************************************************************)
@@ -1286,7 +1286,7 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
   {
     (bit[64]) vAddr := EXTS(offset) + rGPR(base);
     if ~ (isAddressAligned(vAddr, width)) then
-      SignalExceptionBadAddr(AdEL, vAddr) (* unaligned access *)
+      exit (SignalExceptionBadAddr(AdEL, vAddr)) (* unaligned access *)
     else
       let pAddr = (TranslateOrExit(vAddr, LoadData)) in
           {
@@ -1321,7 +1321,7 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
         (bit[64]) vAddr := EXTS(offset) + rGPR(base);
         (bit[64]) rt_val := rGPR(rt);
         if ~ (isAddressAligned(vAddr, width)) then
-          SignalExceptionBadAddr(AdES, vAddr) (* unaligned access *)
+          exit (SignalExceptionBadAddr(AdES, vAddr)) (* unaligned access *)
         else
           let pAddr = (TranslateOrExit(vAddr, StoreData)) in
           {
@@ -1585,7 +1585,7 @@ function clause execute (MFC0(rt, rd, sel, double)) =
                                   : 0b000) (* K0 TODO should be writable*)
           case (0b10000,0b001) -> 0                (* 16, sel 1: Config1 *)
           case (0b10001,0b000) -> CP0LLAddr        (* 17, sel 0: LLAddr *)
-          case _               -> {SignalException(ResI); 0}
+          case _               -> {exit (SignalException(ResI)); 0}
         } in
   wGPR(rt) := if (double) then result else EXTS(result[31..0])
   
@@ -1620,7 +1620,7 @@ function clause execute (MTC0(rt, rd, sel, double)) =
         (CP0Cause.IP)[9..8] := reg_val[9..8];
       }
       case (0b01110,0b000) -> CP0EPC      := reg_val         (* 14, EPC *)
-      case _               -> SignalException(ResI)
+      case _               -> exit (SignalException(ResI))
     }
 
 union ast member unit ERET
