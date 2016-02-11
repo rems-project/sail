@@ -48,7 +48,7 @@ _build/mips.lem: _build/mips.sail ./sail.native
 	$(LEM) -only_changed_output -ocaml -lib lem_interp/ $<
 
 run_mips.native: _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml interpreter
-	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -g -package zarith -package num -package batteries -package uint -I $(LEMLIBOCAML) -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/src/linksem.cmxa _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml  -o run_mips.native
+	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(LEMLIBOCAML)/dependencies/zarith -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(LEMLIBOCAML)/dependencies/zarith/zarith.cmxa $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml  -o run_mips.native
 
 mips: elf run_mips.native
 
