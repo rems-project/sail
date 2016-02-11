@@ -100,7 +100,7 @@ let (vector <0, 32, inc, (register<(bit[64])>) >) GPR =
 (* Check whether a given 64-bit vector is a properly sign extended 32-bit word *)
 val bit[64] -> bool effect pure isWordVal
 function bool NotWordVal (word) = 
-    (word[31] ^^ 32) != word[63..32]
+    (((bit)(word[31])) ^^ 32) != word[63..32]
 
 val bit[5] -> bit[64] effect {rreg} rGPR
 function bit[64] rGPR idx = {
