@@ -2293,10 +2293,22 @@ let initial_typ_env =
     mk_bitwise_op  "bitwise_or" "|" 2;
     mk_bitwise_op  "bitwise_xor" "^" 2;
     mk_bitwise_op  "bitwise_and" "&" 2;
-    ("^^",Base((mk_nat_params ["n"],
-                (mk_pure_fun (mk_tup [bit_t;mk_atom (mk_nv "n")])
-                             (mk_vector bit_t Oinc (mk_c zero) (mk_nv "n")))),
-               External (Some "duplicate"),[],pure_e,pure_e,nob));
+    ("^^",
+     Overload(
+       Base((mk_nat_params["n";"o";"p"]@[("a",{k=K_Typ})],
+             (mk_pure_fun (mk_tup [{t=Tvar "a"}; mk_atom (mk_nv "n")])
+                (mk_vector bit_t Oinc (mk_nv "o") (mk_nv "p")))),
+            External (Some "duplicate"), [], pure_e, pure_e, nob),
+       false,
+       [Base((mk_nat_params ["n"],
+              (mk_pure_fun (mk_tup [bit_t;mk_atom (mk_nv "n")])
+                           (mk_vector bit_t Oinc (mk_c zero) (mk_nv "n")))),
+             External (Some "duplicate"),[],pure_e,pure_e,nob);
+        Base((mk_nat_params ["n";"m";"o"]@mk_ord_params["or"],
+              mk_pure_fun (mk_tup [mk_vector bit_t (Ovar "or") (mk_nv "o") (mk_nv "m");
+                                   mk_atom (mk_nv "n")])
+                (mk_vector bit_t (Ovar "or") (mk_nv "o") (mk_mult (mk_nv "m") (mk_nv "n")))),
+             External (Some "duplicate_bits"),[],pure_e,pure_e,nob);]));
     ("<<",Base((((mk_nat_params ["n";"m"])@[("ord",{k=K_Ord})]),
                 (mk_pure_fun (mk_tup [(mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m"));
                                       (mk_range n_zero (mk_nv "m"))])
@@ -2320,6 +2332,9 @@ let initial_typ_env =
                   (mk_pure_imp (mk_vector bit_t (Ovar "ord") (mk_nv "o") (mk_nv "n"))
                      (mk_vector bit_t (Ovar "ord") (mk_nv "p") (mk_nv "m")) "m")),
                  External (Some "extz"),[],pure_e,pure_e,nob));
+    ("abs",Base(((mk_nat_params ["n";"m";]),
+                 (mk_pure_fun (mk_atom (mk_nv "n")) (mk_range n_zero (mk_nv "m")))),
+                External (Some "abs"),[],pure_e,pure_e,nob));
   ]
 
 
