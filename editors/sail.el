@@ -710,7 +710,7 @@ Based on Tuareg mode. See Tuareg mode for usage"
    sail-font-lock-keywords
    `(("\\<\\(extern\\|function\\|scattered\\|clause\\|effect\\|default\\|struct\\|const\\|union\\|val\\|typedef\\|in\\|let\\|rec\\|and\\|end\\|register\\|alias\\|member\\|enumerate\\)\\>"
       0 sail-font-lock-governing-face nil nil)
-     ("\\<\\(false\\|true\\|bitzero\\|bitone\\)\\>" 0 font-lock-constant-face nil nil)
+     ("\\<\\(false\\|true\\|bitzero\\|bitone\\|0x[:xdigit:]\\|[:digit:]\\)\\>" 0 font-lock-constant-face nil nil)
      ("\\<\\(as\\|downto\\|else\\|foreach\\|if\\|t\\(hen\\|o\\)\\|when\\|switch\\|with\\|case\\|exit\\|nondet\\|from\\|by\\)\\>"
       0 font-lock-keyword-face nil nil)
      ("\\<\\(clause\\)\\>[ \t\n]*\\(\\(\\w\\|[_ \t()*,]\\)+\\)"
