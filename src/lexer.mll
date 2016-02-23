@@ -160,7 +160,6 @@ rule token = parse
   | ":"                                 { Colon(r ":") }
   | ","                                 { Comma }
   | "."                                 { Dot }
-  | "/"			                { (Div(r "/")) }
   | "="                                 { (Eq(r"=")) }
   | "!"					{ (Excl(r"!")) }
   | ">"					{ (Gt(r">")) }
@@ -187,7 +186,6 @@ rule token = parse
   | ":>"                                { ColonGt }
   | ":]"                                { ColonSquare }
   | ".."				{ DotDot }
-  | "=/="				{ (EqDivEq(r"=/=")) }
   | "=="				{ (EqEq(r"==")) }
   | "!="				{ (ExclEq(r"!=")) }
   | "!!"				{ (ExclExcl(r"!!")) }
@@ -265,7 +263,6 @@ rule token = parse
   | "&&" oper_char+ as i                { (AmpAmpI(r i)) }
   | "^^" oper_char+ as i		{ (CarrotCarrotI(r i)) }
   | "::" oper_char+ as i                { (ColonColonI(r i)) }
-  | "=/=" oper_char+ as i		{ (EqDivEqI(r i)) }
   | "==" oper_char+ as i		{ (EqEqI(r i)) }
   | "!=" oper_char+ as i		{ (ExclEqI(r i)) }
   | "!!" oper_char+ as i		{ (ExclExclI(r i)) }

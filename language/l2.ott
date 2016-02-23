@@ -649,7 +649,9 @@ exp :: 'E_' ::=
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
   | ( annot ) exp                                   :: :: internal_cast {{ com This is an internal cast, generated during type checking that will resolve into a syntactic cast after }}
   | annot                       :: :: internal_exp {{ com This is an internal use for passing nexp information  to library functions, postponed for constraint solving }}
-  | annot , annot'           :: :: internal_exp_user {{ com This is like the above but the user has specified an implicit parameter for the current function }} 
+  | annot , annot'           :: :: internal_exp_user {{ com This is like the above but the user has specified an implicit parameter for the current function }}
+  | comment string            :: :: comment {{ com For generated unstructured comments }}
+  | comment exp               :: :: comment_struc {{ com For generated structured comments }}
   | let lexp = exp in exp'    :: :: internal_let {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
   | let pat = exp in exp' :: :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
   | return ( exp )                                          :: :: internal_return {{ com For internal use to embed into monad definition }}
@@ -863,6 +865,10 @@ dec_spec :: 'DEC_' ::=
   | register alias id = alias_spec				:: :: alias
   | register alias typ id = alias_spec				:: :: typ_alias
 
+dec_comm :: 'DC_' ::= {{ com Top-level generated comments }} {{auxparam 'a}}
+  | comment string :: :: comm {{ com generated unstructured comment }}
+  | comment def    :: :: comm_struct {{ com generated structured comment }}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Top-level definitions                                        %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -884,7 +890,8 @@ def :: 'DEF_' ::=
     {{ com scattered function and type definition }}
   | dec_spec                                            :: :: reg_dec
     {{ com register declaration }}
-
+  | dec_comm                                            :: :: comm
+    {{ com generated comments }}
 
 defs :: '' ::=
   {{ com Definition sequence }}

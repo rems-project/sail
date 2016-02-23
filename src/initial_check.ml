@@ -13,17 +13,6 @@ let id_to_string (Id_aux(id,l)) =
 
 let var_to_string (Kid_aux(Var v,l)) = v
 
-(*placeholder, write in type_internal*)
-let rec kind_to_string kind = match kind.k with
-  | K_Nat -> "Nat"
-  | K_Typ -> "Type"
-  | K_Ord -> "Order"
-  | K_Efct -> "Effect"
-  | K_infer -> "Infer"
-  | K_Val -> "Val"
-  | K_Lam (kinds,kind) -> "Lam ... -> " ^ (kind_to_string kind)
-
-
 let typquant_to_quantkinds k_env typquant = 
   match typquant with
   | TypQ_aux(tq,_) ->
@@ -804,11 +793,13 @@ let rec to_ast_defs_helper envs partial_defs = function
               | No_def -> defs,envs,partial_defs
               | Def_place_holder(id,l) -> 
                 (match (def_in_progress id partial_defs) with
-                | None -> raise (Reporting_basic.err_unreachable l "Id stored in place holder not retrievable from partial defs")
-                | Some(d,k) -> 
-                  if (snd !d) 
-                  then (fst !d) :: defs, envs, partial_defs
-                  else typ_error l "Scattered type definition never ended" (Some id) None None))                
+                 | None ->
+                   raise
+                     (Reporting_basic.err_unreachable l "Id stored in place holder not retrievable from partial defs")
+                 | Some(d,k) -> 
+                   if (snd !d) 
+                   then (fst !d) :: defs, envs, partial_defs
+                   else typ_error l "Scattered type definition never ended" (Some id) None None))                
 
 let to_ast (default_names : Nameset.t) (kind_env : kind Envmap.t) (def_ord : order) (Parse_ast.Defs(defs)) =
   let defs,(_,k_env,def_ord),partial_defs = to_ast_defs_helper (default_names,kind_env,def_ord) [] defs in

@@ -156,7 +156,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 %token <string> String Bin Hex
 
 %token <string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde
-%token <string> AmpAmp CarrotCarrot Colon ColonColon EqDivEq EqEq ExclEq ExclExcl
+%token <string> AmpAmp CarrotCarrot Colon ColonColon EqEq ExclEq ExclExcl
 %token <string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt
 %token <string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar TildeCarrot
 
@@ -166,7 +166,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 %token <string> StarUnderSi StarUnderU StarUnderUi TwoCarrot PlusUnderS MinusUnderS 
 
 %token <string> AmpI AtI CarrotI  DivI EqI ExclI GtI LtI PlusI StarI TildeI
-%token <string> AmpAmpI CarrotCarrotI ColonColonI EqDivEqI EqEqI ExclEqI ExclExclI
+%token <string> AmpAmpI CarrotCarrotI ColonColonI EqEqI ExclEqI ExclExclI
 %token <string> GtEqI GtEqPlusI GtGtI GtGtGtI GtPlusI HashGtGtI HashLtLtI
 %token <string> LtEqI LtEqPlusI LtGtI LtLtI LtLtLtI LtPlusI StarStarI TildeCarrotI
 
@@ -237,8 +237,6 @@ id:
   | Lparen Deinfix Colon Rparen
     { idl (DeIid($3)) }
   | Lparen Deinfix ColonColon Rparen
-    { idl (DeIid($3)) }
-  | Lparen Deinfix EqDivEq Rparen
     { idl (DeIid($3)) }
   | Lparen Deinfix EqEq Rparen
     { idl (DeIid($3)) }
@@ -433,7 +431,7 @@ nexp_typ:
    | Num Minus nexp_typ
      { tloc (ATyp_minus((tlocl (ATyp_constant $1) 1 1),$3)) }
    | Lparen Num Minus nexp_typ Rparen
-     { tloc (ATyp_minus((tlocl (ATyp_constant $2) 2 2),$4)) } 
+       { tloc (ATyp_minus((tlocl (ATyp_constant $2) 2 2),$4)) }
 
 
 tup_typ_list:

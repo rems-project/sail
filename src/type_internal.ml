@@ -247,6 +247,15 @@ let get_c_loc = function
 (*To string functions *)
 let debug_mode = ref true;;
 
+let rec kind_to_string kind = match kind.k with
+  | K_Nat -> "Nat"
+  | K_Typ -> "Type"
+  | K_Ord -> "Order"
+  | K_Efct -> "Effect"
+  | K_infer -> "Infer"
+  | K_Val -> "Val"
+  | K_Lam (kinds,kind) -> "Lam [" ^ string_of_list ", " kind_to_string kinds ^ "] -> " ^ (kind_to_string kind)
+
 let co_to_string = function
   | Patt l -> "Pattern " (*^ Reporting_basic.loc_to_string l *)
   | Expr l -> "Expression " (*^ Reporting_basic.loc_to_string l *)

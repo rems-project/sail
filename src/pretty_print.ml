@@ -639,6 +639,9 @@ let squarebarbars = enclose lsquarebarbar rsquarebarbar
 let lsquarecolon = string "[:"
 let rsquarecolon = string ":]"
 let squarecolons = enclose lsquarecolon rsquarecolon
+let lcomment = string "(*"
+let rcomment = string "*)"
+let comment = enclose lcomment rcomment
 let string_lit = enclose dquote dquote
 let spaces op = enclose space space op
 let semi_sp = semi ^^ space
@@ -912,7 +915,7 @@ let doc_exp, doc_let =
   | _ -> group (parens (exp expr))
   and app_exp ((E_aux(e,_)) as expr) = match e with
   | E_app(f,args) ->
-      doc_unop (doc_id f) (parens (separate_map comma exp args))
+      (doc_id f) ^^ (parens (separate_map comma exp args))
   | _ -> vaccess_exp expr
   and vaccess_exp ((E_aux(e,_)) as expr) = match e with
   | E_vector_access(v,e) ->
@@ -988,7 +991,7 @@ let doc_exp, doc_let =
       let cases = separate_map (break 1) doc_case pexps in
       surround 2 1 opening cases rbrace
   | E_exit e ->
-    separate space [string "exit"; exp e;]
+    separate space [string "exit"; atomic_exp e;]
   | E_assert(c,m) ->
     separate space [string "assert"; parens (separate comma [exp c; exp m])]
   (* adding parens and loop for lower precedence *)
@@ -1016,7 +1019,9 @@ let doc_exp, doc_let =
   (* XXX default precedence for app_infix? *)
   | E_app_infix(l,op,r) ->
       failwith ("unexpected app_infix operator " ^ (pp_format_id op))
-      (* doc_op (doc_id op) (exp l) (exp r) *)
+  (* doc_op (doc_id op) (exp l) (exp r) *)
+  | E_comment s -> comment (string s)
+  | E_comment_struc e -> comment (exp e)
   | E_internal_exp((l, Base((_,t),_,_,_,_,bindings))) -> (*TODO use bindings, and other params*)
     (match t.t with
       | Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
@@ -1197,7 +1202,7 @@ let doc_scattered (SD_aux (sdef, _)) = match sdef with
      string "member"; doc_type_union tu]
  | SD_scattered_end id -> string "end" ^^ space ^^ doc_id id
 
-let doc_def def = group (match def with
+let rec doc_def def = group (match def with
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def
@@ -1205,6 +1210,8 @@ let doc_def def = group (match def with
   | DEF_val lbind -> doc_let lbind
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
+  | DEF_comm (DC_comm s) -> comment (string s)
+  | DEF_comm (DC_comm_struct d) -> comment (doc_def d)
   ) ^^ hardline
 
 let doc_defs (Defs(defs)) =

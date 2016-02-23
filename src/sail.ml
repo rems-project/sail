@@ -47,6 +47,7 @@
 open Process_file
 
 let lib = ref []
+let opt_file_out : string option ref = ref None
 let opt_print_version = ref false
 let opt_print_verbose = ref false
 let opt_print_lem_ast = ref false
@@ -60,16 +61,16 @@ let options = Arg.align ([
     Arg.String (fun l -> lib := l::!lib),
     " treat the file as input only and generate no output for it");
   ( "-verbose",
-    Arg.Unit (fun b -> opt_print_verbose := true),
+    Arg.Set opt_print_verbose,
     " pretty-print out the file");
   ( "-lem_ast",
-    Arg.Unit (fun b -> opt_print_lem_ast := true),
+    Arg.Set opt_print_lem_ast,
     " pretty-print a Lem AST representation of the file");
   ( "-lem",
-    Arg.Unit (fun b -> opt_print_lem := true),
+    Arg.Set opt_print_lem,
     " print a Lem translated version of the specification");
   ( "-ocaml",
-    Arg.Unit (fun b -> opt_print_ocaml := true),
+    Arg.Set opt_print_ocaml,
     " print an Ocaml translated version of the specification");
   ( "-skip_constraints",
     Arg.Clear Type_internal.do_resolve_constraints,
@@ -81,8 +82,11 @@ let options = Arg.align ([
     Arg.String (fun l -> opt_libs_ocaml := l::!opt_libs_ocaml),
     " provide additional library to open in Ocaml output");
   ( "-v",
-    Arg.Unit (fun b -> opt_print_version := true),
+    Arg.Set opt_print_version,
     " print version");
+  ( "-o",
+    Arg.String (fun f -> opt_file_out := Some f),
+    " select output filename prefix";)
 ] )
 
 let usage_msg =
@@ -107,25 +111,28 @@ let main() =
     let (ast,kenv,ord) = convert_ast ast in
     let ast = check_ast ast kenv ord in 
     let ast = rewrite_ast ast in
+    let out_name = match !opt_file_out with
+      | None -> fst (List.hd parsed)
+      | Some f -> f ^ ".sail" in
     (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
     begin 
       (if !(opt_print_verbose)
        then ((Pretty_print.pp_defs stdout) ast)
        else ());
       (if !(opt_print_lem_ast)
-       then output "" Lem_ast_out [(fst (List.hd parsed)),ast]
+       then output "" Lem_ast_out [out_name,ast]
        else ());
       (if !(opt_print_ocaml)
        then let ast_ocaml = rewrite_ast_ocaml ast in
          if !(opt_libs_ocaml) = []
-         then output "" (Ocaml_out None) [(fst (List.hd parsed)),ast_ocaml]
-         else output "" (Ocaml_out (Some (List.hd !opt_libs_ocaml))) [(fst (List.hd parsed)),ast_ocaml]
+         then output "" (Ocaml_out None) [out_name,ast_ocaml]
+         else output "" (Ocaml_out (Some (List.hd !opt_libs_ocaml))) [out_name,ast_ocaml]
        else ());
       (if !(opt_print_lem)
        then let ast_lem = rewrite_ast_lem ast in
          if !(opt_libs_lem) = []
-         then output "" (Lem_out None) [(fst (List.hd parsed)),ast_lem]
-         else output "" (Lem_out (Some (List.hd !opt_libs_lem))) [(fst (List.hd parsed)),ast_lem]
+         then output "" (Lem_out None) [out_name,ast_lem]
+         else output "" (Lem_out (Some (List.hd !opt_libs_lem))) [out_name,ast_lem]
        else ())
     end
 
