@@ -3,7 +3,7 @@ open Ast
 open Type_internal
 
 (*Envs is a tuple of used names (currently unused), map from id to kind, default order for vector types and literal vectors *)
-type envs = Nameset.t * kind Envmap.t * order 
+type envs = Nameset.t * kind Envmap.t * Ast.order 
 type 'a envs_out = 'a * envs
 
 let id_to_string (Id_aux(id,l)) =
@@ -32,16 +32,15 @@ let typquant_to_quantkinds k_env typquant =
         [])
 
 let typ_error l msg opt_id opt_var opt_kind =
-  raise (Reporting_basic.err_typ 
-           l
-           (msg ^
-              (match opt_id, opt_var, opt_kind with
-              | Some(id),None,Some(kind) -> (id_to_string id) ^ " of " ^ (kind_to_string kind)
-              | Some(id),None,None -> ": " ^ (id_to_string id)
-              | None,Some(v),Some(kind) -> (var_to_string v) ^ " of " ^ (kind_to_string kind)
-              | None,Some(v),None -> ": " ^ (var_to_string v)
-              | None,None,Some(kind) -> " " ^ (kind_to_string kind)
-              | _ -> "")))
+  let full_msg = (msg ^
+                  (match opt_id, opt_var, opt_kind with
+                   | Some(id),None,Some(kind) -> (id_to_string id) ^ " of " ^ (kind_to_string kind)
+                   | Some(id),None,None -> ": " ^ (id_to_string id)
+                   | None,Some(v),Some(kind) -> (var_to_string v) ^ " of " ^ (kind_to_string kind)
+                   | None,Some(v),None -> ": " ^ (var_to_string v)
+                   | None,None,Some(kind) -> " " ^ (kind_to_string kind)
+                   | _ -> "")) in
+  Reporting_basic.report_error (Reporting_basic.Err_type(l, full_msg))
                 
 let to_base_kind (BK_aux(k,l')) =
   match k with
@@ -62,7 +61,7 @@ let to_kind (k_env : kind Envmap.t) (K_aux(K_kind(klst),l)) : (Ast.kind * kind) 
           | K_Typ -> K_aux(K_kind(List.map fst k_pairs), l), { k = K_Lam(args,ret) }
           | _ -> typ_error l "Type constructor must have an -> kind ending in Type" None None None
 
-let rec to_typ (k_env : kind Envmap.t) (def_ord : order) (t: Ast.typ) : Ast.typ =
+let rec to_typ (k_env : kind Envmap.t) (def_ord : Ast.order) (t: Ast.typ) : Ast.typ =
   match t with
   | Typ_aux(t,l) ->
     Typ_aux( (match t with 
@@ -130,7 +129,7 @@ and to_nexp (k_env : kind Envmap.t) (n: Ast.nexp) : Ast.nexp =
       let n2 = to_nexp k_env t2 in
       Nexp_aux(Nexp_minus(n1,n2),l))
     
-and to_order (k_env : kind Envmap.t) (def_ord : order) (o: Ast.order) : Ast.order =
+and to_order (k_env : kind Envmap.t) (def_ord : Ast.order) (o: Ast.order) : Ast.order =
   match o with
   | Ord_aux(t,l) ->
     (match t with
@@ -161,7 +160,7 @@ and to_effects (k_env : kind Envmap.t) (e : Ast.effect) : Ast.effect =
         | Effect_set(effects) -> Effect_set(effects)
     ), l)
 
-and to_typ_arg (k_env : kind Envmap.t) (def_ord : order) (kind : kind) (arg : Ast.typ_arg) : Ast.typ_arg =
+and to_typ_arg (k_env : kind Envmap.t) (def_ord : Ast.order) (kind : kind) (arg : Ast.typ_arg) : Ast.typ_arg =
   let l,ta = (match arg with Typ_arg_aux(ta,l) -> l,ta) in
   Typ_arg_aux (  
     (match kind.k,ta with 
@@ -244,7 +243,8 @@ let to_typquant (k_env: kind Envmap.t) (tq : typquant) : typquant * kind Envmap.
       let lst,k_env,local_env = to_q_items k_env Nameset.empty Envmap.empty qlist in
       TypQ_aux(TypQ_tq(lst),l), k_env, local_env)
 
-let to_typschm (k_env:kind Envmap.t) (def_ord:order) (tschm:Ast.typschm):Ast.typschm * kind Envmap.t * kind Envmap.t =
+let to_typschm (k_env:kind Envmap.t) (def_ord:Ast.order) (tschm:Ast.typschm)
+  :Ast.typschm * kind Envmap.t * kind Envmap.t =
   match tschm with
   | TypSchm_aux(ts,l) -> 
     (match ts with | TypSchm_ts(tquant,t) ->
@@ -252,7 +252,7 @@ let to_typschm (k_env:kind Envmap.t) (def_ord:order) (tschm:Ast.typschm):Ast.typ
       let typ = to_typ k_env def_ord t in
       TypSchm_aux(TypSchm_ts(tq,typ),l),k_env,local_env)
 
-let rec to_pat (k_env : kind Envmap.t) (def_ord : order) (P_aux(pat,(l,_)) : tannot pat) : tannot pat = 
+let rec to_pat (k_env : kind Envmap.t) (def_ord : Ast.order) (P_aux(pat,(l,_)) : tannot pat) : tannot pat = 
   P_aux(
     (match pat with 
     | P_lit(lit) -> P_lit(lit)
@@ -277,7 +277,7 @@ let rec to_pat (k_env : kind Envmap.t) (def_ord : order) (P_aux(pat,(l,_)) : tan
     ), (l,NoTyp))
 
 
-let rec to_letbind (k_env : kind Envmap.t) (def_ord : order) (LB_aux(lb,(l,_)) : tannot letbind) : tannot letbind =
+let rec to_letbind (k_env : kind Envmap.t) (def_ord : Ast.order) (LB_aux(lb,(l,_)) : tannot letbind) : tannot letbind =
   LB_aux(
     (match lb with
     | LB_val_explicit(typschm,pat,exp) ->
@@ -287,7 +287,7 @@ let rec to_letbind (k_env : kind Envmap.t) (def_ord : order) (LB_aux(lb,(l,_)) :
       LB_val_implicit(to_pat k_env def_ord pat, to_exp k_env def_ord exp)
     ), (l,NoTyp))
 
-and to_exp (k_env : kind Envmap.t) (def_ord : order) (E_aux(exp,(l,_)) :  exp) : exp = 
+and to_exp (k_env : kind Envmap.t) (def_ord : Ast.order) (E_aux(exp,(l,_)) :  exp) : exp = 
   E_aux(
     (match exp with
     | E_block(exps) -> E_block(List.map (to_exp k_env def_ord) exps)
@@ -343,7 +343,7 @@ and to_exp (k_env : kind Envmap.t) (def_ord : order) (E_aux(exp,(l,_)) :  exp) :
     | _ -> raise (Reporting_basic.err_unreachable l "to_exp given internal node")
     ), (l,NoTyp))
 
-and to_lexp (k_env : kind Envmap.t) (def_ord : order) (LEXP_aux(exp,(l,_)) : tannot lexp) : tannot lexp = 
+and to_lexp (k_env : kind Envmap.t) (def_ord : Ast.order) (LEXP_aux(exp,(l,_)) : tannot lexp) : tannot lexp = 
   LEXP_aux(
     (match exp with
     | LEXP_id(id) -> LEXP_id(id)
@@ -360,11 +360,11 @@ and to_lexp (k_env : kind Envmap.t) (def_ord : order) (LEXP_aux(exp,(l,_)) : tan
     | LEXP_field(fexp,id) -> LEXP_field(to_lexp k_env def_ord fexp, id))
   , (l,NoTyp))
 
-and to_case (k_env : kind Envmap.t) (def_ord : order) (Pat_aux(pex,(l,_)) : tannot pexp) : tannot pexp =
+and to_case (k_env : kind Envmap.t) (def_ord : Ast.order) (Pat_aux(pex,(l,_)) : tannot pexp) : tannot pexp =
   match pex with 
   | Pat_exp(pat,exp) -> Pat_aux(Pat_exp(to_pat k_env def_ord pat, to_exp k_env def_ord exp),(l,NoTyp))
 
-and to_fexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:order) (FES_aux (FES_Fexps(fexps,_),(l,_)))
+and to_fexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:Ast.order) (FES_aux (FES_Fexps(fexps,_),(l,_)))
   : tannot fexps option =
   let wrap fs = FES_aux (FES_Fexps(fs,false),(l,NoTyp)) in
   match fexps with
@@ -379,7 +379,7 @@ and to_fexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:order) (FES_aux
        | None ->
          Some(wrap([fexp])))
 
-and to_iexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:order) (iexps: (int * exp) list)
+and to_iexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:Ast.order) (iexps: (int * exp) list)
   :(int * exp) list =
   match iexps with
   | [] -> []
@@ -401,10 +401,10 @@ let to_default (names, k_env, default_order) (default : tannot default_spec) : (
       (match o with
        | Ord_aux(Ord_inc,lo) ->
          let default_order = Ord_aux(Ord_inc,lo) in
-         DT_aux(DT_order default_order,l),(names,k_env,{order=Oinc})
+         DT_aux(DT_order default_order,l),(names,k_env,default_order)
        | Ord_aux(Ord_dec,lo) ->
          let default_order = Ord_aux(Ord_dec,lo) in
-         DT_aux(DT_order default_order,l),(names,k_env,{order=Odec})
+         DT_aux(DT_order default_order,l),(names,k_env,default_order)
        | _ -> typ_error l "Default order must be Inc or Dec" None None None))
 
 let to_spec (names,k_env,default_order) (val_: tannot val_spec) : (tannot val_spec) envs_out =
@@ -482,7 +482,8 @@ let to_typedef (names,k_env,def_ord) (td: tannot type_def) : (tannot type_def) e
     let ranges = List.map (fun (range,id) -> (to_range range),id) ranges in
     TD_aux(TD_register(id,n1,n2,ranges),(l,NoTyp)), (names,Envmap.insert k_env (key, {k=K_Typ}),def_ord))
 
-let to_tannot_opt (k_env:kind Envmap.t) (def_ord:order) (Typ_annot_opt_aux(tp,l)):tannot_opt * kind Envmap.t * kind Envmap.t=
+let to_tannot_opt (k_env:kind Envmap.t) (def_ord:Ast.order) (Typ_annot_opt_aux(tp,l))
+  :tannot_opt * kind Envmap.t * kind Envmap.t=
   match tp with
   | Typ_annot_opt_some(tq,typ) ->
     let typq,k_env,k_local = to_typquant k_env tq in
@@ -651,7 +652,7 @@ let rec to_defs_helper envs partial_defs = function
                    then (fst !d) :: defs, envs, partial_defs
                    else typ_error l "Scattered type definition never ended" (Some id) None None))                
 
-let to_checked_ast (default_names : Nameset.t) (kind_env : kind Envmap.t) (def_ord : order) (Defs(defs)) =
+let to_checked_ast (default_names : Nameset.t) (kind_env : kind Envmap.t) (def_ord : Ast.order) (Defs(defs)) =
   let defs,(_,k_env,def_ord),partial_defs = to_defs_helper (default_names,kind_env,def_ord) [] defs in
   List.iter 
     (fun (id,(d,k)) -> 
