@@ -17,6 +17,13 @@
 
 \newpage
 
+\section{Introduction}
+
+This is a manual describing the Sail specification language, its
+common library, compiler, interpreter and type system. However it is
+currently in early stages of being written, so questions to the
+developers are highly encouraged.
+
 \section{Sail syntax}
 
 \ottgrammartabular{
@@ -77,6 +84,46 @@
 \ottfunctions\ottinterrule
 \ottfunctionsXXwithXXcoercions\ottinterrule}
 \newpage
+
+\section{Tips for Writing Sail specifications}
+
+This section attempts to offer advice for writing Sail specifications
+that will work well with the Sail executable interpreter and
+compilers.
+
+Some tips might also be advice for good ways to specify instructions;
+this will come from a combination of users and Sail developers.
+
+\begin{itemize}
+\item Be precise in numeric types. 
+
+While Sail includes very wide types like int and nat, consider that
+for bounds checking, numeric operations, and and clear understanding,
+these really are unbounded quantities. If you know that a number in
+the specification will range only between 0 and 32, 0 and 4, -32 to
+32, it is better to use a specific range type such as [|32|]. 
+
+Similarly, if you don't know the range precisely, it may also be best
+to remain polymorphic and let Sail's type resolution work out bounds
+in a particular use rather than removing all bounds; to do this, use
+[:'n:] to say that it will polymorphically take some number.
+
+\item Use bit vectors for registers.
+
+Sail the language will readily allow a register to store a value of
+any type. However, the Sail executable interpreter expects that it is
+simulating a uni-processor machine where all registers are bit
+vectors.
+
+A vector of length one, such as \emph{a} can read the element \emph{a}
+either with {\tt a} or {\tt a[0]}.
+
+\item Have functions named decode and execute to evaluate
+  instructions.
+
+The sail interpreter is hard-wired to look for functions with these names.
+
+\end{itemize}
 
 \section{Sail type system}
 
