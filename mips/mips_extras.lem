@@ -89,5 +89,5 @@ let memory_writes : memory_writes = [
 
 let barrier_functions = [
   (*Need to know what barrier kind to install*)
-  ("MEM_Sync", Isync);
+  ("MEM_sync", Isync);
 ]

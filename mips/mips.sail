@@ -28,6 +28,7 @@ register (CauseReg) CP0Cause
 register (bit[64])  CP0EPC
 register (bit[64])  CP0ErrorEPC
 register (bit[1])   CP0LLBit
+register (bit[64])  CP0LLAddr
 register (bit[64])  CP0BadVAddr
 
 typedef StatusReg = register bits [31:0] {
@@ -97,7 +98,7 @@ let (vector <0, 32, inc, (register<(bit[64])>) >) GPR =
   ]
 
 (* Check whether a given 64-bit vector is a properly sign extended 32-bit word *)
-val bit[64] -> bool effect pure isWordVal
+val bit[64] -> bool effect pure NotWordVal
 function bool NotWordVal (word) = 
     (word[31] ^^ 32) != word[63..32]
 
@@ -191,11 +192,11 @@ function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr,
       case 0b11 -> switch(vAddr[61..31], vAddr[30..29]) { (* xkseg *)
         case (0b1111111111111111111111111111111, 0b11) -> (err, None)  (* kseg3 mapped 32-bit compat TODO *)
         case (0b1111111111111111111111111111111, 0b10) -> (err, None)  (* sseg  mapped 32-bit compat TODO *)
-        case (0b1111111111111111111111111111111, 0b01) -> (None, Some(vAddr)) (* kseg1 unmapped uncached 32-bit compat *)
-        case (0b1111111111111111111111111111111, 0b00) -> (None, Some(vAddr)) (* kseg0 unmapped cached 32-bit compat *)
+        case (0b1111111111111111111111111111111, 0b01) -> (None, Some(EXTZ(vAddr[28..0]))) (* kseg1 unmapped uncached 32-bit compat *)
+        case (0b1111111111111111111111111111111, 0b00) -> (None, Some(EXTZ(vAddr[28..0]))) (* kseg0 unmapped cached 32-bit compat *)
         case (_, _) -> (err, None)  (* xkseg mapped TODO *)
       }
-      case 0b10 -> (None, Some(0b10010 : (vAddr[58..0]))) (* xkphys bits 61-59 are cache mode which we ignore *)
+      case 0b10 -> (None, Some(EXTZ(vAddr[58..0]))) (* xkphys bits 61-59 are cache mode which we ignore *)
       case 0b01 -> (err, None) (* xsseg - supervisor mapped TODO *)
       case 0b00 -> (err, None) (* xuseg - user mapped TODO *)
     }
@@ -304,7 +305,7 @@ function clause execute (DADDI (rs, rt, imm)) =
     let (bit[65]) sum65 = (EXTS(rGPR(rs)) + EXTS(imm)) in
     {
       if (sum65[64] != sum65[63]) then
-        SignalException(Ov)
+        exit (SignalException(Ov))
       else
         wGPR(rt) := sum65[63..0]
     }
@@ -323,7 +324,7 @@ function clause execute (DADD (rs, rt, rd)) =
     let (bit[65]) sum65 = (EXTS(rGPR(rs)) + EXTS(rGPR(rt))) in
     {
       if sum65[64] != sum65[63] then
-        SignalException(Ov)
+        exit (SignalException(Ov))
       else
         wGPR(rd) := sum65[63..0]
     }
@@ -345,7 +346,7 @@ function clause execute (ADD(rs, rt, rd)) =
     else
       let (bit[33]) sum33 = (EXTS(opA[31 .. 0]) + EXTS(opB[31 .. 0])) in
         if sum33[32] != sum33[31] then
-          SignalException(Ov)
+          exit (SignalException(Ov))
         else
           wGPR(rd) := EXTS(sum33[31..0])
   }
@@ -365,7 +366,7 @@ function clause execute (ADDI(rs, rt, imm)) =
     else
       let (bit[33]) sum33 = (EXTS(opA[31 .. 0]) + EXTS(imm)) in
         if sum33[32] != sum33[31] then
-          SignalException(Ov)
+          exit (SignalException(Ov))
         else
           wGPR(rt) := EXTS(sum33[31..0])
   }
@@ -432,7 +433,7 @@ function clause execute (DSUB (rs, rt, rd)) =
     let (bit[65]) temp65 = (EXTS(rGPR(rs)) - EXTS(rGPR(rt))) in
     {
       if temp65[64] != temp65[63] then
-        SignalException(Ov)
+        exit (SignalException(Ov))
       else
         wGPR(rd) := temp65[63..0]
     }
@@ -454,7 +455,7 @@ function clause execute (SUB(rs, rt, rd)) =
     else
       let (bit[33]) temp33 = (EXTS(opA[31..0]) - EXTS(opB[31..0])) in
       if temp33[32] != temp33[31] then
-        SignalException(Ov)
+        exit (SignalException(Ov))
       else
         wGPR(rd) := EXTS(temp33[31..0])
   }
@@ -872,9 +873,11 @@ function clause execute (MUL(rs, rt, rd)) =
         undefined
       else
         EXTS(result[31..0]);
-    (* HI and LO are always undefined after MUL *)
+    (* HI and LO are technically undefined after MUL, but this causes problems with tests and 
+       (potentially) context switch so just leave them alone
     HI := undefined;
     LO := undefined;
+    *)
   }
 
 (* MULT 32-bit multiply into HI/LO *)
@@ -1007,10 +1010,15 @@ function clause execute (DIV(rs, rt)) =
   {
     rsVal := rGPR(rs);
     rtVal := rGPR(rt);
-    let ((bit[32]) q, (bit[32])r) = (if (NotWordVal(rsVal) | NotWordVal(rtVal) | (rtVal == 0)) then
+    let ((bit[32]) q, (bit[32])r) = (
+      if (NotWordVal(rsVal) | NotWordVal(rtVal) | (rtVal == 0)) then
         (undefined, undefined)
       else
-        ((rsVal[31..0]) quot_s (rtVal[31..0]), (rsVal[31..0]) mod (rtVal[31..0])))
+        let si = (signed((rsVal[31..0]))) in
+        let ti = (signed((rtVal[31..0]))) in
+        let qi = (si quot_s ti)  in
+        let ri = (si mod_s ti)   in
+        ((bit[32]) qi, (bit[32]) ri))
     in
     {
       HI := EXTS(r);
@@ -1026,10 +1034,15 @@ function clause execute (DIVU(rs, rt)) =
   {
     rsVal := rGPR(rs);
     rtVal := rGPR(rt);
-    let ((bit[32]) q, (bit[32])r) = (if (NotWordVal(rsVal) | NotWordVal(rtVal) | rtVal == 0) then
+    let ((bit[32]) q, (bit[32])r) = (
+      if (NotWordVal(rsVal) | NotWordVal(rtVal) | rtVal == 0) then
         (undefined, undefined)
       else
-        ((rsVal[31..0]) quot (rtVal[31..0]), (rsVal[31..0]) mod (rtVal[31..0])))
+        let si = ((int)(rsVal[31..0])) in
+        let ti = ((int)(rtVal[31..0])) in
+        let qi = (si quot ti)  in
+        let ri = (si mod ti)   in
+        ((bit[32]) qi, (bit[32]) ri))
     in
     {
       HI := EXTS(r);
@@ -1043,14 +1056,17 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : 0b00000 : 0b00000 :
   Some(DDIV(rs, rt))
 function clause execute (DDIV(rs, rt)) =
   {
-    rsVal := rGPR(rs);
-    rtVal := rGPR(rt);
+    rsVal := signed(rGPR(rs));
+    rtVal := signed(rGPR(rt));
     let ((bit[64])q, (bit[64])r) = (if (rtVal == 0)
       then (undefined, undefined) 
-      else (rsVal quot_s rtVal, rsVal mod rtVal)) in
+      else 
+           let qi = (rsVal quot_s rtVal) in
+           let ri = (rsVal mod_s rtVal) in
+           ((bit[64]) qi, (bit[64]) ri)) in
     {
       LO    := q;
-      HI    := r; (* signed? *)
+      HI    := r;
     }
   }
 
@@ -1060,11 +1076,13 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : 0b00000 : 0b00000 :
   Some(DDIVU(rs, rt))
 function clause execute (DDIVU(rs, rt)) =
   {
-    rsVal := rGPR(rs);
-    rtVal := rGPR(rt);
+    (int) rsVal := rGPR(rs);
+    (int) rtVal := rGPR(rt);
     let ((bit[64])q, (bit[64])r) = (if (rtVal == 0)
       then (undefined, undefined) 
-      else (rsVal quot rtVal, rsVal mod rtVal)) in
+      else let qi = (rsVal quot rtVal) in
+           let ri = (rsVal mod rtVal) in
+           ((bit[64]) qi, (bit[64]) ri)) in
     {
       LO    := q;
       HI    := r;
@@ -1197,7 +1215,7 @@ function clause decode (0b000000 : (bit[20]) code : 0b001100) =
   Some(SYSCALL) (* code is ignored *)
 function clause execute (SYSCALL) =
   {
-    SignalException(Sys)
+    exit (SignalException(Sys))
   }
 
 (* BREAK is identical to SYSCALL exception for the exception raised *)
@@ -1206,7 +1224,7 @@ function clause decode (0b000000 : (bit[20]) code : 0b001101) =
   Some(BREAK) (* code is ignored *)
 function clause execute (BREAK) =
   {
-    SignalException(Bp)
+    exit (SignalException(Bp))
   }
 
 (* Accept WAIT as a NOP *)
@@ -1229,7 +1247,7 @@ function clause execute (TRAPREG(rs, rt, cmp)) =
     rt_val := rGPR(rt);
     condition := compare(cmp, rs_val, rt_val);
     if (condition) then
-      SignalException(Tr)
+      exit (SignalException(Tr))
   }
 
 
@@ -1247,7 +1265,7 @@ function clause execute (TRAPIMM(rs, imm, cmp)) =
     imm_val := EXTS(imm);
     condition := compare(cmp, rs_val, imm_val);
     if (condition) then
-      SignalException(Tr)
+      exit (SignalException(Tr))
   }
 
 (**************************************************************************************)
@@ -1268,13 +1286,14 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
   {
     (bit[64]) vAddr := EXTS(offset) + rGPR(base);
     if ~ (isAddressAligned(vAddr, width)) then
-      SignalExceptionBadAddr(AdEL, vAddr) (* unaligned access *)
+      exit (SignalExceptionBadAddr(AdEL, vAddr)) (* unaligned access *)
     else
       let pAddr = (TranslateOrExit(vAddr, LoadData)) in
           {
             memResult := if (linked) then
                 {
-                  CP0LLBit := 0b1;
+                  CP0LLBit  := 0b1;
+                  CP0LLAddr := pAddr;
                   MEMr_reserve(pAddr, wordWidthBytes(width));
                 }
               else
@@ -1302,7 +1321,7 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
         (bit[64]) vAddr := EXTS(offset) + rGPR(base);
         (bit[64]) rt_val := rGPR(rt);
         if ~ (isAddressAligned(vAddr, width)) then
-          SignalExceptionBadAddr(AdES, vAddr) (* unaligned access *)
+          exit (SignalExceptionBadAddr(AdES, vAddr)) (* unaligned access *)
         else
           let pAddr = (TranslateOrExit(vAddr, StoreData)) in
           {
@@ -1548,7 +1567,18 @@ function clause decode (0b010000 : 0b00001 : (regno) rt : (regno) rd : 0b0000000
 function clause execute (MFC0(rt, rd, sel, double)) = 
   let (bit[64]) result = switch (rd, sel)
         {
+          case (0b00000,0b000) -> 0                (* 0, TLB Index *)
+          case (0b00001,0b000) -> 0                (* 1, TLB Random *)
+          case (0b00010,0b000) -> 0                (* 2, TLB EntryLo0 *)
+          case (0b00011,0b000) -> 0                (* 3, TLB EntryLo1 *)
+          case (0b00100,0b000) -> 0                (* 4, TLB Context *)
+          case (0b00101,0b000) -> 0                (* 5, TLB PageMask *)
+          case (0b00110,0b000) -> 0                (* 6, TLB Wired *)
+          case (0b00111,0b000) -> 0                (* 6, HWREna *)
           case (0b01000,0b000) -> CP0BadVAddr      (* 8, BadVAddr reg *)
+          case (0b01000,0b001) -> 0                (* 8, BadInstr reg XXX TODO *)
+          case (0b01001,0b000) -> 0                (* 9, Count reg XXX TODO *)
+          case (0b01010,0b000) -> 0                (* 10, TLB EntryHi *)
           case (0b01011,0b000) -> EXTZ(CP0Compare) (* 11, Compare reg *)
           case (0b01100,0b000) -> EXTZ(CP0Status)  (* 12, Status reg *)
           case (0b01101,0b000) -> EXTZ(CP0Cause)   (* 13, Cause reg *)
@@ -1565,7 +1595,11 @@ function clause execute (MFC0(rt, rd, sel, double)) =
                                   : 0b0000 (* zero *)
                                   : 0b000) (* K0 TODO should be writable*)
           case (0b10000,0b001) -> 0                (* 16, sel 1: Config1 *)
-          case _               -> {SignalException(ResI); 0}
+          case (0b10001,0b000) -> CP0LLAddr        (* 17, sel 0: LLAddr *)
+          case (0b10010,0b000) -> 0                (* 18, WatchLo *)
+          case (0b10011,0b000) -> 0                (* 19, WatchHi *)
+          case (0b10100,0b000) -> 0                (* 20, XContext *)
+          case _               -> {exit (SignalException(ResI)); 0}
         } in
   wGPR(rt) := if (double) then result else EXTS(result[31..0])
   
@@ -1600,7 +1634,7 @@ function clause execute (MTC0(rt, rd, sel, double)) =
         (CP0Cause.IP)[9..8] := reg_val[9..8];
       }
       case (0b01110,0b000) -> CP0EPC      := reg_val         (* 14, EPC *)
-      case _               -> SignalException(ResI)
+      case _               -> exit (SignalException(ResI))
     }
 
 union ast member unit ERET
@@ -1624,7 +1658,10 @@ function clause execute (ERET) =
 function clause execute (HCF) =
   () (* halt instruction actually executed by interpreter framework *)
 
-function clause decode _ = None
+union ast member unit RI
+function clause decode _ = Some(RI)
+function clause execute (RI) =
+      exit (SignalException (ResI))
 
 end decode
 end execute

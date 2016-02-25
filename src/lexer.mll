@@ -108,6 +108,7 @@ let kw_table =
 
      ("div",			 (fun x -> Div_));
      ("mod",			 (fun x -> Mod));
+     ("mod_s",                   (fun x -> ModUnderS));
      ("quot",			 (fun x -> Quot));
      ("quot_s",                  (fun x -> QuotUnderS));
      ("rem",			 (fun x -> Rem));
@@ -159,7 +160,6 @@ rule token = parse
   | ":"                                 { Colon(r ":") }
   | ","                                 { Comma }
   | "."                                 { Dot }
-  | "/"			                { (Div(r "/")) }
   | "="                                 { (Eq(r"=")) }
   | "!"					{ (Excl(r"!")) }
   | ">"					{ (Gt(r">")) }
@@ -186,7 +186,6 @@ rule token = parse
   | ":>"                                { ColonGt }
   | ":]"                                { ColonSquare }
   | ".."				{ DotDot }
-  | "=/="				{ (EqDivEq(r"=/=")) }
   | "=="				{ (EqEq(r"==")) }
   | "!="				{ (ExclEq(r"!=")) }
   | "!!"				{ (ExclExcl(r"!!")) }
@@ -264,7 +263,6 @@ rule token = parse
   | "&&" oper_char+ as i                { (AmpAmpI(r i)) }
   | "^^" oper_char+ as i		{ (CarrotCarrotI(r i)) }
   | "::" oper_char+ as i                { (ColonColonI(r i)) }
-  | "=/=" oper_char+ as i		{ (EqDivEqI(r i)) }
   | "==" oper_char+ as i		{ (EqEqI(r i)) }
   | "!=" oper_char+ as i		{ (ExclEqI(r i)) }
   | "!!" oper_char+ as i		{ (ExclExclI(r i)) }

@@ -91,6 +91,8 @@ let parse_file (f : string) : Parse_ast.defs =
 let convert_ast (defs : Parse_ast.defs) : (Type_internal.tannot Ast.defs * kind Envmap.t * Ast.order)=
   Initial_check.to_ast Nameset.empty Type_internal.initial_kind_env (Ast.Ord_aux(Ast.Ord_inc,Parse_ast.Unknown)) defs
 
+let initi_check_ast (defs : Type_internal.tannot Ast.defs) : (Type_internal.tannot Ast.defs * kind Envmap.t * Ast.order)=
+  Initial_check_full_ast.to_checked_ast Nameset.empty Type_internal.initial_kind_env (Ast.Ord_aux(Ast.Ord_inc,Parse_ast.Unknown)) defs
 
 let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.order) : Type_internal.tannot Ast.defs =
   let d_env = { Type_internal.k_env = k; Type_internal.abbrevs = Type_internal.initial_abbrev_env; 

@@ -83,11 +83,6 @@ type base_effect =
  | BE_aux of base_effect_aux * l
 
 
-type id_aux =  (* Identifier *)
- | Id of x
- | DeIid of x (* remove infix status *)
-
-
 type effect_aux =  (* effect set, of kind Effects *)
  | Effect_var of kid
  | Effect_set of list base_effect (* effect set *)
@@ -99,8 +94,9 @@ type order_aux =  (* vector order specifications, of kind Order *)
  | Ord_dec (* decreasing (big-endian) *)
 
 
-type id = 
- | Id_aux of id_aux * l
+type id_aux =  (* Identifier *)
+ | Id of x
+ | DeIid of x (* remove infix status *)
 
 
 type effect = 
@@ -109,6 +105,10 @@ type effect =
 
 type order = 
  | Ord_aux of order_aux * l
+
+
+type id = 
+ | Id_aux of id_aux * l
 
 let effect_union e1 e2 = 
   match (e1,e2) with
@@ -228,7 +228,16 @@ type reg_id_aux 'a =
  | RI_id of id
 
 
-type fexps_aux 'a =  (* Field-expression list *)
+type lexp 'a = 
+ | LEXP_aux of (lexp_aux 'a) * annot 'a
+
+and fexp_aux 'a =  (* Field-expression *)
+ | FE_Fexp of id * (exp 'a)
+
+and fexp 'a = 
+ | FE_aux of (fexp_aux 'a) * annot 'a
+
+and fexps_aux 'a =  (* Field-expression list *)
  | FES_Fexps of list (fexp 'a) * bool
 
 and fexps 'a = 
@@ -285,6 +294,8 @@ and exp_aux 'a =  (* Expression *)
  | E_internal_cast of annot 'a * (exp 'a) (* This is an internal cast, generated during type checking that will resolve into a syntactic cast after *)
  | E_internal_exp of annot 'a (* This is an internal use for passing nexp information  to library functions, postponed for constraint solving *)
  | E_internal_exp_user of annot 'a * annot 'a (* This is like the above but the user has specified an implicit parameter for the current function *)
+ | E_comment of string (* For generated unstructured comments *)
+ | E_comment_struc of (exp 'a) (* For generated structured comments *)
  | E_internal_let of (lexp 'a) * (exp 'a) * (exp 'a) (* This is an internal node for compilation that demonstrates the scope of a local mutable variable *)
  | E_internal_plet of (pat 'a) * (exp 'a) * (exp 'a) (* This is an internal node, used to distinguised some introduced lets during processing from original ones *)
  | E_internal_return of (exp 'a) (* For internal use to embed into monad definition *)
@@ -299,15 +310,6 @@ and lexp_aux 'a =  (* lvalue expression *)
  | LEXP_vector of (lexp 'a) * (exp 'a) (* vector element *)
  | LEXP_vector_range of (lexp 'a) * (exp 'a) * (exp 'a) (* subvector *)
  | LEXP_field of (lexp 'a) * id (* struct field *)
-
-and lexp 'a = 
- | LEXP_aux of (lexp_aux 'a) * annot 'a
-
-and fexp_aux 'a =  (* Field-expression *)
- | FE_Fexp of id * (exp 'a)
-
-and fexp 'a = 
- | FE_aux of (fexp_aux 'a) * annot 'a
 
 
 type reg_id 'a = 
@@ -449,7 +451,11 @@ type val_spec 'a =
  | VS_aux of (val_spec_aux 'a) * annot 'a
 
 
-type def 'a =  (* Top-level definition *)
+type dec_comm 'a =  (* Top-level generated comments *)
+ | DC_comm of string (* generated unstructured comment *)
+ | DC_comm_struct of (def 'a) (* generated structured comment *)
+
+and def 'a =  (* Top-level definition *)
  | DEF_type of (type_def 'a) (* type definition *)
  | DEF_fundef of (fundef 'a) (* function definition *)
  | DEF_val of (letbind 'a) (* value definition *)
@@ -457,6 +463,7 @@ type def 'a =  (* Top-level definition *)
  | DEF_default of (default_spec 'a) (* default kind and type assumptions *)
  | DEF_scattered of (scattered_def 'a) (* scattered function and type definition *)
  | DEF_reg_dec of (dec_spec 'a) (* register declaration *)
+ | DEF_comm of (dec_comm 'a) (* generated comments *)
 
 
 type defs 'a =  (* Definition sequence *)

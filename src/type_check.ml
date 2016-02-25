@@ -786,7 +786,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
           | Tfn(arg,ret,_,ef') -> check_parms arg lft rht
           | _ -> typ_error l ("Expected a function, found identifier " ^ i ^ " bound to type " ^ (t_to_string t))) in
         (*let _ = Printf.eprintf "Looking for overloaded function %s, generic type is %s, arg_t is %s\n"
-          i (t_to_string t_p) (t_to_string arg_t) in*)
+            i (t_to_string t_p) (t_to_string arg_t) in*)
         (match (select_overload_variant d_env true overload_return variants arg_t) with
         | [] -> 
           typ_error l ("No function found with name " ^ i ^

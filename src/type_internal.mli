@@ -228,7 +228,7 @@ val tag_efs_annot: t -> tag -> effect -> effect -> tannot
 val cons_bs_annot : t -> nexp_range list -> bounds_env -> tannot
 val cons_bs_annot_efr : t -> nexp_range list -> bounds_env -> effect -> tannot
 
-
+val kind_to_string : kind -> string
 val t_to_string : t -> string
 val n_to_string : nexp -> string
 val constraints_to_string : nexp_range list -> string

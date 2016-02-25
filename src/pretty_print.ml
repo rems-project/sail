@@ -639,6 +639,9 @@ let squarebarbars = enclose lsquarebarbar rsquarebarbar
 let lsquarecolon = string "[:"
 let rsquarecolon = string ":]"
 let squarecolons = enclose lsquarecolon rsquarecolon
+let lcomment = string "(*"
+let rcomment = string "*)"
+let comment = enclose lcomment rcomment
 let string_lit = enclose dquote dquote
 let spaces op = enclose space space op
 let semi_sp = semi ^^ space
@@ -691,11 +694,26 @@ let doc_typ, doc_atomic_typ, doc_nexp =
       Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant m, _)), _);
       Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_inc, _)), _);
       Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
-        (doc_id id) ^^ (brackets (if n = 0 then doc_int m else doc_op colon (doc_int n) (doc_int (n+m-1))))
+    (doc_id id) ^^ (brackets (if n = 0 then doc_int m else doc_op colon (doc_int n) (doc_int (n+m-1))))
+  | Typ_app(Id_aux (Id "vector", _), [
+      Typ_arg_aux(Typ_arg_nexp
+                    (Nexp_aux(Nexp_minus (Nexp_aux(Nexp_constant n, _),
+                                          Nexp_aux(Nexp_constant 1, _)),_)),_);
+      Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant m, _)), _);
+      Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_dec, _)), _);
+      Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
+    (doc_id id) ^^ (brackets (if n = m then doc_int m else doc_op colon (doc_int m) (doc_int (n-1))))
+  | Typ_app(Id_aux (Id "vector", _), [
+      Typ_arg_aux(Typ_arg_nexp
+                  (Nexp_aux(Nexp_minus (n', Nexp_aux((Nexp_constant 1), _)),_) as n_n),_);
+      Typ_arg_aux(Typ_arg_nexp m_nexp, _);
+      Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_dec, _)), _);
+      Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
+    (doc_id id) ^^ (brackets (if n' = m_nexp then nexp m_nexp else doc_op colon (nexp m_nexp) (nexp n_n)))
   | Typ_app(Id_aux (Id "range", _), [
     Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
     Typ_arg_aux(Typ_arg_nexp m, _);]) ->
-    (squarebars (if n = 0 then nexp m else doc_op colon (doc_int n) (nexp m))) 
+    (squarebars (if n = 0 then nexp m else doc_op colon (doc_int n) (nexp m)))
   | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
     (squarecolons (nexp n))
   | Typ_app(id,args) ->
@@ -897,7 +915,7 @@ let doc_exp, doc_let =
   | _ -> group (parens (exp expr))
   and app_exp ((E_aux(e,_)) as expr) = match e with
   | E_app(f,args) ->
-      doc_unop (doc_id f) (parens (separate_map comma exp args))
+      (doc_id f) ^^ (parens (separate_map comma exp args))
   | _ -> vaccess_exp expr
   and vaccess_exp ((E_aux(e,_)) as expr) = match e with
   | E_vector_access(v,e) ->
@@ -973,7 +991,7 @@ let doc_exp, doc_let =
       let cases = separate_map (break 1) doc_case pexps in
       surround 2 1 opening cases rbrace
   | E_exit e ->
-    separate space [string "exit"; exp e;]
+    separate space [string "exit"; atomic_exp e;]
   | E_assert(c,m) ->
     separate space [string "assert"; parens (separate comma [exp c; exp m])]
   (* adding parens and loop for lower precedence *)
@@ -1001,7 +1019,9 @@ let doc_exp, doc_let =
   (* XXX default precedence for app_infix? *)
   | E_app_infix(l,op,r) ->
       failwith ("unexpected app_infix operator " ^ (pp_format_id op))
-      (* doc_op (doc_id op) (exp l) (exp r) *)
+  (* doc_op (doc_id op) (exp l) (exp r) *)
+  | E_comment s -> comment (string s)
+  | E_comment_struc e -> comment (exp e)
   | E_internal_exp((l, Base((_,t),_,_,_,_,bindings))) -> (*TODO use bindings, and other params*)
     (match t.t with
       | Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
@@ -1139,10 +1159,13 @@ let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   | _ ->
       let sep = hardline ^^ string "and" ^^ space in
       let clauses = separate_map sep doc_funcl fcls in
-      separate space [string "function";
-        doc_rec r ^^ doc_tannot_opt typa;
-        string "effect"; doc_effects_opt efa;
-        clauses]
+      separate space ([string "function";
+                      doc_rec r ^^ doc_tannot_opt typa;]@
+                      (match efa with
+                       | Effect_opt_aux (Effect_opt_pure,_) -> []
+                       | _ -> [string "effect";
+                               doc_effects_opt efa;])
+                      @[clauses])
 
 let doc_alias (AL_aux (alspec,_)) =
   match alspec with
@@ -1161,15 +1184,17 @@ let doc_dec (DEC_aux (reg,_)) =
 
 let doc_scattered (SD_aux (sdef, _)) = match sdef with
  | SD_scattered_function (r, typa, efa, id) ->
-     separate space [
+     separate space ([
        string "scattered function";
-       doc_rec r ^^ doc_tannot_opt typa;
-       string "effect"; doc_effects_opt efa;
-       doc_id id]
+       doc_rec r ^^ doc_tannot_opt typa;]@
+       (match efa with
+        | Effect_opt_aux (Effect_opt_pure,_) -> []
+        | _ -> [string "effect"; doc_effects_opt efa;])
+         @[doc_id id])
  | SD_scattered_variant (id, ns, tq) ->
      doc_op equals
        (string "scattered typedef" ^^ space ^^ doc_id id ^^ doc_namescm ns)
-       (doc_typquant tq empty)
+       (string "const union" ^^ space ^^ (doc_typquant tq empty))
  | SD_scattered_funcl funcl ->
      string "function clause" ^^ space ^^ doc_funcl funcl
  | SD_scattered_unioncl (id, tu) ->
@@ -1177,7 +1202,7 @@ let doc_scattered (SD_aux (sdef, _)) = match sdef with
      string "member"; doc_type_union tu]
  | SD_scattered_end id -> string "end" ^^ space ^^ doc_id id
 
-let doc_def def = group (match def with
+let rec doc_def def = group (match def with
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def
@@ -1185,6 +1210,8 @@ let doc_def def = group (match def with
   | DEF_val lbind -> doc_let lbind
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
+  | DEF_comm (DC_comm s) -> comment (string s)
+  | DEF_comm (DC_comm_struct d) -> comment (doc_def d)
   ) ^^ hardline
 
 let doc_defs (Defs(defs)) =

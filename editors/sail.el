@@ -175,19 +175,23 @@ Many people find eletric keys irritating, so you can disable them in
 setting this variable to nil."
   :group 'sail :type 'boolean)
 
-(defcustom sail-electric-close-list t
-  "*Non-nil means electrically insert `||' before a list-closing `]'.
+(defcustom sail-electric-close-range t
+  "*Non-nil means electrically insert `|' before a list-closing `]'.
 
 Many people find eletric keys irritating, so you can disable them in
 setting this variable to nil. You should probably have this on,
 though, if you also have `sail-electric-indent' on."
   :group 'sail :type 'boolean)
 
+(defcustom sail-electric-close-block t
+"*Non-nil means electrically insert `}'"
+  :group 'sail :type 'boolean)
+
 
 (defvar sail-options-list
   '(("Automatic indentation of leading keywords" . 'sail-use-abbrev-mode)
     ("Automatic indentation of ), ], |], ||], >, and }" . 'sail-electric-indent)
-    ("Automatic matching of [||" . 'sail-electric-close-list)
+    ("Automatic matching of [|" . 'sail-electric-close-range)
     "---"
     ("Indent body of comments" . 'sail-indent-comments)
     ("Indent first line of comments" . 'sail-indent-leading-comments)
@@ -598,10 +602,10 @@ though, if you also have `sail-electric-indent' on."
 
 (defvar sail-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map "|]" 'sail-electric-piperb)
+    ;(define-key map "|]" 'sail-electric-piperb)
     (define-key map ")" 'sail-electric-rp)
     (define-key map "}" 'sail-electric-rc)
-    (define-key map "]" 'sail-electric-rb)
+    ;(define-key map "]" 'sail-electric-rb)
     (define-key map ">" 'sail-electric-lt)
     (define-key map "\M-q" 'sail-indent-phrase)
     (define-key map "\C-c\C-q" 'sail-indent-phrase)
@@ -706,14 +710,14 @@ Based on Tuareg mode. See Tuareg mode for usage"
    sail-font-lock-keywords
    `(("\\<\\(extern\\|function\\|scattered\\|clause\\|effect\\|default\\|struct\\|const\\|union\\|val\\|typedef\\|in\\|let\\|rec\\|and\\|end\\|register\\|alias\\|member\\|enumerate\\)\\>"
       0 sail-font-lock-governing-face nil nil)
-     ("\\<\\(false\\|true\\)\\>" 0 font-lock-constant-face nil nil)
+     ("\\<\\(false\\|true\\|bitzero\\|bitone\\|0x[:xdigit:]\\|[:digit:]\\)\\>" 0 font-lock-constant-face nil nil)
      ("\\<\\(as\\|downto\\|else\\|foreach\\|if\\|t\\(hen\\|o\\)\\|when\\|switch\\|with\\|case\\|exit\\|nondet\\|from\\|by\\)\\>"
       0 font-lock-keyword-face nil nil)
      ("\\<\\(clause\\)\\>[ \t\n]*\\(\\(\\w\\|[_ \t()*,]\\)+\\)"
       2 font-lock-variable-name-face keep nil)
      ("\\<\\(typedef\\|union\\)\\>[ \t\n]*\\(\\(\\w\\|[_ \t()*,]\\)+\\)"
       2 font-lock-type-face keep nil)
-     ("\\<\\(Type\\|Nat\\|Order\\|Effect\\|inc\\|dec\\|rreg\\|wreg\\|rmem\\|wmem\\|barr\\|undef\\|unspec\\|nondet\\|pure\\|effect\\|IN\\|forall\\)\\>"
+     ("\\<\\(Type\\|Nat\\|Order\\|Effect\\|inc\\|dec\\|rreg\\|wreg\\|rmem\\|wmem\\|barr\\|undef\\|unspec\\|nondet\\|pure\\|effect\\|IN\\|forall\\|bit\\|nat\\|int\\)\\>"
       0 font-lock-type-face keep nil)
      ("\\<\\(val\\|extern\\|clause\\|and\\||let\\|rec\\>[ \t\n]*\\(\\(\\w\\|[_,?~.]\\)*\\)"
       2 font-lock-variable-name-face keep nil)
@@ -745,7 +749,7 @@ Based on Tuareg mode. See Tuareg mode for usage"
 ;;                               Indentation stuff
 
 (eval-and-compile
-  (defconst sail-no-more-code-this-line-regexp "[ \t]*\\((\\*\\|$\\)"
+  (defconst sail-no-more-code-this-line-regexp "[ \t]*"
     "Regexp matching lines which have no more code:
  blanks + (maybe) comment start."))
 
@@ -759,7 +763,7 @@ Based on Tuareg mode. See Tuareg mode for usage"
 
 (defconst sail-extra-unindent-regexp
   (concat "\\(" (sail-ro "function")
-          "\\|\\[" sail-no-more-code-this-line-regexp "\\)")
+          "\\[" sail-no-more-code-this-line-regexp "\\)")
   "Regexp for keywords needing extra indentation to compensate for case matches.")
 
 (defun sail-give-extra-unindent-regexp ()
@@ -798,7 +802,7 @@ delimiters.")
           "\\|[][(){}]\\|\\*)"))
 
 (defconst sail-find-kwop-regexp
-  (concat sail-matching-keyword-regexp "\\|" sail-block-regexp))
+  (concat sail-matching-keyword-regexp "" sail-block-regexp))
 
 (defun sail-give-find-kwop-regexp () sail-find-kwop-regexp)
 
@@ -1070,7 +1074,7 @@ If found, return the actual text of the keyword or operator."
               (t (goto-char old-point) kwop))))
      (t kwop))))
 
-(defconst sail-=-stop-regexp (concat (sail-ro "and" "in") "\\|="))
+(defconst sail-=-stop-regexp (concat (sail-ro "and" "in" "function") "\\|="))
 (defun sail-give-=-stop-regexp () sail-=-stop-regexp)
 
 (defun sail-find-=-match ()
@@ -1714,7 +1718,7 @@ reindent the line."
   "If inserting a } operator at beginning of line, reindent the line."
   (interactive "*")
   (let* ((prec (preceding-char))
-         (look-bra (and sail-electric-close-vector
+         (look-bra (and sail-electric-close-range
                         (not (sail-in-literal-or-comment-p))
                         (not (char-equal ?> prec))))
          (electric (and sail-electric-indent
@@ -1744,7 +1748,7 @@ Also, if the matching [ is followed by a | and this ] is not preceded
 by |, insert one |."
   (interactive "*")
   (let* ((prec (preceding-char))
-         (look-pipe-or-bra (and sail-electric-close-list
+         (look-pipe-or-bra (and sail-electric-close-range
                                 (not (sail-in-literal-or-comment-p))
                                 (not (and (char-equal ?| prec)
                                           (not (char-equal
@@ -1764,7 +1768,7 @@ by |, insert one |."
                (save-excursion
                  (sail-backward-char)
                  (sail-backward-up-list)
-                 (cond ((looking-at "\\[|") "|")
+                 (cond ((looking-at "\\[|") "\\|")
                        (t "")))))
           (sail-backward-char)
           (insert inserted-char))))
@@ -1912,7 +1916,7 @@ or indent all lines in the current phrase."
                       (not (looking-at "^[ \t]*$")))
             (forward-line 1)
             (back-to-indentation)
-            (when (looking-at "\\*\\**\\([^)]\\|$\\)")
+            (when (looking-at "\\*\\**\\([^)]$\\)")
               (delete-char 1)
               (setq endpoint (1- endpoint))))
           (goto-char (min (point) endpoint))
@@ -2067,7 +2071,7 @@ or indent all lines in the current phrase."
 (defconst sail--id-regexp "[[:alpha:]][_'[:alnum:]]*")
 
 (defconst sail-definitions-bind-skip-regexp
-  (concat (sail-ro "rec" "typedef" "function") "\\|'"
+  (concat (sail-ro "rec" "typedef" "function") "\\'"
           sail--id-regexp "\\|('.*)")
   "Regexp matching stuff to ignore after a binding keyword.")
 

@@ -20,13 +20,18 @@ base_kind_aux =  (* base kind *)
 
 
 type 
+base_kind = 
+   BK_aux of base_kind_aux * l
+
+
+type 
 kid_aux =  (* variables with kind, ticked to differntiate from program variables *)
    Var of x
 
 
 type 
-base_kind = 
-   BK_aux of base_kind_aux * l
+kind_aux =  (* kinds *)
+   K_kind of (base_kind) list
 
 
 type 
@@ -35,8 +40,8 @@ kid =
 
 
 type 
-kind_aux =  (* kinds *)
-   K_kind of (base_kind) list
+kind = 
+   K_aux of kind_aux * l
 
 
 type 
@@ -51,11 +56,6 @@ nexp_aux =  (* expression of kind Nat, for vector sizes and origins *)
 
 and nexp = 
    Nexp_aux of nexp_aux * l
-
-
-type 
-kind = 
-   K_aux of kind_aux * l
 
 
 type 
@@ -81,6 +81,13 @@ base_effect =
 
 
 type 
+order_aux =  (* vector order specifications, of kind Order *)
+   Ord_var of kid (* variable *)
+ | Ord_inc (* increasing (little-endian) *)
+ | Ord_dec (* decreasing (big-endian) *)
+
+
+type 
 id_aux =  (* Identifier *)
    Id of x
  | DeIid of x (* remove infix status *)
@@ -93,10 +100,8 @@ effect_aux =  (* effect set, of kind Effects *)
 
 
 type 
-order_aux =  (* vector order specifications, of kind Order *)
-   Ord_var of kid (* variable *)
- | Ord_inc (* increasing (little-endian) *)
- | Ord_dec (* decreasing (big-endian) *)
+order = 
+   Ord_aux of order_aux * l
 
 
 type 
@@ -110,8 +115,9 @@ effect =
 
 
 type 
-order = 
-   Ord_aux of order_aux * l
+kinded_id_aux =  (* optionally kind-annotated identifier *)
+   KOpt_none of kid (* identifier *)
+ | KOpt_kind of kind * kid (* kind-annotated variable *)
 
 
 type 
@@ -123,19 +129,13 @@ n_constraint_aux =  (* constraint over kind $_$ *)
 
 
 type 
-kinded_id_aux =  (* optionally kind-annotated identifier *)
-   KOpt_none of kid (* identifier *)
- | KOpt_kind of kind * kid (* kind-annotated variable *)
+kinded_id = 
+   KOpt_aux of kinded_id_aux * l
 
 
 type 
 n_constraint = 
    NC_aux of n_constraint_aux * l
-
-
-type 
-kinded_id = 
-   KOpt_aux of kinded_id_aux * l
 
 
 type 
@@ -175,7 +175,10 @@ typquant =
 
 
 type 
-typ_aux =  (* Type expressions, of kind $_$ *)
+typ_arg = 
+   Typ_arg_aux of typ_arg_aux * l
+
+and typ_aux =  (* Type expressions, of kind $_$ *)
    Typ_wild (* Unspecified type *)
  | Typ_id of id (* Defined type *)
  | Typ_var of kid (* Type variable *)
@@ -191,9 +194,6 @@ and typ_arg_aux =  (* Type constructor arguments of all kinds *)
  | Typ_arg_typ of typ
  | Typ_arg_order of order
  | Typ_arg_effect of effect
-
-and typ_arg = 
-   Typ_arg_aux of typ_arg_aux * l
 
 
 type 
@@ -273,6 +273,8 @@ type
  | E_internal_cast of 'a annot * 'a exp (* This is an internal cast, generated during type checking that will resolve into a syntactic cast after *)
  | E_internal_exp of 'a annot (* This is an internal use for passing nexp information  to library functions, postponed for constraint solving *)
  | E_internal_exp_user of 'a annot * 'a annot (* This is like the above but the user has specified an implicit parameter for the current function *)
+ | E_comment of string (* For generated unstructured comments *)
+ | E_comment_struc of 'a exp (* For generated structured comments *)
  | E_internal_let of 'a lexp * 'a exp * 'a exp (* This is an internal node for compilation that demonstrates the scope of a local mutable variable *)
  | E_internal_plet of 'a pat * 'a exp * 'a exp (* This is an internal node, used to distinguised some introduced lets during processing from original ones *)
  | E_internal_return of 'a exp (* For internal use to embed into monad definition *)
@@ -492,7 +494,11 @@ type
 
 
 type 
-'a def =  (* Top-level definition *)
+'a dec_comm =  (* Top-level generated comments *)
+   DC_comm of string (* generated unstructured comment *)
+ | DC_comm_struct of 'a def (* generated structured comment *)
+
+and 'a def =  (* Top-level definition *)
    DEF_type of 'a type_def (* type definition *)
  | DEF_fundef of 'a fundef (* function definition *)
  | DEF_val of 'a letbind (* value definition *)
@@ -500,6 +506,7 @@ type
  | DEF_default of 'a default_spec (* default kind and type assumptions *)
  | DEF_scattered of 'a scattered_def (* scattered function and type definition *)
  | DEF_reg_dec of 'a dec_spec (* register declaration *)
+ | DEF_comm of 'a dec_comm (* generated comments *)
 
 
 type 
