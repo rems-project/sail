@@ -5,13 +5,14 @@ built_in_types :: '' ::=
   | bit : Typ :: :: bitDesc
   | unit : Typ :: :: unitDesc
   | forall Nat 'n. Nat 'm. range <'n, 'm> : Nat -> Nat -> Typ :: :: rangeDesc
-  | forall Nat 'n. atom <'n> : Nat -> Typ :: :: atomDesc {{ com singleton number, instead of range<'n,'n> }}
+  | forall Nat 'n. atom <'n> : Nat -> Typ :: :: atomDesc {{ com singleton number, instead of range$< 'n,'n >$ }}
   | forall Nat 'n, Nat 'm, Order 'o, Typ 't. vector < 'n, 'm, 'o, 't > : Nat -> Nat -> Order -> Typ :: :: vectorDesc
+  | forall Typ 'a. option < 'a > : Typ -> Typ :: :: optCtors
   | forall Typ 't. register < 't > : Typ -> Typ :: :: registerDec
   | forall Typ 't. reg < 't > : Typ -> Typ :: :: regDec
     {{ com internal reference cell }}
   | forall Nat 'n . implicit <'n> : Nat -> Typ :: :: implicitDesc
-    {{ com see Kathy for explanation }}
+    {{ com To add to a function val specification indicating that n relies on call site expected value }}
 
 built_in_type_abbreviations :: '' ::=
   | bool => bit :: :: boolDesc
@@ -20,13 +21,15 @@ built_in_type_abbreviations :: '' ::=
   | uint8 => [| 0 '..' 2**8 |] :: :: uinteightDesc
   | uint16 => [| 0 '..' 2**16 |] :: :: uintsixteenDesc
   | uint32 => [| 0 '..' 2**32 |] :: :: uintthirtytwoDesc
-  | uint64 => [| 0 '..' 2**32 |] :: :: uintsixtyfourDesc
+  | uint64 => [| 0 '..' 2**64 |] :: :: uintsixtyfourDesc
 
 
 functions :: '' ::=
   {{ com Built-in functions: all have effect pure, all order polymorphic }}
   | val forall Typ 'a  . 'a -> unit : ignore :: :: ignore
-  | val ( [| 'n '..' 'm |] , [| 'o '..' 'p |] ) -> [| 'n + 'o '..' 'm + 'p |] : + :: :: plusbase
+  | val forall Typ 'a . 'a -> option < 'a > : Some :: :: some
+  | val forall Typ 'a . unit -> option < 'a > : None :: :: none
+  | val ( [: 'n :] , [: 'm :] ) -> [| 'n + 'm |] : + :: :: plusbase
   {{ com arithmetic addition }}
   | val forall Nat 'n . ( bit [ 'n ] , bit ['n] ) -> bit [ 'n ] : + :: :: plusvec
   {{ com unsigned vector addition }}

@@ -2,12 +2,61 @@
 
 Guide to Sail, as of Feb 25, 2016. 
 
-Note: the repository name intends to change to sail for a public release
+Note: the repository name will change to sail for a public release
 
+********************************************************************
+OVERVIEW
+
+This repository provides several tools relating to the Sail
+specification language. There is sail, the type checker and compiler
+for programs in the Sail language; a sequential Sail interpreter,
+which evaluates an Elf binary for an architecture that has been
+specified using Sail; an interface to the PPCMEM concurrent
+evaluation and exploration tool; and a formal definition of the Sail
+language and type system.
+
+There is an example Sail specification of a MIPS processor in the mips
+subdirectory, mips.sail
+
+To check the types of definitions within a specification, one uses the
+sail executable:
+./sail mips/mips.sail
+
+There is a first-draft manual describing the language, common library,
+and some tips for sail development in manual.pdf
+
+Once sufficient instructions have been represented in a
+specification,then it may become desirable to run an executable
+sequentially to debug the specification and begin testing. For this,
+there is the sequential sail interpreter, which evaluates the
+specification on an ELF file. At present, this will require
+conversations with Kathy Gray, as connections within the sail
+interpreter implementation to the architecture being simulated have
+not been factored out into external specification files.
+
+Building the architecture for compilation to connect to the
+interpreter, one uses the sail executable:
+./sail mips/mips.sail -lem_ast
+which will generate a mips.lem file in the current directory, which
+will be linked with the sail interpreter. (It is not recommended to
+read this file, as the output is a verbose representation of the sail AST.)
+
+*** In progress. Does not work yet ***
+To generate Lem specifications for theorem proving, one uses the sail
+executable with flag:
+./sail mips/mips.sail -lem
+
+*** In progress. Does not work yet ***
+To generate OCaml output for fast sequential evaluation, one uses the
+sail executable with flag:
+./sail mips/mips.sail -ocaml
+
+**************************************************************************
 BUILDING
 
-The Sail type checker and compiler requires OCaml; it is tested
-on version 4.02.3.
+SAIL COMPILER
+
+The Sail compiler requires OCaml; it is tested on version 4.02.3.
 
 Run make in the top level l2 directory; this will generate an executable
 called sail in this directory. 
@@ -15,11 +64,17 @@ called sail in this directory.
 make clean will remove this executable as well as the build files in
 subdirectories.
 
-The Sail interpreter relies on external access to Lem and Linksem
-for building and running the interpreter.
+SAIL INTERPRETER
 
-Lem is a public bitbucket git repository. Linksem is a private bitbucket
-mercurial repsotory
+The Sail interpreter relies on external access to two external tools:
+    Lem: a specification language that generates theorem prover code
+    for HOL4, Isabelle, and Coq, and executable OCaml code from a
+    specification.
+    It is a publicly available Bitbucket repository
+    https://bitbucket.org/Peter_Sewell/lem
+    Linksem: a formal specification of ELF that includes the facility
+    to read in an ELF file and represent them in uniform ways. 
+    It is a private Bitbucket repository. 
 
 The Sail build system expects to find these repositories in in the same
 directory as the l2 repository by default. This can be changed with
@@ -34,10 +89,24 @@ to a file within the src/lem_interp directory to support new architectures.
 There is 'bit-rotted' support for evaluating separate sail files and function
 calls. 
 
+MIPS SEQUENTIAL EVALUATOR
+
+With the sail interpreter and the linksem repository explained above,
+the mips sequential interpreter can be build in the src/ subdirectory
+with
+make run_mips.native
+
+This will then evaluate any statically linked mips elf file (without
+syscalls). Use --help for command line options
+
+Todo: describe interpreter commands
+
+**************************************************************************
 EMACS MODE
 
 There is an emacs mode implementation very similar to the Tuareg mode in l2/editors 
 
+***************************************************************************
 RUNNING SAIL compiler
 
 ./sail test.sail   % Type check sail file, do not generate any output.
@@ -71,6 +140,7 @@ IN PROGRESS COMMANDS: -lem -ocaml
 The resulting output of these commands may well be untype checkable Lem or OCaml
 
 
+******************************************************************************
 DIRECTORY STRUCTURE
 
 Sail sources and binaries are to be found in the directories of
