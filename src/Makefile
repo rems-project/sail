@@ -24,6 +24,9 @@ LEM = $(BITBUCKET_ROOT)/lem/lem
 LEMLIBOCAML = $(BITBUCKET_ROOT)/lem/ocaml-lib
 ELFDIR= $(BITBUCKET_ROOT)/linksem
 
+MIPS_SAIL_DIR:=$(BITBUCKET_ROOT)/l2/mips
+MIPS_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
+
 elf:
 	make -C $(ELFDIR)
 
@@ -31,18 +34,14 @@ _build/mips_extras.lem: ../mips/mips_extras.lem
 	mkdir -p _build
 	cp $< $@
 
-_build/mips.sail: ../mips/mips.sail
-	mkdir -p _build
-	cp $< $@
-
 _build/run_with_elf.ml: lem_interp/run_with_elf.ml
 	mkdir -p _build
 	cp $< $@
 
-_build/mips.lem: _build/mips.sail ./sail.native
+_build/mips.lem: $(MIPS_SAILS) ./sail.native
 	mkdir -p _build
 	cd _build ;\
-	../sail.native -lem_ast $(notdir $<)
+	../sail.native -lem_ast -o mips $(MIPS_SAILS)
 
 %.ml: %.lem
 	$(LEM) -only_changed_output -ocaml -lib lem_interp/ $<
