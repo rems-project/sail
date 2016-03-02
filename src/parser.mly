@@ -77,6 +77,7 @@ let irloc r = BF_aux(r, loc())
 let defloc df = DT_aux(df, loc())
 
 let tdloc td = TD_aux(td, loc())
+let kdloc kd = KD_aux(kd, loc())
 let funloc fn = FD_aux(fn, loc())
 let vloc v = VS_aux(v, loc ())
 let sdloc sd = SD_aux(sd, loc ())
@@ -131,7 +132,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 
 /*Terminals with no content*/
 
-%token And Alias As Assert Bitzero Bitone Bits By Case Clause Const Dec Default Deinfix Effect EFFECT End 
+%token And Alias As Assert Bitzero Bitone Bits By Case Clause Const Dec Def Default Deinfix Effect EFFECT End 
 %token Enumerate Else Exit Extern False Forall Foreach Function_ If_ In IN Inc Let_ Member Nat Order 
 %token Pure Rec Register Scattered Struct Switch Then True TwoStarStar Type TYPE Typedef 
 %token Undefined Union With Val
@@ -1207,9 +1208,46 @@ scattered_def:
   | Typedef tid Eq Const Union
     { sdloc (SD_scattered_variant($2,mk_namesectn (),mk_typqn ())) }
 
+ktype_def:
+  | Def kind tid name_sect Eq typquant typ
+    { kdloc (KD_abbrev($2,$3,$4,mk_typschm $6 $7 6 7)) }
+  | Def kind tid name_sect Eq typ
+    { kdloc (KD_abbrev($2,$3,$4,mk_typschm (mk_typqn ()) $6 6 6)) }
+  | Def kind tid Eq typquant typ
+    { kdloc (KD_abbrev($2,$3,mk_namesectn (), mk_typschm $5 $6 5 6)) }
+  | Def kind tid Eq typ
+    { kdloc (KD_abbrev($2,$3,mk_namesectn (),mk_typschm (mk_typqn ()) $5 5 5)) }
+  | Def kind tid Eq Num
+    { kdloc (KD_abbrev($2,$3,mk_namesectn (),mk_typschm (mk_typqn ()) (tlocl (ATyp_constant $5) 5 5) 5 5)) }
+  | Def kind tid name_sect Eq Const Struct typquant Lcurly c_def_body Rcurly
+    { kdloc (KD_record($2,$3,$4,$8,fst $10, snd $10)) }
+  | Def kind tid name_sect Eq Const Struct Lcurly c_def_body Rcurly
+    { kdloc (KD_record($2,$3,$4,(mk_typqn ()), fst $9, snd $9)) }
+  | Def kind tid Eq Const Struct typquant Lcurly c_def_body Rcurly
+    { kdloc (KD_record($2,$3,mk_namesectn (), $7, fst $9, snd $9)) }
+  | Def kind tid Eq Const Struct Lcurly c_def_body Rcurly
+    { kdloc (KD_record($2,$3, mk_namesectn (), mk_typqn (), fst $8, snd $8)) }
+  | Def kind tid name_sect Eq Const Union typquant Lcurly union_body Rcurly
+    { kdloc (KD_variant($2,$3,$4, $8, fst $10, snd $10)) }
+  | Def kind tid Eq Const Union typquant Lcurly union_body Rcurly
+    { kdloc (KD_variant($2,$3,mk_namesectn (), $7, fst $9, snd $9)) }
+  | Def kind tid name_sect Eq Const Union Lcurly union_body Rcurly
+    { kdloc (KD_variant($2, $3,$4, mk_typqn (), fst $9, snd $9)) }
+  | Def kind tid Eq Const Union Lcurly union_body Rcurly
+    { kdloc (KD_variant($2,$3, mk_namesectn (), mk_typqn (), fst $8, snd $8)) }
+  | Def kind tid Eq Enumerate Lcurly enum_body Rcurly
+    { kdloc (KD_enum($2,$3, mk_namesectn (), $7,false)) }
+  | Def kind tid name_sect Eq Enumerate Lcurly enum_body Rcurly
+    { kdloc (KD_enum($2,$3,$4,$8,false)) }
+  | Def kind tid Eq Register Bits Lsquare nexp_typ Colon nexp_typ Rsquare Lcurly r_def_body Rcurly
+    { kdloc (KD_register($2,$3, $8, $10, $13)) }
+
+    
 def:
   | type_def
-    { dloc (DEF_type($1)) }
+      { dloc (DEF_type($1)) }
+  | ktype_def
+      { assert false }
   | fun_def
     { dloc (DEF_fundef($1)) }
   | letbind

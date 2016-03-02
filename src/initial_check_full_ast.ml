@@ -105,7 +105,15 @@ and to_nexp (k_env : kind Envmap.t) (n: Ast.nexp) : Ast.nexp =
   match n with
   | Nexp_aux(t,l) ->
     (match t with
-    | Nexp_var(v) ->                 
+     | Nexp_id i ->
+       let mk = Envmap.apply k_env (id_to_string i) in
+       (match mk with
+        | Some(k) -> Nexp_aux((match k.k with
+            | K_Nat -> Nexp_id i
+            | K_infer -> k.k <- K_Nat; Nexp_id i
+            | _ -> typ_error l "Required a variable with kind Nat, encountered " (Some i) None (Some k)),l)
+       | None -> typ_error l "Encountered an unbound variable" (Some i) None None)       
+    | Nexp_var(v) ->                
       let mk = Envmap.apply k_env (var_to_string v) in
       (match mk with
        | Some(k) -> Nexp_aux((match k.k with
@@ -482,6 +490,82 @@ let to_typedef (names,k_env,def_ord) (td: tannot type_def) : (tannot type_def) e
     let ranges = List.map (fun (range,id) -> (to_range range),id) ranges in
     TD_aux(TD_register(id,n1,n2,ranges),(l,NoTyp)), (names,Envmap.insert k_env (key, {k=K_Typ}),def_ord))
 
+let to_kinddef (names,k_env,def_ord) (kd: tannot kind_def) : (tannot kind_def) envs_out =
+  match kd with
+  |KD_aux(td,(l,_)) ->
+    (match td with 
+     | KD_abbrev(kind,id,name_scm_opt,typschm) ->
+       let key = id_to_string id in
+       let _,k = to_kind k_env kind in
+       (match k.k with
+        | K_Typ | K_Lam _ ->
+          let typschm,k_env,_ = to_typschm k_env def_ord typschm in
+          let kd_abrv = KD_aux(KD_abbrev(kind,id,to_namescm name_scm_opt,typschm),(l,NoTyp)) in
+          let typ = (match typschm with 
+              | TypSchm_aux(TypSchm_ts(tq,typ), _) ->
+                begin match (typquant_to_quantkinds k_env tq) with
+                  | [] -> {k = K_Typ}
+                  | typs -> {k= K_Lam(typs,{k=K_Typ})}
+                end) in
+          kd_abrv,(names,Envmap.insert k_env (key,typ),def_ord)
+        | _ -> typ_error l "Def abbreviation with type scheme had declared kind other than Type" None None (Some k))
+     | KD_nabbrev(kind,id,name_scm_opt,nexp) ->
+       let key = id_to_string id in
+       let _,k = to_kind k_env kind in
+       (match k.k with
+        | K_Nat ->
+          let nexp = to_nexp k_env nexp in
+          let kd_nabrv = KD_aux(KD_nabbrev(kind,id,to_namescm name_scm_opt, nexp),(l,NoTyp)) in
+          kd_nabrv,(names,Envmap.insert k_env (key,k),def_ord)
+        | _ -> typ_error l "Def abbreviation binding a number declared with kind other than Nat" None None (Some k))
+     | KD_record(kind,id,name_scm_opt,typq,fields,_) -> 
+       let key = id_to_string id in
+       let _,k = to_kind k_env kind in
+       let typq,k_env,_ = to_typquant k_env typq in
+       (match k.k with
+        | K_Typ | K_Lam _ ->
+          let fields = List.map (fun (atyp,id) -> (to_typ k_env def_ord atyp),id) fields in (* Add check that all arms have unique names locally *)
+          let kd_rec = KD_aux(KD_record(kind,id,to_namescm name_scm_opt,typq,fields,false),(l,NoTyp)) in
+          let typ = (match (typquant_to_quantkinds k_env typq) with
+              | [ ] -> {k = K_Typ}
+              | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
+          kd_rec, (names,Envmap.insert k_env (key,typ), def_ord)
+        | _ -> typ_error l "Def abbreviation binding a record has kind other than Type" None None (Some k))
+     | KD_variant(kind,id,name_scm_opt,typq,arms,_) ->
+       let key = id_to_string id in
+       let _,k = to_kind k_env kind in
+       let typq,k_env,_ = to_typquant k_env typq in
+       (match k.k with
+        | K_Typ | K_Lam _ ->
+          let arms = List.map (to_type_union k_env def_ord) arms in (* Add check that all arms have unique names *)
+          let kd_var = KD_aux(KD_variant(kind,id,to_namescm name_scm_opt,typq,arms,false),(l,NoTyp)) in
+          let typ = (match (typquant_to_quantkinds k_env typq) with
+              | [ ] -> {k = K_Typ}
+              | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
+          kd_var, (names,Envmap.insert k_env (key,typ), def_ord)
+        | _ -> typ_error l "Def abbreviation binding a variant has kind other than Type" None None (Some k))
+     | KD_enum(kind,id,name_scm_opt,enums,_) -> 
+       let key = id_to_string id in
+       let keys = List.map id_to_string enums in
+       let _,k= to_kind k_env kind in
+       (match k.k with
+        | K_Typ ->
+          let kd_enum = KD_aux(KD_enum(kind,id,to_namescm name_scm_opt,enums,false),(l,NoTyp)) in (* Add check that all enums have unique names *)
+          let k_env = List.fold_right (fun k k_env -> Envmap.insert k_env (k,{k=K_Nat})) keys (Envmap.insert k_env (key,{k=K_Typ})) in
+          kd_enum, (names,k_env,def_ord)
+        | _ -> typ_error l "Def abbreviation binding an enum has kind other than Type" None None (Some k))
+     | KD_register(kind,id,t1,t2,ranges) -> 
+       let key = id_to_string id in
+       let n1 = to_nexp k_env t1 in
+       let n2 = to_nexp k_env t2 in
+       let _,k = to_kind k_env kind in
+       match k.k with
+       | K_Typ ->
+         let ranges = List.map (fun (range,id) -> (to_range range),id) ranges in
+         KD_aux(KD_register(kind,id,n1,n2,ranges),(l,NoTyp)), (names,Envmap.insert k_env (key, {k=K_Typ}),def_ord)
+       | _ -> typ_error l "Def abbreviation binding a register type has kind other than Type" None None (Some k))
+
+
 let to_tannot_opt (k_env:kind Envmap.t) (def_ord:Ast.order) (Typ_annot_opt_aux(tp,l))
   :tannot_opt * kind Envmap.t * kind Envmap.t=
   match tp with
@@ -545,6 +629,9 @@ let to_dec (names,k_env,def_ord) (DEC_aux(regdec,(l,_))) =
 let to_def (names, k_env, def_ord) partial_defs def : def_progress envs_out * (id * partial_def) list = 
   let envs = (names,k_env,def_ord) in
   match def with
+  | DEF_kind(k_def) ->
+    let kd,envs = to_kinddef envs k_def in
+    ((Finished(DEF_kind(kd))),envs),partial_defs
   | DEF_type(t_def) -> 
     let td,envs = to_typedef envs t_def in
     ((Finished(DEF_type(td))),envs),partial_defs

@@ -96,6 +96,7 @@ let kw_table =
      ("true",                    (fun x -> Other));
      ("Type",                    (fun x -> Other));
      ("typedef",		 (fun x -> Typedef));
+     ("def",                     (fun x -> Def));
      ("undefined",               (fun x -> Other));
      ("union",			 (fun x -> Other));
      ("with",                    (fun x -> Other));

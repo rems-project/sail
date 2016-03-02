@@ -83,8 +83,8 @@ let rec extract_if_first recur name (Typ_aux(typ,l)) =
         | None -> None)
     | _ -> None
 
-let rec typ_to_t imp_ok fun_ok (Typ_aux(typ,l)) =
-  let trans t = typ_to_t false false t in 
+let rec typ_to_t envs imp_ok fun_ok (Typ_aux(typ,l)) =
+  let trans t = typ_to_t envs false false t in 
   match typ with
     | Typ_id i -> {t = Tid (id_to_string i)}
     | Typ_var (Kid_aux((Var i),l')) -> {t = Tvar i}
@@ -97,30 +97,36 @@ let rec typ_to_t imp_ok fun_ok (Typ_aux(typ,l)) =
           then (match extract_if_first true "implicit" ty1 with
             | Some(imp,new_ty1) -> (match imp with
                 | Typ_app(_,[Typ_arg_aux(Typ_arg_nexp ((Nexp_aux(n,l')) as ne),_)]) -> 
-                  {t = Tfn (trans new_ty1, trans ty2, IP_user (anexp_to_nexp ne), aeffect_to_effect e)}
+                  {t = Tfn (trans new_ty1, trans ty2, IP_user (anexp_to_nexp envs ne), aeffect_to_effect e)}
                 | _ -> typ_error l "Declaring an implicit parameter requires a Nat specification")
             | None -> typ_error l "A function type with an implicit parameter must declare the implicit first")
           else typ_error l "This function has one (or more) implicit parameter(s) not permitted here"
         else {t = Tfn (trans ty1,trans ty2,IP_none,aeffect_to_effect e)}
       else typ_error l "Function types are only permitted at the top level."
     | Typ_tup(tys) -> {t = Ttup (List.map trans tys) }
-    | Typ_app(i,args) -> {t = Tapp (id_to_string i,List.map typ_arg_to_targ args) }
+    | Typ_app(i,args) -> {t = Tapp (id_to_string i,List.map (typ_arg_to_targ envs) args) }
     | Typ_wild -> new_t ()
-and typ_arg_to_targ (Typ_arg_aux(ta,l)) = 
+and typ_arg_to_targ envs (Typ_arg_aux(ta,l)) = 
   match ta with
-    | Typ_arg_nexp n -> TA_nexp (anexp_to_nexp n)
-    | Typ_arg_typ t -> TA_typ (typ_to_t false false t)
+    | Typ_arg_nexp n -> TA_nexp (anexp_to_nexp envs n)
+    | Typ_arg_typ t -> TA_typ (typ_to_t envs false false t)
     | Typ_arg_order o -> TA_ord (aorder_to_ord o)
     | Typ_arg_effect e -> TA_eft (aeffect_to_effect e)
-and anexp_to_nexp ((Nexp_aux(n,l)) : Ast.nexp) : nexp =
+and anexp_to_nexp envs ((Nexp_aux(n,l)) : Ast.nexp) : nexp =
+  let (Env(d_env,t_env,b_env,tp_env)) = envs in
   match n with
-    | Nexp_var (Kid_aux((Var i),l')) -> mk_nv i
-    | Nexp_constant i -> mk_c_int i
-    | Nexp_times(n1,n2) -> mk_mult (anexp_to_nexp n1) (anexp_to_nexp n2)
-    | Nexp_sum(n1,n2) -> mk_add (anexp_to_nexp n1) (anexp_to_nexp n2)
-    | Nexp_minus(n1,n2) -> mk_sub (anexp_to_nexp n1) (anexp_to_nexp n2)
-    | Nexp_exp n -> mk_2n(anexp_to_nexp n)
-    | Nexp_neg n -> mk_neg(anexp_to_nexp n)
+  | Nexp_var (Kid_aux((Var i),l')) -> mk_nv i
+  | Nexp_id id ->
+    let s = id_to_string id in
+    (match Envmap.apply d_env.nabbrevs s with
+     |Some n -> n
+     | None -> typ_error l ("Unbound nat id " ^ s))
+  | Nexp_constant i -> mk_c_int i
+  | Nexp_times(n1,n2) -> mk_mult (anexp_to_nexp envs n1) (anexp_to_nexp envs n2)
+  | Nexp_sum(n1,n2) -> mk_add (anexp_to_nexp envs n1) (anexp_to_nexp envs n2)
+  | Nexp_minus(n1,n2) -> mk_sub (anexp_to_nexp envs n1) (anexp_to_nexp envs n2)
+  | Nexp_exp n -> mk_2n(anexp_to_nexp envs n)
+  | Nexp_neg n -> mk_neg(anexp_to_nexp envs n)
 and aeffect_to_effect ((Effect_aux(e,l)) : Ast.effect) : effect = 
   match e with
     | Effect_var (Kid_aux((Var i),l')) -> {effect = Evar i}
@@ -163,10 +169,13 @@ let rec quants_to_consts ((Env (d_env,t_env,b_env,tp_env)) as env) qis : (t_para
         | QI_const(NC_aux(nconst,l')) -> 
           (*TODO: somehow the requirement vs best guarantee needs to be derived from user or context*)
           (match nconst with
-            | NC_fixed(n1,n2) -> (ids,typarms,Eq(Specc l',anexp_to_nexp n1,anexp_to_nexp n2)::cs)
-            | NC_bounded_ge(n1,n2) -> (ids,typarms,GtEq(Specc l',Guarantee,anexp_to_nexp n1,anexp_to_nexp n2)::cs)
-            | NC_bounded_le(n1,n2) -> (ids,typarms,LtEq(Specc l',Guarantee,anexp_to_nexp n1,anexp_to_nexp n2)::cs)
-            | NC_nat_set_bounded(Kid_aux((Var i),l''), bounds) -> (ids,typarms,In(Specc l',i,bounds)::cs)))
+           | NC_fixed(n1,n2) ->
+             (ids,typarms,Eq(Specc l',anexp_to_nexp env n1,anexp_to_nexp env n2)::cs)
+           | NC_bounded_ge(n1,n2) ->
+             (ids,typarms,GtEq(Specc l',Guarantee,anexp_to_nexp env n1,anexp_to_nexp env n2)::cs)
+           | NC_bounded_le(n1,n2) ->
+             (ids,typarms,LtEq(Specc l',Guarantee,anexp_to_nexp env n1,anexp_to_nexp env n2)::cs)
+           | NC_nat_set_bounded(Kid_aux((Var i),l''), bounds) -> (ids,typarms,In(Specc l',i,bounds)::cs)))
 
 let typq_to_params envs (TypQ_aux(tq,l)) =
   match tq with
@@ -176,7 +185,7 @@ let typq_to_params envs (TypQ_aux(tq,l)) =
 let typschm_to_tannot envs imp_parm_ok fun_ok ((TypSchm_aux(typschm,l)):typschm) (tag : tag) : tannot = 
   match typschm with
     | TypSchm_ts(tq,typ) -> 
-      let t = typ_to_t imp_parm_ok fun_ok typ in
+      let t = typ_to_t envs imp_parm_ok fun_ok typ in
       let (ids,_,constraints) = typq_to_params envs tq in
       Base((ids,t),tag,constraints,pure_e,pure_e,nob)
 
@@ -247,7 +256,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
       let tannot = Base(([],t),emp_tag,cs,pure_e,pure_e,bounds) in
       (P_aux(P_as(pat',id),(l,tannot)),Envmap.insert env (v,tannot),cs@constraints,bounds,t)
     | P_typ(typ,pat) -> 
-      let t = typ_to_t false false typ in
+      let t = typ_to_t envs false false typ in
       let t = typ_subst tp_env false t in
       let (pat',env,constraints,bounds,u) = check_pattern envs emp_tag t pat in
       let t,cs_consistent = type_consistent (Patt l) d_env Guarantee false t expect_t in
@@ -616,7 +625,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       let t',cs',_,e' = type_coerce (Expr l) d_env Require false widen b_env (get_e_typ e) e expect_t in
       (e',t',t_env,cs@cs',nob,effect)
     | E_cast(typ,e) ->
-      let cast_t = typ_to_t false false typ in
+      let cast_t = typ_to_t envs false false typ in
       let cast_t,cs_a = get_abbrev d_env cast_t in
       let cast_t = typ_subst tp_env false cast_t in
       let ct = {t = Toptions(cast_t,None)} in
@@ -1338,6 +1347,10 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       let (msg',mt',_,_,_,_) = check_exp envs imp_param true {t= Tapp("option",[TA_typ string_t])} msg in
       let (t',c') = type_consistent (Expr l) d_env Require false unit_t expect_t in
       (E_aux (E_assert(cond',msg'), (l, (simple_annot expect_t))), expect_t,t_env,c',nob,pure_e)
+    | E_comment s ->
+      (E_aux (E_comment s, (l, simple_annot unit_t)), expect_t,t_env,[],nob,pure_e)
+    | E_comment_struc e ->
+      (E_aux (E_comment_struc e, (l, simple_annot unit_t)), expect_t,t_env,[],nob,pure_e)
     | E_internal_cast _ | E_internal_exp _ | E_internal_exp_user _ | E_internal_let _
     | E_internal_plet _ | E_internal_return _ -> 
       raise (Reporting_basic.err_unreachable l "Internal expression passed back into type checker")
@@ -1523,7 +1536,7 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
         | _ -> typ_error l ("Unbound identifier " ^ i))
     | LEXP_cast(typ,id) -> 
       let i = id_to_string id in
-      let ty = typ_to_t false false typ in
+      let ty = typ_to_t envs false false typ in
       let ty = typ_subst tp_env false ty in
       let new_bounds = extract_bounds d_env i ty in
       (match Envmap.apply t_env i with
@@ -1729,6 +1742,132 @@ and check_lbind envs imp_param is_top_level emp_tag (LB_aux(lbind,(l,annot))) : 
     (*let _ = Printf.eprintf "done checking tannot in let2\n" in*)
     (LB_aux (LB_val_implicit(pat',e),(l,tannot)), env,cs,merge_bounds bounds b_env,ef)
 
+let check_record_typ envs (id: string) (typq : typquant) (fields : (Ast.typ * id) list)
+  : (tannot * (string * typ) list) = 
+  let (params,typarms,constraints) = typq_to_params envs typq in
+  let ty = match typarms with | [] -> {t = Tid id} | parms -> {t = Tapp(id,parms)} in
+  let tyannot = Base((params,ty),Emp_global,constraints,pure_e,pure_e,nob) in
+  let fields' = List.map (fun (ty,i)->(id_to_string i),(typ_to_t envs false false ty)) fields in
+  (tyannot, fields')
+
+let check_variant_typ envs (id: string) typq arms = 
+  let (Env(d_env,t_env,b_env,tp_env)) = envs in
+  let (params,typarms,constraints) = typq_to_params envs typq in
+  let num_arms = List.length arms in
+  let ty = match params with
+    | [] -> {t=Tid id} 
+    | params -> {t = Tapp(id, typarms) }in
+  let tyannot = Base((params,ty),Constructor num_arms,constraints,pure_e,pure_e,nob) in
+  let arm_t input = Base((params,{t=Tfn(input,ty,IP_none,pure_e)}),Constructor num_arms,constraints,pure_e,pure_e,nob) in
+  let arms' = List.map 
+      (fun (Tu_aux(tu,l')) -> 
+         match tu with 
+         | Tu_id i -> ((id_to_string i),(arm_t unit_t))
+         | Tu_ty_id(typ,i)-> ((id_to_string i),(arm_t (typ_to_t envs false false typ))))
+      arms in
+  let t_env = List.fold_right (fun (id,tann) t_env -> Envmap.insert t_env (id,tann)) arms' t_env in
+  tyannot, t_env
+
+let check_enum_type envs (id: string) ids =
+  let (Env(d_env,t_env,b_env,tp_env)) = envs in
+  let ids' = List.map id_to_string ids in
+  let max = (List.length ids') -1 in
+  let ty = Base (([],{t = Tid id }),Enum max,[],pure_e,pure_e,nob) in
+  let t_env = List.fold_right (fun id t_env -> Envmap.insert t_env (id,ty)) ids' t_env in
+  let enum_env = Envmap.insert d_env.enum_env (id,ids') in
+  ty, t_env, enum_env
+
+let check_register_type envs l (id: string) base top ranges =
+  let (Env(d_env,t_env,b_env,tp_env)) = envs in
+  let basei = normalize_nexp(anexp_to_nexp envs base) in
+  let topi = normalize_nexp(anexp_to_nexp envs top) in
+  match basei.nexp,topi.nexp with
+  | Nconst b, Nconst t -> 
+    if (le_big_int b t) then (
+      let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp (mk_c(add_big_int (sub_big_int t b) (big_int_of_int 1))); 
+                                   TA_ord({order = Oinc}); TA_typ({t = Tid "bit"});])} in
+      let rec range_to_type_inc (BF_aux(idx,l)) = 
+        (match idx with
+         | BF_single i ->
+           if (le_big_int b (big_int_of_int i)) && (le_big_int (big_int_of_int i) t)
+           then {t = Tid "bit"}, i, 1
+           else typ_error l 
+               ("register type declaration " ^ id ^
+                " contains a field specification outside of the declared register size")
+         | BF_range(i1,i2) -> 
+           if i1<i2 
+           then 
+             if (le_big_int b (big_int_of_int i1)) && (le_big_int (big_int_of_int i2) t) 
+             then let size = i2 - i1 + 1 in
+               ({t=Tapp("vector",[TA_nexp (mk_c_int i1); TA_nexp (mk_c_int size);
+                                  TA_ord({order=Oinc}); TA_typ {t=Tid "bit"}])}, i1, size)
+             else typ_error l ("register type declaration " ^ id 
+                               ^ " contains a field specification outside of the declared register size")
+           else typ_error l ("register type declaration " ^ id ^ " is not consistently increasing")
+         | BF_concat(bf1, bf2) ->
+           (match (range_to_type_inc bf1, range_to_type_inc bf2) with
+            | ({t = Tid "bit"}, start, size1),({t= Tid "bit"}, start2, size2) 
+            | (({t = Tid "bit"}, start, size1), ({t= Tapp("vector", _)}, start2, size2)) 
+            | (({t=Tapp("vector", _)}, start, size1), ({t=Tid "bit"}, start2, size2))
+            | (({t=Tapp("vector",_)}, start, size1), ({t=Tapp("vector",_)}, start2, size2)) ->
+              if start < start2
+              then let size = size1 + size2 in
+                ({t=Tapp("vector", [TA_nexp (mk_c_int start); TA_nexp (mk_c_int size);
+                                    TA_ord({order = Oinc}); TA_typ {t=Tid"bit"}])}, start, size)
+              else typ_error l ("register type declaration " ^ id ^ " is not consistently increasing")
+            | _ -> raise (Reporting_basic.err_unreachable l "range_to_type returned something odd")))
+      in                
+      let franges = 
+        List.map 
+          (fun (bf,id) ->
+             let (bf_t, _, _) = range_to_type_inc bf in ((id_to_string id),bf_t))
+          ranges 
+      in
+      let tannot = into_register d_env (Base(([],ty),External None,[],pure_e,pure_e,nob)) in
+      tannot, franges)
+    else (
+      let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp (mk_c(add_big_int (sub_big_int b t) one)); 
+                                   TA_ord({order = Odec}); TA_typ({t = Tid "bit"});])} in
+      let rec range_to_type_dec (BF_aux(idx,l)) = 
+        (match idx with
+         | BF_single i ->
+           if (ge_big_int b (big_int_of_int i)) && (ge_big_int (big_int_of_int i) t)
+           then {t = Tid "bit"}, i, 1
+           else typ_error l 
+               ("register type declaration " ^ id ^
+                " contains a field specification outside of the declared register size")
+         | BF_range(i1,i2) -> 
+           if i1>i2 
+           then 
+             if (ge_big_int b (big_int_of_int i1)) && (ge_big_int (big_int_of_int i2) t) 
+             then let size = (i1 - i2) + 1 in
+               ({t=Tapp("vector",[TA_nexp (mk_c_int i1); TA_nexp (mk_c_int size);
+                                  TA_ord({order=Odec}); TA_typ {t=Tid "bit"}])}, i1, size)
+             else typ_error l ("register type declaration " ^ id 
+                               ^ " contains a field specification outside of the declared register size")
+           else typ_error l ("register type declaration " ^ id ^ " is not consistently decreasing")
+         | BF_concat(bf1, bf2) ->
+           (match (range_to_type_dec bf1, range_to_type_dec bf2) with
+            | ({t = Tid "bit"}, start, size1),({t= Tid "bit"}, start2, size2) 
+            | (({t = Tid "bit"}, start, size1), ({t= Tapp("vector", _)}, start2, size2)) 
+            | (({t=Tapp("vector", _)}, start, size1), ({t=Tid "bit"}, start2, size2))
+            | (({t=Tapp("vector",_)}, start, size1), ({t=Tapp("vector",_)}, start2, size2)) ->
+              if start > start2
+              then let size = size1 + size2 in
+                ({t=Tapp("vector", [TA_nexp (mk_c_int start); TA_nexp (mk_c_int size);
+                                    TA_ord({order = Oinc}); TA_typ {t=Tid"bit"}])}, start, size)
+              else typ_error l ("register type declaration " ^ id ^ " is not consistently decreasing")
+            | _ -> raise (Reporting_basic.err_unreachable l "range_to_type has returned something odd")))
+      in
+      let franges = 
+        List.map 
+          (fun (bf,id) -> let (bf_t, _, _) = range_to_type_dec bf in (id_to_string id, bf_t))
+          ranges 
+      in
+      let tannot = into_register d_env (Base(([],ty),External None,[],pure_e,pure_e,nob)) in
+      tannot, franges)
+  | _,_ -> raise (Reporting_basic.err_unreachable l "Nexps in register declaration do not evaluate to constants")
+
 (*val check_type_def : envs -> (tannot type_def) -> (tannot type_def) envs_out*)
 let check_type_def envs (TD_aux(td,(l,annot))) =
   let (Env(d_env,t_env,b_env,tp_env)) = envs in
@@ -1739,130 +1878,54 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
        Env( { d_env with abbrevs = Envmap.insert d_env.abbrevs ((id_to_string id),tan)},t_env,b_env,tp_env))
     | TD_record(id,nmscm,typq,fields,_) -> 
       let id' = id_to_string id in
-      let (params,typarms,constraints) = typq_to_params envs typq in
-      let ty = match typarms with | [] -> {t = Tid id'} | parms -> {t = Tapp(id',parms)} in
-      let tyannot = Base((params,ty),Emp_global,constraints,pure_e,pure_e,nob) in
-      let fields' = List.map (fun (ty,i)->(id_to_string i),(typ_to_t false false ty)) fields in
+      let (tyannot, fields') = check_record_typ envs id' typq fields in
       (TD_aux(td,(l,tyannot)),Env({d_env with rec_env = (id',Record,tyannot,fields')::d_env.rec_env},t_env,b_env,tp_env))
     | TD_variant(id,nmscm,typq,arms,_) ->
       let id' = id_to_string id in
-      let (params,typarms,constraints) = typq_to_params envs typq in
-      let num_arms = List.length arms in
-      let ty = match params with
-        | [] -> {t=Tid id'} 
-        | params -> {t = Tapp(id', typarms) }in
-      let tyannot = Base((params,ty),Constructor num_arms,constraints,pure_e,pure_e,nob) in
-      let arm_t input = Base((params,{t=Tfn(input,ty,IP_none,pure_e)}),Constructor num_arms,constraints,pure_e,pure_e,nob) in
-      let arms' = List.map 
-        (fun (Tu_aux(tu,l')) -> 
-          match tu with 
-            | Tu_id i -> ((id_to_string i),(arm_t unit_t))
-            | Tu_ty_id(typ,i)-> ((id_to_string i),(arm_t (typ_to_t false false typ))))
-        arms in
-      let t_env = List.fold_right (fun (id,tann) t_env -> Envmap.insert t_env (id,tann)) arms' t_env in
+      let tyannot, t_env = check_variant_typ envs id' typq arms in
       (TD_aux(td,(l,tyannot)),(Env (d_env,t_env,b_env,tp_env)))
     | TD_enum(id,nmscm,ids,_) -> 
       let id' = id_to_string id in
-      let ids' = List.map id_to_string ids in
-      let max = (List.length ids') -1 in
-      let ty = Base (([],{t = Tid id' }),Enum max,[],pure_e,pure_e,nob) in
-      let t_env = List.fold_right (fun id t_env -> Envmap.insert t_env (id,ty)) ids' t_env in
-      let enum_env = Envmap.insert d_env.enum_env (id',ids') in
+      let ty,t_env,enum_env = check_enum_type envs id' ids in
       (TD_aux(td,(l,ty)),Env({d_env with enum_env = enum_env;},t_env,b_env,tp_env))
     | TD_register(id,base,top,ranges) -> 
       let id' = id_to_string id in
-      let basei = normalize_nexp(anexp_to_nexp base) in
-      let topi = normalize_nexp(anexp_to_nexp top) in
-      match basei.nexp,topi.nexp with
-        | Nconst b, Nconst t -> 
-          if (le_big_int b t) then (
-            let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp (mk_c(add_big_int (sub_big_int t b) (big_int_of_int 1))); 
-                                         TA_ord({order = Oinc}); TA_typ({t = Tid "bit"});])} in
-            let rec range_to_type_inc (BF_aux(idx,l)) = 
-              (match idx with
-              | BF_single i ->
-                if (le_big_int b (big_int_of_int i)) && (le_big_int (big_int_of_int i) t)
-                then {t = Tid "bit"}, i, 1
-                else typ_error l 
-                  ("register type declaration " ^ id' ^
-                      " contains a field specification outside of the declared register size")
-              | BF_range(i1,i2) -> 
-                if i1<i2 
-                then 
-                  if (le_big_int b (big_int_of_int i1)) && (le_big_int (big_int_of_int i2) t) 
-                  then let size = i2 - i1 + 1 in
-                       ({t=Tapp("vector",[TA_nexp (mk_c_int i1); TA_nexp (mk_c_int size);
-                                          TA_ord({order=Oinc}); TA_typ {t=Tid "bit"}])}, i1, size)
-                  else typ_error l ("register type declaration " ^ id' 
-                                    ^ " contains a field specification outside of the declared register size")
-                else typ_error l ("register type declaration " ^ id' ^ " is not consistently increasing")
-              | BF_concat(bf1, bf2) ->
-                (match (range_to_type_inc bf1, range_to_type_inc bf2) with
-                  | ({t = Tid "bit"}, start, size1),({t= Tid "bit"}, start2, size2) 
-                  | (({t = Tid "bit"}, start, size1), ({t= Tapp("vector", _)}, start2, size2)) 
-                  | (({t=Tapp("vector", _)}, start, size1), ({t=Tid "bit"}, start2, size2))
-                  | (({t=Tapp("vector",_)}, start, size1), ({t=Tapp("vector",_)}, start2, size2)) ->
-                    if start < start2
-                    then let size = size1 + size2 in
-                         ({t=Tapp("vector", [TA_nexp (mk_c_int start); TA_nexp (mk_c_int size);
-                                             TA_ord({order = Oinc}); TA_typ {t=Tid"bit"}])}, start, size)
-                    else typ_error l ("register type declaration " ^ id' ^ " is not consistently increasing")
-                  | _ -> raise (Reporting_basic.err_unreachable l "range_to_type returned something odd")))
-            in                
-            let franges = 
-              List.map 
-                (fun (bf,id) ->
-                  let (bf_t, _, _) = range_to_type_inc bf in ((id_to_string id),bf_t))
-                ranges 
-            in
-            let tannot = into_register d_env (Base(([],ty),External None,[],pure_e,pure_e,nob)) in
-            (TD_aux(td,(l,tannot)),
-             Env({d_env with rec_env = ((id',Register,tannot,franges)::d_env.rec_env);
-               abbrevs = Envmap.insert d_env.abbrevs (id',tannot)},t_env,b_env,tp_env)))
-          else (
-            let ty = {t = Tapp("vector",[TA_nexp basei; TA_nexp (mk_c(add_big_int (sub_big_int b t) one)); 
-                                         TA_ord({order = Odec}); TA_typ({t = Tid "bit"});])} in
-            let rec range_to_type_dec (BF_aux(idx,l)) = 
-              (match idx with
-              | BF_single i ->
-                if (ge_big_int b (big_int_of_int i)) && (ge_big_int (big_int_of_int i) t)
-                then {t = Tid "bit"}, i, 1
-                else typ_error l 
-                  ("register type declaration " ^ id' ^
-                      " contains a field specification outside of the declared register size")
-              | BF_range(i1,i2) -> 
-                if i1>i2 
-                then 
-                  if (ge_big_int b (big_int_of_int i1)) && (ge_big_int (big_int_of_int i2) t) 
-                  then let size = (i1 - i2) + 1 in
-                       ({t=Tapp("vector",[TA_nexp (mk_c_int i1); TA_nexp (mk_c_int size);
-                                          TA_ord({order=Odec}); TA_typ {t=Tid "bit"}])}, i1, size)
-                  else typ_error l ("register type declaration " ^ id' 
-                                    ^ " contains a field specification outside of the declared register size")
-                else typ_error l ("register type declaration " ^ id' ^ " is not consistently decreasing")
-              | BF_concat(bf1, bf2) ->
-                (match (range_to_type_dec bf1, range_to_type_dec bf2) with
-                  | ({t = Tid "bit"}, start, size1),({t= Tid "bit"}, start2, size2) 
-                  | (({t = Tid "bit"}, start, size1), ({t= Tapp("vector", _)}, start2, size2)) 
-                  | (({t=Tapp("vector", _)}, start, size1), ({t=Tid "bit"}, start2, size2))
-                  | (({t=Tapp("vector",_)}, start, size1), ({t=Tapp("vector",_)}, start2, size2)) ->
-                    if start > start2
-                    then let size = size1 + size2 in
-                         ({t=Tapp("vector", [TA_nexp (mk_c_int start); TA_nexp (mk_c_int size);
-                                             TA_ord({order = Oinc}); TA_typ {t=Tid"bit"}])}, start, size)
-                    else typ_error l ("register type declaration " ^ id' ^ " is not consistently decreasing")
-                  | _ -> raise (Reporting_basic.err_unreachable l "range_to_type has returned something odd")))
-            in
-            let franges = 
-              List.map 
-                (fun (bf,id) -> let (bf_t, _, _) = range_to_type_dec bf in (id_to_string id, bf_t))
-                ranges 
-            in
-            let tannot = into_register d_env (Base(([],ty),External None,[],pure_e,pure_e,nob)) in
-            (TD_aux(td,(l,tannot)),
-             Env({d_env with rec_env = (id',Register,tannot,franges)::d_env.rec_env;
-               abbrevs = Envmap.insert d_env.abbrevs (id',tannot)},t_env,b_env,tp_env)))
-        | _,_ -> raise (Reporting_basic.err_unreachable l "Nexps in register declaration do not evaluate to constants")
+      let (tannot, franges) = check_register_type envs l id' base top ranges in
+      (TD_aux(td,(l,tannot)),
+       Env({d_env with rec_env = ((id',Register,tannot,franges)::d_env.rec_env);
+                       abbrevs = Envmap.insert d_env.abbrevs (id',tannot)},t_env,b_env,tp_env))
+
+(*val check_kind_def : envs -> (tannot kind_def) -> (tannot kind_def) envs_out*)
+let check_kind_def envs (KD_aux(kd,(l,annot))) =
+  let (Env(d_env,t_env,b_env,tp_env)) = envs in
+  match kd with
+  | KD_nabbrev(kind,id,nmscm,n) ->
+    let id' = id_to_string id in
+    let n = normalize_nexp (anexp_to_nexp envs n) in
+    (KD_aux(kd,(l,annot)),
+     Env( { d_env with nabbrevs = Envmap.insert d_env.nabbrevs (id', (mk_nid id' n))},t_env,b_env,tp_env))
+  | KD_abbrev(kind,id,nmscm,typschm) -> 
+    let tan = typschm_to_tannot envs false false typschm Emp_global in
+    (KD_aux(kd,(l,tan)),
+     Env( { d_env with abbrevs = Envmap.insert d_env.abbrevs ((id_to_string id),tan)},t_env,b_env,tp_env))
+  | KD_record(kind,id,nmscm,typq,fields,_) -> 
+    let id' = id_to_string id in
+    let (tyannot, fields') = check_record_typ envs id' typq fields in
+    (KD_aux(kd,(l,tyannot)),Env({d_env with rec_env = (id',Record,tyannot,fields')::d_env.rec_env},t_env,b_env,tp_env))
+  | KD_variant(kind,id,nmscm,typq,arms,_) ->
+    let id' = id_to_string id in
+    let tyannot, t_env = check_variant_typ envs id' typq arms in
+    (KD_aux(kd,(l,tyannot)),(Env (d_env,t_env,b_env,tp_env)))
+  | KD_enum(kind,id,nmscm,ids,_) -> 
+    let id' = id_to_string id in
+    let ty,t_env,enum_env = check_enum_type envs id' ids in
+    (KD_aux(kd,(l,ty)),Env({d_env with enum_env = enum_env;},t_env,b_env,tp_env))
+  | KD_register(kind,id,base,top,ranges) -> 
+    let id' = id_to_string id in
+    let (tannot, franges) = check_register_type envs l id' base top ranges in
+    (KD_aux(kd,(l,tannot)),
+     Env({d_env with rec_env = ((id',Register,tannot,franges)::d_env.rec_env);
+                     abbrevs = Envmap.insert d_env.abbrevs (id',tannot)},t_env,b_env,tp_env))
 
 let check_val_spec envs (VS_aux(vs,(l,annot))) = 
   let (Env(d_env,t_env,b_env,tp_env)) = envs in
@@ -1914,7 +1977,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   let ret_t,param_t,tannot,t_param_env = match tannotopt with
     | Typ_annot_opt_aux(Typ_annot_opt_some(typq,typ),l') ->
       let (ids,_,constraints) = typq_to_params envs typq in
-      let t = typ_to_t false false typ in
+      let t = typ_to_t envs false false typ in
       (*TODO add check that ids == typ_params when has_spec*)
       let t,constraints,_,t_param_env = subst (if has_spec then typ_params else ids) true t constraints pure_e in
       let p_t = new_t () in
@@ -2076,6 +2139,11 @@ let check_alias_spec envs alias (AL_aux(al,(l,annot))) e_typ =
 let check_def envs def = 
   let (Env(d_env,t_env,b_env,tp_env)) = envs in
   match def with
+  | DEF_kind kdef ->
+    (*let _ = Printf.eprintf "checking kind def\n" in*)
+    let kd,envs = check_kind_def envs kdef in
+    (*let _ = Printf.eprintf "checked kind def\n" in*)
+    (DEF_kind kd,envs)
   | DEF_type tdef ->
     (*let _ = Printf.eprintf "checking type def\n" in*)
     let td,envs = check_type_def envs tdef in
@@ -2100,7 +2168,7 @@ let check_def envs def =
                            (DEF_default ds,envs)
   | DEF_reg_dec(DEC_aux(DEC_reg(typ,id), (l,annot))) -> 
     (*let _ = Printf.eprintf "checking reg dec\n" in *)
-    let t = (typ_to_t false false typ) in
+    let t = (typ_to_t envs false false typ) in
     let i = id_to_string id in
     let tannot = into_register d_env (Base(([],t),External (Some i),[],pure_e,pure_e,nob)) in
     (*let _ = Printf.eprintf "done checking reg dec\n" in*)
@@ -2114,11 +2182,12 @@ let check_def envs def =
   | DEF_reg_dec(DEC_aux(DEC_typ_alias(typ,id,aspec),(l,tannot))) ->
     (*let _ = Printf.eprintf "checking reg dec c\n" in*)
     let i = id_to_string id in
-    let t = typ_to_t false false typ in
+    let t = typ_to_t envs false false typ in
     let (aspec,tannot,d_env) = check_alias_spec envs i aspec (Some t) in
     (*let _ = Printf.eprintf "done checking reg dec c\n" in*)
     (DEF_reg_dec(DEC_aux(DEC_typ_alias(typ,id,aspec),(l,tannot))),(Env(d_env,Envmap.insert t_env (i,tannot),b_env,tp_env)))
   | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Scattered given to type checker")
+  | _ -> def,envs (*Else a comment, so skip but keep*)
 
 
 (*val check : envs ->  tannot defs -> tannot defs*)

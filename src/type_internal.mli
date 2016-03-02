@@ -48,6 +48,7 @@ and implicit_parm =
 and nexp = { mutable nexp : nexp_aux ; mutable imp_param : bool}
 and nexp_aux =
   | Nvar of string
+  | Nid of string * nexp
   | Nconst of big_int
   | Npos_inf (* Used to define nat and int types, does not arise from source otherwise *)
   | Nneg_inf (* Used to define int type, does not arise from source otherwise *)
@@ -131,6 +132,7 @@ val n_zero : nexp
 val n_one : nexp
 val n_two : nexp
 val mk_nv : string -> nexp
+val mk_nid : string -> nexp -> nexp
 val mk_add : nexp -> nexp -> nexp
 val mk_sub : nexp -> nexp -> nexp
 val mk_mult : nexp -> nexp -> nexp
@@ -175,7 +177,8 @@ type rec_env = (string * rec_kind * tannot * ((string * t) list))
 type alias_kind = OneReg of string * tannot | TwoReg of string * string * tannot | MultiReg of (string list) * tannot
 type def_envs = { 
   k_env: kind emap; 
-  abbrevs: tannot emap; 
+  abbrevs: tannot emap;
+  nabbrevs: nexp emap;
   namesch : tannot emap; 
   enum_env : (string list) emap; 
   rec_env : rec_env list;

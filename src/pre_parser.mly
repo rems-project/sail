@@ -52,7 +52,7 @@ let r = fun x -> x (* Ulib.Text.of_latin1 *)
 
 /*Terminals with no content*/
 
-%token Scattered Typedef Other Eof
+%token Scattered Typedef Def Other Eof
 
 %token <string> Id
 %start file
@@ -62,7 +62,9 @@ let r = fun x -> x (* Ulib.Text.of_latin1 *)
 
 id_found:
   | Typedef Id
-    { $2 }
+      { $2 }
+  | Def Id Id
+      { $3 }
 
 skip:
   | Scattered

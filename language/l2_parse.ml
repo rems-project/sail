@@ -31,17 +31,6 @@ base_kind =
 
 
 type 
-id_aux =  (* Identifier *)
-   Id of x
- | DeIid of x (* remove infix status *)
-
-
-type 
-kid_aux =  (* identifiers with kind, ticked to differntiate from program variables *)
-   Var of x
-
-
-type 
 base_effect_aux =  (* effect *)
    BE_rreg (* read register *)
  | BE_wreg (* write register *)
@@ -58,13 +47,24 @@ base_effect_aux =  (* effect *)
 
 
 type 
+kid_aux =  (* identifiers with kind, ticked to differntiate from program variables *)
+   Var of x
+
+
+type 
+id_aux =  (* Identifier *)
+   Id of x
+ | DeIid of x (* remove infix status *)
+
+
+type 
 kind_aux =  (* kinds *)
    K_kind of (base_kind) list
 
 
 type 
-id = 
-   Id_aux of id_aux * l
+base_effect = 
+   BE_aux of base_effect_aux * l
 
 
 type 
@@ -73,8 +73,8 @@ kid =
 
 
 type 
-base_effect = 
-   BE_aux of base_effect_aux * l
+id = 
+   Id_aux of id_aux * l
 
 
 type 
@@ -146,6 +146,11 @@ typquant_aux =  (* type quantifiers and constraints *)
 
 
 type 
+typquant = 
+   TypQ_aux of typquant_aux * l
+
+
+type 
 lit_aux =  (* Literal constant *)
    L_unit (* $() : _$ *)
  | L_zero (* $_ : _$ *)
@@ -160,8 +165,8 @@ lit_aux =  (* Literal constant *)
 
 
 type 
-typquant = 
-   TypQ_aux of typquant_aux * l
+typschm_aux =  (* type scheme *)
+   TypSchm_ts of typquant * atyp
 
 
 type 
@@ -170,8 +175,8 @@ lit =
 
 
 type 
-typschm_aux =  (* type scheme *)
-   TypSchm_ts of typquant * atyp
+typschm = 
+   TypSchm_aux of typschm_aux * l
 
 
 type 
@@ -197,11 +202,6 @@ and fpat_aux =  (* Field pattern *)
 
 and fpat = 
    FP_aux of fpat_aux * l
-
-
-type 
-typschm = 
-   TypSchm_aux of typschm_aux * l
 
 
 type 
@@ -271,15 +271,15 @@ and letbind =
 
 
 type 
-name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
-   Name_sect_none
- | Name_sect_some of string
+tannot_opt_aux =  (* Optional type annotation for functions *)
+   Typ_annot_opt_none
+ | Typ_annot_opt_some of typquant * atyp
 
 
 type 
-type_union_aux =  (* Type union constructors *)
-   Tu_id of id
- | Tu_ty_id of atyp * id
+effect_opt_aux =  (* Optional effect annotation for functions *)
+   Effect_opt_pure (* sugar for empty effect set *)
+ | Effect_opt_effect of atyp
 
 
 type 
@@ -294,45 +294,15 @@ funcl_aux =  (* Function clause *)
 
 
 type 
-tannot_opt_aux =  (* Optional type annotation for functions *)
-   Typ_annot_opt_none
- | Typ_annot_opt_some of typquant * atyp
+type_union_aux =  (* Type union constructors *)
+   Tu_id of id
+ | Tu_ty_id of atyp * id
 
 
 type 
-effect_opt_aux =  (* Optional effect annotation for functions *)
-   Effect_opt_pure (* sugar for empty effect set *)
- | Effect_opt_effect of atyp
-
-
-type 
-name_scm_opt = 
-   Name_sect_aux of name_scm_opt_aux * l
-
-
-type 
-index_range_aux =  (* index specification, for bitfields in register types *)
-   BF_single of int (* single index *)
- | BF_range of int * int (* index range *)
- | BF_concat of index_range * index_range (* concatenation of index ranges *)
-
-and index_range = 
-   BF_aux of index_range_aux * l
-
-
-type 
-type_union = 
-   Tu_aux of type_union_aux * l
-
-
-type 
-rec_opt = 
-   Rec_aux of rec_opt_aux * l
-
-
-type 
-funcl = 
-   FCL_aux of funcl_aux * l
+name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
+   Name_sect_none
+ | Name_sect_some of string
 
 
 type 
@@ -346,6 +316,48 @@ effect_opt =
 
 
 type 
+rec_opt = 
+   Rec_aux of rec_opt_aux * l
+
+
+type 
+funcl = 
+   FCL_aux of funcl_aux * l
+
+
+type 
+type_union = 
+   Tu_aux of type_union_aux * l
+
+
+type 
+index_range_aux =  (* index specification, for bitfields in register types *)
+   BF_single of int (* single index *)
+ | BF_range of int * int (* index range *)
+ | BF_concat of index_range * index_range (* concatenation of index ranges *)
+
+and index_range = 
+   BF_aux of index_range_aux * l
+
+
+type 
+name_scm_opt = 
+   Name_sect_aux of name_scm_opt_aux * l
+
+
+type 
+default_typing_spec_aux =  (* Default kinding or typing assumption, and default order for literal vectors and vector shorthands *)
+   DT_kind of base_kind * kid
+ | DT_order of base_kind * atyp
+ | DT_typ of typschm * id
+
+
+type 
+fundef_aux =  (* Function definition *)
+   FD_function of rec_opt * tannot_opt * effect_opt * (funcl) list
+
+
+type 
 type_def_aux =  (* Type definition body *)
    TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
  | TD_record of id * name_scm_opt * typquant * ((atyp * id)) list * bool (* struct type definition *)
@@ -355,8 +367,19 @@ type_def_aux =  (* Type definition body *)
 
 
 type 
-fundef_aux =  (* Function definition *)
-   FD_function of rec_opt * tannot_opt * effect_opt * (funcl) list
+val_spec_aux =  (* Value type specification *)
+   VS_val_spec of typschm * id
+ | VS_extern_no_rename of typschm * id
+ | VS_extern_spec of typschm * id * string
+
+
+type 
+kind_def_aux =  (* Definition body for elements of kind; many are shorthands for type\_defs *)
+   KD_abbrev of kind * id * name_scm_opt * typschm (* type abbreviation *)
+ | KD_record of kind * id * name_scm_opt * typquant * ((atyp * id)) list * bool (* struct type definition *)
+ | KD_variant of kind * id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
+ | KD_enum of kind * id * name_scm_opt * (id) list * bool (* enumeration type definition *)
+ | KD_register of kind * id * atyp * atyp * ((index_range * id)) list (* register mutable bitfield type definition *)
 
 
 type 
@@ -377,17 +400,13 @@ scattered_def_aux =  (* Function and type union definitions that can be spread a
 
 
 type 
-val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_no_rename of typschm * id
- | VS_extern_spec of typschm * id * string
+default_typing_spec = 
+   DT_aux of default_typing_spec_aux * l
 
 
 type 
-default_typing_spec_aux =  (* Default kinding or typing assumption, and default order for literal vectors and vector shorthands *)
-   DT_kind of base_kind * kid
- | DT_order of base_kind * atyp
- | DT_typ of typschm * id
+fundef = 
+   FD_aux of fundef_aux * l
 
 
 type 
@@ -396,8 +415,13 @@ type_def =
 
 
 type 
-fundef = 
-   FD_aux of fundef_aux * l
+val_spec = 
+   VS_aux of val_spec_aux * l
+
+
+type 
+kind_def = 
+   KD_aux of kind_def_aux * l
 
 
 type 
@@ -411,18 +435,9 @@ scattered_def =
 
 
 type 
-val_spec = 
-   VS_aux of val_spec_aux * l
-
-
-type 
-default_typing_spec = 
-   DT_aux of default_typing_spec_aux * l
-
-
-type 
 def =  (* Top-level definition *)
-   DEF_type of type_def (* type definition *)
+   DEF_kind of kind_def (* definition of named kind identifiers *)
+ | DEF_type of type_def (* type definition *)
  | DEF_fundef of fundef (* function definition *)
  | DEF_val of letbind (* value definition *)
  | DEF_spec of val_spec (* top-level type constraint *)

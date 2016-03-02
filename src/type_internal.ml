@@ -41,6 +41,7 @@ and implicit_parm =
 and nexp = { mutable nexp : nexp_aux; mutable imp_param : bool}
 and nexp_aux =
   | Nvar of string
+  | Nid of string * nexp (*First term is the name of this nid, second is the constant it represents*)
   | Nconst of big_int
   | Npos_inf
   | Nneg_inf
@@ -98,6 +99,12 @@ let rec compare_nexps n1 n2 =
   | Nconst n1, Nconst n2 -> compare_big_int n1 n2
   | Nconst _ , _        -> -1
   | _        , Nconst _ ->  1
+  | Nid(i1,n1), Nid(i2,n2) ->
+    (match compare i1 i2 with
+     | 0 -> 0
+     | _ -> compare_nexps n1 n2)
+  | Nid _    , _        -> -1
+  | _        , Nid _    ->  1
   | Nvar i1  , Nvar i2  ->  compare i1 i2
   | Nvar _   , _        -> -1
   | _        , Nvar _   ->  1 
@@ -197,7 +204,8 @@ type rec_env = (string * rec_kind * tannot * ((string * t) list))
 type alias_kind = OneReg of string * tannot | TwoReg of string * string * tannot | MultiReg of (string list) * tannot
 type def_envs = { 
   k_env: kind emap; 
-  abbrevs: tannot emap; 
+  abbrevs: tannot emap;
+  nabbrevs: nexp emap;
   namesch : tannot emap; 
   enum_env : (string list) emap; 
   rec_env : rec_env list;
@@ -216,6 +224,7 @@ type exp = tannot Ast.exp
 (*Nexpression Makers (as built so often)*)
 
 let mk_nv s = {nexp = Nvar s; imp_param = false}
+let mk_nid s n = {nexp = Nid(s,n); imp_param = false}
 let mk_add n1 n2 = {nexp = Nadd(n1,n2); imp_param = false}
 let mk_sub n1 n2 = {nexp = Nsub(n1,n2); imp_param = false}
 let mk_mult n1 n2 = {nexp = Nmult(n1,n2); imp_param = false}
@@ -285,19 +294,23 @@ and targ_to_string = function
   | TA_ord o -> o_to_string o
 and n_to_string n =
   match n.nexp with
-    | Nvar i -> i
-    | Nconst i -> string_of_big_int i
-    | Npos_inf -> "infinity"
-    | Nneg_inf -> "-infinity"
-    | Ninexact -> "infinity - infinity"
-    | Nadd(n1,n2) -> "("^ (n_to_string n1) ^ " + " ^ (n_to_string n2) ^")"
-    | Nsub(n1,n2) -> "("^ (n_to_string n1) ^ " - " ^ (n_to_string n2) ^ ")"
-    | Nmult(n1,n2) -> "(" ^ (n_to_string n1) ^ " * " ^ (n_to_string n2) ^ ")"
-    | N2n(n,None) -> "2**" ^ (n_to_string n)
-    | N2n(n,Some i) -> "2**" ^ (n_to_string n) ^ "(*" ^ (string_of_big_int i) ^ "*)"
-    | Npow(n, i) -> "(" ^ (n_to_string n) ^ ")**" ^ (string_of_int i)
-    | Nneg n -> "-" ^ (n_to_string n)
-    | Nuvar({nindex=i;nsubst=a}) -> if !debug_mode then "Nu_" ^ string_of_int i ^ "(" ^ (match a with | None -> "None" | Some n -> n_to_string n) ^ ")" else "_"
+  | Nid(i,n) -> i ^ "(*" ^ (n_to_string n) ^ "*)"
+  | Nvar i -> i
+  | Nconst i -> string_of_big_int i
+  | Npos_inf -> "infinity"
+  | Nneg_inf -> "-infinity"
+  | Ninexact -> "infinity - infinity"
+  | Nadd(n1,n2) -> "("^ (n_to_string n1) ^ " + " ^ (n_to_string n2) ^")"
+  | Nsub(n1,n2) -> "("^ (n_to_string n1) ^ " - " ^ (n_to_string n2) ^ ")"
+  | Nmult(n1,n2) -> "(" ^ (n_to_string n1) ^ " * " ^ (n_to_string n2) ^ ")"
+  | N2n(n,None) -> "2**" ^ (n_to_string n)
+  | N2n(n,Some i) -> "2**" ^ (n_to_string n) ^ "(*" ^ (string_of_big_int i) ^ "*)"
+  | Npow(n, i) -> "(" ^ (n_to_string n) ^ ")**" ^ (string_of_int i)
+  | Nneg n -> "-" ^ (n_to_string n)
+  | Nuvar({nindex=i;nsubst=a}) ->
+    if !debug_mode
+    then "Nu_" ^ string_of_int i ^ "(" ^ (match a with | None -> "None" | Some n -> n_to_string n) ^ ")"
+    else "_"
 and ef_to_string (Ast.BE_aux(b,l)) =
     match b with
       | Ast.BE_rreg  -> "rreg"
@@ -489,7 +502,7 @@ let is_bit_vector t = match t.t with
 let rec contains_const n =
   match n.nexp with
   | Nvar _ | Nuvar _ | Npow _ | N2n _ | Npos_inf | Nneg_inf | Ninexact -> false
-  | Nconst _ -> true
+  | Nconst _ | Nid _ -> true
   | Nneg n -> contains_const n
   | Nmult(n1,n2) | Nadd(n1,n2) | Nsub(n1,n2) -> (contains_const n1) || (contains_const n2)
 
@@ -582,6 +595,7 @@ let rec nexp_negative n =
 let rec normalize_n_rec recur_ok n =
   (*let _ = Printf.eprintf "Working on normalizing %s\n" (n_to_string n) in *)
   match n.nexp with
+  | Nid(_,n) -> normalize_n_rec true n
   | Nconst _ | Nvar _ | Nuvar _ | Npos_inf | Nneg_inf | Ninexact -> n
   | Nneg n -> 
     let n',to_recur,add_neg = (match n.nexp with
@@ -819,9 +833,11 @@ let rec normalize_n_rec recur_ok n =
         | _ -> mk_mult (normalize_n_rec true (mk_mult n1' n21)) n22)
     | Nmult _ ,Nmult(n21,n22) -> mk_mult (mk_mult n21 n1') (mk_mult n22 n1')
     | Nsub _, _ | _, Nsub _ -> 
-      let _ = Printf.eprintf "nsub case still around %s\n" (n_to_string n) in assert false 
+      let _ = Printf.eprintf "nsub case still around %s\n" (n_to_string n) in assert false
     | Nneg _,_ | _,Nneg _ -> 
       let _ = Printf.eprintf "neg case still around %s\n" (n_to_string n) in assert false
+    | Nid _, _ | _, Nid _ ->
+      let _ = Printf.eprintf "nid case still around %s\n" (n_to_string n) in assert false
     (* If things are normal, neg should be gone. *)
     )
     
@@ -1029,7 +1045,7 @@ let divisible_by ne n =
         (match num with
          | Some i -> eq_big_int i (big_int_of_int 2)
          | _ -> false)
-      | Npow(n,_) | Nneg n -> walk_nexp n
+      | Npow(n,_) | Nneg n | Nid(_,n) -> walk_nexp n
       | Nmult(n1,n2) -> walk_nexp n1 || walk_nexp n2
       | Nadd(n1,n2) | Nsub(n1,n2) -> walk_nexp n1 && walk_nexp n2        
     in walk_nexp ne
@@ -1051,6 +1067,7 @@ let divide_by ne n =
   | Some answer -> answer
   | None ->
     let rec walk_nexp n = match n.nexp with
+      | Nid(_,n) -> walk_nexp n
       | Npos_inf ->
         (match num with
         | Some(i) -> if lt_big_int i zero_big_int then mk_n_inf() else n
@@ -1099,6 +1116,7 @@ let isolate_nexp nv ne =
     | Nuvar _ -> None, Some (get_index nv)
     | _ -> None, None in
   let rec remove_from ne = match ne.nexp with
+    | Nid(_,n) -> remove_from n
     | Npos_inf | Nneg_inf | Ninexact | Nconst _ | N2n(_,Some _)-> ne,None
     | Nvar v ->
       (match var with
@@ -1130,7 +1148,7 @@ let isolate_nexp nv ne =
   | None -> assert false (*Oh my*)
   | Some n_nv ->
     (match n_nv.nexp with
-     | Nvar _ | Nuvar _ | N2n _ | Npow _ | Nadd _ | Nneg _ | Nsub _ -> (n_nv,new_ne)
+     | Nvar _ | Nuvar _ | N2n _ | Npow _ | Nadd _ | Nneg _ | Nsub _ | Nid _ -> (n_nv,new_ne)
      | Nconst _ | Ninexact | Npos_inf | Nneg_inf -> assert false (*double oh my*)
      | Nmult(n1,n2) ->
        if nexp_eq n1 n_nv
@@ -1239,7 +1257,7 @@ let rec occurs_in_pending_subst n_box n : bool =
       else occurs_in_pending_subst n' n
     | Nuvar( { nsubst = None } ) ->
       (match n.nexp with
-       | Nuvar( { nsubst = None }) |  Nvar _ | Nconst _ | Npos_inf | Nneg_inf | Ninexact -> false
+       | Nuvar( { nsubst = None }) |  Nvar _ | Nid _| Nconst _ | Npos_inf | Nneg_inf | Ninexact -> false
        | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> occurs_in_nexp n_box n1 || occurs_in_nexp n_box n2
        | Nneg n1 | N2n(n1,_) | Npow(n1,_) -> occurs_in_nexp n_box n1
        | Nuvar( { nsubst = Some n'}) -> occurs_in_pending_subst n_box n')
@@ -1258,7 +1276,7 @@ and occurs_in_nexp n_box nuvar : bool =
 let rec reduce_n_unifications n = 
   (*let _ = Printf.eprintf "reduce_n_unifications %s\n" (n_to_string n) in*)
   (match n.nexp with
-    | Nvar _ | Nconst _ | Npos_inf | Nneg_inf | Ninexact-> ()
+    | Nvar _ | Nid _ | Nconst _ | Npos_inf | Nneg_inf | Ninexact-> ()
     | N2n(n1,_) | Npow(n1,_) | Nneg n1 -> reduce_n_unifications n1
     | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> reduce_n_unifications n1; reduce_n_unifications n2
     | Nuvar nu ->
@@ -2380,6 +2398,7 @@ and n_subst s_env n =
     (match Envmap.apply s_env i with
       | Some(TA_nexp n1) -> n1
       | _ -> mk_nv i)
+  | Nid(i,n) -> n_subst s_env n
   | Nuvar _ -> new_n()
   | Nconst _ | Npos_inf | Nneg_inf | Ninexact -> n
   | N2n(n1,None) -> mk_2n (n_subst s_env n1) 
@@ -2493,7 +2512,7 @@ and ta_remove_unifications s_env ta =
 and n_remove_unifications s_env n =
   (*let _ = Printf.eprintf "n_remove_unifications %s\n" (n_to_string n) in*)
   match n.nexp with
-  | Nvar _ | Nconst _ | Npos_inf | Nneg_inf | Ninexact -> s_env
+  | Nvar _ | Nid _ | Nconst _ | Npos_inf | Nneg_inf | Ninexact -> s_env
   | Nuvar nu -> 
     let n' = match nu.nsubst with
       | None -> n
@@ -2552,20 +2571,21 @@ and targ_to_typ_arg targ =
     | TA_eft e -> Typ_arg_effect (e_to_ef e)), Parse_ast.Unknown)
 and n_to_nexp n =
   Nexp_aux(
-  (match n.nexp with
-    | Nvar i -> Nexp_var (Kid_aux((Var i),Parse_ast.Unknown)) 
-    | Nconst i -> Nexp_constant (int_of_big_int i) (*TODO: Push more bigint around*) 
-    | Npos_inf -> Nexp_constant max_int (*TODO: Not right*)
-    | Nneg_inf -> Nexp_constant min_int (* see above *)
-    | Ninexact -> Nexp_constant min_int (*and above*)
-    | Nmult(n1,n2) -> Nexp_times(n_to_nexp n1,n_to_nexp n2) 
-    | Nadd(n1,n2) -> Nexp_sum(n_to_nexp n1,n_to_nexp n2) 
-    | Nsub(n1,n2) -> Nexp_minus(n_to_nexp n1,n_to_nexp n2)
-    | N2n(n,_) -> Nexp_exp (n_to_nexp n)
-    | Npow(n,1) -> let Nexp_aux(n',_) = n_to_nexp n in n'
-    | Npow(n,i) -> Nexp_times(n_to_nexp n,n_to_nexp( mk_pow n (i-1))) 
-    | Nneg n -> Nexp_neg (n_to_nexp n)
-    | Nuvar _ -> Nexp_var (Kid_aux((Var "fresh"),Parse_ast.Unknown))), Parse_ast.Unknown)
+    (match n.nexp with
+     | Nid(i,_) -> Nexp_id (Id_aux ((Id i),Parse_ast.Unknown))
+     | Nvar i -> Nexp_var (Kid_aux((Var i),Parse_ast.Unknown)) 
+     | Nconst i -> Nexp_constant (int_of_big_int i) (*TODO: Push more bigint around*) 
+     | Npos_inf -> Nexp_constant max_int (*TODO: Not right*)
+     | Nneg_inf -> Nexp_constant min_int (* see above *)
+     | Ninexact -> Nexp_constant min_int (*and above*)
+     | Nmult(n1,n2) -> Nexp_times(n_to_nexp n1,n_to_nexp n2) 
+     | Nadd(n1,n2) -> Nexp_sum(n_to_nexp n1,n_to_nexp n2) 
+     | Nsub(n1,n2) -> Nexp_minus(n_to_nexp n1,n_to_nexp n2)
+     | N2n(n,_) -> Nexp_exp (n_to_nexp n)
+     | Npow(n,1) -> let Nexp_aux(n',_) = n_to_nexp n in n'
+     | Npow(n,i) -> Nexp_times(n_to_nexp n,n_to_nexp( mk_pow n (i-1))) 
+     | Nneg n -> Nexp_neg (n_to_nexp n)
+     | Nuvar _ -> Nexp_var (Kid_aux((Var "fresh"),Parse_ast.Unknown))), Parse_ast.Unknown)
 and e_to_ef ef =
  Effect_aux( 
   (match ef.effect with
@@ -2758,7 +2778,7 @@ let get_map_tannot = function
 let rec expand_nexp n = match n.nexp with
   | Nvar _ | Nconst _ | Nuvar _ | Npos_inf | Nneg_inf | Ninexact -> [n]
   | Nadd (n1,n2) | Nsub (n1,n2) | Nmult (n1,n2) -> n::((expand_nexp n1)@(expand_nexp n2))
-  | N2n (n1,_) | Npow (n1,_) | Nneg n1 -> n::(expand_nexp n1)
+  | N2n (n1,_) | Npow (n1,_) | Nneg n1 | Nid(_,n1) -> n::(expand_nexp n1)
 
 let is_nconst n = match n.nexp with | Nconst _ -> true | _ -> false
 
@@ -3257,7 +3277,7 @@ let rec contains_var nu n =
   | Nvar _ | Nuvar _ -> nexp_eq_check nu n
   | Nconst _ | Npos_inf | Nneg_inf | Ninexact -> false
   | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> contains_var nu n1 || contains_var nu n2
-  | Nneg n | N2n(n,_) | Npow(n,_) -> contains_var nu n
+  | Nneg n | N2n(n,_) | Npow(n,_) | Nid(_,n) -> contains_var nu n
 
 let rec contains_in_vars in_env n =
   match in_env with
@@ -3269,7 +3289,7 @@ let rec contains_in_vars in_env n =
 
 let rec get_nuvars n =
   match n.nexp with
-    | Nconst _ | Nvar _ | Npos_inf | Nneg_inf | Ninexact-> []
+    | Nconst _ | Nvar _ | Nid _ | Npos_inf | Nneg_inf | Ninexact-> []
     | Nuvar _ -> [n]
     | Nmult(n1,n2) | Nadd(n1,n2) | Nsub(n1,n2) -> (get_nuvars n1)@(get_nuvars n2)
     | Nneg n | N2n(n,_) | Npow(n,_) -> get_nuvars n
@@ -3296,7 +3316,7 @@ let rec subst_nuvars nus n =
   let is_imp_param = n.imp_param in
   let new_n = 
     match n.nexp with
-      | Nconst _ | Nvar _ | Npos_inf | Nneg_inf | Ninexact -> n
+      | Nconst _ | Nvar _ | Nid _ | Npos_inf | Nneg_inf | Ninexact -> n
       | Nuvar _ -> 
         (match Nexpmap.apply nus n with
           | None -> n

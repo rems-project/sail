@@ -305,6 +305,22 @@ type_def :: 'TD_' ::=
   | typedef id = register bits [ atyp : atyp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
 :: :: register {{ com register mutable bitfield type definition }} {{ texlong }}
 
+kind_def :: 'KD_' ::=
+  {{ com Definition body for elements of kind; many are shorthands for type\_defs }}
+  {{ aux _ l }}
+  | Def kind id name_scm_opt = typschm                                        :: :: abbrev
+    {{ com type abbreviation }} {{ texlong }}
+  | Def kind id name_scm_opt = const struct typquant { atyp1 id1 ; ... ; atypn idn semi_opt }     :: :: record
+    {{ com struct type definition }} {{ texlong }}
+  | Def kind id name_scm_opt = const union typquant { type_union1 ; ... ; type_unionn semi_opt }   :: :: variant
+    {{ com union type definition}} {{ texlong }}
+  | Def kind id name_scm_opt = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
+    {{ com enumeration type definition}} {{ texlong }}
+
+  | Def kind id = register bits [ atyp : atyp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
+:: :: register {{ com register mutable bitfield type definition }} {{ texlong }}
+
+
 % also sugar [  nexp ] 
 
 
@@ -744,6 +760,8 @@ dec_spec :: 'DEC_' ::=
 
 def :: 'DEF_' ::=
   {{ com Top-level definition }}
+  | kind_def                                                    :: :: kind
+    {{ com definition of named kind identifiers }}
   | type_def                                                    :: :: type
     {{ com type definition }}
   | fundef                                                   :: :: fundef

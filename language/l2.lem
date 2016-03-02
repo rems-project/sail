@@ -30,12 +30,21 @@ type base_kind_aux =  (* base kind *)
  | BK_effect (* kind of effect sets *)
 
 
+type id_aux =  (* Identifier *)
+ | Id of x
+ | DeIid of x (* remove infix status *)
+
+
 type kid_aux =  (* variables with kind, ticked to differntiate from program variables *)
  | Var of x
 
 
 type base_kind = 
  | BK_aux of base_kind_aux * l
+
+
+type id = 
+ | Id_aux of id_aux * l
 
 
 type kid = 
@@ -47,11 +56,12 @@ type kind_aux =  (* kinds *)
 
 
 type nexp_aux =  (* expression of kind Nat, for vector sizes and origins *)
+ | Nexp_id of id (* identifier, bound by def Nat x = nexp *)
  | Nexp_var of kid (* variable *)
  | Nexp_constant of integer (* constant *)
  | Nexp_times of nexp * nexp (* product *)
  | Nexp_sum of nexp * nexp (* sum *)
- | Nexp_minus of nexp * nexp (* subtraction, error for nexp1 to be smaller than nexp2 *)
+ | Nexp_minus of nexp * nexp (* subtraction *)
  | Nexp_exp of nexp (* exponential *)
  | Nexp_neg of nexp (* For internal use *)
 
@@ -83,32 +93,23 @@ type base_effect =
  | BE_aux of base_effect_aux * l
 
 
-type effect_aux =  (* effect set, of kind Effects *)
- | Effect_var of kid
- | Effect_set of list base_effect (* effect set *)
-
-
 type order_aux =  (* vector order specifications, of kind Order *)
  | Ord_var of kid (* variable *)
  | Ord_inc (* increasing (little-endian) *)
  | Ord_dec (* decreasing (big-endian) *)
 
 
-type id_aux =  (* Identifier *)
- | Id of x
- | DeIid of x (* remove infix status *)
-
-
-type effect = 
- | Effect_aux of effect_aux * l
+type effect_aux =  (* effect set, of kind Effects *)
+ | Effect_var of kid
+ | Effect_set of list base_effect (* effect set *)
 
 
 type order = 
  | Ord_aux of order_aux * l
 
 
-type id = 
- | Id_aux of id_aux * l
+type effect = 
+ | Effect_aux of effect_aux * l
 
 let effect_union e1 e2 = 
   match (e1,e2) with
@@ -163,10 +164,6 @@ type lit_aux =  (* Literal constant *)
  | L_string of string (* string constant *)
 
 
-type typquant = 
- | TypQ_aux of typquant_aux * l
-
-
 type typ_aux =  (* Type expressions, of kind $Type$ *)
  | Typ_wild (* Unspecified type *)
  | Typ_id of id (* Defined type *)
@@ -186,6 +183,10 @@ and typ_arg_aux =  (* Type constructor arguments of all kinds *)
 
 and typ_arg = 
  | Typ_arg_aux of typ_arg_aux * l
+
+
+type typquant = 
+ | TypQ_aux of typquant_aux * l
 
 
 type lit = 
@@ -228,42 +229,7 @@ type reg_id_aux 'a =
  | RI_id of id
 
 
-type lexp 'a = 
- | LEXP_aux of (lexp_aux 'a) * annot 'a
-
-and fexp_aux 'a =  (* Field-expression *)
- | FE_Fexp of id * (exp 'a)
-
-and fexp 'a = 
- | FE_aux of (fexp_aux 'a) * annot 'a
-
-and fexps_aux 'a =  (* Field-expression list *)
- | FES_Fexps of list (fexp 'a) * bool
-
-and fexps 'a = 
- | FES_aux of (fexps_aux 'a) * annot 'a
-
-and opt_default_aux 'a =  (* Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map *)
- | Def_val_empty
- | Def_val_dec of (exp 'a)
-
-and opt_default 'a = 
- | Def_val_aux of (opt_default_aux 'a) * annot 'a
-
-and pexp_aux 'a =  (* Pattern match *)
- | Pat_exp of (pat 'a) * (exp 'a)
-
-and pexp 'a = 
- | Pat_aux of (pexp_aux 'a) * annot 'a
-
-and letbind_aux 'a =  (* Let binding *)
- | LB_val_explicit of typschm * (pat 'a) * (exp 'a) (* value binding, explicit type ((pat 'a) must be total) *)
- | LB_val_implicit of (pat 'a) * (exp 'a) (* value binding, implicit type ((pat 'a) must be total) *)
-
-and letbind 'a = 
- | LB_aux of (letbind_aux 'a) * annot 'a
-
-and exp_aux 'a =  (* Expression *)
+type exp_aux 'a =  (* Expression *)
  | E_block of list (exp 'a) (* block *)
  | E_nondet of list (exp 'a) (* nondeterminisitic block, expressions evaluate in an unspecified order, or concurrently *)
  | E_id of id (* identifier *)
@@ -310,6 +276,41 @@ and lexp_aux 'a =  (* lvalue expression *)
  | LEXP_vector of (lexp 'a) * (exp 'a) (* vector element *)
  | LEXP_vector_range of (lexp 'a) * (exp 'a) * (exp 'a) (* subvector *)
  | LEXP_field of (lexp 'a) * id (* struct field *)
+
+and lexp 'a = 
+ | LEXP_aux of (lexp_aux 'a) * annot 'a
+
+and fexp_aux 'a =  (* Field-expression *)
+ | FE_Fexp of id * (exp 'a)
+
+and fexp 'a = 
+ | FE_aux of (fexp_aux 'a) * annot 'a
+
+and fexps_aux 'a =  (* Field-expression list *)
+ | FES_Fexps of list (fexp 'a) * bool
+
+and fexps 'a = 
+ | FES_aux of (fexps_aux 'a) * annot 'a
+
+and opt_default_aux 'a =  (* Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map *)
+ | Def_val_empty
+ | Def_val_dec of (exp 'a)
+
+and opt_default 'a = 
+ | Def_val_aux of (opt_default_aux 'a) * annot 'a
+
+and pexp_aux 'a =  (* Pattern match *)
+ | Pat_exp of (pat 'a) * (exp 'a)
+
+and pexp 'a = 
+ | Pat_aux of (pexp_aux 'a) * annot 'a
+
+and letbind_aux 'a =  (* Let binding *)
+ | LB_val_explicit of typschm * (pat 'a) * (exp 'a) (* value binding, explicit type ((pat 'a) must be total) *)
+ | LB_val_implicit of (pat 'a) * (exp 'a) (* value binding, implicit type ((pat 'a) must be total) *)
+
+and letbind 'a = 
+ | LB_aux of (letbind_aux 'a) * annot 'a
 
 
 type reg_id 'a = 
@@ -421,6 +422,15 @@ type default_spec_aux 'a =  (* Default kinding or typing assumption *)
  | DT_typ of typschm * id
 
 
+type kind_def_aux 'a =  (* Definition body for elements of kind; many are shorthands for type\_defs *)
+ | KD_nabbrev of kind * id * name_scm_opt * nexp (* nexp abbreviation *)
+ | KD_abbrev of kind * id * name_scm_opt * typschm (* type abbreviation *)
+ | KD_record of kind * id * name_scm_opt * typquant * list (typ * id) * bool (* struct type definition *)
+ | KD_variant of kind * id * name_scm_opt * typquant * list type_union * bool (* union type definition *)
+ | KD_enum of kind * id * name_scm_opt * list id * bool (* enumeration type definition *)
+ | KD_register of kind * id * nexp * nexp * list (index_range * id) (* register mutable bitfield type definition *)
+
+
 type val_spec_aux 'a =  (* Value type specification *)
  | VS_val_spec of typschm * id
  | VS_extern_no_rename of typschm * id
@@ -447,6 +457,10 @@ type default_spec 'a =
  | DT_aux of (default_spec_aux 'a) * l
 
 
+type kind_def 'a = 
+ | KD_aux of (kind_def_aux 'a) * annot 'a
+
+
 type val_spec 'a = 
  | VS_aux of (val_spec_aux 'a) * annot 'a
 
@@ -456,6 +470,7 @@ type dec_comm 'a =  (* Top-level generated comments *)
  | DC_comm_struct of (def 'a) (* generated structured comment *)
 
 and def 'a =  (* Top-level definition *)
+ | DEF_kind of (kind_def 'a) (* definition of named kind identifiers *)
  | DEF_type of (type_def 'a) (* type definition *)
  | DEF_fundef of (fundef 'a) (* function definition *)
  | DEF_val of (letbind 'a) (* value definition *)
@@ -521,14 +536,14 @@ type nec =  (* Numeric expression constraints *)
  | Nec_branch of list nec
 
 
-type kinf =  (* Whether a kind is default or from a local binding *)
- | Kinf_k of k
- | Kinf_def of k
-
-
 type tid =  (* A type identifier or type variable *)
  | Tid_id of id
  | Tid_var of kid
+
+
+type kinf =  (* Whether a kind is default or from a local binding *)
+ | Kinf_k of k
+ | Kinf_def of k
 
 
 type t =  (* Internal types *)
@@ -622,10 +637,10 @@ let fresh_kid denv = Var "x" (*TODO When strings can be manipulated, this should
 
 
 
-type E = env
-
-
 type I = inf
+
+
+type E = env
 
 
 
