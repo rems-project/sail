@@ -536,7 +536,9 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
          | Tapp("register",[TA_typ(t')]),Tuvar _ ->
            (*let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
              let tannot = Base(([],t),(if is_alias then tag else External (Some i)),cs,ef',ef',bounds) in*)
-           let tannot = Base(([],t),(if is_alias then tag else Emp_global),cs,pure_e,pure_e,bounds) in
+           let tannot = Base(([],t),
+                             (if is_alias then tag else (if tag = Emp_local then tag else Emp_global)),
+                             cs,pure_e,pure_e,bounds) in
            let _,cs',ef',e' = type_coerce (Expr l) d_env Require false false b_env t' (rebuild tannot) expect_actual in
            (e',t,t_env,cs@cs',bounds,ef')
          | Tapp("register",[TA_typ(t')]),_ ->
