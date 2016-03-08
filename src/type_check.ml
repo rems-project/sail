@@ -1606,24 +1606,25 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
                                      GtEq(Specc l, Require, acc_n, (mk_sub (mk_add base n_one) rise))] 
             | _ -> typ_error l ("Assignment to one vector element requires a non-polymorphic order")
           in
-          let (e,acc_t',_,cs',_,ef_e) = check_exp envs imp_param false acc_t acc in
-          let item_t,add_reg_write,reg_still_required = 
-            match item_t.t with
-              | Tapp("register",[TA_typ t]) | Tabbrev(_,{t=Tapp("register",[TA_typ t])}) -> t,true,false
-              | Tapp("reg",[TA_typ t]) -> t,false,false
-              | _ -> item_t,false,not(writing_reg_bit) in
-          let efl,tag = if add_reg_write || writing_reg_bit then (add_effect (BE_aux(BE_wreg,l)) efl,External None)
-            else match tag with | External _ -> (efl,Emp_local) | _ ->  (efl,tag) in
-          let efr = union_effects efl (union_effects efr ef_e) in
-          if is_top && reg_still_required && reg_required && not(writing_reg_bit)
-          then typ_error l "Assignment expected a register or non-parameter non-letbound identifier to mutate"
-          else
-            (LEXP_aux(LEXP_vector(vec',e),(l,Base(([],item_t),tag,csi,efl,efr,nob))),
-             item_t,reg_required && reg_still_required,
-             env,tag,csi@cs'@cs_t,bounds,efl,efr)
-        | Tuvar _ -> 
-          typ_error l "Assignment expected a vector with a known order, try adding an annotation."
-        | _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string vec_t))) 
+         let (e,acc_t',_,cs',_,ef_e) = check_exp envs imp_param false acc_t acc in
+         let item_t_act,_ = get_abbrev d_env item_t in
+         let item_t,add_reg_write,reg_still_required = 
+           match item_t_act.t with
+             | Tapp("register",[TA_typ t]) | Tabbrev(_,{t=Tapp("register",[TA_typ t])}) -> t,true,false
+             | Tapp("reg",[TA_typ t]) -> t,false,false
+             | _ -> item_t,false,not(writing_reg_bit) in
+         let efl,tag = if add_reg_write || writing_reg_bit then (add_effect (BE_aux(BE_wreg,l)) efl,External None)
+           else match tag with | External _ -> (efl,Emp_local) | _ ->  (efl,tag) in
+         let efr = union_effects efl (union_effects efr ef_e) in
+         if is_top && reg_still_required && reg_required && not(writing_reg_bit)
+         then typ_error l "Assignment expected a register or non-parameter non-letbound identifier to mutate"
+         else
+           (LEXP_aux(LEXP_vector(vec',e),(l,Base(([],item_t_act),tag,csi,efl,efr,nob))),
+            item_t_act,reg_required && reg_still_required,
+            env,tag,csi@cs'@cs_t,bounds,efl,efr)
+       | Tuvar _ -> 
+         typ_error l "Assignment expected a vector with a known order, try adding an annotation."
+       | _ -> typ_error l ("Assignment expected vector, found assignment to type " ^ (t_to_string vec_t))) 
     | LEXP_vector_range(vec,e1,e2)-> 
       let (vec',vec_t,reg_required,env,tag,csi,bounds,efl,efr) = check_lexp envs imp_param false vec in
       let vec_t,cs = get_abbrev d_env vec_t in
