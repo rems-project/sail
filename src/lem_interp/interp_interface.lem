@@ -952,13 +952,19 @@ val register_value_ones : direction -> nat -> nat -> register_value
 let register_value_ones dir width start_index = 
   register_value Bitl_one dir width start_index
 
+val byte_lifted_undef : byte_lifted
+let byte_lifted_undef = Byte_lifted (List.replicate 8 Bitl_undef)
+
 val byte_lifted_unknown : byte_lifted
 let byte_lifted_unknown = Byte_lifted (List.replicate 8 Bitl_unknown)
-
+  
 val memory_value_unknown : nat (*the number of bytes*) -> memory_value
 let memory_value_unknown (width:nat) : memory_value = 
   List.replicate width byte_lifted_unknown 
 
+val memory_value_undef : nat (*the number of bytes*) -> memory_value
+let memory_value_undef (width:nat) : memory_value = 
+  List.replicate width byte_lifted_undef 
 
 (* lengths *)  
 
