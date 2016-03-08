@@ -394,6 +394,7 @@ end
 type read_kind =
   (* common reads *)
   Read_plain
+  | Read_tag (*For reading the tag of tagged memory*)
   (* Power reads *)
   | Read_reserve
   (* AArch64 reads *)
@@ -401,7 +402,8 @@ type read_kind =
 
 type write_kind =
   (* common writes *)
-  Write_plain
+    Write_plain
+  | Write_tag (*For writing the tag of tagged memory*)
   (* Power writes *)
   | Write_conditional
   (* AArch64 writes *)

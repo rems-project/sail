@@ -23,6 +23,7 @@ let hex_to_big_int s = big_int_of_int64 (Int64.of_string s) ;;
 
 let data_mem = (ref Mem.empty : (memory_byte Run_interp_model.Mem.t) ref) ;;
 let prog_mem = (ref Mem.empty : (memory_byte Run_interp_model.Mem.t) ref) ;;
+let tag_mem  = (ref Mem.empty : (memory_byte Run_interp_model.Mem.t) ref);;
 let reg = ref Reg.empty ;;
 
 let add_mem byte addr mem =
@@ -529,6 +530,7 @@ let initial_system_state_of_elf_file name =
     begin
       prog_mem := Mem.empty;
       data_mem := Mem.empty;
+      tag_mem := Mem.empty;
       load_memory_segments segments;
       (*
       debugf "prog_mem\n";
@@ -956,11 +958,12 @@ let rec fde_loop count context model mode track_dependencies opcode addr_trans =
     else
       begin
         set_next_instruction_address model;
-        match Run_interp_model.run  istate !reg !prog_mem !eager_eval track_dependencies mode "execute" with
+        match Run_interp_model.run  istate !reg !prog_mem !tag_mem !eager_eval track_dependencies mode "execute" with
         | false, _,_, _ -> errorf "FAILURE\n"; exit 1
-        | true, mode, track_dependencies, (my_reg, my_mem) ->
+        | true, mode, track_dependencies, (my_reg, my_mem, my_tags) ->
           reg := my_reg;
           prog_mem := my_mem;
+          tag_mem := my_tags;
           let opcode = fetch_instruction_opcode_and_update_ia model addr_trans in
           fde_loop (count + 1) context model (Some mode) (ref track_dependencies) opcode addr_trans
       end

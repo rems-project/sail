@@ -491,7 +491,7 @@ let rec interp_to_outcome mode context thunk =
                 Read_mem read_k (Address_lifted location address_int) length tracking 
                   (fun v -> IState (Interp.add_answer_to_stack next_state (intern_mem_value mode direction v)) context)
             else Error ("Memory address on read is not 64 bits")
-          | _ -> Error ("Memory " ^ i ^ " function with read kind not found")
+          | _ -> Error ("Memory function " ^ i ^ " not found")
         end  , lm)
       | Interp.Write_mem (Id_aux (Id i) _) loc_val slice write_val ->
         (match List.lookup i mem_writes with
@@ -509,7 +509,7 @@ let rec interp_to_outcome mode context thunk =
                    | Nothing -> (IState (Interp.add_answer_to_stack next_state Interp.unitv) context)
                    | Just return_bool -> return_bool (IState next_state context) b end)
             else Error "Memory address on write is not 64 bits"
-          | _ -> Error ("Memory " ^ i ^ " function with write kind not found")
+          | _ -> Error ("Memory function " ^ i ^ " not found")
           end , lm)
       | Interp.Write_ea (Id_aux (Id i) _) loc_val ->
         (match List.lookup i mem_write_eas with
@@ -521,7 +521,7 @@ let rec interp_to_outcome mode context thunk =
               | _ -> Nothing end in
               Write_ea write_k (Address_lifted location address_int) length tracking (IState next_state context)
             else Error "Memory address for write is not 64 bits"
-          | _ -> Error ("Memory " ^ i ^ " function to signal impending write, not found") end, lm)
+          | _ -> Error ("Memory function " ^ i ^ " to signal impending write, not found") end, lm)
         | Interp.Write_memv (Id_aux (Id i) _) write_val ->
           (match List.lookup i mem_write_vals with
             | (Just (MV return)) -> 
@@ -534,7 +534,7 @@ let rec interp_to_outcome mode context thunk =
                   match return with
                     | Nothing -> (IState (Interp.add_answer_to_stack next_state Interp.unitv) context)
                     | Just return_bool -> return_bool (IState next_state context) b end)
-            | _ -> Error ("Memory " ^ i ^ " function with write value kind not found") end, lm)
+            | _ -> Error ("Memory function " ^ i ^ " not found") end, lm)
          | Interp.Barrier (Id_aux (Id i) _) lval ->
            (match List.lookup i barriers with
              | Just barrier -> 

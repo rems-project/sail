@@ -43,11 +43,10 @@ module Mem = struct
       type t = num
       let compare v1 v2 = compare v1 v2
     end)
-(*  let find idx m = 
-    let v = find idx m in
-    v
-    let add key valu m =
-    add key valu m*)
+  let find idx m =
+    if mem idx m
+    then find idx m
+    else List.hd(memory_value_unknown 1)
 
   let to_string loc v =
     sprintf "[%s] -> %s" (to_string loc)
@@ -106,46 +105,56 @@ let combine_slices (start, stop) (inner_start,inner_stop) =
 
 let unit_lit = (L_aux(L_unit,Interp_ast.Unknown))
 
-let rec perform_action ((reg, mem) as env) = function
+let rec perform_action ((reg, mem, tagmem) as env) = function
  (* registers *)
  | Read_reg0(Reg0(id,_,_,_), _) -> (Some(Reg.find id reg), env)
  | Read_reg0(Reg_slice(id, _, _, range), _)
  | Read_reg0(Reg_field(id, _, _, _, range), _) -> (Some(slice (Reg.find id reg) range), env)
  | Read_reg0(Reg_f_slice(id, _,_,_, range, mini_range), _) ->
    (Some(slice (slice (Reg.find id reg) range) mini_range),env)
- | Write_reg0(Reg0(id,_,_,_), value, _) -> (None, (Reg.add id value reg,mem))
+ | Write_reg0(Reg0(id,_,_,_), value, _) -> (None, (Reg.add id value reg,mem,tagmem))
  | Write_reg0((Reg_slice(id,_,_,range) as reg_n),value, _) 
  | Write_reg0((Reg_field(id,_,_,_,range) as reg_n),value,_)->
      let old_val = Reg.find id reg in
      let new_val = fupdate_slice reg_n old_val value range in
-     (None, (Reg.add id new_val reg, mem))
+     (None, (Reg.add id new_val reg, mem,tagmem))
  | Write_reg0((Reg_f_slice(id,_,_,_,range,mini_range) as reg_n),value,_) ->
    let old_val = Reg.find id reg in
    let new_val = fupdate_slice reg_n old_val value (combine_slices range mini_range) in
-   (None,(Reg.add id new_val reg,mem))
- | Read_mem0(_,location, length, _,_) ->
+   (None,(Reg.add id new_val reg,mem,tagmem))
+ | Read_mem0(kind,location, length, _,_) ->
    let address = match address_of_address_lifted location with
      | Some a -> a
      | None -> assert false (*TODO remember how to report an error *)in
-   let naddress = integer_of_address address in 
-   let rec reading (n : num) length = 
-     if length = 0 
-     then []
-     else (Mem.find n mem)::(reading (add n big_num_unit) (length - 1)) in
-   (Some (register_value_of_memory_value (reading naddress length) !default_order), env)
- | Write_mem0(_,location, length, _, bytes,_,_) ->
+   let naddress = integer_of_address address in
+   (match kind with
+    | Read_tag ->
+      (Some (register_value_of_memory_value [(Mem.find naddress tagmem)] !default_order), env)
+    | _ ->
+      let rec reading (n : num) length = 
+        if length = 0 
+        then []
+        else (Mem.find n mem)::(reading (add n big_num_unit) (length - 1)) in
+      (Some (register_value_of_memory_value (reading naddress length) !default_order), env))
+ | Write_mem0(kind,location, length, _, bytes,_,_) ->
    let address = match address_of_address_lifted location with
      | Some a -> a
      | None -> assert false (*TODO remember how to report an error *)in
-   let naddress = integer_of_address address in 
-   let rec writing location length bytes mem = 
-     if length = 0
-     then mem
-     else match bytes with
-       | [] -> mem
-       | b::bytes -> 
-         writing (add location big_num_unit) (length - 1) bytes (Mem.add location b mem) in
-   (None,(reg,writing naddress length bytes mem))
+   let naddress = integer_of_address address in
+   (match kind with
+    | Write_tag ->
+      (match bytes with
+       | [b] -> (None,(reg,mem,Mem.add naddress b tagmem))
+       | _ -> assert false)
+   | _ -> 
+     let rec writing location length bytes mem = 
+       if length = 0
+       then mem
+       else match bytes with
+         | [] -> mem
+         | b::bytes -> 
+           writing (add location big_num_unit) (length - 1) bytes (Mem.add location b mem) in
+     (None,(reg,writing naddress length bytes mem,tagmem)))
  | _ -> (None, env)
 ;;
 
@@ -170,6 +179,7 @@ let run
   (istate : instruction_state)
   reg
   mem
+  tagmem
   eager_eval
   track_dependencies
   mode
@@ -186,7 +196,7 @@ let run
     mem     print content of memory
     exh     run interpreter exhaustively with unknown and print events 
     quit    exit interpreter" in
-  let rec interact mode ((reg, mem) as env) stack =
+  let rec interact mode ((reg, mem, tagmem) as env) stack =
     flush_all();
     let command = Pervasives.read_line () in
     let command' = if command = "" then mode_to_string mode else command in
@@ -350,9 +360,9 @@ let run
     (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
   try
     Printexc.record_backtrace true;
-    loop mode (reg, mem) (Interp_inter_imp.interp0 imode istate)
+    loop mode (reg, mem,tagmem) (Interp_inter_imp.interp0 imode istate)
   with e ->
     let trace = Printexc.get_backtrace () in
     interactf "%s: %s %s\n%s\n" (grey name) (red "interpretor error") (Printexc.to_string e) trace;
-    (false, mode, !track_dependencies, (reg, mem))
+    (false, mode, !track_dependencies, (reg, mem, tagmem))
 ;;
