@@ -46,7 +46,7 @@ module Mem = struct
   let find idx m =
     if mem idx m
     then find idx m
-    else List.hd(memory_value_unknown 1)
+    else List.hd(memory_value_undef 1)
 
   let to_string loc v =
     sprintf "[%s] -> %s" (to_string loc)
