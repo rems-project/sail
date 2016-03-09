@@ -530,7 +530,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
          | Tfn _,_ -> typ_error l
                         ("Identifier " ^ (id_to_string id) ^ " is bound to a function and cannot be used as a value")
          | Tapp("register",[TA_typ(t')]),Tapp("register",[TA_typ(expect_t')]) -> 
-           let tannot = Base(([],t),Emp_global,cs,pure_e,pure_e,bounds) in
+           let tannot = Base(([],t),tag,cs,pure_e,pure_e,bounds) in
            let t',cs' = type_consistent (Expr l) d_env Require false t' expect_t' in
            (rebuild tannot,t,t_env,cs@cs',bounds,ef)
          | Tapp("register",[TA_typ(t')]),Tuvar _ ->
