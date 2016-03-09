@@ -37,11 +37,8 @@ function clause execute (CGetPCC(cd)) =
       if (register_inaccessible(cd)) then
         exit (raise_c2_exception_v(cd))
       else
-        {
-          (CapRegs[cd]).cursor      := 0;
-          (*destReg          := PCC;*)
-          (*destReg.cursor):= PC; XXX help *)
-        } 
+        let pcc = (capRegToCapStruct(PCC)) in
+        writeCapReg(cd, {pcc with cursor = PC})
     }
 (* Get and Set CP2 cause register *)
 
@@ -73,19 +70,34 @@ union ast member (regno, regno, regno) CAndPerm
 function clause decode (0b010010 : 0b00100 : (regno) cd : (regno) cb : (regno) rt : 0b000 : 0b000) = Some(CAndPerm(cd, cb, rt))
 function clause execute(CAndPerm(cd, cb, rt)) = 
 {
-  cb_reg := CapRegs[cb];
+  cb_val := readCapReg(cb);
+  rt_val := rGPR(rt);
   if (register_inaccessible(cd)) then
     exit (raise_c2_exception_v(cd))
   else if (register_inaccessible(cb)) then
     exit (raise_c2_exception_v(cb))
-  else if (~(cb_reg.tag)) then
+  else if (~(cb_val.tag)) then
     exit (raise_c2_exception(CapEx_TagViolation, cb))
-  else if (~(cb_reg.sealed)) then
+  else if (~(cb_val.sealed)) then
     exit (raise_c2_exception(CapEx_SealViolation, cb))
   else
     {
-      (CapRegs[cd]) := cb_reg;
-      (*cd_reg :=*)
+      writeCapReg(cd, {cb_val with 
+        sw_perms                   = (cb_val.sw_perms                   & (rt_val[30..15]));
+        access_KR2C                = (cb_val.access_KR2C                & (rt_val[14]));
+        access_KR1C                = (cb_val.access_KR1C                & (rt_val[13]));
+        access_KCC                 = (cb_val.access_KCC                 & (rt_val[12]));
+        access_KDC                 = (cb_val.access_KDC                 & (rt_val[11]));
+        access_EPCC                = (cb_val.access_EPCC                & (rt_val[10]));
+        permit_seal                = (cb_val.permit_seal                & (rt_val[7]));
+        permit_store_ephemeral_cap = (cb_val.permit_store_ephemeral_cap & (rt_val[6]));
+        permit_store_cap           = (cb_val.permit_store_cap           & (rt_val[5]));
+        permit_load_cap            = (cb_val.permit_load_cap            & (rt_val[4]));
+        permit_store               = (cb_val.permit_store               & (rt_val[3]));
+        permit_load                = (cb_val.permit_load                & (rt_val[2]));
+        permit_execute             = (cb_val.permit_execute             & (rt_val[1]));
+        non_ephemeral              = (cb_val.non_ephemeral              & (rt_val[0]));
+      })
     }
 }
 

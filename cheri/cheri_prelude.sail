@@ -1,5 +1,5 @@
 (* 265-bit capability is really 257 bits including tag *)
-typedef Capability = register bits [256:0] {
+typedef CapReg = register bits [256:0] {
   256:      tag;
   255..248: reserved; (* padding *)
   247..224: otype;
@@ -9,8 +9,7 @@ typedef Capability = register bits [256:0] {
   205:      access_KCC;
   204:      access_KDC;
   203:      access_EPCC;
-  202:      reserved;
-  201:      permit_set_type;
+  202..201: reserved;
   200:      permit_seal;
   199:      permit_store_ephemeral_cap;
   198:      permit_store_cap;
@@ -25,46 +24,128 @@ typedef Capability = register bits [256:0] {
   63 .. 0:  length;
 }
 
-register Capability PCC
-register Capability C00 (* aka default data capability, DDC *)
-register Capability C01
-register Capability C02
-register Capability C03
-register Capability C04
-register Capability C05
-register Capability C06
-register Capability C07
-register Capability C08
-register Capability C09
-register Capability C10
-register Capability C11
-register Capability C12
-register Capability C13
-register Capability C14
-register Capability C15
-register Capability C16
-register Capability C17
-register Capability C18
-register Capability C19
-register Capability C20
-register Capability C21
-register Capability C22
-register Capability C23
-register Capability C24 (* aka return code capability, RCC *)
-register Capability C25
-register Capability C26 (* aka invoked data capability, IDC *)
-register Capability C27 (* aka kernel reserved capability 1, KR1C *)
-register Capability C28 (* aka kernel reserved capability 2, KR2C *)
-register Capability C29 (* aka kernel code capability, KCC *)
-register Capability C30 (* aka kernel data capability, KDC *)
-register Capability C31 (* aka exception program counter capability, EPCC *)
+register CapReg PCC
+register CapReg C00 (* aka default data capability, DDC *)
+register CapReg C01
+register CapReg C02
+register CapReg C03
+register CapReg C04
+register CapReg C05
+register CapReg C06
+register CapReg C07
+register CapReg C08
+register CapReg C09
+register CapReg C10
+register CapReg C11
+register CapReg C12
+register CapReg C13
+register CapReg C14
+register CapReg C15
+register CapReg C16
+register CapReg C17
+register CapReg C18
+register CapReg C19
+register CapReg C20
+register CapReg C21
+register CapReg C22
+register CapReg C23
+register CapReg C24 (* aka return code capability, RCC *)
+register CapReg C25
+register CapReg C26 (* aka invoked data capability, IDC *)
+register CapReg C27 (* aka kernel reserved capability 1, KR1C *)
+register CapReg C28 (* aka kernel reserved capability 2, KR2C *)
+register CapReg C29 (* aka kernel code capability, KCC *)
+register CapReg C30 (* aka kernel data capability, KDC *)
+register CapReg C31 (* aka exception program counter capability, EPCC *)
 
-let (vector <0, 32, inc, (Capability)>) CapRegs =
+let (vector <0, 32, inc, (CapReg)>) CapRegs =
   [ C00, C01, C02, C03, C04, C05, C06, C07, C08, C09, C10,
   C11, C12, C13, C14, C15, C16, C17, C18, C19, C20,
   C21, C22, C23, C24, C25, C26, C27, C28, C29, C30, C31
   ]
 
+typedef CapStruct = const struct {
+  bool    tag;
+  bit[24] otype;
+  bit[16] sw_perms;
+  bool    access_KR2C;
+  bool    access_KR1C;
+  bool    access_KCC;
+  bool    access_KDC;
+  bool    access_EPCC;
+  bool    permit_seal;
+  bool    permit_store_ephemeral_cap;
+  bool    permit_store_cap;
+  bool    permit_load_cap;
+  bool    permit_store;
+  bool    permit_load;
+  bool    permit_execute;
+  bool    non_ephemeral;
+  bool    sealed;
+  bit[64] cursor;
+  bit[64] base;
+  bit[64] length;
+}
+
+function CapStruct capRegToCapStruct((CapReg) capReg) =
+  {
+    tag                        = capReg.tag;
+    otype                      = capReg.otype;
+    sw_perms                   = capReg.sw_perms;
+    access_KR2C                = capReg.access_KR2C;
+    access_KR1C                = capReg.access_KR1C;
+    access_KCC                 = capReg.access_KCC;
+    access_KDC                 = capReg.access_KDC;
+    access_EPCC                = capReg.access_EPCC;
+    permit_seal                = capReg.permit_seal;
+    permit_store_ephemeral_cap = capReg.permit_store_ephemeral_cap;
+    permit_store_cap           = capReg.permit_store_cap;
+    permit_load_cap            = capReg.permit_load_cap;
+    permit_store               = capReg.permit_store;
+    permit_load                = capReg.permit_load;
+    permit_execute             = capReg.permit_execute;
+    non_ephemeral              = capReg.non_ephemeral;
+    sealed                     = capReg.sealed;
+    cursor                     = capReg.cursor;
+    base                       = capReg.base;
+    length                     = capReg.length;
+  }
+
+
+function (CapStruct) readCapReg((regno) n) =
+  capRegToCapStruct(CapRegs[n])
+
+function (bit[257]) capStructToBit257((CapStruct) cap) =
+    (
+      [cap.tag]
+      : 0b00000000 (* padding *)
+      : cap.otype
+      : cap.sw_perms
+      : [cap.access_KR2C]
+      : [cap.access_KR1C]
+      : [cap.access_KCC]
+      : [cap.access_KDC]
+      : [cap.access_EPCC]
+      : 0b00       (* Padding *)
+      : [cap.permit_seal]
+      : [cap.permit_store_ephemeral_cap]
+      : [cap.permit_store_cap]
+      : [cap.permit_load_cap]
+      : [cap.permit_store]
+      : [cap.permit_load]
+      : [cap.permit_execute]
+      : [cap.non_ephemeral]
+      : [cap.sealed]
+      : cap.cursor
+      : cap.base
+      : cap.length
+    )
+
+function unit writeCapReg((regno) n, (CapStruct) cap) =
+    {
+      reg := (CapRegs[n]);
+      reg := capStructToBit257(cap)
+    }
 typedef CapEx = enumerate {
   CapEx_None; 
   CapEx_LengthVioloation;
