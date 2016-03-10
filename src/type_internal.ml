@@ -3178,14 +3178,15 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
   | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tid("bit") ->
     let t',cs'= type_consistent co d_env enforce false t1 {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} in
     let efr = get_cummulative_effects (get_eannot e)
-    in (t2,cs',pure_e,E_aux(E_if(E_aux(E_app(Id_aux(Id "is_one",l),[e]),(l, simple_annot_efr bit_t efr)),
+    in (t2,cs',pure_e,E_aux(E_if(E_aux(E_app(Id_aux(Id "is_one",l),[e]),
+                                       (l, tag_annot_efr bit_t (External (Some "is_one")) efr)),
                                  E_aux(E_lit(L_aux(L_one,l)),(l,simple_annot bit_t)),
                                  E_aux(E_lit(L_aux(L_zero,l)),(l,simple_annot bit_t))),
                             (l,simple_annot_efr bit_t efr)))
   | Tapp("atom",[TA_nexp b1]),Tid("bit") ->
     let t',cs'= type_consistent co d_env enforce false t1 {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} in
     let efr = get_cummulative_effects (get_eannot e)
-    in (t2,cs',pure_e,E_aux(E_if(E_aux(E_app(Id_aux(Id "is_one",l),[e]),(l, simple_annot_efr bit_t efr)),
+    in (t2,cs',pure_e,E_aux(E_if(E_aux(E_app(Id_aux(Id "is_one",l),[e]),(l, tag_annot_efr bit_t (External None) efr)),
                                  E_aux(E_lit(L_aux(L_one,l)),(l,simple_annot bit_t)),
                                  E_aux(E_lit(L_aux(L_zero,l)),(l,simple_annot bit_t))),
                             (l,simple_annot_efr bit_t efr)))
