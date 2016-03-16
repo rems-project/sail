@@ -1247,7 +1247,7 @@ def:
   | type_def
       { dloc (DEF_type($1)) }
   | ktype_def
-      { assert false }
+      { dloc (DEF_kind($1)) }
   | fun_def
     { dloc (DEF_fundef($1)) }
   | letbind
