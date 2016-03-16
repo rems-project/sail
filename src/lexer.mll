@@ -70,6 +70,7 @@ let kw_table =
      ("clause",                  (fun _ -> Clause));
      ("const",			 (fun _ -> Const));
      ("dec",                     (fun _ -> Dec));
+     ("def",                     (fun _ -> Def));
      ("default",		 (fun _ -> Default));
      ("deinfix",                 (fun _ -> Deinfix));
      ("effect",                  (fun _ -> Effect));
