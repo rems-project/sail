@@ -549,9 +549,11 @@ let rec shift_op_vec op (V_tuple [vl;vr]) =
 	      ((List.replicate n (V_lit (L_aux L_zero Unknown))) ++ (from_n_to_n 0 (n-1) cs))
 	  | "<<<" ->
 	    V_vector b ord
-	      ((from_n_to_n n ((length cs) -1) cs) ++ (from_n_to_n 0 (n-1) cs)) end)
+       ((from_n_to_n n ((length cs) -1) cs) ++ (from_n_to_n 0 (n-1) cs)) end)
       | (V_unknown,_) -> V_unknown
       | (_,V_unknown) -> V_unknown
+      | (V_lit (L_aux L_undef lx), _) -> V_lit (L_aux L_undef lx)
+      | (_, V_lit (L_aux L_undef ly)) -> V_lit (L_aux L_undef ly)
   end in
   binary_taint arith_op_help vl vr
 
@@ -560,6 +562,8 @@ let compare_op op (V_tuple [vl;vr]) =
   let comp_help vl vr = match (vl,vr) with
     | (V_unknown,_) -> V_unknown
     | (_,V_unknown) -> V_unknown
+    | (V_lit (L_aux L_undef lx), _) -> V_lit (L_aux L_undef lx)
+    | (_, V_lit (L_aux L_undef ly)) -> V_lit (L_aux L_undef ly)
     | (V_lit(L_aux (L_num x) lx), V_lit(L_aux (L_num y) ly)) -> 
       if (op x y)
       then V_lit(L_aux L_one lx)
