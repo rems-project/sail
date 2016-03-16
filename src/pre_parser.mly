@@ -63,7 +63,7 @@ let r = fun x -> x (* Ulib.Text.of_latin1 *)
 id_found:
   | Typedef Id
       { $2 }
-  | Def Id Id
+  | Def Other Id
       { $3 }
 
 skip:
