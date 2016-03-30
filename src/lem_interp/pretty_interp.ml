@@ -393,6 +393,7 @@ let doc_exp, doc_let =
       let cases = separate_map (break 1) (doc_case env add_red) pexps in
       surround 2 1 opening cases rbrace
   | E_exit e -> separate space [string "exit"; exp env add_red e;]
+  | E_assert(e,msg) -> string "assert" ^^ parens (separate_map comma (exp env add_red) [e; msg])
   (* adding parens and loop for lower precedence *)
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
   | E_cons (_, _)|E_field (_, _)|E_assign (_, _)

@@ -926,7 +926,7 @@ let rec to_exp mode env v : (exp tannot * lenv) =
     then (E_aux (E_vector_indexed 
 		   (List.reverse (snd (List.foldl (fun (n,acc) e -> (n+1,((integerFromNat n),e)::acc)) (n,[]) es)))
 	           (Def_val_aux Def_val_empty (Interp_ast.Unknown,Nothing))) annot, env')
-    else if n= List.length vals
+    else if (n+1)= List.length vals
     then (E_aux (E_vector es) annot, env')
     else     
       (E_aux (E_vector_indexed 
@@ -1720,7 +1720,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
 				(match (detaint v1, detaint v2) with 
 				  | (V_lit (L_aux (L_num n1) ln1),V_lit (L_aux (L_num n2) ln2)) ->
 				    let (n1,n2) = (natFromInteger n1,natFromInteger n2) in
-				    (match vvec with
+				    (match detaint vvec with
 				      | V_vector _ _ _ -> Value (slice_vector vvec n1 n2)
 				      | V_vector_sparse _ _ _ _ _ -> Value (slice_vector vvec n1 n2)
 				      | V_unknown -> 
@@ -2112,7 +2112,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
          resolve_outcome
            (interp_main mode t_level l_env lm cond)
            (fun c lm le ->
-              (match c with
+              (match detaint c with
                | V_lit (L_aux L_one _) -> (Value unitv,lm,l_env)
                | V_lit (L_aux L_true _) -> (Value unitv,lm,l_env)
                | V_lit (L_aux L_zero _) -> (Action (Fail v) (mk_thunk l annot t_level l_env l_mem), lm,le)
