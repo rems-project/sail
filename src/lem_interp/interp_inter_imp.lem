@@ -7,7 +7,6 @@ open import Interp_interface
 open import Pervasives
 open import Assert_extra
 
-
 val intern_reg_value : register_value -> Interp.value
 val intern_mem_value : interp_mode -> direction -> memory_value -> Interp.value
 val extern_reg_value : reg_name -> Interp.value -> register_value
@@ -57,28 +56,32 @@ let bits_to_ibits l = List.map bit_to_ibit l
 let bitls_to_ibits l = List.map bitl_to_ibit l
 let bitls_from_ibits l = List.map 
   (fun b -> 
-    let b = (match b with | Interp.V_track v _ -> v | _ -> b end) in
+    let b = Interp.detaint b in
     match b with
     | Interp.V_lit (L_aux L_zero _) -> Bitl_zero
     | Interp.V_vector _ _ [Interp.V_lit (L_aux L_zero _)] -> Bitl_zero
     | Interp.V_lit (L_aux L_one _)  -> Bitl_one
     | Interp.V_vector _ _ [Interp.V_lit (L_aux L_one _)] -> Bitl_one
     | Interp.V_lit (L_aux L_undef _) -> Bitl_undef
-    | Interp.V_unknown -> Bitl_unknown end) l
+    | Interp.V_vector _ _ [Interp.V_lit (L_aux L_undef _)] -> Bitl_undef
+    | Interp.V_unknown -> Bitl_unknown
+    | _ -> Assert_extra.failwith ("bitls_from_ibits given unexpected " ^ (Interp.string_of_value b)) end) l
 
 let bits_from_ibits l = List.map 
   (fun b -> 
-    let b = (match b with | Interp.V_track v _ -> v | _ -> b end) in
+    let b = Interp.detaint b in
     match b with
     | Interp.V_lit (L_aux L_zero _) -> Bitc_zero
     | Interp.V_vector _ _ [Interp.V_lit (L_aux L_zero _)] -> Bitc_zero
     | Interp.V_lit (L_aux L_one _)  -> Bitc_one
     | Interp.V_vector _ _ [Interp.V_lit (L_aux L_one _)] -> Bitc_one
+    | _ -> Assert_extra.failwith ("bits_from_ibits given unexpected " ^ (Interp.string_of_value b))
    end) l
 
 let rec to_bytes l = match l with
   | [] -> []
   | (a::b::c::d::e::f::g::h::rest) -> (Byte_lifted[a;b;c;d;e;f;g;h])::(to_bytes rest)
+  | _ -> Assert_extra.failwith "to_bytes given list of bits not divisible by 8"
 end 
 
 let all_known l = List.all is_bool l
@@ -121,7 +124,8 @@ let intern_ifield_value direction v =
   Interp.V_vector (if Interp.is_inc direction then 0 else (List.length(bits) -1)) direction bits
 
 let num_to_bits size kind num =
-(* num_to_bits needed in src_power_get/trans_sail.gen - rather than reengineer the generation, we include a wrapper here *) 
+(* num_to_bits needed in src_power_get/trans_sail.gen - 
+   rather than reengineer the generation, we include a wrapper here *) 
   Interp_interface.bit_list_of_integer size num
 
 let extern_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
@@ -140,12 +144,14 @@ let extern_reg r slice = match (r,slice) with
     let start = Interp.reg_start_pos r in
     let edir = extern_direction dir in
     Reg_slice x start edir (extern_slice edir start (i1, i2))
-  | (Interp.SubReg (Id_aux (Id x) _) ((Interp.Reg (Id_aux (Id y) _) _ dir) as main_r) (BF_aux(BF_single i) _),Nothing) -> 
+  | (Interp.SubReg (Id_aux (Id x) _) ((Interp.Reg (Id_aux (Id y) _) _ dir) as main_r) (BF_aux(BF_single i) _),
+     Nothing) -> 
     let i = natFromInteger i in
     let start = Interp.reg_start_pos main_r in
     let edir = extern_direction dir in
     Reg_field y start edir x (extern_slice edir start (i,i))
-  | (Interp.SubReg (Id_aux (Id x) _) ((Interp.Reg (Id_aux (Id y) _) _ dir) as main_r) (BF_aux(BF_range i j) _), Nothing) -> 
+  | (Interp.SubReg (Id_aux (Id x) _) ((Interp.Reg (Id_aux (Id y) _) _ dir) as main_r) (BF_aux(BF_range i j) _),
+     Nothing) -> 
     let start = Interp.reg_start_pos main_r in
     let edir = extern_direction dir in
     Reg_field y start edir x (extern_slice edir start (natFromInteger i,natFromInteger j))
@@ -154,7 +160,8 @@ let extern_reg r slice = match (r,slice) with
     let start = Interp.reg_start_pos main_r in
     let edir = extern_direction dir in
     Reg_f_slice y start edir x (extern_slice edir start (natFromInteger i,natFromInteger j)) 
-                               (extern_slice edir start (i1, j1))
+      (extern_slice edir start (i1, j1))
+  | _ -> Assert_extra.failwith "extern_reg given non-externable reg" 
 end
 
 let rec extern_reg_value reg_name v = 
@@ -184,7 +191,9 @@ let rec extern_reg_value reg_name v =
           | Interp.V_lit (L_aux L_one _) -> [Bitl_one]
           | Interp.V_lit (L_aux L_true _) -> [Bitl_one]
           | Interp.V_lit (L_aux L_undef _) -> [Bitl_undef]
-          | Interp.V_unknown -> [Bitl_unknown] end) in
+          | Interp.V_unknown -> [Bitl_unknown]
+          | _ -> Assert_extra.failwith ("extern_reg_val given non externable value " ^ (Interp.string_of_value v)) end)
+     in
       <| rv_bits=bit_list; 
          rv_dir=direction;
          rv_start=external_start;
@@ -222,7 +231,9 @@ let rec extern_ifield_value i_name field_name v ftyp = match (v,ftyp) with
   | (Interp.V_lit (L_aux (L_num i) _),_) -> bit_list_of_integer 64 i
   | (Interp.V_ctor _ _ (Interp.C_Enum i) _,Enum _ n) -> bit_list_of_integer n (integerFromNat i)
   | (Interp.V_ctor _ _ (Interp.C_Enum i) _,_) -> bit_list_of_integer 64 (integerFromNat i)
-  | _ -> Assert_extra.failwith ("extern_ifield_value of " ^ i_name ^ " for field " ^ field_name ^ " given non-externable " ^ (Interp.string_of_value v) ^ " ftyp is " ^ show ftyp)
+  | _ ->
+    Assert_extra.failwith ("extern_ifield_value of " ^ i_name ^ " for field " ^ field_name
+                           ^ " given non-externable " ^ (Interp.string_of_value v) ^ " ftyp is " ^ show ftyp)
 end 
 
 let rec slice_reg_value v start stop = 
@@ -266,12 +277,15 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction thunk =
        | Ivh_decode -> (Nothing, Just (Not_an_instruction_error arg))
        | Ivh_illegal -> (Nothing, Just (Not_an_instruction_error arg))
        | Ivh_unsupported -> (Nothing, Just (Unsupported_instruction_error instr))
+       | Ivh_translate -> (Nothing, Just (Internal_error ("Found None for this " ^ errk_str)))
      end)
      | Interp.V_tuple [v1;v2] ->
        (match ivh_mode with
         | Ivh_translate -> (Just value,Nothing)
         | _ -> (Nothing, Just (Internal_error ("Found a tuple for this " ^ errk_str))) end)
-    end)
+     | _ ->
+       (Nothing,
+        Just (Internal_error ("interp_to_value_helper found unexpected value " ^ (Interp.string_of_value value)))) end)
   | (Interp.Error l msg,_,_) -> (Nothing, Just (Internal_error msg))
     | (Interp.Action (Interp.Call_extern i value) stack,_,_) ->
       match List.lookup i (Interp_lib.library_functions direction) with
@@ -293,7 +307,8 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction thunk =
     | (Interp.Action (Interp.Read_reg r _) _,_,_) ->
       let rname = match r with 
         | Interp.Reg (Id_aux (Id i) _) _ _ -> i
-        | Interp.SubReg (Id_aux (Id i) _) (Interp.Reg (Id_aux (Id i2) _) _ _) _ -> i2 ^ "." ^ i end in
+        | Interp.SubReg (Id_aux (Id i) _) (Interp.Reg (Id_aux (Id i2) _) _ _) _ -> i2 ^ "." ^ i
+        | _ -> Assert_extra.failwith "Reg not following expected structure" end in
       (Nothing, Just (Internal_error ("Register read of "^ rname^" request in a " ^ errk_str ^ " of " ^ err_str)))
     | (Interp.Action (Interp.Write_reg _ _ _) _,_,_) ->
       (Nothing, Just (Internal_error ("Register write request in a " ^ errk_str)))
@@ -358,6 +373,7 @@ let translate_address top_level end_flag thunk_name address =
    | (Nothing, Just err) -> match err with
      | Internal_error msg -> Assert_extra.failwith msg
      | _ -> Assert_extra.failwith "Not an internal error either" end 
+   | _ -> Assert_extra.failwith "Neither address nor error are set"
 end
 
 
@@ -408,9 +424,13 @@ let decode_to_istate top_level value =
                    (Interp_utilities.map2 (fun value (p_name,ie_typ) -> 
                      let t = migrate_typ ie_typ in
                      (p_name,t,(extern_ifield_value name p_name value t))) vals parms), effects)
-          end end end in 
+                | _ -> Assert_extra.failwith "decoded instruction doesn't match expectation"
+              end
+           | _ -> Assert_extra.failwith ("failed to find instruction " ^ i) end
+        | _ -> Assert_extra.failwith "decoded instruction not a constructor" end in 
       let (arg,_) = Interp.to_exp mode Interp.eenv instr in
-      let (instr_decoded,error) = interp_to_value_helper value Ivh_unsupported val_str instr_external internal_direction
+      let (instr_decoded,error) =
+        interp_to_value_helper value Ivh_unsupported val_str instr_external internal_direction
         (fun _ -> Interp.resume 
          mode
           (Interp.Thunk_frame 
@@ -426,8 +446,10 @@ let decode_to_istate top_level value =
                        top_env Interp.eenv (Interp.emem "execute") Interp.Top)
                top_level)
         | (Nothing, Just err) -> Decode_error err
+        | _ -> Assert_extra.failwith "One of instr and error unset"
       end 
     | (Nothing, Just err) -> Decode_error err
+    | _ -> Assert_extra.failwith "One of instr and error unset"
 end
 
 
@@ -451,6 +473,7 @@ let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instr
           | Enum _ _ -> Interp_lib.to_num Interp_lib.Unsigned vec
           | _ -> vec
        end 
+      | _ -> Assert_extra.failwith "intern_ifield did not return vector"
     end in
     let (e,_) = Interp.to_exp mode Interp.eenv v in e 
   in
@@ -574,8 +597,10 @@ let rec interp_to_outcome mode context thunk =
          | Interp.Exit e -> 
            (Escape (match e with
              | E_aux (E_lit (L_aux L_unit _)) _ -> Nothing
-             | _ -> Just (IState (Interp.set_in_context next_state e) context) end)  (IState next_state context),
+             | _ -> Just (IState (Interp.set_in_context next_state e) context) end)
+            (IState next_state context),
             (snd (Interp.get_stack_state next_state)))
+         | _ -> Assert_extra.failwith "Action not as expected: consider if a deiid could have appeared"
          end )  
         end
 
@@ -687,7 +712,8 @@ let rec ie_loop mode register_values (IState interp_state context) =
           else i_state in
         let (events,analysis_data) = ie_loop mode register_values updated_i_state in
         ((List.concat possible_events)++events, analysis_data)
-     end ;;
+      | _ -> Assert_extra.failwith "interp_to_outcome may have produced a nondet action"
+      end ;;
   
 let interp_exhaustive register_values i_state = 
   let mode = make_mode_exhaustive E_big_endian in
@@ -695,7 +721,9 @@ let interp_exhaustive register_values i_state =
     | (events,_) -> events
 end
 
-let rec rr_ie_loop mode i_state = 
+(*This code is no longer uptodate. If no one is using it, then we don't need to fix it
+If someone is using it, this will let me know*)
+(*let rec rr_ie_loop mode i_state = 
   let (IState _ (Context _ direction _ _ _ _ _ _)) = i_state in
   let unknown_reg size =  
     <| rv_bits = (List.replicate size Bitl_unknown); 
@@ -724,3 +752,4 @@ let rec rr_ie_loop mode i_state =
 
 let rr_interp_exhaustive mode i_state events = 
   let (events',outcome) = rr_ie_loop mode i_state in ((events ++ events'),outcome)
+*)

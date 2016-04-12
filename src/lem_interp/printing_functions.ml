@@ -23,9 +23,10 @@ let id_to_string = function
   | Id_aux(Id s,_) | Id_aux(DeIid s,_) -> s
 ;;
 
-let loc_to_string = function
+let rec loc_to_string = function
   | Unknown -> "location unknown"
   | Int(s,_) -> s
+  | Generated l -> "Generated near " ^ loc_to_string l
   | Range(s,fline,fchar,tline,tchar) -> 
       if fline = tline
       then sprintf "%s:%d:%d" s fline fchar
@@ -236,12 +237,13 @@ let half_byte_to_hex v =
     | [true ;true ;false;true ] -> "d"
     | [true ;true ;true ;false] -> "e"
     | [true ;true ;true ;true ] -> "f"
+    | _ -> failwith "half_byte_to_hex given list of length longer than or shorter than 4"
 
 let rec bit_to_hex v = 
   match v with
     | [] -> ""
     | a::b::c::d::vs -> half_byte_to_hex [a;b;c;d] ^ bit_to_hex vs
-    | _ -> "bitstring given not divisible by 4"
+    | _ -> failwith "bitstring given not divisible by 4"
 
 (*let val_to_hex_string v = match v with
   | Bitvector(bools, _, _) -> "0x" ^ bit_to_hex bools
@@ -303,8 +305,8 @@ let rec val_to_string_internal ((Interp.LMem (_,_,memory,_)) as mem) = function
 
 let rec top_frame_exp_state = function
   | Interp.Top -> raise (Invalid_argument "top_frame_exp")
-  | Interp.Hole_frame(_, e, _, env, mem, Top)
-  | Interp.Thunk_frame(e, _, env, mem, Top) -> (e,(env,mem))
+  | Interp.Hole_frame(_, e, _, env, mem, Interp.Top)
+  | Interp.Thunk_frame(e, _, env, mem, Interp.Top) -> (e,(env,mem))
   | Interp.Thunk_frame(_, _, _, _, s)
   | Interp.Hole_frame(_, _, _, _, _, s) -> top_frame_exp_state s
 
@@ -345,8 +347,7 @@ let rec compact_exp (E_aux (e, l)) =
      wrap(E_field(compact_exp e, id))
  | E_assign (lexp, e) -> wrap(E_assign(lexp, compact_exp e))
  | E_block [] | E_nondet [] | E_cast (_, _) | E_internal_cast (_, _)
- | E_id _|E_lit _|E_vector_indexed (_, _)|E_record _|E_internal_exp _ | E_exit _->
-     wrap e
+ | _ -> wrap e
 
 (* extract, compact and reverse expressions on the stack;
  * the top of the stack is the head of the returned list. *)
@@ -397,8 +398,10 @@ let rec format_events = function
   | (E_write_reg(reg_name, value))::events ->
     "     Write_reg of " ^ (reg_name_to_string reg_name) ^ " writing " ^ (register_value_to_string value) ^ "\n" ^
     (format_events events)
-  | (E_escape _)::events ->
+  | E_escape::events ->
     "     Escape event\n"^ (format_events events)
+  | E_footprint::events ->
+    "     Dynamic footprint calculation event\n" ^ (format_events events)
 ;;
 
 (* ANSI/VT100 colors *)
@@ -430,7 +433,6 @@ let print_exp printer env e =
   printer ((get_loc e) ^ ": " ^ (Pretty_interp.pp_exp env red e) ^ "\n")
 
 let instruction_state_to_string (IState(stack, _)) =
-  let env = () in
   List.fold_right (fun (e,(env,mem)) es -> (exp_to_string env e) ^ "\n" ^ es) (compact_stack stack) ""
 
 let top_instruction_state_to_string (IState(stack,_)) = 
@@ -447,7 +449,7 @@ let rec option_map f xs =
 let local_variables_to_string (IState(stack,_)) = 
   let (_,(env,mem)) = top_frame_exp_state stack in 
   match env with
-    | LEnv(_,env) -> 
+    | Interp.LEnv(_,env) -> 
       String.concat ", " (option_map (fun (id,value)-> 
 	match id with
 	  | "0" -> None (*Let's not print out the context hole again*)
@@ -459,7 +461,7 @@ let instr_parm_to_string (name, typ, value) =
     | Other -> "Unrepresentable external value"
     | _ -> let intern_v = (Interp_inter_imp.intern_ifield_value D_increasing value) in
 	      match Interp_lib.to_num Interp_lib.Unsigned intern_v with
-		| V_lit (L_aux(L_num n, _)) -> to_string n
+		| Interp.V_lit (L_aux(L_num n, _)) -> to_string n
 		| _ -> ifield_to_string value
 
 let rec instr_parms_to_string ps = 
