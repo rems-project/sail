@@ -249,7 +249,7 @@ val new_e : unit -> effect
 val equate_t : t -> t -> unit
 
 val typ_subst : t_arg emap -> bool -> t -> t 
-val subst : (Envmap.k * kind) list -> bool -> t -> nexp_range list -> effect -> t * nexp_range list * effect * t_arg emap
+val subst : (Envmap.k * kind) list -> bool -> bool -> t -> nexp_range list -> effect -> t * nexp_range list * effect * t_arg emap
 val subst_with_env : t_arg emap -> bool -> t -> nexp_range list -> effect -> t * nexp_range list * effect * t_arg emap
 val type_param_consistent : Parse_ast.l -> t_arg emap -> t_arg emap -> nexp_range list
 

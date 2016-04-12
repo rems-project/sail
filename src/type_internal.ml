@@ -35,7 +35,7 @@ and t_aux =
   | Tabbrev of t * t
   | Toptions of t * t option
   | Tuvar of t_uvar
-and t_uvar = { index : int; mutable subst : t option }
+and t_uvar = { index : int; mutable subst : t option ; mutable torig_name : string option}
 and implicit_parm =
   | IP_none  | IP_length of nexp | IP_start of nexp | IP_user of nexp 
 and nexp = { mutable nexp : nexp_aux; mutable imp_param : bool}
@@ -54,7 +54,11 @@ and nexp_aux =
   | Ninexact (*Result of +inf + -inf which is neither less than nor greater than other numbers really *)
   | Nuvar of n_uvar
 and n_uvar =
-  { nindex : int; mutable nsubst : nexp option; mutable nin : bool; mutable leave_var : bool; orig_var : string option}
+  (*nindex is a counter; insubst are substitions 'inward'; outsubst are substitions 'outward'. Inward can be non nu
+    nin is in an in clause; leave_var flags if we should try to stay a variable; orig_var out inwardmost, name to use
+  *)
+  { nindex : int; mutable insubst : nexp option; mutable outsubst : nexp option;
+    mutable nin : bool; mutable leave_var : bool; mutable orig_var : string option ; mutable been_collapsed : bool }
 and effect = { mutable effect : effect_aux }
 and effect_aux =
   | Evar of string
@@ -253,6 +257,14 @@ let get_index n =
 let get_c_loc = function
   | Patt l | Expr l | Specc l | Fun l -> l
 
+let rec get_outer_most n = match n.nexp with
+  | Nuvar {outsubst= Some n} -> get_outer_most n
+  | _ -> n
+
+let rec get_inner_most n = match n.nexp with
+  | Nuvar {insubst=Some n} -> get_inner_most n
+  | _ -> n
+
 (*To string functions *)
 let debug_mode = ref true;;
 
@@ -307,9 +319,14 @@ and n_to_string n =
   | N2n(n,Some i) -> "2**" ^ (n_to_string n) ^ "(*" ^ (string_of_big_int i) ^ "*)"
   | Npow(n, i) -> "(" ^ (n_to_string n) ^ ")**" ^ (string_of_int i)
   | Nneg n -> "-" ^ (n_to_string n)
-  | Nuvar({nindex=i;nsubst=a}) ->
+  | Nuvar _ ->
     if !debug_mode
-    then "Nu_" ^ string_of_int i ^ "(" ^ (match a with | None -> "None" | Some n -> n_to_string n) ^ ")"
+    then
+      let rec show_nuvar n = match n.nexp with
+        | Nuvar{insubst=None; nindex = i;} -> "Nu_" ^ string_of_int i ^ "()" 
+        | Nuvar{insubst=Some n; nindex =i;} -> "Nu_" ^ string_of_int i ^ "(" ^ show_nuvar n ^ ")"
+        | _ -> n_to_string n in
+      show_nuvar (get_outer_most n)
     else "_"
 and ef_to_string (Ast.BE_aux(b,l)) =
     match b with
@@ -508,22 +525,33 @@ let rec contains_const n =
 
 let rec is_all_nuvar n =
   match n.nexp with
-  | Nuvar { nsubst = None } -> true
-  | Nuvar { nsubst = Some n } -> is_all_nuvar n
+  | Nuvar { insubst = None } -> true
+  | Nuvar { insubst = Some n } -> is_all_nuvar n
   | _ -> false
 
 let rec first_non_nu n =
   match n.nexp with
-  | Nuvar {nsubst = None } -> None
-  | Nuvar { nsubst = Some n} -> first_non_nu n
+  | Nuvar {insubst = None } -> None
+  | Nuvar { insubst = Some n} -> first_non_nu n
   | _ -> Some n
 
-let rec change_nuvar_base n new_base =
-  match n.nexp with
-  | Nuvar {nsubst = Some ({nexp= Nuvar _} as in_n)} -> change_nuvar_base in_n new_base
-  | Nuvar ({nsubst = Some _} as nu) -> nu.nsubst <- Some new_base; true    
-  | Nuvar {nsubst = None } -> false
-  | _ -> false
+(*Adds new_base to inner most position of n, when that is None 
+  Report whether mutation happened*)
+let add_to_nuvar_tail n new_base =
+  if n.nexp == new_base.nexp
+  then false
+  else 
+    let n' = get_inner_most n in
+    let new_base' = get_outer_most new_base in
+    match n'.nexp,new_base'.nexp with
+    | Nuvar ({insubst = None} as nmu), Nuvar(nbmu) ->
+      nmu.insubst <- Some new_base';
+      nbmu.outsubst <- Some n'; true
+    | Nuvar({insubst = None} as nmu),_ ->
+      if new_base.nexp == new_base'.nexp
+      then begin nmu.insubst <- Some new_base; true end
+      else false
+    | _ -> false
 
 let rec get_var n =
   match n.nexp with
@@ -807,7 +835,7 @@ let rec normalize_n_rec recur_ok n =
                              (mk_add (mk_mult n11 n22)
                                 (mk_add (mk_mult n12 n21) (mk_mult n12 n22))))
     | Nuvar _, Nvar _ | Nmult _, N2n _-> mk_mult n1' n2' 
-    | Nuvar _, Nmult(n1,n2) | Nvar _, Nmult(n1,n2) ->
+    | Nuvar _, Nmult(n1,n2) | Nvar _, Nmult(n1,n2) -> (*TODO What's happend to n1'*)
       (match get_var n1, get_var n2 with
         | Some(nv1),Some(nv2) ->
           (match compare_nexps nv1 nv2, n2.nexp with
@@ -873,20 +901,28 @@ let new_id _ =
 let new_t _ = 
   let i = !t_count in
   t_count := i + 1;
-  let t = {t = Tuvar { index = i; subst = None }} in
+  let t = {t = Tuvar { index = i; subst = None ; torig_name = None}} in
+  tuvars := t::!tuvars;
+  t
+let new_tv rv = 
+  let i = !t_count in
+  t_count := i + 1;
+  let t = {t = Tuvar { index = i; subst = None ; torig_name = Some rv}} in
   tuvars := t::!tuvars;
   t
 let new_n _ = 
   let i = !n_count in
   n_count := i + 1;
-  let n = { nexp = Nuvar { nindex = i; nsubst = None ; nin = false ; leave_var = false; orig_var = None};
+  let n = { nexp = Nuvar { nindex = i; insubst = None; outsubst = None;
+                           nin = false ; leave_var = false; orig_var = None; been_collapsed = false};
             imp_param = false} in
   nuvars := n::!nuvars;
   n
 let new_nv s =
   let i = !n_count in
   n_count := i + 1;
-  let n = { nexp = Nuvar { nindex = i; nsubst = None ; nin = false ; leave_var = false ; orig_var = Some s};
+  let n = { nexp = Nuvar { nindex = i; insubst = None ; outsubst = None;
+                           nin = false ; leave_var = false ; orig_var = Some s; been_collapsed = false};
             imp_param = false} in
   nuvars := n::!nuvars;
   n
@@ -921,13 +957,6 @@ let rec resolve_tsubst (t : t) : t =
     | Tuvar(_) -> u.subst <- Some(t''); t''
     | x -> t.t <- x; t)
   | _ -> t
-let rec resolve_nsubst (n : nexp) : nexp = match n.nexp with
-  | Nuvar({ nsubst=Some(n') } as u) ->
-    let n'' = resolve_nsubst n' in
-    (match n''.nexp with
-    | Nuvar(m) -> if u.nin then m.nin <- true else (); u.nsubst <- Some(n''); n''
-    | x -> n.nexp <- x; n)
-  | _ -> n
 let rec resolve_osubst (o : order) : order = match o.order with
   | Ouvar({ osubst=Some(o') } as u) ->
     let o'' = resolve_osubst o' in
@@ -966,14 +995,14 @@ and occurs_check_ta (ta_box : t_arg) (ta : t_arg) : unit =
   | TA_ord obox, TA_ord o -> occurs_check_o obox o
   | TA_eft ebox, TA_eft e -> occurs_check_e ebox e
   | _,_ -> ()
+(*light-weight occurs check, does not look within nuvar chains*)
 and occurs_check_n (n_box : nexp) (n : nexp) : unit =
-  let n = resolve_nsubst n in
-  if n_box == n then
+  if n_box.nexp == n.nexp then
     raise (Occurs_exn (TA_nexp n))
   else
     match n.nexp with
-    | Nadd(n1,n2) | Nmult(n1,n2) -> occurs_check_n n_box n1; occurs_check_n n_box n2
-    | N2n(n,_) | Nneg n -> occurs_check_n n_box n
+    | Nadd(n1,n2) | Nmult(n1,n2) | Nsub(n1,n2) -> occurs_check_n n_box n1; occurs_check_n n_box n2
+    | N2n(n,_) | Nneg n | Npow(n,_) -> occurs_check_n n_box n
     | _ -> ()
 and occurs_check_o (o_box : order) (o : order) : unit =
   let o = resolve_osubst o in
@@ -1248,82 +1277,87 @@ let equate_t (t_box : t) (t : t) : unit =
      | _ ->
        t_box.t <- t.t)
 
-let rec occurs_in_pending_subst n_box n : bool =
-  if n_box.nexp == n.nexp then true 
-  else match n_box.nexp with
-    | Nuvar( { nsubst= Some(n') }) -> 
-      if n'.nexp == n.nexp 
-      then true
-      else occurs_in_pending_subst n' n
-    | Nuvar( { nsubst = None } ) ->
-      (match n.nexp with
-       | Nuvar( { nsubst = None }) |  Nvar _ | Nid _| Nconst _ | Npos_inf | Nneg_inf | Ninexact -> false
-       | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> occurs_in_nexp n_box n1 || occurs_in_nexp n_box n2
-       | Nneg n1 | N2n(n1,_) | Npow(n1,_) -> occurs_in_nexp n_box n1
-       | Nuvar( { nsubst = Some n'}) -> occurs_in_pending_subst n_box n')
-    | _ -> occurs_in_nexp n_box n
+(*Assumes that both are nuvar, and both set initially on outermost of chain *)
+let rec occurs_in_nuvar_chain n_box n : bool =
+  n_box.nexp == n.nexp || (*if both are at outermost and they are the same, then n occurs in n_box *)
+  let n_box' = get_inner_most n_box in
+  match n_box'.nexp with
+  | Nuvar( { insubst= None }) -> false
+  | Nuvar( { insubst= Some(n_box') }) -> occurs_in_nexp n_box' n
+  | _ -> occurs_in_nexp n_box' n
 
+(*Heavy-weight occurs check, including nuvar chains. Assumes second argument always a nuvar*)
 and occurs_in_nexp n_box nuvar : bool =
 (*  let _ = Printf.eprintf "occurs_in_nexp given n_box %s nuvar %s eq? %b\n" 
     (n_to_string n_box) (n_to_string nuvar) (n_box.nexp == nuvar.nexp) in*)
   if n_box.nexp == nuvar.nexp then true
   else match n_box.nexp with
-    | Nuvar _ -> occurs_in_pending_subst n_box nuvar
+    | Nuvar _ -> occurs_in_nuvar_chain (get_outer_most n_box) (get_outer_most nuvar)
     | Nadd (nb1,nb2) | Nsub(nb1,nb2)| Nmult (nb1,nb2) -> occurs_in_nexp nb1 nuvar || occurs_in_nexp nb2 nuvar
     | Nneg nb | N2n(nb,None) | Npow(nb,_) -> occurs_in_nexp nb nuvar
     | _ -> false
 
-let rec reduce_n_unifications n = 
-  (*let _ = Printf.eprintf "reduce_n_unifications %s\n" (n_to_string n) in*)
-  (match n.nexp with
-    | Nvar _ | Nid _ | Nconst _ | Npos_inf | Nneg_inf | Ninexact-> ()
-    | N2n(n1,_) | Npow(n1,_) | Nneg n1 -> reduce_n_unifications n1
-    | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> reduce_n_unifications n1; reduce_n_unifications n2
-    | Nuvar nu ->
-      (match nu.nsubst with
-        | None -> ()
-        | Some(nexp) -> 
-          reduce_n_unifications(nexp);
-          if nu.leave_var then ignore(leave_nuvar(nexp)) else ();
-          n.nexp <- nexp.nexp));
-  (*let _ = Printf.eprintf "n reduced to %s\n" (n_to_string n) in*) ()
+(*Assumes that n is set to it's outermost n*)
+let collapse_nuvar_chain n =
+  let rec collapse n = 
+      match n.nexp with
+      | Nuvar { insubst = None } -> (n,[n])
+      | Nuvar ({insubst = Some ni } as u) ->
+        (*let _ = Printf.eprintf "Collapsing %s, about to collapse it's insubst\n" (n_to_string n) in*)
+        let _,internals = collapse ni in
+        (*let _ = Printf.eprintf "Collapsed %s, with inner %s\n" (n_to_string n) (n_to_string ni) in*)
+        (match ni.nexp with
+         | Nuvar nim ->
+           u.leave_var <- u.leave_var || nim.leave_var;
+           u.nin <- u.nin || nim.nin;
+           u.orig_var <- (match u.orig_var,nim.orig_var with
+               | None, None -> None
+               | Some i, Some j -> if i = j then Some i else None
+               | Some i,_ | _, Some i -> Some i);
+           u.insubst <- None;
+           u.outsubst <- None;
+           u.been_collapsed <- true;
+           (*Shouldn't need this but Somewhere somethings going wonky*)
+           (*nim.nindex <- u.nindex; *)
+           (n,n::internals) 
+         | _ -> if u.leave_var then u.insubst <- Some ni else n.nexp <- ni.nexp; (n,[n]))
+      | _ -> (n,[n])
+  in
+  let rec set_nexp n_from n_to_s = match n_to_s with
+    | [] -> n_from
+    | n_to::n_to_s -> n_to.nexp <- n_from.nexp; set_nexp n_from n_to_s in
+  let (n,all) = collapse n in
+  set_nexp n (List.tl all)
 
+(*assumes called on outermost*)
 let rec leave_nu_as_var n = 
   match n.nexp with
     | Nuvar nu ->
-      (match nu.nsubst with
+      (match nu.insubst with
         | None -> nu.leave_var
         | Some(nexp) -> nu.leave_var || leave_nu_as_var nexp)
     | _ -> false
 
 let equate_n (n_box : nexp) (n : nexp) : bool =
   (*let _ = Printf.eprintf "equate_n given n_box %s and n %s\n" (n_to_string n_box) (n_to_string n) in*)
+  let n_box = get_outer_most n_box in
+  let n = get_outer_most n in
   if n_box.nexp == n.nexp then true
-  else 
-    let n = resolve_nsubst n in
-    let n_box = resolve_nsubst n_box in
-    let occur_nbox_n = occurs_in_pending_subst n_box n in
-    let occur_n_nbox = occurs_in_pending_subst n n_box in
-    let rec set_bottom_nsubst swap u new_bot = 
-      match u.nsubst with
-      | None -> u.nsubst <- Some(new_bot); true
-      | Some({nexp = Nuvar(u)}) -> set_bottom_nsubst swap u new_bot
-      | Some(n_new) -> 
-        if swap 
-        then set_bottom_nsubst false (match new_bot.nexp with | Nuvar u -> u | _ -> assert false) n_new
-        else if nexp_eq n_new new_bot then true
-        else false in
+  else
+    let occur_nbox_n = occurs_in_nexp n_box n in
+    let occur_n_nbox = occurs_in_nexp n n_box in
     match (occur_nbox_n,occur_n_nbox) with
     | true,true -> false
     | true,false | false,true -> true
     | false,false ->
       (*let _ = Printf.eprintf "equate_n has does not occur in %s and %s\n" 
-        (n_to_string n_box) (n_to_string n) in *)      
+        (n_to_string n_box) (n_to_string n) in     *)
+      (*If one is empty, set the empty one into the bottom of the other one if you can, but put it in the chain
+        If neither are empty, merge but make sure to set the nexp to be the same (not yet being done)
+      *)
       match n_box.nexp,n.nexp with
-        | Nuvar(u), Nuvar _ -> set_bottom_nsubst true u n
-        | Nuvar(u), _ -> set_bottom_nsubst false u n
-        | _,Nuvar u -> set_bottom_nsubst false u n_box
-        | _ -> false
+      | Nuvar _, Nuvar _ | Nuvar _, _ | _, Nuvar _ -> add_to_nuvar_tail n_box n
+      | _ -> false
 let equate_o (o_box : order) (o : order) : unit =
   let o = resolve_osubst o in
   if o_box == o then ()
@@ -1351,8 +1385,8 @@ let equate_e (e_box : effect) (e : effect) : unit =
      | _ ->
        e_box.effect <- e.effect)
 
-let fresh_var prefix i mkr bindings =
-  let v = "'" ^ prefix ^ (string_of_int i) in
+let fresh_var just_use_base varbase i mkr bindings =
+  let v = if just_use_base then varbase else "'" ^ varbase ^ (string_of_int i) in
   match Envmap.apply bindings v with
   | Some _ -> mkr v false
   | None -> mkr v true
@@ -1360,7 +1394,7 @@ let fresh_var prefix i mkr bindings =
 let rec fresh_tvar bindings t =
   match t.t with
   | Tuvar { index = i;subst = None } -> 
-    fresh_var "tv" i (fun v add -> equate_t t {t=Tvar v}; if add then Some (v,{k=K_Typ}) else None) bindings
+    fresh_var false "tv" i (fun v add -> equate_t t {t=Tvar v}; if add then Some (v,{k=K_Typ}) else None) bindings
   | Tuvar { index = i; subst = Some ({t = Tuvar _} as t') } ->
     let kv = fresh_tvar bindings t' in
     equate_t t t';
@@ -1372,26 +1406,22 @@ let rec fresh_tvar bindings t =
 let rec fresh_nvar bindings n =
   (*let _ = Printf.eprintf "fresh_nvar for %s\n" (n_to_string n) in*)
   match n.nexp with
-    | Nuvar { nindex = i;nsubst = None ; orig_var = None } -> 
-      fresh_var "nv" i (fun v add -> n.nexp <- (Nvar v); 
+    | Nuvar { nindex = i;insubst = None ; orig_var = None } -> 
+      fresh_var false "nv" i (fun v add -> n.nexp <- (Nvar v); 
                          (*(Printf.eprintf "fresh nvar set %i to %s : %s\n" i v (n_to_string n));*)
                          if add then Some(v,{k=K_Nat}) else None) bindings
-    | Nuvar { nindex = i;nsubst = None ; orig_var = Some v } -> 
-      fresh_var v 0 (fun v add -> n.nexp <- (Nvar v); 
+    | Nuvar { nindex = i;insubst = None ; orig_var = Some v } -> 
+      fresh_var true v 0 (fun v add -> n.nexp <- (Nvar v); 
                       (*(Printf.eprintf "fresh nvar set %i to %s : %s\n" i v (n_to_string n));*)
                       if add then Some(v,{k=K_Nat}) else None) bindings        
-    | Nuvar { nindex = i; nsubst = Some({nexp=Nuvar _} as n')} ->
-      let kv = fresh_nvar bindings n' in
-      n.nexp <- n'.nexp;
-      kv
-    | Nuvar { nindex = i; nsubst = Some n' } ->
+    | Nuvar { nindex = i; insubst = Some n' } ->
       n.nexp <- n'.nexp;
       None
     | _ -> None
 let rec fresh_ovar bindings o =
   match o.order with
     | Ouvar { oindex = i;osubst = None } -> 
-      fresh_var "ov" i (fun v add -> equate_o o {order = (Ovar v)}; if add then Some(v,{k=K_Nat}) else None) bindings
+      fresh_var false "ov" i (fun v add -> equate_o o {order = (Ovar v)}; if add then Some(v,{k=K_Nat}) else None) bindings
     | Ouvar { oindex = i; osubst = Some({order=Ouvar _} as o')} ->
       let kv = fresh_ovar bindings o' in
       equate_o o o';
@@ -1403,7 +1433,7 @@ let rec fresh_ovar bindings o =
 let rec fresh_evar bindings e =
   match e.effect with
     | Euvar { eindex = i;esubst = None } -> 
-      fresh_var "ev" i (fun v add -> equate_e e {effect = (Evar v)}; if add then Some(v,{k=K_Nat}) else None) bindings
+      fresh_var false "ev" i (fun v add -> equate_e e {effect = (Evar v)}; if add then Some(v,{k=K_Nat}) else None) bindings
     | Euvar { eindex = i; esubst = Some({effect=Euvar _} as e')} ->
       let kv = fresh_evar bindings e' in
       equate_e e e';
@@ -2402,7 +2432,7 @@ and n_subst s_env n =
   | Nuvar _ -> new_n()
   | Nconst _ | Npos_inf | Nneg_inf | Ninexact -> n
   | N2n(n1,None) -> mk_2n (n_subst s_env n1) 
-  | N2n(n1,Some(i)) -> n
+  | N2n(n1,Some(i)) -> mk_2nc (n_subst s_env n1) i
   | Npow(n1,i) -> mk_pow (n_subst s_env n1) i
   | Nneg n1 -> mk_neg (n_subst s_env n1)
   | Nadd(n1,n2) -> mk_add (n_subst s_env n1) (n_subst s_env n2)
@@ -2448,13 +2478,13 @@ let rec cs_subst t_env cs =
 let subst_with_env env leave_imp t cs e =
   (typ_subst env leave_imp t, cs_subst env cs, e_subst env e, env)
 
-let subst (k_env : (Envmap.k * kind) list) (leave_imp:bool)
+let subst (k_env : (Envmap.k * kind) list) (leave_imp:bool) (use_var:bool)
           (t : t) (cs : nexp_range list) (e : effect) : (t * nexp_range list * effect * t_arg emap) =
   let subst_env = Envmap.from_list
     (List.map (fun (id,k) -> (id, 
                               match k.k with
-                              | K_Typ -> TA_typ (new_t ())
-                              | K_Nat -> TA_nexp (new_n id)
+                              | K_Typ -> TA_typ (if use_var then (new_tv id) else (new_t ()))
+                              | K_Nat -> TA_nexp (if use_var then (new_nv id) else (new_n ()))
                               | K_Ord -> TA_ord (new_o ())
                               | K_Efct -> TA_eft (new_e ())
                               | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "substitution given an environment with a non-base-kind kind"))) k_env) 
@@ -2500,7 +2530,7 @@ let rec t_remove_unifications s_env t =
       | _ -> ignore(resolve_tsubst t); s_env)
   | Tfn(t1,t2,_,e) -> e_remove_unifications (t_remove_unifications (t_remove_unifications s_env t1) t2) e
   | Ttup(ts) -> List.fold_right (fun t s_env -> t_remove_unifications s_env t) ts s_env
-  | Tapp(i,args) -> List.fold_right (fun t s_env -> ta_remove_unifications s_env t) args s_env
+  | Tapp(i,args) -> List.fold_left (fun s_env t -> ta_remove_unifications s_env t) s_env args
   | Tabbrev(ti,ta) -> (t_remove_unifications (t_remove_unifications s_env ti) ta)
   | Toptions(t1,t2) -> assert false (*This should really be removed by this point*)
 and ta_remove_unifications s_env ta =
@@ -2513,17 +2543,12 @@ and n_remove_unifications s_env n =
   (*let _ = Printf.eprintf "n_remove_unifications %s\n" (n_to_string n) in*)
   match n.nexp with
   | Nvar _ | Nid _ | Nconst _ | Npos_inf | Nneg_inf | Ninexact -> s_env
-  | Nuvar nu -> 
-    let n' = match nu.nsubst with
-      | None -> n
-      | _ -> ignore (resolve_nsubst n); n in
-    (match n'.nexp with
-      | Nuvar _ -> 
-        (*let _ = Printf.eprintf "nuvar is before turning into var %s\n" (n_to_string n') in*)
-        (match fresh_nvar s_env n with
-          | Some ks -> Envmap.insert s_env ks
-          | None -> s_env)
-      | _ -> s_env)
+  | Nuvar _ ->
+    let _ = collapse_nuvar_chain (get_outer_most n) in
+    (*let _ = Printf.eprintf "nuvar is before turning into var %s\n" (n_to_string n) in*)
+    (match fresh_nvar s_env n with
+     | Some ks -> Envmap.insert s_env ks
+     | None -> s_env)
   | N2n(n1,_) | Npow(n1,_) | Nneg n1 -> (n_remove_unifications s_env n1)
   | Nadd(n1,n2) | Nsub(n1,n2) | Nmult(n1,n2) -> (n_remove_unifications (n_remove_unifications s_env n1) n2)
 and o_remove_unifications s_env o =
@@ -2605,7 +2630,7 @@ let rec get_abbrev d_env t =
     | Tid i ->
       (match Envmap.apply d_env.abbrevs i with
         | Some(Base((params,ta),tag,cs,efct,_,_)) ->
-          let ta,cs,_,_ = subst params false ta cs efct in
+          let ta,cs,_,_ = subst params false false ta cs efct in
           let ta,cs' = get_abbrev d_env ta in
           (match ta.t with
           | Tabbrev(t',ta) -> ({t=Tabbrev({t=Tabbrev(t,t')},ta)},cs@cs')
@@ -3237,7 +3262,7 @@ let rec select_overload_variant d_env params_check get_all variants actual_type 
       select_overload_variant d_env params_check get_all variants actual_type
     | Base((parms,t_orig),tag,cs,ef,_,bindings)::variants ->
       (*let _ = Printf.eprintf "About to check a variant %s\n" (t_to_string t_orig) in*)
-      let t,cs,ef,_ = if parms=[] then t_orig,cs,ef,Envmap.empty else subst parms false t_orig cs ef in
+      let t,cs,ef,_ = if parms=[] then t_orig,cs,ef,Envmap.empty else subst parms false false t_orig cs ef in
       (*let _ = Printf.eprintf "And after substitution %s\n" (t_to_string t) in*)
       let t,cs' = get_abbrev d_env t in
       let recur _ = select_overload_variant d_env params_check get_all variants actual_type in
@@ -3318,7 +3343,7 @@ let rec subst_nuvars nus n =
   let new_n = 
     match n.nexp with
       | Nconst _ | Nvar _ | Nid _ | Npos_inf | Nneg_inf | Ninexact -> n
-      | Nuvar _ -> 
+      | Nuvar _ ->
         (match Nexpmap.apply nus n with
           | None -> n
           | Some nc -> nc)
@@ -3363,7 +3388,7 @@ let rec prepare_constraints = function
   | CondCons(l,(Positive|Negative|Switch as kind),None,cs_p,cs_e)::cs ->
     let (new_pred_cs,my_substs) = freshen_constraints cs_p in
     let new_expr_cs = subst_nuvars_cs my_substs cs_e in
-    CondCons(l,kind,Some(my_substs),cs_p,(prepare_constraints new_expr_cs))::(prepare_constraints cs)
+    CondCons(l,kind,Some(my_substs),new_pred_cs,(prepare_constraints new_expr_cs))::(prepare_constraints cs)
   | CondCons(l,Solo,None,cs_p,cs_e)::cs ->
     CondCons(l,Solo,None,cs_p,(prepare_constraints cs_e))::(prepare_constraints cs)
   | BranchCons(l,_,bs)::cs -> BranchCons(l,None, prepare_constraints bs)::(prepare_constraints cs)
@@ -3393,66 +3418,73 @@ let rec make_merged_constraints acc =  function
       cs      
       
 let merge_branch_constraints merge_nuvars constraint_sets =
+  (*let _ = Printf.eprintf "merge_branch_constraints called\n" in*)
   (*Separate variables into only occurs in one set, or occurs in multiple sets*)
+  (*assumes k and n outermost and all nuvar*)
   let conditionally_set k n =
-    (occurs_in_nexp k n) || (occurs_in_nexp n k) || equate_n k n in
-  let set_nuvars_on_merge k n =
-    let def_try_set = merge_nuvars && is_all_nuvar n in
-    if def_try_set
-    then (conditionally_set n k),[],None
-    else if merge_nuvars
-    then match first_non_nu n with
+    not(merge_nuvars) || ((occurs_in_nexp k n) || (occurs_in_nexp n k) || equate_n k n) in
+  (*This function assumes n outermost and k all nuvar; 
+    inserts a new nuvar at bottom, and an eq to k for non-nuvar*)
+  let conditionally_lift_to_nuvars_on_merge k n =
+    if not(merge_nuvars) || is_all_nuvar n 
+    then [],None
+    else
+      let new_nuvar = new_n () in
+      let new_temp = new_n () in
+      match first_non_nu n with
       | Some n' ->
-        if change_nuvar_base n k
-        then (true, [Eq(Patt(Parse_ast.Unknown),k,n')], None)
-        else (false, [Eq(Patt(Parse_ast.Unknown),k,n')], Some(Nexpmap.from_list [n',k]))
-      | None -> (false, [Eq(Patt(Parse_ast.Unknown),k,n)], None)
-    else (false,[],None) in
+        new_temp.nexp <- n'.nexp;      (*Save equation*)
+        n'.nexp <- new_nuvar.nexp;      (*Put a nuvar in place*)
+        [Eq(Patt(Parse_ast.Unknown),k,new_temp)], Some(Nexpmap.from_list [k,new_temp])
+      | None -> [],None
+  in
   let merged_constraints = make_merged_constraints Nexpmap.empty constraint_sets in
-  (*let _ = Printf.eprintf "merge branch constraints: found these shared var mappings %s\n%!"
-      (nexpmap_to_string merged_constraints) in*)
   let shared_path_distinct_constraints = 
     Nexpmap.fold 
       (fun (sc,new_cs,new_map) k v -> match v with
          | One n ->
-         (*let _ = Printf.eprintf "Variables in one path: merge_nuvars %b, key %s, one %s\n%!" 
-           merge_nuvars (n_to_string k) (n_to_string n) in*)
-           let (_,new_cs',nm) =
-             (match (k.nexp, n.nexp) with
-              | Nuvar _, Nuvar _ -> set_nuvars_on_merge k n
-              | _ -> (conditionally_set k n,[],None)) in
-            (sc,new_cs'@new_cs,merge_option_maps nm new_map)
+           (*let _ = Printf.eprintf "Variables in one path: merge_nuvars %b, key %s, one %s\n%!" 
+               merge_nuvars (n_to_string k) (n_to_string n) in*)
+           let k,n = get_outer_most k, get_outer_most n in
+           if (is_all_nuvar k || is_all_nuvar n) && conditionally_set k n
+           then (sc,new_cs,new_map)
+           else (sc, (Eq(Patt(Parse_ast.Unknown),k,n))::new_cs,new_map)
         | Two(n1,n2) ->
           (*let _ = Printf.eprintf "Variables in two paths: merge_nuvars %b, key %s, n1 %s, n2 %s\n%!" 
-            merge_nuvars (n_to_string k) (n_to_string n1) (n_to_string n2) in*)
-          (match n1.nexp,n2.nexp with
-           | Nuvar _, Nuvar _ ->
-             let (set1,ncs1,nm1) = set_nuvars_on_merge k n1 in
-             let (set2,ncs2,nm2) = set_nuvars_on_merge k n2 in
-             if (set1 && set2)
-             then (sc,ncs1@ncs2@new_cs,merge_option_maps new_map (merge_option_maps nm1 nm2))
-             else (Nexpmap.insert sc (k,v),new_cs,merge_option_maps new_map (merge_option_maps nm1 nm2))
-           | Nuvar _, _ ->
-             let (_,cs1, nm1) = set_nuvars_on_merge k n1 in
-             (Nexpmap.insert sc (k,v),cs1@new_cs,merge_option_maps new_map nm1)
-           | _, Nuvar _ ->
-             let (_,cs2, nm2) = set_nuvars_on_merge k n2 in
-             (Nexpmap.insert sc (k,v),cs2@new_cs,merge_option_maps new_map nm2)
-           | _ -> 
-             if nexp_eq n1 n2 && conditionally_set k n1 && conditionally_set k n2
-             then (sc,new_cs,new_map)
-             else (Nexpmap.insert sc (k,v),new_cs,new_map))
+              merge_nuvars (n_to_string k) (n_to_string n1) (n_to_string n2) in*)
+          let k,n1,n2 = get_outer_most k, get_outer_most n1, get_outer_most n2 in
+          let all_nk, all_nn1, all_nn2 = is_all_nuvar k, is_all_nuvar n1, is_all_nuvar n2 in
+          if all_nk && all_nn1 && all_nn2 
+          then
+            let set1,set2 = conditionally_set k n1, conditionally_set k n2 in
+            if set1 && set2 then sc,new_cs,new_map 
+            else (Nexpmap.insert sc (k,v),new_cs,new_map)
+          else (if all_nk
+                then
+                  let ncs1,nm1 = conditionally_lift_to_nuvars_on_merge k n1 in
+                  let ncs2,nm2 = conditionally_lift_to_nuvars_on_merge k n2 in
+                  let set1,set2 = conditionally_set k n1, conditionally_set k n2 in
+                  if set1 && set2
+                  then sc,ncs1@ncs2@new_cs,merge_option_maps new_map (merge_option_maps nm1 nm2)
+                  else (Nexpmap.insert sc (k,v),new_cs,merge_option_maps new_map (merge_option_maps nm1 nm2))
+                else (Nexpmap.insert sc (k,v),new_cs,new_map))
         | Many ns ->
           (*let _ = Printf.eprintf "Variables in many paths: merge_nuvars %b, key %s, [" 
             merge_nuvars (n_to_string k) in
-          let _ = List.iter (fun n -> Printf.eprintf "%s " (n_to_string n)) ns in
-            let _ = Printf.eprintf "\n%!" in*)
-          let sets = List.map (set_nuvars_on_merge k) ns in
-          let css = (List.flatten (List.map (fun (_,c,_) -> c) sets))@ new_cs in
-          let map = List.fold_right merge_option_maps (List.map (fun (_,_,m) -> m) sets) new_map in
-          if List.for_all (fun (b,_,_) -> b) sets 
-          then (sc,css,map)
-          else 
+          let _ = List.iter (fun n -> Printf.eprintf "%s ;" (n_to_string n)) ns in
+          let _ = Printf.eprintf "]\n%!" in*)
+          let k, ns = get_outer_most k, List.map get_outer_most ns in
+          let is_all_nuvars = List.for_all is_all_nuvar ns in
+          if not(merge_nuvars)
+          then Nexpmap.insert sc (k,v),new_cs,new_map
+          else if is_all_nuvars
+          then if List.for_all (conditionally_set k) ns
+            then (sc,new_cs,new_map)
+            else (Nexpmap.insert sc (k,v),new_cs,new_map)
+          else
+            let sets = List.map (conditionally_lift_to_nuvars_on_merge k) ns in
+            let css = (List.flatten (List.map fst sets))@ new_cs in
+            let map = List.fold_right merge_option_maps (List.map snd sets) new_map in
             let rec all_eq = function
               | [] | [_] -> true
               | n1::n2::ns -> 
@@ -3460,8 +3492,8 @@ let merge_branch_constraints merge_nuvars constraint_sets =
             in 
             if (all_eq ns) && not(ns = [])
             then if List.for_all (conditionally_set k) ns
-              then (sc,css, map)
-              else (Nexpmap.insert sc (k,v),css, map)
+              then (sc,new_cs,new_map)
+              else (Nexpmap.insert sc (k,v),new_cs,new_map)
             else (Nexpmap.insert sc (k,v),css, map))
       (Nexpmap.empty,[],None) merged_constraints in
   (*let _ = if merge_nuvars then
@@ -3477,7 +3509,8 @@ let rec extract_path_substs = function
       | _ -> if nexp_eq n v then () else assert false (*Get a location to here*)
     in
     let updated_substs = 
-      Nexpmap.fold (fun substs key newvar -> 
+      Nexpmap.fold (fun substs key newvar ->
+          (*let _ =  Printf.eprintf "building substs sets: %s |-> %s\n" (n_to_string key) (n_to_string newvar) in*)
         match key.nexp with
           | Nuvar _ -> Nexpmap.insert substs (key,newvar)
           | _ -> begin set key newvar; substs end) Nexpmap.empty substs in
@@ -3515,13 +3548,12 @@ let rec equate_nuvars in_env cs =
         | Nuvar u1, Nuvar u2 ->
           (*let _ = Printf.eprintf "setting two nuvars, %s and %s in equate\n" (n_to_string n1) (n_to_string n2) in*)
           let occurs = (occurs_in_nexp n1 n2) || (occurs_in_nexp n2 n1) in
+          (*let _ = Printf.eprintf "did they occur? %b\n" occurs in*)
           if not(occurs) 
-          then begin ignore(resolve_nsubst n1); ignore(resolve_nsubst n2); 
-            if (equate_n n1 n2) then equate cs else c::equate cs end
+          then if (equate_n n1 n2) then equate cs else c::equate cs
           else c::equate cs
         | _ -> c::equate cs)
     | CondCons(co,kind,substs,pats,exps):: cs ->
-      (*let _ = Printf.eprintf "equate_nuvars: condcons: %s\n%!" (constraints_to_string [c]) in*)
       let pats' = equate pats in
       let exps' = equate exps in
       (match pats',exps' with
@@ -3559,8 +3591,7 @@ let rec simple_constraint_check in_env cs =
                                         ^ n_to_string new_n ^ " to equal 0, not " ^ string_of_big_int i)
         | Nuvar u1 ->
           if ok_to_set
-          then begin ignore(resolve_nsubst new_n);
-            if (equate_n new_n n_zero) then None else Some(Eq(co,new_n,n_zero)) end
+          then if (equate_n new_n n_zero) then None else Some(Eq(co,new_n,n_zero))
           else Some(Eq(co,new_n,n_zero))
         | Nadd(new_n1,new_n2) ->
           (match new_n1.nexp, new_n2.nexp with
@@ -3587,38 +3618,36 @@ let rec simple_constraint_check in_env cs =
           (n_to_string n1) (n_to_string n2) ok_to_set in*)
         let occurs = (occurs_in_nexp n1' n2') || (occurs_in_nexp n2' n1') in
         if ok_to_set && not(occurs) 
-        then begin ignore(resolve_nsubst n1'); ignore(resolve_nsubst n2'); 
-          if (equate_n n1' n2') then None else Some(Eq(co,n1',n2')) end
+        then if (equate_n n1' n2') then None else Some(Eq(co,n1',n2'))
         else if occurs then eq_to_zero ok_to_set n1' n2'
         else Some(Eq(co,n1',n2'))
       | _, Nuvar u -> 
         (*let _ = Printf.eprintf "setting right nuvar\n" in*)
         let occurs = occurs_in_nexp n1' n2' in
-        let leave = leave_nu_as_var n2' in
+        let leave = leave_nu_as_var (get_outer_most n2') in
         (*let _ = Printf.eprintf "occurs? %b, leave? %b n1' %s in n2' %s\n" 
           occurs leave (n_to_string n1') (n_to_string n2') in*)
         if (*not(u.nin) &&*) ok_to_set && not(occurs) && not(leave)
         then if (equate_n n2' n1') then  None else (Some (Eq(co,n1',n2')))
         else if occurs 
-        then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end
+        then eq_to_zero ok_to_set n1' n2'
         else Some (Eq(co,n1',n2')) 
       | Nuvar u, _ ->
         (*let _ = Printf.eprintf "setting left nuvar\n" in*)
         let occurs = occurs_in_nexp n2' n1' in
-        let leave = leave_nu_as_var n1' in
+        let leave = leave_nu_as_var (get_outer_most n1') in
         (*let _ = Printf.eprintf "occurs? %b, leave? %b n2' %s in n1' %s\n"
           occurs leave (n_to_string n2') (n_to_string n1') in*)
         if (*not(u.nin) &&*) ok_to_set && not(occurs) && not(leave)
         then if equate_n n1' n2' then None else (Some (Eq(co,n1',n2')))
         else if occurs
-        then begin (reduce_n_unifications n1'); (reduce_n_unifications n2'); eq_to_zero ok_to_set n1' n2' end
+        then eq_to_zero ok_to_set n1' n2'
         else Some (Eq(co,n1',n2'))
       | _,_ -> 
         if nexp_eq_check n1' n2'
         then None
         else eq_to_zero ok_to_set n1' n2')
     in
-    let _ = reduce_n_unifications n1; reduce_n_unifications n2 in
     (match check_eq true n1 n2 with
       | None -> (check cs)
       | Some(c) -> c::(check cs))
@@ -3663,7 +3692,6 @@ let rec simple_constraint_check in_env cs =
       | None -> (check cs)
       | Some(c) -> c::(check cs))
   | GtEq(co,enforce,n1,n2)::cs ->
-    let n1,n2 = resolve_nsubst n1, resolve_nsubst n2 in
     (*let _ = Printf.eprintf ">= check, about to normalize_nexp of %s, %s\n" 
       (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
@@ -3704,7 +3732,6 @@ let rec simple_constraint_check in_env cs =
                  ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
             | _ -> GtEq(co,enforce,n1',n2')::(check cs))))
   | Gt(co,enforce,n1,n2)::cs ->
-    let n1,n2 = resolve_nsubst n1, resolve_nsubst n2 in
     (*let _ = Printf.eprintf "> check, about to normalize_nexp of %s, %s\n"
       (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
@@ -3725,7 +3752,6 @@ let rec simple_constraint_check in_env cs =
                ^ n_to_string new_n ^ " to be greater than or equal to 0, not " ^ string_of_big_int i)
           | _ -> Gt(co,enforce,n1',n2')::(check cs)))
   | LtEq(co,enforce,n1,n2)::cs ->
-    let n1,n2 = resolve_nsubst n1, resolve_nsubst n2 in
     (*let _ = Printf.eprintf "<= check, about to normalize_nexp of %s, %s\n" 
       (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
@@ -3745,7 +3771,6 @@ let rec simple_constraint_check in_env cs =
               " to be less than or equal to " ^ (n_to_string n2))
         | Maybe -> LtEq(co,enforce,n1',n2')::(check cs)))
   | Lt(co,enforce,n1,n2)::cs ->
-    let n1,n2 = resolve_nsubst n1, resolve_nsubst n2 in
     (*let _ = Printf.eprintf "< check, about to normalize_nexp of %s, %s\n"
       (n_to_string n1) (n_to_string n2) in *)
     let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
@@ -3817,16 +3842,19 @@ let resolve_constraints cs =
       let len' = constraint_size cs' in
       if len > len' then fix checker len' cs'
       else cs' in
-(*    let _ = Printf.eprintf "Original constraints are %s\n%!" (constraints_to_string cs) in*)
+    (*let _ = Printf.eprintf "Original constraints are %s\n%!" (constraints_to_string cs) in*)
     let branch_freshened = prepare_constraints cs in
+    (*let _ = Printf.eprintf "Constraints after prepare constraints are %s\n"
+        (constraints_to_string branch_freshened) in*)
     let nuvar_equated = fix equate_nuvars (constraint_size branch_freshened) branch_freshened in
+    (*let _ = Printf.eprintf "Constraints after nuvar equated are %s\n%!" (constraints_to_string nuvar_equated) in*)
     let complex_constraints = 
           fix (fun in_env cs -> let (ncs,_) = merge_paths false (simple_constraint_check in_env cs) in ncs)
         (constraint_size nuvar_equated) nuvar_equated in
     let (complex_constraints,map) = merge_paths true complex_constraints in
     (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" 
-      (constraint_size complex_constraints) in*)
-    (*let _ = Printf.eprintf "%s\n" (constraints_to_string complex_constraints) in*)
+      (constraint_size complex_constraints) in
+    let _ = Printf.eprintf "%s\n" (constraints_to_string complex_constraints) in*)
     (complex_constraints,map)
 
 
@@ -3835,16 +3863,12 @@ let check_tannot l annot imp_param constraints efs =
   | Base((params,t),tag,cs,ef,_,bindings) ->
     let efs = remove_lsets efs in
     ignore(effects_eq (Specc l) efs ef);
-    let s_env = (t_remove_unifications (Envmap.from_list params) t) in
+    let s_env = (t_remove_unifications Envmap.empty t) in
     let params = Envmap.to_list s_env in
-    (*let _ = Printf.eprintf "parameters going to save are " in
-        let _ = List.iter (fun (s,_) -> Printf.eprintf "%s " s) params in
-      let _ = Printf.eprintf "\n" in*)
     ignore (remove_internal_unifications s_env);
-    (*let _ = Printf.eprintf "Checked tannot, t after removing uvars is %s\n" (t_to_string t) in*) 
     let t' = match (t.t,imp_param) with
       | Tfn(p,r,_,e),Some x -> {t = Tfn(p,r,IP_user x,e) }
-      | _ -> t in 
+      | _ -> t in
     Base((params,t'),tag,cs,ef,pure_e,bindings)
   | NoTyp -> raise (Reporting_basic.err_unreachable l "check_tannot given the place holder annotation")
   | Overload _ -> raise (Reporting_basic.err_unreachable l "check_tannot given overload")
@@ -3859,7 +3883,7 @@ let tannot_merge co denv widen t_older t_newer =
       (match tag_o,tag_n with
         | Default,tag -> 
           (match t_n.t with
-            | Tuvar _ -> let t_o,cs_o,ef_o,_ = subst ps_o false t_o cs_o efl_o in
+            | Tuvar _ -> let t_o,cs_o,ef_o,_ = subst ps_o false false t_o cs_o efl_o in
                          let t,_ = type_consistent co denv Guarantee false t_n t_o in
                          Base(([],t),tag_n,cs_o,ef_o,pure_e,bounds_o)
             | _ -> t_newer)

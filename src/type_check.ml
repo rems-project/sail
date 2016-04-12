@@ -271,7 +271,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
                     (P_aux(p,(l,pat_annot)),Envmap.from_list [(i,id_annot)],cs,default_bounds,expect_t) in
       (match Envmap.apply t_env i with
         | Some(Base((params,t),Constructor n,cs,efl,efr,bounds)) ->
-          let t,cs,ef,_ = subst params false t cs efl in
+          let t,cs,ef,_ = subst params false false t cs efl in
           (match t.t with
             | Tfn({t = Tid "unit"},t',IP_none,ef) -> 
               if conforms_to_t d_env false false t' expect_t 
@@ -285,7 +285,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
               else default
             | _ -> raise (Reporting_basic.err_unreachable l "Constructor tannot does not have function type"))
         | Some(Base((params,t),Enum max,cs,efl,efr,bounds)) ->
-          let t,cs,ef,_ = subst params false t cs efl in
+          let t,cs,ef,_ = subst params false false t cs efl in
           if conforms_to_t d_env false false t expect_t
           then 
             let tp,cp = type_consistent (Expr l) d_env Guarantee false t expect_t in
@@ -298,7 +298,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
       (match Envmap.apply t_env i with
         | None | Some NoTyp | Some Overload _ -> typ_error l ("Constructor " ^ i ^ " in pattern is undefined")
         | Some(Base((params,t),Constructor n,constraints,efl,efr,bounds)) -> 
-          let t,dec_cs,_,_ = subst params false t constraints efl in
+          let t,dec_cs,_,_ = subst params false false t constraints efl in
           (match t.t with
             | Tid id -> if pats = [] 
               then let t',ret_cs = type_consistent (Patt l) d_env Guarantee false t expect_t in
@@ -330,7 +330,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
             | (Base((vs,t),tag,cs,eft,_,bounds)) ->
               (*let tup = {t = Ttup(List.map (fun (t,_,_,_) -> t) typ_pats)} in*)
               (*let ft = {t = Tfn(tup,t, IP_none,pure_e) } in*)
-              let (ft_subst,cs,_,_) = subst vs false t cs pure_e in
+              let (ft_subst,cs,_,_) = subst vs false false t cs pure_e in
               let subst_rtyp,subst_typs = 
                 match ft_subst.t with | Tfn({t=Ttup tups},rt,_,_) -> rt,tups 
                   | _ -> raise (Reporting_basic.err_unreachable l "fields_to_rec gave a non function type") in
@@ -493,7 +493,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       let i = id_to_string id in
       (match Envmap.apply t_env i with
       | Some(Base((params,t),(Constructor n),cs,ef,_,bounds)) ->
-        let t,cs,ef,_ = subst params false t cs ef in
+        let t,cs,ef,_ = subst params false false t cs ef in
         (match t.t with
         | Tfn({t = Tid "unit"},t',IP_none,ef) -> 
           let e = E_aux(E_app(id, []),
@@ -504,7 +504,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
           typ_error l ("Constructor " ^ i ^ " expects arguments of type " ^ (t_to_string t) ^ ", found none")
         | _ -> raise (Reporting_basic.err_unreachable l "Constructor tannot does not have function type"))
       | Some(Base((params,t),(Enum max),cs,ef,_,bounds)) ->
-        let t',cs,_,_ = subst params false t cs ef in
+        let t',cs,_,_ = subst params false false t cs ef in
         let t',cs',ef',e' = 
           type_coerce (Expr l) d_env Require false false b_env t' (rebuild (cons_tag_annot t' (Enum max) cs)) expect_t in
         (e',t',t_env,cs@cs',nob,ef')
@@ -512,7 +512,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
         typ_error l ("Identifier " ^ i ^ " must be defined, not just specified, before use")
       | Some(Base((params,t),tag,cs,ef,_,bounds)) ->
         let ((t,cs,ef,_),is_alias) = 
-          match tag with | Emp_global | External _ -> (subst params false t cs ef),false 
+          match tag with | Emp_global | External _ -> (subst params false false t cs ef),false 
             | Alias alias_inf -> (t,cs, add_effect (BE_aux(BE_rreg, Parse_ast.Unknown)) ef, Envmap.empty),true 
             | _ -> (t,cs,ef,Envmap.empty),false 
         in
@@ -671,7 +671,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       let check_result ret imp tag cs ef efr parms =    
         match (imp,imp_param) with
           | (IP_length n ,None) | (IP_user n,None) | (IP_start n,None) ->
-            (*let _ = Printf.eprintf "implicit length or var required, no imp_param %s\n!" (n_to_string n) in*)
+            (*let _ = Printf.eprintf "app of %s implicit required, no imp_param %s\n!"  i (n_to_string n) in*)
             let internal_exp = 
               let _ = set_imp_param n in
               let implicit = {t= Tapp("implicit",[TA_nexp n])} in
@@ -680,8 +680,8 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
             type_coerce (Expr l) d_env Require false false b_env ret 
               (E_aux (E_app(id, internal_exp::parms),(l,(Base(([],ret),tag,cs,ef,efr,nob))))) expect_t
           | (IP_length n ,Some ne) | (IP_user n,Some ne) | (IP_start n,Some ne) ->
-            (*let _ = Printf.eprintf "implicit length or var required %s with imp_param %s\n" 
-              (n_to_string n) (n_to_string ne) in
+            (*let _ = Printf.eprintf "app of %s implicit length or var required %s with imp_param %s\n" 
+              i (n_to_string n) (n_to_string ne) in
             let _ = Printf.eprintf "and expected type is %s and return type is %s\n"
               (t_to_string expect_t) (t_to_string ret) in*)
             let _ = set_imp_param n; set_imp_param ne in
@@ -695,7 +695,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
             type_coerce (Expr l) d_env Require false false b_env ret 
               (E_aux (E_app(id,internal_exp::parms),(l,(Base(([],ret),tag,cs,ef,efr,nob))))) expect_t
           | (IP_none,_) -> 
-            (*let _ = Printf.eprintf "no implicit length or var required: ret %s and expect_t %s\n" (t_to_string ret) (t_to_string expect_t) in*)
+            (*let _ = Printf.eprintf "no implicit: ret %s and expect_t %s\n" (t_to_string ret) (t_to_string expect_t) in*)
             type_coerce (Expr l) d_env Require false false b_env ret 
               (E_aux (E_app(id, parms),(l,(Base(([],ret),tag,cs,ef,efr,nob))))) expect_t
       in
@@ -707,7 +707,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       | Some(Base((params,t),tag,cs,efl,_,bounds)) ->
         (*let _ = Printf.eprintf "Going to check a function call %s with unsubstituted types %s and constraints %s \n"
           i (t_to_string t) (constraints_to_string cs) in*)
-        let t,cs,efl,_ = subst params false t cs efl in
+        let t,cs,efl,_ = subst params false false t cs efl in
         (match t.t with
         | Tfn(arg,ret,imp,efl') ->
           (*let _ = Printf.eprintf "Checking funcation call of %s\n" i in
@@ -723,7 +723,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
                  ("Expected a function or constructor, found identifier " ^ i ^ " bound to type " ^
                   (t_to_string t)))
       | Some(Overload(Base((params,t),tag,cs,efl,_,_),overload_return,variants)) ->
-        let t_p,cs_p,ef_p,_ = subst params false t cs efl in
+        let t_p,cs_p,ef_p,_ = subst params false false t cs efl in
         let args,arg_t,arg_cs,arg_ef = 
           (match t_p.t with
           | Tfn(arg,ret,_,ef') -> check_parms arg parms 
@@ -781,7 +781,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       | Some(Base(tp,Default,cs,ef,_,b)) -> 
         typ_error l ("Function " ^ i ^ " must be defined, not just declared as default, before use")
       | Some(Base((params,t),tag,cs,ef,_,b)) ->
-        let t,cs,ef,_ = subst params false t cs ef in
+        let t,cs,ef,_ = subst params false false t cs ef in
         (match t.t with
         | Tfn(arg,ret,imp,ef) -> 
           let (lft',rht',arg_t,cs_p,ef_p) = check_parms arg lft rht in
@@ -791,7 +791,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
         | _ -> 
           typ_error l ("Expected a function, found identifier " ^ i ^ " bound to type " ^ (t_to_string t)))
       | Some(Overload(Base((params,t),tag,cs,ef,_,_),overload_return,variants)) ->
-        let t_p,cs_p,ef_p,_ = subst params false t cs ef in
+        let t_p,cs_p,ef_p,_ = subst params false false t cs ef in
         let lft',rht',arg_t,arg_cs,arg_ef =  
           (match t_p.t with
           | Tfn(arg,ret,_,ef') -> check_parms arg lft rht
@@ -1196,7 +1196,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
         | Tid(n) | Tapp(n,_)->
           (match lookup_record_typ n d_env.rec_env with 
             | Some(((i,Record,(Base((params,t),tag,cs,eft,_,bounds)),fields) as r)) -> 
-              let (ts,cs,eft,subst_env) = subst params false t cs eft in
+              let (ts,cs,eft,subst_env) = subst params false false t cs eft in
               if (List.length fexps = List.length fields) 
               then let fexps,cons,ef = List.fold_right (field_walker r subst_env bounds tag n) fexps ([],[],pure_e) in
                    let e = E_aux(E_record(FES_aux(FES_Fexps(fexps,false),l')),(l,simple_annot_efr u ef)) in
@@ -1210,7 +1210,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
           let field_names = List.map (fun (FE_aux(FE_Fexp(id,exp),(l,annot))) -> id_to_string id) fexps in
           (match lookup_record_fields field_names d_env.rec_env with
             | Some(((i,Record,(Base((params,t),tag,cs,eft,_,bounds)),fields) as r)) ->
-              let (ts,cs,eft,subst_env) = subst params false t cs eft in
+              let (ts,cs,eft,subst_env) = subst params false false t cs eft in
               let fexps,cons,ef = List.fold_right (field_walker r subst_env bounds tag i) fexps ([],[],pure_e) in 
               let e = E_aux(E_record(FES_aux(FES_Fexps(fexps,false),l')),(l,simple_annot_efr ts ef)) in
               let (t',cs',ef',e') = type_coerce (Expr l) d_env Guarantee false false b_env ts e expect_t in
@@ -1236,7 +1236,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
             | Some(((i,Record,(Base((params,t),tag,cs,eft,_,bounds)),fields) as r)) ->
               if (List.length fexps <= List.length fields) 
               then 
-                let (ts,cs,eft,subst_env) = subst params false t cs eft in
+                let (ts,cs,eft,subst_env) = subst params false false t cs eft in
                 let fexps,cons,ef = List.fold_right (field_walker r subst_env bounds tag i) fexps ([],[],pure_e) in
                 let e = E_aux(E_record_update(e',FES_aux(FES_Fexps(fexps,false),l')), (l,simple_annot_efr ts ef)) in
                 let (t',cs',ef',e') = type_coerce (Expr l) d_env Guarantee false false b_env ts e expect_t in
@@ -1249,7 +1249,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
           (match lookup_possible_records field_names d_env.rec_env with
             | [] -> typ_error l "No struct matches the set of fields given for this struct update"
             | [(((i,Record,(Base((params,t),tag,cs,eft,_,bounds)),fields) as r))] ->
-              let (ts,cs,eft,subst_env) = subst params false t cs eft in
+              let (ts,cs,eft,subst_env) = subst params false false t cs eft in
               let fexps,cons,ef = List.fold_right (field_walker r subst_env bounds tag i) fexps ([],[],pure_e) in
               let e =  E_aux(E_record_update(e',FES_aux(FES_Fexps(fexps,false),l')), (l,simple_annot_efr ts ef)) in
               let (t',cs',ef',e') = type_coerce (Expr l) d_env Guarantee false false b_env ts e expect_t in
@@ -1264,7 +1264,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       | Tabbrev({t=Tid i}, _) | Tabbrev({t=Tapp(i,_)},_) | Tid i | Tapp(i,_) ->
           (match lookup_record_typ i d_env.rec_env with
             | Some(((i,rec_kind,(Base((params,t),tag,cs,eft,_,bounds)),fields) as r)) ->
-              let (ts,cs,eft,subst_env) = subst params false t cs eft in
+              let (ts,cs,eft,subst_env) = subst params false false t cs eft in
               (match lookup_field_type fi r with
                 | None -> typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
                 | Some t ->
@@ -1289,7 +1289,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
         (match lookup_possible_records [fi] d_env.rec_env with
          | [] -> typ_error l ("No struct or register has a field " ^ fi)
          | [(((i,rec_kind,(Base((params,t),tag,cs,eft,_,bounds)),fields) as r))] ->
-           let (ts,cs,eft,subst_env) = subst params false t cs eft in
+           let (ts,cs,eft,subst_env) = subst params false false t cs eft in
            (match lookup_field_type fi r with
             | None -> 
               raise
@@ -1436,7 +1436,7 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
           | _ -> assert false)
        | Some(Base((parms,t),tag,cs,_,_,b)) ->
           let t,cs,ef,_ = 
-            match tag with | External _ | Emp_global -> subst parms false t cs pure_e
+            match tag with | External _ | Emp_global -> subst parms false false t cs pure_e
                            | _ -> t,cs,{effect = Eset[BE_aux(BE_lset,l)]},Envmap.empty
           in
           let t,cs' = get_abbrev d_env t in
@@ -1483,7 +1483,7 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
       let i = id_to_string id in
       (match Envmap.apply t_env i with
         | Some(Base((parms,t),tag,cs,ef,_,_)) ->
-          let t,cs,ef,_ = subst parms false t cs ef in
+          let t,cs,ef,_ = subst parms false false t cs ef in
           (match t.t with
             | Tfn(apps,out,_,ef') ->
               (match ef'.effect with
@@ -1544,7 +1544,7 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
       (match Envmap.apply t_env i with
         | Some(Base((parms,t),tag,cs,_,_,bounds)) ->
           let t,cs,ef,_ = 
-            match tag with | External _ | Emp_global -> subst parms false t cs pure_e
+            match tag with | External _ | Emp_global -> subst parms false false t cs pure_e
                            | _ -> t,cs,{effect=Eset[BE_aux(BE_lset,l)]},Envmap.empty
           in
           let t,cs' = get_abbrev d_env t in
@@ -1692,7 +1692,7 @@ and check_lexp envs imp_param is_top (LEXP_aux(lexp,(l,annot)))
         | Tid i | Tabbrev({t=Tid i},_) | Tabbrev({t=Tapp(i,_)},_) | Tapp(i,_)->
           (match lookup_record_typ i d_env.rec_env with
             | Some(((i,rec_kind,(Base((params,t),tag,cs,eft,_,bounds)),fields) as r)) ->
-              let (ts,cs,eft,subst_env) = subst params false t cs eft in
+              let (ts,cs,eft,subst_env) = subst params false false t cs eft in
               (match lookup_field_type fi r with
                 | None -> typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
                 | Some t ->
@@ -1713,7 +1713,7 @@ and check_lbind envs imp_param is_top_level emp_tag (LB_aux(lbind,(l,annot))) : 
     let tan = typschm_to_tannot envs false false typ emp_tag in
     (match tan with
     | Base((params,t),tag,cs,ef,_,b) ->
-      let t,cs,ef,tp_env' = subst params false t cs ef in
+      let t,cs,ef,tp_env' = subst params false true t cs ef in
       let envs' = (Env(d_env,t_env,b_env,Envmap.union tp_env tp_env')) in
       let (pat',env,cs1,bounds,u) = check_pattern envs' emp_tag t pat in
       let (e,t,_,cs2,_,ef2) = check_exp envs' imp_param true t e in
@@ -1982,7 +1982,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let (ids,_,constraints) = typq_to_params envs typq in
       let t = typ_to_t envs false false typ in
       (*TODO add check that ids == typ_params when has_spec*)
-      let t,constraints,_,t_param_env = subst (if has_spec then typ_params else ids) true t constraints pure_e in
+      let t,constraints,_,t_param_env = subst (if has_spec then typ_params else ids) true true t constraints pure_e in
       let p_t = new_t () in
       let ef = new_e () in
       t,p_t,Base((ids,{t=Tfn(p_t,t,IP_none,ef)}),Emp_global,constraints,ef,pure_e,nob),t_param_env in
