@@ -1,7 +1,7 @@
 (* 265-bit capability is really 257 bits including tag *)
 typedef CapReg = register bits [256:0] {
   256:      tag;
-  255..248: reserved; (* padding *)
+  (* 255..248: reserved1; padding *)
   247..224: otype;
   223..208: sw_perms;
   207:      access_KR2C;
@@ -9,7 +9,8 @@ typedef CapReg = register bits [256:0] {
   205:      access_KCC;
   204:      access_KDC;
   203:      access_EPCC;
-  202..201: reserved;
+  202:      perm_reserved9; (* perm bit 9 *)
+  201:      perm_reserved8; (* perm bit 8 *)
   200:      permit_seal;
   199:      permit_store_ephemeral_cap;
   198:      permit_store_cap;
@@ -19,12 +20,13 @@ typedef CapReg = register bits [256:0] {
   194:      permit_execute;
   193:      non_ephemeral;
   192:      sealed;
-  191..128: cursor;
+  191..128: offset;
   127..64:  base;
   63 .. 0:  length;
 }
 
 register CapReg PCC
+register CapReg delayedPCC
 register CapReg C00 (* aka default data capability, DDC *)
 register CapReg C01
 register CapReg C02
@@ -73,6 +75,8 @@ typedef CapStruct = const struct {
   bool    access_KCC;
   bool    access_KDC;
   bool    access_EPCC;
+  bool    perm_reserved9;
+  bool    perm_reserved8;
   bool    permit_seal;
   bool    permit_store_ephemeral_cap;
   bool    permit_store_cap;
@@ -82,10 +86,38 @@ typedef CapStruct = const struct {
   bool    permit_execute;
   bool    non_ephemeral;
   bool    sealed;
-  bit[64] cursor;
+  bit[64] offset;
   bit[64] base;
   bit[64] length;
 }
+
+let (CapStruct) null_cap = {
+  tag = false;
+  otype = 0;
+  sw_perms = 0;
+  access_KR2C = false;
+  access_KR1C = false;
+  access_KCC = false;
+  access_KDC = false;
+  access_EPCC = false;
+  perm_reserved9 = false;
+  perm_reserved8 = false;
+  permit_seal = false;
+  permit_store_ephemeral_cap = false;
+  permit_store_cap = false;
+  permit_load_cap = false;
+  permit_store = false;
+  permit_load = false;
+  permit_execute = false;
+  non_ephemeral = false;
+  sealed = false;
+  offset = 0;
+  base = 0;
+  length = 0;
+}
+let (nat) max_otype = 0xffffff
+def Nat cap_size_t  = 32 (* cap size in bytes *)
+let ([:cap_size_t:]) cap_size = 32
 
 function CapStruct capRegToCapStruct((CapReg) capReg) =
   {
@@ -97,6 +129,8 @@ function CapStruct capRegToCapStruct((CapReg) capReg) =
     access_KCC                 = capReg.access_KCC;
     access_KDC                 = capReg.access_KDC;
     access_EPCC                = capReg.access_EPCC;
+    perm_reserved9             = capReg.perm_reserved9;
+    perm_reserved8             = capReg.perm_reserved8;
     permit_seal                = capReg.permit_seal;
     permit_store_ephemeral_cap = capReg.permit_store_ephemeral_cap;
     permit_store_cap           = capReg.permit_store_cap;
@@ -106,7 +140,7 @@ function CapStruct capRegToCapStruct((CapReg) capReg) =
     permit_execute             = capReg.permit_execute;
     non_ephemeral              = capReg.non_ephemeral;
     sealed                     = capReg.sealed;
-    cursor                     = capReg.cursor;
+    offset                     = capReg.offset;
     base                       = capReg.base;
     length                     = capReg.length;
   }
@@ -115,18 +149,16 @@ function CapStruct capRegToCapStruct((CapReg) capReg) =
 function (CapStruct) readCapReg((regno) n) =
   capRegToCapStruct(CapRegs[n])
 
-function (bit[257]) capStructToBit257((CapStruct) cap) =
-    (
-      [cap.tag]
-      : 0b00000000 (* padding *)
-      : cap.otype
-      : cap.sw_perms
+function (bit[31]) capPermsToVec((CapStruct) cap) = 
+  (
+    cap.sw_perms
       : [cap.access_KR2C]
       : [cap.access_KR1C]
       : [cap.access_KCC]
       : [cap.access_KDC]
       : [cap.access_EPCC]
-      : 0b00       (* Padding *)
+      : [cap.perm_reserved9]
+      : [cap.perm_reserved8]
       : [cap.permit_seal]
       : [cap.permit_store_ephemeral_cap]
       : [cap.permit_store_cap]
@@ -135,20 +167,31 @@ function (bit[257]) capStructToBit257((CapStruct) cap) =
       : [cap.permit_load]
       : [cap.permit_execute]
       : [cap.non_ephemeral]
+  )
+
+function (bit[257]) capStructToBit257((CapStruct) cap) =
+    (
+      [cap.tag]
+      : 0b00000000 (* padding *)
+      : cap.otype
+      : capPermsToVec(cap)
       : [cap.sealed]
-      : cap.cursor
+      : cap.offset
       : cap.base
       : cap.length
     )
 
+function nat getCapCursor((CapStruct) cap) = 
+  (((nat)(cap.base)) + ((nat)(cap.offset))) mod (2 ** 64)
+
 function unit writeCapReg((regno) n, (CapStruct) cap) =
     {
-      reg := (CapRegs[n]);
-      reg := capStructToBit257(cap)
+      (CapRegs[n]) := capStructToBit257(cap)
     }
+
 typedef CapEx = enumerate {
   CapEx_None; 
-  CapEx_LengthVioloation;
+  CapEx_LengthViolation;
   CapEx_TagViolation;
   CapEx_SealViolation;
   CapEx_TypeViolation;
@@ -183,12 +226,27 @@ typedef CGetXOp = enumerate {
   CGetUnsealed;
 }
 
+typedef CPtrCmpOp = enumerate {
+  CEQ;
+  CNE;
+  CLT;
+  CLE;
+  CLTU;
+  CLEU;
+  CEXEQ;
+}
 
+typedef ClearRegSet = enumerate {
+GPLo;
+GPHi;
+CLo;
+CHi;
+}
 
 function (bit[8]) CapExCode((CapEx) ex) =
   switch(ex) {
     case CapEx_None                         -> 0x00
-    case CapEx_LengthVioloation             -> 0x01
+    case CapEx_LengthViolation              -> 0x01
     case CapEx_TagViolation                 -> 0x02
     case CapEx_SealViolation                -> 0x03
     case CapEx_TypeViolation                -> 0x04
@@ -249,3 +307,19 @@ function bool register_inaccessible((regno) r) =
     case 0b11111 -> (PCC.access_EPCC)
     case _       -> bitone
   })
+
+val extern (bit[64] , bit[8]) -> unit effect { wmem } TAGw
+val extern (bit[64]) -> (bit[8]) effect { rmem } TAGr
+
+function (bool, bit[cap_size_t * 8]) MEMr_tagged ((bit[64]) addr) =
+{
+  let tag = (TAGr (addr)) in
+  let mem = (MEMr (addr, cap_size)) in
+  (tag[0], mem)
+}
+
+function unit MEMw_tagged((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
+{
+  MEMw(addr, cap_size, data);
+  TAGw(addr, (0b0000000 : [tag]));
+}
