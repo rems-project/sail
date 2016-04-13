@@ -43,7 +43,9 @@ let read_memory_functions : memory_reads =
                                  (v,(natFromInteger len),
                                   Just (loc_regs++
                                         (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs))))
-                                 end end end)));                
+                                 end end end)));
+    ("TAGr", (MR Read_tag (fun mode v -> let (v, regs) = extern_mem_value mode v in 
+                                         (v, 1, regs))));
 ]
 let memory_writes : memory_writes = [
   ("MEMw", (MW Write_plain 
@@ -85,6 +87,12 @@ let memory_writes : memory_writes = [
                               let v = Interp.V_lit (L_aux (if success then L_one else L_zero) Unknown) in
                               IState (Interp.add_answer_to_stack interp_state v) c))
      ));
+  ("TAGw", (MW Write_tag (fun mode v -> let (v, regs) = extern_mem_value mode v in
+                                        (v, 1, regs))
+              (Just (fun (IState interp_state c) success ->
+                              let v = Interp.V_lit (L_aux (if success then L_one else L_zero) Unknown) in
+                              IState (Interp.add_answer_to_stack interp_state v) c))
+   ));
   ]
 
 let barrier_functions = [
