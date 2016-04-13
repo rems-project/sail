@@ -83,8 +83,14 @@ let rec {ocaml} string_of_value v = match v with
   | V_vector i inc vals -> 
     let default_format _ = "[" ^ (list_to_string string_of_value "," vals) ^ "]" in
     let to_bin () = "0b" ^ 
-      (List.foldr (fun v rst -> (match v with | V_lit (L_aux l _) -> (match l with | L_one -> "1" | L_zero -> "0" | L_undef -> "u" end)
-	                                      | V_unknown -> "?" end) ^rst) "" vals) in
+                    (List.foldr
+                       (fun v rst ->
+                          (match v with
+                           | V_lit (L_aux l _) ->
+                             (match l with | L_one -> "1" | L_zero -> "0" | L_undef -> "u"
+                                           | _ -> Assert_extra.failwith "to_bin called with non-bin lits" end)
+                           | V_unknown -> "?"
+                           | _ -> Assert_extra.failwith "to_bin called with non-bin values" end) ^rst) "" vals) in
     match vals with
       | [] -> default_format ()
       | v::vs ->
@@ -99,7 +105,7 @@ let rec {ocaml} string_of_value v = match v with
     "{" ^ (list_to_string (fun (id,v) -> (get_id id) ^ "=" ^ (string_of_value v)) ";" vals) ^ "}"
   | V_ctor id t _ value -> (get_id id) ^ " " ^ string_of_value value     
   | V_unknown -> "Unknown"
-  | V_register _ -> "register_as_value"
+  | V_register r -> string_of_reg_form r
   | V_register_alias _ _ -> "register_as_alias"
   | V_track v rs -> (*"tainted by {" ^ (list_to_string string_of_reg_form "," rs) ^ "} --" ^*) (string_of_value v)
 end
@@ -149,19 +155,24 @@ let reg_start_pos reg =
     | Reg _ (Just(typ,_,_,_,_)) _ -> 
       let start_from_vec targs = match targs with
 	| T_args [T_arg_nexp (Ne_const s);_;_;_] -> natFromInteger s
+        | _ -> Assert_extra.failwith "vector type not well formed"
       end in
       let start_from_reg targs = match targs with
 	| T_args [T_arg_typ (T_app "vector" targs)] -> start_from_vec targs
+        | _ -> Assert_extra.failwith "register not of vector"
       end in
       let start_from_abbrev t = match t with
 	| T_app "vector" targs -> start_from_vec targs
 	| T_app "register" targs -> start_from_reg targs
+        | _ -> Assert_extra.failwith "register abbrev not register or vector"
       end in
       match typ with 
 	| T_app "vector" targs -> start_from_vec targs
 	| T_app "register" targs -> start_from_reg targs
-	| T_abbrev _ t -> start_from_abbrev t
+        | T_abbrev _ t -> start_from_abbrev t
+        | _ -> Assert_extra.failwith "register type not vector, register, or abbrev"              
       end 
+   | _ -> Assert_extra.failwith "reg_start_pos found unexpected sub reg, or reg without a type"
 end 
 
 let reg_size reg = 
@@ -169,19 +180,24 @@ let reg_size reg =
     | Reg _ (Just(typ,_,_,_,_)) _ -> 
       let end_from_vec targs = match targs with
 	| T_args [_;T_arg_nexp (Ne_const s);_;_] -> natFromInteger s
+        | _ -> Assert_extra.failwith "register vector type not well formed"
       end in
       let end_from_reg targs = match targs with
-	| T_args [T_arg_typ (T_app "vector" targs)] -> end_from_vec targs
+        | T_args [T_arg_typ (T_app "vector" targs)] -> end_from_vec targs
+        | _ -> Assert_extra.failwith "register does not contain vector"                                          
       end in
       let end_from_abbrev t = match t with
 	| T_app "vector" targs -> end_from_vec targs
-	| T_app "register" targs -> end_from_reg targs
+        | T_app "register" targs -> end_from_reg targs
+        | _ -> Assert_extra.failwith "register abbrev is neither vector nor register"                        
       end in
       match typ with 
 	| T_app "vector" targs -> end_from_vec targs
 	| T_app "register" targs -> end_from_reg targs
-	| T_abbrev _ t -> end_from_abbrev t
+        | T_abbrev _ t -> end_from_abbrev t
+        | _ -> Assert_extra.failwith "register type is none of vector, register, or abbrev"             
       end 
+   | _ -> Assert_extra.failwith "reg_size given unexpected sub reg or reg without a type"
 end 
 
 (*Constant unit value, for use in interpreter *)
@@ -241,7 +257,7 @@ type action =
    all other frames for their inner stack *)
 type stack = 
  | Top
- | Hole_frame of id * exp tannot * top_level * lenv * lmem * stack (* Stack frame waiting to fill a hole with a value *)
+ | Hole_frame of id * exp tannot * top_level * lenv * lmem * stack (* Stack frame waiting for a value *)
  | Thunk_frame of exp tannot * top_level * lenv * lmem * stack     (* Paused stack frame *)
 
 (*Internal representation of outcomes from running the interpreter.
@@ -429,16 +445,20 @@ let litV_to_vec (L_aux lit l) (dir: i_direction) =
 			 | #'c' -> [L_one ;L_one ;L_zero;L_zero]
 			 | #'d' -> [L_one ;L_one ;L_zero;L_one ]
 			 | #'e' -> [L_one ;L_one ;L_one ;L_zero]
-			 | #'f' -> [L_one ;L_one ;L_one ;L_one ] end)
+                         | #'f' -> [L_one ;L_one ;L_one ;L_one ]
+                         | _ -> Assert_extra.failwith "Lexer did not restrict to valid hex" end)
 		       (String.toCharList s))) in
     V_vector (if is_inc(dir) then 0 else ((List.length hexes) - 1)) dir hexes
   | L_bin s -> 
     let bits = List.map 
       (fun s -> match s with 
 	| #'0' -> (V_lit (L_aux L_zero l)) 
-	| #'1' -> (V_lit (L_aux L_one l)) end) (String.toCharList s) in
+        | #'1' -> (V_lit (L_aux L_one l))
+        | _ -> Assert_extra.failwith "Lexer did not restrict to valid bin"   
+        end) (String.toCharList s) in
     V_vector (if is_inc(dir) then 0 else ((List.length bits) -1)) dir bits
-  end
+  | _ -> Assert_extra.failwith "litV predicate did not restrict to literal vectors"
+end
 
 val list_nth : forall 'a . list 'a -> nat -> 'a
 let list_nth l n = List_extra.nth l n
@@ -565,6 +585,7 @@ let access_vector v n =
       match (List.lookup n vs) with
 	| Nothing -> d
 	| Just v  -> v end 
+    | _ -> Assert_extra.failwith ("access_vector given unexpected " ^ string_of_value v)
   end )
 
 val from_n_to_n :forall 'a. nat -> nat  -> list 'a -> list 'a
@@ -604,7 +625,8 @@ let slice_vector v n1 n2 =
       else if is_inc(dir) then V_vector 0 dir (List.map snd slice)
       else if still_sparse then V_vector_sparse n1 (n1 - n2) dir slice d
       else V_vector n1 dir (List.map snd slice)
- end )
+    | _ -> Assert_extra.failwith ("slice_vector given unexpected " ^ string_of_value v)
+  end )
 
 val update_field_list : list (id * value) -> env -> list (id * value)
 let rec update_field_list base updates =
@@ -619,7 +641,10 @@ val fupdate_record : value -> value -> value
 let fupdate_record base updates = 
   let fupdate_record_helper base updates =
       (match (base,updates) with
-	| (V_record t bs,V_record _ us) -> V_record t (update_field_list bs (env_from_list us)) 
+	| (V_record t bs,V_record _ us) -> V_record t (update_field_list bs (env_from_list us))
+        | _ ->
+          Assert_extra.failwith ("fupdate_record given unexpected " ^
+                                 string_of_value base ^ " and " ^ (string_of_value updates))
        end) in
   binary_taint fupdate_record_helper base updates
 
@@ -642,7 +667,8 @@ let fupdate_vec v n vexp =
 	V_vector m dir (List.update vals (if is_inc(dir) then (n-m) else (m-n)) vexp)
       | V_vector_sparse m o dir vals d ->
 	V_vector_sparse m o dir (fupdate_sparse (if is_inc(dir) then (>) else (<)) vals n vexp) d
-     end)
+      | _ -> Assert_extra.failwith ("fupdate_vec given unexpected " ^ string_of_value v)
+    end)
 
 val replace_is : forall 'a. list 'a -> list 'a -> nat -> nat -> nat -> list 'a
 let rec replace_is ls vs base start stop =
@@ -690,7 +716,8 @@ let fupdate_vector_slice vec replace start stop =
 	(List.replicate (if is_inc(dir) then (stop-start) else (start-stop)) V_unknown) in
       (V_vector_sparse m n dir (replace_sparse (if is_inc(dir) then (<) else (>)) vals (List.reverse repsi)) d)
     | (V_unknown,_) -> V_unknown
-    | _ -> Assert_extra.failwith ("fupdate vector slice given " ^ (string_of_value vec) ^ " and " ^ (string_of_value replace))
+    | _ -> Assert_extra.failwith ("fupdate vector slice given " ^ (string_of_value vec)
+                                  ^ " and " ^ (string_of_value replace))
      end) in
   binary_taint fupdate_vec_help vec replace
 
@@ -720,6 +747,8 @@ let update_vector_slice track vector value start stop mem =
     List.foldr (fun vbox mem -> match vbox with
                                     | V_boxref n t -> update_mem track mem n v end)
       mem vs'
+  | _ -> Assert_extra.failwith ("update_vector_slice given unexpected " ^ string_of_value vector
+                                 ^ " and " ^ string_of_value value)
 end
 
 let update_vector_start default_dir new_start expected_size v = 
@@ -731,6 +760,7 @@ let update_vector_start default_dir new_start expected_size v =
       | V_vector_sparse m n dir vals d -> V_vector_sparse new_start n dir vals d 
       | V_unknown -> V_vector new_start default_dir (List.replicate expected_size V_unknown)
       | V_lit (L_aux L_undef _) -> V_vector new_start default_dir (List.replicate expected_size v)
+      | _ -> Assert_extra.failwith ("update_vector_start given unexpected " ^ string_of_value v)
      end)
 
 val in_ctors : list (id * typ) -> id -> maybe typ
@@ -2344,8 +2374,9 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 			  (Action (Write_reg (Reg reg annot' default_dir) (Just (i,i)) 
 				     (update_vector_start default_dir i 1 value)) 
 			          (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
-				     t_level l_env l_mem Top), l_mem, l_env) end)
-		      (fun a -> a)
+                	   t_level l_env l_mem Top), l_mem, l_env)
+                       | _ -> (Error l "Internal error: alias bit has non number", l_mem, l_env) end)
+                      (fun a -> a)
 		  | AL_slice (RI_aux (RI_id reg) (_,annot')) start stop -> 
 		    resolve_outcome (interp_main mode t_level l_env l_mem start)
 		      (fun v lm le -> 
@@ -2361,15 +2392,19 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 						(update_vector_start default_dir start size value))
 					(Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
 					   t_level l_env l_mem Top),
-				      l_mem, l_env) end))
-			       (fun a -> a)) end)
+                                      l_mem, l_env)
+                                  | _ -> (Error l "Alias slice has non number",l_mem, l_env) end))
+                              (fun a -> a))
+                         | _ -> (Error l "Alias slice has non number",l_mem,l_env) end)
 		      (fun a -> a)
 		  | AL_concat (RI_aux (RI_id reg1) (l1,annot1)) (RI_aux (RI_id reg2) annot2) -> 
 		    let val_typ t = match t with
 			  | T_app "register" (T_args [T_arg_typ t]) -> t
-			  | T_abbrev _ (T_app "register" (T_args [T_arg_typ t])) -> t end in
+                          | T_abbrev _ (T_app "register" (T_args [T_arg_typ t])) -> t
+                          | _ -> Assert_extra.failwith "alias type ill formed" end in
 		    let (t1,t2) = match (annot1,annot2) with
-		      | (Just (t1,_,_,_,_), (_,(Just (t2,_,_,_,_)))) -> (val_typ t1,val_typ t2) end in
+                       | (Just (t1,_,_,_,_), (_,(Just (t2,_,_,_,_)))) -> (val_typ t1,val_typ t2)
+                       | _ -> Assert_extra.failwith "type annotations ill formed" end in
                    (match (t1,t2) with
 		      | (T_app "vector" (T_args [T_arg_nexp (Ne_const b1); T_arg_nexp (Ne_const r1); _;_]),
 			 T_app "vector" (T_args [T_arg_nexp (Ne_const b2); T_arg_nexp (Ne_const r2); _;_])) ->
@@ -2380,7 +2415,9 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 						(fst (to_exp <| mode with track_values =false|> eenv 
                                                     (slice_vector value (natFromInteger (r1+1)) (natFromInteger r2)))))
 					 annot2)
-			    t_level l_env l_mem Top), l_mem,l_env) end) end)
+                         t_level l_env l_mem Top), l_mem,l_env)
+                     | _ -> (Error l "Internal error: alias vector types ill formed", l_mem, l_env) end)
+                  | _ -> (Error l "Internal error: alias spec ill formed", l_mem, l_env) end)
 	    | _ -> (Error l ("Internal error: alias not found for id " ^(get_id id)),l_mem,l_env) end) in
 	  (request,Nothing)
         | _ -> 
@@ -2470,9 +2507,13 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
                end)
             | Nothing -> 
 	      ((Error l ("Internal error: function unfound " ^ name),lm,le),Nothing) end)
-         end)
+         | _ -> ((Error l "Internal error: unexpected tag for memory or register write", lm,le),Nothing) 
+        end)
       | (Action a s,lm, le) -> 
-	((Action a s,lm,le), Just (fun (E_aux (E_tuple es) _) env -> (LEXP_aux (LEXP_memory id es) (l,annot), env)))
+	((Action a s,lm,le),
+         Just (fun (E_aux e _) env ->
+                (match e with | E_tuple es -> (LEXP_aux (LEXP_memory id es) (l,annot), env)
+                              | _ -> Assert_extra.failwith "Lexp builder not well formed" end)))
       | e -> (e,Nothing) end
     | LEXP_cast typc id -> 
       let name = get_id id in
@@ -2612,7 +2653,9 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		  | ((V_boxref n t),false, Just lexp_builder) -> 
 		    ((Value (in_mem lm n),lm, l_env),Just (next_builder lexp_builder))
 		  | (v,false, Just lexp_builder) -> 
-		    ((Value v,lm,le), Just (next_builder lexp_builder)) end)
+                    ((Value v,lm,le), Just (next_builder lexp_builder))
+                  | _ -> Assert_extra.failwith "Vector assignment logic incomplete" 
+                  end)
 	      | V_vector_sparse n m inc vs d ->
               (match (nth(),is_top_level,maybe_builder) with
 		| (V_register regform,true,_) ->
@@ -2637,7 +2680,9 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
 		| ((V_boxref n t),false, Just lexp_builder) -> 
 		  ((Value (in_mem lm n),lm, l_env),Just (next_builder lexp_builder))
 		| (v,false, Just lexp_builder) -> 
-		  ((Value v,lm,le), Just (next_builder lexp_builder)) end)
+                  ((Value v,lm,le), Just (next_builder lexp_builder))
+                | _ -> Assert_extra.failwith "Vector assignment logic incomplete"
+                end)
             | v -> 
 	      ((Error l ("Vector access to write of non-vector" ^ (string_of_value v)),lm,l_env),Nothing)
 	     end)
@@ -2809,7 +2854,8 @@ and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
     match typ with
       | T_id i -> i
       | T_abbrev (T_id i) _ -> i
-    end in
+      | _ -> Assert_extra.failwith "Alias reg typ not well formed"
+   end in
   match alspec with
     | AL_subreg (RI_aux (RI_id reg) (li,((Just (t,_,_,_,_)) as annot'))) subreg ->
       let reg_ti = get_reg_typ_name t in
@@ -2824,7 +2870,8 @@ and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
         (fun v le lm -> match v with 
 	  | V_lit (L_aux (L_num i) _) -> 
 	    let i = natFromInteger i in
-	    (Action (Read_reg (Reg reg annot' default_dir) (Just (i,i))) stack, l_mem, l_env) end)
+            (Action (Read_reg (Reg reg annot' default_dir) (Just (i,i))) stack, l_mem, l_env)
+          | _ -> Assert_extra.failwith "alias bit did not reduce to number" end)
         (fun a -> a) (*Should not currently happen as type system enforces constants*)
     | AL_slice (RI_aux (RI_id reg) (_,annot')) start stop -> 
       resolve_outcome (interp_main mode t_level l_env l_mem start)
@@ -2837,15 +2884,21 @@ and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
 		   (match v with
 		     | V_lit (L_aux (L_num stop) _) ->
 		       let (start,stop) = (natFromInteger start,natFromInteger stop) in
-		       (Action (Read_reg (Reg reg annot' default_dir) (Just (start,stop))) stack, l_mem, l_env) end))
-		 (fun a -> a)) end)
+                       (Action (Read_reg (Reg reg annot' default_dir) (Just (start,stop))) stack, l_mem, l_env)
+                     | _ -> Assert_extra.failwith ("Alias slice evaluted non-lit " ^ (string_of_value v))
+                     end))
+                 (fun a -> a))
+           | _ -> Assert_extra.failwith ("Alias slice evaluated non-lit "^ string_of_value v) 
+         end)
         (fun a -> a) (*Neither action function should occur, due to above*)
     | AL_concat (RI_aux (RI_id reg1) (l1, annot1)) (RI_aux (RI_id reg2) annot2) -> 
       (Action (Read_reg (Reg reg1 annot1 default_dir) Nothing)
 	      (Hole_frame redex_id
 		          (E_aux (E_vector_append (E_aux (E_id redex_id) (l1, (intern_annot annot1)))
     				                  (E_aux (E_id reg2) annot2)) 
-			        (l,(intern_annot annot))) t_level l_env l_mem Top), l_mem,l_env) end
+                        	 (l,(intern_annot annot))) t_level l_env l_mem Top), l_mem,l_env)
+    | _ -> Assert_extra.failwith "alias spec not well formed"
+end
 
 let rec eval_toplevel_let handle_action tlevel env mem lbind = 
   match interp_letbind <|eager_eval=true; track_values=false; track_lmem=false|> tlevel env mem lbind with
@@ -2855,7 +2908,8 @@ let rec eval_toplevel_let handle_action tlevel env mem lbind =
 	| Just value ->
 	  (match s with
 	    | Hole_frame id exp tl lenv lmem s ->
-	      eval_toplevel_let handle_action tl (add_to_env (id,value) lenv) lmem (le_builder exp) end)
+              eval_toplevel_let handle_action tl (add_to_env (id,value) lenv) lmem (le_builder exp)
+            | _ -> Assert_extra.failwith "Top level def evaluation created a thunk frame" end)
 	| Nothing -> Nothing end)
     | _ -> Nothing end
 
