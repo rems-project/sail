@@ -495,6 +495,43 @@ let mips_register_data_all =  [
   ("CP0LLBit", (D_decreasing, 1, 0));
 ]
 
+let cheri_register_data_all = mips_register_data_all @ [
+  ("CapCause", (D_decreasing, 16, 15));
+  ("PCC", (D_decreasing, 257, 256));
+  ("C00", (D_decreasing, 257, 256));
+  ("C01", (D_decreasing, 257, 256));
+  ("C02", (D_decreasing, 257, 256));
+  ("C03", (D_decreasing, 257, 256));
+  ("C04", (D_decreasing, 257, 256));
+  ("C05", (D_decreasing, 257, 256));
+  ("C06", (D_decreasing, 257, 256));
+  ("C07", (D_decreasing, 257, 256));
+  ("C08", (D_decreasing, 257, 256));
+  ("C09", (D_decreasing, 257, 256));
+  ("C10", (D_decreasing, 257, 256));
+  ("C11", (D_decreasing, 257, 256));
+  ("C12", (D_decreasing, 257, 256));
+  ("C13", (D_decreasing, 257, 256));
+  ("C14", (D_decreasing, 257, 256));
+  ("C15", (D_decreasing, 257, 256));
+  ("C16", (D_decreasing, 257, 256));
+  ("C17", (D_decreasing, 257, 256));
+  ("C18", (D_decreasing, 257, 256));
+  ("C19", (D_decreasing, 257, 256));
+  ("C20", (D_decreasing, 257, 256));
+  ("C21", (D_decreasing, 257, 256));
+  ("C22", (D_decreasing, 257, 256));
+  ("C23", (D_decreasing, 257, 256));
+  ("C24", (D_decreasing, 257, 256));
+  ("C25", (D_decreasing, 257, 256));
+  ("C26", (D_decreasing, 257, 256));
+  ("C27", (D_decreasing, 257, 256));
+  ("C28", (D_decreasing, 257, 256));
+  ("C29", (D_decreasing, 257, 256));
+  ("C30", (D_decreasing, 257, 256));
+  ("C31", (D_decreasing, 257, 256));
+]
+
 let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
   let initial_stack_data = [] in 
   let initial_register_abi_data : (string * Interp_interface.register_value) list = [] in
@@ -595,7 +632,7 @@ let initial_system_state_of_elf_file name =
           let (initial_stack_data, initial_register_abi_data) =
             initial_stack_and_reg_data_of_MIPS_elf_file e_entry !data_mem in
           
-          (Mips.defs,
+          (Cheri.defs,
            (Mips_extras.read_memory_functions,
             Mips_extras.memory_writes,
 	    [],
@@ -607,7 +644,7 @@ let initial_system_state_of_elf_file name =
            startaddr,
            initial_stack_data,
            initial_register_abi_data,
-           mips_register_data_all)
+           cheri_register_data_all)
 
         | _ -> failwith (Printf.sprintf "Sail sequential interpreter can't handle the e_machine value %s, only EM_PPC64, EM_AARCH64 and EM_MIPS are supported." (Nat_big_num.to_string e_machine))
       in
