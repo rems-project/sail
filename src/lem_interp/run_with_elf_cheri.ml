@@ -495,9 +495,82 @@ let mips_register_data_all =  [
   ("CP0LLBit", (D_decreasing, 1, 0));
 ]
 
+let cheri_register_data_all = mips_register_data_all @ [
+  ("CapCause", (D_decreasing, 16, 15));
+  ("PCC", (D_decreasing, 257, 256));
+  ("C00", (D_decreasing, 257, 256));
+  ("C01", (D_decreasing, 257, 256));
+  ("C02", (D_decreasing, 257, 256));
+  ("C03", (D_decreasing, 257, 256));
+  ("C04", (D_decreasing, 257, 256));
+  ("C05", (D_decreasing, 257, 256));
+  ("C06", (D_decreasing, 257, 256));
+  ("C07", (D_decreasing, 257, 256));
+  ("C08", (D_decreasing, 257, 256));
+  ("C09", (D_decreasing, 257, 256));
+  ("C10", (D_decreasing, 257, 256));
+  ("C11", (D_decreasing, 257, 256));
+  ("C12", (D_decreasing, 257, 256));
+  ("C13", (D_decreasing, 257, 256));
+  ("C14", (D_decreasing, 257, 256));
+  ("C15", (D_decreasing, 257, 256));
+  ("C16", (D_decreasing, 257, 256));
+  ("C17", (D_decreasing, 257, 256));
+  ("C18", (D_decreasing, 257, 256));
+  ("C19", (D_decreasing, 257, 256));
+  ("C20", (D_decreasing, 257, 256));
+  ("C21", (D_decreasing, 257, 256));
+  ("C22", (D_decreasing, 257, 256));
+  ("C23", (D_decreasing, 257, 256));
+  ("C24", (D_decreasing, 257, 256));
+  ("C25", (D_decreasing, 257, 256));
+  ("C26", (D_decreasing, 257, 256));
+  ("C27", (D_decreasing, 257, 256));
+  ("C28", (D_decreasing, 257, 256));
+  ("C29", (D_decreasing, 257, 256));
+  ("C30", (D_decreasing, 257, 256));
+  ("C31", (D_decreasing, 257, 256));
+]
+
 let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
   let initial_stack_data = [] in 
-  let initial_register_abi_data : (string * Interp_interface.register_value) list = [] in
+  let initial_cap_val_int = Nat_big_num.of_string "115792089264276142078167421332581561412618036492862375629811892344162380414975" (*"0x100000000fffffffe00000000000000000000000000000000ffffffffffffffff"*) in
+  let initial_cap_val_reg = Interp_interface.register_value_of_integer 257 256 D_decreasing  initial_cap_val_int in
+  let initial_register_abi_data : (string * Interp_interface.register_value) list = [
+    ("PCC", initial_cap_val_reg);
+    ("C00", initial_cap_val_reg);
+    ("C01", initial_cap_val_reg);
+    ("C02", initial_cap_val_reg);
+    ("C03", initial_cap_val_reg);
+    ("C04", initial_cap_val_reg);
+    ("C05", initial_cap_val_reg);
+    ("C06", initial_cap_val_reg);
+    ("C07", initial_cap_val_reg);
+    ("C08", initial_cap_val_reg);
+    ("C09", initial_cap_val_reg);
+    ("C10", initial_cap_val_reg);
+    ("C11", initial_cap_val_reg);
+    ("C12", initial_cap_val_reg);
+    ("C13", initial_cap_val_reg);
+    ("C14", initial_cap_val_reg);
+    ("C15", initial_cap_val_reg);
+    ("C16", initial_cap_val_reg);
+    ("C17", initial_cap_val_reg);
+    ("C18", initial_cap_val_reg);
+    ("C19", initial_cap_val_reg);
+    ("C20", initial_cap_val_reg);
+    ("C21", initial_cap_val_reg);
+    ("C22", initial_cap_val_reg);
+    ("C23", initial_cap_val_reg);
+    ("C24", initial_cap_val_reg);
+    ("C25", initial_cap_val_reg);
+    ("C26", initial_cap_val_reg);
+    ("C27", initial_cap_val_reg);
+    ("C28", initial_cap_val_reg);
+    ("C29", initial_cap_val_reg);
+    ("C30", initial_cap_val_reg);
+    ("C31", initial_cap_val_reg);
+  ] in
   (initial_stack_data, initial_register_abi_data)
 
 let initial_reg_file reg_data init =
@@ -595,7 +668,7 @@ let initial_system_state_of_elf_file name =
           let (initial_stack_data, initial_register_abi_data) =
             initial_stack_and_reg_data_of_MIPS_elf_file e_entry !data_mem in
           
-          (Mips.defs,
+          (Cheri.defs,
            (Mips_extras.read_memory_functions,
             Mips_extras.memory_writes,
 	    [],
@@ -607,7 +680,7 @@ let initial_system_state_of_elf_file name =
            startaddr,
            initial_stack_data,
            initial_register_abi_data,
-           mips_register_data_all)
+           cheri_register_data_all)
 
         | _ -> failwith (Printf.sprintf "Sail sequential interpreter can't handle the e_machine value %s, only EM_PPC64, EM_AARCH64 and EM_MIPS are supported." (Nat_big_num.to_string e_machine))
       in
@@ -783,6 +856,12 @@ let rec debug_print_gprs start stop =
   then debug_print_gprs (start + 1) stop
   else ()
 
+let rec debug_print_capregs start stop =
+  resultf "DEBUG CAP REG %.2d %s\n" start (Printing_functions.logfile_register_value_to_string (Reg.find (Format.sprintf "C%02d" start) !reg));
+  if start < stop
+  then debug_print_capregs (start + 1) stop
+  else ()
+
 let stop_condition_met model instr =
   match model with
   | PPC ->
@@ -797,6 +876,8 @@ let stop_condition_met model instr =
     | ("HCF", _, _) -> 
       resultf "DEBUG MIPS PC %s\n"  (Printing_functions.logfile_register_value_to_string (Reg.find "PC" !reg));
       debug_print_gprs 0 31;
+      resultf "DEBUG CAP PCC %s\n"  (Printing_functions.logfile_register_value_to_string (Reg.find "PCC" !reg));
+      debug_print_capregs 0 31;
       true
     | _ -> false)
 
