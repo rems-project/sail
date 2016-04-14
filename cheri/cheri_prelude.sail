@@ -318,8 +318,23 @@ function (bool, bit[cap_size_t * 8]) MEMr_tagged ((bit[64]) addr) =
   (tag[0], mem)
 }
 
+function (bool, bit[cap_size_t * 8]) MEMr_tagged_reserve ((bit[64]) addr) =
+{
+  let tag = (TAGr (addr)) in
+  let mem = (MEMr_reserve (addr, cap_size)) in
+  (tag[0], mem)
+}
+
 function unit MEMw_tagged((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
 {
   MEMw(addr, cap_size, data);
   TAGw(addr, (0b0000000 : [tag]));
+}
+
+function bool MEMw_tagged_conditional((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
+{
+  success := MEMw_conditional(addr, cap_size, data);
+  if (success) then
+    TAGw(addr, (0b0000000 : [tag]));
+  success;
 }

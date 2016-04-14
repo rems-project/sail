@@ -557,9 +557,10 @@ function clause execute (CStore(rs, cb, rt, offset, width)) =
       }
   }
 
-union ast member (regno, regno, regno, bit[11]) CSC
-function clause decode (0b111110 : (regno) cs : (regno) cb: (regno) rt : (bit[11]) offset) = Some(CSC(cs, cb, rt, offset))
-function clause execute (CSC(cs, cb, rt, offset)) =
+union ast member (regno, regno, regno, regno, bit[11], bool) CSC
+function clause decode (0b111110 : (regno) cs : (regno) cb: (regno) rt : (bit[11]) offset) = Some(CSC(cs, cb, rt, 0b00000, offset, false))
+function clause decode (0b10010 : 0b10000 : (regno) cs : (regno) cb: (regno) rd : 0b00 : 0b0111) = Some(CSC(cs, cb, 0b00000, rd, 0b00000000000, true))
+function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
   {
     cs_val := readCapReg(cs);
     cb_val := readCapReg(cb);
@@ -589,15 +590,24 @@ function clause execute (CSC(cs, cb, rt, offset)) =
         else
           {
             pAddr  := (TranslateOrExit(vAddr64, if cs_val.tag then StoreData else StoreData)); (* XXX use StoreCap here. *)
-            MEMw_tagged(pAddr, cs_val.tag, (capStructToBit257(cs_val))[255..0]);
-            (* XXX write tag *)
+            if (conditional) then
+              {
+                success := if (CP0LLBit[0]) then
+                    MEMw_tagged_conditional(pAddr, cs_val.tag, (capStructToBit257(cs_val))[255..0])
+                  else
+                    false;
+                wGPR(rd) := EXTZ([success]);
+              }
+            else
+              MEMw_tagged(pAddr, cs_val.tag, (capStructToBit257(cs_val))[255..0]);
           }
       }
   }
 
-union ast member (regno, regno, regno, bit[11]) CLC
-function clause decode (0b110110 : (regno) cd : (regno) cb: (regno) rt : (bit[11]) offset) = Some(CLC(cd, cb, rt, offset))
-function clause execute (CLC(cd, cb, rt, offset)) =  
+union ast member (regno, regno, regno, bit[11], bool) CLC
+function clause decode (0b110110 : (regno) cd : (regno) cb: (regno) rt : (bit[11]) offset) = Some(CLC(cd, cb, rt, offset, false))
+function clause decode (0b010010 : 0b10000 : (regno) cd : (regno) cb: 0b0000000 : 0b1111) = Some(CLC(cd, cb, 0b00000, 0b00000000000, true))
+function clause execute (CLC(cd, cb, rt, offset, linked)) =  
   {
     cb_val := readCapReg(cb);
     if (register_inaccessible(cd)) then
@@ -624,7 +634,16 @@ function clause execute (CLC(cd, cb, rt, offset)) =
         else
           {
             pAddr  := (TranslateOrExit(vAddr64, LoadData)); (* XXX use LoadCap here. *)
-            let (tag, mem) = (MEMr_tagged(pAddr)) in
+            let (tag, mem) = (if (linked) 
+              then
+                {
+                  CP0LLBit  := 0b1;
+                  CP0LLAddr := pAddr;
+                  MEMr_tagged(pAddr);
+                }
+              else 
+                (MEMr_tagged_reserve(pAddr)))
+            in
             (CapRegs[cd]) := ([tag] : mem);
           }
       }
