@@ -507,9 +507,9 @@ function clause execute (CLoad(rd, cb, rt, offset, signed, width)) =
             pAddr      := (TranslateOrExit(vAddr64, LoadData));
             memResult  := MEMr(pAddr, wordWidthBytes(width));
             if (signed) then
-              wGPR(rt) := EXTS(memResult)
+              wGPR(rd) := EXTS(memResult)
             else
-              wGPR(rt) := EXTZ(memResult)
+              wGPR(rd) := EXTZ(memResult)
           }
       }
   }
