@@ -64,6 +64,8 @@ run_cheri.native:  _build/cheri.ml _build/mips_extras.ml _build/run_with_elf_che
 
 mips: elf run_mips.native
 
+cheri: elf run_cheri.native
+
 clean:
 	-ocamlbuild -clean
 	-rm -rf _build *.native
