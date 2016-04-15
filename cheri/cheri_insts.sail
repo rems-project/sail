@@ -160,7 +160,7 @@ function clause execute(CPtrCmp(rd, cb, ct, op)) =
           cursor2 := getCapCursor(ct_val);
           equal   := (cursor1 == cursor2);
           ltu     := (cursor1 < cursor2);
-          lts     := (cursor1 <_s cursor2);
+          lts     := (((bit[64])cursor1) <_s ((bit[64])cursor2));
         };
       wGPR(rd) := EXTZ(switch (op) {
         case CEQ   -> [equal]
