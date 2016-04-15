@@ -278,15 +278,18 @@ typedef CapCauseReg = register bits [15:0] {
 
 register CapCauseReg CapCause
 
-function unit raise_c2_exception((CapEx) capEx, (bit[8]) regnum) =
+function unit raise_c2_exception8((CapEx) capEx, (bit[8]) regnum) =
   {
     (CapCause.ExcCode) := CapExCode(capEx);
     (CapCause.RegNum)  := regnum;
     SignalException(C2E);
   }
 
-function unit raise_c2_exception_v((bit[8]) regnum) =
-  switch(regnum[4..0]) {
+function unit raise_c2_exception((CapEx) capEx, (regno) regnum) =
+  raise_c2_exception8(capEx, 0b000 : regnum)
+
+function unit raise_c2_exception_v((regno) regnum) =
+  switch(regnum) {
    case 0b11011 -> raise_c2_exception(CapEx_AccessKR1CViolation, regnum)
    case 0b11100 -> raise_c2_exception(CapEx_AccessKR2CViolation, regnum)
    case 0b11101 -> raise_c2_exception(CapEx_AccessKCCViolation, regnum)
@@ -296,7 +299,7 @@ function unit raise_c2_exception_v((bit[8]) regnum) =
   }
 
 function unit raise_c2_exception_noreg((CapEx) capEx) =
-  raise_c2_exception(capEx, 0xff)
+  raise_c2_exception8(capEx, 0xff)
 
 function bool register_inaccessible((regno) r) = 
   ~(switch(r) {
