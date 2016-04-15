@@ -343,7 +343,7 @@ function clause execute (CSeal(cd, cs, ct)) =
     exit (raise_c2_exception(CapEx_SealViolation, ct))
   else if (~(ct_val.permit_seal)) then
     exit (raise_c2_exception(CapEx_PermitSealViolation, ct))
-  else if ((ct_val.offset) >= (ct_val.length)) then
+  else if ((nat)(ct_val.offset) >= (nat)(ct_val.length)) then
     exit (raise_c2_exception(CapEx_LengthViolation, ct))
   else if (ct_cursor > max_otype) then
     exit (raise_c2_exception(CapEx_LengthViolation, ct))
