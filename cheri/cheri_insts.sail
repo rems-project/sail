@@ -148,7 +148,7 @@ function clause execute(CPtrCmp(rd, cb, ct, op)) =
       lts    := false;
       if (cb_val.tag != ct_val.tag) then
         {
-          if (cb_val.tag) then
+          if (~(cb_val.tag)) then
             {
               ltu := true;
               lts := true;
