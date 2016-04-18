@@ -470,16 +470,24 @@ function clause execute(CJALR(cd, cb, link)) =
     }
 }
 
-union ast member (regno, regno, regno, bit[8], bool, WordType) CLoad
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b00) = Some(CLoad(rd, cb, rt, offset, false, B)) (* CLB *)
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b00) = Some(CLoad(rd, cb, rt, offset, true,  B)) (* CLBU *)
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b01) = Some(CLoad(rd, cb, rt, offset, false, H)) (* CLH *)
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b01) = Some(CLoad(rd, cb, rt, offset, true,  H)) (* CLHU *)
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b10) = Some(CLoad(rd, cb, rt, offset, false, W)) (* CLW *)
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b10) = Some(CLoad(rd, cb, rt, offset, true,  W)) (* CLWU *)
-function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b11) = Some(CLoad(rd, cb, rt, offset, false, D)) (* CLD *)
-(*function clause decode (0b010000 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b11) = Some(CLoad(rd, cb, rt, offset, true,  D)) (* CLD *)*)
-function clause execute (CLoad(rd, cb, rt, offset, signed, width)) =
+union ast member (regno, regno, regno, bit[8], bool, WordType, bool) CLoad
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b00) = Some(CLoad(rd, cb, rt, offset, false, B, false)) (* CLBU *)
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b00) = Some(CLoad(rd, cb, rt, offset, true,  B, false)) (* CLB *)
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b01) = Some(CLoad(rd, cb, rt, offset, false, H, false)) (* CLHU *)
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b01) = Some(CLoad(rd, cb, rt, offset, true,  H, false)) (* CLH *)
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b10) = Some(CLoad(rd, cb, rt, offset, false, W, false)) (* CLWU *)
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b1 : 0b10) = Some(CLoad(rd, cb, rt, offset, true,  W, false)) (* CLW *)
+function clause decode (0b110010 : (regno) rd : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b11) = Some(CLoad(rd, cb, rt, offset, false, D, false)) (* CLD *)
+
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b0 : 0b00) = Some(CLoad(rd, cb, 0b00000, 0b00000000, false, B, true)) (* CLLBU *)
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b1 : 0b00) = Some(CLoad(rd, cb, 0b00000, 0b00000000, true,  B, true)) (* CLLB  *)
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b0 : 0b01) = Some(CLoad(rd, cb, 0b00000, 0b00000000, false, H, true)) (* CLLHU *)
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b1 : 0b01) = Some(CLoad(rd, cb, 0b00000, 0b00000000, true,  H, true)) (* CLLH  *)
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b0 : 0b10) = Some(CLoad(rd, cb, 0b00000, 0b00000000, false, W, true)) (* CLLWU *)
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b1 : 0b10) = Some(CLoad(rd, cb, 0b00000, 0b00000000, true,  W, true)) (* CLLW  *)
+function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b00000001 : 0b0 : 0b11) = Some(CLoad(rd, cb, 0b00000, 0b00000000, false, D, true)) (* CLLD  *)
+
+function clause execute (CLoad(rd, cb, rt, offset, signed, width, linked)) =
   {
     cb_val := readCapReg(cb);
     if (register_inaccessible(cb)) then
@@ -505,7 +513,15 @@ function clause execute (CLoad(rd, cb, rt, offset, signed, width)) =
         else
           {
             pAddr      := (TranslateOrExit(vAddr64, LoadData));
-            memResult  := MEMr(pAddr, wordWidthBytes(width));
+            widthBytes := wordWidthBytes(width);
+            memResult  := if (linked) then
+                {
+                  CP0LLBit  := 0b1;
+                  CP0LLAddr := pAddr;
+                  MEMr_reserve(pAddr, widthBytes);
+                }
+              else
+                MEMr(pAddr, widthBytes);
             if (signed) then
               wGPR(rd) := EXTS(memResult)
             else
@@ -514,12 +530,18 @@ function clause execute (CLoad(rd, cb, rt, offset, signed, width)) =
       }
   }
 
-union ast member (regno, regno, regno, bit[8], WordType) CStore
-function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b00) = Some(CStore(rs, cb, rt, offset, B)) (* CSB *)
-function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b01) = Some(CStore(rs, cb, rt, offset, H)) (* CSH *)
-function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b10) = Some(CStore(rs, cb, rt, offset, W)) (* CSW *)
-function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b11) = Some(CStore(rs, cb, rt, offset, D)) (* CSD *)
-function clause execute (CStore(rs, cb, rt, offset, width)) =
+union ast member (regno, regno, regno, regno, bit[8], WordType, bool) CStore
+function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b00) = Some(CStore(rs, cb, rt, 0b00000, offset, B, false)) (* CSB *)
+function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b01) = Some(CStore(rs, cb, rt, 0b00000, offset, H, false)) (* CSH *)
+function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b10) = Some(CStore(rs, cb, rt, 0b00000, offset, W, false)) (* CSW *)
+function clause decode (0b111010 : (regno) rs : (regno) cb: (regno) rt : (bit[8]) offset : 0b0 : 0b11) = Some(CStore(rs, cb, rt, 0b00000, offset, D, false)) (* CSD *)
+
+function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) rd : 0b0000 : 0b00) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, B, true)) (* CSCB *)
+function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) rd : 0b0000 : 0b01) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, H, true)) (* CSCH *)
+function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) rd : 0b0000 : 0b10) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, W, true)) (* CSCW *)
+function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) rd : 0b0000 : 0b11) = Some(CStore(rs, cb, 0b00000, rd, 0b00000000, D, true)) (* CSCD *)
+
+function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
   {
     cb_val := readCapReg(cb);
     if (register_inaccessible(cb)) then
@@ -546,6 +568,21 @@ function clause execute (CStore(rs, cb, rt, offset, width)) =
           {
             pAddr  := (TranslateOrExit(vAddr64, StoreData));
             rs_val := rGPR(rs);
+            if (conditional) then
+              {
+                success := if (CP0LLBit[0]) then
+                    switch(width)
+                      {
+                        case B -> MEMw_conditional(pAddr, 1, rs_val[7..0])
+                        case H -> MEMw_conditional(pAddr, 2, rs_val[15..0])
+                        case W -> MEMw_conditional(pAddr, 4, rs_val[31..0])
+                        case D -> MEMw_conditional(pAddr, 8, rs_val)
+                      }
+                  else
+                    false;
+                wGPR(rd) := EXTZ([success]);
+              }
+              else
             switch(width)
               {
                 case B -> MEMw(pAddr, 1) := rs_val[7..0]
