@@ -87,7 +87,9 @@ let doc_effect (BE_aux (e,_)) =
   | BE_depend -> "depend"
   | BE_undef -> "undef"
   | BE_unspec -> "unspec"
-  | BE_nondet -> "nondet")
+  | BE_escape -> "escape"
+  | BE_nondet -> "nondet"
+  | BE_lset -> "(*lset*)")
 
 let doc_effects (Effect_aux(e,_)) = match e with
   | Effect_var v -> doc_var v
@@ -110,9 +112,6 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   | Typ_tup typs -> parens (separate_map comma_sp app_typ typs)
   | _ -> app_typ ty
   and app_typ ((Typ_aux (t, _)) as ty) = match t with
-  | Typ_app(id,args) ->
-      (* trailing space to avoid >> token in case of nested app types *)
-      (doc_id id) ^^ (angles (separate_map comma_sp doc_typ_arg args)) ^^ space
   | Typ_app(Id_aux (Id "vector", _), [
     Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
     Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant m, _)), _);
@@ -120,11 +119,14 @@ let doc_typ, doc_atomic_typ, doc_nexp =
     Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
     (doc_id id) ^^ 
       (brackets (if equal n zero_big then doc_int m 
-	         else doc_op colon (doc_int n) (doc_int (add n (sub m one_big)))))
+                 else doc_op colon (doc_int n) (doc_int (add n (sub m one_big)))))
   | Typ_app(Id_aux (Id "range", _), [
     Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
     Typ_arg_aux(Typ_arg_nexp m, _);]) ->
     (squarebars (if equal n zero_big then nexp m else doc_op colon (doc_int n) (nexp m))) 
+  | Typ_app(id,args) ->
+      (* trailing space to avoid >> token in case of nested app types *)
+      (doc_id id) ^^ (angles (separate_map comma_sp doc_typ_arg args)) ^^ space
   | _ -> atomic_typ ty 
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_id id  -> doc_id id
@@ -163,9 +165,10 @@ let doc_typ, doc_atomic_typ, doc_nexp =
       minus ^^ (atomic_nexp_typ n1)
   | _ -> atomic_nexp_typ ne
   and atomic_nexp_typ ((Nexp_aux(n,_)) as ne) = match n with
-  | Nexp_var v -> doc_var v
-  | Nexp_constant i -> doc_int i
-  | Nexp_neg _ | Nexp_exp _ | Nexp_times _ | Nexp_sum _ | Nexp_minus _ ->
+    | Nexp_id id -> doc_id id
+    | Nexp_var v -> doc_var v
+    | Nexp_constant i -> doc_int i
+    | Nexp_neg _ | Nexp_exp _ | Nexp_times _ | Nexp_sum _ | Nexp_minus _ ->
       group (parens (nexp ne))
 
   (* expose doc_typ, doc_atomic_typ and doc_nexp *)
@@ -314,7 +317,7 @@ let doc_exp, doc_let =
           string "in " ^^ doc_ord order
         ]
       )) ^/^
-	(exp env add_red exp4)
+        (exp env add_red exp4)
   | E_let(leb,e) -> doc_op (string "in") (let_exp env add_red leb) (exp env add_red e)
   | _ -> group (parens (exp env add_red expr))
   and app_exp env add_red ((E_aux(e,_)) as expr) = match e with
@@ -342,10 +345,10 @@ let doc_exp, doc_let =
   | E_id id -> 
     (match id with
       | Id_aux(Id("0"), _) -> 
-	(match Interp.in_lenv env id with
-	  | Interp.V_unknown -> string (add_red "[_]")
-	  | v -> (*string ("\x1b[1;31m" ^ Interp.string_of_value v ^ "\x1b[m")*)
-	    string (add_red (Interp.string_of_value v)))
+        (match Interp.in_lenv env id with
+          | Interp.V_unknown -> string (add_red "[_]")
+          | v -> (*string ("\x1b[1;31m" ^ Interp.string_of_value v ^ "\x1b[m")*)
+            string (add_red (Interp.string_of_value v)))
       | _ -> doc_id id)
   | E_lit lit -> doc_lit lit
   | E_cast(typ,e) ->
@@ -365,19 +368,28 @@ let doc_exp, doc_let =
   | E_vector exps ->
     let default_print _ = brackets (separate_map comma (exp env add_red) exps) in
     (match exps with
-      | [] -> default_print ()
-      | es ->
-	if (List.for_all (fun e -> match e with (E_aux(E_lit(L_aux((L_one | L_zero),_)),_)) -> true | _ -> false) es)
-	then
-	  utf8string
-	    ("0b" ^ 
-		(List.fold_right (fun (E_aux(E_lit(L_aux(l, _)),_)) rst -> match l with | L_one -> "1"^rst | L_zero -> "0"^rst | L_undef -> "u"^rst) exps "")) 
-	else default_print ())
+     | [] -> default_print ()
+     | es ->
+       if (List.for_all
+             (fun e -> match e with
+                | (E_aux(E_lit(L_aux((L_one | L_zero | L_undef),_)),_)) -> true
+                | _ -> false) es)
+       then
+         utf8string
+           ("0b" ^ 
+            (List.fold_right (fun (E_aux(e,_)) rst ->
+                 match e with
+                 | E_lit(L_aux(l, _)) -> (match l with | L_one -> "1"^rst
+                                                      | L_zero -> "0"^rst
+                                                      | L_undef -> "u"^rst
+                                                      | _ -> failwith "bit vector not just bit values")
+                 | _ -> failwith "bit vector not all lits") exps "")) 
+       else default_print ())
   | E_vector_indexed (iexps, (Def_val_aux(default,_))) ->
     let default_string = 
       (match default with
-	| Def_val_empty -> string "" 
-	| Def_val_dec e -> concat [semi; space; string "default"; equals; (exp env add_red e)]) in 
+        | Def_val_empty -> string "" 
+        | Def_val_dec e -> concat [semi; space; string "default"; equals; (exp env add_red e)]) in 
       let iexp (i,e) = doc_op equals (doc_int i) (exp env add_red e) in
       brackets (concat [(separate_map comma iexp iexps);default_string])
   | E_vector_update(v,e1,e2) ->
@@ -424,7 +436,8 @@ let doc_exp, doc_let =
       failwith ("unexpected app_infix operator " ^ (pp_format_id op))
       (* doc_op (doc_id op) (exp l) (exp r) *)
   (* XXX missing case *)
-  | E_internal_exp _ -> assert false
+  | E_comment _ | E_comment_struc _ -> string "" 
+  | _-> failwith "internal expression escpaed"
 
   and let_exp env add_red (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->
@@ -467,6 +480,7 @@ let doc_exp, doc_let =
 let doc_default (DT_aux(df,_)) = match df with
   | DT_kind(bk,v) -> separate space [string "default"; doc_bkind bk; doc_var v]
   | DT_typ(ts,id) -> separate space [string "default"; doc_typscm ts; doc_id id]
+  | DT_order o -> separate space [string "default"; string "Order"; doc_ord o]
 
 let doc_spec (VS_aux(v,_)) = match v with
   | VS_val_spec(ts,id) ->
@@ -549,8 +563,9 @@ let doc_fundef env add_red (FD_aux(FD_function(r, typa, efa, fcls),_)) =
         string "effect"; doc_effects_opt efa;
         clauses]
 
-let doc_dec (DEC_aux(DEC_reg(typ,id),_)) =
-  separate space [string "register"; doc_atomic_typ typ; doc_id id]
+let doc_dec (DEC_aux(d,_)) = match d with
+  | DEC_reg(typ,id) -> separate space [string "register"; doc_atomic_typ typ; doc_id id]
+  | _ -> failwith "interpreter printing out declarations unexpectedly"
 
 let doc_scattered env add_red (SD_aux (sdef, _)) = match sdef with
  | SD_scattered_function (r, typa, efa, id) ->
@@ -570,16 +585,22 @@ let doc_scattered env add_red (SD_aux (sdef, _)) = match sdef with
      string "member"; doc_type_union tu]
  | SD_scattered_end id -> string "end" ^^ space ^^ doc_id id
 
-let doc_def env add_red def = group (match def with
+let rec doc_def env add_red def = group (match def with
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def
+  | DEF_kind k_def -> failwith "interpreter unexpectedly printing kind def"
   | DEF_fundef f_def -> doc_fundef env add_red f_def
   | DEF_val lbind -> doc_let env add_red lbind
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered env add_red sdef
+  | DEF_comm comm_dec -> string "(*" ^^ doc_comm_dec env add_red comm_dec ^^ string "*)"
   ) ^^ hardline
 
+and doc_comm_dec env add_red dec = match dec with
+  | DC_comm s -> string s
+  | DC_comm_struct d -> doc_def env add_red d
+                          
 let doc_defs env add_red (Defs(defs)) =
   separate_map hardline (doc_def env add_red) defs
 

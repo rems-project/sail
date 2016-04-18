@@ -30,7 +30,7 @@ let bitl_to_ibit = function
   | Bitl_zero -> (Interp.V_lit (L_aux L_zero Interp_ast.Unknown)) 
   | Bitl_one ->  (Interp.V_lit (L_aux L_one Interp_ast.Unknown))
   | Bitl_undef -> (Interp.V_lit (L_aux L_undef Interp_ast.Unknown))
-  | Bitl_unknown -> Interp.V_unknown 
+  | Bitl_unknown -> Interp.V_unknown
 end
 
 let bit_to_ibit = function

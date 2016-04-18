@@ -1029,6 +1029,7 @@ let rec bytes_of_bits bits = match bits with
   | [] -> []
   | b0::b1::b2::b3::b4::b5::b6::b7::bits -> 
     (Byte [b0;b1;b2;b3;b4;b5;b6;b7])::(bytes_of_bits bits)
+  | _ -> failwith "bytes_of_bits not given bits divisible by 8"
 end
 
 val byte_lifteds_of_bit_lifteds : list bit_lifted -> list byte_lifted (*assumes (length bits) mod 8 = 0*)
@@ -1036,6 +1037,7 @@ let rec byte_lifteds_of_bit_lifteds bits = match bits with
   | [] -> []
   | b0::b1::b2::b3::b4::b5::b6::b7::bits -> 
     (Byte_lifted [b0;b1;b2;b3;b4;b5;b6;b7])::(byte_lifteds_of_bit_lifteds bits)
+  | _ -> failwith "byte_lifteds of bit_lifteds not given bits divisible by 8"
 end
 
 
@@ -1142,7 +1144,9 @@ let clear_low_order_bits_of_address a =
           let b7' = Byte [bt0;bt1;bt2;bt3;bt4;bt5;Bitc_zero;Bitc_zero] in
 	  let bytes = [b0;b1;b2;b3;b4;b5;b6;b7'] in
           Address bytes (integer_of_byte_list bytes)
-        end
+      | _ -> failwith "Byte does not contain 8 bits"
+      end
+  | _ -> failwith "Address does not contain 8 bytes"
   end
 
 val translate_address : context -> end_flag -> string -> address -> maybe address * maybe nat
@@ -1213,8 +1217,9 @@ let address_lifted_of_register_value (rv:register_value) : maybe address_lifted 
   else 
     Just (Address_lifted (byte_lifteds_of_bit_lifteds rv.rv_bits)
                          (if List.all concretizable_bitl rv.rv_bits 
-			  then let (Just(bits)) = (maybe_all (List.map bit_of_bit_lifted rv.rv_bits)) in
-			       Just (integer_of_bit_list bits)
+			  then match (maybe_all (List.map bit_of_bit_lifted rv.rv_bits)) with
+                              | (Just(bits)) -> Just (integer_of_bit_list bits)
+                              | Nothing -> Nothing end
 			  else Nothing))
 
 val address_of_address_lifted : address_lifted -> maybe address

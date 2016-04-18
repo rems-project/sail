@@ -891,6 +891,7 @@ let library_functions direction = [
   ("bitwise_or_bit", bitwise_binop_bit (||) "|");
   ("bitwise_xor_bit", bitwise_binop_bit xor "^");
   ("lt", compare_op (<));
+  ("lt_signed", compare_op (<));
   ("gt", compare_op (>));
   ("lteq", compare_op (<=));
   ("gteq", compare_op (>=));
