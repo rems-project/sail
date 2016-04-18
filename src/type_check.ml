@@ -2027,8 +2027,8 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let cs',map = resolve_constraints (cs@cs_decs@constraints@c') in
       let tannot =
         check_tannot l (match map with | None -> tannot | Some m -> add_map_tannot m tannot) imp_param cs' ef in
-      (*let _ = Printf.eprintf "remaining constraints are: %s\n" (constraints_to_string cs') in*)
-      (*let _ = Printf.eprintf "check_tannot ok for %s val type %s derived type %s \n" 
+      (*let _ = Printf.eprintf "remaining constraints are: %s\n" (constraints_to_string cs') in
+      let _ = Printf.eprintf "check_tannot ok for %s val type %s derived type %s \n" 
         id (t_to_string u) (t_to_string t) in*)
       let funcls = match imp_param with
         | Some {nexp = Nvar i} -> List.map (update_pattern i) funcls

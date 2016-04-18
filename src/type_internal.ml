@@ -624,6 +624,10 @@ let rec normalize_n_rec recur_ok n =
   (*let _ = Printf.eprintf "Working on normalizing %s\n" (n_to_string n) in *)
   match n.nexp with
   | Nid(_,n) -> normalize_n_rec true n
+  | Nuvar _ ->
+    (match first_non_nu (get_outer_most n) with
+     | None -> n
+     | Some n' -> n')
   | Nconst _ | Nvar _ | Nuvar _ | Npos_inf | Nneg_inf | Ninexact -> n
   | Nneg n -> 
     let n',to_recur,add_neg = (match n.nexp with
@@ -3602,18 +3606,18 @@ let rec simple_constraint_check in_env cs =
         (n_to_string n1) (n_to_string n2) (co_to_string co) in*)
       let n1',n2' = normalize_nexp n1,normalize_nexp n2 in
       (*let _ = Printf.eprintf "finished evaled to %s, %s\n" (n_to_string n1') (n_to_string n2') in *)
-      (match n1'.nexp,n2'.nexp with
-      | Ninexact,nok | nok,Ninexact -> 
+      (match n1'.nexp,n2'.nexp,n1.nexp,n2.nexp with
+      | Ninexact,nok,_,_ | nok,Ninexact,_,_ -> 
         eq_error (get_c_loc co) 
           ("Type constraint arising from here requires " ^ n_to_string {nexp = nok; imp_param = false}
            ^ " to be equal to +inf + -inf")
-      | Npos_inf,Npos_inf | Nneg_inf, Nneg_inf -> None
-      | Nconst i1, Nconst i2 | Nconst i1,N2n(_,Some(i2)) | N2n(_,Some(i1)),Nconst(i2) -> 
+      | Npos_inf,Npos_inf,_,_ | Nneg_inf, Nneg_inf,_,_ -> None
+      | Nconst i1, Nconst i2,_,_ | Nconst i1,N2n(_,Some(i2)),_,_ | N2n(_,Some(i1)),Nconst(i2),_,_ -> 
         if eq_big_int i1 i2 then None 
         else eq_error (get_c_loc co) 
           ("Type constraint mismatch: constraint arising from here requires " ^ n_to_string n1 ^
               " to equal " ^ n_to_string n2 )
-      | Nuvar u1, Nuvar u2 ->
+      | Nuvar u1, Nuvar u2, _, _ ->
         (*let _ = Printf.eprintf "setting two nuvars, %s and %s, it is ok_to_set %b\n" 
           (n_to_string n1) (n_to_string n2) ok_to_set in*)
         let occurs = (occurs_in_nexp n1' n2') || (occurs_in_nexp n2' n1') in
@@ -3621,29 +3625,29 @@ let rec simple_constraint_check in_env cs =
         then if (equate_n n1' n2') then None else Some(Eq(co,n1',n2'))
         else if occurs then eq_to_zero ok_to_set n1' n2'
         else Some(Eq(co,n1',n2'))
-      | _, Nuvar u -> 
+      | _, Nuvar u, _, Nuvar _ -> 
         (*let _ = Printf.eprintf "setting right nuvar\n" in*)
-        let occurs = occurs_in_nexp n1' n2' in
+        let occurs = occurs_in_nexp n1' n2 in
         let leave = leave_nu_as_var (get_outer_most n2') in
         (*let _ = Printf.eprintf "occurs? %b, leave? %b n1' %s in n2' %s\n" 
           occurs leave (n_to_string n1') (n_to_string n2') in*)
         if (*not(u.nin) &&*) ok_to_set && not(occurs) && not(leave)
-        then if (equate_n n2' n1') then  None else (Some (Eq(co,n1',n2')))
+        then if (equate_n n2 n1) then  None else (Some (Eq(co,n1',n2')))
         else if occurs 
         then eq_to_zero ok_to_set n1' n2'
         else Some (Eq(co,n1',n2')) 
-      | Nuvar u, _ ->
+      | Nuvar u, _,Nuvar _, _ ->
         (*let _ = Printf.eprintf "setting left nuvar\n" in*)
-        let occurs = occurs_in_nexp n2' n1' in
+        let occurs = occurs_in_nexp n2' n1 in
         let leave = leave_nu_as_var (get_outer_most n1') in
         (*let _ = Printf.eprintf "occurs? %b, leave? %b n2' %s in n1' %s\n"
           occurs leave (n_to_string n2') (n_to_string n1') in*)
         if (*not(u.nin) &&*) ok_to_set && not(occurs) && not(leave)
-        then if equate_n n1' n2' then None else (Some (Eq(co,n1',n2')))
+        then if equate_n n1 n2 then None else (Some (Eq(co,n1,n2)))
         else if occurs
         then eq_to_zero ok_to_set n1' n2'
         else Some (Eq(co,n1',n2'))
-      | _,_ -> 
+      | _,_,_,_ -> 
         if nexp_eq_check n1' n2'
         then None
         else eq_to_zero ok_to_set n1' n2')
