@@ -676,10 +676,10 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
                 {
                   CP0LLBit  := 0b1;
                   CP0LLAddr := pAddr;
-                  MEMr_tagged(pAddr);
+                  MEMr_tagged_reserve(pAddr);
                 }
               else 
-                (MEMr_tagged_reserve(pAddr)))
+                (MEMr_tagged(pAddr)))
             in
             (CapRegs[cd]) := ([tag] : mem);
           }
