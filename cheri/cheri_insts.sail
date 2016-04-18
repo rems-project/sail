@@ -184,7 +184,7 @@ function clause execute (CIncOffset(cd, cb, rt)) =
         exit (raise_c2_exception_v(cd))
       else if (register_inaccessible(cb)) then
         exit (raise_c2_exception_v(cb))
-      else if ((cb_val.tag) & (cb_val.sealed) & (rt_val != 0)) then
+      else if ((cb_val.tag) & (cb_val.sealed) & (rt_val != 0x0000000000000000)) then
         exit (raise_c2_exception(CapEx_SealViolation, cb))
       else
         writeCapReg(cd, {cb_val with offset=cb_val.offset+rt_val})
