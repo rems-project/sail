@@ -596,7 +596,7 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
 
 union ast member (regno, regno, regno, regno, bit[11], bool) CSC
 function clause decode (0b111110 : (regno) cs : (regno) cb: (regno) rt : (bit[11]) offset) = Some(CSC(cs, cb, rt, 0b00000, offset, false))
-function clause decode (0b10010 : 0b10000 : (regno) cs : (regno) cb: (regno) rd : 0b00 : 0b0111) = Some(CSC(cs, cb, 0b00000, rd, 0b00000000000, true))
+function clause decode (0b010010 : 0b10000 : (regno) cs : (regno) cb: (regno) rd : 0b00 : 0b0111) = Some(CSC(cs, cb, 0b00000, rd, 0b00000000000, true))
 function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
   {
     cs_val := readCapReg(cs);
