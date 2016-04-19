@@ -30,7 +30,9 @@ let add_mem byte addr mem =
   assert(byte >= 0 && byte < 256);
   (*Printf.printf "add_mem %s: 0x%02x\n" (Uint64.to_string_hex (Uint64.of_string (Nat_big_num.to_string addr))) byte;*)
   let mem_byte = memory_byte_of_int byte in
-  mem := Mem.add addr mem_byte !mem
+  let zero_byte = memory_byte_of_int 0 in
+  mem := Mem.add addr mem_byte !mem;
+  tag_mem := Mem.add addr zero_byte !tag_mem
 
 let get_reg reg name =
   let reg_content = Reg.find name reg in reg_content
