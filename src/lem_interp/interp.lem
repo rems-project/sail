@@ -2079,6 +2079,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           else if has_wmem_effect effects
           then let (wv,v) =
                  match v with
+                   | V_tuple [p;v] -> (v,p) 
                    | V_tuple params_list ->
                      let reved = List.reverse params_list in
                      (List_extra.head reved,V_tuple (List.reverse (List_extra.tail reved)))
