@@ -502,7 +502,7 @@ function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
       {
         size   := wordWidthBytes(width);
         cursor := getCapCursor(cb_val);
-        vAddr  := cursor + signed(rGPR(rt)) + signed(offset);
+        vAddr  := cursor + unsigned(rGPR(rt)) + signed(offset);
         vAddr64:= (bit[64]) vAddr;
         if ((vAddr + size) > ((nat) (cb_val.base) + ((nat) (cb_val.length)))) then
           exit (raise_c2_exception(CapEx_LengthViolation, cb))
@@ -556,7 +556,7 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
       {
         size   := wordWidthBytes(width);
         cursor := getCapCursor(cb_val);
-        vAddr  := cursor + signed(rGPR(rt)) + signed(offset);
+        vAddr  := cursor + unsigned(rGPR(rt)) + signed(offset);
         vAddr64:= (bit[64]) vAddr;
         if ((vAddr + size) > ((nat) (cb_val.base) + ((nat) (cb_val.length)))) then
           exit (raise_c2_exception(CapEx_LengthViolation, cb))
@@ -616,7 +616,7 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
     else
       {
         cursor := getCapCursor(cb_val);
-        vAddr  := cursor + signed(rGPR(rt)) + signed(offset);
+        vAddr  := cursor + unsigned(rGPR(rt)) + signed(offset);
         vAddr64:= (bit[64]) vAddr;
         if ((vAddr + cap_size) > ((nat) (cb_val.base) + ((nat) (cb_val.length)))) then
           exit (raise_c2_exception(CapEx_LengthViolation, cb))
@@ -660,7 +660,7 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
     else
       {
         cursor := getCapCursor(cb_val);
-        vAddr  := cursor + signed(rGPR(rt)) + signed(offset);
+        vAddr  := cursor + unsigned(rGPR(rt)) + signed(offset);
         vAddr64:= (bit[64]) vAddr;
         if ((vAddr + cap_size) > ((nat) (cb_val.base) + ((nat) (cb_val.length)))) then
           exit (raise_c2_exception(CapEx_LengthViolation, cb))
