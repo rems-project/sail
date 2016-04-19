@@ -4,7 +4,7 @@ all: sail
 
 sail:
 	$(MAKE) -C src
-	ln -s src/sail.native sail
+	ln -f -s src/sail.native sail
 
 language:
 	$(MAKE) -C language
