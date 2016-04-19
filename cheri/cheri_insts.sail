@@ -376,7 +376,7 @@ function clause execute (CUnseal(cd, cs, ct)) =
     exit (raise_c2_exception(CapEx_TypeViolation, ct))
   else if (~(ct_val.permit_seal)) then
     exit (raise_c2_exception(CapEx_PermitSealViolation, ct))
-  else if ((ct_val.offset) >= (ct_val.length)) then
+  else if (unsigned(ct_val.offset) >= unsigned(ct_val.length)) then
     exit (raise_c2_exception(CapEx_LengthViolation, ct))
   else
     writeCapReg(cd, {cs_val with 
