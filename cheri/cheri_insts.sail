@@ -573,10 +573,10 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
                 success := if (CP0LLBit[0]) then
                     switch(width)
                       {
-                        case B -> MEMw_conditional(pAddr, 1, rs_val[7..0])
-                        case H -> MEMw_conditional(pAddr, 2, rs_val[15..0])
-                        case W -> MEMw_conditional(pAddr, 4, rs_val[31..0])
-                        case D -> MEMw_conditional(pAddr, 8, rs_val)
+                        case B -> MEMw_conditional_wrapper(pAddr, 1, rs_val[7..0])
+                        case H -> MEMw_conditional_wrapper(pAddr, 2, rs_val[15..0])
+                        case W -> MEMw_conditional_wrapper(pAddr, 4, rs_val[31..0])
+                        case D -> MEMw_conditional_wrapper(pAddr, 8, rs_val)
                       }
                   else
                     false;
@@ -585,10 +585,10 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
               else
             switch(width)
               {
-                case B -> MEMw(pAddr, 1) := rs_val[7..0]
-                case H -> MEMw(pAddr, 2) := rs_val[15..0]
-                case W -> MEMw(pAddr, 4) := rs_val[31..0]
-                case D -> MEMw(pAddr, 8) := rs_val
+                case B -> MEMw_wrapper(pAddr, 1) := rs_val[7..0]
+                case H -> MEMw_wrapper(pAddr, 2) := rs_val[15..0]
+                case W -> MEMw_wrapper(pAddr, 4) := rs_val[31..0]
+                case D -> MEMw_wrapper(pAddr, 8) := rs_val
               }
           }
       }

@@ -316,6 +316,7 @@ val extern (bit[64]) -> (bit[8]) effect { rmem } TAGr
 
 function (bool, bit[cap_size_t * 8]) MEMr_tagged ((bit[64]) addr) =
 {
+  (* assumes addr is cap. aligned *)
   let tag = (TAGr (addr)) in
   let mem = (MEMr (addr, cap_size)) in
   (tag[0], mem)
@@ -323,6 +324,7 @@ function (bool, bit[cap_size_t * 8]) MEMr_tagged ((bit[64]) addr) =
 
 function (bool, bit[cap_size_t * 8]) MEMr_tagged_reserve ((bit[64]) addr) =
 {
+  (* assumes addr is cap. aligned *)
   let tag = (TAGr (addr)) in
   let mem = (MEMr_reserve (addr, cap_size)) in
   (tag[0], mem)
@@ -330,14 +332,32 @@ function (bool, bit[cap_size_t * 8]) MEMr_tagged_reserve ((bit[64]) addr) =
 
 function unit MEMw_tagged((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
 {
+  (* assumes addr is cap. aligned *)
   MEMw(addr, cap_size, data);
   TAGw(addr, (0b0000000 : [tag]));
 }
 
 function bool MEMw_tagged_conditional((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
 {
+  (* assumes addr is cap. aligned *)
   success := MEMw_conditional(addr, cap_size, data);
   if (success) then
     TAGw(addr, (0b0000000 : [tag]));
   success;
 }
+
+function unit effect {wmem} MEMw_wrapper(addr, size, data) =
+  {
+    (* On cheri non-capability writes must clear the corresponding tag*)
+    TAGw((addr[63..5] : 0b00000), 0x00);
+    MEMw(addr,size,data)
+  }
+
+function bool effect {wmem} MEMw_conditional_wrapper(addr, size, data) =
+  {
+    (* On cheri non-capability writes must clear the corresponding tag*)
+    success := MEMw_conditional(addr,size,data);
+    if (success) then
+      TAGw((addr[63..5] : 0b00000), 0x00);
+    success;
+  }

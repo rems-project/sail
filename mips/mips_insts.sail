@@ -1072,20 +1072,20 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
                   {
                     success := if (CP0LLBit[0]) then switch(width)
                     {
-                      case B -> MEMw_conditional(pAddr, 1, rt_val[7..0])
-                      case H -> MEMw_conditional(pAddr, 2, rt_val[15..0])
-                      case W -> MEMw_conditional(pAddr, 4, rt_val[31..0])
-                      case D -> MEMw_conditional(pAddr, 8, rt_val)
+                      case B -> MEMw_conditional_wrapper(pAddr, 1, rt_val[7..0])
+                      case H -> MEMw_conditional_wrapper(pAddr, 2, rt_val[15..0])
+                      case W -> MEMw_conditional_wrapper(pAddr, 4, rt_val[31..0])
+                      case D -> MEMw_conditional_wrapper(pAddr, 8, rt_val)
                     } else false;
                     wGPR(rt) := EXTZ([success])
                   }
                 else
                   switch(width)
                     {
-                      case B -> MEMw(pAddr, 1) := rt_val[7..0]
-                      case H -> MEMw(pAddr, 2) := rt_val[15..0]
-                      case W -> MEMw(pAddr, 4) := rt_val[31..0]
-                      case D -> MEMw(pAddr, 8) := rt_val
+                      case B -> MEMw_wrapper(pAddr, 1) := rt_val[7..0]
+                      case H -> MEMw_wrapper(pAddr, 2) := rt_val[15..0]
+                      case W -> MEMw_wrapper(pAddr, 4) := rt_val[31..0]
+                      case D -> MEMw_wrapper(pAddr, 8) := rt_val
                     }
           }
       }
@@ -1143,10 +1143,10 @@ function clause execute(SWL(base, rt, offset)) =
             reg_val   := rGPR(rt);
             switch (vAddr[1..0])
             {
-              case 0b00 -> (MEMw(pAddr, 4) := reg_val[31..0])
-              case 0b01 -> (MEMw(pAddr, 3) := reg_val[31..8])
-              case 0b10 -> (MEMw(pAddr, 2) := reg_val[31..16])
-              case 0b11 -> (MEMw(pAddr, 1) := reg_val[31..24])
+              case 0b00 -> (MEMw_wrapper(pAddr, 4) := reg_val[31..0])
+              case 0b01 -> (MEMw_wrapper(pAddr, 3) := reg_val[31..8])
+              case 0b10 -> (MEMw_wrapper(pAddr, 2) := reg_val[31..16])
+              case 0b11 -> (MEMw_wrapper(pAddr, 1) := reg_val[31..24])
             }
           }
       }
@@ -1163,10 +1163,10 @@ function clause execute(SWR(base, rt, offset)) =
             reg_val   := rGPR(rt);
             switch (vAddr[1..0])
               {
-                case 0b00 -> (MEMw(wordAddr, 1) := reg_val[7..0])
-                case 0b01 -> (MEMw(wordAddr, 2) := reg_val[15..0])
-                case 0b10 -> (MEMw(wordAddr, 3) := reg_val[23..0])
-                case 0b11 -> (MEMw(wordAddr, 4) := reg_val[31..0])
+                case 0b00 -> (MEMw_wrapper(wordAddr, 1) := reg_val[7..0])
+                case 0b01 -> (MEMw_wrapper(wordAddr, 2) := reg_val[15..0])
+                case 0b10 -> (MEMw_wrapper(wordAddr, 3) := reg_val[23..0])
+                case 0b11 -> (MEMw_wrapper(wordAddr, 4) := reg_val[31..0])
               }
           }
       }
@@ -1233,14 +1233,14 @@ function clause execute(SDL(base, rt, offset)) =
             reg_val := rGPR(rt);
             switch (vAddr[2..0])
             {
-              case 0b000 -> (MEMw(pAddr, 8) := reg_val[63..00])
-              case 0b001 -> (MEMw(pAddr, 7) := reg_val[63..08])
-              case 0b010 -> (MEMw(pAddr, 6) := reg_val[63..16])
-              case 0b011 -> (MEMw(pAddr, 5) := reg_val[63..24])
-              case 0b100 -> (MEMw(pAddr, 4) := reg_val[63..32])
-              case 0b101 -> (MEMw(pAddr, 3) := reg_val[63..40])
-              case 0b110 -> (MEMw(pAddr, 2) := reg_val[63..48])
-              case 0b111 -> (MEMw(pAddr, 1) := reg_val[63..56])
+              case 0b000 -> (MEMw_wrapper(pAddr, 8) := reg_val[63..00])
+              case 0b001 -> (MEMw_wrapper(pAddr, 7) := reg_val[63..08])
+              case 0b010 -> (MEMw_wrapper(pAddr, 6) := reg_val[63..16])
+              case 0b011 -> (MEMw_wrapper(pAddr, 5) := reg_val[63..24])
+              case 0b100 -> (MEMw_wrapper(pAddr, 4) := reg_val[63..32])
+              case 0b101 -> (MEMw_wrapper(pAddr, 3) := reg_val[63..40])
+              case 0b110 -> (MEMw_wrapper(pAddr, 2) := reg_val[63..48])
+              case 0b111 -> (MEMw_wrapper(pAddr, 1) := reg_val[63..56])
             }
           }
       }
@@ -1259,14 +1259,14 @@ function clause execute(SDR(base, rt, offset)) =
             wordAddr := pAddr[63..3] : 0b000;
             switch (vAddr[2..0])
             {
-              case 0b000 -> (MEMw(wordAddr, 1) := reg_val[07..0])
-              case 0b001 -> (MEMw(wordAddr, 2) := reg_val[15..0])
-              case 0b010 -> (MEMw(wordAddr, 3) := reg_val[23..0])
-              case 0b011 -> (MEMw(wordAddr, 4) := reg_val[31..0])
-              case 0b100 -> (MEMw(wordAddr, 5) := reg_val[39..0])
-              case 0b101 -> (MEMw(wordAddr, 6) := reg_val[47..0])
-              case 0b110 -> (MEMw(wordAddr, 7) := reg_val[55..0])
-              case 0b111 -> (MEMw(wordAddr, 8) := reg_val[63..0])
+              case 0b000 -> (MEMw_wrapper(wordAddr, 1) := reg_val[07..0])
+              case 0b001 -> (MEMw_wrapper(wordAddr, 2) := reg_val[15..0])
+              case 0b010 -> (MEMw_wrapper(wordAddr, 3) := reg_val[23..0])
+              case 0b011 -> (MEMw_wrapper(wordAddr, 4) := reg_val[31..0])
+              case 0b100 -> (MEMw_wrapper(wordAddr, 5) := reg_val[39..0])
+              case 0b101 -> (MEMw_wrapper(wordAddr, 6) := reg_val[47..0])
+              case 0b110 -> (MEMw_wrapper(wordAddr, 7) := reg_val[55..0])
+              case 0b111 -> (MEMw_wrapper(wordAddr, 8) := reg_val[63..0])
             }
           }
       }
