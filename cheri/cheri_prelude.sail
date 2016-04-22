@@ -361,3 +361,27 @@ function bool effect {wmem} MEMw_conditional_wrapper(addr, size, data) =
       TAGw((addr[63..5] : 0b00000), 0x00);
     success;
   }
+
+function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordType) width) =
+  {
+    capno := 0b00000;
+    cap := readCapReg(capno);
+    if (~(cap.tag)) then
+      exit (raise_c2_exception(CapEx_TagViolation, capno))
+    else if (cap.sealed) then
+      exit (raise_c2_exception(CapEx_SealViolation, capno));
+    switch (accessType) {
+      case Instruction -> if (~(cap.permit_execute)) then exit (raise_c2_exception(CapEx_PermitExecuteViolation, capno))
+      case LoadData    -> if (~(cap.permit_load)) then exit (raise_c2_exception(CapEx_PermitLoadViolation, capno))
+      case StoreData   -> if (~(cap.permit_store)) then exit (raise_c2_exception(CapEx_PermitStoreViolation, capno))
+    };
+    cursor := getCapCursor(cap);
+    vAddr  := cursor + unsigned(addr);
+    vAddr64:= (bit[64]) vAddr;
+    size   := wordWidthBytes(width);
+    if ((vAddr + size) > ((nat) (cap.base) + ((nat) (cap.length)))) then
+      exit (raise_c2_exception(CapEx_LengthViolation, capno))
+    else if (vAddr < ((nat) (cap.base))) then
+      exit (raise_c2_exception(CapEx_LengthViolation, capno));
+    vAddr64;
+  }

@@ -1027,7 +1027,7 @@ function clause decode (0b110000 : (regno) base : (regno) rt : (imm16) offset) =
 function clause decode (0b110100 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(D, false, true, base, rt, offset))  (* LLD *)
 function clause execute (Load(width, signed, linked, base, rt, offset)) =
   {
-    (bit[64]) vAddr := EXTS(offset) + rGPR(base);
+    (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, width);
     if ~ (isAddressAligned(vAddr, width)) then
       exit (SignalExceptionBadAddr(AdEL, vAddr)) (* unaligned access *)
     else
@@ -1061,7 +1061,7 @@ function clause decode (0b111000 : (regno) base : (regno) rt : (imm16) offset) =
 function clause decode (0b111100 : (regno) base : (regno) rt : (imm16) offset) = Some(Store(D, true, base, rt, offset))  (* SCD *)
 function clause execute (Store(width, conditional, base, rt, offset)) =
       {
-        (bit[64]) vAddr := EXTS(offset) + rGPR(base);
+        (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), StoreData, width);
         (bit[64]) rt_val := rGPR(rt);
         if ~ (isAddressAligned(vAddr, width)) then
           exit (SignalExceptionBadAddr(AdES, vAddr)) (* unaligned access *)
@@ -1097,7 +1097,8 @@ function clause decode(0b100010 : (regno) base : (regno) rt : (imm16) offset) =
       Some(LWL(base, rt, offset))
 function clause execute(LWL(base, rt, offset)) = 
       {
-        (bit[64]) vAddr := EXTS(offset) + rGPR(base);
+        (* XXX length check not quite right, but conservative *)
+        (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, W);
         let pAddr = (TranslateOrExit(vAddr, LoadData)) in
           {
             mem_val   := MEMr (pAddr[63..2] : 0b00, 4); (* read word of interest *)
@@ -1116,7 +1117,8 @@ function clause decode(0b100110 : (regno) base : (regno) rt : (imm16) offset) =
       Some(LWR(base, rt, offset))
 function clause execute(LWR(base, rt, offset)) = 
       {
-        (bit[64]) vAddr := EXTS(offset) + rGPR(base);
+        (* XXX length check not quite right, but conservative *)
+        (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, W);
         let pAddr = (TranslateOrExit(vAddr, LoadData)) in
           {
             mem_val   := MEMr (pAddr[63..2] : 0b00, 4); (* read word of interest *)
@@ -1137,7 +1139,8 @@ function clause decode(0b101010 : (regno) base : (regno) rt : (imm16) offset) =
       Some(SWL(base, rt, offset))
 function clause execute(SWL(base, rt, offset)) = 
       {
-        (bit[64]) vAddr := EXTS(offset) + rGPR(base);
+        (* XXX length check not quite right, but conservative *)
+        (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), StoreData, W);
         let pAddr = (TranslateOrExit(vAddr, StoreData)) in
           {
             reg_val   := rGPR(rt);
@@ -1156,7 +1159,8 @@ function clause decode(0b101110 : (regno) base : (regno) rt : (imm16) offset) =
       Some(SWR(base, rt, offset))
 function clause execute(SWR(base, rt, offset)) = 
       {
-        (bit[64]) vAddr := EXTS(offset) + rGPR(base);
+        (* XXX length check not quite right, but conservative *)
+        (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), StoreData, W);
         let (pAddr) = (TranslateOrExit(vAddr, StoreData)) in
           {
             wordAddr := pAddr[63..2] : 0b00;
@@ -1177,7 +1181,8 @@ function clause decode(0b011010 : (regno) base : (regno) rt : (imm16) offset) =
   Some(LDL(base, rt, offset))
 function clause execute(LDL(base, rt, offset)) = 
   {
-    (bit[64]) vAddr := EXTS(offset) + rGPR(base);
+    (* XXX length check not quite right, but conservative *)
+    (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, D);
     let pAddr = (TranslateOrExit(vAddr, StoreData)) in
       {
         mem_val   := MEMr (pAddr[63..3] : 0b000, 8); (* read double of interest *)
@@ -1202,7 +1207,8 @@ function clause decode(0b011011 : (regno) base : (regno) rt : (imm16) offset) =
   Some(LDR(base, rt, offset))
 function clause execute(LDR(base, rt, offset)) = 
   {
-    (bit[64]) vAddr := EXTS(offset) + rGPR(base);
+    (* XXX length check not quite right, but conservative *)
+    (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, D);
     let pAddr = (TranslateOrExit(vAddr, StoreData)) in
       {
         mem_val   := MEMr (pAddr[63..3] : 0b000, 8); (* read double of interest *)
@@ -1227,7 +1233,8 @@ function clause decode(0b101100 : (regno) base : (regno) rt : (imm16) offset) =
       Some(SDL(base, rt, offset))
 function clause execute(SDL(base, rt, offset)) = 
       {
-        (bit[64]) vAddr := EXTS(offset) + rGPR(base);
+        (* XXX length check not quite right, but conservative *)
+        (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), StoreData, D);
         let pAddr = (TranslateOrExit(vAddr, StoreData)) in
           {
             reg_val := rGPR(rt);
@@ -1251,8 +1258,9 @@ union ast member regregimm16 SDR
 function clause decode(0b101101 : (regno) base : (regno) rt : (imm16) offset) =
       Some(SDR(base, rt, offset))
 function clause execute(SDR(base, rt, offset)) = 
-      {
-        (bit[64]) vAddr := EXTS(offset) + rGPR(base);
+  {
+        (* XXX length check not quite right, but conservative *)
+        (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), StoreData, D);
         let pAddr = (TranslateOrExit(vAddr, StoreData)) in
           {
             reg_val := rGPR(rt);
