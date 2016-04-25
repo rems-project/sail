@@ -735,6 +735,12 @@ let doc_typ, doc_atomic_typ, doc_nexp =
       Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
     (doc_id id) ^^ (brackets (if n = 0 then doc_int m else doc_op colon (doc_int n) (doc_int (n+m-1))))
   | Typ_app(Id_aux (Id "vector", _), [
+      Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
+      Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant m, _)), _);
+      Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_dec, _)), _);
+      Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
+    (doc_id id) ^^ (brackets (if n = m-1 then doc_int m else doc_op colon (doc_int n) (doc_int (m+1 -n))))
+  | Typ_app(Id_aux (Id "vector", _), [
       Typ_arg_aux(Typ_arg_nexp
                     (Nexp_aux(Nexp_minus (Nexp_aux(Nexp_constant n, _),
                                           Nexp_aux(Nexp_constant 1, _)),_)),_);
@@ -1251,11 +1257,11 @@ let doc_alias (AL_aux (alspec,_)) =
 
 let doc_dec (DEC_aux (reg,_)) =
   match reg with
-    | DEC_reg(typ,id) -> separate space [string "register"; doc_atomic_typ typ; doc_id id]
+    | DEC_reg(typ,id) -> separate space [string "register"; doc_typ typ; doc_id id]
     | DEC_alias(id,alspec) ->
         doc_op equals (string "register alias" ^^ space ^^ doc_id id) (doc_alias alspec)
     | DEC_typ_alias(typ,id,alspec) -> 
-        doc_op equals (string "register alias" ^^ space ^^ doc_atomic_typ typ) (doc_alias alspec)
+        doc_op equals (string "register alias" ^^ space ^^ doc_typ typ) (doc_alias alspec)
 
 let doc_scattered (SD_aux (sdef, _)) = match sdef with
  | SD_scattered_function (r, typa, efa, id) ->
