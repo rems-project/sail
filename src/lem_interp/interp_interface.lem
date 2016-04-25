@@ -880,11 +880,11 @@ type i_state_or_error =
 
 
 (** PS:I agree. propose to remove this: Function to decode an instruction and build the state to run it*)
-val decode_to_istate : context -> opcode -> i_state_or_error
+val decode_to_istate : context -> maybe (list (reg_name * register_value)) -> opcode -> i_state_or_error
 
 (** propose to add this, and then use instruction_to_istate on the result: Function to decode an instruction and build the state to run it*)
 (** PS made a placeholder in interp_inter_imp.lem, but it just uses decode_to_istate and throws away the istate; surely it's easy to just do what's necessary to get the instruction.   This sort-of works, but it crashes on ioid 10 after 167 steps - maybe instruction_to_istate (which I wasn't using directly before) isn't quite right? *)
-val decode_to_instruction : context -> opcode -> instruction_or_decode_error
+val decode_to_instruction : context -> maybe (list (reg_name * register_value))-> opcode -> instruction_or_decode_error
 
 (*Function to generate the state to run from an instruction form; is always an Instr*)
 val instruction_to_istate : context -> instruction -> instruction_state (*i_state_or_error*)
@@ -1149,7 +1149,8 @@ let clear_low_order_bits_of_address a =
   | _ -> failwith "Address does not contain 8 bytes"
   end
 
-val translate_address : context -> end_flag -> string -> address -> maybe address * maybe nat
+val translate_address :
+  context -> end_flag -> string -> maybe (list (reg_name * register_value)) -> address -> maybe address * maybe nat
 
 val byte_list_of_memory_value : end_flag -> memory_value -> maybe (list byte)
 let byte_list_of_memory_value endian mv = 

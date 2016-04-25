@@ -962,7 +962,7 @@ patsexp:
     { peloc (Pat_exp($1,$3)) }
 
 letbind:
-  | Let_ atomic_pat Eq atomic_exp
+  | Let_ atomic_pat Eq exp
     { lbloc (LB_val_implicit($2,$4)) }
   | Let_ typquant atomic_typ atomic_pat Eq exp
     { lbloc (LB_val_explicit((mk_typschm $2 $3 2 3),$4,$6)) }
@@ -1256,11 +1256,11 @@ def:
     { dloc (DEF_spec($1)) }
   | default_typ
     { dloc (DEF_default($1)) }
-  | Register atomic_typ id
+  | Register typ id
     { dloc (DEF_reg_dec(DEC_aux(DEC_reg($2,$3),loc ()))) }
   | Register Alias id Eq exp
     { dloc (DEF_reg_dec(DEC_aux(DEC_alias($3,$5),loc ()))) }
-  | Register Alias atomic_typ id Eq exp
+  | Register Alias typ id Eq exp
     { dloc (DEF_reg_dec(DEC_aux(DEC_typ_alias($3,$4,$6), loc ()))) }
   | Scattered scattered_def
     { dloc (DEF_scattered $2) }

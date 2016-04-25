@@ -906,7 +906,7 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
     let pc_addr = address_of_register_value nextPC in
     (match pc_addr with
     | Some pc_addr ->
-      let pc_a = match addr_trans pc_addr with
+      let pc_a = match addr_trans None pc_addr with
         | Some a, _ -> integer_of_address a
         | None, Some i -> failwith ("Address translation failed with error code " ^ (Nat_big_num.to_string i))
         | _ -> failwith "Neither an address or a code on translate address" in
@@ -990,7 +990,7 @@ let run () =
           endian mode, and translate function name 
   *)
   let addr_trans = translate_address context E_big_endian "TranslateAddress" in
-  let startaddr = match addr_trans startaddr_internal with
+  let startaddr = match addr_trans None startaddr_internal with
     | Some a, _ -> integer_of_address a
     | None, Some i -> failwith ("Address translation failed with error code " ^ (Nat_big_num.to_string i))
     | _ -> failwith "Neither an address or a code on translate address"

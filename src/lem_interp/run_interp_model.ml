@@ -340,7 +340,8 @@ let run
           show "exiting current evaluation" "" "" "";
           step e,env', e
         | Escape _ -> assert false
-        | Error0 _ -> assert false
+        | Error0 _ -> failwith "Internal error"
+        | Fail0 _ -> failwith "Assertion in program failed"
         | Done ->
           show "done evalution" "" "" "";
           assert false
