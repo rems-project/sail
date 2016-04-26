@@ -401,6 +401,11 @@ let translate_address top_level end_flag thunk_name registers address =
                       Interp.V_ctor (Id_aux (Id "Some") _) _ _ v] ->
        let (mem_v,_) = extern_mem_value mode v in 
        ((address_of_memory_value end_flag mem_v), Just n)
+     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _
+                        (Interp.V_ctor _ _ (Interp.C_Enum n) _);
+                      Interp.V_ctor (Id_aux (Id "Some") _) _ _ v] ->
+       let (mem_v,_) = extern_mem_value mode v in 
+       ((address_of_memory_value end_flag mem_v), Just (integerFromNat n))
      | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "None") _) _ _ _;
                       Interp.V_ctor (Id_aux (Id "Some") _) _ _ v] ->
        let (mem_v,_) = extern_mem_value mode v in
@@ -408,6 +413,9 @@ let translate_address top_level end_flag thunk_name registers address =
      | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_lit (L_aux (L_num n) _));
                       Interp.V_ctor (Id_aux (Id "None") _) _ _ _] ->
        (Nothing, Just n)
+     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_ctor _ _ (Interp.C_Enum n) _);
+                      Interp.V_ctor (Id_aux (Id "None") _) _ _ _] ->
+       (Nothing, Just (integerFromNat n))
      | _ -> Assert_extra.failwith ("About to generate Nothing,Nothing for translate address. Given " ^ (Interp.string_of_value addr)) end)       
    | (Nothing, Just err) -> match err with
      | Internal_error msg -> Assert_extra.failwith msg
