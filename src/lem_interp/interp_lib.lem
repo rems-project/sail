@@ -118,6 +118,9 @@ let rec most_significant v =
     match detaint v with
     | V_vector _ _ (v::vs) -> v
     | V_vector_sparse _ _ _ _ _ -> most_significant (fill_in_sparse v)
+    | V_lit (L_aux L_one _) -> v
+    | V_lit (L_aux L_zero _) -> v
+    | V_lit (L_aux L_undef _) -> v
     | V_unknown -> V_unknown
     | _ -> Assert_extra.failwith ("most_significant given non-vector " ^ (string_of_value v))
 end;;                       
