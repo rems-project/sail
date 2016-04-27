@@ -5,5 +5,5 @@ function bool effect {wmem} MEMw_conditional_wrapper(addr, size, data) =
 function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordType) width) =
     addr
 
-function (option<Exception>, option<bit[64]>) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) = 
+function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) = 
     TLBTranslate(vAddr, accessType)
