@@ -930,9 +930,8 @@ let set_next_instruction_address model =
   | MIPS -> 
     let pc_addr       = address_of_register_value (Reg.find "PC" !reg) in
     let branchPending = integer_of_register_value (Reg.find "branchPending" !reg) in
-    let delayedPC     = address_of_register_value (Reg.find "delayedPC" !reg) in
-    (match (pc_addr, option_int_of_option_integer branchPending, delayedPC) with
-     | (Some pc_val, Some 0, _) -> 
+    (match (pc_addr, option_int_of_option_integer branchPending) with
+     | (Some pc_val, Some 0) -> 
        (* normal -- increment PC *)
        let n_addr = add_address_nat pc_val 4 in
        let n_pc = register_value_of_address n_addr D_decreasing in
@@ -940,15 +939,15 @@ let set_next_instruction_address model =
          reg := Reg.add "nextPC" n_pc !reg;
          reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
        end
-     | (Some pc_val, Some 1, Some delayedPC) -> 
+     | (Some pc_val, Some 1) -> 
        (* delay slot -- branch to delayed PC and clear branchPending *)
        begin 
-         reg := Reg.add "nextPC" (register_value_of_address delayedPC D_decreasing) !reg;
+         reg := Reg.add "nextPC" (Reg.find "delayedPC" !reg) !reg;
          reg := Reg.add "nextPCC" (Reg.find "delayedPCC" !reg) !reg;
          reg := Reg.add "branchPending" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
          reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Interp_interface.D_decreasing (Nat_big_num.of_int 1)) !reg;
        end
-     | (_, _, _) -> errorf "PC address contains unknown or undefined"; exit 1)
+     | (_, _) -> errorf "PC address contains unknown or undefined"; exit 1)
 
 let add1 = Nat_big_num.add (Nat_big_num.of_int 1)
 
