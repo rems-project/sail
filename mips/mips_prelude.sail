@@ -185,7 +185,7 @@ function unit SignalExceptionBadAddr((Exception) ex, (bit[64]) badAddr) =
 
 typedef MemAccessType = enumerate {Instruction; LoadData; StoreData}
 typedef AccessLevel   = enumerate {Kernel; Supervisor; User}
-function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) = 
+function (option<Exception>, option<bit[64]>) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) = 
   {
     err := (if (accessType == StoreData) then Some(AdES) else Some(AdEL));
     switch(vAddr[63..62]) {
@@ -203,7 +203,7 @@ function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr,
   }
 
 function bit[64] TranslateOrExit((bit[64]) vAddr, (MemAccessType) accessType) =
-  switch (TranslateAddress(vAddr, accessType)) {
+  switch (TLBTranslate(vAddr, accessType)) {
     case ((Some(ex)), _)    -> (exit (SignalExceptionBadAddr (ex, vAddr)))
     case (_, (Some(pAddr))) -> pAddr
   }

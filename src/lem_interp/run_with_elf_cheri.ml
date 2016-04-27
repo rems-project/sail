@@ -500,6 +500,8 @@ let mips_register_data_all =  [
 let cheri_register_data_all = mips_register_data_all @ [
   ("CapCause", (D_decreasing, 16, 15));
   ("PCC", (D_decreasing, 257, 256));
+  ("nextPCC", (D_decreasing, 257, 256));
+  ("delayedPCC", (D_decreasing, 257, 256));
   ("C00", (D_decreasing, 257, 256));
   ("C01", (D_decreasing, 257, 256));
   ("C02", (D_decreasing, 257, 256));
@@ -540,6 +542,8 @@ let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
   let initial_cap_val_reg = Interp_interface.register_value_of_integer 257 256 D_decreasing  initial_cap_val_int in
   let initial_register_abi_data : (string * Interp_interface.register_value) list = [
     ("PCC", initial_cap_val_reg);
+    ("nextPCC", initial_cap_val_reg);
+    ("delayedPCC", initial_cap_val_reg);
     ("C00", initial_cap_val_reg);
     ("C01", initial_cap_val_reg);
     ("C02", initial_cap_val_reg);
@@ -940,12 +944,19 @@ let set_next_instruction_address model =
        (* delay slot -- branch to delayed PC and clear branchPending *)
        begin 
          reg := Reg.add "nextPC" (register_value_of_address delayedPC D_decreasing) !reg;
+         reg := Reg.add "nextPCC" (Reg.find "delayedPCC" !reg) !reg;
          reg := Reg.add "branchPending" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
          reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Interp_interface.D_decreasing (Nat_big_num.of_int 1)) !reg;
        end
      | (_, _, _) -> errorf "PC address contains unknown or undefined"; exit 1)
 
 let add1 = Nat_big_num.add (Nat_big_num.of_int 1)
+
+let get_addr_trans_regs _ =
+  (*resultf "PCC %s\n"  (Printing_functions.logfile_register_value_to_string (Reg.find "PCC" !reg));*)
+  Some([
+    (Interp_interface.Reg0("PCC", 256, 257, Interp_interface.D_decreasing), Reg.find "PCC" !reg)
+  ])
 
 let fetch_instruction_opcode_and_update_ia model addr_trans =
   match model with
@@ -985,11 +996,14 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
        Opcode opcode       
      | None -> failwith "_PC address contains unknown or undefined")
   | MIPS -> 
+    begin
+    reg := Reg.add "PCC" (Reg.find "nextPCC" !reg) !reg;
     let nextPC  = Reg.find "nextPC" !reg in
     let pc_addr = address_of_register_value nextPC in
+    (*let unused = interactf "PC: %s\n" (Printing_functions.register_value_to_string nextPC) in*)
     (match pc_addr with
     | Some pc_addr ->
-      let pc_a = match addr_trans None pc_addr with
+      let pc_a = match addr_trans (get_addr_trans_regs ()) pc_addr with
         | Some a, _ -> integer_of_address a
         | None, Some i -> failwith ("Address translation failed with error code " ^ (Nat_big_num.to_string i))
         | _ -> failwith "Neither an address or a code on translate address" in
@@ -1006,6 +1020,7 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
         Opcode opcode
       end
      | None -> errorf "nextPC contains unknown or undefined"; exit 1)
+    end
   |  _ -> assert false
 
 let get_pc_address = function
@@ -1073,7 +1088,7 @@ let run () =
           endian mode, and translate function name 
   *)
   let addr_trans = translate_address context E_big_endian "TranslateAddress" in
-  let startaddr = match addr_trans None startaddr_internal with
+  let startaddr = match addr_trans (get_addr_trans_regs ()) startaddr_internal with
     | Some a, _ -> integer_of_address a
     | None, Some i -> failwith ("Address translation failed with error code " ^ (Nat_big_num.to_string i))
     | _ -> failwith "Neither an address or a code on translate address"

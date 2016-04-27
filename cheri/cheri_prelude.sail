@@ -26,6 +26,7 @@ typedef CapReg = register bits [256:0] {
 }
 
 register CapReg PCC
+register CapReg nextPCC
 register CapReg delayedPCC
 register CapReg C00 (* aka default data capability, DDC *)
 register CapReg C01
@@ -385,3 +386,13 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
       exit (raise_c2_exception(CapEx_LengthViolation, capno));
     vAddr64;
   }
+
+function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) =
+  let (bit[257]) x = PCC in
+  let (bit[64])  base = x[127..64] in
+  let (bit[64])  length = x[63..0] in
+  let (bit[64])  absPC = (base + vAddr) in
+  if ((unsigned(vAddr) + 4) > unsigned(length)) then
+    (Some(C2E), None) (* XXX take exception properly *)
+  else
+    TLBTranslate(absPC, accessType)
