@@ -938,7 +938,7 @@ let rec fde_loop count context model mode track_dependencies opcode addr_trans =
     interactf "\n**** instruction %d from address %s ****\n"
       count (Printing_functions.register_value_to_string (get_pc_address model));
     if !break_point && count = !break_instr then begin break_point := false; eager_eval := false end;
-    let (instruction,istate) = match Interp_inter_imp.decode_to_istate context opcode with
+    let (instruction,istate) = match Interp_inter_imp.decode_to_istate context None opcode with
       | Instr(instruction,istate) ->
         interactf "\n**** Running: %s ****\n" (Printing_functions.instruction_to_string instruction);
         (instruction,istate)
