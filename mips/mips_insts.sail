@@ -1393,6 +1393,7 @@ function clause decode (0b010000 : 0b1 : 0b0000000000000000000 : 0b011000) =
       Some(ERET)
 function clause execute (ERET) =
       {
+        ERETHook();
         if (CP0Status.ERL == bitone) then
           {
             nextPC := CP0ErrorEPC;

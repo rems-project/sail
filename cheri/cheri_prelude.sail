@@ -279,6 +279,23 @@ typedef CapCauseReg = register bits [15:0] {
 
 register CapCauseReg CapCause
 
+function unit SignalException ((Exception) ex) = 
+  {
+    C31        := PCC;
+    C31.offset := PC;
+    nextPCC    := C29; (* KCC *)
+    delayedPCC := C29; (* always write delayedPCC together whether PCC so 
+                          that non-capability branches don't override PCC *)
+    SignalExceptionMIPS(ex);
+  }
+
+function unit ERETHook() =
+  {
+    nextPCC    := C31;
+    delayedPCC := C31; (* always write delayedPCC together whether PCC so 
+                          that non-capability branches don't override PCC *)
+  }
+
 function unit raise_c2_exception8((CapEx) capEx, (bit[8]) regnum) =
   {
     (CapCause.ExcCode) := CapExCode(capEx);

@@ -146,7 +146,9 @@ function (bit[5]) ExceptionCode ((Exception) ex) =
    }
 
 
-function unit SignalException ((Exception) ex) = 
+val Exception -> unit effect {rreg, wreg} SignalException
+
+function unit SignalExceptionMIPS ((Exception) ex) = 
   {
     (* Only update EPC and BD if not already in EXL mode *)
     if (~ (CP0Status.EXL)) then 

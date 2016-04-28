@@ -7,3 +7,7 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
 
 function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) = 
     TLBTranslate(vAddr, accessType)
+
+function unit SignalException ((Exception) ex) = SignalExceptionMIPS(ex)
+
+function unit ERETHook() = ()
