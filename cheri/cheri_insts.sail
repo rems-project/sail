@@ -40,6 +40,19 @@ function clause execute (CGetPCC(cd)) =
         let pcc = (capRegToCapStruct(PCC)) in
         writeCapReg(cd, {pcc with offset = PC})
     }
+
+union ast member (regno, regno) CGetPCCSetOffset
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) rs : 0b00111 : 0b111111) = Some(CGetPCCSetOffset(cd, rs))
+function clause execute (CGetPCCSetOffset(cd, rs)) =
+    {
+      if (register_inaccessible(cd)) then
+        exit (raise_c2_exception_v(cd))
+      else
+        let pcc = (capRegToCapStruct(PCC)) in
+        let rs_val = rGPR(rs) in
+        writeCapReg(cd, {pcc with offset = rs_val})
+    }
+
 (* Get and Set CP2 cause register *)
 
 union ast member regno CGetCause
