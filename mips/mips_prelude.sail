@@ -120,7 +120,7 @@ val extern unit -> unit effect { barr } MEM_sync
 
 typedef Exception = enumerate
 {
-   Int; Mod; TLBL; TLBS; AdEL; AdES; Sys; Bp; ResI; CpU; Ov; Tr; C2E;
+   Int; Mod; TLBL; TLBS; AdEL; AdES; Sys; Bp; ResI; CpU; Ov; Tr; C2E; C2Trap;
    XTLBRefillL; XTLBRefillS
 }
 
@@ -141,6 +141,7 @@ function (bit[5]) ExceptionCode ((Exception) ex) =
       case Ov          -> mask(0x0c) (* Arithmetic overflow *)
       case Tr          -> mask(0x0d) (* Trap *)
       case C2E         -> mask(0x12) (* C2E coprocessor 2 exception *)
+      case C2Trap      -> mask(0x12) (* C2Trap maps to same exception code, different vector *)
       case XTLBRefillL -> mask(0x02)
       case XTLBRefillS -> mask(0x03)
    }
@@ -165,11 +166,17 @@ function unit SignalExceptionMIPS ((Exception) ex) =
           }
       };
 
-      (* choose an exception vector to branch to *)
-      vectorOffset := if ((ex == XTLBRefillL) | (ex == XTLBRefillS)) & ~ (CP0Status.EXL) then
-                     0x080
-                  else
-                     0x180;
+      (* choose an exception vector to branch to. Some are not supported 
+         e.g. Reset *)
+      vectorOffset := 
+        if (CP0Status.EXL) then
+          0x180 (* Always use common vector if in exception mode already *)
+        else if ((ex == XTLBRefillL) | (ex == XTLBRefillS)) then 
+          0x080
+        else if (ex == C2Trap) then
+          0x280 (* Special vector for CHERI traps *)
+        else
+          0x180; (* Common vector *)
       (bit[64]) vectorBase  := if CP0Status.BEV then
                    0xFFFFFFFFBFC00200
                 else

@@ -300,7 +300,10 @@ function unit raise_c2_exception8((CapEx) capEx, (bit[8]) regnum) =
   {
     (CapCause.ExcCode) := CapExCode(capEx);
     (CapCause.RegNum)  := regnum;
-    SignalException(C2E);
+    let mipsEx = 
+      if ((capEx == CapEx_CallTrap) | (capEx == CapEx_ReturnTrap)) 
+      then C2Trap else C2E in
+    SignalException(mipsEx);
   }
 
 function unit raise_c2_exception((CapEx) capEx, (regno) regnum) =

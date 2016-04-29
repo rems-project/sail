@@ -414,7 +414,7 @@ function clause execute (CCall(cs, cb)) =
   else if (cs_val.offset >= cs_val.length) then
     exit (raise_c2_exception(CapEx_LengthViolation, cs))
   else
-    exit (raise_c2_exception_noreg(CapEx_CallTrap));
+    exit (raise_c2_exception(CapEx_CallTrap, cs));
 }
 
 union ast member unit CReturn
