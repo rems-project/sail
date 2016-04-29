@@ -31,7 +31,7 @@ function clause execute (CGetX(op, rd, cb)) =
 
 
 union ast member regno CGetPCC
-function clause decode (0b010010 : 0b00000 : 0b00000 : (regno) cd : 0b00000 : 0b000 : 0b111) = Some(CGetPCC(cd))
+function clause decode (0b010010 : 0b00000 : (regno) cd : 0b00000 : 0b11111 : 0b111111) = Some(CGetPCC(cd))
 function clause execute (CGetPCC(cd)) =
     {
       if (register_inaccessible(cd)) then
