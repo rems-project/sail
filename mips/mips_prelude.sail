@@ -194,28 +194,25 @@ function unit SignalExceptionBadAddr((Exception) ex, (bit[64]) badAddr) =
 
 typedef MemAccessType = enumerate {Instruction; LoadData; StoreData}
 typedef AccessLevel   = enumerate {Kernel; Supervisor; User}
-function (option<Exception>, option<bit[64]>) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) = 
+function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) = 
   {
-    err := (if (accessType == StoreData) then Some(AdES) else Some(AdEL));
+    err := (if (accessType == StoreData) then AdES else AdEL);
     switch(vAddr[63..62]) {
       case 0b11 -> switch(vAddr[61..31], vAddr[30..29]) { (* xkseg *)
-        case (0b1111111111111111111111111111111, 0b11) -> (err, None)  (* kseg3 mapped 32-bit compat TODO *)
-        case (0b1111111111111111111111111111111, 0b10) -> (err, None)  (* sseg  mapped 32-bit compat TODO *)
-        case (0b1111111111111111111111111111111, 0b01) -> (None, Some(EXTZ(vAddr[28..0]))) (* kseg1 unmapped uncached 32-bit compat *)
-        case (0b1111111111111111111111111111111, 0b00) -> (None, Some(EXTZ(vAddr[28..0]))) (* kseg0 unmapped cached 32-bit compat *)
-        case (_, _) -> (err, None)  (* xkseg mapped TODO *)
+        case (0b1111111111111111111111111111111, 0b11) -> exit (SignalException(err))  (* kseg3 mapped 32-bit compat TODO *)
+        case (0b1111111111111111111111111111111, 0b10) -> exit (SignalException(err))  (* sseg  mapped 32-bit compat TODO *)
+        case (0b1111111111111111111111111111111, 0b01) -> EXTZ(vAddr[28..0])         (* kseg1 unmapped uncached 32-bit compat *)
+        case (0b1111111111111111111111111111111, 0b00) -> EXTZ(vAddr[28..0])         (* kseg0 unmapped cached 32-bit compat *)
+        case (_, _) -> exit (SignalException(err))  (* xkseg mapped TODO *)
       }
-      case 0b10 -> (None, Some(EXTZ(vAddr[58..0]))) (* xkphys bits 61-59 are cache mode which we ignore *)
-      case 0b01 -> (err, None) (* xsseg - supervisor mapped TODO *)
-      case 0b00 -> (err, None) (* xuseg - user mapped TODO *)
+      case 0b10 -> EXTZ(vAddr[58..0]) (* xkphys bits 61-59 are cache mode which we ignore *)
+      case 0b01 -> exit (SignalException(err)) (* xsseg - supervisor mapped TODO *)
+      case 0b00 -> exit (SignalException(err)) (* xuseg - user mapped TODO *)
     }
   }
 
 function bit[64] TranslateOrExit((bit[64]) vAddr, (MemAccessType) accessType) =
-  switch (TLBTranslate(vAddr, accessType)) {
-    case ((Some(ex)), _)    -> (exit (SignalExceptionBadAddr (ex, vAddr)))
-    case (_, (Some(pAddr))) -> pAddr
-  }
+  TLBTranslate(vAddr, accessType)
 
 typedef regno = bit[5]                      (* a register number *)
 typedef imm16 = bit[16]                     (* 16-bit immediate *)

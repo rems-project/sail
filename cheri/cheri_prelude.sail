@@ -407,12 +407,12 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
     vAddr64;
   }
 
-function (option<Exception>, option<bit[64]>) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) =
+function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) =
   let (bit[257]) x = PCC in
   let (bit[64])  base = x[127..64] in
   let (bit[64])  length = x[63..0] in
   let (bit[64])  absPC = (base + vAddr) in
   if ((unsigned(vAddr) + 4) > unsigned(length)) then
-    (Some(C2E), None) (* XXX take exception properly *)
+    exit (raise_c2_exception_noreg(CapEx_LengthViolation)) (* XXX take exception properly *)
   else
     TLBTranslate(absPC, accessType)
