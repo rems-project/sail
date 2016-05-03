@@ -449,6 +449,7 @@ let initial_stack_and_reg_data_of_AAarch64_elf_file e_entry all_data_memory =
 
 let mips_register_data_all =  [
   (*Pseudo registers*)
+  ("PC", (D_decreasing, 64, 63));
   ("branchPending", (D_decreasing, 1, 0));
   ("inBranchDelay", (D_decreasing, 1, 0));
   ("delayedPC", (D_decreasing, 64, 63));
@@ -954,7 +955,11 @@ let add1 = Nat_big_num.add (Nat_big_num.of_int 1)
 let get_addr_trans_regs _ =
   (*resultf "PCC %s\n"  (Printing_functions.logfile_register_value_to_string (Reg.find "PCC" !reg));*)
   Some([
-    (Interp_interface.Reg0("PCC", 256, 257, Interp_interface.D_decreasing), Reg.find "PCC" !reg)
+    (Interp_interface.Reg0("PC", 63, 64, Interp_interface.D_decreasing),    Reg.find "PC" !reg);
+    (Interp_interface.Reg0("PCC", 256, 257, Interp_interface.D_decreasing), Reg.find "PCC" !reg);
+    (Interp_interface.Reg0("C29", 256, 257, Interp_interface.D_decreasing), Reg.find "C29" !reg);
+    (Interp_interface.Reg0("CP0Status", 31, 32, Interp_interface.D_decreasing), Reg.find "CP0Status" !reg);
+    (Interp_interface.Reg0("inBranchDelay", 0, 1, Interp_interface.D_decreasing), Reg.find "inBranchDelay" !reg);
   ])
 
 let rec write_events = function
@@ -1025,6 +1030,7 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
         | None, Some events ->
           write_events events;
           let nextPC  = Reg.find "nextPC" !reg in
+          reg := Reg.add "PCC" (Reg.find "nextPCC" !reg) !reg;
           let pc_addr = address_of_register_value nextPC in
           (match pc_addr with
            | Some pc_addr ->
@@ -1044,7 +1050,7 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
                 Mem.find (add1 (add1 pc_a)) !prog_mem;
                 Mem.find (add1 (add1 (add1 pc_a))) !prog_mem]))) in
       begin
-        reg := Reg.add "PC" nextPC !reg;
+        reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
         Opcode opcode
       end
      | None -> errorf "nextPC contains unknown or undefined"; exit 1)
