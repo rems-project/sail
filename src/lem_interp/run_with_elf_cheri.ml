@@ -1024,6 +1024,7 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
         | Some a, None -> integer_of_address a
         | None, Some events ->
           write_events events;
+          let nextPC  = Reg.find "nextPC" !reg in
           let pc_addr = address_of_register_value nextPC in
           (match pc_addr with
            | Some pc_addr ->
