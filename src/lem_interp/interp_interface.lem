@@ -201,7 +201,7 @@ instance (Ord byte)
   let (>=) = byteGreaterEq
 end
 
-let ~{ocaml} addressCompare (Address b1 i1) (Address b2 i2) = compare (b1,i1) (b2,i2)
+let ~{ocaml} addressCompare (Address b1 i1) (Address b2 i2) = compare i1 i2
 let inline {ocaml} addressCompare = defaultCompare
 
 let ~{ocaml} addressLess b1 b2      = addressCompare b1 b2 =  LT
@@ -388,6 +388,13 @@ let start_of_reg_name r = match r with
   | Reg_field _ start _ _ _ -> start
   | Reg_f_slice _ start _ _ _ _ -> start
 end
+
+let id_of_reg_name r = match r with
+  | Reg s _ _ _ -> s
+  | Reg_slice s _ _ _ -> s
+  | Reg_field s _ _ _ _ -> s
+  | Reg_f_slice s _ _ _ _ _ ->s
+    end
 
 (* Data structures for building up instructions *)
 
@@ -1150,7 +1157,8 @@ let clear_low_order_bits_of_address a =
   end
 
 val translate_address :
-  context -> end_flag -> string -> maybe (list (reg_name * register_value)) -> address -> maybe address * maybe nat
+  context -> end_flag -> string -> maybe (list (reg_name * register_value)) -> address
+  -> maybe address * maybe (list event)
 
 val byte_list_of_memory_value : end_flag -> memory_value -> maybe (list byte)
 let byte_list_of_memory_value endian mv = 

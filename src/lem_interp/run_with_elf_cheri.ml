@@ -957,6 +957,15 @@ let get_addr_trans_regs _ =
     (Interp_interface.Reg0("PCC", 256, 257, Interp_interface.D_decreasing), Reg.find "PCC" !reg)
   ])
 
+let rec write_events = function
+  | [] -> ()
+  | e::events ->
+    (match e with
+     | E_write_reg (r,v) ->
+       reg := (Reg.add (id_of_reg_name r) v !reg)
+     | _ -> failwith "Only register write events expected");
+    write_events events
+
 let fetch_instruction_opcode_and_update_ia model addr_trans =
   match model with
   | PPC ->
@@ -1003,9 +1012,20 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
     (match pc_addr with
     | Some pc_addr ->
       let pc_a = match addr_trans (get_addr_trans_regs ()) pc_addr with
-        | Some a, _ -> integer_of_address a
-        | None, Some i -> failwith ("Address translation failed with error code " ^ (Nat_big_num.to_string i))
-        | _ -> failwith "Neither an address or a code on translate address" in
+        | Some a, Some events -> write_events events; integer_of_address a
+        | Some a, None -> integer_of_address a
+        | None, Some events ->
+          write_events events;
+          let pc_addr = address_of_register_value nextPC in
+          (match pc_addr with
+           | Some pc_addr ->
+             (match addr_trans (get_addr_trans_regs ()) pc_addr with
+              | Some a, Some events -> write_events events; integer_of_address a
+              | Some a, None -> integer_of_address a
+              | None, _ -> failwith "Address translation failed twice")
+           | None -> failwith "no nextPc address")
+        | _ -> failwith "No address and no events from translate address"
+      in
       let opcode = List.map (fun b -> match b with
         | Some b -> b
         | None -> failwith "A byte in opcode contained unknown or undef")
@@ -1088,9 +1108,10 @@ let run () =
   *)
   let addr_trans = translate_address context E_big_endian "TranslateAddress" in
   let startaddr = match addr_trans (get_addr_trans_regs ()) startaddr_internal with
-    | Some a, _ -> integer_of_address a
-    | None, Some i -> failwith ("Address translation failed with error code " ^ (Nat_big_num.to_string i))
-    | _ -> failwith "Neither an address or a code on translate address"
+    | Some a, None -> integer_of_address a
+    | Some a, Some events -> write_events events; integer_of_address a
+    | None, Some events -> write_events events; failwith "Not implemented the second loop yet"
+    | None, None -> failwith ("Address translation failed and wrote nothing")
   in
   let initial_opcode = Opcode (List.map (fun b -> match b with
       | Some b -> b

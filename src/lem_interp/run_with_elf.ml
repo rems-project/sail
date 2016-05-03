@@ -990,8 +990,8 @@ let run () =
   *)
   let addr_trans = translate_address context E_big_endian "TranslateAddress" in
   let startaddr = match addr_trans None startaddr_internal with
-    | Some a, _ -> integer_of_address a
-    | None, Some i -> failwith ("Address translation failed with error code " ^ (Nat_big_num.to_string i))
+    | Some a, events -> integer_of_address a
+    | None, events -> failwith ("Address translation failed with error code " ^ (Nat_big_num.to_string i))
     | _ -> failwith "Neither an address or a code on translate address"
   in
   let initial_opcode = Opcode (List.map (fun b -> match b with

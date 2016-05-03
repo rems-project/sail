@@ -287,57 +287,59 @@ let initial_instruction_state top_level main args =
     top_level Interp.eenv (Interp.emem "istate top level") Interp.Top
 
 type interp_value_helper_mode = Ivh_translate | Ivh_decode | Ivh_unsupported | Ivh_illegal
+type interp_value_return =
+  | Ivh_value of Interp.value
+  | Ivh_value_after_exn of Interp.value
+  | Ivh_error of decode_error
 
-let rec interp_to_value_helper arg ivh_mode err_str instr direction registers thunk =
+let rec interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen thunk =
   let errk_str = match ivh_mode with
     | Ivh_translate -> "translate"
     | Ivh_decode -> "decode"
     | Ivh_unsupported -> "supported_instructions"
     | Ivh_illegal -> "illegal instruction" end in
+  let events_out = match events with [] -> Nothing | _ -> Just events end in
+  let mode = (make_interpreter_mode true false) in
   match thunk() with
-  | (Interp.Value value,_,_) ->
-    (match value with
-     | Interp.V_ctor (Id_aux (Id "Some") _) _ _ vinstr -> (Just vinstr,Nothing)
-     | Interp.V_ctor (Id_aux (Id "None") _) _ _ _ ->
-       (match ivh_mode with
-       | Ivh_decode -> (Nothing, Just (Not_an_instruction_error arg))
-       | Ivh_illegal -> (Nothing, Just (Not_an_instruction_error arg))
-       | Ivh_unsupported -> (Nothing, Just (Unsupported_instruction_error instr))
-       | Ivh_translate -> (Nothing, Just (Internal_error ("Found None for this " ^ errk_str)))
-     end)
-     | Interp.V_tuple [v1;v2] ->
-       (match ivh_mode with
-        | Ivh_translate -> (Just value,Nothing)
-        | _ -> (Nothing, Just (Internal_error ("Found a tuple for this " ^ errk_str))) end)
-     | _ ->
-       (Nothing,
-        Just (Internal_error ("interp_to_value_helper found unexpected value " ^ (Interp.string_of_value value)))) end)
-  | (Interp.Error l msg,_,_) -> (Nothing, Just (Internal_error msg))
+    | (Interp.Value value,_,_) ->
+      if exn_seen
+      then (Ivh_value_after_exn value, events_out)
+      else
+        (match ivh_mode with
+         | Ivh_translate -> (Ivh_value value, events_out)
+         | _ ->
+           (match value with
+            | Interp.V_ctor (Id_aux (Id "Some") _) _ _ vinstr -> (Ivh_value vinstr,events_out)
+            | Interp.V_ctor (Id_aux (Id "None") _) _ _ _ ->
+              (match ivh_mode with
+               | Ivh_decode -> (Ivh_error (Not_an_instruction_error arg), events_out)
+               | Ivh_illegal -> (Ivh_error (Not_an_instruction_error arg), events_out)
+               | Ivh_unsupported -> (Ivh_error (Unsupported_instruction_error instr), events_out)
+               | Ivh_translate -> Assert_extra.failwith "Reached unreachable pattern" end) end) end)
+    | (Interp.Error l msg,_,_) -> (Ivh_error (Internal_error msg), events_out)
     | (Interp.Action (Interp.Call_extern i value) stack,_,_) ->
       match List.lookup i (Interp_lib.library_functions direction) with
-        | Nothing -> (Nothing, Just (Internal_error ("External function not available " ^ i)))
+        | Nothing -> (Ivh_error (Internal_error ("External function not available " ^ i)), events_out)
         | Just f  -> 
-          interp_to_value_helper arg ivh_mode err_str instr direction registers
-            (fun _ -> Interp.resume (make_interpreter_mode true false) stack (Just (f value)))
-      end 
-    | (Interp.Action (Interp.Exit ((E_aux e _) as exp)) stack,_,_) ->
-      match e with
-        | E_lit (L_aux (L_string str) _) -> (Nothing, Just (Internal_error ("Exit called with message: " ^ str)))
-        | E_id (Id_aux (Id i) _) -> 
-          (match (Interp.resume (make_interpreter_mode true false) (Interp.set_in_context stack exp) Nothing) with
-            | (Interp.Value (Interp.V_lit (L_aux (L_string str) _)),_,_) ->
-              (Nothing, Just (Internal_error ("Exit called when processing "^err_str ^" with message: " ^ str)))
-            | _ -> (Nothing, Just (Internal_error ("Exit called with unrecognized expression bound to an id " ^ i))) end)
-        | _ -> (Nothing, Just (Internal_error "Exit called with unrecognized expression"))
-      end 
+          interp_to_value_helper arg ivh_mode err_str instr direction registers events false
+                                 (fun _ -> Interp.resume mode stack (Just (f value)))
+      end
+    | (Interp.Action (Interp.Fail v) stack, _, _) ->
+      match (Interp.detaint v) with
+      | Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_lit (L_aux (L_string s) _)) ->
+        (Ivh_error (Internal_error ("Assert failed: " ^ s)), events_out)
+      | _ -> (Ivh_error (Internal_error "Assert failed"), events_out) end
+    | (Interp.Action (Interp.Exit exp) stack,_,_) ->
+      interp_to_value_helper arg ivh_mode err_str instr direction registers events true
+        (fun _ -> Interp.resume mode (Interp.set_in_context stack exp) Nothing)
     | (Interp.Action (Interp.Read_reg r slice) stack,_,_) ->
       let rname = match r with 
         | Interp.Reg (Id_aux (Id i) _) _ _ -> i
         | Interp.SubReg (Id_aux (Id i) _) (Interp.Reg (Id_aux (Id i2) _) _ _) _ -> i2 ^ "." ^ i
         | _ -> Assert_extra.failwith "Reg not following expected structure" end in
       let err_value =
-        (Nothing, Just (Internal_error ("Register read of "^ rname^" request in a " ^ errk_str ^ " of " ^ err_str)))
-      in
+        (Ivh_error (Internal_error ("Register read of "^ rname^" request in a " ^ errk_str ^ " of " ^ err_str)),
+        events_out) in
       (match registers with
         | Nothing -> err_value
         | Just(regs) ->
@@ -346,19 +348,22 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers th
             | Nothing -> err_value
             | Just v ->
               let value = intern_reg_value v in
-              interp_to_value_helper arg ivh_mode err_str instr direction registers
-                (fun _ -> Interp.resume (make_interpreter_mode true false) stack (Just value)) end end)      
-    | (Interp.Action (Interp.Write_reg _ _ _) _,_,_) ->
-      (Nothing, Just (Internal_error ("Register write request in a " ^ errk_str)))
+              interp_to_value_helper arg ivh_mode err_str instr direction registers events false
+                (fun _ -> Interp.resume mode stack (Just value)) end end)      
+    | (Interp.Action (Interp.Write_reg r slice value) stack,_,_) ->
+      let ext_reg = extern_reg r slice in
+      let reg_value = extern_reg_value ext_reg value in
+      interp_to_value_helper arg ivh_mode err_str instr direction registers ((E_write_reg ext_reg reg_value)::events)
+        false (fun _ -> Interp.resume mode stack Nothing)
     | (Interp.Action (Interp.Read_mem _ _ _) _,_,_) ->
-      (Nothing, Just (Internal_error ("Read memory request in a " ^ errk_str)))
+      (Ivh_error (Internal_error ("Read memory request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_mem _ _ _ _) _,_,_) ->
-      (Nothing, Just (Internal_error ("Write memory request in a " ^ errk_str)))
+      (Ivh_error (Internal_error ("Write memory request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_ea _ _) _,_,_) ->
-      (Nothing, Just (Internal_error ("Write ea request in a " ^ errk_str)))
+      (Ivh_error (Internal_error ("Write ea request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_memv _ _) _,_,_) ->
-      (Nothing, Just (Internal_error ("Write memory value request in a " ^ errk_str)))
-    | _ -> (Nothing, Just (Internal_error ("Non expected action in a " ^ errk_str)))
+      (Ivh_error (Internal_error ("Write memory value request in a " ^ errk_str)), events_out)
+    | _ -> (Ivh_error (Internal_error ("Non expected action in a " ^ errk_str)), events_out)
 end
 
 let call_external_functions direction outcome = 
@@ -373,7 +378,8 @@ let build_context defs reads writes write_eas write_vals barriers externs =
   (*TODO add externs to to_top_env*)
   match Interp.to_top_env call_external_functions defs with 
     | (_,((Interp.Env _ _ dir _ _ _ _ _) as context)) -> 
-      Context context (if Interp.is_inc(dir) then D_increasing else D_decreasing) reads writes write_eas write_vals barriers externs end
+      Context context (if Interp.is_inc(dir) then D_increasing else D_decreasing)
+        reads writes write_eas write_vals barriers externs end
 
 
 let translate_address top_level end_flag thunk_name registers address =
@@ -385,8 +391,9 @@ let translate_address top_level end_flag thunk_name registers address =
   let val_str = Interp.string_of_value intern_val in
   let (arg,_) = Interp.to_exp int_mode Interp.eenv intern_val in
   let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
-  let (address,error) = interp_to_value_helper (Opcode bytes) Ivh_translate val_str ("",[],[]) internal_direction
-      registers
+  let (address_error,events) =
+    interp_to_value_helper (Opcode bytes) Ivh_translate val_str ("",[],[]) internal_direction
+      registers [] false
       (fun _ -> Interp.resume 
         int_mode 
         (Interp.Thunk_frame 
@@ -394,33 +401,15 @@ let translate_address top_level end_flag thunk_name registers address =
                    [arg;E_aux (E_lit (L_aux (L_num 0) Interp_ast.Unknown)) (Interp_ast.Unknown,Nothing)])
             (Interp_ast.Unknown, Nothing)) 
          top_env Interp.eenv (Interp.emem "translate top level") Interp.Top) Nothing) in
-  match (address,error) with
-  | (Just addr, _) ->
-    (match addr with
-     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_lit (L_aux (L_num n) _));
-                      Interp.V_ctor (Id_aux (Id "Some") _) _ _ v] ->
-       let (mem_v,_) = extern_mem_value mode v in 
-       ((address_of_memory_value end_flag mem_v), Just n)
-     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _
-                        (Interp.V_ctor _ _ (Interp.C_Enum n) _);
-                      Interp.V_ctor (Id_aux (Id "Some") _) _ _ v] ->
-       let (mem_v,_) = extern_mem_value mode v in 
-       ((address_of_memory_value end_flag mem_v), Just (integerFromNat n))
-     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "None") _) _ _ _;
-                      Interp.V_ctor (Id_aux (Id "Some") _) _ _ v] ->
-       let (mem_v,_) = extern_mem_value mode v in
-       ((address_of_memory_value end_flag mem_v), Nothing)
-     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_lit (L_aux (L_num n) _));
-                      Interp.V_ctor (Id_aux (Id "None") _) _ _ _] ->
-       (Nothing, Just n)
-     | Interp.V_tuple[Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_ctor _ _ (Interp.C_Enum n) _);
-                      Interp.V_ctor (Id_aux (Id "None") _) _ _ _] ->
-       (Nothing, Just (integerFromNat n))
-     | _ -> Assert_extra.failwith ("About to generate Nothing,Nothing for translate address. Given " ^ (Interp.string_of_value addr)) end)       
-   | (Nothing, Just err) -> match err with
+  match (address_error) with
+  | Ivh_value addr ->
+    let (mem_v,_) = extern_mem_value mode addr in 
+    ((address_of_memory_value end_flag mem_v), events)
+  | Ivh_value_after_exn _ ->
+    (Nothing, events)
+  | Ivh_error err -> match err with
      | Internal_error msg -> Assert_extra.failwith msg
      | _ -> Assert_extra.failwith "Not an internal error either" end 
-   | _ -> Assert_extra.failwith "Neither address nor error are set"
 end
 
 
@@ -449,14 +438,15 @@ let decode_to_istate top_level registers value =
   let val_str = Interp.string_of_value intern_val in
   let (arg,_) = Interp.to_exp mode Interp.eenv intern_val in
   let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
-  let (instr_decoded,error) = interp_to_value_helper value Ivh_decode val_str ("",[],[]) internal_direction registers
-    (fun _ -> Interp.resume 
-      mode 
-      (Interp.Thunk_frame 
-         (E_aux (E_app (Id_aux (Id "decode") Interp_ast.Unknown) [arg]) (Interp_ast.Unknown, Nothing)) 
-         top_env Interp.eenv (Interp.emem "decode top level") Interp.Top) Nothing) in
-  match (instr_decoded,error) with
-    | (Just instr, _) -> 
+  let (instr_decoded_error,events) =
+    interp_to_value_helper value Ivh_decode val_str ("",[],[]) internal_direction registers [] false
+      (fun _ -> Interp.resume 
+          mode 
+          (Interp.Thunk_frame 
+             (E_aux (E_app (Id_aux (Id "decode") Interp_ast.Unknown) [arg]) (Interp_ast.Unknown, Nothing)) 
+             top_env Interp.eenv (Interp.emem "decode top level") Interp.Top) Nothing) in
+  match (instr_decoded_error) with
+    | Ivh_value instr -> 
       let instr_external = match instr with
         | Interp.V_ctor (Id_aux (Id i) _) _ _ parm ->
           match (find_instruction i instructions) with
@@ -476,28 +466,29 @@ let decode_to_istate top_level registers value =
            | _ -> Assert_extra.failwith ("failed to find instruction " ^ i) end
         | _ -> Assert_extra.failwith "decoded instruction not a constructor" end in 
       let (arg,_) = Interp.to_exp mode Interp.eenv instr in
-      let (instr_decoded,error) =
+      let (instr_decoded_error,events) =
         interp_to_value_helper value Ivh_unsupported val_str instr_external internal_direction
-          registers
+          registers [] false
         (fun _ -> Interp.resume 
-         mode
-          (Interp.Thunk_frame 
-         (E_aux (E_app (Id_aux (Id "supported_instructions") Interp_ast.Unknown) [arg]) 
-            (Interp_ast.Unknown, Nothing)) 
-         top_env Interp.eenv (Interp.emem "decode second top level") Interp.Top) Nothing) in
-      match (instr_decoded,error) with
-        | (Just instr,_) ->
+            mode
+            (Interp.Thunk_frame 
+               (E_aux (E_app (Id_aux (Id "supported_instructions") Interp_ast.Unknown) [arg]) 
+                  (Interp_ast.Unknown, Nothing)) 
+               top_env Interp.eenv (Interp.emem "decode second top level") Interp.Top) Nothing) in
+      match (instr_decoded_error) with
+        | Ivh_value instr ->
           (*let (arg,_) = Interp.to_exp mode Interp.eenv instr in*)
           Instr instr_external
             (IState (Interp.Thunk_frame
                        (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) [arg]) (Interp_ast.Unknown,Nothing))
                        top_env Interp.eenv (Interp.emem "execute") Interp.Top)
                top_level)
-        | (Nothing, Just err) -> Decode_error err
-        | _ -> Assert_extra.failwith "One of instr and error unset"
-      end 
-    | (Nothing, Just err) -> Decode_error err
-    | _ -> Assert_extra.failwith "One of instr and error unset"
+        | Ivh_value_after_exn v ->
+          Assert_extra.failwith "supported_instructions called exit, so support will be needed for that now"
+        | Ivh_error err -> Decode_error err
+        end
+    | Ivh_value_after_exn _ -> Assert_extra.failwith "Decode called exit, so support will be needed for that now"
+    | Ivh_error err -> Decode_error err
 end
 
 
