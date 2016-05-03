@@ -12,6 +12,7 @@ function clause decode (0b010010 : 0b01101 : (regno) rd : (regno) cb : 0b0000000
 
 function clause execute (CGetX(op, rd, cb)) =
   {
+    checkCP2usable();
     if (register_inaccessible(cb)) then
       exit (raise_c2_exception_v(cb))
     else
@@ -34,6 +35,7 @@ union ast member regno CGetPCC
 function clause decode (0b010010 : 0b00000 : (regno) cd : 0b00000 : 0b11111 : 0b111111) = Some(CGetPCC(cd))
 function clause execute (CGetPCC(cd)) =
     {
+      checkCP2usable();
       if (register_inaccessible(cd)) then
         exit (raise_c2_exception_v(cd))
       else
@@ -45,6 +47,7 @@ union ast member (regno, regno) CGetPCCSetOffset
 function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) rs : 0b00111 : 0b111111) = Some(CGetPCCSetOffset(cd, rs))
 function clause execute (CGetPCCSetOffset(cd, rs)) =
     {
+      checkCP2usable();
       if (register_inaccessible(cd)) then
         exit (raise_c2_exception_v(cd))
       else
@@ -59,6 +62,7 @@ union ast member regno CGetCause
 function clause decode (0b010010 : 0b00000 : (regno) rd : 0b00000 : 0b00000000 : 0b100) = Some(CGetCause(rd))
 function clause execute (CGetCause(rd)) = 
     {
+      checkCP2usable();
       if (~(PCC.access_EPCC)) then
         exit (raise_c2_exception_noreg(CapEx_AccessEPCCViolation))
       else
@@ -69,6 +73,7 @@ union ast member (regno) CSetCause
 function clause decode (0b010010 : 0b00100 : 0b00000 : 0b00000 : (regno) rt : 0b000 : 0b100) = Some(CSetCause(rt))
 function clause execute (CSetCause((regno) rt)) = 
     {
+      checkCP2usable();
       if (~(PCC.access_EPCC)) then
         exit (raise_c2_exception_noreg(CapEx_AccessEPCCViolation))
       else
@@ -83,6 +88,7 @@ union ast member regregreg CAndPerm
 function clause decode (0b010010 : 0b00100 : (regno) cd : (regno) cb : (regno) rt : 0b000 : 0b000) = Some(CAndPerm(cd, cb, rt))
 function clause execute(CAndPerm(cd, cb, rt)) = 
 {
+  checkCP2usable();
   cb_val := readCapReg(cb);
   rt_val := rGPR(rt);
   if (register_inaccessible(cd)) then
@@ -120,6 +126,7 @@ union ast member regregreg CToPtr
 function clause decode (0b010010 : 0b01100 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b000) = Some(CToPtr(rd, cb, ct))
 function clause execute(CToPtr(rd, cb, ct)) = 
 {
+  checkCP2usable();
   ct_val := readCapReg(ct);
   cb_val := readCapReg(cb);
   if (register_inaccessible(cb)) then
@@ -148,6 +155,7 @@ function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) c
 
 function clause execute(CPtrCmp(rd, cb, ct, op)) = 
 {
+  checkCP2usable();
   if (register_inaccessible(cb)) then
     exit (raise_c2_exception_v(cb))
   else if (register_inaccessible(ct)) then
@@ -191,6 +199,7 @@ union ast member regregreg CIncOffset
 function clause decode (0b010010 : 0b01101 : (regno) cd : (regno) cb : (regno) rt : 0b000 : 0b000) = Some(CIncOffset(cd, cb, rt))
 function clause execute (CIncOffset(cd, cb, rt)) =
     {
+      checkCP2usable();
       cb_val := readCapReg(cb);
       rt_val := rGPR(rt);
       if (register_inaccessible(cd)) then
@@ -207,6 +216,7 @@ union ast member regregreg CSetOffset
 function clause decode (0b010010 : 0b01101 : (regno) cd : (regno) cb : (regno) rt : 0b000 : 0b001) = Some(CSetOffset(cd, cb, rt))
 function clause execute (CSetOffset(cd, cb, rt)) =
     {
+      checkCP2usable();
       cb_val := readCapReg(cb);
       rt_val := rGPR(rt);
       if (register_inaccessible(cd)) then
@@ -223,6 +233,7 @@ union ast member regregreg CSetBounds
 function clause decode (0b010010 : 0b00001 : (regno) cd : (regno) cb : (regno) rt : 0b000000) = Some(CSetBounds(cd, cb, rt))
 function clause execute (CSetBounds(cd, cb, rt)) =
     {
+      checkCP2usable();
       cb_val := readCapReg(cb);
       (nat) rt_val := rGPR(rt);
       (nat) cursor := getCapCursor(cb_val);
@@ -246,6 +257,7 @@ union ast member (regno, regno) CClearTag
 function clause decode (0b010010 : 0b00100 : (regno) cd : (regno) cb : 0b00000 : 0b000: 0b101) = Some(CClearTag(cd, cb))
 function clause execute (CClearTag(cd, cb)) =
     {
+      checkCP2usable();
       if (register_inaccessible(cd)) then
         exit (raise_c2_exception_v(cd))
       else if (register_inaccessible(cb)) then
@@ -264,6 +276,7 @@ function clause decode (0b010010 : 0b01111 : 0b00010 : (bit[16]) imm) = Some(Cle
 function clause decode (0b010010 : 0b01111 : 0b00011 : (bit[16]) imm) = Some(ClearRegs(CHi, imm))  (* CClearHi *)
 function clause execute (ClearRegs(regset, mask)) =
 {
+  checkCP2usable();
   if (regset == CHi) then
     ()(* XXX check exception *);
   foreach (i from 0 to 15)
@@ -280,6 +293,7 @@ union ast member regregreg CFromPtr
 function clause decode (0b010010 : 0b00100 : (regno) cd : (regno) cb : (regno) rt : 0b000: 0b111) = Some(CFromPtr(cd, cb, rt))
 function clause execute (CFromPtr(cd, cb, rt)) =
     {
+      checkCP2usable();
       cb_val := readCapReg(cb);
       rt_val := rGPR(rt);
       if (register_inaccessible(cd)) then
@@ -300,6 +314,7 @@ union ast member (regno, regno) CCheckPerm
 function clause decode (0b010010 : 0b01011 : (regno) cs : 0b00000 : (regno) rt : 0b000: 0b000) = Some(CCheckPerm(cs, rt))
 function clause execute (CCheckPerm(cs, rt)) =
     {
+      checkCP2usable();
       cs_val := readCapReg(cs);
       cs_perms := capPermsToVec(cs_val);
       rt_perms := (rGPR(rt))[30..0];
@@ -315,6 +330,7 @@ union ast member (regno, regno) CCheckType
 function clause decode (0b010010 : 0b01011 : (regno) cs : (regno) cb : 0b00000 : 0b000: 0b001) = Some(CCheckType(cs, cb))
 function clause execute (CCheckType(cs, cb)) =
 {
+  checkCP2usable();
   cs_val := readCapReg(cs);
   cb_val := readCapReg(cb);
   if (register_inaccessible(cs)) then
@@ -337,6 +353,7 @@ union ast member regregreg CSeal
 function clause decode (0b010010 : 0b00010 : (regno) cd : (regno) cs : (regno) ct : 0b000: 0b000) = Some(CSeal(cd, cs, ct))
 function clause execute (CSeal(cd, cs, ct)) =
 {
+  checkCP2usable();
   cs_val := readCapReg(cs);
   ct_val := readCapReg(ct);
   (nat) ct_cursor := ((nat)(ct_val.base) + (nat)(ct_val.offset));
@@ -368,6 +385,7 @@ union ast member regregreg CUnseal
 function clause decode (0b010010 : 0b00011 : (regno) cd : (regno) cs : (regno) ct : 0b000: 0b000) = Some(CUnseal(cd, cs, ct))
 function clause execute (CUnseal(cd, cs, ct)) =
 {
+  checkCP2usable();
   cs_val := readCapReg(cs);
   ct_val := readCapReg(ct);
   (nat) ct_cursor := ((nat)(ct_val.base) + (nat)(ct_val.offset));
@@ -403,6 +421,7 @@ union ast member (regno, regno) CCall
 function clause decode (0b010010 : 0b00101 : (regno) cs : (regno) cb : (bit[11]) selector) = Some(CCall(cs, cb))
 function clause execute (CCall(cs, cb)) =
 {
+  checkCP2usable();
   (* Partial implementation of CCall with checks in hardware, but raising a trap to perform trusted stack manipulation *)
   cs_val := readCapReg(cs);
   cb_val := readCapReg(cb);
@@ -433,7 +452,10 @@ function clause execute (CCall(cs, cb)) =
 union ast member unit CReturn
 function clause decode (0b010010 : 0b00110 : 0b000000000000000000000) = Some(CReturn)
 function clause execute (CReturn) =
-    exit (raise_c2_exception_noreg(CapEx_ReturnTrap))
+    {
+      checkCP2usable();
+      exit (raise_c2_exception_noreg(CapEx_ReturnTrap))
+    }
 
 union ast member (regno, bit[16], bool) CBX
 function clause decode (0b010010 : 0b01001 : (regno) cb : (bit[16]) imm) = Some(CBX(cb, imm, true)) (* CBTU *)
@@ -441,6 +463,7 @@ function clause decode (0b010010 : 0b01010 : (regno) cb : (bit[16]) imm) = Some(
 
 function clause execute (CBX(cb, imm, invert)) =
 {
+  checkCP2usable();
   if (register_inaccessible(cb)) then
     exit (raise_c2_exception_v(cb))
   else if (((CapRegs[cb]).tag) ^ invert) then
@@ -456,6 +479,7 @@ function clause decode (0b010010 : 0b00111 : (regno) cd : (regno) cb : 0b00000 :
 function clause decode (0b010010 : 0b01000 : 0b00000    : (regno) cb : 0b00000 : 0b000000) = Some(CJALR(0b00000, cb, false)) (* CJR *)
 function clause execute(CJALR(cd, cb, link)) = 
 {
+  checkCP2usable();
   cb_val := readCapReg(cb);
   if (link & register_inaccessible(cd)) then
     exit (raise_c2_exception_v(cd))
@@ -502,6 +526,7 @@ function clause decode (0b010010 : 0b10000 : (regno) rd : (regno) cb : 0b0000000
 
 function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
   {
+    checkCP2usable();
     cb_val := readCapReg(cb);
     if (register_inaccessible(cb)) then
       exit (raise_c2_exception_v(cb))
@@ -556,6 +581,7 @@ function clause decode (0b010010 : 0b10000 : (regno) rs : (regno) cb : (regno) r
 
 function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
   {
+    checkCP2usable();
     cb_val := readCapReg(cb);
     if (register_inaccessible(cb)) then
       exit (raise_c2_exception_v(cb))
@@ -612,6 +638,7 @@ function clause decode (0b111110 : (regno) cs : (regno) cb: (regno) rt : (bit[11
 function clause decode (0b010010 : 0b10000 : (regno) cs : (regno) cb: (regno) rd : 0b00 : 0b0111) = Some(CSC(cs, cb, 0b00000, rd, 0b00000000000, true))
 function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
   {
+    checkCP2usable();
     cs_val := readCapReg(cs);
     cb_val := readCapReg(cb);
     if (register_inaccessible(cs)) then
@@ -659,6 +686,7 @@ function clause decode (0b110110 : (regno) cd : (regno) cb: (regno) rt : (bit[11
 function clause decode (0b010010 : 0b10000 : (regno) cd : (regno) cb: 0b0000000 : 0b1111) = Some(CLC(cd, cb, 0b00000, 0b00000000000, true))
 function clause execute (CLC(cd, cb, rt, offset, linked)) =  
   {
+    checkCP2usable();
     cb_val := readCapReg(cb);
     if (register_inaccessible(cd)) then
       exit (raise_c2_exception_v(cd))

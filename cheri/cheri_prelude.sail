@@ -416,3 +416,12 @@ function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType
     exit (raise_c2_exception_noreg(CapEx_LengthViolation)) (* XXX take exception properly *)
   else
     TLBTranslate(absPC, accessType)
+
+function unit checkCP2usable () =
+      {
+        if (~((CP0Status.CU)[2])) then
+          {
+            (CP0Cause.CE) := 0b10;
+            exit (SignalException(CpU));
+          }
+      }
