@@ -961,8 +961,16 @@ let rec write_events = function
   | [] -> ()
   | e::events ->
     (match e with
-     | E_write_reg (r,v) ->
-       reg := (Reg.add (id_of_reg_name r) v !reg)
+     | E_write_reg (Reg0(id,_,_,_), value) -> reg := Reg.add id value !reg
+     | E_write_reg ((Reg_slice(id,_,_,range) as reg_n),value) 
+     | E_write_reg ((Reg_field(id,_,_,_,range) as reg_n),value)->
+       let old_val = Reg.find id !reg in
+       let new_val = fupdate_slice reg_n old_val value range in
+       reg := Reg.add id new_val !reg
+     | E_write_reg((Reg_f_slice(id,_,_,_,range,mini_range) as reg_n),value) ->
+       let old_val = Reg.find id !reg in
+       let new_val = fupdate_slice reg_n old_val value (combine_slices range mini_range) in
+       reg := Reg.add id new_val !reg
      | _ -> failwith "Only register write events expected");
     write_events events
 

@@ -321,7 +321,7 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
       match List.lookup i (Interp_lib.library_functions direction) with
         | Nothing -> (Ivh_error (Internal_error ("External function not available " ^ i)), events_out)
         | Just f  -> 
-          interp_to_value_helper arg ivh_mode err_str instr direction registers events false
+          interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
                                  (fun _ -> Interp.resume mode stack (Just (f value)))
       end
     | (Interp.Action (Interp.Fail v) stack, _, _) ->
@@ -348,13 +348,13 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
             | Nothing -> err_value
             | Just v ->
               let value = intern_reg_value v in
-              interp_to_value_helper arg ivh_mode err_str instr direction registers events false
+              interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
                 (fun _ -> Interp.resume mode stack (Just value)) end end)      
     | (Interp.Action (Interp.Write_reg r slice value) stack,_,_) ->
       let ext_reg = extern_reg r slice in
       let reg_value = extern_reg_value ext_reg value in
       interp_to_value_helper arg ivh_mode err_str instr direction registers ((E_write_reg ext_reg reg_value)::events)
-        false (fun _ -> Interp.resume mode stack Nothing)
+        exn_seen (fun _ -> Interp.resume mode stack Nothing)
     | (Interp.Action (Interp.Read_mem _ _ _) _,_,_) ->
       (Ivh_error (Internal_error ("Read memory request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_mem _ _ _ _) _,_,_) ->
