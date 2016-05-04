@@ -238,9 +238,14 @@ end
 
 let rec slice_reg_value v start stop = 
   let inc = v.rv_dir = D_increasing in
-  <| v with rv_bits = (Interp.from_n_to_n (if inc then (start - v.rv_start) else (v.rv_start - start))
-                                          (if inc then (stop - v.rv_start) else (v.rv_start - stop)) v.rv_bits);
-            rv_start = (if inc then start else ((stop - start) + 1)) |> 
+  let r_internal_start = if inc then start else (stop - start) + 1 in
+  let r_start = if inc then r_internal_start else start in
+  <| v with rv_bits = (Interp.from_n_to_n
+                         (if inc then (start - v.rv_start_internal) else (v.rv_start_internal - start))
+                         (if inc then (stop - v.rv_start_internal) else (v.rv_start_internal - stop)) v.rv_bits);
+            rv_start = r_start;
+            rv_start_internal = r_internal_start
+  |> 
 
 let update_reg_value_slice reg_name v start stop v2 =
   let v_internal = intern_reg_value v in
