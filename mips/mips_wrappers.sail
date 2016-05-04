@@ -6,7 +6,10 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
     addr
 
 function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) = 
-    TLBTranslate(vAddr, accessType)
+    if (vAddr[1..0] != 0b00) then (* bad PC alignment *)
+      exit (SignalExceptionBadAddr(AdEL, vAddr))
+    else
+      TLBTranslate(vAddr, accessType)
 
 function unit SignalException ((Exception) ex) = SignalExceptionMIPS(ex)
 
