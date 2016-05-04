@@ -708,7 +708,7 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
         else if (vAddr < ((nat) (cb_val.base))) then
           exit (raise_c2_exception(CapEx_LengthViolation, cb))
         else if (vAddr64[4..0] != 0b00000) then
-          exit (SignalExceptionBadAddr(AdES, vAddr64))
+          exit (SignalExceptionBadAddr(AdEL, vAddr64))
         else
           {
             pAddr  := (TranslateOrExit(vAddr64, LoadData)); (* XXX use LoadCap here. *)
