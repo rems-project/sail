@@ -962,6 +962,16 @@ let get_addr_trans_regs _ =
     (Interp_interface.Reg0("inBranchDelay", 0, 1, Interp_interface.D_decreasing), Reg.find "inBranchDelay" !reg);
   ])
 
+let get_opcode pc_a =
+  List.map (fun b -> match b with
+  | Some b -> b
+  | None -> failwith "A byte in opcode contained unknown or undef")
+    (List.map byte_of_memory_byte
+       ([Mem.find pc_a !prog_mem;
+         Mem.find (add1 pc_a) !prog_mem;
+         Mem.find (add1 (add1 pc_a)) !prog_mem;
+         Mem.find (add1 (add1 (add1 pc_a))) !prog_mem]))
+
 let rec write_events = function
   | [] -> ()
   | e::events ->
@@ -987,14 +997,7 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
     (match cia_addr with
      | Some cia_addr ->
        let cia_a = integer_of_address cia_addr in
-       let opcode = List.map (fun b -> match b with
-           | Some b -> b
-           | None -> failwith "A byte in opcode contained unknown or undef")
-           (List.map byte_of_memory_byte
-              [Mem.find cia_a !prog_mem;
-               Mem.find (add1 cia_a) !prog_mem;
-               Mem.find (add1 (add1 cia_a)) !prog_mem;
-               Mem.find (add1 (add1 (add1 cia_a))) !prog_mem]) in
+       let opcode = (get_opcode cia_a) in
        begin
          reg := Reg.add "CIA" (Reg.find "NIA" !reg) !reg;
          Opcode opcode
@@ -1006,15 +1009,8 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
     (match pc_addr with
      | Some pc_addr ->
        let pc_a = integer_of_address pc_addr in
-       let opcode =  List.map (fun b -> match b with
-           | Some b -> b
-           | None -> failwith "A byte in opcode contained unknown or undef")
-           (List.map byte_of_memory_byte
-              ([Mem.find pc_a !prog_mem;
-                Mem.find (add1 pc_a) !prog_mem;
-                Mem.find (add1 (add1 pc_a)) !prog_mem;
-                Mem.find (add1 (add1 (add1 pc_a))) !prog_mem])) in
-       Opcode opcode       
+       let opcode = (get_opcode pc_a) in
+       Opcode opcode
      | None -> failwith "_PC address contains unknown or undefined")
   | MIPS -> 
     begin
@@ -1041,14 +1037,7 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
            | None -> failwith "no nextPc address")
         | _ -> failwith "No address and no events from translate address"
       in
-      let opcode = List.map (fun b -> match b with
-        | Some b -> b
-        | None -> failwith "A byte in opcode contained unknown or undef")
-        (List.map byte_of_memory_byte
-           (([Mem.find pc_a !prog_mem;
-                Mem.find (add1 pc_a) !prog_mem;
-                Mem.find (add1 (add1 pc_a)) !prog_mem;
-                Mem.find (add1 (add1 (add1 pc_a))) !prog_mem]))) in
+      let opcode = (get_opcode pc_a) in
       begin
         reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
         Opcode opcode
@@ -1128,14 +1117,7 @@ let run () =
     | None, Some events -> write_events events; failwith "Not implemented the second loop yet"
     | None, None -> failwith ("Address translation failed and wrote nothing")
   in
-  let initial_opcode = Opcode (List.map (fun b -> match b with
-      | Some b -> b
-      | None -> errorf "A byte in opcode contained unknown or undef"; exit 1)
-      (List.map byte_of_memory_byte
-         [Mem.find startaddr !prog_mem;
-          Mem.find (add1 startaddr) !prog_mem;
-          Mem.find (add1 (add1 startaddr)) !prog_mem;
-          Mem.find (add1 (add1 (add1 startaddr))) !prog_mem])) in
+  let initial_opcode = Opcode (get_opcode startaddr) in
   reg := Reg.add "PC" (register_value_of_address startaddr_internal model_reg_d ) !reg;
   
   (* entry point: unit -> unit fde *)
