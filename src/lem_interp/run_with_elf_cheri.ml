@@ -1052,42 +1052,76 @@ let get_pc_address = function
   | AArch64 -> Reg.find "_PC" !reg
         
 
-let rec fde_loop count context model mode track_dependencies opcode addr_trans =
+let option_int_of_reg str =
+  option_int_of_option_integer (integer_of_register_value (Reg.find str !reg))
+
+let rec fde_loop count context model mode track_dependencies addr_trans =
   if !max_cut_off && count = !max_instr
   then resultf "\nEnding evaluation due to reaching cut off point of %d instructions\n" count
   else begin
-    interactf "\n**** instruction %d from address %s ****\n"
-      count (Printing_functions.register_value_to_string (get_pc_address model));
     if !break_point && count = !break_instr then begin break_point := false; eager_eval := false end;
-    let (instruction,istate) = match Interp_inter_imp.decode_to_istate context None opcode with
-      | Instr(instruction,istate) ->
-        interactf "\n**** Running: %s ****\n" (Printing_functions.instruction_to_string instruction);
-        (instruction,istate)
-      | Decode_error d ->
-        (match d with
-         | Interp_interface.Unsupported_instruction_error instr ->
-           errorf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instr)
-         | Interp_interface.Not_an_instruction_error op ->
-           (match op with
-            | Opcode bytes ->
-              errorf "\n**** Encountered non-decodeable opcode: %s ****\n" (Printing_functions.byte_list_to_string bytes))
-         | Internal_error s -> errorf "\n**** Internal error on decode: %s ****\n" s);
-        exit 1
-    in
-    if stop_condition_met model instruction
-    then resultf "\nSUCCESS program terminated after %d instructions\n" count
-    else
-      begin
-        set_next_instruction_address model;
-        match Run_interp_model.run  istate !reg !prog_mem !tag_mem !eager_eval track_dependencies mode "execute" with
-        | false, _,_, _ -> errorf "FAILURE\n"; exit 1
-        | true, mode, track_dependencies, (my_reg, my_mem, my_tags) ->
-          reg := my_reg;
-          prog_mem := my_mem;
-          tag_mem := my_tags;
-          let opcode = fetch_instruction_opcode_and_update_ia model addr_trans in
-          fde_loop (count + 1) context model (Some mode) (ref track_dependencies) opcode addr_trans
-      end
+    let pc_regval = get_pc_address model in
+    interactf "\n**** instruction %d from address %s ****\n"
+      count (Printing_functions.register_value_to_string pc_regval);
+    let pc_addr  = address_of_register_value pc_regval in
+    let pc_val = match pc_addr with
+      | Some v -> v
+      | None   -> failwith "pc contains undef or unknown" in
+    let m_paddr_int = match addr_trans (get_addr_trans_regs ()) pc_val with
+      | Some a, Some events -> write_events events; Some (integer_of_address a)
+      | Some a, None        -> Some (integer_of_address a)
+      | None, Some events   -> write_events events; None
+      | None, None          -> failwith "address translation failed and no writes" in
+    match m_paddr_int with
+      | Some pc ->
+          let inBranchDelay = option_int_of_reg "inBranchDelay" in
+          (match inBranchDelay with
+          | Some 0 -> 
+            let npc_addr = add_address_nat pc_val 4 in
+            let npc_reg = register_value_of_address npc_addr Interp_interface.D_decreasing in
+            reg := Reg.add "nextPC" npc_reg !reg;
+          | Some 1 ->
+            reg := Reg.add "nextPC" (Reg.find "delayedPC" !reg) !reg;
+            reg := Reg.add "nextPCC" (Reg.find "delayedPCC" !reg) !reg;
+          | None   -> failwith "invalid value of inBranchDelay");
+          let opcode = Opcode (get_opcode pc) in
+          let (instruction,istate) = match Interp_inter_imp.decode_to_istate context None opcode with
+            | Instr(instruction,istate) ->
+              interactf "\n**** Running: %s ****\n" (Printing_functions.instruction_to_string instruction);
+              (instruction,istate)
+            | Decode_error d ->
+              (match d with
+              | Interp_interface.Unsupported_instruction_error instr ->
+                errorf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instr)
+              | Interp_interface.Not_an_instruction_error op ->
+                (match op with
+                | Opcode bytes ->
+                  errorf "\n**** Encountered non-decodeable opcode: %s ****\n" (Printing_functions.byte_list_to_string bytes))
+              | Internal_error s -> errorf "\n**** Internal error on decode: %s ****\n" s); exit 1
+          in
+          if stop_condition_met model instruction
+          then resultf "\nSUCCESS program terminated after %d instructions\n" count
+          else
+            begin
+              match Run_interp_model.run  istate !reg !prog_mem !tag_mem !eager_eval track_dependencies mode "execute" with
+              | false, _,_, _ -> errorf "FAILURE\n"; exit 1
+              | true, mode, track_dependencies, (my_reg, my_mem, my_tags) ->
+                reg := my_reg;
+                prog_mem := my_mem;
+                tag_mem := my_tags;
+                reg := Reg.add "inBranchDelay" (Reg.find "branchPending" !reg) !reg;
+                reg := Reg.add "branchPending" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
+                reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
+                reg := Reg.add "PCC" (Reg.find "nextPCC" !reg) !reg;
+                fde_loop (count + 1) context model (Some mode) (ref track_dependencies) addr_trans
+            end
+      | None -> begin
+      reg := Reg.add "inBranchDelay" (Reg.find "branchPending" !reg) !reg;
+      reg := Reg.add "branchPending" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
+      reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
+      reg := Reg.add "PCC" (Reg.find "nextPCC" !reg) !reg;
+      fde_loop (count + 1) context model mode track_dependencies addr_trans
+    end
   end
   
 let run () =
@@ -1111,18 +1145,10 @@ let run () =
           endian mode, and translate function name 
   *)
   let addr_trans = translate_address context E_big_endian "TranslateAddress" in
-  let startaddr = match addr_trans (get_addr_trans_regs ()) startaddr_internal with
-    | Some a, None -> integer_of_address a
-    | Some a, Some events -> write_events events; integer_of_address a
-    | None, Some events -> write_events events; failwith "Not implemented the second loop yet"
-    | None, None -> failwith ("Address translation failed and wrote nothing")
-  in
-  let initial_opcode = Opcode (get_opcode startaddr) in
   reg := Reg.add "PC" (register_value_of_address startaddr_internal model_reg_d ) !reg;
-  
   (* entry point: unit -> unit fde *)
   let name = Filename.basename !file in
-  let t = time_it (fun () -> fde_loop 0 context isa_model (Some Run) (ref false) initial_opcode addr_trans) () in
+  let t = time_it (fun () -> fde_loop 0 context isa_model (Some Run) (ref false)  addr_trans) () in
   resultf "Execution time for file %s: %f seconds\n" name t;;
 
 run () ;;
