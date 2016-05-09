@@ -516,7 +516,7 @@ function clause execute (SLTI(rs, rt, imm)) =
   {
     let imm_val = signed(imm) in
     let rs_val  = signed(rGPR(rs)) in
-    wGPR(rt) := EXTZ(if (rs_val < imm_val) then 1 else 0)
+    wGPR(rt) := if (rs_val < imm_val) then 0x0000000000000001 else 0x0000000000000000
   }
 
 (* SLTU set if less than unsigned *)
