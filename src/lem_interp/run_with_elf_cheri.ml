@@ -1021,17 +1021,17 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
     (match pc_addr with
     | Some pc_addr ->
       let pc_a = match addr_trans (get_addr_trans_regs ()) pc_addr with
-        | Some a, Some events -> write_events events; integer_of_address a
+        | Some a, Some events -> write_events (List.rev events); integer_of_address a
         | Some a, None -> integer_of_address a
         | None, Some events ->
-          write_events events;
+          write_events (List.rev events);
           let nextPC  = Reg.find "nextPC" !reg in
           reg := Reg.add "PCC" (Reg.find "nextPCC" !reg) !reg;
           let pc_addr = address_of_register_value nextPC in
           (match pc_addr with
            | Some pc_addr ->
              (match addr_trans (get_addr_trans_regs ()) pc_addr with
-              | Some a, Some events -> write_events events; integer_of_address a
+              | Some a, Some events -> write_events (List.rev events); integer_of_address a
               | Some a, None -> integer_of_address a
               | None, _ -> failwith "Address translation failed twice")
            | None -> failwith "no nextPc address")
@@ -1068,9 +1068,9 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
       | Some v -> v
       | None   -> failwith "pc contains undef or unknown" in
     let m_paddr_int = match addr_trans (get_addr_trans_regs ()) pc_val with
-      | Some a, Some events -> write_events events; Some (integer_of_address a)
+      | Some a, Some events -> write_events (List.rev events); Some (integer_of_address a)
       | Some a, None        -> Some (integer_of_address a)
-      | None, Some events   -> write_events events; None
+      | None, Some events   -> write_events (List.rev events); None
       | None, None          -> failwith "address translation failed and no writes" in
     match m_paddr_int with
       | Some pc ->

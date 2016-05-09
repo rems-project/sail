@@ -1452,7 +1452,6 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                     let i = (List.length vs) - 1 in
                     if start = i then (Value v,lm,le) else (Value (update_vector_start dir i 1 v),lm,le)
                   | _ -> (Value v,lm,le) end
-
               | _ -> (Value v,lm,le) end in
           (match (tag,detaint v) with 
             (*Cast is telling us to read a register*)
