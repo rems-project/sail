@@ -1930,7 +1930,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                        V_vector_sparse m (len+new_len) dir (vals1 ++ sparse_update) d
                      | (V_unknown,_) -> V_unknown (*update to get length from type*)
                      | (_,V_unknown) -> V_unknown (*see above*)
-                     | _ -> Assert_extra.failwith "vector concat requires vector" end) in
+                     | _ -> Assert_extra.failwith ("vector concat requires two vectors but given "
+                                                   ^ (string_of_value v1) ^ " " ^ (string_of_value v2)) end) in
                    (Value (binary_taint append v1 v2),lm,le))
                  (fun a -> update_stack a (add_to_top_frame 
                                              (fun e env -> 
