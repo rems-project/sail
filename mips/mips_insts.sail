@@ -514,7 +514,9 @@ function clause decode (0b001010 : (regno) rs : (regno) rt : (imm16) imm) =
   Some(SLTI(rs, rt, imm))
 function clause execute (SLTI(rs, rt, imm)) =
   {
-    wGPR(rt) := if (rGPR(rs) <_s ((bit[64]) (EXTS(imm)))) then 1 else 0
+    let imm_val = signed(imm) in
+    let rs_val  = signed(rGPR(rs)) in
+    wGPR(rt) := EXTZ(if (rs_val < imm_val) then 1 else 0)
   }
 
 (* SLTU set if less than unsigned *)
