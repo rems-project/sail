@@ -761,8 +761,8 @@ function clause execute (DIV(rs, rt)) =
       else
         let si = (signed((rsVal[31..0]))) in
         let ti = (signed((rtVal[31..0]))) in
-        let qi = (si quot_s ti)  in
-        let ri = (si mod_s ti)   in
+        let qi = (si quot ti)  in
+        let ri = (si - (ti*qi))   in
         ((bit[32]) qi, (bit[32]) ri))
     in
     {
@@ -807,7 +807,7 @@ function clause execute (DDIV(rs, rt)) =
       then (undefined, undefined) 
       else 
            let qi = (rsVal quot_s rtVal) in
-           let ri = (rsVal mod_s rtVal) in
+           let ri = (rsVal - (qi * rtVal)) in
            ((bit[64]) qi, (bit[64]) ri)) in
     {
       LO    := q;
