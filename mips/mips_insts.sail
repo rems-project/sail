@@ -1352,6 +1352,7 @@ function clause execute (MFC0(rt, rd, sel, double)) =
           case (0b10010,0b000) -> 0                (* 18, WatchLo *)
           case (0b10011,0b000) -> 0                (* 19, WatchHi *)
           case (0b10100,0b000) -> 0                (* 20, XContext *)
+          case (0b11110,0b000) -> CP0ErrorEPC      (* 30, ErrorEPC *)
           case _               -> {exit (SignalException(ResI)); 0}
         } in
   wGPR(rt) := if (double) then result else EXTS(result[31..0])
@@ -1387,6 +1388,7 @@ function clause execute (MTC0(rt, rd, sel, double)) =
         (CP0Cause.IP)[9..8] := reg_val[9..8];
       }
       case (0b01110,0b000) -> CP0EPC      := reg_val         (* 14, EPC *)
+      case (0b11110,0b000) -> CP0ErrorEPC := reg_val         (* 30, ErrorEPC *)
       case _               -> exit (SignalException(ResI))
     }
 
