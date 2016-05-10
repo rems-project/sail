@@ -1398,6 +1398,7 @@ function clause decode (0b010000 : 0b1 : 0b0000000000000000000 : 0b011000) =
 function clause execute (ERET) =
       {
         ERETHook();
+        CP0LLBit := 0b0;
         if (CP0Status.ERL == bitone) then
           {
             nextPC := CP0ErrorEPC;
@@ -1405,7 +1406,6 @@ function clause execute (ERET) =
           }
         else
           {
-            CP0LLBit := 0b0;
             nextPC := CP0EPC;
             CP0Status.EXL := 0;
           }
