@@ -500,7 +500,9 @@ let mips_register_data_all =  [
 
 let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
   let initial_stack_data = [] in 
-  let initial_register_abi_data : (string * Interp_interface.register_value) list = [] in
+  let initial_register_abi_data : (string * Interp_interface.register_value) list = [
+    ("CP0Status", Interp_interface.register_value_of_integer 32 31 D_decreasing (Nat_big_num.of_string "0x00400000"));
+  ] in
   (initial_stack_data, initial_register_abi_data)
 
 let initial_reg_file reg_data init =

@@ -542,6 +542,7 @@ let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
   let initial_cap_val_int = Nat_big_num.of_string "115792089264276142078167421332581561412618036492862375629811892344162380414975" (*"0x100000000fffffffe00000000000000000000000000000000ffffffffffffffff"*) in
   let initial_cap_val_reg = Interp_interface.register_value_of_integer 257 256 D_decreasing  initial_cap_val_int in
   let initial_register_abi_data : (string * Interp_interface.register_value) list = [
+    ("CP0Status", Interp_interface.register_value_of_integer 32 31 D_decreasing (Nat_big_num.of_string "0x00400000"));
     ("PCC", initial_cap_val_reg);
     ("nextPCC", initial_cap_val_reg);
     ("delayedPCC", initial_cap_val_reg);
