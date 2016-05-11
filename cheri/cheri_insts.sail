@@ -276,9 +276,13 @@ function clause decode (0b010010 : 0b01111 : 0b00010 : (bit[16]) imm) = Some(Cle
 function clause decode (0b010010 : 0b01111 : 0b00011 : (bit[16]) imm) = Some(ClearRegs(CHi, imm))  (* CClearHi *)
 function clause execute (ClearRegs(regset, mask)) =
 {
-  checkCP2usable();
+  if ((regset == CLo) | (regset == CHi)) then
+    checkCP2usable();
   if (regset == CHi) then
-    ()(* XXX check exception *);
+      foreach (i from 0 to 15)
+        let r = ((bit[5]) (i+16)) in
+        if (mask[i] & register_inaccessible(r)) then
+          exit (raise_c2_exception_v(r));
   foreach (i from 0 to 15)
     if (mask[i]) then
       switch (regset) {
