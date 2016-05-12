@@ -429,6 +429,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
       fprintf ppf "@[<0>(E_aux (%a %a [%a]) (%a, %a))@]" kwd "E_case" pp_lem_exp exp (list_pp pp_semi_lem_case pp_lem_case) pexps pp_lem_l l pp_annot annot
     | E_let(leb,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_let" pp_lem_let leb pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assign(lexp,exp) -> fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]" kwd "E_assign" pp_lem_lexp lexp pp_lem_exp exp pp_lem_l l pp_annot annot
+    | E_sizeof nexp -> fprintf ppf "@[<0>(E_aux (E_sizeof %a) (%a, %a))@]" pp_lem_nexp nexp pp_lem_l l pp_annot annot
     | E_exit exp -> fprintf ppf "@[<0>(E_aux (E_exit %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assert(c,msg) ->
       fprintf ppf "@[<0>(E_aux (E_assert %a %a) (%a, %a))@]" pp_lem_exp c pp_lem_exp msg pp_lem_l l pp_annot annot
@@ -750,7 +751,14 @@ let doc_typ, doc_atomic_typ, doc_nexp =
     (doc_id id) ^^ (brackets (if n = m then doc_int m else doc_op colon (doc_int m) (doc_int (n-1))))
   | Typ_app(Id_aux (Id "vector", _), [
       Typ_arg_aux(Typ_arg_nexp
-                  (Nexp_aux(Nexp_minus (n', Nexp_aux((Nexp_constant 1), _)),_) as n_n),_);
+                    (Nexp_aux(Nexp_minus (n', Nexp_aux((Nexp_constant 1), _)),_) as n_n),_);
+      Typ_arg_aux(Typ_arg_nexp m_nexp, _);
+      Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_dec, _)), _);
+      Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
+    (doc_id id) ^^ (brackets (if n' = m_nexp then nexp m_nexp else doc_op colon (nexp m_nexp) (nexp n_n)))
+  | Typ_app(Id_aux (Id "vector", _), [
+      Typ_arg_aux(Typ_arg_nexp
+                  (Nexp_aux(Nexp_sum (n', Nexp_aux((Nexp_constant -1), _)),_) as n_n),_);
       Typ_arg_aux(Typ_arg_nexp m_nexp, _);
       Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_dec, _)), _);
       Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
@@ -1038,6 +1046,8 @@ let doc_exp, doc_let =
       let opening = separate space [string "switch"; exp e; lbrace] in
       let cases = separate_map (break 1) doc_case pexps in
       surround 2 1 opening cases rbrace
+  | E_sizeof n ->
+    separate space [string "sizeof"; doc_nexp n]
   | E_exit e ->
     separate space [string "exit"; atomic_exp e;]
   | E_assert(c,m) ->

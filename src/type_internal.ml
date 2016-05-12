@@ -628,7 +628,7 @@ let rec normalize_n_rec recur_ok n =
     (match first_non_nu (get_outer_most n) with
      | None -> n
      | Some n' -> n')
-  | Nconst _ | Nvar _ | Nuvar _ | Npos_inf | Nneg_inf | Ninexact -> n
+  | Nconst _ | Nvar _ | Npos_inf | Nneg_inf | Ninexact -> n
   | Nneg n -> 
     let n',to_recur,add_neg = (match n.nexp with
       | Nconst i -> negate n,false,false
@@ -2396,8 +2396,18 @@ let initial_typ_env =
     ("abs",Base(((mk_nat_params ["n";"m";]),
                  (mk_pure_fun (mk_atom (mk_nv "n")) (mk_range n_zero (mk_nv "m")))),
                 External (Some "abs"),[],pure_e,pure_e,nob));
+    ("max",
+     Base(((mk_nat_params ["n";"m";"o"]),
+           (mk_pure_fun (mk_tup [(mk_atom (mk_nv "n"));(mk_atom (mk_nv "m"))])
+                        (mk_atom (mk_nv "o")))),
+          External (Some "max"),[],pure_e,pure_e,nob));
+    ("min",
+     Base(((mk_nat_params ["n";"m";"o"]),
+           (mk_pure_fun (mk_tup [(mk_atom (mk_nv "n"));(mk_atom (mk_nv "m"))])
+                        (mk_atom (mk_nv "o")))),
+          External (Some "min"),[],pure_e,pure_e,nob));
   ]
-
+    
 
 let rec typ_subst s_env leave_imp t =
   match t.t with
@@ -2482,6 +2492,8 @@ let rec cs_subst t_env cs =
 let subst_with_env env leave_imp t cs e =
   (typ_subst env leave_imp t, cs_subst env cs, e_subst env e, env)
 
+let subst_n_with_env = n_subst 
+
 let subst (k_env : (Envmap.k * kind) list) (leave_imp:bool) (use_var:bool)
           (t : t) (cs : nexp_range list) (e : effect) : (t * nexp_range list * effect * t_arg emap) =
   let subst_env = Envmap.from_list
@@ -2491,7 +2503,8 @@ let subst (k_env : (Envmap.k * kind) list) (leave_imp:bool) (use_var:bool)
                               | K_Nat -> TA_nexp (if use_var then (new_nv id) else (new_n ()))
                               | K_Ord -> TA_ord (new_o ())
                               | K_Efct -> TA_eft (new_e ())
-                              | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "substitution given an environment with a non-base-kind kind"))) k_env) 
+                              | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown
+                                              "substitution given an environment with a non-base-kind kind"))) k_env) 
   in
   subst_with_env subst_env leave_imp t cs e
 

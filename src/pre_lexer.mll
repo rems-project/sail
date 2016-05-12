@@ -91,6 +91,7 @@ let kw_table =
      ("register",		 (fun x -> Other));
      ("scattered",               (fun x -> Other));
      ("struct",                  (fun x -> Other));
+     ("sizeof",                  (fun x -> Other));
      ("switch",			 (fun x -> Other));
      ("then",                    (fun x -> Other));
      ("true",                    (fun x -> Other));

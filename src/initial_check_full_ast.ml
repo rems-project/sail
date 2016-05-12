@@ -344,6 +344,7 @@ and to_exp (k_env : kind Envmap.t) (def_ord : Ast.order) (E_aux(exp,(l,_)) :  ex
     | E_case(exp,pexps) -> E_case(to_exp k_env def_ord exp, List.map (to_case k_env def_ord) pexps)
     | E_let(leb,exp) -> E_let(to_letbind k_env def_ord leb, to_exp k_env def_ord exp)
     | E_assign(lexp,exp) -> E_assign(to_lexp k_env def_ord lexp, to_exp k_env def_ord exp)
+    | E_sizeof(nexp) -> E_sizeof(to_nexp k_env nexp)
     | E_exit exp -> E_exit(to_exp k_env def_ord exp)
     | E_assert(cond,msg) -> E_assert(to_exp k_env def_ord cond, to_exp k_env def_ord msg)
     | E_comment s -> E_comment s

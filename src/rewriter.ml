@@ -328,6 +328,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
                           Pat_aux (Pat_exp(rewriters.rewrite_pat rewriters nmap p,rewrite e),pannot)) pexps)))
   | E_let (letbind,body) -> rewrap (E_let(rewriters.rewrite_let rewriters nmap letbind,rewrite body))
   | E_assign (lexp,exp) -> rewrap (E_assign(rewriters.rewrite_lexp rewriters nmap lexp,rewrite exp))
+  | E_sizeof n -> rewrap (E_sizeof n)
   | E_exit e -> rewrap (E_exit (rewrite e))
   | E_assert(e1,e2) -> rewrap (E_assert(rewrite e1,rewrite e2))
   | E_internal_cast ((l,casted_annot),exp) -> 
@@ -335,7 +336,8 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
     (*let _ = Printf.eprintf "Removing an internal_cast with %s\n" (tannot_to_string casted_annot) in*)
     (match casted_annot,exp with
      | Base((_,t),_,_,_,_,_),E_aux(ec,(ecl,Base((_,exp_t),_,_,_,_,_))) ->
-       (*let _ = Printf.eprintf "Considering removing an internal cast where the two types are %s and %s\n" (t_to_string t) (t_to_string exp_t) in*)
+       (*let _ = Printf.eprintf "Considering removing an internal cast where the two types are %s and %s\n" 
+         (t_to_string t) (t_to_string exp_t) in*)
        (match t.t,exp_t.t with
         (*TODO should pass d_env into here so that I can look at the abbreviations if there are any here*)
         | Tapp("vector",[TA_nexp n1;TA_nexp nw1;TA_ord o1;_]),
@@ -370,7 +372,8 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
     (match impl with
      | Base((_,t),_,_,_,_,bounds) ->
        let bounds = match nmap with | None -> bounds | Some (nm,_) -> add_map_to_bounds nm bounds in
-       (*let _ = Printf.eprintf "Rewriting internal expression, with type %s, and bounds %s\n" (t_to_string t) (bounds_to_string bounds) in*)
+       (*let _ = Printf.eprintf "Rewriting internal expression, with type %s, and bounds %s\n" 
+         (t_to_string t) (bounds_to_string bounds) in*)
        (match t.t with
         (*Old case; should possibly be removed*)
         | Tapp("register",[TA_typ {t= Tapp("vector",[ _; TA_nexp r;_;_])}])
@@ -391,6 +394,18 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
           raise (Reporting_basic.err_unreachable l 
                    ("Internal_exp given unexpected types " ^ (t_to_string t))))
      | _ -> raise (Reporting_basic.err_unreachable l ("Internal_exp given none Base annot")))
+  | E_sizeof_internal (l,impl) ->
+    (match impl with
+     | Base((_,t),_,_,_,_,bounds) ->
+       let bounds = match nmap with | None -> bounds | Some (nm,_) -> add_map_to_bounds nm bounds in
+       (match t.t with
+        | Tapp("atom",[TA_nexp n]) ->
+          let nexps = expand_nexp n in
+          (match (match_to_program_vars nexps bounds) with
+           | [] -> rewrite_nexp_to_exp None l n
+           | map -> rewrite_nexp_to_exp (Some map) l n)
+        | _ -> raise (Reporting_basic.err_unreachable l ("Sizeof internal had non-atom type " ^ (t_to_string t))))
+     | _ -> raise (Reporting_basic.err_unreachable l ("Sizeof internal had none base annot")))
   | E_internal_exp_user ((l,user_spec),(_,impl)) -> 
     (match (user_spec,impl) with
      | (Base((_,tu),_,_,_,_,_), Base((_,ti),_,_,_,_,bounds)) ->

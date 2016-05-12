@@ -695,7 +695,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
             type_coerce (Expr l) d_env Require false false b_env ret 
               (E_aux (E_app(id,internal_exp::parms),(l,(Base(([],ret),tag,cs,ef,efr,nob))))) expect_t
           | (IP_none,_) -> 
-            (*let _ = Printf.eprintf "no implicit: ret %s and expect_t %s\n" (t_to_string ret) (t_to_string expect_t) in*)
+          (*let _ = Printf.eprintf "no implicit: ret %s and expect_t %s\n" (t_to_string ret) (t_to_string expect_t) in*)
             type_coerce (Expr l) d_env Require false false b_env ret 
               (E_aux (E_app(id, parms),(l,(Base(([],ret),tag,cs,ef,efr,nob))))) expect_t
       in
@@ -899,7 +899,8 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
          merge_bounds then_bs else_bs,
          sub_effects))
     | E_for(id,from,to_,step,order,block) -> 
-      (*TOTHINK Instead of making up new ns here, perhaps I should instead make sure they conform to range without coercion as these nu variables are likely floating*)
+      (*TOTHINK Instead of making up new ns here, perhaps I should instead make sure they conform to range 
+        without coercion as these nu variables are likely floating*)
       let f,t,s = new_n(),new_n(),new_n() in
       let ft,tt,st = mk_atom f, mk_atom t, mk_atom s in
       let from',from_t,_,from_c,_,from_ef = check_exp envs imp_param false ft from in
@@ -915,7 +916,8 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       in 
       (*TODO Might want to extend bounds here for the introduced variable*)
       let (block',b_t,_,b_c,_,b_ef)=
-        check_exp (Env(d_env,Envmap.insert t_env (id_to_string id,new_annot),b_env,tp_env)) imp_param true expect_t block
+        check_exp (Env(d_env,Envmap.insert t_env (id_to_string id,new_annot),b_env,tp_env))
+          imp_param true expect_t block
       in
       let sub_effects = union_effects b_ef (union_effects step_ef (union_effects to_ef from_ef)) in
       (E_aux(E_for(id,from',to_',step',order,block'),(l,constrained_annot_efr b_t local_cs sub_effects)),expect_t,
@@ -1232,8 +1234,9 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       (match t'.t with
         | Tid i | Tabbrev(_, {t=Tid i}) | Tapp(i,_) ->
           (match lookup_record_typ i d_env.rec_env with
-            | Some((i,Register,tannot,fields)) -> typ_error l "Expected a struct for this update, instead found a register"
-            | Some(((i,Record,(Base((params,t),tag,cs,eft,_,bounds)),fields) as r)) ->
+           | Some((i,Register,tannot,fields)) ->
+             typ_error l "Expected a struct for this update, instead found a register"
+           | Some(((i,Record,(Base((params,t),tag,cs,eft,_,bounds)),fields) as r)) ->
               if (List.length fexps <= List.length fields) 
               then 
                 let (ts,cs,eft,subst_env) = subst params false false t cs eft in
@@ -1326,7 +1329,8 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
     | E_let(lbind,body) -> 
       let (lb',t_env',cs,b_env',ef) = (check_lbind envs imp_param false Emp_local lbind) in
       let new_env = 
-        (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env false) t_env t_env', merge_bounds b_env' b_env,tp_env)) 
+        (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env false)
+               t_env t_env', merge_bounds b_env' b_env,tp_env)) 
       in
       let (e,t,_,cs',_,ef') = check_exp new_env imp_param true expect_t body in
       let effects = union_effects ef ef' in
@@ -1339,11 +1343,20 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       let (exp',t'',_,cs',_,efr') = check_exp envs imp_param true t' exp in
       let (t',c') = type_consistent (Expr l) d_env Require false unit_t expect_t in
       let effects = union_effects efl (union_effects efr efr') in
-      (E_aux(E_assign(lexp',exp'),(l,(Base(([],unit_t),tag,[],efl,effects,nob)))),unit_t,t_env',cs@cs'@c',b_env',effects)
+      (E_aux(E_assign(lexp',exp'),(l,(Base(([],unit_t),tag,[],efl,effects,nob)))),
+       unit_t,t_env',cs@cs'@c',b_env',effects)
     | E_exit e ->
       let (e',t',_,_,_,_) = check_exp envs imp_param true (new_t ()) e in
       let efs = add_effect (BE_aux(BE_escape, l)) pure_e in
       (E_aux (E_exit e',(l,(simple_annot_efr expect_t efs))),expect_t,t_env,[],nob,efs)
+    | E_sizeof nexp ->
+      let n = anexp_to_nexp envs nexp in
+      let n_subst = subst_n_with_env tp_env n in
+      let n_typ = mk_atom n_subst in
+      let nannot = simple_annot n_typ in
+      let e = E_aux (E_sizeof_internal (l, nannot), (l,nannot)) in      
+      let t',cs,ef,e' = type_coerce (Expr l) d_env Require false false b_env n_typ e expect_t in
+      (e',t',t_env,cs,nob,ef)
     | E_assert(cond,msg) ->
       let (cond',t',_,_,_,_) = check_exp envs imp_param true bit_t cond in
       let (msg',mt',_,_,_,_) = check_exp envs imp_param true {t= Tapp("option",[TA_typ string_t])} msg in
@@ -1354,7 +1367,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
     | E_comment_struc e ->
       (E_aux (E_comment_struc e, (l, simple_annot unit_t)), expect_t,t_env,[],nob,pure_e)
     | E_internal_cast _ | E_internal_exp _ | E_internal_exp_user _ | E_internal_let _
-    | E_internal_plet _ | E_internal_return _ -> 
+    | E_internal_plet _ | E_internal_return _ | E_sizeof_internal _ -> 
       raise (Reporting_basic.err_unreachable l "Internal expression passed back into type checker")
 
 and recheck_for_register envs imp_param expect_t exp = 
