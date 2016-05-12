@@ -12,13 +12,13 @@ typedef CapReg = register bits [256:0] {
   202:      perm_reserved9; (* perm bit 9 *)
   201:      perm_reserved8; (* perm bit 8 *)
   200:      permit_seal;
-  199:      permit_store_ephemeral_cap;
+  199:      permit_store_local_cap;
   198:      permit_store_cap;
   197:      permit_load_cap;
   196:      permit_store;
   195:      permit_load;
   194:      permit_execute;
-  193:      non_ephemeral;
+  193:      global;
   192:      sealed;
   191..128: offset;
   127..64:  base;
@@ -79,13 +79,13 @@ typedef CapStruct = const struct {
   bool    perm_reserved9;
   bool    perm_reserved8;
   bool    permit_seal;
-  bool    permit_store_ephemeral_cap;
+  bool    permit_store_local_cap;
   bool    permit_store_cap;
   bool    permit_load_cap;
   bool    permit_store;
   bool    permit_load;
   bool    permit_execute;
-  bool    non_ephemeral;
+  bool    global;
   bool    sealed;
   bit[64] offset;
   bit[64] base;
@@ -104,13 +104,13 @@ let (CapStruct) null_cap = {
   perm_reserved9 = false;
   perm_reserved8 = false;
   permit_seal = false;
-  permit_store_ephemeral_cap = false;
+  permit_store_local_cap = false;
   permit_store_cap = false;
   permit_load_cap = false;
   permit_store = false;
   permit_load = false;
   permit_execute = false;
-  non_ephemeral = false;
+  global = false;
   sealed = false;
   offset = 0;
   base = 0;
@@ -133,13 +133,13 @@ function CapStruct capRegToCapStruct((CapReg) capReg) =
     perm_reserved9             = capReg.perm_reserved9;
     perm_reserved8             = capReg.perm_reserved8;
     permit_seal                = capReg.permit_seal;
-    permit_store_ephemeral_cap = capReg.permit_store_ephemeral_cap;
+    permit_store_local_cap     = capReg.permit_store_local_cap;
     permit_store_cap           = capReg.permit_store_cap;
     permit_load_cap            = capReg.permit_load_cap;
     permit_store               = capReg.permit_store;
     permit_load                = capReg.permit_load;
     permit_execute             = capReg.permit_execute;
-    non_ephemeral              = capReg.non_ephemeral;
+    global                     = capReg.global;
     sealed                     = capReg.sealed;
     offset                     = capReg.offset;
     base                       = capReg.base;
@@ -161,13 +161,13 @@ function (bit[31]) capPermsToVec((CapStruct) cap) =
       : [cap.perm_reserved9]
       : [cap.perm_reserved8]
       : [cap.permit_seal]
-      : [cap.permit_store_ephemeral_cap]
+      : [cap.permit_store_local_cap]
       : [cap.permit_store_cap]
       : [cap.permit_load_cap]
       : [cap.permit_store]
       : [cap.permit_load]
       : [cap.permit_execute]
-      : [cap.non_ephemeral]
+      : [cap.global]
   )
 
 function (bit[257]) capStructToBit257((CapStruct) cap) =

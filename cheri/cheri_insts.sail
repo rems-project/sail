@@ -111,13 +111,13 @@ function clause execute(CAndPerm(cd, cb, rt)) =
         perm_reserved9             = (cb_val.perm_reserved9             & (rt_val[9]));
         perm_reserved8             = (cb_val.perm_reserved8             & (rt_val[8]));
         permit_seal                = (cb_val.permit_seal                & (rt_val[7]));
-        permit_store_ephemeral_cap = (cb_val.permit_store_ephemeral_cap & (rt_val[6]));
+        permit_store_local_cap     = (cb_val.permit_store_local_cap     & (rt_val[6]));
         permit_store_cap           = (cb_val.permit_store_cap           & (rt_val[5]));
         permit_load_cap            = (cb_val.permit_load_cap            & (rt_val[4]));
         permit_store               = (cb_val.permit_store               & (rt_val[3]));
         permit_load                = (cb_val.permit_load                & (rt_val[2]));
         permit_execute             = (cb_val.permit_execute             & (rt_val[1]));
-        non_ephemeral              = (cb_val.non_ephemeral              & (rt_val[0]));
+        global                     = (cb_val.global                     & (rt_val[0]));
       })
     }
 }
@@ -417,7 +417,7 @@ function clause execute (CUnseal(cd, cs, ct)) =
     writeCapReg(cd, {cs_val with 
       sealed=false; 
       otype=0;
-      non_ephemeral=(cs_val.non_ephemeral & ct_val.non_ephemeral)
+      global=(cs_val.global & ct_val.global)
     })
 }
 
@@ -495,7 +495,7 @@ function clause execute(CJALR(cd, cb, link)) =
     exit (raise_c2_exception(CapEx_SealViolation, cb))
   else if (~(cb_val.permit_execute)) then
     exit (raise_c2_exception(CapEx_PermitExecuteViolation, cb))
-  else if (~(cb_val.non_ephemeral)) then
+  else if (~(cb_val.global)) then
     exit (raise_c2_exception(CapEx_GlobalViolation, cb))
   else if (((nat)(cb_val.offset)) + 4 > ((nat) (cb_val.length))) then
     exit (raise_c2_exception(CapEx_LengthViolation, cb))
@@ -655,7 +655,7 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
       exit (raise_c2_exception(CapEx_SealViolation, cb))
     else if (~(cb_val.permit_store_cap)) then
       exit (raise_c2_exception(CapEx_PermitStoreCapViolation, cb))
-    else if ((~(cb_val.permit_store_ephemeral_cap)) & (cs_val.tag) & ~(cs_val.non_ephemeral)) then
+    else if ((~(cb_val.permit_store_local_cap)) & (cs_val.tag) & ~(cs_val.global)) then
       exit (raise_c2_exception(CapEx_PermitStoreLocalCapViolation, cb))
     else
       {
