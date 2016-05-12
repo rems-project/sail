@@ -662,6 +662,9 @@ exp :: 'E_' ::=
   | lexp := exp                                      :: :: assign
     {{ com imperative assignment }}
 
+  | sizeof nexp                                         :: :: sizeof
+  {{ com Expression to return the value of the nexp variable or expression at run time }}
+
   | exit exp						:: :: exit
     {{ com expression to halt all current execution, potentially calling a system, trap, or interrupt handler with exp }}
   | assert ( exp , exp' )                            :: :: assert
@@ -669,6 +672,7 @@ exp :: 'E_' ::=
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
   | ( annot ) exp                                   :: :: internal_cast {{ com This is an internal cast, generated during type checking that will resolve into a syntactic cast after }}
   | annot                       :: :: internal_exp {{ com This is an internal use for passing nexp information  to library functions, postponed for constraint solving }}
+  | sizeof annot             :: :: sizeof_internal {{ com For sizeof during type checking, to replace nexp with internal n}}
   | annot , annot'           :: :: internal_exp_user {{ com This is like the above but the user has specified an implicit parameter for the current function }}
   | comment string            :: :: comment {{ com For generated unstructured comments }}
   | comment exp               :: :: comment_struc {{ com For generated structured comments }}

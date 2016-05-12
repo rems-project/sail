@@ -544,6 +544,7 @@ exp :: 'E_' ::=
   | exp := exp'                                      :: :: assign
     {{ com imperative assignment }}
 
+  | sizeof atyp                                         :: :: sizeof
   | exit exp						:: :: exit
   | assert ( exp , exp' )                               :: :: assert
 
