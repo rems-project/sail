@@ -229,9 +229,6 @@ function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) =
       addr
   }
 
-function bit[64] TranslateOrExit((bit[64]) vAddr, (MemAccessType) accessType) =
-  TLBTranslate(vAddr, accessType)
-
 typedef regno = bit[5]                      (* a register number *)
 typedef imm16 = bit[16]                     (* 16-bit immediate *)
 typedef regregreg   = (regno, regno, regno) (* a commonly used instruction format with three register operands *)

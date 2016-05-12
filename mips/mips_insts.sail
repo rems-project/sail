@@ -1033,7 +1033,7 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
     if ~ (isAddressAligned(vAddr, width)) then
       exit (SignalExceptionBadAddr(AdEL, vAddr)) (* unaligned access *)
     else
-      let pAddr = (TranslateOrExit(vAddr, LoadData)) in
+      let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
             memResult := if (linked) then
                 {
@@ -1068,7 +1068,7 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
         if ~ (isAddressAligned(vAddr, width)) then
           exit (SignalExceptionBadAddr(AdES, vAddr)) (* unaligned access *)
         else
-          let pAddr = (TranslateOrExit(vAddr, StoreData)) in
+          let pAddr = (TLBTranslate(vAddr, StoreData)) in
           {
                 if (conditional) then
                   {
@@ -1101,7 +1101,7 @@ function clause execute(LWL(base, rt, offset)) =
       {
         (* XXX length check not quite right, but conservative *)
         (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, W);
-        let pAddr = (TranslateOrExit(vAddr, LoadData)) in
+        let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
             mem_val   := MEMr (pAddr[63..2] : 0b00, 4); (* read word of interest *)
             reg_val   := rGPR(rt);
@@ -1121,7 +1121,7 @@ function clause execute(LWR(base, rt, offset)) =
       {
         (* XXX length check not quite right, but conservative *)
         (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, W);
-        let pAddr = (TranslateOrExit(vAddr, LoadData)) in
+        let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
             mem_val   := MEMr (pAddr[63..2] : 0b00, 4); (* read word of interest *)
             reg_val   := rGPR(rt);
@@ -1143,7 +1143,7 @@ function clause execute(SWL(base, rt, offset)) =
       {
         (* XXX length check not quite right, but conservative *)
         (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), StoreData, W);
-        let pAddr = (TranslateOrExit(vAddr, StoreData)) in
+        let pAddr = (TLBTranslate(vAddr, StoreData)) in
           {
             reg_val   := rGPR(rt);
             switch (vAddr[1..0])
@@ -1163,7 +1163,7 @@ function clause execute(SWR(base, rt, offset)) =
       {
         (* XXX length check not quite right, but conservative *)
         (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), StoreData, W);
-        let (pAddr) = (TranslateOrExit(vAddr, StoreData)) in
+        let (pAddr) = (TLBTranslate(vAddr, StoreData)) in
           {
             wordAddr := pAddr[63..2] : 0b00;
             reg_val   := rGPR(rt);
@@ -1185,7 +1185,7 @@ function clause execute(LDL(base, rt, offset)) =
   {
     (* XXX length check not quite right, but conservative *)
     (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, D);
-    let pAddr = (TranslateOrExit(vAddr, StoreData)) in
+    let pAddr = (TLBTranslate(vAddr, StoreData)) in
       {
         mem_val   := MEMr (pAddr[63..3] : 0b000, 8); (* read double of interest *)
         reg_val   := rGPR(rt);
@@ -1211,7 +1211,7 @@ function clause execute(LDR(base, rt, offset)) =
   {
     (* XXX length check not quite right, but conservative *)
     (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, D);
-    let pAddr = (TranslateOrExit(vAddr, StoreData)) in
+    let pAddr = (TLBTranslate(vAddr, StoreData)) in
       {
         mem_val   := MEMr (pAddr[63..3] : 0b000, 8); (* read double of interest *)
         reg_val   := rGPR(rt);
@@ -1237,7 +1237,7 @@ function clause execute(SDL(base, rt, offset)) =
       {
         (* XXX length check not quite right, but conservative *)
         (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), StoreData, D);
-        let pAddr = (TranslateOrExit(vAddr, StoreData)) in
+        let pAddr = (TLBTranslate(vAddr, StoreData)) in
           {
             reg_val := rGPR(rt);
             switch (vAddr[2..0])
@@ -1263,7 +1263,7 @@ function clause execute(SDR(base, rt, offset)) =
   {
         (* XXX length check not quite right, but conservative *)
         (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), StoreData, D);
-        let pAddr = (TranslateOrExit(vAddr, StoreData)) in
+        let pAddr = (TLBTranslate(vAddr, StoreData)) in
           {
             reg_val := rGPR(rt);
             wordAddr := pAddr[63..3] : 0b000;

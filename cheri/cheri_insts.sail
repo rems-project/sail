@@ -554,7 +554,7 @@ function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
           exit (SignalExceptionBadAddr(AdEL, vAddr64))
         else
           {
-            pAddr      := (TranslateOrExit(vAddr64, LoadData));
+            pAddr      := (TLBTranslate(vAddr64, LoadData));
             widthBytes := wordWidthBytes(width);
             memResult  := if (linked) then
                 {
@@ -609,7 +609,7 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
           exit (SignalExceptionBadAddr(AdES, vAddr64))
         else
           {
-            pAddr  := (TranslateOrExit(vAddr64, StoreData));
+            pAddr  := (TLBTranslate(vAddr64, StoreData));
             rs_val := rGPR(rs);
             if (conditional) then
               {
@@ -670,7 +670,7 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
           exit (SignalExceptionBadAddr(AdES, vAddr64))
         else
           {
-            pAddr  := (TranslateOrExit(vAddr64, if cs_val.tag then StoreData else StoreData)); (* XXX use StoreCap here. *)
+            pAddr  := (TLBTranslate(vAddr64, if cs_val.tag then StoreData else StoreData)); (* XXX use StoreCap here. *)
             if (conditional) then
               {
                 success := if (CP0LLBit[0]) then
@@ -715,7 +715,7 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
           exit (SignalExceptionBadAddr(AdEL, vAddr64))
         else
           {
-            pAddr  := (TranslateOrExit(vAddr64, LoadData)); (* XXX use LoadCap here. *)
+            pAddr  := (TLBTranslate(vAddr64, LoadData)); (* XXX use LoadCap here. *)
             let (tag, mem) = (if (linked) 
               then
                 {
