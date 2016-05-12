@@ -491,11 +491,15 @@ let mips_register_data_all =  [
   ("HI", (D_decreasing, 64, 63));
   ("LO", (D_decreasing, 64, 63));
   (* control registers *)
-  ("CP0Status", (D_decreasing, 32, 31));
-  ("CP0Cause", (D_decreasing, 32, 31));
-  ("CP0EPC", (D_decreasing, 64, 63));
-  ("CP0LLAddr", (D_decreasing, 64, 63));
-  ("CP0LLBit", (D_decreasing, 1, 0));
+  ("CP0Status",    (D_decreasing, 32, 31));
+  ("CP0Cause",     (D_decreasing, 32, 31));
+  ("CP0EPC",       (D_decreasing, 64, 63));
+  ("CP0LLAddr",    (D_decreasing, 64, 63));
+  ("CP0LLBit",     (D_decreasing, 1, 0));
+  ("CP0Count",     (D_decreasing, 32, 31));
+  ("CP0Compare",   (D_decreasing, 32, 31));
+  ("CP0HWREna",    (D_decreasing, 32, 31));
+  ("CP0UserLocal", (D_decreasing, 64, 63));
 ]
 
 let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
@@ -872,6 +876,9 @@ let get_addr_trans_regs _ =
   Some([
     (Interp_interface.Reg0("PC", 63, 64, Interp_interface.D_decreasing),    Reg.find "PC" !reg);
     (Interp_interface.Reg0("CP0Status", 31, 32, Interp_interface.D_decreasing), Reg.find "CP0Status" !reg);
+    (Interp_interface.Reg0("CP0Cause", 31, 32, Interp_interface.D_decreasing), Reg.find "CP0Cause" !reg);
+    (Interp_interface.Reg0("CP0Count", 31, 32, Interp_interface.D_decreasing), Reg.find "CP0Count" !reg);
+    (Interp_interface.Reg0("CP0Compare", 31, 32, Interp_interface.D_decreasing), Reg.find "CP0Compare" !reg);
     (Interp_interface.Reg0("inBranchDelay", 0, 1, Interp_interface.D_decreasing), Reg.find "inBranchDelay" !reg);
   ])
 

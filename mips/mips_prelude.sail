@@ -30,6 +30,10 @@ register (bit[64])  CP0ErrorEPC
 register (bit[1])   CP0LLBit
 register (bit[64])  CP0LLAddr
 register (bit[64])  CP0BadVAddr
+register (bit[32])  CP0Count
+register (bit[32])  CP0Compare
+register (bit[32])  CP0HWREna
+register (bit[64])  CP0UserLocal
 
 typedef StatusReg = register bits [31:0] {
   31 .. 28        : CU;  (* co-processor enable bits *)
@@ -208,6 +212,29 @@ function AccessLevel getAccessLevel() =
       case _    -> User (* behaviour undefined, assume user *)
     }
 
+function unit checkCP0Access () =
+  {
+    let accessLevel = getAccessLevel() in
+    if ((accessLevel != Kernel) & (~((CP0Status.CU)[0]))) then
+      {
+        (CP0Cause.CE) := 0b00;
+        exit (SignalException(CpU));
+      }
+  }
+
+function unit incrementCP0Count() = {
+  CP0Count := (CP0Count + 1);
+  if (CP0Count == CP0Compare) then {
+    ((CP0Cause.IP)[15]) := bitone;
+  };
+  (* XXX Sail does not allow reading fields here :-( *)
+  let (bit[32])status = CP0Status in
+  let (bit[32])cause  = CP0Cause in
+  let (bit[8]) ims = (status[15..8]) in
+  let (bit[8]) ips = (cause[15..8]) in
+  if ((CP0Status.IE) & ((ips & ims) != 0x00)) then
+    exit (SignalException(Int));
+}
 
 function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) = 
   {

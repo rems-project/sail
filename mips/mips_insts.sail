@@ -1286,8 +1286,8 @@ function clause execute(SDR(base, rt, offset)) =
 union ast member regregimm16 CACHE
 function clause decode (0b101111 : (regno) base : (regno) op : (imm16) imm) =
   Some(CACHE(base, op, imm))
-function clause execute (CACHE(base, op, imm)) =
-  () (* XXX NOP *)
+function clause execute (CACHE(base, op, imm)) = 
+  checkCP0Access () (* pretty much a NOP because no caches *)
 
 (* PREF - prefetching into (non-existent) caches *)
 
@@ -1317,7 +1317,8 @@ function clause decode (0b010000 : 0b00000 : (regno) rt : (regno) rd : 0b0000000
   Some(MFC0(rt, rd, sel, false)) (* MFC0 *)
 function clause decode (0b010000 : 0b00001 : (regno) rt : (regno) rd : 0b00000000 : (bit[3]) sel) =
   Some(MFC0(rt, rd, sel, true))  (* DMFC0 *)
-function clause execute (MFC0(rt, rd, sel, double)) = 
+function clause execute (MFC0(rt, rd, sel, double)) = {
+  checkCP0Access();
   let (bit[64]) result = switch (rd, sel)
         {
           case (0b00000,0b000) -> 0                (* 0, TLB Index *)
@@ -1327,10 +1328,10 @@ function clause execute (MFC0(rt, rd, sel, double)) =
           case (0b00100,0b000) -> 0                (* 4, TLB Context *)
           case (0b00101,0b000) -> 0                (* 5, TLB PageMask *)
           case (0b00110,0b000) -> 0                (* 6, TLB Wired *)
-          case (0b00111,0b000) -> 0                (* 6, HWREna *)
+          case (0b00111,0b000) -> EXTZ(CP0HWREna)     (* 6, HWREna *)
           case (0b01000,0b000) -> CP0BadVAddr      (* 8, BadVAddr reg *)
           case (0b01000,0b001) -> 0                (* 8, BadInstr reg XXX TODO *)
-          case (0b01001,0b000) -> 0                (* 9, Count reg XXX TODO *)
+          case (0b01001,0b000) -> EXTZ(CP0Count)   (* 9, Count reg *)
           case (0b01010,0b000) -> 0                (* 10, TLB EntryHi *)
           case (0b01011,0b000) -> EXTZ(CP0Compare) (* 11, Compare reg *)
           case (0b01100,0b000) -> EXTZ(CP0Status)  (* 12, Status reg *)
@@ -1356,20 +1357,24 @@ function clause execute (MFC0(rt, rd, sel, double)) =
           case _               -> {exit (SignalException(ResI)); 0}
         } in
   wGPR(rt) := if (double) then result else EXTS(result[31..0])
-  
+}  
 
 union ast member (regno, regno, bit[3], bool) MTC0
 function clause decode (0b010000 : 0b00100 : (regno) rt : (regno) rd : 0b00000000 : (bit[3]) sel) =
   Some(MTC0(rt, rd, sel, false)) (* MTC0 *)
 function clause decode (0b010000 : 0b00101 : (regno) rt : (regno) rd : 0b00000000 : (bit[3]) sel) =
   Some(MTC0(rt, rd, sel, true))  (* DMTC0 *)
-function clause execute (MTC0(rt, rd, sel, double)) = 
+function clause execute (MTC0(rt, rd, sel, double)) = {
+  checkCP0Access();
   let reg_val = (rGPR(rt)) in
   switch (rd, sel)
     {
+      case (0b00100,0b010) -> CP0UserLocal := reg_val
+      case (0b00111,0b000) -> CP0HWREna := (reg_val[31..30] : 0b00000000000000000000000000 : reg_val[4..0])
+      case (0b01001,0b000) -> CP0Count := reg_val[31..0]
       case (0b01011,0b000) -> {  (* 11, sel 0: Compare reg *)
         CP0Compare := reg_val[31..0]; 
-        (CP0Cause.IP)[8] := 0
+        (CP0Cause.IP)[15] := 0
       }
       case (0b01100,0b000) -> {  (* 12 Status *)
         (CP0Status.CU)  := reg_val[31..28];
@@ -1391,12 +1396,31 @@ function clause execute (MTC0(rt, rd, sel, double)) =
       case (0b11110,0b000) -> CP0ErrorEPC := reg_val         (* 30, ErrorEPC *)
       case _               -> exit (SignalException(ResI))
     }
+}
+
+union ast member (regno, regno) RDHWR
+function clause decode (0b011111 : 0b00000 : (regno) rt : (regno) rd : 0b00000 : 0b111011) = Some(RDHWR(rt, rd))
+function clause execute (RDHWR(rt, rd)) = {
+  let accessLevel = getAccessLevel() in
+  if ((accessLevel != Kernel) & (~((CP0Status.CU)[0])) & ~(CP0HWREna[rd])) then
+    exit (SignalException(ResI));
+  let (bit[64]) temp = switch (rd) {
+    case 0b00000 -> EXTZ([bitzero])  (* CPUNum *)
+    case 0b00001 -> EXTZ([bitzero])  (* SYNCI_step *)
+    case 0b00010 -> EXTZ(CP0Count) (* Count *)
+    case 0b00011 -> EXTZ([bitone])   (* Count resolution *)
+    case 0b11101 -> CP0UserLocal   (* User local register *)
+    case _       -> exit (SignalException(ResI))
+  } in
+  wGPR(rt) := temp;
+}
 
 union ast member unit ERET
 function clause decode (0b010000 : 0b1 : 0b0000000000000000000 : 0b011000) =
       Some(ERET)
 function clause execute (ERET) =
       {
+        checkCP0Access();
         ERETHook();
         CP0LLBit := 0b0;
         if (CP0Status.ERL == bitone) then

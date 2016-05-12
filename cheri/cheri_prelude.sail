@@ -407,7 +407,9 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
     vAddr64;
   }
 
-function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) =
+function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) = {
+  incrementCP0Count();
+  (* XXX Sail does not allow reading fields here :-( *)
   let (bit[257]) x = PCC in
   let (bit[64])  base = x[127..64] in
   let (bit[64])  length = x[63..0] in
@@ -418,6 +420,7 @@ function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType
     exit (raise_c2_exception_noreg(CapEx_LengthViolation)) (* XXX take exception properly *)
   else
     TLBTranslate(absPC, accessType)
+}
 
 function unit checkCP2usable () =
       {
@@ -427,3 +430,4 @@ function unit checkCP2usable () =
             exit (SignalException(CpU));
           }
       }
+
