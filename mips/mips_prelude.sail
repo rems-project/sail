@@ -34,14 +34,14 @@ register (bit[64])  CP0BadVAddr
 typedef StatusReg = register bits [31:0] {
   31 .. 28        : CU;  (* co-processor enable bits *)
   (* RP/FR/RE/MX/PX not implemented *)
-  22              : BEV; (* use boot exception vectors XXX initialise to one *)
+  22              : BEV; (* use boot exception vectors (initialised to one) *)
   (* TS/SR/NMI not implemented *)
   15 .. 8         : IM;  (* Interrupt mask *)
   7               : KX;  (* kernel 64-bit enable *)
   6               : SX;  (* supervisor 64-bit enable *)
   5               : UX;  (* user 64-bit enable *)
   4 .. 3          : KSU; (* Processor mode *)
-  2               : ERL; (* error level XXX initialise to one *)
+  2               : ERL; (* error level (should be initialised to one, but BERI is different) *)
   1               : EXL; (* exception level *)
   0               : IE;  (* interrupt enable *)
 }
@@ -102,11 +102,13 @@ val bit[64] -> bool effect pure NotWordVal
 function bool NotWordVal (word) = 
     (word[31] ^^ 32) != word[63..32]
 
+(* Read numbered GP reg. ($0 always zero) *)
 val bit[5] -> bit[64] effect {rreg} rGPR
 function bit[64] rGPR idx = {
          if idx == 0 then 0 else GPR[idx]
 }
 
+(* Write numbered GP reg. (writes to $0 ignored) *)
 val (bit[5], bit[64]) -> unit effect {wreg} wGPR
 function unit wGPR (idx, v) = {
          if idx == 0 then () else GPR[idx] := v
