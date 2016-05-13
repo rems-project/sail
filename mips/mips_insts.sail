@@ -976,7 +976,9 @@ function clause execute (BREAK) =
 union ast member unit WAIT
 function clause decode (0b010000 : 0x80000 : 0b100000) =
   Some(WAIT) (* we only accept code == 0 *)
-function clause execute (WAIT) = ()
+function clause execute (WAIT) = {
+  nextPC := PC;
+}
 
 (* Trap instructions with two register operands *)
 union ast member (regno, regno, Comparison) TRAPREG
