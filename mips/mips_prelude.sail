@@ -224,15 +224,18 @@ function unit checkCP0Access () =
 
 function unit incrementCP0Count() = {
   CP0Count := (CP0Count + 1);
-  if (CP0Count == CP0Compare) then {
-    ((CP0Cause.IP)[15]) := bitone;
+  if (unsigned(CP0Count) == unsigned(CP0Compare)) then {
+    (CP0Cause[15]) := bitone;
   };
   (* XXX Sail does not allow reading fields here :-( *)
   let (bit[32])status = CP0Status in
   let (bit[32])cause  = CP0Cause in
   let (bit[8]) ims = (status[15..8]) in
   let (bit[8]) ips = (cause[15..8]) in
-  if ((CP0Status.IE) & ((ips & ims) != 0x00)) then
+  let ie           = status[0] in
+  let exl          = status[1] in
+  let erl          = status[2] in
+  if ((~(exl)) & (~(erl)) & ie & ((ips & ims) != 0x00)) then
     exit (SignalException(Int));
 }
 

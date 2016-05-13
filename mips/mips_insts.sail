@@ -1374,7 +1374,7 @@ function clause execute (MTC0(rt, rd, sel, double)) = {
       case (0b01001,0b000) -> CP0Count := reg_val[31..0]
       case (0b01011,0b000) -> {  (* 11, sel 0: Compare reg *)
         CP0Compare := reg_val[31..0]; 
-        (CP0Cause.IP)[15] := 0
+        (CP0Cause[15]) := bitzero;
       }
       case (0b01100,0b000) -> {  (* 12 Status *)
         (CP0Status.CU)  := reg_val[31..28];
