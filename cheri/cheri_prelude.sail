@@ -119,6 +119,7 @@ let (CapStruct) null_cap = {
 let (nat) max_otype = 0xffffff
 def Nat cap_size_t  = 32 (* cap size in bytes *)
 let ([:cap_size_t:]) cap_size = 32
+let have_cp2 = true
 
 function CapStruct capRegToCapStruct((CapReg) capReg) =
   {

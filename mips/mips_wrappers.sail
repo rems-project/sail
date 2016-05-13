@@ -13,6 +13,8 @@ function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType
       TLBTranslate(vAddr, accessType)
 }
 
+let have_cp2 = false
+
 function unit SignalException ((Exception) ex) = SignalExceptionMIPS(ex)
 
 function unit ERETHook() = ()
