@@ -1370,7 +1370,7 @@ function clause execute (MTC0(rt, rd, sel, double)) = {
   switch (rd, sel)
     {
       case (0b00100,0b010) -> CP0UserLocal := reg_val
-      case (0b00111,0b000) -> CP0HWREna := (reg_val[31..29] : 0b0000000000000000000000000 : reg_val[4..0])
+      case (0b00111,0b000) -> CP0HWREna := (reg_val[31..29] : 0b0000000000000000000000000 : reg_val[3..0])
       case (0b01001,0b000) -> CP0Count := reg_val[31..0]
       case (0b01011,0b000) -> {  (* 11, sel 0: Compare reg *)
         CP0Compare := reg_val[31..0]; 
