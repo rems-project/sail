@@ -730,3 +730,8 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
           }
       }
   }
+
+union ast member (regno) C2Dump
+function clause decode (0b010010 : 0b00100 : (regno) rt : 0x0006) = Some(C2Dump(rt))
+function clause execute (C2Dump (rt)) =
+    () (* Currently a NOP *)
