@@ -406,7 +406,6 @@ function (bit[64]) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessType) =
 
 function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) = 
   {
-    err := (if (accessType == StoreData) then AdES else AdEL);
     let currentAccessLevel = getAccessLevel() in
     let (requiredLevel, addr) = switch(vAddr[63..62]) {
       case 0b11 -> switch(vAddr[61..31], vAddr[30..29]) { (* xkseg *)
@@ -421,7 +420,7 @@ function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) =
       case 0b00 -> (User, None) (* xuseg - user mapped *)
     } in
     if (((nat)currentAccessLevel) < ((nat)requiredLevel)) then
-      exit (SignalException(err))
+      exit (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
     else switch(addr) {
       case (Some(a)) -> a
       case None      -> TLBTranslate2(vAddr, accessType)
