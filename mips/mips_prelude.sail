@@ -23,6 +23,85 @@ typedef CauseReg = register bits [ 31 : 0 ] {
   6 .. 2   : ExcCode; (* code of last exception *)
   (*1 .. 0   : Z4;*)
 }
+
+typedef TLBEntryLoReg = register bits [29 : 0] {
+  29 .. 6 : PFN;
+  5  .. 3 : C;
+  2       : D;
+  1       : V;
+  0       : G;
+}
+
+typedef TLBEntryHiReg = register bits [63 : 0] {
+  63 .. 62 : R;
+  39 .. 13 : VPN2;
+  7  ..  0 : ASID;
+}
+
+typedef ContextReg = register bits [63 : 0] {
+  63 .. 23 : PTEBase;
+  22 .. 4  : BadVPN2;
+  (*3  .. 0  : ZR;*)
+}
+
+typedef XContextReg = register bits [63 : 0] {
+  63 .. 33: PTEBase;
+  32 .. 31: R;
+  30 ..  4: BadVPN2;
+}
+
+let ([:8:]) TLBNumEntries = 8
+typedef TLBIndexT = (bit[3])
+let (TLBIndexT) TLBIndexMax = 0b111
+
+typedef TLBEntry = register bits [112 : 0] {
+  112 .. 97: pagemask; (* 16 bits *)
+  96  .. 95: r;        (* 2 bits  *)
+  94  .. 68: vpn2;     (* 27 bits *)
+  67  .. 60: asid;     (* 8 bits  *)
+  59       : g;
+  58       : valid;
+  57  .. 34: pfn0;     (* 24 bits *)
+  33  .. 31: c0;       (* 3  bits *)
+  30       : d0;
+  29       : v0;
+  28  .. 5 : pfn1;
+  4   .. 2 : c1;
+  1        : d1;
+  0        : v1;
+}
+
+register (bit[1])        TLBProbe
+register (bit[3])     TLBIndex
+register (bit[3])     TLBRandom
+register (TLBEntryLoReg) TLBEntryLo0
+register (TLBEntryLoReg) TLBEntryLo1
+register (ContextReg)    TLBContext
+register (bit[16])       TLBPageMask
+register (bit[3])     TLBWired
+register (TLBEntryHiReg) TLBEntryHi
+register (XContextReg)   TLBXContext
+
+register (TLBEntry) TLBEntry00
+register (TLBEntry) TLBEntry01
+register (TLBEntry) TLBEntry02
+register (TLBEntry) TLBEntry03
+register (TLBEntry) TLBEntry04
+register (TLBEntry) TLBEntry05
+register (TLBEntry) TLBEntry06
+register (TLBEntry) TLBEntry07
+
+let (vector <0, 8, inc, (TLBEntry)>) TLBEntries = [
+TLBEntry00,
+TLBEntry01,
+TLBEntry02,
+TLBEntry03,
+TLBEntry04,
+TLBEntry05,
+TLBEntry06,
+TLBEntry07
+]
+
 register (bit[32])  CP0Compare
 register (CauseReg) CP0Cause
 register (bit[64])  CP0EPC
@@ -126,8 +205,8 @@ val extern unit -> unit effect { barr } MEM_sync
 
 typedef Exception = enumerate
 {
-   Int; Mod; TLBL; TLBS; AdEL; AdES; Sys; Bp; ResI; CpU; Ov; Tr; C2E; C2Trap;
-   XTLBRefillL; XTLBRefillS
+   Int; TLBMod; TLBL; TLBS; AdEL; AdES; Sys; Bp; ResI; CpU; Ov; Tr; C2E; C2Trap;
+   XTLBRefillL; XTLBRefillS; XTLBInvL; XTLBInvS; MCheck
 }
 
 (* Return the ISA defined code for an exception condition *)
@@ -135,7 +214,7 @@ function (bit[5]) ExceptionCode ((Exception) ex) =
    switch (ex)
    {
       case Int         -> mask(0x00) (* Interrupt *)
-      case Mod         -> mask(0x01) (* TLB modification exception *)
+      case TLBMod      -> mask(0x01) (* TLB modification exception *)
       case TLBL        -> mask(0x02) (* TLB exception (load or fetch) *)
       case TLBS        -> mask(0x03) (* TLB exception (store) *)
       case AdEL        -> mask(0x04) (* Address error (load or fetch) *)
@@ -150,6 +229,9 @@ function (bit[5]) ExceptionCode ((Exception) ex) =
       case C2Trap      -> mask(0x12) (* C2Trap maps to same exception code, different vector *)
       case XTLBRefillL -> mask(0x02)
       case XTLBRefillS -> mask(0x03)
+      case XTLBInvL    -> mask(0x02)
+      case XTLBInvS    -> mask(0x03)
+      case MCheck      -> mask(0x18)
    }
 
 
@@ -198,6 +280,16 @@ function unit SignalExceptionBadAddr((Exception) ex, (bit[64]) badAddr) =
     SignalException(ex);
   }
 
+function unit SignalExceptionTLB((Exception) ex, (bit[64]) badAddr) = {
+  CP0BadVAddr := badAddr;
+  (TLBContext.BadVPN2) := (badAddr[31..13]);
+  (TLBXContext.BadVPN2):= (badAddr[39..13]);
+  (TLBXContext.R)      := (badAddr[63..62]);
+  (TLBEntryHi.R)       := (badAddr[63..62]);
+  (TLBEntryHi.VPN2)    := (badAddr[39..13]);
+  SignalException(ex);
+}
+
 typedef MemAccessType = enumerate {Instruction; LoadData; StoreData}
 typedef AccessLevel   = enumerate {User; Supervisor; Kernel} 
 
@@ -223,6 +315,9 @@ function unit checkCP0Access () =
   }
 
 function unit incrementCP0Count() = {
+  TLBRandom := (if (unsigned(TLBRandom) == unsigned(TLBWired))
+    then (TLBIndexMax) else (TLBRandom - 1));
+
   CP0Count := (CP0Count + 1);
   if (unsigned(CP0Count) == unsigned(CP0Compare)) then {
     (CP0Cause[15]) := bitone;
@@ -239,26 +334,98 @@ function unit incrementCP0Count() = {
     exit (SignalException(Int));
 }
 
+function bool tlbEntryMatch(r, vpn2, asid, (TLBEntry) entry) = 
+      let entryVal   = (bit[113]) entry in
+      let entryValid = (entryVal[58]) in
+      let entryR     = (entryVal[96..95]) in
+      let entryMask  = (entryVal[112..97]) in
+      let entryVPN   = (entryVal[94..68]) in
+      let entryASID  = (entryVal[67..60]) in
+      let entryG     = (entryVal[59]) in
+      ((entryValid) &
+       (r == (entryR)) & 
+       ((vpn2 & ~(EXTZ(entryMask))) == ((entryVPN) & ~(EXTZ(entryMask)))) &
+       ((asid == (entryASID)) | (entryG)))
+
+function option<TLBIndexT> tlbSearch((bit[64]) VAddr) =
+  let r    = (VAddr[63..62]) in
+  let vpn2 = (VAddr[39..13]) in
+  let asid = (TLBEntryHi.ASID) in
+  if (tlbEntryMatch(r, vpn2, asid, TLBEntry00)) then
+    Some(0b000)
+  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry01)) then
+    Some(0b001)
+  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry02)) then
+    Some(0b010)
+  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry03)) then
+    Some(0b011)
+  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry04)) then
+    Some(0b100)
+  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry05)) then
+    Some(0b101)
+  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry06)) then
+    Some(0b110)
+  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry07)) then
+    Some(0b111)
+  else
+    None
+
+function (bit[64]) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessType) = {
+  let idx = tlbSearch(vAddr) in
+  switch(idx) {
+    case (Some(idx)) -> 
+    let entry = ((bit[113])(TLBEntries[idx])) in
+    let entryMask = (entry[112..97]) in
+    
+    let evenOddBit = switch(entryMask) {
+      case 0x0000 -> 12
+      case 0x0003 -> 14
+      case 0x000f -> 16
+      case 0x003f -> 18
+      case 0x00ff -> 20
+      case 0x03ff -> 22
+      case 0x0fff -> 24
+      case 0x3fff -> 26
+      case 0xffff -> 28
+      case _      -> undefined
+    } in
+    let isOdd = (vAddr[evenOddBit]) in
+    let (pfn, v, c, d) = if (isOdd) then
+        (entry[28..5], entry[0], entry[4..2], entry[1])
+      else
+        (entry[57..34], entry[29], entry[33..31], entry[30]) in
+    if (~(v)) then 
+      exit (SignalExceptionTLB(if (accessType == StoreData) then XTLBInvS else XTLBInvL, vAddr))
+    else if ((accessType == StoreData) & ~(d)) then
+      exit (SignalExceptionTLB(TLBMod, vAddr))
+    else
+      EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0])
+    case None -> exit (SignalExceptionTLB(if (accessType == StoreData) then XTLBRefillS else XTLBRefillL, vAddr))
+  }
+}
+
 function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) = 
   {
     err := (if (accessType == StoreData) then AdES else AdEL);
     let currentAccessLevel = getAccessLevel() in
     let (requiredLevel, addr) = switch(vAddr[63..62]) {
       case 0b11 -> switch(vAddr[61..31], vAddr[30..29]) { (* xkseg *)
-        case (0b1111111111111111111111111111111, 0b11) -> exit (SignalException(err))  (* kseg3 mapped 32-bit compat TODO *)
-        case (0b1111111111111111111111111111111, 0b10) -> exit (SignalException(err))  (* sseg  mapped 32-bit compat TODO *)
-        case (0b1111111111111111111111111111111, 0b01) -> (Kernel, EXTZ(vAddr[28..0])) (* kseg1 unmapped uncached 32-bit compat *)
-        case (0b1111111111111111111111111111111, 0b00) -> (Kernel, EXTZ(vAddr[28..0])) (* kseg0 unmapped cached 32-bit compat *)
-        case (_, _) -> exit (SignalException(err))  (* xkseg mapped TODO *)
+        case (0b1111111111111111111111111111111, 0b11) -> (Kernel, None)               (* kseg3 mapped 32-bit compat *)
+        case (0b1111111111111111111111111111111, 0b10) -> (Supervisor, None)           (* sseg  mapped 32-bit compat *)
+        case (0b1111111111111111111111111111111, 0b01) -> (Kernel, Some(EXTZ(vAddr[28..0]))) (* kseg1 unmapped uncached 32-bit compat *)
+        case (0b1111111111111111111111111111111, 0b00) -> (Kernel, Some(EXTZ(vAddr[28..0]))) (* kseg0 unmapped cached 32-bit compat *)
+        case (_, _) -> (Kernel, None) (* xkseg mapped *)
       }
-      case 0b10 -> (Kernel, EXTZ(vAddr[58..0])) (* xkphys bits 61-59 are cache mode which we ignore *)
-      case 0b01 -> exit (SignalException(err)) (* xsseg - supervisor mapped TODO *)
-      case 0b00 -> exit (SignalException(err)) (* xuseg - user mapped TODO *)
+      case 0b10 -> (Kernel, Some(EXTZ(vAddr[58..0])))       (* xkphys bits 61-59 are cache mode which we ignore *)
+      case 0b01 -> (Supervisor, None)                       (* xsseg - supervisor mapped *)
+      case 0b00 -> (User, None) (* xuseg - user mapped *)
     } in
     if (((nat)currentAccessLevel) < ((nat)requiredLevel)) then
       exit (SignalException(err))
-    else
-      addr
+    else switch(addr) {
+      case (Some(a)) -> a
+      case None      -> TLBTranslate2(vAddr, accessType)
+    }
   }
 
 typedef regno = bit[5]                      (* a register number *)

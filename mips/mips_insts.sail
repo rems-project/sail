@@ -1323,18 +1323,18 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
   checkCP0Access();
   let (bit[64]) result = switch (rd, sel)
         {
-          case (0b00000,0b000) -> 0                (* 0, TLB Index *)
-          case (0b00001,0b000) -> 0                (* 1, TLB Random *)
-          case (0b00010,0b000) -> 0                (* 2, TLB EntryLo0 *)
-          case (0b00011,0b000) -> 0                (* 3, TLB EntryLo1 *)
-          case (0b00100,0b000) -> 0                (* 4, TLB Context *)
-          case (0b00101,0b000) -> 0                (* 5, TLB PageMask *)
-          case (0b00110,0b000) -> 0                (* 6, TLB Wired *)
-          case (0b00111,0b000) -> EXTZ(CP0HWREna)     (* 6, HWREna *)
+          case (0b00000,0b000) -> (0x00000000 : [TLBProbe] : 0x0000000 : TLBIndex)  (* 0, TLB Index *)
+          case (0b00001,0b000) -> EXTZ(TLBRandom)  (* 1, TLB Random *)
+          case (0b00010,0b000) -> EXTZ(TLBEntryLo0)(* 2, TLB EntryLo0 *)
+          case (0b00011,0b000) -> EXTZ(TLBEntryLo1)(* 3, TLB EntryLo1 *)
+          case (0b00100,0b000) -> TLBContext       (* 4, TLB Context *)
+          case (0b00101,0b000) -> EXTZ(TLBPageMask : 0x000) (* 5, TLB PageMask *)
+          case (0b00110,0b000) -> EXTZ(TLBWired)   (* 6, TLB Wired *)
+          case (0b00111,0b000) -> EXTZ(CP0HWREna)  (* 7, HWREna *)
           case (0b01000,0b000) -> CP0BadVAddr      (* 8, BadVAddr reg *)
           case (0b01000,0b001) -> 0                (* 8, BadInstr reg XXX TODO *)
           case (0b01001,0b000) -> EXTZ(CP0Count)   (* 9, Count reg *)
-          case (0b01010,0b000) -> 0                (* 10, TLB EntryHi *)
+          case (0b01010,0b000) -> TLBEntryHi       (* 10, TLB EntryHi *)
           case (0b01011,0b000) -> EXTZ(CP0Compare) (* 11, Compare reg *)
           case (0b01100,0b000) -> EXTZ(CP0Status)  (* 12, Status reg *)
           case (0b01101,0b000) -> EXTZ(CP0Cause)   (* 13, Cause reg *)
@@ -1377,10 +1377,11 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
                                          : 0b0000  (* SL L2 lines *)
                                          : 0b0000) (* SA L2 assoc. *)
           case (0b10000,0b011) -> 0x0000000000002000 (* 16, sel 3: Config3 zero except for bit 13 == ulri *)
+          case (0b10000,0b101) -> 0x0000000000000000 (* 16, sel 5: Config5 beri specific -- no extended TLB *)
           case (0b10001,0b000) -> CP0LLAddr        (* 17, sel 0: LLAddr *)
           case (0b10010,0b000) -> 0                (* 18, WatchLo *)
           case (0b10011,0b000) -> 0                (* 19, WatchHi *)
-          case (0b10100,0b000) -> 0                (* 20, XContext *)
+          case (0b10100,0b000) -> TLBXContext      (* 20, XContext *)
           case (0b11110,0b000) -> CP0ErrorEPC      (* 30, ErrorEPC *)
           case _               -> {exit (SignalException(ResI)); 0}
         } in
@@ -1397,9 +1398,25 @@ function clause execute (MTC0(rt, rd, sel, double)) = {
   let reg_val = (rGPR(rt)) in
   switch (rd, sel)
     {
+      case (0b00000,0b000) -> TLBIndex := mask(reg_val) (* NB no write to TLBProbe *)
+      case (0b00001,0b000) -> ()                        (* TLBRandom is read only *)
+      case (0b00010,0b000) -> TLBEntryLo0 := mask(reg_val)
+      case (0b00011,0b000) -> TLBEntryLo1 := mask(reg_val)
+      case (0b00100,0b000) -> (TLBContext.PTEBase) := (reg_val[63..23])
       case (0b00100,0b010) -> CP0UserLocal := reg_val
+      case (0b00101,0b000) -> TLBPageMask  := (reg_val[28..13])
+      case (0b00110,0b000) -> {
+        TLBWired     := mask(reg_val);
+        TLBRandom    := TLBIndexMax;
+      }
       case (0b00111,0b000) -> CP0HWREna := (reg_val[31..29] : 0b0000000000000000000000000 : reg_val[3..0])
+      case (0b01000,0b000) -> () (* BadVAddr read only *)
       case (0b01001,0b000) -> CP0Count := reg_val[31..0]
+      case (0b01010,0b000) -> {
+        (TLBEntryHi.R)    := (reg_val[63..62]);
+        (TLBEntryHi.VPN2) := (reg_val[39..13]);
+        (TLBEntryHi.ASID) := (reg_val[7..0]);
+      }
       case (0b01011,0b000) -> {  (* 11, sel 0: Compare reg *)
         CP0Compare := reg_val[31..0]; 
         (CP0Cause[15]) := bitzero;
@@ -1421,9 +1438,93 @@ function clause execute (MTC0(rt, rd, sel, double)) = {
         (CP0Cause.IP)[9..8] := reg_val[9..8];
       }
       case (0b01110,0b000) -> CP0EPC      := reg_val         (* 14, EPC *)
+      case (0b10100,0b000) -> (TLBXContext.PTEBase) := (reg_val[63..33])
       case (0b11110,0b000) -> CP0ErrorEPC := reg_val         (* 30, ErrorEPC *)
       case _               -> exit (SignalException(ResI))
     }
+}
+
+function unit TLBWriteEntry((TLBIndexT) idx) = {
+  pagemask := ((bit[16]) TLBPageMask);
+  switch(pagemask) {
+      case 0x0000 -> ()
+      case 0x0003 -> ()
+      case 0x000f -> ()
+      case 0x003f -> ()
+      case 0x00ff -> ()
+      case 0x03ff -> ()
+      case 0x0fff -> ()
+      case 0x3fff -> ()
+      case 0xffff -> ()
+      case _      -> exit (SignalException(MCheck))
+  };
+  ((TLBEntries[idx]).pagemask) := pagemask;
+  ((TLBEntries[idx]).r       ) := TLBEntryHi.R;
+  ((TLBEntries[idx]).vpn2    ) := TLBEntryHi.VPN2;
+  ((TLBEntries[idx]).asid    ) := TLBEntryHi.ASID;
+  ((TLBEntries[idx]).g       ) := ((TLBEntryLo0.G) & (TLBEntryLo1.G));
+  ((TLBEntries[idx]).valid   ) := bitone;
+  ((TLBEntries[idx]).pfn0    ) := TLBEntryLo0.PFN;
+  ((TLBEntries[idx]).c0      ) := TLBEntryLo0.C;
+  ((TLBEntries[idx]).d0      ) := TLBEntryLo0.D;
+  ((TLBEntries[idx]).v0      ) := TLBEntryLo0.V;
+  ((TLBEntries[idx]).pfn1    ) := TLBEntryLo1.PFN;
+  ((TLBEntries[idx]).c1      ) := TLBEntryLo1.C;
+  ((TLBEntries[idx]).d1      ) := TLBEntryLo1.D;
+  ((TLBEntries[idx]).v1      ) := TLBEntryLo1.V;
+}
+
+union ast member TLBWI
+function clause decode (0b010000 : 0b10000000000000000000 : 0b000010) = Some(TLBWI)
+function clause execute (TLBWI) = {
+  checkCP0Access();
+  TLBWriteEntry(TLBIndex);
+}
+
+union ast member TLBWR
+function clause decode (0b010000 : 0b10000000000000000000 : 0b000110) = Some(TLBWR)
+function clause execute (TLBWR) = {
+  checkCP0Access();
+  TLBWriteEntry(TLBRandom);
+}
+
+union ast member TLBR
+function clause decode (0b010000 : 0b10000000000000000000 : 0b000001) = Some(TLBR)
+function clause execute (TLBR) = {
+  checkCP0Access();
+  let entry = TLBEntries[TLBIndex] in {
+    TLBPageMask     := entry.pagemask;
+    TLBEntryHi.R    := entry.r;
+    TLBEntryHi.VPN2 := entry.vpn2;
+    TLBEntryHi.ASID := entry.asid;
+    TLBEntryLo0.PFN := entry.pfn0;
+    TLBEntryLo0.C   := entry.c0;
+    TLBEntryLo0.D   := entry.d0;
+    TLBEntryLo0.V   := entry.v0;
+    TLBEntryLo0.G   := entry.g;
+    TLBEntryLo1.PFN := entry.pfn1;
+    TLBEntryLo1.C   := entry.c1;
+    TLBEntryLo1.D   := entry.d1;
+    TLBEntryLo1.V   := entry.v1;
+    TLBEntryLo1.G   := entry.g;
+  }
+}
+
+union ast member TLBP
+function clause decode (0b010000 : 0b10000000000000000000 : 0b001000) = Some(TLBP)
+function clause execute ((TLBP)) = {
+  checkCP0Access();
+  let result = tlbSearch(TLBEntryHi) in
+  switch(result) {
+    case (Some(idx)) -> {
+      TLBProbe := [bitzero];
+      TLBIndex := idx;
+    }
+    case None -> {
+      TLBProbe := [bitone];
+      TLBIndex := 0;
+    }
+  }
 }
 
 union ast member (regno, regno) RDHWR
