@@ -350,7 +350,7 @@ function bool tlbEntryMatch(r, vpn2, asid, (TLBEntry) entry) =
 function option<TLBIndexT> tlbSearch((bit[64]) VAddr) =
   let r    = (VAddr[63..62]) in
   let vpn2 = (VAddr[39..13]) in
-  let asid = (TLBEntryHi.ASID) in
+  let asid = (((bit[64])TLBEntryHi)[7..0]) in (* XXX workaround sail bug *)
   if (tlbEntryMatch(r, vpn2, asid, TLBEntry00)) then
     Some(0b000)
   else if (tlbEntryMatch(r, vpn2, asid, TLBEntry01)) then
