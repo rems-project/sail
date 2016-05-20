@@ -500,6 +500,7 @@ let mips_register_data_all =  [
   ("CP0Compare",   (D_decreasing, 32, 31));
   ("CP0HWREna",    (D_decreasing, 32, 31));
   ("CP0UserLocal", (D_decreasing, 64, 63));
+  ("CP0BadVAddr", (D_decreasing, 64, 63));
   ("TLBProbe"   ,(D_decreasing, 1, 0));
   ("TLBIndex"   ,(D_decreasing, 3, 2));
   ("TLBRandom"  ,(D_decreasing, 3, 2));
