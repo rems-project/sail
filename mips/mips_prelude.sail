@@ -54,6 +54,9 @@ let ([:8:]) TLBNumEntries = 8
 typedef TLBIndexT = (bit[3])
 let (TLBIndexT) TLBIndexMax = 0b111
 
+let MAX_VA = unsigned(0xffffffffff)
+let MAX_PA = unsigned(0xfffffffff)
+
 typedef TLBEntry = register bits [112 : 0] {
   112 .. 97: pagemask; (* 16 bits *)
   96  .. 95: r;        (* 2 bits  *)
@@ -407,12 +410,13 @@ function (bit[64]) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessType) =
 function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) = 
   {
     let currentAccessLevel = getAccessLevel() in
+    let compat32 = (vAddr[61..31] == 0b1111111111111111111111111111111) in
     let (requiredLevel, addr) = switch(vAddr[63..62]) {
-      case 0b11 -> switch(vAddr[61..31], vAddr[30..29]) { (* xkseg *)
-        case (0b1111111111111111111111111111111, 0b11) -> (Kernel, None)               (* kseg3 mapped 32-bit compat *)
-        case (0b1111111111111111111111111111111, 0b10) -> (Supervisor, None)           (* sseg  mapped 32-bit compat *)
-        case (0b1111111111111111111111111111111, 0b01) -> (Kernel, Some(EXTZ(vAddr[28..0]))) (* kseg1 unmapped uncached 32-bit compat *)
-        case (0b1111111111111111111111111111111, 0b00) -> (Kernel, Some(EXTZ(vAddr[28..0]))) (* kseg0 unmapped cached 32-bit compat *)
+      case 0b11 -> switch(compat32, vAddr[30..29]) { (* xkseg *)
+        case (true, 0b11) -> (Kernel, None)               (* kseg3 mapped 32-bit compat *)
+        case (true, 0b10) -> (Supervisor, None)           (* sseg  mapped 32-bit compat *)
+        case (true, 0b01) -> (Kernel, Some(EXTZ(vAddr[28..0]))) (* kseg1 unmapped uncached 32-bit compat *)
+        case (true, 0b00) -> (Kernel, Some(EXTZ(vAddr[28..0]))) (* kseg0 unmapped cached 32-bit compat *)
         case (_, _) -> (Kernel, None) (* xkseg mapped *)
       }
       case 0b10 -> (Kernel, Some(EXTZ(vAddr[58..0])))       (* xkphys bits 61-59 are cache mode which we ignore *)
@@ -421,10 +425,18 @@ function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) =
     } in
     if (((nat)currentAccessLevel) < ((nat)requiredLevel)) then
       exit (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
-    else switch(addr) {
+    else 
+      let pa = switch(addr) {
       case (Some(a)) -> a
-      case None      -> TLBTranslate2(vAddr, accessType)
-    }
+      case None      -> if ((~(compat32)) & (unsigned(vAddr[61..0]) > MAX_VA)) then
+          exit (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
+        else
+          TLBTranslate2(vAddr, accessType)
+      }
+      in if (unsigned(pa) > MAX_PA) then
+          exit (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
+        else
+          pa
   }
 
 typedef regno = bit[5]                      (* a register number *)
