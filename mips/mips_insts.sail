@@ -1325,8 +1325,8 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
         {
           case (0b00000,0b000) -> (0x00000000 : [TLBProbe] : 0x0000000 : TLBIndex)  (* 0, TLB Index *)
           case (0b00001,0b000) -> EXTZ(TLBRandom)  (* 1, TLB Random *)
-          case (0b00010,0b000) -> EXTZ(TLBEntryLo0)(* 2, TLB EntryLo0 *)
-          case (0b00011,0b000) -> EXTZ(TLBEntryLo1)(* 3, TLB EntryLo1 *)
+          case (0b00010,0b000) -> TLBEntryLo0      (* 2, TLB EntryLo0 *)
+          case (0b00011,0b000) -> TLBEntryLo1      (* 3, TLB EntryLo1 *)
           case (0b00100,0b000) -> TLBContext       (* 4, TLB Context *)
           case (0b00101,0b000) -> EXTZ(TLBPageMask : 0x000) (* 5, TLB PageMask *)
           case (0b00110,0b000) -> EXTZ(TLBWired)   (* 6, TLB Wired *)
@@ -1400,8 +1400,8 @@ function clause execute (MTC0(rt, rd, sel, double)) = {
     {
       case (0b00000,0b000) -> TLBIndex := mask(reg_val) (* NB no write to TLBProbe *)
       case (0b00001,0b000) -> ()                        (* TLBRandom is read only *)
-      case (0b00010,0b000) -> TLBEntryLo0 := mask(reg_val)
-      case (0b00011,0b000) -> TLBEntryLo1 := mask(reg_val)
+      case (0b00010,0b000) -> TLBEntryLo0 := reg_val
+      case (0b00011,0b000) -> TLBEntryLo1 := reg_val
       case (0b00100,0b000) -> (TLBContext.PTEBase) := (reg_val[63..23])
       case (0b00100,0b010) -> CP0UserLocal := reg_val
       case (0b00101,0b000) -> TLBPageMask  := (reg_val[28..13])
@@ -1464,10 +1464,14 @@ function unit TLBWriteEntry((TLBIndexT) idx) = {
   ((TLBEntries[idx]).asid    ) := TLBEntryHi.ASID;
   ((TLBEntries[idx]).g       ) := ((TLBEntryLo0.G) & (TLBEntryLo1.G));
   ((TLBEntries[idx]).valid   ) := bitone;
+  ((TLBEntries[idx]).caps0   ) := TLBEntryLo0.CapS;
+  ((TLBEntries[idx]).capl0   ) := TLBEntryLo0.CapL;
   ((TLBEntries[idx]).pfn0    ) := TLBEntryLo0.PFN;
   ((TLBEntries[idx]).c0      ) := TLBEntryLo0.C;
   ((TLBEntries[idx]).d0      ) := TLBEntryLo0.D;
   ((TLBEntries[idx]).v0      ) := TLBEntryLo0.V;
+  ((TLBEntries[idx]).caps1   ) := TLBEntryLo1.CapS;
+  ((TLBEntries[idx]).capl1   ) := TLBEntryLo1.CapL;
   ((TLBEntries[idx]).pfn1    ) := TLBEntryLo1.PFN;
   ((TLBEntries[idx]).c1      ) := TLBEntryLo1.C;
   ((TLBEntries[idx]).d1      ) := TLBEntryLo1.D;
@@ -1497,11 +1501,15 @@ function clause execute (TLBR) = {
     TLBEntryHi.R    := entry.r;
     TLBEntryHi.VPN2 := entry.vpn2;
     TLBEntryHi.ASID := entry.asid;
+    TLBEntryLo0.CapS:= entry.caps0;
+    TLBEntryLo0.CapL:= entry.capl0;
     TLBEntryLo0.PFN := entry.pfn0;
     TLBEntryLo0.C   := entry.c0;
     TLBEntryLo0.D   := entry.d0;
     TLBEntryLo0.V   := entry.v0;
     TLBEntryLo0.G   := entry.g;
+    TLBEntryLo1.CapS:= entry.caps1;
+    TLBEntryLo1.CapL:= entry.capl1;
     TLBEntryLo1.PFN := entry.pfn1;
     TLBEntryLo1.C   := entry.c1;
     TLBEntryLo1.D   := entry.d1;

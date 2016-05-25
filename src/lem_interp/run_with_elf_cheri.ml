@@ -504,21 +504,21 @@ let mips_register_data_all =  [
   ("TLBProbe"   ,(D_decreasing, 1, 0));
   ("TLBIndex"   ,(D_decreasing, 3, 2));
   ("TLBRandom"  ,(D_decreasing, 3, 2));
-  ("TLBEntryLo0",(D_decreasing, 30, 29));
-  ("TLBEntryLo1",(D_decreasing, 30, 29));
+  ("TLBEntryLo0",(D_decreasing, 64, 63));
+  ("TLBEntryLo1",(D_decreasing, 64, 63));
   ("TLBContext" ,(D_decreasing, 64, 63));
   ("TLBPageMask",(D_decreasing, 16, 15));
   ("TLBWired"   ,(D_decreasing, 3, 2));
   ("TLBEntryHi" ,(D_decreasing, 64, 63));
   ("TLBXContext",(D_decreasing, 64, 63));
-  ("TLBEntry00" ,(D_decreasing, 113, 112));
-  ("TLBEntry01" ,(D_decreasing, 113, 112));
-  ("TLBEntry02" ,(D_decreasing, 113, 112));
-  ("TLBEntry03" ,(D_decreasing, 113, 112));
-  ("TLBEntry04" ,(D_decreasing, 113, 112));
-  ("TLBEntry05" ,(D_decreasing, 113, 112));
-  ("TLBEntry06" ,(D_decreasing, 113, 112));
-  ("TLBEntry07" ,(D_decreasing, 113, 112));
+  ("TLBEntry00" ,(D_decreasing, 117, 116));
+  ("TLBEntry01" ,(D_decreasing, 117, 116));
+  ("TLBEntry02" ,(D_decreasing, 117, 116));
+  ("TLBEntry03" ,(D_decreasing, 117, 116));
+  ("TLBEntry04" ,(D_decreasing, 117, 116));
+  ("TLBEntry05" ,(D_decreasing, 117, 116));
+  ("TLBEntry06" ,(D_decreasing, 117, 116));
+  ("TLBEntry07" ,(D_decreasing, 117, 116));
 ]
 
 let cheri_register_data_all = mips_register_data_all @ [
@@ -990,14 +990,14 @@ let get_addr_trans_regs _ =
     (Interp_interface.Reg0("TLBRandom", 2, 3, Interp_interface.D_decreasing), Reg.find "TLBRandom" !reg);
     (Interp_interface.Reg0("TLBWired", 2, 3, Interp_interface.D_decreasing), Reg.find "TLBWired" !reg);
     (Interp_interface.Reg0("TLBEntryHi", 63, 64, Interp_interface.D_decreasing), Reg.find "TLBEntryHi" !reg);
-    (Interp_interface.Reg0("TLBEntry00", 112, 113, Interp_interface.D_decreasing), Reg.find "TLBEntry00" !reg);
-    (Interp_interface.Reg0("TLBEntry01", 112, 113, Interp_interface.D_decreasing), Reg.find "TLBEntry01" !reg);
-    (Interp_interface.Reg0("TLBEntry02", 112, 113, Interp_interface.D_decreasing), Reg.find "TLBEntry02" !reg);
-    (Interp_interface.Reg0("TLBEntry03", 112, 113, Interp_interface.D_decreasing), Reg.find "TLBEntry03" !reg);
-    (Interp_interface.Reg0("TLBEntry04", 112, 113, Interp_interface.D_decreasing), Reg.find "TLBEntry04" !reg);
-    (Interp_interface.Reg0("TLBEntry05", 112, 113, Interp_interface.D_decreasing), Reg.find "TLBEntry05" !reg);
-    (Interp_interface.Reg0("TLBEntry06", 112, 113, Interp_interface.D_decreasing), Reg.find "TLBEntry06" !reg);
-    (Interp_interface.Reg0("TLBEntry07", 112, 113, Interp_interface.D_decreasing), Reg.find "TLBEntry07" !reg);
+    (Interp_interface.Reg0("TLBEntry00", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry00" !reg);
+    (Interp_interface.Reg0("TLBEntry01", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry01" !reg);
+    (Interp_interface.Reg0("TLBEntry02", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry02" !reg);
+    (Interp_interface.Reg0("TLBEntry03", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry03" !reg);
+    (Interp_interface.Reg0("TLBEntry04", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry04" !reg);
+    (Interp_interface.Reg0("TLBEntry05", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry05" !reg);
+    (Interp_interface.Reg0("TLBEntry06", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry06" !reg);
+    (Interp_interface.Reg0("TLBEntry07", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry07" !reg);
   ])
 
 let get_opcode pc_a =

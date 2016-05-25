@@ -670,8 +670,10 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
           exit (SignalExceptionBadAddr(AdES, vAddr64))
         else
           {
-            pAddr  := (TLBTranslate(vAddr64, if cs_val.tag then StoreData else StoreData)); (* XXX use StoreCap here. *)
-            if (conditional) then
+            let (pAddr, noStoreCap)  = (TLBTranslateC(vAddr64, StoreData)) in
+            if (cs_val.tag & noStoreCap) then
+              exit (raise_c2_exception(CapEx_TLBNoStoreCap, cs))
+            else if (conditional) then
               {
                 success := if (CP0LLBit[0]) then
                     MEMw_tagged_conditional(pAddr, cs_val.tag, (capStructToBit257(cs_val))[255..0])
@@ -715,7 +717,7 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
           exit (SignalExceptionBadAddr(AdEL, vAddr64))
         else
           {
-            pAddr  := (TLBTranslate(vAddr64, LoadData)); (* XXX use LoadCap here. *)
+            let (pAddr, suppressTag) = (TLBTranslateC(vAddr64, LoadData)) in
             let (tag, mem) = (if (linked) 
               then
                 {
@@ -726,7 +728,7 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
               else 
                 (MEMr_tagged(pAddr)))
             in
-            (CapRegs[cd]) := ([tag] : mem);
+            (CapRegs[cd]) := ([tag & (~(suppressTag))] : mem);
           }
       }
   }

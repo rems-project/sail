@@ -24,7 +24,9 @@ typedef CauseReg = register bits [ 31 : 0 ] {
   (*1 .. 0   : Z4;*)
 }
 
-typedef TLBEntryLoReg = register bits [29 : 0] {
+typedef TLBEntryLoReg = register bits [63 : 0] {
+  63      : CapS;
+  62      : CapL;
   29 .. 6 : PFN;
   5  .. 3 : C;
   2       : D;
@@ -57,21 +59,25 @@ let (TLBIndexT) TLBIndexMax = 0b111
 let MAX_VA = unsigned(0xffffffffff)
 let MAX_PA = unsigned(0xfffffffff)
 
-typedef TLBEntry = register bits [112 : 0] {
-  112 .. 97: pagemask; (* 16 bits *)
-  96  .. 95: r;        (* 2 bits  *)
-  94  .. 68: vpn2;     (* 27 bits *)
-  67  .. 60: asid;     (* 8 bits  *)
-  59       : g;
-  58       : valid;
-  57  .. 34: pfn0;     (* 24 bits *)
-  33  .. 31: c0;       (* 3  bits *)
-  30       : d0;
-  29       : v0;
-  28  .. 5 : pfn1;
-  4   .. 2 : c1;
-  1        : d1;
-  0        : v1;
+typedef TLBEntry = register bits [116 : 0] {
+  116 ..  101: pagemask;
+  100 ..  99 : r       ;
+  98  ..  72 : vpn2    ;
+  71  ..  64 : asid    ;
+  63         : g       ;
+  62         : valid   ;
+  61         : caps1   ;
+  60         : capl1   ;
+  59  ..  36 : pfn1    ;
+  35  ..  33 : c1      ;
+  32         : d1      ;
+  31         : v1      ;
+  30         : caps0   ;
+  29         : capl0   ;
+  28  ..  5  : pfn0    ;
+  4   ..  2  : c0      ;
+  1          : d0      ;
+  0          : v0      ;
 }
 
 register (bit[1])        TLBProbe
@@ -338,13 +344,13 @@ function unit incrementCP0Count() = {
 }
 
 function bool tlbEntryMatch(r, vpn2, asid, (TLBEntry) entry) = 
-      let entryVal   = (bit[113]) entry in
-      let entryValid = (entryVal[58]) in
-      let entryR     = (entryVal[96..95]) in
-      let entryMask  = (entryVal[112..97]) in
-      let entryVPN   = (entryVal[94..68]) in
-      let entryASID  = (entryVal[67..60]) in
-      let entryG     = (entryVal[59]) in
+      let entryVal   = (bit[117]) entry in
+      let entryValid = (entryVal[62]) in
+      let entryR     = (entryVal[100..99]) in
+      let entryMask  = (entryVal[116..101]) in
+      let entryVPN   = (entryVal[98..72]) in
+      let entryASID  = (entryVal[71..64]) in
+      let entryG     = (entryVal[63]) in
       ((entryValid) &
        (r == (entryR)) & 
        ((vpn2 & ~(EXTZ(entryMask))) == ((entryVPN) & ~(EXTZ(entryMask)))) &
@@ -373,12 +379,12 @@ function option<TLBIndexT> tlbSearch((bit[64]) VAddr) =
   else
     None
 
-function (bit[64]) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessType) = {
+function (bit[64], bool) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessType) = {
   let idx = tlbSearch(vAddr) in
   switch(idx) {
     case (Some(idx)) -> 
-    let entry = ((bit[113])(TLBEntries[idx])) in
-    let entryMask = (entry[112..97]) in
+    let entry = ((bit[117])(TLBEntries[idx])) in
+    let entryMask = (entry[116..101]) in
     
     let evenOddBit = switch(entryMask) {
       case 0x0000 -> 12
@@ -393,21 +399,21 @@ function (bit[64]) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessType) =
       case _      -> undefined
     } in
     let isOdd = (vAddr[evenOddBit]) in
-    let (pfn, v, c, d) = if (isOdd) then
-        (entry[28..5], entry[0], entry[4..2], entry[1])
+    let (caps, capl, pfn, d, v) = if (isOdd) then
+        (entry[61], entry[60], entry[59..36], entry[32], entry[31])
       else
-        (entry[57..34], entry[29], entry[33..31], entry[30]) in
+        (entry[30], entry[29], entry[28..5], entry[1], entry[0]) in
     if (~(v)) then 
       exit (SignalExceptionTLB(if (accessType == StoreData) then XTLBInvS else XTLBInvL, vAddr))
     else if ((accessType == StoreData) & ~(d)) then
       exit (SignalExceptionTLB(TLBMod, vAddr))
     else
-      EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0])
+      (EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0]), if (accessType == StoreData) then caps else capl)
     case None -> exit (SignalExceptionTLB(if (accessType == StoreData) then XTLBRefillS else XTLBRefillL, vAddr))
   }
 }
 
-function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) = 
+function (bit[64], bool) TLBTranslateC ((bit[64]) vAddr, (MemAccessType) accessType) = 
   {
     let currentAccessLevel = getAccessLevel() in
     let compat32 = (vAddr[61..31] == 0b1111111111111111111111111111111) in
@@ -426,8 +432,8 @@ function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) =
     if (((nat)currentAccessLevel) < ((nat)requiredLevel)) then
       exit (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
     else 
-      let pa = switch(addr) {
-      case (Some(a)) -> a
+      let (pa, c) = switch(addr) {
+      case (Some(a)) -> (a, false)
       case None      -> if ((~(compat32)) & (unsigned(vAddr[61..0]) > MAX_VA)) then
           exit (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
         else
@@ -436,8 +442,11 @@ function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) =
       in if (unsigned(pa) > MAX_PA) then
           exit (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
         else
-          pa
+          (pa, c)
   }
+
+function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) = 
+      let (addr, c) = TLBTranslateC(vAddr, accessType) in addr
 
 typedef regno = bit[5]                      (* a register number *)
 typedef imm16 = bit[16]                     (* 16-bit immediate *)
