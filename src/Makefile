@@ -53,6 +53,18 @@ _build/cheri.lem: $(CHERI_SAILS) ./sail.native
 	cd _build ;\
 	../sail.native -lem_ast -o cheri $(CHERI_SAILS)
 
+_build/mips_all.sail: $(MIPS_SAILS)
+	cat $(MIPS_SAILS) > $@
+
+_build/cheri_all.sail: $(CHERI_SAILS)
+	cat $(CHERI_SAILS) > $@
+
+_build/%_trimmed.sail: _build/%_all.sail
+	grep -v -e '^\s*$$' $< > $@
+
+count: _build/cheri_trimmed.sail _build/mips_trimmed.sail
+	wc -l $^
+
 %.ml: %.lem
 	$(LEM) -only_changed_output -ocaml -lib lem_interp/ $<
 
