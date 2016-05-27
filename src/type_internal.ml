@@ -3845,6 +3845,7 @@ let check_range_consistent require_lt require_gt guarantee_lt guarantee_gt =
           else assert false
         else assert false
       else assert false
+    | _ -> assert false
           
 let do_resolve_constraints = ref true
 

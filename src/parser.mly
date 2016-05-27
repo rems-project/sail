@@ -589,7 +589,7 @@ atomic_exp:
     { eloc (E_list($2)) }
   | Switch exp Lcurly case_exps Rcurly
     { eloc (E_case($2,$4)) }
-  | Sizeof nexp_typ
+  | Sizeof atomic_typ
     { eloc (E_sizeof($2)) }
   | Exit atomic_exp
       { eloc (E_exit $2) }
