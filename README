@@ -11,7 +11,7 @@ specification language:
 - sail, the type checker and compiler for programs in the Sail
   language;
 
-- an example Sail specification of a MIPS processor (in mips/mips.sail)
+- an example Sail specification of a MIPS processor (in mips/)
 
 - a sequential Sail interpreter, which evaluates an ELF binary for an
   architecture that has been specified using Sail (for ABIs included
@@ -38,8 +38,12 @@ analogy with the existing MIPS definition, using the sail executable
 just to check that it is type-correct. After building sail (as
 described below), this is done by:
 
-./sail mips/mips.sail
+./sail mips/mips_prelude.sail mips/mips_wrappers.sail mips/mips_insts.sail mips/mips_epilogue.sail
 
+Sail treats multiple file arguments as though they wre concatenated
+into a single large file (although error messages will give the
+appropriate file and line number).  For an explanation of why the MIPS
+model is devided up see mips/README.
 
 Once sufficient instructions have been represented in a specification,
 then one may also want to run executables sequentially, to debug the
@@ -53,7 +57,7 @@ factored out into external specification files.
 Building the architecture for compilation to connect to the
 interpreter, one uses the sail executable:
 
-./sail mips/mips.sail -lem_ast
+./sail <sail files...> -lem_ast
 
 which will generate a mips.lem file in the current directory, which
 will be linked with the sail interpreter (the output is a verbose
