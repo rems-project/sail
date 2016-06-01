@@ -1,0 +1,2 @@
+  ".*\\.lem"    -> frame open:"(*" line:"=" close:"*)"
+| ".*\\.sail"   -> frame open:"(*" line:"=" close:"*)"
