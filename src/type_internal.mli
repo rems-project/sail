@@ -188,6 +188,10 @@ type def_envs = {
 
 type exp = tannot Ast.exp
 
+type minmax = (constraint_origin * nexp) option
+type constraints = nexp_range list
+
+
 val lookup_record_typ : string -> rec_env list -> rec_env option
 val lookup_record_fields : string list -> rec_env list -> rec_env option
 val lookup_possible_records : string list -> rec_env list -> rec_env list
@@ -220,21 +224,21 @@ val simple_annot_efr : t -> effect -> tannot
 val global_annot : t -> tannot
 val tag_annot : t -> tag -> tannot
 val tag_annot_efr : t -> tag -> effect -> tannot
-val constrained_annot : t -> nexp_range list -> tannot
-val constrained_annot_efr : t -> nexp_range list -> effect -> tannot
-val cons_tag_annot : t -> tag -> nexp_range list -> tannot
-val cons_tag_annot_efr : t -> tag -> nexp_range list -> effect -> tannot
-val cons_efl_annot : t -> nexp_range list -> effect -> tannot
-val cons_efs_annot : t -> nexp_range list -> effect -> effect -> tannot
+val constrained_annot : t -> constraints -> tannot
+val constrained_annot_efr : t -> constraints -> effect -> tannot
+val cons_tag_annot : t -> tag -> constraints -> tannot
+val cons_tag_annot_efr : t -> tag -> constraints -> effect -> tannot
+val cons_efl_annot : t -> constraints -> effect -> tannot
+val cons_efs_annot : t -> constraints -> effect -> effect -> tannot
 val efs_annot : t -> effect -> effect -> tannot
 val tag_efs_annot: t -> tag -> effect -> effect -> tannot
-val cons_bs_annot : t -> nexp_range list -> bounds_env -> tannot
-val cons_bs_annot_efr : t -> nexp_range list -> bounds_env -> effect -> tannot
+val cons_bs_annot : t -> constraints -> bounds_env -> tannot
+val cons_bs_annot_efr : t -> constraints -> bounds_env -> effect -> tannot
 
 val kind_to_string : kind -> string
 val t_to_string : t -> string
 val n_to_string : nexp -> string
-val constraints_to_string : nexp_range list -> string
+val constraints_to_string : constraints -> string
 val bounds_to_string : bounds_env -> string
 val tannot_to_string : tannot -> string
 val t_to_typ : t -> Ast.typ
@@ -249,8 +253,8 @@ val new_e : unit -> effect
 val equate_t : t -> t -> unit
 
 val typ_subst : t_arg emap -> bool -> t -> t 
-val subst : (Envmap.k * kind) list -> bool -> bool -> t -> nexp_range list -> effect -> t * nexp_range list * effect * t_arg emap
-val subst_with_env : t_arg emap -> bool -> t -> nexp_range list -> effect -> t * nexp_range list * effect * t_arg emap
+val subst : (Envmap.k * kind) list -> bool -> bool -> t -> constraints -> effect -> t * constraints * effect * t_arg emap
+val subst_with_env : t_arg emap -> bool -> t -> nexp_range list -> effect -> t * constraints * effect * t_arg emap
 val subst_n_with_env : t_arg emap -> nexp -> nexp
 val type_param_consistent : Parse_ast.l -> t_arg emap -> t_arg emap -> nexp_range list
 
@@ -269,38 +273,38 @@ val merge_option_maps : nexp_map option -> nexp_map option -> nexp_map option
 
 val expand_nexp : nexp -> nexp list
 val normalize_nexp : nexp -> nexp
-val get_index : nexp -> int (*TEMPORARILY expose nindex through this for debugging purposes*)
+val get_index : nexp -> int (*expose nindex through this for debugging purposes*)
 val get_all_nvar : nexp -> string list (*Pull out all of the contained nvar and nuvars in nexp*)
 
 val select_overload_variant : def_envs -> bool -> bool -> tannot list -> t -> tannot list
 
-val split_conditional_constraints : nexp_range list -> (nexp_range list * nexp_range list)
+val split_conditional_constraints : constraints -> (constraints * constraints)
 
 (*May raise an exception if a contradiction is found*)
-val resolve_constraints : nexp_range list -> (nexp_range list * nexp_map option)
+val resolve_constraints : constraints -> (constraints * nexp_map option)
 (* whether to actually perform constraint resolution or not *)
 val do_resolve_constraints : bool ref
 
-(*May raise an exception if effects do not match tannot effects, will lift unification variables to fresh type variables *)
-val check_tannot : Parse_ast.l -> tannot -> nexp option -> nexp_range list -> effect -> tannot
+(*May raise an exception if effects do not match tannot effects,
+  will lift unification variables to fresh type variables *)
+val check_tannot : Parse_ast.l -> tannot -> nexp option -> constraints -> effect -> tannot
 
 val nexp_eq_check : nexp -> nexp -> bool (*structural equality only*)
 val nexp_eq : nexp -> nexp -> bool
 val nexp_one_more_than : nexp -> nexp -> bool
 
 (*Selects the subset of given list where an nexp_range contains the given nexp, presumed to be an nvar*)
-val contains_nvar : nexp -> nexp_range list -> nexp_range list
+val contains_nvar : nexp -> constraints -> constraints
 (*As above but with nuvars*)
-val contains_nuvar : nexp -> nexp_range list -> nexp_range list
+val contains_nuvar : nexp -> constraints -> constraints
 (*Removes first nexp from second nexp, when first nexp is a nuvar or nvar. 
-If it isn't possible to remove the first nexp fully and leave integral values on the resulting nexp
-(i.e. if we have isolate_nexp 'i (8*i) + 3), then we return the nexp and any non-removable factors
-(this may include 2 ^^ 'x) 
+  If it isn't possible to remove the first nexp fully and leave integral values on the resulting nexp
+  i.e. if we have isolate_nexp 'i (8*i) + 3), then we return the nexp and any non-removable factors
+  (this may include 2 ^^ 'x) 
 *)
-val isolate_nexp : nexp -> nexp -> (nexp * nexp)
-val refine_requires: bool -> (constraint_origin * nexp) option -> (constraint_origin * nexp) option -> Nexpmap.k -> nexp_range list -> nexp_range list
-val refine_guarantees: bool -> (constraint_origin * nexp) option -> (constraint_origin * nexp) option -> Nexpmap.k -> nexp_range list -> nexp_range list
-
+val isolate_nexp : nexp -> nexp -> (nexp option * nexp option * nexp)
+val refine_requires: bool -> minmax -> minmax -> Nexpmap.k -> constraints -> constraints * minmax * minmax 
+val refine_guarantees: bool -> minmax-> minmax -> Nexpmap.k -> constraints -> constraints * minmax * minmax
 
 
 (*type relations*)
@@ -314,14 +318,14 @@ val conforms_to_t : def_envs -> bool -> bool -> t -> t -> bool
    When widen, two atoms are used to generate a range that contains them (or is defined by them for constants; and an atom and a range may widen the range.
    type_consistent mutates uvars to perform unification and will raise an error if the [[t1]] and [[t2]] are inconsistent
 *)
-val type_consistent : constraint_origin -> def_envs -> range_enforcement -> bool -> t -> t -> t * nexp_range list
+val type_consistent : constraint_origin -> def_envs -> range_enforcement -> bool -> t -> t -> t * constraints
 
 (* type_coerce mutates to unify variables, and will raise an exception if the first type cannot
    be coerced into the second and is additionally inconsistent with the second; 
    bool specifices whether this has arisen from an implicit or explicit type coercion request
    type_coerce origin envs enforce is_explicit (ie came from user) widen bounds t exp expect_t
  *)
-val type_coerce : constraint_origin -> def_envs -> range_enforcement -> bool -> bool -> bounds_env -> t -> exp -> t -> t * nexp_range list * effect * exp
+val type_coerce : constraint_origin -> def_envs -> range_enforcement -> bool -> bool -> bounds_env -> t -> exp -> t -> t * constraints * effect * exp
 
 (* Merge tannots when intersection or unioning two environments. In case of default types, defer to tannot on right 
    When merging atoms, use bool to control widening. 

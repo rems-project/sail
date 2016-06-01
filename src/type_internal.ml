@@ -225,6 +225,9 @@ let triple_negate = function
 
 type exp = tannot Ast.exp
 
+type minmax = (constraint_origin * nexp) option
+type constraints = nexp_range list
+
 (*Nexpression Makers (as built so often)*)
 
 let mk_nv s = {nexp = Nvar s; imp_param = false}
@@ -1031,7 +1034,11 @@ let rec nexp_eq_check n1 n2 =
   | N2n(n,_),N2n(n2,_) -> nexp_eq_check n n2
   | Nneg n,Nneg n2 -> nexp_eq_check n n2
   | Npow(n1,i1),Npow(n2,i2) -> i1=i2 && nexp_eq_check n1 n2
-  | Nuvar {nindex =i1},Nuvar {nindex = i2} -> i1 = i2
+  | Nuvar _,Nuvar _ ->
+    let n1_in,n2_in = get_inner_most n1, get_inner_most n2 in
+    (match n1_in.nexp, n2_in.nexp with
+     | Nuvar{insubst=None; nindex=i1},Nuvar{insubst=None; nindex=i2} -> i1 = i2
+     | _ -> nexp_eq_check n1_in n2_in)
   | _,_ -> false
 
 let nexp_eq n1 n2 =
@@ -1148,50 +1155,73 @@ let isolate_nexp nv ne =
     | Nvar v -> Some v, None
     | Nuvar _ -> None, Some (get_index nv)
     | _ -> None, None in
+  (* returns isolated_nexp, 
+   option nv plus any factors, 
+   option factors other than 1, 
+   bool whether factors need to be divided from other terms*)
   let rec remove_from ne = match ne.nexp with
     | Nid(_,n) -> remove_from n
-    | Npos_inf | Nneg_inf | Ninexact | Nconst _ | N2n(_,Some _)-> ne,None
+    | Npos_inf | Nneg_inf | Ninexact | Nconst _ | N2n(_,Some _)-> ne,None,None,false
     | Nvar v ->
       (match var with
-       | Some v' -> if v = v' then (n_zero,Some ne) else (ne,None)
-       | _ -> (ne,None))
+       | Some v' -> if v = v' then (n_zero,Some ne,None,false) else (ne,None,None,false)
+       | _ -> (ne,None,None,false))
     | Nuvar _ ->
       (match uvar with
-       | Some n' ->  if (get_index ne) = n' then n_zero,Some ne else ne,None
-       | _ -> ne,None)
+       | Some n' ->  if (get_index ne) = n' then n_zero,Some ne,None,false else ne,None,None,false
+       | _ -> ne,None,None,false)
     | N2n(n1,_) | Npow(n1,_)->
       (match remove_from n1 with
-       | (_, None) -> ne,None
-       | (_,Some _) -> (n_zero,Some ne))
+       | (_, None,_,_) -> ne,None,None,false
+       | (_,Some _,_,_) -> (n_zero,Some ne,Some ne,false))
     | Nneg n -> assert false (*Normal forms shouldn't have nneg*)
     | Nmult(n1,n2) ->
       (match (remove_from n1, remove_from n2) with
-      | (_, None),(_,None) -> (ne,None)
-      | _ -> (n_zero, Some ne))
+       | (_, None,_,_),(_,None,_,_) -> (ne,None,None,false)
+       | (_, None,_,_),(nv,Some n,None,false) ->
+         if nexp_eq n1 n_one
+         then (nv,Some n, None, false)
+         else (n_zero, Some n, Some n1, true)
+       | (_, None,_,_),(nv, Some n, Some nf, true) ->
+         (nv, Some(mk_mult n1 n2), Some  (mk_mult n1 nf), true)
+       | (_, None,_,_), (nv, Some n, Some nf, false) ->
+         (nv, Some (mk_mult n1 n2), Some (mk_mult n1 n2), false)
+       | _ -> (n_zero, Some ne, Some ne, false))
     | Nadd(n1,n2) ->
       (match (remove_from n1, remove_from n2) with
-       | (_,None),(_,None) -> ne,None
-       | (new_n1,Some nv),(_,None) -> (mk_add new_n1 n2, Some nv)
-       | (_, None),(new_n2,Some nv) -> (mk_add n1 new_n2, Some nv)
-       | (_, Some _), (_, Some _) -> (n_zero, Some ne) (*It's all gone horribly wrong, punt*))
+       | (_,None,_,_),(_,None,_,_) -> ne,None,None,false
+       | (new_n1,Some nv,factor,try_factor),(_,None,_,_) -> (mk_add new_n1 n2, Some nv,factor,try_factor)
+       | (_, None,_,_),(new_n2,Some nv,factor,try_factor) -> (mk_add n1 new_n2, Some nv,factor, try_factor)
+       | (nn1, Some nv1,Some f1,true), (nn2, Some nv2,Some f2,true) ->
+         if nexp_eq nv1 nv2
+         then (mk_add nn1 nn2, Some nv1, Some (mk_add f1 f2), true)
+         else (mk_add nn1 nn2, Some (mk_add nv1 nv2), Some (mk_add f1 f2), false)
+       | (nn1, _,_,_),(nn2,_,_,_) ->
+         (mk_add nn1 nn2, Some ne, Some ne, false) (*It's all gone horribly wrong, punt*))
     | Nsub(n1,n2) -> assert false in (*Normal forms shouldn't have nsub*)
-  let (new_ne,new_nv) = remove_from normal_ne in
+  let (new_ne,new_nv,new_factor,attempt_factor) = remove_from normal_ne in
   let new_ne = normalize_nexp new_ne in
   match new_nv with
-  | None -> assert false (*Oh my*)
+  | None -> None,None, new_ne
   | Some n_nv ->
-    (match n_nv.nexp with
-     | Nvar _ | Nuvar _ | N2n _ | Npow _ | Nadd _ | Nneg _ | Nsub _ | Nid _ -> (n_nv,new_ne)
-     | Nconst _ | Ninexact | Npos_inf | Nneg_inf -> assert false (*double oh my*)
-     | Nmult(n1,n2) ->
+    (match n_nv.nexp,new_factor,attempt_factor with
+     | Nvar _, None, _ | Nuvar _, None, _ -> (Some n_nv,None,new_ne)
+     | Nvar _, Some f, true | Nuvar _, Some f, true ->
+       if divisible_by new_ne f
+       then (Some n_nv, Some f, normalize_nexp (divide_by new_ne f))
+       else (Some (mk_mult f n_nv), None, new_ne)
+     | Nconst _,_,_ | Ninexact,_,_ | Npos_inf,_,_ | Nneg_inf,_,_ | Nid _,_,_ -> assert false (*double oh my*)
+     | N2n _,_,_ | Npow _,_,_ | Nadd _,_,_ | Nneg _,_,_ | Nsub _,_,_ | Nvar _,_,false | Nuvar _,_,false
+       -> (Some n_nv,None, new_ne)
+     | Nmult(n1,n2),_,_ ->
        if nexp_eq n1 n_nv
        then if divisible_by new_ne n2
-         then (n1, normalize_nexp (divide_by new_ne n2))
-         else (n_nv, new_ne)
+         then (Some n1, Some n2, normalize_nexp (divide_by new_ne n2))
+         else (Some n_nv, None, new_ne)
        else if nexp_eq n2 n_nv
        then if divisible_by new_ne n1
-         then (n2, normalize_nexp (divide_by new_ne n1))
-         else (n_nv, new_ne)
+         then (Some n2, Some n1, normalize_nexp (divide_by new_ne n1))
+         else (Some n_nv, None, new_ne)
        else assert false (*really bad*))
 
 let nexp_one_more_than n1 n2 =
@@ -1208,15 +1238,17 @@ let nexp_one_more_than n1 n2 =
  
 
 let rec nexp_gt_compare eq_ok n1 n2 = 
-  let n1,n2 = (normalize_nexp n1, normalize_nexp n2) in
+  let n1,n2 = (normalize_nexp (get_inner_most n1), normalize_nexp (get_inner_most n2)) in
   let ge_test = if eq_ok then ge_big_int else gt_big_int in
-  if eq_ok && nexp_eq n1 n2
+  let is_eq = nexp_eq n1 n2 in
+  if eq_ok && is_eq
   then Yes
-  else if (not eq_ok) && nexp_eq n1 n2 then No
+  else if (not eq_ok) && is_eq then No
   else
     match n1.nexp,n2.nexp with
       | Nconst i, Nconst j | N2n(_,Some i), N2n(_,Some j)-> if ge_test i j then Yes else No
-      | Npos_inf, _ | _, Nneg_inf | Nuvar _, Npos_inf | Nneg_inf, Nuvar _ -> Yes
+      | Npos_inf, _ | _, Nneg_inf -> Yes
+      | Nuvar _, Npos_inf | Nneg_inf, Nuvar _ -> Maybe
       | Nneg_inf, _ | _, Npos_inf -> No
       | Ninexact, _ | _, Ninexact -> Maybe
       | N2n(n1,_), N2n(n2,_) -> nexp_gt_compare eq_ok n1 n2
@@ -1266,6 +1298,8 @@ let rec nexp_gt_compare eq_ok n1 n2 =
 
 let nexp_ge = nexp_gt_compare true
 let nexp_gt = nexp_gt_compare false
+let nexp_le n1 n2 = nexp_gt_compare true n2 n1
+let nexp_lt n1 n2 = nexp_gt_compare false n2 n1
 
 let equate_t (t_box : t) (t : t) : unit =
   let t = resolve_tsubst t in
@@ -1425,7 +1459,8 @@ let rec fresh_nvar bindings n =
 let rec fresh_ovar bindings o =
   match o.order with
     | Ouvar { oindex = i;osubst = None } -> 
-      fresh_var false "ov" i (fun v add -> equate_o o {order = (Ovar v)}; if add then Some(v,{k=K_Nat}) else None) bindings
+      fresh_var false "ov" i (fun v add -> equate_o o {order = (Ovar v)};
+                               if add then Some(v,{k=K_Nat}) else None) bindings
     | Ouvar { oindex = i; osubst = Some({order=Ouvar _} as o')} ->
       let kv = fresh_ovar bindings o' in
       equate_o o o';
@@ -1437,7 +1472,8 @@ let rec fresh_ovar bindings o =
 let rec fresh_evar bindings e =
   match e.effect with
     | Euvar { eindex = i;esubst = None } -> 
-      fresh_var false "ev" i (fun v add -> equate_e e {effect = (Evar v)}; if add then Some(v,{k=K_Nat}) else None) bindings
+      fresh_var false "ev" i (fun v add -> equate_e e {effect = (Evar v)};
+                               if add then Some(v,{k=K_Nat}) else None) bindings
     | Euvar { eindex = i; esubst = Some({effect=Euvar _} as e')} ->
       let kv = fresh_evar bindings e' in
       equate_e e e';
@@ -1505,56 +1541,86 @@ let rec refine_guarantees check_nvar max_lt min_gt id cs =
         | None,None -> []
         | Some(c,i),None -> [LtEq(c,Guarantee,id,i)]
         | None,Some(c,i) -> [GtEq(c,Guarantee,id,i)]
-        | Some(cl,il),Some(cg,ig) -> [LtEq(cl,Guarantee,id,il);GtEq(cg,Guarantee,id,ig)])
-    | LtEq(c,Guarantee,nes,neb)::cs ->
-      (match nes.nexp,neb.nexp,check_nvar,max_lt with
-        | Nuvar _ , Nconst i,false,None | Nvar _ , Nconst i, true, None ->
+        | Some(cl,il),Some(cg,ig) -> [LtEq(cl,Guarantee,id,il);GtEq(cg,Guarantee,id,ig)]), max_lt, min_gt
+    | (LtEq(c,Guarantee,nes,neb) as curr)::cs ->
+      let no_match _ =
+        let (cs,max,min) = refine_guarantees check_nvar max_lt min_gt id cs in
+        curr::cs,max,min in
+      (match nes.nexp,check_nvar,max_lt with
+       | Nuvar _ ,false, None | Nvar _ , true, None ->
+         if nexp_eq id nes 
+         then match neb.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_guarantees check_nvar (Some(c,neb)) min_gt id cs (*new max*)
+         else no_match ()
+       | Nuvar _, false, Some(cm, omax) | Nvar _ , true,Some(cm, omax) ->
+         if nexp_eq id nes
+         then match nexp_ge neb omax with
+           | Yes -> refine_guarantees check_nvar (Some(c,neb)) min_gt id cs (*replace old max*)
+           | No -> refine_guarantees check_nvar max_lt min_gt id cs (*remove redundant constraint *)
+           | Maybe -> no_match ()              
+          else no_match ()
+        | _ -> no_match ())
+    | (Lt(c,Guarantee,nes,neb) as curr)::cs ->
+      let no_match _ =
+        let (cs,max,min) = refine_guarantees check_nvar max_lt min_gt id cs in
+        curr::cs,max,min in
+      (match nes.nexp,check_nvar,max_lt with
+        | Nuvar _, false, None | Nvar _, true, None->
           if nexp_eq id nes 
-          then refine_guarantees check_nvar (Some(c,neb)) min_gt id cs (*new max*)
-          else refine_guarantees check_nvar max_lt min_gt id cs
-        | Nuvar _ , Nconst i, false,Some(cm, {nexp = Nconst im})
-        | Nvar _ , Nconst i, true,Some(cm, {nexp = Nconst im}) ->
-          if nexp_eq id nes && i >= im
-          then refine_guarantees check_nvar (Some(c,neb)) min_gt id cs (*replace old max*)
-          else refine_guarantees check_nvar max_lt min_gt id cs
-        | _ -> refine_guarantees check_nvar max_lt min_gt id cs)
-    | Lt(c,Guarantee,nes,neb)::cs ->
-      (match nes.nexp,neb.nexp,check_nvar,max_lt with
-        | Nuvar _ , Nconst i,false,None | Nvar _ , Nconst i,true,None->
+          then match neb.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_guarantees check_nvar (Some(c,neb)) min_gt id cs (*new max*)
+          else no_match ()
+        | Nuvar _, false, Some(cm, omax) | Nvar _, true, Some(cm, omax) ->
+          if nexp_eq id nes
+          then match nexp_gt neb omax with
+            | Yes -> refine_guarantees check_nvar (Some(c,neb)) min_gt id cs (*replace old max*)
+            | No -> refine_guarantees check_nvar max_lt min_gt id cs (*remove redundant constraint*)
+            | Maybe -> no_match ()
+          else no_match ()
+        | _ -> no_match ())
+    | (GtEq(c,Guarantee,nes,neb) as curr)::cs ->
+      let no_match _ =
+        let (cs,max,min) = refine_guarantees check_nvar max_lt min_gt id cs in
+        curr::cs,max,min in
+      (match nes.nexp,check_nvar,min_gt with
+       | Nuvar _, false, None | Nvar _, true, None->
+         if nexp_eq id nes 
+         then match neb.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_guarantees check_nvar max_lt (Some(c,neb)) id cs (*new min*)
+         else no_match ()
+       | Nuvar _, false, Some(cm, omin) | Nvar _, true, Some(cm, omin) ->
+         if nexp_eq id nes
+         then match nexp_le neb omin with
+           | Yes ->  refine_guarantees check_nvar max_lt (Some(c,neb)) id cs (*replace old min*)
+           | No -> refine_guarantees check_nvar max_lt min_gt id cs (*remove redundant constraint*)
+           | Maybe -> no_match ()
+         else no_match ()
+       | _ -> no_match ())
+    | (Gt(c,Guarantee,nes,neb) as curr)::cs ->
+      let no_match _ =
+        let (cs,max,min) = refine_guarantees check_nvar max_lt min_gt id cs in
+        curr::cs,max,min in
+      (match nes.nexp,check_nvar,min_gt with
+        | Nuvar _, false, None | Nvar _, true, None->
           if nexp_eq id nes 
-          then refine_guarantees check_nvar (Some(c,neb)) min_gt id cs (*new max*)
-          else refine_guarantees check_nvar max_lt min_gt id cs
-        | Nuvar _ , Nconst i,false, Some(cm, {nexp = Nconst im})
-        | Nvar _ , Nconst i,true, Some(cm, {nexp = Nconst im}) ->
-          if nexp_eq id nes && i > im
-          then refine_guarantees check_nvar (Some(c,neb)) min_gt id cs (*replace old max*)
-          else refine_guarantees check_nvar max_lt min_gt id cs
-        | _ -> refine_guarantees check_nvar max_lt min_gt id cs)
-    | GtEq(c,Guarantee,nes,neb)::cs ->
-      (match nes.nexp,neb.nexp,check_nvar,min_gt with
-        | Nuvar _ , Nconst i,false,None | Nvar _ , Nconst i,true,None->
-          if nexp_eq id nes 
-          then refine_guarantees check_nvar max_lt (Some(c,neb)) id cs (*new min*)
-          else refine_guarantees check_nvar max_lt min_gt id cs
-        | Nuvar _ , Nconst i,false, Some(cm, {nexp = Nconst im})
-        | Nvar _ , Nconst i,true, Some(cm, {nexp = Nconst im}) ->
-          if nexp_eq id nes && i <= im
-          then refine_guarantees check_nvar max_lt (Some(c,neb)) id cs (*replace old min*)
-          else refine_guarantees check_nvar max_lt min_gt id cs
-        | _ -> refine_guarantees check_nvar max_lt min_gt id cs)
-    | Gt(c,Guarantee,nes,neb)::cs ->
-      (match nes.nexp,neb.nexp,check_nvar,min_gt with
-        | Nuvar _ , Nconst i,false,None | Nvar _ , Nconst i,true,None->
-          if nexp_eq id nes 
-          then refine_guarantees check_nvar max_lt (Some(c,neb)) id cs (*new min*)
-          else refine_guarantees check_nvar max_lt min_gt id cs
-        | Nuvar _ , Nconst i, false, Some(cm, {nexp = Nconst im})
-        | Nvar _ , Nconst i, true, Some(cm, {nexp = Nconst im}) ->
-          if nexp_eq id nes && i < im
-          then refine_guarantees check_nvar max_lt (Some(c,neb)) id cs (*replace old min*)
-          else refine_guarantees check_nvar max_lt min_gt id cs
-        | _ -> refine_guarantees check_nvar max_lt min_gt id cs)
-    | c::cs -> c::(refine_guarantees check_nvar max_lt min_gt id cs)
+          then match neb.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_guarantees check_nvar max_lt (Some(c,neb)) id cs (*new min*)
+          else no_match ()
+        | Nuvar _, false, Some(cm, omin) | Nvar _, true, Some(cm, omin) ->
+          if nexp_eq id nes
+          then match nexp_lt neb omin with
+            | Yes -> refine_guarantees check_nvar max_lt (Some(c,neb)) id cs (*replace old min*)
+            | No -> refine_guarantees check_nvar max_lt min_gt id cs (*remove redundant constraint*)
+            | Maybe -> no_match ()
+          else no_match ()
+        | _ -> no_match ())
+    | c::cs ->
+      let (cs,max,min) = refine_guarantees check_nvar max_lt min_gt id cs in
+      c::cs,max,min
 
 let rec refine_requires check_nvar min_lt max_gt id cs =
   match cs with
@@ -1563,56 +1629,86 @@ let rec refine_requires check_nvar min_lt max_gt id cs =
         | None,None -> []
         | Some(c,i),None -> [LtEq(c,Require,id,i)]
         | None,Some(c,i) -> [GtEq(c,Require,id,i)]
-        | Some(cl,il),Some(cg,ig) -> [LtEq(cl,Require,id,il);GtEq(cg,Require,id,ig)])
-    | LtEq(c,Require,nes,neb)::cs ->
-      (match nes.nexp,neb.nexp,check_nvar,min_lt with
-        | Nuvar _ , Nconst i,false,None | Nvar _ , Nconst i,true,None ->
+        | Some(cl,il),Some(cg,ig) -> [LtEq(cl,Require,id,il);GtEq(cg,Require,id,ig)]), min_lt,max_gt
+    | (LtEq(c,Require,nes,neb) as curr)::cs ->
+      let no_match _ =
+        let (cs,max,min) = refine_requires check_nvar min_lt max_gt id cs in
+        curr::cs,max,min in
+      (match nes.nexp,check_nvar,min_lt with
+       | Nuvar _, false, None | Nvar _, true, None ->
+         if nexp_eq id nes 
+         then match neb.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_requires check_nvar (Some(c,neb)) max_gt id cs (*new min*)
+         else no_match ()
+       | Nuvar _, false, Some(cm, omin) | Nvar _, true, Some(cm, omin) ->
+         if nexp_eq id nes
+         then match nexp_le neb omin with
+           | Yes -> refine_requires check_nvar (Some(c,neb)) max_gt id cs (*replace old min*)
+           | No -> refine_requires check_nvar min_lt max_gt id cs (*remove redundant constraint*)
+           | Maybe -> no_match ()
+         else no_match()
+        | _ -> no_match())
+    | (Lt(c,Require,nes,neb) as curr)::cs ->
+      let no_match _ =
+        let (cs,max,min) = refine_requires check_nvar min_lt max_gt id cs in
+        curr::cs,max,min in
+      (match nes.nexp,check_nvar,min_lt with
+        | Nuvar _, false, None | Nvar _, true, None->
           if nexp_eq id nes 
-          then refine_requires check_nvar (Some(c,neb)) max_gt id cs (*new min*)
-          else refine_requires check_nvar min_lt max_gt id cs
-        | Nuvar _ , Nconst i, false, Some(cm, {nexp = Nconst im})
-        | Nvar _ , Nconst i, true, Some(cm, {nexp = Nconst im}) ->
-          if nexp_eq id nes && i <= im
-          then refine_requires check_nvar (Some(c,neb)) max_gt id cs (*replace old min*)
-          else refine_requires check_nvar min_lt max_gt id cs
-        | _ -> refine_guarantees check_nvar min_lt max_gt id cs)
-    | Lt(c,Require,nes,neb)::cs ->
-      (match nes.nexp,neb.nexp,check_nvar,min_lt with
-        | Nuvar _ , Nconst i,false,None | Nvar _ , Nconst i,true,None->
+          then match neb.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_requires check_nvar(Some(c,neb)) max_gt id cs (*new min*)
+          else no_match ()
+        | Nuvar _, false, Some(cm, omin) | Nvar _,true, Some(cm, omin) ->
+          if nexp_eq id nes
+          then match nexp_lt neb omin with
+            | Yes -> refine_requires check_nvar (Some(c,neb)) max_gt id cs (*replace old min*)
+            | No  -> refine_requires check_nvar min_lt max_gt id cs (*remove redundant constraint*)
+            | Maybe -> no_match ()
+          else no_match ()
+        | _ -> no_match())
+    | (GtEq(c,Require,nes,neb) as curr)::cs ->
+      let no_match _ =
+        let (cs,max,min) = refine_requires check_nvar min_lt max_gt id cs in
+        curr::cs,max,min in
+      (match nes.nexp,check_nvar,max_gt with
+        | Nuvar _, false, None | Nvar _, true, None ->
           if nexp_eq id nes 
-          then refine_requires check_nvar(Some(c,neb)) max_gt id cs (*new min*)
-          else refine_requires check_nvar min_lt max_gt id cs
-        | Nuvar _ , Nconst i, false, Some(cm, {nexp = Nconst im})
-        | Nvar _ , Nconst i, true, Some(cm, {nexp = Nconst im}) ->
-          if nexp_eq id nes && i < im
-          then refine_requires check_nvar (Some(c,neb)) max_gt id cs (*replace old min*)
-          else refine_requires check_nvar min_lt max_gt id cs
-        | _ -> refine_guarantees check_nvar min_lt max_gt id cs)
-    | GtEq(c,Require,nes,neb)::cs ->
-      (match nes.nexp,neb.nexp,check_nvar,max_gt with
-        | Nuvar _ , Nconst i,false,None | Nvar _ , Nconst i,true,None ->
+          then match neb.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_requires check_nvar min_lt (Some(c,neb)) id cs (*new max*)
+          else no_match ()
+        | Nuvar _, false, Some(cm, omax) | Nvar _, true, Some(cm, omax) ->
+          if nexp_eq id nes
+          then match nexp_ge neb omax with
+            | Yes -> refine_requires check_nvar min_lt (Some(c,neb)) id cs (*replace old max*)
+            | No  -> refine_requires check_nvar min_lt max_gt id cs (*remove redundant constraint*)
+            | Maybe -> no_match ()
+          else no_match ()
+        | _ -> no_match ())
+    | (Gt(c,Require,nes,neb) as curr)::cs ->
+      let no_match _ =
+        let (cs,max,min) = refine_requires check_nvar min_lt max_gt id cs in
+        curr::cs,max,min in
+      (match nes.nexp,check_nvar,max_gt with
+        | Nuvar _, true, None | Nvar _, false, None->
           if nexp_eq id nes 
-          then refine_requires check_nvar min_lt (Some(c,neb)) id cs (*new max*)
+          then match neb.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_requires check_nvar min_lt (Some(c,neb)) id cs (*new max*)
           else refine_requires check_nvar min_lt max_gt id cs
-        | Nuvar _ , Nconst i, false, Some(cm, {nexp = Nconst im}) 
-        | Nvar _ , Nconst i, true, Some(cm, {nexp = Nconst im}) ->
-          if nexp_eq id nes && i >= im
-          then refine_requires check_nvar min_lt (Some(c,neb)) id cs (*replace old max*)
-          else refine_requires check_nvar min_lt max_gt id cs
-        | _ -> refine_requires check_nvar min_lt max_gt id cs)
-    | Gt(c,Require,nes,neb)::cs ->
-      (match nes.nexp,neb.nexp,check_nvar,max_gt with
-        | Nuvar _ , Nconst i,true,None | Nvar _ , Nconst i,false,None->
-          if nexp_eq id nes 
-          then refine_requires check_nvar min_lt (Some(c,neb)) id cs (*new max*)
-          else refine_requires check_nvar min_lt max_gt id cs
-        | Nuvar _ , Nconst i, false, Some(cm, {nexp = Nconst im})
-        | Nvar _ , Nconst i, true, Some(cm, {nexp = Nconst im}) ->
-          if nexp_eq id nes && i > im
-          then refine_requires check_nvar min_lt (Some(c,neb)) id cs (*replace old max*)
-          else refine_requires check_nvar min_lt max_gt id cs
-        | _ -> refine_requires check_nvar min_lt max_gt id cs)
-    | c::cs -> c::(refine_requires check_nvar min_lt max_gt id cs)
+        | Nuvar _, false, Some(cm, omax) | Nvar _, true, Some(cm, omax) ->
+          if nexp_eq id nes
+          then match nexp_gt neb omax with
+            | Yes -> refine_requires check_nvar min_lt (Some(c,neb)) id cs (*replace old max*)
+            | No -> refine_requires check_nvar min_lt max_gt id cs (* remove redundant constraint *)
+            | Maybe -> no_match ()
+          else no_match ()
+        | _ -> no_match())
+    | c::cs ->
+      let (cs,min,max) = refine_requires check_nvar min_lt max_gt id cs in
+      c::cs,min_lt,max_gt
 
 let nat_t = {t = Tapp("range",[TA_nexp n_zero;TA_nexp (mk_p_inf());])}
 let int_t = {t = Tapp("range",[TA_nexp (mk_n_inf());TA_nexp (mk_p_inf());])}
@@ -2973,7 +3069,7 @@ let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 =
   | Tapp("atom",[TA_nexp a]),Tapp("range",[TA_nexp b1; TA_nexp r1]) ->
     (t1, csp@[GtEq(co,enforce,a,b1);LtEq(co,enforce,a,r1)])
   | Tapp("range",[TA_nexp b1; TA_nexp r1]),Tapp("atom",[TA_nexp a]) ->
-    (t2, csp@[LtEq(co,enforce,b1,a);LtEq(co,enforce,r1,a)])
+    (t2, csp@[LtEq(co,Guarantee,b1,a);GtEq(co,Guarantee,r1,a)])
   | Tapp("atom",[TA_nexp a1]),Tapp("atom",[TA_nexp a2]) ->
     if nexp_eq a1 a2
     then (t2,csp)
@@ -2985,13 +3081,17 @@ let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 =
         then ({t= Tapp("range",[TA_nexp a1;TA_nexp a2])},csp)
         else ({t=Tapp ("range",[TA_nexp a2;TA_nexp a1])},csp)
       (*| Nconst _, Nuvar _ | Nuvar _, Nconst _->
-        (t1, csp@[Eq(co,a1,a2)])*) (*TODO This is the correct constraint. However, without the proper support for In checks actually working, this will cause specs to not build*)      
+        (t1, csp@[Eq(co,a1,a2)])*) (*TODO This is the correct constraint. 
+                                     However, without the proper support for In checks actually working,
+                                     this will cause specs to not build*)      
       | _ -> (*let nu1,nu2 = new_n (),new_n () in 
              ({t=Tapp("range",[TA_nexp nu1;TA_nexp nu2])},
               csp@[LtEq(co,enforce,nu1,a1);LtEq(co,enforce,nu1,a2);LtEq(co,enforce,a1,nu2);LtEq(co,enforce,a2,nu2)])*)
-        (t1, csp@[LtEq(co,enforce,a1,a2);(GtEq(co,enforce,a1,a2))])) (*EQ is the right thing to do, but see above. Introducing new free vars here is bad*)
-  | Tapp("vector",[TA_nexp _; TA_nexp l1; ord; ty1]),Tapp("vector",[TA_nexp _; TA_nexp l2; ord2; ty2]) ->
-    (t2, Eq(co,l1,l2)::((type_arg_eq co d_env enforce widen ord ord2)@(type_arg_eq co d_env enforce widen ty1 ty2)))
+        (t1, csp@[LtEq(co,enforce,a1,a2);(GtEq(co,enforce,a1,a2))]))
+  (*EQ is the right thing to do, but see above. Introducing new free vars here is bad*)
+  | Tapp("vector",[TA_nexp b1; TA_nexp l1; ord; ty1]),Tapp("vector",[TA_nexp b2; TA_nexp l2; ord2; ty2]) ->
+    let cs = if widen then [Eq(co,l1,l2)] else [Eq(co,l1,l2);Eq(co,b1,b2)] in
+    (t2, cs@(type_arg_eq co d_env enforce widen ord ord2)@(type_arg_eq co d_env enforce widen ty1 ty2))
   | Tapp(id1,args1), Tapp(id2,args2) ->
     (*let _ = Printf.eprintf "checking consistency of %s and %s\n" id1 id2 in*)
     let la1,la2 = List.length args1, List.length args2 in
@@ -3103,7 +3203,7 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
         | Oinc,Ouvar _ | Odec,Ouvar _ -> equate_o o2 o1;
         | Ouvar _,Oinc | Ouvar _, Odec -> equate_o o1 o2;
         | _,_ -> equate_o o1 o2); 
-        let cs = csp@[Eq(co,r1,r2)] in
+        let cs = csp@[Eq(co,r1,r2)]@(if widen then [] else [Eq(co,b1,b2)]) in
         let t',cs' = type_consistent co d_env enforce widen t1i t2i in
         let tannot = Base(([],t2),Emp_local,cs@cs',pure_e,(get_cummulative_effects (get_eannot e)),nob) in
         let e' = E_aux(E_internal_cast ((l,(Base(([],t2),Emp_local,[],pure_e,pure_e,nob))),e),(l,tannot)) in
@@ -3116,7 +3216,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
         let cs = [Eq(co,b2,n_zero);LtEq(co,Guarantee,mk_sub (mk_2n(r1)) n_one,r2)] in
         (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "unsigned",l)),[e]),
                             (l,
-                             cons_tag_annot_efr t2 (External (Some "unsigned")) cs (get_cummulative_effects (get_eannot e)))))
+                             cons_tag_annot_efr t2 (External (Some "unsigned"))
+                                                cs (get_cummulative_effects (get_eannot e)))))
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Ovar o};TA_typ {t=Tid "bit"}],_ -> 
         eq_error l "Cannot convert a vector to a range without an order"
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
@@ -3129,7 +3230,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
         let cs = [GtEq(co,Guarantee,b2,n_zero);LtEq(co,Guarantee,b2,mk_sub (mk_2n(r1)) n_one)] in
         (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "unsigned",l)),[e]),
                             (l,
-                             cons_tag_annot_efr t2 (External (Some "unsigned")) cs (get_cummulative_effects (get_eannot e)))))
+                             cons_tag_annot_efr t2 (External (Some "unsigned"))
+                                                cs (get_cummulative_effects (get_eannot e)))))
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert non-bit vector into an range"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
@@ -3182,7 +3284,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
         | [TA_typ t] ->
           (*TODO Should this be an internal cast? 
             Probably, make sure it doesn't interfere with the other internal cast and get removed *)
-          (*let _ = Printf.eprintf "Adding cast to remove register read: t %s ; t2 %s\n" (t_to_string t) (t_to_string t2) in*)
+          (*let _ = Printf.eprintf "Adding cast to remove register read: t %s ; t2 %s\n" 
+            (t_to_string t) (t_to_string t2) in*)
           let efc = (BE_aux (BE_rreg, l)) in
           let ef = add_effect efc pure_e in
           let new_e = E_aux(E_cast(t_to_typ unit_t,e),
@@ -3196,7 +3299,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
   | Tapp("vector",[TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]),Tid("bit") ->
     let cs = [Eq(co,r1,n_one)] in
     (t2,cs,pure_e,E_aux((E_app ((Id_aux (Id "most_significant", l)), [e])),
-                        (l, cons_tag_annot_efr t2 (External (Some "most_significant")) cs (get_cummulative_effects (get_eannot e)))))
+                        (l, cons_tag_annot_efr t2 (External (Some "most_significant"))
+                                               cs (get_cummulative_effects (get_eannot e)))))
   | Tid("bit"),Tapp("range",[TA_nexp b1;TA_nexp r1]) ->
     let t',cs'= type_consistent co d_env enforce false {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} t2 in
     (t2,cs',pure_e,
@@ -3590,7 +3694,15 @@ let rec constraint_size = function
       | CondCons(_,_,_,ps,es) -> constraint_size ps + constraint_size es
       | BranchCons(_,_,bs) -> constraint_size bs
       | _ -> 1) + constraint_size cs
-      
+
+let rec flatten_constraints = function
+  | [] -> []
+  | c::cs -> 
+    (match c with 
+      | CondCons(_,_,_,ps,es) -> flatten_constraints ps @ flatten_constraints es
+      | BranchCons(_,_,bs) -> flatten_constraints bs
+      | _ -> [c]) @ flatten_constraints cs
+
 let rec simple_constraint_check in_env cs = 
   let check = simple_constraint_check in_env in
   (*let _ = Printf.eprintf "simple_constraint_check of %i constraints\n%!" (constraint_size cs) in*)
@@ -3807,7 +3919,8 @@ let rec simple_constraint_check in_env cs =
               " to be less than " ^ (n_to_string n2))
         | Maybe -> Lt(co,enforce,n1',n2')::(check cs)))
   | CondCons(co,kind,substs,pats,exps):: cs ->
-    (*let _ = Printf.eprintf "Condcons check length pats %i, length exps %i\n" (List.length pats) (List.length exps) in*)
+    (*let _ = Printf.eprintf "Condcons check length pats %i, length exps %i\n" 
+      (List.length pats) (List.length exps) in*)
     let pats' = check pats in
     let exps' = check exps in
     (*let _ = Printf.eprintf "Condcons after check length pats' %i, length exps' %i\n" 
@@ -3829,6 +3942,76 @@ let rec simple_constraint_check in_env cs =
 
 let rec resolve_in_constraints cs = cs
 
+let tri_to_bl c =
+  match c with
+  | Yes | Maybe -> true
+  | _ -> false
+
+type var_side = Left | Right | Neither
+
+let reform_nexps nv lft rght =
+  let contains_left, contains_right = contains_nuvar_nexp nv lft, contains_nuvar_nexp nv rght in
+  if contains_left && contains_right
+  then
+    match isolate_nexp nv lft, isolate_nexp nv rght with
+    | (Some varl, Some factorl, lft_rst), (Some varr, Some factorr, rght_rst) ->
+      if nexp_eq factorl factorr && nexp_eq varl varr
+      then None, normalize_nexp (mk_sub rght_rst lft_rst), Neither
+      else None, normalize_nexp (mk_sub rght lft), Neither (*Hard cases, let's punt for now*)
+    | (Some varl, Some factor, lft_rst), (Some varr, None, rght_rst) ->
+      if nexp_eq varl varr
+      then Some (normalize_nexp (mk_mult (mk_sub factor n_one) varl)),
+           normalize_nexp (mk_sub rght_rst (mk_mult factor lft_rst)), Left
+      else None, normalize_nexp (mk_sub rght lft), Neither (*More hard cases*)
+    | (Some varl, None, lft_rst), (Some varr, Some factor, rght_rst) ->
+      if nexp_eq varl varr
+      then Some (normalize_nexp (mk_mult (mk_add factor n_one) varl)),
+           normalize_nexp (mk_sub (mk_mult factor rght_rst) lft_rst), Left
+      else None, normalize_nexp (mk_sub rght lft), Neither (*More hard cases*)
+    | (Some varl, None, lft_rst), (Some varr, None, rght_rst) ->
+      if nexp_eq varl varr
+      then None, normalize_nexp (mk_sub rght_rst lft_rst), Neither
+      else None, normalize_nexp (mk_sub rght lft), Neither
+    | (None,_,_),(_,_,_) | (_,_,_),(None,_,_) -> assert false
+  else if contains_left
+  then  
+    match isolate_nexp nv lft with
+    | (Some var, Some factor, lft_rst) ->
+      if divisible_by rght factor
+      then Some var, normalize_nexp (mk_sub (divide_by rght factor) lft_rst),Left
+      else Some (mk_mult var factor), normalize_nexp (mk_sub rght (mk_mult factor lft_rst)),Left
+    | Some var, None, lft_rst -> Some var, normalize_nexp (mk_sub rght lft_rst),Left
+    | None, _, lft -> None,normalize_nexp (mk_sub rght lft),Neither
+  else if contains_right
+  then match isolate_nexp nv rght with
+    | (Some var, Some factor, rgt_rst) ->
+      if divisible_by lft factor
+      then Some var, normalize_nexp (mk_sub (divide_by lft factor) rgt_rst),Right
+      else Some (mk_mult var factor), normalize_nexp (mk_sub lft (mk_mult factor rgt_rst)),Right
+    | Some var, None, rgt_rst -> Some var, normalize_nexp (mk_sub lft rgt_rst),Right
+    | None, _, rght -> None,normalize_nexp (mk_sub rght lft),Neither
+  else None, normalize_nexp (mk_sub rght lft), Neither
+
+let iso_builder nuv builder co enforce lft rgt = 
+  match reform_nexps nuv lft rgt with
+  | Some v, nexp_term, Left ->
+    builder co enforce v nexp_term
+  | Some v, nexp_term, Right ->
+    builder co enforce nexp_term v
+  | None,nexp_term,Neither ->
+    builder co enforce n_zero nexp_term
+  | _ -> assert false (*Should be unreachable*) 
+  
+let rec isolate_constraint nuv constraints = match constraints with
+  | [] -> []
+  | c::cs -> 
+    (match c with 
+     | LtEq(co,enforce,lft,rgt) -> iso_builder nuv (fun c e l r -> LtEq(c,e,l,r)) co enforce lft rgt
+     | Lt(co,enforce,lft,rgt) ->  iso_builder nuv (fun c e l r -> Lt(c,e,l,r)) co enforce lft rgt
+     | GtEq(co,enforce,lft,rgt) ->  iso_builder nuv (fun c e l r -> GtEq(c,e,l,r)) co enforce lft rgt
+     | Gt(co,enforce,lft,rgt) ->  iso_builder nuv (fun c e l r -> Gt(c,e,l,r)) co enforce lft rgt
+     | _ -> c)::isolate_constraint nuv cs
+
 let check_range_consistent require_lt require_gt guarantee_lt guarantee_gt = 
   match require_lt,require_gt,guarantee_lt,guarantee_gt with
     | None,None,None,None 
@@ -3836,17 +4019,30 @@ let check_range_consistent require_lt require_gt guarantee_lt guarantee_gt =
     | Some _, Some _,None,None | None,None,Some _,Some _ (*earlier check should ensure these*)
       -> ()
     | Some(crlt,rlt), Some(crgt,rgt), Some(cglt,glt), Some(cggt,ggt) ->
-      if glt <= rlt (*Can we guarantee that the upper bound is less than the required upper bound*) 
-      then if ggt <= rlt (*Can we guarantee that the lower bound is less than the required upper bound*)
-        then if glt >= rgt (*Can we guarantee that the upper bound is greater than the required lower bound*)
-          then if ggt >= rgt (*Can we guarantee that the lower bound is greater than the required lower bound*)
+      if tri_to_bl (nexp_ge rlt glt) (*Can we guarantee the up is less than the required up*)
+      then if tri_to_bl (nexp_ge rlt ggt) (*Can we guarantee the lw is less than the required up*)
+        then if tri_to_bl (nexp_ge glt rgt) (*Can we guarantee the up is greater than the required lw*)
+          then if tri_to_bl (nexp_ge ggt rgt) (*Can we guarantee that the lw is greater than the required lw*)
             then ()
             else assert false (*make a good two-location error, all the way down*)
           else assert false
         else assert false
       else assert false
     | _ -> assert false
-          
+
+let check_ranges cs =
+  let nuvars = get_all_nuvars_cs cs in
+  let nus_with_cs = List.map (fun n -> (n,contains_nuvar n cs)) (Var_set.elements nuvars) in
+  let nus_with_iso_cs = List.map (fun (n,ncs) -> (n,isolate_constraint n ncs)) nus_with_cs in
+  let refined_cs = List.concat (List.map (fun (n,ncs) ->
+      let guarantees,max_guarantee_lt,min_guarantee_gt = refine_guarantees false None None n ncs in
+      let require_cs,min_require_lt,max_require_gt = refine_requires false None None n guarantees in
+      check_range_consistent  min_require_lt max_require_gt max_guarantee_lt min_guarantee_gt;
+      require_cs)
+      nus_with_iso_cs)
+  in
+  refined_cs
+
 let do_resolve_constraints = ref true
 
 let resolve_constraints cs = 
@@ -3870,9 +4066,10 @@ let resolve_constraints cs =
           fix (fun in_env cs -> let (ncs,_) = merge_paths false (simple_constraint_check in_env cs) in ncs)
         (constraint_size nuvar_equated) nuvar_equated in
     let (complex_constraints,map) = merge_paths true complex_constraints in
+    let complex_constraints = check_ranges complex_constraints in
     (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" 
       (constraint_size complex_constraints) in
-    let _ = Printf.eprintf "%s\n" (constraints_to_string complex_constraints) in*)
+      let _ = Printf.eprintf "%s\n" (constraints_to_string complex_constraints) in*)
     (complex_constraints,map)
 
 
