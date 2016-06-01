@@ -418,7 +418,7 @@ function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType
   if (absPC[1..0] != 0b00) then (* bad PC alignment *)
     exit (SignalExceptionBadAddr(AdEL, absPC))
   else if ((unsigned(vAddr) + 4) > unsigned(length)) then
-    exit (raise_c2_exception_noreg(CapEx_LengthViolation)) (* XXX take exception properly *)
+    exit (raise_c2_exception_noreg(CapEx_LengthViolation))
   else
     TLBTranslate(absPC, accessType)
 }
