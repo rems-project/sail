@@ -1,6 +1,7 @@
-This directory contains a MIPS64-style processor written in Sail.  To
-support integration with the CHERI ISA it is split across several
-files, which must be given to sail in the following order:
+This directory contains a MIPS64-style architecture specification
+written in Sail.  To support integration with the CHERI ISA it is
+split across several files, which must be given to sail in the
+following order:
 
  1. mips_prelude.sail contains definitions used in the rest of the
  ISA, including register declarations and helper functions, for
