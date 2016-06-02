@@ -348,7 +348,7 @@ function AccessLevel getAccessLevel() =
 function unit checkCP0Access () =
   {
     let accessLevel = getAccessLevel() in
-    if ((accessLevel != Kernel) & (~((CP0Status.CU)[0]))) then
+    if ((accessLevel != Kernel) & (~((CP0Status.CU)[28]))) then
       {
         (CP0Cause.CE) := 0b00;
         exit (SignalException(CpU));

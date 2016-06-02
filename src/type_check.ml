@@ -639,7 +639,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       let (e',u,t_env,cs,bounds,ef) = check_exp envs imp_param true ct e in
       (*let _ = Printf.eprintf "Type checking cast: cast_t is %s constraints after checking e are %s\n" 
         (t_to_string cast_t) (constraints_to_string cs) in*)
-      let t',cs2,ef',e' = type_coerce (Expr l) d_env Require true false b_env u e' cast_t in
+      let t',cs2,ef',e' = type_coerce (Expr l) d_env Require true true b_env u e' cast_t in
       (*let _ = Printf.eprintf "Type checking cast: after first coerce with u %s, t' %s is and constraints are %s\n" 
         (t_to_string u) (t_to_string t') (constraints_to_string cs2) in*)
       let t',cs3,ef'',e'' = type_coerce (Expr l) d_env Guarantee false false b_env cast_t e' expect_t in 
@@ -682,7 +682,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
               let implicit = {t= Tapp("implicit",[TA_nexp n])} in
               let annot_i = Base(([],implicit),Emp_local,[],pure_e,pure_e,b_env) in
               E_aux(E_internal_exp((l,annot_i)),(l,simple_annot nat_t)) in
-            type_coerce (Expr l) d_env Require false false b_env ret 
+            type_coerce (Expr l) d_env Require false true b_env ret 
               (E_aux (E_app(id, internal_exp::parms),(l,(Base(([],ret),tag,cs,ef,efr,nob))))) expect_t
           | (IP_length n ,Some ne) | (IP_user n,Some ne) | (IP_start n,Some ne) ->
             (*let _ = Printf.eprintf "app of %s implicit length or var required %s with imp_param %s\n" 
@@ -697,11 +697,11 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
               let annot_i = Base(([],implicit),Emp_local,[],pure_e,pure_e,b_env) in
               E_aux (E_internal_exp_user((l, annot_iu),(l,annot_i)), (l,simple_annot nat_t))
             in
-            type_coerce (Expr l) d_env Require false false b_env ret 
+            type_coerce (Expr l) d_env Require false true b_env ret 
               (E_aux (E_app(id,internal_exp::parms),(l,(Base(([],ret),tag,cs,ef,efr,nob))))) expect_t
           | (IP_none,_) -> 
           (*let _ = Printf.eprintf "no implicit: ret %s and expect_t %s\n" (t_to_string ret) (t_to_string expect_t) in*)
-            type_coerce (Expr l) d_env Require false false b_env ret 
+            type_coerce (Expr l) d_env Require false true b_env ret 
               (E_aux (E_app(id, parms),(l,(Base(([],ret),tag,cs,ef,efr,nob))))) expect_t
       in
       (match Envmap.apply t_env i with
@@ -777,7 +777,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       let check_result ret imp tag cs ef efr lft rht =
         match imp with
           | _ -> (*implicit isn't allowed at the moment on any infix functions *)
-            type_coerce (Expr l) d_env Require false false b_env ret 
+            type_coerce (Expr l) d_env Require false true b_env ret 
               (E_aux (E_app_infix(lft,op,rht),(l,(Base(([],ret),tag,cs,ef,efr,nob))))) expect_t 
       in
       (match Envmap.apply t_env i with
@@ -945,7 +945,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
                               TA_nexp (mk_c_int len);
                               TA_ord {order= Odec}; TA_typ item_t])} 
         | _ -> raise (Reporting_basic.err_unreachable l "Default order was neither inc or dec") in
-      let t',cs',ef',e' = type_coerce (Expr l) d_env Guarantee false false b_env t 
+      let t',cs',ef',e' = type_coerce (Expr l) d_env Guarantee false true b_env t 
           (E_aux(E_vector es,(l,simple_annot_efr t effect))) expect_t in
       (e',t',t_env,cs@cs',nob,union_effects effect ef')
     | E_vector_indexed(eis,(Def_val_aux(default,(ld,annot)))) ->
@@ -1020,7 +1020,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       (*let _ = Printf.eprintf "Type checking vector access. item_t is %s and expect_t is %s\n" 
         (t_to_string item_t) (t_to_string expect_t) in*)
       let sub_effects = union_effects (union_effects va_lef ef) ef_i in
-      let t',cs',ef',e'=type_coerce (Expr l) d_env Require false false b_env item_t 
+      let t',cs',ef',e'=type_coerce (Expr l) d_env Require false true b_env item_t 
         (E_aux(E_vector_access(vec',i'),(l,tag_efs_annot item_t tag va_lef sub_effects))) expect_t in
       (e',t',t_env,cs_loc@cs_i@cs@cs',nob,union_effects ef' sub_effects)
     | E_vector_subrange(vec,i1,i2) ->
@@ -1064,7 +1064,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
       let nt = {t = Tapp("vector", [TA_nexp n1_start; TA_nexp new_length; TA_ord ord; TA_typ item_t]) } in
       let sub_effects = union_effects v_efs (union_effects ef (union_effects ef_i1 ef_i2)) in
       let (t,cs3,ef3,e') = 
-        type_coerce (Expr l) d_env Require false false b_env nt 
+        type_coerce (Expr l) d_env Require false true b_env nt 
           (E_aux(E_vector_subrange(vec',i1',i2'),(l,Base(([], nt),tag, cs_loc,v_efs, sub_effects,nob)))) expect_t in
       (e',t,t_env,cs3@cs@cs_i1@cs_i2@cs_loc,nob,union_effects ef3 sub_effects)
     | E_vector_update(vec,i,e) ->
@@ -1156,11 +1156,11 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
         check_exp envs imp_param true {t=Tapp("vector",[TA_nexp base2;TA_nexp rise2;TA_ord ord;TA_typ item_t])} v2 in
       let ti =  {t=Tapp("vector",[TA_nexp base1;TA_nexp (mk_add rise1 rise2);TA_ord ord; TA_typ item_t])} in
       let cs_loc = match ord.order with
-        | Odec -> [GtEq((Expr l),Require,base1,mk_add rise1 rise2)]
+        | Odec -> [] (* (*This should probably be handled by casts*)[GtEq((Expr l),Require,base1,mk_add rise1 rise2)] *)
         | _ -> [] in
       let sub_effects = union_effects ef_1 ef_2 in
       let (t,cs_c,ef_c,e') = 
-        type_coerce (Expr l) d_env Require false false b_env ti 
+        type_coerce (Expr l) d_env Require false true b_env ti 
           (E_aux(E_vector_append(v1',v2'),(l,constrained_annot_efr ti cs_loc sub_effects))) expect_t in
       (e',t,t_env,cs_loc@cs_1@cs_2,nob,(union_effects ef_c sub_effects))
     | E_list(es) ->
@@ -1277,7 +1277,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
                 | None -> typ_error l ("Type " ^ i ^ " does not have a field " ^ fi)
                 | Some t ->
                   let ft = typ_subst subst_env false t in
-                  let (_,cs_sub') = type_consistent (Expr l) d_env Guarantee false ts t' in
+                  let (_,cs_sub') = type_consistent (Expr l) d_env Guarantee true ts t' in
                   let (e',t',_,c_sub,_,ef_sub),ef_update =
                     match rec_kind with
                       | Register ->
@@ -1285,7 +1285,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
                          add_effect (BE_aux(BE_rreg, l)) pure_e)
                       | Record -> ((e',t',env_sub,c_sub,bounds,ef_sub), pure_e) in
                   let (et',c',ef',acc) = 
-                    type_coerce (Expr l) d_env Require false false b_env ft 
+                    type_coerce (Expr l) d_env Require false true b_env ft 
                       (E_aux(E_field(e',id),
                              (l,Base(([],ft),
                                      tag,cs,union_effects eft ef_update,union_effects ef_sub ef_update,bounds))))
@@ -2056,19 +2056,19 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,orig_env (*Envmap.insert t_env (id,tannot)*),b_env,tp_env)
     | _ , _->
-      let _ = Printf.eprintf "checking %s, not in env\n%!" id in
+      (*let _ = Printf.eprintf "checking %s, not in env\n%!" id in*)
       let t_env = if is_rec then Envmap.insert t_env (id,tannot) else t_env in
       let funcls,cs_ef = check t_env t_param_env None in
       let cses,ef = ((fun (cses,efses) -> (cses,(List.fold_right union_effects efses pure_e))) (List.split cs_ef)) in
       let cs = if List.length funcls = 1 then cses else [BranchCons(Fun l, None, cses)] in
-      let _ = Printf.eprintf "unresolved constraints are %s\n%!" (constraints_to_string cs) in
+      (*let _ = Printf.eprintf "unresolved constraints are %s\n%!" (constraints_to_string cs) in*)
       let (cs',map) = resolve_constraints cs in
-      let _ = Printf.eprintf "checking tannot for %s 2  remaining constraints are %s\n" 
-        id (constraints_to_string cs') in
+      (*let _ = Printf.eprintf "checking tannot for %s 2  remaining constraints are %s\n" 
+        id (constraints_to_string cs') in*)
       let tannot = check_tannot l
                                 (match map with | None -> tannot | Some m -> add_map_tannot m tannot)
                                 None cs' ef in
-      let _ = Printf.eprintf "done funcheck case2\n" in
+      (*let _ = Printf.eprintf "done funcheck case2\n" in*)
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,(if is_rec then t_env else Envmap.insert t_env (id,tannot)),b_env,tp_env)
 
