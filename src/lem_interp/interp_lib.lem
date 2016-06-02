@@ -120,6 +120,12 @@ let rec most_significant v =
     | V_vector_sparse _ _ _ _ _ -> most_significant (fill_in_sparse v)
     | V_lit (L_aux L_one _) -> v
     | V_lit (L_aux L_zero _) -> v
+    | V_lit (L_aux (L_num n) lt) ->
+      if n = 1
+      then V_lit (L_aux L_one lt)
+      else if n = 0
+      then V_lit (L_aux L_zero lt)
+      else Assert_extra.failwith ("most_significant given non-vector " ^ (string_of_value v))
     | V_lit (L_aux L_undef _) -> v
     | V_unknown -> V_unknown
     | _ -> Assert_extra.failwith ("most_significant given non-vector " ^ (string_of_value v))
