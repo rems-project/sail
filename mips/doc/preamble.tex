@@ -1,0 +1,177 @@
+
+\documentclass[10pt]{article}
+
+\usepackage[margin=1.0in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[scaled=0.82]{beramono}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% for Lem listing
+\usepackage[scaled=0.82]{beramono}
+\usepackage{listings}
+
+\newsavebox{\codebox}
+
+\lstdefinelanguage{SailExtraKeywords}
+ {morekeywords= {
+% from the sail lexer
+and,          
+alias,        
+as,           
+bitzero,      
+bitone,       
+bits,         
+by,           
+case,	       
+clause,       
+const,	       
+dec,          
+default,      
+deinfix,      
+effect,       
+Effect,       
+end,          
+enumerate,    
+else,         
+exit,         
+extern,       
+false,        
+forall,       
+foreach,      
+function,     
+if,           
+in,	       
+inc,          
+IN,           
+let,          
+member,       
+Nat,          
+Order,        
+pure,         
+rec,	       
+register,     
+scattered,    
+struct,       
+switch,       
+then,         
+true,         
+Type,         
+typedef,      
+undefined,    
+union,	       
+with,         
+val,          
+div,	       
+mod,	       
+quot,	       
+rem,	       
+barr,         
+rreg,         
+wreg,         
+rmem,         
+wmem,         
+undef,        
+unspec,       
+nondet,       
+bool,unit,vector,range,list,bit,nat, int, uint8,uint16,uint32,uint64,implicit
+}
+}
+
+\lstdefinelanguage{LemExtraKeywords}
+ {morekeywords= {
+% from the lem lexer
+      as,                  
+      fun,                 
+      function,            
+      with,                
+      match,               
+      let,                 
+      and,                 
+      in,                  
+      of,                  
+      rec,                 
+      type,                
+      module,              
+      rename,              
+      struct,              
+      end,                 
+      open,                
+      import,              
+      include,             
+      true,                
+      false,               
+      begin,               
+      if,                  
+      then,                
+      else,                
+      val,                 
+      class,               
+      instance,            
+      default_instance,    
+      indreln,             
+      forall,              
+      exists,              
+      inline,              
+      lem_transform,       
+      IN,                  
+      MEM,                 
+      declare,             
+      infix,               
+      field,              
+      automatic,          
+      manual,             
+      exhaustive,         
+      inexhaustive,       
+      ascii_rep,          
+      compile_message,    
+      set_flag,           
+      termination_argument,
+      pattern_match,      
+      right_assoc,        
+      left_assoc,         
+      non_assoc,          
+      special,            
+      target_rep,         
+      target_type,         
+      target_const,        
+      lemma,               
+      assert,              
+      theorem,             
+      do,                  
+      witness,	     
+      check,
+      % coq notation
+      Inductive,
+      Prop,
+% names of targets,
+  ocaml,
+  html,
+  coq,
+  hol,
+  isabelle,
+% these seem to be used as keywors in indreln?
+  input,
+  output,
+% and more keywords for specific target code that we quote
+  case,
+  definition,
+}
+}
+
+%\lstset{basicstyle=\footnotesize\ttfamily} %
+%\lstset{keywordstyle=\pmb}
+%\lstset{basicstyle=\footnotesize\ttfamily} %
+\lstset{basicstyle=\ttfamily} %
+\lstset{keywordstyle=\bfseries}
+\lstset{language=Caml}
+\lstset{defaultdialect=[Objective]Caml}
+\lstset{alsolanguage=SailExtraKeywords}
+\lstset{mathescape}
+
+\lstset{escapeinside={<@}{@>}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+\begin{lstlisting}
