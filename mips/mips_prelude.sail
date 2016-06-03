@@ -368,8 +368,8 @@ function unit incrementCP0Count() = {
   (* XXX Sail does not allow reading fields here :-( *)
   let (bit[32])status = CP0Status in
   let (bit[32])cause  = CP0Cause in
-  let (bit[8]) ims = (status[15..8]) in
-  let (bit[8]) ips = (cause[15..8]) in
+  let (bit[8]) ims = status[15..8] in
+  let (bit[8]) ips = cause[15..8] in
   let ie           = status[0] in
   let exl          = status[1] in
   let erl          = status[2] in
@@ -379,14 +379,14 @@ function unit incrementCP0Count() = {
 
 function bool tlbEntryMatch(r, vpn2, asid, (TLBEntry) entry) = 
       let entryVal   = (bit[117]) entry in
-      let entryValid = (entryVal[62]) in
-      let entryR     = (entryVal[100..99]) in
-      let entryMask  = (entryVal[116..101]) in
-      let entryVPN   = (entryVal[98..72]) in
-      let entryASID  = (entryVal[71..64]) in
-      let entryG     = (entryVal[63]) in
-      ((entryValid) &
-       (r == (entryR)) & 
+      let entryValid = entryVal[62] in
+      let entryR     = entryVal[100..99] in
+      let entryMask  = entryVal[116..101] in
+      let entryVPN   = entryVal[98..72] in
+      let entryASID  = entryVal[71..64] in
+      let entryG     = entryVal[63] in
+      (entryValid &
+       (r == entryR) & 
        ((vpn2 & ~(EXTZ(entryMask))) == ((entryVPN) & ~(EXTZ(entryMask)))) &
        ((asid == (entryASID)) | (entryG)))
 
