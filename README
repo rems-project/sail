@@ -11,7 +11,9 @@ specification language:
 - sail, the type checker and compiler for programs in the Sail
   language;
 
-- an example Sail specification of a MIPS processor (in mips/)
+- a Sail specification of a MIPS ISA (in mips/)
+
+- a Sail specification of part of the ARMv8 ISA (in arm/)
 
 - a sequential Sail interpreter, which evaluates an ELF binary for an
   architecture that has been specified using Sail (for ABIs included
@@ -30,7 +32,7 @@ library, and a few tips for sail development; it doesn't yet really
 explain the language.  We can answer questions either by mail or some
 google/skype chat.
 
-Elsewhere we have substantial IBM POWER and ARM Sail specifications
+Elsewhere we have a substantial IBM POWER ISA specification
 which we can send by email.
 
 To get started, one probably wants to develop a new definition by
@@ -80,7 +82,7 @@ SAIL COMPILER
 
 The Sail compiler requires OCaml; it is tested on version 4.02.3.
 
-Run "make" in the top level l2 directory; this will generate an executable
+Run "make" in the top level sail directory; this will generate an executable
 called sail in this directory. 
 
 make clean will remove this executable as well as the build files in
@@ -97,10 +99,11 @@ The Sail interpreter relies on external access to two external tools:
 
     Linksem: a formal specification of ELF that includes the facility
     to read in an ELF file and represent them in uniform ways.  It is
-    a private Bitbucket repository.
+    a public Bitbucket repository
+    https://bitbucket.org/Peter_Sewell/linksem
 
 The Sail build system expects to find these repositories in in the same
-directory as the l2 repository by default. This can be changed with
+directory as the sail repository by default. This can be changed with
 make variables LEM, LEMLIBOCAML, and ELFDIR
 
 To build the interpreter, first build Lem and the Lem ocaml libraries.
@@ -127,7 +130,7 @@ Todo: describe interpreter commands
 **************************************************************************
 EMACS MODE
 
-There is an emacs mode implementation very similar to the Tuareg mode in l2/editors 
+There is an emacs mode implementation very similar to the Tuareg mode in sail/editors 
 
 ***************************************************************************
 RUNNING SAIL compiler
@@ -167,8 +170,7 @@ The resulting output of these commands may well be untype checkable Lem or OCaml
 DIRECTORY STRUCTURE
 
 Sail sources and binaries are to be found in the directories of
-bitbucket/l2 (to be renamed when we make sail public in a
-bitbucket/sail respository (hopefully)
+bitbucket/sail  (l2 is the previous working name of sail).
 
 Top level directories
 src/            ML implementation of Sail frontend, Sail executable, subdirectories
