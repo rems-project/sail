@@ -577,13 +577,13 @@ end
 
 val access_vector : value -> nat -> value
 let access_vector v n =
-  let _ = debug_print ("access_vector given " ^ string_of_value v ^ " and " ^ show n) in
   retaint v (match (detaint v) with
     | V_unknown -> V_unknown 
     | V_lit (L_aux L_undef _) -> v
     | V_lit (L_aux L_zero _) -> v
     | V_lit (L_aux L_one _ ) -> v
-    | V_vector m dir vs -> 
+    | V_vector m dir vs ->
+      (*let _ = debug_print ("access_vector given " ^ string_of_value v ^ " where dir was " ^ (if is_inc(dir) then "increasing" else "decreaseing") ^ " and start is " ^ show m ^ " and index is " ^ show n ^ "\n") in*)
       list_nth vs (if is_inc(dir) then (n - m) else (m - n))
     | V_vector_sparse _ _ _ vs d ->
       match (List.lookup n vs) with
