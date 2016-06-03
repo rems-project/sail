@@ -32,6 +32,8 @@
 (*  SUCH DAMAGE.                                                          *)
 (*========================================================================*)
 
+(* mips_epilogue.sail: end of decode, execute and AST definitions. *)
+
 union ast member unit RI
 function clause decode _ = Some(RI)
 function clause execute (RI) =

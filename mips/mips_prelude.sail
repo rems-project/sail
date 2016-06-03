@@ -32,13 +32,12 @@
 (*  SUCH DAMAGE.                                                          *)
 (*========================================================================*)
 
+(* mips_prelude.sail: declarations of mips registers, and functions common 
+   to mips instructions (e.g. address translation) *)
+
 (* bit vectors have indices decreasing from left i.e. msb is highest index *)
 default Order dec
 
-(*(* external functions *)
-val extern forall Nat 'm, Nat 'n. (implicit<'m>,bit['n]) -> bit['m] effect pure EXTS (* Sign extend *)
-val extern forall Nat 'n, Nat 'm. (implicit<'m>,bit['n]) -> bit['m] effect pure EXTZ (* Zero extend *)
-*)
 register (bit[64]) PC
 register (bit[64]) nextPC
 
@@ -228,13 +227,13 @@ val bit[64] -> bool effect pure NotWordVal
 function bool NotWordVal (word) = 
     (word[31] ^^ 32) != word[63..32]
 
-(* Read numbered GP reg. ($0 always zero) *)
+(* Read numbered GP reg. (r0 is always zero) *)
 val bit[5] -> bit[64] effect {rreg} rGPR
 function bit[64] rGPR idx = {
          if idx == 0 then 0 else GPR[idx]
 }
 
-(* Write numbered GP reg. (writes to $0 ignored) *)
+(* Write numbered GP reg. (writes to r0 ignored) *)
 val (bit[5], bit[64]) -> unit effect {wreg} wGPR
 function unit wGPR (idx, v) = {
          if idx == 0 then () else GPR[idx] := v
@@ -442,8 +441,10 @@ function (bit[64], bool) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessT
     else if ((accessType == StoreData) & ~(d)) then
       exit (SignalExceptionTLB(TLBMod, vAddr))
     else
-      (EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0]), if (accessType == StoreData) then caps else capl)
-    case None -> exit (SignalExceptionTLB(if (accessType == StoreData) then XTLBRefillS else XTLBRefillL, vAddr))
+      (EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0]), 
+       if (accessType == StoreData) then caps else capl)
+    case None -> exit (SignalExceptionTLB(
+      if (accessType == StoreData) then XTLBRefillS else XTLBRefillL, vAddr))
   }
 }
 
@@ -459,7 +460,7 @@ function (bit[64], bool) TLBTranslateC ((bit[64]) vAddr, (MemAccessType) accessT
         case (true, 0b00) -> (Kernel, Some(EXTZ(vAddr[28..0]))) (* kseg0 unmapped cached 32-bit compat *)
         case (_, _) -> (Kernel, None) (* xkseg mapped *)
       }
-      case 0b10 -> (Kernel, Some(EXTZ(vAddr[58..0])))       (* xkphys bits 61-59 are cache mode which we ignore *)
+      case 0b10 -> (Kernel, Some(EXTZ(vAddr[58..0])))       (* xkphys bits 61-59 are cache mode (ignored) *)
       case 0b01 -> (Supervisor, None)                       (* xsseg - supervisor mapped *)
       case 0b00 -> (User, None) (* xuseg - user mapped *)
     } in
@@ -484,9 +485,18 @@ function (bit[64]) TLBTranslate ((bit[64]) vAddr, (MemAccessType) accessType) =
 
 typedef regno = bit[5]                      (* a register number *)
 typedef imm16 = bit[16]                     (* 16-bit immediate *)
-typedef regregreg   = (regno, regno, regno) (* a commonly used instruction format with three register operands *)
-typedef regregimm16 = (regno, regno, imm16) (* a commonly used instruction format with two register operands and 16-bit immediate *)
-typedef decode_failure = enumerate { no_matching_pattern; unsupported_instruction; illegal_instruction; internal_error }
+(* a commonly used instruction format with three register operands *)
+typedef regregreg   = (regno, regno, regno)
+(* a commonly used instruction format with two register operands and 16-bit immediate *)
+typedef regregimm16 = (regno, regno, imm16)
+
+typedef decode_failure = enumerate { 
+  no_matching_pattern; 
+  unsupported_instruction; 
+  illegal_instruction; 
+  internal_error 
+}
+
 (* Used by branch and trap instructions *)
 typedef Comparison = enumerate { 
   EQ; (* equal *)
@@ -499,7 +509,8 @@ typedef Comparison = enumerate {
   LTU;(* unsigned less than or qual *) 
 }
 function bool compare ((Comparison)cmp, (bit[64]) valA, (bit[64]) valB) =
-  let valA65 = (0b0 : valA) in (* sail comparisons are signed so extend to 65 bits for unsigned comparisons *)
+   (* sail comparisons are signed so extend to 65 bits for unsigned comparisons *)
+  let valA65 = (0b0 : valA) in
   let valB65 = (0b0 : valB) in
   switch(cmp) {
     case EQ  -> valA ==   valB

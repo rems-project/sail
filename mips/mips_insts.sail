@@ -32,6 +32,9 @@
 (*  SUCH DAMAGE.                                                          *)
 (*========================================================================*)
 
+(* misp_insts.sail: mips instruction decode and execute clauses and AST node 
+   declarations *)
+
 scattered function unit execute
 scattered typedef ast = const union
 
@@ -920,10 +923,14 @@ function clause execute (JALR(rs, rd)) =
 (**************************************************************************************)
 
 union ast member (regno, regno, imm16, bool, bool) BEQ
-function clause decode (0b000100 : (regno) rs : (regno) rt : (imm16) imm) =  Some(BEQ(rs, rt, imm, false, false))  (* BEQ  *)
-function clause decode (0b010100 : (regno) rs : (regno) rt : (imm16) imm) =  Some(BEQ(rs, rt, imm, false, true))   (* BEQL *)
-function clause decode (0b000101 : (regno) rs : (regno) rt : (imm16) imm) =  Some(BEQ(rs, rt, imm, true , false))  (* BNE  *)
-function clause decode (0b010101 : (regno) rs : (regno) rt : (imm16) imm) =  Some(BEQ(rs, rt, imm, true , true))   (* BNEL *)
+function clause decode (0b000100 : (regno) rs : (regno) rt : (imm16) imm) = 
+  Some(BEQ(rs, rt, imm, false, false))  (* BEQ  *)
+function clause decode (0b010100 : (regno) rs : (regno) rt : (imm16) imm) = 
+  Some(BEQ(rs, rt, imm, false, true))   (* BEQL *)
+function clause decode (0b000101 : (regno) rs : (regno) rt : (imm16) imm) = 
+  Some(BEQ(rs, rt, imm, true , false))  (* BNE  *)
+function clause decode (0b010101 : (regno) rs : (regno) rt : (imm16) imm) = 
+  Some(BEQ(rs, rt, imm, true , true))   (* BNEL *)
 function clause execute (BEQ(rs, rd, imm, ne, likely)) =
   {
     if ((rGPR(rs) == rGPR(rd)) ^ ne) then
@@ -950,21 +957,33 @@ function clause execute (BEQ(rs, rd, imm, ne, likely)) =
 (**************************************************************************************)
 
 union ast member (regno, imm16, Comparison, bool, bool) BCMPZ
-function clause decode (0b000001 : (regno) rs : 0b00000 : (imm16) imm) = Some(BCMPZ(rs, imm, LT, false, false)) (* BLTZ *)
-function clause decode (0b000001 : (regno) rs : 0b10000 : (imm16) imm) = Some(BCMPZ(rs, imm, LT, true, false))  (* BLTZAL *)
-function clause decode (0b000001 : (regno) rs : 0b00010 : (imm16) imm) = Some(BCMPZ(rs, imm, LT, false, true))  (* BLTZL *)
-function clause decode (0b000001 : (regno) rs : 0b10010 : (imm16) imm) = Some(BCMPZ(rs, imm, LT, true, true))   (* BLTZALL *)
+function clause decode (0b000001 : (regno) rs : 0b00000 : (imm16) imm) = 
+  Some(BCMPZ(rs, imm, LT, false, false)) (* BLTZ *)
+function clause decode (0b000001 : (regno) rs : 0b10000 : (imm16) imm) = 
+  Some(BCMPZ(rs, imm, LT, true, false))  (* BLTZAL *)
+function clause decode (0b000001 : (regno) rs : 0b00010 : (imm16) imm) = 
+  Some(BCMPZ(rs, imm, LT, false, true))  (* BLTZL *)
+function clause decode (0b000001 : (regno) rs : 0b10010 : (imm16) imm) = 
+  Some(BCMPZ(rs, imm, LT, true, true))   (* BLTZALL *)
 
-function clause decode (0b000001 : (regno) rs : 0b00001 : (imm16) imm) = Some(BCMPZ(rs, imm, GE, false, false)) (* BGEZ *)
-function clause decode (0b000001 : (regno) rs : 0b10001 : (imm16) imm) = Some(BCMPZ(rs, imm, GE, true, false))  (* BGEZAL *)
-function clause decode (0b000001 : (regno) rs : 0b00011 : (imm16) imm) = Some(BCMPZ(rs, imm, GE, false, true))  (* BGEZL *)
-function clause decode (0b000001 : (regno) rs : 0b10011 : (imm16) imm) = Some(BCMPZ(rs, imm, GE, true, true))   (* BGEZALL *)
+function clause decode (0b000001 : (regno) rs : 0b00001 : (imm16) imm) = 
+  Some(BCMPZ(rs, imm, GE, false, false)) (* BGEZ *)
+function clause decode (0b000001 : (regno) rs : 0b10001 : (imm16) imm) = 
+  Some(BCMPZ(rs, imm, GE, true, false))  (* BGEZAL *)
+function clause decode (0b000001 : (regno) rs : 0b00011 : (imm16) imm) = 
+  Some(BCMPZ(rs, imm, GE, false, true))  (* BGEZL *)
+function clause decode (0b000001 : (regno) rs : 0b10011 : (imm16) imm) = 
+  Some(BCMPZ(rs, imm, GE, true, true))   (* BGEZALL *)
 
-function clause decode (0b000111 : (regno) rs : 0b00000 : (imm16) imm) = Some(BCMPZ(rs, imm, GT, false, false)) (* BGTZ *)
-function clause decode (0b010111 : (regno) rs : 0b00000 : (imm16) imm) = Some(BCMPZ(rs, imm, GT, false, true))  (* BGTZL *)
+function clause decode (0b000111 : (regno) rs : 0b00000 : (imm16) imm) = 
+  Some(BCMPZ(rs, imm, GT, false, false)) (* BGTZ *)
+function clause decode (0b010111 : (regno) rs : 0b00000 : (imm16) imm) = 
+  Some(BCMPZ(rs, imm, GT, false, true))  (* BGTZL *)
 
-function clause decode (0b000110 : (regno) rs : 0b00000 : (imm16) imm) = Some(BCMPZ(rs, imm, LE, false, false)) (* BLEZ *)
-function clause decode (0b010110 : (regno) rs : 0b00000 : (imm16) imm) = Some(BCMPZ(rs, imm, LE, false, true))  (* BLEZL *)
+function clause decode (0b000110 : (regno) rs : 0b00000 : (imm16) imm) = 
+  Some(BCMPZ(rs, imm, LE, false, false)) (* BLEZ *)
+function clause decode (0b010110 : (regno) rs : 0b00000 : (imm16) imm) = 
+  Some(BCMPZ(rs, imm, LE, false, true))  (* BLEZL *)
 
 function clause execute (BCMPZ(rs, imm, cmp, link, likely)) =
   {
@@ -1016,12 +1035,18 @@ function clause execute (WAIT) = {
 
 (* Trap instructions with two register operands *)
 union ast member (regno, regno, Comparison) TRAPREG
-function clause decode (0b000000 : (regno) rs : (regno) rt : (bit[10]) code : 0b110000) = Some(TRAPREG(rs, rt, GE)) (* TGE *)
-function clause decode (0b000000 : (regno) rs : (regno) rt : (bit[10]) code : 0b110001) = Some(TRAPREG(rs, rt, GEU)) (* TGEU *)
-function clause decode (0b000000 : (regno) rs : (regno) rt : (bit[10]) code : 0b110010) = Some(TRAPREG(rs, rt, LT)) (* TLT *)
-function clause decode (0b000000 : (regno) rs : (regno) rt : (bit[10]) code : 0b110011) = Some(TRAPREG(rs, rt, LTU)) (* TLTU *)
-function clause decode (0b000000 : (regno) rs : (regno) rt : (bit[10]) code : 0b110100) = Some(TRAPREG(rs, rt, EQ)) (* TEQ *)
-function clause decode (0b000000 : (regno) rs : (regno) rt : (bit[10]) code : 0b110110) = Some(TRAPREG(rs, rt, NE)) (* TNE *)
+function clause decode (0b000000 : (regno) rs : (regno) rt : (bit[10]) code : 0b110000) = 
+  Some(TRAPREG(rs, rt, GE)) (* TGE *)
+function clause decode (0b000000 : (regno) rs : (regno) rt : (bit[10]) code : 0b110001) = 
+  Some(TRAPREG(rs, rt, GEU)) (* TGEU *)
+function clause decode (0b000000 : (regno) rs : (regno) rt : (bit[10]) code : 0b110010) = 
+  Some(TRAPREG(rs, rt, LT)) (* TLT *)
+function clause decode (0b000000 : (regno) rs : (regno) rt : (bit[10]) code : 0b110011) = 
+  Some(TRAPREG(rs, rt, LTU)) (* TLTU *)
+function clause decode (0b000000 : (regno) rs : (regno) rt : (bit[10]) code : 0b110100) = 
+  Some(TRAPREG(rs, rt, EQ)) (* TEQ *)
+function clause decode (0b000000 : (regno) rs : (regno) rt : (bit[10]) code : 0b110110) = 
+  Some(TRAPREG(rs, rt, NE)) (* TNE *)
 function clause execute (TRAPREG(rs, rt, cmp)) =
   {
     rs_val := rGPR(rs);
@@ -1034,12 +1059,18 @@ function clause execute (TRAPREG(rs, rt, cmp)) =
 
 (* Trap instructions with one register and one immediate operand *)
 union ast member (regno, imm16, Comparison) TRAPIMM
-function clause decode (0b000001 : (regno) rs : 0b01100 : (imm16) imm) = Some(TRAPIMM(rs, imm, EQ)) (* TEQI *)
-function clause decode (0b000001 : (regno) rs : 0b01110 : (imm16) imm) = Some(TRAPIMM(rs, imm, NE)) (* TNEI *)
-function clause decode (0b000001 : (regno) rs : 0b01000 : (imm16) imm) = Some(TRAPIMM(rs, imm, GE)) (* TGEI *)
-function clause decode (0b000001 : (regno) rs : 0b01001 : (imm16) imm) = Some(TRAPIMM(rs, imm, GEU)) (* TGEIU *)
-function clause decode (0b000001 : (regno) rs : 0b01010 : (imm16) imm) = Some(TRAPIMM(rs, imm, LT))  (* TLTI *)
-function clause decode (0b000001 : (regno) rs : 0b01011 : (imm16) imm) = Some(TRAPIMM(rs, imm, LTU))  (* TLTIU *)
+function clause decode (0b000001 : (regno) rs : 0b01100 : (imm16) imm) = 
+  Some(TRAPIMM(rs, imm, EQ)) (* TEQI *)
+function clause decode (0b000001 : (regno) rs : 0b01110 : (imm16) imm) = 
+  Some(TRAPIMM(rs, imm, NE)) (* TNEI *)
+function clause decode (0b000001 : (regno) rs : 0b01000 : (imm16) imm) = 
+  Some(TRAPIMM(rs, imm, GE)) (* TGEI *)
+function clause decode (0b000001 : (regno) rs : 0b01001 : (imm16) imm) = 
+  Some(TRAPIMM(rs, imm, GEU)) (* TGEIU *)
+function clause decode (0b000001 : (regno) rs : 0b01010 : (imm16) imm) = 
+  Some(TRAPIMM(rs, imm, LT))  (* TLTI *)
+function clause decode (0b000001 : (regno) rs : 0b01011 : (imm16) imm) = 
+  Some(TRAPIMM(rs, imm, LTU)) (* TLTIU *)
 function clause execute (TRAPIMM(rs, imm, cmp)) =
   {
     rs_val := rGPR(rs);
@@ -1054,15 +1085,24 @@ function clause execute (TRAPIMM(rs, imm, cmp)) =
 (**************************************************************************************)
 
 union ast member (WordType, bool, bool, regno, regno, imm16) Load
-function clause decode (0b100000 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(B, true,  false, base, rt, offset)) (* LB *)
-function clause decode (0b100100 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(B, false, false, base, rt, offset)) (* LBU *)
-function clause decode (0b100001 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(H, true,  false, base, rt, offset)) (* LH *)
-function clause decode (0b100101 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(H, false, false, base, rt, offset)) (* LHU *)
-function clause decode (0b100011 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(W, true,  false, base, rt, offset)) (* LW *)
-function clause decode (0b100111 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(W, false, false, base, rt, offset)) (* LWU *)
-function clause decode (0b110111 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(D, false, false, base, rt, offset)) (* LD *)
-function clause decode (0b110000 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(W, true,  true, base, rt, offset))  (* LL *)
-function clause decode (0b110100 : (regno) base : (regno) rt : (imm16) offset) = Some(Load(D, false, true, base, rt, offset))  (* LLD *)
+function clause decode (0b100000 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Load(B, true,  false, base, rt, offset)) (* LB *)
+function clause decode (0b100100 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Load(B, false, false, base, rt, offset)) (* LBU *)
+function clause decode (0b100001 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Load(H, true,  false, base, rt, offset)) (* LH *)
+function clause decode (0b100101 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Load(H, false, false, base, rt, offset)) (* LHU *)
+function clause decode (0b100011 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Load(W, true,  false, base, rt, offset)) (* LW *)
+function clause decode (0b100111 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Load(W, false, false, base, rt, offset)) (* LWU *)
+function clause decode (0b110111 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Load(D, false, false, base, rt, offset)) (* LD *)
+function clause decode (0b110000 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Load(W, true,  true, base, rt, offset))  (* LL *)
+function clause decode (0b110100 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Load(D, false, true, base, rt, offset))  (* LLD *)
 function clause execute (Load(width, signed, linked, base, rt, offset)) =
   {
     (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, width);
@@ -1091,12 +1131,18 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
 (**************************************************************************************)
 
 union ast member (WordType, bool, regno, regno, imm16) Store
-function clause decode (0b101000 : (regno) base : (regno) rt : (imm16) offset) = Some(Store(B, false, base, rt, offset)) (* SB *)
-function clause decode (0b101001 : (regno) base : (regno) rt : (imm16) offset) = Some(Store(H, false, base, rt, offset)) (* SH *)
-function clause decode (0b101011 : (regno) base : (regno) rt : (imm16) offset) = Some(Store(W, false, base, rt, offset)) (* SW *)
-function clause decode (0b111111 : (regno) base : (regno) rt : (imm16) offset) = Some(Store(D, false, base, rt, offset)) (* SD *)
-function clause decode (0b111000 : (regno) base : (regno) rt : (imm16) offset) = Some(Store(W, true, base, rt, offset))  (* SC *)
-function clause decode (0b111100 : (regno) base : (regno) rt : (imm16) offset) = Some(Store(D, true, base, rt, offset))  (* SCD *)
+function clause decode (0b101000 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Store(B, false, base, rt, offset)) (* SB *)
+function clause decode (0b101001 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Store(H, false, base, rt, offset)) (* SH *)
+function clause decode (0b101011 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Store(W, false, base, rt, offset)) (* SW *)
+function clause decode (0b111111 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Store(D, false, base, rt, offset)) (* SD *)
+function clause decode (0b111000 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Store(W, true, base, rt, offset))  (* SC *)
+function clause decode (0b111100 : (regno) base : (regno) rt : (imm16) offset) = 
+  Some(Store(D, true, base, rt, offset))  (* SCD *)
 function clause execute (Store(width, conditional, base, rt, offset)) =
       {
         (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), StoreData, width);
@@ -1341,13 +1387,6 @@ function clause decode (0b000000 : 0b00000 : 0b00000 : 0b00000 : (regno) stype :
 function clause execute(SYNC) =
   MEM_sync()
 
-union ast member unit HCF
-function clause decode (0b010000 : 0b00100 : (regno) rt : 0b10111 : 0b00000000000) =
-  Some(HCF()) (* simulator halt instruction "MTC0 rt, $23" (cheri specific behaviour) *)
-
-function clause decode (0b010000 : 0b00100 : (regno) rt : 0b11010 : 0b00000000000) =
-  Some(HCF()) (* simulator halt instruction "MTC0 rt, $26" (cheri specific behaviour) *)
-
 union ast member (regno, regno, bit[3], bool) MFC0
 function clause decode (0b010000 : 0b00000 : (regno) rt : (regno) rd : 0b00000000 : (bit[3]) sel) =
   Some(MFC0(rt, rd, sel, false)) (* MFC0 *)
@@ -1570,7 +1609,8 @@ function clause execute ((TLBP)) = {
 }
 
 union ast member (regno, regno) RDHWR
-function clause decode (0b011111 : 0b00000 : (regno) rt : (regno) rd : 0b00000 : 0b111011) = Some(RDHWR(rt, rd))
+function clause decode (0b011111 : 0b00000 : (regno) rt : (regno) rd : 0b00000 : 0b111011) = 
+  Some(RDHWR(rt, rd))
 function clause execute (RDHWR(rt, rd)) = {
   let accessLevel = getAccessLevel() in
   if ((accessLevel != Kernel) & (~((CP0Status.CU)[0])) & ~(CP0HWREna[rd])) then
@@ -1605,6 +1645,14 @@ function clause execute (ERET) =
             CP0Status.EXL := 0;
           }
       }
+
+(* simulator halt instruction "MTC0 rt, r23" (cheri specific behaviour) *)
+union ast member unit HCF
+function clause decode (0b010000 : 0b00100 : (regno) rt : 0b10111 : 0b00000000000) =
+  Some(HCF()) 
+
+function clause decode (0b010000 : 0b00100 : (regno) rt : 0b11010 : 0b00000000000) =
+  Some(HCF())
 
 function clause execute (HCF) =
   () (* halt instruction actually executed by interpreter framework *)
