@@ -155,7 +155,7 @@ let bit_lifteds_to_string (bls: bit_lifted list) (show_length_and_start:bool) (s
   
 
 let register_value_to_string rv = 
-  bit_lifteds_to_string rv.rv_bits true (Some rv.rv_start) false  
+  bit_lifteds_to_string rv.rv_bits true (Some rv.rv_start_internal) false  
 
 let memory_value_to_string endian mv = 
   let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) (if endian = E_big_endian then mv else (List.rev mv)))  in

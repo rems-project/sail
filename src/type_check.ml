@@ -1154,15 +1154,16 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
         check_exp envs imp_param true {t=Tapp("vector",[TA_nexp base1;TA_nexp rise1;TA_ord ord;TA_typ item_t])} v1 in
       let (v2',t2',_,cs_2,_,ef_2) = 
         check_exp envs imp_param true {t=Tapp("vector",[TA_nexp base2;TA_nexp rise2;TA_ord ord;TA_typ item_t])} v2 in
-      let ti =  {t=Tapp("vector",[TA_nexp base1;TA_nexp (mk_add rise1 rise2);TA_ord ord; TA_typ item_t])} in
-      let cs_loc = match ord.order with
-        | Odec -> [] (* (*This should probably be handled by casts*)[GtEq((Expr l),Require,base1,mk_add rise1 rise2)] *)
-        | _ -> [] in
+      let result_rise = mk_add rise1 rise2 in
+      let result_base = match ord.order with
+        | Odec -> mk_sub result_rise n_one
+        | _ -> n_zero in
+      let ti =  {t=Tapp("vector",[TA_nexp result_base;TA_nexp result_rise;TA_ord ord; TA_typ item_t])} in
       let sub_effects = union_effects ef_1 ef_2 in
       let (t,cs_c,ef_c,e') = 
         type_coerce (Expr l) d_env Require false true b_env ti 
-          (E_aux(E_vector_append(v1',v2'),(l,constrained_annot_efr ti cs_loc sub_effects))) expect_t in
-      (e',t,t_env,cs_loc@cs_1@cs_2,nob,(union_effects ef_c sub_effects))
+          (E_aux(E_vector_append(v1',v2'),(l,simple_annot_efr ti sub_effects))) expect_t in
+      (e',t,t_env,cs_1@cs_2,nob,(union_effects ef_c sub_effects))
     | E_list(es) ->
       let item_t = match expect_t.t with
         | Tapp("list",[TA_typ i]) -> i

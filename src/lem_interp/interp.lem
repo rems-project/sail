@@ -583,7 +583,6 @@ let access_vector v n =
     | V_lit (L_aux L_zero _) -> v
     | V_lit (L_aux L_one _ ) -> v
     | V_vector m dir vs ->
-      (*let _ = debug_print ("access_vector given " ^ string_of_value v ^ " where dir was " ^ (if is_inc(dir) then "increasing" else "decreaseing") ^ " and start is " ^ show m ^ " and index is " ^ show n ^ "\n") in*)
       list_nth vs (if is_inc(dir) then (n - m) else (m - n))
     | V_vector_sparse _ _ _ vs d ->
       match (List.lookup n vs) with
@@ -702,7 +701,7 @@ val fupdate_vector_slice : value -> value -> nat -> nat -> value
 let fupdate_vector_slice vec replace start stop =
   let fupdate_vec_help vec replace = 
     (match (vec,replace) with
-    | (V_vector m dir vals,V_vector _ dir' reps) ->
+     | (V_vector m dir vals,V_vector r_m dir' reps) ->
       V_vector m dir 
         (replace_is vals 
            (if dir=dir' then reps else (List.reverse reps))
@@ -761,7 +760,7 @@ let update_vector_slice track vector value start stop mem =
                                  ^ " and " ^ string_of_value value)
 end
 
-let update_vector_start default_dir new_start expected_size v = 
+let update_vector_start default_dir new_start expected_size v =
   retaint v
     (match detaint v with
       | V_lit (L_aux L_zero _) -> V_vector new_start default_dir [v]
@@ -1908,13 +1907,11 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                  (interp_main mode t_level l_env lm e2)
                  (fun v2 lm le ->
                    let append v1 v2 = (match (v1,v2) with
-                     | (V_vector m dir vals1, V_vector _ _ vals2) -> 
+                     | (V_vector _ dir vals1, V_vector _ _ vals2) -> 
                        let vals = vals1++vals2 in
                        let len = List.length vals in
                        if is_inc(dir) 
-                       then V_vector m dir vals
-                       else if m > len 
-                       then V_vector m dir vals
+                       then V_vector 0 dir vals
                        else V_vector (len-1) dir vals
                      | (V_vector m dir vals1, V_vector_sparse _ len _ vals2 d) ->
                        let original_len = List.length vals1 in

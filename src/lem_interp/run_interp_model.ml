@@ -97,8 +97,8 @@ let fupdate_slice reg_name original e (start,stop) =
       increasing because ppcmem only speaks increasing, so here we turn it back *)
     let startd = original.rv_start_internal- start in
     let stopd = startd - (stop - start) in
-    (*let _ = Printf.eprintf "fupdate_slice: starts at %i, %i ->  %i,%i ->  %i\n" original.rv_start_internal start startd  stop stopd in*) 
-    update_reg_value_slice reg_name {original with rv_start=original.rv_start_internal} startd stopd e
+(*    let _ = Printf.eprintf "fupdate_slice: starts at %i, %i ->  %i,%i ->  %i\n" original.rv_start_internal start startd  stop stopd in *)
+    update_reg_value_slice reg_name original startd stopd e
 
 let combine_slices (start, stop) (inner_start,inner_stop) = 
   (start + inner_start, start + inner_stop)

@@ -247,10 +247,17 @@ let rec slice_reg_value v start stop =
             rv_start_internal = r_internal_start
   |> 
 
+let lift_reg_name_to_whole reg_name size = match reg_name with
+  | Reg _ _ _ _ -> reg_name
+  | Reg_slice name start dir _ -> Reg name start size dir
+  | Reg_field name start dir _ _ -> Reg name start size dir
+  | Reg_f_slice name start dir _ _ _ -> Reg name start size dir
+end
+
 let update_reg_value_slice reg_name v start stop v2 =
   let v_internal = intern_reg_value v in
   let v2_internal = intern_reg_value v2 in
-  extern_reg_value reg_name
+  extern_reg_value (lift_reg_name_to_whole reg_name 0)
     (if start = stop then
       (Interp.fupdate_vec v_internal start v2_internal)
     else
