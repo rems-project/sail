@@ -1461,6 +1461,17 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
   wGPR(rt) := if (double) then result else EXTS(result[31..0])
 }  
 
+(* simulator halt instruction "MTC0 rt, r23" (cheri specific behaviour) *)
+union ast member unit HCF
+function clause decode (0b010000 : 0b00100 : (regno) rt : 0b10111 : 0b00000000000) =
+  Some(HCF()) 
+
+function clause decode (0b010000 : 0b00100 : (regno) rt : 0b11010 : 0b00000000000) =
+  Some(HCF())
+
+function clause execute (HCF) =
+  () (* halt instruction actually executed by interpreter framework *)
+
 union ast member (regno, regno, bit[3], bool) MTC0
 function clause decode (0b010000 : 0b00100 : (regno) rt : (regno) rd : 0b00000000 : (bit[3]) sel) =
   Some(MTC0(rt, rd, sel, false)) (* MTC0 *)
@@ -1645,14 +1656,3 @@ function clause execute (ERET) =
             CP0Status.EXL := 0;
           }
       }
-
-(* simulator halt instruction "MTC0 rt, r23" (cheri specific behaviour) *)
-union ast member unit HCF
-function clause decode (0b010000 : 0b00100 : (regno) rt : 0b10111 : 0b00000000000) =
-  Some(HCF()) 
-
-function clause decode (0b010000 : 0b00100 : (regno) rt : 0b11010 : 0b00000000000) =
-  Some(HCF())
-
-function clause execute (HCF) =
-  () (* halt instruction actually executed by interpreter framework *)
