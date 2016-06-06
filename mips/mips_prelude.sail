@@ -432,7 +432,7 @@ function (bit[64], bool) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessT
       case _      -> undefined
     } in
     let isOdd = (vAddr[evenOddBit]) in
-    let (caps, capl, pfn, d, v) = if (isOdd) then
+    let (caps, capl, (bit[24])pfn, d, v) = if (isOdd) then
         (entry[61], entry[60], entry[59..36], entry[32], entry[31])
       else
         (entry[30], entry[29], entry[28..5], entry[1], entry[0]) in
