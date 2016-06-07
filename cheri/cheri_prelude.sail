@@ -303,11 +303,11 @@ function (bit[8]) CapExCode((CapEx) ex) =
     case CapEx_PermitStoreCapViolation      -> 0x15
     case CapEx_PermitStoreLocalCapViolation -> 0x16
     case CapEx_PermitSealViolation          -> 0x17
-    case CapEx_AccessEPCCViolation          -> 0x1a
-    case CapEx_AccessKDCViolation           -> 0x1b
-    case CapEx_AccessKCCViolation           -> 0x1c
-    case CapEx_AccessKR1CViolation          -> 0x1d
-    case CapEx_AccessKR2CViolation          -> 0x1e
+    case CapEx_AccessEPCCViolation          -> 0x18
+    case CapEx_AccessKDCViolation           -> 0x18
+    case CapEx_AccessKCCViolation           -> 0x18
+    case CapEx_AccessKR1CViolation          -> 0x18
+    case CapEx_AccessKR2CViolation          -> 0x18
   }
 
 typedef CapCauseReg = register bits [15:0] {
