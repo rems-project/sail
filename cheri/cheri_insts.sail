@@ -178,6 +178,23 @@ function clause execute(CToPtr(rd, cb, ct)) =
     }
 }
 
+union ast member regregreg CSub
+function clause decode (0b010010 : 0b00000 : (regno) rd : (regno) cb : (regno) ct : 0b001010) = Some(CSub(rd, cb, ct))
+function clause execute(CSub(rd, cb, ct)) = 
+{
+  checkCP2usable();
+  ct_val := readCapReg(ct);
+  cb_val := readCapReg(cb);
+  if (register_inaccessible(cb)) then
+    exit (raise_c2_exception_v(cb))
+  else if (register_inaccessible(ct)) then
+    exit (raise_c2_exception_v(ct))
+  else 
+    {
+      wGPR(rd) := (bit[64])(getCapCursor(cb_val) - getCapCursor(ct_val))
+    }
+}
+
 union ast member (regno, regno, regno, CPtrCmpOp) CPtrCmp
 function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b000) = Some(CPtrCmp(rd, cb, ct, CEQ))
 function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b001) = Some(CPtrCmp(rd, cb, ct, CNE))
