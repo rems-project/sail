@@ -103,6 +103,7 @@ let (vector <0, 32, inc, (CapReg)>) CapRegs =
 
 typedef CapStruct = const struct {
   bool    tag;
+  bit[8]  padding;
   bit[24] otype;
   bit[16] sw_perms;
   bool    access_KR2C;
@@ -128,6 +129,7 @@ typedef CapStruct = const struct {
 
 let (CapStruct) null_cap = {
   tag = false;
+  padding = 0;
   otype = 0;
   sw_perms = 0;
   access_KR2C = false;
@@ -158,6 +160,7 @@ let have_cp2 = true
 function CapStruct capRegToCapStruct((CapReg) capReg) =
   {
     tag                        = capReg.tag;
+    padding                    = capReg[255..248];
     otype                      = capReg.otype;
     sw_perms                   = capReg.sw_perms;
     access_KR2C                = capReg.access_KR2C;
@@ -208,7 +211,7 @@ function (bit[31]) capPermsToVec((CapStruct) cap) =
 function (bit[257]) capStructToBit257((CapStruct) cap) =
     (
       [cap.tag]
-      : 0b00000000 (* padding *)
+      : cap.padding
       : cap.otype
       : capPermsToVec(cap)
       : [cap.sealed]
