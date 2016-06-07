@@ -362,28 +362,25 @@ function unit incrementCP0Count() = {
 
   CP0Count := (CP0Count + 1);
   if (unsigned(CP0Count) == unsigned(CP0Compare)) then {
-    (CP0Cause[15]) := bitone;
+    (CP0Cause[15]) := bitone; (* XXX indexing IP field here doesn't seem to work  *)
   };
-  (* XXX Sail does not allow reading fields here :-( *)
-  let (bit[32])status = CP0Status in
-  let (bit[32])cause  = CP0Cause in
-  let (bit[8]) ims = CP0Status.IM (*status[15..8]*) in
-  let (bit[8]) ips = CP0Cause.IP (*cause[15..8] *) in
+
+  let (bit[8]) ims = CP0Status.IM in
+  let (bit[8]) ips = CP0Cause.IP in
   let ie           = CP0Status.IE in
-  let exl          = CP0Status.EXL (*status[1]*) in
-  let erl          = CP0Status.ERL (*status[2]*) in
+  let exl          = CP0Status.EXL in
+  let erl          = CP0Status.ERL in
   if ((~(exl)) & (~(erl)) & ie & ((ips & ims) != 0x00)) then
     exit (SignalException(Int));
 }
 
 function bool tlbEntryMatch(r, vpn2, asid, (TLBEntry) entry) = 
-      let entryVal   = (bit[117]) entry in
-      let entryValid = entryVal[62] in
-      let entryR     = entryVal[100..99] in
-      let entryMask  = entryVal[116..101] in
-      let entryVPN   = entryVal[98..72] in
-      let entryASID  = entryVal[71..64] in
-      let entryG     = entryVal[63] in
+      let entryValid = entry.valid in
+      let entryR     = entry.r in
+      let entryMask  = entry.pagemask in
+      let entryVPN   = entry.vpn2 in
+      let entryASID  = entry.asid in
+      let entryG     = entry.g in
       (entryValid &
        (r == entryR) & 
        ((vpn2 & ~(EXTZ(entryMask))) == ((entryVPN) & ~(EXTZ(entryMask)))) &
@@ -392,7 +389,7 @@ function bool tlbEntryMatch(r, vpn2, asid, (TLBEntry) entry) =
 function option<TLBIndexT> tlbSearch((bit[64]) VAddr) =
   let r    = (VAddr[63..62]) in
   let vpn2 = (VAddr[39..13]) in
-  let asid = (((bit[64])TLBEntryHi)[7..0]) in (* XXX workaround sail bug *)
+  let asid = TLBEntryHi.ASID in
   if (tlbEntryMatch(r, vpn2, asid, TLBEntry00)) then
     Some(0b000)
   else if (tlbEntryMatch(r, vpn2, asid, TLBEntry01)) then
@@ -416,8 +413,8 @@ function (bit[64], bool) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessT
   let idx = tlbSearch(vAddr) in
   switch(idx) {
     case (Some(idx)) -> 
-    let entry = ((bit[117])(TLBEntries[idx])) in
-    let entryMask = (entry[116..101]) in
+    let entry = (TLBEntries[idx]) in
+    let entryMask = entry.pagemask in
     
     let evenOddBit = switch(entryMask) {
       case 0x0000 -> 12
@@ -433,9 +430,9 @@ function (bit[64], bool) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessT
     } in
     let isOdd = (vAddr[evenOddBit]) in
     let (caps, capl, (bit[24])pfn, d, v) = if (isOdd) then
-        (entry[61], entry[60], entry[59..36], entry[32], entry[31])
+        (entry.caps1, entry.capl1, entry.pfn1, entry.d1, entry.v1)
       else
-        (entry[30], entry[29], entry[28..5], entry[1], entry[0]) in
+        (entry.caps0, entry.capl0, entry.pfn0, entry.d0, entry.v0) in
     if (~(v)) then 
       exit (SignalExceptionTLB(if (accessType == StoreData) then XTLBInvS else XTLBInvL, vAddr))
     else if ((accessType == StoreData) & ~(d)) then
