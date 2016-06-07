@@ -367,11 +367,11 @@ function unit incrementCP0Count() = {
   (* XXX Sail does not allow reading fields here :-( *)
   let (bit[32])status = CP0Status in
   let (bit[32])cause  = CP0Cause in
-  let (bit[8]) ims = status[15..8] in
-  let (bit[8]) ips = cause[15..8] in
-  let ie           = status[0] in
-  let exl          = status[1] in
-  let erl          = status[2] in
+  let (bit[8]) ims = CP0Status.IM (*status[15..8]*) in
+  let (bit[8]) ips = CP0Cause.IP (*cause[15..8] *) in
+  let ie           = CP0Status.IE in
+  let exl          = CP0Status.EXL (*status[1]*) in
+  let erl          = CP0Status.ERL (*status[2]*) in
   if ((~(exl)) & (~(erl)) & ie & ((ips & ims) != 0x00)) then
     exit (SignalException(Int));
 }

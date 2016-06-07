@@ -2057,19 +2057,19 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,orig_env (*Envmap.insert t_env (id,tannot)*),b_env,tp_env)
     | _ , _->
-      (*let _ = Printf.eprintf "checking %s, not in env\n%!" id in*)
+      let _ = Printf.eprintf "checking %s, not in env\n%!" id in
       let t_env = if is_rec then Envmap.insert t_env (id,tannot) else t_env in
       let funcls,cs_ef = check t_env t_param_env None in
       let cses,ef = ((fun (cses,efses) -> (cses,(List.fold_right union_effects efses pure_e))) (List.split cs_ef)) in
       let cs = if List.length funcls = 1 then cses else [BranchCons(Fun l, None, cses)] in
-      (*let _ = Printf.eprintf "unresolved constraints are %s\n%!" (constraints_to_string cs) in*)
+      let _ = Printf.eprintf "unresolved constraints are %s\n%!" (constraints_to_string cs) in
       let (cs',map) = resolve_constraints cs in
-      (*let _ = Printf.eprintf "checking tannot for %s 2  remaining constraints are %s\n" 
-        id (constraints_to_string cs') in*)
+      let _ = Printf.eprintf "checking tannot for %s 2  remaining constraints are %s\n" 
+        id (constraints_to_string cs') in
       let tannot = check_tannot l
                                 (match map with | None -> tannot | Some m -> add_map_tannot m tannot)
                                 None cs' ef in
-      (*let _ = Printf.eprintf "done funcheck case2\n" in*)
+      let _ = Printf.eprintf "done funcheck case2\n" in
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,(if is_rec then t_env else Envmap.insert t_env (id,tannot)),b_env,tp_env)
 

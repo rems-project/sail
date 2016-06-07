@@ -61,8 +61,8 @@ let slice register_vector (start,stop) =
       increasing because ppcmem only speaks increasing, so here we turn it back *)
     let startd = register_vector.rv_start_internal- start in
     let stopd = startd - (stop - start) in
-    (*let _ = Printf.eprintf "slice decreasing with %i, %i, %i\n" startd stopd register_vector.rv_start in*)
-    slice_reg_value {register_vector with rv_start=register_vector.rv_start_internal} startd stopd
+(*    let _ = Printf.eprintf "slice decreasing with %i, %i, %i\n" startd stopd register_vector.rv_start in*)
+    slice_reg_value register_vector start stop
 
 let big_num_unit = of_int 1
 

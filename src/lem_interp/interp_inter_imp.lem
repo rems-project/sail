@@ -236,13 +236,15 @@ let rec extern_ifield_value i_name field_name v ftyp = match (v,ftyp) with
                            ^ " given non-externable " ^ (Interp.string_of_value v) ^ " ftyp is " ^ show ftyp)
 end 
 
-let rec slice_reg_value v start stop = 
+let rec slice_reg_value v start stop =
+(*  let _ = Interp.debug_print ("slice_reg_value " ^ show v.rv_start_internal ^ " " ^ show v.rv_start ^ " " ^ show start ^ " " ^ show stop) in*)
   let inc = v.rv_dir = D_increasing in
   let r_internal_start = if inc then start else (stop - start) + 1 in
   let r_start = if inc then r_internal_start else start in
-  <| v with rv_bits = (Interp.from_n_to_n
+(*  let _ = Interp.debug_print (" " ^ " " ^ if inc then "Inc " else "dec " ^ show (List.length (Interp.from_n_to_n
                          (if inc then (start - v.rv_start_internal) else (v.rv_start_internal - start))
-                         (if inc then (stop - v.rv_start_internal) else (v.rv_start_internal - stop)) v.rv_bits);
+                         (if inc then (stop - v.rv_start_internal) else (v.rv_start_internal - stop)) v.rv_bits)) ^ " " ^ show (List.length v.rv_bits) ^ " " ^ show (v.rv_start_internal - start) ^ " " ^ show (v.rv_start_internal - stop) ^ "\n") in*)
+  <| v with rv_bits = (Interp.from_n_to_n (start - v.rv_start) (stop - v.rv_start) v.rv_bits);
             rv_start = r_start;
             rv_start_internal = r_internal_start
   |> 
@@ -257,11 +259,12 @@ end
 let update_reg_value_slice reg_name v start stop v2 =
   let v_internal = intern_reg_value v in
   let v2_internal = intern_reg_value v2 in
-  extern_reg_value (lift_reg_name_to_whole reg_name 0)
-    (if start = stop then
-      (Interp.fupdate_vec v_internal start v2_internal)
-    else
-      (Interp.fupdate_vector_slice v_internal v2_internal start stop))
+  <| (extern_reg_value (lift_reg_name_to_whole reg_name 0)
+        (if start = stop then
+           (Interp.fupdate_vec v_internal start v2_internal)
+         else
+           (Interp.fupdate_vector_slice v_internal v2_internal start stop)))
+      with rv_start = v.rv_start; rv_start_internal = v.rv_start_internal |>
 
 (*TODO: Only find some sub piece matches, need to look for field/slice sub pieces*)
 (*TODO immediate: this will be impacted by need to change slicing *)
@@ -273,7 +276,8 @@ let rec find_reg_name reg = function
         if i = n && size = size2 then (Just v) else find_reg_name reg registers
       | (Reg_slice i _ _ (p1,p2), Reg n _ _ _) -> 
         if i = n then (Just (slice_reg_value v p1 p2)) else find_reg_name reg registers
-      | (Reg_field i _ _ f (p1,p2), Reg n _ _ _) -> 
+      | (Reg_field i _ _ f (p1,p2), Reg n _ _ _) ->
+(*        let _ = Interp.debug_print ("find_reg_name " ^ i ^ " field case " ^ show p1 ^ " " ^ show p2 ^ "\n") in*)
         if i = n then (Just (slice_reg_value v p1 p2)) else find_reg_name reg registers
       | (Reg_slice  i _ _ (p1,p2), Reg_slice n _ _ (p3,p4)) ->
         if i=n 
@@ -360,6 +364,7 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
             | Nothing -> err_value
             | Just v ->
               let value = intern_reg_value v in
+(*              let _ = Interp.debug_print ("Register read of " ^ rname ^ " returning value " ^ (Interp.string_of_value value) ^ "\n") in *)
               interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
                 (fun _ -> Interp.resume mode stack (Just value)) end end)      
     | (Interp.Action (Interp.Write_reg r slice value) stack,_,_) ->

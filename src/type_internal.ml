@@ -1248,7 +1248,7 @@ let rec nexp_gt_compare eq_ok n1 n2 =
     match n1.nexp,n2.nexp with
       | Nconst i, Nconst j | N2n(_,Some i), N2n(_,Some j)-> if ge_test i j then Yes else No
       | Npos_inf, _ | _, Nneg_inf -> Yes
-      | Nuvar _, Npos_inf | Nneg_inf, Nuvar _ -> Maybe
+      | Nuvar _, Npos_inf | Nneg_inf, Nuvar _ -> if eq_ok then Maybe else No
       | Nneg_inf, _ | _, Npos_inf -> No
       | Ninexact, _ | _, Ninexact -> Maybe
       | N2n(n1,_), N2n(n2,_) -> nexp_gt_compare eq_ok n1 n2
@@ -3833,17 +3833,17 @@ let rec simple_constraint_check in_env cs =
         ("Type constraint mismatch: constraint of " ^ n_to_string n1 ^ " >= " ^ n_to_string n2 ^ 
             " arising from here requires " 
          ^ string_of_big_int i1 ^ " to be greater than or equal to " ^ string_of_big_int i2)
-    | Npos_inf, _ |  _, Nneg_inf  -> check cs
-    | Ninexact, _ | _, Ninexact -> check cs
+    | Npos_inf, Nconst _ |  Nconst _, Nneg_inf  -> check cs
     | Nconst _ ,Npos_inf -> 
       eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
                                ^ (n_to_string n1') ^ " to be greater than or equal to infinity")
-    | Nneg_inf,Nuvar _ ->
+(*    | Nneg_inf,Nuvar _ ->
       if equate_n n2' n1' then check cs else (GtEq(co,enforce,n1',n2')::check cs)
     | Nneg_inf, _ -> 
       eq_error (get_c_loc co) 
         ("Type constraint mismatch: constraint arising from here requires negative infinity to be >= to " 
-         ^ (n_to_string n2'))
+         ^ (n_to_string n2')) *)
+    | Nuvar _, _ | _, Nuvar _ -> GtEq(co,enforce, n1, n2)::(check cs)
     | _,_ -> 
       (match nexp_ge n1' n2' with
         | Yes -> check cs
@@ -3891,7 +3891,8 @@ let rec simple_constraint_check in_env cs =
       then check cs
       else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
                                     ^ string_of_big_int i1 ^ " to be less than or equal to " ^ string_of_big_int i2)
-    | _, Npos_inf | Nneg_inf, _  -> check cs
+(*    | _, Npos_inf | Nneg_inf, _  -> check cs*)
+    | Nuvar _, _ | _, Nuvar _ -> LtEq(co,enforce, n1, n2)::(check cs)
     | _,_ ->
       (match nexp_ge n2' n1' with
         | Yes -> check cs
@@ -4017,8 +4018,9 @@ let check_range_consistent require_lt require_gt guarantee_lt guarantee_gt =
     | None,None,None,None 
     | Some _, None, None, None | None, Some _ , None, None | None, None, Some _ , None | None, None, None, Some _ 
     | Some _, Some _,None,None | None,None,Some _,Some _ (*earlier check should ensure these*)
-      -> ()
+      -> let _ = Printf.eprintf "check_range_consistent in nil case\n" in ()
     | Some(crlt,rlt), Some(crgt,rgt), Some(cglt,glt), Some(cggt,ggt) ->
+      let _ = Printf.eprintf "check_range_consistent is in the checking case\n" in
       if tri_to_bl (nexp_ge rlt glt) (*Can we guarantee the up is less than the required up*)
       then if tri_to_bl (nexp_ge rlt ggt) (*Can we guarantee the lw is less than the required up*)
         then if tri_to_bl (nexp_ge glt rgt) (*Can we guarantee the up is greater than the required lw*)
@@ -4028,9 +4030,12 @@ let check_range_consistent require_lt require_gt guarantee_lt guarantee_gt =
           else assert false
         else assert false
       else assert false
-    | _ -> assert false
+    | _ ->
+      let _ = Printf.eprintf "check_range_consistent is in the partial case\n" in
+      assert false
 
 let check_ranges cs =
+  let _ = Printf.eprintf "In check_ranges with %i constraints\n" (constraint_size cs) in
   let nuvars = get_all_nuvars_cs cs in
   let nus_with_cs = List.map (fun n -> (n,contains_nuvar n cs)) (Var_set.elements nuvars) in
   let nus_with_iso_cs = List.map (fun (n,ncs) -> (n,isolate_constraint n ncs)) nus_with_cs in
