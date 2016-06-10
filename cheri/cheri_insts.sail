@@ -727,13 +727,13 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
             else if (conditional) then
               {
                 success := if (CP0LLBit[0]) then
-                    MEMw_tagged_conditional(pAddr, cs_val.tag, (capStructToBit257(cs_val))[255..0])
+                    MEMw_tagged_conditional(pAddr, cs_val.tag, capStructToMemBits(cs_val))
                   else
                     false;
                 wGPR(rd) := EXTZ([success]);
               }
             else
-              MEMw_tagged(pAddr, cs_val.tag, (capStructToBit257(cs_val))[255..0]);
+              MEMw_tagged(pAddr, cs_val.tag, capStructToMemBits(cs_val));
           }
       }
   }
@@ -779,7 +779,7 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
               else 
                 (MEMr_tagged(pAddr)))
             in
-            (CapRegs[cd]) := ([tag & (~(suppressTag))] : mem);
+            (CapRegs[cd]) := memBitsToCapBits(tag & (~(suppressTag)), mem);
           }
       }
   }

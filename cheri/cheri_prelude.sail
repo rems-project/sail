@@ -208,6 +208,31 @@ function (bit[31]) capPermsToVec((CapStruct) cap) =
       : [cap.global]
   )
 
+(* Function used to convert capabilities to in-memory format 
+   - this is the same as register format except for the offset,
+     field which is stored as an absolute cursor on CHERI
+     due to uarch optimisation *)
+function (bit[256]) capStructToMemBits((CapStruct) cap) =
+  (
+        cap.padding
+      : cap.otype
+      : capPermsToVec(cap)
+      : [cap.sealed]
+        (* NB in memory format stores cursor, not offset *)
+      : (cap.base + cap.offset) 
+      : cap.base
+      : cap.length
+  )
+
+
+(* Reverse of above used when reading from memory *)
+function (bit[257]) memBitsToCapBits((bool) tag, (bit[256]) b) =
+  ([tag]
+   : b[255..192]
+   : ((bit[64])(b[191..128] - b[127..64]))
+   : b[127..0]
+  )
+
 function (bit[257]) capStructToBit257((CapStruct) cap) =
     (
       [cap.tag]
