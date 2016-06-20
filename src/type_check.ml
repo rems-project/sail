@@ -874,7 +874,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
         (e',t',t_env,consts@cs',nob,union_effects ef' effect))
     | E_if(cond,then_,else_) ->
       let (cond',_,_,c1,_,ef1) = check_exp envs imp_param true bit_t cond in
-      let (c1p,c1n) = split_conditional_constraints c1 in
+      let (c1,c1p,c1n) = split_conditional_constraints c1 in
       (match expect_t.t with
       | Tuvar _ -> 
         let then',then_t,then_env,then_c,then_bs,then_ef = check_exp envs imp_param true (new_t ()) then_ in
@@ -889,7 +889,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
         let resulting_env = Envmap.intersect_merge (tannot_merge (Expr l) d_env true) then_env else_env in
         (E_aux(E_if(cond',then',else'),(l,simple_annot_efr expect_t sub_effects)),
          expect_t, resulting_env,
-         [BranchCons(Expr l, None, [t_cs;e_cs])],
+         c1@[BranchCons(Expr l, None, [t_cs;e_cs])],
          merge_bounds then_bs else_bs, (*TODO Should be an intersecting merge*)
          sub_effects)
       | _ ->
@@ -900,7 +900,7 @@ let rec check_exp envs (imp_param:nexp option) (widen:bool) (expect_t:t) (E_aux(
         let sub_effects = union_effects ef1 (union_effects then_ef else_ef) in
         (E_aux(E_if(cond',then',else'),(l,simple_annot_efr expect_t sub_effects)),
          expect_t,Envmap.intersect_merge (tannot_merge (Expr l) d_env true) then_env else_env,
-         [BranchCons(Expr l, None, [t_cs;e_cs])],
+         c1@[BranchCons(Expr l, None, [t_cs;e_cs])],
          merge_bounds then_bs else_bs,
          sub_effects))
     | E_for(id,from,to_,step,order,block) -> 
@@ -2057,19 +2057,19 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,orig_env (*Envmap.insert t_env (id,tannot)*),b_env,tp_env)
     | _ , _->
-      let _ = Printf.eprintf "checking %s, not in env\n%!" id in
+      (*let _ = Printf.eprintf "checking %s, not in env\n%!" id in*)
       let t_env = if is_rec then Envmap.insert t_env (id,tannot) else t_env in
       let funcls,cs_ef = check t_env t_param_env None in
       let cses,ef = ((fun (cses,efses) -> (cses,(List.fold_right union_effects efses pure_e))) (List.split cs_ef)) in
       let cs = if List.length funcls = 1 then cses else [BranchCons(Fun l, None, cses)] in
-      let _ = Printf.eprintf "unresolved constraints are %s\n%!" (constraints_to_string cs) in
+     (* let _ = Printf.eprintf "unresolved constraints are %s\n%!" (constraints_to_string cs) in*)
       let (cs',map) = resolve_constraints cs in
-      let _ = Printf.eprintf "checking tannot for %s 2  remaining constraints are %s\n" 
-        id (constraints_to_string cs') in
+      (*let _ = Printf.eprintf "checking tannot for %s 2  remaining constraints are %s\n" 
+        id (constraints_to_string cs') in*)
       let tannot = check_tannot l
                                 (match map with | None -> tannot | Some m -> add_map_tannot m tannot)
                                 None cs' ef in
-      let _ = Printf.eprintf "done funcheck case2\n" in
+      (*let _ = Printf.eprintf "done funcheck case2\n" in*)
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,(if is_rec then t_env else Envmap.insert t_env (id,tannot)),b_env,tp_env)
 

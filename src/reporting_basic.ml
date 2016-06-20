@@ -125,13 +125,18 @@ let loc_to_string l =
   let s = Format.flush_str_formatter () in
   s
 
-type pos_or_loc = Loc of Parse_ast.l | Pos of Lexing.position
+type pos_or_loc = Loc of Parse_ast.l | LocD of Parse_ast.l * Parse_ast.l | Pos of Lexing.position
 
 let print_err_internal fatal verb_loc p_l m1 m2 =
-  let _ = (match p_l with Pos p -> print_err_pos p | Loc l -> print_err_loc l) in
+  let _ = (match p_l with Pos p -> print_err_pos p
+                        | Loc l -> print_err_loc l
+                        | LocD (l1,l2) ->
+                          print_err_loc l1; Format.fprintf Format.err_formatter " and "; print_err_loc l2) in
   let m12 = if String.length m2 = 0 then "" else ": " in
   Format.eprintf "  %s%s%s\n" m1 m12 m2;
-  if verb_loc then (match p_l with Loc l -> format_loc_source Format.err_formatter l; Format.pp_print_newline Format.err_formatter (); | _ -> ());
+  if verb_loc then (match p_l with Loc l ->
+      format_loc_source Format.err_formatter l;
+      Format.pp_print_newline Format.err_formatter (); | _ -> ());
   Format.pp_print_flush Format.err_formatter ();
   if fatal then (exit 1) else ()
 
@@ -147,6 +152,7 @@ type error =
   | Err_syntax_locn of Parse_ast.l * string
   | Err_lex of Lexing.position * string
   | Err_type of Parse_ast.l * string
+  | Err_type_dual of Parse_ast.l * Parse_ast.l * string
 
 let dest_err = function
   | Err_general (l, m) -> ("Error", false, Loc l, m)
@@ -156,6 +162,7 @@ let dest_err = function
   | Err_syntax_locn (l, m) -> ("Syntax error", false, Loc l, m)
   | Err_lex (p, s) -> ("Lexical error", false, Pos p, s)
   | Err_type (l, m) -> ("Type error", false, Loc l, m)
+  | Err_type_dual(l1,l2,m) -> ("Type error", false, LocD (l1,l2), m)
 
 exception Fatal_error of error
 
@@ -164,6 +171,7 @@ let err_todo l m = Fatal_error (Err_todo (l, m))
 let err_unreachable l m = Fatal_error (Err_unreachable (l, m))
 let err_general l m = Fatal_error (Err_general (l, m))
 let err_typ l m = Fatal_error (Err_type (l,m))
+let err_typ_dual l1 l2 m = Fatal_error (Err_type_dual (l1,l2,m))
 
 let report_error e = 
   let (m1, verb_pos, pos_l, m2) = dest_err e in

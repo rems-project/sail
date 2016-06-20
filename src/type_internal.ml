@@ -1546,55 +1546,109 @@ let rec refine_guarantees check_nvar max_lt min_gt id cs =
       let no_match _ =
         let (cs,max,min) = refine_guarantees check_nvar max_lt min_gt id cs in
         curr::cs,max,min in
-      (match nes.nexp,check_nvar,max_lt with
-       | Nuvar _ ,false, None | Nvar _ , true, None ->
+      (*let _ = Printf.eprintf "refine_guarantee %s\n" (constraints_to_string [curr]) in*)
+      (match nes.nexp,neb.nexp,check_nvar,max_lt,min_gt with
+       | Nuvar _ , _, false, None, _ | Nvar _, _, true, None, _ ->
+         (*let _ = Printf.eprintf "in var nill case of <=\n" in *)
          if nexp_eq id nes 
          then match neb.nexp with
            | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
            | _ -> refine_guarantees check_nvar (Some(c,neb)) min_gt id cs (*new max*)
          else no_match ()
-       | Nuvar _, false, Some(cm, omax) | Nvar _ , true,Some(cm, omax) ->
+       | _ , Nuvar _, false, _, None | _,Nvar _, true, _, None ->
+         (*let _ = Printf.eprintf "in var nill case of <=\n" in *)
+         if nexp_eq id neb 
+         then match nes.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_guarantees check_nvar max_lt (Some(c,nes)) id cs (*new min*)
+         else no_match ()
+       | Nuvar _, _, false, Some(cm, omax), _ | Nvar _, _, true,Some(cm, omax), _ ->
+         (*let _ = Printf.eprintf "in var case of <=\n" in *)
          if nexp_eq id nes
          then match nexp_ge neb omax with
            | Yes -> refine_guarantees check_nvar (Some(c,neb)) min_gt id cs (*replace old max*)
            | No -> refine_guarantees check_nvar max_lt min_gt id cs (*remove redundant constraint *)
            | Maybe -> no_match ()              
-          else no_match ()
-        | _ -> no_match ())
+         else no_match ()
+       | _, Nuvar _, false, _, Some(cm, omin) | _, Nvar _, true,_, Some(cm, omin) ->
+         (*let _ = Printf.eprintf "in var case of <=\n" in *)
+         if nexp_eq id neb
+         then match nexp_le nes omin with
+           | Yes -> refine_guarantees check_nvar max_lt (Some(c,nes)) id cs (*replace old min*)
+           | No -> refine_guarantees check_nvar max_lt min_gt id cs (*remove redundant constraint *)
+           | Maybe -> no_match ()              
+         else no_match ()
+       | _ -> no_match ())
     | (Lt(c,Guarantee,nes,neb) as curr)::cs ->
       let no_match _ =
         let (cs,max,min) = refine_guarantees check_nvar max_lt min_gt id cs in
         curr::cs,max,min in
-      (match nes.nexp,check_nvar,max_lt with
-        | Nuvar _, false, None | Nvar _, true, None->
+            (*let _ = Printf.eprintf "refine_guarantee %s\n" (constraints_to_string [curr]) in*)
+      (match nes.nexp,neb.nexp,check_nvar,max_lt,min_gt with
+       | Nuvar _, _, false, None, _ | Nvar _, _, true, None, _->
+         (*let _ = Printf.eprintf "in var, nil case of <\n" in *)
           if nexp_eq id nes 
           then match neb.nexp with
            | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
            | _ -> refine_guarantees check_nvar (Some(c,neb)) min_gt id cs (*new max*)
           else no_match ()
-        | Nuvar _, false, Some(cm, omax) | Nvar _, true, Some(cm, omax) ->
+       | _, Nuvar _, false, _, None | _, Nvar _, true, _, None->
+         (*let _ = Printf.eprintf "in var, nil case of <\n" in *)
+          if nexp_eq id neb 
+          then match nes.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_guarantees check_nvar max_lt (Some(c,nes)) id cs (*new max*)
+          else no_match ()
+       | Nuvar _, _, false, Some(cm, omax), _ | Nvar _, _, true, Some(cm, omax), _ ->
+         (*let _ = Printf.eprintf "in var case of <\n" in *)
           if nexp_eq id nes
           then match nexp_gt neb omax with
             | Yes -> refine_guarantees check_nvar (Some(c,neb)) min_gt id cs (*replace old max*)
             | No -> refine_guarantees check_nvar max_lt min_gt id cs (*remove redundant constraint*)
             | Maybe -> no_match ()
           else no_match ()
+       | _, Nuvar _, false, _, Some(cm, omin) | _, Nvar _, true, _, Some(cm, omin) ->
+         (*let _ = Printf.eprintf "in var case of <\n" in *)
+          if nexp_eq id neb
+          then match nexp_lt nes omin with
+            | Yes -> refine_guarantees check_nvar max_lt (Some(c,nes)) id cs (*replace old min*)
+            | No -> refine_guarantees check_nvar max_lt min_gt id cs (*remove redundant constraint*)
+            | Maybe -> no_match ()
+          else no_match ()
         | _ -> no_match ())
     | (GtEq(c,Guarantee,nes,neb) as curr)::cs ->
+      (*let _ = Printf.eprintf "refine_guarantee %s\n" (constraints_to_string [curr]) in*)
       let no_match _ =
         let (cs,max,min) = refine_guarantees check_nvar max_lt min_gt id cs in
         curr::cs,max,min in
-      (match nes.nexp,check_nvar,min_gt with
-       | Nuvar _, false, None | Nvar _, true, None->
+      (match nes.nexp,neb.nexp,check_nvar,min_gt,max_lt with
+       | Nuvar _, _, false, None, _ | Nvar _, _, true, None, _->
+         (*let _ = Printf.eprintf "in var, nil case of >=\n" in *)
          if nexp_eq id nes 
          then match neb.nexp with
            | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
            | _ -> refine_guarantees check_nvar max_lt (Some(c,neb)) id cs (*new min*)
          else no_match ()
-       | Nuvar _, false, Some(cm, omin) | Nvar _, true, Some(cm, omin) ->
+       | _, Nuvar _, false, _, None | _, Nvar _, true, _, None->
+         (*let _ = Printf.eprintf "in var, nil case of >=\n" in *)
+         if nexp_eq id neb
+         then match nes.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_guarantees check_nvar (Some(c,nes)) min_gt id cs (*new max*)
+         else no_match ()
+       | Nuvar _, _, false, Some(cm, omin), _ | Nvar _, _, true, Some(cm, omin), _ ->
+         (*let _ = Printf.eprintf "in var case of >=\n" in *)
          if nexp_eq id nes
          then match nexp_le neb omin with
            | Yes ->  refine_guarantees check_nvar max_lt (Some(c,neb)) id cs (*replace old min*)
+           | No -> refine_guarantees check_nvar max_lt min_gt id cs (*remove redundant constraint*)
+           | Maybe -> no_match ()
+         else no_match ()
+       | _, Nuvar _, false, _, Some(cm, omax) | _, Nvar _, true, _, Some(cm, omax) ->
+         (*let _ = Printf.eprintf "in var case of >=\n" in *)
+         if nexp_eq id neb
+         then match nexp_ge nes omax with
+           | Yes ->  refine_guarantees check_nvar (Some(c,nes)) min_gt id cs (*replace old max*)
            | No -> refine_guarantees check_nvar max_lt min_gt id cs (*remove redundant constraint*)
            | Maybe -> no_match ()
          else no_match ()
@@ -1603,22 +1657,41 @@ let rec refine_guarantees check_nvar max_lt min_gt id cs =
       let no_match _ =
         let (cs,max,min) = refine_guarantees check_nvar max_lt min_gt id cs in
         curr::cs,max,min in
-      (match nes.nexp,check_nvar,min_gt with
-        | Nuvar _, false, None | Nvar _, true, None->
+           (* let _ = Printf.eprintf "refine_guarantee %s\n" (constraints_to_string [curr]) in*)
+      (match nes.nexp,neb.nexp,check_nvar,min_gt,max_lt with
+       | Nuvar _,_, false, None,_ | Nvar _, _, true, None,_->
+         (*let _ = Printf.eprintf "in var, nil case of >\n" in *)
           if nexp_eq id nes 
           then match neb.nexp with
            | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
            | _ -> refine_guarantees check_nvar max_lt (Some(c,neb)) id cs (*new min*)
           else no_match ()
-        | Nuvar _, false, Some(cm, omin) | Nvar _, true, Some(cm, omin) ->
+       | _, Nuvar _, false, _, None | _, Nvar _, true, _, None ->
+         (*let _ = Printf.eprintf "in var, nil case of >\n" in *)
+         if nexp_eq id neb 
+          then match nes.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_guarantees check_nvar (Some(c,nes)) min_gt id cs (*new max*)
+          else no_match ()
+       | Nuvar _, _, false, Some(cm, omin), _ | Nvar _, _, true, Some(cm, omin), _ ->
+         (*let _ = Printf.eprintf "in var case of >\n" in *)
           if nexp_eq id nes
           then match nexp_lt neb omin with
             | Yes -> refine_guarantees check_nvar max_lt (Some(c,neb)) id cs (*replace old min*)
             | No -> refine_guarantees check_nvar max_lt min_gt id cs (*remove redundant constraint*)
             | Maybe -> no_match ()
           else no_match ()
-        | _ -> no_match ())
+       | _, Nuvar _, false, _, Some(cm, omax) | _, Nvar _, true, _, Some(cm, omax) ->
+         (*let _ = Printf.eprintf "in var case of >\n" in *)
+         if nexp_eq id neb
+         then match nexp_gt nes omax with
+           | Yes -> refine_guarantees check_nvar (Some(c,nes)) min_gt id cs (*replace old min*)
+           | No -> refine_guarantees check_nvar max_lt min_gt id cs (*remove redundant constraint*)
+           | Maybe -> no_match ()
+         else no_match ()
+       | _ -> no_match ())
     | c::cs ->
+      (*let _ = Printf.eprintf "refine_guarantee %s\n" (constraints_to_string [c]) in*)
       let (cs,max,min) = refine_guarantees check_nvar max_lt min_gt id cs in
       c::cs,max,min
 
@@ -1634,17 +1707,30 @@ let rec refine_requires check_nvar min_lt max_gt id cs =
       let no_match _ =
         let (cs,max,min) = refine_requires check_nvar min_lt max_gt id cs in
         curr::cs,max,min in
-      (match nes.nexp,check_nvar,min_lt with
-       | Nuvar _, false, None | Nvar _, true, None ->
+      (match nes.nexp,neb.nexp,check_nvar,min_lt,max_gt with
+       | Nuvar _, _, false, None, _ | Nvar _, _, true, None, _ ->
          if nexp_eq id nes 
          then match neb.nexp with
            | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
            | _ -> refine_requires check_nvar (Some(c,neb)) max_gt id cs (*new min*)
          else no_match ()
-       | Nuvar _, false, Some(cm, omin) | Nvar _, true, Some(cm, omin) ->
+       | _, Nuvar _, false, _, None | _, Nvar _, true, _, None ->
+         if nexp_eq id neb 
+         then match nes.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_requires check_nvar min_lt (Some(c,neb)) id cs (*new max*)
+         else no_match ()
+       | Nuvar _, _, false, Some(cm, omin), _ | Nvar _, _, true, Some(cm, omin), _ ->
          if nexp_eq id nes
          then match nexp_le neb omin with
            | Yes -> refine_requires check_nvar (Some(c,neb)) max_gt id cs (*replace old min*)
+           | No -> refine_requires check_nvar min_lt max_gt id cs (*remove redundant constraint*)
+           | Maybe -> no_match ()
+         else no_match()
+       | _, Nuvar _, false, _, Some(cm, omax) | _, Nvar _, true, _, Some(cm, omax) ->
+         if nexp_eq id neb
+         then match nexp_ge nes omax with
+           | Yes -> refine_requires check_nvar min_lt (Some(c,nes)) id cs (*replace old max*)
            | No -> refine_requires check_nvar min_lt max_gt id cs (*remove redundant constraint*)
            | Maybe -> no_match ()
          else no_match()
@@ -1653,17 +1739,30 @@ let rec refine_requires check_nvar min_lt max_gt id cs =
       let no_match _ =
         let (cs,max,min) = refine_requires check_nvar min_lt max_gt id cs in
         curr::cs,max,min in
-      (match nes.nexp,check_nvar,min_lt with
-        | Nuvar _, false, None | Nvar _, true, None->
+      (match nes.nexp,neb.nexp,check_nvar,min_lt,max_gt with
+        | Nuvar _, _, false, None, _ | Nvar _, _, true, None, _->
           if nexp_eq id nes 
           then match neb.nexp with
            | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
            | _ -> refine_requires check_nvar(Some(c,neb)) max_gt id cs (*new min*)
           else no_match ()
-        | Nuvar _, false, Some(cm, omin) | Nvar _,true, Some(cm, omin) ->
+        | _, Nuvar _, false, _, None | _, Nvar _, true, _, None->
+          if nexp_eq id neb 
+          then match nes.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_requires check_nvar min_lt (Some(c,nes)) id cs (*new max*)
+          else no_match ()
+        | Nuvar _, _, false, Some(cm, omin), _ | Nvar _, _, true, Some(cm, omin), _ ->
           if nexp_eq id nes
           then match nexp_lt neb omin with
             | Yes -> refine_requires check_nvar (Some(c,neb)) max_gt id cs (*replace old min*)
+            | No  -> refine_requires check_nvar min_lt max_gt id cs (*remove redundant constraint*)
+            | Maybe -> no_match ()
+          else no_match ()
+        | _, Nuvar _, false, _, Some(cm, omax) | _, Nvar _,true, _, Some(cm, omax) ->
+          if nexp_eq id neb
+          then match nexp_gt nes omax with
+            | Yes -> refine_requires check_nvar min_lt (Some(c,nes)) id cs (*replace old max*)
             | No  -> refine_requires check_nvar min_lt max_gt id cs (*remove redundant constraint*)
             | Maybe -> no_match ()
           else no_match ()
@@ -1672,17 +1771,30 @@ let rec refine_requires check_nvar min_lt max_gt id cs =
       let no_match _ =
         let (cs,max,min) = refine_requires check_nvar min_lt max_gt id cs in
         curr::cs,max,min in
-      (match nes.nexp,check_nvar,max_gt with
-        | Nuvar _, false, None | Nvar _, true, None ->
+      (match nes.nexp,neb.nexp,check_nvar,max_gt,min_lt with
+        | Nuvar _, _, false, None, _ | Nvar _, _, true, None, _ ->
           if nexp_eq id nes 
           then match neb.nexp with
            | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
            | _ -> refine_requires check_nvar min_lt (Some(c,neb)) id cs (*new max*)
           else no_match ()
-        | Nuvar _, false, Some(cm, omax) | Nvar _, true, Some(cm, omax) ->
+        | _, Nuvar _, false, _, None | _, Nvar _, true, _, None ->
+          if nexp_eq id neb 
+          then match nes.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_requires check_nvar (Some(c,nes)) max_gt id cs (*new min*)
+          else no_match ()
+        | Nuvar _, _, false, Some(cm, omax), _ | Nvar _, _, true, Some(cm, omax), _ ->
           if nexp_eq id nes
           then match nexp_ge neb omax with
             | Yes -> refine_requires check_nvar min_lt (Some(c,neb)) id cs (*replace old max*)
+            | No  -> refine_requires check_nvar min_lt max_gt id cs (*remove redundant constraint*)
+            | Maybe -> no_match ()
+          else no_match ()
+        | _, Nuvar _, false, _, Some(cm, omin) | _, Nvar _, true, _, Some(cm, omin) ->
+          if nexp_eq id neb
+          then match nexp_le nes omin with
+            | Yes -> refine_requires check_nvar (Some(c,neb)) max_gt id cs (*replace old min*)
             | No  -> refine_requires check_nvar min_lt max_gt id cs (*remove redundant constraint*)
             | Maybe -> no_match ()
           else no_match ()
@@ -1691,17 +1803,30 @@ let rec refine_requires check_nvar min_lt max_gt id cs =
       let no_match _ =
         let (cs,max,min) = refine_requires check_nvar min_lt max_gt id cs in
         curr::cs,max,min in
-      (match nes.nexp,check_nvar,max_gt with
-        | Nuvar _, true, None | Nvar _, false, None->
+      (match nes.nexp,neb.nexp,check_nvar,max_gt,min_lt with
+        | Nuvar _, _, true, None, _ | Nvar _, _, false, None, _ ->
           if nexp_eq id nes 
           then match neb.nexp with
            | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
            | _ -> refine_requires check_nvar min_lt (Some(c,neb)) id cs (*new max*)
           else refine_requires check_nvar min_lt max_gt id cs
-        | Nuvar _, false, Some(cm, omax) | Nvar _, true, Some(cm, omax) ->
+        | _, Nuvar _, true, _, None | _, Nvar _, false, _, None->
+          if nexp_eq id neb 
+          then match nes.nexp with
+           | Nuvar _ | Nvar _ -> no_match () (*Don't set a variable to a max/min*)
+           | _ -> refine_requires check_nvar (Some(c,nes)) max_gt id cs (*new min*)
+          else refine_requires check_nvar min_lt max_gt id cs
+        | Nuvar _, _, false, Some(cm, omax), _ | Nvar _, _, true, Some(cm, omax), _ ->
           if nexp_eq id nes
           then match nexp_gt neb omax with
             | Yes -> refine_requires check_nvar min_lt (Some(c,neb)) id cs (*replace old max*)
+            | No -> refine_requires check_nvar min_lt max_gt id cs (* remove redundant constraint *)
+            | Maybe -> no_match ()
+          else no_match ()
+        | _, Nuvar _, false, _, Some(cm, omin) | _, Nvar _, true, _, Some(cm, omin) ->
+          if nexp_eq id neb
+          then match nexp_lt nes omin with
+            | Yes -> refine_requires check_nvar (Some(c,nes)) max_gt id cs (*replace old min*)
             | No -> refine_requires check_nvar min_lt max_gt id cs (* remove redundant constraint *)
             | Maybe -> no_match ()
           else no_match ()
@@ -2770,6 +2895,7 @@ let is_enum_typ d_env t =
     | _ -> None
 
 let eq_error l msg = raise (Reporting_basic.err_typ l msg)
+let multi_constraint_error l1 l2 msg = raise (Reporting_basic.err_typ_dual (get_c_loc l1) (get_c_loc l2) msg)
 
 let compare_effect (BE_aux(e1,_)) (BE_aux(e2,_)) =
   match e1,e2 with 
@@ -3403,13 +3529,13 @@ let rec select_overload_variant d_env params_check get_all variants actual_type 
         | _ -> recur () )
 
 let rec split_conditional_constraints = function
-  | [] -> [],[]
+  | [] -> [],[],[]
   | Predicate(co,cp,cn)::cs ->
-    let (csp,csn) = split_conditional_constraints cs in
-    (cp::csp, cn::csn)
+    let (csa,csp,csn) = split_conditional_constraints cs in
+    (csa,cp::csp, cn::csn)
   | c::cs ->
-    let (csp,csn) = split_conditional_constraints cs in
-    (c::csp, csn)
+    let (csa,csp,csn) = split_conditional_constraints cs in
+    (c::csa,csp, csn)
 
 let rec in_constraint_env = function
   | [] -> []
@@ -4018,29 +4144,31 @@ let check_range_consistent require_lt require_gt guarantee_lt guarantee_gt =
     | None,None,None,None 
     | Some _, None, None, None | None, Some _ , None, None | None, None, Some _ , None | None, None, None, Some _ 
     | Some _, Some _,None,None | None,None,Some _,Some _ (*earlier check should ensure these*)
-      -> let _ = Printf.eprintf "check_range_consistent in nil case\n" in ()
-    | Some(crlt,rlt), Some(crgt,rgt), Some(cglt,glt), Some(cggt,ggt) ->
-      let _ = Printf.eprintf "check_range_consistent is in the checking case\n" in
+      -> ()
+    | Some(crlt,rlt), Some(crgt,rgt), Some(cglt,glt), Some(cggt,ggt) -> () (*
       if tri_to_bl (nexp_ge rlt glt) (*Can we guarantee the up is less than the required up*)
       then if tri_to_bl (nexp_ge rlt ggt) (*Can we guarantee the lw is less than the required up*)
         then if tri_to_bl (nexp_ge glt rgt) (*Can we guarantee the up is greater than the required lw*)
           then if tri_to_bl (nexp_ge ggt rgt) (*Can we guarantee that the lw is greater than the required lw*)
             then ()
-            else assert false (*make a good two-location error, all the way down*)
-          else assert false
-        else assert false
-      else assert false
+            else multi_constraint_error cggt crgt ("Constraints arising from these locations requires greater than "
+                                              ^ (n_to_string rgt) ^ " but best guarantee is " ^ (n_to_string ggt))
+          else multi_constraint_error cglt crgt ("Constraints arising from these locations guarantees a number no greather than " ^ (n_to_string glt) ^ " but requires a number greater than " ^ (n_to_string rgt))
+        else multi_constraint_error crlt cggt ("Constraints arising from these locations guarantees a number that is less than " ^ (n_to_string rlt) ^ " but best guarantee is " ^ (n_to_string ggt))
+      else multi_constraint_error crlt cglt ("Constraints arising from these locations require no more than " ^ (n_to_string rlt) ^ " but guarantee indicates it may be above " ^ (n_to_string glt)) *)
     | _ ->
-      let _ = Printf.eprintf "check_range_consistent is in the partial case\n" in
-      assert false
+      (*let _ = Printf.eprintf "check_range_consistent is in the partial case\n" in*)
+      ()
 
 let check_ranges cs =
-  let _ = Printf.eprintf "In check_ranges with %i constraints\n" (constraint_size cs) in
+  (*let _ = Printf.eprintf "In check_ranges with %i constraints\n" (constraint_size cs) in*)
   let nuvars = get_all_nuvars_cs cs in
+  (*let _ = Printf.eprintf "Have %i nuvars\n" (List.length (Var_set.elements nuvars)) in*)
   let nus_with_cs = List.map (fun n -> (n,contains_nuvar n cs)) (Var_set.elements nuvars) in
   let nus_with_iso_cs = List.map (fun (n,ncs) -> (n,isolate_constraint n ncs)) nus_with_cs in
   let refined_cs = List.concat (List.map (fun (n,ncs) ->
-      let guarantees,max_guarantee_lt,min_guarantee_gt = refine_guarantees false None None n ncs in
+      let guarantees,max_guarantee_lt,min_guarantee_gt =
+        refine_guarantees false None None n (flatten_constraints ncs) in
       let require_cs,min_require_lt,max_require_gt = refine_requires false None None n guarantees in
       check_range_consistent  min_require_lt max_require_gt max_guarantee_lt min_guarantee_gt;
       require_cs)

@@ -278,7 +278,8 @@ val get_all_nvar : nexp -> string list (*Pull out all of the contained nvar and 
 
 val select_overload_variant : def_envs -> bool -> bool -> tannot list -> t -> tannot list
 
-val split_conditional_constraints : constraints -> (constraints * constraints)
+(*splits constraints into always, positive, negative constraints; where positive and negative happen for predicates *)
+val split_conditional_constraints : constraints -> (constraints * constraints * constraints)
 
 (*May raise an exception if a contradiction is found*)
 val resolve_constraints : constraints -> (constraints * nexp_map option)
