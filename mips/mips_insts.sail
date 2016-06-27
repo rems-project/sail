@@ -1422,7 +1422,7 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
                                   : 0b000             (* AR *)
                                   : 0b001             (* MT standard TLB *)
                                   : 0b0000            (* zero *)
-                                  : 0b000) (* K0 TODO should be writable*)
+                                  : 0b000)
           case (0b10000,0b001) -> EXTZ( (* 16, sel 1: Config1 *)
                                            0b1      (* M *)
                                          : 0b000111 (* MMU size-1 *)
@@ -1522,6 +1522,7 @@ function clause execute (MTC0(rt, rd, sel, double)) = {
         (CP0Cause.IP)[9..8] := reg_val[9..8];
       }
       case (0b01110,0b000) -> CP0EPC      := reg_val         (* 14, EPC *)
+      case (0b10000,0b000) -> () (* XXX ignore K0 cache config  16: Config0 *)
       case (0b10100,0b000) -> (TLBXContext.PTEBase) := (reg_val[63..33])
       case (0b11110,0b000) -> CP0ErrorEPC := reg_val         (* 30, ErrorEPC *)
       case _               -> exit (SignalException(ResI))
