@@ -279,7 +279,7 @@ function (bit[5]) ExceptionCode ((Exception) ex) =
 
 val Exception -> unit effect {rreg, wreg} SignalException
 
-function unit SignalExceptionMIPS ((Exception) ex) = 
+function unit SignalExceptionMIPS ((Exception) ex, (bit[64]) kccBase) = 
   {
     (* Only update EPC and BD if not already in EXL mode *)
     if (~ (CP0Status.EXL)) then 
@@ -311,7 +311,9 @@ function unit SignalExceptionMIPS ((Exception) ex) =
                    0xFFFFFFFFBFC00200
                 else
                    0xFFFFFFFF80000000;
-      nextPC := vectorBase + EXTS(vectorOffset);
+      (* On CHERI we have to subtract KCC.base so that we end up at the 
+         right absolute vector address after indirecting via new PCC *)
+      nextPC := ((bit[64])(vectorBase + EXTS(vectorOffset))) - kccBase;
       CP0Cause.ExcCode      := ExceptionCode(ex);
       CP0Status.EXL         := 1;
   }

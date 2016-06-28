@@ -349,7 +349,7 @@ function unit SignalException ((Exception) ex) =
     nextPCC    := C29; (* KCC *)
     delayedPCC := C29; (* always write delayedPCC together whether PCC so 
                           that non-capability branches don't override PCC *)
-    SignalExceptionMIPS(ex);
+    SignalExceptionMIPS(ex, C29.base);
   }
 
 function unit ERETHook() =

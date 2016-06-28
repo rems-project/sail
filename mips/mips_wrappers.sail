@@ -52,6 +52,6 @@ function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType
 
 let have_cp2 = false
 
-function unit SignalException ((Exception) ex) = SignalExceptionMIPS(ex)
+function unit SignalException ((Exception) ex) = SignalExceptionMIPS(ex, 0x0000000000000000)
 
 function unit ERETHook() = ()
