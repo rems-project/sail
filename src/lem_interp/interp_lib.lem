@@ -573,7 +573,9 @@ let arith_op_no0 op v =
       | (V_lit(L_aux (L_num x) lx), V_lit(L_aux (L_num y) ly)) -> 
 	if y = 0 
 	then V_lit (L_aux L_undef ly)
-	else V_lit(L_aux (L_num (op x y)) lx)
+        else V_lit(L_aux (L_num (op x y)) lx)
+      | (V_lit (L_aux L_undef lx),_) -> vl
+      | (_, (V_lit (L_aux L_undef ly))) -> vr
       | (V_unknown,_) -> V_unknown
       | (_,V_unknown) -> V_unknown
       | _ -> fail ()

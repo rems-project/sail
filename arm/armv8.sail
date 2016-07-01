@@ -877,7 +877,7 @@ function clause execute ( LoadStorePairNonTemp(wback,postindex,n,t,t2,acctype,me
   (bit[64]) address := 0; (* ARM: uninitialized *)
   (bit['D]) data1 := 0; (* ARM: uninitialized *)
   (bit['D]) data2 := 0; (* ARM: uninitialized *)
-  (*constant*) (uinteger) dbytes := datasize quot 8;
+  (*constant*) ([|1:8|]) dbytes := datasize quot 8;
   (boolean) rt_unknown := false;
 
   if memop == MemOp_LOAD & t == t2 then {
@@ -1359,7 +1359,7 @@ function clause execute ( LoadStorePair(wback,postindex,n,t,t2,acctype,memop,_si
   (bit[64]) address := 0; (* ARM: uninitialized *)
   (bit['D]) data1 := 0; (* ARM: uninitialized *)
   (bit['D]) data2 := 0; (* ARM: uninitialized *)
-  (*constant*) (uinteger) dbytes := datasize quot 8;
+  (*constant*) ([|1:8|]) dbytes := datasize quot 8;
   (boolean) rt_unknown := false;
   (boolean) wb_unknown := false;
 
