@@ -434,17 +434,24 @@ let eq (l,r) = bool_to_bit (l = r)
 let eq_vec_range (l,r) = eq (to_num false l,r)
 let eq_range_vec (l,r) = eq (l, to_num false r)
 let eq_vec_vec (l,r) = eq (to_num true l, to_num true r)
-
-let neq (l,r) = bitwise_not_bit (eq (l,r))
+(*
+let neq (l,r) = bitwise_not_bit (eq (l,r)) *)
 let neq_vec (l,r) = bitwise_not_bit (eq_vec_vec (l,r))
 let neq_vec_range (l,r) = bitwise_not_bit (eq_vec_range (l,r))
 let neq_range_vec (l,r) = bitwise_not_bit (eq_range_vec (l,r))
 
 
+(* temporarily *)
+val neq : forall 'a 'b. 'a * 'b -> bit
+let neq _ = O
+                                          
+
 let EXTS (v1,(V _ _ is_inc as v)) =
   to_vec is_inc (v1,signed v)
 
 let EXTZ = EXTS
+
+let exts = EXTS 
 
 val make_indexed_vector_reg : list (integer * register) -> maybe register -> integer -> integer ->
                               vector register

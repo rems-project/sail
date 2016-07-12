@@ -36,7 +36,7 @@ let EIEIO_Sync () = return ()
 
 let recalculate_dependency () = return ()
 
-let trap () = ()
+let trap () = exit ()
 (* this needs to change, but for that we'd have to make the type checker know about trap 
  * as an effect *)
 

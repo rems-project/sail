@@ -2063,17 +2063,18 @@ let doc_id_lem_type (Id_aux(i,_)) =
       * token in case of x ending with star. *)
      parens (separate space [colon; string x; empty])
 
-let doc_id_lem_ctor aexp_needed (Id_aux(i,_)) =
+let doc_id_lem_ctor (Id_aux(i,_)) =
   match i with
   | Id("bit") -> string "bit" 
   | Id("int") -> string "integer"
   | Id("nat") -> string "integer"
+  | Id("Some") -> string "Just"
+  | Id("None") -> string "Nothing"
   | Id i -> string (fix_id (String.capitalize i))
   | DeIid x ->
      (* add an extra space through empty to avoid a closing-comment
       * token in case of x ending with star. *)
-     let epp = separate space [colon; string (String.capitalize x); empty] in
-     if aexp_needed then parens (align epp) else epp
+     separate space [colon; string (String.capitalize x); empty]
 
 let doc_typ_lem, doc_atomic_typ_lem =
   (* following the structure of parser for precedence *)
@@ -2162,13 +2163,13 @@ let rec doc_pat_lem apat_needed regtypes (P_aux (p,(l,annot)) as pa) = match p w
   | P_app(id, ((_ :: _) as pats)) ->
      (match annot with
       | Base(_,(Constructor _ | Enum _),_,_,_,_) ->
-         let ppp = doc_unop (doc_id_lem_ctor true id)
+         let ppp = doc_unop (doc_id_lem_ctor id)
                             (parens (separate_map comma (doc_pat_lem true regtypes) pats)) in
          if apat_needed then parens ppp else ppp
       | _ -> empty)
   | P_app(id,[]) ->
     (match annot with
-     | Base(_,(Constructor _| Enum _),_,_,_,_) -> doc_id_lem_ctor apat_needed id
+     | Base(_,(Constructor _| Enum _),_,_,_,_) -> doc_id_lem_ctor id
      | _ -> empty)
   | P_lit lit  -> doc_lit_lem true lit annot
   | P_wild -> underscore
@@ -2327,8 +2328,13 @@ let doc_exp_lem, doc_let_lem =
         | _ ->
            (match annot with
             | Base (_,Constructor _,_,_,_,_) ->
-               let epp = doc_id_lem f ^^ space ^^ 
-                           parens (separate_map comma (top_exp (regs,regtypes) true) args) in
+               let epp =
+                 match args with
+                 | [] -> doc_id_lem_ctor f
+                 | [arg] -> doc_id_lem_ctor f ^^ space ^^ exp arg
+                 | _ ->
+                    doc_id_lem_ctor f ^^ space ^^ 
+                      parens (separate_map comma exp args) in
                if aexp_needed then parens (align epp) else epp
             | Base (_,External (Some "bitwise_not_bit"),_,_,_,_) ->
                let [a] = args in
@@ -2339,7 +2345,7 @@ let doc_exp_lem, doc_let_lem =
                  | Base(_,External (Some n),_,_,_,_) ->
                     (match n with
                      | _ -> string n)
-                 | Base(_,Constructor _,_,_,_,_) -> doc_id_lem_ctor false f
+                 | Base(_,Constructor _,_,_,_,_) -> doc_id_lem_ctor f
                  | _ -> doc_id_lem f in
                let epp =
                  align
@@ -2389,9 +2395,12 @@ let doc_exp_lem, doc_let_lem =
        (match annot with
         | Base((_, ({t = Tapp("register",_)} | {t=Tabbrev(_,{t=Tapp("register",_)})})),
                External _,_,eff,_,_) ->
+         if has_rreg_effect eff then
            separate space [string "read_reg";doc_id_lem id]
-        | Base(_,(Constructor i |Enum i),_,_,_,_) -> doc_id_lem_ctor aexp_needed id
-        | Base((_,t),Alias alias_info,_,_,_,_) ->
+         else
+           doc_id_lem id
+        | Base(_,(Constructor i |Enum i),_,_,_,_) -> doc_id_lem_ctor id
+        | Base((_,t),Alias alias_info,_,eff,_,_) ->
            (match alias_info with
             | Alias_field(reg,field) ->
                let typ = match List.assoc reg regs with
@@ -2408,7 +2417,11 @@ let doc_exp_lem, doc_let_lem =
                        string (typ ^ "_" ^ field)] in
                if aexp_needed then parens (align epp) else epp
             | Alias_pair(reg1,reg2) ->
-               let epp = separate space [string "read_two_regs";string reg1;string reg2] in
+               let epp = 
+               if has_rreg_effect eff then
+                 separate space [string "read_two_regs";string reg1;string reg2]
+               else
+                 separate space [string "RegisterPair";string reg1;string reg2] in
                if aexp_needed then parens (align epp) else epp
             | Alias_extract(reg,start,stop) ->
                let epp = 
@@ -2667,9 +2680,9 @@ let doc_exp_lem, doc_let_lem =
 
 (*TODO Upcase and downcase type and constructors as needed*)
 let doc_type_union_lem regtypes (Tu_aux(typ_u,_)) = match typ_u with
-  | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_lem_ctor false id; string "of";
+  | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_lem_ctor id; string "of";
                                         parens (doc_typ_lem regtypes typ)]
-  | Tu_id id -> separate space [pipe; doc_id_lem_ctor false id]
+  | Tu_id id -> separate space [pipe; doc_id_lem_ctor id]
 
 let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_single i -> parens (doc_op comma (doc_int i) (doc_int i))
@@ -2693,7 +2706,7 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
       (concat [string "type"; space; doc_id_lem_type id;])
       (doc_typquant_lem typq ar_doc)
   | TD_enum(id,nm,enums,_) ->
-    let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_id_lem_ctor false) enums) in
+    let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) doc_id_lem_ctor enums) in
     doc_op equals
       (concat [string "type"; space; doc_id_lem_type id;])
       (enums_doc)

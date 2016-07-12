@@ -490,7 +490,7 @@ function forall Nat 'n. (bit['n]) zero_or_undef ((bit['n]) x) = {
 scattered function unit execute
 scattered typedef ast = const union
 
-val bit[32] -> ast effect pure decode
+val bit[32] -> ast effect {escape} decode
 
 scattered function ast decode
 

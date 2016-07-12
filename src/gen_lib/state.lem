@@ -130,23 +130,23 @@ let rec foreach_dec (i,stop,by) vars body =
   else ((),vars)
 
 
-val foreachState_inc : forall 's 'e 'vars. (integer * integer * integer) -> 'vars ->
+val foreachM_inc : forall 's 'e 'vars. (integer * integer * integer) -> 'vars ->
                   (integer -> 'vars -> State 's 'e (unit * 'vars)) -> State 's 'e (unit * 'vars)
-let rec foreachState_inc (i,stop,by) vars body = 
+let rec foreachM_inc (i,stop,by) vars body = 
   if i <= stop
   then
     body i vars >>= fun (_,vars) ->
-    foreachState_inc (i + by,stop,by) vars body
+    foreachM_inc (i + by,stop,by) vars body
   else return ((),vars)
 
 
-val foreachState_dec : forall 's 'e 'vars. (integer * integer * integer) -> 'vars ->
+val foreachM_dec : forall 's 'e 'vars. (integer * integer * integer) -> 'vars ->
                   (integer -> 'vars -> State 's 'e (unit * 'vars)) -> State 's 'e (unit * 'vars)
-let rec foreachState_dec (i,stop,by) vars body = 
+let rec foreachM_dec (i,stop,by) vars body = 
   if i >= stop
   then
     body i vars >>= fun (_,vars) ->
-    foreachState_dec (i - by,stop,by) vars body
+    foreachM_dec (i - by,stop,by) vars body
   else return ((),vars)
 
 val read_reg_field : forall 'e. register -> register_field -> State state 'e (vector bit)
