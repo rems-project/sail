@@ -2127,8 +2127,8 @@ let doc_typ_lem, doc_atomic_typ_lem =
 (* doc_lit_lem gets as an additional parameter the type information from the
  * expression around it: that's a hack, but how else can we distinguish between
  * undefined values of different types ? *)
-let doc_lit_lem in_pat (L_aux(l,_)) a =
-  utf8string (match l with
+let doc_lit_lem in_pat (L_aux(lit,l)) a =
+  utf8string (match lit with
   | L_unit  -> "()"
   | L_zero  -> "O"
   | L_one   -> "I"
@@ -2146,7 +2146,8 @@ let doc_lit_lem in_pat (L_aux(l,_)) a =
       | Tid "bit"
       | Tabbrev ({t = Tid "bit"},_) -> "Undef"
       | Tapp ("register",_)
-      | Tabbrev ({t = Tapp ("register",_)},_) -> "UndefinedReg 0")
+      | Tabbrev ({t = Tapp ("register",_)},_) -> "UndefinedReg 0"
+      | _ -> raise (Reporting_basic.err_unreachable l "undefined value of unsupported type"))
   | L_string s -> "\"" ^ s ^ "\"")
 
 (* typ_doc is the doc for the type being quantified *)
@@ -2187,18 +2188,18 @@ let rec doc_pat_lem apat_needed regtypes (P_aux (p,(l,annot)) as pa) = match p w
       | _ -> parens (separate_map comma_sp (doc_pat_lem false regtypes) pats))
      | P_list pats -> brackets (separate_map semi (doc_pat_lem false regtypes) pats) (*Never seen but easy in lem*)
 
-let rec getregtyp_annot (Base ((_,t),_,_,_,_,_)) = 
+let rec getregtyp (LEXP_aux (le,(l,Base ((_,{t=t}),_,_,_,_,_)))) =
   match t with
-   | {t = Tabbrev ({t = Tid name},_)} -> name
-
-let rec getregtyp (LEXP_aux (le,(_,annot))) = match le with
-  | LEXP_id _
-  | LEXP_cast _ -> getregtyp_annot annot
-  | LEXP_memory _ -> failwith "This lexp writes memory"
-  | LEXP_vector (le,_)
-  | LEXP_vector_range (le,_,_)
-  | LEXP_field (le,_) ->
-     getregtyp le
+      | Tabbrev ({t = Tid name},{t= Tapp ("register",_)}) -> name
+      | _ -> 
+         match le with
+         | LEXP_id _
+         | LEXP_cast _ -> raise (Reporting_basic.err_unreachable l "unsupported reg type")
+         | LEXP_memory _ -> failwith "This lexp writes memory"
+         | LEXP_vector (le,_)
+         | LEXP_vector_range (le,_,_)
+         | LEXP_field (le,_) ->
+            getregtyp le
 
 let doc_exp_lem, doc_let_lem =
   let rec top_exp (regs,(regtypes : string list)) (aexp_needed : bool) (E_aux (e, (_,annot))) =
