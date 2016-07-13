@@ -152,7 +152,6 @@ register (bit[1])   CP0LLBit
 register (bit[64])  CP0LLAddr
 register (bit[64])  CP0BadVAddr
 register (bit[32])  CP0Count
-register (bit[32])  CP0Compare
 register (bit[32])  CP0HWREna
 register (bit[64])  CP0UserLocal
 
@@ -277,7 +276,6 @@ function (bit[5]) ExceptionCode ((Exception) ex) =
    }
 
 
-val Exception -> unit effect {rreg, wreg} SignalException
 
 function unit SignalExceptionMIPS ((Exception) ex, (bit[64]) kccBase) = 
   {
@@ -317,6 +315,8 @@ function unit SignalExceptionMIPS ((Exception) ex, (bit[64]) kccBase) =
       CP0Cause.ExcCode      := ExceptionCode(ex);
       CP0Status.EXL         := 1;
   }
+
+val Exception -> unit effect {rreg, wreg} SignalException
 
 function unit SignalExceptionBadAddr((Exception) ex, (bit[64]) badAddr) =
   {
