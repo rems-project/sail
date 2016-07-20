@@ -377,7 +377,8 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
        (match t.t with
         (*Old case; should possibly be removed*)
         | Tapp("register",[TA_typ {t= Tapp("vector",[ _; TA_nexp r;_;_])}])
-        | Tapp("vector", [_;TA_nexp r;_;_]) ->
+        | Tapp("vector", [_;TA_nexp r;_;_])
+        | Tabbrev(_, {t=Tapp("vector",[_;TA_nexp r;_;_])}) ->
           (*let _ = Printf.eprintf "vector case with %s, bounds are %s\n" 
                 (n_to_string r) (bounds_to_string bounds) in*)
           let nexps = expand_nexp r in

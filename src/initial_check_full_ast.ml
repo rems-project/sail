@@ -61,6 +61,16 @@ let to_kind (k_env : kind Envmap.t) (K_aux(K_kind(klst),l)) : (Ast.kind * kind) 
           | K_Typ -> K_aux(K_kind(List.map fst k_pairs), l), { k = K_Lam(args,ret) }
           | _ -> typ_error l "Type constructor must have an -> kind ending in Type" None None None
 
+let rec typ_to_string (Typ_aux(t,_)) = match t with
+  | Typ_id i -> id_to_string i
+  | Typ_var (Kid_aux (Var i,_)) -> i
+  | _ -> "bigger than var"
+
+and nexp_to_string (Nexp_aux(n,_)) = match n with
+  | Nexp_id i -> id_to_string i
+  | Nexp_var (Kid_aux (Var i,_)) -> i
+  | _ -> "nexp bigger than var"
+
 let rec to_typ (k_env : kind Envmap.t) (def_ord : Ast.order) (t: Ast.typ) : Ast.typ =
   match t with
   | Typ_aux(t,l) ->
@@ -178,7 +188,14 @@ and to_typ_arg (k_env : kind Envmap.t) (def_ord : Ast.order) (kind : kind) (arg 
     | K_Efct,Typ_arg_effect e -> Typ_arg_effect (to_effects k_env e)
     | (K_Lam _ | K_infer | K_Val),_ -> 
       raise (Reporting_basic.err_unreachable l "To_ast_typ_arg received Lam kind or infer kind")
-    | _ -> typ_error l "Kind declaration and kind of type argument don't match here" None None (Some kind)),
+    | _ ->
+      let tn_str = 
+        (match ta with
+         | Typ_arg_typ t -> typ_to_string t
+         | Typ_arg_nexp n -> nexp_to_string n
+         | _ -> "order or effect") in
+      typ_error l ("Kind declaration and kind of type argument, " ^ tn_str ^ " don't match here")
+        None None (Some kind)), 
     l)
 
 let to_nexp_constraint (k_env : kind Envmap.t) (c : n_constraint) : n_constraint =

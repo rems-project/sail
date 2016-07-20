@@ -724,6 +724,7 @@ let doc_effect (BE_aux (e,_)) =
   | BE_eamem -> "eamem"
   | BE_barr -> "barr"
   | BE_depend -> "depend"
+  | BE_escape -> "escape"
   | BE_undef -> "undef"
   | BE_unspec -> "unspec"
   | BE_nondet -> "nondet")
