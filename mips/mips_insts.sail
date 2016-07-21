@@ -1517,7 +1517,7 @@ function clause execute (MTC0(rt, rd, sel, double)) = {
         (CP0Status.EXL) := reg_val[1];
         (CP0Status.IE)  := reg_val[0];
       }
-      case (0b01100,0b000) -> {   (* 13 Cause *)
+      case (0b01101,0b000) -> {   (* 13 Cause *)
         CP0Cause.IV := reg_val[23]; (* TODO special interrupt vector not implemeneted *)
         (CP0Cause.IP)[9..8] := reg_val[9..8];
       }
