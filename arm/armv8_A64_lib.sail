@@ -845,14 +845,14 @@ function unit Prefetch((bit[64]) address, (bit[5]) prfop) =
   (uinteger) target := 0;
   (boolean) stream := 0;
 
-  (bool) return := false;
+  (bool) returnv := false;
   switch prfop[4..3] {
     case 0b00 -> hint := Prefetch_READ  (* PLD: prefetch for load    *)
     case 0b01 -> hint := Prefetch_EXEC  (* PLI: preload instructions *)
     case 0b10 -> hint := Prefetch_WRITE (* PST: prepare for store    *)
-    case 0b11 -> return := true         (* unallocated hint          *)
+    case 0b11 -> returnv := true         (* unallocated hint          *)
   };
-  if ~(return) then {
+  if ~(returnv) then {
   target := prfop[2..1];                (* target cache level        *)
   stream := (prfop[0] != 0);            (* streaming (non-temporal)  *)
   Hint_Prefetch(address, hint, target, stream);
