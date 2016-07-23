@@ -442,6 +442,8 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
       fprintf ppf "@[<0>(E_aux (E_sizeof %a) (%a, %a))@]" pp_lem_nexp nexp pp_lem_l l pp_annot annot
     | E_exit exp ->
       fprintf ppf "@[<0>(E_aux (E_exit %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
+    | E_return exp ->
+      fprintf ppf "@[<0>(E_aux (E_return %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assert(c,msg) ->
       fprintf ppf "@[<0>(E_aux (E_assert %a %a) (%a, %a))@]" pp_lem_exp c pp_lem_exp msg pp_lem_l l pp_annot annot
     | E_internal_exp ((l, Base((_,t),_,_,_,_,bindings))) ->
@@ -465,10 +467,13 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
         | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given non-vector or implicit"))
     | E_comment _ | E_comment_struc _ ->
       fprintf ppf "@[(E_aux (E_lit (L_aux L_unit %a)) (%a,%a))@]" pp_lem_l l pp_lem_l l pp_annot annot
-    | E_internal_cast ((_, Overload (_,_, _)), _) | E_internal_exp _ ->
-      raise (Reporting_basic.err_unreachable l "Found internal cast or exp with overload")
+    | E_internal_cast _ | E_internal_exp _ ->
+      raise (Reporting_basic.err_unreachable l "Found internal cast or exp")
     | E_internal_exp_user _ -> (raise (Reporting_basic.err_unreachable l "Found non-rewritten internal_exp_user"))
     | E_sizeof_internal _ -> (raise (Reporting_basic.err_unreachable l "Internal sizeof not removed"))
+    | E_internal_let _ -> (raise (Reporting_basic.err_unreachable l "Found non-rewritten internal_let"))
+    | E_internal_return _ -> (raise (Reporting_basic.err_unreachable l "Found non-rewritten internal_return"))
+    | E_internal_plet _ -> raise (Reporting_basic.err_unreachable l "Found non-rewritten internal_plet")
   in
   print_e ppf e
 
@@ -1074,6 +1079,8 @@ let doc_exp, doc_let =
     separate space [string "sizeof"; doc_nexp n]
   | E_exit e ->
     separate space [string "exit"; atomic_exp e;]
+  | E_return e ->
+    separate space [string "return"; atomic_exp e;]
   | E_assert(c,m) ->
     separate space [string "assert"; parens (separate comma [exp c; exp m])]
   (* adding parens and loop for lower precedence *)

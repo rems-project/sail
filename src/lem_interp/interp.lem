@@ -250,6 +250,7 @@ type action =
  | Footprint of id * value
  | Nondet of list (exp tannot) * tag
  | Call_extern of string * value
+ | Return of value
  | Exit of (exp tannot)
  (* For the error case of a failed assert, carries up an optional error message*)
  | Fail of value 
@@ -853,6 +854,15 @@ let rec clear_stack_state stack =
     | Thunk_frame e t_level env lmem s -> Thunk_frame e t_level env lmem (clear_stack_state s)
 end
 
+let remove_top_stack_frame stack =
+  match stack with
+  | Top -> Nothing
+  | Hole_frame _ _ _ _ _ Top -> Nothing
+  | Thunk_frame _ _ _ _ Top -> Nothing
+  | Hole_frame _ _ _ _ _ stack -> Just stack
+  | Thunk_frame _ _ _ _ stack -> Just stack
+end
+
 (*functions for converting in progress evaluation back into expression for building current continuation*)
 let rec combine_typs ts =
   match ts with
@@ -1300,12 +1310,16 @@ and vec_concat_match_plev t_level pat r_vals dir l last_pat t =
           | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp nc;_;_]) ->
             if last_pat
             then 
-              (true,false,(add_to_env (id,(V_vector (if is_inc(dir) then 0 else (List.length r_vals)) dir r_vals)) eenv),r_vals,[])
+              (true,false,
+               (add_to_env (id,(V_vector (if is_inc(dir) then 0 else (List.length r_vals)) dir r_vals)) eenv),
+               r_vals,[])
             else (false,false,eenv,[],[]) (*TODO use some constraint bounds here*)
           | _ -> 
             if last_pat
             then 
-              (true,false,(add_to_env (id,(V_vector (if is_inc(dir) then 0 else (List.length r_vals)) dir r_vals)) eenv),r_vals,[])
+              (true,false,
+               (add_to_env (id,(V_vector (if is_inc(dir) then 0 else (List.length r_vals)) dir r_vals)) eenv),
+               r_vals,[])
             else (false,false,eenv,[],[]) end)
       | P_wild -> (match t with
           | T_app "vector" (T_args [T_arg_nexp _;T_arg_nexp (Ne_const i);_;_]) ->
@@ -1550,32 +1564,36 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                                     (to_exp mode env (taint (V_lit diff) (r1 union r2)))
                                   | _ -> Assert_extra.failwith "For loop from and by values not range" end in
                                 let  e = 
-                                  (E_aux (E_block 
-                                            [(E_aux 
-                                                (E_let 
-                                                   (LB_aux (LB_val_implicit (P_aux (P_id id) (fl,val_annot ftyp)) from_e)
-                                                      (Unknown,val_annot ftyp))
-                                                   exp) (l,annot));
-                                             (E_aux (E_for id augment_e to_e by_e order exp) (l,annot))])
-                                            (l,annot)) in
+                                  (E_aux
+                                     (E_block 
+                                        [(E_aux 
+                                            (E_let 
+                                               (LB_aux (LB_val_implicit (P_aux (P_id id) (fl,val_annot ftyp)) from_e)
+                                                  (Unknown,val_annot ftyp))
+                                               exp) (l,annot));
+                                         (E_aux (E_for id augment_e to_e by_e order exp) (l,annot))])
+                                     (l,annot)) in
                                 if mode.eager_eval
                                 then interp_main mode t_level env lm e 
                                 else debug_out Nothing Nothing e t_level lm env
                             | V_unknown -> 
                               let e = 
-                                (E_aux (E_let 
-                                          (LB_aux 
-                                             (LB_val_implicit (P_aux (P_id id) (fl, val_annot (val_typ from_val))) from_e)
-                                             (fl, val_annot (val_typ from_val)))
-                                          exp) (l,annot)) in
+                                (E_aux
+                                   (E_let 
+                                      (LB_aux 
+                                         (LB_val_implicit (P_aux (P_id id) (fl, val_annot (val_typ from_val))) from_e)
+                                         (fl, val_annot (val_typ from_val)))
+                                      exp) (l,annot)) in
                               interp_main mode t_level env lm e
                             | _ -> (Error l "internal error: by must be a number",lm,le) end)
                         (fun a -> update_stack a 
                           (add_to_top_frame (fun b env -> (E_aux (E_for id from_e to_e b order exp) (l,annot), env))))
                     | V_unknown -> 
                       let e =
-                        (E_aux (E_let (LB_aux (LB_val_implicit (P_aux (P_id id) (fl, val_annot (val_typ from_val))) from_e)
-                                              (fl, val_annot (val_typ from_val))) exp) (l,annot)) in
+                        (E_aux
+                           (E_let (LB_aux
+                                     (LB_val_implicit (P_aux (P_id id) (fl, val_annot (val_typ from_val))) from_e)
+                                     (fl, val_annot (val_typ from_val))) exp) (l,annot)) in
                       interp_main mode t_level env lm e
                     | _ -> (Error l "internal error: to must be a number",lm,env) end)
                 (fun a -> update_stack a 
@@ -1583,11 +1601,13 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                     (E_aux (E_for id from_e t by order exp) (l,annot), env))))
             | V_unknown ->
               let e =
-                (E_aux (E_let (LB_aux (LB_val_implicit (P_aux (P_id id) (Unknown, val_annot (val_typ from_val))) from_e)
-                                      (Unknown, val_annot (val_typ from_val))) exp) (l,annot)) in
+                (E_aux
+                   (E_let (LB_aux (LB_val_implicit (P_aux (P_id id) (Unknown, val_annot (val_typ from_val))) from_e)
+                             (Unknown, val_annot (val_typ from_val))) exp) (l,annot)) in
               interp_main mode t_level env lm e
             | _ -> (Error l "internal error: from must be a number",lm,le) end)
-        (fun a -> update_stack a (add_to_top_frame (fun f env -> (E_aux (E_for id f to_ by order exp) (l,annot), env))))
+          (fun a -> update_stack a
+              (add_to_top_frame (fun f env -> (E_aux (E_for id f to_ by order exp) (l,annot), env))))
     | E_case exp pats ->
       resolve_outcome 
         (interp_main mode t_level l_env l_mem exp)
@@ -1974,7 +1994,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                             (Def_val_aux (Def_val_dec ev) dannot))
                      (l,annot), env''))
                 (fun vs -> 
-                  (V_vector_sparse b len dir (map2 (fun i v -> ((natFromInteger i),v)) indexes vs) v)) l_env l_mem [] exps)
+                   (V_vector_sparse b len dir
+                      (map2 (fun i v -> ((natFromInteger i),v)) indexes vs) v)) l_env l_mem [] exps)
             (fun a -> 
               update_stack a 
                 (add_to_top_frame (fun e env -> 
@@ -2015,7 +2036,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                     List.foldr (fun (env,_,exp) (rst,taint_env) -> 
                       let (e,t_e) = env_to_let mode env exp taint_env in (e::rst,t_e)) ([],l_env) multi_matches in
                   let (branches,maybe_id) = fix_up_nondet typ lets (l,annot) in
-                  interp_main mode t_level taint_env lm (E_aux (E_nondet branches) (l,(non_det_annot annot maybe_id)))
+                  let exp = E_aux (E_nondet branches) (l,(non_det_annot annot maybe_id)) in
+                  interp_main mode t_level taint_env lm exp
                end)
             | Nothing -> 
               (Error l ("Internal error: function with tag global unfound " ^ name),lm,le) end)
@@ -2169,6 +2191,12 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
         (fun a -> update_stack a (add_to_top_frame (fun lft env -> (E_aux (E_app_infix lft op r) (l,annot), env))))
   | E_exit exp ->
     (Action (Exit exp) (mk_thunk l annot t_level l_env l_mem),l_mem, l_env)
+  | E_return exp ->
+    resolve_outcome
+      (interp_main mode t_level l_env l_mem exp)
+      (fun v lm le ->
+         (Action (Return v) (mk_thunk l annot t_level l_env l_mem), l_mem, l_env))
+      (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_return e) (l,annot), env)))) 
   | E_assert cond msg ->
     resolve_outcome 
       (interp_main mode t_level l_env l_mem msg)

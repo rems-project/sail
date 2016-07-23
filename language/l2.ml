@@ -271,6 +271,7 @@ type
  | E_assign of 'a lexp * 'a exp (* imperative assignment *)
  | E_sizeof of nexp (* Expression to return the value of the nexp variable or expression at run time *)
  | E_exit of 'a exp (* expression to halt all current execution, potentially calling a system, trap, or interrupt handler with exp *)
+ | E_return of 'a exp (* expression to end current function execution and return the value of exp from the function; this can be used to break out of for loops *)
  | E_assert of 'a exp * 'a exp (* expression to halt with error, when the first expression is false, reporting the optional string as an error *)
  | E_internal_cast of 'a annot * 'a exp (* This is an internal cast, generated during type checking that will resolve into a syntactic cast after *)
  | E_internal_exp of 'a annot (* This is an internal use for passing nexp information  to library functions, postponed for constraint solving *)

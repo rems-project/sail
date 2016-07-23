@@ -546,6 +546,7 @@ exp :: 'E_' ::=
 
   | sizeof atyp                                         :: :: sizeof
   | exit exp						:: :: exit
+  | return exp                                          :: :: return
   | assert ( exp , exp' )                               :: :: assert
 
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}

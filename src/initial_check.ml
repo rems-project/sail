@@ -443,6 +443,7 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
     | Parse_ast.E_assign(lexp,exp) -> E_assign(to_ast_lexp k_env def_ord lexp, to_ast_exp k_env def_ord exp)
     | Parse_ast.E_sizeof(nexp) -> E_sizeof(to_ast_nexp k_env nexp)
     | Parse_ast.E_exit exp -> E_exit(to_ast_exp k_env def_ord exp)
+    | Parse_ast.E_return exp -> E_return(to_ast_exp k_env def_ord exp)
     | Parse_ast.E_assert(cond,msg) -> E_assert(to_ast_exp k_env def_ord cond, to_ast_exp k_env def_ord msg)
     ), (l,NoTyp))
 

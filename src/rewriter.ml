@@ -84,11 +84,14 @@ let fix_effsum_exp (E_aux (e,(l,annot))) =
     | E_list es -> eff_union_exps es
     | E_cons (e1,e2) -> eff_union_exps [e1;e2]
     | E_record fexps -> get_effsum_fexps fexps
+    | E_record_update(e,fexps) -> union_effs ((get_effsum_exp e)::[(get_effsum_fexps fexps)])
     | E_field (e,_) -> get_effsum_exp e
     | E_case (e,pexps) -> union_effs (get_effsum_exp e :: List.map get_effsum_pexp pexps)
     | E_let (lb,e) -> union_effs [get_effsum_lb lb;get_effsum_exp e]
     | E_assign (lexp,e) -> union_effs [get_effsum_lexp lexp;get_effsum_exp e]
     | E_exit e -> get_effsum_exp e
+    | E_return e -> get_effsum_exp e
+    | E_sizeof _ | E_sizeof_internal _ -> pure_e
     | E_assert (c,m) -> pure_e
     | E_comment _ | E_comment_struc _ -> pure_e
     | E_internal_cast (_,e) -> get_effsum_exp e
@@ -330,6 +333,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
   | E_assign (lexp,exp) -> rewrap (E_assign(rewriters.rewrite_lexp rewriters nmap lexp,rewrite exp))
   | E_sizeof n -> rewrap (E_sizeof n)
   | E_exit e -> rewrap (E_exit (rewrite e))
+  | E_return e -> rewrap (E_return (rewrite e))
   | E_assert(e1,e2) -> rewrap (E_assert(rewrite e1,rewrite e2))
   | E_internal_cast ((l,casted_annot),exp) -> 
     let new_exp = rewrite exp in
@@ -604,6 +608,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_let                    : 'letbind * 'exp -> 'exp_aux
   ; e_assign                 : 'lexp * 'exp -> 'exp_aux
   ; e_exit                   : 'exp -> 'exp_aux
+  ; e_return                 : 'exp -> 'exp_aux
   ; e_assert                 : 'exp * 'exp -> 'exp_aux
   ; e_internal_cast          : 'a annot * 'exp -> 'exp_aux
   ; e_internal_exp           : 'a annot -> 'exp_aux
@@ -666,6 +671,7 @@ let rec fold_exp_aux alg = function
   | E_let (letbind,e) -> alg.e_let (fold_letbind alg letbind, fold_exp alg e)
   | E_assign (lexp,e) -> alg.e_assign (fold_lexp alg lexp, fold_exp alg e)
   | E_exit e -> alg.e_exit (fold_exp alg e)
+  | E_return e -> alg.e_return (fold_exp alg e)
   | E_assert(e1,e2) -> alg.e_assert (fold_exp alg e1, fold_exp alg e2)
   | E_internal_cast (annot,e) -> alg.e_internal_cast (annot, fold_exp alg e)
   | E_internal_exp annot -> alg.e_internal_exp annot
@@ -729,6 +735,7 @@ let id_exp_alg =
   ; e_let = (fun (lb,e2) -> E_let (lb,e2))
   ; e_assign = (fun (lexp,e2) -> E_assign (lexp,e2))
   ; e_exit = (fun e1 -> E_exit (e1))
+  ; e_return = (fun e1 -> E_return e1)
   ; e_assert = (fun (e1,e2) -> E_assert(e1,e2)) 
   ; e_internal_cast = (fun (a,e1) -> E_internal_cast (a,e1))
   ; e_internal_exp = (fun a -> E_internal_exp a)
@@ -1578,6 +1585,7 @@ let find_updated_vars exp =
       ; e_let = (fun (lb,e2) -> lb @@ e2)
       ; e_assign = (fun ((ids,acc),e2) -> ([],ids) @@ acc @@ e2)
       ; e_exit = (fun e1 -> ([],[]))
+      ; e_return = (fun e1 -> e1)
       ; e_assert = (fun (e1,e2) -> ([],[]))
       ; e_internal_cast = (fun (_,e1) -> e1)
       ; e_internal_exp = (fun _ -> ([],[]))

@@ -233,6 +233,7 @@ exp_aux =  (* Expression *)
  | E_assign of exp * exp (* imperative assignment *)
  | E_sizeof of atyp
  | E_exit of exp
+ | E_return of exp
  | E_assert of exp * exp
 
 and exp = 

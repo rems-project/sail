@@ -89,6 +89,7 @@ let kw_table =
      ("pure",                    (fun x -> Other));
      ("rec",			 (fun x -> Other));
      ("register",		 (fun x -> Other));
+     ("return",                  (fun x -> Other));
      ("scattered",               (fun x -> Other));
      ("struct",                  (fun x -> Other));
      ("sizeof",                  (fun x -> Other));
