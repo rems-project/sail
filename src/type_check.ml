@@ -1364,7 +1364,9 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
       let efs = add_effect (BE_aux(BE_escape, l)) pure_e in
       (E_aux (E_exit e',(l,(simple_annot_efr expect_t efs))),expect_t,t_env,[],nob,efs)
     | E_return e ->
-      check_exp envs imp_param true true ret_t ret_t e
+      let (e', t'',_,cs,_,efr) = check_exp envs imp_param true true ret_t ret_t e in
+      let ers = add_effect (BE_aux (BE_lret,l)) pure_e in
+      (E_aux (E_return e', (l, (simple_annot_efr ret_t ers))), ret_t, t_env,cs,nob,union_effects efr ers)
     | E_sizeof nexp ->
       let n = anexp_to_nexp envs nexp in
       let n_subst = subst_n_with_env tp_env n in

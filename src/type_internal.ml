@@ -345,6 +345,7 @@ and ef_to_string (Ast.BE_aux(b,l)) =
       | Ast.BE_unspec-> "unspec"
       | Ast.BE_nondet-> "nondet"
       | Ast.BE_lset  -> "lset"
+      | Ast.BE_lret  -> "lret"
       | Ast.BE_escape -> "escape" 
 and efs_to_string es = 
   match es with
@@ -463,10 +464,10 @@ let union_effects e1 e2 =
     (*let _ = Printf.eprintf "union effects of length %s and %s\n" (e_to_string e1) (e_to_string e2) in*)
     {effect= Eset (effect_remove_dups (b1@b2))}  
 
-let remove_lsets ef = match ef.effect with
+let remove_local_effects ef = match ef.effect with
   | Evar _ | Euvar _ | Eset [] -> ef
   | Eset effects ->
-    {effect = Eset (List.filter (fun (BE_aux(be,l)) -> (match be with | BE_lset -> false | _ -> true))
+    {effect = Eset (List.filter (fun (BE_aux(be,l)) -> (match be with | BE_lset | BE_lret -> false | _ -> true))
                                 (effect_remove_dups effects)) }
 
 let rec lookup_record_typ (typ : string) (env : rec_env list) : rec_env option =
@@ -2935,6 +2936,9 @@ let compare_effect (BE_aux(e1,_)) (BE_aux(e2,_)) =
   | (BE_lset,BE_lset) -> 0
   | (BE_lset,_) -> -1
   | (_,BE_lset) -> 1
+  | (BE_lret,BE_lret) -> 0
+  | (BE_lret,_) -> -1
+  | (_, BE_lret) -> 1
   | (BE_escape,BE_escape) -> 0
 
 let effect_sort = List.sort compare_effect
@@ -2957,7 +2961,7 @@ let order_eq co o1 o2 =
 
 let rec remove_internal_effects = function
   | [] -> []
-  | (BE_aux(BE_lset,_))::effects -> remove_internal_effects effects
+  | (BE_aux((BE_lset | BE_lret),_))::effects -> remove_internal_effects effects
   | b::effects -> b::(remove_internal_effects effects)
 
 let has_effect searched_for eff =
@@ -4209,7 +4213,7 @@ let resolve_constraints cs =
 let check_tannot l annot imp_param constraints efs = 
   match annot with
   | Base((params,t),tag,cs,ef,_,bindings) ->
-    let efs = remove_lsets efs in
+    let efs = remove_local_effects efs in
     ignore(effects_eq (Specc l) efs ef);
     let s_env = (t_remove_unifications Envmap.empty t) in
     let params = Envmap.to_list s_env in

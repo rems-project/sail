@@ -85,6 +85,7 @@ base_effect_aux =  (* effect *)
  | BE_nondet (* nondeterminism from intra-instruction parallelism *)
  | BE_escape (* Tracking of expressions and functions that might call exit *)
  | BE_lset (* Local mutation happend; not user-writable *)
+ | BE_lret (* Local return happened; not user-writable *)
 
 
 type 
