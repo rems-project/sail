@@ -583,8 +583,13 @@ let rec to_ast_range (Parse_ast.BF_aux(r,l)) = (* TODO add check that ranges are
 
 let to_ast_type_union k_env default_order (Parse_ast.Tu_aux(tu,l)) =
   match tu with
-    | Parse_ast.Tu_ty_id(atyp,id) -> (Tu_aux(Tu_ty_id ((to_ast_typ k_env default_order atyp),(to_ast_id id)),l))
-    | Parse_ast.Tu_id id -> (Tu_aux(Tu_id(to_ast_id id),l)) 
+  | Parse_ast.Tu_ty_id(atyp,id) ->
+    let typ = to_ast_typ k_env default_order atyp in
+    (match typ with
+     | Typ_aux(Typ_id (Id_aux (Id "unit",_)),_) ->
+       Tu_aux(Tu_id(to_ast_id id),l)
+     | _ -> Tu_aux(Tu_ty_id(typ, to_ast_id id), l))
+  | Parse_ast.Tu_id id -> (Tu_aux(Tu_id(to_ast_id id),l)) 
 
 let to_ast_typedef (names,k_env,def_ord) (td:Parse_ast.type_def) : (tannot type_def) envs_out =
   match td with
