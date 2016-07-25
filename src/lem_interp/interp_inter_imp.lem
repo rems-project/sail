@@ -335,7 +335,7 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
             | _ -> (Ivh_error (Internal_error ("Value not an option for " ^ errk_str)), events_out) end) end)
     | (Interp.Error l msg,_,_) -> (Ivh_error (Internal_error msg), events_out)
     | (Interp.Action (Interp.Return value) stack,_,_) ->
-      (match Interp.remove_top_stack_frame stack with
+      (match stack with
        | Top ->
          if exn_seen
          then (Ivh_value_after_exn value, events_out)
@@ -663,7 +663,7 @@ let rec interp_to_outcome mode context thunk =
                       (IState (Interp.add_answer_to_stack next_state new_v) context), lm)
             end)
          | Interp.Return value ->
-           (match Interp.remove_top_stack_frame next_state with
+           (match next_state with
             | Top -> (Done, lm)
             | stack ->
               interp_to_outcome mode context (fun _ -> Interp.resume mode.internal_mode stack (Just value)) end)
