@@ -854,13 +854,13 @@ let rec clear_stack_state stack =
     | Thunk_frame e t_level env lmem s -> Thunk_frame e t_level env lmem (clear_stack_state s)
 end
 
-let remove_top_stack_frame stack =
+let rec remove_top_stack_frame stack =
   match stack with
-  | Top -> Nothing
-  | Hole_frame _ _ _ _ _ Top -> Nothing
-  | Thunk_frame _ _ _ _ Top -> Nothing
-  | Hole_frame _ _ _ _ _ stack -> Just stack
-  | Thunk_frame _ _ _ _ stack -> Just stack
+  | Top -> Top
+  | Hole_frame _ _ _ _ _ Top -> Top
+  | Thunk_frame _ _ _ _ Top -> Top
+  | Hole_frame id e t_level env lmem stack -> Hole_frame id e t_level env lmem (remove_top_stack_frame stack)
+  | Thunk_frame e t_level env lmem stack -> Thunk_frame e t_level env lmem (remove_top_stack_frame stack)
 end
 
 (*functions for converting in progress evaluation back into expression for building current continuation*)
@@ -2194,8 +2194,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
   | E_return exp ->
     resolve_outcome
       (interp_main mode t_level l_env l_mem exp)
-      (fun v lm le ->
-         (Action (Return v) Top, l_mem, l_env))
+      (fun v lm le -> (Action (Return v) Top, l_mem, l_env))
       (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_return e) (l,annot), env)))) 
   | E_assert cond msg ->
     resolve_outcome 

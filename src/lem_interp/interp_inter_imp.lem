@@ -336,7 +336,7 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
     | (Interp.Error l msg,_,_) -> (Ivh_error (Internal_error msg), events_out)
     | (Interp.Action (Interp.Return value) stack,_,_) ->
       (match Interp.remove_top_stack_frame stack with
-       | Nothing ->
+       | Top ->
          if exn_seen
          then (Ivh_value_after_exn value, events_out)
          else (match ivh_mode with
@@ -351,7 +351,7 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
                | Ivh_unsupported -> (Ivh_error (Unsupported_instruction_error instr), events_out)
                | Ivh_translate -> Assert_extra.failwith "Reached unreachable pattern" end)
             | _ -> (Ivh_error (Internal_error ("Value not an option for " ^ errk_str)), events_out)end) end)
-       | Just stack -> interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
+       | stack -> interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
                                               (fun _ -> Interp.resume mode stack (Just value)) end)
     | (Interp.Action (Interp.Call_extern i value) stack,_,_) ->
       match List.lookup i (Interp_lib.library_functions direction) with
@@ -664,8 +664,8 @@ let rec interp_to_outcome mode context thunk =
             end)
          | Interp.Return value ->
            (match Interp.remove_top_stack_frame next_state with
-            | Nothing -> (Done, lm)
-            | Just stack ->
+            | Top -> (Done, lm)
+            | stack ->
               interp_to_outcome mode context (fun _ -> Interp.resume mode.internal_mode stack (Just value)) end)
          | Interp.Step l Nothing Nothing -> (Internal Nothing Nothing (IState next_state context), lm)
          | Interp.Step l (Just name) Nothing -> (Internal (Just name) Nothing (IState next_state context), lm)
