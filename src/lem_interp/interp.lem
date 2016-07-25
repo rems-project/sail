@@ -2195,7 +2195,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
     resolve_outcome
       (interp_main mode t_level l_env l_mem exp)
       (fun v lm le ->
-         (Action (Return v) (mk_thunk l annot t_level l_env l_mem), l_mem, l_env))
+         (Action (Return v) Top, l_mem, l_env))
       (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_return e) (l,annot), env)))) 
   | E_assert cond msg ->
     resolve_outcome 
