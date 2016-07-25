@@ -89,7 +89,8 @@ let doc_effect (BE_aux (e,_)) =
   | BE_unspec -> "unspec"
   | BE_escape -> "escape"
   | BE_nondet -> "nondet"
-  | BE_lset -> "(*lset*)")
+  | BE_lset -> "(*lset*)"
+  | BE_lret -> "(*lret*)")
 
 let doc_effects (Effect_aux(e,_)) = match e with
   | Effect_var v -> doc_var v
@@ -405,6 +406,7 @@ let doc_exp, doc_let =
       let cases = separate_map (break 1) (doc_case env add_red) pexps in
       surround 2 1 opening cases rbrace
   | E_exit e -> separate space [string "exit"; exp env add_red e;]
+  | E_return e -> separate space [string "return"; exp env add_red e;]
   | E_assert(e,msg) -> string "assert" ^^ parens (separate_map comma (exp env add_red) [e; msg])
   (* adding parens and loop for lower precedence *)
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
@@ -437,7 +439,7 @@ let doc_exp, doc_let =
       (* doc_op (doc_id op) (exp l) (exp r) *)
   (* XXX missing case *)
   | E_comment _ | E_comment_struc _ -> string "" 
-  | _-> failwith "internal expression escpaed"
+  | _-> failwith "internal expression escaped"
 
   and let_exp env add_red (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->
