@@ -3369,7 +3369,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       (match args2,args1 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
         [TA_nexp b2;TA_nexp r2;] -> 
-        let cs = [] (*[LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)] (*This constraint failing should be a warning, but truncation is ok*)*)  in
+        let cs = [] (*[LtEq(co,Guarantee,r2,mk_sub {nexp=N2n(r1,None)} n_one)] 
+                      (*This constraint failing should be a warning, but truncation is ok*)*)  in
         let tannot = (l, Base(([],t2), External (Some "to_vec_inc"), cs,
                               pure_e, (get_cummulative_effects (get_eannot e)), bounds)) in
         (t2,cs,pure_e,E_aux(E_app((Id_aux(Id "to_vec_inc",l)),
@@ -3430,7 +3431,10 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
     let cs = [Eq(co,r1,n_one)] in
     (t2,cs,pure_e,E_aux((E_app ((Id_aux (Id "most_significant", l)), [e])),
                         (l, cons_tag_annot_efr t2 (External (Some "most_significant"))
-                                               cs (get_cummulative_effects (get_eannot e)))))
+                           cs (get_cummulative_effects (get_eannot e)))))
+  | Tid("bit"),Tapp("vector",[TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]) ->
+    let cs = [Eq(co,r1,n_one)] in
+    (t2,cs,pure_e,E_aux(E_vector [e], (l, constrained_annot_efr t2 cs (get_cummulative_effects (get_eannot e)))))
   | Tid("bit"),Tapp("range",[TA_nexp b1;TA_nexp r1]) ->
     let t',cs'= type_consistent co d_env enforce false {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} t2 in
     (t2,cs',pure_e,

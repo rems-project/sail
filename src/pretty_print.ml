@@ -151,6 +151,7 @@ and pp_format_base_effect_lem (BE_aux(e,l)) =
     | BE_unspec -> "BE_unspec"
     | BE_nondet -> "BE_nondet"
     | BE_lset -> "BE_lset"
+    | BE_lret -> "BE_lret"
     | BE_escape -> "BE_escape") ^ " " ^
   (pp_format_l_lem l) ^ ")"
 and pp_format_effects_lem (Effect_aux(e,l)) =
