@@ -335,24 +335,8 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
             | _ -> (Ivh_error (Internal_error ("Value not an option for " ^ errk_str)), events_out) end) end)
     | (Interp.Error l msg,_,_) -> (Ivh_error (Internal_error msg), events_out)
     | (Interp.Action (Interp.Return value) stack,_,_) ->
-      (match stack with
-       | Top ->
-         if exn_seen
-         then (Ivh_value_after_exn value, events_out)
-         else (match ivh_mode with
-             | Ivh_translate -> (Ivh_value value, events_out)
-             | _ ->
-                          (match value with
-            | Interp.V_ctor (Id_aux (Id "Some") _) _ _ vinstr -> (Ivh_value vinstr,events_out)
-            | Interp.V_ctor (Id_aux (Id "None") _) _ _ _ ->
-              (match ivh_mode with
-               | Ivh_decode -> (Ivh_error (Not_an_instruction_error arg), events_out)
-               | Ivh_illegal -> (Ivh_error (Not_an_instruction_error arg), events_out)
-               | Ivh_unsupported -> (Ivh_error (Unsupported_instruction_error instr), events_out)
-               | Ivh_translate -> Assert_extra.failwith "Reached unreachable pattern" end)
-            | _ -> (Ivh_error (Internal_error ("Value not an option for " ^ errk_str)), events_out)end) end)
-       | stack -> interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
-                                              (fun _ -> Interp.resume mode stack (Just value)) end)
+      interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
+        (fun _ -> Interp.resume mode stack (Just value))
     | (Interp.Action (Interp.Call_extern i value) stack,_,_) ->
       match List.lookup i (Interp_lib.library_functions direction) with
         | Nothing -> (Ivh_error (Internal_error ("External function not available " ^ i)), events_out)
@@ -663,10 +647,7 @@ let rec interp_to_outcome mode context thunk =
                       (IState (Interp.add_answer_to_stack next_state new_v) context), lm)
             end)
          | Interp.Return value ->
-           (match next_state with
-            | Top -> (Done, lm)
-            | stack ->
-              interp_to_outcome mode context (fun _ -> Interp.resume mode.internal_mode stack (Just value)) end)
+           interp_to_outcome mode context (fun _ -> Interp.resume mode.internal_mode next_state (Just value))
          | Interp.Step l Nothing Nothing -> (Internal Nothing Nothing (IState next_state context), lm)
          | Interp.Step l (Just name) Nothing -> (Internal (Just name) Nothing (IState next_state context), lm)
          | Interp.Step l (Just name) (Just value) ->
