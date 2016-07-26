@@ -1396,7 +1396,8 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
   checkCP0Access();
   let (bit[64]) result = switch (rd, sel)
         {
-          case (0b00000,0b000) -> (0x00000000 : [TLBProbe] : 0x0000000 : TLBIndex)  (* 0, TLB Index *)
+          case (0b00000,0b000) -> let (bit[31]) idx = EXTZ(TLBIndex) in
+                                  (0x00000000 : [TLBProbe] : idx)  (* 0, TLB Index *)
           case (0b00001,0b000) -> EXTZ(TLBRandom)  (* 1, TLB Random *)
           case (0b00010,0b000) -> TLBEntryLo0      (* 2, TLB EntryLo0 *)
           case (0b00011,0b000) -> TLBEntryLo1      (* 3, TLB EntryLo1 *)
@@ -1425,7 +1426,7 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
                                   : 0b000)
           case (0b10000,0b001) -> EXTZ( (* 16, sel 1: Config1 *)
                                            0b1      (* M *)
-                                         : 0b000111 (* MMU size-1 *)
+                                         : TLBIndexMax (* MMU size-1 *)
                                          : 0b000    (* IS icache sets *)
                                          : 0b000    (* IL icache lines *)
                                          : 0b000    (* IA icache assoc. *)

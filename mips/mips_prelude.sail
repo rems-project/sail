@@ -85,9 +85,9 @@ typedef XContextReg = register bits [63 : 0] {
   30 ..  4: BadVPN2;
 }
 
-let ([:8:]) TLBNumEntries = 8
-typedef TLBIndexT = (bit[3])
-let (TLBIndexT) TLBIndexMax = 0b111
+let ([:64:]) TLBNumEntries = 64
+typedef TLBIndexT = (bit[6])
+let (TLBIndexT) TLBIndexMax = 0b111111
 
 let MAX_VA = unsigned(0xffffffffff)
 let MAX_PA = unsigned(0xfffffffff)
@@ -114,13 +114,13 @@ typedef TLBEntry = register bits [116 : 0] {
 }
 
 register (bit[1])        TLBProbe
-register (bit[3])     TLBIndex
-register (bit[3])     TLBRandom
+register (TLBIndexT)     TLBIndex
+register (TLBIndexT)     TLBRandom
 register (TLBEntryLoReg) TLBEntryLo0
 register (TLBEntryLoReg) TLBEntryLo1
 register (ContextReg)    TLBContext
 register (bit[16])       TLBPageMask
-register (bit[3])     TLBWired
+register (TLBIndexT)     TLBWired
 register (TLBEntryHiReg) TLBEntryHi
 register (XContextReg)   TLBXContext
 
@@ -132,8 +132,64 @@ register (TLBEntry) TLBEntry04
 register (TLBEntry) TLBEntry05
 register (TLBEntry) TLBEntry06
 register (TLBEntry) TLBEntry07
+register (TLBEntry) TLBEntry08
+register (TLBEntry) TLBEntry09
+register (TLBEntry) TLBEntry10
+register (TLBEntry) TLBEntry11
+register (TLBEntry) TLBEntry12
+register (TLBEntry) TLBEntry13
+register (TLBEntry) TLBEntry14
+register (TLBEntry) TLBEntry15
+register (TLBEntry) TLBEntry16
+register (TLBEntry) TLBEntry17
+register (TLBEntry) TLBEntry18
+register (TLBEntry) TLBEntry19
+register (TLBEntry) TLBEntry20
+register (TLBEntry) TLBEntry21
+register (TLBEntry) TLBEntry22
+register (TLBEntry) TLBEntry23
+register (TLBEntry) TLBEntry24
+register (TLBEntry) TLBEntry25
+register (TLBEntry) TLBEntry26
+register (TLBEntry) TLBEntry27
+register (TLBEntry) TLBEntry28
+register (TLBEntry) TLBEntry29
+register (TLBEntry) TLBEntry30
+register (TLBEntry) TLBEntry31
+register (TLBEntry) TLBEntry32
+register (TLBEntry) TLBEntry33
+register (TLBEntry) TLBEntry34
+register (TLBEntry) TLBEntry35
+register (TLBEntry) TLBEntry36
+register (TLBEntry) TLBEntry37
+register (TLBEntry) TLBEntry38
+register (TLBEntry) TLBEntry39
+register (TLBEntry) TLBEntry40
+register (TLBEntry) TLBEntry41
+register (TLBEntry) TLBEntry42
+register (TLBEntry) TLBEntry43
+register (TLBEntry) TLBEntry44
+register (TLBEntry) TLBEntry45
+register (TLBEntry) TLBEntry46
+register (TLBEntry) TLBEntry47
+register (TLBEntry) TLBEntry48
+register (TLBEntry) TLBEntry49
+register (TLBEntry) TLBEntry50
+register (TLBEntry) TLBEntry51
+register (TLBEntry) TLBEntry52
+register (TLBEntry) TLBEntry53
+register (TLBEntry) TLBEntry54
+register (TLBEntry) TLBEntry55
+register (TLBEntry) TLBEntry56
+register (TLBEntry) TLBEntry57
+register (TLBEntry) TLBEntry58
+register (TLBEntry) TLBEntry59
+register (TLBEntry) TLBEntry60
+register (TLBEntry) TLBEntry61
+register (TLBEntry) TLBEntry62
+register (TLBEntry) TLBEntry63
 
-let (vector <0, 8, inc, (TLBEntry)>) TLBEntries = [
+let (vector <0, 64, inc, (TLBEntry)>) TLBEntries = [
 TLBEntry00,
 TLBEntry01,
 TLBEntry02,
@@ -141,7 +197,63 @@ TLBEntry03,
 TLBEntry04,
 TLBEntry05,
 TLBEntry06,
-TLBEntry07
+TLBEntry07,
+TLBEntry08,
+TLBEntry09,
+TLBEntry10,
+TLBEntry11,
+TLBEntry12,
+TLBEntry13,
+TLBEntry14,
+TLBEntry15,
+TLBEntry16,
+TLBEntry17,
+TLBEntry18,
+TLBEntry19,
+TLBEntry20,
+TLBEntry21,
+TLBEntry22,
+TLBEntry23,
+TLBEntry24,
+TLBEntry25,
+TLBEntry26,
+TLBEntry27,
+TLBEntry28,
+TLBEntry29,
+TLBEntry30,
+TLBEntry31,
+TLBEntry32,
+TLBEntry33,
+TLBEntry34,
+TLBEntry35,
+TLBEntry36,
+TLBEntry37,
+TLBEntry38,
+TLBEntry39,
+TLBEntry40,
+TLBEntry41,
+TLBEntry42,
+TLBEntry43,
+TLBEntry44,
+TLBEntry45,
+TLBEntry46,
+TLBEntry47,
+TLBEntry48,
+TLBEntry49,
+TLBEntry50,
+TLBEntry51,
+TLBEntry52,
+TLBEntry53,
+TLBEntry54,
+TLBEntry55,
+TLBEntry56,
+TLBEntry57,
+TLBEntry58,
+TLBEntry59,
+TLBEntry60,
+TLBEntry61,
+TLBEntry62,
+TLBEntry63
 ]
 
 register (bit[32])  CP0Compare
@@ -398,25 +510,13 @@ function bool tlbEntryMatch(r, vpn2, asid, (TLBEntry) entry) =
 function option<TLBIndexT> tlbSearch((bit[64]) VAddr) =
   let r    = (VAddr[63..62]) in
   let vpn2 = (VAddr[39..13]) in
-  let asid = TLBEntryHi.ASID in
-  if (tlbEntryMatch(r, vpn2, asid, TLBEntry00)) then
-    Some(0b000)
-  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry01)) then
-    Some(0b001)
-  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry02)) then
-    Some(0b010)
-  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry03)) then
-    Some(0b011)
-  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry04)) then
-    Some(0b100)
-  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry05)) then
-    Some(0b101)
-  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry06)) then
-    Some(0b110)
-  else if (tlbEntryMatch(r, vpn2, asid, TLBEntry07)) then
-    Some(0b111)
-  else
+  let asid = TLBEntryHi.ASID in {
+    foreach (idx from 0 to 63) {
+      if(tlbEntryMatch(r, vpn2, asid, (TLBEntries[idx]))) then
+        return (Some ((TLBIndexT) idx))
+    };
     None
+  }
 
 function (bit[64], bool) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessType) = {
   let idx = tlbSearch(vAddr) in
