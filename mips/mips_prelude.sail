@@ -538,6 +538,8 @@ function forall Nat 'r, 'r IN {1,2,4,8}.[:'r:] wordWidthBytes((WordType) w) =
     case D -> 8
   }
 
+(* This function checks that memory accesses are naturally aligned
+   -- it is disabled in favour of BERI specific behaviour below.
 function bool isAddressAligned(addr, (WordType) wordType) =
   switch (wordType) {
     case B -> true
@@ -545,6 +547,21 @@ function bool isAddressAligned(addr, (WordType) wordType) =
     case W -> (addr[1..0] == 0b00)
     case D -> (addr[2..0] == 0b000)
   }
+*)
+
+(* BERI relaxes the natural alignment requirement for loads and stores
+   but still throws an exception if an access spans a cache line
+   boundary.  Here we assume this is 32 bytes so that we don't have to
+   worry about clearing multiple tags when an access spans more than
+   one capability. Capability load/stores are still naturally
+   aligned. Provided this is a factor of smallest supported page size
+   (4k) we don't need to worry about accesses spanning page boundaries
+   either.
+*)
+let alignment_width = 32
+function (bool) isAddressAligned (addr, (WordType) wordType) =
+  let a = unsigned(addr) in
+  ((a quot alignment_width) == (a + wordWidthBytes(wordType) - 1) quot alignment_width)
 
 function forall Nat 'n. (bit[8 * 'n]) effect { rmem } MEMr_wrapper ((bit[64]) addr, ([:'n:]) size) =
     if (addr == 0x000000007f000000) then
