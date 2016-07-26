@@ -1244,7 +1244,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
           | Some 1 ->
             reg := Reg.add "nextPC" (Reg.find "delayedPC" !reg) !reg;
             reg := Reg.add "nextPCC" (Reg.find "delayedPCC" !reg) !reg;
-          | None   -> failwith "invalid value of inBranchDelay");
+          | _ -> failwith "invalid value of inBranchDelay");
           let opcode = Opcode (get_opcode pc) in
           let (instruction,istate) = match Interp_inter_imp.decode_to_istate context None opcode with
             | Instr(instruction,istate) ->
