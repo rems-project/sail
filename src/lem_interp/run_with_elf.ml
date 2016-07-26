@@ -784,9 +784,11 @@ let break_point = ref false
 let break_instr = ref 0
 let max_cut_off = ref false
 let max_instr = ref 0
+let raw_file = ref ""
+let raw_at   = ref 0
 
 let args = [
-  ("--file", Arg.Set_string file, "filename binary code to load in memory");
+  ("--file", Arg.Set_string file, "filename of elf binary to load in memory");
   ("--quiet", Arg.Clear Run_interp_model.interact_print, "do not display per-instruction actions");
   ("--silent", Arg.Tuple [Arg.Clear Run_interp_model.error_print;
                           Arg.Clear Run_interp_model.interact_print;
@@ -796,6 +798,8 @@ let args = [
   ("--interactive", Arg.Clear eager_eval , "interactive execution");
   ("--breakpoint", Arg.Int (fun i -> break_point := true; break_instr:= i), "run to instruction number i, then run interactively");
   ("--max_instruction", Arg.Int (fun i -> max_cut_off := true; max_instr := i), "only run i instructions, then stop");
+  ("--raw", Arg.Set_string raw_file, "filename of raw file to load in memory");
+  ("--at", Arg.Set_int raw_at, "address to load raw file in memory");
 ]
 
 let time_it action arg =
@@ -1068,7 +1072,18 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
       fde_loop (count + 1) context model mode track_dependencies addr_trans
     end
   end
-  
+
+let rec load_raw_file' mem addr chan =
+  let byte = input_byte chan in
+  (add_mem byte addr mem;
+  load_raw_file' mem (Nat_big_num.succ addr) chan)
+
+let rec load_raw_file mem addr chan =
+  try 
+    load_raw_file' mem addr chan
+   with
+  | End_of_file -> ()
+
 let run () =
   Arg.parse args (fun _ -> raise (Arg.Bad "anonymous parameter")) "" ;
   if !file = "" then begin
@@ -1090,6 +1105,8 @@ let run () =
           endian mode, and translate function name 
   *)
   let addr_trans = translate_address context E_big_endian "TranslateAddress" in
+  if String.length(!raw_file) != 0 then
+    load_raw_file prog_mem (Nat_big_num.of_int !raw_at) (open_in_bin !raw_file);
   reg := Reg.add "PC" (register_value_of_address startaddr_internal model_reg_d ) !reg;
   (* entry point: unit -> unit fde *)
   let name = Filename.basename !file in
