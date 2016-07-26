@@ -162,7 +162,8 @@ let reg_start_pos reg =
       end in
       let start_from_reg targs = match targs with
         | T_args [T_arg_typ (T_app "vector" targs)] -> start_from_vec targs
-        | _ -> Assert_extra.failwith "register not of vector"
+        | T_args [T_arg_typ (T_abbrev _ (T_app "vector" targs))] -> start_from_vec targs               
+        | _ -> Assert_extra.failwith "register not of type vector"
       end in
       let start_from_abbrev t = match t with
         | T_app "vector" targs -> start_from_vec targs
@@ -187,6 +188,7 @@ let reg_size reg =
       end in
       let end_from_reg targs = match targs with
         | T_args [T_arg_typ (T_app "vector" targs)] -> end_from_vec targs
+        | T_args [T_arg_typ (T_abbrev _ (T_app "vector" targs))] -> end_from_vec targs
         | _ -> Assert_extra.failwith "register does not contain vector"                                          
       end in
       let end_from_abbrev t = match t with
