@@ -25,6 +25,7 @@ let data_mem = (ref Mem.empty : (memory_byte Run_interp_model.Mem.t) ref) ;;
 let prog_mem = (ref Mem.empty : (memory_byte Run_interp_model.Mem.t) ref) ;;
 let tag_mem  = (ref Mem.empty : (memory_byte Run_interp_model.Mem.t) ref);;
 let reg = ref Reg.empty ;;
+let input_buf = (ref [] : int list ref);;
 
 let add_mem byte addr mem =
   assert(byte >= 0 && byte < 256);
@@ -519,6 +520,11 @@ let mips_register_data_all =  [
   ("TLBEntry05" ,(D_decreasing, 117, 116));
   ("TLBEntry06" ,(D_decreasing, 117, 116));
   ("TLBEntry07" ,(D_decreasing, 117, 116));
+
+  ("UART_WDATA" ,(D_decreasing, 8, 7));
+  ("UART_RDATA" ,(D_decreasing, 8, 7));
+  ("UART_WRITTEN" ,(D_decreasing, 1, 0));
+  ("UART_RVALID" ,(D_decreasing, 1, 0));
 ]
 
 let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
@@ -1060,6 +1066,38 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
                 reg := my_reg;
                 prog_mem := my_mem;
                 tag_mem := my_tags;
+                
+                (try
+                  let (pending, _, _)  = (Unix.select [(Unix.stdin)] [] [] 0.0) in
+                  (if (pending != []) then
+                    let char = (input_byte stdin) in (
+                    errorf "Input %x\n" char;
+                    input_buf := (!input_buf) @ [char]));
+                with
+                | _ -> ());
+
+                let uart_rvalid = option_int_of_reg "UART_RVALID" in
+                (match uart_rvalid with
+                | Some 0 ->
+                  (match !input_buf with
+                  | x :: xs -> (
+                      reg := Reg.add "UART_RDATA" (register_value_of_integer 8 7 Interp_interface.D_decreasing (Nat_big_num.of_int x)) !reg;
+                      reg := Reg.add "UART_RVALID" (register_value_of_integer 1 0 Interp_interface.D_decreasing (Nat_big_num.of_int 1)) !reg;
+                      input_buf := xs;
+                    )
+                  | [] -> ())
+                | _-> ());
+
+                let uart_written = option_int_of_reg "UART_WRITTEN" in
+                (match uart_written with 
+                | Some 1 ->
+                  (let uart_data = option_int_of_reg "UART_WDATA" in
+                  match uart_data with
+                  | Some b -> (printf "%c" (Char.chr b); printf "%!")
+                  | None   -> (errorf "UART_WDATA was undef" ; exit 1))
+                | _      -> ());
+                reg := Reg.add "UART_WRITTEN" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
+                
                 reg := Reg.add "inBranchDelay" (Reg.find "branchPending" !reg) !reg;
                 reg := Reg.add "branchPending" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
                 reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
@@ -1112,5 +1150,11 @@ let run () =
   let name = Filename.basename !file in
   let t = time_it (fun () -> fde_loop 0 context isa_model (Some Run) (ref false)  addr_trans) () in
   resultf "Execution time for file %s: %f seconds\n" name t;;
+
+(* Turn off line-buffering of standard input to allow responsive console input *)
+if Unix.isatty (Unix.stdin) then begin
+  let tattrs = Unix.tcgetattr (Unix.stdin) in
+  Unix.tcsetattr (Unix.stdin) (Unix.TCSANOW) ({tattrs with c_icanon=false})
+end ;;
 
 run () ;;

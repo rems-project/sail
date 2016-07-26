@@ -221,6 +221,13 @@ let (vector <0, 32, inc, (register<(bit[64])>) >) GPR =
   GPR21, GPR22, GPR23, GPR24, GPR25, GPR26, GPR27, GPR28, GPR29, GPR30, GPR31
   ]
 
+(* JTAG Uart registers *)
+
+register (bit[8]) UART_WDATA
+register (bit[1]) UART_WRITTEN
+register (bit[8]) UART_RDATA
+register (bit[1]) UART_RVALID
+
 (* Check whether a given 64-bit vector is a properly sign extended 32-bit word *)
 val bit[64] -> bool effect pure NotWordVal
 function bool NotWordVal (word) = 
@@ -539,3 +546,16 @@ function bool isAddressAligned(addr, (WordType) wordType) =
     case D -> (addr[2..0] == 0b000)
   }
 
+function forall Nat 'n. (bit[8 * 'n]) effect { rmem } MEMr_wrapper ((bit[64]) addr, ([:'n:]) size) =
+    if (addr == 0x000000007f000000) then
+      {
+        let rvalid = (bit[1]) UART_RVALID in
+        {
+          UART_RVALID := [bitzero];
+          mask(0x00000000 : UART_RDATA : [rvalid] : 0b0000000 : 0x0000)
+        }
+      }
+    else if (addr == 0x000000007f000004) then
+      mask(0x000000000004ffff) (* Always plenty of write space available and jtag activity *)
+    else
+      MEMr(addr, size)

@@ -1118,7 +1118,7 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
                   MEMr_reserve(pAddr, wordWidthBytes(width));
                 }
               else
-                MEMr(pAddr, wordWidthBytes(width));
+                MEMr_wrapper(pAddr, wordWidthBytes(width));
             if (signed) then
               wGPR(rt) := EXTS(memResult)
             else
@@ -1185,7 +1185,7 @@ function clause execute(LWL(base, rt, offset)) =
         (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, W);
         let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
-            mem_val   := MEMr (pAddr[63..2] : 0b00, 4); (* read word of interest *)
+            mem_val   := MEMr_wrapper (pAddr[63..2] : 0b00, 4); (* read word of interest *)
             reg_val   := rGPR(rt);
             wGPR(rt)  := EXTS(switch(vAddr[1..0])
               {
@@ -1205,7 +1205,7 @@ function clause execute(LWR(base, rt, offset)) =
         (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, W);
         let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
-            mem_val   := MEMr (pAddr[63..2] : 0b00, 4); (* read word of interest *)
+            mem_val   := MEMr_wrapper (pAddr[63..2] : 0b00, 4); (* read word of interest *)
             reg_val   := rGPR(rt);
             wGPR(rt)  := EXTS(switch(vAddr[1..0]) (* it is acceptable to sign extend in all cases *)
               {
@@ -1269,7 +1269,7 @@ function clause execute(LDL(base, rt, offset)) =
     (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, D);
     let pAddr = (TLBTranslate(vAddr, StoreData)) in
       {
-        mem_val   := MEMr (pAddr[63..3] : 0b000, 8); (* read double of interest *)
+        mem_val   := MEMr_wrapper (pAddr[63..3] : 0b000, 8); (* read double of interest *)
         reg_val   := rGPR(rt);
         wGPR(rt)  := switch(vAddr[2..0])
               {
@@ -1295,7 +1295,7 @@ function clause execute(LDR(base, rt, offset)) =
     (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, D);
     let pAddr = (TLBTranslate(vAddr, StoreData)) in
       {
-        mem_val   := MEMr (pAddr[63..3] : 0b000, 8); (* read double of interest *)
+        mem_val   := MEMr_wrapper (pAddr[63..3] : 0b000, 8); (* read double of interest *)
         reg_val   := rGPR(rt);
         wGPR(rt)  := switch(vAddr[2..0])
               {

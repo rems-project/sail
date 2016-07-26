@@ -35,7 +35,15 @@
 (* mips_wrappers.sail: wrappers functions and hooks for CHERI extensibility 
    (mostly identity functions here) *)
 
-function unit effect {wmem} MEMw_wrapper(addr, size, data) = MEMw(addr, size, data)
+function unit effect {wmem} MEMw_wrapper(addr, size, data) = 
+    if (addr == 0x000000007f000000) then
+      {
+        UART_WDATA   := data[31..24];
+        UART_WRITTEN := 1;
+      }
+    else
+      MEMw(addr, size, data)
+
 function bool effect {wmem} MEMw_conditional_wrapper(addr, size, data) =
   MEMw_conditional(addr, size, data)
 

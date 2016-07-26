@@ -431,6 +431,12 @@ function bool MEMw_tagged_conditional((bit[64]) addr, (bool) tag, (bit[cap_size_
 }
 
 function unit effect {wmem} MEMw_wrapper(addr, size, data) =
+  if (addr == 0x000000007f000000) then
+  {
+    UART_WDATA   := data[31..24];
+    UART_WRITTEN := 1;
+  }
+  else
   {
     (* On cheri non-capability writes must clear the corresponding tag*)
     TAGw((addr[63..5] : 0b00000), 0x00);
