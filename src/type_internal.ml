@@ -3176,8 +3176,6 @@ and conforms_to_e loosely spec actual =
   When considering two atom type applications, will expand into a range encompasing both when widen is true
 *)
 let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 = 
-  (*let _ = Printf.eprintf "type_consistent_internal called with, widen? %b, %s and %s\n" 
-    widen (t_to_string t1) (t_to_string t2) in*)
   let l = get_c_loc co in
   let t1,cs1' = get_abbrev d_env t1 in
   let t2,cs2' = get_abbrev d_env t2 in
@@ -3185,6 +3183,8 @@ let rec type_consistent_internal co d_env enforce widen t1 cs1 t2 cs2 =
   let csp = cs1@cs2 in
   let t1_actual = match t1.t with | Tabbrev(_,t1) -> t1 | _ -> t1 in
   let t2_actual = match t2.t with | Tabbrev(_,t2) -> t2 | _ -> t2 in
+(*  let _ = Printf.eprintf "type_consistent_internal called with, widen? %b, %s with actual %s and %s with actual %s\n" 
+    widen (t_to_string t1) (t_to_string t1_actual) (t_to_string t2) (t_to_string t2_actual) in*)
   match t1_actual.t,t2_actual.t with
   | Tvar v1,Tvar v2 -> 
     if v1 = v2 then (t2,csp) 
@@ -3271,8 +3271,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
   let t2_actual = match t2.t with | Tabbrev(_,t2) -> t2 | _ -> t2 in
   let cs1,cs2 = cs1@cs1',cs2@cs2' in
   let csp = cs1@cs2 in
-  (*let _ = Printf.eprintf "called type_coerce_internal is_explicit %b, widen %b, turning %s into %s\n" 
-    is_explicit widen (t_to_string t1) (t_to_string t2) in*)
+  (*let _ = Printf.eprintf "called type_coerce_internal is_explicit %b, widen %b, turning %s with actual %s into %s with actual %s\n" 
+    is_explicit widen (t_to_string t1) (t_to_string t1_actual) (t_to_string t2) (t_to_string t2_actual) in*)
   match t1_actual.t,t2_actual.t with
   | Toptions(to1,Some to2),_ -> 
     if (conforms_to_t d_env false true to1 t2_actual || conforms_to_t d_env false true to2 t2_actual)

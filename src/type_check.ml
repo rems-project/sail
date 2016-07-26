@@ -482,6 +482,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
   : (tannot exp * t * tannot emap * nexp_range list * bounds_env * effect) =
   let Env(d_env,t_env,b_env,tp_env) = envs in
   let expect_t,_ = get_abbrev d_env expect_t in
+  let expect_t_actual = match expect_t.t with | Tabbrev(_,t) -> t | _ -> expect_t in
   let ret_t,_ = get_abbrev d_env ret_t in
   let rebuild annot = E_aux(e,(l,annot)) in
   match e with
@@ -527,15 +528,13 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
         in
         let t,cs' = get_abbrev d_env t in
         let cs = cs@cs' in
-        let t_actual,expect_actual = match t.t,expect_t.t with
-          | Tabbrev(_,t),Tabbrev(_,e) -> t,e
-          | Tabbrev(_,t),_ -> t,expect_t 
-          | _,Tabbrev(_,e) -> t,e
-          | _,_ -> t,expect_t in
+        let t_actual = match t.t with
+          | Tabbrev(_,t) -> t 
+          | _ -> t in
         (*let _ = Printf.eprintf "On general id check of %s, expect_t %s, t %s, tactual %s, expect_actual %s\n"
             (id_to_string id)
-            (t_to_string expect_t) (t_to_string t) (t_to_string t_actual) (t_to_string expect_actual) in*)
-        (match t_actual.t,expect_actual.t with 
+            (t_to_string expect_t) (t_to_string t) (t_to_string t_actual) (t_to_string expect_t_actual) in*)
+        (match t_actual.t,expect_t_actual.t with 
          | Tfn _,_ -> typ_error l
                         ("Identifier " ^ (id_to_string id) ^ " is bound to a function and cannot be used as a value")
          | Tapp("register",[TA_typ(t')]),Tapp("register",[TA_typ(expect_t')]) -> 
@@ -549,18 +548,18 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
                              (if is_alias then tag else (if tag = Emp_local then tag else Emp_global)),
                              cs,pure_e,pure_e,bounds) in
            let _,cs',ef',e' =
-             type_coerce (Expr l) d_env Require false widen_vec b_env t' (rebuild tannot) expect_actual in
+             type_coerce (Expr l) d_env Require false widen_vec b_env t' (rebuild tannot) expect_t_actual in
            (e',t,t_env,cs@cs',bounds,ef')
          | Tapp("register",[TA_typ(t')]),_ ->
            let ef' = add_effect (BE_aux(BE_rreg,l)) ef in
            let tannot = Base(([],t),(if is_alias then tag else External (Some i)),cs,ef',ef',bounds) in
            let t',cs',_,e' =
-             type_coerce (Expr l) d_env Require false widen_vec b_env t' (rebuild tannot) expect_actual in
+             type_coerce (Expr l) d_env Require false widen_vec b_env t' (rebuild tannot) expect_t_actual in
            (e',t',t_env,cs@cs',bounds,ef')
          | Tapp("reg",[TA_typ(t')]),_ ->
            let tannot = cons_bs_annot t cs bounds in
            let t',cs',_,e' =
-             type_coerce (Expr l) d_env Require false widen_num b_env t' (rebuild tannot) expect_actual in
+             type_coerce (Expr l) d_env Require false widen_num b_env t' (rebuild tannot) expect_t_actual in
            (e',t',t_env,cs@cs',bounds,pure_e)
         | _ -> 
           let t',cs',ef',e' = type_coerce (Expr l) d_env Require false widen_num b_env
@@ -572,18 +571,18 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
       let e,cs,effect = (match lit with
         | L_unit  -> (rebuild (simple_annot unit_t)),[],pure_e
         | L_zero  -> 
-          (match expect_t.t with
+          (match expect_t_actual.t with
           | Tid "bool" -> simp_exp (E_lit(L_aux(L_zero,l'))) l bool_t,[],pure_e
           | _ -> simp_exp e l bit_t,[],pure_e)
         | L_one   -> 
-          (match expect_t.t with
+          (match expect_t_actual.t with
           | Tid "bool" -> simp_exp (E_lit(L_aux(L_one,l'))) l bool_t,[],pure_e
           | _ -> simp_exp e l bit_t,[],pure_e)
         | L_true  -> simp_exp e l bool_t,[],pure_e
         | L_false -> simp_exp e l bool_t,[],pure_e
         | L_num i -> 
-          (*let _ = Printf.eprintf "expected type of number literal %i is %s\n" i (t_to_string expect_t) in*)
-          (match expect_t.t with
+          (*let _ = Printf.eprintf "expected type of number literal %i is %s\n" i (t_to_string expect_t_actual) in*)
+          (match expect_t_actual.t with
           | Tid "bit" | Toptions({t=Tid"bit"},_) -> 
             if i = 0 then simp_exp (E_lit(L_aux(L_zero,l'))) l bit_t,[],pure_e
             else if i = 1 then simp_exp (E_lit(L_aux(L_one,l'))) l bit_t,[],pure_e
@@ -622,7 +621,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
         | L_string s -> simp_exp e l {t = Tid "string"},[],pure_e
         | L_undef -> 
           let ef = {effect=Eset[BE_aux(BE_undef,l)]} in
-          (match expect_t.t with
+          (match expect_t_actual.t with
             | Tapp ("vector",[TA_nexp base;TA_nexp rise;TA_ord o;(TA_typ {t=Tid "bit"})]) 
             | Toptions({t = Tapp ("vector",[TA_nexp base;TA_nexp rise;TA_ord o;(TA_typ {t=Tid "bit"})])}, None) ->
               let f = match o.order with | Oinc -> "to_vec_inc_undef" | Odec -> "to_vec_dec_undef" 
@@ -852,7 +851,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
                            ^ (t_to_string arg_t) ^ " -> " ^ (t_to_string expect_t) ^ ". A cast may be required")))
       | _ -> typ_error l ("Unbound infix function " ^ i))
     | E_tuple(exps) ->
-      (match expect_t.t with
+      (match expect_t_actual.t with
       | Ttup ts ->
         let tl = List.length ts in
         let el = List.length exps in
@@ -885,8 +884,10 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
       let (c1,c1p,c1n) = split_conditional_constraints c1 in
       (match expect_t.t with
       | Tuvar _ -> 
-        let then',then_t,then_env,then_c,then_bs,then_ef = check_exp envs imp_param true true ret_t (new_t ()) then_ in
-        let else',else_t,else_env,else_c,else_bs,else_ef = check_exp envs imp_param true true ret_t (new_t ()) else_ in
+        let then',then_t,then_env,then_c,then_bs,then_ef =
+          check_exp envs imp_param true true ret_t (new_t ()) then_ in
+        let else',else_t,else_env,else_c,else_bs,else_ef =
+          check_exp envs imp_param true true ret_t (new_t ()) else_ in
         (*TOTHINK Possibly I should first consistency check else and then, with Guarantee,
           then check against expect_t with Require*)
         let then_t',then_c' = type_consistent (Expr l) d_env Require true then_t expect_t in
@@ -937,7 +938,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
        Envmap.empty,
        b_c@from_c@to_c@step_c@local_cs,nob,sub_effects)
     | E_vector(es) ->
-      let item_t,ord = match expect_t.t with
+      let item_t,ord = match expect_t_actual.t with
         | Tapp("vector",[base;rise;TA_ord ord;TA_typ item_t]) -> item_t,ord
         | _ -> new_t (),d_env.default_o in
       let es,cs,effect,item_t = (List.fold_right 
@@ -957,7 +958,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
           (E_aux(E_vector es,(l,simple_annot_efr t effect))) expect_t in
       (e',t',t_env,cs@cs',nob,union_effects effect ef')
     | E_vector_indexed(eis,(Def_val_aux(default,(ld,annot)))) ->
-      let item_t,base_n,rise_n = match expect_t.t with
+      let item_t,base_n,rise_n = match expect_t_actual.t with
         | Tapp("vector",[TA_nexp base;TA_nexp rise;ord;TA_typ item_t]) -> item_t,base,rise
         | _ -> new_t (),new_n (), new_n () in
       let first,last = fst (List.hd eis), fst (List.hd (List.rev eis)) in
@@ -1037,7 +1038,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
       let new_length = new_n() in
       let n1_start = new_n() in
       let n2_end = new_n() in
-      let item_t = match expect_t.t with
+      let item_t = match expect_t_actual.t with
         | Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord_n; TA_typ item_t]) -> item_t
         | _ -> new_t() in
       let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp length;TA_ord ord;TA_typ item_t])} in
@@ -1078,7 +1079,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
     | E_vector_update(vec,i,e) ->
       let base,rise,ord = new_n(),new_n(),new_o() in
       let min,m_rise = new_n(),new_n() in
-      let item_t = match expect_t.t with
+      let item_t = match expect_t_actual.t with
         | Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord_n; TA_typ item_t]) -> item_t
         | _ -> new_t() in
       let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t])} in
@@ -1108,7 +1109,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
       let base,rise,ord = new_n(),new_n(),new_o() in
       let min1,m_rise1 = new_n(),new_n() in
       let min2,m_rise2 = new_n(),new_n() in
-      let item_t = match expect_t.t with
+      let item_t = match expect_t_actual.t with
         | Tapp("vector",[TA_nexp base_n;TA_nexp rise_n; TA_ord ord_n; TA_typ item_t]) -> item_t
         | _ -> new_t() in
       let vt = {t=Tapp("vector",[TA_nexp base;TA_nexp rise;TA_ord ord;TA_typ item_t])} in
@@ -1151,7 +1152,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
           (E_aux(E_vector_update_subrange(vec',i1',i2',e'),(l,constrained_annot_efr  nt cs_loc sub_effects))) expect_t in
       (e',t,t_env,cs3@cs@cs_i1@cs_i2@cs_loc@cs_e,nob,(union_effects ef3 sub_effects))
     | E_vector_append(v1,v2) -> 
-      let item_t,ord = match expect_t.t with
+      let item_t,ord = match expect_t_actual.t with
         | Tapp("vector",[_;_;TA_ord o;TA_typ i]) -> i,o
         | Tapp("range",_) -> bit_t,new_o ()
         | Tapp("atom",_) -> bit_t, new_o ()
@@ -1173,7 +1174,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
           (E_aux(E_vector_append(v1',v2'),(l,simple_annot_efr ti sub_effects))) expect_t in
       (e',t,t_env,cs_1@cs_2,nob,(union_effects ef_c sub_effects))
     | E_list(es) ->
-      let item_t = match expect_t.t with
+      let item_t = match expect_t_actual.t with
         | Tapp("list",[TA_typ i]) -> i
         | _ -> new_t() in
       let es,cs,effect,item_t = 
@@ -1184,7 +1185,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
         (E_aux(E_list es,(l,simple_annot_efr t effect))) expect_t in
       (e',t',t_env,cs@cs',nob,union_effects ef' effect)
     | E_cons(i, ls) ->
-      let item_t = match expect_t.t with
+      let item_t = match expect_t_actual.t with
         | Tapp("list",[TA_typ i]) -> i
         | _ -> new_t() in
       let lt = {t=Tapp("list",[TA_typ item_t])} in
