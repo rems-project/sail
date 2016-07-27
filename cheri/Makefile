@@ -14,7 +14,7 @@ extract: cheri_insts.sail
 	$(call EXTRACT_INST,CSetOffset)
 	$(call EXTRACT_INST,CSetBounds)
 	$(call EXTRACT_INST,CClearTag)
-	$(call EXTRACT_INST,CClearRegs)
+	$(call EXTRACT_INST,ClearRegs)
 	$(call EXTRACT_INST,CFromPtr)
 	$(call EXTRACT_INST,CCheckPerm)
 	$(call EXTRACT_INST,CCheckType)
