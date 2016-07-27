@@ -407,6 +407,8 @@ function clause execute (CCheckPerm(cs, rt)) =
     exit (raise_c2_exception(CapEx_TagViolation, cs))
   else if ((cs_perms & rt_perms) != rt_perms) then
     exit (raise_c2_exception(CapEx_UserDefViolation, cs))
+  else
+    ()
   (* END_CCheckPerm *)
 }
 
