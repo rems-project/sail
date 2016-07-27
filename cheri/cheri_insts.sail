@@ -511,9 +511,9 @@ union ast member (regno, regno) CCall
 function clause decode (0b010010 : 0b00101 : (regno) cs : (regno) cb : (bit[11]) selector) = Some(CCall(cs, cb))
 function clause execute (CCall(cs, cb)) =
 {
+  (* Partial implementation of CCall with checks in hardware, but raising a trap to perform trusted stack manipulation *)
   (* START_CCall *)
   checkCP2usable();
-  (* Partial implementation of CCall with checks in hardware, but raising a trap to perform trusted stack manipulation *)
   cs_val := readCapReg(cs);
   cb_val := readCapReg(cb);
   if (register_inaccessible(cs)) then
