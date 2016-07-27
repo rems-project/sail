@@ -219,7 +219,7 @@ function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) c
 
 function clause execute(CPtrCmp(rd, cb, ct, op)) = 
 {
-  (* START_CPtrCMP *)
+  (* START_CPtrCmp *)
   checkCP2usable();
   if (register_inaccessible(cb)) then
     exit (raise_c2_exception_v(cb))
@@ -258,7 +258,7 @@ function clause execute(CPtrCmp(rd, cb, ct, op)) =
         case CEXEQ -> [cb_val == ct_val]
       })
     }
-  (* END_CPtrCMP *)
+  (* END_CPtrCmp *)
 }
 
 union ast member regregreg CIncOffset
