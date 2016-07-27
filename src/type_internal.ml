@@ -2576,6 +2576,8 @@ let initial_typ_env =
     mk_bitwise_op  "bitwise_or" "|" 2;
     mk_bitwise_op  "bitwise_xor" "^" 2;
     mk_bitwise_op  "bitwise_and" "&" 2;
+    ("not",
+     Base(([], mk_pure_fun bit_t bit_t), External (Some "bitwise_not_bit"), [],pure_e,pure_e,nob));
     ("^^",
      Overload(
        Base((mk_nat_params["n";"o";"p"]@[("a",{k=K_Typ})],
