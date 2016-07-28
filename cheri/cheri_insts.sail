@@ -434,6 +434,8 @@ function clause execute (CCheckType(cs, cb)) =
     exit (raise_c2_exception(CapEx_SealViolation, cb))
   else if ((cs_val.otype) != (cb_val.otype)) then
     exit (raise_c2_exception(CapEx_TypeViolation, cs))
+  else
+    ()
   (* END_CCheckType *)
 }
 
