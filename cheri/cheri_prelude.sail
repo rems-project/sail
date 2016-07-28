@@ -342,7 +342,7 @@ typedef CapCauseReg = register bits [15:0] {
 
 register CapCauseReg CapCause
 
-function unit SignalException ((Exception) ex) = 
+function forall Type 'o . 'o SignalException ((Exception) ex) = 
   {
     C31        := PCC;
     C31.offset := PC;
@@ -359,7 +359,7 @@ function unit ERETHook() =
                           that non-capability branches don't override PCC *)
   }
 
-function unit raise_c2_exception8((CapEx) capEx, (bit[8]) regnum) =
+function forall Type 'o . 'o raise_c2_exception8((CapEx) capEx, (bit[8]) regnum) =
   {
     (CapCause.ExcCode) := CapExCode(capEx);
     (CapCause.RegNum)  := regnum;
@@ -369,10 +369,10 @@ function unit raise_c2_exception8((CapEx) capEx, (bit[8]) regnum) =
     SignalException(mipsEx);
   }
 
-function unit raise_c2_exception((CapEx) capEx, (regno) regnum) =
+function forall Type 'o . 'o raise_c2_exception((CapEx) capEx, (regno) regnum) =
   raise_c2_exception8(capEx, 0b000 : regnum)
 
-function unit raise_c2_exception_v((regno) regnum) =
+function forall Type 'o . 'o raise_c2_exception_v((regno) regnum) =
   switch(regnum) {
    case 0b11011 -> raise_c2_exception(CapEx_AccessKR1CViolation, regnum)
    case 0b11100 -> raise_c2_exception(CapEx_AccessKR2CViolation, regnum)
@@ -382,7 +382,7 @@ function unit raise_c2_exception_v((regno) regnum) =
    case _       -> assert(false, Some("should only call for cap reg violation"))
   }
 
-function unit raise_c2_exception_noreg((CapEx) capEx) =
+function forall Type 'o . 'o raise_c2_exception_noreg((CapEx) capEx) =
   raise_c2_exception8(capEx, 0xff)
 
 function bool register_inaccessible((regno) r) = 
@@ -457,22 +457,22 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
     capno := 0b00000;
     cap := readCapReg(capno);
     if (~(cap.tag)) then
-      exit (raise_c2_exception(CapEx_TagViolation, capno))
+      (raise_c2_exception(CapEx_TagViolation, capno))
     else if (cap.sealed) then
-      exit (raise_c2_exception(CapEx_SealViolation, capno));
+      (raise_c2_exception(CapEx_SealViolation, capno));
     switch (accessType) {
-      case Instruction -> if (~(cap.permit_execute)) then exit (raise_c2_exception(CapEx_PermitExecuteViolation, capno))
-      case LoadData    -> if (~(cap.permit_load)) then exit (raise_c2_exception(CapEx_PermitLoadViolation, capno))
-      case StoreData   -> if (~(cap.permit_store)) then exit (raise_c2_exception(CapEx_PermitStoreViolation, capno))
+      case Instruction -> if (~(cap.permit_execute)) then (raise_c2_exception(CapEx_PermitExecuteViolation, capno))
+      case LoadData    -> if (~(cap.permit_load)) then (raise_c2_exception(CapEx_PermitLoadViolation, capno))
+      case StoreData   -> if (~(cap.permit_store)) then (raise_c2_exception(CapEx_PermitStoreViolation, capno))
     };
     cursor := getCapCursor(cap);
     vAddr  := cursor + unsigned(addr);
     vAddr64:= (bit[64]) vAddr;
     size   := wordWidthBytes(width);
     if ((vAddr + size) > ((nat) (cap.base) + ((nat) (cap.length)))) then
-      exit (raise_c2_exception(CapEx_LengthViolation, capno))
+      (raise_c2_exception(CapEx_LengthViolation, capno))
     else if (vAddr < ((nat) (cap.base))) then
-      exit (raise_c2_exception(CapEx_LengthViolation, capno));
+      (raise_c2_exception(CapEx_LengthViolation, capno));
     vAddr64;
   }
 
@@ -482,9 +482,9 @@ function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType
   let (bit[64])  length = PCC.length in
   let (bit[64])  absPC = (base + vAddr) in
   if (absPC[1..0] != 0b00) then (* bad PC alignment *)
-    exit (SignalExceptionBadAddr(AdEL, absPC))
+    (SignalExceptionBadAddr(AdEL, absPC))
   else if ((unsigned(vAddr) + 4) > unsigned(length)) then
-    exit (raise_c2_exception_noreg(CapEx_LengthViolation))
+    (raise_c2_exception_noreg(CapEx_LengthViolation))
   else
     TLBTranslate(absPC, accessType)
 }
@@ -494,7 +494,7 @@ function unit checkCP2usable () =
         if (~((CP0Status.CU)[2])) then
           {
             (CP0Cause.CE) := 0b10;
-            exit (SignalException(CpU));
+            (SignalException(CpU));
           }
       }
 

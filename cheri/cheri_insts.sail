@@ -49,7 +49,7 @@ function clause execute (CGetX(op, rd, cb)) =
   (* START_CGetX *)
   checkCP2usable();
   if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else
     {
       cbval    := CapRegs[cb];
@@ -73,7 +73,7 @@ function clause execute (CGetPCC(cd)) =
   (* START_CGetPCC *)
   checkCP2usable();
   if (register_inaccessible(cd)) then
-    exit (raise_c2_exception_v(cd))
+    raise_c2_exception_v(cd)
   else
     let pcc = (capRegToCapStruct(PCC)) in
     writeCapReg(cd, {pcc with offset = PC})
@@ -87,7 +87,7 @@ function clause execute (CGetPCCSetOffset(cd, rs)) =
   (* START_CGetPCCSetOffset *)
   checkCP2usable();
   if (register_inaccessible(cd)) then
-    exit (raise_c2_exception_v(cd))
+    raise_c2_exception_v(cd)
   else
     let pcc = (capRegToCapStruct(PCC)) in
     let rs_val = rGPR(rs) in
@@ -104,7 +104,7 @@ function clause execute (CGetCause(rd)) =
   (* START_CGetCause *)
   checkCP2usable();
   if not (PCC.access_EPCC) then
-    exit (raise_c2_exception_noreg(CapEx_AccessEPCCViolation))
+    raise_c2_exception_noreg(CapEx_AccessEPCCViolation)
   else
     wGPR(rd) := EXTZ(CapCause)
   (* END_CGetCause *)
@@ -117,7 +117,7 @@ function clause execute (CSetCause((regno) rt)) =
   (* START_CSetCause *)
   checkCP2usable();
   if not (PCC.access_EPCC) then
-    exit (raise_c2_exception_noreg(CapEx_AccessEPCCViolation))
+    raise_c2_exception_noreg(CapEx_AccessEPCCViolation)
   else
     {
       (bit[64]) rt_val := rGPR(rt);
@@ -136,13 +136,13 @@ function clause execute(CAndPerm(cd, cb, rt)) =
   cb_val := readCapReg(cb);
   rt_val := rGPR(rt);
   if (register_inaccessible(cd)) then
-    exit (raise_c2_exception_v(cd))
+    raise_c2_exception_v(cd)
   else if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if not (cb_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cb))
+    raise_c2_exception(CapEx_TagViolation, cb)
   else if (cb_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cb))
+    raise_c2_exception(CapEx_SealViolation, cb)
   else
     writeCapReg(cd, {cb_val with 
       sw_perms               = (cb_val.sw_perms           & (rt_val[30..15]));
@@ -174,11 +174,11 @@ function clause execute(CToPtr(rd, cb, ct)) =
   ct_val := readCapReg(ct);
   cb_val := readCapReg(cb);
   if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if (register_inaccessible(ct)) then
-    exit (raise_c2_exception_v(ct))
+    raise_c2_exception_v(ct)
   else if not (ct_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, ct))
+    raise_c2_exception(CapEx_TagViolation, ct)
   else 
     {
       wGPR(rd) := if not (cb_val.tag) then
@@ -198,9 +198,9 @@ function clause execute(CSub(rd, cb, ct)) =
   ct_val := readCapReg(ct);
   cb_val := readCapReg(cb);
   if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if (register_inaccessible(ct)) then
-    exit (raise_c2_exception_v(ct))
+    raise_c2_exception_v(ct)
   else 
     {
       wGPR(rd) := (bit[64])(getCapCursor(cb_val) - getCapCursor(ct_val))
@@ -222,9 +222,9 @@ function clause execute(CPtrCmp(rd, cb, ct, op)) =
   (* START_CPtrCmp *)
   checkCP2usable();
   if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if (register_inaccessible(ct)) then
-    exit (raise_c2_exception_v(ct))
+    raise_c2_exception_v(ct)
   else 
     {
       cb_val := readCapReg(cb);
@@ -270,11 +270,11 @@ function clause execute (CIncOffset(cd, cb, rt)) =
   cb_val := readCapReg(cb);
   rt_val := rGPR(rt);
   if (register_inaccessible(cd)) then
-    exit (raise_c2_exception_v(cd))
+    raise_c2_exception_v(cd)
   else if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if ((cb_val.tag) & (cb_val.sealed) & (rt_val != 0x0000000000000000)) then
-    exit (raise_c2_exception(CapEx_SealViolation, cb))
+    raise_c2_exception(CapEx_SealViolation, cb)
   else
     writeCapReg(cd, {cb_val with offset=cb_val.offset+rt_val})
   (* END_CIncOffset *)
@@ -289,11 +289,11 @@ function clause execute (CSetOffset(cd, cb, rt)) =
   cb_val := readCapReg(cb);
   rt_val := rGPR(rt);
   if (register_inaccessible(cd)) then
-    exit (raise_c2_exception_v(cd))
+    raise_c2_exception_v(cd)
   else if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if ((cb_val.tag) & (cb_val.sealed)) then
-    exit (raise_c2_exception(CapEx_SealViolation, cb))
+    raise_c2_exception(CapEx_SealViolation, cb)
   else
     writeCapReg(cd, {cb_val with offset=rt_val})
   (* END_CSetOffset *)
@@ -309,17 +309,17 @@ function clause execute (CSetBounds(cd, cb, rt)) =
   (nat) rt_val := rGPR(rt);
   (nat) cursor := getCapCursor(cb_val);
   if (register_inaccessible(cd)) then
-    exit (raise_c2_exception_v(cd))
+    raise_c2_exception_v(cd)
   else if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if not (cb_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cb))
+    raise_c2_exception(CapEx_TagViolation, cb)
   else if (cb_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cb))
+    raise_c2_exception(CapEx_SealViolation, cb)
   else if (cursor < ((nat)(cb_val.base))) then
-    exit (raise_c2_exception(CapEx_LengthViolation, cb))
+    raise_c2_exception(CapEx_LengthViolation, cb)
   else if ((cursor + rt_val) > ((nat)(cb_val.base) + (nat)(cb_val.length))) then
-    exit (raise_c2_exception(CapEx_LengthViolation, cb))
+    raise_c2_exception(CapEx_LengthViolation, cb)
   else
     writeCapReg(cd, {cb_val with base=(bit[64])cursor; length=(bit[64])rt_val; offset=0})
   (* END_CSetBounds *)
@@ -332,9 +332,9 @@ function clause execute (CClearTag(cd, cb)) =
   (* START_CClearTag *)
   checkCP2usable();
   if (register_inaccessible(cd)) then
-    exit (raise_c2_exception_v(cd))
+    raise_c2_exception_v(cd)
   else if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else
     {
       cb_val := readCapReg(cb);
@@ -357,7 +357,7 @@ function clause execute (ClearRegs(regset, mask)) =
       foreach (i from 0 to 15)
         let r = ((bit[5]) (i+16)) in
         if (mask[i] & register_inaccessible(r)) then
-          exit (raise_c2_exception_v(r));
+          raise_c2_exception_v(r);
   foreach (i from 0 to 15)
     if (mask[i]) then
       switch (regset) {
@@ -378,15 +378,15 @@ function clause execute (CFromPtr(cd, cb, rt)) =
   cb_val := readCapReg(cb);
   rt_val := rGPR(rt);
   if (register_inaccessible(cd)) then
-    exit (raise_c2_exception_v(cd))
+    raise_c2_exception_v(cd)
   else if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if (rt == 0) then
     writeCapReg(cd, null_cap)
   else if not (cb_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cb))
+    raise_c2_exception(CapEx_TagViolation, cb)
   else if (cb_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cb))
+    raise_c2_exception(CapEx_SealViolation, cb)
   else
     writeCapReg(cd, {cb_val with offset = rt_val});
   (* END_CFromPtr *)
@@ -402,11 +402,11 @@ function clause execute (CCheckPerm(cs, rt)) =
   cs_perms := capPermsToVec(cs_val);
   rt_perms := (rGPR(rt))[30..0];
   if (register_inaccessible(cs)) then
-    exit (raise_c2_exception_v(cs))
+    raise_c2_exception_v(cs)
   else if not (cs_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cs))
+    raise_c2_exception(CapEx_TagViolation, cs)
   else if ((cs_perms & rt_perms) != rt_perms) then
-    exit (raise_c2_exception(CapEx_UserDefViolation, cs))
+    raise_c2_exception(CapEx_UserDefViolation, cs)
   else
     ()
   (* END_CCheckPerm *)
@@ -421,19 +421,19 @@ function clause execute (CCheckType(cs, cb)) =
   cs_val := readCapReg(cs);
   cb_val := readCapReg(cb);
   if (register_inaccessible(cs)) then
-    exit (raise_c2_exception_v(cs))
+    raise_c2_exception_v(cs)
   else if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if not (cs_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cs))
+    raise_c2_exception(CapEx_TagViolation, cs)
   else if not (cb_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cb))
+    raise_c2_exception(CapEx_TagViolation, cb)
   else if not (cs_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cs))
+    raise_c2_exception(CapEx_SealViolation, cs)
   else if not (cb_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cb))
+    raise_c2_exception(CapEx_SealViolation, cb)
   else if ((cs_val.otype) != (cb_val.otype)) then
-    exit (raise_c2_exception(CapEx_TypeViolation, cs))
+    raise_c2_exception(CapEx_TypeViolation, cs)
   else
     ()
   (* END_CCheckType *)
@@ -449,25 +449,25 @@ function clause execute (CSeal(cd, cs, ct)) =
   ct_val := readCapReg(ct);
   (nat) ct_cursor := ((nat)(ct_val.base) + (nat)(ct_val.offset));
   if (register_inaccessible(cd)) then
-    exit (raise_c2_exception_v(cd))
+    raise_c2_exception_v(cd)
   else if (register_inaccessible(cs)) then
-    exit (raise_c2_exception_v(cs))
+    raise_c2_exception_v(cs)
   else if (register_inaccessible(ct)) then
-    exit (raise_c2_exception_v(ct))
+    raise_c2_exception_v(ct)
   else if not (cs_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cs))
+    raise_c2_exception(CapEx_TagViolation, cs)
   else if not (ct_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, ct))
+    raise_c2_exception(CapEx_TagViolation, ct)
   else if (cs_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cs))
+    raise_c2_exception(CapEx_SealViolation, cs)
   else if (ct_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, ct))
+    raise_c2_exception(CapEx_SealViolation, ct)
   else if not (ct_val.permit_seal) then
-    exit (raise_c2_exception(CapEx_PermitSealViolation, ct))
+    raise_c2_exception(CapEx_PermitSealViolation, ct)
   else if ((nat)(ct_val.offset) >= (nat)(ct_val.length)) then
-    exit (raise_c2_exception(CapEx_LengthViolation, ct))
+    raise_c2_exception(CapEx_LengthViolation, ct)
   else if (ct_cursor > max_otype) then
-    exit (raise_c2_exception(CapEx_LengthViolation, ct))
+    raise_c2_exception(CapEx_LengthViolation, ct)
   else
     writeCapReg(cd, {cs_val with sealed=true; otype=((bit[24])ct_cursor)})
   (* END_CSeal *)
@@ -483,25 +483,25 @@ function clause execute (CUnseal(cd, cs, ct)) =
   ct_val := readCapReg(ct);
   (nat) ct_cursor := ((nat)(ct_val.base) + (nat)(ct_val.offset));
   if (register_inaccessible(cd)) then
-    exit (raise_c2_exception_v(cd))
+    raise_c2_exception_v(cd)
   else if (register_inaccessible(cs)) then
-    exit (raise_c2_exception_v(cs))
+    raise_c2_exception_v(cs)
   else if (register_inaccessible(ct)) then
-    exit (raise_c2_exception_v(ct))
+    raise_c2_exception_v(ct)
   else if not (cs_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cs))
+    raise_c2_exception(CapEx_TagViolation, cs)
   else if not (ct_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, ct))
+    raise_c2_exception(CapEx_TagViolation, ct)
   else if not (cs_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cs))
+    raise_c2_exception(CapEx_SealViolation, cs)
   else if (ct_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, ct))
+    raise_c2_exception(CapEx_SealViolation, ct)
   else if (ct_cursor != ((nat)(cs_val.otype))) then
-    exit (raise_c2_exception(CapEx_TypeViolation, ct))
+    raise_c2_exception(CapEx_TypeViolation, ct)
   else if not (ct_val.permit_seal) then
-    exit (raise_c2_exception(CapEx_PermitSealViolation, ct))
+    raise_c2_exception(CapEx_PermitSealViolation, ct)
   else if (unsigned(ct_val.offset) >= unsigned(ct_val.length)) then
-    exit (raise_c2_exception(CapEx_LengthViolation, ct))
+    raise_c2_exception(CapEx_LengthViolation, ct)
   else
     writeCapReg(cd, {cs_val with 
       sealed=false; 
@@ -521,27 +521,27 @@ function clause execute (CCall(cs, cb)) =
   cs_val := readCapReg(cs);
   cb_val := readCapReg(cb);
   if (register_inaccessible(cs)) then
-    exit (raise_c2_exception_v(cs))
+    raise_c2_exception_v(cs)
   else if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if not (cs_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cs))
+    raise_c2_exception(CapEx_TagViolation, cs)
   else if not (cb_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cb))
+    raise_c2_exception(CapEx_TagViolation, cb)
   else if not (cs_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cs))
+    raise_c2_exception(CapEx_SealViolation, cs)
   else if not (cb_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cb))
+    raise_c2_exception(CapEx_SealViolation, cb)
   else if ((cs_val.otype) != (cb_val.otype)) then
-    exit (raise_c2_exception(CapEx_TypeViolation, cs))
+    raise_c2_exception(CapEx_TypeViolation, cs)
   else if not (cs_val.permit_execute) then
-    exit (raise_c2_exception(CapEx_PermitExecuteViolation, cs))
+    raise_c2_exception(CapEx_PermitExecuteViolation, cs)
   else if (cb_val.permit_execute) then
-    exit (raise_c2_exception(CapEx_PermitExecuteViolation, cb))
+    raise_c2_exception(CapEx_PermitExecuteViolation, cb)
   else if (cs_val.offset >= cs_val.length) then
-    exit (raise_c2_exception(CapEx_LengthViolation, cs))
+    raise_c2_exception(CapEx_LengthViolation, cs)
   else
-    exit (raise_c2_exception(CapEx_CallTrap, cs));
+    raise_c2_exception(CapEx_CallTrap, cs);
   (* END_CCall *)
 }
 
@@ -551,7 +551,7 @@ function clause execute (CReturn) =
 {
   (* START_CReturn *)
   checkCP2usable();
-  exit (raise_c2_exception_noreg(CapEx_ReturnTrap))
+  raise_c2_exception_noreg(CapEx_ReturnTrap)
   (* END_CReturn *)
 }
 
@@ -564,7 +564,7 @@ function clause execute (CBX(cb, imm, invert)) =
   (* START_CBx *)
   checkCP2usable();
   if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if (((CapRegs[cb]).tag) ^ invert) then
     {
       let (bit[64]) offset = (EXTS(imm : 0b00) + 4) in
@@ -583,21 +583,21 @@ function clause execute(CJALR(cd, cb, link)) =
   checkCP2usable();
   cb_val := readCapReg(cb);
   if (link & register_inaccessible(cd)) then
-    exit (raise_c2_exception_v(cd))
+    raise_c2_exception_v(cd)
   else if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if not (cb_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cb))
+    raise_c2_exception(CapEx_TagViolation, cb)
   else if (cb_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cb))
+    raise_c2_exception(CapEx_SealViolation, cb)
   else if not (cb_val.permit_execute) then
-    exit (raise_c2_exception(CapEx_PermitExecuteViolation, cb))
+    raise_c2_exception(CapEx_PermitExecuteViolation, cb)
   else if not (cb_val.global) then
-    exit (raise_c2_exception(CapEx_GlobalViolation, cb))
+    raise_c2_exception(CapEx_GlobalViolation, cb)
   else if (((nat)(cb_val.offset)) + 4 > ((nat) (cb_val.length))) then
-    exit (raise_c2_exception(CapEx_LengthViolation, cb))
+    raise_c2_exception(CapEx_LengthViolation, cb)
   else if (((cb_val.base+cb_val.offset)[1..0]) != 0b00) then
-    exit (SignalException(AdEL))
+    SignalException(AdEL)
   else
     {
       if (link) then
@@ -632,13 +632,13 @@ function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
   checkCP2usable();
   cb_val := readCapReg(cb);
   if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if not (cb_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cb))
+    raise_c2_exception(CapEx_TagViolation, cb)
   else if (cb_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cb))
+    raise_c2_exception(CapEx_SealViolation, cb)
   else if not (cb_val.permit_load) then
-    exit (raise_c2_exception(CapEx_PermitLoadViolation, cb))
+    raise_c2_exception(CapEx_PermitLoadViolation, cb)
   else
     {
       size   := wordWidthBytes(width);
@@ -646,11 +646,11 @@ function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
       vAddr  := cursor + unsigned(rGPR(rt)) + (size*signed(offset));
       vAddr64:= (bit[64]) vAddr;
       if ((vAddr + size) > ((nat) (cb_val.base) + ((nat) (cb_val.length)))) then
-        exit (raise_c2_exception(CapEx_LengthViolation, cb))
+        raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr < ((nat) (cb_val.base))) then
-        exit (raise_c2_exception(CapEx_LengthViolation, cb))
+        raise_c2_exception(CapEx_LengthViolation, cb)
       else if not (isAddressAligned(vAddr64, width)) then
-        exit (SignalExceptionBadAddr(AdEL, vAddr64))
+        SignalExceptionBadAddr(AdEL, vAddr64)
       else
         {
           pAddr      := (TLBTranslate(vAddr64, LoadData));
@@ -689,13 +689,13 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
   checkCP2usable();
   cb_val := readCapReg(cb);
   if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if not (cb_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cb))
+    raise_c2_exception(CapEx_TagViolation, cb)
   else if (cb_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cb))
+    raise_c2_exception(CapEx_SealViolation, cb)
   else if not (cb_val.permit_store) then
-    exit (raise_c2_exception(CapEx_PermitStoreViolation, cb))
+    raise_c2_exception(CapEx_PermitStoreViolation, cb)
   else
     {
       size   := wordWidthBytes(width);
@@ -703,11 +703,11 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
       vAddr  := cursor + unsigned(rGPR(rt)) + (size * signed(offset));
       vAddr64:= (bit[64]) vAddr;
       if ((vAddr + size) > ((nat) (cb_val.base) + ((nat) (cb_val.length)))) then
-        exit (raise_c2_exception(CapEx_LengthViolation, cb))
+        raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr < ((nat) (cb_val.base))) then
-        exit (raise_c2_exception(CapEx_LengthViolation, cb))
+        raise_c2_exception(CapEx_LengthViolation, cb)
       else if not (isAddressAligned(vAddr64, width)) then
-        exit (SignalExceptionBadAddr(AdES, vAddr64))
+        SignalExceptionBadAddr(AdES, vAddr64)
       else
         {
           pAddr  := (TLBTranslate(vAddr64, StoreData));
@@ -749,33 +749,33 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
   cs_val := readCapReg(cs);
   cb_val := readCapReg(cb);
   if (register_inaccessible(cs)) then
-    exit (raise_c2_exception_v(cs))
+    raise_c2_exception_v(cs)
   else if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if not (cb_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cb))
+    raise_c2_exception(CapEx_TagViolation, cb)
   else if (cb_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cb))
+    raise_c2_exception(CapEx_SealViolation, cb)
   else if not (cb_val.permit_store_cap) then
-    exit (raise_c2_exception(CapEx_PermitStoreCapViolation, cb))
+    raise_c2_exception(CapEx_PermitStoreCapViolation, cb)
   else if not (cb_val.permit_store_local_cap) & (cs_val.tag) & not (cs_val.global) then
-    exit (raise_c2_exception(CapEx_PermitStoreLocalCapViolation, cb))
+    raise_c2_exception(CapEx_PermitStoreLocalCapViolation, cb)
   else
     {
       cursor := getCapCursor(cb_val);
       vAddr  := cursor + unsigned(rGPR(rt)) + (16 * signed(offset));
       vAddr64:= (bit[64]) vAddr;
       if ((vAddr + cap_size) > ((nat) (cb_val.base) + ((nat) (cb_val.length)))) then
-        exit (raise_c2_exception(CapEx_LengthViolation, cb))
+        raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr < ((nat) (cb_val.base))) then
-        exit (raise_c2_exception(CapEx_LengthViolation, cb))
+        raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr64[4..0] != 0b00000) then
-        exit (SignalExceptionBadAddr(AdES, vAddr64))
+        SignalExceptionBadAddr(AdES, vAddr64)
       else
         {
           let (pAddr, noStoreCap)  = (TLBTranslateC(vAddr64, StoreData)) in
           if (cs_val.tag & noStoreCap) then
-            exit (raise_c2_exception(CapEx_TLBNoStoreCap, cs))
+            raise_c2_exception(CapEx_TLBNoStoreCap, cs)
           else if (conditional) then
             {
               success := if (CP0LLBit[0]) then
@@ -800,26 +800,26 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
   checkCP2usable();
   cb_val := readCapReg(cb);
   if (register_inaccessible(cd)) then
-    exit (raise_c2_exception_v(cd))
+    raise_c2_exception_v(cd)
   else if (register_inaccessible(cb)) then
-    exit (raise_c2_exception_v(cb))
+    raise_c2_exception_v(cb)
   else if not (cb_val.tag) then
-    exit (raise_c2_exception(CapEx_TagViolation, cb))
+    raise_c2_exception(CapEx_TagViolation, cb)
   else if (cb_val.sealed) then
-    exit (raise_c2_exception(CapEx_SealViolation, cb))
+    raise_c2_exception(CapEx_SealViolation, cb)
   else if not (cb_val.permit_load_cap) then
-    exit (raise_c2_exception(CapEx_PermitLoadCapViolation, cb))
+    raise_c2_exception(CapEx_PermitLoadCapViolation, cb)
   else
     {
       cursor := getCapCursor(cb_val);
       vAddr  := cursor + unsigned(rGPR(rt)) + (16*signed(offset));
       vAddr64:= (bit[64]) vAddr;
       if ((vAddr + cap_size) > ((nat) (cb_val.base) + ((nat) (cb_val.length)))) then
-        exit (raise_c2_exception(CapEx_LengthViolation, cb))
+        raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr < ((nat) (cb_val.base))) then
-        exit (raise_c2_exception(CapEx_LengthViolation, cb))
+        raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr64[4..0] != 0b00000) then
-        exit (SignalExceptionBadAddr(AdEL, vAddr64))
+        SignalExceptionBadAddr(AdEL, vAddr64)
       else
         {
           let (pAddr, suppressTag) = (TLBTranslateC(vAddr64, LoadData)) in

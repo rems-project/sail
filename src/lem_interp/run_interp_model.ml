@@ -245,6 +245,10 @@ let run
     | Error0 s -> 
       errorf "%s: %s: %s\n" (grey name) (red "error") s;
       (false, mode, !track_dependencies, env)
+    | Escape (None, _) ->
+      show "exiting current instruction" "" "" "";
+      interactf "%s: %s\n" (grey name) (blue "done");
+      (true, mode, !track_dependencies, env)
     | Fail0 (Some s) ->
       errorf "%s: %s: %s\n" (grey name) (red "assertion failed") s;
       (false, mode, !track_dependencies, env)

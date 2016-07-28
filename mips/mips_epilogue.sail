@@ -37,7 +37,7 @@
 union ast member unit RI
 function clause decode _ = Some(RI)
 function clause execute (RI) =
-      exit (SignalException (ResI))
+      SignalException (ResI)
 
 end decode
 end execute

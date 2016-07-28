@@ -85,7 +85,7 @@ function clause execute (DADDI (rs, rt, imm)) =
     let (bit[65]) sum65 = (EXTS(rGPR(rs)) + EXTS(imm)) in
     {
       if (sum65[64] != sum65[63]) then
-        exit (SignalException(Ov))
+        (SignalException(Ov))
       else
         wGPR(rt) := sum65[63..0]
     }
@@ -104,7 +104,7 @@ function clause execute (DADD (rs, rt, rd)) =
     let (bit[65]) sum65 = (EXTS(rGPR(rs)) + EXTS(rGPR(rt))) in
     {
       if sum65[64] != sum65[63] then
-        exit (SignalException(Ov))
+        (SignalException(Ov))
       else
         wGPR(rd) := sum65[63..0]
     }
@@ -126,7 +126,7 @@ function clause execute (ADD(rs, rt, rd)) =
     else
       let (bit[33]) sum33 = (EXTS(opA[31 .. 0]) + EXTS(opB[31 .. 0])) in
         if sum33[32] != sum33[31] then
-          exit (SignalException(Ov))
+          (SignalException(Ov))
         else
           wGPR(rd) := EXTS(sum33[31..0])
   }
@@ -146,7 +146,7 @@ function clause execute (ADDI(rs, rt, imm)) =
     else
       let (bit[33]) sum33 = (EXTS(opA[31 .. 0]) + EXTS(imm)) in
         if sum33[32] != sum33[31] then
-          exit (SignalException(Ov))
+          (SignalException(Ov))
         else
           wGPR(rt) := EXTS(sum33[31..0])
   }
@@ -213,7 +213,7 @@ function clause execute (DSUB (rs, rt, rd)) =
     let (bit[65]) temp65 = (EXTS(rGPR(rs)) - EXTS(rGPR(rt))) in
     {
       if temp65[64] != temp65[63] then
-        exit (SignalException(Ov))
+        (SignalException(Ov))
       else
         wGPR(rd) := temp65[63..0]
     }
@@ -231,11 +231,11 @@ function clause execute (SUB(rs, rt, rd)) =
     (bit[64]) opA := rGPR(rs);
     (bit[64]) opB := rGPR(rt);
     if NotWordVal(opA) | NotWordVal(opB) then
-      wGPR(rd) := undefined (* XXX could exit instead *)
+      wGPR(rd) := undefined (* XXX could instead *)
     else
       let (bit[33]) temp33 = (EXTS(opA[31..0]) - EXTS(opB[31..0])) in
       if temp33[32] != temp33[31] then
-        exit (SignalException(Ov))
+        (SignalException(Ov))
       else
         wGPR(rd) := EXTS(temp33[31..0])
   }
@@ -1013,7 +1013,7 @@ function clause decode (0b000000 : (bit[20]) code : 0b001100) =
   Some(SYSCALL) (* code is ignored *)
 function clause execute (SYSCALL) =
   {
-    exit (SignalException(Sys))
+    (SignalException(Sys))
   }
 
 (* BREAK is identical to SYSCALL exception for the exception raised *)
@@ -1022,7 +1022,7 @@ function clause decode (0b000000 : (bit[20]) code : 0b001101) =
   Some(BREAK) (* code is ignored *)
 function clause execute (BREAK) =
   {
-    exit (SignalException(Bp))
+    (SignalException(Bp))
   }
 
 (* Accept WAIT as a NOP *)
@@ -1053,7 +1053,7 @@ function clause execute (TRAPREG(rs, rt, cmp)) =
     rt_val := rGPR(rt);
     condition := compare(cmp, rs_val, rt_val);
     if (condition) then
-      exit (SignalException(Tr))
+      (SignalException(Tr))
   }
 
 
@@ -1077,7 +1077,7 @@ function clause execute (TRAPIMM(rs, imm, cmp)) =
     imm_val := EXTS(imm);
     condition := compare(cmp, rs_val, imm_val);
     if (condition) then
-      exit (SignalException(Tr))
+      (SignalException(Tr))
   }
 
 (**************************************************************************************)
@@ -1107,7 +1107,7 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
   {
     (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, width);
     if ~ (isAddressAligned(vAddr, width)) then
-      exit (SignalExceptionBadAddr(AdEL, vAddr)) (* unaligned access *)
+      (SignalExceptionBadAddr(AdEL, vAddr)) (* unaligned access *)
     else
       let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
@@ -1148,7 +1148,7 @@ function clause execute (Store(width, conditional, base, rt, offset)) =
         (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), StoreData, width);
         (bit[64]) rt_val := rGPR(rt);
         if ~ (isAddressAligned(vAddr, width)) then
-          exit (SignalExceptionBadAddr(AdES, vAddr)) (* unaligned access *)
+          (SignalExceptionBadAddr(AdES, vAddr)) (* unaligned access *)
         else
           let pAddr = (TLBTranslate(vAddr, StoreData)) in
           {
@@ -1457,7 +1457,7 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
           case (0b10011,0b000) -> 0                (* 19, WatchHi *)
           case (0b10100,0b000) -> TLBXContext      (* 20, XContext *)
           case (0b11110,0b000) -> CP0ErrorEPC      (* 30, ErrorEPC *)
-          case _               -> {exit (SignalException(ResI)); 0}
+          case _               -> (SignalException(ResI))
         } in
   wGPR(rt) := if (double) then result else EXTS(result[31..0])
 }  
@@ -1526,7 +1526,7 @@ function clause execute (MTC0(rt, rd, sel, double)) = {
       case (0b10000,0b000) -> () (* XXX ignore K0 cache config  16: Config0 *)
       case (0b10100,0b000) -> (TLBXContext.PTEBase) := (reg_val[63..33])
       case (0b11110,0b000) -> CP0ErrorEPC := reg_val         (* 30, ErrorEPC *)
-      case _               -> exit (SignalException(ResI))
+      case _               -> (SignalException(ResI))
     }
 }
 
@@ -1542,7 +1542,7 @@ function unit TLBWriteEntry((TLBIndexT) idx) = {
       case 0x0fff -> ()
       case 0x3fff -> ()
       case 0xffff -> ()
-      case _      -> exit (SignalException(MCheck))
+      case _      -> (SignalException(MCheck))
   };
   ((TLBEntries[idx]).pagemask) := pagemask;
   ((TLBEntries[idx]).r       ) := TLBEntryHi.R;
@@ -1627,14 +1627,14 @@ function clause decode (0b011111 : 0b00000 : (regno) rt : (regno) rd : 0b00000 :
 function clause execute (RDHWR(rt, rd)) = {
   let accessLevel = getAccessLevel() in
   if ((accessLevel != Kernel) & (~((CP0Status.CU)[0])) & ~(CP0HWREna[rd])) then
-    exit (SignalException(ResI));
+    (SignalException(ResI));
   let (bit[64]) temp = switch (rd) {
     case 0b00000 -> EXTZ([bitzero])  (* CPUNum *)
     case 0b00001 -> EXTZ([bitzero])  (* SYNCI_step *)
     case 0b00010 -> EXTZ(CP0Count) (* Count *)
     case 0b00011 -> EXTZ([bitone])   (* Count resolution *)
     case 0b11101 -> CP0UserLocal   (* User local register *)
-    case _       -> exit (SignalException(ResI))
+    case _       -> (SignalException(ResI))
   } in
   wGPR(rt) := temp;
 }

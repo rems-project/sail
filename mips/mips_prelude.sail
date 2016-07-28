@@ -396,7 +396,7 @@ function (bit[5]) ExceptionCode ((Exception) ex) =
 
 
 
-function unit SignalExceptionMIPS ((Exception) ex, (bit[64]) kccBase) = 
+function forall Type 'o. 'o SignalExceptionMIPS ((Exception) ex, (bit[64]) kccBase) = 
   {
     (* Only update EPC and BD if not already in EXL mode *)
     if (~ (CP0Status.EXL)) then 
@@ -433,17 +433,18 @@ function unit SignalExceptionMIPS ((Exception) ex, (bit[64]) kccBase) =
       nextPC := ((bit[64])(vectorBase + EXTS(vectorOffset))) - kccBase;
       CP0Cause.ExcCode      := ExceptionCode(ex);
       CP0Status.EXL         := 1;
+      exit ();
   }
 
-val Exception -> unit effect {rreg, wreg} SignalException
+val forall Type 'o . Exception -> 'o effect {escape, rreg, wreg} SignalException
 
-function unit SignalExceptionBadAddr((Exception) ex, (bit[64]) badAddr) =
+function forall Type 'o. 'o SignalExceptionBadAddr((Exception) ex, (bit[64]) badAddr) =
   {
     CP0BadVAddr := badAddr;
     SignalException(ex);
   }
 
-function unit SignalExceptionTLB((Exception) ex, (bit[64]) badAddr) = {
+function forall Type 'o. 'o  SignalExceptionTLB((Exception) ex, (bit[64]) badAddr) = {
   CP0BadVAddr := badAddr;
   (TLBContext.BadVPN2) := (badAddr[31..13]);
   (TLBXContext.BadVPN2):= (badAddr[39..13]);
@@ -473,7 +474,7 @@ function unit checkCP0Access () =
     if ((accessLevel != Kernel) & (~((CP0Status.CU)[28]))) then
       {
         (CP0Cause.CE) := 0b00;
-        exit (SignalException(CpU));
+        SignalException(CpU);
       }
   }
 
@@ -492,7 +493,7 @@ function unit incrementCP0Count() = {
   let exl          = CP0Status.EXL in
   let erl          = CP0Status.ERL in
   if ((~(exl)) & (~(erl)) & ie & ((ips & ims) != 0x00)) then
-    exit (SignalException(Int));
+    SignalException(Int);
 }
 
 function bool tlbEntryMatch(r, vpn2, asid, (TLBEntry) entry) = 
@@ -543,13 +544,13 @@ function (bit[64], bool) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessT
       else
         (entry.caps0, entry.capl0, entry.pfn0, entry.d0, entry.v0) in
     if (~(v)) then 
-      exit (SignalExceptionTLB(if (accessType == StoreData) then XTLBInvS else XTLBInvL, vAddr))
+      (SignalExceptionTLB(if (accessType == StoreData) then XTLBInvS else XTLBInvL, vAddr))
     else if ((accessType == StoreData) & ~(d)) then
-      exit (SignalExceptionTLB(TLBMod, vAddr))
+      (SignalExceptionTLB(TLBMod, vAddr))
     else
       (EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0]), 
        if (accessType == StoreData) then caps else capl)
-    case None -> exit (SignalExceptionTLB(
+    case None ->  (SignalExceptionTLB(
       if (accessType == StoreData) then XTLBRefillS else XTLBRefillL, vAddr))
   }
 }
@@ -571,17 +572,17 @@ function (bit[64], bool) TLBTranslateC ((bit[64]) vAddr, (MemAccessType) accessT
       case 0b00 -> (User, None) (* xuseg - user mapped *)
     } in
     if (((nat)currentAccessLevel) < ((nat)requiredLevel)) then
-      exit (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
+      (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
     else 
       let (pa, c) = switch(addr) {
       case (Some(a)) -> (a, false)
       case None      -> if ((~(compat32)) & (unsigned(vAddr[61..0]) > MAX_VA)) then
-          exit (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
+          (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
         else
           TLBTranslate2(vAddr, accessType)
       }
       in if (unsigned(pa) > MAX_PA) then
-          exit (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
+          (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
         else
           (pa, c)
   }

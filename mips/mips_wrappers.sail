@@ -53,7 +53,7 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
 function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) = {
     incrementCP0Count();
     if (vAddr[1..0] != 0b00) then (* bad PC alignment *)
-      exit (SignalExceptionBadAddr(AdEL, vAddr))
+      (SignalExceptionBadAddr(AdEL, vAddr))
     else
       TLBTranslate(vAddr, accessType)
 }
