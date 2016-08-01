@@ -349,16 +349,6 @@ function forall Type 'o . 'o raise_c2_exception8((CapEx) capEx, (bit[8]) regnum)
 function forall Type 'o . 'o raise_c2_exception((CapEx) capEx, (regno) regnum) =
   raise_c2_exception8(capEx, 0b000 : regnum)
 
-function forall Type 'o . 'o raise_c2_exception_v((regno) regnum) =
-  switch(regnum) {
-   case 0b11011 -> raise_c2_exception(CapEx_AccessSystemRegsViolation, regnum)
-   case 0b11100 -> raise_c2_exception(CapEx_AccessSystemRegsViolation, regnum)
-   case 0b11101 -> raise_c2_exception(CapEx_AccessSystemRegsViolation, regnum)
-   case 0b11110 -> raise_c2_exception(CapEx_AccessSystemRegsViolation, regnum)
-   case 0b11111 -> raise_c2_exception(CapEx_AccessSystemRegsViolation, regnum)
-   case _       -> assert(false, Some("should only call for cap reg violation"))
-  }
-
 function forall Type 'o . 'o raise_c2_exception_noreg((CapEx) capEx) =
   raise_c2_exception8(capEx, 0xff)
 
