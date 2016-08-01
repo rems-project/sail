@@ -38,11 +38,8 @@ typedef CapReg = register bits [256:0] {
   (* 255..248: reserved1; padding *)
   247..224: otype;
   223..208: sw_perms;
-  207:      access_KR2C;
-  206:      access_KR1C;
-  205:      access_KCC;
-  204:      access_KDC;
-  203:      access_EPCC;
+  207..204: perm_reserved11_14;
+  203:      access_system_regs;
   202:      perm_reserved9; (* perm bit 9 *)
   201:      perm_reserved8; (* perm bit 8 *)
   200:      permit_seal;
@@ -106,11 +103,8 @@ typedef CapStruct = const struct {
   bit[8]  padding;
   bit[24] otype;
   bit[16] sw_perms;
-  bool    access_KR2C;
-  bool    access_KR1C;
-  bool    access_KCC;
-  bool    access_KDC;
-  bool    access_EPCC;
+  bit[4]  perm_reserved11_14;
+  bool    access_system_regs;
   bool    perm_reserved9;
   bool    perm_reserved8;
   bool    permit_seal;
@@ -132,11 +126,8 @@ let (CapStruct) null_cap = {
   padding = 0;
   otype = 0;
   sw_perms = 0;
-  access_KR2C = false;
-  access_KR1C = false;
-  access_KCC = false;
-  access_KDC = false;
-  access_EPCC = false;
+  perm_reserved11_14 = 0;
+  access_system_regs = false;
   perm_reserved9 = false;
   perm_reserved8 = false;
   permit_seal = false;
@@ -163,11 +154,8 @@ function CapStruct capRegToCapStruct((CapReg) capReg) =
     padding                    = capReg[255..248];
     otype                      = capReg.otype;
     sw_perms                   = capReg.sw_perms;
-    access_KR2C                = capReg.access_KR2C;
-    access_KR1C                = capReg.access_KR1C;
-    access_KCC                 = capReg.access_KCC;
-    access_KDC                 = capReg.access_KDC;
-    access_EPCC                = capReg.access_EPCC;
+    perm_reserved11_14         = capReg.perm_reserved11_14;
+    access_system_regs         = capReg.access_system_regs;
     perm_reserved9             = capReg.perm_reserved9;
     perm_reserved8             = capReg.perm_reserved8;
     permit_seal                = capReg.permit_seal;
@@ -191,11 +179,8 @@ function (CapStruct) readCapReg((regno) n) =
 function (bit[31]) capPermsToVec((CapStruct) cap) = 
   (
     cap.sw_perms
-      : [cap.access_KR2C]
-      : [cap.access_KR1C]
-      : [cap.access_KCC]
-      : [cap.access_KDC]
-      : [cap.access_EPCC]
+      : cap.perm_reserved11_14
+      : [cap.access_system_regs]
       : [cap.perm_reserved9]
       : [cap.perm_reserved8]
       : [cap.permit_seal]
@@ -273,11 +258,7 @@ typedef CapEx = enumerate {
   CapEx_PermitStoreCapViolation;
   CapEx_PermitStoreLocalCapViolation;
   CapEx_PermitSealViolation;
-  CapEx_AccessEPCCViolation;
-  CapEx_AccessKDCViolation;
-  CapEx_AccessKCCViolation;
-  CapEx_AccessKR1CViolation;
-  CapEx_AccessKR2CViolation;
+  CapEx_AccessSystemRegsViolation;
 }
 
 typedef CGetXOp = enumerate {
@@ -328,11 +309,7 @@ function (bit[8]) CapExCode((CapEx) ex) =
     case CapEx_PermitStoreCapViolation      -> 0x15
     case CapEx_PermitStoreLocalCapViolation -> 0x16
     case CapEx_PermitSealViolation          -> 0x17
-    case CapEx_AccessEPCCViolation          -> 0x18
-    case CapEx_AccessKDCViolation           -> 0x18
-    case CapEx_AccessKCCViolation           -> 0x18
-    case CapEx_AccessKR1CViolation          -> 0x18
-    case CapEx_AccessKR2CViolation          -> 0x18
+    case CapEx_AccessSystemRegsViolation    -> 0x18
   }
 
 typedef CapCauseReg = register bits [15:0] {
@@ -374,11 +351,11 @@ function forall Type 'o . 'o raise_c2_exception((CapEx) capEx, (regno) regnum) =
 
 function forall Type 'o . 'o raise_c2_exception_v((regno) regnum) =
   switch(regnum) {
-   case 0b11011 -> raise_c2_exception(CapEx_AccessKR1CViolation, regnum)
-   case 0b11100 -> raise_c2_exception(CapEx_AccessKR2CViolation, regnum)
-   case 0b11101 -> raise_c2_exception(CapEx_AccessKCCViolation, regnum)
-   case 0b11110 -> raise_c2_exception(CapEx_AccessKDCViolation, regnum)
-   case 0b11111 -> raise_c2_exception(CapEx_AccessEPCCViolation, regnum)
+   case 0b11011 -> raise_c2_exception(CapEx_AccessSystemRegsViolation, regnum)
+   case 0b11100 -> raise_c2_exception(CapEx_AccessSystemRegsViolation, regnum)
+   case 0b11101 -> raise_c2_exception(CapEx_AccessSystemRegsViolation, regnum)
+   case 0b11110 -> raise_c2_exception(CapEx_AccessSystemRegsViolation, regnum)
+   case 0b11111 -> raise_c2_exception(CapEx_AccessSystemRegsViolation, regnum)
    case _       -> assert(false, Some("should only call for cap reg violation"))
   }
 
@@ -387,11 +364,11 @@ function forall Type 'o . 'o raise_c2_exception_noreg((CapEx) capEx) =
 
 function bool register_inaccessible((regno) r) = 
   ~(switch(r) {
-    case 0b11011 -> (PCC.access_KR1C)
-    case 0b11100 -> (PCC.access_KR2C)
-    case 0b11101 -> (PCC.access_KCC)
-    case 0b11110 -> (PCC.access_KDC)
-    case 0b11111 -> (PCC.access_EPCC)
+    case 0b11011 -> (PCC.access_system_regs)
+    case 0b11100 -> (PCC.access_system_regs)
+    case 0b11101 -> (PCC.access_system_regs)
+    case 0b11110 -> (PCC.access_system_regs)
+    case 0b11111 -> (PCC.access_system_regs)
     case _       -> bitone
   })
 

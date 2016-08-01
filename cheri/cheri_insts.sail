@@ -103,8 +103,8 @@ function clause execute (CGetCause(rd)) =
 {
   (* START_CGetCause *)
   checkCP2usable();
-  if not (PCC.access_EPCC) then
-    raise_c2_exception_noreg(CapEx_AccessEPCCViolation)
+  if not (PCC.access_system_regs) then
+    raise_c2_exception_noreg(CapEx_AccessSystemRegsViolation)
   else
     wGPR(rd) := EXTZ(CapCause)
   (* END_CGetCause *)
@@ -116,8 +116,8 @@ function clause execute (CSetCause((regno) rt)) =
 {
   (* START_CSetCause *)
   checkCP2usable();
-  if not (PCC.access_EPCC) then
-    raise_c2_exception_noreg(CapEx_AccessEPCCViolation)
+  if not (PCC.access_system_regs) then
+    raise_c2_exception_noreg(CapEx_AccessSystemRegsViolation)
   else
     {
       (bit[64]) rt_val := rGPR(rt);
@@ -146,11 +146,8 @@ function clause execute(CAndPerm(cd, cb, rt)) =
   else
     writeCapReg(cd, {cb_val with 
       sw_perms               = (cb_val.sw_perms           & (rt_val[30..15]));
-      access_KR2C            = (cb_val.access_KR2C            & (rt_val[14]));
-      access_KR1C            = (cb_val.access_KR1C            & (rt_val[13]));
-      access_KCC             = (cb_val.access_KCC             & (rt_val[12]));
-      access_KDC             = (cb_val.access_KDC             & (rt_val[11]));
-      access_EPCC            = (cb_val.access_EPCC            & (rt_val[10]));
+      perm_reserved11_14     = (cb_val.perm_reserved11_14 & (rt_val[14..11]));
+      access_system_regs     = (cb_val.access_system_regs     & (rt_val[10]));
       perm_reserved9         = (cb_val.perm_reserved9         & (rt_val[9]));
       perm_reserved8         = (cb_val.perm_reserved8         & (rt_val[8]));
       permit_seal            = (cb_val.permit_seal            & (rt_val[7]));
