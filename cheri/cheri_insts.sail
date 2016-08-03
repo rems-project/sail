@@ -766,7 +766,7 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
         raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr < ((nat) (cb_val.base))) then
         raise_c2_exception(CapEx_LengthViolation, cb)
-      else if (vAddr64[4..0] != 0b00000) then
+      else if ((vAddr mod cap_size) != 0) then
         SignalExceptionBadAddr(AdES, vAddr64)
       else
         {
@@ -815,7 +815,7 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
         raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr < ((nat) (cb_val.base))) then
         raise_c2_exception(CapEx_LengthViolation, cb)
-      else if (vAddr64[4..0] != 0b00000) then
+      else if ((vAddr mod cap_size) != 0) then
         SignalExceptionBadAddr(AdEL, vAddr64)
       else
         {
