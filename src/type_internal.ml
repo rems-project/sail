@@ -2268,6 +2268,15 @@ let initial_typ_env =
                                     mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")])
                  (mk_vector bit_t (Ovar "ord") (mk_nv "n") (mk_nv "m")))),
              (External (Some "mod_signed_vec")),[],pure_e,pure_e,nob)]));
+    ("div",
+     Base(((mk_nat_params["n";"m";"o";]),
+           (mk_pure_fun (mk_tup [mk_atom (mk_nv "n");mk_atom (mk_nv "m")])
+                        (mk_atom (mk_nv "o")))),
+          (*This should really be != to 0, as negative is just fine*)
+          (External (Some "quot")),[(*GtEq(Specc(Parse_ast.Int("quot",None)),Require,(mk_nv "m"),n_one);*)
+            LtEq(Specc(Parse_ast.Int("quot",None)),Guarantee,
+                 (mk_mult (mk_nv "n") (mk_nv "o")),(mk_nv "m"))],
+          pure_e,pure_e,nob));
     ("quot",
      Overload(
        Base(((mk_typ_params ["a";"b";"c"]),

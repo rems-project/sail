@@ -585,6 +585,10 @@ atomic_exp:
     { eloc (E_vector_update($2,$4,$6)) }
   | Lsquare exp With atomic_exp Colon atomic_exp Eq exp Rsquare
     { eloc (E_vector_update_subrange($2,$4,$6,$8)) }
+  | SquareBarBar BarBarSquare
+      { eloc (E_list []) }
+  | SquareBarBar exp BarBarSquare
+      { eloc (E_list [$2]) }
   | SquareBarBar comma_exps BarBarSquare
     { eloc (E_list($2)) }
   | Switch exp Lcurly case_exps Rcurly
