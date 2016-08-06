@@ -1308,10 +1308,61 @@ let byte_list_of_opcode (opc:opcode) : list byte =
 (** show type class instantiations             *)
 (** ****************************************** *)
 
+(* matching printing_functions.ml *)
+val stringFromReg_name : reg_name -> string
+let stringFromReg_name r = match r with
+| Reg s start size dir -> s
+| Reg_slice s start dir (first,second) ->
+    let (first,second) = 
+      match dir with
+      | D_increasing -> (first,second) 
+      | D_decreasing -> (start - first, start - second)
+      end in
+    s ^ "[" ^ show first ^ (if (first = second) then "" else ".." ^ (show second)) ^ "]"
+| Reg_field s size dir f (first, second) ->
+    s ^ "." ^ f
+| Reg_f_slice s start dir f (first1,second1) (first,second) ->
+    let (first,second) = 
+      match dir with
+      | D_increasing -> (first,second) 
+      | D_decreasing -> (start - first, start - second)
+      end in
+    s ^ "." ^ f ^ "]" ^ show first ^ (if (first = second) then "" else ".." ^ (show second)) ^ "]"
+end
+
+instance (Show reg_name)
+  let show = stringFromReg_name
+end
+
+
+(* hex pp of integers, adapting the Lem string_extra.lem code *)
+val stringFromNaturalHexHelper : natural -> list char -> list char
+let rec stringFromNaturalHexHelper n acc =
+  if n = 0 then
+    acc
+  else
+    stringFromNaturalHexHelper (n / 16) (String_extra.chr (natFromNatural (let nd = n mod 16 in if nd <=9 then nd + 48 else nd - 10 + 97)) :: acc)
+
+val stringFromNaturalHex : natural -> string
+let (*~{ocaml;hol}*) stringFromNaturalHex n = 
+  if n = 0 then "0" else toString (stringFromNaturalHexHelper n [])
+
+val stringFromIntegerHex : integer -> string
+let (*~{ocaml}*) stringFromIntegerHex i = 
+  if i < 0 then 
+    "-" ^ stringFromNaturalHex (naturalFromInteger i)
+  else
+    stringFromNaturalHex (naturalFromInteger i)
+
+
 let stringFromAddress (Address bs i) = 
   let i' = integer_of_byte_list bs in
   if i=i' then
-    show i (*TODO: should be made to match the src/pp.ml pp_address*)
+(*TODO: ideally this should be made to match the src/pp.ml pp_address; the following very roughly matches what's used in the ppcmem UI, enough to make exceptions readable *)
+    if i < 65535 then 
+      show i 
+    else
+      stringFromIntegerHex i
   else
     "stringFromAddress bytes and integer mismatch"
 

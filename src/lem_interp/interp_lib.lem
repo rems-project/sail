@@ -781,6 +781,27 @@ let duplicate direction v =
     | _ -> fail ()
 end
 
+let rec repeat_block_helper (n: integer) bits =
+  if n <= 0
+  then []
+  else bits ++ (repeat_block_helper (n-1) bits)
+
+let duplicate_bits v =
+  let fail () = Assert_extra.failwith ("duplicate_bits given unexpected " ^ (string_of_value v)) in
+  let dup_help vl vr =
+    match (vl,vr) with
+    | (V_vector start direction bits, (V_lit (L_aux (L_num n) _))) ->
+      let start : nat = if direction = IInc then 0 else ((natFromInteger n) * (List.length bits)) - 1 in
+      (V_vector start direction (repeat_block_helper n bits))
+    | (_,V_unknown) -> V_unknown
+    | _ -> fail ()
+  end in
+  match v with
+    | (V_tuple [vl;vr]) -> binary_taint dup_help vl vr
+    | _ -> fail ()
+end
+
+
 let rec vec_concat v = 
   let fail () = Assert_extra.failwith ("vec_concat given unexpected " ^ (string_of_value v)) in
   let concat_help vl vr = 
@@ -931,6 +952,7 @@ let library_functions direction = [
   ("ltu", compare_op_vec_unsigned (<));
   ("gtu", compare_op_vec_unsigned (>));
   ("duplicate", duplicate direction);
+  ("duplicate_bits", duplicate_bits);
   ("mask", mask direction);
   ("most_significant", most_significant);
 ] ;;
