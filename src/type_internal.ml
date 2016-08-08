@@ -3748,21 +3748,23 @@ let merge_branch_constraints merge_nuvars constraint_sets =
             then (sc,new_cs,new_map)
             else (Nexpmap.insert sc (k,v),new_cs,new_map)
           else
-            let sets = List.map (conditionally_lift_to_nuvars_on_merge k) ns in
-            let css = (List.flatten (List.map fst sets))@ new_cs in
-            let map = List.fold_right merge_option_maps (List.map snd sets) new_map in
             let rec all_eq = function
               | [] | [_] -> true
-              | n1::n2::ns -> 
-                (nexp_eq n1 n2) && all_eq ns 
+              | n1::n2::ns ->
+                (*let _ = Printf.eprintf "all_eq with %s and %s returning %b\n" (n_to_string n1) (n_to_string n2) (nexp_eq n1 n2) in*)
+                (nexp_eq n1 n2) && all_eq (n2::ns) 
             in 
-            if (all_eq ns) && not(ns = [])
+            if (all_eq ns) && not(ns=[])
             then if List.for_all (conditionally_set k) ns
-              then (sc,new_cs,new_map)
+              then  (sc,new_cs,new_map)
               else (Nexpmap.insert sc (k,v),new_cs,new_map)
-            else (Nexpmap.insert sc (k,v),css, map))
+            else            
+              let sets = List.map (conditionally_lift_to_nuvars_on_merge k) ns in
+              let css = (List.flatten (List.map fst sets))@ new_cs in
+              let map = List.fold_right merge_option_maps (List.map snd sets) new_map in
+              (Nexpmap.insert sc (k,v),css, map))
       (Nexpmap.empty,[],None) merged_constraints in
-  (*let _ = if merge_nuvars then
+ (* let _ = if merge_nuvars then
       Printf.eprintf "merge branch constraints: shared var mappings after merge %s\n%!"
         (nexpmap_to_string merged_constraints) in *)
   shared_path_distinct_constraints

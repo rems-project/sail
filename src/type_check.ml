@@ -359,7 +359,8 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
             ((pat'::pats),(t::ts),(t_env::t_envs),(cons@constraints),merge_bounds bs bounds))
           pats ([],[],[],[],nob) in
       let env = List.fold_right (fun e env -> Envmap.union e env) t_envs Envmap.empty in (*Need to check for non-duplication of variables*)
-      let (u,cs) = List.fold_right (fun u (t,cs) -> let t',cs = type_consistent (Patt l) d_env Require true u t in t',cs) ts (item_t,[]) in
+      let (u,cs) = List.fold_right (fun u (t,cs) ->
+          let t',cs = type_consistent (Patt l) d_env Require true u t in t',cs) ts (item_t,[]) in
       let len = List.length ts in
       let t = 
         match (ord.order,d_env.default_o.order) with
@@ -374,8 +375,9 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
                               TA_ord{order=Odec};
                               TA_typ u;])}
         | _ -> raise (Reporting_basic.err_unreachable l "Default order not set") in
+      let _,v_cs = type_consistent (Patt l) d_env Guarantee true t expect_t in
       (*TODO Should gather the constraints here, with regard to the expected base and rise, and potentially reset them above*)
-      (P_aux(P_vector(pats'),(l,cons_tag_annot t emp_tag cs)), env,cs@constraints,bounds,t) 
+      (P_aux(P_vector(pats'),(l,cons_tag_annot t emp_tag (cs@v_cs))), env,cs@v_cs@constraints,bounds,t) 
     | P_vector_indexed(ipats) -> 
       let item_t = match expect_actual.t with
         | Tapp("vector",[b;r;o;TA_typ i]) -> i
@@ -2079,7 +2081,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let funcls,cs_ef = check t_env t_param_env None in
       let cses,ef = ((fun (cses,efses) -> (cses,(List.fold_right union_effects efses pure_e))) (List.split cs_ef)) in
       let cs = if List.length funcls = 1 then cses else [BranchCons(Fun l, None, cses)] in
-     (* let _ = Printf.eprintf "unresolved constraints are %s\n%!" (constraints_to_string cs) in*)
+      (*let _ = Printf.eprintf "unresolved constraints are %s\n%!" (constraints_to_string cs) in*)
       let (cs',map) = resolve_constraints cs in
       (*let _ = Printf.eprintf "checking tannot for %s 2  remaining constraints are %s\n" 
         id (constraints_to_string cs') in*)
