@@ -2084,7 +2084,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (*let _ = Printf.eprintf "unresolved constraints are %s\n%!" (constraints_to_string cs) in*)
       let (cs',map) = resolve_constraints cs in
       (*let _ = Printf.eprintf "checking tannot for %s 2  remaining constraints are %s\n" 
-        id (constraints_to_string cs') in*)
+          id (constraints_to_string cs') in*)
       let tannot = check_tannot l
                                 (match map with | None -> tannot | Some m -> add_map_tannot m tannot)
                                 None cs' ef in

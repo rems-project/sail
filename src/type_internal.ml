@@ -3751,7 +3751,6 @@ let merge_branch_constraints merge_nuvars constraint_sets =
             let rec all_eq = function
               | [] | [_] -> true
               | n1::n2::ns ->
-                (*let _ = Printf.eprintf "all_eq with %s and %s returning %b\n" (n_to_string n1) (n_to_string n2) (nexp_eq n1 n2) in*)
                 (nexp_eq n1 n2) && all_eq (n2::ns) 
             in 
             if (all_eq ns) && not(ns=[])
@@ -3764,7 +3763,7 @@ let merge_branch_constraints merge_nuvars constraint_sets =
               let map = List.fold_right merge_option_maps (List.map snd sets) new_map in
               (Nexpmap.insert sc (k,v),css, map))
       (Nexpmap.empty,[],None) merged_constraints in
- (* let _ = if merge_nuvars then
+  (*let _ = if merge_nuvars then
       Printf.eprintf "merge branch constraints: shared var mappings after merge %s\n%!"
         (nexpmap_to_string merged_constraints) in *)
   shared_path_distinct_constraints
@@ -3779,7 +3778,7 @@ let rec extract_path_substs = function
     let updated_substs = 
       Nexpmap.fold (fun substs key newvar ->
           (*let _ =  Printf.eprintf "building substs sets: %s |-> %s\n" (n_to_string key) (n_to_string newvar) in*)
-        match key.nexp with
+          match key.nexp with
           | Nuvar _ -> Nexpmap.insert substs (key,newvar)
           | _ -> begin set key newvar; substs end) Nexpmap.empty substs in
     let (substs, cs_rest) = extract_path_substs cs in
@@ -3790,7 +3789,8 @@ let rec extract_path_substs = function
 
 let rec merge_paths merge_nuvars = function
   | [] -> [],None
-  | BranchCons(co,_,branches)::cs ->
+  | (BranchCons(co,_,branches) as b)::cs ->
+    (*let _ = Printf.eprintf "merge_paths BranchCons case branch is %s\n\n" (constraints_to_string [b]) in*)
     let branches_merged,new_map = merge_paths merge_nuvars branches in
     let path_substs,branches_up = extract_path_substs branches_merged in
     let (shared_vars,new_cs,nm) = merge_branch_constraints merge_nuvars path_substs in
@@ -3798,6 +3798,7 @@ let rec merge_paths merge_nuvars = function
     let out_map = merge_option_maps (merge_option_maps new_map nm) rest_map in
     (BranchCons(co,Some(shared_vars),branches_up)::(new_cs@rest_cs), out_map)
   | CondCons(co,k,substs,ps,es)::cs ->
+    (*let _ = Printf.eprintf "merge_paths CondCons case: ps %s \n es %s\n\n" (constraints_to_string ps) (constraints_to_string es) in*)
     let (new_es,nm) = merge_paths merge_nuvars es in
     let (rest_cs,rest_map) = merge_paths merge_nuvars cs in
     (CondCons(co,k,substs,ps,new_es)::rest_cs,
@@ -4073,8 +4074,8 @@ let rec simple_constraint_check in_env cs =
     let exps' = check exps in
     (*let _ = Printf.eprintf "Condcons after check length pats' %i, length exps' %i\n" 
       (List.length pats') (List.length exps') in*)
-    (match pats',exps' with
-      | [],[] -> check cs
+    (match pats',exps',substs with
+      | [],[],None -> check cs
       | _     -> CondCons(co,kind,substs,pats',exps')::(check cs))
   | BranchCons(co,sv,branches)::cs ->
     let b = check branches in
