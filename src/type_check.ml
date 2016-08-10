@@ -1374,7 +1374,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
       let n = anexp_to_nexp envs nexp in
       let n_subst = subst_n_with_env tp_env n in
       let n_typ = mk_atom n_subst in
-      let nannot = simple_annot n_typ in
+      let nannot = bounds_annot n_typ b_env in
       let e = E_aux (E_sizeof_internal (l, nannot), (l,nannot)) in      
       let t',cs,ef,e' = type_coerce (Expr l) d_env Require false false b_env n_typ e expect_t in
       (e',t',t_env,cs,nob,ef)

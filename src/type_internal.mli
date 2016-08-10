@@ -226,6 +226,8 @@ val tag_annot : t -> tag -> tannot
 val tag_annot_efr : t -> tag -> effect -> tannot
 val constrained_annot : t -> constraints -> tannot
 val constrained_annot_efr : t -> constraints -> effect -> tannot
+val bounds_annot : t -> bounds_env -> tannot
+val bounds_annot_efr : t -> bounds_env -> effect -> tannot
 val cons_tag_annot : t -> tag -> constraints -> tannot
 val cons_tag_annot_efr : t -> tag -> constraints -> effect -> tannot
 val cons_efl_annot : t -> constraints -> effect -> tannot

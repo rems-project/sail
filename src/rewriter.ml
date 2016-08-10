@@ -375,9 +375,10 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
   | E_internal_exp (l,impl) ->
     (match impl with
      | Base((_,t),_,_,_,_,bounds) ->
-       let bounds = match nmap with | None -> bounds | Some (nm,_) -> add_map_to_bounds nm bounds in
        (*let _ = Printf.eprintf "Rewriting internal expression, with type %s, and bounds %s\n" 
          (t_to_string t) (bounds_to_string bounds) in*)
+       let bounds = match nmap with | None -> bounds | Some (nm,_) -> add_map_to_bounds nm bounds in
+       (*let _ = Printf.eprintf "Bounds after looking at nmap %s\n" (bounds_to_string bounds) in*)
        (match t.t with
         (*Old case; should possibly be removed*)
         | Tapp("register",[TA_typ {t= Tapp("vector",[ _; TA_nexp r;_;_])}])
@@ -406,6 +407,7 @@ let rewrite_exp rewriters nmap (E_aux (exp,(l,annot))) =
        (match t.t with
         | Tapp("atom",[TA_nexp n]) ->
           let nexps = expand_nexp n in
+          (*let _ = Printf.eprintf "Removing sizeof_internal with type %s\n" (t_to_string t) in*)
           (match (match_to_program_vars nexps bounds) with
            | [] -> rewrite_nexp_to_exp None l n
            | map -> rewrite_nexp_to_exp (Some map) l n)
