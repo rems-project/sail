@@ -230,6 +230,8 @@ let to_num signed v =
 	    V_lit(L_aux (L_num(integerFromBitSeq (Maybe_extra.fromJust (bitSeqFromBoolList (map bit_to_bool l))))) Unknown)
       | V_unknown -> V_unknown
       | V_lit (L_aux L_undef _) -> v
+      | V_lit (L_aux L_zero l) -> V_lit (L_aux (L_num 0) l)
+      | V_lit (L_aux L_one l) -> V_lit (L_aux (L_num 1) l)
       | _ -> Assert_extra.failwith ("to_num given unexpected " ^ (string_of_value v))
      end)
 
