@@ -449,7 +449,7 @@ def =  (* Top-level definition *)
 
 
 type 
-lexp_aux =  (* lvalue expression *)
+lexp_aux =  (* lvalue expression, can't occur out of the parser *)
    LEXP_id of id (* identifier *)
  | LEXP_mem of id * (exp) list
  | LEXP_vector of lexp * exp (* vector element *)

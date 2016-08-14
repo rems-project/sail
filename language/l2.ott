@@ -689,6 +689,7 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     | id ( exp1 , .. , expn )				  :: :: memory {{ com memory write via function call }}
     | id exp	       	    				  :: S :: mem_tup {{ ichlo [[id (exp)]] }}
     | ( typ ) id					  :: :: cast
+    | ( lexp0 , .. , lexpn )                              :: :: tup {{ com set multiple at a time, a check will ensure it's not memory }}
     | lexp [ exp ]  :: ::                                 vector  {{ com vector element }}
     | lexp [ exp1 '..' exp2 ]  :: ::                         vector_range {{ com subvector }}
     % maybe comma-sep such lists too

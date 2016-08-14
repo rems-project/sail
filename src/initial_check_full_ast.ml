@@ -381,6 +381,15 @@ and to_lexp (k_env : kind Envmap.t) (def_ord : Ast.order) (LEXP_aux(exp,(l,_)) :
        | args -> LEXP_memory(f, args))
     | LEXP_cast(typ,id) ->
       LEXP_cast(to_typ k_env def_ord typ, id)
+    | LEXP_tup tups ->
+       let ltups = List.map (to_lexp k_env def_ord) tups in
+       let is_ok_in_tup (LEXP_aux (le,(l,_))) =
+         match le with
+         | LEXP_id _ | LEXP_cast _ | LEXP_vector _ | LEXP_field _ | LEXP_vector_range _ | LEXP_tup _ -> ()
+         | LEXP_memory _  ->
+           typ_error l "only identifiers, fields, and vectors may be set in a tuple" None None None in
+       List.iter is_ok_in_tup ltups;
+       LEXP_tup(ltups)
     | LEXP_vector(vexp,exp) -> LEXP_vector(to_lexp k_env def_ord vexp, to_exp k_env def_ord exp)
     | LEXP_vector_range(vexp,exp1,exp2) -> 
       LEXP_vector_range(to_lexp k_env def_ord vexp, to_exp k_env def_ord exp1, to_exp k_env def_ord exp2)

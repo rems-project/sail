@@ -290,11 +290,12 @@ and pp_format_o o =
   | Ouvar(_) -> "(Ord_var (Kid_aux (Var \"fresh_v\") Unknown))")
   ^ " Unknown)"
 
-let pp_format_tag = function
+let rec pp_format_tag = function
   | Emp_local -> "Tag_empty"
   | Emp_intro -> "Tag_intro"
   | Emp_set -> "Tag_set" 
   | Emp_global -> "Tag_global"
+  | Tuple_assign tags -> "(Tag_tuple_assign [" ^ list_format " ;" pp_format_tag tags ^ "])"
   | External (Some s) -> "(Tag_extern (Just \""^s^"\"))"
   | External None -> "(Tag_extern Nothing)"
   | Default -> "Tag_default"
@@ -495,12 +496,15 @@ and pp_lem_lexp ppf (LEXP_aux(lexp,(l,annot))) =
       | LEXP_memory(id,args) ->
         fprintf ppf "(LEXP_memory %a [%a])" pp_lem_id id (list_pp pp_semi_lem_exp pp_lem_exp) args
       | LEXP_cast(typ,id) -> fprintf ppf "(LEXP_cast %a %a)" pp_lem_typ typ pp_lem_id id
+      | LEXP_tup tups -> fprintf ppf "(LEXP_tuple [%a])" (list_pp pp_semi_lem_lexp pp_lem_lexp) tups
       | LEXP_vector(v,exp) -> fprintf ppf "@[(%a %a %a)@]" kwd "LEXP_vector" pp_lem_lexp v pp_lem_exp exp
       | LEXP_vector_range(v,e1,e2) -> 
         fprintf ppf "@[(%a %a %a %a)@]" kwd "LEXP_vector_range" pp_lem_lexp v  pp_lem_exp e1 pp_lem_exp e2
       | LEXP_field(v,id) -> fprintf ppf "@[(%a %a %a)@]" kwd "LEXP_field" pp_lem_lexp v pp_lem_id id
   in
   fprintf ppf "@[(LEXP_aux %a (%a, %a))@]" print_le lexp pp_lem_l l pp_annot annot
+and pp_semi_lem_lexp ppf le = fprintf ppf "@[<1>%a%a@]" pp_lem_lexp le kwd ";"
+
 
 let pp_lem_default ppf (DT_aux(df,l)) =
   let print_de ppf df =

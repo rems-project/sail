@@ -552,7 +552,7 @@ exp :: 'E_' ::=
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
 
 
-lexp :: 'LEXP_' ::= {{ com lvalue expression }}
+lexp :: 'LEXP_' ::= {{ com lvalue expression, can't occur out of the parser }}
     {{ aux _ l }}
 %    {{ aux _ annot }} {{ auxparam 'a }}
     | id                                                  :: :: id

@@ -88,6 +88,7 @@ type tag =
   | Emp_global
   | Emp_intro
   | Emp_set
+  | Tuple_assign of tag list
   | External of string option
   | Default
   | Constructor of int
@@ -364,11 +365,12 @@ and o_to_string o =
   | Odec -> "dec"
   | Ouvar({oindex=i;osubst=a}) -> if !debug_mode then string_of_int i ^ "()" else "_"
 
-let tag_to_string = function
+let rec tag_to_string = function
   | Emp_local -> "Emp_local"
   | Emp_global -> "Emp_global"
   | Emp_intro -> "Emp_intro"
   | Emp_set -> "Emp_set"
+  | Tuple_assign tags -> "Tuple_assign (" ^ string_of_list ", " tag_to_string tags ^ ")"
   | External None -> "External" 
   | External (Some s) -> "External " ^ s
   | Default -> "Default"

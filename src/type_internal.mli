@@ -90,6 +90,7 @@ type tag =
   | Emp_global (* Variable from global instead of local scope *)
   | Emp_intro (* Local mutable variable, and this is its introduction *)
   | Emp_set (* Local mutable expression being set *)
+  | Tuple_assign of tag list (* Tuple of assignments, should not be External, Default, Construct, etc*)
   | External of string option (* External function or register name *)
   | Default (* Variable has default type, has not been bound *)
   | Constructor of int (* Variable is a data constructor, int says how many variants are in this family *)
@@ -148,6 +149,7 @@ val mk_inexact : unit -> nexp
 val set_imp_param : nexp -> unit
 
 val mk_atom : nexp -> t
+val mk_tup : t list -> t
 
 type variable_range =
   | VR_eq of string * nexp

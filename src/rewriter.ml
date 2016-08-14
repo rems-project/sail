@@ -457,6 +457,7 @@ let rewrite_lexp rewriters map (LEXP_aux(lexp,(l,annot))) =
   let rewrap le = LEXP_aux(le,(l,annot)) in
   match lexp with
   | LEXP_id _ | LEXP_cast _ -> rewrap lexp
+  | LEXP_tup tupls -> rewrap (LEXP_tup (List.map (rewriters.rewrite_lexp rewriters map) tupls))
   | LEXP_memory (id,exps) -> rewrap (LEXP_memory(id,List.map (rewriters.rewrite_exp rewriters map) exps))
   | LEXP_vector (lexp,exp) ->
     rewrap (LEXP_vector (rewriters.rewrite_lexp rewriters map lexp,rewriters.rewrite_exp rewriters map exp))
@@ -622,6 +623,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; lEXP_id                  : id -> 'lexp_aux
   ; lEXP_memory              : id * 'exp list -> 'lexp_aux
   ; lEXP_cast                : Ast.typ * id -> 'lexp_aux
+  ; lEXP_tup                 : 'lexp list -> 'lexp_aux
   ; lEXP_vector              : 'lexp * 'exp -> 'lexp_aux
   ; lEXP_vector_range        : 'lexp * 'exp * 'exp -> 'lexp_aux
   ; lEXP_field               : 'lexp * id -> 'lexp_aux
@@ -749,6 +751,7 @@ let id_exp_alg =
   ; lEXP_id = (fun id -> LEXP_id id)
   ; lEXP_memory = (fun (id,es) -> LEXP_memory (id,es))
   ; lEXP_cast = (fun (typ,id) -> LEXP_cast (typ,id))
+  ; lEXP_tup = (fun tups -> LEXP_tup tups)
   ; lEXP_vector = (fun (lexp,e2) -> LEXP_vector (lexp,e2))
   ; lEXP_vector_range = (fun (lexp,e2,e3) -> LEXP_vector_range (lexp,e2,e3))
   ; lEXP_field = (fun (lexp,id) -> LEXP_field (lexp,id))
@@ -1602,6 +1605,7 @@ let find_updated_vars exp =
       ; lEXP_id = (fun id -> (Some id,[],([],[])))
       ; lEXP_memory = (fun (_,es) -> (None,[],lapp2 es))
       ; lEXP_cast = (fun (_,id) -> (Some id,[],([],[])))
+      ; lEXP_tup = (fun tups -> failwith "FORCHRISTOPHER:: this needs implementing, not sure what you want to do")
       ; lEXP_vector = (fun ((ids,acc),e1) -> (None,ids,acc @@ e1))
       ; lEXP_vector_range = (fun ((ids,acc),e1,e2) -> (None,ids,acc @@ e1 @@ e2))
       ; lEXP_field = (fun ((ids,acc),_) -> (None,ids,acc))

@@ -291,6 +291,7 @@ and 'a lexp_aux =  (* lvalue expression *)
    LEXP_id of id (* identifier *)
  | LEXP_memory of id * ('a exp) list (* memory write via function call *)
  | LEXP_cast of typ * id
+ | LEXP_tup of ('a lexp) list (* set multiple at a time, a check will ensure it's not memory *)
  | LEXP_vector of 'a lexp * 'a exp (* vector element *)
  | LEXP_vector_range of 'a lexp * 'a exp * 'a exp (* subvector *)
  | LEXP_field of 'a lexp * id (* struct field *)

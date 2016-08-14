@@ -450,7 +450,18 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
 and to_ast_lexp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : tannot lexp = 
   LEXP_aux(
     (match exp with
-    | Parse_ast.E_id(id) -> LEXP_id(to_ast_id id)
+     | Parse_ast.E_id(id) -> LEXP_id(to_ast_id id)
+     | Parse_ast.E_cast(typ,Parse_ast.E_aux(Parse_ast.E_id(id),l')) ->
+       LEXP_cast(to_ast_typ k_env def_ord typ, to_ast_id id)
+     | Parse_ast.E_tuple(tups) ->
+       let ltups = List.map (to_ast_lexp k_env def_ord) tups in
+       let is_ok_in_tup (LEXP_aux (le,(l,_))) =
+         match le with
+         | LEXP_id _ | LEXP_cast _ | LEXP_vector _ | LEXP_field _ | LEXP_vector_range _ | LEXP_tup _ -> ()
+         | LEXP_memory _ ->
+           typ_error l "only identifiers, fields, and vectors may be set in a tuple" None None None in
+       List.iter is_ok_in_tup ltups;
+       LEXP_tup(ltups)
     | Parse_ast.E_app((Parse_ast.Id_aux(f,l') as f'),args) -> 
       (match f with
       | Parse_ast.Id(id) -> 
@@ -459,8 +470,6 @@ and to_ast_lexp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l
 	  | [E_aux(E_tuple exps,_)] -> LEXP_memory(to_ast_id f',exps)
 	  | args -> LEXP_memory(to_ast_id f', args))
       | _ -> typ_error l' "memory call on lefthand side of assignment must begin with an id" None None None)
-    | Parse_ast.E_cast(typ,Parse_ast.E_aux(Parse_ast.E_id(id),l')) ->
-      LEXP_cast(to_ast_typ k_env def_ord typ, to_ast_id id)
     | Parse_ast.E_vector_access(vexp,exp) -> LEXP_vector(to_ast_lexp k_env def_ord vexp, to_ast_exp k_env def_ord exp)
     | Parse_ast.E_vector_subrange(vexp,exp1,exp2) -> 
       LEXP_vector_range(to_ast_lexp k_env def_ord vexp, to_ast_exp k_env def_ord exp1, to_ast_exp k_env def_ord exp2)
