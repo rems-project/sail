@@ -776,6 +776,7 @@ let duplicate direction v =
       | (V_unknown,(V_lit (L_aux (L_num n) _))) ->
 	V_vector 0 direction (List.replicate (natFromInteger n) V_unknown)
       | (V_unknown,_) -> V_unknown
+      | (_, V_unknown) -> V_unknown
       | _ -> fail ()
     end in
   match v with

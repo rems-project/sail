@@ -2414,7 +2414,8 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
                           | Just ir -> 
                             (Action 
                              (Write_reg (SubReg subreg (Reg reg annot' default_dir) ir) Nothing 
-                              (update_vector_start default_dir (get_first_index_range ir) (get_index_range_size ir) value))
+                                (update_vector_start default_dir (get_first_index_range ir)
+                                   (get_index_range_size ir) value))
                              (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
                                   t_level l_env l_mem Top), l_mem, l_env)
                           | _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
@@ -2427,11 +2428,13 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
                           | Just ir -> 
                             (Action 
                              (Write_reg (SubReg subreg (Reg reg annot' default_dir) ir) Nothing 
-                              (update_vector_start default_dir (get_first_index_range ir) (get_index_range_size ir) value))
+                                (update_vector_start default_dir (get_first_index_range ir)
+                                   (get_index_range_size ir) value))
                              (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l, intern_annot annot))
                                   t_level l_env l_mem Top), l_mem, l_env)
                           | _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
-                      | _ -> (Error l ("Internal error: alias spec has unknown register type "^id), l_mem, l_env) end)
+                      | _ ->
+                       (Error l ("Internal error: alias spec has unknown register type "^id), l_mem, l_env) end)
                   | AL_bit (RI_aux (RI_id reg) (_,annot')) e ->
                     resolve_outcome (interp_main mode t_level l_env l_mem e) 
                       (fun v le lm -> match v with 
@@ -2477,9 +2480,10 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
                         (Action 
                          (Write_reg (Reg reg1 annot1 default_dir) Nothing 
                                     (slice_vector value (natFromInteger b1) (natFromInteger r1)))
-                         (Thunk_frame (E_aux (E_assign (LEXP_aux (LEXP_id reg2) annot2)
-                                                (fst (to_exp <| mode with track_values =false|> eenv 
-                                                    (slice_vector value (natFromInteger (r1+1)) (natFromInteger r2)))))
+                         (Thunk_frame
+                            (E_aux (E_assign (LEXP_aux (LEXP_id reg2) annot2)
+                                      (fst (to_exp <| mode with track_values =false|> eenv 
+                                             (slice_vector value (natFromInteger (r1+1)) (natFromInteger r2)))))
                                          annot2)
                          t_level l_env l_mem Top), l_mem,l_env)
                      | _ -> (Error l "Internal error: alias vector types ill formed", l_mem, l_env) end)
@@ -2492,7 +2496,8 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
       end 
     | LEXP_memory id exps -> 
       match (exp_list mode t_level (fun exps env -> (E_aux (E_tuple exps) (Unknown,Nothing),env)) 
-                      (fun vs -> match vs with | [] -> V_lit (L_aux L_unit Unknown) | [v] -> v | vs -> V_tuple vs end)
+               (fun vs ->
+                  match vs with | [] -> V_lit (L_aux L_unit Unknown) | [v] -> v | vs -> V_tuple vs end)
                       l_env l_mem [] exps) with
       | (Value v,lm,le) ->
         (match tag with
@@ -2537,7 +2542,8 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
                     List.foldr (fun (env,_,exp) (rst,taint_env) -> 
                       let (e,t_e) = env_to_let mode env exp taint_env in (e::rst,t_e)) ([],l_env) multi_matches in
                   let (branches,maybe_id) = fix_up_nondet typ lets (l,annot) in
-                  (interp_main mode t_level taint_env lm (E_aux (E_nondet branches) (l,non_det_annot annot maybe_id)),
+                  (interp_main mode t_level taint_env lm (E_aux (E_nondet branches)
+                                                            (l,non_det_annot annot maybe_id)),
                    Nothing)
                end)
             | Nothing -> 
@@ -2568,7 +2574,8 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
                     List.foldr (fun (env,_,exp) (rst,taint_env) -> 
                       let (e,t_e) = env_to_let mode env exp taint_env in (e::rst,t_e)) ([],l_env) multi_matches in
                   let (branches,maybe_id) = fix_up_nondet typ lets (l,annot) in
-                  (interp_main mode t_level taint_env lm (E_aux (E_nondet branches) (l,non_det_annot annot maybe_id)),
+                  (interp_main mode t_level taint_env lm (E_aux (E_nondet branches)
+                                                            (l,non_det_annot annot maybe_id)),
                    Nothing)
                end)
             | Nothing -> 
@@ -2700,14 +2707,16 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
                     let start_pos = reg_start_pos regform in
                     let reg_size = reg_size regform in
                     ((Action (Write_reg regform Nothing (update_vector_start default_dir start_pos reg_size value)) 
-                        (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),
+                        (Thunk_frame (E_aux (E_lit (L_aux L_unit l))
+                                        (l,intern_annot annot)) t_level l_env l_mem Top),
                       l_mem,l_env),
                      Nothing)
                   | (V_register regform,false,Just lexp_builder) ->
                     let start_pos = reg_start_pos regform in
                     let reg_size = reg_size regform in
                     ((Action (Write_reg regform Nothing (update_vector_start default_dir start_pos reg_size value)) 
-                        (Thunk_frame (E_aux (E_lit (L_aux L_unit l)) (l,intern_annot annot)) t_level l_env l_mem Top),
+                        (Thunk_frame (E_aux (E_lit (L_aux L_unit l))
+                                        (l,intern_annot annot)) t_level l_env l_mem Top),
                       l_mem,l_env),
                      Just (next_builder lexp_builder))
                   | (V_boxref n t,true,_) -> 
@@ -2869,7 +2878,8 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
                | Just ir -> 
                  ((Action 
                      (Write_reg (SubReg id regf ir) Nothing 
-                        (update_vector_start default_dir (get_first_index_range ir) (get_index_range_size ir) value)) s,
+                        (update_vector_start default_dir (get_first_index_range ir)
+                           (get_index_range_size ir) value)) s,
                    lm,le), 
                   (if is_top_level then Nothing else next_builder))
                | _ -> ((Error l "Internal error, unrecognized write, no field",lm,le),Nothing)
@@ -2882,7 +2892,8 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level (
                | Just ir -> 
                  ((Action 
                      (Write_reg (SubReg id regf ir) Nothing 
-                        (update_vector_start default_dir (get_first_index_range ir) (get_index_range_size ir) value)) s,
+                        (update_vector_start default_dir (get_first_index_range ir)
+                           (get_index_range_size ir) value)) s,
                    lm,le), 
                   (if is_top_level then Nothing else next_builder))
                | _ -> ((Error l "Internal error, unrecognized write, no field",lm,le),Nothing)
@@ -2928,9 +2939,11 @@ and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
       (match in_env subregs reg_ti with
         | Just indexes -> 
           (match in_env indexes (get_id subreg) with
-            | Just ir -> (Action (Read_reg (SubReg subreg (Reg reg annot' default_dir) ir) Nothing) stack, l_mem, l_env)
-            | _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
-        | _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " reg_ti), l_mem, l_env) end)
+           | Just ir -> (Action (Read_reg (SubReg subreg (Reg reg annot' default_dir) ir) Nothing) stack,
+                         l_mem, l_env)
+           | _ -> (Error l "Internal error, alias spec has unknown field", l_mem, l_env) end)
+        | _ -> (Error l (String.stringAppend "Internal error: alias spec has unknown register type " reg_ti),
+                 l_mem, l_env) end)
     | AL_bit (RI_aux (RI_id reg) (_,annot')) e ->
       resolve_outcome (interp_main mode t_level l_env l_mem e) 
         (fun v le lm -> match v with 
@@ -2988,8 +3001,9 @@ let rec to_global_letbinds handle_action (Defs defs) t_level =
     | DEF_val lbind ->
       match eval_toplevel_let handle_action t_level eenv (emem "global_letbinds") lbind with
         | Just le -> 
-          to_global_letbinds handle_action (Defs defs) 
-                                           (Env fdefs instrs default_dir (Map.(union) lets le) regs ctors subregs aliases)
+          to_global_letbinds handle_action
+            (Defs defs) 
+            (Env fdefs instrs default_dir (Map.(union) lets le) regs ctors subregs aliases)
         | Nothing -> 
           to_global_letbinds handle_action (Defs defs) 
                                            (Env fdefs instrs default_dir lets regs ctors subregs aliases) end
