@@ -340,7 +340,7 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
     | (Interp.Action (Interp.Call_extern i value) stack,_,_) ->
       match List.lookup i (Interp_lib.library_functions direction) with
         | Nothing -> (Ivh_error (Internal_error ("External function not available " ^ i)), events_out)
-        | Just f  -> 
+        | Just f  ->
           interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
                                  (fun _ -> Interp.resume mode stack (Just (f value)))
       end
@@ -508,7 +508,8 @@ let decode_to_istate top_level registers value =
           Assert_extra.failwith "supported_instructions called exit, so support will be needed for that now"
         | Ivh_error err -> Decode_error err
         end
-    | Ivh_value_after_exn _ -> Assert_extra.failwith "Decode called exit, so support will be needed for that now"
+   | Ivh_value_after_exn _ ->
+       Assert_extra.failwith ("Decode of " ^ val_str ^ " called exit.")
     | Ivh_error err -> Decode_error err
 end
 
@@ -634,10 +635,10 @@ let rec interp_to_outcome mode context thunk =
              | _ -> 
                let nondet_states = List.map (Interp.set_in_context next_state) exps in
                Nondet_choice (List.map (fun i -> IState i context) nondet_states) (IState next_state context) end, lm)
-         | Interp.Call_extern i value -> 
+         | Interp.Call_extern i value ->  
            (match List.lookup i ((Interp_lib.library_functions internal_direction) ++ spec_externs) with
              | Nothing -> (Error ("External function not available " ^ i), lm)
-             | Just f  -> 
+             | Just f  ->
                if (mode.internal_mode.Interp.eager_eval)
                then interp_to_outcome mode context 
                     (fun _ -> Interp.resume mode.internal_mode next_state (Just (f value)))

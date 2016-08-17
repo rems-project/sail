@@ -1174,6 +1174,7 @@ let doc_exp, doc_let =
   | LEXP_cast(typ,id) -> prefix 2 1 (parens (doc_typ typ)) (doc_id id)
   | LEXP_memory _ | LEXP_vector _ | LEXP_vector_range _
   | LEXP_field _ -> group (parens (doc_lexp le))
+  | LEXP_tup tups -> parens (separate_map comma doc_lexp tups)
 
   (* expose doc_exp and doc_let *)
   in exp, let_exp
