@@ -325,32 +325,36 @@ accessed. The slice specifies where this field is in the register*)
 (* The first four components are as in Reg_field; the final slice
 specifies a part of the field, indexed w.r.t. the register as a whole *)
 
-let ~{ocaml} reg_nameCompare r1 r2 = 
-  match (r1,r2) with
-  | (Reg s1 ns1 nz1 l1, Reg s2 ns2 nz2 l2) -> 
-     compare (s1,ns1,nz1,l1) (s2,ns2,nz2,l2)
-  | (Reg_slice s1 ns1 d1 sl1, Reg_slice s2 ns2 d2 sl2) -> 
-     compare(s1,ns1,d1,sl1) (s2,ns2,d2,sl2)
-  | (Reg_field s1 ns1 d1 f1 sl1, Reg_field s2 ns2 d2 f2 sl2) -> 
-     compare ((s1,ns1,d2),f1,sl1) ((s2,ns2,d2),f2,sl2)
-  | (Reg_f_slice s1 ns1 d1 f1 sl1 sl1', Reg_f_slice s2 ns2 d2 f2 sl2 sl2') -> 
-     compare ((s1,ns1,d1),(f1,sl1,sl1')) ((s2,ns2,d2),(f2,sl2,sl2'))
-  | (Reg _ _ _ _, _)  -> LT
-  | (Reg_slice _ _ _ _, _) -> LT
-  | (Reg_field _ _ _ _ _, _) -> LT
-  | (_, _) -> GT
+let register_base_name : reg_name -> string = function
+  | Reg s _ _ _             -> s
+  | Reg_slice s _ _ _       -> s
+  | Reg_field s _ _ _ _     -> s
+  | Reg_f_slice s _ _ _ _ _ -> s
   end
-let inline {ocaml} reg_nameCompare = defaultCompare
 
-let ~{ocaml} reg_nameLess b1 b2      = reg_nameCompare b1 b2 =  LT
-let ~{ocaml} reg_nameLessEq b1 b2    = reg_nameCompare b1 b2 <> GT
-let ~{ocaml} reg_nameGreater b1 b2   = reg_nameCompare b1 b2 =  GT
-let ~{ocaml} reg_nameGreaterEq b1 b2 = reg_nameCompare b1 b2 <> LT
+let slice_of_reg_name : reg_name -> slice = function
+  | Reg _ start width D_increasing -> (start, start + width -1)
+  | Reg _ start width D_decreasing -> (start - width - 1, start)
+  | Reg_slice _ _ _ sl             -> sl
+  | Reg_field _ _ _ _ sl           -> sl
+  | Reg_f_slice _ _ _ _ _ sl       -> sl
+  end
 
-let inline {ocaml} reg_nameLess      = defaultLess
-let inline {ocaml} reg_nameLessEq    = defaultLessEq
-let inline {ocaml} reg_nameGreater   = defaultGreater
-let inline {ocaml} reg_nameGreaterEq = defaultGreaterEq
+let reg_name_non_empty_intersection (r: reg_name) (r': reg_name) : bool = 
+  register_base_name r = register_base_name r' &&
+  let (i1,  i2)  = slice_of_reg_name r in
+  let (i1', i2') = slice_of_reg_name r' in
+  i1' <= i2 && i2' >= i1
+
+
+let reg_nameCompare r1 r2 = 
+  compare (register_base_name r1,slice_of_reg_name r1)
+          (register_base_name r2,slice_of_reg_name r2)
+
+let reg_nameLess b1 b2      = reg_nameCompare b1 b2 =  LT
+let reg_nameLessEq b1 b2    = reg_nameCompare b1 b2 <> GT
+let reg_nameGreater b1 b2   = reg_nameCompare b1 b2 =  GT
+let reg_nameGreaterEq b1 b2 = reg_nameCompare b1 b2 <> LT
 
 instance (Ord reg_name)
   let compare = reg_nameCompare
@@ -360,11 +364,8 @@ instance (Ord reg_name)
   let (>=) = reg_nameGreaterEq
 end
 
-let {coq} reg_nameEqual a1 a2 = (reg_nameCompare a1 a2) = EQ
-let inline ~{coq} reg_nameEqual = unsafe_structural_equality
-
-let {coq} reg_nameInequal a1 a2 = not (reg_nameEqual a1 a2)
-let inline ~{coq} reg_nameInequal = unsafe_structural_inequality
+let reg_nameEqual a1 a2 = (reg_nameCompare a1 a2) = EQ
+let reg_nameInequal a1 a2 = not (reg_nameEqual a1 a2)
 
 instance  (Eq reg_name)
   let (=)  = reg_nameEqual
@@ -388,13 +389,6 @@ let start_of_reg_name r = match r with
   | Reg_field _ start _ _ _ -> start
   | Reg_f_slice _ start _ _ _ _ -> start
 end
-
-let id_of_reg_name r = match r with
-  | Reg s _ _ _ -> s
-  | Reg_slice s _ _ _ -> s
-  | Reg_field s _ _ _ _ -> s
-  | Reg_f_slice s _ _ _ _ _ ->s
-    end
 
 (* Data structures for building up instructions *)
 
