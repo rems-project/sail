@@ -13,15 +13,15 @@ endif
 LEMINTERPDIR=../src/lem_interp/
 
 # the order of the files is important
-SOURCES=armv8.h.sail\
-  armv8_A64_sys_regs.sail\
-  armv8_A64_special_purpose_regs.sail\
-  armv8_A32_sys_regs.sail\
-  armv8_pstate.sail\
-  armv8_lib.h.sail\
-  armv8_common_lib.sail\
-  armv8_A64_lib.sail\
-  armv8.sail
+SOURCES=armV8.h.sail\
+  armV8_A64_sys_regs.sail\
+  armV8_A64_special_purpose_regs.sail\
+  armV8_A32_sys_regs.sail\
+  armV8_pstate.sail\
+  armV8_lib.h.sail\
+  armV8_common_lib.sail\
+  armV8_A64_lib.sail\
+  armV8.sail
 
 all: $(BUILDDIR)/armv8.ml
 
@@ -43,9 +43,22 @@ $(BUILDDIR)/armv8.ml: $(BUILDDIR)/armv8.lem
 
 ######################################################################
 ETCDIR=../etc
-SAIL_FILES=$(wildcard *.sail)
 
 apply_header:
-	headache -c $(ETCDIR)/headache_config -h $(ETCDIR)/arm_header $(SAIL_FILES)
+	-chmod u+w *.sail
+	headache -c $(ETCDIR)/headache_config -h $(ETCDIR)/arm_header *.sail
+	chmod a-w *.sail
 
 .PHONY: apply_header
+
+######################################################################
+IDLARM=../../../rsem/idlarm
+
+pull_from_idlarm:
+	svn up $(IDLARM)
+	$(MAKE) -C $(IDLARM)
+	-chmod u+w *.sail
+	rm -f *.sail
+	cp -a $(IDLARM)/build/*.sail ./
+	chmod a-w *.sail
+	$(MAKE) apply_header

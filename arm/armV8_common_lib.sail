@@ -479,6 +479,7 @@ function forall Nat 'N. (bit['N],bit[4]) AddWithCarry ((bit['N]) x, (bit['N]) y,
   (result,[n]:[z]:[c]:[v])
 }
 
+(** TYPE:shared/functions/memory/AddressDescriptor *)
 (** FUNCTION:boolean BigEndian() *)
 
 function boolean effect {rreg} BigEndian() = {
@@ -538,10 +539,19 @@ function unit effect {barr} DataSynchronizationBarrier((MBReqDomain) domain, (MB
   };
 }
 
+(** ENUMERATE:shared/functions/memory/DeviceType *)
+(** ENUMERATE:shared/functions/memory/DeviceType *)
+(** TYPE:shared/functions/memory/FaultRecord *)
+(** TYPE:shared/functions/memory/FullAddress *)
 (** FUNCTION:shared/functions/memory/Hint_Prefetch *)
 val (bit[64],PrefetchHint,integer,boolean) -> unit effect pure Hint_Prefetch
 function unit effect pure Hint_Prefetch(addr,hint,target,stream) = ()
-
+(** ENUMERATE:shared/functions/memory/MBReqDomain *)
+(** ENUMERATE:shared/functions/memory/MBReqTypes *)
+(** TYPE:shared/functions/memory/MemAttrHints *)
+(** ENUMERATE:shared/functions/memory/MemType *)
+(** TYPE:shared/functions/memory/MemoryAttributes *)
+(** ENUMERATE:shared/functions/memory/PrefetchHint *)
 (** FUNCTION:shared/functions/memory/_Mem *)
 
 (* regular load *)
@@ -749,6 +759,7 @@ function forall Nat 'N, 'N IN {32,64}. unit effect {rreg,wreg} BranchTo((bit['N]
   };
 }
 
+(** ENUMERATE:shared/functions/registers/BranchType *)
 (** FUNCTION:shared/functions/registers/Hint_Branch *)
 
 function unit effect pure Hint_Branch((BranchType) hint) =
@@ -758,7 +769,6 @@ function unit effect pure Hint_Branch((BranchType) hint) =
 
 (** FUNCTION:shared/functions/registers/ResetExternalDebugRegisters *)
 val extern boolean -> unit effect pure ResetExternalDebugRegisters
-
 (** FUNCTION:shared/functions/registers/ThisInstrAddr *)
 
 val forall Nat 'N. implicit<'N> -> bit['N] effect {rreg} ThisInstrAddr
@@ -801,7 +811,6 @@ function bit[32] rSPSR() =
 
 (** FUNCTION:shared/functions/system/ClearEventRegister *)
 val extern unit -> unit effect pure ClearEventRegister
-
 (** FUNCTION:boolean ConditionHolds(bits(4) cond) *)
 
 function boolean effect {rreg} ConditionHolds((bit[4]) _cond) =
@@ -827,6 +836,7 @@ function boolean effect {rreg} ConditionHolds((bit[4]) _cond) =
   result;
 }
 
+(** ENUMERATE:shared/functions/system/EL0 *)
 (** FUNCTION:boolean ELUsingAArch32(bits(2) el) *)
 
 function boolean ELUsingAArch32((bit[2]) el) =
@@ -834,10 +844,8 @@ function boolean ELUsingAArch32((bit[2]) el) =
 
 (** FUNCTION:shared/functions/system/EventRegisterSet *)
 val extern unit -> unit effect pure EventRegisterSet
-
 (** FUNCTION:shared/functions/system/EventRegistered *)
 val extern unit -> boolean effect pure EventRegistered
-
 (** FUNCTION:shared/functions/system/HaveAArch32EL *)
 
 function boolean HaveAArch32EL((bit[2]) el) =
@@ -892,7 +900,6 @@ function unit Hint_Yield() = ()
 
 (** FUNCTION:shared/functions/system/InstructionSynchronizationBarrier *)
 val extern unit -> unit effect {barr} InstructionSynchronizationBarrier
-
 (** FUNCTION:shared/functions/system/InterruptPending *)
 
 val extern unit -> boolean effect pure InterruptPending
@@ -922,6 +929,7 @@ function boolean IsSecureBelowEL3() = {
     IMPLEMENTATION_DEFINED.IsSecureBelowEL3;
 }
 
+(** ENUMERATE:shared/functions/system/Mode_Bits *)
 (** FUNCTION:shared/functions/system/SCR_GEN *)
 
 function SCRType SCR_GEN() = {
@@ -963,10 +971,8 @@ function boolean UsingAArch32() =
 
 (** FUNCTION:shared/functions/system/WaitForEvent *)
 val extern unit -> unit effect pure WaitForEvent
-
 (** FUNCTION:shared/functions/system/WaitForInterrupt *)
 val extern unit -> unit effect pure WaitForInterrupt
-
 (** FUNCTION:shared/translation/translation/PAMax *)
 
 function uinteger PAMax() =
@@ -996,3 +1002,4 @@ function bit[2] effect {rreg} S1TranslationRegime () =
   else
     EL1
 }
+

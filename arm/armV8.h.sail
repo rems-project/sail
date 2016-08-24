@@ -160,5 +160,5 @@ let IMPLEMENTATION_DEFINED =
   IsSecureBelowEL3 = false;
 }
 
-(* FIXME:  *)
+(* FIXME: ask Kathy what should we do with this *)
 let UNKNOWN = 0

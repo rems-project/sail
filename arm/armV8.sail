@@ -38,6 +38,7 @@ typedef ast = const union forall Nat 'R, 'R IN {32, 64},     (* register size *)
   Unallocated;
   (boolean) ImplementationDefinedTestBeginEnd;
   ImplementationDefinedStopFetching;
+  ImplementationDefinedThreadStart;
 
   (reg_index,[:'R:],boolean,bit[64]) CompareAndBranch;
   (bit[64],bit[4]) BranchConditional;
@@ -170,7 +171,7 @@ function clause decodeExceptionGeneration (0b11010100:0b000:(bit[16]) imm16:0b00
   Some(GenerateExceptionEL3(imm))
 }
 
-function clause execute (GenerateExceptionEL2(imm)) =
+function clause execute (GenerateExceptionEL3(imm)) =
 {
   if ~(HaveEL(EL3)) | PSTATE_EL == EL0 then
     UnallocatedEncoding();
@@ -476,6 +477,17 @@ function clause decodeImplementationDefined (0b1101010100:[0]:0b01:0b011:[1]:[_]
 function clause execute ( ImplementationDefinedStopFetching ) =
 {
   info("stop fetching instructions");
+}
+
+(* instructions to signal ppcmem to start a thread *)
+function clause decodeImplementationDefined (0b1101010100:[0]:0b01:0b011:[1]:[_]:0b11:0b0000:0b000:0b00011) =
+{
+  Some(ImplementationDefinedThreadStart)
+}
+
+function clause execute ( ImplementationDefinedThreadStart ) =
+{
+  info("thread start");
 }
 
 end decodeImplementationDefined
@@ -877,7 +889,7 @@ function clause execute ( LoadStorePairNonTemp(wback,postindex,n,t,t2,acctype,me
   (bit[64]) address := 0; (* ARM: uninitialized *)
   (bit['D]) data1 := 0; (* ARM: uninitialized *)
   (bit['D]) data2 := 0; (* ARM: uninitialized *)
-  (*constant*) ([|1:8|]) dbytes := datasize quot 8;
+  (*constant*) (uinteger) dbytes := datasize quot 8;
   (boolean) rt_unknown := false;
 
   if memop == MemOp_LOAD & t == t2 then {
@@ -1359,7 +1371,7 @@ function clause execute ( LoadStorePair(wback,postindex,n,t,t2,acctype,memop,_si
   (bit[64]) address := 0; (* ARM: uninitialized *)
   (bit['D]) data1 := 0; (* ARM: uninitialized *)
   (bit['D]) data2 := 0; (* ARM: uninitialized *)
-  (*constant*) ([|1:8|]) dbytes := datasize quot 8;
+  (*constant*) (uinteger) dbytes := datasize quot 8;
   (boolean) rt_unknown := false;
   (boolean) wb_unknown := false;
 
@@ -1540,7 +1552,7 @@ function clause execute (AddSubImmediate(d,n,datasize,sub_op,setflags,imm)) = {
   }
 }
 
-(* BFM *)
+(* BFM *) 
 (* SBFM *)
 (* UBFM *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.

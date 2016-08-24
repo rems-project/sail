@@ -550,6 +550,7 @@ function forall Nat 'N, 'N IN {8,16,32,64,128}. unit effect {wreg} wV((SIMD_inde
 
 function forall Nat 'N, 'N IN {8,16,32,64,128}. bit['N] effect {rreg} rV((SIMD_index) n) = mask(_V[n])
 
+
 (** FUNCTION:// Vpart[] - non-assignment form *)
 
 function forall Nat 'N, 'N IN {8,16,32,64,128}. bit['N] effect {rreg} rVpart (n,part) = {
@@ -753,6 +754,7 @@ function unit AArch64_ExceptionReturn((bit[64]) new_pc, (bit[32]) spsr) =
   not_implemented("AArch64_ExceptionReturn");
 }
 
+(** ENUMERATE:aarch64/instrs/countop/CountOp *)
 (** FUNCTION:ExtendType DecodeRegExtend(bits(3) op) *)
 
 function ExtendType DecodeRegExtend ((bit[3]) op) = ([|8|]) op
@@ -783,6 +785,8 @@ function bit['N] ExtendReg ((reg_index) _reg, (ExtendType) type, ([:'S:]) shift)
   Extend((_val[(len - 1)..0]) : ((bit['S]) (Zeros())), _unsigned)
 }
 
+(** ENUMERATE:aarch64/instrs/extendreg/ExtendType *)
+(** ENUMERATE:aarch64/instrs/integer/arithmetic/rev/revop/RevOp *)
 (** FUNCTION:(bits(M), bits(M)) DecodeBitMasks (bit immN, bits(6) imms, bits(6) immr, boolean immediate) *)
 
 val forall Nat 'M, Nat 'E. (implicit<'M>,bit,bit[6],bit[6],boolean) -> (bit['M],bit['M]) effect {escape} DecodeBitMasks
@@ -819,6 +823,7 @@ function forall Nat 'M, Nat 'E, 'E IN {2,4,8,16,32,64}. (bit['M],bit['M]) Decode
   (wmask, tmask);
 }}
 
+(** ENUMERATE:aarch64/instrs/integer/ins-ext/insert/movewide/movewideop/MoveWideOp *)
 (** FUNCTION:ShiftType DecodeShift(bits(2) op) *)
 
 function ShiftType DecodeShift((bit[2]) op) = ([|4|]) op
@@ -837,6 +842,9 @@ function forall Nat 'N. bit['N] effect {rreg} ShiftReg((reg_index) _reg, (ShiftT
   result;
 }
 
+(** ENUMERATE:aarch64/instrs/integer/shiftreg/ShiftType *)
+(** ENUMERATE:aarch64/instrs/logicalop/LogicalOp *)
+(** ENUMERATE:aarch64/instrs/memory/memop/MemOp *)
 (** FUNCTION:aarch64/instrs/memory/prefetch/Prefetch *)
 
 function unit Prefetch((bit[64]) address, (bit[5]) prfop) =
@@ -858,6 +866,9 @@ function unit Prefetch((bit[64]) address, (bit[5]) prfop) =
   Hint_Prefetch(address, hint, target, stream);
 }}
 
+(** ENUMERATE:aarch64/instrs/system/barriers/barrierop/MemBarrierOp *)
+(** ENUMERATE:aarch64/instrs/system/hints/syshintop/SystemHintOp *)
+(** ENUMERATE:aarch64/instrs/system/register/cpsr/pstatefield/PSTATEField *)
 (** FUNCTION:aarch64/translation/faults/AArch64.AlignmentFault *)
 
 function FaultRecord AArch64_AlignmentFault((AccType) acctype, (boolean) iswrite, (boolean) secondstage) =
@@ -907,3 +918,4 @@ function AddressDescriptor AArch64_TranslateAddress((bit[64]) vaddress, (AccType
 
   result;
 }
+

@@ -458,6 +458,7 @@ typedef EDSCR_type = register bits [31:0]
 }
 register (EDSCR_type) EDSCR (* External Debug Status and Control Register *)
 
+
 function unit effect pure AArch64_ResetControlRegisters((boolean) cold_reset) =
 {
   ()
