@@ -472,6 +472,199 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
       let t = {t = Tapp("list",[TA_typ u])} in
       (P_aux(P_list(pats'),(l,cons_tag_annot  t emp_tag cs)), env,constraints@cs,bounds,t)
 
+let rec check_pattern_after_constraint_res envs concrete_length_req expect_t (P_aux(p,(l,annot))) : t  =
+  let check_pat = check_pattern_after_constraint_res envs in
+  let (Env(d_env,t_env,b_env,tp_env)) = envs in
+  (*let _ = Printf.eprintf "checking pattern after constraints with expected type %s\n" (t_to_string expect_t) in*)
+  let expect_t,_ = get_abbrev d_env expect_t in
+  (*let _ = Printf.eprintf "check pattern after constraints expect_t after abbrev %s\n" (t_to_string expect_t) in*)
+  let expect_actual = match expect_t.t with | Tabbrev(_,t) -> t | _ -> expect_t in
+  let t_inferred = match annot with
+    | Base((_,t),tag,cs,_,_,_) -> t
+    | _ -> failwith "Inference pass did not annotate a pattern with Base annot" in
+  match p with
+  | P_lit (L_aux(lit,l')) ->
+    let t_from_lit = (match lit with
+        | L_unit  -> unit_t 
+        | L_zero | L_one | L_true | L_false -> bit_t
+        | L_num i -> 
+          (match expect_actual.t with
+           | Tid "bit" -> if i = 0 || i = 1 then bit_t else typ_error l' "Given number but expected bit"
+           | _ -> {t = Tapp("atom", [TA_nexp (mk_c_int i)])})
+        | L_hex s -> 
+          let size = big_int_of_int ((String.length s) * 4) in
+          let is_inc = match d_env.default_o.order with | Oinc -> true | _ -> false in
+          mk_vector bit_t d_env.default_o (if is_inc then n_zero else mk_c (sub_big_int size one)) (mk_c size)
+        | L_bin s -> 
+          let size = big_int_of_int (String.length s) in
+          let is_inc = match d_env.default_o.order with | Oinc -> true | _ -> false in
+          mk_vector bit_t d_env.default_o (if is_inc then n_zero else mk_c(sub_big_int size one)) (mk_c size)
+        | L_string s -> string_t
+        | L_undef -> typ_error l' "Cannot pattern match on undefined") in
+    let t_c,_ = type_consistent (Patt l) d_env Require true t_from_lit t_inferred in
+    let t,_   = type_consistent (Patt l) d_env Require true t_c expect_t in
+    t
+  | P_wild ->
+    let t,_ = type_consistent (Patt l) d_env Require true t_inferred expect_t in t
+  | P_as(pat,id) -> check_pat concrete_length_req expect_t pat
+  | P_typ(typ,pat) -> 
+    let tdec = typ_to_t envs false false typ in
+    let tdec = typ_subst tp_env false tdec in
+    let default _ = let tdec = check_pat false tdec pat in
+      let t,_ = type_consistent (Patt l) d_env Guarantee false tdec t_inferred in
+      let t,_ = type_consistent (Patt l) d_env Guarantee false t expect_t in
+      t
+    in
+    (match tdec.t, concrete_length_req with
+     | Tapp ("vector", [_;TA_nexp {nexp = Nconst _};_;_]), true -> default ()
+     | Tapp ("vector",_), true ->
+       (try (let tdec = check_pat true tdec pat in
+            let t,_ = type_consistent (Patt l) d_env Guarantee false tdec t_inferred in
+            let t,_ = type_consistent (Patt l) d_env Guarantee false t expect_t in t) with
+       | Reporting_basic.Fatal_error(Reporting_basic.Err_type _) ->
+         typ_error l "Type annotation does not provide a concrete vector length and one cannot be inferred")
+     | _ -> default ())
+  | P_id id -> 
+    let i = id_to_string id in
+    let default t =
+      let t,_ = type_consistent (Patt l) d_env Guarantee false t t_inferred in
+      let t,_ = type_consistent (Patt l) d_env Guarantee false t expect_t in t in
+    (match Envmap.apply t_env i with
+     | Some(Base((params,t),Constructor n,cs,efl,efr,bounds)) ->
+       let t,cs,ef,_ = subst params false false t cs efl in
+       (match t.t with
+        | Tfn({t = Tid "unit"},t',IP_none,ef) -> 
+          if conforms_to_t d_env false false t' expect_t then default t' else default t
+        | Tfn(t1,t',IP_none,e) -> 
+          if conforms_to_t d_env false false t' expect_t
+          then typ_error l ("Constructor " ^ i ^ " expects arguments of type " ^ (t_to_string t) ^ ", found none")
+          else default t'
+        | _ -> raise (Reporting_basic.err_unreachable l "Constructor tannot does not have function type"))
+     | Some(Base((params,t),Enum max,cs,efl,efr,bounds)) -> 
+       let t,cs,ef,_ = subst params false false t cs efl in default t
+     | _ -> (match t_inferred.t, concrete_length_req with
+         | Tapp ("vector", [_;TA_nexp {nexp = Nconst _};_;_]), true -> default t_inferred
+         | Tapp ("vector", _), true ->
+           typ_error l ("Unable to infer a vector length for paramter " ^ i ^ ", a type annotation may be required.")
+         | _ -> default t_inferred))
+    | P_app(id,pats) -> 
+      let i = id_to_string id in
+      (*let _ = Printf.eprintf "checking constructor pattern %s\n" i in*)
+      (match Envmap.apply t_env i with
+        | None | Some NoTyp | Some Overload _ -> typ_error l ("Constructor " ^ i ^ " in pattern is undefined")
+        | Some(Base((params,t),Constructor n,constraints,efl,efr,bounds)) -> 
+          let t,dec_cs,_,_ = subst params false false t constraints efl in
+          (match t.t with
+            | Tid id -> if pats = [] 
+              then let t',ret_cs = type_consistent (Patt l) d_env Guarantee false t expect_t in t'
+              else typ_error l ("Constructor " ^ i ^ " does not expect arguments")
+            | Tfn(t1,t2,IP_none,ef) ->
+              let t',ret_cs = type_consistent (Patt l) d_env Guarantee false t2 expect_t in
+              (match pats with
+              | [] -> let _ = type_consistent (Patt l) d_env Guarantee false unit_t t1 in t'
+              | [p] -> check_pat concrete_length_req t1 p 
+              | pats -> check_pat concrete_length_req t1 (P_aux(P_tup(pats),(l,annot))))
+            | _ -> typ_error l ("Identifier " ^ i ^ " must be a union constructor"))
+        | Some(Base((params,t),tag,constraints,efl,efr,bounds)) -> 
+          typ_error l ("Identifier " ^ i ^ " used in pattern is not a union constructor"))
+    | P_record(fpats,_) -> 
+      (match (fields_to_rec fpats d_env.rec_env) with
+        | None -> typ_error l ("No struct exists with the listed fields")
+        | Some(id,tannot,typ_pats) ->
+          (match tannot with
+            | (Base((vs,t),tag,cs,eft,_,bounds)) ->
+              let (ft_subst,cs,_,_) = subst vs false false t cs pure_e in
+              let subst_rtyp,subst_typs = 
+                match ft_subst.t with | Tfn({t=Ttup tups},rt,_,_) -> rt,tups 
+                  | _ -> raise (Reporting_basic.err_unreachable l "fields_to_rec gave a non function type") in
+              let _ = 
+                List.map2 (fun (_,id,l,pat) styp -> check_pat concrete_length_req styp pat) typ_pats subst_typs in
+              let t',cs' = type_consistent (Patt l) d_env Guarantee false ft_subst expect_t in t'
+            | _ -> raise (Reporting_basic.err_unreachable l "fields_to_rec returned a non Base tannot")))
+    | P_vector pats -> 
+      let (item_t, base, rise, ord) = match expect_actual.t with 
+        | Tapp("vector",[TA_nexp b;TA_nexp r;TA_ord o;TA_typ i]) -> (i,b,r,o)
+        | Tuvar _ -> (new_t (),new_n (),new_n(), d_env.default_o) 
+        | _ -> typ_error l ("Expected a " ^ t_to_string expect_actual ^ " but found a vector") in
+      let ts = List.map (check_pat false item_t) pats in
+      let (u,cs) = List.fold_right (fun u (t,cs) ->
+          let t',cs = type_consistent (Patt l) d_env Require true u t in t',cs) ts (item_t,[]) in
+      let len = List.length ts in
+      let t = 
+        match (ord.order,d_env.default_o.order) with
+        | (Oinc,_) | (Ovar _, Oinc) | (Ouvar _,Oinc) -> 
+          {t = Tapp("vector",[TA_nexp n_zero;
+                              TA_nexp (mk_c_int len);
+                              TA_ord{order=Oinc};
+                              TA_typ u])}
+        | (Odec,_) | (Ovar _, Odec) | (Ouvar _,Odec) -> 
+          {t= Tapp("vector", [TA_nexp (mk_c (if len = 0 then zero else (big_int_of_int (len -1))));
+                              TA_nexp (mk_c_int len);
+                              TA_ord{order=Odec};
+                              TA_typ u;])}
+        | _ -> raise (Reporting_basic.err_unreachable l "Default order not set") in
+      let _,_ = type_consistent (Patt l) d_env Guarantee true t expect_t in t
+    | P_vector_indexed(ipats) -> 
+      let item_t = match expect_actual.t with
+        | Tapp("vector",[b;r;o;TA_typ i]) -> i
+        | Tuvar _ -> new_t () 
+        | _ -> typ_error l ("Expected a vector by pattern form, but a " ^ t_to_string expect_actual ^ " by type") in
+      let (is,pats) = List.split ipats in
+      let (fst,lst) = (List.hd is),(List.hd (List.rev is)) in
+      let inc_or_dec = 
+        if fst < lst then
+          (let _ = List.fold_left 
+             (fun i1 i2 -> if i1 < i2 then i2 
+               else typ_error l "Indexed vector pattern was inconsistently increasing") fst (List.tl is) in
+           true)
+        else if lst < fst then
+          (let _ = List.fold_left
+             (fun i1 i2 -> if i1 > i2 then i2
+               else typ_error l "Indexed vector pattern was inconsistently decreasing") fst (List.tl is) in
+           false)
+        else typ_error l "Indexed vector cannot be determined as either increasing or decreasing" in
+      let base,rise = new_n (), new_n () in
+      let ts = List.map (fun (_,pat) -> check_pat concrete_length_req item_t pat) ipats in
+      let co = Patt l in
+      let (u,cs) = List.fold_right (fun u (t,cs) -> type_consistent co d_env Require true u t) ts (item_t,[]) in
+      {t = Tapp("vector",[(TA_nexp base);(TA_nexp rise);
+                          (TA_ord{order=(if inc_or_dec then Oinc else Odec)});(TA_typ u)])}
+    | P_tup(pats) -> 
+      let item_ts = match expect_actual.t with
+        | Ttup ts ->
+          if (List.length ts) = (List.length pats) 
+          then ts
+          else typ_error l ("Expected a pattern with a tuple with " ^
+                            (string_of_int (List.length ts)) ^ " elements, found one with " ^
+                            (string_of_int (List.length pats)))
+        | Tuvar _ -> List.map (fun _ -> new_t ()) pats 
+        | _ -> typ_error l ("Expected a tuple by pattern form, but a " ^ (t_to_string expect_actual) ^ " by type") in
+      let ts = List.map (fun (pat,t) -> check_pat false t pat) (List.combine pats item_ts) in
+      {t = Ttup ts}
+    | P_vector_concat pats -> 
+      let item_t,base,rise,order = 
+        match expect_t.t with 
+          | Tapp("vector",[TA_nexp(b);TA_nexp(r);TA_ord(o);TA_typ item])
+          | Tabbrev(_,{t=Tapp("vector",[TA_nexp(b);TA_nexp(r);TA_ord(o);TA_typ item])}) -> item,b,r,o
+          | _ -> new_t (),new_n (), new_n (), d_env.default_o in
+      let vec_ti _ = {t= Tapp("vector",[TA_nexp (new_n ());TA_nexp (new_n ());TA_ord order;TA_typ item_t])} in
+      let _ =
+        let rec walk = function
+          | [] -> []
+          | [p] ->
+            [check_pat concrete_length_req (*use enclosing pattern status in case of nested concats*) (vec_ti ()) p]
+          | p::ps -> (check_pat true (vec_ti ()) p)::(walk ps) in
+        walk pats in
+      {t = Tapp("vector",[(TA_nexp base);(TA_nexp rise);(TA_ord order);(TA_typ item_t)])}
+    | P_list(pats) -> 
+      let item_t = match expect_actual.t with
+        | Tapp("list",[TA_typ i]) -> i
+        | Tuvar _ -> new_t () 
+        | _ -> typ_error l ("Expected a list here by pattern form, but expected a " ^ t_to_string expect_actual ^ " by type") in
+      let ts = List.map (check_pat false item_t) pats in
+      let u = List.fold_right (fun u t -> let t',_ = type_consistent (Patt l) d_env Require true u t in t') ts item_t in
+      {t = Tapp("list",[TA_typ u])}
+
 let simp_exp e l t = E_aux(e,(l,simple_annot t))
 
 (*widen lets outer expressions control whether inner expressions should widen in the presence of literals or not.
@@ -2058,7 +2251,8 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let (ids,_,constraints) = typq_to_params envs typq in
       let t = typ_to_t envs false false typ in
       (*TODO add check that ids == typ_params when has_spec*)
-      let t,constraints,_,t_param_env = subst (if has_spec then typ_params else ids) true true t constraints pure_e in
+      let t,constraints,_,t_param_env =
+        subst (if has_spec then typ_params else ids) true true t constraints pure_e in
       let p_t = new_t () in
       let ef = new_e () in
       t,p_t,Base((ids,{t=Tfn(p_t,t,IP_none,ef)}),Emp_global,constraints,ef,pure_e,nob),t_param_env in
@@ -2075,10 +2269,12 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
                          merge_bounds b_env b_env',tp_env)) imp_param true true ret_t ret_t exp in
         (*let _ = Printf.eprintf "checked function %s : %s -> %s\n" 
           (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in
-        let _ = Printf.eprintf "constraints were pattern: %s\n expression: %s\n" 
+          let _ = Printf.eprintf "constraints were pattern: %s\n expression: %s\n" 
           (constraints_to_string cs_p) (constraints_to_string cs_e) in*)
         let cs = CondCons(Fun l,cond_kind,None,cs_p,cs_e) in
         (FCL_aux((FCL_Funcl(id,pat',exp')),(l,(Base(([],ret_t),Emp_global,[cs],ef,pure_e,nob)))),(cs,ef))) funcls) in
+  let check_pattern_after_constraints (FCL_aux ((FCL_Funcl (_, pat, _)), _)) =
+    check_pattern_after_constraint_res (Env(d_env,t_env,b_env,tp_env)) false param_t pat in
   let update_pattern var (FCL_aux ((FCL_Funcl(id,(P_aux(pat,t)),exp)),annot)) =
     let pat' = match pat with
       | P_lit (L_aux (L_unit,l')) -> P_aux(P_id (Id_aux (Id var, l')), t)
@@ -2091,7 +2287,9 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (*let _ = Printf.eprintf "Function %s is in env\n" id in*)
       let u,constraints,eft,t_param_env = subst_with_env t_param_env true u constraints eft in
       let _,cs_decs = type_consistent (Specc l) d_env Require false t u in
-      (*let _ = Printf.eprintf "valspec consistent with declared type for %s, %s ~< %s with %s derived constraints and %s stated\n" id (t_to_string t) (t_to_string u) (constraints_to_string cs_decs) (constraints_to_string (constraints@c')) in*)
+      (*let _ = Printf.eprintf "valspec consistent with type for %s, %s ~< %s with %s deriveds and %s stated\n" 
+        id (t_to_string t) (t_to_string u) (constraints_to_string cs_decs) 
+        (constraints_to_string (constraints@c')) in*)
       let imp_param = match u.t with 
         | Tfn(_,_,IP_user n,_) -> Some n
         | _ -> None in
@@ -2104,8 +2302,9 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let tannot =
         check_tannot l (match map with | None -> tannot | Some m -> add_map_tannot m tannot) imp_param cs' ef in
       (*let _ = Printf.eprintf "remaining constraints are: %s\n" (constraints_to_string cs') in
-      let _ = Printf.eprintf "check_tannot ok for %s val type %s derived type %s \n" 
+        let _ = Printf.eprintf "check_tannot ok for %s val type %s derived type %s \n" 
         id (t_to_string u) (t_to_string t) in*)
+      let _ = List.map check_pattern_after_constraints funcls in
       let funcls = match imp_param with
         | Some {nexp = Nvar i} -> List.map (update_pattern i) funcls
         | _ -> funcls
@@ -2126,6 +2325,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       let tannot = check_tannot l
                                 (match map with | None -> tannot | Some m -> add_map_tannot m tannot)
                                 None cs' ef in
+      let _ = List.map check_pattern_after_constraints funcls in
       (*let _ = Printf.eprintf "done funcheck case2\n" in*)
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,(if is_rec then t_env else Envmap.insert t_env (id,tannot)),b_env,tp_env)

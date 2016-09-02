@@ -302,7 +302,7 @@ let initial_instruction_state top_level main args =
   Interp.Thunk_frame (E_aux (E_app (Id_aux (Id main) Interp_ast.Unknown) e_args) (Interp_ast.Unknown, Nothing)) 
     top_level Interp.eenv (Interp.emem "istate top level") Interp.Top
 
-type interp_value_helper_mode = Ivh_translate | Ivh_decode | Ivh_unsupported | Ivh_illegal
+type interp_value_helper_mode = Ivh_translate | Ivh_decode | Ivh_unsupported | Ivh_illegal | Ivh_analysis
 type interp_value_return =
   | Ivh_value of Interp.value
   | Ivh_value_after_exn of Interp.value
@@ -311,6 +311,7 @@ type interp_value_return =
 let rec interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen thunk =
   let errk_str = match ivh_mode with
     | Ivh_translate -> "translate"
+    | Ivh_analysis -> "analysis"
     | Ivh_decode -> "decode"
     | Ivh_unsupported -> "supported_instructions"
     | Ivh_illegal -> "illegal instruction" end in
@@ -323,15 +324,16 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
       else
         (match ivh_mode with
          | Ivh_translate -> (Ivh_value value, events_out)
+         | Ivh_analysis -> (Ivh_value value, events_out)
          | _ ->
            (match value with
             | Interp.V_ctor (Id_aux (Id "Some") _) _ _ vinstr -> (Ivh_value vinstr,events_out)
             | Interp.V_ctor (Id_aux (Id "None") _) _ _ _ ->
-              (match ivh_mode with
-               | Ivh_decode -> (Ivh_error (Not_an_instruction_error arg), events_out)
-               | Ivh_illegal -> (Ivh_error (Not_an_instruction_error arg), events_out)
-               | Ivh_unsupported -> (Ivh_error (Unsupported_instruction_error instr), events_out)
-               | Ivh_translate -> Assert_extra.failwith "Reached unreachable pattern" end)
+              (match (ivh_mode,arg) with
+               | (Ivh_decode, (Just arg)) -> (Ivh_error (Not_an_instruction_error arg), events_out)
+               | (Ivh_illegal, (Just arg)) -> (Ivh_error (Not_an_instruction_error arg), events_out)
+               | (Ivh_unsupported, _) -> (Ivh_error (Unsupported_instruction_error instr), events_out)
+               | _ -> Assert_extra.failwith "Reached unreachable pattern" end)
             | _ -> (Ivh_error (Internal_error ("Value not an option for " ^ errk_str)), events_out) end) end)
     | (Interp.Error l msg,_,_) -> (Ivh_error (Internal_error msg), events_out)
     | (Interp.Action (Interp.Return value) stack,_,_) ->
@@ -413,7 +415,7 @@ let translate_address top_level end_flag thunk_name registers address =
   let (arg,_) = Interp.to_exp int_mode Interp.eenv intern_val in
   let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
   let (address_error,events) =
-    interp_to_value_helper (Opcode bytes) Ivh_translate val_str ("",[],[]) internal_direction
+    interp_to_value_helper (Just (Opcode bytes)) Ivh_translate val_str ("",[],[]) internal_direction
       registers [] false
       (fun _ -> Interp.resume 
         int_mode 
@@ -433,6 +435,77 @@ let translate_address top_level end_flag thunk_name registers address =
      | _ -> Assert_extra.failwith "Not an internal error either" end 
 end
 
+let value_of_instruction_param direction (name,typ,v) = 
+  let vec = intern_ifield_value direction v in
+  let v = match vec with
+    | Interp.V_vector start dir bits ->
+      match typ with
+      | Bit -> match bits with | [b] -> b | _ -> Assert_extra.failwith "Expected a bitvector of length 1" end
+      | Range _ -> Interp_lib.to_num Interp_lib.Unsigned vec
+      | Enum _ _ -> Interp_lib.to_num Interp_lib.Unsigned vec
+      | _ -> vec
+    end 
+    | _ -> Assert_extra.failwith "intern_ifield did not return vector"
+  end in v
+
+let intern_instruction direction (name,parms,_) =
+  Interp.V_ctor (Interp.id_of_string name) (T_id "ast") Interp.C_Union
+    (Interp.V_tuple (List.map (value_of_instruction_param direction) parms))
+
+let instruction_analysis top_level end_flag thunk_name regn_to_reg_details registers instruction =
+  let mode = make_mode true false end_flag in
+  let int_mode = mode.internal_mode in
+  let (Context top_env direction _ _ _ _ _ _) = top_level in
+  let intern_val = intern_instruction direction instruction in
+  let val_str = Interp.string_of_value intern_val in
+  let (arg,_) = Interp.to_exp int_mode Interp.eenv intern_val in
+  let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
+  let (analysis_or_error,events) =
+    interp_to_value_helper Nothing Ivh_analysis val_str ("",[],[]) internal_direction
+      registers [] false
+      (fun _ -> Interp.resume 
+        int_mode 
+        (Interp.Thunk_frame 
+         (E_aux (E_app (Id_aux (Id thunk_name) Interp_ast.Unknown) [arg])
+            (Interp_ast.Unknown, Nothing)) 
+         top_env Interp.eenv (Interp.emem "instruction analysis top level") Interp.Top) Nothing) in
+  match (analysis_or_error) with
+  | Ivh_value regs ->
+    (match regs with
+     | Interp.V_tuple [Interp.V_list regs1; Interp.V_list regs2; Interp.V_list regs3] ->
+       let reg_to_reg_name v = match v with
+         | Interp.V_ctor (Id_aux (Id "RFull") _) _ _ (Interp.V_lit (L_aux (L_string n) _)) ->
+           let (start,length,direction,_) = regn_to_reg_details n Nothing in
+           Reg n start length direction
+         | Interp.V_ctor (Id_aux (Id "RSlice") _) _ _
+             (Interp.V_tuple [Interp.V_lit (L_aux (L_string n) _);
+                              Interp.V_lit (L_aux (L_num s1) _);
+                              Interp.V_lit (L_aux (L_num s2) _);]) ->
+           let (start,length,direction,_) = regn_to_reg_details n Nothing in
+           Reg_slice n start direction (natFromInteger s1, natFromInteger s2)
+                                       (*Note, this may need to change order depending on the direction*)
+         | Interp.V_ctor (Id_aux (Id "RSliceBit") _) _ _
+             (Interp.V_tuple [Interp.V_lit (L_aux (L_string n) _);
+                              Interp.V_lit (L_aux (L_num s) _);]) ->
+           let (start,length,direction,_) = regn_to_reg_details n Nothing in
+           Reg_slice n start direction (natFromInteger s,natFromInteger s)
+         | Interp.V_ctor (Id_aux (Id "RField") _) _ _
+             (Interp.V_tuple [Interp.V_lit (L_aux (L_string n) _);
+                              Interp.V_lit (L_aux (L_string f) _);]) ->
+           let (start,length,direction,span) = regn_to_reg_details n (Just f) in
+           Reg_field n start direction f span             
+         | _ -> Assert_extra.failwith "Analysis did not return an element of the specified type" end
+       in
+       let (regs1,regs2,regs3) =
+         (List.map reg_to_reg_name regs1, List.map reg_to_reg_name regs2, List.map reg_to_reg_name regs3) in
+       (Just (regs1,regs2,regs3), events)
+     | _ -> Assert_extra.failwith "Analysis did not return a three-tuple of lists" end)
+  | Ivh_value_after_exn _ ->
+    (Nothing, events)
+  | Ivh_error err -> match err with
+     | Internal_error msg -> Assert_extra.failwith msg
+     | _ -> Assert_extra.failwith "Not an internal error either" end 
+end
 
 let rec find_instruction i = function
   | [] -> Nothing
@@ -460,7 +533,7 @@ let decode_to_istate top_level registers value =
   let (arg,_) = Interp.to_exp mode Interp.eenv intern_val in
   let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
   let (instr_decoded_error,events) =
-    interp_to_value_helper value Ivh_decode val_str ("",[],[]) internal_direction registers [] false
+    interp_to_value_helper (Just value) Ivh_decode val_str ("",[],[]) internal_direction registers [] false
       (fun _ -> Interp.resume 
           mode 
           (Interp.Thunk_frame 
@@ -488,7 +561,7 @@ let decode_to_istate top_level registers value =
         | _ -> Assert_extra.failwith "decoded instruction not a constructor" end in 
       let (arg,_) = Interp.to_exp mode Interp.eenv instr in
       let (instr_decoded_error,events) =
-        interp_to_value_helper value Ivh_unsupported val_str instr_external internal_direction
+        interp_to_value_helper (Just value) Ivh_unsupported val_str instr_external internal_direction
           registers [] false
         (fun _ -> Interp.resume 
             mode

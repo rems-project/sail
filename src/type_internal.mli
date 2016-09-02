@@ -150,6 +150,7 @@ val set_imp_param : nexp -> unit
 
 val mk_atom : nexp -> t
 val mk_tup : t list -> t
+val mk_vector : t -> order -> nexp -> nexp -> t
 
 type variable_range =
   | VR_eq of string * nexp

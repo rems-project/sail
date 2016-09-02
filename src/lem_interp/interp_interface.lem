@@ -1154,6 +1154,10 @@ val translate_address :
   context -> end_flag -> string -> maybe (list (reg_name * register_value)) -> address
   -> maybe address * maybe (list event)
 
+val instruction_analysis :
+  context -> end_flag -> string -> (string -> (nat * nat * direction * (nat * nat)))
+  -> maybe (list (reg_name * register_value)) -> instruction -> (list reg_name * list reg_name * list reg_name)
+
 val byte_list_of_memory_value : end_flag -> memory_value -> maybe (list byte)
 let byte_list_of_memory_value endian mv = 
   let mv = if endian = E_big_endian then mv else List.reverse mv in
