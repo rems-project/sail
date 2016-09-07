@@ -136,6 +136,9 @@ let return a = Done a
 val (>>=) : forall 'a 'b. M 'a -> ('a -> M 'b) -> M 'b
 val (>>>) : forall 'a 'b 'c. ('a -> M 'b) -> ('b -> M 'c) -> ('a -> M 'c)
 
+val (>>) : forall 'b. M unit -> (unit -> M 'b) -> M 'b
+let (>>) m n = m >>= fun _ -> n
+
 let rec (>>=) m f = match m with
   | Done a -> f a
   | Read_mem rk addr sz rs k ->        Read_mem rk addr sz rs        (fun v -> (k v) >>= f)
@@ -152,8 +155,6 @@ let rec (>>=) m f = match m with
 
 val exit : forall 'a 'e. 'e -> M 'a
 let exit _ = Escape
-
-let (>>) m n = m >>= fun _ -> n
 
 val byte_chunks : forall 'a. nat -> list 'a -> list (list 'a)
 let rec byte_chunks n list = match (n,list) with

@@ -2161,7 +2161,7 @@ let doc_lit_lem in_pat (L_aux(lit,l)) a =
       | Tabbrev ({t = Tid "bit"},_) -> "Undef"
       | Tapp ("register",_)
       | Tabbrev ({t = Tapp ("register",_)},_) -> "UndefinedReg 0"
-      | _ -> raise (Reporting_basic.err_unreachable l "undefined value of unsupported type"))
+      | _ -> "(failwith \"undefined value of unsupported type\")")
   | L_string s -> "\"" ^ s ^ "\"")
 
 (* typ_doc is the doc for the type being quantified *)
@@ -2302,8 +2302,10 @@ let doc_exp_lem, doc_let_lem =
        if aexp_needed then parens (align epp) else epp
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
        failwith "E_for should have been removed till now"
-    | E_let(leb,e) -> let_exp (regs,regtypes) leb ^^ space ^^ string "in" ^/^
-                        top_exp (regs,regtypes) false e
+    | E_let(leb,e) ->
+       let epp = let_exp (regs,regtypes) leb ^^ space ^^ string "in" ^/^
+                   top_exp (regs,regtypes) false e in
+       if aexp_needed then parens epp else epp
     | E_app(f,args) ->
        (match f with
         (* temporary hack to make the loop body a function of the temporary variables *)
@@ -2340,6 +2342,7 @@ let doc_exp_lem, doc_let_lem =
                      )
                  )
            )
+        | Id_aux (Id "None",_) -> string "Nothing"
         | _ ->
            (match annot with
             | Base (_,Constructor _,_,_,_,_) ->
@@ -3110,4 +3113,4 @@ let pp_defs_lem f_arch f d top_line opens =
         (string "(*" ^^ (string top_line) ^^ string "*)" ^/^
            ((separate_map hardline)
               (fun lib -> separate space [string "open import";string lib])
-              ["Pervasives";"Assert_extra";"Vector"]) ^/^ hardline ^^ decls)
+              ["Pervasives_extra";"Assert_extra";"Vector"]) ^/^ hardline ^^ decls)

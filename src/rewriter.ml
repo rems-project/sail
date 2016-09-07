@@ -1931,3 +1931,4 @@ let rewrite_defs_lem defs =
   let defs = rewrite_defs_a_normalise defs in
   let defs = rewrite_defs_remove_e_assign defs in
   defs
+

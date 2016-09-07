@@ -30,12 +30,12 @@ let bind m f s = match m s with
   | (Right error,s') -> (Right error,s')
   end
 
-val exit : forall 's 'e. 'e -> State 's 'e unit
+val exit : forall 's 'e 'a. 'e -> State 's 'e 'a
 let exit e s = (Right e,s)
 
 let (>>=) = bind
 
-val (>>): forall 's 'e 'a 'b. State 's 'e 'a -> State 's 'e 'b -> State 's 'e 'b
+val (>>): forall 's 'e 'b. State 's 'e unit -> State 's 'e 'b -> State 's 'e 'b
 let (>>) m n = m >>= fun _ -> n
 
 val read_writeEA : forall 'e. unit -> State state 'e (integer * integer)

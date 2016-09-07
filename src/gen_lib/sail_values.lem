@@ -69,12 +69,16 @@ let unsigned (V bs _ _ as v) : integer =
     fst (List.foldl
            (fun (acc,exp) b -> (acc + (if b = I then integerPow 2 exp else 0),exp +1)) (0,0) bs)
 
+let unsigned_big = unsigned
+        
 let signed v : integer =
   match most_significant v with
   | I -> 0 - (1 + (unsigned (bitwise_not v)))
   | O -> unsigned v
   | _ -> failwith "signed applied to vector with undefined bits"
   end
+
+let signed_big = signed
 
 let to_num sign = if sign then signed else unsigned
   
@@ -137,6 +141,8 @@ let to_vec is_inc ((len : integer),(n : integer)) =
     let (V bs start is_inc) = bitwise_not (V abs_bs start is_inc) in
     V (add_one_bit bs false (len-1)) start is_inc
 
+let to_vec_big = to_vec
+      
 let to_vec_inc = to_vec true
 let to_vec_dec = to_vec false
 
@@ -146,6 +152,13 @@ let to_vec_undef is_inc (len : integer) =
 let to_vec_inc_undef = to_vec_undef true
 let to_vec_dec_undef = to_vec_undef false
 
+let get_dir (V _ _ ord) = ord
+                                    
+let exts (len, vec) = to_vec (get_dir vec) (len,signed vec)
+let extz (len, vec) = to_vec (get_dir vec) (len,unsigned vec)
+
+let exts_big (len, vec) = to_vec_big (get_dir vec) (len, signed_big vec)
+let extz_big (len, vec) = to_vec_big (get_dir vec) (len, unsigned_big vec)
 
 let add = integerAdd
 let add_signed = integerAdd
@@ -444,14 +457,6 @@ let neq_range_vec (l,r) = bitwise_not_bit (eq_range_vec (l,r))
 (* temporarily *)
 val neq : forall 'a 'b. 'a * 'b -> bit
 let neq _ = O
-                                          
-
-let EXTS (v1,(V _ _ is_inc as v)) =
-  to_vec is_inc (v1,signed v)
-
-let EXTZ = EXTS
-
-let exts = EXTS 
 
 val make_indexed_vector_reg : list (integer * register) -> maybe register -> integer -> integer ->
                               vector register
