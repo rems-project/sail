@@ -201,8 +201,8 @@ instance (Ord byte)
   let (>=) = byteGreaterEq
 end
 
-let ~{ocaml} addressCompare (Address b1 i1) (Address b2 i2) = compare i1 i2
-let inline {ocaml} addressCompare = defaultCompare
+let (*~{ocaml}*) addressCompare (Address b1 i1) (Address b2 i2) = compare i1 i2
+(*let inline {ocaml} addressCompare = defaultCompare*)
 
 let ~{ocaml} addressLess b1 b2      = addressCompare b1 b2 =  LT
 let ~{ocaml} addressLessEq b1 b2    = addressCompare b1 b2 <> GT

@@ -1688,7 +1688,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
             (fun tlv lm le -> match detaint tlv with 
               | V_list t -> (Value (retaint tlv (V_list (hdv::t))),lm,le)
               | V_unknown -> (Value (retaint tlv V_unknown),lm,le)
-              | _ -> (Error l "Internal error '::' of non-list value",lm,le) end)
+              | _ -> (Error l ("Internal error '::' of non-list value " ^ (string_of_value tlv)),lm,le) end)
             (fun a -> update_stack a 
               (add_to_top_frame 
                  (fun t env -> let (hde,env') = to_exp mode env hdv in (E_aux (E_cons hde t) (l,annot),env')))))
