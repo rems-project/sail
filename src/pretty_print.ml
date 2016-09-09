@@ -2884,9 +2884,11 @@ let reg_decls (Defs defs) =
           (fun (name,typ) ->
             let ((n1,n2,_,_),typname) =
               match typ with
+              | Some "bit" -> ((Nexp_aux (Nexp_constant 0,Unknown),
+                               Nexp_aux (Nexp_constant 1,Unknown),[],[]),"register")
               | Some typname ->
                  (try (List.assoc typname regtypes,"register_" ^ typname) with
-                  | Not_found -> failwith ("Couldn't find register type " ^ typname))
+                  | Not_found -> failwith ("Couldn't find register type " ^ typname ^ " for register " ^ name))
               | None -> (default,"register") in
             separate space [pipe;string name;arrow;doc_nexp (if is_inc then n2 else n1);
                             minus;doc_nexp (if is_inc then n1 else n2);plus;string "1"])
@@ -2909,6 +2911,8 @@ let reg_decls (Defs defs) =
            (fun (name,typ) ->
             let ((n1,_,_,_),typname) =
               match typ with
+              | Some "bit" -> ((Nexp_aux (Nexp_constant 0,Unknown),
+                               Nexp_aux (Nexp_constant 1,Unknown),[],[]),"register")
               | Some typname -> (List.assoc typname regtypes,"register_" ^ typname)
               | None -> (default,"register") in
             separate space [pipe;string name;arrow;doc_nexp n1])

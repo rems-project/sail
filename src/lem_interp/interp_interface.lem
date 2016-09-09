@@ -416,6 +416,17 @@ type barrier_kind =
   (* AArch64 barriers *)
   | DMB | DMB_ST | DMB_LD | DSB | DSB_ST | DSB_LD | ISB 
 
+type instruction_kind = 
+  | IK_barrier of barrier_kind 
+  | IK_mem_read of read_kind 
+  | IK_mem_write of write_kind
+(* SS reinstating cond_branches
+at present branches are not distinguished in the instruction_kind;
+they just have particular nias (and will be IK_simple *)
+  | IK_cond_branch 
+(*  | IK_uncond_branch *)
+  | IK_simple
+
 (*Map between external functions as preceived from a Sail spec and the actual implementation of the function *)
 type external_functions = list (string * (Interp.value -> Interp.value))
 
@@ -1156,7 +1167,7 @@ val translate_address :
 
 val instruction_analysis :
   context -> end_flag -> string -> (string -> (nat * nat * direction * (nat * nat)))
-  -> maybe (list (reg_name * register_value)) -> instruction -> (list reg_name * list reg_name * list reg_name)
+  -> maybe (list (reg_name * register_value)) -> instruction -> (list reg_name * list reg_name * list reg_name * list address)
 
 val byte_list_of_memory_value : end_flag -> memory_value -> maybe (list byte)
 let byte_list_of_memory_value endian mv = 
