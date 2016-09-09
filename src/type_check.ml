@@ -1397,7 +1397,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
       let sub_effects = union_effects ef ef_i in
       let (t',cs',ef',e') = 
         type_coerce (Expr l) d_env Require false false b_env lt
-          (E_aux(E_cons(ls',i'),(l,simple_annot_efr lt sub_effects))) expect_t in
+          (E_aux(E_cons(i',ls'),(l,simple_annot_efr lt sub_effects))) expect_t in
       (e',t',t_env,cs@cs'@cs_i,nob,union_effects ef' sub_effects)
     | E_record(FES_aux(FES_Fexps(fexps,_),l')) -> 
       let u,_ = get_abbrev d_env expect_t in
