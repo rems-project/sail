@@ -846,8 +846,21 @@ let mask direction v =
 | _ -> fail ()
 end
 
+let s_append v =
+  let fail () = Assert_extra.failwith ("append given unexpected " ^ (string_of_value v)) in
+  match v with
+  | (V_tuple [l1;l2]) ->
+    retaint v (match (detaint l1,detaint l2) with
+        | (V_list vs1, V_list vs2) -> V_list (vs1++vs2)
+        | (V_unknown, _) -> V_unknown
+        | (_,V_unknown) -> V_unknown
+        | _ -> fail () end)
+  | _ -> fail ()
+end
+
 let library_functions direction = [
-  ("ignore", ignore_sail);            
+  ("ignore", ignore_sail);
+  ("append", s_append);
   ("length", v_length);
   ("add", arith_op (+));
   ("add_vec", arith_op_vec (+) Unsigned 1);

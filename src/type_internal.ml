@@ -1959,6 +1959,12 @@ let initial_typ_env =
                   Constructor 2,[],pure_e,pure_e,nob));
     ("None", Base((["a", {k=K_Typ}], mk_pure_fun unit_t {t=Tapp("option", [TA_typ {t=Tvar "a"}])}),
                   Constructor 2,[],pure_e,pure_e,nob));
+    ("append",
+     lib_tannot
+       (["a",{k=K_Typ}], mk_pure_fun (mk_tup [{t=Tapp("list", [TA_typ {t=Tvar "a"}])};
+                                              {t=Tapp("list", [TA_typ {t=Tvar "a"}])}])
+          {t=Tapp("list",[TA_typ {t=Tvar "a"}])})
+       None []);                                                                                  
     ("most_significant", lib_tannot ((mk_nat_params ["n";"m"]@(mk_ord_params ["ord"])),
                                      (mk_pure_fun (mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m")) bit_t))
                                     None []);
