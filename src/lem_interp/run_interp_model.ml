@@ -155,6 +155,23 @@ let rec perform_action ((reg, mem, tagmem) as env) = function
          | b::bytes -> 
            writing (add location big_num_unit) (length - 1) bytes (Mem.add location b mem) in
      (None,(reg,writing naddress length bytes mem,tagmem)))
+ | Write_memv0(Some location, bytes, _, _) ->
+   let address = match address_of_address_lifted location with
+     | Some a -> a
+     | _ -> failwith "Write address not known" in
+   let naddress = integer_of_address address in
+   let length = List.length bytes in
+   let (length,tag_mem,bytes) = if length = 17 || length = 33
+     then (length - 1, Mem.add naddress (List.hd bytes) tagmem, (List.tl bytes))
+     else (length,tagmem,bytes) in
+   let rec writing location length bytes mem =
+     if length = 0
+     then mem
+     else match bytes with
+       | [] -> mem
+       | b::bytes -> 
+         writing (add location big_num_unit) (length - 1) bytes (Mem.add location b mem) in
+   (None, (reg,writing naddress length bytes mem, tag_mem))
  | _ -> (None, env)
 ;;
 
@@ -305,6 +322,13 @@ let run
              show "write_mem value depended on" (dependencies_to_string vdeps) "" "";);
           let next = next_thunk true in
           (step next,env',next)
+        | Write_memv0(Some(Address_lifted(location,_)),value,_,next_thunk) ->
+          show "write_mem value" (memory_value_to_string !default_endian location) left (memory_value_to_string !default_endian value);
+          let next = next_thunk true in
+          (step next,env',next)
+        | Write_ea0(_,(Address_lifted(location,_)), size,_,next) ->
+          show "write_announce" (memory_value_to_string !default_endian location) left ((string_of_int size) ^ " bytes");
+          (step next, env, next)
         | Barrier0(bkind,next) ->
           show "mem_barrier" "" "" "";
           (step next, env, next)
