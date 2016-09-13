@@ -486,18 +486,18 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
                               Interp.V_lit (L_aux (L_num s1) _);
                               Interp.V_lit (L_aux (L_num s2) _);]) ->
            let (start,length,direction,_) = regn_to_reg_details n Nothing in
-           Reg_slice n start direction (natFromInteger s1, natFromInteger s2)
+           Reg_slice n start direction (extern_slice direction start (natFromInteger s1, natFromInteger s2))
                                        (*Note, this may need to change order depending on the direction*)
          | Interp.V_ctor (Id_aux (Id "RSliceBit") _) _ _
              (Interp.V_tuple [Interp.V_lit (L_aux (L_string n) _);
                               Interp.V_lit (L_aux (L_num s) _);]) ->
            let (start,length,direction,_) = regn_to_reg_details n Nothing in
-           Reg_slice n start direction (natFromInteger s,natFromInteger s)
+           Reg_slice n start direction (extern_slice direction start (natFromInteger s,natFromInteger s))
          | Interp.V_ctor (Id_aux (Id "RField") _) _ _
              (Interp.V_tuple [Interp.V_lit (L_aux (L_string n) _);
                               Interp.V_lit (L_aux (L_string f) _);]) ->
            let (start,length,direction,span) = regn_to_reg_details n (Just f) in
-           Reg_field n start direction f span             
+           Reg_field n start direction f (extern_slice direction start span)             
          | _ -> Assert_extra.failwith "Register footprint analysis did not return an element of the specified type" end
        in
        let get_nia v = address_of_memory_value end_flag (fst (extern_mem_value mode v)) in
