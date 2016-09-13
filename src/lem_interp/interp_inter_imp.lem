@@ -506,7 +506,7 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
            (Interp.V_ctor (Id_aux (Id b) _) _ _ _) ->
             IK_barrier (match b with
                         | "Barrier_Sync" ->   Sync
-                        | "Barrier_Lwsync" -> LwSync
+                        | "Barrier_LwSync" -> LwSync
                         | "Barrier_Eieio" ->  Eieio
                         | "Barrier_Isync" ->  Isync
                         | "Barrier_DMB" ->    DMB
