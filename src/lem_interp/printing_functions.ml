@@ -385,8 +385,8 @@ let rec format_events = function
     "     Write_ea at " ^ (memory_value_to_string E_big_endian location) ^ ", based on registers " ^
       format_tracking tracking ^ " across " ^ (string_of_int length) ^ " bytes\n" ^ 
       (format_events events)
-  | (E_write_memv(value, v_tracking))::events ->
-    "     Write_ea of " ^ (memory_value_to_string E_big_endian value) ^ ", based on registers " ^
+  | (E_write_memv(_, value, v_tracking))::events ->
+    "     Write_memv of " ^ (memory_value_to_string E_big_endian value) ^ ", based on registers " ^
       format_tracking v_tracking ^ "\n" ^
       (format_events events)
   | ((E_barrier b_kind)::events) ->

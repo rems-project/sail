@@ -384,7 +384,7 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
       (Ivh_error (Internal_error ("Write memory request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_ea _ _) _,_,_) ->
       (Ivh_error (Internal_error ("Write ea request in a " ^ errk_str)), events_out)
-    | (Interp.Action (Interp.Write_memv _ _) _,_,_) ->
+    | (Interp.Action (Interp.Write_memv _ _ _) _,_,_) ->
       (Ivh_error (Internal_error ("Write memory value request in a " ^ errk_str)), events_out)
     | _ -> (Ivh_error (Internal_error ("Non expected action in a " ^ errk_str)), events_out)
 end
@@ -731,14 +731,20 @@ let rec interp_to_outcome mode context thunk =
               Write_ea write_k (Address_lifted location address_int) length tracking (IState next_state context)
             else Error "Memory address for write is not 64 bits"
           | _ -> Error ("Memory function " ^ i ^ " to signal impending write, not found") end, lm)
-        | Interp.Write_memv (Id_aux (Id i) _) write_val ->
+        | Interp.Write_memv (Id_aux (Id i) _) address_val write_val ->
           (match List.lookup i mem_write_vals with
-            | (Just (MV return)) -> 
+            | (Just (MV parmf return)) -> 
               let (value, v_tracking) = 
                 match (Interp.detaint write_val) with
                   | Interp.V_tuple[_;v] -> (extern_mem_value mode (Interp.retaint write_val v))
                   | _ -> (extern_mem_value mode write_val) end in
-              Write_memv value v_tracking 
+               let location_opt = match parmf mode address_val with
+                  | Nothing -> Nothing
+                  | Just mv -> let address_int = match (maybe_all (List.map byte_of_byte_lifted mv)) with
+                      | Just bs -> Just (integer_of_byte_list bs)
+                      | _ -> Nothing end in Just (Address_lifted mv address_int) end
+               in
+               Write_memv location_opt value v_tracking 
                 (fun b -> 
                   match return with
                     | Nothing -> (IState (Interp.add_answer_to_stack next_state Interp.unitv) context)
@@ -844,11 +850,11 @@ let rec ie_loop mode register_values (IState interp_state context) =
     | (Write_ea write_k loc length tracking i_state, _) ->
       let (events,analysis_data) = ie_loop mode register_values i_state in
       ((E_write_ea write_k loc length tracking)::events,analysis_data)
-    | (Write_memv value tracking i_state_fun, _) ->
+    | (Write_memv opt_address value tracking i_state_fun, _) ->
       let (events,analysis_data) = ie_loop mode register_values (i_state_fun true) in
       let (events',analysis_data) = ie_loop mode register_values (i_state_fun false) in
       (*TODO: consider if lm and lm should be merged*)
-      ((E_write_memv value tracking)::(events++events'),analysis_data)
+      ((E_write_memv opt_address value tracking)::(events++events'),analysis_data)
     | (Barrier barrier_k i_state, _) ->
       let (events,analysis_data) = ie_loop mode register_values i_state in
       ((E_barrier barrier_k)::events,analysis_data)

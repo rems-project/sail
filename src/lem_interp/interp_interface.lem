@@ -482,13 +482,14 @@ type external_functions = list (string * (Interp.value -> Interp.value))
 (*Maps between the memory functions as preceived from a Sail spec and the values needed for actions in the memory model*)
 type barriers = list (string * barrier_kind)
 type memory_parameter_transformer = interp_mode -> Interp.value -> (memory_value * nat * maybe (list reg_name))
+type optional_memory_transformer = interp_mode -> Interp.value -> maybe memory_value
 type memory_read = MR of read_kind * memory_parameter_transformer
 type memory_reads  = list (string * memory_read)
 type memory_write_ea = MEA of write_kind * memory_parameter_transformer
 type memory_write_eas = list (string * memory_write_ea)
 type memory_write = MW of write_kind * memory_parameter_transformer * (maybe (instruction_state -> bool -> instruction_state))
 and memory_writes = list (string * memory_write)
-and memory_write_val = MV of maybe (instruction_state -> bool -> instruction_state)
+and memory_write_val = MV of optional_memory_transformer * (maybe (instruction_state -> bool -> instruction_state))
 and memory_write_vals = list (string * memory_write_val)
 
 (* Definition information needed to run an instruction *)
@@ -509,7 +510,7 @@ type outcome =
 (* Tell the system a write is imminent, at address lifted tanted by register list, of size nat *)
 | Write_ea of write_kind * address_lifted * nat * maybe (list reg_name) * instruction_state
 (* Request to write memory at last signaled address. Memory value should be 8* the size given in ea signal *)
-| Write_memv of memory_value * maybe (list reg_name) * (bool -> instruction_state)
+| Write_memv of maybe address_lifted * memory_value * maybe (list reg_name) * (bool -> instruction_state)
 (* Request a memory barrier *)
 | Barrier of barrier_kind * instruction_state
 (* Tell the system to dynamically recalculate dependency footprint *)
@@ -539,7 +540,7 @@ type event =
 | E_read_mem of read_kind * address_lifted * nat * maybe (list reg_name)
 | E_write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name)
 | E_write_ea of write_kind * address_lifted * nat * maybe (list reg_name)
-| E_write_memv of memory_value * maybe (list reg_name)
+| E_write_memv of maybe address_lifted * memory_value * maybe (list reg_name)
 | E_barrier of barrier_kind
 | E_footprint 
 | E_read_reg of reg_name
@@ -827,7 +828,7 @@ let ~{ocaml} eventCompare e1 e2 =
     compare ((wk1,v1,i1),(tr1,v1',tr1'))  ((wk2,v2,i2),(tr2,v2',tr2')) 
   | (E_write_ea wk1 a1 i1 tr1, E_write_ea wk2 a2 i2 tr2) ->
     compare (wk1, (a1, i1, tr1)) (wk2, (a2, i2, tr2))
-  | (E_write_memv mv1 tr1, E_write_memv mv2 tr2) -> compare (mv1,tr1) (mv2,tr2)
+  | (E_write_memv _ mv1 tr1, E_write_memv _ mv2 tr2) -> compare (mv1,tr1) (mv2,tr2)
   | (E_barrier bk1, E_barrier bk2) -> compare bk1 bk2
   | (E_read_reg r1, E_read_reg r2) -> compare r1 r2
   | (E_write_reg r1 v1, E_write_reg r2 v2) -> compare (r1,v1) (r2,v2)
@@ -836,7 +837,7 @@ let ~{ocaml} eventCompare e1 e2 =
   | (E_read_mem _ _ _ _, _) -> LT
   | (E_write_mem _ _ _ _ _ _, _) -> LT
   | (E_write_ea _ _ _ _, _) -> LT
-  | (E_write_memv _ _, _) -> LT
+  | (E_write_memv _ _ _, _) -> LT
   | (E_barrier _, _) -> LT
   | (E_read_reg _, _) -> LT
   | (E_write_reg _ _, _) -> LT
