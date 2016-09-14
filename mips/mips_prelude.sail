@@ -357,11 +357,14 @@ function unit wGPR (idx, v) = {
          if idx == 0 then () else GPR[idx] := v
 }
 
-val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmem } MEMw
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_reserve
-val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> bool effect { wmem } MEMw_conditional
 val extern unit -> unit effect { barr } MEM_sync
+
+val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea
+val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> bool effect { wmv } MEMval_conditional
 
 typedef Exception = enumerate
 {

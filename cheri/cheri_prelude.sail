@@ -362,39 +362,42 @@ function bool register_inaccessible((regno) r) =
     case _       -> bitone
   })
 
+val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * ('n + 1)]) effect { rmem } MEMr_tag
+val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * ('n + 1)]) effect { rmem } MEMr_tag_reserve
+
 val extern (bit[64] , bit[8]) -> unit effect { wmem } TAGw
-val extern (bit[64]) -> (bit[8]) effect { rmem } TAGr
+val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_tag
+val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_tag_conditional
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8 * ('n + 1)]) -> unit effect { wmv } MEMval_tag
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8 * ('n + 1)]) -> bool effect { wmv } MEMval_tag_conditional
+
 
 function (bool, bit[cap_size_t * 8]) MEMr_tagged ((bit[64]) addr) =
 {
   (* assumes addr is cap. aligned *)
-  let tag = (TAGr (addr)) in
-  let mem = (MEMr (addr, cap_size)) in
+  let ((bit[8]) tag : mem) = (MEMr_tag (addr, cap_size)) in
   (tag[0], mem)
 }
 
 function (bool, bit[cap_size_t * 8]) MEMr_tagged_reserve ((bit[64]) addr) =
 {
   (* assumes addr is cap. aligned *)
-  let tag = (TAGr (addr)) in
-  let mem = (MEMr_reserve (addr, cap_size)) in
+  let ((bit[8]) tag : mem) = (MEMr_tag_reserve (addr, cap_size)) in
   (tag[0], mem)
 }
 
 function unit MEMw_tagged((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
 {
   (* assumes addr is cap. aligned *)
-  MEMw(addr, cap_size, data);
-  TAGw(addr, (0b0000000 : [tag]));
+  MEMea_tag(addr, cap_size);
+  MEMval_tag(addr, cap_size, 0b0000000 : [tag] :  data);
 }
 
 function bool MEMw_tagged_conditional((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
 {
   (* assumes addr is cap. aligned *)
-  success := MEMw_conditional(addr, cap_size, data);
-  if (success) then
-    TAGw(addr, (0b0000000 : [tag]));
-  success;
+  MEMea_tag_conditional(addr, cap_size);
+  MEMval_tag_conditional(addr, cap_size, 0b0000000 : [tag] :  data);
 }
 
 function unit effect {wmem} MEMw_wrapper(addr, size, data) =
@@ -405,16 +408,21 @@ function unit effect {wmem} MEMw_wrapper(addr, size, data) =
   }
   else
   {
-    (* On cheri non-capability writes must clear the corresponding tag*)
+    (* On cheri non-capability writes must clear the corresponding tag
+       XXX this is vestigal and only works on sequential modle -- tag clearing
+       should probably be done in memory model. *)
     TAGw((addr[63..5] : 0b00000), 0x00);
-    MEMw(addr,size,data)
+    MEMea(addr,size);
+    MEMval(addr, size, data);
   }
 
 function bool effect {wmem} MEMw_conditional_wrapper(addr, size, data) =
   {
     (* On cheri non-capability writes must clear the corresponding tag*)
-    success := MEMw_conditional(addr,size,data);
+    MEMea_conditional(addr, size);
+    success := MEMval_conditional(addr,size,data);
     if (success) then
+      (* XXX as above TAGw is vestigal and must die *)
       TAGw((addr[63..5] : 0b00000), 0x00);
     success;
   }

@@ -1,101 +1,77 @@
 open import Pervasives
 open import Interp_ast
-open import Interp_interface 
-open import Interp_inter_imp 
+open import Interp_interface
+open import Interp_inter_imp
 import Set_extra
 
+let memory_parameter_transformer mode v =
+  let mode = <|mode with endian = E_big_endian|> in
+  match v with
+  | Interp.V_tuple [location;length] ->
+    match length with
+    | Interp.V_lit (L_aux (L_num len) _) ->
+      let (v,regs) = extern_mem_value mode location in
+      (v,(natFromInteger len),regs)
+    | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
+      let (v,loc_regs) = extern_mem_value mode location in
+      match loc_regs with
+      | Nothing -> (v,(natFromInteger len),Just (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs)))
+      | Just loc_regs -> (v,(natFromInteger len),Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs))))
+      end
+    | _ -> Assert_extra.failwith "expected 'V_lit (L_aux (L_num _) _)' or 'V_track (V_lit (L_aux (L_num len) _)) _'"
+    end
+  | _ -> Assert_extra.failwith ("memory_parameter_transformer: expected 'V_tuple [_;_]' given " ^ (Interp.string_of_value v))
+  end
 
-(*MIPS specific external functions*)
-let mips_externs = [
-]
+let memory_parameter_transformer_option_address mode v =
+  let mode = <|mode with endian = E_big_endian|> in
+  match v with
+  | Interp.V_tuple [location;_] ->
+     let (v,_) = extern_mem_value mode location in
+     Just v
+  | _ -> Assert_extra.failwith ("memory_parameter_transformer_option_address: expected 'V_tuple [_;_]' given " ^ (Interp.string_of_value v))
+  end
+
 
 let read_memory_functions : memory_reads =
-  [ ("MEMr", (MR Read_plain
-                (fun mode v -> match v with
-                   | Interp.V_tuple [location;length] ->
-                     match length with
-                     | Interp.V_lit (L_aux (L_num len) _) ->
-                       let (v,regs) = extern_mem_value mode location in
-                       (v,(natFromInteger len),regs) 
-                     | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
-                       let (v,loc_regs) = extern_mem_value mode location in
-                       match loc_regs with
-                       | Nothing -> (v,(natFromInteger len),
-                                     Just (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs)))
-                       | Just loc_regs -> 
-                         (v,(natFromInteger len),
-                          Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs))))
-              end end end)));
-    ("MEMr_reserve", (MR Read_reserve (*TODO Likely this isn't really best to be the same as Power*)
-                        (fun mode v -> match v with
-                           | Interp.V_tuple [location;length] ->
-                             match length with
-                             | Interp.V_lit (L_aux (L_num len) _) ->
-                               let (v,regs) = extern_mem_value mode location in
-                               (v,(natFromInteger len),regs) 
-                             | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
-                               let (v,loc_regs) = extern_mem_value mode location in
-                               match loc_regs with
-                               | Nothing -> 
-                                 (v,(natFromInteger len),
-                                  Just (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs)))
-                               | Just loc_regs -> 
-                                 (v,(natFromInteger len),
-                                  Just (loc_regs++
-                                        (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs))))
-                                 end end end)));
-    ("TAGr", (MR Read_tag (fun mode v -> let (v, regs) = extern_mem_value mode v in 
-                                         (v, 1, regs))));
-]
-let memory_writes : memory_writes = [
-  ("MEMw", (MW Write_plain 
-              (fun mode v -> match v with
-                 | Interp.V_tuple [location;length] ->
-                   match length with
-                   | Interp.V_lit (L_aux (L_num len) _) ->
-                     let (v,regs) = extern_mem_value mode location in
-                     (v,(natFromInteger len),regs)
-                   | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
-                     let (v,loc_regs) = extern_mem_value mode location in
-                     match loc_regs with
-                     | Nothing -> (v,(natFromInteger len),
-                                   Just (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs)))
-                     | Just loc_regs -> 
-                       (v,(natFromInteger len),
-                        Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs))))
-                      end end end) Nothing));
-  (* As above, probably not best to be the same write kind as power *)
-  ("MEMw_conditional", (MW Write_conditional 
-                          (fun mode v -> match v with
-                             | Interp.V_tuple [location;length] ->
-                               match length with
-                               | Interp.V_lit (L_aux (L_num len) _) ->
-                                 let (v,regs) = extern_mem_value mode location in
-                                 (v,(natFromInteger len),regs)
-                               | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
-                                 let (v,loc_regs) = extern_mem_value mode location in
-                                 match loc_regs with
-                                 | Nothing -> 
-                                   (v,(natFromInteger len),
-                                    Just (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs)))
-                                 | Just loc_regs -> 
-                                   (v,(natFromInteger len),
-                                    Just (loc_regs++
-                                          (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs))))
-                                end end end) 
-                            (Just (fun (IState interp_state c) success ->
-                              let v = Interp.V_lit (L_aux (if success then L_one else L_zero) Unknown) in
-                              IState (Interp.add_answer_to_stack interp_state v) c))
-     ));
-  ("TAGw", (MW Write_tag (fun mode v -> let (v, regs) = extern_mem_value mode v in
-                                        (v, 1, regs))
-              (Just (fun (IState interp_state c) success ->
-                              let v = Interp.V_lit (L_aux (if success then L_one else L_zero) Unknown) in
-                              IState (Interp.add_answer_to_stack interp_state v) c))
-   ));
+  [ ("MEMr",             (MR Read_plain              memory_parameter_transformer));
+    ("MEMr_reserve",     (MR Read_reserve            memory_parameter_transformer));
+    ("MEMr_tag",         (MR Read_tag                memory_parameter_transformer));
+    ("MEMr_tag_reserve", (MR Read_tag_reserve        memory_parameter_transformer));
   ]
+
+let memory_writes : memory_writes =
+  [ ("TAGw", (MW Write_tag (fun mode v -> let (v, regs) = extern_mem_value mode v in
+                                         (v, 1, regs))
+               (Just (fun (IState interp_state c) success ->
+                               let v = Interp.V_lit (L_aux (if success then L_one else L_zero) Unknown) in
+                               IState (Interp.add_answer_to_stack interp_state v) c))
+    )); ]
+
+let memory_eas : memory_write_eas =
+  [ ("MEMea",                 (MEA Write_plain           memory_parameter_transformer));
+    ("MEMea_conditional",     (MEA Write_conditional     memory_parameter_transformer));
+    ("MEMea_tag",             (MEA Write_tag             memory_parameter_transformer));
+    ("MEMea_tag_conditional", (MEA Write_tag_conditional memory_parameter_transformer));
+  ]
+
+let memory_vals : memory_write_vals =
+  [ ("MEMval",      (MV memory_parameter_transformer_option_address Nothing));
+    ("MEMval_conditional", (MV memory_parameter_transformer_option_address
+                           (Just 
+                           (fun (IState interp context) b -> 
+                             let bit = Interp.V_lit (L_aux (if b then L_one else L_zero) Interp_ast.Unknown) in
+                             (IState (Interp.add_answer_to_stack interp bit) context)))));
+    ("MEMval_tag",      (MV memory_parameter_transformer_option_address Nothing));
+    ("MEMval_tag_conditional", (MV memory_parameter_transformer_option_address
+                           (Just 
+                           (fun (IState interp context) b -> 
+                             let bit = Interp.V_lit (L_aux (if b then L_one else L_zero) Interp_ast.Unknown) in
+                             (IState (Interp.add_answer_to_stack interp bit) context)))));
+  ]
+
 
 let barrier_functions = [
   (*Need to know what barrier kind to install*)
   ("MEM_sync", Isync);
-]
+  ]
