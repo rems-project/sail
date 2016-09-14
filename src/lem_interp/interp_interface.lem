@@ -395,65 +395,26 @@ end
 type read_kind =
   (* common reads *)
   Read_plain
-  | Read_tag (*For reading the tag of tagged memory*)
+  | Read_tag | Read_tag_reserve (*For reading the tag of tagged memory*)
   (* Power reads *)
   | Read_reserve
   (* AArch64 reads *)
   | Read_acquire | Read_exclusive | Read_exclusive_acquire | Read_stream
 
-instance (Show read_kind)
-  let show = function
-    | Read_plain -> "Read_plain"
-    | Read_tag -> "Read_tag"
-    | Read_reserve -> "Read_reserve"
-    | Read_acquire -> "Read_acquire"
-    | Read_exclusive_acquire -> "Read_exclusive_acquire"
-    | Read_stream -> "Read_stream"
-  end
-end
-
 type write_kind =
   (* common writes *)
     Write_plain
-  | Write_tag (*For writing the tag of tagged memory*)
+  | Write_tag | Write_tag_conditional (*For writing the tag of tagged memory*)
   (* Power writes *)
   | Write_conditional
   (* AArch64 writes *)
   | Write_release | Write_exclusive | Write_exclusive_release
-
-instance (Show write_kind)
-  let show = function
-    | Write_plain -> "Write_plain"
-    | Write_tag -> "Write_tag"
-    | Write_conditional -> "Write_conditional"
-    | Write_release -> "Write_release"
-    | Write_exclusive -> "Write_exclusive"
-    | Write_exclusive_release -> "Write_exclusive_release"
-  end
-end
 
 type barrier_kind =
   (* Power barriers *)
   Sync | LwSync | Eieio | Isync
   (* AArch64 barriers *)
   | DMB | DMB_ST | DMB_LD | DSB | DSB_ST | DSB_LD | ISB 
-
-instance (Show barrier_kind)
-  let show = function
-    | Sync -> "Sync"
-    | LwSync -> "LwSync"
-    | Eieio -> "Eieio"
-    | Isync -> "Isync"
-    | DMB -> "DMB"
-    | DMB_ST -> "DMB_ST"
-    | DMB_LD -> "DMB_LD"
-    | DSB -> "DSB"
-    | DSB_ST -> "DSB_ST"
-    | DSB_LD -> "DSB_LD"
-    | ISB -> "ISB"
-  end
-end
-
 
 type instruction_kind = 
   | IK_barrier of barrier_kind 
@@ -465,16 +426,6 @@ they just have particular nias (and will be IK_simple *)
   | IK_cond_branch 
 (*  | IK_uncond_branch *)
   | IK_simple
-
-instance (Show instruction_kind)
-  let show = function
-    | IK_barrier bk -> "IK_barrier " ^ show bk
-    | IK_mem_read m -> "IK_mem_read " ^ show m
-    | IK_mem_write w -> "IK_mem_write " ^ show w
-    | IK_cond_branch -> "IK_cond_branch"
-    | IK_simple -> "IK_simple"
-  end
-end
 
 (*Map between external functions as preceived from a Sail spec and the actual implementation of the function *)
 type external_functions = list (string * (Interp.value -> Interp.value))

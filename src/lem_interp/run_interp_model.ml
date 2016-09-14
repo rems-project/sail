@@ -128,7 +128,7 @@ let rec perform_action ((reg, mem, tagmem) as env) = function
      | None -> assert false (*TODO remember how to report an error *)in
    let naddress = integer_of_address address in
    (match kind with
-    | Read_tag ->
+    | Read_tag | Read_tag_reserve ->
       let tag = Mem.find naddress tagmem in
       let rec reading (n : num) length = 
         if length = 0 
@@ -147,7 +147,7 @@ let rec perform_action ((reg, mem, tagmem) as env) = function
      | None -> assert false (*TODO remember how to report an error *)in
    let naddress = integer_of_address address in
    (match kind with
-    | Write_tag ->
+    | Write_tag | Write_tag_conditional ->
       (match bytes with
        | [b] -> (None,(reg,mem,Mem.add naddress b tagmem))
        | _ -> assert false)
