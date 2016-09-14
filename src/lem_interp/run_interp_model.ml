@@ -129,7 +129,12 @@ let rec perform_action ((reg, mem, tagmem) as env) = function
    let naddress = integer_of_address address in
    (match kind with
     | Read_tag ->
-      (Some (register_value_of_memory_value [(Mem.find naddress tagmem)] !default_order), env)
+      let tag = Mem.find naddress tagmem in
+      let rec reading (n : num) length = 
+        if length = 0 
+        then []
+        else (Mem.find n mem)::(reading (add n big_num_unit) (length - 1)) in
+      (Some (register_value_of_memory_value (tag::(reading naddress length)) !default_order), env)
     | _ ->
       let rec reading (n : num) length = 
         if length = 0 
