@@ -843,6 +843,12 @@ let remove_vector_concat_pat pat =
 
   let pat = fold_pat name_vector_concat_elements pat in
 
+    
+
+  let rec tag_last = function
+    | x :: xs -> let is_last = xs = [] in (x,is_last) :: tag_last xs
+    | _ -> [] in
+
   (* remove names from vectors in vector_concat patterns and collect them as declarations for the
      function body or expression *)
   let unname_vector_concat_elements = (* :
@@ -896,7 +902,7 @@ let remove_vector_concat_pat pat =
       (LB_aux (letbind,typ),
        (fun body -> E_aux (E_let (LB_aux (letbind,cannot),body),typ)),
        (rootname,childname)) in
-    
+
     let p_aux = function
       | ((P_as (P_aux (P_vector_concat pats,rannot'),rootid),decls),rannot) ->
          let aux (pos,pat_acc,decl_acc) (P_aux (p,cannot),is_last) = match cannot with
@@ -941,11 +947,11 @@ let remove_vector_concat_pat pat =
                     l ("unname_vector_concat_elements: Non-vector in vector-concat pattern:" ^
                        t_to_string t)
                  ) in
-          let rec tag = function
-            | x :: xs -> let is_last = xs = [] in (x,is_last) :: tag xs
-            | _ -> [] in
-          let pats_tagged = tag pats in
+          let pats_tagged = tag_last pats in
           let (_,pats',decls') = List.fold_left aux (0,[],[]) pats_tagged in
+
+          (* abuse P_vector_concat as a P_vector_const pattern: it has the of
+          patterns as an argument but they're meant to be consed together *)
           (P_aux (P_as (P_aux (P_vector_concat pats',rannot'),rootid),rannot), decls @ decls')
       | ((p,decls),annot) -> (P_aux (p,annot),decls) in
     
@@ -1028,7 +1034,7 @@ let remove_vector_concat_pat pat =
 
   let remove_vector_concats =
     let p_vector_concat ps =
-      let aux acc (P_aux (p,annot)) =
+      let aux acc (P_aux (p,annot),is_last) =
         let (l,_) = annot in
         match p,annot with
         | P_vector ps,_ -> acc @ ps
@@ -1041,7 +1047,8 @@ let remove_vector_concat_pat pat =
         | P_id _,(_,Base((_,{t = Tapp ("vector", _)}),_,_,_,_,_))
         | P_id _,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector",_)})}),_,_,_,_,_))
         | P_wild,(_,Base((_,{t = Tapp ("vector", _)}),_,_,_,_,_))
-        | P_wild,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector", _)})}),_,_,_,_,_)) ->
+        | P_wild,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector", _)})}),_,_,_,_,_))
+             when is_last ->
            let wild _ = P_aux (P_wild,(Parse_ast.Generated l,simple_annot {t = Tid "bit"})) in
            acc @ [P_aux(P_wild,annot)]
         | P_lit _,(l,_) ->
@@ -1049,7 +1056,34 @@ let remove_vector_concat_pat pat =
         | _,(l,Base((_,t),_,_,_,_,_)) ->
            raise (Reporting_basic.err_unreachable l ("remove_vector_concats: Non-vector in vector-concat pattern " ^
                        t_to_string t)) in
-      P_vector_concat (List.fold_left aux [] ps) in
+
+      let has_length (P_aux (p,annot)) =
+        match p,annot with
+        | P_vector _,_ -> true
+        | P_id _,(_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_))
+        | P_id _,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])})}),_,_,_,_,_))
+        | P_wild,(_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_))
+        | P_wild,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])})}),_,_,_,_,_)) ->
+           true
+        | P_id _,(_,Base((_,{t = Tapp ("vector", _)}),_,_,_,_,_))
+        | P_id _,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector",_)})}),_,_,_,_,_))
+        | P_wild,(_,Base((_,{t = Tapp ("vector", _)}),_,_,_,_,_))
+        | P_wild,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector", _)})}),_,_,_,_,_)) ->
+           false in
+
+      let ps_tagged = tag_last ps in
+      let ps' = List.fold_left aux [] ps_tagged in
+      let last_has_length ps = List.exists (fun (p,b) -> b && has_length p) ps_tagged in
+
+      if last_has_length ps then
+        P_vector ps'
+      else
+        (* If the last vector pattern in the vector_concat pattern has unknown
+        length we misuse the P_vector_concat constructor's argument to place in
+        the following way: P_vector_concat [x;y; ... ;z] should be mapped to the
+        pattern-match x :: y :: .. z, i.e. if x : 'a, then z : vector 'a. *)
+        P_vector_concat ps' in
+
     {id_pat_alg with p_vector_concat = p_vector_concat} in
   
   let pat = fold_pat remove_vector_concats pat in
