@@ -2196,6 +2196,11 @@ let rec doc_pat_lem apat_needed regtypes (P_aux (p,(l,annot)) as pa) = match p w
        (separate space)
          [string "V";brackets (separate_map semi (doc_pat_lem true regtypes) pats);underscore;underscore] in
      if apat_needed then parens ppp else ppp
+  | P_vector_concat pats ->
+     let ppp =
+       (separate space)
+         [string "V";parens (separate_map (string "::") (doc_pat_lem true regtypes) pats);underscore;underscore] in
+     if apat_needed then parens ppp else ppp
   | P_tup pats  ->
      (match pats with
       | [p] -> doc_pat_lem apat_needed regtypes p

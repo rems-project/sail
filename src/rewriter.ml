@@ -26,6 +26,9 @@ let fresh_name () =
 let reset_fresh_name_counter () =
   fresh_name_counter := 0
 
+let get_fresh_name_counter () = !fresh_name_counter
+let set_fresh_name_counter i = (fresh_name_counter := i)
+
 let get_effsum_annot (_,t) = match t with
   | Base (_,_,_,_,effs,_) -> effs
   | NoTyp -> failwith "no effect information" 
@@ -853,21 +856,50 @@ let remove_vector_concat_pat pat =
     (* build a let-expression of the form "let child = root[i..j] in body" *)
     let letbind_vec (rootid,rannot) (child,cannot) (i,j) =
       let (l,_) = cannot in
-      let index n =
-        let typ = simple_annot {t = Tapp ("atom",[TA_nexp (mk_c (big_int_of_int n))])} in
-        E_aux (E_lit (L_aux (L_num n,Parse_ast.Generated l)), (Parse_ast.Generated l,typ)) in
-      let subv = E_aux (E_vector_subrange (E_aux (E_id rootid,rannot),index i,index j),cannot) in
-      let typ = (Parse_ast.Generated l,simple_annot {t = Tid "unit"}) in
-      let letbind = LB_val_implicit (P_aux (P_id child,cannot),subv) in
       let (Id_aux (Id rootname,_)) = rootid in
       let (Id_aux (Id childname,_)) = child in
+      
+      let simple_num n : tannot exp =
+        let typ = simple_annot (mk_atom_typ (mk_c (big_int_of_int n))) in
+        E_aux (E_lit (L_aux (L_num n,l)), (l,typ)) in
+      
+      let vlength_info (Base ((_,{t = Tapp("vector",[_;TA_nexp nexp;_;_])}),_,_,_,_,_)) =
+        nexp in
+
+      let root : tannot exp = E_aux (E_id rootid,rannot) in
+      let index_i = simple_num i in
+      let index_j : tannot exp = match j with
+        | Some j -> simple_num j
+        | None ->
+           let length_root_nexp = vlength_info (snd rannot) in
+           let length_app_exp : tannot exp =
+             let typ = mk_atom_typ length_root_nexp in
+             let annot = (l,tag_annot typ (External (Some "length"))) in
+             E_aux (E_app (Id_aux (Id "length",l),[root]),annot) in
+           let minus = Id_aux (Id "-",l) in
+           let one_exp : tannot exp = 
+             let typ = (mk_atom_typ (mk_c unit_big_int)) in
+             let annot = (l,simple_annot typ) in
+             E_aux (E_lit (L_aux (L_num 1,l)),annot) in
+           
+           let typ = mk_atom_typ (mk_sub length_root_nexp (mk_c unit_big_int)) in
+           let annot = (l,tag_annot typ (External (Some "minus"))) in
+           let exp : tannot exp =
+             E_aux (E_app_infix(length_app_exp,minus,one_exp),annot) in
+           exp in
+      
+      let subv = E_aux (E_vector_subrange (root,index_i,index_j),cannot) in
+
+      let typ = (Parse_ast.Generated l,simple_annot {t = Tid "unit"}) in
+      
+      let letbind = LB_val_implicit (P_aux (P_id child,cannot),subv) in
       (LB_aux (letbind,typ),
        (fun body -> E_aux (E_let (LB_aux (letbind,cannot),body),typ)),
        (rootname,childname)) in
-
+    
     let p_aux = function
       | ((P_as (P_aux (P_vector_concat pats,rannot'),rootid),decls),rannot) ->
-          let aux (pos,pat_acc,decl_acc) (P_aux (p,cannot)) = match cannot with
+         let aux (pos,pat_acc,decl_acc) (P_aux (p,cannot),is_last) = match cannot with
             | (_,Base((_,{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_))
             | (_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])})}),_,_,_,_,_)) ->
                let length  = int_of_big_int length in
@@ -875,17 +907,31 @@ let remove_vector_concat_pat pat =
                 (* if we see a named vector pattern, remove the name and remember to 
                   declare it later *)
                 | P_as (P_aux (p,cannot),cname) ->
-                   let (lb,decl,info) = letbind_vec (rootid,rannot) (cname,cannot) (pos,pos + length - 1) in
+                   let (lb,decl,info) = letbind_vec (rootid,rannot) (cname,cannot) (pos,Some(pos+length-1)) in
                    (pos + length, pat_acc @ [P_aux (p,cannot)], decl_acc @ [((lb,decl),info)])
                 (* if we see a P_id variable, remember to declare it later *)
                 | P_id cname ->
-                   let (lb,decl,info) = letbind_vec (rootid,rannot) (cname,cannot) (pos,pos + length - 1) in
+                   let (lb,decl,info) = letbind_vec (rootid,rannot) (cname,cannot) (pos,Some(pos+length-1)) in
                    (pos + length, pat_acc @ [P_aux (P_id cname,cannot)], decl_acc @ [((lb,decl),info)])
                 (* normal vector patterns are fine *)
                 | _ -> (pos + length, pat_acc @ [P_aux (p,cannot)],decl_acc) )
             (* non-vector patterns aren't *)
             | (l,Base((_,{t = Tapp ("vector",[_;_;_;_])}),_,_,_,_,_))
             | (l,Base((_,{t = Tabbrev (_,{t = Tapp ("vector",[_;_;_;_])})}),_,_,_,_,_)) ->
+               if is_last then
+                 match p with 
+                (* if we see a named vector pattern, remove the name and remember to 
+                  declare it later *)
+                | P_as (P_aux (p,cannot),cname) ->
+                   let (lb,decl,info) = letbind_vec (rootid,rannot) (cname,cannot) (pos,None) in
+                   (pos, pat_acc @ [P_aux (p,cannot)], decl_acc @ [((lb,decl),info)])
+                (* if we see a P_id variable, remember to declare it later *)
+                | P_id cname ->
+                   let (lb,decl,info) = letbind_vec (rootid,rannot) (cname,cannot) (pos,None) in
+                   (pos, pat_acc @ [P_aux (P_id cname,cannot)], decl_acc @ [((lb,decl),info)])
+                (* normal vector patterns are fine *)
+                | _ -> (pos, pat_acc @ [P_aux (p,cannot)],decl_acc)
+               else
                raise
                  (Reporting_basic.err_unreachable
                     l ("unname_vector_concat_elements: vector of unspecified length in vector-concat pattern"))
@@ -895,7 +941,11 @@ let remove_vector_concat_pat pat =
                     l ("unname_vector_concat_elements: Non-vector in vector-concat pattern:" ^
                        t_to_string t)
                  ) in
-          let (_,pats',decls') = List.fold_left aux (0,[],[]) pats in
+          let rec tag = function
+            | x :: xs -> let is_last = xs = [] in (x,is_last) :: tag xs
+            | _ -> [] in
+          let pats_tagged = tag pats in
+          let (_,pats',decls') = List.fold_left aux (0,[],[]) pats_tagged in
           (P_aux (P_as (P_aux (P_vector_concat pats',rannot'),rootid),rannot), decls @ decls')
       | ((p,decls),annot) -> (P_aux (p,annot),decls) in
     
@@ -942,7 +992,7 @@ let remove_vector_concat_pat pat =
            S.add rootid roots_needed
         ) decls S.empty in
     List.filter
-      (fun (_,(_,childid)) ->
+      (fun (_,(_,childid)) ->  
        S.mem childid roots_needed ||
          String.length childid < 3 ||
            not (String.sub childid 0 2 = String.sub "__v" 0 2))
@@ -953,7 +1003,8 @@ let remove_vector_concat_pat pat =
     List.split decls in
 
   let decls = List.fold_left (fun f g x -> f (g x)) (fun b -> b) decls in
-             
+
+
   (* at this point shouldn't have P_as patterns in P_vector_concat patterns any more,
      all P_as and P_id vectors should have their declarations in decls.
      Now flatten all vector_concat patterns *)
@@ -981,23 +1032,24 @@ let remove_vector_concat_pat pat =
         let (l,_) = annot in
         match p,annot with
         | P_vector ps,_ -> acc @ ps
-        | P_id _,
-          (_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_))
-        | P_id _,
-          (_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])})}),_,_,_,_,_)) ->
+        | P_id _,(_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_))
+        | P_id _,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector",[_;TA_nexp {nexp = Nconst length};_;_])})}),_,_,_,_,_))
+        | P_wild,(_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_))
+        | P_wild,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])})}),_,_,_,_,_)) ->
            let wild _ = P_aux (P_wild,(Parse_ast.Generated l,simple_annot {t = Tid "bit"})) in
            acc @ (List.map wild (range 0 ((int_of_big_int length) - 1)))
-        | P_wild,
-          (_,Base((_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])}),_,_,_,_,_))
-        | P_wild,
-          (_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector", [_;TA_nexp {nexp = Nconst length};_;_])})}),_,_,_,_,_)) ->
+        | P_id _,(_,Base((_,{t = Tapp ("vector", _)}),_,_,_,_,_))
+        | P_id _,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector",_)})}),_,_,_,_,_))
+        | P_wild,(_,Base((_,{t = Tapp ("vector", _)}),_,_,_,_,_))
+        | P_wild,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector", _)})}),_,_,_,_,_)) ->
            let wild _ = P_aux (P_wild,(Parse_ast.Generated l,simple_annot {t = Tid "bit"})) in
-           acc @ (List.map wild (range 0 ((int_of_big_int length) - 1)))
+           acc @ [P_aux(P_wild,annot)]
         | P_lit _,(l,_) ->
            raise (Reporting_basic.err_unreachable l "remove_vector_concats: P_lit pattern in vector-concat pattern")
-        | _,(l,_) ->
-           raise (Reporting_basic.err_unreachable l "remove_vector_concats: Non-vector in vector-concat pattern") in
-      P_vector (List.fold_left aux [] ps) in
+        | _,(l,Base((_,t),_,_,_,_,_)) ->
+           raise (Reporting_basic.err_unreachable l ("remove_vector_concats: Non-vector in vector-concat pattern " ^
+                       t_to_string t)) in
+      P_vector_concat (List.fold_left aux [] ps) in
     {id_pat_alg with p_vector_concat = p_vector_concat} in
   
   let pat = fold_pat remove_vector_concats pat in
