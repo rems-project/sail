@@ -1565,7 +1565,7 @@ and n_exp (E_aux (exp_aux,annot) as exp : 'a exp) (k : 'a exp -> 'a exp) : 'a ex
   | E_record_update (exp1,fexps) -> 
      n_exp_name exp1 (fun exp1 ->
      n_fexps fexps (fun fexps ->
-     k (rewrap (E_record fexps))))
+     k (rewrap (E_record_update (exp1,fexps)))))
   | E_field (exp1,id) ->
      n_exp_name exp1 (fun exp1 ->
      k (rewrap (E_field (exp1,id))))
@@ -1585,12 +1585,20 @@ and n_exp (E_aux (exp_aux,annot) as exp : 'a exp) (k : 'a exp -> 'a exp) : 'a ex
          if effectful exp'
          then (rewrap (E_internal_plet (pat,exp',n_exp body k)))
          else (rewrap (E_let (lb,n_exp body k)))
-     ))
+          ))
+  | E_sizeof nexp ->
+     k (rewrap (E_sizeof nexp))
+  | E_sizeof_internal annot ->
+     k (rewrap (E_sizeof_internal annot))
   | E_assign (lexp,exp1) ->
      n_lexp lexp (fun lexp ->
      n_exp_name exp1 (fun exp1 ->
      k (rewrap (E_assign (lexp,exp1)))))
   | E_exit exp' -> k (E_aux (E_exit (n_exp_term (effectful exp') exp'),annot))
+  | E_assert (exp1,exp2) ->
+     n_exp exp1 (fun exp1 ->
+     n_exp exp2 (fun exp2 ->
+     k (rewrap (E_assert (exp1,exp2)))))
   | E_internal_cast (annot',exp') ->
      n_exp_name exp' (fun exp' ->
      k (rewrap (E_internal_cast (annot',exp'))))
@@ -1604,6 +1612,11 @@ and n_exp (E_aux (exp_aux,annot) as exp : 'a exp) (k : 'a exp -> 'a exp) : 'a ex
   | E_internal_return exp1 ->
      n_exp_name exp1 (fun exp1 ->
      k (rewrap (E_internal_return exp1)))
+  | E_comment str ->
+    k (rewrap (E_comment str))
+  | E_comment_struc exp' ->
+     n_exp exp' (fun exp' ->
+     k (rewrap (E_comment_struc exp')))
   | E_internal_plet _ -> failwith "E_internal_plet should not be here yet"
                                   
 

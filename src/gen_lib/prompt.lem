@@ -83,7 +83,7 @@ type reg_name =
    * specifies a part of the field, indexed w.r.t. the register as a whole *)
   | Reg_f_slice of string * nat * direction * string * slice * slice 
 
-type outcome 'e 'a =
+type outcome 'a =
   (* Request to read memory, value is location to read followed by registers that location depended 
    * on when mode.track_values, integer is size to read, followed by registers that were used in 
    * computing that size *)
@@ -123,7 +123,7 @@ type outcome 'e 'a =
                                                 
   (* Escape the current instruction, for traps, some sys calls, interrupts, etc. Can optionally 
    * provide a handler. *)
-  | Escape 'e (* currently without handlers *) (* of maybe (unit -> outcome 'a) *)
+  | Escape of (outcome unit) (* currently without handlers *) (* of maybe (unit -> outcome 'a) *)
 
   (* Stop for incremental stepping, function can be used to display function call data *)
   | Done of 'a

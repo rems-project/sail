@@ -38,6 +38,13 @@ let (>>=) = bind
 val (>>): forall 's 'e 'b. State 's 'e unit -> State 's 'e 'b -> State 's 'e 'b
 let (>>) m n = m >>= fun _ -> n
 
+let assert' b msg_opt =
+  let msg = match msg_opt with
+  | Just msg -> msg
+  | Nothing  -> "unspecified error"
+  end in
+  if to_bool b then failwith msg else ()
+
 val read_writeEA : forall 'e. unit -> State state 'e (integer * integer)
 let read_writeEA () s = (Left s.writeEA,s)
 
@@ -68,10 +75,10 @@ let write_memstate s (addr,bits) = Map.insert addr bits s
 val read_memory : forall 'e. integer -> integer -> State state 'e (vector bit)
 let read_memory addr l s =
   let bytes = List.map (compose (read_memstate s.memstate) ((+) addr)) (ints l) in
-  (Left (V (foldl (++) [] bytes) 0 defaultDir),s)
+  (Left (Vector (foldl (++) [] bytes) 0 defaultDir),s)
 
 val write_memory : forall 'e. integer -> integer -> vector bit -> State state 'e unit
-let write_memory addr l (V bits _ _) s =
+let write_memory addr l (Vector bits _ _) s =
   let addrs = List.map ((+) addr) (ints l) in
   let bytes = byte_chunks l bits in
   (Left (), <| s with memstate = foldl write_memstate s.memstate (zip addrs bytes) |>)

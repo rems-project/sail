@@ -1,17 +1,18 @@
 open import Pervasives_extra
-open import State
 open import Vector
 open import Arch
 
 type i = integer
 type number = integer
 
+type n = natural
+
 let length l = integerFromNat (length l)
 
-let has_undef (V bs _ _) = List.any (function Undef -> true | _ -> false end) bs
+let has_undef (Vector bs _ _) = List.any (function Undef -> true | _ -> false end) bs
 
 let most_significant = function
-  | (V (b :: _) _ _) -> b
+  | (Vector (b :: _) _ _) -> b
   | _ -> failwith "most_significant applied to empty vector"
   end
 
@@ -22,9 +23,11 @@ let bitwise_not_bit = function
   end
 
 let (~) = bitwise_not_bit
+let pow m n = m ** (natFromInteger n)
 
-let bitwise_not (V bs start is_inc) =
-  V (List.map bitwise_not_bit bs) start is_inc
+
+let bitwise_not (Vector bs start is_inc) =
+  Vector (List.map bitwise_not_bit bs) start is_inc
 
 val is_one : integer -> bit
 let is_one i =
@@ -56,15 +59,15 @@ let (|.) x y = bitwise_or_bit (x,y)
 val (+.) : bit -> bit -> bit
 let (+.) x y = bitwise_xor_bit (x,y)
 
-let bitwise_binop op (V bsl start is_inc, V bsr _ _) =
+let bitwise_binop op (Vector bsl start is_inc, Vector bsr _ _) =
   let revbs = foldl (fun acc pair -> bitwise_binop_bit op pair :: acc) [] (zip bsl bsr) in
-  V (reverse revbs) start is_inc
+  Vector (reverse revbs) start is_inc
 
 let bitwise_and = bitwise_binop (&&)
 let bitwise_or = bitwise_binop (||)
 let bitwise_xor = bitwise_binop xor
 
-let unsigned (V bs _ _ as v) : integer =
+let unsigned (Vector bs _ _ as v) : integer =
   if has_undef v then failwith "unsigned applied to vector with undefined bits" else
     fst (List.foldl
            (fun (acc,exp) b -> (acc + (if b = I then integerPow 2 exp else 0),exp +1)) (0,0) bs)
@@ -133,13 +136,13 @@ let to_vec is_inc ((len : integer),(n : integer)) =
   let bs = List.replicate (natFromInteger len) O in
   let start = if is_inc then 0 else len-1 in
   if n = 0 then
-    V bs start is_inc
+    Vector bs start is_inc
   else if n > 0 then
-    V (divide_by_2 bs (len-1) n) start is_inc
+    Vector (divide_by_2 bs (len-1) n) start is_inc
   else
     let abs_bs = divide_by_2 bs (len-1) (abs n) in
-    let (V bs start is_inc) = bitwise_not (V abs_bs start is_inc) in
-    V (add_one_bit bs false (len-1)) start is_inc
+    let (Vector bs start is_inc) = bitwise_not (Vector abs_bs start is_inc) in
+    Vector (add_one_bit bs false (len-1)) start is_inc
 
 let to_vec_big = to_vec
       
@@ -147,12 +150,12 @@ let to_vec_inc = to_vec true
 let to_vec_dec = to_vec false
 
 let to_vec_undef is_inc (len : integer) =
-  V (replicate (natFromInteger len) Undef) (if is_inc then 0 else len-1) is_inc
+  Vector (replicate (natFromInteger len) Undef) (if is_inc then 0 else len-1) is_inc
 
 let to_vec_inc_undef = to_vec_undef true
 let to_vec_dec_undef = to_vec_undef false
 
-let get_dir (V _ _ ord) = ord
+let get_dir (Vector _ _ ord) = ord
                                     
 let exts (len, vec) = to_vec (get_dir vec) (len,signed vec)
 let extz (len, vec) = to_vec (get_dir vec) (len,unsigned vec)
@@ -168,7 +171,7 @@ let modulo = integerMod
 let quot = integerDiv
 let power = integerPow
 
-let arith_op_vec op sign (size : integer) (V _ _ is_inc as l) r =
+let arith_op_vec op sign (size : integer) (Vector _ _ is_inc as l) r =
   let (l',r') = (to_num sign l, to_num sign r) in
   let n = op  l' r' in
   to_vec is_inc (size * (length l),n)
@@ -186,7 +189,7 @@ let minus_VVV = arith_op_vec integerMinus false 1
 let mult_VVV = arith_op_vec integerMult false 2
 let multS_VVV = arith_op_vec integerMult true 2
 
-let arith_op_vec_range op sign size (V _ _ is_inc as l) r =
+let arith_op_vec_range op sign size (Vector _ _ is_inc as l) r =
   arith_op_vec op sign size l (to_vec is_inc (length l,r))
 
 (* add_vec_range
@@ -201,7 +204,7 @@ let minus_VIV = arith_op_vec_range integerMinus false 1
 let mult_VIV = arith_op_vec_range integerMult false 2
 let multS_VIV = arith_op_vec_range integerMult true 2
 
-let arith_op_range_vec op sign size l (V _ _ is_inc as r) =
+let arith_op_range_vec op sign size l (Vector _ _ is_inc as r) =
   arith_op_vec op sign size (to_vec is_inc (length r, l)) r
 
 (* add_range_vec
@@ -248,7 +251,7 @@ let arith_op_vec_vec_range op sign l r =
 let add_VVI = arith_op_vec_vec_range integerAdd false
 let addS_VVI = arith_op_vec_vec_range integerAdd true
 
-let arith_op_vec_bit op sign (size : integer) (V _ _ is_inc as l)r =
+let arith_op_vec_bit op sign (size : integer) (Vector _ _ is_inc as l)r =
   let l' = to_num sign l in
   let n = op l' (match r with | I -> (1 : integer) | _ -> 0 end) in
   to_vec is_inc (length l * size,n)
@@ -261,7 +264,7 @@ let add_VBV = arith_op_vec_bit integerAdd false 1
 let addS_VBV = arith_op_vec_bit integerAdd true 1
 let minus_VBV = arith_op_vec_bit integerMinus true 1
 
-let rec arith_op_overflow_vec (op : integer -> integer -> integer) sign size (V _ _ is_inc as l) r =
+let rec arith_op_overflow_vec (op : integer -> integer -> integer) sign size (Vector _ _ is_inc as l) r =
   let len = length l in
   let act_size = len * size in
   let (l_sign,r_sign) = (to_num sign l,to_num sign r) in
@@ -292,7 +295,7 @@ let multO_VVV = arith_op_overflow_vec integerMult false 2
 let multSO_VVV = arith_op_overflow_vec integerMult true 2
 
 let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (size : integer)
-                                  (V _ _ is_inc as l) r_bit =
+                                  (Vector _ _ is_inc as l) r_bit =
   let act_size = length l * size in
   let l' = to_num sign l in
   let l_u = to_num false l in
@@ -320,35 +323,35 @@ let addSO_VBV = arith_op_overflow_vec_bit integerAdd true 1
 let minusO_VBV = arith_op_overflow_vec_bit integerMinus false 1
 let minusSO_VBV = arith_op_overflow_vec_bit integerMinus true 1
     
-type shift = LL | RR | LLL
+type shift = LL_shift | RR_shift | LLL_shift
 
-let shift_op_vec op ((V bs start is_inc as l),(n : integer)) =
+let shift_op_vec op ((Vector bs start is_inc as l),(n : integer)) =
   let len = integerFromNat (List.length bs) in
     match op with
-     | LL (*"<<"*) ->
-       let right_vec = V (List.replicate (natFromInteger n) O) 0 true in
+     | LL_shift (*"<<"*) ->
+       let right_vec = Vector (List.replicate (natFromInteger n) O) 0 true in
        let left_vec = slice l n (if is_inc then len + start else start - len) in
        vector_concat left_vec right_vec
-     | RR (*">>"*) ->
+     | RR_shift (*">>"*) ->
        let right_vec = slice l start n in
-       let left_vec = V (List.replicate (natFromInteger n) O) 0 true in
+       let left_vec = Vector (List.replicate (natFromInteger n) O) 0 true in
        vector_concat left_vec right_vec 
-     | LLL (*"<<<"*) ->
+     | LLL_shift (*"<<<"*) ->
        let left_vec = slice l n (if is_inc then len + start else start - len) in
        let right_vec = slice l start n in
        vector_concat left_vec right_vec
      end
 
-let bitwise_leftshift = shift_op_vec LL (*"<<"*)
-let bitwise_rightshift = shift_op_vec RR (*">>"*)
-let bitwise_rotate = shift_op_vec LLL (*"<<<"*)
+let bitwise_leftshift = shift_op_vec LL_shift (*"<<"*)
+let bitwise_rightshift = shift_op_vec RR_shift (*">>"*)
+let bitwise_rotate = shift_op_vec LLL_shift (*"<<<"*)
 
 let rec arith_op_no0 (op : integer -> integer -> integer) l r = 
   if r = 0
   then Nothing
   else Just (op l r)
 
-let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size ((V _ start is_inc) as l) r =
+let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size ((Vector _ start is_inc) as l) r =
   let act_size = length l * size in
   let (l',r') = (to_num sign l,to_num sign r) in
   let n = arith_op_no0 op l' r' in
@@ -361,13 +364,13 @@ let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size ((V _ st
     end in
   if representable 
   then to_vec is_inc (act_size,n')
-  else V (List.replicate (natFromInteger act_size) Undef) start is_inc
+  else Vector (List.replicate (natFromInteger act_size) Undef) start is_inc
 
 let mod_VVV = arith_op_vec_no0 integerMod false 1
 let quot_VVV = arith_op_vec_no0 integerDiv false 1
 let quotS_VVV = arith_op_vec_no0 integerDiv true 1
 
-let arith_op_overflow_no0_vec op sign size ((V _ start is_inc) as l) r =
+let arith_op_overflow_no0_vec op sign size ((Vector _ start is_inc) as l) r =
   let rep_size = length r * size in
   let act_size = length l * size in
   let (l',r') = (to_num sign l,to_num sign r) in
@@ -385,21 +388,31 @@ let arith_op_overflow_no0_vec op sign size ((V _ start is_inc) as l) r =
     if representable then
       (to_vec is_inc (act_size,n'),to_vec is_inc (act_size + 1,n_u'))
     else
-      (V (List.replicate (natFromInteger act_size) Undef) start is_inc,
-       V (List.replicate (natFromInteger (act_size + 1)) Undef) start is_inc) in
+      (Vector (List.replicate (natFromInteger act_size) Undef) start is_inc,
+       Vector (List.replicate (natFromInteger (act_size + 1)) Undef) start is_inc) in
   let overflow = if representable then O else I in
   (correct_size_num,overflow,most_significant one_more)
 
 let quotO_VVV = arith_op_overflow_no0_vec integerDiv false 1
 let quotSO_VVV = arith_op_overflow_no0_vec integerDiv true 1
 
-let arith_op_vec_range_no0 op sign size (V _ _ is_inc as l) r =
+let arith_op_vec_range_no0 op sign size (Vector _ _ is_inc as l) r =
   arith_op_vec_no0 op sign size l (to_vec is_inc (length l,r))
 
 let mod_VIV = arith_op_vec_range_no0 integerMod false 1
 
 let duplicate (bit,length) =
-  V (List.replicate (natFromInteger length) bit) 0 true
+  Vector (List.replicate (natFromInteger length) bit) 0 true
+
+val repeat : forall 'a. list 'a -> integer -> list 'a
+let rec repeat xs = function
+  | 0 -> []
+  | n -> xs ++ repeat xs (n-1)
+  end
+
+let duplicate_bits (Vector bits start direction,len) = 
+  let bits' = repeat bits len in
+  Vector bits' start direction
 
 let compare_op op (l,r) = bool_to_bit (op l r)
 
@@ -463,7 +476,7 @@ val make_indexed_vector_reg : list (integer * register) -> maybe register -> int
 let make_indexed_vector_reg entries default start length =
   let length = natFromInteger length in
   match default with
-  | Just v -> V (List.foldl replace (replicate length v) entries) start defaultDir
+  | Just v -> Vector (List.foldl replace (replicate length v) entries) start defaultDir
   | Nothing -> failwith "make_indexed_vector used without default value"
   end
 
@@ -471,15 +484,15 @@ val make_indexed_vector_bit : list (integer * bit) -> maybe bit -> integer -> in
 let make_indexed_vector_bit entries default start length =
   let length = natFromInteger length in
   let default = match default with Nothing -> Undef | Just v -> v end in
-  V (List.foldl replace (replicate length default) entries) start defaultDir
+  Vector (List.foldl replace (replicate length default) entries) start defaultDir
 
 val make_bit_vector_undef : integer -> vector bit
 let make_bitvector_undef length =
-  V (replicate (natFromInteger length) Undef) 0 true
+  Vector (replicate (natFromInteger length) Undef) 0 true
 
 
 let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n)
 
-let mask (n,V bits start dir) =
+let mask (n,Vector bits start dir) =
   let current_size = List.length bits in
-  V (drop (current_size - (natFromInteger n)) bits) (if dir then 0 else (n-1)) dir
+  Vector (drop (current_size - (natFromInteger n)) bits) (if dir then 0 else (n-1)) dir

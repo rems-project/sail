@@ -1,26 +1,7 @@
 open import Pervasives
 open import State
 open import Sail_values
-import Set_extra
 
-(*
-let memory_parameter_transformer mode v =
-  let mode = <|mode with endian = E_big_endian|> in
-  match v with
-  | Interp.V_tuple [location;length] ->
-    match length with
-    | Interp.V_lit (L_aux (L_num len) _) ->
-      let (v,regs) = extern_mem_value mode location in
-      (v,(natFromInteger len),regs)
-    | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
-      let (v,loc_regs) = extern_mem_value mode location in
-      match loc_regs with
-      | Nothing -> (v,(natFromInteger len),Just (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs)))
-      | Just loc_regs -> (v,(natFromInteger len),Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs))))
-      end
-    end
-  end
- *)
 let rMem_NORMAL (addr,l) = read_memory (unsigned addr) l
 let rMem_STREAM (addr,l) = read_memory (unsigned addr) l
 let rMem_ORDERED (addr,l) = read_memory (unsigned addr) l
@@ -37,14 +18,14 @@ let wMem_Addr_ORDERED (addr,l) = write_writeEA (unsigned addr) l
 let wMem_Addr_ATOMIC (addr,l) = write_writeEA (unsigned addr) l
 let wMem_Addr_ATOMIC_ORDERED (addr,l) = write_writeEA (unsigned addr) l
 
-let wMem_Val_NORMAL l v = read_writeEA () >>= fun (addr,_) -> write_memory addr l v
-let wMem_Val_ATOMIC l v = read_writeEA () >>= fun (addr,_) -> write_memory addr l v
+let wMem_Val_NORMAL (l,v) = read_writeEA () >>= fun (addr,_) -> write_memory addr l v >> return ()
+let wMem_Val_ATOMIC (l,v) = read_writeEA () >>= fun (addr,_) -> write_memory addr l v >> return Vector.O
 
-let DataMemoryBarrier_Reads = return ()
-let DataMemoryBarrier_Writes = return ()
-let DataMemoryBarrier_All = return ()
-let DataSynchronizationBarrier_Reads = return ()
-let DataSynchronizationBarrier_Writes = return ()
-let DataSynchronizationBarrier_All = return ()
-let InstructionSynchronizationBarrier = return ()
+let DataMemoryBarrier_Reads () = return ()
+let DataMemoryBarrier_Writes () = return ()
+let DataMemoryBarrier_All () = return ()
+let DataSynchronizationBarrier_Reads () = return ()
+let DataSynchronizationBarrier_Writes () = return ()
+let DataSynchronizationBarrier_All () = return ()
+let InstructionSynchronizationBarrier () = return ()
 

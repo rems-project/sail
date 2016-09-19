@@ -2071,6 +2071,7 @@ let doc_id_lem_type (Id_aux(i,_)) =
   | Id("bit") -> string "bit"
   | Id("int") -> string "integer"
   | Id("nat") -> string "integer"
+  | Id("option") -> string "maybe"
   | Id i -> string (fix_id i)
   | DeIid x ->
      (* add an extra space through empty to avoid a closing-comment
@@ -2090,13 +2091,31 @@ let doc_id_lem_ctor (Id_aux(i,_)) =
       * token in case of x ending with star. *)
      separate space [colon; string (String.capitalize x); empty]
 
+let effectful (Effect_aux (eff,_)) =
+  match eff with
+  | Effect_var _ -> failwith "effectful: Effect_var not supported"
+  | Effect_set effs ->
+     List.exists
+       (fun (BE_aux (eff,_)) ->
+         match eff with
+         | BE_rreg | BE_wreg | BE_rmem | BE_wmem | BE_eamem | BE_wmv
+         | BE_barr | BE_depend | BE_undef | BE_nondet | BE_escape -> true
+         | _ -> false)
+       effs
+
 let doc_typ_lem, doc_atomic_typ_lem =
   (* following the structure of parser for precedence *)
   let rec typ regtypes ty = fn_typ true regtypes ty
     and typ' regtypes ty = fn_typ false regtypes ty
     and fn_typ atyp_needed regtypes ((Typ_aux (t, _)) as ty) = match t with
       | Typ_fn(arg,ret,efct) ->
-         let tpp = separate space [tup_typ true regtypes arg; arrow;fn_typ false regtypes ret] in
+         let exc_typ = string "string" in
+         let ret_typ =
+           if effectful efct
+           then separate space [string "M";parens exc_typ;fn_typ true regtypes ret]
+           else separate space [fn_typ false regtypes ret] in
+         let tpp = separate space [tup_typ true regtypes arg; arrow;ret_typ] in
+         (* once we have proper excetions we need to know what the exceptions type is *)
          if atyp_needed then parens tpp else tpp
       | _ -> tup_typ atyp_needed regtypes ty
     and tup_typ atyp_needed regtypes ((Typ_aux (t, _)) as ty) = match t with
@@ -2115,15 +2134,15 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
          (string "number")
       | Typ_app(id,args) ->
-         (doc_id_lem_type id) ^^ space ^^ (separate_map space (doc_typ_arg_lem regtypes) args)
+         let tpp = (doc_id_lem_type id) ^^ space ^^ (separate_map space (doc_typ_arg_lem regtypes) args) in
+         if atyp_needed then parens tpp else tpp
       | _ -> atomic_typ atyp_needed regtypes ty 
     and atomic_typ atyp_needed regtypes ((Typ_aux (t, _)) as ty) = match t with
       | Typ_id (Id_aux (Id "bool",_)) -> string "bit"
       | Typ_id ((Id_aux (Id name,_)) as id) ->
-         if List.exists ((=) name) regtypes then
-           string "register"
-         else
-           doc_id_lem_type id
+         if List.exists ((=) name) regtypes
+         then string "register"
+         else doc_id_lem_type id
       | Typ_var v -> doc_var v
       | Typ_wild -> underscore
       | Typ_app _ | Typ_tup _ | Typ_fn _ ->
@@ -2150,7 +2169,7 @@ let doc_lit_lem in_pat (L_aux(lit,l)) a =
   | L_true  -> "I"
   | L_num i ->
      let ipp = string_of_int i in
-     (if i < 0 then "((0"^ipp^") : i)"
+     (if i < 0 then "((0"^ipp^") )"
       else "("^ipp^" : i)")
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
@@ -2194,12 +2213,12 @@ let rec doc_pat_lem apat_needed regtypes (P_aux (p,(l,annot)) as pa) = match p w
   | P_vector pats ->
      let ppp =
        (separate space)
-         [string "V";brackets (separate_map semi (doc_pat_lem true regtypes) pats);underscore;underscore] in
+         [string "Vector";brackets (separate_map semi (doc_pat_lem true regtypes) pats);underscore;underscore] in
      if apat_needed then parens ppp else ppp
   | P_vector_concat pats ->
      let ppp =
        (separate space)
-         [string "V";parens (separate_map (string "::") (doc_pat_lem true regtypes) pats);underscore;underscore] in
+         [string "Vector";parens (separate_map (string "::") (doc_pat_lem true regtypes) pats);underscore;underscore] in
      if apat_needed then parens ppp else ppp
   | P_tup pats  ->
      (match pats with
@@ -2220,8 +2239,11 @@ let rec getregtyp (LEXP_aux (le,(l,Base ((_,{t=t}),_,_,_,_,_)))) =
          | LEXP_field (le,_) ->
             getregtyp le
 
+let prefix_recordtype = true
+let report = Reporting_basic.err_unreachable
+
 let doc_exp_lem, doc_let_lem =
-  let rec top_exp (regs,(regtypes : string list)) (aexp_needed : bool) (E_aux (e, (_,annot))) =
+  let rec top_exp (regs,(regtypes : string list)) (aexp_needed : bool) (E_aux (e, (l,annot))) =
     let exp = top_exp (regs,regtypes) true in
     match e with
     | E_assign((LEXP_aux(le_act,tannot) as le),e) ->
@@ -2232,7 +2254,7 @@ let doc_exp_lem, doc_let_lem =
            (match le with
             | LEXP_aux (LEXP_field (le,id), (_,((Base ((_,{t = t}),_,_,_,_,_))))) ->
                if t = Tid "bit" then
-                 failwith "indexing a register's (single bit) bitfield not supported"
+                  raise (report l "indexing a register's (single bit) bitfield not supported")
                else
                  let typprefix = getregtyp le ^ "_" in
                  (prefix 2 1)
@@ -2248,7 +2270,7 @@ let doc_exp_lem, doc_let_lem =
            (match le with
             | LEXP_aux (LEXP_field (le,id), (_,((Base ((_,{t = t}),_,_,_,_,_))))) ->
                if t = Tid "bit" then
-                 failwith "indexing a register's (single bit) bitfield not supported"
+                 raise (report l "indexing a register's (single bit) bitfield not supported")
                else
                  let typprefix = getregtyp le ^ "_" in
                  (prefix 2 1)
@@ -2278,10 +2300,10 @@ let doc_exp_lem, doc_let_lem =
                  let f = match t with
                    | (Tid "bit" | Tabbrev (_,{t=Tid "bit"})) ->
                       string "write_reg_bitfield"
-                   | _ -> string "write_reg_bitfield" in
+                   | _ -> string "write_reg_field" in
                  let typ = match List.assoc reg regs with
                    | Some typ -> typ
-                   | None -> failwith "Register type information missing" in
+                   | None -> raise (report l "Register type information missing") in
                  (prefix 2 1)
                    f
                    (separate space [string reg;string (typ ^ "_" ^ field);exp e])
@@ -2306,7 +2328,7 @@ let doc_exp_lem, doc_let_lem =
              (prefix 2 1 (string "else") (top_exp (regs,regtypes) false e)) in
        if aexp_needed then parens (align epp) else epp
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
-       failwith "E_for should have been removed till now"
+       raise (report l "E_for should have been removed till now")
     | E_let(leb,e) ->
        let epp = let_exp (regs,regtypes) leb ^^ space ^^ string "in" ^/^
                    top_exp (regs,regtypes) false e in
@@ -2398,22 +2420,30 @@ let doc_exp_lem, doc_let_lem =
          else
            align (string "slice" ^^ space ^^ exp v ^//^ exp e1 ^//^ exp e2) in
        if aexp_needed then parens (align epp) else epp
-    | E_field((E_aux(_,(_,fannot)) as fexp),id) ->
+    | E_field((E_aux(_,(l,fannot)) as fexp),id) ->
        let (Base ((_,{t = t}),_,_,_,_,_)) = fannot in
        (match t with
         | Tabbrev({t = Tid regtyp},{t=Tapp("register",_)}) ->
            let field_f = match annot with
              | Base((_,{t = Tid "bit"}),_,_,_,_,_)
-               | Base((_,{t = Tabbrev(_,{t=Tid "bit"})}),_,_,_,_,_) ->
+             | Base((_,{t = Tabbrev(_,{t=Tid "bit"})}),_,_,_,_,_) ->
                 string "read_reg_bitfield"
              | _ -> string "read_reg_field" in
            let epp = field_f ^^ space ^^ (exp fexp) ^^ space ^^
                        string (regtyp ^ "_") ^^ doc_id_lem id in
            if aexp_needed then parens (align epp) else epp
-        | _ -> exp fexp ^^ dot ^^ doc_id_lem id)
+        | Tid recordtyp
+        | Tabbrev ({t = Tid recordtyp},_) ->
+           let fname =
+             if prefix_recordtype
+             then (string (recordtyp ^ "_")) ^^ doc_id_lem id
+             else doc_id_lem id in
+           exp fexp ^^ dot ^^ fname
+        | _ ->  
+           raise (report l "E_field expression with no register or record type"))
     | E_block [] -> string "()"
-    | E_block exps -> failwith "Blocks should have been removed till now."
-    | E_nondet exps -> failwith "Nondet blocks not supported."
+    | E_block exps -> raise (report l "Blocks should have been removed till now.")
+    | E_nondet exps -> raise (report l "Nondet blocks not supported.")
     | E_id id ->
        (match annot with
         | Base((_, ({t = Tapp("register",_)} | {t=Tabbrev(_,{t=Tapp("register",_)})})),
@@ -2428,7 +2458,7 @@ let doc_exp_lem, doc_let_lem =
             | Alias_field(reg,field) ->
                let typ = match List.assoc reg regs with
                  | Some typ -> typ
-                 | None -> failwith "Register type information missing" in
+                 | None -> raise (report l "Register type information missing") in
                let epp = match t.t with
                  | Tid "bit" | Tabbrev (_,{t=Tid "bit"}) -> 
                     (separate space)
@@ -2469,10 +2499,20 @@ let doc_exp_lem, doc_let_lem =
         | [e] -> top_exp (regs,regtypes) aexp_needed e
         | _ -> parens (separate_map comma (top_exp (regs,regtypes) false) exps))
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
-       let epp = anglebars (separate_map semi_sp (doc_fexp (regs,regtypes)) fexps) in
+       let (Base ((_,{t = t}),_,_,_,_,_)) = annot in
+       let recordtyp = match t with
+         | Tid recordtyp
+         | Tabbrev ({t = Tid recordtyp},_) -> recordtyp
+         | _ ->  raise (report l "cannot get record type") in       
+       let epp = anglebars (separate_map semi_sp (doc_fexp recordtyp (regs,regtypes)) fexps) in
        if aexp_needed then parens epp else epp
     | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
-       anglebars (doc_op (string "with") (exp e) (separate_map semi_sp (doc_fexp (regs,regtypes)) fexps))
+       let (Base ((_,{t = t}),_,_,_,_,_)) = annot in
+       let recordtyp = match t with
+         | Tid recordtyp
+         | Tabbrev ({t = Tid recordtyp},_) -> recordtyp
+         | _ ->  raise (report l "cannot get record type") in       
+       anglebars (doc_op (string "with") (exp e) (separate_map semi_sp (doc_fexp recordtyp (regs,regtypes)) fexps))
     | E_vector exps ->
       (match annot with
        | Base((_,t),_,_,_,_,_) ->
@@ -2499,7 +2539,7 @@ let doc_exp_lem, doc_let_lem =
                     (top_exp (regs,regtypes) false e,0) es in
                 align (group expspp) in
            let epp =
-             group (separate space [string "V"; brackets expspp;string start;string dir_out]) in
+             group (separate space [string "Vector"; brackets expspp;string start;string dir_out]) in
            if aexp_needed then parens (align epp) else epp
       )
     | E_vector_indexed (iexps, (Def_val_aux (default,(dl,dannot)))) ->
@@ -2531,13 +2571,15 @@ let doc_exp_lem, doc_let_lem =
                    let (Base ((_,{t = t}),_,_,_,_,_)) = dannot in
                    let n =
                      match t with
-                       Tapp ("register",
+                     | Tapp ("register",
                              [TA_typ ({t = Tapp ("vector",
                                                  TA_nexp {nexp = Nconst i} ::
                                                    TA_nexp {nexp = Nconst j} ::_)})]) ->
                        abs_big_int (sub_big_int i j)
                      | _ ->
-                        raise (Reporting_basic.err_unreachable dl "nono") in
+                        raise (Reporting_basic.err_unreachable dl
+                                 ("not the right type information available to construct "^
+                                 "undefined register")) in
                    parens (string "Just " ^^ parens (string ("UndefinedReg " ^
                                                                string_of_big_int n))) in 
             let iexp (i,e) = parens (doc_int i ^^ comma ^^ top_exp (regs,regtypes) false e) in
@@ -2573,8 +2615,9 @@ let doc_exp_lem, doc_let_lem =
          (separate_map (break 1) (doc_case (regs,regtypes)) pexps) ^^ (break 1) ^^
          (string "end" ^^ (break 1)) in
      if aexp_needed then parens (align epp) else epp
-  | E_exit e ->
-    separate space [string "exit"; exp e;]
+  | E_exit e -> separate space [string "exit"; exp e;]
+  | E_assert (e1,e2) ->
+     separate space [string "assert'"; exp e1; exp e2]
   | E_app_infix (e1,id,e2) ->
      (match annot with
       | Base((_,t),External(Some name),_,_,_,_) ->
@@ -2583,7 +2626,7 @@ let doc_exp_lem, doc_let_lem =
            let aux2 name = align (string name ^//^ exp e1 ^/^ exp e2) in
            align
              (match name with
-              | "power" -> aux "**"
+              | "power" -> aux2 "pow"
 
               | "bitwise_and_bit" -> aux "&."
               | "bitwise_or_bit" -> aux "|."
@@ -2651,7 +2694,7 @@ let doc_exp_lem, doc_let_lem =
                                                top_exp (regs,regtypes) false e2)) in
          if aexp_needed then parens (align epp) else epp)
   | E_internal_let(lexp, eq_exp, in_exp) ->
-     failwith "E_internal_lets should have been removed till now"
+     raise (report l "E_internal_lets should have been removed till now")
 (*     (separate
         space
         [string "let internal";
@@ -2681,8 +2724,12 @@ let doc_exp_lem, doc_let_lem =
         (separate space [string "let"; doc_pat_lem true regtypes pat; equals])
         (top_exp (regs,regtypes) false e)
 
-  and doc_fexp (regs,regtypes) (FE_aux(FE_Fexp(id,e),_)) =
-    doc_op equals (doc_id_lem id) (top_exp (regs,regtypes) true e)
+  and doc_fexp recordtyp (regs,regtypes) (FE_aux(FE_Fexp(id,e),_)) =
+    let fname =
+      if prefix_recordtype
+      then (string (recordtyp ^ "_")) ^^ doc_id_lem id
+      else doc_id_lem id in
+    doc_op equals fname (top_exp (regs,regtypes) true e)
 
   and doc_case (regs,regtypes) (Pat_aux(Pat_exp(pat,e),_)) =
     group (prefix 3 1 (separate space [pipe; doc_pat_lem false regtypes pat;arrow])
@@ -2717,8 +2764,11 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
      doc_op equals (concat [string "type"; space; doc_id_lem_type id])
             (doc_typschm_lem regtypes typschm)
   | TD_record(id,nm,typq,fs,_) ->
-     let f_pp (typ,id) = concat [doc_id_lem_type id; space; colon;
-                                 doc_typ_lem regtypes typ; semi] in
+     let f_pp (typ,fid) =
+       let fname = if prefix_recordtype
+                   then concat [doc_id_lem id;string "_";doc_id_lem_type fid;]
+                   else doc_id_lem_type fid in
+       concat [fname;space; colon;doc_typ_lem regtypes typ; semi] in
       let fs_doc = group (separate_map (break 1) f_pp fs) in
       doc_op equals
              (concat [string "type"; space; doc_id_lem_type id;])
@@ -2779,35 +2829,17 @@ let doc_dec_lem (DEC_aux (reg,(l,annot))) =
   | DEC_typ_alias(typ,id,alspec) -> empty (*
         doc_op equals (string "register alias" ^^ space ^^ doc_atomic_typ typ) (doc_alias alspec) *)
 
-let rec rearrange_defs defs =
-
-  let name (Id_aux ((Id n | DeIid n),_)) = n in
-  
-  let rec find_def n (left,right) =
-    match right with
-    | [] -> failwith ("rearrange_defs definition for " ^ n ^ "not found")
-    | current :: right ->
-       match current with
-       | DEF_fundef (FD_aux (FD_function (_,_,_,(FCL_aux (FCL_Funcl (id,_,_),_)) :: _),_))
-       | DEF_val (LB_aux (LB_val_explicit (_,P_aux (P_id id,_),_),_))
-       | DEF_val (LB_aux (LB_val_implicit (P_aux (P_id id,_),_),_))
-            when n = name id ->
-          (current, left @ right)
-       | _ -> find_def n (left @ [current],right) in
-
-  match defs with
-  | [] -> []
-  | DEF_spec (VS_aux ((VS_val_spec (_,id)),_)) :: defs ->
-     let (d',defs') = find_def (name id) ([],defs) in
-     d' :: rearrange_defs defs'
-  | d :: defs -> d :: rearrange_defs defs
-
-
-
-
+let doc_spec_lem regtypes (VS_aux (valspec,annot)) =
+  match valspec with
+  | VS_extern_no_rename _
+  | VS_extern_spec _ -> empty (* ignore these at the moment *)
+  | VS_val_spec (typschm,id) ->
+     separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem regtypes typschm] ^/^ hardline
+     
+                        
 let doc_def_lem (regs,regtypes) def = match def with
   | DEF_default df -> empty
-  | DEF_spec v_spec -> empty (*doc_spec_lem regtypes v_spec ^/^ hardline *)
+  | DEF_spec v_spec -> doc_spec_lem regtypes v_spec
   | DEF_type t_def -> group (doc_typdef_lem regtypes t_def) ^/^ hardline
   | DEF_fundef f_def -> group (doc_fundef_lem (regs,regtypes) f_def) ^/^ hardline
   | DEF_val lbind -> group (doc_let_lem (regs,regtypes) lbind) ^/^ hardline
@@ -3107,7 +3139,6 @@ let reg_decls (Defs defs) =
     
 let doc_defs_lem (Defs defs) =
   let (decls,regs,regtypes,defs) = reg_decls (Defs defs) in
-  let defs = rearrange_defs defs in
   (decls,separate_map empty (doc_def_lem (regs,regtypes)) defs)
 
 

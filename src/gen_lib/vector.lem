@@ -1,7 +1,7 @@
 open import Pervasives_extra
 
 type bit = O | I | Undef
-type vector 'a = V of list 'a * integer * bool
+type vector 'a = Vector of list 'a * integer * bool
 
 let rec nth xs (n : integer) =
   match xs with
@@ -15,8 +15,8 @@ let to_bool = function
   | Undef -> failwith "to_bool applied to Undef"
   end
 
-let get_start (V _ s _) = s
-let length (V bs _ _) = length bs
+let get_start (Vector _ s _) = s
+let length (Vector bs _ _) = length bs
 
 let rec replace bs ((n : integer),b') = match bs with
   | [] -> []
@@ -27,13 +27,13 @@ let rec replace bs ((n : integer),b') = match bs with
        b :: replace bs (n - 1,b')
   end
 
-let vector_concat (V bs start is_inc) (V bs' _ _) =
-  V (bs ++ bs') start is_inc
+let vector_concat (Vector bs start is_inc) (Vector bs' _ _) =
+  Vector (bs ++ bs') start is_inc
 
 let (^^) = vector_concat
 
 val slice : vector bit -> integer -> integer -> vector bit
-let slice (V bs start is_inc) n m =
+let slice (Vector bs start is_inc) n m =
   let n = natFromInteger n in
   let m = natFromInteger m in
   let start = natFromInteger start in
@@ -41,9 +41,9 @@ let slice (V bs start is_inc) n m =
   let (_,suffix) = List.splitAt offset bs in
   let (subvector,_) = List.splitAt length suffix in
   let n = integerFromNat n in
-  V subvector n is_inc
+  Vector subvector n is_inc
 
-let update (V bs start is_inc) n m (V bs' _ _) =
+let update (Vector bs start is_inc) n m (Vector bs' _ _) =
   let n = natFromInteger n in
   let m = natFromInteger m in
   let start = natFromInteger start in
@@ -51,12 +51,12 @@ let update (V bs start is_inc) n m (V bs' _ _) =
   let (prefix,_) = List.splitAt offset bs in
   let (_,suffix) = List.splitAt (offset + length) bs in
   let start = integerFromNat start in
-  V (prefix ++ (List.take length bs') ++ suffix) start is_inc
+  Vector (prefix ++ (List.take length bs') ++ suffix) start is_inc
 
 val access : forall 'a. vector 'a -> (*nat*) integer -> 'a
-let access (V bs start is_inc) n =
+let access (Vector bs start is_inc) n =
   if is_inc then nth bs (n - start) else nth bs (start - n)
 
 val update_pos : forall 'a. vector 'a -> (*nat*) integer -> 'a -> vector 'a
 let update_pos v n b =
-  update v n n (V [b] 0 true)
+  update v n n (Vector [b] 0 true)
