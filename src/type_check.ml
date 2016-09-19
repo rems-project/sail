@@ -1706,7 +1706,7 @@ and check_lexp envs imp_param ret_t is_top (LEXP_aux(lexp,(l,annot)))
               | _ -> 
                 typ_error l ("Cannot assign to " ^ i ^" with type " ^ t_to_string t ^ 
                              ". Assignment must be to registers or non-parameter, non-let-bound local variables."))
-           | _,_ -> 
+           | _,_ ->
              if is_top
              then 
                typ_error l ("Cannot assign to " ^ i ^" with type " ^ t_to_string t ^ 
@@ -1813,9 +1813,10 @@ and check_lexp envs imp_param ret_t is_top (LEXP_aux(lexp,(l,annot)))
                ty,false,Envmap.empty,Emp_set,[],bs,ef,ef)
             | (Tfn _ ,_) ->
               (match tag with 
-                | External _ | Spec | Emp_global -> 
-                  let tannot = (Base(([],ty),Emp_intro,[],pure_e,pure_e,new_bounds)) in
-                  (LEXP_aux(lexp,(l,tannot)),ty,
+               | External _ | Spec | Emp_global ->
+                 let u' = {t=Tapp("reg",[TA_typ ty])} in
+                  let tannot = (Base(([],u'),Emp_intro,[],pure_e,pure_e,new_bounds)) in
+                  (LEXP_aux(lexp,(l,tannot)),u',
                    false,Envmap.from_list [i,tannot],Emp_intro,[],new_bounds,pure_e,pure_e)
                 | _ -> 
                   typ_error l ("Cannot assign to " ^ i ^ " with type " ^ t_to_string t)) 
