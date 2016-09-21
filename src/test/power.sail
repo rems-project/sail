@@ -486,6 +486,12 @@ function forall Nat 'n. (bit['n]) zero_or_undef ((bit['n]) x) = {
   out
 }
 
+(* announce write address for plain write *)
+val extern forall Nat 'N, 'N IN {1,2,4,8,16}. (bit[64] (*address*), [:'N:] (*size*)) -> unit effect {eamem} MEMw_EA
+
+(* announce write address for write conditional *)
+val extern forall Nat 'N, 'N IN {1,2,4,8,16}. (bit[64] (*address*), [:'N:] (*size*)) -> unit effect {eamem} MEMw_EA_cond
+
 scattered function unit execute
 scattered typedef ast = const union
 
@@ -516,7 +522,7 @@ function clause decode (0b010000 :
 function clause execute (Bc (BO, BI, BD, AA, LK)) =
   {
     if mode64bit then M := 0 else M := 32;
-    ctr_temp := CTR;
+    (bit[64]) ctr_temp := CTR;
     if ~(BO[2])
     then {
       ctr_temp := ctr_temp - 1;
@@ -545,7 +551,7 @@ function clause decode (0b010011 :
 function clause execute (Bclr (BO, BI, BH, LK)) =
   {
     if mode64bit then M := 0 else M := 32;
-    ctr_temp := CTR;
+    (bit[64]) ctr_temp := CTR;
     if ~(BO[2])
     then {
       ctr_temp := ctr_temp - 1;
@@ -1136,6 +1142,7 @@ function clause execute (Stb (RS, RA, D)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS(D);
+    MEMw_EA(EA,1);
     MEMw(EA,1) := (GPR[RS])[56 .. 63]
   }
 
@@ -1155,6 +1162,7 @@ function clause execute (Stbx (RS, RA, RB)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + GPR[RB];
+    MEMw_EA(EA,1);
     MEMw(EA,1) := (GPR[RS])[56 .. 63]
   }
 
@@ -1170,6 +1178,7 @@ function clause execute (Stbu (RS, RA, D)) =
   {
     (bit[64]) EA := 0;
     EA := GPR[RA] + EXTS(D);
+    MEMw_EA(EA,1);
     GPR[RA] := EA;
     MEMw(EA,1) := (GPR[RS])[56 .. 63]
   }
@@ -1188,6 +1197,7 @@ function clause execute (Stbux (RS, RA, RB)) =
   {
     (bit[64]) EA := 0;
     EA := GPR[RA] + GPR[RB];
+    MEMw_EA(EA,1);
     GPR[RA] := EA;
     MEMw(EA,1) := (GPR[RS])[56 .. 63]
   }
@@ -1206,6 +1216,7 @@ function clause execute (Sth (RS, RA, D)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS(D);
+    MEMw_EA(EA,2);
     MEMw(EA,2) := (GPR[RS])[48 .. 63]
   }
 
@@ -1225,6 +1236,7 @@ function clause execute (Sthx (RS, RA, RB)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + GPR[RB];
+    MEMw_EA(EA,2);
     MEMw(EA,2) := (GPR[RS])[48 .. 63]
   }
 
@@ -1240,6 +1252,7 @@ function clause execute (Sthu (RS, RA, D)) =
   {
     (bit[64]) EA := 0;
     EA := GPR[RA] + EXTS(D);
+    MEMw_EA(EA,2);
     GPR[RA] := EA;
     MEMw(EA,2) := (GPR[RS])[48 .. 63]
   }
@@ -1258,6 +1271,7 @@ function clause execute (Sthux (RS, RA, RB)) =
   {
     (bit[64]) EA := 0;
     EA := GPR[RA] + GPR[RB];
+    MEMw_EA(EA,2);
     GPR[RA] := EA;
     MEMw(EA,2) := (GPR[RS])[48 .. 63]
   }
@@ -1276,6 +1290,7 @@ function clause execute (Stw (RS, RA, D)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS(D);
+    MEMw_EA(EA,4);
     MEMw(EA,4) := (GPR[RS])[32 .. 63]
   }
 
@@ -1295,6 +1310,7 @@ function clause execute (Stwx (RS, RA, RB)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + GPR[RB];
+    MEMw_EA(EA,4);
     MEMw(EA,4) := (GPR[RS])[32 .. 63]
   }
 
@@ -1310,6 +1326,7 @@ function clause execute (Stwu (RS, RA, D)) =
   {
     (bit[64]) EA := 0;
     EA := GPR[RA] + EXTS(D);
+    MEMw_EA(EA,4);
     GPR[RA] := EA;
     MEMw(EA,4) := (GPR[RS])[32 .. 63]
   }
@@ -1328,6 +1345,7 @@ function clause execute (Stwux (RS, RA, RB)) =
   {
     (bit[64]) EA := 0;
     EA := GPR[RA] + GPR[RB];
+    MEMw_EA(EA,4);
     GPR[RA] := EA;
     MEMw(EA,4) := (GPR[RS])[32 .. 63]
   }
@@ -1347,6 +1365,7 @@ function clause execute (Std (RS, RA, DS)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS(DS : 0b00);
+    MEMw_EA(EA,8);
     MEMw(EA,8) := GPR[RS]
   }
 
@@ -1366,6 +1385,7 @@ function clause execute (Stdx (RS, RA, RB)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + GPR[RB];
+    MEMw_EA(EA,8);
     MEMw(EA,8) := GPR[RS]
   }
 
@@ -1382,6 +1402,7 @@ function clause execute (Stdu (RS, RA, DS)) =
   {
     (bit[64]) EA := 0;
     EA := GPR[RA] + EXTS(DS : 0b00);
+    MEMw_EA(EA,8);
     GPR[RA] := EA;
     MEMw(EA,8) := GPR[RS]
   }
@@ -1400,6 +1421,7 @@ function clause execute (Stdux (RS, RA, RB)) =
   {
     (bit[64]) EA := 0;
     EA := GPR[RA] + GPR[RB];
+    MEMw_EA(EA,8);
     GPR[RA] := EA;
     MEMw(EA,8) := GPR[RS]
   }
@@ -1445,19 +1467,14 @@ function clause execute (Stq (RSp, RA, DS)) =
   {
     (bit[64]) b := 0;
     (bit[64]) EA := 0;
-    {
-      (bit[64]) EA := 0;
-      (bit[64]) b := 0;
-      if RA == 0 then b := 0 else b := GPR[RA];
-      EA := b + EXTS(DS : 0b00);
-      (bit[128]) mem := 0;
-      mem[0..63] := GPR[RSp];
-      mem[64..127] := GPR[RSp + 1];
-      if ~(bigendianmode) then mem := byte_reverse(mem) else ();
-      MEMw(EA,16) := mem
-    };
+    if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS(DS : 0b00);
-    MEMw(EA,8) := RSp
+    MEMw_EA(EA,16);
+    (bit[128]) mem := 0;
+    mem[0..63] := GPR[RSp];
+    mem[64..127] := GPR[RSp + 1];
+    if ~(bigendianmode) then mem := byte_reverse(mem) else ();
+    MEMw(EA,16) := mem
   }
 
 union ast member (bit[5], bit[5], bit[5]) Lhbrx
@@ -1497,6 +1514,7 @@ function clause execute (Sthbrx (RS, RA, RB)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + GPR[RB];
+    MEMw_EA(EA,2);
     MEMw(EA,2) := (GPR[RS])[56 .. 63] : (GPR[RS])[48 .. 55]
   }
 
@@ -1538,6 +1556,7 @@ function clause execute (Stwbrx (RS, RA, RB)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + GPR[RB];
+    MEMw_EA(EA,4);
     MEMw(EA,4) :=
       (GPR[RS])[56 .. 63] : (GPR[RS])[48 .. 55] : (GPR[RS])[40 .. 47] : (GPR[RS])[32 .. 39]
   }
@@ -1583,6 +1602,7 @@ function clause execute (Stdbrx (RS, RA, RB)) =
     (bit[64]) EA := 0;
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + GPR[RB];
+    MEMw_EA(EA,8);
     MEMw(EA,8) :=
       (GPR[RS])[56 .. 63] :
         (GPR[RS])[48 .. 55] :
@@ -1630,6 +1650,7 @@ function clause execute (Stmw (RS, RA, D)) =
     if RA == 0 then b := 0 else b := GPR[RA];
     EA := b + EXTS(D);
     size := ([|32|]) (32 - RS) * 4;
+    MEMw_EA(EA,size);
     (bit[994]) buffer := [0 = 0,993 = 0; default=0];
     i := 0;
     foreach (r from RS to 31 by 1 in inc)
@@ -1740,6 +1761,7 @@ function clause execute (Stswi (RS, RA, NB)) =
     ([|31|]) r := 0;
     r := RS - 1;
     ([|32|]) size := if NB == 0 then 32 else NB;
+    MEMw_EA(EA,size);
     (bit[256]) membuffer := [0 = 0,255 = 0; default=0];
     j := 0;
     i := 32;
@@ -1775,6 +1797,7 @@ function clause execute (Stswx (RS, RA, RB)) =
     i := 32;
     ([|128|]) n_top := XER[57 .. 63];
     recalculate_dependency(());
+    MEMw_EA(EA,n_top);
     (bit[512]) membuffer := [0 = 0,511 = 0; default=0];
     j := 0;
     foreach (n from n_top to 1 by 1 in dec)
@@ -1829,7 +1852,7 @@ function clause execute (Add (RT, RA, RB, OE, Rc)) =
       GPR[RT] := temp;
       if Rc
       then {
-        xer_so := XER.SO;
+        (bit) xer_so := XER.SO;
         if OE & overflow then xer_so := overflow else ();
         set_overflow_cr0(temp,xer_so)
       }
@@ -1857,7 +1880,7 @@ function clause execute (Subf (RT, RA, RB, OE, Rc)) =
         GPR[RT] := temp;
         if Rc
         then {
-          xer_so := XER.SO;
+          (bit) xer_so := XER.SO;
           if OE & overflow then xer_so := overflow else ();
           set_overflow_cr0(temp,xer_so)
         }
@@ -1930,7 +1953,7 @@ function clause execute (Addc (RT, RA, RB, OE, Rc)) =
       GPR[RT] := temp;
       if Rc
       then {
-        xer_so := XER.SO;
+        (bit) xer_so := XER.SO;
         if OE & overflow then xer_so := overflow else ();
         set_overflow_cr0(temp,xer_so)
       }
@@ -1960,7 +1983,7 @@ function clause execute (Subfc (RT, RA, RB, OE, Rc)) =
         GPR[RT] := temp;
         if Rc
         then {
-          xer_so := XER.SO;
+          (bit) xer_so := XER.SO;
           if OE & overflow then xer_so := overflow else ();
           set_overflow_cr0(temp,xer_so)
         }
@@ -1990,7 +2013,7 @@ function clause execute (Adde (RT, RA, RB, OE, Rc)) =
         GPR[RT] := temp;
         if Rc
         then {
-          xer_so := XER.SO;
+          (bit) xer_so := XER.SO;
           if OE & overflow then xer_so := overflow else ();
           set_overflow_cr0(temp,xer_so)
         }
@@ -2020,7 +2043,7 @@ function clause execute (Subfe (RT, RA, RB, OE, Rc)) =
         GPR[RT] := temp;
         if Rc
         then {
-          xer_so := XER.SO;
+          (bit) xer_so := XER.SO;
           if OE & overflow then xer_so := overflow else ();
           set_overflow_cr0(temp,xer_so)
         }
@@ -2050,7 +2073,7 @@ function clause execute (Addme (RT, RA, OE, Rc)) =
         GPR[RT] := temp;
         if Rc
         then {
-          xer_so := XER.SO;
+          (bit) xer_so := XER.SO;
           if OE & overflow then xer_so := overflow else ();
           set_overflow_cr0(temp,xer_so)
         }
@@ -2080,7 +2103,7 @@ function clause execute (Subfme (RT, RA, OE, Rc)) =
         GPR[RT] := temp;
         if Rc
         then {
-          xer_so := XER.SO;
+          (bit) xer_so := XER.SO;
           if OE & overflow then xer_so := overflow else ();
           set_overflow_cr0(temp,xer_so)
         }
@@ -2106,7 +2129,7 @@ function clause execute (Addze (RT, RA, OE, Rc)) =
       GPR[RT] := temp;
       if Rc
       then {
-        xer_so := XER.SO;
+        (bit) xer_so := XER.SO;
         if OE & overflow then xer_so := overflow else ();
         set_overflow_cr0(temp,xer_so)
       }
@@ -2132,7 +2155,7 @@ function clause execute (Subfze (RT, RA, OE, Rc)) =
       GPR[RT] := temp;
       if Rc
       then {
-        xer_so := XER.SO;
+        (bit) xer_so := XER.SO;
         if OE & overflow then xer_so := overflow else ();
         set_overflow_cr0(temp,xer_so)
       }
@@ -2191,7 +2214,7 @@ function clause execute (Mullw (RT, RA, RB, OE, Rc)) =
       GPR[RT] := prod;
       if Rc
       then {
-        xer_so := XER.SO;
+        (bit) xer_so := XER.SO;
         if OE & overflow then xer_so := overflow else ();
         set_overflow_cr0(prod,xer_so)
       }
@@ -2223,7 +2246,7 @@ function clause execute (Mulhw (RT, RA, RB, Rc)) =
     (GPR[RT])[0..31] := undefined;
     if Rc
     then {
-      xer_so := XER.SO;
+      (bit) xer_so := XER.SO;
       if mode64bit
       then CR.CR0 := [undefined,undefined,undefined,xer_so]
       else set_overflow_cr0(prod,xer_so)
@@ -2249,7 +2272,7 @@ function clause execute (Mulhwu (RT, RA, RB, Rc)) =
     (GPR[RT])[0..31] := undefined;
     if Rc
     then {
-      xer_so := XER.SO;
+      (bit) xer_so := XER.SO;
       if mode64bit
       then CR.CR0 := [undefined,undefined,undefined,xer_so]
       else set_overflow_cr0(prod,xer_so)
@@ -2283,7 +2306,7 @@ function clause execute (Divw (RT, RA, RB, OE, Rc)) =
     (GPR[RT])[0..31] := undefined;
     if Rc
     then {
-      xer_so := XER.SO;
+      (bit) xer_so := XER.SO;
       if OE & overflow then xer_so := overflow else ();
       if mode64bit | overflow
       then CR.CR0 := [undefined,undefined,undefined,xer_so]
@@ -2319,7 +2342,7 @@ function clause execute (Divwu (RT, RA, RB, OE, Rc)) =
     (GPR[RT])[0..31] := undefined;
     if Rc
     then {
-      xer_so := XER.SO;
+      (bit) xer_so := XER.SO;
       if OE & overflow then xer_so := overflow else ();
       if mode64bit | overflow
       then CR.CR0 := [undefined,undefined,undefined,xer_so]
@@ -2355,7 +2378,7 @@ function clause execute (Divwe (RT, RA, RB, OE, Rc)) =
     (GPR[RT])[0..31] := undefined;
     if Rc
     then {
-      xer_so := XER.SO;
+      (bit) xer_so := XER.SO;
       if OE & overflow then xer_so := overflow else ();
       if mode64bit | overflow
       then CR.CR0 := [undefined,undefined,undefined,xer_so]
@@ -2391,7 +2414,7 @@ function clause execute (Divweu (RT, RA, RB, OE, Rc)) =
     (GPR[RT])[0..31] := undefined;
     if Rc
     then {
-      xer_so := XER.SO;
+      (bit) xer_so := XER.SO;
       if OE & overflow then xer_so := overflow else ();
       if mode64bit | overflow
       then CR.CR0 := [undefined,undefined,undefined,xer_so]
@@ -2424,7 +2447,7 @@ function clause execute (Mulld (RT, RA, RB, OE, Rc)) =
     GPR[RT] := prod[64 .. 127];
     if Rc
     then {
-      xer_so := XER.SO;
+      (bit) xer_so := XER.SO;
       if OE & overflow then xer_so := overflow else ();
       set_overflow_cr0(prod[64 .. 127],xer_so)
     }
@@ -2549,7 +2572,7 @@ function clause execute (Divde (RT, RA, RB, OE, Rc)) =
     if OE then set_SO_OV(overflow) else ();
     if Rc
     then {
-      xer_so := XER.SO;
+      (bit) xer_so := XER.SO;
       if OE & overflow then xer_so := overflow else ();
       if overflow
       then CR.CR0 := [undefined,undefined,undefined,xer_so]
@@ -2585,7 +2608,7 @@ function clause execute (Divdeu (RT, RA, RB, OE, Rc)) =
     if OE then set_SO_OV(overflow) else ();
     if Rc
     then {
-      xer_so := XER.SO;
+      (bit) xer_so := XER.SO;
       if OE & overflow then xer_so := overflow else ();
       if overflow
       then CR.CR0 := [undefined,undefined,undefined,xer_so]
@@ -3288,6 +3311,75 @@ function clause execute (Rlwimi (RS, RA, SH, MB, ME, Rc)) =
     if Rc then set_overflow_cr0(temp,XER.SO) else ()
   }
 
+union ast member (bit[5], bit[5], bit[6], bit[6], bit) Rldicl
+
+function clause decode (0b011110 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[5]) _ :
+(bit[6]) mb :
+0b000 :
+(bit[1]) _ :
+[Rc] as instr) =
+  Some(Rldicl(RS,RA,instr[16 .. 20] : instr[30 .. 30],mb,Rc))
+
+function clause execute (Rldicl (RS, RA, sh, mb, Rc)) =
+  {
+    n := [sh[5]] : sh[0 .. 4];
+    r := ROTL(GPR[RS],n);
+    b := [mb[5]] : mb[0 .. 4];
+    m := MASK(b,63);
+    (bit[64]) temp := (r & m);
+    GPR[RA] := temp;
+    if Rc then set_overflow_cr0(temp,XER.SO) else ()
+  }
+
+union ast member (bit[5], bit[5], bit[6], bit[6], bit) Rldicr
+
+function clause decode (0b011110 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[5]) _ :
+(bit[6]) me :
+0b001 :
+(bit[1]) _ :
+[Rc] as instr) =
+  Some(Rldicr(RS,RA,instr[16 .. 20] : instr[30 .. 30],me,Rc))
+
+function clause execute (Rldicr (RS, RA, sh, me, Rc)) =
+  {
+    n := [sh[5]] : sh[0 .. 4];
+    r := ROTL(GPR[RS],n);
+    e := [me[5]] : me[0 .. 4];
+    m := MASK(0,e);
+    (bit[64]) temp := (r & m);
+    GPR[RA] := temp;
+    if Rc then set_overflow_cr0(temp,XER.SO) else ()
+  }
+
+union ast member (bit[5], bit[5], bit[6], bit[6], bit) Rldic
+
+function clause decode (0b011110 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[5]) _ :
+(bit[6]) mb :
+0b010 :
+(bit[1]) _ :
+[Rc] as instr) =
+  Some(Rldic(RS,RA,instr[16 .. 20] : instr[30 .. 30],mb,Rc))
+
+function clause execute (Rldic (RS, RA, sh, mb, Rc)) =
+  {
+    n := [sh[5]] : sh[0 .. 4];
+    r := ROTL(GPR[RS],n);
+    b := [mb[5]] : mb[0 .. 4];
+    m := MASK(b,(bit[6]) (~(n)));
+    (bit[64]) temp := (r & m);
+    GPR[RA] := temp;
+    if Rc then set_overflow_cr0(temp,XER.SO) else ()
+  }
+
 union ast member (bit[5], bit[5], bit[5], bit[6], bit) Rldcl
 
 function clause decode (0b011110 :
@@ -3328,6 +3420,29 @@ function clause execute (Rldcr (RS, RA, RB, me, Rc)) =
     e := [me[5]] : me[0 .. 4];
     m := MASK(0,e);
     (bit[64]) temp := (r & m);
+    GPR[RA] := temp;
+    if Rc then set_overflow_cr0(temp,XER.SO) else ()
+  }
+
+union ast member (bit[5], bit[5], bit[6], bit[6], bit) Rldimi
+
+function clause decode (0b011110 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[5]) _ :
+(bit[6]) mb :
+0b011 :
+(bit[1]) _ :
+[Rc] as instr) =
+  Some(Rldimi(RS,RA,instr[16 .. 20] : instr[30 .. 30],mb,Rc))
+
+function clause execute (Rldimi (RS, RA, sh, mb, Rc)) =
+  {
+    n := [sh[5]] : sh[0 .. 4];
+    r := ROTL(GPR[RS],n);
+    b := [mb[5]] : mb[0 .. 4];
+    m := MASK(b,(bit[6]) (~(n)));
+    (bit[64]) temp := (r & m | GPR[RA] & ~(m));
     GPR[RA] := temp;
     if Rc then set_overflow_cr0(temp,XER.SO) else ()
   }
@@ -3464,6 +3579,29 @@ function clause execute (Srd (RS, RA, RB, Rc)) =
     (bit[64]) temp := (r & m);
     GPR[RA] := temp;
     if Rc then set_overflow_cr0(temp,XER.SO) else ()
+  }
+
+union ast member (bit[5], bit[5], bit[6], bit) Sradi
+
+function clause decode (0b011111 :
+(bit[5]) RS :
+(bit[5]) RA :
+(bit[5]) _ :
+0b110011101 :
+(bit[1]) _ :
+[Rc] as instr) =
+  Some(Sradi(RS,RA,instr[16 .. 20] : instr[30 .. 30],Rc))
+
+function clause execute (Sradi (RS, RA, sh, Rc)) =
+  {
+    n := [sh[5]] : sh[0 .. 4];
+    r := ROTL(GPR[RS],64 - n);
+    m := MASK(n,63);
+    s := (GPR[RS])[0];
+    (bit[64]) temp := (r & m | s ^^ 64 & ~(m));
+    GPR[RA] := temp;
+    if Rc then set_overflow_cr0(temp,XER.SO) else ();
+    XER.CA := if n >_u (bit[6]) 0 then s & ~((r & ~(m)) == 0) else 0
   }
 
 union ast member (bit[5], bit[5], bit[5], bit) Srad
@@ -3714,38 +3852,6 @@ function clause execute (Mcrxr (BF)) =
   {
     CR[4 * BF + 32..4 * BF + 35] := XER[32 .. 35];
     XER[32..35] := 0b0000
-  }
-
-union ast member (bit[5], bit[5]) Mtdcrux
-
-function clause decode (0b011111 :
-(bit[5]) RS :
-(bit[5]) RA :
-(bit[5]) _ :
-0b0110100011 :
-(bit[1]) _ as instr) =
-  Some(Mtdcrux(RS,RA))
-
-function clause execute (Mtdcrux (RS, RA)) =
-  {
-    DCRN := GPR[RA];
-    DCR[DCRN] := GPR[RS]
-  }
-
-union ast member (bit[5], bit[5]) Mfdcrux
-
-function clause decode (0b011111 :
-(bit[5]) RT :
-(bit[5]) RA :
-(bit[5]) _ :
-0b0100100011 :
-(bit[1]) _ as instr) =
-  Some(Mfdcrux(RT,RA))
-
-function clause execute (Mfdcrux (RT, RA)) =
-  {
-    DCRN := GPR[RA];
-    GPR[RT] := DCR[DCRN]
   }
 
 union ast member (bit[5], bit[5], bit[5], bit) Dlmzb
@@ -4243,7 +4349,16 @@ function clause decode (0b011111 :
 0b1 as instr) =
   Some(Stbcx(RS,RA,RB))
 
-function clause execute (Stbcx (RS, RA, RB)) = ()
+function clause execute (Stbcx (RS, RA, RB)) =
+  {
+    (bit[64]) b := 0;
+    (bit[64]) EA := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + GPR[RB];
+    MEMw_EA_cond(EA,1);
+    status := MEMw_conditional(EA,1,(GPR[RS])[56 .. 63]);
+    CR0 := 0b00 : [status] : [XER.SO]
+  }
 
 union ast member (bit[5], bit[5], bit[5]) Sthcx
 
@@ -4255,7 +4370,16 @@ function clause decode (0b011111 :
 0b1 as instr) =
   Some(Sthcx(RS,RA,RB))
 
-function clause execute (Sthcx (RS, RA, RB)) = ()
+function clause execute (Sthcx (RS, RA, RB)) =
+  {
+    (bit[64]) b := 0;
+    (bit[64]) EA := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + GPR[RB];
+    MEMw_EA_cond(EA,2);
+    status := MEMw_conditional(EA,2,(GPR[RS])[48 .. 63]);
+    CR0 := 0b00 : [status] : [XER.SO]
+  }
 
 union ast member (bit[5], bit[5], bit[5]) Stwcx
 
@@ -4267,7 +4391,16 @@ function clause decode (0b011111 :
 0b1 as instr) =
   Some(Stwcx(RS,RA,RB))
 
-function clause execute (Stwcx (RS, RA, RB)) = ()
+function clause execute (Stwcx (RS, RA, RB)) =
+  {
+    (bit[64]) b := 0;
+    (bit[64]) EA := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + GPR[RB];
+    MEMw_EA_cond(EA,4);
+    status := MEMw_conditional(EA,4,(GPR[RS])[32 .. 63]);
+    CR0 := 0b00 : [status] : [XER.SO]
+  }
 
 union ast member (bit[5], bit[5], bit[5], bit) Ldarx
 
@@ -4298,7 +4431,16 @@ function clause decode (0b011111 :
 0b1 as instr) =
   Some(Stdcx(RS,RA,RB))
 
-function clause execute (Stdcx (RS, RA, RB)) = ()
+function clause execute (Stdcx (RS, RA, RB)) =
+  {
+    (bit[64]) b := 0;
+    (bit[64]) EA := 0;
+    if RA == 0 then b := 0 else b := GPR[RA];
+    EA := b + GPR[RB];
+    MEMw_EA_cond(EA,8);
+    status := MEMw_conditional(EA,8,GPR[RS]);
+    CR0 := 0b00 : [status] : [XER.SO]
+  }
 
 union ast member (bit[2]) Sync
 
@@ -4374,8 +4516,8 @@ val ast -> bit effect pure illegal_instructions_pred
 function bit illegal_instructions_pred ((ast) instr) = {
      switch instr {
         case (Bcctr(BO,BI,BH,LK)) -> ~(BO[2])
-        case (Lbzu(RT,RA,D)) -> (RA == 0) | (RA == RT)
-        case (Lbzux(RT,RA,_)) ->(RA == 0) | (RA == RT)
+        case (Lbzu(RT,RA,D)) -> (RA == 0) | (RA == RT) 
+        case (Lbzux(RT,RA,_)) ->(RA == 0) | (RA == RT) 
         case (Lhzu(RT,RA,D)) -> (RA == 0) | (RA == RT)
         case (Lhzux(RT,RA,RB)) -> (RA == 0) | (RA == RT)
         case (Lhau(RT,RA,D)) -> (RA == 0) | (RA == RT)

@@ -23,6 +23,8 @@ let bitwise_not_bit = function
   end
 
 let (~) = bitwise_not_bit
+
+val pow : integer -> integer -> integer
 let pow m n = m ** (natFromInteger n)
 
 
@@ -496,3 +498,29 @@ let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n)
 let mask (n,Vector bits start dir) =
   let current_size = List.length bits in
   Vector (drop (current_size - (natFromInteger n)) bits) (if dir then 0 else (n-1)) dir
+
+
+
+
+(* this is for a temporary workaround int/nat/integer/natural issues*)
+
+class (subInteger 'a)
+  val toInteger : 'a -> integer
+end
+
+
+instance (subInteger integer)
+  let toInteger = id
+end
+
+instance (subInteger int)
+  let toInteger = integerFromInt
+end
+
+instance (subInteger nat)
+  let toInteger = integerFromNat
+end
+
+instance (subInteger natural)
+  let toInteger = integerFromNatural
+end

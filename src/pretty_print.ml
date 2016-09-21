@@ -2099,7 +2099,7 @@ let effectful (Effect_aux (eff,_)) =
        (fun (BE_aux (eff,_)) ->
          match eff with
          | BE_rreg | BE_wreg | BE_rmem | BE_wmem | BE_eamem | BE_wmv
-         | BE_barr | BE_depend | BE_undef | BE_nondet | BE_escape -> true
+         | BE_barr | BE_depend | BE_nondet | BE_escape -> true
          | _ -> false)
        effs
 
@@ -2169,8 +2169,7 @@ let doc_lit_lem in_pat (L_aux(lit,l)) a =
   | L_true  -> "I"
   | L_num i ->
      let ipp = string_of_int i in
-     (if i < 0 then "((0"^ipp^") )"
-      else "("^ipp^" : i)")
+     if i < 0 then "((0"^ipp^") : i)" else "("^ipp^" : i)"
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef ->

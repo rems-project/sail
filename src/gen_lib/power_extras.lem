@@ -26,6 +26,9 @@ let rec countLeadingZeros (Interp.V_tuple v) = ((match v with
 let MEMr (addr,l) = read_memory (unsigned addr) l
 let MEMr_reserve (addr,l) = read_memory (unsigned addr) l
 
+let MEMw_EA (addr,l) = write_writeEA (unsigned addr) l
+let MEMw_EA_conditional (addr,l) = write_writeEA (unsigned addr) l
+                                        
 let MEMw (addr,l,value) = write_memory (unsigned addr) l value
 let MEMw_conditional (addr,l,value) = write_memory (unsigned addr) l value >> return true
 
@@ -41,6 +44,6 @@ let trap () = exit ()
  * as an effect *)
 
 val countLeadingZeroes : vector bit * integer -> integer
-let countLeadingZeroes (V bits _ _ ,n)  = 
+let countLeadingZeroes (Vector bits _ _ ,n)  = 
   let (_,bits) = List.splitAt (natFromInteger n) bits in
   integerFromNat (List.length (takeWhile ((=) O) bits))
