@@ -25,7 +25,7 @@ LEMLIBOCAML = $(BITBUCKET_ROOT)/lem/ocaml-lib
 ELFDIR= $(BITBUCKET_ROOT)/linksem
 
 MIPS_SAIL_DIR:=$(BITBUCKET_ROOT)/sail/mips
-MIPS_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
+MIPS_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
 CHERI_SAIL_DIR:=$(BITBUCKET_ROOT)/sail/cheri
 CHERI_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(CHERI_SAIL_DIR)/cheri_prelude.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
