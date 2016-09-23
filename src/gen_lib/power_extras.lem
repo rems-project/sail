@@ -27,10 +27,10 @@ let MEMr (addr,l) = read_memory (unsigned addr) l
 let MEMr_reserve (addr,l) = read_memory (unsigned addr) l
 
 let MEMw_EA (addr,l) = write_writeEA (unsigned addr) l
-let MEMw_EA_conditional (addr,l) = write_writeEA (unsigned addr) l
+let MEMw_EA_cond (addr,l) = write_writeEA (unsigned addr) l
                                         
 let MEMw (addr,l,value) = write_memory (unsigned addr) l value
-let MEMw_conditional (addr,l,value) = write_memory (unsigned addr) l value >> return true
+let MEMw_conditional (addr,l,value) = write_memory (unsigned addr) l value >> return I
 
 let I_Sync () = return ()
 let H_Sync () = return ()
@@ -39,7 +39,7 @@ let EIEIO_Sync () = return ()
 
 let recalculate_dependency () = return ()
 
-let trap () = exit ()
+let trap () = exit "error"
 (* this needs to change, but for that we'd have to make the type checker know about trap 
  * as an effect *)
 

@@ -2068,7 +2068,6 @@ let doc_id_lem (Id_aux(i,_)) =
 
 let doc_id_lem_type (Id_aux(i,_)) =
   match i with
-  | Id("bit") -> string "bit"
   | Id("int") -> string "integer"
   | Id("nat") -> string "integer"
   | Id("option") -> string "maybe"
@@ -2103,6 +2102,14 @@ let effectful (Effect_aux (eff,_)) =
          | _ -> false)
        effs
 
+let rec is_number {t=t} =
+  match t with
+  | Tabbrev (t1,t2) -> is_number t1 || is_number t2
+  | Tapp ("range",_) 
+  | Tapp ("implicit",_)
+  | Tapp ("atom",_) -> true
+  | _ -> false
+
 let doc_typ_lem, doc_atomic_typ_lem =
   (* following the structure of parser for precedence *)
   let rec typ regtypes ty = fn_typ true regtypes ty
@@ -2128,11 +2135,11 @@ let doc_typ_lem, doc_atomic_typ_lem =
          let tpp = string "vector" ^^ space ^^ typ regtypes typa in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "range", _),_) ->
-         (string "number")
+         (string "integer")
       | Typ_app(Id_aux (Id "implicit", _),_) ->
          (string "integer")
       | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
-         (string "number")
+         (string "integer")
       | Typ_app(id,args) ->
          let tpp = (doc_id_lem_type id) ^^ space ^^ (separate_map space (doc_typ_arg_lem regtypes) args) in
          if atyp_needed then parens tpp else tpp
@@ -2169,7 +2176,9 @@ let doc_lit_lem in_pat (L_aux(lit,l)) a =
   | L_true  -> "I"
   | L_num i ->
      let ipp = string_of_int i in
-     if i < 0 then "((0"^ipp^") : i)" else "("^ipp^" : i)"
+     if in_pat then  "("^ipp^" : n)" 
+     else if i < 0 then "((0"^ipp^") : i)"
+     else "("^ipp^" : i)"
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef ->
@@ -2608,9 +2617,27 @@ let doc_exp_lem, doc_let_lem =
   | E_list exps ->
       brackets (separate_map semi (top_exp (regs,regtypes) false) exps)
   | E_case(e,pexps) ->
+
+     let only_integers (E_aux(_,(_,annot)) as e) =
+       match annot with
+       | Base((_,t),_,_,_,_,_) ->
+          if is_number t then
+            let e_pp = top_exp (regs,regtypes) true e in
+            align (string "toNatural" ^//^ e_pp)
+          else
+            (match t with
+             | {t = Ttup ([t1;t2;t3;t4;t5] as ts)} when List.for_all is_number ts ->
+                let e_pp = top_exp (regs,regtypes) true e in
+                align (string "toNaturalFiveTup" ^//^ e_pp)
+             | _ -> exp e)
+       | _ -> exp e
+      in
+
+     (* This is a hack, incomplete. It's because lem does not allow
+        pattern-matching on integers *)
      let epp = 
        (prefix 0 1)
-         (separate space [string "match"; exp e; string "with"])
+         (separate space [string "match"; only_integers e; string "with"])
          (separate_map (break 1) (doc_case (regs,regtypes)) pexps) ^^ (break 1) ^^
          (string "end" ^^ (break 1)) in
      if aexp_needed then parens (align epp) else epp

@@ -1,4 +1,4 @@
-open import Pervasves_extra
+open import Pervasives_extra
 open import Vector
 open import Arch
 
@@ -83,47 +83,47 @@ type reg_name =
    * specifies a part of the field, indexed w.r.t. the register as a whole *)
   | Reg_f_slice of string * nat * direction * string * slice * slice 
 
-type outcome 'a =
+type outcome 'e 'a =
   (* Request to read memory, value is location to read followed by registers that location depended 
    * on when mode.track_values, integer is size to read, followed by registers that were used in 
    * computing that size *)
   (* address_lifted should go away: doesn't make sense to allow for undefined bits in addresses *)
   | Read_mem of read_kind * address_lifted * nat * maybe (list reg_name) *
-                  (memory_value -> outcome 'a)
+                  (memory_value -> outcome 'e 'a)
                     
   (* Request to write memory, first value and dependent registers is location, second is the value 
    * to write *)
   | Write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value *
-                   maybe (list reg_name) * (bool -> outcome 'a)
+                   maybe (list reg_name) * (bool -> outcome 'e 'a)
                                              
   (* Tell the system a write is imminent, at address lifted tanted by register list, of size nat *)
-  | Write_ea of write_kind * address_lifted * nat * maybe (list reg_name) * outcome 'a
+  | Write_ea of write_kind * address_lifted * nat * maybe (list reg_name) * outcome 'e 'a
                                                                               
   (* Request to write memory at last signaled address. Memory value should be 8* the size given in 
    * ea signal *)
-  | Write_memv of memory_value * maybe (list reg_name) * (bool -> outcome 'a)
+  | Write_memv of memory_value * maybe (list reg_name) * (bool -> outcome 'e 'a)
                                                            
   (* Request a memory barrier *)
   (* outcome 'a used to be (unit -> outcome 'a), but since the code is purely functional we don't 
    * need that *)
-  | Barrier of barrier_kind * outcome 'a
+  | Barrier of barrier_kind * outcome 'e 'a
                                 
   (* Tell the system to dynamically recalculate dependency footprint *)
-  | Footprint of outcome 'a
+  | Footprint of outcome 'e 'a
                    
   (* Request to read register *)
-  | Read_reg of reg_name * (register_value -> outcome 'a)
+  | Read_reg of reg_name * (register_value -> outcome 'e 'a)
                              
   (* Request to write register *)
-  | Write_reg of reg_name * register_value * outcome 'a
+  | Write_reg of reg_name * register_value * outcome 'e 'a
                                                
   (* List of instruction states to be run in parrallel, any order permitted.
      Expects concurrency model to choose an order: a permutation of the original list *)
-  | Nondet_choice of list (outcome unit) * (list (outcome unit) -> outcome 'a)
+  | Nondet_choice of unit
                                                 
   (* Escape the current instruction, for traps, some sys calls, interrupts, etc. Can optionally 
    * provide a handler. *)
-  | Escape of (outcome unit) (* currently without handlers *) (* of maybe (unit -> outcome 'a) *)
+  | Escape of 'e (* currently without handlers *) (* of maybe (unit -> outcome 'a) *)
 
   (* Stop for incremental stepping, function can be used to display function call data *)
   | Done of 'a
@@ -133,12 +133,7 @@ type M 'e 'a = outcome 'e 'a
 val return : forall 'e 'a. 'a -> M 'e 'a
 let return a = Done a
 
-val (>>=) : forall 'a 'b. M 'a -> ('a -> M 'b) -> M 'b
-val (>>>) : forall 'a 'b 'c. ('a -> M 'b) -> ('b -> M 'c) -> ('a -> M 'c)
-
-val (>>) : forall 'b. M unit -> (unit -> M 'b) -> M 'b
-let (>>) m n = m >>= fun _ -> n
-
+val (>>=) : forall 'e 'a 'b. M 'e 'a -> ('a -> M 'e 'b) -> M 'e 'b
 let rec (>>=) m f = match m with
   | Done a -> f a
   | Read_mem rk addr sz rs k ->        Read_mem rk addr sz rs        (fun v -> (k v) >>= f)
@@ -149,12 +144,15 @@ let rec (>>=) m f = match m with
   | Footprint k ->                     Footprint                     (k >>= f)
   | Read_reg reg k ->                  Read_reg reg                  (fun v -> (k v) >>= f)
   | Write_reg reg v k ->               Write_reg reg v               (k >>= f)
-  | Nondet_choice actions k ->         Nondet_choice actions         (fun c -> (k c) >>= f)
-  | Escape -> Escape
+  | Nondet_choice () -> Nondet_choice ()
+  | Escape e -> Escape e
   end
 
-val exit : forall 'a 'e. 'e -> M 'a
-let exit _ = Escape
+val (>>) : forall 'e 'b. M 'e unit -> M 'e 'b -> M 'e 'b
+let (>>) m n = m >>= fun _ -> n
+
+val exit : forall 'a 'e. 'e -> M 'e 'a
+let exit = Escape
 
 val byte_chunks : forall 'a. nat -> list 'a -> list (list 'a)
 let rec byte_chunks n list = match (n,list) with
@@ -164,40 +162,40 @@ let rec byte_chunks n list = match (n,list) with
 end
 
 val bitvFromBytes : list byte -> vector bit
-let bitvFromBytes v = V (foldl (++) [] v) 0 defaultDir
+let bitvFromBytes v = Vector (foldl (++) [] v) 0 defaultDir
 
 let dir is_inc = if is_inc then D_increasing else D_decreasing
 
 val bitvFromRegisterValue : register_value -> vector bit
 let bitvFromRegisterValue v =
-  V (v.rv_bits) (integerFromNat (v.rv_start)) (v.rv_dir = D_increasing)
+  Vector (v.rv_bits) (integerFromNat (v.rv_start)) (v.rv_dir = D_increasing)
 
 val registerValueFromBitv : vector bit -> register -> register_value
-let registerValueFromBitv (V bits start is_inc) reg = 
+let registerValueFromBitv (Vector bits start is_inc) reg = 
   let start = natFromInteger start in
   <| rv_bits = bits;
      rv_dir = dir is_inc;
      rv_start_internal = start;
      rv_start = start+1 - (natFromInteger (length_reg reg)) |>
 
-val read_memory : read_kind -> integer -> integer -> M (vector bit)
+val read_memory : forall 'e. read_kind -> integer -> integer -> M 'e (vector bit)
 let read_memory rk addr sz =
   let sz = natFromInteger sz in
   Read_mem rk addr sz Nothing (compose Done bitvFromBytes)
 
-val write_memory : write_kind -> integer -> integer -> vector bit -> M bool
-let write_memory wk addr sz (V v _ _) =
+val write_memory : forall 'e. write_kind -> integer -> integer -> vector bit -> M 'e bool
+let write_memory wk addr sz (Vector v _ _) =
   let sz = natFromInteger sz in
   Write_mem wk addr sz Nothing (byte_chunks sz v) Nothing Done
 
-val read_reg_range : register -> (integer * integer) -> M (vector bit)
+val read_reg_range : forall 'e. register -> (integer * integer) -> M 'e (vector bit)
 let read_reg_range reg (i,j) =
   let (i,j) = (natFromInteger i,natFromInteger j) in
   let start = natFromInteger (start_index_reg reg) in
   let reg = Reg_slice (register_to_string reg) start (dir defaultDir) (i,j) in
   Read_reg reg (compose Done bitvFromRegisterValue)
 
-val write_reg_range : register -> (integer * integer) -> vector bit -> M unit
+val write_reg_range : forall 'e. register -> (integer * integer) -> vector bit -> M 'e unit
 let write_reg_range reg (i,j) v =
   let rv = registerValueFromBitv v reg in
   let start = natFromInteger (start_index_reg reg) in
@@ -205,24 +203,24 @@ let write_reg_range reg (i,j) v =
   let reg = Reg_slice (register_to_string reg) start (dir defaultDir) (i,j) in
   Write_reg reg rv (Done ())
 
-val read_reg_bit : register -> integer -> M bit
+val read_reg_bit : forall 'e. register -> integer -> M 'e bit
 let read_reg_bit reg i = 
   let i = natFromInteger i in
   let start = natFromInteger (start_index_reg reg) in
   let reg = Reg_slice (register_to_string reg) start (dir defaultDir) (i,i) in
   Read_reg reg (fun v -> Done (access (bitvFromRegisterValue v) 1))
 
-val write_reg_bit : register -> integer -> bit -> M unit
-let write_reg_bit reg i bit = write_reg_range reg (i,i) (V [bit] 0 true)
+val write_reg_bit : forall 'e. register -> integer -> bit -> M 'e unit
+let write_reg_bit reg i bit = write_reg_range reg (i,i) (Vector [bit] 0 true)
 
-val read_reg : register -> M (vector bit)
+val read_reg : forall 'e. register -> M 'e (vector bit)
 let read_reg reg =
   let start = natFromInteger (start_index_reg reg) in
   let sz = natFromInteger (length_reg reg) in
   let reg = Reg (register_to_string reg) start sz (dir defaultDir) in
   Read_reg reg (compose Done bitvFromRegisterValue)
 
-val write_reg : register -> vector bit -> M unit
+val write_reg : forall 'e. register -> vector bit -> M 'e unit
 let write_reg reg v =
   let rv = registerValueFromBitv v reg in
   let start = natFromInteger (start_index_reg reg) in
@@ -230,7 +228,7 @@ let write_reg reg v =
   let reg = Reg (register_to_string reg) start sz (dir defaultDir) in
   Write_reg reg rv (Done ())
 
-val read_reg_field : register -> register_field -> M (vector bit)
+val read_reg_field : forall 'e. register -> register_field -> M 'e (vector bit)
 let read_reg_field reg rfield = 
   let (i,j) =
     let (i,j) = field_indices rfield in
@@ -239,36 +237,17 @@ let read_reg_field reg rfield =
   let reg = Reg_slice (register_to_string reg) start (dir defaultDir) (i,j) in
   Read_reg reg (compose Done bitvFromRegisterValue)
 
-val write_reg_field : register -> register_field -> vector bit -> M unit
+val write_reg_field : forall 'e. register -> register_field -> vector bit -> M 'e unit
 let write_reg_field reg rfield = write_reg_range reg (field_indices rfield)
 
-val read_reg_bitfield : register -> register_bitfield -> M bit
+val read_reg_bitfield : forall 'e. register -> register_bitfield -> M 'e bit
 let read_reg_bitfield reg rbit = read_reg_bit reg (field_index_bit rbit)
 
-val write_reg_bitfield : register -> register_bitfield -> bit -> M unit
+val write_reg_bitfield : forall 'e. register -> register_bitfield -> bit -> M 'e unit
 let write_reg_bitfield reg rbit = write_reg_bit reg (field_index_bit rbit)
 
-val foreach_inc :  forall 'vars. (integer * integer * integer) (*(nat * nat * nat)*) -> 'vars ->
-                  (integer (*nat*) -> 'vars -> (unit * 'vars)) -> (unit * 'vars)
-let rec foreach_inc (i,stop,by) vars body = 
-  if i <= stop
-  then
-    let (_,vars) = body i vars in
-    foreach_inc (i + by,stop,by) vars body
-  else ((),vars)
-
-val foreach_dec : forall 'vars. (integer * integer * integer) (*(nat * nat * nat)*) -> 'vars ->
-                  (integer (*nat*) -> 'vars -> (unit * 'vars)) -> (unit * 'vars)
-let rec foreach_dec (i,stop,by) vars body = 
-  if i >= stop
-  then
-    let (_,vars) = body i vars in
-    foreach_dec (i - by,stop,by) vars body
-  else ((),vars)
-
-
-val foreachM_inc : forall 'vars. (nat * nat * nat) -> 'vars ->
-                  (nat -> 'vars -> M (unit * 'vars)) -> M (unit * 'vars)
+val foreachM_inc : forall 'e 'vars. (nat * nat * nat) -> 'vars ->
+                  (nat -> 'vars -> M 'e (unit * 'vars)) -> M 'e (unit * 'vars)
 let rec foreachM_inc (i,stop,by) vars body = 
   if i <= stop
   then
@@ -277,8 +256,8 @@ let rec foreachM_inc (i,stop,by) vars body =
   else return ((),vars)
 
 
-val foreachM_dec : forall 'vars. (nat * nat * nat) -> 'vars ->
-                  (nat -> 'vars -> M (unit * 'vars)) -> M (unit * 'vars)
+val foreachM_dec : forall 'e 'vars. (nat * nat * nat) -> 'vars ->
+                  (nat -> 'vars -> M 'e (unit * 'vars)) -> M 'e (unit * 'vars)
 let rec foreachM_dec (i,stop,by) vars body = 
   if i >= stop
   then
@@ -286,8 +265,6 @@ let rec foreachM_dec (i,stop,by) vars body =
     foreachM_dec (i - by,stop,by) vars body
   else return ((),vars)
 
-
-let length l = integerFromNat (length l)
 
 let write_two_regs r1 r2 vec =
   let size = length_reg r1 in

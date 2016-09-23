@@ -1,6 +1,7 @@
 open import Pervasives_extra
 open import Vector
 open import Arch
+open import Sail_values
 
 (* 'a is result type, 'e is error type *)
 type State 's 'e 'a = 's -> (either 'a 'e * 's)
@@ -21,22 +22,22 @@ let rec ints_aux acc x =
 
 let ints = ints_aux []
 
+type M 'e 'a = State state 'e 'a
+                     
 val return : forall 's 'e 'a. 'a -> State 's 'e 'a
 let return a s = (Left a,s)
 
-val bind : forall 's 'e 'a 'b. State 's 'e 'a -> ('a -> State 's 'e 'b) -> State 's 'e 'b
-let bind m f s = match m s with
+val (>>=) : forall 's 'e 'a 'b. State 's 'e 'a -> ('a -> State 's 'e 'b) -> State 's 'e 'b
+let (>>=) m f s = match m s with
   | (Left a,s') -> f a s'
   | (Right error,s') -> (Right error,s')
   end
 
-val exit : forall 's 'e 'a. 'e -> State 's 'e 'a
-let exit e s = (Right e,s)
-
-let (>>=) = bind
-
 val (>>): forall 's 'e 'b. State 's 'e unit -> State 's 'e 'b -> State 's 'e 'b
 let (>>) m n = m >>= fun _ -> n
+
+val exit : forall 's 'e 'a. 'e -> State 's 'e 'a
+let exit e s = (Right e,s)
 
 let assert' b msg_opt =
   let msg = match msg_opt with
@@ -115,46 +116,6 @@ val write_reg : forall 'e. register -> vector bit -> State state 'e unit
 let write_reg reg v s =
   let s' = write_regstate s reg v in
   (Left (),s')
-    
-
-val foreach_inc :  forall 's 'e 'vars. (integer * integer * integer) (*(nat * nat * nat)*) -> 'vars ->
-                  (integer (*nat*) -> 'vars -> (unit * 'vars)) -> (unit * 'vars)
-let rec foreach_inc (i,stop,by) vars body = 
-  if i <= stop
-  then
-    let (_,vars) = body i vars in
-    foreach_inc (i + by,stop,by) vars body
-  else ((),vars)
-
-
-val foreach_dec : forall 's 'e 'vars. (integer * integer * integer) (*(nat * nat * nat)*) -> 'vars ->
-                  (integer (*nat*) -> 'vars -> (unit * 'vars)) -> (unit * 'vars)
-let rec foreach_dec (i,stop,by) vars body = 
-  if i >= stop
-  then
-    let (_,vars) = body i vars in
-    foreach_dec (i - by,stop,by) vars body
-  else ((),vars)
-
-
-val foreachM_inc : forall 's 'e 'vars. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> State 's 'e (unit * 'vars)) -> State 's 'e (unit * 'vars)
-let rec foreachM_inc (i,stop,by) vars body = 
-  if i <= stop
-  then
-    body i vars >>= fun (_,vars) ->
-    foreachM_inc (i + by,stop,by) vars body
-  else return ((),vars)
-
-
-val foreachM_dec : forall 's 'e 'vars. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> State 's 'e (unit * 'vars)) -> State 's 'e (unit * 'vars)
-let rec foreachM_dec (i,stop,by) vars body = 
-  if i >= stop
-  then
-    body i vars >>= fun (_,vars) ->
-    foreachM_dec (i - by,stop,by) vars body
-  else return ((),vars)
 
 val read_reg_field : forall 'e. register -> register_field -> State state 'e (vector bit)
 let read_reg_field reg rfield = uncurry (read_reg_range reg) (field_indices rfield)
@@ -180,10 +141,6 @@ let write_reg_field_bit reg rfield i v =
   let (i',_) = field_indices rfield in
   write_reg_bit reg (i + i') v
 
-
-
-let length l = integerFromNat (length l)
-
 let write_two_regs r1 r2 vec =
   let size = length_reg r1 in
   let start = get_start vec in
@@ -200,4 +157,21 @@ let read_two_regs r1 r2 =
   read_reg r2 >>= fun v2 ->
   return (v1 ^^ v2)
 
-type M 'e 'a = State state 'e 'a
+val foreachM_inc : forall 'e 'vars. (i * i * i) -> 'vars ->
+                  (i -> 'vars -> M 'e (unit * 'vars)) -> M 'e (unit * 'vars)
+let rec foreachM_inc (i,stop,by) vars body = 
+  if i <= stop
+  then
+    body i vars >>= fun (_,vars) ->
+    foreachM_inc (i + by,stop,by) vars body
+  else return ((),vars)
+
+
+val foreachM_dec : forall 'e 'vars. (i * i * i) -> 'vars ->
+                  (i -> 'vars -> M 'e (unit * 'vars)) -> M 'e (unit * 'vars)
+let rec foreachM_dec (i,stop,by) vars body = 
+  if i >= stop
+  then
+    body i vars >>= fun (_,vars) ->
+    foreachM_dec (i - by,stop,by) vars body
+  else return ((),vars)

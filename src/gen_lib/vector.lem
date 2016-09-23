@@ -1,6 +1,8 @@
 open import Pervasives_extra
 
 type bit = O | I | Undef
+
+(* element list * start * has increasing direction *)
 type vector 'a = Vector of list 'a * integer * bool
 
 let rec nth xs (n : integer) =
@@ -16,7 +18,7 @@ let to_bool = function
   end
 
 let get_start (Vector _ s _) = s
-let length (Vector bs _ _) = length bs
+let length (Vector bs _ _) = integerFromNat (length bs)
 
 let rec replace bs ((n : integer),b') = match bs with
   | [] -> []

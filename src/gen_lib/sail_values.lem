@@ -3,11 +3,7 @@ open import Vector
 open import Arch
 
 type i = integer
-type number = integer
-
 type n = natural
-
-let length l = integerFromNat (length l)
 
 let has_undef (Vector bs _ _) = List.any (function Undef -> true | _ -> false end) bs
 
@@ -407,10 +403,9 @@ let duplicate (bit,length) =
   Vector (List.replicate (natFromInteger length) bit) 0 true
 
 val repeat : forall 'a. list 'a -> integer -> list 'a
-let rec repeat xs = function
-  | 0 -> []
-  | n -> xs ++ repeat xs (n-1)
-  end
+let rec repeat xs n =
+  if n = 0 then []
+  else xs ++ repeat xs (n-1)
 
 let duplicate_bits (Vector bits start direction,len) = 
   let bits' = repeat bits len in
@@ -502,25 +497,52 @@ let mask (n,Vector bits start dir) =
 
 
 
-(* this is for a temporary workaround int/nat/integer/natural issues*)
-
-class (subInteger 'a)
-  val toInteger : 'a -> integer
+class (ToNatural 'a)
+  val toNatural : 'a -> natural
 end
 
 
-instance (subInteger integer)
-  let toInteger = id
+instance (ToNatural integer)
+  let toNatural = naturalFromInteger
 end
 
-instance (subInteger int)
-  let toInteger = integerFromInt
+instance (ToNatural int)
+  let toNatural = naturalFromInt
 end
 
-instance (subInteger nat)
-  let toInteger = integerFromNat
+instance (ToNatural nat)
+  let toNatural = naturalFromNat
 end
 
-instance (subInteger natural)
-  let toInteger = integerFromNatural
+instance (ToNatural natural)
+  let toNatural = id
 end
+
+
+let toNaturalFiveTup (n1,n2,n3,n4,n5) =
+  (toNatural n1,
+   toNatural n2,
+   toNatural n3,
+   toNatural n4,
+   toNatural n5)
+
+
+
+
+val foreach_inc :  forall 'vars. (integer * integer * integer) (*(nat * nat * nat)*) -> 'vars ->
+                  (integer (*nat*) -> 'vars -> (unit * 'vars)) -> (unit * 'vars)
+let rec foreach_inc (i,stop,by) vars body = 
+  if i <= stop
+  then
+    let (_,vars) = body i vars in
+    foreach_inc (i + by,stop,by) vars body
+  else ((),vars)
+
+val foreach_dec : forall 'vars. (integer * integer * integer) (*(nat * nat * nat)*) -> 'vars ->
+                  (integer (*nat*) -> 'vars -> (unit * 'vars)) -> (unit * 'vars)
+let rec foreach_dec (i,stop,by) vars body = 
+  if i >= stop
+  then
+    let (_,vars) = body i vars in
+    foreach_dec (i - by,stop,by) vars body
+  else ((),vars)
