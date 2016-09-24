@@ -3143,7 +3143,6 @@ let reg_decls (Defs defs) =
                   string "let size = length_reg r1 in";
                   string "let start = get_start v in";
                   string "let vsize = length v in";
-                  string "let vsize = integerFromNat vsize in";
                   string ("let r1_v = slice v start " ^
                     (if is_inc then "(size - start - 1) in" else "(start - size - 1) in"));
                   string ("let r2_v = slice v " ^
