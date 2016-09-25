@@ -158,20 +158,20 @@ let read_two_regs r1 r2 =
   return (v1 ^^ v2)
 
 val foreachM_inc : forall 'e 'vars. (i * i * i) -> 'vars ->
-                  (i -> 'vars -> M 'e (unit * 'vars)) -> M 'e (unit * 'vars)
+                  (i -> 'vars -> M 'e 'vars) -> M 'e 'vars
 let rec foreachM_inc (i,stop,by) vars body = 
   if i <= stop
   then
-    body i vars >>= fun (_,vars) ->
+    body i vars >>= fun vars ->
     foreachM_inc (i + by,stop,by) vars body
-  else return ((),vars)
+  else return vars
 
 
 val foreachM_dec : forall 'e 'vars. (i * i * i) -> 'vars ->
-                  (i -> 'vars -> M 'e (unit * 'vars)) -> M 'e (unit * 'vars)
+                  (i -> 'vars -> M 'e 'vars) -> M 'e 'vars
 let rec foreachM_dec (i,stop,by) vars body = 
   if i >= stop
   then
-    body i vars >>= fun (_,vars) ->
+    body i vars >>= fun vars ->
     foreachM_dec (i - by,stop,by) vars body
-  else return ((),vars)
+  else return vars

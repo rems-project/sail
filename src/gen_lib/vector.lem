@@ -34,7 +34,7 @@ let vector_concat (Vector bs start is_inc) (Vector bs' _ _) =
 
 let (^^) = vector_concat
 
-val slice : vector bit -> integer -> integer -> vector bit
+val slice : forall 'a. vector 'a -> integer -> integer -> vector 'a
 let slice (Vector bs start is_inc) n m =
   let n = natFromInteger n in
   let m = natFromInteger m in
@@ -45,6 +45,7 @@ let slice (Vector bs start is_inc) n m =
   let n = integerFromNat n in
   Vector subvector n is_inc
 
+val update : forall 'a. vector 'a -> integer -> integer -> vector 'a -> vector 'a
 let update (Vector bs start is_inc) n m (Vector bs' _ _) =
   let n = natFromInteger n in
   let m = natFromInteger m in
@@ -55,10 +56,10 @@ let update (Vector bs start is_inc) n m (Vector bs' _ _) =
   let start = integerFromNat start in
   Vector (prefix ++ (List.take length bs') ++ suffix) start is_inc
 
-val access : forall 'a. vector 'a -> (*nat*) integer -> 'a
+val access : forall 'a. vector 'a -> integer -> 'a
 let access (Vector bs start is_inc) n =
   if is_inc then nth bs (n - start) else nth bs (start - n)
 
-val update_pos : forall 'a. vector 'a -> (*nat*) integer -> 'a -> vector 'a
+val update_pos : forall 'a. vector 'a -> integer -> 'a -> vector 'a
 let update_pos v n b =
   update v n n (Vector [b] 0 true)

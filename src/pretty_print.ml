@@ -2346,7 +2346,6 @@ let doc_exp_lem, doc_let_lem =
         (* temporary hack to make the loop body a function of the temporary variables *)
         | Id_aux ((Id (("foreach_inc" | "foreach_dec" |
                         "foreachM_inc" | "foreachM_dec" ) as loopf),_)) ->
-           let call = doc_id_lem in
            let [id;indices;body;e5] = args in
            (match e5 with
             | E_aux (E_tuple vars,_) ->
