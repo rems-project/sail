@@ -126,6 +126,7 @@ id :: '' ::=
   | reg                          :: M :: reg {{ ichlo (Id "reg") }}
   | to_num			 :: M :: tonum {{ com Built in function identifiers }} {{ ichlo (Id "to_num") }}
   | to_vec			 :: M :: tovec {{ ichlo (Id "to_vec") }}
+  | msb                          :: M :: msb {{ ichlo (Id "msb") }}
 % Note: we have just a single namespace. We don't want the same
 % identifier to be reused as a type name or variable, expression
 % variable, and field name.  We don't enforce any lexical convention
@@ -986,6 +987,8 @@ terminals :: '' ::=
     {{ tex \ensuremath{\vdash_e} }}
   | |-o					:: :: vdashO
     {{ tex \ensuremath{\vdash_o} }}
+  | |-c                                 :: :: vdashC
+    {{ tex \ensuremath{\vdash_c} }}
   | '                                   :: :: quote
     {{ tex \mbox{'} }}
   | |->                                 :: :: mapsto

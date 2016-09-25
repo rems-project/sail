@@ -10,7 +10,8 @@ formula :: formula_ ::=
      {{ hol (FLOOKUP [[E_k]] [[tid]] = SOME [[kinf]]) }}
      {{ lem Map.lookup [[tid]] [[E_k]] = Just [[kinf]] }} 
 
-  | E_a ( tid ) gives tinf                                     :: :: lookup_a
+  | E_a ( tid ) gives tinf                                     :: :: lookup_a_t
+  | E_a ( tid ) gives ne                                       :: :: lookup_a_ne
 
 
    | E_t ( id ) gives tinf                                      :: :: lookup_t
@@ -166,6 +167,10 @@ E_k |-n ne ok :: :: check_n :: check_n_
 {{ lemwcf  witness type check_n_witness; check check_n_w_check; }}
 by
 
+E_k(x) gives K_Nat
+----------------------------------------------------------- :: id
+E_k |-n x ok
+
 E_k('x) gives K_Nat
 ----------------------------------------------------------- :: var
 E_k |-n 'x ok
@@ -182,6 +187,11 @@ E_k |-n ne1 ok
 E_k |-n ne2 ok
 ----------------------------------------------------------- :: sum
 E_k |-n ne1 + ne2 ok
+
+E_k |-n ne1 ok
+E_k |-n ne2 ok
+----------------------------------------------------------- :: minus
+E_k |-n ne1 - ne2 ok
 
 E_k |-n ne1 ok
 E_k |-n ne2 ok
@@ -207,6 +217,12 @@ E_k('x) <-| K_Ord
 ------------------------------------------------------------ :: varInfer
 E_k |-o 'x ok
 
+
+------------------------------------------------------------ :: inc
+E_k |-o inc ok
+
+------------------------------------------------------------ :: dec
+E_k |-o dec ok
 
 defn
 E_k , k |- t_arg ok :: :: check_targs :: check_targs_ 
@@ -335,7 +351,10 @@ defn
 {{ com Convert and normalize numeric expressions }}
 {{ lemwcf  witness type convert_nexp_witness; check convert_nexp_w_check; }}
 by
- 
+
+------------------------------------------------------------- :: id
+|- x ~> x
+
 ------------------------------------------------------------ :: var
 |- 'x ~> 'x
 
@@ -352,12 +371,47 @@ by
 ----------------------------------------------------------- :: add
 |- nexp1 + nexp2 ~> ne1 + ne2
 
+|- nexp1 ~> ne1
+|- nexp2 ~> ne2
+----------------------------------------------------------- :: sub
+|- nexp1 - nexp2 ~> ne1 - ne2
+
 |- nexp ~> ne
 ------------------------------------------------------------ :: exp
 |- 2** nexp ~> 2 ** ne
 
 defn
+E_d |-n ne ~= ne' :: :: conforms_to_ne :: conforms_to_ne_
+by
+
+E_k |-n ne ok
+------------------------------------------------------------ :: refl
+<E_k,E_a,E_r,E_e> |-n ne ~= ne
+  
+E_d |-n ne1 ~= ne2
+E_d |-n ne2 ~= ne3
+------------------------------------------------------------ :: trans
+E_d |-n ne1 ~= ne3
+
+E_d |-n ne2 ~= ne1
+------------------------------------------------------------- :: assoc
+E_d |-n ne1 ~= ne2
+
+E_a(x) gives ne
+<E_k,E_a,E_r,E_e> |-n ne ~= ne'
+------------------------------------------------------------ :: abbrev
+<E_k,E_a,E_r,E_e> |-n x ~= ne' 
+
+:formula_ne_eq: num == num'
+----------------------------------------------------------- :: constants
+E_d |-n num ~= num'
+
+------------------------------------------------------------ :: rest
+E_d |-n ne ~= ne'
+
+defn
 E_d |- t ~= t' :: :: conforms_to :: conforms_to_
+{{ com Relate t and t' when t can be used where t' is expected without consideration for non-constant nats }}
 by
 
 E_k |-t t ok
@@ -395,6 +449,13 @@ E_k(x) gives K_Lam (k1 .. kn -> K_Typ)
 ------------------------------------------------------------ :: app
 <E_k,E_a,E_r,E_e> |- x <t_arg1 .. t_argn> ~= x <t_arg'1 .. t_arg'n>
 
+
+------------------------------------------------------------ :: atom
+E_d |- atom<ne> ~= range<ne1 ne2>
+
+------------------------------------------------------------ :: atom2
+E_d |- range<ne1 ne2> ~= atom<ne>
+
 x' NOTEQ x
 E_a(x') gives {tid1|->kinf1, .. ,tidm|->kinfm}, S_N, tag, u
 <E_k,E_a,E_r,E_e> |- x <t_arg1 .. t_argn> ~= u [ t_arg'1/tid1 .. t_arg'm/tidm ]   
@@ -411,6 +472,10 @@ E_d |- t ~= u
 ------------------------------------------------------------ :: register
 E_d |- register<t> ~= u
 
+E_d |- t ~= u
+------------------------------------------------------------ :: reg
+E_d |- reg<t> ~= u
+
 
 defn
 E_d , k |- t_arg ~= t_arg' :: :: targconforms :: targconforms_
@@ -421,8 +486,91 @@ E_d |- t ~= t'
 ------------------------------------------------------------ :: typ
 E_d, K_Typ |- t ~= t'
 
+E_d |-n ne ~= ne'
 ----------------------------------------------------------- :: nexp
 E_d, K_Nat |- ne ~= ne'
+
+defn
+E_d |-c t ~= t' :: :: conforms_to_upto_coerce :: conforms_to_upto_coerce_
+{{ com Relate t and t' when t can be used where t' is expected upto applying coercions to t }}
+by
+
+E_d |- t ~= t'
+------------------------------------------------------------- :: base
+E_d |-c t ~= t'
+
+E_d |-n ne2 ~= one
+------------------------------------------------------------- :: bitToVec
+E_d |-c bit ~= vector<ne ne2 order bit>
+
+E_d |-n ne2 ~= one
+------------------------------------------------------------- :: vecToBit
+E_d |-c vector<ne ne2 order bit> ~= bit
+
+------------------------------------------------------------- :: vecToAtom
+E_d |-c vector<ne ne2 order bit> ~= atom<ne3>
+
+------------------------------------------------------------- :: vecToRange
+E_d |-c vector<ne ne2 order bit> ~= range<ne3 ne4>
+
+E_e(x) gives enumerate_map
+------------------------------------------------------------- :: enumToRange
+<E_k,E_a,E_r,E_e> |-c x ~= range<ne1 ne2>
+
+E_e(x) gives enumerate_map
+------------------------------------------------------------- :: rangeToEnum
+<E_k,E_a,E_r,E_e> |-c range<ne1 ne2> ~= x
+
+E_e(x) gives enumerate_map
+------------------------------------------------------------- :: enumToAtom
+<E_k,E_a,E_r,E_e> |-c x ~= atom<ne>
+
+E_e(x) gives enumerate_map
+------------------------------------------------------------- :: atomToEnum
+<E_k,E_a,E_r,E_e> |-c atom<ne> ~= x
+
+E_d |-c t1 ~= u1 .... E_d |-c tn ~= un
+------------------------------------------------------------ :: tup
+E_d |-c (t1,....,tn) ~= (u1,....,un)
+
+E_k(x) gives K_Lam (k1 .. kn -> K_Typ)
+<E_k,E_a,E_r,E_e>,k1 |-c t_arg1 ~= t_arg'1 .. <E_k,E_a,E_r,E_e>,kn |-c t_argn ~= t_arg'n
+------------------------------------------------------------ :: app
+<E_k,E_a,E_r,E_e> |-c x <t_arg1 .. t_argn> ~= x <t_arg'1 .. t_arg'n>
+
+
+x' NOTEQ x
+E_a(x') gives {tid1|->kinf1, .. ,tidm|->kinfm}, S_N, tag, u
+<E_k,E_a,E_r,E_e> |-c x <t_arg1 .. t_argn> ~= u [ t_arg'1/tid1 .. t_arg'm/tidm ]   
+------------------------------------------------------------ :: appAbbrev
+<E_k,E_a,E_r,E_e> |-c x < t_arg1 .. t_argn> ~= x' <t_arg'1 .. t_arg'm>
+
+x' NOTEQ x
+E_a(x') gives {tid1|->kinf1, .. ,tidn|->kinfn}, S_N, tag, u
+<E_k,E_a,E_r,E_e> |-c  u [ t_arg1/tid1 .. t_argn/tidn ] ~= x <t_arg'1 .. t_arg'm>    
+------------------------------------------------------------ :: appAbbrev2
+<E_k,E_a,E_r,E_e> |-c x' < t_arg1 .. t_argn> ~= x <t_arg'1 .. t_arg'm>
+
+E_d |-c t ~= u
+------------------------------------------------------------ :: register
+E_d |-c register<t> ~= u
+
+E_d |-c t ~= u
+------------------------------------------------------------ :: reg
+E_d |-c reg<t> ~= u
+
+defn
+E_d , k |-c t_arg ~= t_arg' :: :: targconforms_coerce :: targconforms_coerce_
+by
+
+E_d |-c t ~= t'
+------------------------------------------------------------ :: typ
+E_d, K_Typ |-c t ~= t'
+
+E_d |-n ne ~= ne'
+----------------------------------------------------------- :: nexp
+E_d, K_Nat |-c ne ~= ne'
+
 
 defn
 E_d |- select ( conformsto ( t , t' ) ) of tinflist gives tinflist' :: :: selectoverload :: so_
@@ -441,143 +589,162 @@ E_d |- select (parm(ti,tj)) of tinf0 .. tinfm gives empty
 E_d |- select (parm( ti, tj)) of tinf0 .. tinfm E_k,S_N,tag,ti' -> t effect tinf'0 .. tinf'n gives E_k,S_N,tag,ti' -> t
 
 defn
-E_d |- t ~< t' , S_N :: :: consistent_typ :: consistent_typ_
+E_d , widening |- t ~< t' : t'' , S_N :: :: consistent_typ :: consistent_typ_
+{{ com t is consistent with t' if they match if t can be used where t' is needed after the constraints are solved, with no coercions needed. t'' is the consistent type when widening is required }}
 by
 
 E_k |-t t ok
 ------------------------------------------------------------ :: refl
-<E_k,E_a,E_r,E_e> |- t ~< t,{}
+<E_k,E_a,E_r,E_e>,widening |- t ~< t:t,{}
  
-E_d |- t1 ~< t2,S_N1
-E_d |- t2 ~< t3,S_N2
+E_d,widening |- t1 ~< t3:t4, S_N1
+E_d,widening |- t4 ~< t2: t5, S_N2
 ------------------------------------------------------------ :: trans
-E_d |- t1 ~< t3, S_N1 u+ S_N2
+E_d,widening |- t1 ~< t2: t5, S_N1 u+ S_N2
 
 E_a(x) gives {},S_N1,tag,u
-<E_k,E_a,E_r,E_e> |- u ~< t,S_N
+<E_k,E_a,E_r,E_e>,widening |- u ~< t:t', S_N
 ------------------------------------------------------------ :: abbrev
-<E_k,E_a,E_r,E_e> |- x ~< t , S_N u+ S_N1
+<E_k,E_a,E_r,E_e>,widening |- x ~< t : t', S_N u+ S_N1
 
 E_a(x) gives {},S_N1,tag,u
-<E_k,E_a,E_r,E_e> |- t ~< u,S_N
+<E_k,E_a,E_r,E_e>,widening |- t ~< u: t', S_N'
 ------------------------------------------------------------ :: abbrev2
-<E_k,E_a,E_r,E_e> |- t ~< x , S_N u+ S_N1
+<E_k,E_a,E_r,E_e>,widening |- t ~< x : t', S_N u+ S_N1
 
 ------------------------------------------------------------ :: var
-E_d |- 'x ~< t,{}
+E_d,widening |- 'x ~< t:t, {}
 
 ------------------------------------------------------------ :: var2
-E_d |- t ~< 'x,{} 
+E_d,widening |- t ~< 'x: t, {} 
  
-E_d |- t1 ~< u1, S_N1 .... E_d |- tn ~< un, S_Nn
+E_d,widening |- t1 ~< u1:u'1, S_N1 .... E_d,widening |- tn ~< un:u'n, S_Nn
 ------------------------------------------------------------ :: tup
-E_d |- (t1,....,tn) ~< (u1,....,un), S_N1 u+ .... u+ S_Nn
+E_d,widening |- (t1,....,tn) ~< (u1,....,un): (u'1,....,u'n), S_N1 u+ .... u+ S_Nn
 
 
 ----------------------------------------------------------- :: range
-E_d |- range <ne1 ne2> ~< range<ne3 ne4>, { ne3 <= ne1, ne2 <= ne4 }
+E_d,widening |- range <ne1 ne2> ~< range<ne3 ne4>: range<ne3 ne4>, { ne3 <= ne1, ne2 <= ne4 }
 
 ---------------------------------------------------------- :: atomRange
-E_d |- atom <ne> ~< range<ne1 ne2>, { ne1 <= ne, ne <= ne2 }
+E_d,(nums,_) |- atom <ne> ~< range<ne1 ne2>: atom<ne>, { ne1 <= ne, ne <= ne2 }
+
 
 ---------------------------------------------------------- :: atom
-E_d |- atom <ne1> ~< atom<ne2>, { ne1 = ne2 }
+E_d,(none,_) |- atom <ne1> ~< atom<ne2>: atom<ne2>, { ne1 = ne2 }
+
+num1 lt num2
+---------------------------------------------------------- :: atomWidenConst
+E_d,(nums,_) |- atom <num1> ~< atom<num2>: range<num1 num2>, {}
+
+num2 lt num1
+--------------------------------------------------------- :: atomWidenConst2
+E_d,(nums,_) |- atom <num1> ~< atom<num2>: range<num2 num1>, {}
 
 ---------------------------------------------------------- :: rangeAtom
-E_d |- range<ne1 ne2> ~< atom<'x>, { ne1 <= 'x, 'x <= ne2 }
+E_d,widening |- range<ne1 ne2> ~< atom<'x>: atom<'x>, { ne1 <= 'x, 'x <= ne2 }
 
-E_d |- t ~< t', S_N
+E_d,(nums,none) |- t ~< t': t'', S_N
 ---------------------------------------------------------- :: vector
-E_d |- vector <ne1 ne2 order t> ~< vector <ne3 ne4 order t'>, {ne1=ne3,ne2=ne3} u+ S_N
+E_d,(_,none) |- vector <ne1 ne2 order t> ~< vector <ne3 ne4 order t'>: vector<ne3 ne4 order t''>, {ne2=ne4, ne1=ne3} u+ S_N
+
+E_d,(nums,none) |- t ~< t': t'', S_N
+---------------------------------------------------------- :: vectorWiden
+E_d,(_,vectors) |- vector <ne1 ne2 order t> ~< vector <ne3 ne4 order t'>: vector<ne3 ne4 order t''>, {ne2=ne4} u+ S_N
 
 E_k(x) gives K_Lam (k1 .. kn -> K_Typ)
-<E_k,E_a,E_r,E_e>,k1 |- t_arg1 ~< t_arg'1,S_N1 .. <E_k,E_a,E_r,E_e>,kn |- t_argn ~< t_arg'n,S_Nn
+<E_k,E_a,E_r,E_e>,widening,k1 |- t_arg1 ~< t_arg'1,S_N1 .. <E_k,E_a,E_r,E_e>,widening,kn |- t_argn ~< t_arg'n,S_Nn
 ------------------------------------------------------------ :: app
-<E_k,E_a,E_r,E_e> |- x <t_arg1 .. t_argn> ~< x <t_arg'1 .. t_arg'n>, S_N1 u+ .. u+ S_Nn
+<E_k,E_a,E_r,E_e>,widening |- x <t_arg1 .. t_argn> ~< x <t_arg'1 .. t_arg'n>:x<t_arg'1 .. t_arg'n>, S_N1 u+ .. u+ S_Nn
 
 x' NOTEQ x
 E_a(x') gives {tid1|->kinf1, .. ,tidm|->kinfm}, S_N, tag, u
-<E_k,E_a,E_r,E_e> |- x <t_arg1 .. t_argn> ~< u [ t_arg'1/tid1 .. t_arg'm/tidm ] ,S_N2
+<E_k,E_a,E_r,E_e>,widening |- x <t_arg1 .. t_argn> ~< u [ t_arg'1/tid1 .. t_arg'm/tidm ]: t ,S_N2
 ------------------------------------------------------------ :: appAbbrev
-<E_k,E_a,E_r,E_e> |- x < t_arg1 .. t_argn> ~< x' <t_arg'1 .. t_arg'm>, S_N u+ S_N2
+<E_k,E_a,E_r,E_e>,widening |- x < t_arg1 .. t_argn> ~< x' <t_arg'1 .. t_arg'm>: x'<t_arg'1 .. t_arg'm>, S_N u+ S_N2
 
 x' NOTEQ x
 E_a(x') gives {tid1|->kinf1, .. ,tidm|->kinfm}, S_N, tag, u
-<E_k,E_a,E_r,E_e> |-  u [ t_arg'1/tid1 .. t_arg'm/tidm ]  ~< x <t_arg1 .. t_argn> ,S_N2
+<E_k,E_a,E_r,E_e>,widening |-  u [ t_arg'1/tid1 .. t_arg'm/tidm ]  ~< x <t_arg1 .. t_argn>: t ,S_N2
 ------------------------------------------------------------ :: appAbbrev2
-<E_k,E_a,E_r,E_e> |- x' <t_arg'1 .. t_arg'm> ~<  x < t_arg1 .. t_argn> ,  S_N u+ S_N2
+<E_k,E_a,E_r,E_e>,widening |- x' <t_arg'1 .. t_arg'm> ~<  x < t_arg1 .. t_argn> :x<t_arg1 .. t_argn>, S_N u+ S_N2
 
 defn
-E_d , k |- t_arg ~< t_arg' , S_N :: :: targ_consistent :: targ_consistent_
+E_d , widening , k |- t_arg ~< t_arg' , S_N :: :: targ_consistent :: targ_consistent_
 by
 
-E_d |- t ~< t', S_N
+E_d,widening |- t ~< t': t'', S_N
 ------------------------------------------------------------ :: typ
-E_d, K_Typ |- t ~< t',S_N
+E_d,widening, K_Typ |- t ~< t',S_N
 
 ----------------------------------------------------------- :: nexp
-E_d, K_Nat |- ne ~< ne',{ne=ne'}
+E_d,widening, K_Nat |- ne ~< ne',{ne=ne'}
 
 defn 
-E_d , t' |- exp : t gives t'' , exp' , S_N , effect :: :: coerce_typ :: coerce_typ_
+E_d , widening, t' |- exp : t gives t'' , exp' , S_N , effect :: :: coerce_typ :: coerce_typ_
 {{ lemwcf  witness type coerce_typ_witness; check coerce_typ_w_check; }}
 by
 
-E_d, u1 |- id1 : t1 gives u1, exp1, S_N1,effect1 .. E_d, un|- idn: tn gives un,expn, S_Nn,effectn
+E_d, widening, u1 |- id1 : t1 gives u1, exp1, S_N1,effect1 .. E_d,widening, un|- idn: tn gives un,expn, S_Nn,effectn
 exp' == switch exp { case (id1, .., idn) -> (exp1,..,expn) }
 -------------------------------------- :: tuple
-E_d, (u1 , .. , un) |- exp : (t1 , .. , tn) gives (u1 , .. , un), exp', S_N1 u+ .. u+ S_Nn, pure
+E_d, widening, (u1 , .. , un) |- exp : (t1 , .. , tn) gives (u1 , .. , un), exp', S_N1 u+ .. u+ S_Nn, pure
 
-E_d |- u ~< t,S_N
+E_d,(nums,vectors) |- u ~< t: t',S_N
 exp' == (annot) exp
 ------------------------------------------------- :: vectorUpdateStart
-E_d, vector< ne1 ne2 order t > |- exp : vector <ne3 ne4 order u> gives vector <ne3 ne4 order t>, exp', S_N u+ {ne2=ne4}, pure
+E_d, widening, vector< ne1 ne2 order t > |- exp : vector <ne3 ne4 order u> gives vector <ne3 ne4 order t'>, exp', S_N u+ {ne2=ne4}, pure
 
-E_d |- u ~< bit, S_N
+E_d, (none,none) |- u ~< bit:bit, S_N
 exp' == to_num exp 
 -------------------------------------------------- :: toNum
-E_d, range<ne1 ne2> |- exp : vector <ne3 ne4 order u> gives range<ne1 ne2>, exp', S_N u+ {ne1=zero, ne2 >= 2**ne4}, pure 
+E_d,widening, range<ne1 ne2> |- exp : vector <ne3 ne4 order u> gives range<ne1 ne2>, exp', S_N u+ {ne1=zero, ne2 >= 2**ne4}, pure 
 
 exp' == to_vec exp
 -------------------------------------- :: fromNum
-E_d, vector<ne1 ne2 order bit> |- exp: range<ne3 ne4> gives vector<ne1 ne2 order bit>,exp', {ne3 = zero, ne4 <= 2** ne2}, pure
+E_d,widening, vector<ne1 ne2 order bit> |- exp: range<ne3 ne4> gives vector<ne1 ne2 order bit>,exp', {ne3 = zero, ne4 <= 2** ne2}, pure
 
 E_d |- typ ~> t
 exp' == (typ) exp
-E_d, u |- exp':t gives t',exp'', S_N, pure
+E_d,widening, u |- exp':t gives t',exp'', S_N, pure
 -------------------------------------- :: readReg
-E_d, u |- exp : register<t> gives t', exp'', S_N, {rreg}
+E_d,widening, u |- exp : register<t> gives t', exp'', S_N, {rreg}
 
-exp' == exp[numZero]
+exp' == :E_tup_app: msb(exp)
 -------------------------------------- :: accessVecBit
-E_d, bit |- exp : vector<ne1 ne2 order bit> gives bit,exp', { ne1=one},pure
+E_d,widening, bit |- exp : vector<ne1 ne2 order bit> gives bit,exp', { ne1=one},pure
 
-E_d |- range<zero one> ~< range<ne1 ne2>,S_N
+E_d,widening |- range<zero one> ~< range<ne1 ne2>: t,S_N
 exp' == switch exp { case bitzero -> numZero case bitone -> numOne}
 -------------------------------------- :: bitToNum
-E_d, range<ne1 ne2> |- exp : bit gives range<ne1 ne2>, exp',S_N,pure
+E_d,widening, range<ne1 ne2> |- exp : bit gives range<ne1 ne2>, exp',S_N,pure
 
-E_d |- range<ne1 ne2> ~< range<zero one>,S_N
+E_d,widening |- range<ne1 ne2> ~< range<zero one>: t,S_N
 exp' == switch exp { case numZero -> bitzero case numOne -> bitone }
 ------------------------------------- :: numToBit
-E_d, bit |- range : range<ne1 ne2> gives bit, exp',S_N,pure
+E_d, widening, bit |- exp : range<ne1 ne2> gives bit, exp',S_N,pure
+
+E_d,(nums,none) |- atom<ne> ~< range<zero one>: t,S_N
+exp' == switch exp { case numZero -> bitzero case numOne -> bitone }
+------------------------------------- :: numToBitAtom
+E_d,widening, bit |- exp : atom<ne> gives bit, exp',S_N,pure
 
 E_e(x) gives { </numi |-> idi//i/> }
 exp' == switch exp { </case numi -> idi//i/> }
 ne3 == count( </numi//i/>)
 ------------------------------------------------ :: toEnumerate
-<E_k,E_a,E_r,E_e>, x |- exp : range<ne1 ne2> gives x,exp', {ne1<=zero,ne2<=ne3},pure
+<E_k,E_a,E_r,E_e>,widening, x |- exp : range<ne1 ne2> gives x,exp', {ne1<=zero,ne2<=ne3},pure
 
 E_e(x) gives { </numi |-> idi//i/> }
 exp' == switch exp { </case idi -> numi//i/> }
 ne3 == count( </numi//i/>)
-<E_k,E_a,E_r,E_e> |- range<zero ne3> ~< range<ne1 ne2>, S_N
+<E_k,E_a,E_r,E_e>,(nums,none) |- range<zero ne3> ~< range<ne1 ne2>:t, S_N
 ------------------------------------------------ :: fromEnumerate
-<E_k,E_a,E_r,E_e>,range<ne1 ne2> |- exp: x gives range<zero ne3>, exp', S_N,pure
+<E_k,E_a,E_r,E_e>,widening,range<ne1 ne2> |- exp: x gives range<zero ne3>, exp', S_N,pure
 
-E_d |- t ~< u, S_N
+E_d,widening |- t ~< u: u', S_N
 -------------------------------------- :: eq
-E_d, u |- exp: t gives t, exp, S_N,pure
+E_d,widening, u |- exp: t gives u', exp, S_N,pure
 
 
 defns
@@ -634,9 +801,9 @@ by
 
 lit NOTEQ undefined
 t |- lit : u => lit',S_N
-E_d |- u ~< t,S_N'
+E_d,(nums,none) |- u ~< t: t', S_N'
 ------------------------------------------------------------ :: lit
-<E_t,E_d>, t |- lit : u gives lit', {}, S_N u+ S_N'
+<E_t,E_d>, t |- lit : t' gives lit', {}, S_N u+ S_N'
 
 ------------------------------------------------------------ :: wild
 E, t |- _ : t gives _, {}, {}
@@ -646,9 +813,9 @@ id NOTIN dom(E_t1)
 ------------------------------------------------------------ :: as
 E,t |- (pat as id) : u gives (pat' as id), (E_t1 u+ {id|->t}),S_N
 
-<E_t,E_d>,t' |- pat : t gives pat', E_t1,S_N
 E_t(id) gives {}, {}, Default, t'
-E_d |- t' ~< u,S_N'
+<E_t,E_d>,t' |- pat : t gives pat', E_t1,S_N
+E_d,(none,none) |- t' ~< u : u', S_N'
 ------------------------------------------------------------ :: asDefault
 <E_t,E_d>,u |- (pat as id) : t gives (pat' as id), (E_t1 u+ {id|->t'}),S_N u+ S_N'
 
@@ -661,19 +828,19 @@ E_t(id) gives {tid1 |-> kinf1 , .. , tidm|-> kinfm}, S_N, Ctor, (u'1,..,u'n) -> 
 (u1,..,un) -> x <t_args'> pure == (u'1,..,u'n) -> x <t_args> pure [t_arg1/tid1 .. t_argm/tidm]
 <E_t,E_d>,u1 |- pat1 : t1 gives pat'1,E_t1,S_N1 .. <E_t,E_d>,un |- patn : tn gives pat'n,E_tn,S_Nn
 disjoint doms(E_t1,..,E_tn)
-E_d |- x <t_args'> ~< t, S_N
+E_d,(nums,vectors) |- x <t_args'> ~< t: t', S_N
 ------------------------------------------------------------ :: constr
 <E_t,E_d>,t |- id(pat1, .., patn) : x<t_args'> gives id(pat'1, ..,pat'n), u+ E_t1 .. E_tn, S_N u+ S_N1 u+ .. u+ S_Nn
 
 
 E_t(id) gives {tid1 |-> kinf1 , .. , tidm|-> kinfm}, S_N, Ctor, unit -> x < t_arg1 .. t_argm > pure
 unit -> x <t_args'> pure == unit -> x <t_args> pure [t_arg1/tid1 .. t_argm/tidm]
-E_d |- x <t_args'> ~< t, S_N
+E_d,(nums,vectors) |- x <t_args'> ~< t: t', S_N
 ------------------------------------------------------------- :: identConstr
 <E_t,E_d>, t |- :P_id: id : t gives :P_id: id, {}, S_N
 
 E_t(id) gives {},{},Default,t
-E_d |- t ~< u, S_N
+E_d,(nums,vectors) |- t ~< u: u', S_N
 ------------------------------------------------------------ :: varDefault
 <E_t,E_d>,u |- :P_id: id : t gives :P_id: id, (E_t u+ {id|->t}),S_N
 
@@ -683,13 +850,13 @@ E_d |- t ~< u, S_N
 E_r(</idi//i/>) gives x< t_args>, (</ti//i/>)
 </<E_t,<E_k,E_a,E_r,E_e>>,ti |- pati : ui gives pat'i, E_ti,S_Ni//i/>
 disjoint doms(</E_ti//i/>)
-<E_k,E_a,E_r,E_e> |- x<t_args> ~< t,S_N
+<E_k,E_a,E_r,E_e>,(nums,vectors) |- x<t_args> ~< t: t', S_N
 ------------------------------------------------------------ :: record
 <E_t,<E_k,E_a,E_r,E_e>>,t |- { </idi = pati//i/> semi_opt } : x<t_args> gives {</idi=pat'i//i/> semi_opt }, :E_t_multi_union: u+ </E_ti//i/>, S_N u+ </S_Ni//i/>
  
 <E_t,E_d>,t |- pat1 : u1 gives pat'1, E_t1,S_N1 ... <E_t,E_d>,t |- patn : un gives pat'n, E_tn,S_Nn
 disjoint doms(E_t1, ... ,E_tn)
-E_d |- u1 ~< t,S_N'1 ... E_d |- un ~< t,S_N'n
+E_d,(nums,vectors) |- u1 ~< t:t',S_N'1 ... E_d,(nums,vectors) |- un ~< t:t',S_N'n
 ne4==length(pat1 ... patn) 
 S_N ==S_N1 u+ ... u+ S_Nn
 S_N' == S_N'1 u+ ... u+ S_N'n
@@ -697,7 +864,7 @@ S_N' == S_N'1 u+ ... u+ S_N'n
 <E_t,E_d>, vector<ne1 ne2 order t> |- [ pat1, ..., patn ] : vector< ne3 ne4 order u> gives [ pat'1, ..., pat'n ], (E_t1 u+ ... u+ E_tn), S_N u+ S_N'  u+ {ne2=ne4}
 
 <E_t,E_d>,t |- pat1 : u1 gives pat'1, E_t1,S_N1 ... <E_t,E_d>,t |- patn : un gives pat'n, E_tn,S_Nn
-E_d |- u1 ~< t,S_N'1 ... E_d |- un ~< t,S_N'n
+E_d,(nums,vectors) |- u1 ~< t:t',S_N'1 ... E_d,(nums,vectors) |- un ~< t:t',S_N'n
 ne4 == length(pat1 ... patn)
 disjoint doms(E_t1 , ... , E_tn)
 num1 lt ... lt numn
@@ -707,7 +874,7 @@ S_N' == S_N'1 u+ ... u+ S_N'n
 <E_t,E_d>, vector<ne1 ne2 inc t>  |- [ num1 = pat1 , ... , numn = patn ] : vector< ne3  ne4 inc t> gives [num1 = pat'1 , ... , numn = pat'n], (E_t1 u+ ... u+ E_tn), {ne1<=num1, ne2 >= ne4} u+ S_N1 u+ ... u+ S_Nn
 
 <E_t,E_d>,t |- pat1 : u1 gives pat'1, E_t1,S_N1 ... <E_t,E_d>,t |- patn : un gives pat'n, E_tn,S_Nn
-E_d |- u1 ~< t,S_N'1 ... E_d |- un ~< t,S_N'n
+E_d,(nums,vectors) |- u1 ~< t:t',S_N'1 ... E_d,(nums,vectors) |- un ~< t:t',S_N'n
 ne4 == length(pat1 ... patn)
 disjoint doms(E_t1 , ... , E_tn)
 num1 gt ... gt numn
@@ -717,7 +884,7 @@ S_N' == S_N'1 u+ ... u+ S_N'n
 <E_t,E_d>, vector<ne1 ne2 dec t>  |- [ num1 = pat1 , ... , numn = patn ] : vector< ne3  ne4 dec t> gives [num1 = pat'1 , ... , numn = pat'n], (E_t1 u+ ... u+ E_tn), {ne1>=num1, ne2 >= ne4} u+ S_N1 u+ ... u+ S_Nn
 
 <E_t,E_d>, vector<ne''1 ne'''1 order t> |- pat1 : vector< ne''1 ne'1 order u1> gives pat'1, E_t1,S_N1 ... <E_t,E_d>, vector<ne''n ne'''n order t> |- pat1 : vector< ne''n ne'n order u1> gives pat'n, E_tn,S_Nn
-E_d |- u1 ~< t,S_N'1 ... E_d |- un ~< t,S_N'n
+E_d,(nums,vectors) |- u1 ~< t:t',S_N'1 ... E_d,(nums,vectors) |- un ~< t:t',S_N'n
 disjoint doms(E_t1 , ... , E_tn)
 S_N == S_N1 u+ ... u+ S_Nn
 S_N' == S_N'1 u+ ... u+ S_N'n
@@ -731,7 +898,7 @@ E,(t1, .... , tn) |- (pat1, ...., patn) : (u1 , .... , un) gives (pat'1, .... , 
 
 <E_t,E_d>,t |- pat1 : u1 gives pat'1,E_t1,S_N1 .. <E_t,E_d>,t |- patn : un gives pat'n,E_tn,S_Nn
 disjoint doms(E_t1,..,E_tn)
-E_d |- u1 ~< t,S_N'1 .. E_d |- un ~< t,S_N'n
+E_d,(nums,none) |- u1 ~< t:t',S_N'1 .. E_d,(nums,none) |- un ~< t:t',S_N'n
 disjoint doms(E_t1 , .. , E_tn)
 S_N == S_N1 u+ .. u+ S_Nn
 S_N' == S_N'1 u+ .. u+ S_N'n
@@ -743,242 +910,242 @@ defns
 check_exp :: '' ::=
  
 defn
-E , t |- exp : t' gives exp' , I , E_t :: :: check_exp :: check_exp_ 
+E , t , widening |- exp : t' gives exp' , I , E_t :: :: check_exp :: check_exp_ 
 {{ com Typing expressions, collecting nexp constraints, effects, and new bindings }}
 by
 
 E_t(id) gives {tid0|->kinf0, .., tidn |-> kinfn}, {},Ctor, unit -> x <t_args> pure
 u == x<t_args> [ t_arg0/tid0 .. t_argn/tidn] 
-E_d |- u ~< t,S_N
+E_d,widening |- u ~< t:t',S_N
 ----------------------------------------------------------- :: unaryCtor
-<E_t,E_d>,t |- id : x gives id, <S_N,pure>,{}
+<E_t,E_d>,t,widening |- id : x gives id, <S_N,pure>,{}
 
 E_t(id) gives {}, {},tag,u
-E_d,t |- id : u gives t', exp, S_N, effect
+E_d,widening,t |- id : u gives t', exp, S_N, effect
 ------------------------------------------------------------ :: localVar
-<E_t,E_d>,t |- id : u gives id, <S_N,effect>,{}
+<E_t,E_d>,t,widening |- id : u gives id, <S_N,effect>,{}
 
 E_t(id) gives {tid1|->kinf1, .., tidn |-> kinfn}, S_N,tag,u'
 u == u'[t_arg1/tid1 .. t_argn/tidn]
-E_d,t |- id : u gives t', exp, S_N', effect
+E_d,widening,t |- id : u gives t', exp, S_N', effect
 ------------------------------------------------------------ :: otherVar
-<E_t,E_d>,t |- id : u gives id,<S_N u+ S_N' ,effect>,{}
+<E_t,E_d>,t,widening |- id : u gives id,<S_N u+ S_N' ,effect>,{}
 
 E_t(id) gives {tid0|->kinf0, .., tidn |-> kinfn}, {},Ctor, t'' -> x <t_args> pure
 t' -> u pure == t'' -> x<t_args> pure [ t_arg0/tid0 .. t_argn/tidn] 
-E_d |- u ~< t,S_N
-<E_t,E_d>,t' |- exp : u' gives exp, <S_N',effect>,E_t'
+E_d,widening |- u ~< t:t',S_N
+<E_t,E_d>,t,widening |- exp : u' gives exp, <S_N',effect>,E_t'
 ------------------------------------------------------------ :: ctor
-<E_t,E_d>,t |- :E_app: id(exp) : t gives :E_app: id(exp'), <S_N u+ S_N, effect>,{}
+<E_t,E_d>,t,widening |- :E_app: id(exp) : t gives :E_app: id(exp'), <S_N u+ S_N, effect>,{}
 
 E_t(id) gives {tid0 |-> kinf0, .., tidn |-> kinfn}, S_N, tag, u
 u [t_arg0/tid0 .. t_argn/tidn] == ui -> uj effect
 ui == ( implicit<ne>, t0 , .. , tm )
-<E_t,E_d>,(t0,..,tm) |- (exp0,..,expm) : ui' gives (exp0',..,expm'),I,E_t'
-E_d,t |- :E_app: id (annot, exp'0, .., exp'm) : uj gives uj', exp'',S_N',effect' 
+<E_t,E_d>,(t0,..,tm),widening |- (exp0,..,expm) : ui' gives (exp0',..,expm'),I,E_t'
+E_d,widening,t |- :E_app: id (annot, exp'0, .., exp'm) : uj gives uj', exp'',S_N',effect' 
 ------------------------------------------------------------ :: appImplicit
-<E_t,E_d>,t |- :E_app: id(exp0,..,expm) : uj gives exp'', I u+ <S_N,effect>u+ <S_N',effect'>, E_t
+<E_t,E_d>,t,widening |- :E_app: id(exp0,..,expm) : uj gives exp'', I u+ <S_N,effect>u+ <S_N',effect'>, E_t
 
 
 E_t(id) gives {tid0 |-> kinf0, .., tidn |-> kinfn}, S_N, tag, u
 u [t_arg0/tid0 .. t_argn/tidn] == ui -> uj effect
-<E_t,E_d>,ui |- exp : ui' gives exp',I,E_t'
-E_d,t |- :E_app: id (exp') : uj gives uj', exp'',S_N',effect' 
+<E_t,E_d>,ui,widening |- exp : ui' gives exp',I,E_t'
+E_d,widening,t |- :E_app: id (exp') : uj gives uj', exp'',S_N',effect' 
 ------------------------------------------------------------ :: app
-<E_t,E_d>,t |- :E_app: id(exp) : uj gives exp'', I u+ <S_N,effect>u+ <S_N',effect'>, E_t
+<E_t,E_d>,t,widening |- :E_app: id(exp) : uj gives exp'', I u+ <S_N,effect>u+ <S_N',effect'>, E_t
 
 E_t(id) gives overload {tid0 |-> kinf0, .., tidn |-> kinfn}, S_N, tag, u : tinf1 ... tinfn
 u [t_arg0/tid0 .. t_argn/tidn] == ui -> uj effect
-<E_t,E_d>,ui |- exp : ui' gives exp',I,E_t'
-select (conformsto( ui', t)) of tinf1 ... tinfn gives tinf  
-<({id |-> tinf} u+ E_t), E_d>, t |- :E_app: id (exp) : t' gives exp'',I', E_t'' 
+<E_t,E_d>,ui,widening |- exp : ui' gives exp',I,E_t'
+E_d |- select (full( ui', t)) of tinf1 ... tinfn gives tinf  
+<({id |-> tinf} u+ E_t), E_d>, t,widening |- :E_app: id (exp) : t' gives exp'',I', E_t'' 
 ------------------------------------------------------------ :: appOverload
-<E_t,E_d>,t |- :E_app: id(exp) : uj gives exp'', I u+ I' u+ <S_N,effect>u+ <S_N',effect'>, E_t
+<E_t,E_d>,t,widening |- :E_app: id(exp) : uj gives exp'', I u+ I' u+ <S_N,effect>u+ <S_N',effect'>, E_t
 
 E_t(id) gives {tid0 |-> kinf0, .. ,tidn |-> kinfn}, S_N, tag,  u
 u [t_arg0/tid0 .. t_argn/tidn] == ui -> uj effect
-<E_t,E_d>,ui |- (exp1,exp2) : ui' gives (exp1', exp2'), I,E_t'
-E_d,t |- :E_app_infix: exp1' id exp2' : uj gives uj', exp, S_N', effect' 
+<E_t,E_d>,ui,widening |- (exp1,exp2) : ui' gives (exp1', exp2'), I,E_t'
+E_d,widening,t |- :E_app_infix: exp1' id exp2' : uj gives uj', exp, S_N', effect' 
 ------------------------------------------------------------ :: infix_app
-<E_t,E_d>,t |- :E_app_infix: exp1 id exp2 : t gives exp, I u+ <S_N, effect> u+ <S_N',effect'>, E_t
+<E_t,E_d>,t,widening |- :E_app_infix: exp1 id exp2 : t gives exp, I u+ <S_N, effect> u+ <S_N',effect'>, E_t
 
 E_t(id) gives overload {tid0 |-> kinf0, .., tidn |-> kinfn}, S_N, tag, u : tinf1 ... tinfn
 u [t_arg0/tid0 .. t_argn/tidn] == ui -> uj effect
-<E_t,E_d>,ui |- (exp1,exp2) : ui' gives (exp1', exp2'), I,E_t'
-select (conformsto( ui', t)) of tinf1 ... tinfn gives tinf  
-<({id |-> tinf} u+ E_t), E_d>, t |- :E_app_infix: exp1 id exp2 : t' gives exp, I',E_t'' 
+<E_t,E_d>,ui,widening |- (exp1,exp2) : ui' gives (exp1', exp2'), I,E_t'
+E_d |- select (full( ui', t)) of tinf1 ... tinfn gives tinf  
+<({id |-> tinf} u+ E_t), E_d>, t, widening |- :E_app_infix: exp1 id exp2 : t' gives exp, I',E_t'' 
 ------------------------------------------------------------ :: infix_appOverload
-<E_t,E_d>,t |- :E_app_infix: exp1 id exp2 : t gives exp, I u+ I u+ <S_N, effect> u+ <S_N',effect'>, E_t
+<E_t,E_d>,t,widening |- :E_app_infix: exp1 id exp2 : t gives exp, I u+ I u+ <S_N, effect> u+ <S_N',effect'>, E_t
 
 
 E_r(</idi//i/>) gives x<t_args>, </ti//i/>
-</ <E_t,<E_k,E_a,E_r,E_e>>,ti |- expi : ui gives exp'i,<S_Ni,effecti>,E_t//i/>
-</<E_k,E_a,E_r,E_e> |- ui ~< ti,S_N'i//i/>
+</ <E_t,<E_k,E_a,E_r,E_e>>,ti,widening |- expi : ui gives exp'i,<S_Ni,effecti>,E_t//i/>
+</<E_k,E_a,E_r,E_e>,widening |- ui ~< ti: t'i,S_N'i//i/>
 S_N == u+ </S_Ni//i/>
 S_N' == u+ </S_N'i//i/>
 ------------------------------------------------------------ :: record
-<E_t,<E_k,E_a,E_r,E_e>>,t |- { </idi = expi//i/> semi_opt} : x<t_args> gives{ </idi=exp'i//i/> semi_opt}, u+ <S_N u+ S_N', u+ </effecti//i/>>, {}
+<E_t,<E_k,E_a,E_r,E_e>>,t,widening |- { </idi = expi//i/> semi_opt} : x<t_args> gives{ </idi=exp'i//i/> semi_opt}, u+ <S_N u+ S_N', u+ </effecti//i/>>, {}
 
-<E_t,<E_k,E_a,E_r,E_e>>,t |- exp : x<t_args> gives exp', I,E_t
+<E_t,<E_k,E_a,E_r,E_e>>,t,widening |- exp : x<t_args> gives exp', I,E_t
 E_r(x<t_args>) gives </ id'n:t'n//n/>
-</ <E_t,<E_k,E_a,E_r,E_e>>,ti |- expi : ui gives expi',Ii,E_t//i/>
+</ <E_t,<E_k,E_a,E_r,E_e>>,ti,widening |- expi : ui gives expi',Ii,E_t//i/>
 </idi:ti//i/> SUBSET </id'n : t'n//n/>
-</<E_k,E_a,E_r,E_e> |- ui ~< ti,S_N'i//i/>
+</<E_k,E_a,E_r,E_e>,widening |- ui ~< ti: t''i,S_N'i//i/>
 ------------------------------------------------------------ :: recup
-<E_t,<E_k,E_a,E_r,E_e>> ,t |- { exp with </idi = expi//i/> semi_opt } : x<t_args> gives {exp' with </idi = exp'i//i/>}, I u+ </Ii//i/>, E_t
+<E_t,<E_k,E_a,E_r,E_e>> ,t,widening |- { exp with </idi = expi//i/> semi_opt } : x<t_args> gives {exp' with </idi = exp'i//i/>}, I u+ </Ii//i/>, E_t
 
-<E_t,E_d>,t |- exp1 : u1 gives exp'1,I1,E_t' ... <E_t,E_d>,t |- expn : un gives exp'n,In,E_t'
-E_d |- u1 ~< t, S_N1 ... E_d |- un ~< t, S_Nn
+<E_t,E_d>,t,(nums,none) |- exp1 : u1 gives exp'1,I1,E_t' ... <E_t,E_d>,t,(nums,none) |- expn : un gives exp'n,In,E_t'
+E_d,(nums,none) |- u1 ~< t: t', S_N1 ... E_d,(nums,none) |- un ~< t: t', S_Nn
 length(exp1 ... expn) == ne
 S_N == {ne=ne2} u+ S_N1 u+ ... u+ S_Nn 
 ------------------------------------------------------------ :: vector
-E, vector<ne1 ne2 order t> |- [ exp1 , ... , expn ] : vector<ne1 num order t> gives [exp'1,...,exp'n], <S_N,pure> u+ I1 u+ ... u+ In , E_t
+E, vector<ne1 ne2 order t>, widening |- [ exp1 , ... , expn ] : vector<ne1 num order t> gives [exp'1,...,exp'n], <S_N,pure> u+ I1 u+ ... u+ In , E_t
  
-E, vector<ne ne' order t> |- exp1 : vector<ne1 ne1' inc u> gives exp'1,I1,E_t
-E, range<ne2 ne2'> |- exp2 : range<ne3 ne3'> gives exp'2, I2,E_t
+E, vector<ne ne' order t>,(nums,none) |- exp1 : vector<ne1 ne1' inc u> gives exp'1,I1,E_t
+E, range<ne2 ne2'>,(none,vectors) |- exp2 : range<ne3 ne3'> gives exp'2, I2,E_t
 ------------------------------------------------------------- :: vectorgetInc
-E, t |- :E_vector_access: exp1 [ exp2 ] : u gives exp'1 [ exp'2], I1 u+ I2 u+ <{ne1<=ne3,ne3+ne3'<=ne1+ne1'},pure>,E_t
+E, t,widening |- :E_vector_access: exp1 [ exp2 ] : u gives exp'1 [ exp'2], I1 u+ I2 u+ <{ne1<=ne3,ne3+ne3'<=ne1+ne1'},pure>,E_t
 
-E, vector<ne ne' order t> |- exp1 : vector<ne1 ne1' dec u> gives exp'1,I1,E_t
-E, range<ne2 ne2'> |- exp2 : range<ne3 ne3'> gives exp'2, I2,E_t
+E, vector<ne ne' order t>,(nums,none) |- exp1 : vector<ne1 ne1' dec u> gives exp'1,I1,E_t
+E, range<ne2 ne2'>,(none,vectors) |- exp2 : range<ne3 ne3'> gives exp'2, I2,E_t
 ------------------------------------------------------------- :: vectorgetDec
-E, t |- :E_vector_access: exp1 [ exp2 ] : u gives exp'1 [ exp'2], I1 u+ I2 u+ <{ne1>=ne3,ne3+(-ne3')<=ne1+(-ne1')},pure>,E_t
+E, t,widening |- :E_vector_access: exp1 [ exp2 ] : u gives exp'1 [ exp'2], I1 u+ I2 u+ <{ne1>=ne3,ne3+(-ne3')<=ne1+(-ne1')},pure>,E_t
 
-E, vector<ne1 ne'1 inc t> |- exp1 : vector<ne2 ne'2 inc u> gives exp'1, I1,E_t
-E, range<ne3 ne3'> |- exp2 : range< ne4 ne'4> gives exp'2, I2,E_t
-E,range <ne5 ne5'> |- exp3 : range< ne6 ne'6> gives exp'3, I3,E_t
+E, vector<ne1 ne'1 inc t>,(nums,none) |- exp1 : vector<ne2 ne'2 inc u> gives exp'1, I1,E_t
+E, range<ne3 ne3'>,(none,vectors) |- exp2 : range< ne4 ne'4> gives exp'2, I2,E_t
+E,range <ne5 ne5'>,(none,vectors) |- exp3 : range< ne6 ne'6> gives exp'3, I3,E_t
 ------------------------------------------------------------- :: vectorsubInc
-E, vector<ne ne' inc t> |- :E_vector_subrange: exp1[ exp2 .. exp3 ] : vector<ne7 ne'7 inc u> gives exp'1[exp'2:exp'3], I1 u+ I2 u+ I3 u+ <{ne >= ne4, ne <= ne'4,ne'<=ne4+ne'6,ne4 <= ne2, ne4+ne6' <= ne'2},pure>,E_t
+E, vector<ne ne' inc t>,widening |- :E_vector_subrange: exp1[ exp2 .. exp3 ] : vector<ne7 ne'7 inc u> gives exp'1[exp'2:exp'3], I1 u+ I2 u+ I3 u+ <{ne >= ne4, ne <= ne'4,ne'<=ne4+ne'6,ne4 <= ne2, ne4+ne6' <= ne'2},pure>,E_t
 
-E, vector<ne1 ne'1 dec t> |- exp1 : vector< ne2 ne'2 dec u> gives exp'1, I1,E_t
-E, range<ne3 ne3'> |- exp2 : range< ne4 ne'4> gives exp'2, I2,E_t
-E,range <ne5 ne5'> |- exp3 : range< ne6 ne'6> gives exp'3, I3,E_t
+E, vector<ne1 ne'1 dec t>,(nums,none) |- exp1 : vector< ne2 ne'2 dec u> gives exp'1, I1,E_t
+E, range<ne3 ne3'>,(none,vectors) |- exp2 : range< ne4 ne'4> gives exp'2, I2,E_t
+E,range <ne5 ne5'>,(none,vectors) |- exp3 : range< ne6 ne'6> gives exp'3, I3,E_t
 ------------------------------------------------------------- :: vectorsubDec
-E, vector<ne ne' dec t> |- :E_vector_subrange: exp1[ exp2 .. exp3 ] : vector<ne7 ne'7 dec u> gives exp'1[exp'2:exp'3], I1 u+ I2 u+ I3 u+ <{ne <= ne4, ne >= ne'4,ne'<=ne'6+(-ne4),ne4' >= ne2, ne'6+(-ne4) <= ne'2},pure>,E_t
+E, vector<ne ne' dec t>,widening |- :E_vector_subrange: exp1[ exp2 .. exp3 ] : vector<ne7 ne'7 dec u> gives exp'1[exp'2:exp'3], I1 u+ I2 u+ I3 u+ <{ne <= ne4, ne >= ne'4,ne'<=ne'6+(-ne4),ne4' >= ne2, ne'6+(-ne4) <= ne'2},pure>,E_t
 
-E, vector<ne ne' inc t> |- exp : vector< ne1 ne2 inc u> gives exp',I,E_t
-E, range<ne'1 ne'2> |- exp1 : range<ne3 ne4> gives exp'1,I1,E_t
-E,t |- exp2 : u gives exp'2,I2,E_t
+E, vector<ne ne' inc t>,(nums,none) |- exp : vector< ne1 ne2 inc u> gives exp',I,E_t
+E, range<ne'1 ne'2>,(none,vectors) |- exp1 : range<ne3 ne4> gives exp'1,I1,E_t
+E,t,(nums,vectors) |- exp2 : u gives exp'2,I2,E_t
 ------------------------------------------------------------ :: vectorupInc
-E, vector<ne ne' inc t> |- [ exp with exp1 = exp2 ] : vector< ne1 ne2 inc u> gives [exp' with exp'1 = exp'2], I u+ I1 u+ I2 u+ <{ne1 <= ne3, ne2 >= ne4},pure>,E_t
+E, vector<ne ne' inc t>,widening |- [ exp with exp1 = exp2 ] : vector< ne1 ne2 inc u> gives [exp' with exp'1 = exp'2], I u+ I1 u+ I2 u+ <{ne1 <= ne3, ne2 >= ne4},pure>,E_t
 
-E, vector<ne ne' dec t> |- exp : vector <ne1 ne2 dec u> gives exp',I,E_t
-E, range<ne'1 ne'2> |- exp1 : range<ne3 ne4> gives exp'1,I1,E_t
-E,t |- exp2 : u gives exp'2,I2,E_t
+E, vector<ne ne' dec t>,(nums,none) |- exp : vector <ne1 ne2 dec u> gives exp',I,E_t
+E, range<ne'1 ne'2>,(none,vectors) |- exp1 : range<ne3 ne4> gives exp'1,I1,E_t
+E,t,(nums,vectors) |- exp2 : u gives exp'2,I2,E_t
 ------------------------------------------------------------ :: vectorupDec
-E, vector<ne ne' dec t> |- [ exp with exp1 = exp2 ] : vector< ne1 ne2 dec u> gives [exp' with exp'1 = exp'2], I u+ I1 u+ I2 u+ <{ne1 >= ne3, ne2 >= ne4},pure>,E_t
+E, vector<ne ne' dec t>,widening |- [ exp with exp1 = exp2 ] : vector< ne1 ne2 dec u> gives [exp' with exp'1 = exp'2], I u+ I1 u+ I2 u+ <{ne1 >= ne3, ne2 >= ne4},pure>,E_t
 
-E,vector<ne1 ne2 order t> |- exp : vector< ne3 ne4 inc u> gives exp',I,E_t
-E,atom<ne5> |- exp1 : atom<ne6> gives exp1',I1,E_t
-E,atom<ne7> |- exp2 : atom<ne8> gives exp2', I2,E_t
-E,vector<ne9 ne10 inc t> |- exp3 : vector <ne11 ne12 inc u> gives exp3',I3,E_t
+E,vector<ne1 ne2 order t>,(nums,none) |- exp : vector< ne3 ne4 inc u> gives exp',I,E_t
+E,atom<ne5>,(none,vectors) |- exp1 : atom<ne6> gives exp1',I1,E_t
+E,atom<ne7>,(none,vectors) |- exp2 : atom<ne8> gives exp2', I2,E_t
+E,vector<ne9 ne10 inc t>,(nums,vectors) |- exp3 : vector <ne11 ne12 inc u> gives exp3',I3,E_t
 I4 == <{ ne3 <= ne5, ne3+ne4 <= ne7, ne12 = ne8 + (-ne6) , ne6 + one <= ne8},pure>
 ------------------------------------------------------------ :: vecrangeupInc
-E,vector<ne1 ne2 order t> |- :E_vector_update_subrange: [ exp with exp1 : exp2 = exp3 ] : vector <ne3 ne4 inc u> gives :E_vector_update_subrange:[ exp' with exp1' : exp2' = exp3'], (I u+ (I1 u+ (I2 u+ (I3 u+ I4)))),E_t
+E,vector<ne1 ne2 order t>,widening |- :E_vector_update_subrange: [ exp with exp1 : exp2 = exp3 ] : vector <ne3 ne4 inc u> gives :E_vector_update_subrange:[ exp' with exp1' : exp2' = exp3'], (I u+ (I1 u+ (I2 u+ (I3 u+ I4)))),E_t
 
-E,vector<ne1 ne2 order t> |- exp : vector< ne3 ne4 inc u> gives exp',I,E_t
-E,atom<ne5> |- exp1 : atom<ne6> gives exp1',I1,E_t
-E,atom<ne7> |- exp2 : atom<ne8> gives exp2', I2,E_t
-E,u |- exp3 : u' gives exp3',I3,E_t
+E,vector<ne1 ne2 order t>,(nums,none) |- exp : vector< ne3 ne4 inc u> gives exp',I,E_t
+E,atom<ne5>,(none,vectors) |- exp1 : atom<ne6> gives exp1',I1,E_t
+E,atom<ne7>,(none,vectors) |- exp2 : atom<ne8> gives exp2', I2,E_t
+E,u,(nums,vectors) |- exp3 : u' gives exp3',I3,E_t
 I4 == <{ ne3 <= ne5, ne3+ne4 <= ne7 },pure>
 ------------------------------------------------------------ :: vecrangeupvalueInc
-E,vector<ne1 ne2 order t> |- :E_vector_update_subrange: [ exp with exp1 : exp2 = exp3 ] : vector <ne3 ne4 inc u> gives :E_vector_update_subrange:[ exp' with exp1' : exp2' = exp3'], (I u+ (I1 u+ (I2 u+ (I3 u+ I4)))),E_t
+E,vector<ne1 ne2 order t>,widening |- :E_vector_update_subrange: [ exp with exp1 : exp2 = exp3 ] : vector <ne3 ne4 inc u> gives :E_vector_update_subrange:[ exp' with exp1' : exp2' = exp3'], (I u+ (I1 u+ (I2 u+ (I3 u+ I4)))),E_t
 
-E,vector<ne1 ne2 order t> |- exp : vector< ne3 ne4 dec u> gives exp',I,E_t
-E,atom<ne5> |- exp1 : atom<ne6> gives exp1',I1,E_t
-E,atom<ne7> |- exp2 : atom<ne8> gives exp2', I2,E_t
-E,vector<ne9 ne10 dec t> |- exp3 : vector <ne11 ne12 dec u> gives exp3',I3,E_t
+E,vector<ne1 ne2 order t>,(nums,none) |- exp : vector< ne3 ne4 dec u> gives exp',I,E_t
+E,atom<ne5>,(none,vectors) |- exp1 : atom<ne6> gives exp1',I1,E_t
+E,atom<ne7>,(none,vectors) |- exp2 : atom<ne8> gives exp2', I2,E_t
+E,vector<ne9 ne10 dec t>,(nums,vectors) |- exp3 : vector <ne11 ne12 dec u> gives exp3',I3,E_t
 I4 == <{ ne5 <= ne3, ne3+(-ne4) <= ne6+(-ne8), ne8+one<=ne6 },pure>
 ------------------------------------------------------------ :: vecrangeupDec
-E,vector<ne1 ne2 order t> |- :E_vector_update_subrange: [ exp with exp1 : exp2 = exp3 ] : vector <ne3 ne4 dec u> gives :E_vector_update_subrange:[ exp' with exp1' : exp2' = exp3'], (I u+ (I1 u+ (I2 u+ (I3 u+ I4)))),E_t
+E,vector<ne1 ne2 order t>,widening |- :E_vector_update_subrange: [ exp with exp1 : exp2 = exp3 ] : vector <ne3 ne4 dec u> gives :E_vector_update_subrange:[ exp' with exp1' : exp2' = exp3'], (I u+ (I1 u+ (I2 u+ (I3 u+ I4)))),E_t
 
-E,vector<ne1 ne2 order t> |- exp : vector< ne3 ne4 dec u> gives exp',I,E_t
-E,atom<ne5> |- exp1 : atom<ne6> gives exp1',I1,E_t
-E,atom<ne7> |- exp2 : atom<ne8> gives exp2', I2,E_t
-E,u |- exp3 : u' gives exp3',I3,E_t
+E,vector<ne1 ne2 order t>,(nums,none) |- exp : vector< ne3 ne4 dec u> gives exp',I,E_t
+E,atom<ne5>,(none,vectors) |- exp1 : atom<ne6> gives exp1',I1,E_t
+E,atom<ne7>,(none,vectors) |- exp2 : atom<ne8> gives exp2', I2,E_t
+E,u,(nums,vectors) |- exp3 : u' gives exp3',I3,E_t
 I4 == <{ ne5 <= ne3, ne3+(-ne4) <= ne6+(-ne8), ne8+one<=ne6 },pure>
 ------------------------------------------------------------ :: vecrangeupvalueDec
-E,vector<ne1 ne2 order t> |- :E_vector_update_subrange: [ exp with exp1 : exp2 = exp3 ] : vector <ne3 ne4 dec u> gives :E_vector_update_subrange:[ exp' with exp1' : exp2' = exp3'], (I u+ (I1 u+ (I2 u+ (I3 u+ I4)))),E_t
+E,vector<ne1 ne2 order t>,widening |- :E_vector_update_subrange: [ exp with exp1 : exp2 = exp3 ] : vector <ne3 ne4 dec u> gives :E_vector_update_subrange:[ exp' with exp1' : exp2' = exp3'], (I u+ (I1 u+ (I2 u+ (I3 u+ I4)))),E_t
 
 E_r (x<t_args>) gives </idi : ti//i/> id : u </id'j : t'j//j/>
-<E_t,<E_k,E_a,E_r,E_e>>,t''  |- exp : x< t_args> gives exp', I,E_t
-E_d,t |- exp'.id : u gives t', exp1', S_N', effect
+<E_t,<E_k,E_a,E_r,E_e>>,t'',widening  |- exp : x< t_args> gives exp', I,E_t
+E_d,widening,t |- exp'.id : u gives t', exp1', S_N', effect
 ------------------------------------------------------------ :: field
-<E_t,<E_k,E_a,E_r,E_e>>,t |- exp.id : u gives exp1',I u+ <S_N',effect>,E_t
+<E_t,<E_k,E_a,E_r,E_e>>,t,widening |- exp.id : u gives exp1',I u+ <S_N',effect>,E_t
 
-<E_t,E_d>,t'' |- exp : u gives exp',I,E_t
+<E_t,E_d>,t'',widening |- exp : u gives exp',I,E_t
 </<E_t,E_d>,u |- pati : u'i gives pat'i,E_ti,S_Ni//i/>
-</<(E_t u+ E_ti),E_d>,t |- expi : u''i gives exp'i,Ii,E_t'i//i/>
+</<(E_t u+ E_ti),E_d>,t,widening |- expi : u''i gives exp'i,Ii,E_t'i//i/>
 ------------------------------------------------------------ :: case
-<E_t,E_d>,t |- switch exp { </case pati -> expi//i/> }: u gives switch exp' { </case pat'i -> exp'i//i/> }, I u+ </Ii u+ <S_Ni,pure>//i/>, E_t
+<E_t,E_d>,t,widening |- switch exp { </case pati -> expi//i/> }: u gives switch exp' { </case pat'i -> exp'i//i/> }, I u+ </Ii u+ <S_Ni,pure>//i/>, E_t
 
-<E_t,E_d>,t'' |- exp : u gives exp',I,E_t
+<E_t,E_d>,t'',widening |- exp : u gives exp',I,E_t
 E_d |- typ ~> t'
-E_d,t' |- exp' : u gives u', exp'', S_N,effect
-E_d,t |- exp'' : t' gives u'', exp''', S_N', effect'
+E_d,widening,t' |- exp' : u gives u', exp'', S_N,effect
+E_d,widening,t |- exp'' : t' gives u'', exp''', S_N', effect'
 ------------------------------------------------------------ :: typed
-<E_t,E_d>,t |- (typ) exp : t gives exp''',I u+ <S_N u+ S_N',effect u+ effect'>,E_t
+<E_t,E_d>,t,widening |- (typ) exp : t gives exp''',I u+ <S_N u+ S_N',effect u+ effect'>,E_t
 
 <E_t,E_d> |- letbind gives letbind', E_t1, S_N, effect, {}
-<(E_t u+ E_t1),E_d>,t |- exp : u gives exp', I2, E_t2
+<(E_t u+ E_t1),E_d>,t,widening |- exp : u gives exp', I2, E_t2
 ------------------------------------------------------------ :: let
-<E_t,E_d>,t |- letbind in exp : t gives letbind' in exp', <S_N,effect> u+ I2, E_t
+<E_t,E_d>,t,widening |- letbind in exp : t gives letbind' in exp', <S_N,effect> u+ I2, E_t
  
-E,t1 |- exp1 : u1 gives exp1',I1,E_t1 .... E,tn |- expn : un gives expn',In,E_tn
+E,t1,widening |- exp1 : u1 gives exp1',I1,E_t1 .... E,tn,widening |- expn : un gives expn',In,E_tn
 ------------------------------------------------------------ :: tup
-E,(t1, ...., tn) |- (exp1, .... , expn) : (u1 , .... , un) gives (exp1', ...., expn'), I1 u+ .... u+ In,E_t
+E,(t1, ...., tn),widening |- (exp1, .... , expn) : (u1 , .... , un) gives (exp1', ...., expn'), I1 u+ .... u+ In,E_t
  
-<E_t,E_d>,t |- exp1 : u1 gives exp1', I1,E_t1 .. <E_t,E_d>,t |- expn : un gives expn', In,E_tn
-E_d |- u1 ~< t,S_N1 .. E_d |- un ~< t,S_Nn
+<E_t,E_d>,t,(nums,none) |- exp1 : u1 gives exp1', I1,E_t1 .. <E_t,E_d>,t,(nums,none) |- expn : un gives expn', In,E_tn
+E_d,(nums,none) |- u1 ~< t:t',S_N1 .. E_d,(nums,none) |- un ~< t:t',S_Nn
 ------------------------------------------------------------ :: list
-<E_t,E_d>,list<t> |- [||exp1, .., expn ||] : list<u> gives [|| exp1', .., expn' ||], <S_N1 u+ .. u+ S_Nn,pure> u+ I1 u+ .. u+ In, E_t
+<E_t,E_d>,list<t>,widening |- [||exp1, .., expn ||] : list<u> gives [|| exp1', .., expn' ||], <S_N1 u+ .. u+ S_Nn,pure> u+ I1 u+ .. u+ In, E_t
 
-E,bit |- exp1 : bit gives exp1',I1,E_t'
-E,t |- exp2 : u1 gives exp2',I2,E_t2
-E,t |- exp3 : u2 gives exp3',I3,E_t3
-E_d |- u1 ~< t,S_N1
-E_d |- u2 ~< t,S_N2
+E,bit,widening |- exp1 : bit gives exp1',I1,E_t'
+E,t,widening |- exp2 : u1 gives exp2',I2,E_t2
+E,t,widening |- exp3 : u2 gives exp3',I3,E_t3
+E_d,widening |- u1 ~< t:t',S_N1
+E_d,widening |- u2 ~< t:t',S_N2
 ------------------------------------------------------------ :: if
-<E_t,E_d>,t |- if exp1 then exp2 else exp3 : u gives if exp1' then exp2' else exp3', <S_N1 u+ S_N2,pure> u+ I1 u+ I2 u+ I3,(E_t2 inter E_t3)
+<E_t,E_d>,t,widening |- if exp1 then exp2 else exp3 : u gives if exp1' then exp2' else exp3', <S_N1 u+ S_N2,pure> u+ I1 u+ I2 u+ I3,(E_t2 inter E_t3)
 
-<E_t,E_d>,range<ne1 ne2> |- exp1 : range< ne7 ne8> gives exp1', I1,E_t
-<E_t,E_d>,range<ne3 ne4> |- exp2 : range< ne9 ne10> gives exp2', I2,E_t
-<E_t,E_d>,range<ne5 ne6> |- exp3 : range< ne11 ne12> gives exp3',I3,E_t
-<(E_t u+ {id |-> range< ne1 ne4>}),E_d>,unit |- exp4 : t gives exp4',I4,E_t'
+<E_t,E_d>,range<ne1 ne2>,widening |- exp1 : range< ne7 ne8> gives exp1', I1,E_t
+<E_t,E_d>,range<ne3 ne4>,widening |- exp2 : range< ne9 ne10> gives exp2', I2,E_t
+<E_t,E_d>,range<ne5 ne6>,widening |- exp3 : range< ne11 ne12> gives exp3',I3,E_t
+<(E_t u+ {id |-> range< ne1 ne4>}),E_d>,unit,widening |- exp4 : t gives exp4',I4,E_t'
 ----------------------------------------------------------- :: for
-<E_t,E_d>,unit |- foreach (id from exp1 to exp2 by exp3) exp4 : t gives foreach (id from exp1' to exp2' by exp3') exp4', I1 u+ I2 u+ I3 u+ I4 u+ <{ne1 <= ne3+ne4},pure>,E_t
+<E_t,E_d>,unit,widening |- foreach (id from exp1 to exp2 by exp3) exp4 : t gives foreach (id from exp1' to exp2' by exp3') exp4', I1 u+ I2 u+ I3 u+ I4 u+ <{ne1 <= ne3+ne4},pure>,E_t
 
-E,t |- exp1 : u gives exp1',I1,E_t
-E,list<t> |- exp2 : list<u> gives exp2',I2,E_t
+E,t,widening |- exp1 : u gives exp1',I1,E_t
+E,list<t>,widening |- exp2 : list<u> gives exp2',I2,E_t
 ------------------------------------------------------------ :: cons
-E,list<t> |- exp1 :: exp2 : list<u> gives exp1'::exp2', I1 u+ I2,E_t
+E,list<t>,widening |- exp1 :: exp2 : list<u> gives exp1'::exp2', I1 u+ I2,E_t
 
-t |- lit : u => exp,S_N
+widening,t |- lit : u => exp,S_N
 ------------------------------------------------------------ :: lit
-E,t |- lit : u gives exp,<S_N,pure>,E_t
+E,t,widening |- lit : u gives exp,<S_N,pure>,E_t
 
-<E_t,E_d>,unit |- exp : unit gives exp', I, E_t1
+<E_t,E_d>,unit,widening |- exp : unit gives exp', I, E_t1
 ------------------------------------------------------------ :: blockbase
-<E_t,E_d>,unit |- { exp } : unit gives {exp'}, I, E_t
+<E_t,E_d>,unit,widening |- { exp } : unit gives {exp'}, I, E_t
 
-<E_t,E_d>,unit |- exp : unit gives exp', I1, E_t1
-<(E_t u+ E_t1),E_d>,unit |- { </expi//i/> } : unit gives {</expi'//i/>}, I2, E_t2
+<E_t,E_d>,unit,widening |- exp : unit gives exp', I1, E_t1
+<(E_t u+ E_t1),E_d>,unit,widening |- { </expi//i/> } : unit gives {</expi'//i/>}, I2, E_t2
 ------------------------------------------------------------ :: blockrec
-<E_t,E_d>,unit |- { exp ; </expi//i/> } : unit gives {exp'; </expi'//i/>}, I1 u+ I2, E_t
+<E_t,E_d>,unit,widening |- { exp ; </expi//i/> } : unit gives {exp'; </expi'//i/>}, I1 u+ I2, E_t
 
-<E_t,E_d>,unit |- exp : unit gives exp', I, E_t1
+<E_t,E_d>,unit,widening |- exp : unit gives exp', I, E_t1
 ------------------------------------------------------------ :: nondetbase
-<E_t,E_d>,unit |- nondet { exp } : unit gives {exp'}, I, E_t
+<E_t,E_d>,unit,widening |- nondet { exp } : unit gives {exp'}, I, E_t
 
-<E_t,E_d>,unit |- exp : unit gives exp', I1, E_t1
-<(E_t u+ E_t1),E_d>,unit |- nondet { </expi//i/> } : unit gives {</expi'//i/>}, I2, E_t2
+<E_t,E_d>,unit,widening |- exp : unit gives exp', I1, E_t1
+<(E_t u+ E_t1),E_d>,unit,widening |- nondet { </expi//i/> } : unit gives {</expi'//i/>}, I2, E_t2
 ------------------------------------------------------------ :: nondetrec
-<E_t,E_d>,unit |- nondet { exp ; </expi//i/> } : unit gives {exp'; </expi'//i/>}, I1 u+ I2, E_t
+<E_t,E_d>,unit,widening |- nondet { exp ; </expi//i/> } : unit gives {exp'; </expi'//i/>}, I1 u+ I2, E_t
 
-E,t |- exp:u gives exp', I1, E_t1
+E,t,widening |- exp:u gives exp', I1, E_t1
 E |- lexp:t gives lexp', I2, E_t2
 ------------------------------------------------------------ :: assign
-E,unit |- lexp := exp : unit gives lexp' := exp', I u+ I2, E_t2
+E,unit,widening |- lexp := exp : unit gives lexp' := exp', I u+ I2, E_t2
 
 defn
 E |- lexp : t gives lexp' , I , E_t :: :: check_lexp :: check_lexp_
