@@ -84,6 +84,7 @@ tag :: 'Tag_' ::=
 
 ne :: 'Ne_' ::=
  {{ com internal numeric expressions }}
+   | x                                   :: :: id
    | ' x                                 :: :: var
    | num                                 :: :: const
    | infinity                            :: :: inf
@@ -213,6 +214,20 @@ conformsto :: 'conformsto_' ::=
   {{ com how much conformance does overloading need }}
  | full :: :: full
  | parm :: :: parm
+
+widenvec :: 'widenvec_' ::=
+  | vectors :: :: widen
+  | none    :: :: dont
+  | _       :: :: dontcare
+
+widennum :: 'widennum_' ::=
+  | nums  :: :: widen
+  | none  :: :: dont
+  | _     :: :: dontcare
+
+widening :: 'widening_' ::=
+  {{ com Should we widen vector start locations, should we widen atoms and ranges }}
+  | ( widennum , widenvec ) :: :: w
 
  E_a {{ tex \ottnt{E}^{\textsc{a} } }} :: 'E_a_' ::=   {{ phantom }}
                                                                             {{ hol tid |-> tinf}}

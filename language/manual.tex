@@ -38,11 +38,11 @@ this will come from a combination of users and Sail developers.
 
 \begin{itemize}
 
-\item Declare memory access functions as one read, one write for each
-  kind of access.
+\item Declare memory access functions as one read, one write announce,
+  and one write value for each kind of access.
 
 For basic user-mode instructions, there should be the need for only
-one memory read and one memory write function. These should each be
+one memory read and two memory write function. These should each be
 declared using {\tt val extern} and should have effect {\tt wmem} and
 {\tt rmem} accordingly. 
 
@@ -96,6 +96,17 @@ either with {\tt a} or {\tt a[0]}.
   instructions.
 
 The sail interpreter is hard-wired to look for functions with these names.
+
+\item Type annotations are necessary to read the contents of a
+  register into a local variable.
+
+The code {\tt x := GPR[4]}, where GPR is a vector of general purpose
+registers, will store a local reference to the fourth general purpose
+register, not the contents of that registe, i.e. this will not read
+the register. To read the register contents into a local variable, the
+type is required explicitly so {\tt (bit[64]) x := GPR[4]} reads the
+register contents into x. The type annotation may be on either side of
+the assignment.
 
 \end{itemize}
 
