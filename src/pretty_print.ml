@@ -2176,9 +2176,9 @@ let doc_lit_lem in_pat (L_aux(lit,l)) a =
   | L_true  -> "I"
   | L_num i ->
      let ipp = string_of_int i in
-     if in_pat then  "("^ipp^" : n)" 
-     else if i < 0 then "((0"^ipp^") : i)"
-     else "("^ipp^" : i)"
+     if in_pat then "("^ipp^":n)" 
+     else if i < 0 then "((0"^ipp^"):i)"
+     else "("^ipp^":i)"
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef ->
@@ -2391,15 +2391,10 @@ let doc_exp_lem, doc_let_lem =
                      | _ -> string n)
                  | Base(_,Constructor _,_,_,_,_) -> doc_id_lem_ctor f
                  | _ -> doc_id_lem f in
-               let epp =
-                 align
-                   (call ^//^
-                      (match args with
-                       | [a] -> expY a
-                       | args -> (parens (align (separate_map (comma ^^ break 1) expY args)))
-                      )
-                   )
-               in
+               let argpp = match args with
+                 | [a] -> expY a
+                 | args -> parens (align (separate_map (comma ^^ break 0) expY args)) in
+               let epp = align (call ^//^ argpp) in
                if aexp_needed then parens (align epp) else epp
            )
        )
