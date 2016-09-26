@@ -18,6 +18,9 @@ type 'a rewriters = {
     rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
   }
 
+
+let (>>) f g = fun x -> g(f(x))
+
 let fresh_name_counter = ref 0
 
 let fresh_name () =
@@ -1738,22 +1741,25 @@ let swaptyp t (l,(Base ((t_params,_),tag,nexps,eff,effsum,bounds))) =
   (l,Base ((t_params,t),tag,nexps,eff,effsum,bounds))
 
 let mktup l es =
-  if es = [] then
-    E_aux (E_lit (L_aux (L_unit,Parse_ast.Generated l)),(Parse_ast.Generated l,simple_annot unit_t))
-  else
-    let effs =
-      List.fold_left (fun acc e -> union_effects acc (get_effsum_exp e)) {effect = Eset []} es in
-    let typs = List.map get_type es in
-    E_aux (E_tuple es,(Parse_ast.Generated l,simple_annot_efr {t = Ttup typs} effs))
+  match es with
+  | [] -> E_aux (E_lit (L_aux (L_unit,Parse_ast.Generated l)),(Parse_ast.Generated l,simple_annot unit_t))
+  | [e] -> e
+  | _ -> 
+     let effs =
+       List.fold_left (fun acc e -> union_effects acc (get_effsum_exp e)) {effect = Eset []} es in
+     let typs = List.map get_type es in
+     E_aux (E_tuple es,(Parse_ast.Generated l,simple_annot_efr {t = Ttup typs} effs))
 
 let mktup_pat l es =
-  if es = [] then
-    P_aux (P_wild,(Parse_ast.Generated l,simple_annot unit_t))
-  else
-    let typs = List.map get_type es in
-    let pats = List.map (fun (E_aux (E_id id,_) as exp) ->
-                         P_aux (P_id id,(Parse_ast.Generated l,simple_annot (get_type exp)))) es in
-    P_aux (P_tup pats,(Parse_ast.Generated l,simple_annot {t = Ttup typs}))
+  match es with
+  | [] -> P_aux (P_wild,(Parse_ast.Generated l,simple_annot unit_t))
+  | [E_aux (E_id id,_) as exp] ->
+     P_aux (P_id id,(Parse_ast.Generated l,simple_annot (get_type exp)))
+  | _ ->
+     let typs = List.map get_type es in
+     let pats = List.map (fun (E_aux (E_id id,_) as exp) ->
+                    P_aux (P_id id,(Parse_ast.Generated l,simple_annot (get_type exp)))) es in
+     P_aux (P_tup pats,(Parse_ast.Generated l,simple_annot {t = Ttup typs}))
 
 
 type 'a updated_term =
@@ -1987,6 +1993,58 @@ let remove_reference_types exp =
     }
     exp
 
+
+
+let rewrite_defs_remove_superfluous_letbinds =
+
+  let rec small (E_aux (exp,_)) = match exp with
+    | E_id _
+    | E_lit _ -> true
+    | E_cast (_,e) -> small e
+    | E_list es -> List.for_all small es
+    | E_cons (e1,e2) -> small e1 && small e2
+    | E_sizeof _ -> true
+    | _ -> false in
+
+  let e_aux (exp,annot) = match exp with
+    | E_let (lb,exp2) ->
+       begin match lb,exp2 with
+       (* 'let x = EXP1 in x' can be replaced with 'EXP1' *)
+       | LB_aux (LB_val_explicit (_,P_aux (P_id (Id_aux (id,_)),_),exp1),_),
+         E_aux (E_id (Id_aux (id',_)),_)
+       | LB_aux (LB_val_explicit (_,P_aux (P_id (Id_aux (id,_)),_),exp1),_),
+         E_aux (E_cast (_,E_aux (E_id (Id_aux (id',_)),_)),_)
+       | LB_aux (LB_val_implicit (P_aux (P_id (Id_aux (id,_)),_),exp1),_),
+         E_aux (E_id (Id_aux (id',_)),_)
+       | LB_aux (LB_val_implicit (P_aux (P_id (Id_aux (id,_)),_),exp1),_),
+         E_aux (E_cast (_,E_aux (E_id (Id_aux (id',_)),_)),_)
+            when id = id' ->
+          exp1
+       (* "let x = EXP1 in return x" can be replaced with 'return (EXP1)', at
+          least when EXP1 is 'small' enough *)
+       | LB_aux (LB_val_explicit (_,P_aux (P_id (Id_aux (id,_)),_),exp1),_),
+         E_aux (E_internal_return (E_aux (E_id (Id_aux (id',_)),_)),_)
+       | LB_aux (LB_val_implicit (P_aux (P_id (Id_aux (id,_)),_),exp1),_),
+         E_aux (E_internal_return (E_aux (E_id (Id_aux (id',_)),_)),_)
+            when id = id' && small exp1 ->
+          let (E_aux (_,e1annot)) = exp1 in
+          E_aux (E_internal_return (exp1),e1annot)
+       | _ -> E_aux (exp,annot) 
+       end
+    | _ -> E_aux (exp,annot) in
+
+  let alg = { id_exp_alg with e_aux = e_aux } in
+  rewrite_defs_base
+    { rewrite_exp = (fun _ _ -> fold_exp alg)
+    ; rewrite_pat = rewrite_pat
+    ; rewrite_let = rewrite_let
+    ; rewrite_lexp = rewrite_lexp
+    ; rewrite_fun = rewrite_fun
+    ; rewrite_def = rewrite_def
+    ; rewrite_defs = rewrite_defs_base
+    }
+  
+
 let rewrite_defs_remove_superfluous_returns =
 
   let has_unittype e = 
@@ -2028,7 +2086,7 @@ let rewrite_defs_remove_e_assign =
   let rewrite_exp _ _ e =
     replace_memwrite_e_assign (remove_reference_types (rewrite_var_updates e)) in
   rewrite_defs_base
-    {rewrite_exp = rewrite_exp
+    { rewrite_exp = rewrite_exp
     ; rewrite_pat = rewrite_pat
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
@@ -2038,13 +2096,14 @@ let rewrite_defs_remove_e_assign =
     }
 
 
-let rewrite_defs_lem defs =
-  let defs = rewrite_defs_remove_vector_concat defs in
-  let defs = rewrite_defs_exp_lift_assign defs in
-  let defs = rewrite_defs_remove_blocks defs in
-  let defs = rewrite_defs_letbind_effects defs in
-  let defs = rewrite_defs_remove_e_assign defs in
-  let defs = rewrite_defs_effectful_let_expressions defs in
-  let defs = rewrite_defs_remove_superfluous_returns defs in
-  defs
+let rewrite_defs_lem  =
+  rewrite_defs_remove_vector_concat >>
+  rewrite_defs_exp_lift_assign >> 
+  rewrite_defs_remove_blocks >> 
+  rewrite_defs_letbind_effects >> 
+  rewrite_defs_remove_e_assign >> 
+  rewrite_defs_effectful_let_expressions >> 
+  rewrite_defs_remove_superfluous_letbinds >>
+  rewrite_defs_remove_superfluous_returns
+  
 

@@ -468,25 +468,14 @@ let neq_range_vec (l,r) = bitwise_not_bit (eq_range_vec (l,r))
 val neq : forall 'a 'b. 'a * 'b -> bit
 let neq _ = O
 
-val make_indexed_vector_reg : list (integer * register) -> maybe register -> integer -> integer ->
-                              vector register
-let make_indexed_vector_reg entries default start length =
+val make_indexed_vector : forall 'a. list (integer * 'a) -> 'a -> integer -> integer -> vector 'a
+let make_indexed_vector entries default start length =
   let length = natFromInteger length in
-  match default with
-  | Just v -> Vector (List.foldl replace (replicate length v) entries) start defaultDir
-  | Nothing -> failwith "make_indexed_vector used without default value"
-  end
-
-val make_indexed_vector_bit : list (integer * bit) -> maybe bit -> integer -> integer -> vector bit
-let make_indexed_vector_bit entries default start length =
-  let length = natFromInteger length in
-  let default = match default with Nothing -> Undef | Just v -> v end in
   Vector (List.foldl replace (replicate length default) entries) start defaultDir
 
 val make_bit_vector_undef : integer -> vector bit
 let make_bitvector_undef length =
   Vector (replicate (natFromInteger length) Undef) 0 true
-
 
 let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n)
 
