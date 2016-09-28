@@ -338,6 +338,22 @@ let eq v = match v with
   | _ -> Assert_extra.failwith ("eq not given tuple of length 2 " ^ (string_of_value v))
 end
 
+let eq_vec v =
+  let eq_vec_help v1 v2 = match (v1,v2) with
+    | ((V_vector _ _ c1s),(V_vector _ _ c2s)) ->
+      if (List.length c1s = List.length c2s) &&
+         List.listEqualBy
+           (fun v1 v2 -> match eq (V_tuple [v1; v2]) with V_lit (L_aux L_one _) -> true | _ -> false end) c1s c2s then
+        V_lit (L_aux L_one Unknown)
+      else V_lit (L_aux L_zero Unknown)
+    | (V_unknown, _) -> V_unknown
+    | (_, V_unknown) -> V_unknown
+    | _ -> Assert_extra.failwith ("eq_vec not given two vectors, given instead " ^ (string_of_value v)) end in
+  match v with
+  | (V_tuple [v1; v2]) -> binary_taint eq_vec_help v1 v2
+  | _ -> Assert_extra.failwith ("eq_vec not given tuple of length 2 " ^ (string_of_value v))
+end
+
 let eq_vec_range v = match v with
   | (V_tuple [v; r]) -> eq (V_tuple [to_num Unsigned v; r])
   | _ -> Assert_extra.failwith ("eq_vec_range not given tuple of length 2 " ^ (string_of_value v))
@@ -346,10 +362,10 @@ let eq_range_vec v = match v with
   | (V_tuple [r; v]) -> eq (V_tuple [r; to_num Unsigned v])
   | _ -> Assert_extra.failwith ("eq_range_vec not given tuple of length 2 " ^ (string_of_value v))
 end
-let eq_vec_vec v = match v with
+(*let eq_vec_vec v = match v with
   | (V_tuple [v;v2]) -> eq (V_tuple [to_num Signed v; to_num Signed v2])
   | _ -> Assert_extra.failwith ("eq_vec_vec not given tuple of length 2 " ^ (string_of_value v))
-end
+end*)
 
 let rec neg v = retaint v (match detaint v with
   | V_lit (L_aux arg la) -> 
@@ -364,7 +380,7 @@ end)
 
 let neq = compose neg eq ;;
 
-let neq_vec = compose neg eq_vec_vec
+let neq_vec = compose neg eq_vec
 
 let arith_op op v =
   let fail () = Assert_extra.failwith ("arith_op given unexpected " ^ (string_of_value v)) in
@@ -918,9 +934,17 @@ let library_functions direction = [
   ("quot_overflow_vec_signed", arith_op_overflow_vec_no0 hardware_quot "quot" Signed 1);
   ("power", arith_op power);
   ("eq", eq);
+  ("eq_vec", eq_vec);
   ("eq_vec_range", eq_vec_range);
   ("eq_range_vec", eq_range_vec);
+  ("eq_bit", eq);
+  ("eq_range", eq);
   ("neq", neq);
+  ("neq_vec", neq_vec);
+  ("neq_vec_range", neq);
+  ("neq_range_vec", neq);
+  ("neq_bit", neq);
+  ("neq_range", neq);
   ("vec_concat", vec_concat);
   ("is_one", is_one);
   ("to_num", to_num Unsigned);

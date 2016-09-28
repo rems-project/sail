@@ -2357,32 +2357,82 @@ let initial_typ_env =
     (*Correct types again*)
     ("==",
      Overload(
-       Base((mk_typ_params ["a";"b"],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-            (External (Some "eq")),[],pure_e,pure_e,nob),
+       (lib_tannot (mk_typ_params ["a";"b"],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t))
+         (Some "eq") []),
        false,
-       [Base((mk_nat_params["n";"m";],
-              mk_pure_fun (mk_tup [mk_atom (mk_nv "n") ;mk_atom (mk_nv "m")]) bit_t),
-             (External (Some "eq")),
-             [Predicate(Specc(Parse_ast.Int("==",None)),
-                        Eq(Specc(Parse_ast.Int("==",None)), mk_nv "n", mk_nv "m"),
-                        NtEq(Specc(Parse_ast.Int("==",None)), mk_nv "n", mk_nv "m"))],
-             pure_e,pure_e,nob);
+       [(*== : 'a['m] * 'a['m] -> bit_t *)
+         lib_tannot ((mk_nat_params["n";"m";"o"]@mk_typ_params["a"]@mk_ord_params["ord"]),
+                    (mk_pure_fun (mk_tup [mk_vector {t=Tvar "a"} (mk_ovar "ord") (mk_nv "n") (mk_nv "m");
+                                          mk_vector {t=Tvar "a"} (mk_ovar "ord") (mk_nv "o") (mk_nv "m")])
+                       bit_t))
+                   (Some "eq_vec")
+                   [];
         (* == : bit['n] * [:'o:] -> bit_t *)
-        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-              (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
-                                    mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m")])
-                           bit_t)),
-             (External (Some "eq_range_vec")),[],pure_e,pure_e,nob);
+        lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                    (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                          mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m")])
+                                 bit_t))
+                   (Some "eq_range_vec")
+                   [];
         (* == : [:'o:] * bit['n] -> bit_t *)
-        Base(((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
-              (mk_pure_fun (mk_tup [mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m");
-                                    mk_atom (mk_nv "o")])
-                           bit_t)),
-             (External (Some "eq_vec_range")),[],pure_e,pure_e,nob);
-        Base((["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t)),
-             (External (Some "eq")),[],pure_e,pure_e,nob)]));
-    ("!=",Base((["a",{k=K_Typ}; "b",{k=K_Typ}], (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
-               (External (Some "neq")),[],pure_e,pure_e,nob));
+        lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                    (mk_pure_fun (mk_tup [mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m");
+                                          mk_atom (mk_nv "o")])
+                                  bit_t))
+                   (Some "eq_vec_range")
+                   [];
+        (* == : [:'n:] * [:'m:] -> bit_t *)
+        lib_tannot ((mk_nat_params["n";"m";],
+                     mk_pure_fun (mk_tup [mk_atom (mk_nv "n") ;mk_atom (mk_nv "m")]) bit_t))
+                   (Some "eq_range")
+                   [Predicate(Specc(Parse_ast.Int("==",None)),
+                              Eq(Specc(Parse_ast.Int("==",None)), mk_nv "n", mk_nv "m"),
+                              NtEq(Specc(Parse_ast.Int("==",None)), mk_nv "n", mk_nv "m"))];
+        (* == : (bit_t,bit_t) -> bit_t *)
+        lib_tannot ([], mk_pure_fun (mk_tup [bit_t;bit_t]) bit_t)
+                   (Some "eq_bit")
+                   [];
+        lib_tannot (["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t))
+                   (Some "eq") []]));
+    ("!=",
+     Overload(
+       lib_tannot ((mk_typ_params ["a";"b"]),(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t))
+         (Some "neq") [],
+       false,
+       [(*!= : 'a['m] * 'a['m] -> bit_t *)
+         lib_tannot ((mk_nat_params["n";"m";"o"]@mk_typ_params["a"]@mk_ord_params["ord"]),
+                    (mk_pure_fun (mk_tup [mk_vector {t=Tvar "a"} (mk_ovar "ord") (mk_nv "n") (mk_nv "m");
+                                          mk_vector {t=Tvar "a"} (mk_ovar "ord") (mk_nv "o") (mk_nv "m")])
+                       bit_t))
+                   (Some "neq_vec")
+                   [];
+        (* != : bit['n] * [:'o:] -> bit_t *)
+        lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                    (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
+                                          mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m")])
+                                 bit_t))
+                   (Some "neq_range_vec")
+                   [];
+        (* != : [:'o:] * bit['n] -> bit_t *)
+        lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
+                    (mk_pure_fun (mk_tup [mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m");
+                                          mk_atom (mk_nv "o")])
+                                  bit_t))
+                   (Some "neq_vec_range")
+                   [];
+        (* != : [:'n:] * [:'m:] -> bit_t *)
+        lib_tannot ((mk_nat_params["n";"m";],
+                     mk_pure_fun (mk_tup [mk_atom (mk_nv "n") ;mk_atom (mk_nv "m")]) bit_t))
+                   (Some "neq_range")
+                   [Predicate(Specc(Parse_ast.Int("!=",None)),
+                              Eq(Specc(Parse_ast.Int("!=",None)), mk_nv "n", mk_nv "m"),
+                              NtEq(Specc(Parse_ast.Int("!=",None)), mk_nv "n", mk_nv "m"))];
+        (* != : (bit_t,bit_t) -> bit_t *)
+        lib_tannot ([], mk_pure_fun (mk_tup [bit_t;bit_t]) bit_t)
+                   (Some "neq_bit")
+                   [];
+        lib_tannot (["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t))
+                   (Some "neq") []]));
     ("<",
      Overload(
        Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
