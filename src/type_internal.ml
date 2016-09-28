@@ -1391,8 +1391,7 @@ let equate_n (n_box : nexp) (n : nexp) : bool =
     | true,true -> false
     | true,false | false,true -> true
     | false,false ->
-      (*let _ = Printf.eprintf "equate_n has does not occur in %s and %s\n" 
-        (n_to_string n_box) (n_to_string n) in     *)
+      (*let _ = Printf.eprintf "equate_n has does not occur in %s and %s\n" (n_to_string n_box) (n_to_string n) in*)
       (*If one is empty, set the empty one into the bottom of the other one if you can, but put it in the chain
         If neither are empty, merge but make sure to set the nexp to be the same (not yet being done)
       *)
@@ -3716,67 +3715,69 @@ let merge_branch_constraints merge_nuvars constraint_sets =
       | None -> [],None
   in
   let merged_constraints = make_merged_constraints Nexpmap.empty constraint_sets in
-  let shared_path_distinct_constraints = 
-    Nexpmap.fold 
-      (fun (sc,new_cs,new_map) k v -> match v with
-         | One n ->
-           (*let _ = Printf.eprintf "Variables in one path: merge_nuvars %b, key %s, one %s\n%!" 
-               merge_nuvars (n_to_string k) (n_to_string n) in*)
-           let k,n = get_outer_most k, get_outer_most n in
-           if (is_all_nuvar k || is_all_nuvar n) && conditionally_set k n
-           then (sc,new_cs,new_map)
-           else (sc, (Eq(Patt(Parse_ast.Unknown),k,n))::new_cs,new_map)
-        | Two(n1,n2) ->
-          (*let _ = Printf.eprintf "Variables in two paths: merge_nuvars %b, key %s, n1 %s, n2 %s\n%!" 
-              merge_nuvars (n_to_string k) (n_to_string n1) (n_to_string n2) in*)
-          let k,n1,n2 = get_outer_most k, get_outer_most n1, get_outer_most n2 in
-          let all_nk, all_nn1, all_nn2 = is_all_nuvar k, is_all_nuvar n1, is_all_nuvar n2 in
-          if all_nk && all_nn1 && all_nn2 
-          then
-            let set1,set2 = conditionally_set k n1, conditionally_set k n2 in
-            if set1 && set2 then sc,new_cs,new_map 
-            else (Nexpmap.insert sc (k,v),new_cs,new_map)
-          else (if all_nk
-                then
-                  let ncs1,nm1 = conditionally_lift_to_nuvars_on_merge k n1 in
-                  let ncs2,nm2 = conditionally_lift_to_nuvars_on_merge k n2 in
-                  let set1,set2 = conditionally_set k n1, conditionally_set k n2 in
-                  if set1 && set2
-                  then sc,ncs1@ncs2@new_cs,merge_option_maps new_map (merge_option_maps nm1 nm2)
-                  else (Nexpmap.insert sc (k,v),new_cs,merge_option_maps new_map (merge_option_maps nm1 nm2))
-                else (Nexpmap.insert sc (k,v),new_cs,new_map))
-        | Many ns ->
-          (*let _ = Printf.eprintf "Variables in many paths: merge_nuvars %b, key %s, [" 
-            merge_nuvars (n_to_string k) in
-          let _ = List.iter (fun n -> Printf.eprintf "%s ;" (n_to_string n)) ns in
-          let _ = Printf.eprintf "]\n%!" in*)
-          let k, ns = get_outer_most k, List.map get_outer_most ns in
-          let is_all_nuvars = List.for_all is_all_nuvar ns in
-          if not(merge_nuvars)
-          then Nexpmap.insert sc (k,v),new_cs,new_map
-          else if is_all_nuvars
-          then if List.for_all (conditionally_set k) ns
-            then (sc,new_cs,new_map)
-            else (Nexpmap.insert sc (k,v),new_cs,new_map)
-          else
-            let rec all_eq = function
-              | [] | [_] -> true
-              | n1::n2::ns ->
-                (nexp_eq n1 n2) && all_eq (n2::ns) 
-            in 
-            if (all_eq ns) && not(ns=[])
-            then if List.for_all (conditionally_set k) ns
-              then  (sc,new_cs,new_map)
-              else (Nexpmap.insert sc (k,v),new_cs,new_map)
-            else            
-              let sets = List.map (conditionally_lift_to_nuvars_on_merge k) ns in
-              let css = (List.flatten (List.map fst sets))@ new_cs in
-              let map = List.fold_right merge_option_maps (List.map snd sets) new_map in
-              (Nexpmap.insert sc (k,v),css, map))
-      (Nexpmap.empty,[],None) merged_constraints in
+  let merge_walker (sc,new_cs,new_map) k v = match v with
+    | One n ->
+      (*let _ = Printf.eprintf "Variables in one path: merge_nuvars %b, key %s, one %s\n%!" 
+          merge_nuvars (n_to_string k) (n_to_string n) in*)
+      let k,n = get_outer_most k, get_outer_most n in
+      if (is_all_nuvar k || is_all_nuvar n) && conditionally_set k n
+      then (sc,new_cs,new_map)
+      else (sc, (Eq(Patt(Parse_ast.Unknown),k,n))::new_cs,new_map)
+    | Two(n1,n2) ->
+      (*let _ = Printf.eprintf "Variables in two paths: merge_nuvars %b, key %s, n1 %s, n2 %s\n%!" 
+          merge_nuvars (n_to_string k) (n_to_string n1) (n_to_string n2) in*)
+      let k,n1,n2 = get_outer_most k, get_outer_most n1, get_outer_most n2 in
+      let all_nk, all_nn1, all_nn2 = is_all_nuvar k, is_all_nuvar n1, is_all_nuvar n2 in
+      if all_nk && all_nn1 && all_nn2 
+      then
+        let set1,set2 = conditionally_set k n1, conditionally_set k n2 in
+        if set1 && set2 then sc,new_cs,new_map 
+        else (Nexpmap.insert sc (k,v),new_cs,new_map)
+      else (if all_nk
+            then
+              let ncs1,nm1 = conditionally_lift_to_nuvars_on_merge k n1 in
+              let ncs2,nm2 = conditionally_lift_to_nuvars_on_merge k n2 in
+              let set1,set2 = conditionally_set k n1, conditionally_set k n2 in
+              if set1 && set2
+              then sc,ncs1@ncs2@new_cs,merge_option_maps new_map (merge_option_maps nm1 nm2)
+              else (Nexpmap.insert sc (k,v),new_cs,merge_option_maps new_map (merge_option_maps nm1 nm2))
+            else (Nexpmap.insert sc (k,v),new_cs,new_map))
+    | Many ns ->
+      (*let _ = Printf.eprintf "Variables in many paths: merge_nuvars %b, key %s, [" 
+          merge_nuvars (n_to_string k) in
+      let _ = List.iter (fun n -> Printf.eprintf "%s ;" (n_to_string n)) ns in
+      let _ = Printf.eprintf "]\n%!" in*)
+      let k, ns = get_outer_most k, List.map get_outer_most ns in
+      let is_all_nuvars = List.for_all is_all_nuvar ns in
+      if not(merge_nuvars)
+      then Nexpmap.insert sc (k,v),new_cs,new_map
+      else if is_all_nuvars
+      then if List.for_all (conditionally_set k) ns
+        then (sc,new_cs,new_map)
+        else (Nexpmap.insert sc (k,v),new_cs,new_map)
+      else
+        let rec all_eq = function
+          | [] | [_] -> true
+          | n1::n2::ns ->
+            (nexp_eq n1 n2) && all_eq (n2::ns) 
+        in 
+        if (all_eq ns) && not(ns=[])
+        then if List.for_all (conditionally_set k) ns
+          then  (sc,new_cs,new_map)
+          else (Nexpmap.insert sc (k,v),new_cs,new_map)
+        else            
+          let sets = List.map (conditionally_lift_to_nuvars_on_merge k) ns in
+          let css = (List.flatten (List.map fst sets))@ new_cs in
+          let map = List.fold_right merge_option_maps (List.map snd sets) new_map in
+          (Nexpmap.insert sc (k,v),css, map) in
+  let shared_path_distinct_constraints = Nexpmap.fold merge_walker (Nexpmap.empty,[],None) merged_constraints in
   (*let _ = if merge_nuvars then
       Printf.eprintf "merge branch constraints: shared var mappings after merge %s\n%!"
-        (nexpmap_to_string merged_constraints) in *)
+        (nexpmap_to_string merged_constraints) in*)
+  let shared_path_distinct_constraints =
+    (*This should probably be repeating for a fixpoint, but here's hoping two iterations will do*)
+    if merge_nuvars then Nexpmap.fold merge_walker (Nexpmap.empty,[],None) merged_constraints
+    else shared_path_distinct_constraints in
   shared_path_distinct_constraints
 
 let rec extract_path_substs = function
