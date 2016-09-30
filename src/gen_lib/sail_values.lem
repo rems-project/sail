@@ -454,19 +454,20 @@ let lteq_range_vec = compare_op_range_vec (<=) true
 let gteq_range_vec = compare_op_range_vec (>=) true
 
 let eq (l,r) = bool_to_bit (l = r)
+let eq_range (l,r) = bool_to_bit (l = r)
+let eq_vec (l,r) = bool_to_bit (l = r)
+let eq_bit (l,r) = bool_to_bit (l = r)
 let eq_vec_range (l,r) = eq (to_num false l,r)
 let eq_range_vec (l,r) = eq (l, to_num false r)
 let eq_vec_vec (l,r) = eq (to_num true l, to_num true r)
-(*
-let neq (l,r) = bitwise_not_bit (eq (l,r)) *)
+
+let neq (l,r) = bitwise_not_bit (eq (l,r))
+let neq_bit (l,r) = bitwise_not_bit (eq_bit (l,r))
+let neq_range (l,r) = bitwise_not_bit (eq_range (l,r))
 let neq_vec (l,r) = bitwise_not_bit (eq_vec_vec (l,r))
 let neq_vec_range (l,r) = bitwise_not_bit (eq_vec_range (l,r))
 let neq_range_vec (l,r) = bitwise_not_bit (eq_range_vec (l,r))
 
-
-(* temporarily *)
-val neq : forall 'a 'b. 'a * 'b -> bit
-let neq _ = O
 
 val make_indexed_vector : forall 'a. list (integer * 'a) -> 'a -> integer -> integer -> vector 'a
 let make_indexed_vector entries default start length =

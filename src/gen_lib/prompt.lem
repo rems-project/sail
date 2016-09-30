@@ -88,20 +88,18 @@ type outcome 'e 'a =
    * on when mode.track_values, integer is size to read, followed by registers that were used in 
    * computing that size *)
   (* address_lifted should go away: doesn't make sense to allow for undefined bits in addresses *)
-  | Read_mem of read_kind * address_lifted * nat * maybe (list reg_name) *
-                  (memory_value -> outcome 'e 'a)
+  | Read_mem of read_kind * address_lifted * nat * (memory_value -> outcome 'e 'a)
                     
   (* Request to write memory, first value and dependent registers is location, second is the value 
    * to write *)
-  | Write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value *
-                   maybe (list reg_name) * (bool -> outcome 'e 'a)
+  | Write_mem of write_kind * address_lifted * nat * memory_value * (bool -> outcome 'e 'a)
                                              
   (* Tell the system a write is imminent, at address lifted tanted by register list, of size nat *)
-  | Write_ea of write_kind * address_lifted * nat * maybe (list reg_name) * outcome 'e 'a
+  | Write_ea of write_kind * address_lifted * nat * outcome 'e 'a
                                                                               
   (* Request to write memory at last signaled address. Memory value should be 8* the size given in 
    * ea signal *)
-  | Write_memv of memory_value * maybe (list reg_name) * (bool -> outcome 'e 'a)
+  | Write_memv of memory_value * (bool -> outcome 'e 'a)
                                                            
   (* Request a memory barrier *)
   (* outcome 'a used to be (unit -> outcome 'a), but since the code is purely functional we don't 
@@ -136,16 +134,16 @@ let return a = Done a
 val (>>=) : forall 'e 'a 'b. M 'e 'a -> ('a -> M 'e 'b) -> M 'e 'b
 let rec (>>=) m f = match m with
   | Done a -> f a
-  | Read_mem rk addr sz rs k ->        Read_mem rk addr sz rs        (fun v -> (k v) >>= f)
-  | Write_mem wk addr sz rs v rs2 k -> Write_mem wk addr sz rs v rs2 (fun b -> (k b) >>= f)
-  | Write_ea wk addr sz rs k ->        Write_ea wk addr sz rs        (k >>= f)
-  | Write_memv v rs k ->               Write_memv v rs               (fun b -> (k b) >>= f)
-  | Barrier bk k ->                    Barrier bk                    (k >>= f)
-  | Footprint k ->                     Footprint                     (k >>= f)
-  | Read_reg reg k ->                  Read_reg reg                  (fun v -> (k v) >>= f)
-  | Write_reg reg v k ->               Write_reg reg v               (k >>= f)
-  | Nondet_choice () -> Nondet_choice ()
-  | Escape e -> Escape e
+  | Read_mem rk addr sz k ->    Read_mem rk addr sz    (fun v -> (k v) >>= f)
+  | Write_mem wk addr sz v k -> Write_mem wk addr sz v (fun b -> (k b) >>= f)
+  | Write_ea wk addr sz k ->    Write_ea wk addr sz    (k >>= f)
+  | Write_memv v k ->           Write_memv v           (fun b -> (k b) >>= f)
+  | Barrier bk k ->             Barrier bk             (k >>= f)
+  | Footprint k ->              Footprint              (k >>= f)
+  | Read_reg reg k ->           Read_reg reg           (fun v -> (k v) >>= f)
+  | Write_reg reg v k ->        Write_reg reg v        (k >>= f)
+  | Nondet_choice () ->         Nondet_choice ()
+  | Escape e ->                 Escape e
   end
 
 val (>>) : forall 'e 'b. M 'e unit -> M 'e 'b -> M 'e 'b
@@ -181,12 +179,12 @@ let registerValueFromBitv (Vector bits start is_inc) reg =
 val read_memory : forall 'e. read_kind -> integer -> integer -> M 'e (vector bit)
 let read_memory rk addr sz =
   let sz = natFromInteger sz in
-  Read_mem rk addr sz Nothing (compose Done bitvFromBytes)
+  Read_mem rk addr sz (compose Done bitvFromBytes)
 
 val write_memory : forall 'e. write_kind -> integer -> integer -> vector bit -> M 'e bool
 let write_memory wk addr sz (Vector v _ _) =
   let sz = natFromInteger sz in
-  Write_mem wk addr sz Nothing (byte_chunks sz v) Nothing Done
+  Write_mem wk addr sz (byte_chunks sz v) Done
 
 val read_reg_range : forall 'e. register -> (integer * integer) -> M 'e (vector bit)
 let read_reg_range reg (i,j) =

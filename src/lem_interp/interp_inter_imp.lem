@@ -476,6 +476,7 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
                        Interp.V_list regs2;
                        Interp.V_list regs3;
                        Interp.V_list nias;
+                       dia;
                        ik] ->
        let reg_to_reg_name v = match v with
          | Interp.V_ctor (Id_aux (Id "RFull") _) _ _ (Interp.V_lit (L_aux (L_string n) _)) ->
@@ -500,7 +501,24 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
            Reg_field n start direction f (extern_slice direction start span)             
          | _ -> Assert_extra.failwith "Register footprint analysis did not return an element of the specified type" end
        in
-       let get_nia v = address_of_memory_value end_flag (fst (extern_mem_value mode v)) in
+       let get_addr v = match address_of_memory_value end_flag (fst (extern_mem_value mode v)) with
+         | Just addr -> addr
+         | Nothing -> failwith "get_nia encountered invalid address" end in
+       let dia_to_dia = function
+         | Interp.V_ctor (Id_aux (Id "DIA_none") _) _ _ _ -> DIA_none
+         | Interp.V_ctor (Id_aux (Id "DIA_concrete") _) _ _ address ->
+            DIA_concrete_address (get_addr address)
+         | Interp.V_ctor (Id_aux (Id "DIA_reg") _) _ _ reg -> DIA_register (reg_to_reg_name reg) 
+         | _ -> failwith "Register footprint analysis did not return dia of expected type" end in
+       let nia_to_nia = function
+         | Interp.V_ctor (Id_aux (Id "NIA_successor") _) _ _ _-> NIA_successor
+         | Interp.V_ctor (Id_aux (Id "NIA_concrete_address") _) _ _ address ->
+            NIA_concrete_address (get_addr address)
+         | Interp.V_ctor (Id_aux (Id "NIA_LR") _) _ _ _ -> NIA_LR
+         | Interp.V_ctor (Id_aux (Id "NIA_CTR") _) _ _ _ -> NIA_CTR
+         | Interp.V_ctor (Id_aux (Id "NIA_register") _) _ _ reg ->
+            NIA_register (reg_to_reg_name reg)
+         | _ -> failwith "Register footprint analysis did not return nia of expected type" end in
        let ik_to_ik = function
          | Interp.V_ctor (Id_aux (Id "IK_barrier") _) _ _
            (Interp.V_ctor (Id_aux (Id b) _) _ _ _) ->
@@ -544,13 +562,14 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
             IK_simple
          | _ -> failwith "Analysis returned unexpected instruction kind"
        end in
-       let (regs1,regs2,regs3,nias,ik) =
+       let (regs1,regs2,regs3,nias,dia,ik) =
          (List.map reg_to_reg_name regs1,
           List.map reg_to_reg_name regs2,
           List.map reg_to_reg_name regs3,
-          List.map get_nia nias,
+          List.map nia_to_nia nias,
+          dia_to_dia dia,
           ik_to_ik ik) in
-       ((regs1,regs2,regs3,nias,ik), events)
+       ((regs1,regs2,regs3,nias,dia,ik), events)
      | _ -> Assert_extra.failwith "Analysis did not return a four-tuple of lists" end)
   | Ivh_value_after_exn _ -> Assert_extra.failwith "Instruction analysis failed"
   | Ivh_error err -> match err with

@@ -413,7 +413,6 @@ instance (Show read_kind)
   end
 end
 
-
 type write_kind =
   (* common writes *)
     Write_plain
@@ -1179,10 +1178,6 @@ val translate_address :
   context -> end_flag -> string -> maybe (list (reg_name * register_value)) -> address
   -> maybe address * maybe (list event)
 
-val instruction_analysis :
-  context -> end_flag -> string -> (string -> (nat * nat * direction * (nat * nat)))
-  -> maybe (list (reg_name * register_value)) -> instruction -> (list reg_name * list reg_name * list reg_name * list address)
-
 val byte_list_of_memory_value : end_flag -> memory_value -> maybe (list byte)
 let byte_list_of_memory_value endian mv = 
   let mv = if endian = E_big_endian then mv else List.reverse mv in
@@ -1405,3 +1400,56 @@ instance (Show byte_lifted)
   let show = stringFromByte_lifted
 end
 
+(* possible next instruction address options *)
+type nia = 
+  | NIA_successor
+  | NIA_concrete_address of address
+  | NIA_LR   (* "LR0:61 || 0b00" in Power pseudocode *)
+  | NIA_CTR  (* "CTR0:61 || 0b00" in Power pseudocode *)
+  | NIA_register of reg_name (* the address will be in a register,
+                                corresponds to AArch64 BLR, BR, RET
+                                instructions *)
+
+let niaCompare n1 n2 = match (n1,n2) with
+  | (NIA_successor,NIA_successor) -> EQ
+  | (NIA_concrete_address a1, NIA_concrete_address a2) -> compare a1 a2
+  | (NIA_LR,NIA_LR) -> EQ
+  | (NIA_CTR,NIA_CTR) -> EQ
+  | (NIA_register r1,NIA_register r2) -> compare r1 r2
+
+  | (NIA_successor,_) -> LT
+  | (NIA_concrete_address _,_) -> LT
+  | (NIA_LR,_) -> LT
+  | (NIA_CTR,_) -> LT
+  | (_,_) -> GT
+  end
+
+instance (Ord nia)
+  let compare = niaCompare
+  let (<)  n1 n2 = (niaCompare n1 n2) = LT
+  let (<=) n1 n2 = (niaCompare n1 n2) <> GT
+  let (>)  n1 n2 = (niaCompare n1 n2) = GT
+  let (>=) n1 n2 = (niaCompare n1 n2) <> LT
+end
+
+let stringFromNia = function
+  | NIA_successor -> "NIA_successor"
+  | NIA_concrete_address a -> "NIA_concrete_address " ^ show a
+  | NIA_LR -> "NIA_LR"
+  | NIA_CTR -> "NIA_CTR"
+  | NIA_register r -> "NIA_register " ^ show r
+end
+
+instance (Show nia)
+  let show = stringFromNia
+end
+
+type dia =
+  | DIA_none
+  | DIA_concrete_address of address
+  | DIA_register of reg_name
+
+
+val instruction_analysis :
+  context -> end_flag -> string -> (string -> (nat * nat * direction * (nat * nat)))
+  -> maybe (list (reg_name * register_value)) -> instruction -> (list reg_name * list reg_name * list reg_name * list nia * dia * instruction_kind)
