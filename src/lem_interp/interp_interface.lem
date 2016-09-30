@@ -1449,7 +1449,34 @@ type dia =
   | DIA_concrete_address of address
   | DIA_register of reg_name
 
+let diaCompare d1 d2 = match (d1, d2) with
+  | (DIA_none, DIA_none) -> EQ
+  | (DIA_concrete_address a1, DIA_concrete_address a2) -> compare a1 a2
+  | (DIA_register r1, DIA_register r2) -> compare r1 r2
+  | (DIA_none, _) -> LT
+  | (DIA_concrete_address _, _) -> LT
+  | (DIA_register _, _) -> LT
+end
 
+instance (Ord dia)
+  let compare = diaCompare
+  let (<)  n1 n2 = (diaCompare n1 n2) = LT
+  let (<=) n1 n2 = (diaCompare n1 n2) <> GT
+  let (>)  n1 n2 = (diaCompare n1 n2) = GT
+  let (>=) n1 n2 = (diaCompare n1 n2) <> LT
+end
+
+let stringFromDia = function
+  | DIA_none               ->  "DIA_none"
+  | DIA_concrete_address a ->  "DIA_concrete_address " ^ show a
+  | DIA_register r ->  "DIA_delayed_register " ^ show r
+end
+
+instance (Show dia)
+  let show = stringFromDia
+end
+
+                      
 val instruction_analysis :
   context -> end_flag -> string -> (string -> (nat * nat * direction * (nat * nat)))
   -> maybe (list (reg_name * register_value)) -> instruction -> (list reg_name * list reg_name * list reg_name * list nia * dia * instruction_kind)
