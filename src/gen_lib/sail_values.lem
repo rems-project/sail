@@ -1,9 +1,35 @@
 open import Pervasives_extra
+open import Sail_impl_base
 open import Vector
 open import Arch
 
 type i = integer
 type n = natural
+
+let to_bool = function
+  | O -> false
+  | I  -> true
+  | Undef -> failwith "to_bool applied to Undef"
+  end
+
+
+let bit_lifted_of_bitU = function
+  | O -> Bitl_zero
+  | I -> Bitl_one
+  | Undef -> Bitl_undef
+  end
+
+let bitU_of_bit = function
+  | Bitc_zero -> O
+  | Bitc_one  -> I
+  end
+
+let bitU_of_bit_lifted = function
+  | Bitl_zero -> O
+  | Bitl_one  -> I
+  | Bitl_undef -> Undef
+  | Bitl_unknown -> failwith "bitU_of_bit_lifted Bitl_unknown"
+  end
 
 let has_undef (Vector bs _ _) = List.any (function Undef -> true | _ -> false end) bs
 
@@ -27,7 +53,7 @@ let pow m n = m ** (natFromInteger n)
 let bitwise_not (Vector bs start is_inc) =
   Vector (List.map bitwise_not_bit bs) start is_inc
 
-val is_one : integer -> bit
+val is_one : integer -> bitU
 let is_one i =
   if i = 1 then I else O
 
@@ -39,22 +65,22 @@ let bitwise_binop_bit op = function
   | (x,y) -> bool_to_bit (op (to_bool x) (to_bool y))
   end
 
-val bitwise_and_bit : bit * bit -> bit
+val bitwise_and_bit : bitU * bitU -> bitU
 let bitwise_and_bit = bitwise_binop_bit (&&)
 
-val bitwise_or_bit : bit * bit -> bit
+val bitwise_or_bit : bitU * bitU -> bitU
 let bitwise_or_bit = bitwise_binop_bit (||)
 
-val bitwise_xor_bit : bit * bit -> bit
+val bitwise_xor_bit : bitU * bitU -> bitU
 let bitwise_xor_bit = bitwise_binop_bit xor
 
-val (&.) : bit -> bit -> bit
+val (&.) : bitU -> bitU -> bitU
 let (&.) x y = bitwise_and_bit (x,y)
 
-val (|.) : bit -> bit -> bit
+val (|.) : bitU -> bitU -> bitU
 let (|.) x y = bitwise_or_bit (x,y)
 
-val (+.) : bit -> bit -> bit
+val (+.) : bitU -> bitU -> bitU
 let (+.) x y = bitwise_xor_bit (x,y)
 
 let bitwise_binop op (Vector bsl start is_inc, Vector bsr _ _) =
@@ -474,7 +500,7 @@ let make_indexed_vector entries default start length =
   let length = natFromInteger length in
   Vector (List.foldl replace (replicate length default) entries) start defaultDir
 
-val make_bit_vector_undef : integer -> vector bit
+val make_bit_vector_undef : integer -> vector bitU
 let make_bitvector_undef length =
   Vector (replicate (natFromInteger length) Undef) 0 true
 
@@ -483,6 +509,55 @@ let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n)
 let mask (n,Vector bits start dir) =
   let current_size = List.length bits in
   Vector (drop (current_size - (natFromInteger n)) bits) (if dir then 0 else (n-1)) dir
+
+
+let bit_of_bit_lifted = function
+  | Bitl_zero -> O
+  | Bitl_one  -> I
+  | Bitl_undef -> Undef
+  | _ -> failwith "bit_of_bit_lifted: unexpected Bitl_unknown"
+end
+
+val byte_chunks : forall 'a. nat -> list 'a -> list (list 'a)
+let rec byte_chunks n list = match (n,list) with
+  | (0,_) -> []
+  | (n+1, a::b::c::d::e::f::g::h::rest) -> [a;b;c;d;e;f;g;h] :: byte_chunks n rest
+  | _ -> failwith "byte_chunks not given enough bits"
+end
+
+
+val bitv_of_byte_lifteds : list Sail_impl_base.byte_lifted -> vector bitU
+let bitv_of_byte_lifteds v =
+  Vector (foldl (fun x (Byte_lifted y) -> x ++ (List.map bitU_of_bit_lifted y)) [] v) 0 defaultDir
+
+val byte_lifteds_of_bitv : vector bitU -> list byte_lifted
+let byte_lifteds_of_bitv (Vector bits length is_inc) = 
+  let bits = List.map bit_lifted_of_bitU bits in
+  byte_lifteds_of_bit_lifteds bits
+
+val address_lifted_of_bitv : vector bitU -> address_lifted
+let address_lifted_of_bitv v =
+  Address_lifted (byte_lifteds_of_bitv v) Nothing
+
+
+let dir is_inc = if is_inc then D_increasing else D_decreasing
+
+
+val bitvFromRegisterValue : register_value -> vector bitU
+let bitvFromRegisterValue v =
+  Vector (List.map bitU_of_bit_lifted v.rv_bits)
+         (integerFromNat (v.rv_start))
+         (v.rv_dir = D_increasing)
+
+
+val registerValueFromBitv : vector bitU -> register -> register_value
+let registerValueFromBitv (Vector bits start is_inc) reg = 
+  let start = natFromInteger start in
+  <| rv_bits = List.map bit_lifted_of_bitU bits;
+     rv_dir = dir is_inc;
+     rv_start_internal = start;
+     rv_start = start+1 - (natFromInteger (length_reg reg)) |>
+
 
 
 
@@ -533,4 +608,9 @@ let rec foreach_dec (i,stop,by) vars body =
        foreach_dec (i - by,stop,by) vars body
   else vars
 
-
+let assert' b msg_opt =
+  let msg = match msg_opt with
+  | Just msg -> msg
+  | Nothing  -> "unspecified error"
+  end in
+  if to_bool b then failwith msg else ()

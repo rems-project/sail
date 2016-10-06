@@ -1,6 +1,7 @@
 open import Pervasives_extra
 
-type bit = O | I | Undef
+(* this is here to avoid circular dependencies when Sail_values imports Arch.lem *)
+type bitU = O | I | Undef
 
 (* element list * start * has increasing direction *)
 type vector 'a = Vector of list 'a * integer * bool
@@ -11,11 +12,6 @@ let rec nth xs (n : integer) =
   | _ -> failwith "nth applied to empty list"
   end
 
-let to_bool = function
-  | O -> false
-  | I  -> true
-  | Undef -> failwith "to_bool applied to Undef"
-  end
 
 let get_start (Vector _ s _) = s
 let length (Vector bs _ _) = integerFromNat (length bs)

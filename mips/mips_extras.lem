@@ -1,6 +1,7 @@
 open import Pervasives
 open import Interp_ast
 open import Interp_interface
+open import Sail_impl_base
 open import Interp_inter_imp
 import Set_extra
 

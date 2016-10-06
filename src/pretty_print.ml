@@ -2079,7 +2079,7 @@ let doc_id_lem_type (Id_aux(i,_)) =
 
 let doc_id_lem_ctor (Id_aux(i,_)) =
   match i with
-  | Id("bit") -> string "bit" 
+  | Id("bit") -> string "bitU" 
   | Id("int") -> string "integer"
   | Id("nat") -> string "integer"
   | Id("Some") -> string "Just"
@@ -2145,7 +2145,9 @@ let doc_typ_lem, doc_atomic_typ_lem =
          if atyp_needed then parens tpp else tpp
       | _ -> atomic_typ atyp_needed regtypes ty 
     and atomic_typ atyp_needed regtypes ((Typ_aux (t, _)) as ty) = match t with
-      | Typ_id (Id_aux (Id "bool",_)) -> string "bit"
+      | Typ_id (Id_aux (Id "bool",_)) -> string "bitU"
+      | Typ_id (Id_aux (Id "boolean",_)) -> string "bitU"
+      | Typ_id (Id_aux (Id "bit",_)) -> string "bitU"
       | Typ_id ((Id_aux (Id name,_)) as id) ->
          if List.exists ((=) name) regtypes
          then string "register"
@@ -3037,7 +3039,7 @@ let reg_decls (Defs defs) =
       (separate space [string "type";string "regstate";equals])
       (anglebars
          ((separate_map (semi ^^ break 1))
-            (fun (reg,_) -> separate space [string (String.lowercase reg);colon;string "vector bit"])
+            (fun (reg,_) -> separate space [string (String.lowercase reg);colon;string "vector bitU"])
             regs
          )) in
 

@@ -1,5 +1,6 @@
 open Printf ;;
 open Interp_ast ;;
+open Sail_impl_base ;;
 open Interp_utilities ;;
 open Interp_interface ;;
 open Interp_inter_imp ;;
@@ -86,10 +87,10 @@ let bits_lifted_homogenous_of_bit_lifteds (bls:bit_lifted list) : bits_lifted_ho
   bits_lifted_homogenous_of_bit_lifteds' bls' acc0 
 
 (*let byte_it_lifted_to_string = function
-  | Bitl_zero -> "0"
-  | Bitl_one ->  "1"
-  | Bitl_undef -> "u"
-  | Bitl_unknown -> "?"
+  | BL0 -> "0"
+  | BL1 ->  "1"
+  | BLUndef -> "u"
+  | BLUnknown -> "?"
 *)
 
 let bit_lifted_to_string = function
@@ -103,7 +104,7 @@ let hex_int_to_string i =
 
 let bytes_lifted_homogenous_to_string = function
   | Bitslh_concrete bs -> 
-      let i = to_int (Interp_interface.integer_of_bit_list bs) in
+      let i = to_int (Sail_impl_base.integer_of_bit_list bs) in
       hex_int_to_string i
   | Bitslh_undef -> "uu"
   | Bitslh_unknown -> "??"
@@ -126,7 +127,7 @@ print as lifted hex, otherwise print as lifted bits *)
 let bit_lifteds_to_string (bls: bit_lifted list) (show_length_and_start:bool) (starto: int option) (abbreviate_zero_to_nine: bool) =  
   let l = List.length bls in
   if l mod 8 = 0 then  (*  if List.mem l [8;16;32;64;128] then *)
-    let bytesl = List.map (fun (Byte_lifted bs) -> bs) (Interp_interface.byte_lifteds_of_bit_lifteds bls) in
+    let bytesl = List.map (fun (Byte_lifted bs) -> bs) (Sail_impl_base.byte_lifteds_of_bit_lifteds bls) in
     let byteslhos = List.map bits_lifted_homogenous_of_bit_lifteds bytesl in
     match maybe_all byteslhos with 
     | None -> (* print as bitvector after all *)
@@ -134,7 +135,7 @@ let bit_lifteds_to_string (bls: bit_lifted list) (show_length_and_start:bool) (s
     | Some (byteslhs: bits_lifted_homogenous list) -> 
         (* if abbreviate_zero_to_nine, all bytes are concrete, and the number is <=9, just print that *)  
         (*   (note that that doesn't print the length or start - it's appropriate only for memory values, where we typically have an explicit footprint also printed *)
-        let nos = List.rev_map (function blh -> match blh with | Bitslh_concrete bs -> Some (Interp_interface.nat_of_bit_list bs) | Bitslh_undef -> None | Bitslh_unknown -> None) byteslhs in 
+        let nos = List.rev_map (function blh -> match blh with | Bitslh_concrete bs -> Some (Sail_impl_base.nat_of_bit_list bs) | Bitslh_undef -> None | Bitslh_unknown -> None) byteslhs in 
         let (lsb,msbs) = ((List.hd nos), List.tl nos) in
         match (abbreviate_zero_to_nine, List.for_all (fun no -> no=Some 0) msbs, lsb) with 
         | (true, true, Some n) when n <= 9 -> 
@@ -256,7 +257,7 @@ let dir_to_string = function
   | D_decreasing -> "dec"
 
 let reg_name_to_string = function
-  | Reg0(s,start,size,d) -> s (*^ "(" ^ (string_of_int start) ^ ", " ^ (string_of_int size) ^ ", " ^ (dir_to_string d) ^ ")"*)
+  | Reg(s,start,size,d) -> s (*^ "(" ^ (string_of_int start) ^ ", " ^ (string_of_int size) ^ ", " ^ (dir_to_string d) ^ ")"*)
   | Reg_slice(s,start,dir,(first,second)) -> 
     let first,second = 
       match dir with

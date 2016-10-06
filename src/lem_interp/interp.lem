@@ -7,6 +7,7 @@ open import Show_extra (* for 'show' to convert nat to string) *)
 open import String_extra (* for chr *)
 import Assert_extra (*For failwith when partiality is known to be unreachable*)
 
+open import Sail_impl_base
 open import Interp_ast
 open import Interp_utilities
 open import Instruction_extractor

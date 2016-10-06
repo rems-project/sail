@@ -2,7 +2,7 @@ open import Interp_ast
 open import Interp_utilities
 open import Pervasives
 
-type instr_parm_typ = 
+type instr_param_typ = 
 | IBit
 | IBitvector of maybe nat
 | IRange of maybe nat
@@ -10,7 +10,7 @@ type instr_parm_typ =
 | IOther
 
 type instruction_form = 
-|  Instr_form of string * list (string * instr_parm_typ) * list base_effect
+|  Instr_form of string * list (string * instr_param_typ) * list base_effect
 |  Skipped 
 
 val extract_instructions : string -> defs tannot -> list instruction_form

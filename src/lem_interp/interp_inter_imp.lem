@@ -2,10 +2,11 @@ import Interp
 import Interp_lib
 import Instruction_extractor
 import Set_extra
-open import Interp_ast
-open import Interp_interface
 open import Pervasives
 open import Assert_extra
+open import Interp_ast
+open import Sail_impl_base
+open import Interp_interface
 
 val intern_reg_value : register_value -> Interp.value
 val intern_mem_value : interp_mode -> direction -> memory_value -> Interp.value
@@ -126,7 +127,7 @@ let intern_ifield_value direction v =
 let num_to_bits size kind num =
 (* num_to_bits needed in src_power_get/trans_sail.gen - 
    rather than reengineer the generation, we include a wrapper here *) 
-  Interp_interface.bit_list_of_integer size num
+  Sail_impl_base.bit_list_of_integer size num
 
 let extern_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
   match d with
@@ -750,7 +751,7 @@ let rec interp_to_outcome mode context thunk =
             else Error "Memory address for write is not 64 bits"
           | _ -> Error ("Memory function " ^ i ^ " to signal impending write, not found") end, lm)
         | Interp.Write_memv (Id_aux (Id i) _) address_val write_val ->
-          (match List.lookup i mem_write_vals with
+           (match List.lookup i mem_write_vals with
             | (Just (MV parmf return)) -> 
               let (value, v_tracking) = 
                 match (Interp.detaint write_val) with
@@ -820,6 +821,52 @@ let interp mode (IState interp_state context) =
   match interp_to_outcome mode context (fun _ -> Interp.resume mode.internal_mode interp_state Nothing) with
     | (o,_) -> o
 end 
+
+val state_to_outcome_s : forall 'v. interp_mode -> instruction_state -> Sail_impl_base.outcome_s instruction_state unit unit
+val outcome_to_outcome : interp_mode -> Interp_interface.outcome -> Sail_impl_base.outcome instruction_state unit unit
+let rec outcome_to_outcome mode = function
+  | Interp_interface.Read_mem rk addr size _ k ->
+     Sail_impl_base.Read_mem (rk,addr,size) (fun v -> state_to_outcome_s mode (k v))
+  | Interp_interface.Write_mem rk addr size _ mv _ k ->
+     failwith "Write_mem not supported anymore"
+  | Interp_interface.Write_ea wk addr size _ state ->
+     Sail_impl_base.Write_ea (wk,addr,size) (state_to_outcome_s mode state)
+  | Interp_interface.Write_memv _ mv _ k ->
+     Sail_impl_base.Write_memv mv (fun v -> state_to_outcome_s mode (k v))
+  | Interp_interface.Barrier bk state ->
+     Sail_impl_base.Barrier bk (state_to_outcome_s mode state)
+  | Interp_interface.Footprint state ->
+     Sail_impl_base.Footprint (state_to_outcome_s mode state)
+  | Interp_interface.Read_reg r k ->
+     Sail_impl_base.Read_reg r (fun v -> state_to_outcome_s mode (k v))
+  | Interp_interface.Write_reg r rv state ->
+     Sail_impl_base.Write_reg (r,rv) (state_to_outcome_s mode state)
+  | Interp_interface.Nondet_choice _ _ ->
+     failwith "Nondet_choice not supported yet"
+  | Interp_interface.Escape maybestate _ ->
+     Sail_impl_base.Escape (Maybe.map (state_to_outcome_s mode) maybestate)
+  | Interp_interface.Fail maybestring ->
+     Sail_impl_base.Fail maybestring
+  | Interp_interface.Internal maybestring maybeprint state ->
+     Sail_impl_base.Internal (maybestring,maybeprint) (state_to_outcome_s mode state)
+  | Interp_interface.Analysis_non_det _ _ ->
+     failwith "Analysis_non_det outcome returned"
+  | Interp_interface.Done ->
+     Sail_impl_base.Done ()
+  | Interp_interface.Error message ->
+     failwith ("Interpreter error: " ^ message)
+end
+
+and state_to_outcome_s mode state = 
+  let next_outcome' = interp mode state in
+  let next_outcome = outcome_to_outcome mode next_outcome' in
+  (next_outcome, Just state)
+
+
+let initial_outcome_s_of_instruction context mode instruction =
+  let state = instruction_to_istate context instruction in
+  let initial_outcome' = interp mode state in
+  (outcome_to_outcome mode initial_outcome',Just state)
 
 
 (*Update slice potentially here*)

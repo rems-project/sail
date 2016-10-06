@@ -1,49 +1,47 @@
 open import Pervasives
+open import Sail_impl_base
 open import Vector
-open import State
 open import Sail_values
+open import Prompt
 
-(*
-let rec countLeadingZeros_helper bits =  
-((match bits with
-    | (Interp.V_lit (L_aux( L_zero, _)))::bits -> 
-      let (Interp.V_lit (L_aux( (L_num n), loc))) = (countLeadingZeros_helper bits) in
-      Interp.V_lit (L_aux( (L_num (Nat_big_num.add n(Nat_big_num.of_int 1))), loc))
-    | _ -> Interp.V_lit (L_aux( (L_num(Nat_big_num.of_int 0)), Interp_ast.Unknown))
-))
-let rec countLeadingZeros (Interp.V_tuple v) = ((match v with
-  | [Interp.V_track( v, r);Interp.V_track( v2, r2)] -> 
-    Interp.taint (countLeadingZeros (Interp.V_tuple [v;v2])) ( Pset.(union) r r2)
-  | [Interp.V_track( v, r);v2] -> Interp.taint (countLeadingZeros (Interp.V_tuple [v;v2])) r
-  | [v;Interp.V_track( v2, r2)] -> Interp.taint (countLeadingZeros (Interp.V_tuple [v;v2])) r2
-  | [Interp.V_unknown;_] -> Interp.V_unknown
-  | [_;Interp.V_unknown] -> Interp.V_unknown
-  | [Interp.V_vector( _, _, bits);Interp.V_lit (L_aux( (L_num n), _))] -> 
-    countLeadingZeros_helper (snd (Lem_list.split_at (abs (Nat_big_num.to_int n)) bits))
-))
- *)
+val MEMr         : forall 'e. (vector bitU * integer) -> M 'e (vector bitU)
+val MEMr_reserve : forall 'e. (vector bitU * integer) -> M 'e (vector bitU)
 
-let MEMr (addr,l) = read_memory (unsigned addr) l
-let MEMr_reserve (addr,l) = read_memory (unsigned addr) l
+let MEMr (addr,size) = read_memory Read_plain addr size
+let MEMr_reserve (addr,size) = read_memory Read_reserve addr size
 
-let MEMw_EA (addr,l) = write_writeEA (unsigned addr) l
-let MEMw_EA_cond (addr,l) = write_writeEA (unsigned addr) l
-                                        
-let MEMw (addr,l,value) = write_memory (unsigned addr) l value
-let MEMw_conditional (addr,l,value) = write_memory (unsigned addr) l value >> return I
 
-let I_Sync () = return ()
-let H_Sync () = return ()
-let LW_Sync () = return ()
-let EIEIO_Sync () = return ()
+val MEMw_EA      : forall 'e. (vector bitU * integer) -> M 'e unit
+val MEMr_EA_cond : forall 'e. (vector bitU * integer) -> M 'e unit
+                                                           
+let MEMw_EA (addr,size) = write_memory_ea Write_plain addr size
+let MEMw_EA_cond (addr,size) = write_memory_ea Write_conditional addr size
 
-let recalculate_dependency () = return ()
+
+val MEMw             : forall 'e. (vector bitU * integer * vector bitU) -> M 'e unit
+val MEMw_conditional : forall 'e. (vector bitU * integer * vector bitU) -> M 'e bitU
+
+let MEMw (_,_,value) = write_memory_val value >>= fun _ -> return ()
+let MEMw_conditional (_,_,value) = write_memory_val value >>= fun b -> return (bool_to_bit b)
+
+
+val I_Sync     : forall 'e unit -> M 'e unit
+val H_Sync     : forall 'e unit -> M 'e unit
+val LW_Sync    : forall 'e unit -> M 'e unit
+val EIEIO_Sync : forall 'e unit -> M 'e unit
+
+let I_Sync ()     = barrier Isync
+let H_Sync ()     = barrier Sync
+let LW_Sync ()    = barrier LwSync
+let EIEIO_Sync () = barrier Eieio
+
+let recalculate_dependency () = footprint
 
 let trap () = exit "error"
 (* this needs to change, but for that we'd have to make the type checker know about trap 
  * as an effect *)
 
-val countLeadingZeroes : vector bit * integer -> integer
+val countLeadingZeroes : vector bitU * integer -> integer
 let countLeadingZeroes (Vector bits _ _ ,n)  = 
   let (_,bits) = List.splitAt (natFromInteger n) bits in
   integerFromNat (List.length (takeWhile ((=) O) bits))

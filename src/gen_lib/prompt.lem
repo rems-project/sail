@@ -1,251 +1,134 @@
 open import Pervasives_extra
+open import Sail_impl_base
 open import Vector
+open import Sail_values
 open import Arch
 
-let compose f g x = f (g x)
-
-type end_flag =
-  | E_big_endian
-  | E_little_endian
-
-type direction = 
-  | D_increasing
-  | D_decreasing
-
-type register_value = <| 
-    rv_bits: list bit (* MSB first, smallest index number *); 
-    rv_dir: direction; 
-    rv_start: nat ;
-    rv_start_internal: nat; 
-    (*when dir is increasing, rv_start = rv_start_internal. 
-      Otherwise, tells interpreter how to reconstruct a proper decreasing value*)
-    |>
-
-type byte = list bit (* of length 8 *)  (*MSB first everywhere*)
-
-type address = integer
-type address_lifted = address
-
-type memory_value = list byte
-(* the list is of length >=1 *)
-(* for both big-endian (Power) and little-endian (ARM), the head of the
-     list is the byte stored at the lowest address *)
-(* for big-endian Power the head of the list is the most-significant
-   byte, in both the interpreter and machineDef* code. *)
-(* For little-endian ARM, the head of the list is the
-   least-significant byte in machineDef* code and the
-   most-significant byte in interpreter code, with the switch over
-   (a list-reverse) being done just inside the interpreter interface*)
-(* In other words, in the machineDef* code the lowest-address byte is first,
-   and in the interpreter code the most-significant byte is first *)
-
-type opcode = Opcode of list byte (* of length 4 *)
-
-type read_kind =
-  (* common reads *)
-  | Read_plain
-  (* Power reads *)
-  | Read_reserve
-  (* AArch64 reads *)
-  | Read_acquire | Read_exclusive | Read_exclusive_acquire | Read_stream
-
-type write_kind =
-  (* common writes *)
-  | Write_plain
-  (* Power writes *)
-  | Write_conditional
-  (* AArch64 writes *)
-  | Write_release | Write_exclusive | Write_exclusive_release
-
-type barrier_kind =
-  (* Power barriers *)
-  | Sync | LwSync | Eieio | Isync
-  (* AArch64 barriers *)
-  | DMB | DMB_ST | DMB_LD | DSB | DSB_ST | DSB_LD | ISB 
-
-type slice = (nat * nat)
-
-type reg_name = 
-  (* Name of the register, accessing the entire register, the start and size of this register, 
-   * and its direction *)
-  | Reg of string * nat * nat * direction
-                                  
-  (* Name of the register, accessing from the bit indexed by the first
-   * to the bit indexed by the second integer of the slice, inclusive. For
-   * machineDef* the first is a smaller number or equal to the second.  *)
-  | Reg_slice of string * nat * direction * slice 
-                                              
-  (* Name of the register, start and direction, and name of the field of the register
-   * accessed. The slice specifies where this field is in the register*)
-  | Reg_field of string * nat * direction * string * slice 
-
-  (* The first four components are as in Reg_field; the final slice
-   * specifies a part of the field, indexed w.r.t. the register as a whole *)
-  | Reg_f_slice of string * nat * direction * string * slice * slice 
-
-type outcome 'e 'a =
-  (* Request to read memory, value is location to read followed by registers that location depended 
-   * on when mode.track_values, integer is size to read, followed by registers that were used in 
-   * computing that size *)
-  (* address_lifted should go away: doesn't make sense to allow for undefined bits in addresses *)
-  | Read_mem of read_kind * address_lifted * nat * (memory_value -> outcome 'e 'a)
-                    
-  (* Request to write memory, first value and dependent registers is location, second is the value 
-   * to write *)
-  | Write_mem of write_kind * address_lifted * nat * memory_value * (bool -> outcome 'e 'a)
-                                             
-  (* Tell the system a write is imminent, at address lifted tanted by register list, of size nat *)
-  | Write_ea of write_kind * address_lifted * nat * outcome 'e 'a
-                                                                              
-  (* Request to write memory at last signaled address. Memory value should be 8* the size given in 
-   * ea signal *)
-  | Write_memv of memory_value * (bool -> outcome 'e 'a)
-                                                           
-  (* Request a memory barrier *)
-  (* outcome 'a used to be (unit -> outcome 'a), but since the code is purely functional we don't 
-   * need that *)
-  | Barrier of barrier_kind * outcome 'e 'a
-                                
-  (* Tell the system to dynamically recalculate dependency footprint *)
-  | Footprint of outcome 'e 'a
-                   
-  (* Request to read register *)
-  | Read_reg of reg_name * (register_value -> outcome 'e 'a)
-                             
-  (* Request to write register *)
-  | Write_reg of reg_name * register_value * outcome 'e 'a
-                                               
-  (* List of instruction states to be run in parrallel, any order permitted.
-     Expects concurrency model to choose an order: a permutation of the original list *)
-  | Nondet_choice of unit
-                                                
-  (* Escape the current instruction, for traps, some sys calls, interrupts, etc. Can optionally 
-   * provide a handler. *)
-  | Escape of 'e (* currently without handlers *) (* of maybe (unit -> outcome 'a) *)
-
-  (* Stop for incremental stepping, function can be used to display function call data *)
-  | Done of 'a
-
-type M 'e 'a = outcome 'e 'a
-
-val return : forall 'e 'a. 'a -> M 'e 'a
+val return : forall 's 'e 'a. 'a -> outcome 's 'e 'a
 let return a = Done a
 
-val (>>=) : forall 'e 'a 'b. M 'e 'a -> ('a -> M 'e 'b) -> M 'e 'b
-let rec (>>=) m f = match m with
-  | Done a -> f a
-  | Read_mem rk addr sz k ->    Read_mem rk addr sz    (fun v -> (k v) >>= f)
-  | Write_mem wk addr sz v k -> Write_mem wk addr sz v (fun b -> (k b) >>= f)
-  | Write_ea wk addr sz k ->    Write_ea wk addr sz    (k >>= f)
-  | Write_memv v k ->           Write_memv v           (fun b -> (k b) >>= f)
-  | Barrier bk k ->             Barrier bk             (k >>= f)
-  | Footprint k ->              Footprint              (k >>= f)
-  | Read_reg reg k ->           Read_reg reg           (fun v -> (k v) >>= f)
-  | Write_reg reg v k ->        Write_reg reg v        (k >>= f)
-  | Nondet_choice () ->         Nondet_choice ()
-  | Escape e ->                 Escape e
-  end
+val bind : forall 's 'e 'a 'b. outcome 's 'e 'a -> ('a -> outcome 's 'e 'b) -> outcome 's 'e 'b
+let rec bind m f = match m with
+  | Done a ->              f a 
+  | Read_mem descr k ->    Read_mem descr   (fun v -> let (o,opt) = k v in (bind o f,opt))
+  | Read_reg descr k ->    Read_reg descr   (fun v -> let (o,opt) = k v in (bind o f,opt))
+  | Write_memv descr k ->  Write_memv descr (fun v -> let (o,opt) = k v in (bind o f,opt))
+  | Write_ea descr o_s ->  Write_ea descr   (let (o,opt) = o_s  in (bind o f,opt))
+  | Barrier descr o_s ->   Barrier descr    (let (o,opt) = o_s  in (bind o f,opt))
+  | Footprint o_s ->       Footprint        (let (o,opt) = o_s  in (bind o f,opt))
+  | Write_reg descr o_s -> Write_reg descr  (let (o,opt) = o_s  in (bind o f,opt))
+  | Escape o_s  ->         Escape o_s
+end
 
+
+type M 'e 'a = Sail_impl_base.outcome unit 'e 'a
+
+let (>>=) = bind
 val (>>) : forall 'e 'b. M 'e unit -> M 'e 'b -> M 'e 'b
 let (>>) m n = m >>= fun _ -> n
 
 val exit : forall 'a 'e. 'e -> M 'e 'a
-let exit = Escape
+let exit e = Escape (Just (return e,Nothing))
 
-val byte_chunks : forall 'a. nat -> list 'a -> list (list 'a)
-let rec byte_chunks n list = match (n,list) with
-  | (0,_) -> []
-  | (n+1, a::b::c::d::e::f::g::h::rest) -> [a;b;c;d;e;f;g;h] :: byte_chunks n rest
-  | _ -> failwith "byte_chunks not given enough bits"
-end
-
-val bitvFromBytes : list byte -> vector bit
-let bitvFromBytes v = Vector (foldl (++) [] v) 0 defaultDir
-
-let dir is_inc = if is_inc then D_increasing else D_decreasing
-
-val bitvFromRegisterValue : register_value -> vector bit
-let bitvFromRegisterValue v =
-  Vector (v.rv_bits) (integerFromNat (v.rv_start)) (v.rv_dir = D_increasing)
-
-val registerValueFromBitv : vector bit -> register -> register_value
-let registerValueFromBitv (Vector bits start is_inc) reg = 
-  let start = natFromInteger start in
-  <| rv_bits = bits;
-     rv_dir = dir is_inc;
-     rv_start_internal = start;
-     rv_start = start+1 - (natFromInteger (length_reg reg)) |>
-
-val read_memory : forall 'e. read_kind -> integer -> integer -> M 'e (vector bit)
+val read_memory : forall 'e. read_kind -> vector bitU -> integer -> M 'e (vector bitU)
 let read_memory rk addr sz =
+  let addr = address_lifted_of_bitv addr in
   let sz = natFromInteger sz in
-  Read_mem rk addr sz (compose Done bitvFromBytes)
+  let k memory_value =
+    let bitv = bitv_of_byte_lifteds memory_value in
+    (Done bitv,Nothing) in
+  Read_mem (rk,addr,sz) k
 
-val write_memory : forall 'e. write_kind -> integer -> integer -> vector bit -> M 'e bool
-let write_memory wk addr sz (Vector v _ _) =
+val write_memory_ea : forall 'e. write_kind -> vector bitU -> integer  -> M 'e unit
+let write_memory_ea wk addr sz =
+  let addr = address_lifted_of_bitv addr in
   let sz = natFromInteger sz in
-  Write_mem wk addr sz (byte_chunks sz v) Done
+  Write_ea (wk,addr,sz) (Done (),Nothing)
 
-val read_reg_range : forall 'e. register -> (integer * integer) -> M 'e (vector bit)
-let read_reg_range reg (i,j) =
+val write_memory_val : forall 'e. vector bitU -> M 'e bool
+let write_memory_val v =
+  let v = byte_lifteds_of_bitv v in
+  let k successful = (return successful,Nothing) in
+  Write_memv v k
+
+
+val read_reg_range : forall 'e. register -> integer -> integer -> M 'e (vector bitU)
+let read_reg_range reg i j =
   let (i,j) = (natFromInteger i,natFromInteger j) in
   let start = natFromInteger (start_index_reg reg) in
   let reg = Reg_slice (register_to_string reg) start (dir defaultDir) (i,j) in
-  Read_reg reg (compose Done bitvFromRegisterValue)
+  let k register_value =
+    let v = bitvFromRegisterValue register_value in
+    (Done v,Nothing) in
+  Read_reg reg k
 
-val write_reg_range : forall 'e. register -> (integer * integer) -> vector bit -> M 'e unit
-let write_reg_range reg (i,j) v =
-  let rv = registerValueFromBitv v reg in
-  let start = natFromInteger (start_index_reg reg) in
-  let (i,j) = (natFromInteger i,natFromInteger j) in
-  let reg = Reg_slice (register_to_string reg) start (dir defaultDir) (i,j) in
-  Write_reg reg rv (Done ())
-
-val read_reg_bit : forall 'e. register -> integer -> M 'e bit
+val read_reg_bit : forall 'e. register -> integer -> M 'e bitU
 let read_reg_bit reg i = 
-  let i = natFromInteger i in
-  let start = natFromInteger (start_index_reg reg) in
-  let reg = Reg_slice (register_to_string reg) start (dir defaultDir) (i,i) in
-  Read_reg reg (fun v -> Done (access (bitvFromRegisterValue v) 1))
+  read_reg_range reg i i >>= fun v -> return (access v i)
 
-val write_reg_bit : forall 'e. register -> integer -> bit -> M 'e unit
-let write_reg_bit reg i bit = write_reg_range reg (i,i) (Vector [bit] 0 true)
-
-val read_reg : forall 'e. register -> M 'e (vector bit)
+val read_reg : forall 'e. register -> M 'e (vector bitU)
 let read_reg reg =
   let start = natFromInteger (start_index_reg reg) in
   let sz = natFromInteger (length_reg reg) in
   let reg = Reg (register_to_string reg) start sz (dir defaultDir) in
-  Read_reg reg (compose Done bitvFromRegisterValue)
+  let k register_value =
+    let v = bitvFromRegisterValue register_value in
+    (Done v,Nothing) in
+  Read_reg reg k
 
-val write_reg : forall 'e. register -> vector bit -> M 'e unit
-let write_reg reg v =
-  let rv = registerValueFromBitv v reg in
-  let start = natFromInteger (start_index_reg reg) in
-  let sz = natFromInteger (length_reg reg) in
-  let reg = Reg (register_to_string reg) start sz (dir defaultDir) in
-  Write_reg reg rv (Done ())
-
-val read_reg_field : forall 'e. register -> register_field -> M 'e (vector bit)
+val read_reg_field : forall 'e. register -> register_field -> M 'e (vector bitU)
 let read_reg_field reg rfield = 
   let (i,j) =
     let (i,j) = field_indices rfield in
     (natFromInteger i,natFromInteger j) in
   let start = natFromInteger (start_index_reg reg) in
   let reg = Reg_slice (register_to_string reg) start (dir defaultDir) (i,j) in
-  Read_reg reg (compose Done bitvFromRegisterValue)
+  let k register_value =
+    let v = bitvFromRegisterValue register_value in
+    (Done v,Nothing) in
+  Read_reg reg k
 
-val write_reg_field : forall 'e. register -> register_field -> vector bit -> M 'e unit
-let write_reg_field reg rfield = write_reg_range reg (field_indices rfield)
-
-val read_reg_bitfield : forall 'e. register -> register_bitfield -> M 'e bit
+val read_reg_bitfield : forall 'e. register -> register_bitfield -> M 'e bitU
 let read_reg_bitfield reg rbit = read_reg_bit reg (field_index_bit rbit)
 
-val write_reg_bitfield : forall 'e. register -> register_bitfield -> bit -> M 'e unit
+
+
+val write_reg_range : forall 'e. register -> integer -> integer -> vector bitU -> M 'e unit
+let write_reg_range reg i j v =
+  let rv = registerValueFromBitv v reg in
+  let start = natFromInteger (start_index_reg reg) in
+  let (i,j) = (natFromInteger i,natFromInteger j) in
+  let reg = Reg_slice (register_to_string reg) start (dir defaultDir) (i,j) in
+  Write_reg (reg,rv) (Done (),Nothing)
+
+val write_reg_bit : forall 'e. register -> integer -> bitU -> M 'e unit
+let write_reg_bit reg i bit = write_reg_range reg i i (Vector [bit] 0 true)
+
+val write_reg : forall 'e. register -> vector bitU -> M 'e unit
+let write_reg reg v =
+  let rv = registerValueFromBitv v reg in
+  let start = natFromInteger (start_index_reg reg) in
+  let sz = natFromInteger (length_reg reg) in
+  let reg = Reg (register_to_string reg) start sz (dir defaultDir) in
+  Write_reg (reg,rv) (Done (),Nothing)
+
+val write_reg_field : forall 'e. register -> register_field -> vector bitU -> M 'e unit
+let write_reg_field reg rfield = uncurry (write_reg_range reg) (field_indices rfield)
+
+val write_reg_bitfield : forall 'e. register -> register_bitfield -> bitU -> M 'e unit
 let write_reg_bitfield reg rbit = write_reg_bit reg (field_index_bit rbit)
 
-val foreachM_inc : forall 'e 'vars. (nat * nat * nat) -> 'vars ->
-                  (nat -> 'vars -> M 'e 'vars) -> M 'e 'vars
+
+val barrier : forall 'e. barrier_kind -> M 'e unit
+let barrier bk = Barrier bk (Done (), Nothing)
+
+
+val footprint : forall 'e. M 'e unit
+let footprint = Footprint (Done (),Nothing)
+
+
+val foreachM_inc : forall 'e 'vars. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> M 'e 'vars) -> M 'e 'vars
 let rec foreachM_inc (i,stop,by) vars body = 
   if i <= stop
   then
@@ -254,8 +137,8 @@ let rec foreachM_inc (i,stop,by) vars body =
   else return vars
 
 
-val foreachM_dec : forall 'e 'vars. (nat * nat * nat) -> 'vars ->
-                  (nat -> 'vars -> M 'e 'vars) -> M 'e 'vars
+val foreachM_dec : forall 'e 'vars. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> M 'e 'vars) -> M 'e 'vars
 let rec foreachM_dec (i,stop,by) vars body = 
   if i >= stop
   then

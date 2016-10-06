@@ -1,5 +1,6 @@
 open Printf
 open Interp_ast
+open Sail_impl_base
 open Interp_interface
 open Interp_inter_imp
 
@@ -107,22 +108,22 @@ let unit_lit = (L_aux(L_unit,Interp_ast.Unknown))
 
 let rec perform_action ((reg, mem, tagmem) as env) = function
  (* registers *)
- | Read_reg0(Reg0(id,_,_,_), _) -> (Some(Reg.find id reg), env)
- | Read_reg0(Reg_slice(id, _, _, range), _)
- | Read_reg0(Reg_field(id, _, _, _, range), _) -> (Some(slice (Reg.find id reg) range), env)
- | Read_reg0(Reg_f_slice(id, _,_,_, range, mini_range), _) ->
+ | Read_reg1(Reg(id,_,_,_), _) -> (Some(Reg.find id reg), env)
+ | Read_reg1(Reg_slice(id, _, _, range), _)
+ | Read_reg1(Reg_field(id, _, _, _, range), _) -> (Some(slice (Reg.find id reg) range), env)
+ | Read_reg1(Reg_f_slice(id, _,_,_, range, mini_range), _) ->
    (Some(slice (slice (Reg.find id reg) range) mini_range),env)
- | Write_reg0(Reg0(id,_,_,_), value, _) -> (None, (Reg.add id value reg,mem,tagmem))
- | Write_reg0((Reg_slice(id,_,_,range) as reg_n),value, _) 
- | Write_reg0((Reg_field(id,_,_,_,range) as reg_n),value,_)->
+ | Write_reg1(Reg(id,_,_,_), value, _) -> (None, (Reg.add id value reg,mem,tagmem))
+ | Write_reg1((Reg_slice(id,_,_,range) as reg_n),value, _) 
+ | Write_reg1((Reg_field(id,_,_,_,range) as reg_n),value,_)->
      let old_val = Reg.find id reg in
      let new_val = fupdate_slice reg_n old_val value range in
      (None, (Reg.add id new_val reg, mem,tagmem))
- | Write_reg0((Reg_f_slice(id,_,_,_,range,mini_range) as reg_n),value,_) ->
+ | Write_reg1((Reg_f_slice(id,_,_,_,range,mini_range) as reg_n),value,_) ->
    let old_val = Reg.find id reg in
    let new_val = fupdate_slice reg_n old_val value (combine_slices range mini_range) in
    (None,(Reg.add id new_val reg,mem,tagmem))
- | Read_mem0(kind,location, length, _,_) ->
+ | Read_mem1(kind,location, length, _,_) ->
    let address = match address_of_address_lifted location with
      | Some a -> a
      | None -> assert false (*TODO remember how to report an error *)in
@@ -160,7 +161,7 @@ let rec perform_action ((reg, mem, tagmem) as env) = function
          | b::bytes -> 
            writing (add location big_num_unit) (length - 1) bytes (Mem.add location b mem) in
      (None,(reg,writing naddress length bytes mem,tagmem)))
- | Write_memv0(Some location, bytes, _, _) ->
+ | Write_memv1(Some location, bytes, _, _) ->
    let address = match address_of_address_lifted location with
      | Some a -> a
      | _ -> failwith "Write address not known" in
@@ -261,20 +262,20 @@ let run
       (green act) lhs (blue arrow) rhs in
   let left = "<-" and right = "->" in
   let rec loop mode env = function
-    | Done ->
+    | Done0 ->
       interactf "%s: %s\n" (grey name) (blue "done");
       (true, mode, !track_dependencies, env)
-    | Error0 s -> 
+    | Error1 s -> 
       errorf "%s: %s: %s\n" (grey name) (red "error") s;
       (false, mode, !track_dependencies, env)
-    | Escape (None, _) ->
+    | Escape0 (None, _) ->
       show "exiting current instruction" "" "" "";
       interactf "%s: %s\n" (grey name) (blue "done");
       (true, mode, !track_dependencies, env)
-    | Fail0 (Some s) ->
+    | Fail1 (Some s) ->
       errorf "%s: %s: %s\n" (grey name) (red "assertion failed") s;
       (false, mode, !track_dependencies, env)
-    | Fail0 None ->
+    | Fail1 None ->
       errorf "%s: %s: %s\n" (grey name) (red "assertion failed") "No message provided";
       (false, mode, !track_dependencies, env)
     | action ->
@@ -290,17 +291,17 @@ let run
           mode in
       let (mode', env', next) =
         (match action with    
-        | Read_reg0(reg,next_thunk) ->
+        | Read_reg1(reg,next_thunk) ->
           (match return with
            | Some(value) -> 
              show "read_reg" (reg_name_to_string reg) right (register_value_to_string value);
              let next = next_thunk value in
              (step next, env', next)
            | None -> assert false)
-        | Write_reg0(reg,value,next) ->
+        | Write_reg1(reg,value,next) ->
           show "write_reg" (reg_name_to_string reg) left (register_value_to_string value);
           (step next, env', next)
-        | Read_mem0(kind, (Address_lifted(location,_)), length, tracking, next_thunk) ->
+        | Read_mem1(kind, (Address_lifted(location,_)), length, tracking, next_thunk) ->
           (match return with
            | Some(value) -> 
              show "read_mem"
@@ -327,26 +328,26 @@ let run
              show "write_mem value depended on" (dependencies_to_string vdeps) "" "";);
           let next = next_thunk true in
           (step next,env',next)
-        | Write_memv0(Some(Address_lifted(location,_)),value,_,next_thunk) ->
+        | Write_memv1(Some(Address_lifted(location,_)),value,_,next_thunk) ->
           show "write_mem value" (memory_value_to_string !default_endian location) left (memory_value_to_string !default_endian value);
           let next = next_thunk true in
           (step next,env',next)
-        | Write_ea0(_,(Address_lifted(location,_)), size,_,next) ->
+        | Write_ea1(_,(Address_lifted(location,_)), size,_,next) ->
           show "write_announce" (memory_value_to_string !default_endian location) left ((string_of_int size) ^ " bytes");
           (step next, env, next)
-        | Barrier0(bkind,next) ->
+        | Barrier1(bkind,next) ->
           show "mem_barrier" "" "" "";
           (step next, env, next)
-        | Internal(None,None, next) ->
+        | Internal0(None,None, next) ->
           show "stepped" "" "" "";
           (step ~force:true next,env',next)
-        | Internal((Some fn),None,next) ->
+        | Internal0((Some fn),None,next) ->
           show "evaluated" fn "" "";
           (step ~force:true next, env',next)
-        | Internal(None,Some vdisp,next) ->
+        | Internal0(None,Some vdisp,next) ->
           show "evaluated" (vdisp ()) "" "";
           (step ~force:true next,env', next)
-        | Internal((Some fn),(Some vdisp),next) ->
+        | Internal0((Some fn),(Some vdisp),next) ->
           show "evaluated" (fn ^ " " ^ (vdisp ())) "" "";
           (step ~force:true next, env', next)
         | Nondet_choice(nondets, next) ->
@@ -369,18 +370,18 @@ let run
               loop mode env' (interp0 (make_mode (mode=Run) !track_dependencies !default_endian) next))
               choose_order (false,mode,!track_dependencies,env'); in
             (step i_state,env',i_state) end
-        | Escape(Some e,_) ->
+        | Escape0(Some e,_) ->
           show "exiting current evaluation" "" "" "";
           step e,env', e
-        | Escape _ -> assert false
-        | Error0 _ -> failwith "Internal error"
-        | Fail0 _ -> failwith "Assertion in program failed"
-        | Done ->
+        | Escape0 _ -> assert false
+        | Error1 _ -> failwith "Internal error"
+        | Fail1 _ -> failwith "Assertion in program failed"
+        | Done0 ->
           show "done evalution" "" "" "";
           assert false
-        | Footprint0 _ -> assert false
-        | Write_ea0 _ -> assert false
-        | Write_memv0 _ -> assert false)
+        | Footprint1 _ -> assert false
+        | Write_ea1 _ -> assert false
+        | Write_memv1 _ -> assert false)
         (*| _ -> assert false*)
       in
       loop mode' env' (Interp_inter_imp.interp0 (make_mode (mode' = Run) !track_dependencies !default_endian) next) in

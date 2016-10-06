@@ -1,31 +1,53 @@
 open import Pervasives
-open import State
+open import Sail_impl_base
+open import Vector
 open import Sail_values
+open import Prompt
 
-let rMem_NORMAL (addr,l) = read_memory (unsigned addr) l
-let rMem_STREAM (addr,l) = read_memory (unsigned addr) l
-let rMem_ORDERED (addr,l) = read_memory (unsigned addr) l
-let rMem_ATOMIC (addr,l) = read_memory (unsigned addr) l
-let rMem_ATOMIC_ORDERED (addr,l) = read_memory (unsigned addr) l
+val rMem_NORMAL         : forall 'e. (vector bitU * integer) -> M 'e (vector bitU)
+val rMem_STREAM         : forall 'e. (vector bitU * integer) -> M 'e (vector bitU)
+val rMem_ORDERED        : forall 'e. (vector bitU * integer) -> M 'e (vector bitU)
+val rMem_ATOMICL        : forall 'e. (vector bitU * integer) -> M 'e (vector bitU)
+val rMem_ATOMIC_ORDERED : forall 'e. (vector bitU * integer) -> M 'e (vector bitU)
 
-let wMem_NORMAL (addr,l,v) = write_memory (unsigned addr) l v
-let wMem_ORDERED (addr,l,v) = write_memory (unsigned addr) l v
-let wMem_ATOMIC (addr,l,v) = write_memory (unsigned addr) l v
-let wMem_ATOMIC_ORDERED (addr,l,v) = write_memory (unsigned addr) l v
+let rMem_NORMAL (addr,size)         = read_memory Read_plain addr size
+let rMem_STREAM (addr,size)         = read_memory Read_stream addr size
+let rMem_ORDERED (addr,size)        = read_memory Read_acquire addr size
+let rMem_ATOMIC (addr,size)         = read_memory Read_exclusive addr size
+let rMem_ATOMIC_ORDERED (addr,size) = read_memory Read_exclusive_acquire addr size
 
-let wMem_Addr_NORMAL (addr,l) = write_writeEA (unsigned addr) l
-let wMem_Addr_ORDERED (addr,l) = write_writeEA (unsigned addr) l
-let wMem_Addr_ATOMIC (addr,l) = write_writeEA (unsigned addr) l
-let wMem_Addr_ATOMIC_ORDERED (addr,l) = write_writeEA (unsigned addr) l
+val wMem_Addr_NORMAL         : forall 'e. (vector bitU * integer) -> M 'e unit
+val wMem_Addr_ORDERED        : forall 'e. (vector bitU * integer) -> M 'e unit
+val wMem_Addr_ATOMIC         : forall 'e. (vector bitU * integer) -> M 'e unit
+val wMem_Addr_ATOMIC_ORDERED : forall 'e. (vector bitU * integer) -> M 'e unit
 
-let wMem_Val_NORMAL (l,v) = read_writeEA () >>= fun (addr,_) -> write_memory addr l v >> return ()
-let wMem_Val_ATOMIC (l,v) = read_writeEA () >>= fun (addr,_) -> write_memory addr l v >> return Vector.O
+let wMem_Addr_NORMAL (addr,size)         = write_memory_ea Write_plain addr size
+let wMem_Addr_ORDERED (addr,size)        = write_memory_ea Write_release addr size
+let wMem_Addr_ATOMIC (addr,size)         = write_memory_ea Write_exclusive addr size
+let wMem_Addr_ATOMIC_ORDERED (addr,size) = write_memory_ea Write_exclusive_release addr size
 
-let DataMemoryBarrier_Reads () = return ()
-let DataMemoryBarrier_Writes () = return ()
-let DataMemoryBarrier_All () = return ()
-let DataSynchronizationBarrier_Reads () = return ()
-let DataSynchronizationBarrier_Writes () = return ()
-let DataSynchronizationBarrier_All () = return ()
-let InstructionSynchronizationBarrier () = return ()
+
+val wMem_Val_NORMAL : forall 'e. (integer * vector bitU) -> M 'e unit
+val wMem_Val_ATOMIC : forall 'e. (integer * vector bitU) -> M 'e bitU
+
+let wMem_Val_NORMAL (_,v) = write_memory_val v >>= fun _ -> return ()
+(* in ARM the status returned is inversed *)
+let wMem_Val_ATOMIC (_,v) = write_memory_val v >>= fun b -> return (if b then O else I)
+
+
+val DataMemoryBarrier_Reads            : forall 'e. unit -> M 'e unit
+val DataMemoryBarrier_Writes           : forall 'e. unit -> M 'e unit
+val DataMemoryBarrier_All              : forall 'e. unit -> M 'e unit
+val DataSynchronizationBarrier_Reads   : forall 'e. unit -> M 'e unit
+val DataSynchronizationBarrier_Writes  : forall 'e. unit -> M 'e unit
+val DataSynchronizationBarrier_All     : forall 'e. unit -> M 'e unit
+val InstructionSynchronizationBarrier  : forall 'e. unit -> M 'e unit
+
+let DataMemoryBarrier_Reads ()           = barrier DMB_LD
+let DataMemoryBarrier_Writes ()          = barrier DMB_ST
+let DataMemoryBarrier_All ()             = barrier DMB
+let DataSynchronizationBarrier_Reads ()  = barrier DSB_LD
+let DataSynchronizationBarrier_Writes () = barrier DSB_ST
+let DataSynchronizationBarrier_All ()    = barrier DSB
+let InstructionSynchronizationBarrier () = barrier Isync
 

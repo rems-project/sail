@@ -1,5 +1,6 @@
 open Interp_utilities;;
 open Interp_ast ;;
+open Sail_impl_base ;;
 open Interp_interface ;;
 
 (*Functions to translate values, registers, or locations strings *)
