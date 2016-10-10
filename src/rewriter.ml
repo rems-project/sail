@@ -792,7 +792,7 @@ let remove_vector_concat_pat pat =
 
   let fresh_name l =
     let current = fresh_name () in
-    Id_aux (Id ("__v" ^ string_of_int current), Parse_ast.Generated l) in
+    Id_aux (Id ("v__" ^ string_of_int current), Parse_ast.Generated l) in
   
   (* expects that P_typ elements have been removed from AST,
      that the length of all vectors involved is known,
@@ -993,7 +993,7 @@ let remove_vector_concat_pat pat =
          if S.mem childid roots_needed then
            (* let _ = print_endline rootid in *)
            S.add rootid roots_needed
-         else if String.length childid >= 3 && String.sub childid 0 2 = String.sub "__v" 0 2 then
+         else if String.length childid >= 3 && String.sub childid 0 2 = String.sub "v__" 0 2 then
            roots_needed
          else
            S.add rootid roots_needed
@@ -1002,7 +1002,7 @@ let remove_vector_concat_pat pat =
       (fun (_,(_,childid)) ->  
        S.mem childid roots_needed ||
          String.length childid < 3 ||
-           not (String.sub childid 0 2 = String.sub "__v" 0 2))
+           not (String.sub childid 0 2 = String.sub "v__" 0 2))
       decls in
 
   let (letbinds,decls) =
@@ -1342,7 +1342,7 @@ let rewrite_defs_remove_blocks =
 
 let fresh_id ((l,_) as annot) =
   let current = fresh_name () in
-  let id = Id_aux (Id ("__w" ^ string_of_int current), Parse_ast.Generated l) in
+  let id = Id_aux (Id ("w__" ^ string_of_int current), Parse_ast.Generated l) in
   let annot_var = (Parse_ast.Generated l,simple_annot (get_type_annot annot)) in
   E_aux (E_id id, annot_var)
         

@@ -25,10 +25,10 @@ let MEMw (_,_,value) = write_memory_val value >>= fun _ -> return ()
 let MEMw_conditional (_,_,value) = write_memory_val value >>= fun b -> return (bool_to_bit b)
 
 
-val I_Sync     : forall 'e unit -> M 'e unit
-val H_Sync     : forall 'e unit -> M 'e unit
-val LW_Sync    : forall 'e unit -> M 'e unit
-val EIEIO_Sync : forall 'e unit -> M 'e unit
+val I_Sync     : forall 'e. unit -> M 'e unit
+val H_Sync     : forall 'e. unit -> M 'e unit
+val LW_Sync    : forall 'e. unit -> M 'e unit
+val EIEIO_Sync : forall 'e. unit -> M 'e unit
 
 let I_Sync ()     = barrier Isync
 let H_Sync ()     = barrier Sync

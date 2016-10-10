@@ -1,10 +1,47 @@
 open import Pervasives_extra
 open import Sail_impl_base
 open import Vector
-open import Arch
 
 type i = integer
 type n = natural
+
+type bitU = O | I | Undef
+
+
+type register_field = string
+type register_field_index = string * (integer * integer) (* name, start and end *)
+
+type register =
+  | Register of string * (* name *)
+                integer * (* length *)
+                integer * (* start index *)
+                bool * (* is increasing *)
+                  list register_field_index
+  | UndefinedRegister of integer (* length *)
+  | RegisterPair of register * register
+
+let dir is_inc = if is_inc then D_increasing else D_decreasing
+
+let name_of_reg (Register name _ _ _ _) = name
+let size_of_reg (Register _ size _ _ _) = size
+let start_of_reg (Register _ _ start _ _) = start
+let is_inc_of_reg (Register _ _ _ is_inc _) = is_inc
+let dir_of_reg (Register _ _ _ is_inc _) = dir is_inc
+
+let size_of_reg_nat reg = natFromInteger (size_of_reg reg)
+let start_of_reg_nat reg = natFromInteger (start_of_reg reg)
+
+
+val register_field_indices : register -> register_field -> integer * integer
+let register_field_indices (Register _ _ _ _ rfields) rfield =
+  match List.lookup rfield rfields with
+  | None -> failwith "Invalid register/register-field combination"
+  | Just indices -> indices
+  end
+
+let register_field_indices_nat reg regfield=
+  let (i,j) = register_field_indices reg regfield in
+  (natFromInteger i,natFromInteger j)
 
 let to_bool = function
   | O -> false
@@ -147,7 +184,7 @@ let rec divide_by_2 bs (i : integer) (n : integer) =
 
 let rec add_one_bit bs co (i : integer) =
   if i < 0 then bs
-  else match (nth bs i,co) with
+  else match (List_extra.nth bs (natFromInteger i),co) with
     | (O,false) -> replace bs (i,I)
     | (O,true)  -> add_one_bit (replace bs (i,I)) true (i-1)
     | (I,false) -> add_one_bit (replace bs (i,O)) true (i-1)
@@ -178,8 +215,6 @@ let to_vec_undef is_inc (len : integer) =
 
 let to_vec_inc_undef = to_vec_undef true
 let to_vec_dec_undef = to_vec_undef false
-
-let get_dir (Vector _ _ ord) = ord
                                     
 let exts (len, vec) = to_vec (get_dir vec) (len,signed vec)
 let extz (len, vec) = to_vec (get_dir vec) (len,unsigned vec)
@@ -495,16 +530,16 @@ let neq_vec_range (l,r) = bitwise_not_bit (eq_vec_range (l,r))
 let neq_range_vec (l,r) = bitwise_not_bit (eq_range_vec (l,r))
 
 
-val make_indexed_vector : forall 'a. list (integer * 'a) -> 'a -> integer -> integer -> vector 'a
-let make_indexed_vector entries default start length =
+val make_indexed_vector : forall 'a. list (integer * 'a) -> 'a -> integer -> integer -> bool -> vector 'a
+let make_indexed_vector entries default start length dir =
   let length = natFromInteger length in
-  Vector (List.foldl replace (replicate length default) entries) start defaultDir
+  Vector (List.foldl replace (replicate length default) entries) start dir
 
 val make_bit_vector_undef : integer -> vector bitU
 let make_bitvector_undef length =
   Vector (replicate (natFromInteger length) Undef) 0 true
 
-let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n)
+(* let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n) *)
 
 let mask (n,Vector bits start dir) =
   let current_size = List.length bits in
@@ -528,7 +563,8 @@ end
 
 val bitv_of_byte_lifteds : list Sail_impl_base.byte_lifted -> vector bitU
 let bitv_of_byte_lifteds v =
-  Vector (foldl (fun x (Byte_lifted y) -> x ++ (List.map bitU_of_bit_lifted y)) [] v) 0 defaultDir
+  Vector (foldl (fun x (Byte_lifted y) -> x ++ (List.map bitU_of_bit_lifted y)) [] v) 0 true
+
 
 val byte_lifteds_of_bitv : vector bitU -> list byte_lifted
 let byte_lifteds_of_bitv (Vector bits length is_inc) = 
@@ -540,26 +576,22 @@ let address_lifted_of_bitv v =
   Address_lifted (byte_lifteds_of_bitv v) Nothing
 
 
-let dir is_inc = if is_inc then D_increasing else D_decreasing
-
-
 val bitvFromRegisterValue : register_value -> vector bitU
 let bitvFromRegisterValue v =
   Vector (List.map bitU_of_bit_lifted v.rv_bits)
-         (integerFromNat (v.rv_start))
+         (integerFromNat v.rv_start_internal)
          (v.rv_dir = D_increasing)
 
 
 val registerValueFromBitv : vector bitU -> register -> register_value
 let registerValueFromBitv (Vector bits start is_inc) reg = 
   let start = natFromInteger start in
-  <| rv_bits = List.map bit_lifted_of_bitU bits;
+  let bit_lifteds =
+    List.map bit_lifted_of_bitU bits in
+  <| rv_bits = bit_lifteds;
      rv_dir = dir is_inc;
      rv_start_internal = start;
-     rv_start = start+1 - (natFromInteger (length_reg reg)) |>
-
-
-
+     rv_start = if is_inc then start else start+1 - (size_of_reg_nat reg) |>
 
 
 class (ToNatural 'a)

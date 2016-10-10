@@ -429,10 +429,16 @@ register (bit[64]) NIA (* next instruction address *)
 register (bit[64]) CIA (* current instruction address *)
 
 
-val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmem } MEMw
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMw
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_reserve
-val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> bool effect { wmem } MEMw_conditional
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> bool effect { wmv } MEMw_conditional
+
+(* announce write address for plain write *)
+val extern forall Nat 'N, 'N IN {1,2,4,8,16}. (bit[64] (*address*), [:'N:] (*size*)) -> unit effect {eamem} MEMw_EA
+
+(* announce write address for write conditional *)
+val extern forall Nat 'N, 'N IN {1,2,4,8,16}. (bit[64] (*address*), [:'N:] (*size*)) -> unit effect {eamem} MEMw_EA_cond
 
 val extern unit -> unit effect { barr } I_Sync
 val extern unit -> unit effect { barr } H_Sync (*corresponds to Sync in barrier kinds*)
@@ -485,12 +491,6 @@ function forall Nat 'n. (bit['n]) zero_or_undef ((bit['n]) x) = {
   };
   out
 }
-
-(* announce write address for plain write *)
-val extern forall Nat 'N, 'N IN {1,2,4,8,16}. (bit[64] (*address*), [:'N:] (*size*)) -> unit effect {eamem} MEMw_EA
-
-(* announce write address for write conditional *)
-val extern forall Nat 'N, 'N IN {1,2,4,8,16}. (bit[64] (*address*), [:'N:] (*size*)) -> unit effect {eamem} MEMw_EA_cond
 
 scattered function unit execute
 scattered typedef ast = const union
@@ -2716,67 +2716,6 @@ function clause execute (Cmpl (BF, L, RA, RB)) =
     if a <_u b then c := 0b100 else if a >_u b then c := 0b010 else c := 0b001;
     CR[4 * BF + 32..4 * BF + 35] := c : [XER.SO]
   }
-
-union ast member (bit[5], bit[5], bit[16]) Twi
-
-function clause decode (0b000011 :
-(bit[5]) TO :
-(bit[5]) RA :
-(bit[16]) SI as instr) =
-  Some(Twi(TO,RA,SI))
-
-function clause execute (Twi (TO, RA, SI)) =
-  {
-    a := EXTS((GPR[RA])[32 .. 63]);
-    if a < EXTS(SI) & TO[0] then trap() else ();
-    if a > EXTS(SI) & TO[1] then trap() else ();
-    if a == EXTS(SI) & TO[2] then trap() else ();
-    if a <_u EXTS(SI) & TO[3] then trap() else ();
-    if a >_u EXTS(SI) & TO[4] then trap() else ()
-  }
-
-union ast member (bit[5], bit[5], bit[5]) Tw
-
-function clause decode (0b011111 :
-(bit[5]) TO :
-(bit[5]) RA :
-(bit[5]) RB :
-0b0000000100 :
-(bit[1]) _ as instr) =
-  Some(Tw(TO,RA,RB))
-
-function clause execute (Tw (TO, RA, RB)) =
-  {
-    a := EXTS((GPR[RA])[32 .. 63]);
-    b := EXTS((GPR[RB])[32 .. 63]);
-    if a < b & TO[0] then trap() else ();
-    if a > b & TO[1] then trap() else ();
-    if a == b & TO[2] then trap() else ();
-    if a <_u b & TO[3] then trap() else ();
-    if a >_u b & TO[4] then trap() else ()
-  }
-
-union ast member (bit[5], bit[5], bit[16]) Tdi
-
-function clause decode (0b000010 :
-(bit[5]) TO :
-(bit[5]) RA :
-(bit[16]) SI as instr) =
-  Some(Tdi(TO,RA,SI))
-
-function clause execute (Tdi (TO, RA, SI)) = ()
-
-union ast member (bit[5], bit[5], bit[5]) Td
-
-function clause decode (0b011111 :
-(bit[5]) TO :
-(bit[5]) RA :
-(bit[5]) RB :
-0b0001000100 :
-(bit[1]) _ as instr) =
-  Some(Td(TO,RA,RB))
-
-function clause execute (Td (TO, RA, RB)) = ()
 
 union ast member (bit[5], bit[5], bit[5], bit[5]) Isel
 

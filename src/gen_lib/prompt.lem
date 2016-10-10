@@ -2,7 +2,6 @@ open import Pervasives_extra
 open import Sail_impl_base
 open import Vector
 open import Sail_values
-open import Arch
 
 val return : forall 's 'e 'a. 'a -> outcome 's 'e 'a
 let return a = Done a
@@ -55,8 +54,8 @@ let write_memory_val v =
 val read_reg_range : forall 'e. register -> integer -> integer -> M 'e (vector bitU)
 let read_reg_range reg i j =
   let (i,j) = (natFromInteger i,natFromInteger j) in
-  let start = natFromInteger (start_index_reg reg) in
-  let reg = Reg_slice (register_to_string reg) start (dir defaultDir) (i,j) in
+  let reg = Reg_slice (name_of_reg reg) (start_of_reg_nat reg) (dir_of_reg reg)
+                      (if i<j then (i,j) else (j,i)) in
   let k register_value =
     let v = bitvFromRegisterValue register_value in
     (Done v,Nothing) in
@@ -68,37 +67,34 @@ let read_reg_bit reg i =
 
 val read_reg : forall 'e. register -> M 'e (vector bitU)
 let read_reg reg =
-  let start = natFromInteger (start_index_reg reg) in
-  let sz = natFromInteger (length_reg reg) in
-  let reg = Reg (register_to_string reg) start sz (dir defaultDir) in
+  let reg = Reg (name_of_reg reg) (start_of_reg_nat reg)
+                (size_of_reg_nat reg) (dir_of_reg reg) in
   let k register_value =
     let v = bitvFromRegisterValue register_value in
     (Done v,Nothing) in
   Read_reg reg k
+
 
 val read_reg_field : forall 'e. register -> register_field -> M 'e (vector bitU)
-let read_reg_field reg rfield = 
-  let (i,j) =
-    let (i,j) = field_indices rfield in
-    (natFromInteger i,natFromInteger j) in
-  let start = natFromInteger (start_index_reg reg) in
-  let reg = Reg_slice (register_to_string reg) start (dir defaultDir) (i,j) in
+let read_reg_field reg regfield = 
+  let (i,j) = register_field_indices_nat reg regfield in
+  let reg = Reg_slice (name_of_reg reg) (start_of_reg_nat reg) (dir_of_reg reg)
+                      (if i<j then (i,j) else (j,i)) in
   let k register_value =
     let v = bitvFromRegisterValue register_value in
     (Done v,Nothing) in
   Read_reg reg k
 
-val read_reg_bitfield : forall 'e. register -> register_bitfield -> M 'e bitU
-let read_reg_bitfield reg rbit = read_reg_bit reg (field_index_bit rbit)
-
+val read_reg_bitfield : forall 'e. register -> register_field -> M 'e bitU
+let read_reg_bitfield reg rbit =
+  read_reg_bit reg (fst (register_field_indices reg rbit))
 
 
 val write_reg_range : forall 'e. register -> integer -> integer -> vector bitU -> M 'e unit
 let write_reg_range reg i j v =
   let rv = registerValueFromBitv v reg in
-  let start = natFromInteger (start_index_reg reg) in
   let (i,j) = (natFromInteger i,natFromInteger j) in
-  let reg = Reg_slice (register_to_string reg) start (dir defaultDir) (i,j) in
+  let reg = Reg_slice (name_of_reg reg) (start_of_reg_nat reg) (dir_of_reg reg) (i,j) in
   Write_reg (reg,rv) (Done (),Nothing)
 
 val write_reg_bit : forall 'e. register -> integer -> bitU -> M 'e unit
@@ -107,16 +103,17 @@ let write_reg_bit reg i bit = write_reg_range reg i i (Vector [bit] 0 true)
 val write_reg : forall 'e. register -> vector bitU -> M 'e unit
 let write_reg reg v =
   let rv = registerValueFromBitv v reg in
-  let start = natFromInteger (start_index_reg reg) in
-  let sz = natFromInteger (length_reg reg) in
-  let reg = Reg (register_to_string reg) start sz (dir defaultDir) in
+  let reg = Reg (name_of_reg reg) (start_of_reg_nat reg)
+                (size_of_reg_nat reg) (dir_of_reg reg) in
   Write_reg (reg,rv) (Done (),Nothing)
 
 val write_reg_field : forall 'e. register -> register_field -> vector bitU -> M 'e unit
-let write_reg_field reg rfield = uncurry (write_reg_range reg) (field_indices rfield)
+let write_reg_field reg regfield =
+  uncurry (write_reg_range reg) (register_field_indices reg regfield)
 
-val write_reg_bitfield : forall 'e. register -> register_bitfield -> bitU -> M 'e unit
-let write_reg_bitfield reg rbit = write_reg_bit reg (field_index_bit rbit)
+val write_reg_bitfield : forall 'e. register -> register_field -> bitU -> M 'e unit
+let write_reg_bitfield reg rbit =
+  write_reg_bit reg (fst (register_field_indices reg rbit))
 
 
 val barrier : forall 'e. barrier_kind -> M 'e unit
@@ -146,14 +143,23 @@ let rec foreachM_dec (i,stop,by) vars body =
     foreachM_dec (i - by,stop,by) vars body
   else return vars
 
-
 let write_two_regs r1 r2 vec =
-  let size = length_reg r1 in
-  let start = get_start vec in
-  let vsize = length vec in
-  let r1_v = slice vec start ((if defaultDir then size - start else start - size) - 1) in
+  let is_inc =
+    let is_inc_r1 = is_inc_of_reg r1 in
+    let is_inc_r2 = is_inc_of_reg r2 in
+    let () = ensure (is_inc_r1 = is_inc_r2)
+                    "write_two_regs called with vectors of different direction" in
+    is_inc_r1 in
+  
+  let (size_r1 : integer) = size_of_reg r1 in
+  let (start_vec : integer) = get_start vec in
+  let size_vec = length vec in
+  let r1_v =
+    if is_inc
+    then slice vec start_vec (size_r1 - start_vec - 1)
+    else slice vec start_vec (start_vec - size_r1 - 1) in
   let r2_v =
-    (slice vec)
-      (if defaultDir then size - start else start - size)
-      (if defaultDir then vsize - start else start - vsize) in
+    if is_inc
+    then slice vec (size_r1 - start_vec) (size_vec - start_vec)
+    else slice vec (start_vec - size_r1) (start_vec - size_vec) in
   write_reg r1 r1_v >> write_reg r2 r2_v
