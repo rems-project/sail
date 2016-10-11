@@ -5,7 +5,7 @@ open Interp_ast ;;
 open Interp_interface ;;
 open Interp_inter_imp ;;
 open Run_interp_model ;;
-
+open Sail_impl_base ;;
 open Sail_interface ;;
 
 module StringMap = Map.Make(String)
@@ -210,7 +210,7 @@ let initial_stack_and_reg_data_of_PPC_elf_file e_entry all_data_memory =
   (* take start of stack roughly where running gdb on hello5 on bim says it is*)
   let initial_GPR1_stack_pointer = Nat_big_num.of_string "17592186040320" (*"0xffffffff000"*) in
   let initial_GPR1_stack_pointer_value =
-    Interp_interface.register_value_of_integer 64 0 Interp_interface.D_increasing initial_GPR1_stack_pointer in
+    Sail_impl_base.register_value_of_integer 64 0 Sail_impl_base.D_increasing initial_GPR1_stack_pointer in
   (* ELF says we need an initial zero doubleword there *)
   let initial_stack_data =
     (* the code actually uses the stack, both above and below, so we map a bit more memory*)
@@ -227,20 +227,20 @@ let initial_stack_and_reg_data_of_PPC_elf_file e_entry all_data_memory =
   
   (* read TOC from the second field of the function descriptor pointed to by e_entry*)
   let initial_GPR2_TOC =
-    Interp_interface.register_value_of_address
-      (Interp_interface.address_of_byte_list
+    Sail_impl_base.register_value_of_address
+      (Sail_impl_base.address_of_byte_list
          (List.map (fun b -> match b with Some b -> b | None -> failwith "Address had undefined")
              (List.map byte_of_byte_lifted
                 (read_mem all_data_memory
                    (Nat_big_num.add (Nat_big_num.of_int 8) e_entry) 8))))
-      Interp_interface.D_increasing in
+      Sail_impl_base.D_increasing in
   (* these initial register values are all mandated to be zero, but that's handled by the generic zeroing below
       let initial_GPR3_argc = (Nat_big_num.of_int 0) in
       let initial_GPR4_argv = (Nat_big_num.of_int 0) in
       let initial_GPR5_envp = (Nat_big_num.of_int 0) in
       let initial_FPSCR = (Nat_big_num.of_int 0) in
   *)
-  let initial_register_abi_data : (string * Interp_interface.register_value) list =
+  let initial_register_abi_data : (string * Sail_impl_base.register_value) list =
     [ ("GPR1", initial_GPR1_stack_pointer_value);
       ("GPR2", initial_GPR2_TOC);
   (*
@@ -422,7 +422,7 @@ let initial_stack_and_reg_data_of_AAarch64_elf_file e_entry all_data_memory =
       0x0000007ff2c34560 *)
   let initial_SP_EL0 = Nat_big_num.of_string "549739036672" (*"0x0000007fff000000"*) in
   let initial_SP_EL0_value =
-    Interp_interface.register_value_of_integer
+    Sail_impl_base.register_value_of_integer
       reg_SP_EL0_width
       reg_SP_EL0_initial_index
       reg_SP_EL0_direction
@@ -441,7 +441,7 @@ let initial_stack_and_reg_data_of_AAarch64_elf_file e_entry all_data_memory =
     ]
   in
 
-  let initial_register_abi_data : (string * Interp_interface.register_value) list =
+  let initial_register_abi_data : (string * Sail_impl_base.register_value) list =
     [("SP_EL0", initial_SP_EL0_value)]
   in
 
@@ -626,9 +626,9 @@ let cheri_register_data_all = mips_register_data_all @ [
 let initial_stack_and_reg_data_of_MIPS_elf_file e_entry all_data_memory =
   let initial_stack_data = [] in 
   let initial_cap_val_int = Nat_big_num.of_string "115792089264276142078167421332581561412618036492862375629811892344162380414975" (*"0x100000000fffffffe00000000000000000000000000000000ffffffffffffffff"*) in
-  let initial_cap_val_reg = Interp_interface.register_value_of_integer 257 256 D_decreasing  initial_cap_val_int in
-  let initial_register_abi_data : (string * Interp_interface.register_value) list = [
-    ("CP0Status", Interp_interface.register_value_of_integer 32 31 D_decreasing (Nat_big_num.of_string "0x00400000"));
+  let initial_cap_val_reg = Sail_impl_base.register_value_of_integer 257 256 D_decreasing  initial_cap_val_int in
+  let initial_register_abi_data : (string * Sail_impl_base.register_value) list = [
+    ("CP0Status", Sail_impl_base.register_value_of_integer 32 31 D_decreasing (Nat_big_num.of_string "0x00400000"));
     ("PCC", initial_cap_val_reg);
     ("nextPCC", initial_cap_val_reg);
     ("delayedPCC", initial_cap_val_reg);
@@ -813,7 +813,7 @@ let initial_system_state_of_elf_file name =
       in
 
       (* invert the symbol table to use for pp *)
-      let symbol_table_pp : ((Interp_interface.address * int) * string) list =
+      let symbol_table_pp : ((Sail_impl_base.address * int) * string) list =
         (* map symbol to (bindings, footprint),
            if a symbol appears more then onece keep the one with higher
            precedence (stb_global > stb_weak > stb_local) *)
@@ -830,11 +830,11 @@ let initial_system_state_of_elf_file name =
                        Nat_big_num.equal binding Elf_symbol_table.stb_global
                    then
                      StringMap.add name (binding,
-                                         (Interp_interface.address_of_integer address, Nat_big_num.to_int size)) map
+                                         (Sail_impl_base.address_of_integer address, Nat_big_num.to_int size)) map
                    else map
                  with Not_found ->
                    StringMap.add name (binding,
-                                       (Interp_interface.address_of_integer address, Nat_big_num.to_int size)) map
+                                       (Sail_impl_base.address_of_integer address, Nat_big_num.to_int size)) map
                      
                else map
             )
@@ -911,7 +911,7 @@ let initial_system_state_of_elf_file name =
            isa_model,
            model_reg_d,
            startaddr,
-           (Interp_interface.address_of_integer startaddr))
+           (Sail_impl_base.address_of_integer startaddr))
         in
         
         (initial_system_state, symbol_table_pp)
@@ -1007,7 +1007,7 @@ let set_next_instruction_address model =
     (match cia_addr with
     | Some cia_addr ->
       let nia_addr = add_address_nat cia_addr 4 in 
-      let nia = register_value_of_address nia_addr Interp_interface.D_increasing in
+      let nia = register_value_of_address nia_addr Sail_impl_base.D_increasing in
       reg := Reg.add "NIA" nia !reg
     | _ -> failwith "CIA address contains unknown or undefined")
   | AArch64 ->
@@ -1029,15 +1029,15 @@ let set_next_instruction_address model =
        let n_pc = register_value_of_address n_addr D_decreasing in
        begin
          reg := Reg.add "nextPC" n_pc !reg;
-         reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
+         reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
        end
      | (Some pc_val, Some 1) -> 
        (* delay slot -- branch to delayed PC and clear branchPending *)
        begin 
          reg := Reg.add "nextPC" (Reg.find "delayedPC" !reg) !reg;
          reg := Reg.add "nextPCC" (Reg.find "delayedPCC" !reg) !reg;
-         reg := Reg.add "branchPending" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
-         reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Interp_interface.D_decreasing (Nat_big_num.of_int 1)) !reg;
+         reg := Reg.add "branchPending" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
+         reg := Reg.add "inBranchDelay" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing (Nat_big_num.of_int 1)) !reg;
        end
      | (_, _) -> errorf "PC address contains unknown or undefined"; exit 1)
 
@@ -1046,81 +1046,81 @@ let add1 = Nat_big_num.add (Nat_big_num.of_int 1)
 let get_addr_trans_regs _ =
   (*resultf "PCC %s\n"  (Printing_functions.logfile_register_value_to_string (Reg.find "PCC" !reg));*)
   Some([
-    (Interp_interface.Reg0("PC", 63, 64, Interp_interface.D_decreasing),    Reg.find "PC" !reg);
-    (Interp_interface.Reg0("PCC", 256, 257, Interp_interface.D_decreasing), Reg.find "PCC" !reg);
-    (Interp_interface.Reg0("C29", 256, 257, Interp_interface.D_decreasing), Reg.find "C29" !reg);
-    (Interp_interface.Reg0("CP0Status", 31, 32, Interp_interface.D_decreasing), Reg.find "CP0Status" !reg);
-    (Interp_interface.Reg0("CP0Cause", 31, 32, Interp_interface.D_decreasing), Reg.find "CP0Cause" !reg);
-    (Interp_interface.Reg0("CP0Count", 31, 32, Interp_interface.D_decreasing), Reg.find "CP0Count" !reg);
-    (Interp_interface.Reg0("CP0Compare", 31, 32, Interp_interface.D_decreasing), Reg.find "CP0Compare" !reg);
-    (Interp_interface.Reg0("inBranchDelay", 0, 1, Interp_interface.D_decreasing), Reg.find "inBranchDelay" !reg);
-    (Interp_interface.Reg0("TLBRandom", 5, 6, Interp_interface.D_decreasing), Reg.find "TLBRandom" !reg);
-    (Interp_interface.Reg0("TLBWired", 5, 6, Interp_interface.D_decreasing), Reg.find "TLBWired" !reg);
-    (Interp_interface.Reg0("TLBEntryHi", 63, 64, Interp_interface.D_decreasing), Reg.find "TLBEntryHi" !reg);
-    (Interp_interface.Reg0("TLBEntry00", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry00" !reg);
-    (Interp_interface.Reg0("TLBEntry01", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry01" !reg);
-    (Interp_interface.Reg0("TLBEntry02", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry02" !reg);
-    (Interp_interface.Reg0("TLBEntry03", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry03" !reg);
-    (Interp_interface.Reg0("TLBEntry04", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry04" !reg);
-    (Interp_interface.Reg0("TLBEntry05", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry05" !reg);
-    (Interp_interface.Reg0("TLBEntry06", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry06" !reg);
-    (Interp_interface.Reg0("TLBEntry07", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry07" !reg);
-    (Interp_interface.Reg0("TLBEntry08", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry08" !reg);
-    (Interp_interface.Reg0("TLBEntry09", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry09" !reg);
-    (Interp_interface.Reg0("TLBEntry10", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry10" !reg);
-    (Interp_interface.Reg0("TLBEntry11", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry11" !reg);
-    (Interp_interface.Reg0("TLBEntry12", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry12" !reg);
-    (Interp_interface.Reg0("TLBEntry13", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry13" !reg);
-    (Interp_interface.Reg0("TLBEntry14", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry14" !reg);
-    (Interp_interface.Reg0("TLBEntry15", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry15" !reg);
-    (Interp_interface.Reg0("TLBEntry16", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry16" !reg);
-    (Interp_interface.Reg0("TLBEntry17", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry17" !reg);
-    (Interp_interface.Reg0("TLBEntry18", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry18" !reg);
-    (Interp_interface.Reg0("TLBEntry19", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry19" !reg);
-    (Interp_interface.Reg0("TLBEntry20", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry20" !reg);
-    (Interp_interface.Reg0("TLBEntry21", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry21" !reg);
-    (Interp_interface.Reg0("TLBEntry22", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry22" !reg);
-    (Interp_interface.Reg0("TLBEntry23", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry23" !reg);
-    (Interp_interface.Reg0("TLBEntry24", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry24" !reg);
-    (Interp_interface.Reg0("TLBEntry25", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry25" !reg);
-    (Interp_interface.Reg0("TLBEntry26", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry26" !reg);
-    (Interp_interface.Reg0("TLBEntry27", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry27" !reg);
-    (Interp_interface.Reg0("TLBEntry28", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry28" !reg);
-    (Interp_interface.Reg0("TLBEntry29", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry29" !reg);
-    (Interp_interface.Reg0("TLBEntry30", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry30" !reg);
-    (Interp_interface.Reg0("TLBEntry31", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry31" !reg);
-    (Interp_interface.Reg0("TLBEntry32", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry32" !reg);
-    (Interp_interface.Reg0("TLBEntry33", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry33" !reg);
-    (Interp_interface.Reg0("TLBEntry34", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry34" !reg);
-    (Interp_interface.Reg0("TLBEntry35", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry35" !reg);
-    (Interp_interface.Reg0("TLBEntry36", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry36" !reg);
-    (Interp_interface.Reg0("TLBEntry37", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry37" !reg);
-    (Interp_interface.Reg0("TLBEntry38", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry38" !reg);
-    (Interp_interface.Reg0("TLBEntry39", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry39" !reg);
-    (Interp_interface.Reg0("TLBEntry40", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry40" !reg);
-    (Interp_interface.Reg0("TLBEntry41", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry41" !reg);
-    (Interp_interface.Reg0("TLBEntry42", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry42" !reg);
-    (Interp_interface.Reg0("TLBEntry43", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry43" !reg);
-    (Interp_interface.Reg0("TLBEntry44", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry44" !reg);
-    (Interp_interface.Reg0("TLBEntry45", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry45" !reg);
-    (Interp_interface.Reg0("TLBEntry46", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry46" !reg);
-    (Interp_interface.Reg0("TLBEntry47", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry47" !reg);
-    (Interp_interface.Reg0("TLBEntry48", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry48" !reg);
-    (Interp_interface.Reg0("TLBEntry49", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry49" !reg);
-    (Interp_interface.Reg0("TLBEntry50", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry50" !reg);
-    (Interp_interface.Reg0("TLBEntry51", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry51" !reg);
-    (Interp_interface.Reg0("TLBEntry52", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry52" !reg);
-    (Interp_interface.Reg0("TLBEntry53", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry53" !reg);
-    (Interp_interface.Reg0("TLBEntry54", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry54" !reg);
-    (Interp_interface.Reg0("TLBEntry55", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry55" !reg);
-    (Interp_interface.Reg0("TLBEntry56", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry56" !reg);
-    (Interp_interface.Reg0("TLBEntry57", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry57" !reg);
-    (Interp_interface.Reg0("TLBEntry58", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry58" !reg);
-    (Interp_interface.Reg0("TLBEntry59", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry59" !reg);
-    (Interp_interface.Reg0("TLBEntry60", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry60" !reg);
-    (Interp_interface.Reg0("TLBEntry61", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry61" !reg);
-    (Interp_interface.Reg0("TLBEntry62", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry62" !reg);
-    (Interp_interface.Reg0("TLBEntry63", 116, 117, Interp_interface.D_decreasing), Reg.find "TLBEntry63" !reg);
+    (Sail_impl_base.Reg("PC", 63, 64, Sail_impl_base.D_decreasing),    Reg.find "PC" !reg);
+    (Sail_impl_base.Reg("PCC", 256, 257, Sail_impl_base.D_decreasing), Reg.find "PCC" !reg);
+    (Sail_impl_base.Reg("C29", 256, 257, Sail_impl_base.D_decreasing), Reg.find "C29" !reg);
+    (Sail_impl_base.Reg("CP0Status", 31, 32, Sail_impl_base.D_decreasing), Reg.find "CP0Status" !reg);
+    (Sail_impl_base.Reg("CP0Cause", 31, 32, Sail_impl_base.D_decreasing), Reg.find "CP0Cause" !reg);
+    (Sail_impl_base.Reg("CP0Count", 31, 32, Sail_impl_base.D_decreasing), Reg.find "CP0Count" !reg);
+    (Sail_impl_base.Reg("CP0Compare", 31, 32, Sail_impl_base.D_decreasing), Reg.find "CP0Compare" !reg);
+    (Sail_impl_base.Reg("inBranchDelay", 0, 1, Sail_impl_base.D_decreasing), Reg.find "inBranchDelay" !reg);
+    (Sail_impl_base.Reg("TLBRandom", 5, 6, Sail_impl_base.D_decreasing), Reg.find "TLBRandom" !reg);
+    (Sail_impl_base.Reg("TLBWired", 5, 6, Sail_impl_base.D_decreasing), Reg.find "TLBWired" !reg);
+    (Sail_impl_base.Reg("TLBEntryHi", 63, 64, Sail_impl_base.D_decreasing), Reg.find "TLBEntryHi" !reg);
+    (Sail_impl_base.Reg("TLBEntry00", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry00" !reg);
+    (Sail_impl_base.Reg("TLBEntry01", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry01" !reg);
+    (Sail_impl_base.Reg("TLBEntry02", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry02" !reg);
+    (Sail_impl_base.Reg("TLBEntry03", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry03" !reg);
+    (Sail_impl_base.Reg("TLBEntry04", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry04" !reg);
+    (Sail_impl_base.Reg("TLBEntry05", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry05" !reg);
+    (Sail_impl_base.Reg("TLBEntry06", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry06" !reg);
+    (Sail_impl_base.Reg("TLBEntry07", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry07" !reg);
+    (Sail_impl_base.Reg("TLBEntry08", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry08" !reg);
+    (Sail_impl_base.Reg("TLBEntry09", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry09" !reg);
+    (Sail_impl_base.Reg("TLBEntry10", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry10" !reg);
+    (Sail_impl_base.Reg("TLBEntry11", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry11" !reg);
+    (Sail_impl_base.Reg("TLBEntry12", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry12" !reg);
+    (Sail_impl_base.Reg("TLBEntry13", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry13" !reg);
+    (Sail_impl_base.Reg("TLBEntry14", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry14" !reg);
+    (Sail_impl_base.Reg("TLBEntry15", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry15" !reg);
+    (Sail_impl_base.Reg("TLBEntry16", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry16" !reg);
+    (Sail_impl_base.Reg("TLBEntry17", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry17" !reg);
+    (Sail_impl_base.Reg("TLBEntry18", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry18" !reg);
+    (Sail_impl_base.Reg("TLBEntry19", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry19" !reg);
+    (Sail_impl_base.Reg("TLBEntry20", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry20" !reg);
+    (Sail_impl_base.Reg("TLBEntry21", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry21" !reg);
+    (Sail_impl_base.Reg("TLBEntry22", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry22" !reg);
+    (Sail_impl_base.Reg("TLBEntry23", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry23" !reg);
+    (Sail_impl_base.Reg("TLBEntry24", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry24" !reg);
+    (Sail_impl_base.Reg("TLBEntry25", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry25" !reg);
+    (Sail_impl_base.Reg("TLBEntry26", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry26" !reg);
+    (Sail_impl_base.Reg("TLBEntry27", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry27" !reg);
+    (Sail_impl_base.Reg("TLBEntry28", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry28" !reg);
+    (Sail_impl_base.Reg("TLBEntry29", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry29" !reg);
+    (Sail_impl_base.Reg("TLBEntry30", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry30" !reg);
+    (Sail_impl_base.Reg("TLBEntry31", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry31" !reg);
+    (Sail_impl_base.Reg("TLBEntry32", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry32" !reg);
+    (Sail_impl_base.Reg("TLBEntry33", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry33" !reg);
+    (Sail_impl_base.Reg("TLBEntry34", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry34" !reg);
+    (Sail_impl_base.Reg("TLBEntry35", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry35" !reg);
+    (Sail_impl_base.Reg("TLBEntry36", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry36" !reg);
+    (Sail_impl_base.Reg("TLBEntry37", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry37" !reg);
+    (Sail_impl_base.Reg("TLBEntry38", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry38" !reg);
+    (Sail_impl_base.Reg("TLBEntry39", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry39" !reg);
+    (Sail_impl_base.Reg("TLBEntry40", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry40" !reg);
+    (Sail_impl_base.Reg("TLBEntry41", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry41" !reg);
+    (Sail_impl_base.Reg("TLBEntry42", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry42" !reg);
+    (Sail_impl_base.Reg("TLBEntry43", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry43" !reg);
+    (Sail_impl_base.Reg("TLBEntry44", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry44" !reg);
+    (Sail_impl_base.Reg("TLBEntry45", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry45" !reg);
+    (Sail_impl_base.Reg("TLBEntry46", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry46" !reg);
+    (Sail_impl_base.Reg("TLBEntry47", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry47" !reg);
+    (Sail_impl_base.Reg("TLBEntry48", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry48" !reg);
+    (Sail_impl_base.Reg("TLBEntry49", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry49" !reg);
+    (Sail_impl_base.Reg("TLBEntry50", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry50" !reg);
+    (Sail_impl_base.Reg("TLBEntry51", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry51" !reg);
+    (Sail_impl_base.Reg("TLBEntry52", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry52" !reg);
+    (Sail_impl_base.Reg("TLBEntry53", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry53" !reg);
+    (Sail_impl_base.Reg("TLBEntry54", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry54" !reg);
+    (Sail_impl_base.Reg("TLBEntry55", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry55" !reg);
+    (Sail_impl_base.Reg("TLBEntry56", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry56" !reg);
+    (Sail_impl_base.Reg("TLBEntry57", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry57" !reg);
+    (Sail_impl_base.Reg("TLBEntry58", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry58" !reg);
+    (Sail_impl_base.Reg("TLBEntry59", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry59" !reg);
+    (Sail_impl_base.Reg("TLBEntry60", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry60" !reg);
+    (Sail_impl_base.Reg("TLBEntry61", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry61" !reg);
+    (Sail_impl_base.Reg("TLBEntry62", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry62" !reg);
+    (Sail_impl_base.Reg("TLBEntry63", 116, 117, Sail_impl_base.D_decreasing), Reg.find "TLBEntry63" !reg);
   ])
 
 let get_opcode pc_a =
@@ -1137,7 +1137,7 @@ let rec write_events = function
   | [] -> ()
   | e::events ->
     (match e with
-     | E_write_reg (Reg0(id,_,_,_), value) -> reg := Reg.add id value !reg
+     | E_write_reg (Reg(id,_,_,_), value) -> reg := Reg.add id value !reg
      | E_write_reg ((Reg_slice(id,_,_,range) as reg_n),value) 
      | E_write_reg ((Reg_field(id,_,_,_,range) as reg_n),value)->
        let old_val = Reg.find id !reg in
@@ -1239,7 +1239,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
           (match inBranchDelay with
           | Some 0 -> 
             let npc_addr = add_address_nat pc_val 4 in
-            let npc_reg = register_value_of_address npc_addr Interp_interface.D_decreasing in
+            let npc_reg = register_value_of_address npc_addr Sail_impl_base.D_decreasing in
             reg := Reg.add "nextPC" npc_reg !reg;
           | Some 1 ->
             reg := Reg.add "nextPC" (Reg.find "delayedPC" !reg) !reg;
@@ -1252,9 +1252,9 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
               (instruction,istate)
             | Decode_error d ->
               (match d with
-              | Interp_interface.Unsupported_instruction_error instr ->
+              | Sail_impl_base.Unsupported_instruction_error instr ->
                 errorf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instr)
-              | Interp_interface.Not_an_instruction_error op ->
+              | Sail_impl_base.Not_an_instruction_error op ->
                 (match op with
                 | Opcode bytes ->
                   errorf "\n**** Encountered non-decodeable opcode: %s ****\n" (Printing_functions.byte_list_to_string bytes))
@@ -1285,8 +1285,8 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
                 | Some 0 ->
                   (match !input_buf with
                   | x :: xs -> (
-                      reg := Reg.add "UART_RDATA" (register_value_of_integer 8 7 Interp_interface.D_decreasing (Nat_big_num.of_int x)) !reg;
-                      reg := Reg.add "UART_RVALID" (register_value_of_integer 1 0 Interp_interface.D_decreasing (Nat_big_num.of_int 1)) !reg;
+                      reg := Reg.add "UART_RDATA" (register_value_of_integer 8 7 Sail_impl_base.D_decreasing (Nat_big_num.of_int x)) !reg;
+                      reg := Reg.add "UART_RVALID" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing (Nat_big_num.of_int 1)) !reg;
                       input_buf := xs;
                     )
                   | [] -> ())
@@ -1300,17 +1300,17 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
                   | Some b -> (printf "%c" (Char.chr b); printf "%!")
                   | None   -> (errorf "UART_WDATA was undef" ; exit 1))
                 | _      -> ());
-                reg := Reg.add "UART_WRITTEN" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
+                reg := Reg.add "UART_WRITTEN" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
 
                 reg := Reg.add "inBranchDelay" (Reg.find "branchPending" !reg) !reg;
-                reg := Reg.add "branchPending" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
+                reg := Reg.add "branchPending" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
                 reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
                 reg := Reg.add "PCC" (Reg.find "nextPCC" !reg) !reg;
                 fde_loop (count + 1) context model (Some mode) (ref track_dependencies) addr_trans
             end
       | None -> begin
       reg := Reg.add "inBranchDelay" (Reg.find "branchPending" !reg) !reg;
-      reg := Reg.add "branchPending" (register_value_of_integer 1 0 Interp_interface.D_decreasing Nat_big_num.zero) !reg;
+      reg := Reg.add "branchPending" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
       reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
       reg := Reg.add "PCC" (Reg.find "nextPCC" !reg) !reg;
       fde_loop (count + 1) context model mode track_dependencies addr_trans
