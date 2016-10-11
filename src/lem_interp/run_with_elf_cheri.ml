@@ -676,7 +676,7 @@ let initial_system_state_of_elf_file name =
   match Sail_interface.populate_and_obtain_global_symbol_init_info name with
   | Error.Fail s -> failwith ("populate_and_obtain_global_symbol_init_info: " ^ s)
   | Error.Success 
-      ((elf_epi: Sail_interface.executable_process_image),
+      (_, (elf_epi: Sail_interface.executable_process_image),
        (symbol_map: Elf_file.global_symbol_init_info))
     ->
     let (segments, e_entry, e_machine) =
