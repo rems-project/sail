@@ -2035,23 +2035,63 @@ let anglebars = enclose langlebar ranglebar
 module M = Map.Make(String)
 
 let keywords =
-  (List.fold_left (fun m (x,y) -> M.add x y m) (M.empty))
+  (List.fold_left (fun m x -> M.add x (x ^ "_") m) (M.empty))
     [
-      ("assert","assert_");
-      ("lsl","lsl_");
-      ("lsr","lsr_");
-      ("asr","asr_");
-      ("type","type_");
-      ("fun","fun_");
-      ("function","function_");
-      ("raise","raise_");
-      ("try","try_");
-      ("match","match_");
-      ("with","with_");
-      ("field","fields_");
-      ("LT","LT_");
-      ("GT","GT_");
-      ("EQ","EQ_");
+      "assert";
+      "lsl";
+      "lsr";
+      "asr";
+      "type";
+      "fun";
+      "function";
+      "raise";
+      "try";
+      "match";
+      "with";
+      "field";
+      "LT";
+      "GT";
+      "EQ";
+
+(*      "nia";
+      "NIA_successor";
+      "NIA_concrete_address";
+      "NIA_LR";
+      "NIA_CTR";
+      "NIA_register";
+      "read_kind";
+      "Read_plain";
+      "Read_tag";
+      "Read_reserve";
+      "Read_acquire";
+      "Read_exclusive";
+      "Read_exclusive_acquire";
+      "Read_stream";
+      "write_kind";
+      "Write_plain";
+      "Write_tag";
+      "Write_conditional";
+      "Write_release";
+      "Write_exclusive";
+      "Write_exclusive_release";
+      "barrier_kind";
+      "Barrier_Sync";
+      "Barrier_LwSync";
+      "Barrier_Eieio";
+      "Barrier_Isync";
+      "Barrier_DMB";
+      "Barrier_DMB_ST";
+      "Barrier_DMB_LD";
+      "Barrier_DSB";
+      "Barrier_DSB_ST";
+      "Barrier_DSB_LD";
+      "Barrier_ISB";
+      "instruction_kind";
+      "IK_barrier";
+      "IK_mem_read";
+      "IK_mem_write";
+      "IK_cond_branch";
+      "IK_simple"; *)
     ] 
 
 let fix_id i = if M.mem i keywords then M.find i keywords else i
@@ -2880,12 +2920,12 @@ let find_regtypes (Defs defs) =
     ) [] defs
 
 
-let pp_defs_lem f_arch f d top_line opens =
+let pp_defs_lem f d top_line opens =
   let regtypes = find_regtypes d in
   let defs = doc_defs_lem regtypes d in
-  print f
-        (string "(*" ^^ (string top_line) ^^ string "*)" ^/^
-           ((separate_map hardline)
-              (fun lib -> separate space [string "open import";string lib]) opens) ^/^
-             hardline ^^ defs);
+  (print f)
+    (string "(*" ^^ (string top_line) ^^ string "*)" ^/^
+       ((separate_map hardline)
+          (fun lib -> separate space [string "open import";string lib]) opens) ^/^
+         hardline ^^ defs);
 

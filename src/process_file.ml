@@ -174,23 +174,17 @@ let output1 libpath out_arg filename defs  =
 	  close_output_with_check ext_o
 	end
       | Lem_out None ->
-         let ((o1,_, _) as ext_o1) =
-           open_output_with_check_unformatted ("arch.lem") in
-         let ((o2,_, _) as ext_o2) =
-           open_output_with_check_unformatted (f' ^ "embed.lem") in
-         (Pretty_print.pp_defs_lem o1 o2 defs (generated_line filename))
+         let ((o,_, _) as ext_o) =
+           open_output_with_check_unformatted (f' ^ "_embedded.lem") in
+         (Pretty_print.pp_defs_lem o defs (generated_line filename))
            ["Pervasives_extra";"Sail_impl_base";"Vector";"Prompt";"Sail_values"];
-         close_output_with_check ext_o1;
-         close_output_with_check ext_o2
+         close_output_with_check ext_o
       | Lem_out (Some lib) ->
-         let ((o1,_, _) as ext_o1) =
-           open_output_with_check_unformatted ("arch.lem") in
-         let ((o2,_, _) as ext_o2) =
-           open_output_with_check_unformatted (f' ^ "embed.lem") in
-	 (Pretty_print.pp_defs_lem o1 o2 defs (generated_line filename))
+         let ((o,_, _) as ext_o) =
+           open_output_with_check_unformatted (f' ^ "_embedded.lem") in
+	 (Pretty_print.pp_defs_lem o defs (generated_line filename))
            ["Pervasives_extra";"Sail_impl_base";"Vector";"Prompt";"Sail_values"; lib];
-         close_output_with_check ext_o1;
-         close_output_with_check ext_o2
+         close_output_with_check ext_o;
       | Ocaml_out None ->
         let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in
 	begin Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["Big_int_Z";"Sail_values"];
