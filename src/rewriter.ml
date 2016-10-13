@@ -2096,7 +2096,8 @@ let rewrite_defs_remove_e_assign =
     }
 
 
-let rewrite_defs_lem  =
+let rewrite_defs_lem =
+  top_sort_defs >>
   rewrite_defs_remove_vector_concat >>
   rewrite_defs_exp_lift_assign >> 
   rewrite_defs_remove_blocks >> 

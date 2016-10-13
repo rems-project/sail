@@ -2260,7 +2260,10 @@ let rec doc_pat_lem regtypes apat_needed (P_aux (p,(l,annot)) as pa) = match p w
      | _ -> empty)
   | P_lit lit  -> doc_lit_lem true lit annot
   | P_wild -> underscore
-  | P_id id -> doc_id_lem id
+  | P_id id ->
+     begin match id with 
+     | Id_aux (Id "None",_) -> string "Nothing" (* workaround temporary issue *)
+     | _ -> doc_id_lem id end
   | P_as(p,id) -> parens (separate space [doc_pat_lem regtypes true p; string "as"; doc_id_lem id])
   | P_typ(typ,p) -> doc_op colon (doc_pat_lem regtypes true p) (doc_typ_lem regtypes typ) 
   | P_vector pats ->
@@ -2389,7 +2392,6 @@ let doc_exp_lem, doc_let_lem =
            let [e1;e2] = args in
            let epp = align (expY e1 ^^ space ^^ string "++" ^//^ expY e2) in
            if aexp_needed then parens (align epp) else epp
-        | Id_aux (Id "None",_) -> string "Nothing"
         | _ ->
            (match annot with
             | Base (_,Constructor _,_,_,_,_) ->
@@ -2643,7 +2645,8 @@ let doc_exp_lem, doc_let_lem =
        if aexp_needed then parens (align epp) else align epp
     | E_exit e -> separate space [string "exit"; expY e;]
     | E_assert (e1,e2) ->
-       separate space [string "assert'"; expY e1; expY e2]
+       let epp = separate space [string "assert'"; expY e1; expY e2] in
+       if aexp_needed then parens (align epp) else align epp
     | E_app_infix (e1,id,e2) ->
        (match annot with
         | Base((_,t),External(Some name),_,_,_,_) ->

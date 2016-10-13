@@ -151,7 +151,7 @@ let id_to_string (Ast.Id_aux (i,_)) = match i with
 let conditional_add typ_or_exp bound used id =
   let known_list =
     if typ_or_exp (*true for typ*)
-    then ["bit";"vector";"unit";"string";"int";"bool"]
+    then ["bit";"vector";"unit";"string";"int";"bool";"boolean"]
     else ["=="; "!="; "|";"~";"&";"add_int"] in
   let i = (id_to_string id) in
   if Nameset.mem i bound || List.mem i  known_list
@@ -160,6 +160,40 @@ let conditional_add typ_or_exp bound used id =
 
 let conditional_add_typ = conditional_add true
 let conditional_add_exp = conditional_add false
+
+
+let nameset_bigunion = List.fold_left Nameset.union mt
+
+
+let rec free_type_names_t consider_var {t = t} = match t with
+  | Tvar name -> if consider_var then Nameset.add name mt else mt
+  | Tid name -> Nameset.add name mt
+  | Tfn (t1,t2,_,_) -> Nameset.union (free_type_names_t consider_var t1)
+                                     (free_type_names_t consider_var t2)
+  | Ttup ts -> free_type_names_ts consider_var ts
+  | Tapp (name,targs) -> Nameset.add name (free_type_names_t_args consider_var targs)
+  | Tabbrev (t1,t2) -> Nameset.union (free_type_names_t consider_var t1)
+                                     (free_type_names_t consider_var t2)
+  | Toptions (t,m_t) -> Nameset.union (free_type_names_t consider_var t)
+                                      (free_type_names_maybe_t consider_var m_t)
+  | Tuvar _ -> mt
+and free_type_names_ts consider_var ts = nameset_bigunion (List.map (free_type_names_t consider_var) ts)
+and free_type_names_maybe_t consider_var = function
+  | Some t -> free_type_names_t consider_var t
+  | None -> mt
+and free_type_names_t_arg consider_var = function
+  | TA_typ t -> free_type_names_t consider_var t
+  | _ -> mt
+and free_type_names_t_args consider_var targs =
+  nameset_bigunion (List.map (free_type_names_t_arg consider_var) targs)
+
+
+let rec free_type_names_tannot consider_var = function
+  | NoTyp -> mt
+  | Base ((_,t),_ ,_,_,_,_) -> free_type_names_t consider_var t
+  | Overload (tannot,_,tannots) ->
+     nameset_bigunion (List.map (free_type_names_tannot consider_var) (tannot :: tannots))
+
 
 let rec fv_of_typ consider_var bound used (Typ_aux (t,_)) : Nameset.t =
   match t with
@@ -205,14 +239,19 @@ let fv_of_typschm consider_var bound used (Ast.TypSchm_aux ((Ast.TypSchm_ts(typq
   let ts_bound = if consider_var then typq_bindings typq else mt in
   ts_bound, fv_of_typ consider_var (Nameset.union bound ts_bound) used typ
 
-let rec pat_bindings consider_var bound used (P_aux(p,_)) =
+let rec pat_bindings consider_var bound used (P_aux(p,(_,tannot))) =
   let list_fv bound used ps = List.fold_right (fun p (b,n) -> pat_bindings consider_var b n p) ps (bound, used) in
   match p with
   | P_as(p,id) -> let b,ns = pat_bindings consider_var bound used p in
     Nameset.add (id_to_string id) b,ns
-  | P_typ(t,p) -> let ns = fv_of_typ consider_var bound used t in pat_bindings consider_var bound ns p
-  | P_id id -> Nameset.add (id_to_string id) bound,used
+  | P_typ(t,p) ->
+     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
+     let ns = fv_of_typ consider_var bound used t in pat_bindings consider_var bound ns p
+  | P_id id ->
+     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
+     Nameset.add (id_to_string id) bound,used
   | P_app(id,pats) ->
+    let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
     list_fv bound (Nameset.add (id_to_string id) used) pats    
   | P_record(fpats,_) ->
     List.fold_right (fun (Ast.FP_aux(Ast.FP_Fpat(_,p),_)) (b,n) ->
@@ -222,12 +261,15 @@ let rec pat_bindings consider_var bound used (P_aux(p,_)) =
     List.fold_right (fun (_,p) (b,n) -> pat_bindings consider_var b n p) ipats (bound,used)
   | _ -> bound,used
 
-let rec fv_of_exp consider_var bound used set (E_aux (e,_)) : (Nameset.t * Nameset.t * Nameset.t) =
+let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.t * Nameset.t * Nameset.t) =
   let list_fv b n s es = List.fold_right (fun e (b,n,s) -> fv_of_exp consider_var b n s e) es (b,n,s) in
   match e with
   | E_block es | Ast.E_nondet es | Ast.E_tuple es | Ast.E_vector es | Ast.E_list es ->
     list_fv bound used set es
-  | E_id id -> bound,conditional_add_exp bound used id,set
+  | E_id id ->
+     let used = conditional_add_exp bound used id in
+     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
+     bound,used,set
   | E_cast (t,e) ->
     let u = fv_of_typ consider_var (if consider_var then bound else mt) used t in
     fv_of_exp consider_var bound u set e
@@ -254,8 +296,9 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,_)) : (Nameset.t * Names
   | E_vector_update_subrange(v,i1,i2,e) -> list_fv bound used set [v;i1;i2;e]
   | E_vector_append(e1,e2) | E_cons(e1,e2) -> list_fv bound used set [e1;e2]
   | E_record (FES_aux(FES_Fexps(fexps,_),_)) ->
-    List.fold_right
-      (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (bound,used,set)
+     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
+     List.fold_right
+       (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (bound,used,set)
   | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
     let b,u,s = fv_of_exp consider_var bound used set e in
     List.fold_right
@@ -294,14 +337,16 @@ and fv_of_let consider_var bound used set (LB_aux(lebind,_)) = match lebind with
     let _,us_e,set_e = fv_of_exp consider_var bound used set exp in
     bound_p,Nameset.union us_p us_e,set_e
     
-and fv_of_lexp consider_var bound used set (LEXP_aux(lexp,_)) =
+and fv_of_lexp consider_var bound used set (LEXP_aux(lexp,(_,tannot))) =
   match lexp with
   | LEXP_id id ->
+    let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
     let i = id_to_string id in
     if Nameset.mem i bound
     then bound, used, Nameset.add i set
     else Nameset.add i bound, Nameset.add i used, set
   | LEXP_cast(typ,id) ->
+    let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
     let i = id_to_string id in
     let used_t = fv_of_typ consider_var bound used typ in
     if Nameset.mem i bound
@@ -399,7 +444,7 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_))
 
 let fv_of_vspec consider_var (VS_aux(vspec,_)) = match vspec with
   | VS_val_spec(ts,id) | VS_extern_no_rename (ts,id) | VS_extern_spec(ts,id,_)->
-    init_env (id_to_string id), snd (fv_of_typschm consider_var mt mt ts)
+     init_env ("val:" ^ (id_to_string id)), snd (fv_of_typschm consider_var mt mt ts)
 
 let rec find_scattered_of name = function
   | [] -> []
@@ -520,7 +565,7 @@ let rec topological_sort work_queue defs =
     else if not(Nameset.is_empty(Nameset.inter binds uses))
     then topological_sort (((binds,(remove_all binds uses)),def)::wq) defs
     else
-      match List.sort compare_dbts work_queue with (*We wait to sort until there are no 0 dependency nodes on top*)
+      match List.stable_sort compare_dbts work_queue with (*We wait to sort until there are no 0 dependency nodes on top*)
       | [] -> failwith "sort shrunk the list???"
       | (((n,uses),_)::_) as wq ->
         if (Nameset.cardinal uses = 0)
@@ -579,4 +624,10 @@ let restrict_defs defs name_list =
     List.fold_left (fun po d -> add_to_partial_order d po) [] rdbts in
     let defs = List.map snd partial_order in*)
   let defs = topological_sort (List.sort compare_dbts (remove_local_or_lib_vars rdbts)) [] in
+  Defs defs
+
+
+let top_sort_defs defs =
+  let rdbts = group_defs true defs in
+  let defs = topological_sort (List.stable_sort compare_dbts (remove_local_or_lib_vars rdbts)) [] in
   Defs defs

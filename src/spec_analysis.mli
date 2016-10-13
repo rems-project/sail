@@ -30,3 +30,5 @@ val group_defs : bool -> tannot defs -> ((Nameset.t * Nameset.t) * (tannot def))
 (*reodering definitions, initial functions *)
 (* produce a new ordering for defs, limiting to those listed in the list, which respects dependencies *)
 val restrict_defs : tannot defs -> string list -> tannot defs
+
+val top_sort_defs : tannot defs -> tannot defs
