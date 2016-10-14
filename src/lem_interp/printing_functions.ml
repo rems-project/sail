@@ -151,8 +151,6 @@ let bit_lifteds_to_string (bls: bit_lifted list) (show_length_and_start:bool) (s
               "0x"^s
   else
     simple_bit_lifteds_to_string bls show_length_and_start starto
-
-
   
 
 let register_value_to_string rv = 
@@ -439,6 +437,22 @@ let instruction_state_to_string (IState(stack, _)) =
 let top_instruction_state_to_string (IState(stack,_)) = 
   let (exp,(env,_)) = top_frame_exp_state stack in exp_to_string env exp
 
+let instruction_stack_to_string (IState(stack,_)) =
+  let rec stack_to_string = function
+      Interp.Top -> ""
+    | Interp.Hole_frame(_,e,_,env,mem,Interp.Top)
+    | Interp.Thunk_frame(e,_,env,mem,Interp.Top) ->
+      exp_to_string env e
+    | Interp.Hole_frame(_,e,_,env,mem,s) 
+    | Interp.Thunk_frame(e,_,env,mem,s) ->
+      (exp_to_string env e) ^ "\n----------------------------------------------------------\n" ^
+      (stack_to_string s)
+  in
+  match stack with
+  | Interp.Hole_frame(_,(E_aux (E_id (Id_aux (Id "0",_)), _)),_,_,_,s) ->
+    stack_to_string s
+  | _ -> stack_to_string stack
+    
 let rec option_map f xs = 
   match xs with 
   | [] -> [] 
@@ -478,6 +492,9 @@ let instruction_to_string (name, parms, base_effects) =
 
 let print_backtrace_compact printer (IState(stack,_)) =
   List.iter (fun (e,(env,mem)) -> print_exp printer env e) (compact_stack stack)
+
+let print_stack printer is = printer (instruction_stack_to_string is)
+
 let print_continuation printer (IState(stack,_)) = 
   let (e,(env,mem)) = top_frame_exp_state stack in print_exp printer env e
 let print_instruction printer instr = printer (instruction_to_string instr)

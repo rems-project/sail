@@ -45,6 +45,8 @@ val top_frame_exp_state : interpreter_state -> (tannot exp * (Interp.lenv*Interp
 val format_events : event list -> string
 (*format a portion of the instruction state for easy viewing *)
 val instruction_state_to_string : instruction_state -> string
+(*format a the cull instruction call stack*)
+val instruction_stack_to_string : instruction_state -> string
 (*format just the top of the call stack*)
 val top_instruction_state_to_string : instruction_state -> string
 val local_variables_to_string : instruction_state -> string
@@ -57,7 +59,7 @@ val print_exp : (string-> unit) -> Interp.lenv -> tannot exp -> unit
 val print_backtrace_compact : (string -> unit) -> instruction_state -> unit
 val print_continuation : (string -> unit) -> instruction_state -> unit
 val print_instruction : (string -> unit) -> instruction -> unit
-
+val print_stack : (string -> unit) -> instruction_state -> unit
 
 val register_value_to_string : register_value -> string
 val memory_value_to_string : end_flag -> memory_value -> string
