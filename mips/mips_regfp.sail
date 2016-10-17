@@ -16,6 +16,12 @@ typedef regfps = list <regfp>
 typedef nia = bit[64]
 typedef nias = list <nia>
 
+typedef dia = const union {
+            DIA_none;
+  (bit[64]) DIA_concrete;
+  (regfp)   DIA_reg;
+}
+
 typedef read_kind = enumerate {
   Read_plain;
   Read_tag;
@@ -66,12 +72,14 @@ let (vector <0, 32, inc, string >) GPRs =
 let CIA_fp = RFull("CIA")
 let NIA_fp = RFull("NIA")
 
-function (regfps,regfps,regfps,nias,instruction_kind) initial_analysis (instr) = {
+function (regfps,regfps,regfps,nias,dia,instruction_kind) initial_analysis (instr) = {
   iR := [|| ||];
   oR := [|| ||];
   aR := [|| ||];
   ik := IK_simple;
   Nias := [|| ||];
+  Dia := DIA_none;
+
   switch instr {
     case (DADDIU (rs, rt, imm)) -> {
       if rs == 0 then () else iR := RFull(GPRs[rs]) :: iR;
@@ -368,9 +376,17 @@ function (regfps,regfps,regfps,nias,instruction_kind) initial_analysis (instr) =
       ik := IK_cond_branch;
       if rs == 0 then () else iR := RFull(GPRs[rs]) :: iR;
       if rd == 0 then () else iR := RFull(GPRs[rd]) :: iR;
+      let (bit[64]) offset = (EXTS(imm : 0b00) + 4) in
+      Dia := DIA_concrete (PC + offset);
+    }
+    case (BCMPZ(rs, imm, cmp, link, likely)) -> {
+      ik := IK_cond_branch;
+      if rs == 0 then () else iR := RFull(GPRs[rs]) :: iR;
+      let (bit[64]) offset = (EXTS(imm : 0b00) + 4) in
+      Dia := DIA_concrete (PC + offset);
     }
 (*
-    case (BCMPZ(rs, imm, cmp, link, likely)) =
+
     case (SYSCALL) =
     case (BREAK) =
     case (WAIT) = {
@@ -456,5 +472,5 @@ function (regfps,regfps,regfps,nias,instruction_kind) initial_analysis (instr) =
     case (ERET) 
 *)
   };
-  (iR,oR,aR,Nias,ik)
+  (iR,oR,aR,Nias,Dia,ik)
 }
