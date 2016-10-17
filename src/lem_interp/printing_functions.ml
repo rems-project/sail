@@ -425,27 +425,27 @@ let yellow = color true 3
 let blue = color true 4
 let grey = color false 7
 
-let exp_to_string env e = Pretty_interp.pp_exp env red e
+let exp_to_string env show_hole_value e = Pretty_interp.pp_exp env red show_hole_value e
 
 let get_loc (E_aux(_, (l, (_ : tannot)))) = loc_to_string l
-let print_exp printer env e =
-  printer ((get_loc e) ^ ": " ^ (Pretty_interp.pp_exp env red e) ^ "\n")
+let print_exp printer env show_hole_value e =
+  printer ((get_loc e) ^ ": " ^ (Pretty_interp.pp_exp env red show_hole_value e) ^ "\n")
 
 let instruction_state_to_string (IState(stack, _)) =
-  List.fold_right (fun (e,(env,mem)) es -> (exp_to_string env e) ^ "\n" ^ es) (compact_stack stack) ""
+  List.fold_right (fun (e,(env,mem)) es -> (exp_to_string env true e) ^ "\n" ^ es) (compact_stack stack) ""
 
 let top_instruction_state_to_string (IState(stack,_)) = 
-  let (exp,(env,_)) = top_frame_exp_state stack in exp_to_string env exp
+  let (exp,(env,_)) = top_frame_exp_state stack in exp_to_string env true exp
 
 let instruction_stack_to_string (IState(stack,_)) =
   let rec stack_to_string = function
       Interp.Top -> ""
     | Interp.Hole_frame(_,e,_,env,mem,Interp.Top)
     | Interp.Thunk_frame(e,_,env,mem,Interp.Top) ->
-      exp_to_string env e
+      exp_to_string env true e
     | Interp.Hole_frame(_,e,_,env,mem,s) 
     | Interp.Thunk_frame(e,_,env,mem,s) ->
-      (exp_to_string env e) ^ "\n----------------------------------------------------------\n" ^
+      (exp_to_string env false e) ^ "\n----------------------------------------------------------\n" ^
       (stack_to_string s)
   in
   match stack with
@@ -491,10 +491,10 @@ let instruction_to_string (name, parms, base_effects) =
   ((*pad 5*) (String.lowercase name)) ^ " " ^ instr_parms_to_string parms 
 
 let print_backtrace_compact printer (IState(stack,_)) =
-  List.iter (fun (e,(env,mem)) -> print_exp printer env e) (compact_stack stack)
+  List.iter (fun (e,(env,mem)) -> print_exp printer env true e) (compact_stack stack)
 
 let print_stack printer is = printer (instruction_stack_to_string is)
 
 let print_continuation printer (IState(stack,_)) = 
-  let (e,(env,mem)) = top_frame_exp_state stack in print_exp printer env e
+  let (e,(env,mem)) = top_frame_exp_state stack in print_exp printer env true e
 let print_instruction printer instr = printer (instruction_to_string instr)
