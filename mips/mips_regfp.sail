@@ -382,6 +382,8 @@ function (regfps,regfps,regfps,nias,dia,instruction_kind) initial_analysis (inst
     case (BCMPZ(rs, imm, cmp, link, likely)) -> {
       ik := IK_cond_branch;
       if rs == 0 then () else iR := RFull(GPRs[rs]) :: iR;
+      if link then
+        oR := RFull("GPR31") :: oR;
       let (bit[64]) offset = (EXTS(imm : 0b00) + 4) in
       Dia := DIA_concrete (PC + offset);
     }
