@@ -84,28 +84,32 @@ let rec extract_if_first recur name (Typ_aux(typ,l)) =
     | _ -> None
 
 let rec typ_to_t envs imp_ok fun_ok (Typ_aux(typ,l)) =
+  let (Env(d_env,t_env,b_env,tp_env)) = envs in
   let trans t = typ_to_t envs false false t in 
   match typ with
-    | Typ_id i -> {t = Tid (id_to_string i)}
-    | Typ_var (Kid_aux((Var i),l')) -> {t = Tvar i}
-    | Typ_fn (ty1,ty2,e) -> 
-      if fun_ok 
+  | Typ_id i ->
+    let t_init = {t = Tid (id_to_string i)} in
+    let t_abbrev,_ = get_abbrev d_env t_init in
+    t_abbrev
+  | Typ_var (Kid_aux((Var i),l')) -> {t = Tvar i}
+  | Typ_fn (ty1,ty2,e) -> 
+    if fun_ok 
+    then 
+      if has_typ_app false "implicit" ty1 
       then 
-        if has_typ_app false "implicit" ty1 
-        then 
-          if imp_ok 
-          then (match extract_if_first true "implicit" ty1 with
+        if imp_ok 
+        then (match extract_if_first true "implicit" ty1 with
             | Some(imp,new_ty1) -> (match imp with
                 | Typ_app(_,[Typ_arg_aux(Typ_arg_nexp ((Nexp_aux(n,l')) as ne),_)]) -> 
                   {t = Tfn (trans new_ty1, trans ty2, IP_user (anexp_to_nexp envs ne), aeffect_to_effect e)}
                 | _ -> typ_error l "Declaring an implicit parameter requires a Nat specification")
             | None -> typ_error l "A function type with an implicit parameter must declare the implicit first")
-          else typ_error l "This function has one (or more) implicit parameter(s) not permitted here"
-        else {t = Tfn (trans ty1,trans ty2,IP_none,aeffect_to_effect e)}
-      else typ_error l "Function types are only permitted at the top level."
-    | Typ_tup(tys) -> {t = Ttup (List.map trans tys) }
-    | Typ_app(i,args) -> {t = Tapp (id_to_string i,List.map (typ_arg_to_targ envs) args) }
-    | Typ_wild -> new_t ()
+        else typ_error l "This function has one (or more) implicit parameter(s) not permitted here"
+      else {t = Tfn (trans ty1,trans ty2,IP_none,aeffect_to_effect e)}
+    else typ_error l "Function types are only permitted at the top level."
+  | Typ_tup(tys) -> {t = Ttup (List.map trans tys) }
+  | Typ_app(i,args) -> {t = Tapp (id_to_string i,List.map (typ_arg_to_targ envs) args) }
+  | Typ_wild -> new_t ()
 and typ_arg_to_targ envs (Typ_arg_aux(ta,l)) = 
   match ta with
     | Typ_arg_nexp n -> TA_nexp (anexp_to_nexp envs n)
@@ -2152,7 +2156,8 @@ let check_type_def envs (TD_aux(td,(l,annot))) =
     | TD_record(id,nmscm,typq,fields,_) -> 
       let id' = id_to_string id in
       let (tyannot, fields') = check_record_typ envs id' typq fields in
-      (TD_aux(td,(l,tyannot)),Env({d_env with rec_env = (id',Record,tyannot,fields')::d_env.rec_env},t_env,b_env,tp_env))
+      (TD_aux(td,(l,tyannot)),
+       Env({d_env with rec_env = (id',Record,tyannot,fields')::d_env.rec_env},t_env,b_env,tp_env))
     | TD_variant(id,nmscm,typq,arms,_) ->
       let id' = id_to_string id in
       let tyannot, t_env = check_variant_typ envs id' typq arms in
@@ -2473,7 +2478,7 @@ let check_def envs def =
 (*val check : envs ->  tannot defs -> tannot defs*)
 let rec check envs (Defs defs) = 
  match defs with
-   | [] -> (Defs [])
+   | [] -> (Defs []),envs
    | def::defs -> let (def, envs) = check_def envs def in
-                  let (Defs defs) = check envs (Defs defs) in
-                  (Defs (def::defs))
+                  let (Defs defs, envs) = check envs (Defs defs) in
+                  (Defs (def::defs)), envs

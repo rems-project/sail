@@ -8,4 +8,4 @@ type envs = Env of def_envs * tannot emap * bounds_env * t_arg emap
 type 'a envs_out = 'a * envs
 
 
-val check : envs -> tannot defs -> tannot defs
+val check : envs -> tannot defs -> tannot defs * envs
