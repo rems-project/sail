@@ -9,3 +9,4 @@ type 'a envs_out = 'a * envs
 
 
 val check : envs -> tannot defs -> tannot defs * envs
+val typ_to_t : envs -> bool -> bool -> Ast.typ -> t
