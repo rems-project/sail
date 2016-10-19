@@ -449,7 +449,7 @@ let value_of_instruction_param direction (name,typ,v) =
     | _ -> Assert_extra.failwith "intern_ifield did not return vector"
   end in v
 
-let intern_instruction direction (name,parms,_) =
+let intern_instruction direction (name,parms) =
   Interp.V_ctor (Interp.id_of_string name) (T_id "ast") Interp.C_Union
     (Interp.V_tuple (List.map (value_of_instruction_param direction) parms))
 
