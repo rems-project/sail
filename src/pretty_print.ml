@@ -2798,16 +2798,115 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
       doc_op equals
              (concat [string "type"; space; doc_id_lem_type id;])
              (doc_typquant_lem typq (anglebars (space ^^ align fs_doc ^^ space)))
-  | TD_variant(id,nm,typq,ar,_) ->
-    let ar_doc = group (separate_map (break 1) (doc_type_union_lem regtypes) ar) in
-    doc_op equals
-      (concat [string "type"; space; doc_id_lem_type id;])
-      (doc_typquant_lem typq ar_doc)
+   | TD_variant(id,nm,typq,ar,_) ->
+      let ar_doc = group (separate_map (break 1) (doc_type_union_lem regtypes) ar) in
+      let typ_pp = (doc_op equals)
+                     (concat [string "type"; space; doc_id_lem_type id;])
+                     (doc_typquant_lem typq ar_doc) in
+      let make_id pat id =
+        separate space [string "SIA.Id_aux";
+                        parens (string "SIA.Id " ^^ string_lit (doc_id id));
+                        if pat then underscore else string "SIA.Unknown"] in
+      let fromInterpValueF = concat [doc_id_lem_type id;string "FromInterpValue"] in
+      let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
+      let fromInterpValuePP =
+        (prefix 2 1)
+          (separate space [string "let";fromInterpValueF;equals;string "function"])
+          (
+            ((separate_map (break 1))
+               (fun (Tu_aux (tu,_)) ->
+                 match tu with
+                 | Tu_ty_id (ty,cid) ->
+                    (separate space)
+                      [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
+                       arrow;
+                       doc_id_lem_ctor cid;
+                       parens (string "fromInterpValue v")]
+                 | Tu_id cid ->
+                    (separate space)
+                      [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
+                       arrow;
+                       doc_id_lem_ctor cid])
+               ar) ^/^
+              string "end") in
+      let toInterpValuePP =
+        (prefix 2 1)
+          (separate space [string "let";toInterpValueF;equals;string "function"])
+          (
+            ((separate_map (break 1))
+               (fun (Tu_aux (tu,_)) ->
+                 match tu with
+                 | Tu_ty_id (ty,cid) ->
+                    (separate space)
+                      [pipe;doc_id_lem_ctor cid;string "v";arrow;
+                       string "SI.V_ctor";
+                       parens (make_id false cid);
+                       parens (string "SIA.T_id " ^^ string_lit (doc_id id));
+                       string "SI.C_Union";
+                       parens (string "toInterpValue v")]
+                 | Tu_id cid ->
+                    (separate space)
+                      [pipe;doc_id_lem_ctor cid;arrow;
+                       string "SI.V_ctor";
+                       parens (make_id false cid);
+                       parens (string "SIA.T_id " ^^ string_lit (doc_id id));
+                       string "SI.C_Union";
+                       parens (string "toInterpValue ()")])
+               ar) ^/^
+              string "end") in
+      typ_pp ^^ hardline ^^ hardline ^^
+        fromInterpValuePP ^^ hardline ^^ hardline ^^
+          toInterpValuePP ^^ hardline
   | TD_enum(id,nm,enums,_) ->
-    let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) doc_id_lem_ctor enums) in
-    doc_op equals
-      (concat [string "type"; space; doc_id_lem_type id;])
-      (enums_doc)
+     let rec range i j = if i > j then [] else i :: (range (i+1) j) in
+     let nats = range 0 in
+     let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) doc_id_lem_ctor enums) in
+     let typ_pp = (doc_op equals)
+                    (concat [string "type"; space; doc_id_lem_type id;])
+                    (enums_doc) in
+     let fromInterpValueF = concat [doc_id_lem_type id;string "FromInterpValue"] in
+     let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
+     let make_id pat id =
+       separate space [string "SIA.Id_aux";
+                       parens (string "SIA.Id " ^^ string_lit (doc_id id));
+                       if pat then underscore else string "SIA.Unknown"] in
+     let fromInterpValuePP =
+       (prefix 2 1)
+         (separate space [string "let";fromInterpValueF;equals;string "function"])
+         (
+           ((separate_map (break 1))
+              (fun cid ->
+                (separate space)
+                  [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
+                   arrow;
+                   doc_id_lem_ctor cid])
+              enums) ^/^
+             string "end") in
+     let toInterpValuePP =
+       (prefix 2 1)
+         (separate space [string "let";toInterpValueF;equals;string "function"])
+         (
+           ((separate_map (break 1))
+              (fun (cid,number) ->
+                (separate space)
+                  [pipe;doc_id_lem_ctor cid;arrow;
+                   string "SI.V_ctor";
+                   parens (make_id false cid);
+                   parens (string "SIA.T_id " ^^ string_lit (doc_id id));
+                   parens (string ("SI.C_Enum " ^ string_of_int number));
+                   parens (string "toInterpValue ()")])
+              (List.combine enums (nats ((List.length enums) - 1)))) ^/^
+             string "end") in
+     let fromToInterpValuePP =
+       ((prefix 2 1)
+         (concat [string "instance ";parens (string "ToFromInterpValue " ^^ doc_id_lem_type id)])
+         (concat [string "let toInterpValue = ";toInterpValueF;hardline;
+                  string "let fromInterpValue = ";fromInterpValueF]))
+       ^/^ string "end" in
+      typ_pp ^^ hardline ^^ hardline ^^
+        fromInterpValuePP ^^ hardline ^^ hardline ^^
+          toInterpValuePP ^^ hardline ^^ hardline ^^
+            fromToInterpValuePP ^^ hardline
   | TD_register(id,n1,n2,rs) ->
     match n1,n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
@@ -2923,12 +3022,22 @@ let find_regtypes (Defs defs) =
     ) [] defs
 
 
+let typ_to_t env =
+  Type_check.typ_to_t env false false
+
 let pp_defs_lem f d top_line opens =
   let regtypes = find_regtypes d in
   let defs = doc_defs_lem regtypes d in
   (print f)
-    (string "(*" ^^ (string top_line) ^^ string "*)" ^/^
-       ((separate_map hardline)
-          (fun lib -> separate space [string "open import";string lib]) opens) ^/^
-         hardline ^^ defs);
-
+    (concat 
+       [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
+        (separate_map hardline)
+          (fun lib -> separate space [string "open import";string lib]) opens;hardline;
+        (separate_map hardline)
+          (fun lib -> separate space [string "     import";string lib]) ["Interp";"Interp_ast"]; hardline;
+        hardline;
+        string "module SI = Interp"; hardline;
+        string "module SIA = Interp_ast"; hardline;
+        hardline;
+        defs])
+       

@@ -1,6 +1,8 @@
 open import Pervasives_extra
 open import Sail_impl_base
 open import Vector
+open import Interp     (* only for converting between shallow- and deep-embedding values *)
+open import Interp_ast (* only for converting between shallow- and deep-embedding values *)
 
 type i = integer
 type n = natural
@@ -21,6 +23,10 @@ type register =
   | RegisterPair of register * register
 
 let dir is_inc = if is_inc then D_increasing else D_decreasing
+let bool_of_dir = function
+  | D_increasing -> true
+  | D_decreasing -> false
+  end
 
 let name_of_reg (Register name _ _ _ _) = name
 let size_of_reg (Register _ size _ _ _) = size
@@ -646,3 +652,344 @@ let assert' b msg_opt =
   | Nothing  -> "unspecified error"
   end in
   if to_bool b then failwith msg else ()
+
+
+class (ToFromInterpValue 'a)
+  val toInterpValue : 'a -> Interp.value
+  val fromInterpValue : Interp.value -> 'a
+end
+
+instance (ToFromInterpValue bool)
+  let toInterpValue = function
+    | true -> Interp.V_lit (L_aux (L_one) Unknown)
+    | false -> Interp.V_lit (L_aux (L_zero) Unknown)
+    end
+  let fromInterpValue = function
+    | Interp.V_lit (L_aux (L_true) _)  -> true
+    | Interp.V_lit (L_aux (L_false) _) -> false
+    | Interp.V_lit (L_aux (L_one) _)  -> true
+    | Interp.V_lit (L_aux (L_zero) _) -> false
+    | _ -> failwith "fromInterpValue bool: unexpected value"
+    end
+end
+
+instance (ToFromInterpValue unit)
+  let toInterpValue = fun () -> Interp.V_lit (L_aux (L_unit) Unknown)
+  let fromInterpValue = function
+    | Interp.V_lit (L_aux (L_unit) _) -> ()
+    | _ -> failwith "fromInterpValue unit: unexpected value"
+    end
+end
+
+instance (ToFromInterpValue integer)
+  let toInterpValue i = V_lit (L_aux (L_num i) Unknown)
+  let fromInterpValue = function
+    | Interp.V_lit (L_aux (L_num i) _) -> i
+    | _ -> failwith "fromInterpValue integer: unexexpected value"
+    end
+end
+
+instance (ToFromInterpValue string)
+  let toInterpValue s = V_lit (L_aux (L_string s) Unknown)
+  let fromInterpValue = function
+    | Interp.V_lit (L_aux (L_string s) _) -> s
+    | _ -> failwith "fromInterpValue integer: unexexpected value"
+    end
+end
+
+instance (ToFromInterpValue bitU)
+  let toInterpValue = function
+    | I     -> Interp.V_lit (L_aux (L_one) Unknown)
+    | O     -> Interp.V_lit (L_aux (L_zero) Unknown)
+    | Undef -> Interp.V_lit (L_aux (L_undef) Unknown)
+    end
+  let fromInterpValue = function
+    | Interp.V_lit (L_aux (L_one) _)   -> I
+    | Interp.V_lit (L_aux (L_zero) _)  -> O
+    | Interp.V_lit (L_aux (L_undef) _) -> Undef
+    | _ -> failwith "fromInterpValue bitU: unexpected value"
+    end
+end
+
+
+let tuple2ToInterpValue (a,b) =
+  V_tuple [toInterpValue a;toInterpValue b]
+let tuple2FromInterpValue = function
+  | V_tuple [a;b] -> (fromInterpValue a,fromInterpValue b)
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a 'b. ToFromInterpValue 'a, ToFromInterpValue 'b => (ToFromInterpValue ('a * 'b))
+  let toInterpValue = tuple2ToInterpValue
+  let fromInterpValue = tuple2FromInterpValue
+end
+
+let tuple3ToInterpValue (a,b,c) =
+  V_tuple [toInterpValue a;toInterpValue b;toInterpValue c]
+let tuple3FromInterpValue = function
+  | V_tuple [a;b;c] -> (fromInterpValue a,fromInterpValue b,fromInterpValue c)
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a 'b 'c. ToFromInterpValue 'a, ToFromInterpValue 'b, ToFromInterpValue 'c => 
+    (ToFromInterpValue ('a * 'b * 'c))
+  let toInterpValue = tuple3ToInterpValue
+  let fromInterpValue = tuple3FromInterpValue
+end
+
+let tuple4ToInterpValue (a,b,c,d) =
+  V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d]
+let tuple4FromInterpValue = function
+  | V_tuple [a;b;c;d] -> (fromInterpValue a,fromInterpValue b,
+                          fromInterpValue c,fromInterpValue d)
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a 'b 'c 'd. ToFromInterpValue 'a, ToFromInterpValue 'b, 
+                             ToFromInterpValue 'c, ToFromInterpValue 'd => 
+    (ToFromInterpValue ('a * 'b * 'c * 'd))
+  let toInterpValue = tuple4ToInterpValue
+  let fromInterpValue = tuple4FromInterpValue
+end
+
+let tuple5ToInterpValue (a,b,c,d,e) =
+  V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;toInterpValue e]
+let tuple5FromInterpValue = function
+  | V_tuple [a;b;c;d;e] ->
+     (fromInterpValue a,fromInterpValue b,fromInterpValue c,
+      fromInterpValue d,fromInterpValue e)
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a 'b 'c 'd 'e. 
+    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'c, ToFromInterpValue 'd,
+    ToFromInterpValue 'e =>
+    (ToFromInterpValue ('a * 'b * 'c * 'd * 'e))
+  let toInterpValue = tuple5ToInterpValue
+  let fromInterpValue = tuple5FromInterpValue
+end
+
+
+let tuple6ToInterpValue (a,b,c,d,e,f) =
+  V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
+           toInterpValue e;toInterpValue f]
+let tuple6FromInterpValue = function
+  | V_tuple [a;b;c;d;e;f] ->
+     (fromInterpValue a,fromInterpValue b,fromInterpValue c,
+      fromInterpValue d,fromInterpValue e,fromInterpValue f)
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a 'b 'c 'd 'e 'f.
+    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'c, ToFromInterpValue 'd,
+    ToFromInterpValue 'e, ToFromInterpValue 'f =>
+    (ToFromInterpValue ('a * 'b * 'c * 'd * 'e * 'f))
+  let toInterpValue = tuple6ToInterpValue
+  let fromInterpValue = tuple6FromInterpValue
+end
+
+let tuple7ToInterpValue (a,b,c,d,e,f,g) =
+  V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
+           toInterpValue e;toInterpValue f;toInterpValue g]
+let tuple7FromInterpValue = function
+  | V_tuple [a;b;c;d;e;f;g] ->
+     (fromInterpValue a,fromInterpValue b,fromInterpValue c,
+      fromInterpValue d,fromInterpValue e,fromInterpValue f,
+      fromInterpValue g)
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a 'b 'c 'd 'e 'f 'g.
+    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'c, ToFromInterpValue 'd,
+    ToFromInterpValue 'e, ToFromInterpValue 'f,
+    ToFromInterpValue 'g =>
+    (ToFromInterpValue ('a * 'b * 'c * 'd * 'e * 'f * 'g))
+  let toInterpValue = tuple7ToInterpValue
+  let fromInterpValue = tuple7FromInterpValue
+end
+
+
+let tuple8ToInterpValue (a,b,c,d,e,f,g,h) =
+  V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
+           toInterpValue e;toInterpValue f;toInterpValue g;toInterpValue h]
+let tuple8FromInterpValue = function
+  | V_tuple [a;b;c;d;e;f;g;h] ->
+     (fromInterpValue a,fromInterpValue b,fromInterpValue c,
+      fromInterpValue d,fromInterpValue e,fromInterpValue f,
+      fromInterpValue g,fromInterpValue h)
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a 'b 'c 'd 'e 'f 'g 'h.
+    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'c, ToFromInterpValue 'd,
+    ToFromInterpValue 'e, ToFromInterpValue 'f,
+    ToFromInterpValue 'g, ToFromInterpValue 'h =>
+    (ToFromInterpValue ('a * 'b * 'c * 'd * 'e * 'f * 'g * 'h))
+  let toInterpValue = tuple8ToInterpValue
+  let fromInterpValue = tuple8FromInterpValue
+end
+
+let tuple9ToInterpValue (a,b,c,d,e,f,g,h,i) =
+  V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
+           toInterpValue e;toInterpValue f;toInterpValue g;toInterpValue h;
+           toInterpValue i]
+let tuple9FromInterpValue = function
+  | V_tuple [a;b;c;d;e;f;g;h;i] ->
+     (fromInterpValue a,fromInterpValue b,fromInterpValue c,
+      fromInterpValue d,fromInterpValue e,fromInterpValue f,
+      fromInterpValue g,fromInterpValue h,fromInterpValue i)
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i.
+    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'c, ToFromInterpValue 'd,
+    ToFromInterpValue 'e, ToFromInterpValue 'f,
+    ToFromInterpValue 'g, ToFromInterpValue 'h,
+    ToFromInterpValue 'i =>
+    (ToFromInterpValue ('a * 'b * 'c * 'd * 'e * 'f * 'g * 'h * 'i))
+  let toInterpValue = tuple9ToInterpValue
+  let fromInterpValue = tuple9FromInterpValue
+end
+
+let tuple10ToInterpValue (a,b,c,d,e,f,g,h,i,j) =
+  V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
+           toInterpValue e;toInterpValue f;toInterpValue g;toInterpValue h;
+           toInterpValue i;toInterpValue j;]
+let tuple10FromInterpValue = function
+  | V_tuple [a;b;c;d;e;f;g;h;i;j] ->
+     (fromInterpValue a,fromInterpValue b,fromInterpValue c,
+      fromInterpValue d,fromInterpValue e,fromInterpValue f,
+      fromInterpValue g,fromInterpValue h,fromInterpValue i,
+      fromInterpValue j)
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j.
+    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'c, ToFromInterpValue 'd,
+    ToFromInterpValue 'e, ToFromInterpValue 'f,
+    ToFromInterpValue 'g, ToFromInterpValue 'h,
+    ToFromInterpValue 'i, ToFromInterpValue 'j =>
+    (ToFromInterpValue ('a * 'b * 'c * 'd * 'e * 'f * 'g * 'h * 'i * 'j))
+  let toInterpValue = tuple10ToInterpValue
+  let fromInterpValue = tuple10FromInterpValue
+end
+
+let tuple11ToInterpValue (a,b,c,d,e,f,g,h,i,j,k) =
+  V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
+           toInterpValue e;toInterpValue f;toInterpValue g;toInterpValue h;
+           toInterpValue i;toInterpValue j;toInterpValue k;]
+let tuple11FromInterpValue = function
+  | V_tuple [a;b;c;d;e;f;g;h;i;j;k] ->
+     (fromInterpValue a,fromInterpValue b,fromInterpValue c,
+      fromInterpValue d,fromInterpValue e,fromInterpValue f,
+      fromInterpValue g,fromInterpValue h,fromInterpValue i,
+      fromInterpValue j,fromInterpValue k)
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j 'k.
+    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'c, ToFromInterpValue 'd,
+    ToFromInterpValue 'e, ToFromInterpValue 'f,
+    ToFromInterpValue 'g, ToFromInterpValue 'h,
+    ToFromInterpValue 'i, ToFromInterpValue 'j,
+    ToFromInterpValue 'k =>
+    (ToFromInterpValue ('a * 'b * 'c * 'd * 'e * 'f * 'g * 'h * 'i * 'j * 'k))
+  let toInterpValue = tuple11ToInterpValue
+  let fromInterpValue = tuple11FromInterpValue
+end
+
+
+let tuple12ToInterpValue (a,b,c,d,e,f,g,h,i,j,k,l) =
+  V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
+           toInterpValue e;toInterpValue f;toInterpValue g;toInterpValue h;
+           toInterpValue i;toInterpValue j;toInterpValue k;toInterpValue l;]
+let tuple12FromInterpValue = function
+  | V_tuple [a;b;c;d;e;f;g;h;i;j;k;l] ->
+     (fromInterpValue a,fromInterpValue b,fromInterpValue c,
+      fromInterpValue d,fromInterpValue e,fromInterpValue f,
+      fromInterpValue g,fromInterpValue h,fromInterpValue i,
+      fromInterpValue j,fromInterpValue k,fromInterpValue l)
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j 'k 'l.
+    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'c, ToFromInterpValue 'd,
+    ToFromInterpValue 'e, ToFromInterpValue 'f,
+    ToFromInterpValue 'g, ToFromInterpValue 'h,
+    ToFromInterpValue 'i, ToFromInterpValue 'j,
+    ToFromInterpValue 'k, ToFromInterpValue 'l =>
+    (ToFromInterpValue ('a * 'b * 'c * 'd * 'e * 'f * 'g * 'h * 'i * 'j * 'k * 'l))
+  let toInterpValue = tuple12ToInterpValue
+  let fromInterpValue = tuple12FromInterpValue
+end
+
+
+
+val listToInterpValue : forall 'a. ToFromInterpValue 'a => list 'a -> Interp.value
+let listToInterpValue l = V_list (List.map toInterpValue l)
+
+val listFromInterpValue : forall 'a. ToFromInterpValue 'a => Interp.value -> list 'a
+let listFromInterpValue = function
+  | V_list l -> List.map fromInterpValue l
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a. ToFromInterpValue 'a => (ToFromInterpValue (list 'a))
+  let toInterpValue = listToInterpValue
+  let fromInterpValue = listFromInterpValue
+end
+
+
+val vectorToInterpValue : forall 'a. ToFromInterpValue 'a => vector 'a -> Interp.value
+let vectorToInterpValue (Vector vs start direction) =
+  V_vector (natFromInteger start) (if direction then IInc else IDec) (List.map toInterpValue vs)
+
+val vectorFromInterpValue : forall 'a. ToFromInterpValue 'a => Interp.value -> vector 'a
+let vectorFromInterpValue = function
+  | V_vector start direction vs ->
+     Vector (List.map fromInterpValue vs) (integerFromNat start)
+            (match direction with | IInc -> true | IDec -> false end)
+  | V_vector_sparse start length direction valuemap defaultval ->
+     make_indexed_vector
+       (List.map (fun (i,v) -> (integerFromNat i,fromInterpValue v)) valuemap)
+       (fromInterpValue defaultval)
+       (integerFromNat start) (integerFromNat length)
+       (match direction with | IInc -> true | IDec -> false end)
+  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  end
+
+instance forall 'a. ToFromInterpValue 'a => (ToFromInterpValue (vector 'a))
+  let toInterpValue = vectorToInterpValue
+  let fromInterpValue = vectorFromInterpValue
+end
+
+(* Here the type information is not accurate: instead of T_id "option" it should
+   be T_app (T_id "option) (...), but temporarily we'll do it like this. The
+   same thing has to be fixed in pretty_print.ml when we're generating the
+   type-class instances. *)
+val maybeToInterpValue : forall 'a. ToFromInterpValue 'a => maybe 'a -> Interp.value
+let maybeToInterpValue = function
+  | Nothing -> V_ctor (Id_aux (Id "None") Unknown) (T_id "option") C_Union (V_lit (L_aux L_unit Unknown))
+  | Just a  -> V_ctor (Id_aux (Id "Some") Unknown) (T_id "option") C_Union (toInterpValue a)
+  end
+
+val maybeFromInterpValue : forall 'a. ToFromInterpValue 'a => Interp.value -> maybe 'a
+let maybeFromInterpValue = function
+  | V_ctor (Id_aux (Id "None") _) _ _ _ -> Nothing
+  | V_ctor (Id_aux (Id "Some") _) _ _ v -> Just (fromInterpValue v)
+  | _ -> failwith "fromInterpValue maybe: unexpected value"
+  end
+
+instance forall 'a. ToFromInterpValue 'a => (ToFromInterpValue (maybe 'a))
+  let toInterpValue = maybeToInterpValue
+  let fromInterpValue = maybeFromInterpValue
+end
+
