@@ -416,7 +416,7 @@ let translate_address top_level end_flag thunk_name registers address =
   let (arg,_) = Interp.to_exp int_mode Interp.eenv intern_val in
   let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
   let (address_error,events) =
-    interp_to_value_helper (Just (Opcode bytes)) Ivh_translate val_str ("",[],[]) internal_direction
+    interp_to_value_helper (Just (Opcode bytes)) Ivh_translate val_str ("",[]) internal_direction
       registers [] false
       (fun _ -> Interp.resume 
         int_mode 
@@ -462,7 +462,7 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
   let (arg,_) = Interp.to_exp int_mode Interp.eenv intern_val in
   let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
   let (analysis_or_error,events) =
-    interp_to_value_helper Nothing Ivh_analysis val_str ("",[],[]) internal_direction
+    interp_to_value_helper Nothing Ivh_analysis val_str ("",[]) internal_direction
       registers [] false
       (fun _ -> Interp.resume 
         int_mode 
@@ -604,7 +604,7 @@ let decode_to_istate top_level registers value =
   let (arg,_) = Interp.to_exp mode Interp.eenv intern_val in
   let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
   let (instr_decoded_error,events) =
-    interp_to_value_helper (Just value) Ivh_decode val_str ("",[],[]) internal_direction registers [] false
+    interp_to_value_helper (Just value) Ivh_decode val_str ("",[]) internal_direction registers [] false
       (fun _ -> Interp.resume 
           mode 
           (Interp.Thunk_frame 
@@ -617,15 +617,15 @@ let decode_to_istate top_level registers value =
           match (find_instruction i instructions) with
             | Just(Instruction_extractor.Instr_form name parms effects) -> 
               match (parm,parms) with
-                | (Interp.V_lit (L_aux L_unit _),[]) -> (name, [], effects)
+                | (Interp.V_lit (L_aux L_unit _),[]) -> (name, [])
                 | (value,[(p_name,ie_typ)]) -> 
                   let t = migrate_typ ie_typ in
-                  (name, [(p_name,t, (extern_ifield_value name p_name value t))], effects)
+                  (name, [(p_name,t, (extern_ifield_value name p_name value t))])
                 | (Interp.V_tuple vals,parms) -> 
                   (name, 
                    (Interp_utilities.map2 (fun value (p_name,ie_typ) -> 
                      let t = migrate_typ ie_typ in
-                     (p_name,t,(extern_ifield_value name p_name value t))) vals parms), effects)
+                     (p_name,t,(extern_ifield_value name p_name value t))) vals parms))
                 | _ -> Assert_extra.failwith "decoded instruction doesn't match expectation"
               end
            | _ -> Assert_extra.failwith ("failed to find instruction " ^ i) end
@@ -665,7 +665,7 @@ let decode_to_instruction (top_level:context) registers (value:opcode) : instruc
   end
 
 val instruction_to_istate : context -> instruction -> instruction_state 
-let instruction_to_istate (top_level:context) (((name, parms, _) as instr):instruction) : instruction_state  = 
+let instruction_to_istate (top_level:context) (((name, parms) as instr):instruction) : instruction_state  = 
   let mode = make_interpreter_mode true false in
   let (Context top_env direction _ _ _ _ _ _) = top_level in
   let get_value (name,typ,v) = 
