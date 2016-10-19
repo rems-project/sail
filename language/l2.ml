@@ -434,7 +434,7 @@ type
 type 
 'a type_def_aux =  (* Type definition body *)
    TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
- | TD_recordfs of id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
+ | TD_record of id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
  | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
  | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)
  | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
