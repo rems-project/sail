@@ -596,6 +596,30 @@ let migrate_typ = function
 end
 
 
+let interp_value_to_instr_external top_level instr = 
+  let (Context (Interp.Env _ instructions _ _ _ _ _ _) _ _ _ _ _ _ _) = top_level in
+  match instr with
+  | Interp.V_ctor (Id_aux (Id i) _) _ _ parm ->
+     match (find_instruction i instructions) with
+     | Just(Instruction_extractor.Instr_form name parms effects) -> 
+        match (parm,parms) with
+        | (Interp.V_lit (L_aux L_unit _),[]) -> (name, [])
+        | (value,[(p_name,ie_typ)]) -> 
+           let t = migrate_typ ie_typ in
+           (name, [(p_name,t, (extern_ifield_value name p_name value t))])
+        | (Interp.V_tuple vals,parms) -> 
+           (name, 
+            (Interp_utilities.map2 (fun value (p_name,ie_typ) -> 
+                 let t = migrate_typ ie_typ in
+                 (p_name,t,(extern_ifield_value name p_name value t))) vals parms))
+        | _ -> Assert_extra.failwith "decoded instruction doesn't match expectation"
+        end
+     | _ -> Assert_extra.failwith ("failed to find instruction " ^ i) 
+     end
+  | _ -> Assert_extra.failwith "decoded instruction not a constructor" 
+  end
+
+
 let decode_to_istate top_level registers value = 
   let mode = make_interpreter_mode true false in
   let (Context ((Interp.Env _ instructions _ _ _ _ _ _) as top_env) direction _ _ _ _ _ _) = top_level in
@@ -612,24 +636,7 @@ let decode_to_istate top_level registers value =
              top_env Interp.eenv (Interp.emem "decode top level") Interp.Top) Nothing) in
   match (instr_decoded_error) with
     | Ivh_value instr -> 
-      let instr_external = match instr with
-        | Interp.V_ctor (Id_aux (Id i) _) _ _ parm ->
-          match (find_instruction i instructions) with
-            | Just(Instruction_extractor.Instr_form name parms effects) -> 
-              match (parm,parms) with
-                | (Interp.V_lit (L_aux L_unit _),[]) -> (name, [])
-                | (value,[(p_name,ie_typ)]) -> 
-                  let t = migrate_typ ie_typ in
-                  (name, [(p_name,t, (extern_ifield_value name p_name value t))])
-                | (Interp.V_tuple vals,parms) -> 
-                  (name, 
-                   (Interp_utilities.map2 (fun value (p_name,ie_typ) -> 
-                     let t = migrate_typ ie_typ in
-                     (p_name,t,(extern_ifield_value name p_name value t))) vals parms))
-                | _ -> Assert_extra.failwith "decoded instruction doesn't match expectation"
-              end
-           | _ -> Assert_extra.failwith ("failed to find instruction " ^ i) end
-        | _ -> Assert_extra.failwith "decoded instruction not a constructor" end in 
+      let instr_external = interp_value_to_instr_external top_level instr in
       let (arg,_) = Interp.to_exp mode Interp.eenv instr in
       let (instr_decoded_error,events) =
         interp_to_value_helper (Just value) Ivh_unsupported val_str instr_external internal_direction
@@ -663,6 +670,13 @@ let decode_to_instruction (top_level:context) registers (value:opcode) : instruc
   | Instr inst is -> IDE_instr inst
   | Decode_error de -> IDE_decode_error de
   end
+
+(*
+let instr_external_to_interp_value instr =
+  let (name,parms) = instr in
+
+  V_ctor (Id_aux (Id name) Interp_ast.Unknown) (T_id "ast") C_Union (List.map get_value parms)
+ *)
 
 val instruction_to_istate : context -> instruction -> instruction_state 
 let instruction_to_istate (top_level:context) (((name, parms) as instr):instruction) : instruction_state  = 

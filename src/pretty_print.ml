@@ -2854,9 +2854,16 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                        parens (string "toInterpValue ()")])
                ar) ^/^
               string "end") in
+      let fromToInterpValuePP =
+       ((prefix 2 1)
+         (concat [string "instance ";parens (string "ToFromInterpValue " ^^ doc_id_lem_type id)])
+         (concat [string "let toInterpValue = ";toInterpValueF;hardline;
+                  string "let fromInterpValue = ";fromInterpValueF]))
+       ^/^ string "end" in
       typ_pp ^^ hardline ^^ hardline ^^
         fromInterpValuePP ^^ hardline ^^ hardline ^^
-          toInterpValuePP ^^ hardline
+          toInterpValuePP ^^ hardline ^^ hardline ^^
+            fromToInterpValuePP ^^ hardline
   | TD_enum(id,nm,enums,_) ->
      let rec range i j = if i > j then [] else i :: (range (i+1) j) in
      let nats = range 0 in
