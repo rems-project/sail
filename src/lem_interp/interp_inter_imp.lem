@@ -671,37 +671,41 @@ let decode_to_instruction (top_level:context) registers (value:opcode) : instruc
   | Decode_error de -> IDE_decode_error de
   end
 
-(*
-let instr_external_to_interp_value instr =
+
+let instr_external_to_interp_value top_level instr =
+  let (Context _ direction _ _ _ _ _ _) = top_level in
   let (name,parms) = instr in
 
-  V_ctor (Id_aux (Id name) Interp_ast.Unknown) (T_id "ast") C_Union (List.map get_value parms)
- *)
+  let get_value (_,typ,v) = 
+    let vec = intern_ifield_value direction v in
+    match vec with
+      | Interp.V_vector start dir bits ->
+         match typ with
+         | Bit -> match bits with | [b] -> b | _ -> Assert_extra.failwith "Expected a bitvector of length 1" end
+         | Range _ -> Interp_lib.to_num Interp_lib.Unsigned vec
+         | Enum _ _ -> Interp_lib.to_num Interp_lib.Unsigned vec
+         | _ -> vec
+         end 
+      | _ -> Assert_extra.failwith "intern_ifield did not return vector"
+    end in
+
+  let parmsV = match parms with
+    | [] -> Interp.V_lit (L_aux L_unit Unknown)
+    | _  -> Interp.V_tuple (List.map get_value parms)
+    end in
+  (*This type shouldn't be hard-coded*)
+  Interp.V_ctor (Interp_ast.Id_aux (Interp_ast.Id name) Interp_ast.Unknown) 
+                (T_id "ast") Interp.C_Union parmsV
 
 val instruction_to_istate : context -> instruction -> instruction_state 
 let instruction_to_istate (top_level:context) (((name, parms) as instr):instruction) : instruction_state  = 
   let mode = make_interpreter_mode true false in
-  let (Context top_env direction _ _ _ _ _ _) = top_level in
-  let get_value (name,typ,v) = 
-    let vec = intern_ifield_value direction v in
-    let v = match vec with
-      | Interp.V_vector start dir bits ->
-        match typ with
-          | Bit -> match bits with | [b] -> b | _ -> Assert_extra.failwith "Expected a bitvector of length 1" end
-          | Range _ -> Interp_lib.to_num Interp_lib.Unsigned vec
-          | Enum _ _ -> Interp_lib.to_num Interp_lib.Unsigned vec
-          | _ -> vec
-       end 
-      | _ -> Assert_extra.failwith "intern_ifield did not return vector"
-    end in
-    let (e,_) = Interp.to_exp mode Interp.eenv v in e 
-  in
+  let (Context top_env _ _ _ _ _ _ _) = top_level in
+  let ast_node = fst (Interp.to_exp mode Interp.eenv (instr_external_to_interp_value top_level instr)) in
   (IState
      (Interp.Thunk_frame
-        (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) 
-                  [(E_aux (E_app (Id_aux (Id name) Interp_ast.Unknown) (List.map get_value parms))
-                      (Interp_ast.Unknown,Interp.ctor_annot (T_id "ast")) (*This type shouldn't be hard-coded*))])
-           (Interp_ast.Unknown,Nothing))
+        (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) [ast_node])
+               (Interp_ast.Unknown,Nothing))
         top_env Interp.eenv (Interp.emem "execute") Interp.Top)
      top_level)
 
