@@ -1,0 +1,5 @@
+(* for each instruction instance, identify the role of the registers
+   and possible branching: (outputs, inputs, voidstars, branch) *)
+
+| `MIPSAdd ->
+      ([], [], [], [Next])
