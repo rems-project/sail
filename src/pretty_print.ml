@@ -32,7 +32,7 @@ let lemnum default n = match n with
   | 5   -> "five"
   | 6   -> "six"
   | 7   -> "seven"
-  | 8   -> "eight" 
+  | 8   -> "eight"
   | 15  -> "fifteen"
   | 16  -> "sixteen"
   | 20  -> "twenty"
@@ -69,7 +69,7 @@ let rec pp_format_l_lem = function
 (*  | Parse_ast.Int(s,None) -> "(Int \"" ^ s ^ "\" Nothing)"
   | Parse_ast.Int(s,(Some l)) -> "(Int \"" ^  s ^ "\" (Just " ^ (pp_format_l_lem l) ^ "))"
   | Parse_ast.Range(p1,p2) -> "(Range \"" ^ p1.Lexing.pos_fname ^ "\" " ^
-                               (string_of_int p1.Lexing.pos_lnum) ^ " " ^ 
+                               (string_of_int p1.Lexing.pos_lnum) ^ " " ^
                                (string_of_int (p1.Lexing.pos_cnum - p1.Lexing.pos_bol)) ^ " " ^
                                (string_of_int p2.Lexing.pos_lnum) ^ " " ^
                                (string_of_int (p2.Lexing.pos_cnum - p2.Lexing.pos_bol)) ^ ")"*)
@@ -100,7 +100,7 @@ let pp_format_bkind_lem (BK_aux(k,l)) =
 
 let pp_lem_bkind ppf bk = base ppf (pp_format_bkind_lem bk)
 
-let pp_format_kind_lem (K_aux(K_kind(klst),l)) = 
+let pp_format_kind_lem (K_aux(K_kind(klst),l)) =
   "(K_aux (K_kind [" ^ list_format "; " pp_format_bkind_lem klst ^ "]) " ^ (pp_format_l_lem l) ^ ")"
 
 let pp_lem_kind ppf k = base ppf (pp_format_kind_lem k)
@@ -110,14 +110,14 @@ let rec pp_format_typ_lem (Typ_aux(t,l)) =
   (match t with
     | Typ_id(id) -> "(Typ_id " ^ pp_format_id_lem id ^ ")"
     | Typ_var(var) -> "(Typ_var " ^ pp_format_var_lem var ^ ")"
-    | Typ_fn(arg,ret,efct) -> "(Typ_fn " ^ pp_format_typ_lem arg ^ " " ^ 
+    | Typ_fn(arg,ret,efct) -> "(Typ_fn " ^ pp_format_typ_lem arg ^ " " ^
                               pp_format_typ_lem ret ^ " " ^
                               (pp_format_effects_lem efct) ^ ")"
     | Typ_tup(typs) -> "(Typ_tup [" ^ (list_format "; " pp_format_typ_lem typs) ^ "])"
     | Typ_app(id,args) -> "(Typ_app " ^ (pp_format_id_lem id) ^ " [" ^ (list_format "; " pp_format_typ_arg_lem args) ^ "])"
     | Typ_wild -> "Typ_wild") ^ " " ^
     (pp_format_l_lem l) ^ ")"
-and pp_format_nexp_lem (Nexp_aux(n,l)) = 
+and pp_format_nexp_lem (Nexp_aux(n,l)) =
   "(Nexp_aux " ^
   (match n with
    | Nexp_id(i) -> "(Nexp_id " ^ pp_format_id_lem i ^ ")"
@@ -129,8 +129,8 @@ and pp_format_nexp_lem (Nexp_aux(n,l)) =
    | Nexp_exp(n1) -> "(Nexp_exp " ^ (pp_format_nexp_lem n1) ^ ")"
    | Nexp_neg(n1) -> "(Nexp_neg " ^ (pp_format_nexp_lem n1) ^ ")") ^ " " ^
   (pp_format_l_lem l) ^ ")"
-and pp_format_ord_lem (Ord_aux(o,l)) = 
-  "(Ord_aux " ^ 
+and pp_format_ord_lem (Ord_aux(o,l)) =
+  "(Ord_aux " ^
   (match o with
     | Ord_var(v) -> "(Ord_var " ^ pp_format_var_lem v ^ ")"
     | Ord_inc -> "Ord_inc"
@@ -162,7 +162,7 @@ and pp_format_effects_lem (Effect_aux(e,l)) =
     "(Effect_set [" ^
       (list_format "; " pp_format_base_effect_lem efcts) ^ " ])") ^ " " ^
   (pp_format_l_lem l) ^ ")"
-and pp_format_typ_arg_lem (Typ_arg_aux(t,l)) = 
+and pp_format_typ_arg_lem (Typ_arg_aux(t,l)) =
   "(Typ_arg_aux " ^
   (match t with
   | Typ_arg_typ(t) -> "(Typ_arg_typ " ^ pp_format_typ_lem t ^ ")"
@@ -183,7 +183,7 @@ let pp_format_nexp_constraint_lem (NC_aux(nc,l)) =
   | NC_fixed(n1,n2) -> "(NC_fixed " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
   | NC_bounded_ge(n1,n2) -> "(NC_bounded_ge " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
   | NC_bounded_le(n1,n2) -> "(NC_bounded_le " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
-  | NC_nat_set_bounded(id,bounds) -> "(NC_nat_set_bounded " ^ 
+  | NC_nat_set_bounded(id,bounds) -> "(NC_nat_set_bounded " ^
     pp_format_var_lem id ^
       " [" ^
       list_format "; " string_of_int bounds ^
@@ -193,7 +193,7 @@ let pp_format_nexp_constraint_lem (NC_aux(nc,l)) =
 let pp_lem_nexp_constraint ppf nc = base ppf (pp_format_nexp_constraint_lem nc)
 
 let pp_format_qi_lem (QI_aux(qi,lq)) =
-  "(QI_aux " ^ 
+  "(QI_aux " ^
   (match qi with
   | QI_const(n_const) -> "(QI_const " ^ pp_format_nexp_constraint_lem n_const ^ ")"
   | QI_id(KOpt_aux(ki,lk)) ->
@@ -201,19 +201,19 @@ let pp_format_qi_lem (QI_aux(qi,lq)) =
     (match ki with
     | KOpt_none(var) -> "(KOpt_none " ^ pp_format_var_lem var ^ ")"
     | KOpt_kind(k,var) -> "(KOpt_kind " ^ pp_format_kind_lem k ^ " " ^ pp_format_var_lem var ^ ")") ^ " " ^
-      (pp_format_l_lem lk) ^ "))") ^ " " ^ 
+      (pp_format_l_lem lk) ^ "))") ^ " " ^
   (pp_format_l_lem lq) ^ ")"
 
 let pp_lem_qi ppf qi = base ppf (pp_format_qi_lem qi)
 
 let pp_format_typquant_lem (TypQ_aux(tq,l)) =
-  "(TypQ_aux " ^ 
+  "(TypQ_aux " ^
   (match tq with
   | TypQ_no_forall -> "TypQ_no_forall"
   | TypQ_tq(qlist) ->
-    "(TypQ_tq [" ^ 
+    "(TypQ_tq [" ^
     (list_format "; " pp_format_qi_lem qlist) ^
-    "])") ^ " " ^ 
+    "])") ^ " " ^
   (pp_format_l_lem l) ^ ")"
 
 let pp_lem_typquant ppf tq = base ppf (pp_format_typquant_lem tq)
@@ -221,7 +221,7 @@ let pp_lem_typquant ppf tq = base ppf (pp_format_typquant_lem tq)
 let pp_format_typscm_lem (TypSchm_aux(TypSchm_ts(tq,t),l)) =
   "(TypSchm_aux (TypSchm_ts " ^ (pp_format_typquant_lem tq) ^ " " ^ pp_format_typ_lem t ^ ") " ^
                 (pp_format_l_lem l) ^ ")"
- 
+
 let pp_lem_typscm ppf ts = base ppf (pp_format_typscm_lem ts)
 
 let pp_format_lit_lem (L_aux(lit,l)) =
@@ -259,7 +259,7 @@ and pp_format_targ = function
   | TA_ord o -> "(T_arg_order " ^ pp_format_o o ^ ")"
 and pp_format_n n =
   match n.nexp with
-  | Nid (i, n) -> "(Ne_id \"" ^ i ^ " " ^ "\")" 
+  | Nid (i, n) -> "(Ne_id \"" ^ i ^ " " ^ "\")"
   | Nvar i -> "(Ne_var \"" ^ i ^ "\")"
   | Nconst i -> "(Ne_const " ^ (lemnum string_of_int (int_of_big_int i)) ^ ")"
   | Npos_inf -> "Ne_inf"
@@ -273,7 +273,7 @@ and pp_format_n n =
   | Nneg_inf -> "(Ne_unary Ne_inf)"
   | Npow _ -> "power_not_implemented"
   | Ninexact -> "(Ne_add Ne_inf (Ne_unary Ne_inf)"
-and pp_format_e e = 
+and pp_format_e e =
   "(Effect_aux " ^
   (match e.effect with
   | Evar i -> "(Effect_var (Kid_aux (Var \"" ^ i ^ "\") Unknown))"
@@ -281,8 +281,8 @@ and pp_format_e e =
                   (list_format "; " pp_format_base_effect_lem es) ^ " ])"
   | Euvar(_) -> "(Effect_var (Kid_aux (Var \"fresh_v\") Unknown))")
   ^ " Unknown)"
-and pp_format_o o = 
-  "(Ord_aux " ^ 
+and pp_format_o o =
+  "(Ord_aux " ^
   (match o.order with
   | Ovar i -> "(Ord_var (Kid_aux (Var \"" ^ i ^ "\") Unknown))"
   | Oinc -> "Ord_inc"
@@ -293,7 +293,7 @@ and pp_format_o o =
 let rec pp_format_tag = function
   | Emp_local -> "Tag_empty"
   | Emp_intro -> "Tag_intro"
-  | Emp_set -> "Tag_set" 
+  | Emp_set -> "Tag_set"
   | Emp_global -> "Tag_global"
   | Tuple_assign tags -> "(Tag_tuple_assign [" ^ list_format " ;" pp_format_tag tags ^ "])"
   | External (Some s) -> "(Tag_extern (Just \""^s^"\"))"
@@ -304,18 +304,18 @@ let rec pp_format_tag = function
   | Alias alias_inf -> "Tag_alias"
   | Spec -> "Tag_spec"
 
-let rec pp_format_nes nes = 
+let rec pp_format_nes nes =
   "[" ^ (*
   (list_format "; "
      (fun ne -> match ne with
        | LtEq(_,n1,n2) -> "(Nec_lteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | Eq(_,n1,n2) -> "(Nec_eq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
        | GtEq(_,n1,n2) -> "(Nec_gteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
-       | In(_,i,ns) | InS(_,{nexp=Nvar i},ns) -> 
+       | In(_,i,ns) | InS(_,{nexp=Nvar i},ns) ->
          "(Nec_in \"" ^ i ^ "\" [" ^ (list_format "; " string_of_int ns)^ "])"
-       | InS(_,_,ns)  ->  
+       | InS(_,_,ns)  ->
          "(Nec_in \"fresh\" [" ^ (list_format "; " string_of_int ns)^ "])"
-       | CondCons(_,nes_c,nes_t) -> 
+       | CondCons(_,nes_c,nes_t) ->
          "(Nec_cond " ^ (pp_format_nes nes_c) ^ " " ^ (pp_format_nes nes_t) ^ ")"
        | BranchCons(_,nes_b) ->
          "(Nec_branch " ^ (pp_format_nes nes_b) ^ ")"
@@ -324,7 +324,7 @@ let rec pp_format_nes nes =
 
 let pp_format_annot = function
   | NoTyp -> "Nothing"
-  | Base((_,t),tag,nes,efct,efctsum,_) -> 
+  | Base((_,t),tag,nes,efct,efctsum,_) ->
     (*TODO print out bindings for use in pattern match in interpreter*)
      "(Just (" ^ pp_format_t t ^ ", " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^
        pp_format_e efct ^ ", " ^ pp_format_e efctsum ^ "))"
@@ -344,7 +344,7 @@ let rec pp_format_pat_lem (P_aux(p,(l,annot))) =
   | P_app(id,pats) -> "(P_app " ^ pp_format_id_lem id ^ " [" ^
                       list_format "; " pp_format_pat_lem pats ^ "])"
   | P_record(fpats,_) -> "(P_record [" ^
-                       list_format "; " (fun (FP_aux(FP_Fpat(id,fpat),_)) -> 
+                       list_format "; " (fun (FP_aux(FP_Fpat(id,fpat),_)) ->
                                           "(FP_Fpat " ^ pp_format_id_lem id ^ " " ^ pp_format_pat_lem fpat ^ ")") fpats
                        ^ "])"
   | P_vector(pats) -> "(P_vector [" ^ list_format "; " pp_format_pat_lem pats ^ "])"
@@ -352,29 +352,29 @@ let rec pp_format_pat_lem (P_aux(p,(l,annot))) =
     "(P_vector_indexed [" ^ list_format "; " (fun (i,p) -> Printf.sprintf "(%d, %s)" i (pp_format_pat_lem p)) ipats ^ "])"
   | P_vector_concat(pats) -> "(P_vector_concat [" ^ list_format "; " pp_format_pat_lem pats ^ "])"
   | P_tup(pats) -> "(P_tup [" ^ (list_format "; " pp_format_pat_lem pats) ^ "])"
-  | P_list(pats) -> "(P_list [" ^ (list_format "; " pp_format_pat_lem pats) ^ "])") ^ 
+  | P_list(pats) -> "(P_list [" ^ (list_format "; " pp_format_pat_lem pats) ^ "])") ^
   " (" ^ pp_format_l_lem l ^ ", " ^ pp_format_annot annot ^ "))"
 
 let pp_lem_pat ppf p = base ppf (pp_format_pat_lem p)
 
 let rec pp_lem_let ppf (LB_aux(lb,(l,annot))) =
-  let print_lb ppf lb = 
+  let print_lb ppf lb =
     match lb with
-      | LB_val_explicit(ts,pat,exp) -> 
+      | LB_val_explicit(ts,pat,exp) ->
         fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "LB_val_explicit" pp_lem_typscm ts pp_lem_pat pat pp_lem_exp exp
-      | LB_val_implicit(pat,exp) -> 
+      | LB_val_implicit(pat,exp) ->
         fprintf ppf "@[<0>(%a %a %a)@]" kwd "LB_val_implicit" pp_lem_pat pat  pp_lem_exp exp in
   fprintf ppf "@[<0>(LB_aux %a (%a, %a))@]" print_lb lb pp_lem_l l pp_annot annot
 
-and pp_lem_exp ppf (E_aux(e,(l,annot))) = 
-  let print_e ppf e = 
+and pp_lem_exp ppf (E_aux(e,(l,annot))) =
+  let print_e ppf e =
     match e with
     | E_block(exps) -> fprintf ppf "@[<0>(E_aux %a [%a] %a (%a, %a))@]"
-      kwd "(E_block" 
+      kwd "(E_block"
       (list_pp pp_semi_lem_exp pp_lem_exp) exps
       kwd ")" pp_lem_l l pp_annot annot
     | E_nondet(exps) -> fprintf ppf "@[<0>(E_aux %a [%a] %a (%a, %a))@]"
-      kwd "(E_nondet" 
+      kwd "(E_nondet"
       (list_pp pp_semi_lem_exp pp_lem_exp) exps
       kwd ")" pp_lem_l l pp_annot annot
     | E_id(id) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_id" pp_lem_id id pp_lem_l l pp_annot annot
@@ -391,30 +391,30 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_if(c,t,e) -> fprintf ppf "@[<0>(E_aux (E_if %a @[<1>%a@] @[<1> %a@]) (%a, %a))@]"
                        pp_lem_exp c pp_lem_exp t pp_lem_exp e pp_lem_l l pp_annot annot
     | E_for(id,exp1,exp2,exp3,order,exp4) ->
-      fprintf ppf "@[<0>(E_aux (E_for %a %a %a %a %a @ @[<1> %a @]) (%a, %a))@]" 
+      fprintf ppf "@[<0>(E_aux (E_for %a %a %a %a %a @ @[<1> %a @]) (%a, %a))@]"
         pp_lem_id id pp_lem_exp exp1 pp_lem_exp exp2 pp_lem_exp exp3
         pp_lem_ord order pp_lem_exp exp4 pp_lem_l l pp_annot annot
     | E_vector(exps) -> fprintf ppf "@[<0>(E_aux (%a [%a]) (%a, %a))@]"
                           kwd "E_vector" (list_pp pp_semi_lem_exp pp_lem_exp) exps pp_lem_l l pp_annot annot
-    | E_vector_indexed(iexps,(Def_val_aux (default, (dl,dannot)))) -> 
+    | E_vector_indexed(iexps,(Def_val_aux (default, (dl,dannot)))) ->
       let iformat ppf (i,e) = fprintf ppf "@[<1>(%i %a %a) %a@]" i kwd ", " pp_lem_exp e kwd ";" in
       let lformat ppf (i,e) = fprintf ppf "@[<1>(%i %a %a) @]" i kwd ", " pp_lem_exp e in
       let default_string ppf _ = (match default with
-        | Def_val_empty -> fprintf ppf "(Def_val_aux Def_val_empty (%a,%a))" pp_lem_l dl pp_annot dannot 
+        | Def_val_empty -> fprintf ppf "(Def_val_aux Def_val_empty (%a,%a))" pp_lem_l dl pp_annot dannot
         | Def_val_dec e -> fprintf ppf "(Def_val_aux (Def_val_dec %a) (%a,%a))"
-                             pp_lem_exp e pp_lem_l dl pp_annot dannot) in 
+                             pp_lem_exp e pp_lem_l dl pp_annot dannot) in
       fprintf ppf "@[<0>(E_aux (%a [%a] %a) (%a, %a))@]" kwd "E_vector_indexed"
         (list_pp iformat lformat) iexps default_string () pp_lem_l l pp_annot annot
     | E_vector_access(v,e) ->
       fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]"
         kwd "E_vector_access" pp_lem_exp v pp_lem_exp e pp_lem_l l pp_annot annot
-    | E_vector_subrange(v,e1,e2) -> 
+    | E_vector_subrange(v,e1,e2) ->
       fprintf ppf "@[<0>(E_aux (E_vector_subrange %a %a %a) (%a, %a))@]"
         pp_lem_exp v pp_lem_exp e1 pp_lem_exp e2 pp_lem_l l pp_annot annot
-    | E_vector_update(v,e1,e2) -> 
+    | E_vector_update(v,e1,e2) ->
       fprintf ppf "@[<0>(E_aux (E_vector_update %a %a %a) (%a, %a))@]"
         pp_lem_exp v pp_lem_exp e1 pp_lem_exp e2 pp_lem_l l pp_annot annot
-    | E_vector_update_subrange(v,e1,e2,e3) -> 
+    | E_vector_update_subrange(v,e1,e2,e3) ->
       fprintf ppf "@[<0>(E_aux (E_vector_update_subrange %a %a %a %a) (%a, %a))@]"
         pp_lem_exp v pp_lem_exp e1 pp_lem_exp e2 pp_lem_exp e3 pp_lem_l l pp_annot annot
     | E_vector_append(v1,v2) ->
@@ -424,7 +424,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
                         (list_pp pp_semi_lem_exp pp_lem_exp) exps pp_lem_l l pp_annot annot
     | E_cons(e1,e2) -> fprintf ppf "@[<0>(E_aux (E_cons %a %a) (%a, %a))@]"
                          pp_lem_exp e1 pp_lem_exp e2 pp_lem_l l pp_annot annot
-    | E_record(FES_aux(FES_Fexps(fexps,_),(fl,fannot))) -> 
+    | E_record(FES_aux(FES_Fexps(fexps,_),(fl,fannot))) ->
       fprintf ppf "@[<0>(E_aux (E_record (FES_aux (FES_Fexps [%a] false) (%a,%a))) (%a, %a))@]"
         (list_pp pp_semi_lem_fexp pp_lem_fexp) fexps pp_lem_l fl pp_annot fannot pp_lem_l l pp_annot annot
     | E_record_update(exp,(FES_aux(FES_Fexps(fexps,_),(fl,fannot)))) ->
@@ -433,7 +433,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
         pp_lem_l fl pp_annot fannot pp_lem_l l pp_annot annot
     | E_field(fexp,id) -> fprintf ppf "@[<0>(E_aux (E_field %a %a) (%a, %a))@]"
                             pp_lem_exp fexp pp_lem_id id pp_lem_l l pp_annot annot
-    | E_case(exp,pexps) -> 
+    | E_case(exp,pexps) ->
       fprintf ppf "@[<0>(E_aux (E_case %a [%a]) (%a, %a))@]"
         pp_lem_exp exp (list_pp pp_semi_lem_case pp_lem_case) pexps pp_lem_l l pp_annot annot
     | E_let(leb,exp) -> fprintf ppf "@[<0>(E_aux (E_let %a %a) (%a, %a))@]"
@@ -454,14 +454,14 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
         | Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
         | Tapp("vector",[TA_nexp _;TA_nexp r;_;_]) ->
           (match r.nexp with
-          | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
+          | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]"
                                        kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
           | Nvar v -> fprintf ppf  "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
                                      kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
           | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given vector without known length"))
         | Tapp("implicit",[TA_nexp r]) ->
           (match r.nexp with
-            | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]" 
+            | Nconst bi -> fprintf ppf "@[<0>(E_aux (E_lit (L_aux (L_num %a) %a)) (%a, %a))@]"
                                        kwd (lemnum string_of_int (int_of_big_int bi)) pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
             | Nvar v -> fprintf ppf "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
                                      kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
@@ -481,16 +481,16 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
 
 and pp_semi_lem_exp ppf e = fprintf ppf "@[<1>%a%a@]" pp_lem_exp e kwd ";"
 
-and pp_lem_fexp ppf (FE_aux(FE_Fexp(id,exp),(l,annot))) = 
+and pp_lem_fexp ppf (FE_aux(FE_Fexp(id,exp),(l,annot))) =
   fprintf ppf "@[<1>(FE_aux (FE_Fexp %a %a) (%a, %a))@]" pp_lem_id id pp_lem_exp exp pp_lem_l l pp_annot annot
 and pp_semi_lem_fexp ppf fexp = fprintf ppf "@[<1>%a %a@]" pp_lem_fexp fexp kwd ";"
 
-and pp_lem_case ppf (Pat_aux(Pat_exp(pat,exp),(l,annot))) = 
+and pp_lem_case ppf (Pat_aux(Pat_exp(pat,exp),(l,annot))) =
   fprintf ppf "@[<1>(Pat_aux (Pat_exp %a@ %a) (%a, %a))@]" pp_lem_pat pat pp_lem_exp exp pp_lem_l l pp_annot annot
 and pp_semi_lem_case ppf case = fprintf ppf "@[<1>%a %a@]" pp_lem_case case kwd ";"
 
 and pp_lem_lexp ppf (LEXP_aux(lexp,(l,annot))) =
-  let print_le ppf lexp = 
+  let print_le ppf lexp =
     match lexp with
       | LEXP_id(id) -> fprintf ppf "(%a %a)" kwd "LEXP_id" pp_lem_id id
       | LEXP_memory(id,args) ->
@@ -498,7 +498,7 @@ and pp_lem_lexp ppf (LEXP_aux(lexp,(l,annot))) =
       | LEXP_cast(typ,id) -> fprintf ppf "(LEXP_cast %a %a)" pp_lem_typ typ pp_lem_id id
       | LEXP_tup tups -> fprintf ppf "(LEXP_tuple [%a])" (list_pp pp_semi_lem_lexp pp_lem_lexp) tups
       | LEXP_vector(v,exp) -> fprintf ppf "@[(%a %a %a)@]" kwd "LEXP_vector" pp_lem_lexp v pp_lem_exp exp
-      | LEXP_vector_range(v,e1,e2) -> 
+      | LEXP_vector_range(v,e1,e2) ->
         fprintf ppf "@[(%a %a %a %a)@]" kwd "LEXP_vector_range" pp_lem_lexp v  pp_lem_exp e1 pp_lem_exp e2
       | LEXP_field(v,id) -> fprintf ppf "@[(%a %a %a)@]" kwd "LEXP_field" pp_lem_lexp v pp_lem_id id
   in
@@ -533,35 +533,35 @@ let pp_lem_namescm ppf (Name_sect_aux(ns,l)) =
   | Name_sect_some(s) -> fprintf ppf "(Name_sect_aux (Name_sect_some \"%s\") %a)" s pp_lem_l l
 
 let rec pp_lem_range ppf (BF_aux(r,l)) =
-  match r with 
+  match r with
   | BF_single(i) -> fprintf ppf "(BF_aux (BF_single %i) %a)" i pp_lem_l l
   | BF_range(i1,i2) -> fprintf ppf "(BF_aux (BF_range %i %i) %a)" i1 i2 pp_lem_l l
   | BF_concat(ir1,ir2) -> fprintf ppf "(BF_aux (BF_concat %a %a) %a)" pp_lem_range ir1 pp_lem_range ir2 pp_lem_l l
 
 let pp_lem_typdef ppf (TD_aux(td,(l,annot))) =
-  let print_td ppf td = 
+  let print_td ppf td =
     match td with
-      | TD_abbrev(id,namescm,typschm) -> 
+      | TD_abbrev(id,namescm,typschm) ->
         fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "TD_abbrev" pp_lem_id id pp_lem_namescm namescm pp_lem_typscm typschm
-      | TD_record(id,nm,typq,fs,_) -> 
+      | TD_record(id,nm,typq,fs,_) ->
         let f_pp ppf (typ,id) =
           fprintf ppf "@[<1>(%a, %a)%a@]" pp_lem_typ typ pp_lem_id id kwd ";" in
-        fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]" 
+        fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]"
           kwd "TD_record" pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp f_pp f_pp) fs
       | TD_variant(id,nm,typq,ar,_) ->
-        let a_pp ppf (Tu_aux(typ_u,l)) = 
+        let a_pp ppf (Tu_aux(typ_u,l)) =
           match typ_u with
-            | Tu_ty_id(typ,id) -> fprintf ppf "@[<1>(Tu_aux (Tu_ty_id %a %a) %a);@]" 
+            | Tu_ty_id(typ,id) -> fprintf ppf "@[<1>(Tu_aux (Tu_ty_id %a %a) %a);@]"
                                   pp_lem_typ typ pp_lem_id id pp_lem_l l
             | Tu_id(id) -> fprintf ppf "@[<1>(Tu_aux (Tu_id %a) %a);@]" pp_lem_id id pp_lem_l l
         in
-        fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]" 
-          kwd "TD_variant" pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp a_pp a_pp) ar 
+        fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]"
+          kwd "TD_variant" pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp a_pp a_pp) ar
       | TD_enum(id,ns,enums,_) ->
         let pp_id_semi ppf id = fprintf ppf "%a%a " pp_lem_id id kwd ";" in
         fprintf ppf "@[<0>(%a %a %a [%a] false)@]"
           kwd "TD_enum" pp_lem_id id pp_lem_namescm ns (list_pp pp_id_semi pp_lem_id) enums
-      | TD_register(id,n1,n2,rs) -> 
+      | TD_register(id,n1,n2,rs) ->
         let pp_rid ppf (r,id) = fprintf ppf "(%a, %a)%a " pp_lem_range r pp_lem_id id kwd ";" in
         let pp_rids = (list_pp pp_rid pp_rid) in
         fprintf ppf "@[<0>(%a %a %a %a [%a])@]"
@@ -570,33 +570,33 @@ let pp_lem_typdef ppf (TD_aux(td,(l,annot))) =
   fprintf ppf "@[<0>(TD_aux %a (%a, %a))@]" print_td td pp_lem_l l pp_annot annot
 
 let pp_lem_kindef ppf (KD_aux(kd,(l,annot))) =
-  let print_kd ppf kd = 
+  let print_kd ppf kd =
     match kd with
-    | KD_abbrev(kind,id,namescm,typschm) -> 
+    | KD_abbrev(kind,id,namescm,typschm) ->
       fprintf ppf "@[<0>(KD_abbrev %a %a %a %a)@]"
         pp_lem_kind kind pp_lem_id id pp_lem_namescm namescm pp_lem_typscm typschm
     | KD_nabbrev(kind,id,namescm,n) ->
       fprintf ppf "@[<0>(KD_nabbrev %a %a %a %a)@]"
         pp_lem_kind kind pp_lem_id id pp_lem_namescm namescm pp_lem_nexp n
-    | KD_record(kind,id,nm,typq,fs,_) -> 
+    | KD_record(kind,id,nm,typq,fs,_) ->
       let f_pp ppf (typ,id) =
         fprintf ppf "@[<1>(%a, %a)%a@]" pp_lem_typ typ pp_lem_id id kwd ";" in
-      fprintf ppf "@[<0>(%a %a %a %a %a [%a] false)@]" 
+      fprintf ppf "@[<0>(%a %a %a %a %a [%a] false)@]"
         kwd "KD_record" pp_lem_kind kind pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp f_pp f_pp) fs
     | KD_variant(kind,id,nm,typq,ar,_) ->
-      let a_pp ppf (Tu_aux(typ_u,l)) = 
+      let a_pp ppf (Tu_aux(typ_u,l)) =
         match typ_u with
-        | Tu_ty_id(typ,id) -> fprintf ppf "@[<1>(Tu_aux (Tu_ty_id %a %a) %a);@]" 
+        | Tu_ty_id(typ,id) -> fprintf ppf "@[<1>(Tu_aux (Tu_ty_id %a %a) %a);@]"
                                 pp_lem_typ typ pp_lem_id id pp_lem_l l
         | Tu_id(id) -> fprintf ppf "@[<1>(Tu_aux (Tu_id %a) %a);@]" pp_lem_id id pp_lem_l l
       in
-      fprintf ppf "@[<0>(%a %a %a %a %a [%a] false)@]" 
-        kwd "KD_variant" pp_lem_kind kind pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp a_pp a_pp) ar 
+      fprintf ppf "@[<0>(%a %a %a %a %a [%a] false)@]"
+        kwd "KD_variant" pp_lem_kind kind pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp a_pp a_pp) ar
     | KD_enum(kind,id,ns,enums,_) ->
       let pp_id_semi ppf id = fprintf ppf "%a%a " pp_lem_id id kwd ";" in
       fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]"
         kwd "KD_enum" pp_lem_kind kind pp_lem_id id pp_lem_namescm ns (list_pp pp_id_semi pp_lem_id) enums
-    | KD_register(kind,id,n1,n2,rs) -> 
+    | KD_register(kind,id,n1,n2,rs) ->
       let pp_rid ppf (r,id) = fprintf ppf "(%a, %a)%a " pp_lem_range r pp_lem_id id kwd ";" in
       let pp_rids = (list_pp pp_rid pp_rid) in
       fprintf ppf "@[<0>(%a %a %a %a %a [%a])@]"
@@ -608,10 +608,10 @@ let pp_lem_rec ppf (Rec_aux(r,l)) =
   match r with
   | Rec_nonrec -> fprintf ppf "(Rec_aux Rec_nonrec %a)" pp_lem_l l
   | Rec_rec -> fprintf ppf "(Rec_aux Rec_rec %a)" pp_lem_l l
-  
+
 let pp_lem_tannot_opt ppf (Typ_annot_opt_aux(t,l)) =
   match t with
-  | Typ_annot_opt_some(tq,typ) -> 
+  | Typ_annot_opt_some(tq,typ) ->
     fprintf ppf "(Typ_annot_opt_aux (Typ_annot_opt_some %a %a) %a)" pp_lem_typquant tq pp_lem_typ typ pp_lem_l l
 
 let pp_lem_effects_opt ppf (Effect_opt_aux(e,l)) =
@@ -620,12 +620,12 @@ let pp_lem_effects_opt ppf (Effect_opt_aux(e,l)) =
   | Effect_opt_effect e -> fprintf ppf "(Effect_opt_aux (Effect_opt_effect %a) %a)" pp_lem_effects e pp_lem_l l
 
 let pp_lem_funcl ppf (FCL_aux(FCL_Funcl(id,pat,exp),(l,annot))) =
-  fprintf ppf "@[<0>(FCL_aux (%a %a %a %a) (%a,%a))@]@\n" 
+  fprintf ppf "@[<0>(FCL_aux (%a %a %a %a) (%a,%a))@]@\n"
     kwd "FCL_Funcl" pp_lem_id id pp_lem_pat pat pp_lem_exp exp pp_lem_l l pp_annot annot
 
 let pp_lem_fundef ppf (FD_aux(FD_function(r, typa, efa, fcls),(l,annot))) =
   let pp_funcls ppf funcl = fprintf ppf "%a %a" pp_lem_funcl funcl kwd ";" in
-  fprintf ppf "@[<0>(FD_aux (%a %a %a %a [%a]) (%a, %a))@]" 
+  fprintf ppf "@[<0>(FD_aux (%a %a %a %a [%a]) (%a, %a))@]"
     kwd "FD_function" pp_lem_rec r pp_lem_tannot_opt typa pp_lem_effects_opt efa (list_pp pp_funcls pp_funcls) fcls
     pp_lem_l l pp_annot annot
 
@@ -633,19 +633,19 @@ let pp_lem_aspec ppf (AL_aux(aspec,(l,annot))) =
   let pp_reg_id ppf (RI_aux((RI_id ri),(l,annot))) =
     fprintf ppf "@[<0>(RI_aux (RI_id %a) (%a,%a))@]" pp_lem_id ri pp_lem_l l pp_annot annot in
   match aspec with
-    | AL_subreg(reg,subreg) -> 
+    | AL_subreg(reg,subreg) ->
       fprintf ppf "@[<0>(AL_aux (AL_subreg %a %a) (%a,%a))@]"
         pp_reg_id reg pp_lem_id subreg pp_lem_l l pp_annot annot
     | AL_bit(reg,ac) ->
       fprintf ppf "@[<0>(AL_aux (AL_bit %a %a) (%a,%a))@]" pp_reg_id reg pp_lem_exp ac pp_lem_l l pp_annot annot
     | AL_slice(reg,b,e) ->
-      fprintf ppf "@[<0>(AL_aux (AL_slice %a %a %a) (%a,%a))@]" 
+      fprintf ppf "@[<0>(AL_aux (AL_slice %a %a %a) (%a,%a))@]"
         pp_reg_id reg pp_lem_exp b pp_lem_exp e pp_lem_l l pp_annot annot
     | AL_concat(f,s) ->
       fprintf ppf "@[<0>(AL_aux (AL_concat %a %a) (%a,%a))@]" pp_reg_id f pp_reg_id s pp_lem_l l pp_annot annot
 
 let pp_lem_dec ppf (DEC_aux(reg,(l,annot))) =
-  match reg with 
+  match reg with
   | DEC_reg(typ,id) ->
     fprintf ppf "@[<0>(DEC_aux (DEC_reg %a %a) (%a,%a))@]" pp_lem_typ typ pp_lem_id id pp_lem_l l pp_annot annot
   | DEC_alias(id,alias_spec) ->
@@ -664,7 +664,7 @@ let pp_lem_def ppf d =
   | DEF_fundef(f_def) -> fprintf ppf "(DEF_fundef %a);@\n" pp_lem_fundef f_def
   | DEF_val(lbind) -> fprintf ppf "(DEF_val %a);@\n" pp_lem_let lbind
   | DEF_reg_dec(dec) -> fprintf ppf "(DEF_reg_dec %a);@\n" pp_lem_dec dec
-  | DEF_comm d -> fprintf ppf ""                          
+  | DEF_comm d -> fprintf ppf ""
   | _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "initial_check didn't remove all scattered Defs")
 
 let pp_lem_defs ppf (Defs(defs)) =
@@ -1054,18 +1054,18 @@ let doc_exp, doc_let =
         (match e with
           | E_lit (L_aux(L_one, _)) | E_lit (L_aux(L_zero, _)) ->
             utf8string
-              ("0b" ^ 
+              ("0b" ^
                   (List.fold_right (fun (E_aux( e,_)) rst ->
-                    (match e with 
+                    (match e with
                       | E_lit(L_aux(l, _)) ->
                         ((match l with | L_one -> "1" | L_zero -> "0" | L_undef -> "u" | _ -> assert false) ^ rst)
-                      | _ -> assert false)) exps "")) 
+                      | _ -> assert false)) exps ""))
           | _ -> default_print ()))
   | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
-    let default_string = 
+    let default_string =
       (match default with
-        | Def_val_empty -> string "" 
-        | Def_val_dec e -> concat [semi; space; string "default"; equals; (exp e)]) in 
+        | Def_val_empty -> string ""
+        | Def_val_dec e -> concat [semi; space; string "default"; equals; (exp e)]) in
       let iexp (i,e) = doc_op equals (doc_int i) (exp e) in
       brackets (concat [(separate_map comma iexp iexps); default_string])
   | E_vector_update(v,e1,e2) ->
@@ -1123,7 +1123,7 @@ let doc_exp, doc_let =
         (match r.nexp with
           | Nvar v -> utf8string v
           | Nconst bi -> utf8string (Big_int.string_of_big_int bi)
-          | _ ->  raise (Reporting_basic.err_unreachable l 
+          | _ ->  raise (Reporting_basic.err_unreachable l
                            ("Internal exp given vector without known length, instead given " ^ n_to_string r)))
       | Tapp("implicit",[TA_nexp r]) ->
         (match r.nexp with
@@ -1270,7 +1270,7 @@ let doc_kindef (KD_aux(kd,_)) = match kd with
           braces doc_rids;
         ])
 
-  
+
 let doc_rec (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty
   (* include trailing space because caller doesn't know if we return
@@ -1313,7 +1313,7 @@ let doc_dec (DEC_aux (reg,_)) =
     | DEC_reg(typ,id) -> separate space [string "register"; doc_typ typ; doc_id id]
     | DEC_alias(id,alspec) ->
         doc_op equals (string "register alias" ^^ space ^^ doc_id id) (doc_alias alspec)
-    | DEC_typ_alias(typ,id,alspec) -> 
+    | DEC_typ_alias(typ,id,alspec) ->
         doc_op equals (string "register alias" ^^ space ^^ doc_typ typ) (doc_alias alspec)
 
 let doc_scattered (SD_aux (sdef, _)) = match sdef with
@@ -1357,7 +1357,7 @@ let to_buf ?(len=100) buf doc = ToBuffer.pretty 1. len buf doc
 
 let pp_defs f d = print f (doc_defs d)
 let pp_exp b e = to_buf b (doc_exp e)
-let pat_to_string p = 
+let pat_to_string p =
   let b = Buffer.create 20 in
   to_buf b (doc_pat p);
   Buffer.contents b
@@ -1374,7 +1374,7 @@ let is_number char =
 
 let doc_id_ocaml (Id_aux(i,_)) =
   match i with
-  | Id("bit") -> string "vbit" 
+  | Id("bit") -> string "vbit"
   | Id i -> string (if i.[0] = '\'' || is_number(i.[0])
                     then "_" ^ i
                     else  String.uncapitalize i)
@@ -1385,7 +1385,7 @@ let doc_id_ocaml (Id_aux(i,_)) =
 
 let doc_id_ocaml_type (Id_aux(i,_)) =
   match i with
-  | Id("bit") -> string "vbit" 
+  | Id("bit") -> string "vbit"
   | Id i -> string (String.uncapitalize i)
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
@@ -1394,7 +1394,7 @@ let doc_id_ocaml_type (Id_aux(i,_)) =
 
 let doc_id_ocaml_ctor n (Id_aux(i,_)) =
   match i with
-  | Id("bit") -> string "vbit" 
+  | Id("bit") -> string "vbit"
   | Id i -> string ((if n > 246 then "`" else "") ^ (String.capitalize i))
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
@@ -1426,7 +1426,7 @@ let doc_typ_ocaml, doc_atomic_typ_ocaml =
     (string "number")
   | Typ_app(id,args) ->
      (separate_map space doc_typ_arg_ocaml args) ^^ space ^^ (doc_id_ocaml_type id)
-  | _ -> atomic_typ ty 
+  | _ -> atomic_typ ty
   and atomic_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_id id  -> doc_id_ocaml_type id
   | Typ_var v  -> doc_var v
@@ -1461,7 +1461,7 @@ let doc_typquant_ocaml (TypQ_aux(tq,_)) typ_doc = typ_doc
 let doc_typscm_ocaml (TypSchm_aux(TypSchm_ts(tq,t),_)) =
   (doc_typquant tq (doc_typ_ocaml t))
 
-(*Note: vector concatenation, literal vectors, indexed vectors, and record should 
+(*Note: vector concatenation, literal vectors, indexed vectors, and record should
   be removed prior to pp. The latter two have never yet been seen
 *)
 let doc_pat_ocaml =
@@ -1476,7 +1476,7 @@ let doc_pat_ocaml =
   | P_wild -> underscore
   | P_id id -> doc_id_ocaml id
   | P_as(p,id) -> parens (separate space [pat p; string "as"; doc_id_ocaml id])
-  | P_typ(typ,p) -> doc_op colon (pat p) (doc_typ_ocaml typ) 
+  | P_typ(typ,p) -> doc_op colon (pat p) (doc_typ_ocaml typ)
   | P_app(id,[]) ->
     (match annot with
      | Base(_,Constructor n,_,_,_,_) ->
@@ -1560,10 +1560,10 @@ let doc_exp_ocaml, doc_let_ocaml =
 
         (* this way requires the following OCaml declarations first
 
-         let rec foreach_inc i stop by body = 
+         let rec foreach_inc i stop by body =
            if i <= stop then (body i; foreach_inc (i + by) stop by body) else ()
 
-         let rec foreach_dec i stop by body = 
+         let rec foreach_dec i stop by body =
            if i >= stop then (body i; foreach_dec (i - by) stop by body) else ()
 
          *)*)
@@ -1677,16 +1677,16 @@ let doc_exp_ocaml, doc_let_ocaml =
              | _ -> false, "false" in
            let start = match start.nexp with
              | Nconst i | N2n(_,Some i)-> string_of_big_int i
-             | N2n({nexp=Nconst i},_) -> string_of_int (Util.power 2 (int_of_big_int i)) 
+             | N2n({nexp=Nconst i},_) -> string_of_int (Util.power 2 (int_of_big_int i))
              | _ -> if dir then "0" else string_of_int (List.length iexps) in
            let size = match len.nexp with
              | Nconst i | N2n(_,Some i)-> string_of_big_int i
              | N2n({nexp=Nconst i},_) -> string_of_int (Util.power 2 (int_of_big_int i))
            in
-           let default_string = 
+           let default_string =
              (match default with
-              | Def_val_empty -> string "None" 
-              | Def_val_dec e -> parens (string "Some " ^^ (exp e))) in 
+              | Def_val_empty -> string "None"
+              | Def_val_dec e -> parens (string "Some " ^^ (exp e))) in
            let iexp (i,e) = parens (separate_map comma_sp (fun x -> x) [(doc_int i); (exp e)]) in
            parens (separate space [call;
                                    (brackets (separate_map semi iexp iexps));
@@ -1711,7 +1711,7 @@ let doc_exp_ocaml, doc_let_ocaml =
   | E_exit e ->
     separate space [string "exit"; exp e;]
   | E_app_infix (e1,id,e2) ->
-    let call = 
+    let call =
       match annot with
       | Base((_,t),External(Some name),_,_,_,_) -> string name
       | _ -> doc_id_ocaml id in
@@ -1728,7 +1728,7 @@ let doc_exp_ocaml, doc_let_ocaml =
   | E_internal_plet (pat,e1,e2) ->
      (separate space [(exp e1); string ">>= fun"; doc_pat_ocaml pat;arrow]) ^/^
      exp e2
-       
+
   | E_internal_return (e1) ->
      separate space [string "return"; exp e1;]
   and let_exp (LB_aux(lb,_)) = match lb with
@@ -1759,7 +1759,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       | Base((_,{t=Tapp("reg",_)}),Emp_set,_,_,_,_),false | Base((_,{t=Tabbrev(_,{t=Tapp("reg",_)})}),Emp_set,_,_,_,_),false ->
         string "!" ^^ name
       | _ -> name
-                           
+
   and doc_lexp_array_ocaml ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
     | LEXP_vector(v,e) ->
       (match annot with
@@ -1813,11 +1813,11 @@ let doc_exp_ocaml, doc_let_ocaml =
                 (group (parens ((string (if is_bit then "get_barray" else "get_varray")) ^^ space ^^ string reg)) ^^
                  dot ^^ parens (doc_int start))
                 (exp e_new_v)
-            else 
+            else
               parens ((string (if is_bitv then "set_vector_subrange_bit" else "set_vector_subrange_vec")) ^^ space ^^
                       string reg ^^ space ^^ doc_int start ^^ space ^^ doc_int stop ^^ space ^^ exp e_new_v)
           | Alias_pair(reg1,reg2) ->
-            parens ((string "set_two_regs") ^^ space ^^ string reg1 ^^ space ^^ string reg2 ^^ space ^^ exp e_new_v))         
+            parens ((string "set_two_regs") ^^ space ^^ string reg1 ^^ space ^^ string reg2 ^^ space ^^ exp e_new_v))
        | _ ->
          parens (separate space [string "set_register"; doc_id_ocaml id; exp e_new_v]))
 
@@ -1864,7 +1864,7 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
     let doc_rids = group (separate_map (semi ^^ (break 1)) doc_rid rs) in
     match n1,n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
-      let dir = i1 < i2 in                  
+      let dir = i1 < i2 in
       let size = if dir then i2-i1 +1 else i1-i2 in
       doc_op equals
         ((string "let") ^^ space ^^ doc_id_ocaml id ^^ space ^^ (string "init_val"))
@@ -1914,7 +1914,7 @@ let doc_kdef_ocaml (KD_aux(kd,_)) = match kd with
     let doc_rids = group (separate_map (semi ^^ (break 1)) doc_rid rs) in
     match n1,n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
-      let dir = i1 < i2 in                  
+      let dir = i1 < i2 in
       let size = if dir then i2-i1 +1 else i1-i2 in
       doc_op equals
         ((string "let") ^^ space ^^ doc_id_ocaml id ^^ space ^^ (string "init_val"))
@@ -1988,7 +1988,7 @@ let doc_dec_ocaml (DEC_aux (reg,(l,annot))) =
                                                                                 doc_int (int_of_big_int size);
                                                                                 string "Vzero";])];
                                                      doc_int (int_of_big_int start);
-                                                     o;                                                     
+                                                     o;
                                                      brackets empty])]
            | _ -> empty)
         | Tapp("register", [TA_typ {t=Tid idt}]) |
@@ -2019,7 +2019,7 @@ let doc_defs_ocaml (Defs(defs)) =
   separate_map hardline doc_def_ocaml defs
 let pp_defs_ocaml f d top_line opens =
   print f (string "(*" ^^ (string top_line) ^^ string "*)" ^/^
-           (separate_map hardline (fun lib -> (string "open") ^^ space ^^ (string lib)) opens) ^/^ 
+           (separate_map hardline (fun lib -> (string "open") ^^ space ^^ (string lib)) opens) ^/^
            (doc_defs_ocaml d))
 
 
@@ -2052,47 +2052,8 @@ let keywords =
       "LT";
       "GT";
       "EQ";
-
-(*      "nia";
-      "NIA_successor";
-      "NIA_concrete_address";
-      "NIA_LR";
-      "NIA_CTR";
-      "NIA_register";
-      "read_kind";
-      "Read_plain";
-      "Read_tag";
-      "Read_reserve";
-      "Read_acquire";
-      "Read_exclusive";
-      "Read_exclusive_acquire";
-      "Read_stream";
-      "write_kind";
-      "Write_plain";
-      "Write_tag";
-      "Write_conditional";
-      "Write_release";
-      "Write_exclusive";
-      "Write_exclusive_release";
-      "barrier_kind";
-      "Barrier_Sync";
-      "Barrier_LwSync";
-      "Barrier_Eieio";
-      "Barrier_Isync";
-      "Barrier_DMB";
-      "Barrier_DMB_ST";
-      "Barrier_DMB_LD";
-      "Barrier_DSB";
-      "Barrier_DSB_ST";
-      "Barrier_DSB_LD";
-      "Barrier_ISB";
-      "instruction_kind";
-      "IK_barrier";
-      "IK_mem_read";
-      "IK_mem_write";
-      "IK_cond_branch";
-      "IK_simple"; *)
-    ] 
+      "integer";
+    ]
 
 let fix_id i = if M.mem i keywords then M.find i keywords else i
 
@@ -2111,8 +2072,8 @@ let doc_id_lem (Id_aux(i,_)) =
 
 let doc_id_lem_type (Id_aux(i,_)) =
   match i with
-  | Id("int") -> string "integer"
-  | Id("nat") -> string "integer"
+  | Id("int") -> string "SV.ii"
+  | Id("nat") -> string "SV.ii"
   | Id("option") -> string "maybe"
   | Id i -> string (fix_id i)
   | DeIid x ->
@@ -2122,7 +2083,7 @@ let doc_id_lem_type (Id_aux(i,_)) =
 
 let doc_id_lem_ctor (Id_aux(i,_)) =
   match i with
-  | Id("bit") -> string "bitU" 
+  | Id("bit") -> string "bitU"
   | Id("int") -> string "integer"
   | Id("nat") -> string "integer"
   | Id("Some") -> string "Just"
@@ -2148,7 +2109,7 @@ let effectful (Effect_aux (eff,_)) =
 let rec is_number {t=t} =
   match t with
   | Tabbrev (t1,t2) -> is_number t1 || is_number t2
-  | Tapp ("range",_) 
+  | Tapp ("range",_)
   | Tapp ("implicit",_)
   | Tapp ("atom",_) -> true
   | _ -> false
@@ -2159,10 +2120,10 @@ let doc_typ_lem, doc_atomic_typ_lem =
     and typ' regtypes ty = fn_typ regtypes false ty
     and fn_typ regtypes atyp_needed ((Typ_aux (t, _)) as ty) = match t with
       | Typ_fn(arg,ret,efct) ->
-         let exc_typ = string "string" in
+         (*let exc_typ = string "string" in*)
          let ret_typ =
            if effectful efct
-           then separate space [string "M";parens exc_typ;fn_typ regtypes true ret]
+           then separate space [string "M";(*parens exc_typ;*) fn_typ regtypes true ret]
            else separate space [fn_typ regtypes false ret] in
          let tpp = separate space [tup_typ regtypes true arg; arrow;ret_typ] in
          (* once we have proper excetions we need to know what the exceptions type is *)
@@ -2186,7 +2147,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | Typ_app(id,args) ->
          let tpp = (doc_id_lem_type id) ^^ space ^^ (separate_map space (doc_typ_arg_lem regtypes) args) in
          if atyp_needed then parens tpp else tpp
-      | _ -> atomic_typ regtypes atyp_needed ty 
+      | _ -> atomic_typ regtypes atyp_needed ty
     and atomic_typ regtypes atyp_needed ((Typ_aux (t, _)) as ty) = match t with
       | Typ_id (Id_aux (Id "bool",_)) -> string "bitU"
       | Typ_id (Id_aux (Id "boolean",_)) -> string "bitU"
@@ -2221,9 +2182,9 @@ let doc_lit_lem in_pat (L_aux(lit,l)) a =
   | L_true  -> "I"
   | L_num i ->
      let ipp = string_of_int i in
-     if in_pat then "("^ipp^":n)" 
-     else if i < 0 then "((0"^ipp^"):i)"
-     else "("^ipp^":i)"
+     if in_pat then "("^ipp^":nn)"
+     else if i < 0 then "((0"^ipp^"):ii)"
+     else "("^ipp^":ii)"
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef ->
@@ -2233,6 +2194,8 @@ let doc_lit_lem in_pat (L_aux(lit,l)) a =
       | Tabbrev ({t = Tid "bit"},_) -> "Undef"
       | Tapp ("register",_)
       | Tabbrev ({t = Tapp ("register",_)},_) -> "UndefinedRegister 0"
+      | Tid "string"
+      | Tabbrev ({t = Tapp ("string",_)},_) -> "\"\""
       | _ -> "(failwith \"undefined value of unsupported type\")")
   | L_string s -> "\"" ^ s ^ "\"")
 
@@ -2243,7 +2206,7 @@ let doc_typquant_lem (TypQ_aux(tq,_)) typ_doc = typ_doc
 let doc_typschm_lem regtypes (TypSchm_aux(TypSchm_ts(tq,t),_)) =
   (doc_typquant_lem tq (doc_typ_lem regtypes t))
 
-(*Note: vector concatenation, literal vectors, indexed vectors, and record should 
+(*Note: vector concatenation, literal vectors, indexed vectors, and record should
   be removed prior to pp. The latter two have never yet been seen
 *)
 let rec doc_pat_lem regtypes apat_needed (P_aux (p,(l,annot)) as pa) = match p with
@@ -2261,11 +2224,11 @@ let rec doc_pat_lem regtypes apat_needed (P_aux (p,(l,annot)) as pa) = match p w
   | P_lit lit  -> doc_lit_lem true lit annot
   | P_wild -> underscore
   | P_id id ->
-     begin match id with 
+     begin match id with
      | Id_aux (Id "None",_) -> string "Nothing" (* workaround temporary issue *)
      | _ -> doc_id_lem id end
   | P_as(p,id) -> parens (separate space [doc_pat_lem regtypes true p; string "as"; doc_id_lem id])
-  | P_typ(typ,p) -> doc_op colon (doc_pat_lem regtypes true p) (doc_typ_lem regtypes typ) 
+  | P_typ(typ,p) -> doc_op colon (doc_pat_lem regtypes true p) (doc_typ_lem regtypes typ)
   | P_vector pats ->
      let ppp =
        (separate space)
@@ -2354,9 +2317,9 @@ let doc_exp_lem, doc_let_lem =
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (expY l) (expY r)
     | E_if(c,t,e) ->
        let (E_aux (_,(_,cannot))) = c in
-       let epp = 
+       let epp =
          separate space [string "if";group (align (string "to_bool" ^//^ group (expY c)))] ^^
-           break 1 ^^ 
+           break 1 ^^
              (prefix 2 1 (string "then") (expN t)) ^^ (break 1) ^^
                (prefix 2 1 (string "else") (expN e)) in
        if aexp_needed then parens (align epp) else epp
@@ -2400,14 +2363,14 @@ let doc_exp_lem, doc_let_lem =
                  | [] -> doc_id_lem_ctor f
                  | [arg] -> doc_id_lem_ctor f ^^ space ^^ expY arg
                  | _ ->
-                    doc_id_lem_ctor f ^^ space ^^ 
+                    doc_id_lem_ctor f ^^ space ^^
                       parens (separate_map comma expY args) in
                if aexp_needed then parens (align epp) else epp
             | Base (_,External (Some "bitwise_not_bit"),_,_,_,_) ->
                let [a] = args in
                let epp = align (string "~" ^^ expY a) in
                if aexp_needed then parens (align epp) else epp
-            | _ -> 
+            | _ ->
                let call = match annot with
                  | Base(_,External (Some n),_,_,_,_) ->
                     (match n with
@@ -2455,7 +2418,7 @@ let doc_exp_lem, doc_let_lem =
              then (string (recordtyp ^ "_")) ^^ doc_id_lem id
              else doc_id_lem id in
            expY fexp ^^ dot ^^ fname
-        | _ ->  
+        | _ ->
            raise (report l "E_field expression with no register or record type"))
     | E_block [] -> string "()"
     | E_block exps -> raise (report l "Blocks should have been removed till now.")
@@ -2473,22 +2436,22 @@ let doc_exp_lem, doc_let_lem =
            (match alias_info with
             | Alias_field(reg,field) ->
                let epp = match t.t with
-                 | Tid "bit" | Tabbrev (_,{t=Tid "bit"}) -> 
+                 | Tid "bit" | Tabbrev (_,{t=Tid "bit"}) ->
                     (separate space)
                       [string "read_reg_bitfield"; string reg;string_lit(string field)]
-                 | _ -> 
+                 | _ ->
                     (separate space)
                       [string "read_reg_field"; string reg; string_lit(string field)] in
                if aexp_needed then parens (align epp) else epp
             | Alias_pair(reg1,reg2) ->
-               let epp = 
+               let epp =
                  if has_rreg_effect eff then
                    separate space [string "read_two_regs";string reg1;string reg2]
                  else
                    separate space [string "RegisterPair";string reg1;string reg2] in
                if aexp_needed then parens (align epp) else epp
             | Alias_extract(reg,start,stop) ->
-               let epp = 
+               let epp =
                  if start = stop then
                    (separate space)
                      [string "access";doc_int start;
@@ -2514,7 +2477,7 @@ let doc_exp_lem, doc_let_lem =
        let recordtyp = match t with
          | Tid recordtyp
            | Tabbrev ({t = Tid recordtyp},_) -> recordtyp
-         | _ ->  raise (report l "cannot get record type") in       
+         | _ ->  raise (report l "cannot get record type") in
        let epp = anglebars (space ^^ (align (separate_map
                                           (semi_sp ^^ break 1)
                                           (doc_fexp regtypes recordtyp) fexps)) ^^ space) in
@@ -2524,7 +2487,7 @@ let doc_exp_lem, doc_let_lem =
        let recordtyp = match t with
          | Tid recordtyp
            | Tabbrev ({t = Tid recordtyp},_) -> recordtyp
-         | _ ->  raise (report l "cannot get record type") in       
+         | _ ->  raise (report l "cannot get record type") in
        anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp regtypes recordtyp) fexps))
     | E_vector exps ->
        (match annot with
@@ -2568,12 +2531,12 @@ let doc_exp_lem, doc_let_lem =
          | _ -> false, "false" in
        let start = match start.nexp with
          | Nconst i | N2n(_,Some i)-> string_of_big_int i
-         | N2n({nexp=Nconst i},_) -> string_of_int (Util.power 2 (int_of_big_int i)) 
+         | N2n({nexp=Nconst i},_) -> string_of_int (Util.power 2 (int_of_big_int i))
          | _ -> if dir then "0" else string_of_int (List.length iexps) in
        let size = match len.nexp with
          | Nconst i | N2n(_,Some i)-> string_of_big_int i
          | N2n({nexp=Nconst i},_) -> string_of_int (Util.power 2 (int_of_big_int i)) in
-       let default_string = 
+       let default_string =
          match default with
          | Def_val_empty ->
             if is_bit_vector t then string "Undef"
@@ -2583,7 +2546,7 @@ let doc_exp_lem, doc_let_lem =
             match t with
             | Tapp ("register",
                     [TA_typ ({t = rt})]) ->
-               
+
                let n = match rt with
                  | Tapp ("vector",TA_nexp {nexp = Nconst i} :: TA_nexp {nexp = Nconst j} ::_) ->
                     abs_big_int (sub_big_int i j)
@@ -2620,7 +2583,7 @@ let doc_exp_lem, doc_let_lem =
     | E_list exps ->
        brackets (separate_map semi (expN) exps)
     | E_case(e,pexps) ->
-       
+
        let only_integers (E_aux(_,(_,annot)) as e) =
          match annot with
          | Base((_,t),_,_,_,_,_) ->
@@ -2635,10 +2598,10 @@ let doc_exp_lem, doc_let_lem =
                | _ -> expY e)
          | _ -> expY e
        in
-       
+
        (* This is a hack, incomplete. It's because lem does not allow
         pattern-matching on integers *)
-       let epp = 
+       let epp =
          group ((separate space [string "match"; only_integers e; string "with"]) ^/^
                   (separate_map (break 1) (doc_case regtypes) pexps) ^/^
                     (string "end")) in
@@ -2656,7 +2619,7 @@ let doc_exp_lem, doc_let_lem =
              align
                (match name with
                 | "power" -> aux2 "pow"
-                                  
+
                 | "bitwise_and_bit" -> aux "&."
                 | "bitwise_or_bit" -> aux "|."
                 | "bitwise_xor_bit" -> aux "+."
@@ -2716,7 +2679,7 @@ let doc_exp_lem, doc_let_lem =
                 | _ ->
                    string name ^//^ parens (expN e1 ^^ comma ^/^ expN e2)) in
            if aexp_needed then parens (align epp) else epp
-        | _ -> 
+        | _ ->
            let epp =
              align (doc_id_lem id ^//^ parens (expN e1 ^^ comma ^/^ expN e2)) in
            if aexp_needed then parens (align epp) else epp)
@@ -2768,7 +2731,7 @@ let doc_exp_lem, doc_let_lem =
                                  top_exp regtypes true e])
     | LEXP_id id -> doc_id_lem id
     | LEXP_cast (typ,id) -> doc_id_lem id
-    | _ -> 
+    | _ ->
        raise (Reporting_basic.err_unreachable l ("doc_lexp_deref_lem: Shouldn't happen"))
              (* expose doc_exp_lem and doc_let *)
   in top_exp, let_exp
@@ -2798,122 +2761,144 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
       doc_op equals
              (concat [string "type"; space; doc_id_lem_type id;])
              (doc_typquant_lem typq (anglebars (space ^^ align fs_doc ^^ space)))
-   | TD_variant(id,nm,typq,ar,_) ->
-      let ar_doc = group (separate_map (break 1) (doc_type_union_lem regtypes) ar) in
-      let typ_pp = (doc_op equals)
-                     (concat [string "type"; space; doc_id_lem_type id;])
-                     (doc_typquant_lem typq ar_doc) in
-      let make_id pat id =
-        separate space [string "SIA.Id_aux";
-                        parens (string "SIA.Id " ^^ string_lit (doc_id id));
-                        if pat then underscore else string "SIA.Unknown"] in
-      let fromInterpValueF = concat [doc_id_lem_type id;string "FromInterpValue"] in
-      let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
-      let fromInterpValuePP =
-        (prefix 2 1)
-          (separate space [string "let";fromInterpValueF;equals;string "function"])
-          (
-            ((separate_map (break 1))
-               (fun (Tu_aux (tu,_)) ->
-                 match tu with
-                 | Tu_ty_id (ty,cid) ->
-                    (separate space)
-                      [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
-                       arrow;
-                       doc_id_lem_ctor cid;
-                       parens (string "fromInterpValue v")]
-                 | Tu_id cid ->
+  | TD_variant(id,nm,typq,ar,_) ->
+     (match id with
+      | Id_aux ((Id "read_kind"),_) -> empty
+      | Id_aux ((Id "write_kind"),_) -> empty
+      | Id_aux ((Id "barrier_kind"),_) -> empty
+      | Id_aux ((Id "instruction_kind"),_) -> empty
+      | _ ->
+         let ar_doc = group (separate_map (break 1) (doc_type_union_lem regtypes) ar) in
+         let typ_pp =
+
+           (doc_op equals)
+             (concat [string "type"; space; doc_id_lem_type id;])
+             (doc_typquant_lem typq ar_doc) in
+         let make_id pat id =
+           separate space [string "SIA.Id_aux";
+                           parens (string "SIA.Id " ^^ string_lit (doc_id id));
+                           if pat then underscore else string "SIA.Unknown"] in
+         let fromInterpValueF = concat [doc_id_lem_type id;string "FromInterpValue"] in
+         let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
+         let fromInterpValuePP =
+           (prefix 2 1)
+             (separate space [string "let";fromInterpValueF;equals;string "function"])
+             (
+               ((separate_map (break 1))
+                  (fun (Tu_aux (tu,_)) ->
+                    match tu with
+                    | Tu_ty_id (ty,cid) ->
+                       (separate space)
+                         [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
+                          arrow;
+                          doc_id_lem_ctor cid;
+                          parens (string "fromInterpValue v")]
+                    | Tu_id cid ->
+                       (separate space)
+                         [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
+                          arrow;
+                          doc_id_lem_ctor cid])
+                  ar) ^/^
+                 ((separate space)
+                    [pipe;underscore;arrow;string "failwith";
+                     string_lit (concat [string "fromInterpValue";space;doc_id_lem_type id;colon;
+                                         space;string "unexpected value"])]) ^/^
+                 string "end") in
+         let toInterpValuePP =
+           (prefix 2 1)
+             (separate space [string "let";toInterpValueF;equals;string "function"])
+             (
+               ((separate_map (break 1))
+                  (fun (Tu_aux (tu,_)) ->
+                    match tu with
+                    | Tu_ty_id (ty,cid) ->
+                       (separate space)
+                         [pipe;doc_id_lem_ctor cid;string "v";arrow;
+                          string "SI.V_ctor";
+                          parens (make_id false cid);
+                          parens (string "SIA.T_id " ^^ string_lit (doc_id id));
+                          string "SI.C_Union";
+                          parens (string "toInterpValue v")]
+                    | Tu_id cid ->
+                       (separate space)
+                         [pipe;doc_id_lem_ctor cid;arrow;
+                          string "SI.V_ctor";
+                          parens (make_id false cid);
+                          parens (string "SIA.T_id " ^^ string_lit (doc_id id));
+                          string "SI.C_Union";
+                          parens (string "toInterpValue ()")])
+                  ar) ^/^
+                 string "end") in
+         let fromToInterpValuePP =
+           ((prefix 2 1)
+              (concat [string "instance ";parens (string "ToFromInterpValue " ^^ doc_id_lem_type id)])
+              (concat [string "let toInterpValue = ";toInterpValueF;hardline;
+                       string "let fromInterpValue = ";fromInterpValueF]))
+           ^/^ string "end" in
+         typ_pp ^^ hardline ^^ hardline ^^
+           fromInterpValuePP ^^ hardline ^^ hardline ^^
+             toInterpValuePP ^^ hardline ^^ hardline ^^
+               fromToInterpValuePP ^^ hardline)
+  | TD_enum(id,nm,enums,_) ->
+     (match id with
+      | Id_aux ((Id "read_kind"),_) -> empty
+      | Id_aux ((Id "write_kind"),_) -> empty
+      | Id_aux ((Id "barrier_kind"),_) -> empty
+      | Id_aux ((Id "instruction_kind"),_) -> empty
+      | _ ->
+         let rec range i j = if i > j then [] else i :: (range (i+1) j) in
+         let nats = range 0 in
+         let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) doc_id_lem_ctor enums) in
+         let typ_pp = (doc_op equals)
+                        (concat [string "type"; space; doc_id_lem_type id;])
+                        (enums_doc) in
+         let fromInterpValueF = concat [doc_id_lem_type id;string "FromInterpValue"] in
+         let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
+         let make_id pat id =
+           separate space [string "SIA.Id_aux";
+                           parens (string "SIA.Id " ^^ string_lit (doc_id id));
+                           if pat then underscore else string "SIA.Unknown"] in
+         let fromInterpValuePP =
+           (prefix 2 1)
+             (separate space [string "let";fromInterpValueF;equals;string "function"])
+             (
+               ((separate_map (break 1))
+                  (fun cid ->
                     (separate space)
                       [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
                        arrow;
                        doc_id_lem_ctor cid])
-               ar) ^/^
-              string "end") in
-      let toInterpValuePP =
-        (prefix 2 1)
-          (separate space [string "let";toInterpValueF;equals;string "function"])
-          (
-            ((separate_map (break 1))
-               (fun (Tu_aux (tu,_)) ->
-                 match tu with
-                 | Tu_ty_id (ty,cid) ->
-                    (separate space)
-                      [pipe;doc_id_lem_ctor cid;string "v";arrow;
-                       string "SI.V_ctor";
-                       parens (make_id false cid);
-                       parens (string "SIA.T_id " ^^ string_lit (doc_id id));
-                       string "SI.C_Union";
-                       parens (string "toInterpValue v")]
-                 | Tu_id cid ->
+                  enums) ^/^
+                 ((separate space)
+                    [pipe;underscore;arrow;string "failwith";
+                     string_lit (concat [string "fromInterpValue";space;doc_id_lem_type id;colon;
+                                         space;string "unexpected value"])]) ^/^
+                 string "end") in
+         let toInterpValuePP =
+           (prefix 2 1)
+             (separate space [string "let";toInterpValueF;equals;string "function"])
+             (
+               ((separate_map (break 1))
+                  (fun (cid,number) ->
                     (separate space)
                       [pipe;doc_id_lem_ctor cid;arrow;
                        string "SI.V_ctor";
                        parens (make_id false cid);
                        parens (string "SIA.T_id " ^^ string_lit (doc_id id));
-                       string "SI.C_Union";
+                       parens (string ("SI.C_Enum " ^ string_of_int number));
                        parens (string "toInterpValue ()")])
-               ar) ^/^
-              string "end") in
-      let fromToInterpValuePP =
-       ((prefix 2 1)
-         (concat [string "instance ";parens (string "ToFromInterpValue " ^^ doc_id_lem_type id)])
-         (concat [string "let toInterpValue = ";toInterpValueF;hardline;
-                  string "let fromInterpValue = ";fromInterpValueF]))
-       ^/^ string "end" in
-      typ_pp ^^ hardline ^^ hardline ^^
-        fromInterpValuePP ^^ hardline ^^ hardline ^^
-          toInterpValuePP ^^ hardline ^^ hardline ^^
-            fromToInterpValuePP ^^ hardline
-  | TD_enum(id,nm,enums,_) ->
-     let rec range i j = if i > j then [] else i :: (range (i+1) j) in
-     let nats = range 0 in
-     let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) doc_id_lem_ctor enums) in
-     let typ_pp = (doc_op equals)
-                    (concat [string "type"; space; doc_id_lem_type id;])
-                    (enums_doc) in
-     let fromInterpValueF = concat [doc_id_lem_type id;string "FromInterpValue"] in
-     let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
-     let make_id pat id =
-       separate space [string "SIA.Id_aux";
-                       parens (string "SIA.Id " ^^ string_lit (doc_id id));
-                       if pat then underscore else string "SIA.Unknown"] in
-     let fromInterpValuePP =
-       (prefix 2 1)
-         (separate space [string "let";fromInterpValueF;equals;string "function"])
-         (
-           ((separate_map (break 1))
-              (fun cid ->
-                (separate space)
-                  [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
-                   arrow;
-                   doc_id_lem_ctor cid])
-              enums) ^/^
-             string "end") in
-     let toInterpValuePP =
-       (prefix 2 1)
-         (separate space [string "let";toInterpValueF;equals;string "function"])
-         (
-           ((separate_map (break 1))
-              (fun (cid,number) ->
-                (separate space)
-                  [pipe;doc_id_lem_ctor cid;arrow;
-                   string "SI.V_ctor";
-                   parens (make_id false cid);
-                   parens (string "SIA.T_id " ^^ string_lit (doc_id id));
-                   parens (string ("SI.C_Enum " ^ string_of_int number));
-                   parens (string "toInterpValue ()")])
-              (List.combine enums (nats ((List.length enums) - 1)))) ^/^
-             string "end") in
-     let fromToInterpValuePP =
-       ((prefix 2 1)
-         (concat [string "instance ";parens (string "ToFromInterpValue " ^^ doc_id_lem_type id)])
-         (concat [string "let toInterpValue = ";toInterpValueF;hardline;
-                  string "let fromInterpValue = ";fromInterpValueF]))
-       ^/^ string "end" in
-      typ_pp ^^ hardline ^^ hardline ^^
-        fromInterpValuePP ^^ hardline ^^ hardline ^^
-          toInterpValuePP ^^ hardline ^^ hardline ^^
-            fromToInterpValuePP ^^ hardline
+                  (List.combine enums (nats ((List.length enums) - 1)))) ^/^
+                 string "end") in
+         let fromToInterpValuePP =
+           ((prefix 2 1)
+             (concat [string "instance ";parens (string "ToFromInterpValue " ^^ doc_id_lem_type id)])
+             (concat [string "let toInterpValue = ";toInterpValueF;hardline;
+                      string "let fromInterpValue = ";fromInterpValueF]))
+           ^/^ string "end" in
+          typ_pp ^^ hardline ^^ hardline ^^
+            fromInterpValuePP ^^ hardline ^^ hardline ^^
+              toInterpValuePP ^^ hardline ^^ hardline ^^
+                fromToInterpValuePP ^^ hardline)
   | TD_register(id,n1,n2,rs) ->
     match n1,n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
@@ -2997,7 +2982,7 @@ let doc_dec_lem (DEC_aux (reg,(l,annot))) =
         |_-> empty)
      | _ ->  empty)
   | DEC_alias(id,alspec) -> empty
-  | DEC_typ_alias(typ,id,alspec) -> empty 
+  | DEC_typ_alias(typ,id,alspec) -> empty
 
 let doc_spec_lem regtypes (VS_aux (valspec,annot)) =
   match valspec with
@@ -3005,8 +2990,8 @@ let doc_spec_lem regtypes (VS_aux (valspec,annot)) =
   | VS_extern_spec _ -> empty (* ignore these at the moment *)
   | VS_val_spec (typschm,id) ->
      separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem regtypes typschm] ^/^ hardline
-     
-                        
+
+
 let doc_def_lem regtypes def = match def with
   | DEF_default df -> empty
   | DEF_spec v_spec -> doc_spec_lem regtypes v_spec
@@ -3020,7 +3005,7 @@ let doc_def_lem regtypes def = match def with
 let doc_defs_lem regtypes (Defs defs) =
   separate_map empty (doc_def_lem regtypes) defs
 
-let find_regtypes (Defs defs) = 
+let find_regtypes (Defs defs) =
   List.fold_left
     (fun acc def ->
       match def with
@@ -3036,7 +3021,7 @@ let pp_defs_lem f d top_line opens =
   let regtypes = find_regtypes d in
   let defs = doc_defs_lem regtypes d in
   (print f)
-    (concat 
+    (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
         (separate_map hardline)
           (fun lib -> separate space [string "open import";string lib]) opens;hardline;
@@ -3045,6 +3030,6 @@ let pp_defs_lem f d top_line opens =
         hardline;
         string "module SI = Interp"; hardline;
         string "module SIA = Interp_ast"; hardline;
+        string "module SV = Sail_values"; hardline;
         hardline;
         defs])
-       

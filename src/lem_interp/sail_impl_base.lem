@@ -398,9 +398,10 @@ type write_kind =
 
 type barrier_kind =
   (* Power barriers *)
-  Sync | LwSync | Eieio | Isync
+  Barrier_Sync | Barrier_LwSync | Barrier_Eieio | Barrier_Isync
   (* AArch64 barriers *)
-  | DMB | DMB_ST | DMB_LD | DSB | DSB_ST | DSB_LD | ISB 
+  | Barrier_DMB | Barrier_DMB_ST | Barrier_DMB_LD | Barrier_DSB
+  | Barrier_DSB_ST | Barrier_DSB_LD | Barrier_ISB 
 
 type instruction_kind = 
   | IK_barrier of barrier_kind 
@@ -414,30 +415,30 @@ they just have particular nias (and will be IK_simple *)
   | IK_simple
 
 (* the address_lifted types should go away here and be replaced by address *)
-type outcome 's 'e 'a =
+type outcome 's 'a =
   (* Request to read memory, value is location to read, integer is size to read,
      followed by registers that were used in computing that size *)
-  | Read_mem of (read_kind * address_lifted * nat) * (memory_value -> outcome_s 's 'e 'a)
+  | Read_mem of (read_kind * address_lifted * nat) * (memory_value -> outcome_s 's 'a)
   (* Tell the system a write is imminent, at address lifted, of size nat *)
-  | Write_ea of (write_kind * address_lifted * nat) * outcome_s 's 'e 'a
+  | Write_ea of (write_kind * address_lifted * nat) * outcome_s 's 'a
   (* Request to write memory at last signalled address. Memory value should be 8
      times the size given in ea signal *)
-  | Write_memv of memory_value * (bool -> outcome_s 's 'e 'a)
+  | Write_memv of memory_value * (bool -> outcome_s 's 'a)
   (* Request a memory barrier *)
-  | Barrier of barrier_kind * outcome_s 's 'e 'a
+  | Barrier of barrier_kind * outcome_s 's 'a
   (* Tell the system to dynamically recalculate dependency footprint *)
-  | Footprint of outcome_s 's 'e 'a
+  | Footprint of outcome_s 's 'a
   (* Request to read register, will track dependency when mode.track_values *)
-  | Read_reg of reg_name * (register_value -> outcome_s 's 'e 'a) 
+  | Read_reg of reg_name * (register_value -> outcome_s 's 'a)
   (* Request to write register *)
-  | Write_reg of (reg_name * register_value) * (outcome_s 's 'e 'a)
-  | Escape of maybe (outcome_s 's 'e 'e)
+  | Write_reg of (reg_name * register_value) * (outcome_s 's 'a)
+  | Escape of maybe string * maybe (outcome_s 's unit)
   (*Result of a failed assert with possible error message to report*)
   | Fail of maybe string
-  | Internal of (maybe string * maybe (unit -> string)) * outcome_s 's 'e 'a
+  | Internal of (maybe string * maybe (unit -> string)) * outcome_s 's 'a
   | Done of 'a
   | Error of string
-   and outcome_s 's 'e 'a = outcome 's 'e 'a * maybe 's
+ and outcome_s 's 'a = outcome 's 'a * maybe 's
 
 let ~{ocaml} read_kindCompare rk1 rk2 =
   match (rk1, rk2) with
@@ -613,137 +614,137 @@ end
 
 let ~{ocaml} barrier_kindCompare bk1 bk2 =
   match (bk1, bk2) with
-  | (Sync, Sync)   -> EQ
-  | (Sync, LwSync) -> LT
-  | (Sync, Eieio)  -> LT
-  | (Sync, Isync)  -> LT
-  | (Sync, DMB)    -> LT
-  | (Sync, DMB_ST) -> LT
-  | (Sync, DMB_LD) -> LT
-  | (Sync, DSB)    -> LT
-  | (Sync, DSB_ST) -> LT
-  | (Sync, DSB_LD) -> LT
-  | (Sync, ISB)    -> LT
+  | (Barrier_Sync, Barrier_Sync)   -> EQ
+  | (Barrier_Sync, Barrier_LwSync) -> LT
+  | (Barrier_Sync, Barrier_Eieio)  -> LT
+  | (Barrier_Sync, Barrier_Isync)  -> LT
+  | (Barrier_Sync, Barrier_DMB)    -> LT
+  | (Barrier_Sync, Barrier_DMB_ST) -> LT
+  | (Barrier_Sync, Barrier_DMB_LD) -> LT
+  | (Barrier_Sync, Barrier_DSB)    -> LT
+  | (Barrier_Sync, Barrier_DSB_ST) -> LT
+  | (Barrier_Sync, Barrier_DSB_LD) -> LT
+  | (Barrier_Sync, Barrier_ISB)    -> LT
 
-  | (LwSync, Sync)   -> GT
-  | (LwSync, LwSync) -> EQ
-  | (LwSync, Eieio)  -> LT
-  | (LwSync, Isync)  -> LT
-  | (LwSync, DMB)    -> LT
-  | (LwSync, DMB_ST) -> LT
-  | (LwSync, DMB_LD) -> LT
-  | (LwSync, DSB)    -> LT
-  | (LwSync, DSB_ST) -> LT
-  | (LwSync, DSB_LD) -> LT
-  | (LwSync, ISB)    -> LT
+  | (Barrier_LwSync, Barrier_Sync)   -> GT
+  | (Barrier_LwSync, Barrier_LwSync) -> EQ
+  | (Barrier_LwSync, Barrier_Eieio)  -> LT
+  | (Barrier_LwSync, Barrier_Isync)  -> LT
+  | (Barrier_LwSync, Barrier_DMB)    -> LT
+  | (Barrier_LwSync, Barrier_DMB_ST) -> LT
+  | (Barrier_LwSync, Barrier_DMB_LD) -> LT
+  | (Barrier_LwSync, Barrier_DSB)    -> LT
+  | (Barrier_LwSync, Barrier_DSB_ST) -> LT
+  | (Barrier_LwSync, Barrier_DSB_LD) -> LT
+  | (Barrier_LwSync, Barrier_ISB)    -> LT
 
-  | (Eieio, Sync)   -> GT
-  | (Eieio, LwSync) -> GT
-  | (Eieio, Eieio)  -> EQ
-  | (Eieio, Isync)  -> LT
-  | (Eieio, DMB)    -> LT
-  | (Eieio, DMB_ST) -> LT
-  | (Eieio, DMB_LD) -> LT
-  | (Eieio, DSB)    -> LT
-  | (Eieio, DSB_ST) -> LT
-  | (Eieio, DSB_LD) -> LT
-  | (Eieio, ISB)    -> LT
+  | (Barrier_Eieio, Barrier_Sync)   -> GT
+  | (Barrier_Eieio, Barrier_LwSync) -> GT
+  | (Barrier_Eieio, Barrier_Eieio)  -> EQ
+  | (Barrier_Eieio, Barrier_Isync)  -> LT
+  | (Barrier_Eieio, Barrier_DMB)    -> LT
+  | (Barrier_Eieio, Barrier_DMB_ST) -> LT
+  | (Barrier_Eieio, Barrier_DMB_LD) -> LT
+  | (Barrier_Eieio, Barrier_DSB)    -> LT
+  | (Barrier_Eieio, Barrier_DSB_ST) -> LT
+  | (Barrier_Eieio, Barrier_DSB_LD) -> LT
+  | (Barrier_Eieio, Barrier_ISB)    -> LT
 
-  | (Isync, Sync)   -> GT
-  | (Isync, LwSync) -> GT
-  | (Isync, Eieio)  -> GT
-  | (Isync, Isync)  -> EQ
-  | (Isync, DMB)    -> LT
-  | (Isync, DMB_ST) -> LT
-  | (Isync, DMB_LD) -> LT
-  | (Isync, DSB)    -> LT
-  | (Isync, DSB_ST) -> LT
-  | (Isync, DSB_LD) -> LT
-  | (Isync, ISB)    -> LT
+  | (Barrier_Isync, Barrier_Sync)   -> GT
+  | (Barrier_Isync, Barrier_LwSync) -> GT
+  | (Barrier_Isync, Barrier_Eieio)  -> GT
+  | (Barrier_Isync, Barrier_Isync)  -> EQ
+  | (Barrier_Isync, Barrier_DMB)    -> LT
+  | (Barrier_Isync, Barrier_DMB_ST) -> LT
+  | (Barrier_Isync, Barrier_DMB_LD) -> LT
+  | (Barrier_Isync, Barrier_DSB)    -> LT
+  | (Barrier_Isync, Barrier_DSB_ST) -> LT
+  | (Barrier_Isync, Barrier_DSB_LD) -> LT
+  | (Barrier_Isync, Barrier_ISB)    -> LT
 
-  | (DMB, Sync)   -> GT
-  | (DMB, LwSync) -> GT
-  | (DMB, Eieio)  -> GT
-  | (DMB, Isync)  -> GT
-  | (DMB, DMB)    -> EQ
-  | (DMB, DMB_ST) -> LT
-  | (DMB, DMB_LD) -> LT
-  | (DMB, DSB)    -> LT
-  | (DMB, DSB_ST) -> LT
-  | (DMB, DSB_LD) -> LT
-  | (DMB, ISB)    -> LT
+  | (Barrier_DMB, Barrier_Sync)   -> GT
+  | (Barrier_DMB, Barrier_LwSync) -> GT
+  | (Barrier_DMB, Barrier_Eieio)  -> GT
+  | (Barrier_DMB, Barrier_Isync)  -> GT
+  | (Barrier_DMB, Barrier_DMB)    -> EQ
+  | (Barrier_DMB, Barrier_DMB_ST) -> LT
+  | (Barrier_DMB, Barrier_DMB_LD) -> LT
+  | (Barrier_DMB, Barrier_DSB)    -> LT
+  | (Barrier_DMB, Barrier_DSB_ST) -> LT
+  | (Barrier_DMB, Barrier_DSB_LD) -> LT
+  | (Barrier_DMB, Barrier_ISB)    -> LT
 
-  | (DMB_ST, Sync)   -> GT
-  | (DMB_ST, LwSync) -> GT
-  | (DMB_ST, Eieio)  -> GT
-  | (DMB_ST, Isync)  -> GT
-  | (DMB_ST, DMB)    -> GT
-  | (DMB_ST, DMB_ST) -> EQ
-  | (DMB_ST, DMB_LD) -> LT
-  | (DMB_ST, DSB)    -> LT
-  | (DMB_ST, DSB_ST) -> LT
-  | (DMB_ST, DSB_LD) -> LT
-  | (DMB_ST, ISB)    -> LT
+  | (Barrier_DMB_ST, Barrier_Sync)   -> GT
+  | (Barrier_DMB_ST, Barrier_LwSync) -> GT
+  | (Barrier_DMB_ST, Barrier_Eieio)  -> GT
+  | (Barrier_DMB_ST, Barrier_Isync)  -> GT
+  | (Barrier_DMB_ST, Barrier_DMB)    -> GT
+  | (Barrier_DMB_ST, Barrier_DMB_ST) -> EQ
+  | (Barrier_DMB_ST, Barrier_DMB_LD) -> LT
+  | (Barrier_DMB_ST, Barrier_DSB)    -> LT
+  | (Barrier_DMB_ST, Barrier_DSB_ST) -> LT
+  | (Barrier_DMB_ST, Barrier_DSB_LD) -> LT
+  | (Barrier_DMB_ST, Barrier_ISB)    -> LT
 
-  | (DMB_LD, Sync)   -> GT
-  | (DMB_LD, LwSync) -> GT
-  | (DMB_LD, Eieio)  -> GT
-  | (DMB_LD, Isync)  -> GT
-  | (DMB_LD, DMB)    -> GT
-  | (DMB_LD, DMB_ST) -> GT
-  | (DMB_LD, DMB_LD) -> EQ
-  | (DMB_LD, DSB)    -> LT
-  | (DMB_LD, DSB_ST) -> LT
-  | (DMB_LD, DSB_LD) -> LT
-  | (DMB_LD, ISB)    -> LT
+  | (Barrier_DMB_LD, Barrier_Sync)   -> GT
+  | (Barrier_DMB_LD, Barrier_LwSync) -> GT
+  | (Barrier_DMB_LD, Barrier_Eieio)  -> GT
+  | (Barrier_DMB_LD, Barrier_Isync)  -> GT
+  | (Barrier_DMB_LD, Barrier_DMB)    -> GT
+  | (Barrier_DMB_LD, Barrier_DMB_ST) -> GT
+  | (Barrier_DMB_LD, Barrier_DMB_LD) -> EQ
+  | (Barrier_DMB_LD, Barrier_DSB)    -> LT
+  | (Barrier_DMB_LD, Barrier_DSB_ST) -> LT
+  | (Barrier_DMB_LD, Barrier_DSB_LD) -> LT
+  | (Barrier_DMB_LD, Barrier_ISB)    -> LT
 
-  | (DSB, Sync)   -> GT
-  | (DSB, LwSync) -> GT
-  | (DSB, Eieio)  -> GT
-  | (DSB, Isync)  -> GT
-  | (DSB, DMB)    -> GT
-  | (DSB, DMB_ST) -> GT
-  | (DSB, DMB_LD) -> GT
-  | (DSB, DSB)    -> EQ
-  | (DSB, DSB_ST) -> LT
-  | (DSB, DSB_LD) -> LT
-  | (DSB, ISB)    -> LT
+  | (Barrier_DSB, Barrier_Sync)   -> GT
+  | (Barrier_DSB, Barrier_LwSync) -> GT
+  | (Barrier_DSB, Barrier_Eieio)  -> GT
+  | (Barrier_DSB, Barrier_Isync)  -> GT
+  | (Barrier_DSB, Barrier_DMB)    -> GT
+  | (Barrier_DSB, Barrier_DMB_ST) -> GT
+  | (Barrier_DSB, Barrier_DMB_LD) -> GT
+  | (Barrier_DSB, Barrier_DSB)    -> EQ
+  | (Barrier_DSB, Barrier_DSB_ST) -> LT
+  | (Barrier_DSB, Barrier_DSB_LD) -> LT
+  | (Barrier_DSB, Barrier_ISB)    -> LT
 
-  | (DSB_ST, Sync)   -> GT
-  | (DSB_ST, LwSync) -> GT
-  | (DSB_ST, Eieio)  -> GT
-  | (DSB_ST, Isync)  -> GT
-  | (DSB_ST, DMB)    -> GT
-  | (DSB_ST, DMB_ST) -> GT
-  | (DSB_ST, DMB_LD) -> GT
-  | (DSB_ST, DSB)    -> GT
-  | (DSB_ST, DSB_ST) -> EQ
-  | (DSB_ST, DSB_LD) -> LT
-  | (DSB_ST, ISB)    -> LT
+  | (Barrier_DSB_ST, Barrier_Sync)   -> GT
+  | (Barrier_DSB_ST, Barrier_LwSync) -> GT
+  | (Barrier_DSB_ST, Barrier_Eieio)  -> GT
+  | (Barrier_DSB_ST, Barrier_Isync)  -> GT
+  | (Barrier_DSB_ST, Barrier_DMB)    -> GT
+  | (Barrier_DSB_ST, Barrier_DMB_ST) -> GT
+  | (Barrier_DSB_ST, Barrier_DMB_LD) -> GT
+  | (Barrier_DSB_ST, Barrier_DSB)    -> GT
+  | (Barrier_DSB_ST, Barrier_DSB_ST) -> EQ
+  | (Barrier_DSB_ST, Barrier_DSB_LD) -> LT
+  | (Barrier_DSB_ST, Barrier_ISB)    -> LT
 
-  | (DSB_LD, Sync)   -> GT
-  | (DSB_LD, LwSync) -> GT
-  | (DSB_LD, Eieio)  -> GT
-  | (DSB_LD, Isync)  -> GT
-  | (DSB_LD, DMB)    -> GT
-  | (DSB_LD, DMB_ST) -> GT
-  | (DSB_LD, DMB_LD) -> GT
-  | (DSB_LD, DSB)    -> GT
-  | (DSB_LD, DSB_ST) -> GT
-  | (DSB_LD, DSB_LD) -> EQ
-  | (DSB_LD, ISB)    -> LT
+  | (Barrier_DSB_LD, Barrier_Sync)   -> GT
+  | (Barrier_DSB_LD, Barrier_LwSync) -> GT
+  | (Barrier_DSB_LD, Barrier_Eieio)  -> GT
+  | (Barrier_DSB_LD, Barrier_Isync)  -> GT
+  | (Barrier_DSB_LD, Barrier_DMB)    -> GT
+  | (Barrier_DSB_LD, Barrier_DMB_ST) -> GT
+  | (Barrier_DSB_LD, Barrier_DMB_LD) -> GT
+  | (Barrier_DSB_LD, Barrier_DSB)    -> GT
+  | (Barrier_DSB_LD, Barrier_DSB_ST) -> GT
+  | (Barrier_DSB_LD, Barrier_DSB_LD) -> EQ
+  | (Barrier_DSB_LD, Barrier_ISB)    -> LT
                           
-  | (ISB, Sync)   -> GT
-  | (ISB, LwSync) -> GT
-  | (ISB, Eieio)  -> GT
-  | (ISB, Isync)  -> GT
-  | (ISB, DMB)    -> GT
-  | (ISB, DMB_ST) -> GT
-  | (ISB, DMB_LD) -> GT
-  | (ISB, DSB)    -> GT
-  | (ISB, DSB_ST) -> GT
-  | (ISB, DSB_LD) -> GT
-  | (ISB, ISB)    -> EQ
+  | (Barrier_ISB, Barrier_Sync)   -> GT
+  | (Barrier_ISB, Barrier_LwSync) -> GT
+  | (Barrier_ISB, Barrier_Eieio)  -> GT
+  | (Barrier_ISB, Barrier_Isync)  -> GT
+  | (Barrier_ISB, Barrier_DMB)    -> GT
+  | (Barrier_ISB, Barrier_DMB_ST) -> GT
+  | (Barrier_ISB, Barrier_DMB_LD) -> GT
+  | (Barrier_ISB, Barrier_DSB)    -> GT
+  | (Barrier_ISB, Barrier_DSB_ST) -> GT
+  | (Barrier_ISB, Barrier_DSB_LD) -> GT
+  | (Barrier_ISB, Barrier_ISB)    -> EQ
   end
 let inline {ocaml} barrier_kindCompare = defaultCompare
 
@@ -819,16 +820,6 @@ let inline ~{coq} instructionEqual = unsafe_structural_equality
 
 let {coq} instructionInequal i1 i2 = not (instructionEqual i1 i2)
 let inline ~{coq} instructionInequal = unsafe_structural_inequality
-
-type decode_error = 
-  | Unsupported_instruction_error of instruction
-  | Not_an_instruction_error of opcode
-  | Internal_error of string
-
-type instruction_or_decode_error =
-  | IDE_instr of instruction
-  | IDE_decode_error of decode_error
-
 
 (** operations and coercions on basic values *)
 
@@ -1364,3 +1355,13 @@ end
 
 
 type v_kind = Bitv | Bytev
+
+
+type decode_error = 
+  | Unsupported_instruction_error of instruction
+  | Not_an_instruction_error of opcode
+  | Internal_error of string
+
+
+
+

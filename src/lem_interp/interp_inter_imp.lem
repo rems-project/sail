@@ -524,17 +524,17 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
          | Interp.V_ctor (Id_aux (Id "IK_barrier") _) _ _
            (Interp.V_ctor (Id_aux (Id b) _) _ _ _) ->
             IK_barrier (match b with
-                        | "Barrier_Sync" ->   Sync
-                        | "Barrier_LwSync" -> LwSync
-                        | "Barrier_Eieio" ->  Eieio
-                        | "Barrier_Isync" ->  Isync
-                        | "Barrier_DMB" ->    DMB
-                        | "Barrier_DMB_ST" -> DMB_ST
-                        | "Barrier_DMB_LD" -> DMB_LD
-                        | "Barrier_DSB" ->    DSB
-                        | "Barrier_DSB_ST" -> DSB_ST
-                        | "Barrier_DSB_LD" -> DSB_LD
-                        | "Barrier_ISB" ->    ISB
+                        | "Barrier_Sync" ->   Barrier_Sync
+                        | "Barrier_LwSync" -> Barrier_LwSync
+                        | "Barrier_Eieio" ->  Barrier_Eieio
+                        | "Barrier_Isync" ->  Barrier_Isync
+                        | "Barrier_DMB" ->    Barrier_DMB
+                        | "Barrier_DMB_ST" -> Barrier_DMB_ST
+                        | "Barrier_DMB_LD" -> Barrier_DMB_LD
+                        | "Barrier_DSB" ->    Barrier_DSB
+                        | "Barrier_DSB_ST" -> Barrier_DSB_ST
+                        | "Barrier_DSB_LD" -> Barrier_DSB_LD
+                        | "Barrier_ISB" ->    Barrier_ISB
                         end)
          | Interp.V_ctor (Id_aux (Id "IK_mem_read") _) _ _
            (Interp.V_ctor (Id_aux (Id r) _) _ _ _) ->
@@ -620,7 +620,7 @@ let interp_value_to_instr_external top_level instr =
   end
 
 
-let decode_to_istate top_level registers value = 
+let decode_to_instruction top_level registers value : instruction_or_decode_error = 
   let mode = make_interpreter_mode true false in
   let (Context ((Interp.Env _ instructions _ _ _ _ _ _) as top_env) direction _ _ _ _ _ _) = top_level in
   let intern_val = intern_opcode direction value in
@@ -637,7 +637,6 @@ let decode_to_istate top_level registers value =
   match (instr_decoded_error) with
     | Ivh_value instr -> 
       let instr_external = interp_value_to_instr_external top_level instr in
-      let (arg,_) = Interp.to_exp mode Interp.eenv instr in
       let (instr_decoded_error,events) =
         interp_to_value_helper (Just value) Ivh_unsupported val_str instr_external internal_direction
           registers [] false
@@ -648,27 +647,29 @@ let decode_to_istate top_level registers value =
                   (Interp_ast.Unknown, Nothing)) 
                top_env Interp.eenv (Interp.emem "decode second top level") Interp.Top) Nothing) in
       match (instr_decoded_error) with
-        | Ivh_value instr ->
-          (*let (arg,_) = Interp.to_exp mode Interp.eenv instr in*)
-          Instr instr_external
-            (IState (Interp.Thunk_frame
-                       (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) [arg]) (Interp_ast.Unknown,Nothing))
-                       top_env Interp.eenv (Interp.emem "execute") Interp.Top)
-               top_level)
+        | Ivh_value instr -> IDE_instr instr_external instr
         | Ivh_value_after_exn v ->
           Assert_extra.failwith "supported_instructions called exit, so support will be needed for that now"
-        | Ivh_error err -> Decode_error err
+        | Ivh_error err -> IDE_decode_error err
         end
    | Ivh_value_after_exn _ ->
-       Assert_extra.failwith ("Decode of " ^ val_str ^ " called exit.")
-    | Ivh_error err -> Decode_error err
+      Assert_extra.failwith ("Decode of " ^ val_str ^ " called exit.")
+   | Ivh_error err -> IDE_decode_error err
 end
 
 
-let decode_to_instruction (top_level:context) registers (value:opcode) : instruction_or_decode_error  = 
-  match decode_to_istate top_level registers value with
-  | Instr inst is -> IDE_instr inst
-  | Decode_error de -> IDE_decode_error de
+let decode_to_istate (top_level:context) registers (value:opcode) : i_state_or_error = 
+  let (Context top_env _ _ _ _ _ _ _) = top_level in
+  match decode_to_instruction top_level registers value with
+  | IDE_instr instr instrv ->
+     let mode = make_interpreter_mode true false in
+     let (arg,_) = Interp.to_exp mode Interp.eenv instrv in
+     Instr instr
+           (IState (Interp.Thunk_frame
+                      (E_aux (E_app (Id_aux (Id "execute") Interp_ast.Unknown) [arg]) (Interp_ast.Unknown,Nothing))
+                      top_env Interp.eenv (Interp.emem "execute") Interp.Top)
+                   top_level)
+  | IDE_decode_error de -> Decode_error de
   end
 
 
@@ -840,8 +841,8 @@ let interp mode (IState interp_state context) =
     | (o,_) -> o
 end 
 
-val state_to_outcome_s : forall 'v. interp_mode -> instruction_state -> Sail_impl_base.outcome_s instruction_state unit unit
-val outcome_to_outcome : interp_mode -> Interp_interface.outcome -> Sail_impl_base.outcome instruction_state unit unit
+val state_to_outcome_s : forall 'v. interp_mode -> instruction_state -> Sail_impl_base.outcome_s instruction_state unit
+val outcome_to_outcome : interp_mode -> Interp_interface.outcome -> Sail_impl_base.outcome instruction_state unit
 let rec outcome_to_outcome mode = function
   | Interp_interface.Read_mem rk addr size _ k ->
      Sail_impl_base.Read_mem (rk,addr,size) (fun v -> state_to_outcome_s mode (k v))
@@ -862,7 +863,7 @@ let rec outcome_to_outcome mode = function
   | Interp_interface.Nondet_choice _ _ ->
      failwith "Nondet_choice not supported yet"
   | Interp_interface.Escape maybestate _ ->
-     Sail_impl_base.Escape (Maybe.map (state_to_outcome_s mode) maybestate)
+     Sail_impl_base.Escape Nothing (Maybe.map (state_to_outcome_s mode) maybestate)
   | Interp_interface.Fail maybestring ->
      Sail_impl_base.Fail maybestring
   | Interp_interface.Internal maybestring maybeprint state ->

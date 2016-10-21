@@ -1,35 +1,41 @@
 open import Pervasives_extra
 open import Sail_impl_base
-open import Vector
 open import Sail_values
 
-val return : forall 's 'e 'a. 'a -> outcome 's 'e 'a
+     import Interp_interface
+(* this needs to go away: it's only so we can make the ppcmem outcome types the
+same *)
+
+val return : forall 's 'a. 'a -> outcome 's 'a
 let return a = Done a
 
-val bind : forall 's 'e 'a 'b. outcome 's 'e 'a -> ('a -> outcome 's 'e 'b) -> outcome 's 'e 'b
+val bind : forall 's 'a 'b. outcome 's 'a -> ('a -> outcome 's 'b) -> outcome 's 'b
 let rec bind m f = match m with
-  | Done a ->              f a 
+  | Done a ->              f a
   | Read_mem descr k ->    Read_mem descr   (fun v -> let (o,opt) = k v in (bind o f,opt))
   | Read_reg descr k ->    Read_reg descr   (fun v -> let (o,opt) = k v in (bind o f,opt))
   | Write_memv descr k ->  Write_memv descr (fun v -> let (o,opt) = k v in (bind o f,opt))
-  | Write_ea descr o_s ->  Write_ea descr   (let (o,opt) = o_s  in (bind o f,opt))
-  | Barrier descr o_s ->   Barrier descr    (let (o,opt) = o_s  in (bind o f,opt))
-  | Footprint o_s ->       Footprint        (let (o,opt) = o_s  in (bind o f,opt))
-  | Write_reg descr o_s -> Write_reg descr  (let (o,opt) = o_s  in (bind o f,opt))
-  | Escape o_s  ->         Escape o_s
+  | Write_ea descr o_s ->  Write_ea descr   (let (o,opt) = o_s in (bind o f,opt))
+  | Barrier descr o_s ->   Barrier descr    (let (o,opt) = o_s in (bind o f,opt))
+  | Footprint o_s ->       Footprint        (let (o,opt) = o_s in (bind o f,opt))
+  | Write_reg descr o_s -> Write_reg descr  (let (o,opt) = o_s in (bind o f,opt))
+  | Escape descr mo  ->    Escape descr mo
+  | Fail descr ->          Fail descr
+  | Error descr ->         Error descr
+  | Internal descr o_s ->  Internal descr   (let (o,opt) = o_s in (bind o f ,opt))
 end
 
 
-type M 'e 'a = Sail_impl_base.outcome unit 'e 'a
+type M 'a = Sail_impl_base.outcome Interp_interface.instruction_state 'a
 
-let (>>=) = bind
-val (>>) : forall 'e 'b. M 'e unit -> M 'e 'b -> M 'e 'b
-let (>>) m n = m >>= fun _ -> n
+let inline (>>=) = bind
+val (>>) : forall 'b. M unit -> M 'b -> M 'b
+let inline (>>) m n = m >>= fun _ -> n
 
-val exit : forall 'a 'e. 'e -> M 'e 'a
-let exit e = Escape (Just (return e,Nothing))
+val exit : forall 'a. string -> M 'a
+let exit s = Fail (Just s)
 
-val read_memory : forall 'e. read_kind -> vector bitU -> integer -> M 'e (vector bitU)
+val read_memory : read_kind -> vector bitU -> integer -> M (vector bitU)
 let read_memory rk addr sz =
   let addr = address_lifted_of_bitv addr in
   let sz = natFromInteger sz in
@@ -38,20 +44,20 @@ let read_memory rk addr sz =
     (Done bitv,Nothing) in
   Read_mem (rk,addr,sz) k
 
-val write_memory_ea : forall 'e. write_kind -> vector bitU -> integer  -> M 'e unit
+val write_memory_ea : write_kind -> vector bitU -> integer  -> M unit
 let write_memory_ea wk addr sz =
   let addr = address_lifted_of_bitv addr in
   let sz = natFromInteger sz in
   Write_ea (wk,addr,sz) (Done (),Nothing)
 
-val write_memory_val : forall 'e. vector bitU -> M 'e bool
+val write_memory_val : vector bitU -> M bool
 let write_memory_val v =
   let v = byte_lifteds_of_bitv v in
   let k successful = (return successful,Nothing) in
   Write_memv v k
 
 
-val read_reg_range : forall 'e. register -> integer -> integer -> M 'e (vector bitU)
+val read_reg_range : register -> integer -> integer -> M (vector bitU)
 let read_reg_range reg i j =
   let (i,j) = (natFromInteger i,natFromInteger j) in
   let reg = Reg_slice (name_of_reg reg) (start_of_reg_nat reg) (dir_of_reg reg)
@@ -61,11 +67,11 @@ let read_reg_range reg i j =
     (Done v,Nothing) in
   Read_reg reg k
 
-val read_reg_bit : forall 'e. register -> integer -> M 'e bitU
-let read_reg_bit reg i = 
+val read_reg_bit : register -> integer -> M bitU
+let read_reg_bit reg i =
   read_reg_range reg i i >>= fun v -> return (access v i)
 
-val read_reg : forall 'e. register -> M 'e (vector bitU)
+val read_reg : register -> M (vector bitU)
 let read_reg reg =
   let reg = Reg (name_of_reg reg) (start_of_reg_nat reg)
                 (size_of_reg_nat reg) (dir_of_reg reg) in
@@ -75,8 +81,8 @@ let read_reg reg =
   Read_reg reg k
 
 
-val read_reg_field : forall 'e. register -> register_field -> M 'e (vector bitU)
-let read_reg_field reg regfield = 
+val read_reg_field : register -> register_field -> M (vector bitU)
+let read_reg_field reg regfield =
   let (i,j) = register_field_indices_nat reg regfield in
   let reg = Reg_slice (name_of_reg reg) (start_of_reg_nat reg) (dir_of_reg reg)
                       (if i<j then (i,j) else (j,i)) in
@@ -85,48 +91,48 @@ let read_reg_field reg regfield =
     (Done v,Nothing) in
   Read_reg reg k
 
-val read_reg_bitfield : forall 'e. register -> register_field -> M 'e bitU
+val read_reg_bitfield : register -> register_field -> M bitU
 let read_reg_bitfield reg rbit =
   read_reg_bit reg (fst (register_field_indices reg rbit))
 
 
-val write_reg_range : forall 'e. register -> integer -> integer -> vector bitU -> M 'e unit
+val write_reg_range : register -> integer -> integer -> vector bitU -> M unit
 let write_reg_range reg i j v =
   let rv = registerValueFromBitv v reg in
   let (i,j) = (natFromInteger i,natFromInteger j) in
   let reg = Reg_slice (name_of_reg reg) (start_of_reg_nat reg) (dir_of_reg reg) (i,j) in
   Write_reg (reg,rv) (Done (),Nothing)
 
-val write_reg_bit : forall 'e. register -> integer -> bitU -> M 'e unit
+val write_reg_bit : register -> integer -> bitU -> M unit
 let write_reg_bit reg i bit = write_reg_range reg i i (Vector [bit] 0 true)
 
-val write_reg : forall 'e. register -> vector bitU -> M 'e unit
+val write_reg : register -> vector bitU -> M unit
 let write_reg reg v =
   let rv = registerValueFromBitv v reg in
   let reg = Reg (name_of_reg reg) (start_of_reg_nat reg)
                 (size_of_reg_nat reg) (dir_of_reg reg) in
   Write_reg (reg,rv) (Done (),Nothing)
 
-val write_reg_field : forall 'e. register -> register_field -> vector bitU -> M 'e unit
+val write_reg_field : register -> register_field -> vector bitU -> M unit
 let write_reg_field reg regfield =
   uncurry (write_reg_range reg) (register_field_indices reg regfield)
 
-val write_reg_bitfield : forall 'e. register -> register_field -> bitU -> M 'e unit
+val write_reg_bitfield : register -> register_field -> bitU -> M unit
 let write_reg_bitfield reg rbit =
   write_reg_bit reg (fst (register_field_indices reg rbit))
 
 
-val barrier : forall 'e. barrier_kind -> M 'e unit
+val barrier : barrier_kind -> M unit
 let barrier bk = Barrier bk (Done (), Nothing)
 
 
-val footprint : forall 'e. M 'e unit
+val footprint : M unit
 let footprint = Footprint (Done (),Nothing)
 
 
-val foreachM_inc : forall 'e 'vars. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> M 'e 'vars) -> M 'e 'vars
-let rec foreachM_inc (i,stop,by) vars body = 
+val foreachM_inc : forall 'vars. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> M 'vars) -> M 'vars
+let rec foreachM_inc (i,stop,by) vars body =
   if i <= stop
   then
     body i vars >>= fun vars ->
@@ -134,9 +140,9 @@ let rec foreachM_inc (i,stop,by) vars body =
   else return vars
 
 
-val foreachM_dec : forall 'e 'vars. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> M 'e 'vars) -> M 'e 'vars
-let rec foreachM_dec (i,stop,by) vars body = 
+val foreachM_dec : forall 'vars. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> M 'vars) -> M 'vars
+let rec foreachM_dec (i,stop,by) vars body =
   if i >= stop
   then
     body i vars >>= fun vars ->
@@ -150,7 +156,7 @@ let write_two_regs r1 r2 vec =
     let () = ensure (is_inc_r1 = is_inc_r2)
                     "write_two_regs called with vectors of different direction" in
     is_inc_r1 in
-  
+
   let (size_r1 : integer) = size_of_reg r1 in
   let (start_vec : integer) = get_start vec in
   let size_vec = length vec in

@@ -1,13 +1,72 @@
 open import Pervasives_extra
 open import Sail_impl_base
-open import Vector
 open import Interp     (* only for converting between shallow- and deep-embedding values *)
 open import Interp_ast (* only for converting between shallow- and deep-embedding values *)
 
-type i = integer
-type n = natural
+type ii = integer
+type nn = natural
 
 type bitU = O | I | Undef
+
+
+
+(* element list * start * has increasing direction *)
+type vector 'a = Vector of list 'a * integer * bool
+
+let rec nth xs (n : integer) =
+  match xs with
+  | x :: xs -> if n = 0 then x else nth xs (n - 1)
+  | _ -> failwith "nth applied to empty list"
+  end
+
+
+let get_dir (Vector _ _ ord) = ord
+let get_start (Vector _ s _) = s
+let length (Vector bs _ _) = integerFromNat (length bs)
+
+let rec replace bs ((n : integer),b') = match bs with
+  | [] -> []
+  | b :: bs ->
+     if n = 0 then
+       b' :: bs
+     else
+       b :: replace bs (n - 1,b')
+  end
+
+let vector_concat (Vector bs start is_inc) (Vector bs' _ _) =
+  Vector (bs ++ bs') start is_inc
+
+let inline (^^) = vector_concat
+
+val slice : forall 'a. vector 'a -> integer -> integer -> vector 'a
+let slice (Vector bs start is_inc) n m =
+  let n = natFromInteger n in
+  let m = natFromInteger m in
+  let start = natFromInteger start in
+  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
+  let (_,suffix) = List.splitAt offset bs in
+  let (subvector,_) = List.splitAt length suffix in
+  let n = integerFromNat n in
+  Vector subvector n is_inc
+
+val update : forall 'a. vector 'a -> integer -> integer -> vector 'a -> vector 'a
+let update (Vector bs start is_inc) n m (Vector bs' _ _) =
+  let n = natFromInteger n in
+  let m = natFromInteger m in
+  let start = natFromInteger start in
+  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
+  let (prefix,_) = List.splitAt offset bs in
+  let (_,suffix) = List.splitAt (offset + length) bs in
+  let start = integerFromNat start in
+  Vector (prefix ++ (List.take length bs') ++ suffix) start is_inc
+
+val access : forall 'a. vector 'a -> integer -> 'a
+let access (Vector bs start is_inc) n =
+  if is_inc then nth bs (n - start) else nth bs (start - n)
+
+val update_pos : forall 'a. vector 'a -> integer -> 'a -> vector 'a
+let update_pos v n b =
+  update v n n (Vector [b] 0 true)
 
 
 type register_field = string
@@ -38,11 +97,21 @@ let size_of_reg_nat reg = natFromInteger (size_of_reg reg)
 let start_of_reg_nat reg = natFromInteger (start_of_reg reg)
 
 
+val register_field_indices_aux : register -> register_field -> maybe (integer * integer)
+let rec register_field_indices_aux register rfield =
+  match register with
+  | Register _ _ _ _ rfields -> List.lookup rfield rfields
+  | RegisterPair r1 r2 ->
+      let m_indices = register_field_indices_aux r1 rfield in
+      if isJust m_indices then m_indices else register_field_indices_aux r2 rfield
+  | UndefinedRegister -> Nothing
+  end
+
 val register_field_indices : register -> register_field -> integer * integer
-let register_field_indices (Register _ _ _ _ rfields) rfield =
-  match List.lookup rfield rfields with
-  | None -> failwith "Invalid register/register-field combination"
+let register_field_indices register rfield =
+  match register_field_indices_aux register rfield with
   | Just indices -> indices
+  | Nothing -> failwith "Invalid register/register-field combination"
   end
 
 let register_field_indices_nat reg regfield=
@@ -54,7 +123,6 @@ let to_bool = function
   | I  -> true
   | Undef -> failwith "to_bool applied to Undef"
   end
-
 
 let bit_lifted_of_bitU = function
   | O -> Bitl_zero
@@ -87,7 +155,7 @@ let bitwise_not_bit = function
   | _ -> Undef
   end
 
-let (~) = bitwise_not_bit
+let inline (~) = bitwise_not_bit
 
 val pow : integer -> integer -> integer
 let pow m n = m ** (natFromInteger n)
@@ -118,13 +186,13 @@ val bitwise_xor_bit : bitU * bitU -> bitU
 let bitwise_xor_bit = bitwise_binop_bit xor
 
 val (&.) : bitU -> bitU -> bitU
-let (&.) x y = bitwise_and_bit (x,y)
+let inline (&.) x y = bitwise_and_bit (x,y)
 
 val (|.) : bitU -> bitU -> bitU
-let (|.) x y = bitwise_or_bit (x,y)
+let inline (|.) x y = bitwise_or_bit (x,y)
 
 val (+.) : bitU -> bitU -> bitU
-let (+.) x y = bitwise_xor_bit (x,y)
+let inline (+.) x y = bitwise_xor_bit (x,y)
 
 let bitwise_binop op (Vector bsl start is_inc, Vector bsr _ _) =
   let revbs = foldl (fun acc pair -> bitwise_binop_bit op pair :: acc) [] (zip bsl bsr) in
@@ -140,7 +208,7 @@ let unsigned (Vector bs _ _ as v) : integer =
            (fun (acc,exp) b -> (acc + (if b = I then integerPow 2 exp else 0),exp +1)) (0,0) bs)
 
 let unsigned_big = unsigned
-        
+
 let signed v : integer =
   match most_significant v with
   | I -> 0 - (1 + (unsigned (bitwise_not v)))
@@ -151,7 +219,7 @@ let signed v : integer =
 let signed_big = signed
 
 let to_num sign = if sign then signed else unsigned
-  
+
 let max_64u = (integerPow 2 64) - 1
 let max_64  = (integerPow 2 63) - 1
 let min_64  = 0 - (integerPow 2 63)
@@ -163,7 +231,7 @@ let min_8   = (0 - 128 : integer)
 let max_5   = (31 : integer)
 let min_5   = (0 - 32 : integer)
 
-let get_max_representable_in sign (n : integer) : integer = 
+let get_max_representable_in sign (n : integer) : integer =
   if (n = 64) then match sign with | true -> max_64 | false -> max_64u end
   else if (n=32) then match sign with | true -> max_32 | false -> max_32u end
   else if (n=8) then max_8
@@ -172,7 +240,7 @@ let get_max_representable_in sign (n : integer) : integer =
                        | false -> integerPow 2 (natFromInteger n)
        end
 
-let get_min_representable_in _ (n : integer) : integer = 
+let get_min_representable_in _ (n : integer) : integer =
   if n = 64 then min_64
   else if n = 32 then min_32
   else if n = 8 then min_8
@@ -196,7 +264,7 @@ let rec add_one_bit bs co (i : integer) =
     | (I,false) -> add_one_bit (replace bs (i,O)) true (i-1)
     | (I,true)  -> add_one_bit bs true (i-1)
     | _ -> failwith "add_one_bit applied to list with undefined bit"
-   (*    | Vundef,_ -> assert false*) 
+   (*    | Vundef,_ -> assert false*)
   end
 
 let to_vec is_inc ((len : integer),(n : integer)) =
@@ -212,7 +280,7 @@ let to_vec is_inc ((len : integer),(n : integer)) =
     Vector (add_one_bit bs false (len-1)) start is_inc
 
 let to_vec_big = to_vec
-      
+
 let to_vec_inc = to_vec true
 let to_vec_dec = to_vec false
 
@@ -221,7 +289,7 @@ let to_vec_undef is_inc (len : integer) =
 
 let to_vec_inc_undef = to_vec_undef true
 let to_vec_dec_undef = to_vec_undef false
-                                    
+
 let exts (len, vec) = to_vec (get_dir vec) (len,signed vec)
 let extz (len, vec) = to_vec (get_dir vec) (len,unsigned vec)
 
@@ -244,8 +312,8 @@ let arith_op_vec op sign (size : integer) (Vector _ _ is_inc as l) r =
 
 (* add_vec
  * add_vec_signed
- * minus_vec 
- * multiply_vec 
+ * minus_vec
+ * multiply_vec
  * multiply_vec_signed
  *)
 let add_VVV = arith_op_vec integerAdd false 1
@@ -259,8 +327,8 @@ let arith_op_vec_range op sign size (Vector _ _ is_inc as l) r =
 
 (* add_vec_range
  * add_vec_range_signed
- * minus_vec_range 
- * mult_vec_range 
+ * minus_vec_range
+ * mult_vec_range
  * mult_vec_range_signed
  *)
 let add_VIV = arith_op_vec_range integerAdd false 1
@@ -274,7 +342,7 @@ let arith_op_range_vec op sign size l (Vector _ _ is_inc as r) =
 
 (* add_range_vec
  * add_range_vec_signed
- * minus_range_vec 
+ * minus_range_vec
  * mult_range_vec
  * mult_range_vec_signed
  *)
@@ -288,7 +356,7 @@ let arith_op_range_vec_range op sign l r = op l (to_num sign r)
 
 (* add_range_vec_range
  * add_range_vec_range_signed
- * minus_range_vec_range 
+ * minus_range_vec_range
  *)
 let add_IVI = arith_op_range_vec_range integerAdd false
 let addS_IVI = arith_op_range_vec_range integerAdd true
@@ -306,7 +374,7 @@ let minus_VII = arith_op_vec_range_range integerMinus false
 
 
 
-let arith_op_vec_vec_range op sign l r = 
+let arith_op_vec_vec_range op sign l r =
   let (l',r') = (to_num sign l,to_num sign r) in
   op l' r'
 
@@ -320,7 +388,7 @@ let arith_op_vec_bit op sign (size : integer) (Vector _ _ is_inc as l)r =
   let l' = to_num sign l in
   let n = op l' (match r with | I -> (1 : integer) | _ -> 0 end) in
   to_vec is_inc (length l * size,n)
-    
+
 (* add_vec_bit
  * add_vec_bit_signed
  * minus_vec_bit_signed
@@ -373,21 +441,21 @@ let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (siz
   let correct_size_num = to_vec is_inc (act_size,n) in
   let one_larger = to_vec is_inc (act_size + 1,nu) in
   let overflow =
-    if changed 
+    if changed
     then
       if n <= get_max_representable_in sign act_size && n >= get_min_representable_in sign act_size
-      then O else I 
+      then O else I
     else I in
   (correct_size_num,overflow,most_significant one_larger)
 
 (* add_overflow_vec_bit_signed
  * minus_overflow_vec_bit
- * minus_overflow_vec_bit_signed 
+ * minus_overflow_vec_bit_signed
  *)
 let addSO_VBV = arith_op_overflow_vec_bit integerAdd true 1
 let minusO_VBV = arith_op_overflow_vec_bit integerMinus false 1
 let minusSO_VBV = arith_op_overflow_vec_bit integerMinus true 1
-    
+
 type shift = LL_shift | RR_shift | LLL_shift
 
 let shift_op_vec op ((Vector bs start is_inc as l),(n : integer)) =
@@ -400,7 +468,7 @@ let shift_op_vec op ((Vector bs start is_inc as l),(n : integer)) =
      | RR_shift (*">>"*) ->
        let right_vec = slice l start n in
        let left_vec = Vector (List.replicate (natFromInteger n) O) 0 true in
-       vector_concat left_vec right_vec 
+       vector_concat left_vec right_vec
      | LLL_shift (*"<<<"*) ->
        let left_vec = slice l n (if is_inc then len + start else start - len) in
        let right_vec = slice l start n in
@@ -411,7 +479,7 @@ let bitwise_leftshift = shift_op_vec LL_shift (*"<<"*)
 let bitwise_rightshift = shift_op_vec RR_shift (*">>"*)
 let bitwise_rotate = shift_op_vec LLL_shift (*"<<<"*)
 
-let rec arith_op_no0 (op : integer -> integer -> integer) l r = 
+let rec arith_op_no0 (op : integer -> integer -> integer) l r =
   if r = 0
   then Nothing
   else Just (op l r)
@@ -420,14 +488,14 @@ let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size ((Vector
   let act_size = length l * size in
   let (l',r') = (to_num sign l,to_num sign r) in
   let n = arith_op_no0 op l' r' in
-  let (representable,n') = 
-    match n with 
-    | Just n' ->  
+  let (representable,n') =
+    match n with
+    | Just n' ->
       (n' <= get_max_representable_in sign act_size &&
          n' >= get_min_representable_in sign act_size, n')
     | _ -> (false,0)
     end in
-  if representable 
+  if representable
   then to_vec is_inc (act_size,n')
   else Vector (List.replicate (natFromInteger act_size) Undef) start is_inc
 
@@ -442,14 +510,14 @@ let arith_op_overflow_no0_vec op sign size ((Vector _ start is_inc) as l) r =
   let (l_u,r_u) = (to_num false l,to_num false r) in
   let n = arith_op_no0 op l' r' in
   let n_u = arith_op_no0 op l_u r_u in
-  let (representable,n',n_u') = 
-    match (n, n_u) with 
-    | (Just n',Just n_u') ->  
+  let (representable,n',n_u') =
+    match (n, n_u) with
+    | (Just n',Just n_u') ->
        ((n' <= get_max_representable_in sign rep_size &&
            n' >= (get_min_representable_in sign rep_size)), n', n_u')
     | _ -> (true,0,0)
     end in
-  let (correct_size_num,one_more) = 
+  let (correct_size_num,one_more) =
     if representable then
       (to_vec is_inc (act_size,n'),to_vec is_inc (act_size + 1,n_u'))
     else
@@ -474,7 +542,7 @@ let rec repeat xs n =
   if n = 0 then []
   else xs ++ repeat xs (n-1)
 
-let duplicate_bits (Vector bits start direction,len) = 
+let duplicate_bits (Vector bits start direction,len) =
   let bits' = repeat bits len in
   Vector bits' start direction
 
@@ -486,7 +554,7 @@ let lteq = compare_op (<=)
 let gteq = compare_op (>=)
 
 
-let compare_op_vec op sign (l,r) = 
+let compare_op_vec op sign (l,r) =
   let (l',r') = (to_num sign l, to_num sign r) in
   compare_op op (l',r')
 
@@ -504,7 +572,7 @@ let gt_vec_unsigned = compare_op_vec (>) false
 let lteq_vec_unsigned = compare_op_vec (<=) false
 let gteq_vec_unsigned = compare_op_vec (>=) false
 
-let compare_op_vec_range op sign (l,r) = 
+let compare_op_vec_range op sign (l,r) =
   compare_op op ((to_num sign l),r)
 
 let lt_vec_range = compare_op_vec_range (<) true
@@ -571,9 +639,13 @@ val bitv_of_byte_lifteds : list Sail_impl_base.byte_lifted -> vector bitU
 let bitv_of_byte_lifteds v =
   Vector (foldl (fun x (Byte_lifted y) -> x ++ (List.map bitU_of_bit_lifted y)) [] v) 0 true
 
+val bitv_of_bytes : list Sail_impl_base.byte -> vector bitU
+let bitv_of_bytes v =
+  Vector (foldl (fun x (Byte y) -> x ++ (List.map bitU_of_bit y)) [] v) 0 true
+
 
 val byte_lifteds_of_bitv : vector bitU -> list byte_lifted
-let byte_lifteds_of_bitv (Vector bits length is_inc) = 
+let byte_lifteds_of_bitv (Vector bits length is_inc) =
   let bits = List.map bit_lifted_of_bitU bits in
   byte_lifteds_of_bit_lifteds bits
 
@@ -590,7 +662,7 @@ let bitvFromRegisterValue v =
 
 
 val registerValueFromBitv : vector bitU -> register -> register_value
-let registerValueFromBitv (Vector bits start is_inc) reg = 
+let registerValueFromBitv (Vector bits start is_inc) reg =
   let start = natFromInteger start in
   let bit_lifteds =
     List.map bit_lifted_of_bitU bits in
@@ -603,7 +675,6 @@ let registerValueFromBitv (Vector bits start is_inc) reg =
 class (ToNatural 'a)
   val toNatural : 'a -> natural
 end
-
 
 instance (ToNatural integer)
   let toNatural = naturalFromInteger
@@ -632,7 +703,7 @@ let toNaturalFiveTup (n1,n2,n3,n4,n5) =
 
 val foreach_inc :  forall 'vars. (integer * integer * integer) -> 'vars ->
                    (integer -> 'vars -> 'vars) -> 'vars
-let rec foreach_inc (i,stop,by) vars body = 
+let rec foreach_inc (i,stop,by) vars body =
   if i <= stop
   then let vars = body i vars in
        foreach_inc (i + by,stop,by) vars body
@@ -640,7 +711,7 @@ let rec foreach_inc (i,stop,by) vars body =
 
 val foreach_dec : forall 'vars. (integer * integer * integer) -> 'vars ->
                   (integer -> 'vars -> 'vars) -> 'vars
-let rec foreach_dec (i,stop,by) vars body = 
+let rec foreach_dec (i,stop,by) vars body =
   if i >= stop
   then let vars = body i vars in
        foreach_dec (i - by,stop,by) vars body
@@ -654,10 +725,12 @@ let assert' b msg_opt =
   if to_bool b then failwith msg else ()
 
 
+
 class (ToFromInterpValue 'a)
   val toInterpValue : 'a -> Interp.value
   val fromInterpValue : Interp.value -> 'a
 end
+
 
 instance (ToFromInterpValue bool)
   let toInterpValue = function
@@ -731,7 +804,7 @@ let tuple3FromInterpValue = function
   | _ -> failwith "fromInterpValue a*b: unexpected value"
   end
 
-instance forall 'a 'b 'c. ToFromInterpValue 'a, ToFromInterpValue 'b, ToFromInterpValue 'c => 
+instance forall 'a 'b 'c. ToFromInterpValue 'a, ToFromInterpValue 'b, ToFromInterpValue 'c =>
     (ToFromInterpValue ('a * 'b * 'c))
   let toInterpValue = tuple3ToInterpValue
   let fromInterpValue = tuple3FromInterpValue
@@ -745,8 +818,8 @@ let tuple4FromInterpValue = function
   | _ -> failwith "fromInterpValue a*b: unexpected value"
   end
 
-instance forall 'a 'b 'c 'd. ToFromInterpValue 'a, ToFromInterpValue 'b, 
-                             ToFromInterpValue 'c, ToFromInterpValue 'd => 
+instance forall 'a 'b 'c 'd. ToFromInterpValue 'a, ToFromInterpValue 'b,
+                             ToFromInterpValue 'c, ToFromInterpValue 'd =>
     (ToFromInterpValue ('a * 'b * 'c * 'd))
   let toInterpValue = tuple4ToInterpValue
   let fromInterpValue = tuple4FromInterpValue
@@ -761,8 +834,8 @@ let tuple5FromInterpValue = function
   | _ -> failwith "fromInterpValue a*b: unexpected value"
   end
 
-instance forall 'a 'b 'c 'd 'e. 
-    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+instance forall 'a 'b 'c 'd 'e.
+    ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
     ToFromInterpValue 'e =>
     (ToFromInterpValue ('a * 'b * 'c * 'd * 'e))
@@ -782,7 +855,7 @@ let tuple6FromInterpValue = function
   end
 
 instance forall 'a 'b 'c 'd 'e 'f.
-    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
     ToFromInterpValue 'e, ToFromInterpValue 'f =>
     (ToFromInterpValue ('a * 'b * 'c * 'd * 'e * 'f))
@@ -802,7 +875,7 @@ let tuple7FromInterpValue = function
   end
 
 instance forall 'a 'b 'c 'd 'e 'f 'g.
-    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
     ToFromInterpValue 'e, ToFromInterpValue 'f,
     ToFromInterpValue 'g =>
@@ -824,7 +897,7 @@ let tuple8FromInterpValue = function
   end
 
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h.
-    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
     ToFromInterpValue 'e, ToFromInterpValue 'f,
     ToFromInterpValue 'g, ToFromInterpValue 'h =>
@@ -846,7 +919,7 @@ let tuple9FromInterpValue = function
   end
 
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i.
-    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
     ToFromInterpValue 'e, ToFromInterpValue 'f,
     ToFromInterpValue 'g, ToFromInterpValue 'h,
@@ -870,7 +943,7 @@ let tuple10FromInterpValue = function
   end
 
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j.
-    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
     ToFromInterpValue 'e, ToFromInterpValue 'f,
     ToFromInterpValue 'g, ToFromInterpValue 'h,
@@ -894,7 +967,7 @@ let tuple11FromInterpValue = function
   end
 
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j 'k.
-    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
     ToFromInterpValue 'e, ToFromInterpValue 'f,
     ToFromInterpValue 'g, ToFromInterpValue 'h,
@@ -920,7 +993,7 @@ let tuple12FromInterpValue = function
   end
 
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j 'k 'l.
-    ToFromInterpValue 'a, ToFromInterpValue 'b, 
+    ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
     ToFromInterpValue 'e, ToFromInterpValue 'f,
     ToFromInterpValue 'g, ToFromInterpValue 'h,
@@ -972,7 +1045,7 @@ instance forall 'a. ToFromInterpValue 'a => (ToFromInterpValue (vector 'a))
 end
 
 (* Here the type information is not accurate: instead of T_id "option" it should
-   be T_app (T_id "option) (...), but temporarily we'll do it like this. The
+   be T_app (T_id "option") (...), but temporarily we'll do it like this. The
    same thing has to be fixed in pretty_print.ml when we're generating the
    type-class instances. *)
 val maybeToInterpValue : forall 'a. ToFromInterpValue 'a => maybe 'a -> Interp.value
@@ -993,3 +1066,118 @@ instance forall 'a. ToFromInterpValue 'a => (ToFromInterpValue (maybe 'a))
   let fromInterpValue = maybeFromInterpValue
 end
 
+
+module SI = Interp
+module SIA = Interp_ast
+
+let read_kindFromInterpValue = function
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_plain") _) _ _ v -> Read_plain
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_tag") _) _ _ v -> Read_tag
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_tag_reserve") _) _ _ v -> Read_tag_reserve
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_reserve") _) _ _ v -> Read_reserve
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_acquire") _) _ _ v -> Read_acquire
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_exclusive") _) _ _ v -> Read_exclusive
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_exclusive_acquire") _) _ _ v -> Read_exclusive_acquire
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_stream") _) _ _ v -> Read_stream
+  | _ -> failwith "fromInterpValue read_kind: unexpected value"
+  end
+
+let read_kindToInterpValue = function
+  | Read_plain -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_plain") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 0) (toInterpValue ())
+  | Read_tag -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_tag") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 1) (toInterpValue ())
+  | Read_tag_reserve -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_tag_reserve") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 1) (toInterpValue ())
+  | Read_reserve -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_reserve") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 2) (toInterpValue ())
+  | Read_acquire -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_acquire") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 3) (toInterpValue ())
+  | Read_exclusive -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_exclusive") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 4) (toInterpValue ())
+  | Read_exclusive_acquire -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_exclusive_acquire") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 5) (toInterpValue ())
+  | Read_stream -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_stream") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 6) (toInterpValue ())
+  end
+
+instance (ToFromInterpValue read_kind)
+  let toInterpValue = read_kindToInterpValue
+  let fromInterpValue = read_kindFromInterpValue
+end
+
+
+let write_kindFromInterpValue = function
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_plain") _) _ _ v -> Write_plain
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_tag") _) _ _ v -> Write_tag
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_tag_conditional") _) _ _ v -> Write_tag_conditional
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_conditional") _) _ _ v -> Write_conditional
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_release") _) _ _ v -> Write_release
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_exclusive") _) _ _ v -> Write_exclusive
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_exclusive_release") _) _ _ v -> Write_exclusive_release
+  | _ -> failwith "fromInterpValue write_kind: unexpected value "
+  end
+
+let write_kindToInterpValue = function
+  | Write_plain -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_plain") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 0) (toInterpValue ())
+  | Write_tag -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_tag") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 1) (toInterpValue ())
+  | Write_tag_conditional -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_tag_conditional") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 1) (toInterpValue ())
+  | Write_conditional -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_conditional") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 2) (toInterpValue ())
+  | Write_release -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_release") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 3) (toInterpValue ())
+  | Write_exclusive -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_exclusive") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 4) (toInterpValue ())
+  | Write_exclusive_release -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_exclusive_release") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 5) (toInterpValue ())
+  end
+
+instance (ToFromInterpValue write_kind)
+  let toInterpValue = write_kindToInterpValue
+  let fromInterpValue = write_kindFromInterpValue
+end
+
+let barrier_kindFromInterpValue = function
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_Sync") _) _ _ v -> Barrier_Sync
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_LwSync") _) _ _ v -> Barrier_LwSync
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_Eieio") _) _ _ v -> Barrier_Eieio
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_Isync") _) _ _ v -> Barrier_Isync
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DMB") _) _ _ v -> Barrier_DMB
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DMB_ST") _) _ _ v -> Barrier_DMB_ST
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DMB_LD") _) _ _ v -> Barrier_DMB_LD
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB") _) _ _ v -> Barrier_DSB
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB_ST") _) _ _ v -> Barrier_DSB_ST
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB_LD") _) _ _ v -> Barrier_DSB_LD
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_ISB") _) _ _ v -> Barrier_ISB
+  | _ -> failwith "fromInterpValue barrier_kind: unexpected value"
+  end
+
+let barrier_kindToInterpValue = function
+  | Barrier_Sync -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_Sync") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 0) (toInterpValue ())
+  | Barrier_LwSync -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_LwSync") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 1) (toInterpValue ())
+  | Barrier_Eieio -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_Eieio") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 2) (toInterpValue ())
+  | Barrier_Isync -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_Isync") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 3) (toInterpValue ())
+  | Barrier_DMB -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DMB") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 4) (toInterpValue ())
+  | Barrier_DMB_ST -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DMB_ST") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 5) (toInterpValue ())
+  | Barrier_DMB_LD -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DMB_LD") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 6) (toInterpValue ())
+  | Barrier_DSB -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 7) (toInterpValue ())
+  | Barrier_DSB_ST -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB_ST") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 8) (toInterpValue ())
+  | Barrier_DSB_LD -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB_LD") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 9) (toInterpValue ())
+  | Barrier_ISB -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_ISB") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 10) (toInterpValue ())
+  end
+
+instance (ToFromInterpValue barrier_kind)
+  let toInterpValue = barrier_kindToInterpValue
+  let fromInterpValue = barrier_kindFromInterpValue
+end
+
+
+let instruction_kindFromInterpValue = function
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_barrier") _) _ _ v -> IK_barrier (fromInterpValue v)
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_mem_read") _) _ _ v -> IK_mem_read (fromInterpValue v)
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_mem_write") _) _ _ v -> IK_mem_write (fromInterpValue v)
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_cond_branch") _) _ _ v -> IK_cond_branch
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_simple") _) _ _ v -> IK_simple
+  | _ -> failwith "fromInterpValue instruction_kind: unexpected value"
+  end
+
+let instruction_kindToInterpValue = function
+  | IK_barrier v -> SI.V_ctor (SIA.Id_aux (SIA.Id "IK_barrier") SIA.Unknown) (SIA.T_id "instruction_kind") SI.C_Union (toInterpValue v)
+  | IK_mem_read v -> SI.V_ctor (SIA.Id_aux (SIA.Id "IK_mem_read") SIA.Unknown) (SIA.T_id "instruction_kind") SI.C_Union (toInterpValue v)
+  | IK_mem_write v -> SI.V_ctor (SIA.Id_aux (SIA.Id "IK_mem_write") SIA.Unknown) (SIA.T_id "instruction_kind") SI.C_Union (toInterpValue v)
+  | IK_cond_branch -> SI.V_ctor (SIA.Id_aux (SIA.Id "IK_cond_branch") SIA.Unknown) (SIA.T_id "instruction_kind") SI.C_Union (toInterpValue ())
+  | IK_simple -> SI.V_ctor (SIA.Id_aux (SIA.Id "IK_simple") SIA.Unknown) (SIA.T_id "instruction_kind") SI.C_Union (toInterpValue ())
+  end
+
+instance (ToFromInterpValue instruction_kind)
+  let toInterpValue = instruction_kindToInterpValue
+  let fromInterpValue = instruction_kindFromInterpValue
+end

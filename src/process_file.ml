@@ -177,13 +177,13 @@ let output1 libpath out_arg filename defs  =
          let ((o,_, _) as ext_o) =
            open_output_with_check_unformatted (f' ^ "_embedded.lem") in
          (Pretty_print.pp_defs_lem o defs (generated_line filename))
-           ["Pervasives_extra";"Sail_impl_base";"Vector";"Prompt";"Sail_values"];
+           ["Pervasives_extra";"Sail_impl_base";"Prompt";"Sail_values"];
          close_output_with_check ext_o
       | Lem_out (Some lib) ->
          let ((o,_, _) as ext_o) =
            open_output_with_check_unformatted (f' ^ "_embedded.lem") in
 	 (Pretty_print.pp_defs_lem o defs (generated_line filename))
-           ["Pervasives_extra";"Sail_impl_base";"Vector";"Prompt";"Sail_values";lib];
+           ["Pervasives_extra";"Sail_impl_base";"Prompt";"Sail_values";lib];
          close_output_with_check ext_o;
       | Ocaml_out None ->
         let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in
