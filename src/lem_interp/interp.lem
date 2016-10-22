@@ -116,6 +116,57 @@ let rec {ocaml} string_of_value v = match v with
 end
 let ~{ocaml} string_of_value _ = ""
 
+val debug_print_value_list : list string -> string
+let rec debug_print_value_list vs = match vs with
+  | [] -> ""
+  | [v] -> v
+  | v :: vs -> v ^ ";" ^ debug_print_value_list vs
+end
+val debug_print_value : value -> string
+let rec debug_print_value v = match v with
+  | V_boxref n t -> "V_boxref " ^ (show n) ^ " t"
+  | V_lit (L_aux lit _) -> 
+     "V_lit " ^
+       (match lit with
+        | L_unit -> "L_unit"
+        | L_zero -> "L_zero"
+        | L_one  -> "L_one"
+        | L_true -> "L_true"
+        | L_false -> "L_false"
+        | L_num num -> "(Lnum " ^ (show num) ^ ")"
+        | L_hex hex -> "(L_hex " ^ hex ^ ")"
+        | L_bin bin -> "(L_bin " ^ bin ^ ")"
+        | L_undef -> "L_undef"
+        | L_string str-> "(L_string " ^ str ^ ")" end)
+  | V_tuple vals ->
+     "V_tuple [" ^ debug_print_value_list (List.map debug_print_value vals) ^ "]"
+  | V_list vals ->
+     "V_list [" ^ debug_print_value_list (List.map debug_print_value vals) ^ "]"
+  | V_vector i inc vals ->
+     "V_vector " ^ (show i) ^
+       " " ^ (if inc = IInc then "IInc" else "IDec") ^
+         " [" ^ debug_print_value_list (List.map debug_print_value vals) ^ "]"
+  | V_vector_sparse start stop inc vals default ->
+     let ppindexval (i,v) = (show i) ^ " = " ^ (debug_print_value v) in
+     let valspp = debug_print_value_list (List.map ppindexval vals) in
+     "V_vector " ^ (show start) ^ " " ^ (show stop) ^ " " ^
+       (if inc = IInc then "IInc" else "IDec") ^
+         " [" ^ valspp ^ "] (" ^ debug_print_value default ^ ")"
+  | V_record t vals ->
+     let ppidval (id,v) = "(" ^ (get_id id) ^ "," ^ debug_print_value v ^ ")" in
+     "V_record t [" ^ debug_print_value_list (List.map ppidval vals) ^ "]"
+  | V_ctor id t k vals ->
+     "V_ctor " ^ (get_id id) ^ " t " ^
+       (match k with | C_Enum n -> "(C_Enum " ^ show n ^ ")"
+                     | C_Union -> "C_Union" end) ^
+         "(" ^ debug_print_value v ^ ")"
+  | V_unknown -> "V_unknown"
+  | V_register r -> "V_register (" ^ string_of_reg_form r ^ ")"
+  | V_register_alias _ _ -> "V_register_alias _ _"
+  | V_track v rs -> "V_track (" ^ debug_print_value v ^ ") _"
+  end
+                                   
+                                   
 let rec {coq;ocaml} id_value_eq strict (i, v) (i', v') = i = i' && value_eq strict v v'
 and value_eq strict left right =
   match (left, right) with

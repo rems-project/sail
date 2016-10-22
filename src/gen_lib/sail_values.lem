@@ -27,10 +27,8 @@ let length (Vector bs _ _) = integerFromNat (length bs)
 let rec replace bs ((n : integer),b') = match bs with
   | [] -> []
   | b :: bs ->
-     if n = 0 then
-       b' :: bs
-     else
-       b :: replace bs (n - 1,b')
+     if n = 0 then b' :: bs
+              else b :: replace bs (n - 1,b')
   end
 
 let vector_concat (Vector bs start is_inc) (Vector bs' _ _) =
@@ -38,27 +36,36 @@ let vector_concat (Vector bs start is_inc) (Vector bs' _ _) =
 
 let inline (^^) = vector_concat
 
+val sublist : forall 'a. list 'a -> (nat * nat) -> list 'a
+let sublist xs (i,j) =
+  let (toJ,_suffix) = List.splitAt (j+1) xs in
+  let (_prefix,fromItoJ) = List.splitAt i toJ in
+  fromItoJ
+
+val update_sublist : forall 'a. list 'a -> (nat * nat) -> list 'a -> list 'a
+let update_sublist xs (i,j) xs' =
+  let (toJ,suffix) = List.splitAt (j+1) xs in
+  let (prefix,_fromItoJ) = List.splitAt i toJ in
+  prefix ++ xs' ++ suffix
+
 val slice : forall 'a. vector 'a -> integer -> integer -> vector 'a
-let slice (Vector bs start is_inc) n m =
-  let n = natFromInteger n in
-  let m = natFromInteger m in
-  let start = natFromInteger start in
-  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
-  let (_,suffix) = List.splitAt offset bs in
-  let (subvector,_) = List.splitAt length suffix in
-  let n = integerFromNat n in
-  Vector subvector n is_inc
+let slice (Vector bs start is_inc) i j =
+  let iN = natFromInteger i in
+  let jN = natFromInteger j in
+  let startN = natFromInteger start in
+  let subvector_bits =
+    sublist bs (if is_inc then (iN-startN,jN-startN) else (startN-iN,startN-jN)) in
+  (Vector subvector_bits i is_inc)
 
 val update : forall 'a. vector 'a -> integer -> integer -> vector 'a -> vector 'a
-let update (Vector bs start is_inc) n m (Vector bs' _ _) =
-  let n = natFromInteger n in
-  let m = natFromInteger m in
-  let start = natFromInteger start in
-  let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
-  let (prefix,_) = List.splitAt offset bs in
-  let (_,suffix) = List.splitAt (offset + length) bs in
-  let start = integerFromNat start in
-  Vector (prefix ++ (List.take length bs') ++ suffix) start is_inc
+let update (Vector bs start is_inc) i j (Vector bs' _ _) =
+  let iN = natFromInteger i in
+  let jN = natFromInteger j in
+  let startN = natFromInteger start in
+  let bits =
+    (update_sublist bs)
+      (if is_inc then (iN-startN,jN-startN) else (startN-iN,startN-jN)) bs' in
+  Vector bits start is_inc
 
 val access : forall 'a. vector 'a -> integer -> 'a
 let access (Vector bs start is_inc) n =
@@ -142,8 +149,6 @@ let bitU_of_bit_lifted = function
   | Bitl_unknown -> failwith "bitU_of_bit_lifted Bitl_unknown"
   end
 
-let has_undef (Vector bs _ _) = List.any (function Undef -> true | _ -> false end) bs
-
 let most_significant = function
   | (Vector (b :: _) _ _) -> b
   | _ -> failwith "most_significant applied to empty vector"
@@ -152,7 +157,7 @@ let most_significant = function
 let bitwise_not_bit = function
   | I -> O
   | O -> I
-  | _ -> Undef
+  | Undef -> Undef
   end
 
 let inline (~) = bitwise_not_bit
@@ -203,9 +208,16 @@ let bitwise_or = bitwise_binop (||)
 let bitwise_xor = bitwise_binop xor
 
 let unsigned (Vector bs _ _ as v) : integer =
-  if has_undef v then failwith "unsigned applied to vector with undefined bits" else
-    fst (List.foldl
-           (fun (acc,exp) b -> (acc + (if b = I then integerPow 2 exp else 0),exp +1)) (0,0) bs)
+  let (sum,_) =
+    List.foldr
+      (fun b (acc,exp) ->
+        match b with
+        | I -> (acc + integerPow 2 exp,exp + 1)
+        | O -> (acc, exp + 1)
+        | Undef -> failwith "unsigned: vector has undefined bits"
+        end)
+      (0,0) bs in
+  sum
 
 let unsigned_big = unsigned
 
@@ -264,7 +276,6 @@ let rec add_one_bit bs co (i : integer) =
     | (I,false) -> add_one_bit (replace bs (i,O)) true (i-1)
     | (I,true)  -> add_one_bit bs true (i-1)
     | _ -> failwith "add_one_bit applied to list with undefined bit"
-   (*    | Vundef,_ -> assert false*)
   end
 
 let to_vec is_inc ((len : integer),(n : integer)) =
@@ -306,7 +317,7 @@ let power = integerPow
 
 let arith_op_vec op sign (size : integer) (Vector _ _ is_inc as l) r =
   let (l',r') = (to_num sign l, to_num sign r) in
-  let n = op  l' r' in
+  let n = op l' r' in
   to_vec is_inc (size * (length l),n)
 
 
@@ -620,13 +631,6 @@ let mask (n,Vector bits start dir) =
   Vector (drop (current_size - (natFromInteger n)) bits) (if dir then 0 else (n-1)) dir
 
 
-let bit_of_bit_lifted = function
-  | Bitl_zero -> O
-  | Bitl_one  -> I
-  | Bitl_undef -> Undef
-  | _ -> failwith "bit_of_bit_lifted: unexpected Bitl_unknown"
-end
-
 val byte_chunks : forall 'a. nat -> list 'a -> list (list 'a)
 let rec byte_chunks n list = match (n,list) with
   | (0,_) -> []
@@ -742,7 +746,8 @@ instance (ToFromInterpValue bool)
     | Interp.V_lit (L_aux (L_false) _) -> false
     | Interp.V_lit (L_aux (L_one) _)  -> true
     | Interp.V_lit (L_aux (L_zero) _) -> false
-    | _ -> failwith "fromInterpValue bool: unexpected value"
+    | v -> failwith ("fromInterpValue bool: unexpected value. " ^
+                       Interp.debug_print_value v)
     end
 end
 
@@ -750,7 +755,8 @@ instance (ToFromInterpValue unit)
   let toInterpValue = fun () -> Interp.V_lit (L_aux (L_unit) Unknown)
   let fromInterpValue = function
     | Interp.V_lit (L_aux (L_unit) _) -> ()
-    | _ -> failwith "fromInterpValue unit: unexpected value"
+    | v -> failwith ("fromInterpValue unit: unexpected value. " ^
+                       Interp.debug_print_value v)
     end
 end
 
@@ -758,7 +764,8 @@ instance (ToFromInterpValue integer)
   let toInterpValue i = V_lit (L_aux (L_num i) Unknown)
   let fromInterpValue = function
     | Interp.V_lit (L_aux (L_num i) _) -> i
-    | _ -> failwith "fromInterpValue integer: unexexpected value"
+    | v -> failwith ("fromInterpValue integer: unexpected value. " ^
+                       Interp.debug_print_value v)
     end
 end
 
@@ -766,7 +773,8 @@ instance (ToFromInterpValue string)
   let toInterpValue s = V_lit (L_aux (L_string s) Unknown)
   let fromInterpValue = function
     | Interp.V_lit (L_aux (L_string s) _) -> s
-    | _ -> failwith "fromInterpValue integer: unexexpected value"
+    | v -> failwith ("fromInterpValue integer: unexpected value. " ^
+                       Interp.debug_print_value v)
     end
 end
 
@@ -780,7 +788,10 @@ instance (ToFromInterpValue bitU)
     | Interp.V_lit (L_aux (L_one) _)   -> I
     | Interp.V_lit (L_aux (L_zero) _)  -> O
     | Interp.V_lit (L_aux (L_undef) _) -> Undef
-    | _ -> failwith "fromInterpValue bitU: unexpected value"
+    | Interp.V_lit (L_aux (L_true) _)   -> I
+    | Interp.V_lit (L_aux (L_false) _)  -> O
+    | v -> failwith ("fromInterpValue bitU: unexpected value. " ^
+                       Interp.debug_print_value v)
     end
 end
 
@@ -789,7 +800,8 @@ let tuple2ToInterpValue (a,b) =
   V_tuple [toInterpValue a;toInterpValue b]
 let tuple2FromInterpValue = function
   | V_tuple [a;b] -> (fromInterpValue a,fromInterpValue b)
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | v -> failwith ("fromInterpValue a*b: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a 'b. ToFromInterpValue 'a, ToFromInterpValue 'b => (ToFromInterpValue ('a * 'b))
@@ -801,7 +813,8 @@ let tuple3ToInterpValue (a,b,c) =
   V_tuple [toInterpValue a;toInterpValue b;toInterpValue c]
 let tuple3FromInterpValue = function
   | V_tuple [a;b;c] -> (fromInterpValue a,fromInterpValue b,fromInterpValue c)
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | v -> failwith ("fromInterpValue a*b*c: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a 'b 'c. ToFromInterpValue 'a, ToFromInterpValue 'b, ToFromInterpValue 'c =>
@@ -815,7 +828,8 @@ let tuple4ToInterpValue (a,b,c,d) =
 let tuple4FromInterpValue = function
   | V_tuple [a;b;c;d] -> (fromInterpValue a,fromInterpValue b,
                           fromInterpValue c,fromInterpValue d)
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | v -> failwith ("fromInterpValue a*b*c*d: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a 'b 'c 'd. ToFromInterpValue 'a, ToFromInterpValue 'b,
@@ -831,7 +845,8 @@ let tuple5FromInterpValue = function
   | V_tuple [a;b;c;d;e] ->
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e)
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | v -> failwith ("fromInterpValue a*b*c*d*e: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a 'b 'c 'd 'e.
@@ -851,7 +866,8 @@ let tuple6FromInterpValue = function
   | V_tuple [a;b;c;d;e;f] ->
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e,fromInterpValue f)
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | v -> failwith ("fromInterpValue a*b*c*d*e*f: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a 'b 'c 'd 'e 'f.
@@ -871,7 +887,8 @@ let tuple7FromInterpValue = function
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e,fromInterpValue f,
       fromInterpValue g)
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | v -> failwith ("fromInterpValue a*b*c*d*e*f*g: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a 'b 'c 'd 'e 'f 'g.
@@ -893,7 +910,8 @@ let tuple8FromInterpValue = function
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e,fromInterpValue f,
       fromInterpValue g,fromInterpValue h)
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | v -> failwith ("fromInterpValue a*b*c*d*e*f*g*h: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h.
@@ -915,7 +933,8 @@ let tuple9FromInterpValue = function
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e,fromInterpValue f,
       fromInterpValue g,fromInterpValue h,fromInterpValue i)
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | v -> failwith ("fromInterpValue a*b*c*d*e*f*g*h*i: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i.
@@ -939,7 +958,8 @@ let tuple10FromInterpValue = function
       fromInterpValue d,fromInterpValue e,fromInterpValue f,
       fromInterpValue g,fromInterpValue h,fromInterpValue i,
       fromInterpValue j)
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | v -> failwith ("fromInterpValue a*b*c*d*e*f*g*h*i*j: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j.
@@ -963,7 +983,8 @@ let tuple11FromInterpValue = function
       fromInterpValue d,fromInterpValue e,fromInterpValue f,
       fromInterpValue g,fromInterpValue h,fromInterpValue i,
       fromInterpValue j,fromInterpValue k)
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | v -> failwith ("fromInterpValue a*b*c*d*e*f*g*h*i*j*k: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j 'k.
@@ -989,7 +1010,8 @@ let tuple12FromInterpValue = function
       fromInterpValue d,fromInterpValue e,fromInterpValue f,
       fromInterpValue g,fromInterpValue h,fromInterpValue i,
       fromInterpValue j,fromInterpValue k,fromInterpValue l)
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | v -> failwith ("fromInterpValue a*b*c*d*e*f*g*h*i*j*k*l: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j 'k 'l.
@@ -1012,7 +1034,8 @@ let listToInterpValue l = V_list (List.map toInterpValue l)
 val listFromInterpValue : forall 'a. ToFromInterpValue 'a => Interp.value -> list 'a
 let listFromInterpValue = function
   | V_list l -> List.map fromInterpValue l
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | v -> failwith ("fromInterpValue list 'a: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a. ToFromInterpValue 'a => (ToFromInterpValue (list 'a))
@@ -1036,7 +1059,17 @@ let vectorFromInterpValue = function
        (fromInterpValue defaultval)
        (integerFromNat start) (integerFromNat length)
        (match direction with | IInc -> true | IDec -> false end)
-  | _ -> failwith "fromInterpValue a*b: unexpected value"
+  | V_tuple [V_vector start direction vs] ->
+     Vector (List.map fromInterpValue vs) (integerFromNat start)
+            (match direction with | IInc -> true | IDec -> false end)
+  | V_tuple [V_vector_sparse start length direction valuemap defaultval] ->
+     make_indexed_vector
+       (List.map (fun (i,v) -> (integerFromNat i,fromInterpValue v)) valuemap)
+       (fromInterpValue defaultval)
+       (integerFromNat start) (integerFromNat length)
+       (match direction with | IInc -> true | IDec -> false end)
+  | v -> failwith ("fromInterpValue vector 'a: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a. ToFromInterpValue 'a => (ToFromInterpValue (vector 'a))
@@ -1058,7 +1091,8 @@ val maybeFromInterpValue : forall 'a. ToFromInterpValue 'a => Interp.value -> ma
 let maybeFromInterpValue = function
   | V_ctor (Id_aux (Id "None") _) _ _ _ -> Nothing
   | V_ctor (Id_aux (Id "Some") _) _ _ v -> Just (fromInterpValue v)
-  | _ -> failwith "fromInterpValue maybe: unexpected value"
+  | v -> failwith ("fromInterpValue maybe 'a: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 instance forall 'a. ToFromInterpValue 'a => (ToFromInterpValue (maybe 'a))
@@ -1079,7 +1113,8 @@ let read_kindFromInterpValue = function
   | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_exclusive") _) _ _ v -> Read_exclusive
   | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_exclusive_acquire") _) _ _ v -> Read_exclusive_acquire
   | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_stream") _) _ _ v -> Read_stream
-  | _ -> failwith "fromInterpValue read_kind: unexpected value"
+  | v -> failwith ("fromInterpValue read_kind: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 let read_kindToInterpValue = function
@@ -1107,7 +1142,8 @@ let write_kindFromInterpValue = function
   | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_release") _) _ _ v -> Write_release
   | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_exclusive") _) _ _ v -> Write_exclusive
   | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_exclusive_release") _) _ _ v -> Write_exclusive_release
-  | _ -> failwith "fromInterpValue write_kind: unexpected value "
+  | v -> failwith ("fromInterpValue write_kind: unexpected value " ^
+                     Interp.debug_print_value v)
   end
 
 let write_kindToInterpValue = function
@@ -1137,7 +1173,8 @@ let barrier_kindFromInterpValue = function
   | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB_ST") _) _ _ v -> Barrier_DSB_ST
   | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB_LD") _) _ _ v -> Barrier_DSB_LD
   | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_ISB") _) _ _ v -> Barrier_ISB
-  | _ -> failwith "fromInterpValue barrier_kind: unexpected value"
+  | v -> failwith ("fromInterpValue barrier_kind: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 let barrier_kindToInterpValue = function
@@ -1166,7 +1203,8 @@ let instruction_kindFromInterpValue = function
   | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_mem_write") _) _ _ v -> IK_mem_write (fromInterpValue v)
   | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_cond_branch") _) _ _ v -> IK_cond_branch
   | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_simple") _) _ _ v -> IK_simple
-  | _ -> failwith "fromInterpValue instruction_kind: unexpected value"
+  | v -> failwith ("fromInterpValue instruction_kind: unexpected value. " ^
+                     Interp.debug_print_value v)
   end
 
 let instruction_kindToInterpValue = function
