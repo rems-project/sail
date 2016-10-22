@@ -883,14 +883,14 @@ let stop_condition_met model instr =
   match model with
   | PPC ->
     (match instr with
-     | ("Sc", [("Lev", _, arg)], []) ->
+     | ("Sc", [("Lev", _, arg)]) ->
        Nat_big_num.equal (integer_of_bit_list arg) (Nat_big_num.of_int 32)
      | _ -> false)
   | AArch64 -> (match instr with
-    | ("ImplementationDefinedStopFetching", _, _) -> true
+    | ("ImplementationDefinedStopFetching", _) -> true
     | _ -> false)
   | MIPS -> (match instr with 
-    | ("HCF", _, _) -> 
+    | ("HCF", _) -> 
       resultf "DEBUG MIPS PC %s\n"  (Printing_functions.logfile_register_value_to_string (Reg.find "PC" !reg));
       debug_print_gprs 0 31;
       true
