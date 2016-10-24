@@ -1363,5 +1363,55 @@ type decode_error =
   | Internal_error of string
 
 
+let decode_error_compare e1 e2 =
+  match (e1, e2) with
+  | (Unsupported_instruction_error i1, Unsupported_instruction_error i2)
+      -> defaultCompare i1 i2
+  | (Unsupported_instruction_error _, _) -> LT
+  | (_, Unsupported_instruction_error _) -> GT
+
+  | (Not_an_instruction_error o1, Not_an_instruction_error o2) -> defaultCompare o1 o2
+  | (Not_an_instruction_error _, _) -> LT
+  | (_, Not_an_instruction_error _) -> GT
+
+  | (Internal_error s1, Internal_error s2) -> compare s1 s2
+  (* | (Internal_error _, _) -> LT *)
+  (* | (_, Internal_error _) -> GT *)
+  end
+
+let decode_error_less e1 e2       = decode_error_compare e1 e2 =  LT
+let decode_error_less_eq e1 e2    = decode_error_compare e1 e2 <> GT
+let decode_error_greater e1 e2    = decode_error_compare e1 e2 =  GT
+let decode_error_greater_eq e1 e2 = decode_error_compare e1 e2 <> LT
+
+instance (Ord decode_error)
+  let compare = decode_error_compare
+  let (<)  = decode_error_less
+  let (<=) = decode_error_less_eq
+  let (>)  = decode_error_greater
+  let (>=) = decode_error_greater_eq
+end
+
+let decode_error_equal e1 e2 = (decode_error_compare e1 e2) = EQ
+let decode_error_inequal e1 e2 = not (decode_error_equal e1 e2)
+
+instance  (Eq decode_error)
+  let (=)  = decode_error_equal
+  let (<>) = decode_error_inequal
+end
 
 
+val outcome_s_descrEqual : forall 's 'a. Eq 'a => outcome_s 's 'a -> outcome_s 's 'a -> bool
+let outcome_s_descrEqual os1 os2 = match (fst os1,fst os2) with
+  | (Read_mem  descr1 _, Read_mem  descr2 _) -> descr1 = descr2
+  | (Write_ea  descr1 _, Write_ea  descr2 _) -> descr1 = descr2
+  | (Barrier   descr1 _, Barrier   descr2 _) -> descr1 = descr2
+  | (Read_reg  descr1 _, Read_reg  descr2 _) -> descr1 = descr2
+  | (Write_reg descr1 _, Write_reg descr2 _) -> descr1 = descr2
+  | (Escape    descr1 _, Escape    descr2 _) -> descr1 = descr2
+  | (Fail      descr1,   Fail      descr2)   -> descr1 = descr2
+  | (Internal  descr1 _, Internal  descr2 _)   -> descr1 = descr2
+  | (Done a1, Done a2) -> a1 = a2
+  | (Error e1, Error e2) -> e1 = e2
+  | (Footprint _, Footprint _) -> true
+end

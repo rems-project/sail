@@ -9,6 +9,15 @@ type nn = natural
 type bitU = O | I | Undef
 
 
+let showBitU = function
+  | O -> "O"
+  | I -> "I"
+  | Undef -> "Undef"
+end
+
+instance (Show bitU)
+  let show = showBitU
+end
 
 (* element list * start * has increasing direction *)
 type vector 'a = Vector of list 'a * integer * bool
@@ -18,6 +27,14 @@ let rec nth xs (n : integer) =
   | x :: xs -> if n = 0 then x else nth xs (n - 1)
   | _ -> failwith "nth applied to empty list"
   end
+
+
+let showVector (Vector elems start inc) =
+  "Vector " ^ show elems ^ " " ^ show start ^ " " ^ show inc
+
+instance forall 'a. Show 'a => (Show (vector 'a))
+  let show = showVector
+end
 
 
 let get_dir (Vector _ _ ord) = ord
@@ -655,7 +672,13 @@ let byte_lifteds_of_bitv (Vector bits length is_inc) =
 
 val address_lifted_of_bitv : vector bitU -> address_lifted
 let address_lifted_of_bitv v =
-  Address_lifted (byte_lifteds_of_bitv v) Nothing
+  let byte_lifteds = byte_lifteds_of_bitv v in
+  let maybe_address_integer =
+    match (maybe_all (List.map byte_of_byte_lifted byte_lifteds)) with
+    | Just bs -> Just (integer_of_byte_list bs)
+    | _ -> Nothing
+    end in
+  Address_lifted byte_lifteds maybe_address_integer
 
 
 val bitvFromRegisterValue : register_value -> vector bitU

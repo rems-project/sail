@@ -2799,10 +2799,12 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                           arrow;
                           doc_id_lem_ctor cid])
                   ar) ^/^
-                 ((separate space)
-                    [pipe;underscore;arrow;string "failwith";
-                     string_lit (concat [string "fromInterpValue";space;doc_id_lem_type id;colon;
-                                         space;string "unexpected value"])]) ^/^
+                 let failmessage =
+                    (string_lit
+                       (concat [string "fromInterpValue";space;doc_id_lem_type id;colon;space;string "unexpected value. ";]))
+                    ^^
+                      (string " ^ Interp.debug_print_value v") in
+                  ((separate space) [pipe;string "v";arrow;string "failwith";parens failmessage]) ^/^
                  string "end") in
          let toInterpValuePP =
            (prefix 2 1)
@@ -2863,17 +2865,39 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
              (separate space [string "let";fromInterpValueF;equals;string "function"])
              (
                ((separate_map (break 1))
-                  (fun cid ->
+                  (fun (cid) ->
                     (separate space)
                       [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
-                       arrow;
-                       doc_id_lem_ctor cid])
-                  enums) ^/^
-                 ((separate space)
-                    [pipe;underscore;arrow;string "failwith";
-                     string_lit (concat [string "fromInterpValue";space;doc_id_lem_type id;colon;
-                                         space;string "unexpected value"])]) ^/^
-                 string "end") in
+                       arrow;doc_id_lem_ctor cid]
+                  )
+                  enums
+               ) ^/^
+                 (
+                   (align
+                      ((prefix 3 1)
+                         (separate space [pipe;string ("SI.V_lit (SIA.L_aux (SIA.L_num n) _)");arrow])
+                         (separate space [string "match";parens(string "natFromInteger n");string "with"] ^/^
+                            (
+                              ((separate_map (break 1))
+                                 (fun (cid,number) ->
+                                   (separate space)
+                                     [pipe;string (string_of_int number);arrow;doc_id_lem_ctor cid]
+                                 )
+                                 (List.combine enums (nats ((List.length enums) - 1)))
+                              ) ^/^ string "end"
+                            )
+                         )
+                      )
+                   )
+                 )
+                 ^/^
+                   let failmessage =
+                     (string_lit
+                        (concat [string "fromInterpValue";space;doc_id_lem_type id;colon;space;string "unexpected value. ";]))
+                     ^^
+                       (string " ^ Interp.debug_print_value v") in
+                   ((separate space) [pipe;string "v";arrow;string "failwith";parens failmessage]) ^/^
+                     string "end") in
          let toInterpValuePP =
            (prefix 2 1)
              (separate space [string "let";toInterpValueF;equals;string "function"])
