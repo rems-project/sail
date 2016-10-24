@@ -274,17 +274,17 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
                       | Some n -> Base(([],expect_t), Enum n, cs,pure_e,pure_e,default_bounds) in
                     (P_aux(p,(l,pat_annot)),Envmap.from_list [(i,id_annot)],cs,default_bounds,expect_t) in
       (match Envmap.apply t_env i with
-        | Some(Base((params,t),Constructor n,cs,efl,efr,bounds)) ->
+       | Some(Base((params,t),Constructor n,cs,efl,efr,bounds)) ->
           let t,cs,ef,_ = subst params false false t cs efl in
           (match t.t with
-            | Tfn({t = Tid "unit"},t',IP_none,ef) -> 
-              if conforms_to_t d_env false false t' expect_t 
+            | Tfn({t = Tid "unit"},t',_,ef) ->
+              if conforms_to_t d_env true false t' expect_t 
               then
                 let tp,cp = type_consistent (Expr l) d_env Guarantee false t' expect_t in
                 (P_aux(P_app(id,[]),(l,tag_annot t (Constructor n))),Envmap.empty,cs@cp,bounds,tp)
               else default
-            | Tfn(t1,t',IP_none,e) -> 
-              if conforms_to_t d_env false false t' expect_t
+            | Tfn(t1,t',_,e) ->
+              if conforms_to_t d_env true false t' expect_t
               then typ_error l ("Constructor " ^ i ^ " expects arguments of type " ^ (t_to_string t) ^ ", found none")
               else default
             | _ -> raise (Reporting_basic.err_unreachable l "Constructor tannot does not have function type"))
