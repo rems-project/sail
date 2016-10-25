@@ -2116,7 +2116,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           | Just(funcls) -> 
             (match find_funcl t_level funcls v with
             | [] -> 
-              (Error l ("No matching pattern for function " ^ name),l_mem,l_env)
+              (Error l ("No matching pattern for function " ^ name ^ " on value " ^ (string_of_value v)),l_mem,l_env)
             | [(env,used_unknown,exp)] -> 
               resolve_outcome 
                 (if mode.eager_eval 
@@ -2135,7 +2135,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           | Just(funcls) -> 
             (match find_funcl t_level funcls v with
             | [] -> 
-              (Error l ("No matching pattern for function " ^ name ),l_mem,l_env)
+              (Error l ("No matching pattern for function " ^ name ^ " on value " ^ (string_of_value v)),l_mem,l_env)
             | [(env,used_unknown,exp)] -> 
               resolve_outcome 
                 (if mode.eager_eval 
