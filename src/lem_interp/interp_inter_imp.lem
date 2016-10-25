@@ -647,7 +647,7 @@ let decode_to_instruction top_level registers value : instruction_or_decode_erro
                   (Interp_ast.Unknown, Nothing)) 
                top_env Interp.eenv (Interp.emem "decode second top level") Interp.Top) Nothing) in
       match (instr_decoded_error) with
-        | Ivh_value instr -> IDE_instr instr_external instr
+        | Ivh_value _ -> IDE_instr instr_external instr
         | Ivh_value_after_exn v ->
           Assert_extra.failwith "supported_instructions called exit, so support will be needed for that now"
         | Ivh_error err -> IDE_decode_error err
