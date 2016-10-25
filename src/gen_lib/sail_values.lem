@@ -22,13 +22,6 @@ end
 (* element list * start * has increasing direction *)
 type vector 'a = Vector of list 'a * integer * bool
 
-let rec nth xs (n : integer) =
-  match xs with
-  | x :: xs -> if n = 0 then x else nth xs (n - 1)
-  | _ -> failwith "nth applied to empty list"
-  end
-
-
 let showVector (Vector elems start inc) =
   "Vector " ^ show elems ^ " " ^ show start ^ " " ^ show inc
 
@@ -36,17 +29,14 @@ instance forall 'a. Show 'a => (Show (vector 'a))
   let show = showVector
 end
 
+let pp_bitu_vector (Vector elems start inc) =
+  let elems_pp = List.foldl (fun acc elem -> acc ^ showBitU elem) "" elems in
+  "Vector [" ^ elems_pp ^ "] " ^ show start ^ " " ^ show inc
+
 
 let get_dir (Vector _ _ ord) = ord
 let get_start (Vector _ s _) = s
 let length (Vector bs _ _) = integerFromNat (length bs)
-
-let rec replace bs ((n : integer),b') = match bs with
-  | [] -> []
-  | b :: bs ->
-     if n = 0 then b' :: bs
-              else b :: replace bs (n - 1,b')
-  end
 
 let vector_concat (Vector bs start is_inc) (Vector bs' _ _) =
   Vector (bs ++ bs') start is_inc
@@ -86,7 +76,8 @@ let update (Vector bs start is_inc) i j (Vector bs' _ _) =
 
 val access : forall 'a. vector 'a -> integer -> 'a
 let access (Vector bs start is_inc) n =
-  if is_inc then nth bs (n - start) else nth bs (start - n)
+  if is_inc then List_extra.nth bs (natFromInteger (n - start))
+  else List_extra.nth bs (natFromInteger (start - n))
 
 val update_pos : forall 'a. vector 'a -> integer -> 'a -> vector 'a
 let update_pos v n b =
@@ -182,9 +173,10 @@ let inline (~) = bitwise_not_bit
 val pow : integer -> integer -> integer
 let pow m n = m ** (natFromInteger n)
 
+let bitwise_not_bitlist = List.map bitwise_not_bit
 
 let bitwise_not (Vector bs start is_inc) =
-  Vector (List.map bitwise_not_bit bs) start is_inc
+  Vector (bitwise_not_bitlist bs) start is_inc
 
 val is_one : integer -> bitU
 let is_one i =
@@ -242,7 +234,7 @@ let signed v : integer =
   match most_significant v with
   | I -> 0 - (1 + (unsigned (bitwise_not v)))
   | O -> unsigned v
-  | _ -> failwith "signed applied to vector with undefined bits"
+  | Undef -> failwith "signed applied to vector with undefined bits"
   end
 
 let signed_big = signed
@@ -276,36 +268,40 @@ let get_min_representable_in _ (n : integer) : integer =
   else if n = 5 then min_5
   else 0 - (integerPow 2 (natFromInteger n))
 
+val to_bin_aux : natural -> list bitU
+let rec to_bin_aux x =
+  if x = 0 then []
+  else (if x mod 2 = 1 then I else O) :: to_bin_aux (x / 2)
+let to_bin n = List.reverse (to_bin_aux n)
 
-let rec divide_by_2 bs (i : integer) (n : integer) =
-  if i < 0 || n = 0
-  then bs
-  else
-    if (n mod 2 = 1)
-    then divide_by_2 (replace bs (i,I)) (i - 1) (n / 2)
-    else divide_by_2 bs (i-1) (n div 2)
+val pad_zero : list bitU -> integer -> list bitU
+let rec pad_zero bits n =
+  if n = 0 then bits else pad_zero (O :: bits) (n -1)
 
-let rec add_one_bit bs co (i : integer) =
-  if i < 0 then bs
-  else match (List_extra.nth bs (natFromInteger i),co) with
-    | (O,false) -> replace bs (i,I)
-    | (O,true)  -> add_one_bit (replace bs (i,I)) true (i-1)
-    | (I,false) -> add_one_bit (replace bs (i,O)) true (i-1)
-    | (I,true)  -> add_one_bit bs true (i-1)
-    | _ -> failwith "add_one_bit applied to list with undefined bit"
-  end
+
+let rec add_one_bit_ignore_overflow_aux bits = match bits with
+  | [] -> []
+  | O :: bits -> I :: bits
+  | I :: bits -> O :: add_one_bit_ignore_overflow_aux bits
+  | Undef :: _ -> failwith "add_one_bit_ignore_overflow: undefined bit"
+end
+
+let add_one_bit_ignore_overflow bits =
+  List.reverse (add_one_bit_ignore_overflow_aux (List.reverse bits))
+  
 
 let to_vec is_inc ((len : integer),(n : integer)) =
-  let bs = List.replicate (natFromInteger len) O in
-  let start = if is_inc then 0 else len-1 in
-  if n = 0 then
-    Vector bs start is_inc
-  else if n > 0 then
-    Vector (divide_by_2 bs (len-1) n) start is_inc
-  else
-    let abs_bs = divide_by_2 bs (len-1) (abs n) in
-    let (Vector bs start is_inc) = bitwise_not (Vector abs_bs start is_inc) in
-    Vector (add_one_bit bs false (len-1)) start is_inc
+  let start = if is_inc then 0 else len - 1 in
+  let bits = to_bin (naturalFromInteger (abs n)) in
+  let len_bits = integerFromNat (List.length bits) in
+  let longer = len - len_bits in
+  let bits' =
+    if longer < 0 then drop (natFromInteger (abs (longer))) bits
+    else pad_zero bits longer in
+  if n > (0 : integer)
+  then Vector bits' start is_inc
+  else Vector (add_one_bit_ignore_overflow (bitwise_not_bitlist bits'))
+              start is_inc
 
 let to_vec_big = to_vec
 
@@ -630,6 +626,13 @@ let neq_range (l,r) = bitwise_not_bit (eq_range (l,r))
 let neq_vec (l,r) = bitwise_not_bit (eq_vec_vec (l,r))
 let neq_vec_range (l,r) = bitwise_not_bit (eq_vec_range (l,r))
 let neq_range_vec (l,r) = bitwise_not_bit (eq_range_vec (l,r))
+
+let rec replace bs ((n : integer),b') = match bs with
+  | [] -> []
+  | b :: bs ->
+     if n = 0 then b' :: bs
+              else b :: replace bs (n - 1,b')
+  end
 
 
 val make_indexed_vector : forall 'a. list (integer * 'a) -> 'a -> integer -> integer -> bool -> vector 'a

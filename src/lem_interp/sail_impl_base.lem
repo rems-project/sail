@@ -1400,18 +1400,3 @@ instance  (Eq decode_error)
   let (<>) = decode_error_inequal
 end
 
-
-val outcome_s_descrEqual : forall 's 'a. Eq 'a => outcome_s 's 'a -> outcome_s 's 'a -> bool
-let outcome_s_descrEqual os1 os2 = match (fst os1,fst os2) with
-  | (Read_mem  descr1 _, Read_mem  descr2 _) -> descr1 = descr2
-  | (Write_ea  descr1 _, Write_ea  descr2 _) -> descr1 = descr2
-  | (Barrier   descr1 _, Barrier   descr2 _) -> descr1 = descr2
-  | (Read_reg  descr1 _, Read_reg  descr2 _) -> descr1 = descr2
-  | (Write_reg descr1 _, Write_reg descr2 _) -> descr1 = descr2
-  | (Escape    descr1 _, Escape    descr2 _) -> descr1 = descr2
-  | (Fail      descr1,   Fail      descr2)   -> descr1 = descr2
-  | (Internal  descr1 _, Internal  descr2 _)   -> descr1 = descr2
-  | (Done a1, Done a2) -> a1 = a2
-  | (Error e1, Error e2) -> e1 = e2
-  | (Footprint _, Footprint _) -> true
-end
