@@ -61,9 +61,7 @@ let rec load_memory_segments segments =
     | segment::segments' ->
       let (x,w,r) = segment.Elf_interpreted_segment.elf64_segment_flags in
       begin
-        (if x
-         then load_memory_segment segment prog_mem
-         else load_memory_segment segment data_mem);
+        load_memory_segment segment prog_mem;
         load_memory_segments segments'
       end    
   end
