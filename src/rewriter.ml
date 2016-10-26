@@ -895,7 +895,8 @@ let remove_vector_concat_pat pat =
              E_aux (E_app_infix(length_app_exp,minus,one_exp),annot) in
            exp in
       
-      let subv = E_aux (E_vector_subrange (root,index_i,index_j),cannot) in
+      let subv = E_aux (E_app (Id_aux (Id "slice_raw",Unknown),
+                               [root;index_i;index_j]),cannot) in
 
       let typ = (Parse_ast.Generated l,simple_annot {t = Tid "unit"}) in
       

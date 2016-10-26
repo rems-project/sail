@@ -1638,7 +1638,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       (match annot with
       | Base(_,External _,_,_,_,_) ->
         if read_registers
-        then parens( string "read_register" ^^ space ^^ exp e)
+        then parens (string "read_register" ^^ space ^^ exp e)
         else exp e
       | _ -> (parens (doc_op colon (group (exp e)) (doc_typ_ocaml typ))))
     | E_tuple exps ->
@@ -2329,68 +2329,69 @@ let doc_exp_lem, doc_let_lem =
        let epp = let_exp regtypes leb ^^ space ^^ string "in" ^^ hardline ^^ expN e in
        if aexp_needed then parens epp else epp
     | E_app(f,args) ->
-       (match f with
-        (* temporary hack to make the loop body a function of the temporary variables *)
-        | Id_aux ((Id (("foreach_inc" | "foreach_dec" |
-                        "foreachM_inc" | "foreachM_dec" ) as loopf),_)) ->
-           let [id;indices;body;e5] = args in
-           let varspp = match e5 with
-             | E_aux (E_tuple vars,_) ->
-                let vars = List.map (fun (E_aux (E_id (Id_aux (Id name,_)),_)) -> string name) vars in
-                begin match vars with
-                | [v] -> v
-                | _ -> parens (separate comma vars) end
-             | E_aux (E_id (Id_aux (Id name,_)),_) ->
-                string name
-             | E_aux (E_lit (L_aux (L_unit,_)),_) ->
-                string "_" in
-           parens (
-               (prefix 2 1)
-                 ((separate space) [string loopf;group (expY indices);expY e5])
-                 (parens
-                    (prefix 1 1 (separate space [string "fun";expY id;varspp;arrow]) (expN body))
-                 )
-             )
-        | Id_aux (Id "append",_) ->
-           let [e1;e2] = args in
-           let epp = align (expY e1 ^^ space ^^ string "++" ^//^ expY e2) in
-           if aexp_needed then parens (align epp) else epp
-        | _ ->
-           (match annot with
-            | Base (_,Constructor _,_,_,_,_) ->
-               let epp =
-                 match args with
-                 | [] -> doc_id_lem_ctor f
-                 | [arg] -> doc_id_lem_ctor f ^^ space ^^ expY arg
-                 | _ ->
-                    doc_id_lem_ctor f ^^ space ^^
-                      parens (separate_map comma expY args) in
-               if aexp_needed then parens (align epp) else epp
-            | Base (_,External (Some "bitwise_not_bit"),_,_,_,_) ->
-               let [a] = args in
-               let epp = align (string "~" ^^ expY a) in
-               if aexp_needed then parens (align epp) else epp
-            | _ ->
-               let call = match annot with
-                 | Base(_,External (Some n),_,_,_,_) ->
-                    (match n with
-                     | _ -> string n)
-                 | Base(_,Constructor _,_,_,_,_) -> doc_id_lem_ctor f
-                 | _ -> doc_id_lem f in
-               let argpp a_needed arg =
-                 let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
-                 match t with
-                 | Tapp("vector",_) ->
-                    let epp = concat [string "copy";space;expY arg] in
-                    if a_needed then parens epp else epp
-                 | _ -> expV a_needed arg in
-               let argspp = match args with
-                 | [arg] -> argpp true arg
-                 | args -> parens (align (separate_map (comma ^^ break 0) (argpp false) args)) in
-               let epp = align (call ^//^ argspp) in
-               if aexp_needed then parens (align epp) else epp
-           )
-       )
+       begin match f with
+       (* temporary hack to make the loop body a function of the temporary variables *)
+       | Id_aux ((Id (("foreach_inc" | "foreach_dec" |
+                       "foreachM_inc" | "foreachM_dec" ) as loopf),_)) ->
+          let [id;indices;body;e5] = args in
+          let varspp = match e5 with
+            | E_aux (E_tuple vars,_) ->
+               let vars = List.map (fun (E_aux (E_id (Id_aux (Id name,_)),_)) -> string name) vars in
+               begin match vars with
+               | [v] -> v
+               | _ -> parens (separate comma vars) end
+            | E_aux (E_id (Id_aux (Id name,_)),_) ->
+               string name
+            | E_aux (E_lit (L_aux (L_unit,_)),_) ->
+               string "_" in
+          parens (
+              (prefix 2 1)
+                ((separate space) [string loopf;group (expY indices);expY e5])
+                (parens
+                   (prefix 1 1 (separate space [string "fun";expY id;varspp;arrow]) (expN body))
+                )
+            )
+       | Id_aux (Id "append",_) ->
+          let [e1;e2] = args in
+          let epp = align (expY e1 ^^ space ^^ string "++" ^//^ expY e2) in
+          if aexp_needed then parens (align epp) else epp
+       | Id_aux (Id "slice_raw",_) ->
+          let [e1;e2;e3] = args in
+          let epp = separate space [string "slice_raw";expY e1;expY e2;expY e3] in
+          if aexp_needed then parens (align epp) else epp
+       | _ ->
+          begin match annot with
+          | Base (_,External (Some "bitwise_not_bit"),_,_,_,_) ->
+             let [a] = args in
+             let epp = align (string "~" ^^ expY a) in
+             if aexp_needed then parens (align epp) else epp
+          | Base (_,Constructor _,_,_,_,_) ->
+             let epp =
+               match args with
+               | [] -> doc_id_lem_ctor f
+               | [arg] -> doc_id_lem_ctor f ^^ space ^^ expY arg
+               | _ ->
+                  doc_id_lem_ctor f ^^ space ^^ 
+                    parens (separate_map comma expY args) in
+             if aexp_needed then parens (align epp) else epp
+          | _ ->
+             let call = match annot with
+               | Base(_,External (Some n),_,_,_,_) -> string n
+               | _ -> doc_id_lem f in
+             let argpp a_needed arg =
+               let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
+               match t with
+               | Tapp("vector",_) ->
+                  let epp = concat [string "copy";space;expY arg] in
+                  if a_needed then parens epp else epp
+               | _ -> expV a_needed arg in
+             let argspp = match args with
+               | [arg] -> argpp true arg
+               | args -> parens (align (separate_map (comma ^^ break 0) (argpp false) args)) in
+             let epp = align (call ^//^ argspp) in
+             if aexp_needed then parens (align epp) else epp
+          end
+       end
     | E_vector_access (v,e) ->
        let (Base (_,_,_,_,eff,_)) = annot in
        let epp =
