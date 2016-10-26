@@ -2377,10 +2377,17 @@ let doc_exp_lem, doc_let_lem =
                      | _ -> string n)
                  | Base(_,Constructor _,_,_,_,_) -> doc_id_lem_ctor f
                  | _ -> doc_id_lem f in
-               let argpp = match args with
-                 | [a] -> expY a
-                 | args -> parens (align (separate_map (comma ^^ break 0) expY args)) in
-               let epp = align (call ^//^ argpp) in
+               let argpp a_needed arg =
+                 let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
+                 match t with
+                 | Tapp("vector",_) ->
+                    let epp = concat [string "copy";space;expY arg] in
+                    if a_needed then parens epp else epp
+                 | _ -> expV a_needed arg in
+               let argspp = match args with
+                 | [arg] -> argpp true arg
+                 | args -> parens (align (separate_map (comma ^^ break 0) (argpp false) args)) in
+               let epp = align (call ^//^ argspp) in
                if aexp_needed then parens (align epp) else epp
            )
        )
@@ -2464,10 +2471,20 @@ let doc_exp_lem, doc_let_lem =
            )
         | _ -> doc_id_lem id)
     | E_lit lit -> doc_lit_lem false lit annot
-    | E_cast(typ,e) ->
+    | E_cast(Typ_aux (typ,_),e) ->
        (match annot with
         | Base(_,External _,_,_,_,_) -> string "read_reg" ^^ space ^^ expY e
-        | _ -> expV aexp_needed e) (*(parens (doc_op colon (group (expY e)) (doc_typ_lem typ)))) *)
+        | _ ->
+           (match typ with
+            | Typ_app (Id_aux (Id "vector",_), [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i,_)),_);_;_;_]) ->
+               let epp = (concat [string "set_vector_start";space;string (string_of_int i)]) ^//^
+                           expY e in
+               if aexp_needed then parens epp else epp
+            | Typ_var (Kid_aux (Var "length",_)) ->
+               let epp = (string "set_vector_start_to_length") ^//^ expY e in
+               if aexp_needed then parens epp else epp
+            | _ -> 
+               expV aexp_needed e)) (*(parens (doc_op colon (group (expY e)) (doc_typ_lem typ)))) *)
     | E_tuple exps ->
        (match exps with
         (* | [e] -> expV aexp_needed e *)
@@ -2613,9 +2630,14 @@ let doc_exp_lem, doc_let_lem =
     | E_app_infix (e1,id,e2) ->
        (match annot with
         | Base((_,t),External(Some name),_,_,_,_) ->
+           let argpp arg =
+             let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
+             match t with
+             | Tapp("vector",_) -> parens (concat [string "copy";space;expY arg])
+             | _ -> expY arg in
            let epp =
-             let aux name = align (expY e1 ^^ space ^^ string name ^//^ expY e2) in
-             let aux2 name = align (string name ^//^ expY e1 ^/^ expY e2) in
+             let aux name = align (argpp e1 ^^ space ^^ string name ^//^ argpp e2) in
+             let aux2 name = align (string name ^//^ argpp e1 ^/^ argpp e2) in
              align
                (match name with
                 | "power" -> aux2 "pow"
@@ -2937,9 +2959,9 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
        let dir = string (if dir_b then "true" else "false") in
        let size = if dir_b then i2-i1 +1 else i1-i2 in
        (doc_op equals)
-         ((string "let") ^^ space ^^ doc_id_lem id)
+         (concat [string "let";space;string "build_";doc_id_lem id;space;string "regname"])
          (string "Register" ^^ space ^^
-            align (separate space [string_lit(doc_id_lem id); doc_int size; doc_int i1; dir;
+            align (separate space [string "regname"; doc_int size; doc_int i1; dir;
                                    break 0 ^^ brackets (align doc_rids)]))
        (*^^ hardline ^^
          separate_map hardline doc_rfield rs *)
@@ -2999,10 +3021,14 @@ let doc_dec_lem (DEC_aux (reg,(l,annot))) =
                                        string o;
                                        string "[]"]))
                 ^/^ hardline
-           | _ -> empty)
-        | Tapp("register", [TA_typ {t=Tid idt}]) |
-          Tabbrev( {t= Tid idt}, _) ->
-          separate space [string "let";doc_id_lem id;equals;string idt;] ^/^ hardline
+           | _ ->
+              let (Id_aux (Id name,_)) = id in
+              failwith ("can't deal with register " ^ name))
+        | Tapp("register", [TA_typ {t=Tid idt}])
+        | Tid idt
+        | Tabbrev( {t= Tid idt}, _) ->
+           separate space [string "let";doc_id_lem id;equals;
+                           string "build_" ^^ string idt;string_lit (doc_id_lem id)] ^/^ hardline
         |_-> empty)
      | _ ->  empty)
   | DEC_alias(id,alspec) -> empty

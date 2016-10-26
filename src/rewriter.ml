@@ -1479,7 +1479,7 @@ let rewrite_defs_letbind_effects  =
     | E_id id -> k exp
     | E_lit _ -> k exp
     | E_cast (typ,exp') ->
-       n_exp exp' (fun exp' ->
+       n_exp_name exp' (fun exp' ->
        k (rewrap (E_cast (typ,exp'))))
     | E_app (id,exps) ->
        n_exp_nameL exps (fun exps ->

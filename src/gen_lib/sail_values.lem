@@ -38,6 +38,16 @@ let get_dir (Vector _ _ ord) = ord
 let get_start (Vector _ s _) = s
 let length (Vector bs _ _) = integerFromNat (length bs)
 
+val set_vector_start : forall 'a. integer -> vector 'a -> vector 'a
+let set_vector_start new_start (Vector bs _ is_inc) =
+  Vector bs new_start is_inc
+
+let copy v =
+  set_vector_start (if (get_dir v) then 0 else (length v - 1)) v
+
+let set_vector_start_to_length v =
+  set_vector_start (length v - 1) v
+
 let vector_concat (Vector bs start is_inc) (Vector bs' _ _) =
   Vector (bs ++ bs') start is_inc
 
