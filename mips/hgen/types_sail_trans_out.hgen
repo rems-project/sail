@@ -6,6 +6,8 @@ let translate_out_int inst = (Nat_big_num.to_int (translate_out_big_bit inst))
 
 let translate_out_ireg ireg = IReg (int_to_ireg (translate_out_int ireg))
 
+let translate_out_imm26 imm = translate_out_int imm
+
 let translate_out_imm16 imm = translate_out_int imm
 
 let translate_out_imm5 imm = translate_out_int imm

@@ -110,3 +110,11 @@
    translate_bool "link" link;
    translate_bool "likely" likely;
    ], [])
+| `MIPSJ (offset) ->
+  ("J", [translate_imm26 "offset" offset;], [])
+| `MIPSJAL (offset) ->
+  ("JAL", [translate_imm26 "offset" offset;], [])
+| `MIPSJR(rd) ->
+  ("JR", [translate_reg "rd" rd;], [])
+| `MIPSJALR(rd, rs) ->
+  ("JALR", [translate_reg "rd" rd; translate_reg "rs" rs;], [])

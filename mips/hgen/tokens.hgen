@@ -11,3 +11,7 @@
 %token <MIPSHGenBase.token_SYNC> SYNC
 %token <MIPSHGenBase.token_BEQ> BEQ
 %token <MIPSHGenBase.token_BCMPZ> BCMPZ
+%token <MIPSHGenBase.token_J> J
+%token <MIPSHGenBase.token_JAL> JAL
+%token <MIPSHGenBase.token_JR> JR
+%token <MIPSHGenBase.token_JALR> JALR

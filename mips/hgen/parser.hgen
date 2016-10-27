@@ -24,3 +24,11 @@
     { `MIPSBEQ ( $2, $4, $6, $1.ne, $1.likely) }
 | BCMPZ ARCH_REG COMMA NUM
     { `MIPSBCMPZ ( $2, $4, $1.cmp, $1.link, $1.likely) }
+| J NUM
+    { `MIPSJ ($2) }
+| JAL NUM
+    { `MIPSJAL ($2) }
+| JR ARCH_REG
+    { `MIPSJR ($2) }
+| JALR ARCH_REG COMMA ARCH_REG
+    { `MIPSJALR ($2, $4) }
