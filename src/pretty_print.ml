@@ -2805,7 +2805,7 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
          let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
          let fromInterpValuePP =
            (prefix 2 1)
-             (separate space [string "let";fromInterpValueF;equals;string "function"])
+             (separate space [string "let rec";fromInterpValueF;string "v";equals;string "match v with"])
              (
                ((separate_map (break 1))
                   (fun (Tu_aux (tu,_)) ->
@@ -2822,6 +2822,9 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                           arrow;
                           doc_id_lem_ctor cid])
                   ar) ^/^
+
+                  ((separate space) [pipe;string "SI.V_tuple [v]";arrow;fromInterpValueF;string "v"]) ^/^
+
                  let failmessage =
                     (string_lit
                        (concat [string "fromInterpValue";space;doc_id_lem_type id;colon;space;string "unexpected value. ";]))
@@ -2861,8 +2864,8 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                        string "let fromInterpValue = ";fromInterpValueF]))
            ^/^ string "end" in
          typ_pp ^^ hardline ^^ hardline ^^
-           fromInterpValuePP ^^ hardline ^^ hardline ^^
-             toInterpValuePP ^^ hardline ^^ hardline ^^
+           toInterpValuePP ^^ hardline ^^ hardline ^^
+             fromInterpValuePP ^^ hardline ^^ hardline ^^
                fromToInterpValuePP ^^ hardline)
   | TD_enum(id,nm,enums,_) ->
      (match id with
@@ -2885,7 +2888,7 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                            if pat then underscore else string "SIA.Unknown"] in
          let fromInterpValuePP =
            (prefix 2 1)
-             (separate space [string "let";fromInterpValueF;equals;string "function"])
+             (separate space [string "let rec";fromInterpValueF;string "v";equals;string "match v with"])
              (
                ((separate_map (break 1))
                   (fun (cid) ->
@@ -2912,14 +2915,17 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                          )
                       )
                    )
-                 )
-                 ^/^
+                 ) ^/^
+
+                  ((separate space) [pipe;string "SI.V_tuple [v]";arrow;fromInterpValueF;string "v"]) ^/^
+
                    let failmessage =
                      (string_lit
                         (concat [string "fromInterpValue";space;doc_id_lem_type id;colon;space;string "unexpected value. ";]))
                      ^^
                        (string " ^ Interp.debug_print_value v") in
                    ((separate space) [pipe;string "v";arrow;string "failwith";parens failmessage]) ^/^
+
                      string "end") in
          let toInterpValuePP =
            (prefix 2 1)
@@ -2943,8 +2949,8 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                       string "let fromInterpValue = ";fromInterpValueF]))
            ^/^ string "end" in
           typ_pp ^^ hardline ^^ hardline ^^
-            fromInterpValuePP ^^ hardline ^^ hardline ^^
-              toInterpValuePP ^^ hardline ^^ hardline ^^
+            toInterpValuePP ^^ hardline ^^ hardline ^^
+              fromInterpValuePP ^^ hardline ^^ hardline ^^
                 fromToInterpValuePP ^^ hardline)
   | TD_register(id,n1,n2,rs) ->
     match n1,n2 with

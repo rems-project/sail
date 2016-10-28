@@ -170,8 +170,8 @@ let slice_raw (Vector bs start is_inc) i j =
   let iN = natFromInteger i in
   let jN = natFromInteger j in
   let bits = sublist bs (iN,jN) in
-  let new_start = if is_inc then start + i else start - i in
-  Vector bits new_start is_inc
+  let len = integerFromNat (List.length bits) in
+  Vector bits (if is_inc then 0 else len - 1) is_inc
 
 
 val update_aux : forall 'a. vector 'a -> integer -> integer -> list 'a -> vector 'a
@@ -199,6 +199,12 @@ let update_pos v n b =
 
 
 (*** Bit vector operations *)
+
+let extract_only_bit (Vector elems _ _) = match elems with
+  | [] -> failwith "extract_single_bit called for empty vector"
+  | [e] -> e
+  | _ -> failwith "extract_single_bit called for vector with more bits"
+end
 
 let pp_bitu_vector (Vector elems start inc) =
   let elems_pp = List.foldl (fun acc elem -> acc ^ showBitU elem) "" elems in
@@ -728,16 +734,9 @@ let register_field_indices_nat reg regfield=
   let (i,j) = register_field_indices reg regfield in
   (natFromInteger i,natFromInteger j)
 
-val bitv_of_register_value : register_value -> vector bitU
-let bitv_of_register_value v =
-  Vector (List.map bitU_of_bit_lifted v.rv_bits)
-         (integerFromNat v.rv_start_internal)
-         (v.rv_dir = D_increasing)
-
-
 let rec extern_reg_value reg_name v = 
   let (internal_start, external_start, direction) =
-    (match reg_name with 
+    match reg_name with 
      | Reg _ start size dir ->
         (start, (if dir = D_increasing then start else (start - (size +1))), dir)
      | Reg_slice _ reg_start dir (slice_start, slice_end) ->
@@ -748,44 +747,64 @@ let rec extern_reg_value reg_name v =
          slice_start, dir)
      | Reg_f_slice _ reg_start dir _ _ (slice_start, slice_end) ->
         ((if dir = D_increasing then slice_start else (reg_start - slice_start)),
-         slice_start, dir) end) in
+         slice_start, dir) 
+     end in
   let bits = bit_lifteds_of_bitv v in
   <| rv_bits           = bits; 
      rv_dir            = direction;
      rv_start          = external_start;
      rv_start_internal = internal_start |>
 
+val intern_reg_value : register_value -> vector bitU
+let intern_reg_value v =
+  Vector (List.map bitU_of_bit_lifted v.rv_bits)
+         (integerFromNat v.rv_start_internal)
+         (v.rv_dir = D_increasing)
+
+
+let extern_slice (d:direction) (start:nat) ((i,j):(integer*integer)) =
+  let (i,j) = (natFromInteger i,natFromInteger j) in
+  match d with
+  (*This is the case the thread/concurrecny model expects, so no change needed*)
+  | D_increasing -> (i,j)
+  | D_decreasing -> let slice_i = start - i in 
+                    let slice_j = (i - j) + slice_i in
+                    (slice_i,slice_j)
+  end 
+
+let extern_reg_whole reg =
+  Reg (name_of_reg reg) (start_of_reg_nat reg) (size_of_reg_nat reg) (dir_of_reg reg)
+      
+let extern_reg_slice reg (i,j) =
+  let start = start_of_reg_nat reg in
+  let dir = dir_of_reg reg in
+  Reg_slice (name_of_reg reg) start dir (extern_slice dir start (i,j))
+
+let extern_reg_field_whole reg rfield = 
+  let (m,n) = register_field_indices reg rfield in
+  let start = start_of_reg_nat reg in
+  let dir = dir_of_reg reg in
+  Reg_field (name_of_reg reg) start dir rfield (extern_slice dir start (m,n))
+            
+let extern_reg_field_slice reg rfield (i,j) = 
+  let (m,n) = register_field_indices reg rfield in
+  let start = start_of_reg_nat reg in
+  let dir = dir_of_reg reg in
+  Reg_f_slice (name_of_reg reg) start dir rfield
+              (extern_slice dir start (m,n))
+              (extern_slice dir start (i,j))
+
+let extern_mem_value endian v =
+  let bytes = byte_lifteds_of_bitv v in 
+  if endian = E_big_endian then bytes else List.reverse bytes
+
+let intern_mem_value endian direction bytes = 
+  let v = if endian = E_big_endian then bytes else List.reverse bytes in
+  bitv_of_byte_lifteds direction v
 
 
 
-class (ToNatural 'a)
-  val toNatural : 'a -> natural
-end
-
-instance (ToNatural integer)
-  let toNatural = naturalFromInteger
-end
-
-instance (ToNatural int)
-  let toNatural = naturalFromInt
-end
-
-instance (ToNatural nat)
-  let toNatural = naturalFromNat
-end
-
-instance (ToNatural natural)
-  let toNatural = id
-end
-
-
-let toNaturalFiveTup (n1,n2,n3,n4,n5) =
-  (toNatural n1,
-   toNatural n2,
-   toNatural n3,
-   toNatural n4,
-   toNatural n5)
-
+                       
 
 val foreach_inc :  forall 'vars. (integer * integer * integer) -> 'vars ->
                    (integer -> 'vars -> 'vars) -> 'vars
@@ -808,112 +827,152 @@ let assert' b msg_opt =
   | Just msg -> msg
   | Nothing  -> "unspecified error"
   end in
-  if to_bool b then failwith msg else ()
+  if to_bool b then () else failwith msg
 
 
+
+                                     
+(* convert numbers unsafely to naturals *)
+
+class (ToNatural 'a) val toNatural : 'a -> natural end
+instance (ToNatural integer) let toNatural = naturalFromInteger end
+instance (ToNatural int)     let toNatural = naturalFromInt     end
+instance (ToNatural nat)     let toNatural = naturalFromNat     end
+instance (ToNatural natural) let toNatural = id                 end
+
+let toNaturalFiveTup (n1,n2,n3,n4,n5) =
+  (toNatural n1,
+   toNatural n2,
+   toNatural n3,
+   toNatural n4,
+   toNatural n5)
+
+
+
+(* convert to/from interpreter values *)
 
 class (ToFromInterpValue 'a)
   val toInterpValue : 'a -> Interp.value
   val fromInterpValue : Interp.value -> 'a
 end
 
-
+let toInterValueBool = function
+  | true -> Interp.V_lit (L_aux (L_one) Unknown)
+  | false -> Interp.V_lit (L_aux (L_zero) Unknown)
+end
+let rec fromInterpValueBool v = match v with
+  | Interp.V_lit (L_aux (L_true) _)  -> true
+  | Interp.V_lit (L_aux (L_false) _) -> false
+  | Interp.V_lit (L_aux (L_one) _)  -> true
+  | Interp.V_lit (L_aux (L_zero) _) -> false
+  | Interp.V_tuple [v] -> fromInterpValueBool v
+  | v -> failwith ("fromInterpValue bool: unexpected value. " ^
+                     Interp.debug_print_value v)
+end
 instance (ToFromInterpValue bool)
-  let toInterpValue = function
-    | true -> Interp.V_lit (L_aux (L_one) Unknown)
-    | false -> Interp.V_lit (L_aux (L_zero) Unknown)
-    end
-  let fromInterpValue = function
-    | Interp.V_lit (L_aux (L_true) _)  -> true
-    | Interp.V_lit (L_aux (L_false) _) -> false
-    | Interp.V_lit (L_aux (L_one) _)  -> true
-    | Interp.V_lit (L_aux (L_zero) _) -> false
-    | v -> failwith ("fromInterpValue bool: unexpected value. " ^
-                       Interp.debug_print_value v)
-    end
+  let toInterpValue = toInterValueBool
+  let fromInterpValue = fromInterpValueBool
 end
 
+
+let toInterpValueUnit () = Interp.V_lit (L_aux (L_unit) Unknown)
+let rec fromInterpValueUnit v = match v with
+  | Interp.V_lit (L_aux (L_unit) _) -> ()
+  | Interp.V_tuple [v] -> fromInterpValueUnit v
+  | v -> failwith ("fromInterpValue unit: unexpected value. " ^
+                     Interp.debug_print_value v)
+end
 instance (ToFromInterpValue unit)
-  let toInterpValue = fun () -> Interp.V_lit (L_aux (L_unit) Unknown)
-  let fromInterpValue = function
-    | Interp.V_lit (L_aux (L_unit) _) -> ()
-    | v -> failwith ("fromInterpValue unit: unexpected value. " ^
-                       Interp.debug_print_value v)
-    end
+  let toInterpValue = toInterpValueUnit
+  let fromInterpValue = fromInterpValueUnit
 end
 
+
+let toInterpValueInteger i = V_lit (L_aux (L_num i) Unknown)
+let rec fromInterpValueInteger v = match v with
+  | Interp.V_lit (L_aux (L_num i) _) -> i
+  | Interp.V_tuple [v] -> fromInterpValueInteger v
+  | v -> failwith ("fromInterpValue integer: unexpected value. " ^
+                     Interp.debug_print_value v)
+end
 instance (ToFromInterpValue integer)
-  let toInterpValue i = V_lit (L_aux (L_num i) Unknown)
-  let fromInterpValue = function
-    | Interp.V_lit (L_aux (L_num i) _) -> i
-    | v -> failwith ("fromInterpValue integer: unexpected value. " ^
-                       Interp.debug_print_value v)
-    end
+  let toInterpValue = toInterpValueInteger
+  let fromInterpValue = fromInterpValueInteger
 end
 
+
+let toInterpValueString s = V_lit (L_aux (L_string s) Unknown)
+let rec fromInterpValueString v = match v with
+  | Interp.V_lit (L_aux (L_string s) _) -> s
+  | Interp.V_tuple [v] -> fromInterpValueString v
+  | v -> failwith ("fromInterpValue integer: unexpected value. " ^
+                     Interp.debug_print_value v)
+end
 instance (ToFromInterpValue string)
-  let toInterpValue s = V_lit (L_aux (L_string s) Unknown)
-  let fromInterpValue = function
-    | Interp.V_lit (L_aux (L_string s) _) -> s
-    | v -> failwith ("fromInterpValue integer: unexpected value. " ^
-                       Interp.debug_print_value v)
-    end
+  let toInterpValue = toInterpValueString
+  let fromInterpValue = fromInterpValueString
 end
 
+
+let toInterpValueBitU = function
+  | I     -> Interp.V_lit (L_aux (L_one) Unknown)
+  | O     -> Interp.V_lit (L_aux (L_zero) Unknown)
+  | Undef -> Interp.V_lit (L_aux (L_undef) Unknown)
+end
+let rec fromInterpValueBitU v = match v with
+  | Interp.V_lit (L_aux (L_one) _)   -> I
+  | Interp.V_lit (L_aux (L_zero) _)  -> O
+  | Interp.V_lit (L_aux (L_undef) _) -> Undef
+  | Interp.V_lit (L_aux (L_true) _)   -> I
+  | Interp.V_lit (L_aux (L_false) _)  -> O
+  | Interp.V_tuple [v] -> fromInterpValueBitU v
+  | v -> failwith ("fromInterpValue bitU: unexpected value. " ^
+                     Interp.debug_print_value v)
+end
 instance (ToFromInterpValue bitU)
-  let toInterpValue = function
-    | I     -> Interp.V_lit (L_aux (L_one) Unknown)
-    | O     -> Interp.V_lit (L_aux (L_zero) Unknown)
-    | Undef -> Interp.V_lit (L_aux (L_undef) Unknown)
-    end
-  let fromInterpValue = function
-    | Interp.V_lit (L_aux (L_one) _)   -> I
-    | Interp.V_lit (L_aux (L_zero) _)  -> O
-    | Interp.V_lit (L_aux (L_undef) _) -> Undef
-    | Interp.V_lit (L_aux (L_true) _)   -> I
-    | Interp.V_lit (L_aux (L_false) _)  -> O
-    | v -> failwith ("fromInterpValue bitU: unexpected value. " ^
-                       Interp.debug_print_value v)
-    end
+  let toInterpValue = toInterpValueBitU
+  let fromInterpValue = fromInterpValueBitU
 end
 
 
 let tuple2ToInterpValue (a,b) =
   V_tuple [toInterpValue a;toInterpValue b]
-let tuple2FromInterpValue = function
+let rec tuple2FromInterpValue v = match v with
   | V_tuple [a;b] -> (fromInterpValue a,fromInterpValue b)
+  | V_tuple [v] -> tuple2FromInterpValue v
   | v -> failwith ("fromInterpValue a*b: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a 'b. ToFromInterpValue 'a, ToFromInterpValue 'b => (ToFromInterpValue ('a * 'b))
   let toInterpValue = tuple2ToInterpValue
   let fromInterpValue = tuple2FromInterpValue
 end
 
+
 let tuple3ToInterpValue (a,b,c) =
   V_tuple [toInterpValue a;toInterpValue b;toInterpValue c]
-let tuple3FromInterpValue = function
+let rec tuple3FromInterpValue v = match v with
   | V_tuple [a;b;c] -> (fromInterpValue a,fromInterpValue b,fromInterpValue c)
+  | V_tuple [v] -> tuple3FromInterpValue v
   | v -> failwith ("fromInterpValue a*b*c: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a 'b 'c. ToFromInterpValue 'a, ToFromInterpValue 'b, ToFromInterpValue 'c =>
     (ToFromInterpValue ('a * 'b * 'c))
   let toInterpValue = tuple3ToInterpValue
   let fromInterpValue = tuple3FromInterpValue
 end
 
+
 let tuple4ToInterpValue (a,b,c,d) =
   V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d]
-let tuple4FromInterpValue = function
+let rec tuple4FromInterpValue v = match v with
   | V_tuple [a;b;c;d] -> (fromInterpValue a,fromInterpValue b,
                           fromInterpValue c,fromInterpValue d)
+  | V_tuple [v] -> tuple4FromInterpValue v
   | v -> failwith ("fromInterpValue a*b*c*d: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a 'b 'c 'd. ToFromInterpValue 'a, ToFromInterpValue 'b,
                              ToFromInterpValue 'c, ToFromInterpValue 'd =>
     (ToFromInterpValue ('a * 'b * 'c * 'd))
@@ -921,16 +980,17 @@ instance forall 'a 'b 'c 'd. ToFromInterpValue 'a, ToFromInterpValue 'b,
   let fromInterpValue = tuple4FromInterpValue
 end
 
+
 let tuple5ToInterpValue (a,b,c,d,e) =
   V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;toInterpValue e]
-let tuple5FromInterpValue = function
+let rec tuple5FromInterpValue v = match v with
   | V_tuple [a;b;c;d;e] ->
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e)
+  | V_tuple [v] -> tuple5FromInterpValue v
   | v -> failwith ("fromInterpValue a*b*c*d*e: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a 'b 'c 'd 'e.
     ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
@@ -944,14 +1004,14 @@ end
 let tuple6ToInterpValue (a,b,c,d,e,f) =
   V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
            toInterpValue e;toInterpValue f]
-let tuple6FromInterpValue = function
+let rec tuple6FromInterpValue v = match v with
   | V_tuple [a;b;c;d;e;f] ->
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e,fromInterpValue f)
+  | V_tuple [v] -> tuple6FromInterpValue v
   | v -> failwith ("fromInterpValue a*b*c*d*e*f: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a 'b 'c 'd 'e 'f.
     ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
@@ -961,18 +1021,19 @@ instance forall 'a 'b 'c 'd 'e 'f.
   let fromInterpValue = tuple6FromInterpValue
 end
 
+
 let tuple7ToInterpValue (a,b,c,d,e,f,g) =
   V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
            toInterpValue e;toInterpValue f;toInterpValue g]
-let tuple7FromInterpValue = function
+let rec tuple7FromInterpValue v = match v with
   | V_tuple [a;b;c;d;e;f;g] ->
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e,fromInterpValue f,
       fromInterpValue g)
+  | V_tuple [v] -> tuple7FromInterpValue v
   | v -> failwith ("fromInterpValue a*b*c*d*e*f*g: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a 'b 'c 'd 'e 'f 'g.
     ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
@@ -987,15 +1048,15 @@ end
 let tuple8ToInterpValue (a,b,c,d,e,f,g,h) =
   V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
            toInterpValue e;toInterpValue f;toInterpValue g;toInterpValue h]
-let tuple8FromInterpValue = function
+let rec tuple8FromInterpValue v = match v with
   | V_tuple [a;b;c;d;e;f;g;h] ->
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e,fromInterpValue f,
       fromInterpValue g,fromInterpValue h)
+  | V_tuple [v] -> tuple8FromInterpValue v
   | v -> failwith ("fromInterpValue a*b*c*d*e*f*g*h: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h.
     ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
@@ -1006,19 +1067,20 @@ instance forall 'a 'b 'c 'd 'e 'f 'g 'h.
   let fromInterpValue = tuple8FromInterpValue
 end
 
+
 let tuple9ToInterpValue (a,b,c,d,e,f,g,h,i) =
   V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
            toInterpValue e;toInterpValue f;toInterpValue g;toInterpValue h;
            toInterpValue i]
-let tuple9FromInterpValue = function
+let rec tuple9FromInterpValue v = match v with
   | V_tuple [a;b;c;d;e;f;g;h;i] ->
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e,fromInterpValue f,
       fromInterpValue g,fromInterpValue h,fromInterpValue i)
+  | V_tuple [v] -> tuple9FromInterpValue v
   | v -> failwith ("fromInterpValue a*b*c*d*e*f*g*h*i: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i.
     ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
@@ -1030,20 +1092,21 @@ instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i.
   let fromInterpValue = tuple9FromInterpValue
 end
 
+
 let tuple10ToInterpValue (a,b,c,d,e,f,g,h,i,j) =
   V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
            toInterpValue e;toInterpValue f;toInterpValue g;toInterpValue h;
            toInterpValue i;toInterpValue j;]
-let tuple10FromInterpValue = function
+let rec tuple10FromInterpValue v = match v with
   | V_tuple [a;b;c;d;e;f;g;h;i;j] ->
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e,fromInterpValue f,
       fromInterpValue g,fromInterpValue h,fromInterpValue i,
       fromInterpValue j)
+  | V_tuple [v] -> tuple10FromInterpValue v
   | v -> failwith ("fromInterpValue a*b*c*d*e*f*g*h*i*j: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j.
     ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
@@ -1055,20 +1118,21 @@ instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j.
   let fromInterpValue = tuple10FromInterpValue
 end
 
+
 let tuple11ToInterpValue (a,b,c,d,e,f,g,h,i,j,k) =
   V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
            toInterpValue e;toInterpValue f;toInterpValue g;toInterpValue h;
            toInterpValue i;toInterpValue j;toInterpValue k;]
-let tuple11FromInterpValue = function
+let rec tuple11FromInterpValue v = match v with
   | V_tuple [a;b;c;d;e;f;g;h;i;j;k] ->
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e,fromInterpValue f,
       fromInterpValue g,fromInterpValue h,fromInterpValue i,
       fromInterpValue j,fromInterpValue k)
+  | V_tuple [v] -> tuple11FromInterpValue v
   | v -> failwith ("fromInterpValue a*b*c*d*e*f*g*h*i*j*k: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j 'k.
     ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
@@ -1086,16 +1150,16 @@ let tuple12ToInterpValue (a,b,c,d,e,f,g,h,i,j,k,l) =
   V_tuple [toInterpValue a;toInterpValue b;toInterpValue c;toInterpValue d;
            toInterpValue e;toInterpValue f;toInterpValue g;toInterpValue h;
            toInterpValue i;toInterpValue j;toInterpValue k;toInterpValue l;]
-let tuple12FromInterpValue = function
+let rec tuple12FromInterpValue v = match v with
   | V_tuple [a;b;c;d;e;f;g;h;i;j;k;l] ->
      (fromInterpValue a,fromInterpValue b,fromInterpValue c,
       fromInterpValue d,fromInterpValue e,fromInterpValue f,
       fromInterpValue g,fromInterpValue h,fromInterpValue i,
       fromInterpValue j,fromInterpValue k,fromInterpValue l)
+  | V_tuple [v] -> tuple12FromInterpValue v
   | v -> failwith ("fromInterpValue a*b*c*d*e*f*g*h*i*j*k*l: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j 'k 'l.
     ToFromInterpValue 'a, ToFromInterpValue 'b,
     ToFromInterpValue 'c, ToFromInterpValue 'd,
@@ -1109,29 +1173,22 @@ instance forall 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j 'k 'l.
 end
 
 
-
-val listToInterpValue : forall 'a. ToFromInterpValue 'a => list 'a -> Interp.value
 let listToInterpValue l = V_list (List.map toInterpValue l)
-
-val listFromInterpValue : forall 'a. ToFromInterpValue 'a => Interp.value -> list 'a
-let listFromInterpValue = function
+let rec listFromInterpValue v = match v with
   | V_list l -> List.map fromInterpValue l
+  | V_tuple [v] -> listFromInterpValue v
   | v -> failwith ("fromInterpValue list 'a: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a. ToFromInterpValue 'a => (ToFromInterpValue (list 'a))
   let toInterpValue = listToInterpValue
   let fromInterpValue = listFromInterpValue
 end
 
 
-val vectorToInterpValue : forall 'a. ToFromInterpValue 'a => vector 'a -> Interp.value
 let vectorToInterpValue (Vector vs start direction) =
   V_vector (natFromInteger start) (if direction then IInc else IDec) (List.map toInterpValue vs)
-
-val vectorFromInterpValue : forall 'a. ToFromInterpValue 'a => Interp.value -> vector 'a
-let vectorFromInterpValue = function
+let rec vectorFromInterpValue v = match v with
   | V_vector start direction vs ->
      Vector (List.map fromInterpValue vs) (integerFromNat start)
             (match direction with | IInc -> true | IDec -> false end)
@@ -1141,19 +1198,10 @@ let vectorFromInterpValue = function
        (fromInterpValue defaultval)
        (integerFromNat start) (integerFromNat length)
        (match direction with | IInc -> true | IDec -> false end)
-  | V_tuple [V_vector start direction vs] ->
-     Vector (List.map fromInterpValue vs) (integerFromNat start)
-            (match direction with | IInc -> true | IDec -> false end)
-  | V_tuple [V_vector_sparse start length direction valuemap defaultval] ->
-     make_indexed_vector
-       (List.map (fun (i,v) -> (integerFromNat i,fromInterpValue v)) valuemap)
-       (fromInterpValue defaultval)
-       (integerFromNat start) (integerFromNat length)
-       (match direction with | IInc -> true | IDec -> false end)
+  | V_tuple [v] -> vectorFromInterpValue v
   | v -> failwith ("fromInterpValue vector 'a: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
 instance forall 'a. ToFromInterpValue 'a => (ToFromInterpValue (vector 'a))
   let toInterpValue = vectorToInterpValue
   let fromInterpValue = vectorFromInterpValue
@@ -1163,16 +1211,14 @@ end
    be T_app (T_id "option") (...), but temporarily we'll do it like this. The
    same thing has to be fixed in pretty_print.ml when we're generating the
    type-class instances. *)
-val maybeToInterpValue : forall 'a. ToFromInterpValue 'a => maybe 'a -> Interp.value
 let maybeToInterpValue = function
   | Nothing -> V_ctor (Id_aux (Id "None") Unknown) (T_id "option") C_Union (V_lit (L_aux L_unit Unknown))
   | Just a  -> V_ctor (Id_aux (Id "Some") Unknown) (T_id "option") C_Union (toInterpValue a)
   end
-
-val maybeFromInterpValue : forall 'a. ToFromInterpValue 'a => Interp.value -> maybe 'a
-let maybeFromInterpValue = function
+let rec maybeFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "None") _) _ _ _ -> Nothing
   | V_ctor (Id_aux (Id "Some") _) _ _ v -> Just (fromInterpValue v)
+  | V_tuple [v] -> maybeFromInterpValue v
   | v -> failwith ("fromInterpValue maybe 'a: unexpected value. " ^
                      Interp.debug_print_value v)
   end
@@ -1186,117 +1232,115 @@ end
 module SI = Interp
 module SIA = Interp_ast
 
-let read_kindFromInterpValue = function
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_plain") _) _ _ v -> Read_plain
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_tag") _) _ _ v -> Read_tag
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_tag_reserve") _) _ _ v -> Read_tag_reserve
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_reserve") _) _ _ v -> Read_reserve
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_acquire") _) _ _ v -> Read_acquire
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_exclusive") _) _ _ v -> Read_exclusive
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_exclusive_acquire") _) _ _ v -> Read_exclusive_acquire
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Read_stream") _) _ _ v -> Read_stream
+
+let read_kindToInterpValue = function
+  | Read_plain -> V_ctor (Id_aux (Id "Read_plain") Unknown) (T_id "read_kind") (C_Enum 0) (toInterpValue ())
+  | Read_tag -> V_ctor (Id_aux (Id "Read_tag") Unknown) (T_id "read_kind") (C_Enum 1) (toInterpValue ())
+  | Read_tag_reserve -> V_ctor (Id_aux (Id "Read_tag_reserve") Unknown) (T_id "read_kind") (C_Enum 1) (toInterpValue ())
+  | Read_reserve -> V_ctor (Id_aux (Id "Read_reserve") Unknown) (T_id "read_kind") (C_Enum 2) (toInterpValue ())
+  | Read_acquire -> V_ctor (Id_aux (Id "Read_acquire") Unknown) (T_id "read_kind") (C_Enum 3) (toInterpValue ())
+  | Read_exclusive -> V_ctor (Id_aux (Id "Read_exclusive") Unknown) (T_id "read_kind") (C_Enum 4) (toInterpValue ())
+  | Read_exclusive_acquire -> V_ctor (Id_aux (Id "Read_exclusive_acquire") Unknown) (T_id "read_kind") (C_Enum 5) (toInterpValue ())
+  | Read_stream -> V_ctor (Id_aux (Id "Read_stream") Unknown) (T_id "read_kind") (C_Enum 6) (toInterpValue ())
+  end
+let rec read_kindFromInterpValue v = match v with
+  | V_ctor (Id_aux (Id "Read_plain") _) _ _ v -> Read_plain
+  | V_ctor (Id_aux (Id "Read_tag") _) _ _ v -> Read_tag
+  | V_ctor (Id_aux (Id "Read_tag_reserve") _) _ _ v -> Read_tag_reserve
+  | V_ctor (Id_aux (Id "Read_reserve") _) _ _ v -> Read_reserve
+  | V_ctor (Id_aux (Id "Read_acquire") _) _ _ v -> Read_acquire
+  | V_ctor (Id_aux (Id "Read_exclusive") _) _ _ v -> Read_exclusive
+  | V_ctor (Id_aux (Id "Read_exclusive_acquire") _) _ _ v -> Read_exclusive_acquire
+  | V_ctor (Id_aux (Id "Read_stream") _) _ _ v -> Read_stream
+  | V_tuple [v] -> read_kindFromInterpValue v
   | v -> failwith ("fromInterpValue read_kind: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
-let read_kindToInterpValue = function
-  | Read_plain -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_plain") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 0) (toInterpValue ())
-  | Read_tag -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_tag") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 1) (toInterpValue ())
-  | Read_tag_reserve -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_tag_reserve") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 1) (toInterpValue ())
-  | Read_reserve -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_reserve") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 2) (toInterpValue ())
-  | Read_acquire -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_acquire") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 3) (toInterpValue ())
-  | Read_exclusive -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_exclusive") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 4) (toInterpValue ())
-  | Read_exclusive_acquire -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_exclusive_acquire") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 5) (toInterpValue ())
-  | Read_stream -> SI.V_ctor (SIA.Id_aux (SIA.Id "Read_stream") SIA.Unknown) (SIA.T_id "read_kind") (SI.C_Enum 6) (toInterpValue ())
-  end
-
 instance (ToFromInterpValue read_kind)
   let toInterpValue = read_kindToInterpValue
   let fromInterpValue = read_kindFromInterpValue
 end
 
 
-let write_kindFromInterpValue = function
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_plain") _) _ _ v -> Write_plain
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_tag") _) _ _ v -> Write_tag
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_tag_conditional") _) _ _ v -> Write_tag_conditional
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_conditional") _) _ _ v -> Write_conditional
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_release") _) _ _ v -> Write_release
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_exclusive") _) _ _ v -> Write_exclusive
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Write_exclusive_release") _) _ _ v -> Write_exclusive_release
+let write_kindToInterpValue = function
+  | Write_plain -> V_ctor (Id_aux (Id "Write_plain") Unknown) (T_id "write_kind") (C_Enum 0) (toInterpValue ())
+  | Write_tag -> V_ctor (Id_aux (Id "Write_tag") Unknown) (T_id "write_kind") (C_Enum 1) (toInterpValue ())
+  | Write_tag_conditional -> V_ctor (Id_aux (Id "Write_tag_conditional") Unknown) (T_id "write_kind") (C_Enum 1) (toInterpValue ())
+  | Write_conditional -> V_ctor (Id_aux (Id "Write_conditional") Unknown) (T_id "write_kind") (C_Enum 2) (toInterpValue ())
+  | Write_release -> V_ctor (Id_aux (Id "Write_release") Unknown) (T_id "write_kind") (C_Enum 3) (toInterpValue ())
+  | Write_exclusive -> V_ctor (Id_aux (Id "Write_exclusive") Unknown) (T_id "write_kind") (C_Enum 4) (toInterpValue ())
+  | Write_exclusive_release -> V_ctor (Id_aux (Id "Write_exclusive_release") Unknown) (T_id "write_kind") (C_Enum 5) (toInterpValue ())
+  end
+let rec write_kindFromInterpValue v = match v with
+  | V_ctor (Id_aux (Id "Write_plain") _) _ _ v -> Write_plain
+  | V_ctor (Id_aux (Id "Write_tag") _) _ _ v -> Write_tag
+  | V_ctor (Id_aux (Id "Write_tag_conditional") _) _ _ v -> Write_tag_conditional
+  | V_ctor (Id_aux (Id "Write_conditional") _) _ _ v -> Write_conditional
+  | V_ctor (Id_aux (Id "Write_release") _) _ _ v -> Write_release
+  | V_ctor (Id_aux (Id "Write_exclusive") _) _ _ v -> Write_exclusive
+  | V_ctor (Id_aux (Id "Write_exclusive_release") _) _ _ v -> Write_exclusive_release
+  | V_tuple [v] -> write_kindFromInterpValue v
   | v -> failwith ("fromInterpValue write_kind: unexpected value " ^
                      Interp.debug_print_value v)
   end
-
-let write_kindToInterpValue = function
-  | Write_plain -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_plain") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 0) (toInterpValue ())
-  | Write_tag -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_tag") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 1) (toInterpValue ())
-  | Write_tag_conditional -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_tag_conditional") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 1) (toInterpValue ())
-  | Write_conditional -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_conditional") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 2) (toInterpValue ())
-  | Write_release -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_release") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 3) (toInterpValue ())
-  | Write_exclusive -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_exclusive") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 4) (toInterpValue ())
-  | Write_exclusive_release -> SI.V_ctor (SIA.Id_aux (SIA.Id "Write_exclusive_release") SIA.Unknown) (SIA.T_id "write_kind") (SI.C_Enum 5) (toInterpValue ())
-  end
-
 instance (ToFromInterpValue write_kind)
   let toInterpValue = write_kindToInterpValue
   let fromInterpValue = write_kindFromInterpValue
 end
 
-let barrier_kindFromInterpValue = function
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_Sync") _) _ _ v -> Barrier_Sync
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_LwSync") _) _ _ v -> Barrier_LwSync
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_Eieio") _) _ _ v -> Barrier_Eieio
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_Isync") _) _ _ v -> Barrier_Isync
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DMB") _) _ _ v -> Barrier_DMB
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DMB_ST") _) _ _ v -> Barrier_DMB_ST
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DMB_LD") _) _ _ v -> Barrier_DMB_LD
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB") _) _ _ v -> Barrier_DSB
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB_ST") _) _ _ v -> Barrier_DSB_ST
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB_LD") _) _ _ v -> Barrier_DSB_LD
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_ISB") _) _ _ v -> Barrier_ISB
+
+let barrier_kindToInterpValue = function
+  | Barrier_Sync -> V_ctor (Id_aux (Id "Barrier_Sync") Unknown) (T_id "barrier_kind") (C_Enum 0) (toInterpValue ())
+  | Barrier_LwSync -> V_ctor (Id_aux (Id "Barrier_LwSync") Unknown) (T_id "barrier_kind") (C_Enum 1) (toInterpValue ())
+  | Barrier_Eieio -> V_ctor (Id_aux (Id "Barrier_Eieio") Unknown) (T_id "barrier_kind") (C_Enum 2) (toInterpValue ())
+  | Barrier_Isync -> V_ctor (Id_aux (Id "Barrier_Isync") Unknown) (T_id "barrier_kind") (C_Enum 3) (toInterpValue ())
+  | Barrier_DMB -> V_ctor (Id_aux (Id "Barrier_DMB") Unknown) (T_id "barrier_kind") (C_Enum 4) (toInterpValue ())
+  | Barrier_DMB_ST -> V_ctor (Id_aux (Id "Barrier_DMB_ST") Unknown) (T_id "barrier_kind") (C_Enum 5) (toInterpValue ())
+  | Barrier_DMB_LD -> V_ctor (Id_aux (Id "Barrier_DMB_LD") Unknown) (T_id "barrier_kind") (C_Enum 6) (toInterpValue ())
+  | Barrier_DSB -> V_ctor (Id_aux (Id "Barrier_DSB") Unknown) (T_id "barrier_kind") (C_Enum 7) (toInterpValue ())
+  | Barrier_DSB_ST -> V_ctor (Id_aux (Id "Barrier_DSB_ST") Unknown) (T_id "barrier_kind") (C_Enum 8) (toInterpValue ())
+  | Barrier_DSB_LD -> V_ctor (Id_aux (Id "Barrier_DSB_LD") Unknown) (T_id "barrier_kind") (C_Enum 9) (toInterpValue ())
+  | Barrier_ISB -> V_ctor (Id_aux (Id "Barrier_ISB") Unknown) (T_id "barrier_kind") (C_Enum 10) (toInterpValue ())
+  end
+let rec barrier_kindFromInterpValue v = match v with
+  | V_ctor (Id_aux (Id "Barrier_Sync") _) _ _ v -> Barrier_Sync
+  | V_ctor (Id_aux (Id "Barrier_LwSync") _) _ _ v -> Barrier_LwSync
+  | V_ctor (Id_aux (Id "Barrier_Eieio") _) _ _ v -> Barrier_Eieio
+  | V_ctor (Id_aux (Id "Barrier_Isync") _) _ _ v -> Barrier_Isync
+  | V_ctor (Id_aux (Id "Barrier_DMB") _) _ _ v -> Barrier_DMB
+  | V_ctor (Id_aux (Id "Barrier_DMB_ST") _) _ _ v -> Barrier_DMB_ST
+  | V_ctor (Id_aux (Id "Barrier_DMB_LD") _) _ _ v -> Barrier_DMB_LD
+  | V_ctor (Id_aux (Id "Barrier_DSB") _) _ _ v -> Barrier_DSB
+  | V_ctor (Id_aux (Id "Barrier_DSB_ST") _) _ _ v -> Barrier_DSB_ST
+  | V_ctor (Id_aux (Id "Barrier_DSB_LD") _) _ _ v -> Barrier_DSB_LD
+  | V_ctor (Id_aux (Id "Barrier_ISB") _) _ _ v -> Barrier_ISB
+  | V_tuple [v] -> barrier_kindFromInterpValue v
   | v -> failwith ("fromInterpValue barrier_kind: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
-let barrier_kindToInterpValue = function
-  | Barrier_Sync -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_Sync") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 0) (toInterpValue ())
-  | Barrier_LwSync -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_LwSync") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 1) (toInterpValue ())
-  | Barrier_Eieio -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_Eieio") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 2) (toInterpValue ())
-  | Barrier_Isync -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_Isync") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 3) (toInterpValue ())
-  | Barrier_DMB -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DMB") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 4) (toInterpValue ())
-  | Barrier_DMB_ST -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DMB_ST") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 5) (toInterpValue ())
-  | Barrier_DMB_LD -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DMB_LD") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 6) (toInterpValue ())
-  | Barrier_DSB -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 7) (toInterpValue ())
-  | Barrier_DSB_ST -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB_ST") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 8) (toInterpValue ())
-  | Barrier_DSB_LD -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_DSB_LD") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 9) (toInterpValue ())
-  | Barrier_ISB -> SI.V_ctor (SIA.Id_aux (SIA.Id "Barrier_ISB") SIA.Unknown) (SIA.T_id "barrier_kind") (SI.C_Enum 10) (toInterpValue ())
-  end
-
 instance (ToFromInterpValue barrier_kind)
   let toInterpValue = barrier_kindToInterpValue
   let fromInterpValue = barrier_kindFromInterpValue
 end
 
 
-let instruction_kindFromInterpValue = function
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_barrier") _) _ _ v -> IK_barrier (fromInterpValue v)
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_mem_read") _) _ _ v -> IK_mem_read (fromInterpValue v)
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_mem_write") _) _ _ v -> IK_mem_write (fromInterpValue v)
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_cond_branch") _) _ _ v -> IK_cond_branch
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "IK_simple") _) _ _ v -> IK_simple
+let instruction_kindToInterpValue = function
+  | IK_barrier v -> V_ctor (Id_aux (Id "IK_barrier") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
+  | IK_mem_read v -> V_ctor (Id_aux (Id "IK_mem_read") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
+  | IK_mem_write v -> V_ctor (Id_aux (Id "IK_mem_write") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
+  | IK_cond_branch -> V_ctor (Id_aux (Id "IK_cond_branch") Unknown) (T_id "instruction_kind") C_Union (toInterpValue ())
+  | IK_simple -> V_ctor (Id_aux (Id "IK_simple") Unknown) (T_id "instruction_kind") C_Union (toInterpValue ())
+  end
+let rec instruction_kindFromInterpValue v = match v with
+  | V_ctor (Id_aux (Id "IK_barrier") _) _ _ v -> IK_barrier (fromInterpValue v)
+  | V_ctor (Id_aux (Id "IK_mem_read") _) _ _ v -> IK_mem_read (fromInterpValue v)
+  | V_ctor (Id_aux (Id "IK_mem_write") _) _ _ v -> IK_mem_write (fromInterpValue v)
+  | V_ctor (Id_aux (Id "IK_cond_branch") _) _ _ v -> IK_cond_branch
+  | V_ctor (Id_aux (Id "IK_simple") _) _ _ v -> IK_simple
+  | V_tuple [v] -> instruction_kindFromInterpValue v
   | v -> failwith ("fromInterpValue instruction_kind: unexpected value. " ^
                      Interp.debug_print_value v)
   end
-
-let instruction_kindToInterpValue = function
-  | IK_barrier v -> SI.V_ctor (SIA.Id_aux (SIA.Id "IK_barrier") SIA.Unknown) (SIA.T_id "instruction_kind") SI.C_Union (toInterpValue v)
-  | IK_mem_read v -> SI.V_ctor (SIA.Id_aux (SIA.Id "IK_mem_read") SIA.Unknown) (SIA.T_id "instruction_kind") SI.C_Union (toInterpValue v)
-  | IK_mem_write v -> SI.V_ctor (SIA.Id_aux (SIA.Id "IK_mem_write") SIA.Unknown) (SIA.T_id "instruction_kind") SI.C_Union (toInterpValue v)
-  | IK_cond_branch -> SI.V_ctor (SIA.Id_aux (SIA.Id "IK_cond_branch") SIA.Unknown) (SIA.T_id "instruction_kind") SI.C_Union (toInterpValue ())
-  | IK_simple -> SI.V_ctor (SIA.Id_aux (SIA.Id "IK_simple") SIA.Unknown) (SIA.T_id "instruction_kind") SI.C_Union (toInterpValue ())
-  end
-
 instance (ToFromInterpValue instruction_kind)
   let toInterpValue = instruction_kindToInterpValue
   let fromInterpValue = instruction_kindFromInterpValue
