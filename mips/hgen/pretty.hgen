@@ -25,3 +25,12 @@
       sprintf "%s, %s, %s, .%+d" (pp_beq_op ne likely) (pp_reg rs) (pp_reg rt) offset
 | `MIPSBCMPZ (rs, offset, cmp, link, likely) ->
       sprintf "%s, %s, .%+d" (pp_bcmpz_op cmp link likely) (pp_reg rs) offset
+| `MIPSJ (offset) ->
+  sprintf "j %d" offset
+| `MIPSJAL (offset) ->
+  sprintf "jal %d" offset
+| `MIPSJR(rd) ->
+  sprintf "jr %s" (pp_reg rd)
+| `MIPSJALR(rd, rs) ->
+  sprintf "jalr %s, %s" (pp_reg rd) (pp_reg rs)
+

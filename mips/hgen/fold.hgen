@@ -11,3 +11,8 @@
 | `MIPSSYNC -> (y_reg, y_sreg)
 | `MIPSBEQ (rs, rt, offset, ne, likely) -> fold_reg rs (fold_reg rt (y_reg, y_sreg))
 | `MIPSBCMPZ (rs, offset, cmp, link, likely) -> fold_reg rs (y_reg, y_sreg)
+| `MIPSJ (offset) -> (y_reg, y_sreg)
+| `MIPSJAL (offset) -> fold_reg (IReg(R31)) (y_reg, y_sreg)
+| `MIPSJR (rd) -> fold_reg rd (y_reg, y_sreg)
+| `MIPSJALR (rd, rs) -> fold_reg rd (fold_reg rs (y_reg, y_sreg))
+

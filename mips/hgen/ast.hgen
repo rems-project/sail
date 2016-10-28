@@ -10,4 +10,8 @@
 | `MIPSLSLR of bool * bool * bool  * reg * reg * bit16         (* store, double, left, base, rt, offset *)
 | `MIPSSYNC
 | `MIPSBEQ of reg * reg * bit16 * bool * bool                  (* rs, rt, offset, not equal, likely *)
-| `MIPSBCMPZ of reg * bit16 * mipsCmp * bool * bool                  (* rs, offset, cmp, link, likely *)
+| `MIPSBCMPZ of reg * bit16 * mipsCmp * bool * bool            (* rs, offset, cmp, link, likely *)
+| `MIPSJ of bit26
+| `MIPSJAL of bit26
+| `MIPSJR of reg
+| `MIPSJALR of reg * reg                                       (* rs, rd *)

@@ -110,3 +110,7 @@
 
 "blez",   BCMPZ {txt="BCMPZ"; cmp=MIPS_LE; likely=false; link=false };
 "blezl",  BCMPZ {txt="BCMPZ"; cmp=MIPS_LE; likely=true;  link=false };
+"j",      J     {txt="J"};
+"jal",    JAL   {txt="JAL"};
+"jr",     JR    {txt="JR"};
+"jalr",   JALR  {txt="JALR"};

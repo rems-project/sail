@@ -1,5 +1,7 @@
 let translate_reg name value = 
     (name, Bvector (Some 5), bit_list_of_integer 5 (Nat_big_num.of_int (reg_to_int value)))
+let translate_imm26 name value = 
+    (name, Bvector (Some 26), bit_list_of_integer 26 (Nat_big_num.of_int value))
 let translate_imm16 name value = 
     (name, Bvector (Some 16), bit_list_of_integer 16 (Nat_big_num.of_int value))
 let translate_imm5 name value = 

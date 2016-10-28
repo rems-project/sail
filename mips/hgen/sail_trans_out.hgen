@@ -90,4 +90,8 @@
 | "SYNC", [] -> `MIPSSYNC
 | "BEQ", [rs; rt; offset; ne; likely] -> `MIPSBEQ ((translate_out_ireg rs), (translate_out_ireg rt), (translate_out_imm16 offset), (translate_out_bool ne), (translate_out_bool likely))
 | "BCMPZ", [rs; offset; cmp; link; likely] -> `MIPSBCMPZ ((translate_out_ireg rs), (translate_out_imm16 offset), (translate_out_cmp cmp), (translate_out_bool link), (translate_out_bool likely))
+| "J", [offset] -> `MIPSJ (translate_out_imm26 offset)
+| "JAL", [offset] -> `MIPSJAL (translate_out_imm26 offset)
+| "JR", [rd] -> `MIPSJR (translate_out_ireg rd)
+| "JALR", [rd; rs] -> `MIPSJALR (translate_out_ireg rd, translate_out_ireg rs)
 

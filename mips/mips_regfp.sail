@@ -355,22 +355,26 @@ function (regfps,regfps,regfps,nias,dia,instruction_kind) initial_analysis (inst
     case (J(offset)) -> {
       (* XXX actually unconditional jump *)
       ik := IK_cond_branch;
-      (* Nias := XXX *)
+      Dia := DIA_concrete((PC + 4)[63..28] : offset : 0b00);
     }
     case (JAL(offset)) -> {
       (* XXX actually unconditional jump *)
       ik := IK_cond_branch;
       oR := RFull("GPR31") :: oR;
+      Dia := DIA_concrete((PC + 4)[63..28] : offset : 0b00);
     }
     case (JR(rs)) -> {
       (* XXX actually unconditional jump *)
       ik := IK_cond_branch;
       iR := RFull(GPRs[rs]) :: iR;
+      Dia := DIA_reg(RFull(GPRs[rs]));
     }
     case (JALR(rs, rd)) -> {
+      (* XXX actually unconditional jump *)
       ik := IK_cond_branch;
       iR := RFull(GPRs[rs]) :: iR;
       oR := RFull("GPR31") :: oR;
+      Dia := DIA_reg(RFull(GPRs[rs]));
     }
     case (BEQ(rs, rd, imm, ne, likely)) -> {
       ik := IK_cond_branch;

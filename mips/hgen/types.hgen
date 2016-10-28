@@ -36,6 +36,7 @@ let pp_rtype_op = function
 | MIPSROpSUBU   -> "SUBU"
 | MIPSROpXOR    -> "XOR"
 
+type bit26 = int
 type bit16 = int
 type bit5  = int
 
