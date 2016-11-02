@@ -18,9 +18,6 @@ let rec replace bs ((n : integer),b') = match bs with
   end
 
 
-
-
-
                      
 (*** Bits *)
 type bitU = O | I | Undef
@@ -229,7 +226,7 @@ let bitwise_and = bitwise_binop (&&)
 let bitwise_or = bitwise_binop (||)
 let bitwise_xor = bitwise_binop xor
 
-let unsigned (Vector bs _ _ as v) : integer =
+let unsigned (Vector bs _ _) : integer =
   let (sum,_) =
     List.foldr
       (fun b (acc,exp) ->
@@ -249,6 +246,21 @@ let signed v : integer =
   | O -> unsigned v
   | Undef -> failwith "signed applied to vector with undefined bits"
   end
+
+let hardware_mod (a: integer) (b:integer) : integer = 
+ if a < 0 && b < 0
+ then (abs a) mod (abs b)
+ else if (a < 0 && b >= 0) 
+ then (a mod b) - b
+ else a mod b
+
+let hardware_quot (a:integer) (b:integer) : integer = 
+  if a < 0 && b < 0
+  then (abs a) / (abs b)
+  else if (a < 0 && b > 0) 
+  then (a/b) + 1
+  else a/b
+
 
 let signed_big = signed
 
@@ -337,8 +349,8 @@ let add = integerAdd
 let add_signed = integerAdd
 let minus = integerMinus
 let multiply = integerMult
-let modulo = integerMod
-let quot = integerDiv
+let modulo = hardware_mod
+let quot = hardware_quot
 let power = integerPow
 
 let arith_op_vec op sign (size : integer) (Vector _ _ is_inc as l) r =
@@ -482,7 +494,7 @@ let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (siz
     then
       if n <= get_max_representable_in sign act_size && n >= get_min_representable_in sign act_size
       then O else I
-    else I in
+    else O in
   (correct_size_num,overflow,most_significant one_larger)
 
 (* add_overflow_vec_bit_signed
@@ -495,7 +507,7 @@ let minusSO_VBV = arith_op_overflow_vec_bit integerMinus true 1
 
 type shift = LL_shift | RR_shift | LLL_shift
 
-let shift_op_vec op ((Vector bs start is_inc as l),(n : integer)) =
+let shift_op_vec op (Vector bs start is_inc,(n : integer)) =
   let n = natFromInteger n in
   match op with
   | LL_shift (*"<<"*) ->
@@ -530,9 +542,9 @@ let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size ((Vector
   then to_vec is_inc (act_size,n')
   else Vector (List.replicate (natFromInteger act_size) Undef) start is_inc
 
-let mod_VVV = arith_op_vec_no0 integerMod false 1
-let quot_VVV = arith_op_vec_no0 integerDiv false 1
-let quotS_VVV = arith_op_vec_no0 integerDiv true 1
+let mod_VVV = arith_op_vec_no0 hardware_mod false 1
+let quot_VVV = arith_op_vec_no0 hardware_quot false 1
+let quotS_VVV = arith_op_vec_no0 hardware_quot true 1
 
 let arith_op_overflow_no0_vec op sign size ((Vector _ start is_inc) as l) r =
   let rep_size = length r * size in
@@ -557,13 +569,13 @@ let arith_op_overflow_no0_vec op sign size ((Vector _ start is_inc) as l) r =
   let overflow = if representable then O else I in
   (correct_size_num,overflow,most_significant one_more)
 
-let quotO_VVV = arith_op_overflow_no0_vec integerDiv false 1
-let quotSO_VVV = arith_op_overflow_no0_vec integerDiv true 1
+let quotO_VVV = arith_op_overflow_no0_vec hardware_quot false 1
+let quotSO_VVV = arith_op_overflow_no0_vec hardware_quot true 1
 
 let arith_op_vec_range_no0 op sign size (Vector _ _ is_inc as l) r =
   arith_op_vec_no0 op sign size l (to_vec is_inc (length l,r))
 
-let mod_VIV = arith_op_vec_range_no0 integerMod false 1
+let mod_VIV = arith_op_vec_range_no0 hardware_mod false 1
 
 val repeat : forall 'a. list 'a -> integer -> list 'a
 let rec repeat xs n =
@@ -582,7 +594,7 @@ let compare_op_vec op sign (l,r) =
   let (l',r') = (to_num sign l, to_num sign r) in
   compare_op op (l',r')
 
-let lt_vec = compare_op_vec (>) true
+let lt_vec = compare_op_vec (<) true
 let gt_vec = compare_op_vec (>) true
 let lteq_vec = compare_op_vec (<=) true
 let gteq_vec = compare_op_vec (>=) true
@@ -704,11 +716,35 @@ type register =
   | UndefinedRegister of integer (* length *)
   | RegisterPair of register * register
 
-let name_of_reg (Register name _ _ _ _) = name
-let size_of_reg (Register _ size _ _ _) = size
-let start_of_reg (Register _ _ start _ _) = start
-let is_inc_of_reg (Register _ _ _ is_inc _) = is_inc
-let dir_of_reg (Register _ _ _ is_inc _) = dir is_inc
+let name_of_reg = function
+  | Register name _ _ _ _ -> name
+  | UndefinedRegister _ -> failwith "name_of_reg UndefinedRegister"
+  | RegisterPair _ _ -> failwith "name_of_reg RegisterPair"
+end
+
+let size_of_reg = function
+  | Register _ size _ _ _ -> size
+  | UndefinedRegister size -> size
+  | RegisterPair _ _ -> failwith "size_of_reg RegisterPair"
+end
+                              
+let start_of_reg = function
+  | Register _ _ start _ _ -> start
+  | UndefinedRegister _ -> failwith "start_of_reg UndefinedRegister"
+  | RegisterPair _ _ -> failwith "start_of_reg RegisterPair"
+end
+
+let is_inc_of_reg = function
+  | Register _ _ _ is_inc _ -> is_inc
+  | UndefinedRegister _ -> failwith "is_inc_of_reg UndefinedRegister"
+  | RegisterPair _ _ -> failwith "in_inc_of_reg RegisterPair"
+end
+
+let dir_of_reg = function
+  | Register _ _ _ is_inc _ -> dir is_inc
+  | UndefinedRegister _ -> failwith "dir_of_reg UndefinedRegister"
+  | RegisterPair _ _ -> failwith "dir_of_reg RegisterPair"
+end
 
 let size_of_reg_nat reg = natFromInteger (size_of_reg reg)
 let start_of_reg_nat reg = natFromInteger (start_of_reg reg)

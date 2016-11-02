@@ -109,11 +109,11 @@ let bytes_lifted_homogenous_to_string = function
   | Bitslh_undef -> "uu"
   | Bitslh_unknown -> "??"
 
-let simple_bit_lifteds_to_string bls (show_length_and_start:bool) (starto: int option) =  
+let simple_bit_lifteds_to_string ?(collapse=true) bls (show_length_and_start:bool) (starto: int option) =  
   let s = 
     String.concat "" (List.map bit_lifted_to_string bls) in
   let s = 
-    collapse_leading s in
+    if collapse then collapse_leading s else s in
   let len = string_of_int (List.length bls) in 
   if show_length_and_start then 
     match starto with 
@@ -124,14 +124,14 @@ let simple_bit_lifteds_to_string bls (show_length_and_start:bool) (starto: int o
 
 (* if a multiple of 8 lifted bits and each chunk of 8 is homogenous,
 print as lifted hex, otherwise print as lifted bits *)
-let bit_lifteds_to_string (bls: bit_lifted list) (show_length_and_start:bool) (starto: int option) (abbreviate_zero_to_nine: bool) =  
+let bit_lifteds_to_string ?(collapse=true) (bls: bit_lifted list) (show_length_and_start:bool) (starto: int option) (abbreviate_zero_to_nine: bool) =  
   let l = List.length bls in
   if l mod 8 = 0 then  (*  if List.mem l [8;16;32;64;128] then *)
     let bytesl = List.map (fun (Byte_lifted bs) -> bs) (Sail_impl_base.byte_lifteds_of_bit_lifteds bls) in
     let byteslhos = List.map bits_lifted_homogenous_of_bit_lifteds bytesl in
     match maybe_all byteslhos with 
     | None -> (* print as bitvector after all *)
-        simple_bit_lifteds_to_string bls show_length_and_start starto
+        simple_bit_lifteds_to_string ~collapse:collapse bls show_length_and_start starto
     | Some (byteslhs: bits_lifted_homogenous list) -> 
         (* if abbreviate_zero_to_nine, all bytes are concrete, and the number is <=9, just print that *)  
         (*   (note that that doesn't print the length or start - it's appropriate only for memory values, where we typically have an explicit footprint also printed *)
@@ -161,7 +161,7 @@ let memory_value_to_string endian mv =
   bit_lifteds_to_string bls true None true
 
 let logfile_register_value_to_string rv = 
-  bit_lifteds_to_string rv.rv_bits false (Some rv.rv_start) false  
+  bit_lifteds_to_string ~collapse:false rv.rv_bits false (Some rv.rv_start) false  
 
 let logfile_memory_value_to_string endian mv = 
   let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) (if endian = E_big_endian then mv else (List.rev mv)))  in
