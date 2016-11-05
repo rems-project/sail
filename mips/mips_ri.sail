@@ -32,10 +32,11 @@
 (*  SUCH DAMAGE.                                                          *)
 (*========================================================================*)
 
-(* mips_epilogue.sail: end of decode, execute and AST definitions. *)
+(* mips_ri.sail: only use if want unknown instructions to throw
+   exception (like real hardware) instead of die (convenient for ppcmem) *)
 
-end decode
-end execute
-end ast
+union ast member unit RI
+function clause decode _ = Some(RI)
+function clause execute (RI) =
+      SignalException (ResI)
 
-function option<ast> supported_instructions (instr) = Some(instr)
