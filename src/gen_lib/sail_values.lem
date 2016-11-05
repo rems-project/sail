@@ -50,6 +50,12 @@ let bitU_of_bit = function
   | Bitc_one  -> I
   end
 
+let bit_of_bitU = function
+  | O -> Bitc_zero
+  | I -> Bitc_one
+  | Undef -> failwith "bit_of_bitU: Undef"
+  end
+
 let bitU_of_bit_lifted = function
   | Bitl_zero -> O
   | Bitl_one  -> I
@@ -683,6 +689,11 @@ let byte_lifteds_of_bitv (Vector bits length is_inc) =
   let bits = List.map bit_lifted_of_bitU bits in
   byte_lifteds_of_bit_lifteds bits
 
+val bytes_of_bitv : vector bitU -> list byte
+let bytes_of_bitv (Vector bits length is_inc) =
+  let bits = List.map bit_of_bitU bits in
+  bytes_of_bits bits
+
 val bit_lifteds_of_bitUs : list bitU -> list bit_lifted
 let bit_lifteds_of_bitUs bits = List.map bit_lifted_of_bitU bits
 
@@ -699,6 +710,11 @@ let address_lifted_of_bitv v =
     | _ -> Nothing
     end in
   Address_lifted byte_lifteds maybe_address_integer
+
+val address_of_bitv : vector bitU -> address
+let address_of_bitv v =
+  let bytes = bytes_of_bitv v in
+  address_of_byte_list bytes
 
 
 
@@ -1381,3 +1397,46 @@ instance (ToFromInterpValue instruction_kind)
   let toInterpValue = instruction_kindToInterpValue
   let fromInterpValue = instruction_kindFromInterpValue
 end
+
+
+let regfpToInterpValue = function
+  | RFull v -> SI.V_ctor (SIA.Id_aux (SIA.Id "RFull") SIA.Unknown) (SIA.T_id "regfp") SI.C_Union (toInterpValue v)
+  | RSlice v -> SI.V_ctor (SIA.Id_aux (SIA.Id "RSlice") SIA.Unknown) (SIA.T_id "regfp") SI.C_Union (toInterpValue v)
+  | RSliceBit v -> SI.V_ctor (SIA.Id_aux (SIA.Id "RSliceBit") SIA.Unknown) (SIA.T_id "regfp") SI.C_Union (toInterpValue v)
+  | RField v -> SI.V_ctor (SIA.Id_aux (SIA.Id "RField") SIA.Unknown) (SIA.T_id "regfp") SI.C_Union (toInterpValue v)
+  end
+
+let rec regfpFromInterpValue v = match v with
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "RFull") _) _ _ v -> RFull (fromInterpValue v)
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "RSlice") _) _ _ v -> RSlice (fromInterpValue v)
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "RSliceBit") _) _ _ v -> RSliceBit (fromInterpValue v)
+  | SI.V_ctor (SIA.Id_aux (SIA.Id "RField") _) _ _ v -> RField (fromInterpValue v)
+  | SI.V_tuple [v] -> regfpFromInterpValue v
+  | v -> failwith ("fromInterpValue regfp: unexpected value. " ^ Interp.debug_print_value v)
+  end
+
+instance (ToFromInterpValue regfp)
+  let toInterpValue = regfpToInterpValue
+  let fromInterpValue = regfpFromInterpValue
+end
+
+(*
+let rfp_to_reg reg_info direction = function
+  | RFull name -> 
+     let (start,length,direction,_) = reg_info name Nothing in
+     Reg name start length direction
+  | RSlice (name,i,j) ->
+     let (start,length,direction,_) = reg_info name Nothing in
+     let slice = extern_slice direction (natFromInteger start) (i,j) in
+     Reg_slice name start direction slice
+  | RSliceBit (name,i) ->
+     let (start,length,direction,_) = reg_info name Nothing in
+     let slice = extern_slice direction (natFromInteger start) (i,i) in
+     Reg_slice name start direction slice
+  | RField (name,field_name) ->
+     let (start,length,direction,span) = reg_info name (Just field_name) in
+     let start = natFromInteger start in
+     let slice = extern_slice direction start (start,span) in
+     Reg_field name start direction field_name slice
+end
+ *)

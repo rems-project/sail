@@ -2649,9 +2649,9 @@ let doc_exp_lem, doc_let_lem =
                 | "add" -> aux "+"
                 | "minus" -> aux "-"
                 | "multiply" -> aux "*"
-                | "quot" -> aux "/"
-                | "modulo" -> aux "mod"
 
+                | "quot" -> aux2 "quot"
+                | "modulo" -> aux2 "modulo"
                 | "add_vec" -> aux2 "add_VVV"
                 | "add_vec_signed" -> aux2 "addS_VVV"
                 | "add_overflow_vec" -> aux2 "addO_VVV"
@@ -2790,6 +2790,9 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
       | Id_aux ((Id "write_kind"),_) -> empty
       | Id_aux ((Id "barrier_kind"),_) -> empty
       | Id_aux ((Id "instruction_kind"),_) -> empty
+      | Id_aux ((Id "regfp"),_) -> empty
+      (* | Id_aux ((Id "nia"),_) -> empty
+      | Id_aux ((Id "dia"),_) -> empty *)
       | _ ->
          let ar_doc = group (separate_map (break 1) (doc_type_union_lem regtypes) ar) in
          let typ_pp =

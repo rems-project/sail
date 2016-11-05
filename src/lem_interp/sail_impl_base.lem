@@ -1400,3 +1400,9 @@ instance  (Eq decode_error)
   let (<>) = decode_error_inequal
 end
 
+type regfp =
+  | RFull of (string)
+  | RSlice of (string * integer * integer)
+  | RSliceBit of (string * integer)
+  | RField of (string * string)
+

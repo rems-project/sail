@@ -203,3 +203,4 @@ val instruction_analysis :
 
 
 val initial_outcome_s_of_instruction : context -> interp_mode -> instruction -> Sail_impl_base.outcome_s instruction_state unit
+
