@@ -238,7 +238,7 @@ scattered function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
         option<(ast<'R,'D>)> decodeSystem
 
 (* MSR (immediate) *)
-function clause decodeSystem (0b1101010100:[0]:0b00:op1:0b0100:CRm:op2:0b11111) = {
+function clause decodeSystem (0b1101010100:[0]:0b00:(bit[3]) op1:0b0100:CRm:(bit[3]) op2:0b11111) = {
   (* FIXME: we don't allow register reads in the decoding *)
   (* ARM: CheckSystemAccess(0b00, op1, 0b0100, CRm, op2, 0b11111, 0); *)
 
@@ -398,7 +398,7 @@ function clause execute ( Barrier(op,domain,types) ) = {
 
 (* SYS L=0b0 *)
 (* SYSL L=0b1 *)
-function clause decodeSystem (0b1101010100:[L]:0b01:op1:CRn:CRm:op2:Rt) = {
+function clause decodeSystem (0b1101010100:[L]:0b01:(bit[3]) op1:(bit[4]) CRn:(bit[4]) CRm:(bit[3]) op2:Rt) = {
   (* FIXME: we don't allow register reads in the decoding *)
   (* ARM: CheckSystemAccess(0b01, op1, CRn, CRm, op2, Rt, L);*)
 
@@ -650,7 +650,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   Some(LoadLiteral(t,memop,_signed,size,offset,datasize));
 }
 
-function clause execute ( LoadLiteral(t,memop,_signed,size,offset,datasize) ) = {
+function clause execute ( LoadLiteral(t,memop,_signed,size,offset,([:'D:]) datasize) ) = {
   (bit[64]) address := rPC() + offset;
   (bit['D]) data := 0; (* ARM: uninitialized *)
 

@@ -49,10 +49,10 @@ function boolean DoubleLockStatus() =
 typedef signalValue =
   enumerate {LOw; HIGH}
 
-val extern unit -> signalValue effect pure signalDBGEN
-val extern unit -> signalValue effect pure signalNIDEN
-val extern unit -> signalValue effect pure signalSPIDEN
-val extern unit -> signalValue effect pure signalSPNIDEN
+function signalValue signalDBGEN () = not_implemented_extern("signalDBGEN")
+function signalValue signelNIDEN () = not_implemented_extern("signalNIDEN")
+function signalValue signalSPIDEN () = not_implemented_extern("signalSPIDEN")
+function signalValue signalDPNIDEN () = not_implemented_extern("signalSPNIDEN")
 
 (** FUNCTION:shared/debug/authentication/ExternalInvasiveDebugEnabled *)
 
@@ -202,8 +202,10 @@ function forall Nat 'N. [|'N|] CountLeadingSignBits((bit['N]) x) =
 (** FUNCTION:integer CountLeadingZeroBits(bits(N) x) *)
 
 function forall Nat 'N. [|'N|] CountLeadingZeroBits((bit['N]) x) =
-  length(x) - 1 - HighestSetBit(x)
-
+  switch HighestSetBit(x) {
+    case None -> length(x)
+    case (Some(n)) -> length(x) - 1 - n
+  }
 (** FUNCTION:bits(N) Extend(bits(M) x, integer N, boolean unsigned) *)
 
 val forall Nat 'N, Nat 'M, 'M <= 'N. (implicit<'N>,bit['M],bit) -> bit['N] effect pure Extend
@@ -212,7 +214,7 @@ function forall Nat 'N, Nat 'M. bit['N] Extend (x, unsigned) =
 
 (** FUNCTION:integer HighestSetBit(bits(N) x) *)
 
-function forall Nat 'N. [|-1:('N + -1)|] HighestSetBit((bit['N]) x) = {
+function forall Nat 'N. option<[|0:('N + -1)|]> HighestSetBit((bit['N]) x) = {
   let N = (length(x)) in {
   ([|('N + -1)|]) result := 0;
   (bool) break := false;
@@ -222,7 +224,7 @@ function forall Nat 'N. [|-1:('N + -1)|] HighestSetBit((bit['N]) x) = {
       break := true;
     };
 
-  if break then result else -1;
+  if break then Some(result) else None;
 }}
 
 (** FUNCTION:integer Int(bits(N) x, boolean unsigned) *)
@@ -733,27 +735,28 @@ function forall Nat 'N, 'N IN {32,64}. unit effect {rreg,wreg} BranchTo((bit['N]
   } else {
     assert(( length(target) == 64 & ~(UsingAArch32()) ), None);
     (* Remove the tag bits from tagged target *)
-    switch PSTATE_EL {
-      case EL0 -> {
+    let pstate_el = PSTATE_EL in {
+      if pstate_el == EL0 then {
         if target'[55] == 1 & TCR_EL1.TBI1 == 1 then
           target'[63..56] := 0b11111111;
         if target'[55] == 0 & TCR_EL1.TBI0 == 1 then
           target'[63..56] := 0b00000000;
       }
-      case EL1 -> {
+      else if pstate_el == EL1 then {
         if target'[55] == 1 & TCR_EL1.TBI1 == 1 then
           target'[63..56] := 0b11111111;
         if target'[55] == 0 & TCR_EL1.TBI0 == 1 then
           target'[63..56] := 0b00000000;
       }
-      case EL2 -> {
+      else if pstate_el == EL2 then {
         if TCR_EL2.TBI == 1 then
           target'[63..56] := 0b00000000;
       }
-      case EL3 -> {
+      else if pstate_el == EL3 then {
         if TCR_EL3.TBI == 1 then
           target'[63..56] := 0b00000000;
       }
+      else assert(false,None)
     };
     _PC := target';
   };
@@ -768,7 +771,7 @@ function unit effect pure Hint_Branch((BranchType) hint) =
 }
 
 (** FUNCTION:shared/functions/registers/ResetExternalDebugRegisters *)
-val extern boolean -> unit effect pure ResetExternalDebugRegisters
+function unit ResetExternalDebugRegisters ((boolean) b) = not_implemented_extern("ResetExternalDebugRegisters")
 (** FUNCTION:shared/functions/registers/ThisInstrAddr *)
 
 val forall Nat 'N. implicit<'N> -> bit['N] effect {rreg} ThisInstrAddr
@@ -798,11 +801,11 @@ function bit[32] rSPSR() =
       otherwise          Unreachable();
     *)
   } else {
-    switch PSTATE_EL {
-      case EL1 -> result := SPSR_EL1
-      case EL2 -> result := SPSR_EL2
-      case EL3 -> result := SPSR_EL3
-      case _   -> Unreachable()
+    let pstate_el = PSTATE_EL in {
+      if      pstate_el == EL1 then result := SPSR_EL1
+      else if pstate_el == EL2 then result := SPSR_EL2
+      else if pstate_el == EL3 then result := SPSR_EL3
+      else Unreachable()
     };
   };
 
@@ -810,7 +813,7 @@ function bit[32] rSPSR() =
 }
 
 (** FUNCTION:shared/functions/system/ClearEventRegister *)
-val extern unit -> unit effect pure ClearEventRegister
+function unit ClearEventRegister () = not_implemented_extern("ClearEventRegister")
 (** FUNCTION:boolean ConditionHolds(bits(4) cond) *)
 
 function boolean effect {rreg} ConditionHolds((bit[4]) _cond) =
@@ -843,9 +846,9 @@ function boolean ELUsingAArch32((bit[2]) el) =
     false (* ARM: ELStateUsingAArch32(el, IsSecureBelowEL3()) *) (* FIXME: implement *)
 
 (** FUNCTION:shared/functions/system/EventRegisterSet *)
-val extern unit -> unit effect pure EventRegisterSet
+function unit EventRegisterSet () = not_implemented_extern("EventRegisterSet")
 (** FUNCTION:shared/functions/system/EventRegistered *)
-val extern unit -> boolean effect pure EventRegistered
+function boolean EventRegistered () = not_implemented_extern("EventRegistered")
 (** FUNCTION:shared/functions/system/HaveAArch32EL *)
 
 function boolean HaveAArch32EL((bit[2]) el) =
@@ -879,12 +882,11 @@ function boolean HaveEL((bit[2]) el) =
     true (*EL1 and EL0 must exist*)
   else {
 
-  switch el {
-    case EL2 -> IMPLEMENTATION_DEFINED.HaveEL2
-    case EL3 -> IMPLEMENTATION_DEFINED.HaveEL3
-    case _ -> {assert (false,None); false;}
+  if      el == EL2 then IMPLEMENTATION_DEFINED.HaveEL2
+  else if el == EL3 then IMPLEMENTATION_DEFINED.HaveEL3
+  else {assert (false,None); false};
   };
-}}
+}
 
 (** FUNCTION:boolean HighestELUsingAArch32() *)
 
@@ -902,7 +904,7 @@ function unit Hint_Yield() = ()
 val extern unit -> unit effect {barr} InstructionSynchronizationBarrier
 (** FUNCTION:shared/functions/system/InterruptPending *)
 
-val extern unit -> boolean effect pure InterruptPending
+function boolean InterruptPending () = not_implemented_extern("InterruptPending")
 
 (** FUNCTION:boolean IsSecure() *)
 
@@ -970,9 +972,9 @@ function boolean UsingAArch32() =
 }
 
 (** FUNCTION:shared/functions/system/WaitForEvent *)
-val extern unit -> unit effect pure WaitForEvent
+function unit WaitForEvent () = not_implemented_extern("WaitForEvent")
 (** FUNCTION:shared/functions/system/WaitForInterrupt *)
-val extern unit -> unit effect pure WaitForInterrupt
+function unit WaitForInterrupt () = not_implemented_extern("WaitForInterrupt")
 (** FUNCTION:shared/translation/translation/PAMax *)
 
 function uinteger PAMax() =
