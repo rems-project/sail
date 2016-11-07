@@ -1,3 +1,4 @@
+| `MIPSThreadStart -> `MIPSThreadStart
 | `MIPSRType  (op, rd, rs, rt)  -> `MIPSRType (op, map_reg rd, map_reg rs, map_reg rt)
 | `MIPSIType  (op, rs, rt, imm) -> `MIPSIType  (op, map_reg rs, map_reg rt, imm)
 | `MIPSShiftI (op, rd, rt, imm) -> `MIPSShiftI (op, map_reg rd, map_reg rt, imm)

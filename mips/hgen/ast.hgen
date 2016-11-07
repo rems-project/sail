@@ -1,3 +1,4 @@
+| `MIPSThreadStart
 | `MIPSRType of mipsRTypeOp * reg * reg * reg
 | `MIPSIType of mipsITypeOp * reg * reg * bit16
 | `MIPSShiftI of mipsShiftIOp * reg * reg * bit5

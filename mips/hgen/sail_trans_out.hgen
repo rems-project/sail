@@ -1,3 +1,4 @@
+| ("SYSCALL_THREAD_START", []) -> `MIPSThreadStart
 | ("ADD"   , [rs; rt; rd]) -> `MIPSRType (MIPSROpADD   , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))
 | ("ADDU"  , [rs; rt; rd]) -> `MIPSRType (MIPSROpADDU  , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))
 | ("AND"   , [rs; rt; rd]) -> `MIPSRType (MIPSROpAND   , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))

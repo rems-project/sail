@@ -326,6 +326,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       let (bit[64]) offset = (EXTS(imm : 0b00) + 4) in
       Dia := DIAFP_concrete (PC + offset);
     }
+    case (SYSCALL_THREAD_START) -> ()
 (*
 
     case (SYSCALL) =

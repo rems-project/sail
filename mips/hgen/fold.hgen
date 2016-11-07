@@ -1,3 +1,4 @@
+| `MIPSThreadStart -> (y_reg, y_sreg)
 | `MIPSRType  (op, rd, rs, rt)  -> fold_reg rt (fold_reg rs (fold_reg rd (y_reg, y_sreg)))
 | `MIPSIType  (op, rs, rt, imm) -> fold_reg rs (fold_reg rt (y_reg, y_sreg))
 | `MIPSShiftI (op, rd, rt, imm) -> fold_reg rt (fold_reg rd (y_reg, y_sreg))

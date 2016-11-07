@@ -1008,6 +1008,12 @@ function clause execute (BCMPZ(rs, imm, cmp, link, likely)) =
 (* SYSCALL/BREAK/WAIT/Trap                                                            *)
 (**************************************************************************************)
 
+(* Co-opt syscall 0xfffff for use as thread start in pccmem  *)
+union ast member unit SYSCALL_THREAD_START
+function clause decode (0b000000 : 0xfffff : 0b001100) =
+  Some(SYSCALL_THREAD_START)
+function clause execute (SYSCALL_THREAD_START) = ()
+
 union ast member unit SYSCALL
 function clause decode (0b000000 : (bit[20]) code : 0b001100) =
   Some(SYSCALL) (* code is ignored *)

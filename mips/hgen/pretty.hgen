@@ -1,4 +1,4 @@
-| `MIPSThreadStart -> "START" (* TODO *)
+| `MIPSThreadStart -> "syscall 0xfffff" (*  thread start *)
 | `MIPSStopFetching -> "STOP" (* TODO *)
 | `MIPSRType (op, rd,rs,rt) ->
       sprintf "%s %s,%s,%s" (pp_rtype_op op) (pp_reg rd) (pp_reg rs) (pp_reg rt)

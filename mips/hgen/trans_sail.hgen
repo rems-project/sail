@@ -1,3 +1,5 @@
+| `MIPSThreadStart ->
+  ("SYSCALL_THREAD_START", [], [])
 | `MIPSStopFetching ->
     ("ImplementationDefinedStopFetching",
       [],
