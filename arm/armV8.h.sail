@@ -136,6 +136,14 @@ function unit effect { escape } not_implemented((string) message) =
   exit message;
 }
 
+(* not_implemented_extern is used to indicate something ARM did not define
+   and we did not define yet either. Those functions used to be declared as
+   external but undefined there. *)
+function forall 'a. 'a effect { escape } not_implemented_extern((string) message) =
+{
+  exit message;
+}
+
 (* info is used to convey information to the user *)
 function unit effect pure info((string) message) = ()
 

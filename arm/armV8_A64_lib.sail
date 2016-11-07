@@ -145,11 +145,12 @@ function unit effect {rreg} AArch64_CheckForWFxTrap((bit[2]) target_el, (boolean
     assert((HaveEL(target_el)), None);
 
     (boolean) trap := false; (* ARM: uninitialized *)
-    switch target_el {
-        case EL1 -> trap := ((if is_wfe then SCTLR_EL1.nTWE else SCTLR_EL1.nTWI) == 0)
-        case EL2 -> trap := ((if is_wfe then HCR_EL2.TWE else HCR_EL2.TWI) == 1)
-        case EL3 -> trap := ((if is_wfe then SCR_EL3.TWE else SCR_EL3.TWI) == 1)
-    };
+
+    if      target_el == EL1 then trap := ((if is_wfe then SCTLR_EL1.nTWE else SCTLR_EL1.nTWI) == 0)
+    else if target_el == EL2 then trap := ((if is_wfe then HCR_EL2.TWE else HCR_EL2.TWI) == 1)
+    else if target_el == EL3 then trap := ((if is_wfe then SCR_EL3.TWE else SCR_EL3.TWI) == 1)
+    else {assert(false,None); ()};
+
 
     if trap then
         AArch64_WFxTrap(target_el, is_wfe);
@@ -514,11 +515,12 @@ function forall Nat 'N, 'N IN {32,64}. unit effect {rreg,wreg} wSP ((),(bit['N])
   if PSTATE_SP == 0 then
     SP_EL0 := ZeroExtend(value)
   else
-    switch PSTATE_EL {
-      case EL0 -> SP_EL0 := ZeroExtend(value)
-      case EL1 -> SP_EL1 := ZeroExtend(value)
-      case EL2 -> SP_EL2 := ZeroExtend(value)
-      case EL3 -> SP_EL3 := ZeroExtend(value)
+    let pstate_el = PSTATE_EL in {
+      if      pstate_el == EL0 then SP_EL0 := ZeroExtend(value)
+      else if pstate_el == EL1 then SP_EL1 := ZeroExtend(value)
+      else if pstate_el == EL2 then SP_EL2 := ZeroExtend(value)
+      else if pstate_el == EL3 then SP_EL3 := ZeroExtend(value)
+      else assert(false,None); ();
     }
 }
 
@@ -530,11 +532,12 @@ function bit['N] effect {rreg} rSP () =
   if PSTATE_SP == 0 then
     mask(SP_EL0)
   else
-    switch PSTATE_EL {
-      case EL0 -> mask(SP_EL0)
-      case EL1 -> mask(SP_EL1)
-      case EL2 -> mask(SP_EL2)
-      case EL3 -> mask(SP_EL3)
+    let pstate_el = PSTATE_EL in {
+      if      pstate_el == EL0 then mask(SP_EL0)
+      else if pstate_el == EL1 then mask(SP_EL1)
+      else if pstate_el == EL2 then mask(SP_EL2)
+      else if pstate_el == EL3 then mask(SP_EL3)
+      else {assert(false,None); mask(SP_EL3)}
     }
 }
 
@@ -600,12 +603,10 @@ function forall Nat 'N, 'N IN {8,16,32,64}. bit['N] effect {rreg} rX((reg_index)
 function bit[64] rELR((bit[2]) el) =
 {
   (bit[64]) r := 0; (* ARM: uninitialized *)
-  switch el {
-      case EL1 -> r := ELR_EL1
-      case EL2 -> r := ELR_EL2
-      case EL3 -> r := ELR_EL3
-      case _   -> Unreachable()
-  };
+  if      el == EL1 then r := ELR_EL1
+  else if el == EL2 then r := ELR_EL2
+  else if el == EL3 then r := ELR_EL3
+  else Unreachable();
   r;
 }
 
@@ -620,12 +621,10 @@ function bit[64] rELR'() =
 (** FUNCTION:SCTLRType SCTLR[bits(2) regime] *)
 
 function SCTLR_type effect {rreg} SCTLR ((bit[2]) regime) = {
-   switch regime {
-      case EL1 -> SCTLR_EL1
-      case EL2 -> SCTLR_EL2
-      case EL3 -> SCTLR_EL3
-      case _ -> {assert(false,Some("SCTLR_type unreachable")); SCTLR_EL1} (* ARM: Unreachabe() *)
-   }
+   if      regime == EL1 then SCTLR_EL1
+   else if regime == EL2 then SCTLR_EL2
+   else if regime == EL3 then SCTLR_EL3
+   else {assert(false,Some("SCTLR_type unreachable")); SCTLR_EL1} (* ARM: Unreachabe() *)
 }
 
 (** FUNCTION:SCTLRType SCTLR[] *)
@@ -798,7 +797,10 @@ function forall Nat 'M, Nat 'E, 'E IN {2,4,8,16,32,64}. (bit['M],bit['M]) Decode
 
   (* Compute log2 of element size *)
   (* 2^len must be in range [2, 'M] *)
-  ([|6|]) len := switch HighestSetBit([immN]:(NOT(imms))) { case -1 -> { assert (false,None); 0; } case ([|6|]) c -> c };
+  ([|6|]) len := switch HighestSetBit([immN]:(NOT(imms))) {
+    case None -> { assert (false,Some("DecodeBitMasks: HighestSetBit returned None")); 0; }
+    case (Some(c)) -> c
+  };
   if len < 1 then ReservedValue();
   assert((M >= lsl(1, len)),None);
 

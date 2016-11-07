@@ -166,7 +166,7 @@ val forall Nat 'N. implicit<'N> -> bit['N] effect pure Ones
 val forall Nat 'N, Nat 'M. bit['N] -> [:'M:] effect pure UInt
 (* val forall Nat 'N, Nat 'M, Nat 'K, 'M = 'N + -1, 'K = 2**'M. bit['N] -> [|'K * -1:'K + -1|] effect pure SInt *)
 val forall Nat 'N, Nat 'M. bit['N] -> [:'M:] effect pure SInt
-val forall Nat 'N. bit['N+1] -> [|-1:'N|] effect pure HighestSetBit
+val forall Nat 'N. bit['N+1] -> option<[|0:'N + -1|]> effect pure HighestSetBit
 val forall Nat 'N. bit['N] -> [|'N|] effect pure CountLeadingZeroBits
 val unit -> boolean effect {rreg} IsSecure
 val unit -> boolean effect {rreg} IsSecureBelowEL3
