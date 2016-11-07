@@ -814,8 +814,7 @@ let intern_reg_value v =
          (v.rv_dir = D_increasing)
 
 
-let extern_slice (d:direction) (start:nat) ((i,j):(integer*integer)) =
-  let (i,j) = (natFromInteger i,natFromInteger j) in
+let extern_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
   match d with
   (*This is the case the thread/concurrecny model expects, so no change needed*)
   | D_increasing -> (i,j)
@@ -833,13 +832,13 @@ let extern_reg_slice reg (i,j) =
   Reg_slice (name_of_reg reg) start dir (extern_slice dir start (i,j))
 
 let extern_reg_field_whole reg rfield = 
-  let (m,n) = register_field_indices reg rfield in
+  let (m,n) = register_field_indices_nat reg rfield in
   let start = start_of_reg_nat reg in
   let dir = dir_of_reg reg in
   Reg_field (name_of_reg reg) start dir rfield (extern_slice dir start (m,n))
             
 let extern_reg_field_slice reg rfield (i,j) = 
-  let (m,n) = register_field_indices reg rfield in
+  let (m,n) = register_field_indices_nat reg rfield in
   let start = start_of_reg_nat reg in
   let dir = dir_of_reg reg in
   Reg_f_slice (name_of_reg reg) start dir rfield
@@ -1399,6 +1398,12 @@ instance (ToFromInterpValue instruction_kind)
 end
 
 
+type regfp =
+  | RFull of (string)
+  | RSlice of (string * integer * integer)
+  | RSliceBit of (string * integer)
+  | RField of (string * string)
+
 let regfpToInterpValue = function
   | RFull v -> SI.V_ctor (SIA.Id_aux (SIA.Id "RFull") SIA.Unknown) (SIA.T_id "regfp") SI.C_Union (toInterpValue v)
   | RSlice v -> SI.V_ctor (SIA.Id_aux (SIA.Id "RSlice") SIA.Unknown) (SIA.T_id "regfp") SI.C_Union (toInterpValue v)
@@ -1420,23 +1425,53 @@ instance (ToFromInterpValue regfp)
   let fromInterpValue = regfpFromInterpValue
 end
 
-(*
-let rfp_to_reg reg_info direction = function
+
+let regfp_to_reg (reg_info : string -> maybe string -> (nat * nat * direction * (nat * nat))) = function
   | RFull name -> 
      let (start,length,direction,_) = reg_info name Nothing in
      Reg name start length direction
   | RSlice (name,i,j) ->
+     let i = natFromInteger i in
+     let j = natFromInteger j in
      let (start,length,direction,_) = reg_info name Nothing in
-     let slice = extern_slice direction (natFromInteger start) (i,j) in
+     let slice = extern_slice direction start (i,j) in
      Reg_slice name start direction slice
   | RSliceBit (name,i) ->
+     let i = natFromInteger i in
      let (start,length,direction,_) = reg_info name Nothing in
-     let slice = extern_slice direction (natFromInteger start) (i,i) in
+     let slice = extern_slice direction start (i,i) in
      Reg_slice name start direction slice
   | RField (name,field_name) ->
      let (start,length,direction,span) = reg_info name (Just field_name) in
-     let start = natFromInteger start in
-     let slice = extern_slice direction start (start,span) in
+     let slice = extern_slice direction start span in
      Reg_field name start direction field_name slice
 end
- *)
+
+
+type niafp = 
+  | NIAFP_successor
+  | NIAFP_concrete_address of vector bitU
+  | NIAFP_LR
+  | NIAFP_CTR
+  | NIAFP_register of regfp
+
+(* only for MIPS *)
+type diafp = 
+  | DIAFP_none
+  | DIAFP_concrete of vector bitU
+  | DIAFP_reg of regfp
+
+let niafp_to_nia reginfo = function
+  | NIAFP_successor -> NIA_successor
+  | NIAFP_concrete_address v -> NIA_concrete_address (address_of_bitv v)
+  | NIAFP_LR -> NIA_LR
+  | NIAFP_CTR -> NIA_CTR
+  | NIAFP_register r -> NIA_register (regfp_to_reg reginfo r)
+end
+
+let diafp_to_dia reginfo = function
+  | DIAFP_none -> DIA_none
+  | DIAFP_concrete v -> DIA_concrete_address (address_of_bitv v)
+  | DIAFP_reg r -> DIA_register (regfp_to_reg reginfo r)
+end
+

@@ -2791,8 +2791,8 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
       | Id_aux ((Id "barrier_kind"),_) -> empty
       | Id_aux ((Id "instruction_kind"),_) -> empty
       | Id_aux ((Id "regfp"),_) -> empty
-      (* | Id_aux ((Id "nia"),_) -> empty
-      | Id_aux ((Id "dia"),_) -> empty *)
+      | Id_aux ((Id "niafp"),_) -> empty
+      | Id_aux ((Id "diafp"),_) -> empty
       | _ ->
          let ar_doc = group (separate_map (break 1) (doc_type_union_lem regtypes) ar) in
          let typ_pp =

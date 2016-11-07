@@ -1,68 +1,3 @@
-(* iR : input registers,
- * oR : output registers,
- * aR : registers feeding into the memory address *)
-
-(* branch instructions currently are not writing to NIA *)
-
-typedef regfp = const union {
-   (string) RFull;
-   (string,nat,nat) RSlice;
-   (string,nat) RSliceBit;
-   (string,string) RField;
-}
-
-typedef regfps = list <regfp>
-
-typedef nia = bit[64]
-typedef nias = list <nia>
-
-typedef dia = const union {
-            DIA_none;
-  (bit[64]) DIA_concrete;
-  (regfp)   DIA_reg;
-}
-
-typedef read_kind = enumerate {
-  Read_plain;
-  Read_tag;
-  Read_reserve;
-  Read_acquire;
-  Read_exclusive;
-  Read_exclusive_acquire;
-  Read_stream
-}
-
-typedef write_kind = enumerate {
-  Write_plain;
-  Write_tag;
-  Write_conditional;
-  Write_release;
-  Write_exclusive;
-  Write_exclusive_release;
-}
-
-typedef barrier_kind = enumerate {
-  Barrier_Sync;
-  Barrier_LwSync;
-  Barrier_Eieio;
-  Barrier_Isync;
-  Barrier_DMB;
-  Barrier_DMB_ST;
-  Barrier_DMB_LD;
-  Barrier_DSB;
-  Barrier_DSB_ST;
-  Barrier_DSB_LD;
-  Barrier_ISB;
-}
-
-typedef instruction_kind = const union {
-  (barrier_kind) IK_barrier;
-  (read_kind) IK_mem_read;
-  (write_kind) IK_mem_write;
-  IK_cond_branch;
-  IK_simple
-}
-
 let (vector <0, 32, inc, string >) GPRs =
   [ "GPR00", "GPR01", "GPR02", "GPR03", "GPR04", "GPR05", "GPR06", "GPR07", "GPR08", "GPR09", "GPR10",
   "GPR11", "GPR12", "GPR13", "GPR14", "GPR15", "GPR16", "GPR17", "GPR18", "GPR19", "GPR20",
@@ -72,13 +7,13 @@ let (vector <0, 32, inc, string >) GPRs =
 let CIA_fp = RFull("CIA")
 let NIA_fp = RFull("NIA")
 
-function (regfps,regfps,regfps,nias,dia,instruction_kind) initial_analysis (instr) = {
+function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (instr) = {
   iR := [|| ||];
   oR := [|| ||];
   aR := [|| ||];
   ik := IK_simple;
   Nias := [|| ||];
-  Dia := DIA_none;
+  Dia := DIAFP_none;
 
   switch instr {
     case (DADDIU (rs, rt, imm)) -> {
@@ -355,33 +290,33 @@ function (regfps,regfps,regfps,nias,dia,instruction_kind) initial_analysis (inst
     case (J(offset)) -> {
       (* XXX actually unconditional jump *)
       (*ik := IK_cond_branch;*)
-      Dia := DIA_concrete((PC + 4)[63..28] : offset : 0b00);
+      Dia := DIAFP_concrete((PC + 4)[63..28] : offset : 0b00);
     }
     case (JAL(offset)) -> {
       (* XXX actually unconditional jump *)
       (*ik := IK_cond_branch;*)
       oR := RFull("GPR31") :: oR;
-      Dia := DIA_concrete((PC + 4)[63..28] : offset : 0b00);
+      Dia := DIAFP_concrete((PC + 4)[63..28] : offset : 0b00);
     }
     case (JR(rs)) -> {
       (* XXX actually unconditional jump *)
       (*ik := IK_cond_branch;*)
       iR := RFull(GPRs[rs]) :: iR;
-      Dia := DIA_reg(RFull(GPRs[rs]));
+      Dia := DIAFP_reg(RFull(GPRs[rs]));
     }
     case (JALR(rs, rd)) -> {
       (* XXX actually unconditional jump *)
       (*ik := IK_cond_branch;*)
       iR := RFull(GPRs[rs]) :: iR;
       oR := RFull("GPR31") :: oR;
-      Dia := DIA_reg(RFull(GPRs[rs]));
+      Dia := DIAFP_reg(RFull(GPRs[rs]));
     }
     case (BEQ(rs, rd, imm, ne, likely)) -> {
       ik := IK_cond_branch;
       if rs == 0 then () else iR := RFull(GPRs[rs]) :: iR;
       if rd == 0 then () else iR := RFull(GPRs[rd]) :: iR;
       let (bit[64]) offset = (EXTS(imm : 0b00) + 4) in
-      Dia := DIA_concrete (PC + offset);
+      Dia := DIAFP_concrete (PC + offset);
     }
     case (BCMPZ(rs, imm, cmp, link, likely)) -> {
       ik := IK_cond_branch;
@@ -389,7 +324,7 @@ function (regfps,regfps,regfps,nias,dia,instruction_kind) initial_analysis (inst
       if link then
         oR := RFull("GPR31") :: oR;
       let (bit[64]) offset = (EXTS(imm : 0b00) + 4) in
-      Dia := DIA_concrete (PC + offset);
+      Dia := DIAFP_concrete (PC + offset);
     }
 (*
 

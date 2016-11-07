@@ -66,9 +66,9 @@ let read_reg_aux reg =
 let read_reg reg =
   read_reg_aux (extern_reg_whole reg)
 let read_reg_range reg i j =
-  read_reg_aux (extern_reg_slice reg (i,j))
+  read_reg_aux (extern_reg_slice reg (natFromInteger i,natFromInteger j))
 let read_reg_bit reg i =
-  read_reg_aux (extern_reg_slice reg (i,i)) >>= fun v ->
+  read_reg_aux (extern_reg_slice reg (natFromInteger i,natFromInteger i)) >>= fun v ->
   return (extract_only_bit v)
 let read_reg_field reg regfield =
   read_reg_aux (extern_reg_field_whole reg regfield)
@@ -84,9 +84,10 @@ let write_reg_aux reg_name v =
 let write_reg reg v =
   write_reg_aux (extern_reg_whole reg) v
 let write_reg_range reg i j v =
-  write_reg_aux (extern_reg_slice reg (i,j)) v
+  write_reg_aux (extern_reg_slice reg (natFromInteger i,natFromInteger j)) v
 let write_reg_bit reg i bit =
-  write_reg_aux (extern_reg_slice reg (i,i)) (Vector [bit] i (is_inc_of_reg reg))
+  let iN = natFromInteger i in
+  write_reg_aux (extern_reg_slice reg (iN,iN)) (Vector [bit] i (is_inc_of_reg reg))
 let write_reg_field reg regfield v =
   write_reg_aux (extern_reg_field_whole reg regfield) v
 let write_reg_bitfield reg regfield bit =

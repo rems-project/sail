@@ -506,18 +506,18 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
          | Just addr -> addr
          | Nothing -> failwith "get_nia encountered invalid address" end in
        let dia_to_dia = function
-         | Interp.V_ctor (Id_aux (Id "DIA_none") _) _ _ _ -> DIA_none
-         | Interp.V_ctor (Id_aux (Id "DIA_concrete") _) _ _ address ->
+         | Interp.V_ctor (Id_aux (Id "DIAFP_none") _) _ _ _ -> DIA_none
+         | Interp.V_ctor (Id_aux (Id "DIAFP_concrete") _) _ _ address ->
             DIA_concrete_address (get_addr address)
-         | Interp.V_ctor (Id_aux (Id "DIA_reg") _) _ _ reg -> DIA_register (reg_to_reg_name reg) 
+         | Interp.V_ctor (Id_aux (Id "DIAFP_reg") _) _ _ reg -> DIA_register (reg_to_reg_name reg) 
          | _ -> failwith "Register footprint analysis did not return dia of expected type" end in
        let nia_to_nia = function
-         | Interp.V_ctor (Id_aux (Id "NIA_successor") _) _ _ _-> NIA_successor
-         | Interp.V_ctor (Id_aux (Id "NIA_concrete_address") _) _ _ address ->
+         | Interp.V_ctor (Id_aux (Id "NIAFP_successor") _) _ _ _-> NIA_successor
+         | Interp.V_ctor (Id_aux (Id "NIAFP_concrete_address") _) _ _ address ->
             NIA_concrete_address (get_addr address)
-         | Interp.V_ctor (Id_aux (Id "NIA_LR") _) _ _ _ -> NIA_LR
-         | Interp.V_ctor (Id_aux (Id "NIA_CTR") _) _ _ _ -> NIA_CTR
-         | Interp.V_ctor (Id_aux (Id "NIA_register") _) _ _ reg ->
+         | Interp.V_ctor (Id_aux (Id "NIAFP_LR") _) _ _ _ -> NIA_LR
+         | Interp.V_ctor (Id_aux (Id "NIAFP_CTR") _) _ _ _ -> NIA_CTR
+         | Interp.V_ctor (Id_aux (Id "NIAFP_register") _) _ _ reg ->
             NIA_register (reg_to_reg_name reg)
          | _ -> failwith "Register footprint analysis did not return nia of expected type" end in
        let ik_to_ik = function
