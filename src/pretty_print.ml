@@ -2266,7 +2266,7 @@ let doc_exp_lem, doc_let_lem =
                  (prefix 2 1)
                    (string "write_reg_field_range")
                    (align (doc_lexp_deref_lem regtypes le ^^ space^^
-                             doc_id_lem id ^/^ expY e2 ^/^ expY e3 ^/^ expY e))
+                             string_lit (doc_id_lem id) ^/^ expY e2 ^/^ expY e3 ^/^ expY e))
             | _ ->
                (prefix 2 1)
                  (string "write_reg_range")
@@ -2651,6 +2651,7 @@ let doc_exp_lem, doc_let_lem =
                 | "multiply" -> aux "*"
 
                 | "quot" -> aux2 "quot"
+                | "quot_signed" -> aux2 "quot"
                 | "modulo" -> aux2 "modulo"
                 | "add_vec" -> aux2 "add_VVV"
                 | "add_vec_signed" -> aux2 "addS_VVV"
@@ -3018,7 +3019,8 @@ let doc_dec_lem (DEC_aux (reg,(l,annot))) =
      (match annot with
      | Base((_,t),_,_,_,_,_) ->
        (match t.t with
-        | Tapp("register", [TA_typ {t= Tapp("vector", [TA_nexp start; TA_nexp size; TA_ord order; TA_typ itemt])}]) ->
+        | Tapp("register", [TA_typ {t= Tapp("vector", [TA_nexp start; TA_nexp size; TA_ord order; TA_typ itemt])}])
+        | Tapp("register", [TA_typ {t= Tabbrev(_,{t=Tapp("vector", [TA_nexp start; TA_nexp size; TA_ord order; TA_typ itemt])})}]) ->
           (match itemt.t,start.nexp,size.nexp with
            | Tid "bit", Nconst start, Nconst size ->
              let o = if order.order = Oinc then "true" else "false" in
@@ -3048,8 +3050,8 @@ let doc_spec_lem regtypes (VS_aux (valspec,annot)) =
   match valspec with
   | VS_extern_no_rename _
   | VS_extern_spec _ -> empty (* ignore these at the moment *)
-  | VS_val_spec (typschm,id) ->
-     separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem regtypes typschm] ^/^ hardline
+  | VS_val_spec (typschm,id) -> empty
+(* separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem regtypes typschm] ^/^ hardline *)
 
 
 let doc_def_lem regtypes def = match def with

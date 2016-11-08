@@ -267,6 +267,8 @@ let hardware_quot (a:integer) (b:integer) : integer =
   then (a/b) + 1
   else a/b
 
+let quot_signed = hardware_quot
+
 
 let signed_big = signed
 
@@ -587,6 +589,11 @@ val repeat : forall 'a. list 'a -> integer -> list 'a
 let rec repeat xs n =
   if n = 0 then []
   else xs ++ repeat xs (n-1)
+
+(*
+let duplicate bit length =
+  Vector (repeat [bit] length) (if dir then 0 else length - 1) dir
+ *)
 
 let compare_op op (l,r) = bool_to_bit (op l r)
 

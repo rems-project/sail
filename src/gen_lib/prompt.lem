@@ -32,8 +32,8 @@ let inline (>>=) = bind
 val (>>) : forall 'b. M unit -> M 'b -> M 'b
 let inline (>>) m n = m >>= fun _ -> n
 
-val exit : forall 'a. string -> M 'a
-let exit s = Fail (Just s)
+val exit : forall 'a 'b. 'b -> M 'a
+let exit s = Fail Nothing
 
 val read_mem : end_flag -> bool -> read_kind -> vector bitU -> integer -> M (vector bitU)
 let read_mem endian dir rk addr sz =
@@ -93,6 +93,9 @@ let write_reg_field reg regfield v =
 let write_reg_bitfield reg regfield bit =
   write_reg_aux (extern_reg_field_whole reg regfield)
                 (Vector [bit] 0 (is_inc_of_reg reg))
+let write_reg_field_range reg regfield i j v =
+  write_reg_aux (extern_reg_field_slice reg regfield (natFromInteger i,natFromInteger j)) v
+
 
 
 val barrier : barrier_kind -> M unit

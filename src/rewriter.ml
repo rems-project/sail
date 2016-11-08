@@ -1596,7 +1596,10 @@ let rewrite_defs_letbind_effects  =
       k (rewrap (E_comment str))
     | E_comment_struc exp' ->
        n_exp exp' (fun exp' ->
-       k (rewrap (E_comment_struc exp')))
+               k (rewrap (E_comment_struc exp')))
+    | E_return exp' ->
+       n_exp_name exp' (fun exp' ->
+       k (rewrap (E_return exp')))
     | E_internal_plet _ -> failwith "E_internal_plet should not be here yet" in
 
   let rewrite_fun _ (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),fdannot)) = 
