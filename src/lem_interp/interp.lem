@@ -14,51 +14,6 @@ open import Instruction_extractor
 
 type tannot = Interp_utilities.tannot
 
-type decode_error = 
-  | Unsupported_instruction_error of instruction
-  | Not_an_instruction_error of opcode
-  | Internal_error of string
-
-
-let decode_error_compare e1 e2 =
-  match (e1, e2) with
-  | (Unsupported_instruction_error i1, Unsupported_instruction_error i2)
-      -> defaultCompare i1 i2
-  | (Unsupported_instruction_error _, _) -> LT
-  | (_, Unsupported_instruction_error _) -> GT
-
-  | (Not_an_instruction_error o1, Not_an_instruction_error o2) -> defaultCompare o1 o2
-  | (Not_an_instruction_error _, _) -> LT
-  | (_, Not_an_instruction_error _) -> GT
-
-  | (Internal_error s1, Internal_error s2) -> compare s1 s2
-  (* | (Internal_error _, _) -> LT *)
-  (* | (_, Internal_error _) -> GT *)
-  end
-
-let decode_error_less e1 e2       = decode_error_compare e1 e2 =  LT
-let decode_error_less_eq e1 e2    = decode_error_compare e1 e2 <> GT
-let decode_error_greater e1 e2    = decode_error_compare e1 e2 =  GT
-let decode_error_greater_eq e1 e2 = decode_error_compare e1 e2 <> LT
-
-instance (Ord decode_error)
-  let compare = decode_error_compare
-  let (<)  = decode_error_less
-  let (<=) = decode_error_less_eq
-  let (>)  = decode_error_greater
-  let (>=) = decode_error_greater_eq
-end
-
-let decode_error_equal e1 e2 = (decode_error_compare e1 e2) = EQ
-let decode_error_inequal e1 e2 = not (decode_error_equal e1 e2)
-
-instance  (Eq decode_error)
-  let (=)  = decode_error_equal
-  let (<>) = decode_error_inequal
-end
-
-
-
 val debug_print : string -> unit
 declare ocaml target_rep function debug_print s = `Printf.eprintf` "%s" s
 

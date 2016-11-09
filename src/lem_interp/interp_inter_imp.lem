@@ -307,7 +307,7 @@ type interp_value_helper_mode = Ivh_translate | Ivh_decode | Ivh_unsupported | I
 type interp_value_return =
   | Ivh_value of Interp.value
   | Ivh_value_after_exn of Interp.value
-  | Ivh_error of Interp.decode_error
+  | Ivh_error of decode_error
 
 let rec interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen thunk =
   let errk_str = match ivh_mode with
@@ -331,18 +331,18 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
             | Interp.V_ctor (Id_aux (Id "Some") _) _ _ vinstr -> (Ivh_value vinstr,events_out)
             | Interp.V_ctor (Id_aux (Id "None") _) _ _ _ ->
               (match (ivh_mode,arg) with
-               | (Ivh_decode, (Just arg)) -> (Ivh_error (Interp.Not_an_instruction_error arg), events_out)
-               | (Ivh_illegal, (Just arg)) -> (Ivh_error (Interp.Not_an_instruction_error arg), events_out)
-               | (Ivh_unsupported, _) -> (Ivh_error (Interp.Unsupported_instruction_error instr), events_out)
+               | (Ivh_decode, (Just arg)) -> (Ivh_error (Sail_impl_base.Not_an_instruction_error arg), events_out)
+               | (Ivh_illegal, (Just arg)) -> (Ivh_error (Sail_impl_base.Not_an_instruction_error arg), events_out)
+               | (Ivh_unsupported, _) -> (Ivh_error (Sail_impl_base.Unsupported_instruction_error instr), events_out)
                | _ -> Assert_extra.failwith "Reached unreachable pattern" end)
-            | _ -> (Ivh_error (Interp.Internal_error ("Value not an option for " ^ errk_str)), events_out) end) end)
-    | (Interp.Error l msg,_,_) -> (Ivh_error (Interp.Internal_error msg), events_out)
+            | _ -> (Ivh_error (Sail_impl_base.Internal_error ("Value not an option for " ^ errk_str)), events_out) end) end)
+    | (Interp.Error l msg,_,_) -> (Ivh_error (Sail_impl_base.Internal_error msg), events_out)
     | (Interp.Action (Interp.Return value) stack,_,_) ->
       interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
         (fun _ -> Interp.resume mode stack (Just value))
     | (Interp.Action (Interp.Call_extern i value) stack,_,_) ->
       match List.lookup i (Interp_lib.library_functions direction) with
-        | Nothing -> (Ivh_error (Interp.Internal_error ("External function not available " ^ i)), events_out)
+        | Nothing -> (Ivh_error (Sail_impl_base.Internal_error ("External function not available " ^ i)), events_out)
         | Just f  ->
           interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
                                  (fun _ -> Interp.resume mode stack (Just (f value)))
@@ -350,8 +350,8 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
     | (Interp.Action (Interp.Fail v) stack, _, _) ->
       match (Interp.detaint v) with
       | Interp.V_ctor (Id_aux (Id "Some") _) _ _ (Interp.V_lit (L_aux (L_string s) _)) ->
-        (Ivh_error (Interp.Internal_error ("Assert failed: " ^ s)), events_out)
-      | _ -> (Ivh_error (Interp.Internal_error "Assert failed"), events_out) end
+        (Ivh_error (Sail_impl_base.Internal_error ("Assert failed: " ^ s)), events_out)
+      | _ -> (Ivh_error (Sail_impl_base.Internal_error "Assert failed"), events_out) end
     | (Interp.Action (Interp.Exit exp) stack,_,_) ->
       interp_to_value_helper arg ivh_mode err_str instr direction registers events true
         (fun _ -> Interp.resume mode (Interp.set_in_context stack exp) Nothing)
@@ -361,7 +361,7 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
         | Interp.SubReg (Id_aux (Id i) _) (Interp.Reg (Id_aux (Id i2) _) _ _) _ -> i2 ^ "." ^ i
         | _ -> Assert_extra.failwith "Reg not following expected structure" end in
       let err_value =
-        (Ivh_error (Interp.Internal_error ("Register read of "^ rname^" request in a " ^ errk_str ^ " of " ^ err_str)),
+        (Ivh_error (Sail_impl_base.Internal_error ("Register read of "^ rname^" request in a " ^ errk_str ^ " of " ^ err_str)),
         events_out) in
       (match registers with
         | Nothing -> err_value
@@ -380,14 +380,14 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
       interp_to_value_helper arg ivh_mode err_str instr direction registers ((E_write_reg ext_reg reg_value)::events)
         exn_seen (fun _ -> Interp.resume mode stack Nothing)
     | (Interp.Action (Interp.Read_mem _ _ _) _,_,_) ->
-      (Ivh_error (Interp.Internal_error ("Read memory request in a " ^ errk_str)), events_out)
+      (Ivh_error (Sail_impl_base.Internal_error ("Read memory request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_mem _ _ _ _) _,_,_) ->
-      (Ivh_error (Interp.Internal_error ("Write memory request in a " ^ errk_str)), events_out)
+      (Ivh_error (Sail_impl_base.Internal_error ("Write memory request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_ea _ _) _,_,_) ->
-      (Ivh_error (Interp.Internal_error ("Write ea request in a " ^ errk_str)), events_out)
+      (Ivh_error (Sail_impl_base.Internal_error ("Write ea request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_memv _ _ _) _,_,_) ->
-      (Ivh_error (Interp.Internal_error ("Write memory value request in a " ^ errk_str)), events_out)
-    | _ -> (Ivh_error (Interp.Internal_error ("Non expected action in a " ^ errk_str)), events_out)
+      (Ivh_error (Sail_impl_base.Internal_error ("Write memory value request in a " ^ errk_str)), events_out)
+    | _ -> (Ivh_error (Sail_impl_base.Internal_error ("Non expected action in a " ^ errk_str)), events_out)
 end
 
 let call_external_functions direction outcome = 
@@ -432,7 +432,7 @@ let translate_address top_level end_flag thunk_name registers address =
   | Ivh_value_after_exn _ ->
     (Nothing, events)
   | Ivh_error err -> match err with
-     | Interp.Internal_error msg -> Assert_extra.failwith msg
+     | Sail_impl_base.Internal_error msg -> Assert_extra.failwith msg
      | _ -> Assert_extra.failwith "Not an internal error either" end 
 end
 
@@ -574,7 +574,7 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
      | _ -> Assert_extra.failwith "Analysis did not return a four-tuple of lists" end)
   | Ivh_value_after_exn _ -> Assert_extra.failwith "Instruction analysis failed"
   | Ivh_error err -> match err with
-     | Interp.Internal_error msg -> Assert_extra.failwith msg
+     | Sail_impl_base.Internal_error msg -> Assert_extra.failwith msg
      | _ -> Assert_extra.failwith "Not an internal error either" end 
 end
 

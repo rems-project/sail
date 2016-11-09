@@ -158,12 +158,12 @@ val initial_instruction_state : context -> string -> list register_value -> inst
 
 type instruction_or_decode_error =
   | IDE_instr of instruction * Interp.value
-  | IDE_decode_error of Interp.decode_error
+  | IDE_decode_error of decode_error
 
 (** propose to remove the following type and use the above instead *)
 type i_state_or_error =
   | Instr of instruction * instruction_state
-  | Decode_error of Interp.decode_error
+  | Decode_error of decode_error
 
 
 (** PS:I agree. propose to remove this: Function to decode an instruction and build the state to run it*)
