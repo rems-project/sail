@@ -337,6 +337,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
 *)
     case (Load(width, signed, linked, base, rt, offset)) -> {
       ik := IK_mem_read (if linked then Read_reserve else Read_plain);
+      if linked then oR := RFull("CP0LLBit")::RFull("CP0LLAddr")::oR else ();
       if base == 0 then () else aR := RFull(GPRs[base]) :: aR;
       iR := aR;
       if rt == 0 then () else oR := RFull(GPRs[rt]) :: oR;
@@ -345,6 +346,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       ik := IK_mem_write(if conditional then Write_conditional else Write_plain);
       if base == 0 then () else aR := RFull(GPRs[base]) :: aR;
       iR := aR;
+      if conditional then iR := RFull("CP0LLBit")::iR else ();
       if rt == 0 then () else iR := RFull(GPRs[rt]) :: iR;
     }
     case (LWL(base, rt, offset)) -> {
