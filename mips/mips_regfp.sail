@@ -347,6 +347,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       if base == 0 then () else aR := RFull(GPRs[base]) :: aR;
       iR := aR;
       if conditional then iR := RFull("CP0LLBit")::iR else ();
+      if (conditional & (rt != 0)) then oR := RFull(GPRs[rt])::oR else ();
       if rt == 0 then () else iR := RFull(GPRs[rt]) :: iR;
     }
     case (LWL(base, rt, offset)) -> {
