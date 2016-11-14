@@ -941,11 +941,33 @@ let rec combine_typs ts =
     let t' = combine_typs ts in
     match (t,t') with 
       | (_,T_var _) -> t
-      | ((T_app "range" (T_args [T_arg_nexp (Ne_const n1); T_arg_nexp (Ne_const r1)])),
-         (T_app "range" (T_args [T_arg_nexp (Ne_const n2); T_arg_nexp (Ne_const r2)]))) ->
-        let (smaller,larger,larger_r) = if n1 < n2 then (n1,n2,r2) else (n2,n1,r1) in
-        let r = (larger + larger_r) - smaller in
-        T_app "range" (T_args [T_arg_nexp (Ne_const smaller); T_arg_nexp (Ne_const r)])
+      | ((T_app "range" (T_args [T_arg_nexp (Ne_const bot1); T_arg_nexp (Ne_const top1)])),
+         (T_app "range" (T_args [T_arg_nexp (Ne_const bot2); T_arg_nexp (Ne_const top2)]))) ->
+        let (smallest,largest) =
+          if bot1 <= bot2
+          then if top1 <= top2 then (bot1, top2) else (bot1, top1)
+          else if top1 <= top2 then (bot2, top2) else (bot2, top1) in
+        T_app "range" (T_args [T_arg_nexp (Ne_const smallest); T_arg_nexp (Ne_const largest)])
+      | ((T_app "atom" (T_args [T_arg_nexp (Ne_const a1);])), (T_app "atom" (T_args [T_arg_nexp (Ne_const a2);]))) ->
+        if a1 = a2
+        then t
+        else
+          let (smaller,larger) = if a1 < a2 then (a1,a2) else (a2,a1) in
+          T_app "range" (T_args [T_arg_nexp (Ne_const smaller); T_arg_nexp (Ne_const larger)])
+      | (T_app "range" (T_args [T_arg_nexp (Ne_const bot); T_arg_nexp (Ne_const top)]),
+         T_app "atom" (T_args [T_arg_nexp (Ne_const a)])) ->
+        if bot <= a && a <= top
+        then t
+        else if bot <= a && top <= a
+        then T_app "range" (T_args [T_arg_nexp (Ne_const bot); T_arg_nexp (Ne_const a)])
+        else T_app "range" (T_args [T_arg_nexp (Ne_const a); T_arg_nexp (Ne_const top)])
+      | (T_app "atom" (T_args [T_arg_nexp (Ne_const a)]),
+         T_app "range" (T_args [T_arg_nexp (Ne_const bot); T_arg_nexp (Ne_const top)])) ->
+        if bot <= a && a <= top
+        then t
+        else if bot <= a && top <= a
+        then T_app "range" (T_args [T_arg_nexp (Ne_const bot); T_arg_nexp (Ne_const a)])
+        else T_app "range" (T_args [T_arg_nexp (Ne_const a); T_arg_nexp (Ne_const top)])        
       | ((T_app "vector" (T_args [T_arg_nexp (Ne_const b1); T_arg_nexp (Ne_const r1); 
                                    T_arg_order (Ord_aux o1 _); T_arg_typ t1])),
          (T_app "vector" (T_args [T_arg_nexp (Ne_const b2); T_arg_nexp (Ne_const r2); 
@@ -980,12 +1002,12 @@ let rec val_typ v =
     | V_lit (L_aux lit _) ->
       match lit with
         | L_unit -> T_id "unit"
-        | L_true -> T_id "bool"
-        | L_false -> T_id "bool"
+        | L_true -> T_id "bit"
+        | L_false -> T_id "bit"
         | L_one -> T_id "bit"
         | L_zero -> T_id "bit"
         | L_string _ -> T_id "string"
-        | L_num n -> T_app "range" (T_args [T_arg_nexp (Ne_const n); T_arg_nexp (Ne_const 0)])
+        | L_num n -> T_app "atom" (T_args [T_arg_nexp (Ne_const n);])
         | L_undef -> T_var "fresh"
         | L_hex _ -> Assert_extra.failwith "literal hex not removed"
         | L_bin _ -> Assert_extra.failwith "literal bin not removed"

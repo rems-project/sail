@@ -751,45 +751,45 @@ defns
 check_lit :: '' ::=
  
 defn
-t |- lit : t' => exp , S_N  :: :: check_lit :: check_lit_ 
+widening , t |- lit : t' => exp , S_N  :: :: check_lit :: check_lit_ 
 {{ com Typing literal constants, coercing to expected type t }}
 by
  
 
  ------------------------------------------------------------ :: num
-range <ne ne'>  |- num : atom < num > => num , { ne <= num, num <= ne' }
+widening, range <ne ne'>  |- num : atom < num > => num , { ne <= num, num <= ne' }
 
  ------------------------------------------------------------ :: numToVec
-vector <ne ne' order bit>  |- num : atom < num > => to_vec num , { num + one <= 2**ne' }
+widening, vector <ne ne' order bit>  |- num : atom < num > => to_vec num , { num + one <= 2**ne' }
 
  ------------------------------------------------------------ :: numbitzero
- bit  |- numZero : atom < zero > => bitzero, {}
+widening, bit  |- numZero : atom < zero > => bitzero, {}
 
  ------------------------------------------------------------ :: numbitone
- bit  |- numOne : atom < one > => bitone, {}
+widening, bit  |- numOne : atom < one > => bitone, {}
  
  ------------------------------------------------------------- :: string
- string |- :L_string: string : :T_string_typ: string => :E_lit: string, {}
+widening, string |- :L_string: string : :T_string_typ: string => :E_lit: string, {}
 
  ne == bitlength(hex)
  ------------------------------------------------------------ :: hex
- vector<ne1 ne2 order bit> |- hex : vector< ne1 ne order bit> => hex, {ne=ne2}
+widening, vector<ne1 ne2 order bit> |- hex : vector< ne1 ne order bit> => hex, {ne=ne2}
 
 ne == bitlength(bin)
  ------------------------------------------------------------ :: bin 
-vector<ne1 ne2 order bit> |- bin : vector< ne1 ne order bit> => bin, {ne=ne2}
+widening,vector<ne1 ne2 order bit> |- bin : vector< ne1 ne order bit> => bin, {ne=ne2}
 
  ------------------------------------------------------------ :: unit
-unit |- () : unit => unit, {}
+widening, unit |- () : unit => unit, {}
 
  ------------------------------------------------------------ :: bitzero
-bit |- bitzero : bit => bitzero, {}
+widening, bit |- bitzero : bit => bitzero, {}
 
  ------------------------------------------------------------ :: bitone
-bit  |- bitone : bit => bitzero, {}
+widening, bit  |- bitone : bit => bitzero, {}
 
 ------------------------------------------------------------ :: undef
-t |- undefined : t => undefined, {}
+widening, t |- undefined : t => undefined, {}
 
 defns
 check_pat :: '' ::=
@@ -800,7 +800,7 @@ E , t |- pat : t' gives pat' , E_t , S_N :: :: check_pat :: check_pat_
 by
 
 lit NOTEQ undefined
-t |- lit : u => lit',S_N
+(none,none),t |- lit : u => lit',S_N
 E_d,(nums,none) |- u ~< t: t', S_N'
 ------------------------------------------------------------ :: lit
 <E_t,E_d>, t |- lit : t' gives lit', {}, S_N u+ S_N'
@@ -1143,87 +1143,92 @@ E,t,widening |- lit : u gives exp,<S_N,pure>,E_t
 <E_t,E_d>,unit,widening |- nondet { exp ; </expi//i/> } : unit gives {exp'; </expi'//i/>}, I1 u+ I2, E_t
 
 E,t,widening |- exp:u gives exp', I1, E_t1
-E |- lexp:t gives lexp', I2, E_t2
+E,widening |- lexp:t gives lexp', I2, E_t2
 ------------------------------------------------------------ :: assign
 E,unit,widening |- lexp := exp : unit gives lexp' := exp', I u+ I2, E_t2
 
 defn
-E |- lexp : t gives lexp' , I , E_t :: :: check_lexp :: check_lexp_
+E , widening |- lexp : t gives lexp' , I , E_t :: :: check_lexp :: check_lexp_
 {{ com Check the left hand side of an assignment }}
 by
 
 E_t(id) gives register<t>
 ---------------------------------------------------------- :: wreg
-<E_t,E_d> |- id : t gives id,<{},{ wreg }>, E_t
+<E_t,E_d>,widening |- id : t gives id,<{},{ wreg }>, E_t
 
 E_t(id) gives reg<t>
 ---------------------------------------------------------- :: wlocl
-<E_t,E_d> |- id : t gives id,Ie, E_t
+<E_t,E_d>,widening |- id : t gives id,Ie, E_t
 
 E_t(id) gives t
 ---------------------------------------------------------- :: var
-<E_t,E_d> |- id : t gives id,Ie,E_t
+<E_t,E_d>,widening |- id : t gives id,Ie,E_t
 
 id NOTIN dom(E_t)
 ---------------------------------------------------------- :: wnew
-<E_t,E_d> |- id : t gives id,Ie, {id |-> reg<t>}
+<E_t,E_d>,widening |- id : t gives id,Ie, {id |-> reg<t>}
 
 E_t(id) gives register<t>
 E_d |- typ ~> u
-E_d |- u ~< t, S_N
+E_d,widening |- u ~< t : u, S_N
 ---------------------------------------------------------- :: wregCast
-<E_t,E_d> |- (typ) id : t gives id,<S_N,{ wreg }>, E_t
+<E_t,E_d>,widening |- (typ) id : t gives id,<S_N,{ wreg }>, E_t
 
 E_t(id) gives reg<t>
 E_d |- typ ~> u
-E_d |- u ~< t, S_N
+E_d,widening |- u ~< t : u, S_N
 ---------------------------------------------------------- :: wloclCast
-<E_t,E_d> |- (typ) id : t gives id,<S_N,pure>, E_t
+<E_t,E_d>,widening |- (typ) id : t gives id,<S_N,pure>, E_t
 
 E_t(id) gives t
 E_d |- typ ~> u
-E_d |- u ~< t, S_N
+E_d,widening |- u ~< t : u, S_N
 ---------------------------------------------------------- :: varCast
-<E_t,E_d> |- (typ) id : t gives id,<S_N,pure>,E_t
+<E_t,E_d>,widening |- (typ) id : t gives id,<S_N,pure>,E_t
 
 id NOTIN dom(E_t)
 E_d |- typ ~> t
 ---------------------------------------------------------- :: wnewCast
-<E_t,E_d> |- (typ) id : t gives id,Ie, {id |-> reg<t>}
+<E_t,E_d>, widening |- (typ) id : t gives id,Ie, {id |-> reg<t>}
 
 
-E_t(id) gives E_k, S_N, Extern, t1 -> t {</base_effecti//i/>, wmem, </base_effect'j//j/>}
-<E_t,E_d>,t1 |- exp : u1 gives exp',I,E_t1
+E_t(id) gives E_k, S_N, Extern, (t1, .. ,tn, t) -> t' {</base_effecti//i/>, wmem, </base_effect'j//j/>}
+<E_t,E_d>,(t1, .. , tn),widening |- exp : u1 gives exp',I,E_t1
 ---------------------------------------------------------- :: wmem
-<E_t,E_d> |- :LEXP_memory: id(exp) : t gives :LEXP_memory: id(exp'),I u+ <S_N,{wmem}>,E_t
+<E_t,E_d>,widening |- :LEXP_memory: id(exp) : t gives :LEXP_memory: id(exp'),I u+ <S_N,{wmem}>,E_t
 
-E,atom<ne> |- exp : u gives exp',I1,E_t
-E |- lexp : vector<ne1 ne2 inc t> gives lexp',I2,E_t
+E_t(id) gives E_k, S_N, Extern, (t1, ..,tn,t) -> t' {</base_effecti//i/>, wreg, </base_effect'j//j/>}
+<E_t,E_d>,(t1,..,tn),widening |- exp : u1 gives exp',I,E_t1
+---------------------------------------------------------- :: wregCall
+<E_t,E_d>,widening |- :LEXP_memory: id(exp) : t gives :LEXP_memory: id(exp'),I u+ <S_N,{wreg}>,E_t
+
+E,atom<ne>,(nums,none) |- exp : u gives exp',I1,E_t
+E,(none,vectors) |- lexp : vector<ne1 ne2 inc t> gives lexp',I2,E_t
 ---------------------------------------------------------- :: wbitInc
-E |- lexp [exp] : t gives lexp'[exp'], I1 u+ I2 u+ <{ne1 <= ne, ne1 + ne2 >= ne},pure>,E_t
+E,widening |- lexp [exp] : t gives lexp'[exp'], I1 u+ I2 u+ <{ne1 <= ne, ne1 + ne2 >= ne},pure>,E_t
 
-E,atom<ne> |- exp : u gives exp',I1,E_t
-E |- lexp : vector<ne1 ne2 dec t> gives lexp',I2,E_t
+E,atom<ne>,(nums,none) |- exp : u gives exp',I1,E_t
+E,(none,vectors) |- lexp : vector<ne1 ne2 dec t> gives lexp',I2,E_t
 ---------------------------------------------------------- :: wbitDec
-E |- lexp [exp] : t gives lexp'[exp'], I1 u+ I2 u+ <{ne <= ne1, ne1 + (-ne2) <= ne},pure>,E_t
+E,widening |- lexp [exp] : t gives lexp'[exp'], I1 u+ I2 u+ <{ne <= ne1, ne1 + (-ne2) <= ne},pure>,E_t
 
-E,atom<ne1> |- exp1 : u1 gives exp1',I1,E_t
-E,atom<ne2> |- exp2 : u2 gives exp2',I2,E_t
-E |- lexp : vector<ne3 ne4 inc t> gives lexp',I3,E_t
+E,atom<ne1>,(nums,none) |- exp1 : u1 gives exp1',I1,E_t
+E,atom<ne2>,(nums,none) |- exp2 : u2 gives exp2',I2,E_t
+E,(none,vectors) |- lexp : vector<ne3 ne4 inc t> gives lexp',I3,E_t
 ---------------------------------------------------------- :: wsliceInc
-E |- lexp [exp1 : exp2] : vector< ne1 ne2 + (-ne1) inc t> gives lexp'[exp1':exp2'],I1 u+ I2 u+ I3 u+ <{ne3<=ne1, ne3+ne4<= ne2 + (-ne1)},pure> ,E_t
+E,widening |- lexp [exp1 : exp2] : vector< ne1 ne2 + (-ne1) inc t> gives lexp'[exp1':exp2'],I1 u+ I2 u+ I3 u+ <{ne3<=ne1, ne3+ne4<= ne2 + (-ne1)},pure> ,E_t
 
-E,atom<ne1> |- exp1 : u1 gives exp1',I1,E_t
-E,atom<ne2> |- exp2 : u2 gives exp2',I2,E_t
-E |- lexp : vector<ne3 ne4 inc t> gives lexp',I3,E_t
+E,atom<ne1>,(nums,none) |- exp1 : u1 gives exp1',I1,E_t
+E,atom<ne2>,(nums,none) |- exp2 : u2 gives exp2',I2,E_t
+E,(none,vectors) |- lexp : vector<ne3 ne4 inc t> gives lexp',I3,E_t
 ---------------------------------------------------------- :: wsliceDec
-E |- lexp [exp1 : exp2] : vector< ne1 ne2 + (-ne1) inc t> gives lexp'[exp1':exp2'],I1 u+ I2 u+ I3 u+ <{ne1<=ne3, ne3 + (-ne4)<= ne1 + (-ne2)},pure> ,E_t
+E,widening |- lexp [exp1 : exp2] : vector< ne1 ne2 + (-ne1) inc t> gives lexp'[exp1':exp2'],I1 u+ I2 u+ I3 u+ <{ne1<=ne3, ne3 + (-ne4)<= ne1 + (-ne2)},pure> ,E_t
 
 
 E_r (x<t_args>) gives </idi : ti//i/> id : t </id'j : t'j//j/>
-<E_t,<E_k,E_a,E_r,E_e>> |- lexp : x<t_args> gives lexp',I,E_t
+<E_t,<E_k,E_a,E_r,E_e>>,widening |- lexp : x<t_args> gives lexp',I,E_t
 ---------------------------------------------------------- :: wrecord
-<E_t,<E_k,E_a,E_r,E_e>> |- lexp.id : t gives lexp'.id,I,E_t
+<E_t,<E_k,E_a,E_r,E_e>>,widening |- lexp.id : t gives lexp'.id,I,E_t
 
 defn
 E |- letbind gives letbind' , E_t , S_N , effect , E_k :: :: check_letbind :: check_letbind_ 
@@ -1232,8 +1237,8 @@ by
 
 <E_k,E_a,E_r,E_e> |- typschm ~> t,E_k2,S_N
 <E_t,<E_k u+ E_k2,E_a,E_r,E_e>>,t |- pat : u gives pat',E_t1, S_N1
-<E_t,<E_k u+ E_k2,E_a,E_r,E_e>>,t |- exp : u' gives exp', <S_N2,effect>,E_t2
-<E_k u+ E_k2,E_a,E_r,E_e> |- u' ~< u, S_N3
+<E_t,<E_k u+ E_k2,E_a,E_r,E_e>>,t,(none,none) |- exp : u' gives exp', <S_N2,effect>,E_t2
+<E_k u+ E_k2,E_a,E_r,E_e>,(none,none) |- u' ~< u, S_N3
 ------------------------------------------------------------ :: val_annot
 <E_t,<E_k,E_a,E_r,E_e>> |- let typschm pat = exp gives let typschm pat' = exp', E_t1, S_N u+ S_N1 u+ S_N2 u+ S_N3, effect, E_k2
  

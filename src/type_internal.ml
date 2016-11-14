@@ -3553,6 +3553,21 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
                                                   (l,simple_annot t2))) enums),
              (l,simple_annot_efr t2 (get_cummulative_effects (get_eannot e)))))
     | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
+  | Tapp("vector", [TA_nexp _; TA_nexp size; _; TA_typ {t= Tid "bit"}]), Tid(i) ->
+    (match Envmap.apply d_env.enum_env i with
+     | Some(enums) ->
+       let num_enums = List.length enums in
+       (t2,[LtEq(co,Require,mk_sub (mk_2n size) n_one, mk_c_int num_enums)], pure_e,
+        E_aux(E_case (E_aux(E_app((Id_aux(Id "unsigned",l)),[e]),
+                            (l,
+                             tag_annot_efr (mk_range n_zero (mk_sub (mk_2n size) n_one)) (External (Some "unsigned"))
+                               (get_cummulative_effects (get_eannot e)))),
+                      List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)), (l,simple_annot t1)),
+                                                            E_aux(E_id(Id_aux(Id a,l)),
+                                                                  (l, tag_annot t2 (Enum num_enums)))),
+                                                    (l,simple_annot t2))) enums),
+              (l,simple_annot_efr t2 (get_cummulative_effects (get_eannot e)))))
+     | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
   | Tapp("atom",[TA_nexp b1]),Tid(i) -> 
     (match Envmap.apply d_env.enum_env i with
       | Some(enums) -> 
