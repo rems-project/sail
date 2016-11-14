@@ -25,9 +25,17 @@ LEMLIBOCAML = $(BITBUCKET_ROOT)/lem/ocaml-lib
 ELFDIR= $(BITBUCKET_ROOT)/linksem
 
 MIPS_SAIL_DIR:=$(BITBUCKET_ROOT)/sail/mips
-MIPS_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail $(BITBUCKET_ROOT)/sail/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
-MIPS_NOTLB_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb_stub.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail $(BITBUCKET_ROOT)/sail/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
+
+MIPS_SAILS_PRE:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
+
+MIPS_SAILS:=$(MIPS_SAILS) $(BITBUCKET_ROOT)/sail/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
+
+MIPS_NOTLB_SAILS_PRE:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb_stub.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
+
+MIPS_NOTLB_SAILS:=$(MIPS_NOTLB_SAILS_PRE) $(BITBUCKET_ROOT)/sail/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
+
 CHERI_SAIL_DIR:=$(BITBUCKET_ROOT)/sail/cheri
+
 CHERI_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(CHERI_SAIL_DIR)/cheri_prelude.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
 elf:
@@ -53,6 +61,11 @@ _build/mips_embedded.lem: $(MIPS_SAILS) ./sail.native
 	mkdir -p _build
 	cd _build ;\
 	../sail.native -lem_lib "Mips_extras_embed" -lem -o mips $(MIPS_NOTLB_SAILS)
+
+_build/mips_sequential_embedded.lem: $(MIPS_SAILS) ./sail.native
+	mkdir -p _build
+	cd _build ;\
+	../sail.native -lem_lib "Mips_extras_sequential_embed" -lem_sequential -o mips $(MIPS_NOTLB_SAILS)
 
 _build/mips_notlb.lem: $(MIPS_NOTLB_SAILS) ./sail.native
 	mkdir -p _build
@@ -85,7 +98,7 @@ run_mips.native: _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml int
 run_cheri.native:  _build/cheri.ml _build/mips_extras.ml _build/run_with_elf_cheri.ml interpreter
 	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(LEMLIBOCAML)/dependencies/zarith -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(LEMLIBOCAML)/dependencies/zarith/zarith.cmxa $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/cheri.ml _build/mips_extras.ml _build/run_with_elf_cheri.ml  -o run_cheri.native
 
-mips_notlb: _build/mips_notlb.ml  _build/mips_embedded.lem _build/mips_extras.ml
+mips_notlb: _build/mips_notlb.ml  _build/mips_embedded.lem _build/mips_sequential_embedded.lem _build/mips_extras.ml
 	true
 
 mips: elf run_mips.native

@@ -49,6 +49,7 @@ open Type_internal
 type out_type =
   | Lem_ast_out
   | Lem_out of string option
+  | Lem_sequential_out of string option
   | Ocaml_out of string option
 
 let get_lexbuf fn =
@@ -184,6 +185,18 @@ let output1 libpath out_arg filename defs  =
            open_output_with_check_unformatted (f' ^ "_embedded.lem") in
 	 (Pretty_print.pp_defs_lem o defs (generated_line filename))
            ["Pervasives_extra";"Sail_impl_base";"Prompt";"Sail_values";lib];
+         close_output_with_check ext_o;
+      | Lem_sequential_out None ->
+         let ((o,_, _) as ext_o) =
+           open_output_with_check_unformatted (f' ^ "_sequential_embedded.lem") in
+         (Pretty_print.pp_defs_lem o defs (generated_line filename))
+           ["Pervasives_extra";"Sail_impl_base";"State";"Sail_values"];
+         close_output_with_check ext_o
+      | Lem_sequential_out (Some lib) ->
+         let ((o,_, _) as ext_o) =
+           open_output_with_check_unformatted (f' ^ "_sequential_embedded.lem") in
+	 (Pretty_print.pp_defs_lem o defs (generated_line filename))
+           ["Pervasives_extra";"Sail_impl_base";"State";"Sail_values";lib];
          close_output_with_check ext_o;
       | Ocaml_out None ->
         let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in

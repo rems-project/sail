@@ -33,7 +33,7 @@ instance (Show bitU)
 end
 
 
-let to_bool = function
+let bitU_to_bool = function
   | O -> false
   | I  -> true
   | Undef -> failwith "to_bool applied to Undef"
@@ -75,12 +75,12 @@ val is_one : integer -> bitU
 let is_one i =
   if i = 1 then I else O
 
-let bool_to_bit b = if b then I else O
+let bool_to_bitU b = if b then I else O
 
 let bitwise_binop_bit op = function
   | (Undef,_) -> Undef (*Do we want to do this or to respect | of I and & of B0 rules?*)
   | (_,Undef) -> Undef (*Do we want to do this or to respect | of I and & of B0 rules?*)
-  | (x,y) -> bool_to_bit (op (to_bool x) (to_bool y))
+  | (x,y) -> bool_to_bitU (op (bitU_to_bool x) (bitU_to_bool y))
   end
 
 val bitwise_and_bit : bitU * bitU -> bitU
@@ -595,7 +595,7 @@ let duplicate bit length =
   Vector (repeat [bit] length) (if dir then 0 else length - 1) dir
  *)
 
-let compare_op op (l,r) = bool_to_bit (op l r)
+let compare_op op (l,r) = bool_to_bitU (op l r)
 
 let lt = compare_op (<)
 let gt = compare_op (>)
@@ -637,10 +637,10 @@ let gt_range_vec = compare_op_range_vec (>) true
 let lteq_range_vec = compare_op_range_vec (<=) true
 let gteq_range_vec = compare_op_range_vec (>=) true
 
-let eq (l,r) = bool_to_bit (l = r)
-let eq_range (l,r) = bool_to_bit (l = r)
-let eq_vec (l,r) = bool_to_bit (l = r)
-let eq_bit (l,r) = bool_to_bit (l = r)
+let eq (l,r) = bool_to_bitU (l = r)
+let eq_range (l,r) = bool_to_bitU (l = r)
+let eq_vec (l,r) = bool_to_bitU (l = r)
+let eq_bit (l,r) = bool_to_bitU (l = r)
 let eq_vec_range (l,r) = eq (to_num false l,r)
 let eq_range_vec (l,r) = eq (l, to_num false r)
 let eq_vec_vec (l,r) = eq (to_num true l, to_num true r)
@@ -793,7 +793,7 @@ let register_field_indices_nat reg regfield=
   let (i,j) = register_field_indices reg regfield in
   (natFromInteger i,natFromInteger j)
 
-let rec extern_reg_value reg_name v = 
+let rec external_reg_value reg_name v = 
   let (internal_start, external_start, direction) =
     match reg_name with 
      | Reg _ start size dir ->
@@ -814,14 +814,14 @@ let rec extern_reg_value reg_name v =
      rv_start          = external_start;
      rv_start_internal = internal_start |>
 
-val intern_reg_value : register_value -> vector bitU
-let intern_reg_value v =
+val internal_reg_value : register_value -> vector bitU
+let internal_reg_value v =
   Vector (List.map bitU_of_bit_lifted v.rv_bits)
          (integerFromNat v.rv_start_internal)
          (v.rv_dir = D_increasing)
 
 
-let extern_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
+let external_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
   match d with
   (*This is the case the thread/concurrecny model expects, so no change needed*)
   | D_increasing -> (i,j)
@@ -830,33 +830,33 @@ let extern_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
                     (slice_i,slice_j)
   end 
 
-let extern_reg_whole reg =
+let external_reg_whole reg =
   Reg (name_of_reg reg) (start_of_reg_nat reg) (size_of_reg_nat reg) (dir_of_reg reg)
       
-let extern_reg_slice reg (i,j) =
+let external_reg_slice reg (i,j) =
   let start = start_of_reg_nat reg in
   let dir = dir_of_reg reg in
-  Reg_slice (name_of_reg reg) start dir (extern_slice dir start (i,j))
+  Reg_slice (name_of_reg reg) start dir (external_slice dir start (i,j))
 
-let extern_reg_field_whole reg rfield = 
+let external_reg_field_whole reg rfield = 
   let (m,n) = register_field_indices_nat reg rfield in
   let start = start_of_reg_nat reg in
   let dir = dir_of_reg reg in
-  Reg_field (name_of_reg reg) start dir rfield (extern_slice dir start (m,n))
+  Reg_field (name_of_reg reg) start dir rfield (external_slice dir start (m,n))
             
-let extern_reg_field_slice reg rfield (i,j) = 
+let external_reg_field_slice reg rfield (i,j) = 
   let (m,n) = register_field_indices_nat reg rfield in
   let start = start_of_reg_nat reg in
   let dir = dir_of_reg reg in
   Reg_f_slice (name_of_reg reg) start dir rfield
-              (extern_slice dir start (m,n))
-              (extern_slice dir start (i,j))
+              (external_slice dir start (m,n))
+              (external_slice dir start (i,j))
 
-let extern_mem_value endian v =
+let external_mem_value endian v =
   let bytes = byte_lifteds_of_bitv v in 
   if endian = E_big_endian then bytes else List.reverse bytes
 
-let intern_mem_value endian direction bytes = 
+let internal_mem_value endian direction bytes = 
   let v = if endian = E_big_endian then bytes else List.reverse bytes in
   bitv_of_byte_lifteds direction v
 
@@ -885,7 +885,7 @@ let assert' b msg_opt =
   | Just msg -> msg
   | Nothing  -> "unspecified error"
   end in
-  if to_bool b then () else failwith msg
+  if bitU_to_bool b then () else failwith msg
 
 
 
@@ -1441,16 +1441,16 @@ let regfp_to_reg (reg_info : string -> maybe string -> (nat * nat * direction * 
      let i = natFromInteger i in
      let j = natFromInteger j in
      let (start,length,direction,_) = reg_info name Nothing in
-     let slice = extern_slice direction start (i,j) in
+     let slice = external_slice direction start (i,j) in
      Reg_slice name start direction slice
   | RSliceBit (name,i) ->
      let i = natFromInteger i in
      let (start,length,direction,_) = reg_info name Nothing in
-     let slice = extern_slice direction start (i,i) in
+     let slice = external_slice direction start (i,i) in
      Reg_slice name start direction slice
   | RField (name,field_name) ->
      let (start,length,direction,span) = reg_info name (Just field_name) in
-     let slice = extern_slice direction start span in
+     let slice = external_slice direction start span in
      Reg_field name start direction field_name slice
 end
 

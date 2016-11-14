@@ -55,6 +55,7 @@ val rewrite_ast_ocaml : Type_internal.tannot Ast.defs -> Type_internal.tannot As
 type out_type =
   | Lem_ast_out
   | Lem_out of string option (* If present, the string is a file to open in the lem backend*)
+  | Lem_sequential_out of string option (* If present, the string is a file to open in the lem backend*)
   | Ocaml_out of string option (* If present, the string is a file to open in the ocaml backend*)
 
 val output :

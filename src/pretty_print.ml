@@ -2318,7 +2318,7 @@ let doc_exp_lem, doc_let_lem =
     | E_if(c,t,e) ->
        let (E_aux (_,(_,cannot))) = c in
        let epp =
-         separate space [string "if";group (align (string "to_bool" ^//^ group (expY c)))] ^^
+         separate space [string "if";group (align (string "bitU_to_bool" ^//^ group (expY c)))] ^^
            break 1 ^^
              (prefix 2 1 (string "then") (expN t)) ^^ (break 1) ^^
                (prefix 2 1 (string "else") (expN e)) in

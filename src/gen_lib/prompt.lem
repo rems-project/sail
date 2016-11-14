@@ -40,7 +40,7 @@ let read_mem endian dir rk addr sz =
   let addr = address_lifted_of_bitv addr in
   let sz = natFromInteger sz in
   let k memory_value =
-    let bitv = intern_mem_value endian dir memory_value in
+    let bitv = internal_mem_value endian dir memory_value in
     (Done bitv,Nothing) in
   Read_mem (rk,addr,sz) k
 
@@ -52,49 +52,49 @@ let write_mem_ea wk addr sz =
 
 val write_mem_val : end_flag -> vector bitU -> M bool
 let write_mem_val endian v =
-  let v = extern_mem_value endian v in
+  let v = external_mem_value endian v in
   let k successful = (return successful,Nothing) in
   Write_memv v k
 
 val read_reg_aux : reg_name -> M (vector bitU)
 let read_reg_aux reg = 
   let k reg_value =
-    let v = intern_reg_value reg_value in
+    let v = internal_reg_value reg_value in
     (Done v,Nothing) in
   Read_reg reg k
 
 let read_reg reg =
-  read_reg_aux (extern_reg_whole reg)
+  read_reg_aux (external_reg_whole reg)
 let read_reg_range reg i j =
-  read_reg_aux (extern_reg_slice reg (natFromInteger i,natFromInteger j))
+  read_reg_aux (external_reg_slice reg (natFromInteger i,natFromInteger j))
 let read_reg_bit reg i =
-  read_reg_aux (extern_reg_slice reg (natFromInteger i,natFromInteger i)) >>= fun v ->
+  read_reg_aux (external_reg_slice reg (natFromInteger i,natFromInteger i)) >>= fun v ->
   return (extract_only_bit v)
 let read_reg_field reg regfield =
-  read_reg_aux (extern_reg_field_whole reg regfield)
+  read_reg_aux (external_reg_field_whole reg regfield)
 let read_reg_bitfield reg regfield =
-  read_reg_aux (extern_reg_field_whole reg regfield) >>= fun v ->
+  read_reg_aux (external_reg_field_whole reg regfield) >>= fun v ->
   return (extract_only_bit v)
 
 val write_reg_aux : reg_name -> vector bitU -> M unit
 let write_reg_aux reg_name v =
-  let regval = extern_reg_value reg_name v in
+  let regval = external_reg_value reg_name v in
   Write_reg (reg_name,regval) (Done (), Nothing)
 
 let write_reg reg v =
-  write_reg_aux (extern_reg_whole reg) v
+  write_reg_aux (external_reg_whole reg) v
 let write_reg_range reg i j v =
-  write_reg_aux (extern_reg_slice reg (natFromInteger i,natFromInteger j)) v
+  write_reg_aux (external_reg_slice reg (natFromInteger i,natFromInteger j)) v
 let write_reg_bit reg i bit =
   let iN = natFromInteger i in
-  write_reg_aux (extern_reg_slice reg (iN,iN)) (Vector [bit] i (is_inc_of_reg reg))
+  write_reg_aux (external_reg_slice reg (iN,iN)) (Vector [bit] i (is_inc_of_reg reg))
 let write_reg_field reg regfield v =
-  write_reg_aux (extern_reg_field_whole reg regfield) v
+  write_reg_aux (external_reg_field_whole reg regfield) v
 let write_reg_bitfield reg regfield bit =
-  write_reg_aux (extern_reg_field_whole reg regfield)
+  write_reg_aux (external_reg_field_whole reg regfield)
                 (Vector [bit] 0 (is_inc_of_reg reg))
 let write_reg_field_range reg regfield i j v =
-  write_reg_aux (extern_reg_field_slice reg regfield (natFromInteger i,natFromInteger j)) v
+  write_reg_aux (external_reg_field_slice reg regfield (natFromInteger i,natFromInteger j)) v
 
 
 

@@ -8,23 +8,24 @@ type State 's 'a = 's -> (either 'a string * 's)
 type memstate = map integer memory_byte
 type regstate = map string (vector bitU)
 
-type state = <| regstate : regstate;
-                memstate : memstate; 
-                write_ea : integer * integer |>
+type sequential_state = <| regstate : regstate;
+                           memstate : memstate; 
+                           write_ea : maybe (integer * integer) |>
 
-type M 'a = State state 'a
+type M 'a = State sequential_state 'a
                      
 val return : forall 's 'a. 'a -> State 's 'a
 let return a s = (Left a,s)
 
-val (>>=) : forall 's 'a 'b. State 's 'a -> ('a -> State 's 'b) -> State 's 'b
-let (>>=) m f s = match m s with
+val bind : forall 's 'a 'b. State 's 'a -> ('a -> State 's 'b) -> State 's 'b
+let bind m f s = match m s with
   | (Left a,s') -> f a s'
   | (Right error,s') -> (Right error,s')
   end
 
+let inline (>>=) = bind
 val (>>): forall 's 'b. State 's unit -> State 's 'b -> State 's 'b
-let (>>) m n = m >>= fun _ -> n
+let inline (>>) m n = m >>= fun _ -> n
 
 val exit : forall 's 'e 'a. 'e -> State 's 'a
 let exit _ s = (Right "exit",s)
@@ -35,25 +36,45 @@ let rec range i j =
   if i = j then [i]
   else i :: range (i+1) j
 
+val get_reg : sequential_state -> string -> vector bitU
+let get_reg state reg = Map_extra.find reg state.regstate
+
+val set_reg : sequential_state -> string -> vector bitU -> sequential_state
+let set_reg state reg bitv =
+  <| state with regstate = Map.insert reg bitv state.regstate |>
+
+
 val read_mem : end_flag -> bool -> read_kind -> vector bitU -> integer -> M (vector bitU)
 let read_mem endian dir _ addr sz state =
   let addr = integer_of_address (address_of_bitv addr) in
   let addrs = range addr (addr+sz-1) in
   let memory_value = List.map (fun addr -> Map_extra.find addr state.memstate) addrs in
-  let value = intern_mem_value endian dir memory_value in
+  let value = Sail_values.internal_mem_value endian dir memory_value in
   (Left value,state)
+
+
+val write_mem_address_value : write_kind -> address -> integer -> end_flag -> vector bitU -> M bool
+let write_mem_address_value _ addr sz endian v state = 
+  let addr = integer_of_address addr in
+  let addrs = range addr (addr+sz-1) in
+  let v = external_mem_value endian v in
+  let addresses_with_value = List.zip addrs v in
+  let mem = List.foldl (fun mem (addr,v) -> Map.insert addr v mem)
+                       state.memstate addresses_with_value in
+  (Left true,<| state with memstate = mem |>)
 
 val write_mem_ea : write_kind -> vector bitU -> integer -> M unit
 let write_mem_ea _ addr sz state = 
   let addr = integer_of_address (address_of_bitv addr) in
-  let sz = sz in
-  (Left (), <| state with write_ea = (addr,sz) |>)
+  (Left (), <| state with write_ea = Just (addr,sz) |>)
 
 val write_mem_val : end_flag -> vector bitU -> M bool
 let write_mem_val endian v state =
-  let (addr,sz) = state.write_ea in
+  let (addr,sz) = match state.write_ea with
+    | Nothing -> failwith "write ea has not been announced yet"
+    | Just write_ea -> write_ea end in
   let addrs = range addr (addr+sz-1) in
-  let v = extern_mem_value endian v in
+  let v = external_mem_value endian v in
   let addresses_with_value = List.zip addrs v in
   let mem = List.foldl (fun mem (addr,v) -> Map.insert addr v mem)
                        state.memstate addresses_with_value in
