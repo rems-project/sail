@@ -28,7 +28,7 @@ MIPS_SAIL_DIR:=$(BITBUCKET_ROOT)/sail/mips
 
 MIPS_SAILS_PRE:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
-MIPS_SAILS:=$(MIPS_SAILS) $(BITBUCKET_ROOT)/sail/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
+MIPS_SAILS:=$(MIPS_SAILS_PRE) $(BITBUCKET_ROOT)/sail/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
 
 MIPS_NOTLB_SAILS_PRE:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb_stub.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
