@@ -246,10 +246,11 @@ let mk_p_inf () = {nexp = Npos_inf; imp_param = false}
 let mk_n_inf () = {nexp = Nneg_inf; imp_param = false}
 let mk_inexact () = {nexp = Ninexact; imp_param = false}
 
-let merge_option_maps m1 m2 = match m1,m2 with
+let merge_option_maps m1 m2 =
+  match m1,m2 with
   | None,None -> None
   | None,m | m, None -> m
-  | Some m1, Some m2 -> Some (Nexpmap.union m1 m2) 
+  | Some m1, Some m2 -> Some (Nexpmap.union m1 m2)
 
 (*Getters*)
 
@@ -3716,6 +3717,14 @@ let rec subst_nuvars_cs nus cs =
     | BranchCons(l,possible_invars,bs)::cs -> 
       BranchCons(l,possible_invars,subst_nuvars_cs nus bs)::(subst_nuvars_cs nus cs)
 
+let rec constraint_size = function
+  | [] -> 0
+  | c::cs -> 
+    (match c with 
+      | CondCons(_,_,_,ps,es) -> constraint_size ps + constraint_size es
+      | BranchCons(_,_,bs) -> constraint_size bs
+      | _ -> 1) + constraint_size cs
+
 let freshen_constraints cs =
   let nuvars =
     Var_set.fold (fun n map ->
@@ -3759,7 +3768,7 @@ let rec make_merged_constraints acc =  function
       cs      
       
 let merge_branch_constraints merge_nuvars constraint_sets =
-  (*let _ = Printf.eprintf "merge_branch_constraints called\n" in*)
+  (*let _ = Printf.eprintf "merge_branch_constraints called\n%!" in*)
   (*Separate variables into only occurs in one set, or occurs in multiple sets*)
   (*assumes k and n outermost and all nuvar*)
   let conditionally_set k n =
@@ -3839,10 +3848,6 @@ let merge_branch_constraints merge_nuvars constraint_sets =
   (*let _ = if merge_nuvars then
       Printf.eprintf "merge branch constraints: shared var mappings after merge %s\n%!"
         (nexpmap_to_string merged_constraints) in*)
-  let shared_path_distinct_constraints =
-    (*This should probably be repeating for a fixpoint, but here's hoping two iterations will do*)
-    if merge_nuvars then Nexpmap.fold merge_walker (Nexpmap.empty,[],None) merged_constraints
-    else shared_path_distinct_constraints in
   shared_path_distinct_constraints
 
 let rec extract_path_substs = function
@@ -3878,11 +3883,11 @@ let rec merge_paths merge_nuvars = function
     (*let _ = Printf.eprintf "merge_paths CondCons case: ps %s \n es %s\n\n" (constraints_to_string ps) (constraints_to_string es) in*)
     let (new_es,nm) = merge_paths merge_nuvars es in
     let (rest_cs,rest_map) = merge_paths merge_nuvars cs in
-    (CondCons(co,k,substs,ps,new_es)::rest_cs,
-     merge_option_maps nm rest_map)
-  | c::cs ->
+    let map = merge_option_maps nm rest_map in
+    (CondCons(co,k,substs,ps,new_es)::rest_cs, map)
+  | con::cs ->
     let (rest_cs, rest_map) = merge_paths merge_nuvars cs in
-    (c::rest_cs, rest_map)
+    (con::rest_cs, rest_map)
 
 let rec equate_nuvars in_env cs = 
   (*let _ = Printf.eprintf "equate_nuvars\n" in*)
@@ -3912,13 +3917,6 @@ let rec equate_nuvars in_env cs =
       else BranchCons(co,sv,b')::(equate cs)
     | c::cs -> c::(equate cs)
 
-let rec constraint_size = function
-  | [] -> 0
-  | c::cs -> 
-    (match c with 
-      | CondCons(_,_,_,ps,es) -> constraint_size ps + constraint_size es
-      | BranchCons(_,_,bs) -> constraint_size bs
-      | _ -> 1) + constraint_size cs
 
 let rec flatten_constraints = function
   | [] -> []
@@ -3970,11 +3968,14 @@ let rec simple_constraint_check in_env cs =
       | Nuvar u1, Nuvar u2, _, _ ->
         (*let _ = Printf.eprintf "setting two nuvars, %s and %s, it is ok_to_set %b\n" 
           (n_to_string n1) (n_to_string n2) ok_to_set in*)
-        let occurs = (occurs_in_nexp n1' n2') || (occurs_in_nexp n2' n1') in
-        if ok_to_set && not(occurs) 
-        then if (equate_n n1' n2') then None else Some(Eq(co,n1',n2'))
-        else if occurs then eq_to_zero ok_to_set n1' n2'
-        else Some(Eq(co,n1',n2'))
+        if nexp_eq_check n1 n2
+        then None
+        else 
+          let occurs = (occurs_in_nexp n1' n2') || (occurs_in_nexp n2' n1') in
+          if ok_to_set && not(occurs) 
+          then if (equate_n n1' n2') then None else Some(Eq(co,n1',n2'))
+          else if occurs then eq_to_zero ok_to_set n1' n2'
+          else Some(Eq(co,n1',n2'))
       | _, Nuvar u, _, Nuvar _ -> 
         (*let _ = Printf.eprintf "setting right nuvar\n" in*)
         let occurs = occurs_in_nexp n1' n2 in
@@ -4058,7 +4059,7 @@ let rec simple_constraint_check in_env cs =
         ("Type constraint mismatch: constraint of " ^ n_to_string n1 ^ " >= " ^ n_to_string n2 ^ 
             " arising from here requires " 
          ^ string_of_big_int i1 ^ " to be greater than or equal to " ^ string_of_big_int i2)
-    | Npos_inf, Nconst _ |  Nconst _, Nneg_inf  -> check cs
+    | Npos_inf, _ |  _, Nneg_inf  -> check cs
     | Nconst _ ,Npos_inf -> 
       eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
                                ^ (n_to_string n1') ^ " to be greater than or equal to infinity")
@@ -4116,7 +4117,7 @@ let rec simple_constraint_check in_env cs =
       then check cs
       else eq_error (get_c_loc co) ("Type constraint mismatch: constraint arising from here requires " 
                                     ^ string_of_big_int i1 ^ " to be less than or equal to " ^ string_of_big_int i2)
-(*    | _, Npos_inf | Nneg_inf, _  -> check cs*)
+    | _, Npos_inf | Nneg_inf, _  -> check cs
     | Nuvar _, _ | _, Nuvar _ -> LtEq(co,enforce, n1, n2)::(check cs)
     | _,_ ->
       (match nexp_ge n2' n1' with
@@ -4146,18 +4147,19 @@ let rec simple_constraint_check in_env cs =
         | Maybe -> Lt(co,enforce,n1',n2')::(check cs)))
   | CondCons(co,kind,substs,pats,exps):: cs ->
     (*let _ = Printf.eprintf "Condcons check length pats %i, length exps %i\n" 
-      (List.length pats) (List.length exps) in*)
+      (constraint_size pats) (constraint_size exps) in*)
     let pats' = check pats in
     let exps' = check exps in
     (*let _ = Printf.eprintf "Condcons after check length pats' %i, length exps' %i\n" 
-      (List.length pats') (List.length exps') in*)
+      (constraint_size pats') (constraint_size exps') in*)
     (match pats',exps',substs with
       | [],[],None -> check cs
       | _     -> CondCons(co,kind,substs,pats',exps')::(check cs))
   | BranchCons(co,sv,branches)::cs ->
+    (*let _ = Printf.eprintf "BranchCons pre_check with %i branches and %i for after\n" (constraint_size branches) (constraint_size cs) in*)
     let b = check branches in
-    (*let _ = Printf.eprintf "Branchcons check length branches before %i and after %i\n"
-      (constraint_size branches) (constraint_size b) in*)
+    (*let _ = Printf.eprintf "Branchcons check length branches before %i and after %i with %i remaining after\n"
+      (constraint_size branches) (constraint_size b) (constraint_size cs) in*)
     if [] = b 
     then check cs
     else BranchCons(co,sv,b)::(check cs)
@@ -4260,7 +4262,7 @@ let check_range_consistent require_lt require_gt guarantee_lt guarantee_gt =
       ()
 
 let check_ranges cs =
-  (*let _ = Printf.eprintf "In check_ranges with %i constraints\n" (constraint_size cs) in*)
+  (*let _ = Printf.eprintf "In check_ranges with %i constraints\n%!" (constraint_size cs) in*)
   let nuvars = get_all_nuvars_cs cs in
   (*let _ = Printf.eprintf "Have %i nuvars\n" (List.length (Var_set.elements nuvars)) in*)
   let nus_with_cs = List.map (fun n -> (n,contains_nuvar n cs)) (Var_set.elements nuvars) in
@@ -4296,11 +4298,12 @@ let resolve_constraints cs =
     (*let _ = Printf.eprintf "Constraints after nuvar equated are %s\n%!" (constraints_to_string nuvar_equated) in*)
     let complex_constraints = 
           fix (fun in_env cs -> let (ncs,_) = merge_paths false (simple_constraint_check in_env cs) in ncs)
-        (constraint_size nuvar_equated) nuvar_equated in
+            (constraint_size nuvar_equated) nuvar_equated in
+    (*let _ = Printf.eprintf "Now considering %i constraints \n%!" (constraint_size complex_constraints) in*)
     let (complex_constraints,map) = merge_paths true complex_constraints in
     let complex_constraints = check_ranges complex_constraints in
     (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" 
-      (constraint_size complex_constraints) in
+        (constraint_size complex_constraints) in 
       let _ = Printf.eprintf "%s\n" (constraints_to_string complex_constraints) in*)
     (complex_constraints,map)
 

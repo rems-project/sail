@@ -9,6 +9,9 @@ sail:
 
 sail.native: sail
 
+sail.byte: 
+	ocamlbuild -cflag -g sail.byte
+
 interpreter: 
 	ocamlbuild lem_interp/extract.cmxa
 	ocamlbuild lem_interp/extract.cma

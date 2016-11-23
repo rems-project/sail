@@ -2319,10 +2319,11 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,orig_env (*Envmap.insert t_env (id,tannot)*),b_env,tp_env)
     | _ , _->
-      (*let _ = Printf.eprintf "checking %s, not in env\n%!" id in*)
-      let t_env = if is_rec then Envmap.insert t_env (id,tannot) else t_env in
+      (*let _ = Printf.eprintf "checking %s, not in env\n%!" id in
+      let t_env = if is_rec then Envmap.insert t_env (id,tannot) else t_env in*)
       let funcls,cs_ef = check t_env t_param_env None in
-      let cses,ef = ((fun (cses,efses) -> (cses,(List.fold_right union_effects efses pure_e))) (List.split cs_ef)) in
+      let cses,ef =
+        ((fun (cses,efses) -> (cses,(List.fold_right union_effects efses pure_e))) (List.split cs_ef)) in
       let cs = if List.length funcls = 1 then cses else [BranchCons(Fun l, None, cses)] in
       (*let _ = Printf.eprintf "unresolved constraints are %s\n%!" (constraints_to_string cs) in*)
       let (cs',map) = resolve_constraints cs in
@@ -2456,7 +2457,7 @@ let check_def envs def =
     let t = (typ_to_t envs false false typ) in
     let i = id_to_string id in
     let tannot = into_register d_env (Base(([],t),External (Some i),[],pure_e,pure_e,nob)) in
-    (*let _ = Printf.eprintf "done checking reg dec\n" in*)
+   (* let _ = Printf.eprintf "done checking reg dec\n" in*)
     (DEF_reg_dec(DEC_aux(DEC_reg(typ,id),(l,tannot))),(Env(d_env,Envmap.insert t_env (i,tannot),b_env, tp_env)))
   | DEF_reg_dec(DEC_aux(DEC_alias(id,aspec), (l,annot))) -> 
     (*let _ = Printf.eprintf "checking reg dec b\n" in*)
