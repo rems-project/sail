@@ -1,3 +1,15 @@
+let translate_rtype_op op  = uppercase (pp_rtype_op op)
+let translate_itype_op op  = uppercase (pp_itype_op op)
+let translate_shifti_op op = uppercase (pp_shifti_op op)
+let translate_shiftv_op op = uppercase (pp_shiftv_op op)
+let translate_muldiv_op op = uppercase (pp_muldiv_op op)
+let translate_mfhilo_op op = uppercase (pp_mfhilo_op op)
+let translate_load_op width signed linked = uppercase (pp_load_op width signed linked)
+let translate_store_op width conditional  = uppercase (pp_store_op width conditional)
+let translate_lslr_op store double left   = uppercase (pp_lslr_op store double left)
+let translate_beq_op ne likely            = uppercase (pp_beq_op ne likely)
+let translate_bcmpz_op cmp link likely    = uppercase (pp_bcmpz_op cmp link likely)
+
 let translate_reg name value = 
     (name, Bvector (Some 5), bit_list_of_integer 5 (Nat_big_num.of_int (reg_to_int value)))
 let translate_imm26 name value = 

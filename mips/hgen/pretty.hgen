@@ -13,18 +13,18 @@
 | `MIPSMFHiLo (op, rs) ->
       sprintf "%s %s" (pp_mfhilo_op op) (pp_reg rs)
 | `MIPSLUI (rt, imm) ->
-      sprintf "LUI %s,%d" (pp_reg rt) imm
+      sprintf "lui %s,%d" (pp_reg rt) imm
 | `MIPSLoad (width, signed, linked, base, rt, offset) ->
       sprintf "%s %s,%d(%s)" (pp_load_op width signed linked) (pp_reg rt) offset (pp_reg base)
 | `MIPSStore (width, conditional, base, rt, offset) ->
       sprintf "%s %s,%d(%s)" (pp_store_op width conditional) (pp_reg rt) offset (pp_reg base)
 | `MIPSLSLR (store, double, left, base, rt, offset) ->
       sprintf "%s %s,%d(%s)" (pp_lslr_op store double left) (pp_reg rt) offset (pp_reg base)
-| `MIPSSYNC -> "SYNC"
+| `MIPSSYNC -> "sync"
 | `MIPSBEQ (rs, rt, offset, ne, likely) ->
-      sprintf "%s, %s, %s, .%+d" (pp_beq_op ne likely) (pp_reg rs) (pp_reg rt) offset
+      sprintf "%s %s,%s,.%+d" (pp_beq_op ne likely) (pp_reg rs) (pp_reg rt) offset
 | `MIPSBCMPZ (rs, offset, cmp, link, likely) ->
-      sprintf "%s, %s, .%+d" (pp_bcmpz_op cmp link likely) (pp_reg rs) offset
+      sprintf "%s,%s,.%+d" (pp_bcmpz_op cmp link likely) (pp_reg rs) offset
 | `MIPSJ (offset) ->
   sprintf "j %d" offset
 | `MIPSJAL (offset) ->
@@ -32,5 +32,5 @@
 | `MIPSJR(rd) ->
   sprintf "jr %s" (pp_reg rd)
 | `MIPSJALR(rd, rs) ->
-  sprintf "jalr %s, %s" (pp_reg rd) (pp_reg rs)
+  sprintf "jalr %s,%s" (pp_reg rd) (pp_reg rs)
 

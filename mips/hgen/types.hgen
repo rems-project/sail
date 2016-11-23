@@ -18,23 +18,23 @@ type mipsRTypeOp =
 | MIPSROpXOR
 
 let pp_rtype_op = function
-| MIPSROpADD    -> "ADD"
-| MIPSROpADDU   -> "ADDU"
-| MIPSROpAND    -> "AND"
-| MIPSROpDADD   -> "DADD"
-| MIPSROpDADDU  -> "DADDU"
-| MIPSROpDSUB   -> "DSUB"
-| MIPSROpDSUBU  -> "DSUBU"
-| MIPSROpMOVN   -> "MOVN"
-| MIPSROpMOVZ   -> "MOVZ"
-| MIPSROpMUL    -> "MUL"
-| MIPSROpNOR    -> "NOR"
-| MIPSROpOR     -> "OR"
-| MIPSROpSLT    -> "SLT"
-| MIPSROpSLTU   -> "SLTU"
-| MIPSROpSUB    -> "SUB"
-| MIPSROpSUBU   -> "SUBU"
-| MIPSROpXOR    -> "XOR"
+| MIPSROpADD    -> "add"  
+| MIPSROpADDU   -> "addu"
+| MIPSROpAND    -> "and"  
+| MIPSROpDADD   -> "dadd"
+| MIPSROpDADDU  -> "daddu"
+| MIPSROpDSUB   -> "dsub"
+| MIPSROpDSUBU  -> "dsubu"
+| MIPSROpMOVN   -> "movn"
+| MIPSROpMOVZ   -> "movz"
+| MIPSROpMUL    -> "mul"  
+| MIPSROpNOR    -> "nor"  
+| MIPSROpOR     -> "or"   
+| MIPSROpSLT    -> "slt"  
+| MIPSROpSLTU   -> "sltu"
+| MIPSROpSUB    -> "sub"  
+| MIPSROpSUBU   -> "subu"
+| MIPSROpXOR    -> "xor"  
 
 type bit26 = int
 type bit16 = int
@@ -52,15 +52,15 @@ type mipsITypeOp =
 | MIPSIOpXORI
 
 let pp_itype_op = function
-| MIPSIOpADDI   -> "ADDI"
-| MIPSIOpADDIU  -> "ADDIU"
-| MIPSIOpANDI   -> "ANDI"
-| MIPSIOpDADDI  -> "DADDI"
-| MIPSIOpDADDIU -> "DADDIU"
-| MIPSIOpORI    -> "ORI"
-| MIPSIOpSLTI   -> "SLTI"
-| MIPSIOpSLTIU  -> "SLTIU"
-| MIPSIOpXORI   -> "XORI"
+| MIPSIOpADDI   -> "addi"
+| MIPSIOpADDIU  -> "addiu"
+| MIPSIOpANDI   -> "andi"
+| MIPSIOpDADDI  -> "daddi"
+| MIPSIOpDADDIU -> "daddiu"
+| MIPSIOpORI    -> "ori"
+| MIPSIOpSLTI   -> "slti"
+| MIPSIOpSLTIU  -> "sltiu"
+| MIPSIOpXORI   -> "xori"
 
 type mipsShiftIOp = 
 | MIPSDSLL
@@ -74,15 +74,15 @@ type mipsShiftIOp =
 | MIPSSRL
 
 let pp_shifti_op = function
-| MIPSDSLL   -> "DSLL" 
-| MIPSDSLL32 -> "DSLL32"
-| MIPSDSRA   -> "DSRA"  
-| MIPSDSRA32 -> "DSRA32"
-| MIPSDSRL   -> "DSRL"  
-| MIPSDSRL32 -> "DSRL32"
-| MIPSSLL    -> "SLL"   
-| MIPSSRA    -> "SRA"   
-| MIPSSRL    -> "SRL"   
+| MIPSDSLL   -> "dsll" 
+| MIPSDSLL32 -> "dsll32"
+| MIPSDSRA   -> "dsra"  
+| MIPSDSRA32 -> "dsra32"
+| MIPSDSRL   -> "dsrl"  
+| MIPSDSRL32 -> "dsrl32"
+| MIPSSLL    -> "sll"   
+| MIPSSRA    -> "sra"   
+| MIPSSRL    -> "srl"   
 
 type mipsShiftVOp = 
 | MIPSDSLLV
@@ -93,12 +93,12 @@ type mipsShiftVOp =
 | MIPSSRLV
 
 let pp_shiftv_op = function
-| MIPSDSLLV -> "DSLLV"
-| MIPSDSRAV -> "DSRAV"
-| MIPSDSRLV -> "DSRLV"
-| MIPSSLLV  -> "SLLV" 
-| MIPSSRAV  -> "SRAV" 
-| MIPSSRLV  -> "SRLV" 
+| MIPSDSLLV -> "dsllv"
+| MIPSDSRAV -> "dsrav"
+| MIPSDSRLV -> "dsrlv"
+| MIPSSLLV  -> "sllv" 
+| MIPSSRAV  -> "srav" 
+| MIPSSRLV  -> "srlv" 
 
 type mipsMulDivOp =
 | MIPSDDIV
@@ -115,18 +115,18 @@ type mipsMulDivOp =
 | MIPSMULTU
 
 let pp_muldiv_op = function
-| MIPSDDIV   -> "DDIV"  
-| MIPSDDIVU  -> "DDIVU" 
-| MIPSDIV    -> "DIV"   
-| MIPSDIVU   -> "DIVU"  
-| MIPSDMULT  -> "DMULT" 
-| MIPSDMULTU -> "DMULTU"
-| MIPSMADD   -> "MADD"  
-| MIPSMADDU  -> "MADDU" 
-| MIPSMSUB   -> "MSUB"  
-| MIPSMSUBU  -> "MSUBU" 
-| MIPSMULT   -> "MULT"  
-| MIPSMULTU  -> "MULTU" 
+| MIPSDDIV   -> "ddiv"  
+| MIPSDDIVU  -> "ddivu" 
+| MIPSDIV    -> "div"   
+| MIPSDIVU   -> "divu"  
+| MIPSDMULT  -> "dmult" 
+| MIPSDMULTU -> "dmultu"
+| MIPSMADD   -> "madd"  
+| MIPSMADDU  -> "maddu" 
+| MIPSMSUB   -> "msub"  
+| MIPSMSUBU  -> "msubu" 
+| MIPSMULT   -> "mult"  
+| MIPSMULTU  -> "multu" 
 
 type mipsMFHiLoOp =
 | MIPSMFHI
@@ -135,10 +135,10 @@ type mipsMFHiLoOp =
 | MIPSMTLO
 
 let pp_mfhilo_op = function
-| MIPSMFHI -> "MFHI"
-| MIPSMFLO -> "MFLO"
-| MIPSMTHI -> "MTHI"
-| MIPSMTLO -> "MTLO"
+| MIPSMFHI -> "mfhi"
+| MIPSMFLO -> "mflo"
+| MIPSMTHI -> "mthi"
+| MIPSMTLO -> "mtlo"
 
 type mipsWordWidth = 
 | MIPSByte
@@ -157,41 +157,41 @@ type mipsCmp =
 | MIPS_LTU (* unsigned less than or qual *) 
 
 let pp_load_op width signed linked = match (width, signed, linked) with
-  | (MIPSByte, true, false)    -> "LB"
-  | (MIPSByte, false, false)   -> "LBU"
-  | (MIPSHalf, true, false)    -> "LH"
-  | (MIPSHalf, false, false)   -> "LHU"
-  | (MIPSWord, true, false)    -> "LW"
-  | (MIPSWord, false, false)   -> "LWU"
-  | (MIPSDouble, false, false) -> "LD"
-  | (MIPSWord, true, true)     -> "LL"
-  | (MIPSDouble, false, true)  -> "LLD"
+  | (MIPSByte, true, false)    -> "lb"
+  | (MIPSByte, false, false)   -> "lbu"
+  | (MIPSHalf, true, false)    -> "lh"
+  | (MIPSHalf, false, false)   -> "lhu"
+  | (MIPSWord, true, false)    -> "lw"
+  | (MIPSWord, false, false)   -> "lwu"
+  | (MIPSDouble, false, false) -> "ld"
+  | (MIPSWord, true, true)     -> "ll"
+  | (MIPSDouble, false, true)  -> "lld"
   | _                          -> failwith "unexpected load op"
 
 let pp_store_op width conditional = match (width, conditional) with
-  | (MIPSByte,   false) -> "SB"
-  | (MIPSHalf,   false) -> "SH"
-  | (MIPSWord,   false) -> "SW"
-  | (MIPSDouble, false) -> "SD"
-  | (MIPSWord,   true)  -> "SC"
-  | (MIPSDouble, true)  -> "SCD"
+  | (MIPSByte,   false) -> "sb"
+  | (MIPSHalf,   false) -> "sh"
+  | (MIPSWord,   false) -> "sw"
+  | (MIPSDouble, false) -> "sd"
+  | (MIPSWord,   true)  -> "sc"
+  | (MIPSDouble, true)  -> "scd"
   | _                   -> failwith "unexpected store op"
 
 let pp_lslr_op store double left = match (store, double, left) with
-  | (false, false, true ) -> "LWL"
-  | (false, false, false) -> "LWR"
-  | (false, true , true ) -> "LDL"
-  | (false, true , false) -> "LDR"
-  | (true , false, true ) -> "SWL"
-  | (true , false, false) -> "SWR"
-  | (true , true , true ) -> "SDL"
-  | (true , true , false) -> "SDR"
+  | (false, false, true ) -> "lwl"
+  | (false, false, false) -> "lwr"
+  | (false, true , true ) -> "ldl"
+  | (false, true , false) -> "ldr"
+  | (true , false, true ) -> "swl"
+  | (true , false, false) -> "swr"
+  | (true , true , true ) -> "sdl"
+  | (true , true , false) -> "sdr"
 
 let pp_beq_op ne likely = match (ne, likely) with
-  | (false, false) -> "BEQ"
-  | (false, true)  -> "BEQL"
-  | (true , false) -> "BNE"
-  | (true , true)  -> "BNEL"
+  | (false, false) -> "beq"
+  | (false, true)  -> "beql"
+  | (true , false) -> "bne"
+  | (true , true)  -> "bnel"
 
 let pp_bcmpz_op cmp link likely = match (cmp, likely, link) with
 | (MIPS_LT, false , false ) -> "bltz"

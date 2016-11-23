@@ -8,7 +8,7 @@
 (* Note different argument order, which reflects difference
    between instruction encoding and asm format  *)
 | `MIPSRType (op, rd, rs, rt) ->
-    (pp_rtype_op op,
+    (translate_rtype_op op,
       [
       translate_reg "rs" rs;
       translate_reg "rt" rt;
@@ -18,7 +18,7 @@
 
 (* Note different argument order similar to above *)
 | `MIPSIType (op, rt, rs, imm) ->
-    (pp_itype_op op,
+    (translate_itype_op op,
       [
       translate_reg "rs" rs;
       translate_reg "rt" rt;
@@ -27,7 +27,7 @@
       [])
 
 | `MIPSShiftI (op, rd, rt, sa) ->
-    (pp_shifti_op op,
+    (translate_shifti_op op,
       [
       translate_reg "rt" rt;
       translate_reg "rd" rd;
@@ -36,7 +36,7 @@
       [])
 
 | `MIPSShiftV (op, rd, rt, rs) ->
-    (pp_shiftv_op op,
+    (translate_shiftv_op op,
       [
       translate_reg "rs" rs;
       translate_reg "rt" rt;
@@ -45,7 +45,7 @@
       [])
 
 | `MIPSMulDiv (op, rs, rt) ->
-    (pp_muldiv_op op,
+    (translate_muldiv_op op,
       [
       translate_reg "rs" rs;
       translate_reg "rt" rt;
@@ -53,7 +53,7 @@
       [])
 
 | `MIPSMFHiLo (op, rs) ->
-    (pp_mfhilo_op op,
+    (translate_mfhilo_op op,
       [
       translate_reg "rs" rs;
       ],
@@ -87,7 +87,7 @@
       ],
       [])
 | `MIPSLSLR (store, double, left, base, rt, offset) ->
-  (pp_lslr_op store double left,
+  (translate_lslr_op store double left,
       [
       translate_reg "base" base;
       translate_reg "rt" rt;
