@@ -1,34 +1,34 @@
-| RTYPE ARCH_REG COMMA ARCH_REG COMMA ARCH_REG
+| RTYPE reg COMMA reg COMMA reg
     { `MIPSRType ($1.op, $2, $4, $6) }
-| ITYPE ARCH_REG COMMA ARCH_REG COMMA NUM
+| ITYPE reg COMMA reg COMMA NUM
     { `MIPSIType ($1.op, $2, $4, $6) }
-| SHIFTI ARCH_REG COMMA ARCH_REG COMMA NUM
+| SHIFTI reg COMMA reg COMMA NUM
     { `MIPSShiftI ($1.op, $2, $4, $6) }
-| SHIFTV ARCH_REG COMMA ARCH_REG COMMA ARCH_REG
+| SHIFTV reg COMMA reg COMMA reg
     { `MIPSShiftV ($1.op, $2, $4, $6) }
-| MULDIV ARCH_REG COMMA ARCH_REG
+| MULDIV reg COMMA reg
     { `MIPSMulDiv ($1.op, $2, $4) }
-| MFHILO ARCH_REG
+| MFHILO reg
     { `MIPSMFHiLo ($1.op, $2) }
-| LUI ARCH_REG COMMA NUM
+| LUI reg COMMA NUM
     { `MIPSLUI ($2, $4) }
-| LOAD ARCH_REG COMMA NUM LPAR ARCH_REG RPAR
+| LOAD reg COMMA NUM LPAR reg RPAR
     { `MIPSLoad ($1.width, $1.signed, $1.linked, $6, $2, $4) }
-| STORE ARCH_REG COMMA NUM LPAR ARCH_REG RPAR
+| STORE reg COMMA NUM LPAR reg RPAR
     { `MIPSStore ($1.width, $1.conditional, $6, $2, $4) }
-| LSLR  ARCH_REG COMMA NUM LPAR ARCH_REG RPAR
+| LSLR  reg COMMA NUM LPAR reg RPAR
     { `MIPSLSLR ($1.store, $1.double, $1.left, $6, $2, $4) }
 | SYNC
     { `MIPSSYNC }
-| BEQ ARCH_REG COMMA ARCH_REG COMMA NUM
+| BEQ reg COMMA reg COMMA NUM
     { `MIPSBEQ ( $2, $4, $6, $1.ne, $1.likely) }
-| BCMPZ ARCH_REG COMMA NUM
+| BCMPZ reg COMMA NUM
     { `MIPSBCMPZ ( $2, $4, $1.cmp, $1.link, $1.likely) }
 | J NUM
     { `MIPSJ ($2) }
 | JAL NUM
     { `MIPSJAL ($2) }
-| JR ARCH_REG
+| JR reg
     { `MIPSJR ($2) }
-| JALR ARCH_REG COMMA ARCH_REG
+| JALR reg COMMA reg
     { `MIPSJALR ($2, $4) }
