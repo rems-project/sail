@@ -17,14 +17,14 @@
 | ("SUBU"  , [rs; rt; rd]) -> `MIPSRType (MIPSROpSUBU  , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))
 | ("XOR"   , [rs; rt; rd]) -> `MIPSRType (MIPSROpXOR   , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))
 
-| ("ADDI"  , [rs; rt; imm]) -> `MIPSIType (MIPSIOpADDI  ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_imm16 imm))
-| ("ADDIU" , [rs; rt; imm]) -> `MIPSIType (MIPSIOpADDIU ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_imm16 imm))
+| ("ADDI"  , [rs; rt; imm]) -> `MIPSIType (MIPSIOpADDI  ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_simm16 imm))
+| ("ADDIU" , [rs; rt; imm]) -> `MIPSIType (MIPSIOpADDIU ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_simm16 imm))
 | ("ANDI"  , [rs; rt; imm]) -> `MIPSIType (MIPSIOpANDI  ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_imm16 imm))
-| ("DADDI" , [rs; rt; imm]) -> `MIPSIType (MIPSIOpDADDI ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_imm16 imm))
-| ("DADDIU", [rs; rt; imm]) -> `MIPSIType (MIPSIOpDADDIU,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_imm16 imm))
+| ("DADDI" , [rs; rt; imm]) -> `MIPSIType (MIPSIOpDADDI ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_simm16 imm))
+| ("DADDIU", [rs; rt; imm]) -> `MIPSIType (MIPSIOpDADDIU,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_simm16 imm))
 | ("ORI"   , [rs; rt; imm]) -> `MIPSIType (MIPSIOpORI   ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_imm16 imm))
-| ("SLTI"  , [rs; rt; imm]) -> `MIPSIType (MIPSIOpSLTI  ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_imm16 imm))
-| ("SLTIU" , [rs; rt; imm]) -> `MIPSIType (MIPSIOpSLTIU ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_imm16 imm))
+| ("SLTI"  , [rs; rt; imm]) -> `MIPSIType (MIPSIOpSLTI  ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_simm16 imm))
+| ("SLTIU" , [rs; rt; imm]) -> `MIPSIType (MIPSIOpSLTIU ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_simm16 imm))
 | ("XORI"  , [rs; rt; imm]) -> `MIPSIType (MIPSIOpXORI  ,(translate_out_ireg rt), (translate_out_ireg rs), (translate_out_imm16 imm))
 
 | ("DSLL"   , [rt; rd; sa]) -> `MIPSShiftI (MIPSDSLL   , (translate_out_ireg rd), (translate_out_ireg rt), (translate_out_imm5 sa))
@@ -70,7 +70,7 @@
      (translate_out_bool linked),
      (translate_out_ireg  base),
      (translate_out_ireg  rt),
-     (translate_out_imm16  offset)
+     (translate_out_simm16 offset)
    )
 | "Store", [width; conditional; base; rt; offset] ->
   `MIPSStore (
@@ -78,19 +78,19 @@
      (translate_out_bool conditional),
      (translate_out_ireg  base),
      (translate_out_ireg  rt),
-     (translate_out_imm16  offset)
+     (translate_out_simm16  offset)
    )
-| "LWL", [base; rt; offset] -> `MIPSLSLR (false, false, true , (translate_out_ireg base), (translate_out_ireg rt), (translate_out_imm16 offset))
-| "LWR", [base; rt; offset] -> `MIPSLSLR (false, false, false, (translate_out_ireg base), (translate_out_ireg rt), (translate_out_imm16 offset))
-| "LDL", [base; rt; offset] -> `MIPSLSLR (false, true , true , (translate_out_ireg base), (translate_out_ireg rt), (translate_out_imm16 offset))
-| "LDR", [base; rt; offset] -> `MIPSLSLR (false, true , false, (translate_out_ireg base), (translate_out_ireg rt), (translate_out_imm16 offset))
-| "SWL", [base; rt; offset] -> `MIPSLSLR (true , false, true , (translate_out_ireg base), (translate_out_ireg rt), (translate_out_imm16 offset))
-| "SWR", [base; rt; offset] -> `MIPSLSLR (true , false, false, (translate_out_ireg base), (translate_out_ireg rt), (translate_out_imm16 offset))
-| "SDL", [base; rt; offset] -> `MIPSLSLR (true , true , true , (translate_out_ireg base), (translate_out_ireg rt), (translate_out_imm16 offset))
-| "SDR", [base; rt; offset] -> `MIPSLSLR (true , true , false, (translate_out_ireg base), (translate_out_ireg rt), (translate_out_imm16 offset))
+| "LWL", [base; rt; offset] -> `MIPSLSLR (false, false, true , (translate_out_ireg base), (translate_out_ireg rt), (translate_out_simm16 offset))
+| "LWR", [base; rt; offset] -> `MIPSLSLR (false, false, false, (translate_out_ireg base), (translate_out_ireg rt), (translate_out_simm16 offset))
+| "LDL", [base; rt; offset] -> `MIPSLSLR (false, true , true , (translate_out_ireg base), (translate_out_ireg rt), (translate_out_simm16 offset))
+| "LDR", [base; rt; offset] -> `MIPSLSLR (false, true , false, (translate_out_ireg base), (translate_out_ireg rt), (translate_out_simm16 offset))
+| "SWL", [base; rt; offset] -> `MIPSLSLR (true , false, true , (translate_out_ireg base), (translate_out_ireg rt), (translate_out_simm16 offset))
+| "SWR", [base; rt; offset] -> `MIPSLSLR (true , false, false, (translate_out_ireg base), (translate_out_ireg rt), (translate_out_simm16 offset))
+| "SDL", [base; rt; offset] -> `MIPSLSLR (true , true , true , (translate_out_ireg base), (translate_out_ireg rt), (translate_out_simm16 offset))
+| "SDR", [base; rt; offset] -> `MIPSLSLR (true , true , false, (translate_out_ireg base), (translate_out_ireg rt), (translate_out_simm16 offset))
 | "SYNC", [] -> `MIPSSYNC
-| "BEQ", [rs; rt; offset; ne; likely] -> `MIPSBEQ ((translate_out_ireg rs), (translate_out_ireg rt), (translate_out_imm16 offset), (translate_out_bool ne), (translate_out_bool likely))
-| "BCMPZ", [rs; offset; cmp; link; likely] -> `MIPSBCMPZ ((translate_out_ireg rs), (translate_out_imm16 offset), (translate_out_cmp cmp), (translate_out_bool link), (translate_out_bool likely))
+| "BEQ", [rs; rt; offset; ne; likely] -> `MIPSBEQ ((translate_out_ireg rs), (translate_out_ireg rt), (translate_out_simm16 offset), (translate_out_bool ne), (translate_out_bool likely))
+| "BCMPZ", [rs; offset; cmp; link; likely] -> `MIPSBCMPZ ((translate_out_ireg rs), (translate_out_simm16 offset), (translate_out_cmp cmp), (translate_out_bool link), (translate_out_bool likely))
 | "J", [offset] -> `MIPSJ (translate_out_imm26 offset)
 | "JAL", [offset] -> `MIPSJAL (translate_out_imm26 offset)
 | "JR", [rd] -> `MIPSJR (translate_out_ireg rd)
