@@ -3,7 +3,7 @@ open Interp_ast ;;
 open Sail_impl_base ;;
 open Interp_utilities ;;
 open Interp_interface ;;
-open Interp_inter_imp ;;
+
 
 open Nat_big_num ;;
 
@@ -498,3 +498,6 @@ let print_stack printer is = printer (instruction_stack_to_string is)
 let print_continuation printer (IState(stack,_)) = 
   let (e,(env,mem)) = top_frame_exp_state stack in print_exp printer env true e
 let print_instruction printer instr = printer (instruction_to_string instr)
+
+let pp_instruction_state state () =
+  (instruction_stack_to_string state,local_variables_to_string state)

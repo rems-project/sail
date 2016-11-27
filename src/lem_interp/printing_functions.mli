@@ -71,3 +71,5 @@ val logfile_address_to_string : address -> string
 
 val byte_list_to_string : byte list -> string
 val bit_lifted_to_string : bit_lifted -> string
+
+val pp_instruction_state : instruction_state -> unit -> (string * string)

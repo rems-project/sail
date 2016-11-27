@@ -202,5 +202,5 @@ val instruction_analysis :
   -> maybe (list (reg_name * register_value)) -> instruction -> (list reg_name * list reg_name * list reg_name * list nia * dia * instruction_kind)
 
 
-val initial_outcome_s_of_instruction : context -> interp_mode -> instruction -> Sail_impl_base.outcome_s instruction_state unit
+val initial_outcome_s_of_instruction : (instruction_state -> unit -> (string * string)) -> context -> interp_mode -> instruction -> Sail_impl_base.outcome_s unit
 

@@ -2,14 +2,10 @@ open import Pervasives_extra
 open import Sail_impl_base
 open import Sail_values
 
-     import Interp_interface
-(* this needs to go away: it's only so we can make the ppcmem outcome types the
-same *)
-
-val return : forall 's 'a. 'a -> outcome 's 'a
+val return : forall 'a. 'a -> outcome 'a
 let return a = Done a
 
-val bind : forall 's 'a 'b. outcome 's 'a -> ('a -> outcome 's 'b) -> outcome 's 'b
+val bind : forall 'a 'b. outcome 'a -> ('a -> outcome 'b) -> outcome 'b
 let rec bind m f = match m with
   | Done a ->              f a
   | Read_mem descr k ->    Read_mem descr   (fun v -> let (o,opt) = k v in (bind o f,opt))
@@ -26,7 +22,7 @@ let rec bind m f = match m with
 end
 
 
-type M 'a = Sail_impl_base.outcome Interp_interface.instruction_state 'a
+type M 'a = outcome 'a
 
 let inline (>>=) = bind
 val (>>) : forall 'b. M unit -> M 'b -> M 'b

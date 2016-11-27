@@ -841,9 +841,12 @@ let interp mode (IState interp_state context) =
     | (o,_) -> o
 end 
 
-val state_to_outcome_s : forall 'v. interp_mode -> instruction_state -> Sail_impl_base.outcome_s instruction_state unit
-val outcome_to_outcome : interp_mode -> Interp_interface.outcome -> Sail_impl_base.outcome instruction_state unit
-let rec outcome_to_outcome mode = function
+val state_to_outcome_s : (instruction_state -> unit -> (string * string)) -> interp_mode -> instruction_state -> Sail_impl_base.outcome_s unit
+val outcome_to_outcome : (instruction_state -> unit -> (string * string)) -> interp_mode -> Interp_interface.outcome -> Sail_impl_base.outcome unit
+
+let rec outcome_to_outcome pp_instruction_state mode = 
+  let state_to_outcome_s = state_to_outcome_s pp_instruction_state in
+  function
   | Interp_interface.Read_mem rk addr size _ k ->
      Sail_impl_base.Read_mem (rk,addr,size) (fun v -> state_to_outcome_s mode (k v))
   | Interp_interface.Write_mem rk addr size _ mv _ k ->
@@ -876,16 +879,15 @@ let rec outcome_to_outcome mode = function
      failwith ("Interpreter error: " ^ message)
 end
 
-and state_to_outcome_s mode state = 
+and state_to_outcome_s pp_instruction_state mode state = 
   let next_outcome' = interp mode state in
-  let next_outcome = outcome_to_outcome mode next_outcome' in
-  (next_outcome, Just state)
+  let next_outcome = outcome_to_outcome pp_instruction_state mode next_outcome' in
+  (next_outcome, Just (pp_instruction_state state))
 
-
-let initial_outcome_s_of_instruction context mode instruction =
+val initial_outcome_s_of_instruction : (instruction_state -> unit -> (string * string)) -> context -> interp_mode -> instruction -> Sail_impl_base.outcome_s unit
+let initial_outcome_s_of_instruction pp_instruction_state context mode instruction =
   let state = instruction_to_istate context instruction in
-  let initial_outcome' = interp mode state in
-  (outcome_to_outcome mode initial_outcome',Just state)
+  state_to_outcome_s pp_instruction_state mode state
 
 
 (*Update slice potentially here*)
