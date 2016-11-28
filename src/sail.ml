@@ -52,7 +52,6 @@ let opt_print_version = ref false
 let opt_print_verbose = ref false
 let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
-let opt_print_lem_sequential = ref false
 let opt_print_ocaml = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_ocaml = ref ([]:string list)
@@ -70,9 +69,6 @@ let options = Arg.align ([
   ( "-lem",
     Arg.Set opt_print_lem,
     " print a Lem translated version of the specification to integrate with a concurrency model");
-  ( "-lem_sequential",
-    Arg.Set opt_print_lem_sequential,
-    " print a Lem translated version of the specification as a sequential model");
   ( "-ocaml",
     Arg.Set opt_print_ocaml,
     " print an Ocaml translated version of the specification");
@@ -138,12 +134,6 @@ let main() =
          then output "" (Lem_out None) [out_name,ast_lem]
          else output "" (Lem_out (Some (List.hd !opt_libs_lem))) [out_name,ast_lem]
        else ());
-      (if !(opt_print_lem_sequential)
-       then let ast_lem = rewrite_ast_lem ast in
-         if !(opt_libs_lem) = []
-         then output "" (Lem_sequential_out None) [out_name,ast_lem]
-         else output "" (Lem_sequential_out (Some (List.hd !opt_libs_lem))) [out_name,ast_lem]
-       else ())
     end
 
 let _ =  try

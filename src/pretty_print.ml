@@ -3057,17 +3057,19 @@ let doc_spec_lem regtypes (VS_aux (valspec,annot)) =
 
 
 let doc_def_lem regtypes def = match def with
-  | DEF_default df -> empty
-  | DEF_spec v_spec -> doc_spec_lem regtypes v_spec
-  | DEF_type t_def -> group (doc_typdef_lem regtypes t_def) ^/^ hardline
-  | DEF_fundef f_def -> group (doc_fundef_lem regtypes f_def) ^/^ hardline
-  | DEF_val lbind -> group (doc_let_lem regtypes lbind) ^/^ hardline
-  | DEF_reg_dec dec -> group (doc_dec_lem dec)
+  | DEF_spec v_spec -> (doc_spec_lem regtypes v_spec,empty)
+  | DEF_type t_def -> (group (doc_typdef_lem regtypes t_def) ^/^ hardline,empty)
+  | DEF_reg_dec dec -> (group (doc_dec_lem dec),empty)
+
+  | DEF_default df -> (empty,empty)
+  | DEF_fundef f_def -> (empty,group (doc_fundef_lem regtypes f_def) ^/^ hardline)
+  | DEF_val lbind -> (empty,group (doc_let_lem regtypes lbind) ^/^ hardline)
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"
 
 
 let doc_defs_lem regtypes (Defs defs) =
-  separate_map empty (doc_def_lem regtypes) defs
+  let (typdefs,valdefs) = List.split (List.map (doc_def_lem regtypes) defs) in
+  (separate empty typdefs,separate empty valdefs)
 
 let find_regtypes (Defs defs) =
   List.fold_left
@@ -3081,14 +3083,14 @@ let find_regtypes (Defs defs) =
 let typ_to_t env =
   Type_check.typ_to_t env false false
 
-let pp_defs_lem f d top_line opens =
+let pp_defs_lem (types_file,types_modules) (prompt_file,prompt_modules) (state_file,state_modules) d top_line =
   let regtypes = find_regtypes d in
-  let defs = doc_defs_lem regtypes d in
-  (print f)
+  let (typdefs,valdefs) = doc_defs_lem regtypes d in
+  (print types_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
         (separate_map hardline)
-          (fun lib -> separate space [string "open import";string lib]) opens;hardline;
+          (fun lib -> separate space [string "open import";string lib]) types_modules;hardline;
         (separate_map hardline)
           (fun lib -> separate space [string "     import";string lib]) ["Interp";"Interp_ast"]; hardline;
         hardline;
@@ -3096,4 +3098,18 @@ let pp_defs_lem f d top_line opens =
         string "module SIA = Interp_ast"; hardline;
         string "module SV = Sail_values"; hardline;
         hardline;
-        defs])
+        typdefs]);
+  (print prompt_file)
+    (concat
+       [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
+        (separate_map hardline)
+          (fun lib -> separate space [string "open import";string lib]) prompt_modules;hardline;
+        hardline;
+        valdefs]);
+  (print state_file)
+    (concat
+       [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
+        (separate_map hardline)
+          (fun lib -> separate space [string "open import";string lib]) state_modules;hardline;
+        hardline;
+        valdefs]);
