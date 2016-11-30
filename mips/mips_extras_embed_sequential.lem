@@ -40,7 +40,7 @@ let MEMval_tag_conditional (_,_,v) = write_mem_val endian v >>= fun b -> return 
 
 val MEM_sync  : unit -> M unit
 
-let MEM_sync () = barrier Barrier_Isync
+let MEM_sync () = barrier Barrier_MIPS_SYNC
 
 
 let duplicate (bit,len) =

@@ -73,6 +73,5 @@ let memory_vals : memory_write_vals =
 
 
 let barrier_functions = [
-  (*Need to know what barrier kind to install*)
-  ("MEM_sync", Barrier_Isync);
+  ("MEM_sync", Barrier_MIPS_SYNC);
   ]

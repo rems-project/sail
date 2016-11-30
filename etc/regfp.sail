@@ -61,6 +61,7 @@ typedef barrier_kind = enumerate {
   Barrier_DSB_ST;
   Barrier_DSB_LD;
   Barrier_ISB;
+  Barrier_MIPS_SYNC;
 }
 
 typedef instruction_kind = const union {

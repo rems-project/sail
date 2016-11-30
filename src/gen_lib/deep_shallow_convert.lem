@@ -455,6 +455,7 @@ let barrier_kindToInterpValue = function
   | Barrier_DSB_ST -> V_ctor (Id_aux (Id "Barrier_DSB_ST") Unknown) (T_id "barrier_kind") (C_Enum 8) (toInterpValue ())
   | Barrier_DSB_LD -> V_ctor (Id_aux (Id "Barrier_DSB_LD") Unknown) (T_id "barrier_kind") (C_Enum 9) (toInterpValue ())
   | Barrier_ISB -> V_ctor (Id_aux (Id "Barrier_ISB") Unknown) (T_id "barrier_kind") (C_Enum 10) (toInterpValue ())
+  | Barrier_MIPS_SYNC -> V_ctor (Id_aux (Id "Barrier_MIPS_SYNC") Unknown) (T_id "barrier_kind") (C_Enum 11) (toInterpValue ())
   end
 let rec barrier_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Barrier_Sync") _) _ _ v -> Barrier_Sync
@@ -468,6 +469,7 @@ let rec barrier_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Barrier_DSB_ST") _) _ _ v -> Barrier_DSB_ST
   | V_ctor (Id_aux (Id "Barrier_DSB_LD") _) _ _ v -> Barrier_DSB_LD
   | V_ctor (Id_aux (Id "Barrier_ISB") _) _ _ v -> Barrier_ISB
+  | V_ctor (Id_aux (Id "Barrier_MIPS_SYNC") _) _ _ v -> Barrier_MIPS_SYNC
   | V_tuple [v] -> barrier_kindFromInterpValue v
   | v -> failwith ("fromInterpValue barrier_kind: unexpected value. " ^
                      Interp.debug_print_value v)

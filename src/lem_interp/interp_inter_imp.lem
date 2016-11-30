@@ -535,6 +535,7 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
                         | "Barrier_DSB_ST" -> Barrier_DSB_ST
                         | "Barrier_DSB_LD" -> Barrier_DSB_LD
                         | "Barrier_ISB" ->    Barrier_ISB
+                        | "Barrier_MIPS_SYNC" ->    Barrier_MIPS_SYNC
                         end)
          | Interp.V_ctor (Id_aux (Id "IK_mem_read") _) _ _
            (Interp.V_ctor (Id_aux (Id r) _) _ _ _) ->

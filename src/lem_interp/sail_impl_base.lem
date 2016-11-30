@@ -402,6 +402,8 @@ type barrier_kind =
   (* AArch64 barriers *)
   | Barrier_DMB | Barrier_DMB_ST | Barrier_DMB_LD | Barrier_DSB
   | Barrier_DSB_ST | Barrier_DSB_LD | Barrier_ISB 
+  (* MIPS barriers *)
+  | Barrier_MIPS_SYNC
 
 type instruction_kind = 
   | IK_barrier of barrier_kind 
@@ -627,6 +629,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_Sync, Barrier_DSB_ST) -> LT
   | (Barrier_Sync, Barrier_DSB_LD) -> LT
   | (Barrier_Sync, Barrier_ISB)    -> LT
+  | (Barrier_Sync, Barrier_MIPS_SYNC) -> LT
 
   | (Barrier_LwSync, Barrier_Sync)   -> GT
   | (Barrier_LwSync, Barrier_LwSync) -> EQ
@@ -639,6 +642,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_LwSync, Barrier_DSB_ST) -> LT
   | (Barrier_LwSync, Barrier_DSB_LD) -> LT
   | (Barrier_LwSync, Barrier_ISB)    -> LT
+  | (Barrier_LwSync, Barrier_MIPS_SYNC) -> LT
 
   | (Barrier_Eieio, Barrier_Sync)   -> GT
   | (Barrier_Eieio, Barrier_LwSync) -> GT
@@ -651,6 +655,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_Eieio, Barrier_DSB_ST) -> LT
   | (Barrier_Eieio, Barrier_DSB_LD) -> LT
   | (Barrier_Eieio, Barrier_ISB)    -> LT
+  | (Barrier_Eieio, Barrier_MIPS_SYNC) -> LT
 
   | (Barrier_Isync, Barrier_Sync)   -> GT
   | (Barrier_Isync, Barrier_LwSync) -> GT
@@ -663,6 +668,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_Isync, Barrier_DSB_ST) -> LT
   | (Barrier_Isync, Barrier_DSB_LD) -> LT
   | (Barrier_Isync, Barrier_ISB)    -> LT
+  | (Barrier_Isync, Barrier_MIPS_SYNC) -> LT
 
   | (Barrier_DMB, Barrier_Sync)   -> GT
   | (Barrier_DMB, Barrier_LwSync) -> GT
@@ -675,6 +681,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_DMB, Barrier_DSB_ST) -> LT
   | (Barrier_DMB, Barrier_DSB_LD) -> LT
   | (Barrier_DMB, Barrier_ISB)    -> LT
+  | (Barrier_DMB, Barrier_MIPS_SYNC) -> LT
 
   | (Barrier_DMB_ST, Barrier_Sync)   -> GT
   | (Barrier_DMB_ST, Barrier_LwSync) -> GT
@@ -687,6 +694,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_DMB_ST, Barrier_DSB_ST) -> LT
   | (Barrier_DMB_ST, Barrier_DSB_LD) -> LT
   | (Barrier_DMB_ST, Barrier_ISB)    -> LT
+  | (Barrier_DMB_ST, Barrier_MIPS_SYNC) -> LT
 
   | (Barrier_DMB_LD, Barrier_Sync)   -> GT
   | (Barrier_DMB_LD, Barrier_LwSync) -> GT
@@ -699,6 +707,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_DMB_LD, Barrier_DSB_ST) -> LT
   | (Barrier_DMB_LD, Barrier_DSB_LD) -> LT
   | (Barrier_DMB_LD, Barrier_ISB)    -> LT
+  | (Barrier_DMB_LD, Barrier_MIPS_SYNC) -> LT
 
   | (Barrier_DSB, Barrier_Sync)   -> GT
   | (Barrier_DSB, Barrier_LwSync) -> GT
@@ -711,6 +720,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_DSB, Barrier_DSB_ST) -> LT
   | (Barrier_DSB, Barrier_DSB_LD) -> LT
   | (Barrier_DSB, Barrier_ISB)    -> LT
+  | (Barrier_DSB, Barrier_MIPS_SYNC) -> LT
 
   | (Barrier_DSB_ST, Barrier_Sync)   -> GT
   | (Barrier_DSB_ST, Barrier_LwSync) -> GT
@@ -723,6 +733,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_DSB_ST, Barrier_DSB_ST) -> EQ
   | (Barrier_DSB_ST, Barrier_DSB_LD) -> LT
   | (Barrier_DSB_ST, Barrier_ISB)    -> LT
+  | (Barrier_DSB_ST, Barrier_MIPS_SYNC) -> LT
 
   | (Barrier_DSB_LD, Barrier_Sync)   -> GT
   | (Barrier_DSB_LD, Barrier_LwSync) -> GT
@@ -735,6 +746,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_DSB_LD, Barrier_DSB_ST) -> GT
   | (Barrier_DSB_LD, Barrier_DSB_LD) -> EQ
   | (Barrier_DSB_LD, Barrier_ISB)    -> LT
+  | (Barrier_DSB_LD, Barrier_MIPS_SYNC) -> LT
                           
   | (Barrier_ISB, Barrier_Sync)   -> GT
   | (Barrier_ISB, Barrier_LwSync) -> GT
@@ -747,6 +759,20 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_ISB, Barrier_DSB_ST) -> GT
   | (Barrier_ISB, Barrier_DSB_LD) -> GT
   | (Barrier_ISB, Barrier_ISB)    -> EQ
+  | (Barrier_ISB, Barrier_MIPS_SYNC) -> LT
+
+  | (Barrier_ISB, Barrier_Sync)   -> GT
+  | (Barrier_ISB, Barrier_LwSync) -> GT
+  | (Barrier_ISB, Barrier_Eieio)  -> GT
+  | (Barrier_ISB, Barrier_Isync)  -> GT
+  | (Barrier_ISB, Barrier_DMB)    -> GT
+  | (Barrier_ISB, Barrier_DMB_ST) -> GT
+  | (Barrier_ISB, Barrier_DMB_LD) -> GT
+  | (Barrier_ISB, Barrier_DSB)    -> GT
+  | (Barrier_ISB, Barrier_DSB_ST) -> GT
+  | (Barrier_ISB, Barrier_DSB_LD) -> GT
+  | (Barrier_ISB, Barrier_ISB)    -> GT
+  | (Barrier_ISB, Barrier_MIPS_SYNC) -> EQ
   end
 let inline {ocaml} barrier_kindCompare = defaultCompare
 

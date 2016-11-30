@@ -403,7 +403,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
     case (PREF(base, op, imm)) =
 *)
     case (SYNC) -> {
-      iK := IK_barrier(Barrier_Sync);
+      iK := IK_barrier(Barrier_MIPS_SYNC);
     }
 (*
     case (MFC0(rt, rd, sel, double))
