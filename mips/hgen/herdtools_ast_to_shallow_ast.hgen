@@ -1,0 +1,121 @@
+| `MIPSThreadStart ->
+    SYSCALL_THREAD_START
+
+| `MIPSStopFetching ->
+    ImplementationDefinedStopFetching0
+
+(* Note different argument order, which reflects difference
+   between instruction encoding and asm format  *)
+| `MIPSRType (op, rd, rs, rt) ->
+    (translate_rtype_op op)
+      (
+      translate_reg "rs" rs,
+      translate_reg "rt" rt,
+      translate_reg "rd" rd
+       )
+      
+
+(* Note different argument order similar to above *)
+| `MIPSIType (op, rt, rs, imm) ->
+    (translate_itype_op op)
+      (
+      translate_reg "rs" rs,
+      translate_reg "rt" rt,
+      translate_imm16 "imm" imm
+       )
+      
+
+| `MIPSShiftI (op, rd, rt, sa) ->
+    (translate_shifti_op op)
+      (
+      translate_reg "rt" rt,
+      translate_reg "rd" rd,
+      translate_imm5 "sa" sa
+       )
+      
+
+| `MIPSShiftV (op, rd, rt, rs) ->
+    (translate_shiftv_op op)
+      (
+      translate_reg "rs" rs,
+      translate_reg "rt" rt,
+      translate_reg "rd" rd
+      )
+      
+
+| `MIPSMulDiv (op, rs, rt) ->
+    (translate_muldiv_op op)
+      (
+      translate_reg "rs" rs,
+      translate_reg "rt" rt
+      )
+      
+
+| `MIPSMFHiLo (op, rs) ->
+    (translate_mfhilo_op op)
+      (
+      translate_reg "rs" rs
+      )
+      
+| `MIPSLUI (rt, imm) ->
+  LUI
+      (
+      translate_reg "rt" rt,
+      translate_imm16 "imm" imm
+      )
+      
+| `MIPSLoad (width, signed, linked, base, rt, offset) ->
+  Load
+      (
+      translate_wordsize "width" width,
+      translate_bool "signed" signed,
+      translate_bool "linked" linked,
+      translate_reg "base" base,
+      translate_reg "rt" rt,
+      translate_imm16 "offset" offset
+      )
+      
+| `MIPSStore (width, conditional, base, rt, offset) ->
+  Store
+      (
+      translate_wordsize "width" width,
+      translate_bool "conditional" conditional,
+      translate_reg "base" base,
+      translate_reg "rt" rt,
+      translate_imm16 "offset" offset
+      )
+      
+| `MIPSLSLR (store, double, left, base, rt, offset) ->
+  (translate_lslr_op store double left)
+      (
+      translate_reg "base" base,
+      translate_reg "rt" rt,
+      translate_imm16 "offset" offset
+      )
+      
+| `MIPSSYNC -> SYNC
+| `MIPSBEQ (rs, rt, offset, ne, likely) ->
+  BEQ
+  (translate_reg "rs" rs,
+   translate_reg "rt" rt,
+   translate_imm16 "offset" offset,
+   translate_bool "ne" ne,
+   translate_bool "likely" likely
+   ) 
+
+| `MIPSBCMPZ (rs, offset, cmp, link, likely) ->
+  BCMPZ
+  (translate_reg "rs" rs,
+   translate_imm16 "offset" offset,
+   translate_cmp "cmp" cmp,
+   translate_bool "link" link,
+   translate_bool "likely" likely
+   ) 
+| `MIPSJ (offset) ->
+  J (translate_imm26 "offset" offset) 
+| `MIPSJAL (offset) ->
+  JAL (translate_imm26 "offset" offset) 
+| `MIPSJR(rd) ->
+  JR (translate_reg "rd" rd) 
+| `MIPSJALR(rd, rs) ->
+  JALR (translate_reg "rd" rd, translate_reg "rs" rs) 

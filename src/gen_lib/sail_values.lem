@@ -129,7 +129,7 @@ val set_vector_start : forall 'a. integer -> vector 'a -> vector 'a
 let set_vector_start new_start (Vector bs _ is_inc) =
   Vector bs new_start is_inc
 
-let copy v =
+let reset_vector_start v =
   set_vector_start (if (get_dir v) then 0 else (length v - 1)) v
 
 let set_vector_start_to_length v =

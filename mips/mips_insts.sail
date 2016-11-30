@@ -1014,6 +1014,14 @@ function clause decode (0b000000 : 0xfffff : 0b001100) =
   Some(SYSCALL_THREAD_START)
 function clause execute (SYSCALL_THREAD_START) = ()
 
+
+(* fake stop fetching instruction for ppcmem, execute doesn't do anything,
+   decode never produces it *)
+
+union ast member unit ImplementationDefinedStopFetching
+function clause execute (ImplementationDefinedStopFetching) = ()
+
+
 union ast member unit SYSCALL
 function clause decode (0b000000 : (bit[20]) code : 0b001100) =
   Some(SYSCALL) (* code is ignored *)

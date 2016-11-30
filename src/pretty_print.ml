@@ -7,6 +7,8 @@ open Big_int
  * annotated source to Lem ast pretty printer
 ****************************************************************************)
 
+let print_to_from_interp_value = ref false
+
 let rec list_format (sep : string) (fmt : 'a -> string) (ls : 'a list) : string =
   match ls with
   | [] -> ""
@@ -2368,13 +2370,20 @@ let doc_exp_lem, doc_let_lem =
              let epp = align (string "~" ^^ expY a) in
              if aexp_needed then parens (align epp) else epp
           | Base (_,Constructor _,_,_,_,_) ->
+             let argpp a_needed arg =
+               let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
+               match t with
+               | Tapp("vector",_) ->
+                  let epp = concat [string "reset_vector_start";space;expY arg] in
+                  if a_needed then parens epp else epp
+               | _ -> expV a_needed arg in
              let epp =
                match args with
                | [] -> doc_id_lem_ctor f
-               | [arg] -> doc_id_lem_ctor f ^^ space ^^ expY arg
+               | [arg] -> doc_id_lem_ctor f ^^ space ^^ argpp true arg
                | _ ->
                   doc_id_lem_ctor f ^^ space ^^ 
-                    parens (separate_map comma expY args) in
+                    parens (separate_map comma (argpp false) args) in
              if aexp_needed then parens (align epp) else epp
           | _ ->
              let call = match annot with
@@ -2384,7 +2393,7 @@ let doc_exp_lem, doc_let_lem =
                let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
                match t with
                | Tapp("vector",_) ->
-                  let epp = concat [string "copy";space;expY arg] in
+                  let epp = concat [string "reset_vector_start";space;expY arg] in
                   if a_needed then parens epp else epp
                | _ -> expV a_needed arg in
              let argspp = match args with
@@ -2636,7 +2645,7 @@ let doc_exp_lem, doc_let_lem =
            let argpp arg =
              let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
              match t with
-             | Tapp("vector",_) -> parens (concat [string "copy";space;expY arg])
+             | Tapp("vector",_) -> parens (concat [string "reset_vector_start";space;expY arg])
              | _ -> expY arg in
            let epp =
              let aux name = align (argpp e1 ^^ space ^^ string name ^//^ argpp e2) in
@@ -2870,9 +2879,11 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                        string "let fromInterpValue = ";fromInterpValueF]))
            ^/^ string "end" in
          typ_pp ^^ hardline ^^ hardline ^^
+           if !print_to_from_interp_value then
            toInterpValuePP ^^ hardline ^^ hardline ^^
              fromInterpValuePP ^^ hardline ^^ hardline ^^
-               fromToInterpValuePP ^^ hardline)
+               fromToInterpValuePP ^^ hardline
+           else empty)
   | TD_enum(id,nm,enums,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
@@ -2955,9 +2966,11 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                       string "let fromInterpValue = ";fromInterpValueF]))
            ^/^ string "end" in
           typ_pp ^^ hardline ^^ hardline ^^
-            toInterpValuePP ^^ hardline ^^ hardline ^^
+            if !print_to_from_interp_value 
+            then toInterpValuePP ^^ hardline ^^ hardline ^^
               fromInterpValuePP ^^ hardline ^^ hardline ^^
-                fromToInterpValuePP ^^ hardline)
+                fromToInterpValuePP ^^ hardline
+            else empty)
   | TD_register(id,n1,n2,rs) ->
     match n1,n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
@@ -3091,13 +3104,18 @@ let pp_defs_lem (types_file,types_modules) (prompt_file,prompt_modules) (state_f
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
         (separate_map hardline)
           (fun lib -> separate space [string "open import";string lib]) types_modules;hardline;
-        (separate_map hardline)
-          (fun lib -> separate space [string "     import";string lib]) ["Interp";"Interp_ast"]; hardline;
-        hardline;
-        string "module SI = Interp"; hardline;
-        string "module SIA = Interp_ast"; hardline;
+        if !print_to_from_interp_value
+        then
+          concat
+            [(separate_map hardline)
+               (fun lib -> separate space [string "     import";string lib]) ["Interp";"Interp_ast"];
+             hardline;
+             hardline;
+             string "module SI = Interp"; hardline;
+             string "module SIA = Interp_ast"; hardline;
+             hardline]
+        else empty;
         string "module SV = Sail_values"; hardline;
-        hardline;
         typdefs]);
   (print prompt_file)
     (concat
