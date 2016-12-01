@@ -183,7 +183,7 @@ let output1 libpath out_arg filename defs  =
          let ((o'',_, _) as ext_o'') =
            open_output_with_check_unformatted (f' ^ "embed_sequential.lem") in
 	 (Pretty_print.pp_defs_lem
-            (o,["Pervasives_extra";"Sail_impl_base";"Sail_values";"Deep_shallow_convert"])
+            (o,["Pervasives_extra";"Sail_impl_base";"Sail_values"])
             (o',["Pervasives_extra";"Sail_impl_base";"Prompt";"Sail_values";
             String.capitalize types_module])
             (o'',["Pervasives_extra";"Sail_impl_base";"State";"Sail_values";
@@ -202,7 +202,7 @@ let output1 libpath out_arg filename defs  =
          let ((o'',_, _) as ext_o'') =
            open_output_with_check_unformatted (f' ^ "_embed_sequential.lem") in
 	 (Pretty_print.pp_defs_lem
-            (o,["Pervasives_extra";"Sail_impl_base";"Sail_values";"Deep_shallow_convert";lib])
+            (o,["Pervasives_extra";"Sail_impl_base";"Sail_values";lib])
             (o',["Pervasives_extra";"Sail_impl_base";"Prompt";
                  "Sail_values";String.capitalize types_module;lib])
             (o'',["Pervasives_extra";"Sail_impl_base";"State";

@@ -3109,6 +3109,7 @@ let pp_defs_lem (types_file,types_modules) (prompt_file,prompt_modules) (state_f
           concat
             [(separate_map hardline)
                (fun lib -> separate space [string "     import";string lib]) ["Interp";"Interp_ast"];
+             string "open import Deep_shallow_convert";
              hardline;
              hardline;
              string "module SI = Interp"; hardline;
