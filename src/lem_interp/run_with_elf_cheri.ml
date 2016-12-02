@@ -1250,9 +1250,9 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
               (instruction,istate)
             | Decode_error d ->
               (match d with
-              | Sail_impl_base.Unsupported_instruction_error instr ->
+              | Interp_interface.Unsupported_instruction_error instr ->
                 errorf "\n**** Encountered unsupported instruction %s ****\n" (Printing_functions.instruction_to_string instr)
-              | Sail_impl_base.Not_an_instruction_error op ->
+              | Interp_interface.Not_an_instruction_error op ->
                 (match op with
                 | Opcode bytes ->
                   errorf "\n**** Encountered non-decodeable opcode: %s ****\n" (Printing_functions.byte_list_to_string bytes))
