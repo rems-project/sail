@@ -39,6 +39,7 @@ MIPS_NOTLB_SAILS:=$(MIPS_NOTLB_SAILS_PRE) $(BITBUCKET_ROOT)/sail/etc/regfp.sail 
 
 CHERI_SAIL_DIR:=$(BITBUCKET_ROOT)/sail/cheri
 
+CHERI_NOTLB_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb_stub.sail $(CHERI_SAIL_DIR)/cheri_prelude.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 CHERI_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(CHERI_SAIL_DIR)/cheri_prelude.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
 elf:
@@ -74,6 +75,11 @@ _build/cheri.lem: $(CHERI_SAILS) ./sail.native
 	mkdir -p _build
 	cd _build ;\
 	../sail.native -lem_ast -o cheri $(CHERI_SAILS)
+
+_build/cheri_notlb.lem: $(CHERI_NOTLB_SAILS) ./sail.native
+	mkdir -p _build
+	cd _build ;\
+	../sail.native -lem_ast -o cheri_notlb $(CHERI_NOTLB_SAILS)
 
 _build/mips_all.sail: $(MIPS_SAILS)
 	cat $(MIPS_SAILS) > $@

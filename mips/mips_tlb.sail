@@ -58,6 +58,7 @@ function (bit[64], bool) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessT
   }
 }
 
+(* perform TLB translation. bool is CHERI specific TLB bits noStoreCap/suppressTag *)
 function (bit[64], bool) TLBTranslateC ((bit[64]) vAddr, (MemAccessType) accessType) = 
   {
     let currentAccessLevel = getAccessLevel() in
