@@ -100,21 +100,21 @@ let translate_imm16 name value =
 let translate_imm5 name value = 
     Sail_values.to_vec0 is_inc (Nat_big_num.of_int 5,Nat_big_num.of_int value)
 let translate_bool name = function
-  | true -> Sail_values.I
-  | false -> Sail_values.O
+  | true -> Sail_values.B1
+  | false -> Sail_values.B0
 
 let translate_wordsize _ = function
- | MIPSByte -> Mips_embed_types.B0
+ | MIPSByte -> Mips_embed_types.B2
  | MIPSHalf -> Mips_embed_types.H
  | MIPSWord -> Mips_embed_types.W
  | MIPSDouble -> Mips_embed_types.D
 
 let translate_cmp _ = function
-  | MIPS_EQ  -> EQ_
+  | MIPS_EQ  -> EQ'
   | MIPS_NE  -> NE
   | MIPS_GE  -> GE
   | MIPS_GEU -> GEU
-  | MIPS_GT  -> GT_
+  | MIPS_GT  -> GT'
   | MIPS_LE  -> LE
-  | MIPS_LT  -> LT_
+  | MIPS_LT  -> LT'
   | MIPS_LTU -> LTU

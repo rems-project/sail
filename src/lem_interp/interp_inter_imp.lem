@@ -862,8 +862,8 @@ let rec outcome_to_outcome pp_instruction_state mode =
      Sail_impl_base.Write_reg (r,rv) (state_to_outcome_s mode state)
   | Interp_interface.Nondet_choice _ _ ->
      failwith "Nondet_choice not supported yet"
-  | Interp_interface.Escape maybestate _ ->
-     Sail_impl_base.Escape Nothing (Maybe.map (state_to_outcome_s mode) maybestate)
+  | Interp_interface.Escape _ _ ->
+     Sail_impl_base.Escape Nothing
   | Interp_interface.Fail maybestring ->
      Sail_impl_base.Fail maybestring
   | Interp_interface.Internal maybestring maybeprint state ->

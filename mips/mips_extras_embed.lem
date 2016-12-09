@@ -33,9 +33,9 @@ val MEMval_tag             : (vector bitU * integer * vector bitU) -> M unit
 val MEMval_tag_conditional : (vector bitU * integer * vector bitU) -> M bitU
 
 let MEMval (_,_,v)                 = write_mem_val endian v >>= fun _ -> return ()
-let MEMval_conditional (_,_,v)     = write_mem_val endian v >>= fun b -> return (if b then I else O)
+let MEMval_conditional (_,_,v)     = write_mem_val endian v >>= fun b -> return (if b then B1 else B0)
 let MEMval_tag (_,_,v)             = write_mem_val endian v >>= fun _ -> return ()
-let MEMval_tag_conditional (_,_,v) = write_mem_val endian v >>= fun b -> return (if b then I else O)
+let MEMval_tag_conditional (_,_,v) = write_mem_val endian v >>= fun b -> return (if b then B1 else B0)
 
 
 val MEM_sync  : unit -> M unit

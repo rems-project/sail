@@ -15,7 +15,7 @@ let rec bind m f = match m with
   | Barrier descr o_s ->   Barrier descr    (let (o,opt) = o_s in (bind o f,opt))
   | Footprint o_s ->       Footprint        (let (o,opt) = o_s in (bind o f,opt))
   | Write_reg descr o_s -> Write_reg descr  (let (o,opt) = o_s in (bind o f,opt))
-  | Escape descr mo  ->    Escape descr mo
+  | Escape descr ->        Escape descr
   | Fail descr ->          Fail descr
   | Error descr ->         Error descr
   | Internal descr o_s ->  Internal descr   (let (o,opt) = o_s in (bind o f ,opt))

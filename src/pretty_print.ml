@@ -2036,37 +2036,36 @@ let langlebar = string "<|"
 let ranglebar = string "|>"
 let anglebars = enclose langlebar ranglebar
 
-module M = Map.Make(String)
 
-let keywords =
-  (List.fold_left (fun m x -> M.add x (x ^ "_") m) (M.empty))
-    [
-      "assert";
-      "lsl";
-      "lsr";
-      "asr";
-      "type";
-      "fun";
-      "function";
-      "raise";
-      "try";
-      "match";
-      "with";
-      "field";
-      "LT";
-      "GT";
-      "EQ";
-      "integer";
-    ]
+let fix_id name = match name with
+  | "assert"
+  | "lsl"
+  | "lsr"
+  | "asr"
+  | "type"
+  | "fun"
+  | "function"
+  | "raise"
+  | "try"
+  | "match"
+  | "with"
+  | "field"
+  | "LT"
+  | "GT"
+  | "EQ"
+  | "integer"
+    -> name ^ "'"
+  | _ -> name
 
-let fix_id i = if M.mem i keywords then M.find i keywords else i
 
 let doc_id_lem (Id_aux(i,_)) =
   match i with
   | Id i ->
      (* this not the right place to do this, just a workaround *)
-     if i.[0] = '\'' || is_number(i.[0]) then
-       string ("_" ^ i)
+     if i.[0] = '\'' then
+       string ((String.sub i 1 (String.length i - 1)) ^ "'")
+     else if is_number(i.[0]) then
+       string ("v" ^ i ^ "'")
      else
        string (fix_id i)
   | DeIid x ->
@@ -2076,8 +2075,8 @@ let doc_id_lem (Id_aux(i,_)) =
 
 let doc_id_lem_type (Id_aux(i,_)) =
   match i with
-  | Id("int") -> string "SV.ii"
-  | Id("nat") -> string "SV.ii"
+  | Id("int") -> string "ii"
+  | Id("nat") -> string "ii"
   | Id("option") -> string "maybe"
   | Id i -> string (fix_id i)
   | DeIid x ->
@@ -2180,10 +2179,10 @@ let doc_typ_lem, doc_atomic_typ_lem =
 let doc_lit_lem in_pat (L_aux(lit,l)) a =
   utf8string (match lit with
   | L_unit  -> "()"
-  | L_zero  -> "O"
-  | L_one   -> "I"
-  | L_false -> "O"
-  | L_true  -> "I"
+  | L_zero  -> "B0"
+  | L_one   -> "B1"
+  | L_false -> "B0"
+  | L_true  -> "B1"
   | L_num i ->
      let ipp = string_of_int i in
      if in_pat then "("^ipp^":nn)"
@@ -2195,7 +2194,7 @@ let doc_lit_lem in_pat (L_aux(lit,l)) a =
      let (Base ((_,{t = t}),_,_,_,_,_)) = a in
      (match t with
       | Tid "bit"
-      | Tabbrev ({t = Tid "bit"},_) -> "Undef"
+      | Tabbrev ({t = Tid "bit"},_) -> "BU"
       | Tapp ("register",_)
       | Tabbrev ({t = Tapp ("register",_)},_) -> "UndefinedRegister 0"
       | Tid "string"
@@ -2568,7 +2567,7 @@ let doc_exp_lem, doc_let_lem =
        let default_string =
          match default with
          | Def_val_empty ->
-            if is_bit_vector t then string "Undef"
+            if is_bit_vector t then string "BU"
             else failwith "E_vector_indexed of non-bitvector type without default argument"
          | Def_val_dec e ->
             let (Base ((_,{t = t}),_,_,_,_,_)) = dannot in
@@ -3007,7 +3006,9 @@ let get_id = function
   | [] -> failwith "FD_function with empty list"
   | (FCL_aux (FCL_Funcl (id,_,_),_))::_ -> id
 
-let doc_fundef_lem regtypes (FD_aux(FD_function(r, typa, efa, fcls),_)) =
+module StringSet = Set.Make(String)
+
+let rec doc_fundef_lem regtypes (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [FCL_aux (FCL_Funcl(id,pat,exp),_)] ->
@@ -3020,12 +3021,47 @@ let doc_fundef_lem regtypes (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   | _ ->
     let id = get_id fcls in
     (*    let sep = hardline ^^ pipe ^^ space in *)
-    let clauses =
-      (separate_map (break 1))
-        (fun fcl -> separate space [pipe;doc_funcl_lem regtypes fcl]) fcls in
-    (prefix 2 1)
-      ((separate space) [string "let" ^^ doc_rec_lem r ^^ doc_id_lem id;equals;string "function"])
-      (clauses ^/^ string "end")
+    match id with
+    | Id_aux (Id fname,idl)
+      when fname = "execute" || fname = "initial_analysis" ->
+      let (_,auxiliary_functions,clauses) = 
+        List.fold_left 
+          (fun (already_used_fnames,auxiliary_functions,clauses) funcl ->
+            match funcl with
+            | FCL_aux (FCL_Funcl (Id_aux (Id _,l),pat,exp),annot) ->
+               let (P_aux (P_app (Id_aux (Id ctor,l),argspat),pannot)) = pat in
+               let rec pick_name_not_clashing_with already_used candidate =
+                 if StringSet.mem candidate already_used then
+                   pick_name_not_clashing_with already_used (candidate ^ "'")
+                 else candidate in
+               let aux_fname = pick_name_not_clashing_with already_used_fnames (fname ^ "_" ^ ctor) in
+               let already_used_fnames = StringSet.add aux_fname already_used_fnames in
+               let fcl = FCL_aux (FCL_Funcl (Id_aux (Id aux_fname,l),
+                                             P_aux (P_tup argspat,pannot),exp),annot) in
+               let auxiliary_functions = 
+                  auxiliary_functions ^^ hardline ^^ hardline ^^
+                    doc_fundef_lem regtypes (FD_aux (FD_function(r,typa,efa,[fcl]),fannot)) in
+               let clauses =
+                 clauses ^^ (break 1) ^^
+                   (separate space
+                      [pipe;doc_pat_lem regtypes false pat;arrow;
+                       string aux_fname;
+                       doc_pat_lem regtypes true (P_aux (P_tup argspat, pannot))]) in
+               (already_used_fnames,auxiliary_functions,clauses)
+          ) (StringSet.empty,empty,empty) fcls in
+
+      auxiliary_functions ^^ hardline ^^ hardline ^^
+      (prefix 2 1)
+        ((separate space) [string "let" ^^ doc_rec_lem r ^^ doc_id_lem id;equals;string "function"])
+        (clauses ^/^ string "end")
+    | _ ->
+      let clauses =
+        (separate_map (break 1))
+          (fun fcl -> separate space [pipe;doc_funcl_lem regtypes fcl]) fcls in
+      (prefix 2 1)
+        ((separate space) [string "let" ^^ doc_rec_lem r ^^ doc_id_lem id;equals;string "function"])
+        (clauses ^/^ string "end")
+      
 
 
 let doc_dec_lem (DEC_aux (reg,(l,annot))) =
@@ -3116,7 +3152,6 @@ let pp_defs_lem (types_file,types_modules) (prompt_file,prompt_modules) (state_f
              string "module SIA = Interp_ast"; hardline;
              hardline]
         else empty;
-        string "module SV = Sail_values"; hardline;
         typdefs]);
   (print prompt_file)
     (concat

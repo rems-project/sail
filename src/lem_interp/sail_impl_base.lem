@@ -103,13 +103,16 @@ end
 let ~{ocaml} bit_liftedCompare (bl1:bit_lifted) (bl2:bit_lifted) =
   match (bl1,bl2) with
   | (Bitl_zero, Bitl_zero) -> EQ
-  | (Bitl_one, Bitl_one) -> EQ
-  | (Bitl_undef,Bitl_undef) -> EQ
-  | (Bitl_unknown,Bitl_unknown) -> EQ
   | (Bitl_zero,_) -> LT
+  | (Bitl_one, Bitl_zero) -> GT
+  | (Bitl_one, Bitl_one) -> EQ
   | (Bitl_one, _) -> LT
-  | (Bitl_undef, _) -> LT
-  | (_,_) -> GT
+  | (Bitl_undef,Bitl_zero) -> GT
+  | (Bitl_undef,Bitl_one) -> GT
+  | (Bitl_undef,Bitl_undef) -> EQ
+  | (Bitl_undef,_) -> LT
+  | (Bitl_unknown,Bitl_unknown) -> EQ
+  | (Bitl_unknown,_) -> GT
   end
 let inline {ocaml} bit_liftedCompare = defaultCompare
 
@@ -416,30 +419,32 @@ they just have particular nias (and will be IK_simple *)
   | IK_simple
 
 (* the address_lifted types should go away here and be replaced by address *)
+type with_pp 'o = 'o * maybe (unit -> (string * string))
 type outcome 'a =
   (* Request to read memory, value is location to read, integer is size to read,
      followed by registers that were used in computing that size *)
-  | Read_mem of (read_kind * address_lifted * nat) * (memory_value -> outcome_s 'a)
+  | Read_mem of (read_kind * address_lifted * nat) * (memory_value -> with_pp (outcome 'a))
   (* Tell the system a write is imminent, at address lifted, of size nat *)
-  | Write_ea of (write_kind * address_lifted * nat) * outcome_s 'a
+  | Write_ea of (write_kind * address_lifted * nat) * (with_pp (outcome 'a))
   (* Request to write memory at last signalled address. Memory value should be 8
      times the size given in ea signal *)
-  | Write_memv of memory_value * (bool -> outcome_s 'a)
+  | Write_memv of memory_value * (bool -> with_pp (outcome 'a))
   (* Request a memory barrier *)
-  | Barrier of barrier_kind * outcome_s 'a
+  | Barrier of barrier_kind * with_pp (outcome 'a)
   (* Tell the system to dynamically recalculate dependency footprint *)
-  | Footprint of outcome_s 'a
+  | Footprint of with_pp (outcome 'a)
   (* Request to read register, will track dependency when mode.track_values *)
-  | Read_reg of reg_name * (register_value -> outcome_s 'a)
+  | Read_reg of reg_name * (register_value -> with_pp (outcome 'a))
   (* Request to write register *)
-  | Write_reg of (reg_name * register_value) * (outcome_s 'a)
-  | Escape of maybe string * maybe (outcome_s unit)
+  | Write_reg of (reg_name * register_value) * with_pp (outcome 'a)
+  | Escape of maybe string
   (*Result of a failed assert with possible error message to report*)
   | Fail of maybe string
-  | Internal of (maybe string * maybe (unit -> string)) * outcome_s 'a
+  | Internal of (maybe string * maybe (unit -> string)) * with_pp (outcome 'a)
   | Done of 'a
   | Error of string
- and outcome_s 'a = outcome 'a * maybe (unit -> (string * string))
+
+type outcome_s 'a = with_pp (outcome 'a)
 (* first string : output of instruction_stack_to_string
    second string: output of local_variables_to_string *)
 
@@ -618,56 +623,22 @@ end
 let ~{ocaml} barrier_kindCompare bk1 bk2 =
   match (bk1, bk2) with
   | (Barrier_Sync, Barrier_Sync)   -> EQ
-  | (Barrier_Sync, Barrier_LwSync) -> LT
-  | (Barrier_Sync, Barrier_Eieio)  -> LT
-  | (Barrier_Sync, Barrier_Isync)  -> LT
-  | (Barrier_Sync, Barrier_DMB)    -> LT
-  | (Barrier_Sync, Barrier_DMB_ST) -> LT
-  | (Barrier_Sync, Barrier_DMB_LD) -> LT
-  | (Barrier_Sync, Barrier_DSB)    -> LT
-  | (Barrier_Sync, Barrier_DSB_ST) -> LT
-  | (Barrier_Sync, Barrier_DSB_LD) -> LT
-  | (Barrier_Sync, Barrier_ISB)    -> LT
-  | (Barrier_Sync, Barrier_MIPS_SYNC) -> LT
+  | (Barrier_Sync, _) -> LT
 
   | (Barrier_LwSync, Barrier_Sync)   -> GT
   | (Barrier_LwSync, Barrier_LwSync) -> EQ
-  | (Barrier_LwSync, Barrier_Eieio)  -> LT
-  | (Barrier_LwSync, Barrier_Isync)  -> LT
-  | (Barrier_LwSync, Barrier_DMB)    -> LT
-  | (Barrier_LwSync, Barrier_DMB_ST) -> LT
-  | (Barrier_LwSync, Barrier_DMB_LD) -> LT
-  | (Barrier_LwSync, Barrier_DSB)    -> LT
-  | (Barrier_LwSync, Barrier_DSB_ST) -> LT
-  | (Barrier_LwSync, Barrier_DSB_LD) -> LT
-  | (Barrier_LwSync, Barrier_ISB)    -> LT
-  | (Barrier_LwSync, Barrier_MIPS_SYNC) -> LT
+  | (Barrier_LwSync, _)  -> LT
 
   | (Barrier_Eieio, Barrier_Sync)   -> GT
   | (Barrier_Eieio, Barrier_LwSync) -> GT
   | (Barrier_Eieio, Barrier_Eieio)  -> EQ
-  | (Barrier_Eieio, Barrier_Isync)  -> LT
-  | (Barrier_Eieio, Barrier_DMB)    -> LT
-  | (Barrier_Eieio, Barrier_DMB_ST) -> LT
-  | (Barrier_Eieio, Barrier_DMB_LD) -> LT
-  | (Barrier_Eieio, Barrier_DSB)    -> LT
-  | (Barrier_Eieio, Barrier_DSB_ST) -> LT
-  | (Barrier_Eieio, Barrier_DSB_LD) -> LT
-  | (Barrier_Eieio, Barrier_ISB)    -> LT
-  | (Barrier_Eieio, Barrier_MIPS_SYNC) -> LT
+  | (Barrier_Eieio, _)  -> LT
 
   | (Barrier_Isync, Barrier_Sync)   -> GT
   | (Barrier_Isync, Barrier_LwSync) -> GT
   | (Barrier_Isync, Barrier_Eieio)  -> GT
   | (Barrier_Isync, Barrier_Isync)  -> EQ
-  | (Barrier_Isync, Barrier_DMB)    -> LT
-  | (Barrier_Isync, Barrier_DMB_ST) -> LT
-  | (Barrier_Isync, Barrier_DMB_LD) -> LT
-  | (Barrier_Isync, Barrier_DSB)    -> LT
-  | (Barrier_Isync, Barrier_DSB_ST) -> LT
-  | (Barrier_Isync, Barrier_DSB_LD) -> LT
-  | (Barrier_Isync, Barrier_ISB)    -> LT
-  | (Barrier_Isync, Barrier_MIPS_SYNC) -> LT
+  | (Barrier_Isync, _)    -> LT
 
   | (Barrier_DMB, Barrier_Sync)   -> GT
   | (Barrier_DMB, Barrier_LwSync) -> GT
@@ -675,12 +646,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_DMB, Barrier_Isync)  -> GT
   | (Barrier_DMB, Barrier_DMB)    -> EQ
   | (Barrier_DMB, Barrier_DMB_ST) -> LT
-  | (Barrier_DMB, Barrier_DMB_LD) -> LT
-  | (Barrier_DMB, Barrier_DSB)    -> LT
-  | (Barrier_DMB, Barrier_DSB_ST) -> LT
-  | (Barrier_DMB, Barrier_DSB_LD) -> LT
-  | (Barrier_DMB, Barrier_ISB)    -> LT
-  | (Barrier_DMB, Barrier_MIPS_SYNC) -> LT
+  | (Barrier_DMB, _) -> LT
 
   | (Barrier_DMB_ST, Barrier_Sync)   -> GT
   | (Barrier_DMB_ST, Barrier_LwSync) -> GT
@@ -688,12 +654,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_DMB_ST, Barrier_Isync)  -> GT
   | (Barrier_DMB_ST, Barrier_DMB)    -> GT
   | (Barrier_DMB_ST, Barrier_DMB_ST) -> EQ
-  | (Barrier_DMB_ST, Barrier_DMB_LD) -> LT
-  | (Barrier_DMB_ST, Barrier_DSB)    -> LT
-  | (Barrier_DMB_ST, Barrier_DSB_ST) -> LT
-  | (Barrier_DMB_ST, Barrier_DSB_LD) -> LT
-  | (Barrier_DMB_ST, Barrier_ISB)    -> LT
-  | (Barrier_DMB_ST, Barrier_MIPS_SYNC) -> LT
+  | (Barrier_DMB_ST, _) -> LT
 
   | (Barrier_DMB_LD, Barrier_Sync)   -> GT
   | (Barrier_DMB_LD, Barrier_LwSync) -> GT
@@ -702,11 +663,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_DMB_LD, Barrier_DMB)    -> GT
   | (Barrier_DMB_LD, Barrier_DMB_ST) -> GT
   | (Barrier_DMB_LD, Barrier_DMB_LD) -> EQ
-  | (Barrier_DMB_LD, Barrier_DSB)    -> LT
-  | (Barrier_DMB_LD, Barrier_DSB_ST) -> LT
-  | (Barrier_DMB_LD, Barrier_DSB_LD) -> LT
-  | (Barrier_DMB_LD, Barrier_ISB)    -> LT
-  | (Barrier_DMB_LD, Barrier_MIPS_SYNC) -> LT
+  | (Barrier_DMB_LD, _)    -> LT
 
   | (Barrier_DSB, Barrier_Sync)   -> GT
   | (Barrier_DSB, Barrier_LwSync) -> GT
@@ -716,10 +673,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_DSB, Barrier_DMB_ST) -> GT
   | (Barrier_DSB, Barrier_DMB_LD) -> GT
   | (Barrier_DSB, Barrier_DSB)    -> EQ
-  | (Barrier_DSB, Barrier_DSB_ST) -> LT
-  | (Barrier_DSB, Barrier_DSB_LD) -> LT
-  | (Barrier_DSB, Barrier_ISB)    -> LT
-  | (Barrier_DSB, Barrier_MIPS_SYNC) -> LT
+  | (Barrier_DSB, _) -> LT
 
   | (Barrier_DSB_ST, Barrier_Sync)   -> GT
   | (Barrier_DSB_ST, Barrier_LwSync) -> GT
@@ -730,9 +684,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_DSB_ST, Barrier_DMB_LD) -> GT
   | (Barrier_DSB_ST, Barrier_DSB)    -> GT
   | (Barrier_DSB_ST, Barrier_DSB_ST) -> EQ
-  | (Barrier_DSB_ST, Barrier_DSB_LD) -> LT
-  | (Barrier_DSB_ST, Barrier_ISB)    -> LT
-  | (Barrier_DSB_ST, Barrier_MIPS_SYNC) -> LT
+  | (Barrier_DSB_ST, _) -> LT
 
   | (Barrier_DSB_LD, Barrier_Sync)   -> GT
   | (Barrier_DSB_LD, Barrier_LwSync) -> GT
@@ -744,8 +696,7 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_DSB_LD, Barrier_DSB)    -> GT
   | (Barrier_DSB_LD, Barrier_DSB_ST) -> GT
   | (Barrier_DSB_LD, Barrier_DSB_LD) -> EQ
-  | (Barrier_DSB_LD, Barrier_ISB)    -> LT
-  | (Barrier_DSB_LD, Barrier_MIPS_SYNC) -> LT
+  | (Barrier_DSB_LD, _)    -> LT
                           
   | (Barrier_ISB, Barrier_Sync)   -> GT
   | (Barrier_ISB, Barrier_LwSync) -> GT
@@ -760,18 +711,18 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_ISB, Barrier_ISB)    -> EQ
   | (Barrier_ISB, Barrier_MIPS_SYNC) -> LT
 
-  | (Barrier_ISB, Barrier_Sync)   -> GT
-  | (Barrier_ISB, Barrier_LwSync) -> GT
-  | (Barrier_ISB, Barrier_Eieio)  -> GT
-  | (Barrier_ISB, Barrier_Isync)  -> GT
-  | (Barrier_ISB, Barrier_DMB)    -> GT
-  | (Barrier_ISB, Barrier_DMB_ST) -> GT
-  | (Barrier_ISB, Barrier_DMB_LD) -> GT
-  | (Barrier_ISB, Barrier_DSB)    -> GT
-  | (Barrier_ISB, Barrier_DSB_ST) -> GT
-  | (Barrier_ISB, Barrier_DSB_LD) -> GT
-  | (Barrier_ISB, Barrier_ISB)    -> GT
-  | (Barrier_ISB, Barrier_MIPS_SYNC) -> EQ
+  | (Barrier_MIPS_SYNC, Barrier_Sync)   -> GT
+  | (Barrier_MIPS_SYNC, Barrier_LwSync) -> GT
+  | (Barrier_MIPS_SYNC, Barrier_Eieio)  -> GT
+  | (Barrier_MIPS_SYNC, Barrier_Isync)  -> GT
+  | (Barrier_MIPS_SYNC, Barrier_DMB)    -> GT
+  | (Barrier_MIPS_SYNC, Barrier_DMB_ST) -> GT
+  | (Barrier_MIPS_SYNC, Barrier_DMB_LD) -> GT
+  | (Barrier_MIPS_SYNC, Barrier_DSB)    -> GT
+  | (Barrier_MIPS_SYNC, Barrier_DSB_ST) -> GT
+  | (Barrier_MIPS_SYNC, Barrier_DSB_LD) -> GT
+  | (Barrier_MIPS_SYNC, Barrier_ISB)    -> GT
+  | (Barrier_MIPS_SYNC, Barrier_MIPS_SYNC) -> EQ
   end
 let inline {ocaml} barrier_kindCompare = defaultCompare
 
@@ -1260,17 +1211,25 @@ type nia =
                                 instructions *)
 
 let niaCompare n1 n2 = match (n1,n2) with
-  | (NIA_successor,NIA_successor) -> EQ
+  | (NIA_successor, NIA_successor) -> EQ
+  | (NIA_successor, _) -> LT
+  | (NIA_concrete_address _, NIA_successor) -> GT
   | (NIA_concrete_address a1, NIA_concrete_address a2) -> compare a1 a2
-  | (NIA_LR,NIA_LR) -> EQ
-  | (NIA_CTR,NIA_CTR) -> EQ
-  | (NIA_register r1,NIA_register r2) -> compare r1 r2
-
-  | (NIA_successor,_) -> LT
-  | (NIA_concrete_address _,_) -> LT
-  | (NIA_LR,_) -> LT
-  | (NIA_CTR,_) -> LT
-  | (_,_) -> GT
+  | (NIA_concrete_address _, _) -> LT
+  | (NIA_LR, NIA_successor) -> GT
+  | (NIA_LR, NIA_concrete_address _) -> GT
+  | (NIA_LR, NIA_LR) -> EQ
+  | (NIA_LR, _) -> LT
+  | (NIA_CTR, NIA_successor) -> GT
+  | (NIA_CTR, NIA_concrete_address _) -> GT
+  | (NIA_CTR, NIA_LR) -> GT
+  | (NIA_CTR, NIA_CTR) -> EQ
+  | (NIA_CTR, NIA_register _) -> LT
+  | (NIA_register _, NIA_successor) -> GT
+  | (NIA_register _, NIA_concrete_address _) -> GT
+  | (NIA_register _, NIA_LR) -> GT
+  | (NIA_register _, NIA_CTR) -> GT
+  | (NIA_register r1, NIA_register r2) -> compare r1 r2
   end
 
 instance (Ord nia)
@@ -1300,11 +1259,12 @@ type dia =
 
 let diaCompare d1 d2 = match (d1, d2) with
   | (DIA_none, DIA_none) -> EQ
-  | (DIA_concrete_address a1, DIA_concrete_address a2) -> compare a1 a2
-  | (DIA_register r1, DIA_register r2) -> compare r1 r2
   | (DIA_none, _) -> LT
-  | (DIA_concrete_address _, _) -> LT
-  | (DIA_register _, _) -> LT
+  | (DIA_concrete_address a1, DIA_none) -> GT
+  | (DIA_concrete_address a1, DIA_concrete_address a2) -> compare a1 a2
+  | (DIA_concrete_address a1, _) -> LT
+  | (DIA_register r1, DIA_register r2) -> compare r1 r2
+  | (DIA_register _, _) -> GT
 end
 
 instance (Ord dia)

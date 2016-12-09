@@ -17,23 +17,23 @@ let translate_out_simm16 imm = translate_out_signed_int imm 16
 let translate_out_imm5 imm = translate_out_int imm
 
 let translate_out_bool = function
-  | Sail_values.I  -> true
-  | Sail_values.O -> false
+  | Sail_values.B1  -> true
+  | Sail_values.B0 -> false
   | _ -> failwith "translate_out_bool Undef"
 
 
 let translate_out_wordWidth = function
-    | Mips_embed_types.B0 -> MIPSByte
+    | Mips_embed_types.B2 -> MIPSByte
     | Mips_embed_types.H -> MIPSHalf
     | Mips_embed_types.W -> MIPSWord
     | Mips_embed_types.D -> MIPSDouble
 
 let translate_out_cmp = function
-    | Mips_embed_types.EQ_ -> MIPS_EQ  (* equal *)
+    | Mips_embed_types.EQ' -> MIPS_EQ  (* equal *)
     | Mips_embed_types.NE -> MIPS_NE  (* not equal *)
     | Mips_embed_types.GE -> MIPS_GE  (* signed greater than or equal *)
     | Mips_embed_types.GEU -> MIPS_GEU (* unsigned greater than or equal *) 
-    | Mips_embed_types.GT_ -> MIPS_GT  (* signed strictly greater than *) 
+    | Mips_embed_types.GT' -> MIPS_GT  (* signed strictly greater than *) 
     | Mips_embed_types.LE -> MIPS_LE  (* signed less than or equal *) 
-    | Mips_embed_types.LT_ -> MIPS_LT  (* signed strictly less than *) 
+    | Mips_embed_types.LT' -> MIPS_LT  (* signed strictly less than *) 
     | Mips_embed_types.LTU -> MIPS_LTU (* unsigned less than or qual *) 
