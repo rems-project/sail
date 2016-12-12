@@ -2982,7 +2982,7 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
            (string "Register_field" ^^ space ^^ string_lit(doc_id_lem id)) in*)
        let dir_b = i1 < i2 in
        let dir = string (if dir_b then "true" else "false") in
-       let size = if dir_b then i2-i1 +1 else i1-i2 in
+       let size = if dir_b then i2-i1 +1 else i1-i2 + 1 in
        (doc_op equals)
          (concat [string "let";space;string "build_";doc_id_lem id;space;string "regname"])
          (string "Register" ^^ space ^^
