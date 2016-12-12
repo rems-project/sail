@@ -3105,7 +3105,7 @@ let doc_spec_lem regtypes (VS_aux (valspec,annot)) =
 (* separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem regtypes typschm] ^/^ hardline *)
 
 
-let doc_def_lem regtypes def = match def with
+let rec doc_def_lem regtypes def = match def with
   | DEF_spec v_spec -> (doc_spec_lem regtypes v_spec,empty)
   | DEF_type t_def -> (group (doc_typdef_lem regtypes t_def) ^/^ hardline,empty)
   | DEF_reg_dec dec -> (group (doc_dec_lem dec),empty)
@@ -3114,6 +3114,13 @@ let doc_def_lem regtypes def = match def with
   | DEF_fundef f_def -> (empty,group (doc_fundef_lem regtypes f_def) ^/^ hardline)
   | DEF_val lbind -> (empty,group (doc_let_lem regtypes lbind) ^/^ hardline)
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"
+
+  | DEF_kind _ -> (empty,empty)
+
+  | DEF_comm (DC_comm s) -> (empty,comment (string s))
+  | DEF_comm (DC_comm_struct d) ->
+     let (typdefs,vdefs) = doc_def_lem regtypes d in
+     (empty,comment (typdefs ^^ hardline ^^ vdefs))
 
 
 let doc_defs_lem regtypes (Defs defs) =

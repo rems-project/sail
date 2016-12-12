@@ -81,6 +81,15 @@ _build/cheri_notlb.lem: $(CHERI_NOTLB_SAILS) ./sail.native
 	cd _build ;\
 	../sail.native -lem_ast -o cheri_notlb $(CHERI_NOTLB_SAILS)
 
+_build/cheri_embed_types.lem: $(CHERI_SAILS) ./sail.native
+	mkdir -p _build
+	cd _build ;\
+	../sail.native -lem_lib "Mips_extras_embed" -lem -o cheri $(CHERI_SAILS)
+
+_build/Cheri_embed_sequential.thy: _build/cheri_embed_types.lem
+	cd _build ;\
+	lem -isa -outdir . ../lem_interp/sail_impl_base.lem ../gen_lib/state.lem ../../mips/mips_extras_embed_sequential.lem cheri_embed_sequential.lem
+
 _build/mips_all.sail: $(MIPS_SAILS)
 	cat $(MIPS_SAILS) > $@
 
