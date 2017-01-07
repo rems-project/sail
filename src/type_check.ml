@@ -298,7 +298,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
         | _ -> default)
     | P_app(id,pats) -> 
       let i = id_to_string id in
-      (*let _ = Printf.eprintf "checking constructor pattern %s\n" i in*)
+      (*let _ = Printf.eprintf "checking constructor pattern %s with expected type %s \n" i (t_to_string expect_t) in*)
       (match Envmap.apply t_env i with
         | None | Some NoTyp | Some Overload _ -> typ_error l ("Constructor " ^ i ^ " in pattern is undefined")
         | Some(Base((params,t),Constructor n,constraints,efl,efr,bounds)) -> 
@@ -315,12 +315,14 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
                       (P_aux(P_app(id,[]),(l,cons_tag_annot t' (Constructor n) dec_cs)),
                        Envmap.empty,dec_cs@ret_cs,nob,t')
               | [p] -> let (p',env,p_cs,bounds,u) = check_pattern envs emp_tag t1 p in
+                (*let _ = Printf.eprintf "return constraints are %s\n" (constraints_to_string ret_cs) in*)
                        (P_aux(P_app(id,[p']),
                               (l,cons_tag_annot t' (Constructor n) dec_cs)),env,dec_cs@p_cs@ret_cs,bounds,t')
               | pats -> let (pats',env,p_cs,bounds,u) = 
                           match check_pattern envs emp_tag t1 (P_aux(P_tup(pats),(l,annot))) with
                           | ((P_aux(P_tup(pats'),_)),env,constraints,bounds,u) -> (pats',env,constraints,bounds,u)
                           | _ -> assert false in
+                (*let _ = Printf.eprintf "return constraints are %s\n" (constraints_to_string ret_cs) in*)
                         (P_aux(P_app(id,pats'),
                                (l,cons_tag_annot t' (Constructor n) dec_cs)),env,dec_cs@p_cs@ret_cs,bounds,t'))
             | _ -> typ_error l ("Identifier " ^ i ^ " must be a union constructor"))
@@ -2319,8 +2321,8 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,orig_env (*Envmap.insert t_env (id,tannot)*),b_env,tp_env)
     | _ , _->
-      (*let _ = Printf.eprintf "checking %s, not in env\n%!" id in
-      let t_env = if is_rec then Envmap.insert t_env (id,tannot) else t_env in*)
+      (*let _ = Printf.eprintf "checking %s, not in env\n%!" id in*)
+      (*let t_env = if is_rec then Envmap.insert t_env (id,tannot) else t_env in*)
       let funcls,cs_ef = check t_env t_param_env None in
       let cses,ef =
         ((fun (cses,efses) -> (cses,(List.fold_right union_effects efses pure_e))) (List.split cs_ef)) in
@@ -2457,7 +2459,7 @@ let check_def envs def =
     let t = (typ_to_t envs false false typ) in
     let i = id_to_string id in
     let tannot = into_register d_env (Base(([],t),External (Some i),[],pure_e,pure_e,nob)) in
-   (* let _ = Printf.eprintf "done checking reg dec\n" in*)
+   (*let _ = Printf.eprintf "done checking reg dec\n" in*)
     (DEF_reg_dec(DEC_aux(DEC_reg(typ,id),(l,tannot))),(Env(d_env,Envmap.insert t_env (i,tannot),b_env, tp_env)))
   | DEF_reg_dec(DEC_aux(DEC_alias(id,aspec), (l,annot))) -> 
     (*let _ = Printf.eprintf "checking reg dec b\n" in*)

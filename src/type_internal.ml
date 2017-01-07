@@ -328,6 +328,8 @@ and n_to_string n =
     if !debug_mode
     then
       let rec show_nuvar n = match n.nexp with
+        | Nuvar{insubst=None; nindex = i; orig_var = Some s} -> s^ "()"
+        | Nuvar{insubst=Some n; nindex = i; orig_var = Some s} -> s ^ "(" ^ show_nuvar n ^ ")"
         | Nuvar{insubst=None; nindex = i;} -> "Nu_" ^ string_of_int i ^ "()" 
         | Nuvar{insubst=Some n; nindex =i;} -> "Nu_" ^ string_of_int i ^ "(" ^ show_nuvar n ^ ")"
         | _ -> n_to_string n in
@@ -2808,7 +2810,8 @@ let rec typ_param_eq l spec_param fun_param =
     | (_,[]) -> 
       raise (Reporting_basic.err_typ l "Specification type variables and function definition variables must match")
     | ([],_) -> 
-      raise (Reporting_basic.err_typ l "Function definition declares more type variables than specification variables")
+      raise
+        (Reporting_basic.err_typ l "Function definition declares more type variables than specification variables")
     | ((ids,tas)::spec_param,(idf,taf)::fun_param) ->
       if ids=idf
       then match (tas,taf) with
@@ -2895,7 +2898,8 @@ let rec t_to_typ t =
     | Tvar i -> Typ_aux(Typ_var (Kid_aux((Var i),Parse_ast.Unknown)),Parse_ast.Unknown) 
     | Tfn(t1,t2,_,e) -> Typ_aux(Typ_fn (t_to_typ t1, t_to_typ t2, e_to_ef e),Parse_ast.Unknown)
     | Ttup ts -> Typ_aux(Typ_tup(List.map t_to_typ ts),Parse_ast.Unknown)
-    | Tapp(i,args) -> Typ_aux(Typ_app(Id_aux((Id i), Parse_ast.Unknown),List.map targ_to_typ_arg args),Parse_ast.Unknown)
+    | Tapp(i,args) ->
+      Typ_aux(Typ_app(Id_aux((Id i), Parse_ast.Unknown),List.map targ_to_typ_arg args),Parse_ast.Unknown)
     | Tabbrev(t,_) -> t_to_typ t
     | Tuvar _ | Toptions _ -> Typ_aux(Typ_var (Kid_aux((Var "fresh"),Parse_ast.Unknown)),Parse_ast.Unknown)
 and targ_to_typ_arg targ = 
@@ -3749,7 +3753,7 @@ let nexpmap_to_string nmap =
       match v with
       | One n -> "(" ^ n_to_string k ^ " |-> " ^ n_to_string n ^ ") " ^ acc
       | Two(n1,n2) -> "(" ^ n_to_string k ^ " |-> (" ^ n_to_string n1 ^ ", or " ^ n_to_string n2 ^ ")) " ^ acc
-      | Many ns -> "(" ^ n_to_string k ^ " |-> (" ^ string_of_list ", " n_to_string ns ^ ")) " ^ acc) "" nmap
+      | Many ns -> "(" ^ n_to_string k ^ " |-> (" ^ string_of_list ", " n_to_string ns ^ ") : " ^ (string_of_list ", " (fun n -> if is_all_nuvar n then "true" else "false") ns) ^ ") " ^ acc) "" nmap
 
 let rec make_merged_constraints acc =  function
   | [] -> acc
@@ -3772,11 +3776,11 @@ let merge_branch_constraints merge_nuvars constraint_sets =
   (*Separate variables into only occurs in one set, or occurs in multiple sets*)
   (*assumes k and n outermost and all nuvar*)
   let conditionally_set k n =
-    not(merge_nuvars) || ((occurs_in_nexp k n) || (occurs_in_nexp n k) || equate_n k n) in
+    not(merge_nuvars) || ((occurs_in_nexp k n) || (occurs_in_nexp n k) || equate_n k n || equate_n n k) in
   (*This function assumes n outermost and k all nuvar; 
     inserts a new nuvar at bottom, and an eq to k for non-nuvar*)
   let conditionally_lift_to_nuvars_on_merge k n =
-    if not(merge_nuvars) || is_all_nuvar n 
+    if not(merge_nuvars) || (is_all_nuvar n && conditionally_set k n)
     then [],None
     else
       let new_nuvar = new_n () in
@@ -3817,16 +3821,19 @@ let merge_branch_constraints merge_nuvars constraint_sets =
               else (Nexpmap.insert sc (k,v),new_cs,merge_option_maps new_map (merge_option_maps nm1 nm2))
             else (Nexpmap.insert sc (k,v),new_cs,new_map))
     | Many ns ->
-      (*let _ = Printf.eprintf "Variables in many paths: merge_nuvars %b, key %s, [" 
-          merge_nuvars (n_to_string k) in
-      let _ = List.iter (fun n -> Printf.eprintf "%s ;" (n_to_string n)) ns in
-      let _ = Printf.eprintf "]\n%!" in*)
+      (*(if merge_nuvars then
+        let _ = Printf.eprintf "Variables in many paths: merge_nuvars %b, key %s, [" 
+            merge_nuvars (n_to_string k) in
+        let _ = List.iter (fun n -> Printf.eprintf "%s ;" (n_to_string n)) ns in
+        let _ = Printf.eprintf "]\n%!" in
+        let _ = Printf.eprintf "Is all nuvar? %b\n%!" 
+        (List.for_all is_all_nuvar (List.map get_outer_most ns)) in ());*)
       let k, ns = get_outer_most k, List.map get_outer_most ns in
       let is_all_nuvars = List.for_all is_all_nuvar ns in
       if not(merge_nuvars)
       then Nexpmap.insert sc (k,v),new_cs,new_map
       else if is_all_nuvars
-      then if List.for_all (conditionally_set k) ns
+      then if List.for_all (fun i -> i) (List.map (conditionally_set k) ns)
         then (sc,new_cs,new_map)
         else (Nexpmap.insert sc (k,v),new_cs,new_map)
       else
@@ -3836,7 +3843,7 @@ let merge_branch_constraints merge_nuvars constraint_sets =
             (nexp_eq n1 n2) && all_eq (n2::ns) 
         in 
         if (all_eq ns) && not(ns=[])
-        then if List.for_all (conditionally_set k) ns
+        then if List.for_all (fun i -> i) (List.map (conditionally_set k) ns)
           then  (sc,new_cs,new_map)
           else (Nexpmap.insert sc (k,v),new_cs,new_map)
         else            
@@ -3848,6 +3855,8 @@ let merge_branch_constraints merge_nuvars constraint_sets =
   (*let _ = if merge_nuvars then
       Printf.eprintf "merge branch constraints: shared var mappings after merge %s\n%!"
         (nexpmap_to_string merged_constraints) in*)
+  if merge_nuvars then Nexpmap.fold merge_walker (Nexpmap.empty,[],None) merged_constraints
+  else 
   shared_path_distinct_constraints
 
 let rec extract_path_substs = function
