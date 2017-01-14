@@ -418,35 +418,6 @@ they just have particular nias (and will be IK_simple *)
 (*  | IK_uncond_branch *)
   | IK_simple
 
-(* the address_lifted types should go away here and be replaced by address *)
-type with_pp 'o = 'o * maybe (unit -> (string * string))
-type outcome 'a =
-  (* Request to read memory, value is location to read, integer is size to read,
-     followed by registers that were used in computing that size *)
-  | Read_mem of (read_kind * address_lifted * nat) * (memory_value -> with_pp (outcome 'a))
-  (* Tell the system a write is imminent, at address lifted, of size nat *)
-  | Write_ea of (write_kind * address_lifted * nat) * (with_pp (outcome 'a))
-  (* Request to write memory at last signalled address. Memory value should be 8
-     times the size given in ea signal *)
-  | Write_memv of memory_value * (bool -> with_pp (outcome 'a))
-  (* Request a memory barrier *)
-  | Barrier of barrier_kind * with_pp (outcome 'a)
-  (* Tell the system to dynamically recalculate dependency footprint *)
-  | Footprint of with_pp (outcome 'a)
-  (* Request to read register, will track dependency when mode.track_values *)
-  | Read_reg of reg_name * (register_value -> with_pp (outcome 'a))
-  (* Request to write register *)
-  | Write_reg of (reg_name * register_value) * with_pp (outcome 'a)
-  | Escape of maybe string
-  (*Result of a failed assert with possible error message to report*)
-  | Fail of maybe string
-  | Internal of (maybe string * maybe (unit -> string)) * with_pp (outcome 'a)
-  | Done of 'a
-  | Error of string
-
-type outcome_s 'a = with_pp (outcome 'a)
-(* first string : output of instruction_stack_to_string
-   second string: output of local_variables_to_string *)
 
 let ~{ocaml} read_kindCompare rk1 rk2 =
   match (rk1, rk2) with
@@ -743,6 +714,98 @@ instance (Ord barrier_kind)
   let (>)  = barrier_kindGreater
   let (>=) = barrier_kindGreaterEq
 end
+
+
+type event = 
+| E_read_mem of read_kind * address_lifted * nat * maybe (list reg_name)
+| E_write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name)
+| E_write_ea of write_kind * address_lifted * nat * maybe (list reg_name)
+| E_write_memv of maybe address_lifted * memory_value * maybe (list reg_name)
+| E_barrier of barrier_kind
+| E_footprint 
+| E_read_reg of reg_name
+| E_write_reg of reg_name * register_value
+| E_escape
+| E_error of string 
+
+
+let ~{ocaml} eventCompare e1 e2 = 
+  match (e1,e2) with
+  | (E_read_mem rk1 v1 i1 tr1, E_read_mem rk2 v2 i2 tr2) ->
+     compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2)) 
+  | (E_write_mem wk1 v1 i1 tr1 v1' tr1', E_write_mem wk2 v2 i2 tr2 v2' tr2') -> 
+    compare ((wk1,v1,i1),(tr1,v1',tr1'))  ((wk2,v2,i2),(tr2,v2',tr2')) 
+  | (E_write_ea wk1 a1 i1 tr1, E_write_ea wk2 a2 i2 tr2) ->
+    compare (wk1, (a1, i1, tr1)) (wk2, (a2, i2, tr2))
+  | (E_write_memv _ mv1 tr1, E_write_memv _ mv2 tr2) -> compare (mv1,tr1) (mv2,tr2)
+  | (E_barrier bk1, E_barrier bk2) -> compare bk1 bk2
+  | (E_read_reg r1, E_read_reg r2) -> compare r1 r2
+  | (E_write_reg r1 v1, E_write_reg r2 v2) -> compare (r1,v1) (r2,v2)
+  | (E_error s1, E_error s2) -> compare s1 s2
+  | (E_escape,E_escape) -> EQ
+  | (E_read_mem _ _ _ _, _) -> LT
+  | (E_write_mem _ _ _ _ _ _, _) -> LT
+  | (E_write_ea _ _ _ _, _) -> LT
+  | (E_write_memv _ _ _, _) -> LT
+  | (E_barrier _, _) -> LT
+  | (E_read_reg _, _) -> LT
+  | (E_write_reg _ _, _) -> LT
+  | _ -> GT
+  end
+let inline {ocaml} eventCompare = defaultCompare
+
+let ~{ocaml} eventLess b1 b2      = eventCompare b1 b2 =  LT
+let ~{ocaml} eventLessEq b1 b2    = eventCompare b1 b2 <> GT
+let ~{ocaml} eventGreater b1 b2   = eventCompare b1 b2 =  GT
+let ~{ocaml} eventGreaterEq b1 b2 = eventCompare b1 b2 <> LT
+
+let inline {ocaml} eventLess      = defaultLess
+let inline {ocaml} eventLessEq    = defaultLessEq
+let inline {ocaml} eventGreater   = defaultGreater
+let inline {ocaml} eventGreaterEq = defaultGreaterEq
+
+instance (Ord event)
+  let compare = eventCompare
+  let (<)  = eventLess
+  let (<=) = eventLessEq
+  let (>)  = eventGreater
+  let (>=) = eventGreaterEq
+end
+
+instance (SetType event)
+  let setElemCompare = compare
+end
+
+
+(* the address_lifted types should go away here and be replaced by address *)
+type with_aux 'o = 'o * maybe ((unit -> (string * string)) * ((list (reg_name * register_value)) -> list event))
+type outcome 'a =
+  (* Request to read memory, value is location to read, integer is size to read,
+     followed by registers that were used in computing that size *)
+  | Read_mem of (read_kind * address_lifted * nat) * (memory_value -> with_aux (outcome 'a))
+  (* Tell the system a write is imminent, at address lifted, of size nat *)
+  | Write_ea of (write_kind * address_lifted * nat) * (with_aux (outcome 'a))
+  (* Request to write memory at last signalled address. Memory value should be 8
+     times the size given in ea signal *)
+  | Write_memv of memory_value * (bool -> with_aux (outcome 'a))
+  (* Request a memory barrier *)
+  | Barrier of barrier_kind * with_aux (outcome 'a)
+  (* Tell the system to dynamically recalculate dependency footprint *)
+  | Footprint of with_aux (outcome 'a)
+  (* Request to read register, will track dependency when mode.track_values *)
+  | Read_reg of reg_name * (register_value -> with_aux (outcome 'a))
+  (* Request to write register *)
+  | Write_reg of (reg_name * register_value) * with_aux (outcome 'a)
+  | Escape of maybe string
+  (*Result of a failed assert with possible error message to report*)
+  | Fail of maybe string
+  | Internal of (maybe string * maybe (unit -> string)) * with_aux (outcome 'a)
+  | Done of 'a
+  | Error of string
+
+type outcome_s 'a = with_aux (outcome 'a)
+(* first string : output of instruction_stack_to_string
+   second string: output of local_variables_to_string *)
 
 (** operations and coercions on basic values *)
 

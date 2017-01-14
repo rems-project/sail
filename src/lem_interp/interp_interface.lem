@@ -188,65 +188,6 @@ type outcome =
 (*Interpreter error*)
 | Error of string
 
-type event = 
-| E_read_mem of read_kind * address_lifted * nat * maybe (list reg_name)
-| E_write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name)
-| E_write_ea of write_kind * address_lifted * nat * maybe (list reg_name)
-| E_write_memv of maybe address_lifted * memory_value * maybe (list reg_name)
-| E_barrier of barrier_kind
-| E_footprint 
-| E_read_reg of reg_name
-| E_write_reg of reg_name * register_value
-| E_escape
-| E_error of string 
-
-
-let ~{ocaml} eventCompare e1 e2 = 
-  match (e1,e2) with
-  | (E_read_mem rk1 v1 i1 tr1, E_read_mem rk2 v2 i2 tr2) ->
-     compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2)) 
-  | (E_write_mem wk1 v1 i1 tr1 v1' tr1', E_write_mem wk2 v2 i2 tr2 v2' tr2') -> 
-    compare ((wk1,v1,i1),(tr1,v1',tr1'))  ((wk2,v2,i2),(tr2,v2',tr2')) 
-  | (E_write_ea wk1 a1 i1 tr1, E_write_ea wk2 a2 i2 tr2) ->
-    compare (wk1, (a1, i1, tr1)) (wk2, (a2, i2, tr2))
-  | (E_write_memv _ mv1 tr1, E_write_memv _ mv2 tr2) -> compare (mv1,tr1) (mv2,tr2)
-  | (E_barrier bk1, E_barrier bk2) -> compare bk1 bk2
-  | (E_read_reg r1, E_read_reg r2) -> compare r1 r2
-  | (E_write_reg r1 v1, E_write_reg r2 v2) -> compare (r1,v1) (r2,v2)
-  | (E_error s1, E_error s2) -> compare s1 s2
-  | (E_escape,E_escape) -> EQ
-  | (E_read_mem _ _ _ _, _) -> LT
-  | (E_write_mem _ _ _ _ _ _, _) -> LT
-  | (E_write_ea _ _ _ _, _) -> LT
-  | (E_write_memv _ _ _, _) -> LT
-  | (E_barrier _, _) -> LT
-  | (E_read_reg _, _) -> LT
-  | (E_write_reg _ _, _) -> LT
-  | _ -> GT
-  end
-let inline {ocaml} eventCompare = defaultCompare
-
-let ~{ocaml} eventLess b1 b2      = eventCompare b1 b2 =  LT
-let ~{ocaml} eventLessEq b1 b2    = eventCompare b1 b2 <> GT
-let ~{ocaml} eventGreater b1 b2   = eventCompare b1 b2 =  GT
-let ~{ocaml} eventGreaterEq b1 b2 = eventCompare b1 b2 <> LT
-
-let inline {ocaml} eventLess      = defaultLess
-let inline {ocaml} eventLessEq    = defaultLessEq
-let inline {ocaml} eventGreater   = defaultGreater
-let inline {ocaml} eventGreaterEq = defaultGreaterEq
-
-instance (Ord event)
-  let compare = eventCompare
-  let (<)  = eventLess
-  let (<=) = eventLessEq
-  let (>)  = eventGreater
-  let (>=) = eventGreaterEq
-end
-
-instance (SetType event)
-  let setElemCompare = compare
-end
 
 
 (* Functions to build up the initial state for interpretation *)

@@ -833,58 +833,6 @@ let rec interp_to_outcome mode context thunk =
          end )  
         end
 
-let interp mode (IState interp_state context) = 
-  match interp_to_outcome mode context (fun _ -> Interp.resume mode.internal_mode interp_state Nothing) with
-    | (o,_) -> o
-end 
-
-val state_to_outcome_s : (instruction_state -> unit -> (string * string)) -> interp_mode -> instruction_state -> Sail_impl_base.outcome_s unit
-val outcome_to_outcome : (instruction_state -> unit -> (string * string)) -> interp_mode -> Interp_interface.outcome -> Sail_impl_base.outcome unit
-
-let rec outcome_to_outcome pp_instruction_state mode = 
-  let state_to_outcome_s = state_to_outcome_s pp_instruction_state in
-  function
-  | Interp_interface.Read_mem rk addr size _ k ->
-     Sail_impl_base.Read_mem (rk,addr,size) (fun v -> state_to_outcome_s mode (k v))
-  | Interp_interface.Write_mem rk addr size _ mv _ k ->
-     failwith "Write_mem not supported anymore"
-  | Interp_interface.Write_ea wk addr size _ state ->
-     Sail_impl_base.Write_ea (wk,addr,size) (state_to_outcome_s mode state)
-  | Interp_interface.Write_memv _ mv _ k ->
-     Sail_impl_base.Write_memv mv (fun v -> state_to_outcome_s mode (k v))
-  | Interp_interface.Barrier bk state ->
-     Sail_impl_base.Barrier bk (state_to_outcome_s mode state)
-  | Interp_interface.Footprint state ->
-     Sail_impl_base.Footprint (state_to_outcome_s mode state)
-  | Interp_interface.Read_reg r k ->
-     Sail_impl_base.Read_reg r (fun v -> state_to_outcome_s mode (k v))
-  | Interp_interface.Write_reg r rv state ->
-     Sail_impl_base.Write_reg (r,rv) (state_to_outcome_s mode state)
-  | Interp_interface.Nondet_choice _ _ ->
-     failwith "Nondet_choice not supported yet"
-  | Interp_interface.Escape _ _ ->
-     Sail_impl_base.Escape Nothing
-  | Interp_interface.Fail maybestring ->
-     Sail_impl_base.Fail maybestring
-  | Interp_interface.Internal maybestring maybeprint state ->
-     Sail_impl_base.Internal (maybestring,maybeprint) (state_to_outcome_s mode state)
-  | Interp_interface.Analysis_non_det _ _ ->
-     failwith "Analysis_non_det outcome returned"
-  | Interp_interface.Done ->
-     Sail_impl_base.Done ()
-  | Interp_interface.Error message ->
-     failwith ("Interpreter error: " ^ message)
-end
-
-and state_to_outcome_s pp_instruction_state mode state = 
-  let next_outcome' = interp mode state in
-  let next_outcome = outcome_to_outcome pp_instruction_state mode next_outcome' in
-  (next_outcome, Just (pp_instruction_state state))
-
-val initial_outcome_s_of_instruction : (instruction_state -> unit -> (string * string)) -> context -> interp_mode -> instruction -> Sail_impl_base.outcome_s unit
-let initial_outcome_s_of_instruction pp_instruction_state context mode instruction =
-  let state = instruction_to_istate context instruction in
-  state_to_outcome_s pp_instruction_state mode state
 
 
 (*Update slice potentially here*)
@@ -894,6 +842,13 @@ let reg_size = function
   | Reg_field i _ _ f (p1,p2) -> if p1 < p2 then (p2-p1 +1) else (p1-p2 +1)
   | Reg_f_slice i _ _ f _ (p1,p2) -> if p1 < p2 then p2-p1 +1 else p1-p2+1
 end
+
+
+let interp mode (IState interp_state context) = 
+  match interp_to_outcome mode context (fun _ -> Interp.resume mode.internal_mode interp_state Nothing) with
+    | (o,_) -> o
+end 
+
 
 (*ie_loop returns a tuple of event list, and a tuple ofinternal interpreter memory, bool to indicate normal or exceptional termination*)
 let rec ie_loop mode register_values (IState interp_state context) = 
@@ -968,11 +923,70 @@ let rec ie_loop mode register_values (IState interp_state context) =
       | _ -> Assert_extra.failwith "interp_to_outcome may have produced a nondet action"
       end ;;
   
+val interp_exhaustive : maybe (list (reg_name * register_value)) -> instruction_state -> list event
 let interp_exhaustive register_values i_state = 
   let mode = make_mode_exhaustive E_big_endian in
   match ie_loop mode register_values i_state with
     | (events,_) -> events
 end
+
+
+val state_to_outcome_s : 
+  (instruction_state -> unit -> (string * string)) -> 
+  interp_mode -> instruction_state -> Sail_impl_base.outcome_s unit
+val outcome_to_outcome : 
+  (instruction_state -> unit -> (string * string)) -> 
+  interp_mode -> Interp_interface.outcome -> Sail_impl_base.outcome unit
+
+let rec outcome_to_outcome pp_instruction_state mode = 
+  let state_to_outcome_s = 
+    state_to_outcome_s pp_instruction_state in
+  function
+  | Interp_interface.Read_mem rk addr size _ k ->
+     Sail_impl_base.Read_mem (rk,addr,size) (fun v -> state_to_outcome_s mode (k v))
+  | Interp_interface.Write_mem rk addr size _ mv _ k ->
+     failwith "Write_mem not supported anymore"
+  | Interp_interface.Write_ea wk addr size _ state ->
+     Sail_impl_base.Write_ea (wk,addr,size) (state_to_outcome_s mode state)
+  | Interp_interface.Write_memv _ mv _ k ->
+     Sail_impl_base.Write_memv mv (fun v -> state_to_outcome_s mode (k v))
+  | Interp_interface.Barrier bk state ->
+     Sail_impl_base.Barrier bk (state_to_outcome_s mode state)
+  | Interp_interface.Footprint state ->
+     Sail_impl_base.Footprint (state_to_outcome_s mode state)
+  | Interp_interface.Read_reg r k ->
+     Sail_impl_base.Read_reg r (fun v -> state_to_outcome_s mode (k v))
+  | Interp_interface.Write_reg r rv state ->
+     Sail_impl_base.Write_reg (r,rv) (state_to_outcome_s mode state)
+  | Interp_interface.Nondet_choice _ _ ->
+     failwith "Nondet_choice not supported yet"
+  | Interp_interface.Escape _ _ ->
+     Sail_impl_base.Escape Nothing
+  | Interp_interface.Fail maybestring ->
+     Sail_impl_base.Fail maybestring
+  | Interp_interface.Internal maybestring maybeprint state ->
+     Sail_impl_base.Internal (maybestring,maybeprint) (state_to_outcome_s mode state)
+  | Interp_interface.Analysis_non_det _ _ ->
+     failwith "Analysis_non_det outcome returned"
+  | Interp_interface.Done ->
+     Sail_impl_base.Done ()
+  | Interp_interface.Error message ->
+     failwith ("Interpreter error: " ^ message)
+end
+
+and state_to_outcome_s pp_instruction_state mode state = 
+  let next_outcome' = interp mode state in
+  let next_outcome = outcome_to_outcome pp_instruction_state mode next_outcome' in
+  (next_outcome, 
+   Just ((pp_instruction_state state), 
+         (fun env -> interp_exhaustive (Just env) state))
+  )
+
+val initial_outcome_s_of_instruction : (instruction_state -> unit -> (string * string)) -> context -> interp_mode -> instruction -> Sail_impl_base.outcome_s unit
+let initial_outcome_s_of_instruction pp_instruction_state context mode instruction =
+  let state = instruction_to_istate context instruction in
+  state_to_outcome_s pp_instruction_state mode state
+
 
 (*This code is no longer uptodate. If no one is using it, then we don't need to fix it
 If someone is using it, this will let me know*)
@@ -1006,3 +1020,198 @@ If someone is using it, this will let me know*)
 let rr_interp_exhaustive mode i_state events = 
   let (events',outcome) = rr_ie_loop mode i_state in ((events ++ events'),outcome)
 *)
+
+
+let instruction_kind_of_event : event -> maybe instruction_kind = function
+  | E_read_mem rk _ _ _ -> Just (IK_mem_read rk)
+  | E_write_mem wk _ _ _ _ _  -> Just (IK_mem_write wk)
+  | E_write_ea wk _ _ _ -> Just (IK_mem_write wk)
+  | E_write_memv _ _ _ -> Nothing
+  | E_barrier bk -> Just (IK_barrier bk)
+  | E_footprint -> Nothing
+  | E_read_reg _ -> Nothing
+  | E_write_reg _ _ -> Nothing
+  | E_error s -> failwith ("instruction_kind_of_event error: "^s)
+  | E_escape -> Nothing (*failwith ("instruction_kind_of_event escape")*)
+ end
+(* TODO: how can we decide, looking only at the output of interp_exhaustive,
+   that an instruction is a conditional branch? *)
+
+let regs_in_of_event : event -> list reg_name = function
+  | E_read_mem _ _ _ _ -> []
+  | E_write_mem _ _ _ _ _ _  -> []
+  | E_write_ea _ _ _ _ -> []
+  | E_write_memv _ _ _ -> []
+  | E_barrier _ -> []
+  | E_footprint -> []
+  | E_read_reg r -> [r]
+  | E_write_reg _ _ -> []
+  | E_error s -> failwith ("regs_in_of_event "^s)
+  | E_escape -> [] (*failwith ("regs_in_of_event escape")*)
+  end
+
+let regs_out_of_event : event -> list reg_name = function
+  | E_read_mem _ _ _ _ -> []
+  | E_write_mem _ _ _ _ _ _  -> []
+  | E_write_ea _ _ _ _ -> []
+  | E_write_memv _ _ _ -> []
+  | E_barrier _ -> []
+  | E_footprint -> []
+  | E_read_reg _ -> []
+  | E_write_reg r _ -> [r]
+  | E_error s -> failwith ("regs_out_of_event "^s)
+  | E_escape -> [] (*failwith ("regs_out_of_event escape")*)
+  end
+
+
+let regs_feeding_memory_access_address_of_event : event -> list reg_name = function
+  | E_read_mem _ _ _ (Just rs)       -> rs
+  | E_read_mem _ _ _ None            -> []
+  | E_write_mem _ _ _ (Just rs) _ _  -> rs
+  | E_write_mem _ _ _ None _ _       -> []
+  | E_write_ea wk _ _ (Just rs)      -> rs
+  | E_write_ea wk _ _ None           -> []
+  | E_write_memv _ _ _               -> []
+  | E_barrier bk                     -> []
+  | E_footprint                      -> []
+  | E_read_reg _                     -> []
+  | E_write_reg _ _                  -> []
+  | E_error s -> failwith ("regs_feeding_memory_access_address_of_event " ^ s)
+  | E_escape -> [] (*failwith ("regs_feeding_memory_access_address_of_event escape")*)
+end
+
+let nia_address_of_event nia_reg (event: event) : maybe (maybe address) = 
+   (* return Nothing for unknown/undef *)
+  match event with
+  | E_write_reg reg reg_value ->
+     if register_base_name reg = register_base_name nia_reg then
+       let al = match address_lifted_of_register_value reg_value with
+         | Just al -> al
+         | Nothing -> failwith "nia_register_of_event: NIA read not 64 bits" 
+       end in
+       Just (address_of_address_lifted al)
+     else Nothing
+  | _ -> Nothing
+  end
+
+let nias_of_instruction 
+      thread_ism
+    (nia_address: list (maybe address)) (* Nothing for unknown/undef*)
+    (regs_in:     list reg_name)
+    (instruction: instruction)
+    : list nia
+  =
+  let (instruction_name, instruction_fields) = instruction in
+
+  let unknown_nia_address = List.elem Nothing nia_address in
+
+  let nias = [NIA_concrete_address addr | forall (addr MEM (List.mapMaybe id nia_address)) | true] in
+
+  (* it's a fact of the Power2.06B instruction pseudocode that in the B and Bc
+     cases there should be no Unknown values in nia_values, while in the Bclr
+     and Bcctr cases nia_values will just be Unknown and the semantics should
+     match the comments in the machineDefTypes definition of nia *)
+  (* All our other analysis is on the pseudocode directly, which is arguably
+     pleasingly robust.  We could replace the nias pattern match on
+     instruction_name with something in that style if the exhaustive interpreter
+     announced register dependencies to register writes (easy) and if it could
+     check the form of the register writes to LR and CTR matches the
+     machineDefTypes nia definition *)
+  match (thread_ism, instruction_name) with
+    | ("PPCGEN_ism", "B") ->
+       let () = ensure (not unknown_nia_address)
+                       "unexpected unknown/undefined address in nia_values" in
+       nias
+    | ("PPCGEN_ism", "Bc") ->
+       let () = ensure (not unknown_nia_address)
+                       "unexpected unknown/undefined address in nia_values" in
+       NIA_successor :: nias
+    | ("PPCGEN_ism", "Bclr") -> [ NIA_successor; NIA_LR ]
+    | ("PPCGEN_ism", "Bcctr") -> [ NIA_successor; NIA_CTR ]
+    | ("PPCGEN_ism", "Sc") ->
+       let () = ensure (not unknown_nia_address)
+                       "unexpected unknown/undefined address in nia_values" in
+       match instruction_fields with
+       | [(_, _, lev)] ->
+          (* LEV field is 7 bits long, pad it with false at beginning *)
+          if lev = [Bitc_zero;Bitc_one;Bitc_one;Bitc_one;Bitc_one;Bitc_one;Bitc_one]
+                     (* (Interp_inter_imp.integer_of_byte_list (Interp_inter_imp.to_bytes (false :: bl))) = 63 *)
+          then []
+          else [NIA_successor]
+       | _ -> [ NIA_successor ]
+       end
+
+    (* AARch64 label branch (i.e. address must be known) although
+    these instructions take the address as an offset from PC, in here
+    we see the absolute address as it was extracted from the micro ops
+    just before write to PC *)
+    | ("AArch64HandSail", "BranchImmediate")   -> nias
+    | ("AArch64HandSail", "BranchConditional") -> NIA_successor :: nias
+    | ("AArch64HandSail", "CompareAndBranch")  -> NIA_successor :: nias
+    | ("AArch64HandSail", "TestBitAndBranch")  -> NIA_successor :: nias
+
+    (* AArch64 calculated address branch *)
+    | ("AArch64HandSail", "BranchRegister") ->
+        (* do some parsing of the ast fields to figure out which register holds
+           the branching address i.e. find n in "BR <Xn>". The ast constructor
+           from armV8.sail: (reg_index,BranchType) BranchRegister; *)
+        let n_integer =
+          match instruction_fields with
+          | [(_, _, n); _] -> integer_of_bit_list n
+          | _ -> fail
+          end
+        in
+        let () = ensure (0 <= n_integer && n_integer <= 31)
+                  "expected register number from 0 to 31"
+        in
+        if n_integer = 31 then
+          nias (* BR XZR *)
+        else
+          (* look for Xn (which we actually call Rn) in regs_in *)
+          let n_reg = "R" ^ (String_extra.stringFromInteger n_integer) in
+          [NIA_register r | forall (r MEM regs_in)
+                          | match r with
+                            | (Reg name _ _ _) -> name = n_reg
+                            | _ -> false
+                            end]
+
+    | ("AArch64LitmusSail", "CtrlDep") -> NIA_successor :: nias
+
+    | ("MIPS_ism", "B") -> fail
+
+    | _ ->
+       let () = ensure (not unknown_nia_address)
+                       "unexpected unknown/undefined address in nia_values" in
+        [ NIA_successor ]
+    end
+
+let interp_instruction_analysis 
+      (interp_exhaustive : ((list (reg_name * register_value)) -> list event))
+      instruction nia_reg ism environment = 
+    
+    let es = interp_exhaustive environment in
+
+    let regs_in = List.concatMap regs_in_of_event es in
+    let regs_out = List.concatMap regs_out_of_event es in
+
+    let regs_feeding_address = List.concatMap regs_feeding_memory_access_address_of_event es in
+
+    let nia_address = List.mapMaybe (nia_address_of_event nia_reg) es in
+
+    let nias = nias_of_instruction ism nia_address regs_in instruction in
+
+    let dia = DIA_none in (* FIX THIS! *)
+
+
+    let inst_kind =
+      match List.mapMaybe instruction_kind_of_event es with
+      | [] -> if List.length nias > 1 then IK_cond_branch else IK_simple
+      | inst_kind :: inst_kinds ->
+          let () = ensure (forall (inst_kind' MEM inst_kinds). inst_kind' = inst_kind)
+                          "multiple instruction kinds" in
+          let () = ensure (List.length nias > 1 --> inst_kind = IK_cond_branch)
+                          "multiple NIAs must be IK_cond_branch" in
+          inst_kind
+    end in
+
+  (regs_in, regs_out, regs_feeding_address, nias, dia, inst_kind)
