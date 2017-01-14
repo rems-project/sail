@@ -299,7 +299,7 @@ let rec pp_format_tag = function
   | Emp_intro -> "Tag_intro"
   | Emp_set -> "Tag_set"
   | Emp_global -> "Tag_global"
-  | Tuple_assign tags -> "(Tag_tuple_assign [" ^ list_format " ;" pp_format_tag tags ^ "])"
+  | Tuple_assign tags -> (*"(Tag_tuple_assign [" ^ list_format " ;" pp_format_tag tags ^ "])"*) "Tag_tuple_assign"
   | External (Some s) -> "(Tag_extern (Just \""^s^"\"))"
   | External None -> "(Tag_extern Nothing)"
   | Default -> "Tag_default"
@@ -500,7 +500,7 @@ and pp_lem_lexp ppf (LEXP_aux(lexp,(l,annot))) =
       | LEXP_memory(id,args) ->
         fprintf ppf "(LEXP_memory %a [%a])" pp_lem_id id (list_pp pp_semi_lem_exp pp_lem_exp) args
       | LEXP_cast(typ,id) -> fprintf ppf "(LEXP_cast %a %a)" pp_lem_typ typ pp_lem_id id
-      | LEXP_tup tups -> fprintf ppf "(LEXP_tuple [%a])" (list_pp pp_semi_lem_lexp pp_lem_lexp) tups
+      | LEXP_tup tups -> fprintf ppf "(LEXP_tup [%a])" (list_pp pp_semi_lem_lexp pp_lem_lexp) tups
       | LEXP_vector(v,exp) -> fprintf ppf "@[(%a %a %a)@]" kwd "LEXP_vector" pp_lem_lexp v pp_lem_exp exp
       | LEXP_vector_range(v,e1,e2) ->
         fprintf ppf "@[(%a %a %a %a)@]" kwd "LEXP_vector_range" pp_lem_lexp v  pp_lem_exp e1 pp_lem_exp e2
@@ -1958,7 +1958,7 @@ let get_id = function
 let doc_fundef_ocaml (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
-  | [FCL_aux (FCL_Funcl(id,pat,exp),_)] ->
+  | [FCL_aux (FCL_Funcl(id,pat,exp),_)] -> 
      (separate space [(string "let"); (doc_rec_ocaml r); (doc_id_ocaml id); (doc_pat_ocaml pat); equals]) ^^ hardline ^^ (doc_exp_ocaml exp)
   | _ ->
     let id = get_id fcls in
