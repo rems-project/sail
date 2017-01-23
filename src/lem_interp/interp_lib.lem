@@ -844,6 +844,30 @@ let v_length v = retaint v (match detaint v with
   | V_unknown -> V_unknown 
   | _ -> Assert_extra.failwith ("length given unexpected " ^ (string_of_value v)) end)
 
+let min v = retaint v (match detaint v with
+    | V_tuple [v1;v2] ->
+      (match (detaint v1,detaint v2) with
+       | (V_lit (L_aux (L_num l1) _), V_lit (L_aux (L_num l2) _)) ->
+         if l1 < l2
+         then retaint v2 v1
+         else retaint v1 v2
+       | (V_unknown,_) -> V_unknown
+       | (_,V_unknown) -> V_unknown
+       | (V_lit l1,_) -> Assert_extra.failwith ("Second argument to min not a number " ^ (string_of_value v2))
+       | (_,V_lit l2) -> Assert_extra.failwith ("First argument to min not a number " ^ (string_of_value v1))
+       | _ ->
+         Assert_extra.failwith ("min given unexpected " ^ (string_of_value v1) ^ " and " ^ (string_of_value v2)) end)
+    | _ -> Assert_extra.failwith ("min given unexpected " ^ (string_of_value v)) end)
+
+let max v = retaint v (match detaint v with
+    | (V_tuple [(V_lit (L_aux (L_num l1) _) as v1); (V_lit (L_aux (L_num l2) _) as v2)]) ->
+      if l1 > l2
+      then v1
+      else v2
+    | V_tuple [V_unknown; V_unknown] -> V_unknown
+    | _ -> Assert_extra.failwith ("max given unexpected " ^ (string_of_value v)) end)
+
+
 let mask direction v =
   let fail () = Assert_extra.failwith ("shift_op_vec given unexpected " ^ (string_of_value v)) in
   match v with
@@ -995,6 +1019,8 @@ let library_functions direction = [
   ("duplicate_bits", duplicate_bits);
   ("mask", mask direction);
   ("most_significant", most_significant);
+  ("min", min);
+  ("max", max);
 ] ;;
 
 let eval_external name v = match List.lookup name (library_functions IInc) with
