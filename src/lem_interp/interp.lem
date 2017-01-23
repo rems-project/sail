@@ -111,7 +111,7 @@ let rec {ocaml} string_of_value v = match v with
   | V_unknown -> "Unknown"
   | V_register r -> string_of_reg_form r
   | V_register_alias _ _ -> "register_as_alias"
-  | V_track v rs -> "tainted by {" ^ (list_to_string string_of_reg_form "," []) ^ "} --" ^ (string_of_value v)
+  | V_track v rs -> (*"tainted by {" ^ (list_to_string string_of_reg_form "," []) ^ "} --" ^*) (string_of_value v)
 end
 let ~{ocaml} string_of_value _ = ""
 
