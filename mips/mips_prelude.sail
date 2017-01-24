@@ -89,8 +89,9 @@ let ([:64:]) TLBNumEntries = 64
 typedef TLBIndexT = (bit[6])
 let (TLBIndexT) TLBIndexMax = 0b111111
 
-let MAX_VA = unsigned(0xffffffffff)
-let MAX_PA = unsigned(0xfffffffff)
+let MAX_U64 = unsigned(0xffffffffffffffff)
+let MAX_VA  = unsigned(0xffffffffff)
+let MAX_PA  = unsigned(0xfffffffff)
 
 typedef TLBEntry = register bits [116 : 0] {
   116 ..  101: pagemask;
