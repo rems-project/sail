@@ -350,6 +350,9 @@ let eq_vec v =
       else V_lit (L_aux L_zero Unknown)
     | (V_unknown, _) -> V_unknown
     | (_, V_unknown) -> V_unknown
+    | (V_vector _ _ [c1], _) -> eq (V_tuple [c1; v2])
+    | (_, V_vector _ _ [c2]) -> eq (V_tuple [v1; c2])
+    | (V_lit _, V_lit _) -> eq (V_tuple [v1;v2]) (*Vectors of one bit return one bit; we need coercion to match*)
     | _ -> Assert_extra.failwith ("eq_vec not given two vectors, given instead " ^ (string_of_value v)) end in
   match v with
   | (V_tuple [v1; v2]) -> binary_taint eq_vec_help v1 v2
@@ -383,6 +386,15 @@ end)
 let neq = compose neg eq ;;
 
 let neq_vec = compose neg eq_vec
+
+let rec v_abs v = retaint v (match detaint v with
+    | V_lit (L_aux arg la) ->
+      V_lit (L_aux (match arg with
+          | L_num n -> if n < 0 then L_num (n * (0 - 1)) else L_num n
+          | _ -> Assert_extra.failwith ("abs given unexpected " ^ (string_of_value v)) end) la)
+   | V_unknown -> V_unknown
+   | V_tuple [v] -> v_abs v
+   | _ -> Assert_extra.failwith ("abs given unexpected " ^ (string_of_value v)) end)
 
 let arith_op op v =
   let fail () = Assert_extra.failwith ("arith_op given unexpected " ^ (string_of_value v)) in
@@ -1023,6 +1035,7 @@ let library_functions direction = [
   ("most_significant", most_significant);
   ("min", min);
   ("max", max);
+  ("abs", v_abs);
 ] ;;
 
 let eval_external name v = match List.lookup name (library_functions IInc) with
