@@ -322,7 +322,7 @@ function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType
   let pcc = capRegToCapStruct(PCC) in
   let base  = unsigned(getCapBase(pcc)) in
   let top   = unsigned(getCapTop(pcc)) in
-  let absPC = (unsigned(vAddr)) in
+  let absPC = base + unsigned(vAddr) in
   if ((absPC mod 4)  != 0) then (* bad PC alignment *)
     (SignalExceptionBadAddr(AdEL, (bit[64]) absPC)) (* XXX absPC may be truncated *)
   else if ((absPC + 4) > top) then
