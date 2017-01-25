@@ -32,30 +32,6 @@
 (*  SUCH DAMAGE.                                                          *)
 (*========================================================================*)
 
-(* 265-bit capability is really 257 bits including tag *)
-typedef CapReg = register bits [256:0] {
-  256:      tag;
-  (* 255..248: reserved1; padding *)
-  247..224: otype;
-  223..208: sw_perms;
-  207..204: perm_reserved11_14;
-  203:      access_system_regs;
-  202:      perm_reserved9; (* perm bit 9 *)
-  201:      perm_reserved8; (* perm bit 8 *)
-  200:      permit_seal;
-  199:      permit_store_local_cap;
-  198:      permit_store_cap;
-  197:      permit_load_cap;
-  196:      permit_store;
-  195:      permit_load;
-  194:      permit_execute;
-  193:      global;
-  192:      sealed;
-  191..128: offset;
-  127..64:  base;
-  63 .. 0:  length;
-}
-
 register CapReg PCC
 register CapReg nextPCC
 register CapReg delayedPCC
@@ -92,151 +68,35 @@ register CapReg C29 (* aka kernel code capability, KCC *)
 register CapReg C30 (* aka kernel data capability, KDC *)
 register CapReg C31 (* aka exception program counter capability, EPCC *)
 
-let (vector <0, 32, inc, (CapReg)>) CapRegs =
+let (vector <0, 32, inc, (register<CapReg>)>) CapRegs =
   [ C00, C01, C02, C03, C04, C05, C06, C07, C08, C09, C10,
   C11, C12, C13, C14, C15, C16, C17, C18, C19, C20,
   C21, C22, C23, C24, C25, C26, C27, C28, C29, C30, C31
   ]
 
-typedef CapStruct = const struct {
-  bool    tag;
-  bit[8]  padding;
-  bit[24] otype;
-  bit[16] sw_perms;
-  bit[4]  perm_reserved11_14;
-  bool    access_system_regs;
-  bool    perm_reserved9;
-  bool    perm_reserved8;
-  bool    permit_seal;
-  bool    permit_store_local_cap;
-  bool    permit_store_cap;
-  bool    permit_load_cap;
-  bool    permit_store;
-  bool    permit_load;
-  bool    permit_execute;
-  bool    global;
-  bool    sealed;
-  bit[64] offset;
-  bit[64] base;
-  bit[64] length;
-}
-
-let (CapStruct) null_cap = {
-  tag = false;
-  padding = 0;
-  otype = 0;
-  sw_perms = 0;
-  perm_reserved11_14 = 0;
-  access_system_regs = false;
-  perm_reserved9 = false;
-  perm_reserved8 = false;
-  permit_seal = false;
-  permit_store_local_cap = false;
-  permit_store_cap = false;
-  permit_load_cap = false;
-  permit_store = false;
-  permit_load = false;
-  permit_execute = false;
-  global = false;
-  sealed = false;
-  offset = 0;
-  base = 0;
-  length = 0;
-}
 let (nat) max_otype = 0xffffff
-def Nat cap_size_t  = 32 (* cap size in bytes *)
-let ([:cap_size_t:]) cap_size = 32
 let have_cp2 = true
-
-function CapStruct capRegToCapStruct((CapReg) capReg) =
-  {
-    tag                        = capReg.tag;
-    padding                    = capReg[255..248];
-    otype                      = capReg.otype;
-    sw_perms                   = capReg.sw_perms;
-    perm_reserved11_14         = capReg.perm_reserved11_14;
-    access_system_regs         = capReg.access_system_regs;
-    perm_reserved9             = capReg.perm_reserved9;
-    perm_reserved8             = capReg.perm_reserved8;
-    permit_seal                = capReg.permit_seal;
-    permit_store_local_cap     = capReg.permit_store_local_cap;
-    permit_store_cap           = capReg.permit_store_cap;
-    permit_load_cap            = capReg.permit_load_cap;
-    permit_store               = capReg.permit_store;
-    permit_load                = capReg.permit_load;
-    permit_execute             = capReg.permit_execute;
-    global                     = capReg.global;
-    sealed                     = capReg.sealed;
-    offset                     = capReg.offset;
-    base                       = capReg.base;
-    length                     = capReg.length;
-  }
-
 
 function (CapStruct) readCapReg((regno) n) =
   capRegToCapStruct(CapRegs[n])
 
-function (bit[31]) capPermsToVec((CapStruct) cap) = 
-  (
-    cap.sw_perms
-      : cap.perm_reserved11_14
-      : [cap.access_system_regs]
-      : [cap.perm_reserved9]
-      : [cap.perm_reserved8]
-      : [cap.permit_seal]
-      : [cap.permit_store_local_cap]
-      : [cap.permit_store_cap]
-      : [cap.permit_load_cap]
-      : [cap.permit_store]
-      : [cap.permit_load]
-      : [cap.permit_execute]
-      : [cap.global]
-  )
-
-(* Function used to convert capabilities to in-memory format 
-   - this is the same as register format except for the offset,
-     field which is stored as an absolute cursor on CHERI
-     due to uarch optimisation *)
-function (bit[256]) capStructToMemBits((CapStruct) cap) =
-  (
-        cap.padding
-      : cap.otype
-      : capPermsToVec(cap)
-      : [cap.sealed]
-        (* NB in memory format stores cursor, not offset *)
-      : (cap.base + cap.offset) 
-      : cap.base
-      : cap.length
-  )
-
-
-(* Reverse of above used when reading from memory *)
-function (bit[257]) memBitsToCapBits((bool) tag, (bit[256]) b) =
-  ([tag]
-   : b[255..192]
-   : ((bit[64])(b[191..128] - b[127..64]))
-   : b[127..0]
-  )
-
-function (bit[257]) capStructToBit257((CapStruct) cap) =
-    (
-      [cap.tag]
-      : cap.padding
-      : cap.otype
-      : capPermsToVec(cap)
-      : [cap.sealed]
-      : cap.offset
-      : cap.base
-      : cap.length
-    )
-
-function nat getCapCursor((CapStruct) cap) = 
-  (((nat)(cap.base)) + ((nat)(cap.offset))) mod (2 ** 64)
-
 function unit writeCapReg((regno) n, (CapStruct) cap) =
-    {
-      (CapRegs[n]) := capStructToBit257(cap)
-    }
+  CapRegs[n] := capStructToCapReg(cap)
+
+(*
+function (CapStruct) readCapReg((regno) n) =
+function (CapReg) capStructToCapReg((CapStruct) cap) =
+function (CapReg) memBitsToCapBits((bool) tag, (bit[8*cap_size_t]) b)function unit writeCapReg((regno) n, (CapStruct) cap) =
+function bit[64] getCapBase((CapStruct) c)
+function bit[65] getCapTop((CapStruct) c)
+function bit[64] getCapOffset((CapStruct) c)
+function bit[65] getCapLength((CapStruct) c)  = getCapTop(c) - (0b0 : getCapBase(c))
+function nat getCapCursor((CapStruct) cap)
+function (bool, CapStruct) setCapOffset((CapStruct) c, (bit[64]) offset)
+function (bool, CapStruct) incCapOffset((CapStruct) c, (bit[64]) delta)
+function (bool, CapStruct) setCapBounds((CapStruct) cap, (bit[64]) base, (bit[65]) top)
+function CapStruct int_to_cap ((bit[64]) offset)
+*)
 
 typedef CapEx = enumerate {
   CapEx_None; 
@@ -259,16 +119,6 @@ typedef CapEx = enumerate {
   CapEx_PermitStoreLocalCapViolation;
   CapEx_PermitSealViolation;
   CapEx_AccessSystemRegsViolation;
-}
-
-typedef CGetXOp = enumerate {
-  CGetPerm;
-  CGetType;
-  CGetBase;
-  CGetOffset;
-  CGetLen;
-  CGetTag;
-  CGetUnsealed;
 }
 
 typedef CPtrCmpOp = enumerate {
@@ -321,12 +171,14 @@ register CapCauseReg CapCause
 
 function forall Type 'o . 'o SignalException ((Exception) ex) = 
   {
-    C31        := PCC;
-    C31.offset := PC;
+    let pcc = capRegToCapStruct(PCC) in
+    let (success, epcc) = setCapOffset(pcc, PC) in
+    C31        := capStructToCapReg(epcc);
+    (* XXX what if not success? *)
     nextPCC    := C29; (* KCC *)
     delayedPCC := C29; (* always write delayedPCC together whether PCC so 
                           that non-capability branches don't override PCC *)
-    SignalExceptionMIPS(ex, C29.base);
+    SignalExceptionMIPS(ex, getCapBase(capRegToCapStruct(C29)));
   }
 
 function unit ERETHook() =
@@ -352,15 +204,23 @@ function forall Type 'o . 'o raise_c2_exception((CapEx) capEx, (regno) regnum) =
 function forall Type 'o . 'o raise_c2_exception_noreg((CapEx) capEx) =
   raise_c2_exception8(capEx, 0xff)
 
+function bool pcc_access_system_regs () = 
+      let pcc = capRegToCapStruct(PCC) in
+      (pcc.access_system_regs)
+
 function bool register_inaccessible((regno) r) = 
-  ~(switch(r) {
-    case 0b11011 -> (PCC.access_system_regs)
-    case 0b11100 -> (PCC.access_system_regs)
-    case 0b11101 -> (PCC.access_system_regs)
-    case 0b11110 -> (PCC.access_system_regs)
-    case 0b11111 -> (PCC.access_system_regs)
-    case _       -> bitone
-  })
+  let is_sys_reg = switch(r) {
+    case 0b11011 -> true
+    case 0b11100 -> true
+    case 0b11101 -> true
+    case 0b11110 -> true
+    case 0b11111 -> true
+    case _       -> false
+  } in
+  if is_sys_reg then
+    not (pcc_access_system_regs ())
+  else
+    false
 
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * ('n + 1)]) effect { rmem } MEMr_tag
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * ('n + 1)]) effect { rmem } MEMr_tag_reserve
@@ -400,6 +260,10 @@ function bool MEMw_tagged_conditional((bit[64]) addr, (bool) tag, (bit[cap_size_
   MEMval_tag_conditional(addr, cap_size, 0b0000000 : [tag] :  data);
 }
 
+function (bit[64]) align((bit[64]) addr, (nat) alignment) =
+    let remainder = unsigned(addr) mod alignment in
+    addr - remainder
+
 function unit effect {wmem} MEMw_wrapper(addr, size, data) =
   if (addr == 0x000000007f000000) then
   {
@@ -411,7 +275,7 @@ function unit effect {wmem} MEMw_wrapper(addr, size, data) =
     (* On cheri non-capability writes must clear the corresponding tag
        XXX this is vestigal and only works on sequential modle -- tag clearing
        should probably be done in memory model. *)
-    TAGw((addr[63..5] : 0b00000), 0x00);
+    TAGw(align(addr, cap_size), 0x00);
     MEMea(addr,size);
     MEMval(addr, size, data);
   }
@@ -423,7 +287,7 @@ function bool effect {wmem} MEMw_conditional_wrapper(addr, size, data) =
     success := MEMval_conditional(addr,size,data);
     if (success) then
       (* XXX as above TAGw is vestigal and must die *)
-      TAGw((addr[63..5] : 0b00000), 0x00);
+      TAGw(align(addr, cap_size), 0x00);
     success;
   }
 
@@ -434,7 +298,7 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
     if (~(cap.tag)) then
       (raise_c2_exception(CapEx_TagViolation, capno))
     else if (cap.sealed) then
-      (raise_c2_exception(CapEx_SealViolation, capno));
+        (raise_c2_exception(CapEx_SealViolation, capno));
     switch (accessType) {
       case Instruction -> if (~(cap.permit_execute)) then (raise_c2_exception(CapEx_PermitExecuteViolation, capno))
       case LoadData    -> if (~(cap.permit_load)) then (raise_c2_exception(CapEx_PermitLoadViolation, capno))
@@ -442,26 +306,29 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
     };
     cursor := getCapCursor(cap);
     vAddr  := cursor + unsigned(addr);
-    vAddr64:= (bit[64]) vAddr;
     size   := wordWidthBytes(width);
-    if ((vAddr + size) > ((nat) (cap.base) + ((nat) (cap.length)))) then
+    base   := unsigned(getCapBase(cap));
+    top    := unsigned(getCapTop(cap));
+    if ((vAddr + size) > top) then
       (raise_c2_exception(CapEx_LengthViolation, capno))
-    else if (vAddr < ((nat) (cap.base))) then
-      (raise_c2_exception(CapEx_LengthViolation, capno));
-    vAddr64;
+    else if (vAddr < (base)) then
+      (raise_c2_exception(CapEx_LengthViolation, capno))
+    else
+      (bit[64]) vAddr; (* XXX vAddr not truncated because top <= 2^64 and size > 0 *)
   }
 
 function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) = {
   incrementCP0Count();
-  let (bit[64])  base = PCC.base in
-  let (bit[64])  length = PCC.length in
-  let (bit[64])  absPC = (base + vAddr) in
-  if (absPC[1..0] != 0b00) then (* bad PC alignment *)
-    (SignalExceptionBadAddr(AdEL, absPC))
-  else if ((unsigned(vAddr) + 4) > unsigned(length)) then
+  let pcc = capRegToCapStruct(PCC) in
+  let base  = unsigned(getCapBase(pcc)) in
+  let top   = unsigned(getCapTop(pcc)) in
+  let absPC = base + unsigned(vAddr) in
+  if ((absPC mod 4)  != 0) then (* bad PC alignment *)
+    (SignalExceptionBadAddr(AdEL, (bit[64]) absPC)) (* XXX absPC may be truncated *)
+  else if ((absPC + 4) > top) then
     (raise_c2_exception_noreg(CapEx_LengthViolation))
   else
-    TLBTranslate(absPC, accessType)
+    TLBTranslate((bit[64]) absPC, accessType) (* XXX assert absPC never gets truncated due to above check and top <= 2^64 for valid caps *)
 }
 
 function unit checkCP2usable () =
@@ -472,4 +339,3 @@ function unit checkCP2usable () =
             (SignalException(CpU));
           }
       }
-
