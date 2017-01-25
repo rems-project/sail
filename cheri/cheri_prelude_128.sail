@@ -404,8 +404,10 @@ register CapCauseReg CapCause
 
 function forall Type 'o . 'o SignalException ((Exception) ex) = 
   {
-    C31        := PCC;
-    (*C31.offset := PC; XXX fix this *)
+    let pcc = capRegToCapStruct(PCC) in
+    let (success, epcc) = setCapOffset(pcc, PC) in
+    C31        := capStructToCapReg(epcc);
+    (* XXX what if not success? *)
     nextPCC    := C29; (* KCC *)
     delayedPCC := C29; (* always write delayedPCC together whether PCC so 
                           that non-capability branches don't override PCC *)
