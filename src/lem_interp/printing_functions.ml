@@ -150,7 +150,7 @@ let bit_lifteds_to_string ?(collapse=true) (bls: bit_lifted list) (show_length_a
             else
               "0x"^s
   else
-    simple_bit_lifteds_to_string bls show_length_and_start starto
+    simple_bit_lifteds_to_string  ~collapse:collapse bls show_length_and_start starto
   
 
 let register_value_to_string rv = 

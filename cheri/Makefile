@@ -1,7 +1,12 @@
 EXTRACT_INST=sed -n "/START_${1}\b/,/END_${1}\b/p" cheri_insts.sail | sed 's/^  //;1d;$$d' > inst_$1.sail
 
 extract: cheri_insts.sail
-	$(call EXTRACT_INST,CGetX)
+	$(call EXTRACT_INST,CGetPerms)
+	$(call EXTRACT_INST,CGetType)
+	$(call EXTRACT_INST,CGetBase)
+	$(call EXTRACT_INST,CGetOffset)
+	$(call EXTRACT_INST,CGetTag)
+	$(call EXTRACT_INST,CGetSealed)
 	$(call EXTRACT_INST,CGetPCC)
 	$(call EXTRACT_INST,CGetPCCSetOffset)
 	$(call EXTRACT_INST,CGetCause)
@@ -13,6 +18,7 @@ extract: cheri_insts.sail
 	$(call EXTRACT_INST,CIncOffset)
 	$(call EXTRACT_INST,CSetOffset)
 	$(call EXTRACT_INST,CSetBounds)
+	$(call EXTRACT_INST,CSetBoundsExact)
 	$(call EXTRACT_INST,CClearTag)
 	$(call EXTRACT_INST,ClearRegs)
 	$(call EXTRACT_INST,CFromPtr)

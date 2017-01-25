@@ -1,6 +1,6 @@
 .PHONY: all sail language clean archs
 
-all: sail
+all: sail interpreter
 
 apply_header:
 	headache -c etc/headache_config -h etc/mips_header `ls mips/*.sail`
