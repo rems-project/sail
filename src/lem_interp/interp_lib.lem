@@ -345,6 +345,8 @@ let eq_vec v =
          List.listEqualBy
            (fun v1 v2 -> match eq (V_tuple [v1; v2]) with V_lit (L_aux L_one _) -> true | _ -> false end) c1s c2s then
         V_lit (L_aux L_one Unknown)
+      else if has_unknown v1 || has_unknown v2
+      then V_unknown
       else V_lit (L_aux L_zero Unknown)
     | (V_unknown, _) -> V_unknown
     | (_, V_unknown) -> V_unknown
