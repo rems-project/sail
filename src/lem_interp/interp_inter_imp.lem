@@ -1215,3 +1215,85 @@ let interp_instruction_analysis
     end in
 
   (regs_in, regs_out, regs_feeding_address, nias, dia, inst_kind)
+
+let interp_handwritten_instruction_analysis context endianness instruction analysis_function reg_info environment = 
+  fst (instruction_analysis context endianness analysis_function
+                            reg_info (Just environment) instruction)
+
+
+
+val print_and_fail_of_inequal : forall 'a. Show 'a => 
+                                  (string -> unit) -> 
+                                (instruction -> string) ->
+                                (string * 'a) -> (string * 'a) -> unit
+let print_and_fail_if_inequal 
+      (print_endline,pp_instruction,instruction)
+      (name1,xs1) (name2,xs2) =
+  if xs1 = xs2 then ()
+  else 
+    let () = print_endline (name1^": "^show xs1) in
+    let () = print_endline (name2^": "^show xs2) in
+    failwith (name1^" and "^ name2^" inequal for instruction " ^ pp_instruction instruction)
+
+let interp_compare_analyses 
+      print_endline
+      pp_instruction
+      (non_pseudo_registers : set reg_name -> set reg_name)
+      context
+      endianness
+      interp_exhaustive
+      instruction
+      nia_reg
+      ism
+      environment
+      analysis_function
+      reg_info = 
+  let (regs_in1,regs_out1,regs_feeding_address1,nias1,dia1,inst_kind1) = 
+    interp_instruction_analysis interp_exhaustive instruction nia_reg ism 
+                                environment in
+  let (regs_in1S,regs_out1S,regs_feeding_address1S,nias1S) =
+    (Set.fromList regs_in1,
+     Set.fromList regs_out1,
+     Set.fromList regs_feeding_address1,
+     Set.fromList nias1) in
+  let (regs_in1S,regs_out1S,regs_feeding_addres1S) = 
+    (non_pseudo_registers regs_in1S,
+     non_pseudo_registers regs_out1S,
+     non_pseudo_registers regs_feeding_address1S) in
+
+  let (regs_in2,regs_out2,regs_feeding_address2,nias2,dia2,inst_kind2) = 
+    interp_handwritten_instruction_analysis 
+      context endianness instruction analysis_function reg_info environment in
+  let (regs_in2S,regs_out2S,regs_feeding_address2S,nias2S) =
+    (Set.fromList regs_in2,
+     Set.fromList regs_out2,
+     Set.fromList regs_feeding_address2,
+     Set.fromList nias2) in
+  let (regs_in2S,regs_out2S,regs_feeding_addres2S) = 
+    (non_pseudo_registers regs_in2S,
+     non_pseudo_registers regs_out2S,
+     non_pseudo_registers regs_feeding_address2S) in
+
+  let aux = (print_endline,pp_instruction,instruction) in
+  let () = (print_and_fail_if_inequal aux)
+             ("regs_in exhaustive",regs_in1S) 
+             ("regs_in hand",regs_in2S) in
+  let () = (print_and_fail_if_inequal aux) 
+             ("regs_out exhaustive",regs_out1S)
+             ("regs_out hand",regs_out2S) in
+  let () = (print_and_fail_if_inequal aux) 
+             ("regs_feeding_address exhaustive",regs_feeding_address1S)
+             ("regs_feeding_address hand",regs_feeding_address2S) in
+  let () = (print_and_fail_if_inequal aux) 
+             ("nias exhaustive",nias1S)
+             ("nias hand",nias2S) in
+  let () = (print_and_fail_if_inequal aux) 
+             ("dia exhaustive",dia1)
+             ("dia hand",dia2) in
+  let () = (print_and_fail_if_inequal aux) 
+             ("inst_kind exhaustive",inst_kind1)
+             ("inst_kind hand",inst_kind2) in
+
+  (regs_in1,regs_out1,regs_feeding_address1,nias1,dia1,inst_kind1)
+      
+

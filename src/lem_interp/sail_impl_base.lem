@@ -398,6 +398,18 @@ type write_kind =
   (* AArch64 writes *)
   | Write_release | Write_exclusive | Write_exclusive_release
 
+instance (Show write_kind)
+  let show = function
+    | Write_plain -> "Write_plain"
+    | Write_tag -> "Write_tag"
+    | Write_tag_conditional -> "Write_tag_conditional"
+    | Write_conditional -> "Write_conditional"
+    | Write_release -> "Write_release"
+    | Write_exclusive -> "Write_exclusive"
+    | Write_exclusive_release -> "Write_exclusive_release"
+  end
+end
+
 type barrier_kind =
   (* Power barriers *)
   Barrier_Sync | Barrier_LwSync | Barrier_Eieio | Barrier_Isync
@@ -406,6 +418,23 @@ type barrier_kind =
   | Barrier_DSB_ST | Barrier_DSB_LD | Barrier_ISB 
   (* MIPS barriers *)
   | Barrier_MIPS_SYNC
+
+instance (Show barrier_kind)
+  let show = function
+    | Barrier_Sync -> "Barrier_Sync"
+    | Barrier_LwSync -> "Barrier_LwSync"
+    | Barrier_Eieio -> "Barrier_Eieio"
+    | Barrier_Isync -> "Barrier_Isync"
+    | Barrier_DMB -> "Barrier_DMB"
+    | Barrier_DMB_ST -> "Barrier_DMB_ST"
+    | Barrier_DMB_LD -> "Barrier_DMB_LD"
+    | Barrier_DSB -> "Barrier_DSB"
+    | Barrier_DSB_ST -> "Barrier_DSB_ST"
+    | Barrier_DSB_LD -> "Barrier_DSB_LD"
+    | Barrier_ISB -> "Barrier_ISB"
+    | Barrier_MIPS_SYNC -> "Barrier_MIPS_SYNC"
+  end
+end
 
 type instruction_kind = 
   | IK_barrier of barrier_kind 
@@ -417,6 +446,18 @@ they just have particular nias (and will be IK_simple *)
   | IK_cond_branch 
 (*  | IK_uncond_branch *)
   | IK_simple
+
+
+instance (Show instruction_kind)
+  let show = function
+    | IK_barrier barrier_kind -> "IK_barrier " ^ (show barrier_kind)
+    | IK_mem_read read_kind -> "IK_mem_read " ^ (show read_kind)
+    | IK_mem_write write_kind -> "IK_mem_write " ^ (show write_kind)
+    | IK_cond_branch -> "IK_cond_branch"
+    | IK_simple -> "IK_simple"
+  end
+end
+
 
 
 let ~{ocaml} read_kindCompare rk1 rk2 =
