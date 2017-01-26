@@ -210,6 +210,8 @@ let reg_start_pos reg =
     | Reg _ (Just(typ,_,_,_,_)) _ -> 
       let start_from_vec targs = match targs with
         | T_args [T_arg_nexp (Ne_const s);_;_;_] -> natFromInteger s
+        | T_args [T_arg_nexp _; T_arg_nexp (Ne_const s); T_arg_order Odec; _] -> (natFromInteger s) - 1
+        | T_args [_; _; T_arg_order Oinc; _] -> 0
         | _ -> Assert_extra.failwith "vector type not well formed"
       end in
       let start_from_reg targs = match targs with
