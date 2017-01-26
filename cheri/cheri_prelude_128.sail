@@ -185,7 +185,6 @@ function int a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound) =
 
 function bit[64] getCapBase((CapStruct) c)  = 
     let ([|63|])  E = min(unsigned(c.E), 45) in
-    let (bool)    s = c.sealed in
     let (bit[20]) B = c.B in
     let (bit[64]) a = c.address in
     let (bit[20]) R = B - 0x00100 in (* wraps *)
@@ -197,7 +196,6 @@ function bit[64] getCapBase((CapStruct) c)  =
 
 function bit[65] getCapTop((CapStruct) c)  = 
     let ([|63|])  E = min(unsigned(c.E), 45) in
-    let (bool)    s = c.sealed in
     let (bit[20]) B = c.B in
     let (bit[20]) T = c.T in
     let (bit[64]) a = c.address  in
