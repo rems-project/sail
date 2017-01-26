@@ -171,9 +171,13 @@ register CapCauseReg CapCause
 
 function forall Type 'o . 'o SignalException ((Exception) ex) = 
   {
+    let pc  = (bit[64]) PC in (* XXX Cast forces read of register. Sail bug? *)
     let pcc = capRegToCapStruct(PCC) in
-    let (success, epcc) = setCapOffset(pcc, PC) in
-    C31        := capStructToCapReg(epcc);
+    let (success, epcc) = setCapOffset(pcc, pc) in
+    if (success) then
+        C31 := capStructToCapReg(epcc)
+    else
+        C31 := capStructToCapReg(int_to_cap(pc));
     (* XXX what if not success? *)
     nextPCC    := C29; (* KCC *)
     delayedPCC := C29; (* always write delayedPCC together whether PCC so 

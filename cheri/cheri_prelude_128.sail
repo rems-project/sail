@@ -105,7 +105,7 @@ function CapStruct capRegToCapStruct((CapReg) c) =
     permit_execute         = c[114];
     global                 = c[113];
     reserved               = c[112..111];
-    E                      = c[110..105];
+    E                      = c[110..105] ^ 0b110000;
     sealed                 = s;
     B                      = B;
     T                      = T;
@@ -132,7 +132,7 @@ function (bit[128]) capStructToMemBits((CapStruct) cap) =
     ( cap.uperms
     : getCapHardPerms(cap)
     : cap.reserved
-    : cap.E
+    : (cap.E ^ 0b110000) (* XXX brackets required otherwise sail interpreter error *)
     : [cap.sealed]
     : b
     : t
@@ -155,7 +155,7 @@ function (bit[31]) getCapPerms((CapStruct) cap) =
 function CapStruct setCapPerms((CapStruct) cap, (bit[31]) perms) =
     { cap with
       uperms                 = perms[18..15];
-(*      perm_reserved11_14     = (cap.perm_reserved11_14 & (perms[14..11]));*)
+      (* 14..11 reserved -- ignore *)
       access_system_regs     = perms[10];
       perm_reserved9         = perms[9];
       perm_reserved8         = perms[8];
@@ -184,7 +184,7 @@ function int a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound) =
     }
 
 function bit[64] getCapBase((CapStruct) c)  = 
-    let ([|63|])  E = unsigned(c.E) in
+    let ([|63|])  E = min(unsigned(c.E), 45) in
     let (bool)    s = c.sealed in
     let (bit[20]) B = c.B in
     let (bit[64]) a = c.address in
@@ -196,7 +196,7 @@ function bit[64] getCapBase((CapStruct) c)  =
     base << E
 
 function bit[65] getCapTop((CapStruct) c)  = 
-    let ([|63|])  E = unsigned(c.E) in
+    let ([|63|])  E = min(unsigned(c.E), 45) in
     let (bool)    s = c.sealed in
     let (bit[20]) B = c.B in
     let (bit[20]) T = c.T in
