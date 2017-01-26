@@ -565,6 +565,7 @@ function clause execute (CSeal(cd, cs, ct)) =
   ct_val := readCapReg(ct);
   ct_cursor := getCapCursor(ct_val);
   ct_top    := unsigned(getCapTop(ct_val));
+  ct_base   := unsigned(getCapBase(ct_val));
   if (register_inaccessible(cd)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
   else if (register_inaccessible(cs)) then
@@ -581,6 +582,8 @@ function clause execute (CSeal(cd, cs, ct)) =
     raise_c2_exception(CapEx_SealViolation, ct)
   else if not (ct_val.permit_seal) then
     raise_c2_exception(CapEx_PermitSealViolation, ct)
+  else if (ct_cursor < ct_base) then
+    raise_c2_exception(CapEx_LengthViolation, ct)
   else if (ct_cursor >= ct_top) then
     raise_c2_exception(CapEx_LengthViolation, ct)
   else if (ct_cursor > max_otype) then
@@ -621,6 +624,8 @@ function clause execute (CUnseal(cd, cs, ct)) =
     raise_c2_exception(CapEx_TypeViolation, ct)
   else if not (ct_val.permit_seal) then
     raise_c2_exception(CapEx_PermitSealViolation, ct)
+  else if (ct_cursor <  unsigned(getCapBase(ct_val))) then
+    raise_c2_exception(CapEx_LengthViolation, ct)
   else if (ct_cursor >= unsigned(getCapTop(ct_val))) then
     raise_c2_exception(CapEx_LengthViolation, ct)
   else
@@ -641,6 +646,7 @@ function clause execute (CCall(cs, cb)) =
   checkCP2usable();
   cs_val := readCapReg(cs);
   cb_val := readCapReg(cb);
+  cs_cursor := getCapCursor(cs_val);
   if (register_inaccessible(cs)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cs)
   else if (register_inaccessible(cb)) then
@@ -659,7 +665,9 @@ function clause execute (CCall(cs, cb)) =
     raise_c2_exception(CapEx_PermitExecuteViolation, cs)
   else if (cb_val.permit_execute) then
     raise_c2_exception(CapEx_PermitExecuteViolation, cb)
-  else if (getCapCursor(cs_val) >= unsigned(getCapTop(cs_val))) then
+  else if (cs_cursor < unsigned(getCapBase(cs_val))) then
+    raise_c2_exception(CapEx_LengthViolation, cs)
+  else if (cs_cursor >= unsigned(getCapTop(cs_val))) then
     raise_c2_exception(CapEx_LengthViolation, cs)
   else
     raise_c2_exception(CapEx_CallTrap, cs);
@@ -705,6 +713,7 @@ function clause execute(CJALR(cd, cb, link)) =
   cb_val := readCapReg(cb);
   cb_ptr := getCapCursor(cb_val);
   cb_top := unsigned(getCapTop(cb_val));
+  cb_base:= unsigned(getCapBase(cb_val));
   if (link & register_inaccessible(cd)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
   else if (register_inaccessible(cb)) then
@@ -717,7 +726,9 @@ function clause execute(CJALR(cd, cb, link)) =
     raise_c2_exception(CapEx_PermitExecuteViolation, cb)
   else if not (cb_val.global) then
     raise_c2_exception(CapEx_GlobalViolation, cb)
-  else if (cb_ptr + 4 > cb_top) then
+  else if (cb_ptr < cb_base) then
+    raise_c2_exception(CapEx_LengthViolation, cb)
+  else if ((cb_ptr + 4) > cb_top) then
     raise_c2_exception(CapEx_LengthViolation, cb)
   else if ((cb_ptr mod 4) != 0) then
     SignalException(AdEL)
