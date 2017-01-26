@@ -177,7 +177,7 @@ function forall Type 'o . 'o SignalException ((Exception) ex) =
     if (success) then
         C31 := capStructToCapReg(epcc)
     else
-        C31 := capStructToCapReg(int_to_cap(pc));
+        C31 := capStructToCapReg(int_to_cap(getCapBase(pcc) + pc));
     (* XXX what if not success? *)
     nextPCC    := C29; (* KCC *)
     delayedPCC := C29; (* always write delayedPCC together whether PCC so 
