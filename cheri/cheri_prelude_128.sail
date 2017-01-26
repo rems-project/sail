@@ -177,10 +177,10 @@ function (bool, CapStruct) sealCap((CapStruct) cap, (bit[24]) otype) =
 
 function int a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound) =
     switch (a_mid < R, bound < R) {
-      case (False, False) -> 0
-      case (False, True)  -> 1
-      case (True, False)  -> -1
-      case (True, True)   -> 0
+      case (bitzero, bitzero) -> 0
+      case (bitzero, bitone)  -> 1
+      case (bitone, bitzero)  -> -1
+      case (bitone, bitone)   -> 0
     }
 
 function bit[64] getCapBase((CapStruct) c)  = 
