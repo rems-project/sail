@@ -2092,6 +2092,6 @@ key-bindings or hack Font-Lock keywords...")
 
 (run-hooks 'sail-load-hook)
 
-(provide 'sail_mode)
+(provide 'sail-mode)
 
 ;;; sail.el ends here
