@@ -176,7 +176,7 @@ function (bool, CapStruct) sealCap((CapStruct) cap, (bit[24]) otype) =
         (false, undefined)
 
 function int a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound) =
-    switch (a_mid < R, bound < R) {
+    switch (unsigned(a_mid) < unsigned(R), unsigned(bound) < unsigned(R)) {
       case (bitzero, bitzero) -> 0
       case (bitzero, bitone)  -> 1
       case (bitone, bitzero)  -> -1
