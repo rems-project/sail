@@ -701,15 +701,15 @@ let rec shift_op_vec op v =
   let fail () = Assert_extra.failwith ("shift_op_vec given unexpected " ^ (string_of_value v)) in
   let arith_op_help vl vr =
     match (vl,vr) with
-      | (V_vector b ord cs,V_lit (L_aux (L_num n) _)) ->
-	let n = natFromInteger n in
-	(match op with
-	  | "<<" -> 
-	    V_vector b ord 
-	      ((from_n_to_n n ((length cs) - 1) cs) ++(List.replicate n (V_lit (L_aux L_zero Unknown))))
-	  | ">>" ->
+    | (V_vector b ord cs,V_lit (L_aux (L_num n) _)) ->
+      let n = natFromInteger n in
+      (match op with
+       | "<<" -> 
+	 V_vector b ord 
+           ((from_n_to_n n ((length cs) - 1) cs) ++(List.replicate n (V_lit (L_aux L_zero Unknown))))
+       | ">>" ->
 	    V_vector b ord
-	      ((List.replicate n (V_lit (L_aux L_zero Unknown))) ++ (from_n_to_n 0 (n-1) cs))
+	      ((List.replicate n (V_lit (L_aux L_zero Unknown))) ++ (from_n_to_n 0 (((length cs) -1) - n) cs))
 	  | "<<<" ->
 	    V_vector b ord
              ((from_n_to_n n ((length cs) -1) cs) ++ (from_n_to_n 0 (n-1) cs))
