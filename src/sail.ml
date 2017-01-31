@@ -104,6 +104,18 @@ let main() =
   if !(opt_print_version)
   then Printf.printf "Sail private release \n"
   else
+    let ppd_initial_typ_env = 
+      String.concat "" 
+        (List.map 
+           (function (id,tannot) ->
+             id ^ " : " ^ 
+             Pretty_print.pp_format_annot_ascii tannot 
+             ^ "\n")
+           (Type_internal.Envmap.to_list Type_internal.initial_typ_env)) in
+    Printf.printf "%s" ppd_initial_typ_env ;
+
+    
+
     let parsed = (List.map (fun f -> (f,(parse_file f)))  !opt_file_arguments) in
     let ast = 
       List.fold_right (fun (_,(Parse_ast.Defs ast_nodes)) (Parse_ast.Defs later_nodes) 

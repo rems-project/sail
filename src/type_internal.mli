@@ -337,3 +337,6 @@ val type_coerce : constraint_origin -> def_envs -> range_enforcement -> bool -> 
    When merging atoms, use bool to control widening. 
 *)
 val tannot_merge : constraint_origin -> def_envs -> bool -> tannot -> tannot -> tannot 
+
+val initial_typ_env : tannot Envmap.t
+

@@ -200,7 +200,7 @@ type tannot =
   (*See .mli for purpose of attributes *)
   | Base of (t_params * t) * tag * nexp_range list * effect * effect * bounds_env
   (* First tannot is the most polymorphic version; the list includes all variants. All included t are Tfn *)
-  | Overload of tannot * bool * tannot list 
+  | Overload of tannot * bool * tannot list    (* these tannot's should all be Base *)
 
 type 'a emap = 'a Envmap.t
 
@@ -1954,7 +1954,7 @@ let mk_bitwise_op name symb arity =
              (*lib_tannot (["n",{k=K_Nat};"o",{k=K_Ord}],mk_pure_fun svarg single_bit_vec_typ) (Some name) [];*)
              lib_tannot ([],mk_pure_fun barg bit_t) (Some (name ^ "_bit")) []]))
 
-let initial_typ_env =
+let initial_typ_env : tannot Envmap.t =
   Envmap.from_list [
     ("ignore",lib_tannot ([("a",{k=K_Typ})],mk_pure_fun {t=Tvar "a"} unit_t) None []);
     ("Some", Base((["a",{k=K_Typ}], mk_pure_fun {t=Tvar "a"} {t=Tapp("option", [TA_typ {t=Tvar "a"}])}),
@@ -2703,6 +2703,7 @@ let initial_typ_env =
                         (mk_atom (mk_nv "o")))),
           External (Some "min"),[],pure_e,pure_e,nob));
   ]
+
     
 
 let rec typ_subst s_env leave_imp t =

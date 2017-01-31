@@ -246,38 +246,38 @@ let pp_format_lit_lem (L_aux(lit,l)) =
 let pp_lem_lit ppf l = base ppf (pp_format_lit_lem l)
 
 
-let rec pp_format_t t =
+let rec pp_format_t_lem t =
   match t.t with
     | Tid i -> "(T_id \"" ^ i ^ "\")"
     | Tvar i -> "(T_var \"" ^ i ^ "\")"
-    | Tfn(t1,t2,_,e) -> "(T_fn " ^ (pp_format_t t1) ^ " " ^ (pp_format_t t2) ^ " " ^ pp_format_e e ^ ")"
-    | Ttup(tups) -> "(T_tup [" ^ (list_format "; " pp_format_t tups) ^ "])"
-    | Tapp(i,args) -> "(T_app \"" ^ i ^ "\" (T_args [" ^  list_format "; " pp_format_targ args ^ "]))"
-    | Tabbrev(ti,ta) -> "(T_abbrev " ^ (pp_format_t ti) ^ " " ^ (pp_format_t ta) ^ ")"
+    | Tfn(t1,t2,_,e) -> "(T_fn " ^ (pp_format_t_lem t1) ^ " " ^ (pp_format_t_lem t2) ^ " " ^ pp_format_e_lem e ^ ")"
+    | Ttup(tups) -> "(T_tup [" ^ (list_format "; " pp_format_t_lem tups) ^ "])"
+    | Tapp(i,args) -> "(T_app \"" ^ i ^ "\" (T_args [" ^  list_format "; " pp_format_targ_lem args ^ "]))"
+    | Tabbrev(ti,ta) -> "(T_abbrev " ^ (pp_format_t_lem ti) ^ " " ^ (pp_format_t_lem ta) ^ ")"
     | Tuvar(_) -> "(T_var \"fresh_v\")"
     | Toptions _ -> "(T_var \"fresh_v\")"
-and pp_format_targ = function
-  | TA_typ t -> "(T_arg_typ " ^ pp_format_t t ^ ")"
-  | TA_nexp n -> "(T_arg_nexp " ^ pp_format_n n ^ ")"
-  | TA_eft e -> "(T_arg_effect " ^ pp_format_e e ^ ")"
-  | TA_ord o -> "(T_arg_order " ^ pp_format_o o ^ ")"
-and pp_format_n n =
+and pp_format_targ_lem = function
+  | TA_typ t -> "(T_arg_typ " ^ pp_format_t_lem t ^ ")"
+  | TA_nexp n -> "(T_arg_nexp " ^ pp_format_n_lem n ^ ")"
+  | TA_eft e -> "(T_arg_effect " ^ pp_format_e_lem e ^ ")"
+  | TA_ord o -> "(T_arg_order " ^ pp_format_o_lem o ^ ")"
+and pp_format_n_lem n =
   match n.nexp with
   | Nid (i, n) -> "(Ne_id \"" ^ i ^ " " ^ "\")"
   | Nvar i -> "(Ne_var \"" ^ i ^ "\")"
   | Nconst i -> "(Ne_const " ^ (lemnum string_of_int (int_of_big_int i)) ^ ")"
   | Npos_inf -> "Ne_inf"
-  | Nadd(n1,n2) -> "(Ne_add [" ^ (pp_format_n n1) ^ "; " ^ (pp_format_n n2) ^ "])"
-  | Nsub(n1,n2) -> "(Ne_minus "^ (pp_format_n n1) ^ " " ^ (pp_format_n n2) ^ ")"
-  | Nmult(n1,n2) -> "(Ne_mult " ^ (pp_format_n n1) ^ " " ^ (pp_format_n n2) ^ ")"
-  | N2n(n,Some i) -> "(Ne_exp " ^ (pp_format_n n) ^ "(*" ^ string_of_big_int i ^ "*)" ^ ")"
-  | N2n(n,None) -> "(Ne_exp " ^ (pp_format_n n) ^ ")"
-  | Nneg n -> "(Ne_unary " ^ (pp_format_n n) ^ ")"
+  | Nadd(n1,n2) -> "(Ne_add [" ^ (pp_format_n_lem n1) ^ "; " ^ (pp_format_n_lem n2) ^ "])"
+  | Nsub(n1,n2) -> "(Ne_minus "^ (pp_format_n_lem n1) ^ " " ^ (pp_format_n_lem n2) ^ ")"
+  | Nmult(n1,n2) -> "(Ne_mult " ^ (pp_format_n_lem n1) ^ " " ^ (pp_format_n_lem n2) ^ ")"
+  | N2n(n,Some i) -> "(Ne_exp " ^ (pp_format_n_lem n) ^ "(*" ^ string_of_big_int i ^ "*)" ^ ")"
+  | N2n(n,None) -> "(Ne_exp " ^ (pp_format_n_lem n) ^ ")"
+  | Nneg n -> "(Ne_unary " ^ (pp_format_n_lem n) ^ ")"
   | Nuvar _ -> "(Ne_var \"fresh_v_" ^ string_of_int (get_index n) ^ "\")"
   | Nneg_inf -> "(Ne_unary Ne_inf)"
   | Npow _ -> "power_not_implemented"
   | Ninexact -> "(Ne_add Ne_inf (Ne_unary Ne_inf)"
-and pp_format_e e =
+and pp_format_e_lem e =
   "(Effect_aux " ^
   (match e.effect with
   | Evar i -> "(Effect_var (Kid_aux (Var \"" ^ i ^ "\") Unknown))"
@@ -285,7 +285,7 @@ and pp_format_e e =
                   (list_format "; " pp_format_base_effect_lem es) ^ " ])"
   | Euvar(_) -> "(Effect_var (Kid_aux (Var \"fresh_v\") Unknown))")
   ^ " Unknown)"
-and pp_format_o o =
+and pp_format_o_lem o =
   "(Ord_aux " ^
   (match o.order with
   | Ovar i -> "(Ord_var (Kid_aux (Var \"" ^ i ^ "\") Unknown))"
@@ -312,9 +312,9 @@ let rec pp_format_nes nes =
   "[" ^ (*
   (list_format "; "
      (fun ne -> match ne with
-       | LtEq(_,n1,n2) -> "(Nec_lteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
-       | Eq(_,n1,n2) -> "(Nec_eq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
-       | GtEq(_,n1,n2) -> "(Nec_gteq " ^ pp_format_n n1 ^ " " ^ pp_format_n n2 ^ ")"
+       | LtEq(_,n1,n2) -> "(Nec_lteq " ^ pp_format_n_lem n1 ^ " " ^ pp_format_n_lem n2 ^ ")"
+       | Eq(_,n1,n2) -> "(Nec_eq " ^ pp_format_n_lem n1 ^ " " ^ pp_format_n_lem n2 ^ ")"
+       | GtEq(_,n1,n2) -> "(Nec_gteq " ^ pp_format_n_lem n1 ^ " " ^ pp_format_n_lem n2 ^ ")"
        | In(_,i,ns) | InS(_,{nexp=Nvar i},ns) ->
          "(Nec_in \"" ^ i ^ "\" [" ^ (list_format "; " string_of_int ns)^ "])"
        | InS(_,_,ns)  ->
@@ -330,8 +330,8 @@ let pp_format_annot = function
   | NoTyp -> "Nothing"
   | Base((_,t),tag,nes,efct,efctsum,_) ->
     (*TODO print out bindings for use in pattern match in interpreter*)
-     "(Just (" ^ pp_format_t t ^ ", " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^
-       pp_format_e efct ^ ", " ^ pp_format_e efctsum ^ "))"
+     "(Just (" ^ pp_format_t_lem t ^ ", " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^
+       pp_format_e_lem efct ^ ", " ^ pp_format_e_lem efctsum ^ "))"
   | Overload _ -> "Nothing"
 
 let pp_annot ppf ant = base ppf (pp_format_annot ant)
@@ -673,6 +673,116 @@ let pp_lem_def ppf d =
 
 let pp_lem_defs ppf (Defs(defs)) =
   fprintf ppf "Defs [@[%a@]]@\n" (list_pp pp_lem_def pp_lem_def) defs
+
+
+
+(* **************************************************************************
+   * pp from tannot to ASCII source, for pp of built-in type environment
+*)
+
+
+
+let rec pp_format_t_ascii t =
+  match t.t with
+    | Tid i -> i
+    | Tvar i -> "'" ^ i
+    | Tfn(t1,t2,_,e) -> (pp_format_t_ascii t1) ^ " -> " ^ (pp_format_t_ascii t2) ^ " effect " ^ pp_format_e_ascii e 
+    | Ttup(tups) -> "(" ^ (list_format ", " pp_format_t_ascii tups) ^ ")"
+    | Tapp(i,args) ->  i ^ "<" ^  list_format ", " pp_format_targ_ascii args ^ ">"
+    | Tabbrev(ti,ta) -> (pp_format_t_ascii ti) (* (pp_format_t_ascii ta) *)
+    | Tuvar(_) -> failwith "Tuvar in pp_format_t_ascii"
+    | Toptions _ -> failwith "Toptions in pp_format_t_ascii"
+and pp_format_targ_ascii = function
+  | TA_typ t ->  pp_format_t_ascii t
+  | TA_nexp n -> pp_format_n_ascii n
+  | TA_eft e ->  pp_format_e_ascii e
+  | TA_ord o ->  pp_format_o_ascii o
+and pp_format_n_ascii n =
+  match n.nexp with
+  | Nid (i, n) -> i (* from an abbreviation *)
+  | Nvar i -> "'" ^ i
+  | Nconst i -> (string_of_int (int_of_big_int i))
+  | Npos_inf -> "infinity"
+  | Nadd(n1,n2) -> (pp_format_n_ascii n1) ^ "+" ^ (pp_format_n_ascii n2)
+  | Nsub(n1,n2) -> (pp_format_n_ascii n1) ^ "-" ^ (pp_format_n_ascii n2)
+  | Nmult(n1,n2) -> (pp_format_n_ascii n1) ^ "*" ^ (pp_format_n_ascii n2)
+  | N2n(n,_) -> "2**"^(pp_format_n_ascii n) (* string_of_big_int i ^ *)
+  | Nneg n -> "-" ^ (pp_format_n_ascii n) 
+  | Nuvar _ -> failwith "Nuvar in pp_format_n_ascii"
+  | Nneg_inf -> "-infinity"
+  | Npow _ -> failwith "Npow in pp_format_n_ascii"
+  | Ninexact -> failwith "Ninexact in pp_format_n_ascii"
+and pp_format_e_ascii e =
+  match e.effect with
+  | Evar i -> "'" ^ i
+  | Eset es -> "{" ^
+                  (list_format ", " pp_format_base_effect_ascii es) ^ "}"
+  | Euvar(_) -> failwith "Euvar in pp_format_e_ascii"
+and pp_format_o_ascii o =
+  match o.order with
+  | Ovar i -> "'" ^ i
+  | Oinc -> "inc"
+  | Odec -> "dec"
+  | Ouvar(_) -> failwith "Ouvar in pp_format_o_ascii"
+and pp_format_base_effect_ascii (BE_aux(e,l)) =
+  match e with
+    | BE_rreg -> "rreg"
+    | BE_wreg -> "wreg"
+    | BE_rmem -> "rmem"
+    | BE_wmem -> "wmem"
+    | BE_wmv  -> "wmv"
+    | BE_eamem -> "eamem"
+    | BE_barr -> "barr"
+    | BE_depend -> "depend"
+    | BE_undef -> "undef"
+    | BE_unspec -> "unspec"
+    | BE_nondet -> "nondet"
+    | BE_lset -> "lset"
+    | BE_lret -> "lret"
+    | BE_escape -> "escape"
+
+and pp_format_nes_ascii nes =
+  list_format ", " pp_format_ne_ascii nes
+
+and pp_format_ne_ascii ne =
+  match ne with
+  | Lt(_,_,n1,n2) -> pp_format_n_ascii n1 ^ " < " ^ pp_format_n_ascii n2
+  | LtEq(_,_,n1,n2) -> pp_format_n_ascii n1 ^ " <= " ^ pp_format_n_ascii n2
+  | NtEq(_,n1,n2) ->   pp_format_n_ascii n1 ^ " != " ^ pp_format_n_ascii n2
+  | Eq(_,n1,n2) ->   pp_format_n_ascii n1 ^ " = " ^ pp_format_n_ascii n2
+  | GtEq(_,_,n1,n2) -> pp_format_n_ascii n1 ^ " >= " ^ pp_format_n_ascii n2
+  | Gt(_,_,n1,n2) -> pp_format_n_ascii n1 ^ " > " ^ pp_format_n_ascii n2
+  | In(_,i,ns) | InS(_,{nexp=Nvar i},ns) ->
+  i ^ " IN {" ^ (list_format ", " string_of_int ns)^ "}"
+  | InS(_,_,ns)  -> (* when the variable has been replaced by a unification variable, we use this *)
+  failwith "InS in pp_format_nes_ascii" (*"(Nec_in \"fresh\" [" ^ (list_format "; " string_of_int ns)^ "])"*)
+  | Predicate(_,n1,n2) -> "flow_constraints(" ^ pp_format_ne_ascii n1 ^", "^ pp_format_ne_ascii n2 ^")"
+  | CondCons(_,_,_,nes_c,nes_t) ->
+  failwith "CondCons in pp_format_nes_ascii" (*"(Nec_cond " ^ (pp_format_nes nes_c) ^ " " ^ (pp_format_nes nes_t) ^ ")"*)
+  | BranchCons(_,_,nes_b) ->
+  failwith "BranchCons in pp_format_nes_ascii" (*"(Nec_branch " ^ (pp_format_nes nes_b) ^ ")"*)
+
+
+
+let rec pp_format_annot_ascii = function
+  | NoTyp -> "Nothing"
+  | Base((targs,t),tag,nes,efct,efctsum,_) ->
+    (*TODO print out bindings for use in pattern match in interpreter*)
+     "forall " ^ list_format ", " (function (i,k) -> kind_to_string k ^" "^ i) targs ^ 
+  (match nes with [] -> "" | _ -> ", " ^ pp_format_nes_ascii nes)
+  ^ ". "
+  ^ pp_format_t_ascii t 
+
+(*
+^ " ********** " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^
+       pp_format_e_lem efct ^ ", " ^ pp_format_e_lem efctsum ^ "))"
+*)
+  | Overload (tannot, return_type_overloading_allowed, tannots) -> 
+  pp_format_annot_ascii tannot ^ "\n" ^ String.concat "" (List.map (function tannot' -> "    " ^ pp_format_annot_ascii tannot' ^ "\n") tannots)
+
+
+
+
 
 
 (****************************************************************************
