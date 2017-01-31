@@ -249,20 +249,29 @@ function forall Nat 'N. option<[|0:('N + -1)|]> HighestSetBit((bit['N]) x) = {
   if break then Some(result) else None;
 }}
 
-function (bit[6]) computeE ((bit[65]) rlength) =
+(* hw rounds up E to multiple of 4 *)
+function ([|48|]) roundUp(([|45|]) e) =
+    let r = e mod 4 in
+    if (r == 0)
+    then e
+    else (e - r + 4)
+
+
+function ([|48|]) computeE ((bit[65]) rlength) =
     let msb = HighestSetBit((rlength + (rlength >> 6)) >> 19) in
     switch (msb) {
-      case (Some(b)) -> (bit[6]) b (* hw rounds up to multiple of 4 *)
+      (* above will always return <= 45 because 19 bits of zero are shifted in from right *)
+      case (Some(b)) -> {assert(b <= 45, None); roundUp (min(b,45)) }
       case None    -> 0
-    }    
+      }
 
 function (bool, CapStruct) setCapBounds((CapStruct) cap, (bit[64]) base, (bit[65]) top) =
     (* {cap with base=base; length=(bit[64]) length; offset=0} *)
-    let (bit[6])  e = computeE(top - (0b0 : base)) in
+    let ([|48|])  e = computeE(top - (0b0 : base)) in
     let (bit[20]) B = base[(19+e)..e] in
     let (bit[20]) T = top[(19+e)..e] in
     let (bit[20]) T2 = T + if (top[(e - 1)..0] == 0) then 0 else 1 in
-    let newCap  = {cap with E=e; B=B; T=T2} in
+    let newCap  = {cap with E=(bit[6]) e; B=B; T=T2} in
     let newBase = getCapBase(newCap) in
     let newTop  = getCapTop(newCap) in
     let exact   = (base == newBase) & (top == newTop) in
