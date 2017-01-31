@@ -569,7 +569,7 @@ function bool isAddressAligned(addr, (WordType) wordType) =
    (4k) we don't need to worry about accesses spanning page boundaries
    either.
 *)
-let alignment_width = 32
+let alignment_width = 16
 function (bool) isAddressAligned (addr, (WordType) wordType) =
   let a = unsigned(addr) in
   ((a quot alignment_width) == (a + wordWidthBytes(wordType) - 1) quot alignment_width)
