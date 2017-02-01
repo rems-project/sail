@@ -1842,10 +1842,15 @@ let rec refine_requires check_nvar min_lt max_gt id cs =
 
 let nat_t = {t = Tapp("range",[TA_nexp n_zero;TA_nexp (mk_p_inf());])}
 let int_t = {t = Tapp("range",[TA_nexp (mk_n_inf());TA_nexp (mk_p_inf());])}
-let uint8_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_2nc (mk_c_int 8) (big_int_of_int 256))])}
-let uint16_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_2nc (mk_c_int 16) (big_int_of_int 65536))])}
-let uint32_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_2nc (mk_c_int 32) (big_int_of_string "4294967296"))])}
-let uint64_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_2nc (mk_c_int 64) (big_int_of_string "18446744073709551616"))])}
+let uint8_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_sub (mk_2nc (mk_c_int 8) (big_int_of_int 256)) n_one)])}
+let uint16_t = {t = Tapp("range",[TA_nexp n_zero;
+                                  TA_nexp (mk_sub (mk_2nc (mk_c_int 16) (big_int_of_int 65536)) n_one)])}
+let uint32_t = {t = Tapp("range",[TA_nexp n_zero;
+                                  TA_nexp (mk_sub (mk_2nc (mk_c_int 32) (big_int_of_string "4294967296")) n_one)])}
+let uint64_t = {t = Tapp("range",[TA_nexp n_zero;
+                                  TA_nexp (mk_sub (mk_2nc (mk_c_int 64) (big_int_of_string "18446744073709551616"))
+                                             (mk_c_int 1))
+                                 ])}
 
 let int8_t = {t = Tapp("range", [TA_nexp (mk_neg (mk_2nc (mk_c_int 7) (big_int_of_int 128))) ;
                                  TA_nexp (mk_c_int 127)])}
