@@ -1,14 +1,6 @@
-.PHONY: all sail language clean archs
+.PHONY: all sail language clean archs apply_header
 
 all: sail interpreter
-
-apply_header:
-	$(MAKE) clean
-	headache -c etc/headache_config -h etc/mips_header `ls mips/*.sail`
-	headache -c etc/headache_config -h etc/mips_header `ls cheri/*.sail`
-	headache -c etc/headache_config -h src/LICENCE `ls src/*.{ml,mli,nll,mly}`
-	headache -c etc/headache_config -h src/LICENCE `ls src/lem_interp*.{ml,mli,lem}`
-	$(MAKE) -C arm apply_header
 
 sail:
 	$(MAKE) -C src
@@ -20,13 +12,24 @@ language:
 interpreter: 
 	$(MAKE) -C src interpreter
 
-clean:
-	for subdir in src arm ; do\
-	  $(MAKE) -C "$$subdir" clean;\
-	done
-	rm sail
-
 archs:
 	for arch in arm mips cheri; do\
 	  $(MAKE) -C "$$arch" || exit;\
 	done
+
+apply_header:
+	$(MAKE) clean
+	headache -c etc/headache_config -h etc/mips_header `ls mips/*.sail`
+	headache -c etc/headache_config -h etc/mips_header `ls cheri/*.sail`
+	headache -c etc/headache_config -h src/LICENCE `ls src/Makefile*`
+	headache -c etc/headache_config -h src/LICENCE `ls src/*.ml*`
+	headache -c etc/headache_config -h src/LICENCE `ls src/lem_interp/*.ml`
+	headache -c etc/headache_config -h src/LICENCE `ls src/lem_interp/*.lem`
+	$(MAKE) -C arm apply_header
+
+clean:
+	for subdir in src arm ; do\
+	  $(MAKE) -C "$$subdir" clean;\
+	done
+	-rm sail
+

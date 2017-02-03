@@ -1,2 +1,3 @@
-  ".*\\.lem"    -> frame open:"(*" line:"=" close:"*)"
-| ".*\\.sail"   -> frame open:"(*" line:"=" close:"*)"
+  ".*\\.mllib"  -> frame open:"(*" line:"=" close:"*)"
+|  ".*\\.lem"    -> frame open:"(*" line:"=" close:"*)"
+|  ".*\\.sail"   -> frame open:"(*" line:"=" close:"*)"
