@@ -183,12 +183,12 @@ function CapStruct setCapPerms((CapStruct) cap, (bit[31]) perms) =
 function (bool, CapStruct) sealCap((CapStruct) cap, (bit[24]) otype) =
     (true, {cap with sealed=true; otype=otype})
 
-function bit[64] getCapBase((CapStruct) c)   = c.base
-function bit[65] getCapTop((CapStruct) c)    = (0b0 : c.base) + (0b0 : c.length)
-function bit[64] getCapOffset((CapStruct) c) = c.offset
-function bit[65] getCapLength((CapStruct) c) = EXTZ(c.length)
+function uint64 getCapBase((CapStruct) c)   = unsigned(c.base)
+function CapLen getCapTop((CapStruct) c)    = unsigned(c.base) + unsigned(c.length)
+function uint64 getCapOffset((CapStruct) c) = unsigned(c.offset)
+function CapLen getCapLength((CapStruct) c) = unsigned(c.length)
 
-function nat getCapCursor((CapStruct) cap) = 
+function uint64 getCapCursor((CapStruct) cap) = 
   (unsigned(cap.base) + unsigned(cap.offset)) mod (2 ** 64)
 
 function (bool, CapStruct) setCapOffset((CapStruct) c, (bit[64]) offset) = 

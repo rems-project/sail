@@ -175,7 +175,7 @@ function (bool, CapStruct) sealCap((CapStruct) cap, (bit[24]) otype) =
     else
         (false, undefined)
 
-function int a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound) =
+function [|-1:1|] a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound) =
     switch (unsigned(a_mid) < unsigned(R), unsigned(bound) < unsigned(R)) {
       case (bitzero, bitzero) -> 0
       case (bitzero, bitone)  -> 1
@@ -183,41 +183,41 @@ function int a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound) =
       case (bitone, bitone)   -> 0
     }
 
-function bit[64] getCapBase((CapStruct) c)  = 
-    let ([|63|])  E = min(unsigned(c.E), 45) in
+function uint64 getCapBase((CapStruct) c)  = 
+    let ([|45|])  E = min(unsigned(c.E), 45) in
     let (bit[20]) B = c.B in
     let (bit[64]) a = c.address in
     let (bit[20]) R = B - 0x01000 in (* wraps *)
     let (bit[20]) a_mid = a[(E + 19)..E] in
-    let (int) correction = a_top_correction(a_mid, R, B) in
+    let correction = a_top_correction(a_mid, R, B) in
     let a_top = a[63..(E+20)] in
-    let (bit[64]) base = EXTZ((a_top + correction) : B) in
-    base << E
+    let (bit[64]) base = EXTZ((a_top + correction) : B) << E in
+    unsigned(base)
 
-function bit[65] getCapTop((CapStruct) c)  = 
-    let ([|63|])  E = min(unsigned(c.E), 45) in
+function CapLen getCapTop ((CapStruct) c)  = 
+    let ([|45|])  E = min(unsigned(c.E), 45) in
     let (bit[20]) B = c.B in
     let (bit[20]) T = c.T in
     let (bit[64]) a = c.address  in
     let (bit[20]) R = B - 0x01000 in (* wraps *)
     let (bit[20]) a_mid = a[(E + 19)..E] in
-    let (int) correction = a_top_correction(a_mid, R, T) in
+    let correction = a_top_correction(a_mid, R, T) in
     let a_top = a[63..(E+20)] in
     let (bit[65]) top1 = EXTZ((a_top + correction) : T) in
-    top1 << E
+    (CapLen) (top1 << E)
 
-function bit[64] getCapOffset((CapStruct) c) = 
+function uint64 getCapOffset((CapStruct) c) = 
     let base = getCapBase(c) in
-    c.address - base
+    unsigned(c.address) - base
 
-function bit[65] getCapLength((CapStruct) c)  = getCapTop(c) - (0b0 : getCapBase(c))
+function CapLen getCapLength((CapStruct) c)  = getCapTop(c) - getCapBase(c)
 
-function nat getCapCursor((CapStruct) cap) = unsigned(cap.address)
+function uint64 getCapCursor((CapStruct) cap) = unsigned(cap.address)
 
 function (bool, CapStruct) setCapOffset((CapStruct) c, (bit[64]) offset) =
     let oldBase    = getCapBase(c) in
     let oldTop     = getCapTop(c) in
-    let (bit[64]) newAddress = oldBase + offset in
+    let (bit[64]) newAddress =  oldBase + offset in
     let newCap     = { c with address = newAddress } in
     let newBase    = getCapBase(newCap) in
     let newTop     = getCapTop(newCap) in
@@ -250,14 +250,14 @@ function forall Nat 'N. option<[|0:('N + -1)|]> HighestSetBit((bit['N]) x) = {
 }}
 
 (* hw rounds up E to multiple of 4 *)
-function ([|48|]) roundUp(([|45|]) e) =
+function [|48|] roundUp(([|45|]) e) =
     let r = e mod 4 in
     if (r == 0)
     then e
     else (e - r + 4)
 
 
-function ([|48|]) computeE ((bit[65]) rlength) =
+function [|48|] computeE ((bit[65]) rlength) =
     let msb = HighestSetBit((rlength + (rlength >> 6)) >> 19) in
     switch (msb) {
       (* above will always return <= 45 because 19 bits of zero are shifted in from right *)
