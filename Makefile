@@ -3,8 +3,11 @@
 all: sail interpreter
 
 apply_header:
+	$(MAKE) clean
 	headache -c etc/headache_config -h etc/mips_header `ls mips/*.sail`
 	headache -c etc/headache_config -h etc/mips_header `ls cheri/*.sail`
+	headache -c etc/headache_config -h src/LICENCE `ls src/*.{ml,mli,nll,mly}`
+	headache -c etc/headache_config -h src/LICENCE `ls src/lem_interp*.{ml,mli,lem}`
 	$(MAKE) -C arm apply_header
 
 sail:

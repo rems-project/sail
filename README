@@ -168,6 +168,22 @@ The resulting output of these commands may well be untype checkable OCaml
 
 
 ******************************************************************************
+LICENCES
+
+The Sail implementation, in src/, is distributed under the 2-clause
+BSD licence in the headers of those files and in src/LICENCE, with the
+exception of the library src/pprint, which is distributed under the
+CeCILL-C free software licence in src/pprint/LICENSE.
+
+The ARMv8 model, in arm/, is distributed under the 2-clause BSD
+licence in the headers of those files.
+
+The MIPS and CHERI models, in mips/ and cheri/, are distributed under
+the 2-clause BSD licence in the headers of those files.
+
+
+
+******************************************************************************
 DIRECTORY STRUCTURE
 
 Sail sources and binaries are to be found in the directories of
