@@ -810,17 +810,17 @@ let rec pp_format_annot_ascii = function
   | NoTyp -> "Nothing"
   | Base((targs,t),tag,nes,efct,efctsum,_) ->
     (*TODO print out bindings for use in pattern match in interpreter*)
-     "forall " ^ list_format ", " (function (i,k) -> kind_to_string k ^" "^ i) targs ^ 
+     "forall " ^ list_format ", " (function (i,k) -> kind_to_string k ^" '"^ i) targs ^ 
   (match nes with [] -> "" | _ -> ", " ^ pp_format_nes_ascii nes)
   ^ ". "
   ^ pp_format_t_ascii t 
-
+  ^ "\n"
 (*
 ^ " ********** " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^
        pp_format_e_lem efct ^ ", " ^ pp_format_e_lem efctsum ^ "))"
 *)
   | Overload (tannot, return_type_overloading_allowed, tannots) -> 
-  pp_format_annot_ascii tannot ^ "\n" ^ String.concat "" (List.map (function tannot' -> "    " ^ pp_format_annot_ascii tannot' ^ "\n") tannots)
+  pp_format_annot_ascii tannot ^ String.concat "" (List.map (function tannot' -> "       " ^ pp_format_annot_ascii tannot' ) tannots)
 
 
 

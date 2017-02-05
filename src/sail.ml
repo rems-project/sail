@@ -45,6 +45,7 @@ open Process_file
 let lib = ref []
 let opt_file_out : string option ref = ref None
 let opt_print_version = ref false
+let opt_print_initial_env = ref false
 let opt_print_verbose = ref false
 let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
@@ -56,6 +57,9 @@ let options = Arg.align ([
   ( "-i",
     Arg.String (fun l -> lib := l::!lib),
     " treat the file as input only and generate no output for it");
+  ( "-print_initial_env",
+    Arg.Set opt_print_initial_env,
+    " pretty-print out the initial type environment and terminate");
   ( "-verbose",
     Arg.Set opt_print_verbose,
     " pretty-print out the file");
@@ -96,10 +100,11 @@ let _ =
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg
 
+
 let main() =
   if !(opt_print_version)
   then Printf.printf "Sail private release \n"
-  else
+  else if !(opt_print_initial_env) then
     let ppd_initial_typ_env = 
       String.concat "" 
         (List.map 
@@ -109,8 +114,7 @@ let main() =
              ^ "\n")
            (Type_internal.Envmap.to_list Type_internal.initial_typ_env)) in
     Printf.printf "%s" ppd_initial_typ_env ;
-
-    
+  else    
 
     let parsed = (List.map (fun f -> (f,(parse_file f)))  !opt_file_arguments) in
     let ast = 
