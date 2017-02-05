@@ -162,16 +162,16 @@ kind :: 'K_' ::=
 % we'll never use  ...-> Nat , .. Order , .. or Effects
     
 nexp :: 'Nexp_' ::=  
-  {{ com expression of kind Nat, for vector sizes and origins }}
+  {{ com expression of kind [[Nat]], for vector sizes and origins }}
   {{ aux _ l }}
-  | id                                  :: :: id          {{ com identifier, bound by def Nat x = nexp }}
+  | id                                  :: :: id          {{ com identifier, bound by \texttt{def Nat x = nexp} }}
   | kid                                 :: :: var         {{ com variable }}
   | num                                 :: :: constant     {{ com constant }}
   | nexp1 * nexp2                       :: :: times        {{ com product }}
   | nexp1 + nexp2                       :: :: sum          {{ com sum }}
   | nexp1 - nexp2			:: :: minus	   {{ com subtraction }} 
   | 2** nexp                            :: :: exp         {{ com exponential }}
-  | neg nexp				:: :: neg	  {{ com For internal use }}
+  | neg nexp				:: I :: neg	  {{ com for internal use only}}
   | ( nexp )                            :: S :: paren  {{ ichlo [[nexp]] }}
 
 order :: 'Ord_' ::=  
