@@ -1,3 +1,45 @@
+(**************************************************************************)
+(*     Sail                                                               *)
+(*                                                                        *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
+(*                                                                        *)
+(*  All rights reserved.                                                  *)
+(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*     notice, this list of conditions and the following disclaimer.      *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
+(**************************************************************************)
+
 open Ast
 open Util
 open Big_int
@@ -200,7 +242,7 @@ type tannot =
   (*See .mli for purpose of attributes *)
   | Base of (t_params * t) * tag * nexp_range list * effect * effect * bounds_env
   (* First tannot is the most polymorphic version; the list includes all variants. All included t are Tfn *)
-  | Overload of tannot * bool * tannot list 
+  | Overload of tannot * bool * tannot list    (* these tannot's should all be Base *)
 
 type 'a emap = 'a Envmap.t
 
@@ -1842,10 +1884,15 @@ let rec refine_requires check_nvar min_lt max_gt id cs =
 
 let nat_t = {t = Tapp("range",[TA_nexp n_zero;TA_nexp (mk_p_inf());])}
 let int_t = {t = Tapp("range",[TA_nexp (mk_n_inf());TA_nexp (mk_p_inf());])}
-let uint8_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_2nc (mk_c_int 8) (big_int_of_int 256))])}
-let uint16_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_2nc (mk_c_int 16) (big_int_of_int 65536))])}
-let uint32_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_2nc (mk_c_int 32) (big_int_of_string "4294967296"))])}
-let uint64_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_2nc (mk_c_int 64) (big_int_of_string "18446744073709551616"))])}
+let uint8_t = {t = Tapp("range",[TA_nexp n_zero; TA_nexp (mk_sub (mk_2nc (mk_c_int 8) (big_int_of_int 256)) n_one)])}
+let uint16_t = {t = Tapp("range",[TA_nexp n_zero;
+                                  TA_nexp (mk_sub (mk_2nc (mk_c_int 16) (big_int_of_int 65536)) n_one)])}
+let uint32_t = {t = Tapp("range",[TA_nexp n_zero;
+                                  TA_nexp (mk_sub (mk_2nc (mk_c_int 32) (big_int_of_string "4294967296")) n_one)])}
+let uint64_t = {t = Tapp("range",[TA_nexp n_zero;
+                                  TA_nexp (mk_sub (mk_2nc (mk_c_int 64) (big_int_of_string "18446744073709551616"))
+                                             (mk_c_int 1))
+                                 ])}
 
 let int8_t = {t = Tapp("range", [TA_nexp (mk_neg (mk_2nc (mk_c_int 7) (big_int_of_int 128))) ;
                                  TA_nexp (mk_c_int 127)])}
@@ -1954,7 +2001,7 @@ let mk_bitwise_op name symb arity =
              (*lib_tannot (["n",{k=K_Nat};"o",{k=K_Ord}],mk_pure_fun svarg single_bit_vec_typ) (Some name) [];*)
              lib_tannot ([],mk_pure_fun barg bit_t) (Some (name ^ "_bit")) []]))
 
-let initial_typ_env =
+let initial_typ_env : tannot Envmap.t =
   Envmap.from_list [
     ("ignore",lib_tannot ([("a",{k=K_Typ})],mk_pure_fun {t=Tvar "a"} unit_t) None []);
     ("Some", Base((["a",{k=K_Typ}], mk_pure_fun {t=Tvar "a"} {t=Tapp("option", [TA_typ {t=Tvar "a"}])}),
@@ -2703,6 +2750,7 @@ let initial_typ_env =
                         (mk_atom (mk_nv "o")))),
           External (Some "min"),[],pure_e,pure_e,nob));
   ]
+
     
 
 let rec typ_subst s_env leave_imp t =
@@ -3350,6 +3398,12 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
   (*let _ = Printf.eprintf "called type_coerce_internal is_explicit %b, widen %b, turning %s with actual %s into %s with actual %s\n" 
     is_explicit widen (t_to_string t1) (t_to_string t1_actual) (t_to_string t2) (t_to_string t2_actual) in*)
   match t1_actual.t,t2_actual.t with
+
+    (* Toptions is an internal constructor representing the type we're
+    going to be casting to and the natural type.  source-language type
+    annotations might be demanding a coercion, so this checks
+    conformance and adds a coercion if needed *)
+
   | Toptions(to1,Some to2),_ -> 
     if (conforms_to_t d_env false true to1 t2_actual || conforms_to_t d_env false true to2 t2_actual)
     then begin t1_actual.t <- t2_actual.t; (t2,csp,pure_e,e) end
@@ -3362,12 +3416,17 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
   | _,Toptions(to1,Some to2) -> 
     if (conforms_to_t d_env false true to1 t1_actual || conforms_to_t d_env false true to2 t1_actual)
     then begin t2_actual.t <- t1_actual.t; (t1,csp,pure_e,e) end
-    else eq_error l ((t_to_string t1) ^ " can match neither expexted type " ^
+    else eq_error l ((t_to_string t1) ^ " can match neither expected type " ^
                         (t_to_string to1) ^ " nor " ^ (t_to_string to2))
   | _,Toptions(to1,None) -> 
     if is_explicit
     then type_coerce_internal co d_env enforce is_explicit widen bounds t1_actual cs1 e to1 cs2
     else (t1,csp,pure_e,e)
+
+        (* recursive coercions to components of tuples.  They may be
+        complex expressions, not top-level tuples, so we sometimes
+        need to add a pattern match. At present we do that almost
+        always, unnecessarily often.  The any_coerced is wrong *)
   | Ttup t1s, Ttup t2s ->
     let tl1,tl2 = List.length t1s,List.length t2s in
     if tl1=tl2 then 
@@ -3396,10 +3455,16 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
            (t2,csp@cs,efs,e')
     else eq_error l ("Found a tuple of length " ^ (string_of_int tl1) ^
                      " but expected a tuple of length " ^ (string_of_int tl2))
+
+
+        (* all the Tapp cases *)
   | Tapp(id1,args1),Tapp(id2,args2) ->
     if id1=id2 && (id1 <> "vector")
+        (* no coercion needed, so fall back to consistency *)
     then let t',cs' = type_consistent co d_env enforce widen t1 t2 in (t',cs',pure_e,e)
     else (match id1,id2,is_explicit with
+
+      (* can coerce between two vectors just to change the start index *)
     | "vector","vector",_ ->
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord o1;TA_typ t1i],
@@ -3415,6 +3480,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
         let e' = E_aux(E_internal_cast ((l,(Base(([],t2),Emp_local,[],pure_e,pure_e,nob))),e),(l,tannot)) in
         (t2,cs@cs',pure_e,e')
       | _ -> raise (Reporting_basic.err_unreachable l "vector is not properly kinded"))
+
+          (* coercion from a bit vector into a number *)
     | "vector","range",_ -> 
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord _;TA_typ {t=Tid "bit"}],
@@ -3429,6 +3496,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert non-bit vector into an range"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
+
+          (* similar to vector/range case *)
     | "vector","atom",_ -> 
       (match args1,args2 with
       | [TA_nexp b1;TA_nexp r1;TA_ord _;TA_typ {t=Tid "bit"}],
@@ -3441,6 +3510,9 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert non-bit vector into an range"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
+
+          (* coercion from number into bit vector, if there's an explicit type annotation in the source (the "true") *)
+          (* this can be lossy, if it doesn't fit into that vector, so we want to require the user to specify the vector size. It was desired by some users, but maybe should be turned back into an error and an explicit truncate function be used *)
     | "range","vector",true -> 
       (match args2,args1 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
@@ -3464,6 +3536,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert a range into a non-bit vector"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
+
+          (* similar to number to bit vector case *)
     | "atom","vector",true -> 
       (match args2,args1 with
       | [TA_nexp b1;TA_nexp r1;TA_ord {order = Oinc};TA_typ {t=Tid "bit"}],
@@ -3486,6 +3560,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
       | [TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ t],_ -> 
         eq_error l "Cannot convert a range into a non-bit vector"
       | _,_ -> raise (Reporting_basic.err_unreachable l "vector or range is not properly kinded"))
+
+          (* implicit dereference of a register, from register<t> to t, and then perhaps also from t to the expected type *)
     | "register",_,_ ->
       (match args1 with
         | [TA_typ t] ->
@@ -3501,16 +3577,24 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
           let (t',cs,ef',e) = type_coerce co d_env Guarantee is_explicit widen bounds t new_e t2 in
           (t',cs,union_effects ef ef',e)
         | _ -> raise (Reporting_basic.err_unreachable l "register is not properly kinded"))
+
+          (* otherwise in Tapp case, fall back on type_consistent *)
     | _,_,_ -> 
       let t',cs' = type_consistent co d_env enforce widen t1 t2 in (t',cs',pure_e,e))
+
+        (* bit vector of length 1 to bit *)
   | Tapp("vector",[TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]),Tid("bit") ->
     let cs = [Eq(co,r1,n_one)] in
     (t2,cs,pure_e,E_aux((E_app ((Id_aux (Id "most_significant", l)), [e])),
                         (l, cons_tag_annot_efr t2 (External (Some "most_significant"))
                            cs (get_cummulative_effects (get_eannot e)))))
+
+      (* bit to a bitvector of length 1 *)
   | Tid("bit"),Tapp("vector",[TA_nexp b1;TA_nexp r1;TA_ord o;TA_typ {t=Tid "bit"}]) ->
     let cs = [Eq(co,r1,n_one)] in
     (t2,cs,pure_e,E_aux(E_vector [e], (l, constrained_annot_efr t2 cs (get_cummulative_effects (get_eannot e)))))
+
+      (* bit to a number range (including 0..1) *)
   | Tid("bit"),Tapp("range",[TA_nexp b1;TA_nexp r1]) ->
     let t',cs'= type_consistent co d_env enforce false {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} t2 in
     (t2,cs',pure_e,
@@ -3521,6 +3605,9 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
                                       E_aux(E_lit(L_aux(L_num 1,l)),(l,simple_annot t2))),
                               (l,simple_annot t2));]),
            (l,simple_annot_efr t2 (get_cummulative_effects (get_eannot e)))))   
+
+
+      (* similar to above, bit to a singleton number range *)
   | Tid("bit"),Tapp("atom",[TA_nexp b1]) ->
     let t',cs'= type_consistent co d_env enforce false t2 {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} in
     (t2,cs',pure_e,
@@ -3531,6 +3618,9 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
                                       E_aux(E_lit(L_aux(L_num 1,l)),(l,simple_annot t2))),
                               (l,simple_annot t2));]),
            (l,simple_annot_efr t2 (get_cummulative_effects (get_eannot e)))))
+
+
+      (* number range to a bit *)
   | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tid("bit") ->
     let t',cs'= type_consistent co d_env enforce false t1 {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} in
     let efr = get_cummulative_effects (get_eannot e)
@@ -3539,6 +3629,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
                                  E_aux(E_lit(L_aux(L_one,l)),(l,simple_annot bit_t)),
                                  E_aux(E_lit(L_aux(L_zero,l)),(l,simple_annot bit_t))),
                             (l,simple_annot_efr bit_t efr)))
+
+      (* similar to above *)
   | Tapp("atom",[TA_nexp b1]),Tid("bit") ->
     let t',cs'= type_consistent co d_env enforce false t1 {t=Tapp("range",[TA_nexp n_zero;TA_nexp n_one])} in
     let efr = get_cummulative_effects (get_eannot e)
@@ -3546,6 +3638,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
                                  E_aux(E_lit(L_aux(L_one,l)),(l,simple_annot bit_t)),
                                  E_aux(E_lit(L_aux(L_zero,l)),(l,simple_annot bit_t))),
                             (l,simple_annot_efr bit_t efr)))
+
+      (* number range to an enumeration type *)
   | Tapp("range",[TA_nexp b1;TA_nexp r1;]),Tid(i) -> 
     (match Envmap.apply d_env.enum_env i with
     | Some(enums) -> 
@@ -3558,6 +3652,23 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
                                                   (l,simple_annot t2))) enums),
              (l,simple_annot_efr t2 (get_cummulative_effects (get_eannot e)))))
     | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
+
+        (* similar to above *)
+  | Tapp("atom",[TA_nexp b1]),Tid(i) -> 
+    (match Envmap.apply d_env.enum_env i with
+      | Some(enums) -> 
+        let num_enums = List.length enums in
+        (t2,[GtEq(co,Require,b1,n_zero);
+             LtEq(co,Require,b1,mk_c(big_int_of_int num_enums))],pure_e,
+         E_aux(E_case(e,
+                      List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),(l, simple_annot t1)),
+                                                            E_aux(E_id(Id_aux(Id a,l)),
+                                                                  (l, tag_annot t2 (Enum num_enums)))),
+                                                    (l,simple_annot t2))) enums),
+               (l,simple_annot_efr t2 (get_cummulative_effects (get_eannot e)))))
+      | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
+
+        (* bit vector to an enumeration type *)
   | Tapp("vector", [TA_nexp _; TA_nexp size; _; TA_typ {t= Tid "bit"}]), Tid(i) ->
     (match Envmap.apply d_env.enum_env i with
      | Some(enums) ->
@@ -3573,19 +3684,8 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
                                                     (l,simple_annot t2))) enums),
               (l,simple_annot_efr t2 (get_cummulative_effects (get_eannot e)))))
      | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
-  | Tapp("atom",[TA_nexp b1]),Tid(i) -> 
-    (match Envmap.apply d_env.enum_env i with
-      | Some(enums) -> 
-        let num_enums = List.length enums in
-        (t2,[GtEq(co,Require,b1,n_zero);
-             LtEq(co,Require,b1,mk_c(big_int_of_int num_enums))],pure_e,
-         E_aux(E_case(e,
-                      List.mapi (fun i a -> Pat_aux(Pat_exp(P_aux(P_lit(L_aux((L_num i),l)),(l, simple_annot t1)),
-                                                            E_aux(E_id(Id_aux(Id a,l)),
-                                                                  (l, tag_annot t2 (Enum num_enums)))),
-                                                    (l,simple_annot t2))) enums),
-               (l,simple_annot_efr t2 (get_cummulative_effects (get_eannot e)))))
-      | None -> eq_error l ("Type mismatch: found a " ^ (t_to_string t1) ^ " but expected " ^ (t_to_string t2)))
+
+        (* enumeration type to number range *)
   | Tid(i),Tapp("range",[TA_nexp b1;TA_nexp r1;]) -> 
     (match Envmap.apply d_env.enum_env i with
     | Some(enums) -> 
@@ -3596,6 +3696,11 @@ let rec type_coerce_internal co d_env enforce is_explicit widen bounds t1 cs1 e 
                                                   (l,simple_annot t2))) enums),
              (l,simple_annot_efr t2 (get_cummulative_effects (get_eannot e)))))
     | None -> eq_error l ("Type mismatch: " ^ (t_to_string t1) ^ " , " ^ (t_to_string t2)))
+
+
+        (* probably there's a missing enumeration type to singleton number range *)
+
+        (* fall through to type_consistent *)
   | _,_ -> let t',cs = type_consistent co d_env enforce widen t1 t2 in (t',cs,pure_e,e)
 
 and type_coerce co d_env enforce is_explicit widen bounds t1 e t2 = 

@@ -1,6 +1,6 @@
 #OTT=../../../rsem/ott/bin/ott
 # this is the binary that gets rebuilt by make in ott/src:
-OTT=../../../rsem/ott/src/ott
+OTT=../../../github/ott/src/ott
 OTTLIB=$(dir $(shell which ott))../hol
 
 .PHONY: all
@@ -37,5 +37,6 @@ l2.lem: l2.ott l2_typ.ott
 clean:
 	rm -rf *~
 	-rm -rf *.uo *.ui *.sig *.sml .HOLMK
-	-rm -f *.tex *.aux *.log *.dvi *.ps *.pdf
+	-rm -f *.aux *.log *.dvi *.ps *.pdf
 	rm -rf l2.pdf l2_parse.pdf l2.ml l2_parse.ml l2.lem
+	rm -rf l2.tex doc_in.tex

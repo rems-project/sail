@@ -1,7 +1,7 @@
 (*========================================================================*)
 (*                                                                        *)
-(*  Copyright (c) 2015-2016 Robert M. Norton                              *)
-(*  Copyright (c) 2015-2016 Kathyrn Gray                                  *)
+(*  Copyright (c) 2015-2017 Robert M. Norton                              *)
+(*  Copyright (c) 2015-2017 Kathyrn Gray                                  *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
 (*  This software was developed by the University of Cambridge Computer   *)
@@ -105,7 +105,7 @@ function CapStruct capRegToCapStruct((CapReg) c) =
     permit_execute         = c[114];
     global                 = c[113];
     reserved               = c[112..111];
-    E                      = c[110..105];
+    E                      = c[110..105] ^ 0b110000;
     sealed                 = s;
     B                      = B;
     T                      = T;
@@ -132,7 +132,7 @@ function (bit[128]) capStructToMemBits((CapStruct) cap) =
     ( cap.uperms
     : getCapHardPerms(cap)
     : cap.reserved
-    : cap.E
+    : (cap.E ^ 0b110000) (* XXX brackets required otherwise sail interpreter error *)
     : [cap.sealed]
     : b
     : t
@@ -155,7 +155,7 @@ function (bit[31]) getCapPerms((CapStruct) cap) =
 function CapStruct setCapPerms((CapStruct) cap, (bit[31]) perms) =
     { cap with
       uperms                 = perms[18..15];
-(*      perm_reserved11_14     = (cap.perm_reserved11_14 & (perms[14..11]));*)
+      (* 14..11 reserved -- ignore *)
       access_system_regs     = perms[10];
       perm_reserved9         = perms[9];
       perm_reserved8         = perms[8];
@@ -175,51 +175,49 @@ function (bool, CapStruct) sealCap((CapStruct) cap, (bit[24]) otype) =
     else
         (false, undefined)
 
-function int a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound) =
-    switch (a_mid < R, bound < R) {
-      case (False, False) -> 0
-      case (False, True)  -> 1
-      case (True, False)  -> -1
-      case (True, True)   -> 0
+function [|-1:1|] a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound) =
+    switch (unsigned(a_mid) < unsigned(R), unsigned(bound) < unsigned(R)) {
+      case (bitzero, bitzero) -> 0
+      case (bitzero, bitone)  -> 1
+      case (bitone, bitzero)  -> -1
+      case (bitone, bitone)   -> 0
     }
 
-function bit[64] getCapBase((CapStruct) c)  = 
-    let ([|63|])  E = unsigned(c.E) in
-    let (bool)    s = c.sealed in
+function uint64 getCapBase((CapStruct) c)  = 
+    let ([|45|])  E = min(unsigned(c.E), 45) in
     let (bit[20]) B = c.B in
     let (bit[64]) a = c.address in
-    let (bit[20]) R = B - 0x00100 in (* wraps *)
+    let (bit[20]) R = B - 0x01000 in (* wraps *)
     let (bit[20]) a_mid = a[(E + 19)..E] in
-    let (int) correction = a_top_correction(a_mid, R, B) in
+    let correction = a_top_correction(a_mid, R, B) in
     let a_top = a[63..(E+20)] in
-    let (bit[64]) base = EXTZ((a_top + correction) : B) in
-    base << E
+    let (bit[64]) base = EXTZ((a_top + correction) : B) << E in
+    unsigned(base)
 
-function bit[65] getCapTop((CapStruct) c)  = 
-    let ([|63|])  E = unsigned(c.E) in
-    let (bool)    s = c.sealed in
+function CapLen getCapTop ((CapStruct) c)  = 
+    let ([|45|])  E = min(unsigned(c.E), 45) in
     let (bit[20]) B = c.B in
     let (bit[20]) T = c.T in
     let (bit[64]) a = c.address  in
-    let (bit[20]) R = B - 0x00100 in (* wraps *)
+    let (bit[20]) R = B - 0x01000 in (* wraps *)
     let (bit[20]) a_mid = a[(E + 19)..E] in
-    let (int) correction = a_top_correction(a_mid, R, T) in
+    let correction = a_top_correction(a_mid, R, T) in
     let a_top = a[63..(E+20)] in
     let (bit[65]) top1 = EXTZ((a_top + correction) : T) in
-    top1 << E
+    (CapLen) (top1 << E)
 
-function bit[64] getCapOffset((CapStruct) c) = 
+function uint64 getCapOffset((CapStruct) c) = 
     let base = getCapBase(c) in
-    c.address - base
+    unsigned(c.address) - base
 
-function bit[65] getCapLength((CapStruct) c)  = getCapTop(c) - (0b0 : getCapBase(c))
+function CapLen getCapLength((CapStruct) c)  = getCapTop(c) - getCapBase(c)
 
-function nat getCapCursor((CapStruct) cap) = unsigned(cap.address)
+function uint64 getCapCursor((CapStruct) cap) = unsigned(cap.address)
 
 function (bool, CapStruct) setCapOffset((CapStruct) c, (bit[64]) offset) =
     let oldBase    = getCapBase(c) in
     let oldTop     = getCapTop(c) in
-    let (bit[64]) newAddress = oldBase + offset in
+    let (bit[64]) newAddress =  oldBase + offset in
     let newCap     = { c with address = newAddress } in
     let newBase    = getCapBase(newCap) in
     let newTop     = getCapTop(newCap) in
@@ -251,20 +249,29 @@ function forall Nat 'N. option<[|0:('N + -1)|]> HighestSetBit((bit['N]) x) = {
   if break then Some(result) else None;
 }}
 
-function (bit[6]) computeE ((bit[65]) rlength) =
+(* hw rounds up E to multiple of 4 *)
+function [|48|] roundUp(([|45|]) e) =
+    let r = e mod 4 in
+    if (r == 0)
+    then e
+    else (e - r + 4)
+
+
+function [|48|] computeE ((bit[65]) rlength) =
     let msb = HighestSetBit((rlength + (rlength >> 6)) >> 19) in
     switch (msb) {
-      case (Some(b)) -> (bit[6]) b (* hw rounds up to multiple of 4 *)
+      (* above will always return <= 45 because 19 bits of zero are shifted in from right *)
+      case (Some(b)) -> {assert(b <= 45, None); roundUp (min(b,45)) }
       case None    -> 0
-    }    
+      }
 
 function (bool, CapStruct) setCapBounds((CapStruct) cap, (bit[64]) base, (bit[65]) top) =
     (* {cap with base=base; length=(bit[64]) length; offset=0} *)
-    let (bit[6])  e = computeE(top - (0b0 : base)) in
+    let ([|48|])  e = computeE(top - (0b0 : base)) in
     let (bit[20]) B = base[(19+e)..e] in
     let (bit[20]) T = top[(19+e)..e] in
     let (bit[20]) T2 = T + if (top[(e - 1)..0] == 0) then 0 else 1 in
-    let newCap  = {cap with E=e; B=B; T=T2} in
+    let newCap  = {cap with E=(bit[6]) e; B=B; T=T2} in
     let newBase = getCapBase(newCap) in
     let newTop  = getCapTop(newCap) in
     let exact   = (base == newBase) & (top == newTop) in

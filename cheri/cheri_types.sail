@@ -1,15 +1,7 @@
-(**************************************************************************)
-(*     Sail                                                               *)
+(*========================================================================*)
 (*                                                                        *)
-(*  Copyright (c) 2013-2017                                               *)
-(*    Kathyrn Gray                                                        *)
-(*    Shaked Flur                                                         *)
-(*    Stephen Kell                                                        *)
-(*    Gabriel Kerneis                                                     *)
-(*    Robert Norton-Wright                                                *)
-(*    Christopher Pulte                                                   *)
-(*    Peter Sewell                                                        *)
-(*                                                                        *)
+(*  Copyright (c) 2015-2017 Robert M. Norton                              *)
+(*  Copyright (c) 2015-2017 Kathyrn Gray                                  *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
 (*  This software was developed by the University of Cambridge Computer   *)
@@ -38,13 +30,9 @@
 (*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
 (*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
 (*  SUCH DAMAGE.                                                          *)
-(**************************************************************************)
+(*========================================================================*)
 
-open Format
-val pp_str : formatter -> string -> unit
+let (nat) max_otype = 0xffffff
+let have_cp2 = true
+typedef CapLen = [|0 : 2**65|]
 
-val lst : ('a, formatter, unit) format -> (formatter -> 'b -> unit) -> formatter -> 'b list -> unit
-
-val opt : (formatter -> 'a -> unit) -> formatter -> 'a option -> unit
-
-val pp_to_string : (formatter -> 'a) -> string

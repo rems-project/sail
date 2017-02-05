@@ -1,7 +1,7 @@
 (*========================================================================*)
 (*                                                                        *)
-(*  Copyright (c) 2015-2016 Robert M. Norton                              *)
-(*  Copyright (c) 2015-2016 Kathyrn Gray                                  *)
+(*  Copyright (c) 2015-2017 Robert M. Norton                              *)
+(*  Copyright (c) 2015-2017 Kathyrn Gray                                  *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
 (*  This software was developed by the University of Cambridge Computer   *)
@@ -569,7 +569,7 @@ function bool isAddressAligned(addr, (WordType) wordType) =
    (4k) we don't need to worry about accesses spanning page boundaries
    either.
 *)
-let alignment_width = 32
+let alignment_width = 16
 function (bool) isAddressAligned (addr, (WordType) wordType) =
   let a = unsigned(addr) in
   ((a quot alignment_width) == (a + wordWidthBytes(wordType) - 1) quot alignment_width)

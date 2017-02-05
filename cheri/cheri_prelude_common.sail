@@ -1,7 +1,7 @@
 (*========================================================================*)
 (*                                                                        *)
-(*  Copyright (c) 2015-2016 Robert M. Norton                              *)
-(*  Copyright (c) 2015-2016 Kathyrn Gray                                  *)
+(*  Copyright (c) 2015-2017 Robert M. Norton                              *)
+(*  Copyright (c) 2015-2017 Kathyrn Gray                                  *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
 (*  This software was developed by the University of Cambridge Computer   *)
@@ -83,21 +83,6 @@ function (CapStruct) readCapReg((regno) n) =
 function unit writeCapReg((regno) n, (CapStruct) cap) =
   CapRegs[n] := capStructToCapReg(cap)
 
-(*
-function (CapStruct) readCapReg((regno) n) =
-function (CapReg) capStructToCapReg((CapStruct) cap) =
-function (CapReg) memBitsToCapBits((bool) tag, (bit[8*cap_size_t]) b)function unit writeCapReg((regno) n, (CapStruct) cap) =
-function bit[64] getCapBase((CapStruct) c)
-function bit[65] getCapTop((CapStruct) c)
-function bit[64] getCapOffset((CapStruct) c)
-function bit[65] getCapLength((CapStruct) c)  = getCapTop(c) - (0b0 : getCapBase(c))
-function nat getCapCursor((CapStruct) cap)
-function (bool, CapStruct) setCapOffset((CapStruct) c, (bit[64]) offset)
-function (bool, CapStruct) incCapOffset((CapStruct) c, (bit[64]) delta)
-function (bool, CapStruct) setCapBounds((CapStruct) cap, (bit[64]) base, (bit[65]) top)
-function CapStruct int_to_cap ((bit[64]) offset)
-*)
-
 typedef CapEx = enumerate {
   CapEx_None; 
   CapEx_LengthViolation;
@@ -171,14 +156,19 @@ register CapCauseReg CapCause
 
 function forall Type 'o . 'o SignalException ((Exception) ex) = 
   {
+    let pc  = (bit[64]) PC in (* XXX Cast forces read of register. Sail bug? *)
     let pcc = capRegToCapStruct(PCC) in
-    let (success, epcc) = setCapOffset(pcc, PC) in
-    C31        := capStructToCapReg(epcc);
+    let (success, epcc) = setCapOffset(pcc, pc) in
+    if (success) then
+        C31 := capStructToCapReg(epcc)
+    else
+        C31 := capStructToCapReg(int_to_cap(getCapBase(pcc) + pc));
     (* XXX what if not success? *)
     nextPCC    := C29; (* KCC *)
     delayedPCC := C29; (* always write delayedPCC together whether PCC so 
                           that non-capability branches don't override PCC *)
-    SignalExceptionMIPS(ex, getCapBase(capRegToCapStruct(C29)));
+    let base = (bit[64]) (getCapBase(capRegToCapStruct(C29))) in
+    SignalExceptionMIPS(ex, base);
   }
 
 function unit ERETHook() =
@@ -307,8 +297,8 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
     cursor := getCapCursor(cap);
     vAddr  := cursor + unsigned(addr);
     size   := wordWidthBytes(width);
-    base   := unsigned(getCapBase(cap));
-    top    := unsigned(getCapTop(cap));
+    base   := getCapBase(cap);
+    top    := getCapTop(cap);
     if ((vAddr + size) > top) then
       (raise_c2_exception(CapEx_LengthViolation, capno))
     else if (vAddr < (base)) then
@@ -320,8 +310,8 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
 function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) = {
   incrementCP0Count();
   let pcc = capRegToCapStruct(PCC) in
-  let base  = unsigned(getCapBase(pcc)) in
-  let top   = unsigned(getCapTop(pcc)) in
+  let base  = getCapBase(pcc) in
+  let top   = getCapTop(pcc) in
   let absPC = base + unsigned(vAddr) in
   if ((absPC mod 4)  != 0) then (* bad PC alignment *)
     (SignalExceptionBadAddr(AdEL, (bit[64]) absPC)) (* XXX absPC may be truncated *)

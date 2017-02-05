@@ -1,3 +1,45 @@
+(*========================================================================*)
+(*     Sail                                                               *)
+(*                                                                        *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
+(*                                                                        *)
+(*  All rights reserved.                                                  *)
+(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*     notice, this list of conditions and the following disclaimer.      *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
+(*========================================================================*)
+
 open import Interp_ast
 import Interp
 import Interp_lib
@@ -1120,17 +1162,17 @@ let nias_of_instruction
   match (thread_ism, instruction_name) with
     | ("PPCGEN_ism", "B") ->
        let () = ensure (not unknown_nia_address)
-                       "unexpected unknown/undefined address in nia_values" in
+                       "unexpected unknown/undefined address in nia_values 1" in
        nias
     | ("PPCGEN_ism", "Bc") ->
        let () = ensure (not unknown_nia_address)
-                       "unexpected unknown/undefined address in nia_values" in
+                       "unexpected unknown/undefined address in nia_values 2" in
        NIA_successor :: nias
     | ("PPCGEN_ism", "Bclr") -> [ NIA_successor; NIA_LR ]
     | ("PPCGEN_ism", "Bcctr") -> [ NIA_successor; NIA_CTR ]
     | ("PPCGEN_ism", "Sc") ->
        let () = ensure (not unknown_nia_address)
-                       "unexpected unknown/undefined address in nia_values" in
+                       "unexpected unknown/undefined address in nia_values 3" in
        match instruction_fields with
        | [(_, _, lev)] ->
           (* LEV field is 7 bits long, pad it with false at beginning *)
@@ -1175,13 +1217,49 @@ let nias_of_instruction
                             | _ -> false
                             end]
 
+
+    (** hacky cut-and-paste for AArch64Gen, duplicating code just to see if this suffices *)
+
+    | ("AArch64GenSail", "BranchImmediate")   -> nias
+    | ("AArch64GenSail", "BranchConditional") -> NIA_successor :: nias
+    | ("AArch64GenSail", "CompareAndBranch")  -> NIA_successor :: nias
+    | ("AArch64GenSail", "TestBitAndBranch")  -> NIA_successor :: nias
+
+    (* AArch64 calculated address branch *)
+    | ("AArch64GenSail", "branch_unconditional_register") ->
+        (* do some parsing of the ast fields to figure out which register holds
+           the branching address i.e. find n in "BR <Xn>". The ast constructor
+           from armV8.sail: (reg_index,BranchType) BranchRegister; *)
+        let n_integer =
+          match instruction_fields with
+          | [(_, _, n); _] -> integer_of_bit_list n
+          | _ -> fail
+          end
+        in
+        let () = ensure (0 <= n_integer && n_integer <= 31)
+                  "expected register number from 0 to 31"
+        in
+        if n_integer = 31 then
+          nias (* BR XZR *)
+        else
+          (* look for Xn (which we actually call Rn) in regs_in *)
+          let n_reg = "R" ^ (String_extra.stringFromInteger n_integer) in
+          [NIA_register r | forall (r MEM regs_in)
+                          | match r with
+                            | (Reg name _ _ _) -> name = n_reg
+                            | _ -> false
+                            end]
+
+    (** end of hacky *)
+
     | ("AArch64LitmusSail", "CtrlDep") -> NIA_successor :: nias
+
 
     | ("MIPS_ism", "B") -> fail
 
-    | _ ->
+    | (s1,s2) ->
        let () = ensure (not unknown_nia_address)
-                       "unexpected unknown/undefined address in nia_values" in
+                       ("unexpected unknown/undefined address in nia_values 4 (\""^s1^"\", \""^s2^"\")") in
         [ NIA_successor ]
     end
 

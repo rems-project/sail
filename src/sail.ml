@@ -1,47 +1,43 @@
 (**************************************************************************)
-(*                        Lem                                             *)
+(*     Sail                                                               *)
 (*                                                                        *)
-(*          Dominic Mulligan, University of Cambridge                     *)
-(*          Francesco Zappa Nardelli, INRIA Paris-Rocquencourt            *)
-(*          Gabriel Kerneis, University of Cambridge                      *)
-(*          Kathy Gray, University of Cambridge                           *)
-(*          Peter Boehm, University of Cambridge (while working on Lem)   *)
-(*          Peter Sewell, University of Cambridge                         *)
-(*          Scott Owens, University of Kent                               *)
-(*          Thomas Tuerk, University of Cambridge                         *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
 (*                                                                        *)
-(*  The Lem sources are copyright 2010-2013                               *)
-(*  by the UK authors above and Institut National de Recherche en         *)
-(*  Informatique et en Automatique (INRIA).                               *)
+(*  All rights reserved.                                                  *)
 (*                                                                        *)
-(*  All files except ocaml-lib/pmap.{ml,mli} and ocaml-libpset.{ml,mli}   *)
-(*  are distributed under the license below.  The former are distributed  *)
-(*  under the LGPLv2, as in the LICENSE file.                             *)
-(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
 (*                                                                        *)
 (*  Redistribution and use in source and binary forms, with or without    *)
 (*  modification, are permitted provided that the following conditions    *)
 (*  are met:                                                              *)
 (*  1. Redistributions of source code must retain the above copyright     *)
-(*  notice, this list of conditions and the following disclaimer.         *)
+(*     notice, this list of conditions and the following disclaimer.      *)
 (*  2. Redistributions in binary form must reproduce the above copyright  *)
-(*  notice, this list of conditions and the following disclaimer in the   *)
-(*  documentation and/or other materials provided with the distribution.  *)
-(*  3. The names of the authors may not be used to endorse or promote     *)
-(*  products derived from this software without specific prior written    *)
-(*  permission.                                                           *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
 (*                                                                        *)
-(*  THIS SOFTWARE IS PROVIDED BY THE AUTHORS ``AS IS'' AND ANY EXPRESS    *)
-(*  OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED     *)
-(*  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE    *)
-(*  ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY       *)
-(*  DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL    *)
-(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE     *)
-(*  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS         *)
-(*  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER  *)
-(*  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR       *)
-(*  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN   *)
-(*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
 open Process_file
@@ -104,6 +100,18 @@ let main() =
   if !(opt_print_version)
   then Printf.printf "Sail private release \n"
   else
+    let ppd_initial_typ_env = 
+      String.concat "" 
+        (List.map 
+           (function (id,tannot) ->
+             id ^ " : " ^ 
+             Pretty_print.pp_format_annot_ascii tannot 
+             ^ "\n")
+           (Type_internal.Envmap.to_list Type_internal.initial_typ_env)) in
+    Printf.printf "%s" ppd_initial_typ_env ;
+
+    
+
     let parsed = (List.map (fun f -> (f,(parse_file f)))  !opt_file_arguments) in
     let ast = 
       List.fold_right (fun (_,(Parse_ast.Defs ast_nodes)) (Parse_ast.Defs later_nodes) 

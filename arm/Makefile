@@ -1,6 +1,6 @@
 BUILDDIR=./build
 
-SAIL=../sail
+SAIL=../sail -verbose
 ifeq ("$(wildcard $(SAIL))","")
   $(warning can not find Sail)
 endif

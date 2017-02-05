@@ -122,7 +122,7 @@ id :: '' ::=
   | atom			 :: M :: atom {{ ichlo (Id "atom") }}
   | vector			 :: M :: vector {{ ichlo (Id "vector") }}
   | list			 :: M :: list {{ ichlo (Id "list") }}
-  | set                          :: M :: set {{ ichlo (Id "set") }}
+%  | set                          :: M :: set {{ ichlo (Id "set") }}
   | reg                          :: M :: reg {{ ichlo (Id "reg") }}
   | to_num			 :: M :: tonum {{ com Built in function identifiers }} {{ ichlo (Id "to_num") }}
   | to_vec			 :: M :: tovec {{ ichlo (Id "to_vec") }}
@@ -135,7 +135,7 @@ id :: '' ::=
 % targets use alphabetical infix operators. 
 
 kid :: '' ::=
-  {{ com variables with kind, ticked to differntiate from program variables }}
+  {{ com variables with kind, ticked to differentiate from program variables }}
   {{ aux _ l }}
   | ' x                       :: :: var
  
@@ -687,7 +687,7 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     {{ aux _ annot }} {{ auxparam 'a }}
     | id                                                  :: :: id
     {{ com identifier }}
-    | id ( exp1 , .. , expn )				  :: :: memory {{ com memory write via function call }}
+    | id ( exp1 , .. , expn )				  :: :: memory {{ com memory or register write via function call }}
     | id exp	       	    				  :: S :: mem_tup {{ ichlo [[id (exp)]] }}
     | ( typ ) id					  :: :: cast
     | ( lexp0 , .. , lexpn )                              :: :: tup {{ com set multiple at a time, a check will ensure it's not memory }}
@@ -708,7 +708,7 @@ fexps :: 'FES_' ::=
   | fexp1 ; ... ; fexpn semi_opt                        :: :: Fexps
 
 opt_default :: 'Def_val_' ::=
-  {{ com Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map }}
+  {{ com Optional default value for indexed vectors, to define a default value for any unspecified positions in a sparse map }}
   {{ aux _ annot }} {{ auxparam 'a }}
   |                                                     :: :: empty
   | ; default = exp                                       :: :: dec
