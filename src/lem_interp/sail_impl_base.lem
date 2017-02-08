@@ -1,45 +1,3 @@
-(*========================================================================*)
-(*     Sail                                                               *)
-(*                                                                        *)
-(*  Copyright (c) 2013-2017                                               *)
-(*    Kathyrn Gray                                                        *)
-(*    Shaked Flur                                                         *)
-(*    Stephen Kell                                                        *)
-(*    Gabriel Kerneis                                                     *)
-(*    Robert Norton-Wright                                                *)
-(*    Christopher Pulte                                                   *)
-(*    Peter Sewell                                                        *)
-(*                                                                        *)
-(*  All rights reserved.                                                  *)
-(*                                                                        *)
-(*  This software was developed by the University of Cambridge Computer   *)
-(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
-(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
-(*                                                                        *)
-(*  Redistribution and use in source and binary forms, with or without    *)
-(*  modification, are permitted provided that the following conditions    *)
-(*  are met:                                                              *)
-(*  1. Redistributions of source code must retain the above copyright     *)
-(*     notice, this list of conditions and the following disclaimer.      *)
-(*  2. Redistributions in binary form must reproduce the above copyright  *)
-(*     notice, this list of conditions and the following disclaimer in    *)
-(*     the documentation and/or other materials provided with the         *)
-(*     distribution.                                                      *)
-(*                                                                        *)
-(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
-(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
-(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
-(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
-(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
-(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
-(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
-(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
-(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
-(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
-(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
-(*  SUCH DAMAGE.                                                          *)
-(*========================================================================*)
-
 open import Pervasives_extra
             
 (* maybe isn't a member of type Ord - this should be in the Lem standard library*)
@@ -218,18 +176,17 @@ instance (Ord byte)
   let (>=) = byteGreaterEq
 end
 
-let (*~{ocaml}*) addressCompare (Address b1 i1) (Address b2 i2) = compare i1 i2
-(*let inline {ocaml} addressCompare = defaultCompare*)
+let addressCompare (Address b1 i1) (Address b2 i2) = compare i1 i2
+(* this cannot be defaultCompare for OCaml because addresses contain big ints *)
 
-let ~{ocaml} addressLess b1 b2      = addressCompare b1 b2 =  LT
-let ~{ocaml} addressLessEq b1 b2    = addressCompare b1 b2 <> GT
-let ~{ocaml} addressGreater b1 b2   = addressCompare b1 b2 =  GT
-let ~{ocaml} addressGreaterEq b1 b2 = addressCompare b1 b2 <> LT
+let addressLess b1 b2      = addressCompare b1 b2 =  LT
+let addressLessEq b1 b2    = addressCompare b1 b2 <> GT
+let addressGreater b1 b2   = addressCompare b1 b2 =  GT
+let addressGreaterEq b1 b2 = addressCompare b1 b2 <> LT
 
-let inline {ocaml} addressLess      = defaultLess
-let inline {ocaml} addressLessEq    = defaultLessEq
-let inline {ocaml} addressGreater   = defaultGreater
-let inline {ocaml} addressGreaterEq = defaultGreaterEq
+instance (SetType address)
+  let setElemCompare = addressCompare
+end
 
 instance (Ord address)
   let compare = addressCompare
@@ -239,11 +196,11 @@ instance (Ord address)
   let (>=) = addressGreaterEq
 end
 
-let {coq} addressEqual a1 a2 = (addressCompare a1 a2) = EQ
-let inline ~{coq} addressEqual = unsafe_structural_equality
+let {coq; ocaml} addressEqual a1 a2 = (addressCompare a1 a2) = EQ
+let inline {hol; isabelle} addressEqual = unsafe_structural_equality
 
-let {coq} addressInequal a1 a2 = not (addressEqual a1 a2)
-let inline ~{coq} addressInequal = unsafe_structural_inequality
+let {coq; ocaml} addressInequal a1 a2 = not (addressEqual a1 a2)
+let inline {hol; isabelle} addressInequal = unsafe_structural_inequality
 
 instance  (Eq address)
   let (=)  = addressEqual
@@ -299,19 +256,15 @@ instance (Ord register_value)
   let (>=) = register_valueGreaterEq
 end
 
-let ~{ocaml} address_liftedCompare (Address_lifted b1 i1) (Address_lifted b2 i2) =
-  compare (b1,i1) (b2,i2)
-let inline {ocaml} address_liftedCompare = defaultCompare
+let address_liftedCompare (Address_lifted b1 i1) (Address_lifted b2 i2) =
+  compare (i1,b1) (i2,b2)
+(* this cannot be defaultCompare for OCaml because address_lifteds contain big
+   ints *)
 
-let ~{ocaml} address_liftedLess b1 b2      = address_liftedCompare b1 b2 =  LT
-let ~{ocaml} address_liftedLessEq b1 b2    = address_liftedCompare b1 b2 <> GT
-let ~{ocaml} address_liftedGreater b1 b2   = address_liftedCompare b1 b2 =  GT
-let ~{ocaml} address_liftedGreaterEq b1 b2 = address_liftedCompare b1 b2 <> LT
-
-let inline {ocaml} address_liftedLess      = defaultLess
-let inline {ocaml} address_liftedLessEq    = defaultLessEq
-let inline {ocaml} address_liftedGreater   = defaultGreater
-let inline {ocaml} address_liftedGreaterEq = defaultGreaterEq
+let address_liftedLess b1 b2      = address_liftedCompare b1 b2 =  LT
+let address_liftedLessEq b1 b2    = address_liftedCompare b1 b2 <> GT
+let address_liftedGreater b1 b2   = address_liftedCompare b1 b2 =  GT
+let address_liftedGreaterEq b1 b2 = address_liftedCompare b1 b2 <> LT
 
 instance (Ord address_lifted)
   let compare = address_liftedCompare
@@ -381,10 +334,12 @@ instance (Ord reg_name)
   let (>=) = reg_nameGreaterEq
 end
 
-let reg_nameEqual a1 a2 = (reg_nameCompare a1 a2) = EQ
-let reg_nameInequal a1 a2 = not (reg_nameEqual a1 a2)
+let {coq;ocaml} reg_nameEqual a1 a2 = (reg_nameCompare a1 a2) = EQ
+let {hol;isabelle} reg_nameEqual = unsafe_structural_equality
+let {coq;ocaml} reg_nameInequal a1 a2 = not (reg_nameEqual a1 a2)
+let {hol;isabelle} reg_nameInequal = unsafe_structural_inequality
 
-instance  (Eq reg_name)
+instance (Eq reg_name)
   let (=)  = reg_nameEqual
   let (<>) = reg_nameInequal
 end
@@ -812,7 +767,7 @@ type event =
 | E_error of string 
 
 
-let ~{ocaml} eventCompare e1 e2 = 
+let eventCompare e1 e2 = 
   match (e1,e2) with
   | (E_read_mem rk1 v1 i1 tr1, E_read_mem rk2 v2 i2 tr2) ->
      compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2)) 
@@ -835,17 +790,11 @@ let ~{ocaml} eventCompare e1 e2 =
   | (E_write_reg _ _, _) -> LT
   | _ -> GT
   end
-let inline {ocaml} eventCompare = defaultCompare
 
-let ~{ocaml} eventLess b1 b2      = eventCompare b1 b2 =  LT
-let ~{ocaml} eventLessEq b1 b2    = eventCompare b1 b2 <> GT
-let ~{ocaml} eventGreater b1 b2   = eventCompare b1 b2 =  GT
-let ~{ocaml} eventGreaterEq b1 b2 = eventCompare b1 b2 <> LT
-
-let inline {ocaml} eventLess      = defaultLess
-let inline {ocaml} eventLessEq    = defaultLessEq
-let inline {ocaml} eventGreater   = defaultGreater
-let inline {ocaml} eventGreaterEq = defaultGreaterEq
+let eventLess b1 b2      = eventCompare b1 b2 =  LT
+let eventLessEq b1 b2    = eventCompare b1 b2 <> GT
+let eventGreater b1 b2   = eventCompare b1 b2 =  GT
+let eventGreaterEq b1 b2 = eventCompare b1 b2 <> LT
 
 instance (Ord event)
   let compare = eventCompare
