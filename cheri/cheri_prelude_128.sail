@@ -224,14 +224,24 @@ function (bool, CapStruct) setCapOffset((CapStruct) c, (bit[64]) offset) =
     let representable = (oldBase == newBase) & (oldTop == newTop) in
     (representable, newCap)
 
+function bool fastRepCheck((CapStruct) c, (bit[64]) i) =
+    let E        = min(unsigned(c.E), 45) in
+    let i_top    = signed(i[63..E+20]) in
+    let (bit[20]) i_mid = i[E+19..E] in
+    let (bit[20]) a_mid = (c.address)[E+19..E] in
+    let (bit[20]) R     = (c.B) - 0x01000 in
+    let (bit[20]) diff  = R - a_mid in
+    let (bit[20]) diff1 = diff - 1 in
+    switch(i_top) {
+      case 0  -> i_mid <_u diff1
+      case -1 -> unsigned(i_mid) >= unsigned(diff) & (R != a_mid)
+      case _  -> false
+    } | (E >= 44)
+
 function (bool, CapStruct) incCapOffset((CapStruct) c, (bit[64]) delta) =
-    let oldBase    = getCapBase(c) in
-    let oldTop     = getCapTop(c) in
     let (bit[64]) newAddress = c.address + delta in
     let newCap     = { c with address = newAddress } in
-    let newBase    = getCapBase(newCap) in
-    let newTop     = getCapTop(newCap) in
-    let representable = (oldBase == newBase) & (oldTop == newTop) in
+    let representable = fastRepCheck(c, delta) in
     (representable, newCap)
 
 (** FUNCTION:integer HighestSetBit(bits(N) x) *)
