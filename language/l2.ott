@@ -1011,8 +1011,11 @@ terminals :: '' ::=
     {{ tex \ottkw{consistent\_increase}~ }}
   | consistent_decrease                 :: :: cd
     {{ tex \ottkw{consistent\_decrease}~ }}
- | == :: :: equiv
-   {{ tex \equiv }}
-
+  | == :: :: equiv
+    {{ tex \equiv }}
+%  | [|| :: :: list_start
+%    {{ tex \ottsym{[||} }}       
+%  | ||] :: :: list_end       
+%    {{ tex \ottsym{||]} }}       
 
 

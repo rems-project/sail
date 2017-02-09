@@ -31,7 +31,7 @@ id_aux =  (* Identifier *)
 
 
 type 
-kid_aux =  (* variables with kind, ticked to differntiate from program variables *)
+kid_aux =  (* variables with kind, ticked to differentiate from program variables *)
    Var of x
 
 
@@ -56,15 +56,15 @@ kind =
 
 
 type 
-nexp_aux =  (* expression of kind Nat, for vector sizes and origins *)
-   Nexp_id of id (* identifier, bound by def Nat x = nexp *)
+nexp_aux =  (* expression of kind _, for vector sizes and origins *)
+   Nexp_id of id (* identifier, bound by \texttt{def Nat x = nexp} *)
  | Nexp_var of kid (* variable *)
  | Nexp_constant of int (* constant *)
  | Nexp_times of nexp * nexp (* product *)
  | Nexp_sum of nexp * nexp (* sum *)
  | Nexp_minus of nexp * nexp (* subtraction *)
  | Nexp_exp of nexp (* exponential *)
- | Nexp_neg of nexp (* For internal use *)
+ | Nexp_neg of nexp (* for internal use only *)
 
 and nexp = 
    Nexp_aux of nexp_aux * l
@@ -289,7 +289,7 @@ and 'a exp =
 
 and 'a lexp_aux =  (* lvalue expression *)
    LEXP_id of id (* identifier *)
- | LEXP_memory of id * ('a exp) list (* memory write via function call *)
+ | LEXP_memory of id * ('a exp) list (* memory or register write via function call *)
  | LEXP_cast of typ * id
  | LEXP_tup of ('a lexp) list (* set multiple at a time, a check will ensure it's not memory *)
  | LEXP_vector of 'a lexp * 'a exp (* vector element *)
@@ -311,7 +311,7 @@ and 'a fexps_aux =  (* Field-expression list *)
 and 'a fexps = 
    FES_aux of 'a fexps_aux * 'a annot
 
-and 'a opt_default_aux =  (* Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map *)
+and 'a opt_default_aux =  (* Optional default value for indexed vectors, to define a default value for any unspecified positions in a sparse map *)
    Def_val_empty
  | Def_val_dec of 'a exp
 

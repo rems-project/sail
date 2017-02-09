@@ -810,6 +810,7 @@ let rec pp_format_annot_ascii = function
   | NoTyp -> "Nothing"
   | Base((targs,t),tag,nes,efct,efctsum,_) ->
     (*TODO print out bindings for use in pattern match in interpreter*)
+      (match tag with External (Some s) -> "("^s^") " | _ -> "") ^
      "forall " ^ list_format ", " (function (i,k) -> kind_to_string k ^" '"^ i) targs ^ 
   (match nes with [] -> "" | _ -> ", " ^ pp_format_nes_ascii nes)
   ^ ". "
