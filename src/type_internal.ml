@@ -2012,22 +2012,6 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
     mk_bitwise_op  "bitwise_or" "|" 2;
     mk_bitwise_op  "bitwise_xor" "^" 2;
     mk_bitwise_op  "bitwise_and" "&" 2;
-    ("^^",
-     Overload(
-       Base((mk_nat_params["n";"o";"p"]@[("a",{k=K_Typ})],
-             (mk_pure_fun (mk_tup [{t=Tvar "a"}; mk_atom (mk_nv "n")])
-                (mk_vector bit_t {order = Oinc} (mk_nv "o") (mk_nv "p")))),
-            External (Some "duplicate"), [], pure_e, pure_e, nob),
-       false,
-       [Base((mk_nat_params ["n"],
-              (mk_pure_fun (mk_tup [bit_t;mk_atom (mk_nv "n")])
-                           (mk_vector bit_t {order=Oinc} (mk_c zero) (mk_nv "n")))),
-             External (Some "duplicate"),[],pure_e,pure_e,nob);
-        Base((mk_nat_params ["n";"m";"o"]@mk_ord_params["ord"],
-              mk_pure_fun (mk_tup [mk_vector bit_t (mk_ovar "ord") (mk_nv "o") (mk_nv "m");
-                                   mk_atom (mk_nv "n")])
-                (mk_vector bit_t (mk_ovar "ord") (mk_nv "o") (mk_mult (mk_nv "m") (mk_nv "n")))),
-             External (Some "duplicate_bits"),[],pure_e,pure_e,nob);]));
   ];
   "bitwise shifts and rotates",
    [
@@ -2047,8 +2031,24 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
                                   (mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m")))),
                 External (Some "bitwise_rotate"),[],pure_e,pure_e,nob));
   ];
-   "bitvector extension and MSB",
+   "bitvector duplicate, extension, and MSB",
    [
+    ("^^",
+     Overload(
+       Base((mk_nat_params["n";"o";"p"]@[("a",{k=K_Typ})],
+             (mk_pure_fun (mk_tup [{t=Tvar "a"}; mk_atom (mk_nv "n")])
+                (mk_vector bit_t {order = Oinc} (mk_nv "o") (mk_nv "p")))),
+            External (Some "duplicate"), [], pure_e, pure_e, nob),
+       false,
+       [Base((mk_nat_params ["n"],
+              (mk_pure_fun (mk_tup [bit_t;mk_atom (mk_nv "n")])
+                           (mk_vector bit_t {order=Oinc} (mk_c zero) (mk_nv "n")))),
+             External (Some "duplicate"),[],pure_e,pure_e,nob);
+        Base((mk_nat_params ["n";"m";"o"]@mk_ord_params["ord"],
+              mk_pure_fun (mk_tup [mk_vector bit_t (mk_ovar "ord") (mk_nv "o") (mk_nv "m");
+                                   mk_atom (mk_nv "n")])
+                (mk_vector bit_t (mk_ovar "ord") (mk_nv "o") (mk_mult (mk_nv "m") (mk_nv "n")))),
+             External (Some "duplicate_bits"),[],pure_e,pure_e,nob);]));
     ("EXTZ",Base((((mk_nat_params ["n";"m";"o";"p"])@["ord",{k=K_Ord}]),
                   (mk_pure_imp (mk_vector bit_t (mk_ovar "ord") (mk_nv "o") (mk_nv "n"))
                      (mk_vector bit_t (mk_ovar "ord") (mk_nv "p") (mk_nv "m")) "m")),
