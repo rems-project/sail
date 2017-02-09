@@ -382,3 +382,5 @@ val tannot_merge : constraint_origin -> def_envs -> bool -> tannot -> tannot -> 
 
 val initial_typ_env : tannot Envmap.t
 
+val initial_typ_env_list : (string * ((string * tannot) list)) list 
+

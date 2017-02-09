@@ -728,7 +728,7 @@ let rec pp_format_t_ascii t =
   match t.t with
     | Tid i -> i
     | Tvar i -> "'" ^ i
-    | Tfn(t1,t2,_,e) -> (pp_format_t_ascii t1) ^ " -> " ^ (pp_format_t_ascii t2) ^ " effect " ^ pp_format_e_ascii e 
+    | Tfn(t1,t2,_,e) -> (pp_format_t_ascii t1) ^ " -> " ^ (pp_format_t_ascii t2) ^ (match e.effect with Eset [] -> "" | _ -> " effect " ^ pp_format_e_ascii e)
     | Ttup(tups) -> "(" ^ (list_format ", " pp_format_t_ascii tups) ^ ")"
     | Tapp(i,args) ->  i ^ "<" ^  list_format ", " pp_format_targ_ascii args ^ ">"
     | Tabbrev(ti,ta) -> (pp_format_t_ascii ti) (* (pp_format_t_ascii ta) *)
@@ -811,17 +811,18 @@ let rec pp_format_annot_ascii = function
   | Base((targs,t),tag,nes,efct,efctsum,_) ->
     (*TODO print out bindings for use in pattern match in interpreter*)
       (match tag with External (Some s) -> "("^s^") " | _ -> "") ^
-     "forall " ^ list_format ", " (function (i,k) -> kind_to_string k ^" '"^ i) targs ^ 
-  (match nes with [] -> "" | _ -> ", " ^ pp_format_nes_ascii nes)
-  ^ ". "
-  ^ pp_format_t_ascii t 
-  ^ "\n"
+      (match (targs,nes) with ([],[]) -> "\n" | _ -> 
+        "forall " ^ list_format ", " (function (i,k) -> kind_to_string k ^" '"^ i) targs ^ 
+        (match nes with [] -> "" | _ -> ", " ^ pp_format_nes_ascii nes)
+        ^ ".\n") ^ "     "
+      ^ pp_format_t_ascii t 
+      ^ "\n"
 (*
 ^ " ********** " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^
        pp_format_e_lem efct ^ ", " ^ pp_format_e_lem efctsum ^ "))"
 *)
   | Overload (tannot, return_type_overloading_allowed, tannots) -> 
-  pp_format_annot_ascii tannot ^ String.concat "" (List.map (function tannot' -> "       " ^ pp_format_annot_ascii tannot' ) tannots)
+  (*pp_format_annot_ascii tannot*) "\n" ^ String.concat "" (List.map (function tannot' -> "   " ^ pp_format_annot_ascii tannot' ) tannots)
 
 
 

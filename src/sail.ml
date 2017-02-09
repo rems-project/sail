@@ -107,12 +107,17 @@ let main() =
   else if !(opt_print_initial_env) then
     let ppd_initial_typ_env = 
       String.concat "" 
-        (List.map 
-           (function (id,tannot) ->
-             id ^ " : " ^ 
-             Pretty_print.pp_format_annot_ascii tannot 
-             ^ "\n")
-           (Type_internal.Envmap.to_list Type_internal.initial_typ_env)) in
+        (List.map
+           (function (comment,tenv) -> 
+             "(* "^comment^" *)\n" ^ 
+             String.concat ""
+               (List.map 
+                  (function (id,tannot) ->
+                    id ^ " : " ^ 
+                    Pretty_print.pp_format_annot_ascii tannot 
+                    ^ "\n")
+                  tenv))
+           Type_internal.initial_typ_env_list) in
     Printf.printf "%s" ppd_initial_typ_env ;
   else    
 
