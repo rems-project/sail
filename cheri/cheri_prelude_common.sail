@@ -156,16 +156,18 @@ register CapCauseReg CapCause
 
 function forall Type 'o . 'o SignalException ((Exception) ex) = 
   {
-    let pc  = (bit[64]) PC in (* XXX Cast forces read of register. Sail bug? *)
-    let pcc = capRegToCapStruct(PCC) in
-    let (success, epcc) = setCapOffset(pcc, pc) in
-    if (success) then
+    if (~ (CP0Status.EXL)) then {
+      let pc  = (bit[64]) PC in (* Cast forces read of register. *)
+      let pcc = capRegToCapStruct(PCC) in
+      let (success, epcc) = setCapOffset(pcc, pc) in
+      if (success) then
         C31 := capStructToCapReg(epcc)
-    else
+      else
         C31 := capStructToCapReg(int_to_cap(getCapBase(pcc) + pc));
-    (* XXX what if not success? *)
+    };
+
     nextPCC    := C29; (* KCC *)
-    delayedPCC := C29; (* always write delayedPCC together whether PCC so 
+    delayedPCC := C29; (* always write delayedPCC together with nextPCC so 
                           that non-capability branches don't override PCC *)
     let base = (bit[64]) (getCapBase(capRegToCapStruct(C29))) in
     SignalExceptionMIPS(ex, base);
@@ -174,7 +176,7 @@ function forall Type 'o . 'o SignalException ((Exception) ex) =
 function unit ERETHook() =
   {
     nextPCC    := C31;
-    delayedPCC := C31; (* always write delayedPCC together whether PCC so 
+    delayedPCC := C31; (* always write delayedPCC together with nextPCC so 
                           that non-capability branches don't override PCC *)
   }
 
