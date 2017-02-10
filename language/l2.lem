@@ -138,9 +138,9 @@ type n_constraint =
  | NC_aux of n_constraint_aux * l
 
 
-type quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
- | QI_id of kinded_id (* An optionally kinded identifier *)
- | QI_const of n_constraint (* A constraint for this type *)
+type quant_item_aux =  (* kinded identifier or Nat constraint *)
+ | QI_id of kinded_id (* optionally kinded identifier *)
+ | QI_const of n_constraint (* Nat constraint *)
 
 
 type quant_item = 
@@ -149,7 +149,7 @@ type quant_item =
 
 type typquant_aux =  (* type quantifiers and constraints *)
  | TypQ_tq of list quant_item
- | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
+ | TypQ_no_forall (* empty *)
 
 
 type lit_aux =  (* Literal constant *)
@@ -231,8 +231,8 @@ type reg_id_aux 'a =
 
 
 type exp_aux 'a =  (* Expression *)
- | E_block of list (exp 'a) (* block *)
- | E_nondet of list (exp 'a) (* nondeterminisitic block, expressions evaluate in an unspecified order, or concurrently *)
+ | E_block of list (exp 'a) (* sequential block *)
+ | E_nondet of list (exp 'a) (* nondeterministic block *)
  | E_id of id (* identifier *)
  | E_lit of lit (* literal constant *)
  | E_cast of typ * (exp 'a) (* cast *)
@@ -246,7 +246,7 @@ type exp_aux 'a =  (* Expression *)
  | E_vector_access of (exp 'a) * (exp 'a) (* vector access *)
  | E_vector_subrange of (exp 'a) * (exp 'a) * (exp 'a) (* subvector extraction *)
  | E_vector_update of (exp 'a) * (exp 'a) * (exp 'a) (* vector functional update *)
- | E_vector_update_subrange of (exp 'a) * (exp 'a) * (exp 'a) * (exp 'a) (* vector subrange update (with vector) *)
+ | E_vector_update_subrange of (exp 'a) * (exp 'a) * (exp 'a) * (exp 'a) (* vector subrange update, with vector *)
  | E_vector_append of (exp 'a) * (exp 'a) (* vector concatenation *)
  | E_list of list (exp 'a) (* list *)
  | E_cons of (exp 'a) * (exp 'a) (* cons *)
@@ -256,10 +256,10 @@ type exp_aux 'a =  (* Expression *)
  | E_case of (exp 'a) * list (pexp 'a) (* pattern matching *)
  | E_let of (letbind 'a) * (exp 'a) (* let expression *)
  | E_assign of (lexp 'a) * (exp 'a) (* imperative assignment *)
- | E_sizeof of nexp (* Expression to return the value of the nexp variable or expression at run time *)
- | E_exit of (exp 'a) (* expression to halt all current execution, potentially calling a system, trap, or interrupt handler with exp *)
- | E_return of (exp 'a) (* expression to end current function execution and return the value of exp from the function; this can be used to break out of for loops *)
- | E_assert of (exp 'a) * (exp 'a) (* expression to halt with error, when the first expression is false, reporting the optional string as an error *)
+ | E_sizeof of nexp (* the value of nexp at run time *)
+ | E_return of (exp 'a) (* return (exp 'a) from current function *)
+ | E_exit of (exp 'a) (* halt all current execution *)
+ | E_assert of (exp 'a) * (exp 'a) (* halt with error (exp 'a) when not (exp 'a) *)
  | E_internal_cast of annot 'a * (exp 'a) (* This is an internal cast, generated during type checking that will resolve into a syntactic cast after *)
  | E_internal_exp of annot 'a (* This is an internal use for passing nexp information  to library functions, postponed for constraint solving *)
  | E_sizeof_internal of annot 'a (* For sizeof during type checking, to replace nexp with internal n *)
@@ -276,8 +276,8 @@ and exp 'a =
 and lexp_aux 'a =  (* lvalue expression *)
  | LEXP_id of id (* identifier *)
  | LEXP_memory of id * list (exp 'a) (* memory or register write via function call *)
- | LEXP_cast of typ * id
- | LEXP_tup of list (lexp 'a) (* set multiple at a time, a check will ensure it's not memory *)
+ | LEXP_cast of typ * id (* cast *)
+ | LEXP_tup of list (lexp 'a) (* multiple (non-memory) assignment *)
  | LEXP_vector of (lexp 'a) * (exp 'a) (* vector element *)
  | LEXP_vector_range of (lexp 'a) * (exp 'a) * (exp 'a) (* subvector *)
  | LEXP_field of (lexp 'a) * id (* struct field *)
@@ -311,8 +311,8 @@ and pexp 'a =
  | Pat_aux of (pexp_aux 'a) * annot 'a
 
 and letbind_aux 'a =  (* Let binding *)
- | LB_val_explicit of typschm * (pat 'a) * (exp 'a) (* value binding, explicit type ((pat 'a) must be total) *)
- | LB_val_implicit of (pat 'a) * (exp 'a) (* value binding, implicit type ((pat 'a) must be total) *)
+ | LB_val_explicit of typschm * (pat 'a) * (exp 'a) (* let, explicit type ((pat 'a) must be total) *)
+ | LB_val_implicit of (pat 'a) * (exp 'a) (* let, implicit type ((pat 'a) must be total) *)
 
 and letbind 'a = 
  | LB_aux of (letbind_aux 'a) * annot 'a
@@ -350,7 +350,7 @@ type tannot_opt_aux =  (* Optional type annotation for functions *)
  | Typ_annot_opt_some of typquant * typ
 
 
-type alias_spec_aux 'a =  (* Register alias expression forms. Other than where noted, each id must refer to an unaliased register of type vector *)
+type alias_spec_aux 'a =  (* Register alias expression forms *)
  | AL_subreg of (reg_id 'a) * id
  | AL_bit of (reg_id 'a) * (exp 'a)
  | AL_slice of (reg_id 'a) * (exp 'a) * (exp 'a)

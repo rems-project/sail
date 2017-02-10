@@ -454,8 +454,8 @@ lit :: 'L_' ::=
   {{ com hex and bin are constant bit vectors, C-style }}
   | bin                                         :: :: bin  {{ com bit vector constant, C-style }}
 % Should undefined be of type bit[alpha] or alpha[beta] or just alpha?
-  | undefined					:: :: undef {{ com constant representing undefined values }}
   | string                                              :: :: string {{ com string constant }}
+  | undefined					:: :: undef {{ com constant representing undefined values }}
 
 semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
                                                         {{ ocaml bool }}
@@ -693,8 +693,10 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     {{ com identifier }}
     | id ( exp1 , .. , expn )				  :: :: memory {{ com memory or register write via function call }}
     | id exp	       	    				  :: S :: mem_tup {{ ichlo [[id (exp)]] }}
+{{ com sugared form of above where [[exp]] is an explicit tuple }}
     | ( typ ) id					  :: :: cast
-    | ( lexp0 , .. , lexpn )                              :: :: tup {{ com set multiple at a time, a check will ensure it's not memory }}
+{{ com cast }}
+    | ( lexp0 , .. , lexpn )                              :: :: tup {{ com multiple (non-memory) assignment }}
     | lexp [ exp ]  :: ::                                 vector  {{ com vector element }}
     | lexp [ exp1 '..' exp2 ]  :: ::                         vector_range {{ com subvector }}
     % maybe comma-sep such lists too
