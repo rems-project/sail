@@ -324,7 +324,7 @@ typquant :: 'TypQ_' ::=
   {{ aux _ l }}
   | forall quant_item1 , ... , quant_itemn . :: :: tq %{{ texlong }}
 % WHY ARE CONSTRAINTS HERE AND NOT IN THE KIND LANGUAGE
-  |                           ::  ::  no_forall     {{ com sugar, omitting quantifier and constraints }}
+  |                           ::  ::  no_forall     {{ com empty }}
 
 typschm :: 'TypSchm_' ::=
   {{ com type scheme  }}
@@ -835,10 +835,10 @@ letbind :: 'LB_' ::=
   {{ com Let binding }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | let typschm pat = exp                                :: :: val_explicit
-    {{ com value binding, explicit type ([[pat]] must be total)}}
+    {{ com let, explicit type ([[pat]] must be total)}}
 % at the moment, we cannot parse the following, so perhaps we shouldn't keep this form here 
   | let pat = exp                                    :: :: val_implicit
-    {{ com value binding, implicit type ([[pat]] must be total)}}
+    {{ com let, implicit type ([[pat]] must be total)}}
 
 
 val_spec :: 'VS_' ::=
@@ -882,7 +882,8 @@ reg_id :: 'RI_' ::=
   | id								:: :: id
 
 alias_spec :: 'AL_' ::=
-  {{ com Register alias expression forms. Other than where noted, each id must refer to an unaliased register of type vector }}
+  {{ com Register alias expression forms }}
+%. Other than where noted, each id must refer to an unaliased register of type vector
   {{ aux _ annot }} {{ auxparam 'a }}
   | reg_id . id							:: :: subreg
   | reg_id [ exp ] 						:: :: bit
