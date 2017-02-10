@@ -314,15 +314,15 @@ kinded_id :: 'KOpt_' ::=
   | kind kid				      :: :: kind {{ com kind-annotated variable }}
 
 quant_item :: 'QI_' ::=
-  {{ com Either a kinded identifier or a nexp constraint for a typquant }}
+  {{ com kinded identifier or [[Nat]] constraint }}
   {{ aux _ l }}
-  | kinded_id 	  	 	       	      :: :: id {{ com An optionally kinded identifier }}
-  | n_constraint			              :: :: const {{ com A constraint for this type }}
+  | kinded_id 	  	 	       	      :: :: id {{ com optionally kinded identifier }}
+  | n_constraint			              :: :: const {{ com [[Nat]] constraint }}
 
 typquant :: 'TypQ_' ::= 
   {{ com type quantifiers and constraints}}
   {{ aux _ l }}
-  | forall quant_item1 , ... , quant_itemn . :: :: tq {{ texlong }}
+  | forall quant_item1 , ... , quant_itemn . :: :: tq %{{ texlong }}
 % WHY ARE CONSTRAINTS HERE AND NOT IN THE KIND LANGUAGE
   |                           ::  ::  no_forall     {{ com sugar, omitting quantifier and constraints }}
 
@@ -552,10 +552,10 @@ exp :: 'E_' ::=
   {{ com Expression }}
   {{ aux _ annot }} {{ auxparam 'a }}  
 
-  | { exp1 ; ... ; expn }                               :: :: block {{ com block }}
+  | { exp1 ; ... ; expn }                               :: :: block {{ com sequential block }}
 % maybe we really should have indentation-sensitive syntax :-)  (given that some of the targets do)
 
-  | nondet { exp1 ; ... ; expn }                        :: :: nondet {{ com nondeterminisitic block, expressions evaluate in an unspecified order, or concurrently}}
+  | nondet { exp1 ; ... ; expn }                        :: :: nondet {{ com nondeterministic block }}
 
   | id                                                  :: :: id
     {{ com identifier }}
@@ -568,7 +568,8 @@ exp :: 'E_' ::=
 
   | id ( exp1 , .. , expn )                                   :: :: app
     {{ com function application }}
-  | id exp                                               :: S :: tup_app {{ ichlo [[id ( exp ) ]] }} {{ com No extra parens needed when exp is a tuple }}
+  | id exp                                               :: S :: tup_app {{ ichlo [[id ( exp ) ]] }} 
+   {{ com funtion application to tuple }}
 
 % Note: fully applied function application only
 
@@ -614,7 +615,7 @@ exp :: 'E_' ::=
   {{ com vector functional update }}
 
   | [ exp with exp1 : exp2 = exp3 ]                   :: :: vector_update_subrange
-  {{ com vector subrange update (with vector)}}
+  {{ com vector subrange update, with vector}}
   % do we want a functional update form with a comma-separated list of such?
 
   | exp : exp2                                        :: :: vector_append
@@ -664,23 +665,26 @@ exp :: 'E_' ::=
     {{ com imperative assignment }}
 
   | sizeof nexp                                         :: :: sizeof
-  {{ com Expression to return the value of the nexp variable or expression at run time }}
+  {{ com the value of [[nexp]] at run time }}
 
+  | return exp                                       :: :: return {{ com  return [[exp]] from current function }}
+% this can be used to break out of for loops
   | exit exp						:: :: exit
-    {{ com expression to halt all current execution, potentially calling a system, trap, or interrupt handler with exp }}
-  | return exp                                       :: :: return {{ com expression to end current function execution and return the value of exp from the function; this can be used to break out of for loops }}
+    {{ com halt all current execution }}
+%, potentially calling a system, trap, or interrupt handler with exp
   | assert ( exp , exp' )                            :: :: assert
-    {{ com expression to halt with error, when the first expression is false, reporting the optional string as an error }}
+    {{ com halt with error [[exp']] when not [[exp]] }}
+% exp' is optional?
   | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
-  | ( annot ) exp                                   :: :: internal_cast {{ com This is an internal cast, generated during type checking that will resolve into a syntactic cast after }}
-  | annot                       :: :: internal_exp {{ com This is an internal use for passing nexp information  to library functions, postponed for constraint solving }}
-  | sizeof annot             :: :: sizeof_internal {{ com For sizeof during type checking, to replace nexp with internal n}}
-  | annot , annot'           :: :: internal_exp_user {{ com This is like the above but the user has specified an implicit parameter for the current function }}
-  | comment string            :: :: comment {{ com For generated unstructured comments }}
-  | comment exp               :: :: comment_struc {{ com For generated structured comments }}
-  | let lexp = exp in exp'    :: :: internal_let {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
-  | let pat = exp in exp' :: :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
-  | return_int ( exp )                                          :: :: internal_return {{ com For internal use to embed into monad definition }}
+  | ( annot ) exp                                   :: I :: internal_cast {{ com This is an internal cast, generated during type checking that will resolve into a syntactic cast after }}
+  | annot                       :: I :: internal_exp {{ com This is an internal use for passing nexp information  to library functions, postponed for constraint solving }}
+  | sizeof annot             :: I :: sizeof_internal {{ com For sizeof during type checking, to replace nexp with internal n}}
+  | annot , annot'           :: I :: internal_exp_user {{ com This is like the above but the user has specified an implicit parameter for the current function }}
+  | comment string            :: I :: comment {{ com For generated unstructured comments }}
+  | comment exp               :: I :: comment_struc {{ com For generated structured comments }}
+  | let lexp = exp in exp'    :: I :: internal_let {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
+  | let pat = exp in exp' :: I :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
+  | return_int ( exp )                                          :: I :: internal_return {{ com For internal use to embed into monad definition }}
 
 
 lexp :: 'LEXP_' ::= {{ com lvalue expression }}
@@ -919,7 +923,7 @@ def :: 'DEF_' ::=
     {{ com scattered function and type definition }}
   | dec_spec                                            :: :: reg_dec
     {{ com register declaration }}
-  | dec_comm                                            :: :: comm
+  | dec_comm                                            :: I :: comm
     {{ com generated comments }}
 
 defs :: '' ::=
