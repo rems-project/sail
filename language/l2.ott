@@ -96,7 +96,7 @@ l :: '' ::=                                     {{ phantom }}
                                                 {{ ocaml l }}
                                                 {{ lem l }}
                                                 {{ hol unit }}
-  {{ com Source location }}
+  {{ com source location }}
   |                                             :: :: Unknown
     {{ ocaml Unknown }}
     {{ lem Unknown }}
@@ -109,11 +109,11 @@ annot :: '' ::=
                                                 {{ hol unit }}
 
 id :: '' ::=
-  {{ com Identifier }}
+  {{ com identifier }}
   {{ aux _ l }}
   | x                           :: :: id
-  | ( deinfix x )                       :: :: deIid {{ com remove infix status }}
-  | bool      		   	 :: M :: bool {{ com Built in type identifiers }} {{ ichlo (Id "bool") }}
+  | ( deinfix x )                       :: D :: deIid {{ com remove infix status }}
+  | bool      		   	 :: M :: bool {{ com built in type identifiers }} {{ ichlo (Id "bool") }}
   | bit				 :: M :: bit {{ ichlo (Id "bit") }} 
   | unit			 :: M :: unit {{ ichlo (Id "unit") }}
   | nat				 :: M :: nat  {{ ichlo (Id "nat") }}
@@ -124,7 +124,7 @@ id :: '' ::=
   | list			 :: M :: list {{ ichlo (Id "list") }}
 %  | set                          :: M :: set {{ ichlo (Id "set") }}
   | reg                          :: M :: reg {{ ichlo (Id "reg") }}
-  | to_num			 :: M :: tonum {{ com Built in function identifiers }} {{ ichlo (Id "to_num") }}
+  | to_num			 :: M :: tonum {{ com built-in function identifiers }} {{ ichlo (Id "to_num") }}
   | to_vec			 :: M :: tovec {{ ichlo (Id "to_vec") }}
   | msb                          :: M :: msb {{ ichlo (Id "msb") }}
 % Note: we have just a single namespace. We don't want the same
@@ -135,7 +135,7 @@ id :: '' ::=
 % targets use alphabetical infix operators. 
 
 kid :: '' ::=
-  {{ com variables with kind, ticked to differentiate from program variables }}
+  {{ com variables of some $\ottnt{kind}$ }}
   {{ aux _ l }}
   | ' x                       :: :: var
  
@@ -162,9 +162,9 @@ kind :: 'K_' ::=
 % we'll never use  ...-> Nat , .. Order , .. or Effects
     
 nexp :: 'Nexp_' ::=  
-  {{ com expression of kind [[Nat]], for vector sizes and origins }}
+  {{ com numeric expression, of kind [[Nat]] }}
   {{ aux _ l }}
-  | id                                  :: :: id          {{ com identifier, bound by \texttt{def Nat x = nexp} }}
+  | id                                  :: :: id          {{ com abbreviation identifier }}
   | kid                                 :: :: var         {{ com variable }}
   | num                                 :: :: constant     {{ com constant }}
   | nexp1 * nexp2                       :: :: times        {{ com product }}
@@ -175,11 +175,11 @@ nexp :: 'Nexp_' ::=
   | ( nexp )                            :: S :: paren  {{ ichlo [[nexp]] }}
 
 order :: 'Ord_' ::=  
-  {{ com vector order specifications, of kind Order}}
+  {{ com vector order specifications, of kind [[Order]]}}
   {{ aux _ l }} 
   | kid                                 :: :: var {{ com variable }} 
-  | inc                                 :: :: inc  {{ com increasing (little-endian) }}
-  | dec                                 :: :: dec  {{ com decreasing (big-endian) }}
+  | inc                                 :: :: inc  {{ com increasing }}
+  | dec                                 :: :: dec  {{ com decreasing }}
   | ( order )                             :: S :: paren {{ ichlo [[order]] }}
 
 base_effect :: 'BE_' ::=
@@ -195,19 +195,19 @@ base_effect :: 'BE_' ::=
   | depend				:: :: depend {{ com dynamic footprint }}
   | undef                               :: :: undef {{ com undefined-instruction exception }}
   | unspec                              :: :: unspec {{ com unspecified values }}
-  | nondet                              :: :: nondet {{ com nondeterminism from intra-instruction parallelism }}
-  | escape                              :: :: escape {{ com Tracking of expressions and functions that might call exit }}
-  | lset                                :: :: lset {{ com Local mutation happend; not user-writable }}
-  | lret                                :: :: lret {{ com Local return happened; not user-writable }}
+  | nondet                              :: :: nondet {{ com nondeterminism, from [[nondet]] }}
+  | escape                              :: :: escape {{ com potential call of  [[exit]] }}
+  | lset                                :: :: lset {{ com local mutation; not user-writable }}
+  | lret                                :: :: lret {{ com local return; not user-writable }}
 
 effect :: 'Effect_' ::=
-  {{ com effect set, of kind Effects }}
+  {{ com effect set, of kind [[Effect]] }}
   {{ aux _ l }}
  | kid                                 :: :: var
  | { base_effect1 , .. , base_effectn }           :: :: set {{ com effect set }}
  | pure                                 :: M :: pure {{ com sugar for empty effect set }} 
    {{ lem (Effect_set [])  }} {{icho [[{}]] }}
- | effect1 u+ .. u+ effectn                   :: M :: union {{ com meta operation for combining sets of effects }} {{ icho [] }}
+ | effect1 u+ .. u+ effectn                   :: M :: union {{ com union of sets of effects }} {{ icho [] }}
    {{ lem (List.foldr effect_union (Effect_aux (Effect_set []) Unknown) [[effect1..effectn]]) }}
 
 embed
@@ -223,20 +223,20 @@ grammar
 % TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.  Yes.  But we think we don't need any interesting effect-set expressions, eg effectset-variable union {rreg}. 
 
 typ :: 'Typ_' ::=
-  {{ com Type expressions, of kind $[[Type]]$ }}
+  {{ com type expressions, of kind $[[Type]]$ }}
   {{ aux _ l }}
   | _                                           :: :: wild
-    {{ com Unspecified type }}
+    {{ com unspecified type }}
   | id                                         :: :: id
-    {{ com Defined type }}
+    {{ com defined type }}
   | kid                                         :: :: var
-    {{ com Type variable }}
+    {{ com type variable }}
   | typ1 -> typ2 effectkw effect                        :: :: fn
-    {{ com Function type (first-order only in user code) }}
+    {{ com Function (first-order only in user code) }}
 % TODO: build first-order restriction into AST or just into type rules? neither - see note
 % TODO: concrete syntax for effects in a function type?  needed only for pp, not in user syntax.
   | ( typ1 , .... , typn )                          :: :: tup
-    {{ com Tuple type }}
+    {{ com Tuple }}
 % TODO union in the other kind grammars?  or make a syntax of argument? or glom together the grammars and leave o the typechecker
   | id < typ_arg1 , .. , typ_argn >                    :: :: app
   {{ com type constructor application }}
@@ -245,16 +245,16 @@ typ :: 'Typ_' ::=
   | [| nexp |]             :: S :: range1 {{ichlo range <[[nexp]], 0> }} {{ com sugar for \texttt{range<0, nexp>} }}
   | [| nexp : nexp' |]  :: S :: range2 {{ichlo range <[[nexp]],[[nexp']]> }} {{ com sugar for \texttt{range< nexp, nexp'>} }}
 % | atom < nexp > :: :: atom {{ com equivalent to range<nexp,nexp> }}
-  | [: nexp :]            :: S :: atom1 {{ichlo atom <[[nexp]]> }} {{ com sugar for \texttt{atom<nexp>} which is special case of \texttt{range<nexp,nexp>} }}
+  | [: nexp :]            :: S :: atom1 {{ichlo atom <[[nexp]]> }} {{ com sugar for \texttt{atom<nexp>}=\texttt{range<nexp,nexp>} }}
 % use .. not - to avoid ambiguity with nexp -
 % total maps and vectors indexed by finite subranges of nat
 %  | vector nexp1 nexp2 order typ :: :: vector {{ com vector of [[typ]], indexed by natural range }}
 % probably some sugar for vector types, using [ ] similarly to enums:
 % (but with .. not : in the former, to avoid confusion...)
-  | typ [ nexp ]  :: S :: vector2 {{ichlo vector < [[nexp]],0,inc,[[typ]] > }} {{ com sugar for vector indexed by [ [[nexp]] ] }}
-  | typ [ nexp : nexp' ] :: S :: vector3 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} {{ com sugar for vector indexed by [ [[nexp]]..[[nexp']] ] }}
-  | typ [ nexp <: nexp' ] :: S :: vector4 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} {{ com sugar for increasing vector indexed as above }}
-  | typ [ nexp :> nexp' ] :: S :: vector5 {{ ichlo vector < [[nexp]],[[nexp']],dec,[[typ]] }} {{ com sugar for decreasing vector indexed as above }}
+  | typ [ nexp ]  :: S :: vector2 {{ichlo vector < [[nexp]],0,inc,[[typ]] > }} {{ com sugar for vector indexed by [| [[nexp]] |] }}
+  | typ [ nexp : nexp' ] :: S :: vector3 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} {{ com sugar for vector indexed by [| [[nexp]]..[[nexp']] |] }}
+  | typ [ nexp <: nexp' ] :: S :: vector4 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} {{ com sugar for increasing vector }}
+  | typ [ nexp :> nexp' ] :: S :: vector5 {{ ichlo vector < [[nexp]],[[nexp']],dec,[[typ]] }} {{ com sugar for decreasing vector }}
 % ...so bit [ nexp ] etc is just an instance of that
 %  | List < typ > :: :: list {{ com list of [[typ]] }}
 %  | Set < typ >  :: :: set  {{ com finite set of [[typ]] }}
@@ -265,7 +265,7 @@ typ :: 'Typ_' ::=
 
 
 typ_arg :: 'Typ_arg_' ::=
-  {{ com Type constructor arguments of all kinds }}
+  {{ com type constructor arguments of all kinds }}
   {{ aux _ l }} 
   | nexp       :: :: nexp
   | typ        :: :: typ
@@ -359,7 +359,7 @@ grammar
 %%     {{ com Variant types }}
 %% 
  name_scm_opt :: 'Name_sect_' ::=
-   {{ com Optional variable-naming-scheme specification }} 
+   {{ com optional variable naming-scheme constraint}} 
    {{ aux _ l }}
    |                                                   :: :: none
    | [ name = regexp ]                                 :: :: some
@@ -377,7 +377,7 @@ grammar
 %%% OR, IN C STYLE
 
 type_def :: 'TD_' ::=
-  {{ com Type definition body }}
+  {{ com type definition body }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | typedef id name_scm_opt = typschm                                        :: :: abbrev
     {{ com type abbreviation }} {{ texlong }}
@@ -403,7 +403,7 @@ kind_def :: 'KD_' ::=
   {{ com Definition body for elements of kind }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | Def kind id name_scm_opt = nexp                                           :: :: nabbrev
-    {{ com nexp abbreviation }}
+    {{ com [[Nat]]-expression abbreviation }}
   | Def kind id name_scm_opt = typschm                                        :: D :: abbrev
     {{ com type abbreviation }} {{ texlong }}
   | Def kind id name_scm_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: D :: record
@@ -421,7 +421,7 @@ kind_def :: 'KD_' ::=
 % also sugar [  nexp ] 
 
 type_union :: 'Tu_' ::=
-  {{ com Type union constructors }}
+  {{ com type union constructors }}
   {{ aux _ l }}
   | id                                                  :: :: id
   | typ id                                              :: :: ty_id
@@ -444,7 +444,7 @@ index_range :: 'BF_' ::= {{ com index specification, for bitfields in register t
 grammar
 
 lit :: 'L_' ::=
-  {{ com Literal constant }}
+  {{ com literal constant }}
   {{ aux _ l }}
   | ( )                                                 :: :: unit  {{ com $() : [[unit]]$ }}
 %Presumably we want to remove bitzero and bitone ?
@@ -464,7 +464,7 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
                                                         {{ ocaml bool }}
                                                         {{ lem bool }}
                                                         {{ hol bool }}
-  {{ com Optional semi-colon }}
+  {{ com optional semi-colon }}
   |                                                     :: :: no  
     {{ hol F }}
     {{ ocaml false }}
@@ -481,7 +481,7 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
 
 
 pat :: 'P_' ::= 
-  {{ com Pattern }}
+  {{ com pattern }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | lit                                                 :: :: lit
     {{ com literal constant pattern }}
@@ -535,7 +535,7 @@ pat :: 'P_' ::=
 
 % XXX Is this still useful?
 fpat :: 'FP_' ::=
-  {{ com Field pattern }}
+  {{ com field pattern }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | id = pat                                            :: :: Fpat
 
@@ -552,7 +552,7 @@ P_app <= P_as
 grammar
 
 exp :: 'E_' ::=
-  {{ com Expression }}
+  {{ com expression }}
   {{ aux _ annot }} {{ auxparam 'a }}  
 
   | { exp1 ; ... ; expn }                               :: :: block {{ com sequential block }}
@@ -696,7 +696,7 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
     {{ com identifier }}
     | id ( exp1 , .. , expn )				  :: :: memory {{ com memory or register write via function call }}
     | id exp	       	    				  :: S :: mem_tup {{ ichlo [[id (exp)]] }}
-{{ com sugared form of above where [[exp]] is an explicit tuple }}
+{{ com sugared form of above for explicit tuple [[exp]] }}
     | ( typ ) id					  :: :: cast
 {{ com cast }}
     | ( lexp0 , .. , lexpn )                              :: :: tup {{ com multiple (non-memory) assignment }}
@@ -707,23 +707,23 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
 
 
 fexp :: 'FE_' ::=
-  {{ com Field-expression }}
+  {{ com field expression }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | id = exp                                            :: :: Fexp
 
 fexps :: 'FES_' ::=
-  {{ com Field-expression list }}
+  {{ com field expression list }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | fexp1 ; ... ; fexpn semi_opt                        :: :: Fexps
 
 opt_default :: 'Def_val_' ::=
-  {{ com Optional default value for indexed vectors, to define a default value for any unspecified positions in a sparse map }}
+  {{ com optional default value for indexed vector expressions }} %, to define a default value for any unspecified positions in a sparse map 
   {{ aux _ annot }} {{ auxparam 'a }}
   |                                                     :: :: empty
   | ; default = exp                                       :: :: dec
 
 pexp :: 'Pat_' ::=
-  {{ com Pattern match }}
+  {{ com pattern match }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | pat -> exp                                  :: :: exp
 % apparently could use -> or => for this.
@@ -800,32 +800,32 @@ grammar
 %%%%% C-ish style %%%%%%%%%%
 
 tannot_opt :: 'Typ_annot_opt_' ::=
-  {{ com Optional type annotation for functions}}
+  {{ com optional type annotation for functions}}
   {{ aux _ l }} 
 %  |                                             :: :: none
 % Currently not optional; one issue, do the type parameters apply over the argument types, or should this be the type of the function and not just the return
   | typquant typ                                :: :: some 
 
 rec_opt :: 'Rec_' ::=
-  {{ com Optional recursive annotation for functions }}
+  {{ com optional recursive annotation for functions }}
   {{ aux _ l }}
   |                                             :: :: nonrec {{ com non-recursive }}
   | rec                                         :: :: rec {{ com recursive }}
 
 effect_opt :: 'Effect_opt_' ::=
-  {{ com Optional effect annotation for functions }}
+  {{ com optional effect annotation for functions }}
   {{ aux _ l }}
   |                                             :: :: pure {{ com sugar for empty effect set }}
   | effectkw effect                              :: :: effect
 
 funcl :: 'FCL_' ::=
-  {{ com Function clause }}
+  {{ com function clause }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | id pat = exp                   :: :: Funcl
 
 
 fundef :: 'FD_' ::=
-  {{ com Function definition}}
+  {{ com function definition}}
   {{ aux _ annot }} {{ auxparam 'a }}
   | function rec_opt tannot_opt effect_opt funcl1 and ... and funcln :: :: function {{ texlong }}  
 % {{ com function definition }}
@@ -837,7 +837,7 @@ fundef :: 'FD_' ::=
 %  which is ok for the typ_quant part but not for the typ part
 
 letbind :: 'LB_' ::=
-  {{ com Let binding }}
+  {{ com let binding }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | let typschm pat = exp                                :: :: val_explicit
     {{ com let, explicit type ([[pat]] must be total)}}
@@ -847,7 +847,7 @@ letbind :: 'LB_' ::=
 
 
 val_spec :: 'VS_' ::=
-  {{ com Value type specification }} 
+  {{ com value type specification }} 
   {{ aux _ annot }} {{ auxparam 'a }}
   | val typschm id                                  :: :: val_spec
     {{ com specify the type of an upcoming definition }}
@@ -858,7 +858,7 @@ val_spec :: 'VS_' ::=
 %where the string must provide an explicit path to the required function but will not be checked
 
 default_spec :: 'DT_' ::=
-  {{ com Default kinding or typing assumption }}
+  {{ com default kinding or typing assumption }}
   {{ aux _ l }} {{ auxparam 'a }}
   | default Order order      :: :: order
   | default base_kind kid    :: :: kind
@@ -871,7 +871,7 @@ default_spec :: 'DT_' ::=
 % For example, we might often have default Type ['alphanum]
 
 scattered_def :: 'SD_' ::=
-  {{ com Scattered function and union type definitions }}
+  {{ com scattered function and union type definitions }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | scattered function rec_opt tannot_opt effect_opt id   :: :: scattered_function 
 {{ texlong }} {{ com scattered function definition header }}
@@ -892,7 +892,7 @@ reg_id :: 'RI_' ::=
   | id								:: :: id
 
 alias_spec :: 'AL_' ::=
-  {{ com Register alias expression forms }}
+  {{ com register alias expression forms }}
 %. Other than where noted, each id must refer to an unaliased register of type vector
   {{ aux _ annot }} {{ auxparam 'a }}
   | reg_id . id							:: :: subreg
@@ -901,13 +901,13 @@ alias_spec :: 'AL_' ::=
   | reg_id : reg_id'  	    					:: :: concat
 
 dec_spec :: 'DEC_' ::=
-  {{ com Register declarations }}
+  {{ com register declarations }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | register typ id                                             :: :: reg
   | register alias id = alias_spec				:: :: alias
   | register alias typ id = alias_spec				:: :: typ_alias
 
-dec_comm :: 'DC_' ::= {{ com Top-level generated comments }} {{auxparam 'a}}
+dec_comm :: 'DC_' ::= {{ com top-level generated comments }} {{auxparam 'a}}
   | comment string :: :: comm {{ com generated unstructured comment }}
   | comment def    :: :: comm_struct {{ com generated structured comment }}
 
@@ -916,7 +916,7 @@ dec_comm :: 'DC_' ::= {{ com Top-level generated comments }} {{auxparam 'a}}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 def :: 'DEF_' ::=
-  {{ com Top-level definition }}
+  {{ com top-level definition }}
   {{ auxparam 'a }}
   | kind_def                                                    :: :: kind
     {{ com definition of named kind identifiers }}
@@ -938,7 +938,7 @@ def :: 'DEF_' ::=
     {{ com generated comments }}
 
 defs :: '' ::=
-  {{ com Definition sequence }}
+  {{ com definition sequence }}
   {{ auxparam 'a }}
   | def1  .. defn                 :: :: Defs
 
