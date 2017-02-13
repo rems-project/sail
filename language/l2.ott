@@ -949,23 +949,26 @@ terminals :: '' ::=
     {{ tex \ensuremath{\mathop{\mathord{*}\mathord{*} } } }}
     {{ com \texttt{**} }}
   | >=                                  :: :: geq
-    {{ tex \ensuremath{\geq} }}
+%    {{ tex \ensuremath{\geq} }}
+    {{ tex \ottsym{\textgreater=} }}
     {{ com \texttt{>=} }}
   | '<='                                        :: :: leq
-    {{ tex \ensuremath{\leq} }}
+%    {{ tex \ensuremath{\leq} }}
+    {{ tex \ottsym{\textless=} }}
     {{ com \texttt{<=} }}
   | ->                                  :: :: arrow
-    {{ tex \ensuremath{\rightarrow} }}
+%    {{ tex \ensuremath{\rightarrow} }}
+    {{ tex \ottsym{-\textgreater} }}
     {{ com \texttt{->} }}
   | ==>                                 :: :: Longrightarrow
     {{ tex \ensuremath{\Longrightarrow} }}
     {{ com \texttt{==>} }}
-  | <|                                  :: :: startrec
-    {{ tex \ensuremath{\langle|} }}
-    {{ com \texttt{<|} }}
-  | |>                                  :: :: endrec
-    {{ tex \ensuremath{|\rangle} }}
-    {{ com \texttt{|>} }}
+%   | <|                                  :: :: startrec
+%     {{ tex \ensuremath{\langle|} }}
+%     {{ com \texttt{<|} }}
+%   | |>                                  :: :: endrec
+%     {{ tex \ensuremath{|\rangle} }}
+%     {{ com \texttt{|>} }}
   | inter                               :: :: inter
     {{ tex \ensuremath{\cap} }}
   | u+                                  :: :: uplus
@@ -981,9 +984,11 @@ terminals :: '' ::=
   | emptyset                            :: :: emptyset
     {{ tex \ensuremath{\emptyset} }}
   | <                                   :: :: lt
-    {{ tex \ensuremath{\langle} }}
+%    {{ tex \ensuremath{\langle} }}
+    {{ tex \ottsym{<} }}
   | >                                   :: :: gt
-    {{ tex \ensuremath{\rangle} }}
+%    {{ tex \ensuremath{\rangle} }}
+    {{ tex \ottsym{>} }}
   | lt                                  :: :: mathlt
     {{ tex < }}
   | gt                                  :: :: mathgt
@@ -1005,7 +1010,7 @@ terminals :: '' ::=
   | |-c                                 :: :: vdashC
     {{ tex \ensuremath{\vdash_c} }}
   | '                                   :: :: quote
-    {{ tex \mbox{'} }}
+    {{ tex \ottsym{'} }}
   | |->                                 :: :: mapsto
     {{ tex \ensuremath{\mapsto} }}
   | gives                               :: :: gives
@@ -1028,9 +1033,13 @@ terminals :: '' ::=
     {{ tex \ottkw{consistent\_decrease}~ }}
   | == :: :: equiv
     {{ tex \equiv }}
-%  | [|| :: :: list_start
-%    {{ tex \ottsym{[||} }}       
-%  | ||] :: :: list_end       
-%    {{ tex \ottsym{||]} }}       
+  | [| :: :: range_start
+    {{ tex \ottsym{[\textbar} }}       
+  | |] :: :: range_end       
+    {{ tex \ottsym{\textbar]} }}       
+  | [|| :: :: list_start
+    {{ tex \ottsym{[\textbar\textbar} }}       
+  | ||] :: :: list_end       
+    {{ tex \ottsym{\textbar\textbar]} }}       
 
 
