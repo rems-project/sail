@@ -359,7 +359,7 @@ grammar
 %%     {{ com Variant types }}
 %% 
  name_scm_opt :: 'Name_sect_' ::=
-   {{ com Optional variable-naming-scheme specification for variables of defined type }} 
+   {{ com Optional variable-naming-scheme specification }} 
    {{ aux _ l }}
    |                                                   :: :: none
    | [ name = regexp ]                                 :: :: some
@@ -388,7 +388,7 @@ type_def :: 'TD_' ::=
 %  take parameters of function types)
 % concrete syntax: to be even closer to C, could have a postfix id rather than prefix id = 
   | typedef id name_scm_opt = const union typquant { type_union1 ; ... ; type_unionn semi_opt }   :: :: variant
-    {{ com union type definition}} {{ texlong }}
+    {{ com tagged union type definition}} {{ texlong }}
 
   | typedef id name_scm_opt = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
     {{ com enumeration type definition}} {{ texlong }}
@@ -396,22 +396,25 @@ type_def :: 'TD_' ::=
   | typedef  id = register bits [ nexp : nexp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
 :: :: register {{ com register mutable bitfield type definition }} {{ texlong }}
 
+
+% the D(eprecated) forms here should be removed; they add complexity for no purpose.  The nexp abbreviation form should have better syntax.
+% ; many are shorthands for type\_defs
 kind_def :: 'KD_' ::=
-  {{ com Definition body for elements of kind; many are shorthands for type\_defs }}
+  {{ com Definition body for elements of kind }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | Def kind id name_scm_opt = nexp                                           :: :: nabbrev
     {{ com nexp abbreviation }}
-  | Def kind id name_scm_opt = typschm                                        :: :: abbrev
+  | Def kind id name_scm_opt = typschm                                        :: D :: abbrev
     {{ com type abbreviation }} {{ texlong }}
-  | Def kind id name_scm_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: :: record
+  | Def kind id name_scm_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: D :: record
     {{ com struct type definition }} {{ texlong }}
-  | Def kind id name_scm_opt = const union typquant { type_union1 ; ... ; type_unionn semi_opt }   :: :: variant
+  | Def kind id name_scm_opt = const union typquant { type_union1 ; ... ; type_unionn semi_opt }   :: D :: variant
     {{ com union type definition}} {{ texlong }}
-  | Def kind id name_scm_opt = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
+  | Def kind id name_scm_opt = enumerate { id1 ; ... ; idn semi_opt }   :: D :: enum
     {{ com enumeration type definition}} {{ texlong }}
 
   | Def kind id = register bits [ nexp : nexp' ] { index_range1 : id1 ; ... ; index_rangen : idn } 
-:: :: register {{ com register mutable bitfield type definition }} {{ texlong }}
+:: D :: register {{ com register mutable bitfield type definition }} {{ texlong }}
 
 
 
@@ -847,15 +850,18 @@ val_spec :: 'VS_' ::=
   {{ com Value type specification }} 
   {{ aux _ annot }} {{ auxparam 'a }}
   | val typschm id                                  :: :: val_spec
+    {{ com specify the type of an upcoming definition }}
   | val extern typschm id                           :: :: extern_no_rename
+    {{ com specify the type of an external function }}
   | val extern typschm id = string                  :: :: extern_spec
-    {{ com Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked }}
+    {{ com specify the type of a function from Lem }}
+%where the string must provide an explicit path to the required function but will not be checked
 
 default_spec :: 'DT_' ::=
   {{ com Default kinding or typing assumption }}
   {{ aux _ l }} {{ auxparam 'a }}
-  | default base_kind kid    :: :: kind
   | default Order order      :: :: order
+  | default base_kind kid    :: :: kind
   | default typschm id      :: :: typ
 % The intended semantics of these is that if an id in binding position
 % doesn't have a kind or type annotation, then we look through the
@@ -865,19 +871,21 @@ default_spec :: 'DT_' ::=
 % For example, we might often have default Type ['alphanum]
 
 scattered_def :: 'SD_' ::=
-  {{ com Function and type union definitions that can be spread across
-         a file. Each one must end in $[[end id]]$ }}
+  {{ com Scattered function and union type definitions }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | scattered function rec_opt tannot_opt effect_opt id   :: :: scattered_function {{ texlong }} {{ com scattered function definition header }}
+  | scattered function rec_opt tannot_opt effect_opt id   :: :: scattered_function 
+{{ texlong }} {{ com scattered function definition header }}
 
   | function clause funcl  :: :: scattered_funcl  
-{{ com scattered function definition clause }}
+{{ texlong }} {{ com scattered function definition clause }}
 
-  | scattered typedef id name_scm_opt = const union typquant :: :: scattered_variant {{ texlong }} {{ com scattered union definition header }}
+  | scattered typedef id name_scm_opt = const union typquant :: :: scattered_variant 
+{{ texlong }} {{ com scattered union definition header }}
 
-  | union id member type_union  :: :: scattered_unioncl {{ com scattered union definition member }}
+  | union id member type_union  :: :: scattered_unioncl 
+{{ texlong }} {{ com scattered union definition member }}
   | end id  :: :: scattered_end
-{{ com scattered definition end }}
+{{ texlong }} {{ com scattered definition end }}
 
 reg_id :: 'RI_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}
