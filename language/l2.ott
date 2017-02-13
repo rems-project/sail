@@ -135,7 +135,7 @@ id :: '' ::=
 % targets use alphabetical infix operators. 
 
 kid :: '' ::=
-  {{ com variables of some $\ottnt{kind}$ }}
+  {{ com [[Type]], [[Nat]], [[Order]], and [[Effect]] variables }}
   {{ aux _ l }}
   | ' x                       :: :: var
  
@@ -251,8 +251,10 @@ typ :: 'Typ_' ::=
 %  | vector nexp1 nexp2 order typ :: :: vector {{ com vector of [[typ]], indexed by natural range }}
 % probably some sugar for vector types, using [ ] similarly to enums:
 % (but with .. not : in the former, to avoid confusion...)
-  | typ [ nexp ]  :: S :: vector2 {{ichlo vector < [[nexp]],0,inc,[[typ]] > }} {{ com sugar for vector indexed by [| [[nexp]] |] }}
-  | typ [ nexp : nexp' ] :: S :: vector3 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} {{ com sugar for vector indexed by [| [[nexp]]..[[nexp']] |] }}
+  | typ [ nexp ]  :: S :: vector2 {{ichlo vector < [[nexp]],0,inc,[[typ]] > }} 
+{{ com sugar for vector indexed by \texttt{[|} [[nexp]] \texttt{|]} }}
+  | typ [ nexp : nexp' ] :: S :: vector3 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} 
+{{ com sugar for vector indexed by \texttt{[|} [[nexp]]..[[nexp']] \texttt{|]} }}
   | typ [ nexp <: nexp' ] :: S :: vector4 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} {{ com sugar for increasing vector }}
   | typ [ nexp :> nexp' ] :: S :: vector5 {{ ichlo vector < [[nexp]],[[nexp']],dec,[[typ]] }} {{ com sugar for decreasing vector }}
 % ...so bit [ nexp ] etc is just an instance of that
@@ -458,7 +460,7 @@ lit :: 'L_' ::=
   | bin                                         :: :: bin  {{ com bit vector constant, C-style }}
 % Should undefined be of type bit[alpha] or alpha[beta] or just alpha?
   | string                                              :: :: string {{ com string constant }}
-  | undefined					:: :: undef {{ com constant representing undefined values }}
+  | undefined					:: :: undef {{ com undefined-value constant }}
 
 semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
                                                         {{ ocaml bool }}
