@@ -54,44 +54,44 @@ let opt_libs_lem = ref ([]:string list)
 let opt_libs_ocaml = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let options = Arg.align ([
-  ( "-i",
-    Arg.String (fun l -> lib := l::!lib),
-    " treat the file as input only and generate no output for it");
-  ( "-print_initial_env",
-    Arg.Set opt_print_initial_env,
-    " pretty-print out the initial type environment and terminate");
-  ( "-verbose",
-    Arg.Set opt_print_verbose,
-    " pretty-print out the file");
+  ( "-o",
+    Arg.String (fun f -> opt_file_out := Some f),
+    "<prefix> select output filename prefix");
   ( "-lem_ast",
     Arg.Set opt_print_lem_ast,
-    " pretty-print a Lem AST representation of the file");
+    " output a Lem AST representation of the input");
   ( "-lem",
     Arg.Set opt_print_lem,
-    " print a Lem translated version of the specification to integrate with a concurrency model");
+    " output a Lem translated version of the input");
   ( "-ocaml",
     Arg.Set opt_print_ocaml,
-    " print an Ocaml translated version of the specification");
-  ( "-skip_constraints",
-    Arg.Clear Type_internal.do_resolve_constraints,
-    " skip constraint resolution in type-checking");
+    " output an OCaml translated version of the input");
   ( "-lem_lib",
     Arg.String (fun l -> opt_libs_lem := l::!opt_libs_lem),
-    " provide additional library to open in Lem output");
+    "<filename> provide additional library to open in Lem output");
   ( "-ocaml_lib",
     Arg.String (fun l -> opt_libs_ocaml := l::!opt_libs_ocaml),
-    " provide additional library to open in Ocaml output");
+    "<filename> provide additional library to open in OCaml output");
+  ( "-i",
+    Arg.String (fun l -> lib := l::!lib),
+    "<library_filename> treat this file as input only and generate no output for it");
+  ( "-print_initial_env",
+    Arg.Set opt_print_initial_env,
+    " print the built-in initial type environment and terminate");
+  ( "-verbose",
+    Arg.Set opt_print_verbose,
+    " (debug) pretty-print the input to standard output");
+  ( "-skip_constraints",
+    Arg.Clear Type_internal.do_resolve_constraints,
+    " (debug) skip constraint resolution in type-checking");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
-  ( "-o",
-    Arg.String (fun f -> opt_file_out := Some f),
-    " select output filename prefix";)
 ] )
 
 let usage_msg =
-    ("Sail " ^ "pre beta" ^ "\n"
-     ^ "example usage:       sail test.sail\n"
+    ("Sail " (*^ "pre beta"*) ^ "\n"
+     ^ "usage:       sail <options> <file1.sail> .. <fileN.sail>\n"
     )
 
 let _ =
