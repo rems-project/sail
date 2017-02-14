@@ -42,7 +42,7 @@
 
 open Process_file
 
-let lib = ref []
+let lib = ref ([] : string list)
 let opt_file_out : string option ref = ref None
 let opt_print_version = ref false
 let opt_print_initial_env = ref false
@@ -72,9 +72,11 @@ let options = Arg.align ([
   ( "-ocaml_lib",
     Arg.String (fun l -> opt_libs_ocaml := l::!opt_libs_ocaml),
     "<filename> provide additional library to open in OCaml output");
+(*
   ( "-i",
     Arg.String (fun l -> lib := l::!lib),
     "<library_filename> treat this file as input only and generate no output for it");
+*)
   ( "-print_initial_env",
     Arg.Set opt_print_initial_env,
     " print the built-in initial type environment and terminate");
