@@ -214,16 +214,6 @@ function CapLen getCapLength((CapStruct) c)  = getCapTop(c) - getCapBase(c)
 
 function uint64 getCapCursor((CapStruct) cap) = unsigned(cap.address)
 
-function (bool, CapStruct) setCapOffset((CapStruct) c, (bit[64]) offset) =
-    let oldBase    = getCapBase(c) in
-    let oldTop     = getCapTop(c) in
-    let (bit[64]) newAddress =  oldBase + offset in
-    let newCap     = { c with address = newAddress } in
-    let newBase    = getCapBase(newCap) in
-    let newTop     = getCapTop(newCap) in
-    let representable = (oldBase == newBase) & (oldTop == newTop) in
-    (representable, newCap)
-
 function bool fastRepCheck((CapStruct) c, (bit[64]) i) =
     let E        = min(unsigned(c.E), 45) in
     let i_top    = signed(i[63..E+20]) in
@@ -237,6 +227,13 @@ function bool fastRepCheck((CapStruct) c, (bit[64]) i) =
       case -1 -> unsigned(i_mid) >= unsigned(diff) & (R != a_mid)
       case _  -> false
     } | (E >= 44)
+
+function (bool, CapStruct) setCapOffset((CapStruct) c, (bit[64]) offset) =
+    let (bit[64]) base       = (bit[64]) (getCapBase(c)) in
+    let (bit[64]) newAddress = base + offset in
+    let newCap     = { c with address = newAddress } in
+    let representable = fastRepCheck(c, (newAddress - c.address)) in
+    (representable, newCap)
 
 function (bool, CapStruct) incCapOffset((CapStruct) c, (bit[64]) delta) =
     let (bit[64]) newAddress = c.address + delta in
