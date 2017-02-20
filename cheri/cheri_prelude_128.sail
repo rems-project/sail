@@ -215,18 +215,26 @@ function CapLen getCapLength((CapStruct) c)  = getCapTop(c) - getCapBase(c)
 function uint64 getCapCursor((CapStruct) cap) = unsigned(cap.address)
 
 function bool fastRepCheck((CapStruct) c, (bit[64]) i) =
-    let E        = min(unsigned(c.E), 45) in
-    let i_top    = signed(i[63..E+20]) in
-    let (bit[20]) i_mid = i[E+19..E] in
-    let (bit[20]) a_mid = (c.address)[E+19..E] in
-    let (bit[20]) R     = (c.B) - 0x01000 in
-    let (bit[20]) diff  = R - a_mid in
-    let (bit[20]) diff1 = diff - 1 in
-    switch(i_top) {
-      case 0  -> i_mid <_u diff1
-      case -1 -> unsigned(i_mid) >= unsigned(diff) & (R != a_mid)
-      case _  -> false
-    } | (E >= 44)
+    if ((c.E) >= 44) then
+        true (* in this case representable region is whole address space *)
+    else
+        let E        = min(unsigned(c.E), 43) in
+        let i_top    = signed(i[63..E+20]) in
+        let (bit[20]) i_mid = i[E+19..E] in
+        let (bit[20]) a_mid = (c.address)[E+19..E] in
+        let (bit[20]) R     = (c.B) - 0x01000 in
+        let (bit[20]) diff  = R - a_mid in
+        let (bit[20]) diff1 = diff - 1 in
+        (* i_top determines 1. whether the increment is inRange
+           i.e. less than the size of the representable region
+           (2**(E+20)) and 2. whether it is positive or negative. To
+           satisfy 1. all top bits must be the same so we are
+           interested in the cases i_top is 0 or -1 *)
+        switch(i_top) { 
+          case 0  -> i_mid <_u diff1
+          case -1 -> unsigned(i_mid) >= unsigned(diff) & (R != a_mid) (* XXX sail missing unsigned >= *)
+          case _  -> false
+        }
 
 function (bool, CapStruct) setCapOffset((CapStruct) c, (bit[64]) offset) =
     let (bit[64]) base       = (bit[64]) (getCapBase(c)) in
