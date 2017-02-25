@@ -135,7 +135,7 @@ id :: '' ::=
 % targets use alphabetical infix operators. 
 
 kid :: '' ::=
-  {{ com [[Type]], [[Nat]], [[Order]], and [[Effect]] variables }}
+  {{ com kinded IDs: [[Type]], [[Nat]], [[Order]], and [[Effect]] variables }}
   {{ aux _ l }}
   | ' x                       :: :: var
  
