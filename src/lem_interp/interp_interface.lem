@@ -62,7 +62,7 @@ open import Num
 
 open import Assert_extra
 
-(*Type representint the constructor parameters in instruction, other is a type not representable externally*)
+(*Type representing the constructor parameters in instruction, other is a type not representable externally*)
 type instr_parm_typ = 
   | Bit (*A single bit, represented as a one element Bitvector as a value*)
   | Bvector of maybe nat (* A bitvector type, with length when statically known *)
@@ -196,40 +196,55 @@ and instruction_state = IState of interpreter_state * context
 
 
 type outcome =
-(* Request to read memory, value is location to read followed by registers that location depended on when mode.track_values,
-   integer is size to read, followed by registers that were used in computing that size *)
-| Read_mem of read_kind * address_lifted * nat * maybe (list reg_name) *  (memory_value -> instruction_state)
-(* Request to write memory, first value and dependent registers is location, second is the value to write *)
-| Write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name) * (bool -> instruction_state)
-(* Tell the system a write is imminent, at address lifted tanted by register list, of size nat *)
+(* Request to read N bytes at address *)
+(* The register list, used when mode.track_values, is those that the address depended on *)
+| Read_mem of read_kind * address_lifted * nat * maybe (list reg_name) * (memory_value -> instruction_state)
+
+(* Request to write memory *)
+| Write_mem of write_kind * address_lifted * nat * maybe (list reg_name)
+  * memory_value * maybe (list reg_name)  * (bool -> instruction_state)
+
+(* Tell the system a write is imminent, at address lifted tainted by register list, of size nat *)
 | Write_ea of write_kind * address_lifted * nat * maybe (list reg_name) * instruction_state
-(* Request to write memory at last signaled address. Memory value should be 8* the size given in ea signal *)
+
+(* Request to write memory at last signaled address. Memory value should be 8* the size given in Write_ea *)
 | Write_memv of maybe address_lifted * memory_value * maybe (list reg_name) * (bool -> instruction_state)
+
 (* Request a memory barrier *)
 | Barrier of barrier_kind * instruction_state
+
 (* Tell the system to dynamically recalculate dependency footprint *)
 | Footprint of instruction_state
+
 (* Request to read register, will track dependency when mode.track_values *)
 | Read_reg of reg_name * (register_value -> instruction_state) 
+
 (* Request to write register *)
 | Write_reg of reg_name * register_value * instruction_state
-(* List of instruciton states to be run in parrallel, any order permitted *)
+
+(* List of instruciton states to be run in parallel, any order*)
 | Nondet_choice of list instruction_state * instruction_state
-(* Escape the current instruction, for traps, some sys calls, interrupts, etc. Can optionally provide a handler 
-   The non-optional instruction_state is what we would be doing if we're not escaping. This is for exhaustive interp *)
+
+(* Escape the current instruction, for traps, some sys calls, interrupts, etc. Can optionally 
+   provide a handler.  The non-optional instruction_state is what we would be doing if we're 
+   not escaping. This is for exhaustive interp *)
 | Escape of maybe instruction_state * instruction_state
+
 (*Result of a failed assert with possible error message to report*)
 | Fail of maybe string
+
 (* Stop for incremental stepping, function can be used to display function call data *)
 | Internal of maybe string * maybe (unit -> string) * instruction_state
+
 (* Analysis can lead to non_deterministic evaluation, represented with this outcome *)
 (*Note: this should not be externally visible *)
 | Analysis_non_det of list instruction_state * instruction_state
+
 (*Completed interpreter*)
 | Done
+
 (*Interpreter error*)
 | Error of string
-
 
 
 (* Functions to build up the initial state for interpretation *)
@@ -267,7 +282,8 @@ val update_reg_value_slice : reg_name -> register_value -> nat -> nat -> registe
 (* When interp_mode has eager_eval false, interpreter is (close to) small step *)
 val interp : interp_mode -> instruction_state -> outcome
 
-(* Run the interpreter without external interaction, feeding in Unknown on all reads except for those register values provided *)
+(* Run the interpreter without external interaction, feeding in Unknown on all reads 
+except for those register values provided *)
 val interp_exhaustive : maybe (list (reg_name * register_value)) -> instruction_state -> list event
 
 (* As above, but will request register reads: outcome will only be rreg, done, or error *)
