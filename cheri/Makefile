@@ -5,6 +5,7 @@ extract: cheri_insts.sail
 	$(call EXTRACT_INST,CGetType)
 	$(call EXTRACT_INST,CGetBase)
 	$(call EXTRACT_INST,CGetOffset)
+	$(call EXTRACT_INST,CGetLen)
 	$(call EXTRACT_INST,CGetTag)
 	$(call EXTRACT_INST,CGetSealed)
 	$(call EXTRACT_INST,CGetPCC)
