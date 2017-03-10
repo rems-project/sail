@@ -324,10 +324,8 @@ function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType
 }
 
 function unit checkCP2usable () =
-      {
-        if (~((CP0Status.CU)[2])) then
-          {
-            (CP0Cause.CE) := 0b10;
-            (SignalException(CpU));
-          }
-      }
+  if not ((CP0Status.CU)[2]) then
+    {
+      (CP0Cause.CE) := 0b10;
+      (SignalException(CpU));
+    }
