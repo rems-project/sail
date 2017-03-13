@@ -820,8 +820,8 @@ function clause execute (DIVU(rs, rt)) =
       if (NotWordVal(rsVal) | NotWordVal(rtVal) | rtVal == 0) then
         (undefined, undefined)
       else
-        let si = ((int)(rsVal[31..0])) in
-        let ti = ((int)(rtVal[31..0])) in
+        let si = unsigned(rsVal[31..0]) in
+        let ti = unsigned(rtVal[31..0]) in
         let qi = (si quot ti)  in
         let ri = (si mod ti)   in
         ((bit[32]) qi, (bit[32]) ri))
@@ -843,7 +843,7 @@ function clause execute (DDIV(rs, rt)) =
     let ((bit[64])q, (bit[64])r) = (if (rtVal == 0)
       then (undefined, undefined) 
       else 
-           let qi = (rsVal quot_s rtVal) in
+           let qi = (rsVal quot rtVal) in
            let ri = (rsVal - (qi * rtVal)) in
            ((bit[64]) qi, (bit[64]) ri)) in
     {
@@ -1534,7 +1534,8 @@ function clause execute (MTC0(rt, rd, sel, double)) = {
       }
       case (0b01101,0b000) -> {   (* 13 Cause *)
         CP0Cause.IV := reg_val[23]; (* TODO special interrupt vector not implemeneted *)
-        (CP0Cause.IP)[9..8] := reg_val[9..8];
+        let ip = (bit[8]) (CP0Cause.IP) in
+        CP0Cause.IP := ((ip[7..2]) : (reg_val[9..8]));
       }
       case (0b01110,0b000) -> CP0EPC      := reg_val         (* 14, EPC *)
       case (0b10000,0b000) -> () (* XXX ignore K0 cache config  16: Config0 *)
