@@ -1347,7 +1347,8 @@ let rewrite_defs_separate_numbs defs = rewrite_defs_base
      rewrite_defs = rewrite_defs_base} defs
 
 let rewrite_defs_ocaml defs =
-  let defs_vec_concat_removed = rewrite_defs_remove_vector_concat defs in
+  let defs_sorted = top_sort_defs defs in
+  let defs_vec_concat_removed = rewrite_defs_remove_vector_concat defs_sorted in
   let defs_lifted_assign = rewrite_defs_exp_lift_assign defs_vec_concat_removed in
   let defs_separate_nums = rewrite_defs_separate_numbs defs_lifted_assign in
   defs_separate_nums

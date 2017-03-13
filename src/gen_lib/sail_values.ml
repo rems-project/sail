@@ -3,7 +3,7 @@ open Big_int_Z
 (* only expected to be 0, 1, 2; 2 represents undef *)
 type vbit = Vone | Vzero | Vundef
 type number = Big_int_Z.big_int
-
+type _bool = vbit
 type value =
   | Vvector of vbit array * int * bool
   | VvectorR of value array * int * bool
@@ -19,6 +19,10 @@ let is_one_big i =
   if eq_big_int i unit_big_int
   then Vone
   else Vzero
+
+
+let exit _ = failwith "called exit"
+
 
 let is_one i =
   if i = 1 then Vone else Vzero
@@ -40,11 +44,19 @@ let get_start = function
   | Vvector(_,s,o) | Vregister(_,s,o,_) | VvectorR(_,s,o) -> s
   | _ -> assert false  
   
+let set_start i = function
+  | Vvector(a,start,dir) -> Vvector(a,i,dir)
+  | Vregister(bits,start,dir,regfields) -> Vregister(bits,i,dir,regfields)
+  | VvectorR(a,start,dir) -> VvectorR(a,i,dir)
+  | _ -> assert false  
+
 let length = function
   | Vvector(array,_,_) -> Array.length array
   | Vregister(array,_,_,_) -> Array.length !array
   | VvectorR(array,_,_) -> Array.length array
   | _ -> assert false
+  
+let set_start_to_length v = set_start (length v) v
 
 let length_big v = big_int_of_int (length v)
 
@@ -779,8 +791,8 @@ let rec arith_op_no0 op (l,r) =
   then None
   else Some (op l r)
 
-let modulo = arith_op_no0 (mod)
-let quot = arith_op_no0 (/)
+let modulo = arith_op (mod)
+let quot = arith_op (/)
 
 let rec arith_op_vec_no0 op sign size (l,r) =
   let ord = get_ord l in
@@ -986,9 +998,35 @@ let gteq_range_vec_big = compare_op_range_vec_big ge_big_int true
 
 
 let eq (l,r) = if l == r then Vone else Vzero
+let eq_vec_vec (l,r) = eq (to_num true l, to_num true r)
+let eq_vec (l,r) = eq_vec_vec(l,r)
 let eq_vec_range (l,r) = eq (to_num false l,r)
 let eq_range_vec (l,r) = eq (l, to_num false r)
-let eq_vec_vec (l,r) = eq (to_num true l, to_num true r)
+let eq_range = eq
+let eq_bit = bitwise_binop_bit (=)
 
 let neq (l,r) = bitwise_not_bit (eq (l,r))
 let neq_vec (l,r) = bitwise_not_bit (eq_vec_vec(l,r))
+let neq_bit (l,r) = bitwise_not_bit (eq_bit(l,r))
+
+let mask (n,v) = match v with
+  | Vvector (bits,start,dir) ->
+     let current_size = Array.length bits in 
+     let to_drop = (current_size - n) in
+     let bits' = Array.sub bits to_drop n in
+     Vvector (bits',(if dir then 0 else n-1), dir)
+  | VvectorR (bits,start,dir) ->
+     let current_size = Array.length bits in 
+     let to_drop = (current_size - n) in
+     let bits' = Array.sub bits to_drop n in
+     VvectorR (bits',(if dir then 0 else n-1), dir)
+  | Vregister _ -> failwith "mask not implemented for Vregister"
+  | Vbit _ -> failwith "mask called for bit"
+
+let slice_raw (v, i, j) = match v with
+  | Vvector (bs, start, is_inc) ->
+     let bits = Array.sub bs i j in
+     let len = Array.length bits in
+     Vvector (bits, (if is_inc then 0 else len - 1), is_inc)
+  | _ -> failwith "slice_raw only implemented for VVector"
+let _slice_raw = slice_raw

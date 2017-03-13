@@ -1535,7 +1535,7 @@ let doc_id_ocaml (Id_aux(i,_)) =
   | Id("bit") -> string "vbit"
   | Id i -> string (if i.[0] = '\'' || is_number(i.[0])
                     then "_" ^ i
-                    else  String.uncapitalize i)
+                    else  "_" ^ (String.uncapitalize i))
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
        * token in case of x ending with star. *)
@@ -1544,7 +1544,7 @@ let doc_id_ocaml (Id_aux(i,_)) =
 let doc_id_ocaml_type (Id_aux(i,_)) =
   match i with
   | Id("bit") -> string "vbit"
-  | Id i -> string (String.uncapitalize i)
+  | Id i -> string ("_" ^ (String.uncapitalize i))
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
        * token in case of x ending with star. *)
@@ -1637,9 +1637,9 @@ let doc_pat_ocaml =
   | P_typ(typ,p) -> doc_op colon (pat p) (doc_typ_ocaml typ)
   | P_app(id,[]) ->
     (match annot with
-     | Base(_,Constructor n,_,_,_,_) ->
+     | Base(_,(Constructor n | Enum n),_,_,_,_) ->
        doc_id_ocaml_ctor n id
-     | _ -> empty)
+     | _ -> failwith "encountered unexpected P_app pattern")
   | P_vector pats ->
     let non_bit_print () =
       parens
@@ -1798,7 +1798,19 @@ let doc_exp_ocaml, doc_let_ocaml =
         if read_registers
         then parens (string "read_register" ^^ space ^^ exp e)
         else exp e
-      | _ -> (parens (doc_op colon (group (exp e)) (doc_typ_ocaml typ))))
+      | _ -> 
+         let (Typ_aux (t,_)) = typ in
+             (match t with
+            | Typ_app (Id_aux (Id "vector",_), [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i,_)),_);_;_;_]) ->
+               parens ((concat [string "set_start";space;string (string_of_int i)]) ^//^
+                           exp e)
+            | Typ_var (Kid_aux (Var "length",_)) ->
+               parens ((string "set_start_to_length") ^//^ exp e)
+            | _ -> 
+               parens (doc_op colon (group (exp e)) (doc_typ_ocaml typ)))
+
+
+)
     | E_tuple exps ->
       parens (separate_map comma exp exps)
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
@@ -2132,7 +2144,8 @@ let doc_dec_ocaml (DEC_aux (reg,(l,annot))) =
     (match annot with
      | Base((_,t),_,_,_,_,_) ->
        (match t.t with
-        | Tapp("register", [TA_typ {t= Tapp("vector", [TA_nexp start; TA_nexp size; TA_ord order; TA_typ itemt])}]) ->
+        | Tapp("register", [TA_typ {t= Tapp("vector", [TA_nexp start; TA_nexp size; TA_ord order; TA_typ itemt])}]) 
+        | Tapp("register", [TA_typ {t= Tabbrev(_,{t=Tapp("vector", [TA_nexp start; TA_nexp size; TA_ord order; TA_typ itemt])})}]) ->
           (match itemt.t,start.nexp,size.nexp with
            | Tid "bit", Nconst start, Nconst size ->
              let o = if order.order = Oinc then string "true" else string "false" in
@@ -2154,10 +2167,10 @@ let doc_dec_ocaml (DEC_aux (reg,(l,annot))) =
           separate space [string "let";
                           doc_id_ocaml id;
                           equals;
-                          string idt;
+                          doc_id_ocaml (Id_aux (Id idt, Unknown));
                           string "None"]
-        |_-> empty)
-     | _ ->  empty)
+        |_-> failwith "type was not handled in register declaration")
+     | _ -> failwith "annot was not Base")
     | DEC_alias(id,alspec) -> empty (*
         doc_op equals (string "register alias" ^^ space ^^ doc_id id) (doc_alias alspec) *)
     | DEC_typ_alias(typ,id,alspec) -> empty (*
