@@ -4,7 +4,9 @@ OTT=../../../github/ott/src/ott
 OTTLIB=$(dir $(shell which ott))../hol
 
 .PHONY: all
-all: l2.pdf l2_parse.pdf l2.ml l2_parse.ml l2.lem
+all: l2.ml l2_parse.ml l2.lem
+
+docs: l2.pdf l2_parse.pdf 
 
 %.pdf: %.tex
 	pdflatex $<
@@ -12,9 +14,9 @@ all: l2.pdf l2_parse.pdf l2.ml l2_parse.ml l2.lem
 %Theory.uo: %Script.sml
 	Holmake --qof -I $(OTTLIB) $@
 
-manual.pdf: doc_in.tex manual.tex
-	pdflatex manual.tex
-	pdflatex manual.tex
+type_system.pdf: doc_in.tex type_system.tex
+	pdflatex type_system.tex
+	pdflatex type_system.tex
 
 l2.tex: l2.ott l2_typ.ott l2_rules.ott
 	$(OTT) -sort false -generate_aux_rules false -o $@ -picky_multiple_parses true $^
@@ -36,7 +38,11 @@ l2.lem: l2.ott l2_typ.ott
 
 clean:
 	rm -rf *~
-	-rm -rf *.uo *.ui *.sig *.sml .HOLMK
-	-rm -f *.aux *.log *.dvi *.ps *.pdf
-	rm -rf l2.pdf l2_parse.pdf l2.ml l2_parse.ml l2.lem
+	rm -rf *.uo *.ui *.sig *.sml .HOLMK
+	rm -f *.aux *.log *.dvi *.ps *.pdf *.toc
+	rm -rf l2.pdf l2_parse.pdf 
 	rm -rf l2.tex doc_in.tex
+
+realclean:
+	$(MAKE) clean
+	rm -rf l2.ml l2_parse.ml l2.lem

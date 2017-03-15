@@ -25,13 +25,13 @@ base_kind =
 
 
 type 
-id_aux =  (* Identifier *)
+id_aux =  (* identifier *)
    Id of x
  | DeIid of x (* remove infix status *)
 
 
 type 
-kid_aux =  (* variables with kind, ticked to differentiate from program variables *)
+kid_aux =  (* kinded IDs: _, _, _, and _ variables *)
    Var of x
 
 
@@ -56,8 +56,8 @@ kind =
 
 
 type 
-nexp_aux =  (* expression of kind _, for vector sizes and origins *)
-   Nexp_id of id (* identifier, bound by \texttt{def Nat x = nexp} *)
+nexp_aux =  (* numeric expression, of kind _ *)
+   Nexp_id of id (* abbreviation identifier *)
  | Nexp_var of kid (* variable *)
  | Nexp_constant of int (* constant *)
  | Nexp_times of nexp * nexp (* product *)
@@ -82,10 +82,10 @@ base_effect_aux =  (* effect *)
  | BE_depend (* dynamic footprint *)
  | BE_undef (* undefined-instruction exception *)
  | BE_unspec (* unspecified values *)
- | BE_nondet (* nondeterminism from intra-instruction parallelism *)
- | BE_escape (* Tracking of expressions and functions that might call exit *)
- | BE_lset (* Local mutation happend; not user-writable *)
- | BE_lret (* Local return happened; not user-writable *)
+ | BE_nondet (* nondeterminism, from _ *)
+ | BE_escape (* potential call of  _ *)
+ | BE_lset (* local mutation; not user-writable *)
+ | BE_lret (* local return; not user-writable *)
 
 
 type 
@@ -94,14 +94,14 @@ base_effect =
 
 
 type 
-order_aux =  (* vector order specifications, of kind Order *)
+order_aux =  (* vector order specifications, of kind _ *)
    Ord_var of kid (* variable *)
- | Ord_inc (* increasing (little-endian) *)
- | Ord_dec (* decreasing (big-endian) *)
+ | Ord_inc (* increasing *)
+ | Ord_dec (* decreasing *)
 
 
 type 
-effect_aux =  (* effect set, of kind Effects *)
+effect_aux =  (* effect set, of kind _ *)
    Effect_var of kid
  | Effect_set of (base_effect) list (* effect set *)
 
@@ -158,7 +158,7 @@ typquant_aux =  (* type quantifiers and constraints *)
 
 
 type 
-lit_aux =  (* Literal constant *)
+lit_aux =  (* literal constant *)
    L_unit (* $() : _$ *)
  | L_zero (* $_ : _$ *)
  | L_one (* $_ : _$ *)
@@ -167,8 +167,8 @@ lit_aux =  (* Literal constant *)
  | L_num of int (* natural number constant *)
  | L_hex of string (* bit vector constant, C-style *)
  | L_bin of string (* bit vector constant, C-style *)
- | L_undef (* constant representing undefined values *)
  | L_string of string (* string constant *)
+ | L_undef (* undefined-value constant *)
 
 
 type 
@@ -177,18 +177,18 @@ typquant =
 
 
 type 
-typ_aux =  (* Type expressions, of kind $_$ *)
-   Typ_wild (* Unspecified type *)
- | Typ_id of id (* Defined type *)
- | Typ_var of kid (* Type variable *)
- | Typ_fn of typ * typ * effect (* Function type (first-order only in user code) *)
- | Typ_tup of (typ) list (* Tuple type *)
+typ_aux =  (* type expressions, of kind $_$ *)
+   Typ_wild (* unspecified type *)
+ | Typ_id of id (* defined type *)
+ | Typ_var of kid (* type variable *)
+ | Typ_fn of typ * typ * effect (* Function (first-order only in user code) *)
+ | Typ_tup of (typ) list (* Tuple *)
  | Typ_app of id * (typ_arg) list (* type constructor application *)
 
 and typ = 
    Typ_aux of typ_aux * l
 
-and typ_arg_aux =  (* Type constructor arguments of all kinds *)
+and typ_arg_aux =  (* type constructor arguments of all kinds *)
    Typ_arg_nexp of nexp
  | Typ_arg_typ of typ
  | Typ_arg_order of order
@@ -209,7 +209,7 @@ typschm_aux =  (* type scheme *)
 
 
 type 
-'a pat_aux =  (* Pattern *)
+'a pat_aux =  (* pattern *)
    P_lit of lit (* literal constant pattern *)
  | P_wild (* wildcard *)
  | P_as of 'a pat * id (* named pattern *)
@@ -226,7 +226,7 @@ type
 and 'a pat = 
    P_aux of 'a pat_aux * 'a annot
 
-and 'a fpat_aux =  (* Field pattern *)
+and 'a fpat_aux =  (* field pattern *)
    FP_Fpat of id * 'a pat
 
 and 'a fpat = 
@@ -244,7 +244,7 @@ type
 
 
 type 
-'a exp_aux =  (* Expression *)
+'a exp_aux =  (* expression *)
    E_block of ('a exp) list (* sequential block *)
  | E_nondet of ('a exp) list (* nondeterministic block *)
  | E_id of id (* identifier *)
@@ -299,32 +299,32 @@ and 'a lexp_aux =  (* lvalue expression *)
 and 'a lexp = 
    LEXP_aux of 'a lexp_aux * 'a annot
 
-and 'a fexp_aux =  (* Field-expression *)
+and 'a fexp_aux =  (* field expression *)
    FE_Fexp of id * 'a exp
 
 and 'a fexp = 
    FE_aux of 'a fexp_aux * 'a annot
 
-and 'a fexps_aux =  (* Field-expression list *)
+and 'a fexps_aux =  (* field expression list *)
    FES_Fexps of ('a fexp) list * bool
 
 and 'a fexps = 
    FES_aux of 'a fexps_aux * 'a annot
 
-and 'a opt_default_aux =  (* Optional default value for indexed vectors, to define a default value for any unspecified positions in a sparse map *)
+and 'a opt_default_aux =  (* optional default value for indexed vector expressions *)
    Def_val_empty
  | Def_val_dec of 'a exp
 
 and 'a opt_default = 
    Def_val_aux of 'a opt_default_aux * 'a annot
 
-and 'a pexp_aux =  (* Pattern match *)
+and 'a pexp_aux =  (* pattern match *)
    Pat_exp of 'a pat * 'a exp
 
 and 'a pexp = 
    Pat_aux of 'a pexp_aux * 'a annot
 
-and 'a letbind_aux =  (* Let binding *)
+and 'a letbind_aux =  (* let binding *)
    LB_val_explicit of typschm * 'a pat * 'a exp (* let, explicit type ('a pat must be total) *)
  | LB_val_implicit of 'a pat * 'a exp (* let, implicit type ('a pat must be total) *)
 
@@ -338,41 +338,41 @@ type
 
 
 type 
-type_union_aux =  (* Type union constructors *)
+type_union_aux =  (* type union constructors *)
    Tu_id of id
  | Tu_ty_id of typ * id
 
 
 type 
-name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
+name_scm_opt_aux =  (* optional variable naming-scheme constraint *)
    Name_sect_none
  | Name_sect_some of string
 
 
 type 
-effect_opt_aux =  (* Optional effect annotation for functions *)
+effect_opt_aux =  (* optional effect annotation for functions *)
    Effect_opt_pure (* sugar for empty effect set *)
  | Effect_opt_effect of effect
 
 
 type 
-'a funcl_aux =  (* Function clause *)
+'a funcl_aux =  (* function clause *)
    FCL_Funcl of id * 'a pat * 'a exp
 
 
 type 
-rec_opt_aux =  (* Optional recursive annotation for functions *)
+rec_opt_aux =  (* optional recursive annotation for functions *)
    Rec_nonrec (* non-recursive *)
  | Rec_rec (* recursive *)
 
 
 type 
-tannot_opt_aux =  (* Optional type annotation for functions *)
+tannot_opt_aux =  (* optional type annotation for functions *)
    Typ_annot_opt_some of typquant * typ
 
 
 type 
-'a alias_spec_aux =  (* Register alias expression forms *)
+'a alias_spec_aux =  (* register alias expression forms *)
    AL_subreg of 'a reg_id * id
  | AL_bit of 'a reg_id * 'a exp
  | AL_slice of 'a reg_id * 'a exp * 'a exp
@@ -425,31 +425,31 @@ type
 
 
 type 
-'a default_spec_aux =  (* Default kinding or typing assumption *)
-   DT_kind of base_kind * kid
- | DT_order of order
+'a default_spec_aux =  (* default kinding or typing assumption *)
+   DT_order of order
+ | DT_kind of base_kind * kid
  | DT_typ of typschm * id
 
 
 type 
-'a type_def_aux =  (* Type definition body *)
+'a type_def_aux =  (* type definition body *)
    TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
  | TD_record of id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
- | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
+ | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* tagged union type definition *)
  | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)
  | TD_register of id * nexp * nexp * ((index_range * id)) list (* register mutable bitfield type definition *)
 
 
 type 
-'a val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_no_rename of typschm * id
- | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
+'a val_spec_aux =  (* value type specification *)
+   VS_val_spec of typschm * id (* specify the type of an upcoming definition *)
+ | VS_extern_no_rename of typschm * id (* specify the type of an external function *)
+ | VS_extern_spec of typschm * id * string (* specify the type of a function from Lem *)
 
 
 type 
-'a kind_def_aux =  (* Definition body for elements of kind; many are shorthands for type\_defs *)
-   KD_nabbrev of kind * id * name_scm_opt * nexp (* nexp abbreviation *)
+'a kind_def_aux =  (* Definition body for elements of kind *)
+   KD_nabbrev of kind * id * name_scm_opt * nexp (* _-expression abbreviation *)
  | KD_abbrev of kind * id * name_scm_opt * typschm (* type abbreviation *)
  | KD_record of kind * id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
  | KD_variant of kind * id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
@@ -458,8 +458,7 @@ type
 
 
 type 
-'a scattered_def_aux =  (* Function and type union definitions that can be spread across
-         a file. Each one must end in $_$ *)
+'a scattered_def_aux =  (* scattered function and union type definitions *)
    SD_scattered_function of rec_opt * tannot_opt * effect_opt * id (* scattered function definition header *)
  | SD_scattered_funcl of 'a funcl (* scattered function definition clause *)
  | SD_scattered_variant of id * name_scm_opt * typquant (* scattered union definition header *)
@@ -468,12 +467,12 @@ type
 
 
 type 
-'a fundef_aux =  (* Function definition *)
+'a fundef_aux =  (* function definition *)
    FD_function of rec_opt * tannot_opt * effect_opt * ('a funcl) list
 
 
 type 
-'a dec_spec_aux =  (* Register declarations *)
+'a dec_spec_aux =  (* register declarations *)
    DEC_reg of typ * id
  | DEC_alias of id * 'a alias_spec
  | DEC_typ_alias of typ * id * 'a alias_spec
@@ -515,11 +514,11 @@ type
 
 
 type 
-'a dec_comm =  (* Top-level generated comments *)
+'a dec_comm =  (* top-level generated comments *)
    DC_comm of string (* generated unstructured comment *)
  | DC_comm_struct of 'a def (* generated structured comment *)
 
-and 'a def =  (* Top-level definition *)
+and 'a def =  (* top-level definition *)
    DEF_kind of 'a kind_def (* definition of named kind identifiers *)
  | DEF_type of 'a type_def (* type definition *)
  | DEF_fundef of 'a fundef (* function definition *)
@@ -532,7 +531,7 @@ and 'a def =  (* Top-level definition *)
 
 
 type 
-'a defs =  (* Definition sequence *)
+'a defs =  (* definition sequence *)
    Defs of ('a def) list
 
 
