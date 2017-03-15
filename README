@@ -1,12 +1,19 @@
-# Readme
+Sail README
 
-Guide to Sail, as of Feb 25, 2016. 
+Kathryn E. Gray and Peter Sewell
+15 March 2017
 
 ********************************************************************
 OVERVIEW
 
-This repository provides several tools relating to the Sail
-specification language:
+Sail is a language for describing the instruction semantics of
+processors.  It has been used in several papers, available from
+http://www.cl.cam.ac.uk/~pes20/sail/
+
+This repository contains the implementation of Sail, together with
+related tools and some Sail specifications:
+
+- a manual, manual.pdf
 
 - sail, the type checker and compiler for programs in the Sail
   language;
@@ -28,53 +35,9 @@ specification language:
 
 - an emacs mode, including syntax highlighting
 
-There is also the beginnings of a manual, in manual.pdf.  This
-currently just describes the language syntax, type system, common
-library, and a few tips for sail development; it doesn't yet really
-explain the language.  We can answer questions either by mail or some
-google/skype chat.
-
-Elsewhere we have a substantial IBM POWER ISA specification
+We also have a substantial IBM POWER ISA specification,
 which we can send by email.
 
-To get started, one probably wants to develop a new definition by
-analogy with the existing MIPS definition, using the sail executable
-just to check that it is type-correct. After building sail (as
-described below), this is done by:
-
-./sail mips/mips_prelude.sail mips/mips_wrappers.sail mips/mips_insts.sail mips/mips_epilogue.sail
-
-Sail treats multiple file arguments as though they wre concatenated
-into a single large file (although error messages will give the
-appropriate file and line number).  For an explanation of why the MIPS
-model is devided up see mips/README.
-
-Once sufficient instructions have been represented in a specification,
-then one may also want to run executables sequentially, to debug the
-specification and begin testing. For this, there is the sequential
-sail interpreter, which evaluates the specification on an ELF file. At
-present, doing this for a new architecture will require conversation
-with Robert Norton Wright or Kathy Gray, as the connections within
-the sail interpreter implementation to the architecture being simulated
-have not been factored out into external specification files.
-
-Building the architecture for compilation to connect to the
-interpreter, one uses the sail executable:
-
-./sail <sail files...> -lem_ast
-
-which will generate a mips.lem file in the current directory, which
-will be linked with the sail interpreter (the output is a verbose
-representation of the sail AST).
-
-To generate Lem specifications for theorem proving, one uses the sail
-executable with flag:
-./sail mips/mips.sail -lem
-
-*** In progress. Does not work yet ***
-To generate OCaml output for fast sequential evaluation, one uses the
-sail executable with flag:
-./sail mips/mips.sail -ocaml
 
 **************************************************************************
 BUILDING
@@ -133,39 +96,41 @@ EMACS MODE
 
 There is an emacs mode implementation very similar to the Tuareg mode in sail/editors 
 
-***************************************************************************
-RUNNING SAIL compiler
+**************************************************************************
+To get started, one probably wants to develop a new definition by
+analogy with the existing MIPS definition, using the sail executable
+just to check that it is type-correct. After building sail (as
+described below), this is done by:
 
-./sail test.sail   % Type check sail file, do not generate any output.
-                   % Multiple files can be listed, the resulting specification is
-                   % equivalent to a concatenation in order of the given files
+./sail mips/mips_prelude.sail mips/mips_wrappers.sail mips/mips_insts.sail mips/mips_epilogue.sail
 
-Command-line options
-  -verbose           pretty-print out the file
-  -lem_ast           pretty-print a Lem AST representation of the file, for the interpreter
-  -lem               print a Lem translated version of the specification
-  -ocaml             print an Ocaml translated version of the specification
-  -skip_constraints  skip constraint resolution in type-checking (*Not recommended*)
-  -lem_lib           provide additional library to open in Lem output
-  -ocaml_lib         provide additional library to open in Ocaml output
-  -v                 print version
-  -o                 select output filename prefix
-  -help              Display this list of options
-  --help             Display this list of options
+Sail treats multiple file arguments as though they wre concatenated
+into a single large file (although error messages will give the
+appropriate file and line number).  For an explanation of how the MIPS
+model is divided up see mips/README.
 
+Once sufficient instructions have been represented in a specification,
+then one may also want to run executables sequentially, to debug the
+specification and begin testing. For this, one would need to adapt the
+sequential sail interpreter, which evaluates the specification on an
+ELF file. 
 
-Usage
+Building the architecture for compilation to connect to the
+interpreter, one uses the sail executable:
 
-./sail test.sail foo.sail -o spec -lem_ast -ocaml
+./sail <sail files...> -lem_ast
 
-Will generate the files spec.lem and spec.ml in the current directory
+which will generate a mips.lem file in the current directory, which
+will be linked with the sail interpreter (the output is a verbose
+representation of the sail AST).
 
-It is not recommended to try to read the generated Lem ast file, as it is a very verbose
-representation of the AST. 
+To generate Lem specifications for theorem proving, one uses the sail
+executable with flag:
+./sail mips/mips.sail -lem
 
-IN PROGRESS COMMANDS: -ocaml
-The resulting output of these commands may well be untype checkable OCaml
-
+To generate OCaml output for fast sequential evaluation, one uses the
+sail executable with flag:
+./sail mips/mips.sail -ocaml
 
 ******************************************************************************
 LICENCES
