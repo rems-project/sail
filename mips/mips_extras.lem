@@ -6,15 +6,14 @@ open import Interp_inter_imp
 import Set_extra
 
 let memory_parameter_transformer mode v =
-  let mode = <|mode with endian = E_big_endian|> in
   match v with
   | Interp.V_tuple [location;length] ->
+    let (v,loc_regs) = extern_with_track mode extern_vector_value location in
+
     match length with
     | Interp.V_lit (L_aux (L_num len) _) ->
-      let (v,regs) = extern_mem_value mode location in
-      (v,(natFromInteger len),regs)
+      (v,(natFromInteger len),loc_regs)
     | Interp.V_track (Interp.V_lit (L_aux (L_num len) _)) size_regs ->
-      let (v,loc_regs) = extern_mem_value mode location in
       match loc_regs with
       | Nothing -> (v,(natFromInteger len),Just (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs)))
       | Just loc_regs -> (v,(natFromInteger len),Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs))))
@@ -24,12 +23,10 @@ let memory_parameter_transformer mode v =
   | _ -> Assert_extra.failwith ("memory_parameter_transformer: expected 'V_tuple [_;_]' given " ^ (Interp.string_of_value v))
   end
 
-let memory_parameter_transformer_option_address mode v =
-  let mode = <|mode with endian = E_big_endian|> in
+let memory_parameter_transformer_option_address _mode v =
   match v with
   | Interp.V_tuple [location;_] ->
-     let (v,_) = extern_mem_value mode location in
-     Just v
+     Just (extern_vector_value location)
   | _ -> Assert_extra.failwith ("memory_parameter_transformer_option_address: expected 'V_tuple [_;_]' given " ^ (Interp.string_of_value v))
   end
 
@@ -42,7 +39,7 @@ let read_memory_functions : memory_reads =
   ]
 
 let memory_writes : memory_writes =
-  [ ("TAGw", (MW Write_tag (fun mode v -> let (v, regs) = extern_mem_value mode v in
+  [ ("TAGw", (MW Write_tag (fun mode v -> let (v, regs) = extern_with_track mode extern_vector_value v in
                                          (v, 1, regs))
                (Just (fun (IState interp_state c) success ->
                                let v = Interp.V_lit (L_aux (if success then L_one else L_zero) Unknown) in

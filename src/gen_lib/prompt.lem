@@ -31,12 +31,12 @@ let inline (>>) m n = m >>= fun _ -> n
 val exit : forall 'a 'b. 'b -> M 'a
 let exit s = Fail Nothing
 
-val read_mem : end_flag -> bool -> read_kind -> vector bitU -> integer -> M (vector bitU)
-let read_mem endian dir rk addr sz =
+val read_mem : bool -> read_kind -> vector bitU -> integer -> M (vector bitU)
+let read_mem dir rk addr sz =
   let addr = address_lifted_of_bitv addr in
   let sz = natFromInteger sz in
   let k memory_value =
-    let bitv = internal_mem_value endian dir memory_value in
+    let bitv = internal_mem_value dir memory_value in
     (Done bitv,Nothing) in
   Read_mem (rk,addr,sz) k
 
@@ -46,9 +46,9 @@ let write_mem_ea wk addr sz =
   let sz = natFromInteger sz in
   Write_ea (wk,addr,sz) (Done (),Nothing)
 
-val write_mem_val : end_flag -> vector bitU -> M bool
-let write_mem_val endian v =
-  let v = external_mem_value endian v in
+val write_mem_val : vector bitU -> M bool
+let write_mem_val v =
+  let v = external_mem_value v in
   let k successful = (return successful,Nothing) in
   Write_memv v k
 

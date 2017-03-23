@@ -45,12 +45,12 @@ let set_reg state reg bitv =
   <| state with regstate = Map.insert reg bitv state.regstate |>
 
 
-val read_mem : end_flag -> bool -> read_kind -> vector bitU -> integer -> M (vector bitU)
-let read_mem endian dir read_kind addr sz state =
+val read_mem : bool -> read_kind -> vector bitU -> integer -> M (vector bitU)
+let read_mem dir read_kind addr sz state =
   let addr = integer_of_address (address_of_bitv addr) in
   let addrs = range addr (addr+sz-1) in
   let memory_value = List.map (fun addr -> Map_extra.find addr state.memstate) addrs in
-  let value = Sail_values.internal_mem_value endian dir memory_value in
+  let value = Sail_values.internal_mem_value dir memory_value in
   let is_exclusive = match read_kind with
     | Sail_impl_base.Read_plain -> false
     | Sail_impl_base.Read_tag -> failwith "Read_tag not implemented"
@@ -73,13 +73,13 @@ let write_mem_ea write_kind addr sz state =
   let addr = integer_of_address (address_of_bitv addr) in
   [(Left (), <| state with write_ea = Just (write_kind,addr,sz) |>)]
 
-val write_mem_val : end_flag -> vector bitU -> M bool
-let write_mem_val endian v state =
+val write_mem_val : vector bitU -> M bool
+let write_mem_val v state =
   let (write_kind,addr,sz) = match state.write_ea with
     | Nothing -> failwith "write ea has not been announced yet"
     | Just write_ea -> write_ea end in
   let addrs = range addr (addr+sz-1) in
-  let v = external_mem_value endian v in
+  let v = external_mem_value v in
   let addresses_with_value = List.zip addrs v in
   let memstate = List.foldl (fun mem (addr,v) -> Map.insert addr v mem)
                             state.memstate addresses_with_value in

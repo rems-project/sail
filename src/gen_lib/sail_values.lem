@@ -849,13 +849,11 @@ let external_reg_field_slice reg rfield (i,j) =
               (external_slice dir start (m,n))
               (external_slice dir start (i,j))
 
-let external_mem_value endian v =
-  let bytes = byte_lifteds_of_bitv v in 
-  if endian = E_big_endian then bytes else List.reverse bytes
+let external_mem_value v =
+  byte_lifteds_of_bitv v $> List.reverse
 
-let internal_mem_value endian direction bytes = 
-  let v = if endian = E_big_endian then bytes else List.reverse bytes in
-  bitv_of_byte_lifteds direction v
+let internal_mem_value direction bytes =
+  List.reverse bytes $> bitv_of_byte_lifteds direction
 
 
 

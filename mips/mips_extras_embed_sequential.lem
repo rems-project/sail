@@ -3,17 +3,15 @@ open import Sail_impl_base
 open import Sail_values
 open import State
 
-let endian = E_big_endian
-
 val MEMr             : (vector bitU * integer) -> M (vector bitU)
 val MEMr_reserve     : (vector bitU * integer) -> M (vector bitU)
 val MEMr_tag         : (vector bitU * integer) -> M (vector bitU)
 val MEMr_tag_reserve : (vector bitU * integer) -> M (vector bitU)
 
-let MEMr (addr,size)             = read_mem endian false Read_plain addr size
-let MEMr_reserve (addr,size)     = read_mem endian false Read_reserve addr size
-let MEMr_tag (addr,size)         = read_mem endian false Read_tag addr size
-let MEMr_tag_reserve (addr,size) = read_mem endian false Read_tag_reserve addr size
+let MEMr (addr,size)             = read_mem false Read_plain addr size
+let MEMr_reserve (addr,size)     = read_mem false Read_reserve addr size
+let MEMr_tag (addr,size)         = read_mem false Read_tag addr size
+let MEMr_tag_reserve (addr,size) = read_mem false Read_tag_reserve addr size
 
 
 val MEMea                 : (vector bitU * integer) -> M unit
@@ -32,10 +30,10 @@ val MEMval_conditional     : (vector bitU * integer * vector bitU) -> M bitU
 val MEMval_tag             : (vector bitU * integer * vector bitU) -> M unit
 val MEMval_tag_conditional : (vector bitU * integer * vector bitU) -> M bitU
 
-let MEMval (_,_,v)                 = write_mem_val endian v >>= fun _ -> return ()
-let MEMval_conditional (_,_,v)     = write_mem_val endian v >>= fun b -> return (if b then B1 else B0)
-let MEMval_tag (_,_,v)             = write_mem_val endian v >>= fun _ -> return ()
-let MEMval_tag_conditional (_,_,v) = write_mem_val endian v >>= fun b -> return (if b then B1 else B0)
+let MEMval (_,_,v)                 = write_mem_val v >>= fun _ -> return ()
+let MEMval_conditional (_,_,v)     = write_mem_val v >>= fun b -> return (if b then B1 else B0)
+let MEMval_tag (_,_,v)             = write_mem_val v >>= fun _ -> return ()
+let MEMval_tag_conditional (_,_,v) = write_mem_val v >>= fun b -> return (if b then B1 else B0)
 
 
 val MEM_sync  : unit -> M unit

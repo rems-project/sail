@@ -54,21 +54,21 @@ open import Interp_interface
 val intern_reg_value : register_value -> Interp.value
 val intern_mem_value : interp_mode -> direction -> memory_value -> Interp.value
 val extern_reg_value : reg_name -> Interp.value -> register_value
-val extern_mem_value : interp_mode -> Interp.value -> (memory_value * maybe (list reg_name))
+val extern_with_track: forall 'a. interp_mode -> (Interp.value -> 'a) -> Interp.value -> ('a * maybe (list reg_name))
+val extern_vector_value: Interp.value -> list byte_lifted
+val extern_mem_value :   Interp.value -> memory_value
 val extern_reg : Interp.reg_form -> maybe (nat * nat) -> reg_name
 
 let make_interpreter_mode eager_eval tracking_values = 
   <| Interp.eager_eval = eager_eval; Interp.track_values = tracking_values; Interp.track_lmem = false|>;;
 
-let make_mode eager_eval tracking_values endian = 
-  <|internal_mode = make_interpreter_mode eager_eval tracking_values;
-    endian = endian|>;;
-let make_mode_exhaustive endian = 
-  <| internal_mode = <| Interp.eager_eval = true; Interp.track_values = true; Interp.track_lmem = true|>;
-     endian = endian |>;;
+let make_mode eager_eval tracking_values =
+  <|internal_mode = make_interpreter_mode eager_eval tracking_values|>;;
+let make_mode_exhaustive =
+  <| internal_mode = <| Interp.eager_eval = true; Interp.track_values = true; Interp.track_lmem = true|> |>;;
 let tracking_dependencies mode = mode.internal_mode.Interp.track_values
-let make_eager_mode mode = <| mode with internal_mode = <|mode.internal_mode with Interp.eager_eval = true |> |>;;
-let make_default_mode _ = <|internal_mode = make_interpreter_mode false false; endian = E_big_endian|>;;
+let make_eager_mode mode = <| internal_mode = <|mode.internal_mode with Interp.eager_eval = true |> |>;;
+let make_default_mode = fun () -> <|internal_mode = make_interpreter_mode false false|>;;
 
 let bitl_to_ibit = function 
   | Bitl_zero -> (Interp.V_lit (L_aux L_zero Interp_ast.Unknown)) 
@@ -156,11 +156,12 @@ let intern_reg_value v = match v with
   | _ -> Interp.V_vector v.rv_start_internal (intern_direction v.rv_dir) (bitls_to_ibits v.rv_bits)
 end
 
-let intern_mem_value mode direction v = 
-  let v = if mode.endian = E_big_endian then v else List.reverse v in
-  let bits = (List.concatMap (fun (Byte_lifted bits) -> bitls_to_ibits bits) v) in
+let intern_mem_value mode direction v =
+  List.reverse v (* match little endian representation *)
+  $> List.concatMap (fun (Byte_lifted bits) -> bitls_to_ibits bits)
+  $> fun bits ->
   let direction = intern_direction direction in
-  Interp.V_vector (if Interp.is_inc(direction) then 0 else (List.length(bits) -1)) direction bits
+  Interp.V_vector (if Interp.is_inc direction then 0 else (List.length bits) -1) direction bits
 
 let intern_ifield_value direction v =
   let bits = bits_to_ibits v in
@@ -239,22 +240,27 @@ let rec extern_reg_value reg_name v =
          rv_start_internal = internal_start |>
 end 
 
-let rec extern_mem_value mode v = match v with
-  | Interp.V_track v regs -> 
-    let (external_v,_) = extern_mem_value mode v in
-    (external_v,
-     if mode.internal_mode.Interp.track_values 
+let extern_with_track mode f = function
+  | Interp.V_track v regs ->
+    (f v,
+     if mode.internal_mode.Interp.track_values
      then (Just (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList regs)))
      else Nothing)
-  | Interp.V_vector fst inc bits -> 
-    let bytes = to_bytes (bitls_from_ibits bits) in 
-    if mode.endian = E_big_endian 
-    then (bytes, Nothing)
-    else (List.reverse bytes, Nothing)
-  | Interp.V_vector_sparse fst stop inc bits default ->
-    extern_mem_value mode (Interp_lib.fill_in_sparse v)
-  | _ -> Assert_extra.failwith ("extern_mem_value received non-externable value " ^ (Interp.string_of_value v))
-end 
+  | v -> (f v, Nothing)
+  end
+
+let rec extern_vector_value v = match v with
+  | Interp.V_vector _fst _inc bits ->
+    bitls_from_ibits bits
+    $> to_bytes
+  | Interp.V_vector_sparse _fst _stop _inc _bits _default ->
+    Interp_lib.fill_in_sparse v
+    $> extern_vector_value
+  | _ -> Assert_extra.failwith ("extern_vector_value received non-externable value " ^ (Interp.string_of_value v))
+end
+
+let rec extern_mem_value v = List.reverse (extern_vector_value v)
+
 
 let rec extern_ifield_value i_name field_name v ftyp = match (v,ftyp) with
   | (Interp.V_track v regs,_) -> extern_ifield_value i_name field_name v ftyp
@@ -446,7 +452,7 @@ let build_context defs reads writes write_eas write_vals barriers externs =
 
 let translate_address top_level end_flag thunk_name registers address =
   let (Address bytes i) = address in
-  let mode = make_mode true false end_flag in
+  let mode = make_mode true false in
   let int_mode = mode.internal_mode in
   let (Context top_env direction _ _ _ _ _ _) = top_level in
   let intern_val = intern_mem_value mode direction (memory_value_of_address end_flag address) in
@@ -465,8 +471,7 @@ let translate_address top_level end_flag thunk_name registers address =
          top_env Interp.eenv (Interp.emem "translate top level") Interp.Top) Nothing) in
   match (address_error) with
   | Ivh_value addr ->
-    let (mem_v,_) = extern_mem_value mode addr in 
-    ((address_of_memory_value end_flag mem_v), events)
+    (address_of_byte_lifted_list (extern_vector_value addr), events)
   | Ivh_value_after_exn _ ->
     (Nothing, events)
   | Ivh_error err -> match err with
@@ -492,7 +497,7 @@ let intern_instruction direction (name,parms) =
     (Interp.V_tuple (List.map (value_of_instruction_param direction) parms))
 
 let instruction_analysis top_level end_flag thunk_name regn_to_reg_details registers instruction =
-  let mode = make_mode true false end_flag in
+  let mode = make_mode true false in
   let int_mode = mode.internal_mode in
   let (Context top_env direction _ _ _ _ _ _) = top_level in
   let intern_val = intern_instruction direction instruction in
@@ -540,7 +545,7 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
            Reg_field n start direction f (extern_slice direction start span)             
          | _ -> Assert_extra.failwith "Register footprint analysis did not return an element of the specified type" end
        in
-       let get_addr v = match address_of_memory_value end_flag (fst (extern_mem_value mode v)) with
+       let get_addr v = match address_of_byte_lifted_list (extern_vector_value v) with
          | Just addr -> addr
          | Nothing -> failwith "get_nia encountered invalid address" end in
        let dia_to_dia = function
@@ -783,7 +788,7 @@ let rec interp_to_outcome mode context thunk =
         (match List.lookup i mem_writes with
           | (Just (MW write_k f return)) -> 
             let (location, length, tracking) = (f mode loc_val) in
-            let (value, v_tracking) = (extern_mem_value mode write_val) in
+            let (value, v_tracking) = extern_with_track mode extern_mem_value write_val in
             if (List.length location) = 8
             then let address_int = match (maybe_all (List.map byte_of_byte_lifted location)) with
               | Just bs -> Just (integer_of_byte_list bs)
@@ -813,8 +818,8 @@ let rec interp_to_outcome mode context thunk =
             | (Just (MV parmf return)) -> 
               let (value, v_tracking) = 
                 match (Interp.detaint write_val) with
-                  | Interp.V_tuple[_;v] -> (extern_mem_value mode (Interp.retaint write_val v))
-                  | _ -> (extern_mem_value mode write_val) end in
+                  | Interp.V_tuple[_;v] -> extern_with_track mode extern_mem_value (Interp.retaint write_val v)
+                  | _ -> extern_with_track mode extern_mem_value write_val end in
                let location_opt = match parmf mode address_val with
                   | Nothing -> Nothing
                   | Just mv -> let address_int = match (maybe_all (List.map byte_of_byte_lifted mv)) with
@@ -967,7 +972,7 @@ let rec ie_loop mode register_values (IState interp_state context) =
   
 val interp_exhaustive : maybe (list (reg_name * register_value)) -> instruction_state -> list event
 let interp_exhaustive register_values i_state = 
-  let mode = make_mode_exhaustive E_big_endian in
+  let mode = make_mode_exhaustive in
   match ie_loop mode register_values i_state with
     | (events,_) -> events
 end
@@ -1294,7 +1299,7 @@ let interp_instruction_analysis
 
   (regs_in, regs_out, regs_feeding_address, nias, dia, inst_kind)
 
-let interp_handwritten_instruction_analysis context endianness instruction analysis_function reg_info environment = 
+let interp_handwritten_instruction_analysis context endianness instruction analysis_function reg_info environment =
   fst (instruction_analysis context endianness analysis_function
                             reg_info (Just environment) instruction)
 
