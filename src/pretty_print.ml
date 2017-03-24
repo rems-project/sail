@@ -1533,9 +1533,7 @@ let is_number char =
 let doc_id_ocaml (Id_aux(i,_)) =
   match i with
   | Id("bit") -> string "vbit"
-  | Id i -> string (if i.[0] = '\'' || is_number(i.[0])
-                    then "_" ^ i
-                    else  "_" ^ (String.uncapitalize i))
+  | Id i -> string ("_" ^ i)
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
        * token in case of x ending with star. *)
@@ -1544,7 +1542,7 @@ let doc_id_ocaml (Id_aux(i,_)) =
 let doc_id_ocaml_type (Id_aux(i,_)) =
   match i with
   | Id("bit") -> string "vbit"
-  | Id i -> string ("_" ^ (String.uncapitalize i))
+  | Id i -> string ("_" ^ i)
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
        * token in case of x ending with star. *)
@@ -1607,7 +1605,7 @@ let doc_lit_ocaml in_pat (L_aux(l,_)) =
   | L_one   -> "Vone"
   | L_true  -> "Vone"
   | L_false -> "Vzero"
-  | L_num i -> string_of_int i
+  | L_num i -> "(big_int_of_int " ^ (string_of_int i) ^ ")"
   | L_hex n -> "(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)
   | L_bin n -> "(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)
   | L_undef -> "Vundef"
@@ -1875,7 +1873,7 @@ let doc_exp_ocaml, doc_let_ocaml =
   | E_list exps ->
       brackets (separate_map semi exp exps)
   | E_case(e,pexps) ->
-      let opening = separate space [string "("; string "match"; top_exp true e; string "with"] in
+      let opening = separate space [string "("; string "match"; top_exp false e; string "with"] in
       let cases = separate_map (break 1) doc_case pexps in
       surround 2 1 opening cases rparen
   | E_exit e ->
@@ -1937,10 +1935,10 @@ let doc_exp_ocaml, doc_let_ocaml =
          let t_act = match t.t with | Tapp("reg",[TA_typ t]) | Tabbrev(_,{t=Tapp("reg",[TA_typ t])}) -> t | _ -> t in
          (match t_act.t with
           | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) ->
-            parens ((string "get_barray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens (top_exp false e)
-          | _ -> parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens (top_exp false e))
+            parens ((string "get_barray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (top_exp false e))
+          | _ -> parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (top_exp false e)))
        | _ ->
-         parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens (top_exp false e))
+         parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (top_exp false e)))
     | _ -> empty
 
   and doc_lexp_rwrite ((LEXP_aux(lexp,(l,annot))) as le) e_new_v =
@@ -1961,7 +1959,7 @@ let doc_exp_ocaml, doc_let_ocaml =
     | LEXP_vector(v,e) ->
       doc_op (string "<-")
         (group (parens ((string (if is_bit then "get_barray" else "get_varray")) ^^ space ^^ doc_lexp_ocaml false v)) ^^
-         dot ^^ parens (exp e))
+         dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (exp e)))
         (exp e_new_v)
     | LEXP_vector_range(v,e1,e2) ->
       parens ((string (if is_bitv then "set_vector_subrange_bit" else "set_vector_subrange_vec")) ^^ space ^^
@@ -1981,7 +1979,7 @@ let doc_exp_ocaml, doc_let_ocaml =
             then
               doc_op (string "<-")
                 (group (parens ((string (if is_bit then "get_barray" else "get_varray")) ^^ space ^^ string reg)) ^^
-                 dot ^^ parens (doc_int start))
+                 dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (doc_int start)))
                 (exp e_new_v)
             else
               parens ((string (if is_bitv then "set_vector_subrange_bit" else "set_vector_subrange_vec")) ^^ space ^^
@@ -2035,7 +2033,7 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
     match n1,n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
       let dir = i1 < i2 in
-      let size = if dir then i2-i1 +1 else i1-i2 in
+      let size = if dir then i2-i1 +1 else i1-i2+1  in
       doc_op equals
         ((string "let") ^^ space ^^ doc_id_ocaml id ^^ space ^^ (string "init_val"))
         (separate space [string "Vregister";
@@ -2184,6 +2182,8 @@ let doc_def_ocaml def = group (match def with
   | DEF_val lbind -> doc_let_ocaml lbind
   | DEF_reg_dec dec -> doc_dec_ocaml dec
   | DEF_scattered sdef -> empty (*shoulnd't still be here*)
+  | DEF_kind _ -> failwith "unhandled DEF_kind"
+  | DEF_comm _ -> failwith "unhandled DEF_comm"
   ) ^^ hardline
 
 let doc_defs_ocaml (Defs(defs)) =

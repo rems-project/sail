@@ -1350,8 +1350,8 @@ let rewrite_defs_ocaml defs =
   let defs_sorted = top_sort_defs defs in
   let defs_vec_concat_removed = rewrite_defs_remove_vector_concat defs_sorted in
   let defs_lifted_assign = rewrite_defs_exp_lift_assign defs_vec_concat_removed in
-  let defs_separate_nums = rewrite_defs_separate_numbs defs_lifted_assign in
-  defs_separate_nums
+(*  let defs_separate_nums = rewrite_defs_separate_numbs defs_lifted_assign in *)
+  defs_lifted_assign
 
 let rewrite_defs_remove_blocks =
   let letbind_wild v body =
