@@ -177,7 +177,7 @@ let bit_lifteds_to_string ?(collapse=true) (bls: bit_lifted list) (show_length_a
     | Some (byteslhs: bits_lifted_homogenous list) -> 
         (* if abbreviate_zero_to_nine, all bytes are concrete, and the number is <=9, just print that *)  
         (*   (note that that doesn't print the length or start - it's appropriate only for memory values, where we typically have an explicit footprint also printed *)
-        let nos = List.rev_map (function blh -> match blh with | Bitslh_concrete bs -> Some (Sail_impl_base.nat_of_bit_list bs) | Bitslh_undef -> None | Bitslh_unknown -> None) byteslhs in 
+        let nos = List.rev_map (function Bitslh_concrete bs -> Some (Sail_impl_base.nat_of_bit_list bs) | Bitslh_undef -> None | Bitslh_unknown -> None) byteslhs in
         let (lsb,msbs) = ((List.hd nos), List.tl nos) in
         match (abbreviate_zero_to_nine, List.for_all (fun no -> no=Some 0) msbs, lsb) with 
         | (true, true, Some n) when n <= 9 -> 
@@ -199,23 +199,31 @@ let register_value_to_string rv =
   bit_lifteds_to_string rv.rv_bits true (Some rv.rv_start_internal) false  
 
 let memory_value_to_string endian mv = 
-  let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) (if endian = E_big_endian then mv else (List.rev mv)))  in
+  let bls =
+    Sail_impl_base.match_endianness endian mv
+    |> List.map (fun (Byte_lifted bs) -> bs)
+    |> List.concat
+  in
   bit_lifteds_to_string bls true None true
 
 let logfile_register_value_to_string rv = 
   bit_lifteds_to_string ~collapse:false rv.rv_bits false (Some rv.rv_start) false  
 
 let logfile_memory_value_to_string endian mv = 
-  let bls = List.concat(List.map (fun (Byte_lifted bs) -> bs) (if endian = E_big_endian then mv else (List.rev mv)))  in
+  let bls =
+    Sail_impl_base.match_endianness endian mv
+    |> List.map (fun (Byte_lifted bs) -> bs)
+    |> List.concat
+  in
   bit_lifteds_to_string bls false None false
 
 let byte_list_to_string bs =
   let bs' = List.map byte_lifted_of_byte bs in
-  memory_value_to_string E_big_endian bs' 
+  memory_value_to_string E_little_endian bs'
 
 let logfile_address_to_string a =
   let bs' = List.map byte_lifted_of_byte (byte_list_of_address a) in
-  logfile_memory_value_to_string E_big_endian bs'
+  logfile_memory_value_to_string E_little_endian bs'
   
 
 (*let bytes_to_string bytes = 
@@ -414,20 +422,20 @@ let rec format_events = function
   | (E_error s)::events ->
     "     Failed with message : " ^ s ^ " but continued on erroneously\n"
   | (E_read_mem(read_kind, (Address_lifted(location, _)), length, tracking))::events ->
-    "     Read_mem at " ^ (memory_value_to_string E_big_endian location) ^ " based on registers " ^ 
+    "     Read_mem at " ^ (memory_value_to_string E_little_endian location) ^ " based on registers " ^
       format_tracking tracking ^  " for " ^ (string_of_int length) ^ " bytes \n" ^
     (format_events events)
   | (E_write_mem(write_kind,(Address_lifted (location,_)), length, tracking, value, v_tracking))::events ->
-    "     Write_mem at " ^ (memory_value_to_string E_big_endian location) ^ ", based on registers " ^ 
-      format_tracking tracking ^ ", writing " ^ (memory_value_to_string E_big_endian value) ^
+    "     Write_mem at " ^ (memory_value_to_string E_little_endian location) ^ ", based on registers " ^
+      format_tracking tracking ^ ", writing " ^ (memory_value_to_string E_little_endian value) ^
       ", based on " ^ format_tracking v_tracking ^ " across " ^ (string_of_int length) ^ " bytes\n" ^
     (format_events events)
   | (E_write_ea(write_kind,(Address_lifted (location,_)), length, tracking))::events ->
-    "     Write_ea at " ^ (memory_value_to_string E_big_endian location) ^ ", based on registers " ^
+    "     Write_ea at " ^ (memory_value_to_string E_little_endian location) ^ ", based on registers " ^
       format_tracking tracking ^ " across " ^ (string_of_int length) ^ " bytes\n" ^ 
       (format_events events)
   | (E_write_memv(_, value, v_tracking))::events ->
-    "     Write_memv of " ^ (memory_value_to_string E_big_endian value) ^ ", based on registers " ^
+    "     Write_memv of " ^ (memory_value_to_string E_little_endian value) ^ ", based on registers " ^
       format_tracking v_tracking ^ "\n" ^
       (format_events events)
   | ((E_barrier b_kind)::events) ->

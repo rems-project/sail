@@ -95,10 +95,10 @@ type memory_byte = byte_lifted (* of length 8 *) (*MSB first everywhere*)
 type memory_value = list memory_byte
 (* the list is of length >=1 *)
 (* the head of the list is the byte stored at the lowest address;
-when calling a Sail function with a wmv effect, the list significant 8
+when calling a Sail function with a wmv effect, the least significant 8
 bits of the bit vector passed to the function will be interpreted as
 the lowest address byte; similarly, when calling a Sail function with
-rmem effect, the lowest address byte will be placed in the list
+rmem effect, the lowest address byte will be placed in the least
 significant 8 bits of the bit vector returned by the function; this
 behaviour is consistent with little-endian. *)
 
@@ -940,8 +940,8 @@ let memory_value_undef (width:nat) : memory_value =
 val match_endianness : forall 'a. end_flag -> list 'a -> list 'a
 let match_endianness endian l =
   match endian with
-  | E_little_endian -> l
-  | E_big_endian    -> List.reverse l
+  | E_little_endian -> List.reverse l
+  | E_big_endian    -> l
   end
 
 (* lengths *)  
