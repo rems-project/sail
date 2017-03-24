@@ -776,7 +776,7 @@ let rec register_field_indices_aux register rfield =
   | RegisterPair r1 r2 ->
       let m_indices = register_field_indices_aux r1 rfield in
       if isJust m_indices then m_indices else register_field_indices_aux r2 rfield
-  | UndefinedRegister -> Nothing
+  | UndefinedRegister _ -> Nothing
   end
 
 val register_field_indices : register -> register_field -> integer * integer

@@ -256,6 +256,7 @@ let rec extern_vector_value v = match v with
   | Interp.V_vector_sparse _fst _stop _inc _bits _default ->
     Interp_lib.fill_in_sparse v
     $> extern_vector_value
+  | Interp.V_track v _ -> extern_vector_value v
   | _ -> Assert_extra.failwith ("extern_vector_value received non-externable value " ^ (Interp.string_of_value v))
 end
 
