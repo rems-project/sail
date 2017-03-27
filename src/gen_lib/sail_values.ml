@@ -840,17 +840,20 @@ let shift_op_vec_int op (l,r) =
     let len = Array.length array in
     (match op with
      | "<<" ->
-       let right_vec = Vvector(Array.make r Vzero,0,true) in
-       let left_vec = vector_subrange_int l r (if ord then len + start else start - len) in
-       vector_concat left_vec right_vec
+       let left = Array.sub array r (len - r) in
+       let right = Array.make r Vzero in
+       let result = Array.append left right in
+       Vvector(result, start, ord)
      | ">>" ->
-       let right_vec = vector_subrange_int l start r in
-       let left_vec = Vvector(Array.make r Vzero,0,true) in
-       vector_concat left_vec right_vec 
+       let left = Array.make r Vzero in
+       let right = Array.sub array 0 (len - r) in
+       let result = Array.append left right in
+       Vvector(result, start, ord)
      | "<<<" ->
-       let left_vec = vector_subrange_int l r (if ord then len + start else start - len) in
-       let right_vec = vector_subrange_int l start r in
-       vector_concat left_vec right_vec
+       let left = Array.sub array r (len - r) in
+       let right = Array.sub array 0 r in
+       let result = Array.append left right in
+       Vvector(result, start, ord)
      | _ -> assert false)
   | _ -> assert false
 
