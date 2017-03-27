@@ -461,14 +461,14 @@ let rec divide_by_2_int array i n =
     then begin array.(i) <- Vone; divide_by_2_int array (i-1) quo end
     else divide_by_2_int array (i-1) quo
 
-let rec add_one_bit array co i =
+let rec add_one_bit array ci i =
   if i < 0
   then array
-  else match array.(i),co with
-    | Vzero,false -> array.(i) <- Vone; array
-    | Vzero,true  -> array.(i) <- Vone; add_one_bit array true (i-1)
-    | Vone, false -> array.(i) <- Vzero; add_one_bit array true (i-1)
-    | Vone, true  -> add_one_bit array true (i-1)
+  else match array.(i),ci with
+    | Vzero,false -> add_one_bit array false (i-1)
+    | Vzero,true  -> array.(i) <- Vone; add_one_bit array false (i-1)
+    | Vone, false -> array.(i) <- Vone; add_one_bit array false (i-1)
+    | Vone, true  -> array.(i) <- Vzero; add_one_bit array true (i-1)
     | Vundef,_ -> assert false
 
 let to_vec_int ord len n =
@@ -483,7 +483,7 @@ let to_vec_int ord len n =
     let abs_array = divide_by_2_int array (len-1) abs_n in
     let v_abs = bitwise_not (Vvector(abs_array,start,ord)) in
     match v_abs with
-    | Vvector(array,start,ord) -> Vvector(add_one_bit array false (len-1),start,ord)
+    | Vvector(array,start,ord) -> Vvector(add_one_bit array true (len-1),start,ord)
     | _ -> assert false
 
 let to_vec_big ord len n =
@@ -499,7 +499,7 @@ let to_vec_big ord len n =
     let abs_array = divide_by_2_big array (len-1) abs_n in
     let v_abs = bitwise_not (Vvector(abs_array,start,ord)) in
     match v_abs with
-    | Vvector(array,start,ord) -> Vvector(add_one_bit array false (len-1),start,ord)
+    | Vvector(array,start,ord) -> Vvector(add_one_bit array true (len-1),start,ord)
     | _ -> assert false
 
 let to_vec_inc_int (len,n) = to_vec_int true len n
