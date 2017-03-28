@@ -1003,12 +1003,12 @@ let mod_vec_range_big = arith_op_vec_range_no0_big mod_big_int false unit_big_in
 
 let mod_vec_range = mod_vec_range_big
 
-(*Need to have a default top level direction reference I think*)
+(* XXX Need to have a default top level direction reference I think*)
 let duplicate_int (bit,length) =
-  Vvector((Array.make length bit), 0, true)
+  Vvector((Array.make length bit), (length-1), false)
 
 let duplicate_big (bit,length) =
-  Vvector((Array.make (int_of_big_int length) bit), 0, true)
+  duplicate_int (bit, int_of_big_int length)
 
 let duplicate = duplicate_big
 
