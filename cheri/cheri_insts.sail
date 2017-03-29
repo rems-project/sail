@@ -797,10 +797,10 @@ function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
               {
                 CP0LLBit  := 0b1;
                 CP0LLAddr := pAddr;
-                MEMr_reserve(pAddr, widthBytes);
+                MEMr_reserve_wrapper(pAddr, widthBytes);
               }
             else
-              MEMr(pAddr, widthBytes);
+              MEMr_wrapper(pAddr, widthBytes);
           if (signext) then
             wGPR(rd) := EXTS(memResult)
           else

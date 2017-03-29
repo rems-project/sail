@@ -228,28 +228,28 @@ function (bool, bit[cap_size_t * 8]) MEMr_tagged ((bit[64]) addr) =
 {
   (* assumes addr is cap. aligned *)
   let ((bit[8]) tag : mem) = (MEMr_tag (addr, cap_size)) in
-  (tag[0], mem)
+  (tag[0], reverse_endianness(mem))
 }
 
 function (bool, bit[cap_size_t * 8]) MEMr_tagged_reserve ((bit[64]) addr) =
 {
   (* assumes addr is cap. aligned *)
   let ((bit[8]) tag : mem) = (MEMr_tag_reserve (addr, cap_size)) in
-  (tag[0], mem)
+  (tag[0], reverse_endianness(mem))
 }
 
 function unit MEMw_tagged((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
 {
   (* assumes addr is cap. aligned *)
   MEMea_tag(addr, cap_size);
-  MEMval_tag(addr, cap_size, 0b0000000 : [tag] :  data);
+  MEMval_tag(addr, cap_size, 0b0000000 : [tag] :  reverse_endianness(data));
 }
 
 function bool MEMw_tagged_conditional((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
 {
   (* assumes addr is cap. aligned *)
   MEMea_tag_conditional(addr, cap_size);
-  MEMval_tag_conditional(addr, cap_size, 0b0000000 : [tag] :  data);
+  MEMval_tag_conditional(addr, cap_size, 0b0000000 : [tag] :  reverse_endianness(data));
 }
 
 function (bit[64]) align((bit[64]) addr, (nat) alignment) =
@@ -269,14 +269,14 @@ function unit effect {wmem} MEMw_wrapper(addr, size, data) =
        should probably be done in memory model. *)
     TAGw(align(addr, cap_size), 0x00);
     MEMea(addr,size);
-    MEMval(addr, size, data);
+    MEMval(addr, size, reverse_endianness(data));
   }
 
 function bool effect {wmem} MEMw_conditional_wrapper(addr, size, data) =
   {
     (* On cheri non-capability writes must clear the corresponding tag*)
     MEMea_conditional(addr, size);
-    success := MEMval_conditional(addr,size,data);
+    success := MEMval_conditional(addr,size,reverse_endianness(data));
     if (success) then
       (* XXX as above TAGw is vestigal and must die *)
       TAGw(align(addr, cap_size), 0x00);

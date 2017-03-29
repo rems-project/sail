@@ -1129,7 +1129,7 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
                 {
                   CP0LLBit  := 0b1;
                   CP0LLAddr := pAddr;
-                  MEMr_reserve(pAddr, wordWidthBytes(width));
+                  MEMr_reserve_wrapper(pAddr, wordWidthBytes(width));
                 }
               else
                 MEMr_wrapper(pAddr, wordWidthBytes(width));

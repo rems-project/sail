@@ -42,13 +42,13 @@ function unit effect {wmem} MEMw_wrapper(addr, size, data) =
         UART_WRITTEN := 1;
       } else {
         MEMea(addr, size);
-        MEMval(addr, size, data);
+        MEMval(addr, size, reverse_endianness(data));
       }
 
 function bool effect {wmem} MEMw_conditional_wrapper(addr, size, data) =
     {
       MEMea_conditional(addr, size);
-      MEMval_conditional(addr, size, data)
+      MEMval_conditional(addr, size, reverse_endianness(data))
     }
 
 function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordType) width) =
