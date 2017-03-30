@@ -227,29 +227,29 @@ val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8 * ('n + 1)]) -> bool effect
 function (bool, bit[cap_size_t * 8]) MEMr_tagged ((bit[64]) addr) =
 {
   (* assumes addr is cap. aligned *)
-  let ((bit[8]) tag : mem) = (MEMr_tag (addr, cap_size)) in
-  (tag[0], reverse_endianness(mem))
+  let ((bit[8]) tag : mem) = reverse_endianness(MEMr_tag (addr, cap_size)) in
+  (tag[0], mem)
 }
 
 function (bool, bit[cap_size_t * 8]) MEMr_tagged_reserve ((bit[64]) addr) =
 {
   (* assumes addr is cap. aligned *)
-  let ((bit[8]) tag : mem) = (MEMr_tag_reserve (addr, cap_size)) in
-  (tag[0], reverse_endianness(mem))
+  let ((bit[8]) tag : mem) = reverse_endianness(MEMr_tag_reserve (addr, cap_size)) in
+  (tag[0], mem)
 }
 
 function unit MEMw_tagged((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
 {
   (* assumes addr is cap. aligned *)
   MEMea_tag(addr, cap_size);
-  MEMval_tag(addr, cap_size, 0b0000000 : [tag] :  reverse_endianness(data));
+  MEMval_tag(addr, cap_size,  reverse_endianness(0b0000000 : [tag] : data));
 }
 
 function bool MEMw_tagged_conditional((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
 {
   (* assumes addr is cap. aligned *)
   MEMea_tag_conditional(addr, cap_size);
-  MEMval_tag_conditional(addr, cap_size, 0b0000000 : [tag] :  reverse_endianness(data));
+  MEMval_tag_conditional(addr, cap_size, reverse_endianness(0b0000000 : [tag] : data));
 }
 
 function (bit[64]) align((bit[64]) addr, (nat) alignment) =
