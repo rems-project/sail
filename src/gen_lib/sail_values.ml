@@ -66,15 +66,16 @@ let set_start i = function
   | VvectorR(a,start,dir) -> VvectorR(a,i,dir)
   | _ -> assert false  
 
-let length = function
+let length_int = function
   | Vvector(array,_,_) -> Array.length array
   | Vregister(array,_,_,_) -> Array.length !array
   | VvectorR(array,_,_) -> Array.length array
   | _ -> assert false
   
-let set_start_to_length v = set_start ((length v)-1) v (* XXX should take account of direction? *)
+let set_start_to_length v = set_start ((length_int v)-1) v (* XXX should take account of direction? *)
 
-let length_big v = big_int_of_int (length v)
+let length_big v = big_int_of_int (length_int v)
+let length = length_big
 
 let read_register = function
   | Vregister(a,start,inc,_) -> Vvector(!a,start,inc)
@@ -219,10 +220,10 @@ let set_register_field_bit reg field new_v =
   | _ -> ()
 
 let set_two_reg r1 r2 vec =
-  let size = length r1 in
+  let size = length_int r1 in
   let dir = get_ord r1 in
   let start = get_start vec in
-  let vsize = length vec in
+  let vsize = length_int vec in
   let r1_v = vector_subrange_int vec start ((if dir then size - start else start - size) - 1) in
   let r2_v = vector_subrange_int vec (if dir then size - start else start - size)
       (if dir then vsize - start else start - vsize) in
@@ -581,7 +582,7 @@ let arith_op_vec_int op sign size (l,r) =
   let ord = get_ord l in
   let (l',r') = to_num_int sign l, to_num_int sign r in
   let n = arith_op op (l',r') in
-  to_vec_int ord (size * (length l)) n
+  to_vec_int ord (size * (length_int l)) n
 
 let add_vec_int = arith_op_vec_int (+) false 1
 let add_vec_signed_int = arith_op_vec_int (+) true 1
@@ -598,7 +599,7 @@ let multiply_vec_signed = multiply_vec_signed_big
 
 let arith_op_vec_range_int op sign size (l,r) =
   let ord = get_ord l in
-  arith_op_vec_int op sign size (l, to_vec_int ord (length l) r)
+  arith_op_vec_int op sign size (l, to_vec_int ord (length_int l) r)
 
 let add_vec_range_int = arith_op_vec_range_int (+) false 1
 let add_vec_range_signed_int = arith_op_vec_range_int (+) true 1
@@ -624,7 +625,7 @@ let mult_vec_range_signed = mult_vec_range_signed_big
 
 let arith_op_range_vec_int op sign size (l,r) =
   let ord = get_ord r in
-  arith_op_vec_int op sign size ((to_vec_int ord (length r) l), r)
+  arith_op_vec_int op sign size ((to_vec_int ord (length_int r) l), r)
 
 let add_range_vec_int = arith_op_range_vec_int (+) false 1
 let add_range_vec_signed_int = arith_op_range_vec_int (+) true 1
@@ -703,7 +704,7 @@ let arith_op_vec_bit_int op sign (l,r) =
   let ord = get_ord l in
   let l' = to_num_int sign l in
   let n = arith_op op (l', match r with | Vone -> 1 | _ -> 0) in
-  to_vec_int ord (length l) n
+  to_vec_int ord (length_int l) n
     
 let add_vec_bit_int = arith_op_vec_bit_int (+) false
 let add_vec_bit_signed_int = arith_op_vec_bit_int (+) true 
@@ -726,7 +727,7 @@ let minus_vec_bit      = minus_vec_bit_big
 
 let rec arith_op_overflow_vec_int op sign size (l,r) =
   let ord = get_ord l in
-  let len = length l in
+  let len = length_int l in
   let act_size = len * size in
   let (l_sign,r_sign) = (to_num_int sign l,to_num_int sign r) in
   let (l_unsign,r_unsign) = (to_num_int false l,to_num_int false r) in
@@ -781,7 +782,7 @@ let mult_overflow_vec_signed  = mult_overflow_vec_signed_big
 
 let rec arith_op_overflow_vec_bit_int op sign (l,r_bit) =
   let ord = get_ord l in
-  let act_size = length l in
+  let act_size = length_int l in
   let l' = to_num_int sign l in
   let l_u = to_num_int false l in
   let (n,nu,changed) = match r_bit with
@@ -881,7 +882,7 @@ let rec arith_op_no0_int op (l,r) =
 
 let rec arith_op_vec_no0_int op sign size (l,r) =
   let ord = get_ord l in
-  let act_size = ((length l) * size) in
+  let act_size = ((length_int l) * size) in
   let (l',r') = (to_num_int sign l,to_num_int sign r) in
   let n = arith_op_no0_int op (l',r') in
   let representable,n' = 
@@ -904,7 +905,7 @@ let quot_vec_signed_int = arith_op_vec_no0_int (/) true 1
 
 let rec arith_op_vec_no0_big op sign size (l,r) =
   let ord = get_ord l in
-  let act_size = int_of_big_int (mult_int_big_int (length l) size) in
+  let act_size = int_of_big_int (mult_int_big_int (length_int l) size) in
   let (l',r') = (to_num_big sign l,to_num_big sign r) in
   let n = arith_op_no0_big op (l',r') in
   let representable,n' = 
@@ -931,8 +932,8 @@ let quot_vec_signed = quot_vec_signed_big
 
 let arith_op_overflow_no0_vec_int op sign size (l,r) =
   let ord = get_ord l in
-  let rep_size = (length r) * size in
-  let act_size = (length l) * size in
+  let rep_size = (length_int r) * size in
+  let act_size = (length_int l) * size in
   let (l',r') = ((to_num_int sign l),(to_num_int sign r)) in
   let (l_u,r_u) = (to_num_int false l,to_num_int false r) in
   let n = arith_op_no0_int op (l',r') in
@@ -991,7 +992,7 @@ let quot_overflow_vec_signed = quot_overflow_vec_signed_big
 
 let arith_op_vec_range_no0_int op sign size (l,r) =
   let ord = get_ord l in
-  arith_op_vec_no0_int op sign size (l,(to_vec_int ord (length l) r))
+  arith_op_vec_no0_int op sign size (l,(to_vec_int ord (length_int l) r))
 
 let mod_vec_range_int = arith_op_vec_range_no0_int (mod) false 1
 
