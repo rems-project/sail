@@ -415,6 +415,7 @@ function clause execute (CSetBoundsExact(cd, cb, rt)) =
   cursor := getCapCursor(cb_val);
   base   := getCapBase(cb_val);
   top    := getCapTop(cb_val);
+  newTop := cursor + rt_val;
   if (register_inaccessible(cd)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
   else if (register_inaccessible(cb)) then
@@ -425,10 +426,10 @@ function clause execute (CSetBoundsExact(cd, cb, rt)) =
     raise_c2_exception(CapEx_SealViolation, cb)
   else if (cursor < base) then
     raise_c2_exception(CapEx_LengthViolation, cb)
-  else if ((cursor + rt_val) > top) then
+  else if (newTop > top) then
     raise_c2_exception(CapEx_LengthViolation, cb)
   else
-    let (exact, newCap) = setCapBounds(cb_val, (bit[64]) base, (bit[65]) top) in
+    let (exact, newCap) = setCapBounds(cb_val, (bit[64]) cursor, (bit[65]) newTop) in
     if not (exact) then
         raise_c2_exception(CapEx_InexactBounds, cb)
     else
