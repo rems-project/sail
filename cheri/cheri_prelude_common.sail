@@ -309,7 +309,7 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
       (bit[64]) vAddr; (* XXX vAddr not truncated because top <= 2^64 and size > 0 *)
   }
 
-function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType) = {
+function (bit[64]) TranslatePC ((bit[64]) vAddr) = {
   incrementCP0Count();
   let pcc = capRegToCapStruct(PCC) in
   let base  = getCapBase(pcc) in
@@ -320,7 +320,7 @@ function (bit[64]) TranslateAddress ((bit[64]) vAddr, (MemAccessType) accessType
   else if ((absPC + 4) > top) then
     (raise_c2_exception_noreg(CapEx_LengthViolation))
   else
-    TLBTranslate((bit[64]) absPC, accessType) (* XXX assert absPC never gets truncated due to above check and top <= 2^64 for valid caps *)
+    TLBTranslate((bit[64]) absPC, Instruction) (* XXX assert absPC never gets truncated due to above check and top <= 2^64 for valid caps *)
 }
 
 function unit checkCP2usable () =

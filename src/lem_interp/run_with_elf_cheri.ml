@@ -1388,7 +1388,7 @@ let run () =
   (*NOTE: this is likely MIPS specific, so should probably pull from initial_system_state info on to translate or not, 
           endian mode, and translate function name 
   *)
-  let addr_trans = translate_address context E_little_endian "TranslateAddress" in
+  let addr_trans = translate_address context E_little_endian "TranslatePC" in
   if String.length(!raw_file) != 0 then
     load_raw_file prog_mem (Nat_big_num.of_int !raw_at) (open_in_bin !raw_file);
   reg := Reg.add "PC" (register_value_of_address startaddr_internal model_reg_d ) !reg;
