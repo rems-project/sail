@@ -534,11 +534,34 @@ let to_vec_dec_undef_big len = to_vec_undef_big false len
 let to_vec_inc_undef = to_vec_inc_undef_big
 let to_vec_dec_undef = to_vec_dec_undef_big
 
-let exts_int (len, vec) = to_vec_int (get_ord vec) len (signed_int vec)
-let extz_int (len, vec) = to_vec_int (get_ord vec) len (unsigned_int vec)
+let exts_int (len, vec) = 
+  let barray = get_barray(vec) in
+  let vlen = Array.length barray in
+  let arr = 
+    if (vlen < len) then
+      (* copy most significant bit into new bits *)
+      Array.append (Array.make (len - vlen) barray.(0)) barray
+    else
+      (* truncate to least significant bits *)
+      Array.sub barray (vlen - len) len in
+  let inc = get_ord vec in
+  Vvector(arr, (if inc then 0 else (len - 1)), inc)
 
-let exts_big (len,vec) = to_vec_big (get_ord vec) len (signed_big vec)
-let extz_big (len,vec) = to_vec_big (get_ord vec) len (unsigned_big vec)
+let extz_int (len, vec) = 
+  let barray = get_barray(vec) in
+  let vlen = Array.length barray in
+  let arr = 
+    if (vlen < len) then
+      (* fill new bits with zero *)
+      Array.append (Array.make (len - vlen) Vzero) barray
+    else
+      (* truncate to least significant bits *)
+      Array.sub barray (vlen - len) len in
+  let inc = get_ord vec in
+  Vvector(arr, (if inc then 0 else (len - 1)), inc)
+
+let exts_big (len,vec) = exts_int (int_of_big_int len, vec)
+let extz_big (len,vec) = extz_int (int_of_big_int len, vec)
 
 let exts = exts_big
 let extz = extz_big
