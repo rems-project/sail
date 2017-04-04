@@ -13,6 +13,8 @@ type value =
   | Vregister of vbit array ref * int * bool * (string * (int * int)) list
   | Vbit of vbit (*Mostly for Vundef in place of undefined register place holders*)
 
+exception Sail_exit
+
 let string_of_bit = function 
   | Vone   -> "1"
   | Vzero  -> "0"
@@ -37,7 +39,7 @@ let is_one i =
   else Vzero
 
 
-let exit _ = failwith "called exit"
+let exit _ = raise Sail_exit
 
 
 let is_one_int i =
