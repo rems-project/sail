@@ -1146,7 +1146,7 @@ let gt_range_vec   = gt_range_vec_big
 let lteq_range_vec = lteq_range_vec_big 
 let gteq_range_vec = gteq_range_vec_big 
 
-let eq (l,r) = if l == r then Vone else Vzero
+let eq (l,r) = if l = r then Vone else Vzero
 let eq_vec_vec (l,r) = eq (to_num_big true l, to_num_big true r)
 let eq_vec (l,r) = eq_vec_vec(l,r)
 let eq_vec_range (l,r) = eq (to_num_big false l,r)
