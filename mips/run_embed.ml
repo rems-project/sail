@@ -316,7 +316,7 @@ let rec debug_print_gprs start stop =
   then debug_print_gprs (start + 1) stop
   else ()
 
-let get_opcode pc_a = _MEMr (to_vec_dec_big (big_int_of_int 64, pc_a), big_int_of_int 4)
+let get_opcode pc_a = Mips_model._reverse_endianness(_MEMr (to_vec_dec_big (big_int_of_int 64, pc_a), big_int_of_int 4))
 
 let rec fde_loop count =
   if !max_cut_off && count = !max_instr
