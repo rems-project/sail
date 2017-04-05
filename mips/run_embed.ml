@@ -64,7 +64,23 @@ let rec foldli f acc ?(i=0) = function
   | x::xs -> foldli f (f i acc x) ~i:(i+1) xs;;
 
 let hex_to_big_int s = big_int_of_int64 (Int64.of_string s) ;;
-let big_int_to_hex i = Uint64.to_string_hex (Uint64.of_string (string_of_big_int i))
+let big_int_to_hex i = 
+  (* annoyingly Uint64.to_string_hex prefixes the string with 0x UNLESS it is zero... *) 
+  if i = zero_big_int then
+    "0"
+  else
+    let s = Uint64.to_string_hex (Uint64.of_string (string_of_big_int i)) in
+    let len = String.length s in
+    String.sub s 2 (len - 2)
+
+let big_int_to_hex64 i = 
+  let hex = big_int_to_hex i in
+  let len = String.length hex in
+  if (len < 16) then
+    (String.make (16-len) '0') ^ hex
+  else
+    hex
+    
 let input_buf = (ref [] : int list ref);;
 
 let add_mem byte addr mem = begin
@@ -295,7 +311,7 @@ let time_it action arg =
   (finish_time -. start_time, ret)
 
 let rec debug_print_gprs start stop =
-  resultf "DEBUG MIPS REG %.2d %s\n" start (big_int_to_hex (unsigned_big(vector_access Mips_model._GPR (big_int_of_int start))));
+  resultf "DEBUG MIPS REG %.2d 0x%s\n" start (big_int_to_hex64 (unsigned_big(vector_access Mips_model._GPR (big_int_of_int start))));
   if start < stop
   then debug_print_gprs (start + 1) stop
   else ()
@@ -337,6 +353,7 @@ let rec fde_loop count =
           if (i == Mips_model.HCF)
           then 
             begin
+              resultf "DEBUG MIPS PC 0x%s\n" (big_int_to_hex pc_vaddr);
               debug_print_gprs 0 31;
               resultf "\nSUCCESS program terminated after %d instructions\n" count;
               count
