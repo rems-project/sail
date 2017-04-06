@@ -135,7 +135,7 @@ id :: '' ::=
 % targets use alphabetical infix operators. 
 
 kid :: '' ::=
-  {{ com kinded IDs: [[Type]], [[Nat]], [[Order]], and [[Effect]] variables }}
+  {{ com kinded IDs: $[[Type]]$, $[[Nat]]$, $[[Order]]$, and $[[Effect]]$ variables }}
   {{ aux _ l }}
   | ' x                       :: :: var
  
@@ -162,7 +162,7 @@ kind :: 'K_' ::=
 % we'll never use  ...-> Nat , .. Order , .. or Effects
     
 nexp :: 'Nexp_' ::=  
-  {{ com numeric expression, of kind [[Nat]] }}
+  {{ com numeric expression, of kind $[[Nat]]$ }}
   {{ aux _ l }}
   | id                                  :: :: id          {{ com abbreviation identifier }}
   | kid                                 :: :: var         {{ com variable }}
@@ -175,7 +175,7 @@ nexp :: 'Nexp_' ::=
   | ( nexp )                            :: S :: paren  {{ ichlo [[nexp]] }}
 
 order :: 'Ord_' ::=  
-  {{ com vector order specifications, of kind [[Order]]}}
+  {{ com vector order specifications, of kind $[[Order]]$}}
   {{ aux _ l }} 
   | kid                                 :: :: var {{ com variable }} 
   | inc                                 :: :: inc  {{ com increasing }}
@@ -195,13 +195,13 @@ base_effect :: 'BE_' ::=
   | depend				:: :: depend {{ com dynamic footprint }}
   | undef                               :: :: undef {{ com undefined-instruction exception }}
   | unspec                              :: :: unspec {{ com unspecified values }}
-  | nondet                              :: :: nondet {{ com nondeterminism, from [[nondet]] }}
-  | escape                              :: :: escape {{ com potential call of  [[exit]] }}
+  | nondet                              :: :: nondet {{ com nondeterminism, from $[[nondet]]$ }}
+  | escape                              :: :: escape {{ com potential call of  $[[exit]]$ }}
   | lset                                :: :: lset {{ com local mutation; not user-writable }}
   | lret                                :: :: lret {{ com local return; not user-writable }}
 
 effect :: 'Effect_' ::=
-  {{ com effect set, of kind [[Effect]] }}
+  {{ com effect set, of kind $[[Effect]]$ }}
   {{ aux _ l }}
  | kid                                 :: :: var
  | { base_effect1 , .. , base_effectn }           :: :: set {{ com effect set }}
@@ -316,10 +316,10 @@ kinded_id :: 'KOpt_' ::=
   | kind kid				      :: :: kind {{ com kind-annotated variable }}
 
 quant_item :: 'QI_' ::=
-  {{ com kinded identifier or [[Nat]] constraint }}
+  {{ com kinded identifier or $[[Nat]]$ constraint }}
   {{ aux _ l }}
   | kinded_id 	  	 	       	      :: :: id {{ com optionally kinded identifier }}
-  | n_constraint			              :: :: const {{ com [[Nat]] constraint }}
+  | n_constraint			              :: :: const {{ com $[[Nat]]$ constraint }}
 
 typquant :: 'TypQ_' ::= 
   {{ com type quantifiers and constraints}}
@@ -405,7 +405,7 @@ kind_def :: 'KD_' ::=
   {{ com Definition body for elements of kind }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | Def kind id name_scm_opt = nexp                                           :: :: nabbrev
-    {{ com [[Nat]]-expression abbreviation }}
+    {{ com $[[Nat]]$-expression abbreviation }}
   | Def kind id name_scm_opt = typschm                                        :: D :: abbrev
     {{ com type abbreviation }} {{ texlong }}
   | Def kind id name_scm_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: D :: record
@@ -1036,12 +1036,12 @@ terminals :: '' ::=
   | == :: :: equiv
     {{ tex \equiv }}
   | [| :: :: range_start
-    {{ tex \ottsym{[\textbar} }}       
+    {{ tex \mbox{$\ottsym{[\textbar}$} }}       
   | |] :: :: range_end       
-    {{ tex \ottsym{\textbar]} }}       
+    {{ tex \mbox{$\ottsym{\textbar]}$} }}       
   | [|| :: :: list_start
-    {{ tex \ottsym{[\textbar\textbar} }}       
+    {{ tex \mbox{$\ottsym{[\textbar\textbar}$} }}       
   | ||] :: :: list_end       
-    {{ tex \ottsym{\textbar\textbar]} }}       
+    {{ tex \mbox{$\ottsym{\textbar\textbar]}$} }}       
 
 
