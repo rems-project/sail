@@ -1,4 +1,5 @@
 open Big_int_Z
+open Printf
 
 (* only expected to be 0, 1, 2; 2 represents undef *)
 type vbit = Vone | Vzero | Vundef
@@ -13,6 +14,8 @@ type value =
   | Vregister of vbit array ref * int * bool * (string * (int * int)) list
   | Vbit of vbit (*Mostly for Vundef in place of undefined register place holders*)
 
+exception Sail_exit
+
 let string_of_bit = function 
   | Vone   -> "1"
   | Vzero  -> "0"
@@ -23,7 +26,7 @@ let string_of_bit_array a = Array.fold_left (^) "" (Array.map string_of_bit a)
 let string_of_value = function
   | Vvector(bits, start, inc)  -> (string_of_int start) ^ (if inc then "inc" else "dec") ^ (string_of_bit_array bits)
   | VvectorR(values, start, inc) -> ""
-  | Vregister(bits, start, inc, fields) -> (string_of_int start) ^ (if inc then "inc" else "dec") ^ (string_of_bit_array !bits)
+  | Vregister(bits, start, inc, fields) -> "reg" ^ (string_of_int start) ^ (if inc then "inc" else "dec") ^ (string_of_bit_array !bits)
   | Vbit(b) -> string_of_bit b
 
 let to_bool = function
@@ -37,7 +40,7 @@ let is_one i =
   else Vzero
 
 
-let exit _ = failwith "called exit"
+let exit _ = raise Sail_exit
 
 
 let is_one_int i =
@@ -157,7 +160,7 @@ let set_register register value = match register,value with
     a := !new_v
   | Vregister(a,_,_,_), Vvector(new_v,_,_) ->
     a := new_v
-  | _ -> ()
+  | _ -> failwith "set_register of non-register"
 
 let set_vector_subrange_vec_int v n m new_v =
   let walker array length offset new_values =
@@ -532,11 +535,34 @@ let to_vec_dec_undef_big len = to_vec_undef_big false len
 let to_vec_inc_undef = to_vec_inc_undef_big
 let to_vec_dec_undef = to_vec_dec_undef_big
 
-let exts_int (len, vec) = to_vec_int (get_ord vec) len (signed_int vec)
-let extz_int (len, vec) = to_vec_int (get_ord vec) len (unsigned_int vec)
+let exts_int (len, vec) = 
+  let barray = get_barray(vec) in
+  let vlen = Array.length barray in
+  let arr = 
+    if (vlen < len) then
+      (* copy most significant bit into new bits *)
+      Array.append (Array.make (len - vlen) barray.(0)) barray
+    else
+      (* truncate to least significant bits *)
+      Array.sub barray (vlen - len) len in
+  let inc = get_ord vec in
+  Vvector(arr, (if inc then 0 else (len - 1)), inc)
 
-let exts_big (len,vec) = to_vec_big (get_ord vec) len (signed_big vec)
-let extz_big (len,vec) = to_vec_big (get_ord vec) len (unsigned_big vec)
+let extz_int (len, vec) = 
+  let barray = get_barray(vec) in
+  let vlen = Array.length barray in
+  let arr = 
+    if (vlen < len) then
+      (* fill new bits with zero *)
+      Array.append (Array.make (len - vlen) Vzero) barray
+    else
+      (* truncate to least significant bits *)
+      Array.sub barray (vlen - len) len in
+  let inc = get_ord vec in
+  Vvector(arr, (if inc then 0 else (len - 1)), inc)
+
+let exts_big (len,vec) = exts_int (int_of_big_int len, vec)
+let extz_big (len,vec) = extz_int (int_of_big_int len, vec)
 
 let exts = exts_big
 let extz = extz_big
@@ -1121,7 +1147,7 @@ let gt_range_vec   = gt_range_vec_big
 let lteq_range_vec = lteq_range_vec_big 
 let gteq_range_vec = gteq_range_vec_big 
 
-let eq (l,r) = if l == r then Vone else Vzero
+let eq (l,r) = if l = r then Vone else Vzero
 let eq_vec_vec (l,r) = eq (to_num_big true l, to_num_big true r)
 let eq_vec (l,r) = eq_vec_vec(l,r)
 let eq_vec_range (l,r) = eq (to_num_big false l,r)
