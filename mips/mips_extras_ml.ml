@@ -40,8 +40,12 @@ let _MEMr (addr, size) = begin
   let ret = ref (to_vec_dec_int (0, 0)) in
   for i = 0 to (s - 1) do
     let byte_addr = add_int_big_int i a in
-    let byte = Mem.find byte_addr !mips_mem in
-    let byte_vec = to_vec_dec_int (8, byte) in
+    let byte_vec = 
+      try
+        let byte = Mem.find byte_addr !mips_mem in
+        to_vec_dec_int (8, byte)
+      with Not_found -> 
+        to_vec_dec_undef_int 8 in
     ret := vector_concat byte_vec (!ret);
     (*printf "MEM [%s] -> %x %s %s\n" (big_int_to_hex byte_addr) byte (string_of_value byte_vec) (string_of_value !ret);*)
   done;

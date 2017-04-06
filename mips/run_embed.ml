@@ -311,7 +311,13 @@ let time_it action arg =
   (finish_time -. start_time, ret)
 
 let rec debug_print_gprs start stop =
-  resultf "DEBUG MIPS REG %.2d 0x%s\n" start (big_int_to_hex64 (unsigned_big(vector_access Mips_model._GPR (big_int_of_int start))));
+  let gpr_val = vector_access Mips_model._GPR (big_int_of_int start) in
+  let gpr_str = 
+    if has_undef gpr_val then
+      "uuuuuuuuuuuuuuuu"
+    else
+      big_int_to_hex64 (unsigned_big(gpr_val)) in
+  resultf "DEBUG MIPS REG %.2d 0x%s\n" start gpr_str;
   if start < stop
   then debug_print_gprs (start + 1) stop
   else ()
