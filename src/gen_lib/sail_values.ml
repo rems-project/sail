@@ -1,4 +1,5 @@
 open Big_int_Z
+open Printf
 
 (* only expected to be 0, 1, 2; 2 represents undef *)
 type vbit = Vone | Vzero | Vundef
@@ -25,7 +26,7 @@ let string_of_bit_array a = Array.fold_left (^) "" (Array.map string_of_bit a)
 let string_of_value = function
   | Vvector(bits, start, inc)  -> (string_of_int start) ^ (if inc then "inc" else "dec") ^ (string_of_bit_array bits)
   | VvectorR(values, start, inc) -> ""
-  | Vregister(bits, start, inc, fields) -> (string_of_int start) ^ (if inc then "inc" else "dec") ^ (string_of_bit_array !bits)
+  | Vregister(bits, start, inc, fields) -> "reg" ^ (string_of_int start) ^ (if inc then "inc" else "dec") ^ (string_of_bit_array !bits)
   | Vbit(b) -> string_of_bit b
 
 let to_bool = function
@@ -159,7 +160,7 @@ let set_register register value = match register,value with
     a := !new_v
   | Vregister(a,_,_,_), Vvector(new_v,_,_) ->
     a := new_v
-  | _ -> ()
+  | _ -> failwith "set_register of non-register"
 
 let set_vector_subrange_vec_int v n m new_v =
   let walker array length offset new_values =
