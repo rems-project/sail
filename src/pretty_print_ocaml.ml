@@ -479,10 +479,13 @@ let doc_exp_ocaml, doc_let_ocaml =
       | _ -> (false,false) in
     match lexp with
     | LEXP_vector(v,e) ->
-      doc_op (string "<-")
-        (group (parens ((string (if is_bit then "get_barray" else "get_varray")) ^^ space ^^ doc_lexp_ocaml false v)) ^^
-         dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (exp e)))
-        (exp e_new_v)
+       if is_bit then
+         doc_op (string "<-") (group (parens (string "get_barray"  ^^ space ^^ doc_lexp_ocaml false v)) ^^
+         dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (exp e))) (exp e_new_v)
+       else  (* XXX Check whether vector of reg? *) 
+         parens ((string "set_register") ^^ space ^^ 
+         ((group (parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml false v)) ^^ 
+             dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (exp e))) ^^ space ^^ (exp e_new_v)))
     | LEXP_vector_range(v,e1,e2) ->
       parens ((string (if is_bitv then "set_vector_subrange_bit" else "set_vector_subrange_vec")) ^^ space ^^
               doc_lexp_ocaml false v ^^ space ^^ exp e1 ^^ space ^^ exp e2 ^^ space ^^ exp e_new_v)
