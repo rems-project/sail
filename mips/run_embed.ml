@@ -47,7 +47,7 @@ open Mips_extras_ml;;
 (* The linksem ELF interface *)
 open Sail_interface ;;
 
-module Mips_model=Mips_notlb_embed;;
+module Mips_model=Mips_embed;;
 
 let interact_print = ref true
 let result_print = ref true
@@ -294,14 +294,14 @@ let initial_system_state_of_elf_file name =
 let max_cut_off = ref false
 let max_instr = ref 0
 let raw_file = ref ""
-let raw_at   = ref 0
+let raw_at   = ref ""
 let elf_file = ref ""
 
 let args = [
   ("--file", Arg.Set_string elf_file, "filename of elf binary to load in memory");
   ("--max_instruction", Arg.Int (fun i -> max_cut_off := true; max_instr := i), "only run i instructions, then stop");
   ("--raw", Arg.Set_string raw_file, "filename of raw file to load in memory");
-  ("--at", Arg.Set_int raw_at, "address to load raw file in memory");
+  ("--at", Arg.Set_string raw_at, "address to load raw file in memory");
 ]
 
 let time_it action arg =
@@ -318,6 +318,13 @@ let rec debug_print_gprs start stop =
 
 let get_opcode pc_a = Mips_model._reverse_endianness(_MEMr (to_vec_dec_big (big_int_of_int 64, pc_a), big_int_of_int 4))
 
+let get_pc () = begin
+    try
+      Some (unsigned_big(Mips_model._TranslatePC(Mips_model._PC)))
+    with Sail_exit -> None
+  end
+
+
 let rec fde_loop count =
   if !max_cut_off && count = !max_instr
   then begin
@@ -327,8 +334,8 @@ let rec fde_loop count =
   else begin
     let pc_vaddr = unsigned_big(Mips_model._PC) in
     interactf "\n**** instruction %d from address %s ****\n"
-      count (big_int_to_hex pc_vaddr);
-    let m_paddr = Some pc_vaddr in (* XXX should be address translate *)
+      count (big_int_to_hex64 pc_vaddr);
+    let m_paddr = get_pc () in
     match m_paddr with
       | Some pc ->
           let inBranchDelay = Some(unsigned_int(Mips_model._inBranchDelay)) in
@@ -360,43 +367,13 @@ let rec fde_loop count =
             end 
           else
             begin
-              Mips_model._execute(i);
-
-                (*
-                (try
-                  let (pending, _, _)  = (Unix.select [(Unix.stdin)] [] [] 0.0) in
-                  (if (pending != []) then
-                    let char = (input_byte stdin) in (
-                    errorf "Input %x\n" char;
-                    input_buf := (!input_buf) @ [char]));
-                with
-                | _ -> ());
-
-                let uart_rvalid = option_int_of_reg "UART_RVALID" in
-                (match uart_rvalid with
-                | Some 0 ->
-                  (match !input_buf with
-                  | x :: xs -> (
-                      reg := Reg.add "UART_RDATA" (register_value_of_integer 8 7 Sail_impl_base.D_decreasing (Nat_big_num.of_int x)) !reg;
-                      reg := Reg.add "UART_RVALID" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing (Nat_big_num.of_int 1)) !reg;
-                      input_buf := xs;
-                    )
-                  | [] -> ())
-                | _-> ());
-
-                let uart_written = option_int_of_reg "UART_WRITTEN" in
-                (match uart_written with 
-                | Some 1 ->
-                  (let uart_data = option_int_of_reg "UART_WDATA" in
-                  match uart_data with
-                  | Some b -> (printf "%c" (Char.chr b); printf "%!")
-                  | None   -> (errorf "UART_WDATA was undef" ; exit 1))
-                | _      -> ());
-                reg := Reg.add "UART_WRITTEN" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;*)
-                set_register Mips_model._inBranchDelay Mips_model._branchPending;
-                set_register Mips_model._branchPending (to_vec_dec_int (1, 0));
-                set_register Mips_model._PC Mips_model._nextPC;
-                fde_loop (count + 1)
+              (try
+                Mips_model._execute(i)
+              with Sail_exit -> ());
+              set_register Mips_model._inBranchDelay Mips_model._branchPending;
+              set_register Mips_model._branchPending (to_vec_dec_int (1, 0));
+              set_register Mips_model._PC Mips_model._nextPC;
+              fde_loop (count + 1)
             end
       | None -> begin (* Exception during PC translation *)
           set_register Mips_model._inBranchDelay Mips_model._branchPending;
@@ -405,6 +382,39 @@ let rec fde_loop count =
           fde_loop (count + 1)
         end
   end
+
+
+ (*
+ (try
+   let (pending, _, _)  = (Unix.select [(Unix.stdin)] [] [] 0.0) in
+   (if (pending != []) then
+     let char = (input_byte stdin) in (
+     errorf "Input %x\n" char;
+     input_buf := (!input_buf) @ [char]));
+ with
+ | _ -> ());
+
+ let uart_rvalid = option_int_of_reg "UART_RVALID" in
+ (match uart_rvalid with
+ | Some 0 ->
+   (match !input_buf with
+   | x :: xs -> (
+       reg := Reg.add "UART_RDATA" (register_value_of_integer 8 7 Sail_impl_base.D_decreasing (Nat_big_num.of_int x)) !reg;
+       reg := Reg.add "UART_RVALID" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing (Nat_big_num.of_int 1)) !reg;
+       input_buf := xs;
+     )
+   | [] -> ())
+ | _-> ());
+
+ let uart_written = option_int_of_reg "UART_WRITTEN" in
+ (match uart_written with 
+ | Some 1 ->
+   (let uart_data = option_int_of_reg "UART_WDATA" in
+   match uart_data with
+   | Some b -> (printf "%c" (Char.chr b); printf "%!")
+   | None   -> (errorf "UART_WDATA was undef" ; exit 1))
+ | _      -> ());
+ reg := Reg.add "UART_WRITTEN" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;*)
 
 let rec load_raw_file' mem addr chan =
   let byte = input_byte chan in
@@ -434,10 +444,10 @@ let run () =
         startaddr_internal), pp_symbol_map) = initial_system_state_of_elf_file !file in
  *)
   if String.length(!raw_file) != 0 then
-    load_raw_file mips_mem (big_int_of_int !raw_at) (open_in_bin !raw_file);
+    load_raw_file mips_mem (big_int_of_string !raw_at) (open_in_bin !raw_file);
   set_register_field_bit Mips_model._CP0Status "BEV" Vone;
   printf "CP0Status: %s\n" (string_of_value Mips_model._CP0Status);
-  let start_addr = (to_vec_dec_big (big_int_of_int 64, hex_to_big_int "0x40000000")) in
+  let start_addr = (to_vec_dec_big (big_int_of_int 64, hex_to_big_int "0x9000000040000000")) in
   set_register Mips_model._PC start_addr;
   let name = Filename.basename !raw_file in
   let (t, count) = time_it fde_loop 0 in
