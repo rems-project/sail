@@ -1,0 +1,31 @@
+grammar 
+terminals :: '' ::=
+  | <                                   :: :: lt
+%    {{ tex \ensuremath{\langle} }}
+    {{ tex \ottsym{<} }}
+  | >                                   :: :: gt
+%    {{ tex \ensuremath{\rangle} }}
+    {{ tex \ottsym{>} }}
+
+  | [| :: :: range_start
+    {{ tex \mbox{$\ottsym{[\textbar}$} }}       
+  | |] :: :: range_end       
+    {{ tex \mbox{$\ottsym{\textbar]}$} }}       
+  | [|| :: :: list_start
+    {{ tex \mbox{$\ottsym{[\textbar\textbar}$} }}       
+  | ||] :: :: list_end       
+    {{ tex \mbox{$\ottsym{\textbar\textbar]}$} }}       
+
+  | ->                                  :: :: arrow
+%    {{ tex \ensuremath{\rightarrow} }}
+    {{ tex \ottsym{-\textgreater} }}
+    {{ com \texttt{->} }}
+
+  | >=                                  :: :: geq
+%    {{ tex \ensuremath{\geq} }}
+    {{ tex \ottsym{\textgreater=} }}
+    {{ com \texttt{>=} }}
+  | '<='                                        :: :: leq
+%    {{ tex \ensuremath{\leq} }}
+    {{ tex \ottsym{\textless=} }}
+    {{ com \texttt{<=} }}
