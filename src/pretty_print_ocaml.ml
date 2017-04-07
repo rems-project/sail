@@ -479,10 +479,9 @@ let doc_exp_ocaml, doc_let_ocaml =
       | _ -> (false,false) in
     match lexp with
     | LEXP_vector(v,e) ->
-       if is_bit then
-         doc_op (string "<-") (group (parens (string "get_barray"  ^^ space ^^ doc_lexp_ocaml false v)) ^^
-         dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (exp e))) (exp e_new_v)
-       else  (* XXX Check whether vector of reg? *) 
+       if is_bit then (* XXX check whether register or not?? *)
+         parens ((string "set_register_bit" ^^ space ^^ doc_lexp_ocaml false v ^^ space ^^ exp e ^^ space ^^ exp e_new_v))
+          else  (* XXX Check whether vector of reg? XXX Does not work for decreasing vector. *) 
          parens ((string "set_register") ^^ space ^^ 
          ((group (parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml false v)) ^^ 
              dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (exp e))) ^^ space ^^ (exp e_new_v)))

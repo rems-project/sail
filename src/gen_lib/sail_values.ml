@@ -201,6 +201,13 @@ let set_vector_subrange_bit_big v n m new_v =
   set_vector_subrange_bit_int v (int_of_big_int n) (int_of_big_int m) new_v
 let set_vector_subrange_bit = set_vector_subrange_bit_int
 
+let set_register_bit_int reg n v = 
+  match reg with
+  | Vregister(array,start,inc,fields) ->
+     (!array).(if inc then (n - start) else (start - n)) <- v
+  | _ -> failwith "set_register_bit of non-register"
+let set_register_bit_big reg n v = set_register_bit_int reg (int_of_big_int n) v
+let set_register_bit = set_register_bit_big
 
 let set_register_field_v reg field new_v =
   match reg with
