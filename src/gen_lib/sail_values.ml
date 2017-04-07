@@ -320,7 +320,7 @@ let bitwise_binop_bit op (l,r) =
 
 let bitwise_and_bit = bitwise_binop_bit (&&)
 let bitwise_or_bit = bitwise_binop_bit (||)
-let bitwise_xor_bit = bitwise_binop_bit (fun x y -> (1 = (if x then 1 else 0) lxor (if y then 1 else 0)))
+let bitwise_xor_bit = bitwise_binop_bit (<>)
 
 let bitwise_binop op (l,r) =
   let bop l arrayl arrayr =
@@ -344,7 +344,7 @@ let bitwise_binop op (l,r) =
 
 let bitwise_and = bitwise_binop (&&)
 let bitwise_or = bitwise_binop (||)
-let bitwise_xor = bitwise_binop (fun x y -> (1 = (if x then 1 else 0) lxor (if y then 0 else 1)))
+let bitwise_xor = bitwise_binop (<>)
 
 let rec power_int base raiseto =
   if raiseto = 0
