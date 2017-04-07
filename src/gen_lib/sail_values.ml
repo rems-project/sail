@@ -572,8 +572,19 @@ let add_big = arith_op add_big_int
 let add_signed_big = arith_op add_big_int
 let minus_big = arith_op sub_big_int
 let multiply_big = arith_op mult_big_int
-let modulo_big = arith_op mod_big_int
-let quot_big = arith_op div_big_int
+ (* this implements truncation towards zero like C and unlike ocaml (consider r < 0) *)
+let quot_big (l, r) =
+  let q = div_big_int (abs_big_int l) (abs_big_int r) in
+  let lneg = lt_big_int l zero_big_int in
+  let rneg = lt_big_int r zero_big_int in
+  if (lneg <> rneg) then
+    minus_big_int q
+  else
+    q
+let modulo_big (l, r) = (* calculate mod given above quot *)
+  let q = quot_big (l, r) in
+  sub_big_int l (mult_big_int q r)
+
 let power_big = arith_op power_big
 
 let add_int = arith_op (+)
@@ -581,7 +592,18 @@ let add_signed_int = arith_op (+)
 let minus_int = arith_op (-)
 let multiply_int = arith_op ( * )
 let modulo_int = arith_op (mod)
-let quot_int = arith_op (/)
+let quot_int (l, r) = 
+  let q = (abs l) / (abs r) in
+  let lneg = l < 0 in
+  let rneg = r < 0 in
+  if (lneg <> rneg) then
+    -q
+  else
+    q
+let modulo_int (l, r) = 
+  let q = quot_int (l, r) in
+  l - (r * q)
+
 let power_int = arith_op power_int
 
 let add        = add_big
