@@ -130,7 +130,7 @@ let doc_lit_ocaml in_pat (L_aux(l,_)) =
   | L_num i -> "(big_int_of_int " ^ (string_of_int i) ^ ")"
   | L_hex n -> "(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)
   | L_bin n -> "(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)
-  | L_undef -> "Vundef"
+  | L_undef -> "failwith \"undef literal not supported\"" (* XXX Undef vectors get handled with to_vec_undef. We could support undef bit but would need to check type. For the moment treat as runtime error.  *)
   | L_string s -> "\"" ^ s ^ "\"")
 
 (* typ_doc is the doc for the type being quantified *)
