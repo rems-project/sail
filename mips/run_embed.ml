@@ -452,7 +452,6 @@ let run () =
   if String.length(!raw_file) != 0 then
     load_raw_file mips_mem (big_int_of_string !raw_at) (open_in_bin !raw_file);
   set_register_field_bit Mips_model._CP0Status "BEV" Vone;
-  printf "CP0Status: %s\n" (string_of_value Mips_model._CP0Status);
   let start_addr = (to_vec_dec_big (big_int_of_int 64, hex_to_big_int "0x9000000040000000")) in
   set_register Mips_model._PC start_addr;
   let name = Filename.basename !raw_file in
