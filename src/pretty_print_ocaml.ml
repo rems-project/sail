@@ -213,7 +213,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       string "else" ^^ space ^^ group (exp e))
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
       let var= doc_id_ocaml id in
-      let (compare,next) = if order = Ord_inc then string "<=",string "+" else string ">=",string "-" in
+      let (compare,next) = if order = Ord_inc then string "le_big_int",string "add_big_int" else string "ge_big_int",string "sub_big_int" in
       let by = exp exp3 in
       let stop = exp exp2 in
       (*takes over two names but doesn't require building a closure*)
@@ -224,10 +224,10 @@ let doc_exp_ocaml, doc_let_ocaml =
                              var;
                              equals;
                              string "if";
-                             parens (doc_op compare var (string "__stop") );
+                             parens (compare ^^ space ^^ var ^^ space ^^ (string "__stop") );
                              string "then";
                              parens (exp exp4 ^^ space ^^ semi ^^ (string "foreach") ^^
-                                     parens (doc_op next var (string "__by")));
+                                     parens (next ^^ space ^^ var ^^ space ^^ (string "__by")));
                              string "in";
                              string "foreach";
                              exp exp1])
