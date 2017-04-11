@@ -1546,7 +1546,7 @@ function clause execute (MTC0(rt, rd, sel, double)) = {
 }
 
 function unit TLBWriteEntry((TLBIndexT) idx) = {
-  pagemask := ((bit[16]) TLBPageMask);
+  pagemask := EXTZ(TLBPageMask); (* XXX EXTZ here forces register read in ocaml shallow embedding *)
   switch(pagemask) {
       case 0x0000 -> ()
       case 0x0003 -> ()
