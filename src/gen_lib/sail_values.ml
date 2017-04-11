@@ -15,6 +15,7 @@ type value =
   | Vbit of vbit (*Mostly for Vundef in place of undefined register place holders*)
 
 exception Sail_exit
+exception Sail_return
 
 let string_of_bit = function 
   | Vone   -> "1"

@@ -400,6 +400,8 @@ let doc_exp_ocaml, doc_let_ocaml =
       surround 2 1 opening cases rparen
   | E_exit e ->
     separate space [string "exit"; exp e;]
+  | E_return e ->
+    separate space [string "begin ret := Some" ; exp e ; string "; raise Sail_return; end"]
   | E_app_infix (e1,id,e2) ->
     let call =
       match annot with
@@ -636,8 +638,22 @@ let doc_rec_ocaml (Rec_aux(r,_)) = match r with
 let doc_tannot_opt_ocaml (Typ_annot_opt_aux(t,_)) = match t with
   | Typ_annot_opt_some(tq,typ) -> doc_typquant_ocaml tq (doc_typ_ocaml typ)
 
+let doc_funcl_exp_ocaml (E_aux (e, (l, annot)) as ea) = match annot with
+  | Base((_,t),tag,nes,efct,efctsum,_) ->
+     if has_lret_effect efctsum then
+       separate hardline [string "let ret = ref None in"; 
+                       string "try";
+                       (doc_exp_ocaml ea);
+                       string "with Sail_return -> match(!ret) with";
+                       string "| Some(x) -> x";
+                       string "| None -> failwith \"ret unset\""
+                      ]
+     else
+       doc_exp_ocaml ea
+  | _ -> doc_exp_ocaml ea
+
 let doc_funcl_ocaml (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
-  group (doc_op arrow (doc_pat_ocaml pat) (doc_exp_ocaml exp))
+  group (doc_op arrow (doc_pat_ocaml pat) (doc_funcl_exp_ocaml exp))
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
@@ -647,7 +663,7 @@ let doc_fundef_ocaml (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [FCL_aux (FCL_Funcl(id,pat,exp),_)] -> 
-     (separate space [(string "let"); (doc_rec_ocaml r); (doc_id_ocaml id); (doc_pat_ocaml pat); equals]) ^^ hardline ^^ (doc_exp_ocaml exp)
+     (separate space [(string "let"); (doc_rec_ocaml r); (doc_id_ocaml id); (doc_pat_ocaml pat); equals]) ^^ hardline ^^ (doc_funcl_exp_ocaml exp)
   | _ ->
     let id = get_id fcls in
     let sep = hardline ^^ pipe ^^ space in

@@ -3142,6 +3142,7 @@ let has_rmem_effect = has_effect (BE_aux(BE_rmem, Parse_ast.Unknown))
 let has_wmem_effect = has_effect (BE_aux(BE_wmem, Parse_ast.Unknown))
 let has_eamem_effect = has_effect (BE_aux(BE_eamem, Parse_ast.Unknown))
 let has_memv_effect = has_effect (BE_aux(BE_wmv, Parse_ast.Unknown))
+let has_lret_effect = has_effect (BE_aux(BE_lret, Parse_ast.Unknown))
 
 (*Similarly to above.*)
 let effects_eq co e1 e2 =
