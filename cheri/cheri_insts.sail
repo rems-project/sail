@@ -946,8 +946,6 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
     raise_c2_exception(CapEx_TagViolation, cb)
   else if (cb_val.sealed) then
     raise_c2_exception(CapEx_SealViolation, cb)
-  else if not (cb_val.permit_load_cap) then
-    raise_c2_exception(CapEx_PermitLoadCapViolation, cb)
   else
     {
       cursor := getCapCursor(cb_val);
@@ -972,7 +970,7 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
             else 
               (MEMr_tagged(pAddr)))
           in
-          (CapRegs[cd]) := memBitsToCapBits(tag & not (suppressTag), mem);
+          (CapRegs[cd]) := memBitsToCapBits(tag & (cb_val.permit_load_cap) & not (suppressTag), mem);
         }
     }
   (* END_CLC *)
