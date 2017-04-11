@@ -1197,12 +1197,12 @@ let mask (n,v) =
      let to_drop = (current_size - n') in
      let bits' = Array.sub bits to_drop n' in
      Vvector (bits',(if dir then 0 else n'-1), dir)
-  | VvectorR (bits,start,dir) ->
-     let current_size = Array.length bits in 
+  | Vregister (bits,start,dir,fields) ->
+     let current_size = Array.length !bits in 
      let to_drop = (current_size - n') in
-     let bits' = Array.sub bits to_drop n' in
-     VvectorR (bits',(if dir then 0 else n'-1), dir)
-  | Vregister _ -> failwith "mask not implemented for Vregister"
+     let bits' = Array.sub !bits to_drop n' in
+     Vvector (bits',(if dir then 0 else n'-1), dir)
+  | VvectorR _ -> failwith "mask not implemented for VregisterR"
   | Vbit _ -> failwith "mask called for bit"
 
 let slice_raw (v, i, j) = 
