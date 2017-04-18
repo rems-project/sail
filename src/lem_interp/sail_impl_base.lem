@@ -271,6 +271,10 @@ instance (Ord direction)
   let (>=) = directionGreaterEq
 end
 
+instance (Show direction)
+  let show = function D_increasing -> "D_increasing" | D_decreasing  -> "D_decreasing" end
+end
+
 let ~{ocaml} register_valueCompare rv1 rv2 =
   compare (rv1.rv_bits, rv1.rv_dir, rv1.rv_start, rv1.rv_start_internal)
           (rv2.rv_bits, rv2.rv_dir, rv2.rv_start, rv2.rv_start_internal)
@@ -347,6 +351,19 @@ let slice_of_reg_name : reg_name -> slice = function
   | Reg_slice _ _ _ sl             -> sl
   | Reg_field _ _ _ _ sl           -> sl
   | Reg_f_slice _ _ _ _ _ sl       -> sl
+  end
+
+let width_of_reg_name (r: reg_name) : nat =
+  let width_of_slice (i, j) = (* j - i + 1 in *)
+
+    (integerFromNat j) - (integerFromNat i) + 1
+    $> abs $> natFromInteger
+  in
+  match r with
+  | Reg _ _ width _          -> width
+  | Reg_slice _ _ _ sl       -> width_of_slice sl
+  | Reg_field _ _ _ _ sl     -> width_of_slice sl
+  | Reg_f_slice _ _ _ _ _ sl -> width_of_slice sl
   end
 
 let reg_name_non_empty_intersection (r: reg_name) (r': reg_name) : bool = 
@@ -450,7 +467,8 @@ type barrier_kind =
   Barrier_Sync | Barrier_LwSync | Barrier_Eieio | Barrier_Isync
   (* AArch64 barriers *)
   | Barrier_DMB | Barrier_DMB_ST | Barrier_DMB_LD | Barrier_DSB
-  | Barrier_DSB_ST | Barrier_DSB_LD | Barrier_ISB 
+  | Barrier_DSB_ST | Barrier_DSB_LD | Barrier_ISB
+  | Barrier_TM_COMMIT
   (* MIPS barriers *)
   | Barrier_MIPS_SYNC
 
@@ -467,7 +485,20 @@ instance (Show barrier_kind)
     | Barrier_DSB_ST -> "Barrier_DSB_ST"
     | Barrier_DSB_LD -> "Barrier_DSB_LD"
     | Barrier_ISB -> "Barrier_ISB"
+    | Barrier_TM_COMMIT -> "Barrier_TM_COMMIT"
     | Barrier_MIPS_SYNC -> "Barrier_MIPS_SYNC"
+  end
+end
+
+type trans_kind =
+  (* AArch64 *)
+  | Transaction_start | Transaction_commit | Transaction_abort
+
+instance (Show trans_kind)
+  let show = function
+  | Transaction_start  -> "Transaction_start"
+  | Transaction_commit -> "Transaction_commit"
+  | Transaction_abort  -> "Transaction_abort"
   end
 end
 
@@ -480,6 +511,7 @@ at present branches are not distinguished in the instruction_kind;
 they just have particular nias (and will be IK_simple *)
   | IK_cond_branch 
 (*  | IK_uncond_branch *)
+  | IK_trans of trans_kind
   | IK_simple
 
 
@@ -489,6 +521,7 @@ instance (Show instruction_kind)
     | IK_mem_read read_kind -> "IK_mem_read " ^ (show read_kind)
     | IK_mem_write write_kind -> "IK_mem_write " ^ (show write_kind)
     | IK_cond_branch -> "IK_cond_branch"
+    | IK_trans trans_kind -> "IK_trans " ^ (show trans_kind)
     | IK_simple -> "IK_simple"
   end
 end
@@ -669,107 +702,58 @@ end
 
 let ~{ocaml} barrier_kindCompare bk1 bk2 =
   match (bk1, bk2) with
-  | (Barrier_Sync, Barrier_Sync)   -> EQ
+  | (Barrier_Sync, Barrier_Sync) -> EQ
   | (Barrier_Sync, _) -> LT
+  | (_, Barrier_Sync) -> GT
 
-  | (Barrier_LwSync, Barrier_Sync)   -> GT
   | (Barrier_LwSync, Barrier_LwSync) -> EQ
-  | (Barrier_LwSync, _)  -> LT
+  | (Barrier_LwSync, _) -> LT
+  | (_, Barrier_LwSync) -> GT
 
-  | (Barrier_Eieio, Barrier_Sync)   -> GT
-  | (Barrier_Eieio, Barrier_LwSync) -> GT
-  | (Barrier_Eieio, Barrier_Eieio)  -> EQ
-  | (Barrier_Eieio, _)  -> LT
+  | (Barrier_Eieio, Barrier_Eieio) -> EQ
+  | (Barrier_Eieio, _) -> LT
+  | (_, Barrier_Eieio) -> GT
 
-  | (Barrier_Isync, Barrier_Sync)   -> GT
-  | (Barrier_Isync, Barrier_LwSync) -> GT
-  | (Barrier_Isync, Barrier_Eieio)  -> GT
-  | (Barrier_Isync, Barrier_Isync)  -> EQ
-  | (Barrier_Isync, _)    -> LT
+  | (Barrier_Isync, Barrier_Isync) -> EQ
+  | (Barrier_Isync, _) -> LT
+  | (_, Barrier_Isync) -> GT
 
-  | (Barrier_DMB, Barrier_Sync)   -> GT
-  | (Barrier_DMB, Barrier_LwSync) -> GT
-  | (Barrier_DMB, Barrier_Eieio)  -> GT
-  | (Barrier_DMB, Barrier_Isync)  -> GT
-  | (Barrier_DMB, Barrier_DMB)    -> EQ
-  | (Barrier_DMB, Barrier_DMB_ST) -> LT
+  | (Barrier_DMB, Barrier_DMB) -> EQ
   | (Barrier_DMB, _) -> LT
+  | (_, Barrier_DMB) -> GT
 
-  | (Barrier_DMB_ST, Barrier_Sync)   -> GT
-  | (Barrier_DMB_ST, Barrier_LwSync) -> GT
-  | (Barrier_DMB_ST, Barrier_Eieio)  -> GT
-  | (Barrier_DMB_ST, Barrier_Isync)  -> GT
-  | (Barrier_DMB_ST, Barrier_DMB)    -> GT
   | (Barrier_DMB_ST, Barrier_DMB_ST) -> EQ
   | (Barrier_DMB_ST, _) -> LT
+  | (_, Barrier_DMB_ST) -> GT
 
-  | (Barrier_DMB_LD, Barrier_Sync)   -> GT
-  | (Barrier_DMB_LD, Barrier_LwSync) -> GT
-  | (Barrier_DMB_LD, Barrier_Eieio)  -> GT
-  | (Barrier_DMB_LD, Barrier_Isync)  -> GT
-  | (Barrier_DMB_LD, Barrier_DMB)    -> GT
-  | (Barrier_DMB_LD, Barrier_DMB_ST) -> GT
   | (Barrier_DMB_LD, Barrier_DMB_LD) -> EQ
-  | (Barrier_DMB_LD, _)    -> LT
+  | (Barrier_DMB_LD, _) -> LT
+  | (_, Barrier_DMB_LD) -> GT
 
-  | (Barrier_DSB, Barrier_Sync)   -> GT
-  | (Barrier_DSB, Barrier_LwSync) -> GT
-  | (Barrier_DSB, Barrier_Eieio)  -> GT
-  | (Barrier_DSB, Barrier_Isync)  -> GT
-  | (Barrier_DSB, Barrier_DMB)    -> GT
-  | (Barrier_DSB, Barrier_DMB_ST) -> GT
-  | (Barrier_DSB, Barrier_DMB_LD) -> GT
-  | (Barrier_DSB, Barrier_DSB)    -> EQ
+  | (Barrier_DSB, Barrier_DSB) -> EQ
   | (Barrier_DSB, _) -> LT
+  | (_, Barrier_DSB) -> GT
 
-  | (Barrier_DSB_ST, Barrier_Sync)   -> GT
-  | (Barrier_DSB_ST, Barrier_LwSync) -> GT
-  | (Barrier_DSB_ST, Barrier_Eieio)  -> GT
-  | (Barrier_DSB_ST, Barrier_Isync)  -> GT
-  | (Barrier_DSB_ST, Barrier_DMB)    -> GT
-  | (Barrier_DSB_ST, Barrier_DMB_ST) -> GT
-  | (Barrier_DSB_ST, Barrier_DMB_LD) -> GT
-  | (Barrier_DSB_ST, Barrier_DSB)    -> GT
   | (Barrier_DSB_ST, Barrier_DSB_ST) -> EQ
   | (Barrier_DSB_ST, _) -> LT
+  | (_, Barrier_DSB_ST) -> GT
 
-  | (Barrier_DSB_LD, Barrier_Sync)   -> GT
-  | (Barrier_DSB_LD, Barrier_LwSync) -> GT
-  | (Barrier_DSB_LD, Barrier_Eieio)  -> GT
-  | (Barrier_DSB_LD, Barrier_Isync)  -> GT
-  | (Barrier_DSB_LD, Barrier_DMB)    -> GT
-  | (Barrier_DSB_LD, Barrier_DMB_ST) -> GT
-  | (Barrier_DSB_LD, Barrier_DMB_LD) -> GT
-  | (Barrier_DSB_LD, Barrier_DSB)    -> GT
-  | (Barrier_DSB_LD, Barrier_DSB_ST) -> GT
   | (Barrier_DSB_LD, Barrier_DSB_LD) -> EQ
-  | (Barrier_DSB_LD, _)    -> LT
+  | (Barrier_DSB_LD, _) -> LT
+  | (_, Barrier_DSB_LD) -> GT
                           
-  | (Barrier_ISB, Barrier_Sync)   -> GT
-  | (Barrier_ISB, Barrier_LwSync) -> GT
-  | (Barrier_ISB, Barrier_Eieio)  -> GT
-  | (Barrier_ISB, Barrier_Isync)  -> GT
-  | (Barrier_ISB, Barrier_DMB)    -> GT
-  | (Barrier_ISB, Barrier_DMB_ST) -> GT
-  | (Barrier_ISB, Barrier_DMB_LD) -> GT
-  | (Barrier_ISB, Barrier_DSB)    -> GT
-  | (Barrier_ISB, Barrier_DSB_ST) -> GT
-  | (Barrier_ISB, Barrier_DSB_LD) -> GT
-  | (Barrier_ISB, Barrier_ISB)    -> EQ
-  | (Barrier_ISB, Barrier_MIPS_SYNC) -> LT
+  | (Barrier_ISB, Barrier_ISB) -> EQ
+  | (Barrier_ISB, _) -> LT
+  | (_, Barrier_ISB) -> GT
 
-  | (Barrier_MIPS_SYNC, Barrier_Sync)   -> GT
-  | (Barrier_MIPS_SYNC, Barrier_LwSync) -> GT
-  | (Barrier_MIPS_SYNC, Barrier_Eieio)  -> GT
-  | (Barrier_MIPS_SYNC, Barrier_Isync)  -> GT
-  | (Barrier_MIPS_SYNC, Barrier_DMB)    -> GT
-  | (Barrier_MIPS_SYNC, Barrier_DMB_ST) -> GT
-  | (Barrier_MIPS_SYNC, Barrier_DMB_LD) -> GT
-  | (Barrier_MIPS_SYNC, Barrier_DSB)    -> GT
-  | (Barrier_MIPS_SYNC, Barrier_DSB_ST) -> GT
-  | (Barrier_MIPS_SYNC, Barrier_DSB_LD) -> GT
-  | (Barrier_MIPS_SYNC, Barrier_ISB)    -> GT
+  | (Barrier_TM_COMMIT, Barrier_TM_COMMIT) -> EQ
+  | (Barrier_TM_COMMIT, _) -> LT
+  | (_, Barrier_TM_COMMIT) -> GT
+
   | (Barrier_MIPS_SYNC, Barrier_MIPS_SYNC) -> EQ
+  (* | (Barrier_MIPS_SYNC, _) -> LT
+  | (_, Barrier_MIPS_SYNC) -> GT *)
+
   end
 let inline {ocaml} barrier_kindCompare = defaultCompare
 
@@ -1167,6 +1151,10 @@ let register_value_of_integer (len:nat) (start:nat) (dir:direction) (i:integer):
   let bs = bit_list_of_integer len i in
   build_register_value (List.map bit_lifted_of_bit bs) dir len start
 
+val register_value_for_reg_of_integer : reg_name -> integer -> register_value
+let register_value_for_reg_of_integer (r: reg_name) (i:integer) : register_value =
+  register_value_of_integer (width_of_reg_name r) (start_of_reg_name r) (direction_of_reg_name r) i
+
 (* *)
 
 val opcode_of_bytes : byte -> byte -> byte -> byte -> opcode
@@ -1276,25 +1264,29 @@ let byte_list_of_opcode (Opcode bs) : list byte = bs
 
 (* matching printing_functions.ml *)
 val stringFromReg_name : reg_name -> string
-let stringFromReg_name r = match r with
-| Reg s start size dir -> s
-| Reg_slice s start dir (first,second) ->
-    let (first,second) = 
-      match dir with
-      | D_increasing -> (first,second) 
+let stringFromReg_name r =
+  let norm_sl start dir (first,second) = (first,second)
+    (* match dir with
+      | D_increasing -> (first,second)
       | D_decreasing -> (start - first, start - second)
-      end in
-    s ^ "[" ^ show first ^ (if (first = second) then "" else ".." ^ (show second)) ^ "]"
-| Reg_field s size dir f (first, second) ->
-    s ^ "." ^ f
-| Reg_f_slice s start dir f (first1,second1) (first,second) ->
-    let (first,second) = 
-      match dir with
-      | D_increasing -> (first,second) 
-      | D_decreasing -> (start - first, start - second)
-      end in
-    s ^ "." ^ f ^ "]" ^ show first ^ (if (first = second) then "" else ".." ^ (show second)) ^ "]"
-end
+    end *)
+  in
+  match r with
+  | Reg s start size dir -> s
+  | Reg_slice s start dir sl ->
+      let (first,second) = norm_sl start dir sl in
+      s ^ "[" ^ show first ^ (if (first = second) then "" else ".." ^ (show second)) ^ "]"
+  | Reg_field s start dir f sl ->
+      let (first,second) = norm_sl start dir sl in
+      s ^ "." ^ f ^ " (" ^ (show start) ^ ", " ^ (show dir) ^ ", " ^ (show first) ^ ", " ^ (show second) ^ ")"
+  | Reg_f_slice s start dir f (first1,second1) (first,second) ->
+      let (first,second) =
+        match dir with
+        | D_increasing -> (first,second)
+        | D_decreasing -> (start - first, start - second)
+        end in
+      s ^ "." ^ f ^ "]" ^ show first ^ (if (first = second) then "" else ".." ^ (show second)) ^ "]"
+  end
 
 instance (Show reg_name)
   let show = stringFromReg_name

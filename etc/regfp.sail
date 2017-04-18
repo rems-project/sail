@@ -64,10 +64,15 @@ typedef barrier_kind = enumerate {
   Barrier_MIPS_SYNC;
 }
 
+typedef trans_kind = enumerate {
+  Transaction_start; Transaction_commit; Transaction_abort;
+}
+
 typedef instruction_kind = const union {
   (barrier_kind) IK_barrier;
   (read_kind) IK_mem_read;
   (write_kind) IK_mem_write;
   IK_cond_branch;
+  (trans_kind) IK_trans;
   IK_simple
 }

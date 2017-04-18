@@ -171,8 +171,8 @@ let intern_ifield_value direction v =
 let extern_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
   match d with
     | D_increasing -> (i,j) (*This is the case the thread/concurrecny model expects, so no change needed*)
-    | D_decreasing -> 
-      let slice_i = start - i in 
+    | D_decreasing ->
+      let slice_i = start - i in
       let slice_j = (i - j) + slice_i in
       (slice_i,slice_j)
    end 
@@ -211,7 +211,7 @@ let rec extern_reg_value reg_name v =
       extern_reg_value reg_name (Interp_lib.fill_in_sparse v)
     | _ ->
       let (internal_start, external_start, direction) =
-        (match reg_name with 
+        (match reg_name with
           | Reg _ start size dir ->
             (start, (if dir = D_increasing then start else (start - (size +1))), dir)
           | Reg_slice _ reg_start dir (slice_start, slice_end) ->
@@ -1070,6 +1070,11 @@ let rr_interp_exhaustive mode i_state events =
 
 
 let instruction_kind_of_event : event -> maybe instruction_kind = function
+  (* this is a hack to avoid adding special events for AArch64 transactional-memory *)
+  | E_read_reg (Reg "TMStartEffect" 63 64 D_decreasing) -> Just (IK_trans Transaction_start)
+  | E_write_reg (Reg "TMAbortEffect" 63 64 D_decreasing) _ -> Just (IK_trans Transaction_abort)
+  | E_barrier Barrier_TM_COMMIT -> Just (IK_trans Transaction_commit)
+
   | E_read_mem rk _ _ _ -> Just (IK_mem_read rk)
   | E_write_mem wk _ _ _ _ _  -> Just (IK_mem_write wk)
   | E_write_ea wk _ _ _ -> Just (IK_mem_write wk)
@@ -1290,11 +1295,20 @@ let interp_instruction_analysis
       match List.mapMaybe instruction_kind_of_event es with
       | [] -> if List.length nias > 1 then IK_cond_branch else IK_simple
       | inst_kind :: inst_kinds ->
-          let () = ensure (forall (inst_kind' MEM inst_kinds). inst_kind' = inst_kind)
-                          "multiple instruction kinds" in
           let () = ensure (List.length nias > 1 --> inst_kind = IK_cond_branch)
-                          "multiple NIAs must be IK_cond_branch" in
-          inst_kind
+                      "multiple NIAs must be IK_cond_branch" in
+
+          if forall (inst_kind' MEM inst_kinds). inst_kind' = inst_kind then
+            inst_kind
+          (* the TSTART instruction can also be aborted so it will have two kinds of events *)
+          else if (exists (inst_kind' MEM (inst_kind :: inst_kinds)).
+                        inst_kind' = IK_trans Transaction_start) &&
+                  (forall (inst_kind' MEM (inst_kind :: inst_kinds)).
+                        inst_kind' = IK_trans Transaction_start
+                        || inst_kind' = IK_trans Transaction_abort)
+          then
+            IK_trans Transaction_start
+          else failwith "multiple instruction kinds"
     end in
 
   (regs_in, regs_out, regs_feeding_address, nias, dia, inst_kind)

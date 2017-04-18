@@ -821,6 +821,7 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
       | Id_aux ((Id "barrier_kind"),_) -> empty
+      | Id_aux ((Id "trans_kind"),_) -> empty
       | Id_aux ((Id "instruction_kind"),_) -> empty
       | Id_aux ((Id "regfp"),_) -> empty
       | Id_aux ((Id "niafp"),_) -> empty
@@ -909,7 +910,11 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
       | Id_aux ((Id "barrier_kind"),_) -> empty
+      | Id_aux ((Id "trans_kind"),_) -> empty
       | Id_aux ((Id "instruction_kind"),_) -> empty
+      | Id_aux ((Id "regfp"),_) -> empty
+      | Id_aux ((Id "niafp"),_) -> empty
+      | Id_aux ((Id "diafp"),_) -> empty
       | _ ->
          let rec range i j = if i > j then [] else i :: (range (i+1) j) in
          let nats = range 0 in
