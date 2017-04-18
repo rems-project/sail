@@ -1,6 +1,10 @@
 open Big_int_Z
 open Printf
 
+let trace_writes = ref false
+let tracef : ('a, out_channel, unit) format -> 'a =
+  function f -> if !trace_writes then printf f else ifprintf stderr f
+
 (* only expected to be 0, 1, 2; 2 represents undef *)
 type vbit = Vone | Vzero | Vundef
 type number = Big_int_Z.big_int
@@ -11,7 +15,7 @@ type _nat = number
 type value =
   | Vvector of vbit array * int * bool
   | VvectorR of value array * int * bool
-  | Vregister of vbit array ref * int * bool * (string * (int * int)) list
+  | Vregister of vbit array ref * int * bool * string * (string * (int * int)) list
   | Vbit of vbit (*Mostly for Vundef in place of undefined register place holders*)
 
 exception Sail_exit
@@ -27,7 +31,7 @@ let string_of_bit_array a = Array.fold_left (^) "" (Array.map string_of_bit a)
 let string_of_value = function
   | Vvector(bits, start, inc)  -> (string_of_int start) ^ (if inc then "inc" else "dec") ^ (string_of_bit_array bits)
   | VvectorR(values, start, inc) -> ""
-  | Vregister(bits, start, inc, fields) -> "reg" ^ (string_of_int start) ^ (if inc then "inc" else "dec") ^ (string_of_bit_array !bits)
+  | Vregister(bits, start, inc, name, fields) -> "reg" ^ (string_of_int start) ^ (if inc then "inc" else "dec") ^ (string_of_bit_array !bits)
   | Vbit(b) -> string_of_bit b
 
 let to_bool = function
@@ -49,7 +53,7 @@ let is_one_int i =
 
 let get_barray  = function
   | Vvector(a,_,_) -> a
-  | Vregister(a,_,_,_) -> !a
+  | Vregister(a,_,_,_,_) -> !a
   | _ -> assert false
 
 let get_varray = function
@@ -57,22 +61,22 @@ let get_varray = function
   | _ -> assert false
 
 let get_ord = function
-  | Vvector(_,_,o) | Vregister(_,_,o,_) | VvectorR(_,_,o) -> o
+  | Vvector(_,_,o) | Vregister(_,_,o,_,_) | VvectorR(_,_,o) -> o
   | _ -> assert false  
 
 let get_start = function
-  | Vvector(_,s,o) | Vregister(_,s,o,_) | VvectorR(_,s,o) -> s
+  | Vvector(_,s,o) | Vregister(_,s,o,_,_) | VvectorR(_,s,o) -> s
   | _ -> assert false  
   
 let set_start i = function
   | Vvector(a,start,dir) -> Vvector(a,i,dir)
-  | Vregister(bits,start,dir,regfields) -> Vregister(bits,i,dir,regfields)
+  | Vregister(bits,start,dir,name,regfields) -> Vregister(bits,i,dir,name,regfields)
   | VvectorR(a,start,dir) -> VvectorR(a,i,dir)
   | _ -> assert false  
 
 let length_int = function
   | Vvector(array,_,_) -> Array.length array
-  | Vregister(array,_,_,_) -> Array.length !array
+  | Vregister(array,_,_,_,_) -> Array.length !array
   | VvectorR(array,_,_) -> Array.length array
   | _ -> assert false
   
@@ -82,7 +86,7 @@ let length_big v = big_int_of_int (length_int v)
 let length = length_big
 
 let read_register = function
-  | Vregister(a,start,inc,_) -> Vvector(!a,start,inc)
+  | Vregister(a,start,inc,_,_) -> Vvector(!a,start,inc)
   | v -> v
 
 let vector_access_int v n = 
@@ -102,7 +106,7 @@ let bit_vector_access_int v n = match v with
     if is_inc
     then array.(n-start)
     else array.(start-n)
-  | Vregister(array,start,is_inc,_) ->
+  | Vregister(array,start,is_inc,_,_) ->
     if is_inc
     then !array.(n-start)
     else !array.(start-n)
@@ -128,7 +132,7 @@ let vector_subrange_int v n m =
   | Vvector(array,start,is_inc) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
     Vvector(builder array length offset Vzero,n,is_inc)
-  | Vregister(array,start,is_inc,fields) ->
+  | Vregister(array,start,is_inc,name,fields) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
     Vvector(builder !array length offset Vzero,n,is_inc)
   | _ -> v
@@ -138,7 +142,7 @@ let vector_subrange = vector_subrange_big
 
 let get_register_field_vec reg field =
   match reg with
-  | Vregister(_,_,_,fields) ->
+  | Vregister(_,_,_,name,fields) ->
     (match List.assoc field fields with
      | (i,j) ->
        if i = j
@@ -148,7 +152,7 @@ let get_register_field_vec reg field =
 
 let get_register_field_bit reg field =
   match reg with
-  | Vregister(_,_,_,fields) ->
+  | Vregister(_,_,_,name,fields) ->
     (match List.assoc field fields with
      | (i,j) ->
        if i = j
@@ -157,10 +161,16 @@ let get_register_field_bit reg field =
   | _ -> Vundef
 
 let set_register register value = match register,value with
-  | Vregister(a,_,_,_), Vregister(new_v,_,_,_) ->
-    a := !new_v
-  | Vregister(a,_,_,_), Vvector(new_v,_,_) ->
-    a := new_v
+  | Vregister(a,_,_,name,_), Vregister(new_v,_,_,_,_) -> 
+     begin
+       tracef "%s <- %s\n" name (string_of_value value);
+       a := !new_v
+     end
+  | Vregister(a,_,_,name,_), Vvector(new_v,_,_) ->
+     begin
+       tracef "%s <- %s\n" name (string_of_value value);
+       a := new_v
+     end
   | _ -> failwith "set_register of non-register"
 
 let set_vector_subrange_vec_int v n m new_v =
@@ -193,7 +203,7 @@ let set_vector_subrange_bit_int v n m new_v =
   | Vvector(array,start,is_inc),Vvector(new_v,_,_) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
     walker array length offset new_v
-  | Vregister(array,start,is_inc,fields),Vvector(new_v,_,_) ->
+  | Vregister(array,start,is_inc,name,fields),Vvector(new_v,_,_) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
     walker !array length offset new_v
   | _ -> ()
@@ -204,30 +214,39 @@ let set_vector_subrange_bit = set_vector_subrange_bit_int
 
 let set_register_bit_int reg n v = 
   match reg with
-  | Vregister(array,start,inc,fields) ->
-     (!array).(if inc then (n - start) else (start - n)) <- v
+  | Vregister(array,start,inc,name,fields) ->
+     begin
+       tracef "%s[%d] <- %s\n" name n (string_of_bit v);
+       (!array).(if inc then (n - start) else (start - n)) <- v
+     end
   | _ -> failwith "set_register_bit of non-register"
 let set_register_bit_big reg n v = set_register_bit_int reg (int_of_big_int n) v
 let set_register_bit = set_register_bit_big
 
 let set_register_field_v reg field new_v =
   match reg with
-  | Vregister(array,start,dir,fields) ->
+  | Vregister(array,start,dir,name,fields) ->
+     begin
+       tracef "%s[%s] <- %s\n" name field (string_of_value new_v);
     (match List.assoc field fields with
      | (i,j) ->
        if i = j
        then ()
        else set_vector_subrange_bit reg i j new_v)
+     end
   | _ -> ()
 
 let set_register_field_bit reg field new_v =
   match reg with
-  | Vregister(array,start,dir,fields) ->
+  | Vregister(array,start,dir,name,fields) ->
+     begin
+       tracef "%s.%s <- %s\n" name field (string_of_bit new_v);
     (match List.assoc field fields with
      | (i,j) ->
        if i = j
        then !array.(if dir then i - start else start - i) <- new_v
        else ())
+     end
   | _ -> ()
 
 let set_two_reg r1 r2 vec =
@@ -271,11 +290,11 @@ let vector_concat l r =
   match l,r with
   | Vvector(arrayl,start,ord), Vvector(arrayr,_,_) ->
     Vvector(Array.append arrayl arrayr, start, ord)
-  | Vvector(arrayl,start,ord), Vregister(arrayr,_,_,_) ->
+  | Vvector(arrayl,start,ord), Vregister(arrayr,_,_,_,_) ->
     Vvector(Array.append arrayl !arrayr, start,ord)
-  | Vregister(arrayl,start,ord,_), Vvector(arrayr,_,_) ->
+  | Vregister(arrayl,start,ord,_,_), Vvector(arrayr,_,_) ->
     Vvector(Array.append !arrayl arrayr, start, ord)
-  | Vregister(arrayl,start,ord,_), Vregister(arrayr,_,_,_) ->
+  | Vregister(arrayl,start,ord,_,_), Vregister(arrayr,_,_,_,_) ->
     Vvector(Array.append !arrayl !arrayr,start,ord)
   | VvectorR(arrayl,start,ord),VvectorR(arrayr,_,_) ->
     VvectorR(Array.append arrayl arrayr, start,ord)
@@ -290,7 +309,7 @@ let has_undef = function
         else foreach (i+1)
       else false in
     foreach 0
-  | Vregister(array,_,_,_) ->
+  | Vregister(array,_,_,_,_) ->
     let array = !array in
     let rec foreach i =
       if i < Array.length array
@@ -303,7 +322,7 @@ let has_undef = function
 
 let most_significant = function
   | Vvector(array,_,_) -> array.(0)
-  | Vregister(array,_,_,_) -> !array.(0)
+  | Vregister(array,_,_,_,_) -> !array.(0)
   | _ -> assert false
 
 let bitwise_not_bit = function
@@ -313,7 +332,7 @@ let bitwise_not_bit = function
 
 let bitwise_not = function
   | Vvector(array,s,d)-> Vvector( Array.map bitwise_not_bit array,s,d)
-  | Vregister(array,s,d,_) -> Vvector( Array.map bitwise_not_bit !array,s,d)
+  | Vregister(array,s,d,_,_) -> Vvector( Array.map bitwise_not_bit !array,s,d)
   | _ -> assert false 
 
 let bool_to_bit b = if b then Vone else Vzero
@@ -342,11 +361,11 @@ let bitwise_binop op (l,r) =
   match l,r with
   | Vvector(arrayl, start, dir), Vvector(arrayr,_,_) ->
     Vvector(bop (Array.length arrayl) arrayl arrayr, start,dir)
-  | Vvector(arrayl, start, dir), Vregister(arrayr,_,_,_) ->
+  | Vvector(arrayl, start, dir), Vregister(arrayr,_,_,_,_) ->
     Vvector(bop (Array.length arrayl) arrayl !arrayr, start, dir)
-  | Vregister(arrayl, start,dir,_), Vvector(arrayr,_,_) ->
+  | Vregister(arrayl, start,dir,_,_), Vvector(arrayr,_,_) ->
     Vvector(bop (Array.length arrayr) !arrayl arrayr, start,dir)
-  | Vregister(arrayl, start, dir, _), Vregister(arrayr,_,_,_) ->
+  | Vregister(arrayl, start, dir, _, _), Vregister(arrayr,_,_,_,_) ->
     Vvector(bop (Array.length !arrayl) !arrayl !arrayr, start,dir)
   | _ -> Vbit Vundef
 
@@ -376,7 +395,7 @@ let unsigned_int = function
     if has_undef v
     then assert false
     else int_of_bit_array array
-  | (Vregister(array,_,_,_) as v)->
+  | (Vregister(array,_,_,_,_) as v)->
     let array = !array in
     if has_undef v
     then assert false
@@ -401,7 +420,7 @@ let unsigned_big = function
     then assert false
     else
       big_int_of_bit_array array
-  | (Vregister(array,_,_,_) as v)->
+  | (Vregister(array,_,_,_,_) as v)->
     let array = !array in
     if has_undef v
     then assert false
@@ -892,8 +911,8 @@ let minus_overflow_vec_bit_signed = minus_overflow_vec_bit_signed_big
 
 let shift_op_vec_int op (l,r) =
   match l with
-  | Vvector(_,start,ord) | Vregister(_,start,ord,_) ->
-    let array = match l with | Vvector(array,_,_) -> array | Vregister(array,_,_,_) -> !array | _ -> assert false in
+  | Vvector(_,start,ord) | Vregister(_,start,ord,_,_) ->
+    let array = match l with | Vvector(array,_,_) -> array | Vregister(array,_,_,_,_) -> !array | _ -> assert false in
     let len = Array.length array in
     (match op with
      | "<<" ->
@@ -951,7 +970,7 @@ let rec arith_op_vec_no0_int op sign size (l,r) =
   then to_vec_int ord act_size n'
   else
     match l with
-    | Vvector(_, start, _) | Vregister(_, start, _, _) ->
+    | Vvector(_, start, _) | Vregister(_, start, _, _, _) ->
       Vvector((Array.make act_size Vundef), start, ord)
     | _ -> assert false
 
@@ -974,7 +993,7 @@ let rec arith_op_vec_no0_big op sign size (l,r) =
   then to_vec_big ord (big_int_of_int act_size) n'
   else
     match l with
-    | Vvector(_, start, _) | Vregister(_, start, _, _) ->
+    | Vvector(_, start, _) | Vregister(_, start, _, _, _) ->
       Vvector((Array.make act_size Vundef), start, ord)
     | _ -> assert false
 
@@ -1004,7 +1023,7 @@ let arith_op_overflow_no0_vec_int op sign size (l,r) =
     if representable then
       (to_vec_int ord act_size n',to_vec_int ord (1+act_size) n_u')
     else match l with 
-      | Vvector(_, start, _) | Vregister(_, start, _, _) ->
+      | Vvector(_, start, _) | Vregister(_, start, _, _, _) ->
         Vvector((Array.make act_size Vundef), start, ord),
         Vvector((Array.make  (act_size + 1) Vundef), start, ord)
       | _ -> assert false in
@@ -1032,7 +1051,7 @@ let arith_op_overflow_no0_vec_big op sign size (l,r) =
     if representable then
       (to_vec_big ord act_size n',to_vec_big ord (succ_big_int act_size) n_u')
     else match l with 
-      | Vvector(_, start, _) | Vregister(_, start, _, _) ->
+      | Vvector(_, start, _) | Vregister(_, start, _, _, _) ->
         Vvector((Array.make (int_of_big_int act_size) Vundef), start, ord),
         Vvector((Array.make  ((int_of_big_int act_size) + 1) Vundef), start, ord)
       | _ -> assert false in
@@ -1197,7 +1216,7 @@ let mask (n,v) =
      let to_drop = (current_size - n') in
      let bits' = Array.sub bits to_drop n' in
      Vvector (bits',(if dir then 0 else n'-1), dir)
-  | Vregister (bits,start,dir,fields) ->
+  | Vregister (bits,start,dir,name,fields) ->
      let current_size = Array.length !bits in 
      let to_drop = (current_size - n') in
      let bits' = Array.sub !bits to_drop n' in

@@ -579,6 +579,7 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
                                                 string "ref init_val";]);
                                      doc_nexp n1;
                                      string (if dir then "true" else "false");
+                                     string_lit (doc_id id);
                                      brackets doc_rids]))])
 
 let doc_kdef_ocaml (KD_aux(kd,_)) = match kd with
@@ -629,6 +630,7 @@ let doc_kdef_ocaml (KD_aux(kd,_)) = match kd with
                                                 string "ref init_val";]);
                                      doc_nexp n1;
                                      string (if dir then "true" else "false");
+                                     string_lit (doc_id id);
                                      brackets doc_rids]))])
 
 let doc_rec_ocaml (Rec_aux(r,_)) = match r with
@@ -698,6 +700,7 @@ let doc_dec_ocaml (DEC_aux (reg,(l,annot))) =
                                                                                 string "Vzero";])];
                                                      doc_int (int_of_big_int start);
                                                      o;
+                                                     string_lit (doc_id id);
                                                      brackets empty])]
            | _ -> empty)
         | Tapp("register", [TA_typ {t=Tid idt}]) |
