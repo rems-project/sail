@@ -423,6 +423,8 @@ let doc_exp_ocaml, doc_let_ocaml =
 
   | E_internal_return (e1) ->
      separate space [string "return"; exp e1;]
+  | E_assert (e1, e2) ->
+     (string "assert") ^^ parens ((string "to_bool") ^^ space ^^ exp e1) (* XXX drops e2 *)
   and let_exp (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->
       prefix 2 1
