@@ -585,6 +585,11 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
                                      brackets doc_rids]))])
 
 let doc_kdef_ocaml (KD_aux(kd,_)) = match kd with
+  | KD_nabbrev (k, id, name_scm, nexp) -> 
+     separate space [string "let" ; 
+                     doc_id_ocaml id;
+                     equals;
+                     doc_nexp nexp]
   | KD_abbrev(_,id,nm,typschm) ->
       doc_op equals (concat [string "type"; space; doc_id_ocaml_type id;]) (doc_typscm_ocaml typschm)
   | KD_record(_,id,nm,typq,fs,_) ->
@@ -727,7 +732,7 @@ let doc_def_ocaml def = group (match def with
   | DEF_val lbind -> doc_let_ocaml lbind
   | DEF_reg_dec dec -> doc_dec_ocaml dec
   | DEF_scattered sdef -> empty (*shoulnd't still be here*)
-  | DEF_kind _ -> failwith "unhandled DEF_kind"
+  | DEF_kind k_def -> doc_kdef_ocaml k_def
   | DEF_comm _ -> failwith "unhandled DEF_comm"
   ) ^^ hardline
 
