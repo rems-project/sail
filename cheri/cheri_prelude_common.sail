@@ -227,14 +227,18 @@ val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8 * ('n + 1)]) -> bool effect
 function (bool, bit[cap_size_t * 8]) MEMr_tagged ((bit[64]) addr) =
 {
   (* assumes addr is cap. aligned *)
-  let ((bit[8]) tag : mem) = reverse_endianness(MEMr_tag (addr, cap_size)) in
+  let tagmem = reverse_endianness(MEMr_tag (addr, cap_size)) in
+  let tag = tagmem[((8 * cap_size) + 7) .. (8 * cap_size)] in
+  let mem = tagmem[((8 * cap_size) - 1) .. 0] in
   (tag[0], mem)
 }
 
 function (bool, bit[cap_size_t * 8]) MEMr_tagged_reserve ((bit[64]) addr) =
 {
   (* assumes addr is cap. aligned *)
-  let ((bit[8]) tag : mem) = reverse_endianness(MEMr_tag_reserve (addr, cap_size)) in
+  let tagmem = reverse_endianness(MEMr_tag_reserve (addr, cap_size)) in
+  let tag = tagmem[((8 * cap_size) + 7) .. (8 * cap_size)] in
+  let mem = tagmem[((8 * cap_size) - 1) .. 0] in
   (tag[0], mem)
 }
 
