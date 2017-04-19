@@ -62,7 +62,7 @@ let _MEMr (addr, size) = begin
         let byte = Mem.find byte_addr !mips_mem in
         to_vec_dec_int (8, byte)
       with Not_found -> 
-        to_vec_dec_undef_int 8 in
+        to_vec_dec_int (8, 0) in (* XXX return 0 for uninitialised memory. Optionally return undef instead. *)
     ret := vector_concat byte_vec (!ret);
     (*printf "MEM [%s] -> %x %s %s\n" (big_int_to_hex byte_addr) byte (string_of_value byte_vec) (string_of_value !ret);*)
   done;
