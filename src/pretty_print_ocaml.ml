@@ -280,7 +280,7 @@ let doc_exp_ocaml, doc_let_ocaml =
              string "get_register_field_bit"
            | _ -> string "get_register_field_vec" in
          parens (field_f ^^ space ^^ (exp fexp) ^^ space ^^ string_lit (doc_id id))
-      | _ -> exp fexp ^^ dot ^^ doc_id id)
+      | _ -> exp fexp ^^ dot ^^ doc_id_ocaml id)
     | E_block [] -> string "()"
     | E_block exps | E_nondet exps ->
       let exps_doc = separate_map (semi ^^ hardline) exp exps in
