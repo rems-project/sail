@@ -599,6 +599,8 @@ let add_big = arith_op add_big_int
 let add_signed_big = arith_op add_big_int
 let minus_big = arith_op sub_big_int
 let multiply_big = arith_op mult_big_int
+let min_big = arith_op min_big_int
+let max_big = arith_op max_big_int
  (* this implements truncation towards zero like C and unlike ocaml (consider r < 0) *)
 let quot_big (l, r) =
   let q = div_big_int (abs_big_int l) (abs_big_int r) in
@@ -640,6 +642,8 @@ let multiply   = multiply_big
 let modulo     = modulo_big
 let quot       = quot_big
 let power      = power_big
+let min        = min_big
+let max        = max_big
 
 let arith_op_vec_big op sign size (l,r) =
   let ord = get_ord l in
@@ -1207,6 +1211,7 @@ let eq_bit = bitwise_binop_bit (=)
 let neq (l,r) = bitwise_not_bit (eq (l,r))
 let neq_vec (l,r) = bitwise_not_bit (eq_vec_vec(l,r))
 let neq_bit (l,r) = bitwise_not_bit (eq_bit(l,r))
+let neq_range = neq
 
 let mask (n,v) = 
   let n' = int_of_big_int n in
