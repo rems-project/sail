@@ -12,12 +12,15 @@ module Mem = struct
 end
 
 let mips_mem = (ref Mem.empty : (int Mem.t) ref);;
+let tag_mem = (ref Mem.empty : (bool Mem.t) ref);;
 
 let _MEMea (addr, size) = ()
 let _MEMea_conditional = _MEMea
+let _MEMea_tag  = _MEMea
+let _MEMea_tag_conditional = _MEMea
 
 let _MEMval (addr, size, data) =
-  (* assumes data is decreasing vector to be stored in big-endian byte order in mem *)
+  (* assumes data is decreasing vector to be stored in little-endian byte order in mem *)
   let s = int_of_big_int size in
   let a = unsigned_big(addr) in
   for i = 0 to (s - 1) do
@@ -29,9 +32,23 @@ let _MEMval (addr, size, data) =
       mips_mem := Mem.add byte_addr byte !mips_mem;
     end
   done
+
+let _MEMval_tag (addr, size, data) =
+  let tag = bit_vector_access_int data 0 in
+  let data = vector_subrange_int data (8*(int_of_big_int size) + 7) 8 in 
+  let addr_bi = (unsigned_big(addr)) in
+  begin
+    _MEMval (addr, size, data);
+    tag_mem := Mem.add addr_bi (to_bool tag) !tag_mem;
+  end
+
   
 let _MEMval_conditional (addr, size, data) =
     let _ = _MEMval (addr, size, data) in
+    Vone
+
+let _MEMval_tag_conditional (addr, size, data) =
+    let _ = _MEMval_tag (addr, size, data) in
     Vone
 
 let _MEMr (addr, size) = begin
@@ -53,5 +70,22 @@ let _MEMr (addr, size) = begin
   !ret;
 end
 let _MEMr_reserve = _MEMr
+
+let _MEMr_tag (addr, size) =
+  let data = _MEMr(addr, size) in
+  let addr_bi = unsigned_big(addr) in 
+  let tag = try
+      Mem.find addr_bi !tag_mem 
+    with Not_found -> false in
+  begin
+    set_start_to_length (vector_concat data (to_vec_dec_int (8, if tag then 1 else 0)))
+  end
+
+let _MEMr_tag_reserve = _MEMr_tag
+
+let _TAGw (addr, tag) = 
+  begin
+    tag_mem := Mem.add (unsigned_big addr) (to_bool (bit_vector_access_int tag 0)) !tag_mem
+  end
 
 let _MEM_sync _ = ()
