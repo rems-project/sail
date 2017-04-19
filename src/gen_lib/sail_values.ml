@@ -2,8 +2,7 @@ open Big_int_Z
 open Printf
 
 let trace_writes = ref false
-let tracef : ('a, out_channel, unit) format -> 'a =
-  function f -> if !trace_writes then printf f else ifprintf stderr f
+let tracef = printf
 
 (* only expected to be 0, 1, 2; 2 represents undef *)
 type vbit = Vone | Vzero | Vundef
@@ -163,12 +162,14 @@ let get_register_field_bit reg field =
 let set_register register value = match register,value with
   | Vregister(a,_,_,name,_), Vregister(new_v,_,_,_,_) -> 
      begin
-       tracef "%s <- %s\n" name (string_of_value value);
+       if !trace_writes then
+         tracef "%s <- %s\n" name (string_of_value value);
        a := !new_v
      end
   | Vregister(a,_,_,name,_), Vvector(new_v,_,_) ->
      begin
-       tracef "%s <- %s\n" name (string_of_value value);
+       if !trace_writes then
+         tracef "%s <- %s\n" name (string_of_value value);
        a := new_v
      end
   | _ -> failwith "set_register of non-register"
@@ -227,7 +228,8 @@ let set_register_field_v reg field new_v =
   match reg with
   | Vregister(array,start,dir,name,fields) ->
      begin
-       tracef "%s[%s] <- %s\n" name field (string_of_value new_v);
+       if !trace_writes then
+         tracef "%s[%s] <- %s\n" name field (string_of_value new_v);
     (match List.assoc field fields with
      | (i,j) ->
        if i = j
@@ -240,7 +242,8 @@ let set_register_field_bit reg field new_v =
   match reg with
   | Vregister(array,start,dir,name,fields) ->
      begin
-       tracef "%s.%s <- %s\n" name field (string_of_bit new_v);
+       if !trace_writes then
+         tracef "%s.%s <- %s\n" name field (string_of_bit new_v);
     (match List.assoc field fields with
      | (i,j) ->
        if i = j
