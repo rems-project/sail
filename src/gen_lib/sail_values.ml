@@ -297,7 +297,7 @@ let vector_concat l r =
 
 let has_undef = function
   | Vvector(array,_,_) ->
-    let rec foreach i =
+    let rec foreach i = (* XXX ideally would use Array.mem but not in ocaml 4.02.3 *)
       if i < Array.length array
       then
         if array.(i) = Vundef then true
@@ -377,9 +377,10 @@ let int_of_bit_array array =
   let acc = ref 0 in
   let len = Array.length array in
   begin 
-    for i = len - 1 downto 0 do
-      match array.(len - i - 1) with
-      | Vone -> acc := !acc + (power_int 2 i)
+    for i = 0 to len - 1 do
+      acc := (!acc) lsl 1;
+      match array.(i) with
+      | Vone -> acc := succ (!acc)
       | _ -> ()
     done;
     !acc
@@ -401,10 +402,11 @@ let big_int_of_bit_array array =
   let acc = ref zero_big_int in
   let len = Array.length array in
   begin 
-    for i = len - 1 downto 0 do
-      match array.(len-i-1) with
-      | Vone -> acc := add_big_int !acc (power_int_positive_int 2 i)
-      | _ -> ()
+    for i = 0 to len - 1 do
+      acc := shift_left_big_int !acc 1;
+      match array.(i) with
+      | Vone -> acc := succ_big_int !acc
+      | _ -> ();
     done;
     !acc
   end
