@@ -230,11 +230,12 @@ function bool fastRepCheck((CapStruct) c, (bit[64]) i) =
            (2**(E+20)) and 2. whether it is positive or negative. To
            satisfy 1. all top bits must be the same so we are
            interested in the cases i_top is 0 or -1 *)
-        switch(i_top) { 
-          case 0  -> i_mid <_u diff1
-          case -1 -> unsigned(i_mid) >= unsigned(diff) & (R != a_mid) (* XXX sail missing unsigned >= *)
-          case _  -> false
-        }
+        if (i_top == 0) then
+          i_mid <_u diff1
+        else if (i_top == -1) then
+          unsigned(i_mid) >= unsigned(diff) & (R != a_mid) (* XXX sail missing unsigned >= *)
+        else
+          false
 
 function (bool, CapStruct) setCapOffset((CapStruct) c, (bit[64]) offset) =
     let (bit[64]) base       = (bit[64]) (getCapBase(c)) in
