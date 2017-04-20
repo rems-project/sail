@@ -236,7 +236,63 @@ module CHERI_model : ISA_model = struct
       resultf "DEBUG CAP PCC %s\n" (cap_reg_to_string Cheri_embed._PCC);
       debug_print_caps Cheri_embed._CapRegs 0 31;
     end 
+end
 
+module CHERI128_model : ISA_model = struct
+  type ast = Cheri128_embed._ast
+
+  let init_model () = 
+    let start_addr = (to_vec_dec_big (big_int_of_int 64, hex_to_big_int "0x9000000040000000")) in
+    set_register Cheri128_embed._nextPC start_addr;
+    set_register_field_bit Cheri128_embed._CP0Status "BEV" Vone;
+    let initial_cap_val_int = big_int_of_string "0x1fffe0000000800000000000000000000" in (* hex((0x80000 << 64) + (0x7fff << 113) + (1 << 128)) *)
+    let initial_cap_vec = to_vec_dec ((big_int_of_int 129), initial_cap_val_int) in 
+    set_register Cheri128_embed._PCC initial_cap_vec;
+    set_register Cheri128_embed._nextPCC initial_cap_vec;
+    set_register Cheri128_embed._delayedPCC initial_cap_vec;
+    for i = 0 to 31 do
+      set_register (vector_access_int Cheri128_embed._CapRegs i) initial_cap_vec
+    done
+
+  let inc_nextPC () = 
+    set_register Cheri128_embed._inBranchDelay Cheri128_embed._branchPending;
+    set_register Cheri128_embed._branchPending (to_vec_dec_int (1, 0));
+    set_register Cheri128_embed._PC Cheri128_embed._nextPC;
+    set_register Cheri128_embed._PCC Cheri128_embed._nextPCC;
+    let inBranchDelay = unsigned_int(Cheri128_embed._inBranchDelay) in
+    (match inBranchDelay with
+    | 0 ->
+       let pc_vaddr = unsigned_big(Cheri128_embed._PC) in
+       let npc_addr = add_int_big_int 4 pc_vaddr in
+       let npc_vec = to_vec_dec_big (big_int_of_int 64, npc_addr) in
+       set_register Cheri128_embed._nextPC npc_vec;
+    | 1 ->
+       begin
+         set_register Cheri128_embed._nextPC Cheri128_embed._delayedPC;
+         set_register Cheri128_embed._nextPCC Cheri128_embed._delayedPCC;
+       end
+    | _ -> failwith "invalid value of inBranchDelay")
+
+  let get_pc () = unsigned_big (Cheri128_embed._PC)
+
+  let translate_pc () = 
+    try
+      Some (unsigned_big(Cheri128_embed._TranslatePC(Cheri128_embed._PC)))
+    with Sail_exit -> None
+
+  let get_opcode pc_a = Cheri128_embed._reverse_endianness(_MEMr (to_vec_dec_big (big_int_of_int 64, pc_a), big_int_of_int 4))
+
+  let decode = Cheri128_embed._decode
+
+  let execute = Cheri128_embed._execute
+  let is_halt i = (i = Cheri128_embed.HCF)
+  let print_results () =
+    begin
+      resultf "DEBUG MIPS PC 0x%s\n" (big_int_to_hex (unsigned_big Cheri128_embed._PC));
+      debug_print_gprs Cheri128_embed._GPR 0 31;
+      resultf "DEBUG CAP PCC %s\n" (cap_reg_to_string Cheri128_embed._PCC);
+      debug_print_caps Cheri128_embed._CapRegs 0 31;
+    end 
 end
 
 let time_it action arg =
@@ -334,6 +390,7 @@ let rec load_raw_file mem addr chan =
 
 
 let get_model = function
+  | "cheri128" -> (module CHERI128_model : ISA_model)
   | "cheri" -> (module CHERI_model : ISA_model)
   | "mips" -> (module MIPS_model : ISA_model)
   | _ -> failwith "unknown model name"
