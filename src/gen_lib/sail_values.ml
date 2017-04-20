@@ -115,25 +115,17 @@ let bit_vector_access_big v n = bit_vector_access_int v (int_of_big_int n)
 let bit_vector_access = bit_vector_access_big
 
 let vector_subrange_int v n m =
-  let builder array length offset default =
-    let new_array = Array.make length default in
-    begin
-      for x = 0 to length-1
-      do new_array.(x) <- array.(x+offset) 
-      done;
-      new_array
-    end
-  in
+  (*Printf.printf "vector_subrange %s %d %d\n" (string_of_value v) n m;*)
   match v with
   | VvectorR(array,start,is_inc) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
-    VvectorR(builder array length offset (VvectorR([||], 0, is_inc)),n,is_inc)
+    VvectorR(Array.sub array offset length,n,is_inc)
   | Vvector(array,start,is_inc) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
-    Vvector(builder array length offset Vzero,n,is_inc)
+    Vvector(Array.sub array offset length,n,is_inc)
   | Vregister(array,start,is_inc,name,fields) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
-    Vvector(builder !array length offset Vzero,n,is_inc)
+    Vvector(Array.sub !array offset length,n,is_inc)
   | _ -> v
 
 let vector_subrange_big v n m = vector_subrange_int v (int_of_big_int n) (int_of_big_int m)
