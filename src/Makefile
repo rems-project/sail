@@ -138,6 +138,10 @@ _build/mips_embed.ml: $(MIPS_SAILS_PRE) ./sail.native
 	cd _build ; \
 	../sail.native -ocaml -lem -lem_ast -ocaml_lib Mips_extras_ml -o mips_embed $(MIPS_SAILS_PRE)
 
+_build/cheri_embed.ml: $(CHERI_SAILS) ./sail.native
+	mkdir -p _build
+	cd _build ; \
+	../sail.native -ocaml -lem -lem_ast -ocaml_lib Mips_extras_ml -o cheri_embed $(CHERI_SAILS)
 
 _build/cheri.lem: $(CHERI_SAILS) ./sail.native
 	mkdir -p _build
@@ -181,17 +185,15 @@ count: _build/cheri_trimmed.sail _build/mips_trimmed.sail
 run_mips.native: _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml interpreter
 	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(LEMLIBOCAML)/dependencies/zarith -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(LEMLIBOCAML)/dependencies/zarith/zarith.cmxa $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/mips.ml _build/mips_extras.ml _build/run_with_elf.ml  -o run_mips.native
 
-run_mips_embed.native: _build/mips_embed.ml _build/mips_extras_ml.ml _build/sail_values.ml _build/run_embed.ml
-	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(LEMLIBOCAML)/dependencies/zarith -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(LEMLIBOCAML)/dependencies/zarith/zarith.cmxa $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/sail_values.ml _build/mips_extras_ml.ml _build/mips_embed.ml _build/run_embed.ml -o run_mips_embed.native
-
-run_mips_embed.bytes: _build/mips_notlb_embed.ml _build/mips_extras_ml.ml _build/sail_values.ml _build/run_embed.ml
-	env OCAMLRUNPARAM=l=100M ocamlfind ocamlc -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(LEMLIBOCAML)/dependencies/zarith -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(LEMLIBOCAML)/dependencies/zarith/zarith.cma $(LEMLIBOCAML)/extract.cma $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cma $(ELFDIR)/src/linksem.cma  _build/sail_values.ml _build/mips_extras_ml.ml _build/mips_notlb_embed.ml _build/run_embed.ml -o run_mips_embed.bytes
-
 run_cheri.native:  _build/cheri.ml _build/mips_extras.ml _build/run_with_elf_cheri.ml interpreter
 	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(LEMLIBOCAML)/dependencies/zarith -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(LEMLIBOCAML)/dependencies/zarith/zarith.cmxa $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/cheri.ml _build/mips_extras.ml _build/run_with_elf_cheri.ml  -o run_cheri.native
 
 run_cheri128.native:  _build/cheri128.ml _build/mips_extras.ml _build/run_with_elf_cheri128.ml interpreter
 	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(LEMLIBOCAML)/dependencies/zarith -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(LEMLIBOCAML)/dependencies/zarith/zarith.cmxa $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/cheri128.ml _build/mips_extras.ml _build/run_with_elf_cheri128.ml  -o run_cheri128.native
+
+run_embed.native: _build/sail_values.ml _build/mips_extras_ml.ml _build/mips_embed.ml _build/cheri_embed.ml _build/run_embed.ml
+	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt -g -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(LEMLIBOCAML)/dependencies/zarith -I _build -linkpkg $(LEMLIBOCAML)/dependencies/zarith/zarith.cmxa $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $^ -o $@
+
 
 mips_notlb: _build/mips_notlb.ml  _build/mips_embed_types.lem _build/mips_extras.ml
 	true
