@@ -2,7 +2,7 @@ open Sail_values
 open Big_int_Z
 open Printf
 
-let big_int_to_hex i = Uint64.to_string_hex (Uint64.of_string (string_of_big_int i))
+let big_int_to_hex i = Z.format "%x" i
 
 module Mem = struct
   include Map.Make(struct

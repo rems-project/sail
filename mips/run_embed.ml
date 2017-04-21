@@ -59,23 +59,8 @@ let rec foldli f acc ?(i=0) = function
   | [] -> acc
   | x::xs -> foldli f (f i acc x) ~i:(i+1) xs;;
 
-let hex_to_big_int s = big_int_of_int64 (Int64.of_string s) ;;
-let big_int_to_hex i = 
-  (* annoyingly Uint64.to_string_hex prefixes the string with 0x UNLESS it is zero... *) 
-  if i = zero_big_int then
-    "0"
-  else
-    let s = Uint64.to_string_hex (Uint64.of_string (string_of_big_int i)) in
-    let len = String.length s in
-    String.sub s 2 (len - 2)
-
-let big_int_to_hex64 i = 
-  let hex = big_int_to_hex i in
-  let len = String.length hex in
-  if (len < 16) then
-    (String.make (16-len) '0') ^ hex
-  else
-    hex
+let big_int_to_hex i = Z.format "%x" i
+let big_int_to_hex64 i = Z.format "%016x" i
 
 let input_buf = (ref [] : int list ref);;
 
