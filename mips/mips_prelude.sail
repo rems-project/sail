@@ -483,11 +483,11 @@ function unit checkCP0Access () =
   }
 
 function unit incrementCP0Count() = {
-  TLBRandom := (if (unsigned(TLBRandom) == unsigned(TLBWired))
+  TLBRandom := (if (TLBRandom == TLBWired)
     then (TLBIndexMax) else (TLBRandom - 1));
 
   CP0Count := (CP0Count + 1);
-  if (unsigned(CP0Count) == unsigned(CP0Compare)) then {
+  if (CP0Count == CP0Compare) then {
     (CP0Cause[15]) := bitone; (* XXX indexing IP field here doesn't seem to work  *)
   };
 
