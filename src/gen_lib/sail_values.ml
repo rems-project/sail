@@ -521,15 +521,14 @@ let to_vec_big ord len n =
   let start = if ord then 0 else len-1 in
   if eq_big_int n zero_big_int
   then Vvector(array, start, ord)
-  else if gt_big_int n zero_big_int
-  then Vvector(divide_by_2_big array (len -1) n, start, ord)
   else
-    let abs_n = abs_big_int n in
-    let abs_array = divide_by_2_big array (len-1) abs_n in
-    let v_abs = bitwise_not (Vvector(abs_array,start,ord)) in
-    match v_abs with
-    | Vvector(array,start,ord) -> Vvector(add_one_bit array true (len-1),start,ord)
-    | _ -> assert false
+    begin
+      for i = 0 to len - 1 do
+        if ((extract_big_int n (len - 1 - i) 1) == unit_big_int) then
+          array.(i) <- Vone
+      done;
+      Vvector(array, start, ord)
+    end
 
 let to_vec_inc_int (len,n) = to_vec_int true len n
 let to_vec_dec_int (len,n) = to_vec_int false len n
