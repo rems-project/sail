@@ -3264,7 +3264,7 @@ let merge_bounds b1 b2 =
                   if nexp_eq n1 n2 then b1 else VR_range(v,[Eq((Patt Parse_ast.Unknown),n1,n2)])
                 | VR_eq(v,n),VR_range(_,ranges) | 
                   VR_range(v,ranges),VR_eq(_,n) -> VR_range(v,(Eq((Patt Parse_ast.Unknown),n,n))::ranges)
-                | VR_range(v,ranges1),VR_range(_,ranges2) -> VR_range(v,ranges1@ranges2)
+                | VR_range(v,ranges1),VR_range(_,ranges2) -> VR_range(v, List.rev_append (List.rev ranges1) ranges2)
                 | VR_vec_eq(v,n1),VR_vec_eq(_,n2) ->
                   if nexp_eq n1 n2 then b1 else VR_vec_r(v,[Eq((Patt Parse_ast.Unknown),n1,n2)])
                 | VR_vec_eq(v,n),VR_vec_r(_,ranges) |
