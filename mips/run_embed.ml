@@ -142,7 +142,7 @@ module MIPS_model : ISA_model = struct
   type ast = Mips_embed._ast
 
   let init_model () = 
-    let start_addr = (to_vec_dec_big (big_int_of_int 64, hex_to_big_int "0x9000000040000000")) in
+    let start_addr = (to_vec_dec_big (bi64, big_int_of_string "0x9000000040000000")) in
     set_register Mips_embed._nextPC start_addr;
     set_register_field_bit Mips_embed._CP0Status "BEV" Vone
 
@@ -155,7 +155,7 @@ module MIPS_model : ISA_model = struct
     | 0 ->
        let pc_vaddr = unsigned_big(Mips_embed._PC) in
        let npc_addr = add_int_big_int 4 pc_vaddr in
-       let npc_vec = to_vec_dec_big (big_int_of_int 64, npc_addr) in
+       let npc_vec = to_vec_dec_big (bi64, npc_addr) in
        set_register Mips_embed._nextPC npc_vec;
     | 1 ->
        set_register Mips_embed._nextPC Mips_embed._delayedPC;
@@ -168,7 +168,7 @@ module MIPS_model : ISA_model = struct
       Some (unsigned_big(Mips_embed._TranslatePC(Mips_embed._PC)))
     with Sail_exit -> None
 
-  let get_opcode pc_a = Mips_embed._reverse_endianness(_MEMr (to_vec_dec_big (big_int_of_int 64, pc_a), big_int_of_int 4))
+  let get_opcode pc_a = Mips_embed._reverse_endianness(_MEMr (to_vec_dec_big (bi64, pc_a), bi4))
 
   let decode = Mips_embed._decode
 
@@ -185,7 +185,7 @@ module CHERI_model : ISA_model = struct
   type ast = Cheri_embed._ast
 
   let init_model () = 
-    let start_addr = (to_vec_dec_big (big_int_of_int 64, hex_to_big_int "0x9000000040000000")) in
+    let start_addr = (to_vec_dec_big (bi64, big_int_of_string "0x9000000040000000")) in
     set_register Cheri_embed._nextPC start_addr;
     set_register_field_bit Cheri_embed._CP0Status "BEV" Vone;
     let initial_cap_val_int = big_int_of_string "0x100000000fffffffe00000000000000000000000000000000ffffffffffffffff" in
@@ -207,7 +207,7 @@ module CHERI_model : ISA_model = struct
     | 0 ->
        let pc_vaddr = unsigned_big(Cheri_embed._PC) in
        let npc_addr = add_int_big_int 4 pc_vaddr in
-       let npc_vec = to_vec_dec_big (big_int_of_int 64, npc_addr) in
+       let npc_vec = to_vec_dec_big (bi64, npc_addr) in
        set_register Cheri_embed._nextPC npc_vec;
     | 1 ->
        begin
@@ -223,7 +223,7 @@ module CHERI_model : ISA_model = struct
       Some (unsigned_big(Cheri_embed._TranslatePC(Cheri_embed._PC)))
     with Sail_exit -> None
 
-  let get_opcode pc_a = Cheri_embed._reverse_endianness(_MEMr (to_vec_dec_big (big_int_of_int 64, pc_a), big_int_of_int 4))
+  let get_opcode pc_a = Cheri_embed._reverse_endianness(_MEMr (to_vec_dec_big (bi64, pc_a), bi4))
 
   let decode = Cheri_embed._decode
 
@@ -242,11 +242,11 @@ module CHERI128_model : ISA_model = struct
   type ast = Cheri128_embed._ast
 
   let init_model () = 
-    let start_addr = (to_vec_dec_big (big_int_of_int 64, hex_to_big_int "0x9000000040000000")) in
+    let start_addr = (to_vec_dec_big (bi64, big_int_of_string "0x9000000040000000")) in
     set_register Cheri128_embed._nextPC start_addr;
     set_register_field_bit Cheri128_embed._CP0Status "BEV" Vone;
     let initial_cap_val_int = big_int_of_string "0x1fffe0000000800000000000000000000" in (* hex((0x80000 << 64) + (0x7fff << 113) + (1 << 128)) *)
-    let initial_cap_vec = to_vec_dec ((big_int_of_int 129), initial_cap_val_int) in 
+    let initial_cap_vec = to_vec_dec ((bi129), initial_cap_val_int) in 
     set_register Cheri128_embed._PCC initial_cap_vec;
     set_register Cheri128_embed._nextPCC initial_cap_vec;
     set_register Cheri128_embed._delayedPCC initial_cap_vec;
@@ -264,7 +264,7 @@ module CHERI128_model : ISA_model = struct
     | 0 ->
        let pc_vaddr = unsigned_big(Cheri128_embed._PC) in
        let npc_addr = add_int_big_int 4 pc_vaddr in
-       let npc_vec = to_vec_dec_big (big_int_of_int 64, npc_addr) in
+       let npc_vec = to_vec_dec_big (bi64, npc_addr) in
        set_register Cheri128_embed._nextPC npc_vec;
     | 1 ->
        begin
@@ -280,7 +280,7 @@ module CHERI128_model : ISA_model = struct
       Some (unsigned_big(Cheri128_embed._TranslatePC(Cheri128_embed._PC)))
     with Sail_exit -> None
 
-  let get_opcode pc_a = Cheri128_embed._reverse_endianness(_MEMr (to_vec_dec_big (big_int_of_int 64, pc_a), big_int_of_int 4))
+  let get_opcode pc_a = Cheri128_embed._reverse_endianness(_MEMr (to_vec_dec_big (bi64, pc_a), bi4))
 
   let decode = Cheri128_embed._decode
 

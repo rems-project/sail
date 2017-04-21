@@ -127,7 +127,12 @@ let doc_lit_ocaml in_pat (L_aux(l,_)) =
   | L_one   -> "Vone"
   | L_true  -> "Vone"
   | L_false -> "Vzero"
-  | L_num i -> "(big_int_of_int (" ^ (string_of_int i) ^ "))"
+  | L_num i -> 
+     let s = string_of_int i in
+     if (i >= 0) && (i <= 257) then
+       "bi" ^ s
+     else
+       "(big_int_of_int (" ^ s ^ "))"
   | L_hex n -> "(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)
   | L_bin n -> "(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)
   | L_undef -> "failwith \"undef literal not supported\"" (* XXX Undef vectors get handled with to_vec_undef. We could support undef bit but would need to check type. For the moment treat as runtime error.  *)
