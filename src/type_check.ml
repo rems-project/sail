@@ -2521,10 +2521,9 @@ let check_def envs def =
 
 
 (*val check : envs ->  tannot defs -> tannot defs*)
-let check envs (Defs defs) =
-  let rec check' envs (Defs defs) k =
-    match defs with
-    | [] -> k ((Defs []), envs)
-    | def::defs -> let (def, envs) = check_def envs def in
-                   check' envs (Defs defs) (fun (Defs defs, envs) -> Defs (def::defs), envs) in
-  check' envs (Defs defs) (fun x -> x)
+let rec check envs (Defs defs) = 
+ match defs with
+   | [] -> (Defs []),envs
+   | def::defs -> let (def, envs) = check_def envs def in
+                  let (Defs defs, envs) = check envs (Defs defs) in
+                  (Defs (def::defs)), envs
