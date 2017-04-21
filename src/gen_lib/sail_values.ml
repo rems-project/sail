@@ -209,7 +209,8 @@ let set_register_bit_int reg n v =
   match reg with
   | Vregister(array,start,inc,name,fields) ->
      begin
-       tracef "%s[%d] <- %s\n" name n (string_of_bit v);
+       if !trace_writes then
+         tracef "%s[%d] <- %s\n" name n (string_of_bit v);
        (!array).(if inc then (n - start) else (start - n)) <- v
      end
   | _ -> failwith "set_register_bit of non-register"
