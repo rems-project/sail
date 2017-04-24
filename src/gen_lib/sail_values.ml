@@ -473,15 +473,6 @@ let get_min_representable_in _ n =
   else if (n=5) then min_5
   else minus_big_int (power_big two_big_int (big_int_of_int n))
 
-
-let rec divide_by_2_big array i n =
-  if i < 0 || eq_big_int n zero_big_int
-  then array
-  else let (quo,modu) = quomod_big_int n two_big_int in
-    if eq_big_int modu unit_big_int
-    then begin array.(i) <- Vone; divide_by_2_big array (i-1) quo end
-    else divide_by_2_big array (i-1) quo
-
 let rec divide_by_2_int array i n =
   if i < 0 || n = 0
   then array
