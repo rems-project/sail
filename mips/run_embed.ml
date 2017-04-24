@@ -115,6 +115,10 @@ let rec debug_print_gprs gprs start stop =
 let cap_reg_to_string reg =
   "0b" ^ (String.sub (string_of_value reg) 9 257)
 
+let read_bit_reg = function
+  | Vregister (array,_,_,_,_) -> (!array).(0) = Vone
+  | _ -> failwith "read_bit_reg of non-reg"
+
 let rec debug_print_caps capregs start stop =
   let cap_val = vector_access capregs (big_int_of_int start) in
   let cap_str = cap_reg_to_string cap_val in
@@ -122,6 +126,30 @@ let rec debug_print_caps capregs start stop =
   if start < stop
   then debug_print_caps capregs (start + 1) stop
   else ()
+
+let handle_uart uart_written uart_wdata uart_rdata uart_rvalid =
+  let (pending, _, _)  = (Unix.select [Unix.stdin] [] [] 0.0) in
+  if pending != [] then
+    input_buf := (!input_buf) @ [(input_byte stdin)];
+
+
+  if (read_bit_reg uart_written) then
+    begin
+      let b = unsigned_int(uart_wdata) in
+      printf "%c" (Char.chr b);
+      printf "%!";
+      set_register uart_written (to_vec_dec_int (1,0))
+    end;
+  
+  if not (read_bit_reg uart_rvalid) then
+    (match !input_buf with
+     | x :: xs -> 
+        begin
+          set_register uart_rdata (to_vec_dec_int (8, x));
+          set_register uart_rvalid (to_vec_dec_int (1, 1));
+          input_buf := xs;
+        end
+     | _ -> ())
 
 module MIPS_model : ISA_model = struct
   type ast = Mips_embed._ast
@@ -132,19 +160,19 @@ module MIPS_model : ISA_model = struct
     set_register_field_bit Mips_embed._CP0Status "BEV" Vone
 
   let inc_nextPC () = 
+    handle_uart Mips_embed._UART_WRITTEN Mips_embed._UART_WDATA Mips_embed._UART_RDATA Mips_embed._UART_RVALID;
+
     set_register Mips_embed._inBranchDelay Mips_embed._branchPending;
     set_register Mips_embed._branchPending (to_vec_dec_int (1, 0));
     set_register Mips_embed._PC Mips_embed._nextPC;
-    let inBranchDelay = unsigned_int(Mips_embed._inBranchDelay) in
-    (match inBranchDelay with
-    | 0 ->
-       let pc_vaddr = unsigned_big(Mips_embed._PC) in
-       let npc_addr = add_int_big_int 4 pc_vaddr in
-       let npc_vec = to_vec_dec_big (bi64, npc_addr) in
-       set_register Mips_embed._nextPC npc_vec;
-    | 1 ->
-       set_register Mips_embed._nextPC Mips_embed._delayedPC;
-    | _ -> failwith "invalid value of inBranchDelay")
+    let inBranchDelay = read_bit_reg Mips_embed._inBranchDelay in
+    if inBranchDelay then
+      set_register Mips_embed._nextPC Mips_embed._delayedPC
+    else
+      let pc_vaddr = unsigned_big(Mips_embed._PC) in
+      let npc_addr = add_int_big_int 4 pc_vaddr in
+      let npc_vec = to_vec_dec_big (bi64, npc_addr) in
+      set_register Mips_embed._nextPC npc_vec
 
   let get_pc () = unsigned_big (Mips_embed._PC)
 
@@ -183,23 +211,23 @@ module CHERI_model : ISA_model = struct
     done
 
   let inc_nextPC () = 
+    handle_uart Cheri_embed._UART_WRITTEN Cheri_embed._UART_WDATA Cheri_embed._UART_RDATA Cheri_embed._UART_RVALID;
+
     set_register Cheri_embed._inBranchDelay Cheri_embed._branchPending;
     set_register Cheri_embed._branchPending (to_vec_dec_int (1, 0));
     set_register Cheri_embed._PC Cheri_embed._nextPC;
     set_register Cheri_embed._PCC Cheri_embed._nextPCC;
-    let inBranchDelay = unsigned_int(Cheri_embed._inBranchDelay) in
-    (match inBranchDelay with
-    | 0 ->
-       let pc_vaddr = unsigned_big(Cheri_embed._PC) in
-       let npc_addr = add_int_big_int 4 pc_vaddr in
-       let npc_vec = to_vec_dec_big (bi64, npc_addr) in
-       set_register Cheri_embed._nextPC npc_vec;
-    | 1 ->
+    let inBranchDelay = read_bit_reg Cheri_embed._inBranchDelay in
+    if inBranchDelay then
        begin
          set_register Cheri_embed._nextPC Cheri_embed._delayedPC;
          set_register Cheri_embed._nextPCC Cheri_embed._delayedPCC;
        end
-    | _ -> failwith "invalid value of inBranchDelay")
+    else
+       let pc_vaddr = unsigned_big(Cheri_embed._PC) in
+       let npc_addr = add_int_big_int 4 pc_vaddr in
+       let npc_vec = to_vec_dec_big (bi64, npc_addr) in
+       set_register Cheri_embed._nextPC npc_vec
 
   let get_pc () = unsigned_big (Cheri_embed._PC)
 
@@ -240,23 +268,23 @@ module CHERI128_model : ISA_model = struct
     done
 
   let inc_nextPC () = 
+    handle_uart Cheri128_embed._UART_WRITTEN Cheri128_embed._UART_WDATA Cheri128_embed._UART_RDATA Cheri128_embed._UART_RVALID;
+
     set_register Cheri128_embed._inBranchDelay Cheri128_embed._branchPending;
     set_register Cheri128_embed._branchPending (to_vec_dec_int (1, 0));
     set_register Cheri128_embed._PC Cheri128_embed._nextPC;
     set_register Cheri128_embed._PCC Cheri128_embed._nextPCC;
-    let inBranchDelay = unsigned_int(Cheri128_embed._inBranchDelay) in
-    (match inBranchDelay with
-    | 0 ->
-       let pc_vaddr = unsigned_big(Cheri128_embed._PC) in
+    let inBranchDelay = read_bit_reg Cheri_embed._inBranchDelay in
+    if inBranchDelay then
+       begin
+         set_register Cheri_embed._nextPC Cheri_embed._delayedPC;
+         set_register Cheri_embed._nextPCC Cheri_embed._delayedPCC;
+       end
+    else
+       let pc_vaddr = unsigned_big(Cheri_embed._PC) in
        let npc_addr = add_int_big_int 4 pc_vaddr in
        let npc_vec = to_vec_dec_big (bi64, npc_addr) in
-       set_register Cheri128_embed._nextPC npc_vec;
-    | 1 ->
-       begin
-         set_register Cheri128_embed._nextPC Cheri128_embed._delayedPC;
-         set_register Cheri128_embed._nextPCC Cheri128_embed._delayedPCC;
-       end
-    | _ -> failwith "invalid value of inBranchDelay")
+       set_register Cheri_embed._nextPC npc_vec
 
   let get_pc () = unsigned_big (Cheri128_embed._PC)
 
@@ -295,6 +323,7 @@ let rec fde_loop (model, count) =
   else 
     begin
     let module Model = (val model : ISA_model) in
+
     Model.inc_nextPC ();
     if !interact_print then
       interactf "\n**** instruction %d from address %s ****\n"
@@ -330,38 +359,6 @@ let rec fde_loop (model, count) =
           fde_loop (model, count + 1)
   end
 
- (*
- (try
-   let (pending, _, _)  = (Unix.select [(Unix.stdin)] [] [] 0.0) in
-   (if (pending != []) then
-     let char = (input_byte stdin) in (
-     errorf "Input %x\n" char;
-     input_buf := (!input_buf) @ [char]));
- with
- | _ -> ());
-
- let uart_rvalid = option_int_of_reg "UART_RVALID" in
- (match uart_rvalid with
- | Some 0 ->
-   (match !input_buf with
-   | x :: xs -> (
-       reg := Reg.add "UART_RDATA" (register_value_of_integer 8 7 Sail_impl_base.D_decreasing (Nat_big_num.of_int x)) !reg;
-       reg := Reg.add "UART_RVALID" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing (Nat_big_num.of_int 1)) !reg;
-       input_buf := xs;
-     )
-   | [] -> ())
- | _-> ());
-
- let uart_written = option_int_of_reg "UART_WRITTEN" in
- (match uart_written with 
- | Some 1 ->
-   (let uart_data = option_int_of_reg "UART_WDATA" in
-   match uart_data with
-   | Some b -> (printf "%c" (Char.chr b); printf "%!")
-   | None   -> (errorf "UART_WDATA was undef" ; exit 1))
- | _      -> ());
- reg := Reg.add "UART_WRITTEN" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;*)
-
 let rec load_raw_file' mem addr chan =
   let byte = input_byte chan in
   (add_mem byte addr mem;
@@ -381,6 +378,12 @@ let get_model = function
   | _ -> failwith "unknown model name"
 
 let run () =
+  (* Turn off line-buffering of standard input to allow responsive console input  *)
+  if Unix.isatty (Unix.stdin) then begin
+    let tattrs = Unix.tcgetattr (Unix.stdin) in
+    Unix.tcsetattr (Unix.stdin) (Unix.TCSANOW) ({tattrs with c_icanon=false})
+  end;
+
   Arg.parse args (fun _ -> raise (Arg.Bad "anonymous parameter")) "" ;
 
   if String.length(!raw_file) != 0 then
@@ -393,14 +396,4 @@ let run () =
   let (t, count) = time_it fde_loop (model, 0) in
   resultf "Execution time for file %s: %f seconds %f IPS \n" name t (float(count) /. t);;
 
-
-
-(* Turn off line-buffering of standard input to allow responsive console input 
-if Unix.isatty (Unix.stdin) then begin
-  let tattrs = Unix.tcgetattr (Unix.stdin) in
-  Unix.tcsetattr (Unix.stdin) (Unix.TCSANOW) ({tattrs with c_icanon=false})
-end ;;
-*)
-
 run () ;;
-

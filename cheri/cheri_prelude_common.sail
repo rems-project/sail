@@ -263,7 +263,7 @@ function (bit[64]) align((bit[64]) addr, (nat) alignment) =
 function unit effect {wmem} MEMw_wrapper(addr, size, data) =
   if (addr == 0x000000007f000000) then
   {
-    UART_WDATA   := data[31..24];
+    UART_WDATA   := data[7..0];
     UART_WRITTEN := 1;
   }
   else

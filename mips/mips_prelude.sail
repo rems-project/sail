@@ -586,9 +586,10 @@ function forall Nat 'n. (bit[8 * 'n]) effect { rmem } MEMr_wrapper ((bit[64]) ad
     if (addr == 0x000000007f000000) then
       {
         let rvalid = (bit[1]) UART_RVALID in
+        let rdata = mask(0x00000000 : UART_RDATA : [rvalid] : 0b0000000 : 0x0000) in
         {
           UART_RVALID := [bitzero];
-          mask(0x00000000 : UART_RDATA : [rvalid] : 0b0000000 : 0x0000)
+          rdata
         }
       }
     else if (addr == 0x000000007f000004) then
