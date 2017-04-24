@@ -890,8 +890,8 @@ let build_register_value bs dir width start_index =
   <| rv_bits = bs;
      rv_dir = dir; (* D_increasing for Power, D_decreasing for ARM *)
      rv_start_internal = start_index; 
-     rv_start = if dir = D_increasing 
-       then start_index 
+     rv_start = if dir = D_increasing
+       then start_index
        else (start_index+1) - width; (* Smaller index, as in Power, for external interaction *)
   |>
 
@@ -906,6 +906,20 @@ let register_value_zeros dir width start_index =
 val register_value_ones : direction -> nat -> nat -> register_value
 let register_value_ones dir width start_index = 
   register_value Bitl_one dir width start_index
+
+val register_value_for_reg : reg_name -> list bit_lifted -> register_value
+let register_value_for_reg r bs : register_value =
+  let () = ensure (width_of_reg_name r = List.length bs)
+      ("register_value_for_reg (\"" ^ show (register_base_name r) ^ "\") length mismatch: "
+          ^ show (width_of_reg_name r) ^ " vs " ^ show (List.length bs))
+  in
+  let (j1, j2) = slice_of_reg_name r in
+  let d = direction_of_reg_name r in
+  <|  rv_bits = bs;
+      rv_dir = d;
+      rv_start_internal = if d = D_increasing then j1 else (start_of_reg_name r) - j1;
+      rv_start = j1;
+  |>
 
 val byte_lifted_undef : byte_lifted
 let byte_lifted_undef = Byte_lifted (List.replicate 8 Bitl_undef)
@@ -1144,8 +1158,9 @@ let integer_of_register_value (rv:register_value):maybe integer =
   match maybe_all (List.map bit_of_bit_lifted rv.rv_bits) with
   | Nothing -> Nothing
   | Just bs -> Just (integer_of_bit_list bs)
-  end 
-  
+  end
+
+(* NOTE: register_value_for_reg_of_integer might be easier to use *)
 val register_value_of_integer : nat -> nat -> direction -> integer -> register_value 
 let register_value_of_integer (len:nat) (start:nat) (dir:direction) (i:integer):register_value =
   let bs = bit_list_of_integer len i in
