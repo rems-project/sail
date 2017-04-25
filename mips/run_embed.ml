@@ -117,11 +117,11 @@ let rec debug_print_caps capregs start stop =
   else ()
 
 let handle_uart uart_written uart_wdata uart_rdata uart_rvalid =
-  let (pending, _, _)  = (Unix.select [Unix.stdin] [] [] 0.0) in
-  if pending != [] then
-    try
+  try
+    let (pending, _, _) = Unix.select [Unix.stdin] [] [] 0.0 in
+    if pending != [] then
       input_buf := (!input_buf) @ [(input_byte stdin)]
-    with End_of_file -> ();
+  with _ -> ();
 
   if (read_bit_reg uart_written) then
     begin
