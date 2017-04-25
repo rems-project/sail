@@ -473,38 +473,16 @@ let get_min_representable_in _ n =
   else if (n=5) then min_5
   else minus_big_int (power_big two_big_int (big_int_of_int n))
 
-let rec divide_by_2_int array i n =
-  if i < 0 || n = 0
-  then array
-  else let (quo,modu) = n/2, n mod 2 in
-    if modu = 1
-    then begin array.(i) <- Vone; divide_by_2_int array (i-1) quo end
-    else divide_by_2_int array (i-1) quo
-
-let rec add_one_bit array ci i =
-  if i < 0
-  then array
-  else match array.(i),ci with
-    | Vzero,false -> add_one_bit array false (i-1)
-    | Vzero,true  -> array.(i) <- Vone; add_one_bit array false (i-1)
-    | Vone, false -> array.(i) <- Vone; add_one_bit array false (i-1)
-    | Vone, true  -> array.(i) <- Vzero; add_one_bit array true (i-1)
-    | Vundef,_ -> assert false
-
 let to_vec_int ord len n =
   let array = Array.make len Vzero in
   let start = if ord then 0 else len-1 in
-  if n = 0
-  then Vvector(array, start, ord)
-  else if n >= 0 
-  then Vvector(divide_by_2_int array (len -1) n, start, ord)
-  else
-    let abs_n = abs n in
-    let abs_array = divide_by_2_int array (len-1) abs_n in
-    let v_abs = bitwise_not (Vvector(abs_array,start,ord)) in
-    match v_abs with
-    | Vvector(array,start,ord) -> Vvector(add_one_bit array true (len-1),start,ord)
-    | _ -> assert false
+  let acc = ref n in
+  for i = (len - 1) downto 0 do
+    if ((!acc) land 1) = 1 then
+      array.(i) <- Vone;
+    acc := (!acc) asr 1
+  done;
+  Vvector(array, start, ord)
 
 let to_vec_big ord len n =
   let len = int_of_big_int len in
