@@ -64,12 +64,6 @@ let big_int_to_hex64 i = Z.format "%016x" i
 
 let input_buf = (ref [] : int list ref);;
 
-let add_mem byte addr mem = begin
-  assert(byte >= 0 && byte < 256);
-  (*printf "MEM [%s] <- %x\n" (big_int_to_hex addr) byte;*)
-  mem := Mem.add addr byte !mem
-end
-
 let max_cut_off = ref false
 let max_instr = ref 0
 let model_arg = ref "cheri"
@@ -355,17 +349,12 @@ let rec fde_loop (model, count) =
           fde_loop (model, count + 1)
   end
 
-let rec load_raw_file' mem addr chan =
-  let byte = input_byte chan in
-  (add_mem byte addr mem;
-  load_raw_file' mem (Big_int_Z.add_int_big_int 1 addr) chan)
-
-let rec load_raw_file mem addr chan =
-  try 
-    load_raw_file' mem addr chan
-   with
-  | End_of_file -> ()
-
+let rec load_raw_file buf addr len chan =
+    let to_read = min_int len page_size_bytes in
+    really_input chan buf 0 to_read;
+    add_mem_bytes addr buf 0 to_read;
+    if (len > to_read) then
+      load_raw_file buf (add_int_big_int to_read addr) (len - to_read) chan
 
 let get_model = function
   | "cheri128" -> (module CHERI128_model : ISA_model)
@@ -384,7 +373,10 @@ let anon_raw s =
   raw_list := (!raw_list) @ [(f, big_int_of_string addr)]
 
 let load_raw_arg (f, a) =
-  load_raw_file mips_mem a (open_in_bin f)
+  let buf = Bytes.create page_size_bytes in
+  let chan = open_in_bin f in
+  let len = in_channel_length chan in
+  load_raw_file buf a len chan
 
 let run () =
   (* Turn off line-buffering of standard input to allow responsive console input  *)

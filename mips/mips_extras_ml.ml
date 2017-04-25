@@ -11,8 +11,49 @@ module Mem = struct
     end)
 end
 
-let mips_mem = (ref Mem.empty : (int Mem.t) ref);;
+let mem_pages = (ref Mem.empty : (Bytes.t Mem.t) ref);;
 let tag_mem = (ref Mem.empty : (bool Mem.t) ref);;
+
+let page_shift_bits = 20 (* 1M page *)
+let page_size_bytes = 1 lsl page_shift_bits;; 
+
+
+let page_no_of_addr a = shift_right_big_int a page_shift_bits;;
+let bottom_addr_of_page p = shift_left_big_int p page_shift_bits
+let top_addr_of_page p = shift_left_big_int (succ_big_int p) page_shift_bits
+let get_page p =
+  try
+    Mem.find p !mem_pages
+  with Not_found -> 
+    let new_page = Bytes.create page_size_bytes in
+    mem_pages := Mem.add p new_page !mem_pages;
+    new_page
+  
+let rec add_mem_bytes addr buf off len =
+  let page_no = page_no_of_addr addr in
+  let page_bot = bottom_addr_of_page page_no in
+  let page_top = top_addr_of_page page_no in
+  let page_off = int_of_big_int (sub_big_int addr page_bot) in
+  let page = get_page page_no in
+  let bytes_left_in_page = sub_big_int page_top addr in
+  let to_copy = min_int (int_of_big_int bytes_left_in_page) len in
+  Bytes.blit buf off page page_off to_copy;
+  if (to_copy < len) then
+    add_mem_bytes page_top buf (off + to_copy) (len - to_copy)
+
+let rec read_mem_bytes addr len = 
+  let page_no = page_no_of_addr addr in
+  let page_bot = bottom_addr_of_page page_no in
+  let page_top = top_addr_of_page page_no in
+  let page_off = int_of_big_int (sub_big_int addr page_bot) in
+  let page = get_page page_no in
+  let bytes_left_in_page = sub_big_int page_top addr in
+  let to_get = min_int (int_of_big_int bytes_left_in_page) len in
+  let bytes = Bytes.sub page page_off to_get in
+  if to_get >= len then
+    bytes
+  else
+    Bytes.cat bytes (read_mem_bytes page_top (len - to_get))
 
 let _MEMea (addr, size) = ()
 let _MEMea_conditional = _MEMea
@@ -23,15 +64,13 @@ let _MEMval (addr, size, data) =
   (* assumes data is decreasing vector to be stored in little-endian byte order in mem *)
   let s = int_of_big_int size in
   let a = unsigned_big(addr) in
+  let buf = Bytes.create s in
   for i = 0 to (s - 1) do
     let bit_idx = i * 8 in
     let byte = unsigned_int(slice_raw (data, big_int_of_int bit_idx, big_int_of_int (bit_idx + 7))) in
-    let byte_addr = add_int_big_int (s-1-i) a in
-    begin
-      (*printf "MEM [%s] <- %x\n" (big_int_to_hex byte_addr) byte;*)
-      mips_mem := Mem.add byte_addr byte !mips_mem;
-    end
-  done
+    Bytes.set buf (s-1-i) (char_of_int byte);
+  done;
+  add_mem_bytes a buf 0 s
 
 let _MEMval_tag (addr, size, data) =
   let tag = bit_vector_access_int data 0 in
@@ -54,15 +93,11 @@ let _MEMval_tag_conditional (addr, size, data) =
 let _MEMr (addr, size) = begin
   let s = int_of_big_int size in
   let a = unsigned_big(addr) in
+  let bytes = read_mem_bytes a s in
   let ret = ref (to_vec_dec_int (0, 0)) in
   for i = 0 to (s - 1) do
-    let byte_addr = add_int_big_int i a in
-    let byte_vec = 
-      try
-        let byte = Mem.find byte_addr !mips_mem in
-        to_vec_dec_int (8, byte)
-      with Not_found -> 
-        to_vec_dec_int (8, 0) in (* XXX return 0 for uninitialised memory. Optionally return undef instead. *)
+    let byte = Bytes.get bytes i in
+    let byte_vec = to_vec_dec_int (8, int_of_char byte) in
     ret := vector_concat byte_vec (!ret);
     (*printf "MEM [%s] -> %x %s %s\n" (big_int_to_hex byte_addr) byte (string_of_value byte_vec) (string_of_value !ret);*)
   done;

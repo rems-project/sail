@@ -630,7 +630,9 @@ let multiply   = multiply_big
 let modulo     = modulo_big
 let quot       = quot_big
 let power      = power_big
-let min        = min_big
+let min_int    = min (* the built-in version *)
+let min        = min_big (* is overwritten here *)
+let max_int    = max (* likewise *)
 let max        = max_big
 
 let arith_op_vec_big op sign size (l,r) =
