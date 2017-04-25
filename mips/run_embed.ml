@@ -72,17 +72,12 @@ end
 
 let max_cut_off = ref false
 let max_instr = ref 0
-let raw_file = ref ""
-let raw_at   = ref ""
-let elf_file = ref ""
 let model_arg = ref "cheri"
+let raw_list = ref []
 
 let args = [
   ("--model", Arg.Set_string model_arg, "CPU model to use (mips, cheri, cheri128)");
-  ("--file", Arg.Set_string elf_file, "filename of elf binary to load in memory");
   ("--max_instruction", Arg.Int (fun i -> max_cut_off := true; max_instr := i), "only run i instructions, then stop");
-  ("--raw", Arg.Set_string raw_file, "filename of raw file to load in memory");
-  ("--at", Arg.Set_string raw_at, "address to load raw file in memory");
   ("--trace", Arg.Set trace_writes, "trace all register writes"); (* trace_writes is in sail_values.ml *)
   ("--quiet", Arg.Clear interact_print, "suppress trace of PC");
 ]
@@ -377,23 +372,31 @@ let get_model = function
   | "mips" -> (module MIPS_model : ISA_model)
   | _ -> failwith "unknown model name"
 
+let anon_raw s = 
+  (* some input validation would be nice... *)
+  let len = String.length s in
+  let atidx = try
+      String.index s '@' 
+    with Not_found -> raise (Arg.Bad "expected argument of form file@addr") in
+  let f = String.sub s 0 atidx in
+  let addr =  String.sub s (atidx+1) (len - atidx -1) in
+  raw_list := (!raw_list) @ [(f, big_int_of_string addr)]
+
+let load_raw_arg (f, a) =
+  load_raw_file mips_mem a (open_in_bin f)
+
 let run () =
   (* Turn off line-buffering of standard input to allow responsive console input  *)
   if Unix.isatty (Unix.stdin) then begin
     let tattrs = Unix.tcgetattr (Unix.stdin) in
     Unix.tcsetattr (Unix.stdin) (Unix.TCSANOW) ({tattrs with c_icanon=false})
   end;
-
-  Arg.parse args (fun _ -> raise (Arg.Bad "anonymous parameter")) "" ;
-
-  if String.length(!raw_file) != 0 then
-    load_raw_file mips_mem (big_int_of_string !raw_at) (open_in_bin !raw_file);
-
-  let name = Filename.basename !raw_file in
+  Arg.parse args anon_raw "" ;
+  List.iter load_raw_arg !raw_list;
   let model = get_model !model_arg in
   let module Model = (val model  : ISA_model) in
   Model.init_model ();
   let (t, count) = time_it fde_loop (model, 0) in
-  resultf "Execution time for file %s: %f seconds %f IPS \n" name t (float(count) /. t);;
+  resultf "Execution time: %f seconds %f IPS \n" t (float(count) /. t);;
 
 run () ;;
