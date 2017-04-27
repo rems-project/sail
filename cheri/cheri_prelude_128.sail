@@ -127,8 +127,8 @@ function (bit[11]) getCapHardPerms((CapStruct) cap) =
   : [cap.global])
 
 function (bit[128]) capStructToMemBits((CapStruct) cap) =
-    let (bit[20]) b = if cap.sealed then (cap.B)[23..12] : (cap.otype)[23..12] else cap.B in
-    let (bit[20]) t = if cap.sealed then (cap.T)[23..12] : (cap.otype)[11..0]  else cap.T in
+    let (bit[20]) b = if cap.sealed then (cap.B)[19..12] : (cap.otype)[23..12] else cap.B in
+    let (bit[20]) t = if cap.sealed then (cap.T)[19..12] : (cap.otype)[11..0]  else cap.T in
     ( cap.uperms
     : getCapHardPerms(cap)
     : cap.reserved
