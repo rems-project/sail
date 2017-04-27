@@ -74,6 +74,7 @@ let args = [
   ("--max_instruction", Arg.Int (fun i -> max_cut_off := true; max_instr := i), "only run i instructions, then stop");
   ("--trace", Arg.Set trace_writes, "trace all register writes"); (* trace_writes is in sail_values.ml *)
   ("--quiet", Arg.Clear interact_print, "suppress trace of PC");
+  ("--undef", Arg.String (fun s -> undef_val := bit_of_string s), "value to use for undef (u,0,1)");
 ]
 
 module type ISA_model = sig

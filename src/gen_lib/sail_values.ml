@@ -11,6 +11,8 @@ type _bool = vbit
 type _string = string
 type _nat = number
 
+let undef_val = ref Vundef
+
 type value =
   | Vvector of vbit array * int * bool
   | VvectorR of value array * int * bool
@@ -24,6 +26,12 @@ let string_of_bit = function
   | Vone   -> "1"
   | Vzero  -> "0"
   | Vundef -> "u"
+
+let bit_of_string = function
+  | "1" -> Vone
+  | "0" -> Vzero
+  | "u" -> Vundef
+  | _ -> failwith "invalid bit value"
 
 let string_of_bit_array a = Array.fold_left (^) "" (Array.map string_of_bit a) 
 
@@ -509,13 +517,13 @@ let to_vec_inc = to_vec_inc_big
 let to_vec_dec = to_vec_dec_big
 
 let to_vec_undef_int ord len = 
-  let array = Array.make len Vundef in
+  let array = Array.make len !undef_val in
   let start = if ord then 0 else len-1 in
   Vvector(array, start, ord)
 
 let to_vec_undef_big ord len = 
   let len = int_of_big_int len in
-  let array = Array.make len Vundef in
+  let array = Array.make len !undef_val in
   let start = if ord then 0 else len-1 in
   Vvector(array, start, ord)
 
