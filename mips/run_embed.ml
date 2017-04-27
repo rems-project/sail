@@ -103,7 +103,7 @@ let rec debug_print_gprs gprs start stop =
   else ()
 
 let cap_reg_to_string reg =
-  "0b" ^ (String.sub (string_of_value reg) 9 257)
+  "0b" ^ (string_of_bit_array (get_barray reg))
 
 let read_bit_reg = function
   | Vregister (array,_,_,_,_) -> (!array).(0) = Vone
@@ -265,17 +265,17 @@ module CHERI128_model : ISA_model = struct
     set_register Cheri128_embed._branchPending (to_vec_dec_int (1, 0));
     set_register Cheri128_embed._PC Cheri128_embed._nextPC;
     set_register Cheri128_embed._PCC Cheri128_embed._nextPCC;
-    let inBranchDelay = read_bit_reg Cheri_embed._inBranchDelay in
+    let inBranchDelay = read_bit_reg Cheri128_embed._inBranchDelay in
     if inBranchDelay then
        begin
-         set_register Cheri_embed._nextPC Cheri_embed._delayedPC;
-         set_register Cheri_embed._nextPCC Cheri_embed._delayedPCC;
+         set_register Cheri128_embed._nextPC Cheri128_embed._delayedPC;
+         set_register Cheri128_embed._nextPCC Cheri128_embed._delayedPCC;
        end
     else
-       let pc_vaddr = unsigned_big(Cheri_embed._PC) in
+       let pc_vaddr = unsigned_big(Cheri128_embed._PC) in
        let npc_addr = add_int_big_int 4 pc_vaddr in
        let npc_vec = to_vec_dec_big (bi64, npc_addr) in
-       set_register Cheri_embed._nextPC npc_vec
+       set_register Cheri128_embed._nextPC npc_vec
 
   let get_pc () = unsigned_big (Cheri128_embed._PC)
 
