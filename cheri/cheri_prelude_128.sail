@@ -173,7 +173,7 @@ function (bool, CapStruct) sealCap((CapStruct) cap, (bit[24]) otype) =
     if (((cap.T)[11..0] == 0) & ((cap.B)[11..0] == 0)) then
         (true, {cap with sealed=true; otype=otype})
     else
-        (false, undefined)
+        (false, cap (* was undefined but ocaml shallow embedding can't handle it *) )
 
 function [|-1:1|] a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound) =
     switch (a_mid <_u R, bound <_u R) {
