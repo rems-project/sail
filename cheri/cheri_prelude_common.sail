@@ -261,9 +261,10 @@ function (bit[64]) align((bit[64]) addr, (nat) alignment) =
     addr - remainder
 
 function unit effect {wmem} MEMw_wrapper(addr, size, data) =
+  let ledata = reverse_endianness(data) in
   if (addr == 0x000000007f000000) then
   {
-    UART_WDATA   := data[7..0];
+    UART_WDATA   := ledata[7..0];
     UART_WRITTEN := 1;
   }
   else
@@ -273,7 +274,7 @@ function unit effect {wmem} MEMw_wrapper(addr, size, data) =
        should probably be done in memory model. *)
     TAGw(align(addr, cap_size), 0x00);
     MEMea(addr,size);
-    MEMval(addr, size, reverse_endianness(data));
+    MEMval(addr, size, ledata);
   }
 
 function bool effect {wmem} MEMw_conditional_wrapper(addr, size, data) =

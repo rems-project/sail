@@ -36,13 +36,14 @@
    (mostly identity functions here) *)
 
 function unit effect {wmem} MEMw_wrapper(addr, size, data) = 
+    let ledata = reverse_endianness(data) in
     if (addr == 0x000000007f000000) then
       {
-        UART_WDATA   := data[7..0];
+        UART_WDATA   := ledata[7..0];
         UART_WRITTEN := 1;
       } else {
         MEMea(addr, size);
-        MEMval(addr, size, reverse_endianness(data));
+        MEMval(addr, size, ledata);
       }
 
 function bool effect {wmem} MEMw_conditional_wrapper(addr, size, data) =
