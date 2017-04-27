@@ -70,6 +70,8 @@ let _MEMval (addr, size, data) =
     let byte = unsigned_int(slice_raw (data, big_int_of_int bit_idx, big_int_of_int (bit_idx + 7))) in
     Bytes.set buf (s-1-i) (char_of_int byte);
   done;
+  if !trace_writes then
+    tracef "MEM[%s] <- %s\n" (big_int_to_hex a) (string_of_value data);
   add_mem_bytes a buf 0 s
 
 let _MEMval_tag (addr, size, data) =
