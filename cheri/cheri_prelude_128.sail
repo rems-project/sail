@@ -186,11 +186,11 @@ function [|-1:1|] a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound
 function uint64 getCapBase((CapStruct) c)  = 
     let ([|45|])  E = min(unsigned(c.E), 45) in
     let (bit[20]) B = c.B in
-    let (bit[64]) a = c.address in
+    let (bit[65]) a = EXTZ(c.address) in
     let (bit[20]) R = B - 0x01000 in (* wraps *)
     let (bit[20]) a_mid = a[(E + 19)..E] in
     let correction = a_top_correction(a_mid, R, B) in
-    let a_top = a[63..(E+20)] in
+    let a_top = a >> (E+20) in
     let (bit[64]) base = EXTZ((a_top + correction) : B) << E in
     unsigned(base)
 
@@ -198,11 +198,11 @@ function CapLen getCapTop ((CapStruct) c)  =
     let ([|45|])  E = min(unsigned(c.E), 45) in
     let (bit[20]) B = c.B in
     let (bit[20]) T = c.T in
-    let (bit[64]) a = c.address  in
+    let (bit[65]) a = EXTZ(c.address)  in
     let (bit[20]) R = B - 0x01000 in (* wraps *)
     let (bit[20]) a_mid = a[(E + 19)..E] in
     let correction = a_top_correction(a_mid, R, T) in
-    let a_top = a[63..(E+20)] in
+    let a_top = a >> (E+20) in
     let (bit[65]) top1 = EXTZ((a_top + correction) : T) in
     (CapLen) (top1 << E)
 
