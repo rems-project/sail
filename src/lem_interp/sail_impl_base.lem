@@ -64,8 +64,8 @@ type bit =
 type bit_lifted = 
   | Bitl_zero
   | Bitl_one
-  | Bitl_undef
-  | Bitl_unknown
+  | Bitl_undef    (* used for modelling h/w arch unspecified bits *)
+  | Bitl_unknown  (* used for interpreter analysis exhaustive execution *)
 
 type direction = 
   | D_increasing
