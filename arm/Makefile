@@ -1,6 +1,6 @@
 BUILDDIR=./build
 
-SAIL=../sail -verbose
+SAIL=../sail
 ifeq ("$(wildcard $(SAIL))","")
   $(warning can not find Sail)
 endif
@@ -28,7 +28,9 @@ all: $(BUILDDIR)/armv8.ml
 clean:
 	rm -rf $(BUILDDIR)
 
-.PHONY: all clean
+ocaml: $(BUILDDIR)/armv8_embed.ml
+
+.PHONY: all clean ocaml
 
 $(BUILDDIR):
 	mkdir -p $@
@@ -40,6 +42,12 @@ $(BUILDDIR)/armv8.lem: $(SOURCES) | $(BUILDDIR)
 
 $(BUILDDIR)/armv8.ml: $(BUILDDIR)/armv8.lem
 	$(LEM) -ocaml -lib $(LEMINTERPDIR) $<
+
+$(BUILDDIR)/armv8_embed.ml: $(SOURCES) | $(BUILDDIR)
+	$(SAIL) -ocaml $(SOURCES) -o $(basename $@)
+#	sail generates the .lem file in pwd
+	mv $(notdir $@) $@
+
 
 ######################################################################
 ETCDIR=../etc
