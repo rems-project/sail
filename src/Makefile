@@ -74,17 +74,18 @@ ELFDIR= $(BITBUCKET_ROOT)/linksem
 ZARITH_DIR=$(LEMLIBOCAML)/dependencies/zarith
 ZARITH_LIB=$(ZARITH_DIR)/zarith.cmxa
 
-MIPS_SAIL_DIR:=$(BITBUCKET_ROOT)/sail/mips
+SAIL_DIR:=$(BITBUCKET_ROOT)/sail
+MIPS_SAIL_DIR:=$(SAIL_DIR)/mips
 
 MIPS_SAILS_PRE:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
-MIPS_SAILS:=$(MIPS_SAILS_PRE) $(BITBUCKET_ROOT)/sail/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
+MIPS_SAILS:=$(MIPS_SAILS_PRE) $(SAIL_DIR)/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
 
 MIPS_NOTLB_SAILS_PRE:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb_stub.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
-MIPS_NOTLB_SAILS:=$(MIPS_NOTLB_SAILS_PRE) $(BITBUCKET_ROOT)/sail/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
+MIPS_NOTLB_SAILS:=$(MIPS_NOTLB_SAILS_PRE) $(SAIL_DIR)/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
 
-CHERI_SAIL_DIR:=$(BITBUCKET_ROOT)/sail/cheri
+CHERI_SAIL_DIR:=$(SAIL_DIR)/cheri
 
 CHERI_NOTLB_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb_stub.sail $(CHERI_SAIL_DIR)/cheri_types.sail $(CHERI_SAIL_DIR)/cheri_prelude_256.sail $(CHERI_SAIL_DIR)/cheri_prelude_common.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
@@ -148,7 +149,7 @@ _build/cheri_embed.ml: $(CHERI_SAILS) ./sail.native
 	cd _build ; \
 	../sail.native -ocaml -lem -lem_ast -ocaml_lib Mips_extras_ml -o cheri_embed $(CHERI_SAILS)
 
-_build/cheri128_embed.ml: $(CHERI_SAILS) ./sail.native
+_build/cheri128_embed.ml: $(CHERI128_SAILS) ./sail.native
 	mkdir -p _build
 	cd _build ; \
 	../sail.native -ocaml -lem -lem_ast -ocaml_lib Mips_extras_ml -o cheri128_embed $(CHERI128_SAILS)
@@ -202,6 +203,20 @@ run_cheri128.native:  _build/cheri128.ml _build/mips_extras.ml _build/run_with_e
 	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package num -package str -package unix -I $(ELFDIR)/contrib/ocaml-uint/_build/lib -I $(LEMLIBOCAML) -I $(ZARITH_DIR) -I _build/lem_interp/ -I $(ELFDIR)/src  -I $(ELFDIR)/src/adaptors -I $(ELFDIR)/src/abis/mips64 -I _build -linkpkg $(ZARITH_LIB) $(LEMLIBOCAML)/extract.cmxa $(ELFDIR)/contrib/ocaml-uint/_build/lib/uint.cmxa $(ELFDIR)/src/linksem.cmxa  _build/pprint/src/PPrintLib.cmxa _build/lem_interp/extract.cmxa _build/cheri128.ml _build/mips_extras.ml _build/run_with_elf_cheri128.ml  -o run_cheri128.native
 
 run_embed.native: _build/sail_values.ml _build/mips_extras_ml.ml _build/mips_embed.ml _build/cheri_embed.ml _build/cheri128_embed.ml _build/run_embed.ml
+	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package unix -I $(ZARITH_DIR) -I _build -linkpkg $(ZARITH_LIB) $^ -o $@
+
+_build/power.ml: $(SAIL_DIR)/src/test/power.sail sail.native
+	cd _build; \
+	./sail.native -lem_ast -ocaml $< -o $(basename $(@))
+
+_build/power.native: _build/sail_values.ml _build/power.ml
+	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package unix -I $(ZARITH_DIR) -I _build -linkpkg $(ZARITH_LIB) $^ -o $@
+
+_build/armv8_embed.ml: sail.native
+	make -C ../arm ocaml
+	cp ../arm/build/armv8_embed.ml $@
+
+_build/arm.native: _build/sail_values.ml _build/armv8_embed.ml
 	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package unix -I $(ZARITH_DIR) -I _build -linkpkg $(ZARITH_LIB) $^ -o $@
 
 mips_notlb: _build/mips_notlb.ml  _build/mips_embed_types.lem _build/mips_extras.ml
