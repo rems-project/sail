@@ -52,10 +52,13 @@ open Pretty_print_common
 
 let star_sp = star ^^ space
 
+let sanitize_name s = 
+  "_" ^ s
+
 let doc_id_ocaml (Id_aux(i,_)) =
   match i with
   | Id("bit") -> string "vbit"
-  | Id i -> string ("_" ^ i)
+  | Id i -> string (sanitize_name i)
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
        * token in case of x ending with star. *)
@@ -64,7 +67,7 @@ let doc_id_ocaml (Id_aux(i,_)) =
 let doc_id_ocaml_type (Id_aux(i,_)) =
   match i with
   | Id("bit") -> string "vbit"
-  | Id i -> string ("_" ^ i)
+  | Id i -> string (sanitize_name i)
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
        * token in case of x ending with star. *)
@@ -308,16 +311,16 @@ let doc_exp_ocaml, doc_let_ocaml =
            let field_f = match t.t with
              | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> string "get_register_field_bit"
              | _ -> string "get_register_field_vec" in
-           parens (separate space [field_f; string (String.uncapitalize reg); string_lit (string field)])
+           parens (separate space [field_f; string (sanitize_name reg); string_lit (string field)])
          | Alias_extract(reg,start,stop) ->
            if start = stop
-           then parens (separate space [string "bit_vector_access";string (String.uncapitalize reg);doc_int start])
+           then parens (separate space [string "bit_vector_access";string (sanitize_name reg);doc_int start])
            else parens
-               (separate space [string "vector_subrange"; string (String.uncapitalize reg); doc_int start; doc_int stop])
+               (separate space [string "vector_subrange"; string (sanitize_name reg); doc_int start; doc_int stop])
          | Alias_pair(reg1,reg2) ->
            parens (separate space [string "vector_concat";
-                                   string (String.uncapitalize reg1);
-                                   string (String.uncapitalize reg2)]))
+                                   string (sanitize_name reg1);
+                                   string (sanitize_name reg2)]))
       | _ -> doc_id_ocaml id)
     | E_lit lit -> doc_lit_ocaml false lit
     | E_cast(typ,e) ->
@@ -509,7 +512,7 @@ let doc_exp_ocaml, doc_let_ocaml =
          (match alias_info with
           | Alias_field(reg,field) ->
             parens ((if is_bit then string "set_register_field_bit" else string "set_register_field_v") ^^ space ^^
-                    string (String.uncapitalize reg) ^^ space ^^string_lit (string field) ^^ space ^^ exp e_new_v)
+                    string (sanitize_name reg) ^^ space ^^string_lit (string field) ^^ space ^^ exp e_new_v)
           | Alias_extract(reg,start,stop) ->
             if start = stop
             then

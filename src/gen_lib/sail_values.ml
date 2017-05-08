@@ -7,9 +7,11 @@ let tracef = printf
 (* only expected to be 0, 1, 2; 2 represents undef *)
 type vbit = Vone | Vzero | Vundef
 type number = Big_int_Z.big_int
+
 type _bool = vbit
 type _string = string
 type _nat = number
+type _int = number
 
 let undef_val = ref Vundef
 
@@ -211,7 +213,7 @@ let set_vector_subrange_bit_int v n m new_v =
 
 let set_vector_subrange_bit_big v n m new_v =
   set_vector_subrange_bit_int v (int_of_big_int n) (int_of_big_int m) new_v
-let set_vector_subrange_bit = set_vector_subrange_bit_int
+let set_vector_subrange_bit = set_vector_subrange_bit_big
 
 let set_register_bit_int reg n v = 
   match reg with
@@ -235,7 +237,7 @@ let set_register_field_v reg field new_v =
      | (i,j) ->
        if i = j
        then ()
-       else set_vector_subrange_bit reg i j new_v)
+       else set_vector_subrange_bit_int reg i j new_v)
      end
   | _ -> ()
 
@@ -1186,6 +1188,7 @@ let eq_bit = bitwise_binop_bit (=)
 
 let neq (l,r) = bitwise_not_bit (eq (l,r))
 let neq_vec (l,r) = bitwise_not_bit (eq_vec_vec(l,r))
+let neq_vec_range (l,r) = bitwise_not_bit (eq_vec_range (l,r))
 let neq_bit (l,r) = bitwise_not_bit (eq_bit(l,r))
 let neq_range = neq
 
