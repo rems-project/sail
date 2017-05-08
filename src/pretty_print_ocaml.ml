@@ -183,6 +183,9 @@ let doc_pat_ocaml =
      | _ -> non_bit_print ())
   | P_tup pats  -> parens (separate_map comma_sp pat pats)
   | P_list pats -> brackets (separate_map semi pat pats) (*Never seen but easy in ocaml*)
+  | P_record _ -> raise (Reporting_basic.err_unreachable l "unhandled record pattern")
+  | P_vector_indexed _ -> raise (Reporting_basic.err_unreachable l  "unhandled vector_indexed pattern")
+  | P_vector_concat _ -> raise (Reporting_basic.err_unreachable l "unhandled vector_concat pattern")
   in pat
 
 let doc_exp_ocaml, doc_let_ocaml =
