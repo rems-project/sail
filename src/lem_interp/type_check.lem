@@ -646,6 +646,7 @@ let check_lit envs typ (L_aux lit loc) =
   | L_num n -> consistent_typ envs (mk_atom n) typ
   | L_zero -> consistent_typ envs (T_id "bit") typ
   | L_one -> consistent_typ envs (T_id "bit") typ
+  | L_real   _ -> consistent_typ envs (T_id "real") typ
   | L_string _ -> consistent_typ envs (T_id "string") typ
   | L_undef -> (true,envs)
   | _ -> (false,envs)

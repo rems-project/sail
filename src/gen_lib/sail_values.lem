@@ -953,3 +953,23 @@ let diafp_to_dia reginfo = function
   | DIAFP_reg r -> DIA_register (regfp_to_reg reginfo r)
 end
 
+(*** Real numbers *)
+
+type real = Real of integer * integer
+
+let showReal (Real num dec) = "(" ^ show num ^ " / " ^ show dec ^ ")"
+
+instance Show real
+  let show = showReal
+end
+
+(* add_real
+ * minus_real
+ * mult_real
+ * div_real
+ *)
+let add_RR = failwith "add_real"
+let minus_RR = failwith "minus_real"
+let mult_RR = failwith "mult_real"
+let div_RR = failwith "div_real"
+

@@ -123,6 +123,7 @@ let rec {ocaml} string_of_value v = match v with
     | L_hex hex -> "0x" ^ hex
     | L_bin bin -> "0b" ^ bin
     | L_undef -> "undefined"
+    | L_real   r  -> r
     | L_string str-> "\"" ^ str ^ "\"" end)
   | V_tuple vals -> "(" ^ (list_to_string string_of_value "," vals) ^ ")"
   | V_list vals -> "[||" ^ (list_to_string string_of_value "," vals) ^ "||]"

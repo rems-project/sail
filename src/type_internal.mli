@@ -261,6 +261,7 @@ val unit_t : t
 val int64_t : t
 val bool_t : t
 val bit_t : t
+val real_t : t
 val string_t : t
 val pure_e : effect
 val nob : bounds_env

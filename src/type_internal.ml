@@ -1907,6 +1907,7 @@ let unit_t = { t = Tid "unit" }
 let bit_t = {t = Tid "bit" }
 let bool_t = {t = Tid "bool" }
 let nat_typ = {t=Tid "nat"}
+let real_t = {t = Tid "real"}
 let string_t = {t = Tid "string"}
 let pure_e = {effect=Eset []}
 let nob = No_bounds
@@ -1929,6 +1930,7 @@ let initial_kind_env =
     ("uint64", {k=K_Typ});
     ("unit", {k = K_Typ});
     ("bit", {k = K_Typ});
+    ("real", {k = K_Typ});
     ("string", {k = K_Typ});
     ("list", {k = K_Lam( [{k = K_Typ}], {k = K_Typ})});
     ("reg", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
@@ -2118,6 +2120,7 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
                    (mk_pure_fun (mk_tup [bit_t; mk_vector bit_t (mk_ovar "ord") (mk_nv "o") (mk_nv "p")])
                                 (mk_vector bit_t (mk_ovar "ord") (mk_nv "o") (mk_nv "p"))))
                   (Some "add_bit_vec") [];
+       lib_tannot ([], (mk_pure_fun (mk_tup [real_t; real_t]) real_t)) (Some "add_real") [];
       ]));
     ("+_s",Overload(
       lib_tannot ((mk_typ_params ["a";"b";"c"]),
@@ -2225,6 +2228,7 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
                    (mk_pure_fun (mk_tup [mk_vector bit_t (mk_ovar "ord") (mk_nv "o") (mk_nv "p"); bit_t])
                                 (mk_tup [(mk_vector bit_t (mk_ovar "ord") (mk_nv "o") (mk_nv "p")); bit_t; bit_t])))
                    (Some "minus_overflow_vec_bit") [];
+       lib_tannot ([], (mk_pure_fun (mk_tup [real_t; real_t]) real_t)) (Some "sub_real") [];
       ]));
     ("-_s",Overload(
       lib_tannot ((mk_typ_params ["a";"b";"c"]), (mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) {t=Tvar "c"}))
@@ -2293,6 +2297,7 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
                                    mk_atom (mk_nv "o")])
                            (mk_vector bit_t (mk_ovar "ord") (mk_nv "q") (mk_add (mk_nv "m") (mk_nv "m"))))),
             (External (Some "mult_vec_range")),[],pure_e,pure_e,nob);
+       lib_tannot ([], (mk_pure_fun (mk_tup [real_t; real_t]) real_t)) (Some "mul_real") [];
       ]));
     ("*_s",Overload(
       Base(((mk_typ_params ["a";"b";"c"]),
@@ -2499,7 +2504,9 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
                    (Some "eq_bit")
                    [];
         lib_tannot (["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t))
-                   (Some "eq") []]));
+                   (Some "eq") [];
+        lib_tannot ([], (mk_pure_fun (mk_tup [real_t; real_t]) bit_t)) (Some "eq_real") [];
+      ]));
     ("!=",
      Overload(
        lib_tannot ((mk_typ_params ["a";"b"]),(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t))
@@ -2538,7 +2545,9 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
                    (Some "neq_bit")
                    [];
         lib_tannot (["a",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "a"}]) bit_t))
-                   (Some "neq") []]));
+                   (Some "neq") [];
+        lib_tannot ([], (mk_pure_fun (mk_tup [real_t; real_t]) bit_t)) (Some "ne_real") [];
+      ]));
     ("<",
      Overload(
        Base((["a",{k=K_Typ};"b",{k=K_Typ}],(mk_pure_fun (mk_tup [{t=Tvar "a"};{t=Tvar "b"}]) bit_t)),
@@ -2559,6 +2568,7 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
              (mk_pure_fun (mk_tup [mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m");
                                    mk_atom (mk_nv "o")]) bit_t)),
             (External (Some "lt_vec_range")), [], pure_e,pure_e, nob);
+       lib_tannot ([], (mk_pure_fun (mk_tup [real_t; real_t]) bit_t)) (Some "lt_real") [];
        ]));
     ("<_u",
      Overload(
@@ -2614,6 +2624,7 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
              (mk_pure_fun (mk_tup [mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m");
                                    mk_atom (mk_nv "o")]) bit_t)),
             (External (Some "gt_vec_range")), [], pure_e,pure_e, nob);
+       lib_tannot ([], (mk_pure_fun (mk_tup [real_t; real_t]) bit_t)) (Some "gt_real") [];
        ]));
     (">_u",
      Overload(
@@ -2673,6 +2684,7 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
               (mk_pure_fun (mk_tup [mk_vector bit_t (mk_ovar "ord") (mk_nv "o") (mk_nv "n");
                                     mk_vector bit_t (mk_ovar "ord") (mk_nv "p") (mk_nv "n")]) bit_t)),
              (External (Some "lteq_vec")),[],pure_e,pure_e,nob);
+        lib_tannot ([], (mk_pure_fun (mk_tup [real_t; real_t]) bit_t)) (Some "le_real") [];
        ]));
     ("<=_s",
      Overload(
@@ -2713,6 +2725,7 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
               (mk_pure_fun (mk_tup [mk_atom (mk_nv "o");
                                     mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m")]) bit_t)),
              (External (Some "gteq_range_vec")), [], pure_e,pure_e, nob);
+        lib_tannot ([], (mk_pure_fun (mk_tup [real_t; real_t]) bit_t)) (Some "ge_real") [];
        ]));
     (">=_s",
      Overload(
@@ -2735,6 +2748,12 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
 (** ? *)
   "oddments",
    [
+    ("/", lib_tannot ([], (mk_pure_fun (mk_tup [real_t; real_t]) real_t)) (Some "divide_real") []);
+    ("power2_real", lib_tannot ([], (mk_pure_fun int_t real_t)) (Some "power2_real") []);
+    ("to_real", lib_tannot ([], (mk_pure_fun int_t real_t)) (Some "cvt_int_real") []);
+    ("round_up_real", lib_tannot ([], (mk_pure_fun real_t int_t)) (Some "round_up_real") []);
+    ("round_down_real", lib_tannot ([], (mk_pure_fun real_t int_t)) (Some "round_down_real") []);
+    ("sqrt_real", lib_tannot ([], (mk_pure_fun real_t real_t)) (Some "sqrt_real") []);
     ("is_one",Base(([],(mk_pure_fun bit_t bit_t)),(External (Some "is_one")),[],pure_e,pure_e,nob));
     ("signed",Base((mk_nat_params["n";"m";"o"]@[("ord",{k=K_Ord})],
                     (mk_pure_fun (mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m"))

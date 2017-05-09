@@ -55,11 +55,24 @@ instance (ToFromInterpValue integer)
 end
 
 
+let toInterpValueReal r = V_lit (L_aux (L_real r) Unknown)
+let rec fromInterpValueReal v = match v with
+  | Interp.V_lit (L_aux (L_real r) _) -> r
+  | Interp.V_tuple [v] -> fromInterpValueReal v
+  | v -> failwith ("fromInterpValue real: unexpected value. " ^
+                     Interp.debug_print_value v)
+end
+instance (ToFromInterpValue real)
+  let toInterpValue = toInterpValueReal
+  let fromInterpValue = fromInterpValueReal
+end
+
+
 let toInterpValueString s = V_lit (L_aux (L_string s) Unknown)
 let rec fromInterpValueString v = match v with
   | Interp.V_lit (L_aux (L_string s) _) -> s
   | Interp.V_tuple [v] -> fromInterpValueString v
-  | v -> failwith ("fromInterpValue integer: unexpected value. " ^
+  | v -> failwith ("fromInterpValue string: unexpected value. " ^
                      Interp.debug_print_value v)
 end
 instance (ToFromInterpValue string)
