@@ -176,7 +176,7 @@ _build/cheri_embed_types.lem: $(CHERI_SAILS) ./sail.native
 
 _build/Cheri_embed_sequential.thy: _build/cheri_embed_types.lem
 	cd _build ;\
-	lem -isa -outdir . ../lem_interp/sail_impl_base.lem ../gen_lib/state.lem ../../mips/mips_extras_embed_sequential.lem cheri_embed_sequential.lem
+	lem -isa -outdir . ../lem_interp/sail_impl_base.lem ../gen_lib/state.lem ../../mips/mips_extras_embed_sequential.lem cheri_embed_types.lem cheri_embed_sequential.lem
 
 _build/mips_all.sail: $(MIPS_SAILS)
 	cat $(MIPS_SAILS) > $@
