@@ -1,4 +1,5 @@
 open import Pervasives
+open import Pervasives_extra
 open import Sail_impl_base
 open import Sail_values
 open import State
@@ -35,6 +36,9 @@ let MEMval_conditional (_,_,v)     = write_mem_val v >>= fun b -> return (if b t
 let MEMval_tag (_,_,v)             = write_mem_val v >>= fun _ -> return ()
 let MEMval_tag_conditional (_,_,v) = write_mem_val v >>= fun b -> return (if b then B1 else B0)
 
+(* TODO *)
+val TAGw : (vector bitU * vector bitU) -> M unit
+let TAGw (addr, tag) = failwith "TAGw not implemented"
 
 val MEM_sync  : unit -> M unit
 
