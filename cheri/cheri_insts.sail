@@ -108,8 +108,8 @@ function clause execute (CGetLen(rd, cb)) =
   else
     let capVal = readCapReg(cb) in
     let len65  = getCapLength(capVal) in
-    let len64  = (bit[64]) (min(MAX_U64, len65)) in
-    wGPR(rd) := len64;
+    let len64  = (if len65 > MAX_U64 then MAX_U64 else len65) in
+    wGPR(rd) := (bit[64]) len64;
   (* END_CGetLen *)
 }
 
