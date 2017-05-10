@@ -81,7 +81,6 @@ let (CapStruct) null_cap = {
   address                = 0;
 }
 
-let (nat) max_otype = 0xffffff
 def Nat cap_size_t  = 16 (* cap size in bytes *)
 let ([:cap_size_t:]) cap_size = 16
 

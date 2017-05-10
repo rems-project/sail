@@ -32,6 +32,4 @@
 (*  SUCH DAMAGE.                                                          *)
 (*========================================================================*)
 
-(*let (nat) max_otype = 0xffffff
-let have_cp2 = true*)
 typedef CapLen = [|0 : 2**65|]
