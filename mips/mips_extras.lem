@@ -34,23 +34,19 @@ let memory_parameter_transformer_option_address _mode v =
 let read_memory_functions : memory_reads =
   [ ("MEMr",             (MR Read_plain              memory_parameter_transformer));
     ("MEMr_reserve",     (MR Read_reserve            memory_parameter_transformer));
-    ("MEMr_tag",         (MR Read_tag                memory_parameter_transformer));
-    ("MEMr_tag_reserve", (MR Read_tag_reserve        memory_parameter_transformer));
+  ]
+
+let read_memory_tagged_functions : memory_read_taggeds =
+  [ ("MEMr_tag",         (MRT Read_plain             memory_parameter_transformer));
+    ("MEMr_tag_reserve", (MRT Read_reserve           memory_parameter_transformer));
   ]
 
 let memory_writes : memory_writes =
-  [ ("TAGw", (MW Write_tag (fun mode v -> let (v, regs) = extern_with_track mode extern_vector_value v in
-                                         (v, 1, regs))
-               (Just (fun (IState interp_state c) success ->
-                               let v = Interp.V_lit (L_aux (if success then L_one else L_zero) Unknown) in
-                               IState (Interp.add_answer_to_stack interp_state v) c))
-    )); ]
+  []
 
 let memory_eas : memory_write_eas =
   [ ("MEMea",                 (MEA Write_plain           memory_parameter_transformer));
     ("MEMea_conditional",     (MEA Write_conditional     memory_parameter_transformer));
-    ("MEMea_tag",             (MEA Write_tag             memory_parameter_transformer));
-    ("MEMea_tag_conditional", (MEA Write_tag_conditional memory_parameter_transformer));
   ]
 
 let memory_vals : memory_write_vals =
@@ -60,14 +56,17 @@ let memory_vals : memory_write_vals =
                            (fun (IState interp context) b -> 
                              let bit = Interp.V_lit (L_aux (if b then L_one else L_zero) Interp_ast.Unknown) in
                              (IState (Interp.add_answer_to_stack interp bit) context)))));
-    ("MEMval_tag",      (MV memory_parameter_transformer_option_address Nothing));
-    ("MEMval_tag_conditional", (MV memory_parameter_transformer_option_address
+  ]
+
+let memory_vals_tagged : memory_write_vals_tagged =
+  [
+    ("MEMval_tag",      (MVT memory_parameter_transformer_option_address Nothing));
+    ("MEMval_tag_conditional", (MVT memory_parameter_transformer_option_address
                            (Just 
                            (fun (IState interp context) b -> 
                              let bit = Interp.V_lit (L_aux (if b then L_one else L_zero) Interp_ast.Unknown) in
                              (IState (Interp.add_answer_to_stack interp bit) context)))));
   ]
-
 
 let barrier_functions = [
   ("MEM_sync", Barrier_MIPS_SYNC);

@@ -382,8 +382,10 @@ and ef_to_string (Ast.BE_aux(b,l)) =
       | Ast.BE_rreg  -> "rreg"
       | Ast.BE_wreg  -> "wreg"
       | Ast.BE_rmem  -> "rmem"
+      | Ast.BE_rmemt -> "rmemt"
       | Ast.BE_wmem  -> "wmem"
       | Ast.BE_wmv   -> "wmv"
+      | Ast.BE_wmvt  -> "wmvt"
       | Ast.BE_eamem -> "eamem"
       | Ast.BE_barr  -> "barr"
       | Ast.BE_undef -> "undef"
@@ -3075,12 +3077,18 @@ let compare_effect (BE_aux(e1,_)) (BE_aux(e2,_)) =
   | (BE_rmem,BE_rmem) -> 0
   | (BE_rmem,_) -> -1
   | (_,BE_rmem) -> 1
+  | (BE_rmemt,BE_rmemt) -> 0
+  | (BE_rmemt,_) -> -1
+  | (_,BE_rmemt) -> 1
   | (BE_wmem,BE_wmem) -> 0
   | (BE_wmem,_) -> -1
   | (_,BE_wmem) -> 1
   | (BE_wmv,BE_wmv) -> 0
   | (BE_wmv, _ ) -> -1
   | (_,BE_wmv) -> 1
+  | (BE_wmvt,BE_wmvt) -> 0
+  | (BE_wmvt, _ ) -> -1
+  | (_,BE_wmvt) -> 1
   | (BE_eamem,BE_eamem) -> 0
   | (BE_eamem,_) -> -1
   | (_,BE_eamem) -> 1
@@ -3139,9 +3147,11 @@ let has_effect searched_for eff =
 let has_rreg_effect = has_effect (BE_aux(BE_rreg, Parse_ast.Unknown))
 let has_wreg_effect = has_effect (BE_aux(BE_wreg, Parse_ast.Unknown))
 let has_rmem_effect = has_effect (BE_aux(BE_rmem, Parse_ast.Unknown))
+let has_rmemt_effect = has_effect (BE_aux(BE_rmemt, Parse_ast.Unknown))
 let has_wmem_effect = has_effect (BE_aux(BE_wmem, Parse_ast.Unknown))
 let has_eamem_effect = has_effect (BE_aux(BE_eamem, Parse_ast.Unknown))
 let has_memv_effect = has_effect (BE_aux(BE_wmv, Parse_ast.Unknown))
+let has_memvt_effect = has_effect (BE_aux(BE_wmvt, Parse_ast.Unknown))
 let has_lret_effect = has_effect (BE_aux(BE_lret, Parse_ast.Unknown))
 
 (*Similarly to above.*)

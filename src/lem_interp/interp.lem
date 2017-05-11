@@ -356,9 +356,11 @@ type action =
  | Read_reg of reg_form * maybe (nat * nat)
  | Write_reg of reg_form * maybe (nat * nat) * value
  | Read_mem of id * value * maybe (nat * nat)
+ | Read_mem_tagged of id * value * maybe (nat * nat)
  | Write_mem of id * value * maybe (nat * nat) * value
  | Write_ea of id * value
  | Write_memv of id * value * value
+ | Write_memv_tagged of id * value * value * value
  | Barrier of id * value
  | Footprint of id * value
  | Nondet of list (exp tannot) * tag
@@ -2227,6 +2229,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           let mk_thunk_frame act = (Action act (mk_thunk l annot t_level le lm), lm, le) in
           if has_rmem_effect effects 
           then mk_hole_frame (Read_mem (id_of_string name_ext) v Nothing) 
+          else if has_rmemt_effect effects 
+          then mk_hole_frame (Read_mem_tagged (id_of_string name_ext) v Nothing) 
           else if has_barr_effect effects
           then mk_thunk_frame (Barrier (id_of_string name_ext) v)
           else if has_depend_effect effects
@@ -2251,6 +2255,11 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                    (List_extra.head reved,V_tuple (List.reverse (List_extra.tail reved)))
                  | _ -> (v,unitv) end in
                mk_hole_frame (Write_memv (id_of_string name_ext) v wv)
+          else if has_wmvt_effect effects
+          then match v with
+               | V_tuple [addr; size; tag; data] -> 
+                  mk_hole_frame (Write_memv_tagged (id_of_string name_ext) (V_tuple([addr; size])) tag data)
+               | _ -> Assert_extra.failwith("wmvt: expected tuple of four elements") end
           else mk_hole_frame (Call_extern name_ext v) 
         | _ ->
           (Error l (String.stringAppend "Tag not empty, spec, ctor, or extern on function call " name),lm,le) end)
@@ -2384,6 +2393,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                   | (Action (Write_reg regf range value) stack) -> a
                   | (Action (Write_mem id a_ range value) stack) -> a
                   | (Action (Write_memv _ _ _) stack) -> a
+                  | (Action (Write_memv_tagged _ _ _ _) stack) -> a
                   | _ -> update_stack a (add_to_top_frame 
                                            (fun e env -> 
                                              let (ev,env') = (to_exp mode env v) in
@@ -3047,6 +3057,7 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level
        match a with
        | Read_reg _ _ -> ((Action a s,lm,le), next_builder, Nothing)
        | Read_mem _ _ _ -> ((Action a s,lm,le), next_builder, Nothing)
+       | Read_mem_tagged _ _ _ -> ((Action a s,lm,le), next_builder, Nothing)
        | Call_extern _ _ -> ((Action a s,lm,le), next_builder, Nothing)
        | Write_reg ((Reg _ (Just(T_id id',_,_,_,_)) _) as regf) Nothing value -> 
          match in_env subregs id' with

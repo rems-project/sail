@@ -277,8 +277,10 @@ and to_ast_effects (k_env : kind Envmap.t) (e : Parse_ast.atyp) : Ast.effect =
                                | Parse_ast.BE_rreg   -> BE_rreg
                                | Parse_ast.BE_wreg   -> BE_wreg
                                | Parse_ast.BE_rmem   -> BE_rmem
+                               | Parse_ast.BE_rmemt  -> BE_rmemt
                                | Parse_ast.BE_wmem   -> BE_wmem
 			       | Parse_ast.BE_wmv    -> BE_wmv
+			       | Parse_ast.BE_wmvt   -> BE_wmvt
 			       | Parse_ast.BE_eamem  -> BE_eamem
 			       | Parse_ast.BE_depend -> BE_depend
                                | Parse_ast.BE_undef  -> BE_undef

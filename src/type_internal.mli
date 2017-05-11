@@ -248,9 +248,11 @@ val e_to_string : effect -> string
 val has_rreg_effect : effect -> bool
 val has_wreg_effect : effect -> bool
 val has_rmem_effect : effect -> bool
+val has_rmemt_effect : effect -> bool
 val has_wmem_effect : effect -> bool
 val has_eamem_effect : effect -> bool
 val has_memv_effect : effect -> bool
+val has_memvt_effect : effect -> bool
 val has_lret_effect : effect -> bool
   
 val initial_kind_env : kind Envmap.t
