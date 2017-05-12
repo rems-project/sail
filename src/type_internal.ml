@@ -67,7 +67,7 @@ and k_aux =
   | K_Lam of kind list * kind
   | K_infer
 
- type t = { mutable t : t_aux }
+type t = { mutable t : t_aux }
 and t_aux =
   | Tvar of string
   | Tid of string
@@ -434,7 +434,7 @@ let cond_kind_to_string = function
   | Solo -> "solo"
   | Switch -> "switch"
 
-let rec constraint_to_string = function
+let rec constraint_to_string d = function
   | LtEq (co,enforce,nexp1,nexp2) ->
     "LtEq(" ^ co_to_string co ^ ", " ^ enforce_to_string enforce ^ ", " ^ 
       n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
@@ -454,14 +454,19 @@ let rec constraint_to_string = function
   | In(co,var,ints) -> "In of " ^ var
   | InS(co,n,ints) -> "InS of " ^ n_to_string n
   | Predicate(co,cp,cn) -> 
-    "Pred(" ^ co_to_string co ^ ", " ^ constraint_to_string cp ^", " ^ constraint_to_string cn ^  ")"
+    "Pred(" ^ co_to_string co ^ ", " ^ constraint_to_string (d + 1) cp ^", " ^ constraint_to_string (d + 1) cn ^  ")"
   | CondCons(co,kind,_,pats,exps) ->
     "CondCons(" ^ co_to_string co ^ ", " ^ cond_kind_to_string kind ^
-    ", [" ^ constraints_to_string pats ^ "], [" ^ constraints_to_string exps ^ "])"
+    ",\n" ^ indent d ^ " [" ^ constraints_to_string_depth (d + 1) pats ^ "],\n" ^ indent d ^ " [" ^ constraints_to_string_depth (d + 1) exps ^ "])"
   | BranchCons(co,_,consts) ->
-    "BranchCons(" ^ co_to_string co ^ ", [" ^ constraints_to_string consts ^ "])"
-and constraints_to_string l = string_of_list "; " constraint_to_string l
+    "BranchCons(" ^ co_to_string co ^ ",\n" ^ indent d ^ " [" ^ constraints_to_string_depth (d + 1) consts ^ "])"
 
+and constraints_to_string_depth d l = string_of_list (";\n" ^ indent d) (constraint_to_string d) l
+
+and indent d = String.make d ' ' ^ String.make d ' '
+                                                     
+let constraints_to_string l = constraints_to_string_depth 0 l
+                                                   
 let variable_range_to_string v = match v with
   | VR_eq (s,n) -> "vr_eq(" ^ s ^ ", " ^ n_to_string n ^ ")"
   | VR_range (s,cs) -> "vr_range(" ^ s ^ ", " ^ constraints_to_string cs ^ ")"
@@ -4434,38 +4439,116 @@ let check_ranges cs =
   in
   refined_cs
 
+(* SMT constraint solving *)
+exception Unsupported_Constraint;;
+    
+type 'a sexpr = List of ('a sexpr list) | Atom of 'a
+
+let sfun (fn : 'a) (xs : 'a sexpr list) : 'a sexpr = List (Atom fn :: xs) 
+                                                    
+let rec pp_sexpr : string sexpr -> string = function
+  | List xs -> "(" ^ string_of_list " " pp_sexpr xs ^ ")"
+  | Atom x -> x
+
+(* Take a list of constraints and output a string in SMTLIB format for Z3 or other SMT solvers *)
+let constraints_to_smtlib l : string =
+  let module SS = Set.Make(String) in
+
+  let rec nexp_nuvars n : SS.t =
+    match n.nexp with
+    | Nadd(n1,n2) -> SS.union (nexp_nuvars n1) (nexp_nuvars n2)
+    | Nsub(n1,n2) -> SS.union (nexp_nuvars n1) (nexp_nuvars n2)
+    | Nmult(n1,n2) -> SS.union (nexp_nuvars n1) (nexp_nuvars n2)
+    | Npow(n, i) -> nexp_nuvars n
+    | Nneg n -> nexp_nuvars n
+    | Nuvar {nindex = i} -> SS.singleton ("nu" ^ string_of_int i) (* TODO: We don't capture everything a nuvar can be... (whatever that is) *)
+    | _ -> SS.empty
+  in
+
+  let rec constraint_nuvars = function
+    | LtEq (co, enforce, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
+    | GtEq (co, enforce, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
+    | CondCons (co, kind, _, [], exps) -> constraints_nuvars exps
+    | CondCons (co, kind, _, pats, exps) -> SS.union (constraints_nuvars pats) (constraints_nuvars exps)
+    | BranchCons (co, _, consts) -> constraints_nuvars consts
+    | _ -> raise Unsupported_Constraint
+  and constraints_nuvars = function
+    | [] -> SS.empty
+    | l -> List.fold_left SS.union SS.empty (List.map constraint_nuvars l)
+  in
+
+  let nuvar_decs =
+    constraints_nuvars l
+    |> SS.elements
+    |> List.map (fun nuvar -> sfun "declare-const" [Atom nuvar; Atom "Int"])
+    |> string_of_list "\n" pp_sexpr 
+  in
+  
+  let rec n_to_sexpr n : string sexpr =
+    match n.nexp with
+    | Nid(i,n) -> raise Unsupported_Constraint
+    | Nvar i -> raise Unsupported_Constraint
+    | Nconst i -> Atom (string_of_big_int i)
+    | Npos_inf -> raise Unsupported_Constraint (* "infinity" *)
+    | Nneg_inf -> raise Unsupported_Constraint (* "-infinity" *)
+    | Ninexact -> raise Unsupported_Constraint (* "infinity - infinity" *)
+    | Nadd(n1,n2) -> sfun "+" [n_to_sexpr n1; n_to_sexpr n2]
+    | Nsub(n1,n2) -> sfun "-" [n_to_sexpr n1; n_to_sexpr n2]
+    | Nmult(n1,n2) -> sfun "*" [n_to_sexpr n1; n_to_sexpr n2]
+    | N2n(n,None) -> raise Unsupported_Constraint
+    | N2n(n,Some i) -> raise Unsupported_Constraint
+    | Npow(n, i) -> sfun "**" [n_to_sexpr n; Atom (string_of_int i)]
+    | Nneg n -> sfun "-" [n_to_sexpr n]
+    | Nuvar {nindex = i} -> Atom ("nu" ^ string_of_int i) (* TODO: We don't capture everything a nuvar can be... (whatever that is) *)
+  in
+                      
+  let rec constraint_to_sexpr = function
+    | LtEq (co, enforce, nexp1, nexp2) -> sfun "<=" [n_to_sexpr nexp1; n_to_sexpr nexp2]
+    | GtEq (co, enforce, nexp1, nexp2) -> sfun ">=" [n_to_sexpr nexp1; n_to_sexpr nexp2]
+    | CondCons (co, kind, _, [], exps) -> constraints_to_sexpr exps
+    | CondCons (co, kind, _, pats, exps) -> sfun "=>" [constraints_to_sexpr pats; constraints_to_sexpr exps]
+    | BranchCons (co, _, consts) -> constraints_to_sexpr consts
+    | _ -> raise Unsupported_Constraint
+  and constraints_to_sexpr = function
+    | [] -> Atom "true"
+    | l -> sfun "and" (List.map constraint_to_sexpr l)
+  in
+
+  nuvar_decs
+  ^ "\n"
+  ^ pp_sexpr (sfun "define-fun" [Atom "constraint"; List []; Atom "Bool"; constraints_to_sexpr l])
+  ^ "\n(assert constraint)\n(check-sat)\n"
+
+let call_z3 (input : string) : bool =
+  begin
+    let (input_file, tmp_chan) = Filename.open_temp_file "constraint_" ".sat" in
+    output_string tmp_chan input;
+    close_out tmp_chan;
+    prerr_endline ("Calling z3: " ^ input_file);
+    let z3_chan = Unix.open_process_in ("z3 " ^ input_file) in
+    let z3_output = input_line z3_chan in
+    let _ = Unix.close_process_in z3_chan in
+    Sys.remove input_file;
+    prerr_endline ("z3 returned: " ^ z3_output);
+    if z3_output = "sat" then true else false
+  end
+      
 let do_resolve_constraints = ref true
 
 let resolve_constraints cs = 
-  (*let _ = Printf.eprintf "called resolve constraints with %i constraints\n" (constraint_size cs) in*)
+  prerr_endline (Printf.sprintf "=== Called resolve constraints with %i constraints ===" (constraint_size cs));
   if not !do_resolve_constraints
   then (cs,None)
   else
-    let rec fix checker len cs =
-      (*let _ = Printf.eprintf "Calling fix check thunk, fix check point is %i\n%!" len in *)
-      let cs' = checker (in_constraint_env cs) cs in
-      let len' = constraint_size cs' in
-      if len > len' then fix checker len' cs'
-      else cs' in
-    (*let _ = Printf.eprintf "Original constraints are %s\n%!" (constraints_to_string cs) in*)
-    let branch_freshened = prepare_constraints cs in
-    (*let _ = Printf.eprintf "Constraints after prepare constraints are %s\n"
-        (constraints_to_string branch_freshened) in*)
-    let nuvar_equated = fix equate_nuvars (constraint_size branch_freshened) branch_freshened in
-    (*let _ = Printf.eprintf "Constraints after nuvar equated are %s\n%!" (constraints_to_string nuvar_equated) in*)
-    let complex_constraints = 
-          fix (fun in_env cs -> let (ncs,_) = merge_paths false (simple_constraint_check in_env cs) in ncs)
-            (constraint_size nuvar_equated) nuvar_equated in
-    (*let _ = Printf.eprintf "Now considering %i constraints \n%!" (constraint_size complex_constraints) in*)
-    let (complex_constraints,map) = merge_paths true complex_constraints in
-    let complex_constraints = check_ranges complex_constraints in
-    (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" 
-        (constraint_size complex_constraints) in 
-      let _ = Printf.eprintf "%s\n" (constraints_to_string complex_constraints) in*)
-    (complex_constraints,map)
+    begin
+      prerr_endline (Printf.sprintf "Original constraints are: \n%s\n%!" (constraints_to_string cs));
+      prerr_endline (Printf.sprintf "SMTLIB constraints are: \n%s%!" (constraints_to_smtlib cs));
+      if not (call_z3 (constraints_to_smtlib cs))
+      then raise (Reporting_basic.err_typ Parse_ast.Unknown "Constraints are unsatisfiable")
+      else ([], None)
+    end
 
-
-let check_tannot l annot imp_param constraints efs = 
+let check_tannot l annot imp_param _ efs = 
   match annot with
   | Base((params,t),tag,cs,ef,_,bindings) ->
     let efs = remove_local_effects efs in

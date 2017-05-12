@@ -1,7 +1,7 @@
 true: -traverse, debug
 <**/*.ml>: bin_annot, annot
 <lem_interp> or <test>:  include
-<sail.{byte,native}>: use_pprint, use_nums
+<sail.{byte,native}>: use_pprint, use_nums, use_unix
 <pprint> or <pprint/src>: include
 
 # see http://caml.inria.fr/mantis/view.php?id=4943
