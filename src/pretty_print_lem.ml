@@ -256,12 +256,12 @@ let rec doc_pat_lem regtypes apat_needed (P_aux (p,(l,annot)) as pa) = match p w
   | P_vector pats ->
      let ppp =
        (separate space)
-         [string "Vector";brackets (separate_map semi (doc_pat_lem regtypes true) pats);underscore;underscore] in
+         [string "Vector";brackets (separate_map semi (doc_pat_lem regtypes true) pats); (*underscore;*) underscore] in
      if apat_needed then parens ppp else ppp
   | P_vector_concat pats ->
      let ppp =
        (separate space)
-         [string "Vector";parens (separate_map (string "::") (doc_pat_lem regtypes true) pats);underscore;underscore] in
+         [string "Vector";parens (separate_map (string "::") (doc_pat_lem regtypes true) pats); (*underscore;*) underscore] in
      if apat_needed then parens ppp else ppp
   | P_tup pats  ->
      (match pats with
@@ -391,12 +391,12 @@ let doc_exp_lem, doc_let_lem =
              if aexp_needed then parens (align epp) else epp
           | Base (_,Constructor _,_,_,_,_) ->
              let argpp a_needed arg =
-               let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
+               (*let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
                match t with
                | Tapp("vector",_) ->
                   let epp = concat [string "reset_vector_start";space;expY arg] in
                   if a_needed then parens epp else epp
-               | _ -> expV a_needed arg in
+               | _ ->*) expV a_needed arg in
              let epp =
                match args with
                | [] -> doc_id_lem_ctor f
@@ -410,12 +410,12 @@ let doc_exp_lem, doc_let_lem =
                | Base(_,External (Some n),_,_,_,_) -> string n
                | _ -> doc_id_lem f in
              let argpp a_needed arg =
-               let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
+               (*let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
                match t with
                | Tapp("vector",_) ->
                   let epp = concat [string "reset_vector_start";space;expY arg] in
                   if a_needed then parens epp else epp
-               | _ -> expV a_needed arg in
+               | _ ->*) expV a_needed arg in
              let argspp = match args with
                | [arg] -> argpp true arg
                | args -> parens (align (separate_map (comma ^^ break 0) (argpp false) args)) in
@@ -507,7 +507,7 @@ let doc_exp_lem, doc_let_lem =
        (match annot with
         | Base(_,External _,_,_,_,_) -> string "read_reg" ^^ space ^^ expY e
         | _ ->
-           (match typ with
+           ((*match typ with
             | Typ_app (Id_aux (Id "vector",_), [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i,_)),_);_;_;_]) ->
                let epp = (concat [string "set_vector_start";space;string (string_of_int i)]) ^//^
                            expY e in
@@ -515,7 +515,7 @@ let doc_exp_lem, doc_let_lem =
             | Typ_var (Kid_aux (Var "length",_)) ->
                let epp = (string "set_vector_start_to_length") ^//^ expY e in
                if aexp_needed then parens epp else epp
-            | _ -> 
+            | _ -> *)
                expV aexp_needed e)) (*(parens (doc_op colon (group (expY e)) (doc_typ_lem typ)))) *)
     | E_tuple exps ->
        (match exps with
@@ -564,7 +564,7 @@ let doc_exp_lem, doc_let_lem =
                        (expN e,0) es in
                    align (group expspp) in
               let epp =
-                group (separate space [string "Vector"; brackets expspp;string start;string dir_out]) in
+                group (separate space [string "Vector"; brackets expspp; (*string start;*) string dir_out]) in
               if aexp_needed then parens (align epp) else epp
        )
     | E_vector_indexed (iexps, (Def_val_aux (default,(dl,dannot)))) ->
@@ -663,10 +663,10 @@ let doc_exp_lem, doc_let_lem =
        (match annot with
         | Base((_,t),External(Some name),_,_,_,_) ->
            let argpp arg =
-             let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
+             (*let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
              match t with
              | Tapp("vector",_) -> parens (concat [string "reset_vector_start";space;expY arg])
-             | _ -> expY arg in
+             | _ ->*) expY arg in
            let epp =
              let aux name = align (argpp e1 ^^ space ^^ string name ^//^ argpp e2) in
              let aux2 name = align (string name ^//^ argpp e1 ^/^ argpp e2) in

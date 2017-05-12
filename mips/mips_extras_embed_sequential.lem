@@ -47,5 +47,4 @@ let MEM_sync () = barrier Barrier_MIPS_SYNC
 
 let duplicate (bit,len) =
   let bits = repeat [bit] len in
-  let start = len - 1 in
-  Vector bits start false
+  Vector bits false
