@@ -2277,7 +2277,7 @@ let check_default envs (DT_aux(ds,l)) =
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot)),b_env,tp_env))
 
 let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,annot))) =
-  (*let _ = Printf.eprintf "checking fundef\n" in*)
+  let _ = prerr_endline "checking fundef" in
   let Env(d_env,t_env,b_env,tp_env) = envs in
   let _ = reset_fresh () in
   let is_rec = match recopt with
@@ -2296,31 +2296,33 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   let (typ_params,has_spec) = match in_env with
     | Some(Base( (params,u),Spec,constraints,eft,_,_)) -> params,true
     | _ -> [],false in
-  let ret_t,param_t,tannot,t_param_env = match tannotopt with
+  let ret_t,param_t,tannot,t_param_env,extra_constraints = match tannotopt with
     | Typ_annot_opt_aux(Typ_annot_opt_some(typq,typ),l') ->
       let (ids,_,constraints) = typq_to_params envs typq in
+      let _ = prerr_endline (Printf.sprintf "C1 = %s\n" (constraints_to_string constraints)) in
       let t = typ_to_t envs false false typ in
       (*TODO add check that ids == typ_params when has_spec*)
       let t,constraints,_,t_param_env =
         subst (if has_spec then typ_params else ids) true true t constraints pure_e in
+      let _ = prerr_endline (Printf.sprintf "C2 = %s\n" (constraints_to_string constraints)) in
       let p_t = new_t () in
       let ef = new_e () in
-      t,p_t,Base((ids,{t=Tfn(p_t,t,IP_none,ef)}),Emp_global,constraints,ef,pure_e,nob),t_param_env in
+      t,p_t,Base((ids,{t=Tfn(p_t,t,IP_none,ef)}),Emp_global,constraints,ef,pure_e,nob),t_param_env,constraints in
   let cond_kind = if (List.length funcls) = 1 then Solo else Switch in
   let check t_env tp_env imp_param =
     List.split
       (List.map (fun (FCL_aux((FCL_Funcl(id,pat,exp)),(l,_))) ->
-        (*let _ = Printf.eprintf "checking function %s : %s -> %s\n" 
-          (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in*)
+        let _ = prerr_endline (Printf.sprintf "checking function %s : %s -> %s\n" 
+          (id_to_string id) (t_to_string param_t) (t_to_string ret_t)) in
         let (pat',t_env',cs_p,b_env',t') = check_pattern (Env(d_env,t_env,b_env,tp_env)) Emp_local param_t pat in
         let _, _ = type_consistent (Patt l) d_env Require false param_t t' in
         let exp',_,_,cs_e,_,ef = 
           check_exp (Env(d_env,Envmap.union_merge (tannot_merge (Expr l) d_env true) t_env t_env', 
                          merge_bounds b_env b_env',tp_env)) imp_param true true ret_t ret_t exp in
-        (*let _ = Printf.eprintf "checked function %s : %s -> %s\n" 
-          (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in
-          let _ = Printf.eprintf "constraints were pattern: %s\n expression: %s\n" 
-          (constraints_to_string cs_p) (constraints_to_string cs_e) in*)
+        (* let _ = Printf.eprintf "checked function %s : %s -> %s\n" 
+          (id_to_string id) (t_to_string param_t) (t_to_string ret_t) in *)
+        let _ = prerr_endline (Printf.sprintf "constraints were pattern: %s\n expression: %s\n" 
+          (constraints_to_string cs_p) (constraints_to_string cs_e)) in
         let cs = CondCons(Fun l,cond_kind,None,cs_p,cs_e) in
         (FCL_aux((FCL_Funcl(id,pat',exp')),(l,(Base(([],ret_t),Emp_global,[cs],ef,pure_e,nob)))),(cs,ef))) funcls) in
   let check_pattern_after_constraints (FCL_aux ((FCL_Funcl (_, pat, _)), _)) =
@@ -2334,7 +2336,7 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
   in
   match (in_env,tannot) with
     | Some(Base( (params,u),Spec,constraints,eft,_,_)), Base( (p',t),_,c',eft',_,_) ->
-      (*let _ = Printf.eprintf "Function %s is in env\n" id in*)
+      let _ = prerr_endline (Printf.sprintf "Function %s is in env" id) in
       let u,constraints,eft,t_param_env = subst_with_env t_param_env true u constraints eft in
       let _,cs_decs = type_consistent (Specc l) d_env Require false t u in
       (*let _ = Printf.eprintf "valspec consistent with type for %s, %s ~< %s with %s deriveds and %s stated\n" 
@@ -2363,14 +2365,14 @@ let check_fundef envs (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,
       (FD_aux(FD_function(recopt,tannotopt,effectopt,funcls),(l,tannot))),
       Env(d_env,orig_env (*Envmap.insert t_env (id,tannot)*),b_env,tp_env)
     | _ , _->
-      (*let _ = Printf.eprintf "checking %s, not in env\n%!" id in*)
+      let _ = prerr_endline (Printf.sprintf "checking %s, not in env" id) in
       (*let t_env = if is_rec then Envmap.insert t_env (id,tannot) else t_env in*)
       let funcls,cs_ef = check t_env t_param_env None in
       let cses,ef =
         ((fun (cses,efses) -> (cses,(List.fold_right union_effects efses pure_e))) (List.split cs_ef)) in
       let cs = if List.length funcls = 1 then cses else [BranchCons(Fun l, None, cses)] in
       (*let _ = Printf.eprintf "unresolved constraints are %s\n%!" (constraints_to_string cs) in*)
-      let (cs',map) = resolve_constraints cs in
+      let (cs',map) = resolve_constraints (extra_constraints @ cs) in
       (*let _ = Printf.eprintf "checking tannot for %s 2  remaining constraints are %s\n" 
           id (constraints_to_string cs') in*)
       let tannot = check_tannot l
