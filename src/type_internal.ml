@@ -4479,6 +4479,8 @@ let simplify_infinity = function
   | List [Atom ">="; Atom "infinity"; x] -> Atom "true"
   | List [Atom ">="; x; Atom "negative_infinity"] -> Atom "true"
   | List [Atom "<="; Atom "negative_infinity"; x] -> Atom "true"
+  | List [Atom "="; Atom "negative_infinity"; Atom x] -> if x = "negative_infinity" then Atom "true" else Atom "true" (* FIXME *)
+  | List [Atom "="; Atom x; Atom "negative_infinity"] -> if x = "negative_infinity" then Atom "true" else Atom "true"                    
   | sexpr -> sexpr
 
 let rec simp f = function
@@ -4574,7 +4576,7 @@ let constraints_to_smtlib constraints : string * int =
     | Nadd(n1,n2) -> cfun "+" [n_to_cexpr n1; n_to_cexpr n2]
     | Nsub(n1,n2) -> cfun "-" [n_to_cexpr n1; n_to_cexpr n2]
     | Nmult(n1,n2) -> cfun "*" [n_to_cexpr n1; n_to_cexpr n2]
-    | N2n(n,None) -> cfun "*" [n_to_cexpr n; n_to_cexpr n]
+    | N2n(n,None) -> CAtom "true" (* (cfun "^" [CAtom "2"; CAtom "256"] (* n_to_cexpr n] *)) *)
     | N2n(n,Some i) -> raise (Unsupported_Constraint "N2n")
     | Npow(n, i) -> cfun "^" [n_to_cexpr n; CAtom (string_of_int i)]
     | Nneg n -> cfun "-" [n_to_cexpr n]
@@ -4609,11 +4611,9 @@ let constraints_to_smtlib constraints : string * int =
 
   let processed_constraints = unbranch (constraints_to_cexpr constraints) |> List.map simplify_constraints in
 
-  (var_decs
-   ^ nuvar_decs
-   ^ "\n"
-   ^ string_of_list "\n" smtlib_constraint processed_constraints
-   ^ "\n"
+  (var_decs ^ "\n"
+   ^ nuvar_decs ^ "\n"
+   ^ string_of_list "\n" smtlib_constraint processed_constraints ^ "\n"
   , List.length processed_constraints)
     
 let call_z3 (input, problems) : bool =
