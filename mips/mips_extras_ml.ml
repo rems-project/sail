@@ -103,7 +103,6 @@ let _MEMr (addr, size) = begin
     ret := vector_concat byte_vec (!ret);
     (*printf "MEM [%s] -> %x %s %s\n" (big_int_to_hex byte_addr) byte (string_of_value byte_vec) (string_of_value !ret);*)
   done;
-  ret := set_start_to_length (!ret);
   !ret;
 end
 let _MEMr_reserve = _MEMr
@@ -115,7 +114,7 @@ let _MEMr_tag (addr, size) =
       Mem.find addr_bi !tag_mem 
     with Not_found -> false in
   begin
-    set_start_to_length (vector_concat data (to_vec_dec_int (8, if tag then 1 else 0)))
+    vector_concat data (to_vec_dec_int (8, if tag then 1 else 0))
   end
 
 let _MEMr_tag_reserve = _MEMr_tag

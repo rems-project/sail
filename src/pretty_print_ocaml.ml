@@ -173,14 +173,14 @@ let doc_pat_ocaml =
       parens
         (separate space [string "VvectorR";
                          parens (separate comma_sp [squarebars (separate_map semi pat pats);
-                                                    underscore;
+                                                    (* underscore; *)
                                                     underscore])]) in
     (match annot with
      | Base(([],t),_,_,_,_,_) ->
        if is_bit_vector t
        then parens (separate space [string "Vvector";
                                     parens (separate comma_sp [squarebars (separate_map semi pat pats);
-                                                                underscore;
+                                                                (* underscore; *)
                                                                 underscore])])
        else non_bit_print()
      | _ -> non_bit_print ())
@@ -333,10 +333,10 @@ let doc_exp_ocaml, doc_let_ocaml =
          let (Typ_aux (t,_)) = typ in
              (match t with
             | Typ_app (Id_aux (Id "vector",_), [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i,_)),_);_;_;_]) ->
-               parens ((concat [string "set_start";space;string (string_of_int i)]) ^//^
+               parens ((*(concat [string "set_start";space;string (string_of_int i)]) ^//^*)
                            exp e)
             | Typ_var (Kid_aux (Var "length",_)) ->
-               parens ((string "set_start_to_length") ^//^ exp e)
+               parens ((*(string "set_start_to_length") ^//^*) exp e)
             | _ -> 
                parens (doc_op colon (group (exp e)) (doc_typ_ocaml typ)))
 
@@ -358,12 +358,12 @@ let doc_exp_ocaml, doc_let_ocaml =
            let dir,dir_out = match order.order with
              | Oinc -> true,"true"
              | _ -> false, "false" in
-           let start = match start.nexp with
+           (* let start = match start.nexp with
              | Nconst i -> string_of_big_int i
              | N2n(_,Some i) -> string_of_big_int i
-             | _ -> if dir then "0" else string_of_int (List.length exps) in
+             | _ -> if dir then "0" else string_of_int (List.length exps) in *)
            parens (separate space [call; parens (separate comma_sp [squarebars (separate_map semi exp exps);
-                                                                   string start;
+                                                                   (* string start; *)
                                                                    string dir_out])]))
     | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
       (match annot with
@@ -753,4 +753,3 @@ let pp_defs_ocaml f d top_line opens =
   print f (string "(*" ^^ (string top_line) ^^ string "*)" ^/^
            (separate_map hardline (fun lib -> (string "open") ^^ space ^^ (string lib)) opens) ^/^
            (doc_defs_ocaml d))
-

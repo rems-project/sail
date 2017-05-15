@@ -16,8 +16,8 @@ type _int = number
 let undef_val = ref Vundef
 
 type value =
-  | Vvector of vbit array * int * bool
-  | VvectorR of value array * int * bool
+  | Vvector of vbit array * bool
+  | VvectorR of value array * bool
   | Vregister of vbit array ref * int * bool * string * (string * (int * int)) list
   | Vbit of vbit (*Mostly for Vundef in place of undefined register place holders*)
 
@@ -38,8 +38,8 @@ let bit_of_string = function
 let string_of_bit_array a = Array.fold_left (^) "" (Array.map string_of_bit a) 
 
 let string_of_value = function
-  | Vvector(bits, start, inc)  -> (string_of_int start) ^ (if inc then "inc" else "dec") ^ (string_of_bit_array bits)
-  | VvectorR(values, start, inc) -> ""
+  | Vvector(bits, inc)  -> (if inc then "inc" else "dec") ^ (string_of_bit_array bits)
+  | VvectorR(values, inc) -> ""
   | Vregister(bits, start, inc, name, fields) -> "reg" ^ (string_of_int start) ^ (if inc then "inc" else "dec") ^ (string_of_bit_array !bits)
   | Vbit(b) -> string_of_bit b
 
@@ -61,46 +61,49 @@ let is_one_int i =
   if i = 1 then Vone else Vzero
 
 let get_barray  = function
-  | Vvector(a,_,_) -> a
+  | Vvector(a,_) -> a
   | Vregister(a,_,_,_,_) -> !a
   | _ -> assert false
 
 let get_varray = function
-  | VvectorR(a,_,_) -> a
+  | VvectorR(a,_) -> a
   | _ -> assert false
 
 let get_ord = function
-  | Vvector(_,_,o) | Vregister(_,_,o,_,_) | VvectorR(_,_,o) -> o
+  | Vvector(_,o) | Vregister(_,_,o,_,_) | VvectorR(_,o) -> o
   | _ -> assert false  
 
 let get_start = function
-  | Vvector(_,s,o) | Vregister(_,s,o,_,_) | VvectorR(_,s,o) -> s
+  | Vvector(a,o) -> if o then 0 else Array.length a - 1
+   | VvectorR(a,o) -> if o then 0 else Array.length a - 1
+  | Vregister(_,s,o,_,_) -> s
   | _ -> assert false  
   
-let set_start i = function
+(* let set_start i = function
   | Vvector(a,start,dir) -> Vvector(a,i,dir)
   | Vregister(bits,start,dir,name,regfields) -> Vregister(bits,i,dir,name,regfields)
   | VvectorR(a,start,dir) -> VvectorR(a,i,dir)
-  | _ -> assert false  
+  | _ -> assert false   *)
 
 let length_int = function
-  | Vvector(array,_,_) -> Array.length array
+  | Vvector(array,_) -> Array.length array
   | Vregister(array,_,_,_,_) -> Array.length !array
-  | VvectorR(array,_,_) -> Array.length array
+  | VvectorR(array,_) -> Array.length array
   | _ -> assert false
   
-let set_start_to_length v = set_start ((length_int v)-1) v (* XXX should take account of direction? *)
+(* let set_start_to_length v = set_start ((length_int v)-1) v (* XXX should take account of direction? *) *)
 
 let length_big v = big_int_of_int (length_int v)
 let length = length_big
 
 let read_register = function
-  | Vregister(a,start,inc,_,_) -> Vvector(!a,start,inc)
+  | Vregister(a,start,inc,_,_) -> Vvector(!a,inc)
   | v -> v
 
 let vector_access_int v n = 
   match v with
-  | VvectorR(array,start,is_inc) ->
+  | VvectorR(array,is_inc) ->
+    let start = get_start v in
     if is_inc
     then (array.(n-start))
     else (array.(start-n))
@@ -111,7 +114,8 @@ let vector_access_big v n = vector_access_int v (int_of_big_int n)
 let vector_access = vector_access_big
 
 let bit_vector_access_int v n = match v with
-  | Vvector(array,start,is_inc) ->
+  | Vvector(array,is_inc) ->
+    let start = get_start v in
     if is_inc
     then array.(n-start)
     else array.(start-n)
@@ -127,15 +131,17 @@ let bit_vector_access = bit_vector_access_big
 let vector_subrange_int v n m =
   (*Printf.printf "vector_subrange %s %d %d\n" (string_of_value v) n m;*)
   match v with
-  | VvectorR(array,start,is_inc) ->
+  | VvectorR(array,is_inc) ->
+    let start = get_start v in
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
-    VvectorR(Array.sub array offset length,n,is_inc)
-  | Vvector(array,start,is_inc) ->
+    VvectorR(Array.sub array offset length,is_inc)
+  | Vvector(array,is_inc) ->
+    let start = get_start v in
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
-    Vvector(Array.sub array offset length,n,is_inc)
+    Vvector(Array.sub array offset length,is_inc)
   | Vregister(array,start,is_inc,name,fields) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
-    Vvector(Array.sub !array offset length,n,is_inc)
+    Vvector(Array.sub !array offset length,is_inc)
   | _ -> v
 
 let vector_subrange_big v n m = vector_subrange_int v (int_of_big_int n) (int_of_big_int m)
@@ -168,7 +174,7 @@ let set_register register value = match register,value with
          tracef "%s <- %s\n" name (string_of_value value);
        a := !new_v
      end
-  | Vregister(a,_,_,name,_), Vvector(new_v,_,_) ->
+  | Vregister(a,_,_,name,_), Vvector(new_v,_) ->
      begin
        if !trace_writes then
          tracef "%s <- %s\n" name (string_of_value value);
@@ -185,7 +191,8 @@ let set_vector_subrange_vec_int v n m new_v =
     end
   in
   match v, new_v with
-  | VvectorR(array,start,is_inc),VvectorR(new_v,_,_) ->
+  | VvectorR(array,is_inc),VvectorR(new_v,_) ->
+    let start = get_start v in
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
     walker array length offset new_v
   | _ -> ()
@@ -203,10 +210,11 @@ let set_vector_subrange_bit_int v n m new_v =
     end
   in
   match v,new_v with
-  | Vvector(array,start,is_inc),Vvector(new_v,_,_) ->
+  | Vvector(array,is_inc),Vvector(new_v,_) ->
+    let start = get_start v in
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
     walker array length offset new_v
-  | Vregister(array,start,is_inc,name,fields),Vvector(new_v,_,_) ->
+  | Vregister(array,start,is_inc,name,fields),Vvector(new_v,_) ->
     let (length,offset) = if is_inc then (m-n+1,n-start) else (n-m+1,start-n) in
     walker !array length offset new_v
   | _ -> ()
@@ -266,48 +274,48 @@ let set_two_reg r1 r2 vec =
   begin set_register r1 r1_v; set_register r2 r2_v end
   
 
-let make_indexed_v entries default start size dir =
+let make_indexed_v entries default size dir =
   let default_value = match default with
     | None -> Vbit Vundef
     | Some v -> v in
   let array = Array.make size default_value in
   begin
-    List.iter (fun (i,v) -> array.(if dir then start - i else i - start) <- v) entries;
-    VvectorR(array, start, dir)
+    List.iter (fun (i,v) -> array.(if dir then i else size - 1 - i) <- v) entries;
+    VvectorR(array, dir)
   end
 
-let make_indexed_v_big entries default start size dir =
-  make_indexed_v entries default (int_of_big_int start) (int_of_big_int size) dir
+let make_indexed_v_big entries default size dir =
+  make_indexed_v entries default (int_of_big_int size) dir
 
-let make_indexed_bitv entries default start size dir =
+let make_indexed_bitv entries default size dir =
   let default_value = match default with
     | None -> Vundef
     | Some v -> v in
   let array = Array.make size default_value in
   begin
-    List.iter (fun (i,v) -> array.(if dir then start - i else i - start) <- v) entries;
-    Vvector(array, start, dir)
+    List.iter (fun (i,v) -> array.(if dir then i else size - 1 - i) <- v) entries;
+    Vvector(array, dir)
   end
 
-let make_indexed_bitv_big entries default start size dir =
-  make_indexed_bitv entries default (int_of_big_int start) (int_of_big_int size) dir
+let make_indexed_bitv_big entries default size dir =
+  make_indexed_bitv entries default (int_of_big_int size) dir
 
 let vector_concat l r =
   match l,r with
-  | Vvector(arrayl,start,ord), Vvector(arrayr,_,_) ->
-    Vvector(Array.append arrayl arrayr, start, ord)
-  | Vvector(arrayl,start,ord), Vregister(arrayr,_,_,_,_) ->
-    Vvector(Array.append arrayl !arrayr, start,ord)
-  | Vregister(arrayl,start,ord,_,_), Vvector(arrayr,_,_) ->
-    Vvector(Array.append !arrayl arrayr, start, ord)
-  | Vregister(arrayl,start,ord,_,_), Vregister(arrayr,_,_,_,_) ->
-    Vvector(Array.append !arrayl !arrayr,start,ord)
-  | VvectorR(arrayl,start,ord),VvectorR(arrayr,_,_) ->
-    VvectorR(Array.append arrayl arrayr, start,ord)
+  | Vvector(arrayl,ord), Vvector(arrayr,_) ->
+    Vvector(Array.append arrayl arrayr, ord)
+  | Vvector(arrayl,ord), Vregister(arrayr,_,_,_,_) ->
+    Vvector(Array.append arrayl !arrayr,ord)
+  | Vregister(arrayl,_,ord,_,_), Vvector(arrayr,_) ->
+    Vvector(Array.append !arrayl arrayr, ord)
+  | Vregister(arrayl,_,ord,_,_), Vregister(arrayr,_,_,_,_) ->
+    Vvector(Array.append !arrayl !arrayr,ord)
+  | VvectorR(arrayl,ord),VvectorR(arrayr,_) ->
+    VvectorR(Array.append arrayl arrayr,ord)
   | _ -> Vbit Vundef
 
 let has_undef = function
-  | Vvector(array,_,_) ->
+  | Vvector(array,_) ->
     let rec foreach i = (* XXX ideally would use Array.mem but not in ocaml 4.02.3 *)
       if i < Array.length array
       then
@@ -327,7 +335,7 @@ let has_undef = function
   | _ -> false
 
 let most_significant = function
-  | Vvector(array,_,_) -> array.(0)
+  | Vvector(array,_) -> array.(0)
   | Vregister(array,_,_,_,_) -> !array.(0)
   | _ -> assert false
 
@@ -337,8 +345,8 @@ let bitwise_not_bit = function
   | _ -> Vundef
 
 let bitwise_not = function
-  | Vvector(array,s,d)-> Vvector( Array.map bitwise_not_bit array,s,d)
-  | Vregister(array,s,d,_,_) -> Vvector( Array.map bitwise_not_bit !array,s,d)
+  | Vvector(array,d)-> Vvector( Array.map bitwise_not_bit array,d)
+  | Vregister(array,_,d,_,_) -> Vvector( Array.map bitwise_not_bit !array,d)
   | _ -> assert false 
 
 let bool_to_bit b = if b then Vone else Vzero
@@ -365,14 +373,14 @@ let bitwise_binop op (l,r) =
       array
     end in
   match l,r with
-  | Vvector(arrayl, start, dir), Vvector(arrayr,_,_) ->
-    Vvector(bop (Array.length arrayl) arrayl arrayr, start,dir)
-  | Vvector(arrayl, start, dir), Vregister(arrayr,_,_,_,_) ->
-    Vvector(bop (Array.length arrayl) arrayl !arrayr, start, dir)
-  | Vregister(arrayl, start,dir,_,_), Vvector(arrayr,_,_) ->
-    Vvector(bop (Array.length arrayr) !arrayl arrayr, start,dir)
-  | Vregister(arrayl, start, dir, _, _), Vregister(arrayr,_,_,_,_) ->
-    Vvector(bop (Array.length !arrayl) !arrayl !arrayr, start,dir)
+  | Vvector(arrayl, dir), Vvector(arrayr,_) ->
+    Vvector(bop (Array.length arrayl) arrayl arrayr,dir)
+  | Vvector(arrayl, dir), Vregister(arrayr,_,_,_,_) ->
+    Vvector(bop (Array.length arrayl) arrayl !arrayr, dir)
+  | Vregister(arrayl,_,dir,_,_), Vvector(arrayr,_) ->
+    Vvector(bop (Array.length arrayr) !arrayl arrayr,dir)
+  | Vregister(arrayl, _, dir, _, _), Vregister(arrayr,_,_,_,_) ->
+    Vvector(bop (Array.length !arrayl) !arrayl !arrayr,dir)
   | _ -> Vbit Vundef
 
 let bitwise_and = bitwise_binop (&&)
@@ -398,7 +406,7 @@ let int_of_bit_array array =
   end
 
 let unsigned_int = function
-  | (Vvector(array,_,_) as v) ->
+  | (Vvector(array,_) as v) ->
     if has_undef v
     then assert false
     else int_of_bit_array array
@@ -423,7 +431,7 @@ let big_int_of_bit_array array =
   end
 
 let unsigned_big = function
-  | (Vvector(array,_,_) as v) ->
+  | (Vvector(array,_) as v) ->
     if has_undef v
     then assert false
     else
@@ -485,28 +493,26 @@ let get_min_representable_in _ n =
 
 let to_vec_int ord len n =
   let array = Array.make len Vzero in
-  let start = if ord then 0 else len-1 in
   let acc = ref n in
   for i = (len - 1) downto 0 do
     if ((!acc) land 1) = 1 then
       array.(i) <- Vone;
     acc := (!acc) asr 1
   done;
-  Vvector(array, start, ord)
+  Vvector(array, ord)
 
 let to_vec_big ord len n =
   let len = int_of_big_int len in
   let array = Array.make len Vzero in
-  let start = if ord then 0 else len-1 in
   if eq_big_int n zero_big_int
-  then Vvector(array, start, ord)
+  then Vvector(array, ord)
   else
     begin
       for i = 0 to len - 1 do
         if ((extract_big_int n (len - 1 - i) 1) == unit_big_int) then
           array.(i) <- Vone
       done;
-      Vvector(array, start, ord)
+      Vvector(array, ord)
     end
 
 let to_vec_inc_int (len,n) = to_vec_int true len n
@@ -520,14 +526,12 @@ let to_vec_dec = to_vec_dec_big
 
 let to_vec_undef_int ord len = 
   let array = Array.make len !undef_val in
-  let start = if ord then 0 else len-1 in
-  Vvector(array, start, ord)
+  Vvector(array, ord)
 
 let to_vec_undef_big ord len = 
   let len = int_of_big_int len in
   let array = Array.make len !undef_val in
-  let start = if ord then 0 else len-1 in
-  Vvector(array, start, ord)
+  Vvector(array, ord)
 
 let to_vec_inc_undef_int len = to_vec_undef_int true len
 let to_vec_dec_undef_int len = to_vec_undef_int false len
@@ -549,7 +553,7 @@ let exts_int (len, vec) =
       (* truncate to least significant bits *)
       Array.sub barray (vlen - len) len in
   let inc = get_ord vec in
-  Vvector(arr, (if inc then 0 else (len - 1)), inc)
+  Vvector(arr, inc)
 
 let extz_int (len, vec) = 
   let barray = get_barray(vec) in
@@ -562,7 +566,7 @@ let extz_int (len, vec) =
       (* truncate to least significant bits *)
       Array.sub barray (vlen - len) len in
   let inc = get_ord vec in
-  Vvector(arr, (if inc then 0 else (len - 1)), inc)
+  Vvector(arr, inc)
 
 let exts_big (len,vec) = exts_int (int_of_big_int len, vec)
 let extz_big (len,vec) = extz_int (int_of_big_int len, vec)
@@ -893,25 +897,25 @@ let minus_overflow_vec_bit_signed = minus_overflow_vec_bit_signed_big
 
 let shift_op_vec_int op (l,r) =
   match l with
-  | Vvector(_,start,ord) | Vregister(_,start,ord,_,_) ->
-    let array = match l with | Vvector(array,_,_) -> array | Vregister(array,_,_,_,_) -> !array | _ -> assert false in
+  | Vvector(_,ord) | Vregister(_,_,ord,_,_) ->
+    let array = match l with | Vvector(array,_) -> array | Vregister(array,_,_,_,_) -> !array | _ -> assert false in
     let len = Array.length array in
     (match op with
      | "<<" ->
        let left = Array.sub array r (len - r) in
        let right = Array.make r Vzero in
        let result = Array.append left right in
-       Vvector(result, start, ord)
+       Vvector(result, ord)
      | ">>" ->
        let left = Array.make r Vzero in
        let right = Array.sub array 0 (len - r) in
        let result = Array.append left right in
-       Vvector(result, start, ord)
+       Vvector(result, ord)
      | "<<<" ->
        let left = Array.sub array r (len - r) in
        let right = Array.sub array 0 r in
        let result = Array.append left right in
-       Vvector(result, start, ord)
+       Vvector(result, ord)
      | _ -> assert false)
   | _ -> assert false
 
@@ -952,8 +956,8 @@ let rec arith_op_vec_no0_int op sign size (l,r) =
   then to_vec_int ord act_size n'
   else
     match l with
-    | Vvector(_, start, _) | Vregister(_, start, _, _, _) ->
-      Vvector((Array.make act_size Vundef), start, ord)
+    | Vvector(_, _) | Vregister(_, _, _, _, _) ->
+      Vvector((Array.make act_size Vundef), ord)
     | _ -> assert false
 
 let mod_vec_int = arith_op_vec_no0_int (mod) false 1
@@ -975,8 +979,8 @@ let rec arith_op_vec_no0_big op sign size (l,r) =
   then to_vec_big ord (big_int_of_int act_size) n'
   else
     match l with
-    | Vvector(_, start, _) | Vregister(_, start, _, _, _) ->
-      Vvector((Array.make act_size Vundef), start, ord)
+    | Vvector(_, _) | Vregister(_, _, _, _, _) ->
+      Vvector((Array.make act_size Vundef), ord)
     | _ -> assert false
 
 let mod_vec_big = arith_op_vec_no0_big mod_big_int false unit_big_int
@@ -1005,9 +1009,9 @@ let arith_op_overflow_no0_vec_int op sign size (l,r) =
     if representable then
       (to_vec_int ord act_size n',to_vec_int ord (1+act_size) n_u')
     else match l with 
-      | Vvector(_, start, _) | Vregister(_, start, _, _, _) ->
-        Vvector((Array.make act_size Vundef), start, ord),
-        Vvector((Array.make  (act_size + 1) Vundef), start, ord)
+      | Vvector(_, _) | Vregister(_, _, _, _, _) ->
+        Vvector((Array.make act_size Vundef), ord),
+        Vvector((Array.make  (act_size + 1) Vundef), ord)
       | _ -> assert false in
   let overflow = if representable then Vzero else Vone in
   (correct_size_num,overflow,most_significant one_more)
@@ -1033,9 +1037,9 @@ let arith_op_overflow_no0_vec_big op sign size (l,r) =
     if representable then
       (to_vec_big ord act_size n',to_vec_big ord (succ_big_int act_size) n_u')
     else match l with 
-      | Vvector(_, start, _) | Vregister(_, start, _, _, _) ->
-        Vvector((Array.make (int_of_big_int act_size) Vundef), start, ord),
-        Vvector((Array.make  ((int_of_big_int act_size) + 1) Vundef), start, ord)
+      | Vvector(_, _) | Vregister(_, _, _, _, _) ->
+        Vvector((Array.make (int_of_big_int act_size) Vundef), ord),
+        Vvector((Array.make  ((int_of_big_int act_size) + 1) Vundef), ord)
       | _ -> assert false in
   let overflow = if representable then Vzero else Vone in
   (correct_size_num,overflow,most_significant one_more)
@@ -1063,7 +1067,7 @@ let mod_vec_range = mod_vec_range_big
 
 (* XXX Need to have a default top level direction reference I think*)
 let duplicate_int (bit,length) =
-  Vvector((Array.make length bit), (length-1), false)
+  Vvector((Array.make length bit), false)
 
 let duplicate_big (bit,length) =
   duplicate_int (bit, int_of_big_int length)
@@ -1195,16 +1199,16 @@ let neq_range = neq
 let mask (n,v) = 
   let n' = int_of_big_int n in
   match v with
-  | Vvector (bits,start,dir) ->
+  | Vvector (bits,dir) ->
      let current_size = Array.length bits in 
      let to_drop = (current_size - n') in
      let bits' = Array.sub bits to_drop n' in
-     Vvector (bits',(if dir then 0 else n'-1), dir)
-  | Vregister (bits,start,dir,name,fields) ->
+     Vvector (bits', dir)
+  | Vregister (bits,_,dir,name,fields) ->
      let current_size = Array.length !bits in 
      let to_drop = (current_size - n') in
      let bits' = Array.sub !bits to_drop n' in
-     Vvector (bits',(if dir then 0 else n'-1), dir)
+     Vvector (bits', dir)
   | VvectorR _ -> failwith "mask not implemented for VregisterR"
   | Vbit _ -> failwith "mask called for bit"
 
@@ -1212,10 +1216,9 @@ let slice_raw (v, i, j) =
   let i' = int_of_big_int i in
   let j' = int_of_big_int j in
   match v with
-  | Vvector (bs, start, is_inc) ->
+  | Vvector (bs, is_inc) ->
      let bits = Array.sub bs i' (j'-i'+1) in
-     let len = Array.length bits in
-     Vvector (bits, (if is_inc then 0 else len - 1), is_inc)
+     Vvector (bits, is_inc)
   | _ -> failwith "slice_raw only implemented for VVector"
 let _slice_raw = slice_raw
 
