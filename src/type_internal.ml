@@ -207,6 +207,12 @@ type constraint_origin =
   | Fun of Parse_ast.l
   | Specc of Parse_ast.l
 
+let constraint_origin_loc = function
+  | Patt l -> l
+  | Expr l -> l
+  | Fun l -> l
+  | Specc l -> l
+               
 type range_enforcement = Require | Guarantee 
 type cond_kind = Positive | Negative | Solo | Switch
 type 'a many = One of 'a | Two of 'a * 'a | Many of 'a list
@@ -372,7 +378,7 @@ and n_to_string n =
       let rec show_nuvar n = match n.nexp with
         | Nuvar{insubst=None; nindex = i; orig_var = Some s} -> s^ "()"
         | Nuvar{insubst=Some n; nindex = i; orig_var = Some s} -> s ^ "(" ^ show_nuvar n ^ ")"
-        | Nuvar{insubst=None; nindex = i;} -> "Nu_" ^ string_of_int i ^ "()" 
+        | Nuvar{insubst=None; nindex = i} -> "Nu_" ^ string_of_int i ^ "()" 
         | Nuvar{insubst=Some n; nindex =i;} -> "Nu_" ^ string_of_int i ^ "(" ^ show_nuvar n ^ ")"
         | _ -> n_to_string n in
       show_nuvar (get_outer_most n)
@@ -452,7 +458,7 @@ let rec constraint_to_string d = function
     "Gt(" ^ co_to_string co ^ ", " ^ enforce_to_string enforce ^ ", " ^
       n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
   | In(co,var,ints) -> "In of " ^ var
-  | InS(co,n,ints) -> "InS of " ^ n_to_string n
+  | InS(co,n,ints) -> "InS of " ^ n_to_string n ^ " {" ^ string_of_list ", " string_of_int ints ^ "}"
   | Predicate(co,cp,cn) -> 
     "Pred(" ^ co_to_string co ^ ", " ^ constraint_to_string (d + 1) cp ^", " ^ constraint_to_string (d + 1) cn ^  ")"
   | CondCons(co,kind,_,pats,exps) ->
@@ -4468,6 +4474,10 @@ let constraints_to_smtlib l : string =
   let rec constraint_nuvars = function
     | LtEq (co, enforce, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
     | GtEq (co, enforce, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
+    | Lt (co, enforce, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
+    | Gt (co, enforce, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
+    | Eq (co, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
+    | InS (co, nexp, ints) -> nexp_nuvars nexp
     | CondCons (co, kind, _, [], exps) -> constraints_nuvars exps
     | CondCons (co, kind, _, pats, exps) -> SS.union (constraints_nuvars pats) (constraints_nuvars exps)
     | BranchCons (co, _, consts) -> constraints_nuvars consts
@@ -4505,6 +4515,10 @@ let constraints_to_smtlib l : string =
   let rec constraint_to_sexpr = function
     | LtEq (co, enforce, nexp1, nexp2) -> sfun "<=" [n_to_sexpr nexp1; n_to_sexpr nexp2]
     | GtEq (co, enforce, nexp1, nexp2) -> sfun ">=" [n_to_sexpr nexp1; n_to_sexpr nexp2]
+    | Lt (co, enforce, nexp1, nexp2) -> sfun "<" [n_to_sexpr nexp1; n_to_sexpr nexp2]
+    | Gt (co, enforce, nexp1, nexp2) -> sfun ">" [n_to_sexpr nexp2; n_to_sexpr nexp2]
+    | Eq (co, nexp1, nexp2) -> sfun "=" [n_to_sexpr nexp1; n_to_sexpr nexp2]
+    | InS (co, nexp, ints) -> sfun "or" (List.map (fun i -> sfun "=" [n_to_sexpr nexp; Atom (string_of_int i)]) ints)
     | CondCons (co, kind, _, [], exps) -> constraints_to_sexpr exps
     | CondCons (co, kind, _, pats, exps) -> sfun "=>" [constraints_to_sexpr pats; constraints_to_sexpr exps]
     | BranchCons (co, _, consts) -> constraints_to_sexpr consts
