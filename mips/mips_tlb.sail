@@ -113,7 +113,7 @@ function (bit[64], bool) TLBTranslateC ((bit[64]) vAddr, (MemAccessType) accessT
     else 
       let (pa, c) = switch(addr) {
       case (Some(a)) -> (a, false)
-      case None      -> if ((~(compat32)) & (unsigned(vAddr[61..0]) > MAX_VA)) then
+      case None      -> if ((~(compat32)) & (vAddr[61..0] > MAX_VA)) then
           (SignalExceptionBadAddr(if (accessType == StoreData) then AdES else AdEL, vAddr))
         else
           TLBTranslate2(vAddr, accessType)
