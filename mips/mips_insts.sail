@@ -483,7 +483,7 @@ function clause execute (SRA(rt, rd, sa)) =
     if (NotWordVal(temp)) then
       wGPR(rd) := undefined
     else
-      wGPR(rd) := (temp[31] ^^ (sa+32)) : temp [31..sa]
+      wGPR(rd) := (temp[31] ^^ (sa+31)) : temp [31..sa]
   }
 
 (* SRAV 32-bit arithmetic shift right variable *)
@@ -498,7 +498,7 @@ function clause execute (SRAV(rs, rt, rd)) =
     if (NotWordVal(temp)) then
       wGPR(rd) := undefined
     else
-      wGPR(rd) := (temp[31] ^^ (sa+32)) : temp [31..sa]
+      wGPR(rd) := (temp[31] ^^ (sa+31)) : temp [31..sa]
   }
 
 (* SRL 32-bit shift right *)
@@ -858,8 +858,8 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : 0b00000 : 0b00000 :
   Some(DDIVU(rs, rt))
 function clause execute (DDIVU(rs, rt)) =
   {
-    (int) rsVal := rGPR(rs);
-    (int) rtVal := rGPR(rt);
+    (nat) rsVal := rGPR(rs);
+    (nat) rtVal := rGPR(rt);
     let ((bit[64])q, (bit[64])r) = (if (rtVal == 0)
       then (undefined, undefined) 
       else let qi = (rsVal quot rtVal) in
