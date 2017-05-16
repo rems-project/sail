@@ -990,7 +990,9 @@ let remove_vector_concat_pat pat =
                  (Reporting_basic.err_unreachable
                     l ("unname_vector_concat_elements: Non-vector in vector-concat pattern:" ^
                        t_to_string t)
-                 ) in
+                 )
+            | _ -> failwith "has_length: unmatched pattern"
+          in
           let pats_tagged = tag_last pats in
           let (_,pats',decls') = List.fold_left aux (0,[],[]) pats_tagged in
 
@@ -1113,7 +1115,9 @@ let remove_vector_concat_pat pat =
         | P_id _,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector",_)})}),_,_,_,_,_))
         | P_wild,(_,Base((_,{t = Tapp ("vector", _)}),_,_,_,_,_))
         | P_wild,(_,Base((_,{t = Tabbrev (_,{t = Tapp ("vector", _)})}),_,_,_,_,_)) ->
-           false in
+           false
+        | _ -> failwith "has_length: unmatched pattern"
+        in
 
       let ps_tagged = tag_last ps in
       let ps' = List.fold_left aux [] ps_tagged in
@@ -1500,6 +1504,7 @@ let rewrite_defs_letbind_effects  =
     | LEXP_field (lexp,id) ->
        n_lexp lexp (fun lexp ->
        k (fix_effsum_lexp (LEXP_aux (LEXP_field (lexp,id),annot))))
+    | _ -> failwith "n_lexp: unhandled lexp"
 
   and n_exp_term (newreturn : bool) (exp : 'a exp) : 'a exp =
     let (E_aux (_,(l,_))) = exp in
@@ -1853,7 +1858,9 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          | false, Ord_aux (Ord_inc,_) -> "foreach_inc"
          | false, Ord_aux (Ord_dec,_) -> "foreach_dec"
          | true,  Ord_aux (Ord_inc,_) -> "foreachM_inc"
-         | true,  Ord_aux (Ord_dec,_) -> "foreachM_dec" in
+         | true,  Ord_aux (Ord_dec,_) -> "foreachM_dec"
+         | _ -> failwith "E_for: unhandled order"
+       in
        let funcl = Id_aux (Id fname,Parse_ast.Generated el) in
        let loopvar =
          let (bf,tf) = match get_type exp1 with
@@ -1861,16 +1868,22 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
            | {t = Tapp ("reg", [TA_typ {t = Tapp ("atom",[TA_nexp f])}])} -> (TA_nexp f,TA_nexp f)
            | {t = Tapp ("range",[TA_nexp bf;TA_nexp tf])} -> (TA_nexp bf,TA_nexp tf)
            | {t = Tapp ("reg", [TA_typ {t = Tapp ("range",[TA_nexp bf;TA_nexp tf])}])} -> (TA_nexp bf,TA_nexp tf)
-           | {t = Tapp (name,_)} -> failwith (name ^ " shouldn't be here") in
+           | {t = Tapp (name,_)} -> failwith (name ^ " shouldn't be here")
+           | _ -> failwith "E_for: unhandled from-expr"
+         in
          let (bt,tt) = match get_type exp2 with
            | {t = Tapp ("atom",[TA_nexp t])} -> (TA_nexp t,TA_nexp t)
            | {t = Tapp ("atom",[TA_typ {t = Tapp ("atom", [TA_nexp t])}])} -> (TA_nexp t,TA_nexp t)
            | {t = Tapp ("range",[TA_nexp bt;TA_nexp tt])} -> (TA_nexp bt,TA_nexp tt)
            | {t = Tapp ("atom",[TA_typ {t = Tapp ("range",[TA_nexp bt;TA_nexp tt])}])} -> (TA_nexp bt,TA_nexp tt)
-           | {t = Tapp (name,_)} -> failwith (name ^ " shouldn't be here") in
+           | {t = Tapp (name,_)} -> failwith (name ^ " shouldn't be here")
+           | _ -> failwith "E_for: unhandled to-expr"
+         in
          let t = {t = Tapp ("range",match order with
                                     | Ord_aux (Ord_inc,_) -> [bf;tt]
-                                    | Ord_aux (Ord_dec,_) -> [tf;bt])} in
+                                    | Ord_aux (Ord_dec,_) -> [tf;bt]
+                                    | _ -> failwith "E_for: unhandled Ord"
+                                    )} in
          E_aux (E_id id,(Parse_ast.Generated el,simple_annot t)) in
        let v = E_aux (E_app (funcl,[loopvar;mktup el [exp1;exp2;exp3];exp4;vartuple]),
                       (Parse_ast.Generated el,simple_annot_efr (get_type exp4) (get_effsum_exp exp4))) in
@@ -1950,7 +1963,9 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
              let vexp = E_aux (E_vector_update_subrange (eid,i,j,vexp),
                                (Parse_ast.Generated l,simple_annot (get_type_annot annot))) in
              let pat = P_aux (P_id id,(Parse_ast.Generated pl,simple_annot (get_type vexp))) in
-             Added_vars (vexp,pat))
+             Added_vars (vexp,pat)
+           | _ -> failwith "E_assign: unhandled lexp"
+          )
     | _ ->
        (* after rewrite_defs_letbind_effects this expression is pure and updates
        no variables: check n_exp_term and where it's used. *)
@@ -1980,7 +1995,9 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
      (* Rewrite E_internal_let into E_let and call recursively *)
      let id = match lexp with
        | LEXP_aux (LEXP_id id,_) -> id
-       | LEXP_aux (LEXP_cast (_,id),_) -> id in
+       | LEXP_aux (LEXP_cast (_,id),_) -> id
+       | _ -> failwith "E_internal_let: unhandled lexp"
+     in
      let pat = P_aux (P_id id, (Parse_ast.Generated l,simple_annot (get_type v))) in
      let lbannot = (Parse_ast.Generated l,simple_annot_efr (get_type v) (get_effsum_exp v)) in
      let lb = LB_aux (LB_val_implicit (pat,v),lbannot) in
