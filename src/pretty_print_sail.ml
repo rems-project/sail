@@ -563,3 +563,7 @@ let pat_to_string p =
   let b = Buffer.create 20 in
   to_buf b (doc_pat p);
   Buffer.contents b
+let typ_to_string t =
+  let b = Buffer.create 20 in
+  to_buf b (doc_typ t);
+  Buffer.contents b
