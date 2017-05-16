@@ -113,9 +113,9 @@ let read_from_file_pos2 p1 p2 =
   let ic = open_in p1.Lexing.pos_fname in
   let _ = seek_in ic s in
   let l = (e - s) in
-  let buf = String.create l in
+  let buf = Bytes.create l in
   let _ = input ic buf 0 l in
-  let _ = match multi with None -> () | Some sk -> String.fill buf 0 sk ' ' in
+  let _ = match multi with None -> () | Some sk -> Bytes.fill buf 0 sk ' ' in
   let _ = close_in ic in
   (buf, not (multi = None))
 
