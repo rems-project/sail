@@ -332,7 +332,7 @@ let rec kind_to_string kind = match kind.k with
 
 let co_to_string = function
   | Patt l -> "Pattern " (*^ Reporting_basic.loc_to_string l *)
-  | Expr l -> "Expression " (*^ Reporting_basic.loc_to_string l *)
+  | Expr l -> "Expression " ^ Reporting_basic.loc_to_string l 
   | Fun l -> "Function def " (*^ Reporting_basic.loc_to_string l *)
   | Specc l -> "Specification " (*^ Reporting_basic.loc_to_string l *)
 
@@ -4474,21 +4474,50 @@ let rec pp_sexpr : string sexpr -> string = function
   | List xs -> "(" ^ string_of_list " " pp_sexpr xs ^ ")"
   | Atom x -> x
 
-let simplify_infinity = function
+let simplify_infinity sexpr =
+  let neg_inf_error x =
+    "negative_infinity cannot equal " ^ x ^ ", perhaps you cast an unsigned value to a signed value."
+
+  let simplify_infinity' = function
   | List [Atom "<="; x; Atom "infinity"] -> Atom "true"
   | List [Atom ">="; Atom "infinity"; x] -> Atom "true"
   | List [Atom ">="; x; Atom "negative_infinity"] -> Atom "true"
   | List [Atom "<="; Atom "negative_infinity"; x] -> Atom "true"
-  | List [Atom "="; Atom "negative_infinity"; Atom x] -> if x = "negative_infinity" then Atom "true" else Atom "true" (* FIXME *)
-  | List [Atom "="; Atom x; Atom "negative_infinity"] -> if x = "negative_infinity" then Atom "true" else Atom "true"                    
+  | List [Atom "="; Atom "negative_infinity"; Atom x] ->
+     if x = "negative_infinity"
+     then Atom "true"
+     else raise (Unsupported_Constraint (neg_inf_error x)) 
+  | List [Atom "="; Atom x; Atom "negative_infinity"] ->
+     if x = "negative_infinity"
+     then Atom "true"
+     else raise (Unsupported_Constraint (nef_inf_error x))
   | sexpr -> sexpr
+  in
+  simplify_infinity' sexpr
 
-let rec simp f = function
+let power_atoms sexpr : string list =
+  let module SS = Set.Make(String) in  
+  let rec power_atoms' = function
+    | List [Atom "^"; Atom "2"; Atom x] -> SS.singleton x
+    | List xs -> List.fold_left SS.union SS.empty (List.map power_atoms' xs)
+    | Atom x -> SS.empty
+  in
+  power_atoms' sexpr |> SS.elements
+
+let rec subst_atom (f : 'a -> 'a) : 'a sexpr -> 'a sexpr = function
+  | Atom x -> Atom (f x)
+  | List xs -> List (List.map (subst_atom f) xs)
+                          
+let simp_powers sexpr : string sexpr =
+  let atoms = power_atoms sexpr in
+  List.fold_left (fun sexpr atom -> subst_atom (fun atom' -> if atom = atom' then "3" else atom') sexpr) sexpr atoms
+                   
+let rec rewrites f = function
   | Atom x -> f (Atom x)
-  | List xs -> f (List (List.map (simp f) xs))
+  | List xs -> f (List (List.map (rewrites f) xs))
                                                           
 (* Take a list of constraints and output a string in SMTLIB format for Z3 or other SMT solvers *)
-let constraints_to_smtlib constraints : string * int =
+let constraints_to_smtlib ?(simp=(fun x -> x)) constraints : string * int =
   let module SS = Set.Make(String) in
 
   let rec nexp_nuvars n : SS.t =
@@ -4576,7 +4605,7 @@ let constraints_to_smtlib constraints : string * int =
     | Nadd(n1,n2) -> cfun "+" [n_to_cexpr n1; n_to_cexpr n2]
     | Nsub(n1,n2) -> cfun "-" [n_to_cexpr n1; n_to_cexpr n2]
     | Nmult(n1,n2) -> cfun "*" [n_to_cexpr n1; n_to_cexpr n2]
-    | N2n(n,None) -> CAtom "true" (* (cfun "^" [CAtom "2"; CAtom "256"] (* n_to_cexpr n] *)) *)
+    | N2n(n,None) -> cfun "^" [CAtom "2"; n_to_cexpr n]
     | N2n(n,Some i) -> raise (Unsupported_Constraint "N2n")
     | Npow(n, i) -> cfun "^" [n_to_cexpr n; CAtom (string_of_int i)]
     | Nneg n -> cfun "-" [n_to_cexpr n]
@@ -4601,7 +4630,7 @@ let constraints_to_smtlib constraints : string * int =
     | l -> cfun "and" (List.map constraint_to_cexpr l)
   in
 
-  let simplify_constraints cs = simp simplify_infinity cs in
+  let simplify_constraints cs = simp (rewrites simplify_infinity cs) in
 
   let smtlib_constraint c =
     "(push)\n"
@@ -4616,15 +4645,14 @@ let constraints_to_smtlib constraints : string * int =
    ^ string_of_list "\n" smtlib_constraint processed_constraints ^ "\n"
   , List.length processed_constraints)
     
-let call_z3 (input, problems) : bool =
+let rec call_z3 ?(simp=(fun x -> x)) ?(retry=true) constraints : bool =
+  let (input, problems) = constraints_to_smtlib ~simp:simp constraints in
+
+  prerr_endline (Printf.sprintf "SMTLIB constraints are: \n%s%!" input);
+  
   let rec input_lines chan = function
     | 0 -> []
     | n -> input_line chan :: input_lines chan (n - 1)
-  in
-
-  let rec replicate x = function
-    | 0 -> []
-    | n -> x :: replicate x (n - 1)
   in
   
   begin
@@ -4632,12 +4660,12 @@ let call_z3 (input, problems) : bool =
     output_string tmp_chan input;
     close_out tmp_chan;
     prerr_endline ("Calling z3: " ^ input_file);
-    let z3_chan = Unix.open_process_in ("z3 " ^ input_file) in
+    let z3_chan = Unix.open_process_in ("z3 -t:1000 " ^ input_file) in
     let z3_output = input_lines z3_chan problems in
     let _ = Unix.close_process_in z3_chan in
     Sys.remove input_file;
     prerr_endline ("z3 returned: " ^ string_of_list " " (fun x -> x) z3_output);
-    if z3_output = replicate "sat" problems then true else false
+    List.for_all (fun res -> res = "unknown" || res = "sat") z3_output
   end
       
 let do_resolve_constraints = ref true
@@ -4649,8 +4677,7 @@ let resolve_constraints cs =
   else
     begin
       prerr_endline (Printf.sprintf "Original constraints are: \n%s\n%!" (constraints_to_string cs));
-      prerr_endline (Printf.sprintf "SMTLIB constraints are: \n%s%!" (fst (constraints_to_smtlib cs)));
-      if not (call_z3 (constraints_to_smtlib cs))
+      if not (call_z3 ~retry:false cs)
       then raise (Reporting_basic.err_typ Parse_ast.Unknown "Constraints are unsatisfiable")
       else ([], None)
     end
