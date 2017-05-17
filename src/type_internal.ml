@@ -3164,7 +3164,7 @@ let has_memv_effect = has_effect (BE_aux(BE_wmv, Parse_ast.Unknown))
 let has_lret_effect = has_effect (BE_aux(BE_lret, Parse_ast.Unknown))
 
 (*Similarly to above.*)
-let effects_eq co e1 e2 =
+let effects_eq (co: constraint_origin) (e1: effect) (e2: effect) : effect =
   let l = get_c_loc co in
   match e1.effect,e2.effect with
   | Eset _ , Evar _ -> e2
