@@ -206,12 +206,17 @@ let doc_exp_ocaml, doc_let_ocaml =
           | LEXP_vector _ ->
             doc_op (string "<-") (doc_lexp_array_ocaml le) (exp e)
           | LEXP_vector_range _ ->
-            doc_lexp_rwrite le e)
+            doc_lexp_rwrite le e
+          | _ -> failwith "doc_exp_ocaml E_assign: unhandled lexp"
+         )
        | _ ->
          (match le_act with
           | LEXP_vector _ | LEXP_vector_range _ | LEXP_cast _ | LEXP_field _ | LEXP_id _ ->
             (doc_lexp_rwrite le e)
-          | LEXP_memory _ -> (doc_lexp_fcall le e)))
+          | LEXP_memory _ -> (doc_lexp_fcall le e)
+          | _ -> failwith "doc_exp_ocaml _: unhandled lexp"
+         )
+      )
     | E_vector_append(l,r) ->
       parens ((string "vector_concat ") ^^ (exp l) ^^ space ^^ (exp r))
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
@@ -352,7 +357,7 @@ let doc_exp_ocaml, doc_let_ocaml =
     | E_vector exps ->
       (match annot with
        | Base((_,t),_,_,_,_,_) ->
-         match t.t with
+         ( match t.t with
          | Tapp("vector", [TA_nexp start; _; TA_ord order; _])
          | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; _; TA_ord order; _])}) ->
            let call = if is_bit_vector t then (string "Vvector") else (string "VvectorR") in
@@ -365,11 +370,16 @@ let doc_exp_ocaml, doc_let_ocaml =
              | _ -> if dir then "0" else string_of_int (List.length exps) in
            parens (separate space [call; parens (separate comma_sp [squarebars (separate_map semi exp exps);
                                                                    string start;
-                                                                   string dir_out])]))
+                                                                   string
+                                                                   dir_out])])
+         | _ -> failwith "doc_exp_ocaml E_vector: unhandled type"
+         )
+       | _ -> failwith "doc_exp_ocaml E_vector: unhandled annotation"
+      )
     | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
       (match annot with
        | Base((_,t),_,_,_,_,_) ->
-         match t.t with
+         ( match t.t with
          | Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])
          | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])})
          | Tapp("reg", [TA_typ {t =Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])}]) ->
@@ -384,6 +394,7 @@ let doc_exp_ocaml, doc_let_ocaml =
            let size = match len.nexp with
              | Nconst i | N2n(_,Some i)-> string_of_big_int i
              | N2n({nexp=Nconst i},_) -> string_of_int (Util.power 2 (int_of_big_int i))
+             | _ -> failwith "doc_exp_ocaml E_vector_indexed: unhandled size"
            in
            let default_string =
              (match default with
@@ -395,7 +406,11 @@ let doc_exp_ocaml, doc_let_ocaml =
                                    default_string;
                                    string start;
                                    string size;
-                                   string dir_out]))
+                                   string dir_out])
+         | _ -> failwith "doc_exp_ocaml E_vector_indexed: unhandled type"
+         )
+       | _ -> failwith "doc_exp_ocaml E_vector_indexed: unhandled annotation"
+      )
   | E_vector_update(v,e1,e2) ->
     (*Has never happened to date*)
       brackets (doc_op (string "with") (exp v) (doc_op equals (exp e1) (exp e2)))
@@ -437,6 +452,8 @@ let doc_exp_ocaml, doc_let_ocaml =
      separate space [string "return"; exp e1;]
   | E_assert (e1, e2) ->
      (string "assert") ^^ parens ((string "to_bool") ^^ space ^^ exp e1) (* XXX drops e2 *)
+  | _ -> failwith "top_exp: unhandled expression"
+
   and let_exp (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->
       prefix 2 1
@@ -454,17 +471,20 @@ let doc_exp_ocaml, doc_let_ocaml =
 
   and doc_lexp_ocaml top_call ((LEXP_aux(lexp,(l,annot))) as le) =
     let exp = top_exp false in
-    match lexp with
+    ( match lexp with
     | LEXP_vector(v,e) -> doc_lexp_array_ocaml le
     | LEXP_vector_range(v,e1,e2) ->
       parens ((string "vector_subrange") ^^ space ^^ (doc_lexp_ocaml false v) ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
     | LEXP_field(v,id) -> (doc_lexp_ocaml false v) ^^ dot ^^ doc_id_ocaml id
     | LEXP_id id | LEXP_cast(_,id) ->
       let name = doc_id_ocaml id in
-      match annot,top_call with
+      ( match annot,top_call with
       | Base((_,{t=Tapp("reg",_)}),Emp_set,_,_,_,_),false | Base((_,{t=Tabbrev(_,{t=Tapp("reg",_)})}),Emp_set,_,_,_,_),false ->
         string "!" ^^ name
       | _ -> name
+      )
+    | _ -> failwith "doc_lexp_ocaml: unhandled lexp"
+    )
 
   and doc_lexp_array_ocaml ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
     | LEXP_vector(v,e) ->
@@ -528,9 +548,11 @@ let doc_exp_ocaml, doc_let_ocaml =
             parens ((string "set_two_regs") ^^ space ^^ string reg1 ^^ space ^^ string reg2 ^^ space ^^ exp e_new_v))
        | _ ->
          parens (separate space [string "set_register"; doc_id_ocaml id; exp e_new_v]))
+    | _ -> failwith "doc_lexp_rwrite: unhandled lexp"
 
   and doc_lexp_fcall ((LEXP_aux(lexp,(l,annot))) as le) e_new_v = match lexp with
     | LEXP_memory(id,args) -> doc_id_ocaml id ^^ parens (separate_map comma (top_exp false) (args@[e_new_v]))
+    | _ -> failwith "doc_lexp_fcall: unhandled lexp"
 
   (* expose doc_exp and doc_let *)
   in top_exp false, let_exp
@@ -595,6 +617,7 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
                                      string (if dir then "true" else "false");
                                      string_lit (doc_id id);
                                      brackets doc_rids]))])
+    | _ -> failwith "doc_typedef_ocaml: unhandled nexp"
 
 let doc_kdef_ocaml (KD_aux(kd,_)) = match kd with
   | KD_nabbrev (k, id, name_scm, nexp) -> 
@@ -651,6 +674,7 @@ let doc_kdef_ocaml (KD_aux(kd,_)) = match kd with
                                      string (if dir then "true" else "false");
                                      string_lit (doc_id id);
                                      brackets doc_rids]))])
+    | _ -> failwith "doc_kdef_ocaml: unhandled nexp"
 
 let doc_rec_ocaml (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty
