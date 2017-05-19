@@ -104,6 +104,7 @@ let _ =
 
 
 let main() =
+  Printexc.record_backtrace true;
   if !(opt_print_version)
   then Printf.printf "Sail private release \n"
   else if !(opt_print_initial_env) then

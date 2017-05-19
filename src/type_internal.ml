@@ -3814,237 +3814,50 @@ let cs_print (message : string) : unit =
                                   
 exception Unsupported_Constraint of string;;
 
-type 'a cexpr = CList of ('a cexpr list) | CBranch of ('a cexpr list) | CAtom of 'a
+module Bindings = Map.Make(String)
 
-type 'a sexpr = List of ('a sexpr list) | Atom of 'a
-                                                    
-let cfun (fn : 'a) (xs : 'a cexpr list) : 'a cexpr = CList (CAtom fn :: xs)
-  
-let sfun (fn : 'a) (xs : 'a sexpr list) : 'a sexpr = List (Atom fn :: xs) 
-                                                        
-let unbranch (cexpr : 'a cexpr) : 'a sexpr list =
-  let rec resolve_branches = function
-    | ([] :: xs) -> []
-    | ((x :: xs) :: xxs) -> (List.map (fun ys -> x :: ys) (resolve_branches xxs)) @ resolve_branches (xs :: xxs) 
-    | [] -> [[]]
-  in
-  
-  let rec unbranch' = function
-    | CBranch xs -> List.map unbranch' xs |> List.concat
-    | CList xs -> List.map unbranch' xs |> resolve_branches |> List.map (fun ys -> List ys)
-    | CAtom x -> [Atom x]
-  in
-  unbranch' cexpr
-
-let rec pp_sexpr : string sexpr -> string = function
-  | List xs -> "(" ^ string_of_list " " pp_sexpr xs ^ ")"
-  | Atom x -> x
-
-let simplify_infinity sexpr =
-  let neg_inf_error x =
-    "negative_infinity cannot equal " ^ x ^ ", perhaps you cast an unsigned value to a signed value."
-  in
-
-  let simplify_infinity' = function
-  | List [Atom "<="; x; Atom "infinity"] -> Atom "true"
-  | List [Atom ">="; Atom "infinity"; x] -> Atom "true"
-  | List [Atom ">="; x; Atom "negative_infinity"] -> Atom "true"
-  | List [Atom "<="; Atom "negative_infinity"; x] -> Atom "true"
-  | List [Atom "="; Atom "negative_infinity"; Atom x] ->
-     if x = "negative_infinity"
-     then Atom "true"
-     else raise (Unsupported_Constraint (neg_inf_error x)) 
-  | List [Atom "="; Atom x; Atom "negative_infinity"] ->
-     if x = "negative_infinity"
-     then Atom "true"
-     else raise (Unsupported_Constraint (neg_inf_error x))
-  | sexpr -> sexpr
-  in
-  simplify_infinity' sexpr
-
-let power_atoms sexpr : string list =
-  let module SS = Set.Make(String) in  
-  let rec power_atoms' = function
-    | List [Atom "^"; Atom "2"; Atom x] -> SS.singleton x
-    | List xs -> List.fold_left SS.union SS.empty (List.map power_atoms' xs)
-    | Atom x -> SS.empty
-  in
-  power_atoms' sexpr |> SS.elements
-
-let rec subst_atom (f : 'a -> 'a) : 'a sexpr -> 'a sexpr = function
-  | Atom x -> Atom (f x)
-  | List xs -> List (List.map (subst_atom f) xs)
-                          
-let simp_powers sexpr : string sexpr =
-  let atoms = power_atoms sexpr in
-  List.fold_left (fun sexpr atom -> subst_atom (fun atom' -> if atom = atom' then "31" else atom') sexpr) sexpr atoms
-                   
-let rec rewrites f = function
-  | Atom x -> f (Atom x)
-  | List xs -> f (List (List.map (rewrites f) xs))
-                                                          
-(* Take a list of constraints and output a string in SMTLIB format for Z3 or other SMT solvers *)
-module SS = Set.Make(String);;
-
-let rec nexp_nuvars n : SS.t =
-  match n.nexp with
-  | Nadd(n1,n2) -> SS.union (nexp_nuvars n1) (nexp_nuvars n2)
-  | Nsub(n1,n2) -> SS.union (nexp_nuvars n1) (nexp_nuvars n2)
-  | Nmult(n1,n2) -> SS.union (nexp_nuvars n1) (nexp_nuvars n2)
-  | N2n(n, _) -> nexp_nuvars n                    
-  | Npow(n, i) -> nexp_nuvars n
-  | Nneg n -> nexp_nuvars n
-  | Nuvar {nindex = i} -> SS.singleton ("nu" ^ string_of_int i) (* TODO: We don't capture everything a nuvar can be... (whatever that is) *)
-  | _ -> SS.empty
-    
-let rec constraint_nuvars = function
-  | LtEq (co, enforce, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
-  | GtEq (co, enforce, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
-  | NtEq (co, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
-  | Lt (co, enforce, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
-  | Gt (co, enforce, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
-  | Eq (co, nexp1, nexp2) -> SS.union (nexp_nuvars nexp1) (nexp_nuvars nexp2)
-  | InS (co, nexp, ints) -> nexp_nuvars nexp
-  | CondCons (co, kind, _, [], exps) -> constraints_nuvars exps
-  | CondCons (co, kind, _, pats, exps) -> SS.union (constraints_nuvars pats) (constraints_nuvars exps)
-  | BranchCons (co, _, consts) -> constraints_nuvars consts
-  | Predicate (co, const1, const2) -> SS.union (constraint_nuvars const1) (constraint_nuvars const2)                  
-  | _ -> raise (Unsupported_Constraint "nuvars")
-and constraints_nuvars = function
-  | [] -> SS.empty
-  | l -> List.fold_left SS.union SS.empty (List.map constraint_nuvars l)
-
-let rec nexp_vars n : SS.t =
-  match n.nexp with
-  | Nadd(n1,n2) -> SS.union (nexp_vars n1) (nexp_vars n2)
-  | Nsub(n1,n2) -> SS.union (nexp_vars n1) (nexp_vars n2)
-  | Nmult(n1,n2) -> SS.union (nexp_vars n1) (nexp_vars n2)
-  | N2n(n, _) -> nexp_vars n                    
-  | Npow(n, i) -> nexp_vars n
-  | Nneg n -> nexp_vars n
-  | Nvar i -> SS.singleton ("var_" ^ Str.global_replace (Str.regexp_string "'") "" i)
-  | _ -> SS.empty
-
-let rec constraint_vars = function
-  | LtEq (co, enforce, nexp1, nexp2) -> SS.union (nexp_vars nexp1) (nexp_vars nexp2)
-  | GtEq (co, enforce, nexp1, nexp2) -> SS.union (nexp_vars nexp1) (nexp_vars nexp2)
-  | NtEq (co, nexp1, nexp2) -> SS.union (nexp_vars nexp1) (nexp_vars nexp2)
-  | Lt (co, enforce, nexp1, nexp2) -> SS.union (nexp_vars nexp1) (nexp_vars nexp2)
-  | Gt (co, enforce, nexp1, nexp2) -> SS.union (nexp_vars nexp1) (nexp_vars nexp2)
-  | Eq (co, nexp1, nexp2) -> SS.union (nexp_vars nexp1) (nexp_vars nexp2)
-  | InS (co, nexp, ints) -> nexp_vars nexp
-  | CondCons (co, kind, _, [], exps) -> constraints_vars exps
-  | CondCons (co, kind, _, pats, exps) -> SS.union (constraints_vars pats) (constraints_vars exps)
-  | BranchCons (co, _, consts) -> constraints_vars consts
-  | Predicate (co, const1, const2) -> SS.union (constraint_vars const1) (constraint_vars const2)                  
-  | _ -> raise (Unsupported_Constraint "vars")          
-and constraints_vars = function
-  | [] -> SS.empty
-  | l -> List.fold_left SS.union SS.empty (List.map constraint_vars l)
-
-let nuvar_decs constraints =
-  constraints_nuvars constraints
-  |> SS.elements
-  |> List.map (fun nuvar -> sfun "declare-const" [Atom nuvar; Atom "Int"])
-  |> string_of_list "\n" pp_sexpr 
-
-let var_decs constraints =
-  constraints_vars constraints
-  |> SS.elements
-  |> List.map (fun var -> sfun "declare-const" [Atom var; Atom "Int"])
-  |> string_of_list "\n" pp_sexpr
-  
-let rec n_to_cexpr n : string cexpr =
+let rec n_to_cexpr n : Constraint.nexp =
   match n.nexp with
   | Nid(i,n) -> raise (Unsupported_Constraint "Nid")
-  | Nvar i -> CAtom ("var_" ^ Str.global_replace (Str.regexp_string "'") "" i)
-  | Nconst i -> CAtom (string_of_big_int i)
-  | Npos_inf -> CAtom "infinity"
-  | Nneg_inf -> CAtom "negative_infinity"
+  | Nvar i -> raise (Unsupported_Constraint "Nvar")
+  | Nconst i -> Constraint.constant i
+  | Npos_inf -> raise (Unsupported_Constraint "Npos_inf")
+  | Nneg_inf -> raise (Unsupported_Constraint "Nneg_inf") 
   | Ninexact -> raise (Unsupported_Constraint "Ninexact")
-  | Nadd(n1,n2) -> cfun "+" [n_to_cexpr n1; n_to_cexpr n2]
-  | Nsub(n1,n2) -> cfun "-" [n_to_cexpr n1; n_to_cexpr n2]
-  | Nmult(n1,n2) -> cfun "*" [n_to_cexpr n1; n_to_cexpr n2]
-  | N2n(n,None) -> cfun "^" [CAtom "2"; n_to_cexpr n]
-  | N2n(n,Some i) -> raise (Unsupported_Constraint "N2n")
-  | Npow(n, i) -> cfun "^" [n_to_cexpr n; CAtom (string_of_int i)]
-  | Nneg n -> cfun "-" [n_to_cexpr n]
-  | Nuvar {nindex = i} -> CAtom ("nu" ^ string_of_int i) (* TODO: We don't capture everything a nuvar can be... (whatever that is) *)
+  | Nadd(n1,n2) -> Constraint.add (n_to_cexpr n1) (n_to_cexpr n2)
+  | Nsub(n1,n2) -> Constraint.sub (n_to_cexpr n1) (n_to_cexpr n2)
+  | Nmult(n1,n2) -> Constraint.mult (n_to_cexpr n1) (n_to_cexpr n2)
+  | N2n(n,None) -> Constraint.pow2 (n_to_cexpr n)
+  | N2n(n,Some i) -> raise (Unsupported_Constraint "N2n with Some")
+  | Npow(n, i) -> raise (Unsupported_Constraint "Npow")
+  | Nneg n -> raise (Unsupported_Constraint "Nneg")
+  | Nuvar { nindex = i } -> Constraint.variable (2 * i)
                       
 let rec constraint_to_cexpr = function
-  | LtEq (co, enforce, nexp1, nexp2) -> cfun "<=" [n_to_cexpr nexp1; n_to_cexpr nexp2]
-  | GtEq (co, enforce, nexp1, nexp2) -> cfun ">=" [n_to_cexpr nexp1; n_to_cexpr nexp2]
-  | NtEq (co, nexp1, nexp2) -> cfun "not" [cfun "=" [n_to_cexpr nexp1; n_to_cexpr nexp2]]
-  | Lt (co, enforce, nexp1, nexp2) -> cfun "<" [n_to_cexpr nexp1; n_to_cexpr nexp2]
-  | Gt (co, enforce, nexp1, nexp2) -> cfun ">" [n_to_cexpr nexp2; n_to_cexpr nexp2]
-  | Eq (co, nexp1, nexp2) -> cfun "=" [n_to_cexpr nexp1; n_to_cexpr nexp2]
-  | InS (co, nexp, ints) -> cfun "or" (List.map (fun i -> cfun "=" [n_to_cexpr nexp; CAtom (string_of_int i)]) ints)
+  | LtEq (co, enforce, { nexp = Nneg_inf }, nexp2) -> Constraint.literal true
+  | LtEq (co, enforce, nexp1, { nexp = Npos_inf }) -> Constraint.literal true
+  | LtEq (co, enforce, nexp1, nexp2) -> Constraint.lteq (n_to_cexpr nexp1) (n_to_cexpr nexp2)
+  | GtEq (co, enforce, nexp1, { nexp = Nneg_inf }) -> Constraint.literal true
+  | GtEq (co, enforce, { nexp = Npos_inf }, nexp2) -> Constraint.literal true
+  | GtEq (co, enforce, nexp1, nexp2) -> Constraint.gteq (n_to_cexpr nexp1) (n_to_cexpr nexp2)
+  | NtEq (co, { nexp = Nneg_inf }, nexp2) -> Constraint.literal (nexp2.nexp <> Nneg_inf)
+  | NtEq (co, nexp1, { nexp = Nneg_inf }) -> Constraint.literal (nexp1.nexp <> Nneg_inf)                                                                
+  | NtEq (co, nexp1, nexp2) -> Constraint.neq (n_to_cexpr nexp1) (n_to_cexpr nexp2)
+  | Lt (co, enforce, nexp1, nexp2) -> Constraint.lt (n_to_cexpr nexp1) (n_to_cexpr nexp2)
+  | Gt (co, enforce, nexp1, nexp2) -> Constraint.gt (n_to_cexpr nexp2) (n_to_cexpr nexp2)
+  | Eq (co, nexp1, nexp2) -> Constraint.eq (n_to_cexpr nexp1) (n_to_cexpr nexp2)
+  | InS (co, nexp, ints) ->
+     List.fold_left Constraint.disj
+                    (Constraint.literal false)
+                    (List.map (fun i -> Constraint.eq (n_to_cexpr nexp) (Constraint.constant (big_int_of_int i))) ints)
   | CondCons (co, kind, _, [], exps) -> constraints_to_cexpr exps
-  | CondCons (co, kind, _, pats, exps) -> cfun "=>" [constraints_to_cexpr pats; constraints_to_cexpr exps]
-  | BranchCons (co, _, consts) -> CBranch (List.map constraint_to_cexpr consts)
-  | Predicate (co, const1, const2) -> CBranch [constraint_to_cexpr const1; constraint_to_cexpr const2] (* the correct translation for this is unclear *)
+  | CondCons (co, kind, _, pats, exps) -> Constraint.implies (constraints_to_cexpr pats) (constraints_to_cexpr exps)
+  | BranchCons (co, _, consts) -> Constraint.branch (List.map constraint_to_cexpr consts)
+  | Predicate (co, const1, const2) -> Constraint.branch [constraint_to_cexpr const1; constraint_to_cexpr const2] (* the correct translation for this is unclear *)
   | _ -> raise (Unsupported_Constraint "c2c")
 and constraints_to_cexpr = function
-  | [] -> CAtom "true"
-  | l -> cfun "and" (List.map constraint_to_cexpr l)
-
-let process_constraints constraints : string sexpr list =
-  let simplify_constraints cs = rewrites simplify_infinity cs in
-  unbranch (constraints_to_cexpr constraints) |> List.map simplify_constraints
-
-let smtlib_constraint (c : string sexpr) : string =
-  "(push)\n"
-  ^ pp_sexpr (sfun "define-fun" [Atom "constraint"; List []; Atom "Bool"; c])
-  ^ "\n(assert constraint)\n(check-sat)\n(pop)"
-    
-type z3_result = Unknown of string sexpr list | Unsat of string sexpr
-
-(* Call the Z3 constraint solver with a list of constraints in nexp
-   form. Returns Unknown [] if it can solve every constraint, and
-   Unknown xs where xs is a list of unknown constraints if there are
-   some it cannot solve. Returns Unsat sexpr where sexpr is an
-   unsatisfiable constraint if it cannot solve the constraint. *)
-let rec call_z3 constraints problems : z3_result =
-  let z3_file =
-    var_decs constraints ^ "\n"
-    ^ nuvar_decs constraints ^ "\n"
-    ^ string_of_list "\n" smtlib_constraint problems
-  in
-  
-  cs_print (Printf.sprintf "SMTLIB constraints are: \n%s%!" z3_file);
-  
-  let rec input_lines chan = function
-    | 0 -> []
-    | n ->
-       begin
-         let l = input_line chan in
-         let ls = input_lines chan (n - 1) in
-         l :: ls
-       end
-  in
-  
-  begin
-    let (input_file, tmp_chan) = Filename.open_temp_file "constraint_" ".sat" in
-    output_string tmp_chan z3_file;
-    close_out tmp_chan;
-    cs_print ("Calling z3: " ^ input_file);
-    let z3_chan = Unix.open_process_in ("z3 -t:1000 " ^ input_file) in
-    let z3_output = List.combine problems (input_lines z3_chan (List.length problems)) in
-    let _ = Unix.close_process_in z3_chan in
-    Sys.remove input_file;
-    
-    cs_print ("z3 returned: " ^ string_of_list " " (fun x -> x) (List.map snd z3_output));
-
-    try
-      let (problem, _) = List.find (fun (_, result) -> result = "unsat") z3_output in
-      Unsat problem
-    with
-    | Not_found ->
-       z3_output
-       |> List.filter (fun (_, result) -> result = "unknown")
-       |> List.map fst
-       |> (fun unsolved -> Unknown unsolved)
-  end
+  | [] -> Constraint.literal true
+  | (c :: cs) -> List.fold_left Constraint.conj (constraint_to_cexpr c) (List.map constraint_to_cexpr cs)
       
 let do_resolve_constraints = ref true
 
@@ -4055,20 +3868,12 @@ let resolve_constraints cs =
   else
     begin
       cs_print (Printf.sprintf "Original constraints are: \n%s\n%!" (constraints_to_string cs));
-      match call_z3 cs (process_constraints cs) with
+      match Constraint.call_z3 (constraints_to_cexpr cs) with
       | Unsat problem -> raise (Reporting_basic.err_typ Parse_ast.Unknown "Constraints are unsatisfiable")
       | Unknown [] -> ([], None)
       | Unknown problems ->
-         match call_z3 cs (List.map simp_powers problems) with
-         | Unsat problem -> begin
-             prerr_endline (Printf.sprintf "z3 unknown unsat :\n%s\n" (var_decs cs ^ "\n" ^ nuvar_decs cs ^ "\n" ^ string_of_list "\n" smtlib_constraint problems));
-             ([], None)
-           end
-         | Unknown [] -> ([], None)
-         | Unknown problems -> begin
-             prerr_endline (Printf.sprintf "z3 unknowns :\n%s\n" (string_of_list "\n" smtlib_constraint problems));
-             ([], None)
-           end
+         prerr_endline (Printf.sprintf "z3 unknown unsat :\n%s\n" (string_of_list "\n" Constraint.string_of problems));
+         ([], None)
     end
 
 let check_tannot l annot imp_param _ efs = 
