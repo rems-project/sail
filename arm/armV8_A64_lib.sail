@@ -366,7 +366,7 @@ function forall Nat 'N, 'N IN {1,2,4,8,16}. (*bit['N*8]*) read_buffer_type effec
   (boolean) iswrite := false;
 
   (boolean) aligned := AArch64_CheckAlignment(address, size, acctype, iswrite);
-  (boolean) atomic := ((aligned & ~(acctype == AccType_VEC | acctype == AccType_VECSTREAM)) | size == 1);
+  (boolean) atomic := ((aligned & ~(acctype == AccType_VEC | acctype == AccType_VECSTREAM)) | (uinteger) size == 1);
 
   if ~(atomic) then {
     assert((~(exclusive)), None); (* as far as I can tell this should never happen *)
@@ -421,7 +421,7 @@ function forall Nat 'N, 'N IN {1,2,4,8,16}. write_buffer_type wMem'((write_buffe
   if BigEndian() then
     value' := BigEndianReverse(value');
   (boolean) aligned := AArch64_CheckAlignment(address, size, acctype, iswrite);
-  (boolean) atomic := ((aligned & ~(acctype == AccType_VEC | acctype == AccType_VECSTREAM)) | size == 1);
+  (boolean) atomic := ((aligned & ~(acctype == AccType_VEC | acctype == AccType_VECSTREAM)) | (uinteger) size == 1);
 
   (bool) exclusiveSuccess := false;
   if ~(atomic) then {

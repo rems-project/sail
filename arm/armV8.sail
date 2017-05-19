@@ -238,7 +238,7 @@ scattered function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
         option<(ast<'R,'D>)> decodeSystem
 
 (* MSR (immediate) *)
-function clause decodeSystem (0b1101010100:[0]:0b00:(bit[3]) op1:0b0100:CRm:(bit[3]) op2:0b11111) = {
+function clause decodeSystem (0b1101010100:[0]:0b00:(bit[3]) op1:0b0100:(bit[4]) CRm:(bit[3]) op2:0b11111) = {
   (* FIXME: we don't allow register reads in the decoding *)
   (* ARM: CheckSystemAccess(0b00, op1, 0b0100, CRm, op2, 0b11111, 0); *)
 
@@ -351,7 +351,7 @@ function clause execute (ClearExclusiveMonitor(imm)) = {
 (* DMB opc=0b01*)
 (* DSB opc=0b00*)
 (* ISB opc=0b10*)
-function clause decodeSystem (0b1101010100:[0]:0b00:0b011:0b0011:(bit[4]) CRm:[1]:opc:0b11111) = {
+function clause decodeSystem (0b1101010100:[0]:0b00:0b011:0b0011:(bit[4]) CRm:[1]:(bit[3]) opc:0b11111) = {
   (* TODO: according to ARM, HCR_EL2.BSU affect the domain, but the pseudo
            code doesn't show any signs of that *)
   (MemBarrierOp) op := 0; (* ARM: uninitialized *)
@@ -538,7 +538,7 @@ scattered function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
 (* BLR *)
 (* BR *)
 (* RET *)
-function clause decodeUnconditionalBranchRegister (0b1101011:0b00:op:0b11111:0b000000:Rn:0b00000) = {
+function clause decodeUnconditionalBranchRegister (0b1101011:0b00:(bit[2]) op:0b11111:0b000000:(bit[5]) Rn:0b00000) = {
   (reg_index) n := UInt_reg(Rn);
   (BranchType) _branch_type := 0; (* ARM: uninitialized *)
 
@@ -693,7 +693,7 @@ function clause execute ( LoadLiteral(t,memop,_signed,size,offset,([:'D:]) datas
 (* STXRB  size=0b00,o2=0,L=0,o1=0,o0=0,                   rt2=(1)(1)(1)(1)(1) *)
 (* STXRH  size=0b01,o2=0,L=0,o1=0,o0=0,                   rt2=(1)(1)(1)(1)(1) *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLoadStoreExclusive ((bit[2]) size:0b001000:[o2]:[L]:[o1]:Rs:[o0]:Rt2:Rn:Rt) =
+        option<(ast<'R,'D>)> effect pure decodeLoadStoreExclusive ((bit[2]) size:0b001000:[o2]:[L]:[o1]:(bit[5]) Rs:[o0]:(bit[5]) Rt2:(bit[5]) Rn:Rt) =
 {
   (reg_index) n := UInt_reg(Rn);
   (reg_index) t := UInt_reg(Rt);
@@ -865,7 +865,7 @@ function clause execute ( LoadStoreAcqExc(n,t,t2,s,acctype,excl,pair,memop,elsiz
 (* LDNP *)
 (* STNP *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLoadStoreNoAllocatePairOffset ((bit[2]) opc:0b101:[0]:0b000:[L]:(bit[7]) imm7:Rt2:Rn:Rt) =
+        option<(ast<'R,'D>)> effect pure decodeLoadStoreNoAllocatePairOffset ((bit[2]) opc:0b101:[0]:0b000:[L]:(bit[7]) imm7:(bit[5]) Rt2:(bit[5]) Rn:Rt) =
 {
   (boolean) wback := false;
   (boolean) postindex := false;
@@ -981,7 +981,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
   (AccType) acctype := AccType_NORMAL/AccType_UNPRIV; *)
   (MemOp) memop := 0; (* ARM: uninitialized *)
   (boolean) _signed := false; (* ARM: uninitialized *)
-  ([:'R:]) regsize := 64; (* ARM: uninitialized *)
+  (uinteger) regsize := 64; (* ARM: uninitialized *)
 
   if opc[1] == 0 then {
     (* store or zero-extending load *)
@@ -1019,7 +1019,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
 (* LDRSH (immediate) post-index *)
 (* LDRSW (immediate) post-index *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterImmediatePostIndexed (size:0b111:[0]:0b00:opc:[0]:(bit[9]) imm9:0b01:Rn:Rt) = {
+        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterImmediatePostIndexed ((bit[2]) size:0b111:[0]:0b00:(bit[2]) opc:[0]:(bit[9]) imm9:0b01:(bit[5]) Rn:Rt) = {
   (boolean) wback := true;
   (boolean) postindex := true;
   (uinteger) scale := UInt(size);
@@ -1129,7 +1129,7 @@ function clause execute ( LoadImmediate(n,t,acctype,memop,_signed,wback,postinde
 (* LDRSH (immediate) pre-index *)
 (* LDRSW (immediate) pre-index *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterImmediatePreIndexed (size:0b111:[0]:0b00:opc:[0]:(bit[9]) imm9:0b11:Rn:Rt) =
+        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterImmediatePreIndexed ((bit[2]) size:0b111:[0]:0b00:(bit[2]) opc:[0]:(bit[9]) imm9:0b11:(bit[5]) Rn:Rt) =
 {
   (boolean) wback := true;
   (boolean) postindex := false;
@@ -1146,7 +1146,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}. option<(ast<'
   (AccType) acctype := AccType_NORMAL;
   (MemOp) memop := 0; (* ARM: uninitialized *)
   (boolean) _signed := 0; (* ARM: uninitialized *)
-  ([:'R:]) regsize := 64; (* ARM: uninitialized *)
+  (uinteger) regsize := 64; (* ARM: uninitialized *)
 
   if opc[1] == 0 then {
     (* store or zero-extending load *)
@@ -1179,7 +1179,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}. option<(ast<'
 (* LDRSW (register) *)
 (* PRFM (register) *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterRegisterOffset (size:0b111:[0]:0b00:opc:[1]:Rm:option_v:[S]:0b10:Rn:Rt) =
+        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterRegisterOffset ((bit[2]) size:0b111:[0]:0b00:(bit[2]) opc:[1]:(bit[5]) Rm:(bit[3]) option_v:[S]:0b10:(bit[5]) Rn:Rt) =
 {
   (boolean) wback := false;
   (boolean) postindex := false;
@@ -1293,7 +1293,7 @@ function clause execute ( LoadRegister(n,t,m,acctype,memop,_signed,wback,postind
 (* LDTRSH *)
 (* LDTRSW *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterUnprivileged (size:0b111:[0]:0b00:opc:[0]:(bit[9]) imm9:0b10:Rn:Rt) =
+        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterUnprivileged ((bit[2]) size:0b111:[0]:0b00:(bit[2]) opc:[0]:(bit[9]) imm9:0b10:(bit[5]) Rn:Rt) =
 {
   (boolean) wback := false;
   (boolean) postindex := false;
@@ -1311,10 +1311,10 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
 (* LDURSW *)
 (* PRFUM *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterUnscaledImmediate (size:0b111:[0]:0b00:opc:[0]:(bit[9]) imm9:0b00:Rn:Rt) = {
+        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterUnscaledImmediate ((bit[2]) size:0b111:[0]:0b00:(bit[2]) opc:[0]:(bit[9]) imm9:0b00:(bit[5]) Rn:Rt) = {
   (boolean) wback := false;
   (boolean) postindex := false;
-  (uinteger) scale := UInt(size);
+  (uinteger) scale := UInt((bit[2]) size);
   (bit[64]) offset := SignExtend(imm9);
 
   sharedDecodeLoadImmediate(opc,size,Rn,Rt,wback,postindex,scale,offset,AccType_NORMAL,true);
@@ -1328,7 +1328,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
 (* LDRSW (immediate) Unsigned offset *)
 (* PRFM (immediate) Unsigned offset *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterUnsignedImmediate (size:0b111:[0]:0b01:opc:(bit[12]) imm12:Rn:Rt) =
+        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterUnsignedImmediate ((bit[2]) size:0b111:[0]:0b01:(bit[2]) opc:(bit[12]) imm12:(bit[5]) Rn:Rt) =
 {
   (boolean) wback := false;
   (boolean) postindex := false;
@@ -1359,7 +1359,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
 (* LDPSW signed offset *)
 (* STP signed offset *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterPairOffset (opc:0b101:[0]:0b010:[L]:(bit[7]) imm7:Rt2:Rn:Rt) =
+        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterPairOffset ((bit[2]) opc:0b101:[0]:0b010:[L]:(bit[7]) imm7:(bit[5]) Rt2:(bit[5]) Rn:Rt) =
 {
   (boolean) wback := false;
   (boolean) postindex := false;
@@ -1487,7 +1487,7 @@ function clause execute ( LoadStorePair(wback,postindex,n,t,t2,acctype,memop,_si
 (* LDPSW post-index *)
 (* STP post-index *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterPairPostIndexed (opc:0b101:[0]:0b001:[L]:(bit[7]) imm7:Rt2:Rn:Rt) =
+        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterPairPostIndexed ((bit[2]) opc:0b101:[0]:0b001:[L]:(bit[7]) imm7:(bit[5]) Rt2:(bit[5]) Rn:Rt) =
 {
   (boolean) wback := true;
   (boolean) postindex := true;
@@ -1499,7 +1499,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
 (* LDPSW pre-index *)
 (* STP pre-index *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterPairPreIndexed (opc:0b101:[0]:0b011:[L]:(bit[7]) imm7:Rt2:Rn:Rt) =
+        option<(ast<'R,'D>)> effect pure decodeLoadStoreRegisterPairPreIndexed ((bit[2]) opc:0b101:[0]:0b011:[L]:(bit[7]) imm7:(bit[5]) Rt2:(bit[5]) Rn:Rt) =
 {
   (boolean) wback := true;
   (boolean) postindex := false;
@@ -1510,7 +1510,7 @@ function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
 (* ADD/ADDS (immediate) *)
 (* SUB/SUBS (immediate) *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeAddSubtractImmediate ([sf]:[op]:[S]:0b10001:shift:(bit[12]) imm12:Rn:Rd) =
+        option<(ast<'R,'D>)> effect pure decodeAddSubtractImmediate ([sf]:[op]:[S]:0b10001:(bit[2]) shift:(bit[12]) imm12:(bit[5]) Rn:Rd) =
 {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
@@ -1556,7 +1556,7 @@ function clause execute (AddSubImmediate(d,n,datasize,sub_op,setflags,imm)) = {
 (* SBFM *)
 (* UBFM *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeBitfield ([sf]:opc:0b100110:[N]:(bit[6]) immr:(bit[6]) imms:Rn:Rd) = {
+        option<(ast<'R,'D>)> effect pure decodeBitfield ([sf]:(bit[2]) opc:0b100110:[N]:(bit[6]) immr:(bit[6]) imms:(bit[5]) Rn:Rd) = {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
   ([:'R:]) datasize := if sf == 1 then 64 else 32;
@@ -1601,7 +1601,7 @@ function clause execute (BitfieldMove(d,n,datasize,inzero,extend,R,S,wmask,tmask
 
 (* EXTR *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeExtract ([sf]:0b00:0b100111:[N]:0b0:Rm:(bit[6]) imms:Rn:Rd) =
+        option<(ast<'R,'D>)> effect pure decodeExtract ([sf]:0b00:0b100111:[N]:0b0:(bit[5]) Rm:(bit[6]) imms:(bit[5]) Rn:Rd) =
 {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
@@ -1630,7 +1630,7 @@ function clause execute ( ExtractRegister(d,n,m,datasize,lsb) ) = {
 (* EOR (immediate) *)
 (* ORR (immediate) *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLogicalImmediate ([sf]:opc:0b100100:[N]:(bit[6]) immr:(bit[6]) imms:Rn:Rd) =
+        option<(ast<'R,'D>)> effect pure decodeLogicalImmediate ([sf]:(bit[2]) opc:0b100100:[N]:(bit[6]) immr:(bit[6]) imms:(bit[5]) Rn:Rd) =
 {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
@@ -1674,7 +1674,7 @@ function clause execute (LogicalImmediate(d,n,datasize,setflags,op,imm)) = {
 (* MOVN *)
 (* MOVZ *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeMoveWideImmediate ([sf]:opc:0b100101:(bit[2]) hw:(bit[16]) imm16:Rd) =
+        option<(ast<'R,'D>)> effect pure decodeMoveWideImmediate ([sf]:(bit[2]) opc:0b100101:(bit[2]) hw:(bit[16]) imm16:Rd) =
 {
   (reg_index) d := UInt_reg(Rd);
   ([:'R:]) datasize := if sf == 1 then 64 else 32;
@@ -1738,7 +1738,7 @@ function clause execute (Address(d,page,imm)) = {
 (* ADD/ADDS (extended register) *)
 (* SUB/SUBS (extended register) *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeAddSubtractExtendedRegister ([sf]:[op]:[S]:0b01011:0b00:0b1:Rm:option_v:(bit[3]) imm3:Rn:Rd) =
+        option<(ast<'R,'D>)> effect pure decodeAddSubtractExtendedRegister ([sf]:[op]:[S]:0b01011:0b00:0b1:(bit[5]) Rm:(bit[3]) option_v:(bit[3]) imm3:(bit[5]) Rn:Rd) =
 {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
@@ -1779,7 +1779,7 @@ function clause execute (AddSubExtendRegister(d,n,m,datasize,sub_op,setflags,ext
 (* ADD/ADDS (shifted register) *)
 (* SUB/SUBS (shifted register) *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeAddSubtractShiftedRegister ([sf]:[op]:[S]:0b01011:shift:0b0:Rm:(bit[6]) imm6:Rn:Rd) =
+        option<(ast<'R,'D>)> effect pure decodeAddSubtractShiftedRegister ([sf]:[op]:[S]:0b01011:(bit[2]) shift:0b0:(bit[5]) Rm:(bit[6]) imm6:(bit[5]) Rn:Rd) =
 {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
@@ -1821,7 +1821,7 @@ function clause execute (AddSubShiftedRegister(d,n,m,datasize,sub_op,setflags,sh
 (* ADC/ADCS *)
 (* SBC/SBCS *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeAddSubtractWithCarry ([sf]:[op]:[S]:0b11010000:Rm:0b000000:Rn:Rd) = {
+        option<(ast<'R,'D>)> effect pure decodeAddSubtractWithCarry ([sf]:[op]:[S]:0b11010000:(bit[5]) Rm:0b000000:(bit[5]) Rn:Rd) = {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
   (reg_index) m := UInt_reg(Rm);
@@ -1850,7 +1850,7 @@ function clause execute( AddSubCarry(d,n,m,datasize,sub_op,setflags)) = {
 (* CCMN (immediate) *)
 (* CCMP (immediate) *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeConditionalCompareImmediate ((bit[32]) ([sf]:[op]:[1]:0b11010010:(bit[5]) imm5:_cond:[1]:[0]:Rn:[0]:nzcv)) =
+        option<(ast<'R,'D>)> effect pure decodeConditionalCompareImmediate ((bit[32]) ([sf]:[op]:[1]:0b11010010:(bit[5]) imm5:(bit[4]) _cond:[1]:[0]:(bit[5]) Rn:[0]:nzcv)) =
 {
   (reg_index) n := UInt_reg(Rn);
   ([:'R:]) datasize := if sf == 1 then 64 else 32;
@@ -1881,7 +1881,7 @@ function clause execute (ConditionalCompareImmediate(n,datasize,sub_op,condition
 (* CCMN (register) *)
 (* CCMP (register) *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeConditionalCompareRegister ((bit[32]) ([sf]:[op]:[1]:0b11010010:Rm:_cond:[0]:[0]:Rn:[0]:nzcv)) = {
+        option<(ast<'R,'D>)> effect pure decodeConditionalCompareRegister ((bit[32]) ([sf]:[op]:[1]:0b11010010:(bit[5]) Rm:(bit[4]) _cond:[0]:[0]:(bit[5]) Rn:[0]:nzcv)) = {
   (reg_index) n := UInt_reg(Rn);
   (reg_index) m := UInt_reg(Rm);
   ([:'R:]) datasize := if sf == 1 then 64 else 32;
@@ -1913,7 +1913,7 @@ function clause execute (ConditionalCompareRegister(n,m,datasize,sub_op,conditio
 (* CSINV op=1,o2=0 *)
 (* CSNEG op=1,o2=1 *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeConditionalSelect ((bit[32]) ([sf]:[op]:[0]:0b11010100:Rm:_cond:[0]:[o2]:Rn:Rd)) =
+        option<(ast<'R,'D>)> effect pure decodeConditionalSelect ((bit[32]) ([sf]:[op]:[0]:0b11010100:(bit[5]) Rm:(bit[4]) _cond:[0]:[o2]:(bit[5]) Rn:Rd)) =
 {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
@@ -1951,7 +1951,7 @@ scattered function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
 (* REV *)
 (* REV16 *)
 (* REV32 *)
-function clause decodeData1Source ([sf]:[1]:[0]:0b11010110:0b00000:0b0000:opc:Rn:Rd) = {
+function clause decodeData1Source ([sf]:[1]:[0]:0b11010110:0b00000:0b0000:(bit[2]) opc:(bit[5]) Rn:Rd) = {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
 
@@ -2004,7 +2004,7 @@ function clause execute ( Reverse(d,n,datasize,op) ) = {
 
 (* CLS *)
 (* CLZ *)
-function clause decodeData1Source ([sf]:[1]:[0]:0b11010110:0b00000:0b00010:[op]:Rn:Rd) = {
+function clause decodeData1Source ([sf]:[1]:[0]:0b11010110:0b00000:0b00010:[op]:(bit[5]) Rn:Rd) = {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
   ([:'R:]) datasize := if sf == 1 then 64 else 32;
@@ -2034,7 +2034,7 @@ scattered function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
 
 (* SDIV o1=1 *)
 (* UDIV o1=0 *)
-function clause decodeData2Source ([sf]:[0]:[0]:0b11010110:Rm:0b00001:[o1]:Rn:Rd) = {
+function clause decodeData2Source ([sf]:[0]:[0]:0b11010110:(bit[5]) Rm:0b00001:[o1]:(bit[5]) Rn:Rd) = {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
   (reg_index) m := UInt_reg(Rm);
@@ -2061,7 +2061,7 @@ function clause execute ( Division(d,n,m,datasize,_unsigned) ) = {
 (* LSLV *)
 (* LSRV *)
 (* RORV *)
-function clause decodeData2Source ([sf]:[0]:[0]:0b11010110:Rm:0b0010:op2:Rn:Rd) = {
+function clause decodeData2Source ([sf]:[0]:[0]:0b11010110:(bit[5]) Rm:0b0010:(bit[3]) op2:(bit[5]) Rn:Rd) = {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
   (reg_index) m := UInt_reg(Rm);
@@ -2081,7 +2081,7 @@ function clause execute (Shift(d,n,m,datasize,shift_type)) = {
 
 (* CRC32B/CRC32H/CRC32W/CRC32X C=0 *)
 (* CRC32CB/CRC32CH/CRC32CW/CRC32CX C=1 *)
-function clause decodeData2Source ([sf]:[0]:[0]:0b11010110:Rm:0b010:[C]:sz:Rn:Rd) = {
+function clause decodeData2Source ([sf]:[0]:[0]:0b11010110:(bit[5]) Rm:0b010:[C]:(bit[2]) sz:(bit[5]) Rn:Rd) = {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
   (reg_index) m := UInt_reg(Rm);
@@ -2117,7 +2117,7 @@ scattered function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
 
 (* MADD o0=0 *)
 (* MSUB o0=1 *)
-function clause decodeData3Source ([sf]:0b00:0b11011:0b000:Rm:[o0]:Ra:Rn:Rd) = {
+function clause decodeData3Source ([sf]:0b00:0b11011:0b000:(bit[5]) Rm:[o0]:(bit[5]) Ra:(bit[5]) Rn:Rd) = {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
   (reg_index) m := UInt_reg(Rm);
@@ -2148,7 +2148,7 @@ function clause execute ( MultiplyAddSub(d,n,m,a,destsize,datasize,sub_op) ) = {
 (* SMSUBL *)
 (* UMADDL *)
 (* UMSUBL *)
-function clause decodeData3Source ([1]:0b00:0b11011:[U]:0b01:Rm:[o0]:Ra:Rn:Rd) = {
+function clause decodeData3Source ([1]:0b00:0b11011:[U]:0b01:(bit[5]) Rm:[o0]:(bit[5]) Ra:(bit[5]) Rn:Rd) = {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
   (reg_index) m := UInt_reg(Rm);
@@ -2178,7 +2178,7 @@ function clause execute ( MultiplyAddSubLong(d,n,m,a,destsize,datasize,sub_op,_u
 
 (* SMULH *)
 (* UMULH *)
-function clause decodeData3Source ([1]:0b00:0b11011:[U]:0b10:Rm:[0]:Ra:Rn:Rd) = {
+function clause decodeData3Source ([1]:0b00:0b11011:[U]:0b10:(bit[5]) Rm:[0]:(bit[5]) Ra:(bit[5]) Rn:Rd) = {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
   (reg_index) m := UInt_reg(Rm);
@@ -2210,7 +2210,7 @@ end decodeData3Source
 (* ORR (shifted register) *)
 (* BIC/BICS (shifted register) *)
 function forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}.
-        option<(ast<'R,'D>)> effect pure decodeLogicalShiftedRegister ([sf]:opc:0b01010:shift:[N]:Rm:(bit[6]) imm6:Rn:Rd) =
+        option<(ast<'R,'D>)> effect pure decodeLogicalShiftedRegister ([sf]:(bit[2]) opc:0b01010:(bit[2]) shift:[N]:(bit[5]) Rm:(bit[6]) imm6:(bit[5]) Rn:Rd) =
 {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);

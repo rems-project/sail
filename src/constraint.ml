@@ -239,7 +239,7 @@ let rec call_z3 constraints : smt_result =
     let (input_file, tmp_chan) = Filename.open_temp_file "constraint_" ".sat" in
     output_string tmp_chan z3_file;
     close_out tmp_chan;
-    let z3_chan = Unix.open_process_in ("z3 -t:1000 " ^ input_file) in
+    let z3_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
     let z3_output = List.combine problems (input_lines z3_chan (List.length problems)) in
     let _ = Unix.close_process_in z3_chan in
     Sys.remove input_file;
@@ -258,7 +258,7 @@ let string_of constr =
   constr
   |> unbranch
   |> List.map normalize
-  |> List.map (fun c -> pp_sexpr (sexpr_of_constraint c))
+  |> List.map (fun c -> smtlib_of_constraint c)
   |> string_of_list "\n" (fun x -> x)
     
 (* ===== Abstract API for building constraints ===== *)
