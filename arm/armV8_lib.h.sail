@@ -155,7 +155,7 @@ typedef PrefetchHint =
 val forall Nat 'N, Nat 'S, 'S >= 1. (bit['N],[:'S:]) -> (bit['N], bit) effect pure ASR_C
 val forall Nat 'N, Nat 'S, 'S >= 1. (bit['N],[:'S:]) -> (bit['N], bit) effect pure LSL_C
 val forall Nat 'N, Nat 'S, 'S >= 1. (bit['N],[:'S:]) -> (bit['N], bit) effect pure LSR_C
-val forall Nat 'N, Nat 'S, 'S >= 1, 'S <= -1. (bit['N],[:'S:]) -> (bit['N], bit) effect pure ROR_C
+val forall Nat 'N, Nat 'S, 'S != 0. (bit['N],[:'S:]) -> (bit['N], bit) effect pure ROR_C
 val forall Nat 'N. bit['N] -> boolean effect pure IsZero
 val forall Nat 'N, Nat 'M. (implicit<'N>,bit['M]) -> bit['N] effect pure Replicate
 val forall Nat 'N, Nat 'M, 'N >= 'M. (implicit<'N>,bit['M]) -> bit['N] effect pure SignExtend

@@ -157,6 +157,7 @@ n_constraint_aux =  (* constraint over kind $_$ *)
    NC_fixed of atyp * atyp
  | NC_bounded_ge of atyp * atyp
  | NC_bounded_le of atyp * atyp
+ | NC_not_equal of atyp * atyp
  | NC_nat_set_bounded of kid * (int) list
 
 

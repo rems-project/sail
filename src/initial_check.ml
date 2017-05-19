@@ -316,6 +316,10 @@ let to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) 
                let n1 = to_ast_nexp k_env t1 in
                let n2 = to_ast_nexp k_env t2 in
                NC_bounded_le(n1,n2)
+             | Parse_ast.NC_not_equal(t1,t2) ->
+               let n1 = to_ast_nexp k_env t1 in
+               let n2 = to_ast_nexp k_env t2 in
+               NC_not_equal(n1,n2)
              | Parse_ast.NC_nat_set_bounded(id,bounds) ->
                NC_nat_set_bounded(to_ast_var id, bounds)
     ), l)               

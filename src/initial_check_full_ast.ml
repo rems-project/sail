@@ -256,7 +256,11 @@ let to_nexp_constraint (k_env : kind Envmap.t) (c : n_constraint) : n_constraint
                let n1 = to_nexp k_env t1 in
                let n2 = to_nexp k_env t2 in
                NC_bounded_le(n1,n2)
-             | NC_nat_set_bounded(id,bounds) ->
+             | NC_not_equal(t1,t2) ->
+               let n1 = to_nexp k_env t1 in
+               let n2 = to_nexp k_env t2 in
+               NC_not_equal(t1,t2)
+             | NC_nat_set_bounded(id, bounds) ->
                NC_nat_set_bounded(id, bounds)
     ), l)               
 

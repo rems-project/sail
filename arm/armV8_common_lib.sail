@@ -326,7 +326,7 @@ function forall Nat 'N. bit['N] ROR((bit['N]) x, (uinteger) shift) =
 
 (** FUNCTION:shared/functions/common/ROR_C *)
 
-function forall Nat 'N, Nat 'S, 'S >= 1, 'S <= -1. (bit['N], bit) ROR_C((bit['N]) x, ([:'S:]) shift) =
+function forall Nat 'N, Nat 'S, 'S != 0. (bit['N], bit) ROR_C((bit['N]) x, ([:'S:]) shift) =
 {
   let N = (length(x)) in {
   (*assert shift != 0;*)

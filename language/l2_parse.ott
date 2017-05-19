@@ -236,6 +236,7 @@ n_constraint :: 'NC_' ::=
   | atyp = atyp'                                :: :: fixed
   | atyp >= atyp'                               :: :: bounded_ge
   | atyp '<=' atyp'                             :: :: bounded_le
+  | atyp != atyp'                               :: :: not_equal
   | kid 'IN' { num1 , ... , numn }               :: :: nat_set_bounded
 
 % Note only id on the left and constants on the right in a

@@ -3882,7 +3882,9 @@ let resolve_constraints cs =
       cs_print (Printf.sprintf "Original constraints are: \n%s\n%!" (constraints_to_string cs));
       bindings := Bindings.empty;
       match Constraint.call_z3 (constraints_to_cexpr cs) with
-      | Unsat problem -> raise (Reporting_basic.err_typ Parse_ast.Unknown "Constraints are unsatisfiable")
+      | Unsat problem ->
+         prerr_endline (Printf.sprintf "z3 unsat :\n%s\n" (Constraint.string_of problem));         
+         raise (Reporting_basic.err_typ Parse_ast.Unknown "Constraints are unsatisfiable")
       | Unknown [] -> ([], None)
       | Unknown problems ->
          prerr_endline (Printf.sprintf "z3 unknowns :\n%s\n" (string_of_list "\n\n" Constraint.string_of problems));

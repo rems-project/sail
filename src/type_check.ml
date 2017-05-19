@@ -217,6 +217,8 @@ let rec quants_to_consts ((Env (d_env,t_env,b_env,tp_env)) as env) qis : (t_para
           (match nconst with
            | NC_fixed(n1,n2) ->
              (ids,typarms,Eq(Specc l',anexp_to_nexp env n1,anexp_to_nexp env n2)::cs)
+           | NC_not_equal(n1,n2) ->
+             (ids,typarms,NtEq(Specc l',anexp_to_nexp env n1,anexp_to_nexp env n2)::cs)
            | NC_bounded_ge(n1,n2) ->
              (ids,typarms,GtEq(Specc l',Guarantee,anexp_to_nexp env n1,anexp_to_nexp env n2)::cs)
            | NC_bounded_le(n1,n2) ->
