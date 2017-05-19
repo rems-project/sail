@@ -1,12 +1,6 @@
 open Big_int
-(* open Util *)
+open Util
 
-(*String formatting *)
-let rec string_of_list sep string_of = function
-  | [] -> ""
-  | [x] -> string_of x
-  | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
-       
 (* ===== Integer Constraints ===== *)
        
 type nexp_op = Plus | Minus | Mult
@@ -84,16 +78,16 @@ let rec remove_nots : 'a constraint_bool -> 'a constraint_bool = function
   | Not (CFun (c, x, y)) -> CFun (negate_comparison c, x, y)
   | c -> c
            
-(* Apply distributivity so all And clauses are within Or clauses *)
+(* Apply distributivity so all Or clauses are within And clauses *)
 let rec distrib_step : 'a constraint_bool -> ('a constraint_bool * int) = function
-  | BFun (And, x, BFun (Or, y, z)) ->
-     let (xy, n) = distrib_step (BFun (And, x, y)) in
-     let (xz, m) = distrib_step (BFun (And, x, z)) in
-     BFun (Or, xy, xz), n + m + 1
-  | BFun (And, BFun (Or, x, y), z) ->
-     let (xz, n) = distrib_step (BFun (And, x, z)) in
-     let (yz, m) = distrib_step (BFun (And, y, z)) in
-     BFun (Or, xz, yz), n + m + 1
+  | BFun (Or, x, BFun (And, y, z)) ->
+     let (xy, n) = distrib_step (BFun (Or, x, y)) in
+     let (xz, m) = distrib_step (BFun (Or, x, z)) in
+     BFun (And, xy, xz), n + m + 1
+  | BFun (Or, BFun (And, x, y), z) ->
+     let (xz, n) = distrib_step (BFun (Or, x, z)) in
+     let (yz, m) = distrib_step (BFun (Or, y, z)) in
+     BFun (And, xz, yz), n + m + 1
   | BFun (op, x, y) ->
      let (x', n) = distrib_step x in
      let (y', m) = distrib_step y in
@@ -112,16 +106,16 @@ type 'a constraint_leaf =
   | LFun of (constraint_compare_op * 'a * 'a)
   | LBoolean of bool
 
-let rec flatten_and : 'a constraint_bool -> 'a constraint_leaf list = function
-  | BFun (And, x, y) -> flatten_and x @ flatten_and y
+let rec flatten_or : 'a constraint_bool -> 'a constraint_leaf list = function
+  | BFun (Or, x, y) -> flatten_or x @ flatten_or y
   | CFun comparison -> [LFun comparison]
   | Boolean b -> [LBoolean b]
   | _ -> assert false
   
 let rec flatten : 'a constraint_bool -> 'a constraint_leaf list list = function
-  | BFun (Or, x, y) -> flatten x @ flatten y
+  | BFun (And, x, y) -> flatten x @ flatten y
   | Boolean b -> [[LBoolean b]]
-  | c -> [flatten_and c]
+  | c -> [flatten_or c]
 
 let normalize (constr : 'a constraint_bool) : 'a constraint_leaf list list =
   constr
@@ -189,7 +183,16 @@ let rec sexpr_of_nexp = function
   | N2n x -> sfun "^" [Atom "2"; sexpr_of_nexp x]
   | NConstant c -> Atom (string_of_big_int c) (* CHECK: do we do negative constants right? *)
   | NVar var -> Atom ("v" ^ string_of_int var)
-
+              
+let rec sexpr_of_cbool = function
+  | BFun (And, x, y) -> sfun "and" [sexpr_of_cbool x; sexpr_of_cbool y]
+  | BFun (Or, x, y) -> sfun "or" [sexpr_of_cbool x; sexpr_of_cbool y]
+  | Not x -> sfun "not" [sexpr_of_cbool x]
+  | CFun (op, x, y) -> cop_sexpr op (sexpr_of_nexp x) (sexpr_of_nexp y)
+  | Branch xs -> sfun "BRANCH" (List.map sexpr_of_cbool xs)
+  | Boolean true -> Atom "true"
+  | Boolean false -> Atom "false"
+                     
 let sexpr_of_constraint_leaf = function
   | LFun (op, x, y) -> cop_sexpr op (sexpr_of_nexp x) (sexpr_of_nexp y)
   | LBoolean true -> Atom "true"
@@ -198,8 +201,8 @@ let sexpr_of_constraint_leaf = function
 let sexpr_of_constraint constr : sexpr =
   constr
   |> List.map (List.map sexpr_of_constraint_leaf)
-  |> List.map (sfun "and")
-  |> sfun "or"
+  |> List.map (fun xs -> match xs with [x] -> x | _ -> (sfun "or" xs))
+  |> sfun "and"
 
 let smtlib_of_constraint constr : string =
   "(push)\n"
@@ -220,7 +223,7 @@ let rec call_z3 constraints : smt_result =
     |> string_of_list "\n" (fun x -> x)
   in
   
-  prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file);
+  (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file); *)
   
   let rec input_lines chan = function
     | 0 -> []

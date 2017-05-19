@@ -3816,10 +3816,21 @@ exception Unsupported_Constraint of string;;
 
 module Bindings = Map.Make(String)
 
+let bindings = ref Bindings.empty 
+
+let fresh_var str =
+  let n = Bindings.cardinal !bindings in
+  bindings := Bindings.add str n !bindings;
+  n
+
+let var_of str =
+  try Bindings.find str !bindings with
+  | Not_found -> fresh_var str
+                   
 let rec n_to_cexpr n : Constraint.nexp =
   match n.nexp with
   | Nid(i,n) -> raise (Unsupported_Constraint "Nid")
-  | Nvar i -> raise (Unsupported_Constraint "Nvar")
+  | Nvar i -> Constraint.variable (2 * var_of i + 1)
   | Nconst i -> Constraint.constant i
   | Npos_inf -> raise (Unsupported_Constraint "Npos_inf")
   | Nneg_inf -> raise (Unsupported_Constraint "Nneg_inf") 
@@ -3830,7 +3841,7 @@ let rec n_to_cexpr n : Constraint.nexp =
   | N2n(n,None) -> Constraint.pow2 (n_to_cexpr n)
   | N2n(n,Some i) -> raise (Unsupported_Constraint "N2n with Some")
   | Npow(n, i) -> raise (Unsupported_Constraint "Npow")
-  | Nneg n -> raise (Unsupported_Constraint "Nneg")
+  | Nneg n -> Constraint.sub (Constraint.constant zero_big_int) (n_to_cexpr n)
   | Nuvar { nindex = i } -> Constraint.variable (2 * i)
                       
 let rec constraint_to_cexpr = function
@@ -3846,9 +3857,10 @@ let rec constraint_to_cexpr = function
   | Lt (co, enforce, nexp1, nexp2) -> Constraint.lt (n_to_cexpr nexp1) (n_to_cexpr nexp2)
   | Gt (co, enforce, nexp1, nexp2) -> Constraint.gt (n_to_cexpr nexp2) (n_to_cexpr nexp2)
   | Eq (co, nexp1, nexp2) -> Constraint.eq (n_to_cexpr nexp1) (n_to_cexpr nexp2)
-  | InS (co, nexp, ints) ->
+  | InS (co, nexp, []) -> Constraint.literal false
+  | InS (co, nexp, (int :: ints)) ->
      List.fold_left Constraint.disj
-                    (Constraint.literal false)
+                    (Constraint.eq (n_to_cexpr nexp) (Constraint.constant (big_int_of_int int)))
                     (List.map (fun i -> Constraint.eq (n_to_cexpr nexp) (Constraint.constant (big_int_of_int i))) ints)
   | CondCons (co, kind, _, [], exps) -> constraints_to_cexpr exps
   | CondCons (co, kind, _, pats, exps) -> Constraint.implies (constraints_to_cexpr pats) (constraints_to_cexpr exps)
@@ -3868,11 +3880,12 @@ let resolve_constraints cs =
   else
     begin
       cs_print (Printf.sprintf "Original constraints are: \n%s\n%!" (constraints_to_string cs));
+      bindings := Bindings.empty;
       match Constraint.call_z3 (constraints_to_cexpr cs) with
       | Unsat problem -> raise (Reporting_basic.err_typ Parse_ast.Unknown "Constraints are unsatisfiable")
       | Unknown [] -> ([], None)
       | Unknown problems ->
-         prerr_endline (Printf.sprintf "z3 unknown unsat :\n%s\n" (string_of_list "\n" Constraint.string_of problems));
+         prerr_endline (Printf.sprintf "z3 unknowns :\n%s\n" (string_of_list "\n\n" Constraint.string_of problems));
          ([], None)
     end
 
