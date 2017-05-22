@@ -351,7 +351,7 @@ function clause execute (ClearExclusiveMonitor(imm)) = {
 (* DMB opc=0b01*)
 (* DSB opc=0b00*)
 (* ISB opc=0b10*)
-function clause decodeSystem (0b1101010100:[0]:0b00:0b011:0b0011:(bit[4]) CRm:[1]:(bit[3]) opc:0b11111) = {
+function clause decodeSystem (0b1101010100:[0]:0b00:0b011:0b0011:(bit[4]) CRm:[1]:(bit[2]) opc:0b11111) = {
   (* TODO: according to ARM, HCR_EL2.BSU affect the domain, but the pseudo
            code doesn't show any signs of that *)
   (MemBarrierOp) op := 0; (* ARM: uninitialized *)
@@ -2061,7 +2061,7 @@ function clause execute ( Division(d,n,m,datasize,_unsigned) ) = {
 (* LSLV *)
 (* LSRV *)
 (* RORV *)
-function clause decodeData2Source ([sf]:[0]:[0]:0b11010110:(bit[5]) Rm:0b0010:(bit[3]) op2:(bit[5]) Rn:Rd) = {
+function clause decodeData2Source ([sf]:[0]:[0]:0b11010110:(bit[5]) Rm:0b0010:(bit[2]) op2:(bit[5]) Rn:Rd) = {
   (reg_index) d := UInt_reg(Rd);
   (reg_index) n := UInt_reg(Rn);
   (reg_index) m := UInt_reg(Rm);

@@ -223,7 +223,7 @@ let rec call_z3 constraints : smt_result =
     |> string_of_list "\n" (fun x -> x)
   in
   
-  (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file); *)
+  prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file);
   
   let rec input_lines chan = function
     | 0 -> []

@@ -4447,7 +4447,7 @@ let check_ranges cs =
   refined_cs
                                   
 (* SMT constraint solving *)
-let constraint_solver_verbose = ref false
+let constraint_solver_verbose = ref true
 
 let cs_print (message : string) : unit =
   if !constraint_solver_verbose
