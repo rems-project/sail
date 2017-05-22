@@ -11,7 +11,7 @@ NC='\033[0m'
 for i in `ls $DIR/pass/`;
 do
   printf "testing $i expecting pass: "
-  if $DIR/../../sail $DIR/pass/$i 2> /dev/null;
+  if $DIR/../../sail $1 $DIR/pass/$i 2> /dev/null;
   then
     printf "${GREEN}pass${NC}\n"
   else
@@ -22,7 +22,7 @@ done
 for i in `ls $DIR/fail/`;
 do
   printf "testing $i expecting fail: "
-  if $DIR/../../sail $DIR/fail/$i 2> /dev/null;
+  if $DIR/../../sail $1 $DIR/fail/$i 2> /dev/null;
   then
     printf "${RED}pass${NC}\n"
   else
@@ -33,7 +33,7 @@ done
 for i in `ls $DIR/nice/`;
 do
   printf "testing $i would like pass: "
-  if $DIR/../../sail $DIR/nice/$i 2> /dev/null;
+  if $DIR/../../sail $1 $DIR/nice/$i 2> /dev/null;
   then
     printf "${GREEN}pass${NC}\n"
   else

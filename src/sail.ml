@@ -86,6 +86,9 @@ let options = Arg.align ([
   ( "-skip_constraints",
     Arg.Clear Type_internal.do_resolve_constraints,
     " (debug) skip constraint resolution in type-checking");
+  ( "-z3",
+    Arg.Set Type_internal.z3_solver,
+    " use z3 to solve constraints");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");

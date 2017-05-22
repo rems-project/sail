@@ -333,7 +333,8 @@ val split_conditional_constraints : constraints -> (constraints * constraints * 
 val resolve_constraints : constraints -> (constraints * nexp_map option)
 (* whether to actually perform constraint resolution or not *)
 val do_resolve_constraints : bool ref
-
+val z3_solver : bool ref
+                                  
 (*May raise an exception if effects do not match tannot effects,
   will lift unification variables to fresh type variables *)
 val check_tannot : Parse_ast.l -> tannot -> nexp option -> constraints -> effect -> tannot
