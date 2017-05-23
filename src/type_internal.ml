@@ -332,9 +332,9 @@ let rec kind_to_string kind = match kind.k with
 
 let co_to_string = function
   | Patt l -> "Pattern " (*^ Reporting_basic.loc_to_string l *)
-  | Expr l -> "Expression " ^ Reporting_basic.loc_to_string l 
+  | Expr l -> "Expression " (* ^ Reporting_basic.loc_to_string l *)
   | Fun l -> "Function def " (*^ Reporting_basic.loc_to_string l *)
-  | Specc l -> "Specification " ^ Reporting_basic.loc_to_string l
+  | Specc l -> "Specification " (* ^ Reporting_basic.loc_to_string l *)
 
 let rec t_to_string t = 
   match t.t with
@@ -376,8 +376,10 @@ and n_to_string n =
     if !debug_mode
     then
       let rec show_nuvar n = match n.nexp with
+        | Nuvar{outsubst=Some n; nindex = i; orig_var = Some s} -> s ^ "<" ^ show_nuvar n ^ ">"
         | Nuvar{insubst=None; nindex = i; orig_var = Some s} -> s^ "()"
         | Nuvar{insubst=Some n; nindex = i; orig_var = Some s} -> s ^ "(" ^ show_nuvar n ^ ")"
+        | Nuvar{outsubst=Some n; nindex = i} -> "Nu_" ^ string_of_int i ^ "<" ^ show_nuvar n ^ ">"
         | Nuvar{insubst=None; nindex = i} -> "Nu_" ^ string_of_int i ^ "()" 
         | Nuvar{insubst=Some n; nindex =i;} -> "Nu_" ^ string_of_int i ^ "(" ^ show_nuvar n ^ ")"
         | _ -> n_to_string n in
@@ -457,14 +459,18 @@ let rec constraint_to_string d = function
   | Gt (co,enforce,nexp1,nexp2) ->
     "Gt(" ^ co_to_string co ^ ", " ^ enforce_to_string enforce ^ ", " ^
       n_to_string nexp1 ^ ", " ^ n_to_string nexp2 ^ ")"
-  | In(co,var,ints) -> "In of " ^ var
+  | In(co,var,ints) -> "In of " ^ var ^ " {" ^ string_of_list ", " string_of_int ints ^ "}"
   | InS(co,n,ints) -> "InS of " ^ n_to_string n ^ " {" ^ string_of_list ", " string_of_int ints ^ "}"
   | Predicate(co,cp,cn) -> 
     "Pred(" ^ co_to_string co ^ ", " ^ constraint_to_string (d + 1) cp ^", " ^ constraint_to_string (d + 1) cn ^  ")"
-  | CondCons(co,kind,_,pats,exps) ->
+  | CondCons(co,kind,Some map,pats,exps) ->
+    "CondCons(" ^ co_to_string co ^ ", " ^ cond_kind_to_string kind ^
+    ",\n" ^ indent d ^ string_of_list ";" (fun (x, y) -> n_to_string x ^ "->" ^ n_to_string y) (Nexpmap.to_list map) ^
+    ",\n" ^ indent d ^ " [" ^ constraints_to_string_depth (d + 1) pats ^ "],\n" ^ indent d ^ " [" ^ constraints_to_string_depth (d + 1) exps ^ "])"
+  | CondCons(co,kind,None,pats,exps) ->
     "CondCons(" ^ co_to_string co ^ ", " ^ cond_kind_to_string kind ^
     ",\n" ^ indent d ^ " [" ^ constraints_to_string_depth (d + 1) pats ^ "],\n" ^ indent d ^ " [" ^ constraints_to_string_depth (d + 1) exps ^ "])"
-  | BranchCons(co,_,consts) ->
+  | BranchCons(co,None,consts) ->
     "BranchCons(" ^ co_to_string co ^ ",\n" ^ indent d ^ " [" ^ constraints_to_string_depth (d + 1) consts ^ "])"
 
 and constraints_to_string_depth d l = string_of_list (";\n" ^ indent d) (constraint_to_string d) l

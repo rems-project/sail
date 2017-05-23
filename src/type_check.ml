@@ -963,14 +963,15 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
       | Some(Base(tp,Default,_,_,_,_)) ->
         typ_error l ("Function " ^ i ^ " must be specified, not just declared as a default, before use")
       | Some(Base((params,t),tag,cs,efl,_,bounds)) ->
-        (*let _ = Printf.eprintf "Going to check func call %s with unsubstituted types %s and constraints %s \n"
-          i (t_to_string t) (constraints_to_string cs) in*)
-        let t,cs,efl,_ = subst params false false t cs efl in
+        let _ = prerr_endline (Printf.sprintf "Going to check func call %s with unsubstituted types %s and constraints %s"
+          i (t_to_string t) (constraints_to_string cs)) in
+        let t,cs,efl,_ = subst params true false t cs efl in
+        let _ = prerr_endline (Printf.sprintf "subst constraints %s" (constraints_to_string cs)) in
         (match t.t with
         | Tfn(arg,ret,imp,efl') ->
-          (*let _ = Printf.eprintf "Checking funcation call of %s\n" i in
-          let _ = Printf.eprintf "Substituted types and constraints are %s and %s\n" 
-            (t_to_string t) (constraints_to_string cs) in*)
+          let _ = prerr_endline (Printf.sprintf "Checking funcation call of %s" i) in
+          let _ = prerr_endline (Printf.sprintf "Substituted types and constraints are %s and %s" 
+            (t_to_string t) (constraints_to_string cs)) in
           let ret,_ = get_abbrev d_env ret in 
           let parms,arg_t,cs_p,ef_p = check_parms arg parms in
           (*let _ = Printf.eprintf "Checked parms of %s\n" i in*)
