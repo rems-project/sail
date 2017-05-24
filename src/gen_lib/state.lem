@@ -53,8 +53,6 @@ let read_mem dir read_kind addr sz state =
   let value = Sail_values.internal_mem_value dir memory_value in
   let is_exclusive = match read_kind with
     | Sail_impl_base.Read_plain -> false
-    | Sail_impl_base.Read_tag -> failwith "Read_tag not implemented"
-    | Sail_impl_base.Read_tag_reserve -> failwith "Read_tag_reserve not implemented"
     | Sail_impl_base.Read_reserve -> true
     | Sail_impl_base.Read_acquire -> false
     | Sail_impl_base.Read_exclusive -> true

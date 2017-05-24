@@ -11,8 +11,9 @@ val MEMr_tag_reserve : (vector bitU * integer) -> M (vector bitU)
 
 let MEMr (addr,size)             = read_mem false Read_plain addr size
 let MEMr_reserve (addr,size)     = read_mem false Read_reserve addr size
-let MEMr_tag (addr,size)         = read_mem false Read_tag addr size
-let MEMr_tag_reserve (addr,size) = read_mem false Read_tag_reserve addr size
+
+let MEMr_tag (addr,size)         = read_mem false Read_plain addr size
+let MEMr_tag_reserve (addr,size) = read_mem false Read_reserve addr size
 
 
 val MEMea                 : (vector bitU * integer) -> M unit
@@ -22,8 +23,9 @@ val MEMea_tag_conditional : (vector bitU * integer) -> M unit
 
 let MEMea (addr,size)                 = write_mem_ea Write_plain addr size
 let MEMea_conditional (addr,size)     = write_mem_ea Write_conditional addr size
-let MEMea_tag (addr,size)             = write_mem_ea Write_tag addr size
-let MEMea_tag_conditional (addr,size) = write_mem_ea Write_tag_conditional addr size
+
+let MEMea_tag (addr,size)             = write_mem_ea Write_plain addr size
+let MEMea_tag_conditional (addr,size) = write_mem_ea Write_conditional addr size
 
 
 val MEMval                 : (vector bitU * integer * vector bitU) -> M unit
