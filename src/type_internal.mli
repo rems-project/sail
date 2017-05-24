@@ -250,6 +250,7 @@ val has_wreg_effect : effect -> bool
 val has_rmem_effect : effect -> bool
 val has_wmem_effect : effect -> bool
 val has_eamem_effect : effect -> bool
+val has_exmem_effect : effect -> bool
 val has_memv_effect : effect -> bool
 val has_lret_effect : effect -> bool
   

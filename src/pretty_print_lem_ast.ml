@@ -184,6 +184,7 @@ and pp_format_base_effect_lem (BE_aux(e,l)) =
     | BE_wmem -> "BE_wmem"
     | BE_wmv  -> "BE_wmv"
     | BE_eamem -> "BE_eamem"
+    | BE_exmem -> "BE_exmem"
     | BE_barr -> "BE_barr"
     | BE_depend -> "BE_depend"
     | BE_undef -> "BE_undef"

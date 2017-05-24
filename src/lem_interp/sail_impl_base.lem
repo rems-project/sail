@@ -780,6 +780,7 @@ type event =
 | E_read_mem of read_kind * address_lifted * nat * maybe (list reg_name)
 | E_write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name)
 | E_write_ea of write_kind * address_lifted * nat * maybe (list reg_name)
+| E_excl_res
 | E_write_memv of maybe address_lifted * memory_value * maybe (list reg_name)
 | E_barrier of barrier_kind
 | E_footprint 
@@ -797,6 +798,7 @@ let eventCompare e1 e2 =
     compare ((wk1,v1,i1),(tr1,v1',tr1'))  ((wk2,v2,i2),(tr2,v2',tr2')) 
   | (E_write_ea wk1 a1 i1 tr1, E_write_ea wk2 a2 i2 tr2) ->
     compare (wk1, (a1, i1, tr1)) (wk2, (a2, i2, tr2))
+  | (E_excl_res, E_excl_res) -> EQ
   | (E_write_memv _ mv1 tr1, E_write_memv _ mv2 tr2) -> compare (mv1,tr1) (mv2,tr2)
   | (E_barrier bk1, E_barrier bk2) -> compare bk1 bk2
   | (E_read_reg r1, E_read_reg r2) -> compare r1 r2
@@ -806,6 +808,7 @@ let eventCompare e1 e2 =
   | (E_read_mem _ _ _ _, _) -> LT
   | (E_write_mem _ _ _ _ _ _, _) -> LT
   | (E_write_ea _ _ _ _, _) -> LT
+  | (E_excl_res, _) -> LT
   | (E_write_memv _ _ _, _) -> LT
   | (E_barrier _, _) -> LT
   | (E_read_reg _, _) -> LT
@@ -839,6 +842,8 @@ type outcome 'a =
   | Read_mem of (read_kind * address_lifted * nat) * (memory_value -> with_aux (outcome 'a))
   (* Tell the system a write is imminent, at address lifted, of size nat *)
   | Write_ea of (write_kind * address_lifted * nat) * (with_aux (outcome 'a))
+  (* Request the result of store-exclusive *)
+  | Excl_res of (bool -> with_aux (outcome 'a))
   (* Request to write memory at last signalled address. Memory value should be 8
      times the size given in ea signal *)
   | Write_memv of memory_value * (bool -> with_aux (outcome 'a))

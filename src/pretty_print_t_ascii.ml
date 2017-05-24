@@ -99,6 +99,7 @@ and pp_format_base_effect_ascii (BE_aux(e,l)) =
     | BE_wmem -> "wmem"
     | BE_wmv  -> "wmv"
     | BE_eamem -> "eamem"
+    | BE_exmem -> "exmem"
     | BE_barr -> "barr"
     | BE_depend -> "depend"
     | BE_undef -> "undef"

@@ -359,6 +359,7 @@ type action =
  | Write_mem of id * value * maybe (nat * nat) * value
  | Write_ea of id * value
  | Write_memv of id * value * value
+ | Excl_res of id * value
  | Barrier of id * value
  | Footprint of id * value
  | Nondet of list (exp tannot) * tag
@@ -2242,6 +2243,8 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                 mk_hole_frame (Write_mem (id_of_string name_ext) v Nothing wv)
           else if has_eamem_effect effects
           then mk_thunk_frame (Write_ea (id_of_string name_ext) v)
+          else if has_exmem_effect effects
+          then mk_thunk_frame (Excl_res (id_of_string name_ext) v)
           else if has_wmv_effect effects
           then let (wv,v) =
                  match v with

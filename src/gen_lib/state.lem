@@ -66,7 +66,11 @@ let read_mem dir read_kind addr sz state =
   then [(Left value, <| state with last_exclusive_operation_was_load = true |>)]
   else [(Left value, state)]
   
-
+val excl_result : unit -> M bool
+let excl_result () state =
+  let success =
+    (Left true,  <| state with last_exclusive_operation_was_load = false |>) in
+  (Left false, state) :: if state.last_exclusive_operation_was_load then [success] else []
 
 val write_mem_ea : write_kind -> vector bitU -> integer -> M unit
 let write_mem_ea write_kind addr sz state = 
@@ -83,29 +87,7 @@ let write_mem_val v state =
   let addresses_with_value = List.zip addrs v in
   let memstate = List.foldl (fun mem (addr,v) -> Map.insert addr v mem)
                             state.memstate addresses_with_value in
-
-  let is_exclusive = match write_kind with
-    | Sail_impl_base.Write_plain -> false
-    | Sail_impl_base.Write_tag -> failwith "Write_tag not implemented"
-    | Sail_impl_base.Write_tag_conditional -> failwith "Write_tag_conditional not implemented"
-    | Sail_impl_base.Write_conditional -> true
-    | Sail_impl_base.Write_release -> false
-    | Sail_impl_base.Write_exclusive -> true
-    | Sail_impl_base.Write_exclusive_release -> true
-  end in
-
-  if is_exclusive 
-  then
-    let success =
-      (Left true,  <| state with memstate = memstate; 
-                                 last_exclusive_operation_was_load = false |>) in
-    let failure =
-      (Left false, <| state with last_exclusive_operation_was_load = false |>) in
-    if state.last_exclusive_operation_was_load
-    then [failure;success]
-    else [failure]
-  else [(Left true, <| state with memstate = memstate |>)]
-
+  [(Left true,  <| state with memstate = memstate |>)]
 
 
 val read_reg : register -> M (vector bitU)

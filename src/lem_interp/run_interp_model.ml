@@ -377,6 +377,10 @@ let run
         | Write_ea1(_,(Address_lifted(location,_)), size,_,next) ->
           show "write_announce" (memory_value_to_string !default_endian location) left ((string_of_int size) ^ " bytes");
           (step next, env, next)
+        | Excl_res1(next_thunk) ->
+          show "exclusive_result" "" "" "";
+          let next = next_thunk true in
+          (step next,env',next)
         | Barrier1(bkind,next) ->
           show "mem_barrier" "" "" "";
           (step next, env, next)

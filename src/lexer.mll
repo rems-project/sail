@@ -120,6 +120,7 @@ let kw_table =
      ("wmem",                    (fun x -> Wmem));
      ("wmv",                     (fun x -> Wmv));
      ("eamem",                   (fun x -> Eamem));
+     ("exmem",                   (fun x -> Exmem));
      ("undef",                   (fun x -> Undef));
      ("unspec",                  (fun x -> Unspec));
      ("nondet",                  (fun x -> Nondet));
