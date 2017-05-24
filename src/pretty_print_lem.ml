@@ -125,8 +125,9 @@ let effectful (Effect_aux (eff,_)) =
      List.exists
        (fun (BE_aux (eff,_)) ->
          match eff with
-         | BE_rreg | BE_wreg | BE_rmem | BE_wmem | BE_eamem | BE_exmem
-         | BE_wmv | BE_barr | BE_depend | BE_nondet | BE_escape -> true
+         | BE_rreg | BE_wreg | BE_rmem | BE_rmemt | BE_wmem | BE_eamem
+         | BE_exmem | BE_wmv | BE_wmvt | BE_barr | BE_depend | BE_nondet
+         | BE_escape -> true
          | _ -> false)
        effs
 

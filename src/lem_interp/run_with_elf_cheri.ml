@@ -804,9 +804,11 @@ let initial_system_state_of_elf_file name =
           
           (Cheri.defs,
            (Mips_extras.read_memory_functions,
+            Mips_extras.read_memory_tagged_functions,
             Mips_extras.memory_writes,
             Mips_extras.memory_eas,
             Mips_extras.memory_vals,
+            Mips_extras.memory_vals_tagged,
             Mips_extras.barrier_functions),
            [],
            MIPS,
@@ -1304,7 +1306,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
           then resultf "\nSUCCESS program terminated after %d instructions\n" count
           else
             begin
-              match Run_interp_model.run  istate !reg !prog_mem !tag_mem !eager_eval track_dependencies mode "execute" with
+              match Run_interp_model.run  istate !reg !prog_mem !tag_mem (Nat_big_num.of_int 32) !eager_eval track_dependencies mode "execute" with
               | false, _,_, _ -> errorf "FAILURE\n"; exit 1
               | true, mode, track_dependencies, (my_reg, my_mem, my_tags) ->
                 reg := my_reg;
@@ -1377,14 +1379,14 @@ let run () =
   if !break_point then eager_eval := true;
 
   let ((isa_defs,
-       (isa_m0, isa_m1, isa_m2, isa_m3,isa_m4),
+       (isa_m0, isa_m1, isa_m2, isa_m3,isa_m4,isa_m5,isa_m6),
         isa_externs,
         isa_model,
         model_reg_d,
         startaddr,
         startaddr_internal), pp_symbol_map) = initial_system_state_of_elf_file !file in
 
-  let context = build_context isa_defs isa_m0 isa_m1 isa_m2 isa_m3 isa_m4 isa_externs in
+  let context = build_context isa_defs isa_m0 isa_m1 isa_m2 isa_m3 isa_m4 isa_m5 isa_m6 isa_externs in
   (*NOTE: this is likely MIPS specific, so should probably pull from initial_system_state info on to translate or not, 
           endian mode, and translate function name 
   *)

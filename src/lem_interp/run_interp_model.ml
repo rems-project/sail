@@ -148,7 +148,10 @@ let combine_slices (start, stop) (inner_start,inner_stop) =
 
 let unit_lit = (L_aux(L_unit,Interp_ast.Unknown))
 
-let rec perform_action ((reg, mem, tagmem) as env) = function
+let align_addr addr size = 
+  sub addr (modulus addr size)
+
+let rec perform_action ((reg, mem, tagmem) as env, cap_size) = function
  (* registers *)
  | Read_reg1(Reg(id,_,_,_), _) -> (Some(Reg.find id reg), env)
  | Read_reg1(Reg_slice(id, _, _, range), _)
@@ -170,48 +173,41 @@ let rec perform_action ((reg, mem, tagmem) as env) = function
      | Some a -> a
      | None -> assert false (*TODO remember how to report an error *)in
    let naddress = integer_of_address address in
-   (match kind with
-    | Read_tag | Read_tag_reserve ->
-      let tag = Mem.find naddress tagmem in
-      let rec reading (n : num) length = 
-        if length = 0 
-        then []
-        else (Mem.find n mem)::(reading (add n big_num_unit) (length - 1)) in
-      (Some (register_value_of_memory_value (tag::(reading naddress length)) !default_order), env)
-    | _ ->
-      let rec reading (n : num) length = 
-        if length = 0 
-        then []
-        else (Mem.find n mem)::(reading (add n big_num_unit) (length - 1)) in
-      (Some (register_value_of_memory_value (reading naddress length) !default_order), env))
+   let rec reading (n : num) length = 
+     if length = 0 
+     then []
+     else (Mem.find n mem)::(reading (add n big_num_unit) (length - 1)) in
+   (Some (register_value_of_memory_value (reading naddress length) !default_order), env)
+ | Read_mem_tagged0(kind,location, length, _,_) ->
+   let address = match address_of_address_lifted location with
+     | Some a -> a
+     | None -> assert false (*TODO remember how to report an error *)in
+   let naddress = integer_of_address address in
+   let tag = Mem.find (align_addr naddress cap_size) tagmem in
+   let rec reading (n : num) length = 
+     if length = 0 
+     then []
+     else (Mem.find n mem)::(reading (add n big_num_unit) (length - 1)) in
+   (Some (register_value_of_memory_value (tag::(reading naddress length)) !default_order), env)
  | Write_mem0(kind,location, length, _, bytes,_,_) ->
    let address = match address_of_address_lifted location with
      | Some a -> a
      | None -> assert false (*TODO remember how to report an error *)in
    let naddress = integer_of_address address in
-   (match kind with
-    | Write_tag | Write_tag_conditional ->
-      (match bytes with
-       | [b] -> (None,(reg,mem,Mem.add naddress b tagmem))
-       | _ -> assert false)
-   | _ -> 
-     let rec writing location length bytes mem = 
-       if length = 0
-       then mem
-       else match bytes with
+   let rec writing location length bytes mem = 
+     if length = 0
+     then mem
+     else match bytes with
          | [] -> mem
          | b::bytes -> 
            writing (add location big_num_unit) (length - 1) bytes (Mem.add location b mem) in
-     (None,(reg,writing naddress length bytes mem,tagmem)))
+     (None,(reg,writing naddress length bytes mem,tagmem))
  | Write_memv1(Some location, bytes, _, _) ->
    let address = match address_of_address_lifted location with
      | Some a -> a
      | _ -> failwith "Write address not known" in
    let naddress = integer_of_address address in
    let length = List.length bytes in
-   let (length,tag_mem,bytes) = if length = 17 || length = 33
-     then (length - 1, Mem.add naddress (List.hd bytes) tagmem, (List.tl bytes))
-     else (length,tagmem,bytes) in
    let rec writing location length bytes mem =
      if length = 0
      then mem
@@ -219,7 +215,22 @@ let rec perform_action ((reg, mem, tagmem) as env) = function
        | [] -> mem
        | b::bytes -> 
          writing (add location big_num_unit) (length - 1) bytes (Mem.add location b mem) in
-   (None, (reg,writing naddress length bytes mem, tag_mem))
+   (None, (reg,writing naddress length bytes mem, tagmem))
+ | Write_memv_tagged0(Some location, (tag, bytes), _, _) ->
+    let address = match address_of_address_lifted location with
+     | Some a -> a
+     | _ -> failwith "Write address not known" in
+    let naddress = integer_of_address address in
+    let length = List.length bytes in
+    let rec writing location length bytes mem =
+     if length = 0
+     then mem
+     else match bytes with
+       | [] -> mem
+       | b::bytes -> 
+         writing (add location big_num_unit) (length - 1) bytes (Mem.add location b mem) in
+    let tagmem = Mem.add (align_addr naddress cap_size) (Byte_lifted ([Bitl_zero;Bitl_zero;Bitl_zero;Bitl_zero;Bitl_zero;Bitl_zero;Bitl_zero;tag])) tagmem in
+    (None, (reg,writing naddress length bytes mem, tagmem))
  | _ -> (None, env)
 ;;
 
@@ -245,6 +256,7 @@ let run
   reg
   mem
   tagmem
+  cap_size
   eager_eval
   track_dependencies
   mode
@@ -321,7 +333,7 @@ let run
       errorf "%s: %s: %s\n" (grey name) (red "assertion failed") "No message provided";
       (false, mode, !track_dependencies, env)
     | action ->
-      let (return,env') = perform_action env action in
+      let (return,env') = perform_action (env, cap_size) action in
       let step ?(force=false) (state: instruction_state) =
         let stack = match state with IState(stack,_) -> stack in
         let (top_exp,(top_env,top_mem)) = top_frame_exp_state stack in
@@ -356,6 +368,22 @@ let run
              let next = next_thunk (memory_value_of_register_value value) in
              (step next, env', next)
            | None -> assert false)
+        | Read_mem_tagged0(kind, (Address_lifted(location,_)), length, tracking, next_thunk) ->
+          (match return with
+           | Some(value) -> 
+             show "read_mem_tagged"
+               (memory_value_to_string !default_endian location) right
+               (register_value_to_string value);
+             (match tracking with
+              | None -> ()
+              | Some(deps) ->
+                show "read_mem address depended on" (dependencies_to_string deps) "" "");
+             let next = 
+               (match (memory_value_of_register_value value) with
+                | (Byte_lifted tag)::bytes -> next_thunk ((List.nth tag 7), bytes)
+                | _ -> assert false) in
+             (step next, env', next)
+           | None -> assert false)
         | Write_mem0(kind,(Address_lifted(location,_)), length, tracking, value, v_tracking, next_thunk) ->
           show "write_mem" (memory_value_to_string !default_endian location) left
             (memory_value_to_string !default_endian value);
@@ -372,6 +400,10 @@ let run
           (step next,env',next)
         | Write_memv1(Some(Address_lifted(location,_)),value,_,next_thunk) ->
           show "write_mem value" (memory_value_to_string !default_endian location) left (memory_value_to_string !default_endian value);
+          let next = next_thunk true in
+          (step next,env',next)
+        | Write_memv_tagged0(Some(Address_lifted(location,_)),(tag, value),_,next_thunk) ->
+          show "write_mem_tagged value" (memory_value_to_string !default_endian location) left (memory_value_to_string !default_endian value);
           let next = next_thunk true in
           (step next,env',next)
         | Write_ea1(_,(Address_lifted(location,_)), size,_,next) ->
