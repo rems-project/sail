@@ -376,14 +376,30 @@ and n_to_string n =
     if !debug_mode
     then
       let rec show_nuvar n = match n.nexp with
-        | Nuvar{outsubst=Some n; nindex = i; orig_var = Some s} -> s ^ "<" ^ show_nuvar n ^ ">"
-        | Nuvar{insubst=None; nindex = i; orig_var = Some s} -> s^ "()"
-        | Nuvar{insubst=Some n; nindex = i; orig_var = Some s} -> s ^ "(" ^ show_nuvar n ^ ")"
-        | Nuvar{outsubst=Some n; nindex = i} -> "Nu_" ^ string_of_int i ^ "<" ^ show_nuvar n ^ ">"
-        | Nuvar{insubst=None; nindex = i} -> "Nu_" ^ string_of_int i ^ "()" 
-        | Nuvar{insubst=Some n; nindex =i;} -> "Nu_" ^ string_of_int i ^ "(" ^ show_nuvar n ^ ")"
-        | _ -> n_to_string n in
-      show_nuvar (get_outer_most n)
+        | Nuvar { outsubst = None; orig_var = Some s; insubst = None } -> s
+        | Nuvar { outsubst = Some outs; orig_var = Some s; insubst = None } -> "<" ^ show_nuvar_outs outs ^ ">" ^ s
+        | Nuvar { outsubst = None; orig_var = Some s; insubst = Some ins } -> s ^ "<" ^ show_nuvar_ins ins ^ ">"
+        | Nuvar { outsubst = Some outs; orig_var = Some s; insubst = Some ins } ->
+           "<" ^ show_nuvar_outs outs ^ ">" ^ s ^ "<" ^ show_nuvar_ins ins ^ ">"
+        | Nuvar { outsubst = None; nindex = i; insubst = None } -> "nu" ^ string_of_int i
+        | Nuvar { outsubst = Some outs; nindex = i; insubst = None } -> "<" ^ show_nuvar_outs outs ^ ">nu" ^ string_of_int i
+        | Nuvar { outsubst = None; nindex = i; insubst = Some ins } -> "nu" ^ string_of_int i ^ "<" ^ show_nuvar_ins ins ^ ">"
+        | Nuvar { outsubst = Some outs; nindex = i; insubst = Some ins } ->
+           "<" ^ show_nuvar_outs outs ^ ">nu" ^ string_of_int i ^ "<" ^ show_nuvar_ins ins ^ ">"
+      and show_nuvar_outs n = match n.nexp with
+        | Nuvar { outsubst = None; orig_var = Some s } -> s
+        | Nuvar { outsubst = Some outs; orig_var = Some s } -> "<" ^ show_nuvar_outs outs ^ ">nu" ^ s    
+        | Nuvar { outsubst = None; nindex = i } -> "nu" ^ string_of_int i
+        | Nuvar { outsubst = Some outs; nindex = i } -> "<" ^ show_nuvar_outs outs ^ ">nu" ^ string_of_int i
+        | _ -> n_to_string n
+      and show_nuvar_ins n = match n.nexp with
+        | Nuvar { insubst = None; orig_var = Some s } -> s
+        | Nuvar { insubst = Some ins; orig_var = Some s } -> s ^ string_of_int i ^ "<" ^ show_nuvar_ins ins ^ ">"
+        | Nuvar { insubst = None; nindex = i } -> "nu" ^ string_of_int i
+        | Nuvar { insubst = Some ins; nindex = i } -> "nu" ^ string_of_int i ^ "<" ^ show_nuvar_ins ins ^ ">"
+        | _ -> n_to_string n
+      in
+      show_nuvar n
     else "_"
 and ef_to_string (Ast.BE_aux(b,l)) =
     match b with
@@ -442,6 +458,9 @@ let cond_kind_to_string = function
   | Solo -> "solo"
   | Switch -> "switch"
 
+let string_of_nexpmap map =
+  string_of_list ";\n" (fun (x, y) -> n_to_string x ^ "->" ^ n_to_string y) (Nexpmap.to_list map)
+                
 let rec constraint_to_string d = function
   | LtEq (co,enforce,nexp1,nexp2) ->
     "LtEq(" ^ co_to_string co ^ ", " ^ enforce_to_string enforce ^ ", " ^ 
@@ -4546,19 +4565,25 @@ let resolve_constraints_adhoc cs =
     let (complex_constraints,map) = merge_paths true complex_constraints in
     let complex_constraints = check_ranges complex_constraints in
     (*let _ = Printf.eprintf "Resolved as many constraints as possible, leaving %i\n" 
-        (constraint_size complex_constraints) in 
-      let _ = Printf.eprintf "%s\n" (constraints_to_string complex_constraints) in*)
+        (constraint_size complex_constraints) in *)
+    let _ = cs_print (Printf.sprintf "Mutated constraints: \n%s\n%!" (constraints_to_string cs)) in
+    let _ = cs_print (Printf.sprintf "Unresolved constraints: \n%s\n%!" (constraints_to_string complex_constraints)) in
+    begin
+      match map with
+      | None -> cs_print "Returned nexpmap is None\n"
+      | Some map -> cs_print (Printf.sprintf "Returned nexpmap is Some: \n%s\n%!" (string_of_nexpmap map))
+    end;
     (complex_constraints,map)
                     
 let resolve_constraints cs = 
   cs_print (Printf.sprintf "=== Called resolve constraints with %i constraints ===" (constraint_size cs));
+  cs_print (Printf.sprintf "Original constraints are: \n%s\n%!" (constraints_to_string cs));
   if not !do_resolve_constraints
   then (cs,None)
   else if not !z3_solver
   then resolve_constraints_adhoc cs
   else
     begin
-      cs_print (Printf.sprintf "Original constraints are: \n%s\n%!" (constraints_to_string cs));
       bindings := Bindings.empty;
       match Constraint.call_z3 (constraints_to_cexpr cs) with
       | Unsat problem ->
@@ -4567,7 +4592,7 @@ let resolve_constraints cs =
       | Unknown [] -> ([], None)
       | Unknown problems ->
          prerr_endline (Printf.sprintf "z3 unknowns :\n%s\n" (string_of_list "\n\n" Constraint.string_of problems));
-         ([], Some Nexpmap.empty)
+         ([], None)
     end
       
 let check_tannot l annot imp_param _ efs = 

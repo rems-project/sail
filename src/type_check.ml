@@ -969,7 +969,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
         let _ = prerr_endline (Printf.sprintf "subst constraints %s" (constraints_to_string cs)) in
         (match t.t with
         | Tfn(arg,ret,imp,efl') ->
-          let _ = prerr_endline (Printf.sprintf "Checking funcation call of %s" i) in
+          let _ = prerr_endline (Printf.sprintf "Checking function call of %s" i) in
           let _ = prerr_endline (Printf.sprintf "Substituted types and constraints are %s and %s" 
             (t_to_string t) (constraints_to_string cs)) in
           let ret,_ = get_abbrev d_env ret in 
