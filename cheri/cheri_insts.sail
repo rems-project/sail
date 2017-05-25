@@ -774,8 +774,6 @@ function clause execute(CJALR(cd, cb, link)) =
     raise_c2_exception(CapEx_SealViolation, cb)
   else if not (cb_val.permit_execute) then
     raise_c2_exception(CapEx_PermitExecuteViolation, cb)
-  else if not (cb_val.global) then
-    raise_c2_exception(CapEx_GlobalViolation, cb)
   else if (cb_ptr < cb_base) then
     raise_c2_exception(CapEx_LengthViolation, cb)
   else if ((cb_ptr + 4) > cb_top) then
