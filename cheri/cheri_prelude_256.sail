@@ -43,7 +43,7 @@ typedef CapStruct = const struct {
   bit[4]  perm_reserved11_14;
   bool    access_system_regs;
   bool    perm_reserved9;
-  bool    perm_reserved8;
+  bool    permit_ccall;
   bool    permit_seal;
   bool    permit_store_local_cap;
   bool    permit_store_cap;
@@ -66,7 +66,7 @@ let (CapStruct) null_cap = {
   perm_reserved11_14 = 0;
   access_system_regs = false;
   perm_reserved9 = false;
-  perm_reserved8 = false;
+  permit_ccall = false;
   permit_seal = false;
   permit_store_local_cap = false;
   permit_store_cap = false;
@@ -93,7 +93,7 @@ function CapStruct capRegToCapStruct((CapReg) capReg) =
     perm_reserved11_14         = capReg[207..204];
     access_system_regs         = capReg[203];
     perm_reserved9             = capReg[202];
-    perm_reserved8             = capReg[201];
+    permit_ccall               = capReg[201];
     permit_seal                = capReg[200];
     permit_store_local_cap     = capReg[199];
     permit_store_cap           = capReg[198];
@@ -114,7 +114,7 @@ function (bit[31]) getCapPerms((CapStruct) cap) =
       : cap.perm_reserved11_14
       : [cap.access_system_regs]
       : [cap.perm_reserved9]
-      : [cap.perm_reserved8]
+      : [cap.permit_ccall]
       : [cap.permit_seal]
       : [cap.permit_store_local_cap]
       : [cap.permit_store_cap]
@@ -169,7 +169,7 @@ function CapStruct setCapPerms((CapStruct) cap, (bit[31]) perms) =
       perm_reserved11_14     = perms[14..11];
       access_system_regs     = perms[10];
       perm_reserved9         = perms[9];
-      perm_reserved8         = perms[8];
+      permit_ccall           = perms[8];
       permit_seal            = perms[7];
       permit_store_local_cap = perms[6];
       permit_store_cap       = perms[5];

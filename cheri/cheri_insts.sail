@@ -637,9 +637,9 @@ function clause execute (CUnseal(cd, cs, ct)) =
   (* END_CUnseal *)
 }
 
-union ast member (regno, regno) CCall
-function clause decode (0b010010 : 0b00101 : (regno) cs : (regno) cb : (bit[11]) selector) = Some(CCall(cs, cb))
-function clause execute (CCall(cs, cb)) =
+union ast member (regno, regno, bit[11]) CCall
+function clause decode (0b010010 : 0b00101 : (regno) cs : (regno) cb : (bit[11]) selector) = Some(CCall(cs, cb, selector))
+function clause execute (CCall(cs, cb, 0b00000000000)) = (* selector=0 *)
 {
   (* Partial implementation of CCall with checks in hardware, but raising a trap to perform trusted stack manipulation *)
   (* START_CCall *)
@@ -672,6 +672,56 @@ function clause execute (CCall(cs, cb)) =
   else
     raise_c2_exception(CapEx_CallTrap, cs);
   (* END_CCall *)
+}
+
+function clause execute (CCall(cs, cb, 0b00000000001)) = (* selector=1 *)
+{
+  (* Jump-like implementation of CCall that unseals arguments *)
+  (* START_CCall2 *)
+  checkCP2usable();
+  cs_val := readCapReg(cs);
+  cb_val := readCapReg(cb);
+  cs_cursor := getCapCursor(cs_val);
+  if (register_inaccessible(cs)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cs)
+  else if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if not (cs_val.tag) then
+    raise_c2_exception(CapEx_TagViolation, cs)
+  else if not (cb_val.tag) then
+    raise_c2_exception(CapEx_TagViolation, cb)
+  else if not (cs_val.sealed) then
+    raise_c2_exception(CapEx_SealViolation, cs)
+  else if not (cb_val.sealed) then
+    raise_c2_exception(CapEx_SealViolation, cb)
+  else if ((cs_val.otype) != (cb_val.otype)) then
+    raise_c2_exception(CapEx_TypeViolation, cs)
+  else if not (cs_val.permit_ccall) then
+    raise_c2_exception(CapEx_PermitCCallViolation, cs)
+  else if not (cb_val.permit_ccall) then
+    raise_c2_exception(CapEx_PermitCCallViolation, cb)
+  else if not (cs_val.permit_execute) then
+    raise_c2_exception(CapEx_PermitExecuteViolation, cs)
+  else if (cb_val.permit_execute) then
+    raise_c2_exception(CapEx_PermitExecuteViolation, cb)
+  else if (cs_cursor < getCapBase(cs_val)) then
+    raise_c2_exception(CapEx_LengthViolation, cs)
+  else if (cs_cursor >= getCapTop(cs_val)) then
+    raise_c2_exception(CapEx_LengthViolation, cs)
+  else
+    let csUnsealed = capStructToCapReg({cs_val with
+        sealed=false;
+        otype=0;
+    }) in {
+      nextPC := (bit[64]) (getCapOffset(cs_val));
+      nextPCC := csUnsealed;
+      delayedPCC := csUnsealed;
+      C26 := capStructToCapReg({cb_val with
+        sealed=false;
+        otype=0;
+      });
+    }
+  (* END_CCall2 *)
 }
 
 union ast member unit CReturn

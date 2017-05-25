@@ -104,6 +104,7 @@ typedef CapEx = enumerate {
   CapEx_PermitStoreLocalCapViolation;
   CapEx_PermitSealViolation;
   CapEx_AccessSystemRegsViolation;
+  CapEx_PermitCCallViolation;
 }
 
 typedef CPtrCmpOp = enumerate {
@@ -145,6 +146,7 @@ function (bit[8]) CapExCode((CapEx) ex) =
     case CapEx_PermitStoreLocalCapViolation -> 0x16
     case CapEx_PermitSealViolation          -> 0x17
     case CapEx_AccessSystemRegsViolation    -> 0x18
+    case CapEx_PermitCCallViolation         -> 0x19
   }
 
 typedef CapCauseReg = register bits [15:0] {
