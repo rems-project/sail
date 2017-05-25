@@ -243,12 +243,20 @@ function clause execute(CToPtr(rd, cb, ct)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, ct)
   else if not (ct_val.tag) then
     raise_c2_exception(CapEx_TagViolation, ct)
+  else if (cb_val.tag) & (cb_val.sealed) then
+    raise_c2_exception(CapEx_SealViolation, cb)
   else 
     {
-      wGPR(rd) := if not (cb_val.tag) then
+      let cbBase = getCapBase(cb_val) in
+      let cbTop = getCapTop(cb_val) in
+      let ctBase = getCapBase(ct_val) in
+      let ctTop = getCapTop(ct_val) in
+      wGPR(rd) := if (not (cb_val.tag)) |
+                     (cbBase < ctBase) |
+                     (cbTop > ctTop) then
           ((bit[64]) 0)
         else
-          (bit[64])(getCapCursor(cb_val) - getCapBase(ct_val))
+          (bit[64])(getCapCursor(cb_val) - ctBase)
     }
   (* END_CToPtr *)
 }
