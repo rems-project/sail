@@ -463,6 +463,22 @@ function clause execute (CClearTag(cd, cb)) =
   (* END_CClearTag *)
 }
 
+union ast member (regno,regno,regno,bool) CMOVX
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) rt : 0b011100) = Some(CMOVX(cd, cb, rt, false)) (* CMOVN *)
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) rt : 0b011011) = Some(CMOVX(cd, cb, rt, true)) (* CMOVZ *)
+function clause execute (CMOVX(cd, cb, rt, ismovz)) =
+{
+  (* START_CMOVX *)
+  checkCP2usable();
+  if (register_inaccessible(cd)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
+  else if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if ((rGPR(rt) == 0) ^ ismovz) then
+    writeCapReg(cd) := readCapReg(cb);
+  (* END_CMOVX *)
+}
+
 union ast member (ClearRegSet, bit[16]) ClearRegs
 function clause decode (0b010010 : 0b01111 : 0b00000 : (bit[16]) imm) = Some(ClearRegs(GPLo, imm)) (* ClearLo *)
 function clause decode (0b010010 : 0b01111 : 0b00001 : (bit[16]) imm) = Some(ClearRegs(GPHi, imm)) (* ClearHi *)
