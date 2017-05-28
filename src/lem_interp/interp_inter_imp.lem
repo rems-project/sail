@@ -433,7 +433,7 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
       (Ivh_error (Interp_interface.Internal_error ("Write memory request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_ea _ _) _,_,_) ->
       (Ivh_error (Interp_interface.Internal_error ("Write ea request in a " ^ errk_str)), events_out)
-    | (Interp.Action (Interp.Excl_res _ _) _,_,_) ->
+    | (Interp.Action (Interp.Excl_res _) _,_,_) ->
       (Ivh_error (Interp_interface.Internal_error ("Exclusive result request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_memv _ _ _) _,_,_) ->
       (Ivh_error (Interp_interface.Internal_error ("Write memory value request in a " ^ errk_str)), events_out)
@@ -831,7 +831,7 @@ let rec interp_to_outcome mode context thunk =
               Write_ea write_k (Address_lifted location address_int) length tracking (IState next_state context)
             else Error "Memory address for write is not 64 bits"
           | _ -> Error ("Memory function " ^ i ^ " to signal impending write, not found") end, lm)
-      | Interp.Excl_res (Id_aux (Id i) _) loc_val ->
+      | Interp.Excl_res (Id_aux (Id i) _) ->
         (match excl_res with
           | (Just (i', ER return)) ->
               Excl_res (fun b ->

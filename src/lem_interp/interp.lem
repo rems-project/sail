@@ -360,7 +360,7 @@ type action =
  | Write_mem of id * value * maybe (nat * nat) * value
  | Write_ea of id * value
  | Write_memv of id * value * value
- | Excl_res of id * value
+ | Excl_res of id
  | Write_memv_tagged of id * value * value * value
  | Barrier of id * value
  | Footprint of id * value
@@ -2248,7 +2248,7 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
           else if has_eamem_effect effects
           then mk_thunk_frame (Write_ea (id_of_string name_ext) v)
           else if has_exmem_effect effects
-          then mk_thunk_frame (Excl_res (id_of_string name_ext) v)
+          then mk_hole_frame (Excl_res (id_of_string name_ext))
           else if has_wmv_effect effects
           then let (wv,v) =
                  match v with
