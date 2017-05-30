@@ -59,6 +59,7 @@ let lit_to_string = function
  | L_hex s -> "0x"^s
  | L_bin s -> "0b"^s
  | L_undef -> "undefined"
+ | L_real   r -> r
  | L_string s -> "\"" ^ s ^ "\""
 ;;
 

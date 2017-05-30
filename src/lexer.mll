@@ -128,7 +128,7 @@ let kw_table =
 ]
 
 let default_type_names = ["bool";"unit";"vector";"range";"list";"bit";"nat"; "int";
-			  "uint8";"uint16";"uint32";"uint64";"atom";"implicit";"string";"option"]
+                          "uint8";"uint16";"uint32";"uint64";"atom";"implicit";"real";"string";"option"]
 let custom_type_names : string list ref = ref []
 
 }
@@ -167,6 +167,7 @@ rule token = parse
   | "+"					{ (Plus(r"+")) }
   | ";"                                 { Semi }
   | "*"                                 { (Star(r"*")) }
+  | "/"                                 { (Slash(r"/")) }
   | "~"					{ (Tilde(r"~")) }
   | "_"                                 { Under }
   | "{"                                 { Lcurly }
@@ -303,6 +304,7 @@ rule token = parse
   | "*_ui" oper_char+ as i				{ (StarUnderUiI(r i)) }
   | "2^" oper_char+ as i				{ (TwoCarrotI(r i)) }
 
+  | digit+ '.' digit+  as i             { (Real(i)) }
   | digit+ as i                         { (Num(int_of_string i)) }
   | "-" digit+ as i                     { (Num(int_of_string i)) }
   | "0b" (binarydigit+ as i)		{ (Bin(i)) }

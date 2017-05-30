@@ -104,6 +104,7 @@ let doc_lit (L_aux(l,_)) =
   | L_hex n -> "0x" ^ n
   | L_bin n -> "0b" ^ n
   | L_undef -> "undefined"
+  | L_real   r -> r
   | L_string s -> "\"" ^ s ^ "\"")
 
 let doc_pat, doc_atomic_pat =
@@ -561,4 +562,8 @@ let pp_exp b e = to_buf b (doc_exp e)
 let pat_to_string p =
   let b = Buffer.create 20 in
   to_buf b (doc_pat p);
+  Buffer.contents b
+let typ_to_string t =
+  let b = Buffer.create 20 in
+  to_buf b (doc_typ t);
   Buffer.contents b

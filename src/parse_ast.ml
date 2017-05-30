@@ -204,6 +204,7 @@ lit_aux =  (* Literal constant *)
  | L_hex of string (* bit vector constant, C-style *)
  | L_bin of string (* bit vector constant, C-style *)
  | L_undef (* undefined value *)
+ | L_real   of string (* rational constant *)
  | L_string of string (* string constant *)
 
 

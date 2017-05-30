@@ -150,9 +150,9 @@ let make_vector_sugar order_set is_inc typ typ1 =
 
 %token <string> Id TyVar TyId
 %token <int> Num
-%token <string> String Bin Hex
+%token <string> String Bin Hex Real
 
-%token <string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde
+%token <string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Slash Tilde
 %token <string> AmpAmp CarrotCarrot Colon ColonColon EqEq ExclEq ExclExcl
 %token <string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt
 %token <string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar TildeCarrot
@@ -223,6 +223,8 @@ id:
     { idl (DeIid($3)) }
   | Lparen Deinfix StarUnderS Rparen
     { idl (DeIid("*_s")) }
+  | Lparen Deinfix Slash Rparen
+    { idl (DeIid($3)) }
   | Lparen Deinfix AmpAmp Rparen
     { idl (DeIid($3)) }
   | Lparen Deinfix Bar Rparen
@@ -456,6 +458,8 @@ lit:
     { lloc L_false }
   | Num
     { lloc (L_num $1) }
+  | Real
+    { lloc (L_real $1) }
   | String
     { lloc (L_string $1) }
   | Lparen Rparen
@@ -678,6 +682,8 @@ star_exp:
     { $1 }
   | star_exp Star starstar_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp Slash starstar_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | star_exp Div starstar_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | star_exp Div_ starstar_exp
@@ -705,6 +711,8 @@ star_right_atomic_exp:
   | starstar_right_atomic_exp
     { $1 }
   | star_exp Star starstar_right_atomic_exp
+    { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
+  | star_exp Slash starstar_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }
   | star_exp Div starstar_right_atomic_exp
     { eloc (E_app_infix($1,Id_aux(Id($2), locn 2 2), $3)) }

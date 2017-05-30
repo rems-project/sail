@@ -221,6 +221,7 @@ let doc_lit_lem in_pat (L_aux(lit,l)) a =
       | Tid "string"
       | Tabbrev ({t = Tapp ("string",_)},_) -> "\"\""
       | _ -> "(failwith \"undefined value of unsupported type\")")
+  | L_real   r -> r
   | L_string s -> "\"" ^ s ^ "\"")
 
 (* typ_doc is the doc for the type being quantified *)

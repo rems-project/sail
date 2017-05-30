@@ -82,6 +82,7 @@ let {ocaml;coq} lit_eq (L_aux left _) (L_aux right _) =
    | (L_true, L_true) -> true
    | (L_false, L_false) -> true
    | (L_undef, L_undef) -> true
+   | (L_real r, L_real r') -> r = r'
    | (L_string s, L_string s') -> s = s'
    | (_, _) -> false
 end

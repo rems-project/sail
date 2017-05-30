@@ -288,6 +288,7 @@ let rec check_pattern envs emp_tag expect_t (P_aux(p,(l,annot))) : ((tannot pat)
                       [TA_nexp(if is_inc then n_zero else mk_c(sub_big_int size one));
                        TA_nexp (mk_c size);
                        TA_ord d_env.default_o;TA_typ{t = Tid"bit"}])},lit
+          | L_real _   -> {t = Tid "real"},lit
           | L_string s -> {t = Tid "string"},lit
           | L_undef -> typ_error l' "Cannot pattern match on undefined") in
       (*let _ = Printf.eprintf "checking pattern literal. expected type is %s. t is %s\n"
@@ -549,6 +550,7 @@ let rec check_pattern_after_constraint_res envs concrete_length_req expect_t (P_
           let size = big_int_of_int (String.length s) in
           let is_inc = match d_env.default_o.order with | Oinc -> true | _ -> false in
           mk_vector bit_t d_env.default_o (if is_inc then n_zero else mk_c(sub_big_int size one)) (mk_c size)
+        | L_real _ -> real_t
         | L_string s -> string_t
         | L_undef -> typ_error l' "Cannot pattern match on undefined") in
     let t_c,_ = type_consistent (Patt l) d_env Require true t_from_lit t_inferred in
@@ -864,6 +866,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
                                  [TA_nexp start;
                                   TA_nexp (mk_c_int size);
                                   TA_ord d_env.default_o ;TA_typ{t = Tid"bit"}])},[],pure_e
+        | L_real _ -> simp_exp e l {t = Tid "real"},[],pure_e
         | L_string s -> simp_exp e l {t = Tid "string"},[],pure_e
         | L_undef -> 
           let ef = {effect=Eset[BE_aux(BE_undef,l)]} in

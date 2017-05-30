@@ -275,6 +275,7 @@ let pp_format_lit_lem (L_aux(lit,l)) =
   | L_hex(n) -> "(L_hex \"" ^ n ^ "\")"
   | L_bin(n) -> "(L_bin \"" ^ n ^ "\")"
   | L_undef -> "L_undef"
+  | L_real(r)   -> r
   | L_string(s) -> "(L_string \"" ^ s ^ "\")") ^ " " ^
   (pp_format_l_lem l) ^ ")"
 
