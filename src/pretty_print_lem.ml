@@ -270,17 +270,6 @@ let rec doc_pat_lem regtypes apat_needed (P_aux (p,(l,annot)) as pa) = match p w
       | _ -> parens (separate_map comma_sp (doc_pat_lem regtypes false) pats))
      | P_list pats -> brackets (separate_map semi (doc_pat_lem regtypes false) pats) (*Never seen but easy in lem*)
 
-let rec pat_has_wildcard (P_aux (p,_)) = match p with
-  | P_app (_, pats) -> List.exists pat_has_wildcard pats
-  | P_lit _ -> false
-  | P_wild -> true
-  | P_id _ -> false
-  | P_as (pat,_) -> pat_has_wildcard pat
-  | P_typ (_,pat) -> pat_has_wildcard pat
-  | P_vector pats -> true (* Vector patterns are pretty-printed with underscores for order and index *)
-  | P_vector_concat pats -> true
-  | P_tup pats -> List.exists pat_has_wildcard pats
-
 let prefix_recordtype = true
 let report = Reporting_basic.err_unreachable
 let doc_exp_lem, doc_let_lem =
@@ -1079,21 +1068,26 @@ let rec doc_fundef_lem regtypes (FD_aux(FD_function(r, typa, efa, fcls),fannot))
                let auxiliary_functions = 
                   auxiliary_functions ^^ hardline ^^ hardline ^^
                     doc_fundef_lem regtypes (FD_aux (FD_function(r,typa,efa,[fcl]),fannot)) in
-               let bind_wild_pats idx (P_aux (p,a)) =
-                 if pat_has_wildcard (P_aux (p,a))
-                 then P_aux (P_as (P_aux (p,a), Id_aux (Id ("arg" ^ string_of_int idx),l)),a)
-                 else P_aux (p,a) in
-               let bound_argspat = List.mapi bind_wild_pats argspat in
-               let bound_pat = P_aux (P_app (Id_aux (Id ctor,l),bound_argspat),pannot) in
-               let argsexp = List.map (fun (P_aux (p,a)) -> match p with
-                 | P_as (p,id) -> P_aux (P_id id,a)
-                 | _ -> P_aux (p,a)) bound_argspat in
+               (* Bind complex patterns to names so that we can pass them to the
+                  auxiliary function *)
+               let name_pat idx (P_aux (p,a)) = match p with
+                 | P_as (pat,_) -> P_aux (p,a) (* already named *)
+                 | P_lit _ -> P_aux (p,a) (* no need to name a literal *)
+                 | P_id _ -> P_aux (p,a) (* no need to name an identifier *)
+                 | _ -> P_aux (P_as (P_aux (p,a), Id_aux (Id ("arg" ^ string_of_int idx),l)),a) in
+               let named_argspat = List.mapi name_pat argspat in
+               let named_pat = P_aux (P_app (Id_aux (Id ctor,l),named_argspat),pannot) in
+               let doc_arg idx (P_aux (p,(l,a))) = match p with
+                 | P_as (pat,id) -> doc_id_lem id
+                 | P_lit lit -> doc_lit_lem false lit a
+                 | P_id id -> doc_id_lem id
+                 | _ -> string ("arg" ^ string_of_int idx) in
                let clauses =
                  clauses ^^ (break 1) ^^
                    (separate space
-                      [pipe;doc_pat_lem regtypes false bound_pat;arrow;
+                      [pipe;doc_pat_lem regtypes false named_pat;arrow;
                        string aux_fname;
-                       doc_pat_lem regtypes true (P_aux (P_tup argsexp, pannot))]) in
+                       parens (separate comma (List.mapi doc_arg named_argspat))]) in
                (already_used_fnames,auxiliary_functions,clauses)
           ) (StringSet.empty,empty,empty) fcls in
 
