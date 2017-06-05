@@ -41,7 +41,7 @@
 (*========================================================================*)
 
 open import Pervasives_extra
-            
+
 (* maybe isn't a member of type Ord - this should be in the Lem standard library*)
 instance forall 'a. Ord 'a => (Ord (maybe 'a))
   let compare = maybeCompare compare
@@ -422,7 +422,6 @@ end
 type read_kind =
   (* common reads *)
   | Read_plain
-  | Read_tag | Read_tag_reserve (*For reading the tag of tagged memory*)
   (* Power reads *)
   | Read_reserve
   (* AArch64 reads *)
@@ -431,8 +430,6 @@ type read_kind =
 instance (Show read_kind)
   let show = function
     | Read_plain -> "Read_plain"
-    | Read_tag -> "Read_tag"
-    | Read_tag_reserve -> "Read_tag_reserve"
     | Read_reserve -> "Read_reserve"
     | Read_acquire -> "Read_acquire"
     | Read_exclusive -> "Read_exclusive"
@@ -444,7 +441,6 @@ end
 type write_kind =
   (* common writes *)
   | Write_plain
-  | Write_tag | Write_tag_conditional (*For writing the tag of tagged memory*)
   (* Power writes *)
   | Write_conditional
   (* AArch64 writes *)
@@ -453,8 +449,6 @@ type write_kind =
 instance (Show write_kind)
   let show = function
     | Write_plain -> "Write_plain"
-    | Write_tag -> "Write_tag"
-    | Write_tag_conditional -> "Write_tag_conditional"
     | Write_conditional -> "Write_conditional"
     | Write_release -> "Write_release"
     | Write_exclusive -> "Write_exclusive"
@@ -536,8 +530,6 @@ let ~{ocaml} read_kindCompare rk1 rk2 =
   | (Read_plain, Read_exclusive)         -> LT
   | (Read_plain, Read_exclusive_acquire) -> LT
   | (Read_plain, Read_stream)            -> LT
-  | (Read_plain, Read_tag)               -> LT
-  | (Read_plain, Read_tag_reserve)       -> LT
 
   | (Read_reserve, Read_plain)             -> GT
   | (Read_reserve, Read_reserve)           -> EQ
@@ -545,8 +537,6 @@ let ~{ocaml} read_kindCompare rk1 rk2 =
   | (Read_reserve, Read_exclusive)         -> LT
   | (Read_reserve, Read_exclusive_acquire) -> LT
   | (Read_reserve, Read_stream)            -> LT
-  | (Read_reserve, Read_tag)               -> LT
-  | (Read_reserve, Read_tag_reserve)       -> LT
 
   | (Read_acquire, Read_plain)             -> GT
   | (Read_acquire, Read_reserve)           -> GT
@@ -554,8 +544,6 @@ let ~{ocaml} read_kindCompare rk1 rk2 =
   | (Read_acquire, Read_exclusive)         -> LT
   | (Read_acquire, Read_exclusive_acquire) -> LT
   | (Read_acquire, Read_stream)            -> LT
-  | (Read_acquire, Read_tag)               -> LT
-  | (Read_acquire, Read_tag_reserve)       -> LT
 
   | (Read_exclusive, Read_plain)             -> GT
   | (Read_exclusive, Read_reserve)           -> GT
@@ -563,8 +551,6 @@ let ~{ocaml} read_kindCompare rk1 rk2 =
   | (Read_exclusive, Read_exclusive)         -> EQ
   | (Read_exclusive, Read_exclusive_acquire) -> LT
   | (Read_exclusive, Read_stream)            -> LT
-  | (Read_exclusive, Read_tag)               -> LT
-  | (Read_exclusive, Read_tag_reserve)       -> LT
 
   | (Read_exclusive_acquire, Read_plain)             -> GT
   | (Read_exclusive_acquire, Read_reserve)           -> GT
@@ -572,8 +558,6 @@ let ~{ocaml} read_kindCompare rk1 rk2 =
   | (Read_exclusive_acquire, Read_exclusive)         -> GT
   | (Read_exclusive_acquire, Read_exclusive_acquire) -> EQ
   | (Read_exclusive_acquire, Read_stream)            -> GT
-  | (Read_exclusive_acquire, Read_tag)               -> LT
-  | (Read_exclusive_acquire, Read_tag_reserve)       -> LT
 
   | (Read_stream, Read_plain)             -> GT
   | (Read_stream, Read_reserve)           -> GT
@@ -581,27 +565,7 @@ let ~{ocaml} read_kindCompare rk1 rk2 =
   | (Read_stream, Read_exclusive)         -> GT
   | (Read_stream, Read_exclusive_acquire) -> GT
   | (Read_stream, Read_stream)            -> EQ
-  | (Read_stream, Read_tag)               -> LT
-  | (Read_stream, Read_tag_reserve)       -> LT
-                                               
-  | (Read_tag, Read_plain)             -> GT
-  | (Read_tag, Read_reserve)           -> GT
-  | (Read_tag, Read_acquire)           -> GT
-  | (Read_tag, Read_exclusive)         -> GT
-  | (Read_tag, Read_exclusive_acquire) -> GT
-  | (Read_tag, Read_stream)            -> GT
-  | (Read_tag, Read_tag)               -> EQ
-  | (Read_tag, Read_tag_reserve)       -> LT
-                                               
-  | (Read_tag_reserve, Read_plain)             -> GT
-  | (Read_tag_reserve, Read_reserve)           -> GT
-  | (Read_tag_reserve, Read_acquire)           -> GT
-  | (Read_tag_reserve, Read_exclusive)         -> GT
-  | (Read_tag_reserve, Read_exclusive_acquire) -> GT
-  | (Read_tag_reserve, Read_stream)            -> GT
-  | (Read_tag_reserve, Read_tag)               -> GT
-  | (Read_tag_reserve, Read_tag_reserve)       -> EQ
-  end
+end
 let inline {ocaml} read_kindCompare = defaultCompare
 
 let ~{ocaml} read_kindLess b1 b2      = read_kindCompare b1 b2 =  LT
@@ -629,57 +593,31 @@ let ~{ocaml} write_kindCompare wk1 wk2 =
   | (Write_plain, Write_release)           -> LT
   | (Write_plain, Write_exclusive)         -> LT
   | (Write_plain, Write_exclusive_release) -> LT
-  | (Write_plain, Write_tag)               -> LT
-  | (Write_plain, Write_tag_conditional)   -> LT
 
   | (Write_conditional, Write_plain)             -> GT
   | (Write_conditional, Write_conditional)       -> EQ
   | (Write_conditional, Write_release)           -> LT
   | (Write_conditional, Write_exclusive)         -> LT
   | (Write_conditional, Write_exclusive_release) -> LT
-  | (Write_conditional, Write_tag)               -> LT
-  | (Write_conditional, Write_tag_conditional)   -> LT
 
   | (Write_release, Write_plain)             -> GT
   | (Write_release, Write_conditional)       -> GT
   | (Write_release, Write_release)           -> EQ
   | (Write_release, Write_exclusive)         -> LT
   | (Write_release, Write_exclusive_release) -> LT
-  | (Write_release, Write_tag)               -> LT
-  | (Write_release, Write_tag_conditional)   -> LT
 
   | (Write_exclusive, Write_plain)             -> GT
   | (Write_exclusive, Write_conditional)       -> GT
   | (Write_exclusive, Write_release)           -> GT
   | (Write_exclusive, Write_exclusive)         -> EQ
   | (Write_exclusive, Write_exclusive_release) -> LT
-  | (Write_exclusive, Write_tag)               -> LT
-  | (Write_exclusive, Write_tag_conditional)   -> LT
 
   | (Write_exclusive_release, Write_plain)             -> GT
   | (Write_exclusive_release, Write_conditional)       -> GT
   | (Write_exclusive_release, Write_release)           -> GT
   | (Write_exclusive_release, Write_exclusive)         -> GT
   | (Write_exclusive_release, Write_exclusive_release) -> EQ
-  | (Write_exclusive_release, Write_tag)               -> LT
-  | (Write_exclusive_release, Write_tag_conditional)   -> LT
-
-  | (Write_tag, Write_plain)             -> GT
-  | (Write_tag, Write_conditional)       -> GT
-  | (Write_tag, Write_release)           -> GT
-  | (Write_tag, Write_exclusive)         -> GT
-  | (Write_tag, Write_exclusive_release) -> GT
-  | (Write_tag, Write_tag)               -> EQ
-  | (Write_tag, Write_tag_conditional)   -> LT
-
-  | (Write_tag_conditional, Write_plain)             -> GT
-  | (Write_tag_conditional, Write_conditional)       -> GT
-  | (Write_tag_conditional, Write_release)           -> GT
-  | (Write_tag_conditional, Write_exclusive)         -> GT
-  | (Write_tag_conditional, Write_exclusive_release) -> GT
-  | (Write_tag_conditional, Write_tag)               -> GT
-  | (Write_tag_conditional, Write_tag_conditional)   -> EQ
-  end
+end
 let inline {ocaml} write_kindCompare = defaultCompare
 
 let ~{ocaml} write_kindLess b1 b2      = write_kindCompare b1 b2 =  LT
@@ -778,9 +716,12 @@ end
 
 type event = 
 | E_read_mem of read_kind * address_lifted * nat * maybe (list reg_name)
+| E_read_memt of read_kind * address_lifted * nat * maybe (list reg_name)
 | E_write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name)
 | E_write_ea of write_kind * address_lifted * nat * maybe (list reg_name)
+| E_excl_res
 | E_write_memv of maybe address_lifted * memory_value * maybe (list reg_name)
+| E_write_memvt of maybe address_lifted * (bit_lifted * memory_value) * maybe (list reg_name)
 | E_barrier of barrier_kind
 | E_footprint 
 | E_read_reg of reg_name
@@ -793,11 +734,15 @@ let eventCompare e1 e2 =
   match (e1,e2) with
   | (E_read_mem rk1 v1 i1 tr1, E_read_mem rk2 v2 i2 tr2) ->
      compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2)) 
+  | (E_read_memt rk1 v1 i1 tr1, E_read_memt rk2 v2 i2 tr2) ->
+     compare (rk1, (v1,i1,tr1)) (rk2,(v2, i2, tr2)) 
   | (E_write_mem wk1 v1 i1 tr1 v1' tr1', E_write_mem wk2 v2 i2 tr2 v2' tr2') -> 
     compare ((wk1,v1,i1),(tr1,v1',tr1'))  ((wk2,v2,i2),(tr2,v2',tr2')) 
   | (E_write_ea wk1 a1 i1 tr1, E_write_ea wk2 a2 i2 tr2) ->
     compare (wk1, (a1, i1, tr1)) (wk2, (a2, i2, tr2))
+  | (E_excl_res, E_excl_res) -> EQ
   | (E_write_memv _ mv1 tr1, E_write_memv _ mv2 tr2) -> compare (mv1,tr1) (mv2,tr2)
+  | (E_write_memvt _ mv1 tr1, E_write_memvt _ mv2 tr2) -> compare (mv1,tr1) (mv2,tr2)
   | (E_barrier bk1, E_barrier bk2) -> compare bk1 bk2
   | (E_read_reg r1, E_read_reg r2) -> compare r1 r2
   | (E_write_reg r1 v1, E_write_reg r2 v2) -> compare (r1,v1) (r2,v2)
@@ -806,6 +751,7 @@ let eventCompare e1 e2 =
   | (E_read_mem _ _ _ _, _) -> LT
   | (E_write_mem _ _ _ _ _ _, _) -> LT
   | (E_write_ea _ _ _ _, _) -> LT
+  | (E_excl_res, _) -> LT
   | (E_write_memv _ _ _, _) -> LT
   | (E_barrier _, _) -> LT
   | (E_read_reg _, _) -> LT
@@ -839,6 +785,8 @@ type outcome 'a =
   | Read_mem of (read_kind * address_lifted * nat) * (memory_value -> with_aux (outcome 'a))
   (* Tell the system a write is imminent, at address lifted, of size nat *)
   | Write_ea of (write_kind * address_lifted * nat) * (with_aux (outcome 'a))
+  (* Request the result of store-exclusive *)
+  | Excl_res of (bool -> with_aux (outcome 'a))
   (* Request to write memory at last signalled address. Memory value should be 8
      times the size given in ea signal *)
   | Write_memv of memory_value * (bool -> with_aux (outcome 'a))

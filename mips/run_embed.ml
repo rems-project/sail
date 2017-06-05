@@ -197,6 +197,7 @@ module CHERI_model : ISA_model = struct
     set_register Cheri_embed._PCC initial_cap_vec;
     set_register Cheri_embed._nextPCC initial_cap_vec;
     set_register Cheri_embed._delayedPCC initial_cap_vec;
+    cap_size_shift := 5; (* configure memory model cap_size in mips_extras_ml *)
     for i = 0 to 31 do
       set_register (vector_access_int Cheri_embed._CapRegs i) initial_cap_vec
     done
@@ -254,6 +255,7 @@ module CHERI128_model : ISA_model = struct
     set_register Cheri128_embed._PCC initial_cap_vec;
     set_register Cheri128_embed._nextPCC initial_cap_vec;
     set_register Cheri128_embed._delayedPCC initial_cap_vec;
+    cap_size_shift := 4; (* configure memory model cap_size in mips_extras_ml *)
     for i = 0 to 31 do
       set_register (vector_access_int Cheri128_embed._CapRegs i) initial_cap_vec
     done

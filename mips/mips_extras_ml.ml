@@ -11,6 +11,7 @@ module Mem = struct
     end)
 end
 
+let cap_size_shift = ref 5;; (* caps every 2**5 = 32 bytes *)
 let mem_pages = (ref Mem.empty : (Bytes.t Mem.t) ref);;
 let tag_mem = (ref Mem.empty : (bool Mem.t) ref);;
 
@@ -74,13 +75,11 @@ let _MEMval (addr, size, data) =
     tracef "MEM[%s] <- %s\n" (big_int_to_hex a) (string_of_value data);
   add_mem_bytes a buf 0 s
 
-let _MEMval_tag (addr, size, data) =
-  let tag = bit_vector_access_int data 0 in
-  let data = vector_subrange_int data (8*(int_of_big_int size) + 7) 8 in 
+let _MEMval_tag (addr, size, tag, data) =
   let addr_bi = (unsigned_big(addr)) in
   begin
     _MEMval (addr, size, data);
-    tag_mem := Mem.add addr_bi (to_bool tag) !tag_mem;
+    tag_mem := Mem.add (shift_right_big_int addr_bi !cap_size_shift) (to_bool tag) !tag_mem;
   end
 
   
@@ -88,8 +87,8 @@ let _MEMval_conditional (addr, size, data) =
     let _ = _MEMval (addr, size, data) in
     Vone
 
-let _MEMval_tag_conditional (addr, size, data) =
-    let _ = _MEMval_tag (addr, size, data) in
+let _MEMval_tag_conditional (addr, size, tag, data) =
+    let _ = _MEMval_tag (addr, size, tag, data) in
     Vone
 
 let _MEMr (addr, size) = begin
@@ -111,17 +110,10 @@ let _MEMr_tag (addr, size) =
   let data = _MEMr(addr, size) in
   let addr_bi = unsigned_big(addr) in 
   let tag = try
-      Mem.find addr_bi !tag_mem 
+      Mem.find (shift_right_big_int addr_bi !cap_size_shift) !tag_mem 
     with Not_found -> false in
-  begin
-    vector_concat data (to_vec_dec_int (8, if tag then 1 else 0))
-  end
+  (bool_to_bit tag, data)
 
 let _MEMr_tag_reserve = _MEMr_tag
-
-let _TAGw (addr, tag) = 
-  begin
-    tag_mem := Mem.add (unsigned_big addr) (to_bool (bit_vector_access_int tag 0)) !tag_mem
-  end
 
 let _MEM_sync _ = ()

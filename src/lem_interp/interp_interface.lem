@@ -179,17 +179,23 @@ type memory_parameter_transformer = interp_mode -> Interp.value -> (memory_value
 type optional_memory_transformer = interp_mode -> Interp.value -> maybe memory_value
 type memory_read = MR of read_kind * memory_parameter_transformer
 type memory_reads  = list (string * memory_read)
+type memory_read_tagged  = MRT of read_kind * memory_parameter_transformer
+type memory_read_taggeds = list (string * memory_read_tagged)
 type memory_write_ea = MEA of write_kind * memory_parameter_transformer
 type memory_write_eas = list (string * memory_write_ea)
 type memory_write = MW of write_kind * memory_parameter_transformer * (maybe (instruction_state -> bool -> instruction_state))
 and memory_writes = list (string * memory_write)
 and memory_write_val = MV of optional_memory_transformer * (maybe (instruction_state -> bool -> instruction_state))
 and memory_write_vals = list (string * memory_write_val)
+and excl_res_t = ER of maybe (instruction_state -> bool -> instruction_state)
+and excl_res = maybe (string * excl_res_t)
+and memory_write_val_tagged = MVT of optional_memory_transformer * (maybe (instruction_state -> bool -> instruction_state))
+and memory_write_vals_tagged = list (string * memory_write_val_tagged)
 
 (* Definition information needed to run an instruction *)
 and context =
     Context of Interp.top_level * direction * 
-	memory_reads * memory_writes * memory_write_eas * memory_write_vals * barriers * external_functions
+	memory_reads * memory_read_taggeds * memory_writes * memory_write_eas * memory_write_vals * memory_write_vals_tagged * barriers * excl_res * external_functions
 
 (* An instruction in flight *)
 and instruction_state = IState of interpreter_state * context
@@ -199,16 +205,21 @@ type outcome =
 (* Request to read N bytes at address *)
 (* The register list, used when mode.track_values, is those that the address depended on *)
 | Read_mem of read_kind * address_lifted * nat * maybe (list reg_name) * (memory_value -> instruction_state)
+| Read_mem_tagged of read_kind * address_lifted * nat * maybe (list reg_name) * ((bit_lifted * memory_value) -> instruction_state)
 
 (* Request to write memory *)
 | Write_mem of write_kind * address_lifted * nat * maybe (list reg_name)
   * memory_value * maybe (list reg_name)  * (bool -> instruction_state)
+
+(* Request the result of store-exclusive *)
+| Excl_res of (bool -> instruction_state)
 
 (* Tell the system a write is imminent, at address lifted tainted by register list, of size nat *)
 | Write_ea of write_kind * address_lifted * nat * maybe (list reg_name) * instruction_state
 
 (* Request to write memory at last signaled address. Memory value should be 8* the size given in Write_ea *)
 | Write_memv of maybe address_lifted * memory_value * maybe (list reg_name) * (bool -> instruction_state)
+| Write_memv_tagged of maybe address_lifted * (bit_lifted * memory_value) * maybe (list reg_name) * (bool -> instruction_state)
 
 (* Request a memory barrier *)
 | Barrier of barrier_kind * instruction_state
@@ -248,7 +259,7 @@ type outcome =
 
 
 (* Functions to build up the initial state for interpretation *)
-val build_context : specification -> memory_reads -> memory_writes -> memory_write_eas -> memory_write_vals -> barriers -> external_functions -> context 
+val build_context : specification -> memory_reads -> memory_read_taggeds-> memory_writes -> memory_write_eas -> memory_write_vals -> memory_write_vals_tagged -> barriers -> excl_res -> external_functions -> context
 val initial_instruction_state : context -> string -> list register_value -> instruction_state 
   (* string is a function name, list of value are the parameters to that function *)
 

@@ -104,6 +104,7 @@ typedef CapEx = enumerate {
   CapEx_PermitStoreLocalCapViolation;
   CapEx_PermitSealViolation;
   CapEx_AccessSystemRegsViolation;
+  CapEx_PermitCCallViolation;
 }
 
 typedef CPtrCmpOp = enumerate {
@@ -145,6 +146,7 @@ function (bit[8]) CapExCode((CapEx) ex) =
     case CapEx_PermitStoreLocalCapViolation -> 0x16
     case CapEx_PermitSealViolation          -> 0x17
     case CapEx_AccessSystemRegsViolation    -> 0x18
+    case CapEx_PermitCCallViolation         -> 0x19
   }
 
 typedef CapCauseReg = register bits [15:0] {
@@ -214,51 +216,37 @@ function bool register_inaccessible((regno) r) =
   else
     false
 
-val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * ('n + 1)]) effect { rmem } MEMr_tag
-val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * ('n + 1)]) effect { rmem } MEMr_tag_reserve
+val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bool, bit[8 * 'n]) effect { rmemt } MEMr_tag
+val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bool, bit[8 * 'n]) effect { rmemt } MEMr_tag_reserve
 
-val extern (bit[64] , bit[8]) -> unit effect { wmem } TAGw
-val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_tag
-val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_tag_conditional
-val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8 * ('n + 1)]) -> unit effect { wmv } MEMval_tag
-val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8 * ('n + 1)]) -> bool effect { wmv } MEMval_tag_conditional
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bool, bit[8 * 'n]) -> unit effect { wmvt } MEMval_tag
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bool, bit[8 * 'n]) -> bool effect { wmvt } MEMval_tag_conditional
 
 
 function (bool, bit[cap_size_t * 8]) MEMr_tagged ((bit[64]) addr) =
-{
   (* assumes addr is cap. aligned *)
-  let tagmem = reverse_endianness(MEMr_tag (addr, cap_size)) in
-  let tag = tagmem[((8 * cap_size) + 7) .. (8 * cap_size)] in
-  let mem = tagmem[((8 * cap_size) - 1) .. 0] in
-  (tag[0], mem)
-}
+  let (tag, data) = MEMr_tag (addr, cap_size) in
+  (tag, reverse_endianness(data))
+
 
 function (bool, bit[cap_size_t * 8]) MEMr_tagged_reserve ((bit[64]) addr) =
-{
   (* assumes addr is cap. aligned *)
-  let tagmem = reverse_endianness(MEMr_tag_reserve (addr, cap_size)) in
-  let tag = tagmem[((8 * cap_size) + 7) .. (8 * cap_size)] in
-  let mem = tagmem[((8 * cap_size) - 1) .. 0] in
-  (tag[0], mem)
-}
+  let (tag, data) = MEMr_tag_reserve(addr, cap_size) in
+  (tag, reverse_endianness(data))
 
 function unit MEMw_tagged((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
 {
   (* assumes addr is cap. aligned *)
-  MEMea_tag(addr, cap_size);
-  MEMval_tag(addr, cap_size,  reverse_endianness(0b0000000 : [tag] : data));
+  MEMea(addr, cap_size);
+  MEMval_tag(addr, cap_size,  tag, reverse_endianness(data));
 }
 
 function bool MEMw_tagged_conditional((bit[64]) addr, (bool) tag, (bit[cap_size_t * 8]) data) =
 {
   (* assumes addr is cap. aligned *)
-  MEMea_tag_conditional(addr, cap_size);
-  MEMval_tag_conditional(addr, cap_size, reverse_endianness(0b0000000 : [tag] : data));
+  MEMea_conditional(addr, cap_size);
+  MEMval_tag_conditional(addr, cap_size, tag, reverse_endianness(data));
 }
-
-function (bit[64]) align((bit[64]) addr, (nat) alignment) =
-    let remainder = unsigned(addr) mod alignment in
-    addr - remainder
 
 function unit effect {wmem} MEMw_wrapper(addr, size, data) =
   let ledata = reverse_endianness(data) in
@@ -269,23 +257,16 @@ function unit effect {wmem} MEMw_wrapper(addr, size, data) =
   }
   else
   {
-    (* On cheri non-capability writes must clear the corresponding tag
-       XXX this is vestigal and only works on sequential modle -- tag clearing
-       should probably be done in memory model. *)
-    TAGw(align(addr, cap_size), 0x00);
-    MEMea(addr,size);
-    MEMval(addr, size, ledata);
+    (* On cheri non-capability writes must clear the corresponding tag *)
+    MEMea(addr, size);
+    MEMval_tag(addr, size, false, ledata);
   }
 
 function bool effect {wmem} MEMw_conditional_wrapper(addr, size, data) =
   {
     (* On cheri non-capability writes must clear the corresponding tag*)
     MEMea_conditional(addr, size);
-    success := MEMval_conditional(addr,size,reverse_endianness(data));
-    if (success) then
-      (* XXX as above TAGw is vestigal and must die *)
-      TAGw(align(addr, cap_size), 0x00);
-    success;
+    MEMval_tag_conditional(addr,size,false,reverse_endianness(data));
   }
 
 function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordType) width) =

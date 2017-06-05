@@ -243,12 +243,20 @@ function clause execute(CToPtr(rd, cb, ct)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, ct)
   else if not (ct_val.tag) then
     raise_c2_exception(CapEx_TagViolation, ct)
+  else if (cb_val.tag) & (cb_val.sealed) then
+    raise_c2_exception(CapEx_SealViolation, cb)
   else 
     {
-      wGPR(rd) := if not (cb_val.tag) then
+      let cbBase = getCapBase(cb_val) in
+      let cbTop = getCapTop(cb_val) in
+      let ctBase = getCapBase(ct_val) in
+      let ctTop = getCapTop(ct_val) in
+      wGPR(rd) := if (not (cb_val.tag)) |
+                     (cbBase < ctBase) |
+                     (cbTop > ctTop) then
           ((bit[64]) 0)
         else
-          (bit[64])(getCapCursor(cb_val) - getCapBase(ct_val))
+          (bit[64])(getCapCursor(cb_val) - ctBase)
     }
   (* END_CToPtr *)
 }
@@ -455,6 +463,22 @@ function clause execute (CClearTag(cd, cb)) =
   (* END_CClearTag *)
 }
 
+union ast member (regno,regno,regno,bool) CMOVX
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) rt : 0b011100) = Some(CMOVX(cd, cb, rt, false)) (* CMOVN *)
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) rt : 0b011011) = Some(CMOVX(cd, cb, rt, true)) (* CMOVZ *)
+function clause execute (CMOVX(cd, cb, rt, ismovz)) =
+{
+  (* START_CMOVX *)
+  checkCP2usable();
+  if (register_inaccessible(cd)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
+  else if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if ((rGPR(rt) == 0) ^ ismovz) then
+    writeCapReg(cd) := readCapReg(cb);
+  (* END_CMOVX *)
+}
+
 union ast member (ClearRegSet, bit[16]) ClearRegs
 function clause decode (0b010010 : 0b01111 : 0b00000 : (bit[16]) imm) = Some(ClearRegs(GPLo, imm)) (* ClearLo *)
 function clause decode (0b010010 : 0b01111 : 0b00001 : (bit[16]) imm) = Some(ClearRegs(GPHi, imm)) (* ClearHi *)
@@ -637,9 +661,9 @@ function clause execute (CUnseal(cd, cs, ct)) =
   (* END_CUnseal *)
 }
 
-union ast member (regno, regno) CCall
-function clause decode (0b010010 : 0b00101 : (regno) cs : (regno) cb : (bit[11]) selector) = Some(CCall(cs, cb))
-function clause execute (CCall(cs, cb)) =
+union ast member (regno, regno, bit[11]) CCall
+function clause decode (0b010010 : 0b00101 : (regno) cs : (regno) cb : (bit[11]) selector) = Some(CCall(cs, cb, selector))
+function clause execute (CCall(cs, cb, 0b00000000000)) = (* selector=0 *)
 {
   (* Partial implementation of CCall with checks in hardware, but raising a trap to perform trusted stack manipulation *)
   (* START_CCall *)
@@ -672,6 +696,56 @@ function clause execute (CCall(cs, cb)) =
   else
     raise_c2_exception(CapEx_CallTrap, cs);
   (* END_CCall *)
+}
+
+function clause execute (CCall(cs, cb, 0b00000000001)) = (* selector=1 *)
+{
+  (* Jump-like implementation of CCall that unseals arguments *)
+  (* START_CCall2 *)
+  checkCP2usable();
+  cs_val := readCapReg(cs);
+  cb_val := readCapReg(cb);
+  cs_cursor := getCapCursor(cs_val);
+  if (register_inaccessible(cs)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cs)
+  else if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if not (cs_val.tag) then
+    raise_c2_exception(CapEx_TagViolation, cs)
+  else if not (cb_val.tag) then
+    raise_c2_exception(CapEx_TagViolation, cb)
+  else if not (cs_val.sealed) then
+    raise_c2_exception(CapEx_SealViolation, cs)
+  else if not (cb_val.sealed) then
+    raise_c2_exception(CapEx_SealViolation, cb)
+  else if ((cs_val.otype) != (cb_val.otype)) then
+    raise_c2_exception(CapEx_TypeViolation, cs)
+  else if not (cs_val.permit_ccall) then
+    raise_c2_exception(CapEx_PermitCCallViolation, cs)
+  else if not (cb_val.permit_ccall) then
+    raise_c2_exception(CapEx_PermitCCallViolation, cb)
+  else if not (cs_val.permit_execute) then
+    raise_c2_exception(CapEx_PermitExecuteViolation, cs)
+  else if (cb_val.permit_execute) then
+    raise_c2_exception(CapEx_PermitExecuteViolation, cb)
+  else if (cs_cursor < getCapBase(cs_val)) then
+    raise_c2_exception(CapEx_LengthViolation, cs)
+  else if (cs_cursor >= getCapTop(cs_val)) then
+    raise_c2_exception(CapEx_LengthViolation, cs)
+  else
+    let csUnsealed = capStructToCapReg({cs_val with
+        sealed=false;
+        otype=0;
+    }) in {
+      nextPC := (bit[64]) (getCapOffset(cs_val));
+      nextPCC := csUnsealed;
+      delayedPCC := csUnsealed;
+      C26 := capStructToCapReg({cb_val with
+        sealed=false;
+        otype=0;
+      });
+    }
+  (* END_CCall2 *)
 }
 
 union ast member unit CReturn
@@ -724,8 +798,6 @@ function clause execute(CJALR(cd, cb, link)) =
     raise_c2_exception(CapEx_SealViolation, cb)
   else if not (cb_val.permit_execute) then
     raise_c2_exception(CapEx_PermitExecuteViolation, cb)
-  else if not (cb_val.global) then
-    raise_c2_exception(CapEx_GlobalViolation, cb)
   else if (cb_ptr < cb_base) then
     raise_c2_exception(CapEx_LengthViolation, cb)
   else if ((cb_ptr + 4) > cb_top) then

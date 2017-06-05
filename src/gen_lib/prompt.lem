@@ -11,6 +11,7 @@ let rec bind m f = match m with
   | Read_mem descr k ->    Read_mem descr   (fun v -> let (o,opt) = k v in (bind o f,opt))
   | Read_reg descr k ->    Read_reg descr   (fun v -> let (o,opt) = k v in (bind o f,opt))
   | Write_memv descr k ->  Write_memv descr (fun v -> let (o,opt) = k v in (bind o f,opt))
+  | Excl_res k ->          Excl_res         (fun v -> let (o,opt) = k v in (bind o f,opt))
   | Write_ea descr o_s ->  Write_ea descr   (let (o,opt) = o_s in (bind o f,opt))
   | Barrier descr o_s ->   Barrier descr    (let (o,opt) = o_s in (bind o f,opt))
   | Footprint o_s ->       Footprint        (let (o,opt) = o_s in (bind o f,opt))
@@ -39,6 +40,11 @@ let read_mem dir rk addr sz =
     let bitv = internal_mem_value dir memory_value in
     (Done bitv,Nothing) in
   Read_mem (rk,addr,sz) k
+
+val excl_result : unit -> M bool
+let excl_result () =
+  let k successful = (return successful,Nothing) in
+  Excl_res k
 
 val write_mem_ea : write_kind -> vector bitU -> integer -> M unit
 let write_mem_ea wk addr sz =

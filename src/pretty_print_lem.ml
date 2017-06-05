@@ -125,8 +125,9 @@ let effectful (Effect_aux (eff,_)) =
      List.exists
        (fun (BE_aux (eff,_)) ->
          match eff with
-         | BE_rreg | BE_wreg | BE_rmem | BE_wmem | BE_eamem | BE_wmv
-         | BE_barr | BE_depend | BE_nondet | BE_escape -> true
+         | BE_rreg | BE_wreg | BE_rmem | BE_rmemt | BE_wmem | BE_eamem
+         | BE_exmem | BE_wmv | BE_wmvt | BE_barr | BE_depend | BE_nondet
+         | BE_escape -> true
          | _ -> false)
        effs
 
@@ -1067,12 +1068,26 @@ let rec doc_fundef_lem regtypes (FD_aux(FD_function(r, typa, efa, fcls),fannot))
                let auxiliary_functions = 
                   auxiliary_functions ^^ hardline ^^ hardline ^^
                     doc_fundef_lem regtypes (FD_aux (FD_function(r,typa,efa,[fcl]),fannot)) in
+               (* Bind complex patterns to names so that we can pass them to the
+                  auxiliary function *)
+               let name_pat idx (P_aux (p,a)) = match p with
+                 | P_as (pat,_) -> P_aux (p,a) (* already named *)
+                 | P_lit _ -> P_aux (p,a) (* no need to name a literal *)
+                 | P_id _ -> P_aux (p,a) (* no need to name an identifier *)
+                 | _ -> P_aux (P_as (P_aux (p,a), Id_aux (Id ("arg" ^ string_of_int idx),l)),a) in
+               let named_argspat = List.mapi name_pat argspat in
+               let named_pat = P_aux (P_app (Id_aux (Id ctor,l),named_argspat),pannot) in
+               let doc_arg idx (P_aux (p,(l,a))) = match p with
+                 | P_as (pat,id) -> doc_id_lem id
+                 | P_lit lit -> doc_lit_lem false lit a
+                 | P_id id -> doc_id_lem id
+                 | _ -> string ("arg" ^ string_of_int idx) in
                let clauses =
                  clauses ^^ (break 1) ^^
                    (separate space
-                      [pipe;doc_pat_lem regtypes false pat;arrow;
+                      [pipe;doc_pat_lem regtypes false named_pat;arrow;
                        string aux_fname;
-                       doc_pat_lem regtypes true (P_aux (P_tup argspat, pannot))]) in
+                       parens (separate comma (List.mapi doc_arg named_argspat))]) in
                (already_used_fnames,auxiliary_functions,clauses)
           ) (StringSet.empty,empty,empty) fcls in
 

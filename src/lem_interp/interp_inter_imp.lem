@@ -96,10 +96,7 @@ let is_bool = function
   | Bitl_unknown -> false
 end
 
-let bits_to_ibits l = List.map bit_to_ibit l
-let bitls_to_ibits l = List.map bitl_to_ibit l
-let bitls_from_ibits l = List.map 
-  (fun b -> 
+let bitl_from_ibit b = 
     let b = Interp.detaint b in
     match b with
     | Interp.V_lit (L_aux L_zero _) -> Bitl_zero
@@ -109,7 +106,11 @@ let bitls_from_ibits l = List.map
     | Interp.V_lit (L_aux L_undef _) -> Bitl_undef
     | Interp.V_vector _ _ [Interp.V_lit (L_aux L_undef _)] -> Bitl_undef
     | Interp.V_unknown -> Bitl_unknown
-    | _ -> Assert_extra.failwith ("bitls_from_ibits given unexpected " ^ (Interp.string_of_value b)) end) l
+    | _ -> Assert_extra.failwith ("bit_from_ibit given unexpected " ^ (Interp.string_of_value b)) end
+
+let bits_to_ibits l = List.map bit_to_ibit l
+let bitls_to_ibits l = List.map bitl_to_ibit l
+let bitls_from_ibits l = List.map bitl_from_ibit l
 
 let bits_from_ibits l = List.map 
   (fun b -> 
@@ -426,12 +427,18 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
         exn_seen (fun _ -> Interp.resume mode stack Nothing)
     | (Interp.Action (Interp.Read_mem _ _ _) _,_,_) ->
       (Ivh_error (Interp_interface.Internal_error ("Read memory request in a " ^ errk_str)), events_out)
+    | (Interp.Action (Interp.Read_mem_tagged _ _ _) _,_,_) ->
+      (Ivh_error (Interp_interface.Internal_error ("Read memory tagged request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_mem _ _ _ _) _,_,_) ->
       (Ivh_error (Interp_interface.Internal_error ("Write memory request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_ea _ _) _,_,_) ->
       (Ivh_error (Interp_interface.Internal_error ("Write ea request in a " ^ errk_str)), events_out)
+    | (Interp.Action (Interp.Excl_res _) _,_,_) ->
+      (Ivh_error (Interp_interface.Internal_error ("Exclusive result request in a " ^ errk_str)), events_out)
     | (Interp.Action (Interp.Write_memv _ _ _) _,_,_) ->
       (Ivh_error (Interp_interface.Internal_error ("Write memory value request in a " ^ errk_str)), events_out)
+    | (Interp.Action (Interp.Write_memv_tagged _ _ _ _) _,_,_) ->
+      (Ivh_error (Interp_interface.Internal_error ("Write memory value tagged request in a " ^ errk_str)), events_out)
     | _ -> (Ivh_error (Interp_interface.Internal_error ("Non expected action in a " ^ errk_str)), events_out)
 end
 
@@ -443,19 +450,19 @@ let call_external_functions direction outcome =
         | Just f -> Just (f value) end
     | _ -> Nothing end
 
-let build_context defs reads writes write_eas write_vals barriers externs = 
+let build_context defs reads writes write_eas write_vals barriers excl_res externs =
   (*TODO add externs to to_top_env*)
   match Interp.to_top_env call_external_functions defs with 
     | (_,((Interp.Env _ _ dir _ _ _ _ _) as context)) -> 
       Context context (if Interp.is_inc(dir) then D_increasing else D_decreasing)
-        reads writes write_eas write_vals barriers externs end
+        reads writes write_eas write_vals barriers excl_res externs end
 
 
 let translate_address top_level end_flag thunk_name registers address =
   let (Address bytes i) = address in
   let mode = make_mode true false in
   let int_mode = mode.internal_mode in
-  let (Context top_env direction _ _ _ _ _ _) = top_level in
+  let (Context top_env direction _ _ _ _ _ _ _ _ _) = top_level in
   let intern_val = intern_mem_value mode direction (memory_value_of_address end_flag address) in
   let val_str = Interp.string_of_value intern_val in
   let (arg,_) = Interp.to_exp int_mode Interp.eenv intern_val in
@@ -499,7 +506,7 @@ let intern_instruction direction (name,parms) =
 let instruction_analysis top_level end_flag thunk_name regn_to_reg_details registers instruction =
   let mode = make_mode true false in
   let int_mode = mode.internal_mode in
-  let (Context top_env direction _ _ _ _ _ _) = top_level in
+  let (Context top_env direction _ _ _ _ _ _ _ _ _) = top_level in
   let intern_val = intern_instruction direction instruction in
   let val_str = Interp.string_of_value intern_val in
   let (arg,_) = Interp.to_exp int_mode Interp.eenv intern_val in
@@ -584,7 +591,6 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
            (Interp.V_ctor (Id_aux (Id r) _) _ _ _) ->
             IK_mem_read (match r with
                          | "Read_plain" ->             Read_plain
-                         | "Read_tag"   ->             Read_tag
                          | "Read_reserve" ->           Read_reserve
                          | "Read_acquire" ->           Read_acquire
                          | "Read_exclusive" ->         Read_exclusive
@@ -595,7 +601,6 @@ let instruction_analysis top_level end_flag thunk_name regn_to_reg_details regis
            (Interp.V_ctor (Id_aux (Id w) _) _ _ _) ->
             IK_mem_write (match w with
                          | "Write_plain" ->             Write_plain
-                         | "Write_tag"   ->             Write_tag
                          | "Write_conditional" ->       Write_conditional
                          | "Write_release" ->           Write_release
                          | "Write_exclusive" ->         Write_exclusive
@@ -641,7 +646,7 @@ end
 
 
 let interp_value_to_instr_external top_level instr = 
-  let (Context (Interp.Env _ instructions _ _ _ _ _ _) _ _ _ _ _ _ _) = top_level in
+  let (Context (Interp.Env _ instructions _ _ _ _ _ _) _ _ _ _ _ _ _ _ _ _) = top_level in
   match instr with
   | Interp.V_ctor (Id_aux (Id i) _) _ _ parm ->
      match (find_instruction i instructions) with
@@ -666,7 +671,7 @@ let interp_value_to_instr_external top_level instr =
 
 let decode_to_instruction top_level registers value : instruction_or_decode_error = 
   let mode = make_interpreter_mode true false in
-  let (Context ((Interp.Env _ instructions _ _ _ _ _ _) as top_env) direction _ _ _ _ _ _) = top_level in
+  let (Context ((Interp.Env _ instructions _ _ _ _ _ _) as top_env) direction _ _ _ _ _ _ _ _ _) = top_level in
   let intern_val = intern_opcode direction value in
   let val_str = Interp.string_of_value intern_val in
   let (arg,_) = Interp.to_exp mode Interp.eenv intern_val in
@@ -703,7 +708,7 @@ end
 
 
 let decode_to_istate (top_level:context) registers (value:opcode) : i_state_or_error = 
-  let (Context top_env _ _ _ _ _ _ _) = top_level in
+  let (Context top_env _ _ _ _ _ _ _ _ _ _) = top_level in
   match decode_to_instruction top_level registers value with
   | IDE_instr instr instrv ->
      let mode = make_interpreter_mode true false in
@@ -718,7 +723,7 @@ let decode_to_istate (top_level:context) registers (value:opcode) : i_state_or_e
 
 
 let instr_external_to_interp_value top_level instr =
-  let (Context _ direction _ _ _ _ _ _) = top_level in
+  let (Context _ direction _ _ _ _ _ _ _ _ _) = top_level in
   let (name,parms) = instr in
 
   let get_value (_,typ,v) = 
@@ -745,7 +750,7 @@ let instr_external_to_interp_value top_level instr =
 val instruction_to_istate : context -> instruction -> instruction_state 
 let instruction_to_istate (top_level:context) (((name, parms) as instr):instruction) : instruction_state  = 
   let mode = make_interpreter_mode true false in
-  let (Context top_env _ _ _ _ _ _ _) = top_level in
+  let (Context top_env _ _ _ _ _ _ _ _ _ _) = top_level in
   let ast_node = fst (Interp.to_exp mode Interp.eenv (instr_external_to_interp_value top_level instr)) in
   (IState
      (Interp.Thunk_frame
@@ -755,7 +760,7 @@ let instruction_to_istate (top_level:context) (((name, parms) as instr):instruct
      top_level)
 
 let rec interp_to_outcome mode context thunk = 
-  let (Context _ direction mem_reads mem_writes mem_write_eas mem_write_vals barriers spec_externs) = context in
+  let (Context _ direction mem_reads mem_reads_tagged mem_writes mem_write_eas mem_write_vals mem_write_vals_tagged barriers excl_res spec_externs) = context in
   let internal_direction = if direction = D_increasing then Interp.IInc else Interp.IDec in
   match thunk () with
   | (Interp.Value _,lm,le) -> (Done,lm)
@@ -781,6 +786,19 @@ let rec interp_to_outcome mode context thunk =
               | _ -> Nothing end in
                 Read_mem read_k (Address_lifted location address_int) length tracking 
                   (fun v -> IState (Interp.add_answer_to_stack next_state (intern_mem_value mode direction v)) context)
+            else Error ("Memory address on read is not 64 bits")
+          | _ -> Error ("Memory function " ^ i ^ " not found")
+        end  , lm)
+      | Interp.Read_mem_tagged (Id_aux (Id i) _) value slice ->
+        (match List.lookup i mem_reads_tagged with
+          | (Just (MRT read_k f)) -> 
+            let (location, length, tracking) = (f mode value) in 
+            if (List.length location) = 8
+            then let address_int = match (maybe_all (List.map byte_of_byte_lifted location)) with
+              | Just bs -> Just (integer_of_byte_list bs)
+              | _ -> Nothing end in
+                Read_mem_tagged read_k (Address_lifted location address_int) length tracking 
+                  (fun (tag, v) -> IState (Interp.add_answer_to_stack next_state (Interp.V_tuple ([(bitl_to_ibit tag);(intern_mem_value mode direction v)]))) context)
             else Error ("Memory address on read is not 64 bits")
           | _ -> Error ("Memory function " ^ i ^ " not found")
         end  , lm)
@@ -813,7 +831,15 @@ let rec interp_to_outcome mode context thunk =
               Write_ea write_k (Address_lifted location address_int) length tracking (IState next_state context)
             else Error "Memory address for write is not 64 bits"
           | _ -> Error ("Memory function " ^ i ^ " to signal impending write, not found") end, lm)
-        | Interp.Write_memv (Id_aux (Id i) _) address_val write_val ->
+      | Interp.Excl_res (Id_aux (Id i) _) ->
+        (match excl_res with
+          | (Just (i', ER return)) ->
+              Excl_res (fun b ->
+                          match return with
+                          | Nothing -> (IState (Interp.add_answer_to_stack next_state Interp.unitv) context)
+                          | Just return_bool -> return_bool (IState next_state context) b end)
+          | _ -> Error ("Exclusive result function, not provided") end, lm)
+      | Interp.Write_memv (Id_aux (Id i) _) address_val write_val ->
            (match List.lookup i mem_write_vals with
             | (Just (MV parmf return)) -> 
               let (value, v_tracking) = 
@@ -827,6 +853,25 @@ let rec interp_to_outcome mode context thunk =
                       | _ -> Nothing end in Just (Address_lifted mv address_int) end
                in
                Write_memv location_opt value v_tracking 
+                (fun b -> 
+                  match return with
+                    | Nothing -> (IState (Interp.add_answer_to_stack next_state Interp.unitv) context)
+                    | Just return_bool -> return_bool (IState next_state context) b end)
+            | _ -> Error ("Memory function " ^ i ^ " not found") end, lm)
+        | Interp.Write_memv_tagged (Id_aux (Id i) _) address_val tag_val write_val ->
+           (match List.lookup i mem_write_vals_tagged with
+            | (Just (MVT parmf return)) -> 
+              let (value, v_tracking) = 
+                match (Interp.detaint write_val) with
+                  | Interp.V_tuple[_;v] -> extern_with_track mode extern_mem_value (Interp.retaint write_val v)
+                  | _ -> extern_with_track mode extern_mem_value write_val end in
+               let location_opt = match parmf mode address_val with
+                  | Nothing -> Nothing
+                  | Just mv -> let address_int = match (maybe_all (List.map byte_of_byte_lifted mv)) with
+                      | Just bs -> Just (integer_of_byte_list bs)
+                      | _ -> Nothing end in Just (Address_lifted mv address_int) end
+               in
+               Write_memv_tagged location_opt ((bitl_from_ibit tag_val), value) v_tracking 
                 (fun b -> 
                   match return with
                     | Nothing -> (IState (Interp.add_answer_to_stack next_state Interp.unitv) context)
@@ -899,7 +944,7 @@ end
 
 (*ie_loop returns a tuple of event list, and a tuple ofinternal interpreter memory, bool to indicate normal or exceptional termination*)
 let rec ie_loop mode register_values (IState interp_state context) = 
-  let (Context _ direction externs reads writes write_eas write_vals barriers) = context in
+  let (Context _ direction externs reads reads_tagged writes write_eas write_vals write_vals_tagged barriers excl_res) = context in
   let unknown_reg size =  
     <| rv_bits = (List.replicate size Bitl_unknown);
        rv_start = 0;
@@ -927,6 +972,9 @@ let rec ie_loop mode register_values (IState interp_state context) =
     | (Read_mem read_k loc length tracking i_state_fun, _) ->
       let (events,analysis_data) = ie_loop mode register_values (i_state_fun (unknown_mem length)) in
       ((E_read_mem read_k loc length tracking)::events,analysis_data)
+    | (Read_mem_tagged read_k loc length tracking i_state_fun, _) ->
+      let (events,analysis_data) = ie_loop mode register_values (i_state_fun (Bitl_unknown, (unknown_mem length))) in
+      ((E_read_memt read_k loc length tracking)::events,analysis_data)
     | (Write_mem write_k loc length tracking value v_tracking i_state_fun, _) ->
       let (events,analysis_data) = ie_loop mode register_values (i_state_fun true) in
       let (events',analysis_data) = ie_loop mode register_values (i_state_fun false) in
@@ -935,11 +983,21 @@ let rec ie_loop mode register_values (IState interp_state context) =
     | (Write_ea write_k loc length tracking i_state, _) ->
       let (events,analysis_data) = ie_loop mode register_values i_state in
       ((E_write_ea write_k loc length tracking)::events,analysis_data)
+    | (Excl_res i_state_fun, _) ->
+      let (events,analysis_data) = ie_loop mode register_values (i_state_fun true) in
+      let (events',analysis_data) = ie_loop mode register_values (i_state_fun false) in
+      (*TODO: consider if lm and lm should be merged*)
+      (E_excl_res :: (events ++ events'), analysis_data)
     | (Write_memv opt_address value tracking i_state_fun, _) ->
       let (events,analysis_data) = ie_loop mode register_values (i_state_fun true) in
       let (events',analysis_data) = ie_loop mode register_values (i_state_fun false) in
       (*TODO: consider if lm and lm should be merged*)
       ((E_write_memv opt_address value tracking)::(events++events'),analysis_data)
+    | (Write_memv_tagged opt_address value tracking i_state_fun, _) ->
+      let (events,analysis_data) = ie_loop mode register_values (i_state_fun true) in
+      let (events',analysis_data) = ie_loop mode register_values (i_state_fun false) in
+      (*TODO: consider if lm and lm should be merged*)
+      ((E_write_memvt opt_address value tracking)::(events++events'),analysis_data)
     | (Barrier barrier_k i_state, _) ->
       let (events,analysis_data) = ie_loop mode register_values i_state in
       ((E_barrier barrier_k)::events,analysis_data)
@@ -995,6 +1053,8 @@ let rec outcome_to_outcome pp_instruction_state mode =
      failwith "Write_mem not supported anymore"
   | Interp_interface.Write_ea wk addr size _ state ->
      Sail_impl_base.Write_ea (wk,addr,size) (state_to_outcome_s mode state)
+  | Interp_interface.Excl_res k ->
+     Sail_impl_base.Excl_res (fun v -> state_to_outcome_s mode (k v))
   | Interp_interface.Write_memv _ mv _ k ->
      Sail_impl_base.Write_memv mv (fun v -> state_to_outcome_s mode (k v))
   | Interp_interface.Barrier bk state ->
@@ -1076,9 +1136,12 @@ let instruction_kind_of_event : event -> maybe instruction_kind = function
   | E_barrier Barrier_TM_COMMIT -> Just (IK_trans Transaction_commit)
 
   | E_read_mem rk _ _ _ -> Just (IK_mem_read rk)
+  | E_read_memt rk _ _ _ -> Just (IK_mem_read rk)
   | E_write_mem wk _ _ _ _ _  -> Just (IK_mem_write wk)
   | E_write_ea wk _ _ _ -> Just (IK_mem_write wk)
+  | E_excl_res -> Nothing
   | E_write_memv _ _ _ -> Nothing
+  | E_write_memvt _ _ _ -> Nothing
   | E_barrier bk -> Just (IK_barrier bk)
   | E_footprint -> Nothing
   | E_read_reg _ -> Nothing
@@ -1091,9 +1154,12 @@ let instruction_kind_of_event : event -> maybe instruction_kind = function
 
 let regs_in_of_event : event -> list reg_name = function
   | E_read_mem _ _ _ _ -> []
+  | E_read_memt _ _ _ _ -> []
   | E_write_mem _ _ _ _ _ _  -> []
   | E_write_ea _ _ _ _ -> []
+  | E_excl_res -> []
   | E_write_memv _ _ _ -> []
+  | E_write_memvt _ _ _ -> []
   | E_barrier _ -> []
   | E_footprint -> []
   | E_read_reg r -> [r]
@@ -1104,9 +1170,12 @@ let regs_in_of_event : event -> list reg_name = function
 
 let regs_out_of_event : event -> list reg_name = function
   | E_read_mem _ _ _ _ -> []
+  | E_read_memt _ _ _ _ -> []
   | E_write_mem _ _ _ _ _ _  -> []
   | E_write_ea _ _ _ _ -> []
+  | E_excl_res -> []
   | E_write_memv _ _ _ -> []
+  | E_write_memvt _ _ _ -> []
   | E_barrier _ -> []
   | E_footprint -> []
   | E_read_reg _ -> []
@@ -1119,11 +1188,15 @@ let regs_out_of_event : event -> list reg_name = function
 let regs_feeding_memory_access_address_of_event : event -> list reg_name = function
   | E_read_mem _ _ _ (Just rs)       -> rs
   | E_read_mem _ _ _ None            -> []
+  | E_read_memt _ _ _ (Just rs)       -> rs
+  | E_read_memt _ _ _ None            -> []
   | E_write_mem _ _ _ (Just rs) _ _  -> rs
   | E_write_mem _ _ _ None _ _       -> []
   | E_write_ea wk _ _ (Just rs)      -> rs
   | E_write_ea wk _ _ None           -> []
+  | E_excl_res                       -> []
   | E_write_memv _ _ _               -> []
+  | E_write_memvt _ _ _               -> []
   | E_barrier bk                     -> []
   | E_footprint                      -> []
   | E_read_reg _                     -> []

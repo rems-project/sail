@@ -1214,7 +1214,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
           then resultf "\nSUCCESS program terminated after %d instructions\n" count
           else
             begin
-              match Run_interp_model.run  istate !reg !prog_mem !tag_mem !eager_eval track_dependencies mode "execute" with
+              match Run_interp_model.run  istate !reg !prog_mem !tag_mem (Nat_big_num.of_int 1) !eager_eval track_dependencies mode "execute" with
               | false, _,_, _ -> errorf "FAILURE\n"; exit 1
               | true, mode, track_dependencies, (my_reg, my_mem, my_tags) ->
                 reg := my_reg;
@@ -1292,7 +1292,7 @@ let run () =
         startaddr,
         startaddr_internal), pp_symbol_map) = initial_system_state_of_elf_file !file in
 
-  let context = build_context isa_defs isa_m0 isa_m1 isa_m2 isa_m3 isa_m4 isa_externs in
+  let context = build_context isa_defs isa_m0 [] isa_m1 isa_m2 isa_m3 [] isa_m4 None isa_externs in
   (*NOTE: this is likely MIPS specific, so should probably pull from initial_system_state info on to translate or not, 
           endian mode, and translate function name 
   *)
