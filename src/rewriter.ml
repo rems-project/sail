@@ -739,7 +739,8 @@ and fold_lexp_aux alg = function
   | LEXP_vector (lexp,e) -> alg.lEXP_vector (fold_lexp alg lexp, fold_exp alg e)
   | LEXP_vector_range (lexp,e1,e2) ->
      alg.lEXP_vector_range (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
- | LEXP_field (lexp,id) -> alg.lEXP_field (fold_lexp alg lexp, id)
+  | LEXP_field (lexp,id) -> alg.lEXP_field (fold_lexp alg lexp, id)
+  | LEXP_tup es -> alg.lEXP_tup (List.map (fold_lexp alg) es)
 and fold_lexp alg (LEXP_aux (lexp_aux,annot)) =
   alg.lEXP_aux (fold_lexp_aux alg lexp_aux, annot)
 and fold_fexp_aux alg (FE_Fexp (id,e)) = alg.fE_Fexp (id, fold_exp alg e)
@@ -1839,8 +1840,8 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
           effects/update local variables in "tail-position": check n_exp_term
           and where it is used. *)
        if overwrite then
-         let () = if get_type exp = {t = Tid "unit"} then ()
-                  else failwith "nono" in
+         (* let () = if get_type exp = {t = Tid "unit"} then ()
+                  else failwith "nono" in *)
          vars
        else
          E_aux (E_tuple [exp;vars],swaptyp {t = Ttup [get_type exp;get_type vars]} annot) in
@@ -1868,7 +1869,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
            | {t = Tapp ("reg", [TA_typ {t = Tapp ("atom",[TA_nexp f])}])} -> (TA_nexp f,TA_nexp f)
            | {t = Tapp ("range",[TA_nexp bf;TA_nexp tf])} -> (TA_nexp bf,TA_nexp tf)
            | {t = Tapp ("reg", [TA_typ {t = Tapp ("range",[TA_nexp bf;TA_nexp tf])}])} -> (TA_nexp bf,TA_nexp tf)
-           | {t = Tapp (name,_)} -> failwith (name ^ " shouldn't be here")
+           | {t = Tapp (name,_)} -> failwith (name ^ " shouldn't be here (from) at " ^ Reporting_basic.loc_to_string el)
            | _ -> failwith "E_for: unhandled from-expr"
          in
          let (bt,tt) = match get_type exp2 with
@@ -1876,7 +1877,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
            | {t = Tapp ("atom",[TA_typ {t = Tapp ("atom", [TA_nexp t])}])} -> (TA_nexp t,TA_nexp t)
            | {t = Tapp ("range",[TA_nexp bt;TA_nexp tt])} -> (TA_nexp bt,TA_nexp tt)
            | {t = Tapp ("atom",[TA_typ {t = Tapp ("range",[TA_nexp bt;TA_nexp tt])}])} -> (TA_nexp bt,TA_nexp tt)
-           | {t = Tapp (name,_)} -> failwith (name ^ " shouldn't be here")
+           | {t = Tapp (name,_)} -> failwith (name ^ " shouldn't be here (to) at " ^ Reporting_basic.loc_to_string el)
            | _ -> failwith "E_for: unhandled to-expr"
          in
          let t = {t = Tapp ("range",match order with

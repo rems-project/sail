@@ -559,6 +559,11 @@ let doc_defs (Defs(defs)) =
 
 let pp_defs f d = print f (doc_defs d)
 let pp_exp b e = to_buf b (doc_exp e)
+
+let exp_to_string e =
+  let b = Buffer.create 20 in
+  pp_exp b e;
+  Buffer.contents b     
 let pat_to_string p =
   let b = Buffer.create 20 in
   to_buf b (doc_pat p);

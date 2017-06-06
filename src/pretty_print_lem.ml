@@ -761,6 +761,9 @@ let doc_exp_lem, doc_let_lem =
        if aexp_needed then parens (align epp) else epp
     | E_internal_return (e1) ->
        separate space [string "return"; expY e1;]
+    | E_return e1 ->
+       separate space [string "return"; expY e1;]
+    | e -> raise (report l (Pretty_print_sail.exp_to_string (E_aux (e, (l, annot))) ^ " not pattern matched in doc_lem_exp"))
   and let_exp regtypes (LB_aux(lb,_)) = match lb with
     | LB_val_explicit(_,pat,e)
       | LB_val_implicit(pat,e) ->

@@ -394,7 +394,7 @@ and n_to_string n =
         | _ -> n_to_string n
       and show_nuvar_ins n = match n.nexp with
         | Nuvar { insubst = None; orig_var = Some s } -> s
-        | Nuvar { insubst = Some ins; orig_var = Some s } -> s ^ string_of_int i ^ "<" ^ show_nuvar_ins ins ^ ">"
+        | Nuvar { insubst = Some ins; orig_var = Some s } -> s ^ "<" ^ show_nuvar_ins ins ^ ">"
         | Nuvar { insubst = None; nindex = i } -> "nu" ^ string_of_int i
         | Nuvar { insubst = Some ins; nindex = i } -> "nu" ^ string_of_int i ^ "<" ^ show_nuvar_ins ins ^ ">"
         | _ -> n_to_string n
@@ -4491,7 +4491,7 @@ let check_ranges cs =
   refined_cs
                                   
 (* SMT constraint solving *)
-let constraint_solver_verbose = ref true
+let constraint_solver_verbose = ref false
 
 let cs_print (message : string) : unit =
   if !constraint_solver_verbose
@@ -4557,7 +4557,7 @@ and constraints_to_cexpr = function
   | [] -> Constraint.literal true
   | (c :: cs) -> List.fold_left Constraint.conj (constraint_to_cexpr c) (List.map constraint_to_cexpr cs)
       
-let do_resolve_constraints = ref true
+let do_resolve_constraints = ref false
 let z3_solver = ref false
 
 let resolve_constraints_adhoc cs = 
@@ -4605,11 +4605,11 @@ let resolve_constraints cs =
     begin
       bindings := Bindings.empty;
       match Constraint.call_z3 (constraints_to_cexpr cs) with
-      | Unsat problem ->
+      | Constraint.Unsat problem ->
          prerr_endline (Printf.sprintf "z3 unsat :\n%s\n" (Constraint.string_of problem));         
          raise (Reporting_basic.err_typ Parse_ast.Unknown "Constraints are unsatisfiable")
-      | Unknown [] -> ([], None)
-      | Unknown problems ->
+      | Constraint.Unknown [] -> ([], None)
+      | Constraint.Unknown problems ->
          prerr_endline (Printf.sprintf "z3 unknowns :\n%s\n" (string_of_list "\n\n" Constraint.string_of problems));
          ([], None)
     end
