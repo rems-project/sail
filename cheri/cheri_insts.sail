@@ -1052,3 +1052,73 @@ union ast member (regno) C2Dump
 function clause decode (0b010010 : 0b00100 : (regno) rt : 0x0006) = Some(C2Dump(rt))
 function clause execute (C2Dump (rt)) =
     () (* Currently a NOP *)
+
+union ast member (regno, regno, regno) CBuildCap
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) ct : 0b011101) = Some(CBuildCap(cd,cb,ct))
+function clause execute (CBuildCap(cd,cb,ct)) =
+{
+  (* START_CBuildCap *)
+  checkCP2usable();
+  cb_val := readCapReg(cb);
+  ct_val := readCapReg(ct);
+  if (register_inaccessible(cd)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
+  else if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if register_inaccessible(ct) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, ct)
+  else if not (cb_val.tag) then
+    raise_c2_exception(CapEx_TagViolation, cb)
+  else if (cb_val.sealed) then
+    raise_c2_exception(CapEx_SealViolation, cb)
+  else if (ct_val.base < cb_val.base) then
+    raise_c2_exception(CapEx_LengthViolation, cb)
+  else if (unsigned(ct_val.base) + unsigned(ct_val.length) > unsigned(cb_val.base) + unsigned(cb_val.length)) then
+    raise_c2_exception(CapEx_LengthViolation, cb)
+  else if (ct_val.length < 0) then
+    raise_c2_exception(CapEx_LengthViolation, ct)
+  else if ((getCapPerms(ct_val) & getCapPerms(cb_val)) != getCapPerms(ct_val)) then
+    raise_c2_exception(CapEx_UserDefViolation, cb)
+  else if ((ct_val.uperms & cb_val.uperms) != ct_val.uperms) then
+    raise_c2_exception(CapEx_UserDefViolation, cb)
+  else
+    {
+      cd_val := { cb_val with base = ct_val.base; length = ct_val.length;
+                              uperms = ct_val.uperms; offset = ct_val.offset;
+                              sealed = false };
+      cd_val := setCapPerms(cd_val, getCapPerms(ct_val));
+      (CapRegs[cd]) := capStructToCapReg(cd_val);
+    }
+  (* END_CBuildCap *)
+}
+
+union ast member (regno, regno, regno) CCopyType
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) ct : 0b011110) = Some(CCopyType(cd,cb,ct))
+function clause execute (CCopyType(cd,cb,ct)) =
+{
+  (* START_CBuildCap *)
+  checkCP2usable();
+  cb_val := readCapReg(cb);
+  ct_val := readCapReg(ct);
+  if (register_inaccessible(cd)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
+  else if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if register_inaccessible(ct) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, ct)
+  else if not (cb_val.tag) then
+    raise_c2_exception(CapEx_TagViolation, cb)
+  else if (cb_val.sealed) then
+    raise_c2_exception(CapEx_SealViolation, cb)
+  else if (ct_val.sealed) then
+    {
+      cd_val := { cb_val with offset = ((bit[64]) (signed(ct_val.otype) - signed(cb_val.base))) };
+      (CapRegs[cd]) := capStructToCapReg(cd_val);
+    }
+  else
+    {
+      cd_val := { cb_val with offset = (-1) };
+      (CapRegs[cd]) := capStructToCapReg(cd_val);
+    }
+  (* END_CBuildCap *)
+}
