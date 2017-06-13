@@ -89,12 +89,12 @@ let write_reg_range reg i j v =
   write_reg_aux (external_reg_slice reg (natFromInteger i,natFromInteger j)) v
 let write_reg_bit reg i bit =
   let iN = natFromInteger i in
-  write_reg_aux (external_reg_slice reg (iN,iN)) (Vector [bit] i (is_inc_of_reg reg))
+  write_reg_aux (external_reg_slice reg (iN,iN)) (Vector [bit] (is_inc_of_reg reg))
 let write_reg_field reg regfield v =
   write_reg_aux (external_reg_field_whole reg regfield) v
 let write_reg_bitfield reg regfield bit =
   write_reg_aux (external_reg_field_whole reg regfield)
-                (Vector [bit] 0 (is_inc_of_reg reg))
+                (Vector [bit] (is_inc_of_reg reg))
 let write_reg_field_range reg regfield i j v =
   write_reg_aux (external_reg_field_slice reg regfield (natFromInteger i,natFromInteger j)) v
 
