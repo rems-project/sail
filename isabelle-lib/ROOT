@@ -1,0 +1,6 @@
+session "Sail" = "LEM" +
+  options [document = false]
+  theories
+    Sail_values
+    State
+    Prompt

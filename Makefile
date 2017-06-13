@@ -1,4 +1,4 @@
-.PHONY: all sail language clean archs apply_header
+.PHONY: all sail language clean archs isabelle-lib apply_header
 
 all: sail interpreter
 
@@ -17,6 +17,9 @@ archs:
 	  $(MAKE) -C "$$arch" || exit;\
 	done
 
+isabelle-lib:
+	$(MAKE) -C isabelle-lib
+
 apply_header:
 	$(MAKE) clean
 	headache -c etc/headache_config -h etc/mips_header `ls mips/*.sail`
@@ -32,4 +35,3 @@ clean:
 	  $(MAKE) -C "$$subdir" clean;\
 	done
 	-rm sail
-
