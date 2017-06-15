@@ -250,6 +250,9 @@ module Env : sig
   val add_ret_typ : typ -> t -> t
   val add_typ_synonym : id -> (typ_arg list -> typ) -> t -> t
   val get_typ_synonym : id -> t -> typ_arg list -> typ
+  val get_default_order : t -> order
+  val set_default_order_inc : t -> t
+  val set_default_order_dec : t -> t
   val fresh_kid : t -> kid
   val expand_synonyms : t -> typ -> typ
   val empty : t                                   
@@ -260,6 +263,7 @@ end = struct
       typ_vars : base_kind_aux KBindings.t;
       typ_synonyms : (typ_arg list -> typ) Bindings.t;
       constraints : n_constraint list;
+      default_order : order option;
       ret_typ : typ option
     }
   
@@ -269,6 +273,7 @@ end = struct
       typ_vars = KBindings.empty;
       typ_synonyms = Bindings.empty;
       constraints = [];
+      default_order = None;
       ret_typ = None;
     }
 
@@ -383,6 +388,19 @@ end = struct
     | Typ_arg_typ typ -> Typ_arg_aux (Typ_arg_typ (expand_synonyms env typ), l)
     | arg -> Typ_arg_aux (arg, l)
 
+  let get_default_order env =
+    match env.default_order with
+    | None -> typ_error Parse_ast.Unknown ("No default order has been set")
+    | Some ord -> ord
+
+  let set_default_order o env =
+    match env.default_order with
+    | None -> { env with default_order = Some (Ord_aux (o, Parse_ast.Unknown)) }
+    | Some _ -> typ_error Parse_ast.Unknown ("Cannot change default order once already set")
+
+  let set_default_order_inc = set_default_order Ord_inc
+  let set_default_order_dec = set_default_order Ord_dec
+                          
 end
 
 type tannot = (Env.t * typ) option
@@ -753,7 +771,7 @@ let rec bind_pat env (P_aux (pat_aux, (l, _)) as pat) (Typ_aux (typ_aux, _) as t
   | P_lit lit ->
      begin
        let lit_typ = infer_lit env lit in
-       subtyp l env lit_typ typ;
+       subtyp l env lit_typ typ; (* CHECK: is the the correct way round? *)
        annot_pat (P_lit lit) typ, env
      end
   | _ -> typ_error l ("Unhandled pat " ^ string_of_pat pat)
@@ -958,7 +976,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
 
 (* Checking a val spec simply adds the type as a binding in the
    context. We have to destructure the various kinds of val specs, but
-   the difference is irrelvant for the typechecker. *)
+   the difference is irrelevant for the typechecker. *)
 let check_val_spec env (VS_aux (vs, (l, _))) =
   let (id, quants, typ) = match vs with
     | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id) -> (id, quants, typ) 
@@ -966,6 +984,15 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
     | VS_extern_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, _) -> (id, quants, typ) in
   DEF_spec (VS_aux (vs, (l, None))), Env.add_val_spec id (quants, typ) env
 
+let check_default env (DT_aux (ds, l)) =
+  match ds with
+  | DT_kind _ -> DEF_default (DT_aux (ds,l)), env
+  | DT_order (Ord_aux (Ord_inc, _)) -> DEF_default (DT_aux (ds, l)), Env.set_default_order_inc env
+  | DT_order (Ord_aux (Ord_dec, _)) -> DEF_default (DT_aux (ds, l)), Env.set_default_order_dec env
+  | DT_order (Ord_aux (Ord_var _, _)) -> typ_error l "Cannot have variable default order"
+  (* This branch allows us to write something like: default forall Nat 'n. [|'n|] name... what does this even mean?! *)
+  | DT_typ (typschm, id) -> typ_error l ("Unsupported default construct")
+                                                      
 let rec check_def env def =
   let cd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented Case") in
   match def with
@@ -974,7 +1001,7 @@ let rec check_def env def =
   | DEF_fundef fdef -> check_fundef env fdef, env
   | DEF_val letdef -> cd_err ()
   | DEF_spec vs -> check_val_spec env vs
-  | DEF_default default -> cd_err ()
+  | DEF_default default -> check_default env default
   | DEF_reg_dec(DEC_aux(DEC_reg(typ,id), (l,annot))) -> cd_err ()
   | DEF_reg_dec(DEC_aux(DEC_alias(id,aspec), (l,annot))) -> cd_err ()
   | DEF_reg_dec(DEC_aux(DEC_typ_alias(typ,id,aspec),(l,tannot))) -> cd_err ()

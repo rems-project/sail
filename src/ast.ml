@@ -470,7 +470,7 @@ type
 
 
 type 
-'a default_spec_aux =  (* Default kinding or typing assumption *)
+default_spec_aux =  (* Default kinding or typing assumption *)
    DT_kind of base_kind * kid
  | DT_order of order
  | DT_typ of typschm * id
@@ -526,7 +526,7 @@ type
 
 type 
 'a default_spec = 
-   DT_aux of 'a default_spec_aux * l
+   DT_aux of default_spec_aux * l
 
 
 type 
