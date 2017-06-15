@@ -486,7 +486,7 @@ type
 
 
 type 
-'a val_spec_aux =  (* Value type specification *)
+val_spec_aux =  (* Value type specification *)
    VS_val_spec of typschm * id
  | VS_extern_no_rename of typschm * id
  | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
@@ -536,7 +536,7 @@ type
 
 type 
 'a val_spec = 
-   VS_aux of 'a val_spec_aux * 'a annot
+   VS_aux of val_spec_aux * 'a annot
 
 
 type 

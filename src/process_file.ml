@@ -88,6 +88,8 @@ let convert_ast (defs : Parse_ast.defs) : (Type_internal.tannot Ast.defs * kind 
 let initi_check_ast (defs : Type_internal.tannot Ast.defs) : (Type_internal.tannot Ast.defs * kind Envmap.t * Ast.order)=
   Initial_check_full_ast.to_checked_ast Nameset.empty Type_internal.initial_kind_env (Ast.Ord_aux(Ast.Ord_inc,Parse_ast.Unknown)) defs
 
+let opt_new_typecheck = ref false
+                                        
 let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.order) : Type_internal.tannot Ast.defs * Type_check.envs =
   let d_env = { Type_internal.k_env = k; Type_internal.abbrevs = Type_internal.initial_abbrev_env;
                 Type_internal.nabbrevs = Envmap.empty;
@@ -97,6 +99,9 @@ let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.
                 {Type_internal.order = (match o with | (Ast.Ord_aux(Ast.Ord_inc,_)) -> Type_internal.Oinc 
 		                                     | (Ast.Ord_aux(Ast.Ord_dec,_)) -> Type_internal.Odec
 						     | _ -> Type_internal.Oinc)};} in
+  if !opt_new_typecheck
+  then let _ = Type_check_new.check Type_check_new.initial_env defs in ()
+  else ();
   Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env,Type_internal.nob,Envmap.empty)) defs 
 
 let rewrite_ast (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs defs

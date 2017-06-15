@@ -9,6 +9,7 @@
 (*    Robert Norton-Wright                                                *)
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -40,29 +41,29 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-val parse_file : string -> Parse_ast.defs
-val convert_ast : Parse_ast.defs -> Type_internal.tannot Ast.defs * Type_internal.kind Type_internal.Envmap.t * Ast.order
-val initi_check_ast : Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.defs * Type_internal.kind Type_internal.Envmap.t * Ast.order
-val check_ast: Type_internal.tannot Ast.defs -> Type_internal.kind Type_internal.Envmap.t -> Ast.order -> Type_internal.tannot Ast.defs * Type_check.envs
-val rewrite_ast: Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.defs
-val rewrite_ast_lem : Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.defs
-val rewrite_ast_ocaml : Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.defs
+open Ast
 
-val opt_new_typecheck : bool ref
-                                                                              
-type out_type =
-  | Lem_ast_out
-  | Lem_out of string option (* If present, the string is a file to open in the lem backend*)
-  | Ocaml_out of string option (* If present, the string is a file to open in the ocaml backend*)
+module Env : sig
+  type t
+  val get_val_spec : id -> t -> typquant * typ
+  val add_val_spec : id -> typquant * typ -> t -> t
+  val get_local : id -> t -> typ
+  val add_local : id -> typ -> t -> t
+  val get_constraints : t -> n_constraint list
+  val add_constraint : n_constraint -> t -> t
+  val get_typ_var : kid -> t -> base_kind_aux
+  val add_typ_var : kid -> base_kind_aux -> t -> t
+  val get_ret_typ : t -> typ option
+  val add_ret_typ : typ -> t -> t
+  val add_typ_synonym : id -> (typ_arg list -> typ) -> t -> t
+  val get_typ_synonym : id -> t -> typ_arg list -> typ
+  val fresh_kid : t -> kid
+  val expand_synonyms : t -> typ -> typ
+  val empty : t                                   
+end
 
-val output :
-  string ->                           (* The path to the library *)
-  out_type ->                         (* Backend kind *)
-  (string * Type_internal.tannot Ast.defs) list -> (*File names paired with definitions *)
-  unit
+type tannot = (Env.t * typ) option
+               
+val check : Env.t -> 'a defs -> tannot defs * Env.t
 
-(** [always_replace_files] determines whether Sail only updates modified files.
-    If it is set to [true], all output files are written, regardless of whether the
-    files existed before. If it is set to [false] and an output file already exists,
-    the output file is only updated, if its content really changes. *)
-val always_replace_files : bool ref
+val initial_env : Env.t
