@@ -160,8 +160,14 @@ let doc_typ_lem, doc_atomic_typ_lem =
          if atyp_needed then parens tpp else tpp
       | _ -> app_typ regtypes atyp_needed ty
     and app_typ regtypes atyp_needed ((Typ_aux (t, _)) as ty) = match t with
-      | Typ_app(Id_aux (Id "vector", _),[_;_;_;Typ_arg_aux (Typ_arg_typ typa, _)]) ->
-         let tpp = string "vector" ^^ space ^^ typ regtypes typa in
+      | Typ_app(Id_aux (Id "vector", _), [
+          Typ_arg_aux (Typ_arg_nexp n, _);
+          Typ_arg_aux (Typ_arg_nexp m, _);
+          Typ_arg_aux (Typ_arg_order ord, _);
+          Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
+         let tpp = match elem_typ with
+           | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) -> string "bitvector" ^^ space ^^ doc_nexp m
+           | _ -> string "vector" ^^ space ^^ typ regtypes elem_typ in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "range", _),_) ->
          (string "integer")
