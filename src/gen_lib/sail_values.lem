@@ -204,6 +204,7 @@ let update_pos v n b =
 
 (* element list * start * has increasing direction *)
 type bitvector 'a = Bitvector of mword 'a * integer * bool
+declare isabelle target_sorts bitvector = `len`
 
 let showBitvector (Bitvector elems start inc) =
   "Bitvector " ^ show elems ^ " " ^ show start ^ " " ^ show inc
@@ -279,7 +280,7 @@ let bvaccess (Bitvector bs start is_inc) n =
 
 val bvupdate_pos : forall 'a. Size 'a => bitvector 'a -> integer -> bool -> bitvector 'a
 let bvupdate_pos v n b =
-  bvupdate_aux v n n (wordFromNatural (if b then 1 else 0))
+  bvupdate_aux v n n ((wordFromNatural (if b then 1 else 0)) : mword ty1)
 
 (*** Bit vector operations *)
 
@@ -422,8 +423,9 @@ let modulo = hardware_mod
 let quot = hardware_quot
 let power = integerPow
 
-(* TODO: this, and the definitions that use it, currently requires Size for
-   to_vec, which I'd rather avoid *)
+(* TODO: this, and the definitions that use it, currently require Size for
+   to_vec, which I'd rather avoid in favour of library versions; the
+   double-size results for multiplication may be a problem *)
 let arith_op_vec op sign (size : integer) (Bitvector _ _ is_inc as l) r =
   let (l',r') = (to_num sign l, to_num sign r) in
   let n = op l' r' in
@@ -442,9 +444,9 @@ let minus_VVV = arith_op_vec integerMinus false 1
 let mult_VVV = arith_op_vec integerMult false 2
 let multS_VVV = arith_op_vec integerMult true 2
 
-val arith_op_vec_range : forall 'a. Size 'a => (integer -> integer -> integer) -> bool -> integer -> bitvector 'a -> integer -> bitvector 'a
+val arith_op_vec_range : forall 'a 'b. Size 'a, Size 'b => (integer -> integer -> integer) -> bool -> integer -> bitvector 'a -> integer -> bitvector 'b
 let arith_op_vec_range op sign size (Bitvector _ _ is_inc as l) r =
-  arith_op_vec op sign size l (to_vec is_inc (bvlength l,r))
+  arith_op_vec op sign size l ((to_vec is_inc (bvlength l,r)) : bitvector 'a)
 
 (* add_vec_range
  * add_vec_range_signed
@@ -458,9 +460,9 @@ let minus_VIV = arith_op_vec_range integerMinus false 1
 let mult_VIV = arith_op_vec_range integerMult false 2
 let multS_VIV = arith_op_vec_range integerMult true 2
 
-val arith_op_range_vec : forall 'a. Size 'a => (integer -> integer -> integer) -> bool -> integer -> integer -> bitvector 'a -> bitvector 'a
+val arith_op_range_vec : forall 'a 'b. Size 'a, Size 'b => (integer -> integer -> integer) -> bool -> integer -> integer -> bitvector 'a -> bitvector 'b
 let arith_op_range_vec op sign size l (Bitvector _ _ is_inc as r) =
-  arith_op_vec op sign size (to_vec is_inc (bvlength r, l)) r
+  arith_op_vec op sign size ((to_vec is_inc (bvlength r, l)) : bitvector 'a) r
 
 (* add_range_vec
  * add_range_vec_signed
@@ -519,7 +521,8 @@ let add_VBV = arith_op_vec_bit integerAdd false 1
 let addS_VBV = arith_op_vec_bit integerAdd true 1
 let minus_VBV = arith_op_vec_bit integerMinus true 1
 
-val arith_op_overflow_vec : forall 'a. Size 'a => (integer -> integer -> integer) -> bool -> integer -> bitvector 'a -> bitvector 'a -> bitvector 'a * bitU * bool
+(* TODO: these can't be done directly in Lem because of the one_more size calculation
+val arith_op_overflow_vec : forall 'a 'b. Size 'a, Size 'b => (integer -> integer -> integer) -> bool -> integer -> bitvector 'a -> bitvector 'a -> bitvector 'b * bitU * bool
 let rec arith_op_overflow_vec op sign size (Bitvector _ _ is_inc as l) r =
   let len = bvlength l in
   let act_size = len * size in
@@ -550,8 +553,8 @@ let minusSO_VVV = arith_op_overflow_vec integerMinus true 1
 let multO_VVV = arith_op_overflow_vec integerMult false 2
 let multSO_VVV = arith_op_overflow_vec integerMult true 2
 
-val arith_op_overflow_vec_bit : forall 'a. Size 'a => (integer -> integer -> integer) -> bool -> integer ->
-                                bitvector 'a -> bitU -> bitvector 'a * bitU * bool
+val arith_op_overflow_vec_bit : forall 'a 'b. Size 'a, Size 'b => (integer -> integer -> integer) -> bool -> integer ->
+                                bitvector 'a -> bitU -> bitvector 'b * bitU * bool
 let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (size : integer)
                                   (Bitvector _ _ is_inc as l) r_bit =
   let act_size = bvlength l * size in
@@ -580,7 +583,7 @@ let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (siz
 let addSO_VBV = arith_op_overflow_vec_bit integerAdd true 1
 let minusO_VBV = arith_op_overflow_vec_bit integerMinus false 1
 let minusSO_VBV = arith_op_overflow_vec_bit integerMinus true 1
-
+*)
 type shift = LL_shift | RR_shift | LLL_shift
 
 let shift_op_vec op (Bitvector bs start is_inc,(n : integer)) =
