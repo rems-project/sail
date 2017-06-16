@@ -604,14 +604,15 @@ function clause execute (CCopyType(cd, cb, ct)) =
     raise_c2_exception(CapEx_SealViolation, cb)
   else
     {
-      let newOffset = if (ct_val.sealed) 
+      let (bit[64]) newOffset = if (ct_val.sealed) 
         then 
-          EXTZ(ct_val.otype) - cb_val.base
+          ((bit[64]) (EXTZ(ct_val.otype))) - cb_base
         else
-          -1 in
-      let (success, cap) = setCapOffset(cb_val, newOffset) in
-      writeCapReg(cd, cap);
-      assert(success, None); (*XXX TODO can this fail*)
+          (bit[64]) -1 in
+      let (success, cap) = setCapOffset(cb_val, newOffset) in {
+        writeCapReg(cd, cap);
+        assert(success, None); (*XXX TODO can this fail*)
+      }
     }
   (* END_CCopyType *)
 }
