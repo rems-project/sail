@@ -586,12 +586,6 @@ function clause execute (CCopyType(cd, cb, ct)) =
   cb_val := readCapReg(cb);
   ct_val := readCapReg(ct);
   cb_base := getCapBase(cb_val);
-  ct_base := getCapBase(ct_val);
-  cb_top := getCapTop(cb_val);
-  ct_top := getCapTop(ct_val);
-  cb_perms := getCapPerms(cb_val);
-  ct_perms := getCapPerms(ct_val);
-  ct_offset := getCapOffset(ct_val);
   if (register_inaccessible(cd)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
   else if (register_inaccessible(cb)) then
