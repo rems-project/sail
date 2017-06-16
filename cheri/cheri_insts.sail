@@ -532,6 +532,90 @@ function clause execute (CFromPtr(cd, cb, rt)) =
   (* END_CFromPtr *)
 }
 
+union ast member regregreg CBuildCap
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) ct : 0b011101) = Some(CBuildCap(cd, cb, ct))
+function clause execute (CBuildCap(cd, cb, ct)) =
+{
+  (* START_CBuildCap *)
+  checkCP2usable();
+  cb_val := readCapReg(cb);
+  ct_val := readCapReg(ct);
+  cb_base := getCapBase(cb_val);
+  ct_base := getCapBase(ct_val);
+  cb_top := getCapTop(cb_val);
+  ct_top := getCapTop(ct_val);
+  cb_perms := getCapPerms(cb_val);
+  ct_perms := getCapPerms(ct_val);
+  ct_offset := getCapOffset(ct_val);
+  if (register_inaccessible(cd)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
+  else if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if (register_inaccessible(ct)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, ct)
+  else if not (cb_val.tag) then
+    raise_c2_exception(CapEx_TagViolation, cb)
+  else if (cb_val.sealed) then
+    raise_c2_exception(CapEx_SealViolation, cb)
+  else if ct_base < cb_base then
+    raise_c2_exception(CapEx_LengthViolation, cb)
+  else if ct_top > cb_top then
+    raise_c2_exception(CapEx_LengthViolation, cb)
+   else if ct_base > ct_top then (* check for length < 0 - possible because ct might be untagged *)
+    raise_c2_exception(CapEx_LengthViolation, ct)
+   else if (ct_perms & cb_perms) != ct_perms then
+    raise_c2_exception(CapEx_UserDefViolation, ct)
+  else
+    let (exact, cd1) = setCapBounds(cb_val, (bit[64]) ct_base, (bit[65]) ct_top) in 
+    let (representable, cd2) = setCapOffset(cd1, (bit[64]) ct_offset) in
+    let cd3 = setCapPerms(cd2, ct_perms) in
+    {
+      assert(exact, None);         (* base and top came from ct originally so will be exact *)
+      assert(representable, None); (* similarly offset should be representable XXX except for fastRepCheck *)
+      writeCapReg(cd, cd3);
+    }
+  (* END_CBuildCap *)
+}
+
+union ast member regregreg CCopyType
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cb : (regno) ct : 0b011110) = Some(CCopyType(cd, cb, ct))
+function clause execute (CCopyType(cd, cb, ct)) =
+{
+  (* START_CCopyType *)
+    checkCP2usable();
+  cb_val := readCapReg(cb);
+  ct_val := readCapReg(ct);
+  cb_base := getCapBase(cb_val);
+  ct_base := getCapBase(ct_val);
+  cb_top := getCapTop(cb_val);
+  ct_top := getCapTop(ct_val);
+  cb_perms := getCapPerms(cb_val);
+  ct_perms := getCapPerms(ct_val);
+  ct_offset := getCapOffset(ct_val);
+  if (register_inaccessible(cd)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cd)
+  else if (register_inaccessible(cb)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
+  else if (register_inaccessible(ct)) then
+    raise_c2_exception(CapEx_AccessSystemRegsViolation, ct)
+  else if not (cb_val.tag) then
+    raise_c2_exception(CapEx_TagViolation, cb)
+  else if (cb_val.sealed) then
+    raise_c2_exception(CapEx_SealViolation, cb)
+  else
+    {
+      let newOffset = if (ct_val.sealed) 
+        then 
+          EXTZ(ct_val.otype) - cb_val.base
+        else
+          -1 in
+      let (success, cap) = setCapOffset(cb_val, newOffset) in
+      writeCapReg(cd, cap);
+      assert(success, None); (*XXX TODO can this fail*)
+    }
+  (* END_CCopyType *)
+}
+
 union ast member (regno, regno) CCheckPerm
 function clause decode (0b010010 : 0b01011 : (regno) cs : 0b00000 : (regno) rt : 0b000: 0b000) = Some(CCheckPerm(cs, rt))
 function clause execute (CCheckPerm(cs, rt)) =
