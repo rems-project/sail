@@ -45,7 +45,7 @@ open Ast
 open Util
 open Big_int
 
-let debug = ref 1
+let debug = ref 2
 let depth = ref 0
 
 let typ_debug m = if !debug > 1 then prerr_endline m else ()
@@ -235,13 +235,16 @@ end
 module Bindings = Map.Make(Id)
 module KBindings = Map.Make(Kid)
 module KidSet = Set.Make(Kid)
-              
+
+type mut = Immutable | Mutable
+                        
 module Env : sig
   type t
   val get_val_spec : id -> t -> typquant * typ
   val add_val_spec : id -> typquant * typ -> t -> t
-  val get_local : id -> t -> typ
-  val add_local : id -> typ -> t -> t
+  val get_local : id -> t -> mut * typ
+  val add_local : id -> mut * typ -> t -> t
+  val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
   val add_constraint : n_constraint -> t -> t
   val get_typ_var : kid -> t -> base_kind_aux
@@ -259,7 +262,7 @@ module Env : sig
 end = struct
   type t =
     { top_val_specs : (typquant * typ) Bindings.t;
-      locals : typ Bindings.t;
+      locals : (mut * typ) Bindings.t;
       typ_vars : base_kind_aux KBindings.t;
       typ_synonyms : (typ_arg list -> typ) Bindings.t;
       constraints : n_constraint list;
@@ -294,12 +297,25 @@ end = struct
 
   let get_local id env =
     try Bindings.find id env.locals with
-    | Not_found -> typ_error (id_loc id) ("No val spec found for " ^ string_of_id id)
+    | Not_found -> typ_error (id_loc id) ("No local binding found for " ^ string_of_id id)
 
-  let add_local id typ env =
+  let is_mutable id env =
+    try
+      let (mut, _) = Bindings.find id env.locals in
+      match mut with
+      | Mutable -> true
+      | Immutable -> false
+    with
+    | Not_found -> typ_error (id_loc id) ("No local binding found for " ^ string_of_id id)
+                             
+  let string_of_mtyp (mut, typ) = match mut with
+    | Immutable -> string_of_typ typ
+    | Mutable -> "ref<" ^ string_of_typ typ ^ ">"
+                             
+  let add_local id mtyp env =
     begin
-      typ_print ("Adding local binding " ^ string_of_id id ^ " :: " ^ string_of_typ typ);
-      { env with locals = Bindings.add id typ env.locals }
+      typ_print ("Adding local binding " ^ string_of_id id ^ " :: " ^ string_of_mtyp mtyp);
+      { env with locals = Bindings.add id mtyp env.locals }
     end
 
   let get_typ_var kid env =
@@ -470,6 +486,8 @@ let rec normalize_typ env (Typ_aux (typ, l)) =
   | Typ_app (Id_aux (Id "range", _), [Typ_arg_aux (Typ_arg_nexp n1, _); Typ_arg_aux (Typ_arg_nexp n2, _)]) ->
      let kid = Env.fresh_kid env in
      Tnf_index_sort (IS_prop (kid, [(n1, nvar kid); (nvar kid, n2)]))
+  | Typ_app ((Id_aux (Id "vector", _) as vector), args) ->
+     Tnf_app (vector, List.map (normalize_typ_arg env) args)
   | Typ_app (id, args) -> normalize_typ env (Env.get_typ_synonym id env args) 
   | Typ_fn _ -> typ_error l ("Cannot normalize function type " ^ string_of_typ (Typ_aux (typ, l)))
 and normalize_typ_arg env (Typ_arg_aux (typ_arg, _)) =
@@ -674,11 +692,17 @@ let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   | Nexp_neg n1, Nexp_neg n2 -> nexp_identical n1 n2
   | _, _ -> false
                                                
-let rec unify_nexps l (Nexp_aux (nexp_aux1, _) as nexp1) nexp2 =
+let rec unify_nexps l (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_aux2, _) as nexp2) =
   typ_debug ("UNIFYING NEXPS " ^ string_of_nexp nexp1 ^ " AND " ^ string_of_nexp nexp2);
   match nexp_aux1 with
   | Nexp_id v -> typ_error l "Unimplemented Nexp_id in unify nexp"
-  | Nexp_var kid -> (kid, nexp2)
+  | Nexp_var kid -> Some (kid, nexp2)
+  | Nexp_constant c1 ->
+     begin
+       match nexp_aux2 with
+       | Nexp_constant c2 -> if c1 = c2 then None else typ_error l "Constants are not the same"
+       | _ -> typ_error l "Unification error"
+     end
   | Nexp_sum (n1a, n1b) ->
      if KidSet.is_empty (nexp_frees n1b)
      then unify_nexps l n1a (nminus nexp2 n1b)
@@ -726,7 +750,12 @@ let unify l env typ1 typ2 =
     | _, _ -> typ_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2) 
   and unify_typ_args l (Typ_arg_aux (typ_arg_aux1, _) as typ_arg1) (Typ_arg_aux (typ_arg_aux2, _) as typ_arg2) =
     match typ_arg_aux1, typ_arg_aux2 with
-    | Typ_arg_nexp n1, Typ_arg_nexp n2 -> let (kid, unifier) = unify_nexps l n1 n2 in KBindings.singleton kid unifier
+    | Typ_arg_nexp n1, Typ_arg_nexp n2 ->
+       begin
+         match unify_nexps l n1 n2 with
+         | Some (kid, unifier) -> KBindings.singleton kid unifier
+         | None -> KBindings.empty
+       end
     | Typ_arg_typ typ1, Typ_arg_typ typ2 -> unify_typ l typ1 typ2
     | Typ_arg_order _, Typ_arg_order _ -> assert false (* FIXME *)
     | Typ_arg_effect _, Typ_arg_effect _ -> assert false
@@ -746,7 +775,7 @@ let infer_lit env (L_aux (lit_aux, l) as lit) =
 let rec bind_pat env (P_aux (pat_aux, (l, _)) as pat) (Typ_aux (typ_aux, _) as typ) =
   let annot_pat pat typ = P_aux (pat, (l, Some (env, typ))) in
   match pat_aux with
-  | P_id v -> annot_pat (P_id v) typ, Env.add_local v typ env
+  | P_id v -> annot_pat (P_id v) typ, Env.add_local v (Immutable, typ) env
   | P_wild -> annot_pat P_wild typ, env
   | P_typ (typ_annot, pat) ->
      begin
@@ -779,11 +808,11 @@ let rec bind_pat env (P_aux (pat_aux, (l, _)) as pat) (Typ_aux (typ_aux, _) as t
 and bind_lexp env (LEXP_aux (lexp_aux, (l, _))) typ =
   let annot_lexp lexp typ = LEXP_aux (lexp, (l, Some (env, typ))) in
   match lexp_aux with
-  | LEXP_id v -> annot_lexp (LEXP_id v) typ, Env.add_local v typ env
+  | LEXP_id v -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
   | LEXP_cast (typ_annot, v) ->
      begin
        subtyp l env typ typ_annot;
-       annot_lexp (LEXP_cast (typ_annot, v)) typ, Env.add_local v typ_annot env
+       annot_lexp (LEXP_cast (typ_annot, v)) typ, Env.add_local v (Mutable, typ_annot) env
      end
   | LEXP_tup lexps ->
      begin
@@ -827,7 +856,7 @@ let irule r env exp =
   typ_print ("Infer " ^ string_of_exp exp ^ " => " ^ string_of_typ (typ_of inferred_exp));
   decr depth;
   inferred_exp
-                   
+
 let rec check_exp env (E_aux (exp_aux, (l, _)) as exp : 'a exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
   let annot_exp exp typ = E_aux (exp, (l, Some (env, typ))) in
   match (exp_aux, typ_aux) with
@@ -873,7 +902,7 @@ and bind_assignment env lexp (E_aux (_, (l, _)) as exp) =
 and infer_exp env (E_aux (exp_aux, (l, _)) as exp : 'a exp) : tannot exp =
   let annot_exp exp typ = E_aux (exp, (l, Some (env, typ))) in
   match exp_aux with
-  | E_id v -> annot_exp (E_id v) (Env.get_local v env)
+  | E_id v -> annot_exp (E_id v) (snd (Env.get_local v env))
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
   | E_sizeof nexp -> annot_exp (E_sizeof nexp) (mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp nexp)])))
   | E_return exp ->
@@ -986,7 +1015,7 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
 
 let check_default env (DT_aux (ds, l)) =
   match ds with
-  | DT_kind _ -> DEF_default (DT_aux (ds,l)), env
+  | DT_kind _ -> DEF_default (DT_aux (ds,l)), env (* Check: Is this supposed to do nothing? *)
   | DT_order (Ord_aux (Ord_inc, _)) -> DEF_default (DT_aux (ds, l)), Env.set_default_order_inc env
   | DT_order (Ord_aux (Ord_dec, _)) -> DEF_default (DT_aux (ds, l)), Env.set_default_order_dec env
   | DT_order (Ord_aux (Ord_var _, _)) -> typ_error l "Cannot have variable default order"

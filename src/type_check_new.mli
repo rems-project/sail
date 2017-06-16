@@ -43,12 +43,15 @@
 
 open Ast
 
+type mut = Immutable | Mutable
+
 module Env : sig
   type t
   val get_val_spec : id -> t -> typquant * typ
   val add_val_spec : id -> typquant * typ -> t -> t
-  val get_local : id -> t -> typ
-  val add_local : id -> typ -> t -> t
+  val get_local : id -> t -> mut * typ
+  val add_local : id -> mut * typ -> t -> t
+  val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
   val add_constraint : n_constraint -> t -> t
   val get_typ_var : kid -> t -> base_kind_aux

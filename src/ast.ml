@@ -575,7 +575,6 @@ and 'a def =  (* Top-level definition *)
  | DEF_reg_dec of 'a dec_spec (* register declaration *)
  | DEF_comm of 'a dec_comm (* generated comments *)
 
-
 type 
 'a defs =  (* Definition sequence *)
    Defs of ('a def) list
