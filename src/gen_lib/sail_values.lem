@@ -214,7 +214,7 @@ let bvget_start (Bitvector _ s _) = s
 let bvget_elems (Bitvector elems _ _) = elems
 let bvlength (Bitvector bs _ _) = integerFromNat (word_length bs)
 
-instance forall 'a. Show 'a => (Show (bitvector 'a))
+instance forall 'a. (Show (bitvector 'a))
   let show = showBitvector
 end
 
