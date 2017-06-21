@@ -71,12 +71,12 @@ let read_reg_range reg i j =
   read_reg_aux (external_reg_slice reg (natFromInteger i,natFromInteger j))
 let read_reg_bit reg i =
   read_reg_aux (external_reg_slice reg (natFromInteger i,natFromInteger i)) >>= fun v ->
-  return (extract_only_bit v)
+  return (extract_only_element v)
 let read_reg_field reg regfield =
   read_reg_aux (external_reg_field_whole reg regfield)
 let read_reg_bitfield reg regfield =
   read_reg_aux (external_reg_field_whole reg regfield) >>= fun v ->
-  return (extract_only_bit v)
+  return (extract_only_element v)
 
 val write_reg_aux : reg_name -> vector bitU -> M unit
 let write_reg_aux reg_name v =

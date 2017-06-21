@@ -560,15 +560,6 @@ let rec pow_i i n =
   | n -> mult_int_big_int i (pow_i i (n-1))
 let two_pow = pow_i 2
 
-let is_bit_vector t = match t.t with
-  | Tapp("vector", [_;_;_; TA_typ t])
-  | Tabbrev(_,{t=Tapp("vector",[_;_;_; TA_typ t])})
-  | Tapp("reg", [TA_typ {t=Tapp("vector",[_;_;_; TA_typ t])}])->
-    (match t.t with
-     | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) | Tapp("reg",[TA_typ {t=Tid "bit"}]) -> true
-     | _ -> false)
-  | _ -> false
-
 (* predicate to determine if pushing a constant in for addition or multiplication could change the form *)
 let rec contains_const n =
   match n.nexp with
@@ -929,7 +920,36 @@ let rec normalize_n_rec recur_ok n =
     
 let normalize_nexp = normalize_n_rec true
 
+let rec normalize_t t = match t.t with
+  | Tfn (t1,t2,i,eff) -> {t = Tfn (normalize_t t1,normalize_t t2,i,eff)}
+  | Ttup ts -> {t = Ttup (List.map normalize_t ts)}
+  | Tapp (c,args) -> {t = Tapp (c, List.map normalize_t_arg args)}
+  | Tabbrev (_,t') -> t'
+  | _ -> t
+and normalize_t_arg targ = match targ with
+  | TA_typ t -> TA_typ (normalize_t t)
+  | TA_nexp nexp -> TA_nexp (normalize_nexp nexp)
+  | _ -> targ
+
 let int_to_nexp = mk_c_int
+
+let rec is_bit_vector t = match t.t with
+  | Tapp("vector", [_;_;_; TA_typ t]) ->
+    (match t.t with
+     | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) | Tapp("register",[TA_typ {t=Tid "bit"}]) -> true
+     | _ -> false)
+  | Tapp("register", [TA_typ t']) -> is_bit_vector t'
+  | Tabbrev(_,t') -> is_bit_vector t'
+  | _ -> false
+
+let rec has_const_vector_length t = match t.t with
+  | Tapp("vector", [_;TA_nexp m;_;_]) ->
+    (match (normalize_nexp m).nexp with
+      | Nconst i -> Some i
+      | _ -> None)
+  | Tapp("register", [TA_typ t']) -> has_const_vector_length t'
+  | Tabbrev(_,t') -> has_const_vector_length t'
+  | _ -> None
 
 let v_count = ref 0
 let t_count = ref 0

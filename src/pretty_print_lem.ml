@@ -118,18 +118,24 @@ let doc_id_lem_ctor (Id_aux(i,_)) =
       * token in case of x ending with star. *)
      separate space [colon; string (String.capitalize x); empty]
 
+let effectful_set =
+  List.exists
+    (fun (BE_aux (eff,_)) ->
+      match eff with
+      | BE_rreg | BE_wreg | BE_rmem | BE_rmemt | BE_wmem | BE_eamem
+      | BE_exmem | BE_wmv | BE_wmvt | BE_barr | BE_depend | BE_nondet
+      | BE_escape -> true
+      | _ -> false)
+
 let effectful (Effect_aux (eff,_)) =
   match eff with
   | Effect_var _ -> failwith "effectful: Effect_var not supported"
-  | Effect_set effs ->
-     List.exists
-       (fun (BE_aux (eff,_)) ->
-         match eff with
-         | BE_rreg | BE_wreg | BE_rmem | BE_rmemt | BE_wmem | BE_eamem
-         | BE_exmem | BE_wmv | BE_wmvt | BE_barr | BE_depend | BE_nondet
-         | BE_escape -> true
-         | _ -> false)
-       effs
+  | Effect_set effs -> effectful_set effs
+
+let effectful_t eff =
+  match eff.effect with
+  | Eset effs -> effectful_set effs
+  | _ -> false
 
 let rec is_number {t=t} =
   match t with
@@ -166,9 +172,20 @@ let doc_typ_lem, doc_atomic_typ_lem =
           Typ_arg_aux (Typ_arg_order ord, _);
           Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
          let tpp = match elem_typ with
-           | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) -> string "bitvector" ^^ space ^^ doc_nexp m
+           | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) ->
+               let len = match m with
+                 | (Nexp_aux(Nexp_constant i,_)) -> string "ty" ^^ doc_int i
+                 | _ -> doc_nexp m in
+               string "bitvector" ^^ space ^^ len
            | _ -> string "vector" ^^ space ^^ typ regtypes elem_typ in
          if atyp_needed then parens tpp else tpp
+      | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
+         (* TODO: Better distinguish register names and contents?
+            The former are represented in the Lem library using a type
+            "register" (without parameters), the latter just using the content
+            type (e.g. "bitvector ty64").  We assume the latter is meant here
+            and drop the "register" keyword. *)
+         fn_typ regtypes atyp_needed etyp
       | Typ_app(Id_aux (Id "range", _),_) ->
          (string "integer")
       | Typ_app(Id_aux (Id "implicit", _),_) ->
@@ -195,11 +212,16 @@ let doc_typ_lem, doc_atomic_typ_lem =
          let tpp = typ regtypes ty in
          if atyp_needed then parens tpp else tpp
     and doc_typ_arg_lem regtypes (Typ_arg_aux(t,_)) = match t with
-      | Typ_arg_typ t -> app_typ regtypes false t
+      | Typ_arg_typ t -> app_typ regtypes true t
       | Typ_arg_nexp n -> empty
       | Typ_arg_order o -> empty
       | Typ_arg_effect e -> empty
   in typ', atomic_typ
+
+let doc_tannot_lem regtypes eff t =
+  let ta = doc_typ_lem regtypes (t_to_typ (normalize_t t)) in
+  if eff then string " : M " ^^ parens ta
+  else string " : " ^^ ta
 
 (* doc_lit_lem gets as an additional parameter the type information from the
  * expression around it: that's a hack, but how else can we distinguish between
@@ -276,6 +298,44 @@ let rec doc_pat_lem regtypes apat_needed (P_aux (p,(l,annot)) as pa) = match p w
       | _ -> parens (separate_map comma_sp (doc_pat_lem regtypes false) pats))
      | P_list pats -> brackets (separate_map semi (doc_pat_lem regtypes false) pats) (*Never seen but easy in lem*)
 
+let rec contains_bitvector_type t = match t.t with
+  | Ttup ts -> List.exists contains_bitvector_type ts
+  | Tapp (_, targs) -> is_bit_vector t || List.exists contains_bitvector_type_arg targs
+  | Tabbrev (_,t') -> contains_bitvector_type t'
+  | Tfn (t1,t2,_,_) -> contains_bitvector_type t1 || contains_bitvector_type t2
+  | _ -> false
+and contains_bitvector_type_arg targ = match targ with
+  | TA_typ t -> contains_bitvector_type t
+  | _ -> false
+
+let const_nexp nexp = match nexp.nexp with
+  | Nconst _ -> true
+  | _ -> false
+
+(* Check for variables in types that would be pretty-printed.
+   In particular, in case of vector types, only the element type and the
+   length argument are checked for variables, and the latter only if it is
+   a bitvector; for other types of vectors, the length is not pretty-printed
+   in the type, and the start index is never pretty-printed in vector types. *)
+let rec contains_t_pp_var t = match t.t with
+  | Tvar _ -> true
+  | Tfn (t1,t2,_,_) -> contains_t_pp_var t1 || contains_t_pp_var t2
+  | Ttup ts -> List.exists contains_t_pp_var ts
+  | Tapp ("vector",[_;TA_nexp m;_;TA_typ t']) ->
+      if is_bit_vector t then not (const_nexp (normalize_nexp m))
+      else contains_t_pp_var t'
+  | Tapp (c,targs) -> List.exists contains_t_arg_pp_var targs
+  | Tabbrev (_,t') -> contains_t_pp_var t'
+  | Toptions (t1,t2o) ->
+      contains_t_pp_var t1 ||
+      (match t2o with Some t2 -> contains_t_pp_var t2 | _ -> false)
+  | Tuvar _ -> true
+  | Tid _ -> false
+and contains_t_arg_pp_var targ = match targ with
+  | TA_typ t -> contains_t_pp_var t
+  | TA_nexp nexp -> not (const_nexp (normalize_nexp nexp))
+  | _ -> false
+
 let prefix_recordtype = true
 let report = Reporting_basic.err_unreachable
 let doc_exp_lem, doc_let_lem =
@@ -342,8 +402,15 @@ let doc_exp_lem, doc_let_lem =
         | _ ->
            (prefix 2 1) (string "write_reg") (doc_lexp_deref_lem regtypes le ^/^ expY e))
     | E_vector_append(l,r) ->
+       let (Base((_,t),_,_,_,_,_)) = annot in
+       let (call,ta,aexp_needed) =
+         if is_bit_vector t then
+           if not (contains_t_pp_var t)
+           then ("bitvector_concat", doc_tannot_lem regtypes false t, true)
+           else ("bitvector_concat", empty, aexp_needed)
+         else ("vector_concat",empty,aexp_needed) in
        let epp =
-         align (group (separate space [expY l;string "^^"] ^/^ expY r)) in
+         align (group (separate space [string call;expY l;expY r])) ^^ ta in
        if aexp_needed then parens epp else epp
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (expY l) (expY r)
     | E_if(c,t,e) ->
@@ -388,7 +455,15 @@ let doc_exp_lem, doc_let_lem =
           if aexp_needed then parens (align epp) else epp
        | Id_aux (Id "slice_raw",_) ->
           let [e1;e2;e3] = args in
-          let epp = separate space [string "slice_raw";expY e1;expY e2;expY e3] in
+          let (E_aux (_,(_,Base((_,t1),_,_,_,_,_)))) = e1 in
+          let call = if is_bit_vector t1 then "bvslice_raw" else "slice_raw" in
+          let epp = separate space [string call;expY e1;expY e2;expY e3] in
+          if aexp_needed then parens (align epp) else epp
+       | Id_aux (Id "length",_) ->
+          let [arg] = args in
+          let (E_aux (_,(_,Base((_,targ),_,_,_,_,_)))) = arg in
+          let call = if is_bit_vector targ then "bvlength" else "length" in
+          let epp = separate space [string call;expY arg] in
           if aexp_needed then parens (align epp) else epp
        | _ ->
           begin match annot with
@@ -398,10 +473,13 @@ let doc_exp_lem, doc_let_lem =
              if aexp_needed then parens (align epp) else epp
           | Base (_,Constructor _,_,_,_,_) ->
              let argpp a_needed arg =
-               let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
-               match t with
-               | Tapp("vector",_) ->
-                  let epp = concat [string "reset_vector_start";space;expY arg] in
+               let (E_aux (_,(_,Base((_,t),_,_,_,_,_)))) = arg in
+               match t.t with
+               | Tapp("vector",[_;_;_;_]) ->
+                  let call =
+                    if is_bit_vector t then "reset_bitvector_start"
+                    else "reset_vector_start" in
+                  let epp = concat [string call;space;expY arg] in
                   if a_needed then parens epp else epp
                | _ -> expV a_needed arg in
              let epp =
@@ -417,17 +495,25 @@ let doc_exp_lem, doc_let_lem =
                | Base(_,External (Some n),_,_,_,_) -> string n
                | _ -> doc_id_lem f in
              let argpp a_needed arg =
-               let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
-               match t with
-               | Tapp("vector",_) ->
-                  let epp = concat [string "reset_vector_start";space;expY arg] in
+               let (E_aux (_,(_,Base((_,t),_,_,_,_,_)))) = arg in
+               match t.t with
+               | Tapp("vector",[_;_;_;_]) ->
+                  let call =
+                    if is_bit_vector t then "reset_bitvector_start"
+                    else "reset_vector_start" in
+                  let epp = concat [string call;space;expY arg] in
                   if a_needed then parens epp else epp
                | _ -> expV a_needed arg in
              let argspp = match args with
                | [arg] -> argpp true arg
                | args -> parens (align (separate_map (comma ^^ break 0) (argpp false) args)) in
              let epp = align (call ^//^ argspp) in
-             if aexp_needed then parens (align epp) else epp
+             let (taepp,aexp_needed) =
+               let (Base ((_,t),_,_,eff,_,_)) = annot in
+               if contains_bitvector_type t && not (contains_t_pp_var t)
+               then (align epp ^^ (doc_tannot_lem regtypes (effectful_t eff) t), true)
+               else (epp, aexp_needed) in
+             if aexp_needed then parens (align taepp) else taepp
           end
        end
     | E_vector_access (v,e) ->
@@ -436,27 +522,40 @@ let doc_exp_lem, doc_let_lem =
          if has_rreg_effect eff then
            separate space [string "read_reg_bit";expY v;expY e]
          else
-           separate space [string "access";expY v;expY e] in
+           let (E_aux (_,(_,Base ((_,tv),_,_,_,_,_)))) = v in
+           let call = if is_bit_vector tv then "bvaccess" else "access" in
+           separate space [string call;expY v;expY e] in
        if aexp_needed then parens (align epp) else epp
     | E_vector_subrange (v,e1,e2) ->
-       let (Base (_,_,_,_,eff,_)) = annot in
-       let epp =
+       let (Base ((_,t),_,_,_,eff,_)) = annot in
+       let (epp,aexp_needed) =
          if has_rreg_effect eff then
-           align (string "read_reg_range" ^^ space ^^ expY v ^//^ expY e1 ^//^ expY e2)
+           let epp = align (string "read_reg_range" ^^ space ^^ expY v ^//^ expY e1 ^//^ expY e2) in
+           if contains_bitvector_type t && not (contains_t_pp_var t)
+           then (epp ^^ doc_tannot_lem regtypes true t, true)
+           else (epp, aexp_needed)
          else
-           align (string "slice" ^^ space ^^ expY v ^//^ expY e1 ^//^ expY e2) in
+           if is_bit_vector t then
+             let bepp = string "bvslice" ^^ space ^^ expY v ^//^ expY e1 ^//^ expY e2 in
+             if not (contains_t_pp_var t)
+             then (bepp ^^ doc_tannot_lem regtypes false t, true)
+             else (bepp, aexp_needed)
+           else (string "slice" ^^ space ^^ expY v ^//^ expY e1 ^//^ expY e2, aexp_needed) in
        if aexp_needed then parens (align epp) else epp
     | E_field((E_aux(_,(l,fannot)) as fexp),id) ->
-       let (Base ((_,{t = t}),_,_,_,_,_)) = fannot in
-       (match t with
+       let (Base ((_,{t = ft}),_,_,_,_,_)) = fannot in
+       (match ft with
         | Tabbrev({t = Tid regtyp},{t=Tapp("register",_)}) ->
-           let field_f = match annot with
-             | Base((_,{t = Tid "bit"}),_,_,_,_,_)
-               | Base((_,{t = Tabbrev(_,{t=Tid "bit"})}),_,_,_,_,_) ->
-                string "read_reg_bitfield"
+           let (Base((_,t),_,_,_,_,_)) = annot in
+           let field_f = match t.t with
+             | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> string "read_reg_bitfield"
              | _ -> string "read_reg_field" in
+           let (ta,aexp_needed) =
+             if contains_bitvector_type t && not (contains_t_pp_var t)
+             then (doc_tannot_lem regtypes true t, true)
+             else (empty, aexp_needed) in
            let epp = field_f ^^ space ^^ (expY fexp) ^^ space ^^ string_lit (doc_id_lem id) in
-           if aexp_needed then parens (align epp) else epp
+           if aexp_needed then parens (align epp ^^ ta) else (epp ^^ ta)
         | Tid recordtyp
           | Tabbrev ({t = Tid recordtyp},_) ->
            let fname =
@@ -470,57 +569,73 @@ let doc_exp_lem, doc_let_lem =
     | E_block exps -> raise (report l "Blocks should have been removed till now.")
     | E_nondet exps -> raise (report l "Nondet blocks not supported.")
     | E_id id ->
+       let (Base((_,t),_,_,_,_,_)) = annot in
        (match annot with
         | Base((_, ({t = Tapp("register",_)} | {t=Tabbrev(_,{t=Tapp("register",_)})})),
                External _,_,eff,_,_) ->
            if has_rreg_effect eff then
-             separate space [string "read_reg";doc_id_lem id]
+             let epp = separate space [string "read_reg";doc_id_lem id] in
+             if contains_bitvector_type t && not (contains_t_pp_var t)
+             then parens (epp ^^ doc_tannot_lem regtypes true t)
+             else epp
            else
              doc_id_lem id
         | Base(_,(Constructor i |Enum i),_,_,_,_) -> doc_id_lem_ctor id
         | Base((_,t),Alias alias_info,_,eff,_,_) ->
            (match alias_info with
             | Alias_field(reg,field) ->
-               let epp = match t.t with
-                 | Tid "bit" | Tabbrev (_,{t=Tid "bit"}) ->
-                    (separate space)
-                      [string "read_reg_bitfield"; string reg;string_lit(string field)]
-                 | _ ->
-                    (separate space)
-                      [string "read_reg_field"; string reg; string_lit(string field)] in
-               if aexp_needed then parens (align epp) else epp
+                let call = match t.t with
+                  | Tid "bit" | Tabbrev (_,{t=Tid "bit"}) -> "read_reg_bitfield"
+                  | _ -> "read_reg_field" in
+                let ta =
+                  if contains_bitvector_type t && not (contains_t_pp_var t)
+                  then doc_tannot_lem regtypes true t else empty in
+                let epp = separate space [string call;string reg;string_lit(string field)] ^^ ta in
+                if aexp_needed then parens (align epp) else epp
             | Alias_pair(reg1,reg2) ->
-               let epp =
-                 if has_rreg_effect eff then
-                   separate space [string "read_two_regs";string reg1;string reg2]
-                 else
-                   separate space [string "RegisterPair";string reg1;string reg2] in
-               if aexp_needed then parens (align epp) else epp
+                let (call,ta) =
+                  if has_rreg_effect eff then
+                    let ta =
+                      if contains_bitvector_type t && not (contains_t_pp_var t)
+                      then doc_tannot_lem regtypes true t else empty in
+                    ("read_two_regs", ta)
+                  else
+                    ("RegisterPair", empty) in
+                let epp = separate space [string call;string reg1;string reg2] ^^ ta in
+                if aexp_needed then parens (align epp) else epp
             | Alias_extract(reg,start,stop) ->
-               let epp =
-                 if start = stop then
-                   (separate space)
-                     [string "access";doc_int start;
-                      parens (string "read_reg" ^^ space ^^ string reg)]
-                 else
-                   (separate space)
-                     [string "slice"; doc_int start; doc_int stop;
-                      parens (string "read_reg" ^^ space ^^ string reg)] in
-               if aexp_needed then parens (align epp) else epp
+                let epp =
+                  if start = stop then
+                    separate space [string "read_reg_bit";string reg;doc_int start]
+                  else
+                    let ta =
+                      if contains_bitvector_type t && not (contains_t_pp_var t)
+                      then doc_tannot_lem regtypes true t else empty in
+                    separate space [string "read_reg_range";string reg;doc_int start;doc_int stop] ^^ ta in
+                if aexp_needed then parens (align epp) else epp
            )
         | _ -> doc_id_lem id)
     | E_lit lit -> doc_lit_lem false lit annot
     | E_cast(Typ_aux (typ,_),e) ->
        (match annot with
-        | Base(_,External _,_,_,_,_) -> string "read_reg" ^^ space ^^ expY e
-        | _ ->
+        | Base((_,t),External _,_,_,_,_) ->
+           let epp = string "read_reg" ^^ space ^^ expY e in
+           if contains_bitvector_type t && not (contains_t_pp_var t)
+           then parens (epp ^^ doc_tannot_lem regtypes true t) else epp
+        | Base((_,t),_,_,_,_,_) ->
            (match typ with
             | Typ_app (Id_aux (Id "vector",_), [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i,_)),_);_;_;_]) ->
-               let epp = (concat [string "set_vector_start";space;string (string_of_int i)]) ^//^
+               let call =
+                 if is_bit_vector t then "set_bitvector_start"
+                 else "set_vector_start" in
+               let epp = (concat [string call;space;string (string_of_int i)]) ^//^
                            expY e in
                if aexp_needed then parens epp else epp
             | Typ_var (Kid_aux (Var "length",_)) ->
-               let epp = (string "set_vector_start_to_length") ^//^ expY e in
+               let call =
+                 if is_bit_vector t then "set_bitvector_start_to_length"
+                 else "set_vector_start_to_length" in
+               let epp = (string call) ^//^ expY e in
                if aexp_needed then parens epp else epp
             | _ -> 
                expV aexp_needed e)) (*(parens (doc_op colon (group (expY e)) (doc_typ_lem typ)))) *)
@@ -549,8 +664,8 @@ let doc_exp_lem, doc_let_lem =
        (match annot with
         | Base((_,t),_,_,_,_,_) ->
            match t.t with
-           | Tapp("vector", [TA_nexp start; _; TA_ord order; _])
-             | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; _; TA_ord order; _])}) ->
+           | Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; TA_typ etyp])
+             | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; TA_typ etyp])}) ->
               let dir,dir_out = match order.order with
                 | Oinc -> true,"true"
                 | _ -> false, "false" in
@@ -572,6 +687,13 @@ let doc_exp_lem, doc_let_lem =
                    align (group expspp) in
               let epp =
                 group (separate space [string "Vector"; brackets expspp;string start;string dir_out]) in
+              let (epp,aexp_needed) =
+                if etyp.t = Tid "bit" then
+                  let bepp = string "vec_to_bvec" ^^ space ^^ parens (align epp) in
+                  if contains_t_pp_var t
+                  then (bepp, aexp_needed)
+                  else (bepp ^^ doc_tannot_lem regtypes false t, true)
+                else (epp,aexp_needed) in
               if aexp_needed then parens (align epp) else epp
        )
     | E_vector_indexed (iexps, (Def_val_aux (default,(dl,dannot)))) ->
@@ -627,12 +749,20 @@ let doc_exp_lem, doc_let_lem =
        let epp =
          align (group (call ^//^ brackets expspp ^/^
                          separate space [default_string;string start;string size;string dir_out])) in
-       if aexp_needed then parens (align epp) else epp
+       let (bepp, aexp_needed) =
+         if is_bit_vector t
+         then (string "vec_to_bvec" ^^ space ^^ parens (epp) ^^ doc_tannot_lem regtypes false t, true)
+         else (epp, aexp_needed) in
+       if aexp_needed then parens (align bepp) else bepp
     | E_vector_update(v,e1,e2) ->
-       let epp = separate space [string "update_pos";expY v;expY e1;expY e2] in
+       let (Base((_,t),_,_,_,_,_)) = annot in
+       let call = if is_bit_vector t then "bvupdate_pos" else "update_pos" in
+       let epp = separate space [string call;expY v;expY e1;expY e2] in
        if aexp_needed then parens (align epp) else epp
     | E_vector_update_subrange(v,e1,e2,e3) ->
-       let epp = align (string "update" ^//^
+       let (Base((_,t),_,_,_,_,_)) = annot in
+       let call = if is_bit_vector t then "bvupdate" else "update" in
+       let epp = align (string call ^//^
                           group (group (expY v) ^/^ group (expY e1) ^/^ group (expY e2)) ^/^
                             group (expY e3)) in
        if aexp_needed then parens (align epp) else epp
@@ -670,9 +800,13 @@ let doc_exp_lem, doc_let_lem =
        (match annot with
         | Base((_,t),External(Some name),_,_,_,_) ->
            let argpp arg =
-             let (E_aux (_,(_,Base((_,{t=t}),_,_,_,_,_)))) = arg in
-             match t with
-             | Tapp("vector",_) -> parens (concat [string "reset_vector_start";space;expY arg])
+             let (E_aux (_,(_,Base((_,t),_,_,_,_,_)))) = arg in
+             match t.t with
+             | Tapp("vector",_) ->
+                 let call =
+                   if is_bit_vector t then "reset_bitvector_start"
+                   else "reset_vector_start" in
+                 parens (concat [string call;space;expY arg])
              | _ -> expY arg in
            let epp =
              let aux name = align (argpp e1 ^^ space ^^ string name ^//^ argpp e2) in
@@ -740,6 +874,10 @@ let doc_exp_lem, doc_let_lem =
 
                 | _ ->
                    string name ^//^ parens (expN e1 ^^ comma ^/^ expN e2)) in
+           let (epp,aexp_needed) =
+             if contains_bitvector_type t && not (contains_t_pp_var t)
+             then (parens epp ^^ doc_tannot_lem regtypes false t, true)
+             else (epp, aexp_needed) in
            if aexp_needed then parens (align epp) else epp
         | _ ->
            let epp =

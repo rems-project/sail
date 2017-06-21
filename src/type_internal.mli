@@ -313,6 +313,7 @@ val get_abbrev : def_envs -> t -> (t * nexp_range list)
 
 val is_enum_typ : def_envs -> t -> int option
 val is_bit_vector : t -> bool
+val has_const_vector_length : t -> big_int option
 
 val extract_bounds : def_envs -> string -> t -> bounds_env
 val merge_bounds : bounds_env -> bounds_env -> bounds_env
@@ -324,6 +325,7 @@ val merge_option_maps : nexp_map option -> nexp_map option -> nexp_map option
 
 val expand_nexp : nexp -> nexp list
 val normalize_nexp : nexp -> nexp
+val normalize_t : t -> t
 val get_index : nexp -> int (*expose nindex through this for debugging purposes*)
 val get_all_nvar : nexp -> string list (*Pull out all of the contained nvar and nuvars in nexp*)
 
@@ -387,4 +389,3 @@ val tannot_merge : constraint_origin -> def_envs -> bool -> tannot -> tannot -> 
 val initial_typ_env : tannot Envmap.t
 
 val initial_typ_env_list : (string * ((string * tannot) list)) list 
-

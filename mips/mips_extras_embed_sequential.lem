@@ -4,10 +4,10 @@ open import Sail_impl_base
 open import Sail_values
 open import State
 
-val MEMr             : (vector bitU * integer) -> M (vector bitU)
-val MEMr_reserve     : (vector bitU * integer) -> M (vector bitU)
-val MEMr_tag         : (vector bitU * integer) -> M (bitU * vector bitU)
-val MEMr_tag_reserve : (vector bitU * integer) -> M (bitU * vector bitU)
+val MEMr             : forall 'a 'b. Size 'b => (bitvector 'a * integer) -> M (bitvector 'b)
+val MEMr_reserve     : forall 'a 'b. Size 'b => (bitvector 'a * integer) -> M (bitvector 'b)
+val MEMr_tag         : forall 'a 'b. Size 'b => (bitvector 'a * integer) -> M (bitU * bitvector 'b)
+val MEMr_tag_reserve : forall 'a 'b. Size 'b => (bitvector 'a * integer) -> M (bitU * bitvector 'b)
 
 let MEMr (addr,size)             = read_mem false Read_plain addr size
 let MEMr_reserve (addr,size)     = read_mem false Read_reserve addr size
@@ -23,10 +23,10 @@ let MEMr_tag_reserve (addr,size) =
   return (t, v)
 
 
-val MEMea                 : (vector bitU * integer) -> M unit
-val MEMea_conditional     : (vector bitU * integer) -> M unit
-val MEMea_tag             : (vector bitU * integer) -> M unit
-val MEMea_tag_conditional : (vector bitU * integer) -> M unit
+val MEMea                 : forall 'a. (bitvector 'a * integer) -> M unit
+val MEMea_conditional     : forall 'a. (bitvector 'a * integer) -> M unit
+val MEMea_tag             : forall 'a. (bitvector 'a * integer) -> M unit
+val MEMea_tag_conditional : forall 'a. (bitvector 'a * integer) -> M unit
 
 let MEMea (addr,size)                 = write_mem_ea Write_plain addr size
 let MEMea_conditional (addr,size)     = write_mem_ea Write_conditional addr size
@@ -35,10 +35,10 @@ let MEMea_tag (addr,size)             = write_mem_ea Write_plain addr size
 let MEMea_tag_conditional (addr,size) = write_mem_ea Write_conditional addr size
 
 
-val MEMval                 : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_conditional     : (vector bitU * integer * vector bitU) -> M bitU
-val MEMval_tag             : (vector bitU * integer * bitU * vector bitU) -> M unit
-val MEMval_tag_conditional : (vector bitU * integer * bitU * vector bitU) -> M bitU
+val MEMval                 : forall 'a 'b. (bitvector 'a * integer * bitvector 'b) -> M unit
+val MEMval_conditional     : forall 'a 'b. (bitvector 'a * integer * bitvector 'b) -> M bitU
+val MEMval_tag             : forall 'a 'b. (bitvector 'a * integer * bitU * bitvector 'b) -> M unit
+val MEMval_tag_conditional : forall 'a 'b. (bitvector 'a * integer * bitU * bitvector 'b) -> M bitU
 
 let MEMval (_,_,v)                   = write_mem_val v >>= fun _ -> return ()
 let MEMval_conditional (_,_,v)       = write_mem_val v >>= fun b -> return (if b then B1 else B0)
@@ -50,7 +50,9 @@ val MEM_sync  : unit -> M unit
 let MEM_sync () = barrier Barrier_MIPS_SYNC
 
 
+(* TODO: Consider moving this to sail_values.lem (after fixing and implementing
+   a default index ordering) *)
 let duplicate (bit,len) =
-  let bits = repeat [bit] len in
+  let bits = repeat [bitU_to_bool bit] len in
   let start = len - 1 in
-  Vector bits start false
+  Bitvector (wordFromBitlist bits) start false

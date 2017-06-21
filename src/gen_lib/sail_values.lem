@@ -218,6 +218,14 @@ instance forall 'a. Show 'a => (Show (bitvector 'a))
   let show = showBitvector
 end
 
+let bvec_to_vec (Bitvector bs start is_inc) =
+  let bits = List.map bool_to_bitU (bitlistFromWord bs) in
+  Vector bits start is_inc
+
+let vec_to_bvec (Vector elems start is_inc) =
+  let word = wordFromBitlist (List.map bitU_to_bool elems) in
+  Bitvector word start is_inc
+
 (*** Vector operations *)
 
 val set_bitvector_start : forall 'a. integer -> bitvector 'a -> bitvector 'a
@@ -265,7 +273,7 @@ let bvupdate_aux (Bitvector bs start is_inc) i j bs' =
   let bits = word_update bs lo hi bs' in
   Bitvector bits start is_inc
 
-val bvupdate : forall 'a. bitvector 'a -> integer -> integer -> bitvector 'a -> bitvector 'a
+val bvupdate : forall 'a 'b. bitvector 'a -> integer -> integer -> bitvector 'b -> bitvector 'a
 let bvupdate v i j (Bitvector bs' _ _) =
   bvupdate_aux v i j bs'
 
@@ -273,25 +281,32 @@ let bvupdate v i j (Bitvector bs' _ _) =
 val getBit' : forall 'a. mword 'a -> nat -> bool
 let getBit' w n = getBit w (naturalFromNat n)
 
-val bvaccess : forall 'a. bitvector 'a -> integer -> bool
-let bvaccess (Bitvector bs start is_inc) n =
+val bvaccess : forall 'a. bitvector 'a -> integer -> bitU
+let bvaccess (Bitvector bs start is_inc) n = bool_to_bitU (
   if is_inc then getBit' bs (natFromInteger (n - start))
-  else getBit' bs (natFromInteger (start - n))
+  else getBit' bs (natFromInteger (start - n)))
 
-val bvupdate_pos : forall 'a. Size 'a => bitvector 'a -> integer -> bool -> bitvector 'a
+val bvupdate_pos : forall 'a. Size 'a => bitvector 'a -> integer -> bitU -> bitvector 'a
 let bvupdate_pos v n b =
-  bvupdate_aux v n n ((wordFromNatural (if b then 1 else 0)) : mword ty1)
+  bvupdate_aux v n n ((wordFromNatural (if bitU_to_bool b then 1 else 0)) : mword ty1)
 
 (*** Bit vector operations *)
 
+let extract_only_element (Vector elems _ _) = match elems with
+  | [] -> failwith "extract_only_element called for empty vector"
+  | [e] -> e
+  | _ -> failwith "extract_only_element called for vector with more elements"
+end
+
+val extract_only_bit : bitvector ty1 -> bitU
 let extract_only_bit (Bitvector elems _ _) =
-  let l = word_length elems in
-  if l = 1 then
-    msb elems
-  else if l = 0 then
+  (*let l = word_length elems in
+  if l = 1 then*)
+    bool_to_bitU (msb elems)
+  (*else if l = 0 then
     failwith "extract_single_bit called for empty vector"
   else
-    failwith "extract_single_bit called for vector with more bits"
+    failwith "extract_single_bit called for vector with more bits"*)
 
 let pp_bitu_vector (Vector elems start inc) =
   let elems_pp = List.foldl (fun acc elem -> acc ^ showBitU elem) "" elems in
@@ -302,7 +317,7 @@ let most_significant (Bitvector v _ _) =
   if word_length v = 0 then
     failwith "most_significant applied to empty vector"
   else
-    msb v
+    bool_to_bitU (msb v)
 
 let bitwise_not_bitlist = List.map bitwise_not_bit
 
@@ -402,13 +417,14 @@ let to_vec_big = to_vec
 
 let to_vec_inc = to_vec true
 let to_vec_dec = to_vec false
-(* TODO??
+
+(* TODO: Think about undefined bit(vector)s *)
 let to_vec_undef is_inc (len : integer) =
-  Vector (replicate (natFromInteger len) BU) (if is_inc then 0 else len-1) is_inc
+  Bitvector (failwith "undefined bitvector") (if is_inc then 0 else len-1) is_inc
 
 let to_vec_inc_undef = to_vec_undef true
 let to_vec_dec_undef = to_vec_undef false
-*)
+
 let exts (len, vec) = to_vec (bvget_dir vec) (len,signed vec)
 let extz (len, vec) = to_vec (bvget_dir vec) (len,unsigned vec)
 
@@ -737,9 +753,9 @@ let make_bitvector_undef length =
 
 (* let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n) *)
 
-let mask (n,Vector bits start dir) =
-  let current_size = List.length bits in
-  Vector (drop (current_size - (natFromInteger n)) bits) (if dir then 0 else (n-1)) dir
+let mask (n,bv) =
+  let len = bvlength bv in
+  bvslice_raw bv (len - n) (len - 1)
 
 
 val byte_chunks : forall 'a. nat -> list 'a -> list (list 'a)
@@ -1026,4 +1042,3 @@ let diafp_to_dia reginfo = function
   | DIAFP_concrete v -> DIA_concrete_address (address_of_bitv v)
   | DIAFP_reg r -> DIA_register (regfp_to_reg reginfo r)
 end
-
