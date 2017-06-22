@@ -129,6 +129,9 @@ let main() =
                         -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
     let (ast,kenv,ord) = convert_ast ast in
     let (ast,type_envs) = check_ast ast kenv ord in 
+
+(*    let ast = Monomorphise.split_defs [(("mips_insts.sail",1120),"width")] type_envs ast in*)
+
     let ast = rewrite_ast ast in
     let out_name = match !opt_file_out with
       | None -> fst (List.hd parsed)
