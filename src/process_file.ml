@@ -89,6 +89,7 @@ let initi_check_ast (defs : Type_internal.tannot Ast.defs) : (Type_internal.tann
   Initial_check_full_ast.to_checked_ast Nameset.empty Type_internal.initial_kind_env (Ast.Ord_aux(Ast.Ord_inc,Parse_ast.Unknown)) defs
 
 let opt_new_typecheck = ref false
+let opt_just_check = ref false
                                         
 let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.order) : Type_internal.tannot Ast.defs * Type_check.envs =
   let d_env = { Type_internal.k_env = k; Type_internal.abbrevs = Type_internal.initial_abbrev_env;
@@ -101,6 +102,9 @@ let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.
 						     | _ -> Type_internal.Oinc)};} in
   if !opt_new_typecheck
   then let _ = Type_check_new.check Type_check_new.initial_env defs in ()
+  else ();
+  if !opt_just_check
+  then exit 0
   else ();
   Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env,Type_internal.nob,Envmap.empty)) defs 
 

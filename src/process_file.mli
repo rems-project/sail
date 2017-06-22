@@ -49,6 +49,7 @@ val rewrite_ast_lem : Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.
 val rewrite_ast_ocaml : Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.defs
 
 val opt_new_typecheck : bool ref
+val opt_just_check : bool ref
                                                                               
 type out_type =
   | Lem_ast_out

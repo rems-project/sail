@@ -45,7 +45,7 @@ open Ast
 open Util
 open Big_int
 
-let debug = ref 1
+let debug = ref 2
 let depth = ref 0
 
 let rec indent n = match n with
@@ -333,13 +333,17 @@ module KBindings = Map.Make(Kid)
 module KidSet = Set.Make(Kid)
 
 type mut = Immutable | Mutable
-                        
+
+type lvar = Register of typ | Local of mut * typ | Unbound
+                         
 module Env : sig
   type t
   val get_val_spec : id -> t -> typquant * typ
   val add_val_spec : id -> typquant * typ -> t -> t
   val get_local : id -> t -> mut * typ
   val add_local : id -> mut * typ -> t -> t
+  val get_register : id -> t -> typ
+  val add_register : id -> typ -> t -> t
   val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
   val add_constraint : n_constraint -> t -> t
@@ -352,6 +356,7 @@ module Env : sig
   val get_default_order : t -> order
   val set_default_order_inc : t -> t
   val set_default_order_dec : t -> t
+  val lookup_id : id -> t -> lvar
   val fresh_kid : t -> kid
   val expand_synonyms : t -> typ -> typ
   val empty : t                                   
@@ -359,6 +364,7 @@ end = struct
   type t =
     { top_val_specs : (typquant * typ) Bindings.t;
       locals : (mut * typ) Bindings.t;
+      registers : typ Bindings.t;
       typ_vars : base_kind_aux KBindings.t;
       typ_synonyms : (typ_arg list -> typ) Bindings.t;
       constraints : n_constraint list;
@@ -369,6 +375,7 @@ end = struct
   let empty =
     { top_val_specs = Bindings.empty;
       locals = Bindings.empty;
+      registers = Bindings.empty;
       typ_vars = KBindings.empty;
       typ_synonyms = Bindings.empty;
       constraints = [];
@@ -428,6 +435,30 @@ end = struct
       { env with locals = Bindings.add id mtyp env.locals }
     end
 
+  let get_register id env =
+    try Bindings.find id env.registers with
+    | Not_found -> typ_error (id_loc id) ("No register binding found for " ^ string_of_id id)
+
+  let add_register id typ env =
+    if Bindings.mem id env.registers
+    then typ_error (id_loc id) ("Register " ^ string_of_id id ^ " is already bound")
+    else
+      begin
+        typ_print ("Adding register binding " ^ string_of_id id ^ " :: " ^ string_of_typ typ);
+        { env with registers = Bindings.add id typ env.registers }
+      end
+
+  let lookup_id id env =
+    try
+      let (mut, typ) = Bindings.find id env.locals in
+      Local (mut, typ)
+    with
+    | Not_found ->
+       begin
+         try Register (Bindings.find id env.registers) with
+         | Not_found -> Unbound
+       end
+        
   let get_typ_var kid env =
     try KBindings.find kid env.typ_vars with
     | Not_found -> typ_error (kid_loc kid) ("No kind identifier " ^ string_of_kid kid)
@@ -919,11 +950,35 @@ let rec bind_pat env (P_aux (pat_aux, (l, _)) as pat) (Typ_aux (typ_aux, _) as t
 and bind_lexp env (LEXP_aux (lexp_aux, (l, _))) typ =
   let annot_lexp lexp typ = LEXP_aux (lexp, (l, Some (env, typ))) in
   match lexp_aux with
-  | LEXP_id v -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
+  | LEXP_id v ->
+     begin
+       match Env.lookup_id v env with
+       | Local (Immutable, _) -> typ_error l ("Cannot modify or shadow let-bound constant " ^ string_of_id v)
+       | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
+       | Register vtyp -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
+       | Unbound -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
+     end
   | LEXP_cast (typ_annot, v) ->
      begin
-       subtyp l env typ typ_annot;
-       annot_lexp (LEXP_cast (typ_annot, v)) typ, Env.add_local v (Mutable, typ_annot) env
+       match Env.lookup_id v env with
+       | Local (Immutable, _) -> typ_error l ("Cannot modify or shadow let-bound constant " ^ string_of_id v)
+       | Local (Mutable, vtyp) ->
+          begin
+            subtyp l env typ typ_annot;
+            subtyp l env typ_annot vtyp;
+            annot_lexp (LEXP_cast (typ_annot, v)) typ, env
+          end
+       | Register vtyp ->
+          begin
+            subtyp l env typ typ_annot;
+            subtyp l env typ_annot vtyp;
+            annot_lexp (LEXP_cast (typ_annot, v)) typ, env
+          end
+       | Unbound ->
+          begin
+            subtyp l env typ typ_annot;
+            annot_lexp (LEXP_cast (typ_annot, v)) typ, Env.add_local v (Mutable, typ_annot) env
+          end
      end
   | LEXP_tup lexps ->
      begin
@@ -1223,9 +1278,10 @@ let rec check_def env def =
   | DEF_val letdef -> cd_err ()
   | DEF_spec vs -> check_val_spec env vs
   | DEF_default default -> check_default env default
-  | DEF_reg_dec(DEC_aux(DEC_reg(typ,id), (l,annot))) -> cd_err ()
-  | DEF_reg_dec(DEC_aux(DEC_alias(id,aspec), (l,annot))) -> cd_err ()
-  | DEF_reg_dec(DEC_aux(DEC_typ_alias(typ,id,aspec),(l,tannot))) -> cd_err ()
+  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), (l, _))) ->
+     DEF_reg_dec (DEC_aux (DEC_reg (typ, id), (l, None))), Env.add_register id typ env
+  | DEF_reg_dec (DEC_aux (DEC_alias (id, aspec), (l, annot))) -> cd_err ()
+  | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Scattered given to type checker")
   | DEF_comm (DC_comm str) -> DEF_comm (DC_comm str), env
   | DEF_comm (DC_comm_struct def) ->

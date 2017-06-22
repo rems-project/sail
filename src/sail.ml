@@ -89,6 +89,9 @@ let options = Arg.align ([
   ( "-new_typecheck",
     Arg.Set opt_new_typecheck,
     " use new typechecker with Z3 constraint solving (experimental)");
+  ( "-just_check",
+    Arg.Tuple [Arg.Set opt_new_typecheck; Arg.Set opt_just_check],
+    " terminate immediately after typechecking, implies -new_typecheck");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
