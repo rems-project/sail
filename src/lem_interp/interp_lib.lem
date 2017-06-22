@@ -54,6 +54,11 @@ open import Bool
 
 type signed = Unsigned | Signed
 
+val debug_print : string -> unit
+declare ocaml target_rep function debug_print s = `Printf.eprintf` "%s" s
+
+let print s = let _ = debug_print (string_of_value s) in V_lit(L_aux L_unit Unknown)
+
 let hardware_mod (a: integer) (b:integer) : integer = 
  if a < 0 && b < 0
  then (abs a) mod (abs b)
@@ -1012,6 +1017,7 @@ let library_functions direction = [
   ("quot_overflow_vec", arith_op_overflow_vec_no0 hardware_quot "quot" Unsigned 1);
   ("quot_vec_signed", arith_op_vec_no0 hardware_quot "quot" Signed 1);
   ("quot_overflow_vec_signed", arith_op_overflow_vec_no0 hardware_quot "quot" Signed 1);
+  ("print", print);
   ("power", arith_op power);
   ("eq", eq);
   ("eq_vec", eq_vec);

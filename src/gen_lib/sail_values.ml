@@ -24,6 +24,8 @@ type value =
 exception Sail_exit
 exception Sail_return
 
+let _print s = print_string s
+
 let string_of_bit = function 
   | Vone   -> "1"
   | Vzero  -> "0"

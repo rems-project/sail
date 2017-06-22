@@ -2769,6 +2769,7 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
                        (External None),[],pure_e,pure_e,nob));
     ("to_vec_dec",Base(([("a",{k=K_Typ})],{t=Tfn(nat_typ,{t=Tvar "a"},IP_none,pure_e)}),
                        (External None),[],pure_e,pure_e,nob));
+    ("print",Base(([],(mk_pure_fun string_t unit_t)),(External None),[],pure_e,pure_e,nob)); (* XXX not actually pure... *)
  ];
 
 
