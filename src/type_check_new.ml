@@ -229,6 +229,8 @@ end
 let unaux_nexp (Nexp_aux (nexp, _)) = nexp
 
 let unaux_order (Ord_aux (ord, _)) = ord
+
+let unaux_typ (Typ_aux (typ, _)) = typ
                                         
 let rec nexp_subst sv subst (Nexp_aux (nexp, l)) = Nexp_aux (nexp_subst_aux sv subst nexp, l)
 and nexp_subst_aux sv subst = function
@@ -266,6 +268,21 @@ and typ_subst_arg_nexp_aux sv subst = function
   | Typ_arg_order ord -> Typ_arg_order ord
   | Typ_arg_effect eff -> Typ_arg_effect eff
 
+let rec typ_subst_typ sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_typ_aux sv subst typ, l)
+and typ_subst_typ_aux sv subst = function
+  | Typ_wild -> Typ_wild
+  | Typ_id v -> Typ_id v
+  | Typ_var kid -> if Kid.compare kid sv = 0 then subst else Typ_var kid
+  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_typ sv subst typ1, typ_subst_typ sv subst typ2, effs)
+  | Typ_tup typs -> Typ_tup (List.map (typ_subst_typ sv subst) typs)
+  | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_nexp sv subst) args)
+and typ_subst_arg_nexp sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_nexp_aux sv subst arg, l)
+and typ_subst_arg_nexp_aux sv subst = function
+  | Typ_arg_nexp nexp -> Typ_arg_nexp nexp
+  | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_typ sv subst typ)
+  | Typ_arg_order ord -> Typ_arg_order ord
+  | Typ_arg_effect eff -> Typ_arg_effect eff
+                                         
 let order_subst_aux sv subst = function
   | Ord_var kid -> if Kid.compare kid sv = 0 then subst else Ord_var kid
   | Ord_inc -> Ord_inc
@@ -873,7 +890,7 @@ let unify l env typ1 typ2 =
     | Typ_id v1, Typ_id v2 ->
        if Id.compare v1 v2 = 0 then KBindings.empty
        else unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2)
-    | Typ_var _, Typ_var _ -> unify_error l "Raw identifiers during unification"
+    | Typ_var kid, _ -> KBindings.singleton kid (U_typ typ2)
     | Typ_tup typs1, Typ_tup typs2 ->
        begin
          try List.fold_left (KBindings.merge (merge_unifiers l)) KBindings.empty (List.map2 (unify_typ l) typs1 typs2) with
@@ -1009,6 +1026,10 @@ let is_nat_kid kid = function
 let is_order_kid kid = function
   | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_order, _)], _), kid'), _) -> Kid.compare kid kid' = 0
   | _ -> false
+
+let is_typ_kid kid = function
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_type, _)], _), kid'), _) -> Kid.compare kid kid' = 0
+  | _ -> false
            
 let rec instantiate_quants quants kid uvar = match quants with
   | [] -> []
@@ -1023,14 +1044,18 @@ let rec instantiate_quants quants kid uvar = match quants with
           if is_order_kid kid kinded_id
           then instantiate_quants quants kid uvar
           else quant :: instantiate_quants quants kid uvar
+       | U_typ typ ->
+          if is_typ_kid kid kinded_id
+          then instantiate_quants quants kid uvar
+          else quant :: instantiate_quants quants kid uvar                         
        | _ -> typ_error Parse_ast.Unknown "Cannot instantiate quantifier"
      end
   | ((QI_aux (QI_const nc, l)) :: quants) ->
      begin
        match uvar with
        | U_nexp nexp ->
-          QI_aux (QI_const (nc_subst_nexp kid (unaux_nexp nexp) nc), l) :: quants
-       | _ -> (QI_aux (QI_const nc, l)) :: quants
+          QI_aux (QI_const (nc_subst_nexp kid (unaux_nexp nexp) nc), l) :: instantiate_quants quants kid uvar
+       | _ -> (QI_aux (QI_const nc, l)) :: instantiate_quants quants kid uvar
      end
 
 let subst_unifiers unifiers typ =
@@ -1038,6 +1063,7 @@ let subst_unifiers unifiers typ =
     match uvar with
     | U_nexp nexp -> typ_subst_nexp kid (unaux_nexp nexp) typ
     | U_order ord -> typ_subst_order kid (unaux_order ord) typ
+    | U_typ subst -> typ_subst_typ kid (unaux_typ subst) typ
     | _ -> typ_error Parse_ast.Unknown "Cannot subst unifier"
   in
   List.fold_left subst_unifier typ (KBindings.bindings unifiers)
@@ -1125,6 +1151,8 @@ and infer_exp env (E_aux (exp_aux, (l, _)) as exp : 'a exp) : tannot exp =
      let checked_exp = check_exp env exp typ in
      annot_exp (E_cast (typ, checked_exp)) typ
   | E_app (f, xs) -> infer_funapp l env f xs None
+  | E_vector_access (v, n) -> infer_funapp l env (mk_id "vector_access") [v; n] None
+  | E_vector_append (v1, v2) -> infer_funapp l env (mk_id "vector_append") [v1; v2] None
   | _ -> typ_error l "Unimplemented"
                    
 and infer_funapp l env f xs ret_ctx_typ =
