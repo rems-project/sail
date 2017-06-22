@@ -328,7 +328,7 @@ function clause execute(CPtrCmp(rd, cb, ct, op)) =
         case CLT   -> [lts]
         case CLE   -> [lts | equal]
         case CLTU  -> [ltu]
-        case CLEU  -> [lts | equal]
+        case CLEU  -> [ltu | equal]
         case CEXEQ -> [cb_val == ct_val]
       })
     }
