@@ -8,7 +8,6 @@ val unit -> [:10:] effect pure test
 function [:10:] test () =
 {
   z := 9;
-  z := 10;
   z
 }
 

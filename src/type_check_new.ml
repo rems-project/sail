@@ -45,16 +45,16 @@ open Ast
 open Util
 open Big_int
 
-let debug = ref 2
+let debug = ref 1
 let depth = ref 0
-
-let typ_debug m = if !debug > 1 then prerr_endline m else ()
 
 let rec indent n = match n with
   | 0 -> ""
   | n -> "|   " ^ indent (n - 1)
-                                                            
-let typ_print m = if !debug > 0 then (prerr_endline (indent !depth ^ m)) else ()
+
+let typ_debug m = if !debug > 1 then prerr_endline (indent !depth ^ m) else ()
+                         
+let typ_print m = if !debug > 0 then prerr_endline (indent !depth ^ m) else ()
                                                                                 
 let typ_error l m = raise (Reporting_basic.err_typ l m)
 
@@ -95,7 +95,11 @@ let string_of_base_kind_aux = function
   | BK_nat -> "Nat"
   | BK_order -> "Order"
   | BK_effect -> "Effect"
-                 
+
+let string_of_base_kind (BK_aux (bk, _)) = string_of_base_kind_aux bk
+                   
+let string_of_kind (K_aux (K_kind bks, _)) = string_of_list " -> " string_of_base_kind bks
+                   
 let string_of_base_effect = function
   | BE_aux (beff, _) -> string_of_base_effect_aux beff
 
@@ -150,7 +154,7 @@ let string_of_n_constraint = function
                                            
 let string_of_quant_item_aux = function
   | QI_id (KOpt_aux (KOpt_none kid, _)) -> string_of_kid kid
-  | QI_id (KOpt_aux (KOpt_kind (k, kid), _)) -> "KIND " ^ string_of_kid kid
+  | QI_id (KOpt_aux (KOpt_kind (k, kid), _)) -> string_of_kind k ^ " " ^ string_of_kid kid
   | QI_const constr -> string_of_n_constraint constr
      
 let string_of_quant_item = function
@@ -216,7 +220,104 @@ and string_of_letbind (LB_aux (lb, l)) =
   | LB_val_implicit (pat, exp) -> string_of_pat pat ^ " = " ^ string_of_exp exp
   | LB_val_explicit (typschm, pat, exp) ->
      string_of_typschm typschm ^ " " ^ string_of_pat pat ^ " = " ^ string_of_exp exp
-                           
+
+module Kid = struct
+  type t = kid
+  let compare kid1 kid2 = String.compare (string_of_kid kid1) (string_of_kid kid2)
+end
+                                                                                 
+let unaux_nexp (Nexp_aux (nexp, _)) = nexp
+
+let unaux_order (Ord_aux (ord, _)) = ord
+                                        
+let rec nexp_subst sv subst (Nexp_aux (nexp, l)) = Nexp_aux (nexp_subst_aux sv subst nexp, l)
+and nexp_subst_aux sv subst = function
+  | Nexp_id v -> Nexp_id v
+  | Nexp_var kid -> if Kid.compare kid sv = 0 then subst else Nexp_var kid
+  | Nexp_constant c -> Nexp_constant c
+  | Nexp_times (nexp1, nexp2) -> Nexp_times (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
+  | Nexp_sum (nexp1, nexp2) -> Nexp_sum (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
+  | Nexp_minus (nexp1, nexp2) -> Nexp_minus (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
+  | Nexp_exp nexp -> Nexp_exp (nexp_subst sv subst nexp)
+  | Nexp_neg nexp -> Nexp_neg (nexp_subst sv subst nexp)
+
+let rec nc_subst_nexp sv subst (NC_aux (nc, l)) = NC_aux (nc_subst_nexp_aux l sv subst nc, l)
+and nc_subst_nexp_aux l sv subst = function
+  | NC_fixed (n1, n2) -> NC_fixed (nexp_subst sv subst n1, nexp_subst sv subst n2)
+  | NC_bounded_ge (n1, n2) -> NC_bounded_ge (nexp_subst sv subst n1, nexp_subst sv subst n2)
+  | NC_bounded_le (n1, n2) -> NC_bounded_le (nexp_subst sv subst n1, nexp_subst sv subst n2)
+  | NC_nat_set_bounded (kid, ints) as set_nc ->
+      if compare kid sv = 0
+      then typ_error l ("Cannot substitute " ^ string_of_kid sv ^ " into set constraint " ^ string_of_n_constraint (NC_aux (set_nc, l)))
+      else set_nc
+                                           
+let rec typ_subst_nexp sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_nexp_aux sv subst typ, l)
+and typ_subst_nexp_aux sv subst = function
+  | Typ_wild -> Typ_wild
+  | Typ_id v -> Typ_id v
+  | Typ_var kid -> Typ_var kid
+  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_nexp sv subst typ1, typ_subst_nexp sv subst typ2, effs)
+  | Typ_tup typs -> Typ_tup (List.map (typ_subst_nexp sv subst) typs)
+  | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_nexp sv subst) args)
+and typ_subst_arg_nexp sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_nexp_aux sv subst arg, l)
+and typ_subst_arg_nexp_aux sv subst = function
+  | Typ_arg_nexp nexp -> Typ_arg_nexp (nexp_subst sv subst nexp)
+  | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_nexp sv subst typ)
+  | Typ_arg_order ord -> Typ_arg_order ord
+  | Typ_arg_effect eff -> Typ_arg_effect eff
+
+let order_subst_aux sv subst = function
+  | Ord_var kid -> if Kid.compare kid sv = 0 then subst else Ord_var kid
+  | Ord_inc -> Ord_inc
+  | Ord_dec -> Ord_dec
+                                         
+let order_subst sv subst (Ord_aux (ord, l)) = Ord_aux (order_subst_aux sv subst ord, l) 
+                                         
+let rec typ_subst_order sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_order_aux sv subst typ, l)
+and typ_subst_order_aux sv subst = function
+  | Typ_wild -> Typ_wild
+  | Typ_id v -> Typ_id v
+  | Typ_var kid -> Typ_var kid
+  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_order sv subst typ1, typ_subst_order sv subst typ2, effs)
+  | Typ_tup typs -> Typ_tup (List.map (typ_subst_order sv subst) typs)
+  | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_nexp sv subst) args)
+and typ_subst_arg_nexp sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_nexp_aux sv subst arg, l)
+and typ_subst_arg_nexp_aux sv subst = function
+  | Typ_arg_nexp nexp -> Typ_arg_nexp nexp
+  | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_order sv subst typ)
+  | Typ_arg_order ord -> Typ_arg_order (order_subst sv subst ord)
+  | Typ_arg_effect eff -> Typ_arg_effect eff
+
+let rec typ_subst_kid sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_kid_aux sv subst typ, l)
+and typ_subst_kid_aux sv subst = function
+  | Typ_wild -> Typ_wild
+  | Typ_id v -> Typ_id v
+  | Typ_var kid -> if Kid.compare kid sv = 0 then Typ_var subst else Typ_var kid
+  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_kid sv subst typ1, typ_subst_kid sv subst typ2, effs)
+  | Typ_tup typs -> Typ_tup (List.map (typ_subst_kid sv subst) typs)
+  | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_kid sv subst) args)
+and typ_subst_arg_kid sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_kid_aux sv subst arg, l)
+and typ_subst_arg_kid_aux sv subst = function
+  | Typ_arg_nexp nexp -> Typ_arg_nexp (nexp_subst sv (Nexp_var subst) nexp)
+  | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_kid sv subst typ)
+  | Typ_arg_order ord -> Typ_arg_order (order_subst sv (Ord_var subst) ord)
+  | Typ_arg_effect eff -> Typ_arg_effect eff
+
+let quant_item_subst_kid_aux sv subst = function
+  | QI_id (KOpt_aux (KOpt_none kid, l)) as qid ->
+     if Kid.compare kid sv = 0 then QI_id (KOpt_aux (KOpt_none subst, l)) else qid
+  | QI_id (KOpt_aux (KOpt_kind (k, kid), l)) as qid ->
+     if Kid.compare kid sv = 0 then QI_id (KOpt_aux (KOpt_kind (k, subst), l)) else qid
+  | QI_const nc -> QI_const (nc_subst_nexp sv (Nexp_var subst) nc)
+                                         
+let quant_item_subst_kid sv subst (QI_aux (quant, l)) = QI_aux (quant_item_subst_kid_aux sv subst quant, l) 
+                                         
+let typquant_subst_kid_aux sv subst = function
+  | TypQ_tq quants -> TypQ_tq (List.map (quant_item_subst_kid sv subst) quants)
+  | TypQ_no_forall -> TypQ_no_forall
+                                         
+let typquant_subst_kid sv subst (TypQ_aux (typq, l)) = TypQ_aux (typquant_subst_kid_aux sv subst typq, l)
+                                         
 module Id = struct
   type t = id
   let compare id1 id2 =
@@ -225,11 +326,6 @@ module Id = struct
     | Id_aux (DeIid x, _), Id_aux (DeIid y, _) -> String.compare x y
     | Id_aux (Id _, _), Id_aux (DeIid _, _) -> -1
     | Id_aux (DeIid _, _), Id_aux (Id _, _) -> 1
-end
-
-module Kid = struct
-  type t = kid
-  let compare kid1 kid2 = String.compare (string_of_kid kid1) (string_of_kid kid2)
 end
 
 module Bindings = Map.Make(Id)
@@ -281,9 +377,23 @@ end = struct
     }
 
   let counter = ref 0
-                           
+
+  let fresh_kid env =
+    let fresh = Kid_aux (Var ("'fv" ^ string_of_int !counter), Parse_ast.Unknown) in
+    incr counter; fresh
+
+  let freshen_kid env kid (typq, typ) =
+    let fresh = fresh_kid env in
+    (typquant_subst_kid kid fresh typq, typ_subst_kid kid fresh typ)
+                                               
   let get_val_spec id env =
-    try Bindings.find id env.top_val_specs with
+    try
+      let bind = Bindings.find id env.top_val_specs in
+      typ_debug ("get_val_spec: Env has " ^ string_of_list ", " (fun (kid, bk) -> string_of_kid kid ^ " => " ^ string_of_base_kind_aux bk) (KBindings.bindings env.typ_vars));
+      let bind' = List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars) in
+      typ_debug ("get_val_spec: freshened to " ^ string_of_bind bind');
+      bind'
+    with
     | Not_found -> typ_error (id_loc id) ("No val spec found for " ^ string_of_id id)
 
   let add_val_spec id bind env =
@@ -365,10 +475,6 @@ end = struct
       { env with constraints = constr :: env.constraints }
     end
 
-  let fresh_kid env =
-    let fresh = Kid_aux (Var ("'fv" ^ string_of_int !counter), Parse_ast.Unknown) in
-    incr counter; fresh
-
   let get_ret_typ env = env.ret_typ
 
   let add_ret_typ typ env = { env with ret_typ = Some typ }
@@ -440,6 +546,7 @@ let mk_id str = Id_aux (Id str, Parse_ast.Unknown)
  
 let nconstant c = Nexp_aux (Nexp_constant c, Parse_ast.Unknown)
 let nminus n1 n2 = Nexp_aux (Nexp_minus (n1, n2), Parse_ast.Unknown)
+let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)                            
 let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
 
 type index_sort =
@@ -518,44 +625,13 @@ this is equivalent to
 which is then a problem we can feed to the constraint solver expecting unsat.
  *)
 
-let unaux_nexp (Nexp_aux (nexp, _)) = nexp
-                                       
-let rec nexp_subst sv subst (Nexp_aux (nexp, l)) = Nexp_aux (nexp_subst_aux sv subst nexp, l)
-and nexp_subst_aux sv subst = function
-  | Nexp_id v -> Nexp_id v
-  | Nexp_var kid -> if Kid.compare kid sv = 0 then subst else Nexp_var kid
-  | Nexp_constant c -> Nexp_constant c
-  | Nexp_times (nexp1, nexp2) -> Nexp_times (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
-  | Nexp_sum (nexp1, nexp2) -> Nexp_sum (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
-  | Nexp_minus (nexp1, nexp2) -> Nexp_minus (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2)
-  | Nexp_exp nexp -> Nexp_exp (nexp_subst sv subst nexp)
-  | Nexp_neg nexp -> Nexp_neg (nexp_subst sv subst nexp)
-
-let rec nc_subst_nexp sv subst (NC_aux (nc, l)) = NC_aux (nc_subst_nexp_aux l sv subst nc, l)
-and nc_subst_nexp_aux l sv subst = function
-  | NC_fixed (n1, n2) -> NC_fixed (nexp_subst sv subst n1, nexp_subst sv subst n2)
-  | NC_bounded_ge (n1, n2) -> NC_bounded_ge (nexp_subst sv subst n1, nexp_subst sv subst n2)
-  | NC_bounded_le (n1, n2) -> NC_bounded_le (nexp_subst sv subst n1, nexp_subst sv subst n2)
-  | NC_nat_set_bounded (kid, ints) as set_nc ->
-      if compare kid sv = 0
-      then typ_error l ("Cannot substitute " ^ string_of_kid sv ^ " into set constraint " ^ string_of_n_constraint (NC_aux (set_nc, l)))
-      else set_nc
-                                           
-let rec typ_subst_nexp sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_nexp_aux sv subst typ, l)
-and typ_subst_nexp_aux sv subst = function
-  | Typ_wild -> Typ_wild
-  | Typ_id v -> Typ_id v
-  | Typ_var kid -> Typ_var kid
-  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_nexp sv subst typ1, typ_subst_nexp sv subst typ2, effs)
-  | Typ_tup typs -> Typ_tup (List.map (typ_subst_nexp sv subst) typs)
-  | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_nexp sv subst) args)
-and typ_subst_arg_nexp sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_nexp_aux sv subst arg, l)
-and typ_subst_arg_nexp_aux sv subst = function
-  | Typ_arg_nexp nexp -> Typ_arg_nexp (nexp_subst sv subst nexp)
-  | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_nexp sv subst typ)
-  | Typ_arg_order o -> Typ_arg_order o
-  | Typ_arg_effect eff -> Typ_arg_effect eff
-                              
+let order_eq (Ord_aux (ord_aux1, _)) (Ord_aux (ord_aux2, _)) =
+  match ord_aux1, ord_aux2 with
+  | Ord_inc, Ord_inc -> true
+  | Ord_dec, Ord_dec -> true
+  | Ord_var kid1, Ord_var kid2 -> Kid.compare kid1 kid2 = 0
+  | _, _ -> false
+       
 let rec props_subst sv subst props =
   match props with
   | [] -> []
@@ -660,8 +736,13 @@ let rec subtyp_tnf env tnf1 tnf2 =
      end
   | _, _ -> false
 
-and tnf_args_eq env arg1 arg2 = true
-
+and tnf_args_eq env arg1 arg2 =
+  match arg1, arg2 with
+  | Tnf_arg_nexp n1, Tnf_arg_nexp n2 -> prove env (NC_aux (NC_fixed (n1, n2), Parse_ast.Unknown))
+  | Tnf_arg_order ord1, Tnf_arg_order ord2 -> order_eq ord1 ord2
+  | Tnf_arg_typ tnf1, Tnf_arg_typ tnf2 -> subtyp_tnf env tnf1 tnf2 && subtyp_tnf env tnf2 tnf1
+  | _, _ -> assert false
+                                              
 let subtyp l env typ1 typ2 =
   if subtyp_tnf env (normalize_typ env typ1) (normalize_typ env typ2)
   then ()
@@ -691,17 +772,21 @@ let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   | Nexp_exp n1, Nexp_exp n2 -> nexp_identical n1 n2
   | Nexp_neg n1, Nexp_neg n2 -> nexp_identical n1 n2
   | _, _ -> false
-                                               
+
+exception Unification_error of l * string;;
+
+let unify_error l str = raise (Unification_error (l, str))
+             
 let rec unify_nexps l (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_aux2, _) as nexp2) =
   typ_debug ("UNIFYING NEXPS " ^ string_of_nexp nexp1 ^ " AND " ^ string_of_nexp nexp2);
   match nexp_aux1 with
-  | Nexp_id v -> typ_error l "Unimplemented Nexp_id in unify nexp"
+  | Nexp_id v -> unify_error l "Unimplemented Nexp_id in unify nexp"
   | Nexp_var kid -> Some (kid, nexp2)
   | Nexp_constant c1 ->
      begin
        match nexp_aux2 with
-       | Nexp_constant c2 -> if c1 = c2 then None else typ_error l "Constants are not the same"
-       | _ -> typ_error l "Unification error"
+       | Nexp_constant c2 -> if c1 = c2 then None else unify_error l "Constants are not the same"
+       | _ -> unify_error l "Unification error"
      end
   | Nexp_sum (n1a, n1b) ->
      if KidSet.is_empty (nexp_frees n1b)
@@ -709,33 +794,59 @@ let rec unify_nexps l (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_aux2, _
      else
        if KidSet.is_empty (nexp_frees n1a)
        then unify_nexps l n1b (nminus nexp2 n1a)
-       else typ_error l ("Both sides of Nat expression " ^ string_of_nexp nexp1
-                         ^ " contain free type variables so it cannot be unified with " ^ string_of_nexp nexp2)
-  | _ -> typ_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
+       else unify_error l ("Both sides of Nat expression " ^ string_of_nexp nexp1
+                           ^ " contain free type variables so it cannot be unified with " ^ string_of_nexp nexp2)
+  | Nexp_minus (n1a, n1b) ->
+     if KidSet.is_empty (nexp_frees n1b)
+     then unify_nexps l n1a (nsum nexp2 n1b)
+     else  unify_error l ("Cannot unify minus Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
+                        
+  | _ -> unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
 
+type uvar =
+  | U_nexp of nexp
+  | U_order of order
+  | U_effect of effect
+  | U_typ of typ
+
+let string_of_uvar = function
+  | U_nexp n -> string_of_nexp n
+  | U_order o -> string_of_order o
+  | U_effect eff -> string_of_effect eff
+  | U_typ typ -> string_of_typ typ
+
+let unify_order l (Ord_aux (ord_aux1, _) as ord1) (Ord_aux (ord_aux2, _) as ord2) =
+  typ_debug ("UNIFYING ORDERS " ^ string_of_order ord1 ^ " AND " ^ string_of_order ord2);
+  match ord_aux1, ord_aux2 with
+  | Ord_var kid, _ -> KBindings.singleton kid (U_order ord2)
+  | Ord_inc, Ord_inc -> KBindings.empty
+  | Ord_dec, Ord_dec -> KBindings.empty
+  | _, _ -> unify_error l (string_of_order ord1 ^ " cannot be unified with " ^ string_of_order ord2)
+                               
 let unify l env typ1 typ2 =
-  let merge_unifiers l kid nexp1 nexp2 =
-    match nexp1, nexp2 with
-    | Some n1, Some n2 ->
-       if nexp_identical n1 n2 then Some n1
-       else typ_error l ("Multiple non-identical unifiers for " ^ string_of_kid kid
-                         ^ ": " ^ string_of_nexp n1 ^ " and " ^ string_of_nexp n2)
-    | None, Some n2 -> Some n2
-    | Some n1, None -> Some n1
+  let merge_unifiers l kid uvar1 uvar2 =
+    match uvar1, uvar2 with
+    | Some (U_nexp n1), Some (U_nexp n2) ->
+       if nexp_identical n1 n2 then Some (U_nexp n1)
+       else unify_error l ("Multiple non-identical unifiers for " ^ string_of_kid kid
+                           ^ ": " ^ string_of_nexp n1 ^ " and " ^ string_of_nexp n2)
+    | Some _, Some _ -> unify_error l "Multiple non-identical non-nexp unifiers"
+    | None, Some u2 -> Some u2
+    | Some u1, None -> Some u1
     | None, None -> None
   in
   let rec unify_typ l (Typ_aux (typ1_aux, _) as typ1) (Typ_aux (typ2_aux, _) as typ2) =
-    typ_debug ("UNIFYING: " ^ string_of_typ typ1 ^ " AND " ^ string_of_typ typ2);
+    typ_debug ("UNIFYING TYPES " ^ string_of_typ typ1 ^ " AND " ^ string_of_typ typ2);
     match typ1_aux, typ2_aux with
     | Typ_wild, Typ_wild -> KBindings.empty
     | Typ_id v1, Typ_id v2 ->
-       if compare v1 v2 = 0 then KBindings.empty
-       else typ_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2)
-    | Typ_var _, Typ_var _ -> typ_error l "Raw identifiers during unification"
+       if Id.compare v1 v2 = 0 then KBindings.empty
+       else unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2)
+    | Typ_var _, Typ_var _ -> unify_error l "Raw identifiers during unification"
     | Typ_tup typs1, Typ_tup typs2 ->
        begin
          try List.fold_left (KBindings.merge (merge_unifiers l)) KBindings.empty (List.map2 (unify_typ l) typs1 typs2) with
-         | Invalid_argument _ -> typ_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2
+         | Invalid_argument _ -> unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2
                                               ^ " tuple type is of different length")
        end
     | Typ_app (f1, args1), Typ_app (f2, args2) ->
@@ -743,23 +854,23 @@ let unify l env typ1 typ2 =
          if Id.compare f1 f2 = 0
          then
            try List.fold_left (KBindings.merge (merge_unifiers l)) KBindings.empty (List.map2 (unify_typ_args l) args1 args2) with
-           | Invalid_argument _ -> typ_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2
+           | Invalid_argument _ -> unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2
                                                 ^ " functions applied to different number of arguments")
-         else typ_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2)
+         else unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2)
        end
-    | _, _ -> typ_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2) 
+    | _, _ -> unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2) 
   and unify_typ_args l (Typ_arg_aux (typ_arg_aux1, _) as typ_arg1) (Typ_arg_aux (typ_arg_aux2, _) as typ_arg2) =
     match typ_arg_aux1, typ_arg_aux2 with
     | Typ_arg_nexp n1, Typ_arg_nexp n2 ->
        begin
          match unify_nexps l n1 n2 with
-         | Some (kid, unifier) -> KBindings.singleton kid unifier
+         | Some (kid, unifier) -> KBindings.singleton kid (U_nexp unifier)
          | None -> KBindings.empty
        end
     | Typ_arg_typ typ1, Typ_arg_typ typ2 -> unify_typ l typ1 typ2
-    | Typ_arg_order _, Typ_arg_order _ -> assert false (* FIXME *)
+    | Typ_arg_order ord1, Typ_arg_order ord2 -> unify_order l ord1 ord2
     | Typ_arg_effect _, Typ_arg_effect _ -> assert false
-    | _, _ -> typ_error l (string_of_typ_arg typ_arg1 ^ " cannot be unified with type argument " ^ string_of_typ_arg typ_arg2)
+    | _, _ -> unify_error l (string_of_typ_arg typ_arg1 ^ " cannot be unified with type argument " ^ string_of_typ_arg typ_arg2)
   in
   let typ1, typ2 = Env.expand_synonyms env typ1, Env.expand_synonyms env typ2 in
   unify_typ l typ1 typ2
@@ -831,7 +942,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, _))) typ =
      end
   | _ -> typ_error l ("Unhandled l-expression")
                    
-let quant_items = function
+let quant_items : typquant -> quant_item list = function
   | TypQ_aux (TypQ_tq qis, _) -> qis
   | TypQ_aux (TypQ_no_forall, _) -> []
                                       
@@ -840,6 +951,42 @@ let is_nat_kid kid = function
   | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_nat, _)], _), kid'), _) -> Kid.compare kid kid' = 0
   | _ -> false
 
+let is_order_kid kid = function
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_order, _)], _), kid'), _) -> Kid.compare kid kid' = 0
+  | _ -> false
+           
+let rec instantiate_quants quants kid uvar = match quants with
+  | [] -> []
+  | ((QI_aux (QI_id kinded_id, _) as quant) :: quants) ->
+     begin
+       match uvar with
+       | U_nexp nexp ->
+          if is_nat_kid kid kinded_id
+          then instantiate_quants quants kid uvar
+          else quant :: instantiate_quants quants kid uvar
+       | U_order ord ->
+          if is_order_kid kid kinded_id
+          then instantiate_quants quants kid uvar
+          else quant :: instantiate_quants quants kid uvar
+       | _ -> typ_error Parse_ast.Unknown "Cannot instantiate quantifier"
+     end
+  | ((QI_aux (QI_const nc, l)) :: quants) ->
+     begin
+       match uvar with
+       | U_nexp nexp ->
+          QI_aux (QI_const (nc_subst_nexp kid (unaux_nexp nexp) nc), l) :: quants
+       | _ -> (QI_aux (QI_const nc, l)) :: quants
+     end
+
+let subst_unifiers unifiers typ =
+  let subst_unifier typ (kid, uvar) =
+    match uvar with
+    | U_nexp nexp -> typ_subst_nexp kid (unaux_nexp nexp) typ
+    | U_order ord -> typ_subst_order kid (unaux_order ord) typ
+    | _ -> typ_error Parse_ast.Unknown "Cannot subst unifier"
+  in
+  List.fold_left subst_unifier typ (KBindings.bindings unifiers)
+           
 let typ_of (E_aux (_, (_, tannot))) = match tannot with
   | Some (_, typ) -> typ
   | None -> assert false
@@ -890,6 +1037,9 @@ let rec check_exp env (E_aux (exp_aux, (l, _)) as exp : 'a exp) (Typ_aux (typ_au
           let tpat, env = bind_pat env pat (typ_of inferred_bind) in
           annot_exp (E_let (LB_aux (LB_val_implicit (tpat, inferred_bind), (let_loc, None)), crule check_exp env exp typ)) typ
      end
+  | E_app (f, xs), _ ->
+     let inferred_exp = infer_funapp l env f xs (Some typ)
+     in (subtyp l env (typ_of inferred_exp) typ; inferred_exp)
   | _, _ -> 
      let inferred_exp = irule infer_exp env exp
      in (subtyp l env (typ_of inferred_exp) typ; inferred_exp)
@@ -919,57 +1069,99 @@ and infer_exp env (E_aux (exp_aux, (l, _)) as exp : 'a exp) : tannot exp =
   | E_cast (typ, exp) ->
      let checked_exp = check_exp env exp typ in
      annot_exp (E_cast (typ, checked_exp)) typ
-  | E_app (f, xs) ->
-     begin
-       let rec instantiate_quants quants kid nexp = match quants with
-         | [] -> []
-         | ((QI_aux (QI_id kinded_id, _) as quant) :: quants) ->
-            if is_nat_kid kid kinded_id then instantiate_quants quants kid nexp else quant :: instantiate_quants quants kid nexp
-         | ((QI_aux (QI_const nc, l)) :: quants) ->
-            QI_aux (QI_const (nc_subst_nexp kid (unaux_nexp nexp) nc), l) :: quants
-       in
-       let solve_quant = function
-         | QI_aux (QI_id _, _) -> false
-         | QI_aux (QI_const nc, _) -> prove env nc
-       in
-       let rec instantiate quants typs ret_typ args =
-         match quants, typs, args with
-         | [], [], [] -> ([], ret_typ)
-         | _, [], [] ->
-            if List.for_all solve_quant quants
-            then ([], ret_typ)
-            else typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants
-                              ^ " not resolved during function application of " ^ string_of_id f)
-         | _, [], _ -> typ_error l ("Function " ^ string_of_id f ^ " applied to too many arguments")
-         | _, _, [] -> typ_error l ("Function " ^ string_of_id f ^ " not applied to not enough arguments")
-         | _, (typ :: typs), (arg :: args) ->
-            begin
-              typ_debug ("INSTANTIATE: " ^ string_of_exp arg ^ " with " ^ string_of_typ typ ^ " NF " ^ string_of_tnf (normalize_typ env typ));
-              let iarg = irule infer_exp env arg in
-              typ_debug ("INFER: " ^ string_of_exp arg ^ " type " ^ string_of_typ (typ_of iarg) ^ " NF " ^ string_of_tnf (normalize_typ env (typ_of iarg)));
-              let unifiers = unify l env typ (typ_of iarg) in
-              typ_debug (string_of_list ", " (fun (kid, nexp) -> string_of_kid kid ^ " => " ^ string_of_nexp nexp) (KBindings.bindings unifiers));
-              let typs' = List.map (fun typ -> List.fold_left (fun typ (kid, nexp) -> typ_subst_nexp kid (unaux_nexp nexp) typ)
-                                                              typ
-                                                              (KBindings.bindings unifiers)) typs in
-              let quants' = List.fold_left (fun qs (kid, nexp) -> instantiate_quants qs kid nexp) quants (KBindings.bindings unifiers) in
-              let ret_typ' = List.fold_left (fun typ (kid, nexp) -> typ_subst_nexp kid (unaux_nexp nexp) typ) ret_typ (KBindings.bindings unifiers) in
-              let (iargs, ret_typ'') = instantiate quants' typs' ret_typ' args in
-              (iarg :: iargs, ret_typ'')
-            end
-       in
-       let (typq, f_typ) = Env.get_val_spec f env in
-       match f_typ with
-       | Typ_aux (Typ_fn (Typ_aux (Typ_tup typ_args, _), typ_ret, effs), _) ->
-          let (xs, typ_ret) = instantiate (quant_items typq) typ_args typ_ret xs in
-          annot_exp (E_app (f, xs)) typ_ret
-       | Typ_aux (Typ_fn (typ_arg, typ_ret, effs), _) ->
-          let (xs, typ_ret) = instantiate (quant_items typq) [typ_arg] typ_ret xs in
-          annot_exp (E_app (f, xs)) typ_ret
-       | _ -> typ_error l (string_of_id f ^ " is not a function")
-     end         
+  | E_app (f, xs) -> infer_funapp l env f xs None
   | _ -> typ_error l "Unimplemented"
-
+                   
+and infer_funapp l env f xs ret_ctx_typ =
+  let annot_exp exp typ = E_aux (exp, (l, Some (env, typ))) in
+  let solve_quant = function
+    | QI_aux (QI_id _, _) -> false
+    | QI_aux (QI_const nc, _) -> prove env nc
+  in
+  let rec instantiate quants typs ret_typ args =
+    match typs, args with
+    | (utyps, []), (uargs, []) ->
+       begin
+         let iuargs = List.map2 (fun utyp uarg -> crule check_exp env uarg utyp) utyps uargs in
+         if List.for_all solve_quant quants
+         then (iuargs, ret_typ)
+         else typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants
+                           ^ " not resolved during function application of " ^ string_of_id f)
+       end
+    | (utyps, (typ :: typs)), (uargs, (arg :: args)) ->
+       begin
+         typ_debug ("INSTANTIATE: " ^ string_of_exp arg ^ " with " ^ string_of_typ typ ^ " NF " ^ string_of_tnf (normalize_typ env typ));
+         let iarg = irule infer_exp env arg in
+         typ_debug ("INFER: " ^ string_of_exp arg ^ " type " ^ string_of_typ (typ_of iarg) ^ " NF " ^ string_of_tnf (normalize_typ env (typ_of iarg)));
+         try
+           let unifiers = unify l env typ (typ_of iarg) in
+           typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
+           let utyps' = List.map (subst_unifiers unifiers) utyps in
+           let typs' = List.map (subst_unifiers unifiers) typs in
+           let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
+           let ret_typ' = subst_unifiers unifiers ret_typ in
+           let (iargs, ret_typ'') = instantiate quants' (utyps', typs') ret_typ' (uargs, args) in
+           (iarg :: iargs, ret_typ'')
+         with
+         | Unification_error (l, str) ->
+            typ_debug ("Unification error: " ^ str);
+            let (iargs, ret_typ') = instantiate quants (typ :: utyps, typs) ret_typ (arg :: uargs, args) in
+            (iarg :: iargs, ret_typ')
+       end
+    | (_, []), _ -> typ_error l ("Function " ^ string_of_id f ^ " applied to too many arguments")
+    | _, (_, []) -> typ_error l ("Function " ^ string_of_id f ^ " not applied to enough arguments")
+  in
+  let instantiate_ret quants typs ret_typ =
+    match ret_ctx_typ with
+    | None -> (quants, typs, ret_typ)
+    | Some rct ->
+       begin
+         try
+           let unifiers = unify l env ret_typ rct in
+           typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
+           let typs' = List.map (subst_unifiers unifiers) typs in
+           let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
+           let ret_typ' = subst_unifiers unifiers ret_typ in
+           (quants', typs', ret_typ')
+         with
+         | Unification_error (_, str) ->
+            typ_debug ("Unification error (function return): " ^ str);
+            (quants, typs, ret_typ)
+       end
+  in
+  let (typq, f_typ) = Env.get_val_spec f env in
+  match f_typ with
+  | Typ_aux (Typ_fn (Typ_aux (Typ_tup typ_args, _), typ_ret, effs), _) ->
+     let (quants, typ_args, typ_ret) = instantiate_ret (quant_items typq) typ_args typ_ret in
+     let (xs, typ_ret) = instantiate quants ([], typ_args) typ_ret ([], xs) in
+     annot_exp (E_app (f, xs)) typ_ret
+  | Typ_aux (Typ_fn (typ_arg, typ_ret, effs), _) ->
+     let (quants, typ_args, typ_ret) = instantiate_ret (quant_items typq) [typ_arg] typ_ret in
+     let (xs, typ_ret) = instantiate quants ([], typ_args) typ_ret ([], xs) in
+     annot_exp (E_app (f, xs)) typ_ret
+  | _ -> typ_error l (string_of_id f ^ " is not a function")
+ 
+(* and eliminate_quants quants (typs1, typs2) ret_typ (args1, args2) = *)
+(*   match typs, args with *)
+(*   | [], [] -> (quants, [], ret_typ, []) *)
+(*   | (typ :: typs) (arg :: args) -> *)
+(*      begin *)
+(*        let iarg = irule infer_exp env arg in *)
+(*        try *)
+(*          let unifiers = unify l env typ (typ_of iarg) in *)
+(*          let typs' = List.map (fun typ -> List.fold_left (fun typ (kid, nexp) -> typ_subst_nexp kid (unaux_nexp nexp) typ) *)
+(*                                                          typ *)
+(*                                                          (KBindings.bindings unifiers)) typs in *)
+(*          let quants' = List.fold_left (fun qs (kid, nexp) -> instantiate_quants qs kid nexp) quants (KBindings.bindings unifiers) in *)
+(*          let ret_typ' = List.fold_left (fun typ (kid, nexp) -> typ_subst_nexp kid (unaux_nexp nexp) typ) ret_typ (KBindings.bindings unifiers) in *)
+(*          let (quants'', typs'', ret_typ'', iargs) = eliminate_quants quants' typs' ret_typ' args in *)
+(*          (quants'', typs'', ret_typ'', iarg :: iargs) *)
+(*        with *)
+(*        | Unification_error str -> *)
+(*           let (quants', typs', ret_typ', iargs) = eliminate_quants quants typs ret_typ args in *)
+(*           (quants', typ *)
+(*      end      *)    
+       
 let check_funcl env (FCL_aux (FCL_Funcl (id, pat, exp), (l, _))) typ =
   match typ with
   | Typ_aux (Typ_fn (typ_arg, typ_ret, eff), _) ->
