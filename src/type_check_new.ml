@@ -1153,6 +1153,7 @@ and infer_exp env (E_aux (exp_aux, (l, _)) as exp : 'a exp) : tannot exp =
   | E_app (f, xs) -> infer_funapp l env f xs None
   | E_vector_access (v, n) -> infer_funapp l env (mk_id "vector_access") [v; n] None
   | E_vector_append (v1, v2) -> infer_funapp l env (mk_id "vector_append") [v1; v2] None
+  | E_vector_subrange (v, n, m) -> infer_funapp l env (mk_id "vector_subrange") [v; n; m] None
   | _ -> typ_error l "Unimplemented"
                    
 and infer_funapp l env f xs ret_ctx_typ =
