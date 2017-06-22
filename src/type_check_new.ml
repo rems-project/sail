@@ -929,6 +929,8 @@ let infer_lit env (L_aux (lit_aux, l) as lit) =
   | L_zero -> mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp (nconstant 0))]))
   | L_one -> mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp (nconstant 1))]))
   | L_num n -> mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp (nconstant n))]))
+  | L_true -> mk_typ (Typ_id (mk_id "bool"))
+  | L_false -> mk_typ (Typ_id (mk_id "bool"))
   | _ -> typ_error l ("Unimplemented literal " ^ string_of_lit lit)
             
 let rec bind_pat env (P_aux (pat_aux, (l, _)) as pat) (Typ_aux (typ_aux, _) as typ) =
@@ -1121,6 +1123,11 @@ let rec check_exp env (E_aux (exp_aux, (l, _)) as exp : 'a exp) (Typ_aux (typ_au
   | E_app (f, xs), _ ->
      let inferred_exp = infer_funapp l env f xs (Some typ)
      in (subtyp l env (typ_of inferred_exp) typ; inferred_exp)
+  | E_if (cond, then_branch, else_branch), _ ->
+     let cond' = check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
+     let then_branch' = check_exp env then_branch typ in
+     let else_branch' = check_exp env else_branch typ in
+     annot_exp (E_if (cond', then_branch', else_branch')) typ
   | _, _ -> 
      let inferred_exp = irule infer_exp env exp
      in (subtyp l env (typ_of inferred_exp) typ; inferred_exp)
