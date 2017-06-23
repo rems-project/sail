@@ -53,6 +53,7 @@ let opt_print_ocaml = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_ocaml = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
+let opt_mono_split = ref ([]:((string * int) * string) list)
 let options = Arg.align ([
   ( "-o",
     Arg.String (fun f -> opt_file_out := Some f),
@@ -86,6 +87,13 @@ let options = Arg.align ([
   ( "-skip_constraints",
     Arg.Clear Type_internal.do_resolve_constraints,
     " (debug) skip constraint resolution in type-checking");
+  ( "-mono-split",
+    Arg.String (fun s ->
+      let l = String.split_on_char ':' s in
+      match l with
+      | [fname;line;var] -> opt_mono_split := ((fname,int_of_string line),var)::!opt_mono_split
+      | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable>"))),
+      "<filename>:<line>:<variable> to case split for monomorphisation");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
@@ -130,7 +138,10 @@ let main() =
     let (ast,kenv,ord) = convert_ast ast in
     let (ast,type_envs) = check_ast ast kenv ord in 
 
-(*    let ast = Monomorphise.split_defs [(("mips_insts.sail",1120),"width")] type_envs ast in*)
+    let ast = match !opt_mono_split with
+      | [] -> ast
+      | l -> Monomorphise.split_defs l type_envs ast
+    in
 
     let ast = rewrite_ast ast in
     let out_name = match !opt_file_out with
