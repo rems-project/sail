@@ -263,12 +263,17 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
                         ("Multiple variables to split on: " ^ String.concat ", " (List.map snd lvs)))
     in
 
-    (* TODO: only warn if one of the variables is present *)
     let check_single_pat (P_aux (_,(l,_)) as p) =
       match match_l l with
       | [] -> p
-      | _ -> (Reporting_basic.print_err false true l "Monomorphisation"
-                "Splitting a singleton pattern is not possible"; p)
+      | lvs ->
+         let pvs = bindings_from_pat t_env p in
+         let overlap = List.exists (fun (_,v) -> List.mem v pvs) lvs in
+         let () =
+           if overlap then
+             Reporting_basic.print_err false true l "Monomorphisation"
+               "Splitting a singleton pattern is not possible"
+         in p
     in
 
     let rec map_exp ((E_aux (e,annot)) as ea) =
