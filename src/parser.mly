@@ -413,6 +413,8 @@ exp_typ:
      { $1 }
    | TwoStarStar atomic_typ
      { tloc (ATyp_exp($2)) }
+   | TwoStarStar atomic_typ Minus Num
+     { tloc (ATyp_minus (tloc (ATyp_exp $2), tloc (ATyp_constant $4))) }
    | TwoStarStar Num
      { tloc (ATyp_exp (tloc (ATyp_constant $2))) }
 

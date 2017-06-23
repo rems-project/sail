@@ -477,7 +477,7 @@ default_spec_aux =  (* Default kinding or typing assumption *)
 
 
 type 
-'a type_def_aux =  (* Type definition body *)
+type_def_aux =  (* Type definition body *)
    TD_abbrev of id * name_scm_opt * typschm (* type abbreviation *)
  | TD_record of id * name_scm_opt * typquant * ((typ * id)) list * bool (* struct type definition *)
  | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
@@ -531,7 +531,7 @@ type
 
 type 
 'a type_def = 
-   TD_aux of 'a type_def_aux * 'a annot
+   TD_aux of type_def_aux * 'a annot
 
 
 type 
