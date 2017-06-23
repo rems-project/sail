@@ -16,7 +16,142 @@ let optmap v f =
   | None -> None
   | Some v -> Some (f v)
 
+let disable_const_propagation = ref false
+
+(* Based on current type checker's behaviour *)
+let pat_id_is_variable t_env id =
+  match Envmap.apply t_env id with
+  | Some (Base(_,Constructor _,_,_,_,_))
+  | Some (Base(_,Enum _,_,_,_,_))
+    -> false
+  | _ -> true
+  
+
+let bindings_from_pat t_env p =
+  let rec aux_pat (P_aux (p,annot)) =
+  match p with
+  | P_lit _
+  | P_wild
+    -> []
+  | P_as (p,id) -> id_to_string id::(aux_pat p)
+  | P_typ (_,p) -> aux_pat p
+  | P_id id ->
+     let i = id_to_string id in
+     if pat_id_is_variable t_env i then [i] else []
+  | P_vector ps
+  | P_vector_concat ps
+  | P_app (_,ps)
+  | P_tup ps
+  | P_list ps
+    -> List.concat (List.map aux_pat ps)
+  | P_record (fps,_) -> List.concat (List.map aux_fpat fps)
+  | P_vector_indexed ips -> List.concat (List.map (fun (_,p) -> aux_pat p) ips)
+  and aux_fpat (FP_aux (FP_Fpat (_,p), _)) = aux_pat p
+  in aux_pat p
+
+let remove_bound t_env env pat =
+  let bound = bindings_from_pat t_env pat in
+  List.fold_left (fun sub v -> Envmap.remove env v) env bound
+
 let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
+
+  (* Constant propogation *)
+  let rec const_prop_exp substs ((E_aux (e,(l,annot))) as exp) =
+    let re e = E_aux (e,(l,annot)) in
+    match e with
+      (* TODO: are there circumstances in which we should get rid of these? *)
+    | E_block es -> re (E_block (List.map (const_prop_exp substs) es))
+    | E_nondet es -> re (E_nondet (List.map (const_prop_exp substs) es))
+       
+    | E_id id ->
+       (match Envmap.apply substs (id_to_string id) with
+       | None -> exp
+       | Some exp' -> exp')
+    | E_lit _
+    | E_sizeof _
+    | E_internal_exp _
+    | E_sizeof_internal _
+    | E_internal_exp_user _
+    | E_comment _
+      -> exp
+    | E_cast (t,e') -> re (E_cast (t, const_prop_exp substs e'))
+    | E_app (id,es) -> re (E_app (id,List.map (const_prop_exp substs) es))
+    | E_app_infix (e1,id,e2) -> re (E_app_infix (const_prop_exp substs e1,id,const_prop_exp substs e2))
+    | E_tuple es -> re (E_tuple (List.map (const_prop_exp substs) es))
+    | E_if (e1,e2,e3) -> re (E_if (const_prop_exp substs e1, const_prop_exp substs e2, const_prop_exp substs e3))
+    | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3,ord,const_prop_exp (Envmap.remove substs (id_to_string id)) e4))
+    | E_vector es -> re (E_vector (List.map (const_prop_exp substs) es))
+    | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,const_prop_exp substs e)) ies,
+                                                         const_prop_opt_default substs ed))
+    | E_vector_access (e1,e2) -> re (E_vector_access (const_prop_exp substs e1,const_prop_exp substs e2))
+    | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3))
+    | E_vector_update (e1,e2,e3) -> re (E_vector_update (const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3))
+    | E_vector_update_subrange (e1,e2,e3,e4) -> re (E_vector_update_subrange (const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3,const_prop_exp substs e4))
+    | E_vector_append (e1,e2) -> re (E_vector_append (const_prop_exp substs e1,const_prop_exp substs e2))
+    | E_list es -> re (E_list (List.map (const_prop_exp substs) es))
+    | E_cons (e1,e2) -> re (E_cons (const_prop_exp substs e1,const_prop_exp substs e2))
+    | E_record fes -> re (E_record (const_prop_fexps substs fes))
+    | E_record_update (e,fes) -> re (E_record_update (const_prop_exp substs e, const_prop_fexps substs fes))
+    | E_field (e,id) -> re (E_field (const_prop_exp substs e,id))
+    | E_case (e,cases) -> re (E_case (const_prop_exp substs e, List.map (const_prop_pexp substs) cases))
+    | E_let (lb,e) ->
+       let (lb',substs') = const_prop_letbind substs lb in
+       re (E_let (lb', const_prop_exp substs' e))
+    | E_assign (le,e) -> re (E_assign (const_prop_lexp substs le, const_prop_exp substs e))
+    | E_exit e -> re (E_exit (const_prop_exp substs e))
+    | E_return e -> re (E_return (const_prop_exp substs e))
+    | E_assert (e1,e2) -> re (E_assert (const_prop_exp substs e1,const_prop_exp substs e2))
+    | E_internal_cast (ann,e) -> re (E_internal_cast (ann,const_prop_exp substs e))
+    | E_comment_struc e -> re (E_comment_struc e)
+    | E_internal_let _
+    | E_internal_plet _
+    | E_internal_return _
+      -> raise (Reporting_basic.err_unreachable l
+                  "Unexpected internal expression encountered in monomorphisation")
+    and const_prop_opt_default substs ((Def_val_aux (ed,annot)) as eda) =
+    match ed with
+    | Def_val_empty -> eda
+    | Def_val_dec e -> Def_val_aux (Def_val_dec (const_prop_exp substs e),annot)
+  and const_prop_fexps substs (FES_aux (FES_Fexps (fes,flag), annot)) =
+    FES_aux (FES_Fexps (List.map (const_prop_fexp substs) fes, flag), annot)
+  and const_prop_fexp substs (FE_aux (FE_Fexp (id,e), annot)) =
+    FE_aux (FE_Fexp (id,const_prop_exp substs e),annot)
+  and const_prop_pexp substs (Pat_aux (Pat_exp (p,e),l)) =
+    Pat_aux (Pat_exp (p,const_prop_exp (remove_bound t_env substs p) e),l)
+  and const_prop_letbind substs (LB_aux (lb,annot)) =
+    match lb with
+    | LB_val_explicit (tysch,p,e) ->
+       (LB_aux (LB_val_explicit (tysch,p,const_prop_exp substs e), annot),
+        remove_bound t_env substs p)
+    | LB_val_implicit (p,e) ->
+       (LB_aux (LB_val_implicit (p,const_prop_exp substs e), annot),
+        remove_bound t_env substs p)
+  and const_prop_lexp substs ((LEXP_aux (e,annot)) as le) =
+    let re e = LEXP_aux (e,annot) in
+    match e with
+    | LEXP_id _ (* shouldn't end up substituting here *)
+    | LEXP_cast _
+      -> le
+    | LEXP_memory (id,es) -> re (LEXP_memory (id,List.map (const_prop_exp substs) es)) (* or here *)
+    | LEXP_tup les -> re (LEXP_tup (List.map (const_prop_lexp substs) les))
+    | LEXP_vector (le,e) -> re (LEXP_vector (const_prop_lexp substs le, const_prop_exp substs e))
+    | LEXP_vector_range (le,e1,e2) -> re (LEXP_vector_range (const_prop_lexp substs le, const_prop_exp substs e1, const_prop_exp substs e2))
+    | LEXP_field (le,id) -> re (LEXP_field (const_prop_lexp substs le, id))
+  in
+
+  let subst_exp subst exp =
+    if !disable_const_propagation then
+    (* TODO: This just sticks a let in - we really need propogation *)
+      let (subi,(E_aux (_,subannot) as sube)) = subst in
+      let E_aux (e,(l,annot)) = exp in
+      let lg = Generated l in
+      let p = P_aux (P_id (Id_aux (Id subi, lg)), subannot) in
+      E_aux (E_let (LB_aux (LB_val_implicit (p,sube),(lg,annot)), exp),(lg,annot))
+    else 
+      let substs = Envmap.from_list [subst] in
+      const_prop_exp substs exp
+  in
+    
 
   (* Split a variable pattern into every possible value *)
 
@@ -136,15 +271,6 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
                 "Splitting a singleton pattern is not possible"; p)
     in
 
-    let subst_exp subst exp =
-      (* TODO: This just sticks a let in - we really need propogation *)
-      let (subi,(E_aux (_,subannot) as sube)) = subst in
-      let E_aux (e,(l,annot)) = exp in
-      let lg = Generated l in
-      let p = P_aux (P_id (Id_aux (Id subi, lg)), subannot) in
-      E_aux (E_let (LB_aux (LB_val_implicit (p,sube),(lg,annot)), exp),(lg,annot))
-    in
-    
     let rec map_exp ((E_aux (e,annot)) as ea) =
       let re e = E_aux (e,annot) in
       match e with
