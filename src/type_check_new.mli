@@ -45,13 +45,13 @@ open Ast
 
 type mut = Immutable | Mutable
 
-type lvar = Register of typ | Local of mut * typ | Unbound
+type lvar = Register of typ | Enum of typ | Local of mut * typ | Unbound
                          
 module Env : sig
   type t
   val get_val_spec : id -> t -> typquant * typ
   val add_val_spec : id -> typquant * typ -> t -> t
-  val get_local : id -> t -> mut * typ
+  (* val get_local : id -> t -> mut * typ *)
   val add_local : id -> mut * typ -> t -> t
   val get_register : id -> t -> typ
   val add_register : id -> typ -> t -> t
