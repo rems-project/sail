@@ -847,6 +847,8 @@ let to_ast_dec (names,k_env,def_ord) (Parse_ast.DEC_aux(regdec,l)) =
 let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out * (id * partial_def) list = 
   let envs = (names,k_env,def_ord) in
   match def with
+  | Parse_ast.DEF_overload(id,ids) ->
+    ((Finished(DEF_overload(to_ast_id id, List.map to_ast_id ids))),envs),partial_defs
   | Parse_ast.DEF_kind(k_def) ->
     let kd,envs = to_ast_kdef envs k_def in
     ((Finished(DEF_kind(kd))),envs),partial_defs

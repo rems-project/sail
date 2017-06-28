@@ -2528,6 +2528,7 @@ let check_def envs def =
 let rec check envs (Defs defs) = 
  match defs with
    | [] -> (Defs []),envs
+   | (DEF_overload (_, _)::defs) -> check envs (Defs defs)
    | def::defs -> let (def, envs) = check_def envs def in
                   let (Defs defs, envs) = check envs (Defs defs) in
                   (Defs (def::defs)), envs

@@ -81,6 +81,7 @@ let kw_table =
      ("forall",                  (fun _ -> Forall));
      ("foreach",                 (fun _ -> Foreach));
      ("function",                (fun x -> Function_));
+     ("overload",                (fun _ -> Overload));
      ("if",                      (fun x -> If_));
      ("in",			 (fun x -> In));
      ("inc",                     (fun _ -> Inc));

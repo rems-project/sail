@@ -1,5 +1,6 @@
-val cast forall Nat 'n, Order 'ord. [:1:] -> vector<'n,1,'ord,bit> effect pure cast_one_bv
-val cast forall Nat 'n, Order 'ord. [:0:] -> vector<'n,1,'ord,bit> effect pure cast_zero_bv
+val cast forall Nat 'n, Nat 'm, Nat 'o, 'o >= 'm - 1.
+  vector<'n,'m,dec,bit> -> vector<'o,'m,dec,bit>
+  effect pure ADJUST
 
 default Order dec
 
@@ -23,5 +24,5 @@ val unit -> unit effect {wreg} test
 
 function unit test () =
 {
-  CP0Cause.BD := 1
+  CP0Cause.CE := 0b11
 }

@@ -1,5 +1,12 @@
-val cast forall Nat 'n, Order 'ord. [:1:] -> vector<'n,1,'ord,bit> effect pure cast_one_bv
-val cast forall Nat 'n, Order 'ord. [:0:] -> vector<'n,1,'ord,bit> effect pure cast_zero_bv
+(* val forall Nat 'n, Nat 'm, Nat 'o, 'o >= 'm - 1.
+  vector<'n,'m,dec,bit> -> vector<'o,'m,dec,bit>
+  effect pure ADJUST
+*)
+
+val forall Nat 'n, Nat 'l, Type 'a, 'l >= 0. (vector<'n,'l,dec,'a>, [|'n - 'l + 1:'n|]) -> 'a effect pure vector_access_dec
+(*
+val forall Nat 'n, Nat 'l, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [|'n:'n + 'l - 1|]) -> 'a effect pure vector_access_inc
+*)
 
 default Order dec
 
@@ -19,9 +26,9 @@ typedef CauseReg = register bits [ 31 : 0 ] {
 
 register (CauseReg) CP0Cause
 
-val unit -> unit effect {wreg} test
+val unit -> bit effect {rreg} test
 
-function unit test () =
+function bit test () =
 {
-  CP0Cause.BD := 1
+  CP0Cause[30]
 }
