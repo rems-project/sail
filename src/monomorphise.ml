@@ -53,8 +53,30 @@ let remove_bound t_env env pat =
   let bound = bindings_from_pat t_env pat in
   List.fold_left (fun sub v -> Envmap.remove env v) env bound
 
+
 let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
 
+  let can_match (E_aux (e,(l,annot)) as exp) cases =
+    match e with
+    | E_id id ->
+       let i = id_to_string id in
+       (match Envmap.apply t_env i with
+       | Some(Base(_,Enum _,_,_,_,_)) ->
+          let rec findpat cases =
+            match cases with
+            | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
+                       ("Failed to find a case for " ^ i); None)
+            | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some exp
+            | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
+            | (Pat_aux (Pat_exp (P_aux (P_app (id',[]),_),exp),_))::tl ->
+               if i = id_to_string id' then Some exp else findpat tl
+            | (Pat_aux (Pat_exp (P_aux (_,(l',_)),_),_))::_ ->
+               (Reporting_basic.print_err false true l' "Monomorphisation"
+                  "Unexpected kind of pattern for enumeration"; None)
+          in findpat cases
+       | _ -> None)
+    | _ -> None
+  in
   (* Constant propogation *)
   let rec const_prop_exp substs ((E_aux (e,(l,annot))) as exp) =
     let re e = E_aux (e,(l,annot)) in
@@ -93,7 +115,12 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
     | E_record fes -> re (E_record (const_prop_fexps substs fes))
     | E_record_update (e,fes) -> re (E_record_update (const_prop_exp substs e, const_prop_fexps substs fes))
     | E_field (e,id) -> re (E_field (const_prop_exp substs e,id))
-    | E_case (e,cases) -> re (E_case (const_prop_exp substs e, List.map (const_prop_pexp substs) cases))
+    | E_case (e,cases) ->
+       let e' = const_prop_exp substs e in
+       (* TODO: ought to propagate type substitution to other terms *)
+       (match can_match e' cases with
+       | None -> re (E_case (e', List.map (const_prop_pexp substs) cases))
+       | Some e'' -> const_prop_exp substs e'')
     | E_let (lb,e) ->
        let (lb',substs') = const_prop_letbind substs lb in
        re (E_let (lb', const_prop_exp substs' e))
