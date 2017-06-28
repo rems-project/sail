@@ -640,7 +640,7 @@ though, if you also have `sail-electric-indent' on."
     (setq sail-mode-abbrev-table (make-abbrev-table))
   (mapc 'sail-define-abbrev
         '("scattered" "function" "typedef" "let" "default" "val" "register"
-          "alias" "union" "member" "clause" "extern" "effect"
+          "alias" "union" "member" "clause" "extern" "cast" "effect"
           "rec" "and" "switch" "case" "exit" "foreach" "from" "else"
           "to" "end" "downto" "in" "then" "with" "if" "nondet" "as"
 	  "undefined" "const" "struct" "IN" "deinfix" "return" "sizeof"))
@@ -708,7 +708,7 @@ Based on Tuareg mode. See Tuareg mode for usage"
 (defun sail-install-font-lock ()
   (setq
    sail-font-lock-keywords
-   `(("\\<\\(extern\\|function\\|scattered\\|clause\\|effect\\|default\\|struct\\|const\\|union\\|val\\|typedef\\|in\\|let\\|rec\\|and\\|end\\|register\\|alias\\|member\\|enumerate\\)\\>"
+   `(("\\<\\(extern\\|cast\\|function\\|scattered\\|clause\\|effect\\|default\\|struct\\|const\\|union\\|val\\|typedef\\|in\\|let\\|rec\\|and\\|end\\|register\\|alias\\|member\\|enumerate\\)\\>"
       0 sail-font-lock-governing-face nil nil)
      ("\\<\\(false\\|true\\|bitzero\\|bitone\\|0x[:xdigit:]\\|[:digit:]\\)\\>" 0 font-lock-constant-face nil nil)
      ("\\<\\(as\\|downto\\|else\\|foreach\\|if\\|t\\(hen\\|o\\)\\|when\\|switch\\|with\\|case\\|exit\\|sizeof\\|nondet\\|from\\|by\\|return\\)\\>"
@@ -717,7 +717,7 @@ Based on Tuareg mode. See Tuareg mode for usage"
       2 font-lock-variable-name-face keep nil)
      ("\\<\\(typedef\\|union\\)\\>[ \t\n]*\\(\\(\\w\\|[_ \t()*,]\\)+\\)"
       2 font-lock-type-face keep nil)
-     ("\\<\\(Type\\|Nat\\|Order\\|Effect\\|inc\\|dec\\|implicit\\|vector\\|rreg\\|wreg\\|rmem\\|wmem\\|wmv\\|eamem\\|barr\\|undef\\|escape\\|unspec\\|nondet\\|pure\\|effect\\|IN\\|forall\\|bit\\|unit\\|bool\\|nat\\|int\\)\\>"
+     ("\\<\\(Type\\|Nat\\|Num\\|Order\\|Effect\\|inc\\|dec\\|implicit\\|vector\\|rreg\\|wreg\\|rmem\\|wmem\\|wmv\\|eamem\\|barr\\|undef\\|escape\\|unspec\\|nondet\\|pure\\|effect\\|IN\\|forall\\|bit\\|unit\\|bool\\|nat\\|int\\)\\>"
       0 font-lock-type-face keep nil)
      ("\\<\\(val\\|extern\\|clause\\|and\\||let\\|rec\\>[ \t\n]*\\(\\(\\w\\|[_,?~.]\\)*\\)"
       2 font-lock-variable-name-face keep nil)

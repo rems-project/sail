@@ -615,6 +615,9 @@ let to_ast_spec (names,k_env,default_order) (val_:Parse_ast.val_spec) : (tannot 
     | Parse_ast.VS_extern_spec(ts,id,s) ->
       let typsch,_,_ = to_ast_typschm k_env default_order ts in
       VS_aux(VS_extern_spec(typsch,to_ast_id id,s),(l,NoTyp)),(names,k_env,default_order)
+    | Parse_ast.VS_cast_spec(ts,id) ->
+      let typsch,_,_ = to_ast_typschm k_env default_order ts in
+      VS_aux(VS_cast_spec(typsch,to_ast_id id),(l,NoTyp)),(names,k_env,default_order)
     | Parse_ast.VS_extern_no_rename(ts,id) ->
       let typsch,_,_ = to_ast_typschm k_env default_order ts in
        VS_aux(VS_extern_no_rename(typsch,to_ast_id id),(l,NoTyp)),(names,k_env,default_order))

@@ -76,6 +76,7 @@ let kw_table =
      ("else",                    (fun _ -> Else));
      ("exit",                    (fun _ -> Exit));
      ("extern",                  (fun _ -> Extern));
+     ("cast",                    (fun _ -> Cast));
      ("false",                   (fun _ -> False));
      ("forall",                  (fun _ -> Forall));
      ("foreach",                 (fun _ -> Foreach));
@@ -87,6 +88,7 @@ let kw_table =
      ("let",                     (fun x -> Let_));
      ("member",                  (fun x -> Member));
      ("Nat",                     (fun x -> Nat));
+     ("Num",                     (fun x -> NatNum));
      ("Order",                   (fun x -> Order));
      ("pure",                    (fun x -> Pure));
      ("rec",			 (fun x -> Rec));

@@ -46,7 +46,7 @@ open Ast
 type mut = Immutable | Mutable
 
 type lvar = Register of typ | Enum of typ | Local of mut * typ | Unbound
-                         
+
 module Env : sig
   type t
   val get_val_spec : id -> t -> typquant * typ
@@ -71,6 +71,8 @@ module Env : sig
 end
 
 type tannot = (Env.t * typ) option
+
+val check_exp : Env.t -> unit exp -> typ -> tannot exp
                
 val check : Env.t -> 'a defs -> tannot defs * Env.t
 

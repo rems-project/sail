@@ -2261,6 +2261,10 @@ let check_val_spec envs (VS_aux(vs,(l,annot))) =
       let tannot = typschm_to_tannot envs true true typs (External None) in
       (VS_aux(vs,(l,tannot)),
        Env(d_env,(Envmap.insert t_env (id_to_string id,tannot)),b_env,tp_env))
+    | VS_cast_spec(typs,id) ->
+      let tannot = typschm_to_tannot envs true true typs (External None) in
+      (VS_aux(VS_val_spec(typs,id),(l,tannot)),
+       Env(d_env,(Envmap.insert t_env (id_to_string id,tannot)),b_env,tp_env))
     | VS_extern_spec(typs,id,s) ->
       let tannot = typschm_to_tannot envs true true typs (External (Some s)) in
       (VS_aux(vs,(l,tannot)),

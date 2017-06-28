@@ -1,3 +1,4 @@
+default Order dec
 
 typedef CauseReg = register bits [ 31 : 0 ] {
   31       : BD; (* branch delay *)
