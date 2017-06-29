@@ -40,7 +40,7 @@
 #  SUCH DAMAGE.                                                          #
 ##########################################################################
 
-.PHONY: all sail test clean doc lib power test_power test_idempotence
+.PHONY: all sail sail.native sail.byte test clean doc lib power test_power test_idempotence
 
 # set to -p on command line to enable gprof profiling
 OCAML_OPTS?=
