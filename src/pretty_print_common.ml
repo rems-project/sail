@@ -125,6 +125,7 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   (*TODO Need to un bid-endian-ify this here, since both can transform to the shorthand, especially with <: and :> *)
   (* Special case simple vectors to improve legibility
    * XXX we assume big-endian here, as usual *)
+(*
   | Typ_app(Id_aux (Id "vector", _), [
       Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
       Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant m, _)), _);
@@ -159,6 +160,7 @@ let doc_typ, doc_atomic_typ, doc_nexp =
       Typ_arg_aux (Typ_arg_order (Ord_aux (Ord_dec, _)), _);
       Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)]) ->
     (doc_id id) ^^ (brackets (if n' = m_nexp then nexp m_nexp else doc_op colon (nexp m_nexp) (nexp n_n)))
+ *)
   | Typ_app(Id_aux (Id "range", _), [
     Typ_arg_aux(Typ_arg_nexp (Nexp_aux(Nexp_constant n, _)), _);
     Typ_arg_aux(Typ_arg_nexp m, _);]) ->

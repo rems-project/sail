@@ -1470,11 +1470,15 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
    or throws a type error if the coercion cannot be performed. *)
 and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
   let strip exp_aux = strip_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))) in
+  let annot_exp exp typ = E_aux (exp, (l, Some (env, typ))) in
   let rec try_casts m = function
     | [] -> typ_error l ("No valid casts:\n" ^ m)
     | (cast :: casts) -> begin
         typ_print ("Casting with " ^ string_of_id cast ^ " expression " ^ string_of_exp annotated_exp ^ " to " ^ string_of_typ typ);
-        try crule check_exp (Env.no_casts env) (strip (E_app (cast, [annotated_exp]))) typ with
+        try
+          let checked_cast = crule check_exp (Env.no_casts env) (strip (E_app (cast, [annotated_exp]))) typ in
+          annot_exp (E_cast (typ, checked_cast)) typ
+        with
         | Type_error (_, m) -> try_casts m casts
       end
   in
@@ -1494,13 +1498,15 @@ and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
    throws a unification error *)
 and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
   let strip exp_aux = strip_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))) in
+  let annot_exp exp typ = E_aux (exp, (l, Some (env, typ))) in
   let rec try_casts m = function
     | [] -> unify_error l ("No valid casts resulted in unification:\n" ^ m)
     | (cast :: casts) -> begin
         typ_print ("Casting with " ^ string_of_id cast ^ " expression " ^ string_of_exp annotated_exp ^ " for unification");
         try
-          let annotated_exp = irule infer_exp (Env.no_casts env) (strip (E_app (cast, [annotated_exp]))) in
-          annotated_exp, unify l env typ (typ_of annotated_exp)
+          let inferred_cast = irule infer_exp (Env.no_casts env) (strip (E_app (cast, [annotated_exp]))) in
+          let ityp = typ_of inferred_cast in
+          annot_exp (E_cast (ityp, inferred_cast)) ityp, unify l env typ ityp
         with
         | Type_error (_, m) -> try_casts m casts
         | Unification_error (_, m) -> try_casts m casts
@@ -1849,7 +1855,7 @@ let check_letdef env (LB_aux (letbind, (l, _))) =
     | LB_val_implicit (P_aux (P_typ (typ_annot, pat), _), bind) ->
        let checked_bind = crule check_exp env (strip_exp bind) typ_annot in
        let tpat, env = bind_pat env (strip_pat pat) typ_annot in
-       DEF_val (LB_aux (LB_val_implicit (tpat, checked_bind), (l, None))), env
+       DEF_val (LB_aux (LB_val_implicit (P_aux (P_typ (typ_annot, tpat), (l, Some (env, typ_annot))), checked_bind), (l, None))), env
     | LB_val_implicit (pat, bind) ->
        let inferred_bind = irule infer_exp env (strip_exp bind) in
        let tpat, env = bind_pat env (strip_pat pat) (typ_of inferred_bind) in
