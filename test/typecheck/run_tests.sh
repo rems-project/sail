@@ -11,6 +11,9 @@ NC='\033[0m'
 mkdir -p $DIR/rtpass
 mkdir -p $DIR/rtfail
 
+pass=0
+fail=0
+
 for i in `ls $DIR/pass/`;
 do
     printf "testing $i expecting pass: "
@@ -18,11 +21,15 @@ do
     then
 	if $DIR/../../sail -dno_cast -just_check $DIR/rtpass/$i 2> /dev/null;
 	then
+	    (( pass += 2))
 	    printf "${GREEN}pass${NC}\n"
 	else
-	    printf "${YELLOW}pass${NC}\n"
+	    (( fail += 1 ))
+	    (( pass += 1 ))
+	    printf "${YELLOW}pass but failed re-check${NC}\n"
 	fi
     else
+	(( fail += 2 ))
 	printf "${RED}fail${NC}\n"
     fi
 done
@@ -32,13 +39,19 @@ do
     printf "testing $i expecting fail: "
     if $DIR/../../sail -ddump_tc_ast -just_check $DIR/fail/$i 2> /dev/null 1> $DIR/rtfail/$i;
     then
+	(( fail += 2 ))
 	printf "${RED}pass${NC}\n"
     else
 	if $DIR/../../sail -dno_cast -just_check $DIR/rtfail/$i 2> /dev/null;
 	then
-	    printf "${YELLOW}fail${NC}\n"
+	    (( fail += 1 ))
+	    (( pass += 1 ))
+	    printf "${YELLOW}fail but passed re-check${NC}\n"
 	else
+	    (( pass += 2 ))
 	    printf "${GREEN}fail${NC}\n"
 	fi
     fi
 done
+
+printf "Passed ${pass} out of $(( pass + fail ))\n"

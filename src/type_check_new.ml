@@ -210,6 +210,8 @@ let string_of_n_constraint = function
   | NC_aux (NC_fixed (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
   | NC_aux (NC_bounded_ge (n1, n2), _) -> string_of_nexp n1 ^ " >= " ^ string_of_nexp n2
   | NC_aux (NC_bounded_le (n1, n2), _) -> string_of_nexp n1 ^ " <= " ^ string_of_nexp n2
+  | NC_aux (NC_set_subst (nexp, ns), _) ->
+     string_of_nexp nexp ^ " IN {" ^ string_of_list ", " string_of_int ns ^ "}"
   | NC_aux (NC_nat_set_bounded (kid, ns), _) ->
      string_of_kid kid ^ " IN {" ^ string_of_list ", " string_of_int ns ^ "}"
 
@@ -340,9 +342,10 @@ and nc_subst_nexp_aux l sv subst = function
   | NC_bounded_ge (n1, n2) -> NC_bounded_ge (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_bounded_le (n1, n2) -> NC_bounded_le (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_nat_set_bounded (kid, ints) as set_nc ->
-      if compare kid sv = 0
-      then typ_error l ("Cannot substitute " ^ string_of_kid sv ^ " into set constraint " ^ string_of_n_constraint (NC_aux (set_nc, l)))
-      else set_nc
+     if Kid.compare kid sv = 0
+     then NC_set_subst (Nexp_aux (subst, Parse_ast.Unknown), ints)
+     else set_nc
+  | NC_set_subst (nexp, ints) -> NC_set_subst (nexp_subst sv subst nexp, ints) 
 
 let rec typ_subst_nexp sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_nexp_aux sv subst typ, l)
 and typ_subst_nexp_aux sv subst = function
@@ -784,7 +787,8 @@ end = struct
     | NC_bounded_ge (n1, n2) -> wf_nexp env n1; wf_nexp env n2
     | NC_bounded_le (n1, n2) -> wf_nexp env n1; wf_nexp env n2
     | NC_nat_set_bounded (kid, ints) -> () (* MAYBE: We could demand that ints are all unique here *)
-
+    | NC_set_subst (nexp, ints) -> wf_nexp env nexp
+                                          
   let get_constraints env = env.constraints
 
   let add_constraint (NC_aux (_, l) as constr) env =
@@ -985,16 +989,17 @@ let rec nexp_constraint var_of (Nexp_aux (nexp, l)) =
   | Nexp_exp nexp -> Constraint.pow2 (nexp_constraint var_of nexp)
   | Nexp_neg nexp -> Constraint.sub (Constraint.constant (big_int_of_int 0)) (nexp_constraint var_of nexp)
 
-let nc_constraint var_of (NC_aux (nc, _)) =
+let rec nc_constraint var_of (NC_aux (nc, l)) =
   match nc with
   | NC_fixed (nexp1, nexp2) -> Constraint.eq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
   | NC_bounded_ge (nexp1, nexp2) -> Constraint.gteq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
   | NC_bounded_le (nexp1, nexp2) -> Constraint.lteq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | NC_nat_set_bounded (_, []) -> Constraint.literal false
-  | NC_nat_set_bounded (kid, (int :: ints)) ->
+  | NC_nat_set_bounded (kid, ints) -> nc_constraint var_of (NC_aux (NC_set_subst (nvar kid, ints), l))
+  | NC_set_subst (_, []) -> Constraint.literal false
+  | NC_set_subst (nexp, (int :: ints)) ->
      List.fold_left Constraint.disj
-                    (Constraint.eq (Constraint.variable (var_of kid)) (Constraint.constant (big_int_of_int int)))
-                    (List.map (fun i -> Constraint.eq (Constraint.variable (var_of kid)) (Constraint.constant (big_int_of_int i))) ints)
+                    (Constraint.eq (nexp_constraint var_of nexp) (Constraint.constant (big_int_of_int int)))
+                    (List.map (fun i -> Constraint.eq (nexp_constraint var_of nexp) (Constraint.constant (big_int_of_int i))) ints)
 
 let rec nc_constraints var_of ncs =
   match ncs with

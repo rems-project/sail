@@ -172,6 +172,8 @@ n_constraint_aux =  (* constraint over kind $_$ *)
  | NC_bounded_ge of nexp * nexp
  | NC_bounded_le of nexp * nexp
  | NC_nat_set_bounded of kid * (int) list
+ (* We need this for the new typechecker when as nexp is substituted for an id *)
+ | NC_set_subst of nexp * int list
 
 
 type 
