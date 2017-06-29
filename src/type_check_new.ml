@@ -98,6 +98,8 @@ and map_pat_annot_aux f = function
   | P_app (id, pats) -> P_app (id, List.map (map_pat_annot f) pats)
   | P_tup pats -> P_tup (List.map (map_pat_annot f) pats)
   | P_list pats -> P_list (List.map (map_pat_annot f) pats)
+  | P_vector_concat pats -> P_vector_concat (List.map (map_pat_annot f) pats)
+  | P_vector pats -> P_vector (List.map (map_pat_annot f) pats)
   | _ -> typ_error Parse_ast.Unknown "Unimplemented: Cannot map annot in pat"
 and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
 and map_letbind_annot_aux f = function
@@ -262,6 +264,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_vector vec -> "[" ^ string_of_list ", " string_of_exp vec ^ "]"
   | E_vector_access (v, n) -> string_of_exp v ^ "[" ^ string_of_exp n ^ "]"
   | E_vector_subrange (v, n1, n2) -> string_of_exp v ^ "[" ^ string_of_exp n1 ^ " .. " ^ string_of_exp n2 ^ "]"
+  | E_vector_append (v1, v2) -> string_of_exp v1 ^ " : " ^ string_of_exp v2
   | E_if (cond, then_branch, else_branch) ->
      "if " ^ string_of_exp cond ^ " then " ^ string_of_exp then_branch ^ " else " ^ string_of_exp else_branch
   | E_field (exp, id) -> string_of_exp exp ^ "." ^ string_of_id id
@@ -1084,6 +1087,9 @@ let subtyp l env typ1 typ2 =
                     ^ " is not a subtype of " ^ string_of_typ typ2
                     ^ " in context " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env))
 
+let typ_equality l env typ1 typ2 =
+  subtyp l env typ1 typ2; subtyp l env typ2 typ1
+                 
 let rec nexp_frees (Nexp_aux (nexp, l)) =
   match nexp with
   | Nexp_id _ -> typ_error l "Unimplemented Nexp_id in nexp_frees"
@@ -1254,6 +1260,13 @@ let vector_typ n m ord typ =
 
 let dvector_typ env n m typ = vector_typ n m (Env.get_default_order env) typ
 
+let lvector_typ env l typ =
+  match Env.get_default_order env with
+  | Ord_aux (Ord_inc, _) as ord ->
+     vector_typ (nconstant 0) l ord typ
+  | Ord_aux (Ord_dec, _) as ord ->
+     vector_typ (nminus l (nconstant 1)) l ord typ
+                                         
 let infer_lit env (L_aux (lit_aux, l) as lit) =
   match lit_aux with
   | L_unit -> mk_typ (Typ_id (mk_id "unit"))
@@ -1343,6 +1356,10 @@ let typ_of (E_aux (_, (_, tannot))) = match tannot with
   | Some (_, typ) -> typ
   | None -> assert false
 
+let pat_typ_of (P_aux (_, (_, tannot))) = match tannot with
+  | Some (_, typ) -> typ
+  | None -> assert false
+                   
 let crule r env exp typ =
   incr depth;
   typ_print ("Check " ^ string_of_exp exp ^ " <= " ^ string_of_typ typ);
@@ -1494,6 +1511,7 @@ and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
 
 and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ) =
   let annot_pat pat typ = P_aux (pat, (l, Some (env, typ))) in
+  let switch_typ (P_aux (pat_aux, (l, Some (env, _)))) typ = P_aux (pat_aux, (l, Some (env, typ))) in
   match pat_aux with
   | P_id v ->
      begin
@@ -1504,12 +1522,6 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
        | Enum enum -> subtyp l env enum typ; annot_pat (P_id v) typ, env
      end
   | P_wild -> annot_pat P_wild typ, env
-  | P_typ (typ_annot, pat) ->
-     begin
-       subtyp l env typ_annot typ;
-       let (typed_pat, env) = bind_pat env pat typ_annot in
-       annot_pat (P_typ (typ_annot, typed_pat)) typ, env
-     end
   | P_tup pats ->
      begin
        match typ_aux with
@@ -1521,16 +1533,46 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
             try List.fold_left2 bind_tuple_pat ([], env) pats typs with
             | Invalid_argument _ -> typ_error l "Tuple pattern and tuple type have different length"
           in
-          annot_pat (P_tup tpats) typ, env
+          annot_pat (P_tup (List.rev tpats)) typ, env
        | _ -> typ_error l "Cannot bind tuple pattern against non tuple type"
      end
-  | P_lit lit ->
+  | _ ->
+     let (inferred_pat, env) = infer_pat env pat in
+     subtyp l env (pat_typ_of inferred_pat) typ;
+     switch_typ inferred_pat typ, env
+
+and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
+  let annot_pat pat typ = P_aux (pat, (l, Some (env, typ))) in
+  match pat_aux with
+  | P_id v ->
      begin
-       let lit_typ = infer_lit env lit in
-       subtyp l env lit_typ typ; (* CHECK: is the the correct way round? *)
-       annot_pat (P_lit lit) typ, env
+       match Env.lookup_id v env with
+       | Local (Immutable, _) | Unbound ->
+          typ_error l ("Cannot infer identifier in pattern " ^ string_of_pat pat ^ " - try adding a type annotation")
+       | Local (Mutable, _) | Register _ ->
+          typ_error l ("Cannot shadow mutable local or register in switch statement pattern " ^ string_of_pat pat)
+       | Enum enum -> annot_pat (P_id v) enum, env
      end
-  | _ -> typ_error l ("Unhandled pat " ^ string_of_pat pat)
+  | P_typ (typ_annot, pat) ->
+     let (typed_pat, env) = bind_pat env pat typ_annot in
+     annot_pat (P_typ (typ_annot, typed_pat)) typ_annot, env
+  | P_lit lit ->
+     annot_pat (P_lit lit) (infer_lit env lit), env
+  | P_vector_concat (pat :: pats) ->
+     let fold_pats (pats, env) pat =
+       let inferred_pat, env = infer_pat env pat in
+       pats @ [inferred_pat], env
+     in
+     let (inferred_pat :: inferred_pats), env = List.fold_left fold_pats ([], env) (pat :: pats) in
+     let (_, len, _, vtyp) = destructure_vec_typ l (pat_typ_of inferred_pat) in
+     let fold_len len pat =
+       let (_, len', _, vtyp') = destructure_vec_typ l (pat_typ_of pat) in
+       typ_equality l env vtyp vtyp';
+       nsum len len'
+     in
+     let len = nexp_simp (List.fold_left fold_len len inferred_pats) in
+     annot_pat (P_vector_concat (inferred_pat :: inferred_pats)) (lvector_typ env len vtyp), env
+  | _ -> typ_error l ("Couldn't infer type of pattern " ^ string_of_pat pat)
 
 and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as exp) =
   let annot_assign lexp exp = E_aux (E_assign (lexp, exp), (l, Some (env, mk_typ (Typ_id (mk_id "unit"))))) in
@@ -1557,7 +1599,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
             | _, _ -> typ_error l "Not implemented this register field type yet..."
           in
           let checked_exp = crule check_exp env exp vec_typ in
-          annot_assign (annot_lexp (LEXP_id v) vec_typ) checked_exp, env
+          annot_assign (annot_lexp (LEXP_field (annot_lexp (LEXP_id v) regtyp, field)) vec_typ) checked_exp, env
        | _ ->  typ_error l "Field l-expression has invalid type"
      end
   | _ ->

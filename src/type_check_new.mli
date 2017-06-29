@@ -67,6 +67,7 @@ module Env : sig
   val lookup_id : id -> t -> lvar
   val fresh_kid : t -> kid
   val expand_synonyms : t -> typ -> typ
+  val no_casts : t -> t
   val empty : t                                   
 end
 

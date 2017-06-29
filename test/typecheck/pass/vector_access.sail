@@ -4,6 +4,8 @@ val forall Nat 'n, Nat 'l, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [|'n:'n + 'l
 
 default Order inc
 
+overload vector_access [vector_access_inc; vector_access_dec]
+
 val bit[4] -> unit effect pure test
     
 function unit test v =

@@ -40,7 +40,7 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Type_internal
+(* open Type_internal *)
 open Ast
 open PPrint
 open Pretty_print_common
@@ -238,6 +238,7 @@ let doc_exp, doc_let =
   | E_id id -> doc_id id
   | E_lit lit -> doc_lit lit
   | E_cast(typ,e) -> prefix 2 1 (parens (doc_typ typ)) (group (atomic_exp e))
+                            (*
   | E_internal_cast((_,NoTyp),e) -> atomic_exp e
   | E_internal_cast((_,Base((_,t),_,_,_,_,bindings)), (E_aux(_,(_,eannot)) as e)) ->
       (match t.t,eannot with
@@ -247,6 +248,7 @@ let doc_exp, doc_let =
       | Tapp("vector",[TA_nexp n1;_;_;_]),Base((_,{t=Tapp("vector",[TA_nexp n2;_;_;_])}),_,_,_,_,_)
           when nexp_eq n1 n2 -> atomic_exp e
       | _ -> prefix 2 1 (parens (doc_typ (t_to_typ t))) (group (atomic_exp e)))
+                             *)
   | E_tuple exps ->
       parens (separate_map comma exp exps)
   | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
@@ -325,6 +327,7 @@ let doc_exp, doc_let =
   (* doc_op (doc_id op) (exp l) (exp r) *)
   | E_comment s -> comment (string s)
   | E_comment_struc e -> comment (exp e)
+                                 (*
   | E_internal_exp((l, Base((_,t),_,_,_,_,bindings))) -> (*TODO use bindings, and other params*)
     (match t.t with
       | Tapp("register",[TA_typ {t=Tapp("vector",[TA_nexp _;TA_nexp r;_;_])}])
@@ -342,7 +345,7 @@ let doc_exp, doc_let =
       | _ ->  raise (Reporting_basic.err_unreachable l ("Internal exp given non-vector, non-implicit " ^ t_to_string t)))
   | E_internal_exp_user _ -> raise (Reporting_basic.err_unreachable Unknown ("internal_exp_user not rewritten away"))
   | E_internal_cast ((_, Overload (_, _,_ )), _) | E_internal_exp _ -> assert false
-
+                                  *)
   and let_exp (LB_aux(lb,_)) = match lb with
     | LB_val_explicit(ts,pat,e) ->
       (match ts with
@@ -391,16 +394,18 @@ let doc_exp, doc_let =
 let doc_default (DT_aux(df,_)) = match df with
   | DT_kind(bk,v) -> separate space [string "default"; doc_bkind bk; doc_var v]
   | DT_typ(ts,id) -> separate space [string "default"; doc_typscm ts; doc_id id]
-  | DT_order(ord) -> separate space [string "default"; string "order"; doc_ord ord]
+  | DT_order(ord) -> separate space [string "default"; string "Order"; doc_ord ord]
 
 let doc_spec (VS_aux(v,_)) = match v with
   | VS_val_spec(ts,id) ->
-      separate space [string "val"; doc_typscm ts; doc_id id]
+     separate space [string "val"; doc_typscm ts; doc_id id]
+  | VS_cast_spec (ts, id) ->
+     separate space [string "val"; string "cast"; doc_typscm ts; doc_id id]
   | VS_extern_no_rename(ts,id) ->
-      separate space [string "val"; string "extern"; doc_typscm ts; doc_id id]
+     separate space [string "val"; string "extern"; doc_typscm ts; doc_id id]
   | VS_extern_spec(ts,id,s) ->
-      separate space [string "val"; string "extern"; doc_typscm ts;
-      doc_op equals (doc_id id) (dquotes (string s))]
+     separate space [string "val"; string "extern"; doc_typscm ts;
+                     doc_op equals (doc_id id) (dquotes (string s))]
 
 let doc_namescm (Name_sect_aux(ns,_)) = match ns with
   | Name_sect_none -> empty
@@ -549,6 +554,9 @@ let rec doc_def def = group (match def with
   | DEF_val lbind -> doc_let lbind
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
+  | DEF_overload (id, ids) ->
+      let ids_doc = group (separate_map (semi ^^ break 1) doc_id ids) in
+      string "overload" ^^ space ^^ doc_id id ^^ space ^^ brackets ids_doc
   | DEF_comm (DC_comm s) -> comment (string s)
   | DEF_comm (DC_comm_struct d) -> comment (doc_def d)
   ) ^^ hardline

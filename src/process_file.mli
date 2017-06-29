@@ -50,7 +50,9 @@ val rewrite_ast_ocaml : Type_internal.tannot Ast.defs -> Type_internal.tannot As
 
 val opt_new_typecheck : bool ref
 val opt_just_check : bool ref
-                                                                              
+val opt_ddump_tc_ast : bool ref
+val opt_dno_cast : bool ref
+
 type out_type =
   | Lem_ast_out
   | Lem_out of string option (* If present, the string is a file to open in the lem backend*)

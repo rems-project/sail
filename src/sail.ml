@@ -88,10 +88,16 @@ let options = Arg.align ([
     " (debug) skip constraint resolution in type-checking");
   ( "-new_typecheck",
     Arg.Set opt_new_typecheck,
-    " use new typechecker with Z3 constraint solving (experimental)");
+    " (experimental) use new typechecker with Z3 constraint solving");
   ( "-just_check",
     Arg.Tuple [Arg.Set opt_new_typecheck; Arg.Set opt_just_check],
-    " terminate immediately after typechecking, implies -new_typecheck");
+    " (experimental) terminate immediately after typechecking, implies -new_typecheck");
+  ( "-ddump_tc_ast",
+    Arg.Set opt_ddump_tc_ast,
+    " (debug) dump the typechecked ast to stdout");
+  ( "-dno_cast",
+    Arg.Set opt_dno_cast,
+    " (debug) typecheck without any implicit casting");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");

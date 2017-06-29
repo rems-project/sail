@@ -90,6 +90,8 @@ let initi_check_ast (defs : Type_internal.tannot Ast.defs) : (Type_internal.tann
 
 let opt_new_typecheck = ref false
 let opt_just_check = ref false
+let opt_ddump_tc_ast = ref false
+let opt_dno_cast = ref false
                                         
 let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.order) : Type_internal.tannot Ast.defs * Type_check.envs =
   let d_env = { Type_internal.k_env = k; Type_internal.abbrevs = Type_internal.initial_abbrev_env;
@@ -101,7 +103,10 @@ let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.
 		                                     | (Ast.Ord_aux(Ast.Ord_dec,_)) -> Type_internal.Odec
 						     | _ -> Type_internal.Oinc)};} in
   if !opt_new_typecheck
-  then let _ = Type_check_new.check Type_check_new.initial_env defs in ()
+  then
+    let ienv = if !opt_dno_cast then Type_check_new.Env.no_casts Type_check_new.initial_env else Type_check_new.initial_env in
+    let ast, _ = Type_check_new.check ienv defs in
+    if !opt_ddump_tc_ast then Pretty_print.pp_defs stdout ast else ()
   else ();
   if !opt_just_check
   then exit 0
