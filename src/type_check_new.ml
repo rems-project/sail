@@ -122,7 +122,7 @@ let string_of_id = function
 let deinfix = function
   | Id_aux (Id v, l) -> Id_aux (DeIid v, l)
   | Id_aux (DeIid v, l) -> Id_aux (DeIid v, l)
-                                               
+
 let string_of_kid = function
   | Kid_aux (Var v, _) -> v
 
@@ -313,7 +313,7 @@ let mk_typ typ = Typ_aux (typ, Parse_ast.Unknown)
 let mk_typ_arg arg = Typ_arg_aux (arg, Parse_ast.Unknown)
 let mk_id str = Id_aux (Id str, Parse_ast.Unknown)
 let mk_infix_id str = Id_aux (DeIid str, Parse_ast.Unknown)
-                       
+
 let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
 
 let unit_typ = mk_id_typ (mk_id "unit")
@@ -345,7 +345,7 @@ and nc_subst_nexp_aux l sv subst = function
      if Kid.compare kid sv = 0
      then NC_set_subst (Nexp_aux (subst, Parse_ast.Unknown), ints)
      else set_nc
-  | NC_set_subst (nexp, ints) -> NC_set_subst (nexp_subst sv subst nexp, ints) 
+  | NC_set_subst (nexp, ints) -> NC_set_subst (nexp_subst sv subst nexp, ints)
 
 let rec typ_subst_nexp sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_nexp_aux sv subst typ, l)
 and typ_subst_nexp_aux sv subst = function
@@ -788,7 +788,7 @@ end = struct
     | NC_bounded_le (n1, n2) -> wf_nexp env n1; wf_nexp env n2
     | NC_nat_set_bounded (kid, ints) -> () (* MAYBE: We could demand that ints are all unique here *)
     | NC_set_subst (nexp, ints) -> wf_nexp env nexp
-                                          
+
   let get_constraints env = env.constraints
 
   let add_constraint (NC_aux (_, l) as constr) env =
@@ -1094,7 +1094,7 @@ let subtyp l env typ1 typ2 =
 
 let typ_equality l env typ1 typ2 =
   subtyp l env typ1 typ2; subtyp l env typ2 typ1
-                 
+
 let rec nexp_frees (Nexp_aux (nexp, l)) =
   match nexp with
   | Nexp_id _ -> typ_error l "Unimplemented Nexp_id in nexp_frees"
@@ -1271,7 +1271,7 @@ let lvector_typ env l typ =
      vector_typ (nconstant 0) l ord typ
   | Ord_aux (Ord_dec, _) as ord ->
      vector_typ (nminus l (nconstant 1)) l ord typ
-                                         
+
 let infer_lit env (L_aux (lit_aux, l) as lit) =
   match lit_aux with
   | L_unit -> mk_typ (Typ_id (mk_id "unit"))
@@ -1364,7 +1364,7 @@ let typ_of (E_aux (_, (_, tannot))) = match tannot with
 let pat_typ_of (P_aux (_, (_, tannot))) = match tannot with
   | Some (_, typ) -> typ
   | None -> assert false
-                   
+
 let crule r env exp typ =
   incr depth;
   typ_print ("Check " ^ string_of_exp exp ^ " <= " ^ string_of_typ typ);

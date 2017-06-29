@@ -226,7 +226,7 @@ id:
   | Lparen Deinfix AmpAmp Rparen
     { idl (DeIid($3)) }
   | Lparen Deinfix Bar Rparen
-    { idl (DeIid("||")) }
+    { idl (DeIid("|")) }
   | Lparen Deinfix BarBar Rparen
     { idl (DeIid("||")) }
   | Lparen Deinfix CarrotCarrot Rparen

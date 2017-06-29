@@ -419,7 +419,7 @@ val_spec_aux =  (* Value type specification *)
  | VS_extern_no_rename of typschm * id
  | VS_extern_spec of typschm * id * string
  | VS_cast_spec of typschm * id
-                                      
+
 
 type 
 kind_def_aux =  (* Definition body for elements of kind; many are shorthands for type\_defs *)

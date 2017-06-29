@@ -68,13 +68,13 @@ module Env : sig
   val fresh_kid : t -> kid
   val expand_synonyms : t -> typ -> typ
   val no_casts : t -> t
-  val empty : t                                   
+  val empty : t
 end
 
 type tannot = (Env.t * typ) option
 
 val check_exp : Env.t -> unit exp -> typ -> tannot exp
-               
+
 val check : Env.t -> 'a defs -> tannot defs * Env.t
 
 val initial_env : Env.t

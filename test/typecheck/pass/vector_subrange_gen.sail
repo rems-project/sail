@@ -11,7 +11,7 @@ val forall Nat 'n, Nat 'm. ([:'n:], [:'m:]) -> [:'n - 'm:] effect pure minus
 default Order inc
 
 val forall 'n, 'm, 'n >= 5. bit['n] -> bit['n - 2] effect pure test
-    
+
 function forall 'n, 'n >= 5. bit['n - 2] test v =
 {
   z := vector_subrange(v, 0, minus(sizeof 'n, 2));

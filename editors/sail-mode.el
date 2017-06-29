@@ -688,8 +688,8 @@ Based on Tuareg mode. See Tuareg mode for usage"
   (setq comment-multi-line t)
   (make-local-variable 'parse-sexp-ignore-comments)
   (setq parse-sexp-ignore-comments nil)
-  (make-local-variable 'indent-line-function)
-  (setq indent-line-function 'sail-indent-command)
+  ;; (make-local-variable 'indent-line-function)
+  ;; setq indent-line-function 'sail-indent-command)
   (unless sail-use-syntax-ppss
     (add-hook 'before-change-functions 'sail-before-change-function nil t))
   (make-local-variable 'normal-auto-fill-function)

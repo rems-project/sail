@@ -2,7 +2,7 @@ open Big_int
 open Util
 
 (* ===== Integer Constraints ===== *)
-       
+
 type nexp_op = Plus | Minus | Mult
 
 type nexp =
@@ -14,24 +14,24 @@ type nexp =
 let big_int_op : nexp_op -> big_int -> big_int -> big_int = function
   | Plus -> add_big_int
   | Minus -> sub_big_int
-  | Mult -> mult_big_int 
-              
+  | Mult -> mult_big_int
+
 let rec arith constr =
   let constr' = match constr with
     | NFun (op, x, y) -> NFun (op, arith x, arith y)
     | N2n c -> arith c
     | c -> c
-  in                  
+  in
   match constr' with
   | NFun (op, NConstant x, NConstant y) -> NConstant (big_int_op op x y)
   | N2n (NConstant x) -> NConstant (power_int_positive_big_int 2 x)
   | c -> c
 
 (* ===== Boolean Constraints ===== *)
- 
+
 type constraint_bool_op = And | Or
 
-type constraint_compare_op = Gt | Lt | GtEq | LtEq | Eq | NEq 
+type constraint_compare_op = Gt | Lt | GtEq | LtEq | Eq | NEq
 
 let negate_comparison = function
   | Gt -> LtEq
@@ -40,14 +40,14 @@ let negate_comparison = function
   | LtEq -> Gt
   | Eq -> NEq
   | NEq -> Eq
-                                                            
+
 type 'a constraint_bool =
   | BFun of (constraint_bool_op * 'a constraint_bool * 'a constraint_bool)
   | Not of 'a constraint_bool
   | CFun of (constraint_compare_op * 'a * 'a)
   | Branch of ('a constraint_bool list)
   | Boolean of bool
-       
+
 let rec pairs (xs : 'a list) (ys : 'a list) : ('a * 'b) list =
   match xs with
   | [] -> []
@@ -60,7 +60,7 @@ let rec unbranch : 'a constraint_bool -> 'a constraint_bool list = function
      let xs, ys = unbranch x, unbranch y in
      List.map (fun (z, w) -> BFun (op, z, w)) (pairs xs ys)
   | c -> [c]
-       
+
 (* Apply De Morgan's laws to push all negations to just before integer
    constraints *)
 let rec de_morgan : 'a constraint_bool -> 'a constraint_bool = function
@@ -77,7 +77,7 @@ let rec remove_nots : 'a constraint_bool -> 'a constraint_bool = function
   | BFun (op, x, y) -> BFun (op, remove_nots x, remove_nots y)
   | Not (CFun (c, x, y)) -> CFun (negate_comparison c, x, y)
   | c -> c
-           
+
 (* Apply distributivity so all Or clauses are within And clauses *)
 let rec distrib_step : 'a constraint_bool -> ('a constraint_bool * int) = function
   | BFun (Or, x, BFun (And, y, z)) ->
@@ -91,7 +91,7 @@ let rec distrib_step : 'a constraint_bool -> ('a constraint_bool * int) = functi
   | BFun (op, x, y) ->
      let (x', n) = distrib_step x in
      let (y', m) = distrib_step y in
-     BFun (op, x', y'), n + m 
+     BFun (op, x', y'), n + m
   | c -> (c, 0)
 
 let rec distrib (c : 'a constraint_bool) : 'a constraint_bool =
@@ -111,7 +111,7 @@ let rec flatten_or : 'a constraint_bool -> 'a constraint_leaf list = function
   | CFun comparison -> [LFun comparison]
   | Boolean b -> [LBoolean b]
   | _ -> assert false
-  
+
 let rec flatten : 'a constraint_bool -> 'a constraint_leaf list list = function
   | BFun (And, x, y) -> flatten x @ flatten y
   | Boolean b -> [[LBoolean b]]
@@ -130,7 +130,7 @@ module IntSet = Set.Make(
     let compare = Pervasives.compare
     type t = int
   end)
-                    
+
 let rec int_expr_vars : nexp -> IntSet.t = function
   | NConstant _ -> IntSet.empty
   | NVar v -> IntSet.singleton v
@@ -151,12 +151,12 @@ let constraint_vars constr : IntSet.t =
    lightweight representation of those here. *)
 type sexpr = List of (sexpr list) | Atom of string
 
-let sfun (fn : string) (xs : sexpr list) : sexpr = List (Atom fn :: xs) 
-                                              
+let sfun (fn : string) (xs : sexpr list) : sexpr = List (Atom fn :: xs)
+
 let rec pp_sexpr : sexpr -> string = function
   | List xs -> "(" ^ string_of_list " " pp_sexpr xs ^ ")"
   | Atom x -> x
-                   
+
 let var_decs constr =
   constraint_vars constr
   |> IntSet.elements
@@ -183,7 +183,7 @@ let rec sexpr_of_nexp = function
   | N2n x -> sfun "^" [Atom "2"; sexpr_of_nexp x]
   | NConstant c -> Atom (string_of_big_int c) (* CHECK: do we do negative constants right? *)
   | NVar var -> Atom ("v" ^ string_of_int var)
-              
+
 let rec sexpr_of_cbool = function
   | BFun (And, x, y) -> sfun "and" [sexpr_of_cbool x; sexpr_of_cbool y]
   | BFun (Or, x, y) -> sfun "or" [sexpr_of_cbool x; sexpr_of_cbool y]
@@ -192,7 +192,7 @@ let rec sexpr_of_cbool = function
   | Branch xs -> sfun "BRANCH" (List.map sexpr_of_cbool xs)
   | Boolean true -> Atom "true"
   | Boolean false -> Atom "false"
-                     
+
 let sexpr_of_constraint_leaf = function
   | LFun (op, x, y) -> cop_sexpr op (sexpr_of_nexp x) (sexpr_of_nexp y)
   | LBoolean true -> Atom "true"
@@ -213,7 +213,7 @@ let smtlib_of_constraint constr : string =
 type t = nexp constraint_bool
 
 type smt_result = Unknown of t list | Unsat of t
-                    
+
 let rec call_z3 constraints : smt_result =
   let problems = unbranch constraints in
   let z3_file =
@@ -222,9 +222,9 @@ let rec call_z3 constraints : smt_result =
     |> List.map smtlib_of_constraint
     |> string_of_list "\n" (fun x -> x)
   in
-  
+
   (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file); *)
-  
+
   let rec input_lines chan = function
     | 0 -> []
     | n ->
@@ -234,7 +234,7 @@ let rec call_z3 constraints : smt_result =
          l :: ls
        end
   in
-  
+
   begin
     let (input_file, tmp_chan) = Filename.open_temp_file "constraint_" ".sat" in
     output_string tmp_chan z3_file;
@@ -260,12 +260,12 @@ let string_of constr =
   |> List.map normalize
   |> List.map (fun c -> smtlib_of_constraint c)
   |> string_of_list "\n" (fun x -> x)
-    
+
 (* ===== Abstract API for building constraints ===== *)
 
 (* These functions are exported from constraint.mli, and ensure that
    the internal representation of constraints remains opaque. *)
-                    
+
 let implies (x : t) (y : t) : t =
   BFun (Or, Not x, y)
 
@@ -296,9 +296,9 @@ let neq x y : t = CFun (NEq, x, y)
 let pow2 x : nexp = N2n x
 
 let add x y : nexp = NFun (Plus, x, y)
-                                     
+
 let sub x y : nexp = NFun (Minus, x, y)
-                                     
+
 let mult x y : nexp = NFun (Mult, x, y)
 
 let constant (x : big_int) : nexp = NConstant x
