@@ -173,6 +173,45 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
                   "Unexpected kind of pattern for enumeration"; None)
           in findpat cases
        | _ -> None)
+    (* TODO: could generalise Lit matching *)
+    | E_lit (L_aux ((L_zero | L_one | L_true | L_false) as bit, _)) ->
+       let rec findpat cases =
+         match cases with
+         | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
+                    ("Failed to find a case for bit"); None)
+         | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some exp
+         | (Pat_aux (Pat_exp (P_aux (P_lit (L_aux (lit, _)),_),exp),_))::tl ->
+            (match bit,lit with
+            | (L_zero | L_false), (L_zero | L_false) -> Some exp
+            | (L_one  | L_true ), (L_one  | L_true ) -> Some exp
+            | _ -> findpat tl)
+         | (Pat_aux (Pat_exp (P_aux (_,(l',_)),_),_))::_ ->
+            (Reporting_basic.print_err false true l' "Monomorphisation"
+               "Unexpected kind of pattern for bit"; None)
+       in findpat cases
+    | _ -> None
+  in
+
+  (* TODO: doublecheck *)
+  let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
+    match l1,l2 with
+    | (L_zero|L_false), (L_zero|L_false)
+    | (L_one |L_true ), (L_one |L_true)
+      -> Some true
+    | L_undef, _ | _, L_undef -> None
+    | _ -> Some (l1 = l2)
+  in
+
+  (* TODO: any useful type information revealed? (probably not) *)
+  let try_app_infix (l,ann) (E_aux (e1,ann1)) id (E_aux (e2,ann2)) =
+    let new_l = Generated l in
+    match e1, id, e2 with
+    | E_lit l1, ("=="|"!="), E_lit l2 ->
+       let lit b = if b then L_true else L_false in
+       let lit b = lit (if id = "==" then b else not b) in
+       (match lit_eq l1 l2 with
+       | Some b -> Some (E_aux (E_lit (L_aux (lit b,new_l)), (l,ann)))
+       | None -> None)
     | _ -> None
   in
 
@@ -238,9 +277,22 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
       -> exp
     | E_cast (t,e') -> re (E_cast (t, const_prop_exp substs e'))
     | E_app (id,es) -> re (E_app (id,List.map (const_prop_exp substs) es))
-    | E_app_infix (e1,id,e2) -> re (E_app_infix (const_prop_exp substs e1,id,const_prop_exp substs e2))
+    | E_app_infix (e1,id,e2) ->
+       let e1',e2' = const_prop_exp substs e1,const_prop_exp substs e2 in
+       (match try_app_infix (l,annot) e1' (id_to_string id) e2' with
+       | Some exp -> exp
+       | None -> re (E_app_infix (e1',id,e2')))
     | E_tuple es -> re (E_tuple (List.map (const_prop_exp substs) es))
-    | E_if (e1,e2,e3) -> re (E_if (const_prop_exp substs e1, const_prop_exp substs e2, const_prop_exp substs e3))
+    | E_if (e1,e2,e3) ->
+       let e1' = const_prop_exp substs e1 in
+       let e2',e3' = const_prop_exp substs e2, const_prop_exp substs e3 in
+       (match e1' with
+       | E_aux (E_lit (L_aux ((L_true|L_false) as lit ,_)),_) ->
+          let e' = match lit with L_true -> e2' | _ -> e3' in
+          (match e' with E_aux (_,(_,annot')) ->
+            nexp_substs := build_nexp_subst l annot annot' @ !nexp_substs;
+            e')
+       | _ -> re (E_if (e1',e2',e3')))
     | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3,ord,const_prop_exp (Envmap.remove substs (id_to_string id)) e4))
     | E_vector es -> re (E_vector (List.map (const_prop_exp substs) es))
     | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,const_prop_exp substs e)) ies,
@@ -352,7 +404,13 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
           (* enumerations *)
           | Some ns -> List.map (fun n -> (P_aux (P_id (new_id n),(l,tannot)),
                                            (id,E_aux (E_id (new_id n),(new_l,tannot))))) ns
-          | None -> cannot ())
+          | None ->
+             if i = "bit" then
+               List.map (fun b ->
+                 P_aux (P_lit (L_aux (b,new_l)),(l,tannot)),
+                 (id,E_aux (E_lit (L_aux (b,new_l)),(new_l, tannot))))
+                 [L_zero; L_one]
+             else cannot ())
      (*|  vectors TODO *)
      (*|  numbers TODO *)
        | _ -> cannot ())
