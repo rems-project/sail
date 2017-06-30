@@ -488,6 +488,19 @@ module KidSet = Set.Make(Kid)
 
 type mut = Immutable | Mutable
 
+type index_sort =
+  | IS_int
+  | IS_prop of kid * (nexp * nexp) list
+
+let string_of_index_sort = function
+  | IS_int -> "INT"
+  | IS_prop (kid, constraints) ->
+     "{" ^ string_of_kid kid ^ " | "
+     ^ string_of_list " & " (fun (x, y) -> string_of_nexp x ^ " <= " ^ string_of_nexp y) constraints
+     ^ "}"
+
+type flow_typ = typ -> typ
+
 type lvar = Register of typ | Enum of typ | Local of mut * typ | Unbound
 
 module Env : sig
@@ -496,6 +509,8 @@ module Env : sig
   val add_val_spec : id -> typquant * typ -> t -> t
   (* val get_local : id -> t -> mut * typ *)
   val add_local : id -> mut * typ -> t -> t
+  val add_flow : id -> (typ -> typ) -> t -> t
+  val get_flow : id -> t -> typ -> typ
   val get_register : id -> t -> typ
   val add_register : id -> typ -> t -> t
   val add_regtyp : id -> int -> int -> (index_range * id) list -> t -> t
@@ -532,6 +547,7 @@ end = struct
       typ_vars : base_kind_aux KBindings.t;
       typ_synonyms : (typ_arg list -> typ) Bindings.t;
       overloads : (id list) Bindings.t;
+      flow : flow_typ Bindings.t;
       enums : IdSet.t Bindings.t;
       casts : id list;
       allow_casts : bool;
@@ -548,12 +564,9 @@ end = struct
       typ_vars = KBindings.empty;
       typ_synonyms = Bindings.empty;
       overloads = Bindings.empty;
+      flow = Bindings.empty;
       enums = Bindings.empty;
       casts = [];
-      (*
-      casts = [mk_id "cast_vec_to_range"; mk_id "cast_01_to_vec"; mk_id "reg_deref"; mk_id "cast_dec_bv_to_bool"; mk_id "cast_bit_to_bool";
-              mk_id "cast_one_bit"; mk_id "cast_zero_bit"; mk_id "cast_one_bv"; mk_id "cast_zero_bv"; mk_id "cast_vec_bool"; mk_id "ADJUST"];
-       *)
       allow_casts = true;
       constraints = [];
       default_order = None;
@@ -692,6 +705,16 @@ end = struct
       { env with locals = Bindings.add id mtyp env.locals }
     end
 
+  let get_flow id env =
+    try Bindings.find id env.flow with
+    | Not_found -> fun typ -> typ
+
+  let add_flow id f env =
+    begin
+      typ_print ("Adding flow constraints for " ^ string_of_id id);
+      { env with flow = Bindings.add id (fun typ -> f (get_flow id env typ)) env.flow }
+    end
+
   let get_register id env =
     try Bindings.find id env.registers with
     | Not_found -> typ_error (id_loc id) ("No register binding found for " ^ string_of_id id)
@@ -757,7 +780,8 @@ end = struct
   let lookup_id id env =
     try
       let (mut, typ) = Bindings.find id env.locals in
-      Local (mut, typ)
+      let flow = get_flow id env in
+      Local (mut, flow typ)
     with
     | Not_found ->
        begin
@@ -882,9 +906,17 @@ let nminus n1 n2 = Nexp_aux (Nexp_minus (n1, n2), Parse_ast.Unknown)
 let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)
 let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
 
-type index_sort =
-  | IS_int
-  | IS_prop of kid * (nexp * nexp) list
+let order_eq (Ord_aux (ord_aux1, _)) (Ord_aux (ord_aux2, _)) =
+  match ord_aux1, ord_aux2 with
+  | Ord_inc, Ord_inc -> true
+  | Ord_dec, Ord_dec -> true
+  | Ord_var kid1, Ord_var kid2 -> Kid.compare kid1 kid2 = 0
+  | _, _ -> false
+
+let rec props_subst sv subst props =
+  match props with
+  | [] -> []
+  | ((nexp1, nexp2) :: props) -> (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2) :: props_subst sv subst props
 
 type tnf =
   | Tnf_wild
@@ -913,6 +945,14 @@ and string_of_tnf_arg = function
   | Tnf_arg_typ tnf -> string_of_tnf tnf
   | Tnf_arg_order o -> string_of_order o
   | Tnf_arg_effect eff -> string_of_effect eff
+
+let index_sort_intersect is1 is2 =
+  match is1, is2 with
+  | IS_int, _ -> is2
+  | _, IS_int -> is1
+  | IS_prop (kid1, cs1), IS_prop (kid2, cs2) ->
+     let cs2 = props_subst kid2 (Nexp_var kid1) cs2 in
+     IS_prop (kid1, cs1 @ cs2)
 
 let rec normalize_typ env (Typ_aux (typ, l)) =
   match typ with
@@ -965,18 +1005,6 @@ this is equivalent to
 
 which is then a problem we can feed to the constraint solver expecting unsat.
  *)
-
-let order_eq (Ord_aux (ord_aux1, _)) (Ord_aux (ord_aux2, _)) =
-  match ord_aux1, ord_aux2 with
-  | Ord_inc, Ord_inc -> true
-  | Ord_dec, Ord_dec -> true
-  | Ord_var kid1, Ord_var kid2 -> Kid.compare kid1 kid2 = 0
-  | _, _ -> false
-
-let rec props_subst sv subst props =
-  match props with
-  | [] -> []
-  | ((nexp1, nexp2) :: props) -> (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2) :: props_subst sv subst props
 
 let rec nexp_constraint var_of (Nexp_aux (nexp, l)) =
   match nexp with
@@ -1365,6 +1393,49 @@ let pat_typ_of (P_aux (_, (_, tannot))) = match tannot with
   | Some (_, typ) -> typ
   | None -> assert false
 
+let destructure_atom (Typ_aux (typ_aux, _)) =
+  match typ_aux with
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c, _)), _)])
+       when string_of_id f = "atom" -> c
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c1, _)), _); Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c2, _)), _)])
+       when string_of_id f = "range" && c1 = c2 -> c1
+  | _ -> assert false
+
+let restrict_range_upper c1 (Typ_aux (typ_aux, l) as typ) =
+  match typ_aux with
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp, _); Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c2, _)), _)])
+     when string_of_id f = "range" ->
+     range_typ nexp (nconstant (min c1 c2))
+  | _ -> typ
+
+let restrict_range_lower c1 (Typ_aux (typ_aux, l) as typ) =
+  match typ_aux with
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c2, _)), _); Typ_arg_aux (Typ_arg_nexp nexp, _)])
+     when string_of_id f = "range" ->
+     range_typ (nconstant (max c1 c2)) nexp
+  | _ -> typ
+
+type flow_constraint =
+  | Flow_lteq of int
+(* | Flow_gteq of int *)
+
+let apply_flow_constraint = function
+  | Flow_lteq c -> (restrict_range_upper c, restrict_range_lower (c + 1))
+
+let rec infer_flow env (E_aux (exp_aux, (l, _))) =
+  match exp_aux with
+  | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lt_range_atom" ->
+     let kid = Env.fresh_kid env in
+     let c = destructure_atom (typ_of y) in
+     [(v, Flow_lteq (c - 1))]
+  | _ -> []
+
+let rec add_flows b flows env =
+  match flows with
+  | [] -> env
+  | (id, flow) :: flows when b -> add_flows true flows (Env.add_flow id (fst (apply_flow_constraint flow)) env)
+  | (id, flow) :: flows -> add_flows false flows (Env.add_flow id (snd (apply_flow_constraint flow)) env)
+
 let crule r env exp typ =
   incr depth;
   typ_print ("Check " ^ string_of_exp exp ^ " <= " ^ string_of_typ typ);
@@ -1436,8 +1507,9 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      type_coercion env inferred_exp typ
   | E_if (cond, then_branch, else_branch), _ ->
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
-     let then_branch' = crule check_exp env then_branch typ in
-     let else_branch' = crule check_exp env else_branch typ in
+     let flows = infer_flow env cond' in
+     let then_branch' = crule check_exp (add_flows true flows env) then_branch typ in
+     let else_branch' = crule check_exp (add_flows false flows env) else_branch typ in
      annot_exp (E_if (cond', then_branch', else_branch')) typ
   | E_exit exp, _ ->
      let checked_exp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in

@@ -221,7 +221,6 @@ type
 typquant =
    TypQ_aux of typquant_aux * l
 
-
 type
 typ_aux =  (* Type expressions, of kind $_$ *)
    Typ_wild (* Unspecified type *)

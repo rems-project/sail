@@ -45,6 +45,8 @@ open Ast
 
 type mut = Immutable | Mutable
 
+type flow_typ
+
 type lvar = Register of typ | Enum of typ | Local of mut * typ | Unbound
 
 module Env : sig
