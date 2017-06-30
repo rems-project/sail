@@ -333,6 +333,8 @@ let most_significant = function
   | Vregister(array,_,_,_,_) -> !array.(0)
   | _ -> assert false
 
+let _most_significant = most_significant
+
 let bitwise_not_bit = function
   | Vone -> Vzero
   | Vzero -> Vone
@@ -1052,6 +1054,15 @@ let duplicate_big (bit,length) =
   duplicate_int (bit, int_of_big_int length)
 
 let duplicate = duplicate_big
+
+let duplicate_bits_big (bits, x) =
+  let len = (length_int bits) * (int_of_big_int x) in
+  let is_inc = get_ord bits in
+  let bits_arr = get_barray bits in
+  let arr = Array.concat (Array.to_list(Array.make (int_of_big_int x) bits_arr)) in
+  Vvector(arr, (if is_inc then 0 else (len - 1)), is_inc)
+
+let duplicate_bits = duplicate_bits_big
 
 let compare_op op (l,r) =
   if (op l r)
