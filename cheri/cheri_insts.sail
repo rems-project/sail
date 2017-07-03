@@ -609,7 +609,7 @@ function clause execute (CCopyType(cd, cb, ct)) =
         writeCapReg(cd, cap);
       }
   } else
-    writeCapReg(cd, {cb_val with tag=false})
+    writeCapReg(cd, int_to_cap(-1))
   (* END_CCopyType *)
 }
 
@@ -703,7 +703,7 @@ function clause execute (CSeal(cd, cs, ct)) =
 }
 
 union ast member regregreg CCSeal
-(*function clause decode (0b010010 : 0b00010 : (regno) cd : (regno) cs : (regno) ct : 0b000: 0b000) = Some(CCSeal(cd, cs, ct)) XXX no encoding yet *)
+function clause decode (0b010010 : 0b00000 : (regno) cd : (regno) cs : (regno) ct : 0b011111) = Some(CCSeal(cd, cs, ct))
 function clause execute (CCSeal(cd, cs, ct)) =
 {
   (* START_CCSeal *)
@@ -721,7 +721,7 @@ function clause execute (CCSeal(cd, cs, ct)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, ct)
   else if not (cs_val.tag) then
     raise_c2_exception(CapEx_TagViolation, cs)
-  else if not (ct_val.tag) then
+  else if (not (ct_val.tag)) | (getCapCursor(ct_val) == -1) then
     writeCapReg(cd, cs_val)
   else if (cs_val.sealed) then
     raise_c2_exception(CapEx_SealViolation, cs)
