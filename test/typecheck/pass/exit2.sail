@@ -1,5 +1,5 @@
 
-val unit -> [:6:] effect pure test
+val unit -> [:6:] effect {escape} test
 
 function [:6:] test () =
 {
