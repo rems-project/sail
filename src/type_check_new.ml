@@ -45,7 +45,7 @@ open Ast
 open Util
 open Big_int
 
-let debug = ref 2
+let debug = ref 1
 let depth = ref 0
 
 let rec indent n = match n with
@@ -81,6 +81,7 @@ and map_exp_annot_aux f = function
   | E_sizeof nexp -> E_sizeof nexp
   | E_exit exp -> E_exit (map_exp_annot f exp)
   | E_return exp -> E_return (map_exp_annot f exp)
+  | E_assert (test, msg) -> E_assert (map_exp_annot f test, map_exp_annot f msg)
   | E_field (exp, id) -> E_field (map_exp_annot f exp, id)
   | E_vector exps -> E_vector (List.map (map_exp_annot f) exps)
   | E_vector_access (exp1, exp2) -> E_vector_access (map_exp_annot f exp1, map_exp_annot f exp2)
@@ -502,18 +503,27 @@ let string_of_index_sort = function
 type flow_typ = typ -> typ
 
 type lvar = Register of typ | Enum of typ | Local of mut * typ | Unbound
+(*
+type fn = Accessor of typquant * typ | Fn of typquant * typ
 
+let to_bind = function
+  | Accessor (typq, typ) -> typq, typ
+  | Fn (typq, typ) -> typq, typ
+ *)
 module Env : sig
   type t
-  val get_val_spec : id -> t -> typquant * typ
   val add_val_spec : id -> typquant * typ -> t -> t
-  (* val get_local : id -> t -> mut * typ *)
+  val get_val_spec : id -> t -> typquant * typ
+  val add_record : id -> typquant -> (typ * id) list -> t -> t
+  val is_record : id -> t -> bool
+  val get_accessor : id -> t -> typquant * typ
   val add_local : id -> mut * typ -> t -> t
   val add_flow : id -> (typ -> typ) -> t -> t
   val get_flow : id -> t -> typ -> typ
   val get_register : id -> t -> typ
   val add_register : id -> typ -> t -> t
   val add_regtyp : id -> int -> int -> (index_range * id) list -> t -> t
+  val is_regtyp : id -> t -> bool
   val get_regtyp : id -> t -> int * int * (index_range * id) list
   val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
@@ -534,6 +544,7 @@ module Env : sig
   val allow_casts : t -> bool
   val no_casts : t -> t
   val add_cast : id -> t -> t
+  (* val lookup_fn : id -> t -> fn *)
   val lookup_id : id -> t -> lvar
   val fresh_kid : t -> kid
   val expand_synonyms : t -> typ -> typ
@@ -549,6 +560,8 @@ end = struct
       overloads : (id list) Bindings.t;
       flow : flow_typ Bindings.t;
       enums : IdSet.t Bindings.t;
+      records : (typquant * (typ * id) list) Bindings.t;
+      accessors : (typquant * typ) Bindings.t;
       casts : id list;
       allow_casts : bool;
       constraints : n_constraint list;
@@ -566,6 +579,8 @@ end = struct
       overloads = Bindings.empty;
       flow = Bindings.empty;
       enums = Bindings.empty;
+      records = Bindings.empty;
+      accessors = Bindings.empty;
       casts = [];
       allow_casts = true;
       constraints = [];
@@ -609,6 +624,7 @@ end = struct
   (* FIXME: Add an IdSet for builtin types *)
   let bound_typ_id env id =
     Bindings.mem id env.typ_synonyms
+    || Bindings.mem id env.records
     || Bindings.mem id env.regtyps
     || Bindings.mem id env.enums
     || Id.compare id (mk_id "range") = 0
@@ -684,6 +700,29 @@ end = struct
         typ_print ("Adding enum " ^ string_of_id id);
         { env with enums = Bindings.add id (IdSet.of_list ids) env.enums }
       end
+
+  let is_record id env = Bindings.mem id env.records
+
+  let add_record id typq fields env =
+    if bound_typ_id env id
+    then typ_error (id_loc id) ("Cannot create record " ^ string_of_id id ^ ", type name is already bound")
+    else
+      begin
+        typ_print ("Adding record " ^ string_of_id id);
+        let fold_accessors accs (typ, fid) =
+          let acc_typ = mk_typ (Typ_fn (mk_id_typ id, typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
+          typ_print (indent 1 ^ "Adding accessor " ^ string_of_id fid ^ " :: " ^ string_of_bind (typq, acc_typ));
+          Bindings.add fid (typq, acc_typ) accs
+        in
+        { env with records = Bindings.add id (typq, fields) env.records;
+                   accessors = List.fold_left fold_accessors env.accessors fields }
+      end
+
+  let get_accessor id env =
+    let freshen_bind bind = List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars) in
+    try freshen_bind (Bindings.find id env.accessors)
+    with
+    | Not_found -> typ_error (id_loc id) ("No accessor found for " ^ string_of_id id)
 
   let is_mutable id env =
     try
@@ -773,6 +812,8 @@ end = struct
         { env with regtyps = Bindings.add id (base, top, ranges) env.regtyps }
       end
 
+  let is_regtyp id env = Bindings.mem id env.regtyps
+
   let get_regtyp id env =
     try Bindings.find id env.regtyps with
     | Not_found -> typ_error (id_loc id) (string_of_id id ^ " is not a register type")
@@ -795,8 +836,19 @@ end = struct
               | Not_found -> Unbound
             end
        end
-
-   let add_typ_var kid k env =
+(*
+  let lookup_fn id env =
+    let freshen_bind bind = List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars) in
+    try let typq, typ = freshen_bind (Bindings.find id env.top_val_specs) in Fn (typq, typ)
+    with
+    | Not_found ->
+       begin
+         try let typq, typ = freshen_bind (Bindings.find id env.accessors) in Accessor (typq, typ)
+         with
+         | Not_found -> typ_error (id_loc id) ("No function found for " ^ string_of_id id)
+       end
+ *)
+  let add_typ_var kid k env =
     if KBindings.mem kid env.typ_vars
     then typ_error (kid_loc kid) ("Kind identifier " ^ string_of_kid kid ^ " is already bound")
     else
@@ -839,7 +891,7 @@ end = struct
     then typ_error (id_loc id) ("Type synonym " ^ string_of_id id ^ " already exists")
     else
       begin
-        typ_debug ("Adding typ synonym " ^ string_of_id id);
+        typ_debug ("Adding type synonym " ^ string_of_id id);
         { env with typ_synonyms = Bindings.add id synonym env.typ_synonyms }
       end
 
@@ -945,14 +997,6 @@ and string_of_tnf_arg = function
   | Tnf_arg_typ tnf -> string_of_tnf tnf
   | Tnf_arg_order o -> string_of_order o
   | Tnf_arg_effect eff -> string_of_effect eff
-
-let index_sort_intersect is1 is2 =
-  match is1, is2 with
-  | IS_int, _ -> is2
-  | _, IS_int -> is1
-  | IS_prop (kid1, cs1), IS_prop (kid2, cs2) ->
-     let cs2 = props_subst kid2 (Nexp_var kid1) cs2 in
-     IS_prop (kid1, cs1 @ cs2)
 
 let rec normalize_typ env (Typ_aux (typ, l)) =
   match typ with
@@ -1417,10 +1461,11 @@ let restrict_range_lower c1 (Typ_aux (typ_aux, l) as typ) =
 
 type flow_constraint =
   | Flow_lteq of int
-(* | Flow_gteq of int *)
+  | Flow_gteq of int
 
 let apply_flow_constraint = function
   | Flow_lteq c -> (restrict_range_upper c, restrict_range_lower (c + 1))
+  | Flow_gteq c -> (restrict_range_lower c, restrict_range_upper (c - 1))
 
 let rec infer_flow env (E_aux (exp_aux, (l, _))) =
   match exp_aux with
@@ -1428,6 +1473,22 @@ let rec infer_flow env (E_aux (exp_aux, (l, _))) =
      let kid = Env.fresh_kid env in
      let c = destructure_atom (typ_of y) in
      [(v, Flow_lteq (c - 1))]
+  | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lteq_range_atom" ->
+     let kid = Env.fresh_kid env in
+     let c = destructure_atom (typ_of y) in
+     [(v, Flow_lteq c)]
+  | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gt_range_atom" ->
+     let kid = Env.fresh_kid env in
+     let c = destructure_atom (typ_of y) in
+     [(v, Flow_gteq (c + 1))]
+  | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gteq_range_atom" ->
+     let kid = Env.fresh_kid env in
+     let c = destructure_atom (typ_of y) in
+     [(v, Flow_gteq c)]
+       (*
+  | E_app (f, [exp1; exp2]) when string_of_id f = "bool_and" ->
+     infer_flow env exp1 @ infer_flow env exp2
+        *)
   | _ -> []
 
 let rec add_flows b flows env =
@@ -1668,7 +1729,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
          | _ -> typ_error l "l-expression field is not a register"
        in
        match Env.expand_synonyms env regtyp with
-       | Typ_aux (Typ_id regtyp_id, _) ->
+       | Typ_aux (Typ_id regtyp_id, _) when Env.is_regtyp regtyp_id env ->
           let base, top, ranges = Env.get_regtyp regtyp_id env in
           let range, _ =
             try List.find (fun (_, id) -> Id.compare id field = 0) ranges with
@@ -1764,6 +1825,8 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
 and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   let annot_exp exp typ = E_aux (exp, (l, Some (env, typ))) in
   match exp_aux with
+  | E_nondet exps ->
+     annot_exp (E_nondet (List.map (fun exp -> check_exp env exp unit_typ) exps)) unit_typ
   | E_id v ->
      begin
        match Env.lookup_id v env with
@@ -1782,7 +1845,8 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      begin
        let inferred_exp = infer_exp env exp in
        match Env.expand_synonyms env (typ_of inferred_exp) with
-       | Typ_aux (Typ_id regtyp, _) ->
+       (* Accessing a (bit) field of a register *)
+       | Typ_aux (Typ_id regtyp, _) when Env.is_regtyp regtyp env ->
           let base, top, ranges = Env.get_regtyp regtyp env in
           let range, _ =
             try List.find (fun (_, id) -> Id.compare id field = 0) ranges with
@@ -1796,9 +1860,17 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_dec, _) ->
                let vec_typ = dvector_typ env (nconstant n) (nconstant (n - m + 1)) (mk_typ (Typ_id (mk_id "bit"))) in
                annot_exp (E_field (inferred_exp, field)) vec_typ
-            | _, _ -> typ_error l "Not implemented this register field type yet..."
+            | _, _ -> typ_error l "Not implemented this register field type yet..." (* FIXME *)
           end
-       | _ ->  typ_error l ("Field expression " ^ string_of_exp exp ^ " :: " ^ string_of_typ (typ_of inferred_exp) ^ " is not a register type")
+       (* Accessing a field of a record *)
+       | Typ_aux (Typ_id rectyp, _) as typ when Env.is_record rectyp env ->
+          begin
+            let inferred_acc = infer_funapp' l (Env.no_casts env) field (Env.get_accessor field env) [strip_exp inferred_exp] None in
+            match inferred_acc with
+            | E_aux (E_app (field, [inferred_exp]) ,_) -> annot_exp (E_field (inferred_exp, field)) (typ_of inferred_acc)
+            | _ -> assert false (* Unreachable *)
+          end
+       | _ ->  typ_error l ("Field expression " ^ string_of_exp exp ^ " :: " ^ string_of_typ (typ_of inferred_exp) ^ " is not valid")
      end
   | E_tuple exps ->
      let inferred_exps = List.map (irule infer_exp env) exps in
@@ -1822,8 +1894,9 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_app (f, xs) -> infer_funapp l env f xs None
   | E_if (cond, then_branch, else_branch) ->
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
-     let then_branch' = irule infer_exp env then_branch in
-     let else_branch' = crule check_exp env else_branch (typ_of then_branch') in
+     let flows = infer_flow env cond' in
+     let then_branch' = irule infer_exp (add_flows true flows env) then_branch in
+     let else_branch' = crule check_exp (add_flows false flows env) else_branch (typ_of then_branch') in
      annot_exp (E_if (cond', then_branch', else_branch')) (typ_of then_branch')
   | E_vector_access (v, n) -> infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, ())))
   | E_vector_append (v1, v2) -> infer_exp env (E_aux (E_app (mk_id "vector_append", [v1; v2]), (l, ())))
@@ -1847,9 +1920,16 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
                             mk_typ_arg (Typ_arg_typ (typ_of inferred_item))]))
      in
      annot_exp (E_vector (inferred_item :: checked_items)) vec_typ
+  | E_assert (test, msg) ->
+     let checked_test = check_exp env test bool_typ in
+     let checked_msg = check_exp env msg string_typ in
+     annot_exp (E_assert (checked_test, checked_msg)) unit_typ
   | _ -> typ_error l ("Cannot infer type of: " ^ string_of_exp exp)
 
-and infer_funapp l env f xs ret_ctx_typ =
+and infer_funapp l env f xs ret_ctx_typ = infer_funapp' l env f (Env.get_val_spec f env) xs ret_ctx_typ
+
+and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
+
   let annot_exp exp typ = E_aux (exp, (l, Some (env, typ))) in
   let rec number n = function
     | [] -> []
@@ -1869,7 +1949,7 @@ and infer_funapp l env f xs ret_ctx_typ =
            let iuargs = List.map2 (fun utyp (n, uarg) -> (n, crule check_exp env uarg utyp)) utyps uargs in
            (iuargs, ret_typ)
          else typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants
-                           ^ " not resolved during function application of " ^ string_of_id f)
+                           ^ " not resolved during application of " ^ string_of_id f)
        end
     | (utyps, (typ :: typs)), (uargs, ((n, arg) :: args)) ->
        begin
@@ -1906,7 +1986,6 @@ and infer_funapp l env f xs ret_ctx_typ =
          (quants', typs', ret_typ')
        end
   in
-  let (typq, f_typ) = Env.get_val_spec f env in
   match f_typ with
   | Typ_aux (Typ_fn (Typ_aux (Typ_tup typ_args, _), typ_ret, effs), _) ->
      let (quants, typ_args, typ_ret) = instantiate_ret (quant_items typq) typ_args typ_ret in
@@ -1918,7 +1997,7 @@ and infer_funapp l env f xs ret_ctx_typ =
      let (xs_instantiated, typ_ret) = instantiate quants ([], typ_args) typ_ret ([], number 0 xs) in
      let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
      annot_exp (E_app (f, xs_reordered)) typ_ret
-  | _ -> typ_error l (string_of_id f ^ " is not a function")
+  | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
 
 let check_letdef env (LB_aux (letbind, (l, _))) =
   begin
@@ -2025,7 +2104,8 @@ let check_typedef env (TD_aux (tdef, (l, _))) =
   match tdef with
   | TD_abbrev(id, nmscm, (TypSchm_aux (TypSchm_ts (typq, typ), _))) ->
      DEF_type (TD_aux (tdef, (l, None))), Env.add_typ_synonym id (fun _ -> typ) env
-  | TD_record(id, nmscm, typq, fields, _) -> td_err ()
+  | TD_record(id, nmscm, typq, fields, _) ->
+     DEF_type (TD_aux (tdef, (l, None))), Env.add_record id typq fields env
   | TD_variant(id, nmscm, typq, arms, _) -> td_err ()
   | TD_enum(id, nmscm, ids, _) ->
      DEF_type (TD_aux (tdef, (l, None))), Env.add_enum id ids env
