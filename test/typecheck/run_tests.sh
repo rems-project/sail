@@ -13,7 +13,7 @@ mkdir -p $DIR/rtpass
 mkdir -p $DIR/lem
 mkdir -p $DIR/rtfail
 
-rm $DIR/tests.xml
+rm -f $DIR/tests.xml
 
 pass=0
 fail=0
