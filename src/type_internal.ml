@@ -933,11 +933,14 @@ and normalize_t_arg targ = match targ with
 
 let int_to_nexp = mk_c_int
 
+let is_bit t = match t.t with
+  | Tid "bit"
+  | Tabbrev(_,{t=Tid "bit"})
+  | Tapp("register",[TA_typ {t=Tid "bit"}]) -> true
+  | _ -> false
+
 let rec is_bit_vector t = match t.t with
-  | Tapp("vector", [_;_;_; TA_typ t]) ->
-    (match t.t with
-     | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) | Tapp("register",[TA_typ {t=Tid "bit"}]) -> true
-     | _ -> false)
+  | Tapp("vector", [_;_;_; TA_typ t]) -> is_bit t
   | Tapp("register", [TA_typ t']) -> is_bit_vector t'
   | Tabbrev(_,t') -> is_bit_vector t'
   | _ -> false

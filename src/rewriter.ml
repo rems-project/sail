@@ -1171,7 +1171,15 @@ let rewrite_fun_remove_vector_concat_pat
     (FCL_aux (FCL_Funcl (id,pat,rewriters.rewrite_exp rewriters None (decls exp)),(l,annot))) 
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
-let rewrite_defs_remove_vector_concat_pat rewriters (Defs defs) =
+let rewrite_defs_remove_vector_concat (Defs defs) =
+  let rewriters =
+    {rewrite_exp = rewrite_exp_remove_vector_concat_pat;
+     rewrite_pat = rewrite_pat;
+     rewrite_let = rewrite_let;
+     rewrite_lexp = rewrite_lexp;
+     rewrite_fun = rewrite_fun_remove_vector_concat_pat;
+     rewrite_def = rewrite_def;
+     rewrite_defs = rewrite_defs_base} in
   let rewrite_def d =
     let d = rewriters.rewrite_def rewriters d in
     match d with
@@ -1183,17 +1191,8 @@ let rewrite_defs_remove_vector_concat_pat rewriters (Defs defs) =
        let (pat,letbinds,_) = remove_vector_concat_pat pat in
        let defvals = List.map (fun lb -> DEF_val lb) letbinds in
        [DEF_val (LB_aux (LB_val_implicit (pat,exp),a))] @ defvals
-    | d -> [rewriters.rewrite_def rewriters d] in
+    | d -> [d] in
   Defs (List.flatten (List.map rewrite_def defs))
-
-let rewrite_defs_remove_vector_concat defs = rewrite_defs_base
-    {rewrite_exp = rewrite_exp_remove_vector_concat_pat;
-     rewrite_pat = rewrite_pat;
-     rewrite_let = rewrite_let;
-     rewrite_lexp = rewrite_lexp;
-     rewrite_fun = rewrite_fun_remove_vector_concat_pat;
-     rewrite_def = rewrite_def;
-     rewrite_defs = rewrite_defs_remove_vector_concat_pat} defs
 
 let map_default f = function
 | None -> None
@@ -1206,7 +1205,7 @@ let rec binop_opt f x y = match x, y with
 | Some x, Some y -> Some (f x y)
 
 let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with
-| P_lit _ | P_wild _ | P_id _ -> false
+| P_lit _ | P_wild | P_id _ -> false
 | P_as (pat,_) | P_typ (_,pat) -> contains_bitvector_pat pat
 | P_vector _ | P_vector_concat _ | P_vector_indexed _ ->
     is_bit_vector (get_type_annot annot)
@@ -1233,113 +1232,182 @@ let remove_bitvector_pat pat =
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
     ; p_aux =
         (fun (pat,annot) contained_in_p_as ->
-          match pat, annot with
-          | P_vector _, (l, Base((_,t),_,_,_,_,_))
-          | P_vector_indexed _, (l, Base((_,t),_,_,_,_,_)) ->
-             (if is_bit_vector t && not contained_in_p_as
-              then P_aux (P_as (P_aux (pat,annot),fresh_id "b__" l), annot)
-              else P_aux (pat,annot))
+          let t = get_type_annot annot in
+          let (l,_) = annot in
+          match pat, is_bit_vector t, contained_in_p_as with
+          | P_vector _, true, false
+          | P_vector_indexed _, true, false ->
+            P_aux (P_as (P_aux (pat,annot),fresh_id "b__" l), annot)
           | _ -> P_aux (pat,annot)
         )
     ; fP_aux = (fun (fpat,annot) -> FP_aux (fpat,annot))
     ; fP_Fpat = (fun (id,p) -> FP_Fpat (id,p false))
     } in
-
   let pat = (fold_pat name_bitvector_roots pat) false in
 
-  let bit_annot l eaux =
-    let bitannot = (Parse_ast.Generated l, simple_annot {t = Tid "bit"}) in
-    E_aux (eaux, bitannot) in
+  (* Then collect guard expressions testing whether the literal bits of a
+     bitvector pattern match those of a given bitvector, and collect let
+     bindings for the bits bound by P_id or P_as patterns *)
+
+  (* Helper functions for calculating vector indices *)
+  let vec_ord t = match (normalize_t t).t with
+    | Tapp("vector", [_;_;TA_ord {order = ord}; _]) -> ord
+    | _ -> Oinc (* TODO Use default order *) in
+
+  let vec_is_inc t = match vec_ord t with Oinc -> true | _ -> false in
+
+  let vec_start t = match (normalize_t t).t with
+    | Tapp("vector", [TA_nexp {nexp = Nconst i};_;_; _]) -> int_of_big_int i
+    | _ -> 0 in
+
+  let vec_length t = match (normalize_t t).t with
+    | Tapp("vector", [_;TA_nexp {nexp = Nconst j};_; _]) -> int_of_big_int j
+    | _ -> 0 in
+
+  (* Helper functions for generating guard expressions *)
+  let bit_annot l = (Parse_ast.Generated l, simple_annot {t = Tid "bit"}) in
 
   let access_bit_exp (rootid,rannot) l idx =
     let root : tannot exp = E_aux (E_id rootid,rannot) in
-    let idx_exp = simple_num l idx in
-    bit_annot l (E_vector_access (root,idx_exp)) in
+    E_aux (E_vector_access (root,simple_num l idx), bit_annot l) in
 
+  let test_bit_exp rootid l t idx exp =
+    let rannot = (Parse_ast.Generated l, simple_annot t) in
+    let elem = access_bit_exp (rootid,rannot) l idx in
+    let eqid = Id_aux (Id "==", Parse_ast.Generated l) in
+    let eqannot = (Parse_ast.Generated l,
+                   tag_annot {t = Tid "bit"} (External (Some "eq_bit"))) in
+    let eqexp : tannot exp = E_aux (E_app_infix(elem,eqid,exp), eqannot) in
+    Some (eqexp) in
+
+  let test_subvec_exp rootid l t i j lits =
+    let l' = Parse_ast.Generated l in
+    let t' = mk_vector {t = Tid "bit"} {order = vec_ord t}
+                       (mk_c_int i) (mk_c_int (List.length lits)) in
+    let subvec_exp =
+      if vec_start t = i && vec_length t = List.length lits
+      then E_id rootid
+      else E_vector_subrange (
+             E_aux (E_id rootid, (l', simple_annot t)),
+             simple_num l i,
+             simple_num l j) in
+    E_aux (E_app_infix(
+        E_aux (subvec_exp, (l', simple_annot t')),
+        Id_aux (Id "==", l'),
+        E_aux (E_vector lits, (l', simple_annot t'))),
+      (l', tag_annot {t = Tid "bit"} (External (Some "eq_vec")))) in
+
+  let letbind_bit_exp rootid l t idx id =
+    let rannot = (Parse_ast.Generated l, simple_annot t) in
+    let elem = access_bit_exp (rootid,rannot) l idx in
+    let e = P_aux (P_id id, bit_annot l) in
+    let letbind = LB_aux (LB_val_implicit (e,elem), bit_annot l) in
+    let letexp = (fun body ->
+      let (E_aux (_,(_,bannot))) = body in
+      E_aux (E_let (letbind,body), (Parse_ast.Generated l, bannot))) in
+    (letexp, letbind) in
+
+  (* Helper functions for composing guards *)
   let bitwise_and exp1 exp2 =
     let (E_aux (_,(l,_))) = exp1 in
     let andid = Id_aux (Id "&", Parse_ast.Generated l) in
     let andannot = (Parse_ast.Generated l,
                     tag_annot {t = Tid "bit"} (External (Some "bitwise_and_bit"))) in
-    let andexp : tannot exp = E_aux (E_app_infix(exp1,andid,exp2), andannot) in
-    andexp in
+    E_aux (E_app_infix(exp1,andid,exp2), andannot) in
 
-  let compose_guards guards (*root_bv*) =
-    (*let guards = List.map ((|>) root_bv) guards in*)
+  let compose_guards guards =
     List.fold_right (binop_opt bitwise_and) guards None in
 
-  let test_bit_exp rootid t idx (pat, guard) =
-    (match guard with
-      | Some exp ->
-          let (P_aux (_,(l,_))) = pat in
-          let rannot = (Parse_ast.Generated l, simple_annot t) in
-          let elem = access_bit_exp (rootid,rannot) l idx in
-          let eqid = Id_aux (Id "==", Parse_ast.Generated l) in
-          let eqannot = (Parse_ast.Generated l,
-                         tag_annot {t = Tid "bit"} (External (Some "eq_bit"))) in
-          let eqexp : tannot exp = E_aux (E_app_infix(elem,eqid,exp), eqannot) in
-          Some (eqexp)
-      | None -> None) in
+  let flatten_guards_decls gd =
+    let (guards,decls,letbinds) = Util.split3 gd in
+    (compose_guards guards, (List.fold_right (@@) decls), List.flatten letbinds) in
 
-  (* TODO: Collect let bindings for bits that are bound via P_as or P_id *)
+  (* Collect guards and let bindings *)
   let guard_bitvector_pat =
-    { p_lit            = (fun lit bvid t -> (P_lit lit, match bvid, (normalize_t t).t with Some (Id_aux (_,l)), Tid "bit" -> Some (bit_annot l (E_lit lit)) | _, _ -> None))
-    ; p_wild           = (fun _ _ -> (P_wild, None))
-    ; p_as             = (fun (p,id) _ _ -> let (pat,guard) = p (Some id) in (P_as (pat,id), guard))
-    ; p_typ            = (fun (typ,p) _ _ -> let (pat,guards) = p None in (P_typ (typ,pat), guards))
-    ; p_id             = (fun id _ _ -> (P_id id, None))
-    ; p_app            = (fun (id,ps) _ _ -> let (ps,guards) = List.split (List.map ((|>) None) ps) in
-                                         (P_app (id,ps), compose_guards guards))
-    ; p_record         = (fun (ps,b) _ _ -> let (ps,guards) = List.split (List.map ((|>) None) ps) in
-                                        (P_record (ps,b), compose_guards guards))
-    ; p_vector         = (fun p bvid t -> let p = List.map ((|>) bvid) p in
-                                          let (ps,guards) = List.split p in
-                                          (*let guard = (match bvid with
-                                            | Some (Id_aux (_,l)) -> Some (bit_annot l (E_lit (L_aux (L_true,l))))
-                                            | None -> None) in*)
-                                          let guards = (match bvid, is_bit_vector t with
-                                            | Some id, true -> List.mapi (test_bit_exp id t) p
-                                            | _, _ -> guards) in
-                                   (*let guards' = (function
-                                   | Some root_bv ->
-                                       let tests = List.mapi (test_bit_exp root_bv) p in
-                                       List.fold_right (binop_opt bitwise_and) tests None
-                                   | None -> compose_guards guards None) in*)
-                                   (P_vector ps, compose_guards guards))
-    ; p_vector_indexed = (fun p bvid t -> let (is,p) = List.split p in
-                                   let p = List.map ((|>) bvid) p in
-                                   let (ps,guards) = List.split p in
-                                   let guards = (match bvid, is_bit_vector t with
-                                     | Some id, true -> List.map2 (test_bit_exp id t) is p
-                                     | _, _ -> guards) in
-                                   (*let guards' = (function
-                                   | Some root_bv ->
-                                       let tests = List.map2 (test_bit_exp root_bv) is p in
-                                       List.fold_right (binop_opt bitwise_and) tests None
-                                   | None -> compose_guards guards None) in*)
-                                   let ps = List.combine is ps in
-                                   (P_vector_indexed ps, (*compose_guards guards*) None))
-    ; p_vector_concat  = (fun ps _ _ -> let (ps,guards) = List.split (List.map ((|>) None) ps) in
-                                    (P_vector_concat ps, compose_guards guards))
-    ; p_tup            = (fun ps _ _ -> let (ps,guards) = List.split (List.map ((|>) None) ps) in
-                                    (P_tup ps, compose_guards guards))
-    ; p_list           = (fun ps _ _ -> let (ps,guards) = List.split (List.map ((|>) None) ps) in
-                                    (P_list ps, compose_guards guards))
-    ; p_aux            = (fun (p,annot) bvid ->
-                           let (l,Base((_,t),_,_,_,_,_)) = annot in
-                           let (pat,guard) = p bvid t in
-                           (*(P_aux (pat,annot), guard))*)
-                           (match pat, is_bit_vector t with
-                           | P_as (P_aux (P_vector _, _), id), true
-                           | P_as (P_aux (P_vector_indexed _, _), id), true ->
-                               (P_aux (P_id id, annot), guard)
-                           | _, _ -> (P_aux (pat,annot), guard)))
-    ; fP_aux           = (fun ((fpat,guard),annot) _ -> (FP_aux (fpat,annot), guard))
-    ; fP_Fpat          = (fun (id,p) -> let (pat,guard) = p None in (FP_Fpat (id,pat), guard))
-    } in
+    let collect_guards_decls ps rootid t =
+      let rec collect current (guards,dls) idx ps =
+        let idx' = if vec_is_inc t then idx + 1 else idx - 1 in
+        (match ps with
+          | pat :: ps' ->
+            (match pat with
+              | P_aux (P_lit lit, (l,annot)) ->
+                let e = E_aux (E_lit lit, (Parse_ast.Generated l, annot)) in
+                let current' = (match current with
+                  | Some (l,i,j,lits) -> Some (l,i,idx,lits @ [e])
+                  | None -> Some (l,idx,idx,[e])) in
+                collect current' (guards, dls) idx' ps'
+              | P_aux (P_as (pat',id), (l,annot)) ->
+                let dl = letbind_bit_exp rootid l t idx id in
+                collect current (guards, dls @ [dl]) idx (pat' :: ps')
+              | _ ->
+                let dls' = (match pat with
+                  | P_aux (P_id id, (l,annot)) ->
+                    dls @ [letbind_bit_exp rootid l t idx id]
+                  | _ -> dls) in
+                let guards' = (match current with
+                  | Some (l,i,j,lits) ->
+                    guards @ [Some (test_subvec_exp rootid l t i j lits)]
+                  | None -> guards) in
+                collect None (guards', dls') idx' ps')
+          | [] ->
+            let guards' = (match current with
+              | Some (l,i,j,lits) ->
+                guards @ [Some (test_subvec_exp rootid l t i j lits)]
+              | None -> guards) in
+            (guards',dls)) in
+      let (guards,dls) = collect None ([],[]) (vec_start t) ps in
+      let (decls,letbinds) = List.split dls in
+      (compose_guards guards, List.fold_right (@@) decls, letbinds) in
 
-  let (pat,guard) = fold_pat guard_bitvector_pat pat None in
-  (pat, guard)
+    let collect_guards_decls_indexed ips rootid t =
+      let rec guard_decl (idx,pat) = (match pat with
+        | P_aux (P_lit lit, (l,annot)) ->
+          let exp = E_aux (E_lit lit, (l,annot)) in
+          (test_bit_exp rootid l t idx exp, (fun b -> b), [])
+        | P_aux (P_as (pat',id), (l,annot)) ->
+          let (guard,decls,letbinds) = guard_decl (idx,pat') in
+          let (letexp,letbind) = letbind_bit_exp rootid l t idx id in
+          (guard, decls >> letexp, letbind :: letbinds)
+        | P_aux (P_id id, (l,annot)) ->
+          let (letexp,letbind) = letbind_bit_exp rootid l t idx id in
+          (None, letexp, [letbind])
+        | _ -> (None, (fun b -> b), [])) in
+      let (guards,decls,letbinds) = Util.split3 (List.map guard_decl ips) in
+      (compose_guards guards, List.fold_right (@@) decls, List.flatten letbinds) in
+
+    { p_lit            = (fun lit -> (P_lit lit, (None, (fun b -> b), [])))
+    ; p_wild           = (P_wild, (None, (fun b -> b), []))
+    ; p_as             = (fun ((pat,gdls),id) -> (P_as (pat,id), gdls))
+    ; p_typ            = (fun (typ,(pat,gdls)) -> (P_typ (typ,pat), gdls))
+    ; p_id             = (fun id -> (P_id id, (None, (fun b -> b), [])))
+    ; p_app            = (fun (id,ps) -> let (ps,gdls) = List.split ps in
+                                         (P_app (id,ps), flatten_guards_decls gdls))
+    ; p_record         = (fun (ps,b) -> let (ps,gdls) = List.split ps in
+                                        (P_record (ps,b), flatten_guards_decls gdls))
+    ; p_vector         = (fun ps -> let (ps,gdls) = List.split ps in
+                                    (P_vector ps, flatten_guards_decls gdls))
+    ; p_vector_indexed = (fun p -> let (is,p) = List.split p in
+                                   let (ps,gdls) = List.split p in
+                                   let ps = List.combine is ps in
+                                   (P_vector_indexed ps, flatten_guards_decls gdls))
+    ; p_vector_concat  = (fun ps -> let (ps,gdls) = List.split ps in
+                                    (P_vector_concat ps, flatten_guards_decls gdls))
+    ; p_tup            = (fun ps -> let (ps,gdls) = List.split ps in
+                                    (P_tup ps, flatten_guards_decls gdls))
+    ; p_list           = (fun ps -> let (ps,gdls) = List.split ps in
+                                    (P_list ps, flatten_guards_decls gdls))
+    ; p_aux            = (fun ((pat,gdls),annot) ->
+                           let t = get_type_annot annot in
+                           (match pat, is_bit_vector t with
+                           | P_as (P_aux (P_vector ps, _), id), true ->
+                             (P_aux (P_id id, annot), collect_guards_decls ps id t)
+                           | P_as (P_aux (P_vector_indexed ips, _), id), true ->
+                             (P_aux (P_id id, annot), collect_guards_decls_indexed ips id t)
+                           | _, _ -> (P_aux (pat,annot), gdls)))
+    ; fP_aux           = (fun ((fpat,gdls),annot) -> (FP_aux (fpat,annot), gdls))
+    ; fP_Fpat          = (fun (id,(pat,gdls)) -> (FP_Fpat (id,pat), gdls))
+    } in
+  fold_pat guard_bitvector_pat pat
 
 let remove_wildcards pre (P_aux (_,(l,_)) as pat) =
   fold_pat
@@ -1356,6 +1424,16 @@ let remove_wildcards pre (P_aux (_,(l,_)) as pat) =
  *)
 let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,_) as pat2) =
   let rewrap p = P_aux (p,annot1) in
+  let subsumes_list s pats1 pats2 =
+    if List.length pats1 = List.length pats2
+    then
+      let subs = List.map2 s pats1 pats2 in
+      List.fold_right
+        (fun p acc -> match p, acc with
+          | Some subst, Some substs -> Some (subst @ substs)
+          | _ -> None)
+        subs (Some [])
+    else None in
   match p1, p2 with
   | P_lit (L_aux (lit1,_)), P_lit (L_aux (lit2,_)) ->
       if lit1 = lit2 then Some [] else None
@@ -1364,28 +1442,25 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,_) as pat2) =
   | P_typ (_,pat1), _ -> subsumes_pat pat1 pat2
   | _, P_typ (_,pat2) -> subsumes_pat pat1 pat2
   | P_id (Id_aux (id1,_) as aid1), P_id (Id_aux (id2,_) as aid2) ->
-      if id1 = id2 then Some [] else Some [(id2,id1)]
+    if id1 = id2 then Some [] else Some [(id2,id1)]
   | P_id id1, _ -> Some []
   | P_wild, _ -> Some []
   | P_app (Id_aux (id1,l1),args1), P_app (Id_aux (id2,_),args2) ->
-      if id1 = id2 then subsumes_pat_list args1 args2 else None
+    if id1 = id2 then subsumes_list subsumes_pat args1 args2 else None
+  | P_record (fps1,b1), P_record (fps2,b2) ->
+    if b1 = b2 then subsumes_list subsumes_fpat fps1 fps2 else None
   | P_vector pats1, P_vector pats2
+  | P_vector_concat pats1, P_vector_concat pats2
   | P_tup pats1, P_tup pats2
   | P_list pats1, P_list pats2 ->
-      subsumes_pat_list pats1 pats2
-  (* TODO: records *)
-  (* TODO: indexed vectors, vector concats *)
+    subsumes_list subsumes_pat pats1 pats2
+  | P_vector_indexed ips1, P_vector_indexed ips2 ->
+    let (is1,ps1) = List.split ips1 in
+    let (is2,ps2) = List.split ips2 in
+    if is1 = is2 then subsumes_list subsumes_pat ps1 ps2 else None
   | _ -> None
-and subsumes_pat_list pats1 pats2 =
-  if List.length pats1 = List.length pats2
-  then
-    let subs = List.map2 subsumes_pat pats1 pats2 in
-    List.fold_right
-      (fun p acc -> match p, acc with
-        | Some subst, Some substs -> Some (subst @ substs)
-        | _ -> None)
-      subs (Some [])
-  else None
+and subsumes_fpat (FP_aux (FP_Fpat (id1,pat1),_)) (FP_aux (FP_Fpat (id2,pat2),_)) =
+  if id1 = id2 then subsumes_pat pat1 pat2 else None
 
 let equiv_pats pat1 pat2 =
   match subsumes_pat pat1 pat2, subsumes_pat pat2 pat1 with
@@ -1496,8 +1571,9 @@ let rewrite_exp_remove_bitvector_pat rewriters nmap (E_aux (exp,(l,annot)) as fu
   | E_case (e,ps)
     when List.exists (fun (Pat_aux (Pat_exp (pat,_),_)) -> contains_bitvector_pat pat) ps ->
      let clause (Pat_aux (Pat_exp (pat,body),annot')) =
-       let (pat',guard) = remove_bitvector_pat pat in
-       (pat',guard,rewrite_rec body,annot') in
+       let (pat',(guard,decls,_)) = remove_bitvector_pat pat in
+       let body' = decls (rewrite_rec body) in
+       (pat',guard,body',annot') in
      let clauses = rewrite_guarded_clauses l (List.map clause ps) in
      if (effectful e) then
        let e = rewrite_rec e in
@@ -1511,14 +1587,14 @@ let rewrite_exp_remove_bitvector_pat rewriters nmap (E_aux (exp,(l,annot)) as fu
        let exp' = case_exp exp_e' (get_type full_exp) clauses in
        rewrap (E_let (letbind_e, exp'))
      else case_exp e (get_type full_exp) clauses
-  (*| E_let (LB_aux (LB_val_explicit (typ,pat,v),annot'),body) ->
-     let (pat,_,decls) = remove_vector_concat_pat pat in
+  | E_let (LB_aux (LB_val_explicit (typ,pat,v),annot'),body) ->
+     let (pat,(_,decls,_)) = remove_bitvector_pat pat in
      rewrap (E_let (LB_aux (LB_val_explicit (typ,pat,rewrite_rec v),annot'),
                     decls (rewrite_rec body)))
   | E_let (LB_aux (LB_val_implicit (pat,v),annot'),body) ->
-     let (pat,_,decls) = remove_vector_concat_pat pat in
+     let (pat,(_,decls,_)) = remove_bitvector_pat pat in
      rewrap (E_let (LB_aux (LB_val_implicit (pat,rewrite_rec v),annot'),
-                    decls (rewrite_rec body)))*)
+                    decls (rewrite_rec body)))
   | _ -> rewrite_base full_exp
 
 let rewrite_fun_remove_bitvector_pat
@@ -1528,37 +1604,37 @@ let rewrite_fun_remove_bitvector_pat
   let funcls = match funcls with
     | (FCL_aux (FCL_Funcl(id,_,_),_) :: _) ->
         let clause (FCL_aux (FCL_Funcl(_,pat,exp),annot)) =
-          let (pat,guard) = remove_bitvector_pat pat in
-          let exp = rewriters.rewrite_exp rewriters None exp in
+          let (pat,(guard,decls,_)) = remove_bitvector_pat pat in
+          let exp = decls (rewriters.rewrite_exp rewriters None exp) in
           (pat,guard,exp,annot) in
         let cs = rewrite_guarded_clauses l (List.map clause funcls) in
         List.map (fun (pat,exp,annot) -> FCL_aux (FCL_Funcl(id,pat,exp),annot)) cs
     | _ -> funcls (* TODO is the empty list possible here? *) in
   FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))
 
-(*let rewrite_defs_remove_vector_concat_pat rewriters (Defs defs) =
-  let rewrite_def d =
-    let d = rewriters.rewrite_def rewriters d in
-    match d with
-    | DEF_val (LB_aux (LB_val_explicit (t,pat,exp),a)) ->
-       let (pat,letbinds,_) = remove_vector_concat_pat pat in
-       let defvals = List.map (fun lb -> DEF_val lb) letbinds in
-       [DEF_val (LB_aux (LB_val_explicit (t,pat,exp),a))] @ defvals
-    | DEF_val (LB_aux (LB_val_implicit (pat,exp),a)) ->
-       let (pat,letbinds,_) = remove_vector_concat_pat pat in
-       let defvals = List.map (fun lb -> DEF_val lb) letbinds in
-       [DEF_val (LB_aux (LB_val_implicit (pat,exp),a))] @ defvals
-    | d -> [rewriters.rewrite_def rewriters d] in
-  Defs (List.flatten (List.map rewrite_def defs))*)
-
-let rewrite_defs_remove_bitvector_pats defs = rewrite_defs_base
+let rewrite_defs_remove_bitvector_pats (Defs defs) =
+  let rewriters =
     {rewrite_exp = rewrite_exp_remove_bitvector_pat;
      rewrite_pat = rewrite_pat;
      rewrite_let = rewrite_let;
      rewrite_lexp = rewrite_lexp;
      rewrite_fun = rewrite_fun_remove_bitvector_pat;
      rewrite_def = rewrite_def;
-     rewrite_defs = rewrite_defs_base } defs
+     rewrite_defs = rewrite_defs_base } in
+  let rewrite_def d =
+    let d = rewriters.rewrite_def rewriters d in
+    match d with
+    | DEF_val (LB_aux (LB_val_explicit (t,pat,exp),a)) ->
+       let (pat',(_,_,letbinds)) = remove_bitvector_pat pat in
+       let defvals = List.map (fun lb -> DEF_val lb) letbinds in
+       [DEF_val (LB_aux (LB_val_explicit (t,pat',exp),a))] @ defvals
+    | DEF_val (LB_aux (LB_val_implicit (pat,exp),a)) ->
+       let (pat',(_,_,letbinds)) = remove_bitvector_pat pat in
+       let defvals = List.map (fun lb -> DEF_val lb) letbinds in
+       [DEF_val (LB_aux (LB_val_implicit (pat',exp),a))] @ defvals
+    | d -> [d] in
+  Defs (List.flatten (List.map rewrite_def defs))
+
 
 (*Expects to be called after rewrite_defs; thus the following should not appear:
   internal_exp of any form
