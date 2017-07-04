@@ -71,7 +71,9 @@ function clause execute (CGetType(rd, cb)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else
     let capVal = readCapReg(cb) in
-    wGPR(rd) := EXTZ(capVal.otype);
+    wGPR(rd) := if (capVal.sealed)
+      then EXTZ(capVal.otype)
+      else -1
   (* END_CGetType *)
 }
 
