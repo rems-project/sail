@@ -45,7 +45,7 @@ open Ast
 open Util
 open Big_int
 
-let debug = ref 1
+let debug = ref 0
 let depth = ref 0
 
 let rec indent n = match n with
@@ -802,7 +802,7 @@ end = struct
 
   let add_regtyp id base top ranges env =
     if Bindings.mem id env.regtyps
-    then typ_error (id_loc id) ("Register typ " ^ string_of_id id ^ " is already bound")
+    then typ_error (id_loc id) ("Register type " ^ string_of_id id ^ " is already bound")
     else
       begin
         typ_print ("Adding register type " ^ string_of_id id);

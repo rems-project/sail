@@ -21,16 +21,19 @@ fail=0
 XML=""
 
 function green {
+    (( pass += 1 ))
     printf "$1: ${GREEN}$2${NC}\n"
     XML+="    <testcase name=\"$1\"/>\n"
 }
 
 function yellow {
+    (( fail += 1 ))
     printf "$1: ${YELLOW}$2${NC}\n"
     XML+="    <testcase name=\"$1\">\n      <error message=\"$2\">$2</error>\n    </testcase>\n"
 }
 
 function red {
+    (( fail += 1 ))
     printf "$1: ${RED}$2${NC}\n"
     XML+="    <testcase name=\"$1\">\n      <error message=\"$2\">$2</error>\n    </testcase>\n"
 }
@@ -52,15 +55,11 @@ do
     then
 	if $SAILDIR/sail -dno_cast -just_check $DIR/rtpass/$i 2> /dev/null;
 	then
-	    (( pass += 2))
 	    green "tested $i expecting pass" "pass"
 	else
-	    (( fail += 1 ))
-	    (( pass += 1 ))
-	    yellow "tested $i expecting pass" "pass but failed re-check"
+	    yellow "tested $i expecting pass" "failed re-check"
 	fi
     else
-	(( fail += 2 ))
 	red "tested $i expecting pass" "fail"
     fi
 done
@@ -71,16 +70,12 @@ for i in `ls $DIR/fail/`;
 do
     if $SAILDIR/sail -ddump_tc_ast -just_check $DIR/fail/$i 2> /dev/null 1> $DIR/rtfail/$i;
     then
-	(( fail += 2 ))
 	red "tested $i expecting fail" "pass"
     else
 	if $SAILDIR/sail -dno_cast -just_check $DIR/rtfail/$i 2> /dev/null;
 	then
-	    (( fail += 1 ))
-	    (( pass += 1 ))
-	    yellow "tested $i expecting fail" "failed but passed re-check"
+	    yellow "tested $i expecting fail" "passed re-check"
 	else
-	    (( pass += 2 ))
 	    green "tested $i expecting fail" "fail"
 	fi
     fi
@@ -98,14 +93,11 @@ function test_lem {
 	    mv $SAILDIR/${i%%.*}_embed_sequential.lem $DIR/lem/
 	    if lem -lib $SAILDIR/src/lem_interp -lib $SAILDIR/src/gen_lib/ $DIR/lem/${i%%.*}_embed_types.lem $DIR/lem/${i%%.*}_embed.lem 2> /dev/null
 	    then
-		(( pass += 1 ))
 		green "generated lem for $1/$i" "pass"
 	    else
-		(( fail += 1 ))
 		red "generated lem for $1/$i" "failed to typecheck lem"
 	    fi
 	else
-	    (( fail += 1 ))
 	    red "generated lem for $1/$i" "failed to generate lem"
 	fi
     done
