@@ -8,6 +8,8 @@ typedef Record =
 
 register bit[32] R0
 
+val Record -> unit effect {wreg} test
+
 function unit test ((Record) r) =
 {
   R0 := r.bitfield;

@@ -75,9 +75,14 @@ module Env : sig
 
   val get_typ_var : kid -> t -> base_kind_aux
 
+  val is_record : id -> t -> bool
+
+  val get_accessor : id -> t -> typquant * typ
+
   (* If the environment is checking a function, then this will get the
      expected return type of the function. It's useful for checking or
-     inserting early returns. *)
+     inserting early returns. Returns an option type and won't throw
+     any exceptions. *)
   val get_ret_typ : t -> typ option
 
   val get_typ_synonym : id -> t -> typ_arg list -> typ
@@ -102,13 +107,42 @@ module Env : sig
      node. *)
   val no_casts : t -> t
 
-  (* Is casting allowed by the environment *)
+  (* Is casting allowed by the environment? *)
   val allow_casts : t -> bool
 
   val empty : t
 end
 
-type tannot = (Env.t * typ) option
+(* Some handy utility functions for constructing types. *)
+val mk_typ : typ_aux -> typ
+val mk_typ_arg : typ_arg_aux -> typ_arg
+val mk_id : string -> id
+val mk_id_typ : id -> typ
+
+val no_effect : effect
+val mk_effect : base_effect_aux list -> effect
+
+val union_effects : effect -> effect -> effect
+val equal_effects : effect -> effect -> bool
+
+(* Sail builtin types. *)
+val int_typ : typ
+val nat_typ : typ
+val atom_typ : nexp -> typ
+val range_typ : nexp -> nexp -> typ
+val bit_typ : typ
+val bool_typ : typ
+val unit_typ : typ
+val string_typ : typ
+val vector_typ : nexp -> nexp -> order -> typ -> typ
+
+(* Vector with default order. *)
+val dvector_typ : Env.t -> nexp -> nexp -> typ -> typ
+
+(* Vector of specific length with default order, i.e. lvector_typ env n bit_typ = bit[n]. *)
+val lvector_typ : Env.t -> nexp -> typ -> typ
+
+type tannot = (Env.t * typ * effect) option
 
 (* Strip the type annotations from an expression. *)
 val strip_exp : 'a exp -> unit exp
@@ -120,6 +154,15 @@ val strip_exp : 'a exp -> unit exp
    sub-expression. so local modifications to the AST can be
    re-checked. *)
 val check_exp : Env.t -> unit exp -> typ -> tannot exp
+
+(* Partial functions: The expressions and patterns passed to these
+   functions must be guaranteed to have tannots of the form Some (env,
+   typ) for these to work. *)
+val typ_of : tannot exp -> typ
+
+val pat_typ_of : tannot pat -> typ
+
+val effect_of : tannot exp -> effect
 
 (* Fully type-check an AST
 

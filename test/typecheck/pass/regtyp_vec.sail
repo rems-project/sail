@@ -8,6 +8,8 @@ val forall Nat 'n, Nat 'l, Type 'a, 'l >= 0. (vector<'n,'l,dec,'a>, [|'n - 'l + 
 val forall Nat 'n, Nat 'l, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [|'n:'n + 'l - 1|]) -> 'a effect pure vector_access_inc
 *)
 
+overload vector_access [vector_access_dec]
+
 default Order dec
 
 typedef CauseReg = register bits [ 31 : 0 ] {

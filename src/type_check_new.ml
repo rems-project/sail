@@ -317,6 +317,8 @@ let mk_infix_id str = Id_aux (DeIid str, Parse_ast.Unknown)
 
 let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
 
+let int_typ = mk_id_typ (mk_id "int")
+let nat_typ = mk_id_typ (mk_id "nat")
 let unit_typ = mk_id_typ (mk_id "unit")
 let bit_typ = mk_id_typ (mk_id "bit")
 let atom_typ nexp = mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp nexp)]))
@@ -324,7 +326,29 @@ let range_typ nexp1 nexp2 = mk_typ (Typ_app (mk_id "range", [mk_typ_arg (Typ_arg
 let bool_typ = mk_id_typ (mk_id "bool")
 let string_typ = mk_id_typ (mk_id "string")
 
-let no_effects = Effect_aux (Effect_set [], Parse_ast.Unknown)
+let mk_effect effs =
+  Effect_aux (Effect_set (List.map (fun be_aux -> BE_aux (be_aux, Parse_ast.Unknown)) effs), Parse_ast.Unknown)
+
+let no_effect = mk_effect []
+
+module BE = struct
+  type t = base_effect
+  let compare be1 be2 = String.compare (string_of_base_effect be1) (string_of_base_effect be2)
+end
+module BESet = Set.Make(BE)
+
+let union_effects e1 e2 =
+  match e1, e2 with
+  | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
+     let base_effs3 = BESet.elements (BESet.of_list (base_effs1 @ base_effs2)) in
+     Effect_aux (Effect_set base_effs3, Parse_ast.Unknown)
+  | _, _ -> assert false (* We don't do Effect variables *)
+
+let equal_effects e1 e2 =
+  match e1, e2 with
+  | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
+     BESet.compare (BESet.of_list base_effs1) (BESet.of_list base_effs2) = 0
+  | _, _ -> assert false (* We don't do Effect variables *)
 
 let rec nexp_subst sv subst (Nexp_aux (nexp, l)) = Nexp_aux (nexp_subst_aux sv subst nexp, l)
 and nexp_subst_aux sv subst = function
@@ -836,18 +860,7 @@ end = struct
               | Not_found -> Unbound
             end
        end
-(*
-  let lookup_fn id env =
-    let freshen_bind bind = List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars) in
-    try let typq, typ = freshen_bind (Bindings.find id env.top_val_specs) in Fn (typq, typ)
-    with
-    | Not_found ->
-       begin
-         try let typq, typ = freshen_bind (Bindings.find id env.accessors) in Accessor (typq, typ)
-         with
-         | Not_found -> typ_error (id_loc id) ("No function found for " ^ string_of_id id)
-       end
- *)
+
   let add_typ_var kid k env =
     if KBindings.mem kid env.typ_vars
     then typ_error (kid_loc kid) ("Kind identifier " ^ string_of_kid kid ^ " is already bound")
@@ -938,7 +951,7 @@ end = struct
 
 end
 
-type tannot = (Env.t * typ) option
+type tannot = (Env.t * typ * effect) option
 
 let add_typquant (quant : typquant) (env : Env.t) : Env.t =
   let rec add_quant_item env = function
@@ -1430,11 +1443,11 @@ let destructure_vec_typ l = function
   | typ -> typ_error l ("Expected vector type, got " ^ string_of_typ typ)
 
 let typ_of (E_aux (_, (_, tannot))) = match tannot with
-  | Some (_, typ) -> typ
+  | Some (_, typ, _) -> typ
   | None -> assert false
 
 let pat_typ_of (P_aux (_, (_, tannot))) = match tannot with
-  | Some (_, typ) -> typ
+  | Some (_, typ, _) -> typ
   | None -> assert false
 
 let destructure_atom (Typ_aux (typ_aux, _)) =
@@ -1520,7 +1533,8 @@ let strip_exp : 'a exp -> unit exp = function exp -> map_exp_annot (fun (l, _) -
 let strip_pat : 'a pat -> unit pat = function pat -> map_pat_annot (fun (l, _) -> (l, ())) pat
 
 let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
-  let annot_exp exp typ = E_aux (exp, (l, Some (env, typ))) in
+  let annot_exp_effect exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
+  let annot_exp exp typ = annot_exp_effect exp typ no_effect in
   match (exp_aux, typ_aux) with
   | E_block exps, _ ->
      begin
@@ -1574,7 +1588,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      annot_exp (E_if (cond', then_branch', else_branch')) typ
   | E_exit exp, _ ->
      let checked_exp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
-     annot_exp (E_exit checked_exp) typ
+     annot_exp_effect (E_exit checked_exp) typ (mk_effect [BE_escape])
   | E_vector vec, _ ->
      begin
        let (start, len, ord, vtyp) = destructure_vec_typ l typ in
@@ -1586,7 +1600,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        | _ -> typ_error l "Cannot check list constant against non-constant length vector type"
      end
   | E_lit (L_aux (L_undef, _) as lit), _ ->
-     annot_exp (E_lit lit) typ
+     annot_exp_effect (E_lit lit) typ (mk_effect [BE_undef])
   (* This rule allows registers of type t to be passed by name with type register<t>*)
   | E_id reg, Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) when string_of_id id = "register" ->
      let rtyp = Env.get_register reg env in
@@ -1603,7 +1617,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
    or throws a type error if the coercion cannot be performed. *)
 and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
   let strip exp_aux = strip_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))) in
-  let annot_exp exp typ = E_aux (exp, (l, Some (env, typ))) in
+  let annot_exp exp typ = E_aux (exp, (l, Some (env, typ, no_effect))) in
   let rec try_casts m = function
     | [] -> typ_error l ("No valid casts:\n" ^ m)
     | (cast :: casts) -> begin
@@ -1631,7 +1645,7 @@ and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
    throws a unification error *)
 and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
   let strip exp_aux = strip_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))) in
-  let annot_exp exp typ = E_aux (exp, (l, Some (env, typ))) in
+  let annot_exp exp typ = E_aux (exp, (l, Some (env, typ, no_effect))) in
   let rec try_casts m = function
     | [] -> unify_error l ("No valid casts resulted in unification:\n" ^ m)
     | (cast :: casts) -> begin
@@ -1654,8 +1668,8 @@ and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
   end
 
 and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ) =
-  let annot_pat pat typ = P_aux (pat, (l, Some (env, typ))) in
-  let switch_typ (P_aux (pat_aux, (l, Some (env, _)))) typ = P_aux (pat_aux, (l, Some (env, typ))) in
+  let annot_pat pat typ = P_aux (pat, (l, Some (env, typ, no_effect))) in
+  let switch_typ (P_aux (pat_aux, (l, Some (env, _, eff)))) typ = P_aux (pat_aux, (l, Some (env, typ, eff))) in
   match pat_aux with
   | P_id v ->
      begin
@@ -1686,7 +1700,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
      switch_typ inferred_pat typ, env
 
 and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
-  let annot_pat pat typ = P_aux (pat, (l, Some (env, typ))) in
+  let annot_pat pat typ = P_aux (pat, (l, Some (env, typ, no_effect))) in
   match pat_aux with
   | P_id v ->
      begin
@@ -1719,8 +1733,9 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
   | _ -> typ_error l ("Couldn't infer type of pattern " ^ string_of_pat pat)
 
 and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as exp) =
-  let annot_assign lexp exp = E_aux (E_assign (lexp, exp), (l, Some (env, mk_typ (Typ_id (mk_id "unit"))))) in
-  let annot_lexp lexp typ = LEXP_aux (lexp, (l, Some (env, typ))) in
+  let annot_assign lexp exp = E_aux (E_assign (lexp, exp), (l, Some (env, mk_typ (Typ_id (mk_id "unit")), no_effect))) in
+  let annot_lexp_effect lexp typ eff = LEXP_aux (lexp, (l, Some (env, typ, eff))) in
+  let annot_lexp lexp typ = annot_lexp_effect lexp typ no_effect in
   match lexp_aux with
   | LEXP_field (LEXP_aux (LEXP_id v, _), field) ->
      begin
@@ -1743,7 +1758,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
             | _, _ -> typ_error l "Not implemented this register field type yet..."
           in
           let checked_exp = crule check_exp env exp vec_typ in
-          annot_assign (annot_lexp (LEXP_field (annot_lexp (LEXP_id v) regtyp, field)) vec_typ) checked_exp, env
+          annot_assign (annot_lexp (LEXP_field (annot_lexp_effect (LEXP_id v) regtyp (mk_effect [BE_wreg]), field)) vec_typ) checked_exp, env
        | _ ->  typ_error l "Field l-expression has invalid type"
      end
   | _ ->
@@ -1752,14 +1767,16 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
      annot_assign tlexp inferred_exp, env'
 
 and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
-  let annot_lexp lexp typ = LEXP_aux (lexp, (l, Some (env, typ))) in
+  let annot_lexp_effect lexp typ eff = LEXP_aux (lexp, (l, Some (env, typ, eff))) in
+  let annot_lexp lexp typ = annot_lexp_effect lexp typ no_effect in
   match lexp_aux with
   | LEXP_id v ->
      begin
        match Env.lookup_id v env with
        | Local (Immutable, _) | Enum _ ->
           typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
-       | Local (Mutable, vtyp) | Register vtyp -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
+       | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
+       | Register vtyp -> subtyp l env typ vtyp; annot_lexp_effect (LEXP_id v) typ (mk_effect [BE_wreg]), env
        | Unbound -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
      end
   | LEXP_cast (typ_annot, v) ->
@@ -1777,7 +1794,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
           begin
             subtyp l env typ typ_annot;
             subtyp l env typ_annot vtyp;
-            annot_lexp (LEXP_cast (typ_annot, v)) typ, env
+            annot_lexp_effect (LEXP_cast (typ_annot, v)) typ (mk_effect [BE_wreg]), env
           end
        | Unbound ->
           begin
@@ -1814,7 +1831,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
        match typ_of access with
        | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_typ deref_typ, _)]), _) when string_of_id id = "register" ->
           subtyp l env typ deref_typ;
-          annot_lexp (LEXP_vector (annot_lexp (LEXP_id v) vtyp, inferred_exp)) typ, env
+          annot_lexp (LEXP_vector (annot_lexp_effect (LEXP_id v) vtyp (mk_effect [BE_wreg]), inferred_exp)) typ, env
        | _ when not is_immutable ->
           subtyp l env typ (typ_of access);
           annot_lexp (LEXP_vector (annot_lexp (LEXP_id v) vtyp, inferred_exp)) typ, env
@@ -1823,14 +1840,16 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
   | _ -> typ_error l ("Unhandled l-expression")
 
 and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
-  let annot_exp exp typ = E_aux (exp, (l, Some (env, typ))) in
+  let annot_exp_effect exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
+  let annot_exp exp typ = annot_exp_effect exp typ no_effect in
   match exp_aux with
   | E_nondet exps ->
      annot_exp (E_nondet (List.map (fun exp -> check_exp env exp unit_typ) exps)) unit_typ
   | E_id v ->
      begin
        match Env.lookup_id v env with
-       | Local (_, typ) | Enum typ | Register typ -> annot_exp (E_id v) typ
+       | Local (_, typ) | Enum typ -> annot_exp (E_id v) typ
+       | Register typ -> annot_exp_effect (E_id v) typ (mk_effect [BE_rreg])
        | Unbound -> typ_error l ("Identifier " ^ string_of_id v ^ " is unbound")
      end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
@@ -1929,8 +1948,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
 and infer_funapp l env f xs ret_ctx_typ = infer_funapp' l env f (Env.get_val_spec f env) xs ret_ctx_typ
 
 and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
-
-  let annot_exp exp typ = E_aux (exp, (l, Some (env, typ))) in
+  let annot_exp exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
   let rec number n = function
     | [] -> []
     | (x :: xs) -> (n, x) :: number (n + 1) xs
@@ -1987,17 +2005,186 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
        end
   in
   match f_typ with
-  | Typ_aux (Typ_fn (Typ_aux (Typ_tup typ_args, _), typ_ret, effs), _) ->
+  | Typ_aux (Typ_fn (Typ_aux (Typ_tup typ_args, _), typ_ret, eff), _) ->
      let (quants, typ_args, typ_ret) = instantiate_ret (quant_items typq) typ_args typ_ret in
      let (xs_instantiated, typ_ret) = instantiate quants ([], typ_args) typ_ret ([], number 0 xs) in
      let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
-     annot_exp (E_app (f, xs_reordered)) typ_ret
-  | Typ_aux (Typ_fn (typ_arg, typ_ret, effs), _) ->
+     annot_exp (E_app (f, xs_reordered)) typ_ret eff
+  | Typ_aux (Typ_fn (typ_arg, typ_ret, eff), _) ->
      let (quants, typ_args, typ_ret) = instantiate_ret (quant_items typq) [typ_arg] typ_ret in
      let (xs_instantiated, typ_ret) = instantiate quants ([], typ_args) typ_ret ([], number 0 xs) in
      let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
-     annot_exp (E_app (f, xs_reordered)) typ_ret
+     annot_exp (E_app (f, xs_reordered)) typ_ret eff
   | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
+
+let effect_of (E_aux (exp, (l, annot))) =
+  match annot with
+  | Some (_, _, eff) -> eff
+  | None -> no_effect
+
+let add_effect (E_aux (exp, (l, annot))) eff1 =
+  match annot with
+  | Some (env, typ, eff2) -> E_aux (exp, (l, Some (env, typ, union_effects eff1 eff2)))
+  | None -> assert false
+
+let effect_of_lexp (LEXP_aux (exp, (l, annot))) =
+  match annot with
+  | Some (_, _, eff) -> eff
+  | None -> no_effect
+
+let add_effect_lexp (LEXP_aux (lexp, (l, annot))) eff1 =
+  match annot with
+  | Some (env, typ, eff2) -> LEXP_aux (lexp, (l, Some (env, typ, union_effects eff1 eff2)))
+  | None -> assert false
+
+let effect_of_pat (P_aux (exp, (l, annot))) =
+  match annot with
+  | Some (_, _, eff) -> eff
+  | None -> no_effect
+
+let add_effect_pat (P_aux (pat, (l, annot))) eff1 =
+  match annot with
+  | Some (env, typ, eff2) -> P_aux (pat, (l, Some (env, typ, union_effects eff1 eff2)))
+  | None -> assert false
+
+let collect_effects xs = List.fold_left union_effects no_effect (List.map effect_of xs)
+
+let collect_effects_lexp xs = List.fold_left union_effects no_effect (List.map effect_of_lexp xs)
+
+let collect_effects_pat xs = List.fold_left union_effects no_effect (List.map effect_of_pat xs)
+
+let rec propagate_exp_effect (E_aux (exp, annot)) =
+  let propagated_exp, eff = propagate_exp_effect_aux exp in
+  add_effect (E_aux (propagated_exp, annot)) eff
+and propagate_exp_effect_aux = function
+  | E_block xs ->
+     let propagated_xs = List.map propagate_exp_effect xs in
+     E_block propagated_xs, collect_effects propagated_xs
+  | E_nondet xs ->
+     let propagated_xs = List.map propagate_exp_effect xs in
+     E_nondet propagated_xs, collect_effects propagated_xs
+  | E_id id -> E_id id, no_effect
+  | E_lit lit -> E_lit lit, no_effect
+  | E_cast (typ, exp) ->
+     let propagated_exp = propagate_exp_effect exp in
+     E_cast (typ, propagated_exp), effect_of propagated_exp
+  | E_app (id, xs) ->
+     let propagated_xs = List.map propagate_exp_effect xs in
+     E_app (id, propagated_xs), collect_effects propagated_xs
+  | E_tuple xs ->
+     let propagated_xs = List.map propagate_exp_effect xs in
+     E_tuple propagated_xs, collect_effects propagated_xs
+  | E_if (cond, t, e) ->
+     let propagated_cond = propagate_exp_effect cond in
+     let propagated_t = propagate_exp_effect t in
+     let propagated_e =  propagate_exp_effect e in
+     E_if (propagated_cond, propagated_t, propagated_e), collect_effects [propagated_cond; propagated_t; propagated_e]
+  | E_case (exp, cases) ->
+     let propagated_exp = propagate_exp_effect exp in
+     let propagated_cases = List.map propagate_pexp_effect cases in
+     let case_eff = List.fold_left union_effects no_effect (List.map snd propagated_cases) in
+     E_case (propagated_exp, List.map fst propagated_cases), union_effects (effect_of propagated_exp) case_eff
+  | E_let (letbind, exp) ->
+     let propagated_lb, eff = propagate_letbind_effect letbind in
+     let propagated_exp = propagate_exp_effect exp in
+     E_let (propagated_lb, propagated_exp), union_effects (effect_of propagated_exp) eff
+  | E_assign (lexp, exp) ->
+     let propagated_lexp = propagate_lexp_effect lexp in
+     let propagated_exp = propagate_exp_effect exp in
+     E_assign (propagated_lexp, propagated_exp), union_effects (effect_of propagated_exp) (effect_of_lexp propagated_lexp)
+  | E_sizeof nexp -> E_sizeof nexp, no_effect
+  | E_exit exp ->
+     let propagated_exp = propagate_exp_effect exp in
+     E_exit propagated_exp, effect_of propagated_exp
+  | E_return exp ->
+     let propagated_exp = propagate_exp_effect exp in
+     E_return propagated_exp, effect_of propagated_exp
+  | E_assert (test, msg) ->
+     let propagated_test = propagate_exp_effect test in
+     let propagated_msg = propagate_exp_effect msg in
+     E_assert (propagated_test, propagated_msg), collect_effects [propagated_test; propagated_msg]
+  | E_field (exp, id) ->
+     let propagated_exp = propagate_exp_effect exp in
+     E_field (propagated_exp, id), effect_of propagated_exp
+  | exp_aux -> typ_error Parse_ast.Unknown ("Unimplemented: Cannot propagate effect in expression")
+
+and propagate_pexp_effect (Pat_aux (Pat_exp (pat, exp), (l, annot))) =
+  let propagated_pat = propagate_pat_effect pat in
+  let propagated_exp = propagate_exp_effect exp in
+  let propagated_eff = union_effects (effect_of_pat propagated_pat) (effect_of propagated_exp) in
+  match annot with
+  | Some (typq, typ, eff) ->
+     Pat_aux (Pat_exp (propagated_pat, propagated_exp), (l, Some (typq, typ, union_effects eff propagated_eff))),
+     union_effects eff propagated_eff
+  | None -> Pat_aux (Pat_exp (propagated_pat, propagated_exp), (l, None)), propagated_eff
+
+and propagate_pat_effect (P_aux (pat, annot)) =
+  let propagated_pat, eff = propagate_pat_effect_aux pat in
+  add_effect_pat (P_aux (propagated_pat, annot)) eff
+and propagate_pat_effect_aux = function
+  | P_lit lit -> P_lit lit, no_effect
+  | P_wild -> P_wild, no_effect
+  | P_as (pat, id) ->
+     let propagated_pat = propagate_pat_effect pat in
+     P_as (propagated_pat, id), effect_of_pat propagated_pat
+  | P_typ (typ, pat) ->
+     let propagated_pat = propagate_pat_effect pat in
+     P_typ (typ, propagated_pat), effect_of_pat propagated_pat
+  | P_id id -> P_id id, no_effect
+  | P_app (id, pats) ->
+     let propagated_pats = List.map propagate_pat_effect pats in
+     P_app (id, propagated_pats), collect_effects_pat propagated_pats
+  | P_tup pats ->
+     let propagated_pats = List.map propagate_pat_effect pats in
+     P_tup propagated_pats, collect_effects_pat propagated_pats
+  | P_list pats ->
+     let propagated_pats = List.map propagate_pat_effect pats in
+     P_list propagated_pats, collect_effects_pat propagated_pats
+  | P_vector_concat pats ->
+     let propagated_pats = List.map propagate_pat_effect pats in
+     P_vector_concat propagated_pats, collect_effects_pat propagated_pats
+  | P_vector pats ->
+     let propagated_pats = List.map propagate_pat_effect pats in
+     P_vector propagated_pats, collect_effects_pat propagated_pats
+  | _ -> typ_error Parse_ast.Unknown "Unimplemented: Cannot propagate effect in pat"
+
+and propagate_letbind_effect (LB_aux (lb, (l, annot))) =
+  let propagated_lb, eff = propagate_letbind_effect_aux lb in
+  match annot with
+  | Some (typq, typ, eff) -> LB_aux (propagated_lb, (l, Some (typq, typ, eff))), eff
+  | None -> LB_aux (propagated_lb, (l, None)), eff
+and propagate_letbind_effect_aux = function
+  | LB_val_explicit (typschm, pat, exp) ->
+     let propagated_pat = propagate_pat_effect pat in
+     let propagated_exp = propagate_exp_effect exp in
+     LB_val_explicit (typschm, propagated_pat, propagated_exp),
+     union_effects (effect_of_pat propagated_pat) (effect_of propagated_exp)
+  | LB_val_implicit (pat, exp) ->
+     let propagated_pat = propagate_pat_effect pat in
+     let propagated_exp = propagate_exp_effect exp in
+     LB_val_implicit (propagated_pat, propagated_exp),
+     union_effects (effect_of_pat propagated_pat) (effect_of propagated_exp)
+ 
+and propagate_lexp_effect (LEXP_aux (lexp, annot)) =
+  let propagated_lexp, eff = propagate_lexp_effect_aux lexp in
+  add_effect_lexp (LEXP_aux (propagated_lexp, annot)) eff
+and propagate_lexp_effect_aux = function
+  | LEXP_id id -> LEXP_id id, no_effect
+  | LEXP_memory (id, exps) ->
+     let propagated_exps = List.map propagate_exp_effect exps in
+     LEXP_memory (id, propagated_exps), collect_effects propagated_exps
+  | LEXP_cast (typ, id) -> LEXP_cast (typ, id), no_effect
+  | LEXP_tup lexps ->
+     let propagated_lexps = List.map propagate_lexp_effect lexps in
+     LEXP_tup propagated_lexps, collect_effects_lexp propagated_lexps
+  | LEXP_vector (lexp, exp) ->
+     let propagated_lexp = propagate_lexp_effect lexp in
+     let propagated_exp = propagate_exp_effect exp in
+     LEXP_vector (propagated_lexp, propagated_exp), union_effects (effect_of propagated_exp) (effect_of_lexp propagated_lexp)
+  | LEXP_field (lexp, id) ->
+     let propagated_lexp = propagate_lexp_effect lexp in
+     LEXP_field (propagated_lexp, id),effect_of_lexp propagated_lexp
+  | _ -> typ_error Parse_ast.Unknown "Unimplemented: Cannot propagate effect in lexp"
 
 let check_letdef env (LB_aux (letbind, (l, _))) =
   begin
@@ -2006,7 +2193,7 @@ let check_letdef env (LB_aux (letbind, (l, _))) =
     | LB_val_implicit (P_aux (P_typ (typ_annot, pat), _), bind) ->
        let checked_bind = crule check_exp env (strip_exp bind) typ_annot in
        let tpat, env = bind_pat env (strip_pat pat) typ_annot in
-       DEF_val (LB_aux (LB_val_implicit (P_aux (P_typ (typ_annot, tpat), (l, Some (env, typ_annot))), checked_bind), (l, None))), env
+       DEF_val (LB_aux (LB_val_implicit (P_aux (P_typ (typ_annot, tpat), (l, Some (env, typ_annot, no_effect))), checked_bind), (l, None))), env
     | LB_val_implicit (pat, bind) ->
        let inferred_bind = irule infer_exp env (strip_exp bind) in
        let tpat, env = bind_pat env (strip_pat pat) (typ_of inferred_bind) in
@@ -2019,10 +2206,15 @@ let check_funcl env (FCL_aux (FCL_Funcl (id, pat, exp), (l, _))) typ =
      begin
        let typed_pat, env = bind_pat env (strip_pat pat) typ_arg in
        let env = Env.add_ret_typ typ_ret env in
-       let exp = crule check_exp env (strip_exp exp) typ_ret in
-       FCL_aux (FCL_Funcl (id, typed_pat, exp), (l, Some (env, typ)))
+       let exp = propagate_exp_effect (crule check_exp env (strip_exp exp) typ_ret) in
+       FCL_aux (FCL_Funcl (id, typed_pat, exp), (l, Some (env, typ, effect_of exp)))
      end
   | _ -> typ_error l ("Function clause must have function type: " ^ string_of_typ typ ^ " is not a function type")
+
+let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pat, exp), (l, annot))) =
+  match annot with
+  | Some (_, _, eff) -> eff
+  | None -> no_effect (* Maybe could be assert false. This should never happen *)
 
 let infer_funtyp l env tannotopt funcls =
   let Typ_annot_opt_aux (Typ_annot_opt_some (quant, ret_typ), _) = tannotopt in
@@ -2055,17 +2247,24 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
     | None -> typ_error l "funcl list is empty"
   in
   typ_print ("\nChecking function " ^ string_of_id id);
-  let (quant, typ), env =
-    try Env.get_val_spec id env, env with
+  let have_val_spec, (quant, (Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, declared_eff), vl) as typ)), env =
+  try true, Env.get_val_spec id env, env with
     | Type_error (l, _) ->
        let (quant, typ) = infer_funtyp l env tannotopt funcls in
-       (quant, typ), Env.add_val_spec id (quant, typ) env
+       false, (quant, typ), env
   in
   typ_debug ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ));
-  typ_debug ("Annotation typ " ^ string_of_bind (annot_quant, annot_typ1));
   let funcl_env = add_typquant quant env in
   let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
-  DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, None))), env
+  let eff = List.fold_left union_effects no_effect (List.map funcl_effect funcls) in
+  let env, declared_eff =
+    if not have_val_spec
+    then Env.add_val_spec id (quant, Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, eff), vl)) env, eff
+    else env, declared_eff
+  in
+  if equal_effects eff declared_eff
+  then DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, None))), env
+  else typ_error l ("Effects do not match: " ^ string_of_effect declared_eff ^ " declared and " ^ string_of_effect eff ^ " found")
 
 (* Checking a val spec simply adds the type as a binding in the
    context. We have to destructure the various kinds of val specs, but
@@ -2092,7 +2291,7 @@ let check_register env id base top ranges =
   | Nexp_aux (Nexp_constant basec, _), Nexp_aux (Nexp_constant topc, _) ->
      let no_typq = TypQ_aux (TypQ_tq [], Parse_ast.Unknown) (* Maybe could be TypQ_no_forall? *) in
      (* FIXME: wrong for default Order inc? *)
-     let cast_typ = mk_typ (Typ_fn (mk_id_typ id, dvector_typ env base (nconstant ((basec - topc) + 1)) bit_typ, no_effects)) in
+     let cast_typ = mk_typ (Typ_fn (mk_id_typ id, dvector_typ env base (nconstant ((basec - topc) + 1)) bit_typ, no_effect)) in
      env
      |> Env.add_regtyp id basec topc ranges
      |> Env.add_val_spec (mk_id ("cast_" ^ string_of_id id)) (no_typq, cast_typ)
