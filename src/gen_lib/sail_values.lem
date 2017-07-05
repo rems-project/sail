@@ -1,4 +1,7 @@
+(* Version of sail_values.lem that uses Lem's machine words library *)
+
 open import Pervasives_extra
+open import Machine_word
 open import Sail_impl_base
 
 
@@ -197,58 +200,141 @@ val update_pos : forall 'a. vector 'a -> integer -> 'a -> vector 'a
 let update_pos v n b =
   update_aux v n n [b]
 
+(*** Bitvectors *)
+
+(* element list * start * has increasing direction *)
+type bitvector 'a = Bitvector of mword 'a * integer * bool
+declare isabelle target_sorts bitvector = `len`
+
+let showBitvector (Bitvector elems start inc) =
+  "Bitvector " ^ show elems ^ " " ^ show start ^ " " ^ show inc
+
+let bvget_dir (Bitvector _ _ ord) = ord
+let bvget_start (Bitvector _ s _) = s
+let bvget_elems (Bitvector elems _ _) = elems
+let bvlength (Bitvector bs _ _) = integerFromNat (word_length bs)
+
+instance forall 'a. (Show (bitvector 'a))
+  let show = showBitvector
+end
+
+let bvec_to_vec (Bitvector bs start is_inc) =
+  let bits = List.map bool_to_bitU (bitlistFromWord bs) in
+  Vector bits start is_inc
+
+let vec_to_bvec (Vector elems start is_inc) =
+  let word = wordFromBitlist (List.map bitU_to_bool elems) in
+  Bitvector word start is_inc
+
+(*** Vector operations *)
+
+val set_bitvector_start : forall 'a. integer -> bitvector 'a -> bitvector 'a
+let set_bitvector_start new_start (Bitvector bs _ is_inc) =
+  Bitvector bs new_start is_inc
+
+let reset_bitvector_start v =
+  set_bitvector_start (if (bvget_dir v) then 0 else (bvlength v - 1)) v
+
+let set_bitvector_start_to_length v =
+  set_bitvector_start (bvlength v - 1) v
+
+let bitvector_concat (Bitvector bs start is_inc) (Bitvector bs' _ _) =
+  Bitvector (word_concat bs bs') start is_inc
+
+let inline (^^^) = bitvector_concat
+
+val bvslice : forall 'a 'b. bitvector 'a -> integer -> integer -> bitvector 'b
+let bvslice (Bitvector bs start is_inc) i j =
+  let iN = natFromInteger i in
+  let jN = natFromInteger j in
+  let startN = natFromInteger start in
+  let (lo,hi) = if is_inc then (iN-startN,jN-startN) else (startN-iN,startN-jN) in
+  let subvector_bits = word_extract lo hi bs in
+  Bitvector subvector_bits i is_inc
+
+(* this is for the vector slicing introduced in vector-concat patterns: i and j
+index into the "raw data", the list of bits. Therefore getting the bit list is
+easy, but the start index has to be transformed to match the old vector start
+and the direction. *)
+val bvslice_raw : forall 'a 'b. Size 'b => bitvector 'a -> integer -> integer -> bitvector 'b
+let bvslice_raw (Bitvector bs start is_inc) i j =
+  let iN = natFromInteger i in
+  let jN = natFromInteger j in
+  let bits = word_extract iN jN bs in
+  let len = integerFromNat (word_length bits) in
+  Bitvector bits (if is_inc then 0 else len - 1) is_inc
+
+val bvupdate_aux : forall 'a 'b. bitvector 'a -> integer -> integer -> mword 'b -> bitvector 'a
+let bvupdate_aux (Bitvector bs start is_inc) i j bs' =
+  let iN = natFromInteger i in
+  let jN = natFromInteger j in
+  let startN = natFromInteger start in
+  let (lo,hi) = if is_inc then (iN-startN,jN-startN) else (startN-iN,startN-jN) in
+  let bits = word_update bs lo hi bs' in
+  Bitvector bits start is_inc
+
+val bvupdate : forall 'a 'b. bitvector 'a -> integer -> integer -> bitvector 'b -> bitvector 'a
+let bvupdate v i j (Bitvector bs' _ _) =
+  bvupdate_aux v i j bs'
+
+(* TODO: decide between nat/natural, change either here or in machine_word *)
+val getBit' : forall 'a. mword 'a -> nat -> bool
+let getBit' w n = getBit w (naturalFromNat n)
+
+val bvaccess : forall 'a. bitvector 'a -> integer -> bitU
+let bvaccess (Bitvector bs start is_inc) n = bool_to_bitU (
+  if is_inc then getBit' bs (natFromInteger (n - start))
+  else getBit' bs (natFromInteger (start - n)))
+
+val bvupdate_pos : forall 'a. Size 'a => bitvector 'a -> integer -> bitU -> bitvector 'a
+let bvupdate_pos v n b =
+  bvupdate_aux v n n ((wordFromNatural (if bitU_to_bool b then 1 else 0)) : mword ty1)
 
 (*** Bit vector operations *)
 
-let extract_only_bit (Vector elems _ _) = match elems with
-  | [] -> failwith "extract_single_bit called for empty vector"
+let extract_only_element (Vector elems _ _) = match elems with
+  | [] -> failwith "extract_only_element called for empty vector"
   | [e] -> e
-  | _ -> failwith "extract_single_bit called for vector with more bits"
+  | _ -> failwith "extract_only_element called for vector with more elements"
 end
+
+val extract_only_bit : bitvector ty1 -> bitU
+let extract_only_bit (Bitvector elems _ _) =
+  (*let l = word_length elems in
+  if l = 1 then*)
+    bool_to_bitU (msb elems)
+  (*else if l = 0 then
+    failwith "extract_single_bit called for empty vector"
+  else
+    failwith "extract_single_bit called for vector with more bits"*)
 
 let pp_bitu_vector (Vector elems start inc) =
   let elems_pp = List.foldl (fun acc elem -> acc ^ showBitU elem) "" elems in
   "Vector [" ^ elems_pp ^ "] " ^ show start ^ " " ^ show inc
 
 
-let most_significant = function
-  | (Vector (b :: _) _ _) -> b
-  | _ -> failwith "most_significant applied to empty vector"
-  end
+let most_significant (Bitvector v _ _) =
+  if word_length v = 0 then
+    failwith "most_significant applied to empty vector"
+  else
+    bool_to_bitU (msb v)
 
 let bitwise_not_bitlist = List.map bitwise_not_bit
 
-let bitwise_not (Vector bs start is_inc) =
-  Vector (bitwise_not_bitlist bs) start is_inc
+let bitwise_not (Bitvector bs start is_inc) =
+  Bitvector (lNot bs) start is_inc
 
-let bitwise_binop op (Vector bsl start is_inc, Vector bsr _ _) =
-  let revbs = foldl (fun acc pair -> bitwise_binop_bit op pair :: acc) [] (zip bsl bsr) in
-  Vector (reverse revbs) start is_inc
+let bitwise_binop op (Bitvector bsl start is_inc, Bitvector bsr _ _) =
+  Bitvector (op bsl bsr) start is_inc
 
-let bitwise_and = bitwise_binop (&&)
-let bitwise_or = bitwise_binop (||)
-let bitwise_xor = bitwise_binop xor
+let bitwise_and = bitwise_binop lAnd
+let bitwise_or = bitwise_binop lOr
+let bitwise_xor = bitwise_binop lXor
 
-let unsigned (Vector bs _ _) : integer =
-  let (sum,_) =
-    List.foldr
-      (fun b (acc,exp) ->
-        match b with
-        | B1 -> (acc + integerPow 2 exp,exp + 1)
-        | B0 -> (acc, exp + 1)
-        | BU -> failwith "unsigned: vector has undefined bits"
-        end)
-      (0,0) bs in
-  sum
-
+let unsigned (Bitvector bs _ _) : integer = unsignedIntegerFromWord bs
 let unsigned_big = unsigned
 
-let signed v : integer =
-  match most_significant v with
-  | B1 -> 0 - (1 + (unsigned (bitwise_not v)))
-  | B0 -> unsigned v
-  | BU -> failwith "signed applied to vector with undefined bits"
-  end
+let signed (Bitvector v _ _) : integer = signedIntegerFromWord v
 
 let hardware_mod (a: integer) (b:integer) : integer = 
  if a < 0 && b < 0
@@ -319,36 +405,31 @@ end
 let add_one_bit_ignore_overflow bits =
   List.reverse (add_one_bit_ignore_overflow_aux (List.reverse bits))
   
-
 let to_vec is_inc ((len : integer),(n : integer)) =
   let start = if is_inc then 0 else len - 1 in
-  let bits = to_bin (naturalFromInteger (abs n)) in
-  let len_bits = integerFromNat (List.length bits) in
-  let longer = len - len_bits in
-  let bits' =
-    if longer < 0 then drop (natFromInteger (abs (longer))) bits
-    else pad_zero bits longer in
-  if n > (0 : integer)
-  then Vector bits' start is_inc
-  else Vector (add_one_bit_ignore_overflow (bitwise_not_bitlist bits'))
-              start is_inc
+  let bits = wordFromInteger n in
+  if integerFromNat (word_length bits) = len then
+    Bitvector bits start is_inc
+  else
+    failwith "Vector length mismatch in to_vec"
 
 let to_vec_big = to_vec
 
 let to_vec_inc = to_vec true
 let to_vec_dec = to_vec false
 
+(* TODO: Think about undefined bit(vector)s *)
 let to_vec_undef is_inc (len : integer) =
-  Vector (replicate (natFromInteger len) BU) (if is_inc then 0 else len-1) is_inc
+  Bitvector (failwith "undefined bitvector") (if is_inc then 0 else len-1) is_inc
 
 let to_vec_inc_undef = to_vec_undef true
 let to_vec_dec_undef = to_vec_undef false
 
-let exts (len, vec) = to_vec (get_dir vec) (len,signed vec)
-let extz (len, vec) = to_vec (get_dir vec) (len,unsigned vec)
+let exts (len, vec) = to_vec (bvget_dir vec) (len,signed vec)
+let extz (len, vec) = to_vec (bvget_dir vec) (len,unsigned vec)
 
-let exts_big (len, vec) = to_vec_big (get_dir vec) (len, signed_big vec)
-let extz_big (len, vec) = to_vec_big (get_dir vec) (len, unsigned_big vec)
+let exts_big (len, vec) = to_vec_big (bvget_dir vec) (len, signed_big vec)
+let extz_big (len, vec) = to_vec_big (bvget_dir vec) (len, unsigned_big vec)
 
 let add = integerAdd
 let add_signed = integerAdd
@@ -358,10 +439,13 @@ let modulo = hardware_mod
 let quot = hardware_quot
 let power = integerPow
 
-let arith_op_vec op sign (size : integer) (Vector _ _ is_inc as l) r =
+(* TODO: this, and the definitions that use it, currently require Size for
+   to_vec, which I'd rather avoid in favour of library versions; the
+   double-size results for multiplication may be a problem *)
+let arith_op_vec op sign (size : integer) (Bitvector _ _ is_inc as l) r =
   let (l',r') = (to_num sign l, to_num sign r) in
   let n = op l' r' in
-  to_vec is_inc (size * (length l),n)
+  to_vec is_inc (size * (bvlength l),n)
 
 
 (* add_vec
@@ -376,8 +460,9 @@ let minus_VVV = arith_op_vec integerMinus false 1
 let mult_VVV = arith_op_vec integerMult false 2
 let multS_VVV = arith_op_vec integerMult true 2
 
-let arith_op_vec_range op sign size (Vector _ _ is_inc as l) r =
-  arith_op_vec op sign size l (to_vec is_inc (length l,r))
+val arith_op_vec_range : forall 'a 'b. Size 'a, Size 'b => (integer -> integer -> integer) -> bool -> integer -> bitvector 'a -> integer -> bitvector 'b
+let arith_op_vec_range op sign size (Bitvector _ _ is_inc as l) r =
+  arith_op_vec op sign size l ((to_vec is_inc (bvlength l,r)) : bitvector 'a)
 
 (* add_vec_range
  * add_vec_range_signed
@@ -391,8 +476,9 @@ let minus_VIV = arith_op_vec_range integerMinus false 1
 let mult_VIV = arith_op_vec_range integerMult false 2
 let multS_VIV = arith_op_vec_range integerMult true 2
 
-let arith_op_range_vec op sign size l (Vector _ _ is_inc as r) =
-  arith_op_vec op sign size (to_vec is_inc (length r, l)) r
+val arith_op_range_vec : forall 'a 'b. Size 'a, Size 'b => (integer -> integer -> integer) -> bool -> integer -> integer -> bitvector 'a -> bitvector 'b
+let arith_op_range_vec op sign size l (Bitvector _ _ is_inc as r) =
+  arith_op_vec op sign size ((to_vec is_inc (bvlength r, l)) : bitvector 'a) r
 
 (* add_range_vec
  * add_range_vec_signed
@@ -438,10 +524,10 @@ let arith_op_vec_vec_range op sign l r =
 let add_VVI = arith_op_vec_vec_range integerAdd false
 let addS_VVI = arith_op_vec_vec_range integerAdd true
 
-let arith_op_vec_bit op sign (size : integer) (Vector _ _ is_inc as l)r =
+let arith_op_vec_bit op sign (size : integer) (Bitvector _ _ is_inc as l)r =
   let l' = to_num sign l in
   let n = op l' (match r with | B1 -> (1 : integer) | _ -> 0 end) in
-  to_vec is_inc (length l * size,n)
+  to_vec is_inc (bvlength l * size,n)
 
 (* add_vec_bit
  * add_vec_bit_signed
@@ -451,8 +537,10 @@ let add_VBV = arith_op_vec_bit integerAdd false 1
 let addS_VBV = arith_op_vec_bit integerAdd true 1
 let minus_VBV = arith_op_vec_bit integerMinus true 1
 
-let rec arith_op_overflow_vec (op : integer -> integer -> integer) sign size (Vector _ _ is_inc as l) r =
-  let len = length l in
+(* TODO: these can't be done directly in Lem because of the one_more size calculation
+val arith_op_overflow_vec : forall 'a 'b. Size 'a, Size 'b => (integer -> integer -> integer) -> bool -> integer -> bitvector 'a -> bitvector 'a -> bitvector 'b * bitU * bool
+let rec arith_op_overflow_vec op sign size (Bitvector _ _ is_inc as l) r =
+  let len = bvlength l in
   let act_size = len * size in
   let (l_sign,r_sign) = (to_num sign l,to_num sign r) in
   let (l_unsign,r_unsign) = (to_num false l,to_num false r) in
@@ -481,9 +569,11 @@ let minusSO_VVV = arith_op_overflow_vec integerMinus true 1
 let multO_VVV = arith_op_overflow_vec integerMult false 2
 let multSO_VVV = arith_op_overflow_vec integerMult true 2
 
+val arith_op_overflow_vec_bit : forall 'a 'b. Size 'a, Size 'b => (integer -> integer -> integer) -> bool -> integer ->
+                                bitvector 'a -> bitU -> bitvector 'b * bitU * bool
 let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (size : integer)
-                                  (Vector _ _ is_inc as l) r_bit =
-  let act_size = length l * size in
+                                  (Bitvector _ _ is_inc as l) r_bit =
+  let act_size = bvlength l * size in
   let l' = to_num sign l in
   let l_u = to_num false l in
   let (n,nu,changed) = match r_bit with
@@ -509,18 +599,18 @@ let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (siz
 let addSO_VBV = arith_op_overflow_vec_bit integerAdd true 1
 let minusO_VBV = arith_op_overflow_vec_bit integerMinus false 1
 let minusSO_VBV = arith_op_overflow_vec_bit integerMinus true 1
-
+*)
 type shift = LL_shift | RR_shift | LLL_shift
 
-let shift_op_vec op (Vector bs start is_inc,(n : integer)) =
+let shift_op_vec op (Bitvector bs start is_inc,(n : integer)) =
   let n = natFromInteger n in
   match op with
   | LL_shift (*"<<"*) ->
-     Vector (sublist bs (n,List.length bs -1) ++ List.replicate n B0) start is_inc
+     Bitvector (shiftLeft bs (naturalFromNat n)) start is_inc
   | RR_shift (*">>"*) ->
-     Vector (List.replicate n B0 ++ sublist bs (0,n-1)) start is_inc
+     Bitvector (shiftRight bs (naturalFromNat n)) start is_inc
   | LLL_shift (*"<<<"*) ->
-     Vector (sublist bs (n,List.length bs - 1) ++ sublist bs (0,n-1)) start is_inc
+     Bitvector (rotateLeft (naturalFromNat n) bs) start is_inc
   end
 
 let bitwise_leftshift = shift_op_vec LL_shift (*"<<"*)
@@ -531,9 +621,9 @@ let rec arith_op_no0 (op : integer -> integer -> integer) l r =
   if r = 0
   then Nothing
   else Just (op l r)
-
-let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size ((Vector _ start is_inc) as l) r =
-  let act_size = length l * size in
+(* TODO
+let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size ((Bitvector _ start is_inc) as l) r =
+  let act_size = bvlength l * size in
   let (l',r') = (to_num sign l,to_num sign r) in
   let n = arith_op_no0 op l' r' in
   let (representable,n') =
@@ -581,7 +671,7 @@ let arith_op_vec_range_no0 op sign size (Vector _ _ is_inc as l) r =
   arith_op_vec_no0 op sign size l (to_vec is_inc (length l,r))
 
 let mod_VIV = arith_op_vec_range_no0 hardware_mod false 1
-
+*)
 val repeat : forall 'a. list 'a -> integer -> list 'a
 let rec repeat xs n =
   if n = 0 then []
@@ -663,9 +753,9 @@ let make_bitvector_undef length =
 
 (* let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n) *)
 
-let mask (n,Vector bits start dir) =
-  let current_size = List.length bits in
-  Vector (drop (current_size - (natFromInteger n)) bits) (if dir then 0 else (n-1)) dir
+let mask (n,bv) =
+  let len = bvlength bv in
+  bvslice_raw bv (len - n) (len - 1)
 
 
 val byte_chunks : forall 'a. nat -> list 'a -> list (list 'a)
@@ -952,4 +1042,3 @@ let diafp_to_dia reginfo = function
   | DIAFP_concrete v -> DIA_concrete_address (address_of_bitv v)
   | DIAFP_reg r -> DIA_register (regfp_to_reg reginfo r)
 end
-

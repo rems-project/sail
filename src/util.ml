@@ -240,6 +240,12 @@ let split_after n l =
     | _            -> raise (Failure "index too large")
   in aux [] n l
 
+let rec split3 = function
+  | (x, y, z) :: xs ->
+    let (xs, ys, zs) = split3 xs in
+    (x :: xs, y :: ys, z :: zs)
+  | [] -> ([], [], [])
+
 let list_mapi (f : int -> 'a -> 'b)  (l : 'a list) : 'b list =
   let rec aux f i l =
      match l with
@@ -324,4 +330,3 @@ let rec string_of_list sep string_of = function
   | [] -> ""
   | [x] -> string_of x
   | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
-

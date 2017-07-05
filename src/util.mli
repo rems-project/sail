@@ -145,6 +145,9 @@ val undo_list_to_front : int -> 'a list -> 'a list
     [l1] and [l2], with [length l1 = n] and [l1 @ l2 = l]. Fails if n is too small or large. *)
 val split_after : int -> 'a list -> 'a list * 'a list
 
+(** [split3 l] splits a list of triples into a triple of lists *)
+val split3 : ('a * 'b * 'c) list -> 'a list * 'b list * 'c list
+
 val compare_list : ('a -> 'b -> int) -> 'a list -> 'b list -> int
 
 

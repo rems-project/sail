@@ -37,5 +37,5 @@ prompt.lem: ../src/gen_lib/prompt.lem
 	cp $< .
 
 clean:
-	rm $(THYS) $(LEMS)
-	rm *Auxiliary.thy
+	-rm $(THYS) $(LEMS)
+	-rm *Auxiliary.thy

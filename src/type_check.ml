@@ -1593,7 +1593,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
       let (pexps',t,cs',ef') = 
         check_cases envs imp_param ret_t t' expect_t (if (List.length pexps) = 1 then Solo else Switch) pexps in
       let effects = union_effects ef ef' in
-      (E_aux(E_case(e',pexps'),(l,simple_annot_efr t effects)),t,
+      (E_aux(E_case(e',pexps'),(l,simple_annot_efr expect_t effects)),t,
        t_env,cs@[BranchCons(Expr l, None, cs')],nob,effects)
     | E_let(lbind,body) -> 
       let (lb',t_env',cs,b_env',ef) = (check_lbind envs imp_param false (Some ret_t) Emp_local lbind) in

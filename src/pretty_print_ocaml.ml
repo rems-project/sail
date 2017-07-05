@@ -338,10 +338,7 @@ let doc_exp_ocaml, doc_let_ocaml =
             | Typ_var (Kid_aux (Var "length",_)) ->
                parens ((string "set_start_to_length") ^//^ exp e)
             | _ -> 
-               parens (doc_op colon (group (exp e)) (doc_typ_ocaml typ)))
-
-
-)
+               parens (doc_op colon (group (exp e)) (doc_typ_ocaml typ))))
     | E_tuple exps ->
       parens (separate_map comma exp exps)
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
@@ -753,4 +750,3 @@ let pp_defs_ocaml f d top_line opens =
   print f (string "(*" ^^ (string top_line) ^^ string "*)" ^/^
            (separate_map hardline (fun lib -> (string "open") ^^ space ^^ (string lib)) opens) ^/^
            (doc_defs_ocaml d))
-
