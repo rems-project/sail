@@ -144,7 +144,14 @@ let rec compare_list f l1 l2 =
             compare_list f l1 l2
           else
             c
-              
+
+let rec split_on_char sep str =
+  try
+    let sep_pos = String.index str sep in
+    String.sub str 0 sep_pos :: split_on_char sep (String.sub str (sep_pos + 1) (String.length str - (sep_pos + 1)))
+  with
+  | Not_found -> [str]
+
 let map_changed_default d f l =
   let rec g = function
     | [] -> ([],false)

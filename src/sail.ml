@@ -89,7 +89,7 @@ let options = Arg.align ([
     " (debug) skip constraint resolution in type-checking");
   ( "-mono-split",
     Arg.String (fun s ->
-      let l = String.split_on_char ':' s in
+      let l = Util.split_on_char ':' s in
       match l with
       | [fname;line;var] -> opt_mono_split := ((fname,int_of_string line),var)::!opt_mono_split
       | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable>"))),

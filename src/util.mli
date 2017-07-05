@@ -198,3 +198,5 @@ module ExtraSet : functor (S : Set.S) ->
 
 (*Formatting functions*)
 val string_of_list : string -> ('a -> string) -> 'a list -> string
+
+val split_on_char : char -> string -> string list
