@@ -43,6 +43,7 @@
 
 open Ast
 open Util
+open Ast_util
 open Big_int
 
 let debug = ref 0
@@ -62,249 +63,11 @@ exception Type_error of l * string;;
 
 let typ_error l m = raise (Type_error (l, m))
 
-let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
-and map_exp_annot_aux f = function
-  | E_block xs -> E_block (List.map (map_exp_annot f) xs)
-  | E_nondet xs -> E_nondet (List.map (map_exp_annot f) xs)
-  | E_id id -> E_id id
-  | E_lit lit -> E_lit lit
-  | E_cast (typ, exp) -> E_cast (typ, map_exp_annot f exp)
-  | E_app (id, xs) -> E_app (id, List.map (map_exp_annot f) xs)
-  | E_app_infix (x, op, y) -> E_app_infix (map_exp_annot f x, op, map_exp_annot f y)
-  | E_tuple xs -> E_tuple (List.map (map_exp_annot f) xs)
-  | E_if (cond, t, e) -> E_if (map_exp_annot f cond, map_exp_annot f t, map_exp_annot f e)
-  | E_for (v, e1, e2, e3, o, e4) -> E_for (v, map_exp_annot f e1, map_exp_annot f e2, map_exp_annot f e3, o, map_exp_annot f e4)
-  | E_list xs -> E_list (List.map (map_exp_annot f) xs)
-  | E_case (exp, cases) -> E_case (map_exp_annot f exp, List.map (map_pexp_annot f) cases)
-  | E_let (letbind, exp) -> E_let (map_letbind_annot f letbind, map_exp_annot f exp)
-  | E_assign (lexp, exp) -> E_assign (map_lexp_annot f lexp, map_exp_annot f exp)
-  | E_sizeof nexp -> E_sizeof nexp
-  | E_exit exp -> E_exit (map_exp_annot f exp)
-  | E_return exp -> E_return (map_exp_annot f exp)
-  | E_assert (test, msg) -> E_assert (map_exp_annot f test, map_exp_annot f msg)
-  | E_field (exp, id) -> E_field (map_exp_annot f exp, id)
-  | E_vector exps -> E_vector (List.map (map_exp_annot f) exps)
-  | E_vector_access (exp1, exp2) -> E_vector_access (map_exp_annot f exp1, map_exp_annot f exp2)
-  | E_vector_subrange (exp1, exp2, exp3) -> E_vector_subrange (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
-  | E_vector_append (exp1, exp2) -> E_vector_append (map_exp_annot f exp1, map_exp_annot f exp2)
-  | _ -> typ_error Parse_ast.Unknown "Unimplemented: Cannot map annot in exp"
-and map_pexp_annot f (Pat_aux (Pat_exp (pat, exp), annot)) = Pat_aux (Pat_exp (map_pat_annot f pat, map_exp_annot f exp), f annot)
-and map_pat_annot f (P_aux (pat, annot)) = P_aux (map_pat_annot_aux f pat, f annot)
-and map_pat_annot_aux f = function
-  | P_lit lit -> P_lit lit
-  | P_wild -> P_wild
-  | P_as (pat, id) -> P_as (map_pat_annot f pat, id)
-  | P_typ (typ, pat) -> P_typ (typ, map_pat_annot f pat)
-  | P_id id -> P_id id
-  | P_app (id, pats) -> P_app (id, List.map (map_pat_annot f) pats)
-  | P_tup pats -> P_tup (List.map (map_pat_annot f) pats)
-  | P_list pats -> P_list (List.map (map_pat_annot f) pats)
-  | P_vector_concat pats -> P_vector_concat (List.map (map_pat_annot f) pats)
-  | P_vector pats -> P_vector (List.map (map_pat_annot f) pats)
-  | _ -> typ_error Parse_ast.Unknown "Unimplemented: Cannot map annot in pat"
-and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
-and map_letbind_annot_aux f = function
-  | LB_val_explicit (typschm, pat, exp) -> LB_val_explicit (typschm, map_pat_annot f pat, map_exp_annot f exp)
-  | LB_val_implicit (pat, exp) -> LB_val_implicit (map_pat_annot f pat, map_exp_annot f exp)
-and map_lexp_annot f (LEXP_aux (lexp, annot)) = LEXP_aux (map_lexp_annot_aux f lexp, f annot)
-and map_lexp_annot_aux f = function
-  | LEXP_id id -> LEXP_id id
-  | LEXP_memory (id, exps) -> LEXP_memory (id, List.map (map_exp_annot f) exps)
-  | LEXP_cast (typ, id) -> LEXP_cast (typ, id)
-  | LEXP_tup lexps -> LEXP_tup (List.map (map_lexp_annot f) lexps)
-  | LEXP_vector (lexp, exp) -> LEXP_vector (map_lexp_annot f lexp, map_exp_annot f exp)
-  | LEXP_field (lexp, id) -> LEXP_field (map_lexp_annot f lexp, id)
-  | _ -> typ_error Parse_ast.Unknown "Unimplemented: Cannot map annot in lexp"
-
-let string_of_id = function
-  | Id_aux (Id v, _) -> v
-  | Id_aux (DeIid v, _) -> "(deinfix " ^ v ^ ")"
-
 let deinfix = function
   | Id_aux (Id v, l) -> Id_aux (DeIid v, l)
   | Id_aux (DeIid v, l) -> Id_aux (DeIid v, l)
 
-let string_of_kid = function
-  | Kid_aux (Var v, _) -> v
-
-let id_loc = function
-  | Id_aux (_, l) -> l
-
-let kid_loc = function
-  | Kid_aux (_, l) -> l
-
-let string_of_base_effect_aux = function
-  | BE_rreg -> "rreg"
-  | BE_wreg -> "wreg"
-  | BE_rmem -> "rmem"
-  | BE_rmemt -> "rmemt"
-  | BE_wmem -> "wmem"
-  | BE_eamem -> "eamem"
-  | BE_exmem -> "exmem"
-  | BE_wmv -> "wmv"
-  | BE_wmvt -> "wmvt"
-  | BE_barr -> "barr"
-  | BE_depend -> "depend"
-  | BE_undef -> "undef"
-  | BE_unspec -> "unspec"
-  | BE_nondet -> "nondet"
-  | BE_escape -> "escape"
-  | BE_lset -> "lset"
-  | BE_lret -> "lret"
-
-let string_of_base_kind_aux = function
-  | BK_type -> "Type"
-  | BK_nat -> "Nat"
-  | BK_order -> "Order"
-  | BK_effect -> "Effect"
-
-let string_of_base_kind (BK_aux (bk, _)) = string_of_base_kind_aux bk
-
-let string_of_kind (K_aux (K_kind bks, _)) = string_of_list " -> " string_of_base_kind bks
-
-let string_of_base_effect = function
-  | BE_aux (beff, _) -> string_of_base_effect_aux beff
-
-let string_of_effect = function
-  | Effect_aux (Effect_var kid, _) ->
-     typ_debug "kid effect occured"; string_of_kid kid
-  | Effect_aux (Effect_set [], _) -> "pure"
-  | Effect_aux (Effect_set beffs, _) ->
-     "{" ^ string_of_list ", " string_of_base_effect beffs ^ "}"
-
-let string_of_order = function
-  | Ord_aux (Ord_var kid, _) -> string_of_kid kid
-  | Ord_aux (Ord_inc, _) -> "inc"
-  | Ord_aux (Ord_dec, _) -> "dec"
-
-let rec string_of_nexp = function
-  | Nexp_aux (nexp, _) -> string_of_nexp_aux nexp
-and string_of_nexp_aux = function
-  | Nexp_id id -> string_of_id id
-  | Nexp_var kid -> string_of_kid kid
-  | Nexp_constant c -> string_of_int c
-  | Nexp_times (n1, n2) -> "(" ^ string_of_nexp n1 ^ " * " ^ string_of_nexp n2 ^ ")"
-  | Nexp_sum (n1, n2) -> "(" ^ string_of_nexp n1 ^ " + " ^ string_of_nexp n2 ^ ")"
-  | Nexp_minus (n1, n2) -> "(" ^ string_of_nexp n1 ^ " - " ^ string_of_nexp n2 ^ ")"
-  | Nexp_exp n -> "2 ^ " ^ string_of_nexp n
-  | Nexp_neg n -> "- " ^ string_of_nexp n
-
-let rec string_of_typ = function
-  | Typ_aux (typ, l) -> string_of_typ_aux typ
-and string_of_typ_aux = function
-  | Typ_wild -> "_"
-  | Typ_id id -> string_of_id id
-  | Typ_var kid -> string_of_kid kid
-  | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
-  | Typ_app (id, args) -> string_of_id id ^ "<" ^ string_of_list ", " string_of_typ_arg args ^ ">"
-  | Typ_fn (typ_arg, typ_ret, eff) ->
-     string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
-and string_of_typ_arg = function
-  | Typ_arg_aux (typ_arg, l) -> string_of_typ_arg_aux typ_arg
-and string_of_typ_arg_aux = function
-  | Typ_arg_nexp n -> string_of_nexp n
-  | Typ_arg_typ typ -> string_of_typ typ
-  | Typ_arg_order o -> string_of_order o
-  | Typ_arg_effect eff -> string_of_effect eff
-
-let string_of_n_constraint = function
-  | NC_aux (NC_fixed (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
-  | NC_aux (NC_bounded_ge (n1, n2), _) -> string_of_nexp n1 ^ " >= " ^ string_of_nexp n2
-  | NC_aux (NC_bounded_le (n1, n2), _) -> string_of_nexp n1 ^ " <= " ^ string_of_nexp n2
-  | NC_aux (NC_set_subst (nexp, ns), _) ->
-     string_of_nexp nexp ^ " IN {" ^ string_of_list ", " string_of_int ns ^ "}"
-  | NC_aux (NC_nat_set_bounded (kid, ns), _) ->
-     string_of_kid kid ^ " IN {" ^ string_of_list ", " string_of_int ns ^ "}"
-
-let string_of_quant_item_aux = function
-  | QI_id (KOpt_aux (KOpt_none kid, _)) -> string_of_kid kid
-  | QI_id (KOpt_aux (KOpt_kind (k, kid), _)) -> string_of_kind k ^ " " ^ string_of_kid kid
-  | QI_const constr -> string_of_n_constraint constr
-
-let string_of_quant_item = function
-  | QI_aux (qi, _) -> string_of_quant_item_aux qi
-
-let string_of_typquant_aux = function
-  | TypQ_tq quants -> "forall " ^ string_of_list ", " string_of_quant_item quants
-  | TypQ_no_forall -> ""
-
-let string_of_typquant = function
-  | TypQ_aux (quant, _) -> string_of_typquant_aux quant
-
-let string_of_typschm (TypSchm_aux (TypSchm_ts (quant, typ), _)) =
-  string_of_typquant quant ^ ". " ^ string_of_typ typ
-
 let string_of_bind (typquant, typ) = string_of_typquant typquant ^ ". " ^ string_of_typ typ
-
-let string_of_lit (L_aux (lit, _)) =
-  match lit with
-  | L_unit -> "()"
-  | L_zero -> "bitzero"
-  | L_one -> "bitone"
-  | L_true -> "true"
-  | L_false -> "false"
-  | L_num n -> string_of_int n
-  | L_hex n -> "0x" ^ n
-  | L_bin n -> "0b" ^ n
-  | L_undef -> "undefined"
-  | L_string str -> "\"" ^ str ^ "\""
-
-let rec string_of_exp (E_aux (exp, _)) =
-  match exp with
-  | E_block exps -> "{ " ^ string_of_list "; " string_of_exp exps ^ " }"
-  | E_id v -> string_of_id v
-  | E_sizeof nexp -> "sizeof " ^ string_of_nexp nexp
-  | E_lit lit -> string_of_lit lit
-  | E_return exp -> "return " ^ string_of_exp exp
-  | E_app (f, args) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp args ^ ")"
-  | E_app_infix (x, op, y) -> "(" ^ string_of_exp x ^ " " ^ string_of_id op ^ " " ^ string_of_exp y ^ ")"
-  | E_tuple exps -> "(" ^ string_of_list ", " string_of_exp exps ^ ")"
-  | E_case (exp, cases) ->
-     "switch " ^ string_of_exp exp ^ " { case " ^ string_of_list " case " string_of_pexp cases ^ "}"
-  | E_let (letbind, exp) -> "let " ^ string_of_letbind letbind ^ " in " ^ string_of_exp exp
-  | E_assign (lexp, bind) -> string_of_lexp lexp ^ " := " ^ string_of_exp bind
-  | E_cast (typ, exp) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_exp exp
-  | E_vector vec -> "[" ^ string_of_list ", " string_of_exp vec ^ "]"
-  | E_vector_access (v, n) -> string_of_exp v ^ "[" ^ string_of_exp n ^ "]"
-  | E_vector_subrange (v, n1, n2) -> string_of_exp v ^ "[" ^ string_of_exp n1 ^ " .. " ^ string_of_exp n2 ^ "]"
-  | E_vector_append (v1, v2) -> string_of_exp v1 ^ " : " ^ string_of_exp v2
-  | E_if (cond, then_branch, else_branch) ->
-     "if " ^ string_of_exp cond ^ " then " ^ string_of_exp then_branch ^ " else " ^ string_of_exp else_branch
-  | E_field (exp, id) -> string_of_exp exp ^ "." ^ string_of_id id
-  | _ -> "INTERNAL"
-and string_of_pexp (Pat_aux (Pat_exp (pat, exp), _)) = string_of_pat pat ^ " -> " ^ string_of_exp exp
-and string_of_pat (P_aux (pat, l)) =
-  match pat with
-  | P_lit lit -> string_of_lit lit
-  | P_wild -> "_"
-  | P_id v -> string_of_id v
-  | P_typ (typ, pat) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_pat pat
-  | P_tup pats -> "(" ^ string_of_list ", " string_of_pat pats ^ ")"
-  | _ -> "PAT"
-and string_of_lexp (LEXP_aux (lexp, _)) =
-  match lexp with
-  | LEXP_id v -> string_of_id v
-  | LEXP_cast (typ, v) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_id v
-  | LEXP_tup lexps -> "(" ^ string_of_list ", " string_of_lexp lexps ^ ")"
-  | LEXP_vector (lexp, exp) -> string_of_lexp lexp ^ "[" ^ string_of_exp exp ^ "]"
-  | LEXP_field (lexp, id) -> string_of_lexp lexp ^ "." ^ string_of_id id
-  | _ -> "LEXP"
-and string_of_letbind (LB_aux (lb, l)) =
-  match lb with
-  | LB_val_implicit (pat, exp) -> string_of_pat pat ^ " = " ^ string_of_exp exp
-  | LB_val_explicit (typschm, pat, exp) ->
-     string_of_typschm typschm ^ " " ^ string_of_pat pat ^ " = " ^ string_of_exp exp
-
-let rec string_of_index_range (BF_aux (ir, _)) =
-  match ir with
-  | BF_single n -> string_of_int n
-  | BF_range (n, m) -> string_of_int n ^ " .. " ^ string_of_int m
-  | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ ") : (" ^ string_of_index_range ir2 ^ ")"
-
-module Kid = struct
-  type t = kid
-  let compare kid1 kid2 = String.compare (string_of_kid kid1) (string_of_kid kid2)
-end
 
 let unaux_nexp (Nexp_aux (nexp, _)) = nexp
 let unaux_order (Ord_aux (ord, _)) = ord
@@ -326,15 +89,25 @@ let range_typ nexp1 nexp2 = mk_typ (Typ_app (mk_id "range", [mk_typ_arg (Typ_arg
 let bool_typ = mk_id_typ (mk_id "bool")
 let string_typ = mk_id_typ (mk_id "string")
 
+let vector_typ n m ord typ =
+  mk_typ (Typ_app (mk_id "vector",
+                   [mk_typ_arg (Typ_arg_nexp n);
+                    mk_typ_arg (Typ_arg_nexp m);
+                    mk_typ_arg (Typ_arg_order ord);
+                    mk_typ_arg (Typ_arg_typ typ)]))
+
+let nconstant c = Nexp_aux (Nexp_constant c, Parse_ast.Unknown)
+let nminus n1 n2 = Nexp_aux (Nexp_minus (n1, n2), Parse_ast.Unknown)
+let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)
+let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
+
+(* Utilities for constructing effect sets *)
+
 let mk_effect effs =
   Effect_aux (Effect_set (List.map (fun be_aux -> BE_aux (be_aux, Parse_ast.Unknown)) effs), Parse_ast.Unknown)
 
 let no_effect = mk_effect []
 
-module BE = struct
-  type t = base_effect
-  let compare be1 be2 = String.compare (string_of_base_effect be1) (string_of_base_effect be2)
-end
 module BESet = Set.Make(BE)
 
 let union_effects e1 e2 =
@@ -349,6 +122,32 @@ let equal_effects e1 e2 =
   | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
      BESet.compare (BESet.of_list base_effs1) (BESet.of_list base_effs2) = 0
   | _, _ -> assert false (* We don't do Effect variables *)
+
+(* Sets and maps for identifiers and kind identifiers *)
+
+module Bindings = Map.Make(Id)
+module IdSet = Set.Make(Id)
+module KBindings = Map.Make(Kid)
+module KidSet = Set.Make(Kid)
+
+(* An index_sort is a more general form of range type: it can either
+   be IS_int, which represents every natural number, or some set of
+   natural numbers given by an IS_prop expression of the form
+   {'n. f('n) <= g('n) /\ ...} *)
+type index_sort =
+  | IS_int
+  | IS_prop of kid * (nexp * nexp) list
+
+let string_of_index_sort = function
+  | IS_int -> "INT"
+  | IS_prop (kid, constraints) ->
+     "{" ^ string_of_kid kid ^ " | "
+     ^ string_of_list " & " (fun (x, y) -> string_of_nexp x ^ " <= " ^ string_of_nexp y) constraints
+     ^ "}"
+
+(**************************************************************************)
+(* 1. Substitutions                                                       *)
+(**************************************************************************)
 
 let rec nexp_subst sv subst (Nexp_aux (nexp, l)) = Nexp_aux (nexp_subst_aux sv subst nexp, l)
 and nexp_subst_aux sv subst = function
@@ -445,19 +244,6 @@ let quant_item_subst_kid_aux sv subst = function
   | QI_id (KOpt_aux (KOpt_kind (k, kid), l)) as qid ->
      if Kid.compare kid sv = 0 then QI_id (KOpt_aux (KOpt_kind (k, subst), l)) else qid
   | QI_const nc -> QI_const (nc_subst_nexp sv (Nexp_var subst) nc)
-(*
-let typ_vars (Typ_aux (typ_aux, _)) =
-  match typ_aux with
-  | Typ_wild -> KBindings.empty
-  | Typ_id v -> KBindings.empty
-  | Typ_var kid -> KBindings.singleton kid
-  | Typ_fn (typ1, typ2, effs) ->
-  | Typ_tup typs -> Typ_tup (List.map (typ_subst_kid sv subst) typs)
-  | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_kid sv subst) args)
- *)
-let rec pow2 = function
-  | 0 -> 1
-  | n -> 2 * pow2 (n - 1)
 
 let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
 and nexp_simp_aux = function
@@ -496,44 +282,14 @@ let typquant_subst_kid_aux sv subst = function
 
 let typquant_subst_kid sv subst (TypQ_aux (typq, l)) = TypQ_aux (typquant_subst_kid_aux sv subst typq, l)
 
-module Id = struct
-  type t = id
-  let compare id1 id2 =
-    match (id1, id2) with
-    | Id_aux (Id x, _), Id_aux (Id y, _) -> String.compare x y
-    | Id_aux (DeIid x, _), Id_aux (DeIid y, _) -> String.compare x y
-    | Id_aux (Id _, _), Id_aux (DeIid _, _) -> -1
-    | Id_aux (DeIid _, _), Id_aux (Id _, _) -> 1
-end
-
-module Bindings = Map.Make(Id)
-module IdSet = Set.Make(Id)
-module KBindings = Map.Make(Kid)
-module KidSet = Set.Make(Kid)
+(**************************************************************************)
+(* 2. Environment                                                         *)
+(**************************************************************************)
 
 type mut = Immutable | Mutable
 
-type index_sort =
-  | IS_int
-  | IS_prop of kid * (nexp * nexp) list
-
-let string_of_index_sort = function
-  | IS_int -> "INT"
-  | IS_prop (kid, constraints) ->
-     "{" ^ string_of_kid kid ^ " | "
-     ^ string_of_list " & " (fun (x, y) -> string_of_nexp x ^ " <= " ^ string_of_nexp y) constraints
-     ^ "}"
-
-type flow_typ = typ -> typ
-
 type lvar = Register of typ | Enum of typ | Local of mut * typ | Unbound
-(*
-type fn = Accessor of typquant * typ | Fn of typquant * typ
 
-let to_bind = function
-  | Accessor (typq, typ) -> typq, typ
-  | Fn (typq, typ) -> typq, typ
- *)
 module Env : sig
   type t
   val add_val_spec : id -> typquant * typ -> t -> t
@@ -568,7 +324,6 @@ module Env : sig
   val allow_casts : t -> bool
   val no_casts : t -> t
   val add_cast : id -> t -> t
-  (* val lookup_fn : id -> t -> fn *)
   val lookup_id : id -> t -> lvar
   val fresh_kid : t -> kid
   val expand_synonyms : t -> typ -> typ
@@ -582,7 +337,7 @@ end = struct
       typ_vars : base_kind_aux KBindings.t;
       typ_synonyms : (typ_arg list -> typ) Bindings.t;
       overloads : (id list) Bindings.t;
-      flow : flow_typ Bindings.t;
+      flow : (typ -> typ) Bindings.t;
       enums : IdSet.t Bindings.t;
       records : (typquant * (typ * id) list) Bindings.t;
       accessors : (typquant * typ) Bindings.t;
@@ -709,12 +464,6 @@ end = struct
                                 ^ string_of_base_kind_aux kind ^ " but should have kind Order")
        end
     | Ord_inc | Ord_dec -> ()
-
-                             (*
-  let get_local id env =
-    try Bindings.find id env.locals with
-    | Not_found -> typ_error (id_loc id) ("No local binding found for " ^ string_of_id id)
-                              *)
 
   let add_enum id ids env =
     if bound_typ_id env id
@@ -951,7 +700,6 @@ end = struct
 
 end
 
-type tannot = (Env.t * typ * effect) option
 
 let add_typquant (quant : typquant) (env : Env.t) : Env.t =
   let rec add_quant_item env = function
@@ -966,10 +714,24 @@ let add_typquant (quant : typquant) (env : Env.t) : Env.t =
   | TypQ_aux (TypQ_no_forall, _) -> env
   | TypQ_aux (TypQ_tq quants, _) -> List.fold_left add_quant_item env quants
 
-let nconstant c = Nexp_aux (Nexp_constant c, Parse_ast.Unknown)
-let nminus n1 n2 = Nexp_aux (Nexp_minus (n1, n2), Parse_ast.Unknown)
-let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)
-let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
+(* Create vectors with the default order from the environment *)
+
+let dvector_typ env n m typ = vector_typ n m (Env.get_default_order env) typ
+
+let lvector_typ env l typ =
+  match Env.get_default_order env with
+  | Ord_aux (Ord_inc, _) as ord ->
+     vector_typ (nconstant 0) l ord typ
+  | Ord_aux (Ord_dec, _) as ord ->
+     vector_typ (nminus l (nconstant 1)) l ord typ
+
+let initial_env =
+  Env.empty
+  |> Env.add_typ_synonym (mk_id "atom") (fun args -> mk_typ (Typ_app (mk_id "range", args @ args)))
+
+(**************************************************************************)
+(* 3. Subtyping and constraint solving                                    *)
+(**************************************************************************)
 
 let order_eq (Ord_aux (ord_aux1, _)) (Ord_aux (ord_aux2, _)) =
   match ord_aux1, ord_aux2 with
@@ -1180,6 +942,10 @@ let subtyp l env typ1 typ2 =
 let typ_equality l env typ1 typ2 =
   subtyp l env typ1 typ2; subtyp l env typ2 typ1
 
+(**************************************************************************)
+(* 4. Unification                                                         *)
+(**************************************************************************)
+
 let rec nexp_frees (Nexp_aux (nexp, l)) =
   match nexp with
   | Nexp_id _ -> typ_error l "Unimplemented Nexp_id in nexp_frees"
@@ -1341,21 +1107,13 @@ let unify l env typ1 typ2 =
   let typ1, typ2 = Env.expand_synonyms env typ1, Env.expand_synonyms env typ2 in
   unify_typ l typ1 typ2
 
-let vector_typ n m ord typ =
-  mk_typ (Typ_app (mk_id "vector",
-                   [mk_typ_arg (Typ_arg_nexp n);
-                    mk_typ_arg (Typ_arg_nexp m);
-                    mk_typ_arg (Typ_arg_order ord);
-                    mk_typ_arg (Typ_arg_typ typ)]))
+(**************************************************************************)
+(* 5. Type checking expressions                                           *)
+(**************************************************************************)
 
-let dvector_typ env n m typ = vector_typ n m (Env.get_default_order env) typ
-
-let lvector_typ env l typ =
-  match Env.get_default_order env with
-  | Ord_aux (Ord_inc, _) as ord ->
-     vector_typ (nconstant 0) l ord typ
-  | Ord_aux (Ord_dec, _) as ord ->
-     vector_typ (nminus l (nconstant 1)) l ord typ
+(* The type checker produces a fully annoted AST - tannot is the type
+   of these type annotations. *)
+type tannot = (Env.t * typ * effect) option
 
 let infer_lit env (L_aux (lit_aux, l) as lit) =
   match lit_aux with
@@ -1450,6 +1208,8 @@ let pat_typ_of (P_aux (_, (_, tannot))) = match tannot with
   | Some (_, typ, _) -> typ
   | None -> assert false
 
+(* Flow typing *)
+
 let destructure_atom (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c, _)), _)])
@@ -1498,10 +1258,6 @@ let rec infer_flow env (E_aux (exp_aux, (l, _))) =
      let kid = Env.fresh_kid env in
      let c = destructure_atom (typ_of y) in
      [(v, Flow_gteq c)]
-       (*
-  | E_app (f, [exp1; exp2]) when string_of_id f = "bool_and" ->
-     infer_flow env exp1 @ infer_flow env exp2
-        *)
   | _ -> []
 
 let rec add_flows b flows env =
@@ -2017,6 +1773,10 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
      annot_exp (E_app (f, xs_reordered)) typ_ret eff
   | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
 
+(**************************************************************************)
+(* 6. Effect system                                                       *)
+(**************************************************************************)
+
 let effect_of (E_aux (exp, (l, annot))) =
   match annot with
   | Some (_, _, eff) -> eff
@@ -2052,6 +1812,8 @@ let collect_effects xs = List.fold_left union_effects no_effect (List.map effect
 let collect_effects_lexp xs = List.fold_left union_effects no_effect (List.map effect_of_lexp xs)
 
 let collect_effects_pat xs = List.fold_left union_effects no_effect (List.map effect_of_pat xs)
+
+(* Traversal that propagates effects upwards through expressions *)
 
 let rec propagate_exp_effect (E_aux (exp, annot)) =
   let propagated_exp, eff = propagate_exp_effect_aux exp in
@@ -2164,7 +1926,7 @@ and propagate_letbind_effect_aux = function
      let propagated_exp = propagate_exp_effect exp in
      LB_val_implicit (propagated_pat, propagated_exp),
      union_effects (effect_of_pat propagated_pat) (effect_of propagated_exp)
- 
+
 and propagate_lexp_effect (LEXP_aux (lexp, annot)) =
   let propagated_lexp, eff = propagate_lexp_effect_aux lexp in
   add_effect_lexp (LEXP_aux (propagated_lexp, annot)) eff
@@ -2185,6 +1947,10 @@ and propagate_lexp_effect_aux = function
      let propagated_lexp = propagate_lexp_effect lexp in
      LEXP_field (propagated_lexp, id),effect_of_lexp propagated_lexp
   | _ -> typ_error Parse_ast.Unknown "Unimplemented: Cannot propagate effect in lexp"
+
+(**************************************************************************)
+(* 6. Checking toplevel definitions                                       *)
+(**************************************************************************)
 
 let check_letdef env (LB_aux (letbind, (l, _))) =
   begin
@@ -2341,7 +2107,3 @@ let rec check' env (Defs defs) =
 let check env defs =
   try check' env defs with
   | Type_error (l, m) -> raise (Reporting_basic.err_typ l m)
-
-let initial_env =
-  Env.empty
-  |> Env.add_typ_synonym (mk_id "atom") (fun args -> mk_typ (Typ_app (mk_id "range", args @ args)))
