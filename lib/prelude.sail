@@ -7,12 +7,14 @@ val cast forall Nat 'n, Nat 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0:2**'m 
 val forall Nat 'n, Nat 'l, Type 'a, 'l >= 0. (vector<'n,'l,dec,'a>, [|'n - 'l + 1:'n|]) -> 'a effect pure vector_access_dec
 val forall Nat 'n, Nat 'l, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [|'n:'n + 'l - 1|]) -> 'a effect pure vector_access_inc
 
+overload vector_access [vector_access_inc; vector_access_dec]
+
 (* Type safe vector subrange *)
 val forall Nat 'n, Nat 'l, Nat 'm, Nat 'o, Type 'a, 'l >= 0, 'm <= 'o, 'o <= 'l.
   (vector<'n,'l,inc,'a>, [:'m:], [:'o:]) -> vector<'m,'o - 'm,inc,'a> effect pure vector_subrange_inc
 
 val forall Nat 'n, Nat 'l, Nat 'm, Nat 'o, Type 'a, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
-  (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,('m - 'o) - 1,dec,'a> effect pure vector_subrange_dec
+  (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,'m - 'o - 1,dec,'a> effect pure vector_subrange_dec
 
 overload vector_subrange [vector_subrange_inc; vector_subrange_dec]
 
@@ -21,9 +23,7 @@ val forall Nat 'n1, Nat 'l1, Nat 'n2, Nat 'l2, Order 'o, Type 'a, 'l1 >= 0, 'l2 
   (vector<'n1,'l1,'o,'a>, vector<'n2,'l2,'o,'a>) -> vector<'n1,'l1 + 'l2,'o,'a> effect pure vector_append
 
 (* Implicit register dereferencing *)
-val cast forall Type 'a. register<'a> -> 'a effect pure reg_deref
-
-overload vector_access [vector_access_inc; vector_access_dec]
+val cast forall Type 'a. register<'a> -> 'a effect {rreg} reg_deref
 
 (* Bitvector duplication *)
 val forall Nat 'n. (bit, [:'n:]) -> vector<'n - 1,'n,dec,bit> effect pure duplicate
@@ -64,139 +64,118 @@ val forall Nat 'n, Nat 'm, Order 'ord. vector<'n, 'm, 'ord, bit> -> bit effect p
 
 (* Arithmetic *)
 
-val forall Nat 'n, Nat 'm.
-    (atom<'n>, atom<'m>) -> atom<'n+'m> effect pure add
+val forall Nat 'n, Nat 'm, Nat 'o, Nat 'p.
+    ([|'n:'m|], [|'o:'p|]) -> [|'n + 'o:'m + 'p|] effect pure add
 
-val forall Nat 'n, Nat 'o, Nat 'p, Order 'ord.
-    (vector<'o, 'n, 'ord, bit>, vector<'p, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure add_vec
+val (nat, nat) -> nat effect pure add_nat
 
-val forall Nat 'n, Nat 'o, Nat 'p, Nat 'q, Order 'ord.
-    (vector<'o, 'n, 'ord, bit>, vector<'p, 'n, 'ord, bit>) -> range<'q, 2**'n> effect pure add_vec_vec_range
+val (int, int) -> int effect pure add_int
 
-(* FIXME: the parser is broken for 2**... it's just been hacked to work for this common case *)
-val forall Nat 'n, Nat 'm, Nat 'o, Order 'ord, 'o <= 2** 'm - 1.
-    (vector<'n, 'm, 'ord, bit>, atom<'o>) -> vector<'n, 'm, 'ord, bit> effect pure add_vec_range
+val forall Nat 'n, Nat 'o, Order 'ord.
+    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure add_vec
 
-val forall Nat 'n, Nat 'o, Nat 'p, Order 'ord.
-    (vector<'o, 'n, 'ord, bit>, vector<'p, 'n, 'ord, bit>) -> (vector<'o, 'n, 'ord, bit>, bit, bit) effect pure add_overflow_vec
+val forall Nat 'n, Nat 'o, Order 'ord.
+    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> (vector<'o, 'n, 'ord, bit>, bit, bit) effect pure add_overflow_vec
 
-(* but it doesn't parse this
-val forall Nat 'n, Nat 'm, Nat 'o, Order 'ord, 'o <= 2** 'm - 1.
-    (vector<'n, 'm, 'ord, bit>, atom<'o>) -> range<'o, 'o+2** 'm> effect pure add_vec_range_range
-    *)
+val forall Nat 'n, Nat 'm, Nat 'o, Nat 'p.
+    ([|'n:'m|], [|'o:'p|]) -> [|'n - 'p:'m - 'o|] effect pure sub
 
-val forall Nat 'n, Nat 'm, Nat 'o, Order 'ord, 'o <= 2** 'm - 1.
-    (atom<'o>, vector<'n, 'm, 'ord, bit>) -> vector<'n, 'm, 'ord, bit> effect pure add_range_vec
+val (int, int) -> int effect pure sub_int
 
-(* or this
-val forall Nat 'n, Nat 'm, Nat 'o, Order 'ord, 'o <= 2** 'm - 1.
-    (atom<'o>, vector<'n, 'm, 'ord, bit>) -> range<'o, 'o+2**'m-1> effect pure add_range_vec_range
-*)
+val forall Nat 'n, Nat 'm, Order 'ord.
+    (vector<'n,'m,'ord,bit>, int) -> vector<'n,'m,'ord,bit> effect pure sub_vec_int
 
-val forall Nat 'o, Nat 'p, Order 'ord.
-    (vector<'o, 'p, 'ord, bit>, bit) -> vector<'o, 'p, 'ord, bit> effect pure add_vec_bit
+val forall Nat 'n, Nat 'o, Order 'ord.
+    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure sub_vec
 
-val forall Nat 'o, Nat 'p, Order 'ord.
-    (bit, vector<'o, 'p, 'ord, bit>) -> vector<'o, 'p, 'ord, bit> effect pure add_bit_vec
-
-val forall Nat 'n, Nat 'm. ([:'n:], [:'m:]) -> [:'n - 'm:] effect pure sub_exact
-val forall Nat 'n, Nat 'm, Nat 'o, 'o <= 'm - 'n. ([|'n:'m|], [:'o:]) -> [|'n:'m - 'o|] effect pure sub_range
-val forall Nat 'n, Nat 'm, Order 'ord. (vector<'n,'m,'ord,bit>, int) -> vector<'n,'m,'ord,bit> effect pure sub_bv
+val forall Nat 'n, Nat 'o, Order 'ord.
+    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> (vector<'o, 'n, 'ord, bit>, bit, bit) effect pure sub_underflow_vec
 
 overload (deinfix +) [
-  add;
   add_vec;
-  add_vec_vec_range;
-  add_vec_range;
   add_overflow_vec;
-  add_vec_range_range;
-  add_range_vec;
-  add_range_vec_range;
-  add_vec_bit;
-  add_bit_vec;
+  add;
+  add_nat;
+  add_int
 ]
 
 overload (deinfix -) [
-  sub_exact;
-  sub_bv;
-  sub_range;
+  sub_vec_int;
+  sub_vec;
+  sub_underflow_vec;
+  sub;
+  sub_int
 ]
-
-(* Equality *)
-
-(* Sail gives a bunch of overloads for equality, but apparantly also
-gives an equality and inequality for any type 'a, so why bother
-overloading? *)
-
-val forall Type 'a. ('a, 'a) -> bool effect pure eq
-val forall Type 'a. ('a, 'a) -> bool effect pure neq
-
-overload (deinfix ==) [eq]
-overload (deinfix !=) [neq]
 
 (* Boolean operators *)
 val bool -> bool effect pure bool_not
 val (bool, bool) -> bool effect pure bool_or
 val (bool, bool) -> bool effect pure bool_and
 
-overload ~ [bool_not]
-overload (deinfix &) [bool_and]
-overload (deinfix |) [bool_or]
+val forall Num 'n, Num 'm, Order 'ord.
+    vector<'n,'m,'ord,bit> -> vector<'n,'m,'ord,bit> effect pure bitwise_not
 
-(*
-val forall Nat 'n, Nat 'l, Nat 'm, Nat 'o, Type 'a, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1. (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,'m - 'o - 1,dec,'a> effect pure vector_subrange
+val forall Num 'n, Num 'm, Order 'ord.
+    (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> vector<'n,'m,'ord,bit> effect pure bitwise_and
 
-val forall Nat 'n, Nat 'l, Order 'ord. ([|0:1|], vector<'n,'l,'ord,bit>) -> bool effect pure vec_eq_01_left
-val forall Nat 'n, Nat 'l, Order 'ord. (vector<'n,'l,'ord,bit>, [|0:1|]) -> bool effect pure vec_eq_01_right
+val forall Num 'n, Num 'm, Order 'ord.
+    (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> vector<'n,'m,'ord,bit> effect pure bitwise_or
 
-val forall Nat 'n, Nat 'l, Order 'ord. [|0:1|] -> vector<'n,'l,'ord,bit> effect pure cast_01_to_vec
+overload ~ [bool_not; bitwise_not]
+overload (deinfix &) [bool_and; bitwise_and]
+overload (deinfix |) [bool_or; bitwise_or]
 
-val forall Nat 'n, Nat 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0:2**'m - 1|] effect pure cast_vec_to_range
+(* Equality *)
 
-val forall Type 'a. register<'a> -> 'a effect pure reg_deref
+val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure eq_vec
 
-val forall Nat 'n, Nat 'l, Type 'a.
-    (vector<'n,'l,dec,'a>, [|'n - 'l + 1:'n|], 'a) -> vector<'n,'l,dec,'a>
-    effect pure vector_update_dec
+val forall Type 'a. ('a, 'a) -> bool effect pure eq
 
-val forall Nat 'n, Nat 'm, Nat 'o, Type 'a, 'o <= 'm.
-    vector<'n,'m,dec,'a> -> vector<'o - 1,'o,dec,'a>
-    effect pure mask_dec
+val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure neq_vec
 
-val forall Nat 'n, Nat 'm, Nat 'o, Type 'a, 'o <= 'm.
-    vector<'n,'m,inc,'a> -> vector<0,'o,inc,'a>
-    effect pure mask_inc
+val forall Type 'a. ('a, 'a) -> bool effect pure neq
 
-val bool -> bool effect pure not
-val (bool, bool) -> bool effect pure bool_or
-val (bool, bool) -> bool effect pure bool_and
+function forall Num 'n, Num 'm, Order 'ord. bool neq_vec (v1, v2) = bool_not(eq_vec(v1, v2))
 
-val forall Nat 'n. vector<'n,'n,dec,bit> -> bool effect pure cast_dec_bv_to_bool
+overload (deinfix ==) [eq_vec; eq]
+overload (deinfix !=) [neq_vec; neq]
 
-val bit -> bool effect pure cast_bit_to_bool
+val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gteq_vec
+val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gt_vec
+val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure lteq_vec
+val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure lt_vec
 
-val forall Nat 'n, Nat 'm. ([:'n:], [:'m:]) -> [:'n - 'm:] effect pure sub_exact
-val forall Nat 'n, Nat 'm, Nat 'o, 'o <= 'm - 'n. ([|'n:'m|], [:'o:]) -> [|'n:'m - 'o|] effect pure sub_range
-val forall Nat 'n, Nat 'm, Order 'ord. (vector<'n,'m,'ord,bit>, int) -> vector<'n,'m,'ord,bit> effect pure sub_bv
+val (int, int) -> bool effect pure gteq_int
+val (int, int) -> bool effect pure gt_int
+val (int, int) -> bool effect pure lteq_int
+val (int, int) -> bool effect pure lt_int
 
-val [:1:] -> bit effect pure cast_one_bit
-val forall Nat 'n, Order 'ord. [:1:] -> vector<'n,1,'ord,bit> effect pure cast_one_bv
-val [:0:] -> bit effect pure cast_zero_bit
-val forall Nat 'n, Order 'ord. [:0:] -> vector<'n,1,'ord,bit> effect pure cast_zero_bv
+val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure lt_range_atom
+val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure lteq_range_atom
+val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure gt_range_atom
+val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure gteq_range_atom
+val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure lt_atom_range
+val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure lteq_atom_range
+val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure gt_atom_range
+val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure gteq_atom_range
 
-val forall Type 'a. ('a, 'a) -> bool effect pure eq_anything
-val forall Type 'a. ('a, 'a) -> bool effect pure neq_anything
+overload (deinfix >=) [gteq_range_atom; gteq_atom_range; gteq_vec; gteq_int]
+overload (deinfix >) [gt_vec; gt_int]
+overload (deinfix <=) [lteq_range_atom; lteq_atom_range; lteq_vec; lteq_int]
+overload (deinfix <) [lt_vec; lt_int]
 
-val forall Nat 'n, Order 'ord. vector<'n,1,'ord,bit> -> bool effect pure cast_vec_bool
+val (int, int) -> int effect pure quotient
 
-val forall Nat 'n, Nat 'm, Nat 'o, Nat 'p, Order 'ord, 'm >= 'n.
-  vector<'o,'n,'ord,bit> -> vector<'p,'m,'ord,bit> effect pure EXTS
+overload (deinfix quot) [quotient]
 
-val forall Nat 'n, Nat 'm, Order 'ord.
-  (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> vector<'n,'m,'ord,bit>
-  effect pure bv_add
+val forall Num 'n, Num 'm, Order 'ord, Type 'a. vector<'n,'m,'ord,'a> -> [:'m:] effect pure length
 
-val forall Nat 'n, Nat 'm, Nat 'o, 'n >= 'm - 1, 'o >= 'm - 1.
-  vector<'n,'m,dec,bit> -> vector<'o,'m,dec,bit>
-  effect pure ADJUST
-*)
+default Order dec
+
+val forall Nat 'W, 'W >= 1. bit[8 * 'W] -> bit[8 * 'W] effect pure reverse_endianness
+function rec forall Nat 'W, 'W >= 1. bit[8 * 'W] reverse_endianness ((bit[8 * 'W]) value) =
+{
+    ([:8 * 'W:]) width := length(value);
+    if width <= 8 then value
+    else value[7..0] : reverse_endianness(value[(width - 1) .. 8])
+}
