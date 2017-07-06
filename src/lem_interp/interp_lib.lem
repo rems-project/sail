@@ -436,6 +436,8 @@ end)
 let neq = compose neg eq ;;
 
 let neq_vec = compose neg eq_vec
+let neq_vec_range = compose neg eq_vec_range
+let neq_range_vec = compose neg eq_range_vec
 
 let rec v_abs v = retaint v (match detaint v with
     | V_lit (L_aux arg la) ->
@@ -1030,8 +1032,8 @@ let library_functions direction = [
   ("eq_range", eq);
   ("neq", neq);
   ("neq_vec", neq_vec);
-  ("neq_vec_range", neq);
-  ("neq_range_vec", neq);
+  ("neq_vec_range", neq_vec_range);
+  ("neq_range_vec", neq_range_vec);
   ("neq_bit", neq);
   ("neq_range", neq);
   ("vec_concat", vec_concat);
