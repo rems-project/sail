@@ -920,8 +920,8 @@ let rec arith_op_no0_big op (l,r) =
   then None
   else Some (op l r)
 
-let modulo_no0_big = arith_op_no0_big mod_big_int
-let quot_no0_big = arith_op_no0_big div_big_int
+let modulo_no0_big = arith_op_no0_big (Z.rem)
+let quot_no0_big = arith_op_no0_big (Z.div)
 
 let rec arith_op_no0_int op (l,r) = 
   if r = 0
@@ -970,9 +970,9 @@ let rec arith_op_vec_no0_big op sign size (l,r) =
       Vvector((Array.make act_size Vundef), start, ord)
     | _ -> assert false
 
-let mod_vec_big = arith_op_vec_no0_big mod_big_int false unit_big_int
-let quot_vec_big = arith_op_vec_no0_big div_big_int false unit_big_int
-let quot_vec_signed_big = arith_op_vec_no0_big div_big_int true unit_big_int
+let mod_vec_big = arith_op_vec_no0_big (Z.rem) false unit_big_int
+let quot_vec_big = arith_op_vec_no0_big (Z.div) false unit_big_int
+let quot_vec_signed_big = arith_op_vec_no0_big (Z.div) true unit_big_int
 
 let mod_vec         = mod_vec_big         
 let quot_vec        = quot_vec_big        
@@ -1031,8 +1031,8 @@ let arith_op_overflow_no0_vec_big op sign size (l,r) =
   let overflow = if representable then Vzero else Vone in
   (correct_size_num,overflow,most_significant one_more)
 
-let quot_overflow_vec_big = arith_op_overflow_no0_vec_big div_big_int false unit_big_int 
-let quot_overflow_vec_signed_big = arith_op_overflow_no0_vec_big div_big_int true unit_big_int 
+let quot_overflow_vec_big = arith_op_overflow_no0_vec_big (Z.div) false unit_big_int 
+let quot_overflow_vec_signed_big = arith_op_overflow_no0_vec_big (Z.div) true unit_big_int 
 
 let quot_overflow_vec        = quot_overflow_vec_big        
 let quot_overflow_vec_signed = quot_overflow_vec_signed_big 
@@ -1048,7 +1048,7 @@ let arith_op_vec_range_no0_big op sign size (l,r) =
   let ord = get_ord l in
   arith_op_vec_no0_big op sign size (l,(to_vec_big ord (length_big l) r))
 
-let mod_vec_range_big = arith_op_vec_range_no0_big mod_big_int false unit_big_int
+let mod_vec_range_big = arith_op_vec_range_no0_big (Z.rem) false unit_big_int
 
 let mod_vec_range = mod_vec_range_big
 
