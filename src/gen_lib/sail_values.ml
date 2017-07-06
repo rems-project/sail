@@ -610,6 +610,9 @@ let min_int    = min (* the built-in version *)
 let min        = min_big (* is overwritten here *)
 let max_int    = max (* likewise *)
 let max        = max_big
+let abs_int    = abs
+let abs_big    = abs_big_int
+let abs        = abs_big
 
 let arith_op_vec_big op sign size (l,r) =
   let ord = get_ord l in
