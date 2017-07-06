@@ -1,6 +1,8 @@
 
 val cast forall Nat 'n, Nat 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0:2**'m - 1|] effect pure unsigned
 
+val forall Nat 'n, Nat 'm. [|0:'n|] -> vector<'m - 1,'m,dec,bit> effect pure to_vec
+
 (* Vector access can't actually be properly polymorphic on vector
    direction because of the ranges being different for each type, so
    we overload it instead *)
@@ -20,7 +22,7 @@ overload vector_subrange [vector_subrange_inc; vector_subrange_dec]
 
 (* Type safe vector append *)
 val forall Nat 'n1, Nat 'l1, Nat 'n2, Nat 'l2, Order 'o, Type 'a, 'l1 >= 0, 'l2 >= 0.
-  (vector<'n1,'l1,'o,'a>, vector<'n2,'l2,'o,'a>) -> vector<'n1,'l1 + 'l2,'o,'a> effect pure vector_append
+  (vector<'n1,'l1,'o,'a>, vector<'n2,'l2,'o,'a>) -> vector<'l1 + 'l2 - 1,'l1 + 'l2,'o,'a> effect pure vector_append
 
 (* Implicit register dereferencing *)
 val cast forall Type 'a. register<'a> -> 'a effect {rreg} reg_deref
@@ -47,6 +49,10 @@ val forall Type 'a, Nat 'n, Nat 'm, Nat 'o, Nat 'p, Order 'ord, 'm >= 'o.
     vector<'n, 'm, 'ord, 'a> -> vector<'p, 'o, 'ord, 'a> effect pure mask
 
 (* Adjust the start index of a decreasing bitvector *)
+val cast forall Nat 'n, Nat 'm, 'n >= 'm - 1.
+  vector<'n,'m,dec,bit> -> vector<'m - 1,'m,dec,bit>
+  effect pure norm_dec
+
 val cast forall Nat 'n, Nat 'm, Nat 'o, 'n >= 'm - 1, 'o >= 'm - 1.
   vector<'n,'m,dec,bit> -> vector<'o,'m,dec,bit>
   effect pure adjust_dec
@@ -155,13 +161,14 @@ val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure lteq_
 val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure gt_range_atom
 val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure gteq_range_atom
 val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure lt_atom_range
+val forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure lteq_atom_atom
 val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure lteq_atom_range
 val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure gt_atom_range
 val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure gteq_atom_range
 
 overload (deinfix >=) [gteq_range_atom; gteq_atom_range; gteq_vec; gteq_int]
 overload (deinfix >) [gt_vec; gt_int]
-overload (deinfix <=) [lteq_range_atom; lteq_atom_range; lteq_vec; lteq_int]
+overload (deinfix <=) [lteq_atom_atom; lteq_range_atom; lteq_atom_range; lteq_vec; lteq_int]
 overload (deinfix <) [lt_vec; lt_int]
 
 val (int, int) -> int effect pure quotient
@@ -170,12 +177,9 @@ overload (deinfix quot) [quotient]
 
 val forall Num 'n, Num 'm, Order 'ord, Type 'a. vector<'n,'m,'ord,'a> -> [:'m:] effect pure length
 
-default Order dec
+val cast forall Num 'n. [:'n:] -> [|'n|] effect pure upper
 
-val forall Nat 'W, 'W >= 1. bit[8 * 'W] -> bit[8 * 'W] effect pure reverse_endianness
-function rec forall Nat 'W, 'W >= 1. bit[8 * 'W] reverse_endianness ((bit[8 * 'W]) value) =
-{
-    ([:8 * 'W:]) width := length(value);
-    if width <= 8 then value
-    else value[7..0] : reverse_endianness(value[(width - 1) .. 8])
+typedef option = const union forall Type 'a. {
+    None;
+    'a Some
 }

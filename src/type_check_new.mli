@@ -47,7 +47,7 @@ exception Type_error of l * string;;
 
 type mut = Immutable | Mutable
 
-type lvar = Register of typ | Enum of typ | Local of mut * typ | Unbound
+type lvar = Register of typ | Enum of typ | Local of mut * typ | Union of typquant * typ | Unbound
 
 module Env : sig
   (* Env.t is the type of environments *)

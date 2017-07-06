@@ -270,6 +270,12 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_if (cond, then_branch, else_branch) ->
      "if " ^ string_of_exp cond ^ " then " ^ string_of_exp then_branch ^ " else " ^ string_of_exp else_branch
   | E_field (exp, id) -> string_of_exp exp ^ "." ^ string_of_id id
+  | E_for (id, f, t, u, ord, body) ->
+     "foreach ("
+     ^ string_of_id id ^ " from " ^ string_of_exp f ^ " to " ^ string_of_exp t
+     ^ " by " ^ string_of_exp u ^ " order " ^ string_of_order ord
+     ^ ") { "
+     ^ string_of_exp body
   | _ -> "INTERNAL"
 and string_of_pexp (Pat_aux (Pat_exp (pat, exp), _)) = string_of_pat pat ^ " -> " ^ string_of_exp exp
 and string_of_pat (P_aux (pat, l)) =
