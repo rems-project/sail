@@ -86,23 +86,29 @@ let (min_32  : integer) = integerNegate (integerFromNat (natPow 2 31)) (*2147483
 let (max_8   : integer) = (integerFromNat 127)
 let (min_8   : integer) = (integerFromNat 0) - (integerFromNat 128)
 let (max_5   : integer) = (integerFromNat 31)
-let (min_5   : integer) = (integerFromNat 0)-(integerFromNat 32)
 
 val get_max_representable_in : signed -> nat -> integer
 let get_max_representable_in sign n = 
-  if (n = 64) then match sign with | Signed -> max_64 | Unsigned -> max_64u end
-  else if (n=32) then match sign with | Signed -> max_32 | Unsigned -> max_32u end
-  else if (n=8) then max_8
-  else if (n=5) then max_5
-  else match sign with | Signed -> 2**n - 1 | Unsigned -> 2**n end
+  match (sign, n) with
+  | (Signed, 64)   -> max_64
+  | (Unsigned, 64) -> max_64u
+  | (Signed, 32)   -> max_32
+  | (Unsigned, 32) -> max_32u
+  | (Signed, 8)    -> max_8
+  | (Unsigned, 5)  -> max_5
+  | (Signed, _)    -> 2**(n -1) - 1
+  | (Unsigned, _)  -> 2**n - 1
+  end
 
 val get_min_representable_in : signed -> nat -> integer
-let get_min_representable_in _ n = 
-  if (n = 64) then min_64
-  else if (n=32) then min_32
-  else if (n=8) then min_8
-  else if (n=5) then min_5
-  else 0-(2**n)
+let get_min_representable_in sign n = 
+  match (sign, n) with
+  | (Unsigned, _)  -> 0
+  | (Signed, 64)   -> min_64
+  | (Signed, 32)   -> min_32
+  | (Signed, 8)    -> min_8
+  | (Signed, _)    -> 0-(2**(n-1))
+  end
 
 let ignore_sail x = V_lit (L_aux L_unit Unknown) ;;
 
