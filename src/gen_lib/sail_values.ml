@@ -470,22 +470,25 @@ let min_32  = big_int_of_int (-2147483648)
 let max_8   = big_int_of_int 127
 let min_8   = big_int_of_int (-128)
 let max_5   = big_int_of_int 31
-let min_5   = big_int_of_int (-32)
 
 let get_max_representable_in sign n = 
-  if (n = 64) then match sign with | true -> max_64 | false -> max_64u
-  else if (n=32) then match sign with | true -> max_32 | false -> max_32u
-  else if (n=8) then max_8
-  else if (n=5) then max_5
-  else match sign with | true -> power_big two_big_int (pred_big_int (big_int_of_int n))
-                       | false -> power_big two_big_int (big_int_of_int n)
+  match (sign, n) with
+  | (true, 64)  -> max_64
+  | (false, 64) -> max_64u
+  | (true, 32)  -> max_32
+  | (false, 32) -> max_32u
+  | (true, 8)   -> max_8
+  | (false, 5)  -> max_5
+  | (true, _)   -> pred_big_int (power_big two_big_int (big_int_of_int (n-1)))
+  | (false, _)  -> pred_big_int (power_big two_big_int (big_int_of_int n))
 
-let get_min_representable_in _ n = 
-  if (n = 64) then min_64
-  else if (n=32) then min_32
-  else if (n=8) then min_8
-  else if (n=5) then min_5
-  else minus_big_int (power_big two_big_int (big_int_of_int n))
+let get_min_representable_in sign n = 
+  match (sign, n) with
+  | (false, _)  -> zero_big_int
+  | (true, 64)  -> min_64
+  | (true, 32)  -> min_32
+  | (true, 8)   -> min_8
+  | (true, _)   -> minus_big_int (power_big two_big_int (big_int_of_int (n-1)))
 
 let to_vec_int ord len n =
   let array = Array.make len Vzero in
