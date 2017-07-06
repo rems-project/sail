@@ -2082,7 +2082,7 @@ let initial_typ_env_list : (string * ((string * tannot) list)) list =
        lib_tannot ((mk_nat_params ["n";"o";"p";"q"])@(mk_ord_params ["ord"]),
                    (mk_pure_fun (mk_tup [mk_vector bit_t (mk_ovar "ord") (mk_nv "o") (mk_nv "n");
                                          mk_vector bit_t (mk_ovar "ord") (mk_nv "p") (mk_nv "n")])
-                                (mk_range (mk_nv "q") (mk_2n (mk_nv "n")))))
+                                (mk_range (mk_nv "q") (mk_sub (mk_2n (mk_nv "n")) n_one))))
                   (Some "add_vec_vec_range") [];
        lib_tannot ((mk_nat_params ["n";"m";"o"])@(mk_ord_params ["ord"]),
                    (mk_pure_fun (mk_tup [mk_vector bit_t (mk_ovar "ord") (mk_nv "n") (mk_nv "m");
