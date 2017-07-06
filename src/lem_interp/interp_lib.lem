@@ -1066,8 +1066,8 @@ let library_functions direction = [
   ("gt_range_vec", compare_op_range_vec (>) Signed);
   ("lteq_vec_range", compare_op_vec_range (<=) Signed);
   ("gteq_vec_range", compare_op_vec_range (>=) Signed);
-  ("lteq_range_vec", compare_op_vec_range (<=) Signed);
-  ("gteq_range_vec", compare_op_vec_range (>=) Signed);
+  ("lteq_range_vec", compare_op_range_vec (<=) Signed);
+  ("gteq_range_vec", compare_op_range_vec (>=) Signed);
   ("lteq_vec", compare_op_vec (<=) Signed);
   ("gteq_vec", compare_op_vec (>=) Signed);
   ("lt_vec_signed", compare_op_vec (<) Signed);
