@@ -755,10 +755,25 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
          match p with
          | P_app (id,args) ->
             (try
-              let variants = List.assoc (id_to_string id) refinements in
+              let i = id_to_string id in
+              let variants = List.assoc i refinements in
+              let constr_tannot =
+                match Envmap.apply t_env i with
+                | Some (Base ((_,{t=Tfn(_,outt,_,_)}),_,_,_,_,_)) -> simple_annot outt
+                | _ -> raise (Reporting_basic.err_general l
+                                ("Constructor missing from environment: " ^ i))
+              in
+              let varmap = build_nexp_subst l constr_tannot tannot in
               let map_inst (insts,i') =
+                let insts = List.map (fun (v,i) ->
+                  ((match List.assoc v varmap with
+                  | {nexp=Nvar s} -> s
+                  | _ -> raise (Reporting_basic.err_general l
+                                  ("Constructor parameter not a variable: " ^ v))),
+                   TA_nexp {nexp=Nconst (Big_int.big_int_of_int i);imp_param=false}))
+                  insts in
                 P_aux (P_app (Id_aux (Id i',Generated l),args),(Generated l,tannot)),
-                Envmap.from_list (List.map (fun (v,i) -> (v,TA_nexp {nexp=Nconst (Big_int.big_int_of_int i);imp_param=false})) insts)
+                Envmap.from_list insts
               in
               ConstrSplit (List.map map_inst variants)
             with Not_found -> NoSplit)
