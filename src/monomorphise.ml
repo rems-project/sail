@@ -193,7 +193,7 @@ let reduce_nexp subst ne =
    assumes that bitvector sizes are always given as a variable; don't yet handle
    more general cases (e.g., 8 * var) *)
 
-let refine_constructor refinements i substs arg t =
+let refine_constructor refinements i substs (E_aux (_,(l,_)) as arg) t =
   let rec derive_vars t (E_aux (e,(l,tannot)) as exp) =
     match t.t with
     | Tapp ("vector", [_;TA_nexp {nexp = Nvar v};_;TA_typ {t=Tid "bit"}]) ->
@@ -218,7 +218,13 @@ let refine_constructor refinements i substs arg t =
   try
     let irefinements = List.assoc i refinements in
     let vars = List.sort_uniq (fun x y -> String.compare (fst x) (fst y)) (derive_vars t arg) in
-    Some (List.assoc vars irefinements)
+    try
+      Some (List.assoc vars irefinements)
+    with Not_found ->
+      (Reporting_basic.print_err false true l "Monomorphisation"
+         ("Failed to find a monomorphic constructor for " ^ i ^ " instance " ^
+             match vars with [] -> "<empty>"
+             | _ -> String.concat "," (List.map (fun (x,y) -> x ^ "=" ^ string_of_int y) vars)); None)
   with Not_found -> None
 
 
@@ -270,9 +276,9 @@ let nexp_subst_fns t_env substs refinements =
          let es' = List.map s_exp es in
          let arg =
            match es' with
-           | [] -> E_aux (E_lit (L_aux (L_unit,Unknown)),(Unknown,simple_annot unit_t))
+           | [] -> E_aux (E_lit (L_aux (L_unit,Unknown)),(l,simple_annot unit_t))
            | [e] -> e
-           | _ -> E_aux (E_tuple es',(Unknown,NoTyp))
+           | _ -> E_aux (E_tuple es',(l,NoTyp))
          in
          let i = id_to_string id in
          let id' = 
