@@ -1377,6 +1377,40 @@ let neg_constraints = function
 let rec add_constraints constrs env =
   List.fold_left (fun env constr -> Env.add_constraint constr env) env constrs
 
+(* When doing implicit type coercion, for performance reasons we want
+   to filter out the possible casts to only those that could
+   reasonably apply. We don't mind if we try some coercions that are
+   impossible, but we should be careful to never rule out a possible
+   cast - match_typ and filter_casts implement this logic. *)
+let rec match_typ (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
+  match typ1, typ2 with
+  | Typ_wild, Typ_wild -> true
+  | _, Typ_var kid2 -> true
+  | Typ_id v1, Typ_id v2 when Id.compare v1 v2 = 0 -> true
+  | Typ_id v1, Typ_id v2 when string_of_id v1 = "int" && string_of_id v2 = "nat" -> true
+  | Typ_tup typs1, Typ_tup typs2 -> List.for_all2 match_typ typs1 typs2
+  | Typ_id v, Typ_app (f, _) when string_of_id v = "nat" && string_of_id f = "atom" -> true
+  | Typ_id v, Typ_app (f, _) when string_of_id v = "int" &&  string_of_id f = "atom" -> true
+  | Typ_id v, Typ_app (f, _) when string_of_id v = "nat" &&  string_of_id f = "range" -> true
+  | Typ_id v, Typ_app (f, _) when string_of_id v = "int" &&  string_of_id f = "range" -> true
+  | Typ_app (f1, _), Typ_app (f2, _) when string_of_id f1 = "range" && string_of_id f2 = "atom" -> true
+  | Typ_app (f1, _), Typ_app (f2, _) when Id.compare f1 f2 = 0 -> true
+  | _, _ -> false
+
+let rec filter_casts env from_typ to_typ casts =
+  match casts with
+  | (cast :: casts) ->
+     begin
+       let (quant, cast_typ) = Env.get_val_spec cast env in
+       match cast_typ with
+       | Typ_aux (Typ_fn (cast_from_typ, cast_to_typ, _), _)
+            when match_typ from_typ cast_from_typ && match_typ to_typ cast_to_typ ->
+          typ_print ("Considering cast " ^ string_of_typ cast_typ ^ " for " ^ string_of_typ from_typ ^ " to " ^ string_of_typ to_typ);
+          cast :: filter_casts env from_typ to_typ casts
+       | _ -> filter_casts env from_typ to_typ casts
+     end
+  | [] -> []
+
 let crule r env exp typ =
   incr depth;
   typ_print ("Check " ^ string_of_exp exp ^ " <= " ^ string_of_typ typ);
@@ -1501,7 +1535,9 @@ and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
       typ_debug "PERFORMING TYPE COERCION";
       subtyp l env (typ_of annotated_exp) typ; annotated_exp
     with
-    | Type_error (_, m) when Env.allow_casts env -> try_casts "" (Env.get_casts env)
+    | Type_error (_, m) when Env.allow_casts env ->
+       let casts = filter_casts env (typ_of annotated_exp) typ (Env.get_casts env) in
+       try_casts "" casts
     | Type_error (l, m) -> typ_error l ("Subtype error " ^ m)
   end
 
@@ -1531,7 +1567,9 @@ and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
       typ_debug "PERFORMING COERCING UNIFICATION";
       annotated_exp, unify l env typ (typ_of annotated_exp)
     with
-    | Unification_error (_, m) when Env.allow_casts env -> try_casts "" (Env.get_casts env)
+    | Unification_error (_, m) when Env.allow_casts env ->
+       let casts = filter_casts env (typ_of annotated_exp) typ (Env.get_casts env) in
+       try_casts "" casts
   end
 
 and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ) =
