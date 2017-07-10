@@ -317,6 +317,7 @@ module Env : sig
   type t
   val add_val_spec : id -> typquant * typ -> t -> t
   val get_val_spec : id -> t -> typquant * typ
+  val is_union_constructor : id -> t -> bool
   val add_record : id -> typquant -> (typ * id) list -> t -> t
   val is_record : id -> t -> bool
   val get_accessor : id -> t -> typquant * typ
@@ -427,6 +428,15 @@ end = struct
         typ_print ("Adding val spec binding " ^ string_of_id id ^ " :: " ^ string_of_bind bind);
         { env with top_val_specs = Bindings.add id bind env.top_val_specs }
       end
+
+  let is_union_constructor id env =
+    let is_ctor id (Tu_aux (tu, _)) = match tu with
+      | Tu_id ctor_id when Id.compare id ctor_id = 0 -> true
+      | Tu_ty_id (_, ctor_id) when Id.compare id ctor_id = 0 -> true
+      | _ -> false
+    in
+    let type_unions = List.concat (List.map (fun (_, (_, tus)) -> tus) (Bindings.bindings env.variants)) in
+    List.exists (is_ctor id) type_unions
 
   let get_typ_var kid env =
     try KBindings.find kid env.typ_vars with
@@ -1649,7 +1659,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           annot_pat (P_tup (List.rev tpats)) typ, env
        | _ -> typ_error l "Cannot bind tuple pattern against non tuple type"
      end
-  | P_app (f, pats) ->
+  | P_app (f, pats) when Env.is_union_constructor f env ->
      begin
        let (typq, ctor_typ) = Env.get_val_spec f env in
        let quants = quant_items typq in
@@ -1680,6 +1690,8 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           end
        | _ -> typ_error l ("Mal-formed constructor " ^ string_of_id f)
      end
+  | P_app (f, _) when not (Env.is_union_constructor f env) ->
+     typ_error l (string_of_id f ^ " is not a union constructor in pattern " ^ string_of_pat pat)
   | _ ->
      let (inferred_pat, env) = infer_pat env pat in
      subtyp l env (pat_typ_of inferred_pat) typ;

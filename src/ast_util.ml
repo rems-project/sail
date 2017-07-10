@@ -285,6 +285,7 @@ and string_of_pat (P_aux (pat, l)) =
   | P_id v -> string_of_id v
   | P_typ (typ, pat) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_pat pat
   | P_tup pats -> "(" ^ string_of_list ", " string_of_pat pats ^ ")"
+  | P_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | _ -> "PAT"
 and string_of_lexp (LEXP_aux (lexp, _)) =
   match lexp with
