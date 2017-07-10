@@ -92,7 +92,7 @@ let opt_new_typecheck = ref false
 let opt_just_check = ref false
 let opt_ddump_tc_ast = ref false
 let opt_dno_cast = ref false
-                                        
+
 let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.order) : Type_internal.tannot Ast.defs * Type_check.envs =
   let d_env = { Type_internal.k_env = k; Type_internal.abbrevs = Type_internal.initial_abbrev_env;
                 Type_internal.nabbrevs = Envmap.empty;

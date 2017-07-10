@@ -1544,9 +1544,9 @@ function clause execute (MTC0(rt, rd, sel, double)) = {
       case _               -> (SignalException(ResI))
     }
 }
-
+(*
 function unit TLBWriteEntry((TLBIndexT) idx) = {
-  pagemask := EXTZ(TLBPageMask); (* XXX EXTZ here forces register read in ocaml shallow embedding *)
+  pagemask := (bit[16]) (EXTZ(TLBPageMask)); (* XXX EXTZ here forces register read in ocaml shallow embedding *)
   switch(pagemask) {
       case 0x0000 -> ()
       case 0x0003 -> ()
@@ -1578,7 +1578,7 @@ function unit TLBWriteEntry((TLBIndexT) idx) = {
   ((TLBEntries[idx]).d1      ) := TLBEntryLo1.D;
   ((TLBEntries[idx]).v1      ) := TLBEntryLo1.V;
 }
-
+*)
 union ast member TLBWI
 function clause decode (0b010000 : 0b10000000000000000000 : 0b000010) = Some(TLBWI)
 function clause execute (TLBWI) = {

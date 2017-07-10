@@ -1317,13 +1317,16 @@ let rec instantiate_quants quants kid uvar = match quants with
        | _ -> (QI_aux (QI_const nc, l)) :: instantiate_quants quants kid uvar
      end
 
-let destructure_vec_typ l = function
-  | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n1, _);
-                           Typ_arg_aux (Typ_arg_nexp n2, _);
-                           Typ_arg_aux (Typ_arg_order o, _);
-                           Typ_arg_aux (Typ_arg_typ vtyp, _)]
-                     ), _) when string_of_id id = "vector" -> (n1, n2, o, vtyp)
-  | typ -> typ_error l ("Expected vector type, got " ^ string_of_typ typ)
+let destructure_vec_typ l env typ =
+  let destructure_vec_typ' l = function
+    | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n1, _);
+                             Typ_arg_aux (Typ_arg_nexp n2, _);
+                             Typ_arg_aux (Typ_arg_order o, _);
+                             Typ_arg_aux (Typ_arg_typ vtyp, _)]
+                       ), _) when string_of_id id = "vector" -> (n1, n2, o, vtyp)
+    | typ -> typ_error l ("Expected vector type, got " ^ string_of_typ typ)
+  in
+  destructure_vec_typ' l (Env.expand_synonyms env typ)
 
 let typ_of (E_aux (_, (_, tannot))) = match tannot with
   | Some (_, typ, _) -> typ
@@ -1536,7 +1539,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      annot_exp_effect (E_exit checked_exp) typ (mk_effect [BE_escape])
   | E_vector vec, _ ->
      begin
-       let (start, len, ord, vtyp) = destructure_vec_typ l typ in
+       let (start, len, ord, vtyp) = destructure_vec_typ l env typ in
        let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
        match len with
        | Nexp_aux (Nexp_constant lenc, _) ->
@@ -1720,9 +1723,9 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
        pats @ [inferred_pat], env
      in
      let (inferred_pat :: inferred_pats), env = List.fold_left fold_pats ([], env) (pat :: pats) in
-     let (_, len, _, vtyp) = destructure_vec_typ l (pat_typ_of inferred_pat) in
+     let (_, len, _, vtyp) = destructure_vec_typ l env (pat_typ_of inferred_pat) in
      let fold_len len pat =
-       let (_, len', _, vtyp') = destructure_vec_typ l (pat_typ_of pat) in
+       let (_, len', _, vtyp') = destructure_vec_typ l env (pat_typ_of pat) in
        typ_equality l env vtyp vtyp';
        nsum len len'
      in
@@ -1849,6 +1852,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | Local (_, typ) | Enum typ -> annot_exp (E_id v) typ
        | Register typ -> annot_exp_effect (E_id v) typ (mk_effect [BE_rreg])
        | Unbound -> typ_error l ("Identifier " ^ string_of_id v ^ " is unbound")
+       | Union _ -> typ_error l ("Cannot infer the type of polymorphic union indentifier " ^ string_of_id v)
      end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
   | E_sizeof nexp -> annot_exp (E_sizeof nexp) (mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp nexp)])))

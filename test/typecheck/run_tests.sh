@@ -16,6 +16,8 @@ mkdir -p $DIR/rtfail
 rm -f $DIR/tests.xml
 
 cat $SAILDIR/lib/prelude.sail $SAILDIR/mips_new_tc/mips_prelude.sail > $DIR/pass/mips_prelude.sail
+cat $SAILDIR/lib/prelude.sail $SAILDIR/mips_new_tc/mips_prelude.sail $SAILDIR/mips_new_tc/mips_tlb.sail > $DIR/pass/mips_tlb.sail
+cat $SAILDIR/lib/prelude.sail $SAILDIR/mips_new_tc/mips_prelude.sail $SAILDIR/mips_new_tc/mips_tlb.sail $SAILDIR/mips_new_tc/mips_wrappers.sail > $DIR/pass/mips_wrappers.sail
 
 pass=0
 fail=0
