@@ -413,7 +413,7 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
   let (refinements, defs') = split_constructors defs in
 
   (* Attempt simple pattern matches *)
-  let can_match (E_aux (e,(l,annot))) cases =
+  let can_match (E_aux (e,(l,annot)) as exp0) cases =
     match e with
     | E_id id ->
        let i = id_to_string id in
@@ -423,10 +423,13 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
             match cases with
             | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
                        ("Failed to find a case for " ^ i); None)
-            | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some exp
+            | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[])
+            | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
+                when pat_id_is_variable t_env (id_to_string id') ->
+               Some (exp, [(id_to_string id', exp0)])
             | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
             | (Pat_aux (Pat_exp (P_aux (P_app (id',[]),_),exp),_))::tl ->
-               if i = id_to_string id' then Some exp else findpat tl
+               if i = id_to_string id' then Some (exp,[]) else findpat tl
             | (Pat_aux (Pat_exp (P_aux (_,(l',_)),_),_))::_ ->
                (Reporting_basic.print_err false true l' "Monomorphisation"
                   "Unexpected kind of pattern for enumeration"; None)
@@ -438,11 +441,14 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
          match cases with
          | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
                     ("Failed to find a case for bit"); None)
-         | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some exp
+         | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[])
+         | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
+             when pat_id_is_variable t_env (id_to_string id') ->
+            Some (exp, [(id_to_string id', exp0)])
          | (Pat_aux (Pat_exp (P_aux (P_lit (L_aux (lit, _)),_),exp),_))::tl ->
             (match bit,lit with
-            | (L_zero | L_false), (L_zero | L_false) -> Some exp
-            | (L_one  | L_true ), (L_one  | L_true ) -> Some exp
+            | (L_zero | L_false), (L_zero | L_false) -> Some (exp,[])
+            | (L_one  | L_true ), (L_one  | L_true ) -> Some (exp,[])
             | _ -> findpat tl)
          | (Pat_aux (Pat_exp (P_aux (_,(l',_)),_),_))::_ ->
             (Reporting_basic.print_err false true l' "Monomorphisation"
@@ -572,9 +578,10 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
        let e' = const_prop_exp substs e in
        (match can_match e' cases with
        | None -> re (E_case (e', List.map (const_prop_pexp substs) cases))
-       | Some (E_aux (_,(_,annot')) as exp) ->
+       | Some (E_aux (_,(_,annot')) as exp,newbindings) ->
+          let substs' = Envmap.union substs (Envmap.from_list newbindings) in
           nexp_substs := build_nexp_subst l annot annot' @ !nexp_substs;
-          const_prop_exp substs exp)
+          const_prop_exp substs' exp)
     | E_let (lb,e) ->
        let (lb',substs') = const_prop_letbind substs lb in
        re (E_let (lb', const_prop_exp substs' e))
