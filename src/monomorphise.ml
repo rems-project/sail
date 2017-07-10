@@ -88,6 +88,20 @@ let pat_id_is_variable t_env id =
     -> false
   | _ -> true
 
+let rec is_value t_env (E_aux (e,_)) =
+  match e with
+  | E_id id -> not (pat_id_is_variable t_env (id_to_string id))
+  | E_lit _ -> true
+  | E_tuple es -> List.for_all (is_value t_env) es
+(* TODO: more? *)
+  | _ -> false
+
+let is_pure (Effect_opt_aux (e,_)) =
+  match e with
+  | Effect_opt_pure -> true
+  | Effect_opt_effect (Effect_aux (Effect_set [],_)) -> true
+  | _ -> false
+
 let rec list_extract f = function
   | [] -> None
   | h::t -> match f h with None -> list_extract f t | Some v -> Some v
@@ -424,6 +438,8 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
             | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
                        ("Failed to find a case for " ^ i); None)
             | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[])
+            | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
+               findpat ((Pat_aux (Pat_exp (p,exp),ann))::tl)
             | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
                 when pat_id_is_variable t_env (id_to_string id') ->
                Some (exp, [(id_to_string id', exp0)])
@@ -442,6 +458,8 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
          | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
                     ("Failed to find a case for bit"); None)
          | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[])
+         | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
+            findpat ((Pat_aux (Pat_exp (p,exp),ann))::tl)
          | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
              when pat_id_is_variable t_env (id_to_string id') ->
             Some (exp, [(id_to_string id', exp0)])
@@ -527,7 +545,8 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
   let rec const_prop_exp substs ((E_aux (e,(l,annot))) as exp) =
     let re e = E_aux (e,(l,annot)) in
     match e with
-      (* TODO: are there circumstances in which we should get rid of these? *)
+      (* TODO: are there more circumstances in which we should get rid of these? *)
+    | E_block [e] -> const_prop_exp substs e
     | E_block es -> re (E_block (List.map (const_prop_exp substs) es))
     | E_nondet es -> re (E_nondet (List.map (const_prop_exp substs) es))
        
@@ -543,7 +562,11 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
     | E_comment _
       -> exp
     | E_cast (t,e') -> re (E_cast (t, const_prop_exp substs e'))
-    | E_app (id,es) -> re (E_app (id,List.map (const_prop_exp substs) es))
+    | E_app (id,es) ->
+       let es' = List.map (const_prop_exp substs) es in
+       (match const_prop_try_fn (id,es') with
+       | None -> re (E_app (id,es'))
+       | Some r -> r)
     | E_app_infix (e1,id,e2) ->
        let e1',e2' = const_prop_exp substs e1,const_prop_exp substs e2 in
        (match try_app_infix (l,annot) e1' (id_to_string id) e2' with
@@ -625,6 +648,39 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
     | LEXP_vector (le,e) -> re (LEXP_vector (const_prop_lexp substs le, const_prop_exp substs e))
     | LEXP_vector_range (le,e1,e2) -> re (LEXP_vector_range (const_prop_lexp substs le, const_prop_exp substs e1, const_prop_exp substs e2))
     | LEXP_field (le,id) -> re (LEXP_field (const_prop_lexp substs le, id))
+  (* Reduce a function when
+     1. all arguments are values,
+     2. the function is pure,
+     3. the result is a value
+     (and 4. the function is not scattered, but that's not terribly important)
+     to try and keep execution time and the results managable.
+  *)
+  and const_prop_try_fn (id,args) =
+    if not (List.for_all (is_value t_env) args) then
+      None
+    else
+      let i = id_to_string id in
+      let Defs ds = defs in
+      match list_extract (function
+      | (DEF_fundef (FD_aux (FD_function (_,_,eff,((FCL_aux (FCL_Funcl (id',_,_),_))::_ as fcls)),_)))
+        -> if i = id_to_string id' then Some (eff,fcls) else None
+      | _ -> None) ds with
+      | None -> None
+      | Some (eff,_) when not (is_pure eff) -> None
+      | Some (_,fcls) ->
+         let arg = match args with
+           | [] -> E_aux (E_lit (L_aux (L_unit,Unknown)),(Unknown,simple_annot unit_t))
+           | [e] -> e
+           | _ -> E_aux (E_tuple args,(Unknown,NoTyp)) in
+         let cases = List.map (function
+           | FCL_aux (FCL_Funcl (_,pat,exp), ann) -> Pat_aux (Pat_exp (pat,exp),ann))
+           fcls in
+         match can_match arg cases with
+         | Some (exp,bindings) ->
+            let substs = Envmap.from_list bindings in
+            let result = const_prop_exp substs exp in
+            if is_value t_env result then Some result else None
+         | None -> None
   in
 
   let subst_exp subst exp =
