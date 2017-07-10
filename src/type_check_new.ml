@@ -46,7 +46,7 @@ open Util
 open Ast_util
 open Big_int
 
-let debug = ref 1
+let debug = ref 0
 let depth = ref 0
 
 let rec indent n = match n with
@@ -895,7 +895,7 @@ let rec nc_constraints var_of ncs =
   | (nc :: ncs) ->
      Constraint.conj (nc_constraint var_of nc) (nc_constraints var_of ncs)
 
-let prove env nc =
+let prove_z3 env nc =
   typ_print ("Prove " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc);
   let module Bindings = Map.Make(Kid) in
   let bindings = ref Bindings.empty  in
@@ -913,6 +913,21 @@ let prove env nc =
   | Constraint.Unsat _ -> typ_debug "unsat"; true
   | Constraint.Unknown [] -> typ_debug "sat"; false
   | Constraint.Unknown _ -> typ_debug "unknown"; false
+
+let prove env (NC_aux (nc_aux, _) as nc) =
+  let compare_const f (Nexp_aux (n1, _)) (Nexp_aux (n2, _)) =
+    match n1, n2 with
+    | Nexp_constant c1, Nexp_constant c2 when f c1 c2 -> true
+    | _, _ -> false
+  in
+  match nc_aux with
+  | NC_fixed (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 = c2) (nexp_simp nexp1) (nexp_simp nexp2) -> true
+  | NC_bounded_le (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 <= c2) (nexp_simp nexp1) (nexp_simp nexp2) -> true
+  | NC_bounded_ge (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 >= c2) (nexp_simp nexp1) (nexp_simp nexp2) -> true
+  | NC_fixed (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 <> c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
+  | NC_bounded_le (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 > c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
+  | NC_bounded_ge (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 < c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
+  | _ -> prove_z3 env nc
 
 let rec subtyp_tnf env tnf1 tnf2 =
   typ_print ("Subset " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_tnf tnf1 ^ " " ^ string_of_tnf tnf2);
@@ -1381,7 +1396,8 @@ let rec add_constraints constrs env =
    to filter out the possible casts to only those that could
    reasonably apply. We don't mind if we try some coercions that are
    impossible, but we should be careful to never rule out a possible
-   cast - match_typ and filter_casts implement this logic. *)
+   cast - match_typ and filter_casts implement this logic. It must be
+   the case that if two types unify, then they match. *)
 let rec match_typ (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
   match typ1, typ2 with
   | Typ_wild, Typ_wild -> true
