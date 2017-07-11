@@ -1423,7 +1423,7 @@ let rec check_exp envs (imp_param:nexp option) (widen_num:bool) (widen_vec:bool)
       let (t,cs_c,ef_c,e') = 
         type_coerce (Expr l) d_env Require false true b_env ti 
           (E_aux(E_vector_append(v1',v2'),(l,simple_annot_efr ti sub_effects))) expect_t in
-      (e',t,t_env,cs_1@cs_2,nob,(union_effects ef_c sub_effects))
+      (e',t,t_env,cs_1@cs_2@cs_c,nob,(union_effects ef_c sub_effects))
     | E_list(es) ->
       let item_t = match expect_t_actual.t with
         | Tapp("list",[TA_typ i]) -> i
