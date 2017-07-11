@@ -35,8 +35,10 @@
 (* misp_insts.sail: mips instruction decode and execute clauses and AST node 
    declarations *)
 
-scattered function unit execute
 scattered typedef ast = const union
+
+val ast -> unit effect pure execute
+scattered function unit execute
 
 val bit[32] -> option<ast> effect pure decode
 scattered function option<ast> decode
@@ -56,7 +58,7 @@ function clause decode (0b011001 : (regno) rs : (regno) rt : (imm16) imm) =
 
 function clause execute (DADDIU (rs, rt, imm)) =
   {
-    wGPR(rt) := rGPR(rs) + EXTS(imm)
+    wGPR(rt) := rGPR(rs) + (bit[64]) (EXTS(imm))
   }
 
 (* DADDU Doubleword Add Unsigned -- another very simple instruction,
@@ -82,7 +84,7 @@ function clause decode (0b011000 : (regno) rs : (regno) rt : (imm16) imm) =
 
 function clause execute (DADDI (rs, rt, imm)) =
   {
-    let (bit[65]) sum65 = (EXTS(rGPR(rs)) + EXTS(imm)) in
+    let (bit[65]) sum65 = ((bit[65]) (EXTS(rGPR(rs))) + (bit[65]) (EXTS(imm))) in
     {
       if (sum65[64] != sum65[63]) then
         (SignalException(Ov))
@@ -101,7 +103,7 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b0000
 
 function clause execute (DADD (rs, rt, rd)) =
   {
-    let (bit[65]) sum65 = (EXTS(rGPR(rs)) + EXTS(rGPR(rt))) in
+    let (bit[65]) sum65 = ((bit[65]) (EXTS(rGPR(rs))) + (bit[65]) (EXTS(rGPR(rt)))) in
     {
       if sum65[64] != sum65[63] then
         (SignalException(Ov))
@@ -117,18 +119,18 @@ union ast member regregreg ADD
 function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b00000 : 0b100000) =
   Some(ADD(rs, rt, rd))
 
-function clause execute (ADD(rs, rt, rd)) = 
+function clause execute (ADD(rs, rt, rd)) =
   {
     (bit[64]) opA := rGPR(rs);
     (bit[64]) opB := rGPR(rt);
     if NotWordVal(opA) | NotWordVal(opB) then
-      wGPR(rd) := undefined (* XXX could exit instead *)
+      wGPR(rd) := (bit[64]) undefined (* XXX could exit instead *)
     else
-      let (bit[33]) sum33 = (EXTS(opA[31 .. 0]) + EXTS(opB[31 .. 0])) in
+      let (bit[33]) sum33 = ((bit[33]) (EXTS(opA[31 .. 0])) + (bit[33]) (EXTS(opB[31 .. 0]))) in
         if sum33[32] != sum33[31] then
           (SignalException(Ov))
         else
-          wGPR(rd) := EXTS(sum33[31..0])
+	  wGPR(rd) := (bit[64]) (EXTS(sum33[31..0]))
   }
 
 (* ADDI  32-bit add immediate -- reg, reg, imm with possible undefined behaviour or exception *)
@@ -1011,7 +1013,7 @@ function clause execute (BCMPZ(rs, imm, cmp, link, likely)) =
 (* Co-opt syscall 0xfffff for use as thread start in pccmem  *)
 union ast member unit SYSCALL_THREAD_START
 function clause decode (0b000000 : 0xfffff : 0b001100) =
-  Some(SYSCALL_THREAD_START)
+  Some((ast) SYSCALL_THREAD_START)
 function clause execute (SYSCALL_THREAD_START) = ()
 
 
@@ -1024,7 +1026,7 @@ function clause execute (ImplementationDefinedStopFetching) = ()
 
 union ast member unit SYSCALL
 function clause decode (0b000000 : (bit[20]) code : 0b001100) =
-  Some(SYSCALL) (* code is ignored *)
+  Some((ast) SYSCALL) (* code is ignored *)
 function clause execute (SYSCALL) =
   {
     (SignalException(Sys))
@@ -1033,7 +1035,7 @@ function clause execute (SYSCALL) =
 (* BREAK is identical to SYSCALL exception for the exception raised *)
 union ast member unit BREAK
 function clause decode (0b000000 : (bit[20]) code : 0b001101) =
-  Some(BREAK) (* code is ignored *)
+  Some((ast) BREAK) (* code is ignored *)
 function clause execute (BREAK) =
   {
     (SignalException(Bp))
@@ -1042,7 +1044,7 @@ function clause execute (BREAK) =
 (* Accept WAIT as a NOP *)
 union ast member unit WAIT
 function clause decode (0b010000 : 0x80000 : 0b100000) =
-  Some(WAIT) (* we only accept code == 0 *)
+  Some((ast) WAIT) (* we only accept code == 0 *)
 function clause execute (WAIT) = {
   nextPC := PC;
 }
@@ -1397,7 +1399,7 @@ function clause execute (PREF(base, op, imm)) =
 (* SYNC  - Memory barrier *)
 union ast member unit SYNC
 function clause decode (0b000000 : 0b00000 : 0b00000 : 0b00000 : (regno) stype : 0b001111) = 
-  Some(SYNC()) (* stype is currently ignored *)
+  Some((ast) SYNC) (* stype is currently ignored *)
 function clause execute(SYNC) =
   MEM_sync()
 
@@ -1479,10 +1481,10 @@ function clause execute (MFC0(rt, rd, sel, double)) = {
 (* simulator halt instruction "MTC0 rt, r23" (cheri specific behaviour) *)
 union ast member unit HCF
 function clause decode (0b010000 : 0b00100 : (regno) rt : 0b10111 : 0b00000000000) =
-  Some(HCF()) 
+  Some((ast) HCF)
 
 function clause decode (0b010000 : 0b00100 : (regno) rt : 0b11010 : 0b00000000000) =
-  Some(HCF())
+  Some((ast) HCF)
 
 function clause execute (HCF) =
   () (* halt instruction actually executed by interpreter framework *)
@@ -1580,21 +1582,21 @@ function unit TLBWriteEntry((TLBIndexT) idx) = {
 }
 *)
 union ast member TLBWI
-function clause decode (0b010000 : 0b10000000000000000000 : 0b000010) = Some(TLBWI)
+function clause decode (0b010000 : 0b10000000000000000000 : 0b000010) = Some((ast) TLBWI)
 function clause execute (TLBWI) = {
   checkCP0Access();
   TLBWriteEntry(TLBIndex);
 }
 
 union ast member TLBWR
-function clause decode (0b010000 : 0b10000000000000000000 : 0b000110) = Some(TLBWR)
+function clause decode (0b010000 : 0b10000000000000000000 : 0b000110) = Some((ast) TLBWR)
 function clause execute (TLBWR) = {
   checkCP0Access();
   TLBWriteEntry(TLBRandom);
 }
 
 union ast member TLBR
-function clause decode (0b010000 : 0b10000000000000000000 : 0b000001) = Some(TLBR)
+function clause decode (0b010000 : 0b10000000000000000000 : 0b000001) = Some((ast) TLBR)
 function clause execute (TLBR) = {
   checkCP0Access();
   let entry = TLBEntries[TLBIndex] in {
@@ -1620,7 +1622,7 @@ function clause execute (TLBR) = {
 }
 
 union ast member TLBP
-function clause decode (0b010000 : 0b10000000000000000000 : 0b001000) = Some(TLBP)
+function clause decode (0b010000 : 0b10000000000000000000 : 0b001000) = Some((ast) TLBP)
 function clause execute ((TLBP)) = {
   checkCP0Access();
   let result = tlbSearch(TLBEntryHi) in
@@ -1655,8 +1657,9 @@ function clause execute (RDHWR(rt, rd)) = {
 }
 
 union ast member unit ERET
+
 function clause decode (0b010000 : 0b1 : 0b0000000000000000000 : 0b011000) =
-      Some(ERET)
+      Some((ast) ERET)
 function clause execute (ERET) =
       {
         checkCP0Access();

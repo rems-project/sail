@@ -46,7 +46,7 @@ open Util
 open Ast_util
 open Big_int
 
-let debug = ref 1
+let debug = ref 2
 let depth = ref 0
 
 let rec indent n = match n with
@@ -848,6 +848,7 @@ let rec normalize_typ env (Typ_aux (typ, l)) =
      end
   | Typ_var kid -> Tnf_var kid
   | Typ_tup typs -> Tnf_tup (List.map (normalize_typ env) typs)
+  | Typ_app (f, []) -> normalize_typ env (Typ_aux (Typ_id f, l))
   | Typ_app (Id_aux (Id "range", _), [Typ_arg_aux (Typ_arg_nexp n1, _); Typ_arg_aux (Typ_arg_nexp n2, _)]) ->
      let kid = Env.fresh_kid env in
      Tnf_index_sort (IS_prop (kid, [(n1, nvar kid); (nvar kid, n2)]))
@@ -1181,6 +1182,12 @@ let unify l env typ1 typ2 =
     | Typ_id v1, Typ_id v2 ->
        if Id.compare v1 v2 = 0 then KBindings.empty
        else unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2)
+    | Typ_id v1, Typ_app (f2, []) ->
+       if Id.compare v1 f2 = 0 then KBindings.empty
+       else unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2)
+    | Typ_app (f1, []), Typ_id v2 ->
+       if Id.compare f1 v2 = 0 then KBindings.empty
+       else unify_error l (string_of_typ typ1 ^ " cannot be unified with " ^ string_of_typ typ2)
     | Typ_var kid, _ when KidSet.mem kid goals -> KBindings.singleton kid (U_typ typ2)
     | Typ_var kid1, Typ_var kid2 when Kid.compare kid1 kid2 = 0 -> KBindings.empty
     | Typ_tup typs1, Typ_tup typs2 ->
@@ -1382,6 +1389,18 @@ let rec infer_flow env (E_aux (exp_aux, (l, _))) =
      let n1 = destructure_atom_nexp (typ_of x) in
      let n2 = destructure_atom_nexp (typ_of y) in
      [], [nc_lteq n1 n2]
+  | E_app (f, [x; y]) when string_of_id f = "gteq_atom_atom" ->
+     let n1 = destructure_atom_nexp (typ_of x) in
+     let n2 = destructure_atom_nexp (typ_of y) in
+     [], [nc_gteq n1 n2]
+  | E_app (f, [x; y]) when string_of_id f = "lt_atom_atom" ->
+     let n1 = destructure_atom_nexp (typ_of x) in
+     let n2 = destructure_atom_nexp (typ_of y) in
+     [], [nc_lt n1 n2]
+  | E_app (f, [x; y]) when string_of_id f = "gt_atom_atom" ->
+     let n1 = destructure_atom_nexp (typ_of x) in
+     let n2 = destructure_atom_nexp (typ_of y) in
+     [], [nc_gt n1 n2]
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lt_range_atom" ->
      let kid = Env.fresh_kid env in
      let c = destructure_atom (typ_of y) in
@@ -1436,7 +1455,10 @@ let rec match_typ (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
   | Typ_id v, Typ_app (f, _) when string_of_id v = "nat" &&  string_of_id f = "range" -> true
   | Typ_id v, Typ_app (f, _) when string_of_id v = "int" &&  string_of_id f = "range" -> true
   | Typ_app (f1, _), Typ_app (f2, _) when string_of_id f1 = "range" && string_of_id f2 = "atom" -> true
+  | Typ_app (f1, _), Typ_app (f2, _) when string_of_id f1 = "atom" && string_of_id f2 = "range" -> true
   | Typ_app (f1, _), Typ_app (f2, _) when Id.compare f1 f2 = 0 -> true
+  | Typ_id v1, Typ_app (f2, _) when Id.compare v1 f2 = 0 -> true
+  | Typ_app (f1, _), Typ_id v2 when Id.compare f1 v2 = 0 -> true
   | _, _ -> false
 
 let rec filter_casts env from_typ to_typ casts =
@@ -1670,7 +1692,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
          | Typ_tup typs -> typs
          | _ -> [typ]
        in
-       match ctor_typ with
+       match Env.expand_synonyms env ctor_typ with
        | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
           begin
             try
@@ -1762,6 +1784,8 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
           annot_assign (annot_lexp (LEXP_field (annot_lexp_effect (LEXP_id v) regtyp (mk_effect [BE_wreg]), field)) vec_typ) checked_exp, env
        | _ ->  typ_error l "Field l-expression has invalid type"
      end
+  | LEXP_memory (f, xs) ->
+     check_exp env (E_aux (E_app (f, xs @ [exp]), (l, ()))) unit_typ, env
   | _ ->
      let inferred_exp = irule infer_exp env exp in
      let tlexp, env' = bind_lexp env lexp (typ_of inferred_exp) in
@@ -1852,7 +1876,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | Local (_, typ) | Enum typ -> annot_exp (E_id v) typ
        | Register typ -> annot_exp_effect (E_id v) typ (mk_effect [BE_rreg])
        | Unbound -> typ_error l ("Identifier " ^ string_of_id v ^ " is unbound")
-       | Union _ -> typ_error l ("Cannot infer the type of polymorphic union indentifier " ^ string_of_id v)
+       | Union (typq, typ) ->
+          if quant_items typq = []
+          then annot_exp (E_id v) typ
+          else typ_error l ("Cannot infer the type of polymorphic union indentifier " ^ string_of_id v)
      end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
   | E_sizeof nexp -> annot_exp (E_sizeof nexp) (mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp nexp)])))
@@ -1868,7 +1895,6 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        match Env.expand_synonyms env (typ_of inferred_exp) with
        (* Accessing a (bit) field of a register *)
        | Typ_aux (Typ_id regtyp, _) when Env.is_regtyp regtyp env ->
-          typ_print "REGTYP";
           let base, top, ranges = Env.get_regtyp regtyp env in
           let range, _ =
             try List.find (fun (_, id) -> Id.compare id field = 0) ranges with
@@ -1877,17 +1903,22 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
           begin
             match range, Env.get_default_order env with
             | BF_aux (BF_single n, _), Ord_aux (Ord_dec, _) ->
-               let vec_typ = dvector_typ env (nconstant n) (nconstant 1) (mk_typ (Typ_id (mk_id "bit"))) in
+               let vec_typ = dvector_typ env (nconstant n) (nconstant 1) bit_typ in
                annot_exp (E_field (inferred_exp, field)) vec_typ
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_dec, _) ->
-               let vec_typ = dvector_typ env (nconstant n) (nconstant (n - m + 1)) (mk_typ (Typ_id (mk_id "bit"))) in
+               let vec_typ = dvector_typ env (nconstant n) (nconstant (n - m + 1)) bit_typ in
                annot_exp (E_field (inferred_exp, field)) vec_typ
-            | _, _ -> typ_error l "Not implemented this register field type yet..." (* FIXME *)
+            | BF_aux (BF_single n, _), Ord_aux (Ord_inc, _) ->
+               let vec_typ = dvector_typ env (nconstant n) (nconstant 1) bit_typ in
+               annot_exp (E_field (inferred_exp, field)) vec_typ
+            | BF_aux (BF_range (n, m), _), Ord_aux (Ord_inc, _) ->
+               let vec_typ = dvector_typ env (nconstant n) (nconstant (m - n + 1)) bit_typ in
+               annot_exp (E_field (inferred_exp, field)) vec_typ
+            | _, _ -> typ_error l "Invalid register field type"
           end
        (* Accessing a field of a record *)
        | Typ_aux (Typ_id rectyp, _) as typ when Env.is_record rectyp env ->
           begin
-            typ_print "RECTYP";
             let inferred_acc = infer_funapp' l (Env.no_casts env) field (Env.get_accessor field env) [strip_exp inferred_exp] None in
             match inferred_acc with
             | E_aux (E_app (field, [inferred_exp]) ,_) -> annot_exp (E_field (inferred_exp, field)) (typ_of inferred_acc)
@@ -2027,18 +2058,23 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
          (quants', typs', ret_typ')
        end
   in
-  match f_typ with
-  | Typ_aux (Typ_fn (Typ_aux (Typ_tup typ_args, _), typ_ret, eff), _) ->
-     let (quants, typ_args, typ_ret) = instantiate_ret (quant_items typq) typ_args typ_ret in
-     let (xs_instantiated, typ_ret) = instantiate quants ([], typ_args) typ_ret ([], number 0 xs) in
-     let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
-     annot_exp (E_app (f, xs_reordered)) typ_ret eff
-  | Typ_aux (Typ_fn (typ_arg, typ_ret, eff), _) ->
-     let (quants, typ_args, typ_ret) = instantiate_ret (quant_items typq) [typ_arg] typ_ret in
-     let (xs_instantiated, typ_ret) = instantiate quants ([], typ_args) typ_ret ([], number 0 xs) in
-     let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
-     annot_exp (E_app (f, xs_reordered)) typ_ret eff
-  | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
+  let exp =
+    match Env.expand_synonyms env f_typ with
+    | Typ_aux (Typ_fn (Typ_aux (Typ_tup typ_args, _), typ_ret, eff), _) ->
+       let (quants, typ_args, typ_ret) = instantiate_ret (quant_items typq) typ_args typ_ret in
+       let (xs_instantiated, typ_ret) = instantiate quants ([], typ_args) typ_ret ([], number 0 xs) in
+       let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
+       annot_exp (E_app (f, xs_reordered)) typ_ret eff
+    | Typ_aux (Typ_fn (typ_arg, typ_ret, eff), _) ->
+       let (quants, typ_args, typ_ret) = instantiate_ret (quant_items typq) [typ_arg] typ_ret in
+       let (xs_instantiated, typ_ret) = instantiate quants ([], typ_args) typ_ret ([], number 0 xs) in
+       let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
+       annot_exp (E_app (f, xs_reordered)) typ_ret eff
+    | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
+  in
+  match ret_ctx_typ with
+  | None -> exp
+  | Some rct -> type_coercion env exp rct
 
 (**************************************************************************)
 (* 6. Effect system                                                       *)
