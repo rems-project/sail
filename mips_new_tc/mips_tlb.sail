@@ -87,15 +87,15 @@ function (bit[64], bool) TLBTranslate2 ((bit[64]) vAddr, (MemAccessType) accessT
       (SignalExceptionTLB(TLBMod, vAddr))
     else
       let res = (bit[64]) switch evenOddBit {
-	case ([:12:]) evenOddBit -> EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0])
-	case ([:14:]) evenOddBit -> EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0])
-	case ([:16:]) evenOddBit -> EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0])
-	case ([:18:]) evenOddBit -> EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0])
-	case ([:20:]) evenOddBit -> EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0])
-	case ([:22:]) evenOddBit -> EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0])
-	case ([:24:]) evenOddBit -> EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0])
-	case ([:26:]) evenOddBit -> EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0])
-	case ([:28:]) evenOddBit -> EXTZ(pfn[23..((evenOddBit)-(12))] : vAddr[((evenOddBit)-(1)) .. 0])
+	case ([:12:]) evenOddBit -> EXTZ(pfn[23..(evenOddBit - 12)] : vAddr[(evenOddBit - 1) .. 0])
+	case ([:14:]) evenOddBit -> EXTZ(pfn[23..(evenOddBit - 12)] : vAddr[(evenOddBit - 1) .. 0])
+	case ([:16:]) evenOddBit -> EXTZ(pfn[23..(evenOddBit - 12)] : vAddr[(evenOddBit - 1) .. 0])
+	case ([:18:]) evenOddBit -> EXTZ(pfn[23..(evenOddBit - 12)] : vAddr[(evenOddBit - 1) .. 0])
+	case ([:20:]) evenOddBit -> EXTZ(pfn[23..(evenOddBit - 12)] : vAddr[(evenOddBit - 1) .. 0])
+	case ([:22:]) evenOddBit -> EXTZ(pfn[23..(evenOddBit - 12)] : vAddr[(evenOddBit - 1) .. 0])
+	case ([:24:]) evenOddBit -> EXTZ(pfn[23..(evenOddBit - 12)] : vAddr[(evenOddBit - 1) .. 0])
+	case ([:26:]) evenOddBit -> EXTZ(pfn[23..(evenOddBit - 12)] : vAddr[(evenOddBit - 1) .. 0])
+	case ([:28:]) evenOddBit -> EXTZ(pfn[23..(evenOddBit - 12)] : vAddr[(evenOddBit - 1) .. 0])
       } in
       (res, (bool) (if (accessType == StoreData) then caps else capl)) (* FIXME: get rid of explicit cast here *)
     case None ->  (SignalExceptionTLB(

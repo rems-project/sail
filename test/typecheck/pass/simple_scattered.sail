@@ -10,6 +10,8 @@ scattered function forall Num 'datasize, Num 'destsize, Num 'regsize. unit execu
 
 union ast member (bit[8], bit['regsize]) test
 
+union ast member int test2
+
 function clause execute (test (x, y)) =
 {
   return ()

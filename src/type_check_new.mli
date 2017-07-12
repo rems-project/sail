@@ -164,6 +164,8 @@ val pat_typ_of : tannot pat -> typ
 
 val effect_of : tannot exp -> effect
 
+val propagate_exp_effect : tannot exp -> tannot exp
+
 (* Fully type-check an AST
 
 Some invariants that will hold of a fully checked AST are:
@@ -174,7 +176,7 @@ Some invariants that will hold of a fully checked AST are:
    calls E_app to vector access functions. This is different to the
    old type checker.
 
- * Every expressions type annotation (tanot) will be Some (typ, env).
+ * Every expressions type annotation (tannot) will be Some (typ, env).
 
  * Also every pattern will be annotated with the type it matches.
 

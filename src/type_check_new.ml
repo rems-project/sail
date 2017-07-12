@@ -46,7 +46,7 @@ open Util
 open Ast_util
 open Big_int
 
-let debug = ref 2
+let debug = ref 1
 let depth = ref 0
 
 let rec indent n = match n with
@@ -349,6 +349,7 @@ module Env : sig
   val get_casts : t -> id list
   val allow_casts : t -> bool
   val no_casts : t -> t
+  val enable_casts : t -> t
   val add_cast : id -> t -> t
   val lookup_id : id -> t -> lvar
   val fresh_kid : t -> kid
@@ -705,6 +706,7 @@ end = struct
   let allow_casts env = env.allow_casts
 
   let no_casts env = { env with allow_casts = false }
+  let enable_casts env = { env with allow_casts = true }
 
   let add_cast cast env =
     typ_print ("Adding cast " ^ string_of_id cast);
@@ -1851,7 +1853,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
          | Local (Immutable, vtyp) -> true, vtyp
          | Local (Mutable, vtyp) | Register vtyp -> false, vtyp
        in
-       let access = infer_exp env (E_aux (E_app (mk_id "vector_subrange", [E_aux (E_id v, (l, ())); exp1; exp2]), (l, ()))) in
+       let access = infer_exp (Env.enable_casts env) (E_aux (E_app (mk_id "vector_subrange", [E_aux (E_id v, (l, ())); exp1; exp2]), (l, ()))) in
        let E_aux (E_app (_, [_; inferred_exp1; inferred_exp2]), _) = access in
        match typ_of access with
        | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_typ deref_typ, _)]), _) when string_of_id id = "register" ->
@@ -1871,7 +1873,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
          | Local (Immutable, vtyp) -> true, vtyp
          | Local (Mutable, vtyp) | Register vtyp -> false, vtyp
        in
-       let access = infer_exp env (E_aux (E_app (mk_id "vector_access", [E_aux (E_id v, (l, ())); exp]), (l, ()))) in
+       let access = infer_exp (Env.enable_casts env) (E_aux (E_app (mk_id "vector_access", [E_aux (E_id v, (l, ())); exp]), (l, ()))) in
        let E_aux (E_app (_, [_; inferred_exp]), _) = access in
        match typ_of access with
        | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_typ deref_typ, _)]), _) when string_of_id id = "register" ->

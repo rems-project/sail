@@ -13,7 +13,7 @@ val forall Nat 'n, Nat 'l, Nat 'm, Nat 'o, Type 'a, 'l >= 0, 'm <= 'o, 'o <= 'l.
   (vector<'n,'l,inc,'a>, [:'m:], [:'o:]) -> vector<'m,'o - 'm,inc,'a> effect pure vector_subrange_inc
 
 val forall Nat 'n, Nat 'l, Nat 'm, Nat 'o, Type 'a, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
-  (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,'m - 'o - 1,dec,'a> effect pure vector_subrange_dec
+  (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,'m - ('o - 1),dec,'a> effect pure vector_subrange_dec
 
 overload vector_subrange [vector_subrange_inc; vector_subrange_dec]
 
@@ -491,7 +491,7 @@ register (bit[1]) UART_RVALID
 
 (* Check whether a given 64-bit vector is a properly sign extended 32-bit word *)
 val bit[64] -> bool effect pure NotWordVal
-function bool NotWordVal (word) = 
+function bool NotWordVal (word) =
     (word[31] ^^ 32) != word[63..32]
 
 (* Read numbered GP reg. (r0 is always zero) *)

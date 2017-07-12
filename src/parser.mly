@@ -344,29 +344,7 @@ effect_typ:
   | Pure
     { tloc (ATyp_set([])) }
 
-atomic_typ:
-  | tid
-    { tloc (ATyp_id $1) }
-  | tyvar
-    { tloc (ATyp_var $1) }
-  | effect_typ
-    { $1 }
-  | Inc
-    { tloc (ATyp_inc) }
-  | Dec
-    { tloc (ATyp_dec) } 
-  | SquareBar nexp_typ BarSquare
-      { tloc (make_range_sugar $2) }
-  | SquareBar nexp_typ Colon nexp_typ BarSquare
-      { tloc (make_range_sugar_bounded $2 $4) }
-  | SquareColon nexp_typ ColonSquare
-      { tloc (make_atom_sugar $2) }
-  | Lparen typ Rparen
-    { $2 }
-
 vec_typ:
-  | atomic_typ
-      { $1 }
   | tid Lsquare nexp_typ Rsquare
       { tloc (make_vector_sugar false false (ATyp_aux ((ATyp_id $1), locn 1 1)) $3) }
   | tid Lsquare nexp_typ Colon nexp_typ Rsquare
@@ -385,70 +363,73 @@ vec_typ:
       { tloc (make_vector_sugar_bounded true false "vector" (ATyp_aux ((ATyp_var $1), locn 1 1)) $3 $5) }
 
 app_typs:
-  | nexp_typ
+  | atomic_typ
     { [$1] }
-  | nexp_typ Comma app_typs
+  | atomic_typ Comma app_typs
     { $1::$3 }
 
-app_typ:
+atomic_typ:
   | vec_typ
     { $1 }
+  | range_typ
+    { $1 }
+  | nexp_typ
+    { $1 }
+  | Inc
+    { tloc (ATyp_inc) }
+  | Dec
+    { tloc (ATyp_dec) }
   | tid Lt app_typs Gt
     { tloc (ATyp_app($1,$3)) }
   | Register Lt app_typs Gt
     { tloc (ATyp_app(Id_aux(Id "register", locn 1 1),$3)) }
 
-app_num_typ:
-  | app_typ
-    { $1 }
-  | Num
-     { tloc (ATyp_constant $1) }
-
-star_typ:
-  | app_num_typ
-    { $1 }
-  | app_num_typ Star nexp_typ
-    { tloc (ATyp_times ($1, $3)) }
-
-exp_typ:
-   | star_typ
-     { $1 }
-   | TwoStarStar atomic_typ
-     { tloc (ATyp_exp($2)) }
-   | TwoStarStar atomic_typ Minus Num
-     { tloc (ATyp_minus (tloc (ATyp_exp $2), tloc (ATyp_constant $4))) }
-   | TwoStarStar Num
-     { tloc (ATyp_exp (tloc (ATyp_constant $2))) }
+range_typ:
+  | SquareBar nexp_typ BarSquare
+      { tloc (make_range_sugar $2) }
+  | SquareBar nexp_typ Colon nexp_typ BarSquare
+      { tloc (make_range_sugar_bounded $2 $4) }
+  | SquareColon nexp_typ ColonSquare
+      { tloc (make_atom_sugar $2) }
 
 nexp_typ:
-   | exp_typ
-     { $1 }
-   | atomic_typ Plus nexp_typ
-     { tloc (ATyp_sum($1,$3)) }
-   | Lparen atomic_typ Plus nexp_typ Rparen
-     { tloc (ATyp_sum($2,$4)) } 
-   | Num Plus nexp_typ
-     { tloc (ATyp_sum((tlocl (ATyp_constant $1) 1 1),$3)) }
-   | Lparen Num Plus nexp_typ Rparen
-     { tloc (ATyp_sum((tlocl (ATyp_constant $2) 2 2),$4)) } 
-   | atomic_typ Minus nexp_typ
-     { tloc (ATyp_minus($1,$3)) }
-   | Lparen atomic_typ Minus nexp_typ Rparen
-     { tloc (ATyp_minus($2,$4)) } 
-   | Num Minus nexp_typ
-     { tloc (ATyp_minus((tlocl (ATyp_constant $1) 1 1),$3)) }
-   | Lparen Num Minus nexp_typ Rparen
-       { tloc (ATyp_minus((tlocl (ATyp_constant $2) 2 2),$4)) }
+  | nexp_typ Plus nexp_typ2
+    { tloc (ATyp_sum ($1, $3)) }
+  | nexp_typ Minus nexp_typ2
+    { tloc (ATyp_minus ($1, $3)) }
+  | nexp_typ2
+    { $1 }
 
+nexp_typ2:
+  | nexp_typ2 Star nexp_typ3
+    { tloc (ATyp_times ($1, $3)) }
+  | nexp_typ3
+    { $1 }
+
+nexp_typ3:
+  | TwoStarStar nexp_typ4
+     { tloc (ATyp_exp $2) }
+  | nexp_typ4
+     { $1 }
+
+nexp_typ4:
+  | Num
+    { tlocl (ATyp_constant $1) 1 1 }
+  | tid
+    { tloc (ATyp_id $1) }
+  | tyvar
+    { tloc (ATyp_var $1) }
+  | Lparen tup_typ Rparen
+    { $2 }
 
 tup_typ_list:
-   | app_typ Comma app_typ
+   | atomic_typ Comma atomic_typ
        { [$1;$3] }
-   | app_typ Comma tup_typ_list
+   | atomic_typ Comma tup_typ_list
        { $1::$3 }
 
 tup_typ:
-   | app_typ
+   | atomic_typ
      { $1 }
    | Lparen tup_typ_list Rparen
      { tloc (ATyp_tup $2) }
@@ -481,7 +462,6 @@ lit:
   | Bitone
     { lloc L_one }
 
-
 atomic_pat:
   | lit
     { ploc (P_lit $1) }
@@ -489,8 +469,8 @@ atomic_pat:
     { ploc P_wild }
   | Lparen pat As id Rparen
     { ploc (P_as($2,$4)) }
-  | Lparen typ Rparen atomic_pat
-    { ploc (P_typ($2,$4)) } 
+  | Lparen tup_typ Rparen atomic_pat
+    { ploc (P_typ($2,$4)) }
   | id
     { ploc (P_app($1,[])) }
   | Lcurly fpats Rcurly
@@ -573,7 +553,7 @@ atomic_exp:
     { eloc (E_lit($1)) }
   | Lparen exp Rparen
     { $2 }
-  | Lparen typ Rparen atomic_exp 
+  | Lparen tup_typ Rparen atomic_exp
     { eloc (E_cast($2,$4)) }
   | Lparen comma_exps Rparen
     { eloc (E_tuple($2)) }
@@ -660,7 +640,7 @@ right_atomic_exp:
       if $6 <> "to" && $6 <> "downto" then
        raise (Parse_error_locn ((loc ()),"Missing \"to\" or \"downto\" in foreach loop"));
       let step = eloc (E_lit(lloc (L_num 1))) in
-      let ord = 
+      let ord =
         if $6 = "to"
         then ATyp_aux(ATyp_inc,(locn 6 6))
         else ATyp_aux(ATyp_dec,(locn 6 6)) in

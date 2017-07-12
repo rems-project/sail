@@ -16,7 +16,7 @@ val forall Nat 'n, Nat 'l, Nat 'm, Nat 'o, Type 'a, 'l >= 0, 'm <= 'o, 'o <= 'l.
   (vector<'n,'l,inc,'a>, [:'m:], [:'o:]) -> vector<'m,'o - 'm,inc,'a> effect pure vector_subrange_inc
 
 val forall Nat 'n, Nat 'l, Nat 'm, Nat 'o, Type 'a, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
-  (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,'m - 'o - 1,dec,'a> effect pure vector_subrange_dec
+  (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,'m - ('o - 1),dec,'a> effect pure vector_subrange_dec
 
 overload vector_subrange [vector_subrange_inc; vector_subrange_dec]
 
@@ -39,7 +39,7 @@ overload (deinfix ^^) [duplicate; duplicate_bits]
 val forall Nat 'n, Nat 'm, Nat 'o, Nat 'p, Order 'ord.
     vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure extz
 
-val forall Nat 'n, Nat 'm, Nat 'o, Nat 'p, Order 'ord.
+val cast forall Nat 'n, Nat 'm, Nat 'o, Nat 'p, Order 'ord.
     vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure exts
 
 overload EXTZ [extz]
