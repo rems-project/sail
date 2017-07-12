@@ -57,7 +57,7 @@ let get_lexbuf fn =
 
 let parse_file (f : string) : Parse_ast.defs =
   let scanbuf = get_lexbuf f in
-  let type_names = 
+  let type_names =
     try
       Pre_parser.file Pre_lexer.token scanbuf
     with
@@ -84,9 +84,6 @@ let parse_file (f : string) : Parse_ast.defs =
 (*Should add a flag to say whether we want to consider Oinc or Odec the default order *)
 let convert_ast (defs : Parse_ast.defs) : (Type_internal.tannot Ast.defs * kind Envmap.t * Ast.order)=
   Initial_check.to_ast Nameset.empty Type_internal.initial_kind_env (Ast.Ord_aux(Ast.Ord_inc,Parse_ast.Unknown)) defs
-
-let initi_check_ast (defs : Type_internal.tannot Ast.defs) : (Type_internal.tannot Ast.defs * kind Envmap.t * Ast.order)=
-  Initial_check_full_ast.to_checked_ast Nameset.empty Type_internal.initial_kind_env (Ast.Ord_aux(Ast.Ord_inc,Parse_ast.Unknown)) defs
 
 let opt_new_typecheck = ref false
 let opt_just_check = ref false
