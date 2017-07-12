@@ -43,6 +43,8 @@
 
 open Ast
 
+val opt_tc_debug : int ref
+
 exception Type_error of l * string;;
 
 type mut = Immutable | Mutable

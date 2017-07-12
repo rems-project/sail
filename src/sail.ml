@@ -103,6 +103,9 @@ let options = Arg.align ([
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
+  ( "-dtc_verbose",
+    Arg.Int (fun verbosity -> Type_check_new.opt_tc_debug := verbosity),
+    " (debug) verbose typechecker output: 0 is silent");
   ( "-dno_cast",
     Arg.Set opt_dno_cast,
     " (debug) typecheck without any implicit casting");

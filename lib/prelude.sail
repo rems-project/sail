@@ -18,11 +18,18 @@ val forall Nat 'n, Nat 'l, Nat 'm, Nat 'o, Type 'a, 'l >= 0, 'm <= 'o, 'o <= 'l.
 val forall Nat 'n, Nat 'l, Nat 'm, Nat 'o, Type 'a, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
   (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,'m - ('o - 1),dec,'a> effect pure vector_subrange_dec
 
-overload vector_subrange [vector_subrange_inc; vector_subrange_dec]
+val forall Nat 'n, Nat 'l, Order 'ord.
+  (vector<'n,'l,'ord,bit>, int, int) -> list<bit> effect pure vector_subrange_bl
+
+overload vector_subrange [vector_subrange_inc; vector_subrange_dec; vector_subrange_bl]
 
 (* Type safe vector append *)
 val forall Nat 'n1, Nat 'l1, Nat 'n2, Nat 'l2, Order 'o, Type 'a, 'l1 >= 0, 'l2 >= 0.
-  (vector<'n1,'l1,'o,'a>, vector<'n2,'l2,'o,'a>) -> vector<'l1 + 'l2 - 1,'l1 + 'l2,'o,'a> effect pure vector_append
+  (vector<'n1,'l1,'o,'a>, vector<'n2,'l2,'o,'a>) -> vector<'l1 + 'l2 - 1,'l1 + 'l2,'o,'a> effect pure vec_append
+
+val (list<bit>, list<bit>) -> list<bit> effect pure list_append
+
+overload vector_append [vec_append; list_append]
 
 (* Implicit register dereferencing *)
 val cast forall Type 'a. register<'a> -> 'a effect {rreg} reg_deref
@@ -39,10 +46,13 @@ overload (deinfix ^^) [duplicate; duplicate_bits]
 val forall Nat 'n, Nat 'm, Nat 'o, Nat 'p, Order 'ord.
     vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure extz
 
+val forall Nat 'm, Nat 'p, Order 'ord.
+    list<bit> -> vector<'p, 'm, 'ord, bit> effect pure extz_bl
+
 val cast forall Nat 'n, Nat 'm, Nat 'o, Nat 'p, Order 'ord.
     vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure exts
 
-overload EXTZ [extz]
+overload EXTZ [extz; extz_bl]
 overload EXTS [exts]
 
 val forall Type 'a, Nat 'n, Nat 'm, Nat 'o, Nat 'p, Order 'ord, 'm >= 'o.
@@ -187,3 +197,4 @@ typedef option = const union forall Type 'a. {
     None;
     'a Some
 }
+

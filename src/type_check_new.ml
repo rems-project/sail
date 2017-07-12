@@ -46,16 +46,16 @@ open Util
 open Ast_util
 open Big_int
 
-let debug = ref 1
+let opt_tc_debug = ref 0
 let depth = ref 0
 
 let rec indent n = match n with
   | 0 -> ""
   | n -> "|   " ^ indent (n - 1)
 
-let typ_debug m = if !debug > 1 then prerr_endline (indent !depth ^ m) else ()
+let typ_debug m = if !opt_tc_debug > 1 then prerr_endline (indent !depth ^ m) else ()
 
-let typ_print m = if !debug > 0 then prerr_endline (indent !depth ^ m) else ()
+let typ_print m = if !opt_tc_debug > 0 then prerr_endline (indent !depth ^ m) else ()
 
 let typ_warning m = prerr_endline ("Warning: " ^ m)
 
@@ -2325,23 +2325,26 @@ let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pat, exp), (l, annot))) =
   | None -> no_effect (* Maybe could be assert false. This should never happen *)
 
 let infer_funtyp l env tannotopt funcls =
-  let Typ_annot_opt_aux (Typ_annot_opt_some (quant, ret_typ), _) = tannotopt in
-  let rec typ_from_pat (P_aux (pat_aux, (l, _)) as pat) =
-    match pat_aux with
-    | P_lit lit -> infer_lit env lit
-    | P_typ (typ, _) -> typ
-    | P_tup pats -> mk_typ (Typ_tup (List.map typ_from_pat pats))
-    | _ -> typ_error l ("Cannot infer type from pattern " ^ string_of_pat pat)
-  in
-  match funcls with
-  | [FCL_aux (FCL_Funcl (_, pat, _), _)] ->
-     let arg_typ = typ_from_pat pat in
-     let fn_typ = mk_typ (Typ_fn (arg_typ, ret_typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
-     (quant, fn_typ)
-  | _ -> typ_error l "Cannot infer function type for function with multiple clauses"
+  match tannotopt with
+  | Typ_annot_opt_aux (Typ_annot_opt_some (quant, ret_typ), _) ->
+     begin
+       let rec typ_from_pat (P_aux (pat_aux, (l, _)) as pat) =
+         match pat_aux with
+         | P_lit lit -> infer_lit env lit
+         | P_typ (typ, _) -> typ
+         | P_tup pats -> mk_typ (Typ_tup (List.map typ_from_pat pats))
+         | _ -> typ_error l ("Cannot infer type from pattern " ^ string_of_pat pat)
+       in
+       match funcls with
+       | [FCL_aux (FCL_Funcl (_, pat, _), _)] ->
+          let arg_typ = typ_from_pat pat in
+          let fn_typ = mk_typ (Typ_fn (arg_typ, ret_typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
+          (quant, fn_typ)
+       | _ -> typ_error l "Cannot infer function type for function with multiple clauses"
+     end
+  | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> typ_error l "Cannot infer function type for unannotated function"
 
 let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, _)) as fd_aux) =
-  let (Typ_annot_opt_aux (Typ_annot_opt_some (annot_quant, annot_typ1), _)) = tannotopt in
   let id =
     match (List.fold_right
              (fun (FCL_aux (FCL_Funcl (id, _, _), _)) id' ->

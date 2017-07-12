@@ -779,7 +779,8 @@ let to_ast_rec (Parse_ast.Rec_aux(r,l): Parse_ast.rec_opt) : rec_opt =
 
 let to_ast_tannot_opt (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.Typ_annot_opt_aux(tp,l)):tannot_opt * kind Envmap.t * kind Envmap.t=
   match tp with
-  | Parse_ast.Typ_annot_opt_none -> raise (Reporting_basic.err_unreachable l "Parser generated typ annot opt none")
+  | Parse_ast.Typ_annot_opt_none ->
+     Typ_annot_opt_aux (Typ_annot_opt_none, l), k_env, Envmap.empty
   | Parse_ast.Typ_annot_opt_some(tq,typ) ->
     let typq,k_env,k_local = to_ast_typquant k_env tq in
     Typ_annot_opt_aux(Typ_annot_opt_some(typq,to_ast_typ k_env def_ord typ),l),k_env,k_local

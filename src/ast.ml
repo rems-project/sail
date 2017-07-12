@@ -414,7 +414,7 @@ rec_opt_aux =  (* Optional recursive annotation for functions *)
 type
 tannot_opt_aux =  (* Optional type annotation for functions *)
    Typ_annot_opt_some of typquant * typ
-
+ | Typ_annot_opt_none
 
 type
 'a alias_spec_aux =  (* Register alias expression forms. Other than where noted, each id must refer to an unaliased register of type vector *)

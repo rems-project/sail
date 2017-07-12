@@ -437,7 +437,7 @@ tup_typ:
 typ:
   | tup_typ
     { $1 }
-  | tup_typ MinusGt typ Effect effect_typ
+  | tup_typ MinusGt tup_typ Effect effect_typ
     { tloc (ATyp_fn($1,$3,$5)) }
 
 lit:
