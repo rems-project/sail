@@ -161,15 +161,19 @@ val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure lteq_
 val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure gt_range_atom
 val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure gteq_range_atom
 val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure lt_atom_range
-val forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure lteq_atom_atom
 val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure lteq_atom_range
 val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure gt_atom_range
 val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure gteq_atom_range
 
-overload (deinfix >=) [gteq_range_atom; gteq_atom_range; gteq_vec; gteq_int]
-overload (deinfix >) [gt_vec; gt_int]
+val forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure lteq_atom_atom
+val forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure gteq_atom_atom
+val forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure lt_atom_atom
+val forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure gt_atom_atom
+
+overload (deinfix >=) [gteq_atom_atom; gteq_range_atom; gteq_atom_range; gteq_vec; gteq_int]
+overload (deinfix >) [gt_atom_atom; gt_vec; gt_int]
 overload (deinfix <=) [lteq_atom_atom; lteq_range_atom; lteq_atom_range; lteq_vec; lteq_int]
-overload (deinfix <) [lt_vec; lt_int]
+overload (deinfix <) [lt_atom_atom; lt_vec; lt_int]
 
 val (int, int) -> int effect pure quotient
 
