@@ -1650,6 +1650,7 @@ and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
   end
 
 and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ) =
+  typ_print ("Binding " ^ string_of_typ typ);
   let annot_pat pat typ = P_aux (pat, (l, Some (env, typ, no_effect))) in
   let switch_typ (P_aux (pat_aux, (l, Some (env, _, eff)))) typ = P_aux (pat_aux, (l, Some (env, typ, eff))) in
   let bind_tuple_pat (tpats, env) pat typ =
@@ -1841,6 +1842,25 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
           in
           annot_lexp (LEXP_tup tlexps) typ, env
        | _ -> typ_error l "Cannot bind tuple l-expression against non tuple type"
+     end
+  | LEXP_vector_range (LEXP_aux (LEXP_id v, _), exp1, exp2) ->
+     begin
+       let is_immutable, vtyp = match Env.lookup_id v env with
+         | Unbound -> typ_error l "Cannot assign to element of unbound vector"
+         | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
+         | Local (Immutable, vtyp) -> true, vtyp
+         | Local (Mutable, vtyp) | Register vtyp -> false, vtyp
+       in
+       let access = infer_exp env (E_aux (E_app (mk_id "vector_subrange", [E_aux (E_id v, (l, ())); exp1; exp2]), (l, ()))) in
+       let E_aux (E_app (_, [_; inferred_exp1; inferred_exp2]), _) = access in
+       match typ_of access with
+       | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_typ deref_typ, _)]), _) when string_of_id id = "register" ->
+          subtyp l env typ deref_typ;
+          annot_lexp (LEXP_vector_range (annot_lexp_effect (LEXP_id v) vtyp (mk_effect [BE_wreg]), inferred_exp1, inferred_exp2)) typ, env
+       | _ when not is_immutable ->
+          subtyp l env typ (typ_of access);
+          annot_lexp (LEXP_vector_range (annot_lexp (LEXP_id v) vtyp, inferred_exp1, inferred_exp2)) typ, env
+       | _ -> typ_error l ("Bad vector assignment: " ^ string_of_lexp lexp)
      end
   (* Not sure about this case... can the left lexp be anything other than an identifier? *)
   | LEXP_vector (LEXP_aux (LEXP_id v, _), exp) ->
@@ -2257,6 +2277,12 @@ and propagate_lexp_effect_aux = function
      let propagated_lexp = propagate_lexp_effect lexp in
      let propagated_exp = propagate_exp_effect exp in
      LEXP_vector (propagated_lexp, propagated_exp), union_effects (effect_of propagated_exp) (effect_of_lexp propagated_lexp)
+  | LEXP_vector_range (lexp, exp1, exp2) ->
+     let propagated_lexp = propagate_lexp_effect lexp in
+     let propagated_exp1 = propagate_exp_effect exp1 in
+     let propagated_exp2 = propagate_exp_effect exp2 in
+     LEXP_vector_range (propagated_lexp, propagated_exp1, propagated_exp2),
+     union_effects (collect_effects [propagated_exp1; propagated_exp2]) (effect_of_lexp propagated_lexp)
   | LEXP_field (lexp, id) ->
      let propagated_lexp = propagate_lexp_effect lexp in
      LEXP_field (propagated_lexp, id),effect_of_lexp propagated_lexp
