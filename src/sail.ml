@@ -174,7 +174,7 @@ let main() =
          else output "" (Ocaml_out (Some (List.hd !opt_libs_ocaml))) [out_name,ast_ocaml]
        else ());
       (if !(opt_print_lem)
-       then let ast_lem = rewrite_ast_lem ast in
+       then let ast_lem = rewrite_ast_lem type_envs ast in
          if !(opt_libs_lem) = []
          then output "" (Lem_out None) [out_name,ast_lem]
          else output "" (Lem_out (Some (List.hd !opt_libs_lem))) [out_name,ast_lem]

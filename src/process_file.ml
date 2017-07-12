@@ -111,7 +111,7 @@ let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.
   Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env,Type_internal.nob,Envmap.empty)) defs 
 
 let rewrite_ast (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs defs
-let rewrite_ast_lem (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs_lem defs
+let rewrite_ast_lem (Type_check.Env (_, typ_env, _, _)) (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs_lem typ_env defs
 let rewrite_ast_ocaml (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs_ocaml defs
 
 let open_output_with_check file_name =
@@ -234,4 +234,3 @@ let output libpath out_arg files =
     (fun (f, defs) ->
        output1 libpath out_arg f defs)
     files
-

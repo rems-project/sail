@@ -1417,13 +1417,22 @@ let remove_wildcards pre (P_aux (_,(l,_)) as pat) =
         | (p,annot) -> P_aux (p,annot) }
     pat
 
+(* Based on current type checker's behaviour *)
+let pat_id_is_variable t_env id =
+  match Envmap.apply t_env id with
+  | Some (Base(_,Constructor _,_,_,_,_))
+  | Some (Base(_,Enum _,_,_,_,_))
+    -> false
+  | _ -> true
+
 (* Check if one pattern subsumes the other, and if so, calculate a
    substitution of variables that are used in the same position.
    TODO: Check somewhere that there are no variable clashes (the same variable
    name used in different positions of the patterns)
  *)
-let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,_) as pat2) =
+let rec subsumes_pat typ_env (P_aux (p1,annot1) as pat1) (P_aux (p2,_) as pat2) =
   let rewrap p = P_aux (p,annot1) in
+  let subsumes = subsumes_pat typ_env in
   let subsumes_list s pats1 pats2 =
     if List.length pats1 = List.length pats2
     then
@@ -1437,33 +1446,36 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,_) as pat2) =
   match p1, p2 with
   | P_lit (L_aux (lit1,_)), P_lit (L_aux (lit2,_)) ->
       if lit1 = lit2 then Some [] else None
-  | P_as (pat1,_), _ -> subsumes_pat pat1 pat2
-  | _, P_as (pat2,_) -> subsumes_pat pat1 pat2
-  | P_typ (_,pat1), _ -> subsumes_pat pat1 pat2
-  | _, P_typ (_,pat2) -> subsumes_pat pat1 pat2
+  | P_as (pat1,_), _ -> subsumes pat1 pat2
+  | _, P_as (pat2,_) -> subsumes pat1 pat2
+  | P_typ (_,pat1), _ -> subsumes pat1 pat2
+  | _, P_typ (_,pat2) -> subsumes pat1 pat2
   | P_id (Id_aux (id1,_) as aid1), P_id (Id_aux (id2,_) as aid2) ->
-    if id1 = id2 then Some [] else Some [(id2,id1)]
-  | P_id id1, _ -> Some []
+    if id1 = id2 then Some []
+    else if pat_id_is_variable typ_env (id_to_string aid1) &&
+            pat_id_is_variable typ_env (id_to_string aid1)
+           then Some [(id2,id1)] else None
+  | P_id id1, _ -> if pat_id_is_variable typ_env (id_to_string id1) then Some [] else None
   | P_wild, _ -> Some []
   | P_app (Id_aux (id1,l1),args1), P_app (Id_aux (id2,_),args2) ->
-    if id1 = id2 then subsumes_list subsumes_pat args1 args2 else None
+    if id1 = id2 then subsumes_list subsumes args1 args2 else None
   | P_record (fps1,b1), P_record (fps2,b2) ->
-    if b1 = b2 then subsumes_list subsumes_fpat fps1 fps2 else None
+    if b1 = b2 then subsumes_list (subsumes_fpat typ_env) fps1 fps2 else None
   | P_vector pats1, P_vector pats2
   | P_vector_concat pats1, P_vector_concat pats2
   | P_tup pats1, P_tup pats2
   | P_list pats1, P_list pats2 ->
-    subsumes_list subsumes_pat pats1 pats2
+    subsumes_list subsumes pats1 pats2
   | P_vector_indexed ips1, P_vector_indexed ips2 ->
     let (is1,ps1) = List.split ips1 in
     let (is2,ps2) = List.split ips2 in
-    if is1 = is2 then subsumes_list subsumes_pat ps1 ps2 else None
+    if is1 = is2 then subsumes_list subsumes ps1 ps2 else None
   | _ -> None
-and subsumes_fpat (FP_aux (FP_Fpat (id1,pat1),_)) (FP_aux (FP_Fpat (id2,pat2),_)) =
-  if id1 = id2 then subsumes_pat pat1 pat2 else None
+and subsumes_fpat typ_env (FP_aux (FP_Fpat (id1,pat1),_)) (FP_aux (FP_Fpat (id2,pat2),_)) =
+  if id1 = id2 then subsumes_pat typ_env pat1 pat2 else None
 
-let equiv_pats pat1 pat2 =
-  match subsumes_pat pat1 pat2, subsumes_pat pat2 pat1 with
+let equiv_pats typ_env pat1 pat2 =
+  match subsumes_pat typ_env pat1 pat2, subsumes_pat typ_env pat2 pat1 with
   | Some _, Some _ -> true
   | _, _ -> false
 
@@ -1511,13 +1523,13 @@ let case_exp e t cs =
   (* let efr = union_effs (List.map get_effsum_pexp ps) in *)
   fix_effsum_exp (E_aux (E_case (e,ps), gen_annot (get_loc e) t pure_e))
 
-let rewrite_guarded_clauses l cs =
+let rewrite_guarded_clauses typ_env l cs =
   let rec group clauses =
     let add_clause (pat,cls,annot) c = (pat,cls @ [c],annot) in
     let rec group_aux current acc = (function
       | ((pat,guard,body,annot) as c) :: cs ->
           let (current_pat,_,_) = current in
-          (match subsumes_pat current_pat pat with
+          (match subsumes_pat typ_env current_pat pat with
             | Some substs ->
                 let pat' = List.fold_left subst_id_pat pat substs in
                 let guard' = (match guard with
@@ -1552,7 +1564,7 @@ let rewrite_guarded_clauses l cs =
         (match guard with
           | Some exp ->
               let else_exp =
-                if equiv_pats current_pat pat'
+                if equiv_pats typ_env current_pat pat'
                 then if_exp current_pat (c' :: cs)
                 else case_exp (pat_to_exp current_pat) (get_type_annot annot') (group (c' :: cs)) in
               fix_effsum_exp (E_aux (E_if (exp,body,else_exp), annot))
@@ -1563,7 +1575,7 @@ let rewrite_guarded_clauses l cs =
             "if_exp given empty list in rewrite_guarded_clauses")) in
   group cs
 
-let rewrite_exp_remove_bitvector_pat rewriters nmap (E_aux (exp,(l,annot)) as full_exp) =
+let rewrite_exp_remove_bitvector_pat typ_env rewriters nmap (E_aux (exp,(l,annot)) as full_exp) =
   let rewrap e = E_aux (e,(l,annot)) in
   let rewrite_rec = rewriters.rewrite_exp rewriters nmap in
   let rewrite_base = rewrite_exp rewriters nmap in
@@ -1574,7 +1586,7 @@ let rewrite_exp_remove_bitvector_pat rewriters nmap (E_aux (exp,(l,annot)) as fu
        let (pat',(guard,decls,_)) = remove_bitvector_pat pat in
        let body' = decls (rewrite_rec body) in
        (pat',guard,body',annot') in
-     let clauses = rewrite_guarded_clauses l (List.map clause ps) in
+     let clauses = rewrite_guarded_clauses typ_env l (List.map clause ps) in
      if (effectful e) then
        let e = rewrite_rec e in
        let (E_aux (_,(el,eannot))) = e in
@@ -1598,7 +1610,7 @@ let rewrite_exp_remove_bitvector_pat rewriters nmap (E_aux (exp,(l,annot)) as fu
   | _ -> rewrite_base full_exp
 
 let rewrite_fun_remove_bitvector_pat
-      rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) =
+      typ_env rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) =
   let _ = reset_fresh_name_counter () in
   (* TODO Can there be clauses with different id's in one FD_function? *)
   let funcls = match funcls with
@@ -1607,18 +1619,18 @@ let rewrite_fun_remove_bitvector_pat
           let (pat,(guard,decls,_)) = remove_bitvector_pat pat in
           let exp = decls (rewriters.rewrite_exp rewriters None exp) in
           (pat,guard,exp,annot) in
-        let cs = rewrite_guarded_clauses l (List.map clause funcls) in
+        let cs = rewrite_guarded_clauses typ_env l (List.map clause funcls) in
         List.map (fun (pat,exp,annot) -> FCL_aux (FCL_Funcl(id,pat,exp),annot)) cs
     | _ -> funcls (* TODO is the empty list possible here? *) in
   FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))
 
-let rewrite_defs_remove_bitvector_pats (Defs defs) =
+let rewrite_defs_remove_bitvector_pats typ_env (Defs defs) =
   let rewriters =
-    {rewrite_exp = rewrite_exp_remove_bitvector_pat;
+    {rewrite_exp = rewrite_exp_remove_bitvector_pat typ_env;
      rewrite_pat = rewrite_pat;
      rewrite_let = rewrite_let;
      rewrite_lexp = rewrite_lexp;
-     rewrite_fun = rewrite_fun_remove_bitvector_pat;
+     rewrite_fun = rewrite_fun_remove_bitvector_pat typ_env;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base } in
   let rewrite_def d =
@@ -2587,10 +2599,10 @@ let rewrite_defs_remove_e_assign =
     }
 
 
-let rewrite_defs_lem =
+let rewrite_defs_lem typ_env =
   top_sort_defs >>
   rewrite_defs_remove_vector_concat >>
-  rewrite_defs_remove_bitvector_pats >>
+  rewrite_defs_remove_bitvector_pats typ_env >>
   rewrite_defs_exp_lift_assign >> 
   rewrite_defs_remove_blocks >> 
   rewrite_defs_letbind_effects >> 

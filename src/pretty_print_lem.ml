@@ -455,10 +455,15 @@ let doc_exp_lem, doc_let_lem =
           if aexp_needed then parens (align epp) else epp
        | Id_aux (Id "slice_raw",_) ->
           let [e1;e2;e3] = args in
-          let (E_aux (_,(_,Base((_,t1),_,_,_,_,_)))) = e1 in
+          let (E_aux (_,(_,Base((_,t1),_,_,eff1,_,_)))) = e1 in
           let call = if is_bit_vector t1 then "bvslice_raw" else "slice_raw" in
           let epp = separate space [string call;expY e1;expY e2;expY e3] in
-          if aexp_needed then parens (align epp) else epp
+          let (taepp,aexp_needed) =
+            let (Base ((_,t),_,_,eff,_,_)) = annot in
+            if contains_bitvector_type t && not (contains_t_pp_var t)
+            then (align epp ^^ (doc_tannot_lem regtypes (effectful_t eff) t), true)
+            else (epp, aexp_needed) in
+          if aexp_needed then parens (align taepp) else taepp
        | Id_aux (Id "length",_) ->
           let [arg] = args in
           let (E_aux (_,(_,Base((_,targ),_,_,_,_,_)))) = arg in
