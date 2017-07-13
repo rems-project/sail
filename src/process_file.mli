@@ -51,6 +51,7 @@ val opt_new_typecheck : bool ref
 val opt_just_check : bool ref
 val opt_ddump_tc_ast : bool ref
 val opt_dno_cast : bool ref
+val opt_mono_split : ((string * int) * string) list ref
 
 type out_type =
   | Lem_ast_out

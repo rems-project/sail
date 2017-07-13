@@ -65,13 +65,16 @@ let subst_src_typ substs t =
 (* Based on current type checker's behaviour *)
 let pat_id_is_variable env id =
   match Env.lookup_id id env with
+  | Unbound
+  (* TODO: are the next two possible in typechecked code?  What
+     would they do? *)
   | Register _
   | Local _
     -> true
   | Enum _
   | Union _
     -> false
-  | Unbound -> failwith "unbound var"
+
 
 let rec is_value (E_aux (e,(l,annot))) =
   match e with
@@ -381,7 +384,7 @@ type split =
   | VarSplit of (tannot pat * (id * tannot Ast.exp)) list
   | ConstrSplit of (tannot pat * nexp KSubst.t) list
 
-let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
+let split_defs splits defs =
   let split_constructors (Defs defs) =
     let sc_type_union q (Tu_aux (tu,l) as tua) =
       match tu with
@@ -689,32 +692,38 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
       nexp_subst_exp nsubsts refinements exp'
   in
     
-let env_some_enum_lookup _ _ = None in
   (* Split a variable pattern into every possible value *)
 
-  let split var env (Typ_aux (ty,l) as typ) =
-    let new_l = Generated l in
-    let new_id i = Id_aux (Id i, new_l) in
+  let split var annot =
     let v = string_of_id var in
+    let (env, (Typ_aux (ty,l) as typ), eff) =
+      match annot with
+      | Some ann -> ann
+      | None -> raise (Reporting_basic.err_general Unknown
+                         ("Missing type environment when splitting " ^ v))
+    in
+    let new_l = Generated l in
+    let renew_id (Id_aux (id,l)) = Id_aux (id,new_l) in
     let cannot () =
       raise (Reporting_basic.err_general l
                ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v))
     in
     match ty with
     | Typ_id id ->
-       (match env_some_enum_lookup id env with
-          (* enumerations *)
-       | Some ns -> List.map (fun n -> (P_aux (P_id (new_id n),(l,None)),
-                                        (var,E_aux (E_id (new_id n),(new_l,None))))) ns
-       | None ->
-          if id_to_string id = "bit" then
-            List.map (fun b ->
-              P_aux (P_lit (L_aux (b,new_l)),(l,None)),
-              (var,E_aux (E_lit (L_aux (b,new_l)),(new_l, None))))
-              [L_zero; L_one]
-          else cannot ())
-       (*|  vectors TODO *)
-       (*|  numbers TODO *)
+       (try
+         (* enumerations *)
+         let ns = Env.get_enum id env in
+         List.map (fun n -> (P_aux (P_id (renew_id n),(l,annot)),
+                             (var,E_aux (E_id (renew_id n),(new_l,annot))))) ns
+       with Type_error _ ->
+         if id_to_string id = "bit" then
+           List.map (fun b ->
+             P_aux (P_lit (L_aux (b,new_l)),(l,annot)),
+             (var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))))
+             [L_zero; L_one]
+         else cannot ())
+    (*|  vectors TODO *)
+    (*|  numbers TODO *)
     | _ -> cannot ()
   in
   
@@ -769,11 +778,7 @@ let env_some_enum_lookup _ _ = None in
         | P_id id ->
            let i = id_to_string id in
            if i = var
-           then
-             match annot with
-             | Some (env,ty,_) -> Some (split id env ty)
-             | None -> raise (Reporting_basic.err_general l
-                                ("Missing type environment when splitting " ^ var))
+           then Some (split id annot)
            else None
         | P_app (id,ps) ->
            relist spl (fun ps -> P_app (id,ps)) ps

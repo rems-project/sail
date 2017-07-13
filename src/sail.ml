@@ -53,7 +53,6 @@ let opt_print_ocaml = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_ocaml = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
-let opt_mono_split = ref ([]:((string * int) * string) list)
 let options = Arg.align ([
   ( "-o",
     Arg.String (fun f -> opt_file_out := Some f),
