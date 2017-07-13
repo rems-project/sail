@@ -1074,6 +1074,36 @@ let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   | Nexp_neg n1, Nexp_neg n2 -> nexp_identical n1 n2
   | _, _ -> false
 
+let ord_identical (Ord_aux (ord1, _)) (Ord_aux (ord2, _)) =
+  match ord1, ord2 with
+  | Ord_var kid1, Ord_var kid2 -> Kid.compare kid1 kid2 = 0
+  | Ord_inc, Ord_inc -> true
+  | Ord_dec, Ord_dec -> true
+  | _, _ -> false
+
+let rec typ_identical (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
+  match typ1, typ2 with
+  | Typ_wild, Typ_wild -> true
+  | Typ_id v1, Typ_id v2 -> Id.compare v1 v2 = 0
+  | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2 = 0
+  | Typ_tup typs1, Typ_tup typs2 ->
+     begin
+       try List.for_all2 typ_identical typs1 typs2 with
+       | Invalid_argument _ -> false
+     end
+  | Typ_app (f1, args1), Typ_app (f2, args2) ->
+     begin
+       try Id.compare f1 f2 = 0 && List.for_all2 typ_arg_identical args1 args2 with
+       | Invalid_argument _ -> false
+     end
+  | _, _ -> false
+and typ_arg_identical (Typ_arg_aux (arg1, _)) (Typ_arg_aux (arg2, _)) =
+  match arg1, arg2 with
+  | Typ_arg_nexp n1, Typ_arg_nexp n2 -> nexp_identical n1 n2
+  | Typ_arg_typ typ1, Typ_arg_typ typ2 -> typ_identical typ1 typ2
+  | Typ_arg_order ord1, Typ_arg_order ord2 -> ord_identical ord1 ord2
+  | Typ_arg_effect _, Typ_arg_effect _ -> assert false
+
 type uvar =
   | U_nexp of nexp
   | U_order of order
@@ -2396,6 +2426,13 @@ let infer_funtyp l env tannotopt funcls =
 
 let mk_val_spec typq typ id = DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id), (Parse_ast.Unknown, None)))
 
+let check_tannotopt typq ret_typ = function
+  | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
+  | Typ_annot_opt_aux (Typ_annot_opt_some (annot_typq, annot_ret_typ), l) ->
+     if typ_identical ret_typ annot_ret_typ
+     then ()
+     else typ_error l (string_of_bind (typq, ret_typ) ^ " and " ^ string_of_bind (annot_typq, annot_ret_typ) ^ " do not match between function and val spec")
+
 let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, _)) as fd_aux) =
   let id =
     match (List.fold_right
@@ -2416,6 +2453,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
        let (quant, typ) = infer_funtyp l env tannotopt funcls in
        false, (quant, typ), env
   in
+  check_tannotopt quant vtyp_ret tannotopt;
   typ_debug ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ));
   let funcl_env = add_typquant quant env in
   let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in

@@ -69,6 +69,6 @@ function (bit[64]) TranslatePC ((bit[64]) vAddr) = {
 
 let have_cp2 = false
 
-function unit SignalException ((Exception) ex) = SignalExceptionMIPS(ex, 0x0000000000000000)
+function forall Type 'o. 'o SignalException ((Exception) ex) = SignalExceptionMIPS(ex, 0x0000000000000000)
 
 function unit ERETHook() = ()
