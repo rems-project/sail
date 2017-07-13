@@ -488,6 +488,7 @@ let doc_rec (Rec_aux(r,_)) = match r with
 
 let doc_tannot_opt (Typ_annot_opt_aux(t,_)) = match t with
   | Typ_annot_opt_some(tq,typ) -> doc_typquant tq (doc_typ typ)
+  | Typ_annot_opt_none -> empty
 
 let doc_effects_opt (Effect_opt_aux(e,_)) = match e with
   | Effect_opt_pure -> string "pure"

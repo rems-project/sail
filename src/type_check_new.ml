@@ -346,6 +346,7 @@ module Env : sig
   val set_default_order_inc : t -> t
   val set_default_order_dec : t -> t
   val add_enum : id -> id list -> t -> t
+  val get_enum : id -> t -> id list
   val get_casts : t -> id list
   val allow_casts : t -> bool
   val no_casts : t -> t
@@ -517,6 +518,11 @@ end = struct
         typ_print ("Adding enum " ^ string_of_id id);
         { env with enums = Bindings.add id (IdSet.of_list ids) env.enums }
       end
+
+  let get_enum id env =
+    try IdSet.elements (Bindings.find id env.enums)
+    with
+    | Not_found -> typ_error (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
   let is_record id env = Bindings.mem id env.records
 
@@ -1533,19 +1539,24 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      begin
        match letbind with
        | LB_val_explicit (typschm, pat, bind) -> assert false
+       | LB_val_implicit (P_aux (P_typ (ptyp, _), _) as pat, bind) ->
+          let checked_bind = crule check_exp env bind ptyp in
+          let tpat, env = bind_pat env pat (typ_of checked_bind) in
+          annot_exp (E_let (LB_aux (LB_val_implicit (tpat, checked_bind), (let_loc, None)), crule check_exp env exp typ)) typ
        | LB_val_implicit (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
           let tpat, env = bind_pat env pat (typ_of inferred_bind) in
           annot_exp (E_let (LB_aux (LB_val_implicit (tpat, inferred_bind), (let_loc, None)), crule check_exp env exp typ)) typ
      end
-  | E_app_infix (x, op, y), _ when List.length (Env.get_overloads (deinfix op) env) > 0 -> check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ()))) typ
+  | E_app_infix (x, op, y), _ when List.length (Env.get_overloads (deinfix op) env) > 0 ->
+     check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ()))) typ
   | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
        | [] -> typ_error l ("No valid overloading for " ^ string_of_exp exp)
        | (f :: fs) -> begin
            typ_print ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
            try crule check_exp env (E_aux (E_app (f, xs), (l, ()))) typ with
-           | Type_error (_, m2) -> try_overload fs
+           | Type_error (_, m) -> typ_print ("Error : " ^ m); try_overload fs
          end
      in
      try_overload (Env.get_overloads f env)
@@ -1789,6 +1800,10 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
      end
   | LEXP_memory (f, xs) ->
      check_exp env (E_aux (E_app (f, xs @ [exp]), (l, ()))) unit_typ, env
+  | LEXP_cast (typ_annot, v) ->
+     let checked_exp = crule check_exp env exp typ_annot in
+     let tlexp, env' = bind_lexp env lexp (typ_of checked_exp) in
+     annot_assign tlexp checked_exp, env'
   | _ ->
      let inferred_exp = irule infer_exp env exp in
      let tlexp, env' = bind_lexp env lexp (typ_of inferred_exp) in
@@ -1963,7 +1978,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | (f :: fs) -> begin
            typ_print ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
            try irule infer_exp env (E_aux (E_app (f, xs), (l, ()))) with
-           | Type_error (_, m2) -> try_overload fs
+           | Type_error (_, m) -> typ_print ("Error: " ^ m); try_overload fs
          end
      in
      try_overload (Env.get_overloads f env)
@@ -2042,6 +2057,12 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
            (iuargs, ret_typ)
          else typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants
                            ^ " not resolved during application of " ^ string_of_id f)
+       end
+    | (utyps, (typ :: typs)), (uargs, ((n, arg) :: args)) when KidSet.is_empty (typ_frees typ) ->
+       begin
+         let carg = crule check_exp env arg typ in
+         let (iargs, ret_typ') = instantiate quants (utyps, typs) ret_typ (uargs, args) in
+         ((n, carg) :: iargs, ret_typ')
        end
     | (utyps, (typ :: typs)), (uargs, ((n, arg) :: args)) ->
        begin

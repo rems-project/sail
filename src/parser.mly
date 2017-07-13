@@ -209,6 +209,10 @@ id:
     { idl (DeIid($3)) }
   | Lparen Deinfix Lt Rparen
     { idl (DeIid($3)) }
+  | Lparen Deinfix GtUnderS Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix LtUnderS Rparen
+    { idl (DeIid($3)) }
   | Lparen Deinfix Minus Rparen
     { idl (DeIid("-")) }
   | Lparen Deinfix MinusUnderS Rparen
@@ -243,6 +247,8 @@ id:
     { idl (DeIid($3)) }
   | Lparen Deinfix GtEq Rparen
     { idl (DeIid($3)) }
+  | Lparen Deinfix GtEqUnderS Rparen
+    { idl (DeIid($3)) }
   | Lparen Deinfix GtEqPlus Rparen
     { idl (DeIid($3)) }
   | Lparen Deinfix GtGt Rparen
@@ -256,6 +262,8 @@ id:
   | Lparen Deinfix HashLtLt Rparen
     { idl (DeIid($3)) }
   | Lparen Deinfix LtEq Rparen
+    { idl (DeIid($3)) }
+  | Lparen Deinfix LtEqUnderS Rparen
     { idl (DeIid($3)) }
   | Lparen Deinfix LtLt Rparen
     { idl (DeIid($3)) }

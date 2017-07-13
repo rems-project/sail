@@ -144,13 +144,13 @@ function clause execute (ADDI(rs, rt, imm)) =
   {
     (bit[64]) opA := rGPR(rs);
     if NotWordVal(opA) then
-      wGPR(rt) := undefined (* XXX could exit instead *)
+      wGPR(rt) := (bit[64]) undefined (* XXX could exit instead *)
     else
-      let (bit[33]) sum33 = (EXTS(opA[31 .. 0]) + EXTS(imm)) in
+      let sum33 = (bit[33]) (EXTS(opA[31 .. 0])) + (bit[33]) (EXTS(imm)) in
         if sum33[32] != sum33[31] then
           (SignalException(Ov))
         else
-          wGPR(rt) := EXTS(sum33[31..0])
+	  wGPR(rt) := EXTS(sum33[31..0])
   }
 
 (* ADDU  32-bit add immediate -- reg, reg, reg with possible undefined behaviour *)
@@ -165,9 +165,9 @@ function clause execute (ADDU(rs, rt, rd)) =
     (bit[64]) opA := rGPR(rs);
     (bit[64]) opB := rGPR(rt);
     if NotWordVal(opA) | NotWordVal(opB) then
-      wGPR(rd) := undefined
+      wGPR(rd) := (bit[64]) undefined
     else
-      wGPR(rd) := EXTS(opA[31..0] + opB[31..0])
+      wGPR(rd) := (bit[64]) (EXTS(opA[31..0] + opB[31..0]))
   }
 
 
@@ -182,9 +182,9 @@ function clause execute (ADDIU(rs, rt, imm)) =
   {
     (bit[64]) opA := rGPR(rs);
     if NotWordVal(opA) then
-      wGPR(rt) := undefined (* XXX could exit instead *)
+      wGPR(rt) := (bit[64]) undefined (* XXX could exit instead *)
     else
-      wGPR(rt) := EXTS((opA[31 .. 0]) + EXTS(imm))
+      wGPR(rt) := (bit[64]) (EXTS((opA[31 .. 0]) + (bit[32]) (EXTS(imm))))
   }
 
 (**************************************************************************************)
@@ -212,7 +212,7 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b0000
 
 function clause execute (DSUB (rs, rt, rd)) =
   {
-    let (bit[65]) temp65 = (EXTS(rGPR(rs)) - EXTS(rGPR(rt))) in
+    let (bit[65]) temp65 = (bit[65]) (EXTS(rGPR(rs))) - (bit[65]) (EXTS(rGPR(rt))) in
     {
       if temp65[64] != temp65[63] then
         (SignalException(Ov))
@@ -228,12 +228,12 @@ union ast member regregreg SUB
 function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b00000 : 0b100010) =
   Some(SUB(rs, rt, rd))
 
-function clause execute (SUB(rs, rt, rd)) = 
+function clause execute (SUB(rs, rt, rd)) =
   {
     (bit[64]) opA := rGPR(rs);
     (bit[64]) opB := rGPR(rt);
     if NotWordVal(opA) | NotWordVal(opB) then
-      wGPR(rd) := undefined (* XXX could instead *)
+      wGPR(rd) := (bit[64]) undefined (* XXX could instead *)
     else
       let (bit[33]) temp33 = (EXTS(opA[31..0]) - EXTS(opB[31..0])) in
       if temp33[32] != temp33[31] then
@@ -388,7 +388,7 @@ function clause decode (0b000000 : 0b00000 : (regno) rt : (regno) rd : (bit[5]) 
 function clause execute (DSRA (rt, rd, sa)) =
   {
     temp     := rGPR(rt);
-    wGPR(rd) := ((temp[63] ^^ sa) : (temp[63 .. sa]))
+    wGPR(rd) := EXTS((temp[63] ^^ sa) : (temp[63 .. sa]))
   }
 
 (* DSRA32 reg, reg, imm5 *)
@@ -400,7 +400,7 @@ function clause execute (DSRA32 (rt, rd, sa)) =
   {
     temp     := rGPR(rt);
     sa32     := (0b1 : sa); (* sa+32 *)
-    wGPR(rd) := ((temp[63] ^^ sa32) : (temp[63 .. sa32]))
+    wGPR(rd) := EXTS((temp[63] ^^ sa32) : (temp[63 .. sa32]))
   }
 
 (* DSRAV reg, reg, reg *)
@@ -411,7 +411,7 @@ function clause execute (DSRAV (rs, rt, rd)) =
   {
     temp     := rGPR(rt);
     sa       := (rGPR(rs)) [5..0];
-    wGPR(rd) := ((temp[63] ^^ sa) : temp[63 .. sa])
+    wGPR(rd) := EXTS((temp[63] ^^ sa) : temp[63 .. sa])
   }
 
 (* DSRL shift right logical - reg, reg, imm5 *)
@@ -422,7 +422,7 @@ function clause decode (0b000000 : 0b00000 : (regno) rt : (regno) rd : (bit[5]) 
 function clause execute (DSRL (rt, rd, sa)) =
   {
     temp     := rGPR(rt);
-    wGPR(rd) := ((bitzero ^^ sa) : (temp[63 .. sa]))
+    wGPR(rd) := EXTS((bitzero ^^ sa) : (temp[63 .. sa]))
   }
 
 (* DSRL32 reg, reg, imm5 *)
@@ -434,7 +434,7 @@ function clause execute (DSRL32 (rt, rd, sa)) =
   {
     temp     := rGPR(rt);
     sa32     := (0b1 : sa); (* sa+32 *)
-    wGPR(rd) := ((bitzero ^^ sa32) : (temp[63 .. sa32]))
+    wGPR(rd) := EXTS((bitzero ^^ sa32) : (temp[63 .. sa32]))
   }
 
 (* DSRLV reg, reg, reg *)
@@ -446,7 +446,7 @@ function clause execute (DSRLV (rs, rt, rd)) =
   {
     temp     := rGPR(rt);
     sa       := (rGPR(rs)) [5..0];
-    wGPR(rd) := ((bitzero ^^ sa) : temp[63 .. sa])
+    wGPR(rd) := EXTS((bitzero ^^ sa) : temp[63 .. sa])
   }
 
 (**************************************************************************************)
@@ -460,7 +460,7 @@ function clause decode (0b000000 : 0b00000 : (regno) rt : (regno) rd : (regno) s
   Some(SLL(rt, rd, sa))
 function clause execute (SLL(rt, rd, sa)) =
   {
-    wGPR(rd) := EXTS((rGPR(rt)) [(31-sa)..0] : (bitzero ^^ sa))
+    wGPR(rd) := EXTS((rGPR(rt)) [31 - sa .. 0] : (bitzero ^^ sa))
   }
 
 (* SLLV 32-bit shift left variable *)
@@ -471,7 +471,7 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : (regno) rd : 0b0000
 function clause execute (SLLV(rs, rt, rd)) =
   {
     sa       := (rGPR(rs))[4..0];
-    wGPR(rd) := EXTS((rGPR(rt)) [(31-sa)..0] : (bitzero ^^ sa))
+    wGPR(rd) := EXTS((rGPR(rt)) [31 - sa .. 0] : (bitzero ^^ sa))
   }
 
 (* SRA 32-bit arithmetic shift right *)
@@ -485,7 +485,7 @@ function clause execute (SRA(rt, rd, sa)) =
     if (NotWordVal(temp)) then
       wGPR(rd) := undefined
     else
-      wGPR(rd) := (temp[31] ^^ (sa+32)) : temp [31..sa]
+      wGPR(rd) := EXTS((temp[31] ^^ (sa+32)) : temp [31..sa])
   }
 
 (* SRAV 32-bit arithmetic shift right variable *)
@@ -500,7 +500,7 @@ function clause execute (SRAV(rs, rt, rd)) =
     if (NotWordVal(temp)) then
       wGPR(rd) := undefined
     else
-      wGPR(rd) := (temp[31] ^^ (sa+32)) : temp [31..sa]
+      wGPR(rd) := EXTS((temp[31] ^^ (sa+32)) : temp [31..sa])
   }
 
 (* SRL 32-bit shift right *)
@@ -652,7 +652,7 @@ function clause execute (MUL(rs, rt, rd)) =
   {
     rsVal := rGPR(rs);
     rtVal := rGPR(rt);
-    (bit[64]) result := (rsVal[31..0]) *_s (rtVal[31..0]);
+    (bit[64]) result := EXTS((rsVal[31..0]) *_s (rtVal[31..0]));
     wGPR(rd) := if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
@@ -675,7 +675,7 @@ function clause execute (MULT(rs, rt)) =
     (bit[64]) result := if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-        (rsVal[31..0]) *_s (rtVal[31..0]);
+	EXTS((rsVal[31..0]) *_s (rtVal[31..0]));
     HI := EXTS(result[63..32]);
     LO := EXTS(result[31..0]);
   }

@@ -64,6 +64,10 @@ module Env : sig
 
   val get_regtyp : id -> t -> int * int * (index_range * id) list
 
+  (* Return all the identifiers in an enumeration. Throws a type error
+     if the enumeration doesn't exist. *)
+  val get_enum : id -> t -> id list
+
   (* Returns true if id is a register type, false otherwise *)
   val is_regtyp : id -> t -> bool
 
