@@ -38,4 +38,4 @@ end decode
 end execute
 end ast
 
-function option<ast> supported_instructions (instr) = Some(instr)
+function option<ast> supported_instructions (ast) instr = Some(instr)

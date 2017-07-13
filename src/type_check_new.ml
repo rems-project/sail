@@ -723,13 +723,13 @@ end = struct
     then typ_error (id_loc id) ("Type synonym " ^ string_of_id id ^ " already exists")
     else
       begin
-        typ_debug ("Adding type synonym " ^ string_of_id id);
+        typ_print ("Adding type synonym " ^ string_of_id id);
         { env with typ_synonyms = Bindings.add id synonym env.typ_synonyms }
       end
 
   let get_typ_synonym id env = Bindings.find id env.typ_synonyms
 
-  let rec expand_synonyms env (Typ_aux (typ, l)) =
+  let rec expand_synonyms env (Typ_aux (typ, l) as t) =
     match typ with
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
     | Typ_fn (typ1, typ2, effs) -> Typ_aux (Typ_fn (expand_synonyms env typ1, expand_synonyms env typ2, effs), l)
@@ -1773,13 +1773,35 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
   let annot_assign lexp exp = E_aux (E_assign (lexp, exp), (l, Some (env, mk_typ (Typ_id (mk_id "unit")), no_effect))) in
   let annot_lexp_effect lexp typ eff = LEXP_aux (lexp, (l, Some (env, typ, eff))) in
   let annot_lexp lexp typ = annot_lexp_effect lexp typ no_effect in
+  let has_typ v env =
+    match Env.lookup_id v env with
+    | Local (Mutable, _) | Register _ -> true
+    | _ -> false
+  in
   match lexp_aux with
-  | LEXP_field (LEXP_aux (LEXP_id v, _), field) ->
+  | LEXP_field (LEXP_aux (flexp, _), field) ->
      begin
-       let regtyp = match Env.lookup_id v env with
-         | Register typ -> typ
-         | _ -> typ_error l "l-expression field is not a register"
+       let infer_flexp = function
+         | LEXP_id v ->
+            begin match Env.lookup_id v env with
+            | Register typ -> typ, LEXP_id v
+            | _ -> typ_error l "l-expression field is not a register"
+            end
+         | LEXP_vector (LEXP_aux (LEXP_id v, _), exp) ->
+            begin
+              (* Check: is this ok if the vector is immutable? *)
+              let is_immutable, vtyp = match Env.lookup_id v env with
+                | Unbound -> typ_error l "Cannot assign to element of unbound vector"
+                | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
+                | Local (Immutable, vtyp) -> true, vtyp
+                | Local (Mutable, vtyp) | Register vtyp -> false, vtyp
+              in
+              let access = infer_exp (Env.enable_casts env) (E_aux (E_app (mk_id "vector_access", [E_aux (E_id v, (l, ())); exp]), (l, ()))) in
+              let E_aux (E_app (_, [_; inferred_exp]), _) = access in
+              typ_of access, LEXP_vector (annot_lexp (LEXP_id v) vtyp, inferred_exp)
+            end
        in
+       let regtyp, inferred_flexp = infer_flexp flexp in
        match Env.expand_synonyms env regtyp with
        | Typ_aux (Typ_id regtyp_id, _) when Env.is_regtyp regtyp_id env ->
           let base, top, ranges = Env.get_regtyp regtyp_id env in
@@ -1795,7 +1817,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
             | _, _ -> typ_error l "Not implemented this register field type yet..."
           in
           let checked_exp = crule check_exp env exp vec_typ in
-          annot_assign (annot_lexp (LEXP_field (annot_lexp_effect (LEXP_id v) regtyp (mk_effect [BE_wreg]), field)) vec_typ) checked_exp, env
+          annot_assign (annot_lexp (LEXP_field (annot_lexp_effect inferred_flexp regtyp (mk_effect [BE_wreg]), field)) vec_typ) checked_exp, env
        | _ ->  typ_error l "Field l-expression has invalid type"
      end
   | LEXP_memory (f, xs) ->
@@ -1804,6 +1826,14 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
      let checked_exp = crule check_exp env exp typ_annot in
      let tlexp, env' = bind_lexp env lexp (typ_of checked_exp) in
      annot_assign tlexp checked_exp, env'
+  | LEXP_id v when has_typ v env ->
+     begin match Env.lookup_id v env with
+     | Local (Mutable, vtyp) | Register vtyp ->
+        let checked_exp = crule check_exp env exp vtyp in
+        let tlexp, env' = bind_lexp env lexp (typ_of checked_exp) in
+        annot_assign tlexp checked_exp, env'
+     | _ -> assert false
+     end
   | _ ->
      let inferred_exp = irule infer_exp env exp in
      let tlexp, env' = bind_lexp env lexp (typ_of inferred_exp) in
@@ -1814,13 +1844,12 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
   let annot_lexp lexp typ = annot_lexp_effect lexp typ no_effect in
   match lexp_aux with
   | LEXP_id v ->
-     begin
-       match Env.lookup_id v env with
-       | Local (Immutable, _) | Enum _ ->
-          typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
-       | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
-       | Register vtyp -> subtyp l env typ vtyp; annot_lexp_effect (LEXP_id v) typ (mk_effect [BE_wreg]), env
-       | Unbound -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
+     begin match Env.lookup_id v env with
+     | Local (Immutable, _) | Enum _ ->
+        typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
+     | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
+     | Register vtyp -> subtyp l env typ vtyp; annot_lexp_effect (LEXP_id v) typ (mk_effect [BE_wreg]), env
+     | Unbound -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
      end
   | LEXP_cast (typ_annot, v) ->
      begin
@@ -2423,11 +2452,16 @@ let check_register env id base top ranges =
   | Nexp_aux (Nexp_constant basec, _), Nexp_aux (Nexp_constant topc, _) ->
      let no_typq = TypQ_aux (TypQ_tq [], Parse_ast.Unknown) (* Maybe could be TypQ_no_forall? *) in
      (* FIXME: wrong for default Order inc? *)
-     let cast_typ = mk_typ (Typ_fn (mk_id_typ id, dvector_typ env base (nconstant ((basec - topc) + 1)) bit_typ, no_effect)) in
+     let vec_typ = dvector_typ env base (nconstant ((basec - topc) + 1)) bit_typ in
+     let cast_typ = mk_typ (Typ_fn (mk_id_typ id, vec_typ, no_effect)) in
+     let cast_to_typ = mk_typ (Typ_fn (vec_typ, mk_id_typ id, no_effect)) in
      env
      |> Env.add_regtyp id basec topc ranges
+  (* |> Env.add_typ_synonym id (fun _ -> vec_typ) *)
      |> Env.add_val_spec (mk_id ("cast_" ^ string_of_id id)) (no_typq, cast_typ)
      |> Env.add_cast (mk_id ("cast_" ^ string_of_id id))
+     |> Env.add_val_spec (mk_id ("cast_to_" ^ string_of_id id)) (no_typq, cast_to_typ)
+     |> Env.add_cast (mk_id ("cast_to_" ^ string_of_id id))
   | _, _ -> typ_error (id_loc id) "Num expressions in register type declaration do not evaluate to constants"
 
 let kinded_id_arg kind_id =

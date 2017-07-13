@@ -1,32 +1,34 @@
 
-val cast forall Nat 'n, Nat 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0:2**'m - 1|] effect pure unsigned
+val cast forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0:2**'m - 1|] effect pure unsigned
 
-val forall Nat 'n, Nat 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0 - (2**('m - 1)):2**('m - 1) - 1|] effect pure signed
+val forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0 - (2**('m - 1)):2**('m - 1) - 1|] effect pure signed
 
-val forall Nat 'n, Nat 'm. [|0:'n|] -> vector<'m - 1,'m,dec,bit> effect pure to_vec
+val forall Num 'n, Num 'm. [|0:'n|] -> vector<'m - 1,'m,dec,bit> effect pure to_vec
+
+val forall Num 'm. int -> vector<'m - 1,'m,dec,bit> effect pure to_svec
 
 (* Vector access can't actually be properly polymorphic on vector
    direction because of the ranges being different for each type, so
    we overload it instead *)
-val forall Nat 'n, Nat 'l, Type 'a, 'l >= 0. (vector<'n,'l,dec,'a>, [|'n - 'l + 1:'n|]) -> 'a effect pure vector_access_dec
-val forall Nat 'n, Nat 'l, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [|'n:'n + 'l - 1|]) -> 'a effect pure vector_access_inc
+val forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,dec,'a>, [|'n - 'l + 1:'n|]) -> 'a effect pure vector_access_dec
+val forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [|'n:'n + 'l - 1|]) -> 'a effect pure vector_access_inc
 
 overload vector_access [vector_access_inc; vector_access_dec]
 
 (* Type safe vector subrange *)
-val forall Nat 'n, Nat 'l, Nat 'm, Nat 'o, Type 'a, 'l >= 0, 'm <= 'o, 'o <= 'l.
+val forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'l >= 0, 'm <= 'o, 'o <= 'l.
   (vector<'n,'l,inc,'a>, [:'m:], [:'o:]) -> vector<'m,'o - 'm,inc,'a> effect pure vector_subrange_inc
 
-val forall Nat 'n, Nat 'l, Nat 'm, Nat 'o, Type 'a, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
+val forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
   (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,'m - ('o - 1),dec,'a> effect pure vector_subrange_dec
 
-val forall Nat 'n, Nat 'l, Order 'ord.
+val forall Num 'n, Num 'l, Order 'ord.
   (vector<'n,'l,'ord,bit>, int, int) -> list<bit> effect pure vector_subrange_bl
 
 overload vector_subrange [vector_subrange_inc; vector_subrange_dec; vector_subrange_bl]
 
 (* Type safe vector append *)
-val forall Nat 'n1, Nat 'l1, Nat 'n2, Nat 'l2, Order 'o, Type 'a, 'l1 >= 0, 'l2 >= 0.
+val forall Num 'n1, Num 'l1, Num 'n2, Num 'l2, Order 'o, Type 'a, 'l1 >= 0, 'l2 >= 0.
   (vector<'n1,'l1,'o,'a>, vector<'n2,'l2,'o,'a>) -> vector<'l1 + 'l2 - 1,'l1 + 'l2,'o,'a> effect pure vec_append
 
 val (list<bit>, list<bit>) -> list<bit> effect pure list_append
@@ -37,89 +39,98 @@ overload vector_append [vec_append; list_append]
 val cast forall Type 'a. register<'a> -> 'a effect {rreg} reg_deref
 
 (* Bitvector duplication *)
-val forall Nat 'n. (bit, [:'n:]) -> vector<'n - 1,'n,dec,bit> effect pure duplicate
+val forall Num 'n. (bit, [:'n:]) -> vector<'n - 1,'n,dec,bit> effect pure duplicate
 
 val (bit, int) -> list<bit> effect pure duplicate_to_list
 
-val forall Nat 'n, Nat 'm, Nat 'o, Order 'ord.
+val forall Num 'n, Num 'm, Num 'o, Order 'ord.
   (vector<'o,'n,'ord,bit>, [:'m:]) -> vector<'o,'m*'n,'ord,bit> effect pure duplicate_bits
 
-val forall Nat 'n, Nat 'o, Order 'ord.
+val forall Num 'n, Num 'o, Order 'ord.
   (vector<'o,'n,'ord,bit>, int) -> list<bit> effect pure duplicate_bits_to_list
 
 overload (deinfix ^^) [duplicate; duplicate_bits; duplicate_to_list; duplicate_bits_to_list]
 
 (* Bitvector extension *)
-val forall Nat 'n, Nat 'm, Nat 'o, Nat 'p, Order 'ord.
+val forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.
     vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure extz
 
-val forall Nat 'm, Nat 'p, Order 'ord.
+val forall Num 'm, Num 'p, Order 'ord.
     list<bit> -> vector<'p, 'm, 'ord, bit> effect pure extz_bl
 
-val forall Nat 'n, Nat 'm, Nat 'o, Nat 'p, Order 'ord.
+val forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.
     vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure exts
 
-val forall Nat 'm, Nat 'p, Order 'ord.
+val forall Num 'm, Num 'p, Order 'ord.
     list<bit> -> vector<'p, 'm, 'ord, bit> effect pure exts_bl
+
+val cast forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord, 'm >= 'n.
+    vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure extzi
 
 overload EXTZ [extz; extz_bl]
 overload EXTS [exts; exts_bl]
 
-val forall Type 'a, Nat 'n, Nat 'm, Nat 'o, Nat 'p, Order 'ord, 'm >= 'o.
+val forall Type 'a, Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord, 'm >= 'o.
     vector<'n, 'm, 'ord, 'a> -> vector<'p, 'o, 'ord, 'a> effect pure mask
 
 (* Adjust the start index of a decreasing bitvector *)
-val cast forall Nat 'n, Nat 'm, 'n >= 'm - 1.
+val cast forall Num 'n, Num 'm, 'n >= 'm - 1.
   vector<'n,'m,dec,bit> -> vector<'m - 1,'m,dec,bit>
   effect pure norm_dec
 
-val cast forall Nat 'n, Nat 'm, Nat 'o, 'n >= 'm - 1, 'o >= 'm - 1.
+val cast forall Num 'n, Num 'm, Num 'o, 'n >= 'm - 1, 'o >= 'm - 1.
   vector<'n,'m,dec,bit> -> vector<'o,'m,dec,bit>
   effect pure adjust_dec
 
 (* Various casts from 0 and 1 to bitvectors *)
-val cast forall Nat 'n, Nat 'l, Order 'ord. [:0:] -> vector<'n,'l,'ord,bit> effect pure cast_0_vec
-val cast forall Nat 'n, Nat 'l, Order 'ord. [:1:] -> vector<'n,'l,'ord,bit> effect pure cast_1_vec
-val cast forall Nat 'n, Nat 'l, Order 'ord. [|0:1|] -> vector<'n,'l,'ord,bit> effect pure cast_01_vec
+val cast forall Num 'n, Num 'l, Order 'ord. [:0:] -> vector<'n,'l,'ord,bit> effect pure cast_0_vec
+val cast forall Num 'n, Num 'l, Order 'ord. [:1:] -> vector<'n,'l,'ord,bit> effect pure cast_1_vec
+val cast forall Num 'n, Num 'l, Order 'ord. [|0:1|] -> vector<'n,'l,'ord,bit> effect pure cast_01_vec
 
-val cast forall Nat 'n, Order 'ord. vector<'n,1,'ord,bit> -> bool effect pure cast_vec_bool
+val cast forall Num 'n, Order 'ord. vector<'n,1,'ord,bit> -> bool effect pure cast_vec_bool
 val cast bit -> bool effect pure cast_bit_bool
 
+val cast forall Num 'n, Num 'm, 'n >= 'm - 1, 'm >= 1. bit -> vector<'n,'m,dec,bit> effect pure cast_bit_vec
+
 (* MSB *)
-val forall Nat 'n, Nat 'm, Order 'ord. vector<'n, 'm, 'ord, bit> -> bit effect pure most_significant
+val forall Num 'n, Num 'm, Order 'ord. vector<'n, 'm, 'ord, bit> -> bit effect pure most_significant
 
 (* Arithmetic *)
 
-val forall Nat 'n, Nat 'm, Nat 'o, Nat 'p.
+val forall Num 'n, Num 'm, Num 'o, Num 'p.
     ([|'n:'m|], [|'o:'p|]) -> [|'n + 'o:'m + 'p|] effect pure add
 
 val (nat, nat) -> nat effect pure add_nat
 
 val (int, int) -> int effect pure add_int
 
-val forall Nat 'n, Nat 'o, Order 'ord.
+val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure add_vec
 
-val forall Nat 'n, Nat 'o, Order 'ord.
+val forall Num 'n, Num 'o, Order 'ord.
+    (vector<'o, 'n, 'ord, bit>, int) -> vector<'o, 'n, 'ord, bit> effect pure add_vec_int
+
+val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> (vector<'o, 'n, 'ord, bit>, bit, bit) effect pure add_overflow_vec
 
-val forall Nat 'n, Nat 'm, Nat 'o, Nat 'p.
+val forall Num 'n, Num 'm, Num 'o, Num 'p.
     ([|'n:'m|], [|'o:'p|]) -> [|'n - 'p:'m - 'o|] effect pure sub
 
 val (int, int) -> int effect pure sub_int
 
-val forall Nat 'n, Nat 'm, Order 'ord.
+val forall Num 'n, Num 'm, Order 'ord.
     (vector<'n,'m,'ord,bit>, int) -> vector<'n,'m,'ord,bit> effect pure sub_vec_int
 
-val forall Nat 'n, Nat 'o, Order 'ord.
+val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure sub_vec
 
-val forall Nat 'n, Nat 'o, Order 'ord.
+val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> (vector<'o, 'n, 'ord, bit>, bit, bit) effect pure sub_underflow_vec
 
 overload (deinfix +) [
   add_vec;
   add_overflow_vec;
+  add_vec_int;
   add;
   add_nat;
   add_int
@@ -133,21 +144,35 @@ overload (deinfix -) [
   sub_int
 ]
 
-val forall Nat 'n, Nat 'o, Order 'ord.
-    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure add_svec
+val bool -> bit effect pure bool_to_bit
 
-overload (deinfix *_s) [
-  add_svec
+val (int, int) -> int effect pure mul_int
+val forall Num 'n, Num 'o, Order 'ord.
+    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure mul_vec
+
+overload (deinfix * ) [
+  mul_vec;
+  mul_int
 ]
 
-val forall Nat 'n, Nat 'o, Order 'ord.
+val forall Num 'n, Num 'o, Order 'ord.
+    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure mul_svec
+
+overload (deinfix *_s) [
+  mul_svec
+]
+
+val (bool, bool) -> bool effect pure bool_xor
+
+val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure xor_vec
 
 overload (deinfix ^) [
+  bool_xor;
   xor_vec
 ]
 
-val forall Nat 'n, Nat 'o, Order 'ord.
+val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, int) -> vector<'o, 'n, 'ord, bit> effect pure shiftl
 
 overload (deinfix <<) [
@@ -229,6 +254,10 @@ overload (deinfix >=_s) [gteq_svec]
 val (int, int) -> int effect pure quotient
 
 overload (deinfix quot) [quotient]
+
+val (int, int) -> int effect pure modulus
+
+overload (deinfix mod) [modulus]
 
 val forall Num 'n, Num 'm, Order 'ord, Type 'a. vector<'n,'m,'ord,'a> -> [:'m:] effect pure length
 

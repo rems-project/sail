@@ -15,9 +15,12 @@ mkdir -p $DIR/rtfail
 
 rm -f $DIR/tests.xml
 
-cat $SAILDIR/lib/prelude.sail $SAILDIR/mips_new_tc/mips_prelude.sail > $DIR/pass/mips_prelude.sail
-cat $SAILDIR/lib/prelude.sail $SAILDIR/mips_new_tc/mips_prelude.sail $SAILDIR/mips_new_tc/mips_tlb.sail > $DIR/pass/mips_tlb.sail
-cat $SAILDIR/lib/prelude.sail $SAILDIR/mips_new_tc/mips_prelude.sail $SAILDIR/mips_new_tc/mips_tlb.sail $SAILDIR/mips_new_tc/mips_wrappers.sail > $DIR/pass/mips_wrappers.sail
+MIPS="$SAILDIR/mips_new_tc"
+
+cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail > $DIR/pass/mips_prelude.sail
+cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb.sail > $DIR/pass/mips_tlb.sail
+cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb.sail $MIPS/mips_wrappers.sail > $DIR/pass/mips_wrappers.sail
+cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb.sail $MIPS/mips_wrappers.sail $MIPS/mips_insts.sail $MIPS/mips_epilogue.sail > $DIR/pass/mips_insts.sail
 
 pass=0
 fail=0

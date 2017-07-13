@@ -35,8 +35,10 @@
 (* mips_wrappers.sail: wrappers functions and hooks for CHERI extensibility 
    (mostly identity functions here) *)
 
-function unit effect {wmem} MEMw_wrapper((bit[64]) addr, ([:8:]) size, (bit[64]) data) =
-    let ledata = reverse_endianness'(8, data) in
+val forall Nat 'n, 'n >= 1, 'n <= 8. (bit[64], [:'n:], bit[8 * 'n]) -> unit effect {eamem, wmv, wreg} MEMw_wrapper
+
+function unit MEMw_wrapper((bit[64]) addr, ([:'n:]) size, (bit[8 * 'n]) data) =
+    let ledata = reverse_endianness'(sizeof 'n, data) in
     if (addr == 0x000000007f000000) then
       {
         UART_WDATA   := ledata[7..0];
@@ -46,10 +48,12 @@ function unit effect {wmem} MEMw_wrapper((bit[64]) addr, ([:8:]) size, (bit[64])
         MEMval(addr, size, ledata);
       }
 
-function bool effect {wmem} MEMw_conditional_wrapper((bit[64]) addr, ([:8:]) size, (bit[64]) data) =
+val forall Nat 'n, 'n >= 1, 'n <= 8. (bit[64], [:'n:], bit[8 * 'n]) -> bool effect {eamem, wmv} MEMw_conditional_wrapper
+
+function bool MEMw_conditional_wrapper(addr, size, data) =
     {
       MEMea_conditional(addr, size);
-      MEMval_conditional(addr, size, reverse_endianness'(8, data))
+      MEMval_conditional(addr, size, reverse_endianness'(sizeof 'n, data))
     }
 
 function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordType) width) =

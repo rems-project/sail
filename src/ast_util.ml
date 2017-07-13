@@ -294,6 +294,7 @@ and string_of_lexp (LEXP_aux (lexp, _)) =
   | LEXP_tup lexps -> "(" ^ string_of_list ", " string_of_lexp lexps ^ ")"
   | LEXP_vector (lexp, exp) -> string_of_lexp lexp ^ "[" ^ string_of_exp exp ^ "]"
   | LEXP_field (lexp, id) -> string_of_lexp lexp ^ "." ^ string_of_id id
+  | LEXP_memory (f, xs) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"
   | _ -> "LEXP"
 and string_of_letbind (LB_aux (lb, l)) =
   match lb with
