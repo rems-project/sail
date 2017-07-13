@@ -4,6 +4,8 @@ open Ast_util
 open Type_check_new
 
 let disable_const_propagation = ref false
+let size_set_limit = 8
+let vector_split_limit = 4
 
 (* TODO: some places will need Type_check_new.expand_synonyms *)
 
@@ -176,11 +178,10 @@ let split_src_type i ty (TypQ_aux (q,ql)) =
      in
      let nvar_sets = List.map find_set nvars in
      let total_variants = List.fold_left ( * ) 1 (List.map (fun (_,l) -> List.length l) nvar_sets) in
-     let limit = 8 in
-     let () = if total_variants > limit then
+     let () = if total_variants > size_set_limit then
          raise (Reporting_basic.err_general ql
                   (string_of_int total_variants ^ "variants for constructor " ^ i ^
-                     "bigger than limit " ^ string_of_int limit)) else ()
+                     "bigger than limit " ^ string_of_int size_set_limit)) else ()
      in
      let variants = cross nvar_sets in
      let name l = String.concat "_" (i::(List.map (fun (v,i) -> string_of_kid v ^ string_of_int i) l)) in
@@ -739,10 +740,16 @@ let split_defs splits defs =
     | Typ_app (Id_aux (Id "vector",_), [_;Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (match len with
        | Nexp_aux (Nexp_constant sz,_) ->
-          let lits = make_vectors sz in
-          List.map (fun lit ->
-            P_aux (P_lit lit,(l,annot)),
-            (var,E_aux (E_lit lit,(new_l,annot)))) lits
+          if sz <= vector_split_limit then
+            let lits = make_vectors sz in
+            List.map (fun lit ->
+              P_aux (P_lit lit,(l,annot)),
+              (var,E_aux (E_lit lit,(new_l,annot)))) lits
+          else
+            raise (Reporting_basic.err_general l
+                     ("Refusing to split vector type of length " ^ string_of_int sz ^
+                         " above limit " ^ string_of_int vector_split_limit ^ 
+                         " for variable " ^ v))
        | _ ->
           cannot ()
        )
