@@ -10,6 +10,7 @@ YELLOW='\033[0;33m'
 NC='\033[0m'
 
 mkdir -p $DIR/rtpass
+mkdir -p $DIR/rtpass2
 mkdir -p $DIR/lem
 mkdir -p $DIR/rtfail
 
@@ -60,9 +61,14 @@ for i in `ls $DIR/pass/`;
 do
     if $SAILDIR/sail -ddump_tc_ast -just_check $DIR/pass/$i 2> /dev/null 1> $DIR/rtpass/$i;
     then
-	if $SAILDIR/sail -dno_cast -just_check $DIR/rtpass/$i 2> /dev/null;
+	if $SAILDIR/sail -dno_cast -ddump_tc_ast -just_check $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
 	then
-	    green "tested $i expecting pass" "pass"
+	    if diff $DIR/rtpass/$i $DIR/rtpass2/$i;
+	    then
+		green "tested $i expecting pass" "pass"
+	    else
+		yellow "tested $i expecting pass" "re-check AST was different"
+	    fi
 	else
 	    yellow "tested $i expecting pass" "failed re-check"
 	fi

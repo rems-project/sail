@@ -2351,11 +2351,11 @@ let check_letdef env (LB_aux (letbind, (l, _))) =
     | LB_val_implicit (P_aux (P_typ (typ_annot, pat), _), bind) ->
        let checked_bind = crule check_exp env (strip_exp bind) typ_annot in
        let tpat, env = bind_pat env (strip_pat pat) typ_annot in
-       DEF_val (LB_aux (LB_val_implicit (P_aux (P_typ (typ_annot, tpat), (l, Some (env, typ_annot, no_effect))), checked_bind), (l, None))), env
+       [DEF_val (LB_aux (LB_val_implicit (P_aux (P_typ (typ_annot, tpat), (l, Some (env, typ_annot, no_effect))), checked_bind), (l, None)))], env
     | LB_val_implicit (pat, bind) ->
        let inferred_bind = irule infer_exp env (strip_exp bind) in
        let tpat, env = bind_pat env (strip_pat pat) (typ_of inferred_bind) in
-       DEF_val (LB_aux (LB_val_implicit (tpat, inferred_bind), (l, None))), env
+       [DEF_val (LB_aux (LB_val_implicit (tpat, inferred_bind), (l, None)))], env
   end
 
 let check_funcl env (FCL_aux (FCL_Funcl (id, pat, exp), (l, _))) typ =
@@ -2394,6 +2394,8 @@ let infer_funtyp l env tannotopt funcls =
      end
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> typ_error l "Cannot infer function type for unannotated function"
 
+let mk_val_spec typq typ id = DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id), (Parse_ast.Unknown, None)))
+
 let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, _)) as fd_aux) =
   let id =
     match (List.fold_right
@@ -2409,7 +2411,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
   in
   typ_print ("\nChecking function " ^ string_of_id id);
   let have_val_spec, (quant, (Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, declared_eff), vl) as typ)), env =
-  try true, Env.get_val_spec id env, env with
+    try true, Env.get_val_spec id env, env with
     | Type_error (l, _) ->
        let (quant, typ) = infer_funtyp l env tannotopt funcls in
        false, (quant, typ), env
@@ -2418,13 +2420,16 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
   let funcl_env = add_typquant quant env in
   let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
   let eff = List.fold_left union_effects no_effect (List.map funcl_effect funcls) in
-  let env, declared_eff =
+  let vs_def, env, declared_eff =
     if not have_val_spec
-    then Env.add_val_spec id (quant, Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, eff), vl)) env, eff
-    else env, declared_eff
+    then
+      let typ = Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, eff), vl) in
+      [mk_val_spec quant typ id], Env.add_val_spec id (quant, typ) env, eff
+    else [], env, declared_eff
   in
   if equal_effects eff declared_eff
-  then DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, None))), env
+  then
+    vs_def @ [DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, None)))], env
   else typ_error l ("Effects do not match: " ^ string_of_effect declared_eff ^ " declared and " ^ string_of_effect eff ^ " found")
 
 (* Checking a val spec simply adds the type as a binding in the
@@ -2436,13 +2441,13 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
     | VS_cast_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id) -> (id, quants, typ, Env.add_cast id env)
     | VS_extern_no_rename (TypSchm_aux (TypSchm_ts (quants, typ), _), id) -> (id, quants, typ, env)
     | VS_extern_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, _) -> (id, quants, typ, env) in
-  DEF_spec (VS_aux (vs, (l, None))), Env.add_val_spec id (quants, typ) env
+  [DEF_spec (VS_aux (vs, (l, None)))], Env.add_val_spec id (quants, typ) env
 
 let check_default env (DT_aux (ds, l)) =
   match ds with
-  | DT_kind _ -> DEF_default (DT_aux (ds,l)), env (* Check: Is this supposed to do nothing? *)
-  | DT_order (Ord_aux (Ord_inc, _)) -> DEF_default (DT_aux (ds, l)), Env.set_default_order_inc env
-  | DT_order (Ord_aux (Ord_dec, _)) -> DEF_default (DT_aux (ds, l)), Env.set_default_order_dec env
+  | DT_kind _ -> [DEF_default (DT_aux (ds,l))], env (* Check: Is this supposed to do nothing? *)
+  | DT_order (Ord_aux (Ord_inc, _)) -> [DEF_default (DT_aux (ds, l))], Env.set_default_order_inc env
+  | DT_order (Ord_aux (Ord_dec, _)) -> [DEF_default (DT_aux (ds, l))], Env.set_default_order_dec env
   | DT_order (Ord_aux (Ord_var _, _)) -> typ_error l "Cannot have variable default order"
   (* This branch allows us to write something like: default forall Nat 'n. [|'n|] name... what does this even mean?! *)
   | DT_typ (typschm, id) -> typ_error l ("Unsupported default construct")
@@ -2489,19 +2494,19 @@ let check_typedef env (TD_aux (tdef, (l, _))) =
   let td_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented Typedef") in
   match tdef with
   | TD_abbrev(id, nmscm, (TypSchm_aux (TypSchm_ts (typq, typ), _))) ->
-     DEF_type (TD_aux (tdef, (l, None))), Env.add_typ_synonym id (fun _ -> typ) env
+     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_typ_synonym id (fun _ -> typ) env
   | TD_record(id, nmscm, typq, fields, _) ->
-     DEF_type (TD_aux (tdef, (l, None))), Env.add_record id typq fields env
+     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_record id typq fields env
   | TD_variant(id, nmscm, typq, arms, _) ->
      let env =
        env
        |> Env.add_variant id (typq, arms)
        |> (fun env -> List.fold_left (fun env tu -> check_type_union env id typq tu) env arms)
      in
-     DEF_type (TD_aux (tdef, (l, None))), env
+     [DEF_type (TD_aux (tdef, (l, None)))], env
   | TD_enum(id, nmscm, ids, _) ->
-     DEF_type (TD_aux (tdef, (l, None))), Env.add_enum id ids env
-  | TD_register(id, base, top, ranges) -> DEF_type (TD_aux (tdef, (l, None))), check_register env id base top ranges
+     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_enum id ids env
+  | TD_register(id, base, top, ranges) -> [DEF_type (TD_aux (tdef, (l, None)))], check_register env id base top ranges
 
 let rec check_def env def =
   let cd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented Case") in
@@ -2512,16 +2517,16 @@ let rec check_def env def =
   | DEF_val letdef -> check_letdef env letdef
   | DEF_spec vs -> check_val_spec env vs
   | DEF_default default -> check_default env default
-  | DEF_overload (id, ids) -> DEF_overload (id, ids), Env.add_overloads id ids env
+  | DEF_overload (id, ids) -> [DEF_overload (id, ids)], Env.add_overloads id ids env
   | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), (l, _))) ->
-     DEF_reg_dec (DEC_aux (DEC_reg (typ, id), (l, None))), Env.add_register id typ env
+     [DEF_reg_dec (DEC_aux (DEC_reg (typ, id), (l, None)))], Env.add_register id typ env
   | DEF_reg_dec (DEC_aux (DEC_alias (id, aspec), (l, annot))) -> cd_err ()
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Scattered given to type checker")
-  | DEF_comm (DC_comm str) -> DEF_comm (DC_comm str), env
+  | DEF_comm (DC_comm str) -> [DEF_comm (DC_comm str)], env
   | DEF_comm (DC_comm_struct def) ->
-     let def, env = check_def env def
-     in DEF_comm (DC_comm_struct def), env
+     let defs, env = check_def env def
+     in List.map (fun def -> DEF_comm (DC_comm_struct def)) defs, env
 
 let rec check' env (Defs defs) =
   match defs with
@@ -2529,7 +2534,7 @@ let rec check' env (Defs defs) =
   | def :: defs ->
      let (def, env) = check_def env def in
      let (Defs defs, env) = check' env (Defs defs) in
-     (Defs (def::defs)), env
+     (Defs (def @ defs)), env
 
 let check env defs =
   try check' env defs with

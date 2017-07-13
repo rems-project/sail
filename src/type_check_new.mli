@@ -72,7 +72,7 @@ module Env : sig
   val is_regtyp : id -> t -> bool
 
   (* Check if a local variable is mutable. Throws Type_error if it
-     isn't a mutable variable. Probably best to use Env.lookup_id
+     isn't a local variable. Probably best to use Env.lookup_id
      instead *)
   val is_mutable : id -> t -> bool
 
