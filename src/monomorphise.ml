@@ -506,11 +506,9 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
       let t2 = match t2.t with Tabbrev(_,t) -> t | _ -> t2 in
       if t1 = t2 then [] else
         match t1.t,t2.t with
-        | Tapp (s1,args1), Tapp (s2,args2) ->
-           if s1 = s2 then
-             List.concat (List.map2 from_args args1 args2)
-           else (Reporting_basic.print_err false true l "Monomorphisation"
-                   "Unexpected type mismatch"; [])
+        (* Can get legal mismatches; e.g. int and atom *)
+        | Tapp (s1,args1), Tapp (s2,args2) when s1 = s2 ->
+           List.concat (List.map2 from_args args1 args2)
         | Ttup ts1, Ttup ts2 ->
            if List.length ts1 = List.length ts2 then
              List.concat (List.map2 from_types ts1 ts2)
@@ -979,6 +977,7 @@ let split_defs splits (Type_check.Env (d_env,t_env,b_env,tp_env)) defs =
       | DEF_default _
       | DEF_reg_dec _
       | DEF_comm _
+      | DEF_overload _
         -> [d]
       | DEF_fundef fd -> [DEF_fundef (map_fundef fd)]
       | DEF_val lb -> [DEF_val (map_letbind lb)]
