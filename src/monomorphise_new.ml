@@ -27,6 +27,12 @@ module KSubst = Map.Make(Kid)
 module ISubst = Map.Make(Id)
 let ksubst_from_list = List.fold_left (fun s (v,i) -> KSubst.add v i s) KSubst.empty
 let isubst_from_list = List.fold_left (fun s (v,i) -> ISubst.add v i s) ISubst.empty
+(* union was introduced in 4.03.0, a bit too recently *)
+let isubst_union s1 s2 =
+  ISubst.merge (fun _ x y -> match x,y with
+  |  _, (Some x) -> Some x
+  |  (Some x), _ -> Some x
+  |  _,  _ -> None) s1 s2
 
 let subst_src_typ substs t =
   let rec s_snexp (Nexp_aux (ne,l) as nexp) =
@@ -607,7 +613,7 @@ let split_defs splits defs =
        | None -> re (E_case (e', List.map (const_prop_pexp substs) cases))
        | Some (E_aux (_,(_,annot')) as exp,newbindings) ->
           let newbindings_env = isubst_from_list newbindings in
-          let substs' = ISubst.union (fun _ _ s -> Some s) substs newbindings_env in
+          let substs' = isubst_union substs newbindings_env in
           nexp_substs := build_nexp_subst l annot annot' @ !nexp_substs;
           const_prop_exp substs' exp)
     | E_let (lb,e) ->
