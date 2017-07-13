@@ -59,7 +59,21 @@ let subst_src_typ substs t =
     | Typ_arg_effect _ -> targ
   in s_styp t
 
+let make_vector_lit sz i =
+  let f j = if (i lsr (sz-j-1)) mod 2 = 0 then '0' else '1' in
+  let s = String.init sz f in
+  L_aux (L_bin s,Generated Unknown)
 
+let tabulate f n =
+  let rec aux acc n =
+    let acc' = f n::acc in
+    if n = 0 then acc' else aux acc' (n-1)
+  in if n = 0 then [] else aux [] (n-1)
+
+let make_vectors sz =
+  tabulate (make_vector_lit sz) (1 lsl sz)
+  
+  
 
 
 (* Based on current type checker's behaviour *)
@@ -722,6 +736,16 @@ let split_defs splits defs =
              (var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))))
              [L_zero; L_one]
          else cannot ())
+    | Typ_app (Id_aux (Id "vector",_), [_;Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
+       (match len with
+       | Nexp_aux (Nexp_constant sz,_) ->
+          let lits = make_vectors sz in
+          List.map (fun lit ->
+            P_aux (P_lit lit,(l,annot)),
+            (var,E_aux (E_lit lit,(new_l,annot)))) lits
+       | _ ->
+          cannot ()
+       )
     (*|  vectors TODO *)
     (*|  numbers TODO *)
     | _ -> cannot ()
