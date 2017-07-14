@@ -436,7 +436,14 @@ let split_defs splits defs =
 
   let (refinements, defs') = split_constructors defs in
 
+
   (* Attempt simple pattern matches *)
+  let lit_match = function
+    | (L_zero | L_false), (L_zero | L_false) -> true
+    | (L_one  | L_true ), (L_one  | L_true ) -> true
+    | l1,l2 -> l1 = l2
+  in
+
   let can_match (E_aux (e,(l,annot)) as exp0) cases =
     let (env,ty) = match annot with Some (env,ty,_) -> env,ty | None -> failwith "env" in
     let rec findpat_generic check_pat description = function
@@ -467,14 +474,10 @@ let split_defs splits defs =
                   "Unexpected kind of pattern for enumeration"; None)
           in findpat_generic checkpat i cases
        | _ -> None)
-    (* TODO: could generalise Lit matching *)
-    | E_lit (L_aux ((L_zero | L_one | L_true | L_false) as bit, _)) ->
+    | E_lit (L_aux (lit_e, _)) ->
        let checkpat = function
-         | (Pat_exp (P_aux (P_lit (L_aux (lit, _)),_),exp)) ->
-            (match bit,lit with
-            | (L_zero | L_false), (L_zero | L_false) -> Some (exp,[])
-            | (L_one  | L_true ), (L_one  | L_true ) -> Some (exp,[])
-            | _ -> None)
+         | (Pat_exp (P_aux (P_lit (L_aux (lit_p, _)),_),exp)) ->
+            if lit_match (lit_e,lit_p) then Some (exp,[]) else None
          | (Pat_exp (P_aux (_,(l',_)),_)) ->
             (Reporting_basic.print_err false true l' "Monomorphisation"
                "Unexpected kind of pattern for bit"; None)
