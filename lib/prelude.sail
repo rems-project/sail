@@ -64,7 +64,9 @@ val forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.
 val forall Num 'm, Num 'p, Order 'ord.
     list<bit> -> vector<'p, 'm, 'ord, bit> effect pure exts_bl
 
-val cast forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord, 'm >= 'n.
+(* If we want an automatic bitvector extension, then this is the function to
+   use, but I've disabled the cast because it hides signedness bugs. *)
+val (*cast*) forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord, 'm >= 'n.
     vector<'o, 'n, 'ord, bit> -> vector<'p, 'm, 'ord, bit> effect pure extzi
 
 overload EXTZ [extz; extz_bl]

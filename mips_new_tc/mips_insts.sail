@@ -702,7 +702,7 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : 0b00000 : 0b00000 :
   Some(DMULT(rs, rt))
 function clause execute (DMULT(rs, rt)) =
   {
-    (bit[128]) result := (rGPR(rs)) *_s (rGPR(rt));
+    (bit[128]) result := (exts (rGPR(rs))) *_s (exts (rGPR(rt)));
     HI := (result[127..64]);
     LO := (result[63..0]);
   }
@@ -713,7 +713,7 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : 0b00000 : 0b00000 :
   Some(DMULTU(rs, rt))
 function clause execute (DMULTU(rs, rt)) =
   {
-    (bit[128]) result := (rGPR(rs)) * (rGPR(rt));
+    (bit[128]) result := (extz (rGPR(rs))) * (extz (rGPR(rt)));
     HI := (result[127..64]);
     LO := (result[63..0]);
   }
@@ -729,7 +729,7 @@ function clause execute (MADD(rs, rt)) =
     (bit[64]) mul_result := if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-        ((rsVal[31..0]) *_s (rtVal[31..0]));
+        ((exts (rsVal[31..0])) *_s (exts (rtVal[31..0])));
     (bit[64]) result := mul_result + (HI[31..0] : LO[31..0]);
     HI := EXTS(result[63..32]);
     LO := EXTS(result[31..0]);
@@ -746,7 +746,7 @@ function clause execute (MADDU(rs, rt)) =
     (bit[64]) mul_result := if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-        ((rsVal[31..0]) * (rtVal[31..0]));
+        ((extz (rsVal[31..0])) * (extz (rtVal[31..0])));
     (bit[64]) result := mul_result + (HI[31..0] : LO[31..0]);
     HI := EXTS(result[63..32]);
     LO := EXTS(result[31..0]);
@@ -763,7 +763,7 @@ function clause execute (MSUB(rs, rt)) =
     (bit[64]) mul_result := if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-        ((rsVal[31..0]) *_s (rtVal[31..0]));
+        ((exts (rsVal[31..0])) *_s (exts (rtVal[31..0])));
     (bit[64]) result := (HI[31..0] : LO[31..0]) - mul_result;
     HI := EXTS(result[63..32]);
     LO := EXTS(result[31..0]);
@@ -780,7 +780,7 @@ function clause execute (MSUBU(rs, rt)) =
     (bit[64]) mul_result := if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-        ((rsVal[31..0]) * (rtVal[31..0]));
+        ((extz (rsVal[31..0])) * (extz (rtVal[31..0])));
     (bit[64]) result := (HI[31..0] : LO[31..0]) - mul_result;
     HI := EXTS(result[63..32]);
     LO := EXTS(result[31..0]);
@@ -1119,6 +1119,15 @@ function clause decode (0b110000 : (regno) base : (regno) rt : (imm16) offset) =
   Some(Load(W, true,  true, base, rt, offset))  (* LL *)
 function clause decode (0b110100 : (regno) base : (regno) rt : (imm16) offset) =
   Some(Load(D, false, true, base, rt, offset))  (* LLD *)
+
+val forall 'sz. (bit['sz], bool) -> bit[64] effect pure extendLoad
+function extendLoad(memResult, signed) = {
+  if (signed) then
+    EXTS(memResult)
+  else
+    EXTZ(memResult)
+}
+
 function clause execute (Load(width, signed, linked, base, rt, offset)) =
   {
     (bit[64]) vAddr := addrWrapper(EXTS(offset) + rGPR(base), LoadData, width);
@@ -1132,23 +1141,20 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
                   CP0LLBit  := 0b1;
 		  CP0LLAddr := pAddr;
 		  switch wordWidthBytes(width) {
-		    case ([:1:]) w -> MEMr_reserve_wrapper(pAddr, w)
-		    case ([:2:]) w -> MEMr_reserve_wrapper(pAddr, w)
-		    case ([:4:]) w -> MEMr_reserve_wrapper(pAddr, w)
-		    case ([:8:]) w -> MEMr_reserve_wrapper(pAddr, w)
+		    case ([:1:]) w -> extendLoad(MEMr_reserve_wrapper(pAddr, w), signed)
+		    case ([:2:]) w -> extendLoad(MEMr_reserve_wrapper(pAddr, w), signed)
+		    case ([:4:]) w -> extendLoad(MEMr_reserve_wrapper(pAddr, w), signed)
+		    case ([:8:]) w -> extendLoad(MEMr_reserve_wrapper(pAddr, w), signed)
 		  }
                 }
               else
 		switch wordWidthBytes(width) {
-		  case ([:1:]) w -> MEMr_reserve_wrapper(pAddr, w)
-		  case ([:2:]) w -> MEMr_reserve_wrapper(pAddr, w)
-		  case ([:4:]) w -> MEMr_reserve_wrapper(pAddr, w)
-		  case ([:8:]) w -> MEMr_reserve_wrapper(pAddr, w)
+		  case ([:1:]) w -> extendLoad(MEMr_wrapper(pAddr, w), signed)
+		  case ([:2:]) w -> extendLoad(MEMr_wrapper(pAddr, w), signed)
+		  case ([:4:]) w -> extendLoad(MEMr_wrapper(pAddr, w), signed)
+		  case ([:8:]) w -> extendLoad(MEMr_wrapper(pAddr, w), signed)
 		};
-	    if (signed) then
-              wGPR(rt) := EXTS(memResult)
-            else
-              wGPR(rt) := EXTZ(memResult)
+            wGPR(rt) := memResult
           }
   }
 
