@@ -439,50 +439,46 @@ let split_defs splits defs =
   (* Attempt simple pattern matches *)
   let can_match (E_aux (e,(l,annot)) as exp0) cases =
     let (env,ty) = match annot with Some (env,ty,_) -> env,ty | None -> failwith "env" in
+    let rec findpat_generic check_pat description = function
+      | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
+                 ("Failed to find a case for " ^ description); None)
+      | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[])
+      | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
+         findpat_generic check_pat description ((Pat_aux (Pat_exp (p,exp),ann))::tl)
+      | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
+          when pat_id_is_variable env id' ->
+         Some (exp, [(id', exp0)])
+      | (Pat_aux (p,_))::tl ->
+         match check_pat p with
+         | None -> findpat_generic check_pat description tl
+         | result -> result
+    in
     match e with
     | E_id id ->
        let i = id_to_string id in
        (match Env.lookup_id id env with
        | Enum _ ->
-          let rec findpat cases =
-            match cases with
-            | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
-                       ("Failed to find a case for " ^ i); None)
-            | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[])
-            | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
-               findpat ((Pat_aux (Pat_exp (p,exp),ann))::tl)
-            | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
-                when pat_id_is_variable env id' ->
-               Some (exp, [(id', exp0)])
-            | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
-            | (Pat_aux (Pat_exp (P_aux (P_app (id',[]),_),exp),_))::tl ->
-               if i = id_to_string id' then Some (exp,[]) else findpat tl
-            | (Pat_aux (Pat_exp (P_aux (_,(l',_)),_),_))::_ ->
+          let checkpat = function
+            | (Pat_exp (P_aux (P_id id',_),exp))
+            | (Pat_exp (P_aux (P_app (id',[]),_),exp)) ->
+               if i = id_to_string id' then Some (exp,[]) else None
+            | (Pat_exp (P_aux (_,(l',_)),_)) ->
                (Reporting_basic.print_err false true l' "Monomorphisation"
                   "Unexpected kind of pattern for enumeration"; None)
-          in findpat cases
+          in findpat_generic checkpat i cases
        | _ -> None)
     (* TODO: could generalise Lit matching *)
     | E_lit (L_aux ((L_zero | L_one | L_true | L_false) as bit, _)) ->
-       let rec findpat cases =
-         match cases with
-         | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
-                    ("Failed to find a case for bit"); None)
-         | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[])
-         | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
-            findpat ((Pat_aux (Pat_exp (p,exp),ann))::tl)
-         | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
-             when pat_id_is_variable env id' ->
-            Some (exp, [(id', exp0)])
-         | (Pat_aux (Pat_exp (P_aux (P_lit (L_aux (lit, _)),_),exp),_))::tl ->
+       let checkpat = function
+         | (Pat_exp (P_aux (P_lit (L_aux (lit, _)),_),exp)) ->
             (match bit,lit with
             | (L_zero | L_false), (L_zero | L_false) -> Some (exp,[])
             | (L_one  | L_true ), (L_one  | L_true ) -> Some (exp,[])
-            | _ -> findpat tl)
-         | (Pat_aux (Pat_exp (P_aux (_,(l',_)),_),_))::_ ->
+            | _ -> None)
+         | (Pat_exp (P_aux (_,(l',_)),_)) ->
             (Reporting_basic.print_err false true l' "Monomorphisation"
                "Unexpected kind of pattern for bit"; None)
-       in findpat cases
+       in findpat_generic checkpat "bit" cases
     | _ -> None
   in
 
