@@ -9,7 +9,6 @@
 (*    Robert Norton-Wright                                                *)
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
-(*    Alasdair Armstrong                                                  *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -42,55 +41,30 @@
 (**************************************************************************)
 
 open Ast
+open Util
+open Type_check_new
 
-(* Functions to map over the annotations in sub-expressions *)
-val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
-val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat
-val map_lexp_annot : ('a annot -> 'b annot) -> 'a lexp -> 'b lexp
-val map_letbind_annot : ('a annot -> 'b annot) -> 'a letbind -> 'b letbind
+(*Determines if the first typ is within the range of the the second typ, 
+  using the constraints provided when the first typ contains variables. 
+  It is an error for second typ to be anything other than a range type
+  If the first typ is a vector, then determines if the max representable 
+  number is in the range of the second; it is an error for the first typ
+  to be anything other than a vector, a range, an atom, or a bit (after
+  suitable unwrapping of abbreviations, reg, and registers). 
+*)
+(* val is_within_range: typ -> typ -> nexp_range list -> triple
+val is_within_machine64 : typ -> nexp_range list -> triple *)
 
-(* Extract locations from identifiers *)
-val id_loc : id -> Parse_ast.l
-val kid_loc : kid -> Parse_ast.l
+(* free variables and dependencies *)
 
-(* For debugging and error messages only: Not guaranteed to produce
-   parseable SAIL, or even print all language constructs! *)
-(* TODO: replace with existing pretty-printer *)
-val string_of_id : id -> string
-val string_of_kid : kid -> string
-val string_of_base_effect_aux : base_effect_aux -> string
-val string_of_base_kind_aux : base_kind_aux -> string
-val string_of_base_kind : base_kind -> string
-val string_of_kind : kind -> string
-val string_of_base_effect : base_effect -> string
-val string_of_effect : effect -> string
-val string_of_order : order -> string
-val string_of_nexp : nexp -> string
-val string_of_typ : typ -> string
-val string_of_typ_arg : typ_arg -> string
-val string_of_n_constraint : n_constraint -> string
-val string_of_quant_item : quant_item -> string
-val string_of_typquant : typquant -> string
-val string_of_typschm : typschm -> string
-val string_of_lit : lit -> string
-val string_of_exp : 'a exp -> string
-val string_of_pexp : 'a pexp -> string
-val string_of_lexp : 'a lexp -> string
-val string_of_pat : 'a pat -> string
-val string_of_letbind : 'a letbind -> string
-val string_of_index_range : index_range -> string
+(*fv_of_def consider_ty_vars consider_scatter_as_one all_defs all_defs def -> (bound_by_def, free_in_def) *)
+(* val fv_of_def: bool -> bool -> ('a def) list -> 'a def -> Nameset.t * Nameset.t *)
 
-module Id : sig
-  type t = id
-  val compare : id -> id -> int
-end
+(*group_defs consider_scatter_as_one all_defs -> ((bound_by_def, free_in_def), def) list *)
+(* val group_defs : bool -> 'a defs -> ((Nameset.t * Nameset.t) * ('a def)) list *)
 
-module Kid : sig
-  type t = kid
-  val compare : kid -> kid -> int
-end
+(*reodering definitions, initial functions *)
+(* produce a new ordering for defs, limiting to those listed in the list, which respects dependencies *)
+(* val restrict_defs : 'a defs -> string list -> 'a defs *)
 
-module BE : sig
-  type t = base_effect
-  val compare : base_effect -> base_effect -> int
-end
+val top_sort_defs : tannot defs -> tannot defs

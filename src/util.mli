@@ -77,6 +77,12 @@ val option_bind : ('a -> 'b option) -> 'a option -> 'b option
     whereas [option_default d (Some x)] returns [x]. *)
 val option_default : 'a -> 'a option -> 'a
 
+(** [option_binop f None None] returns [None], while
+    [option_binop f (Some x) None] and [option_binop f None (Some x)]
+    return [Some x], and [option_binop f (Some x) (Some y)] returns
+    [Some (f x y)] *)
+val option_binop : ('a -> 'a -> 'a) -> 'a option -> 'a option -> 'a option
+
 (** [option_get_exn exn None] throws the exception [exn],
     whereas [option_get_exn exn (Some x)] returns [x]. *)
 val option_get_exn : exn -> 'a option -> 'a

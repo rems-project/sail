@@ -131,6 +131,11 @@ val mk_effect : base_effect_aux list -> effect
 val union_effects : effect -> effect -> effect
 val equal_effects : effect -> effect -> bool
 
+val nconstant : int -> nexp
+val nminus : nexp -> nexp -> nexp
+val nsum : nexp -> nexp -> nexp
+val nvar : kid -> nexp
+
 (* Sail builtin types. *)
 val int_typ : typ
 val nat_typ : typ
@@ -152,6 +157,7 @@ type tannot = (Env.t * typ * effect) option
 
 (* Strip the type annotations from an expression. *)
 val strip_exp : 'a exp -> unit exp
+val strip_pat : 'a pat -> unit pat
 
 (* Check an expression has some type. Returns a fully annotated
    version of the expression, where each subexpression is annotated
