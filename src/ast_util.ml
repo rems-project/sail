@@ -62,6 +62,7 @@ and map_exp_annot_aux f = function
      E_vector_indexed (List.map (fun (i, exp) -> (i, map_exp_annot f exp)) iexps, map_opt_default_annot f opt_default)
   | E_vector_access (exp1, exp2) -> E_vector_access (map_exp_annot f exp1, map_exp_annot f exp2)
   | E_vector_subrange (exp1, exp2, exp3) -> E_vector_subrange (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
+  | E_vector_update (exp1, exp2, exp3) -> E_vector_update (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
   | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
      E_vector_update_subrange (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3, map_exp_annot f exp4)
   | E_vector_append (exp1, exp2) -> E_vector_append (map_exp_annot f exp1, map_exp_annot f exp2)
@@ -327,4 +328,3 @@ module Id = struct
     | Id_aux (Id _, _), Id_aux (DeIid _, _) -> -1
     | Id_aux (DeIid _, _), Id_aux (Id _, _) -> 1
 end
-
