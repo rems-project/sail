@@ -1560,9 +1560,14 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      end
   | E_case (exp, cases), _ ->
      let inferred_exp = irule infer_exp env exp in
-     let check_case (Pat_aux (Pat_exp (pat, case), (l, _))) typ =
-       let tpat, env = bind_pat env pat (typ_of inferred_exp) in
-       Pat_aux (Pat_exp (tpat, crule check_exp env case typ), (l, None))
+     let check_case pat typ = match pat with
+       | Pat_aux (Pat_exp (pat, case), (l, _)) ->
+          let tpat, env = bind_pat env pat (typ_of inferred_exp) in
+          Pat_aux (Pat_exp (tpat, crule check_exp env case typ), (l, None))
+       | Pat_aux (Pat_when (pat, guard, case), (l, _)) ->
+          let tpat, env = bind_pat env pat (typ_of inferred_exp) in
+          let checked_guard = check_exp env guard bool_typ in
+          Pat_aux (Pat_when (tpat, checked_guard, crule check_exp env case typ), (l, None))
      in
      annot_exp (E_case (inferred_exp, List.map (fun case -> check_case case typ) cases)) typ
   | E_let (LB_aux (letbind, (let_loc, _)), exp), _ ->
@@ -2286,15 +2291,32 @@ and propagate_exp_effect_aux = function
   | exp_aux -> typ_error Parse_ast.Unknown ("Unimplemented: Cannot propagate effect in expression "
                                             ^ string_of_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))))
 
-and propagate_pexp_effect (Pat_aux (Pat_exp (pat, exp), (l, annot))) =
-  let propagated_pat = propagate_pat_effect pat in
-  let propagated_exp = propagate_exp_effect exp in
-  let propagated_eff = union_effects (effect_of_pat propagated_pat) (effect_of propagated_exp) in
-  match annot with
-  | Some (typq, typ, eff) ->
-     Pat_aux (Pat_exp (propagated_pat, propagated_exp), (l, Some (typq, typ, union_effects eff propagated_eff))),
-     union_effects eff propagated_eff
-  | None -> Pat_aux (Pat_exp (propagated_pat, propagated_exp), (l, None)), propagated_eff
+and propagate_pexp_effect = function
+  | Pat_aux (Pat_exp (pat, exp), (l, annot)) ->
+     begin
+       let propagated_pat = propagate_pat_effect pat in
+       let propagated_exp = propagate_exp_effect exp in
+       let propagated_eff = union_effects (effect_of_pat propagated_pat) (effect_of propagated_exp) in
+       match annot with
+       | Some (typq, typ, eff) ->
+          Pat_aux (Pat_exp (propagated_pat, propagated_exp), (l, Some (typq, typ, union_effects eff propagated_eff))),
+         union_effects eff propagated_eff
+       | None -> Pat_aux (Pat_exp (propagated_pat, propagated_exp), (l, None)), propagated_eff
+     end
+  | Pat_aux (Pat_when (pat, guard, exp), (l, annot)) ->
+     begin
+       let propagated_pat = propagate_pat_effect pat in
+       let propagated_guard = propagate_exp_effect guard in
+       let propagated_exp = propagate_exp_effect exp in
+       let propagated_eff = union_effects (effect_of_pat propagated_pat)
+                                          (union_effects (effect_of propagated_guard) (effect_of propagated_exp))
+       in
+       match annot with
+       | Some (typq, typ, eff) ->
+          Pat_aux (Pat_when (propagated_pat, propagated_guard, propagated_exp), (l, Some (typq, typ, union_effects eff propagated_eff))),
+          union_effects eff propagated_eff
+       | None -> Pat_aux (Pat_when (propagated_pat, propagated_guard, propagated_exp), (l, None)), propagated_eff
+     end
 
 and propagate_pat_effect (P_aux (pat, annot)) =
   let propagated_pat, eff = propagate_pat_effect_aux pat in

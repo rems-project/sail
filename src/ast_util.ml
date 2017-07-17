@@ -93,7 +93,10 @@ and map_opt_default_annot_aux f = function
   | Def_val_dec exp -> Def_val_dec (map_exp_annot f exp)
 and map_fexps_annot f (FES_aux (FES_Fexps (fexps, b), annot)) = FES_aux (FES_Fexps (List.map (map_fexp_annot f) fexps, b), f annot)
 and map_fexp_annot f (FE_aux (FE_Fexp (id, exp), annot)) = FE_aux (FE_Fexp (id, map_exp_annot f exp), f annot)
-and map_pexp_annot f (Pat_aux (Pat_exp (pat, exp), annot)) = Pat_aux (Pat_exp (map_pat_annot f pat, map_exp_annot f exp), f annot)
+and map_pexp_annot f (Pat_aux (pexp, annot)) = Pat_aux (map_pexp_annot_aux f pexp, f annot)
+and map_pexp_annot_aux f = function
+  | Pat_exp (pat, exp) -> Pat_exp (map_pat_annot f pat, map_exp_annot f exp)
+  | Pat_when (pat, guard, exp) -> Pat_when (map_pat_annot f pat, map_exp_annot f guard, map_exp_annot f exp)
 and map_pat_annot f (P_aux (pat, annot)) = P_aux (map_pat_annot_aux f pat, f annot)
 and map_pat_annot_aux f = function
   | P_lit lit -> P_lit lit
@@ -278,7 +281,10 @@ let rec string_of_exp (E_aux (exp, _)) =
      ^ ") { "
      ^ string_of_exp body
   | _ -> "INTERNAL"
-and string_of_pexp (Pat_aux (Pat_exp (pat, exp), _)) = string_of_pat pat ^ " -> " ^ string_of_exp exp
+and string_of_pexp (Pat_aux (pexp, _)) =
+  match pexp with
+  | Pat_exp (pat, exp) -> string_of_pat pat ^ " -> " ^ string_of_exp exp
+  | Pat_when (pat, guard, exp) -> string_of_pat pat ^ " when " ^ string_of_exp guard ^ " -> " ^ string_of_exp exp
 and string_of_pat (P_aux (pat, l)) =
   match pat with
   | P_lit lit -> string_of_lit lit

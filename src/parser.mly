@@ -131,7 +131,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 %token And Alias As Assert Bitzero Bitone Bits By Case Clause Const Dec Def Default Deinfix Effect EFFECT End 
 %token Enumerate Else Exit Extern False Forall Foreach Overload Function_ If_ In IN Inc Let_ Member Nat NatNum Order Cast
 %token Pure Rec Register Return Scattered Sizeof Struct Switch Then True TwoStarStar Type TYPE Typedef 
-%token Undefined Union With Val
+%token Undefined Union With When Val
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 
 
@@ -962,6 +962,8 @@ case_exps:
 patsexp:
   | atomic_pat MinusGt exp
     { peloc (Pat_exp($1,$3)) }
+  | atomic_pat When exp MinusGt exp
+    { peloc (Pat_when ($1, $3, $5)) }
 
 letbind:
   | Let_ atomic_pat Eq exp

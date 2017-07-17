@@ -364,8 +364,12 @@ let doc_exp, doc_let =
 
   and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id id) (exp e)
 
-  and doc_case (Pat_aux(Pat_exp(pat,e),_)) =
-    doc_op arrow (separate space [string "case"; doc_atomic_pat pat]) (group (exp e))
+  and doc_case (Pat_aux (pexp, _)) =
+    match pexp with
+    | Pat_exp(pat, e) ->
+       doc_op arrow (separate space [string "case"; doc_atomic_pat pat]) (group (exp e))
+    | Pat_when(pat, guard, e) ->
+       doc_op arrow (separate space [string "case"; doc_atomic_pat pat; string "when"; exp guard]) (group (exp e))
 
   (* lexps are parsed as eq_exp - we need to duplicate the precedence
    * structure for them *)

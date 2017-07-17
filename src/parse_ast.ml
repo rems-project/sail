@@ -305,6 +305,7 @@ and opt_default =
 
 and pexp_aux =  (* Pattern match *)
    Pat_exp of pat * exp
+ | Pat_when of pat * exp * exp
 
 and pexp = 
    Pat_aux of pexp_aux * l

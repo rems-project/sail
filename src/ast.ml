@@ -364,7 +364,8 @@ and 'a opt_default =
    Def_val_aux of 'a opt_default_aux * 'a annot
 
 and 'a pexp_aux =  (* Pattern match *)
-   Pat_exp of 'a pat * 'a exp
+  Pat_exp of 'a pat * 'a exp
+| Pat_when of 'a pat * 'a exp * 'a exp
 
 and 'a pexp =
    Pat_aux of 'a pexp_aux * 'a annot

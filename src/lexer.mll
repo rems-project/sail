@@ -106,6 +106,7 @@ let kw_table =
      ("undefined",               (fun x -> Undefined));
      ("union",			 (fun x -> Union));
      ("with",                    (fun x -> With));
+     ("when",                    (fun x -> When));
      ("val",                     (fun x -> Val));
 
      ("div",			 (fun x -> Div_));
