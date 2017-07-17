@@ -150,7 +150,7 @@ val bool -> bit effect pure bool_to_bit
 
 val (int, int) -> int effect pure mul_int
 val forall Num 'n, Num 'o, Order 'ord.
-    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure mul_vec
+    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<2 * 'n - 1, 2 * 'n, 'ord, bit> effect pure mul_vec
 
 overload (deinfix * ) [
   mul_vec;
@@ -158,7 +158,7 @@ overload (deinfix * ) [
 ]
 
 val forall Num 'n, Num 'o, Order 'ord.
-    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure mul_svec
+    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<2 * 'n - 1, 2 * 'n, 'ord, bit> effect pure mul_svec
 
 overload (deinfix *_s) [
   mul_svec

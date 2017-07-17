@@ -702,7 +702,7 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : 0b00000 : 0b00000 :
   Some(DMULT(rs, rt))
 function clause execute (DMULT(rs, rt)) =
   {
-    (bit[128]) result := (exts (rGPR(rs))) *_s (exts (rGPR(rt)));
+    (bit[128]) result := rGPR(rs) *_s rGPR(rt);
     HI := (result[127..64]);
     LO := (result[63..0]);
   }
@@ -713,7 +713,7 @@ function clause decode (0b000000 : (regno) rs : (regno) rt : 0b00000 : 0b00000 :
   Some(DMULTU(rs, rt))
 function clause execute (DMULTU(rs, rt)) =
   {
-    (bit[128]) result := (extz (rGPR(rs))) * (extz (rGPR(rt)));
+    (bit[128]) result := rGPR(rs) * rGPR(rt);
     HI := (result[127..64]);
     LO := (result[63..0]);
   }
@@ -729,7 +729,7 @@ function clause execute (MADD(rs, rt)) =
     (bit[64]) mul_result := if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-        ((exts (rsVal[31..0])) *_s (exts (rtVal[31..0])));
+	rsVal[31..0] *_s rtVal[31..0];
     (bit[64]) result := mul_result + (HI[31..0] : LO[31..0]);
     HI := EXTS(result[63..32]);
     LO := EXTS(result[31..0]);
@@ -746,7 +746,7 @@ function clause execute (MADDU(rs, rt)) =
     (bit[64]) mul_result := if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-        ((extz (rsVal[31..0])) * (extz (rtVal[31..0])));
+	rsVal[31..0] * rtVal[31..0];
     (bit[64]) result := mul_result + (HI[31..0] : LO[31..0]);
     HI := EXTS(result[63..32]);
     LO := EXTS(result[31..0]);
@@ -763,7 +763,7 @@ function clause execute (MSUB(rs, rt)) =
     (bit[64]) mul_result := if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-        ((exts (rsVal[31..0])) *_s (exts (rtVal[31..0])));
+	rsVal[31..0] *_s rtVal[31..0];
     (bit[64]) result := (HI[31..0] : LO[31..0]) - mul_result;
     HI := EXTS(result[63..32]);
     LO := EXTS(result[31..0]);
@@ -780,7 +780,7 @@ function clause execute (MSUBU(rs, rt)) =
     (bit[64]) mul_result := if (NotWordVal(rsVal) | NotWordVal(rtVal)) then
         undefined
       else
-        ((extz (rsVal[31..0])) * (extz (rtVal[31..0])));
+	rsVal[31..0] * rtVal[31..0];
     (bit[64]) result := (HI[31..0] : LO[31..0]) - mul_result;
     HI := EXTS(result[63..32]);
     LO := EXTS(result[31..0]);
