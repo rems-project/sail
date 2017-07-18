@@ -10,6 +10,7 @@
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
 (*    Alasdair Armstrong                                                  *)
+(*    Thomas Bauereiss                                                    *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -335,3 +336,50 @@ module Id = struct
     | Id_aux (Id _, _), Id_aux (DeIid _, _) -> -1
     | Id_aux (DeIid _, _), Id_aux (Id _, _) -> 1
 end
+
+let rec is_number (Typ_aux (t,_)) =
+  match t with
+  | Typ_app (Id_aux (Id "range", _),_)
+  | Typ_app (Id_aux (Id "implicit", _),_)
+  | Typ_app (Id_aux (Id "atom", _),_) -> true
+  | _ -> false
+
+let rec is_vector_typ = function
+  | Typ_aux (Typ_app (Id_aux (Id "vector",_), [_;_;_;_]), _) -> true
+  | Typ_aux (Typ_app (Id_aux (Id "register",_), [Typ_arg_aux (Typ_arg_typ rtyp,_)]), _) ->
+    is_vector_typ rtyp
+  | _ -> false
+
+let typ_app_args_of = function
+  | Typ_aux (Typ_app (Id_aux (Id c,_), targs), l) ->
+    (c, List.map (fun (Typ_arg_aux (a,_)) -> a) targs, l)
+  | Typ_aux (_, l) -> raise (Reporting_basic.err_typ l "typ_app_args_of called on non-app type")
+
+let rec vector_typ_args_of typ = match typ_app_args_of typ with
+  | ("vector", [Typ_arg_nexp start; Typ_arg_nexp len; Typ_arg_order ord; Typ_arg_typ etyp], _) ->
+    (start, len, ord, etyp)
+  | ("register", [Typ_arg_typ rtyp], _) -> vector_typ_args_of rtyp
+  | (_, _, l) -> raise (Reporting_basic.err_typ l "vector_typ_args_of called on non-vector type")
+
+let is_order_inc = function
+  | Ord_aux (Ord_inc, _) -> true
+  | Ord_aux (Ord_dec, _) -> false
+  | Ord_aux (Ord_var _, l) ->
+    raise (Reporting_basic.err_unreachable l "is_order_inc called on vector with variable ordering")
+
+let is_bit_typ = function
+  | Typ_aux (Typ_id (Id_aux (Id "bit", _)), _) -> true
+  | _ -> false
+
+let is_bitvector_typ typ =
+  if is_vector_typ typ then
+    let (_,_,_,etyp) = vector_typ_args_of typ in
+    is_bit_typ etyp
+  else false
+
+let has_effect (Effect_aux (eff,_)) searched_for = match eff with
+  | Effect_set effs ->
+    List.exists (fun (BE_aux (be,_)) -> be = searched_for) effs
+  | Effect_var _ ->
+    raise (Reporting_basic.err_unreachable Parse_ast.Unknown
+      "has_effect called on effect variable")

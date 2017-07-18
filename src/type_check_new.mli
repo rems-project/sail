@@ -172,10 +172,12 @@ val check_exp : Env.t -> unit exp -> typ -> tannot exp
    functions must be guaranteed to have tannots of the form Some (env,
    typ) for these to work. *)
 val typ_of : tannot exp -> typ
+val typ_of_annot : Ast.l * tannot -> typ
 
 val pat_typ_of : tannot pat -> typ
 
 val effect_of : tannot exp -> effect
+val effect_of_annot : tannot -> effect
 
 val propagate_exp_effect : tannot exp -> tannot exp
 

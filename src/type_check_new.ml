@@ -1376,13 +1376,13 @@ let destructure_vec_typ l env typ =
   in
   destructure_vec_typ' l (Env.expand_synonyms env typ)
 
-let typ_of (E_aux (_, (_, tannot))) = match tannot with
+let typ_of_annot (l, tannot) = match tannot with
   | Some (_, typ, _) -> typ
-  | None -> assert false
+  | None -> raise (Reporting_basic.err_unreachable l "no type annotation")
 
-let pat_typ_of (P_aux (_, (_, tannot))) = match tannot with
-  | Some (_, typ, _) -> typ
-  | None -> assert false
+let typ_of (E_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
+
+let pat_typ_of (P_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
 (* Flow typing *)
 
@@ -2190,30 +2190,25 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
 (* 6. Effect system                                                       *)
 (**************************************************************************)
 
-let effect_of (E_aux (exp, (l, annot))) =
-  match annot with
-  | Some (_, _, eff) -> eff
-  | None -> no_effect
+let effect_of_annot = function
+| Some (_, _, eff) -> eff
+| None -> no_effect
+
+let effect_of (E_aux (exp, (l, annot))) = effect_of_annot annot
 
 let add_effect (E_aux (exp, (l, annot))) eff1 =
   match annot with
   | Some (env, typ, eff2) -> E_aux (exp, (l, Some (env, typ, union_effects eff1 eff2)))
   | None -> assert false
 
-let effect_of_lexp (LEXP_aux (exp, (l, annot))) =
-  match annot with
-  | Some (_, _, eff) -> eff
-  | None -> no_effect
+let effect_of_lexp (LEXP_aux (exp, (l, annot))) = effect_of_annot annot
 
 let add_effect_lexp (LEXP_aux (lexp, (l, annot))) eff1 =
   match annot with
   | Some (env, typ, eff2) -> LEXP_aux (lexp, (l, Some (env, typ, union_effects eff1 eff2)))
   | None -> assert false
 
-let effect_of_pat (P_aux (exp, (l, annot))) =
-  match annot with
-  | Some (_, _, eff) -> eff
-  | None -> no_effect
+let effect_of_pat (P_aux (exp, (l, annot))) = effect_of_annot annot
 
 let add_effect_pat (P_aux (pat, (l, annot))) eff1 =
   match annot with

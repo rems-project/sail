@@ -10,6 +10,7 @@
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
 (*    Alasdair Armstrong                                                  *)
+(*    Thomas Bauereiss                                                    *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -94,3 +95,15 @@ module BE : sig
   type t = base_effect
   val compare : base_effect -> base_effect -> int
 end
+
+val is_number : typ -> bool
+val is_vector_typ : typ -> bool
+val is_bit_typ : typ -> bool
+val is_bitvector_typ : typ -> bool
+
+val typ_app_args_of : typ -> string * typ_arg_aux list * Ast.l
+val vector_typ_args_of : typ -> nexp * nexp * order * typ
+
+val is_order_inc : order -> bool
+
+val has_effect : effect -> base_effect_aux -> bool
