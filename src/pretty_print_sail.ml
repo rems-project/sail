@@ -103,6 +103,7 @@ let doc_lit (L_aux(l,_)) =
   | L_num i -> string_of_int i
   | L_hex n -> "0x" ^ n
   | L_bin n -> "0b" ^ n
+  | L_real r -> r
   | L_undef -> "undefined"
   | L_string s -> "\"" ^ s ^ "\"")
 

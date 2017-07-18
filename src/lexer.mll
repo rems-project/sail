@@ -314,14 +314,14 @@ rule token = parse
   | "-" (digit* as i1) "." (digit+ as i2) { (Real ("-" ^ i1 ^ "." ^ i2)) }
   | digit+ as i                           { (Num(int_of_string i)) }
   | "-" digit+ as i                       { (Num(int_of_string i)) }
-  | "0b" (binarydigit+ as i)	          { (Bin(i)) }
-  | "0x" (hexdigit+ as i) 		  { (Hex(i)) }
+  | "0b" (binarydigit+ as i)              { (Bin(i)) }
+  | "0x" (hexdigit+ as i)                 { (Hex(i)) }
   | '"'                                   { (String(
-					     string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf)) }
+                                             string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf)) }
   | eof                                   { Eof }
   | _  as c                               { raise (LexError(
-					    Printf.sprintf "Unexpected character: %c" c,
-					    Lexing.lexeme_start_p lexbuf)) }
+                                            Printf.sprintf "Unexpected character: %c" c,
+                                            Lexing.lexeme_start_p lexbuf)) }
 
 
 and comment pos depth = parse
