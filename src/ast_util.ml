@@ -250,6 +250,7 @@ let string_of_lit (L_aux (lit, _)) =
   | L_hex n -> "0x" ^ n
   | L_bin n -> "0b" ^ n
   | L_undef -> "undefined"
+  | L_real r -> r
   | L_string str -> "\"" ^ str ^ "\""
 
 let rec string_of_exp (E_aux (exp, _)) =

@@ -1956,6 +1956,7 @@ let initial_kind_env =
     ("unit", {k = K_Typ});
     ("bit", {k = K_Typ});
     ("string", {k = K_Typ});
+    ("real", {k = K_Typ});
     ("list", {k = K_Lam( [{k = K_Typ}], {k = K_Typ})});
     ("reg", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("register", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});

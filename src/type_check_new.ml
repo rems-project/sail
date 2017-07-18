@@ -84,6 +84,7 @@ let int_typ = mk_id_typ (mk_id "int")
 let nat_typ = mk_id_typ (mk_id "nat")
 let unit_typ = mk_id_typ (mk_id "unit")
 let bit_typ = mk_id_typ (mk_id "bit")
+let real_typ = mk_id_typ (mk_id "real")
 let app_typ id args = mk_typ (Typ_app (id, args))
 let atom_typ nexp = mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp nexp)]))
 let range_typ nexp1 nexp2 = mk_typ (Typ_app (mk_id "range", [mk_typ_arg (Typ_arg_nexp nexp1); mk_typ_arg (Typ_arg_nexp nexp2)]))
@@ -459,6 +460,7 @@ end = struct
     || Id.compare id (mk_id "int") = 0
     || Id.compare id (mk_id "nat") = 0
     || Id.compare id (mk_id "bool") = 0
+    || Id.compare id (mk_id "real") = 0
 
   (* Check if a type, order, or n-expression is well-formed. Throws a
      type error if the type is badly formed. FIXME: Add arity to type
@@ -1286,13 +1288,14 @@ type tannot = (Env.t * typ * effect) option
 
 let infer_lit env (L_aux (lit_aux, l) as lit) =
   match lit_aux with
-  | L_unit -> mk_typ (Typ_id (mk_id "unit"))
-  | L_zero -> mk_typ (Typ_id (mk_id "bit"))
-  | L_one -> mk_typ (Typ_id (mk_id "bit"))
-  | L_num n -> mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp (nconstant n))]))
-  | L_true -> mk_typ (Typ_id (mk_id "bool"))
-  | L_false -> mk_typ (Typ_id (mk_id "bool"))
-  | L_string _ -> mk_typ (Typ_id (mk_id "string"))
+  | L_unit -> unit_typ
+  | L_zero -> bit_typ
+  | L_one -> bit_typ
+  | L_num n -> atom_typ (nconstant n)
+  | L_true -> bool_typ
+  | L_false -> bool_typ
+  | L_string _ -> string_typ
+  | L_real _ -> real_typ
   | L_bin str ->
      begin
        match Env.get_default_order env with

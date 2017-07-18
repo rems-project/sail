@@ -392,6 +392,7 @@ let to_ast_lit (Parse_ast.L_aux(lit,l)) : lit =
     | Parse_ast.L_num(i) -> L_num(i)
     | Parse_ast.L_hex(h) -> L_hex(h)
     | Parse_ast.L_bin(b) -> L_bin(b)
+    | Parse_ast.L_real r -> L_real r
     | Parse_ast.L_string(s) -> L_string(s))
       ,l)
 

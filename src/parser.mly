@@ -150,7 +150,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 
 %token <string> Id TyVar TyId
 %token <int> Num
-%token <string> String Bin Hex
+%token <string> String Bin Hex Real
 
 %token <string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde
 %token <string> AmpAmp CarrotCarrot Colon ColonColon EqEq ExclEq ExclExcl
@@ -463,6 +463,8 @@ lit:
     { lloc (L_bin $1) }
   | Hex
     { lloc (L_hex $1) }
+  | Real
+    { lloc (L_real $1) }
   | Undefined
     { lloc L_undef }
   | Bitzero
