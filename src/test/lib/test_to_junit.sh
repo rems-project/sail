@@ -12,6 +12,8 @@ fail=0
 
 XML=""
 
+XML_FILE=tests.xml
+
 function green {
     (( pass += 1 ))
     printf "$1: ${GREEN}$2${NC}\n"
@@ -33,24 +35,28 @@ function red {
 function finish_suite {
     printf "$1: Passed ${pass} out of $(( pass + fail ))\n"
     XML="  <testsuite name=\"$1\" tests=\"$(( pass + fail ))\" failures=\"${fail}\" timestamp=\"$(date)\">\n$XML  </testsuite>\n"
-    printf "$XML" > $1.xml
+    printf "$XML" >> $XML_FILE
     XML=""
     pass=0
     fail=0
 }
 
-test_regex="^(.*): (pass|fail)$"
-while read line; do
-    if [[ $line =~ $test_regex ]] ; then
-        test_name=${BASH_REMATCH[1]}
-        test_status=${BASH_REMATCH[2]}
-        if [[ $test_status == pass ]] ; then
-            green $test_name $test_status
+test_regex="^\"*([^\"]*)\"*: (pass|fail)$"
+echo "<testsuites>" > $XML_FILE
+for result_file in $@; do
+    while read line; do
+        if [[ $line =~ $test_regex ]] ; then
+            test_name=${BASH_REMATCH[1]}
+            test_status=${BASH_REMATCH[2]}
+            if [[ $test_status == pass ]] ; then
+                green $test_name $test_status
+            else
+                red $test_name $test_status
+            fi
         else
-            red $test_name $test_status
+            echo $line
         fi
-    else
-        echo $line
-    fi
+    done < "$result_file"
+    finish_suite $result_file
 done
-finish_suite all_tests
+echo "</testsuites>" >> $XML_FILE

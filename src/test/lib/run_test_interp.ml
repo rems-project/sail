@@ -40,14 +40,9 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Printf ;;
-open Format ;;
-open Big_int ;;
-open Interp_ast ;;
 open Interp_interface ;;
 open Interp_inter_imp ;;
 open Sail_impl_base ;;
-open Run_interp_model ;;
 
 let doit () =
   let context = build_context Test_lem_ast.defs [] [] [] [] [] [] [] None [] in
