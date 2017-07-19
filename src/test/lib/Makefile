@@ -25,7 +25,8 @@ ocaml: | $(BUILD_DIR)
 	cd $(BUILD_DIR) && \
 	$(SAIL) -ocaml test_lib.sail -o test && \
 	ocamlopt -I $(ZARITH_DIR) $(ZARITH_LIB) sail_values.ml test.ml run_test_embed.ml -o test_embed.native && \
-	./test_embed.native
+	./test_embed.native > test_embed.out && \
+	../test_to_junit.sh < test_embed.out
 
 interp: | $(BUILD_DIR)
 	cp test_lib.sail $(BUILD_DIR) && \
