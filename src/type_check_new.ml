@@ -80,6 +80,9 @@ let mk_infix_id str = Id_aux (DeIid str, Parse_ast.Unknown)
 
 let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
 
+let inc_ord = Ord_aux (Ord_inc, Parse_ast.Unknown)
+let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
+
 let int_typ = mk_id_typ (mk_id "int")
 let nat_typ = mk_id_typ (mk_id "nat")
 let unit_typ = mk_id_typ (mk_id "unit")
@@ -109,6 +112,8 @@ let is_range (Typ_aux (typ_aux, _)) =
 let nconstant c = Nexp_aux (Nexp_constant c, Parse_ast.Unknown)
 let nminus n1 n2 = Nexp_aux (Nexp_minus (n1, n2), Parse_ast.Unknown)
 let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)
+let ntimes n1 n2 = Nexp_aux (Nexp_times (n1, n2), Parse_ast.Unknown)
+let npow2 n = Nexp_aux (Nexp_exp n, Parse_ast.Unknown)
 let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
 
 let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)

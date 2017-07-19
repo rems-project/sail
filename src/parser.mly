@@ -405,6 +405,8 @@ nexp_typ:
     { tloc (ATyp_sum ($1, $3)) }
   | nexp_typ Minus nexp_typ2
     { tloc (ATyp_minus ($1, $3)) }
+  | Minus nexp_typ2
+    { tloc (ATyp_neg $2) }
   | nexp_typ2
     { $1 }
 

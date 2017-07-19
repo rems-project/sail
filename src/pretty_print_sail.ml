@@ -489,10 +489,10 @@ let doc_rec (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty
   (* include trailing space because caller doesn't know if we return
    * empty *)
-  | Rec_rec -> string "rec" ^^ space
+  | Rec_rec -> space ^^ string "rec"
 
 let doc_tannot_opt (Typ_annot_opt_aux(t,_)) = match t with
-  | Typ_annot_opt_some(tq,typ) -> doc_typquant tq (doc_typ typ)
+  | Typ_annot_opt_some(tq,typ) -> space ^^ doc_typquant tq (doc_typ typ)
   | Typ_annot_opt_none -> empty
 
 let doc_effects_opt (Effect_opt_aux(e,_)) = match e with
@@ -508,8 +508,7 @@ let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   | _ ->
       let sep = hardline ^^ string "and" ^^ space in
       let clauses = separate_map sep doc_funcl fcls in
-      separate space ([string "function";
-                      doc_rec r ^^ doc_tannot_opt typa;]@
+      separate space ([string "function" ^^ doc_rec r ^^ doc_tannot_opt typa]@
                       (match efa with
                        | Effect_opt_aux (Effect_opt_pure,_) -> []
                        | _ -> [string "effect";

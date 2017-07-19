@@ -134,6 +134,8 @@ val equal_effects : effect -> effect -> bool
 val nconstant : int -> nexp
 val nminus : nexp -> nexp -> nexp
 val nsum : nexp -> nexp -> nexp
+val ntimes : nexp -> nexp -> nexp
+val npow2 : nexp -> nexp
 val nvar : kid -> nexp
 
 (* Sail builtin types. *)
@@ -147,6 +149,9 @@ val unit_typ : typ
 val string_typ : typ
 val real_typ : typ
 val vector_typ : nexp -> nexp -> order -> typ -> typ
+
+val inc_ord : order
+val dec_ord : order
 
 (* Vector with default order. *)
 val dvector_typ : Env.t -> nexp -> nexp -> typ -> typ

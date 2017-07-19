@@ -310,7 +310,7 @@ rule token = parse
   | "*_ui" oper_char+ as i				{ (StarUnderUiI(r i)) }
   | "2^" oper_char+ as i				{ (TwoCarrotI(r i)) }
 
-  | (digit* as i1) "." (digit+ as i2)     { (Real (i1 ^ "." ^ i2)) }
+  | (digit+ as i1) "." (digit+ as i2)     { (Real (i1 ^ "." ^ i2)) }
   | "-" (digit* as i1) "." (digit+ as i2) { (Real ("-" ^ i1 ^ "." ^ i2)) }
   | digit+ as i                           { (Num(int_of_string i)) }
   | "-" digit+ as i                       { (Num(int_of_string i)) }
