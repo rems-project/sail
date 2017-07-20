@@ -115,6 +115,7 @@ typedef CPtrCmpOp = enumerate {
   CLTU;
   CLEU;
   CEXEQ;
+  CNEXEQ;
 }
 
 typedef ClearRegSet = enumerate {

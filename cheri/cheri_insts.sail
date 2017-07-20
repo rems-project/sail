@@ -292,6 +292,7 @@ function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) c
 function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b100) = Some(CPtrCmp(rd, cb, ct, CLTU))
 function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b101) = Some(CPtrCmp(rd, cb, ct, CLEU))
 function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b110) = Some(CPtrCmp(rd, cb, ct, CEXEQ))
+function clause decode (0b010010 : 0b01110 : (regno) rd : (regno) cb : (regno) ct : 0b000 : 0b111) = Some(CPtrCmp(rd, cb, ct, CNEXEQ))
 
 function clause execute(CPtrCmp(rd, cb, ct, op)) = 
 {
@@ -332,6 +333,7 @@ function clause execute(CPtrCmp(rd, cb, ct, op)) =
         case CLTU  -> [ltu]
         case CLEU  -> [ltu | equal]
         case CEXEQ -> [cb_val == ct_val]
+        case CNEXEQ -> [cb_val != ct_val]
       })
     }
   (* END_CPtrCmp *)
