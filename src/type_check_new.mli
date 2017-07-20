@@ -106,6 +106,9 @@ module Env : sig
 
   val expand_synonyms : t -> typ -> typ
 
+  (* Expand type synonyms and remove register annotations (i.e. register<t> -> t)) *)
+  val base_typ_of : t -> typ -> typ
+
   (* no_casts removes all the implicit type casts/coercions from the
      environment, so checking a term with such an environment will
      guarantee not to insert any casts. Not that this is only about

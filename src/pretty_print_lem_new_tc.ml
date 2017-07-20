@@ -920,10 +920,10 @@ let doc_exp_lem, doc_let_lem =
         | Nexp_aux (Nexp_constant i, _) -> doc_lit_lem false (L_aux (L_num i, l)) annot
         | _ ->
           raise (Reporting_basic.err_unreachable l
-            "pretty-printing non-constant sizeof expressions to Lem not yet supported"))
+            "pretty-printing non-constant sizeof expressions to Lem not supported"))
     | E_return _ ->
-      raise (Reporting_basic.err_unreachable l
-        "pretty-printing early return statements not yet to Lem supported")
+      raise (Reporting_basic.err_todo l
+        "pretty-printing early return statements to Lem not yet supported")
     | E_comment _ | E_comment_struc _ -> empty
     | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _ | E_internal_exp_user _ ->
       raise (Reporting_basic.err_unreachable l
@@ -1223,7 +1223,14 @@ let rec doc_fundef_lem regtypes (FD_aux(FD_function(r, typa, efa, fcls),fannot))
           (fun (already_used_fnames,auxiliary_functions,clauses) funcl ->
             match funcl with
             | FCL_aux (FCL_Funcl (Id_aux (Id _,l),pat,exp),annot) ->
-               let (P_aux (P_app (Id_aux (Id ctor,l),argspat),pannot)) = pat in
+               let ctor, l, argspat, pannot = (match pat with
+                 | P_aux (P_app (Id_aux (Id ctor,l),argspat),pannot) ->
+                   (ctor, l, argspat, pannot)
+                 | P_aux (P_id (Id_aux (Id ctor,l)), pannot) ->
+                   (ctor, l, [], pannot)
+                 | _ ->
+                   raise (Reporting_basic.err_unreachable l
+                     "unsupported parameter pattern in function clause")) in
                let rec pick_name_not_clashing_with already_used candidate =
                  if StringSet.mem candidate already_used then
                    pick_name_not_clashing_with already_used (candidate ^ "'")

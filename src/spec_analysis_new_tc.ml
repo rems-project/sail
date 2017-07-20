@@ -448,7 +448,9 @@ let fv_of_tannot_opt consider_var (Typ_annot_opt_aux (t,_)) =
   | Typ_annot_opt_some (typq,typ) ->
     let bindings = if consider_var then typq_bindings typq else mt in
     let free = fv_of_typ consider_var bindings mt typ in
-    (bindings,free)  
+    (bindings,free)
+  | Typ_annot_opt_none ->
+    (mt, mt)
 
 (*Unlike the other fv, the bound returns are the names bound by the pattern for use in the exp*)
 let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pat,exp),l)) =
@@ -467,7 +469,9 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_))
     | Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ),_) ->
       let bindings = if consider_var then typq_bindings typq else mt in
       let bound = Nameset.union bindings base_bounds in
-      bound, fv_of_typ consider_var bound mt typ in
+      bound, fv_of_typ consider_var bound mt typ
+    | Typ_annot_opt_aux(Typ_annot_opt_none, _) ->
+      base_bounds, mt in
   let ns = List.fold_right (fun (FCL_aux(FCL_Funcl(_,pat,exp),_)) ns ->
       let pat_bs,pat_ns = pat_bindings consider_var base_bounds ns pat in
       let _, exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty exp in
@@ -497,7 +501,9 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
     let b,ns = (match tannot_opt with
         | Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ),_) ->
           let bindings = if consider_var then typq_bindings typq else mt in
-          bindings, fv_of_typ consider_var bindings mt typ) in
+          bindings, fv_of_typ consider_var bindings mt typ
+        | Typ_annot_opt_aux(Typ_annot_opt_none, _) ->
+          mt, mt) in
     init_env (string_of_id id),ns
   | SD_scattered_funcl (FCL_aux(FCL_Funcl(id,pat,exp),_)) ->
     let pat_bs,pat_ns = pat_bindings consider_var mt mt pat in
