@@ -9,12 +9,14 @@ let vector_split_limit = 4
 
 (* TODO: some places will need Type_check_new.expand_synonyms *)
 
-(* TODO: check for temporary failwiths *)
-
 let optmap v f =
   match v with
   | None -> None
   | Some v -> Some (f v)
+
+let env_typ_expected l : tannot -> Env.t * typ = function
+  | None -> raise (Reporting_basic.err_unreachable l "Missing type environment")
+  | Some (env,ty,_) -> env,ty
 
 module KSubst = Map.Make(Kid)
 module ISubst = Map.Make(Id)
@@ -302,8 +304,7 @@ let nexp_subst_fns substs refinements =
            | _ -> E_aux (E_tuple es',(l,None))
          in
          let id' = 
-           let env = match annot with Some (e,_,_) -> e | None -> failwith "env" in
-           match Env.lookup_id id env with
+           match Env.lookup_id id (fst (env_typ_expected l annot)) with
            | Union (qs,Typ_aux (Typ_fn(inty,outty,_),_)) ->
               (match refine_constructor refinements id substs arg inty with
               | None -> id
@@ -373,7 +374,7 @@ let nexp_subst_exp substs refinements = snd (nexp_subst_fns substs refinements)
 
 let bindings_from_pat p =
   let rec aux_pat (P_aux (p,(l,annot))) =
-    let env = match annot with Some (e,_,_) -> e | None -> failwith "env" in
+    let env,_ = env_typ_expected l annot in
     match p with
     | P_lit _
     | P_wild
@@ -410,7 +411,7 @@ type 'a matchresult =
   | GiveUp
 
 let can_match (E_aux (e,(l,annot)) as exp0) cases =
-  let (env,ty) = match annot with Some (env,ty,_) -> env,ty | None -> failwith "env" in
+  let (env,ty) = env_typ_expected l annot in
   let rec findpat_generic check_pat description = function
     | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
                ("Failed to find a case for " ^ description); None)
@@ -861,7 +862,7 @@ let split_defs splits defs =
          | P_app (id,args) ->
             (try
               let (_,variants) = List.find (fun (id',_) -> Id.compare id id' = 0) refinements in
-              let env = match tannot with Some (env,_,_) -> env | None -> failwith "env" in
+              let env,_ = env_typ_expected l tannot in
               let constr_out_typ =
                 match Env.lookup_id id env with
                 | Union (qs,Typ_aux (Typ_fn(_,outt,_),_)) -> outt
