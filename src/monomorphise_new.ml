@@ -9,13 +9,6 @@ let vector_split_limit = 4
 
 (* TODO: some places will need Type_check_new.expand_synonyms *)
 
-(* TODO: put this somewhere common *)
-
-let id_to_string (Id_aux(id,l)) =
-  match id with
-    | Id(s) -> s
-    | DeIid(s) -> s
-
 (* TODO: check for temporary failwiths *)
 
 let optmap v f =
@@ -128,7 +121,8 @@ let rec cross = function
 
 (* Given a type for a constructor, work out which refinements we ought to produce *)
 (* TODO collision avoidance *)
-let split_src_type i ty (TypQ_aux (q,ql)) =
+let split_src_type id ty (TypQ_aux (q,ql)) =
+  let i = string_of_id id in
   let rec size_nvars_nexp (Nexp_aux (ne,_)) =
     match ne with
     | Nexp_var v -> [v]
@@ -190,8 +184,12 @@ let split_src_type i ty (TypQ_aux (q,ql)) =
                      "bigger than limit " ^ string_of_int size_set_limit)) else ()
      in
      let variants = cross nvar_sets in
-     let name l = String.concat "_" (i::(List.map (fun (v,i) -> string_of_kid v ^ string_of_int i) l)) in
-     Some (List.map (fun l -> (l, name l)) variants)
+     let wrap = match id with
+       | Id_aux (Id i,l) -> (fun f -> Id_aux (Id (f i),Generated l))
+       | Id_aux (DeIid i,l) -> (fun f -> Id_aux (DeIid (f i),l))
+     in
+     let name l i = String.concat "_" (i::(List.map (fun (v,i) -> string_of_kid v ^ string_of_int i) l)) in
+     Some (List.map (fun l -> (l, wrap (name l))) variants)
 
 (* TODO: maybe fold this into subst_src_typ? *)
 let inst_src_type insts ty =
@@ -218,7 +216,7 @@ let reduce_nexp subst ne =
    more general cases (e.g., 8 * var) *)
 
 (* TODO: use type checker's instantiation instead *)
-let refine_constructor refinements i substs (E_aux (_,(l,_)) as arg) t =
+let refine_constructor refinements id substs (E_aux (_,(l,_)) as arg) t =
   let rec derive_vars (Typ_aux (t,_)) (E_aux (e,(l,tannot))) =
     match t with
     | Typ_app (Id_aux (Id "vector",_), [_;Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var v,_)),_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
@@ -238,13 +236,13 @@ let refine_constructor refinements i substs (E_aux (_,(l,_)) as arg) t =
        | _ -> [] (* TODO? *)
   in
   try
-    let irefinements = List.assoc i refinements in
+    let (_,irefinements) = List.find (fun (id',_) -> Id.compare id id' = 0) refinements in
     let vars = List.sort_uniq (fun x y -> Kid.compare (fst x) (fst y)) (derive_vars t arg) in
     try
       Some (List.assoc vars irefinements)
     with Not_found ->
       (Reporting_basic.print_err false true l "Monomorphisation"
-         ("Failed to find a monomorphic constructor for " ^ i ^ " instance " ^
+         ("Failed to find a monomorphic constructor for " ^ string_of_id id ^ " instance " ^
              match vars with [] -> "<empty>"
              | _ -> String.concat "," (List.map (fun (x,y) -> string_of_kid x ^ "=" ^ string_of_int y) vars)); None)
   with Not_found -> None
@@ -303,14 +301,13 @@ let nexp_subst_fns substs refinements =
            | [e] -> e
            | _ -> E_aux (E_tuple es',(l,None))
          in
-         let i = id_to_string id in
          let id' = 
            let env = match annot with Some (e,_,_) -> e | None -> failwith "env" in
            match Env.lookup_id id env with
            | Union (qs,Typ_aux (Typ_fn(inty,outty,_),_)) ->
-              (match refine_constructor refinements i substs arg inty with
+              (match refine_constructor refinements id substs arg inty with
               | None -> id
-              | Some i -> Id_aux (Id i,Generated l))
+              | Some id' -> id')
            | _ -> id
          in re (E_app (id',es'))
       | E_app_infix (e1,id,e2) -> re (E_app_infix (s_exp e1,id,s_exp e2))
@@ -432,17 +429,16 @@ let can_match (E_aux (e,(l,annot)) as exp0) cases =
   in
   match e with
   | E_id id ->
-     let i = id_to_string id in
      (match Env.lookup_id id env with
      | Enum _ ->
         let checkpat = function
           | P_aux (P_id id',_)
           | P_aux (P_app (id',[]),_) ->
-             if i = id_to_string id' then DoesMatch [] else DoesNotMatch
+             if Id.compare id id' = 0 then DoesMatch [] else DoesNotMatch
           | P_aux (_,(l',_)) ->
              (Reporting_basic.print_err false true l' "Monomorphisation"
                 "Unexpected kind of pattern for enumeration"; GiveUp)
-        in findpat_generic checkpat i cases
+        in findpat_generic checkpat (string_of_id id) cases
      | _ -> None)
   | E_lit (L_aux (lit_e, _)) ->
      let checkpat = function
@@ -467,12 +463,13 @@ let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
 
 
 (* TODO: any useful type information revealed? (probably not) *)
-let try_app_infix (l,ann) (E_aux (e1,ann1)) id (E_aux (e2,ann2)) =
+let try_app_infix (l,ann) (E_aux (e1,ann1)) (Id_aux (id,_)) (E_aux (e2,ann2)) =
+  let i = match id with Id x -> x | DeIid x -> x in
   let new_l = Generated l in
-  match e1, id, e2 with
+  match e1, i, e2 with
   | E_lit l1, ("=="|"!="), E_lit l2 ->
      let lit b = if b then L_true else L_false in
-     let lit b = lit (if id = "==" then b else not b) in
+     let lit b = lit (if i = "==" then b else not b) in
      (match lit_eq l1 l2 with
      | Some b -> Some (E_aux (E_lit (L_aux (lit b,new_l)), (l,ann)))
      | None -> None)
@@ -493,12 +490,11 @@ let split_defs splits defs =
       match tu with
       | Tu_id id -> [],[tua]
       | Tu_ty_id (ty,id) ->
-         let i = id_to_string id in
-         (match split_src_type i ty q with
+         (match split_src_type id ty q with
          | None -> ([],[Tu_aux (Tu_ty_id (ty,id),l)])
          | Some variants ->
-            ([(i,variants)],
-             List.map (fun (insts, i') -> Tu_aux (Tu_ty_id (inst_src_type insts ty,Id_aux (Id i',Generated l)),Generated l)) variants))
+            ([(id,variants)],
+             List.map (fun (insts, id') -> Tu_aux (Tu_ty_id (inst_src_type insts ty,id'),Generated l)) variants))
     in
     let sc_type_def ((TD_aux (tda,annot)) as td) =
       match tda with
@@ -587,7 +583,7 @@ let split_defs splits defs =
        | Some r -> r)
     | E_app_infix (e1,id,e2) ->
        let e1',e2' = const_prop_exp substs e1,const_prop_exp substs e2 in
-       (match try_app_infix (l,annot) e1' (id_to_string id) e2' with
+       (match try_app_infix (l,annot) e1' id e2' with
        | Some exp -> exp
        | None -> re (E_app_infix (e1',id,e2')))
     | E_tuple es -> re (E_tuple (List.map (const_prop_exp substs) es))
@@ -682,11 +678,10 @@ let split_defs splits defs =
     if not (List.for_all is_value args) then
       None
     else
-      let i = id_to_string id in
       let Defs ds = defs in
       match list_extract (function
       | (DEF_fundef (FD_aux (FD_function (_,_,eff,((FCL_aux (FCL_Funcl (id',_,_),_))::_ as fcls)),_)))
-        -> if i = id_to_string id' then Some (eff,fcls) else None
+        -> if Id.compare id id' = 0 then Some (eff,fcls) else None
       | _ -> None) ds with
       | None -> None
       | Some (eff,_) when not (is_pure eff) -> None
@@ -749,12 +744,13 @@ let split_defs splits defs =
          List.map (fun n -> (P_aux (P_id (renew_id n),(l,annot)),
                              (var,E_aux (E_id (renew_id n),(new_l,annot))))) ns
        with Type_error _ ->
-         if id_to_string id = "bit" then
-           List.map (fun b ->
-             P_aux (P_lit (L_aux (b,new_l)),(l,annot)),
-             (var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))))
-             [L_zero; L_one]
-         else cannot ())
+         match id with
+         | Id_aux (Id "bit",_) ->
+            List.map (fun b ->
+              P_aux (P_lit (L_aux (b,new_l)),(l,annot)),
+              (var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))))
+              [L_zero; L_one]
+         | _ -> cannot ())
     | Typ_app (Id_aux (Id "vector",_), [_;Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (match len with
        | Nexp_aux (Nexp_constant sz,_) ->
@@ -776,6 +772,7 @@ let split_defs splits defs =
     | _ -> cannot ()
   in
   
+
   (* Split variable patterns at the given locations *)
 
   let map_locs ls (Defs defs) =
@@ -790,6 +787,11 @@ let split_defs splits defs =
     in 
 
     let split_pat var p =
+      let id_matches = function
+        | Id_aux (Id x,_) -> x = var
+        | Id_aux (DeIid x,_) -> x = var
+      in
+
       let rec list f = function
         | [] -> None
         | h::t ->
@@ -817,18 +819,16 @@ let split_defs splits defs =
         | P_lit _
         | P_wild
           -> None
+        | P_as (p',id) when id_matches id ->
+           raise (Reporting_basic.err_general l
+                    ("Cannot split " ^ var ^ " on 'as' pattern"))
         | P_as (p',id) ->
-           let i = id_to_string id in
-           if i = var
-           then raise (Reporting_basic.err_general l
-                         ("Cannot split " ^ var ^ " on 'as' pattern"))
-           else re (fun p -> P_as (p,id)) p'
+           re (fun p -> P_as (p,id)) p'
         | P_typ (t,p') -> re (fun p -> P_typ (t,p)) p'
-        | P_id id ->
-           let i = id_to_string id in
-           if i = var
-           then Some (split id annot)
-           else None
+        | P_id id when id_matches id ->
+           Some (split id annot)
+        | P_id _ ->
+           None
         | P_app (id,ps) ->
            relist spl (fun ps -> P_app (id,ps)) ps
         | P_record (fps,flag) ->
@@ -860,17 +860,16 @@ let split_defs splits defs =
          match p with
          | P_app (id,args) ->
             (try
-              let i = id_to_string id in
-              let variants = List.assoc i refinements in
+              let (_,variants) = List.find (fun (id',_) -> Id.compare id id' = 0) refinements in
               let env = match tannot with Some (env,_,_) -> env | None -> failwith "env" in
               let constr_out_typ =
                 match Env.lookup_id id env with
                 | Union (qs,Typ_aux (Typ_fn(_,outt,_),_)) -> outt
                 | _ -> raise (Reporting_basic.err_general l
-                                ("Constructor " ^ i ^ " is not a construtor!"))
+                                ("Constructor " ^ string_of_id id ^ " is not a construtor!"))
               in
               let varmap = build_nexp_subst l constr_out_typ tannot in
-              let map_inst (insts,i') =
+              let map_inst (insts,id') =
                 let insts = List.map (fun (v,i) ->
                   ((match List.assoc (string_of_kid v) varmap with
                   | Nexp_aux (Nexp_var s, _) -> s
@@ -878,7 +877,7 @@ let split_defs splits defs =
                                   ("Constructor parameter not a variable: " ^ string_of_kid v))),
                    Nexp_aux (Nexp_constant i,Generated l)))
                   insts in
-                P_aux (P_app (Id_aux (Id i',Generated l),args),(Generated l,tannot)),
+                P_aux (P_app (id',args),(Generated l,tannot)),
                 ksubst_from_list insts
               in
               ConstrSplit (List.map map_inst variants)
