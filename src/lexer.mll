@@ -97,6 +97,7 @@ let kw_table =
      ("return",                  (fun x -> Return));
      ("scattered",               (fun x -> Scattered));
      ("sizeof",                  (fun x -> Sizeof));
+     ("constraint",              (fun x -> Constraint));
      ("struct",                  (fun x -> Struct));
      ("switch",			 (fun x -> Switch));
      ("then",                    (fun x -> Then));

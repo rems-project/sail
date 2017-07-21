@@ -42,6 +42,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_util
 
 val opt_tc_debug : int ref
 
@@ -81,6 +82,8 @@ module Env : sig
 
   val get_typ_var : kid -> t -> base_kind_aux
 
+  val get_typ_vars : t -> base_kind_aux KBindings.t
+
   val is_record : id -> t -> bool
 
   val get_accessor : id -> t -> typquant * typ
@@ -117,7 +120,10 @@ module Env : sig
   val allow_casts : t -> bool
 
   val empty : t
+
 end
+
+val add_typquant : typquant -> Env.t -> Env.t
 
 (* Some handy utility functions for constructing types. *)
 val mk_typ : typ_aux -> typ

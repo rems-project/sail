@@ -46,6 +46,10 @@ open Ast
 open Util
 open Big_int
 
+let mk_nc nc_aux = NC_aux (nc_aux, Parse_ast.Unknown)
+
+let mk_nexp nexp_aux = Nexp_aux (nexp_aux, Parse_ast.Unknown)
+
 let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
 and map_exp_annot_aux f = function
   | E_block xs -> E_block (List.map (map_exp_annot f) xs)
@@ -76,6 +80,7 @@ and map_exp_annot_aux f = function
   | E_let (letbind, exp) -> E_let (map_letbind_annot f letbind, map_exp_annot f exp)
   | E_assign (lexp, exp) -> E_assign (map_lexp_annot f lexp, map_exp_annot f exp)
   | E_sizeof nexp -> E_sizeof nexp
+  | E_constraint nc -> E_constraint nc
   | E_exit exp -> E_exit (map_exp_annot f exp)
   | E_return exp -> E_return (map_exp_annot f exp)
   | E_assert (test, msg) -> E_assert (map_exp_annot f test, map_exp_annot f msg)
@@ -214,12 +219,15 @@ and string_of_typ_arg_aux = function
   | Typ_arg_order o -> string_of_order o
   | Typ_arg_effect eff -> string_of_effect eff
 
-let string_of_n_constraint = function
+let rec string_of_n_constraint = function
   | NC_aux (NC_fixed (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
+  | NC_aux (NC_not_equal (n1, n2), _) -> string_of_nexp n1 ^ " != " ^ string_of_nexp n2
   | NC_aux (NC_bounded_ge (n1, n2), _) -> string_of_nexp n1 ^ " >= " ^ string_of_nexp n2
   | NC_aux (NC_bounded_le (n1, n2), _) -> string_of_nexp n1 ^ " <= " ^ string_of_nexp n2
-  | NC_aux (NC_set_subst (nexp, ns), _) ->
-     string_of_nexp nexp ^ " IN {" ^ string_of_list ", " string_of_int ns ^ "}"
+  | NC_aux (NC_or (nc1, nc2), _) ->
+     "(" ^ string_of_n_constraint nc1 ^ " | " ^ string_of_n_constraint nc2 ^ ")"
+  | NC_aux (NC_and (nc1, nc2), _) ->
+     "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_nat_set_bounded (kid, ns), _) ->
      string_of_kid kid ^ " IN {" ^ string_of_list ", " string_of_int ns ^ "}"
 
@@ -259,6 +267,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_block exps -> "{ " ^ string_of_list "; " string_of_exp exps ^ " }"
   | E_id v -> string_of_id v
   | E_sizeof nexp -> "sizeof " ^ string_of_nexp nexp
+  | E_constraint nc -> "constraint(" ^ string_of_n_constraint nc ^ ")"
   | E_lit lit -> string_of_lit lit
   | E_return exp -> "return " ^ string_of_exp exp
   | E_app (f, args) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp args ^ ")"
@@ -282,6 +291,7 @@ let rec string_of_exp (E_aux (exp, _)) =
      ^ " by " ^ string_of_exp u ^ " order " ^ string_of_order ord
      ^ ") { "
      ^ string_of_exp body
+  | E_assert (test, msg) -> "assert(" ^ string_of_exp test ^ ", " ^ string_of_exp msg ^ ")"
   | _ -> "INTERNAL"
 and string_of_pexp (Pat_aux (pexp, _)) =
   match pexp with
@@ -336,6 +346,11 @@ module Id = struct
     | Id_aux (Id _, _), Id_aux (DeIid _, _) -> -1
     | Id_aux (DeIid _, _), Id_aux (Id _, _) -> 1
 end
+
+module Bindings = Map.Make(Id)
+module IdSet = Set.Make(Id)
+module KBindings = Map.Make(Kid)
+module KidSet = Set.Make(Kid)
 
 let rec is_number (Typ_aux (t,_)) =
   match t with

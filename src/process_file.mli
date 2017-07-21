@@ -46,6 +46,7 @@ val check_ast: Type_internal.tannot Ast.defs -> Type_internal.kind Type_internal
 val rewrite_ast: Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.defs
 val rewrite_ast_lem : Type_check.envs -> Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.defs
 val rewrite_ast_ocaml : Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.defs
+val load_file : Type_check_new.Env.t -> string -> Type_check_new.tannot Ast.defs * Type_check_new.Env.t
 
 val opt_new_typecheck : bool ref
 val opt_just_check : bool ref

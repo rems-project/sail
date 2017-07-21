@@ -303,14 +303,18 @@ and to_ast_typ_arg (k_env : kind Envmap.t) (def_ord : order) (kind : kind) (arg 
     | _ -> raise (Reporting_basic.err_unreachable l "To_ast_typ_arg received Lam kind or infer kind")),
     l)
 
-let to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) : n_constraint =
-  match c with 
+let rec to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) : n_constraint =
+  match c with
   | Parse_ast.NC_aux(nc,l) ->
     NC_aux( (match nc with
              | Parse_ast.NC_fixed(t1,t2) -> 
                let n1 = to_ast_nexp k_env t1 in
                let n2 = to_ast_nexp k_env t2 in
                NC_fixed(n1,n2)
+             | Parse_ast.NC_not_equal(t1,t2) ->
+                let n1 = to_ast_nexp k_env t1 in
+                let n2 = to_ast_nexp k_env t2 in
+                NC_not_equal(n1,n2)
              | Parse_ast.NC_bounded_ge(t1,t2) ->
                let n1 = to_ast_nexp k_env t1 in
                let n2 = to_ast_nexp k_env t2 in
@@ -320,8 +324,12 @@ let to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) 
                let n2 = to_ast_nexp k_env t2 in
                NC_bounded_le(n1,n2)
              | Parse_ast.NC_nat_set_bounded(id,bounds) ->
-               NC_nat_set_bounded(to_ast_var id, bounds)
-    ), l)               
+                NC_nat_set_bounded(to_ast_var id, bounds)
+             | Parse_ast.NC_or (nc1, nc2) ->
+                NC_or (to_ast_nexp_constraint k_env nc1, to_ast_nexp_constraint k_env nc2)
+             | Parse_ast.NC_and (nc1, nc2) ->
+                NC_and (to_ast_nexp_constraint k_env nc1, to_ast_nexp_constraint k_env nc2)
+    ), l)
 
 (* Transforms a typquant while building first the kind environment of declared variables, and also the kind environment in context *)
 let to_ast_typquant (k_env: kind Envmap.t) (tq : Parse_ast.typquant) : typquant * kind Envmap.t * kind Envmap.t =
@@ -488,6 +496,7 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
     | Parse_ast.E_let(leb,exp) -> E_let(to_ast_letbind k_env def_ord leb, to_ast_exp k_env def_ord exp)
     | Parse_ast.E_assign(lexp,exp) -> E_assign(to_ast_lexp k_env def_ord lexp, to_ast_exp k_env def_ord exp)
     | Parse_ast.E_sizeof(nexp) -> E_sizeof(to_ast_nexp k_env nexp)
+    | Parse_ast.E_constraint nc -> E_constraint (to_ast_nexp_constraint k_env nc)
     | Parse_ast.E_exit exp -> E_exit(to_ast_exp k_env def_ord exp)
     | Parse_ast.E_return exp -> E_return(to_ast_exp k_env def_ord exp)
     | Parse_ast.E_assert(cond,msg) -> E_assert(to_ast_exp k_env def_ord cond, to_ast_exp k_env def_ord msg)

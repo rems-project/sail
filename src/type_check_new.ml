@@ -116,6 +116,8 @@ let ntimes n1 n2 = Nexp_aux (Nexp_times (n1, n2), Parse_ast.Unknown)
 let npow2 n = Nexp_aux (Nexp_exp n, Parse_ast.Unknown)
 let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
 
+let nc_eq n1 n2 = mk_nc (NC_fixed (n1, n2))
+let nc_neq n1 n2 = mk_nc (NC_not_equal (n1, n2))
 let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
 let nc_gteq n1 n2 = NC_aux (NC_bounded_ge (n1, n2), Parse_ast.Unknown)
 let nc_lt n1 n2 = nc_lteq n1 (nsum n2 (nconstant 1))
@@ -123,11 +125,19 @@ let nc_gt n1 n2 = nc_gteq n1 (nsum n2 (nconstant 1))
 
 let mk_lit l = E_aux (E_lit (L_aux (l, Parse_ast.Unknown)), (Parse_ast.Unknown, ()))
 
-let nc_negate (NC_aux (nc, _)) =
+(* FIXME: Can now negate all n_constraints *)
+let rec nc_negate (NC_aux (nc, _)) =
   match nc with
-  | NC_bounded_ge (n1, n2) -> Some (nc_lt n1 n2)
-  | NC_bounded_le (n1, n2) -> Some (nc_gt n1 n2)
-  | _ -> None
+  | NC_bounded_ge (n1, n2) -> nc_lt n1 n2
+  | NC_bounded_le (n1, n2) -> nc_gt n1 n2
+  | NC_fixed (n1, n2) -> nc_neq n1 n2
+  | NC_not_equal (n1, n2) -> nc_eq n1 n2
+  | NC_and (n1, n2) -> mk_nc (NC_or (nc_negate n1, nc_negate n2))
+  | NC_or (n1, n2) -> mk_nc (NC_and (nc_negate n1, nc_negate n2))
+  | NC_nat_set_bounded (kid, []) -> typ_error Parse_ast.Unknown "Cannot negate empty nexp set"
+  | NC_nat_set_bounded (kid, [int]) -> nc_neq (nvar kid) (nconstant int)
+  | NC_nat_set_bounded (kid, int :: ints) ->
+     mk_nc (NC_and (nc_neq (nvar kid) (nconstant int), nc_negate (mk_nc (NC_nat_set_bounded (kid, ints)))))
 
 (* Utilities for constructing effect sets *)
 
@@ -150,13 +160,6 @@ let equal_effects e1 e2 =
   | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
      BESet.compare (BESet.of_list base_effs1) (BESet.of_list base_effs2) = 0
   | _, _ -> assert false (* We don't do Effect variables *)
-
-(* Sets and maps for identifiers and kind identifiers *)
-
-module Bindings = Map.Make(Id)
-module IdSet = Set.Make(Id)
-module KBindings = Map.Make(Kid)
-module KidSet = Set.Make(Kid)
 
 (* An index_sort is a more general form of range type: it can either
    be IS_int, which represents every natural number, or some set of
@@ -188,6 +191,11 @@ and nexp_subst_aux sv subst = function
   | Nexp_exp nexp -> Nexp_exp (nexp_subst sv subst nexp)
   | Nexp_neg nexp -> Nexp_neg (nexp_subst sv subst nexp)
 
+let rec nexp_set_to_or l subst = function
+  | [] -> typ_error l "Cannot substitute into empty nexp set"
+  | [int] -> NC_fixed (subst, nconstant int)
+  | (int :: ints) -> NC_or (mk_nc (NC_fixed (subst, nconstant int)), mk_nc (nexp_set_to_or l subst ints))
+
 let rec nc_subst_nexp sv subst (NC_aux (nc, l)) = NC_aux (nc_subst_nexp_aux l sv subst nc, l)
 and nc_subst_nexp_aux l sv subst = function
   | NC_fixed (n1, n2) -> NC_fixed (nexp_subst sv subst n1, nexp_subst sv subst n2)
@@ -195,9 +203,10 @@ and nc_subst_nexp_aux l sv subst = function
   | NC_bounded_le (n1, n2) -> NC_bounded_le (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_nat_set_bounded (kid, ints) as set_nc ->
      if Kid.compare kid sv = 0
-     then NC_set_subst (Nexp_aux (subst, Parse_ast.Unknown), ints)
+     then nexp_set_to_or l (mk_nexp subst) ints
      else set_nc
-  | NC_set_subst (nexp, ints) -> NC_set_subst (nexp_subst sv subst nexp, ints)
+  | NC_or (nc1, nc2) -> NC_or (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
+  | NC_and (nc1, nc2) -> NC_and (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
 
 let rec typ_subst_nexp sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_nexp_aux sv subst typ, l)
 and typ_subst_nexp_aux sv subst = function
@@ -341,6 +350,7 @@ module Env : sig
   val get_constraints : t -> n_constraint list
   val add_constraint : n_constraint -> t -> t
   val get_typ_var : kid -> t -> base_kind_aux
+  val get_typ_vars : t -> base_kind_aux KBindings.t
   val add_typ_var : kid -> base_kind_aux -> t -> t
   val get_ret_typ : t -> typ option
   val add_ret_typ : typ -> t -> t
@@ -449,6 +459,8 @@ end = struct
   let get_typ_var kid env =
     try KBindings.find kid env.typ_vars with
     | Not_found -> typ_error (kid_loc kid) ("No kind identifier " ^ string_of_kid kid)
+
+  let get_typ_vars env = env.typ_vars
 
   (* FIXME: Add an IdSet for builtin types *)
   let bound_typ_id env id =
@@ -695,13 +707,15 @@ end = struct
         { env with typ_vars = KBindings.add kid k env.typ_vars }
       end
 
-  let wf_constraint env (NC_aux (nc, _)) =
+  let rec wf_constraint env (NC_aux (nc, _)) =
     match nc with
     | NC_fixed (n1, n2) -> wf_nexp env n1; wf_nexp env n2
+    | NC_not_equal (n1, n2) -> wf_nexp env n1; wf_nexp env n2
     | NC_bounded_ge (n1, n2) -> wf_nexp env n1; wf_nexp env n2
     | NC_bounded_le (n1, n2) -> wf_nexp env n1; wf_nexp env n2
     | NC_nat_set_bounded (kid, ints) -> () (* MAYBE: We could demand that ints are all unique here *)
-    | NC_set_subst (nexp, ints) -> wf_nexp env nexp
+    | NC_or (nc1, nc2) -> wf_constraint env nc1; wf_constraint env nc2
+    | NC_and (nc1, nc2) -> wf_constraint env nc1; wf_constraint env nc2
 
   let get_constraints env = env.constraints
 
@@ -917,14 +931,16 @@ let rec nexp_constraint var_of (Nexp_aux (nexp, l)) =
 let rec nc_constraint var_of (NC_aux (nc, l)) =
   match nc with
   | NC_fixed (nexp1, nexp2) -> Constraint.eq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
+  | NC_not_equal (nexp1, nexp2) -> Constraint.neq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
   | NC_bounded_ge (nexp1, nexp2) -> Constraint.gteq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
   | NC_bounded_le (nexp1, nexp2) -> Constraint.lteq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | NC_nat_set_bounded (kid, ints) -> nc_constraint var_of (NC_aux (NC_set_subst (nvar kid, ints), l))
-  | NC_set_subst (_, []) -> Constraint.literal false
-  | NC_set_subst (nexp, (int :: ints)) ->
+  | NC_nat_set_bounded (_, []) -> Constraint.literal false
+  | NC_nat_set_bounded (kid, (int :: ints)) ->
      List.fold_left Constraint.disj
-                    (Constraint.eq (nexp_constraint var_of nexp) (Constraint.constant (big_int_of_int int)))
-                    (List.map (fun i -> Constraint.eq (nexp_constraint var_of nexp) (Constraint.constant (big_int_of_int i))) ints)
+                    (Constraint.eq (nexp_constraint var_of (nvar kid)) (Constraint.constant (big_int_of_int int)))
+                    (List.map (fun i -> Constraint.eq (nexp_constraint var_of (nvar kid)) (Constraint.constant (big_int_of_int i))) ints)
+  | NC_or (nc1, nc2) -> Constraint.disj (nc_constraint var_of nc1) (nc_constraint var_of nc2)
+  | NC_and (nc1, nc2) -> Constraint.conj (nc_constraint var_of nc1) (nc_constraint var_of nc2)
 
 let rec nc_constraints var_of ncs =
   match ncs with
@@ -1471,15 +1487,6 @@ let rec add_flows b flows env =
   | (id, flow) :: flows when b -> add_flows true flows (Env.add_flow id (fst (apply_flow_constraint flow)) env)
   | (id, flow) :: flows -> add_flows false flows (Env.add_flow id (snd (apply_flow_constraint flow)) env)
 
-let neg_constraints = function
-  | [constr] ->
-     begin
-       match nc_negate constr with
-       | Some constr -> [constr]
-       | None -> []
-     end
-  | _ -> []
-
 let rec add_constraints constrs env =
   List.fold_left (fun env constr -> Env.add_constraint constr env) env constrs
 
@@ -1560,6 +1567,10 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
          | (E_aux (E_assign (lexp, bind), _) :: exps) ->
             let texp, env = bind_assignment env lexp bind in
             texp :: check_block l env exps typ
+         | ((E_aux (E_assert (E_aux (E_constraint nc, _), assert_msg), _) as exp) :: exps) ->
+            typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
+            let inferred_exp = irule infer_exp env exp in
+            inferred_exp :: check_block l (Env.add_constraint nc env) exps typ
          | (exp :: exps) ->
             let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
             texp :: check_block l env exps typ
@@ -1610,7 +1621,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
      let flows, constrs = infer_flow env cond' in
      let then_branch' = crule check_exp (add_constraints constrs (add_flows true flows env)) then_branch typ in
-     let else_branch' = crule check_exp (add_constraints (neg_constraints constrs) (add_flows false flows env)) else_branch typ in
+     let else_branch' = crule check_exp (add_constraints (List.map nc_negate constrs) (add_flows false flows env)) else_branch typ in
      annot_exp (E_if (cond', then_branch', else_branch')) typ
   | E_exit exp, _ ->
      let checked_exp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
@@ -1992,6 +2003,8 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
   | E_sizeof nexp -> annot_exp (E_sizeof nexp) (mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp nexp)])))
+  | E_constraint nc ->
+     annot_exp (E_constraint nc) bool_typ
   | E_return exp ->
      begin
        match Env.get_ret_typ env with
@@ -2076,7 +2089,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
      let flows, constrs = infer_flow env cond' in
      let then_branch' = irule infer_exp (add_constraints constrs (add_flows true flows env)) then_branch in
-     let else_branch' = crule check_exp (add_constraints (neg_constraints constrs) (add_flows false flows env)) else_branch (typ_of then_branch') in
+     let else_branch' = crule check_exp (add_constraints (List.map nc_negate constrs) (add_flows false flows env)) else_branch (typ_of then_branch') in
      annot_exp (E_if (cond', then_branch', else_branch')) (typ_of then_branch')
   | E_vector_access (v, n) -> infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, ())))
   | E_vector_append (v1, v2) -> infer_exp env (E_aux (E_app (mk_id "vector_append", [v1; v2]), (l, ())))
@@ -2278,6 +2291,7 @@ and propagate_exp_effect_aux = function
      let propagated_exp = propagate_exp_effect exp in
      E_assign (propagated_lexp, propagated_exp), union_effects (effect_of propagated_exp) (effect_of_lexp propagated_lexp)
   | E_sizeof nexp -> E_sizeof nexp, no_effect
+  | E_constraint nc -> E_constraint nc, no_effect
   | E_exit exp ->
      let propagated_exp = propagate_exp_effect exp in
      E_exit propagated_exp, effect_of propagated_exp

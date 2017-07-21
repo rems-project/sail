@@ -160,20 +160,20 @@ n_constraint_aux =  (* constraint over kind $_$ *)
    NC_fixed of atyp * atyp
  | NC_bounded_ge of atyp * atyp
  | NC_bounded_le of atyp * atyp
+ | NC_not_equal of atyp * atyp
  | NC_nat_set_bounded of kid * (int) list
+ | NC_or of n_constraint * n_constraint
+ | NC_and of n_constraint * n_constraint
 
+and
+n_constraint = 
+   NC_aux of n_constraint_aux * l
 
 type 
 kinded_id = 
    KOpt_aux of kinded_id_aux * l
 
-
-type 
-n_constraint = 
-   NC_aux of n_constraint_aux * l
-
-
-type 
+type
 quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
    QI_id of kinded_id (* An optionally kinded identifier *)
  | QI_const of n_constraint (* A constraint for this type *)
@@ -277,6 +277,7 @@ exp_aux =  (* Expression *)
  | E_let of letbind * exp (* let expression *)
  | E_assign of exp * exp (* imperative assignment *)
  | E_sizeof of atyp
+ | E_constraint of n_constraint
  | E_exit of exp
  | E_return of exp
  | E_assert of exp * exp

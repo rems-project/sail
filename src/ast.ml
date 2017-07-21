@@ -171,20 +171,18 @@ n_constraint_aux =  (* constraint over kind $_$ *)
    NC_fixed of nexp * nexp
  | NC_bounded_ge of nexp * nexp
  | NC_bounded_le of nexp * nexp
+ | NC_not_equal of nexp * nexp
  | NC_nat_set_bounded of kid * (int) list
- (* We need this for the new typechecker when as nexp is substituted for an id *)
- | NC_set_subst of nexp * int list
+ | NC_or of n_constraint * n_constraint
+ | NC_and of n_constraint * n_constraint
 
+and
+n_constraint =
+   NC_aux of n_constraint_aux * l
 
 type
 kinded_id =
    KOpt_aux of kinded_id_aux * l
-
-
-type
-n_constraint =
-   NC_aux of n_constraint_aux * l
-
 
 type
 quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
@@ -316,6 +314,7 @@ type
  | E_let of 'a letbind * 'a exp (* let expression *)
  | E_assign of 'a lexp * 'a exp (* imperative assignment *)
  | E_sizeof of nexp (* Expression to return the value of the nexp variable or expression at run time *)
+ | E_constraint of n_constraint (* Expression to evaluate the n_constraint at run time *)
  | E_exit of 'a exp (* expression to halt all current execution, potentially calling a system, trap, or interrupt handler with exp *)
  | E_return of 'a exp (* expression to end current function execution and return the value of exp from the function; this can be used to break out of for loops *)
  | E_assert of 'a exp * 'a exp (* expression to halt with error, when the first expression is false, reporting the optional string as an error *)

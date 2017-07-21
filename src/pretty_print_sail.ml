@@ -49,9 +49,6 @@ open Pretty_print_common
  * PPrint-based source-to-source pretty printer
 ****************************************************************************)
 
-
-
-
 let doc_bkind (BK_aux(k,_)) =
   string (match k with
   | BK_type -> "Type"
@@ -62,13 +59,18 @@ let doc_bkind (BK_aux(k,_)) =
 let doc_kind (K_aux(K_kind(klst),_)) =
   separate_map (spaces arrow) doc_bkind klst
 
-let doc_nexp_constraint (NC_aux(nc,_)) = match nc with
+let rec doc_nexp_constraint (NC_aux(nc,_)) = match nc with
   | NC_fixed(n1,n2) -> doc_op equals (doc_nexp n1) (doc_nexp n2)
+  | NC_not_equal (n1, n2) -> doc_op (string "!=") (doc_nexp n1) (doc_nexp n2)
   | NC_bounded_ge(n1,n2) -> doc_op (string ">=") (doc_nexp n1) (doc_nexp n2)
   | NC_bounded_le(n1,n2) -> doc_op (string "<=") (doc_nexp n1) (doc_nexp n2)
   | NC_nat_set_bounded(v,bounds) ->
       doc_op (string "IN") (doc_var v)
-        (braces (separate_map comma_sp doc_int bounds))
+             (braces (separate_map comma_sp doc_int bounds))
+  | NC_or (nc1, nc2) ->
+     parens (separate space [doc_nexp_constraint nc1; string "|"; doc_nexp_constraint nc2])
+  | NC_and (nc1, nc2) ->
+     separate space [doc_nexp_constraint nc1; string "&"; doc_nexp_constraint nc2]
 
 let doc_qi (QI_aux(qi,_)) = match qi with
   | QI_const n_const -> doc_nexp_constraint n_const
@@ -293,7 +295,9 @@ let doc_exp, doc_let =
       let cases = separate_map (break 1) doc_case pexps in
       surround 2 1 opening cases rbrace
   | E_sizeof n ->
-    separate space [string "sizeof"; doc_nexp n]
+     separate space [string "sizeof"; doc_nexp n]
+  | E_constraint nc ->
+     string "constraint" ^^ parens (doc_nexp_constraint nc)
   | E_exit e ->
     separate space [string "exit"; atomic_exp e;]
   | E_return e ->

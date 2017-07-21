@@ -131,7 +131,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 %token And Alias As Assert Bitzero Bitone Bits By Case Clause Const Dec Def Default Deinfix Effect EFFECT End 
 %token Enumerate Else Exit Extern False Forall Foreach Overload Function_ If_ In IN Inc Let_ Member Nat NatNum Order Cast
 %token Pure Rec Register Return Scattered Sizeof Struct Switch Then True TwoStarStar Type TYPE Typedef 
-%token Undefined Union With When Val
+%token Undefined Union With When Val Constraint
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 
 
@@ -593,6 +593,8 @@ atomic_exp:
     { eloc (E_case($2,$4)) }
   | Sizeof atomic_typ
     { eloc (E_sizeof($2)) }
+  | Constraint Lparen nexp_constraint Rparen
+    { eloc (E_constraint $3) }
   | Exit atomic_exp
       { eloc (E_exit $2) }
   | Return atomic_exp
@@ -1053,14 +1055,32 @@ nums:
     { $1::$3 }
 
 nexp_constraint:
+  | nexp_constraint1
+    { $1 }
+  | nexp_constraint1 Bar nexp_constraint
+    { NC_aux (NC_or ($1, $3), loc ()) }
+
+nexp_constraint1:
+  | nexp_constraint2
+    { $1 }
+  | nexp_constraint2 Amp nexp_constraint1
+    { NC_aux (NC_and ($1, $3), loc ()) }
+
+nexp_constraint2:
   | nexp_typ Eq nexp_typ
     { NC_aux(NC_fixed($1,$3), loc () ) }
+  | nexp_typ ExclEq nexp_typ
+    { NC_aux (NC_not_equal ($1, $3), loc ()) }
   | nexp_typ GtEq nexp_typ
     { NC_aux(NC_bounded_ge($1,$3), loc () ) }
   | nexp_typ LtEq nexp_typ
     { NC_aux(NC_bounded_le($1,$3), loc () ) }
+  | tyvar In Lcurly nums Rcurly
+    { NC_aux(NC_nat_set_bounded($1,$4), loc ()) }
   | tyvar IN Lcurly nums Rcurly
     { NC_aux(NC_nat_set_bounded($1,$4), loc ()) }
+  | Lparen nexp_constraint Rparen
+    { $2 }
 
 id_constraint:
   | nexp_constraint

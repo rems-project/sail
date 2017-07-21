@@ -643,7 +643,7 @@ though, if you also have `sail-electric-indent' on."
           "alias" "union" "member" "clause" "extern" "cast" "effect"
 	  "rec" "and" "switch" "case" "when" "exit" "foreach" "from" "else"
           "to" "end" "downto" "in" "then" "with" "if" "nondet" "as"
-	  "undefined" "const" "struct" "IN" "deinfix" "return" "sizeof"))
+	  "undefined" "const" "struct" "IN" "deinfix" "return" "constraint" "sizeof"))
   (setq abbrevs-changed nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -708,10 +708,10 @@ Based on Tuareg mode. See Tuareg mode for usage"
 (defun sail-install-font-lock ()
   (setq
    sail-font-lock-keywords
-   `(("\\<\\(extern\\|cast\\|overload\\|deinfix\\|function\\|scattered\\|clause\\|effect\\|default\\|struct\\|const\\|union\\|val\\|typedef\\|in\\|let\\|rec\\|and\\|end\\|register\\|alias\\|member\\|enumerate\\)\\>"
+   `(("\\<\\(extern\\|cast\\|overload\\|deinfix\\|function\\|scattered\\|clause\\|effect\\|default\\|struct\\|const\\|union\\|val\\|typedef\\|let\\|rec\\|and\\|end\\|register\\|alias\\|member\\|enumerate\\)\\>"
       0 sail-font-lock-governing-face nil nil)
      ("\\<\\(false\\|true\\|bitzero\\|bitone\\|0x[:xdigit:]\\|[:digit:]\\)\\>" 0 font-lock-constant-face nil nil)
-     ("\\<\\(as\\|downto\\|else\\|foreach\\|if\\|t\\(hen\\|o\\)\\|when\\|switch\\|with\\|case\\|when\\|exit\\|sizeof\\|nondet\\|from\\|by\\|return\\)\\>"
+     ("\\<\\(as\\|downto\\|else\\|foreach\\|if\\|t\\(hen\\|o\\)\\|when\\|in\\|switch\\|with\\|case\\|when\\|exit\\|constraint\\|sizeof\\|nondet\\|from\\|by\\|return\\)\\>"
       0 font-lock-keyword-face nil nil)
      ("\\<\\(clause\\)\\>[ \t\n]*\\(\\(\\w\\|[_ \t()*,]\\)+\\)"
       2 font-lock-variable-name-face keep nil)

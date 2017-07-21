@@ -44,6 +44,9 @@
 
 open Ast
 
+val mk_nc : n_constraint_aux -> n_constraint
+val mk_nexp : nexp_aux -> nexp
+
 (* Functions to map over the annotations in sub-expressions *)
 val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
 val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat
@@ -94,6 +97,22 @@ end
 module BE : sig
   type t = base_effect
   val compare : base_effect -> base_effect -> int
+end
+
+module IdSet : sig
+  include Set.S with type elt = id
+end
+
+module KidSet : sig
+  include Set.S with type elt = kid
+end
+
+module KBindings : sig
+  include Map.S with type key = kid
+end
+
+module Bindings : sig
+  include Map.S with type key = id
 end
 
 val is_number : typ -> bool
