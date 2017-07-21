@@ -1626,6 +1626,10 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      end
   | E_app_infix (x, op, y), _ when List.length (Env.get_overloads (deinfix op) env) > 0 ->
      check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ()))) typ
+  | E_app (f, [E_aux (E_constraint nc, _)]), _ when Id.compare f (mk_id "_prove") = 0 ->
+     if prove env nc
+     then annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
+     else typ_error l ("Cannot prove " ^ string_of_n_constraint nc)
   | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
        | [] -> typ_error l ("No valid overloading for " ^ string_of_exp exp)

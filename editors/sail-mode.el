@@ -710,6 +710,8 @@ Based on Tuareg mode. See Tuareg mode for usage"
    sail-font-lock-keywords
    `(("\\<\\(extern\\|cast\\|overload\\|deinfix\\|function\\|scattered\\|clause\\|effect\\|default\\|struct\\|const\\|union\\|val\\|typedef\\|let\\|rec\\|and\\|end\\|register\\|alias\\|member\\|enumerate\\)\\>"
       0 sail-font-lock-governing-face nil nil)
+     ("\\<\\(_prove\\)\\>"
+      0 font-lock-preprocessor-face nil nil)
      ("\\<\\(false\\|true\\|bitzero\\|bitone\\|0x[:xdigit:]\\|[:digit:]\\)\\>" 0 font-lock-constant-face nil nil)
      ("\\<\\(as\\|downto\\|else\\|foreach\\|if\\|t\\(hen\\|o\\)\\|when\\|in\\|switch\\|with\\|case\\|when\\|exit\\|constraint\\|sizeof\\|nondet\\|from\\|by\\|return\\)\\>"
       0 font-lock-keyword-face nil nil)
@@ -724,7 +726,7 @@ Based on Tuareg mode. See Tuareg mode for usage"
      ("\\<\\(val\\|and\\|let\\>[ \t\n]*\\(\\(\\w\\|[_,?~.]\\)*\\)\\>\\(\\(\\w\\|[->_ \t,?~.]\\|(\\(\\w\\|[--->_ \t,?~.=]\\)*)\\)*\\)"
       6 font-lock-variable-name-face keep nil)
      ("\\<\\([?~]?[_[:alpha:]]\\w*\\)[ \t\n]*:[^:>=]"
-      1 font-lock-variable-name-face keep nil)
+      0 font-lock-variable-name-face keep nil)
      ("^#\\w+\\>" 0 font-lock-preprocessor-face t nil)
      ))
   (setq font-lock-defaults
