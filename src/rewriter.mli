@@ -9,6 +9,7 @@
 (*    Robert Norton-Wright                                                *)
 (*    Christopher Pulte                                                   *)
 (*    Peter Sewell                                                        *)
+(*    Thomas Bauereiss                                                    *)
 (*                                                                        *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
@@ -42,26 +43,21 @@
 
 open Big_int
 open Ast
-open Type_internal
-type typ = Type_internal.t
-type 'a exp = 'a Ast.exp
-type 'a emap = 'a Envmap.t
-type envs = Type_check.envs
-type 'a namemap = (typ * 'a exp) emap
+open Type_check_new
 
-type 'a rewriters = { rewrite_exp  : 'a rewriters -> (nexp_map * 'a namemap) option -> 'a exp -> 'a exp;
-                      rewrite_lexp : 'a rewriters -> (nexp_map * 'a namemap) option -> 'a lexp -> 'a lexp;
-                      rewrite_pat  : 'a rewriters -> (nexp_map * 'a namemap) option -> 'a pat -> 'a pat;
-                      rewrite_let  : 'a rewriters -> (nexp_map * 'a namemap) option -> 'a letbind -> 'a letbind;
+type 'a rewriters = { rewrite_exp  : 'a rewriters -> 'a exp -> 'a exp;
+                      rewrite_lexp : 'a rewriters -> 'a lexp -> 'a lexp;
+                      rewrite_pat  : 'a rewriters -> 'a pat -> 'a pat;
+                      rewrite_let  : 'a rewriters -> 'a letbind -> 'a letbind;
                       rewrite_fun  : 'a rewriters -> 'a fundef -> 'a fundef;
                       rewrite_def  : 'a rewriters -> 'a def -> 'a def;
                       rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
                     }
                     
-val rewrite_exp : tannot rewriters -> (nexp_map * tannot namemap) option -> tannot exp -> tannot exp
+val rewrite_exp : tannot rewriters -> tannot exp -> tannot exp
 val rewrite_defs : tannot defs -> tannot defs
 val rewrite_defs_ocaml : tannot defs -> tannot defs (*Perform rewrites to exclude AST nodes not supported for ocaml out*)
-val rewrite_defs_lem : tannot emap -> tannot defs -> tannot defs (*Perform rewrites to exclude AST nodes not supported for lem out*)
+val rewrite_defs_lem : tannot defs -> tannot defs (*Perform rewrites to exclude AST nodes not supported for lem out*)
 
 (* the type of interpretations of pattern-matching expressions *)
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
@@ -114,6 +110,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
  ; e_case                   : 'exp * 'pexp list -> 'exp_aux
  ; e_let                    : 'letbind * 'exp -> 'exp_aux
  ; e_assign                 : 'lexp * 'exp -> 'exp_aux
+ ; e_sizeof                 : nexp -> 'exp_aux
  ; e_exit                   : 'exp -> 'exp_aux
  ; e_return                 : 'exp -> 'exp_aux
  ; e_assert                 : 'exp * 'exp -> 'exp_aux

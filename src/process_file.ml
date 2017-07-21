@@ -97,7 +97,7 @@ let opt_ddump_tc_ast = ref false
 let opt_dno_cast = ref false
 let opt_mono_split = ref ([]:((string * int) * string) list)
 
-let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.order) : Type_internal.tannot Ast.defs * Type_check.envs =
+let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.order) : Type_check_new.tannot Ast.defs * Type_check_new.Env.t =
   let d_env = { Type_internal.k_env = k; Type_internal.abbrevs = Type_internal.initial_abbrev_env;
                 Type_internal.nabbrevs = Envmap.empty;
 		Type_internal.namesch = Envmap.empty; Type_internal.enum_env = Envmap.empty; 
@@ -106,10 +106,10 @@ let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.
                 {Type_internal.order = (match o with | (Ast.Ord_aux(Ast.Ord_inc,_)) -> Type_internal.Oinc 
 		                                     | (Ast.Ord_aux(Ast.Ord_dec,_)) -> Type_internal.Odec
 						     | _ -> Type_internal.Oinc)};} in
-  if !opt_new_typecheck
-  then
+  (* if !opt_new_typecheck
+  then *)
     let ienv = if !opt_dno_cast then Type_check_new.Env.no_casts Type_check_new.initial_env else Type_check_new.initial_env in
-    let ast, _ = Type_check_new.check ienv defs in
+    let ast, env = Type_check_new.check ienv defs in
     let ast = match !opt_mono_split with
       | [] -> ast
       | l ->
@@ -118,16 +118,14 @@ let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.
          let ast, _ = Type_check_new.check ienv ast in
          ast
     in
-    if !opt_ddump_tc_ast then Pretty_print.pp_defs stdout ast else ()
-  else ();
-  if !opt_just_check
-  then exit 0
-  else ();
-  Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env,Type_internal.nob,Envmap.empty)) defs 
+    let () = if !opt_ddump_tc_ast then Pretty_print.pp_defs stdout ast else () in
+    let () = if !opt_just_check then exit 0 else () in
+    (ast, env)
+  (* else Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env,Type_internal.nob,Envmap.empty)) defs  *)
 
-let rewrite_ast (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs defs
-let rewrite_ast_lem (Type_check.Env (_, typ_env, _, _)) (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs_lem typ_env defs
-let rewrite_ast_ocaml (defs: Type_internal.tannot Ast.defs) = Rewriter.rewrite_defs_ocaml defs
+let rewrite_ast (defs: Type_check_new.tannot Ast.defs) = Rewriter.rewrite_defs defs
+let rewrite_ast_lem (defs: Type_check_new.tannot Ast.defs) = Rewriter.rewrite_defs_lem defs
+let rewrite_ast_ocaml (defs: Type_check_new.tannot Ast.defs) = Rewriter.rewrite_defs_ocaml defs
 
 let open_output_with_check file_name =
   let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in
@@ -242,7 +240,6 @@ let output1 libpath out_arg filename defs  =
         let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in
 	Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["Big_int_Z"; "Sail_values"; lib];
         close_output_with_check ext_o
-
 
 let output libpath out_arg files =
   List.iter

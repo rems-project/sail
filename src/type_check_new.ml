@@ -371,6 +371,7 @@ module Env : sig
   val lookup_id : id -> t -> lvar
   val fresh_kid : t -> kid
   val expand_synonyms : t -> typ -> typ
+  val base_typ_of : t -> typ -> typ
   val empty : t
 end = struct
   type t =
@@ -775,6 +776,27 @@ end = struct
     match typ_arg with
     | Typ_arg_typ typ -> Typ_arg_aux (Typ_arg_typ (expand_synonyms env typ), l)
     | arg -> Typ_arg_aux (arg, l)
+
+  let base_typ_of env typ =
+    let rec aux (Typ_aux (t,a)) =
+      let rewrap t = Typ_aux (t,a) in
+      match t with
+      | Typ_fn (t1, t2, eff) ->
+        rewrap (Typ_fn (aux t1, aux t2, eff))
+      | Typ_tup ts ->
+        rewrap (Typ_tup (List.map aux ts))
+      | Typ_app (register, [Typ_arg_aux (Typ_arg_typ rtyp,_)])
+        when string_of_id register = "register" ->
+        aux rtyp
+      | Typ_app (id, targs) ->
+        rewrap (Typ_app (id, List.map aux_arg targs))
+      | t -> rewrap t
+    and aux_arg (Typ_arg_aux (targ,a)) =
+      let rewrap targ = Typ_arg_aux (targ,a) in
+      match targ with
+      | Typ_arg_typ typ -> rewrap (Typ_arg_typ (aux typ))
+      | targ -> rewrap targ in
+    aux (expand_synonyms env typ)
 
   let get_default_order env =
     match env.default_order with

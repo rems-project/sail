@@ -42,10 +42,9 @@
 
 open Ast
 open Util
-open Big_int
-open Type_internal
+open Ast_util
 
-type typ = Type_internal.t
+module Nameset = Set.Make(String)
 
 let mt = Nameset.empty
 
@@ -58,7 +57,7 @@ let set_to_string n =
 
 
 (*Query a spec for its default order if one is provided. Assumes Inc if not *)
-let get_default_order_sp (DT_aux(spec,_)) =
+(* let get_default_order_sp (DT_aux(spec,_)) =
   match spec with
   | DT_order (Ord_aux(o,_)) ->
     (match o with
@@ -77,11 +76,11 @@ let rec default_order (Defs defs) =
   | def::defs ->
     match get_default_order_def def with
     | None -> default_order (Defs defs)
-    | Some o -> o
+    | Some o -> o *)
 
 (*Is within range*)
 
-let check_in_range (candidate : big_int) (range : typ) : bool =
+(* let check_in_range (candidate : big_int) (range : typ) : bool =
   match range.t with
   | Tapp("range", [TA_nexp min; TA_nexp max]) | Tabbrev(_,{t=Tapp("range", [TA_nexp min; TA_nexp max])}) ->
     let min,max = 
@@ -182,21 +181,18 @@ let is_within_range candidate range constraints =
      | _ -> Maybe)
   | _ -> Maybe
 
-let is_within_machine64 candidate constraints = is_within_range candidate int64_t constraints
+let is_within_machine64 candidate constraints = is_within_range candidate int64_t constraints *)
   
 (************************************************************************************************)
 (*FV finding analysis: identifies the free variables of a function, expression, etc *)
-
-let id_to_string (Ast.Id_aux (i,_)) = match i with
-  | Ast.Id s | Ast.DeIid s -> s
 
 let conditional_add typ_or_exp bound used id =
   let known_list =
     if typ_or_exp (*true for typ*)
     then ["bit";"vector";"unit";"string";"int";"bool";"boolean"]
     else ["=="; "!="; "|";"~";"&";"add_int"] in
-  let i = (id_to_string id) in
-  if Nameset.mem i bound || List.mem i  known_list
+  let i = (string_of_id id) in
+  if Nameset.mem i bound || List.mem i known_list
   then used
   else Nameset.add i used
 
@@ -207,34 +203,28 @@ let conditional_add_exp = conditional_add false
 let nameset_bigunion = List.fold_left Nameset.union mt
 
 
-let rec free_type_names_t consider_var {t = t} = match t with
-  | Tvar name -> if consider_var then Nameset.add name mt else mt
-  | Tid name -> Nameset.add name mt
-  | Tfn (t1,t2,_,_) -> Nameset.union (free_type_names_t consider_var t1)
+let rec free_type_names_t consider_var (Typ_aux (t, _)) = match t with
+  | Typ_var name -> if consider_var then Nameset.add (string_of_kid name) mt else mt
+  | Typ_id name -> Nameset.add (string_of_id name) mt
+  | Typ_fn (t1,t2,_) -> Nameset.union (free_type_names_t consider_var t1)
                                      (free_type_names_t consider_var t2)
-  | Ttup ts -> free_type_names_ts consider_var ts
-  | Tapp (name,targs) -> Nameset.add name (free_type_names_t_args consider_var targs)
-  | Tabbrev (t1,t2) -> Nameset.union (free_type_names_t consider_var t1)
-                                     (free_type_names_t consider_var t2)
-  | Toptions (t,m_t) -> Nameset.union (free_type_names_t consider_var t)
-                                      (free_type_names_maybe_t consider_var m_t)
-  | Tuvar _ -> mt
+  | Typ_tup ts -> free_type_names_ts consider_var ts
+  | Typ_app (name,targs) -> Nameset.add (string_of_id name) (free_type_names_t_args consider_var targs)
+  | Typ_wild -> mt
 and free_type_names_ts consider_var ts = nameset_bigunion (List.map (free_type_names_t consider_var) ts)
 and free_type_names_maybe_t consider_var = function
   | Some t -> free_type_names_t consider_var t
   | None -> mt
 and free_type_names_t_arg consider_var = function
-  | TA_typ t -> free_type_names_t consider_var t
+  | Typ_arg_aux (Typ_arg_typ t, _) -> free_type_names_t consider_var t
   | _ -> mt
 and free_type_names_t_args consider_var targs =
   nameset_bigunion (List.map (free_type_names_t_arg consider_var) targs)
 
 
 let rec free_type_names_tannot consider_var = function
-  | NoTyp -> mt
-  | Base ((_,t),_ ,_,_,_,_) -> free_type_names_t consider_var t
-  | Overload (tannot,_,tannots) ->
-     nameset_bigunion (List.map (free_type_names_tannot consider_var) (tannot :: tannots))
+  | None -> mt
+  | Some (_, t, _) -> free_type_names_t consider_var t
 
 
 let rec fv_of_typ consider_var bound used (Typ_aux (t,_)) : Nameset.t =
@@ -285,16 +275,16 @@ let rec pat_bindings consider_var bound used (P_aux(p,(_,tannot))) =
   let list_fv bound used ps = List.fold_right (fun p (b,n) -> pat_bindings consider_var b n p) ps (bound, used) in
   match p with
   | P_as(p,id) -> let b,ns = pat_bindings consider_var bound used p in
-    Nameset.add (id_to_string id) b,ns
+    Nameset.add (string_of_id id) b,ns
   | P_typ(t,p) ->
      let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
      let ns = fv_of_typ consider_var bound used t in pat_bindings consider_var bound ns p
   | P_id id ->
      let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
-     Nameset.add (id_to_string id) bound,used
+     Nameset.add (string_of_id id) bound,used
   | P_app(id,pats) ->
     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
-    list_fv bound (Nameset.add (id_to_string id) used) pats    
+    list_fv bound (Nameset.add (string_of_id id) used) pats
   | P_record(fpats,_) ->
     List.fold_right (fun (Ast.FP_aux(Ast.FP_Fpat(_,p),_)) (b,n) ->
         pat_bindings consider_var bound used p) fpats (bound,used)
@@ -324,7 +314,7 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   | E_if(c,t,e) -> list_fv bound used set [c;t;e]
   | E_for(id,from,to_,by,_,body) ->
     let _,used,set = list_fv bound used set [from;to_;by] in
-    fv_of_exp consider_var (Nameset.add (id_to_string id) bound) used set body
+    fv_of_exp consider_var (Nameset.add (string_of_id id) bound) used set body
   | E_vector_indexed (es_i,(Ast.Def_val_aux(default,_))) ->
     let bound,used,set =
       List.fold_right
@@ -383,13 +373,13 @@ and fv_of_lexp consider_var bound used set (LEXP_aux(lexp,(_,tannot))) =
   match lexp with
   | LEXP_id id ->
     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
-    let i = id_to_string id in
+    let i = string_of_id id in
     if Nameset.mem i bound
     then bound, used, Nameset.add i set
     else Nameset.add i bound, Nameset.add i used, set
   | LEXP_cast(typ,id) ->
     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
-    let i = id_to_string id in
+    let i = string_of_id id in
     let used_t = fv_of_typ consider_var bound used typ in
     if Nameset.mem i bound
     then bound, used_t, Nameset.add i set
@@ -401,7 +391,7 @@ and fv_of_lexp consider_var bound used set (LEXP_aux(lexp,(_,tannot))) =
       List.fold_right
         (fun e (b,u,s) ->
           fv_of_exp consider_var b u s e) args (bound,used,set) in
-    bound,Nameset.add (id_to_string id) used,set
+    bound,Nameset.add (string_of_id id) used,set
   | LEXP_field(lexp,_) -> fv_of_lexp consider_var bound used set lexp
   | LEXP_vector(lexp,exp) ->
     let bound_l,used,set = fv_of_lexp consider_var bound used set lexp in
@@ -418,47 +408,49 @@ let init_env s = Nameset.singleton s
 let typ_variants consider_var bound tunions =
   List.fold_right
     (fun (Tu_aux(t,_)) (b,n) -> match t with
-       | Tu_id id -> Nameset.add (id_to_string id) b,n
-       | Tu_ty_id(t,id) -> Nameset.add (id_to_string id) b, fv_of_typ consider_var b n t)
+       | Tu_id id -> Nameset.add (string_of_id id) b,n
+       | Tu_ty_id(t,id) -> Nameset.add (string_of_id id) b, fv_of_typ consider_var b n t)
     tunions
     (bound,mt)
 
 let fv_of_kind_def consider_var (KD_aux(k,_)) = match k with
-  | KD_nabbrev(_,id,_,nexp) -> init_env (id_to_string id), fv_of_nexp consider_var mt mt nexp
+  | KD_nabbrev(_,id,_,nexp) -> init_env (string_of_id id), fv_of_nexp consider_var mt mt nexp
   | KD_abbrev(_,id,_,typschm) ->
-    init_env (id_to_string id), snd (fv_of_typschm consider_var mt mt typschm)
+    init_env (string_of_id id), snd (fv_of_typschm consider_var mt mt typschm)
   | KD_record(_,id,_,typq,tids,_) ->
-    let binds = init_env (id_to_string id) in
+    let binds = init_env (string_of_id id) in
     let bounds = if consider_var then typq_bindings typq else mt in
     binds, List.fold_right (fun (t,_) n -> fv_of_typ consider_var bounds n t) tids mt
   | KD_variant(_,id,_,typq,tunions,_) ->
-    let bindings = Nameset.add (id_to_string id) (if consider_var then typq_bindings typq else mt) in
+    let bindings = Nameset.add (string_of_id id) (if consider_var then typq_bindings typq else mt) in
     typ_variants consider_var bindings tunions
   | KD_enum(_,id,_,ids,_) ->
-    Nameset.of_list (List.map id_to_string (id::ids)),mt
+    Nameset.of_list (List.map string_of_id (id::ids)),mt
   | KD_register(_,id,n1,n2,_) ->
-    init_env (id_to_string id), fv_of_nexp consider_var mt (fv_of_nexp consider_var mt mt n1) n2
+    init_env (string_of_id id), fv_of_nexp consider_var mt (fv_of_nexp consider_var mt mt n1) n2
 
 let fv_of_type_def consider_var (TD_aux(t,_)) = match t with
-  | TD_abbrev(id,_,typschm) -> init_env (id_to_string id), snd (fv_of_typschm consider_var mt mt typschm)
+  | TD_abbrev(id,_,typschm) -> init_env (string_of_id id), snd (fv_of_typschm consider_var mt mt typschm)
   | TD_record(id,_,typq,tids,_) ->
-    let binds = init_env (id_to_string id) in
+    let binds = init_env (string_of_id id) in
     let bounds = if consider_var then typq_bindings typq else mt in
     binds, List.fold_right (fun (t,_) n -> fv_of_typ consider_var bounds n t) tids mt
   | TD_variant(id,_,typq,tunions,_) ->
-    let bindings = Nameset.add (id_to_string id) (if consider_var then typq_bindings typq else mt) in
+    let bindings = Nameset.add (string_of_id id) (if consider_var then typq_bindings typq else mt) in
     typ_variants consider_var bindings tunions
   | TD_enum(id,_,ids,_) ->
-    Nameset.of_list (List.map id_to_string (id::ids)),mt
+    Nameset.of_list (List.map string_of_id (id::ids)),mt
   | TD_register(id,n1,n2,_) ->
-    init_env (id_to_string id), fv_of_nexp consider_var mt (fv_of_nexp consider_var mt mt n1) n2
+    init_env (string_of_id id), fv_of_nexp consider_var mt (fv_of_nexp consider_var mt mt n1) n2
 
 let fv_of_tannot_opt consider_var (Typ_annot_opt_aux (t,_)) =
   match t with
   | Typ_annot_opt_some (typq,typ) ->
     let bindings = if consider_var then typq_bindings typq else mt in
     let free = fv_of_typ consider_var bindings mt typ in
-    (bindings,free)  
+    (bindings,free)
+  | Typ_annot_opt_none ->
+    (mt, mt)
 
 (*Unlike the other fv, the bound returns are the names bound by the pattern for use in the exp*)
 let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pat,exp),l)) =
@@ -469,7 +461,7 @@ let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pat,exp),l)) =
 let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_)) =
   let fun_name = match funcls with
     | [] -> failwith "fv_of_fun fell off the end looking for the function name"
-    | FCL_aux(FCL_Funcl(id,_,_),_)::_ -> id_to_string id in
+    | FCL_aux(FCL_Funcl(id,_,_),_)::_ -> string_of_id id in
   let base_bounds = match rec_opt with
     | Rec_aux(Ast.Rec_rec,_) -> init_env fun_name
     | _ -> mt in
@@ -477,7 +469,9 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_))
     | Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ),_) ->
       let bindings = if consider_var then typq_bindings typq else mt in
       let bound = Nameset.union bindings base_bounds in
-      bound, fv_of_typ consider_var bound mt typ in
+      bound, fv_of_typ consider_var bound mt typ
+    | Typ_annot_opt_aux(Typ_annot_opt_none, _) ->
+      base_bounds, mt in
   let ns = List.fold_right (fun (FCL_aux(FCL_Funcl(_,pat,exp),_)) ns ->
       let pat_bs,pat_ns = pat_bindings consider_var base_bounds ns pat in
       let _, exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty exp in
@@ -485,8 +479,9 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_))
   init_env fun_name,Nameset.union ns ns_r
 
 let fv_of_vspec consider_var (VS_aux(vspec,_)) = match vspec with
-  | VS_val_spec(ts,id) | VS_extern_no_rename (ts,id) | VS_extern_spec(ts,id,_)->
-     init_env ("val:" ^ (id_to_string id)), snd (fv_of_typschm consider_var mt mt ts)
+  | VS_val_spec(ts,id) | VS_extern_no_rename (ts,id) | VS_extern_spec(ts,id,_)
+  | VS_cast_spec(ts,id) ->
+     init_env ("val:" ^ (string_of_id id)), snd (fv_of_typschm consider_var mt mt ts)
 
 let rec find_scattered_of name = function
   | [] -> []
@@ -495,7 +490,7 @@ let rec find_scattered_of name = function
      | SD_scattered_function(_,_,_,id)
      | SD_scattered_funcl(FCL_aux(FCL_Funcl(id,_,_),_))
      | SD_scattered_unioncl(id,_) ->
-       if name = id_to_string id
+       if name = string_of_id id
        then [sd] else []
      | _ -> [])@
     (find_scattered_of name defs)
@@ -506,17 +501,19 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
     let b,ns = (match tannot_opt with
         | Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ),_) ->
           let bindings = if consider_var then typq_bindings typq else mt in
-          bindings, fv_of_typ consider_var bindings mt typ) in
-    init_env (id_to_string id),ns
+          bindings, fv_of_typ consider_var bindings mt typ
+        | Typ_annot_opt_aux(Typ_annot_opt_none, _) ->
+          mt, mt) in
+    init_env (string_of_id id),ns
   | SD_scattered_funcl (FCL_aux(FCL_Funcl(id,pat,exp),_)) ->
     let pat_bs,pat_ns = pat_bindings consider_var mt mt pat in
     let _,exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty exp in
     let scattered_binds = match pat with
-      | P_aux(P_app(pid,_),_) -> init_env ((id_to_string id) ^ "/" ^ (id_to_string pid))
+      | P_aux(P_app(pid,_),_) -> init_env ((string_of_id id) ^ "/" ^ (string_of_id pid))
       | _ -> mt in
     scattered_binds, exp_ns
   | SD_scattered_variant (id,_,_) ->
-    let name = id_to_string id in
+    let name = string_of_id id in
     let uses =
       if consider_scatter_as_one
       then
@@ -528,12 +525,12 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
       else mt in
     init_env name, uses
   | SD_scattered_unioncl(id, type_union) ->
-    let typ_name = id_to_string id in
+    let typ_name = string_of_id id in
     let b = init_env typ_name in
     let (b,r) = typ_variants consider_var b [type_union] in
     (Nameset.remove typ_name b, Nameset.add typ_name r)
   | SD_scattered_end id ->
-    let name = id_to_string id in
+    let name = string_of_id id in
     let uses = if consider_scatter_as_one
     (*Note: if this is a function ending, the dec is included *)
       then
@@ -545,11 +542,11 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
 
 let fv_of_rd consider_var (DEC_aux (d,_)) = match d with
   | DEC_reg(t,id) ->
-    init_env (id_to_string id), fv_of_typ consider_var mt mt t
+    init_env (string_of_id id), fv_of_typ consider_var mt mt t
   | DEC_alias(id,alias) ->
-    init_env (id_to_string id),mt
+    init_env (string_of_id id),mt
   | DEC_typ_alias(t,id,alias) ->
-    init_env (id_to_string id), mt
+    init_env (string_of_id id), mt
 
 let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_kind kdef -> fv_of_kind_def consider_var kdef
@@ -557,6 +554,7 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_fundef fdef -> fv_of_fun consider_var fdef
   | DEF_val lebind -> ((fun (b,u,_) -> (b,u)) (fv_of_let consider_var mt mt mt lebind))
   | DEF_spec vspec -> fv_of_vspec consider_var vspec
+  | DEF_overload (id,ids) -> init_env (string_of_id id), List.fold_left (fun ns id -> Nameset.add (string_of_id id) ns) mt ids
   | DEF_default def -> mt,mt
   | DEF_scattered sdef -> fv_of_scattered consider_var consider_scatter_as_one all_defs sdef
   | DEF_reg_dec rdec -> fv_of_rd consider_var rdec

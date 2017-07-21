@@ -42,10 +42,11 @@
 
 val parse_file : string -> Parse_ast.defs
 val convert_ast : Parse_ast.defs -> Type_internal.tannot Ast.defs * Type_internal.kind Type_internal.Envmap.t * Ast.order
-val check_ast: Type_internal.tannot Ast.defs -> Type_internal.kind Type_internal.Envmap.t -> Ast.order -> Type_internal.tannot Ast.defs * Type_check.envs
-val rewrite_ast: Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.defs
-val rewrite_ast_lem : Type_check.envs -> Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.defs
-val rewrite_ast_ocaml : Type_internal.tannot Ast.defs -> Type_internal.tannot Ast.defs
+val check_ast: Type_internal.tannot Ast.defs -> Type_internal.kind Type_internal.Envmap.t -> Ast.order -> Type_check_new.tannot Ast.defs * Type_check_new.Env.t
+val rewrite_ast: Type_check_new.tannot Ast.defs -> Type_check_new.tannot Ast.defs
+val rewrite_ast_lem : Type_check_new.tannot Ast.defs -> Type_check_new.tannot Ast.defs
+val rewrite_ast_ocaml : Type_check_new.tannot Ast.defs -> Type_check_new.tannot Ast.defs
+
 val load_file : Type_check_new.Env.t -> string -> Type_check_new.tannot Ast.defs * Type_check_new.Env.t
 
 val opt_new_typecheck : bool ref
@@ -62,7 +63,7 @@ type out_type =
 val output :
   string ->                           (* The path to the library *)
   out_type ->                         (* Backend kind *)
-  (string * Type_internal.tannot Ast.defs) list -> (*File names paired with definitions *)
+  (string * Type_check_new.tannot Ast.defs) list -> (*File names paired with definitions *)
   unit
 
 (** [always_replace_files] determines whether Sail only updates modified files.

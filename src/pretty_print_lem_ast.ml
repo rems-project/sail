@@ -40,7 +40,7 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Type_internal
+open Type_check_new
 open Ast
 open Format
 open Big_int
@@ -284,68 +284,6 @@ let pp_format_lit_lem (L_aux(lit,l)) =
 let pp_lem_lit ppf l = base ppf (pp_format_lit_lem l)
 
 
-let rec pp_format_t_lem t =
-  match t.t with
-    | Tid i -> "(T_id \"" ^ i ^ "\")"
-    | Tvar i -> "(T_var \"" ^ i ^ "\")"
-    | Tfn(t1,t2,_,e) -> "(T_fn " ^ (pp_format_t_lem t1) ^ " " ^ (pp_format_t_lem t2) ^ " " ^ pp_format_e_lem e ^ ")"
-    | Ttup(tups) -> "(T_tup [" ^ (list_format "; " pp_format_t_lem tups) ^ "])"
-    | Tapp(i,args) -> "(T_app \"" ^ i ^ "\" (T_args [" ^  list_format "; " pp_format_targ_lem args ^ "]))"
-    | Tabbrev(ti,ta) -> "(T_abbrev " ^ (pp_format_t_lem ti) ^ " " ^ (pp_format_t_lem ta) ^ ")"
-    | Tuvar(_) -> "(T_var \"fresh_v\")"
-    | Toptions _ -> "(T_var \"fresh_v\")"
-and pp_format_targ_lem = function
-  | TA_typ t -> "(T_arg_typ " ^ pp_format_t_lem t ^ ")"
-  | TA_nexp n -> "(T_arg_nexp " ^ pp_format_n_lem n ^ ")"
-  | TA_eft e -> "(T_arg_effect " ^ pp_format_e_lem e ^ ")"
-  | TA_ord o -> "(T_arg_order " ^ pp_format_o_lem o ^ ")"
-and pp_format_n_lem n =
-  match n.nexp with
-  | Nid (i, n) -> "(Ne_id \"" ^ i ^ " " ^ "\")"
-  | Nvar i -> "(Ne_var \"" ^ i ^ "\")"
-  | Nconst i -> "(Ne_const " ^ (lemnum string_of_int (int_of_big_int i)) ^ ")"
-  | Npos_inf -> "Ne_inf"
-  | Nadd(n1,n2) -> "(Ne_add [" ^ (pp_format_n_lem n1) ^ "; " ^ (pp_format_n_lem n2) ^ "])"
-  | Nsub(n1,n2) -> "(Ne_minus "^ (pp_format_n_lem n1) ^ " " ^ (pp_format_n_lem n2) ^ ")"
-  | Nmult(n1,n2) -> "(Ne_mult " ^ (pp_format_n_lem n1) ^ " " ^ (pp_format_n_lem n2) ^ ")"
-  | N2n(n,Some i) -> "(Ne_exp " ^ (pp_format_n_lem n) ^ "(*" ^ string_of_big_int i ^ "*)" ^ ")"
-  | N2n(n,None) -> "(Ne_exp " ^ (pp_format_n_lem n) ^ ")"
-  | Nneg n -> "(Ne_unary " ^ (pp_format_n_lem n) ^ ")"
-  | Nuvar _ -> "(Ne_var \"fresh_v_" ^ string_of_int (get_index n) ^ "\")"
-  | Nneg_inf -> "(Ne_unary Ne_inf)"
-  | Npow _ -> "power_not_implemented"
-  | Ninexact -> "(Ne_add Ne_inf (Ne_unary Ne_inf)"
-and pp_format_e_lem e =
-  "(Effect_aux " ^
-  (match e.effect with
-  | Evar i -> "(Effect_var (Kid_aux (Var \"" ^ i ^ "\") Unknown))"
-  | Eset es -> "(Effect_set [" ^
-                  (list_format "; " pp_format_base_effect_lem es) ^ " ])"
-  | Euvar(_) -> "(Effect_var (Kid_aux (Var \"fresh_v\") Unknown))")
-  ^ " Unknown)"
-and pp_format_o_lem o =
-  "(Ord_aux " ^
-  (match o.order with
-  | Ovar i -> "(Ord_var (Kid_aux (Var \"" ^ i ^ "\") Unknown))"
-  | Oinc -> "Ord_inc"
-  | Odec -> "Ord_dec"
-  | Ouvar(_) -> "(Ord_var (Kid_aux (Var \"fresh_v\") Unknown))")
-  ^ " Unknown)"
-
-let rec pp_format_tag = function
-  | Emp_local -> "Tag_empty"
-  | Emp_intro -> "Tag_intro"
-  | Emp_set -> "Tag_set"
-  | Emp_global -> "Tag_global"
-  | Tuple_assign tags -> (*"(Tag_tuple_assign [" ^ list_format " ;" pp_format_tag tags ^ "])"*) "Tag_tuple_assign"
-  | External (Some s) -> "(Tag_extern (Just \""^s^"\"))"
-  | External None -> "(Tag_extern Nothing)"
-  | Default -> "Tag_default"
-  | Constructor _ -> "Tag_ctor"
-  | Enum i -> "(Tag_enum " ^ (lemnum string_of_int i) ^ ")"
-  | Alias alias_inf -> "Tag_alias"
-  | Spec -> "Tag_spec"
-
 let rec pp_format_nes nes =
   "[" ^ (*
   (list_format "; "
@@ -365,12 +303,16 @@ let rec pp_format_nes nes =
      nes) ^*) "]"
 
 let pp_format_annot = function
+  | None -> "Nothing"
+  | Some (_, typ, eff) ->
+    "(Just (Env.empty, " ^ pp_format_typ_lem typ ^ ", " ^ pp_format_effects_lem eff ^ "))"
+(*
   | NoTyp -> "Nothing"
   | Base((_,t),tag,nes,efct,efctsum,_) ->
     (*TODO print out bindings for use in pattern match in interpreter*)
      "(Just (" ^ pp_format_t_lem t ^ ", " ^ pp_format_tag tag ^ ", " ^ pp_format_nes nes ^ ", " ^
        pp_format_e_lem efct ^ ", " ^ pp_format_e_lem efctsum ^ "))"
-  | Overload _ -> "Nothing"
+  | Overload _ -> "Nothing" *)
 
 let pp_annot ppf ant = base ppf (pp_format_annot ant)
 
@@ -423,7 +365,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
     | E_lit(lit) -> fprintf ppf "(E_aux (%a %a) (%a, %a))" kwd "E_lit" pp_lem_lit lit pp_lem_l l pp_annot annot
     | E_cast(typ,exp) ->
       fprintf ppf "@[<0>(E_aux (E_cast %a %a) (%a, %a))@]" pp_lem_typ typ pp_lem_exp exp pp_lem_l l pp_annot annot
-    | E_internal_cast((_,NoTyp),e) -> pp_lem_exp ppf e
+    | E_internal_cast((_,None),e) -> pp_lem_exp ppf e
     | E_app(f,args) -> fprintf ppf "@[<0>(E_aux (E_app %a [%a]) (%a, %a))@]"
                          pp_lem_id f (list_pp pp_semi_lem_exp pp_lem_exp) args pp_lem_l l pp_annot annot
     | E_app_infix(l',op,r) -> fprintf ppf "@[<0>(E_aux (E_app_infix %a %a %a) (%a, %a))@]"
@@ -490,6 +432,7 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
       fprintf ppf "@[<0>(E_aux (E_return %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_assert(c,msg) ->
       fprintf ppf "@[<0>(E_aux (E_assert %a %a) (%a, %a))@]" pp_lem_exp c pp_lem_exp msg pp_lem_l l pp_annot annot
+      (*
     | E_internal_exp ((l, Base((_,t),_,_,_,_,bindings))) ->
       (*TODO use bindings where appropriate*)
       (match t.t with
@@ -508,16 +451,22 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
             | Nvar v -> fprintf ppf "@[<0>(E_aux (E_id (Id_aux (Id \"%a\") %a)) (%a,%a))@]"
                                      kwd v pp_lem_l l pp_lem_l l pp_annot (Base(([],nat_t),Emp_local,[],pure_e,pure_e,nob))
             | _ -> raise (Reporting_basic.err_unreachable l "Internal_exp given implicit without variable or const"))
-        | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given non-vector or implicit"))
+        | _ ->  raise (Reporting_basic.err_unreachable l "Internal exp given non-vector or implicit")*)
     | E_comment _ | E_comment_struc _ ->
       fprintf ppf "@[(E_aux (E_lit (L_aux L_unit %a)) (%a,%a))@]" pp_lem_l l pp_lem_l l pp_annot annot
     | E_internal_cast _ | E_internal_exp _ ->
       raise (Reporting_basic.err_unreachable l "Found internal cast or exp")
     | E_internal_exp_user _ -> (raise (Reporting_basic.err_unreachable l "Found non-rewritten internal_exp_user"))
     | E_sizeof_internal _ -> (raise (Reporting_basic.err_unreachable l "Internal sizeof not removed"))
-    | E_internal_let _ -> (raise (Reporting_basic.err_unreachable l "Found non-rewritten internal_let"))
-    | E_internal_return _ -> (raise (Reporting_basic.err_unreachable l "Found non-rewritten internal_return"))
-    | E_internal_plet _ -> raise (Reporting_basic.err_unreachable l "Found non-rewritten internal_plet")
+    | E_internal_let (lexp,exp1,exp2) ->
+      fprintf ppf "@[<0>(E_aux (E_internal_let %a %a %a) (%a, %a))@]"
+        pp_lem_lexp lexp pp_lem_exp exp1 pp_lem_exp exp2 pp_lem_l l pp_annot annot
+    | E_internal_return exp ->
+      fprintf ppf "@[<0>(E_aux (E_internal_return %a) (%a, %a))@]"
+        pp_lem_exp exp pp_lem_l l pp_annot annot
+    | E_internal_plet (pat,exp1,exp2) ->
+      fprintf ppf "@[<0>(E_aux (E_internal_plet %a %a %a) (%a, %a))@]"
+        pp_lem_pat pat pp_lem_exp exp1 pp_lem_exp exp2 pp_lem_l l pp_annot annot
   in
   print_e ppf e
 
@@ -547,6 +496,7 @@ and pp_lem_lexp ppf (LEXP_aux(lexp,(l,annot))) =
   fprintf ppf "@[(LEXP_aux %a (%a, %a))@]" print_le lexp pp_lem_l l pp_annot annot
 and pp_semi_lem_lexp ppf le = fprintf ppf "@[<1>%a%a@]" pp_lem_lexp le kwd ";"
 
+let pp_semi_lem_id ppf id = fprintf ppf "@[<1>%a%a@]" pp_lem_id id kwd ";"
 
 let pp_lem_default ppf (DT_aux(df,l)) =
   let print_de ppf df =
@@ -566,6 +516,8 @@ let pp_lem_spec ppf (VS_aux(v,(l,annot))) =
       fprintf ppf "@[<0>(%a %a %a \"%s\")@]@\n" kwd "VS_extern_spec" pp_lem_typscm ts pp_lem_id id s
     | VS_extern_no_rename(ts,id) ->
       fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_extern_no_rename" pp_lem_typscm ts pp_lem_id id
+    | VS_cast_spec(ts,id) ->
+      fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_cast_spec" pp_lem_typscm ts pp_lem_id id
   in
   fprintf ppf "@[<0>(VS_aux %a (%a, %a))@]" print_spec v pp_lem_l l pp_annot annot
 
@@ -655,6 +607,8 @@ let pp_lem_tannot_opt ppf (Typ_annot_opt_aux(t,l)) =
   match t with
   | Typ_annot_opt_some(tq,typ) ->
     fprintf ppf "(Typ_annot_opt_aux (Typ_annot_opt_some %a %a) %a)" pp_lem_typquant tq pp_lem_typ typ pp_lem_l l
+  | Typ_annot_opt_none ->
+    fprintf ppf "(Typ_annot_opt_aux (Typ_annot_opt_none) %a)" pp_lem_l l
 
 let pp_lem_effects_opt ppf (Effect_opt_aux(e,l)) =
   match e with
@@ -701,6 +655,7 @@ let pp_lem_def ppf d =
   match d with
   | DEF_default(df) -> fprintf ppf "(DEF_default %a);@\n" pp_lem_default df
   | DEF_spec(v_spec) -> fprintf ppf "(DEF_spec %a);@\n" pp_lem_spec v_spec
+  | DEF_overload(id,ids) -> fprintf ppf "(DEF_overload %a [%a]);@\n" pp_lem_id id (list_pp pp_semi_lem_id pp_lem_id) ids
   | DEF_type(t_def) -> fprintf ppf "(DEF_type %a);@\n" pp_lem_typdef t_def
   | DEF_kind(k_def) -> fprintf ppf "(DEF_kind %a);@\n" pp_lem_kindef k_def
   | DEF_fundef(f_def) -> fprintf ppf "(DEF_fundef %a);@\n" pp_lem_fundef f_def
@@ -711,4 +666,3 @@ let pp_lem_def ppf d =
 
 let pp_lem_defs ppf (Defs(defs)) =
   fprintf ppf "Defs [@[%a@]]@\n" (list_pp pp_lem_def pp_lem_def) defs
-
