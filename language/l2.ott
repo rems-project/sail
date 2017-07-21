@@ -41,8 +41,6 @@ metavar regexp ::=
 embed
 {{ ocaml
 
-type text = string
-
 type l = Parse_ast.l
 
 type 'a annot = l * 'a
@@ -72,7 +70,7 @@ val subst : forall 'a. list 'a -> list 'a -> bool
 }}
 
 metavar x , y , z ::=
-  {{ ocaml text }}
+  {{ ocaml string }}
   {{ lem string }}
   {{ hol string }}
   {{ com identifier }}
@@ -81,7 +79,7 @@ metavar x , y , z ::=
 
 metavar ix ::=
   {{ lex alphanum }}
-  {{ ocaml text }}
+  {{ ocaml string }}
   {{ lem string }}
   {{ hol string }}
   {{ com infix identifier }}

@@ -34,7 +34,7 @@ type base_kind =
  | BK_aux of base_kind_aux * l
 
 
-type kid_aux =  (* kinded IDs: Type, Nat, Order, and Effect variables *)
+type kid_aux =  (* kinded IDs: $Type$, $Nat$, $Order$, and $Effect$ variables *)
  | Var of x
 
 
@@ -59,7 +59,7 @@ type kind =
  | K_aux of kind_aux * l
 
 
-type nexp_aux =  (* numeric expression, of kind Nat *)
+type nexp_aux =  (* numeric expression, of kind $Nat$ *)
  | Nexp_id of id (* abbreviation identifier *)
  | Nexp_var of kid (* variable *)
  | Nexp_constant of integer (* constant *)
@@ -84,8 +84,8 @@ type base_effect_aux =  (* effect *)
  | BE_depend (* dynamic footprint *)
  | BE_undef (* undefined-instruction exception *)
  | BE_unspec (* unspecified values *)
- | BE_nondet (* nondeterminism, from nondet *)
- | BE_escape (* potential call of  exit *)
+ | BE_nondet (* nondeterminism, from $nondet$ *)
+ | BE_escape (* potential call of  $exit$ *)
  | BE_lset (* local mutation; not user-writable *)
  | BE_lret (* local return; not user-writable *)
 
@@ -94,13 +94,13 @@ type base_effect =
  | BE_aux of base_effect_aux * l
 
 
-type order_aux =  (* vector order specifications, of kind Order *)
+type order_aux =  (* vector order specifications, of kind $Order$ *)
  | Ord_var of kid (* variable *)
  | Ord_inc (* increasing *)
  | Ord_dec (* decreasing *)
 
 
-type effect_aux =  (* effect set, of kind Effect *)
+type effect_aux =  (* effect set, of kind $Effect$ *)
  | Effect_var of kid
  | Effect_set of list base_effect (* effect set *)
 
@@ -138,9 +138,9 @@ type n_constraint =
  | NC_aux of n_constraint_aux * l
 
 
-type quant_item_aux =  (* kinded identifier or Nat constraint *)
+type quant_item_aux =  (* kinded identifier or $Nat$ constraint *)
  | QI_id of kinded_id (* optionally kinded identifier *)
- | QI_const of n_constraint (* Nat constraint *)
+ | QI_const of n_constraint (* $Nat$ constraint *)
 
 
 type quant_item = 
@@ -415,7 +415,7 @@ type val_spec_aux 'a =  (* value type specification *)
 
 
 type kind_def_aux 'a =  (* Definition body for elements of kind *)
- | KD_nabbrev of kind * id * name_scm_opt * nexp (* Nat-expression abbreviation *)
+ | KD_nabbrev of kind * id * name_scm_opt * nexp (* $Nat$-expression abbreviation *)
  | KD_abbrev of kind * id * name_scm_opt * typschm (* type abbreviation *)
  | KD_record of kind * id * name_scm_opt * typquant * list (typ * id) * bool (* struct type definition *)
  | KD_variant of kind * id * name_scm_opt * typquant * list type_union * bool (* union type definition *)
