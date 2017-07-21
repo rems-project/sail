@@ -339,7 +339,7 @@ let run
         let (top_exp,(top_env,top_mem)) = top_frame_exp_state stack in
         let loc = get_loc (compact_exp top_exp) in
         if mode = Step || force then begin
-          interactf "%s\n" (Pretty_interp.pp_exp top_env Printing_functions.red true top_exp);
+          interactf "%s\n" (Pretty_interp.pp_exp top_env top_mem Printing_functions.red true top_exp);
           interact mode env' state
         end else
           mode in
@@ -470,7 +470,7 @@ let run
   let (IState(instr_state,context)) = istate in
   let (top_exp,(top_env,top_mem)) = top_frame_exp_state instr_state in
   interactf "%s: %s %s\n" (grey name) (blue "evaluate") 
-    (Pretty_interp.pp_exp top_env Printing_functions.red true top_exp);
+    (Pretty_interp.pp_exp top_env top_mem Printing_functions.red true top_exp);
   try
     Printexc.record_backtrace true;
     loop mode (reg, mem,tagmem) (Interp_inter_imp.interp0 imode istate)

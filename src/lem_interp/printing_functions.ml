@@ -49,60 +49,13 @@ open Interp_interface ;;
 
 open Nat_big_num ;;
 
-let lit_to_string = function
- | L_unit -> "unit"
- | L_zero -> "0b0"
- | L_one -> "0b1"
- | L_true -> "true"
- | L_false -> "false"
- | L_num n -> to_string n
- | L_hex s -> "0x"^s
- | L_bin s -> "0b"^s
- | L_undef -> "undefined"
- | L_string s -> "\"" ^ s ^ "\""
-;;
+let val_to_string_internal = Pretty_interp.val_to_string_internal ;;
+let lit_to_string = Pretty_interp.lit_to_string ;;
+let id_to_string = Pretty_interp.id_to_string ;;
+let loc_to_string = Pretty_interp.loc_to_string ;;
+let bitvec_to_string = Pretty_interp.bitvec_to_string ;;
+let collapse_leading = Pretty_interp.collapse_leading ;;
 
-let id_to_string = function
-  | Id_aux(Id s,_) | Id_aux(DeIid s,_) -> s
-;;
-
-let rec loc_to_string = function
-  | Unknown -> "location unknown"
-  | Int(s,_) -> s
-  | Generated l -> "Generated near " ^ loc_to_string l
-  | Range(s,fline,fchar,tline,tchar) -> 
-      if fline = tline
-      then sprintf "%s:%d:%d" s fline fchar
-      else sprintf "%s:%d:%d-%d:%d" s fline fchar tline tchar
-;;
-
-let collapse_leading s =
-  if String.length s <= 8 then s else
-  let first_bit = s.[0] in
-  let templ = sprintf "%c...%c" first_bit first_bit in
-
-  let rec find_first_diff str cha pos =
-    if pos >= String.length str then None
-    else if str.[pos] != cha then Some pos
-    else find_first_diff str cha (pos+1)
-  in
-
-  match find_first_diff s first_bit 0 with
-  | None -> templ
-  | Some pos when pos > 4 -> templ ^ (String.sub s pos ((String.length s)- pos))
-  | _ -> s
-;;
-
-let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (function
-  | Interp.V_lit(L_aux(L_zero, _)) -> "0"
-  | Interp.V_lit(L_aux(L_one, _)) -> "1"
-  | Interp.V_lit(L_aux(L_undef, _)) -> "u"
-  | Interp.V_unknown -> "?"
-  | v -> (Printf.printf "bitvec found a non bit %s%!\n" (Interp.string_of_value v));assert false) 
-								      (List.map Interp.detaint l)))
-;;
-
-(* pp the bytes of a Bytevector as a hex value *)
 
 type bits_lifted_homogenous = 
   | Bitslh_concrete of bit list
@@ -322,36 +275,6 @@ let reg_name_to_string = function
 
 let dependencies_to_string dependencies = String.concat ", " (List.map reg_name_to_string dependencies)
 
-let rec val_to_string_internal ((Interp.LMem (_,_,memory,_)) as mem) = function
- | Interp.V_boxref(n, t) -> val_to_string_internal mem (Pmap.find n memory)
- | Interp.V_lit (L_aux(l,_)) -> sprintf "%s" (lit_to_string l)
- | Interp.V_tuple l ->
-     let repr = String.concat ", " (List.map (val_to_string_internal mem) l) in
-     sprintf "(%s)" repr
- | Interp.V_list l ->
-     let repr = String.concat "; " (List.map (val_to_string_internal mem) l) in
-     sprintf "[||%s||]" repr
- | Interp.V_vector (first_index, inc, l) ->
-     let last_index = (if (Interp.IInc = inc) then List.length l - 1 else 1 - List.length l) + first_index  in
-     let repr =
-       try bitvec_to_string l
-       with Failure _ ->
-         sprintf "[%s]" (String.concat "; " (List.map (val_to_string_internal mem) l)) in
-     sprintf "%s [%s..%s]" repr (string_of_int first_index) (string_of_int last_index)
- | (Interp.V_vector_sparse(first_index,last_index,inc,l,default) as v) -> 
-   val_to_string_internal mem (Interp_lib.fill_in_sparse v)
- | Interp.V_record(_, l) ->
-     let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string_internal mem value) in
-     let repr = String.concat "; " (List.map  pp l) in
-     sprintf "{%s}" repr
- | Interp.V_ctor (id,_,_, value) ->
-     sprintf "%s %s" (id_to_string id) (val_to_string_internal mem value)
- | Interp.V_register _ | Interp.V_register_alias _ ->
-     sprintf "reg-as-value" 
- | Interp.V_unknown -> "unknown"
- | Interp.V_track(v,rs) -> (*"tainted by {" ^ (Interp_utilities.list_to_string Interp.string_of_reg_form "," rs) ^ "} --" ^ *) (val_to_string_internal mem v)
-;;
-
 let rec top_frame_exp_state = function
   | Interp.Top -> raise (Invalid_argument "top_frame_exp")
   | Interp.Hole_frame(_, e, _, env, mem, Interp.Top)
@@ -485,27 +408,27 @@ let yellow = color true 3
 let blue = color true 4
 let grey = color false 7
 
-let exp_to_string env show_hole_value e = Pretty_interp.pp_exp env red show_hole_value e
+let exp_to_string env mem show_hole_value e = Pretty_interp.pp_exp env mem red show_hole_value e
 
 let get_loc (E_aux(_, (l, (_ : tannot)))) = loc_to_string l
-let print_exp printer env show_hole_value e =
-  printer ((get_loc e) ^ ": " ^ (Pretty_interp.pp_exp env red show_hole_value e) ^ "\n")
+let print_exp printer env mem show_hole_value e =
+  printer ((get_loc e) ^ ": " ^ (Pretty_interp.pp_exp env mem red show_hole_value e) ^ "\n")
 
 let instruction_state_to_string (IState(stack, _)) =
-  List.fold_right (fun (e,(env,mem)) es -> (exp_to_string env true e) ^ "\n" ^ es) (compact_stack stack) ""
+  List.fold_right (fun (e,(env,mem)) es -> (exp_to_string env mem true e) ^ "\n" ^ es) (compact_stack stack) ""
 
 let top_instruction_state_to_string (IState(stack,_)) = 
-  let (exp,(env,_)) = top_frame_exp_state stack in exp_to_string env true exp
+  let (exp,(env,mem)) = top_frame_exp_state stack in exp_to_string env mem true exp
 
 let instruction_stack_to_string (IState(stack,_)) =
   let rec stack_to_string = function
       Interp.Top -> ""
     | Interp.Hole_frame(_,e,_,env,mem,Interp.Top)
     | Interp.Thunk_frame(e,_,env,mem,Interp.Top) ->
-      exp_to_string env true e
+      exp_to_string env mem true e
     | Interp.Hole_frame(_,e,_,env,mem,s) 
     | Interp.Thunk_frame(e,_,env,mem,s) ->
-      (exp_to_string env false e) ^ "\n----------------------------------------------------------\n" ^
+      (exp_to_string env mem false e) ^ "\n----------------------------------------------------------\n" ^
       (stack_to_string s)
   in
   match stack with
@@ -536,7 +459,7 @@ let instr_parm_to_string (name, typ, value) =
     | Other -> "Unrepresentable external value"
     | _ -> let intern_v = (Interp_inter_imp.intern_ifield_value D_increasing value) in
 	      match Interp_lib.to_num Interp_lib.Unsigned intern_v with
-		| Interp.V_lit (L_aux(L_num n, _)) -> to_string n
+		| Interp_ast.V_lit (L_aux(L_num n, _)) -> to_string n
 		| _ -> ifield_to_string value
 
 let rec instr_parms_to_string ps = 
@@ -551,12 +474,12 @@ let instruction_to_string (name, parms) =
   ((*pad 5*) (String.lowercase name)) ^ " " ^ instr_parms_to_string parms 
 
 let print_backtrace_compact printer (IState(stack,_)) =
-  List.iter (fun (e,(env,mem)) -> print_exp printer env true e) (compact_stack stack)
+  List.iter (fun (e,(env,mem)) -> print_exp printer env mem true e) (compact_stack stack)
 
 let print_stack printer is = printer (instruction_stack_to_string is)
 
 let print_continuation printer (IState(stack,_)) = 
-  let (e,(env,mem)) = top_frame_exp_state stack in print_exp printer env true e
+  let (e,(env,mem)) = top_frame_exp_state stack in print_exp printer env mem true e
 let print_instruction printer instr = printer (instruction_to_string instr)
 
 let pp_instruction_state state () =
