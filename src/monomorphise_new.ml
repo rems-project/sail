@@ -1,7 +1,7 @@
 open Parse_ast
 open Ast
 open Ast_util
-open Type_check_new
+open Type_check
 
 let disable_const_propagation = ref false
 let size_set_limit = 8

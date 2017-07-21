@@ -43,7 +43,7 @@
 
 open Big_int
 open Ast
-open Type_check_new
+open Type_check
 
 type 'a rewriters = { rewrite_exp  : 'a rewriters -> 'a exp -> 'a exp;
                       rewrite_lexp : 'a rewriters -> 'a lexp -> 'a lexp;

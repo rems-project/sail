@@ -77,15 +77,9 @@ let options = Arg.align ([
     Arg.String (fun l -> lib := l::!lib),
     "<library_filename> treat this file as input only and generate no output for it");
 *)
-  ( "-print_initial_env",
-    Arg.Set opt_print_initial_env,
-    " print the built-in initial type environment and terminate");
   ( "-verbose",
     Arg.Set opt_print_verbose,
     " (debug) pretty-print the input to standard output");
-  ( "-skip_constraints",
-    Arg.Clear Type_internal.do_resolve_constraints,
-    " (debug) skip constraint resolution in type-checking");
   ( "-mono-split",
     Arg.String (fun s ->
       let l = Util.split_on_char ':' s in
@@ -103,7 +97,7 @@ let options = Arg.align ([
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
   ( "-dtc_verbose",
-    Arg.Int (fun verbosity -> Type_check_new.opt_tc_debug := verbosity),
+    Arg.Int (fun verbosity -> Type_check.opt_tc_debug := verbosity),
     " (debug) verbose typechecker output: 0 is silent");
   ( "-dno_cast",
     Arg.Set opt_dno_cast,
@@ -128,29 +122,14 @@ let _ =
 let main() =
   if !(opt_print_version)
   then Printf.printf "Sail private release \n"
-  else if !(opt_print_initial_env) then
-    let ppd_initial_typ_env = 
-      String.concat "" 
-        (List.map
-           (function (comment,tenv) -> 
-             "(* "^comment^" *)\n" ^ 
-             String.concat ""
-               (List.map 
-                  (function (id,tannot) ->
-                    id ^ " : " ^ 
-                    Pretty_print.pp_format_annot_ascii tannot 
-                    ^ "\n")
-                  tenv))
-           Type_internal.initial_typ_env_list) in
-    Printf.printf "%s" ppd_initial_typ_env ;
-  else    
+  else
 
     let parsed = (List.map (fun f -> (f,(parse_file f)))  !opt_file_arguments) in
-    let ast = 
+    let ast =
       List.fold_right (fun (_,(Parse_ast.Defs ast_nodes)) (Parse_ast.Defs later_nodes) 
                         -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
-    let (ast,kenv,ord) = convert_ast ast in
-    let (ast,type_envs) = check_ast ast kenv ord in 
+    let ast = convert_ast ast in
+    let (ast, type_envs) = check_ast ast in
 
     (* let ast = match !opt_mono_split with
       | [] -> ast
@@ -162,7 +141,7 @@ let main() =
       | None -> fst (List.hd parsed)
       | Some f -> f ^ ".sail" in
     (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
-    begin 
+    begin
       (if !(opt_print_verbose)
        then ((Pretty_print.pp_defs stdout) ast)
        else ());

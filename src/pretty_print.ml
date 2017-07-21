@@ -40,7 +40,6 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-include Pretty_print_t_ascii
 include Pretty_print_lem_ast
 include Pretty_print_sail
 include Pretty_print_ocaml

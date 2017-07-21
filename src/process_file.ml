@@ -40,8 +40,6 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Type_internal
-
 type out_type =
   | Lem_ast_out
   | Lem_out of string option
@@ -83,13 +81,12 @@ let parse_file (f : string) : Parse_ast.defs =
 
 
 (*Should add a flag to say whether we want to consider Oinc or Odec the default order *)
-let convert_ast (defs : Parse_ast.defs) : (Type_internal.tannot Ast.defs * kind Envmap.t * Ast.order)=
-  Initial_check.to_ast Nameset.empty Type_internal.initial_kind_env (Ast.Ord_aux(Ast.Ord_inc,Parse_ast.Unknown)) defs
+let convert_ast (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast defs
 
 let load_file env f =
   let ast = parse_file f in
-  let (ast, _, _) = convert_ast ast in
-  Type_check_new.check env ast
+  let ast = convert_ast ast in
+  Type_check.check env ast
 
 let opt_new_typecheck = ref false
 let opt_just_check = ref false
@@ -97,35 +94,24 @@ let opt_ddump_tc_ast = ref false
 let opt_dno_cast = ref false
 let opt_mono_split = ref ([]:((string * int) * string) list)
 
-let check_ast (defs : Type_internal.tannot Ast.defs) (k : kind Envmap.t) (o:Ast.order) : Type_check_new.tannot Ast.defs * Type_check_new.Env.t =
-  let d_env = { Type_internal.k_env = k; Type_internal.abbrevs = Type_internal.initial_abbrev_env;
-                Type_internal.nabbrevs = Envmap.empty;
-		Type_internal.namesch = Envmap.empty; Type_internal.enum_env = Envmap.empty; 
-		Type_internal.rec_env = []; Type_internal.alias_env = Envmap.empty; 
-		Type_internal.default_o = 
-                {Type_internal.order = (match o with | (Ast.Ord_aux(Ast.Ord_inc,_)) -> Type_internal.Oinc 
-		                                     | (Ast.Ord_aux(Ast.Ord_dec,_)) -> Type_internal.Odec
-						     | _ -> Type_internal.Oinc)};} in
-  (* if !opt_new_typecheck
-  then *)
-    let ienv = if !opt_dno_cast then Type_check_new.Env.no_casts Type_check_new.initial_env else Type_check_new.initial_env in
-    let ast, env = Type_check_new.check ienv defs in
-    let ast = match !opt_mono_split with
-      | [] -> ast
-      | l ->
-         let ast = Monomorphise_new.split_defs l ast in
-         let ienv = Type_check_new.Env.no_casts Type_check_new.initial_env in
-         let ast, _ = Type_check_new.check ienv ast in
-         ast
-    in
-    let () = if !opt_ddump_tc_ast then Pretty_print.pp_defs stdout ast else () in
-    let () = if !opt_just_check then exit 0 else () in
-    (ast, env)
-  (* else Type_check.check (Type_check.Env (d_env, Type_internal.initial_typ_env,Type_internal.nob,Envmap.empty)) defs  *)
+let check_ast (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.Env.t =
+  let ienv = if !opt_dno_cast then Type_check.Env.no_casts Type_check.initial_env else Type_check.initial_env in
+  let ast, env = Type_check.check ienv defs in
+  let ast = match !opt_mono_split with
+    | [] -> ast
+    | l ->
+       let ast = Monomorphise_new.split_defs l ast in
+       let ienv = Type_check.Env.no_casts Type_check.initial_env in
+       let ast, _ = Type_check.check ienv ast in
+       ast
+  in
+  let () = if !opt_ddump_tc_ast then Pretty_print.pp_defs stdout ast else () in
+  let () = if !opt_just_check then exit 0 else () in
+  (ast, env)
 
-let rewrite_ast (defs: Type_check_new.tannot Ast.defs) = Rewriter.rewrite_defs defs
-let rewrite_ast_lem (defs: Type_check_new.tannot Ast.defs) = Rewriter.rewrite_defs_lem defs
-let rewrite_ast_ocaml (defs: Type_check_new.tannot Ast.defs) = Rewriter.rewrite_defs_ocaml defs
+let rewrite_ast (defs: Type_check.tannot Ast.defs) = Rewriter.rewrite_defs defs
+let rewrite_ast_lem (defs: Type_check.tannot Ast.defs) = Rewriter.rewrite_defs_lem defs
+let rewrite_ast_ocaml (defs: Type_check.tannot Ast.defs) = Rewriter.rewrite_defs_ocaml defs
 
 let open_output_with_check file_name =
   let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in

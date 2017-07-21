@@ -40,11 +40,37 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Type_internal
 open Ast
+open Util
 
-type kind = Type_internal.kind
-type typ = Type_internal.t
+module Envmap = Finite_map.Fmap_map(String)
+module Nameset' = Set.Make(String)
+module Nameset = struct
+  include Nameset'
+  let pp ppf nameset =
+    Format.fprintf ppf "{@[%a@]}"
+      (Pp.lst ",@ " Pp.pp_str)
+      (Nameset'.elements nameset)
+end
+
+type kind = { mutable k : k_aux }
+and k_aux =
+  | K_Typ
+  | K_Nat
+  | K_Ord
+  | K_Efct
+  | K_Val
+  | K_Lam of kind list * kind
+  | K_infer
+
+let rec kind_to_string kind = match kind.k with
+  | K_Nat -> "Nat"
+  | K_Typ -> "Type"
+  | K_Ord -> "Order"
+  | K_Efct -> "Effect"
+  | K_infer -> "Infer"
+  | K_Val -> "Val"
+  | K_Lam (kinds,kind) -> "Lam [" ^ string_of_list ", " kind_to_string kinds ^ "] -> " ^ (kind_to_string kind)
 
 (*Envs is a tuple of used names (currently unused), map from id to kind, default order for vector types and literal vectors *)
 type envs = Nameset.t * kind Envmap.t * order 
@@ -404,7 +430,7 @@ let to_ast_lit (Parse_ast.L_aux(lit,l)) : lit =
     | Parse_ast.L_string(s) -> L_string(s))
       ,l)
 
-let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pat,l) : Parse_ast.pat) : tannot pat = 
+let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pat,l) : Parse_ast.pat) : unit pat = 
   P_aux(
     (match pat with 
     | Parse_ast.P_lit(lit) -> P_lit(to_ast_lit lit)
@@ -419,17 +445,17 @@ let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pa
     | Parse_ast.P_record(fpats,_) -> 
       P_record(List.map 
                  (fun (Parse_ast.FP_aux(Parse_ast.FP_Fpat(id,fp),l)) -> 
-		      FP_aux(FP_Fpat(to_ast_id id, to_ast_pat k_env def_ord fp),(l,NoTyp)))
+		      FP_aux(FP_Fpat(to_ast_id id, to_ast_pat k_env def_ord fp),(l,())))
                  fpats, false)
     | Parse_ast.P_vector(pats) -> P_vector(List.map (to_ast_pat k_env def_ord) pats)
     | Parse_ast.P_vector_indexed(ipats) -> P_vector_indexed(List.map (fun (i,pat) -> i,to_ast_pat k_env def_ord pat) ipats)
     | Parse_ast.P_vector_concat(pats) -> P_vector_concat(List.map (to_ast_pat k_env def_ord) pats)
     | Parse_ast.P_tup(pats) -> P_tup(List.map (to_ast_pat k_env def_ord) pats)
     | Parse_ast.P_list(pats) -> P_list(List.map (to_ast_pat k_env def_ord) pats)
-    ), (l,NoTyp))
+    ), (l,()))
 
 
-let rec to_ast_letbind (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.LB_aux(lb,l) : Parse_ast.letbind) : tannot letbind =
+let rec to_ast_letbind (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.LB_aux(lb,l) : Parse_ast.letbind) : unit letbind =
   LB_aux(
     (match lb with
     | Parse_ast.LB_val_explicit(typschm,pat,exp) ->
@@ -437,9 +463,9 @@ let rec to_ast_letbind (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.LB_a
       LB_val_explicit(typsch,to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp)
     | Parse_ast.LB_val_implicit(pat,exp) ->
       LB_val_implicit(to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp)
-    ), (l,NoTyp))
+    ), (l,()))
 
-and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : tannot exp = 
+and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : unit exp = 
   E_aux(
     (match exp with
     | Parse_ast.E_block(exps) -> 
@@ -466,14 +492,14 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
       (match to_ast_iexps false k_env def_ord exps with
 	| Some([]) -> E_vector([])
 	| Some(iexps) -> E_vector_indexed(iexps, 
-					  Def_val_aux(Def_val_empty,(l,NoTyp)))
+					  Def_val_aux(Def_val_empty,(l,())))
 	| None -> E_vector(List.map (to_ast_exp k_env def_ord) exps))
     | Parse_ast.E_vector_indexed(iexps,Parse_ast.Def_val_aux(default,dl)) -> 
       (match to_ast_iexps true k_env def_ord iexps with
 	| Some(iexps) -> E_vector_indexed (iexps, 
 					   Def_val_aux((match default with
 					     | Parse_ast.Def_val_empty -> Def_val_empty
-					     | Parse_ast.Def_val_dec e -> Def_val_dec (to_ast_exp k_env def_ord e)),(dl,NoTyp)))
+					     | Parse_ast.Def_val_dec e -> Def_val_dec (to_ast_exp k_env def_ord e)),(dl,())))
 	| _ -> raise (Reporting_basic.err_unreachable l "to_ast_iexps didn't throw error"))
     | Parse_ast.E_vector_access(vexp,exp) -> E_vector_access(to_ast_exp k_env def_ord vexp, to_ast_exp k_env def_ord exp)
     | Parse_ast.E_vector_subrange(vex,exp1,exp2) -> 
@@ -500,9 +526,9 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
     | Parse_ast.E_exit exp -> E_exit(to_ast_exp k_env def_ord exp)
     | Parse_ast.E_return exp -> E_return(to_ast_exp k_env def_ord exp)
     | Parse_ast.E_assert(cond,msg) -> E_assert(to_ast_exp k_env def_ord cond, to_ast_exp k_env def_ord msg)
-    ), (l,NoTyp))
+    ), (l,()))
 
-and to_ast_lexp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : tannot lexp = 
+and to_ast_lexp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : unit lexp = 
   LEXP_aux(
     (match exp with
      | Parse_ast.E_id(id) -> LEXP_id(to_ast_id id)
@@ -530,17 +556,17 @@ and to_ast_lexp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l
       LEXP_vector_range(to_ast_lexp k_env def_ord vexp, to_ast_exp k_env def_ord exp1, to_ast_exp k_env def_ord exp2)
     | Parse_ast.E_field(fexp,id) -> LEXP_field(to_ast_lexp k_env def_ord fexp, to_ast_id id)
     | _ -> typ_error l "Only identifiers, cast identifiers, vector accesses, vector slices, and fields can be on the lefthand side of an assignment" None None None)
-      , (l,NoTyp))
+      , (l,()))
 
-and to_ast_case (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.Pat_aux(pex,l) : Parse_ast.pexp) : tannot pexp =
+and to_ast_case (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.Pat_aux(pex,l) : Parse_ast.pexp) : unit pexp =
   match pex with 
-  | Parse_ast.Pat_exp(pat,exp) -> Pat_aux(Pat_exp(to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp),(l,NoTyp))
+  | Parse_ast.Pat_exp(pat,exp) -> Pat_aux(Pat_exp(to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp),(l,()))
   | Parse_ast.Pat_when(pat,guard,exp) ->
-     Pat_aux (Pat_when (to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord guard, to_ast_exp k_env def_ord exp), (l, NoTyp))
+     Pat_aux (Pat_when (to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord guard, to_ast_exp k_env def_ord exp), (l, ()))
 
-and to_ast_fexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:order) (exps : Parse_ast.exp list) : tannot fexps option =
+and to_ast_fexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:order) (exps : Parse_ast.exp list) : unit fexps option =
   match exps with
-  | [] -> Some(FES_aux(FES_Fexps([],false), (Parse_ast.Unknown,NoTyp)))
+  | [] -> Some(FES_aux(FES_Fexps([],false), (Parse_ast.Unknown,())))
   | fexp::exps -> let maybe_fexp,maybe_error = to_ast_record_try k_env def_ord fexp in
                   (match maybe_fexp,maybe_error with
                   | Some(fexp),None -> 
@@ -553,12 +579,12 @@ and to_ast_fexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:order) (exp
                     else None
                   | _ -> None)
 
-and to_ast_record_try (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.E_aux(exp,l):Parse_ast.exp): tannot fexp option * (l * string) option =
+and to_ast_record_try (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.E_aux(exp,l):Parse_ast.exp): unit fexp option * (l * string) option =
   match exp with
   | Parse_ast.E_app_infix(left,op,r) ->
     (match left, op with
     | Parse_ast.E_aux(Parse_ast.E_id(id),li), Parse_ast.Id_aux(Parse_ast.Id("="),leq) ->
-      Some(FE_aux(FE_Fexp(to_ast_id id, to_ast_exp k_env def_ord r), (l,NoTyp))),None
+      Some(FE_aux(FE_Fexp(to_ast_id id, to_ast_exp k_env def_ord r), (l,()))),None
     | Parse_ast.E_aux(_,li) , Parse_ast.Id_aux(Parse_ast.Id("="),leq) ->
       None,Some(li,"Expected an identifier to begin this field assignment")
     | Parse_ast.E_aux(Parse_ast.E_id(id),li), Parse_ast.Id_aux(_,leq) ->
@@ -568,7 +594,7 @@ and to_ast_record_try (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.E_aux(exp
   | _ ->
     None,Some(l, "Expected a field assignment to be identifier = expression")
 
-and to_ast_iexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:order) (exps:Parse_ast.exp list):(int * tannot exp) list option =
+and to_ast_iexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:order) (exps:Parse_ast.exp list):(int * unit exp) list option =
  match exps with
    | [] -> Some([])
    | iexp::exps -> (match to_iexp_try k_env def_ord iexp with
@@ -581,7 +607,7 @@ and to_ast_iexps (fail_on_error:bool) (k_env:kind Envmap.t) (def_ord:order) (exp
 		       then typ_error l msg None None None
 		       else None
 		     | _ -> None)
-and to_iexp_try (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.E_aux(exp,l): Parse_ast.exp): ((int * tannot exp) option * (l*string) option) =
+and to_iexp_try (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.E_aux(exp,l): Parse_ast.exp): ((int * unit exp) option * (l*string) option) =
   match exp with
     | Parse_ast.E_app_infix(left,op,r) ->
       (match left,op with
@@ -593,7 +619,7 @@ and to_iexp_try (k_env:kind Envmap.t) (def_ord:order) (Parse_ast.E_aux(exp,l): P
 	  None,(Some(leq,"Expected an indexed vector assignment constant = expression")))
     | _ -> None,(Some(l,"Expected an indexed vector assignment: constant = expression"))
       
-let to_ast_default (names, k_env, default_order) (default : Parse_ast.default_typing_spec) : (tannot default_spec) envs_out =
+let to_ast_default (names, k_env, default_order) (default : Parse_ast.default_typing_spec) : (unit default_spec) envs_out =
   match default with
   | Parse_ast.DT_aux(df,l) ->
     (match df with 
@@ -616,23 +642,23 @@ let to_ast_default (names, k_env, default_order) (default : Parse_ast.default_ty
 	  DT_aux(DT_order default_order,l),(names,k_env,default_order)
 	| _ -> typ_error l "Inc and Dec must have kind Order" None None None))
 
-let to_ast_spec (names,k_env,default_order) (val_:Parse_ast.val_spec) : (tannot val_spec) envs_out =
+let to_ast_spec (names,k_env,default_order) (val_:Parse_ast.val_spec) : (unit val_spec) envs_out =
   match val_ with
   | Parse_ast.VS_aux(vs,l) ->
     (match vs with
     | Parse_ast.VS_val_spec(ts,id) ->
       (*let _ = Printf.eprintf "to_ast_spec called for internal spec: for %s\n" (id_to_string (to_ast_id id)) in*)
       let typsch,_,_ = to_ast_typschm k_env default_order ts in
-      VS_aux(VS_val_spec(typsch,to_ast_id id),(l,NoTyp)),(names,k_env,default_order)
+      VS_aux(VS_val_spec(typsch,to_ast_id id),(l,())),(names,k_env,default_order)
     | Parse_ast.VS_extern_spec(ts,id,s) ->
       let typsch,_,_ = to_ast_typschm k_env default_order ts in
-      VS_aux(VS_extern_spec(typsch,to_ast_id id,s),(l,NoTyp)),(names,k_env,default_order)
+      VS_aux(VS_extern_spec(typsch,to_ast_id id,s),(l,())),(names,k_env,default_order)
     | Parse_ast.VS_cast_spec(ts,id) ->
       let typsch,_,_ = to_ast_typschm k_env default_order ts in
-      VS_aux(VS_cast_spec(typsch,to_ast_id id),(l,NoTyp)),(names,k_env,default_order)
+      VS_aux(VS_cast_spec(typsch,to_ast_id id),(l,())),(names,k_env,default_order)
     | Parse_ast.VS_extern_no_rename(ts,id) ->
       let typsch,_,_ = to_ast_typschm k_env default_order ts in
-       VS_aux(VS_extern_no_rename(typsch,to_ast_id id),(l,NoTyp)),(names,k_env,default_order))
+       VS_aux(VS_extern_no_rename(typsch,to_ast_id id),(l,())),(names,k_env,default_order))
     
 
 let to_ast_namescm (Parse_ast.Name_sect_aux(ns,l)) = 
@@ -660,7 +686,7 @@ let to_ast_type_union k_env default_order (Parse_ast.Tu_aux(tu,l)) =
      | _ -> Tu_aux(Tu_ty_id(typ, to_ast_id id), l))
   | Parse_ast.Tu_id id -> (Tu_aux(Tu_id(to_ast_id id),l)) 
 
-let to_ast_typedef (names,k_env,def_ord) (td:Parse_ast.type_def) : (tannot type_def) envs_out =
+let to_ast_typedef (names,k_env,def_ord) (td:Parse_ast.type_def) : (unit type_def) envs_out =
   match td with
   | Parse_ast.TD_aux(td,l) ->
   (match td with 
@@ -668,7 +694,7 @@ let to_ast_typedef (names,k_env,def_ord) (td:Parse_ast.type_def) : (tannot type_
     let id = to_ast_id id in
     let key = id_to_string id in
     let typschm,k_env,_ = to_ast_typschm k_env def_ord typschm in
-    let td_abrv = TD_aux(TD_abbrev(id,to_ast_namescm name_scm_opt,typschm),(l,NoTyp)) in
+    let td_abrv = TD_aux(TD_abbrev(id,to_ast_namescm name_scm_opt,typschm),(l,())) in
     let typ = (match typschm with 
       | TypSchm_aux(TypSchm_ts(tq,typ), _) ->
         begin match (typquant_to_quantkinds k_env tq) with
@@ -681,7 +707,7 @@ let to_ast_typedef (names,k_env,def_ord) (td:Parse_ast.type_def) : (tannot type_
     let key = id_to_string id in
     let typq,k_env,_ = to_ast_typquant k_env typq in
     let fields = List.map (fun (atyp,id) -> (to_ast_typ k_env def_ord atyp),(to_ast_id id)) fields in (* Add check that all arms have unique names locally *)
-    let td_rec = TD_aux(TD_record(id,to_ast_namescm name_scm_opt,typq,fields,false),(l,NoTyp)) in
+    let td_rec = TD_aux(TD_record(id,to_ast_namescm name_scm_opt,typq,fields,false),(l,())) in
     let typ = (match (typquant_to_quantkinds k_env typq) with
       | [ ] -> {k = K_Typ}
       | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
@@ -691,7 +717,7 @@ let to_ast_typedef (names,k_env,def_ord) (td:Parse_ast.type_def) : (tannot type_
     let key = id_to_string id in
     let typq,k_env,_ = to_ast_typquant k_env typq in
     let arms = List.map (to_ast_type_union k_env def_ord) arms in (* Add check that all arms have unique names *)
-    let td_var = TD_aux(TD_variant(id,to_ast_namescm name_scm_opt,typq,arms,false),(l,NoTyp)) in
+    let td_var = TD_aux(TD_variant(id,to_ast_namescm name_scm_opt,typq,arms,false),(l,())) in
     let typ = (match (typquant_to_quantkinds k_env typq) with
       | [ ] -> {k = K_Typ}
       | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
@@ -701,7 +727,7 @@ let to_ast_typedef (names,k_env,def_ord) (td:Parse_ast.type_def) : (tannot type_
     let key = id_to_string id in
     let enums = List.map to_ast_id enums in
     let keys = List.map id_to_string enums in
-    let td_enum = TD_aux(TD_enum(id,to_ast_namescm name_scm_opt,enums,false),(l,NoTyp)) in (* Add check that all enums have unique names *)
+    let td_enum = TD_aux(TD_enum(id,to_ast_namescm name_scm_opt,enums,false),(l,())) in (* Add check that all enums have unique names *)
     let k_env = List.fold_right (fun k k_env -> Envmap.insert k_env (k,{k=K_Nat})) keys (Envmap.insert k_env (key,{k=K_Typ})) in
     td_enum, (names,k_env,def_ord)
   | Parse_ast.TD_register(id,t1,t2,ranges) -> 
@@ -710,9 +736,9 @@ let to_ast_typedef (names,k_env,def_ord) (td:Parse_ast.type_def) : (tannot type_
     let n1 = to_ast_nexp k_env t1 in
     let n2 = to_ast_nexp k_env t2 in
     let ranges = List.map (fun (range,id) -> (to_ast_range range),to_ast_id id) ranges in
-    TD_aux(TD_register(id,n1,n2,ranges),(l,NoTyp)), (names,Envmap.insert k_env (key, {k=K_Typ}),def_ord))
+    TD_aux(TD_register(id,n1,n2,ranges),(l,())), (names,Envmap.insert k_env (key, {k=K_Typ}),def_ord))
 
-let to_ast_kdef (names,k_env,def_ord) (td:Parse_ast.kind_def) : (tannot kind_def) envs_out =
+let to_ast_kdef (names,k_env,def_ord) (td:Parse_ast.kind_def) : (unit kind_def) envs_out =
   match td with
   | Parse_ast.KD_aux(td,l) ->
   (match td with 
@@ -723,7 +749,7 @@ let to_ast_kdef (names,k_env,def_ord) (td:Parse_ast.kind_def) : (tannot kind_def
     (match k.k with
      | K_Typ | K_Lam _ ->
        let typschm,k_env,_ = to_ast_typschm k_env def_ord typschm in
-       let kd_abrv = KD_aux(KD_abbrev(kind,id,to_ast_namescm name_scm_opt,typschm),(l,NoTyp)) in
+       let kd_abrv = KD_aux(KD_abbrev(kind,id,to_ast_namescm name_scm_opt,typschm),(l,())) in
        let typ = (match typschm with 
            | TypSchm_aux(TypSchm_ts(tq,typ), _) ->
              begin match (typquant_to_quantkinds k_env tq) with
@@ -737,7 +763,7 @@ let to_ast_kdef (names,k_env,def_ord) (td:Parse_ast.kind_def) : (tannot kind_def
           | Parse_ast.TypSchm_aux(Parse_ast.TypSchm_ts(Parse_ast.TypQ_aux(tq,_),atyp),_) ->
             (match tq with
              | Parse_ast.TypQ_no_forall ->
-               KD_aux(KD_nabbrev(kind,id,to_ast_namescm name_scm_opt, to_ast_nexp k_env atyp), (l,NoTyp))
+               KD_aux(KD_nabbrev(kind,id,to_ast_namescm name_scm_opt, to_ast_nexp k_env atyp), (l,()))
              | _ -> typ_error l "Def with kind Nat cannot have universal quantification" None None None)) in
        kd_nabrv,(names,Envmap.insert k_env (key, k),def_ord)
      | _ -> assert false
@@ -748,7 +774,7 @@ let to_ast_kdef (names,k_env,def_ord) (td:Parse_ast.kind_def) : (tannot kind_def
     let (kind,k) = to_ast_kind k_env kind in
     let typq,k_env,_ = to_ast_typquant k_env typq in
     let fields = List.map (fun (atyp,id) -> (to_ast_typ k_env def_ord atyp),(to_ast_id id)) fields in (* Add check that all arms have unique names locally *)
-    let kd_rec = KD_aux(KD_record(kind,id,to_ast_namescm name_scm_opt,typq,fields,false),(l,NoTyp)) in
+    let kd_rec = KD_aux(KD_record(kind,id,to_ast_namescm name_scm_opt,typq,fields,false),(l,())) in
     let typ = (match (typquant_to_quantkinds k_env typq) with
       | [ ] -> {k = K_Typ}
       | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
@@ -759,7 +785,7 @@ let to_ast_kdef (names,k_env,def_ord) (td:Parse_ast.kind_def) : (tannot kind_def
     let kind,k = to_ast_kind k_env kind in
     let typq,k_env,_ = to_ast_typquant k_env typq in
     let arms = List.map (to_ast_type_union k_env def_ord) arms in (* Add check that all arms have unique names *)
-    let kd_var = KD_aux(KD_variant(kind,id,to_ast_namescm name_scm_opt,typq,arms,false),(l,NoTyp)) in
+    let kd_var = KD_aux(KD_variant(kind,id,to_ast_namescm name_scm_opt,typq,arms,false),(l,())) in
     let typ = (match (typquant_to_quantkinds k_env typq) with
       | [ ] -> {k = K_Typ}
       | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
@@ -770,7 +796,7 @@ let to_ast_kdef (names,k_env,def_ord) (td:Parse_ast.kind_def) : (tannot kind_def
     let kind,k = to_ast_kind k_env kind in
     let enums = List.map to_ast_id enums in
     let keys = List.map id_to_string enums in
-    let kd_enum = KD_aux(KD_enum(kind,id,to_ast_namescm name_scm_opt,enums,false),(l,NoTyp)) in (* Add check that all enums have unique names *)
+    let kd_enum = KD_aux(KD_enum(kind,id,to_ast_namescm name_scm_opt,enums,false),(l,())) in (* Add check that all enums have unique names *)
     let k_env = List.fold_right (fun k k_env -> Envmap.insert k_env (k,{k=K_Nat})) keys (Envmap.insert k_env (key,{k=K_Typ})) in
     kd_enum, (names,k_env,def_ord)
   | Parse_ast.KD_register(kind,id,t1,t2,ranges) -> 
@@ -780,7 +806,7 @@ let to_ast_kdef (names,k_env,def_ord) (td:Parse_ast.kind_def) : (tannot kind_def
     let n1 = to_ast_nexp k_env t1 in
     let n2 = to_ast_nexp k_env t2 in
     let ranges = List.map (fun (range,id) -> (to_ast_range range),to_ast_id id) ranges in
-    KD_aux(KD_register(kind,id,n1,n2,ranges),(l,NoTyp)), (names,Envmap.insert k_env (key, {k=K_Typ}),def_ord))
+    KD_aux(KD_register(kind,id,n1,n2,ranges),(l,())), (names,Envmap.insert k_env (key, {k=K_Typ}),def_ord))
 
 
 let to_ast_rec (Parse_ast.Rec_aux(r,l): Parse_ast.rec_opt) : rec_opt =
@@ -802,25 +828,25 @@ let to_ast_effects_opt (k_env : kind Envmap.t) (Parse_ast.Effect_opt_aux(e,l)) :
   | Parse_ast.Effect_opt_pure -> Effect_opt_aux(Effect_opt_pure,l)
   | Parse_ast.Effect_opt_effect(typ) -> Effect_opt_aux(Effect_opt_effect(to_ast_effects k_env typ),l)
 
-let to_ast_funcl (names,k_env,def_ord) (Parse_ast.FCL_aux(fcl,l) : Parse_ast.funcl) : (tannot funcl) =
+let to_ast_funcl (names,k_env,def_ord) (Parse_ast.FCL_aux(fcl,l) : Parse_ast.funcl) : (unit funcl) =
   (*let _ = Printf.eprintf "to_ast_funcl\n" in*)
   match fcl with
   | Parse_ast.FCL_Funcl(id,pat,exp) -> 
-    FCL_aux(FCL_Funcl(to_ast_id id, to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp),(l,NoTyp))
+    FCL_aux(FCL_Funcl(to_ast_id id, to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp),(l,()))
 
-let to_ast_fundef  (names,k_env,def_ord) (Parse_ast.FD_aux(fd,l):Parse_ast.fundef) : (tannot fundef) envs_out = 
+let to_ast_fundef  (names,k_env,def_ord) (Parse_ast.FD_aux(fd,l):Parse_ast.fundef) : (unit fundef) envs_out = 
   match fd with
   | Parse_ast.FD_function(rec_opt,tannot_opt,effects_opt,funcls) -> 
     (*let _ = Printf.eprintf "to_ast_fundef\n" in*)
     let tannot_opt, k_env,_ = to_ast_tannot_opt k_env def_ord tannot_opt in
-    FD_aux(FD_function(to_ast_rec rec_opt, tannot_opt, to_ast_effects_opt k_env effects_opt, List.map (to_ast_funcl (names, k_env, def_ord)) funcls), (l,NoTyp)), (names,k_env,def_ord)
+    FD_aux(FD_function(to_ast_rec rec_opt, tannot_opt, to_ast_effects_opt k_env effects_opt, List.map (to_ast_funcl (names, k_env, def_ord)) funcls), (l,())), (names,k_env,def_ord)
     
 type def_progress =
     No_def
   | Def_place_holder of id * Parse_ast.l
-  | Finished of tannot def
+  | Finished of unit def
 
-type partial_def = ((tannot def) * bool) ref * kind Envmap.t
+type partial_def = ((unit def) * bool) ref * kind Envmap.t
 
 let rec def_in_progress (id : id) (partial_defs : (id * partial_def) list) : partial_def option =
   match partial_defs with
@@ -834,17 +860,17 @@ let to_ast_alias_spec k_env def_ord (Parse_ast.E_aux(e,le)) =
   AL_aux(
     (match e with
       | Parse_ast.E_field(Parse_ast.E_aux(Parse_ast.E_id id,li), field) -> 
-	AL_subreg(RI_aux(RI_id (to_ast_id id),(li,NoTyp)),to_ast_id field)
+	AL_subreg(RI_aux(RI_id (to_ast_id id),(li,())),to_ast_id field)
       | Parse_ast.E_vector_access(Parse_ast.E_aux(Parse_ast.E_id id,li),range) ->
-	AL_bit(RI_aux(RI_id (to_ast_id id),(li,NoTyp)),to_ast_exp k_env def_ord range)
+	AL_bit(RI_aux(RI_id (to_ast_id id),(li,())),to_ast_exp k_env def_ord range)
       | Parse_ast.E_vector_subrange(Parse_ast.E_aux(Parse_ast.E_id id,li),base,stop) ->
-	AL_slice(RI_aux(RI_id (to_ast_id id),(li,NoTyp)),to_ast_exp k_env def_ord base,to_ast_exp k_env def_ord stop)
+	AL_slice(RI_aux(RI_id (to_ast_id id),(li,())),to_ast_exp k_env def_ord base,to_ast_exp k_env def_ord stop)
       | Parse_ast.E_vector_append(Parse_ast.E_aux(Parse_ast.E_id first,lf),
 				  Parse_ast.E_aux(Parse_ast.E_id second,ls)) ->
-	AL_concat(RI_aux(RI_id (to_ast_id first),(lf,NoTyp)),
-		  RI_aux(RI_id (to_ast_id second),(ls,NoTyp)))
+	AL_concat(RI_aux(RI_id (to_ast_id first),(lf,())),
+		  RI_aux(RI_id (to_ast_id second),(ls,())))
       | _ -> raise (Reporting_basic.err_unreachable le "Found an expression not supported by parser in to_ast_alias_spec")
-    ), (le,NoTyp))      
+    ), (le,()))      
 
 let to_ast_dec (names,k_env,def_ord) (Parse_ast.DEC_aux(regdec,l)) =
   DEC_aux(
@@ -855,7 +881,7 @@ let to_ast_dec (names,k_env,def_ord) (Parse_ast.DEC_aux(regdec,l)) =
 	DEC_alias(to_ast_id id,to_ast_alias_spec k_env def_ord e)
       | Parse_ast.DEC_typ_alias(typ,id,e) ->
 	DEC_typ_alias(to_ast_typ k_env def_ord typ,to_ast_id id,to_ast_alias_spec k_env def_ord e)
-    ),(l,NoTyp))
+    ),(l,()))
       
 let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out * (id * partial_def) list = 
   let envs = (names,k_env,def_ord) in
@@ -887,11 +913,11 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
     (match sd with
     | Parse_ast.SD_scattered_function(rec_opt, tannot_opt, effects_opt, id) ->
       let rec_opt = to_ast_rec rec_opt in
-      let tannot,k_env',k_local = to_ast_tannot_opt k_env def_ord tannot_opt in
+      let unit,k_env',k_local = to_ast_tannot_opt k_env def_ord tannot_opt in
       let effects_opt = to_ast_effects_opt k_env' effects_opt in
       let id = to_ast_id id in
       (match (def_in_progress id partial_defs) with
-      | None -> let partial_def = ref ((DEF_fundef(FD_aux(FD_function(rec_opt,tannot,effects_opt,[]),(l,NoTyp)))),false) in
+      | None -> let partial_def = ref ((DEF_fundef(FD_aux(FD_function(rec_opt,unit,effects_opt,[]),(l,())))),false) in
                 (No_def,envs),((id,(partial_def,k_local))::partial_defs)
       | Some(d,k) -> typ_error l "Scattered function definition header name already in use by scattered definition" (Some id) None None)
     | Parse_ast.SD_scattered_funcl(funcl) -> 
@@ -919,7 +945,7 @@ let to_ast_def (names, k_env, def_ord) partial_defs def : def_progress envs_out 
         | [ ] -> {k = K_Typ}
         | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
       (match (def_in_progress id partial_defs) with
-      | None -> let partial_def = ref ((DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,NoTyp)))),false) in
+      | None -> let partial_def = ref ((DEF_type(TD_aux(TD_variant(id,name,typq,[],false),(l,())))),false) in
                 (Def_place_holder(id,l),(names,Envmap.insert k_env ((id_to_string id),kind),def_ord)),(id,(partial_def,k_env'))::partial_defs
       | Some(d,k) -> typ_error l "Scattered type definition header name already in use by scattered definition" (Some id) None None)
     | Parse_ast.SD_scattered_unioncl(id,tu) -> 
@@ -975,3 +1001,30 @@ let to_ast (default_names : Nameset.t) (kind_env : kind Envmap.t) (def_ord : ord
       | (_, true) -> ()))
     partial_defs;
   (Defs defs),k_env,def_ord
+
+let initial_kind_env = 
+  Envmap.from_list [ 
+    ("bool", {k = K_Typ});
+    ("nat", {k = K_Typ});
+    ("int", {k = K_Typ});
+    ("uint8", {k = K_Typ});
+    ("uint16", {k= K_Typ});
+    ("uint32", {k=K_Typ});
+    ("uint64", {k=K_Typ});
+    ("unit", {k = K_Typ});
+    ("bit", {k = K_Typ});
+    ("string", {k = K_Typ});
+    ("real", {k = K_Typ});
+    ("list", {k = K_Lam( [{k = K_Typ}], {k = K_Typ})});
+    ("reg", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
+    ("register", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
+    ("range", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}], {k = K_Typ}) });
+    ("vector", {k = K_Lam( [ {k = K_Nat}; {k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } );
+    ("atom", {k = K_Lam( [ {k=K_Nat} ], {k=K_Typ})});
+    ("option", { k = K_Lam( [{k=K_Typ}], {k=K_Typ}) });
+    ("implicit", {k = K_Lam( [{k = K_Nat}], {k=K_Typ})} );
+  ]
+
+let process_ast defs =
+  let (ast, _, _) = to_ast Nameset.empty initial_kind_env (Ast.Ord_aux(Ast.Ord_inc,Parse_ast.Unknown)) defs in
+  ast

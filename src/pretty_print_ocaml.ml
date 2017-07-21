@@ -43,7 +43,7 @@
 open Big_int
 open Ast
 open Ast_util
-open Type_check_new
+open Type_check
 open PPrint
 open Pretty_print_common
 

@@ -41,7 +41,7 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Type_check_new
+open Type_check
 open Ast
 open Ast_util
 open Rewriter
@@ -1350,10 +1350,6 @@ let find_regtypes (Defs defs) =
       | DEF_type (TD_aux(TD_register (Id_aux (Id tname, _),_,_,_),_)) -> tname :: acc
       | _ -> acc
     ) [] defs
-
-
-let typ_to_t env =
-  Type_check.typ_to_t env false false
 
 let pp_defs_lem (types_file,types_modules) (prompt_file,prompt_modules) (state_file,state_modules) d top_line =
   let regtypes = find_regtypes d in

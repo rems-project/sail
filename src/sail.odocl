@@ -12,5 +12,4 @@ pretty_print
 process_file
 reporting_basic
 type_check
-type_internal
 util

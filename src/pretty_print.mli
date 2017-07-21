@@ -41,7 +41,7 @@
 (**************************************************************************)
 
 open Ast
-open Type_check_new
+open Type_check
 
 (* Prints the defs following source syntax *)
 val pp_defs : out_channel -> 'a defs -> unit 
@@ -53,6 +53,3 @@ val pp_lem_defs : Format.formatter -> tannot defs -> unit
 
 val pp_defs_ocaml : out_channel -> tannot defs -> string -> string list -> unit
 val pp_defs_lem : (out_channel * string list) -> (out_channel * string list) -> (out_channel * string list) -> tannot defs -> string -> unit
-
-
-val pp_format_annot_ascii : Type_internal.tannot -> string

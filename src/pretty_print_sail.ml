@@ -40,7 +40,6 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-(* open Type_internal *)
 open Ast
 open PPrint
 open Pretty_print_common

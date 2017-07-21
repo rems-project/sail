@@ -42,7 +42,7 @@
 
 open Ast
 open Util
-open Type_check_new
+open Type_check
 
 (*Determines if the first typ is within the range of the the second typ, 
   using the constraints provided when the first typ contains variables. 

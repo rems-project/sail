@@ -40,7 +40,7 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Type_check_new
+open Type_check
 open Ast
 open Format
 open Big_int

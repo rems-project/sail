@@ -50,7 +50,7 @@ all: sail lib doc
 full: sail lib power doc test
 
 sail:
-	ocamlbuild sail.native sail_lib.cma sail_lib.cmxa
+	ocamlbuild sail.native
 
 sail.native: sail
 
