@@ -7,8 +7,6 @@ let disable_const_propagation = ref false
 let size_set_limit = 8
 let vector_split_limit = 4
 
-(* TODO: some places will need Type_check_new.expand_synonyms *)
-
 let optmap v f =
   match v with
   | None -> None
@@ -411,7 +409,7 @@ type 'a matchresult =
   | GiveUp
 
 let can_match (E_aux (e,(l,annot)) as exp0) cases =
-  let (env,ty) = env_typ_expected l annot in
+  let (env,_) = env_typ_expected l annot in
   let rec findpat_generic check_pat description = function
     | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
                ("Failed to find a case for " ^ description); None)
@@ -723,14 +721,11 @@ let split_defs splits defs =
     
   (* Split a variable pattern into every possible value *)
 
-  let split var annot =
+  let split var l annot =
     let v = string_of_id var in
-    let (env, (Typ_aux (ty,l) as typ), eff) =
-      match annot with
-      | Some ann -> ann
-      | None -> raise (Reporting_basic.err_general Unknown
-                         ("Missing type environment when splitting " ^ v))
-    in
+    let env, typ = env_typ_expected l annot in
+    let typ = Env.expand_synonyms env typ in
+    let Typ_aux (ty,l) = typ in
     let new_l = Generated l in
     let renew_id (Id_aux (id,l)) = Id_aux (id,new_l) in
     let cannot () =
@@ -827,7 +822,7 @@ let split_defs splits defs =
            re (fun p -> P_as (p,id)) p'
         | P_typ (t,p') -> re (fun p -> P_typ (t,p)) p'
         | P_id id when id_matches id ->
-           Some (split id annot)
+           Some (split id l annot)
         | P_id _ ->
            None
         | P_app (id,ps) ->
