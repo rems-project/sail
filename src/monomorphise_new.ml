@@ -3,7 +3,7 @@ open Ast
 open Ast_util
 open Type_check
 
-let disable_const_propagation = ref false
+let disable_const_propagation = false
 let size_set_limit = 8
 let vector_split_limit = 4
 
@@ -81,10 +81,10 @@ let make_vectors sz =
 let pat_id_is_variable env id =
   match Env.lookup_id id env with
   | Unbound
-  (* TODO: are the next two possible in typechecked code?  What
-     would they do? *)
-  | Register _
+  (* Shadowing of immutable locals is allowed; mutable locals and registers
+     are rejected by the type checker, so don't matter *)
   | Local _
+  | Register _
     -> true
   | Enum _
   | Union _
@@ -95,8 +95,14 @@ let rec is_value (E_aux (e,(l,annot))) =
   match e with
   | E_id id ->
      (match annot with
-     | None -> false (* Be conservative if we have no info *)
-     | Some (env,_,_) -> not (pat_id_is_variable env id))
+     | None -> 
+        (Reporting_basic.print_err false true l "Monomorphisation"
+           ("Missing type information for identifier " ^ string_of_id id);
+         false) (* Be conservative if we have no info *)
+     | Some (env,_,_) ->
+        match Env.lookup_id id env with
+        | Enum _ | Union _ -> true
+        | Unbound | Local _ | Register _ -> false)
   | E_lit _ -> true
   | E_tuple es -> List.for_all is_value es
 (* TODO: more? *)
@@ -287,7 +293,7 @@ let nexp_subst_fns substs refinements =
       | E_id _
       | E_lit _
       | E_comment _ -> re e
-      | E_sizeof ne -> re (E_sizeof ne) (* TODO: do this need done?  does it appear in type checked code? *)
+      | E_sizeof ne -> re (E_sizeof ne) (* TODO: does this need done?  does it appear in type checked code? *)
       | E_internal_exp (l,annot) -> re (E_internal_exp (l, (*s_tannot*) annot))
       | E_sizeof_internal (l,annot) -> re (E_sizeof_internal (l, (*s_tannot*) annot))
       | E_internal_exp_user ((l1,annot1),(l2,annot2)) ->
@@ -451,7 +457,6 @@ let can_match (E_aux (e,(l,annot)) as exp0) cases =
 
 
 (* Similarly, simple conditionals *)
-(* TODO: doublecheck *)
 let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
   match l1,l2 with
   | (L_zero|L_false), (L_zero|L_false)
@@ -461,7 +466,6 @@ let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
   | _ -> Some (l1 = l2)
 
 
-(* TODO: any useful type information revealed? (probably not) *)
 let try_app_infix (l,ann) (E_aux (e1,ann1)) (Id_aux (id,_)) (E_aux (e2,ann2)) =
   let i = match id with Id x -> x | DeIid x -> x in
   let new_l = Generated l in
@@ -701,8 +705,7 @@ let split_defs splits defs =
   in
 
   let subst_exp subst exp =
-    if !disable_const_propagation then
-    (* TODO: This just sticks a let in - we really need propogation *)
+    if disable_const_propagation then
       let (subi,(E_aux (_,subannot) as sube)) = subst in
       let E_aux (e,(l,annot)) = exp in
       let lg = Generated l in
@@ -763,8 +766,7 @@ let split_defs splits defs =
        | _ ->
           cannot ()
        )
-    (*|  vectors TODO *)
-    (*|  numbers TODO *)
+    (*|  set constrained numbers TODO *)
     | _ -> cannot ()
   in
   
