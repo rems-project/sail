@@ -41,8 +41,6 @@ metavar regexp ::=
 embed
 {{ ocaml
 
-type l = Parse_ast.l
-
 type 'a annot = l * 'a
 
 }}
@@ -91,7 +89,7 @@ metavar ix ::=
 grammar
 
 l :: '' ::=                                     {{ phantom }}
-                                                {{ ocaml l }}
+                                                {{ ocaml Parse_ast.l }}
                                                 {{ lem l }}
                                                 {{ hol unit }}
   {{ com source location }}
