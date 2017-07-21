@@ -41,8 +41,9 @@
 (**************************************************************************)
 
 open Big_int
-open Type_internal
 open Ast
+open Ast_util
+open Type_check_new
 open PPrint
 open Pretty_print_common
 
@@ -73,10 +74,10 @@ let doc_id_ocaml_type (Id_aux(i,_)) =
        * token in case of x ending with star. *)
       parens (separate space [colon; string (String.uncapitalize x); empty])
 
-let doc_id_ocaml_ctor n (Id_aux(i,_)) =
+let doc_id_ocaml_ctor (Id_aux(i,_)) =
   match i with
   | Id("bit") -> string "vbit"
-  | Id i -> string ((if n > 246 then "`" else "") ^ (String.capitalize i))
+  | Id i -> string ((* TODO if n > 246 then "`" else "") ^ *) (String.capitalize i))
   | DeIid x ->
       (* add an extra space through empty to avoid a closing-comment
        * token in case of x ending with star. *)
@@ -154,10 +155,17 @@ let doc_pat_ocaml =
   let rec pat pa = app_pat pa
   and app_pat ((P_aux(p,(l,annot))) as pa) = match p with
     | P_app(id, ((_ :: _) as pats)) ->
-      (match annot with
-       | Base(_,Constructor n,_,_,_,_) ->
-         doc_unop (doc_id_ocaml_ctor n id) (parens (separate_map comma_sp pat pats))
-       | _ -> empty)
+      (* TODO This check fails for some reason in the MIPS execute function;
+         lookup_id returns Unbound, maybe because the environment is not
+         propagated correctly during rewriting.
+         I comment out the check for now. *)
+      (* (match annot with
+       | Some (env, typ, eff) ->
+         (match Env.lookup_id id env with
+           | Union _ -> *)
+             doc_unop (doc_id_ocaml_ctor id) (parens (separate_map comma_sp pat pats))
+           (* | _ -> empty)
+       | _ -> empty) *)
   | P_lit lit  -> doc_lit_ocaml true lit
   | P_wild -> underscore
   | P_id id -> doc_id_ocaml id
@@ -165,8 +173,10 @@ let doc_pat_ocaml =
   | P_typ(typ,p) -> doc_op colon (pat p) (doc_typ_ocaml typ)
   | P_app(id,[]) ->
     (match annot with
-     | Base(_,(Constructor n | Enum n),_,_,_,_) ->
-       doc_id_ocaml_ctor n id
+     | Some (env, typ, eff) ->
+       (match Env.lookup_id id env with
+         | Union _ | Enum _ -> doc_id_ocaml_ctor id
+         | _ -> failwith "encountered unexpected P_app pattern")
      | _ -> failwith "encountered unexpected P_app pattern")
   | P_vector pats ->
     let non_bit_print () =
@@ -176,14 +186,14 @@ let doc_pat_ocaml =
                                                     underscore;
                                                     underscore])]) in
     (match annot with
-     | Base(([],t),_,_,_,_,_) ->
-       if is_bit_vector t
-       then parens (separate space [string "Vvector";
-                                    parens (separate comma_sp [squarebars (separate_map semi pat pats);
-                                                                underscore;
-                                                                underscore])])
-       else non_bit_print()
-     | _ -> non_bit_print ())
+    | Some (env, typ, _) ->
+      if is_bitvector_typ (Env.base_typ_of env typ)
+      then parens (separate space [string "Vvector";
+                                   parens (separate comma_sp [squarebars (separate_map semi pat pats);
+                                                               underscore;
+                                                               underscore])])
+      else non_bit_print()
+    | None -> non_bit_print())
   | P_tup pats  -> parens (separate_map comma_sp pat pats)
   | P_list pats -> brackets (separate_map semi pat pats) (*Never seen but easy in ocaml*)
   | P_record _ -> raise (Reporting_basic.err_unreachable l "unhandled record pattern")
@@ -191,26 +201,47 @@ let doc_pat_ocaml =
   | P_vector_concat _ -> raise (Reporting_basic.err_unreachable l "unhandled vector_concat pattern")
   in pat
 
+let id_is_local_var id env = match Env.lookup_id id env with
+  | Local _ | Unbound -> true
+  | _ -> false
+
+let rec lexp_is_local (LEXP_aux (lexp, _)) env = match lexp with
+  | LEXP_memory _ -> false
+  | LEXP_id id
+  | LEXP_cast (_, id) -> id_is_local_var id env
+  | LEXP_tup lexps -> List.for_all (fun lexp -> lexp_is_local lexp env) lexps
+  | LEXP_vector (lexp,_)
+  | LEXP_vector_range (lexp,_,_)
+  | LEXP_field (lexp,_) -> lexp_is_local lexp env
+
+let is_regtyp (Typ_aux (typ,_)) env = match typ with
+  | Typ_app (register, _) -> string_of_id register = "register"
+  | Typ_id id -> Env.is_regtyp id env
+  | _ -> false
+
 let doc_exp_ocaml, doc_let_ocaml =
-  let rec top_exp read_registers (E_aux (e, (_,annot))) =
+  let rec top_exp read_registers (E_aux (e, (l,annot)) as full_exp) =
     let exp = top_exp read_registers in
+    let (env, typ, eff) = match annot with
+    | Some (env, typ, eff) -> (env, typ, eff)
+    | None -> raise (Reporting_basic.err_unreachable l "no type annotation") in
     match e with
     | E_assign((LEXP_aux(le_act,tannot) as le),e) ->
-      (match annot with
-       | Base(_,(Emp_local | Emp_set),_,_,_,_) ->
-         (match le_act with
-          | LEXP_id _ | LEXP_cast _ ->
-            (*Setting local variable fully *)
-            doc_op coloneq (doc_lexp_ocaml true le) (exp e)
-          | LEXP_vector _ ->
-            doc_op (string "<-") (doc_lexp_array_ocaml le) (exp e)
-          | LEXP_vector_range _ ->
-            doc_lexp_rwrite le e)
-       | _ ->
-         (match le_act with
-          | LEXP_vector _ | LEXP_vector_range _ | LEXP_cast _ | LEXP_field _ | LEXP_id _ ->
-            (doc_lexp_rwrite le e)
-          | LEXP_memory _ -> (doc_lexp_fcall le e)))
+      if lexp_is_local le env
+      then
+       (match le_act with
+        | LEXP_id _ | LEXP_cast _ ->
+          (*Setting local variable fully *)
+          doc_op coloneq (doc_lexp_ocaml true le) (exp e)
+        | LEXP_vector _ ->
+          doc_op (string "<-") (doc_lexp_array_ocaml le) (exp e)
+        | LEXP_vector_range _ ->
+          doc_lexp_rwrite le e)
+      else
+       (match le_act with
+        | LEXP_vector _ | LEXP_vector_range _ | LEXP_cast _ | LEXP_field _ | LEXP_id _ ->
+          (doc_lexp_rwrite le e)
+        | LEXP_memory _ -> (doc_lexp_fcall le e))
     | E_vector_append(l,r) ->
       parens ((string "vector_concat ") ^^ (exp l) ^^ space ^^ (exp r))
     | E_cons(l,r) -> doc_op (group (colon^^colon)) (exp l) (exp r)
@@ -258,9 +289,8 @@ let doc_exp_ocaml, doc_let_ocaml =
          *)*)
     | E_let(leb,e) -> doc_op (string "in") (let_exp leb) (exp e)
     | E_app(f,args) ->
-      let call,ctor = match annot with
-        | Base(_,External (Some n),_,_,_,_) -> string n,false
-        | Base(_,Constructor i,_,_,_,_) -> doc_id_ocaml_ctor i f,true
+      let call,ctor = match Env.lookup_id f env with
+        | Union _ -> doc_id_ocaml_ctor f,true
         | _ -> doc_id_ocaml f,false in
       let base_print () = parens (doc_unop call (parens (separate_map comma exp args))) in
       if not(ctor)
@@ -272,39 +302,38 @@ let doc_exp_ocaml, doc_let_ocaml =
             | _ -> base_print())
         | args ->  base_print())
     | E_vector_access(v,e) ->
-      let call = (match annot with
-          | Base((_,t),_,_,_,_,_) ->
-            (match t.t with
-             | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) -> (string "bit_vector_access")
-             | _ -> (string "vector_access"))
-          | _ -> (string "vector_access")) in
+      let call =
+        if is_bit_typ (Env.base_typ_of env typ)
+        then (string "bit_vector_access")
+        else (string "vector_access") in
       parens (call ^^ space ^^ exp v ^^ space ^^ exp e)
     | E_vector_subrange(v,e1,e2) ->
       parens ((string "vector_subrange") ^^ space ^^ (exp v) ^^ space ^^ (exp e1) ^^ space ^^ (exp e2))
-    | E_field((E_aux(_,(_,fannot)) as fexp),id) ->
-      (match fannot with
-       | Base((_,{t= Tapp("register",_)}),_,_,_,_,_) |
-         Base((_,{t= Tabbrev(_,{t=Tapp("register",_)})}),_,_,_,_,_)->
-         let field_f = match annot with
-           | Base((_,{t = Tid "bit"}),_,_,_,_,_) |
-             Base((_,{t = Tabbrev(_,{t=Tid "bit"})}),_,_,_,_,_) ->
-             string "get_register_field_bit"
-           | _ -> string "get_register_field_vec" in
-         parens (field_f ^^ space ^^ (exp fexp) ^^ space ^^ string_lit (doc_id id))
-      | _ -> exp fexp ^^ dot ^^ doc_id_ocaml id)
+    | E_field((E_aux(_,(fl,fannot)) as fexp),id) ->
+      let ftyp = typ_of_annot (fl,fannot) in
+      if (is_regtyp ftyp env) then
+        let field_f =
+          if (is_bit_typ (Env.base_typ_of env ftyp))
+          then string "get_register_field_bit"
+          else string "get_register_field_vec" in
+        parens (field_f ^^ space ^^ (exp fexp) ^^ space ^^ string_lit (doc_id id))
+      else exp fexp ^^ dot ^^ doc_id_ocaml id
     | E_block [] -> string "()"
     | E_block exps | E_nondet exps ->
       let exps_doc = separate_map (semi ^^ hardline) exp exps in
       surround 2 1 (string "begin") exps_doc (string "end")
     | E_id id ->
-      (match annot with
-      | Base((_, ({t = Tapp("reg",_)} | {t=Tabbrev(_,{t=Tapp("reg",_)})})),_,_,_,_,_) ->
-        string "!" ^^ doc_id_ocaml id
-      | Base((_, ({t = Tapp("register",_)} | {t=Tabbrev(_,{t=Tapp("register",_)})})),_,_,_,_,_) ->
-        if read_registers
-        then string "(read_register " ^^ doc_id_ocaml id ^^ string ")"
-        else doc_id_ocaml id
-      | Base(_,(Constructor i |Enum i),_,_,_,_) -> doc_id_ocaml_ctor i id
+      (match Env.lookup_id id env with
+        | Local (Mutable, _) ->
+          string "!" ^^ doc_id_ocaml id
+        | Union _ | Enum _ -> doc_id_ocaml_ctor id
+        | _ ->
+          if (is_regtyp typ env) then
+            if read_registers
+            then string "(read_register " ^^ doc_id_ocaml id ^^ string ")"
+            else doc_id_ocaml id
+          else doc_id_ocaml id)
+      (*match annot with
       | Base((_,t),Alias alias_info,_,_,_,_) ->
          (match alias_info with
          | Alias_field(reg,field) ->
@@ -320,16 +349,15 @@ let doc_exp_ocaml, doc_let_ocaml =
          | Alias_pair(reg1,reg2) ->
            parens (separate space [string "vector_concat";
                                    string (sanitize_name reg1);
-                                   string (sanitize_name reg2)]))
-      | _ -> doc_id_ocaml id)
+                                   string (sanitize_name reg2)])) *)
     | E_lit lit -> doc_lit_ocaml false lit
     | E_cast(typ,e) ->
-      (match annot with
+      (* (match annot with
       | Base(_,External _,_,_,_,_) ->
         if read_registers
         then parens (string "read_register" ^^ space ^^ exp e)
         else exp e
-      | _ -> 
+      | _ ->  *)
          let (Typ_aux (t,_)) = typ in
              (match t with
             | Typ_app (Id_aux (Id "vector",_), [Typ_arg_aux (Typ_arg_nexp(Nexp_aux (Nexp_constant i,_)),_);_;_;_]) ->
@@ -338,7 +366,7 @@ let doc_exp_ocaml, doc_let_ocaml =
             | Typ_var (Kid_aux (Var "length",_)) ->
                parens ((string "set_start_to_length") ^//^ exp e)
             | _ -> 
-               parens (doc_op colon (group (exp e)) (doc_typ_ocaml typ))))
+               parens (doc_op colon (group (exp e)) (doc_typ_ocaml typ)))
     | E_tuple exps ->
       parens (separate_map comma exp exps)
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
@@ -346,41 +374,47 @@ let doc_exp_ocaml, doc_let_ocaml =
     | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
       braces (doc_op (string "with") (exp e) (separate_map semi_sp doc_fexp fexps))
     | E_vector exps ->
-      (match annot with
+      let (start, _, order, _) = vector_typ_args_of (Env.base_typ_of env typ) in
+      (*match annot with
        | Base((_,t),_,_,_,_,_) ->
          match t.t with
          | Tapp("vector", [TA_nexp start; _; TA_ord order; _])
-         | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; _; TA_ord order; _])}) ->
-           let call = if is_bit_vector t then (string "Vvector") else (string "VvectorR") in
-           let dir,dir_out = match order.order with
-             | Oinc -> true,"true"
-             | _ -> false, "false" in
-           let start = match start.nexp with
-             | Nconst i -> string_of_big_int i
-             | N2n(_,Some i) -> string_of_big_int i
+         | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; _; TA_ord order; _])}) ->*)
+           let call = if is_bitvector_typ typ then (string "Vvector") else (string "VvectorR") in
+           let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
+           let start = match start with
+             | Nexp_aux (Nexp_constant i, _) -> string_of_int i
+             | Nexp_aux (Nexp_exp (Nexp_aux (Nexp_constant i, _)), _) ->
+               string_of_int (Util.power 2 i)
              | _ -> if dir then "0" else string_of_int (List.length exps) in
            parens (separate space [call; parens (separate comma_sp [squarebars (separate_map semi exp exps);
                                                                    string start;
-                                                                   string dir_out])]))
+                                                                   string dir_out])])
     | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
-      (match annot with
+      let (start, len, order, _) = vector_typ_args_of (Env.base_typ_of env typ) in
+      (*match annot with
        | Base((_,t),_,_,_,_,_) ->
          match t.t with
          | Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])
          | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])})
-         | Tapp("reg", [TA_typ {t =Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])}]) ->
-           let call = if is_bit_vector t then (string "make_indexed_bitv") else (string "make_indexed_v") in
-           let dir,dir_out = match order.order with
-             | Oinc -> true,"true"
-             | _ -> false, "false" in
-           let start = match start.nexp with
-             | Nconst i | N2n(_,Some i)-> string_of_big_int i
-             | N2n({nexp=Nconst i},_) -> string_of_int (Util.power 2 (int_of_big_int i))
+         | Tapp("reg", [TA_typ {t =Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])}]) ->*)
+           let call =
+             if is_bitvector_typ (Env.base_typ_of env typ)
+             then (string "make_indexed_bitv")
+             else (string "make_indexed_v") in
+           let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
+           let start = match start with
+             | Nexp_aux (Nexp_constant i, _) -> string_of_int i
+             | Nexp_aux (Nexp_exp (Nexp_aux (Nexp_constant i, _)), _) ->
+               string_of_int (Util.power 2 i)
              | _ -> if dir then "0" else string_of_int (List.length iexps) in
-           let size = match len.nexp with
-             | Nconst i | N2n(_,Some i)-> string_of_big_int i
-             | N2n({nexp=Nconst i},_) -> string_of_int (Util.power 2 (int_of_big_int i))
-           in
+           let size = match len with
+             | Nexp_aux (Nexp_constant i, _) -> string_of_int i
+             | Nexp_aux (Nexp_exp (Nexp_aux (Nexp_constant i, _)), _) ->
+               string_of_int (Util.power 2 i)
+             | _ ->
+               raise (Reporting_basic.err_unreachable l
+                 "indexed vector without known length") in
            let default_string =
              (match default with
               | Def_val_empty -> string "None"
@@ -391,7 +425,7 @@ let doc_exp_ocaml, doc_let_ocaml =
                                    default_string;
                                    string start;
                                    string size;
-                                   string dir_out]))
+                                   string dir_out])
   | E_vector_update(v,e1,e2) ->
     (*Has never happened to date*)
       brackets (doc_op (string "with") (exp v) (doc_op equals (exp e1) (exp e2)))
@@ -412,9 +446,9 @@ let doc_exp_ocaml, doc_let_ocaml =
     separate space [string "begin ret := Some" ; exp e ; string "; raise Sail_return; end"]
   | E_app_infix (e1,id,e2) ->
     let call =
-      match annot with
+      (* match annot with
       | Base((_,t),External(Some name),_,_,_,_) -> string name
-      | _ -> doc_id_ocaml id in
+      | _ -> *) doc_id_ocaml id in
     parens (separate space [call; parens (separate_map comma exp [e1;e2])])
   | E_internal_let(lexp, eq_exp, in_exp) ->
     separate space [string "let";
@@ -458,37 +492,30 @@ let doc_exp_ocaml, doc_let_ocaml =
     | LEXP_id id | LEXP_cast(_,id) ->
       let name = doc_id_ocaml id in
       match annot,top_call with
-      | Base((_,{t=Tapp("reg",_)}),Emp_set,_,_,_,_),false | Base((_,{t=Tabbrev(_,{t=Tapp("reg",_)})}),Emp_set,_,_,_,_),false ->
-        string "!" ^^ name
+      | Some (env, _, _), false ->
+        (match Env.lookup_id id env with
+          | Local (Mutable, _) -> string "!" ^^ name
+          | _ -> name)
       | _ -> name
 
   and doc_lexp_array_ocaml ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
     | LEXP_vector(v,e) ->
       (match annot with
-       | Base((_,t),_,_,_,_,_) ->
-         let t_act = match t.t with | Tapp("reg",[TA_typ t]) | Tabbrev(_,{t=Tapp("reg",[TA_typ t])}) -> t | _ -> t in
-         (match t_act.t with
-          | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) ->
-            parens ((string "get_barray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (top_exp false e))
-          | _ -> parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (top_exp false e)))
+       | Some (env, t, _) ->
+         if (is_bit_typ (Env.base_typ_of env t))
+         then parens ((string "get_barray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (top_exp false e))
+         else parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (top_exp false e))
        | _ ->
          parens ((string "get_varray") ^^ space ^^ doc_lexp_ocaml false v) ^^ dot ^^ parens ((string "int_of_big_int") ^^ space ^^ (top_exp false e)))
     | _ -> empty
 
   and doc_lexp_rwrite ((LEXP_aux(lexp,(l,annot))) as le) e_new_v =
     let exp = top_exp false in
-    let (is_bit,is_bitv) = match e_new_v with
-      | E_aux(_,(_,Base((_,t),_,_,_,_,_))) ->
-        (match t.t with
-         | Tapp("vector", [_;_;_;(TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})}))]) |
-           Tabbrev(_,{t=Tapp("vector",[_;_;_;TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})})])}) |
-           Tapp("reg", [TA_typ {t= Tapp("vector", [_;_;_;(TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})}))])}])
-           ->
-           (false,true)
-         | Tid "bit" | Tabbrev(_,{t=Tid "bit"}) | Tapp("reg",[TA_typ ({t=Tid "bit"} | {t=Tabbrev(_,{t=Tid "bit"})})])
-           -> (true,false)
-         | _ -> (false,false))
-      | _ -> (false,false) in
+    let (is_bit,is_bitv) = match annot with
+    | Some (env, typ, _) ->
+      let typ = Env.base_typ_of env typ in
+      (is_bit_typ typ, is_bitvector_typ typ)
+    | _ -> (false, false) in
     match lexp with
     | LEXP_vector(v,e) ->
        if is_bit then (* XXX check whether register or not?? *)
@@ -504,7 +531,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       parens ((string (if is_bit then "set_register_field_bit" else "set_register_field_v")) ^^ space ^^
               doc_lexp_ocaml false v ^^ space ^^string_lit (doc_id id) ^^ space ^^ exp e_new_v)
     | LEXP_id id | LEXP_cast (_,id) ->
-      (match annot with
+      (* (match annot with
        | Base(_,Alias alias_info,_,_,_,_) ->
          (match alias_info with
           | Alias_field(reg,field) ->
@@ -522,8 +549,8 @@ let doc_exp_ocaml, doc_let_ocaml =
                       string reg ^^ space ^^ doc_int start ^^ space ^^ doc_int stop ^^ space ^^ exp e_new_v)
           | Alias_pair(reg1,reg2) ->
             parens ((string "set_two_regs") ^^ space ^^ string reg1 ^^ space ^^ string reg2 ^^ space ^^ exp e_new_v))
-       | _ ->
-         parens (separate space [string "set_register"; doc_id_ocaml id; exp e_new_v]))
+       | _ -> *)
+         parens (separate space [string "set_register"; doc_id_ocaml id; exp e_new_v])
 
   and doc_lexp_fcall ((LEXP_aux(lexp,(l,annot))) as le) e_new_v = match lexp with
     | LEXP_memory(id,args) -> doc_id_ocaml id ^^ parens (separate_map comma (top_exp false) (args@[e_new_v]))
@@ -533,8 +560,8 @@ let doc_exp_ocaml, doc_let_ocaml =
 
 (*TODO Upcase and downcase type and constructors as needed*)
 let doc_type_union_ocaml n (Tu_aux(typ_u,_)) = match typ_u with
-  | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_ocaml_ctor n id; string "of"; doc_typ_ocaml typ;]
-  | Tu_id id -> separate space [pipe; doc_id_ocaml_ctor n id]
+  | Tu_ty_id(typ,id) -> separate space [pipe; doc_id_ocaml_ctor id; string "of"; doc_typ_ocaml typ;]
+  | Tu_id id -> separate space [pipe; doc_id_ocaml_ctor id]
 
 let rec doc_range_ocaml (BF_aux(r,_)) = match r with
   | BF_single i -> parens (doc_op comma (doc_int i) (doc_int i))
@@ -559,7 +586,7 @@ let doc_typdef_ocaml (TD_aux(td,_)) = match td with
        else (doc_typquant_ocaml typq ar_doc))
   | TD_enum(id,nm,enums,_) ->
     let n = List.length enums in
-    let enums_doc = group (separate_map (break 1 ^^ pipe) (doc_id_ocaml_ctor n) enums) in
+    let enums_doc = group (separate_map (break 1 ^^ pipe) (doc_id_ocaml_ctor) enums) in
     doc_op equals
       (concat [string "type"; space; doc_id_ocaml_type id;])
       (enums_doc)
@@ -615,7 +642,7 @@ let doc_kdef_ocaml (KD_aux(kd,_)) = match kd with
        else (doc_typquant_ocaml typq ar_doc))
   | KD_enum(_,id,nm,enums,_) ->
     let n = List.length enums in
-    let enums_doc = group (separate_map (break 1 ^^ pipe) (doc_id_ocaml_ctor n) enums) in
+    let enums_doc = group (separate_map (break 1 ^^ pipe) (doc_id_ocaml_ctor) enums) in
     doc_op equals
       (concat [string "type"; space; doc_id_ocaml_type id;])
       (enums_doc)
@@ -656,8 +683,9 @@ let doc_tannot_opt_ocaml (Typ_annot_opt_aux(t,_)) = match t with
   | Typ_annot_opt_some(tq,typ) -> doc_typquant_ocaml tq (doc_typ_ocaml typ)
 
 let doc_funcl_exp_ocaml (E_aux (e, (l, annot)) as ea) = match annot with
-  | Base((_,t),tag,nes,efct,efctsum,_) ->
-     if has_lret_effect efctsum then
+  | Some (_, t, efctsum) ->
+  (* | Base((_,t),tag,nes,efct,efctsum,_) -> *)
+     if has_effect efctsum BE_lret then
        separate hardline [string "let ret = ref None in"; 
                        string "try";
                        (doc_exp_ocaml ea);
@@ -696,14 +724,16 @@ let doc_fundef_ocaml (FD_aux(FD_function(r, typa, efa, fcls),_)) =
 let doc_dec_ocaml (DEC_aux (reg,(l,annot))) =
   match reg with
   | DEC_reg(typ,id) ->
-    (match annot with
+    if is_vector_typ typ then
+      let (start, size, order, itemt) = vector_typ_args_of typ in
+    (* (match annot with
      | Base((_,t),_,_,_,_,_) ->
        (match t.t with
         | Tapp("register", [TA_typ {t= Tapp("vector", [TA_nexp start; TA_nexp size; TA_ord order; TA_typ itemt])}]) 
-        | Tapp("register", [TA_typ {t= Tabbrev(_,{t=Tapp("vector", [TA_nexp start; TA_nexp size; TA_ord order; TA_typ itemt])})}]) ->
-          (match itemt.t,start.nexp,size.nexp with
-           | Tid "bit", Nconst start, Nconst size ->
-             let o = if order.order = Oinc then string "true" else string "false" in
+        | Tapp("register", [TA_typ {t= Tabbrev(_,{t=Tapp("vector", [TA_nexp start; TA_nexp size; TA_ord order; TA_typ itemt])})}]) -> *)
+          (match is_bit_typ itemt, start, size with
+           | true, Nexp_aux (Nexp_constant start, _), Nexp_aux (Nexp_constant size, _) ->
+             let o = if is_order_inc order then string "true" else string "false" in
              separate space [string "let";
                              doc_id_ocaml id;
                              equals;
@@ -711,22 +741,25 @@ let doc_dec_ocaml (DEC_aux (reg,(l,annot))) =
                              parens (separate comma [separate space [string "ref";
                                                                      parens (separate space
                                                                                [string "Array.make";
-                                                                                doc_int (int_of_big_int size);
+                                                                                doc_int size;
                                                                                 string "Vzero";])];
-                                                     doc_int (int_of_big_int start);
+                                                     doc_int start;
                                                      o;
                                                      string_lit (doc_id id);
                                                      brackets empty])]
            | _ -> empty)
-        | Tapp("register", [TA_typ {t=Tid idt}]) |
-          Tabbrev( {t= Tid idt}, _) ->
+    else
+      (match typ with
+        | Typ_aux (Typ_id idt, _) ->
+        (* | Tapp("register", [TA_typ {t=Tid idt}]) |
+          Tabbrev( {t= Tid idt}, _) -> *)
           separate space [string "let";
                           doc_id_ocaml id;
                           equals;
-                          doc_id_ocaml (Id_aux (Id idt, Unknown));
+                          doc_id_ocaml idt;
                           string "None"]
         |_-> failwith "type was not handled in register declaration")
-     | _ -> failwith "annot was not Base")
+     (* | _ -> failwith "annot was not Base") *)
     | DEC_alias(id,alspec) -> empty (*
         doc_op equals (string "register alias" ^^ space ^^ doc_id id) (doc_alias alspec) *)
     | DEC_typ_alias(typ,id,alspec) -> empty (*
@@ -741,6 +774,7 @@ let doc_def_ocaml def = group (match def with
   | DEF_reg_dec dec -> doc_dec_ocaml dec
   | DEF_scattered sdef -> empty (*shoulnd't still be here*)
   | DEF_kind k_def -> doc_kdef_ocaml k_def
+  | DEF_overload _ -> empty
   | DEF_comm _ -> failwith "unhandled DEF_comm"
   ) ^^ hardline
 

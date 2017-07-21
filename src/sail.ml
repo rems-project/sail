@@ -152,10 +152,10 @@ let main() =
     let (ast,kenv,ord) = convert_ast ast in
     let (ast,type_envs) = check_ast ast kenv ord in 
 
-    let ast = match !opt_mono_split with
+    (* let ast = match !opt_mono_split with
       | [] -> ast
       | l -> Monomorphise.split_defs l type_envs ast
-    in
+    in *)
 
     let ast = rewrite_ast ast in
     let out_name = match !opt_file_out with
@@ -176,7 +176,7 @@ let main() =
          else output "" (Ocaml_out (Some (List.hd !opt_libs_ocaml))) [out_name,ast_ocaml]
        else ());
       (if !(opt_print_lem)
-       then let ast_lem = rewrite_ast_lem type_envs ast in
+       then let ast_lem = rewrite_ast_lem ast in
          if !(opt_libs_lem) = []
          then output "" (Lem_out None) [out_name,ast_lem]
          else output "" (Lem_out (Some (List.hd !opt_libs_lem))) [out_name,ast_lem]
