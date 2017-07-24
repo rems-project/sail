@@ -354,6 +354,7 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot))) =
   | P_vector_concat pats -> rewrap (P_vector_concat (List.map rewrite pats))
   | P_tup pats -> rewrap (P_tup (List.map rewrite pats))
   | P_list pats -> rewrap (P_list (List.map rewrite pats))
+  | P_cons (pat1, pat2) -> rewrap (P_cons (rewrite pat1, rewrite pat2))
 
 let rewrite_exp rewriters (E_aux (exp,(l,annot))) = 
   let rewrap e = E_aux (e,(l,annot)) in

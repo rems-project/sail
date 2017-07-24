@@ -503,6 +503,8 @@ atomic_pat:
     { ploc (P_list([$2])) }
   | SquareBarBar comma_pats BarBarSquare
     { ploc (P_list($2)) }
+  | atomic_pat ColonColon pat
+    { ploc (P_cons ($1, $3)) }
   | Lparen pat Rparen
     { $2 }
 

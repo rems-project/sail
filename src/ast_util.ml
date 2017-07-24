@@ -117,6 +117,7 @@ and map_pat_annot_aux f = function
   | P_vector_concat pats -> P_vector_concat (List.map (map_pat_annot f) pats)
   | P_vector_indexed ipats -> P_vector_indexed (List.map (fun (i, pat) -> (i, map_pat_annot f pat)) ipats)
   | P_vector pats -> P_vector (List.map (map_pat_annot f) pats)
+  | P_cons (pat1, pat2) -> P_cons (map_pat_annot f pat1, map_pat_annot f pat2)
 and map_fpat_annot f (FP_aux (FP_Fpat (id, pat), annot)) = FP_aux (FP_Fpat (id, map_pat_annot f pat), f annot)
 and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
 and map_letbind_annot_aux f = function
@@ -305,6 +306,8 @@ and string_of_pat (P_aux (pat, l)) =
   | P_typ (typ, pat) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_pat pat
   | P_tup pats -> "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_pat pats ^ ")"
+  | P_cons (pat1, pat2) -> string_of_pat pat1 ^ " :: " ^ string_of_pat pat2
+  | P_list pats -> "[||" ^ string_of_list "," string_of_pat pats ^ "||]"
   | _ -> "PAT"
 and string_of_lexp (LEXP_aux (lexp, _)) =
   match lexp with

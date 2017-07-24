@@ -238,6 +238,7 @@ pat_aux =  (* Pattern *)
  | P_vector_concat of (pat) list (* concatenated vector pattern *)
  | P_tup of (pat) list (* tuple pattern *)
  | P_list of (pat) list (* list pattern *)
+ | P_cons of pat * pat (* cons pattern *)
 
 and pat = 
    P_aux of pat_aux * l

@@ -130,6 +130,7 @@ let doc_pat, doc_atomic_pat =
   | P_vector_indexed ipats  -> brackets (separate_map comma_sp npat ipats)
   | P_tup pats  -> parens (separate_map comma_sp atomic_pat pats)
   | P_list pats  -> squarebarbars (separate_map semi_sp atomic_pat pats)
+  | P_cons (pat1, pat2) -> separate space [atomic_pat pat1; string "::"; pat pat2]
   | P_app(_, _ :: _) | P_vector_concat _ ->
       group (parens (pat pa))
   and fpat (FP_aux(FP_Fpat(id,fpat),_)) = doc_op equals (doc_id id) (pat fpat)

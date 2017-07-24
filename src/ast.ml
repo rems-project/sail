@@ -265,6 +265,7 @@ type
  | P_vector_concat of ('a pat) list (* concatenated vector pattern *)
  | P_tup of ('a pat) list (* tuple pattern *)
  | P_list of ('a pat) list (* list pattern *)
+ | P_cons of 'a pat * 'a pat
 
 and 'a pat =
    P_aux of 'a pat_aux * 'a annot
