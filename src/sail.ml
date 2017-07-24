@@ -53,6 +53,7 @@ let opt_print_ocaml = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_ocaml = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
+let opt_mono_split = ref ([]:((string * int) * string) list)
 let options = Arg.align ([
   ( "-o",
     Arg.String (fun f -> opt_file_out := Some f),
@@ -130,6 +131,12 @@ let main() =
                         -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
     let ast = convert_ast ast in
     let (ast, type_envs) = check_ast ast in
+
+    let (ast, type_envs) =
+      match !opt_mono_split with
+      | [] -> ast, type_envs
+      | locs -> monomorphise_ast locs ast
+    in
 
     let ast = rewrite_ast ast in
     let out_name = match !opt_file_out with
