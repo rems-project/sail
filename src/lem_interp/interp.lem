@@ -1762,233 +1762,205 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                 | Nothing -> Error l "Internal error, unrecognized read, no reg" end
              | _ -> update_stack a (add_to_top_frame (fun e env -> (E_aux(E_field e id) (l,annot),env))) end)
     | E_vector_access vec i ->
-      resolve_outcome 
-        (interp_main mode t_level l_env l_mem i)
-        (fun iv lm le -> 
-          match detaint iv with
-            | V_unknown -> (Value iv,lm,le)
-            | V_lit (L_aux (L_num n) ln) ->
-              let n = natFromInteger n in
-              resolve_outcome
-                (interp_main mode t_level l_env lm vec)
-                (fun vvec lm le ->
-                  let v_access vvec num = (match (detaint vvec, detaint num) with
-                    | (V_vector _ _ _,V_lit _) -> Value (access_vector vvec n)
-                    | (V_vector_sparse _ _ _ _ _,V_lit _) -> Value (access_vector vvec n)
-                    | (V_register reg, V_lit _) ->
-                      Action (Read_reg reg (Just (n,n))) (mk_hole l annot t_level l_env lm) 
-                    | (V_unknown,_) -> Value V_unknown 
-                    | _ -> Assert_extra.failwith 
-                      ("Vector access error: " ^ (string_of_value vvec) ^ "[" ^ (show n) ^ "]") end) in
-                  (v_access (retaint iv vvec) iv,lm,le))
-                (fun a ->
-                 (*TODO I think this pattern match is no longer necessary *)
-                  match a with
-                    | Action (Read_reg reg Nothing) stack -> 
-                      (match vec with
-                        | (E_aux _ (l,Just(_,Tag_extern _,_,_,_))) -> Action (Read_reg reg (Just(n,n))) stack
-                        | _ -> Action (Read_reg reg Nothing) 
-                          (add_to_top_frame 
-                             (fun v env -> 
-                               let (iv_e, env) = to_exp mode env iv in
-                               (E_aux (E_vector_access v iv_e) (l,annot),env)) stack) end)
-                    | Action (Read_reg reg (Just (o,p))) stack ->
-                      (match vec with
-                        | (E_aux _ (l,Just(_,Tag_extern _,_,_,_))) -> Action (Read_reg reg (Just(n,n))) stack
-                        | _ -> Action (Read_reg reg (Just (o,p))) 
-                          (add_to_top_frame 
-                             (fun v env -> 
-                               let (iv_e, env) = to_exp mode env iv in
-                               (E_aux (E_vector_access v iv_e) (l,annot),env)) stack) end)
-                    | _ -> 
-                      update_stack a 
-                        (add_to_top_frame 
-                           (fun v env -> 
-                             let (iv_e, env) = to_exp mode env iv in
-                             (E_aux (E_vector_access v iv_e) (l,annot), env))) end)
-            | _ -> (Error l "Vector access not given a number for index",lm,l_env) end)
-        (fun a -> update_stack a (add_to_top_frame (fun i env -> (E_aux (E_vector_access vec i) (l,annot), env))))
-    | E_vector_subrange vec i1 i2 ->
-      resolve_outcome 
-        (interp_main mode t_level l_env l_mem i1)
-        (fun i1v lm le ->
-          match detaint i1v with
-            | V_unknown -> (Value i1v,lm,le)
-            | V_lit (L_aux (L_num n1) nl1) -> 
-              resolve_outcome 
-                (interp_main mode t_level l_env lm i2)
-                (fun i2v lm le ->
-                  match detaint i2v with
-                    | V_unknown -> (Value i2v,lm,le)
-                    | V_lit (L_aux (L_num n2) nl2) ->
-                      resolve_outcome 
-                        (interp_main mode t_level l_env lm vec)
-                        (fun vvec lm le ->
-                          let slice = binary_taint (fun v1 v2 -> V_tuple[v1;v2]) i1v i2v in
-                          let take_slice vvec =
-                            let (n1,n2) = (natFromInteger n1,natFromInteger n2) in
-                            (match detaint vvec with
-                             | V_vector _ _ _ -> Value (slice_vector vvec n1 n2)
-                             | V_vector_sparse _ _ _ _ _ -> Value (slice_vector vvec n1 n2)
-                             | V_unknown -> 
-                               let inc = n1 < n2 in
-                               Value (retaint vvec (V_vector n1 (if inc then IInc else IDec) 
-                                                      (List.replicate ((if inc then n1-n2 else n2-n1)+1) V_unknown)))
-                             | V_register reg ->
-                               Action (Read_reg reg (Just (n1,n2))) (mk_hole l annot t_level le lm)
-                             | _ -> (Error l ("Vector slice of non-vector " ^ (string_of_value vvec))) end) in
-                          ((take_slice (retaint slice vvec)), lm,le))
-                        (fun a -> 
-                          let rebuild v env = let (ie1,env) = to_exp mode env i1v in
-                                              let (ie2,env) = to_exp mode env i2v in
-                           (E_aux (E_vector_subrange v ie1 ie2) (l,annot), env) in
-                          (*TODO this pattern match should no longer be needed*)
-                          match a with 
-                            | Action (Read_reg reg Nothing) stack ->
-                              match vec with
-                                | (E_aux _ (l,Just(_,Tag_extern _,_,_,_))) -> 
-                                  Action (Read_reg reg (Just((natFromInteger (get_num i1v)),
-                                                             (natFromInteger (get_num i2v))))) stack
-                                | _ -> Action (Read_reg reg Nothing) (add_to_top_frame rebuild stack) end
-                            | Action (Read_reg reg (Just (o,p))) stack ->
-                              match vec with
-                                | (E_aux _ (l,Just(_,Tag_extern _,_,_,_))) -> 
-                                  Action (Read_reg reg (Just((natFromInteger (get_num i1v)),
-                                                             (natFromInteger (get_num i2v))))) stack
-                                | _ -> Action (Read_reg reg (Just (o,p))) (add_to_top_frame rebuild stack) end
-                            | _ -> update_stack a (add_to_top_frame rebuild) end)
-                | _ -> (Error l "vector subrange did not receive a range value", l_mem, l_env)
-                 end)
-                (fun a -> update_stack a 
-                  (add_to_top_frame 
-                     (fun i2 env -> 
-                       let (ie1,env) = to_exp mode env i1v in
-                       (E_aux (E_vector_subrange vec ie1 i2) (l,annot), env))))
-        | _ -> (Error l "vector subrange did not receive a range value", l_mem, l_env) end) 
-        (fun a -> 
-          update_stack a (add_to_top_frame (fun i1 env -> (E_aux (E_vector_subrange vec i1 i2) (l,annot), env))))
-    | E_vector_update vec i exp ->
-      resolve_outcome 
-        (interp_main mode t_level l_env l_mem i)
-        (fun vi lm le ->
-          (match (detaint vi) with
-            | V_lit (L_aux (L_num n1) ln1) ->
-              (resolve_outcome 
-                 (interp_main mode t_level le lm exp)
-                 (fun vup lm le ->
-                   resolve_outcome 
-                     (interp_main mode t_level le lm vec)
-                     (fun vec lm le ->
-                       let fvup vi vec = (match vec with
-                         | V_vector _ _ _ -> fupdate_vec vec (natFromInteger n1) vup
-                         | V_vector_sparse _ _ _ _ _ -> fupdate_vec vec (natFromInteger n1) vup
-                         | V_unknown -> V_unknown
-                         | _ -> Assert_extra.failwith "Update of vector given non-vector" end) in
-                       (Value (binary_taint fvup vi vec),lm,le))
-                     (fun a -> update_stack a 
-                       (add_to_top_frame 
-                          (fun v env ->
-                            let (eup,env') = (to_exp mode env vup) in 
-                            let (ei, env') = (to_exp mode env' vi) in
-                            (E_aux (E_vector_update v ei eup) (l,annot), env')))))
-                 (fun a -> update_stack a 
-                   (add_to_top_frame 
-                      (fun e env -> 
-                        let (ei, env) = to_exp mode env vi in
-                        (E_aux (E_vector_update vec ei e) (l,annot), env)))))
-            | V_unknown -> (Value vi,lm,l_env)
-            | _ -> Assert_extra.failwith "Update of vector requires number for access" end))
-        (fun a -> update_stack a (add_to_top_frame (fun i env -> (E_aux (E_vector_update vec i exp) (l,annot), env))))
-    | E_vector_update_subrange vec i1 i2 exp ->
-      resolve_outcome 
-        (interp_main mode t_level l_env l_mem i1)
-        (fun vi1 lm le ->
-          match detaint vi1 with
-            | V_unknown -> (Value vi1,lm,le)
-            | V_lit (L_aux (L_num n1) ln1) ->
-              resolve_outcome 
-                (interp_main mode t_level l_env lm i2) 
-                (fun vi2 lm le ->
-                  match detaint vi2 with
-                    | V_unknown -> (Value vi2,lm,le)
-                    | V_lit (L_aux (L_num n2) ln2) ->
-                      resolve_outcome 
-                        (interp_main mode t_level l_env lm exp)
-                        (fun v_rep lm le ->
-                          (resolve_outcome 
-                             (interp_main mode t_level l_env lm vec)
-                             (fun vvec lm le ->
-                               let slice = binary_taint (fun v1 v2 -> V_tuple[v1;v2]) vi1 vi2 in
-                               let fup_v_slice v1 vvec = (match vvec with
-                                 | V_vector _ _ _ -> 
-                                   fupdate_vector_slice vvec v_rep (natFromInteger n1) (natFromInteger n2)
-                                 | V_vector_sparse _ _ _ _ _ -> 
-                                   fupdate_vector_slice vvec v_rep (natFromInteger n1) (natFromInteger n2)
-                                 | V_unknown -> V_unknown
-                                 | _ -> Assert_extra.failwith "Vector update requires vector" end) in
-                               (Value (binary_taint fup_v_slice slice vvec),lm,le))
-                             (fun a -> update_stack a 
-                               (add_to_top_frame 
-                                  (fun v env -> 
-                                    let (e_rep,env') = to_exp mode env v_rep in
-                                    let (ei1, env') = to_exp mode env' vi1 in
-                                    let (ei2, env') = to_exp mode env' vi2 in
-                                    (E_aux (E_vector_update_subrange v ei1 ei2 e_rep) (l,annot), env'))))))
-                        (fun a -> update_stack a 
-                          (add_to_top_frame 
-                             (fun e env -> 
-                               let (ei1,env') = to_exp mode env vi1 in
-                               let (ei2,env') = to_exp mode env' vi2 in
-                               (E_aux (E_vector_update_subrange vec ei1 ei2 e) (l,annot),env'))))
-                    | _ -> Assert_extra.failwith "vector update requires number" end)
-                (fun a -> 
-                  update_stack a (add_to_top_frame 
-                                    (fun i2 env -> 
-                                      let (ei1, env') = to_exp mode env vi1 in
-                                      (E_aux (E_vector_update_subrange vec ei1 i2 exp) (l,annot), env'))))
-            | _ -> Assert_extra.failwith "vector update requires number" end)
-        (fun a -> 
-          update_stack a 
-            (add_to_top_frame (fun i1 env -> (E_aux (E_vector_update_subrange vec i1 i2 exp) (l,annot), env))))
-    | E_vector_append e1 e2 ->
-      resolve_outcome 
-        (interp_main mode t_level l_env l_mem e1)
-        (fun v1 lm le ->
-         match detaint v1 with
-            | V_unknown -> (Value v1,lm,l_env)
-            | _ ->
-              (resolve_outcome 
-                 (interp_main mode t_level l_env lm e2)
-                 (fun v2 lm le ->
-                   let append v1 v2 = (match (v1,v2) with
-                     | (V_vector _ dir vals1, V_vector _ _ vals2) -> 
-                       let vals = vals1++vals2 in
-                       let len = List.length vals in
-                       if is_inc(dir) 
-                       then V_vector 0 dir vals
-                       else V_vector (len-1) dir vals
-                     | (V_vector m dir vals1, V_vector_sparse _ len _ vals2 d) ->
-                       let original_len = List.length vals1 in
-                       let (_,sparse_vals) = List.foldr (fun v (i,vals) -> (i+1,(i,v)::vals)) (m,[]) vals1 in
-                       let sparse_update = List.map (fun (i,v) -> (i+m+original_len,v)) vals2 in
-                       V_vector_sparse m (len+original_len) dir (sparse_vals ++ sparse_update) d
-                     | (V_vector_sparse m len dir vals1 d, V_vector _ _ vals2) ->
-                       let new_len = List.length vals2 in
-                       let (_,sparse_vals) = List.foldr (fun v (i,vals) -> (i+1,(i,v)::vals)) (len,[]) vals2 in
-                       V_vector_sparse m (len+new_len) dir (vals1++sparse_vals) d
-                     | (V_vector_sparse m len dir vals1 d, V_vector_sparse _ new_len _ vals2 _) ->
-                       let sparse_update = List.map (fun (i,v) -> (i+len,v)) vals2 in
-                       V_vector_sparse m (len+new_len) dir (vals1 ++ sparse_update) d
-                     | (V_unknown,_) -> V_unknown (*update to get length from type*)
-                     | (_,V_unknown) -> V_unknown (*see above*)
-                     | _ -> Assert_extra.failwith ("vector concat requires two vectors but given "
-                                                   ^ (string_of_value v1) ^ " " ^ (string_of_value v2)) end) in
-                   (Value (binary_taint append v1 v2),lm,le))
-                 (fun a -> update_stack a (add_to_top_frame 
-                                             (fun e env -> 
-                                               let (e1,env') = to_exp mode env v1 in
-                                               (E_aux (E_vector_append e1 e) (l,annot),env'))))) end)
-        (fun a -> update_stack a (add_to_top_frame (fun e env -> (E_aux (E_vector_append e e2) (l,annot),env))))
+       resolve_outcome
+         (interp_main mode t_level l_env l_mem vec)
+         (fun vvec lm le ->
+           resolve_outcome
+             (interp_main mode t_level l_env lm i)
+             (fun iv lm le ->
+               (match detaint iv with
+                | V_unknown -> (Value iv,lm,le)
+                | V_lit (L_aux (L_num n) ln) ->
+                   let n = natFromInteger n in
+                   let v_access vvec num =
+                     (match (detaint vvec, detaint num) with
+                      | (V_vector _ _ _,V_lit _) -> Value (access_vector vvec n)
+                      | (V_vector_sparse _ _ _ _ _,V_lit _) -> Value (access_vector vvec n)
+                      | (V_register reg, V_lit _) ->
+                         Action (Read_reg reg (Just (n,n))) (mk_hole l annot t_level l_env lm)
+                      | (V_unknown,_) -> Value V_unknown
+                      | _ -> Assert_extra.failwith
+                               ("Vector access error: " ^ (string_of_value vvec) ^ "[" ^ (show n) ^ "]")
+                      end)
+                   in
+                   (v_access (retaint iv vvec) iv,lm,le)
+                | _ -> (Error l "Vector access not given a number for index",lm,l_env)
+                end))
+                 (fun a -> update_stack a (add_to_top_frame(fun i' env ->
+                                               let (vec_e, env') = to_exp mode env vvec in
+                                               (E_aux (E_vector_access vec_e i') (l,annot), env')))))
+             (fun a ->
+               update_stack a (add_to_top_frame (fun vec' env ->
+                                   (E_aux (E_vector_access vec' i) (l,annot), env))))
+         | E_vector_subrange vec i1 i2 ->
+            resolve_outcome
+              (interp_main mode t_level l_env l_mem vec)
+              (fun vvec lm le ->
+                resolve_outcome
+                  (interp_main mode t_level l_env lm i1)
+                  (fun i1v lm le ->
+                    resolve_outcome
+                      (interp_main mode t_level l_env lm i2)
+                      (fun i2v lm le ->
+                        match detaint i1v with
+                        | V_unknown -> (Value i1v,lm,le)
+                        | V_lit (L_aux (L_num n1) nl1) ->
+                           match detaint i2v with
+                           | V_unknown -> (Value i2v,lm,le)
+                           | V_lit (L_aux (L_num n2) nl2) ->
+                              let slice = binary_taint (fun v1 v2 -> V_tuple[v1;v2]) i1v i2v in
+                              let take_slice vvec =
+                                let (n1,n2) = (natFromInteger n1,natFromInteger n2) in
+                                (match detaint vvec with
+                                 | V_vector _ _ _ -> Value (slice_vector vvec n1 n2)
+                                 | V_vector_sparse _ _ _ _ _ -> Value (slice_vector vvec n1 n2)
+                                 | V_unknown ->
+                                    let inc = n1 < n2 in
+                                    Value (retaint vvec (V_vector n1 (if inc then IInc else IDec)
+                                                                  (List.replicate ((if inc then n1-n2 else n2-n1)+1) V_unknown)))
+                                 | V_register reg ->
+                                    Action (Read_reg reg (Just (n1,n2))) (mk_hole l annot t_level le lm)
+                                 | _ -> (Error l ("Vector slice of non-vector " ^ (string_of_value vvec))) end) in
+                              ((take_slice (retaint slice vvec)), lm,le)
+                           | _ -> (Error l "vector subrange did not receive a range value", l_mem, l_env)
+                       end
+                      | _ -> (Error l "vector subrange did not receive a range value", l_mem, l_env)
+                       end)
+                      (fun a -> update_stack a (add_to_top_frame (fun i2' env ->
+                                                    let (vec_e, env') = to_exp mode env vvec in
+                                                    let (i1_e, env'') = to_exp mode env' i1v in
+                                                    (E_aux (E_vector_subrange vec_e i1_e i2') (l,annot), env'')))))
+                  (fun a ->
+                    update_stack a (add_to_top_frame (fun i1' env ->
+                                        let (vec_e, env') = to_exp mode env vvec in
+                                        (E_aux (E_vector_subrange vec_e i1' i2) (l,annot), env')))))
+              (fun a ->
+                update_stack a (add_to_top_frame (fun vec' env ->
+                                    (E_aux (E_vector_subrange vec' i1 i2) (l,annot), env))))
+         | E_vector_update vec i exp ->
+            resolve_outcome
+              (interp_main mode t_level l_env l_mem vec)
+              (fun vvec lm le ->
+                resolve_outcome
+                  (interp_main mode t_level l_env lm i)
+                  (fun vi lm le ->
+                    resolve_outcome
+                      (interp_main mode t_level l_env lm exp)
+                      (fun vup lm le ->
+                        (match (detaint vi) with
+                         | V_lit (L_aux (L_num n1) ln1) ->
+                            let fvup vi vvec =
+                              (match vvec with
+                               | V_vector _ _ _ -> fupdate_vec vvec (natFromInteger n1) vup
+                               | V_vector_sparse _ _ _ _ _ -> fupdate_vec vvec (natFromInteger n1) vup
+                               | V_unknown -> V_unknown
+                               | _ -> Assert_extra.failwith "Update of vector given non-vector"
+                               end)
+                            in
+                            (Value (binary_taint fvup vi vvec),lm,le)
+                         | V_unknown -> (Value vi,lm,le)
+                         | _ -> Assert_extra.failwith "Update of vector requires number for access"
+                         end))
+                      (fun a -> update_stack a (add_to_top_frame (fun exp' env ->
+                                                    let (vec_e, env') = to_exp mode env vvec in
+                                                    let (i_e, env'') = to_exp mode env' vi in
+                                                    (E_aux (E_vector_update vec_e i_e exp') (l,annot), env'')))))
+                  (fun a -> update_stack a (add_to_top_frame (fun i' env ->
+                                                let (vec_e, env') = to_exp mode env vvec in
+                                                (E_aux (E_vector_update vec_e i' exp) (l,annot), env')))))
+              (fun a -> update_stack a (add_to_top_frame (fun vec' env ->
+                                            (E_aux (E_vector_update vec' i exp) (l,annot), env))))
+         | E_vector_update_subrange vec i1 i2 exp ->
+            resolve_outcome
+              (interp_main mode t_level l_env l_mem vec)
+              (fun vvec lm le ->
+                resolve_outcome
+                  (interp_main mode t_level l_env lm i1)
+                  (fun vi1 lm le ->
+                    resolve_outcome
+                      (interp_main mode t_level l_env lm i2)
+                      (fun vi2 lm le ->
+                        resolve_outcome
+                          (interp_main mode t_level l_env lm exp)
+                          (fun v_rep lm le ->
+                            (match detaint vi1 with
+                             | V_unknown -> (Value vi1,lm,le)
+                             | V_lit (L_aux (L_num n1) ln1) ->
+                                (match detaint vi2 with
+                                 | V_unknown -> (Value vi2,lm,le)
+                                 | V_lit (L_aux (L_num n2) ln2) ->
+                                    let slice = binary_taint (fun v1 v2 -> V_tuple[v1;v2]) vi1 vi2 in
+                                    let fup_v_slice v1 vvec =
+                                      (match vvec with
+                                       | V_vector _ _ _ ->
+                                          fupdate_vector_slice vvec v_rep (natFromInteger n1) (natFromInteger n2)
+                                       | V_vector_sparse _ _ _ _ _ ->
+                                          fupdate_vector_slice vvec v_rep (natFromInteger n1) (natFromInteger n2)
+                                       | V_unknown -> V_unknown
+                                       | _ -> Assert_extra.failwith "Vector update requires vector"
+                                       end) in
+                                    (Value (binary_taint fup_v_slice slice vvec),lm,le)
+                                 | _ -> Assert_extra.failwith "vector update requires number"
+                                 end)
+                             | _ -> Assert_extra.failwith "vector update requires number"
+                             end))
+                          (fun a -> update_stack a (add_to_top_frame (fun exp' env ->
+                                                        let (vec_e, env') = to_exp mode env vvec  in
+                                                        let (i1_e, env'') = to_exp mode env' vi1  in
+                                                        let (i2_e, env''') = to_exp mode env'' vi1  in
+                                                        (E_aux (E_vector_update_subrange vec_e i1_e i2_e exp') (l,annot), env''')))))
+                      (fun a -> update_stack a (add_to_top_frame (fun i2' env ->
+                                                    let (vec_e, env') = to_exp mode env vvec  in
+                                                    let (i1_e, env'') = to_exp mode env' vi1  in
+                                                    (E_aux (E_vector_update_subrange vec_e i1_e i2' exp) (l,annot), env'')))))
+                  (fun a -> update_stack a (add_to_top_frame (fun i1' env ->
+                                                let (vec_e, env') = to_exp mode env vvec  in
+                                                (E_aux (E_vector_update_subrange vec_e i1' i2 exp) (l,annot), env')))))
+              (fun a -> update_stack a (add_to_top_frame (fun vec' env ->
+                                            (E_aux (E_vector_update_subrange vec' i1 i2 exp) (l,annot), env))))
+         | E_vector_append e1 e2 ->
+            resolve_outcome
+              (interp_main mode t_level l_env l_mem e1)
+              (fun v1 lm le ->
+                resolve_outcome
+                  (interp_main mode t_level l_env lm e2)
+                  (fun v2 lm le ->
+                    (match detaint v1 with
+                     | V_unknown -> (Value v1,lm,le)
+                     | _ ->
+                        let append v1 v2 =
+                          (match (v1,v2) with
+                           | (V_vector _ dir vals1, V_vector _ _ vals2) ->
+                              let vals = vals1++vals2 in
+                              let len = List.length vals in
+                              if is_inc(dir)
+                              then V_vector 0 dir vals
+                              else V_vector (len-1) dir vals
+                           | (V_vector m dir vals1, V_vector_sparse _ len _ vals2 d) ->
+                              let original_len = List.length vals1 in
+                              let (_,sparse_vals) = List.foldr (fun v (i,vals) -> (i+1,(i,v)::vals)) (m,[]) vals1 in
+                              let sparse_update = List.map (fun (i,v) -> (i+m+original_len,v)) vals2 in
+                              V_vector_sparse m (len+original_len) dir (sparse_vals ++ sparse_update) d
+                           | (V_vector_sparse m len dir vals1 d, V_vector _ _ vals2) ->
+                              let new_len = List.length vals2 in
+                              let (_,sparse_vals) = List.foldr (fun v (i,vals) -> (i+1,(i,v)::vals)) (len,[]) vals2 in
+                              V_vector_sparse m (len+new_len) dir (vals1++sparse_vals) d
+                           | (V_vector_sparse m len dir vals1 d, V_vector_sparse _ new_len _ vals2 _) ->
+                              let sparse_update = List.map (fun (i,v) -> (i+len,v)) vals2 in
+                              V_vector_sparse m (len+new_len) dir (vals1 ++ sparse_update) d
+                           | (V_unknown,_) -> V_unknown (*update to get length from type*)
+                           | (_,V_unknown) -> V_unknown (*see above*)
+                           | _ -> Assert_extra.failwith ("vector concat requires two vectors but given "
+                                                         ^ (string_of_value v1) ^ " " ^ (string_of_value v2))
+                           end)
+                        in
+                        (Value (binary_taint append v1 v2),lm,le)
+                     end))
+                  (fun a -> update_stack a (add_to_top_frame (fun e2' env ->
+                                                let (e1_e, env') = to_exp mode env v1  in
+                                                (E_aux (E_vector_append e1_e e2') (l,annot), env')))))
+              (fun a -> update_stack a (add_to_top_frame (fun e1' env ->
+                                            (E_aux (E_vector_append e1' e2) (l,annot), env))))
     | E_tuple(exps) -> 
       exp_list mode t_level (fun exps env' -> (E_aux (E_tuple exps) (l,annot), env')) V_tuple l_env l_mem [] exps
     | E_vector(exps) ->
