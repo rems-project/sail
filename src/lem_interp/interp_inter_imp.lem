@@ -59,16 +59,16 @@ val extern_vector_value: Interp_ast.value -> list byte_lifted
 val extern_mem_value :   Interp_ast.value -> memory_value
 val extern_reg : Interp_ast.reg_form -> maybe (nat * nat) -> reg_name
 
-let make_interpreter_mode eager_eval tracking_values = 
-  <| Interp.eager_eval = eager_eval; Interp.track_values = tracking_values; Interp.track_lmem = false|>;;
+let make_interpreter_mode eager_eval tracking_values debug =
+  <| Interp.eager_eval = eager_eval; Interp.track_values = tracking_values; Interp.track_lmem = false; Interp.debug = debug; Interp.debug_indent = "" |>;;
 
-let make_mode eager_eval tracking_values =
-  <|internal_mode = make_interpreter_mode eager_eval tracking_values|>;;
-let make_mode_exhaustive =
-  <| internal_mode = <| Interp.eager_eval = true; Interp.track_values = true; Interp.track_lmem = true|> |>;;
+let make_mode eager_eval tracking_values debug =
+  <| internal_mode = make_interpreter_mode eager_eval tracking_values debug |>;;
+let make_mode_exhaustive debug =
+  <| internal_mode = <| Interp.eager_eval = true; Interp.track_values = true; Interp.track_lmem = true; Interp.debug = debug; Interp.debug_indent = "" |> |>;;
 let tracking_dependencies mode = mode.internal_mode.Interp.track_values
-let make_eager_mode mode = <| internal_mode = <|mode.internal_mode with Interp.eager_eval = true |> |>;;
-let make_default_mode = fun () -> <|internal_mode = make_interpreter_mode false false|>;;
+let make_eager_mode mode = <| internal_mode = <| mode.internal_mode with Interp.eager_eval = true |> |>;;
+let make_default_mode = fun () -> <| internal_mode = make_interpreter_mode false false false |>;;
 
 let bitl_to_ibit = function 
   | Bitl_zero -> (Interp_ast.V_lit (L_aux L_zero Interp_ast.Unknown)) 
@@ -355,7 +355,7 @@ type interp_value_return =
   | Ivh_value_after_exn of Interp_ast.value
   | Ivh_error of decode_error
 
-let rec interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen thunk =
+let rec interp_to_value_helper debug arg ivh_mode err_str instr direction registers events exn_seen thunk =
   let errk_str = match ivh_mode with
     | Ivh_translate -> "translate"
     | Ivh_analysis -> "analysis"
@@ -363,7 +363,7 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
     | Ivh_unsupported -> "supported_instructions"
     | Ivh_illegal -> "illegal instruction" end in
   let events_out = match events with [] -> Nothing | _ -> Just events end in
-  let mode = (make_interpreter_mode true false) in
+  let mode = (make_interpreter_mode true false debug) in
   match thunk() with
     | (Interp.Value value,_,_) ->
       if exn_seen
@@ -384,13 +384,13 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
             | _ -> (Ivh_error (Interp_interface.Internal_error ("Value not an option for " ^ errk_str)), events_out) end) end)
     | (Interp.Error l msg,_,_) -> (Ivh_error (Interp_interface.Internal_error msg), events_out)
     | (Interp.Action (Interp.Return value) stack,_,_) ->
-      interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
+      interp_to_value_helper debug arg ivh_mode err_str instr direction registers events exn_seen
         (fun _ -> Interp.resume mode stack (Just value))
     | (Interp.Action (Interp.Call_extern i value) stack,_,_) ->
       match List.lookup i (Interp_lib.library_functions direction) with
         | Nothing -> (Ivh_error (Interp_interface.Internal_error ("External function not available " ^ i)), events_out)
         | Just f  ->
-          interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
+          interp_to_value_helper debug arg ivh_mode err_str instr direction registers events exn_seen
                                  (fun _ -> Interp.resume mode stack (Just (f value)))
       end
     | (Interp.Action (Interp.Fail v) stack, _, _) ->
@@ -399,7 +399,7 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
         (Ivh_error (Interp_interface.Internal_error ("Assert failed: " ^ s)), events_out)
       | _ -> (Ivh_error (Interp_interface.Internal_error "Assert failed"), events_out) end
     | (Interp.Action (Interp.Exit exp) stack,_,_) ->
-      interp_to_value_helper arg ivh_mode err_str instr direction registers events true
+      interp_to_value_helper debug arg ivh_mode err_str instr direction registers events true
         (fun _ -> Interp.resume mode (Interp.set_in_context stack exp) Nothing)
     | (Interp.Action (Interp.Read_reg r slice) stack,_,_) ->
       let rname = match r with 
@@ -418,12 +418,12 @@ let rec interp_to_value_helper arg ivh_mode err_str instr direction registers ev
             | Just v ->
               let value = intern_reg_value v in
 (*              let _ = Interp.debug_print ("Register read of " ^ rname ^ " returning value " ^ (Interp.string_of_value value) ^ "\n") in *)
-              interp_to_value_helper arg ivh_mode err_str instr direction registers events exn_seen
+              interp_to_value_helper debug arg ivh_mode err_str instr direction registers events exn_seen
                 (fun _ -> Interp.resume mode stack (Just value)) end end)      
     | (Interp.Action (Interp.Write_reg r slice value) stack,_,_) ->
       let ext_reg = extern_reg r slice in
       let reg_value = extern_reg_value ext_reg value in
-      interp_to_value_helper arg ivh_mode err_str instr direction registers ((E_write_reg ext_reg reg_value)::events)
+      interp_to_value_helper debug arg ivh_mode err_str instr direction registers ((E_write_reg ext_reg reg_value)::events)
         exn_seen (fun _ -> Interp.resume mode stack Nothing)
     | (Interp.Action (Interp.Read_mem _ _ _) _,_,_) ->
       (Ivh_error (Interp_interface.Internal_error ("Read memory request in a " ^ errk_str)), events_out)
@@ -450,25 +450,26 @@ let call_external_functions direction outcome =
         | Just f -> Just (f value) end
     | _ -> Nothing end
 
-let build_context defs reads writes write_eas write_vals barriers excl_res externs =
+let build_context debug defs reads writes write_eas write_vals barriers excl_res externs =
   (*TODO add externs to to_top_env*)
-  match Interp.to_top_env call_external_functions defs with 
-    | (_,((Interp.Env _ _ dir _ _ _ _ _) as context)) -> 
+  match Interp.to_top_env debug call_external_functions defs with 
+    | (_,((Interp.Env _ _ dir _ _ _ _ _ debug) as context)) -> 
       Context context (if Interp.is_inc(dir) then D_increasing else D_decreasing)
         reads writes write_eas write_vals barriers excl_res externs end
 
 
 let translate_address top_level end_flag thunk_name registers address =
   let (Address bytes i) = address in
-  let mode = make_mode true false in
-  let int_mode = mode.internal_mode in
   let (Context top_env direction _ _ _ _ _ _ _ _ _) = top_level in
+  let (Interp.Env _ _ _ _ _ _ _ _ debug) = top_env in
+  let mode = make_mode true false debug in
+  let int_mode = mode.internal_mode in
   let intern_val = intern_mem_value mode direction (memory_value_of_address end_flag address) in
   let val_str = Interp.string_of_value intern_val in
   let (arg,_) = Interp.to_exp int_mode Interp.eenv intern_val in
   let internal_direction = if direction = D_increasing then Interp_ast.IInc else Interp_ast.IDec in
   let (address_error,events) =
-    interp_to_value_helper (Just (Opcode bytes)) Ivh_translate val_str ("",[]) internal_direction
+    interp_to_value_helper debug (Just (Opcode bytes)) Ivh_translate val_str ("",[]) internal_direction
       registers [] false
       (fun _ -> Interp.resume 
         int_mode 
@@ -504,15 +505,16 @@ let intern_instruction direction (name,parms) =
     (Interp_ast.V_tuple (List.map (value_of_instruction_param direction) parms))
 
 let instruction_analysis top_level end_flag thunk_name regn_to_reg_details registers instruction =
-  let mode = make_mode true false in
-  let int_mode = mode.internal_mode in
   let (Context top_env direction _ _ _ _ _ _ _ _ _) = top_level in
+  let (Interp.Env _ _ _ _ _ _ _ _ debug) = top_env in
+  let mode = make_mode true false debug in
+  let int_mode = mode.internal_mode in
   let intern_val = intern_instruction direction instruction in
   let val_str = Interp.string_of_value intern_val in
   let (arg,_) = Interp.to_exp int_mode Interp.eenv intern_val in
   let internal_direction = if direction = D_increasing then Interp_ast.IInc else Interp_ast.IDec in
   let (analysis_or_error,events) =
-    interp_to_value_helper Nothing Ivh_analysis val_str ("",[]) internal_direction
+    interp_to_value_helper debug Nothing Ivh_analysis val_str ("",[]) internal_direction
       registers [] false
       (fun _ -> Interp.resume 
         int_mode 
@@ -646,7 +648,7 @@ end
 
 
 let interp_value_to_instr_external top_level instr = 
-  let (Context (Interp.Env _ instructions _ _ _ _ _ _) _ _ _ _ _ _ _ _ _ _) = top_level in
+  let (Context (Interp.Env _ instructions _ _ _ _ _ _ debug) _ _ _ _ _ _ _ _ _ _) = top_level in
   match instr with
   | Interp_ast.V_ctor (Id_aux (Id i) _) _ _ parm ->
      match (find_instruction i instructions) with
@@ -670,14 +672,14 @@ let interp_value_to_instr_external top_level instr =
 
 
 let decode_to_instruction top_level registers value : instruction_or_decode_error = 
-  let mode = make_interpreter_mode true false in
-  let (Context ((Interp.Env _ instructions _ _ _ _ _ _) as top_env) direction _ _ _ _ _ _ _ _ _) = top_level in
+  let (Context ((Interp.Env _ instructions _ _ _ _ _ _ debug) as top_env) direction _ _ _ _ _ _ _ _ _) = top_level in
+  let mode = make_interpreter_mode true false debug in
   let intern_val = intern_opcode direction value in
   let val_str = Interp.string_of_value intern_val in
   let (arg,_) = Interp.to_exp mode Interp.eenv intern_val in
   let internal_direction = if direction = D_increasing then Interp_ast.IInc else Interp_ast.IDec in
   let (instr_decoded_error,events) =
-    interp_to_value_helper (Just value) Ivh_decode val_str ("",[]) internal_direction registers [] false
+    interp_to_value_helper debug (Just value) Ivh_decode val_str ("",[]) internal_direction registers [] false
       (fun _ -> Interp.resume 
           mode 
           (Interp.Thunk_frame 
@@ -687,7 +689,7 @@ let decode_to_instruction top_level registers value : instruction_or_decode_erro
     | Ivh_value instr -> 
       let instr_external = interp_value_to_instr_external top_level instr in
       let (instr_decoded_error,events) =
-        interp_to_value_helper (Just value) Ivh_unsupported val_str instr_external internal_direction
+        interp_to_value_helper debug (Just value) Ivh_unsupported val_str instr_external internal_direction
           registers [] false
         (fun _ -> Interp.resume 
             mode
@@ -1028,9 +1030,9 @@ let rec ie_loop mode register_values (IState interp_state context) =
       | _ -> Assert_extra.failwith "interp_to_outcome may have produced a nondet action"
       end ;;
   
-val interp_exhaustive : maybe (list (reg_name * register_value)) -> instruction_state -> list event
-let interp_exhaustive register_values i_state = 
-  let mode = make_mode_exhaustive in
+val interp_exhaustive : bool -> maybe (list (reg_name * register_value)) -> instruction_state -> list event
+let interp_exhaustive debug register_values i_state =
+  let mode = make_mode_exhaustive debug in
   match ie_loop mode register_values i_state with
     | (events,_) -> events
 end
@@ -1086,7 +1088,7 @@ and state_to_outcome_s pp_instruction_state mode state =
   let next_outcome = outcome_to_outcome pp_instruction_state mode next_outcome' in
   (next_outcome, 
    Just ((pp_instruction_state state), 
-         (fun env -> interp_exhaustive (Just env) state))
+         (fun env -> interp_exhaustive mode.internal_mode.Interp.debug (Just env) state))
   )
 
 val initial_outcome_s_of_instruction : (instruction_state -> unit -> (string * string)) -> context -> interp_mode -> instruction -> Sail_impl_base.outcome_s unit

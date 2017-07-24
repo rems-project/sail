@@ -292,7 +292,7 @@ let run
         interact mode env stack
       | "e" | "exh" | "exhaust" ->
         interactf "interpreting exhaustively from current state\n";
-        let events = interp_exhaustive None stack in
+        let events = interp_exhaustive false None stack in
         interactf "%s" (format_events events);
         interact mode env stack
       | "c" | "cont" | "continuation" ->
@@ -433,7 +433,7 @@ let run
               (List.combine nondets (List.map (fun _ -> Random.bits ()) nondets)) in
           show "nondeterministic evaluation begun" "" "" "";
           let (_,_,_,env') = List.fold_right (fun (next,_) (_,_,_,env') -> 
-              loop mode env' (interp0 (make_mode (mode=Run) !track_dependencies) next))
+              loop mode env' (interp0 (make_mode (mode=Run) !track_dependencies false) next))
               choose_order (false,mode,!track_dependencies,env'); in
           show "nondeterministic evaluation ended" "" "" "";
           (step next,env',next)
@@ -445,7 +445,7 @@ let run
           else begin
             show "undefined triggered a non_det" "" "" "";
             let (_,_,_,env') = List.fold_right (fun (next,_) (_,_,_,env') -> 
-              loop mode env' (interp0 (make_mode (mode=Run) !track_dependencies) next))
+              loop mode env' (interp0 (make_mode (mode=Run) !track_dependencies false) next))
               choose_order (false,mode,!track_dependencies,env'); in
             (step i_state,env',i_state) end
         | Escape0(Some e,_) ->
@@ -462,11 +462,11 @@ let run
         | Write_memv1 _ -> assert false)
         (*| _ -> assert false*)
       in
-      loop mode' env' (Interp_inter_imp.interp0 (make_mode (mode' = Run) !track_dependencies) next) in
+      loop mode' env' (Interp_inter_imp.interp0 (make_mode (mode' = Run) !track_dependencies false) next) in
   let mode = match mode with
   | None -> if eager_eval then Run else Step
   | Some m -> m in
-  let imode = make_mode eager_eval !track_dependencies in
+  let imode = make_mode eager_eval !track_dependencies false in
   let (IState(instr_state,context)) = istate in
   let (top_exp,(top_env,top_mem)) = top_frame_exp_state instr_state in
   interactf "%s: %s %s\n" (grey name) (blue "evaluate") 

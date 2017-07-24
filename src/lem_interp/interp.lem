@@ -45,6 +45,7 @@ import Map
 import Map_extra (* For 'find' instead of using lookup and maybe types, as we know it cannot fail *)
 import Set_extra (* For 'to_list' because map only goes to set *)
 import List_extra (* For 'nth' and 'head' where we know that they cannot fail *)
+open import Show
 open import Show_extra (* for 'show' to convert nat to string) *)
 open import String_extra (* for chr *)
 import Assert_extra (*For failwith when partiality is known to be unreachable*)
@@ -53,6 +54,15 @@ open import Sail_impl_base
 open import Interp_ast
 open import Interp_utilities
 open import Instruction_extractor
+
+(* TODO: upstream into Lem *)
+val stringFromTriple : forall 'a 'b 'c. ('a -> string) -> ('b -> string) -> ('c -> string) -> ('a * 'b * 'c) -> string
+let stringFromTriple showX showY showZ (x,y,z) =
+  "(" ^ showX x ^ ", " ^ showY y ^ ", " ^ showZ z ^ ")"
+
+instance forall 'a 'b 'c. Show 'a, Show 'b, Show 'c => (Show ('a * 'b * 'c))
+  let show = stringFromTriple show show show
+end
 
 val debug_print : string -> unit
 declare ocaml target_rep function debug_print s = `Printf.eprintf` "%s" s
@@ -172,18 +182,21 @@ let rec debug_print_value v = match v with
   | V_record t vals ->
      let ppidval (id,v) = "(" ^ (get_id id) ^ "," ^ debug_print_value v ^ ")" in
      "V_record t [" ^ debug_print_value_list (List.map ppidval vals) ^ "]"
-  | V_ctor id t k vals ->
+  | V_ctor id t k v' ->
      "V_ctor " ^ (get_id id) ^ " t " ^
        (match k with | C_Enum n -> "(C_Enum " ^ show n ^ ")"
                      | C_Union -> "C_Union" end) ^
-         "(" ^ debug_print_value v ^ ")"
+         "(" ^ debug_print_value v' ^ ")"
   | V_unknown -> "V_unknown"
   | V_register r -> "V_register (" ^ string_of_reg_form r ^ ")"
   | V_register_alias _ _ -> "V_register_alias _ _"
   | V_track v rs -> "V_track (" ^ debug_print_value v ^ ") _"
   end
-                                   
-                                   
+
+instance (Show value)
+  let show v = debug_print_value v
+end
+
 let rec {coq;ocaml} id_value_eq strict (i, v) (i', v') = i = i' && value_eq strict v v'
 and value_eq strict left right =
   match (left, right) with
@@ -302,11 +315,19 @@ end
 let env_to_string (LEnv c env) =
   "(LEnv " ^ show c ^ " [" ^
   (list_to_string ", " (fun (k,v) -> k ^ " -> " ^ (string_of_value v)) (Map_extra.toList env)) ^
-  "])"
+    "])"
+
+instance (Show lenv)
+  let show env = env_to_string env
+end
 
 let mem_to_string (LMem f c mem _) =
   "(LMem " ^ f ^ " " ^ show c ^
   " [" ^ (list_to_string ", " (fun (k,v) -> show k ^ " -> " ^ (string_of_value v)) (Map_extra.toList mem)) ^ "])"
+
+instance (Show lmem)
+  let show mem = mem_to_string mem
+end
 
 type sub_reg_map = map string index_range
 
@@ -327,6 +348,7 @@ type top_level =
         * map string typ (*typedef union constructors *)
         * map string sub_reg_map (*sub register mappings*)
         * map string (alias_spec tannot) (*register aliases*)
+        * bool (* debug? *)
 
 type action = 
  | Read_reg of reg_form * maybe (nat * nat)
@@ -363,10 +385,246 @@ type outcome =
  | Action of action * stack
  | Error of l * string 
 
-type interp_mode = <| eager_eval : bool; track_values : bool; track_lmem : bool|>
+let string_of_id id' =
+  (match id' with
+   | Id_aux id _ ->
+      (match id with
+       | Id s -> s
+       | DeIid s -> s
+       end)
+   end)
+
+instance (Show id)
+  let show = string_of_id
+end
+
+let string_of_kid kid' =
+  (match kid' with
+   | Kid_aux kid _ ->
+     (match kid with
+      | Var s -> s
+      end)
+   end)
+
+instance (Show kid)
+  let show = string_of_kid
+end
+
+let string_of_reg_id (RI_aux (RI_id id ) _) = string_of_id id
+
+instance forall 'a. (Show reg_id 'a)
+  let show = string_of_reg_id
+end
+
+let rec string_of_typ typ' =
+  (match typ' with
+   | Typ_aux typ _ ->
+      (match typ with
+       | Typ_wild -> "(Typ_wild)"
+       | Typ_id id -> "(Typ_id " ^ (string_of_id id) ^ ")"
+       | Typ_var kid -> "(Typ_var " ^ (string_of_kid kid) ^ ")"
+       | Typ_fn typ1 typ2 eff -> "(Typ_fn _ _ _)"
+       | Typ_tup typs -> "(Typ_tup [" ^ String.concat "; " (List.map string_of_typ typs) ^ "])"
+       | Typ_app id args -> "(Typ_app " ^ string_of_id id ^ " _)"
+       end)
+   end)
+
+instance (Show typ)
+  let show = string_of_typ
+end
+
+let rec string_of_lexp l' =
+  (match l' with
+   | LEXP_aux l _ ->
+      (match l with
+       | LEXP_id id -> "(LEXP_id " ^ string_of_id id ^ ")"
+       | LEXP_memory id exps -> "(LEXP_memory " ^ string_of_id id ^ " _)"
+       | LEXP_cast typ id -> "(LEXP_cast " ^ string_of_typ typ ^ " " ^ string_of_id id ^ ")"
+       | LEXP_tup lexps -> "(LEXP_tup [" ^ String.concat "; " (List.map string_of_lexp lexps) ^ "])"
+       | LEXP_vector lexps exps -> "(LEXP_vector _ _)"
+       | LEXP_vector_range lexp exp1 exp2 -> "(LEXP_vector_range _ _ _)"
+       | LEXP_field lexp id -> "(LEXP_field " ^ string_of_lexp lexp ^ "." ^ string_of_id id ^ ")"
+       end)
+   end)
+
+instance forall 'a. (Show lexp 'a)
+  let show = string_of_lexp
+end
+
+let string_of_lit l' =
+  (match l' with
+   | L_aux l _ ->
+      (match l with
+       | L_unit -> "()"
+       | L_zero -> "0"
+       | L_one -> "1"
+       | L_true -> "true"
+       | L_false -> "false"
+       | L_num n -> "0d" ^ (show n)
+       | L_hex s -> "0x" ^ s
+       | L_bin s -> "0b" ^ s
+       | L_undef -> "undef"
+       | L_string s -> "\"" ^ s ^ "\""
+       end)
+   end)
+
+instance (Show lit)
+  let show = string_of_lit
+end
+
+let string_of_order o' =
+  (match o' with
+   | Ord_aux o _ ->
+      (match o with
+       | Ord_var kid -> string_of_kid kid
+       | Ord_inc -> "inc"
+       | Ord_dec -> "dec"
+       end)
+   end)
+
+instance (Show order)
+  let show = string_of_order
+end
+
+let rec string_of_exp e' =
+  (match e' with
+   | E_aux e _ ->
+      (match e with
+       | E_block exps -> "(E_block [" ^ String.concat "; " (List.map string_of_exp exps) ^ "])"
+       | E_nondet exps -> "(E_nondet [" ^ String.concat "; " (List.map string_of_exp exps) ^ "])"
+       | E_id id -> "(E_id \"" ^ string_of_id id ^ "\")"
+       | E_lit lit -> "(E_lit " ^ string_of_lit lit ^ ")"
+       | E_cast typ exp -> "(E_cast " ^ string_of_typ typ ^ " " ^ string_of_exp exp ^ ")"
+       | E_app id exps -> "(E_app " ^ string_of_id id ^ " [" ^ String.concat "; " (List.map string_of_exp exps) ^ "])"
+       | E_app_infix exp1 id exp2 -> "(E_app_infix " ^ string_of_exp exp1 ^ " " ^ string_of_id id ^ " " ^ string_of_exp exp2 ^ ")"
+       | E_tuple exps -> "(E_tuple [" ^ String.concat "; " (List.map string_of_exp exps) ^ "])"
+       | E_if cond thn els -> "(E_if " ^ (string_of_exp cond) ^ " ? " ^ (string_of_exp thn) ^ " : " ^ (string_of_exp els) ^ ")"
+       | E_for id from to_ by order exp -> "(E_for " ^ string_of_id id ^ " " ^ string_of_exp from ^ " " ^ string_of_exp to_ ^ " " ^ string_of_exp by ^ " " ^ string_of_order order ^ " " ^ string_of_exp exp ^ ")"
+       | E_vector exps -> "(E_vector [" ^ String.concat "; " (List.map string_of_exp exps) ^ "])"
+       | E_vector_indexed _ _ -> "(E_vector_indexed)"
+       | E_vector_access exp1 exp2 -> "(E_vector_access " ^ string_of_exp exp1 ^ " " ^ string_of_exp exp2 ^ ")"
+       | E_vector_subrange exp1 exp2 exp3 -> "(E_vector_subrange " ^ string_of_exp exp1 ^ " " ^ string_of_exp exp2 ^ " " ^ string_of_exp exp3 ^ ")"
+       | E_vector_update _ _ _ -> "(E_vector_update)"
+       | E_vector_update_subrange _ _ _ _ -> "(E_vector_update_subrange)"
+       | E_vector_append exp1 exp2 -> "(E_vector_append " ^ string_of_exp exp1 ^ " " ^ string_of_exp exp2 ^ ")"
+       | E_list exps -> "(E_list [" ^ String.concat "; " (List.map string_of_exp exps) ^ "])"
+       | E_cons exp1 exp2 -> "(E_cons " ^ string_of_exp exp1 ^ " :: " ^ string_of_exp exp2 ^ ")"
+       | E_record _ -> "(E_record)"
+       | E_record_update _ _ -> "(E_record_update)"
+       | E_field _ _ -> "(E_field)"
+       | E_case _ _ -> "(E_case)"
+       | E_let _ _ -> "(E_let)"
+       | E_assign lexp exp -> "(E_assign " ^ string_of_lexp lexp ^ " := " ^ string_of_exp exp ^ ")"
+       | E_sizeof _ -> "(E_sizeof _)"
+       | E_exit exp -> "(E_exit " ^ string_of_exp exp ^ ")"
+       | E_return exp -> "(E_return " ^ string_of_exp exp ^ ")"
+       | E_assert cond msg -> "(E_assert " ^ string_of_exp cond ^ " " ^ string_of_exp msg ^ ")"
+       | E_internal_cast _ _ -> "(E_internal_cast _ _)"
+       | E_internal_exp _ -> "(E_internal_exp _)"
+       | E_sizeof_internal _ -> "(E_size _)"
+       | E_internal_exp_user _ _ -> "(E_internal_exp_user _ _)"
+       | E_comment _ -> "(E_comment _)"
+       | E_comment_struc _ -> "(E_comment_struc _)"
+       | E_internal_let _ _ _ -> "(E_internal_let _ _ _)"
+       | E_internal_plet _ _ _ -> "(E_internal_plet _ _ _)"
+       | E_internal_return _ -> "(E_internal_return _)"
+       | E_internal_value value -> "(E_internal_value " ^ debug_print_value value ^ ")"
+       end)
+   end)
+
+instance forall 'a. (Show (exp 'a))
+  let show = string_of_exp
+end
+
+let string_of_alias_spec (AL_aux _as _) =
+  (match _as with
+   | AL_subreg reg_id id -> "(AL_subreg " ^ (show reg_id) ^ " " ^ (show id) ^ ")"
+   | AL_bit reg_id exp -> "(AL_bit " ^ (show reg_id) ^ " " ^ (show exp) ^ ")"
+   | AL_slice reg_id exp1 exp2 -> "(AL_slice " ^ (show reg_id) ^ " " ^ (show exp1) ^ " " ^ (show exp2) ^ ")"
+   | AL_concat reg_id1 reg_id2 -> "(AL_concat " ^ (show reg_id1) ^ " " ^ (show reg_id2) ^ ")"
+   end)
+
+instance forall 'a. (Show alias_spec 'a)
+  let show = string_of_alias_spec
+end
+
+let string_of_quant_item (QI_aux qi _) =
+  (match qi with
+   | QI_id kinded_id -> "(QI_id _)"
+   | QI_const nc -> "(QI_const _)"
+   end)
+
+instance (Show quant_item)
+  let show = string_of_quant_item
+end
+
+let string_of_typquant (TypQ_aux tq _) =
+  (match tq with
+   | TypQ_tq qis -> "(TypQ_tq [" ^ (String.concat "; " (List.map show qis)) ^ "]"
+   | TypQ_no_forall -> "TypQ_no_forall"
+   end)
+
+instance (Show typquant)
+  let show = string_of_typquant
+end
+
+let string_of_typschm (TypSchm_aux (TypSchm_ts typquant typ) _) =
+  "(TypSchm " ^ (show typquant) ^ " " ^ (show typ) ^ ")"
+
+instance (Show typschm)
+  let show = string_of_typschm
+end
+
+let rec string_of_pat (P_aux pat _) =
+  (match pat with
+   | P_lit lit -> "(P_lit " ^ show lit ^ ")"
+   | P_wild -> "P_wild"
+   | P_as pat' id -> "(P_as " ^ string_of_pat pat' ^ " " ^ show id ^ ")"
+   | P_typ typ pat' -> "(P_typ" ^ show typ ^ " " ^ string_of_pat pat' ^ ")"
+   | P_id id -> "(P_id " ^ show id ^ ")"
+   | P_app id pats -> "(P_app " ^ show id ^ " [" ^ String.concat "; " (List.map string_of_pat pats) ^ "])"
+   | P_record _ _ -> "(P_record _ _)"
+   | P_vector pats -> "(P_vector [" ^ String.concat "; " (List.map string_of_pat pats) ^ "])"
+   | P_vector_indexed _ -> "(P_vector_indexed _)"
+   | P_vector_concat pats -> "(P_vector_concat [" ^ String.concat "; " (List.map string_of_pat pats) ^ "])"
+   | P_tup pats -> "(P_tup [" ^ String.concat "; " (List.map string_of_pat pats) ^ "])"
+   | P_list pats -> "(P_list [" ^ String.concat "; " (List.map string_of_pat pats) ^ "])"
+   end)
+
+instance forall 'a. (Show pat 'a)
+  let show = string_of_pat
+end
+
+let string_of_letbind (LB_aux lb _) =
+  (match lb with
+   | LB_val_explicit ts pat exp -> "(LB_val_explicit " ^ (show ts) ^ " " ^ (show pat) ^ " " ^ (show exp) ^ ")"
+   | LB_val_implicit pat exp -> "(LB_val_implicit " ^ (show pat) ^ " " ^ (show exp) ^ ")"
+   end)
+
+instance forall 'a. (Show letbind 'a)
+  let show = string_of_letbind
+end
+
+type interp_mode = <| eager_eval : bool; track_values : bool; track_lmem : bool; debug : bool; debug_indent : string |>
+
+let indent_mode mode = if mode.debug then <| mode with debug_indent = "  " ^ mode.debug_indent |> else mode
+
+val debug_fun_enter : interp_mode -> string -> list string -> unit
+let debug_fun_enter mode name args =
+  if mode.debug then
+    debug_print (mode.debug_indent ^ ":: " ^ name ^ " args: [" ^ (String.concat "; " args) ^ "]\n")
+  else
+    ()
+
+val debug_fun_exit : forall 'a. Show 'a => interp_mode -> string -> 'a -> unit
+let debug_fun_exit mode name retval =
+  if mode.debug then
+    debug_print (mode.debug_indent ^ "=> " ^ name ^ " returns: " ^ (show retval) ^ "\n")
+  else
+    ()
 
 (* Evaluates global let binds and prepares the context for individual expression evaluation in the current model *)
-val to_top_env : (i_direction -> outcome -> maybe value) -> defs tannot -> (maybe outcome * top_level)
+val to_top_env : bool -> (i_direction -> outcome -> maybe value) -> defs tannot -> (maybe outcome * top_level)
 val get_default_direction : top_level -> i_direction
 
 (* interprets the exp sequentially in the presence of a set of top level definitions and returns a value, a memory request, or other external action *)
@@ -1103,7 +1361,7 @@ end
 (* match_pattern returns a tuple of (pattern_matches? , pattern_passed_due_to_unknown?, env_of_pattern *)
 val match_pattern : top_level -> pat tannot -> value -> bool * bool * lenv
 let rec match_pattern t_level (P_aux p (_, annot)) value_whole =
-  let (Env fdefs instrs default_dir lets regs ctors subregs aliases) = t_level in 
+  let (Env fdefs instrs default_dir lets regs ctors subregs aliases debug) = t_level in
   let (t,tag,cs) = match annot with
     | Just(t,tag,cs,e,_) -> (t,tag,cs)
     | Nothing -> (T_var "fresh",Tag_empty,[]) end in
@@ -1430,7 +1688,43 @@ let resolve_outcome to_match value_thunk action_thunk =
     | (Value v,lm,le) -> value_thunk v lm le
     | (Action action stack,lm,le) -> (action_thunk (Action action stack), lm,le)
     | (Error l s,lm,le) -> (Error l s,lm,le)
-  end
+end
+
+let string_of_action a =
+  (match a with
+  | Read_reg r _ -> "(Read_reg " ^ string_of_reg_form r ^ " _)"
+  | Write_reg r _ _ -> "(Write_reg " ^ string_of_reg_form r ^ " _ _)"
+  | Read_mem id v _ -> "(Read_mem " ^ string_of_id id ^ " " ^ debug_print_value v ^ " _)"
+  | Read_mem_tagged id v _ -> "(Read_mem_tagged " ^ string_of_id id ^ " " ^ debug_print_value v ^ " _)"
+  | Write_mem _ _ _ _ -> "(Write_mem _ _ _ _)"
+  | Write_ea id v -> "(Write_ea " ^ string_of_id id ^ " " ^ debug_print_value v ^ " _)"
+  | Write_memv _ _ _ -> "(Write_memv _ _ _)"
+  | Excl_res id -> "(Excl_res " ^ string_of_id id ^ ")"
+  | Write_memv_tagged _ _ _ _ -> "(Write_memv_tagged _ _ _ _)"
+  | Barrier id v -> "(Barrier " ^ string_of_id id ^ " " ^ debug_print_value v ^ ")"
+  | Footprint id v -> "(Footprint " ^ string_of_id id ^ " " ^ debug_print_value v ^ ")"
+  | Nondet exps _ -> "(Nondet [" ^ String.concat "; " (List.map string_of_exp exps) ^ "] _)"
+  | Call_extern s v -> "(Call_extern \"" ^ s ^ "\" " ^ debug_print_value v ^ ")"
+  | Return v -> "(Return " ^ debug_print_value v ^ ")"
+  | Exit exp -> "(Exit " ^ string_of_exp exp ^ ")"
+  | Fail v -> "(Fail " ^ debug_print_value v ^ ")"
+  | Step _ _ _ -> "(Step _ _ _)"
+  end)
+
+instance (Show action)
+  let show action = string_of_action action
+end
+
+let string_of_outcome outcome =
+  (match outcome with
+  | Value v -> "(Value " ^ debug_print_value v ^ ")"
+  | Action a _ -> "(Action " ^ string_of_action a ^ " _)"
+  | Error _ s -> "(Error _ \"" ^ s ^ "\")"
+  end)
+
+instance (Show outcome)
+  let show outcome = string_of_outcome outcome
+end
 
 let update_stack o fn = match o  with
   | Action act stack -> Action act (fn stack)
@@ -1448,7 +1742,7 @@ let get_num v = match v with
   | _ -> 0 end
 
 (*Interpret a list of expressions, tracking local state but evaluating in the same scope (i.e. not tracking env) *)
-let rec exp_list mode t_level build_e build_v l_env l_mem vals exps =
+let rec __exp_list mode t_level build_e build_v l_env l_mem vals exps =
   match exps with
   | [ ] -> (Value (build_v vals), l_mem, l_env)
   | e::exps -> 
@@ -1461,8 +1755,14 @@ let rec exp_list mode t_level build_e build_v l_env l_mem vals exps =
                                                   (e,env''))))
   end
 
-and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
-  let (Env fdefs instrs default_dir lets regs ctors subregs aliases) = t_level in 
+and exp_list mode t_level build_e build_v l_env l_mem vals exps =
+  let _ = debug_fun_enter mode "exp_list" [show vals; show exps] in
+  let retval = __exp_list (indent_mode mode) t_level build_e build_v l_env l_mem vals exps in
+  let _ = debug_fun_exit mode "exp_list" retval in
+  retval
+
+and __interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
+  let (Env fdefs instrs default_dir lets regs ctors subregs aliases debug) = t_level in
   let (typ,tag,ncs,effect,reffect) = match annot with 
     | Nothing ->
       (T_var "fresh_v", Tag_empty,[],(Effect_aux (Effect_set []) Unknown),(Effect_aux (Effect_set []) Unknown))
@@ -2283,8 +2583,14 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
   | _ -> (Error l "Internal expression escaped to interpreter", l_mem, l_env)
   end
 
+and interp_main mode t_level l_env l_mem exp =
+  let _ = debug_fun_enter mode "interp_main" [show exp] in
+  let retval = __interp_main (indent_mode mode) t_level l_env l_mem exp in
+  let _ = debug_fun_exit mode "interp_main" retval in
+  retval
+
 (*TODO shrink location information on recursive calls *)
- and interp_block mode t_level init_env local_env local_mem l tannot exps =
+and __interp_block mode t_level init_env local_env local_mem l tannot exps =
    match exps with
     | [] -> (Value (V_lit (L_aux (L_unit) Unknown)), local_mem, init_env)
     | [exp] -> 
@@ -2299,12 +2605,18 @@ and interp_main mode t_level l_env l_mem (E_aux exp (l,annot)) =
                         else debug_out Nothing Nothing (E_aux (E_block exps) (l,tannot)) t_level lm le)
                       (fun a -> update_stack a 
                         (add_to_top_frame (fun e env-> (E_aux (E_block(e::exps)) (l,tannot), env))))
-    end
+   end
 
-and create_write_message_or_update mode t_level value l_env l_mem is_top_level
+and interp_block mode t_level init_env local_env local_mem l tannot exps =
+  let _ = debug_fun_enter mode "interp_block" [show exps] in
+  let retval = __interp_block (indent_mode mode) t_level init_env local_env local_mem l tannot exps in
+  let _ = debug_fun_exit mode "interp_block" retval in
+  retval
+
+and __create_write_message_or_update mode t_level value l_env l_mem is_top_level
     ((LEXP_aux lexp (l,annot)):lexp tannot) 
     : ((outcome * lmem * lenv) * maybe ((exp tannot) -> lenv -> ((lexp tannot) * lenv)) * maybe value) =
-   let (Env fdefs instrs default_dir lets regs ctors subregs aliases) = t_level in
+   let (Env fdefs instrs default_dir lets regs ctors subregs aliases debug) = t_level in
    let (typ,tag,ncs,ef,efr) = match annot with 
      | Nothing -> (T_var "fresh_v", Tag_empty, [],
                    (Effect_aux (Effect_set []) Unknown),(Effect_aux (Effect_set []) Unknown))
@@ -2963,7 +3275,13 @@ and create_write_message_or_update mode t_level value l_env l_mem is_top_level
      | e -> e end)
      end
 
-and interp_letbind mode t_level l_env l_mem (LB_aux lbind (l,annot)) =
+and create_write_message_or_update mode t_level value l_env l_mem is_top_level le =
+  let _ = debug_fun_enter mode "create_write_message_or_update" [show le] in
+  let retval = __create_write_message_or_update (indent_mode mode) t_level value l_env l_mem is_top_level le in
+  let _ = debug_fun_exit mode "create_write_message_or_update" "_" in
+  retval
+
+and __interp_letbind mode t_level l_env l_mem (LB_aux lbind (l,annot)) =
   match lbind with
   | LB_val_explicit t pat exp ->
     match (interp_main mode t_level l_env l_mem exp) with
@@ -2981,10 +3299,16 @@ and interp_letbind mode t_level l_env l_mem (LB_aux lbind (l,annot)) =
       | _ -> ((Error l "Pattern in letbind did not match value",lm,le),Nothing) end)
     | (Action a s,lm,le) -> ((Action a s,lm,le),(Just (fun e -> (LB_aux (LB_val_implicit pat e) (l,annot)))))
     | e -> (e,Nothing) end
-end     
+end
 
-and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
-  let (Env defs instrs default_dir lets regs ctors subregs aliases) = t_level in 
+and interp_letbind mode t_level l_env l_mem lb =
+  let _ = debug_fun_enter mode "interp_letbind" [show lb] in
+  let retval = __interp_letbind (indent_mode mode) t_level l_env l_mem lb in
+  let _ = debug_fun_exit mode "interp_letbind" "_" in
+  retval
+
+and __interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
+  let (Env defs instrs default_dir lets regs ctors subregs aliases debug) = t_level in
   let stack = Hole_frame redex_id (E_aux (E_id redex_id) (l,(intern_annot annot))) t_level l_env l_mem Top in
   let get_reg_typ_name typ =
     match typ with
@@ -3038,8 +3362,14 @@ and interp_alias_read mode t_level l_env l_mem (AL_aux alspec (l,annot)) =
     | _ -> Assert_extra.failwith "alias spec not well formed"
 end
 
+and interp_alias_read mode t_level l_env l_mem al =
+  let _ = debug_fun_enter mode "interp_alias_read" [show al] in
+  let retval = __interp_alias_read (indent_mode mode) t_level l_env l_mem al in
+  let _ = debug_fun_exit mode "interp_alias_read" retval in
+  retval
+
 let rec eval_toplevel_let handle_action tlevel env mem lbind = 
-  match interp_letbind <|eager_eval=true; track_values=false; track_lmem=false|> tlevel env mem lbind with
+  match interp_letbind <| eager_eval=true; track_values=false; track_lmem=false; debug=false; debug_indent="" |> tlevel env mem lbind with
     | ((Value v, lm, (LEnv _ le)),_) -> Just le
     | ((Action a s,lm,le), Just le_builder) -> 
       (match handle_action (Action a s) with
@@ -3052,7 +3382,7 @@ let rec eval_toplevel_let handle_action tlevel env mem lbind =
     | _ -> Nothing end
 
 let rec to_global_letbinds handle_action (Defs defs) t_level =
-  let  (Env fdefs instrs default_dir lets regs ctors subregs aliases) = t_level in
+  let  (Env fdefs instrs default_dir lets regs ctors subregs aliases debug) = t_level in
   match defs with
   | [] -> ((Value (V_lit (L_aux L_unit Unknown)), (emem "global_letbinds"), eenv),t_level)
   | def::defs ->
@@ -3062,10 +3392,10 @@ let rec to_global_letbinds handle_action (Defs defs) t_level =
         | Just le -> 
           to_global_letbinds handle_action
             (Defs defs) 
-            (Env fdefs instrs default_dir (Map.(union) lets le) regs ctors subregs aliases)
+            (Env fdefs instrs default_dir (Map.(union) lets le) regs ctors subregs aliases debug)
         | Nothing -> 
           to_global_letbinds handle_action (Defs defs) 
-                                           (Env fdefs instrs default_dir lets regs ctors subregs aliases) end
+                                           (Env fdefs instrs default_dir lets regs ctors subregs aliases debug) end
     | DEF_type (TD_aux tdef _) ->
       match tdef with
       | TD_enum id ns ids _ -> 
@@ -3076,7 +3406,7 @@ let rec to_global_letbinds handle_action (Defs defs) t_level =
             (List.foldl (fun (c,rst) eid -> (1+c,(get_id eid,V_ctor eid typ (C_Enum c) unitv)::rst)) (0,[]) ids)) in
         to_global_letbinds 
           handle_action (Defs defs) 
-                        (Env fdefs instrs default_dir (Map.(union) lets enum_vals) regs ctors subregs aliases)
+                        (Env fdefs instrs default_dir (Map.(union) lets enum_vals) regs ctors subregs aliases debug)
       | _ -> to_global_letbinds handle_action (Defs defs) t_level end
     | _ -> to_global_letbinds handle_action (Defs defs) t_level
     end
@@ -3091,28 +3421,34 @@ let rec extract_default_direction (Defs defs) = match defs with
       | _ -> extract_default_direction (Defs defs) end end
 
 (*TODO Contemplate making execute environment variable instead of constant*)
-let to_top_env external_functions defs = 
+let to_top_env debug external_functions defs =
   let direction = (extract_default_direction defs) in
   let t_level = Env (to_fdefs defs) 
                     (extract_instructions "execute" defs) 
                     direction
                     Map.empty (* empty letbind and enum values, call below will fill in any *) 
                     (to_registers direction defs) 
-                    (to_data_constructors defs) (to_register_fields defs) (to_aliases defs) in
+                    (to_data_constructors defs) (to_register_fields defs) (to_aliases defs) debug in
   let (o,t_level) = to_global_letbinds (external_functions direction) defs t_level in
   match o with
     | (Value _,_,_) -> (Nothing,t_level)
     | (o,_,_) -> (Just o,t_level)
   end
 
-let interp mode external_functions defs exp =
-  match (to_top_env external_functions defs) with
+let __interp mode external_functions defs exp =
+  match (to_top_env mode.debug external_functions defs) with
     | (Nothing,t_level) -> 
       interp_main mode t_level eenv (emem "top level") exp
     | (Just o,_) -> (o,(emem "top level error"),eenv) 
   end
 
-let rec resume_with_env mode stack value =
+let interp mode external_functions defs exp =
+  let _ = debug_fun_enter mode "interp" [show exp] in
+  let retval = __interp (indent_mode mode) external_functions defs exp in
+  let _ = debug_fun_exit mode "interp" retval in
+  retval
+
+let rec __resume_with_env mode stack value =
   match (stack,value) with
   | (Top,_) -> (Error Unknown "Top hit without expression to evaluate in resume_with_env",eenv)
   | (Hole_frame id exp t_level env mem Top,Just value) -> 
@@ -3139,10 +3475,17 @@ let rec resume_with_env mode stack value =
       match interp_main mode t_level env mem exp with | (o,_,e) -> (o,e) end 
     | (Action action stack,e) -> (Action action (Thunk_frame exp t_level env mem stack),e)
     | (Error l s,e) -> (Error l s,e)
-    end  
+    end
   end
 
-let rec resume mode stack value =
+and resume_with_env mode stack value =
+  let _ = debug_fun_enter mode "resume_with_env" [show value] in
+  let retval = __resume_with_env (indent_mode mode) stack value in
+  let _ = debug_fun_exit mode "interp" retval in
+  retval
+
+
+let rec __resume mode stack value =
   match (stack,value) with
   | (Top,_) -> (Error Unknown "Top hit without expression to evaluate in resume",(emem "top level error"),eenv)
   | (Hole_frame id exp t_level env mem Top,Just value) -> 
@@ -3173,3 +3516,8 @@ let rec resume mode stack value =
     end  
   end
 
+and resume mode stack value =
+  let _ = debug_fun_enter mode "resume" [show value] in
+  let retval = __resume (indent_mode mode) stack value in
+  let _ = debug_fun_exit mode "resume" retval in
+  retval
