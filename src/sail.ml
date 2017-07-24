@@ -131,11 +131,6 @@ let main() =
     let ast = convert_ast ast in
     let (ast, type_envs) = check_ast ast in
 
-    (* let ast = match !opt_mono_split with
-      | [] -> ast
-      | l -> Monomorphise.split_defs l type_envs ast
-    in *)
-
     let ast = rewrite_ast ast in
     let out_name = match !opt_file_out with
       | None -> fst (List.hd parsed)

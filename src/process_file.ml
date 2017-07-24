@@ -100,7 +100,7 @@ let check_ast (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.E
   let ast = match !opt_mono_split with
     | [] -> ast
     | l ->
-       let ast = Monomorphise_new.split_defs l ast in
+       let ast = Monomorphise.split_defs l ast in
        let ienv = Type_check.Env.no_casts Type_check.initial_env in
        let ast, _ = Type_check.check ienv ast in
        ast
