@@ -294,6 +294,7 @@ let nexp_subst_fns substs refinements =
       | E_lit _
       | E_comment _ -> re e
       | E_sizeof ne -> re (E_sizeof ne) (* TODO: does this need done?  does it appear in type checked code? *)
+      | E_constraint _ -> re e (* TODO: actual substitution if necessary *)
       | E_internal_exp (l,annot) -> re (E_internal_exp (l, (*s_tannot*) annot))
       | E_sizeof_internal (l,annot) -> re (E_sizeof_internal (l, (*s_tannot*) annot))
       | E_internal_exp_user ((l1,annot1),(l2,annot2)) ->
@@ -577,6 +578,7 @@ let split_defs splits defs =
     | E_sizeof_internal _
     | E_internal_exp_user _
     | E_comment _
+    | E_constraint _
       -> exp
     | E_cast (t,e') -> re (E_cast (t, const_prop_exp substs e'))
     | E_app (id,es) ->
@@ -909,6 +911,7 @@ let split_defs splits defs =
       | E_sizeof_internal _
       | E_internal_exp_user _
       | E_comment _
+      | E_constraint _
         -> ea
       | E_cast (t,e') -> re (E_cast (t, map_exp e'))
       | E_app (id,es) -> re (E_app (id,List.map map_exp es))
