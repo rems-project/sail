@@ -106,7 +106,7 @@ let doc_lit (L_aux(l,_)) =
   | L_bin n -> "0b" ^ n
   | L_real r -> r
   | L_undef -> "undefined"
-  | L_string s -> "\"" ^ s ^ "\"")
+  | L_string s -> "\"" ^ String.escaped s ^ "\"")
 
 let doc_pat, doc_atomic_pat =
   let rec pat pa = pat_colons pa
