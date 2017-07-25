@@ -47,6 +47,7 @@ open Ast_util
 open Big_int
 
 let opt_tc_debug = ref 0
+let opt_no_effects = ref false
 let depth = ref 0
 
 let rec indent n = match n with
@@ -82,6 +83,8 @@ let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
 
 let inc_ord = Ord_aux (Ord_inc, Parse_ast.Unknown)
 let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
+
+let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
 
 let int_typ = mk_id_typ (mk_id "int")
 let nat_typ = mk_id_typ (mk_id "nat")
@@ -176,6 +179,27 @@ let string_of_index_sort = function
      "{" ^ string_of_kid kid ^ " | "
      ^ string_of_list " & " (fun (x, y) -> string_of_nexp x ^ " <= " ^ string_of_nexp y) constraints
      ^ "}"
+
+let quant_items : typquant -> quant_item list = function
+  | TypQ_aux (TypQ_tq qis, _) -> qis
+  | TypQ_aux (TypQ_no_forall, _) -> []
+
+let kopt_kid (KOpt_aux (kopt_aux, _)) =
+  match kopt_aux with
+  | KOpt_none kid | KOpt_kind (_, kid) -> kid
+
+let is_nat_kopt = function
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_nat, _)], _), _), _) -> true
+  | KOpt_aux (KOpt_none _, _) -> true
+  | _ -> false
+
+let is_order_kopt = function
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_order, _)], _), _), _) -> true
+  | _ -> false
+
+let is_typ_kopt = function
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_type, _)], _), _), _) -> true
+  | _ -> false
 
 (**************************************************************************)
 (* 1. Substitutions                                                       *)
@@ -481,6 +505,7 @@ end = struct
     || Id.compare id (mk_id "bool") = 0
     || Id.compare id (mk_id "real") = 0
     || Id.compare id (mk_id "list") = 0
+    || Id.compare id (mk_id "string") = 0
 
   (* Check if a type, order, or n-expression is well-formed. Throws a
      type error if the type is badly formed. FIXME: Add arity to type
@@ -554,8 +579,22 @@ end = struct
     else
       begin
         typ_print ("Adding record " ^ string_of_id id);
+        let rec record_typ_args = function
+          | [] -> []
+          | ((QI_aux (QI_id kopt, _)) :: qis) when is_nat_kopt kopt ->
+             mk_typ_arg (Typ_arg_nexp (nvar (kopt_kid kopt))) :: record_typ_args qis
+          | ((QI_aux (QI_id kopt, _)) :: qis) when is_typ_kopt kopt ->
+             mk_typ_arg (Typ_arg_typ (mk_typ (Typ_var (kopt_kid kopt)))) :: record_typ_args qis
+          | ((QI_aux (QI_id kopt, _)) :: qis) when is_order_kopt kopt ->
+             mk_typ_arg (Typ_arg_order (mk_ord (Ord_var (kopt_kid kopt)))) :: record_typ_args qis
+          | (_ :: qis) -> record_typ_args qis
+        in
+        let rectyp = match record_typ_args (quant_items typq) with
+          | [] -> mk_id_typ id
+          | args -> mk_typ (Typ_app (id, args))
+        in
         let fold_accessors accs (typ, fid) =
-          let acc_typ = mk_typ (Typ_fn (mk_id_typ id, typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
+          let acc_typ = mk_typ (Typ_fn (rectyp, typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
           typ_print (indent 1 ^ "Adding accessor " ^ string_of_id fid ^ " :: " ^ string_of_bind (typq, acc_typ));
           Bindings.add fid (typq, acc_typ) accs
         in
@@ -1365,10 +1404,6 @@ let infer_lit env (L_aux (lit_aux, l) as lit) =
      end
   | L_undef -> typ_error l "Cannot infer the type of undefined"
 
-let quant_items : typquant -> quant_item list = function
-  | TypQ_aux (TypQ_tq qis, _) -> qis
-  | TypQ_aux (TypQ_no_forall, _) -> []
-
 let is_nat_kid kid = function
   | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_nat, _)], _), kid'), _) -> Kid.compare kid kid' = 0
   | KOpt_aux (KOpt_none kid', _) -> Kid.compare kid kid' = 0
@@ -1908,6 +1943,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
             end
        in
        let regtyp, inferred_flexp = infer_flexp flexp in
+       typ_debug ("REGTYP: " ^ string_of_typ regtyp ^ " / " ^ string_of_typ (Env.expand_synonyms env regtyp));
        match Env.expand_synonyms env regtyp with
        | Typ_aux (Typ_id regtyp_id, _) when Env.is_regtyp regtyp_id env ->
           let base, top, ranges = Env.get_regtyp regtyp_id env in
@@ -1924,6 +1960,12 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
           in
           let checked_exp = crule check_exp env exp vec_typ in
           annot_assign (annot_lexp (LEXP_field (annot_lexp_effect inferred_flexp regtyp (mk_effect [BE_wreg]), field)) vec_typ) checked_exp, env
+       | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
+          let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor field env in
+          let unifiers = try unify l env rectyp_q regtyp with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m) in
+          let field_typ' = subst_unifiers unifiers field_typ in
+          let checked_exp = crule check_exp env exp field_typ' in
+          annot_assign (annot_lexp (LEXP_field (annot_lexp_effect inferred_flexp regtyp (mk_effect [BE_wreg]), field)) field_typ') checked_exp, env
        | _ ->  typ_error l "Field l-expression has invalid type"
      end
   | LEXP_memory (f, xs) ->
@@ -1997,17 +2039,21 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
      end
   | LEXP_vector_range (LEXP_aux (LEXP_id v, _), exp1, exp2) ->
      begin
-       let is_immutable, vtyp = match Env.lookup_id v env with
+       let is_immutable, is_register, vtyp = match Env.lookup_id v env with
          | Unbound -> typ_error l "Cannot assign to element of unbound vector"
          | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
-         | Local (Immutable, vtyp) -> true, vtyp
-         | Local (Mutable, vtyp) | Register vtyp -> false, vtyp
+         | Local (Immutable, vtyp) -> true, false, vtyp
+         | Local (Mutable, vtyp) -> false, false, vtyp
+         | Register vtyp -> false, true, vtyp
        in
        let access = infer_exp (Env.enable_casts env) (E_aux (E_app (mk_id "vector_subrange", [E_aux (E_id v, (l, ())); exp1; exp2]), (l, ()))) in
        let E_aux (E_app (_, [_; inferred_exp1; inferred_exp2]), _) = access in
        match typ_of access with
        | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_typ deref_typ, _)]), _) when string_of_id id = "register" ->
           subtyp l env typ deref_typ;
+          annot_lexp (LEXP_vector_range (annot_lexp_effect (LEXP_id v) vtyp (mk_effect [BE_wreg]), inferred_exp1, inferred_exp2)) typ, env
+       | _ when not is_immutable && is_register ->
+          subtyp l env typ (typ_of access);
           annot_lexp (LEXP_vector_range (annot_lexp_effect (LEXP_id v) vtyp (mk_effect [BE_wreg]), inferred_exp1, inferred_exp2)) typ, env
        | _ when not is_immutable ->
           subtyp l env typ (typ_of access);
@@ -2560,7 +2606,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
       [mk_val_spec quant typ id], Env.add_val_spec id (quant, typ) env, eff
     else [], env, declared_eff
   in
-  if equal_effects eff declared_eff
+  if (equal_effects eff declared_eff || !opt_no_effects)
   then
     vs_def @ [DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, None)))], env
   else typ_error l ("Effects do not match: " ^ string_of_effect declared_eff ^ " declared and " ^ string_of_effect eff ^ " found")

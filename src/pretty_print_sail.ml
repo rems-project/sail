@@ -81,7 +81,7 @@ let doc_qi (QI_aux(qi,_)) = match qi with
 (* typ_doc is the doc for the type being quantified *)
 let doc_typquant (TypQ_aux(tq,_)) typ_doc = match tq with
   | TypQ_no_forall -> typ_doc
-  | TypQ_tq [] -> failwith "TypQ_tq with empty list"
+  | TypQ_tq [] -> typ_doc
   | TypQ_tq qlist ->
     (* include trailing break because the caller doesn't know if tq is empty *)
     doc_op dot
