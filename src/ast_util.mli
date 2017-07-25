@@ -115,6 +115,9 @@ module Bindings : sig
   include Map.S with type key = id
 end
 
+val nexp_frees : nexp -> KidSet.t
+val nexp_identical : nexp -> nexp -> bool
+
 val is_number : typ -> bool
 val is_vector_typ : typ -> bool
 val is_bit_typ : typ -> bool

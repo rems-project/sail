@@ -185,6 +185,10 @@ val check_exp : Env.t -> unit exp -> typ -> tannot exp
 (* Partial functions: The expressions and patterns passed to these
    functions must be guaranteed to have tannots of the form Some (env,
    typ) for these to work. *)
+
+val env_of : tannot exp -> Env.t
+val env_of_annot : Ast.l * tannot -> Env.t
+
 val typ_of : tannot exp -> typ
 val typ_of_annot : Ast.l * tannot -> typ
 

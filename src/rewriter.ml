@@ -60,12 +60,6 @@ type 'a rewriters = {
 
 let (>>) f g = fun x -> g(f(x))
 
-let env_of_annot = function
-  | (_,Some(env,_,_)) -> env
-  | (l,None) -> Env.empty
-
-let env_of (E_aux (_,a)) = env_of_annot a
-
 let effect_of_fpat (FP_aux (_,(_,a))) = effect_of_annot a
 let effect_of_lexp (LEXP_aux (_,(_,a))) = effect_of_annot a
 let effect_of_fexp (FE_aux (_,(_,a))) = effect_of_annot a
@@ -573,15 +567,17 @@ let rewrite_defs_base rewriters (Defs defs) =
     | [] -> []
     | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds) in
   Defs (rewrite defs)
+
+let rewriters_base =
+  {rewrite_exp = rewrite_exp;
+   rewrite_pat = rewrite_pat;
+   rewrite_let = rewrite_let;
+   rewrite_lexp = rewrite_lexp;
+   rewrite_fun = rewrite_fun;
+   rewrite_def = rewrite_def;
+   rewrite_defs = rewrite_defs_base}
     
-let rewrite_defs (Defs defs) = rewrite_defs_base
-    {rewrite_exp = rewrite_exp;
-     rewrite_pat = rewrite_pat;
-     rewrite_let = rewrite_let;
-     rewrite_lexp = rewrite_lexp;
-     rewrite_fun = rewrite_fun;
-     rewrite_def = rewrite_def;
-     rewrite_defs = rewrite_defs_base} (Defs defs)
+let rewrite_defs (Defs defs) = rewrite_defs_base rewriters_base (Defs defs)
 
 module Envmap = Finite_map.Fmap_map(String)
 
@@ -860,7 +856,177 @@ let id_exp_alg =
   ; lB_aux = (fun (lb,annot) -> LB_aux (lb,annot))
   ; pat_alg = id_pat_alg
   }
-  
+
+(* Folding algorithms for not only rewriting patterns/expressions, but also
+   computing some additional value. Usage: Pass default value (bot) and a
+   binary join operator as arguments, and specify the non-default cases of
+   rewriting/computation by overwriting fields of the record.
+   See rewrite_sizeof for examples. *)
+let compute_pat_alg bot join =
+  let join_list vs = List.fold_left join bot vs in
+  let split_join f ps = let (vs,ps) = List.split ps in (join_list vs, f ps) in
+  { p_lit            = (fun lit -> (bot, P_lit lit))
+  ; p_wild           = (bot, P_wild)
+  ; p_as             = (fun ((v,pat),id) -> (v, P_as (pat,id)))
+  ; p_typ            = (fun (typ,(v,pat)) -> (v, P_typ (typ,pat)))
+  ; p_id             = (fun id -> (bot, P_id id))
+  ; p_app            = (fun (id,ps) -> split_join (fun ps -> P_app (id,ps)) ps)
+  ; p_record         = (fun (ps,b) -> split_join (fun ps -> P_record (ps,b)) ps)
+  ; p_vector         = split_join (fun ps -> P_vector ps)
+  ; p_vector_indexed = (fun ps ->
+                          let (is,ps) = List.split ps in
+                          let (vs,ps) = List.split ps in
+                          (join_list vs, P_vector_indexed (List.combine is ps)))
+  ; p_vector_concat  = split_join (fun ps -> P_vector_concat ps)
+  ; p_tup            = split_join (fun ps -> P_tup ps)
+  ; p_list           = split_join (fun ps -> P_list ps)
+  ; p_aux            = (fun ((v,pat),annot) -> (v, P_aux (pat,annot)))
+  ; fP_aux           = (fun ((v,fpat),annot) -> (v, FP_aux (fpat,annot)))
+  ; fP_Fpat          = (fun (id,(v,pat)) -> (v, FP_Fpat (id,pat)))
+  }
+
+let compute_exp_alg bot join =
+  let join_list vs = List.fold_left join bot vs in
+  let split_join f es = let (vs,es) = List.split es in (join_list vs, f es) in
+  { e_block = split_join (fun es -> E_block es)
+  ; e_nondet = split_join (fun es -> E_nondet es)
+  ; e_id = (fun id -> (bot, E_id id))
+  ; e_lit = (fun lit -> (bot, E_lit lit))
+  ; e_cast = (fun (typ,(v,e)) -> (v, E_cast (typ,e)))
+  ; e_app = (fun (id,es) -> split_join (fun es -> E_app (id,es)) es)
+  ; e_app_infix = (fun ((v1,e1),id,(v2,e2)) -> (join v1 v2, E_app_infix (e1,id,e2)))
+  ; e_tuple = split_join (fun es -> E_tuple es)
+  ; e_if = (fun ((v1,e1),(v2,e2),(v3,e3)) -> (join_list [v1;v2;v3], E_if (e1,e2,e3)))
+  ; e_for = (fun (id,(v1,e1),(v2,e2),(v3,e3),order,(v4,e4)) ->
+      (join_list [v1;v2;v3;v4], E_for (id,e1,e2,e3,order,e4)))
+  ; e_vector = split_join (fun es -> E_vector es)
+  ; e_vector_indexed = (fun (es,(v2,opt2)) ->
+      let (is,es) = List.split es in
+      let (vs,es) = List.split es in
+      (join_list (vs @ [v2]), E_vector_indexed (List.combine is es,opt2)))
+  ; e_vector_access = (fun ((v1,e1),(v2,e2)) -> (join v1 v2, E_vector_access (e1,e2)))
+  ; e_vector_subrange =  (fun ((v1,e1),(v2,e2),(v3,e3)) -> (join_list [v1;v2;v3], E_vector_subrange (e1,e2,e3)))
+  ; e_vector_update = (fun ((v1,e1),(v2,e2),(v3,e3)) -> (join_list [v1;v2;v3], E_vector_update (e1,e2,e3)))
+  ; e_vector_update_subrange =  (fun ((v1,e1),(v2,e2),(v3,e3),(v4,e4)) -> (join_list [v1;v2;v3;v4], E_vector_update_subrange (e1,e2,e3,e4)))
+  ; e_vector_append = (fun ((v1,e1),(v2,e2)) -> (join v1 v2, E_vector_append (e1,e2)))
+  ; e_list = split_join (fun es -> E_list es)
+  ; e_cons = (fun ((v1,e1),(v2,e2)) -> (join v1 v2, E_cons (e1,e2)))
+  ; e_record = (fun (vs,fexps) -> (vs, E_record fexps))
+  ; e_record_update = (fun ((v1,e1),(vf,fexp)) -> (join v1 vf, E_record_update (e1,fexp)))
+  ; e_field = (fun ((v1,e1),id) -> (v1, E_field (e1,id)))
+  ; e_case = (fun ((v1,e1),pexps) ->
+      let (vps,pexps) = List.split pexps in
+      (join_list (v1::vps), E_case (e1,pexps)))
+  ; e_let = (fun ((vl,lb),(v2,e2)) -> (join vl v2, E_let (lb,e2)))
+  ; e_assign = (fun ((vl,lexp),(v2,e2)) -> (join vl v2, E_assign (lexp,e2)))
+  ; e_sizeof = (fun nexp -> (bot, E_sizeof nexp))
+  ; e_exit = (fun (v1,e1) -> (v1, E_exit (e1)))
+  ; e_return = (fun (v1,e1) -> (v1, E_return e1))
+  ; e_assert = (fun ((v1,e1),(v2,e2)) -> (join v1 v2, E_assert(e1,e2)) )
+  ; e_internal_cast = (fun (a,(v1,e1)) -> (v1, E_internal_cast (a,e1)))
+  ; e_internal_exp = (fun a -> (bot, E_internal_exp a))
+  ; e_internal_exp_user = (fun (a1,a2) -> (bot, E_internal_exp_user (a1,a2)))
+  ; e_internal_let = (fun ((vl, lexp), (v2,e2), (v3,e3)) ->
+      (join_list [vl;v2;v3], E_internal_let (lexp,e2,e3)))
+  ; e_internal_plet = (fun ((vp,pat), (v1,e1), (v2,e2)) ->
+      (join_list [vp;v1;v2], E_internal_plet (pat,e1,e2)))
+  ; e_internal_return = (fun (v,e) -> (v, E_internal_return e))
+  ; e_aux = (fun ((v,e),annot) -> (v, E_aux (e,annot)))
+  ; lEXP_id = (fun id -> (bot, LEXP_id id))
+  ; lEXP_memory = (fun (id,es) -> split_join (fun es -> LEXP_memory (id,es)) es)
+  ; lEXP_cast = (fun (typ,id) -> (bot, LEXP_cast (typ,id)))
+  ; lEXP_tup = split_join (fun tups -> LEXP_tup tups)
+  ; lEXP_vector = (fun ((vl,lexp),(v2,e2)) -> (join vl v2, LEXP_vector (lexp,e2)))
+  ; lEXP_vector_range = (fun ((vl,lexp),(v2,e2),(v3,e3)) ->
+      (join_list [vl;v2;v3], LEXP_vector_range (lexp,e2,e3)))
+  ; lEXP_field = (fun ((vl,lexp),id) -> (vl, LEXP_field (lexp,id)))
+  ; lEXP_aux = (fun ((vl,lexp),annot) -> (vl, LEXP_aux (lexp,annot)))
+  ; fE_Fexp = (fun (id,(v,e)) -> (v, FE_Fexp (id,e)))
+  ; fE_aux = (fun ((vf,fexp),annot) -> (vf, FE_aux (fexp,annot)))
+  ; fES_Fexps = (fun (fexps,b) ->
+      let (vs,fexps) = List.split fexps in
+      (join_list vs, FES_Fexps (fexps,b)))
+  ; fES_aux = (fun ((vf,fexp),annot) -> (vf, FES_aux (fexp,annot)))
+  ; def_val_empty = (bot, Def_val_empty)
+  ; def_val_dec = (fun (v,e) -> (v, Def_val_dec e))
+  ; def_val_aux = (fun ((v,defval),aux) -> (v, Def_val_aux (defval,aux)))
+  ; pat_exp = (fun ((vp,pat),(v,e)) -> (join vp v, Pat_exp (pat,e)))
+  ; pat_aux = (fun ((v,pexp),a) -> (v, Pat_aux (pexp,a)))
+  ; lB_val_explicit = (fun (typ,(vp,pat),(v,e)) -> (join vp v, LB_val_explicit (typ,pat,e)))
+  ; lB_val_implicit = (fun ((vp,pat),(v,e)) -> (join vp v, LB_val_implicit (pat,e)))
+  ; lB_aux = (fun ((vl,lb),annot) -> (vl,LB_aux (lb,annot)))
+  ; pat_alg = compute_pat_alg bot join
+  }
+
+let rewrite_sizeof defs =
+  let sizeof_frees exp =
+    fst (fold_exp
+      { (compute_exp_alg KidSet.empty KidSet.union) with
+        e_sizeof = (fun nexp -> (nexp_frees nexp, E_sizeof nexp)) }
+      exp) in
+
+  let nexps_from_params pat =
+    fst (fold_pat
+      { (compute_pat_alg [] (@)) with
+        p_aux = (fun ((v,pat),((l,_) as annot)) ->
+          let v' = match pat with
+          | P_id id | P_as (_, id) ->
+            let (Typ_aux (typ,_) as typ_aux) = typ_of_annot annot in
+            (match typ with
+              | Typ_app (atom, [Typ_arg_aux (Typ_arg_nexp nexp, _)])
+                when string_of_id atom = "atom" ->
+                [nexp, E_id id]
+              | Typ_app (vector, _) when string_of_id vector = "vector" ->
+                let (_,len,_,_) = vector_typ_args_of typ_aux in
+                let exp = E_app
+                  (Id_aux (Id "length", Parse_ast.Generated l),
+                  [E_aux (E_id id, annot)]) in
+                [len, exp]
+              | _ -> [])
+          | _ -> [] in
+          (v @ v', P_aux (pat,annot)))} pat) in
+
+  let rec e_sizeof nmap (Nexp_aux (nexp, l) as nexp_aux) =
+    try snd (List.find (fun (nexp,_) -> nexp_identical nexp nexp_aux) nmap)
+    with
+    | Not_found ->
+      let binop nexp1 op nexp2 = E_app_infix (
+        E_aux (e_sizeof nmap nexp1, simple_annot l (atom_typ nexp1)),
+        Id_aux (Id op, Unknown),
+        E_aux (e_sizeof nmap nexp2, simple_annot l (atom_typ nexp2))
+        ) in
+      (match nexp with
+      | Nexp_constant i -> E_lit (L_aux (L_num i, l))
+      | Nexp_times (nexp1, nexp2) -> binop nexp1 "*" nexp2
+      | Nexp_sum (nexp1, nexp2) -> binop nexp1 "+" nexp2
+      | Nexp_minus (nexp1, nexp2) -> binop nexp1 "-" nexp2
+      | _ -> E_sizeof nexp_aux) in
+
+  let rewrite_sizeof_exp nmap rewriters exp =
+    let exp = rewriters_base.rewrite_exp rewriters exp in
+    fold_exp { id_exp_alg with e_sizeof = e_sizeof nmap } exp in
+
+  let rewrite_sizeof_fun rewriters
+    (FD_aux (FD_function (rec_opt,tannot,eff,funcls),annot)) =
+    let rewrite_funcl_body (FCL_aux (FCL_Funcl (id,pat,exp), annot)) =
+      let body_env = env_of exp in
+      let body_typ = typ_of exp in
+      let nmap = nexps_from_params pat in
+      let exp =
+        try check_exp body_env
+          (strip_exp (fold_exp { id_exp_alg with e_sizeof = e_sizeof nmap } exp))
+          body_typ
+        with
+          | Type_error _ -> exp in
+      FCL_aux (FCL_Funcl (id,pat,exp), annot) in
+    let funcls = List.map rewrite_funcl_body funcls in
+    FD_aux (FD_function (rec_opt,tannot,eff,funcls),annot) in
+
+  rewrite_defs_base
+    { rewriters_base with
+      rewrite_exp = rewrite_sizeof_exp [];
+      rewrite_fun = rewrite_sizeof_fun }
+    defs
 
 let remove_vector_concat_pat pat =
 
@@ -2398,7 +2564,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
                                simple_annot l (typ_of_annot annot)) in
              let pat = P_aux (P_id id, simple_annot pl (typ_of vexp)) in
              Added_vars (vexp,pat)
-          | _ -> raise (Reporting_basic.err_unreachable el "Unsupported l-exp"))
+          | _ -> Same_vars (E_aux (E_assign (lexp,vexp),annot)))
     | _ ->
        (* after rewrite_defs_letbind_effects this expression is pure and updates
        no variables: check n_exp_term and where it's used. *)
@@ -2580,6 +2746,7 @@ let rewrite_defs_remove_e_assign =
 
 let rewrite_defs_lem =
   top_sort_defs >>
+  rewrite_sizeof >>
   rewrite_defs_remove_vector_concat >>
   rewrite_defs_remove_bitvector_pats >>
   rewrite_defs_exp_lift_assign >> 

@@ -392,7 +392,7 @@ let doc_exp_lem, doc_let_lem =
         | _ ->
            (prefix 2 1) (string "write_reg") (doc_lexp_deref_lem regtypes le ^/^ expY e))
     | E_vector_append(le,re) ->
-       let t = typ_of_annot (l,annot) in
+       let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let (call,ta,aexp_needed) =
          if is_bitvector_typ t then
            if not (contains_t_pp_var t)
@@ -450,7 +450,7 @@ let doc_exp_lem, doc_let_lem =
           let call = if is_bitvector_typ t1 then "bvslice_raw" else "slice_raw" in
           let epp = separate space [string call;expY e1;expY e2;expY e3] in
           let (taepp,aexp_needed) =
-            let t = typ_of full_exp in
+            let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
             let eff = effect_of full_exp in
             if contains_bitvector_typ t && not (contains_t_pp_var t)
             then (align epp ^^ (doc_tannot_lem regtypes (effectful eff) t), true)
@@ -504,7 +504,7 @@ let doc_exp_lem, doc_let_lem =
                | args -> parens (align (separate_map (comma ^^ break 0) (argpp false) args)) in
              let epp = align (call ^//^ argspp) in
              let (taepp,aexp_needed) =
-               let t = typ_of full_exp in
+               let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
                let eff = effect_of full_exp in
                if contains_bitvector_typ t && not (contains_t_pp_var t)
                then (align epp ^^ (doc_tannot_lem regtypes (effectful eff) t), true)
@@ -523,7 +523,7 @@ let doc_exp_lem, doc_let_lem =
            separate space [string call;expY v;expY e] in
        if aexp_needed then parens (align epp) else epp
     | E_vector_subrange (v,e1,e2) ->
-       let t = typ_of full_exp in
+       let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let eff = effect_of full_exp in
        let (epp,aexp_needed) =
          if has_effect eff BE_rreg then
@@ -543,7 +543,7 @@ let doc_exp_lem, doc_let_lem =
        let ft = typ_of_annot (l,fannot) in
        (match fannot with
         | Some(env, (Typ_aux (Typ_id tid, _)), _) when Env.is_regtyp tid env ->
-           let t = typ_of full_exp in
+           let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
            let field_f = string
              (if is_bit_typ t
              then "read_reg_bitfield"
@@ -566,7 +566,7 @@ let doc_exp_lem, doc_let_lem =
     | E_block exps -> raise (report l "Blocks should have been removed till now.")
     | E_nondet exps -> raise (report l "Nondet blocks not supported.")
     | E_id id ->
-       let t = typ_of full_exp in
+       let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        (match annot with
         | Some (env, Typ_aux (Typ_id tid, _), eff) when Env.is_regtyp tid env ->
            if has_effect eff BE_rreg then
@@ -613,6 +613,7 @@ let doc_exp_lem, doc_let_lem =
         | _ -> doc_id_lem id)
     | E_lit lit -> doc_lit_lem false lit annot
     | E_cast(typ,e) ->
+       let typ = Env.base_typ_of (env_of full_exp) typ in
        if is_vector_typ typ then
          let (start,_,_,_) = vector_typ_args_of typ in
          let call =
@@ -670,10 +671,11 @@ let doc_exp_lem, doc_let_lem =
          | _ ->  raise (report l "cannot get record type") in
        anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp regtypes recordtyp) fexps))
     | E_vector exps ->
-       let t = typ_of full_exp in
+       let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let (start, len, order, etyp) =
          if is_vector_typ t then vector_typ_args_of t
-         else raise (Reporting_basic.err_unreachable l "E_vector of non-vector type") in
+         else raise (Reporting_basic.err_unreachable l
+           "E_vector of non-vector type") in
        (*match annot with
         | Base((_,t),_,_,_,_,_) ->
            match t.t with
@@ -707,7 +709,7 @@ let doc_exp_lem, doc_let_lem =
               if aexp_needed then parens (align epp) else epp
        (* *)
     | E_vector_indexed (iexps, (Def_val_aux (default,(dl,dannot)))) ->
-      let t = typ_of full_exp in
+      let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
       let (start, len, order, etyp) =
         if is_vector_typ t then vector_typ_args_of t
         else raise (Reporting_basic.err_unreachable l "E_vector_indexed of non-vector type") in
@@ -1285,8 +1287,9 @@ let doc_dec_lem (DEC_aux (reg,(l,annot))) =
      (match typ with
       | Typ_aux (Typ_app (r, [Typ_arg_aux (Typ_arg_typ rt, _)]), _)
         when string_of_id r = "register" && is_vector_typ rt ->
-        let (start, size, order, etyp) = vector_typ_args_of rt in
-        (match is_bit_typ etyp, start, size with
+        let env = env_of_annot (l,annot) in
+        let (start, size, order, etyp) = vector_typ_args_of (Env.base_typ_of env rt) in
+        (match is_bit_typ (Env.base_typ_of env etyp), start, size with
           | true, Nexp_aux (Nexp_constant start, _), Nexp_aux (Nexp_constant size, _) ->
              let o = if is_order_inc order then "true" else "false" in
              (doc_op equals)

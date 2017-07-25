@@ -355,6 +355,29 @@ module IdSet = Set.Make(Id)
 module KBindings = Map.Make(Kid)
 module KidSet = Set.Make(Kid)
 
+let rec nexp_frees (Nexp_aux (nexp, l)) =
+  match nexp with
+  | Nexp_id _ -> raise (Reporting_basic.err_typ l "Unimplemented Nexp_id in nexp_frees")
+  | Nexp_var kid -> KidSet.singleton kid
+  | Nexp_constant _ -> KidSet.empty
+  | Nexp_times (n1, n2) -> KidSet.union (nexp_frees n1) (nexp_frees n2)
+  | Nexp_sum (n1, n2) -> KidSet.union (nexp_frees n1) (nexp_frees n2)
+  | Nexp_minus (n1, n2) -> KidSet.union (nexp_frees n1) (nexp_frees n2)
+  | Nexp_exp n -> nexp_frees n
+  | Nexp_neg n -> nexp_frees n
+
+let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
+  match nexp1, nexp2 with
+  | Nexp_id v1, Nexp_id v2 -> Id.compare v1 v2 = 0
+  | Nexp_var kid1, Nexp_var kid2 -> Kid.compare kid1 kid2 = 0
+  | Nexp_constant c1, Nexp_constant c2 -> c1 = c2
+  | Nexp_times (n1a, n1b), Nexp_times (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | Nexp_sum (n1a, n1b), Nexp_sum (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | Nexp_exp n1, Nexp_exp n2 -> nexp_identical n1 n2
+  | Nexp_neg n1, Nexp_neg n2 -> nexp_identical n1 n2
+  | _, _ -> false
+
 let rec is_number (Typ_aux (t,_)) =
   match t with
   | Typ_app (Id_aux (Id "range", _),_)
