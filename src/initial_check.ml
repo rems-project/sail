@@ -215,6 +215,11 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
 		    else typ_error l "Type constructor given incorrect number of arguments" (Some id) None None
                   | None -> typ_error l "Required a type constructor, encountered an unbound identifier" (Some id) None None
                   | _ -> typ_error l "Required a type constructor, encountered a base kind variable" (Some id) None None)
+              | Parse_ast.ATyp_exist (kids, nc, atyp) ->
+                 let kids = List.map to_ast_var kids in
+                 let k_env = List.fold_left Envmap.insert k_env (List.map (fun kid -> (var_to_string kid, {k=K_Nat})) kids) in
+                 let exist_typ = to_ast_typ k_env def_ord atyp in
+                 Typ_exist (kids, to_ast_nexp_constraint k_env nc, exist_typ)
               | _ -> typ_error l "Required an item of kind Type, encountered an illegal form for this kind" None None None
     ), l)
 
@@ -308,7 +313,7 @@ and to_ast_typ_arg (k_env : kind Envmap.t) (def_ord : order) (kind : kind) (arg 
     | _ -> raise (Reporting_basic.err_unreachable l "To_ast_typ_arg received Lam kind or infer kind")),
     l)
 
-let rec to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) : n_constraint =
+and to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) : n_constraint =
   match c with
   | Parse_ast.NC_aux(nc,l) ->
     NC_aux( (match nc with

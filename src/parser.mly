@@ -129,7 +129,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 /*Terminals with no content*/
 
 %token And Alias As Assert Bitzero Bitone Bits By Case Clause Const Dec Def Default Deinfix Effect EFFECT End 
-%token Enumerate Else Exit Extern False Forall Foreach Overload Function_ If_ In IN Inc Let_ Member Nat NatNum Order Cast
+%token Enumerate Else Exit Extern False Forall Exist Foreach Overload Function_ If_ In IN Inc Let_ Member Nat NatNum Order Cast
 %token Pure Rec Register Return Scattered Sizeof Struct Switch Then True TwoStarStar Type TYPE Typedef 
 %token Undefined Union With When Val Constraint
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
@@ -285,6 +285,12 @@ tid:
 tyvar:
   | TyVar
     { (Kid_aux((Var($1)),loc ())) }
+
+tyvars:
+  | tyvar
+    { [$1] }
+  | tyvar tyvars
+    { $1 :: $2 }
 
 atomic_kind:
   | TYPE
@@ -446,10 +452,16 @@ tup_typ:
    | Lparen tup_typ_list Rparen
      { tloc (ATyp_tup $2) }
 
-typ:
+exist_typ:
   | tup_typ
     { $1 }
-  | tup_typ MinusGt tup_typ Effect effect_typ
+  | Exist tyvars Comma nexp_constraint Dot tup_typ
+    { tloc (ATyp_exist ($2, $4, $6)) }
+
+typ:
+  | exist_typ
+    { $1 }
+  | tup_typ MinusGt exist_typ Effect effect_typ
     { tloc (ATyp_fn($1,$3,$5)) }
 
 lit:

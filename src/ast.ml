@@ -227,6 +227,7 @@ typ_aux =  (* Type expressions, of kind $_$ *)
  | Typ_fn of typ * typ * effect (* Function type (first-order only in user code) *)
  | Typ_tup of (typ) list (* Tuple type *)
  | Typ_app of id * (typ_arg) list (* type constructor application *)
+ | Typ_exist of kid list * n_constraint * typ
 
 and typ =
    Typ_aux of typ_aux * l

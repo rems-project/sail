@@ -79,6 +79,7 @@ let kw_table =
      ("cast",                    (fun _ -> Cast));
      ("false",                   (fun _ -> False));
      ("forall",                  (fun _ -> Forall));
+     ("exist",                   (fun _ -> Exist));
      ("foreach",                 (fun _ -> Foreach));
      ("function",                (fun x -> Function_));
      ("overload",                (fun _ -> Overload));

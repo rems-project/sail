@@ -144,18 +144,19 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_fn of atyp * atyp * atyp (* Function type (first-order only in user code), last atyp is an effect *)
  | ATyp_tup of (atyp) list (* Tuple type *)
  | ATyp_app of id * (atyp) list (* type constructor application *)
+ | ATyp_exist of kid list * n_constraint * atyp
 
 and atyp = 
    ATyp_aux of atyp_aux * l
 
 
-type 
+and 
 kinded_id_aux =  (* optionally kind-annotated identifier *)
    KOpt_none of kid (* identifier *)
  | KOpt_kind of kind * kid (* kind-annotated variable *)
 
 
-type 
+and 
 n_constraint_aux =  (* constraint over kind $_$ *)
    NC_fixed of atyp * atyp
  | NC_bounded_ge of atyp * atyp

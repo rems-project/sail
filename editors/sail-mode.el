@@ -719,7 +719,7 @@ Based on Tuareg mode. See Tuareg mode for usage"
       2 font-lock-variable-name-face keep nil)
      ("\\<\\(typedef\\|union\\)\\>[ \t\n]*\\(\\(\\w\\|[_ \t()*,]\\)+\\)"
       2 font-lock-type-face keep nil)
-     ("\\<\\(Type\\|Nat\\|Num\\|Order\\|Effect\\|inc\\|dec\\|implicit\\|vector\\|rreg\\|wreg\\|rmem\\|wmem\\|wmv\\|eamem\\|barr\\|undef\\|escape\\|unspec\\|nondet\\|pure\\|effect\\|IN\\|forall\\|bit\\|unit\\|bool\\|nat\\|real\\|int\\)\\>"
+     ("\\<\\(Type\\|Nat\\|Num\\|Order\\|Effect\\|inc\\|dec\\|implicit\\|vector\\|rreg\\|wreg\\|rmem\\|wmem\\|wmv\\|eamem\\|barr\\|undef\\|escape\\|unspec\\|nondet\\|pure\\|effect\\|IN\\|forall\\|exist\\|bit\\|unit\\|bool\\|nat\\|real\\|int\\)\\>"
       0 font-lock-type-face keep nil)
      ("\\<\\(val\\|extern\\|clause\\|and\\||let\\|rec\\>[ \t\n]*\\(\\(\\w\\|[_,?~.]\\)*\\)"
       2 font-lock-variable-name-face keep nil)
