@@ -343,3 +343,7 @@ let rec string_of_list sep string_of = function
   | [] -> ""
   | [x] -> string_of x
   | x::ls -> (string_of x) ^ sep ^ (string_of_list sep string_of ls)
+
+let string_of_option string_of = function
+  | None -> ""
+  | Some x -> string_of x
