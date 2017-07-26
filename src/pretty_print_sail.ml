@@ -81,7 +81,7 @@ let doc_qi (QI_aux(qi,_)) = match qi with
 (* typ_doc is the doc for the type being quantified *)
 let doc_typquant (TypQ_aux(tq,_)) typ_doc = match tq with
   | TypQ_no_forall -> typ_doc
-  | TypQ_tq [] -> failwith "TypQ_tq with empty list"
+  | TypQ_tq [] -> typ_doc
   | TypQ_tq qlist ->
     (* include trailing break because the caller doesn't know if tq is empty *)
     doc_op dot
@@ -106,7 +106,7 @@ let doc_lit (L_aux(l,_)) =
   | L_bin n -> "0b" ^ n
   | L_real r -> r
   | L_undef -> "undefined"
-  | L_string s -> "\"" ^ s ^ "\"")
+  | L_string s -> "\"" ^ String.escaped s ^ "\"")
 
 let doc_pat, doc_atomic_pat =
   let rec pat pa = pat_colons pa

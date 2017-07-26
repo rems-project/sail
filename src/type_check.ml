@@ -47,6 +47,7 @@ open Ast_util
 open Big_int
 
 let opt_tc_debug = ref 0
+let opt_no_effects = ref false
 let depth = ref 0
 
 let rec indent n = match n with
@@ -82,6 +83,8 @@ let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
 
 let inc_ord = Ord_aux (Ord_inc, Parse_ast.Unknown)
 let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
+
+let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
 
 let int_typ = mk_id_typ (mk_id "int")
 let nat_typ = mk_id_typ (mk_id "nat")
@@ -176,6 +179,27 @@ let string_of_index_sort = function
      "{" ^ string_of_kid kid ^ " | "
      ^ string_of_list " & " (fun (x, y) -> string_of_nexp x ^ " <= " ^ string_of_nexp y) constraints
      ^ "}"
+
+let quant_items : typquant -> quant_item list = function
+  | TypQ_aux (TypQ_tq qis, _) -> qis
+  | TypQ_aux (TypQ_no_forall, _) -> []
+
+let kopt_kid (KOpt_aux (kopt_aux, _)) =
+  match kopt_aux with
+  | KOpt_none kid | KOpt_kind (_, kid) -> kid
+
+let is_nat_kopt = function
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_nat, _)], _), _), _) -> true
+  | KOpt_aux (KOpt_none _, _) -> true
+  | _ -> false
+
+let is_order_kopt = function
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_order, _)], _), _), _) -> true
+  | _ -> false
+
+let is_typ_kopt = function
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_type, _)], _), _), _) -> true
+  | _ -> false
 
 (**************************************************************************)
 (* 1. Substitutions                                                       *)
@@ -481,6 +505,7 @@ end = struct
     || Id.compare id (mk_id "bool") = 0
     || Id.compare id (mk_id "real") = 0
     || Id.compare id (mk_id "list") = 0
+    || Id.compare id (mk_id "string") = 0
 
   (* Check if a type, order, or n-expression is well-formed. Throws a
      type error if the type is badly formed. FIXME: Add arity to type
@@ -554,8 +579,22 @@ end = struct
     else
       begin
         typ_print ("Adding record " ^ string_of_id id);
+        let rec record_typ_args = function
+          | [] -> []
+          | ((QI_aux (QI_id kopt, _)) :: qis) when is_nat_kopt kopt ->
+             mk_typ_arg (Typ_arg_nexp (nvar (kopt_kid kopt))) :: record_typ_args qis
+          | ((QI_aux (QI_id kopt, _)) :: qis) when is_typ_kopt kopt ->
+             mk_typ_arg (Typ_arg_typ (mk_typ (Typ_var (kopt_kid kopt)))) :: record_typ_args qis
+          | ((QI_aux (QI_id kopt, _)) :: qis) when is_order_kopt kopt ->
+             mk_typ_arg (Typ_arg_order (mk_ord (Ord_var (kopt_kid kopt)))) :: record_typ_args qis
+          | (_ :: qis) -> record_typ_args qis
+        in
+        let rectyp = match record_typ_args (quant_items typq) with
+          | [] -> mk_id_typ id
+          | args -> mk_typ (Typ_app (id, args))
+        in
         let fold_accessors accs (typ, fid) =
-          let acc_typ = mk_typ (Typ_fn (mk_id_typ id, typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
+          let acc_typ = mk_typ (Typ_fn (rectyp, typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
           typ_print (indent 1 ^ "Adding accessor " ^ string_of_id fid ^ " :: " ^ string_of_bind (typq, acc_typ));
           Bindings.add fid (typq, acc_typ) accs
         in
@@ -1223,20 +1262,20 @@ let subst_args_unifiers unifiers typ_args =
   in
   List.fold_left subst_unifier typ_args (KBindings.bindings unifiers)
 
+let merge_unifiers l kid uvar1 uvar2 =
+  match uvar1, uvar2 with
+  | Some (U_nexp n1), Some (U_nexp n2) ->
+     if nexp_identical n1 n2 then Some (U_nexp n1)
+     else unify_error l ("Multiple non-identical unifiers for " ^ string_of_kid kid
+                         ^ ": " ^ string_of_nexp n1 ^ " and " ^ string_of_nexp n2)
+  | Some _, Some _ -> unify_error l "Multiple non-identical non-nexp unifiers"
+  | None, Some u2 -> Some u2
+  | Some u1, None -> Some u1
+  | None, None -> None
+
 let unify l env typ1 typ2 =
   typ_print ("Unify " ^ string_of_typ typ1 ^ " with " ^ string_of_typ typ2);
   let goals = KidSet.inter (KidSet.diff (typ_frees typ1) (typ_frees typ2)) (typ_frees typ1) in
-  let merge_unifiers l kid uvar1 uvar2 =
-    match uvar1, uvar2 with
-    | Some (U_nexp n1), Some (U_nexp n2) ->
-       if nexp_identical n1 n2 then Some (U_nexp n1)
-       else unify_error l ("Multiple non-identical unifiers for " ^ string_of_kid kid
-                           ^ ": " ^ string_of_nexp n1 ^ " and " ^ string_of_nexp n2)
-    | Some _, Some _ -> unify_error l "Multiple non-identical non-nexp unifiers"
-    | None, Some u2 -> Some u2
-    | Some u1, None -> Some u1
-    | None, None -> None
-  in
   let rec unify_typ l (Typ_aux (typ1_aux, _) as typ1) (Typ_aux (typ2_aux, _) as typ2) =
     typ_debug ("UNIFYING TYPES " ^ string_of_typ typ1 ^ " AND " ^ string_of_typ typ2);
     match typ1_aux, typ2_aux with
@@ -1300,6 +1339,11 @@ let unify l env typ1 typ2 =
   let typ1, typ2 = Env.expand_synonyms env typ1, Env.expand_synonyms env typ2 in
   unify_typ l typ1 typ2
 
+let merge_uvars l unifiers1 unifiers2 =
+  try KBindings.merge (merge_unifiers l) unifiers1 unifiers2
+  with
+  | Unification_error (_, m) -> typ_error l ("Could not merge unification variables: " ^ m)
+
 (**************************************************************************)
 (* 5. Type checking expressions                                           *)
 (**************************************************************************)
@@ -1341,10 +1385,6 @@ let infer_lit env (L_aux (lit_aux, l) as lit) =
                      (mk_typ (Typ_id (mk_id "bit")))
      end
   | L_undef -> typ_error l "Cannot infer the type of undefined"
-
-let quant_items : typquant -> quant_item list = function
-  | TypQ_aux (TypQ_tq qis, _) -> qis
-  | TypQ_aux (TypQ_no_forall, _) -> []
 
 let is_nat_kid kid = function
   | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_nat, _)], _), kid'), _) -> Kid.compare kid kid' = 0
@@ -1409,7 +1449,13 @@ let typ_of_annot (l, tannot) = match tannot with
   | Some (_, typ, _) -> typ
   | None -> raise (Reporting_basic.err_unreachable l "no type annotation")
 
+let env_of_annot (l, tannot) = match tannot with
+  | Some (env, _, _) -> env
+  | None -> raise (Reporting_basic.err_unreachable l "no type annotation")
+
 let typ_of (E_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
+
+let env_of (E_aux (_, (l, tannot))) = env_of_annot (l, tannot)
 
 let pat_typ_of (P_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
@@ -1658,7 +1704,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      begin
        match Env.lookup_id id env with
        | Union (typq, ctor_typ) ->
-          let inferred_exp = infer_funapp' l env id (typq, mk_typ (Typ_fn (unit_typ, ctor_typ, no_effect))) [mk_lit L_unit] (Some typ) in
+          let inferred_exp = fst (infer_funapp' l env id (typq, mk_typ (Typ_fn (unit_typ, ctor_typ, no_effect))) [mk_lit L_unit] (Some typ)) in
           annot_exp (E_id id) (typ_of inferred_exp)
        | _ -> assert false (* Unreachble due to guard *)
      end
@@ -1892,6 +1938,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
             end
        in
        let regtyp, inferred_flexp = infer_flexp flexp in
+       typ_debug ("REGTYP: " ^ string_of_typ regtyp ^ " / " ^ string_of_typ (Env.expand_synonyms env regtyp));
        match Env.expand_synonyms env regtyp with
        | Typ_aux (Typ_id regtyp_id, _) when Env.is_regtyp regtyp_id env ->
           let base, top, ranges = Env.get_regtyp regtyp_id env in
@@ -1908,6 +1955,12 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
           in
           let checked_exp = crule check_exp env exp vec_typ in
           annot_assign (annot_lexp (LEXP_field (annot_lexp_effect inferred_flexp regtyp (mk_effect [BE_wreg]), field)) vec_typ) checked_exp, env
+       | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
+          let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor field env in
+          let unifiers = try unify l env rectyp_q regtyp with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m) in
+          let field_typ' = subst_unifiers unifiers field_typ in
+          let checked_exp = crule check_exp env exp field_typ' in
+          annot_assign (annot_lexp (LEXP_field (annot_lexp_effect inferred_flexp regtyp (mk_effect [BE_wreg]), field)) field_typ') checked_exp, env
        | _ ->  typ_error l "Field l-expression has invalid type"
      end
   | LEXP_memory (f, xs) ->
@@ -1981,17 +2034,21 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
      end
   | LEXP_vector_range (LEXP_aux (LEXP_id v, _), exp1, exp2) ->
      begin
-       let is_immutable, vtyp = match Env.lookup_id v env with
+       let is_immutable, is_register, vtyp = match Env.lookup_id v env with
          | Unbound -> typ_error l "Cannot assign to element of unbound vector"
          | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
-         | Local (Immutable, vtyp) -> true, vtyp
-         | Local (Mutable, vtyp) | Register vtyp -> false, vtyp
+         | Local (Immutable, vtyp) -> true, false, vtyp
+         | Local (Mutable, vtyp) -> false, false, vtyp
+         | Register vtyp -> false, true, vtyp
        in
        let access = infer_exp (Env.enable_casts env) (E_aux (E_app (mk_id "vector_subrange", [E_aux (E_id v, (l, ())); exp1; exp2]), (l, ()))) in
        let E_aux (E_app (_, [_; inferred_exp1; inferred_exp2]), _) = access in
        match typ_of access with
        | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_typ deref_typ, _)]), _) when string_of_id id = "register" ->
           subtyp l env typ deref_typ;
+          annot_lexp (LEXP_vector_range (annot_lexp_effect (LEXP_id v) vtyp (mk_effect [BE_wreg]), inferred_exp1, inferred_exp2)) typ, env
+       | _ when not is_immutable && is_register ->
+          subtyp l env typ (typ_of access);
           annot_lexp (LEXP_vector_range (annot_lexp_effect (LEXP_id v) vtyp (mk_effect [BE_wreg]), inferred_exp1, inferred_exp2)) typ, env
        | _ when not is_immutable ->
           subtyp l env typ (typ_of access);
@@ -2077,7 +2134,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        (* Accessing a field of a record *)
        | Typ_aux (Typ_id rectyp, _) as typ when Env.is_record rectyp env ->
           begin
-            let inferred_acc = infer_funapp' l (Env.no_casts env) field (Env.get_accessor field env) [strip_exp inferred_exp] None in
+            let inferred_acc, _ = infer_funapp' l (Env.no_casts env) field (Env.get_accessor field env) [strip_exp inferred_exp] None in
             match inferred_acc with
             | E_aux (E_app (field, [inferred_exp]) ,_) -> annot_exp (E_field (inferred_exp, field)) (typ_of inferred_acc)
             | _ -> assert false (* Unreachable *)
@@ -2155,10 +2212,17 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      annot_exp (E_assert (checked_test, checked_msg)) unit_typ
   | _ -> typ_error l ("Cannot infer type of: " ^ string_of_exp exp)
 
-and infer_funapp l env f xs ret_ctx_typ = infer_funapp' l env f (Env.get_val_spec f env) xs ret_ctx_typ
+and infer_funapp l env f xs ret_ctx_typ = fst (infer_funapp' l env f (Env.get_val_spec f env) xs ret_ctx_typ)
+
+and instantiation_of (E_aux (exp_aux, (l, _)) as exp) =
+  let env = env_of exp in
+  match exp_aux with
+  | E_app (f, xs) -> snd (infer_funapp' l (Env.no_casts env) f (Env.get_val_spec f env) (List.map strip_exp xs) (Some (typ_of exp)))
+  | _ -> invalid_arg ("instantiation_of expected application,  got " ^ string_of_exp exp)
 
 and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   let annot_exp exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
+  let all_unifiers = ref KBindings.empty in
   let rec number n = function
     | [] -> []
     | (x :: xs) -> (n, x) :: number (n + 1) xs
@@ -2193,6 +2257,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
          try
            let iarg, unifiers = type_coercion_unify env iarg typ in
            typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
+           all_unifiers := merge_uvars l !all_unifiers unifiers;
            let utyps' = List.map (subst_unifiers unifiers) utyps in
            let typs' = List.map (subst_unifiers unifiers) typs in
            let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
@@ -2216,6 +2281,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
          typ_debug ("INSTANTIATE RETURN:" ^ string_of_typ ret_typ);
          let unifiers = try unify l env ret_typ rct with Unification_error _ -> typ_debug "UERROR"; KBindings.empty in
          typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
+         all_unifiers := merge_uvars l !all_unifiers unifiers;
          let typs' = List.map (subst_unifiers unifiers) typs in
          let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
          let ret_typ' = subst_unifiers unifiers ret_typ in
@@ -2237,8 +2303,8 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
     | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
   in
   match ret_ctx_typ with
-  | None -> exp
-  | Some rct -> type_coercion env exp rct
+  | None -> exp, !all_unifiers
+  | Some rct -> type_coercion env exp rct, !all_unifiers
 
 (**************************************************************************)
 (* 6. Effect system                                                       *)
@@ -2544,7 +2610,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
       [mk_val_spec quant typ id], Env.add_val_spec id (quant, typ) env, eff
     else [], env, declared_eff
   in
-  if equal_effects eff declared_eff
+  if (equal_effects eff declared_eff || !opt_no_effects)
   then
     vs_def @ [DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, None)))], env
   else typ_error l ("Effects do not match: " ^ string_of_effect declared_eff ^ " declared and " ^ string_of_effect eff ^ " found")

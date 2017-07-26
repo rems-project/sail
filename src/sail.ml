@@ -103,6 +103,9 @@ let options = Arg.align ([
   ( "-dno_cast",
     Arg.Set opt_dno_cast,
     " (debug) typecheck without any implicit casting");
+  ( "-no_effects",
+    Arg.Set Type_check.opt_no_effects,
+    " turn off effect checking");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");

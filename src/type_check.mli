@@ -45,6 +45,7 @@ open Ast
 open Ast_util
 
 val opt_tc_debug : int ref
+val opt_no_effects : bool ref
 
 exception Type_error of l * string;;
 
@@ -158,6 +159,7 @@ val unit_typ : typ
 val string_typ : typ
 val real_typ : typ
 val vector_typ : nexp -> nexp -> order -> typ -> typ
+val list_typ : typ -> typ
 
 val inc_ord : order
 val dec_ord : order
@@ -192,10 +194,21 @@ val env_of_annot : Ast.l * tannot -> Env.t
 val typ_of : tannot exp -> typ
 val typ_of_annot : Ast.l * tannot -> typ
 
+val env_of : tannot exp -> Env.t
+
 val pat_typ_of : tannot pat -> typ
 
 val effect_of : tannot exp -> effect
 val effect_of_annot : tannot -> effect
+
+type uvar =
+  | U_nexp of nexp
+  | U_order of order
+  | U_effect of effect
+  | U_typ of typ
+
+(* Throws Invalid_argument if the argument is not a E_app expression *)
+val instantiation_of : tannot exp -> uvar KBindings.t
 
 val propagate_exp_effect : tannot exp -> tannot exp
 
