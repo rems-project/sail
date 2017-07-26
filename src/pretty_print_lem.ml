@@ -274,7 +274,7 @@ let rec doc_pat_lem regtypes apat_needed (P_aux (p,(l,annot)) as pa) = match p w
      | Id_aux (Id "None",_) -> string "Nothing" (* workaround temporary issue *)
      | _ -> doc_id_lem id end
   | P_as(p,id) -> parens (separate space [doc_pat_lem regtypes true p; string "as"; doc_id_lem id])
-  | P_typ(typ,p) -> doc_op colon (doc_pat_lem regtypes true p) (doc_typ_lem regtypes typ)
+  | P_typ(typ,p) -> parens (doc_op colon (doc_pat_lem regtypes true p) (doc_typ_lem regtypes typ))
   | P_vector pats ->
      let ppp =
        (separate space)

@@ -330,6 +330,19 @@ let rec string_of_index_range (BF_aux (ir, _)) =
   | BF_range (n, m) -> string_of_int n ^ " .. " ^ string_of_int m
   | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ ") : (" ^ string_of_index_range ir2 ^ ")"
 
+let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =
+  match (List.fold_right
+           (fun (FCL_aux (FCL_Funcl (id, _, _), _)) id' ->
+             match id' with
+             | Some id' -> if string_of_id id' = string_of_id id then Some id'
+                           else raise (Reporting_basic.err_typ l
+                             ("Function declaration expects all definitions to have the same name, "
+                              ^ string_of_id id ^ " differs from other definitions of " ^ string_of_id id'))
+             | None -> Some id) funcls None)
+  with
+  | Some id -> id
+  | None -> raise (Reporting_basic.err_typ l "funcl list is empty")
+
 module Kid = struct
   type t = kid
   let compare kid1 kid2 = String.compare (string_of_kid kid1) (string_of_kid kid2)

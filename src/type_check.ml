@@ -1889,6 +1889,17 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      annot_pat (P_typ (typ_annot, typed_pat)) typ_annot, env
   | P_lit lit ->
      annot_pat (P_lit lit) (infer_lit env lit), env
+  | P_vector (pat :: pats) ->
+     let fold_pats (pats, env) pat =
+       let inferred_pat, env = infer_pat env pat in
+       pats @ [inferred_pat], env
+     in
+     let ((inferred_pat :: inferred_pats) as pats), env =
+       List.fold_left fold_pats ([], env) (pat :: pats) in
+     let len = nexp_simp (nconstant (List.length pats)) in
+     let etyp = pat_typ_of inferred_pat in
+     List.map (fun pat -> typ_equality l env etyp (pat_typ_of pat)) pats;
+     annot_pat (P_vector pats) (lvector_typ env len etyp), env
   | P_vector_concat (pat :: pats) ->
      let fold_pats (pats, env) pat =
        let inferred_pat, env = infer_pat env pat in
@@ -2579,18 +2590,7 @@ let check_tannotopt typq ret_typ = function
      else typ_error l (string_of_bind (typq, ret_typ) ^ " and " ^ string_of_bind (annot_typq, annot_ret_typ) ^ " do not match between function and val spec")
 
 let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, _)) as fd_aux) =
-  let id =
-    match (List.fold_right
-             (fun (FCL_aux (FCL_Funcl (id, _, _), _)) id' ->
-               match id' with
-               | Some id' -> if string_of_id id' = string_of_id id then Some id'
-                             else typ_error l ("Function declaration expects all definitions to have the same name, "
-                                               ^ string_of_id id ^ " differs from other definitions of " ^ string_of_id id')
-               | None -> Some id) funcls None)
-    with
-    | Some id -> id
-    | None -> typ_error l "funcl list is empty"
-  in
+  let id = id_of_fundef fd_aux in
   typ_print ("\nChecking function " ^ string_of_id id);
   let have_val_spec, (quant, (Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, declared_eff), vl) as typ)), env =
     try true, Env.get_val_spec id env, env with

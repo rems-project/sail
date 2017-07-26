@@ -84,6 +84,8 @@ val string_of_pat : 'a pat -> string
 val string_of_letbind : 'a letbind -> string
 val string_of_index_range : index_range -> string
 
+val id_of_fundef : 'a fundef -> id
+
 module Id : sig
   type t = id
   val compare : id -> id -> int
