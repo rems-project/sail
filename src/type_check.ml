@@ -50,6 +50,11 @@ let opt_tc_debug = ref 0
 let opt_no_effects = ref false
 let depth = ref 0
 
+let rec take n xs = match n, xs with
+  | 0, _ -> []
+  | n, [] -> []
+  | n, (x :: xs) -> x :: take (n - 1) xs 
+
 let rec indent n = match n with
   | 0 -> ""
   | n -> "|   " ^ indent (n - 1)
@@ -2339,6 +2344,9 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
     | Some goal -> typ_error l ("Could not prove existential goal: " ^ string_of_n_constraint goal)
     | None -> ()
   in
+  let universals = Env.get_typ_vars env in
+  let universal_constraints = Env.get_constraints env in
+  let is_bound kid env = KBindings.mem kid (Env.get_typ_vars env) in
   let rec number n = function
     | [] -> []
     | (x :: xs) -> (n, x) :: number (n + 1) xs
@@ -2378,7 +2386,10 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
              | [], None -> env
              | _, Some enc ->
                 let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env ex_kids in
-                let env = List.fold_left uv_nexp_constraint env (KBindings.bindings unifiers) in
+                typ_debug "UV nexping";
+                let fold_exs env (kid, nexp) = if not (is_bound kid env) then env else uv_nexp_constraint env (kid, nexp) in
+                let env = List.fold_left fold_exs env (KBindings.bindings unifiers) in
+                typ_debug "UV nexped";
                 Env.add_constraint enc env
            in
            all_unifiers := merge_uvars l !all_unifiers unifiers;
@@ -2399,6 +2410,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   let instantiate_ret env quants typs ret_typ =
     match ret_ctx_typ with
     | None -> (quants, typs, ret_typ, env)
+    | Some rct when is_exist rct -> (quants, typs, ret_typ, env) 
     | Some rct ->
        begin
          typ_debug ("RCT is " ^ string_of_typ rct);
@@ -2421,23 +2433,29 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
          (quants', typs', ret_typ', env)
        end
   in
-  let exp, env =
+  let (quants, typ_args, typ_ret, env), eff =
     match Env.expand_synonyms env f_typ with
     | Typ_aux (Typ_fn (Typ_aux (Typ_tup typ_args, _), typ_ret, eff), _) ->
-       let (quants, typ_args, typ_ret, env) = instantiate_ret env (quant_items typq) typ_args typ_ret in
-       let (xs_instantiated, typ_ret, env) = instantiate env quants ([], typ_args) typ_ret ([], number 0 xs) in
-       let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
-       prove_goal env;
-       annot_exp (E_app (f, xs_reordered)) typ_ret eff, env
+       instantiate_ret env (quant_items typq) typ_args typ_ret, eff
     | Typ_aux (Typ_fn (typ_arg, typ_ret, eff), _) ->
-       let (quants, typ_args, typ_ret, env) = instantiate_ret env (quant_items typq) [typ_arg] typ_ret in
-       let (xs_instantiated, typ_ret, env) = instantiate env quants ([], typ_args) typ_ret ([], number 0 xs) in
-       let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
-       prove_goal env;
-       annot_exp (E_app (f, xs_reordered)) typ_ret eff, env
+       instantiate_ret env (quant_items typq) [typ_arg] typ_ret, eff
     | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
   in
-  typ_print ("Type variables: " ^ string_of_list ", " (fun (kid, bk) -> string_of_kid kid) (KBindings.bindings (Env.get_typ_vars env)));
+  let (xs_instantiated, typ_ret, env) = instantiate env quants ([], typ_args) typ_ret ([], number 0 xs) in
+  let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
+
+  prove_goal env;
+
+  let ty_vars = List.map fst (KBindings.bindings (Env.get_typ_vars env)) in
+  let existentials = List.filter (fun kid -> not (KBindings.mem kid universals)) ty_vars in
+  let num_new_ncs = List.length (Env.get_constraints env) - List.length universal_constraints in
+  let ex_constraints = take num_new_ncs (Env.get_constraints env) in 
+
+  typ_debug ("Existentials: " ^ string_of_list ", " string_of_kid existentials);
+  typ_debug ("Existential constraints: " ^ string_of_list ", " string_of_n_constraint ex_constraints);
+
+  let exp = annot_exp (E_app (f, xs_reordered)) typ_ret eff in
+
   match ret_ctx_typ with
   | None -> exp, !all_unifiers
   | Some rct ->
