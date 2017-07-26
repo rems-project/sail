@@ -427,6 +427,8 @@ nexp_typ4:
     { tlocl (ATyp_constant $1) 1 1 }
   | tid
     { tloc (ATyp_id $1) }
+  | Lcurly id Rcurly
+    { tloc (ATyp_id $2) }
   | tyvar
     { tloc (ATyp_var $1) }
   | Lparen tup_typ Rparen

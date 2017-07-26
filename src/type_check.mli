@@ -147,6 +147,7 @@ val nsum : nexp -> nexp -> nexp
 val ntimes : nexp -> nexp -> nexp
 val npow2 : nexp -> nexp
 val nvar : kid -> nexp
+val nid : id -> nexp
 
 (* Sail builtin types. *)
 val int_typ : typ

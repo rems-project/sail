@@ -209,7 +209,7 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   | _ -> atomic_nexp_typ ne
   and atomic_nexp_typ ((Nexp_aux(n,_)) as ne) = match n with
     | Nexp_var v -> doc_var v
-    | Nexp_id i  -> doc_id i
+    | Nexp_id i  -> braces (doc_id i)
     | Nexp_constant i -> doc_int i
     | Nexp_neg _ | Nexp_exp _ | Nexp_times _ | Nexp_sum _ | Nexp_minus _->
       group (parens (nexp ne))

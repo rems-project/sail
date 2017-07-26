@@ -119,6 +119,7 @@ let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)
 let ntimes n1 n2 = Nexp_aux (Nexp_times (n1, n2), Parse_ast.Unknown)
 let npow2 n = Nexp_aux (Nexp_exp n, Parse_ast.Unknown)
 let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
+let nid id = Nexp_aux (Nexp_id id, Parse_ast.Unknown)
 
 let nc_eq n1 n2 = mk_nc (NC_fixed (n1, n2))
 let nc_neq n1 n2 = mk_nc (NC_not_equal (n1, n2))

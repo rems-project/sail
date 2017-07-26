@@ -219,49 +219,28 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
     ), l)
 
 and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
-  (*let _ = Printf.eprintf "to_ast_nexp\n" in*)
   match n with
   | Parse_ast.ATyp_aux(t,l) ->
     (match t with
-     | Parse_ast.ATyp_id(i) ->
-       let i = to_ast_id i in
-       let v = id_to_string i in
-       let mk = Envmap.apply k_env v in
-       (match mk with
-        | Some(k) -> Nexp_aux((match k.k with
-            | K_Nat -> Nexp_id i
-            | K_infer -> k.k <- K_Nat; Nexp_id i
-            | _ -> typ_error l "Required an identifier with kind Nat, encountered " (Some i) None (Some k)),l)
-        | None -> typ_error l "Encountered an unbound variable" (Some i) None None)
-     | Parse_ast.ATyp_var(v) ->                 
-       let v = to_ast_var v in
-       let mk = Envmap.apply k_env (var_to_string v) in
-       (*let _ = 
-         Envmap.iter (fun v' k -> Printf.eprintf "%s -> %s, %s =? %b\n"
-         v' (kind_to_string k) (var_to_string v) ((var_to_string v) = v') ) k_env in *)
-       (match mk with
-        | Some(k) -> Nexp_aux((match k.k with
-            | K_Nat -> Nexp_var v
-            | K_infer -> k.k <- K_Nat; Nexp_var v
-            | _ -> typ_error l "Required a variable with kind Nat, encountered " None (Some v) (Some k)),l)
-        | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
-    | Parse_ast.ATyp_constant(i) -> Nexp_aux(Nexp_constant(i),l)
-    | Parse_ast.ATyp_sum(t1,t2) ->
-      let n1 = to_ast_nexp k_env t1 in
-      let n2 = to_ast_nexp k_env t2 in
-      Nexp_aux(Nexp_sum(n1,n2),l)
-    | Parse_ast.ATyp_exp(t1) -> Nexp_aux(Nexp_exp(to_ast_nexp k_env t1),l)
-    | Parse_ast.ATyp_neg(t1) -> Nexp_aux(Nexp_neg(to_ast_nexp k_env t1),l)
-    | Parse_ast.ATyp_times(t1,t2) ->
-      let n1 = to_ast_nexp k_env t1 in
-      let n2 = to_ast_nexp k_env t2 in
-      Nexp_aux(Nexp_times(n1,n2),l)
-    | Parse_ast.ATyp_minus(t1,t2) ->
-      let n1 = to_ast_nexp k_env t1 in
-      let n2 = to_ast_nexp k_env t2 in
-      Nexp_aux(Nexp_minus(n1,n2),l)
-    | _ -> typ_error l "Requred an item of kind Nat, encountered an illegal form for this kind" None None None)
-    
+     | Parse_ast.ATyp_id i -> Nexp_aux (Nexp_id (to_ast_id i), l)
+     | Parse_ast.ATyp_var v -> Nexp_aux (Nexp_var (to_ast_var v), l)
+     | Parse_ast.ATyp_constant i -> Nexp_aux (Nexp_constant i, l)
+     | Parse_ast.ATyp_sum (t1, t2) ->
+        let n1 = to_ast_nexp k_env t1 in
+        let n2 = to_ast_nexp k_env t2 in
+        Nexp_aux (Nexp_sum (n1, n2), l)
+     | Parse_ast.ATyp_exp t1 -> Nexp_aux(Nexp_exp(to_ast_nexp k_env t1),l)
+     | Parse_ast.ATyp_neg t1 -> Nexp_aux(Nexp_neg(to_ast_nexp k_env t1),l)
+     | Parse_ast.ATyp_times (t1, t2) ->
+        let n1 = to_ast_nexp k_env t1 in
+        let n2 = to_ast_nexp k_env t2 in
+        Nexp_aux (Nexp_times (n1, n2), l)
+     | Parse_ast.ATyp_minus (t1, t2) ->
+        let n1 = to_ast_nexp k_env t1 in
+        let n2 = to_ast_nexp k_env t2 in
+        Nexp_aux (Nexp_minus (n1, n2), l)
+     | _ -> typ_error l "Requred an item of kind Nat, encountered an illegal form for this kind" None None None)
+
 and to_ast_order (k_env : kind Envmap.t) (def_ord : order) (o: Parse_ast.atyp) : Ast.order =
   match o with
   | Parse_ast.ATyp_aux(t,l) ->
