@@ -293,6 +293,7 @@ let rec string_of_exp (E_aux (exp, _)) =
      ^ ") { "
      ^ string_of_exp body
   | E_assert (test, msg) -> "assert(" ^ string_of_exp test ^ ", " ^ string_of_exp msg ^ ")"
+  | E_exit exp -> "exit " ^ string_of_exp exp
   | _ -> "INTERNAL"
 and string_of_pexp (Pat_aux (pexp, _)) =
   match pexp with
