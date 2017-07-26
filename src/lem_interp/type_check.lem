@@ -54,7 +54,7 @@ open import Interp_ast
 open import Interp_utilities
 open import Instruction_extractor
 
-type tannot = Interp_utilities.tannot
+type tannot = Interp_ast.tannot
 
 (*Env of t counter, nexp counter, order counter, type env, order env, nexp env, nec env*)
 type envs = | Env of nat * nat * nat * map string (t * nec) * map string order * map string ne * map string nec

@@ -1,6 +1,6 @@
 #OTT=../../../rsem/ott/bin/ott
 # this is the binary that gets rebuilt by make in ott/src:
-OTT=../../../github/ott/src/ott -merge true
+OTT=../../../github/ott/src/ott
 OTTLIB=$(dir $(shell which ott))../hol
 
 .PHONY: all
@@ -33,7 +33,7 @@ doc_in.tex: l2.ott primitive_doc.ott l2_terminals_tt.ott l2_typ.ott l2_rules.ott
 %Script.sml: %.ott
 	$(OTT) -sort false -generate_aux_rules true -o $@ -picky_multiple_parses true $^
 
-l2.lem: l2.ott l2_typ.ott
+l2.lem: l2.ott
 	$(OTT) -sort false -generate_aux_rules true -o $@ -picky_multiple_parses true $^
 
 clean:

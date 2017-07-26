@@ -41,8 +41,6 @@ metavar regexp ::=
 embed
 {{ ocaml
 
-type text = string
-
 type l =
   | Unknown
   | Int of string * l option
@@ -77,7 +75,7 @@ val subst : forall 'a. list 'a -> list 'a -> bool
 }}
 
 metavar x , y , z ::=
-  {{ ocaml text }}
+  {{ ocaml string }}
   {{ lem string }}
   {{ hol string }}
   {{ com identifier }}
@@ -86,7 +84,7 @@ metavar x , y , z ::=
 
 metavar ix ::=
   {{ lex alphanum }}
-  {{ ocaml text }}
+  {{ ocaml string }}
   {{ lem string }}
   {{ hol string }}
   {{ com infix identifier }}

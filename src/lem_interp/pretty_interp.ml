@@ -71,6 +71,92 @@ let pp_format_id (Id_aux(i,_)) =
   | Id(i) -> i
   | DeIid(x) -> "(deinfix " ^ x ^ ")"
 
+let lit_to_string = function
+  | L_unit -> "unit"
+  | L_zero -> "0b0"
+  | L_one -> "0b1"
+  | L_true -> "true"
+  | L_false -> "false"
+  | L_num n -> Nat_big_num.to_string n
+  | L_hex s -> "0x"^s
+  | L_bin s -> "0b"^s
+  | L_undef -> "undefined"
+  | L_string s -> "\"" ^ s ^ "\""
+;;
+
+let id_to_string = function
+  | Id_aux(Id s,_) | Id_aux(DeIid s,_) -> s
+;;
+
+let rec loc_to_string = function
+  | Unknown -> "location unknown"
+  | Int(s,_) -> s
+  | Generated l -> "Generated near " ^ loc_to_string l
+  | Range(s,fline,fchar,tline,tchar) -> 
+     if fline = tline
+     then sprintf "%s:%d:%d" s fline fchar
+     else sprintf "%s:%d:%d-%d:%d" s fline fchar tline tchar
+;;
+  
+let collapse_leading s =
+  if String.length s <= 8 then s else
+  let first_bit = s.[0] in
+  let templ = sprintf "%c...%c" first_bit first_bit in
+
+  let rec find_first_diff str cha pos =
+    if pos >= String.length str then None
+    else if str.[pos] != cha then Some pos
+    else find_first_diff str cha (pos+1)
+  in
+
+  match find_first_diff s first_bit 0 with
+  | None -> templ
+  | Some pos when pos > 4 -> templ ^ (String.sub s pos ((String.length s)- pos))
+  | _ -> s
+;;
+
+(* pp the bytes of a Bytevector as a hex value *)
+
+let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (function
+  | Interp_ast.V_lit(L_aux(L_zero, _)) -> "0"
+  | Interp_ast.V_lit(L_aux(L_one, _)) -> "1"
+  | Interp_ast.V_lit(L_aux(L_undef, _)) -> "u"
+  | Interp_ast.V_unknown -> "?"
+  | v -> (Printf.printf "bitvec found a non bit %s%!\n" (Interp.string_of_value v));assert false) 
+								                                               (List.map Interp.detaint l)))
+  ;;
+
+
+let rec val_to_string_internal ((Interp.LMem (_,_,memory,_)) as mem) = function
+ | Interp_ast.V_boxref(n, t) -> val_to_string_internal mem (Pmap.find n memory)
+ | Interp_ast.V_lit (L_aux(l,_)) -> sprintf "%s" (lit_to_string l)
+ | Interp_ast.V_tuple l ->
+     let repr = String.concat ", " (List.map (val_to_string_internal mem) l) in
+     sprintf "(%s)" repr
+ | Interp_ast.V_list l ->
+     let repr = String.concat "; " (List.map (val_to_string_internal mem) l) in
+     sprintf "[||%s||]" repr
+ | Interp_ast.V_vector (first_index, inc, l) ->
+     let last_index = (if (Interp_ast.IInc = inc) then List.length l - 1 else 1 - List.length l) + first_index  in
+     let repr =
+       try bitvec_to_string l
+       with Failure _ ->
+         sprintf "[%s]" (String.concat "; " (List.map (val_to_string_internal mem) l)) in
+     sprintf "%s [%s..%s]" repr (string_of_int first_index) (string_of_int last_index)
+ | (Interp_ast.V_vector_sparse(first_index,last_index,inc,l,default) as v) -> 
+   val_to_string_internal mem (Interp_lib.fill_in_sparse v)
+ | Interp_ast.V_record(_, l) ->
+     let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string_internal mem value) in
+     let repr = String.concat "; " (List.map  pp l) in
+     sprintf "{%s}" repr
+ | Interp_ast.V_ctor (id,_,_, value) ->
+     sprintf "%s %s" (id_to_string id) (val_to_string_internal mem value)
+ | Interp_ast.V_register _ | Interp_ast.V_register_alias _ ->
+     sprintf "reg-as-value" 
+ | Interp_ast.V_unknown -> "unknown"
+ | Interp_ast.V_track(v,rs) -> (*"tainted by {" ^ (Interp_utilities.list_to_string Interp.string_of_reg_form "," rs) ^ "} --" ^ *) (val_to_string_internal mem v)
+;;
+
 (****************************************************************************
  * PPrint-based source-to-source pretty printer
 ****************************************************************************)
@@ -293,108 +379,108 @@ let doc_pat, doc_atomic_pat =
   in pat, atomic_pat
 
 let doc_exp, doc_let =
-  let rec exp env add_red show_hole_contents e = group (or_exp env add_red show_hole_contents e)
-  and or_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+  let rec exp env mem add_red show_hole_contents e = group (or_exp env mem add_red show_hole_contents e)
+  and or_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id ("|" | "||"),_) as op),r) ->
-      doc_op (doc_id op) (and_exp env add_red show_hole_contents l) (or_exp env add_red show_hole_contents r)
-  | _ -> and_exp env add_red show_hole_contents expr
-  and and_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+      doc_op (doc_id op) (and_exp env mem add_red show_hole_contents l) (or_exp env mem add_red show_hole_contents r)
+  | _ -> and_exp env mem add_red show_hole_contents expr
+  and and_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id ("&" | "&&"),_) as op),r) ->
-    doc_op (doc_id op) (eq_exp env add_red show_hole_contents l) (and_exp env add_red show_hole_contents r)
-  | _ -> eq_exp env add_red show_hole_contents expr
-  and eq_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+    doc_op (doc_id op) (eq_exp env mem add_red show_hole_contents l) (and_exp env mem add_red show_hole_contents r)
+  | _ -> eq_exp env mem add_red show_hole_contents expr
+  and eq_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id (
     (* XXX this is not very consistent - is the parser bogus here? *)
       "=" | "==" | "!="
     | ">=" | ">=_s" | ">=_u" | ">" | ">_s" | ">_u"
     | "<=" | "<=_s" | "<" | "<_s" | "<_si" | "<_u"
     ),_) as op),r) ->
-      doc_op (doc_id op) (eq_exp env add_red show_hole_contents l) (at_exp env add_red show_hole_contents r)
+      doc_op (doc_id op) (eq_exp env mem add_red show_hole_contents l) (at_exp env mem add_red show_hole_contents r)
   (* XXX assignment should not have the same precedence as equal etc. *)
   | E_assign(le,exp) ->
-    doc_op coloneq (doc_lexp env add_red show_hole_contents le) (at_exp env add_red show_hole_contents exp)
-  | _ -> at_exp env add_red show_hole_contents expr
-  and at_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+    doc_op coloneq (doc_lexp env mem add_red show_hole_contents le) (at_exp env mem add_red show_hole_contents exp)
+  | _ -> at_exp env mem add_red show_hole_contents expr
+  and at_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id ("@" | "^^" | "^" | "~^"),_) as op),r) ->
-      doc_op (doc_id op) (cons_exp env add_red show_hole_contents l) (at_exp env add_red show_hole_contents r)
-  | _ -> cons_exp env add_red show_hole_contents expr
-  and cons_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+      doc_op (doc_id op) (cons_exp env mem add_red show_hole_contents l) (at_exp env mem add_red show_hole_contents r)
+  | _ -> cons_exp env mem add_red show_hole_contents expr
+  and cons_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   | E_vector_append(l,r) ->
-      doc_op colon (shift_exp env add_red show_hole_contents l) (cons_exp env add_red show_hole_contents r)
+      doc_op colon (shift_exp env mem add_red show_hole_contents l) (cons_exp env mem add_red show_hole_contents r)
   | E_cons(l,r) ->
-      doc_op colon (shift_exp env add_red show_hole_contents l) (cons_exp env add_red show_hole_contents r)
-  | _ -> shift_exp env add_red show_hole_contents expr
-  and shift_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+      doc_op colon (shift_exp env mem add_red show_hole_contents l) (cons_exp env mem add_red show_hole_contents r)
+  | _ -> shift_exp env mem add_red show_hole_contents expr
+  and shift_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id (">>" | ">>>" | "<<" | "<<<"),_) as op),r) ->
-      doc_op (doc_id op) (shift_exp env add_red show_hole_contents l) (plus_exp env add_red show_hole_contents r)
-  | _ -> plus_exp env add_red show_hole_contents expr
-  and plus_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+      doc_op (doc_id op) (shift_exp env mem add_red show_hole_contents l) (plus_exp env mem add_red show_hole_contents r)
+  | _ -> plus_exp env mem add_red show_hole_contents expr
+  and plus_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id ("+" | "-"| "+_s" | "-_s" ),_) as op),r) ->
-      doc_op (doc_id op) (plus_exp env add_red show_hole_contents l) (star_exp env add_red show_hole_contents r)
-  | _ -> star_exp env add_red show_hole_contents expr
-  and star_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+      doc_op (doc_id op) (plus_exp env mem add_red show_hole_contents l) (star_exp env mem add_red show_hole_contents r)
+  | _ -> star_exp env mem add_red show_hole_contents expr
+  and star_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id (
       "*" | "/"
     | "div" | "quot" | "rem" | "mod" | "quot_s" | "mod_s" 
     | "*_s" | "*_si" | "*_u" | "*_ui"),_) as op),r) ->
-      doc_op (doc_id op) (star_exp env add_red show_hole_contents l) (starstar_exp env add_red show_hole_contents r)
-  | _ -> starstar_exp env add_red show_hole_contents expr
-  and starstar_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+      doc_op (doc_id op) (star_exp env mem add_red show_hole_contents l) (starstar_exp env mem add_red show_hole_contents r)
+  | _ -> starstar_exp env mem add_red show_hole_contents expr
+  and starstar_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id "**",_) as op),r) ->
-      doc_op (doc_id op) (starstar_exp env add_red show_hole_contents l) (app_exp env add_red show_hole_contents r)
-  | E_if _ | E_for _ | E_let _ -> right_atomic_exp env add_red show_hole_contents expr
-  | _ -> app_exp env add_red show_hole_contents expr
-  and right_atomic_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+      doc_op (doc_id op) (starstar_exp env mem add_red show_hole_contents l) (app_exp env mem add_red show_hole_contents r)
+  | E_if _ | E_for _ | E_let _ -> right_atomic_exp env mem add_red show_hole_contents expr
+  | _ -> app_exp env mem add_red show_hole_contents expr
+  and right_atomic_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   (* Special case: omit "else ()" when the else branch is empty. *)
   | E_if(c,t,E_aux(E_block [], _)) ->
-      string "if" ^^ space ^^ group (exp env add_red show_hole_contents c) ^/^
-      string "then" ^^ space ^^ group (exp env add_red show_hole_contents t)
+      string "if" ^^ space ^^ group (exp env mem add_red show_hole_contents c) ^/^
+      string "then" ^^ space ^^ group (exp env mem add_red show_hole_contents t)
   | E_if(c,t,e) ->
-      string "if" ^^ space ^^ group (exp env add_red show_hole_contents c) ^/^
-      string "then" ^^ space ^^ group (exp env add_red show_hole_contents t) ^/^
-      string "else" ^^ space ^^ group (exp env add_red show_hole_contents e)
+      string "if" ^^ space ^^ group (exp env mem add_red show_hole_contents c) ^/^
+      string "then" ^^ space ^^ group (exp env mem add_red show_hole_contents t) ^/^
+      string "else" ^^ space ^^ group (exp env mem add_red show_hole_contents e)
   | E_for(id,exp1,exp2,exp3,order,exp4) ->
       string "foreach" ^^ space ^^
       group (parens (
         separate (break 1) [
           doc_id id;
-          string "from " ^^ (atomic_exp env add_red show_hole_contents exp1);
-          string "to " ^^ (atomic_exp env add_red show_hole_contents exp2);
-          string "by " ^^ (atomic_exp env add_red show_hole_contents exp3);
+          string "from " ^^ (atomic_exp env mem add_red show_hole_contents exp1);
+          string "to " ^^ (atomic_exp env mem add_red show_hole_contents exp2);
+          string "by " ^^ (atomic_exp env mem add_red show_hole_contents exp3);
           string "in " ^^ doc_ord order
         ]
       )) ^/^
-        (exp env add_red show_hole_contents exp4)
-  | E_let(leb,e) -> doc_op (string "in") (let_exp env add_red show_hole_contents leb) (exp env add_red show_hole_contents e)
-  | _ -> group (parens (exp env add_red show_hole_contents expr))
-  and app_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+        (exp env mem add_red show_hole_contents exp4)
+  | E_let(leb,e) -> doc_op (string "in") (let_exp env mem add_red show_hole_contents leb) (exp env mem add_red show_hole_contents e)
+  | _ -> group (parens (exp env mem add_red show_hole_contents expr))
+  and app_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   | E_app(f,args) ->
-      doc_unop (doc_id f) (parens (separate_map comma (exp env add_red show_hole_contents) args))
-  | _ -> vaccess_exp env add_red show_hole_contents expr
-  and vaccess_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+      doc_unop (doc_id f) (parens (separate_map comma (exp env mem add_red show_hole_contents) args))
+  | _ -> vaccess_exp env mem add_red show_hole_contents expr
+  and vaccess_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
   | E_vector_access(v,e) ->
-    (atomic_exp env add_red show_hole_contents v) ^^ brackets (exp env add_red show_hole_contents e)
+    (atomic_exp env mem add_red show_hole_contents v) ^^ brackets (exp env mem add_red show_hole_contents e)
   | E_vector_subrange(v,e1,e2) ->
-    (atomic_exp env add_red show_hole_contents v) ^^
-    brackets (doc_op dotdot (exp env add_red show_hole_contents e1) (exp env add_red show_hole_contents e2))
-  | _ -> field_exp env add_red show_hole_contents expr
-  and field_exp env add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
-  | E_field(fexp,id) -> (atomic_exp env add_red show_hole_contents fexp) ^^ dot ^^ doc_id id
-  | _ -> atomic_exp env add_red show_hole_contents expr
-  and atomic_exp env add_red (show_hole_contents:bool) ((E_aux(e,annot)) as expr) = match e with
+    (atomic_exp env mem add_red show_hole_contents v) ^^
+    brackets (doc_op dotdot (exp env mem add_red show_hole_contents e1) (exp env mem add_red show_hole_contents e2))
+  | _ -> field_exp env mem add_red show_hole_contents expr
+  and field_exp env mem add_red show_hole_contents ((E_aux(e,_)) as expr) = match e with
+  | E_field(fexp,id) -> (atomic_exp env mem add_red show_hole_contents fexp) ^^ dot ^^ doc_id id
+  | _ -> atomic_exp env mem add_red show_hole_contents expr
+  and atomic_exp env mem add_red (show_hole_contents:bool) ((E_aux(e,annot)) as expr) = match e with
   (* Special case: an empty block is equivalent to unit, but { } is a syntactic struct *)
   | E_block [] -> string "()"
   | E_block exps ->
-      let exps_doc = separate_map (semi ^^ hardline) (exp env add_red show_hole_contents) exps in
+      let exps_doc = separate_map (semi ^^ hardline) (exp env mem add_red show_hole_contents) exps in
       surround 2 1 lbrace exps_doc rbrace
   | E_nondet exps ->
-    let exps_doc = separate_map (semi ^^ hardline) (exp env add_red show_hole_contents) exps in
+    let exps_doc = separate_map (semi ^^ hardline) (exp env mem add_red show_hole_contents) exps in
     string "nondet" ^^ space ^^ (surround 2 1 lbrace exps_doc rbrace)
   | E_id id -> 
     (match id with
     | Id_aux(Id("0"), _) -> 
         (match Interp.in_lenv env id with
-          | Interp.V_unknown -> string (add_red "[_]")
+          | Interp_ast.V_unknown -> string (add_red "[_]")
           | v ->
             if show_hole_contents
             then string (add_red (Interp.string_of_value v))
@@ -403,22 +489,22 @@ let doc_exp, doc_let =
   | E_lit lit -> doc_lit lit
   | E_cast(typ,e) ->
       if !ignore_casts then
-        atomic_exp env add_red show_hole_contents e
+        atomic_exp env mem add_red show_hole_contents e
       else
-        prefix 2 1 (parens (doc_typ typ)) (group (atomic_exp env add_red show_hole_contents e))
+        prefix 2 1 (parens (doc_typ typ)) (group (atomic_exp env mem add_red show_hole_contents e))
   | E_internal_cast(_,e) ->
       (* XXX ignore internal casts in the interpreter *)
-      atomic_exp env add_red show_hole_contents e
+      atomic_exp env mem add_red show_hole_contents e
   | E_tuple exps ->
-      parens (separate_map comma (exp env add_red show_hole_contents) exps)
+      parens (separate_map comma (exp env mem add_red show_hole_contents) exps)
   | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
-      braces (separate_map semi_sp (doc_fexp env add_red show_hole_contents) fexps)
+      braces (separate_map semi_sp (doc_fexp env mem add_red show_hole_contents) fexps)
   | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
     braces (doc_op (string "with")
-              (exp env add_red show_hole_contents e)
-              (separate_map semi_sp (doc_fexp env add_red show_hole_contents) fexps))
+              (exp env mem add_red show_hole_contents e)
+              (separate_map semi_sp (doc_fexp env mem add_red show_hole_contents) fexps))
   | E_vector exps ->
-    let default_print _ = brackets (separate_map comma (exp env add_red show_hole_contents) exps) in
+    let default_print _ = brackets (separate_map comma (exp env mem add_red show_hole_contents) exps) in
     (match exps with
      | [] -> default_print ()
      | es ->
@@ -441,28 +527,28 @@ let doc_exp, doc_let =
     let default_string = 
       (match default with
         | Def_val_empty -> string "" 
-        | Def_val_dec e -> concat [semi; space; string "default"; equals; (exp env add_red show_hole_contents e)]) in 
-      let iexp (i,e) = doc_op equals (doc_int i) (exp env add_red show_hole_contents e) in
+        | Def_val_dec e -> concat [semi; space; string "default"; equals; (exp env mem add_red show_hole_contents e)]) in 
+      let iexp (i,e) = doc_op equals (doc_int i) (exp env mem add_red show_hole_contents e) in
       brackets (concat [(separate_map comma iexp iexps);default_string])
   | E_vector_update(v,e1,e2) ->
     brackets (doc_op (string "with")
-                (exp env add_red show_hole_contents v)
-                (doc_op equals (atomic_exp env add_red show_hole_contents e1)
-                   (exp env add_red show_hole_contents e2)))
+                (exp env mem add_red show_hole_contents v)
+                (doc_op equals (atomic_exp env mem add_red show_hole_contents e1)
+                   (exp env mem add_red show_hole_contents e2)))
   | E_vector_update_subrange(v,e1,e2,e3) ->
       brackets (
-        doc_op (string "with") (exp env add_red show_hole_contents v)
-          (doc_op equals ((atomic_exp env add_red show_hole_contents e1) ^^ colon
-                          ^^ (atomic_exp env add_red show_hole_contents e2)) (exp env add_red show_hole_contents e3)))
+        doc_op (string "with") (exp env mem add_red show_hole_contents v)
+          (doc_op equals ((atomic_exp env mem add_red show_hole_contents e1) ^^ colon
+                          ^^ (atomic_exp env mem add_red show_hole_contents e2)) (exp env mem add_red show_hole_contents e3)))
   | E_list exps ->
-      squarebarbars (separate_map comma (exp env add_red show_hole_contents) exps)
+      squarebarbars (separate_map comma (exp env mem add_red show_hole_contents) exps)
   | E_case(e,pexps) ->
-      let opening = separate space [string "switch"; exp env add_red show_hole_contents e; lbrace] in
-      let cases = separate_map (break 1) (doc_case env add_red show_hole_contents) pexps in
+      let opening = separate space [string "switch"; exp env mem add_red show_hole_contents e; lbrace] in
+      let cases = separate_map (break 1) (doc_case env mem add_red show_hole_contents) pexps in
       surround 2 1 opening cases rbrace
-  | E_exit e -> separate space [string "exit"; exp env add_red show_hole_contents e;]
-  | E_return e -> separate space [string "return"; exp env add_red show_hole_contents e;]
-  | E_assert(e,msg) -> string "assert" ^^ parens (separate_map comma (exp env add_red show_hole_contents) [e; msg])
+  | E_exit e -> separate space [string "exit"; exp env mem add_red show_hole_contents e;]
+  | E_return e -> separate space [string "return"; exp env mem add_red show_hole_contents e;]
+  | E_assert(e,msg) -> string "assert" ^^ parens (separate_map comma (exp env mem add_red show_hole_contents) [e; msg])
   (* adding parens and loop for lower precedence *)
   | E_app (_, _)|E_vector_access (_, _)|E_vector_subrange (_, _, _)
   | E_cons (_, _)|E_field (_, _)|E_assign (_, _)
@@ -484,57 +570,59 @@ let doc_exp, doc_let =
     | "*_s" | "*_si" | "*_u" | "*_ui"
     | "**"), _))
     , _) ->
-      group (parens (exp env add_red show_hole_contents expr))
+      group (parens (exp env mem add_red show_hole_contents expr))
   (* XXX fixup deinfix into infix ones *)
   | E_app_infix(l, (Id_aux((DeIid op), annot')), r) ->
     group (parens
-             (exp env add_red show_hole_contents (E_aux ((E_app_infix (l, (Id_aux(Id op, annot')), r)), annot))))
+             (exp env mem add_red show_hole_contents (E_aux ((E_app_infix (l, (Id_aux(Id op, annot')), r)), annot))))
   (* XXX default precedence for app_infix? *)
   | E_app_infix(l,op,r) ->
       failwith ("unexpected app_infix operator " ^ (pp_format_id op))
       (* doc_op (doc_id op) (exp l) (exp r) *)
   (* XXX missing case *)
-  | E_comment _ | E_comment_struc _ -> string "" 
+  | E_comment _ | E_comment_struc _ -> string ""
+  | E_internal_value v ->
+     string (val_to_string_internal mem v)
   | _-> failwith "internal expression escaped"
 
-  and let_exp env add_red show_hole_contents (LB_aux(lb,_)) = match lb with
+  and let_exp env mem add_red show_hole_contents (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->
       prefix 2 1
         (separate space [string "let"; doc_typscm_atomic ts; doc_atomic_pat pat; equals])
-        (exp env add_red show_hole_contents e)
+        (exp env mem add_red show_hole_contents e)
   | LB_val_implicit(pat,e) ->
       prefix 2 1
         (separate space [string "let"; doc_atomic_pat pat; equals])
-        (exp env add_red show_hole_contents e)
+        (exp env mem add_red show_hole_contents e)
 
-  and doc_fexp env add_red show_hole_contents (FE_aux(FE_Fexp(id,e),_)) =
-    doc_op equals (doc_id id) (exp env add_red show_hole_contents e)
+  and doc_fexp env mem add_red show_hole_contents (FE_aux(FE_Fexp(id,e),_)) =
+    doc_op equals (doc_id id) (exp env mem add_red show_hole_contents e)
 
-  and doc_case env add_red show_hole_contents (Pat_aux(Pat_exp(pat,e),_)) =
-    doc_op arrow (separate space [string "case"; doc_atomic_pat pat]) (group (exp env add_red show_hole_contents e))
+  and doc_case env mem add_red show_hole_contents (Pat_aux(Pat_exp(pat,e),_)) =
+    doc_op arrow (separate space [string "case"; doc_atomic_pat pat]) (group (exp env mem add_red show_hole_contents e))
 
   (* lexps are parsed as eq_exp - we need to duplicate the precedence
    * structure for them *)
-  and doc_lexp env add_red show_hole_contents le = app_lexp env add_red show_hole_contents le
-  and app_lexp env add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_memory(id,args) -> doc_id id ^^ parens (separate_map comma (exp env add_red show_hole_contents) args)
-  | _ -> vaccess_lexp env add_red show_hole_contents le
-  and vaccess_lexp env add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
+  and doc_lexp env mem add_red show_hole_contents le = app_lexp env mem add_red show_hole_contents le
+  and app_lexp env mem add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
+  | LEXP_memory(id,args) -> doc_id id ^^ parens (separate_map comma (exp env mem add_red show_hole_contents) args)
+  | _ -> vaccess_lexp env mem add_red show_hole_contents le
+  and vaccess_lexp env mem add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
     | LEXP_vector(v,e) ->
-      (atomic_lexp env add_red show_hole_contents v) ^^ brackets (exp env add_red show_hole_contents e)
+      (atomic_lexp env mem add_red show_hole_contents v) ^^ brackets (exp env mem add_red show_hole_contents e)
     | LEXP_vector_range(v,e1,e2) ->
-      (atomic_lexp env add_red show_hole_contents v) ^^
-      brackets ((exp env add_red show_hole_contents e1) ^^ dotdot ^^ (exp env add_red show_hole_contents e2))
-    | _ -> field_lexp env add_red show_hole_contents le
-  and field_lexp env add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
-  | LEXP_field(v,id) -> (atomic_lexp env add_red show_hole_contents v) ^^ dot ^^ doc_id id
-  | _ -> atomic_lexp env add_red show_hole_contents le
-  and atomic_lexp env add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
+      (atomic_lexp env mem add_red show_hole_contents v) ^^
+      brackets ((exp env mem add_red show_hole_contents e1) ^^ dotdot ^^ (exp env mem add_red show_hole_contents e2))
+    | _ -> field_lexp env mem add_red show_hole_contents le
+  and field_lexp env mem add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
+  | LEXP_field(v,id) -> (atomic_lexp env mem add_red show_hole_contents v) ^^ dot ^^ doc_id id
+  | _ -> atomic_lexp env mem add_red show_hole_contents le
+  and atomic_lexp env mem add_red show_hole_contents ((LEXP_aux(lexp,_)) as le) = match lexp with
   | LEXP_id id -> doc_id id
   | LEXP_cast(typ,id) -> prefix 2 1 (parens (doc_typ typ)) (doc_id id)
-  | LEXP_tup(lexps) -> group (parens (separate_map comma (doc_lexp env add_red show_hole_contents) lexps))
+  | LEXP_tup(lexps) -> group (parens (separate_map comma (doc_lexp env mem add_red show_hole_contents) lexps))
   | LEXP_memory _ | LEXP_vector _ | LEXP_vector_range _
-  | LEXP_field _ -> group (parens (doc_lexp env add_red show_hole_contents le))
+  | LEXP_field _ -> group (parens (doc_lexp env mem add_red show_hole_contents le))
 
   (* expose doc_exp and doc_let *)
   in exp, let_exp
@@ -611,15 +699,15 @@ let doc_effects_opt (Effect_opt_aux(e,_)) = match e with
   | Effect_opt_pure -> string "pure"
   | Effect_opt_effect e -> doc_effects e
 
-let doc_funcl env add_red (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
-  group (doc_op equals (separate space [doc_id id; doc_atomic_pat pat]) (doc_exp env add_red false exp))
+let doc_funcl env mem add_red (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
+  group (doc_op equals (separate space [doc_id id; doc_atomic_pat pat]) (doc_exp env mem add_red false exp))
 
-let doc_fundef env add_red (FD_aux(FD_function(r, typa, efa, fcls),_)) =
+let doc_fundef env mem add_red (FD_aux(FD_function(r, typa, efa, fcls),_)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | _ ->
       let sep = hardline ^^ string "and" ^^ space in
-      let clauses = separate_map sep (doc_funcl env add_red) fcls in
+      let clauses = separate_map sep (doc_funcl env mem add_red) fcls in
       separate space [string "function";
         doc_rec r ^^ doc_tannot_opt typa;
         string "effect"; doc_effects_opt efa;
@@ -629,7 +717,7 @@ let doc_dec (DEC_aux(d,_)) = match d with
   | DEC_reg(typ,id) -> separate space [string "register"; doc_atomic_typ typ; doc_id id]
   | _ -> failwith "interpreter printing out declarations unexpectedly"
 
-let doc_scattered env add_red (SD_aux (sdef, _)) = match sdef with
+let doc_scattered env mem add_red (SD_aux (sdef, _)) = match sdef with
  | SD_scattered_function (r, typa, efa, id) ->
      separate space [
        string "scattered function";
@@ -641,35 +729,35 @@ let doc_scattered env add_red (SD_aux (sdef, _)) = match sdef with
        (string "scattered typedef" ^^ space ^^ doc_id id ^^ doc_namescm ns)
        (doc_typquant tq empty)
  | SD_scattered_funcl funcl ->
-     string "function clause" ^^ space ^^ doc_funcl env add_red funcl
+     string "function clause" ^^ space ^^ doc_funcl env mem add_red funcl
  | SD_scattered_unioncl (id, tu) ->
      separate space [string "union"; doc_id id;
      string "member"; doc_type_union tu]
  | SD_scattered_end id -> string "end" ^^ space ^^ doc_id id
 
-let rec doc_def env add_red def = group (match def with
+let rec doc_def env mem add_red def = group (match def with
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def
   | DEF_kind k_def -> failwith "interpreter unexpectedly printing kind def"
-  | DEF_fundef f_def -> doc_fundef env add_red f_def
-  | DEF_val lbind -> doc_let env add_red false lbind
+  | DEF_fundef f_def -> doc_fundef env mem add_red f_def
+  | DEF_val lbind -> doc_let env mem add_red false lbind
   | DEF_reg_dec dec -> doc_dec dec
-  | DEF_scattered sdef -> doc_scattered env add_red sdef
-  | DEF_comm comm_dec -> string "(*" ^^ doc_comm_dec env add_red comm_dec ^^ string "*)"
+  | DEF_scattered sdef -> doc_scattered env mem add_red sdef
+  | DEF_comm comm_dec -> string "(*" ^^ doc_comm_dec env mem add_red comm_dec ^^ string "*)"
   ) ^^ hardline
 
-and doc_comm_dec env add_red dec = match dec with
+and doc_comm_dec env mem add_red dec = match dec with
   | DC_comm s -> string s
-  | DC_comm_struct d -> doc_def env add_red d
+  | DC_comm_struct d -> doc_def env mem add_red d
                           
-let doc_defs env add_red (Defs(defs)) =
-  separate_map hardline (doc_def env add_red) defs
+let doc_defs env mem add_red (Defs(defs)) =
+  separate_map hardline (doc_def env mem add_red) defs
 
 let print ?(len=80) channel doc = ToChannel.pretty 1. len channel doc
 let to_buf ?(len=80) buf doc = ToBuffer.pretty 1. len buf doc
 
-let pp_exp env add_red show_hole_contents e =
+let pp_exp env mem add_red show_hole_contents e =
   let b = Buffer.create 20 in
-  to_buf b (doc_exp env add_red show_hole_contents e);
+  to_buf b (doc_exp env mem add_red show_hole_contents e);
   Buffer.contents b
