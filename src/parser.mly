@@ -495,7 +495,7 @@ atomic_pat:
     { ploc P_wild }
   | Lparen pat As id Rparen
     { ploc (P_as($2,$4)) }
-  | Lparen tup_typ Rparen atomic_pat
+  | Lparen exist_typ Rparen atomic_pat
     { ploc (P_typ($2,$4)) }
   | id
     { ploc (P_app($1,[])) }
@@ -581,7 +581,7 @@ atomic_exp:
     { eloc (E_lit($1)) }
   | Lparen exp Rparen
     { $2 }
-  | Lparen tup_typ Rparen atomic_exp
+  | Lparen exist_typ Rparen atomic_exp
     { eloc (E_cast($2,$4)) }
   | Lparen comma_exps Rparen
     { eloc (E_tuple($2)) }
