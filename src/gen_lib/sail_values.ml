@@ -24,6 +24,8 @@ type value =
 exception Sail_exit
 exception Sail_return
 
+let _print s = print_string s
+
 let string_of_bit = function 
   | Vone   -> "1"
   | Vzero  -> "0"
@@ -331,6 +333,8 @@ let most_significant = function
   | Vregister(array,_,_,_,_) -> !array.(0)
   | _ -> assert false
 
+let _most_significant = most_significant
+
 let bitwise_not_bit = function
   | Vone -> Vzero
   | Vzero -> Vone
@@ -466,22 +470,25 @@ let min_32  = big_int_of_int (-2147483648)
 let max_8   = big_int_of_int 127
 let min_8   = big_int_of_int (-128)
 let max_5   = big_int_of_int 31
-let min_5   = big_int_of_int (-32)
 
 let get_max_representable_in sign n = 
-  if (n = 64) then match sign with | true -> max_64 | false -> max_64u
-  else if (n=32) then match sign with | true -> max_32 | false -> max_32u
-  else if (n=8) then max_8
-  else if (n=5) then max_5
-  else match sign with | true -> power_big two_big_int (pred_big_int (big_int_of_int n))
-                       | false -> power_big two_big_int (big_int_of_int n)
+  match (sign, n) with
+  | (true, 64)  -> max_64
+  | (false, 64) -> max_64u
+  | (true, 32)  -> max_32
+  | (false, 32) -> max_32u
+  | (true, 8)   -> max_8
+  | (false, 5)  -> max_5
+  | (true, _)   -> pred_big_int (power_big two_big_int (big_int_of_int (n-1)))
+  | (false, _)  -> pred_big_int (power_big two_big_int (big_int_of_int n))
 
-let get_min_representable_in _ n = 
-  if (n = 64) then min_64
-  else if (n=32) then min_32
-  else if (n=8) then min_8
-  else if (n=5) then min_5
-  else minus_big_int (power_big two_big_int (big_int_of_int n))
+let get_min_representable_in sign n = 
+  match (sign, n) with
+  | (false, _)  -> zero_big_int
+  | (true, 64)  -> min_64
+  | (true, 32)  -> min_32
+  | (true, 8)   -> min_8
+  | (true, _)   -> minus_big_int (power_big two_big_int (big_int_of_int (n-1)))
 
 let to_vec_int ord len n =
   let array = Array.make len Vzero in
@@ -603,6 +610,9 @@ let min_int    = min (* the built-in version *)
 let min        = min_big (* is overwritten here *)
 let max_int    = max (* likewise *)
 let max        = max_big
+let abs_int    = abs
+let abs_big    = abs_big_int
+let abs        = abs_big
 
 let arith_op_vec_big op sign size (l,r) =
   let ord = get_ord l in
@@ -910,8 +920,8 @@ let rec arith_op_no0_big op (l,r) =
   then None
   else Some (op l r)
 
-let modulo_no0_big = arith_op_no0_big mod_big_int
-let quot_no0_big = arith_op_no0_big div_big_int
+let modulo_no0_big = arith_op_no0_big (Z.rem)
+let quot_no0_big = arith_op_no0_big (Z.div)
 
 let rec arith_op_no0_int op (l,r) = 
   if r = 0
@@ -960,9 +970,9 @@ let rec arith_op_vec_no0_big op sign size (l,r) =
       Vvector((Array.make act_size Vundef), start, ord)
     | _ -> assert false
 
-let mod_vec_big = arith_op_vec_no0_big mod_big_int false unit_big_int
-let quot_vec_big = arith_op_vec_no0_big div_big_int false unit_big_int
-let quot_vec_signed_big = arith_op_vec_no0_big div_big_int true unit_big_int
+let mod_vec_big = arith_op_vec_no0_big (Z.rem) false unit_big_int
+let quot_vec_big = arith_op_vec_no0_big (Z.div) false unit_big_int
+let quot_vec_signed_big = arith_op_vec_no0_big (Z.div) true unit_big_int
 
 let mod_vec         = mod_vec_big         
 let quot_vec        = quot_vec_big        
@@ -1021,8 +1031,8 @@ let arith_op_overflow_no0_vec_big op sign size (l,r) =
   let overflow = if representable then Vzero else Vone in
   (correct_size_num,overflow,most_significant one_more)
 
-let quot_overflow_vec_big = arith_op_overflow_no0_vec_big div_big_int false unit_big_int 
-let quot_overflow_vec_signed_big = arith_op_overflow_no0_vec_big div_big_int true unit_big_int 
+let quot_overflow_vec_big = arith_op_overflow_no0_vec_big (Z.div) false unit_big_int 
+let quot_overflow_vec_signed_big = arith_op_overflow_no0_vec_big (Z.div) true unit_big_int 
 
 let quot_overflow_vec        = quot_overflow_vec_big        
 let quot_overflow_vec_signed = quot_overflow_vec_signed_big 
@@ -1038,7 +1048,7 @@ let arith_op_vec_range_no0_big op sign size (l,r) =
   let ord = get_ord l in
   arith_op_vec_no0_big op sign size (l,(to_vec_big ord (length_big l) r))
 
-let mod_vec_range_big = arith_op_vec_range_no0_big mod_big_int false unit_big_int
+let mod_vec_range_big = arith_op_vec_range_no0_big (Z.rem) false unit_big_int
 
 let mod_vec_range = mod_vec_range_big
 
@@ -1050,6 +1060,15 @@ let duplicate_big (bit,length) =
   duplicate_int (bit, int_of_big_int length)
 
 let duplicate = duplicate_big
+
+let duplicate_bits_big (bits, x) =
+  let len = (length_int bits) * (int_of_big_int x) in
+  let is_inc = get_ord bits in
+  let bits_arr = get_barray bits in
+  let arr = Array.concat (Array.to_list(Array.make (int_of_big_int x) bits_arr)) in
+  Vvector(arr, (if is_inc then 0 else (len - 1)), is_inc)
+
+let duplicate_bits = duplicate_bits_big
 
 let compare_op op (l,r) =
   if (op l r)

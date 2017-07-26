@@ -54,6 +54,11 @@ open import Bool
 
 type signed = Unsigned | Signed
 
+val debug_print : string -> unit
+declare ocaml target_rep function debug_print s = `Printf.eprintf` "%s" s
+
+let print s = let _ = debug_print (string_of_value s) in V_lit(L_aux L_unit Unknown)
+
 let hardware_mod (a: integer) (b:integer) : integer = 
  if a < 0 && b < 0
  then (abs a) mod (abs b)
@@ -61,13 +66,16 @@ let hardware_mod (a: integer) (b:integer) : integer =
  then (a mod b) - b
  else a mod b
 
+(* There are different possible answers for integer divide regarding
+rounding behaviour on negative operands. Positive operands always
+round down so derive the one we want (trucation towards zero) from
+that *)
 let hardware_quot (a:integer) (b:integer) : integer = 
-  if a < 0 && b < 0
-  then (abs a) / (abs b)
-  else if (a < 0 && b > 0) 
-  then (a/b) + 1
-  else a/b
-
+  let q = (abs a) / (abs b) in
+  if ((a<0) = (b<0)) then
+    q  (* same sign -- result positive *)
+  else
+    ~q (* different sign -- result negative *)
 
 let (max_64u : integer) = integerFromNat ((natPow 2 64) - 1)
 let (max_64  : integer) = integerFromNat ((natPow 2 63) - 1)
@@ -78,23 +86,29 @@ let (min_32  : integer) = integerNegate (integerFromNat (natPow 2 31)) (*2147483
 let (max_8   : integer) = (integerFromNat 127)
 let (min_8   : integer) = (integerFromNat 0) - (integerFromNat 128)
 let (max_5   : integer) = (integerFromNat 31)
-let (min_5   : integer) = (integerFromNat 0)-(integerFromNat 32)
 
 val get_max_representable_in : signed -> nat -> integer
 let get_max_representable_in sign n = 
-  if (n = 64) then match sign with | Signed -> max_64 | Unsigned -> max_64u end
-  else if (n=32) then match sign with | Signed -> max_32 | Unsigned -> max_32u end
-  else if (n=8) then max_8
-  else if (n=5) then max_5
-  else match sign with | Signed -> 2**n - 1 | Unsigned -> 2**n end
+  match (sign, n) with
+  | (Signed, 64)   -> max_64
+  | (Unsigned, 64) -> max_64u
+  | (Signed, 32)   -> max_32
+  | (Unsigned, 32) -> max_32u
+  | (Signed, 8)    -> max_8
+  | (Unsigned, 5)  -> max_5
+  | (Signed, _)    -> 2**(n -1) - 1
+  | (Unsigned, _)  -> 2**n - 1
+  end
 
 val get_min_representable_in : signed -> nat -> integer
-let get_min_representable_in _ n = 
-  if (n = 64) then min_64
-  else if (n=32) then min_32
-  else if (n=8) then min_8
-  else if (n=5) then min_5
-  else 0-(2**n)
+let get_min_representable_in sign n = 
+  match (sign, n) with
+  | (Unsigned, _)  -> 0
+  | (Signed, 64)   -> min_64
+  | (Signed, 32)   -> min_32
+  | (Signed, 8)    -> min_8
+  | (Signed, _)    -> 0-(2**(n-1))
+  end
 
 let ignore_sail x = V_lit (L_aux L_unit Unknown) ;;
 
@@ -428,6 +442,8 @@ end)
 let neq = compose neg eq ;;
 
 let neq_vec = compose neg eq_vec
+let neq_vec_range = compose neg eq_vec_range
+let neq_range_vec = compose neg eq_range_vec
 
 let rec v_abs v = retaint v (match detaint v with
     | V_lit (L_aux arg la) ->
@@ -1012,6 +1028,7 @@ let library_functions direction = [
   ("quot_overflow_vec", arith_op_overflow_vec_no0 hardware_quot "quot" Unsigned 1);
   ("quot_vec_signed", arith_op_vec_no0 hardware_quot "quot" Signed 1);
   ("quot_overflow_vec_signed", arith_op_overflow_vec_no0 hardware_quot "quot" Signed 1);
+  ("print", print);
   ("power", arith_op power);
   ("eq", eq);
   ("eq_vec", eq_vec);
@@ -1021,8 +1038,8 @@ let library_functions direction = [
   ("eq_range", eq);
   ("neq", neq);
   ("neq_vec", neq_vec);
-  ("neq_vec_range", neq);
-  ("neq_range_vec", neq);
+  ("neq_vec_range", neq_vec_range);
+  ("neq_range_vec", neq_range_vec);
   ("neq_bit", neq);
   ("neq_range", neq);
   ("vec_concat", vec_concat);
@@ -1055,8 +1072,8 @@ let library_functions direction = [
   ("gt_range_vec", compare_op_range_vec (>) Signed);
   ("lteq_vec_range", compare_op_vec_range (<=) Signed);
   ("gteq_vec_range", compare_op_vec_range (>=) Signed);
-  ("lteq_range_vec", compare_op_vec_range (<=) Signed);
-  ("gteq_range_vec", compare_op_vec_range (>=) Signed);
+  ("lteq_range_vec", compare_op_range_vec (<=) Signed);
+  ("gteq_range_vec", compare_op_range_vec (>=) Signed);
   ("lteq_vec", compare_op_vec (<=) Signed);
   ("gteq_vec", compare_op_vec (>=) Signed);
   ("lt_vec_signed", compare_op_vec (<) Signed);

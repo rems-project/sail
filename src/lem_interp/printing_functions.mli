@@ -10,7 +10,7 @@ val loc_to_string : l -> string
 val get_loc : tannot exp -> string
 (*interp_interface.value to string*)
 val reg_value_to_string : register_value -> string
-val val_to_string_internal : Interp.lmem -> Interp.value -> string
+val val_to_string_internal : Interp.lmem -> Interp_ast.value -> string
 
 (*(*Force all representations to hex strings instead of a mixture of hex and binary strings*)
 val val_to_hex_string : value0 -> string*)
@@ -19,7 +19,7 @@ val reg_name_to_string : reg_name -> string
 (* format the register dependencies *)
 val dependencies_to_string : reg_name list -> string
 (* formats an expression, using interp_pretty *)
-val exp_to_string : Interp.lenv -> bool -> tannot exp -> string
+val exp_to_string : Interp.lenv -> Interp.lmem -> bool -> tannot exp -> string
 
 (* Functions to set the color of parts of the output *)
 type ppmode = 
@@ -55,7 +55,7 @@ val local_variables_to_string : instruction_state -> string
 val instruction_to_string : instruction -> string
 
 (*Functions to take a print function and cause a print event for the above functions *)
-val print_exp : (string-> unit) -> Interp.lenv -> bool -> tannot exp -> unit 
+val print_exp : (string-> unit) -> Interp.lenv -> Interp.lmem -> bool -> tannot exp -> unit 
 val print_backtrace_compact : (string -> unit) -> instruction_state -> unit
 val print_continuation : (string -> unit) -> instruction_state -> unit
 val print_instruction : (string -> unit) -> instruction -> unit
