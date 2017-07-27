@@ -437,7 +437,7 @@ nexp_typ4:
     { tloc (ATyp_id $2) }
   | tyvar
     { tloc (ATyp_var $1) }
-  | Lparen tup_typ Rparen
+  | Lparen exist_typ Rparen
     { $2 }
 
 tup_typ_list:
@@ -453,10 +453,10 @@ tup_typ:
      { tloc (ATyp_tup $2) }
 
 exist_typ:
-  | tup_typ
-    { $1 }
   | Exist tyvars Comma nexp_constraint Dot tup_typ
     { tloc (ATyp_exist ($2, $4, $6)) }
+  | tup_typ
+    { $1 }
 
 typ:
   | exist_typ

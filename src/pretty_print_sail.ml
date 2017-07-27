@@ -58,19 +58,6 @@ let doc_bkind (BK_aux(k,_)) =
 let doc_kind (K_aux(K_kind(klst),_)) =
   separate_map (spaces arrow) doc_bkind klst
 
-let rec doc_nexp_constraint (NC_aux(nc,_)) = match nc with
-  | NC_fixed(n1,n2) -> doc_op equals (doc_nexp n1) (doc_nexp n2)
-  | NC_not_equal (n1, n2) -> doc_op (string "!=") (doc_nexp n1) (doc_nexp n2)
-  | NC_bounded_ge(n1,n2) -> doc_op (string ">=") (doc_nexp n1) (doc_nexp n2)
-  | NC_bounded_le(n1,n2) -> doc_op (string "<=") (doc_nexp n1) (doc_nexp n2)
-  | NC_nat_set_bounded(v,bounds) ->
-      doc_op (string "IN") (doc_var v)
-             (braces (separate_map comma_sp doc_int bounds))
-  | NC_or (nc1, nc2) ->
-     parens (separate space [doc_nexp_constraint nc1; string "|"; doc_nexp_constraint nc2])
-  | NC_and (nc1, nc2) ->
-     separate space [doc_nexp_constraint nc1; string "&"; doc_nexp_constraint nc2]
-
 let doc_qi (QI_aux(qi,_)) = match qi with
   | QI_const n_const -> doc_nexp_constraint n_const
   | QI_id(KOpt_aux(ki,_)) ->

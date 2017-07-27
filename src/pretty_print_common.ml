@@ -111,7 +111,7 @@ let doc_ord (Ord_aux(o,_)) = match o with
   | Ord_inc -> string "inc"
   | Ord_dec -> string "dec"
 
-let doc_typ, doc_atomic_typ, doc_nexp =
+let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
   (* following the structure of parser for precedence *)
   let rec typ ty = fn_typ ty
   and fn_typ ((Typ_aux (t, _)) as ty) = match t with
@@ -119,6 +119,8 @@ let doc_typ, doc_atomic_typ, doc_nexp =
       separate space [tup_typ arg; arrow; fn_typ ret; string "effect"; doc_effects efct]
   | _ -> tup_typ ty
   and tup_typ ((Typ_aux (t, _)) as ty) = match t with
+  | Typ_exist (kids, nc, ty) ->
+     separate space [string "exist"; separate_map space doc_var kids ^^ comma; nexp_constraint nc ^^ dot; typ ty]
   | Typ_tup typs -> parens (separate_map comma_sp app_typ typs)
   | _ -> app_typ ty
   and app_typ ((Typ_aux (t, _)) as ty) = match t with
@@ -214,8 +216,21 @@ let doc_typ, doc_atomic_typ, doc_nexp =
     | Nexp_neg _ | Nexp_exp _ | Nexp_times _ | Nexp_sum _ | Nexp_minus _->
       group (parens (nexp ne))
 
-  (* expose doc_typ, doc_atomic_typ and doc_nexp *)
-  in typ, atomic_typ, nexp
+  and nexp_constraint (NC_aux(nc,_)) = match nc with
+    | NC_fixed(n1,n2) -> doc_op equals (nexp n1) (nexp n2)
+    | NC_not_equal (n1, n2) -> doc_op (string "!=") (nexp n1) (nexp n2)
+    | NC_bounded_ge(n1,n2) -> doc_op (string ">=") (nexp n1) (nexp n2)
+    | NC_bounded_le(n1,n2) -> doc_op (string "<=") (nexp n1) (nexp n2)
+    | NC_nat_set_bounded(v,bounds) ->
+       doc_op (string "IN") (doc_var v)
+              (braces (separate_map comma_sp doc_int bounds))
+    | NC_or (nc1, nc2) ->
+       parens (separate space [nexp_constraint nc1; string "|"; nexp_constraint nc2])
+    | NC_and (nc1, nc2) ->
+       separate space [nexp_constraint nc1; string "&"; nexp_constraint nc2]
+
+  (* expose doc_typ, doc_atomic_typ, doc_nexp and doc_nexp_constraint *)
+  in typ, atomic_typ, nexp, nexp_constraint
 
 let pp_format_id (Id_aux(i,_)) =
   match i with

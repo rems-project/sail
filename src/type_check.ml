@@ -249,7 +249,8 @@ and typ_subst_nexp_aux sv subst = function
   | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_nexp sv subst typ1, typ_subst_nexp sv subst typ2, effs)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_nexp sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_nexp sv subst) args)
-  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, typ) (* FIXME *)
+  | Typ_exist (kids, nc, typ) when KidSet.mem sv (KidSet.of_list kids) -> Typ_exist (kids, nc, typ)
+  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, typ_subst_nexp sv subst typ)
 and typ_subst_arg_nexp sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_nexp_aux sv subst arg, l)
 and typ_subst_arg_nexp_aux sv subst = function
   | Typ_arg_nexp nexp -> Typ_arg_nexp (nexp_subst sv subst nexp)
@@ -265,6 +266,7 @@ and typ_subst_typ_aux sv subst = function
   | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_typ sv subst typ1, typ_subst_typ sv subst typ2, effs)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_typ sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_typ sv subst) args)
+  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, typ_subst_typ sv subst typ)
 and typ_subst_arg_typ sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_typ_aux sv subst arg, l)
 and typ_subst_arg_typ_aux sv subst = function
   | Typ_arg_nexp nexp -> Typ_arg_nexp nexp
@@ -287,6 +289,7 @@ and typ_subst_order_aux sv subst = function
   | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_order sv subst typ1, typ_subst_order sv subst typ2, effs)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_order sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_order sv subst) args)
+  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, typ_subst_order sv subst typ)
 and typ_subst_arg_order sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_order_aux sv subst arg, l)
 and typ_subst_arg_order_aux sv subst = function
   | Typ_arg_nexp nexp -> Typ_arg_nexp nexp
@@ -302,7 +305,8 @@ and typ_subst_kid_aux sv subst = function
   | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_kid sv subst typ1, typ_subst_kid sv subst typ2, effs)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_kid sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_kid sv subst) args)
-  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, typ) (* FIXME *)
+  | Typ_exist (kids, nc, typ) when KidSet.mem sv (KidSet.of_list kids) -> Typ_exist (kids, nc, typ)
+  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, typ_subst_kid sv subst typ)
 and typ_subst_arg_kid sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_kid_aux sv subst arg, l)
 and typ_subst_arg_kid_aux sv subst = function
   | Typ_arg_nexp nexp -> Typ_arg_nexp (nexp_subst sv (Nexp_var subst) nexp)
@@ -2367,7 +2371,8 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
          else typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants
                            ^ " not resolved during application of " ^ string_of_id f)
        end
-    | (utyps, (typ :: typs)), (uargs, ((n, arg) :: args)) when KidSet.is_empty (typ_frees typ) ->
+    | (utyps, (typ :: typs)), (uargs, ((n, arg) :: args))
+         when List.for_all (fun kid -> is_bound kid env) (KidSet.elements (typ_frees typ)) ->
        begin
          let carg = crule check_exp env arg typ in
          let (iargs, ret_typ', env) = instantiate env quants (utyps, typs) ret_typ (uargs, args) in
@@ -2454,6 +2459,12 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   typ_debug ("Existentials: " ^ string_of_list ", " string_of_kid existentials);
   typ_debug ("Existential constraints: " ^ string_of_list ", " string_of_n_constraint ex_constraints);
 
+  let nc_true = nc_eq (nconstant 0) (nconstant 0) in
+  let typ_ret =
+    if existentials = []
+    then typ_ret
+    else mk_typ (Typ_exist (existentials, List.fold_left nc_and nc_true ex_constraints, typ_ret))
+  in
   let exp = annot_exp (E_app (f, xs_reordered)) typ_ret eff in
 
   match ret_ctx_typ with
