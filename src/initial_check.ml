@@ -112,7 +112,7 @@ let typ_error l msg opt_id opt_var opt_kind =
               | None,Some(v),None -> ": " ^ (var_to_string v)
               | None,None,Some(kind) -> " " ^ (kind_to_string kind)
               | _ -> "")))
-                
+
 let to_ast_id (Parse_ast.Id_aux(id,l)) =
     Id_aux( (match id with
              | Parse_ast.Id(x) -> Id(x)
@@ -144,16 +144,8 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
   match t with
   | Parse_ast.ATyp_aux(t,l) ->
     Typ_aux( (match t with 
-              | Parse_ast.ATyp_id(id) -> 
-                let id = to_ast_id id in
-                let mk = Envmap.apply k_env (id_to_string id) in
-                (match mk with
-                | Some(k) -> (match k.k with
-                              | K_Typ -> Typ_id id
-                              | K_infer -> k.k <- K_Typ; Typ_id id
-                              | _ -> typ_error l "Required an identifier with kind Type, encountered " (Some id) None (Some k))
-                | None -> typ_error l "Encountered an unbound type identifier" (Some id) None None)
-              | Parse_ast.ATyp_var(v) -> 
+              | Parse_ast.ATyp_id(id) -> Typ_id (to_ast_id id)
+              | Parse_ast.ATyp_var(v) ->
                 let v = to_ast_var v in
                 let mk = Envmap.apply k_env (var_to_string v) in
                 (match mk with
@@ -1005,6 +997,6 @@ let initial_kind_env =
     ("implicit", {k = K_Lam( [{k = K_Nat}], {k=K_Typ})} );
   ]
 
-let process_ast defs =
-  let (ast, _, _) = to_ast Nameset.empty initial_kind_env (Ast.Ord_aux(Ast.Ord_inc,Parse_ast.Unknown)) defs in
+let process_ast order defs =
+  let (ast, _, _) = to_ast Nameset.empty initial_kind_env order defs in
   ast

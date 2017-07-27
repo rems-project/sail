@@ -82,14 +82,12 @@ let parse_file (f : string) : Parse_ast.defs =
       | Lexer.LexError(s,p) ->
           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
 
+let convert_ast (order : Ast.order) (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast order defs
 
-(*Should add a flag to say whether we want to consider Oinc or Odec the default order *)
-let convert_ast (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast defs
+let load_file_no_check order f = convert_ast order (parse_file f)
 
-let load_file_no_check f = convert_ast (parse_file f)
-
-let load_file env f =
-  let ast = convert_ast (parse_file f) in
+let load_file order env f =
+  let ast = convert_ast order (parse_file f) in
   Type_check.check env ast
 
 let opt_new_typecheck = ref false
