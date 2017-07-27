@@ -68,6 +68,11 @@ let deinfix = function
   | Id_aux (Id v, l) -> Id_aux (DeIid v, l)
   | Id_aux (DeIid v, l) -> Id_aux (DeIid v, l)
 
+let field_name rec_id id =
+  match rec_id, id with
+  | Id_aux (Id r, _), Id_aux (Id v, l) -> Id_aux (Id (r ^ "." ^ v), l)
+  | _, _ -> assert false
+
 let string_of_bind (typquant, typ) = string_of_typquant typquant ^ ". " ^ string_of_typ typ
 
 let unaux_nexp (Nexp_aux (nexp, _)) = nexp
@@ -361,7 +366,7 @@ module Env : sig
   val is_union_constructor : id -> t -> bool
   val add_record : id -> typquant -> (typ * id) list -> t -> t
   val is_record : id -> t -> bool
-  val get_accessor : id -> t -> typquant * typ
+  val get_accessor : id -> id -> t -> typquant * typ
   val add_local : id -> mut * typ -> t -> t
   val add_variant : id -> typquant * type_union list -> t -> t
   val add_union_id : id -> typquant * typ -> t -> t
@@ -596,18 +601,18 @@ end = struct
         in
         let fold_accessors accs (typ, fid) =
           let acc_typ = mk_typ (Typ_fn (rectyp, typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
-          typ_print (indent 1 ^ "Adding accessor " ^ string_of_id fid ^ " :: " ^ string_of_bind (typq, acc_typ));
-          Bindings.add fid (typq, acc_typ) accs
+          typ_print (indent 1 ^ "Adding accessor " ^ string_of_id id ^ "." ^ string_of_id fid ^ " :: " ^ string_of_bind (typq, acc_typ));
+          Bindings.add (field_name id fid) (typq, acc_typ) accs
         in
         { env with records = Bindings.add id (typq, fields) env.records;
                    accessors = List.fold_left fold_accessors env.accessors fields }
       end
 
-  let get_accessor id env =
+  let get_accessor rec_id id env =
     let freshen_bind bind = List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars) in
-    try freshen_bind (Bindings.find id env.accessors)
+    try freshen_bind (Bindings.find (field_name rec_id id) env.accessors)
     with
-    | Not_found -> typ_error (id_loc id) ("No accessor found for " ^ string_of_id id)
+    | Not_found -> typ_error (id_loc id) ("No accessor found for " ^ string_of_id (field_name rec_id id))
 
   let is_mutable id env =
     try
@@ -1932,24 +1937,27 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
        let infer_flexp = function
          | LEXP_id v ->
             begin match Env.lookup_id v env with
-            | Register typ -> typ, LEXP_id v
-            | _ -> typ_error l "l-expression field is not a register"
+            | Register typ -> typ, LEXP_id v, true
+            | Local (Mutable, typ) -> typ, LEXP_id v, false
+            | _ -> typ_error l "l-expression field is not a register or a local mutable type"
             end
          | LEXP_vector (LEXP_aux (LEXP_id v, _), exp) ->
             begin
               (* Check: is this ok if the vector is immutable? *)
-              let is_immutable, vtyp = match Env.lookup_id v env with
+              let is_immutable, vtyp, is_register = match Env.lookup_id v env with
                 | Unbound -> typ_error l "Cannot assign to element of unbound vector"
                 | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
-                | Local (Immutable, vtyp) -> true, vtyp
-                | Local (Mutable, vtyp) | Register vtyp -> false, vtyp
+                | Local (Immutable, vtyp) -> true, vtyp, false
+                | Local (Mutable, vtyp) -> false, vtyp, false
+                | Register vtyp -> false, vtyp, true
               in
               let access = infer_exp (Env.enable_casts env) (E_aux (E_app (mk_id "vector_access", [E_aux (E_id v, (l, ())); exp]), (l, ()))) in
               let E_aux (E_app (_, [_; inferred_exp]), _) = access in
-              typ_of access, LEXP_vector (annot_lexp (LEXP_id v) vtyp, inferred_exp)
+              typ_of access, LEXP_vector (annot_lexp (LEXP_id v) vtyp, inferred_exp), is_register
             end
        in
-       let regtyp, inferred_flexp = infer_flexp flexp in
+       let regtyp, inferred_flexp, is_register = infer_flexp flexp in
+       let eff = if is_register then mk_effect [BE_wreg] else no_effect in
        typ_debug ("REGTYP: " ^ string_of_typ regtyp ^ " / " ^ string_of_typ (Env.expand_synonyms env regtyp));
        match Env.expand_synonyms env regtyp with
        | Typ_aux (Typ_id regtyp_id, _) when Env.is_regtyp regtyp_id env ->
@@ -1966,13 +1974,13 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
             | _, _ -> typ_error l "Not implemented this register field type yet..."
           in
           let checked_exp = crule check_exp env exp vec_typ in
-          annot_assign (annot_lexp (LEXP_field (annot_lexp_effect inferred_flexp regtyp (mk_effect [BE_wreg]), field)) vec_typ) checked_exp, env
+          annot_assign (annot_lexp (LEXP_field (annot_lexp_effect inferred_flexp regtyp eff, field)) vec_typ) checked_exp, env
        | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
-          let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor field env in
+          let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor rectyp_id field env in
           let unifiers = try unify l env rectyp_q regtyp with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m) in
           let field_typ' = subst_unifiers unifiers field_typ in
           let checked_exp = crule check_exp env exp field_typ' in
-          annot_assign (annot_lexp (LEXP_field (annot_lexp_effect inferred_flexp regtyp (mk_effect [BE_wreg]), field)) field_typ') checked_exp, env
+          annot_assign (annot_lexp (LEXP_field (annot_lexp_effect inferred_flexp regtyp eff, field)) field_typ') checked_exp, env
        | _ ->  typ_error l "Field l-expression has invalid type"
      end
   | LEXP_memory (f, xs) ->
@@ -2146,7 +2154,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        (* Accessing a field of a record *)
        | Typ_aux (Typ_id rectyp, _) as typ when Env.is_record rectyp env ->
           begin
-            let inferred_acc, _ = infer_funapp' l (Env.no_casts env) field (Env.get_accessor field env) [strip_exp inferred_exp] None in
+            let inferred_acc, _ = infer_funapp' l (Env.no_casts env) field (Env.get_accessor rectyp field env) [strip_exp inferred_exp] None in
             match inferred_acc with
             | E_aux (E_app (field, [inferred_exp]) ,_) -> annot_exp (E_field (inferred_exp, field)) (typ_of inferred_acc)
             | _ -> assert false (* Unreachable *)
