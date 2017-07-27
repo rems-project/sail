@@ -73,6 +73,7 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_vector_concat  : 'pat list -> 'pat_aux
   ; p_tup            : 'pat list -> 'pat_aux
   ; p_list           : 'pat list -> 'pat_aux
+  ; p_cons           : 'pat * 'pat -> 'pat_aux
   ; p_aux            : 'pat_aux * 'a annot -> 'pat
   ; fP_aux           : 'fpat_aux * 'a annot -> 'fpat
   ; fP_Fpat          : id * 'pat -> 'fpat_aux
@@ -117,6 +118,8 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
  ; e_internal_cast          : 'a annot * 'exp -> 'exp_aux
  ; e_internal_exp           : 'a annot -> 'exp_aux
  ; e_internal_exp_user      : 'a annot * 'a annot -> 'exp_aux
+ ; e_comment                : string -> 'exp_aux
+ ; e_comment_struc          : 'exp -> 'exp_aux
  ; e_internal_let           : 'lexp * 'exp * 'exp -> 'exp_aux
  ; e_internal_plet          : 'pat * 'exp * 'exp -> 'exp_aux
  ; e_internal_return        : 'exp -> 'exp_aux
@@ -137,6 +140,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
  ; def_val_dec              : 'exp -> 'opt_default_aux
  ; def_val_aux              : 'opt_default_aux * 'a annot -> 'opt_default
  ; pat_exp                  : 'pat * 'exp -> 'pexp_aux
+ ; pat_when                 : 'pat * 'exp * 'exp -> 'pexp_aux
  ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
  ; lB_val_explicit          : typschm * 'pat * 'exp -> 'letbind_aux
  ; lB_val_implicit          : 'pat * 'exp -> 'letbind_aux

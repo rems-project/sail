@@ -357,6 +357,11 @@ and fv_of_pes consider_var bound used set pes =
     let bound_p,us_p = pat_bindings consider_var bound used p in
     let bound_e,us_e,set_e = fv_of_exp consider_var bound_p us_p set e in
     fv_of_pes consider_var bound us_e set_e pes
+  | Pat_aux(Pat_when (p,g,e),_)::pes ->
+    let bound_p,us_p = pat_bindings consider_var bound used p in
+    let bound_g,us_g,set_g = fv_of_exp consider_var bound_p us_p set g in
+    let bound_e,us_e,set_e = fv_of_exp consider_var bound_g us_g set_g e in
+    fv_of_pes consider_var bound us_e set_e pes
     
 and fv_of_let consider_var bound used set (LB_aux(lebind,_)) = match lebind with
   | LB_val_explicit(typsch,pat,exp) ->

@@ -219,12 +219,15 @@ let pp_lem_ord ppf o = base ppf (pp_format_ord_lem o)
 let pp_lem_effects ppf e = base ppf (pp_format_effects_lem e)
 let pp_lem_beffect ppf be = base ppf (pp_format_base_effect_lem be)
 
-let pp_format_nexp_constraint_lem (NC_aux(nc,l)) =
+let rec pp_format_nexp_constraint_lem (NC_aux(nc,l)) =
   "(NC_aux " ^
   (match nc with
   | NC_fixed(n1,n2) -> "(NC_fixed " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
   | NC_bounded_ge(n1,n2) -> "(NC_bounded_ge " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
   | NC_bounded_le(n1,n2) -> "(NC_bounded_le " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
+  | NC_not_equal(n1,n2) -> "(NC_not_equal " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
+  | NC_or(nc1,nc2) -> "(NC_or " ^ pp_format_nexp_constraint_lem nc1 ^ " " ^ pp_format_nexp_constraint_lem nc2 ^ ")"
+  | NC_and(nc1,nc2) -> "(NC_and " ^ pp_format_nexp_constraint_lem nc1 ^ " " ^ pp_format_nexp_constraint_lem nc2 ^ ")"
   | NC_nat_set_bounded(id,bounds) -> "(NC_nat_set_bounded " ^
     pp_format_var_lem id ^
       " [" ^
@@ -278,7 +281,8 @@ let pp_format_lit_lem (L_aux(lit,l)) =
   | L_hex(n) -> "(L_hex \"" ^ n ^ "\")"
   | L_bin(n) -> "(L_bin \"" ^ n ^ "\")"
   | L_undef -> "L_undef"
-  | L_string(s) -> "(L_string \"" ^ s ^ "\")") ^ " " ^
+  | L_string(s) -> "(L_string \"" ^ s ^ "\")"
+  | L_real(s) -> "(L_real \"" ^ s ^ "\")") ^ " " ^
   (pp_format_l_lem l) ^ ")"
 
 let pp_lem_lit ppf l = base ppf (pp_format_lit_lem l)
@@ -336,7 +340,8 @@ let rec pp_format_pat_lem (P_aux(p,(l,annot))) =
     "(P_vector_indexed [" ^ list_format "; " (fun (i,p) -> Printf.sprintf "(%d, %s)" i (pp_format_pat_lem p)) ipats ^ "])"
   | P_vector_concat(pats) -> "(P_vector_concat [" ^ list_format "; " pp_format_pat_lem pats ^ "])"
   | P_tup(pats) -> "(P_tup [" ^ (list_format "; " pp_format_pat_lem pats) ^ "])"
-  | P_list(pats) -> "(P_list [" ^ (list_format "; " pp_format_pat_lem pats) ^ "])") ^
+  | P_list(pats) -> "(P_list [" ^ (list_format "; " pp_format_pat_lem pats) ^ "])"
+  | P_cons(pat,pat') -> "(P_cons " ^ pp_format_pat_lem pat ^ " " ^ pp_format_pat_lem pat' ^ ")") ^
   " (" ^ pp_format_l_lem l ^ ", " ^ pp_format_annot annot ^ "))"
 
 let pp_lem_pat ppf p = base ppf (pp_format_pat_lem p)
@@ -426,6 +431,8 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
                               pp_lem_lexp lexp pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_sizeof nexp ->
       fprintf ppf "@[<0>(E_aux (E_sizeof %a) (%a, %a))@]" pp_lem_nexp nexp pp_lem_l l pp_annot annot
+    | E_constraint nc ->
+      fprintf ppf "@[<0>(E_aux (E_constraint %a) (%a, %a))@]" pp_lem_nexp_constraint nc pp_lem_l l pp_annot annot
     | E_exit exp ->
       fprintf ppf "@[<0>(E_aux (E_exit %a) (%a, %a))@]" pp_lem_exp exp pp_lem_l l pp_annot annot
     | E_return exp ->
@@ -476,8 +483,11 @@ and pp_lem_fexp ppf (FE_aux(FE_Fexp(id,exp),(l,annot))) =
   fprintf ppf "@[<1>(FE_aux (FE_Fexp %a %a) (%a, %a))@]" pp_lem_id id pp_lem_exp exp pp_lem_l l pp_annot annot
 and pp_semi_lem_fexp ppf fexp = fprintf ppf "@[<1>%a %a@]" pp_lem_fexp fexp kwd ";"
 
-and pp_lem_case ppf (Pat_aux(Pat_exp(pat,exp),(l,annot))) =
+and pp_lem_case ppf = function
+| Pat_aux(Pat_exp(pat,exp),(l,annot)) ->
   fprintf ppf "@[<1>(Pat_aux (Pat_exp %a@ %a) (%a, %a))@]" pp_lem_pat pat pp_lem_exp exp pp_lem_l l pp_annot annot
+| Pat_aux(Pat_when(pat,guard,exp),(l,annot)) ->
+  fprintf ppf "@[<1>(Pat_aux (Pat_exp %a@ %a %a) (%a, %a))@]" pp_lem_pat pat pp_lem_exp guard pp_lem_exp exp pp_lem_l l pp_annot annot
 and pp_semi_lem_case ppf case = fprintf ppf "@[<1>%a %a@]" pp_lem_case case kwd ";"
 
 and pp_lem_lexp ppf (LEXP_aux(lexp,(l,annot))) =

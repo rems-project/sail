@@ -140,7 +140,8 @@ let doc_lit_ocaml in_pat (L_aux(l,_)) =
   | L_hex n -> "(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)
   | L_bin n -> "(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)
   | L_undef -> "(failwith \"undef literal not supported\")" (* XXX Undef vectors get handled with to_vec_undef. We could support undef bit but would need to check type. For the moment treat as runtime error.  *)
-  | L_string s -> "\"" ^ s ^ "\"")
+  | L_string s -> "\"" ^ s ^ "\""
+  | L_real s -> s)
 
 (* typ_doc is the doc for the type being quantified *)
 let doc_typquant_ocaml (TypQ_aux(tq,_)) typ_doc = typ_doc
@@ -170,7 +171,7 @@ let doc_pat_ocaml =
   | P_wild -> underscore
   | P_id id -> doc_id_ocaml id
   | P_as(p,id) -> parens (separate space [pat p; string "as"; doc_id_ocaml id])
-  | P_typ(typ,p) -> doc_op colon (pat p) (doc_typ_ocaml typ)
+  | P_typ(typ,p) -> parens (doc_op colon (pat p) (doc_typ_ocaml typ))
   | P_app(id,[]) ->
     (match annot with
      | Some (env, typ, eff) ->
@@ -196,6 +197,7 @@ let doc_pat_ocaml =
     | None -> non_bit_print())
   | P_tup pats  -> parens (separate_map comma_sp pat pats)
   | P_list pats -> brackets (separate_map semi pat pats) (*Never seen but easy in ocaml*)
+  | P_cons (p,p') -> doc_op (string "::") (pat p) (pat p')
   | P_record _ -> raise (Reporting_basic.err_unreachable l "unhandled record pattern")
   | P_vector_indexed _ -> raise (Reporting_basic.err_unreachable l  "unhandled vector_indexed pattern")
   | P_vector_concat _ -> raise (Reporting_basic.err_unreachable l "unhandled vector_concat pattern")
@@ -467,6 +469,13 @@ let doc_exp_ocaml, doc_let_ocaml =
      separate space [string "return"; exp e1;]
   | E_assert (e1, e2) ->
      (string "assert") ^^ parens ((string "to_bool") ^^ space ^^ exp e1) (* XXX drops e2 *)
+  | E_sizeof _ -> raise (Reporting_basic.err_unreachable l
+      "E_sizeof should have been rewritten before pretty-printing")
+  | E_constraint _ -> empty
+  | E_sizeof_internal _ | E_internal_exp_user (_, _) | E_internal_cast (_, _)
+  | E_internal_exp _ -> raise (Reporting_basic.err_unreachable l
+      "internal expression should have been rewritten before pretty-printing")
+  | E_comment _ | E_comment_struc _ -> empty (* TODO Should we output comments? *)
   and let_exp (LB_aux(lb,_)) = match lb with
   | LB_val_explicit(ts,pat,e) ->
       prefix 2 1
@@ -479,8 +488,14 @@ let doc_exp_ocaml, doc_let_ocaml =
 
   and doc_fexp (FE_aux(FE_Fexp(id,e),_)) = doc_op equals (doc_id_ocaml id) (top_exp false e)
 
-  and doc_case (Pat_aux(Pat_exp(pat,e),_)) =
+  and doc_case = function
+  | (Pat_aux(Pat_exp(pat,e),_)) ->
     doc_op arrow (separate space [pipe; doc_pat_ocaml pat]) (group (top_exp false e))
+  | (Pat_aux(Pat_when(pat,guard,e),_)) ->
+    doc_op arrow
+      (separate space [pipe;
+        doc_op (string "when") (doc_pat_ocaml pat) (top_exp false guard)])
+      (group (top_exp false e))
 
   and doc_lexp_ocaml top_call ((LEXP_aux(lexp,(l,annot))) as le) =
     let exp = top_exp false in

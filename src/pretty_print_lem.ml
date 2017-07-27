@@ -281,15 +281,14 @@ let rec doc_pat_lem regtypes apat_needed (P_aux (p,(l,annot)) as pa) = match p w
          [string "Vector";brackets (separate_map semi (doc_pat_lem regtypes true) pats);underscore;underscore] in
      if apat_needed then parens ppp else ppp
   | P_vector_concat pats ->
-     let ppp =
-       (separate space)
-         [string "Vector";parens (separate_map (string "::") (doc_pat_lem regtypes true) pats);underscore;underscore] in
-     if apat_needed then parens ppp else ppp
+     raise (Reporting_basic.err_unreachable l
+       "vector concatenation patterns should have been removed before pretty-printing")
   | P_tup pats  ->
      (match pats with
       | [p] -> doc_pat_lem regtypes apat_needed p
       | _ -> parens (separate_map comma_sp (doc_pat_lem regtypes false) pats))
-     | P_list pats -> brackets (separate_map semi (doc_pat_lem regtypes false) pats) (*Never seen but easy in lem*)
+  | P_list pats -> brackets (separate_map semi (doc_pat_lem regtypes false) pats) (*Never seen but easy in lem*)
+  | P_cons (p,p') -> doc_op (string "::") (doc_pat_lem regtypes true p) (doc_pat_lem regtypes true p')
   | P_record (_,_) | P_vector_indexed _ -> empty (* TODO *)
 
 let rec contains_bitvector_typ (Typ_aux (t,_) as typ) = match t with
@@ -926,7 +925,7 @@ let doc_exp_lem, doc_let_lem =
     | E_return _ ->
       raise (Reporting_basic.err_todo l
         "pretty-printing early return statements to Lem not yet supported")
-    | E_comment _ | E_comment_struc _ -> empty
+    | E_constraint _ | E_comment _ | E_comment_struc _ -> empty
     | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _ | E_internal_exp_user _ ->
       raise (Reporting_basic.err_unreachable l
         "unsupported internal expression encountered while pretty-printing")
@@ -944,9 +943,13 @@ let doc_exp_lem, doc_let_lem =
       else doc_id_lem id in
     group (doc_op equals fname (top_exp regtypes true e))
 
-  and doc_case regtypes (Pat_aux(Pat_exp(pat,e),_)) =
+  and doc_case regtypes = function
+  | Pat_aux(Pat_exp(pat,e),_) ->
     group (prefix 3 1 (separate space [pipe; doc_pat_lem regtypes false pat;arrow])
                   (group (top_exp regtypes false e)))
+  | Pat_aux(Pat_when(_,_,_),(l,_)) ->
+    raise (Reporting_basic.err_unreachable l
+      "guarded pattern expression should have been rewritten before pretty-printing")
 
   and doc_lexp_deref_lem regtypes ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
     | LEXP_field (le,id) ->
