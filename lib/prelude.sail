@@ -181,6 +181,13 @@ overload (deinfix <<) [
   shiftl
 ]
 
+val forall Num 'n, Num 'o, Order 'ord.
+    (vector<'o, 'n, 'ord, bit>, int) -> vector<'o, 'n, 'ord, bit> effect pure shiftr
+
+overload (deinfix >>) [
+  shiftr
+]
+
 (* Boolean operators *)
 val bool -> bool effect pure bool_not
 val (bool, bool) -> bool effect pure bool_or
