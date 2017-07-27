@@ -77,9 +77,10 @@ let make_vectors sz =
   
 
 
-(* Based on current type checker's behaviour *)
 let pat_id_is_variable env id =
   match Env.lookup_id id env with
+  (* Unbound is returned for both variables and constructors which take
+     arguments, but the latter only don't appear in a P_id *)
   | Unbound
   (* Shadowing of immutable locals is allowed; mutable locals and registers
      are rejected by the type checker, so don't matter *)
@@ -90,21 +91,24 @@ let pat_id_is_variable env id =
   | Union _
     -> false
 
-
 let rec is_value (E_aux (e,(l,annot))) =
+  let is_constructor id =
+    match annot with
+    | None -> 
+       (Reporting_basic.print_err false true l "Monomorphisation"
+          ("Missing type information for identifier " ^ string_of_id id);
+        false) (* Be conservative if we have no info *)
+    | Some (env,_,_) ->
+       Env.is_union_constructor id env ||
+         (match Env.lookup_id id env with
+         | Enum _ | Union _ -> true 
+         | Unbound | Local _ | Register _ -> false)
+  in
   match e with
-  | E_id id ->
-     (match annot with
-     | None -> 
-        (Reporting_basic.print_err false true l "Monomorphisation"
-           ("Missing type information for identifier " ^ string_of_id id);
-         false) (* Be conservative if we have no info *)
-     | Some (env,_,_) ->
-        match Env.lookup_id id env with
-        | Enum _ | Union _ -> true
-        | Unbound | Local _ | Register _ -> false)
+  | E_id id -> is_constructor id
   | E_lit _ -> true
   | E_tuple es -> List.for_all is_value es
+  | E_app (id,es) -> is_constructor id && List.for_all is_value es
 (* TODO: more? *)
   | _ -> false
 
@@ -309,12 +313,15 @@ let nexp_subst_fns substs refinements =
            | _ -> E_aux (E_tuple es',(l,None))
          in
          let id' = 
-           match Env.lookup_id id (fst (env_typ_expected l annot)) with
-           | Union (qs,Typ_aux (Typ_fn(inty,outty,_),_)) ->
-              (match refine_constructor refinements id substs arg inty with
-              | None -> id
-              | Some id' -> id')
-           | _ -> id
+           let env,_ = env_typ_expected l annot in
+           if Env.is_union_constructor id env then
+             let (qs,ty) = Env.get_val_spec id env in
+             match ty with (Typ_aux (Typ_fn(inty,outty,_),_)) ->
+               (match refine_constructor refinements id substs arg inty with
+               | None -> id
+               | Some id' -> id')
+             | _ -> id
+           else id
          in re (E_app (id',es'))
       | E_app_infix (e1,id,e2) -> re (E_app_infix (s_exp e1,id,s_exp e2))
       | E_tuple es -> re (E_tuple (List.map s_exp es))
@@ -863,8 +870,8 @@ let split_defs splits defs =
               let (_,variants) = List.find (fun (id',_) -> Id.compare id id' = 0) refinements in
               let env,_ = env_typ_expected l tannot in
               let constr_out_typ =
-                match Env.lookup_id id env with
-                | Union (qs,Typ_aux (Typ_fn(_,outt,_),_)) -> outt
+                match Env.get_val_spec id env with
+                | (qs,Typ_aux (Typ_fn(_,outt,_),_)) -> outt
                 | _ -> raise (Reporting_basic.err_general l
                                 ("Constructor " ^ string_of_id id ^ " is not a construtor!"))
               in
