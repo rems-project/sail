@@ -403,6 +403,7 @@ let bindings_from_pat p =
       -> List.concat (List.map aux_pat ps)
     | P_record (fps,_) -> List.concat (List.map aux_fpat fps)
     | P_vector_indexed ips -> List.concat (List.map (fun (_,p) -> aux_pat p) ips)
+    | P_cons (p1,p2) -> aux_pat p1 @ aux_pat p2
   and aux_fpat (FP_aux (FP_Fpat (_,p), _)) = aux_pat p
   in aux_pat p
 
@@ -850,6 +851,10 @@ let split_defs splits defs =
            relist spl (fun ps -> P_tup ps) ps
         | P_list ps ->
            relist spl (fun ps -> P_list ps) ps
+        | P_cons (p1,p2) ->
+           match re (fun p' -> P_cons (p',p2)) p1 with
+           | Some r -> Some r
+           | None -> re (fun p' -> P_cons (p1,p')) p2
       in spl p
     in
 
