@@ -1802,8 +1802,8 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
   | P_wild -> annot_pat P_wild typ, env
   | P_cons (hd_pat, tl_pat) ->
      begin
-       match typ_aux with
-       | Typ_app (f, [Typ_arg_aux (Typ_arg_typ ltyp, _)]) when Id.compare f (mk_id "list") = 0 ->
+       match Env.expand_synonyms env typ with
+       | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_typ ltyp, _)]), _) when Id.compare f (mk_id "list") = 0 ->
           let hd_pat, env = bind_pat env hd_pat ltyp in
           let tl_pat, env = bind_pat env tl_pat typ in
           annot_pat (P_cons (hd_pat, tl_pat)) typ, env
@@ -1811,8 +1811,8 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
      end
   | P_list pats ->
      begin
-       match typ_aux with
-       | Typ_app (f, [Typ_arg_aux (Typ_arg_typ ltyp, _)]) when Id.compare f (mk_id "list") = 0 ->
+       match Env.expand_synonyms env typ with
+       | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_typ ltyp, _)]), _) when Id.compare f (mk_id "list") = 0 ->
           let rec process_pats env = function
             | [] -> [], env
             | (pat :: pats) ->
