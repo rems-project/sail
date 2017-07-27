@@ -105,6 +105,8 @@ module Env : sig
      won't throw any exceptions. *)
   val lookup_id : id -> t -> lvar
 
+  val is_union_constructor : id -> t -> bool
+
   (* Return a fresh kind identifier that doesn't exist in the environment *)
   val fresh_kid : t -> kid
 
