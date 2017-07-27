@@ -1694,7 +1694,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      begin
        let (start, len, ord, vtyp) = destructure_vec_typ l env typ in
        let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
-       match len with
+       match nexp_simp len with
        | Nexp_aux (Nexp_constant lenc, _) ->
           if List.length vec = lenc then annot_exp (E_vector checked_items) typ
           else typ_error l "List length didn't match" (* FIXME: improve error message *)
