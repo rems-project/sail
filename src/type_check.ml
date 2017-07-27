@@ -250,7 +250,7 @@ and typ_subst_nexp_aux sv subst = function
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_nexp sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_nexp sv subst) args)
   | Typ_exist (kids, nc, typ) when KidSet.mem sv (KidSet.of_list kids) -> Typ_exist (kids, nc, typ)
-  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, typ_subst_nexp sv subst typ)
+  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc_subst_nexp sv subst nc, typ_subst_nexp sv subst typ)
 and typ_subst_arg_nexp sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_nexp_aux sv subst arg, l)
 and typ_subst_arg_nexp_aux sv subst = function
   | Typ_arg_nexp nexp -> Typ_arg_nexp (nexp_subst sv subst nexp)
@@ -306,7 +306,7 @@ and typ_subst_kid_aux sv subst = function
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_kid sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_kid sv subst) args)
   | Typ_exist (kids, nc, typ) when KidSet.mem sv (KidSet.of_list kids) -> Typ_exist (kids, nc, typ)
-  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, typ_subst_kid sv subst typ)
+  | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc_subst_nexp sv (Nexp_var subst) nc, typ_subst_kid sv subst typ)
 and typ_subst_arg_kid sv subst (Typ_arg_aux (arg, l)) = Typ_arg_aux (typ_subst_arg_kid_aux sv subst arg, l)
 and typ_subst_arg_kid_aux sv subst = function
   | Typ_arg_nexp nexp -> Typ_arg_nexp (nexp_subst sv (Nexp_var subst) nexp)
@@ -358,24 +358,6 @@ let typquant_subst_kid_aux sv subst = function
   | TypQ_no_forall -> TypQ_no_forall
 
 let typquant_subst_kid sv subst (TypQ_aux (typq, l)) = TypQ_aux (typquant_subst_kid_aux sv subst typq, l)
-
-let ex_counter = ref 0
-
-let fresh_existential () =
-  let fresh = Kid_aux (Var ("'ex" ^ string_of_int !ex_counter), Parse_ast.Unknown) in
-  incr ex_counter; fresh
-
-let destructure_exist = function
-  | Typ_aux (Typ_exist (kids, nc, typ), _) ->
-     let fresh_kids = List.map (fun kid -> (kid, fresh_existential ())) kids in
-     let nc = List.fold_left (fun nc (kid, fresh) -> nc_subst_nexp kid (Nexp_var fresh) nc) nc fresh_kids in
-     let typ = List.fold_left (fun typ (kid, fresh) -> typ_subst_nexp kid (Nexp_var fresh) typ) typ fresh_kids in
-     Some (List.map snd fresh_kids, nc, typ)
-  | _ -> None
-
-let is_exist = function
-  | Typ_aux (Typ_exist (_, _, _), _) -> true
-  | _ -> false
 
 (**************************************************************************)
 (* 2. Environment                                                         *)
@@ -919,6 +901,25 @@ let initial_env =
   Env.empty
   |> Env.add_typ_synonym (mk_id "atom") (fun args -> mk_typ (Typ_app (mk_id "range", args @ args)))
 
+let ex_counter = ref 0
+
+let fresh_existential () =
+  let fresh = Kid_aux (Var ("'ex" ^ string_of_int !ex_counter), Parse_ast.Unknown) in
+  incr ex_counter; fresh
+
+let destructure_exist env typ =
+  match Env.expand_synonyms env typ with
+  | Typ_aux (Typ_exist (kids, nc, typ), _) ->
+     let fresh_kids = List.map (fun kid -> (kid, fresh_existential ())) kids in
+     let nc = List.fold_left (fun nc (kid, fresh) -> nc_subst_nexp kid (Nexp_var fresh) nc) nc fresh_kids in
+     let typ = List.fold_left (fun typ (kid, fresh) -> typ_subst_nexp kid (Nexp_var fresh) typ) typ fresh_kids in
+     Some (List.map snd fresh_kids, nc, typ)
+  | _ -> None
+
+let is_exist = function
+  | Typ_aux (Typ_exist (_, _, _), _) -> true
+  | _ -> false
+
 (**************************************************************************)
 (* 3. Subtyping and constraint solving                                    *)
 (**************************************************************************)
@@ -1395,7 +1396,7 @@ let rec unify l env typ1 typ2 =
     | Typ_arg_effect _, Typ_arg_effect _ -> assert false
     | _, _ -> unify_error l (string_of_typ_arg typ_arg1 ^ " cannot be unified with type argument " ^ string_of_typ_arg typ_arg2)
   in
-  match destructure_exist typ2 with
+  match destructure_exist env typ2 with
   | Some (kids, nc, typ2) ->
      let typ1, typ2 = Env.expand_synonyms env typ1, Env.expand_synonyms env typ2 in
      let unifiers = unify_typ l typ1 typ2 in
@@ -1425,7 +1426,7 @@ let uv_nexp_constraint env (kid, uvar) =
   | _ -> env
 
 let subtyp l env typ1 typ2 =
-  match destructure_exist typ2 with
+  match destructure_exist env typ2 with
   | Some (kids, nc, typ2) ->
      let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env kids in
      let unifiers, existential_kids, existential_nc =
@@ -2415,7 +2416,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   let instantiate_ret env quants typs ret_typ =
     match ret_ctx_typ with
     | None -> (quants, typs, ret_typ, env)
-    | Some rct when is_exist rct -> (quants, typs, ret_typ, env) 
+    | Some rct when is_exist (Env.expand_synonyms env rct) -> (quants, typs, ret_typ, env) 
     | Some rct ->
        begin
          typ_debug ("RCT is " ^ string_of_typ rct);
@@ -2466,9 +2467,10 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
     else mk_typ (Typ_exist (existentials, List.fold_left nc_and nc_true ex_constraints, typ_ret))
   in
   let exp = annot_exp (E_app (f, xs_reordered)) typ_ret eff in
-
+  typ_debug ("RETURNING: " ^ string_of_typ (typ_of exp));
   match ret_ctx_typ with
-  | None -> exp, !all_unifiers
+  | None ->
+     exp, !all_unifiers
   | Some rct ->
      let exp = type_coercion env exp rct in
      typ_debug ("RETURNING AFTER COERCION " ^ string_of_typ (typ_of exp));
