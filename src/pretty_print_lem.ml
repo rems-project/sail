@@ -239,7 +239,8 @@ let doc_lit_lem in_pat (L_aux(lit,l)) a =
           | Typ_id (Id_aux (Id "string", _)) -> "\"\""
           | _ -> "(failwith \"undefined value of unsupported type\")")
        | _ -> "(failwith \"undefined value of unsupported type\")")
-  | L_string s -> "\"" ^ s ^ "\"")
+  | L_string s -> "\"" ^ s ^ "\""
+  | L_real s -> s (* TODO What's the Lem syntax for reals? *))
 
 (* typ_doc is the doc for the type being quantified *)
 
@@ -257,16 +258,10 @@ let is_ctor env id = match Env.lookup_id id env with
 *)
 let rec doc_pat_lem regtypes apat_needed (P_aux (p,(l,annot)) as pa) = match p with
   | P_app(id, ((_ :: _) as pats)) ->
-     (match annot with
-      | Some (env, _, _) when (is_ctor env id) ->
-         let ppp = doc_unop (doc_id_lem_ctor id)
-                            (parens (separate_map comma (doc_pat_lem regtypes true) pats)) in
-         if apat_needed then parens ppp else ppp
-      | _ -> empty)
-  | P_app(id,[]) ->
-    (match annot with
-     | Some (env, _, _) when (is_ctor env id) -> doc_id_lem_ctor id
-     | _ -> empty)
+    let ppp = doc_unop (doc_id_lem_ctor id)
+                       (parens (separate_map comma (doc_pat_lem regtypes true) pats)) in
+    if apat_needed then parens ppp else ppp
+  | P_app(id,[]) -> doc_id_lem_ctor id
   | P_lit lit  -> doc_lit_lem true lit annot
   | P_wild -> underscore
   | P_id id ->
