@@ -2514,7 +2514,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
 
   let nc_true = nc_eq (nconstant 0) (nconstant 0) in
   let typ_ret =
-    if existentials = []
+    if KidSet.is_empty (KidSet.inter (typ_frees typ_ret) (KidSet.of_list existentials))
     then typ_ret
     else mk_typ (Typ_exist (existentials, List.fold_left nc_and nc_true ex_constraints, typ_ret))
   in
