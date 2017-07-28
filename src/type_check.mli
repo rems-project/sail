@@ -87,7 +87,7 @@ module Env : sig
 
   val is_record : id -> t -> bool
 
-  val get_accessor : id -> t -> typquant * typ
+  val get_accessor : id -> id -> t -> typquant * typ
 
   (* If the environment is checking a function, then this will get the
      expected return type of the function. It's useful for checking or
@@ -104,6 +104,8 @@ module Env : sig
      lvar type. Returns Unbound if the identifier is unbound, and
      won't throw any exceptions. *)
   val lookup_id : id -> t -> lvar
+
+  val is_union_constructor : id -> t -> bool
 
   (* Return a fresh kind identifier that doesn't exist in the environment *)
   val fresh_kid : t -> kid

@@ -232,6 +232,8 @@ and string_of_n_constraint = function
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_nat_set_bounded (kid, ns), _) ->
      string_of_kid kid ^ " IN {" ^ string_of_list ", " string_of_int ns ^ "}"
+  | NC_aux (NC_true, _) -> "true"
+  | NC_aux (NC_false, _) -> "false"
 
 let string_of_quant_item_aux = function
   | QI_id (KOpt_aux (KOpt_none kid, _)) -> string_of_kid kid

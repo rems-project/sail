@@ -42,7 +42,5 @@
 
 open Ast
 
-val process_ast : Parse_ast.defs -> unit defs
+val process_ast : order -> Parse_ast.defs -> unit defs
 
-
-                                        

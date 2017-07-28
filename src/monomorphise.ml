@@ -77,9 +77,10 @@ let make_vectors sz =
   
 
 
-(* Based on current type checker's behaviour *)
 let pat_id_is_variable env id =
   match Env.lookup_id id env with
+  (* Unbound is returned for both variables and constructors which take
+     arguments, but the latter only don't appear in a P_id *)
   | Unbound
   (* Shadowing of immutable locals is allowed; mutable locals and registers
      are rejected by the type checker, so don't matter *)
@@ -90,21 +91,24 @@ let pat_id_is_variable env id =
   | Union _
     -> false
 
-
 let rec is_value (E_aux (e,(l,annot))) =
+  let is_constructor id =
+    match annot with
+    | None -> 
+       (Reporting_basic.print_err false true l "Monomorphisation"
+          ("Missing type information for identifier " ^ string_of_id id);
+        false) (* Be conservative if we have no info *)
+    | Some (env,_,_) ->
+       Env.is_union_constructor id env ||
+         (match Env.lookup_id id env with
+         | Enum _ | Union _ -> true 
+         | Unbound | Local _ | Register _ -> false)
+  in
   match e with
-  | E_id id ->
-     (match annot with
-     | None -> 
-        (Reporting_basic.print_err false true l "Monomorphisation"
-           ("Missing type information for identifier " ^ string_of_id id);
-         false) (* Be conservative if we have no info *)
-     | Some (env,_,_) ->
-        match Env.lookup_id id env with
-        | Enum _ | Union _ -> true
-        | Unbound | Local _ | Register _ -> false)
+  | E_id id -> is_constructor id
   | E_lit _ -> true
   | E_tuple es -> List.for_all is_value es
+  | E_app (id,es) -> is_constructor id && List.for_all is_value es
 (* TODO: more? *)
   | _ -> false
 
@@ -294,6 +298,7 @@ let nexp_subst_fns substs refinements =
       | E_lit _
       | E_comment _ -> re e
       | E_sizeof ne -> re (E_sizeof ne) (* TODO: does this need done?  does it appear in type checked code? *)
+      | E_constraint _ -> re e (* TODO: actual substitution if necessary *)
       | E_internal_exp (l,annot) -> re (E_internal_exp (l, (*s_tannot*) annot))
       | E_sizeof_internal (l,annot) -> re (E_sizeof_internal (l, (*s_tannot*) annot))
       | E_internal_exp_user ((l1,annot1),(l2,annot2)) ->
@@ -308,12 +313,15 @@ let nexp_subst_fns substs refinements =
            | _ -> E_aux (E_tuple es',(l,None))
          in
          let id' = 
-           match Env.lookup_id id (fst (env_typ_expected l annot)) with
-           | Union (qs,Typ_aux (Typ_fn(inty,outty,_),_)) ->
-              (match refine_constructor refinements id substs arg inty with
-              | None -> id
-              | Some id' -> id')
-           | _ -> id
+           let env,_ = env_typ_expected l annot in
+           if Env.is_union_constructor id env then
+             let (qs,ty) = Env.get_val_spec id env in
+             match ty with (Typ_aux (Typ_fn(inty,outty,_),_)) ->
+               (match refine_constructor refinements id substs arg inty with
+               | None -> id
+               | Some id' -> id')
+             | _ -> id
+           else id
          in re (E_app (id',es'))
       | E_app_infix (e1,id,e2) -> re (E_app_infix (s_exp e1,id,s_exp e2))
       | E_tuple es -> re (E_tuple (List.map s_exp es))
@@ -395,6 +403,7 @@ let bindings_from_pat p =
       -> List.concat (List.map aux_pat ps)
     | P_record (fps,_) -> List.concat (List.map aux_fpat fps)
     | P_vector_indexed ips -> List.concat (List.map (fun (_,p) -> aux_pat p) ips)
+    | P_cons (p1,p2) -> aux_pat p1 @ aux_pat p2
   and aux_fpat (FP_aux (FP_Fpat (_,p), _)) = aux_pat p
   in aux_pat p
 
@@ -577,6 +586,7 @@ let split_defs splits defs =
     | E_sizeof_internal _
     | E_internal_exp_user _
     | E_comment _
+    | E_constraint _
       -> exp
     | E_cast (t,e') -> re (E_cast (t, const_prop_exp substs e'))
     | E_app (id,es) ->
@@ -841,6 +851,10 @@ let split_defs splits defs =
            relist spl (fun ps -> P_tup ps) ps
         | P_list ps ->
            relist spl (fun ps -> P_list ps) ps
+        | P_cons (p1,p2) ->
+           match re (fun p' -> P_cons (p',p2)) p1 with
+           | Some r -> Some r
+           | None -> re (fun p' -> P_cons (p1,p')) p2
       in spl p
     in
 
@@ -861,8 +875,8 @@ let split_defs splits defs =
               let (_,variants) = List.find (fun (id',_) -> Id.compare id id' = 0) refinements in
               let env,_ = env_typ_expected l tannot in
               let constr_out_typ =
-                match Env.lookup_id id env with
-                | Union (qs,Typ_aux (Typ_fn(_,outt,_),_)) -> outt
+                match Env.get_val_spec id env with
+                | (qs,Typ_aux (Typ_fn(_,outt,_),_)) -> outt
                 | _ -> raise (Reporting_basic.err_general l
                                 ("Constructor " ^ string_of_id id ^ " is not a construtor!"))
               in
@@ -909,6 +923,7 @@ let split_defs splits defs =
       | E_sizeof_internal _
       | E_internal_exp_user _
       | E_comment _
+      | E_constraint _
         -> ea
       | E_cast (t,e') -> re (E_cast (t, map_exp e'))
       | E_app (id,es) -> re (E_app (id,List.map map_exp es))

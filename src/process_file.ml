@@ -45,16 +45,17 @@ type out_type =
   | Lem_out of string option
   | Ocaml_out of string option
 
-let get_lexbuf fn =
-  let lexbuf = Lexing.from_channel (open_in fn) in
-    lexbuf.Lexing.lex_curr_p <- { Lexing.pos_fname = fn;
-                                  Lexing.pos_lnum = 1;
-                                  Lexing.pos_bol = 0;
-                                  Lexing.pos_cnum = 0; };
-    lexbuf
+let get_lexbuf f =
+  let in_chan = open_in f in
+  let lexbuf = Lexing.from_channel in_chan in
+  lexbuf.Lexing.lex_curr_p <- { Lexing.pos_fname = f;
+                                Lexing.pos_lnum = 1;
+                                Lexing.pos_bol = 0;
+                                Lexing.pos_cnum = 0; };
+  lexbuf, in_chan
 
 let parse_file (f : string) : Parse_ast.defs =
-  let scanbuf = get_lexbuf f in
+  let scanbuf, in_chan = get_lexbuf f in
   let type_names =
     try
       Pre_parser.file Pre_lexer.token scanbuf
@@ -67,25 +68,26 @@ let parse_file (f : string) : Parse_ast.defs =
       | Lexer.LexError(s,p) ->
           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s))) in
   let () = Lexer.custom_type_names := !Lexer.custom_type_names @ type_names in
-  let lexbuf = get_lexbuf f in
+  close_in in_chan;
+  let lexbuf, in_chan = get_lexbuf f in
     try
-      Parser.file Lexer.token lexbuf
+      let ast = Parser.file Lexer.token lexbuf in
+      close_in in_chan; ast
     with
       | Parsing.Parse_error ->
           let pos = Lexing.lexeme_start_p lexbuf in
-           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "main")))
+          raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax (pos, "main")))
       | Parse_ast.Parse_error_locn(l,m) ->
           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_syntax_locn (l, m)))
       | Lexer.LexError(s,p) ->
           raise (Reporting_basic.Fatal_error (Reporting_basic.Err_lex (p, s)))
 
+let convert_ast (order : Ast.order) (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast order defs
 
-(*Should add a flag to say whether we want to consider Oinc or Odec the default order *)
-let convert_ast (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast defs
+let load_file_no_check order f = convert_ast order (parse_file f)
 
-let load_file env f =
-  let ast = parse_file f in
-  let ast = convert_ast ast in
+let load_file order env f =
+  let ast = convert_ast order (parse_file f) in
   Type_check.check env ast
 
 let opt_new_typecheck = ref false
