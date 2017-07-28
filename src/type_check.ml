@@ -132,6 +132,10 @@ let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
 let nc_gteq n1 n2 = NC_aux (NC_bounded_ge (n1, n2), Parse_ast.Unknown)
 let nc_lt n1 n2 = nc_lteq n1 (nsum n2 (nconstant 1))
 let nc_gt n1 n2 = nc_gteq n1 (nsum n2 (nconstant 1))
+let nc_and nc1 nc2 = mk_nc (NC_and (nc1, nc2))
+let nc_or nc1 nc2 = mk_nc (NC_or (nc1, nc2))
+let nc_true = mk_nc NC_true
+let nc_false = mk_nc NC_false
 
 let mk_lit l = E_aux (E_lit (L_aux (l, Parse_ast.Unknown)), (Parse_ast.Unknown, ()))
 
@@ -144,6 +148,8 @@ let rec nc_negate (NC_aux (nc, _)) =
   | NC_not_equal (n1, n2) -> nc_eq n1 n2
   | NC_and (n1, n2) -> mk_nc (NC_or (nc_negate n1, nc_negate n2))
   | NC_or (n1, n2) -> mk_nc (NC_and (nc_negate n1, nc_negate n2))
+  | NC_false -> mk_nc NC_true
+  | NC_true -> mk_nc NC_false
   | NC_nat_set_bounded (kid, []) -> typ_error Parse_ast.Unknown "Cannot negate empty nexp set"
   | NC_nat_set_bounded (kid, [int]) -> nc_neq (nvar kid) (nconstant int)
   | NC_nat_set_bounded (kid, int :: ints) ->
@@ -238,6 +244,8 @@ and nc_subst_nexp_aux l sv subst = function
      else set_nc
   | NC_or (nc1, nc2) -> NC_or (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
   | NC_and (nc1, nc2) -> NC_and (nc_subst_nexp sv subst nc1, nc_subst_nexp sv subst nc2)
+  | NC_false -> NC_false
+  | NC_true -> NC_true
 
 let rec typ_subst_nexp sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_nexp_aux sv subst typ, l)
 and typ_subst_nexp_aux sv subst = function
@@ -764,6 +772,7 @@ end = struct
     | NC_nat_set_bounded (kid, ints) -> () (* MAYBE: We could demand that ints are all unique here *)
     | NC_or (nc1, nc2) -> wf_constraint env nc1; wf_constraint env nc2
     | NC_and (nc1, nc2) -> wf_constraint env nc1; wf_constraint env nc2
+    | NC_true | NC_false -> ()
 
   let get_constraints env = env.constraints
 
@@ -1010,6 +1019,8 @@ let rec nc_constraint var_of (NC_aux (nc, l)) =
                     (List.map (fun i -> Constraint.eq (nexp_constraint var_of (nvar kid)) (Constraint.constant (big_int_of_int i))) ints)
   | NC_or (nc1, nc2) -> Constraint.disj (nc_constraint var_of nc1) (nc_constraint var_of nc2)
   | NC_and (nc1, nc2) -> Constraint.conj (nc_constraint var_of nc1) (nc_constraint var_of nc2)
+  | NC_false -> Constraint.literal false
+  | NC_true -> Constraint.literal true
 
 let rec nc_constraints var_of ncs =
   match ncs with
@@ -1050,6 +1061,8 @@ let prove env (NC_aux (nc_aux, _) as nc) =
   | NC_fixed (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 <> c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
   | NC_bounded_le (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 > c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
   | NC_bounded_ge (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 < c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
+  | NC_true -> true
+  | NC_false -> false
   | _ -> prove_z3 env nc
 
 let rec subtyp_tnf env tnf1 tnf2 =
@@ -1497,6 +1510,24 @@ let restrict_range_lower c1 (Typ_aux (typ_aux, l) as typ) =
      range_typ (nconstant (max c1 c2)) nexp
   | _ -> typ
 
+exception Not_a_constraint;;
+
+let rec assert_nexp (E_aux (exp_aux, l)) =
+  match exp_aux with
+  | E_sizeof nexp -> nexp
+  | E_lit (L_aux (L_num n, _)) -> nconstant n
+  | _ -> raise Not_a_constraint
+
+let rec assert_constraint (E_aux (exp_aux, l)) =
+  match exp_aux with
+  | E_app_infix (x, op, y) when string_of_id op = "|" ->
+     nc_or (assert_constraint x) (assert_constraint y)
+  | E_app_infix (x, op, y) when string_of_id op = "&" ->
+     nc_and (assert_constraint x) (assert_constraint y)
+  | E_app_infix (x, op, y) when string_of_id op = "==" ->
+     nc_eq (assert_nexp x) (assert_nexp y)
+  | _ -> nc_true
+
 type flow_constraint =
   | Flow_lteq of int
   | Flow_gteq of int
@@ -1622,7 +1653,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_block exps, _ ->
      begin
        let rec check_block l env exps typ = match exps with
-         | [] -> typ_error l "Empty block found"
+         | [] -> typ_equality l env typ unit_typ; []
          | [exp] -> [crule check_exp env exp typ]
          | (E_aux (E_assign (lexp, bind), _) :: exps) ->
             let texp, env = bind_assignment env lexp bind in
@@ -1631,6 +1662,14 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
             typ_print ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert");
             let inferred_exp = irule infer_exp env exp in
             inferred_exp :: check_block l (Env.add_constraint nc env) exps typ
+         | ((E_aux (E_assert (const_expr, assert_msg), _) as exp) :: exps) ->
+            begin
+              try
+                let nc = assert_constraint const_expr in
+                check_block l (Env.add_constraint nc env) exps typ
+              with
+              | Not_a_constraint -> check_block l env exps typ
+            end
          | (exp :: exps) ->
             let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
             texp :: check_block l env exps typ
@@ -1829,10 +1868,17 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           annot_pat (P_list pats) typ, env
        | _ -> typ_error l "Cannot match list pattern against non-list type"
      end
+  | P_tup [] ->
+     begin
+       match Env.expand_synonyms env typ with
+       | Typ_aux (Typ_id typ_id, _) when string_of_id typ_id = "unit" ->
+          annot_pat (P_tup []) typ, env
+       | _ -> typ_error l "Cannot match unit pattern against non-unit type"
+     end
   | P_tup pats ->
      begin
-       match typ_aux with
-       | Typ_tup typs ->
+       match Env.expand_synonyms env typ with
+       | Typ_aux (Typ_tup typs, _) ->
           let tpats, env =
             try List.fold_left2 bind_tuple_pat ([], env) pats typs with
             | Invalid_argument _ -> typ_error l "Tuple pattern and tuple type have different length"
