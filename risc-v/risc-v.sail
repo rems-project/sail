@@ -126,7 +126,7 @@ function clause execute (BTYPE(imm, rs2, rs1, op)) =
     case BLT  -> rs1_val <_s rs2_val
     case BGE  -> rs1_val >=_s rs2_val
     case BLTU -> rs1_val <_u rs2_val
-    case BGEU -> rs1_val >= rs2_val (* XXX is this signed or unsigned? *)
+    case BGEU -> unsigned(rs1_val) >= unsigned(rs2_val) (* XXX sail missing >=_u *)
   } in
   if (taken) then
       nextPC := PC + EXTS(imm : 0b0)
