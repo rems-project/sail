@@ -2444,10 +2444,6 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
              | [], None -> env
              | _, Some enc ->
                 let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env ex_kids in
-                typ_debug "UV nexping";
-                let fold_exs env (kid, nexp) = if not (is_bound kid env) then env else uv_nexp_constraint env (kid, nexp) in
-                let env = List.fold_left fold_exs env (KBindings.bindings unifiers) in
-                typ_debug "UV nexped";
                 Env.add_constraint enc env
            in
            all_unifiers := merge_uvars l !all_unifiers unifiers;
