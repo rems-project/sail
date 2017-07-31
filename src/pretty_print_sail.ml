@@ -282,7 +282,7 @@ let doc_exp, doc_let =
       let cases = separate_map (break 1) doc_case pexps in
       surround 2 1 opening cases rbrace
   | E_sizeof n ->
-     separate space [string "sizeof"; doc_nexp n]
+     parens (separate space [string "sizeof"; doc_nexp n])
   | E_constraint nc ->
      string "constraint" ^^ parens (doc_nexp_constraint nc)
   | E_exit e ->
