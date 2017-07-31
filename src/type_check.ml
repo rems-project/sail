@@ -96,22 +96,52 @@ let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
 
 let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
 
+let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
+and nexp_simp_aux = function
+  | Nexp_sum (n1, n2) ->
+     begin
+       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
+       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
+       match n1_simp, n2_simp with
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 + c2)
+       | _, Nexp_neg n2 -> Nexp_minus (n1, n2)
+       | _, _ -> Nexp_sum (n1, n2)
+     end
+  | Nexp_times (n1, n2) ->
+     begin
+       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
+       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
+       match n1_simp, n2_simp with
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 * c2)
+       | _, _ -> Nexp_times (n1, n2)
+     end
+  | Nexp_minus (n1, n2) ->
+     begin
+       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
+       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
+       typ_debug ("SIMP: " ^ string_of_nexp n1 ^ " - " ^ string_of_nexp n2);
+       match n1_simp, n2_simp with
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 - c2)
+       | _, _ -> Nexp_minus (n1, n2)
+     end
+  | nexp -> nexp
+
 let int_typ = mk_id_typ (mk_id "int")
 let nat_typ = mk_id_typ (mk_id "nat")
 let unit_typ = mk_id_typ (mk_id "unit")
 let bit_typ = mk_id_typ (mk_id "bit")
 let real_typ = mk_id_typ (mk_id "real")
 let app_typ id args = mk_typ (Typ_app (id, args))
-let atom_typ nexp = mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp nexp)]))
-let range_typ nexp1 nexp2 = mk_typ (Typ_app (mk_id "range", [mk_typ_arg (Typ_arg_nexp nexp1); mk_typ_arg (Typ_arg_nexp nexp2)]))
+let atom_typ nexp = mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp))]))
+let range_typ nexp1 nexp2 = mk_typ (Typ_app (mk_id "range", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp1)); mk_typ_arg (Typ_arg_nexp (nexp_simp nexp2))]))
 let bool_typ = mk_id_typ (mk_id "bool")
 let string_typ = mk_id_typ (mk_id "string")
 let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (Typ_arg_typ typ)]))
 
 let vector_typ n m ord typ =
   mk_typ (Typ_app (mk_id "vector",
-                   [mk_typ_arg (Typ_arg_nexp n);
-                    mk_typ_arg (Typ_arg_nexp m);
+                   [mk_typ_arg (Typ_arg_nexp (nexp_simp n));
+                    mk_typ_arg (Typ_arg_nexp (nexp_simp m));
                     mk_typ_arg (Typ_arg_order ord);
                     mk_typ_arg (Typ_arg_typ typ)]))
 
@@ -331,36 +361,6 @@ let quant_item_subst_kid_aux sv subst = function
   | QI_id (KOpt_aux (KOpt_kind (k, kid), l)) as qid ->
      if Kid.compare kid sv = 0 then QI_id (KOpt_aux (KOpt_kind (k, subst), l)) else qid
   | QI_const nc -> QI_const (nc_subst_nexp sv (Nexp_var subst) nc)
-
-let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
-and nexp_simp_aux = function
-  | Nexp_sum (n1, n2) ->
-     begin
-       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
-       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
-       match n1_simp, n2_simp with
-       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 + c2)
-       | _, Nexp_neg n2 -> Nexp_minus (n1, n2)
-       | _, _ -> Nexp_sum (n1, n2)
-     end
-  | Nexp_times (n1, n2) ->
-     begin
-       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
-       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
-       match n1_simp, n2_simp with
-       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 * c2)
-       | _, _ -> Nexp_times (n1, n2)
-     end
-  | Nexp_minus (n1, n2) ->
-     begin
-       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
-       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
-       typ_debug ("SIMP: " ^ string_of_nexp n1 ^ " - " ^ string_of_nexp n2);
-       match n1_simp, n2_simp with
-       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 - c2)
-       | _, _ -> Nexp_minus (n1, n2)
-     end
-  | nexp -> nexp
 
 let quant_item_subst_kid sv subst (QI_aux (quant, l)) = QI_aux (quant_item_subst_kid_aux sv subst quant, l)
 
@@ -1469,6 +1469,10 @@ let subtyp l env typ1 typ2 =
 let typ_equality l env typ1 typ2 =
   subtyp l env typ1 typ2; subtyp l env typ2 typ1
 
+let subtype_check env typ1 typ2 =
+  try subtyp Parse_ast.Unknown env typ1 typ2; true with
+  | Type_error _ -> false
+
 (**************************************************************************)
 (* 5. Type checking expressions                                           *)
 (**************************************************************************)
@@ -1823,6 +1827,12 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
          end
      in
      try_overload (Env.get_overloads f env)
+  | E_return exp, _ ->
+     let checked_exp = match Env.get_ret_typ env with
+       | Some ret_typ -> crule check_exp env exp ret_typ
+       | None -> typ_error l "Cannot use return outside a function"
+     in
+     annot_exp (E_return checked_exp) typ
   | E_app (f, xs), _ ->
      let inferred_exp = infer_funapp l env f xs (Some typ) in
      type_coercion env inferred_exp typ
@@ -2270,12 +2280,6 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_sizeof nexp -> annot_exp (E_sizeof nexp) (mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp nexp)])))
   | E_constraint nc ->
      annot_exp (E_constraint nc) bool_typ
-  | E_return exp ->
-     begin
-       match Env.get_ret_typ env with
-       | Some typ -> annot_exp (E_return (crule check_exp env exp typ)) (mk_typ (Typ_id (mk_id "unit")))
-       | None -> typ_error l "Return found in non-function environment"
-     end
   | E_field (exp, field) ->
      begin
        let inferred_exp = irule infer_exp env exp in
@@ -2345,7 +2349,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        match is_range (typ_of inferred_f), is_range (typ_of inferred_t) with
        | None, _ -> typ_error l ("Type of " ^ string_of_exp f ^ " in foreach must be a range")
        | _, None -> typ_error l ("Type of " ^ string_of_exp t ^ " in foreach must be a range")
-       | Some (l1, l2), Some (u1, u2) when prove env (nc_lteq l2 u1) ->
+       | Some (l1, l2), Some (u1, u2) (* when prove env (nc_lteq l2 u1) *) ->
           let checked_body = crule check_exp (Env.add_local v (Immutable, range_typ l1 u2) env) body unit_typ in
           annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ
        | _, _ -> typ_error l "Ranges in foreach overlap"

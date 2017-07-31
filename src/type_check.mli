@@ -85,6 +85,8 @@ module Env : sig
 
   val get_typ_vars : t -> base_kind_aux KBindings.t
 
+  val add_typ_var : kid -> base_kind_aux -> t -> t
+
   val is_record : id -> t -> bool
 
   val get_accessor : id -> id -> t -> typquant * typ
@@ -187,6 +189,10 @@ val strip_pat : 'a pat -> unit pat
    re-checked. *)
 val check_exp : Env.t -> unit exp -> typ -> tannot exp
 
+val infer_exp : Env.t -> unit exp -> tannot exp
+
+val subtype_check : Env.t -> typ -> typ -> bool
+
 (* Partial functions: The expressions and patterns passed to these
    functions must be guaranteed to have tannots of the form Some (env,
    typ) for these to work. *)
@@ -203,6 +209,8 @@ val pat_typ_of : tannot pat -> typ
 
 val effect_of : tannot exp -> effect
 val effect_of_annot : tannot -> effect
+
+val destructure_atom_nexp : typ -> nexp
 
 type uvar =
   | U_nexp of nexp
