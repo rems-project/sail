@@ -1171,7 +1171,7 @@ and tnf_args_eq env arg1 arg2 =
 
 let rec nexp_frees ?exs:(exs=KidSet.empty) (Nexp_aux (nexp, l)) =
   match nexp with
-  | Nexp_id _ -> typ_error l "Unimplemented Nexp_id in nexp_frees ~exs:exs"
+  | Nexp_id _ -> KidSet.empty
   | Nexp_var kid -> KidSet.singleton kid
   | Nexp_constant _ -> KidSet.empty
   | Nexp_times (n1, n2) -> KidSet.union (nexp_frees ~exs:exs n1) (nexp_frees ~exs:exs n2)
