@@ -312,6 +312,9 @@ and string_of_pat (P_aux (pat, l)) =
   | P_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_cons (pat1, pat2) -> string_of_pat pat1 ^ " :: " ^ string_of_pat pat2
   | P_list pats -> "[||" ^ string_of_list "," string_of_pat pats ^ "||]"
+  | P_vector_concat pats -> string_of_list " : " string_of_pat pats
+  | P_vector pats -> "[" ^ string_of_list ", " string_of_pat pats ^ "]"
+  | P_as (pat, id) -> string_of_pat pat ^ " as " ^ string_of_id id
   | _ -> "PAT"
 and string_of_lexp (LEXP_aux (lexp, _)) =
   match lexp with
