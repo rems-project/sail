@@ -1968,7 +1968,7 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      annot_pat (P_vector_concat (inferred_pat :: inferred_pats)) (lvector_typ env len vtyp), env
   | P_as (pat, id) ->
      let (typed_pat, env) = infer_pat env pat in
-     annot_pat (P_as (typed_pat, id)) (pat_typ_of typed_pat), env
+     annot_pat (P_as (typed_pat, id)) (pat_typ_of typed_pat), Env.add_local id (Immutable, pat_typ_of typed_pat) env
   | _ -> typ_error l ("Couldn't infer type of pattern " ^ string_of_pat pat)
 
 and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as exp) =
