@@ -135,6 +135,11 @@ let effectful (Effect_aux (eff,_)) =
   | Effect_var _ -> failwith "effectful: Effect_var not supported"
   | Effect_set effs -> effectful_set effs
 
+let is_regtyp (Typ_aux (typ, _)) env = match typ with
+  | Typ_app(id, _) when string_of_id id = "register" -> true
+  | Typ_id(id) when Env.is_regtyp id env -> true
+  | _ -> false
+
 let doc_typ_lem, doc_atomic_typ_lem =
   (* following the structure of parser for precedence *)
   let rec typ regtypes ty = fn_typ regtypes true ty
@@ -463,39 +468,21 @@ let doc_exp_lem, doc_let_lem =
        | _ ->
           begin match annot with
           | Some (env, _, _) when (is_ctor env f) ->
-             let argpp a_needed arg =
-               let t = typ_of arg in
-               if is_vector_typ t then
-                 let call =
-                   if is_bitvector_typ t then "reset_bitvector_start"
-                   else "reset_vector_start" in
-                 let epp = concat [string call;space;expY arg] in
-                 if a_needed then parens epp else epp
-               else expV a_needed arg in
              let epp =
                match args with
                | [] -> doc_id_lem_ctor f
-               | [arg] -> doc_id_lem_ctor f ^^ space ^^ argpp true arg
+               | [arg] -> doc_id_lem_ctor f ^^ space ^^ expV true arg
                | _ ->
                   doc_id_lem_ctor f ^^ space ^^ 
-                    parens (separate_map comma (argpp false) args) in
+                    parens (separate_map comma (expV false) args) in
              if aexp_needed then parens (align epp) else epp
           | _ ->
              let call = (*match annot with
                | Base(_,External (Some n),_,_,_,_) -> string n
                | _ ->*) doc_id_lem f in
-             let argpp a_needed arg =
-               let t = typ_of arg in
-               if is_vector_typ t then
-                 let call =
-                   if is_bitvector_typ t then "reset_bitvector_start"
-                   else "reset_vector_start" in
-                 let epp = concat [string call;space;expY arg] in
-                 if a_needed then parens epp else epp
-               else expV a_needed arg in
              let argspp = match args with
-               | [arg] -> argpp true arg
-               | args -> parens (align (separate_map (comma ^^ break 0) (argpp false) args)) in
+               | [arg] -> expV true arg
+               | args -> parens (align (separate_map (comma ^^ break 0) (expV false) args)) in
              let epp = align (call ^//^ argspp) in
              let (taepp,aexp_needed) =
                let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
@@ -536,15 +523,16 @@ let doc_exp_lem, doc_let_lem =
     | E_field((E_aux(_,(l,fannot)) as fexp),id) ->
        let ft = typ_of_annot (l,fannot) in
        (match fannot with
-        | Some(env, (Typ_aux (Typ_id tid, _)), _) when Env.is_regtyp tid env ->
+        | Some(env, ftyp, _) when is_regtyp ftyp env ->
            let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
+           let eff = effect_of full_exp in
            let field_f = string
              (if is_bit_typ t
              then "read_reg_bitfield"
              else "read_reg_field") in
            let (ta,aexp_needed) =
              if contains_bitvector_typ t && not (contains_t_pp_var t)
-             then (doc_tannot_lem regtypes true t, true)
+             then (doc_tannot_lem regtypes (effectful eff) t, true)
              else (empty, aexp_needed) in
            let epp = field_f ^^ space ^^ (expY fexp) ^^ space ^^ string_lit (doc_id_lem id) in
            if aexp_needed then parens (align epp ^^ ta) else (epp ^^ ta)
@@ -560,17 +548,17 @@ let doc_exp_lem, doc_let_lem =
     | E_block exps -> raise (report l "Blocks should have been removed till now.")
     | E_nondet exps -> raise (report l "Nondet blocks not supported.")
     | E_id id ->
-       let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
-       (match annot with
-        | Some (env, Typ_aux (Typ_id tid, _), eff) when Env.is_regtyp tid env ->
-           if has_effect eff BE_rreg then
-             let epp = separate space [string "read_reg";doc_id_lem id] in
-             if contains_bitvector_typ t && not (contains_t_pp_var t)
-             then parens (epp ^^ doc_tannot_lem regtypes true t)
-             else epp
-           else
-             doc_id_lem id
-        | Some (env, _, _) when (is_ctor env id) -> doc_id_lem_ctor id
+       let env = env_of full_exp in
+       let typ = typ_of full_exp in
+       let eff = effect_of full_exp in
+       let base_typ = Env.base_typ_of env typ in
+       if has_effect eff BE_rreg then
+         let epp = separate space [string "read_reg";doc_id_lem id] in
+         if contains_bitvector_typ base_typ && not (contains_t_pp_var base_typ)
+         then parens (epp ^^ doc_tannot_lem regtypes true base_typ)
+         else epp
+       else if is_ctor env id then doc_id_lem_ctor id
+       else doc_id_lem id
         (*| Base((_,t),Alias alias_info,_,eff,_,_) ->
            (match alias_info with
             | Alias_field(reg,field) ->
@@ -604,20 +592,9 @@ let doc_exp_lem, doc_let_lem =
                     separate space [string "read_reg_range";string reg;doc_int start;doc_int stop] ^^ ta in
                 if aexp_needed then parens (align epp) else epp
            )*)
-        | _ -> doc_id_lem id)
     | E_lit lit -> doc_lit_lem false lit annot
     | E_cast(typ,e) ->
-       let typ = Env.base_typ_of (env_of full_exp) typ in
-       if is_vector_typ typ then
-         let (start,_,_,_) = vector_typ_args_of typ in
-         let call =
-           if is_bitvector_typ typ then "set_bitvector_start"
-           else "set_vector_start" in
-         let epp = (concat [string call;space;doc_nexp start]) ^//^
-                     expY e in
-         if aexp_needed then parens epp else epp
-       else
-         expV aexp_needed e (*
+       expV aexp_needed e (*
        (match annot with
         | Base((_,t),External _,_,_,_,_) ->
            (* TODO: Does this case still exist with the new type checker? *)

@@ -69,7 +69,7 @@ let bitwise_not_bit = function
   | BU -> BU
   end
 
-let inline (~) = bitwise_not_bit
+(* let inline (~) = bitwise_not_bit *)
 
 val is_one : integer -> bitU
 let is_one i =
