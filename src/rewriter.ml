@@ -101,17 +101,27 @@ let fresh_id_pat pre ((l,annot)) =
 let union_eff_exps es =
   List.fold_left union_effects no_effect (List.map effect_of es)
 
+let fun_app_effects id env =
+  try
+    match Env.get_val_spec id env with
+    | (_, Typ_aux (Typ_fn (_,_,feff), _)) -> feff
+    | _ -> no_effect
+  with
+  | _ -> no_effect
+
 let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
 | Some (env, typ, eff) ->
-  let effsum = union_effects eff (match e with
+  let effsum = match e with
     | E_block es -> union_eff_exps es
     | E_nondet es -> union_eff_exps es
     | E_id _
-    | E_lit _ -> no_effect
+    | E_lit _ -> eff
     | E_cast (_,e) -> effect_of e
-    | E_app (_,es)
+    | E_app (f,es) ->
+      union_effects (fun_app_effects f env) (union_eff_exps es)
     | E_tuple es -> union_eff_exps es
-    | E_app_infix (e1,_,e2) -> union_eff_exps [e1;e2]
+    | E_app_infix (e1,f,e2) ->
+      union_effects (fun_app_effects f env) (union_eff_exps [e1;e2])
     | E_if (e1,e2,e3) -> union_eff_exps [e1;e2;e3]
     | E_for (_,e1,e2,e3,_,e4) -> union_eff_exps [e1;e2;e3;e4]
     | E_vector es -> union_eff_exps es
@@ -136,7 +146,7 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
     | E_exit e -> effect_of e
     | E_return e -> effect_of e
     | E_sizeof _ | E_sizeof_internal _ | E_constraint _ -> no_effect
-    | E_assert (c,m) -> no_effect
+    | E_assert (c,m) -> eff
     | E_comment _ | E_comment_struc _ -> no_effect
     | E_internal_cast (_,e) -> effect_of e
     | E_internal_exp _ -> no_effect
@@ -145,7 +155,7 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
       union_effects (effect_of_lexp lexp)
         (union_effects (effect_of e1) (effect_of e2))
     | E_internal_plet (_,e1,e2) -> union_effects (effect_of e1) (effect_of e2)
-    | E_internal_return e1 -> effect_of e1)
+    | E_internal_return e1 -> effect_of e1
   in
   E_aux (e, (l, Some (env, typ, effsum)))
 | None ->
@@ -189,18 +199,18 @@ let fix_eff_opt_default (Def_val_aux (opt_default,((l,_) as annot))) = match snd
 
 let fix_eff_pexp (Pat_aux (pexp,((l,_) as annot))) = match snd annot with
 | Some (env, typ, eff) ->
-  let effsum = union_effects eff (match pexp with
+  let effsum = match pexp with
     | Pat_exp (_,e) -> effect_of e
-    | Pat_when (_,e,e') -> union_effects (effect_of e) (effect_of e')) in
+    | Pat_when (_,e,e') -> union_effects (effect_of e) (effect_of e') in
   Pat_aux (pexp, (l, Some (env, typ, effsum)))
 | None ->
   Pat_aux (pexp, (l, None))
 
 let fix_eff_lb (LB_aux (lb,((l,_) as annot))) = match snd annot with
 | Some (env, typ, eff) ->
-  let effsum = union_effects eff (match lb with
+  let effsum = match lb with
     | LB_val_explicit (_,_,e) -> effect_of e
-    | LB_val_implicit (_,e) -> effect_of e) in
+    | LB_val_implicit (_,e) -> effect_of e in
   LB_aux (lb, (l, Some (env, typ, effsum)))
 | None ->
   LB_aux (lb, (l, None))
@@ -1961,7 +1971,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
     if (effectful e) then
       let e = rewrite_rec e in
       let (E_aux (_,(el,eannot))) = e in
-      let pat_e' = fresh_id_pat "p__" (el,eannot) in
+      let pat_e' = fresh_id_pat "p__" (el, Some (env_of e, typ_of e, no_effect)) in
       let exp_e' = pat_to_exp pat_e' in
       let letbind_e = LB_aux (LB_val_implicit (pat_e',e), (el,eannot)) in
       let exp' = case_exp exp_e' (typ_of full_exp) clauses in
