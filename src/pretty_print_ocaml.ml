@@ -237,7 +237,7 @@ let doc_exp_ocaml, doc_let_ocaml =
           doc_op coloneq (doc_lexp_ocaml true le) (exp e)
         | LEXP_vector _ ->
           doc_op (string "<-") (doc_lexp_array_ocaml le) (exp e)
-        | LEXP_vector_range _ ->
+        | LEXP_vector_range _ | LEXP_field _ ->
           doc_lexp_rwrite le e)
       else
        (match le_act with
