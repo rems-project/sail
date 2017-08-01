@@ -932,6 +932,21 @@ let is_exist = function
   | Typ_aux (Typ_exist (_, _, _), _) -> true
   | _ -> false
 
+let exist_typ constr typ =
+  let fresh_kid = fresh_existential () in
+  mk_typ (Typ_exist ([fresh_kid], constr fresh_kid, typ fresh_kid))
+
+let destruct_vector_typ env typ =
+  let destruct_vector_typ' = function
+    | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n1, _);
+                             Typ_arg_aux (Typ_arg_nexp n2, _);
+                             Typ_arg_aux (Typ_arg_order o, _);
+                             Typ_arg_aux (Typ_arg_typ vtyp, _)]
+                       ), _) when string_of_id id = "vector" -> Some (n1, n2, o, vtyp)
+    | typ -> None
+  in
+  destruct_vector_typ' (Env.expand_synonyms env typ)
+
 (**************************************************************************)
 (* 3. Subtyping and constraint solving                                    *)
 (**************************************************************************)
@@ -2349,9 +2364,13 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        match is_range (typ_of inferred_f), is_range (typ_of inferred_t) with
        | None, _ -> typ_error l ("Type of " ^ string_of_exp f ^ " in foreach must be a range")
        | _, None -> typ_error l ("Type of " ^ string_of_exp t ^ " in foreach must be a range")
-       | Some (l1, l2), Some (u1, u2) (* when prove env (nc_lteq l2 u1) *) ->
-          let checked_body = crule check_exp (Env.add_local v (Immutable, range_typ l1 u2) env) body unit_typ in
+       | Some (l1, l2), Some (u1, u2) when prove env (nc_lteq l2 u1) ->
+          let loop_vtyp = exist_typ (fun e -> nc_and (nc_lteq l1 (nvar e)) (nc_lteq (nvar e) u2)) (fun e -> atom_typ (nvar e)) in
+          let checked_body = crule check_exp (Env.add_local v (Immutable, loop_vtyp) env) body unit_typ in
           annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ
+       (* | Some (l1, l2), Some (u1, u2) when prove env (nc_lteq l2 u1) ->
+          let checked_body = crule check_exp (Env.add_local v (Immutable, range_typ l1 u2) env) body unit_typ in
+          annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ *)
        | _, _ -> typ_error l "Ranges in foreach overlap"
      end
   | E_if (cond, then_branch, else_branch) ->

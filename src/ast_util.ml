@@ -319,6 +319,8 @@ and string_of_lexp (LEXP_aux (lexp, _)) =
   | LEXP_cast (typ, v) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_id v
   | LEXP_tup lexps -> "(" ^ string_of_list ", " string_of_lexp lexps ^ ")"
   | LEXP_vector (lexp, exp) -> string_of_lexp lexp ^ "[" ^ string_of_exp exp ^ "]"
+  | LEXP_vector_range (lexp, exp1, exp2) ->
+     string_of_lexp lexp ^ "[" ^ string_of_exp exp1 ^ ".." ^ string_of_exp exp2 ^ "]"
   | LEXP_field (lexp, id) -> string_of_lexp lexp ^ "." ^ string_of_id id
   | LEXP_memory (f, xs) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"
   | _ -> "LEXP"

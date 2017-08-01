@@ -153,6 +153,8 @@ val npow2 : nexp -> nexp
 val nvar : kid -> nexp
 val nid : id -> nexp
 
+val nc_gteq : nexp -> nexp -> n_constraint
+
 (* Sail builtin types. *)
 val int_typ : typ
 val nat_typ : typ
@@ -165,6 +167,7 @@ val string_typ : typ
 val real_typ : typ
 val vector_typ : nexp -> nexp -> order -> typ -> typ
 val list_typ : typ -> typ
+val exist_typ : (kid -> n_constraint) -> (kid -> typ) -> typ
 
 val inc_ord : order
 val dec_ord : order
@@ -211,6 +214,8 @@ val effect_of : tannot exp -> effect
 val effect_of_annot : tannot -> effect
 
 val destructure_atom_nexp : typ -> nexp
+
+val destruct_vector_typ : Env.t -> typ -> (nexp * nexp * order * typ) option
 
 type uvar =
   | U_nexp of nexp

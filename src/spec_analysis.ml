@@ -238,7 +238,7 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,_)) : Nameset.t =
   | Typ_fn(arg,ret,_) -> fv_of_typ consider_var bound (fv_of_typ consider_var bound used arg) ret
   | Typ_tup ts -> List.fold_right (fun t n -> fv_of_typ consider_var bound n t) ts used
   | Typ_app(id,targs) ->
-    List.fold_right (fun ta n -> fv_of_targ consider_var bound n ta) targs (conditional_add_typ bound used id)
+     List.fold_right (fun ta n -> fv_of_targ consider_var bound n ta) targs (conditional_add_typ bound used id)
 
 and fv_of_targ consider_var bound used (Ast.Typ_arg_aux(targ,_)) : Nameset.t = match targ with
   | Typ_arg_typ t -> fv_of_typ consider_var bound used t

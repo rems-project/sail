@@ -4,9 +4,9 @@ register nat x
 register nat y
 
 typedef wordsize = forall Nat 'n, 'n IN {8,16,32}. [|'n|]
-let forall Nat 'n. (wordsize<'n>) word = 8
+(* let forall Nat 'n. (wordsize<'n>) word = 8 *)
 
-function nat main _ = {
+function nat main () = {
 
   (* works - x and y are set to 42 *)
   n := 1;
