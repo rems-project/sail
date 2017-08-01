@@ -1943,13 +1943,13 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      annot_pat (P_lit lit) (infer_lit env lit), env
   | P_vector (pat :: pats) ->
      let fold_pats (pats, env) pat =
-       let inferred_pat, env = infer_pat env pat in
-       pats @ [inferred_pat], env
+       let typed_pat, env = bind_pat env pat bit_typ in
+       pats @ [typed_pat], env
      in
-     let ((inferred_pat :: inferred_pats) as pats), env =
+     let ((typed_pat :: typed_pats) as pats), env =
        List.fold_left fold_pats ([], env) (pat :: pats) in
      let len = nexp_simp (nconstant (List.length pats)) in
-     let etyp = pat_typ_of inferred_pat in
+     let etyp = pat_typ_of typed_pat in
      List.map (fun pat -> typ_equality l env etyp (pat_typ_of pat)) pats;
      annot_pat (P_vector pats) (lvector_typ env len etyp), env
   | P_vector_concat (pat :: pats) ->
@@ -1966,6 +1966,9 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      in
      let len = nexp_simp (List.fold_left fold_len len inferred_pats) in
      annot_pat (P_vector_concat (inferred_pat :: inferred_pats)) (lvector_typ env len vtyp), env
+  | P_as (pat, id) ->
+     let (typed_pat, env) = infer_pat env pat in
+     annot_pat (P_as (typed_pat, id)) (pat_typ_of typed_pat), env
   | _ -> typ_error l ("Couldn't infer type of pattern " ^ string_of_pat pat)
 
 and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as exp) =
@@ -2239,6 +2242,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        match is_range (typ_of inferred_f), is_range (typ_of inferred_t) with
        | None, _ -> typ_error l ("Type of " ^ string_of_exp f ^ " in foreach must be a range")
        | _, None -> typ_error l ("Type of " ^ string_of_exp t ^ " in foreach must be a range")
+       (* | Some (l1, l2), Some (u1, u2) when prove env (nc_lteq l2 u1) ->
+          let loop_vtyp = exist_typ (fun e -> nc_and (nc_lteq l1 (nvar e)) (nc_lteq (nvar e) u2)) (fun e -> atom_typ (nvar e)) in
+          let checked_body = crule check_exp (Env.add_local v (Immutable, loop_vtyp) env) body unit_typ in
+          annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ *)
        | Some (l1, l2), Some (u1, u2) when prove env (nc_lteq l2 u1) ->
           let checked_body = crule check_exp (Env.add_local v (Immutable, range_typ l1 u2) env) body unit_typ in
           annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ
