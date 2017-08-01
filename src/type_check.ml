@@ -1587,13 +1587,15 @@ let rec add_constraints constrs env =
    impossible, but we should be careful to never rule out a possible
    cast - match_typ and filter_casts implement this logic. It must be
    the case that if two types unify, then they match. *)
-let rec match_typ (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
-  match typ1, typ2 with
+let rec match_typ env typ1 typ2 =
+  let Typ_aux (typ1_aux, _) = Env.expand_synonyms env typ1 in
+  let Typ_aux (typ2_aux, _) = Env.expand_synonyms env typ2 in
+  match typ1_aux, typ2_aux with
   | Typ_wild, Typ_wild -> true
   | _, Typ_var kid2 -> true
   | Typ_id v1, Typ_id v2 when Id.compare v1 v2 = 0 -> true
   | Typ_id v1, Typ_id v2 when string_of_id v1 = "int" && string_of_id v2 = "nat" -> true
-  | Typ_tup typs1, Typ_tup typs2 -> List.for_all2 match_typ typs1 typs2
+  | Typ_tup typs1, Typ_tup typs2 -> List.for_all2 (match_typ env) typs1 typs2
   | Typ_id v, Typ_app (f, _) when string_of_id v = "nat" && string_of_id f = "atom" -> true
   | Typ_id v, Typ_app (f, _) when string_of_id v = "int" &&  string_of_id f = "atom" -> true
   | Typ_id v, Typ_app (f, _) when string_of_id v = "nat" &&  string_of_id f = "range" -> true
@@ -1612,7 +1614,7 @@ let rec filter_casts env from_typ to_typ casts =
        let (quant, cast_typ) = Env.get_val_spec cast env in
        match cast_typ with
        | Typ_aux (Typ_fn (cast_from_typ, cast_to_typ, _), _)
-            when match_typ from_typ cast_from_typ && match_typ to_typ cast_to_typ ->
+            when match_typ env from_typ cast_from_typ && match_typ env to_typ cast_to_typ ->
           typ_print ("Considering cast " ^ string_of_typ cast_typ ^ " for " ^ string_of_typ from_typ ^ " to " ^ string_of_typ to_typ);
           cast :: filter_casts env from_typ to_typ casts
        | _ -> filter_casts env from_typ to_typ casts
