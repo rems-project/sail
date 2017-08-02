@@ -300,10 +300,6 @@ and contains_bitvector_typ_arg (Typ_arg_aux (targ, _)) = match targ with
   | Typ_arg_typ t -> contains_bitvector_typ t
   | _ -> false
 
-let const_nexp (Nexp_aux (nexp,_)) = match nexp with
-  | Nexp_constant _ -> true
-  | _ -> false
-
 (* Check for variables in types that would be pretty-printed.
    In particular, in case of vector types, only the element type and the
    length argument are checked for variables, and the latter only if it is
@@ -318,11 +314,11 @@ let rec contains_t_pp_var (Typ_aux (t,a) as typ) = match t with
   | Typ_app (c,targs) ->
       if is_bitvector_typ typ then
         let (_,length,_,_) = vector_typ_args_of typ in
-        not (const_nexp ((*normalize_nexp*) length))
+        not (is_nexp_constant ((*normalize_nexp*) length))
       else List.exists contains_t_arg_pp_var targs
 and contains_t_arg_pp_var (Typ_arg_aux (targ, _)) = match targ with
   | Typ_arg_typ t -> contains_t_pp_var t
-  | Typ_arg_nexp nexp -> not (const_nexp ((*normalize_nexp*) nexp))
+  | Typ_arg_nexp nexp -> not (is_nexp_constant ((*normalize_nexp*) nexp))
   | _ -> false
 
 let prefix_recordtype = true
@@ -1260,33 +1256,30 @@ let doc_dec_lem (DEC_aux (reg,(l,annot))) =
   match reg with
   | DEC_reg(typ,id) ->
      (match typ with
-      | Typ_aux (Typ_app (r, [Typ_arg_aux (Typ_arg_typ rt, _)]), _)
-        when string_of_id r = "register" && is_vector_typ rt ->
-        let env = env_of_annot (l,annot) in
-        let (start, size, order, etyp) = vector_typ_args_of (Env.base_typ_of env rt) in
-        (match is_bit_typ (Env.base_typ_of env etyp), start, size with
-          | true, Nexp_aux (Nexp_constant start, _), Nexp_aux (Nexp_constant size, _) ->
-             let o = if is_order_inc order then "true" else "false" in
-             (doc_op equals)
-             (string "let" ^^ space ^^ doc_id_lem id)
-             (string "Register" ^^ space ^^
-                align (separate space [string_lit(doc_id_lem id);
-                                       doc_int (size);
-                                       doc_int (start);
-                                       string o;
-                                       string "[]"]))
-                ^/^ hardline
-           | _ ->
-              let (Id_aux (Id name,_)) = id in
-              failwith ("can't deal with register " ^ name))
-      | Typ_aux (Typ_app(r, [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id idt, _)), _)]), _)
-        when string_of_id r = "register" ->
-         separate space [string "let";doc_id_lem id;equals;
-                         string "build_" ^^ string (string_of_id idt);string_lit (doc_id_lem id)] ^/^ hardline
       | Typ_aux (Typ_id idt, _) ->
-         separate space [string "let";doc_id_lem id;equals;
-                         string "build_" ^^ string (string_of_id idt);string_lit (doc_id_lem id)] ^/^ hardline
-      |_-> empty)
+        separate space [string "let";doc_id_lem id;equals;
+                        string "build_" ^^ string (string_of_id idt);string_lit (doc_id_lem id)] ^/^ hardline
+      | _ ->
+        let rt = (match annot with
+          | Some (env, _, _) -> Env.base_typ_of env typ
+          | _ -> typ) in
+        if is_vector_typ rt then
+          let (start, size, order, etyp) = vector_typ_args_of rt in
+          if is_bit_typ etyp && is_nexp_constant start && is_nexp_constant size then
+            let o = if is_order_inc order then "true" else "false" in
+            (doc_op equals)
+            (string "let" ^^ space ^^ doc_id_lem id)
+            (string "Register" ^^ space ^^
+               align (separate space [string_lit(doc_id_lem id);
+                                      doc_nexp (size);
+                                      doc_nexp (start);
+                                      string o;
+                                      string "[]"]))
+               ^/^ hardline
+          else raise (Reporting_basic.err_unreachable l
+            ("can't deal with register type " ^ string_of_typ typ))
+        else raise (Reporting_basic.err_unreachable l
+          ("can't deal with register type " ^ string_of_typ typ)))
   | DEC_alias(id,alspec) -> empty
   | DEC_typ_alias(typ,id,alspec) -> empty
 

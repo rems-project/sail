@@ -2008,10 +2008,11 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
             end
        in
        let regtyp, inferred_flexp, is_register = infer_flexp flexp in
-       let eff = if is_register then mk_effect [BE_wreg] else no_effect in
        typ_debug ("REGTYP: " ^ string_of_typ regtyp ^ " / " ^ string_of_typ (Env.expand_synonyms env regtyp));
        match Env.expand_synonyms env regtyp with
+       | Typ_aux (Typ_app (Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id regtyp_id, _)), _)]), _)
        | Typ_aux (Typ_id regtyp_id, _) when Env.is_regtyp regtyp_id env ->
+          let eff = mk_effect [BE_wreg] in
           let base, top, ranges = Env.get_regtyp regtyp_id env in
           let range, _ =
             try List.find (fun (_, id) -> Id.compare id field = 0) ranges with
@@ -2027,6 +2028,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
           let checked_exp = crule check_exp env exp vec_typ in
           annot_assign (annot_lexp (LEXP_field (annot_lexp_effect inferred_flexp regtyp eff, field)) vec_typ) checked_exp, env
        | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
+          let eff = if is_register then mk_effect [BE_wreg] else no_effect in
           let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor rectyp_id field env in
           let unifiers = try unify l env rectyp_q regtyp with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m) in
           let field_typ' = subst_unifiers unifiers field_typ in
@@ -2180,6 +2182,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        let inferred_exp = irule infer_exp env exp in
        match Env.expand_synonyms env (typ_of inferred_exp) with
        (* Accessing a (bit) field of a register *)
+       | Typ_aux (Typ_app (Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id regtyp, _)), _)]), _)
        | Typ_aux (Typ_id regtyp, _) when Env.is_regtyp regtyp env ->
           let base, top, ranges = Env.get_regtyp regtyp env in
           let range, _ =

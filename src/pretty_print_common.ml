@@ -215,7 +215,7 @@ let doc_typ, doc_atomic_typ, doc_nexp =
       group (parens (nexp ne))
 
   (* expose doc_typ, doc_atomic_typ and doc_nexp *)
-  in typ, atomic_typ, nexp
+  in typ, atomic_typ, atomic_nexp_typ
 
 let pp_format_id (Id_aux(i,_)) =
   match i with

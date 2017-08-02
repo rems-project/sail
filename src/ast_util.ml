@@ -397,6 +397,13 @@ let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   | Nexp_neg n1, Nexp_neg n2 -> nexp_identical n1 n2
   | _, _ -> false
 
+let rec is_nexp_constant (Nexp_aux (nexp, _)) = match nexp with
+| Nexp_id _ | Nexp_var _ -> false
+| Nexp_constant _ -> true
+| Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) ->
+  is_nexp_constant n1 && is_nexp_constant n2
+| Nexp_exp n | Nexp_neg n -> is_nexp_constant n
+
 let rec is_number (Typ_aux (t,_)) =
   match t with
   | Typ_app (Id_aux (Id "range", _),_)

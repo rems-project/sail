@@ -2767,7 +2767,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          | _ ->
            raise (Reporting_basic.err_unreachable l
              "assignment without effects annotation") in
-       if not (List.exists (function BE_aux (BE_lset,_) -> true | _ -> false) effs) then
+       if effectful exp then
          Same_vars (E_aux (E_assign (lexp,vexp),annot))
        else 
          (match lexp with
