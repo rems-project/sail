@@ -2,6 +2,9 @@ default Order inc
 
 val extern forall Num 'n. (bit['n], bit['n]) -> bit['n] effect pure bv_add = "bv_add_inc"
 
+val forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'l >= 0, 'm <= 'o, 'o <= 'l.
+  (vector<'n,'l,inc,'a>, [:'m:], [:'o:]) -> vector<'m,'o + 1 - 'm,inc,'a> effect pure vector_subrange
+
 val forall Num 'n, Num 'm, Num 'o, Num 'p, Type 'a.
   (vector<'n,'m,inc,'a>, vector<'o,'p,inc,'a>) -> vector<'n,'m + 'p,inc,'a>
   effect pure vector_append_inc

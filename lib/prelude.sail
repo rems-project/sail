@@ -16,11 +16,13 @@ val forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [|'n:'n + 'l
 overload vector_access [vector_access_inc; vector_access_dec]
 
 (* Type safe vector subrange *)
+(* vector_subrange(v, m, o) returns the subvector of v with elements with
+   indices from m up to and *including* o. *)
 val forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'l >= 0, 'm <= 'o, 'o <= 'l.
-  (vector<'n,'l,inc,'a>, [:'m:], [:'o:]) -> vector<'m,'o - 'm,inc,'a> effect pure vector_subrange_inc
+  (vector<'n,'l,inc,'a>, [:'m:], [:'o:]) -> vector<'m,('o - 'm) + 1,inc,'a> effect pure vector_subrange_inc
 
 val forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
-  (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,'m - ('o - 1),dec,'a> effect pure vector_subrange_dec
+  (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,('m - 'o) + 1,dec,'a> effect pure vector_subrange_dec
 
 val forall Num 'n, Num 'l, Order 'ord.
   (vector<'n,'l,'ord,bit>, int, int) -> list<bit> effect pure vector_subrange_bl
@@ -276,4 +278,3 @@ typedef option = const union forall Type 'a. {
     None;
     'a Some
 }
-
