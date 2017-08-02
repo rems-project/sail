@@ -133,6 +133,8 @@ function test_ocaml {
 	if $SAILDIR/sail -ocaml $DIR/$1/$i 2> /dev/null
 	then
 	    green "generated ocaml for $1/$i" "pass"
+
+	    rm $SAILDIR/${i%%.*}.ml
 	else
 	    red "generated ocaml for $1/$i" "fail"
 	fi
