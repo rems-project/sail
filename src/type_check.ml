@@ -87,6 +87,7 @@ let unaux_typ (Typ_aux (typ, _)) = typ
 let mk_typ typ = Typ_aux (typ, Parse_ast.Unknown)
 let mk_typ_arg arg = Typ_arg_aux (arg, Parse_ast.Unknown)
 let mk_id str = Id_aux (Id str, Parse_ast.Unknown)
+let mk_kid str = Kid_aux (Var ("'" ^ str), Parse_ast.Unknown)
 let mk_infix_id str = Id_aux (DeIid str, Parse_ast.Unknown)
 
 let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
@@ -2367,13 +2368,18 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        match is_range (typ_of inferred_f), is_range (typ_of inferred_t) with
        | None, _ -> typ_error l ("Type of " ^ string_of_exp f ^ " in foreach must be a range")
        | _, None -> typ_error l ("Type of " ^ string_of_exp t ^ " in foreach must be a range")
-       (* | Some (l1, l2), Some (u1, u2) when prove env (nc_lteq l2 u1) ->
-          let loop_vtyp = exist_typ (fun e -> nc_and (nc_lteq l1 (nvar e)) (nc_lteq (nvar e) u2)) (fun e -> atom_typ (nvar e)) in
-          let checked_body = crule check_exp (Env.add_local v (Immutable, loop_vtyp) env) body unit_typ in
-          annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ *)
        | Some (l1, l2), Some (u1, u2) when prove env (nc_lteq l2 u1) ->
-          let checked_body = crule check_exp (Env.add_local v (Immutable, range_typ l1 u2) env) body unit_typ in
-          annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ
+          let kid = mk_kid ("loop_" ^ string_of_id v) in
+          if KBindings.mem kid (Env.get_typ_vars env)
+          then typ_error l "Nested loop variables cannot have the same name"
+          else
+            begin
+              let env = Env.add_typ_var kid BK_nat env in
+              let env = Env.add_constraint (nc_and (nc_lteq l1 (nvar kid)) (nc_lteq (nvar kid) u2)) env in
+              let loop_vtyp = atom_typ (nvar kid) in
+              let checked_body = crule check_exp (Env.add_local v (Immutable, loop_vtyp) env) body unit_typ in
+              annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ
+            end
        | _, _ -> typ_error l "Ranges in foreach overlap"
      end
   | E_if (cond, then_branch, else_branch) ->
