@@ -2136,12 +2136,13 @@ let rewrite_defs_separate_numbs defs = rewrite_defs_base
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} defs*)
 
-let rewrite_defs_ocaml =
-  top_sort_defs >>
-  rewrite_defs_remove_vector_concat >>
-  rewrite_sizeof >>
-  rewrite_defs_exp_lift_assign (* >>
+let rewrite_defs_ocaml = [
+  top_sort_defs;
+  rewrite_defs_remove_vector_concat;
+  rewrite_sizeof;
+  rewrite_defs_exp_lift_assign (* ;
   rewrite_defs_separate_numbs *)
+  ]
 
 let rewrite_defs_remove_blocks =
   let letbind_wild v body =
@@ -2969,17 +2970,18 @@ let rewrite_defs_remove_e_assign =
     }
 
 
-let rewrite_defs_lem =
-  top_sort_defs >>
-  rewrite_sizeof >>
-  rewrite_defs_remove_vector_concat >>
-  rewrite_defs_remove_bitvector_pats >>
-  rewrite_defs_guarded_pats >>
-  rewrite_defs_exp_lift_assign >> 
-  rewrite_defs_remove_blocks >> 
-  rewrite_defs_letbind_effects >> 
-  rewrite_defs_remove_e_assign >> 
-  rewrite_defs_effectful_let_expressions >> 
-  rewrite_defs_remove_superfluous_letbinds >>
+let rewrite_defs_lem =[
+  top_sort_defs;
+  rewrite_sizeof;
+  rewrite_defs_remove_vector_concat;
+  rewrite_defs_remove_bitvector_pats;
+  rewrite_defs_guarded_pats;
+  rewrite_defs_exp_lift_assign;
+  rewrite_defs_remove_blocks;
+  rewrite_defs_letbind_effects;
+  rewrite_defs_remove_e_assign;
+  rewrite_defs_effectful_let_expressions;
+  rewrite_defs_remove_superfluous_letbinds;
   rewrite_defs_remove_superfluous_returns
+  ]
   

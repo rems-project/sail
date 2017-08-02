@@ -56,8 +56,8 @@ type 'a rewriters = { rewrite_exp  : 'a rewriters -> 'a exp -> 'a exp;
                     
 val rewrite_exp : tannot rewriters -> tannot exp -> tannot exp
 val rewrite_defs : tannot defs -> tannot defs
-val rewrite_defs_ocaml : tannot defs -> tannot defs (*Perform rewrites to exclude AST nodes not supported for ocaml out*)
-val rewrite_defs_lem : tannot defs -> tannot defs (*Perform rewrites to exclude AST nodes not supported for lem out*)
+val rewrite_defs_ocaml : (tannot defs -> tannot defs) list (*Perform rewrites to exclude AST nodes not supported for ocaml out*)
+val rewrite_defs_lem : (tannot defs -> tannot defs) list (*Perform rewrites to exclude AST nodes not supported for lem out*)
 
 (* the type of interpretations of pattern-matching expressions *)
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
