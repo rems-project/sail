@@ -259,7 +259,7 @@ type outcome =
 
 
 (* Functions to build up the initial state for interpretation *)
-val build_context : specification -> memory_reads -> memory_read_taggeds-> memory_writes -> memory_write_eas -> memory_write_vals -> memory_write_vals_tagged -> barriers -> excl_res -> external_functions -> context
+val build_context : bool -> specification -> memory_reads -> memory_read_taggeds-> memory_writes -> memory_write_eas -> memory_write_vals -> memory_write_vals_tagged -> barriers -> excl_res -> external_functions -> context
 val initial_instruction_state : context -> string -> list register_value -> instruction_state 
   (* string is a function name, list of value are the parameters to that function *)
 
