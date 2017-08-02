@@ -2278,7 +2278,16 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
           annot_lexp (LEXP_vector (annot_lexp (LEXP_id v) vtyp, inferred_exp)) typ, env
        | _ -> typ_error l ("Bad vector assignment: " ^ string_of_lexp lexp)
      end
-  | _ -> typ_error l ("Unhandled l-expression")
+  | LEXP_field (LEXP_aux (LEXP_id v, _), fid) ->
+     (* FIXME: will only work for ASL *)
+     let rec_id =
+       match Env.lookup_id v env with
+       | Register (Typ_aux (Typ_id rec_id, _)) -> rec_id
+       | _ -> typ_error l (string_of_lexp lexp ^ " must be a record register here")
+     in
+     let typq, (Typ_aux (Typ_fn (_, ret_typ, _), _)) = Env.get_accessor rec_id fid env in
+     annot_lexp_effect (LEXP_field (annot_lexp (LEXP_id v) (mk_id_typ rec_id), fid)) ret_typ (mk_effect [BE_wreg]), env
+  | _ -> typ_error l ("Unhandled l-expression " ^ string_of_lexp lexp)
 
 and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   let annot_exp_effect exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
