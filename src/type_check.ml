@@ -1713,13 +1713,15 @@ let rec add_constraints constrs env =
    impossible, but we should be careful to never rule out a possible
    cast - match_typ and filter_casts implement this logic. It must be
    the case that if two types unify, then they match. *)
-let rec match_typ (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
-  match typ1, typ2 with
+let rec match_typ env typ1 typ2 =
+  let Typ_aux (typ1_aux, _) = Env.expand_synonyms env typ1 in
+  let Typ_aux (typ2_aux, _) = Env.expand_synonyms env typ2 in
+  match typ1_aux, typ2_aux with
   | Typ_wild, Typ_wild -> true
   | _, Typ_var kid2 -> true
   | Typ_id v1, Typ_id v2 when Id.compare v1 v2 = 0 -> true
   | Typ_id v1, Typ_id v2 when string_of_id v1 = "int" && string_of_id v2 = "nat" -> true
-  | Typ_tup typs1, Typ_tup typs2 -> List.for_all2 match_typ typs1 typs2
+  | Typ_tup typs1, Typ_tup typs2 -> List.for_all2 (match_typ env) typs1 typs2
   | Typ_id v, Typ_app (f, _) when string_of_id v = "nat" && string_of_id f = "atom" -> true
   | Typ_id v, Typ_app (f, _) when string_of_id v = "int" &&  string_of_id f = "atom" -> true
   | Typ_id v, Typ_app (f, _) when string_of_id v = "nat" &&  string_of_id f = "range" -> true
@@ -1738,7 +1740,7 @@ let rec filter_casts env from_typ to_typ casts =
        let (quant, cast_typ) = Env.get_val_spec cast env in
        match cast_typ with
        | Typ_aux (Typ_fn (cast_from_typ, cast_to_typ, _), _)
-            when match_typ from_typ cast_from_typ && match_typ to_typ cast_to_typ ->
+            when match_typ env from_typ cast_from_typ && match_typ env to_typ cast_to_typ ->
           typ_print ("Considering cast " ^ string_of_typ cast_typ ^ " for " ^ string_of_typ from_typ ^ " to " ^ string_of_typ to_typ);
           cast :: filter_casts env from_typ to_typ casts
        | _ -> filter_casts env from_typ to_typ casts
@@ -2100,7 +2102,7 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      annot_pat (P_vector_concat (inferred_pat :: inferred_pats)) (lvector_typ env len vtyp), env
   | P_as (pat, id) ->
      let (typed_pat, env) = infer_pat env pat in
-     annot_pat (P_as (typed_pat, id)) (pat_typ_of typed_pat), env
+     annot_pat (P_as (typed_pat, id)) (pat_typ_of typed_pat), Env.add_local id (Immutable, pat_typ_of typed_pat) env
   | _ -> typ_error l ("Couldn't infer type of pattern " ^ string_of_pat pat)
 
 and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as exp) =
@@ -2368,6 +2370,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        match is_range (typ_of inferred_f), is_range (typ_of inferred_t) with
        | None, _ -> typ_error l ("Type of " ^ string_of_exp f ^ " in foreach must be a range")
        | _, None -> typ_error l ("Type of " ^ string_of_exp t ^ " in foreach must be a range")
+       (* | Some (l1, l2), Some (u1, u2) when prove env (nc_lteq l2 u1) ->
+          let loop_vtyp = exist_typ (fun e -> nc_and (nc_lteq l1 (nvar e)) (nc_lteq (nvar e) u2)) (fun e -> atom_typ (nvar e)) in
+          let checked_body = crule check_exp (Env.add_local v (Immutable, loop_vtyp) env) body unit_typ in
+          annot_exp (E_for (v, inferred_f, inferred_t, checked_step, ord, checked_body)) unit_typ *)
        | Some (l1, l2), Some (u1, u2) when prove env (nc_lteq l2 u1) ->
           let kid = mk_kid ("loop_" ^ string_of_id v) in
           if KBindings.mem kid (Env.get_typ_vars env)

@@ -101,17 +101,20 @@ function test_lem {
     do
 	if $SAILDIR/sail -lem $DIR/$1/$i 2> /dev/null
 	then
+	    green "generated lem for $1/$i" "pass"
+
 	    mv $SAILDIR/${i%%.*}_embed_types.lem $DIR/lem/
 	    mv $SAILDIR/${i%%.*}_embed.lem $DIR/lem/
 	    mv $SAILDIR/${i%%.*}_embed_sequential.lem $DIR/lem/
 	    if lem -lib $SAILDIR/src/lem_interp -lib $SAILDIR/src/gen_lib/ $DIR/lem/${i%%.*}_embed_types.lem $DIR/lem/${i%%.*}_embed.lem 2> /dev/null
 	    then
-		green "generated lem for $1/$i" "pass"
+		green "typechecking lem for $1/$i" "pass"
 	    else
-		red "generated lem for $1/$i" "failed to typecheck lem"
+		red "typechecking lem for $1/$i" "fail"
 	    fi
 	else
-	    red "generated lem for $1/$i" "failed to generate lem"
+	    red "generated lem for $1/$i" "fail"
+	    red "typechecking lem for $1/$i" "fail"
 	fi
     done
 }
@@ -123,5 +126,25 @@ finish_suite "Lem generation 1"
 test_lem rtpass
 
 finish_suite "Lem generation 2"
+
+function test_ocaml {
+    for i in `ls $DIR/pass/`;
+    do
+	if $SAILDIR/sail -ocaml $DIR/$1/$i 2> /dev/null
+	then
+	    green "generated ocaml for $1/$i" "pass"
+	else
+	    red "generated ocaml for $1/$i" "fail"
+	fi
+    done
+}
+
+test_ocaml pass
+
+finish_suite "Ocaml generation 1"
+
+test_ocaml rtpass
+
+finish_suite "Ocaml generation 2"
 
 printf "</testsuites>\n" >> $DIR/tests.xml
