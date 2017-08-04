@@ -220,5 +220,6 @@ let report_error e =
   let (m1, verb_pos, pos_l, m2) = dest_err e in
   (print_err_internal verb_pos false pos_l m1 m2; exit 1)
 
-
-
+let print_error e =
+  let (m1, verb_pos, pos_l, m2) = dest_err e in
+  print_err_internal verb_pos false pos_l m1 m2

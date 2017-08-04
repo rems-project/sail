@@ -559,7 +559,7 @@ end = struct
     | Typ_arg_effect _ -> () (* Check: is this ever used? *)
   and wf_nexp ?exs:(exs=KidSet.empty) env (Nexp_aux (nexp_aux, l)) =
     match nexp_aux with
-    | Nexp_id _ -> typ_error l "Unimplemented: Nexp_id"
+    | Nexp_id _ -> ()
     | Nexp_var kid when KidSet.mem kid exs -> ()
     | Nexp_var kid ->
        begin
@@ -1652,6 +1652,8 @@ let rec assert_constraint (E_aux (exp_aux, l)) =
      nc_and (assert_constraint x) (assert_constraint y)
   | E_app_infix (x, op, y) when string_of_id op = "==" ->
      nc_eq (assert_nexp x) (assert_nexp y)
+  | E_app_infix (x, op, y) when string_of_id op = ">=" ->
+     nc_gteq (assert_nexp x) (assert_nexp y)
   | _ -> nc_true
 
 type flow_constraint =
@@ -2455,7 +2457,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
     | [] -> []
     | (x :: xs) -> (n, x) :: number (n + 1) xs
   in
-  let solve_quant = function
+  let solve_quant env = function
     | QI_aux (QI_id _, _) -> false
     | QI_aux (QI_const nc, _) -> prove env nc
   in
@@ -2464,7 +2466,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
     | (utyps, []), (uargs, []) ->
        begin
          typ_debug ("Got unresolved args: " ^ string_of_list ", " (fun (_, exp) -> string_of_exp exp) uargs);
-         if List.for_all solve_quant quants
+         if List.for_all (solve_quant env) quants
          then
            let iuargs = List.map2 (fun utyp (n, uarg) -> (n, crule check_exp env uarg utyp)) utyps uargs in
            (iuargs, ret_typ, env)

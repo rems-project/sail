@@ -104,3 +104,4 @@ val err_typ_dual : Parse_ast.l ->  Parse_ast.l -> string -> exn
     raising a [Fatal_error] exception is recommended. *)
 val report_error : error -> 'a
 
+val print_error : error -> unit
