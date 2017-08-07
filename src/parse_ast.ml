@@ -165,6 +165,8 @@ n_constraint_aux =  (* constraint over kind $_$ *)
  | NC_nat_set_bounded of kid * (int) list
  | NC_or of n_constraint * n_constraint
  | NC_and of n_constraint * n_constraint
+ | NC_true
+ | NC_false
 
 and
 n_constraint = 

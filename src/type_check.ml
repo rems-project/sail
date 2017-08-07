@@ -1431,7 +1431,7 @@ let rec unify l env typ1 typ2 =
   match destructure_exist env typ2 with
   | Some (kids, nc, typ2) ->
      let typ1, typ2 = Env.expand_synonyms env typ1, Env.expand_synonyms env typ2 in
-     let unifiers = unify_typ l typ1 typ2 in
+     let (unifiers, _, _) = unify l env typ1 typ2 in
      typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
      unifiers, kids, Some nc
   | None ->
@@ -2208,7 +2208,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
           begin
             subtyp l env typ typ_annot;
             subtyp l env typ_annot vtyp;
-            annot_lexp (LEXP_cast (typ_annot, v)) typ, env
+            annot_lexp (LEXP_cast (typ_annot, v)) typ, Env.add_local v (Mutable, typ_annot) env
           end
        | Register vtyp ->
           begin

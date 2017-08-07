@@ -455,6 +455,8 @@ tup_typ:
 exist_typ:
   | Exist tyvars Comma nexp_constraint Dot tup_typ
     { tloc (ATyp_exist ($2, $4, $6)) }
+  | Exist tyvars Dot tup_typ
+    { tloc (ATyp_exist ($2, NC_aux (NC_true, loc ()), $4)) }
   | tup_typ
     { $1 }
 
@@ -1095,6 +1097,10 @@ nexp_constraint2:
     { NC_aux(NC_nat_set_bounded($1,$4), loc ()) }
   | tyvar IN Lcurly nums Rcurly
     { NC_aux(NC_nat_set_bounded($1,$4), loc ()) }
+  | True
+    { NC_aux (NC_true, loc ()) }
+  | False
+    { NC_aux (NC_false, loc ()) }
   | Lparen nexp_constraint Rparen
     { $2 }
 

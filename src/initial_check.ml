@@ -331,6 +331,8 @@ and to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) 
                 NC_or (to_ast_nexp_constraint k_env nc1, to_ast_nexp_constraint k_env nc2)
              | Parse_ast.NC_and (nc1, nc2) ->
                 NC_and (to_ast_nexp_constraint k_env nc1, to_ast_nexp_constraint k_env nc2)
+             | Parse_ast.NC_true -> NC_true
+             | Parse_ast.NC_false -> NC_false
     ), l)
 
 (* Transforms a typquant while building first the kind environment of declared variables, and also the kind environment in context *)
