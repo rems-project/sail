@@ -118,6 +118,12 @@ let is_range (Typ_aux (typ_aux, _)) =
        when string_of_id f = "range" -> Some (n1, n2)
   | _ -> None
 
+let is_list (Typ_aux (typ_aux, _)) =
+  match typ_aux with
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_typ typ, _)])
+       when string_of_id f = "list" -> Some typ
+  | _ -> None
+
 let nconstant c = Nexp_aux (Nexp_constant c, Parse_ast.Unknown)
 let nminus n1 n2 = Nexp_aux (Nexp_minus (n1, n2), Parse_ast.Unknown)
 let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)
@@ -1690,6 +1696,23 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
           Pat_aux (Pat_when (tpat, checked_guard, crule check_exp env case typ), (l, None))
      in
      annot_exp (E_case (inferred_exp, List.map (fun case -> check_case case typ) cases)) typ
+  | E_cons (x, xs), _ ->
+     begin
+       match is_list (Env.expand_synonyms env typ) with
+       | Some elem_typ ->
+          let checked_xs = crule check_exp env xs typ in
+          let checked_x = crule check_exp env x elem_typ in
+          annot_exp (E_cons (checked_x, checked_xs)) typ
+       | None -> typ_error l ("Cons " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
+     end
+  | E_list xs, _ ->
+     begin
+       match is_list (Env.expand_synonyms env typ) with
+       | Some elem_typ ->
+          let checked_xs = List.map (fun x -> crule check_exp env x elem_typ) xs in
+          annot_exp (E_list checked_xs) typ
+       | None -> typ_error l ("List " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
+     end
   | E_let (LB_aux (letbind, (let_loc, _)), exp), _ ->
      begin
        match letbind with
@@ -2466,6 +2489,13 @@ and propagate_exp_effect_aux = function
      let p_lb, eff = propagate_letbind_effect letbind in
      let p_exp = propagate_exp_effect exp in
      E_let (p_lb, p_exp), union_effects (effect_of p_exp) eff
+  | E_cons (x, xs) ->
+     let p_x = propagate_exp_effect x in
+     let p_xs = propagate_exp_effect xs in
+     E_cons (p_x, p_xs), union_effects (effect_of p_x) (effect_of p_xs)
+  | E_list xs ->
+     let p_xs = List.map propagate_exp_effect xs in
+     E_list p_xs, collect_effects p_xs
   | E_assign (lexp, exp) ->
      let p_lexp = propagate_lexp_effect lexp in
      let p_exp = propagate_exp_effect exp in
