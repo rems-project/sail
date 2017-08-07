@@ -46,6 +46,7 @@ open PPrint
 let pipe = string "|"
 let arrow = string "->"
 let dotdot = string ".."
+let coloncolon = string "::"
 let coloneq = string ":="
 let lsquarebar = string "[|"
 let rsquarebar = string "|]"

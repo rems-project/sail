@@ -130,7 +130,7 @@ let doc_pat, doc_atomic_pat =
   | P_vector_indexed ipats  -> brackets (separate_map comma_sp npat ipats)
   | P_tup pats  -> parens (separate_map comma_sp atomic_pat pats)
   | P_list pats  -> squarebarbars (separate_map semi_sp atomic_pat pats)
-  | P_cons (pat1, pat2) -> separate space [atomic_pat pat1; string "::"; pat pat2]
+  | P_cons (pat1, pat2) -> separate space [atomic_pat pat1; coloncolon; pat pat2]
   | P_app(_, _ :: _) | P_vector_concat _ ->
       group (parens (pat pa))
   and fpat (FP_aux(FP_Fpat(id,fpat),_)) = doc_op equals (doc_id id) (pat fpat)
@@ -168,7 +168,7 @@ let doc_exp, doc_let =
   | E_vector_append(l,r) ->
       doc_op colon (shift_exp l) (cons_exp r)
   | E_cons(l,r) ->
-      doc_op colon (shift_exp l) (cons_exp r)
+      doc_op coloncolon (shift_exp l) (cons_exp r)
   | _ -> shift_exp expr
   and shift_exp ((E_aux(e,_)) as expr) = match e with
   | E_app_infix(l,(Id_aux(Id (">>" | ">>>" | "<<" | "<<<"),_) as op),r) ->
