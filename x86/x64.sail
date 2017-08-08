@@ -30,6 +30,8 @@
 
 default Order dec
 
+val extern forall Type 'a. ('a, list<'a>) -> bool effect pure ismember
+val extern forall Type 'a. list<'a> -> nat effect pure listlength
 val extern forall Nat 'n. (bit['n],[|'n|]) -> bit['n] effect pure ASR
 val extern forall Nat 'n. (bit['n],[|'n|]) -> bit['n] effect pure LSR
 val extern forall Nat 'n. (bit['n],[|'n|]) -> bit['n] effect pure ROR
@@ -135,9 +137,51 @@ typedef binop_name = enumerate {
   Add; Or; Adc; Sbb; And; Sub; Xor; Cmp; Rol; Ror; Rcl; Rcr; Shl; Shr; Test; Sar
 }
 
+function binop_name opc_to_binop_name ((bit[4]) opc) =
+  switch opc
+  {
+    case 0x0 -> Add
+    case 0x1 -> Or
+    case 0x2 -> Adc
+    case 0x3 -> Sbb
+    case 0x4 -> And
+    case 0x5 -> Sub
+    case 0x6 -> Xor
+    case 0x7 -> Cmp
+    case 0x8 -> Rol
+    case 0x9 -> Ror
+    case 0xa -> Rcl
+    case 0xb -> Rcr
+    case 0xc -> Shl
+    case 0xd -> Shr
+    case 0xe -> Test
+    case 0xf -> Sar
+  }
+
 typedef cond = enumerate {
   O; NO; B; NB; E; NE; NA; A; S; NS; P; NP; L; NL; NG; G; ALWAYS
 }
+
+function cond bv_to_cond ((bit[4]) v) =
+  switch v
+  {
+    case 0x0 -> O
+    case 0x1 -> NO
+    case 0x2 -> B
+    case 0x3 -> NB
+    case 0x4 -> E
+    case 0x5 -> NE
+    case 0x6 -> NA
+    case 0x7 -> A
+    case 0x8 -> S
+    case 0x9 -> NS
+    case 0xa -> P
+    case 0xb -> NP
+    case 0xc -> L
+    case 0xd -> NL
+    case 0xe -> NG
+    case 0xf -> G
+  }
 
 (* Effective addresses *)
 
@@ -190,7 +234,7 @@ function ea ea_imm_rm ((size) sz, (imm_rm) i_rm) =
     case (Imm (v)) -> Ea_i (sz, v)
   }
 
-function qword restrictSize ((size) sz, (qword) imm) =
+function qword restrict_size ((size) sz, (qword) imm) =
   switch sz {
     case (Sz8(_)) -> imm & 0x00000000000000FF
     case Sz16     -> imm & 0x000000000000FFFF
@@ -202,13 +246,13 @@ function regn sub4 ((regn) r) = negative_to_zero (r - 4)
 
 function qword effect { rreg, rmem } EA ((ea) e) =
   switch e {
-    case (Ea_i(sz,i)) -> restrictSize(sz,i)
+    case (Ea_i(sz,i)) -> restrict_size(sz,i)
     case (Ea_r((Sz8(have_rex)),r)) ->
       if have_rex | r < 4 (* RSP *) | r > 7 (* RDI *) then
         REG[r]
       else
-        LSR (REG[sub4 (r)], 8) & 0x00000000000000FF
-    case (Ea_r(sz,r)) -> restrictSize(sz, REG[r])
+        (REG[sub4 (r)] >> 8) & 0x00000000000000FF
+    case (Ea_r(sz,r)) -> restrict_size(sz, REG[r])
     case (Ea_m((Sz8(_)),a)) -> EXTZ (MEM(a, 1))
     case (Ea_m(Sz16,a)) -> EXTZ (MEM(a, 2))
     case (Ea_m(Sz32,a)) -> EXTZ (MEM(a, 4))
@@ -438,8 +482,8 @@ function unit write_binop ((size) sz, (binop_name) bop, (qword) a, (qword) b, (e
     case Rol -> write_result_erase_eflags (rol (sz, a, b), e)
     case Ror -> write_result_erase_eflags (ror (sz, a, b), e)
     case Sar -> write_result_erase_eflags (sar (sz, a, b), e)
-    case Shl -> write_result_erase_eflags (a << mask_shift (sz,b), e)
-    case Shr -> write_result_erase_eflags (LSR (a, mask_shift (sz,b)), e)
+    case Shl -> write_result_erase_eflags (a << mask_shift (sz, b), e)
+    case Shr -> write_result_erase_eflags (a >> mask_shift (sz, b), e)
     case Adc ->
       {
         let carry = CF in
@@ -807,3 +851,377 @@ function clause execute (XCHG (sz,r,n)) =
 
 end ast
 end execute
+
+(* --------------------------------------------------------------------------
+   Decoding
+   -------------------------------------------------------------------------- *)
+
+function (qword,ostream) oimmediate8 ((ostream) strm) =
+  switch strm {
+    case (Some (b :: t)) -> ((qword) (EXTS(b)), Some (t))
+    case _ -> ((qword) undefined, (ostream) None)
+  }
+
+function (qword,ostream) immediate8 ((byte_stream) strm) =
+  oimmediate8 (Some (strm))
+
+function (qword,ostream) immediate16 ((byte_stream) strm) =
+  switch strm {
+    case b1 :: b2 :: t -> ((qword) (EXTS(b2 : b1)), Some (t))
+    case _ -> ((qword) undefined, (ostream) None)
+  }
+
+function (qword,ostream) immediate32 ((byte_stream) strm) =
+  switch strm {
+    case b1 :: b2 :: b3 :: b4 :: t ->
+      ((qword) (EXTS(b4 : b3 : b2 : b1)), Some (t))
+    case _ -> ((qword) undefined, (ostream) None)
+  }
+
+function (qword,ostream) immediate64 ((byte_stream) strm) =
+  switch strm {
+    case b1 :: b2 :: b3 :: b4 :: b5 :: b6 :: b7 :: b8 :: t ->
+      ((qword) (EXTS(b8 : b7 : b6 : b5 : b4 : b3 : b2 : b1)), Some (t))
+    case _ -> ((qword) undefined, (ostream) None)
+  }
+
+function (qword, ostream) immediate ((size) sz, (byte_stream) strm) =
+   switch sz {
+      case (Sz8 (_)) -> immediate8 (strm)
+      case Sz16      -> immediate16 (strm)
+      case _         -> immediate32 (strm)
+   }
+
+function (qword, ostream) oimmediate ((size) sz, (ostream) strm) =
+   switch strm {
+      case (Some (s)) -> immediate (sz, s)
+      case None       -> ((qword) undefined, (ostream) None)
+   }
+
+function (qword, ostream) full_immediate ((size) sz, (byte_stream) strm) =
+  if sz == Sz64 then immediate64 (strm) else immediate (sz, strm)
+
+(* - Parse ModR/M and SIB bytes --------------------------------------------- *)
+
+typedef REX = register bits [3 : 0] {
+  3 : W;
+  2 : R;
+  1 : X;
+  0 : B
+}
+
+function regn rex_reg ((bit[1]) b, (bit[3]) r) = unsigned(b : r)
+
+function (qword, ostream) read_displacement ((bit[2]) Mod, (byte_stream) strm) =
+   if Mod == 0b01
+      then immediate8 (strm)
+   else if Mod == 0b10
+      then immediate32 (strm)
+   else (0x0000000000000000, (Some (strm)))
+
+function (qword, ostream)
+  read_sib_displacement ((bit[2]) Mod, (byte_stream) strm) =
+  if Mod == 0b01 then immediate8 (strm) else immediate32 (strm)
+
+function (rm, ostream)
+   read_SIB ((REX) rex, (bit[2]) Mod, (byte_stream) strm) =
+   switch strm {
+     case ((bit[2]) SS : (bit[3]) Index : (bit[3]) Base) :: strm1 ->
+        (let bbase = rex_reg (rex.B, Base) in
+         let index = rex_reg (rex.X, Index) in
+         let scaled_index = if index == 4 (* RSP *) then
+                               (option<scale_index>) None
+                            else let x = (scale_index) (SS, index) in
+                               Some (x) in
+          (if bbase == 5 (* RBP *)
+              then let (displacement, strm2) =
+                      read_sib_displacement (Mod, strm1) in
+                   let bbase = if Mod == 0b00 then NoBase else RegBase (bbase)
+                   in
+                      (Mem (scaled_index, bbase, displacement), strm2)
+           else let (displacement, strm2) = read_displacement (Mod, strm1) in
+              (Mem (scaled_index, RegBase (bbase), displacement), strm2)))
+     case _ -> ((rm) undefined, (ostream) None)
+   }
+
+function (regn, rm, ostream) read_ModRM ((REX) rex, (byte_stream) strm) =
+   switch strm {
+     case (0b00 : (bit[3]) RegOpc : 0b101) :: strm1 ->
+       let (displacement, strm2) = immediate32 (strm1) in
+         (rex_reg (rex.R, RegOpc), Mem (None, RipBase, displacement), strm2)
+     case (0b11 : (bit[3]) REG : (bit[3]) RM) :: strm1 ->
+         (rex_reg (rex.R, REG), Reg (rex_reg (rex.B, RM)), Some (strm1))
+     case ((bit[2]) Mod : (bit[3]) RegOpc : 0b100) :: strm1 ->
+       let (sib, strm2) = read_SIB (rex, Mod, strm1) in
+         (rex_reg (rex.R, RegOpc), sib, strm2)
+     case ((bit[2]) Mod : (bit[3]) RegOpc : (bit[3]) RM) :: strm1 ->
+       let (displacement, strm2) = read_displacement (Mod, strm1) in
+         (rex_reg (rex.R, RegOpc),
+          Mem (None, RegBase (rex_reg (rex.B, RM)), displacement),
+          strm2)
+     case _ -> ((regn) undefined, (rm) undefined, (ostream) None)
+   }
+
+function (bit[3], rm, ostream)
+   read_opcode_ModRM ((REX) rex, (byte_stream) strm) =
+  let (opcode, r, strm1) = read_ModRM (rex, strm) in
+    ((bit[3]) (cast_int_vec((int) opcode mod 8)), r, strm1)
+
+(* - Prefixes --------------------------------------------------------------- *)
+
+typedef prefix = [|5|]
+
+function prefix prefix_group ((byte) b) =
+  switch b {
+    case 0xf0 -> 1
+    case 0xf2 -> 1
+    case 0xf3 -> 1
+    case 0x26 -> 2
+    case 0x2e -> 2
+    case 0x36 -> 2
+    case 0x3e -> 2
+    case 0x64 -> 2
+    case 0x65 -> 2
+    case 0x66 -> 3
+    case 0x67 -> 4
+    case _ -> if b[7 .. 4] == 0b0100 then 5 else 0
+  }
+
+typedef atuple = (byte_stream, bool, REX, byte_stream)
+
+val (list<prefix>, byte_stream, byte_stream) -> option<atuple> effect {undef} read_prefix
+
+function rec option<atuple> read_prefix
+  ((list<prefix>) s, (byte_stream) p, (byte_stream) strm) =
+    switch strm {
+      case h :: strm1 ->
+         let group = prefix_group (h) in
+           if group == 0 then
+              let x = (p, false, (REX) 0b0000, strm) in Some (x)
+           else if group == 5 then
+              let x = (p, true, (REX) (h[3 .. 0]), strm1) in Some (x)
+           else if ismember (group, s) then
+              None
+           else
+              read_prefix (group :: s, h :: p, strm1)
+      case _ -> let x = (p, false, (REX) undefined, strm) in Some (x)
+    }
+
+function  option<atuple> read_prefixes ((byte_stream) strm) =
+   read_prefix ([||||], [||||], strm)
+
+function size op_size ((bool) have_rex, (bit[1]) w, (bit[1]) v, (bool) override) =
+  if v == 1 then
+    Sz8 (have_rex)
+  else if w == 1 then
+    Sz64
+  else if override then
+    Sz16
+  else
+    Sz32
+
+function bool is_mem ((rm) r) =
+  switch r {case (Mem (_, _, _)) -> true case _ -> false}
+
+(* - Decoder ---------------------------------------------------------------- *)
+
+function (ast, ostream) decode_aux
+  ((byte_stream) strm, (bool) have_rex, (REX) rex, (bool) op_size_override) =
+  switch strm
+  {
+    case (0b00 : (bit[3]) opc : 0b0 : (bit[1]) x : (bit[1]) v) :: strm2 ->
+      let (reg, r, strm3) = read_ModRM (rex, strm2) in
+      let sz = op_size (have_rex, rex.W, v, op_size_override) in
+      let binop = opc_to_binop_name (EXTZ (opc)) in
+      let src_dst = if x == 0 then Rm_r (r, reg) else R_rm (reg, r) in
+      (Binop (binop, sz, src_dst), strm3)
+    case (0b00 : (bit[3]) opc : 0b10 : (bit[1]) v) :: strm2 ->
+      let sz = op_size (have_rex, rex.W, v, op_size_override) in
+      let binop = opc_to_binop_name (EXTZ (opc)) in
+      let (imm, strm3) = immediate (sz, strm2) in
+      (Binop (binop, sz, Rm_i (Reg (0), imm)), strm3)
+    case (0x5 : (bit[1]) b : (bit[3]) r) :: strm2 ->
+      let reg = Reg (([|15|]) (rex.B : r)) in
+      (if b == 0b0 then PUSH (Rm (reg)) else POP (reg), Some (strm2))
+    case 0x63 :: strm2 ->
+      let (reg, r, strm3) = read_ModRM (rex, strm2) in
+      (MOVSX (Sz32, R_rm (reg, r), Sz64), strm3)
+    case (0x6 : 0b10 : (bit[1]) b : 0b0) :: strm2 ->
+      let (imm, strm3) = if b == 1 then immediate8 (strm2)
+                         else immediate32 (strm2) in
+      (PUSH (Imm (imm)), strm3)
+    case (0x7 : (bit[4]) c) :: strm2 ->
+      let (imm, strm3) = immediate8 (strm2) in
+      (Jcc (bv_to_cond (c), imm), strm3)
+    case (0x8 : 0b000 : (bit[1]) v) :: strm2 ->
+      let sz = op_size (have_rex, rex.W, v, op_size_override) in
+      let (opc, r, strm3) = read_opcode_ModRM (rex, strm2) in
+      let (imm, strm4) = oimmediate (sz, strm3) in
+      let binop = opc_to_binop_name (EXTZ (opc)) in
+      (Binop (binop, sz, Rm_i (r, imm)), strm4)
+    case 0x83 :: strm2 ->
+      let sz = op_size (have_rex, rex.W, 1, op_size_override) in
+      let (opc, r, strm3) = read_opcode_ModRM (rex, strm2) in
+      let (imm, strm4) = oimmediate (sz, strm3) in
+      let binop = opc_to_binop_name (EXTZ (opc)) in
+      (Binop (binop, sz, Rm_i (r, imm)), strm4)
+    case (0x8 : 0b010 : (bit[1]) v) :: strm2 ->
+      let sz = op_size (have_rex, rex.W, v, op_size_override) in
+      let (reg, r, strm3) = read_ModRM (rex, strm2) in
+      (Binop (Test, sz, Rm_r (r, reg)), strm3)
+    case (0x8 : 0b011 : (bit[1]) v) :: strm2 ->
+      let sz = op_size (have_rex, rex.W, v, op_size_override) in
+      let (reg, r, strm3) = read_ModRM (rex, strm2) in
+      (XCHG (sz, r, reg), strm3)
+    case (0x8 : 0b10 : (bit[1]) x : (bit[1]) v) :: strm2 ->
+      let (reg, r, strm3) = read_ModRM (rex, strm2) in
+      let sz = op_size (have_rex, rex.W, v, op_size_override) in
+      let src_dst = if x == 0 then Rm_r (r, reg) else R_rm (reg, r) in
+      (MOV (ALWAYS, sz, src_dst), strm3)
+    case 0x8d :: strm2 ->
+      let sz = op_size (true, rex.W, 1, op_size_override) in
+      let (reg, r, strm3) = read_ModRM (rex, strm2) in
+      if is_mem (r) then (LEA (sz, R_rm (reg, r)), strm3) else exit ()
+    case 0x8f :: strm2 ->
+      let (opc, r, strm3) = read_opcode_ModRM (rex, strm2) in
+      if opc == 0 then (POP (r), strm3) else exit ()
+    case (0x9 : 0b0 : (bit[3]) r) :: strm2 ->
+      let sz = op_size (true, rex.W, 1, op_size_override) in
+      let reg = rex_reg (rex.B, r) in
+      if reg == 0 then
+        (NOP (listlength (strm)), Some (strm2))
+      else
+        (XCHG (sz, Reg (0), reg), Some (strm2))
+    case (0xa : 0b100 : (bit[1]) v) :: strm2 ->
+      let sz = op_size (true, rex.W, v, op_size_override) in
+      let (imm, strm3) = immediate (sz, strm2) in
+      (Binop (Test, sz, Rm_i (Reg (0), imm)), strm3)
+    case (0xb : (bit[1]) v : (bit[3]) r) :: strm2 ->
+      let sz = op_size (have_rex, rex.W, v, op_size_override) in
+      let (imm, strm3) = full_immediate (sz, strm2) in
+      let reg = rex_reg (rex.B, r) in
+      (MOV (ALWAYS, sz, Rm_i (Reg (reg), imm)), strm3)
+    case (0xc : 0b000 : (bit[1]) v) :: strm2 ->
+      let sz = op_size (have_rex, rex.W, v, op_size_override) in
+      let (opc, r, strm3) = read_opcode_ModRM (rex, strm2) in
+      let (imm, strm4) = oimmediate8 (strm3) in
+      let binop = opc_to_binop_name (0b1 : opc) in
+      if opc == 0b110 then exit ()
+      else (Binop (binop, sz, Rm_i (r, imm)), strm4)
+    case (0xc : 0b001 : (bit[1]) v) :: strm2 ->
+      if v == 0 then
+        let (imm, strm3) = immediate16 (strm2) in (RET (imm), strm3)
+      else
+        (RET (0), Some (strm2))
+    case (0xc : 0b011 : (bit[1]) v) :: strm2 ->
+      let sz = op_size (have_rex, rex.W, v, op_size_override) in
+      let (opc, r, strm3) = read_opcode_ModRM (rex, strm2) in
+      let (imm, strm4) = oimmediate (sz, strm3) in
+      if opc == 0 then (MOV (ALWAYS, sz, Rm_i (r, imm)), strm4)
+      else exit ()
+    case 0xc9 :: strm2 ->
+      (LEAVE, Some (strm2))
+    case (0xd : 0b00 : (bit[1]) b : (bit[1]) v) :: strm2 ->
+      let sz = op_size (have_rex, rex.W, v, op_size_override) in
+      let (opc, r, strm3) = read_opcode_ModRM (rex, strm2) in
+      let shift = if b == 0 then Rm_i (r, 1) else Rm_r (r, 1) in
+      let binop = opc_to_binop_name (0b1 : opc) in
+      if opc == 0b110 then exit ()
+      else (Binop (binop, sz, shift), strm3)
+    case (0xe : 0b000 : (bit[1]) b) :: strm2 ->
+      let (imm, strm3) = immediate8 (strm2) in
+      let cnd = if b == 0 then NE else E in
+      (LOOP (cnd, imm), strm3)
+    case 0xe2 :: strm2 ->
+      let (imm, strm3) = immediate8 (strm2) in
+      (LOOP (ALWAYS, imm), strm3)
+    case 0xe8 :: strm2 ->
+      let (imm, strm3) = immediate32 (strm2) in
+      (CALL (Imm (imm)), strm3)
+    case (0xe : 0b10 : (bit[1]) b : 0b1) :: strm2 ->
+      let (imm, strm3) = if b == 0 then immediate32 (strm2)
+                         else immediate8 (strm2) in
+      (Jcc (ALWAYS, imm), strm3)
+    case 0xf5 :: strm2 -> (CMC, Some (strm2))
+    case 0xf8 :: strm2 -> (CLC, Some (strm2))
+    case 0xf9 :: strm2 -> (STC, Some (strm2))
+    case (0xf : 0b011 : (bit[1]) v) :: strm2 ->
+      let sz = op_size (have_rex, rex.W, v, op_size_override) in
+      let (opc, r, strm3) = read_opcode_ModRM (rex, strm2) in
+      switch opc {
+        case 0b000 -> let (imm, strm4) = oimmediate (sz, strm3) in
+                      (Binop (Test, sz, Rm_i (r, imm)), strm4)
+        case 0b010 -> (Monop (Not, sz, r), strm3)
+        case 0b011 -> (Monop (Neg, sz, r), strm3)
+        case 0b100 -> (MUL (sz, r), strm3)
+        case 0b110 -> (DIV (sz, r), strm3)
+        case _ -> exit ()
+      }
+    case 0xfe :: strm2 ->
+      let (opc, r, strm3) = read_opcode_ModRM (rex, strm2) in
+      switch opc {
+        case 0b000 -> (Monop (Inc, Sz8 (have_rex), r), strm3)
+        case 0b001 -> (Monop (Dec, Sz8 (have_rex), r), strm3)
+        case _ -> exit ()
+      }
+    case 0xff :: strm2 ->
+      let sz = op_size (have_rex, rex.W, 1, op_size_override) in
+      let (opc, r, strm3) = read_opcode_ModRM (rex, strm2) in
+      switch opc {
+        case 0b000 -> (Monop (Inc, sz, r), strm3)
+        case 0b001 -> (Monop (Dec, sz, r), strm3)
+        case 0b010 -> (CALL (Rm (r)), strm3)
+        case 0b100 -> (JMP (r), strm3)
+        case 0b110 -> (PUSH (Rm (r)), strm3)
+        case _ -> exit ()
+      }
+    case 0x0f :: opc :: strm2 ->
+      switch opc {
+        case 0x1f ->
+          let (opc, r, strm3) = read_opcode_ModRM (rex, strm2) in
+          (NOP (listlength (strm)), strm3)
+        case (0x4 : (bit[4]) c) ->
+          let sz = op_size (true, rex.W, 1, op_size_override) in
+          let (reg, r, strm3) = read_ModRM (rex, strm2) in
+          (MOV (bv_to_cond (c), sz, R_rm (reg, r)), strm3)
+        case (0x8 : (bit[4]) c) ->
+          let (imm, strm3) = immediate32 (strm2) in
+          (Jcc (bv_to_cond (c), imm), strm3)
+        case (0x9 : (bit[4]) c) ->
+          let (reg, r, strm3) = read_ModRM (rex, strm2) in
+          (SET (bv_to_cond (c), have_rex, r), strm3)
+        case (0xb : 0b000 : (bit[1]) v) ->
+          let sz = op_size (have_rex, rex.W, v, op_size_override) in
+          let (reg, r, strm3) = read_ModRM (rex, strm2) in
+          (CMPXCHG (sz, r, reg), strm3)
+        case (0xc : 0b000 : (bit[1]) v) ->
+          let sz = op_size (have_rex, rex.W, v, op_size_override) in
+          let (reg, r, strm3) = read_ModRM (rex, strm2) in
+          (XADD (sz, r, reg), strm3)
+        case (0xb : (bit[1]) s : 0b11 : (bit[1]) v) ->
+          let sz2 = op_size (have_rex, rex.W, 1, op_size_override) in
+          let sz = if v == 1 then Sz16 else Sz8 (have_rex) in
+          let (reg, r, strm3) = read_ModRM (rex, strm2) in
+          if s == 1 then
+             (MOVSX (sz, R_rm (reg, r), sz2), strm3)
+          else
+             (MOVZX (sz, R_rm (reg, r), sz2), strm3)
+        case _ -> exit ()
+      }
+    case _ -> exit ()
+  }
+
+function (byte_stream, ast, nat) decode ((byte_stream) strm) =
+  switch read_prefixes (strm)
+  {
+    case None -> exit ()
+    case (Some (prefixes, have_rex, rex, strm1)) ->
+      let op_size_override = ismember (0x66, prefixes) in
+      if rex.W == 1 & op_size_override | ismember (0x67, prefixes) then
+        exit ()
+      else
+        switch decode_aux (strm1, have_rex, rex, op_size_override) {
+          case (instr, (Some (strm2))) -> (prefixes, instr, listlength (strm2))
+          case _ -> exit ()
+        }
+  }
