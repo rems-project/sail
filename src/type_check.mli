@@ -85,6 +85,8 @@ module Env : sig
 
   val get_typ_vars : t -> base_kind_aux KBindings.t
 
+  val add_typ_var : kid -> base_kind_aux -> t -> t
+
   val is_record : id -> t -> bool
 
   val get_accessor : id -> id -> t -> typquant * typ
