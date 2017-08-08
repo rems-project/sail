@@ -126,7 +126,7 @@ val read_reg : forall 'a. Size 'a => register -> M (bitvector 'a)
 let read_reg reg state =
   let v = get_reg state (name_of_reg reg) in
   [(Left (vec_to_bvec v),state)]
-let read_reg_range reg i j state =
+(*let read_reg_range reg i j state =
   let v = slice (get_reg state (name_of_reg reg)) i j in
   [(Left (vec_to_bvec v),state)]
 let read_reg_bit reg i state =
@@ -137,7 +137,9 @@ let read_reg_field reg regfield =
   read_reg_range reg i j
 let read_reg_bitfield reg regfield =
   let (i,_) = register_field_indices reg regfield in
-  read_reg_bit reg i 
+  read_reg_bit reg i *)
+
+let reg_deref = read_reg
 
 val write_reg : forall 'a. Size 'a => register -> bitvector 'a -> M unit
 let write_reg reg v state =
