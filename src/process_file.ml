@@ -40,6 +40,8 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+let opt_new_parser = ref false
+
 type out_type =
   | Lem_ast_out
   | Lem_out of string option
@@ -71,7 +73,11 @@ let parse_file (f : string) : Parse_ast.defs =
   close_in in_chan;
   let lexbuf, in_chan = get_lexbuf f in
     try
-      let ast = Parser.file Lexer.token lexbuf in
+      let ast =
+        if !opt_new_parser
+        then Parser2.file Lexer2.token lexbuf
+        else Parser.file Lexer.token lexbuf
+      in
       close_in in_chan; ast
     with
       | Parsing.Parse_error ->
@@ -90,7 +96,6 @@ let load_file order env f =
   let ast = convert_ast order (parse_file f) in
   Type_check.check env ast
 
-let opt_new_typecheck = ref false
 let opt_just_check = ref false
 let opt_ddump_tc_ast = ref false
 let opt_dno_cast = ref false
