@@ -1,0 +1,12 @@
+type token_UTYPE    = {op : riscvUop }
+type token_JAL      = unit
+type token_JALR     = unit
+type token_BType    = {op : riscvBop }
+type token_IType    = {op : riscvIop }
+type token_ShiftIop = {op : riscvSop }
+type token_RTYPE    = {op : riscvRop }
+type token_Load     = {unsigned: bool; width : wordWidth }
+type token_Store    = {width : wordWidth }
+type token_ADDIW    = unit
+type token_SHIFTW   = {op : riscvSop }
+type token_RTYPEW   = {op : riscvRopw }

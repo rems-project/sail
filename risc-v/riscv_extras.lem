@@ -1,0 +1,58 @@
+open import Pervasives
+open import Interp_ast
+open import Interp_interface
+open import Sail_impl_base
+open import Interp_inter_imp
+import Set_extra
+
+let memory_parameter_transformer mode v =
+  match v with
+  | Interp_ast.V_tuple [location;length] ->
+    let (v,loc_regs) = extern_with_track mode extern_vector_value location in
+
+    match length with
+    | Interp_ast.V_lit (L_aux (L_num len) _) ->
+      (v,(natFromInteger len),loc_regs)
+    | Interp_ast.V_track (Interp_ast.V_lit (L_aux (L_num len) _)) size_regs ->
+      match loc_regs with
+      | Nothing -> (v,(natFromInteger len),Just (List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs)))
+      | Just loc_regs -> (v,(natFromInteger len),Just (loc_regs++(List.map (fun r -> extern_reg r Nothing) (Set_extra.toList size_regs))))
+      end
+    | _ -> Assert_extra.failwith "expected 'V_lit (L_aux (L_num _) _)' or 'V_track (V_lit (L_aux (L_num len) _)) _'"
+    end
+  | _ -> Assert_extra.failwith ("memory_parameter_transformer: expected 'V_tuple [_;_]' given " ^ (Interp.string_of_value v))
+  end
+
+let memory_parameter_transformer_option_address _mode v =
+  match v with
+  | Interp_ast.V_tuple [location;_] ->
+     Just (extern_vector_value location)
+  | _ -> Assert_extra.failwith ("memory_parameter_transformer_option_address: expected 'V_tuple [_;_]' given " ^ (Interp.string_of_value v))
+  end
+
+
+let read_memory_functions : memory_reads =
+  [ ("MEMr",             (MR Read_plain              memory_parameter_transformer));
+    ("MEMr_reserve",     (MR Read_reserve            memory_parameter_transformer));
+  ]
+
+let memory_writes : memory_writes =
+  []
+
+let memory_eas : memory_write_eas =
+  [ ("MEMea",                 (MEA Write_plain           memory_parameter_transformer));
+    ("MEMea_conditional",     (MEA Write_conditional     memory_parameter_transformer));
+  ]
+
+let memory_vals : memory_write_vals =
+  [ ("MEMval",      (MV memory_parameter_transformer_option_address Nothing));
+    ("MEMval_conditional", (MV memory_parameter_transformer_option_address
+                           (Just 
+                           (fun (IState interp context) b -> 
+                             let bit = Interp_ast.V_lit (L_aux (if b then L_one else L_zero) Interp_ast.Unknown) in
+                             (IState (Interp.add_answer_to_stack interp bit) context)))));
+  ]
+
+let barrier_functions = [
+  ("MEM_sync", Barrier_MIPS_SYNC);
+  ]
