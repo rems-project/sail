@@ -400,11 +400,37 @@ let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   | _, _ -> false
 
 let rec is_nexp_constant (Nexp_aux (nexp, _)) = match nexp with
-| Nexp_id _ | Nexp_var _ -> false
-| Nexp_constant _ -> true
-| Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) ->
-  is_nexp_constant n1 && is_nexp_constant n2
-| Nexp_exp n | Nexp_neg n -> is_nexp_constant n
+  | Nexp_id _ | Nexp_var _ -> false
+  | Nexp_constant _ -> true
+  | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) ->
+    is_nexp_constant n1 && is_nexp_constant n2
+  | Nexp_exp n | Nexp_neg n -> is_nexp_constant n
+
+let rec simplify_nexp (Nexp_aux (nexp, l)) =
+  let rewrap n = Nexp_aux (n, l) in
+  let try_binop op n1 n2 c = (match simplify_nexp n1, simplify_nexp n2 with
+    | Nexp_aux (Nexp_constant i1, _), Nexp_aux (Nexp_constant i2, _) ->
+      rewrap (Nexp_constant (op i1 i2))
+    | n1, n2 -> rewrap (c n1 n2)) in
+  match nexp with
+  | Nexp_times (n1, n2) -> try_binop ( * ) n1 n2 (fun n1 n2 -> Nexp_times (n1, n2))
+  | Nexp_sum (n1, n2) -> try_binop ( + ) n1 n2 (fun n1 n2 -> Nexp_sum (n1, n2))
+  | Nexp_minus (n1, n2) -> try_binop ( - ) n1 n2 (fun n1 n2 -> Nexp_minus (n1, n2))
+  | Nexp_exp n ->
+    (match simplify_nexp n with
+      | Nexp_aux (Nexp_constant i, _) ->
+        rewrap (Nexp_constant (power 2 i))
+      | n -> rewrap (Nexp_exp n))
+  | Nexp_neg n ->
+    (match simplify_nexp n with
+      | Nexp_aux (Nexp_constant i, _) ->
+        rewrap (Nexp_constant (-i))
+      | n -> rewrap (Nexp_neg n))
+  | _ -> rewrap nexp
+  (* | Nexp_sum of nexp * nexp (* sum *)
+  | Nexp_minus of nexp * nexp (* subtraction *)
+  | Nexp_exp of nexp (* exponential *)
+  | Nexp_neg of nexp (* For internal use *) *)
 
 let rec is_number (Typ_aux (t,_)) =
   match t with

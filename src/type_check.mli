@@ -101,6 +101,10 @@ module Env : sig
 
   val get_overloads : id -> t -> id list
 
+  val is_extern : id -> t -> bool
+
+  val get_extern : id -> t -> string
+
   (* Lookup id searchs for a specified id in the environment, and
      returns it's type and what kind of identifier it is, using the
      lvar type. Returns Unbound if the identifier is unbound, and

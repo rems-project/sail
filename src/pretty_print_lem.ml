@@ -160,7 +160,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
          let tpp = separate_map (space ^^ star ^^ space) (app_typ regtypes false) typs in
          if atyp_needed then parens tpp else tpp
       | _ -> app_typ regtypes atyp_needed ty
-    and app_typ regtypes atyp_needed ((Typ_aux (t, _)) as ty) = match t with
+    and app_typ regtypes atyp_needed ((Typ_aux (t, l)) as ty) = match t with
       | Typ_app(Id_aux (Id "vector", _), [
           Typ_arg_aux (Typ_arg_nexp n, _);
           Typ_arg_aux (Typ_arg_nexp m, _);
@@ -168,19 +168,16 @@ let doc_typ_lem, doc_atomic_typ_lem =
           Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
          let tpp = match elem_typ with
            | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) ->
-               let len = match m with
-                 | (Nexp_aux(Nexp_constant i,_)) -> string "ty" ^^ doc_int i
-                 | _ -> doc_nexp m in
-               string "bitvector" ^^ space ^^ len
+             (match simplify_nexp m with
+               | (Nexp_aux(Nexp_constant i,_)) -> string "bitvector ty" ^^ doc_int i
+               | _ -> raise (Reporting_basic.err_unreachable l
+                 "cannot pretty-print bitvector type with non-constant length"))
            | _ -> string "vector" ^^ space ^^ typ regtypes elem_typ in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
-         (* TODO: Better distinguish register names and contents?
-            The former are represented in the Lem library using a type
-            "register" (without parameters), the latter just using the content
-            type (e.g. "bitvector ty64").  We assume the latter is meant here
-            and drop the "register" keyword. *)
-         fn_typ regtypes atyp_needed etyp
+         (* TODO: Better distinguish register names and contents? *)
+         (* fn_typ regtypes atyp_needed etyp *)
+         (string "register")
       | Typ_app(Id_aux (Id "range", _),_) ->
          (string "integer")
       | Typ_app(Id_aux (Id "implicit", _),_) ->
@@ -192,13 +189,13 @@ let doc_typ_lem, doc_atomic_typ_lem =
          if atyp_needed then parens tpp else tpp
       | _ -> atomic_typ regtypes atyp_needed ty
     and atomic_typ regtypes atyp_needed ((Typ_aux (t, _)) as ty) = match t with
-      | Typ_id (Id_aux (Id "bool",_)) -> string "bitU"
-      | Typ_id (Id_aux (Id "boolean",_)) -> string "bitU"
+      | Typ_id (Id_aux (Id "bool",_)) -> string "bool"
+      | Typ_id (Id_aux (Id "boolean",_)) -> string "bool"
       | Typ_id (Id_aux (Id "bit",_)) -> string "bitU"
       | Typ_id (id) ->
-         if List.exists ((=) (string_of_id id)) regtypes
+         (*if List.exists ((=) (string_of_id id)) regtypes
          then string "register"
-         else doc_id_lem_type id
+         else*) doc_id_lem_type id
       | Typ_var v -> doc_var v
       | Typ_wild -> underscore
       | Typ_app _ | Typ_tup _ | Typ_fn _ ->
@@ -213,39 +210,67 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | Typ_arg_effect e -> empty
   in typ', atomic_typ
 
+(* Check for variables in types that would be pretty-printed.
+   In particular, in case of vector types, only the element type and the
+   length argument are checked for variables, and the latter only if it is
+   a bitvector; for other types of vectors, the length is not pretty-printed
+   in the type, and the start index is never pretty-printed in vector types. *)
+let rec contains_t_pp_var (Typ_aux (t,a) as typ) = match t with
+  | Typ_wild -> true
+  | Typ_id _ -> false
+  | Typ_var _ -> true
+  | Typ_fn (t1,t2,_) -> contains_t_pp_var t1 || contains_t_pp_var t2
+  | Typ_tup ts -> List.exists contains_t_pp_var ts
+  | Typ_app (c,targs) ->
+      if Ast_util.is_number typ then false
+      else if is_bitvector_typ typ then
+        let (_,length,_,_) = vector_typ_args_of typ in
+        not (is_nexp_constant (simplify_nexp length))
+      else List.exists contains_t_arg_pp_var targs
+and contains_t_arg_pp_var (Typ_arg_aux (targ, _)) = match targ with
+  | Typ_arg_typ t -> contains_t_pp_var t
+  | Typ_arg_nexp nexp -> not (is_nexp_constant (simplify_nexp nexp))
+  | _ -> false
+
 let doc_tannot_lem regtypes eff typ =
-  let ta = doc_typ_lem regtypes typ in
-  if eff then string " : M " ^^ parens ta
-  else string " : " ^^ ta
+  if contains_t_pp_var typ then empty
+  else
+    let ta = doc_typ_lem regtypes typ in
+    if eff then string " : M " ^^ parens ta
+    else string " : " ^^ ta
 
 (* doc_lit_lem gets as an additional parameter the type information from the
  * expression around it: that's a hack, but how else can we distinguish between
  * undefined values of different types ? *)
-let doc_lit_lem in_pat (L_aux(lit,l)) a =
-  utf8string (match lit with
-  | L_unit  -> "()"
-  | L_zero  -> "B0"
-  | L_one   -> "B1"
-  | L_false -> "B0"
-  | L_true  -> "B1"
+let doc_lit_lem regtypes in_pat (L_aux(lit,l)) a =
+  match lit with
+  | L_unit  -> utf8string "()"
+  | L_zero  -> utf8string "B0"
+  | L_one   -> utf8string "B1"
+  | L_false -> utf8string "false"
+  | L_true  -> utf8string "true"
   | L_num i ->
      let ipp = string_of_int i in
-     if in_pat then "("^ipp^":nn)"
-     else if i < 0 then "((0"^ipp^"):ii)"
-     else "("^ipp^":ii)"
+     utf8string (
+       if in_pat then "("^ipp^":nn)"
+       else if i < 0 then "((0"^ipp^"):ii)"
+       else "("^ipp^":ii)")
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef ->
      (match a with
-       | Some (_, Typ_aux (t,_), _) ->
+       | Some (_, (Typ_aux (t,_) as typ), _) ->
          (match t with
           | Typ_id (Id_aux (Id "bit", _))
-          | Typ_app (Id_aux (Id "register", _),_) -> "UndefinedRegister 0"
-          | Typ_id (Id_aux (Id "string", _)) -> "\"\""
-          | _ -> "(failwith \"undefined value of unsupported type\")")
-       | _ -> "(failwith \"undefined value of unsupported type\")")
-  | L_string s -> "\"" ^ s ^ "\""
-  | L_real s -> s (* TODO What's the Lem syntax for reals? *))
+          | Typ_app (Id_aux (Id "register", _),_) -> utf8string "UndefinedRegister 0"
+          | Typ_id (Id_aux (Id "string", _)) -> utf8string "\"\""
+          | _ ->
+            parens
+              ((utf8string "(failwith \"undefined value of unsupported type\")") ^^
+              (doc_tannot_lem regtypes false typ)))
+       | _ -> utf8string "(failwith \"undefined value of unsupported type\")")
+  | L_string s -> utf8string ("\"" ^ s ^ "\"")
+  | L_real s -> utf8string s (* TODO What's the Lem syntax for reals? *)
 
 (* typ_doc is the doc for the type being quantified *)
 
@@ -267,14 +292,17 @@ let rec doc_pat_lem regtypes apat_needed (P_aux (p,(l,annot)) as pa) = match p w
                        (parens (separate_map comma (doc_pat_lem regtypes true) pats)) in
     if apat_needed then parens ppp else ppp
   | P_app(id,[]) -> doc_id_lem_ctor id
-  | P_lit lit  -> doc_lit_lem true lit annot
+  | P_lit lit  -> doc_lit_lem regtypes true lit annot
   | P_wild -> underscore
   | P_id id ->
      begin match id with
      | Id_aux (Id "None",_) -> string "Nothing" (* workaround temporary issue *)
      | _ -> doc_id_lem id end
   | P_as(p,id) -> parens (separate space [doc_pat_lem regtypes true p; string "as"; doc_id_lem id])
-  | P_typ(typ,p) -> parens (doc_op colon (doc_pat_lem regtypes true p) (doc_typ_lem regtypes typ))
+  | P_typ(typ,p) ->
+    let doc_p = doc_pat_lem regtypes true p in
+    if contains_t_pp_var typ then doc_p
+    else parens (doc_op colon doc_p (doc_typ_lem regtypes typ))
   | P_vector pats ->
      let ppp =
        (separate space)
@@ -298,27 +326,6 @@ let rec contains_bitvector_typ (Typ_aux (t,_) as typ) = match t with
   | _ -> false
 and contains_bitvector_typ_arg (Typ_arg_aux (targ, _)) = match targ with
   | Typ_arg_typ t -> contains_bitvector_typ t
-  | _ -> false
-
-(* Check for variables in types that would be pretty-printed.
-   In particular, in case of vector types, only the element type and the
-   length argument are checked for variables, and the latter only if it is
-   a bitvector; for other types of vectors, the length is not pretty-printed
-   in the type, and the start index is never pretty-printed in vector types. *)
-let rec contains_t_pp_var (Typ_aux (t,a) as typ) = match t with
-  | Typ_wild -> true
-  | Typ_id _ -> false
-  | Typ_var _ -> true
-  | Typ_fn (t1,t2,_) -> contains_t_pp_var t1 || contains_t_pp_var t2
-  | Typ_tup ts -> List.exists contains_t_pp_var ts
-  | Typ_app (c,targs) ->
-      if is_bitvector_typ typ then
-        let (_,length,_,_) = vector_typ_args_of typ in
-        not (is_nexp_constant ((*normalize_nexp*) length))
-      else List.exists contains_t_arg_pp_var targs
-and contains_t_arg_pp_var (Typ_arg_aux (targ, _)) = match targ with
-  | Typ_arg_typ t -> contains_t_pp_var t
-  | Typ_arg_nexp nexp -> not (is_nexp_constant ((*normalize_nexp*) nexp))
   | _ -> false
 
 let prefix_recordtype = true
@@ -387,7 +394,9 @@ let doc_exp_lem, doc_let_lem =
         | _ ->
            (prefix 2 1) (string "write_reg") (doc_lexp_deref_lem regtypes le ^/^ expY e))
     | E_vector_append(le,re) ->
-       let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
+      raise (Reporting_basic.err_unreachable l
+        "E_vector_access should have been rewritten before pretty-printing")
+       (* let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let (call,ta,aexp_needed) =
          if is_bitvector_typ t then
            if not (contains_t_pp_var t)
@@ -396,12 +405,12 @@ let doc_exp_lem, doc_let_lem =
          else ("vector_concat",empty,aexp_needed) in
        let epp =
          align (group (separate space [string call;expY le;expY re])) ^^ ta in
-       if aexp_needed then parens epp else epp
+       if aexp_needed then parens epp else epp *)
     | E_cons(le,re) -> doc_op (group (colon^^colon)) (expY le) (expY re)
     | E_if(c,t,e) ->
        let (E_aux (_,(_,cannot))) = c in
        let epp =
-         separate space [string "if";group (align (string "bitU_to_bool" ^//^ group (expY c)))] ^^
+         separate space [string "if";group (expY c)] ^^
            break 1 ^^
              (prefix 2 1 (string "then") (expN t)) ^^ (break 1) ^^
                (prefix 2 1 (string "else") (expN e)) in
@@ -434,7 +443,7 @@ let doc_exp_lem, doc_let_lem =
                    (prefix 1 1 (separate space [string "fun";expY id;varspp;arrow]) (expN body))
                 )
             )
-       | Id_aux (Id "append",_) ->
+       (* | Id_aux (Id "append",_) ->
           let [e1;e2] = args in
           let epp = align (expY e1 ^^ space ^^ string "++" ^//^ expY e2) in
           if aexp_needed then parens (align epp) else epp
@@ -460,7 +469,7 @@ let doc_exp_lem, doc_let_lem =
        | Id_aux (Id "bool_not", _) ->
           let [a] = args in
           let epp = align (string "~" ^^ expY a) in
-          if aexp_needed then parens (align epp) else epp
+          if aexp_needed then parens (align epp) else epp *)
        | _ ->
           begin match annot with
           | Some (env, _, _) when (is_ctor env f) ->
@@ -473,15 +482,16 @@ let doc_exp_lem, doc_let_lem =
                     parens (separate_map comma (expV false) args) in
              if aexp_needed then parens (align epp) else epp
           | _ ->
-             let call = (*match annot with
-               | Base(_,External (Some n),_,_,_,_) -> string n
-               | _ ->*) doc_id_lem f in
+             let call = match annot with
+               | Some (env, _, _) when Env.is_extern f env ->
+                 string (Env.get_extern f env)
+               | _ -> doc_id_lem f in
              let argspp = match args with
                | [arg] -> expV true arg
                | args -> parens (align (separate_map (comma ^^ break 0) (expV false) args)) in
              let epp = align (call ^//^ argspp) in
              let (taepp,aexp_needed) =
-               let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
+               let t = (*Env.base_typ_of (env_of full_exp)*) (typ_of full_exp) in
                let eff = effect_of full_exp in
                if contains_bitvector_typ t && not (contains_t_pp_var t)
                then (align epp ^^ (doc_tannot_lem regtypes (effectful eff) t), true)
@@ -490,7 +500,9 @@ let doc_exp_lem, doc_let_lem =
           end
        end
     | E_vector_access (v,e) ->
-       let eff = effect_of full_exp in
+      raise (Reporting_basic.err_unreachable l
+        "E_vector_access should have been rewritten before pretty-printing")
+       (* let eff = effect_of full_exp in
        let epp =
          if has_effect eff BE_rreg then
            separate space [string "read_reg_bit";expY v;expY e]
@@ -498,9 +510,11 @@ let doc_exp_lem, doc_let_lem =
            let tv = typ_of v in
            let call = if is_bitvector_typ tv then "bvaccess" else "access" in
            separate space [string call;expY v;expY e] in
-       if aexp_needed then parens (align epp) else epp
+       if aexp_needed then parens (align epp) else epp*)
     | E_vector_subrange (v,e1,e2) ->
-       let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
+      raise (Reporting_basic.err_unreachable l
+        "E_vector_access should have been rewritten before pretty-printing")
+       (* let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let eff = effect_of full_exp in
        let (epp,aexp_needed) =
          if has_effect eff BE_rreg then
@@ -515,22 +529,22 @@ let doc_exp_lem, doc_let_lem =
              then (bepp ^^ doc_tannot_lem regtypes false t, true)
              else (bepp, aexp_needed)
            else (string "slice" ^^ space ^^ expY v ^//^ expY e1 ^//^ expY e2, aexp_needed) in
-       if aexp_needed then parens (align epp) else epp
+       if aexp_needed then parens (align epp) else epp *)
     | E_field((E_aux(_,(l,fannot)) as fexp),id) ->
        let ft = typ_of_annot (l,fannot) in
        (match fannot with
-        | Some(env, ftyp, _) when is_regtyp ftyp env ->
-           let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
+        | Some(env, (Typ_aux (Typ_id tid, _)), _)
+        | Some(env, (Typ_aux (Typ_app (Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id tid, _)), _)]), _)), _)
+          when Env.is_regtyp tid env ->
+           let t = (* Env.base_typ_of (env_of full_exp) *) (typ_of full_exp) in
            let eff = effect_of full_exp in
-           let field_f = string
-             (if is_bit_typ t
-             then "read_reg_bitfield"
-             else "read_reg_field") in
+           let field_f = string "get" ^^ underscore ^^
+             doc_id_lem tid ^^ underscore ^^ doc_id_lem id in
            let (ta,aexp_needed) =
              if contains_bitvector_typ t && not (contains_t_pp_var t)
              then (doc_tannot_lem regtypes (effectful eff) t, true)
              else (empty, aexp_needed) in
-           let epp = field_f ^^ space ^^ (expY fexp) ^^ space ^^ string_lit (doc_id_lem id) in
+           let epp = field_f ^^ space ^^ (expY fexp) in
            if aexp_needed then parens (align epp ^^ ta) else (epp ^^ ta)
         | Some(env, (Typ_aux (Typ_id tid, _)), _) when Env.is_record tid env ->
            let fname =
@@ -550,7 +564,7 @@ let doc_exp_lem, doc_let_lem =
        let base_typ = Env.base_typ_of env typ in
        if has_effect eff BE_rreg then
          let epp = separate space [string "read_reg";doc_id_lem id] in
-         if contains_bitvector_typ base_typ && not (contains_t_pp_var base_typ)
+         if is_bitvector_typ base_typ && not (contains_t_pp_var base_typ)
          then parens (epp ^^ doc_tannot_lem regtypes true base_typ)
          else epp
        else if is_ctor env id then doc_id_lem_ctor id
@@ -588,7 +602,7 @@ let doc_exp_lem, doc_let_lem =
                     separate space [string "read_reg_range";string reg;doc_int start;doc_int stop] ^^ ta in
                 if aexp_needed then parens (align epp) else epp
            )*)
-    | E_lit lit -> doc_lit_lem false lit annot
+    | E_lit lit -> doc_lit_lem regtypes false lit annot
     | E_cast(typ,e) ->
        expV aexp_needed e (*
        (match annot with
@@ -649,7 +663,7 @@ let doc_exp_lem, doc_let_lem =
            | Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; TA_typ etyp])
              | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; TA_typ etyp])}) ->*)
               let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
-              let start = match start with
+              let start = match simplify_nexp start with
                 | Nexp_aux (Nexp_constant i, _) -> string_of_int i
                 | _ -> if dir then "0" else string_of_int (List.length exps) in
               let expspp =
@@ -681,10 +695,10 @@ let doc_exp_lem, doc_let_lem =
         if is_vector_typ t then vector_typ_args_of t
         else raise (Reporting_basic.err_unreachable l "E_vector_indexed of non-vector type") in
        let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
-       let start = match start with
+       let start = match simplify_nexp start with
          | Nexp_aux (Nexp_constant i, _) -> string_of_int i
          | _ -> if dir then "0" else string_of_int (List.length iexps) in
-       let size = match len with
+       let size = match simplify_nexp len with
          | Nexp_aux (Nexp_constant i, _)-> string_of_int i
          | Nexp_aux (Nexp_exp (Nexp_aux (Nexp_constant i, _)), _) ->
            string_of_int (Util.power 2 i)
@@ -885,8 +899,8 @@ let doc_exp_lem, doc_let_lem =
     | E_internal_return (e1) ->
        separate space [string "return"; expY e1;]
     | E_sizeof nexp ->
-      (match nexp with
-        | Nexp_aux (Nexp_constant i, _) -> doc_lit_lem false (L_aux (L_num i, l)) annot
+      (match simplify_nexp nexp with
+        | Nexp_aux (Nexp_constant i, _) -> doc_lit_lem regtypes false (L_aux (L_num i, l)) annot
         | _ ->
           raise (Reporting_basic.err_unreachable l
             "pretty-printing non-constant sizeof expressions to Lem not supported"))
@@ -943,7 +957,7 @@ let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_range(i1,i2) -> parens (doc_op comma (doc_int i1) (doc_int i2))
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
 
-let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
+let doc_typdef_lem regtypes (TD_aux(td, (l, _))) = match td with
   | TD_abbrev(id,nm,typschm) ->
      doc_op equals (concat [string "type"; space; doc_id_lem_type id])
             (doc_typschm_lem regtypes typschm)
@@ -967,6 +981,7 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
       | Id_aux ((Id "regfp"),_) -> empty
       | Id_aux ((Id "niafp"),_) -> empty
       | Id_aux ((Id "diafp"),_) -> empty
+      | Id_aux ((Id "option"),_) -> empty
       | _ ->
          let ar_doc = group (separate_map (break 1) (doc_type_union_lem regtypes) ar) in
          let typ_pp =
@@ -1138,7 +1153,7 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                 fromToInterpValuePP ^^ hardline
             else empty)
   | TD_register(id,n1,n2,rs) ->
-    match n1,n2 with
+    match n1, n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
        let doc_rid (r,id) = parens (separate comma_sp [string_lit (doc_id_lem id);
                                                        doc_range_lem r;]) in
@@ -1149,14 +1164,46 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
            (string "Register_field" ^^ space ^^ string_lit(doc_id_lem id)) in*)
        let dir_b = i1 < i2 in
        let dir = string (if dir_b then "true" else "false") in
+       let dir_suffix = (if dir_b then "_inc" else "_dec") in
+       let ord = Ord_aux ((if dir_b then Ord_inc else Ord_dec), Parse_ast.Unknown) in
        let size = if dir_b then i2-i1 +1 else i1-i2 + 1 in
-       (doc_op equals)
+       let vtyp = vector_typ (nconstant i1) (nconstant size) ord bit_typ in
+       let tannot = doc_tannot_lem regtypes false vtyp in
+       let doc_field (fr, fid) =
+         let i, j = match fr with
+         | BF_aux (BF_single i, _) -> (i, i)
+         | BF_aux (BF_range (i, j), _) -> (i, j)
+         | _ -> raise (Reporting_basic.err_unreachable l "unsupported field type") in
+         let get, set =
+           "bitvector_subrange" ^ dir_suffix ^ " (reg, " ^ string_of_int i ^ ", " ^ string_of_int j ^ ")",
+           "bitvector_update" ^ dir_suffix ^ " (reg, " ^ string_of_int i ^ ", " ^ string_of_int j ^ ", v)" in
+         doc_op equals
+           (concat [string "let get_"; doc_id_lem id; underscore; doc_id_lem fid;
+             space; parens (string "reg" ^^ tannot)]) (string get) ^^
+         hardline ^^
+         doc_op equals
+           (concat [string "let set_"; doc_id_lem id; underscore; doc_id_lem fid;
+             space; parens (separate comma_sp [parens (string "reg" ^^ tannot); string "v"])]) (string set)
+       in
+       doc_op equals
+         (concat [string "type";space;doc_id_lem id])
+         (doc_typ_lem regtypes vtyp)
+       ^^ hardline ^^
+       doc_op equals
          (concat [string "let";space;string "build_";doc_id_lem id;space;string "regname"])
          (string "Register" ^^ space ^^
             align (separate space [string "regname"; doc_int size; doc_int i1; dir;
                                    break 0 ^^ brackets (align doc_rids)]))
-       (*^^ hardline ^^
-         separate_map hardline doc_rfield rs *)
+       ^^ hardline ^^
+       doc_op equals
+         (concat [string "let";space;string "cast_";doc_id_lem id;space;string "reg"])
+         (string "reg")
+       ^^ hardline ^^
+       doc_op equals
+         (concat [string "let";space;string "cast_to_";doc_id_lem id;space;string "reg"])
+         (string "reg")
+       ^^ hardline ^^
+         separate_map hardline doc_field rs
 
 let doc_rec_lem (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> space
@@ -1226,7 +1273,7 @@ let rec doc_fundef_lem regtypes (FD_aux(FD_function(r, typa, efa, fcls),fannot))
                let named_pat = P_aux (P_app (Id_aux (Id ctor,l),named_argspat),pannot) in
                let doc_arg idx (P_aux (p,(l,a))) = match p with
                  | P_as (pat,id) -> doc_id_lem id
-                 | P_lit lit -> doc_lit_lem false lit a
+                 | P_lit lit -> doc_lit_lem regtypes false lit a
                  | P_id id -> doc_id_lem id
                  | _ -> string ("arg" ^ string_of_int idx) in
                let clauses =
@@ -1252,17 +1299,16 @@ let rec doc_fundef_lem regtypes (FD_aux(FD_function(r, typa, efa, fcls),fannot))
       
 
 
-let doc_dec_lem (DEC_aux (reg,(l,annot))) =
+let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
   match reg with
   | DEC_reg(typ,id) ->
+     let env = env_of_annot annot in
      (match typ with
-      | Typ_aux (Typ_id idt, _) ->
+      | Typ_aux (Typ_id idt, _) when Env.is_regtyp idt env ->
         separate space [string "let";doc_id_lem id;equals;
                         string "build_" ^^ string (string_of_id idt);string_lit (doc_id_lem id)] ^/^ hardline
       | _ ->
-        let rt = (match annot with
-          | Some (env, _, _) -> Env.base_typ_of env typ
-          | _ -> typ) in
+        let rt = Env.base_typ_of env typ in
         if is_vector_typ rt then
           let (start, size, order, etyp) = vector_typ_args_of rt in
           if is_bit_typ etyp && is_nexp_constant start && is_nexp_constant size then

@@ -386,6 +386,7 @@ module Env : sig
   val add_union_id : id -> typquant * typ -> t -> t
   val add_flow : id -> (typ -> typ) -> t -> t
   val get_flow : id -> t -> typ -> typ
+  val is_register : id -> t -> bool
   val get_register : id -> t -> typ
   val add_register : id -> typ -> t -> t
   val add_regtyp : id -> int -> int -> (index_range * id) list -> t -> t
@@ -403,6 +404,9 @@ module Env : sig
   val get_typ_synonym : id -> t -> typ_arg list -> typ
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
+  val is_extern : id -> t -> bool
+  val add_extern : id -> string -> t -> t
+  val get_extern : id -> t -> string
   val get_default_order : t -> order
   val set_default_order_inc : t -> t
   val set_default_order_dec : t -> t
@@ -433,6 +437,7 @@ end = struct
       enums : IdSet.t Bindings.t;
       records : (typquant * (typ * id) list) Bindings.t;
       accessors : (typquant * typ) Bindings.t;
+      externs : string Bindings.t;
       casts : id list;
       allow_casts : bool;
       constraints : n_constraint list;
@@ -454,6 +459,7 @@ end = struct
       enums = Bindings.empty;
       records = Bindings.empty;
       accessors = Bindings.empty;
+      externs = Bindings.empty;
       casts = [];
       allow_casts = true;
       constraints = [];
@@ -670,6 +676,9 @@ end = struct
       { env with flow = Bindings.add id (fun typ -> f (get_flow id env typ)) env.flow }
     end
 
+  let is_register id env =
+    Bindings.mem id env.registers
+
   let get_register id env =
     try Bindings.find id env.registers with
     | Not_found -> typ_error (id_loc id) ("No register binding found for " ^ string_of_id id)
@@ -681,6 +690,16 @@ end = struct
   let add_overloads id ids env =
     typ_print ("Adding overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]");
     { env with overloads = Bindings.add id ids env.overloads }
+
+  let is_extern id env =
+    Bindings.mem id env.externs
+
+  let add_extern id ext env =
+    { env with externs = Bindings.add id ext env.externs }
+
+  let get_extern id env =
+    try Bindings.find id env.externs with
+    | Not_found -> typ_error (id_loc id) ("No extern binding found for " ^ string_of_id id)
 
   let get_casts env = env.casts
 
@@ -839,6 +858,19 @@ end = struct
     | Typ_arg_typ typ -> Typ_arg_aux (Typ_arg_typ (expand_synonyms env typ), l)
     | arg -> Typ_arg_aux (arg, l)
 
+  let get_default_order env =
+    match env.default_order with
+    | None -> typ_error Parse_ast.Unknown ("No default order has been set")
+    | Some ord -> ord
+
+  let set_default_order o env =
+    match env.default_order with
+    | None -> { env with default_order = Some (Ord_aux (o, Parse_ast.Unknown)) }
+    | Some _ -> typ_error Parse_ast.Unknown ("Cannot change default order once already set")
+
+  let set_default_order_inc = set_default_order Ord_inc
+  let set_default_order_dec = set_default_order Ord_dec
+
   let base_typ_of env typ =
     let rec aux (Typ_aux (t,a)) =
       let rewrap t = Typ_aux (t,a) in
@@ -852,6 +884,11 @@ end = struct
         aux rtyp
       | Typ_app (id, targs) ->
         rewrap (Typ_app (id, List.map aux_arg targs))
+      | Typ_id id when is_regtyp id env ->
+        let base, top, ranges = get_regtyp id env in
+        let len = abs(top - base) + 1 in
+        vector_typ (nconstant base) (nconstant len) (get_default_order env) bit_typ
+        (* TODO registers with non-default order? non-bitvector registers? *)
       | t -> rewrap t
     and aux_arg (Typ_arg_aux (targ,a)) =
       let rewrap targ = Typ_arg_aux (targ,a) in
@@ -859,19 +896,6 @@ end = struct
       | Typ_arg_typ typ -> rewrap (Typ_arg_typ (aux typ))
       | targ -> rewrap targ in
     aux (expand_synonyms env typ)
-
-  let get_default_order env =
-    match env.default_order with
-    | None -> typ_error Parse_ast.Unknown ("No default order has been set")
-    | Some ord -> ord
-
-  let set_default_order o env =
-    match env.default_order with
-    | None -> { env with default_order = Some (Ord_aux (o, Parse_ast.Unknown)) }
-    | Some _ -> typ_error Parse_ast.Unknown ("Cannot change default order once already set")
-
-  let set_default_order_inc = set_default_order Ord_inc
-  let set_default_order_dec = set_default_order Ord_dec
 
 end
 
@@ -1767,7 +1791,8 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_lit (L_aux (L_undef, _) as lit), _ ->
      annot_exp_effect (E_lit lit) typ (mk_effect [BE_undef])
   (* This rule allows registers of type t to be passed by name with type register<t>*)
-  | E_id reg, Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)]) when string_of_id id = "register" ->
+  | E_id reg, Typ_app (id, [Typ_arg_aux (Typ_arg_typ typ, _)])
+    when string_of_id id = "register" && Env.is_register reg env ->
      let rtyp = Env.get_register reg env in
      subtyp l env rtyp typ; annot_exp (E_id reg) typ (* CHECK: is this subtyp the correct way around? *)
   | E_id id, _ when is_union_id id env ->
@@ -2154,17 +2179,21 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
   (* Not sure about this case... can the left lexp be anything other than an identifier? *)
   | LEXP_vector (LEXP_aux (LEXP_id v, _), exp) ->
      begin
-       let is_immutable, vtyp = match Env.lookup_id v env with
+       let is_immutable, is_register, vtyp = match Env.lookup_id v env with
          | Unbound -> typ_error l "Cannot assign to element of unbound vector"
          | Enum _ -> typ_error l "Cannot vector assign to enumeration element"
-         | Local (Immutable, vtyp) -> true, vtyp
-         | Local (Mutable, vtyp) | Register vtyp -> false, vtyp
+         | Local (Immutable, vtyp) -> true, false, vtyp
+         | Local (Mutable, vtyp) -> false, false, vtyp
+         | Register vtyp -> false, true, vtyp
        in
        let access = infer_exp (Env.enable_casts env) (E_aux (E_app (mk_id "vector_access", [E_aux (E_id v, (l, ())); exp]), (l, ()))) in
        let E_aux (E_app (_, [_; inferred_exp]), _) = access in
        match typ_of access with
        | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_typ deref_typ, _)]), _) when string_of_id id = "register" ->
           subtyp l env typ deref_typ;
+          annot_lexp (LEXP_vector (annot_lexp_effect (LEXP_id v) vtyp (mk_effect [BE_wreg]), inferred_exp)) typ, env
+       | _ when not is_immutable && is_register ->
+          subtyp l env typ (typ_of access);
           annot_lexp (LEXP_vector (annot_lexp_effect (LEXP_id v) vtyp (mk_effect [BE_wreg]), inferred_exp)) typ, env
        | _ when not is_immutable ->
           subtyp l env typ (typ_of access);
@@ -2205,27 +2234,28 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        let inferred_exp = irule infer_exp env exp in
        match Env.expand_synonyms env (typ_of inferred_exp) with
        (* Accessing a (bit) field of a register *)
-       | Typ_aux (Typ_app (Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id regtyp, _)), _)]), _)
-       | Typ_aux (Typ_id regtyp, _) when Env.is_regtyp regtyp env ->
+       | Typ_aux (Typ_app (Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ ((Typ_aux (Typ_id regtyp, _) as regtyp_aux)), _)]), _)
+       | (Typ_aux (Typ_id regtyp, _) as regtyp_aux) when Env.is_regtyp regtyp env ->
           let base, top, ranges = Env.get_regtyp regtyp env in
           let range, _ =
             try List.find (fun (_, id) -> Id.compare id field = 0) ranges with
             | Not_found -> typ_error l ("Field " ^ string_of_id field ^ " doesn't exist for register type " ^ string_of_id regtyp)
           in
+          let checked_exp = crule check_exp env (strip_exp inferred_exp) regtyp_aux in
           begin
             match range, Env.get_default_order env with
             | BF_aux (BF_single n, _), Ord_aux (Ord_dec, _) ->
                let vec_typ = dvector_typ env (nconstant n) (nconstant 1) bit_typ in
-               annot_exp (E_field (inferred_exp, field)) vec_typ
+               annot_exp (E_field (checked_exp, field)) vec_typ
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_dec, _) ->
                let vec_typ = dvector_typ env (nconstant n) (nconstant (n - m + 1)) bit_typ in
-               annot_exp (E_field (inferred_exp, field)) vec_typ
+               annot_exp (E_field (checked_exp, field)) vec_typ
             | BF_aux (BF_single n, _), Ord_aux (Ord_inc, _) ->
                let vec_typ = dvector_typ env (nconstant n) (nconstant 1) bit_typ in
-               annot_exp (E_field (inferred_exp, field)) vec_typ
+               annot_exp (E_field (checked_exp, field)) vec_typ
             | BF_aux (BF_range (n, m), _), Ord_aux (Ord_inc, _) ->
                let vec_typ = dvector_typ env (nconstant n) (nconstant (m - n + 1)) bit_typ in
-               annot_exp (E_field (inferred_exp, field)) vec_typ
+               annot_exp (E_field (checked_exp, field)) vec_typ
             | _, _ -> typ_error l "Invalid register field type"
           end
        (* Accessing a field of a record *)
@@ -2719,8 +2749,12 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
   let (id, quants, typ, env) = match vs with
     | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id) -> (id, quants, typ, env)
     | VS_cast_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id) -> (id, quants, typ, Env.add_cast id env)
-    | VS_extern_no_rename (TypSchm_aux (TypSchm_ts (quants, typ), _), id) -> (id, quants, typ, env)
-    | VS_extern_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, _) -> (id, quants, typ, env) in
+    | VS_extern_no_rename (TypSchm_aux (TypSchm_ts (quants, typ), _), id) ->
+      let env = Env.add_extern id (string_of_id id) env in
+      (id, quants, typ, env)
+    | VS_extern_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, ext) ->
+      let env = Env.add_extern id ext env in
+      (id, quants, typ, env) in
   [DEF_spec (VS_aux (vs, (l, None)))], Env.add_val_spec id (quants, typ) env
 
 let check_default env (DT_aux (ds, l)) =
@@ -2768,7 +2802,11 @@ let check_type_union env variant typq (Tu_aux (tu, l)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
   match tu with
   | Tu_id v -> Env.add_union_id v (typq, ret_typ) env
-  | Tu_ty_id (typ, v) -> Env.add_val_spec v (typq, mk_typ (Typ_fn (typ, ret_typ, no_effect))) env
+  | Tu_ty_id (typ, v) ->
+     let typ' = mk_typ (Typ_fn (typ, ret_typ, no_effect)) in
+     env
+     |> Env.add_union_id v (typq, typ')
+     |> Env.add_val_spec v (typq, typ')
 
 let check_typedef env (TD_aux (tdef, (l, _))) =
   let td_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented Typedef") in
@@ -2799,7 +2837,8 @@ let rec check_def env def =
   | DEF_default default -> check_default env default
   | DEF_overload (id, ids) -> [DEF_overload (id, ids)], Env.add_overloads id ids env
   | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), (l, _))) ->
-     [DEF_reg_dec (DEC_aux (DEC_reg (typ, id), (l, None)))], Env.add_register id typ env
+     let env = Env.add_register id typ env in
+     [DEF_reg_dec (DEC_aux (DEC_reg (typ, id), (l, Some (env, typ, no_effect))))], env
   | DEF_reg_dec (DEC_aux (DEC_alias (id, aspec), (l, annot))) -> cd_err ()
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered _ -> raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Scattered given to type checker")
