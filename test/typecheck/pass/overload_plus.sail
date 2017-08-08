@@ -1,6 +1,6 @@
 default Order inc
 
-val extern forall Nat 'n. (bit['n], bit['n]) -> bit['n] effect pure bv_add = "bv_add_inc"
+val extern forall Nat 'n. (bit['n], bit['n]) -> bit['n] effect pure bv_add = "add_vec"
   
 overload (deinfix +) [bv_add]
 

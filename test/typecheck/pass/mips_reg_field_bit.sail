@@ -1,8 +1,8 @@
+default Order dec
+
 val cast forall Nat 'n, Nat 'm, Nat 'o, 'o >= 'm - 1.
   vector<'n,'m,dec,bit> -> vector<'o,'m,dec,bit>
-  effect pure ADJUST
-
-default Order dec
+  effect pure adjust_dec
 
 typedef CauseReg = register bits [ 31 : 0 ] {
   31       : BD; (* branch delay *)

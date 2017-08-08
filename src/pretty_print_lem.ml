@@ -273,11 +273,23 @@ let doc_lit_lem regtypes in_pat (L_aux(lit,l)) a =
   | L_real s -> utf8string s (* TODO What's the Lem syntax for reals? *)
 
 (* typ_doc is the doc for the type being quantified *)
+let doc_quant_item (QI_aux (qi, _)) = match qi with
+| QI_id (KOpt_aux (KOpt_none kid, _))
+| QI_id (KOpt_aux (KOpt_kind (_, kid), _)) -> doc_var kid
+| _ -> empty
 
-let doc_typquant_lem (TypQ_aux(tq,_)) typ_doc = typ_doc
+let doc_typquant_items_lem (TypQ_aux(tq,_)) = match tq with
+| TypQ_tq qs -> separate_map space doc_quant_item qs
+| _ -> empty
 
-let doc_typschm_lem regtypes (TypSchm_aux(TypSchm_ts(tq,t),_)) =
-  (doc_typquant_lem tq (doc_typ_lem regtypes t))
+let doc_typquant_lem (TypQ_aux(tq,_)) typ = match tq with
+| TypQ_tq ((_ :: _) as qs) ->
+  string "forall " ^^ separate_map space doc_quant_item qs ^^ string ". " ^^ typ
+| _ -> empty
+
+let doc_typschm_lem regtypes quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
+  if quants then (doc_typquant_lem tq (doc_typ_lem regtypes t))
+  else doc_typ_lem regtypes t
 
 let is_ctor env id = match Env.lookup_id id env with
 | Enum _ | Union _ -> true
@@ -960,7 +972,7 @@ let rec doc_range_lem (BF_aux(r,_)) = match r with
 let doc_typdef_lem regtypes (TD_aux(td, (l, _))) = match td with
   | TD_abbrev(id,nm,typschm) ->
      doc_op equals (concat [string "type"; space; doc_id_lem_type id])
-            (doc_typschm_lem regtypes typschm)
+            (doc_typschm_lem regtypes false typschm)
   | TD_record(id,nm,typq,fs,_) ->
      let f_pp (typ,fid) =
        let fname = if prefix_recordtype
@@ -970,7 +982,7 @@ let doc_typdef_lem regtypes (TD_aux(td, (l, _))) = match td with
       let fs_doc = group (separate_map (break 1) f_pp fs) in
       doc_op equals
              (concat [string "type"; space; doc_id_lem_type id;])
-             (doc_typquant_lem typq (anglebars (space ^^ align fs_doc ^^ space)))
+             ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space)))
   | TD_variant(id,nm,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
@@ -987,8 +999,8 @@ let doc_typdef_lem regtypes (TD_aux(td, (l, _))) = match td with
          let typ_pp =
 
            (doc_op equals)
-             (concat [string "type"; space; doc_id_lem_type id;])
-             (doc_typquant_lem typq ar_doc) in
+             (concat [string "type"; space; doc_id_lem_type id; space; doc_typquant_items_lem typq])
+             ((*doc_typquant_lem typq*) ar_doc) in
          let make_id pat id =
            separate space [string "SIA.Id_aux";
                            parens (string "SIA.Id " ^^ string_lit (doc_id id));
@@ -1210,7 +1222,7 @@ let doc_rec_lem (Rec_aux(r,_)) = match r with
   | Rec_rec -> space ^^ string "rec" ^^ space
 
 let doc_tannot_opt_lem regtypes (Typ_annot_opt_aux(t,_)) = match t with
-  | Typ_annot_opt_some(tq,typ) -> doc_typquant_lem tq (doc_typ_lem regtypes typ)
+  | Typ_annot_opt_some(tq,typ) -> (*doc_typquant_lem tq*) (doc_typ_lem regtypes typ)
 
 let doc_funcl_lem regtypes (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
   group (prefix 3 1 ((doc_pat_lem regtypes false pat) ^^ space ^^ arrow)

@@ -1136,24 +1136,24 @@ function clause execute (Load(width, signed, linked, base, rt, offset)) =
     else
       let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
-	    (bit[64]) memResult := if (linked) then
+            (bit[64]) memResult := if (linked) then
                 {
                   CP0LLBit  := 0b1;
-		  CP0LLAddr := pAddr;
-		  switch wordWidthBytes(width) {
-		    case ([:1:]) w -> extendLoad(MEMr_reserve_wrapper(pAddr, w), signed)
-		    case ([:2:]) w -> extendLoad(MEMr_reserve_wrapper(pAddr, w), signed)
-		    case ([:4:]) w -> extendLoad(MEMr_reserve_wrapper(pAddr, w), signed)
-		    case ([:8:]) w -> extendLoad(MEMr_reserve_wrapper(pAddr, w), signed)
-		  }
+                  CP0LLAddr := pAddr;
+                  w := wordWidthBytes(width);
+                  if w == 1 then extendLoad(MEMr_reserve_wrapper(pAddr, 1), signed)
+                  else if w == 2 then extendLoad(MEMr_reserve_wrapper(pAddr, 2), signed)
+                  else if w == 4 then extendLoad(MEMr_reserve_wrapper(pAddr, 4), signed)
+                  else extendLoad(MEMr_reserve_wrapper(pAddr, 8), signed)
                 }
               else
-		switch wordWidthBytes(width) {
-		  case ([:1:]) w -> extendLoad(MEMr_wrapper(pAddr, w), signed)
-		  case ([:2:]) w -> extendLoad(MEMr_wrapper(pAddr, w), signed)
-		  case ([:4:]) w -> extendLoad(MEMr_wrapper(pAddr, w), signed)
-		  case ([:8:]) w -> extendLoad(MEMr_wrapper(pAddr, w), signed)
-		};
+                {
+                  w := wordWidthBytes(width);
+                  if w == 1 then extendLoad(MEMr_reserve_wrapper(pAddr, 1), signed)
+                  else if w == 2 then extendLoad(MEMr_reserve_wrapper(pAddr, 2), signed)
+                  else if w == 4 then extendLoad(MEMr_reserve_wrapper(pAddr, 4), signed)
+                  else extendLoad(MEMr_reserve_wrapper(pAddr, 8), signed);
+                };
             wGPR(rt) := memResult
           }
   }

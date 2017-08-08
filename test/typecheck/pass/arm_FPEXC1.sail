@@ -1,9 +1,9 @@
 default Order dec
 
-val forall Num 'n. (bit['n], int) -> bit effect pure vector_access
+val extern forall Num 'n. (bit['n], int) -> bit effect pure vector_access = "bitvector_access_dec"
 
-val forall Num 'n, Num 'm, Num 'o, 'm >= 'o, 'o >= 0, 'n >= 'm + 1.
-  (bit['n], [:'m:], [:'o:]) -> bit['m - ('o - 1)] effect pure vector_subrange
+val extern forall Num 'n, Num 'm, Num 'o, 'm >= 'o, 'o >= 0, 'n >= 'm + 1.
+  (bit['n], [:'m:], [:'o:]) -> bit['m - ('o - 1)] effect pure vector_subrange = "bitvector_subrange_dec"
 
 register vector<32 - 1, 32, dec, bit>  _FPEXC32_EL2
 
