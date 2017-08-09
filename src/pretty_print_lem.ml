@@ -505,7 +505,8 @@ let doc_exp_lem, doc_let_lem =
              let (taepp,aexp_needed) =
                let t = (*Env.base_typ_of (env_of full_exp)*) (typ_of full_exp) in
                let eff = effect_of full_exp in
-               if contains_bitvector_typ t && not (contains_t_pp_var t)
+               if contains_bitvector_typ (Env.base_typ_of (env_of full_exp) t) &&
+                  not (contains_t_pp_var t)
                then (align epp ^^ (doc_tannot_lem regtypes (effectful eff) t), true)
                else (epp, aexp_needed) in
              if aexp_needed then parens (align taepp) else taepp
