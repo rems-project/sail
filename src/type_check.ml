@@ -1743,7 +1743,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        | LB_val_explicit (typschm, pat, bind) -> assert false
        | LB_val_implicit (P_aux (P_typ (ptyp, _), _) as pat, bind) ->
           let checked_bind = crule check_exp env bind ptyp in
-          let tpat, env = bind_pat env pat (typ_of checked_bind) in
+          let tpat, env = bind_pat env pat ptyp in
           annot_exp (E_let (LB_aux (LB_val_implicit (tpat, checked_bind), (let_loc, None)), crule check_exp env exp typ)) typ
        | LB_val_implicit (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
@@ -1870,7 +1870,7 @@ and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
   end
 
 and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ) =
-  typ_print ("Binding " ^ string_of_typ typ);
+  typ_print ("Binding " ^ string_of_pat pat ^  " to " ^ string_of_typ typ);
   let annot_pat pat typ = P_aux (pat, (l, Some (env, typ, no_effect))) in
   let switch_typ (P_aux (pat_aux, (l, Some (env, _, eff)))) typ = P_aux (pat_aux, (l, Some (env, typ, eff))) in
   let bind_tuple_pat (tpats, env) pat typ =
