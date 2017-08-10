@@ -97,7 +97,7 @@ module Env : sig
      any exceptions. *)
   val get_ret_typ : t -> typ option
 
-  val get_typ_synonym : id -> t -> typ_arg list -> typ
+  val get_typ_synonym : id -> t -> (t -> typ_arg list -> typ)
 
   val get_overloads : id -> t -> id list
 
