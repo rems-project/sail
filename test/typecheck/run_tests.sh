@@ -22,6 +22,7 @@ cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail > $DIR/pass/mips_prelude.s
 cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb.sail > $DIR/pass/mips_tlb.sail
 cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb.sail $MIPS/mips_wrappers.sail > $DIR/pass/mips_wrappers.sail
 cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb.sail $MIPS/mips_wrappers.sail $MIPS/mips_insts.sail $MIPS/mips_epilogue.sail > $DIR/pass/mips_insts.sail
+cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb_stub.sail $MIPS/mips_wrappers.sail $MIPS/mips_insts.sail $MIPS/mips_epilogue.sail > $DIR/pass/mips_notlb.sail
 
 pass=0
 fail=0
@@ -99,14 +100,20 @@ finish_suite "Expecting fail"
 function test_lem {
     for i in `ls $DIR/pass/`;
     do
-	if $SAILDIR/sail -lem $DIR/$1/$i 2> /dev/null
+	# MIPS requires an additional library, Mips_extras_embed.
+	# It might be useful to allow adding options for specific test cases.
+	# For now, include the library for all test cases, which doesn't seem to hurt.
+	if $SAILDIR/sail -lem -lem_lib Mips_extras_embed $DIR/$1/$i 2> /dev/null
 	then
 	    green "generated lem for $1/$i" "pass"
 
+	    cp $MIPS/mips_extras_embed_sequential.lem $DIR/lem/
 	    mv $SAILDIR/${i%%.*}_embed_types.lem $DIR/lem/
 	    mv $SAILDIR/${i%%.*}_embed.lem $DIR/lem/
 	    mv $SAILDIR/${i%%.*}_embed_sequential.lem $DIR/lem/
-	    if lem -lib $SAILDIR/src/lem_interp -lib $SAILDIR/src/gen_lib/ $DIR/lem/${i%%.*}_embed_types.lem $DIR/lem/${i%%.*}_embed.lem 2> /dev/null
+	    # Test sequential embedding for now
+	    # TODO: Add tests for the free monad
+	    if lem -lib $SAILDIR/src/lem_interp -lib $SAILDIR/src/gen_lib/ $DIR/lem/mips_extras_embed_sequential.lem $DIR/lem/${i%%.*}_embed_types.lem $DIR/lem/${i%%.*}_embed_sequential.lem 2> /dev/null
 	    then
 		green "typechecking lem for $1/$i" "pass"
 	    else
@@ -133,6 +140,8 @@ function test_ocaml {
 	if $SAILDIR/sail -ocaml $DIR/$1/$i 2> /dev/null
 	then
 	    green "generated ocaml for $1/$i" "pass"
+
+	    rm $SAILDIR/${i%%.*}.ml
 	else
 	    red "generated ocaml for $1/$i" "fail"
 	fi

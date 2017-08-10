@@ -97,6 +97,9 @@ let options = Arg.align ([
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
+  ( "-ddump_rewrite_ast",
+    Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0)),
+    " <prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
   ( "-dtc_verbose",
     Arg.Int (fun verbosity -> Type_check.opt_tc_debug := verbosity),
     " (debug) verbose typechecker output: 0 is silent");

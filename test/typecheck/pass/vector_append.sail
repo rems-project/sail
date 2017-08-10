@@ -1,7 +1,6 @@
 
-
-val forall Nat 'n1, Nat 'l1, Nat 'n2, Nat 'l2, Order 'o, Type 'a, 'l1 >= 0, 'l2 >= 0.
-  (vector<'n1,'l1,'o,'a>, vector<'n2,'l2,'o,'a>) -> vector<'n1,'l1 + 'l2,'o,'a> effect pure vector_append
+val extern forall Nat 'n1, Nat 'l1, Nat 'n2, Nat 'l2, Order 'o, 'l1 >= 0, 'l2 >= 0.
+  (vector<'n1,'l1,'o,bit>, vector<'n2,'l2,'o,bit>) -> vector<'n1,'l1 + 'l2,'o,bit> effect pure vector_append = "bitvector_concat"
 
 default Order inc
 

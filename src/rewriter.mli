@@ -56,8 +56,8 @@ type 'a rewriters = { rewrite_exp  : 'a rewriters -> 'a exp -> 'a exp;
                     
 val rewrite_exp : tannot rewriters -> tannot exp -> tannot exp
 val rewrite_defs : tannot defs -> tannot defs
-val rewrite_defs_ocaml : tannot defs -> tannot defs (*Perform rewrites to exclude AST nodes not supported for ocaml out*)
-val rewrite_defs_lem : tannot defs -> tannot defs (*Perform rewrites to exclude AST nodes not supported for lem out*)
+val rewrite_defs_ocaml : (tannot defs -> tannot defs) list (*Perform rewrites to exclude AST nodes not supported for ocaml out*)
+val rewrite_defs_lem : (tannot defs -> tannot defs) list (*Perform rewrites to exclude AST nodes not supported for lem out*)
 
 (* the type of interpretations of pattern-matching expressions *)
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
@@ -154,3 +154,10 @@ val fold_exp : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_a
       'pat,'pat_aux,'fpat,'fpat_aux) exp_alg -> 'a exp -> 'exp
 
 val id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg
+
+val compute_exp_alg : 'b -> ('b -> 'b -> 'b) ->
+  ('a,('b * 'a exp),('b * 'a exp_aux),('b * 'a lexp),('b * 'a lexp_aux),('b * 'a fexp),
+  ('b * 'a fexp_aux),('b * 'a fexps),('b * 'a fexps_aux),
+  ('b * 'a opt_default_aux),('b * 'a opt_default),('b * 'a pexp),('b * 'a pexp_aux),
+  ('b * 'a letbind_aux),('b * 'a letbind),
+  ('b * 'a pat),('b * 'a pat_aux),('b * 'a fpat),('b * 'a fpat_aux)) exp_alg

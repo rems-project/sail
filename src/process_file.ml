@@ -98,6 +98,7 @@ let load_file order env f =
 
 let opt_just_check = ref false
 let opt_ddump_tc_ast = ref false
+let opt_ddump_rewrite_ast = ref None
 let opt_dno_cast = ref false
 
 let check_ast (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.Env.t =
@@ -111,10 +112,6 @@ let monomorphise_ast locs ast =
   let ast = Monomorphise.split_defs locs ast in
   let ienv = Type_check.Env.no_casts Type_check.initial_env in
   Type_check.check ienv ast
-
-let rewrite_ast (defs: Type_check.tannot Ast.defs) = Rewriter.rewrite_defs defs
-let rewrite_ast_lem (defs: Type_check.tannot Ast.defs) = Rewriter.rewrite_defs_lem defs
-let rewrite_ast_ocaml (defs: Type_check.tannot Ast.defs) = Rewriter.rewrite_defs_ocaml defs
 
 let open_output_with_check file_name =
   let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in
@@ -235,3 +232,20 @@ let output libpath out_arg files =
     (fun (f, defs) ->
        output1 libpath out_arg f defs)
     files
+
+let rewrite_step defs rewriter =
+  let defs = rewriter defs in
+  let _ = match !(opt_ddump_rewrite_ast) with
+    | Some (f, i) ->
+      begin
+        output "" Lem_ast_out [f ^ "_rewrite_" ^ string_of_int i ^ ".sail",defs];
+        opt_ddump_rewrite_ast := Some (f, i + 1)
+      end
+    | _ -> () in
+  defs
+
+let rewrite rewriters defs = List.fold_left rewrite_step defs rewriters
+
+let rewrite_ast = rewrite [Rewriter.rewrite_defs]
+let rewrite_ast_lem = rewrite Rewriter.rewrite_defs_lem
+let rewrite_ast_ocaml = rewrite Rewriter.rewrite_defs_ocaml

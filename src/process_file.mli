@@ -54,6 +54,7 @@ val load_file : Ast.order -> Type_check.Env.t -> string -> Type_check.tannot Ast
 val opt_new_parser : bool ref
 val opt_just_check : bool ref
 val opt_ddump_tc_ast : bool ref
+val opt_ddump_rewrite_ast : ((string * int) option) ref
 val opt_dno_cast : bool ref
 
 type out_type =

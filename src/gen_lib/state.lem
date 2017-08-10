@@ -14,12 +14,28 @@ type sequential_state = <| regstate : regstate;
                            write_ea : maybe (write_kind * integer * integer);
                            last_exclusive_operation_was_load : bool|>
 
-type M 'a = sequential_state -> list ((either 'a string) * sequential_state)
+(* State, nondeterminism and exception monad with result type 'a
+   and exception type 'e. *)
+type ME 'a 'e = sequential_state -> list ((either 'a 'e) * sequential_state)
 
-val return : forall 'a. 'a -> M 'a
+(* Most of the time, we don't distinguish between different types of exceptions *)
+type M 'a = ME 'a unit
+
+(* For early return, we abuse exceptions by throwing and catching
+   the return value. The exception type is "maybe 'r", where "Nothing"
+   represents a proper exception and "Just r" an early return of value "r". *)
+type MR 'a 'r = ME 'a (maybe 'r)
+
+val liftR : forall 'a 'r. M 'a -> MR 'a 'r
+let liftR m s = List.map (function
+  | (Left a, s') -> (Left a, s')
+  | (Right (), s') -> (Right Nothing, s')
+  end) (m s)
+
+val return : forall 'a 'e. 'a -> ME 'a 'e
 let return a s = [(Left a,s)]
 
-val bind : forall 'a 'b. M 'a -> ('a -> M 'b) -> M 'b
+val bind : forall 'a 'b 'e. ME 'a 'e -> ('a -> ME 'b 'e) -> ME 'b 'e
 let bind m f (s : sequential_state) =
   List.concatMap (function
                   | (Left a, s') -> f a s'
@@ -27,12 +43,23 @@ let bind m f (s : sequential_state) =
                   end) (m s)
 
 let inline (>>=) = bind
-val (>>): forall 'b. M unit -> M 'b -> M 'b
+val (>>): forall 'b 'e. ME unit 'e -> ME 'b 'e -> ME 'b 'e
 let inline (>>) m n = m >>= fun _ -> n
 
 val exit : forall 'e 'a. 'e -> M 'a
-let exit _ s = [(Right "exit",s)]
+let exit _ s = [(Right (), s)]
 
+val early_return : forall 'r. 'r -> MR unit 'r
+let early_return r s = [(Right (Just r), s)]
+
+val catch_early_return : forall 'a 'r. MR 'a 'a -> M 'a
+let catch_early_return m s =
+  List.map
+    (function
+     | (Right (Just a), s') -> (Left a, s')
+     | (Right Nothing, s') -> (Right (), s')
+     | (Left a, s') -> (Left a, s')
+    end) (m s)
 
 val range : integer -> integer -> list integer
 let rec range i j = 
@@ -126,7 +153,7 @@ val read_reg : forall 'a. Size 'a => register -> M (bitvector 'a)
 let read_reg reg state =
   let v = get_reg state (name_of_reg reg) in
   [(Left (vec_to_bvec v),state)]
-let read_reg_range reg i j state =
+(*let read_reg_range reg i j state =
   let v = slice (get_reg state (name_of_reg reg)) i j in
   [(Left (vec_to_bvec v),state)]
 let read_reg_bit reg i state =
@@ -137,7 +164,9 @@ let read_reg_field reg regfield =
   read_reg_range reg i j
 let read_reg_bitfield reg regfield =
   let (i,_) = register_field_indices reg regfield in
-  read_reg_bit reg i 
+  read_reg_bit reg i *)
+
+let reg_deref = read_reg
 
 val write_reg : forall 'a. Size 'a => register -> bitvector 'a -> M unit
 let write_reg reg v state =
@@ -172,8 +201,8 @@ val footprint : M unit
 let footprint = return ()
 
 
-val foreachM_inc : forall 'vars. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> M 'vars) -> M 'vars
+val foreachM_inc : forall 'vars 'e. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> ME 'vars 'e) -> ME 'vars 'e
 let rec foreachM_inc (i,stop,by) vars body =
   if i <= stop
   then
@@ -182,8 +211,8 @@ let rec foreachM_inc (i,stop,by) vars body =
   else return vars
 
 
-val foreachM_dec : forall 'vars. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> M 'vars) -> M 'vars
+val foreachM_dec : forall 'vars 'e. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> ME 'vars 'e) -> ME 'vars 'e
 let rec foreachM_dec (i,stop,by) vars body =
   if i >= stop
   then

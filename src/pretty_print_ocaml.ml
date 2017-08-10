@@ -741,28 +741,23 @@ let doc_dec_ocaml (DEC_aux (reg,(l,annot))) =
   | DEC_reg(typ,id) ->
     if is_vector_typ typ then
       let (start, size, order, itemt) = vector_typ_args_of typ in
-    (* (match annot with
-     | Base((_,t),_,_,_,_,_) ->
-       (match t.t with
-        | Tapp("register", [TA_typ {t= Tapp("vector", [TA_nexp start; TA_nexp size; TA_ord order; TA_typ itemt])}]) 
-        | Tapp("register", [TA_typ {t= Tabbrev(_,{t=Tapp("vector", [TA_nexp start; TA_nexp size; TA_ord order; TA_typ itemt])})}]) -> *)
-          (match is_bit_typ itemt, start, size with
-           | true, Nexp_aux (Nexp_constant start, _), Nexp_aux (Nexp_constant size, _) ->
-             let o = if is_order_inc order then string "true" else string "false" in
-             separate space [string "let";
-                             doc_id_ocaml id;
-                             equals;
-                             string "Vregister";
-                             parens (separate comma [separate space [string "ref";
-                                                                     parens (separate space
-                                                                               [string "Array.make";
-                                                                                doc_int size;
-                                                                                string "Vzero";])];
-                                                     doc_int start;
-                                                     o;
-                                                     string_lit (doc_id id);
-                                                     brackets empty])]
-           | _ -> empty)
+      if is_bit_typ itemt && is_nexp_constant start && is_nexp_constant size then
+        let o = if is_order_inc order then string "true" else string "false" in
+        separate space [string "let";
+                        doc_id_ocaml id;
+                        equals;
+                        string "Vregister";
+                        parens (separate comma [separate space [string "ref";
+                                                                parens (separate space
+                                                                          [string "Array.make";
+                                                                           doc_nexp size;
+                                                                           string "Vzero";])];
+                                                doc_nexp start;
+                                                o;
+                                                string_lit (doc_id id);
+                                                brackets empty])]
+      else raise (Reporting_basic.err_unreachable l
+        ("can't deal with register type " ^ string_of_typ typ))
     else
       (match typ with
         | Typ_aux (Typ_id idt, _) ->
@@ -773,7 +768,8 @@ let doc_dec_ocaml (DEC_aux (reg,(l,annot))) =
                           equals;
                           doc_id_ocaml idt;
                           string "None"]
-        |_-> failwith "type was not handled in register declaration")
+        |_-> raise (Reporting_basic.err_unreachable l
+          ("can't deal with register type " ^ string_of_typ typ)))
      (* | _ -> failwith "annot was not Base") *)
     | DEC_alias(id,alspec) -> empty (*
         doc_op equals (string "register alias" ^^ space ^^ doc_id id) (doc_alias alspec) *)
