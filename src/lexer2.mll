@@ -174,7 +174,8 @@ rule token = parse
       token lexbuf }
   | "&"					{ (Amp(r"&")) }
   | "|"                                 { Bar }
-  | "^"					{ (Carrot(r"^")) }
+  | "2" ws "^"                          { TwoCaret }
+  | "^"					{ (Caret(r"^")) }
   | ":"                                 { Colon(r ":") }
   | ","                                 { Comma }
   | "."                                 { Dot }

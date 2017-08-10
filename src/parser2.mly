@@ -66,6 +66,7 @@ let mk_funcl f n m = FCL_aux (f, loc n m)
 let mk_fun fn n m = FD_aux (fn, loc n m)
 let mk_td t n m = TD_aux (t, loc n m)
 let mk_vs v n m = VS_aux (v, loc n m)
+let mk_reg_dec d n m = DEC_aux (d, loc n m)
 
 let qi_id_of_kopt (KOpt_aux (kopt_aux, l) as kopt) = QI_aux (QI_id kopt, l)
 
@@ -119,7 +120,7 @@ let rec desugar_rchain chain s e =
 
 %token And As Assert Bitzero Bitone Bits By Match Clause Const Dec Def Default Deinfix Effect EFFECT End Op
 %token Enum Else Exit Extern False Forall Exist Foreach Overload Function_ If_ In IN Inc Let_ Member Int Order Cast
-%token Pure Rec Register Return Scattered Sizeof Struct Switch Then True TwoStarStar Type TYPE Typedef
+%token Pure Rec Register Return Scattered Sizeof Struct Switch Then True TwoCaret Type TYPE Typedef
 %token Undefined Union With When Val Constraint
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 
@@ -139,15 +140,15 @@ let rec desugar_rchain chain s e =
 %token <int> Num
 %token <string> String Bin Hex Real
 
-%token <string> Amp At Carrot  Div Eq Excl Gt Lt Plus Star Tilde EqGt Unit
+%token <string> Amp At Caret Div Eq Excl Gt Lt Plus Star Tilde EqGt Unit
 %token <string> Colon ExclEq
 %token <string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt
-%token <string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar TildeCarrot
+%token <string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar
 
 %token <string> GtEqUnderS GtEqUnderSi GtEqUnderU GtEqUnderUi GtGtUnderU GtUnderS
 %token <string> GtUnderSi GtUnderU GtUnderUi LtEqUnderS LtEqUnderSi LtEqUnderU
 %token <string> LtEqUnderUi LtUnderS LtUnderSi LtUnderU LtUnderUi StarStarUnderS StarStarUnderSi StarUnderS
-%token <string> StarUnderSi StarUnderU StarUnderUi TwoCarrot PlusUnderS MinusUnderS
+%token <string> StarUnderSi StarUnderU StarUnderUi PlusUnderS MinusUnderS
 
 %token <string> Op0 Op1 Op2 Op3 Op4 Op5 Op6 Op7 Op8 Op9
 
@@ -178,6 +179,12 @@ id:
     { mk_id (DeIid $2) $startpos $endpos }
   | Op Op9
     { mk_id (DeIid $2) $startpos $endpos }
+  | Op Plus
+    { mk_id (DeIid "+") $startpos $endpos }
+  | Op Minus
+    { mk_id (DeIid "-") $startpos $endpos }
+  | Op Star
+    { mk_id (DeIid "*") $startpos $endpos }
 
 op0: Op0 { mk_id (Id $1) $startpos $endpos }
 op1: Op1 { mk_id (Id $1) $startpos $endpos }
@@ -193,6 +200,12 @@ op9: Op9 { mk_id (Id $1) $startpos $endpos }
 decl:
   | Decl
     { mk_id (Id $1) $startpos $endpos }
+
+id_list:
+  | id
+    { [$1] }
+  | id Comma id_list
+    { $1 :: $3 }
 
 kid:
   | TyVar
@@ -267,12 +280,6 @@ nc_rchain:
 typ:
   | typ0
     { $1 }
-  | Lparen typ Comma typ_list Rparen
-    { mk_typ (ATyp_tup ($2 :: $4)) $startpos $endpos }
-  | Lcurly kid_list Dot typ Rcurly
-    { mk_typ (ATyp_exist ($2, NC_aux (NC_true, loc $startpos $endpos), $4)) $startpos $endpos }
-  | Lcurly kid_list Comma nc Dot typ Rcurly
-    { mk_typ (ATyp_exist ($2, $4, $6)) $startpos $endpos }
 
 typ0:
   | typ1 op0 typ1 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
@@ -300,14 +307,18 @@ typ5:
 
 typ6:
   | typ7 op6 typ7 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ6 Plus typ7 { mk_typ (ATyp_sum ($1, $3)) $startpos $endpos }
+  | typ6 Minus typ7 { mk_typ (ATyp_minus ($1, $3)) $startpos $endpos }
   | typ7 { $1 }
 
 typ7:
   | typ8 op7 typ8 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ7 Star typ8 { mk_typ (ATyp_times ($1, $3)) $startpos $endpos }
   | typ8 { $1 }
 
 typ8:
   | typ9 op8 typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
   | typ9 { $1 }
 
 typ9:
@@ -329,6 +340,12 @@ atomic_typ:
     { mk_typ (ATyp_app ($1, $3)) $startpos $endpos }
   | Lparen typ Rparen
     { $2 }
+  | Lparen typ Comma typ_list Rparen
+    { mk_typ (ATyp_tup ($2 :: $4)) $startpos $endpos }
+  | Lcurly kid_list Dot typ Rcurly
+    { mk_typ (ATyp_exist ($2, NC_aux (NC_true, loc $startpos $endpos), $4)) $startpos $endpos }
+  | Lcurly kid_list Comma nc Dot typ Rcurly
+    { mk_typ (ATyp_exist ($2, $4, $6)) $startpos $endpos }
 
 typ_list:
   | typ
@@ -422,7 +439,7 @@ exp:
     { $1 }
 
 cast_exp:
-  | atomic_exp
+  | exp0
     { $1 }
   | atomic_exp Eq cast_exp
     { mk_exp (E_assign ($1, $3)) $startpos $endpos }
@@ -434,10 +451,54 @@ cast_exp:
     { mk_exp (E_return $2) $startpos $endpos }
   | If_ exp Then cast_exp Else cast_exp
     { mk_exp (E_if ($2, $4, $6)) $startpos $endpos }
-  | Match atomic_exp Lcurly case_list Rcurly
+  | Match exp0 Lcurly case_list Rcurly
     { mk_exp (E_case ($2, $4)) $startpos $endpos }
   | Lparen exp Comma exp_list Rparen
     { mk_exp (E_tuple ($2 :: $4)) $startpos $endpos }
+
+exp0:
+  | exp1 op0 exp1 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp1 { $1 }
+
+exp1:
+  | exp2 op1 exp2 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp2 { $1 }
+
+exp2:
+  | exp3 op2 exp3 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp3 { $1 }
+
+exp3:
+  | exp4 op3 exp4 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp4 { $1 }
+
+exp4:
+  | exp5 op4 exp5 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp5 { $1 }
+
+exp5:
+  | exp6 op5 exp6 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp6 { $1 }
+
+exp6:
+  | exp7 op6 exp7 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp6 Plus exp7 { mk_exp (E_app_infix ($1, mk_id (Id "+") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp6 Minus exp7 { mk_exp (E_app_infix ($1, mk_id (Id "-") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp7 { $1 }
+
+exp7:
+  | exp8 op7 exp8 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp7 Star exp8 { mk_exp (E_app_infix ($1, mk_id (Id "*") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp8 { $1 }
+
+exp8:
+  | exp9 op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | TwoCaret exp9 { mk_exp (E_app (mk_id (Id "pow2") $startpos($1) $endpos($1), [$2])) $startpos $endpos }
+  | exp9 { $1 }
+
+exp9:
+  | atomic_exp op9 atomic_exp { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | atomic_exp { $1 }
 
 case:
   | pat EqGt exp
@@ -470,7 +531,7 @@ block:
 atomic_exp:
   | lit
     { mk_exp (E_lit $1) $startpos $endpos }
-  | decl typ
+  | decl atomic_typ
     { mk_exp (E_cast ($2, mk_exp (E_id $1) $startpos $endpos($1))) $startpos $endpos }
   | id
     { mk_exp (E_id $1) $startpos $endpos }
@@ -567,6 +628,12 @@ val_spec_def:
   | Val id Colon typschm
     { mk_vs (VS_val_spec ($4, $2)) $startpos $endpos }
 
+register_def:
+  | Register decl typ
+    { mk_reg_dec (DEC_reg ($3, $2)) $startpos $endpos }
+  | Register id Colon typ
+    { mk_reg_dec (DEC_reg ($4, $2)) $startpos $endpos }
+
 def:
   | fun_def
     { DEF_fundef $1 }
@@ -576,6 +643,12 @@ def:
     { DEF_type $1 }
   | let_def
     { DEF_val $1 }
+  | register_def
+    { DEF_reg_dec $1 }
+  | Overload id Eq Lcurly id_list Rcurly
+    { DEF_overload ($2, $5) }
+  | Overload id Eq enum_bar
+    { DEF_overload ($2, $4) }
 
 defs_list:
   | def
