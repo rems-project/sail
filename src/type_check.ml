@@ -133,8 +133,11 @@ let unit_typ = mk_id_typ (mk_id "unit")
 let bit_typ = mk_id_typ (mk_id "bit")
 let real_typ = mk_id_typ (mk_id "real")
 let app_typ id args = mk_typ (Typ_app (id, args))
-let atom_typ nexp = mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp))]))
-let range_typ nexp1 nexp2 = mk_typ (Typ_app (mk_id "range", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp1)); mk_typ_arg (Typ_arg_nexp (nexp_simp nexp2))]))
+let atom_typ nexp =
+  mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp))]))
+let range_typ nexp1 nexp2 =
+  mk_typ (Typ_app (mk_id "range", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp1));
+                                   mk_typ_arg (Typ_arg_nexp (nexp_simp nexp2))]))
 let bool_typ = mk_id_typ (mk_id "bool")
 let string_typ = mk_id_typ (mk_id "string")
 let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (Typ_arg_typ typ)]))
@@ -175,7 +178,6 @@ let nc_false = mk_nc NC_false
 
 let mk_lit l = E_aux (E_lit (L_aux (l, Parse_ast.Unknown)), (Parse_ast.Unknown, ()))
 
-(* FIXME: Can now negate all n_constraints *)
 let rec nc_negate (NC_aux (nc, _)) =
   match nc with
   | NC_bounded_ge (n1, n2) -> nc_lt n1 n2
@@ -231,6 +233,18 @@ let string_of_index_sort = function
 let quant_items : typquant -> quant_item list = function
   | TypQ_aux (TypQ_tq qis, _) -> qis
   | TypQ_aux (TypQ_no_forall, _) -> []
+
+let quant_split typq =
+  let qi_kopt = function
+    | QI_aux (QI_id kopt, _) -> [kopt]
+    | _ -> []
+  in
+  let qi_nc = function
+    | QI_aux (QI_const nc, _) -> [nc]
+    | _ -> []
+  in
+  let qis = quant_items typq in
+  List.concat (List.map qi_kopt qis), List.concat (List.map qi_nc qis)
 
 let kopt_kid (KOpt_aux (kopt_aux, _)) =
   match kopt_aux with
@@ -405,8 +419,8 @@ module Env : sig
   val add_typ_var : kid -> base_kind_aux -> t -> t
   val get_ret_typ : t -> typ option
   val add_ret_typ : typ -> t -> t
-  val add_typ_synonym : id -> (typ_arg list -> typ) -> t -> t
-  val get_typ_synonym : id -> t -> typ_arg list -> typ
+  val add_typ_synonym : id -> (t -> typ_arg list -> typ) -> t -> t
+  val get_typ_synonym : id -> t -> t -> typ_arg list -> typ
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
   val get_default_order : t -> order
@@ -433,7 +447,7 @@ end = struct
       regtyps : (int * int * (index_range * id) list) Bindings.t;
       variants : (typquant * type_union list) Bindings.t;
       typ_vars : base_kind_aux KBindings.t;
-      typ_synonyms : (typ_arg list -> typ) Bindings.t;
+      typ_synonyms : (t -> typ_arg list -> typ) Bindings.t;
       overloads : (id list) Bindings.t;
       flow : (typ -> typ) Bindings.t;
       enums : IdSet.t Bindings.t;
@@ -831,7 +845,7 @@ end = struct
        begin
          try
            let synonym = Bindings.find id env.typ_synonyms in
-           expand_synonyms env (synonym args)
+           expand_synonyms env (synonym env args)
          with
        | Not_found -> Typ_aux (Typ_app (id, List.map (expand_synonyms_arg env) args), l)
        end
@@ -839,7 +853,7 @@ end = struct
        begin
          try
            let synonym = Bindings.find id env.typ_synonyms in
-           expand_synonyms env (synonym [])
+           expand_synonyms env (synonym env [])
          with
          | Not_found -> Typ_aux (Typ_id id, l)
        end
@@ -912,7 +926,7 @@ let lvector_typ env l typ =
 
 let initial_env =
   Env.empty
-  |> Env.add_typ_synonym (mk_id "atom") (fun args -> mk_typ (Typ_app (mk_id "range", args @ args)))
+  |> Env.add_typ_synonym (mk_id "atom") (fun _ args -> mk_typ (Typ_app (mk_id "range", args @ args)))
 
 let ex_counter = ref 0
 
@@ -952,6 +966,12 @@ let destruct_vector_typ env typ =
 (* 3. Subtyping and constraint solving                                    *)
 (**************************************************************************)
 
+let rec simp_typ (Typ_aux (typ_aux, l)) = Typ_aux (simp_typ_aux typ_aux, l)
+and simp_typ_aux = function
+  | Typ_exist (kids1, nc1, Typ_aux (Typ_exist (kids2, nc2, typ), _)) ->
+     Typ_exist (kids1 @ kids2, nc_and nc1 nc2, typ)
+  | typ_aux -> typ_aux
+
 let order_eq (Ord_aux (ord_aux1, _)) (Ord_aux (ord_aux2, _)) =
   match ord_aux1, ord_aux2 with
   | Ord_inc, Ord_inc -> true
@@ -971,7 +991,6 @@ type tnf =
   | Tnf_tup of tnf list
   | Tnf_index_sort of index_sort
   | Tnf_app of id * tnf_arg list
-  | Tnf_exist of kid list * n_constraint * tnf
 and tnf_arg =
   | Tnf_arg_nexp of nexp
   | Tnf_arg_typ of tnf
@@ -987,8 +1006,6 @@ let rec string_of_tnf = function
   | Tnf_index_sort IS_int -> "INT"
   | Tnf_index_sort (IS_prop (kid, props)) ->
      "{" ^ string_of_kid kid ^ " | " ^ string_of_list " & " (fun (n1, n2) -> string_of_nexp n1 ^ " <= " ^ string_of_nexp n2) props ^ "}"
-  | Tnf_exist (kids, nc, tnf) ->
-     "exist " ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_tnf tnf
 and string_of_tnf_arg = function
   | Tnf_arg_nexp n -> string_of_nexp n
   | Tnf_arg_typ tnf -> string_of_tnf tnf
@@ -1003,7 +1020,7 @@ let rec normalize_typ env (Typ_aux (typ, l)) =
      let kid = Env.fresh_kid env in Tnf_index_sort (IS_prop (kid, [(nconstant 0, nvar kid)]))
   | Typ_id v ->
      begin
-       try normalize_typ env (Env.get_typ_synonym v env []) with
+       try normalize_typ env (Env.get_typ_synonym v env env []) with
        | Not_found -> Tnf_id v
      end
   | Typ_var kid -> Tnf_var kid
@@ -1016,10 +1033,10 @@ let rec normalize_typ env (Typ_aux (typ, l)) =
      Tnf_app (vector, List.map (normalize_typ_arg env) args)
   | Typ_app (id, args) ->
      begin
-       try normalize_typ env (Env.get_typ_synonym id env args) with
+       try normalize_typ env (Env.get_typ_synonym id env env args) with
        | Not_found -> Tnf_app (id, List.map (normalize_typ_arg env) args)
      end
-  | Typ_exist (kids, nc, typ) -> Tnf_exist (kids, nc, normalize_typ env typ)
+  | Typ_exist (kids, nc, typ) -> typ_error l "Cannot normalise existential type"
   | Typ_fn _ -> typ_error l ("Cannot normalize function type " ^ string_of_typ (Typ_aux (typ, l)))
 and normalize_typ_arg env (Typ_arg_aux (typ_arg, _)) =
   match typ_arg with
@@ -1168,10 +1185,6 @@ let rec subtyp_tnf env tnf1 tnf2 =
        | Constraint.Unknown [] -> typ_debug "sat"; false
        | Constraint.Unknown _ -> typ_debug "unknown"; false
      end
-  | Tnf_exist (kids, nc, tnf1), _ ->
-     let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env kids in
-     let env = Env.add_constraint nc env in
-     subtyp_tnf env tnf1 tnf2
   | _, _ -> false
 
 and tnf_args_eq env arg1 arg2 =
@@ -1457,9 +1470,13 @@ let uv_nexp_constraint env (kid, uvar) =
   | U_nexp nexp -> Env.add_constraint (nc_eq (nvar kid) nexp) env
   | _ -> env
 
-let subtyp l env typ1 typ2 =
-  match destructure_exist env typ2 with
-  | Some (kids, nc, typ2) ->
+let rec subtyp l env typ1 typ2 =
+  match destructure_exist env typ1, destructure_exist env typ2 with
+  | Some (kids, nc, typ1), _ ->
+     let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env kids in
+     let env = Env.add_constraint nc env in
+     subtyp l env typ1 typ2
+  | _, Some (kids, nc, typ2) ->
      let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env kids in
      let unifiers, existential_kids, existential_nc =
        try unify l env typ2 typ1 with
@@ -1475,7 +1492,7 @@ let subtyp l env typ1 typ2 =
      in
      if prove env nc then ()
      else typ_error l ("Could not show " ^ string_of_typ typ1 ^ " is a subset of existential " ^ string_of_typ typ2)
-  | None ->
+  | _, None ->
      if subtyp_tnf env (normalize_typ env typ1) (normalize_typ env typ2)
      then ()
      else typ_error l (string_of_typ typ1
@@ -1719,6 +1736,8 @@ let rec match_typ env typ1 typ2 =
   let Typ_aux (typ1_aux, _) = Env.expand_synonyms env typ1 in
   let Typ_aux (typ2_aux, _) = Env.expand_synonyms env typ2 in
   match typ1_aux, typ2_aux with
+  | Typ_exist (_, _, typ1), _ -> match_typ env typ1 typ2
+  | _, Typ_exist (_, _, typ2) -> match_typ env typ1 typ2
   | Typ_wild, Typ_wild -> true
   | _, Typ_var kid2 -> true
   | Typ_id v1, Typ_id v2 when Id.compare v1 v2 = 0 -> true
@@ -1915,7 +1934,7 @@ and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
   in
   begin
     try
-      typ_debug "PERFORMING TYPE COERCION";
+      typ_debug ("PERFORMING TYPE COERCION: from " ^ string_of_typ (typ_of annotated_exp) ^ " to " ^ string_of_typ typ);
       subtyp l env (typ_of annotated_exp) typ; annotated_exp
     with
     | Type_error (_, m) when Env.allow_casts env ->
@@ -2482,9 +2501,9 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
        end
     | (utyps, (typ :: typs)), (uargs, ((n, arg) :: args)) ->
        begin
-         typ_debug ("INSTANTIATE: " ^ string_of_exp arg ^ " with " ^ string_of_typ typ ^ " NF " ^ string_of_tnf (normalize_typ env typ));
+         typ_debug ("INSTANTIATE: " ^ string_of_exp arg ^ " with " ^ string_of_typ typ);
          let iarg = irule infer_exp env arg in
-         typ_debug ("INFER: " ^ string_of_exp arg ^ " type " ^ string_of_typ (typ_of iarg) ^ " NF " ^ string_of_tnf (normalize_typ env (typ_of iarg)));
+         typ_debug ("INFER: " ^ string_of_exp arg ^ " type " ^ string_of_typ (typ_of iarg));
          try
            let iarg, (unifiers, ex_kids, ex_nc) (* FIXME *) = type_coercion_unify env iarg typ in
            typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
@@ -2557,12 +2576,12 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   typ_debug ("Existentials: " ^ string_of_list ", " string_of_kid existentials);
   typ_debug ("Existential constraints: " ^ string_of_list ", " string_of_n_constraint ex_constraints);
 
-  let nc_true = nc_eq (nconstant 0) (nconstant 0) in
   let typ_ret =
-    if KidSet.is_empty (KidSet.inter (typ_frees typ_ret) (KidSet.of_list existentials))
-    then typ_ret
+    if KidSet.is_empty (KidSet.of_list existentials)
+    then (typ_debug "Returning Existential"; typ_ret)
     else mk_typ (Typ_exist (existentials, List.fold_left nc_and nc_true ex_constraints, typ_ret))
   in
+  let typ_ret = simp_typ typ_ret in
   let exp = annot_exp (E_app (f, xs_reordered)) typ_ret eff in
   typ_debug ("RETURNING: " ^ string_of_typ (typ_of exp));
   match ret_ctx_typ with
@@ -2940,11 +2959,35 @@ let check_type_union env variant typq (Tu_aux (tu, l)) =
   | Tu_id v -> Env.add_union_id v (typq, ret_typ) env
   | Tu_ty_id (typ, v) -> Env.add_val_spec v (typq, mk_typ (Typ_fn (typ, ret_typ, no_effect))) env
 
+let mk_synonym typq typ =
+  let kopts, ncs = quant_split typq in
+  let rec subst_args kopts args =
+    match kopts, args with
+    | kopt :: kopts, Typ_arg_aux (Typ_arg_nexp arg, _) :: args when is_nat_kopt kopt ->
+       let typ, ncs = subst_args kopts args in
+       typ_subst_nexp (kopt_kid kopt) (unaux_nexp arg) typ,
+       List.map (nc_subst_nexp (kopt_kid kopt) (unaux_nexp arg)) ncs
+    | kopt :: kopts, Typ_arg_aux (Typ_arg_typ arg, _) :: args when is_typ_kopt kopt ->
+       let typ, ncs = subst_args kopts args in
+       typ_subst_typ (kopt_kid kopt) (unaux_typ arg) typ, ncs
+    | kopt :: kopts, Typ_arg_aux (Typ_arg_order arg, _) :: args when is_order_kopt kopt ->
+       let typ, ncs = subst_args kopts args in
+       typ_subst_order (kopt_kid kopt) (unaux_order arg) typ, ncs     
+    | [], [] -> typ, ncs
+    | _, Typ_arg_aux (_, l) :: _ -> typ_error l "Synonym applied to bad arguments"
+    | _, _ -> typ_error Parse_ast.Unknown "Synonym applied to bad arguments"
+  in
+  fun env args ->
+    let typ, ncs = subst_args kopts args in
+    if List.for_all (prove env) ncs
+    then typ
+    else typ_error Parse_ast.Unknown "Could not prove constraints in type synonym"
+
 let check_typedef env (TD_aux (tdef, (l, _))) =
   let td_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented Typedef") in
   match tdef with
   | TD_abbrev(id, nmscm, (TypSchm_aux (TypSchm_ts (typq, typ), _))) ->
-     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_typ_synonym id (fun _ -> typ) env
+     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_typ_synonym id (mk_synonym typq typ) env
   | TD_record(id, nmscm, typq, fields, _) ->
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_record id typq fields env
   | TD_variant(id, nmscm, typq, arms, _) ->

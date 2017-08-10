@@ -88,11 +88,11 @@ let options = Arg.align ([
       | [fname;line;var] -> opt_mono_split := ((fname,int_of_string line),var)::!opt_mono_split
       | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable>"))),
       "<filename>:<line>:<variable> to case split for monomorphisation");
-  ( "-new_typecheck",
-    Arg.Set opt_new_typecheck,
-    " (experimental) use new typechecker with Z3 constraint solving");
+  ( "-new_parser",
+    Arg.Set Process_file.opt_new_parser,
+    " (experimental) use new parser");
   ( "-just_check",
-    Arg.Tuple [Arg.Set opt_new_typecheck; Arg.Set opt_just_check],
+    Arg.Set opt_just_check,
     " (experimental) terminate immediately after typechecking, implies -new_typecheck");
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
