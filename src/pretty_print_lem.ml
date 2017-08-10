@@ -170,6 +170,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
            | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) ->
              (match simplify_nexp m with
                | (Nexp_aux(Nexp_constant i,_)) -> string "bitvector ty" ^^ doc_int i
+               | (Nexp_aux(Nexp_var _, _)) -> separate space [string "bitvector"; doc_nexp m]
                | _ -> raise (Reporting_basic.err_unreachable l
                  "cannot pretty-print bitvector type with non-constant length"))
            | _ -> string "vector" ^^ space ^^ typ regtypes elem_typ in
@@ -340,13 +341,23 @@ and contains_bitvector_typ_arg (Typ_arg_aux (targ, _)) = match targ with
   | Typ_arg_typ t -> contains_bitvector_typ t
   | _ -> false
 
+let contains_early_return exp =
+  fst (fold_exp
+  { (Rewriter.compute_exp_alg false (||))
+    with e_return = (fun (_, r) -> (true, E_return r)) } exp)
+
 let prefix_recordtype = true
 let report = Reporting_basic.err_unreachable
 let doc_exp_lem, doc_let_lem =
-  let rec top_exp regtypes (aexp_needed : bool) (E_aux (e, (l,annot)) as full_exp) =
-    let expY = top_exp regtypes true in
-    let expN = top_exp regtypes false in
-    let expV = top_exp regtypes in
+  let rec top_exp regtypes (early_ret : bool) (aexp_needed : bool)
+    (E_aux (e, (l,annot)) as full_exp) =
+    let expY = top_exp regtypes early_ret true in
+    let expN = top_exp regtypes early_ret false in
+    let expV = top_exp regtypes early_ret in
+    let liftR doc =
+      if early_ret && effectful (effect_of full_exp)
+      then separate space [string "liftR"; parens (doc)]
+      else doc in
     match e with
     | E_assign((LEXP_aux(le_act,tannot) as le), e) ->
        (* can only be register writes *)
@@ -358,14 +369,14 @@ let doc_exp_lem, doc_let_lem =
                if is_bit_typ (typ_of_annot lannot) then
                  raise (report l "indexing a register's (single bit) bitfield not supported")
                else
-                 (prefix 2 1)
+                 liftR ((prefix 2 1)
                    (string "write_reg_field_range")
-                   (align (doc_lexp_deref_lem regtypes le ^^ space^^
-                             string_lit (doc_id_lem id) ^/^ expY e2 ^/^ expY e3 ^/^ expY e))
+                   (align (doc_lexp_deref_lem regtypes early_ret le ^^ space^^
+                             string_lit (doc_id_lem id) ^/^ expY e2 ^/^ expY e3 ^/^ expY e)))
             | _ ->
-               (prefix 2 1)
+               liftR ((prefix 2 1)
                  (string "write_reg_range")
-                 (align (doc_lexp_deref_lem regtypes le ^^ space ^^ expY e2 ^/^ expY e3 ^/^ expY e))
+                 (align (doc_lexp_deref_lem regtypes early_ret le ^^ space ^^ expY e2 ^/^ expY e3 ^/^ expY e)))
            )
         | LEXP_vector (le,e2) when is_bit_typ t ->
            (match le with
@@ -373,23 +384,23 @@ let doc_exp_lem, doc_let_lem =
                if is_bit_typ (typ_of_annot lannot) then
                  raise (report l "indexing a register's (single bit) bitfield not supported")
                else
-                 (prefix 2 1)
+                 liftR ((prefix 2 1)
                    (string "write_reg_field_bit")
-                   (align (doc_lexp_deref_lem regtypes le ^^ space ^^ doc_id_lem id ^/^ expY e2 ^/^ expY e))
+                   (align (doc_lexp_deref_lem regtypes early_ret le ^^ space ^^ doc_id_lem id ^/^ expY e2 ^/^ expY e)))
             | _ ->
-               (prefix 2 1)
+               liftR ((prefix 2 1)
                  (string "write_reg_bit")
-                 (doc_lexp_deref_lem regtypes le ^^ space ^^ expY e2 ^/^ expY e)
+                 (doc_lexp_deref_lem regtypes early_ret le ^^ space ^^ expY e2 ^/^ expY e))
            )
         | LEXP_field (le,id) when is_bit_typ t ->
-           (prefix 2 1)
+           liftR ((prefix 2 1)
              (string "write_reg_bitfield")
-             (doc_lexp_deref_lem regtypes le ^^ space ^^ string_lit(doc_id_lem id) ^/^ expY e)
+             (doc_lexp_deref_lem regtypes early_ret le ^^ space ^^ string_lit(doc_id_lem id) ^/^ expY e))
         | LEXP_field (le,id) ->
-           (prefix 2 1)
+           liftR ((prefix 2 1)
              (string "write_reg_field")
-             (doc_lexp_deref_lem regtypes le ^^ space ^^
-                string_lit(doc_id_lem id) ^/^ expY e)
+             (doc_lexp_deref_lem regtypes early_ret le ^^ space ^^
+                string_lit(doc_id_lem id) ^/^ expY e))
         (* | (LEXP_id id | LEXP_cast (_,id)), t, Alias alias_info ->
            (match alias_info with
             | Alias_field(reg,field) ->
@@ -404,7 +415,7 @@ let doc_exp_lem, doc_let_lem =
                string "write_two_regs" ^^ space ^^ string reg1 ^^ space ^^
                  string reg2 ^^ space ^^ expY e) *)
         | _ ->
-           (prefix 2 1) (string "write_reg") (doc_lexp_deref_lem regtypes le ^/^ expY e))
+           liftR ((prefix 2 1) (string "write_reg") (doc_lexp_deref_lem regtypes early_ret le ^/^ expY e)))
     | E_vector_append(le,re) ->
       raise (Reporting_basic.err_unreachable l
         "E_vector_access should have been rewritten before pretty-printing")
@@ -430,7 +441,7 @@ let doc_exp_lem, doc_let_lem =
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
        raise (report l "E_for should have been removed till now")
     | E_let(leb,e) ->
-       let epp = let_exp regtypes leb ^^ space ^^ string "in" ^^ hardline ^^ expN e in
+       let epp = let_exp regtypes early_ret leb ^^ space ^^ string "in" ^^ hardline ^^ expN e in
        if aexp_needed then parens epp else epp
     | E_app(f,args) ->
        begin match f with
@@ -509,7 +520,7 @@ let doc_exp_lem, doc_let_lem =
                   not (contains_t_pp_var t)
                then (align epp ^^ (doc_tannot_lem regtypes (effectful eff) t), true)
                else (epp, aexp_needed) in
-             if aexp_needed then parens (align taepp) else taepp
+             liftR (if aexp_needed then parens (align taepp) else taepp)
           end
        end
     | E_vector_access (v,e) ->
@@ -578,8 +589,8 @@ let doc_exp_lem, doc_let_lem =
        if has_effect eff BE_rreg then
          let epp = separate space [string "read_reg";doc_id_lem id] in
          if is_bitvector_typ base_typ && not (contains_t_pp_var base_typ)
-         then parens (epp ^^ doc_tannot_lem regtypes true base_typ)
-         else epp
+         then liftR (parens (epp ^^ doc_tannot_lem regtypes true base_typ))
+         else liftR epp
        else if is_ctor env id then doc_id_lem_ctor id
        else doc_id_lem id
         (*| Base((_,t),Alias alias_info,_,eff,_,_) ->
@@ -656,14 +667,14 @@ let doc_exp_lem, doc_let_lem =
          | _ ->  raise (report l "cannot get record type") in
        let epp = anglebars (space ^^ (align (separate_map
                                           (semi_sp ^^ break 1)
-                                          (doc_fexp regtypes recordtyp) fexps)) ^^ space) in
+                                          (doc_fexp regtypes early_ret recordtyp) fexps)) ^^ space) in
        if aexp_needed then parens epp else epp
     | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
        let recordtyp = match annot with
          | Some (env, Typ_aux (Typ_id tid,_), _) when Env.is_record tid env ->
            tid
          | _ ->  raise (report l "cannot get record type") in
-       anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp regtypes recordtyp) fexps))
+       anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp regtypes early_ret recordtyp) fexps))
     | E_vector exps ->
        let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let (start, len, order, etyp) =
@@ -792,10 +803,10 @@ let doc_exp_lem, doc_let_lem =
         pattern-matching on integers *)
        let epp =
          group ((separate space [string "match"; only_integers e; string "with"]) ^/^
-                  (separate_map (break 1) (doc_case regtypes) pexps) ^/^
+                  (separate_map (break 1) (doc_case regtypes early_ret) pexps) ^/^
                     (string "end")) in
        if aexp_needed then parens (align epp) else align epp
-    | E_exit e -> separate space [string "exit"; expY e;]
+    | E_exit e -> liftR (separate space [string "exit"; expY e;])
     | E_assert (e1,e2) ->
        let epp = separate space [string "assert'"; expY e1; expY e2] in
        if aexp_needed then parens (align epp) else align epp
@@ -917,41 +928,40 @@ let doc_exp_lem, doc_let_lem =
         | _ ->
           raise (Reporting_basic.err_unreachable l
             "pretty-printing non-constant sizeof expressions to Lem not supported"))
-    | E_return _ ->
-      raise (Reporting_basic.err_todo l
-        "pretty-printing early return statements to Lem not yet supported")
+    | E_return r ->
+      align (string "early_return" ^//^ expV true r)
     | E_constraint _ | E_comment _ | E_comment_struc _ -> empty
     | E_internal_cast _ | E_internal_exp _ | E_sizeof_internal _ | E_internal_exp_user _ ->
       raise (Reporting_basic.err_unreachable l
         "unsupported internal expression encountered while pretty-printing")
-  and let_exp regtypes (LB_aux(lb,_)) = match lb with
+  and let_exp regtypes early_ret (LB_aux(lb,_)) = match lb with
     | LB_val_explicit(_,pat,e)
       | LB_val_implicit(pat,e) ->
        prefix 2 1
               (separate space [string "let"; doc_pat_lem regtypes true pat; equals])
-              (top_exp regtypes false e)
+              (top_exp regtypes early_ret false e)
 
-  and doc_fexp regtypes recordtyp (FE_aux(FE_Fexp(id,e),_)) =
+  and doc_fexp regtypes early_ret recordtyp (FE_aux(FE_Fexp(id,e),_)) =
     let fname =
       if prefix_recordtype
       then (string (string_of_id recordtyp ^ "_")) ^^ doc_id_lem id
       else doc_id_lem id in
-    group (doc_op equals fname (top_exp regtypes true e))
+    group (doc_op equals fname (top_exp regtypes early_ret true e))
 
-  and doc_case regtypes = function
+  and doc_case regtypes early_ret = function
   | Pat_aux(Pat_exp(pat,e),_) ->
     group (prefix 3 1 (separate space [pipe; doc_pat_lem regtypes false pat;arrow])
-                  (group (top_exp regtypes false e)))
+                  (group (top_exp regtypes early_ret false e)))
   | Pat_aux(Pat_when(_,_,_),(l,_)) ->
     raise (Reporting_basic.err_unreachable l
       "guarded pattern expression should have been rewritten before pretty-printing")
 
-  and doc_lexp_deref_lem regtypes ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
+  and doc_lexp_deref_lem regtypes early_ret ((LEXP_aux(lexp,(l,annot))) as le) = match lexp with
     | LEXP_field (le,id) ->
-       parens (separate empty [doc_lexp_deref_lem regtypes le;dot;doc_id_lem id])
+       parens (separate empty [doc_lexp_deref_lem regtypes early_ret le;dot;doc_id_lem id])
     | LEXP_vector(le,e) ->
-       parens ((separate space) [string "access";doc_lexp_deref_lem regtypes le;
-                                 top_exp regtypes true e])
+       parens ((separate space) [string "access";doc_lexp_deref_lem regtypes early_ret le;
+                                 top_exp regtypes early_ret true e])
     | LEXP_id id -> doc_id_lem id
     | LEXP_cast (typ,id) -> doc_id_lem id
     | _ ->
@@ -1225,9 +1235,16 @@ let doc_rec_lem (Rec_aux(r,_)) = match r with
 let doc_tannot_opt_lem regtypes (Typ_annot_opt_aux(t,_)) = match t with
   | Typ_annot_opt_some(tq,typ) -> (*doc_typquant_lem tq*) (doc_typ_lem regtypes typ)
 
+let doc_fun_body_lem regtypes exp =
+  let early_ret = contains_early_return exp in
+  let doc_exp = doc_exp_lem regtypes early_ret false exp in
+  if early_ret
+  then align (string "catch_early_return" ^//^ parens (doc_exp))
+  else doc_exp
+
 let doc_funcl_lem regtypes (FCL_aux(FCL_Funcl(id,pat,exp),_)) =
   group (prefix 3 1 ((doc_pat_lem regtypes false pat) ^^ space ^^ arrow)
-                (doc_exp_lem regtypes false exp))
+    (doc_fun_body_lem regtypes exp))
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
@@ -1244,7 +1261,7 @@ let rec doc_fundef_lem regtypes (FD_aux(FD_function(r, typa, efa, fcls),fannot))
           [(string "let") ^^ (doc_rec_lem r) ^^ (doc_id_lem id);
            (doc_pat_lem regtypes true pat);
            equals])
-       (doc_exp_lem regtypes false exp)
+       (doc_fun_body_lem regtypes exp)
   | _ ->
     let id = get_id fcls in
     (*    let sep = hardline ^^ pipe ^^ space in *)
@@ -1358,7 +1375,7 @@ let rec doc_def_lem regtypes def = match def with
 
   | DEF_default df -> (empty,empty)
   | DEF_fundef f_def -> (empty,group (doc_fundef_lem regtypes f_def) ^/^ hardline)
-  | DEF_val lbind -> (empty,group (doc_let_lem regtypes lbind) ^/^ hardline)
+  | DEF_val lbind -> (empty,group (doc_let_lem regtypes false lbind) ^/^ hardline)
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"
 
   | DEF_kind _ -> (empty,empty)

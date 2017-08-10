@@ -149,8 +149,8 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
       List.fold_left union_effects (effect_of e) (List.map effect_of_pexp pexps)
     | E_let (lb,e) -> union_effects (effect_of_lb lb) (effect_of e)
     | E_assign (lexp,e) -> union_effects (effect_of_lexp lexp) (effect_of e)
-    | E_exit e -> effect_of e
-    | E_return e -> effect_of e
+    | E_exit e -> union_effects eff (effect_of e)
+    | E_return e -> union_effects eff (effect_of e)
     | E_sizeof _ | E_sizeof_internal _ | E_constraint _ -> no_effect
     | E_assert (c,m) -> eff
     | E_comment _ | E_comment_struc _ -> no_effect
@@ -2074,7 +2074,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
       | (E_aux(E_assign((LEXP_aux ((LEXP_id id | LEXP_cast (_,id)),_)) as le,e),
                ((l, Some (env,typ,eff)) as annot)) as exp)::exps ->
         (match Env.lookup_id id env with
-         | Unbound ->
+         | Unbound | Local _ ->
             let le' = rewriters.rewrite_lexp rewriters le in
             let e' = rewrite_base e in
             let exps' = walker exps in
@@ -2210,6 +2210,65 @@ let rewrite_defs_separate_numbs defs = rewrite_defs_base
      rewrite_fun = rewrite_fun;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} defs*)
+
+let rewrite_defs_early_return =
+  let is_return (E_aux (exp, _)) = match exp with
+  | E_return _ -> true
+  | _ -> false in
+
+  let get_return (E_aux (e, (l, _)) as exp) = match e with
+  | E_return e -> e
+  | _ -> exp in
+
+  let e_block es =
+    (* let rec walker = function
+    | e :: es -> if is_return e then [e] else e :: walker es
+    | [] -> [] in
+    let es = walker es in *)
+    match es with
+    | [E_aux (e, _)] -> e
+    | _ -> E_block es in
+
+  let e_if (e1, e2, e3) =
+    if is_return e2 && is_return e3 then E_if (e1, get_return e2, get_return e3)
+    else E_if (e1, e2, e3) in
+
+  let e_case (e, pes) =
+    let is_return_pexp (Pat_aux (pexp, _)) = match pexp with
+    | Pat_exp (_, e) | Pat_when (_, _, e) -> is_return e in
+    let get_return_pexp (Pat_aux (pexp, a)) = match pexp with
+    | Pat_exp (p, e) -> Pat_aux (Pat_exp (p, get_return e), a)
+    | Pat_when (p, g, e) -> Pat_aux (Pat_when (p, g, get_return e), a) in
+    if List.for_all is_return_pexp pes
+    then E_return (E_aux (E_case (e, List.map get_return_pexp pes), (Parse_ast.Unknown, None)))
+    else E_case (e, pes) in
+
+  let e_aux (exp, (l, annot)) =
+    let full_exp = fix_eff_exp (E_aux (exp, (l, annot))) in
+    match annot with
+    | Some (env, typ, eff) when is_return full_exp ->
+      (* Add escape effect annotation, since we use the exception mechanism
+         of the state monad to implement early return in the Lem backend *)
+      let annot' = Some (env, typ, union_effects eff (mk_effect [BE_escape])) in
+      E_aux (exp, (l, annot'))
+    | _ -> full_exp in
+
+  let rewrite_funcl_early_return _ (FCL_aux (FCL_Funcl (id, pat, exp), a)) =
+    let exp = fold_exp
+      { id_exp_alg with e_block = e_block; e_if = e_if; e_case = e_case;
+        e_aux = e_aux } exp in
+    let a = match a with
+    | (l, Some (env, typ, eff)) ->
+      (l, Some (env, typ, union_effects eff (effect_of exp)))
+    | _ -> a in
+    FCL_aux (FCL_Funcl (id, pat, get_return exp), a) in
+
+  let rewrite_fun_early_return rewriters
+    (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), a)) =
+    FD_aux (FD_function (rec_opt, tannot_opt, effect_opt,
+      List.map (rewrite_funcl_early_return rewriters) funcls), a) in
+
+  rewrite_defs_base { rewriters_base with rewrite_fun = rewrite_fun_early_return }
 
 let rewrite_defs_ocaml = [
   top_sort_defs;
@@ -3053,6 +3112,7 @@ let rewrite_defs_lem =[
   rewrite_defs_remove_bitvector_pats;
   rewrite_defs_guarded_pats;
   (* recheck_defs; *)
+  rewrite_defs_early_return;
   rewrite_defs_exp_lift_assign;
   rewrite_defs_remove_blocks;
   rewrite_defs_letbind_effects;

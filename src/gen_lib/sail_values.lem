@@ -1028,7 +1028,7 @@ let assert' b msg_opt =
   | Just msg -> msg
   | Nothing  -> "unspecified error"
   end in
-  if bitU_to_bool b then () else failwith msg
+  if b then () else failwith msg
 
 (* convert numbers unsafely to naturals *)
 
