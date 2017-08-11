@@ -1,5 +1,4 @@
-true: -traverse, debug
-#, use_menhir
+true: -traverse, debug, use_menhir
 <**/*.ml>: bin_annot, annot
 <lem_interp> or <test>:  include
 <sail.{byte,native}>: use_pprint, use_nums, use_unix

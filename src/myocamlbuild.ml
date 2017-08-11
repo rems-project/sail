@@ -101,5 +101,11 @@ dispatch begin function
         mv (basename (env "%.lem")) (dirname (env "%.lem"))
       ]);
 
+    rule "old parser"
+    ~insert:(`top)
+    ~prods: ["parser.ml"; "parser.mli"]
+    ~dep: "parser.mly"
+    (fun env builder -> Cmd(S[V"OCAMLYACC"; T(tags_of_pathname "parser.mly"++"ocaml"++"parser"++"ocamlyacc"); Px "parser.mly"]));
+
 | _ -> ()
 end ;;
