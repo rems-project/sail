@@ -1,5 +1,5 @@
 | UTYPE reg COMMA NUM
-  { `RISCVUTYPE($4, $2, $1.o) }
+  { `RISCVUTYPE($4, $2, $1.op) }
 | JAL reg COMMA NUM
   { `RISCVJAL($4, $2) }
 | JALR reg COMMA reg COMMA NUM
@@ -7,15 +7,15 @@
 | BTYPE reg COMMA reg COMMA NUM
   { `RISCVBType($6, $4, $2, $1.op) }
 | ITYPE reg COMMA reg COMMA NUM
-  { `RISCVIType(o$6, $4, $2, $1.op) }
+  { `RISCVIType($6, $4, $2, $1.op) }
 | SHIFTIOP reg COMMA reg COMMA NUM
   { `RISCVShiftIop($6, $4, $2, $1.op) }
 | RTYPE reg COMMA reg COMMA reg
-  { `RISCVRType ($6, $3, $2, $1.op) }
+  { `RISCVRType ($6, $4, $2, $1.op) }
 | LOAD reg COMMA NUM LPAR reg RPAR
   { `RISCVLoad($4, $6, $2, $1.unsigned, $1.width) }
 | STORE reg COMMA NUM LPAR reg RPAR
-  { `RISCVStore($4, $6, $2, $1.width) } (* reg order? *)
+  { `RISCVStore($4, $6, $2, $1.width) }
 | ADDIW reg COMMA reg COMMA NUM
   { `RISCVADDIW ($6, $4, $2) }
 | SHIFTW reg COMMA reg COMMA NUM

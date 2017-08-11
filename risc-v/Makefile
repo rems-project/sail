@@ -1,13 +1,13 @@
 
 SAIL:=../src/sail.native
-
+SOURCES:=riscv.sail ../etc/regfp.sail riscv_regfp.sail
 all: lem_ast shallow
 
-lem_ast: riscv.sail $(SAIL)
-	$(SAIL) -lem_ast $<
+lem_ast: $(SOURCES) $(SAIL)
+	$(SAIL) -lem_ast $(SOURCES)
 
-shallow: riscv.sail $(SAIL)
-	$(SAIL) -lem_lib Riscv_extras_embed -lem $<
+shallow: $(SOURCES) $(SAIL)
+	$(SAIL) -lem_lib Riscv_extras_embed -lem $(SOURCES)
 
 clean:
 	rm -f riscv.lem riscv_embed*.lem

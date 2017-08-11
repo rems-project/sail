@@ -1,4 +1,3 @@
-| `RISCVThreadStart
 | `RISCVUTYPE of bit20 * reg * riscvUop
 | `RISCVJAL   of bit20 * reg
 | `RISCVJALR  of bit12 * reg * reg

@@ -44,6 +44,7 @@ let translate_out_bop op = match translate_out_enum op with
 | 3 -> RISCVBGE 
 | 4 -> RISCVBLTU
 | 5 -> RISCVBGEU
+| _ -> failwith "Unknown bop in sail translate out"
 
 let translate_out_iop op = match translate_out_enum op with
 | 0 -> RISCVADDI 
@@ -52,11 +53,13 @@ let translate_out_iop op = match translate_out_enum op with
 | 3 -> RISCVXORI 
 | 4 -> RISCVORI  
 | 5 -> RISCVANDI 
+| _ -> failwith "Unknown iop in sail translate out"
 
 let translate_out_sop op = match translate_out_enum op with 
 | 0 -> RISCVSLLI
 | 1 -> RISCVSRLI
 | 2 -> RISCVSRAI
+| _ -> failwith "Unknown sop in sail translate out"
 
 let translate_out_rop op = match translate_out_enum op with
 | 0 -> RISCVADD 
@@ -69,6 +72,7 @@ let translate_out_rop op = match translate_out_enum op with
 | 7 -> RISCVSRA 
 | 8 -> RISCVOR  
 | 9 -> RISCVAND 
+| _ -> failwith "Unknown rop in sail translate out"
 
 let translate_out_ropw op = match translate_out_enum op with
 | 0 -> RISCVADDW
@@ -76,3 +80,4 @@ let translate_out_ropw op = match translate_out_enum op with
 | 2 -> RISCVSLLW
 | 3 -> RISCVSRLW
 | 4 -> RISCVSRAW
+| _ -> failwith "Unknown ropw in sail translate out"

@@ -1,3 +1,5 @@
+| `RISCVThreadStart               -> "start"
+| `RISCVStopFetching              -> "stop"
 | `RISCVUTYPE(imm, rd, op)        -> sprintf "%s %s, %d" (pp_riscv_uop op) (pp_reg rd) imm
 | `RISCVJAL(imm, rd)              -> sprintf "jal  %s, %d" (pp_reg rd) imm
 | `RISCVJALR(imm, rs, rd)         -> sprintf "jalr %s, %s, %d" (pp_reg rd) (pp_reg rs) imm

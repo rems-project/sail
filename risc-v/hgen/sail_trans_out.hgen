@@ -1,3 +1,4 @@
+| ("EBREAK", [])                  -> `RISCVStopFetching
 | ("UTYPE", [imm; rd; op])        -> `RISCVUTYPE(translate_out_simm20 imm, translate_out_ireg rd, translate_out_uop op)
 | ("JAL", [imm; rd])              -> `RISCVJAL(translate_out_simm20 imm, translate_out_ireg  rd)
 | ("JALR", [imm; rs; rd])         -> `RISCVJALR(translate_out_simm12 imm, translate_out_ireg rs, translate_out_ireg rd)

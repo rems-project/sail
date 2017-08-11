@@ -281,6 +281,10 @@ function clause execute (RTYPEW(rs2, rs1, rd, op)) =
   } in
   wGPR(rd, EXTS(result))
 
+union ast member unit EBREAK
+function clause decode (0b000000000001 : 0b00000 : 0b000 : 0b00000 : 0b1110011) = Some(EBREAK ())
+function clause execute EBREAK = { exit () }
+
 function clause decode _ = None
 
 end ast

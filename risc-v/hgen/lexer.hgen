@@ -1,8 +1,8 @@
-"lwu"   , UTYPE { op=RSICVLUI   };
-"auipc" , UTYPE { op=RSICVAUIPC };
+"lwu"   , UTYPE { op=RISCVLUI   };
+"auipc" , UTYPE { op=RISCVAUIPC };
 
-"jal",  JAL;
-"jalr", JALR;
+"jal",  JAL ();
+"jalr", JALR ();
 
 "beq",  BTYPE {op=RISCVBEQ};
 "bne",  BTYPE {op=RISCVBNE};
@@ -12,7 +12,7 @@
 "bgeu", BTYPE {op=RISCVBGEU};
 
 "addi",  ITYPE {op=RISCVADDI};
-"stli",  ITYPE {op=RISCVSTLI};
+"stli",  ITYPE {op=RISCVSLTI};
 "sltiu", ITYPE {op=RISCVSLTIU};
 "xori",  ITYPE {op=RISCVXORI};
 "ori",   ITYPE {op=RISCVORI};
@@ -33,24 +33,24 @@
 "or",   RTYPE{op=RISCVOR};
 "and",  RTYPE{op=RISCVAND};
 
-"lb",  LOAD{unsigned=false; width=RISCBYTE};
-"lbu", LOAD{unsigned=true;  width=RISCBYTE};
+"lb",  LOAD{unsigned=false; width=RISCVBYTE};
+"lbu", LOAD{unsigned=true;  width=RISCVBYTE};
 "lh",  LOAD{unsigned=false; width=RISCVHALF};
 "lhu", LOAD{unsigned=true;  width=RISCVHALF};
 "lw",  LOAD{unsigned=false; width=RISCVWORD};
 "lwu", LOAD{unsigned=true;  width=RISCVWORD};
 "ld",  LOAD{unsigned=false; width=RISCVDOUBLE};
 
-"sb", STORE{width=RISCBYTE};
+"sb", STORE{width=RISCVBYTE};
 "sh", STORE{width=RISCVHALF};
 "sw", STORE{width=RISCVWORD};
 "sd", STORE{width=RISCVDOUBLE};
 
-"addiw", ADDIW;
+"addiw", ADDIW ();
 
-"slliw", SHIFTW{op=RISCVSLL};
-"srliw", SHIFTW{op=RISCVSRL};
-"sraiw", SHIFTW{op=RISCVSRA};
+"slliw", SHIFTW{op=RISCVSLLI};
+"srliw", SHIFTW{op=RISCVSRLI};
+"sraiw", SHIFTW{op=RISCVSRAI};
 
 "addw", RTYPEW{op=RISCVADDW};
 "subw", RTYPEW{op=RISCVSUBW};
