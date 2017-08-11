@@ -49,37 +49,50 @@ let r = fun s -> s (* Ulib.Text.of_latin1 *)
 (* Available as Scanf.unescaped since OCaml 4.0 but 3.12 is still common *)
 let unescaped s = Scanf.sscanf ("\"" ^ s ^ "\"") "%S%!" (fun x -> x)
 
+let mk_operator n op =
+  match n with
+  | 0 -> Op0 op
+  | 1 -> Op1 op
+  | 2 -> Op2 op
+  | 3 -> Op3 op
+  | 4 -> Op4 op
+  | 5 -> Op5 op
+  | 6 -> Op6 op
+  | 7 -> Op7 op
+  | 8 -> Op8 op
+  | 9 -> Op9 op
+
+let operators = ref M.empty
+
 let kw_table =
   List.fold_left
     (fun r (x,y) -> M.add x y r)
     M.empty
     [
      ("and",                     (fun _ -> And));
-     ("alias",                   (fun _ -> Alias));
      ("as",                      (fun _ -> As));
      ("assert",                  (fun _ -> Assert));
      ("bitzero",                 (fun _ -> Bitzero));
      ("bitone",                  (fun _ -> Bitone));
-     ("bits",                    (fun _ -> Bits));
      ("by",                      (fun _ -> By));
-     ("case",			 (fun _ -> Case));
+     ("match",			 (fun _ -> Match));
      ("clause",                  (fun _ -> Clause));
      ("const",			 (fun _ -> Const));
      ("dec",                     (fun _ -> Dec));
      ("def",                     (fun _ -> Def));
+     ("op",                      (fun _ -> Op));
      ("default",		 (fun _ -> Default));
      ("deinfix",                 (fun _ -> Deinfix));
      ("effect",                  (fun _ -> Effect));
      ("Effect",                  (fun _ -> EFFECT));
      ("end",                     (fun _ -> End));
-     ("enumerate",		 (fun _ -> Enumerate));
+     ("enum",		         (fun _ -> Enum));
      ("else",                    (fun _ -> Else));
      ("exit",                    (fun _ -> Exit));
      ("extern",                  (fun _ -> Extern));
      ("cast",                    (fun _ -> Cast));
      ("false",                   (fun _ -> False));
      ("forall",                  (fun _ -> Forall));
-     ("exist",                   (fun _ -> Exist));
      ("foreach",                 (fun _ -> Foreach));
      ("function",                (fun x -> Function_));
      ("overload",                (fun _ -> Overload));
@@ -89,8 +102,7 @@ let kw_table =
      ("IN",                      (fun x -> IN));
      ("let",                     (fun x -> Let_));
      ("member",                  (fun x -> Member));
-     ("Nat",                     (fun x -> Nat));
-     ("Num",                     (fun x -> NatNum));
+     ("Int",                     (fun x -> Int));
      ("Order",                   (fun x -> Order));
      ("pure",                    (fun x -> Pure));
      ("rec",			 (fun x -> Rec));
@@ -104,7 +116,7 @@ let kw_table =
      ("then",                    (fun x -> Then));
      ("true",                    (fun x -> True));
      ("Type",                    (fun x -> TYPE));
-     ("typedef",		 (fun x -> Typedef));
+     ("type",		         (fun x -> Typedef));
      ("undefined",               (fun x -> Undefined));
      ("union",			 (fun x -> Union));
      ("with",                    (fun x -> With));
@@ -160,158 +172,51 @@ rule token = parse
   | "\n"
     { Lexing.new_line lexbuf;
       token lexbuf }
-
   | "&"					{ (Amp(r"&")) }
-  | "@"					{ (At(r"@")) }
   | "|"                                 { Bar }
-  | "^"					{ (Carrot(r"^")) }
+  | "2" ws "^"                          { TwoCaret }
+  | "^"					{ (Caret(r"^")) }
   | ":"                                 { Colon(r ":") }
   | ","                                 { Comma }
   | "."                                 { Dot }
   | "="                                 { (Eq(r"=")) }
-  | "!"					{ (Excl(r"!")) }
   | ">"					{ (Gt(r">")) }
   | "-"					{ Minus }
   | "<"					{ (Lt(r"<")) }
   | "+"					{ (Plus(r"+")) }
   | ";"                                 { Semi }
   | "*"                                 { (Star(r"*")) }
-  | "~"					{ (Tilde(r"~")) }
   | "_"                                 { Under }
   | "{"                                 { Lcurly }
   | "}"                                 { Rcurly }
+  | "()"                                { Unit(r"()") }
   | "("                                 { Lparen }
   | ")"                                 { Rparen }
   | "["                                 { Lsquare }
   | "]"                                 { Rsquare }
-  | "&&" as i                           { (AmpAmp(r i)) }
-  | "||"                                { BarBar }
-  | "||]"                               { BarBarSquare }
-  | "|]"				{ BarSquare }
-  | "^^"				{ (CarrotCarrot(r"^^")) }
-  | "::" as i                           { (ColonColon(r i)) }
-  | ":="                                { ColonEq }
-  | ":>"                                { ColonGt }
-  | ":]"                                { ColonSquare }
-  | ".."				{ DotDot }
-  | "=="				{ (EqEq(r"==")) }
   | "!="				{ (ExclEq(r"!=")) }
-  | "!!"				{ (ExclExcl(r"!!")) }
   | ">="				{ (GtEq(r">=")) }
-  | ">=+"				{ (GtEqPlus(r">=+")) }
-  | ">>"				{ (GtGt(r">>")) }
-  | ">>>"				{ (GtGtGt(r">>>")) }
-  | ">+"				{ (GtPlus(r">+")) }
-  | "#>>"				{ (HashGtGt(r"#>>")) }
-  | "#<<"				{ (HashLtLt(r"#<<")) }
   | "->"                                { MinusGt }
-  | "<:"                                { LtColon }
+  | "=>"                                { EqGt(r "=>") }
   | "<="				{ (LtEq(r"<=")) }
-  | "<=+"				{ (LtEqPlus(r"<=+")) }
-  | "<>"				{ (LtGt(r"<>")) }
-  | "<<"				{ (LtLt(r"<<")) }
-  | "<<<"				{ (LtLtLt(r"<<<")) }
-  | "<+"				{ (LtPlus(r"<+")) }
-  | "**"				{ (StarStar(r"**")) }
-  | "[|"                                { SquareBar }
-  | "[||"                               { SquareBarBar }
-  | "[:"                                { SquareColon }
-  | "~^"				{ (TildeCarrot(r"~^")) }
-
-  | "+_s"                               { (PlusUnderS(r"+_s")) }
-  | "-_s"                               { (MinusUnderS(r"-_s")) }
-  | ">=_s"				{ (GtEqUnderS(r">=_s")) }
-  | ">=_si"				{ (GtEqUnderSi(r">=_si")) }
-  | ">=_u"				{ (GtEqUnderU(r">=_u")) }
-  | ">=_ui"				{ (GtEqUnderUi(r">=_ui")) }
-  | ">>_u"				{ (GtGtUnderU(r">>_u")) }
-  | ">_s"				{ (GtUnderS(r">_s")) }
-  | ">_si"				{ (GtUnderSi(r">_si")) }
-  | ">_u"				{ (GtUnderU(r">_u")) }
-  | ">_ui"				{ (GtUnderUi(r">_ui")) }
-  | "<=_s"				{ (LtEqUnderS(r"<=_s")) }
-  | "<=_si"				{ (LtEqUnderSi(r"<=_si")) }
-  | "<=_u"				{ (LtEqUnderU(r"<=_u")) }
-  | "<=_ui"				{ (LtEqUnderUi(r"<=_ui")) }
-  | "<_s"				{ (LtUnderS(r"<_s")) }
-  | "<_si"				{ (LtUnderSi(r"<_si")) }
-  | "<_u"				{ (LtUnderU(r"<_u")) }
-  | "<_ui"				{ (LtUnderUi(r"<_ui")) }
-  | "*_s"                               { (StarUnderS(r"*_s")) }
-  | "**_s"				{ (StarStarUnderS(r"**_s")) }
-  | "**_si"				{ (StarStarUnderSi(r"**_si")) }
-  | "*_u"				{ (StarUnderU(r"*_u")) }
-  | "*_ui"				{ (StarUnderUi(r"*_ui")) }
-  | "2^"				{ (TwoCarrot(r"2^")) }
-  | "2**"				{ TwoStarStar }
-
-
+  | "infix" ws (digit as p) ws (oper_char+ as op)
+    { operators := M.add op (mk_operator (int_of_string (Char.escaped p)) op) !operators;
+      token lexbuf }
+  | oper_char+ as op
+    { try M.find op !operators
+      with Not_found -> raise (LexError ("Operator fixity undeclared", Lexing.lexeme_start_p lexbuf)) }
   | "(*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }
   | "*)"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
-
+  | (tyvar_start startident ident* as i) ":" { TyDecl(r i) }
+  | (startident ident* as i) ":"        { Decl(r i) }
   | tyvar_start startident ident* as i  { TyVar(r i) }
   | startident ident* as i              { if M.mem i kw_table then
                                             (M.find i kw_table) ()
-                                          else if
+					  (* else if
                                             List.mem i default_type_names ||
                                             List.mem i !custom_type_names then
-					    TyId(r i)
-                                          else Id(r i) }
-  | "&" oper_char+ as i                 { (AmpI(r i)) }
-  | "@" oper_char+ as i                 { (AtI(r i)) }
-  | "^" oper_char+ as i                 { (CarrotI(r i)) }
-  | "/" oper_char+ as i                 { (DivI(r i)) }
-  | "=" oper_char+ as i			{ (EqI(r i)) }
-  | "!" oper_char+ as i                 { (ExclI(r i)) }
-  | ">" oper_char+ as i                 { (GtI(r i)) }
-  | "<" oper_char+ as i			{ (LtI(r i)) }
-  | "+"	oper_char+ as i			{ (PlusI(r i)) }
-  | "*" oper_char+ as i                 { (StarI(r i)) }
-  | "~"	oper_char+ as i			{ (TildeI(r i)) }
-  | "&&" oper_char+ as i                { (AmpAmpI(r i)) }
-  | "^^" oper_char+ as i		{ (CarrotCarrotI(r i)) }
-  | "::" oper_char+ as i                { (ColonColonI(r i)) }
-  | "==" oper_char+ as i		{ (EqEqI(r i)) }
-  | "!=" oper_char+ as i		{ (ExclEqI(r i)) }
-  | "!!" oper_char+ as i		{ (ExclExclI(r i)) }
-  | ">=" oper_char+ as i		{ (GtEqI(r i)) }
-  | ">=+" oper_char+ as i		{ (GtEqPlusI(r i)) }
-  | ">>" oper_char+ as i		{ (GtGtI(r i)) }
-  | ">>>" oper_char+ as i		{ (GtGtGtI(r i)) }
-  | ">+" oper_char+ as i		{ (GtPlusI(r i)) }
-  | "#>>" oper_char+ as i		{ (HashGtGt(r i)) }
-  | "#<<" oper_char+ as i		{ (HashLtLt(r i)) }
-  | "<=" oper_char+ as i		{ (LtEqI(r i)) }
-  | "<=+" oper_char+ as i		{ (LtEqPlusI(r i)) }
-  | "<<" oper_char+ as i		{ (LtLtI(r i)) }
-  | "<<<" oper_char+ as i		{ (LtLtLtI(r i)) }
-  | "<+" oper_char+ as i		{ (LtPlusI(r i)) }
-  | "**" oper_char+ as i		{ (StarStarI(r i)) }
-  | "~^" oper_char+ as i		{ (TildeCarrot(r i)) }
-
-  | ">=_s" oper_char+ as i				{ (GtEqUnderSI(r i)) }
-  | ">=_si" oper_char+ as i				{ (GtEqUnderSiI(r i)) }
-  | ">=_u" oper_char+ as i				{ (GtEqUnderUI(r i)) }
-  | ">=_ui" oper_char+ as i				{ (GtEqUnderUiI(r i)) }
-  | ">>_u" oper_char+ as i				{ (GtGtUnderUI(r i)) }
-  | ">_s" oper_char+ as i				{ (GtUnderSI(r i)) }
-  | ">_si" oper_char+ as i				{ (GtUnderSiI(r i)) }
-  | ">_u" oper_char+ as i				{ (GtUnderUI(r i)) }
-  | ">_ui" oper_char+ as i				{ (GtUnderUiI(r i)) }
-  | "<=_s" oper_char+ as i				{ (LtEqUnderSI(r i)) }
-  | "<=_si" oper_char+ as i				{ (LtEqUnderSiI(r i)) }
-  | "<=_u" oper_char+ as i				{ (LtEqUnderUI(r i)) }
-  | "<=_ui" oper_char+ as i				{ (LtEqUnderUiI(r i)) }
-  | "<_s" oper_char+ as i				{ (LtUnderSI(r i)) }
-  | "<_si" oper_char+ as i				{ (LtUnderSiI(r i)) }
-  | "<_u" oper_char+ as i				{ (LtUnderUI(r i)) }
-  | "<_ui" oper_char+ as i				{ (LtUnderUiI(r i)) }
-  | "**_s" oper_char+ as i				{ (StarStarUnderSI(r i)) }
-  | "**_si" oper_char+ as i				{ (StarStarUnderSiI(r i)) }
-  | "*_u" oper_char+ as i				{ (StarUnderUI(r i)) }
-  | "*_ui" oper_char+ as i				{ (StarUnderUiI(r i)) }
-  | "2^" oper_char+ as i				{ (TwoCarrotI(r i)) }
-
+					    TyId(r i) *)
+					  else Id(r i) }
   | (digit+ as i1) "." (digit+ as i2)     { (Real (i1 ^ "." ^ i2)) }
   | "-" (digit* as i1) "." (digit+ as i2) { (Real ("-" ^ i1 ^ "." ^ i2)) }
   | digit+ as i                           { (Num(int_of_string i)) }

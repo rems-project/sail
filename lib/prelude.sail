@@ -3,37 +3,50 @@ val cast forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0:2**'m 
 
 val forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [|0 - (2**('m - 1)):2**('m - 1) - 1|] effect pure signed
 
-val forall Num 'n, Num 'm. [|0:'n|] -> vector<'m - 1,'m,dec,bit> effect pure to_vec
+val extern forall Num 'n, Num 'm. [|0:'n|] -> vector<'m - 1,'m,dec,bit> effect pure to_vec = "to_vec_dec"
 
-val forall Num 'm. int -> vector<'m - 1,'m,dec,bit> effect pure to_svec
+val extern forall Num 'm. int -> vector<'m - 1,'m,dec,bit> effect pure to_svec = "to_vec_dec"
 
 (* Vector access can't actually be properly polymorphic on vector
    direction because of the ranges being different for each type, so
    we overload it instead *)
 val forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,dec,'a>, [|'n - 'l + 1:'n|]) -> 'a effect pure vector_access_dec
 val forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [|'n:'n + 'l - 1|]) -> 'a effect pure vector_access_inc
+val forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,dec,bit>, [|'n - 'l + 1:'n|]) -> bit effect pure bitvector_access_dec
+val forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,inc,bit>, [|'n:'n + 'l - 1|]) -> bit effect pure bitvector_access_inc
 
-overload vector_access [vector_access_inc; vector_access_dec]
+overload vector_access [bitvector_access_inc; bitvector_access_dec; vector_access_inc; vector_access_dec]
 
 (* Type safe vector subrange *)
+(* vector_subrange(v, m, o) returns the subvector of v with elements with
+   indices from m up to and *including* o. *)
 val forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'l >= 0, 'm <= 'o, 'o <= 'l.
-  (vector<'n,'l,inc,'a>, [:'m:], [:'o:]) -> vector<'m,'o - 'm,inc,'a> effect pure vector_subrange_inc
+  (vector<'n,'l,inc,'a>, [:'m:], [:'o:]) -> vector<'m,('o - 'm) + 1,inc,'a> effect pure vector_subrange_inc
 
 val forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
-  (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,'m - ('o - 1),dec,'a> effect pure vector_subrange_dec
+  (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,('m - 'o) + 1,dec,'a> effect pure vector_subrange_dec
 
 val forall Num 'n, Num 'l, Order 'ord.
   (vector<'n,'l,'ord,bit>, int, int) -> list<bit> effect pure vector_subrange_bl
 
-overload vector_subrange [vector_subrange_inc; vector_subrange_dec; vector_subrange_bl]
+val forall Num 'n, Num 'l, Num 'm, Num 'o, 'l >= 0, 'm <= 'o, 'o <= 'l.
+  (vector<'n,'l,inc,bit>, [:'m:], [:'o:]) -> vector<'m,('o - 'm) + 1,inc,bit> effect pure bitvector_subrange_inc
+
+val forall Num 'n, Num 'l, Num 'm, Num 'o, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
+  (vector<'n,'l,dec,bit>, [:'m:], [:'o:]) -> vector<'m,('m - 'o) + 1,dec,bit> effect pure bitvector_subrange_dec
+
+overload vector_subrange [bitvector_subrange_inc; bitvector_subrange_dec; vector_subrange_inc; vector_subrange_dec; vector_subrange_bl]
 
 (* Type safe vector append *)
-val forall Num 'n1, Num 'l1, Num 'n2, Num 'l2, Order 'o, Type 'a, 'l1 >= 0, 'l2 >= 0.
-  (vector<'n1,'l1,'o,'a>, vector<'n2,'l2,'o,'a>) -> vector<'l1 + 'l2 - 1,'l1 + 'l2,'o,'a> effect pure vec_append
+val extern forall Num 'n1, Num 'l1, Num 'n2, Num 'l2, Order 'o, Type 'a, 'l1 >= 0, 'l2 >= 0.
+  (vector<'n1,'l1,'o,'a>, vector<'n2,'l2,'o,'a>) -> vector<'l1 + 'l2 - 1,'l1 + 'l2,'o,'a> effect pure vec_append = "vector_concat"
 
 val (list<bit>, list<bit>) -> list<bit> effect pure list_append
 
-overload vector_append [vec_append; list_append]
+val extern forall Num 'n1, Num 'l1, Num 'n2, Num 'l2, Order 'o, 'l1 >= 0, 'l2 >= 0.
+  (vector<'n1,'l1,'o,bit>, vector<'n2,'l2,'o,bit>) -> vector<'l1 + 'l2 - 1,'l1 + 'l2,'o,bit> effect pure bitvec_append = "bitvector_concat"
+
+overload vector_append [bitvec_append; vec_append; list_append]
 
 (* Implicit register dereferencing *)
 val cast forall Type 'a. register<'a> -> 'a effect {rreg} reg_deref
@@ -99,12 +112,12 @@ val forall Num 'n, Num 'm, Order 'ord. vector<'n, 'm, 'ord, bit> -> bit effect p
 
 (* Arithmetic *)
 
-val forall Num 'n, Num 'm, Num 'o, Num 'p.
+val extern forall Num 'n, Num 'm, Num 'o, Num 'p.
     ([|'n:'m|], [|'o:'p|]) -> [|'n + 'o:'m + 'p|] effect pure add
 
-val (nat, nat) -> nat effect pure add_nat
+val extern (nat, nat) -> nat effect pure add_nat = "add"
 
-val (int, int) -> int effect pure add_int
+val extern (int, int) -> int effect pure add_int = "add"
 
 val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure add_vec
@@ -115,10 +128,10 @@ val forall Num 'n, Num 'o, Order 'ord.
 val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> (vector<'o, 'n, 'ord, bit>, bit, bit) effect pure add_overflow_vec
 
-val forall Num 'n, Num 'm, Num 'o, Num 'p.
+val extern forall Num 'n, Num 'm, Num 'o, Num 'p.
     ([|'n:'m|], [|'o:'p|]) -> [|'n - 'p:'m - 'o|] effect pure sub
 
-val (int, int) -> int effect pure sub_int
+val extern (int, int) -> int effect pure sub_int = "sub"
 
 val forall Num 'n, Num 'm, Order 'ord.
     (vector<'n,'m,'ord,bit>, int) -> vector<'n,'m,'ord,bit> effect pure sub_vec_int
@@ -146,7 +159,7 @@ overload (deinfix -) [
   sub_int
 ]
 
-val bool -> bit effect pure bool_to_bit
+val extern bool -> bit effect pure bool_to_bit = "bool_to_bitU"
 
 val (int, int) -> int effect pure mul_int
 val forall Num 'n, Num 'o, Order 'ord.
@@ -164,10 +177,10 @@ overload (deinfix *_s) [
   mul_svec
 ]
 
-val (bool, bool) -> bool effect pure bool_xor
+val extern (bool, bool) -> bool effect pure bool_xor
 
-val forall Num 'n, Num 'o, Order 'ord.
-    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure xor_vec
+val extern forall Num 'n, Num 'o, Order 'ord.
+    (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure xor_vec = "bitwise_xor"
 
 overload (deinfix ^) [
   bool_xor;
@@ -189,7 +202,7 @@ overload (deinfix >>) [
 ]
 
 (* Boolean operators *)
-val bool -> bool effect pure bool_not
+val extern bool -> bool effect pure bool_not = "not"
 val (bool, bool) -> bool effect pure bool_or
 val (bool, bool) -> bool effect pure bool_and
 
@@ -226,24 +239,24 @@ val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'or
 val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure lteq_vec
 val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure lt_vec
 
-val (int, int) -> bool effect pure gteq_int
-val (int, int) -> bool effect pure gt_int
-val (int, int) -> bool effect pure lteq_int
-val (int, int) -> bool effect pure lt_int
+val extern (int, int) -> bool effect pure gteq_int = "gteq"
+val extern (int, int) -> bool effect pure gt_int = "gt"
+val extern (int, int) -> bool effect pure lteq_int = "lteq"
+val extern (int, int) -> bool effect pure lt_int = "lt"
 
-val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure lt_range_atom
-val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure lteq_range_atom
-val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure gt_range_atom
-val forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure gteq_range_atom
-val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure lt_atom_range
-val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure lteq_atom_range
-val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure gt_atom_range
-val forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure gteq_atom_range
+val extern forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure lt_range_atom = "lt"
+val extern forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure lteq_range_atom = "lteq"
+val extern forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure gt_range_atom = "gt"
+val extern forall Num 'n, Num 'm, Num 'o. ([|'n:'m|], [:'o:]) -> bool effect pure gteq_range_atom = "gteq"
+val extern forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure lt_atom_range = "lt"
+val extern forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure lteq_atom_range = "lteq"
+val extern forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure gt_atom_range = "gt"
+val extern forall Num 'n, Num 'm, Num 'o. ([:'n:], [|'m:'o|]) -> bool effect pure gteq_atom_range = "gteq"
 
-val forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure lteq_atom_atom
-val forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure gteq_atom_atom
-val forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure lt_atom_atom
-val forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure gt_atom_atom
+val extern forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure lteq_atom_atom = "lteq"
+val extern forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure gteq_atom_atom = "gteq"
+val extern forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure lt_atom_atom = "lt"
+val extern forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure gt_atom_atom = "gt"
 
 overload (deinfix >=) [gteq_atom_atom; gteq_range_atom; gteq_atom_range; gteq_vec; gteq_int]
 overload (deinfix >) [gt_atom_atom; gt_vec; gt_int]
@@ -264,11 +277,16 @@ val (int, int) -> int effect pure quotient
 
 overload (deinfix quot) [quotient]
 
-val (int, int) -> int effect pure modulus
+val (int, int) -> int effect pure modulo
 
-overload (deinfix mod) [modulus]
+overload (deinfix mod) [modulo]
 
-val forall Num 'n, Num 'm, Order 'ord, Type 'a. vector<'n,'m,'ord,'a> -> [:'m:] effect pure length
+val extern forall Num 'n, Num 'm, Order 'ord, Type 'a. vector<'n,'m,'ord,'a> -> [:'m:] effect pure vec_length = "length"
+val forall Type 'a. list<'a> -> nat effect pure list_length
+
+val extern forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [:'m:] effect pure bitvector_length = "bvlength"
+
+overload length [bitvector_length; vector_length; list_length]
 
 val cast forall Num 'n. [:'n:] -> [|'n|] effect pure upper
 
@@ -276,4 +294,3 @@ typedef option = const union forall Type 'a. {
     None;
     'a Some
 }
-

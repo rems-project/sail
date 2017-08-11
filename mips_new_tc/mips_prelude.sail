@@ -190,7 +190,7 @@ register (TLBEntry) TLBEntry61
 register (TLBEntry) TLBEntry62
 register (TLBEntry) TLBEntry63
 
-let (vector <0, 64, inc, (TLBEntry)>) TLBEntries = [
+let (vector <0, 64, inc, (register<TLBEntry>)>) TLBEntries = [
 TLBEntry00,
 TLBEntry01,
 TLBEntry02,
