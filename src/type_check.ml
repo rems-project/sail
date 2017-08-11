@@ -1320,6 +1320,13 @@ let rec unify_nexps l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (ne
            match nexp_aux2 with
            | Nexp_times (n2a, n2b) when prove env (NC_aux (NC_fixed (n1a, n2a), Parse_ast.Unknown)) ->
               unify_nexps l env goals n1b n2b
+           | Nexp_constant c2 ->
+              begin
+                match n1a with
+                | Nexp_aux (Nexp_constant c1,_) when c2 mod c1 = 0 ->
+                   unify_nexps l env goals n1b (mk_nexp (Nexp_constant (c2 / c1)))
+                | _ -> unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
+              end
            | _ -> unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
          end
        else if KidSet.is_empty (nexp_frees n1b)
