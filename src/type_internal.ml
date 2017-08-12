@@ -1901,8 +1901,8 @@ let int8_t = {t = Tapp("range", [TA_nexp (mk_neg (mk_2nc (mk_c_int 7) (big_int_o
                                  TA_nexp (mk_c_int 127)])}
 let int16_t = {t = Tapp("range", [TA_nexp (mk_neg (mk_2nc (mk_c_int 15) (big_int_of_int 32768)));
                                   TA_nexp (mk_c_int 32767)])}
-let int32_t = {t = Tapp("range", [TA_nexp (mk_neg (mk_2nc (mk_c_int 31) (big_int_of_int 2147483648))) ;
-                                  TA_nexp (mk_c_int 2147483647)])}
+let int32_t = {t = Tapp("range", [TA_nexp (mk_neg (mk_2nc (mk_c_int 31) (big_int_of_string "2147483648"))) ;
+                                  TA_nexp (mk_c (big_int_of_string "2147483647"))])}
 let int64_t = {t = Tapp("range", [TA_nexp (mk_neg (mk_2nc (mk_c_int 63) (big_int_of_string "9223372036854775808")));
                                   TA_nexp (mk_c (big_int_of_string "9223372036854775807"))])}
 
