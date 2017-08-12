@@ -266,7 +266,7 @@ let hardware_quot (a:integer) (b:integer) : integer =
   if ((a<0) = (b<0)) then
     q  (* same sign -- result positive *)
   else
-    ~q (* different sign -- result negative *)
+    integerNegate q (* different sign -- result negative *)
 
 let quot_signed = hardware_quot
 
@@ -956,4 +956,3 @@ let diafp_to_dia reginfo = function
   | DIAFP_concrete v -> DIA_concrete_address (address_of_bitv v)
   | DIAFP_reg r -> DIA_register (regfp_to_reg reginfo r)
 end
-
