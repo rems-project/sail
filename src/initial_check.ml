@@ -73,7 +73,7 @@ let rec kind_to_string kind = match kind.k with
   | K_Lam (kinds,kind) -> "Lam [" ^ string_of_list ", " kind_to_string kinds ^ "] -> " ^ (kind_to_string kind)
 
 (*Envs is a tuple of used names (currently unused), map from id to kind, default order for vector types and literal vectors *)
-type envs = Nameset.t * kind Envmap.t * order 
+type envs = Nameset.t * kind Envmap.t * order
 type 'a envs_out = 'a * envs
 
 let id_to_string (Id_aux(id,l)) =
@@ -236,7 +236,7 @@ and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
         let n1 = to_ast_nexp k_env t1 in
         let n2 = to_ast_nexp k_env t2 in
         Nexp_aux (Nexp_minus (n1, n2), l)
-     | _ -> typ_error l "Requred an item of kind Nat, encountered an illegal form for this kind" None None None)
+     | _ -> typ_error l "Required an item of kind Nat, encountered an illegal form for this kind" None None None)
 
 and to_ast_order (k_env : kind Envmap.t) (def_ord : order) (o: Parse_ast.atyp) : Ast.order =
   match o with
