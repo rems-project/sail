@@ -228,10 +228,10 @@ function ea ea_src ((size) sz, (dest_src) ds) =
     case (R_rm (_, v)) -> ea_rm (sz, v)
   }
 
-function ea ea_imm_rm ((size) sz, (imm_rm) i_rm) =
+function ea ea_imm_rm ((imm_rm) i_rm) =
   switch i_rm {
-    case (Rm (v)) -> ea_rm (sz, v)
-    case (Imm (v)) -> Ea_i (sz, v)
+    case (Rm (v)) -> ea_rm (Sz64, v)
+    case (Imm (v)) -> Ea_i (Sz64, v)
   }
 
 function qword restrict_size ((size) sz, (qword) imm) =
@@ -553,7 +553,7 @@ function unit push_aux ((qword) w) =
 
 function unit pop ((rm) r) = wEA (ea_rm (Sz64,r)) := pop_aux()
 function unit pop_rip () = RIP := pop_aux()
-function unit push ((imm_rm) i) = push_aux (EA (ea_imm_rm (Sz64, i)))
+function unit push ((imm_rm) i) = push_aux (EA (ea_imm_rm (i)))
 function unit push_rip () = push_aux (RIP)
 
 function unit drop ((qword) i) = if i[7 ..0] != 0 then () else RSP := RSP + i
@@ -586,7 +586,7 @@ union ast member imm_rm CALL
 function clause execute (CALL (i)) =
 {
   push_rip();
-  jump_to_ea (ea_imm_rm (Sz64, i))
+  jump_to_ea (ea_imm_rm (i))
 }
 
 (* ==========================================================================
