@@ -154,6 +154,7 @@ let rec pp_format_typ_lem (Typ_aux(t,l)) =
                               (pp_format_effects_lem efct) ^ ")"
     | Typ_tup(typs) -> "(Typ_tup [" ^ (list_format "; " pp_format_typ_lem typs) ^ "])"
     | Typ_app(id,args) -> "(Typ_app " ^ (pp_format_id_lem id) ^ " [" ^ (list_format "; " pp_format_typ_arg_lem args) ^ "])"
+    | Typ_exist(kids,nc,typ) -> "(Typ_exist ([" ^ list_format ";" pp_format_var_lem kids ^ "], " ^ pp_format_nexp_constraint_lem nc ^ ", " ^ pp_format_typ_lem typ ^ "))"
     | Typ_wild -> "Typ_wild") ^ " " ^
     (pp_format_l_lem l) ^ ")"
 and pp_format_nexp_lem (Nexp_aux(n,l)) =
@@ -212,14 +213,7 @@ and pp_format_typ_arg_lem (Typ_arg_aux(t,l)) =
   | Typ_arg_order(o) -> "(Typ_arg_order " ^ pp_format_ord_lem o ^ ")"
   | Typ_arg_effect(e) -> "(Typ_arg_effect " ^ pp_format_effects_lem e ^ ")") ^ " " ^
   (pp_format_l_lem l) ^ ")"
-
-let pp_lem_typ ppf t = base ppf (pp_format_typ_lem t)
-let pp_lem_nexp ppf n = base ppf (pp_format_nexp_lem n)
-let pp_lem_ord ppf o = base ppf (pp_format_ord_lem o)
-let pp_lem_effects ppf e = base ppf (pp_format_effects_lem e)
-let pp_lem_beffect ppf be = base ppf (pp_format_base_effect_lem be)
-
-let rec pp_format_nexp_constraint_lem (NC_aux(nc,l)) =
+and pp_format_nexp_constraint_lem (NC_aux(nc,l)) =
   "(NC_aux " ^
   (match nc with
   | NC_fixed(n1,n2) -> "(NC_fixed " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
@@ -234,6 +228,12 @@ let rec pp_format_nexp_constraint_lem (NC_aux(nc,l)) =
       list_format "; " string_of_int bounds ^
       "])") ^ " " ^
   (pp_format_l_lem l) ^ ")"
+
+let pp_lem_typ ppf t = base ppf (pp_format_typ_lem t)
+let pp_lem_nexp ppf n = base ppf (pp_format_nexp_lem n)
+let pp_lem_ord ppf o = base ppf (pp_format_ord_lem o)
+let pp_lem_effects ppf e = base ppf (pp_format_effects_lem e)
+let pp_lem_beffect ppf be = base ppf (pp_format_base_effect_lem be)
 
 let pp_lem_nexp_constraint ppf nc = base ppf (pp_format_nexp_constraint_lem nc)
 

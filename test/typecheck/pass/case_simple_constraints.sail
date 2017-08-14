@@ -1,9 +1,9 @@
 
-val forall Nat 'n, Nat 'm. ([:'n + 20:], [:'m:]) -> [:'n + 20 + 'm:] effect pure plus
+val extern forall Nat 'n, Nat 'm. ([:'n + 20:], [:'m:]) -> [:'n + 20 + 'm:] effect pure plus = "add"
 
-val forall Nat 'n, 'n <= -10. [:'n:] -> [:'n:] effect pure minus_ten_id 
+val extern forall Nat 'n, 'n <= -10. [:'n:] -> [:'n:] effect pure minus_ten_id = "id"
 
-val forall Nat 'n, 'n >= 10. [:'n:] -> [:'n:] effect pure ten_id
+val extern forall Nat 'n, 'n >= 10. [:'n:] -> [:'n:] effect pure ten_id = "id"
 
 val forall Nat 'N, 'N >= 63. [|10:'N|] -> [|10:'N|] effect pure branch
 

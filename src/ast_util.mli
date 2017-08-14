@@ -119,6 +119,8 @@ end
 
 val nexp_frees : nexp -> KidSet.t
 val nexp_identical : nexp -> nexp -> bool
+val is_nexp_constant : nexp -> bool
+val simplify_nexp : nexp -> nexp
 
 val is_number : typ -> bool
 val is_vector_typ : typ -> bool

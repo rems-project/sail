@@ -411,6 +411,91 @@ let remove_bound env pat =
   let bound = bindings_from_pat pat in
   List.fold_left (fun sub v -> ISubst.remove v env) env bound
 
+(* Remove explicit existential types from the AST, so that the sizes of
+   bitvectors will be filled in throughout.
+
+   Problems: there might be other existential types that we want to keep (e.g.
+   because they describe conditions needed for a vector index to be in range),
+   and inference might not be able to find a sufficiently precise type. *)
+let rec deexist_exp (E_aux (e,(l,(annot : Type_check.tannot))) as exp) =
+  let re e = E_aux (e,(l,annot)) in
+  match e with
+  | E_block es -> re (E_block (List.map deexist_exp es))
+  | E_nondet es -> re (E_nondet (List.map deexist_exp es))
+  | E_id _
+  | E_lit _
+  | E_sizeof _
+  | E_constraint _
+    -> (*Type_check.strip_exp*) exp
+  | E_cast (Typ_aux (Typ_exist (kids, nc, ty),l),(E_aux (_,(l',annot')) as e)) ->
+(*     let env,_ = env_typ_expected l' annot' in
+     let plain_e = deexist_exp e in
+     let E_aux (_,(_,annot'')) = Type_check.infer_exp env plain_e in
+*)
+     deexist_exp e
+  | E_cast (ty,e) -> re (E_cast (ty,deexist_exp e))
+  | E_app (id,args) -> re (E_app (id,List.map deexist_exp args))
+  | E_app_infix (e1,id,e2) -> re (E_app_infix (deexist_exp e1,id,deexist_exp e2))
+  | E_tuple es -> re (E_tuple (List.map deexist_exp es))
+  | E_if (e1,e2,e3) -> re (E_if (deexist_exp e1,deexist_exp e2,deexist_exp e3))
+  | E_for (id,e1,e2,e3,ord,e4) ->
+     re (E_for (id,deexist_exp e1,deexist_exp e2,deexist_exp e3,ord,deexist_exp e4))
+  | E_vector es -> re (E_vector (List.map deexist_exp es))
+  | E_vector_indexed (ies,def) ->
+     re (E_vector_indexed
+           (List.map (fun (i,e) -> (i,deexist_exp e)) ies,
+            match def with
+            | Def_val_aux (Def_val_empty,(l,ann)) -> Def_val_aux (Def_val_empty,(l,ann))
+            | Def_val_aux (Def_val_dec e,(l,ann)) -> Def_val_aux (Def_val_dec (deexist_exp e),(l,ann))))
+  | E_vector_access (e1,e2) -> re (E_vector_access (deexist_exp e1,deexist_exp e2))
+  | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (deexist_exp e1,deexist_exp e2,deexist_exp e3))
+  | E_vector_update (e1,e2,e3) -> re (E_vector_update (deexist_exp e1,deexist_exp e2,deexist_exp e3))
+  | E_vector_update_subrange (e1,e2,e3,e4) ->
+     re (E_vector_update_subrange (deexist_exp e1,deexist_exp e2,deexist_exp e3,deexist_exp e4))
+  | E_vector_append (e1,e2) -> re (E_vector_append (deexist_exp e1,deexist_exp e2))
+  | E_list es -> re (E_list (List.map deexist_exp es))
+  | E_cons (e1,e2) -> re (E_cons (deexist_exp e1,deexist_exp e2))
+  | E_record _ -> (*Type_check.strip_exp*) exp (* TODO *)
+  | E_record_update  _ -> (*Type_check.strip_exp*) exp (* TODO *)
+  | E_field (e1,fld) -> re (E_field (deexist_exp e1,fld))
+  | E_case (e1,cases) -> re (E_case (deexist_exp e1, List.map deexist_pexp cases))
+  | E_let (lb,e1) -> re (E_let (deexist_letbind lb, deexist_exp e1))
+  | E_assign (le,e1) -> re (E_assign (deexist_lexp le, deexist_exp e1))
+  | E_exit e1 -> re (E_exit (deexist_exp e1))
+  | E_return e1 -> re (E_return (deexist_exp e1))
+  | E_assert (e1,e2) -> re (E_assert (deexist_exp e1,deexist_exp e2))
+and deexist_pexp (Pat_aux (pe,(l,annot))) =
+  match pe with
+  | Pat_exp (p,e) -> Pat_aux (Pat_exp ((*Type_check.strip_pat*) p,deexist_exp e),(l,annot))
+  | Pat_when (p,e1,e2) -> Pat_aux (Pat_when ((*Type_check.strip_pat*) p,deexist_exp e1,deexist_exp e2),(l,annot))
+and deexist_letbind (LB_aux (lb,(l,annot))) =
+  match lb with (* TODO, drop tysc if there's an exist? Do they even appear here? *)
+  | LB_val_explicit (tysc,p,e) -> LB_aux (LB_val_explicit (tysc,(*Type_check.strip_pat*) p,deexist_exp e),(l,annot))
+  | LB_val_implicit (p,e) -> LB_aux (LB_val_implicit ((*Type_check.strip_pat*) p,deexist_exp e),(l,annot))
+and deexist_lexp (LEXP_aux (le,(l,annot))) =
+  let re le = LEXP_aux (le,(l,annot)) in
+  match le with
+  | LEXP_id id -> re (LEXP_id id)
+  | LEXP_memory (id,es) -> re (LEXP_memory (id,List.map deexist_exp es))
+  | LEXP_cast (Typ_aux (Typ_exist _,_),id) -> re (LEXP_id id)
+  | LEXP_cast (ty,id) -> re (LEXP_cast (ty,id))
+  | LEXP_tup lexps -> re (LEXP_tup (List.map deexist_lexp lexps))
+  | LEXP_vector (le,e) -> re (LEXP_vector (deexist_lexp le, deexist_exp e))
+  | LEXP_vector_range (le,e1,e2) -> re (LEXP_vector_range (deexist_lexp le, deexist_exp e1, deexist_exp e2))
+  | LEXP_field (le,id) -> re (LEXP_field (deexist_lexp le, id))
+
+let deexist_funcl (FCL_aux (FCL_Funcl (id,p,e),(l,annot))) =
+  FCL_aux (FCL_Funcl (id, (*Type_check.strip_pat*) p, deexist_exp e),(l,annot))
+
+let deexist_def = function
+  | DEF_kind kd -> DEF_kind kd
+  | DEF_type td -> DEF_type td
+  | DEF_fundef (FD_aux (FD_function (recopt,topt,effopt,fcls),(l,annot))) ->
+     DEF_fundef (FD_aux (FD_function (recopt,topt,effopt,List.map deexist_funcl fcls),(l,annot)))
+  | x -> x
+
+let deexist (Defs defs) = Defs (List.map deexist_def defs)
+
 
 (* Attempt simple pattern matches *)
 let lit_match = function
@@ -1056,5 +1141,5 @@ let split_defs splits defs =
     in
     Defs (List.concat (List.map map_def defs))
   in
-  map_locs splits defs'
+  deexist (map_locs splits defs')
 

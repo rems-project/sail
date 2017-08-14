@@ -1,5 +1,5 @@
-val cast forall Nat 'n, Order 'ord. [:1:] -> vector<'n,1,'ord,bit> effect pure cast_one_bv
-val cast forall Nat 'n, Order 'ord. [:0:] -> vector<'n,1,'ord,bit> effect pure cast_zero_bv
+val cast forall Nat 'n, Order 'ord. [:1:] -> vector<'n,1,'ord,bit> effect pure cast_1_vec
+val cast forall Nat 'n, Order 'ord. [:0:] -> vector<'n,1,'ord,bit> effect pure cast_0_vec
     
 default Order dec
 

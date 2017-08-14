@@ -1,13 +1,16 @@
 default Order inc
 
-val extern forall Num 'n. (bit['n], bit['n]) -> bit['n] effect pure bv_add = "bv_add_inc"
+val extern forall Num 'n. (bit['n], bit['n]) -> bit['n] effect pure bv_add = "add_vec"
 
-val forall Num 'n, Num 'm, Num 'o, Num 'p, Type 'a.
-  (vector<'n,'m,inc,'a>, vector<'o,'p,inc,'a>) -> vector<'n,'m + 'p,inc,'a>
-  effect pure vector_append_inc
+val extern forall Num 'n, Num 'l, Num 'm, Num 'o, 'l >= 0, 'm <= 'o, 'o <= 'l.
+  (vector<'n,'l,inc,bit>, [:'m:], [:'o:]) -> vector<'m,'o + 1 - 'm,inc,bit> effect pure vector_subrange = "bitvector_subrange_inc"
+
+val forall Num 'n, Num 'm, Num 'o, Num 'p.
+  (vector<'n,'m,inc,bit>, vector<'o,'p,inc,bit>) -> vector<'n,'m + 'p,inc,bit>
+  effect pure bitvector_concat
 
 overload (deinfix +) [bv_add]
-overload vector_append [vector_append_inc]
+overload vector_append [bitvector_concat]
 
 val (bit[3], bit[3]) -> bit[3] effect pure test
 
