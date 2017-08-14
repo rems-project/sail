@@ -559,6 +559,26 @@ let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
   | L_undef, _ | _, L_undef -> None
   | _ -> Some (l1 = l2)
 
+(* TODO: we should really specify which functions are equality in the prelude,
+   rather than fixing them here. *)
+let eq_fns = [Id "eq_int"; Id "eq_vec"; Id "eq_string"; Id "eq_real"]
+let neq_fns = [Id "neq_anything"]
+
+let try_app (l,ann) (Id_aux (id,_),args) =
+  let is_eq = List.mem id eq_fns in
+  let is_neq = (not is_eq) && List.mem id neq_fns in
+  if is_eq || is_neq then
+    let new_l = Generated l in
+    match args with
+    | [E_aux (E_lit l1,_); E_aux (E_lit l2,_)] ->
+       let lit b = if b then L_true else L_false in
+       let lit b = lit (if is_eq then b else not b) in
+       (match lit_eq l1 l2 with
+       | None -> None
+       | Some b -> Some (E_aux (E_lit (L_aux (lit b,new_l)),(l,ann))))
+    | _ -> None
+  else None
+
 
 let try_app_infix (l,ann) (E_aux (e1,ann1)) (Id_aux (id,_)) (E_aux (e2,ann2)) =
   let i = match id with Id x -> x | DeIid x -> x in
@@ -676,8 +696,11 @@ let split_defs splits defs =
     | E_cast (t,e') -> re (E_cast (t, const_prop_exp substs e'))
     | E_app (id,es) ->
        let es' = List.map (const_prop_exp substs) es in
-       (match const_prop_try_fn (id,es') with
-       | None -> re (E_app (id,es'))
+       (match try_app (l,annot) (id,es') with
+       | None ->
+          (match const_prop_try_fn (id,es') with
+          | None -> re (E_app (id,es'))
+          | Some r -> r)
        | Some r -> r)
     | E_app_infix (e1,id,e2) ->
        let e1',e2' = const_prop_exp substs e1,const_prop_exp substs e2 in
