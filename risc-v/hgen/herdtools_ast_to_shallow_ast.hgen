@@ -1,0 +1,61 @@
+| `RISCVStopFetching -> EBREAK
+| `RISCVUTYPE(imm, rd, op) -> UTYPE(
+      translate_imm20 "imm" imm,
+      translate_reg "rd" rd,
+      translate_uop op)
+| `RISCVJAL(imm, rd) -> JAL0(
+      translate_imm20 "imm" imm,
+      translate_reg "rd" rd)
+| `RISCVJALR(imm, rs, rd) -> JALR0(
+      translate_imm12 "imm" imm,
+      translate_reg "rs" rd,
+      translate_reg "rd" rd)
+| `RISCVBType(imm, rs2, rs1, op) -> BTYPE(
+      translate_imm12 "imm" imm,
+      translate_reg "rs2" rs2,
+      translate_reg "rs1" rs1,
+      translate_bop op)
+| `RISCVIType(imm, rs1, rd, op) -> ITYPE(
+      translate_imm12 "imm" imm,
+      translate_reg "rs1" rs1,
+      translate_reg "rd" rd,
+      translate_iop op)
+| `RISCVShiftIop(imm, rs, rd, op) -> SHIFTIOP(
+      translate_imm6 "imm" imm,
+      translate_reg "rs" rs,
+      translate_reg "rd" rd,
+      translate_sop op)
+| `RISCVRType (rs2, rs1, rd, op) -> RTYPE (
+      translate_reg "rs2" rs2,
+      translate_reg "rs1" rs1,
+      translate_reg "rd" rd,
+      translate_rop op)
+| `RISCVLoad(imm, rs, rd, unsigned, width) -> LOAD(
+      translate_imm12 "imm" imm,
+      translate_reg "rs" rs,
+      translate_reg "rd" rd,
+      translate_bool "unsigned" unsigned,
+      translate_wordWidth width)
+| `RISCVStore(imm, rs, rd, width) -> STORE (
+      translate_imm12 "imm" imm,
+      translate_reg "rs" rs,
+      translate_reg "rd" rd,
+      translate_wordWidth width)
+| `RISCVADDIW(imm, rs, rd) -> ADDIW(
+      translate_imm12 "imm" imm,
+      translate_reg "rs" rs,
+      translate_reg "rd" rd)
+| `RISCVSHIFTW(imm, rs, rd, op) -> SHIFTW(
+      translate_imm5 "imm" imm,
+      translate_reg "rs" rs,
+      translate_reg "rd" rd,
+      translate_sop op)
+| `RISCVRTYPEW(rs2, rs1, rd, op) -> RTYPEW(
+      translate_reg "rs2" rs2,
+      translate_reg "rs1" rs1,
+      translate_reg "rd" rd,
+      translate_ropw op)
+| `RISCVFENCE -> FENCE (
+  translate_imm4 "pred" 0,
+  translate_imm4 "succ" 0
+)

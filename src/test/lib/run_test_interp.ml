@@ -45,7 +45,7 @@ open Interp_inter_imp ;;
 open Sail_impl_base ;;
 
 let doit () =
-  let context = build_context Test_lem_ast.defs [] [] [] [] [] [] [] None [] in
+  let context = build_context false Test_lem_ast.defs [] [] [] [] [] [] [] None [] in
   translate_address context E_little_endian "run" None (address_of_integer (Nat_big_num.of_int 0));;
 
 doit () ;;

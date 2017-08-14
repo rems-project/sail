@@ -1,0 +1,70 @@
+let translate_out_big_bit = Sail_values.unsigned
+
+let translate_out_int inst = (Nat_big_num.to_int (translate_out_big_bit inst))
+let translate_out_signed_int inst bits = 
+    let i = (Nat_big_num.to_int (translate_out_big_bit inst)) in
+    if (i >= (1 lsl (bits - 1))) then
+    (i - (1 lsl bits)) else
+    i
+
+let translate_out_ireg ireg = IReg (int_to_ireg (translate_out_int ireg))
+
+let translate_out_uop op = match op with
+  | LUI0  -> RISCVLUI  
+  | AUIPC -> RISCVAUIPC
+
+let translate_out_bop op = match op with
+  | BEQ0 -> RISCVBEQ 
+  | BNE  -> RISCVBNE 
+  | BLT  -> RISCVBLT 
+  | BGE  -> RISCVBGE 
+  | BLTU -> RISCVBLTU
+  | BGEU -> RISCVBGEU
+
+let translate_out_iop op = match op with
+  | ADDI0  -> RISCVADDI 
+  | SLTI0  -> RISCVSLTI 
+  | SLTIU0 -> RISCVSLTIU
+  | XORI0  -> RISCVXORI 
+  | ORI0   -> RISCVORI  
+  | ANDI0  -> RISCVANDI 
+
+let translate_out_sop op = match op with
+  | SLLI -> RISCVSLLI
+  | SRLI -> RISCVSRLI
+  | SRAI -> RISCVSRAI
+
+let translate_out_rop op = match op with
+  | ADD0  -> RISCVADD 
+  | SUB0  -> RISCVSUB 
+  | SLL0  -> RISCVSLL 
+  | SLT0  -> RISCVSLT 
+  | SLTU0 -> RISCVSLTU
+  | XOR0  -> RISCVXOR 
+  | SRL0  -> RISCVSRL 
+  | SRA0  -> RISCVSRA 
+  | OR0   -> RISCVOR  
+  | AND0  -> RISCVAND 
+
+let translate_out_ropw op = match op with
+  | ADDW  -> RISCVADDW
+  | SUBW  -> RISCVSUBW
+  | SLLW  -> RISCVSLLW
+  | SRLW  -> RISCVSRLW
+  | SRAW  -> RISCVSRAW
+
+let translate_out_wordWidth op = match op with
+  | BYTE   -> RISCVBYTE  
+  | HALF   -> RISCVHALF  
+  | WORD   -> RISCVWORD  
+  | DOUBLE -> RISCVDOUBLE
+
+let translate_out_bool = function
+  | Sail_values.B1  -> true
+  | Sail_values.B0 -> false
+  | _ -> failwith "translate_out_bool Undef"
+
+let translate_out_simm20 imm = translate_out_signed_int imm 20
+let translate_out_simm12 imm = translate_out_signed_int imm 12
+let translate_out_imm6 imm = translate_out_int imm
+let translate_out_imm5 imm = translate_out_int imm
