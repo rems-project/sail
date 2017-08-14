@@ -1852,7 +1852,10 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
             begin
               try
                 let nc = assert_constraint const_expr in
-                check_block l (Env.add_constraint nc env) exps typ
+                let cexp = annot_exp (E_constraint nc) bool_typ in
+                let checked_msg = crule check_exp env assert_msg string_typ in
+                let texp = annot_exp (E_assert (cexp, checked_msg)) unit_typ in
+                texp :: check_block l (Env.add_constraint nc env) exps typ
               with
               | Not_a_constraint -> check_block l env exps typ
             end
