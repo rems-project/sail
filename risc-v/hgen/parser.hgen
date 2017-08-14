@@ -22,3 +22,5 @@
   { `RISCVSHIFTW ($6, $4, $2, $1.op) }
 | RTYPEW reg COMMA reg COMMA reg
   { `RISCVRTYPEW ($6, $4, $2, $1.op) }
+| FENCE
+  { `RISCVFENCE }

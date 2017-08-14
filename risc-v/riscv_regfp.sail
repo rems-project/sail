@@ -29,7 +29,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
             let (bit[64]) offset = EXTS(imm) in
-            Nias := [|| NIAFP_register (RFull(GPRstr[rs])) ||];
+            Nias := [|| NIAFP_register (RFull(GPRstr[rs])) ||]; (* XXX this should br rs + offset... *)
      }
      case (BTYPE ( imm, rs2, rs1, op)) -> {
             if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
@@ -75,6 +75,9 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
             if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+     }
+     case (FENCE(pred, succ)) -> {
+          ik := IK_barrier (Barrier_MIPS_SYNC);
      }
   };
   (iR,oR,aR,Nias,Dia,ik)

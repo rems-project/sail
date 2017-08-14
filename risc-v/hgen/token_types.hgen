@@ -10,3 +10,4 @@ type token_Store    = {width : wordWidth }
 type token_ADDIW    = unit
 type token_SHIFTW   = {op : riscvSop }
 type token_RTYPEW   = {op : riscvRopw }
+type token_FENCE    = unit

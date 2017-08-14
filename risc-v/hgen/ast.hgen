@@ -10,3 +10,4 @@
 | `RISCVADDIW of bit12 * reg * reg
 | `RISCVSHIFTW of bit5 * reg * reg * riscvSop
 | `RISCVRTYPEW of reg * reg * reg * riscvRopw
+| `RISCVFENCE

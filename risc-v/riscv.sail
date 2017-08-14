@@ -55,6 +55,7 @@ function unit wGPR((regno) r, (regval) v) =
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval
+val extern unit -> unit effect { barr } MEM_sync
 
 (* Ideally these would be sail builtin *)
 function (bit[64]) shift_right_arith64 ((bit[64]) v, (bit[6]) shift) =
@@ -281,9 +282,24 @@ function clause execute (RTYPEW(rs2, rs1, rd, op)) =
   } in
   wGPR(rd, EXTS(result))
 
+union ast member (bit[4], bit[4]) FENCE
+function clause decode (0b0000 : (bit[4]) pred : (bit[4]) succ : 0b00000 : 0b000 : 0b00000 : 0b0001111) = Some(FENCE (pred, succ))
+function clause execute (FENCE(pred, succ)) = {
+ MEM_sync(); (* XXX use pred and succ *)
+}
+
+union ast member unit FENCEI
+function clause decode (0b0000 : 0b0000 : 0b0000 : 0b00000 : 0b001 : 0b00000 : 0b0001111) = Some(FENCEI)
+function clause execute FENCEI = () (* XXX TODO *)
+
+union ast member unit ECALL
+function clause decode (0b000000000000 : 0b00000 : 0b000 : 0b00000 : 0b1110011) = Some(ECALL ())
+function clause execute ECALL = ()
+
 union ast member unit EBREAK
 function clause decode (0b000000000001 : 0b00000 : 0b000 : 0b00000 : 0b1110011) = Some(EBREAK ())
 function clause execute EBREAK = { exit () }
+
 
 function clause decode _ = None
 

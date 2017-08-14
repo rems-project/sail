@@ -58,3 +58,4 @@
 "srlw", RTYPEW{op=RISCVSRLW};
 "sraw", RTYPEW{op=RISCVSRAW};
 
+"fence", FENCE ();
