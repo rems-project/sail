@@ -149,6 +149,8 @@ let vector_typ n m ord typ =
                     mk_typ_arg (Typ_arg_order ord);
                     mk_typ_arg (Typ_arg_typ typ)]))
 
+let exc_typ = mk_id_typ (mk_id "exception")
+
 let is_range (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)])
@@ -1874,6 +1876,18 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
           Pat_aux (Pat_when (tpat, checked_guard, crule check_exp env case typ), (l, None))
      in
      annot_exp (E_case (inferred_exp, List.map (fun case -> check_case case typ) cases)) typ
+  | E_try (exp, cases), _ ->
+     let checked_exp = crule check_exp env exp typ in
+     let check_case pat typ = match pat with
+       | Pat_aux (Pat_exp (pat, case), (l, _)) ->
+          let tpat, env = bind_pat env pat exc_typ in
+          Pat_aux (Pat_exp (tpat, crule check_exp env case typ), (l, None))
+       | Pat_aux (Pat_when (pat, guard, case), (l, _)) ->
+          let tpat, env = bind_pat env pat exc_typ in
+          let checked_guard = check_exp env guard bool_typ in
+          Pat_aux (Pat_when (tpat, checked_guard, crule check_exp env case typ), (l, None))
+     in
+     annot_exp (E_try (checked_exp, List.map (fun case -> check_case case typ) cases)) typ
   | E_cons (x, xs), _ ->
      begin
        match is_list (Env.expand_synonyms env typ) with
@@ -1938,6 +1952,9 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_exit exp, _ ->
      let checked_exp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
      annot_exp_effect (E_exit checked_exp) typ (mk_effect [BE_escape])
+  | E_throw exp, _ ->
+     let checked_exp = crule check_exp env exp exc_typ in
+     annot_exp_effect (E_throw checked_exp) typ (mk_effect [BE_escape])
   | E_vector vec, _ ->
      begin
        let (start, len, ord, vtyp) = destructure_vec_typ l env typ in
@@ -2726,6 +2743,11 @@ and propagate_exp_effect_aux = function
      let p_cases = List.map propagate_pexp_effect cases in
      let case_eff = List.fold_left union_effects no_effect (List.map snd p_cases) in
      E_case (p_exp, List.map fst p_cases), union_effects (effect_of p_exp) case_eff
+  | E_try (exp, cases) ->
+     let p_exp = propagate_exp_effect exp in
+     let p_cases = List.map propagate_pexp_effect cases in
+     let case_eff = List.fold_left union_effects no_effect (List.map snd p_cases) in
+     E_try (p_exp, List.map fst p_cases), union_effects (effect_of p_exp) case_eff
   | E_for (v, f, t, step, ord, body) ->
      let p_f = propagate_exp_effect f in
      let p_t = propagate_exp_effect t in
@@ -2753,6 +2775,9 @@ and propagate_exp_effect_aux = function
   | E_exit exp ->
      let p_exp = propagate_exp_effect exp in
      E_exit p_exp, effect_of p_exp
+  | E_throw exp ->
+     let p_exp = propagate_exp_effect exp in
+     E_throw p_exp, effect_of p_exp
   | E_return exp ->
      let p_exp = propagate_exp_effect exp in
      E_return p_exp, effect_of p_exp

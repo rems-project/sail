@@ -77,11 +77,13 @@ and map_exp_annot_aux f = function
   | E_record_update (exp, fexps) -> E_record_update (map_exp_annot f exp, map_fexps_annot f fexps)
   | E_field (exp, id) -> E_field (map_exp_annot f exp, id)
   | E_case (exp, cases) -> E_case (map_exp_annot f exp, List.map (map_pexp_annot f) cases)
+  | E_try (exp, cases) -> E_try (map_exp_annot f exp, List.map (map_pexp_annot f) cases)
   | E_let (letbind, exp) -> E_let (map_letbind_annot f letbind, map_exp_annot f exp)
   | E_assign (lexp, exp) -> E_assign (map_lexp_annot f lexp, map_exp_annot f exp)
   | E_sizeof nexp -> E_sizeof nexp
   | E_constraint nc -> E_constraint nc
   | E_exit exp -> E_exit (map_exp_annot f exp)
+  | E_throw exp -> E_throw (map_exp_annot f exp)
   | E_return exp -> E_return (map_exp_annot f exp)
   | E_assert (test, msg) -> E_assert (map_exp_annot f test, map_exp_annot f msg)
   | E_internal_cast (annot, exp) -> E_internal_cast (f annot, map_exp_annot f exp)
@@ -279,6 +281,8 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_tuple exps -> "(" ^ string_of_list ", " string_of_exp exps ^ ")"
   | E_case (exp, cases) ->
      "switch " ^ string_of_exp exp ^ " { case " ^ string_of_list " case " string_of_pexp cases ^ "}"
+  | E_try (exp, cases) ->
+     "try " ^ string_of_exp exp ^ " catch { case " ^ string_of_list " case " string_of_pexp cases ^ "}"
   | E_let (letbind, exp) -> "let " ^ string_of_letbind letbind ^ " in " ^ string_of_exp exp
   | E_assign (lexp, bind) -> string_of_lexp lexp ^ " := " ^ string_of_exp bind
   | E_cast (typ, exp) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_exp exp
@@ -297,6 +301,7 @@ let rec string_of_exp (E_aux (exp, _)) =
      ^ string_of_exp body
   | E_assert (test, msg) -> "assert(" ^ string_of_exp test ^ ", " ^ string_of_exp msg ^ ")"
   | E_exit exp -> "exit " ^ string_of_exp exp
+  | E_throw exp -> "throw " ^ string_of_exp exp
   | E_cons (x, xs) -> string_of_exp x ^ " :: " ^ string_of_exp xs
   | E_list xs -> "[||" ^ string_of_list ", " string_of_exp xs ^ "||]"
   | _ -> "INTERNAL"

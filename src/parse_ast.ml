@@ -283,6 +283,8 @@ exp_aux =  (* Expression *)
  | E_sizeof of atyp
  | E_constraint of n_constraint
  | E_exit of exp
+ | E_throw of exp
+ | E_try of exp * pexp list
  | E_return of exp
  | E_assert of exp * exp
 
