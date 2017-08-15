@@ -54,7 +54,7 @@ let exit _ s = [(Right (), s)]
 val early_return : forall 'regs 'r. 'r -> MR 'regs unit 'r
 let early_return r s = [(Right (Just r), s)]
 
-val catch_early_return : forall 'regs 'a 'r. MR 'regs 'a 'a -> M 'regs 'a
+val catch_early_return : forall 'regs 'a. MR 'regs 'a 'a -> M 'regs 'a
 let catch_early_return m s =
   List.map
     (function
