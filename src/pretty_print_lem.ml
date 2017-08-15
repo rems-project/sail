@@ -670,7 +670,8 @@ let doc_exp_lem, doc_let_lem =
                                           (doc_fexp regtypes early_ret recordtyp) fexps)) ^^ space) in
        if aexp_needed then parens epp else epp
     | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
-       let recordtyp = match annot with
+       let (E_aux (_, (_, eannot))) = e in
+       let recordtyp = match eannot with
          | Some (env, Typ_aux (Typ_id tid,_), _) when Env.is_record tid env ->
            tid
          | _ ->  raise (report l "cannot get record type") in
