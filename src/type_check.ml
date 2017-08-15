@@ -196,7 +196,7 @@ let rec nc_negate (NC_aux (nc, _)) =
   | NC_or (n1, n2) -> mk_nc (NC_and (nc_negate n1, nc_negate n2))
   | NC_false -> mk_nc NC_true
   | NC_true -> mk_nc NC_false
-  | NC_nat_set_bounded (kid, []) -> typ_error Parse_ast.Unknown "Cannot negate empty nexp set"
+  | NC_nat_set_bounded (kid, []) -> nc_false
   | NC_nat_set_bounded (kid, [int]) -> nc_neq (nvar kid) (nconstant int)
   | NC_nat_set_bounded (kid, int :: ints) ->
      mk_nc (NC_and (nc_neq (nvar kid) (nconstant int), nc_negate (mk_nc (NC_nat_set_bounded (kid, ints)))))

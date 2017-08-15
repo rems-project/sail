@@ -135,6 +135,7 @@ module Env : sig
 
 end
 
+(* Push all the type variables and constraints from a typquant into an environment *)
 val add_typquant : typquant -> Env.t -> Env.t
 
 (* Some handy utility functions for constructing types. *)
@@ -155,9 +156,24 @@ val nsum : nexp -> nexp -> nexp
 val ntimes : nexp -> nexp -> nexp
 val npow2 : nexp -> nexp
 val nvar : kid -> nexp
-val nid : id -> nexp
+val nid : id -> nexp (* NOTE: Nexp_id's don't do anything currently *)
 
+(* Numeric constraint builders *)
+val nc_eq : nexp -> nexp -> n_constraint
+val nc_neq : nexp -> nexp -> n_constraint
+val nc_lteq : nexp -> nexp -> n_constraint
 val nc_gteq : nexp -> nexp -> n_constraint
+val nc_lt : nexp -> nexp -> n_constraint
+val nc_gt : nexp -> nexp -> n_constraint
+val nc_and : n_constraint -> n_constraint -> n_constraint
+val nc_or : n_constraint -> n_constraint -> n_constraint
+val nc_true : n_constraint
+val nc_false : n_constraint
+
+(* Negate a n_constraint. Note that there's no NC_not constructor, so
+   this flips all the inequalites a the n_constraint leaves and uses
+   de-morgans to switch and to or and vice versa. *)
+val nc_negate : n_constraint -> n_constraint
 
 (* Sail builtin types. *)
 val int_typ : typ
@@ -172,6 +188,7 @@ val real_typ : typ
 val vector_typ : nexp -> nexp -> order -> typ -> typ
 val list_typ : typ -> typ
 val exist_typ : (kid -> n_constraint) -> (kid -> typ) -> typ
+val exc_typ : typ
 
 val inc_ord : order
 val dec_ord : order
