@@ -1845,7 +1845,10 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
             begin
               try
                 let nc = assert_constraint const_expr in
-                check_block l (Env.add_constraint nc env) exps typ
+                let cexp = annot_exp (E_constraint nc) bool_typ in
+                let checked_msg = crule check_exp env assert_msg string_typ in
+                let texp = annot_exp (E_assert (cexp, checked_msg)) unit_typ in
+                texp :: check_block l (Env.add_constraint nc env) exps typ
               with
               | Not_a_constraint -> check_block l env exps typ
             end
@@ -2311,11 +2314,11 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
        let (Typ_aux (typ_aux, _)) = typ in
        match typ_aux with
        | Typ_tup typs ->
-          let bind_tuple_lexp (tlexps, env) lexp typ =
+          let bind_tuple_lexp lexp typ (tlexps, env) =
             let tlexp, env = bind_lexp env lexp typ in tlexp :: tlexps, env
           in
           let tlexps, env =
-            try List.fold_left2 bind_tuple_lexp ([], env) lexps typs with
+            try List.fold_right2 bind_tuple_lexp lexps typs ([], env) with
             | Invalid_argument _ -> typ_error l "Tuple l-expression and tuple type have different length"
           in
           annot_lexp (LEXP_tup tlexps) typ, env
