@@ -1,4 +1,4 @@
-"lwu"   , UTYPE { op=RISCVLUI   };
+"lui"   , UTYPE { op=RISCVLUI   };
 "auipc" , UTYPE { op=RISCVAUIPC };
 
 "jal",  JAL ();
