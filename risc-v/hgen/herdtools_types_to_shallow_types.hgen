@@ -57,9 +57,14 @@ let translate_bool name = function
   | true -> Sail_values.B1
   | false -> Sail_values.B0
 
+let translate_imm21 name value = 
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 21,Nat_big_num.of_int value)
 
 let translate_imm20 name value = 
     Sail_values.to_vec0 is_inc (Nat_big_num.of_int 20,Nat_big_num.of_int value)
+
+let translate_imm13 name value = 
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 13,Nat_big_num.of_int value)
 
 let translate_imm12 name value = 
     Sail_values.to_vec0 is_inc (Nat_big_num.of_int 12,Nat_big_num.of_int value)

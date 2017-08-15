@@ -64,7 +64,9 @@ let translate_out_bool = function
   | Sail_values.B0 -> false
   | _ -> failwith "translate_out_bool Undef"
 
+let translate_out_simm21 imm = translate_out_signed_int imm 21
 let translate_out_simm20 imm = translate_out_signed_int imm 20
+let translate_out_simm13 imm = translate_out_signed_int imm 13
 let translate_out_simm12 imm = translate_out_signed_int imm 12
 let translate_out_imm6 imm = translate_out_int imm
 let translate_out_imm5 imm = translate_out_int imm

@@ -10,7 +10,7 @@
 | `RISCVJAL(imm, rd) -> 
    ("JAL",
     [
-      translate_imm20 "imm" imm;
+      translate_imm21 "imm" imm;
       translate_reg "rd" rd;
     ],
     [])
@@ -25,7 +25,7 @@
 | `RISCVBType(imm, rs2, rs1, op)  -> 
    ("BTYPE",
     [
-      translate_imm12 "imm" imm;
+      translate_imm13 "imm" imm;
       translate_reg "rs2" rs2;
       translate_reg "rs1" rs1;
       translate_bop "op" op;

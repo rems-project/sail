@@ -95,10 +95,10 @@ function clause execute (UTYPE(imm, rd, op)) =
     } in
     wGPR(rd, ret)
 
-union ast member ((bit[20]), regno) JAL
-function clause decode ((bit[20]) imm : (regno) rd : 0b1101111) = Some (JAL(imm, rd))
+union ast member ((bit[21]), regno) JAL
+function clause decode ((bit[20]) imm : (regno) rd : 0b1101111) = Some (JAL(imm[19] : imm[7..0] : imm[8] : imm[18..13] : imm[12..9] : 0b0, rd))
 function clause execute (JAL(imm, rd)) =
-    let (bit[64]) offset = EXTS(imm[19] : imm[7..0] : imm[8] : imm[18..13] : imm[12..9] : 0b0) in {
+    let (bit[64]) offset = EXTS(imm) in {
       nextPC :=  PC + offset;
       wGPR(rd, PC + 4);
     }
@@ -112,13 +112,13 @@ function clause execute (JALR(imm, rs1, rd)) =
       wGPR(rd, PC + 4);
     }
 
-union ast member ((bit[12]), regno, regno, bop) BTYPE
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b000 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1], rs2, rs1, BEQ))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b001 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1], rs2, rs1, BNE))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b100 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1], rs2, rs1, BLT))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b101 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1], rs2, rs1, BGE))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b110 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1], rs2, rs1, BLTU))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b111 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1], rs2, rs1, BGEU))
+union ast member ((bit[13]), regno, regno, bop) BTYPE
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b000 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1] : 0b0, rs2, rs1, BEQ))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b001 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1] : 0b0, rs2, rs1, BNE))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b100 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1] : 0b0, rs2, rs1, BLT))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b101 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1] : 0b0, rs2, rs1, BGE))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b110 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1] : 0b0, rs2, rs1, BLTU))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b111 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1] : 0b0, rs2, rs1, BGEU))
 
 function clause execute (BTYPE(imm, rs2, rs1, op)) =
   let rs1_val = rGPR(rs1) in
@@ -132,7 +132,7 @@ function clause execute (BTYPE(imm, rs2, rs1, op)) =
     case BGEU -> unsigned(rs1_val) >= unsigned(rs2_val) (* XXX sail missing >=_u *)
   } in
   if (taken) then
-      nextPC := PC + EXTS(imm : 0b0)
+      nextPC := PC + EXTS(imm)
 
 union ast member ((bit[12]), regno, regno, iop) ITYPE
 function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b0010011) = Some(ITYPE(imm, rs1, rd, ADDI))
