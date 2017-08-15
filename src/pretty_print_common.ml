@@ -189,7 +189,6 @@ let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
   | Typ_arg_typ t -> app_typ t
   | Typ_arg_nexp n -> nexp n
   | Typ_arg_order o -> doc_ord o
-  | Typ_arg_effect e -> doc_effects e
 
   (* same trick to handle precedence of nexp *)
   and nexp ne = sum_typ ne

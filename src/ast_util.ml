@@ -222,7 +222,6 @@ and string_of_typ_arg_aux = function
   | Typ_arg_nexp n -> string_of_nexp n
   | Typ_arg_typ typ -> string_of_typ typ
   | Typ_arg_order o -> string_of_order o
-  | Typ_arg_effect eff -> string_of_effect eff
 and string_of_n_constraint = function
   | NC_aux (NC_fixed (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
   | NC_aux (NC_not_equal (n1, n2), _) -> string_of_nexp n1 ^ " != " ^ string_of_nexp n2

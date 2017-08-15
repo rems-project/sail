@@ -121,7 +121,6 @@ let doc_typ_ocaml, doc_atomic_typ_ocaml =
   | Typ_arg_typ t -> app_typ t
   | Typ_arg_nexp n -> empty
   | Typ_arg_order o -> empty
-  | Typ_arg_effect e -> empty
   in typ, atomic_typ
 
 let doc_lit_ocaml in_pat (L_aux(l,_)) =

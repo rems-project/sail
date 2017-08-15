@@ -56,8 +56,7 @@ let subst_src_typ substs t =
     match ta with
     | Typ_arg_nexp ne -> Typ_arg_aux (Typ_arg_nexp (s_snexp ne),l)
     | Typ_arg_typ t -> Typ_arg_aux (Typ_arg_typ (s_styp t),l)
-    | Typ_arg_order _
-    | Typ_arg_effect _ -> targ
+    | Typ_arg_order _ -> targ
   in s_styp t
 
 let make_vector_lit sz i =

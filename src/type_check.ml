@@ -320,7 +320,6 @@ and typ_subst_arg_nexp_aux sv subst = function
   | Typ_arg_nexp nexp -> Typ_arg_nexp (nexp_subst sv subst nexp)
   | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_nexp sv subst typ)
   | Typ_arg_order ord -> Typ_arg_order ord
-  | Typ_arg_effect eff -> Typ_arg_effect eff
 
 let rec typ_subst_typ sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_typ_aux sv subst typ, l)
 and typ_subst_typ_aux sv subst = function
@@ -336,7 +335,6 @@ and typ_subst_arg_typ_aux sv subst = function
   | Typ_arg_nexp nexp -> Typ_arg_nexp nexp
   | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_typ sv subst typ)
   | Typ_arg_order ord -> Typ_arg_order ord
-  | Typ_arg_effect eff -> Typ_arg_effect eff
 
 let order_subst_aux sv subst = function
   | Ord_var kid -> if Kid.compare kid sv = 0 then subst else Ord_var kid
@@ -359,7 +357,6 @@ and typ_subst_arg_order_aux sv subst = function
   | Typ_arg_nexp nexp -> Typ_arg_nexp nexp
   | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_order sv subst typ)
   | Typ_arg_order ord -> Typ_arg_order (order_subst sv subst ord)
-  | Typ_arg_effect eff -> Typ_arg_effect eff
 
 let rec typ_subst_kid sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_kid_aux sv subst typ, l)
 and typ_subst_kid_aux sv subst = function
@@ -376,7 +373,6 @@ and typ_subst_arg_kid_aux sv subst = function
   | Typ_arg_nexp nexp -> Typ_arg_nexp (nexp_subst sv (Nexp_var subst) nexp)
   | Typ_arg_typ typ -> Typ_arg_typ (typ_subst_kid sv subst typ)
   | Typ_arg_order ord -> Typ_arg_order (order_subst sv (Ord_var subst) ord)
-  | Typ_arg_effect eff -> Typ_arg_effect eff
 
 let quant_item_subst_kid_aux sv subst = function
   | QI_id (KOpt_aux (KOpt_none kid, l)) as qid ->
@@ -584,7 +580,6 @@ end = struct
     | Typ_arg_nexp nexp -> wf_nexp ~exs:exs env nexp
     | Typ_arg_typ typ -> wf_typ ~exs:exs env typ
     | Typ_arg_order ord -> wf_order env ord
-    | Typ_arg_effect _ -> () (* Check: is this ever used? *)
   and wf_nexp ?exs:(exs=KidSet.empty) env (Nexp_aux (nexp_aux, l)) =
     match nexp_aux with
     | Nexp_id _ -> ()
@@ -1075,7 +1070,6 @@ and normalize_typ_arg env (Typ_arg_aux (typ_arg, _)) =
   | Typ_arg_nexp n -> Tnf_arg_nexp n
   | Typ_arg_typ typ -> Tnf_arg_typ (normalize_typ env typ)
   | Typ_arg_order o -> Tnf_arg_order o
-  | Typ_arg_effect e -> Tnf_arg_effect e
 
 (* Here's how the constraint generation works for subtyping
 
@@ -1260,7 +1254,6 @@ and typ_arg_frees ?exs:(exs=KidSet.empty) (Typ_arg_aux (typ_arg_aux, l)) =
   | Typ_arg_nexp n -> nexp_frees ~exs:exs n
   | Typ_arg_typ typ -> typ_frees ~exs:exs typ
   | Typ_arg_order ord -> order_frees ord
-  | Typ_arg_effect _ -> assert false
 
 let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   match nexp1, nexp2 with
@@ -1302,7 +1295,6 @@ and typ_arg_identical (Typ_arg_aux (arg1, _)) (Typ_arg_aux (arg2, _)) =
   | Typ_arg_nexp n1, Typ_arg_nexp n2 -> nexp_identical n1 n2
   | Typ_arg_typ typ1, Typ_arg_typ typ2 -> typ_identical typ1 typ2
   | Typ_arg_order ord1, Typ_arg_order ord2 -> ord_identical ord1 ord2
-  | Typ_arg_effect _, Typ_arg_effect _ -> assert false
 
 type uvar =
   | U_nexp of nexp
@@ -1477,7 +1469,6 @@ let rec unify l env typ1 typ2 =
        end
     | Typ_arg_typ typ1, Typ_arg_typ typ2 -> unify_typ l typ1 typ2
     | Typ_arg_order ord1, Typ_arg_order ord2 -> unify_order l ord1 ord2
-    | Typ_arg_effect _, Typ_arg_effect _ -> assert false
     | _, _ -> unify_error l (string_of_typ_arg typ_arg1 ^ " cannot be unified with type argument " ^ string_of_typ_arg typ_arg2)
   in
   match destruct_exist env typ2 with

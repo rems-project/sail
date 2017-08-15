@@ -208,7 +208,6 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | Typ_arg_typ t -> app_typ regtypes true t
       | Typ_arg_nexp n -> empty
       | Typ_arg_order o -> empty
-      | Typ_arg_effect e -> empty
   in typ', atomic_typ
 
 (* Check for variables in types that would be pretty-printed.

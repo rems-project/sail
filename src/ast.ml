@@ -238,7 +238,6 @@ and typ_arg_aux =  (* Type constructor arguments of all kinds *)
    Typ_arg_nexp of nexp
  | Typ_arg_typ of typ
  | Typ_arg_order of order
- | Typ_arg_effect of effect
 
 and typ_arg =
    Typ_arg_aux of typ_arg_aux * l
