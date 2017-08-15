@@ -236,9 +236,9 @@ function clause execute (STORE(imm, rs2, rs1, width)) =
       };
       let rs2_val = rGPR(rs2) in
       switch (width) {
-        case BYTE   -> MEMval(addr, 1, rs2_val)
-        case WORD   -> MEMval(addr, 2, rs2_val)
-        case HALF   -> MEMval(addr, 4, rs2_val)
+        case BYTE   -> MEMval(addr, 1, rs2_val[7..0])
+        case WORD   -> MEMval(addr, 2, rs2_val[15..0])
+        case HALF   -> MEMval(addr, 4, rs2_val[31..0])
         case DOUBLE -> MEMval(addr, 8, rs2_val)
       }
     }
