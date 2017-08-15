@@ -105,13 +105,11 @@ let kw_table =
      ("def",                     (fun _ -> Def));
      ("op",                      (fun _ -> Op));
      ("default",		 (fun _ -> Default));
-     ("deinfix",                 (fun _ -> Deinfix));
      ("effect",                  (fun _ -> Effect));
      ("Effect",                  (fun _ -> EFFECT));
      ("end",                     (fun _ -> End));
      ("enum",		         (fun _ -> Enum));
      ("else",                    (fun _ -> Else));
-     ("exit",                    (fun _ -> Exit));
      ("extern",                  (fun _ -> Extern));
      ("cast",                    (fun _ -> Cast));
      ("false",                   (fun _ -> False));
@@ -119,6 +117,9 @@ let kw_table =
      ("foreach",                 (fun _ -> Foreach));
      ("function",                (fun x -> Function_));
      ("overload",                (fun _ -> Overload));
+     ("throw",                   (fun _ -> Throw));
+     ("try",                     (fun _ -> Try));
+     ("catch",                   (fun _ -> Catch));
      ("if",                      (fun x -> If_));
      ("in",			 (fun x -> In));
      ("inc",                     (fun _ -> Inc));

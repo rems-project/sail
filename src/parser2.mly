@@ -62,6 +62,7 @@ let mk_lit l n m = L_aux (l, loc n m)
 let mk_lit_exp l n m = mk_exp (E_lit (mk_lit l n m)) n m
 let mk_typschm tq t n m = TypSchm_aux (TypSchm_ts (tq, t), loc n m)
 let mk_nc nc n m = NC_aux (nc, loc n m)
+let mk_sd s n m = SD_aux (s, loc n m)
 
 let mk_funcl f n m = FCL_aux (f, loc n m)
 let mk_fun fn n m = FD_aux (fn, loc n m)
@@ -120,10 +121,10 @@ let rec desugar_rchain chain s e =
 
 /*Terminals with no content*/
 
-%token And As Assert Bitzero Bitone Bits By Match Clause Const Dec Def Default Deinfix Effect EFFECT End Op
-%token Enum Else Exit Extern False Forall Exist Foreach Overload Function_ If_ In IN Inc Let_ Member Int Order Cast
+%token And As Assert Bitzero Bitone Bits By Match Clause Const Dec Def Default Effect EFFECT End Op
+%token Enum Else Extern False Forall Exist Foreach Overload Function_ If_ In IN Inc Let_ Member Int Order Cast
 %token Pure Rec Register Return Scattered Sizeof Struct Then True TwoCaret Type TYPE Typedef
-%token Undefined Union With Val Constraint
+%token Undefined Union With Val Constraint Throw Try Catch
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 
 %nonassoc Then
@@ -602,6 +603,8 @@ atomic_pat:
     { mk_pat (P_lit $1) $startpos $endpos }
   | id
     { mk_pat (P_id $1) $startpos $endpos }
+  | id Lparen pat_list Rparen
+    { mk_pat (P_app ($1, $3)) $startpos $endpos }
   | pat Colon typ
     { mk_pat (P_typ ($3, $1)) $startpos $endpos }
   | decl typ
@@ -648,13 +651,17 @@ cast_exp:
     { mk_exp (E_block $2) $startpos $endpos }
   | Return cast_exp
     { mk_exp (E_return $2) $startpos $endpos }
+  | Throw cast_exp
+    { mk_exp (E_throw $2) $startpos $endpos }
   | If_ exp Then cast_exp Else cast_exp
     { mk_exp (E_if ($2, $4, $6)) $startpos $endpos }
   | If_ exp Then cast_exp
     { mk_exp (E_if ($2, $4, mk_lit_exp L_unit $endpos($4) $endpos($4))) $startpos $endpos }
-  | Match exp0 Lcurly case_list Rcurly
+  | Match exp Lcurly case_list Rcurly
     { mk_exp (E_case ($2, $4)) $startpos $endpos }
-  | Lparen exp Comma exp_list Rparen
+  | Try exp Catch Lcurly case_list Rcurly
+    { mk_exp (E_try ($2, $5)) $startpos $endpos }
+  | Lparen exp0 Comma exp_list Rparen
     { mk_exp (E_tuple ($2 :: $4)) $startpos $endpos }
 
 /* The following implements all nine levels of user-defined precedence for
@@ -852,10 +859,6 @@ atomic_exp:
     { mk_exp (E_sizeof $3) $startpos $endpos }
   | Constraint Lparen nc Rparen
     { mk_exp (E_constraint $3) $startpos $endpos }
-  | Exit Unit
-    { mk_exp (E_exit (mk_lit_exp L_unit $startpos($2) $endpos)) $startpos $endpos }
-  | Exit Lparen exp Rparen
-    { mk_exp (E_exit $3) $startpos $endpos }
   | Assert Lparen exp Comma exp Rparen
     { mk_exp (E_assert ($3, $5)) $startpos $endpos }
   | atomic_exp Lsquare exp Rsquare
@@ -957,11 +960,19 @@ register_def:
   | Register id Colon typ
     { mk_reg_dec (DEC_reg ($4, $2)) $startpos $endpos }
 
-default:
+default_def:
   | Default base_kind Inc
     { mk_default (DT_order ($2, mk_typ ATyp_inc $startpos($3) $endpos)) $startpos $endpos }
   | Default base_kind Dec
     { mk_default (DT_order ($2, mk_typ ATyp_dec $startpos($3) $endpos)) $startpos $endpos }
+
+scattered_def:
+  | Union id typquant
+    { mk_sd (SD_scattered_variant($2, mk_namesectn, $3)) $startpos $endpos }
+  | Union id
+    { mk_sd (SD_scattered_variant($2, mk_namesectn, mk_typqn)) $startpos $endpos }
+  | Function_ id
+    { mk_sd (SD_scattered_function(mk_recn, mk_tannotn, mk_eannotn, $2)) $startpos $endpos }
 
 def:
   | fun_def
@@ -978,7 +989,15 @@ def:
     { DEF_overload ($2, $5) }
   | Overload id Eq enum_bar
     { DEF_overload ($2, $4) }
-  | default
+  | Scattered scattered_def
+    { DEF_scattered $2 }
+  | Function_ Clause funcl
+    { DEF_scattered (mk_sd (SD_scattered_funcl $3) $startpos $endpos) }
+  | Union Clause id Eq type_union
+    { DEF_scattered (mk_sd (SD_scattered_unioncl ($3, $5)) $startpos $endpos) }
+  | End id
+    { DEF_scattered (mk_sd (SD_scattered_end $2) $startpos $endpos) }
+  | default_def
     { DEF_default $1 }
 
 defs_list:
