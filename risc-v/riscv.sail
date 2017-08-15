@@ -208,15 +208,15 @@ function clause execute(LOAD(imm, rs1, rd, unsigned, width)) =
     let (bit[64]) result = if unsigned then 
         switch (width) {
           case BYTE   -> EXTZ(MEMr(addr, 1))
-          case WORD   -> EXTZ(MEMr(addr, 2))
-          case HALF   -> EXTZ(MEMr(addr, 4))
+          case HALF   -> EXTZ(MEMr(addr, 2))
+          case WORD   -> EXTZ(MEMr(addr, 4))
           case DOUBLE -> MEMr(addr, 8)
         }
       else
         switch (width) {
           case BYTE   -> EXTS(MEMr(addr, 1))
-          case WORD   -> EXTS(MEMr(addr, 2))
-          case HALF   -> EXTS(MEMr(addr, 4))
+          case HALF   -> EXTS(MEMr(addr, 2))
+          case WORD   -> EXTS(MEMr(addr, 4))
           case DOUBLE -> MEMr(addr, 8)
         } in
     wGPR(rd, result)
@@ -230,15 +230,15 @@ function clause execute (STORE(imm, rs2, rs1, width)) =
     let (bit[64]) addr = rGPR(rs1) + EXTS(imm) in {
       switch (width) {
         case BYTE   -> MEMea(addr, 1)
-        case WORD   -> MEMea(addr, 2)
-        case HALF   -> MEMea(addr, 4)
+        case HALF   -> MEMea(addr, 2)
+        case WORD   -> MEMea(addr, 4)
         case DOUBLE -> MEMea(addr, 8)
       };
       let rs2_val = rGPR(rs2) in
       switch (width) {
         case BYTE   -> MEMval(addr, 1, rs2_val[7..0])
-        case WORD   -> MEMval(addr, 2, rs2_val[15..0])
-        case HALF   -> MEMval(addr, 4, rs2_val[31..0])
+        case HALF   -> MEMval(addr, 2, rs2_val[15..0])
+        case WORD   -> MEMval(addr, 4, rs2_val[31..0])
         case DOUBLE -> MEMval(addr, 8, rs2_val)
       }
     }
