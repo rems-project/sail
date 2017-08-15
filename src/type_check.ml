@@ -966,7 +966,7 @@ let fresh_existential () =
   let fresh = Kid_aux (Var ("'ex" ^ string_of_int !ex_counter), Parse_ast.Unknown) in
   incr ex_counter; fresh
 
-let destructure_exist env typ =
+let destruct_exist env typ =
   match Env.expand_synonyms env typ with
   | Typ_aux (Typ_exist (kids, nc, typ), _) ->
      let fresh_kids = List.map (fun kid -> (kid, fresh_existential ())) kids in
@@ -983,8 +983,8 @@ let exist_typ constr typ =
   let fresh_kid = fresh_existential () in
   mk_typ (Typ_exist ([fresh_kid], constr fresh_kid, typ fresh_kid))
 
-let destruct_vector_typ env typ =
-  let destruct_vector_typ' = function
+let destruct_vector env typ =
+  let destruct_vector' = function
     | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n1, _);
                              Typ_arg_aux (Typ_arg_nexp n2, _);
                              Typ_arg_aux (Typ_arg_order o, _);
@@ -992,7 +992,7 @@ let destruct_vector_typ env typ =
                        ), _) when string_of_id id = "vector" -> Some (n1, n2, o, vtyp)
     | typ -> None
   in
-  destruct_vector_typ' (Env.expand_synonyms env typ)
+  destruct_vector' (Env.expand_synonyms env typ)
 
 (**************************************************************************)
 (* 3. Subtyping and constraint solving                                    *)
@@ -1480,7 +1480,7 @@ let rec unify l env typ1 typ2 =
     | Typ_arg_effect _, Typ_arg_effect _ -> assert false
     | _, _ -> unify_error l (string_of_typ_arg typ_arg1 ^ " cannot be unified with type argument " ^ string_of_typ_arg typ_arg2)
   in
-  match destructure_exist env typ2 with
+  match destruct_exist env typ2 with
   | Some (kids, nc, typ2) ->
      let typ1, typ2 = Env.expand_synonyms env typ1, Env.expand_synonyms env typ2 in
      let (unifiers, _, _) = unify l env typ1 typ2 in
@@ -1510,7 +1510,7 @@ let uv_nexp_constraint env (kid, uvar) =
   | _ -> env
 
 let rec subtyp l env typ1 typ2 =
-  match destructure_exist env typ1, destructure_exist env typ2 with
+  match destruct_exist env typ1, destruct_exist env typ2 with
   | Some (kids, nc, typ1), _ ->
      let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env kids in
      let env = Env.add_constraint nc env in
@@ -1628,8 +1628,8 @@ let rec instantiate_quants quants kid uvar = match quants with
        | _ -> (QI_aux (QI_const nc, l)) :: instantiate_quants quants kid uvar
      end
 
-let destructure_vec_typ l env typ =
-  let destructure_vec_typ' l = function
+let destruct_vec_typ l env typ =
+  let destruct_vec_typ' l = function
     | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n1, _);
                              Typ_arg_aux (Typ_arg_nexp n2, _);
                              Typ_arg_aux (Typ_arg_order o, _);
@@ -1637,7 +1637,7 @@ let destructure_vec_typ l env typ =
                        ), _) when string_of_id id = "vector" -> (n1, n2, o, vtyp)
     | typ -> typ_error l ("Expected vector type, got " ^ string_of_typ typ)
   in
-  destructure_vec_typ' l (Env.expand_synonyms env typ)
+  destruct_vec_typ' l (Env.expand_synonyms env typ)
 
 
 let env_of_annot (l, tannot) = match tannot with
@@ -1662,7 +1662,7 @@ let pat_typ_of (P_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
 (* Flow typing *)
 
-let destructure_atom (Typ_aux (typ_aux, _)) =
+let destruct_atom (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c, _)), _)])
        when string_of_id f = "atom" -> c
@@ -1670,7 +1670,7 @@ let destructure_atom (Typ_aux (typ_aux, _)) =
        when string_of_id f = "range" && c1 = c2 -> c1
   | _ -> assert false
 
-let destructure_atom_nexp (Typ_aux (typ_aux, _)) =
+let destruct_atom_nexp (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)])
        when string_of_id f = "atom" -> n
@@ -1723,36 +1723,36 @@ let apply_flow_constraint = function
 let rec infer_flow env (E_aux (exp_aux, (l, _))) =
   match exp_aux with
   | E_app (f, [x; y]) when string_of_id f = "lteq_atom_atom" ->
-     let n1 = destructure_atom_nexp (typ_of x) in
-     let n2 = destructure_atom_nexp (typ_of y) in
+     let n1 = destruct_atom_nexp (typ_of x) in
+     let n2 = destruct_atom_nexp (typ_of y) in
      [], [nc_lteq n1 n2]
   | E_app (f, [x; y]) when string_of_id f = "gteq_atom_atom" ->
-     let n1 = destructure_atom_nexp (typ_of x) in
-     let n2 = destructure_atom_nexp (typ_of y) in
+     let n1 = destruct_atom_nexp (typ_of x) in
+     let n2 = destruct_atom_nexp (typ_of y) in
      [], [nc_gteq n1 n2]
   | E_app (f, [x; y]) when string_of_id f = "lt_atom_atom" ->
-     let n1 = destructure_atom_nexp (typ_of x) in
-     let n2 = destructure_atom_nexp (typ_of y) in
+     let n1 = destruct_atom_nexp (typ_of x) in
+     let n2 = destruct_atom_nexp (typ_of y) in
      [], [nc_lt n1 n2]
   | E_app (f, [x; y]) when string_of_id f = "gt_atom_atom" ->
-     let n1 = destructure_atom_nexp (typ_of x) in
-     let n2 = destructure_atom_nexp (typ_of y) in
+     let n1 = destruct_atom_nexp (typ_of x) in
+     let n2 = destruct_atom_nexp (typ_of y) in
      [], [nc_gt n1 n2]
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lt_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destructure_atom (typ_of y) in
+     let c = destruct_atom (typ_of y) in
      [(v, Flow_lteq (c - 1))], []
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lteq_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destructure_atom (typ_of y) in
+     let c = destruct_atom (typ_of y) in
      [(v, Flow_lteq c)], []
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gt_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destructure_atom (typ_of y) in
+     let c = destruct_atom (typ_of y) in
      [(v, Flow_gteq (c + 1))], []
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gteq_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destructure_atom (typ_of y) in
+     let c = destruct_atom (typ_of y) in
      [(v, Flow_gteq c)], []
   | _ -> [], []
 
@@ -1957,7 +1957,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      annot_exp_effect (E_throw checked_exp) typ (mk_effect [BE_escape])
   | E_vector vec, _ ->
      begin
-       let (start, len, ord, vtyp) = destructure_vec_typ l env typ in
+       let (start, len, ord, vtyp) = destruct_vec_typ l env typ in
        let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
        match nexp_simp len with
        | Nexp_aux (Nexp_constant lenc, _) ->
@@ -2185,9 +2185,9 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
        pats @ [inferred_pat], env
      in
      let (inferred_pat :: inferred_pats), env = List.fold_left fold_pats ([], env) (pat :: pats) in
-     let (_, len, _, vtyp) = destructure_vec_typ l env (pat_typ_of inferred_pat) in
+     let (_, len, _, vtyp) = destruct_vec_typ l env (pat_typ_of inferred_pat) in
      let fold_len len pat =
-       let (_, len', _, vtyp') = destructure_vec_typ l env (pat_typ_of pat) in
+       let (_, len', _, vtyp') = destruct_vec_typ l env (pat_typ_of pat) in
        typ_equality l env vtyp vtyp';
        nsum len len'
      in

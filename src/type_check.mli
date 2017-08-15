@@ -234,9 +234,15 @@ val pat_typ_of : tannot pat -> typ
 val effect_of : tannot exp -> effect
 val effect_of_annot : tannot -> effect
 
-val destructure_atom_nexp : typ -> nexp
+(* TODO: make return option *)
+val destruct_atom_nexp : typ -> nexp
 
-val destruct_vector_typ : Env.t -> typ -> (nexp * nexp * order * typ) option
+(* Safely destructure an existential type. Returns None if the type is
+   not existential. This function will pick a fresh name for the
+   existential to ensure that no name-clashes occur. *)
+val destruct_exist : Env.t -> typ -> (kid list * n_constraint * typ) option
+
+val destruct_vector : Env.t -> typ -> (nexp * nexp * order * typ) option
 
 type uvar =
   | U_nexp of nexp
