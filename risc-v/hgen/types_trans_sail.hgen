@@ -29,5 +29,7 @@ let translate_imm6 name value =
     (name, Bvector (Some 6), bit_list_of_integer 6 (Nat_big_num.of_int value))
 let translate_imm5 name value = 
     (name, Bvector (Some 5), bit_list_of_integer 5 (Nat_big_num.of_int value))
+let translate_imm4 name value = 
+    (name, Bvector (Some 4), bit_list_of_integer 4 (Nat_big_num.of_int value))
 let translate_bool name value =
   (name, Bit, [if value then Bitc_one else Bitc_zero])

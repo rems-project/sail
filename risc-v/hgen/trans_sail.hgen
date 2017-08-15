@@ -103,4 +103,10 @@
       translate_ropw "op" op;
     ],
     [])
-| `RISCVFENCE -> ("FENCE", [], [])
+| `RISCVFENCE -> 
+  ("FENCE", 
+  [
+     translate_imm4 "pred" 0;
+     translate_imm4 "succ" 0;
+  ], 
+  [])
