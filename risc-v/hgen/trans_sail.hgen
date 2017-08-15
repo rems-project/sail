@@ -68,12 +68,12 @@
       translate_width "width" width;
     ],
     [])
-| `RISCVStore(imm, rs, rd, width) -> 
+| `RISCVStore(imm, rs2, rs1, width) -> 
    ("STORE",
     [
       translate_imm12 "imm" imm;
-      translate_reg "rs" rs;
-      translate_reg "rd" rd;
+      translate_reg "rs2" rs2;
+      translate_reg "rs1" rs1;
       translate_width "width" width;
     ],
     [])
