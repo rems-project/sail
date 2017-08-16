@@ -127,36 +127,6 @@ let bitvec_to_string l = "0b" ^ collapse_leading (String.concat "" (List.map (fu
   ;;
 
 
-let rec val_to_string_internal ((Interp.LMem (_,_,memory,_)) as mem) = function
- | Interp_ast.V_boxref(n, t) -> val_to_string_internal mem (Pmap.find n memory)
- | Interp_ast.V_lit (L_aux(l,_)) -> sprintf "%s" (lit_to_string l)
- | Interp_ast.V_tuple l ->
-     let repr = String.concat ", " (List.map (val_to_string_internal mem) l) in
-     sprintf "(%s)" repr
- | Interp_ast.V_list l ->
-     let repr = String.concat "; " (List.map (val_to_string_internal mem) l) in
-     sprintf "[||%s||]" repr
- | Interp_ast.V_vector (first_index, inc, l) ->
-     let last_index = (if (Interp_ast.IInc = inc) then List.length l - 1 else 1 - List.length l) + first_index  in
-     let repr =
-       try bitvec_to_string l
-       with Failure _ ->
-         sprintf "[%s]" (String.concat "; " (List.map (val_to_string_internal mem) l)) in
-     sprintf "%s [%s..%s]" repr (string_of_int first_index) (string_of_int last_index)
- | (Interp_ast.V_vector_sparse(first_index,last_index,inc,l,default) as v) -> 
-   val_to_string_internal mem (Interp_lib.fill_in_sparse v)
- | Interp_ast.V_record(_, l) ->
-     let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string_internal mem value) in
-     let repr = String.concat "; " (List.map  pp l) in
-     sprintf "{%s}" repr
- | Interp_ast.V_ctor (id,_,_, value) ->
-     sprintf "%s %s" (id_to_string id) (val_to_string_internal mem value)
- | Interp_ast.V_register _ | Interp_ast.V_register_alias _ ->
-     sprintf "reg-as-value" 
- | Interp_ast.V_unknown -> "unknown"
- | Interp_ast.V_track(v,rs) -> (*"tainted by {" ^ (Interp_utilities.list_to_string Interp.string_of_reg_form "," rs) ^ "} --" ^ *) (val_to_string_internal mem v)
-;;
-
 (****************************************************************************
  * PPrint-based source-to-source pretty printer
 ****************************************************************************)
@@ -582,7 +552,7 @@ let doc_exp, doc_let =
   (* XXX missing case *)
   | E_comment _ | E_comment_struc _ -> string ""
   | E_internal_value v ->
-     string (val_to_string_internal mem v)
+     string (Interp.string_of_value v)
   | _-> failwith "internal expression escaped"
 
   and let_exp env mem add_red show_hole_contents (LB_aux(lb,_)) = match lb with

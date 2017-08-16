@@ -114,33 +114,6 @@ let rec reg_to_string = function
   | SubReg (id,r,_) -> sprintf "%s.%s" (reg_to_string r) (id_to_string id)
 ;;
 
-let rec val_to_string_internal = function
- | V_boxref(n, t) -> sprintf "boxref %d" n
- | V_lit (L_aux(l,_)) -> sprintf "%s" (lit_to_string l)
- | V_tuple l ->
-     let repr = String.concat ", " (List.map val_to_string_internal l) in
-     sprintf "(%s)" repr
- | V_list l ->
-     let repr = String.concat "; " (List.map val_to_string_internal l) in
-     sprintf "[||%s||]" repr
- | V_vector (first_index, inc, l) ->
-     let last_index = add_int_big_int (if inc then List.length l - 1 else 1 - List.length l) first_index  in
-     let repr =
-       try bitvec_to_string (* (if inc then l else List.rev l)*) l
-       with Failure _ ->
-         sprintf "[%s]" (String.concat "; " (List.map val_to_string_internal l)) in
-     sprintf "%s [%s..%s]" repr (string_of_big_int first_index) (string_of_big_int last_index)
- | V_record(_, l) ->
-     let pp (id, value) = sprintf "%s = %s" (id_to_string id) (val_to_string_internal value) in
-     let repr = String.concat "; " (List.map  pp l) in
-     sprintf "{%s}" repr
- | V_ctor (id,_, value) ->
-     sprintf "%s %s" (id_to_string id) (val_to_string_internal value)
- | V_register r ->
-     sprintf "reg-as-value %s" (reg_to_string r)
- | V_unknown -> "unknown"
-;;
-
 let rec top_frame_exp_state = function
   | Top -> raise (Invalid_argument "top_frame_exp")
   | Hole_frame(_, e, _, env, mem, Top) 
@@ -210,7 +183,7 @@ let id_compare i1 i2 =
 module Reg = struct
   include Map.Make(struct type t = id let compare = id_compare end)
   let to_string id v =
-    sprintf "%s -> %s" (id_to_string id) (val_to_string_internal v)
+    sprintf "%s -> %s" (id_to_string id) (string_of_value v)
   let find id m =
 (*    eprintf "reg_find called with %s\n" (id_to_string id);*)
     let v = find id m in
@@ -255,7 +228,7 @@ module Mem = struct
     v
   *)
   let to_string idx v =
-    sprintf "[%s] -> %s" (string_of_big_int idx) (val_to_string_internal v)
+    sprintf "[%s] -> %s" (string_of_big_int idx) (string_of_value v)
 end ;;
 
 
@@ -412,7 +385,7 @@ let run
   in
   let rec loop mode env = function
   | Value v ->
-      debugf "%s: %s %s\n" (grey name) (blue "return") (val_to_string_internal v);
+      debugf "%s: %s %s\n" (grey name) (blue "return") (string_of_value v);
       true, mode, env
   | Action (a, s) ->
       let (top_exp,(top_env,top_mem)) = top_frame_exp_state s in
@@ -429,25 +402,25 @@ let run
       let left = "<-" and right = "->" in
       let (mode',env',s) = begin match a with
       | Read_reg (reg, sub) ->
-          show "read_reg" (reg_to_string reg ^ sub_to_string sub) right (val_to_string_internal return);
+          show "read_reg" (reg_to_string reg ^ sub_to_string sub) right (string_of_value return);
           step (),env',s
       | Write_reg (reg, sub, value) ->
           assert (return = unit_lit);
-          show "write_reg" (reg_to_string reg ^ sub_to_string sub) left (val_to_string_internal value);
+          show "write_reg" (reg_to_string reg ^ sub_to_string sub) left (string_of_value value);
           step (),env',s
       | Read_mem (id, args, sub) ->
-          show "read_mem" (id_to_string id ^ val_to_string_internal args ^ sub_to_string sub) right (val_to_string_internal return);
+          show "read_mem" (id_to_string id ^ string_of_value args ^ sub_to_string sub) right (string_of_value return);
           step (),env',s
       | Write_mem (id, args, sub, value) ->
           assert (return = unit_lit);
-          show "write_mem" (id_to_string id ^ val_to_string_internal args ^ sub_to_string sub) left (val_to_string_internal value);
+          show "write_mem" (id_to_string id ^ string_of_value args ^ sub_to_string sub) left (string_of_value value);
           step (),env',s
       (* distinguish single argument for pretty-printing *)
       | Call_extern (f, (V_tuple _ as args)) ->
-          show "call_lib" (f ^ val_to_string_internal args) right (val_to_string_internal return);
+          show "call_lib" (f ^ string_of_value args) right (string_of_value return);
           step (),env',s
       | Call_extern (f, arg) ->
-          show "call_lib" (sprintf "%s(%s)" f (val_to_string_internal arg)) right (val_to_string_internal return);
+          show "call_lib" (sprintf "%s(%s)" f (string_of_value arg)) right (string_of_value return);
           step (),env',s
       | Interp.Step _ ->
           assert (return = unit_lit);
