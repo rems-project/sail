@@ -353,9 +353,9 @@ let bitwise_not (Bitvector bs start is_inc) =
 let bitwise_binop op (Bitvector bsl start is_inc, Bitvector bsr _ _) =
   Bitvector (op bsl bsr) start is_inc
 
-let bitwise_and = bitwise_binop lAnd
-let bitwise_or = bitwise_binop lOr
-let bitwise_xor = bitwise_binop lXor
+let bitwise_and x = bitwise_binop lAnd x
+let bitwise_or x = bitwise_binop lOr x
+let bitwise_xor x = bitwise_binop lXor x
 
 let unsigned (Bitvector bs _ _) : integer = unsignedIntegerFromWord bs
 let unsigned_big = unsigned
@@ -549,9 +549,9 @@ let arith_op_range_vec_range op sign l r = op l (to_num sign r)
  * add_range_vec_range_signed
  * minus_range_vec_range
  *)
-let add_IVI = arith_op_range_vec_range integerAdd false
-let addS_IVI = arith_op_range_vec_range integerAdd true
-let minus_IVI = arith_op_range_vec_range integerMinus false
+let add_IVI x y = arith_op_range_vec_range integerAdd false x y
+let addS_IVI x y = arith_op_range_vec_range integerAdd true x y
+let minus_IVI x y = arith_op_range_vec_range integerMinus false x y
 
 let arith_op_vec_range_range op sign l r = op (to_num sign l) r
 
@@ -559,9 +559,9 @@ let arith_op_vec_range_range op sign l r = op (to_num sign l) r
  * add_vec_range_range_signed
  * minus_vec_range_range
  *)
-let add_VII = arith_op_vec_range_range integerAdd false
-let addS_VII = arith_op_vec_range_range integerAdd true
-let minus_VII = arith_op_vec_range_range integerMinus false
+let add_VII x y = arith_op_vec_range_range integerAdd false x y
+let addS_VII x y = arith_op_vec_range_range integerAdd true x y
+let minus_VII x y = arith_op_vec_range_range integerMinus false x y
 
 
 
@@ -572,8 +572,8 @@ let arith_op_vec_vec_range op sign l r =
 (* add_vec_vec_range
  * add_vec_vec_range_signed
  *)
-let add_VVI = arith_op_vec_vec_range integerAdd false
-let addS_VVI = arith_op_vec_vec_range integerAdd true
+let add_VVI x y = arith_op_vec_vec_range integerAdd false x y
+let addS_VVI x y = arith_op_vec_vec_range integerAdd true x y
 
 let arith_op_vec_bit op sign (size : integer) (Bitvector _ _ is_inc as l) r =
   let l' = to_num sign l in
@@ -664,9 +664,9 @@ let shift_op_vec op (Bitvector bs start is_inc,(n : integer)) =
      Bitvector (rotateLeft n bs) start is_inc
   end
 
-let bitwise_leftshift = shift_op_vec LL_shift (*"<<"*)
-let bitwise_rightshift = shift_op_vec RR_shift (*">>"*)
-let bitwise_rotate = shift_op_vec LLL_shift (*"<<<"*)
+let bitwise_leftshift x = shift_op_vec LL_shift x (*"<<"*)
+let bitwise_rightshift x = shift_op_vec RR_shift x (*">>"*)
+let bitwise_rotate x = shift_op_vec LLL_shift x (*"<<<"*)
 
 let shiftl = bitwise_leftshift
 
@@ -747,37 +747,37 @@ let compare_op_vec op sign (l,r) =
   let (l',r') = (to_num sign l, to_num sign r) in
   compare_op op (l',r')
 
-let lt_vec = compare_op_vec (<) true
-let gt_vec = compare_op_vec (>) true
-let lteq_vec = compare_op_vec (<=) true
-let gteq_vec = compare_op_vec (>=) true
+let lt_vec x = compare_op_vec (<) true x
+let gt_vec x = compare_op_vec (>) true x
+let lteq_vec x = compare_op_vec (<=) true x
+let gteq_vec x = compare_op_vec (>=) true x
 
-let lt_vec_signed = compare_op_vec (<) true
-let gt_vec_signed = compare_op_vec (>) true
-let lteq_vec_signed = compare_op_vec (<=) true
-let gteq_vec_signed = compare_op_vec (>=) true
-let lt_vec_unsigned = compare_op_vec (<) false
-let gt_vec_unsigned = compare_op_vec (>) false
-let lteq_vec_unsigned = compare_op_vec (<=) false
-let gteq_vec_unsigned = compare_op_vec (>=) false
+let lt_vec_signed x = compare_op_vec (<) true x
+let gt_vec_signed x = compare_op_vec (>) true x
+let lteq_vec_signed x = compare_op_vec (<=) true x
+let gteq_vec_signed x = compare_op_vec (>=) true x
+let lt_vec_unsigned x = compare_op_vec (<) false x
+let gt_vec_unsigned x = compare_op_vec (>) false x
+let lteq_vec_unsigned x = compare_op_vec (<=) false x
+let gteq_vec_unsigned x = compare_op_vec (>=) false x
 
 let lt_svec = lt_vec_signed
 
 let compare_op_vec_range op sign (l,r) =
   compare_op op ((to_num sign l),r)
 
-let lt_vec_range = compare_op_vec_range (<) true
-let gt_vec_range = compare_op_vec_range (>) true
-let lteq_vec_range = compare_op_vec_range (<=) true
-let gteq_vec_range = compare_op_vec_range (>=) true
+let lt_vec_range x = compare_op_vec_range (<) true x
+let gt_vec_range x = compare_op_vec_range (>) true x
+let lteq_vec_range x = compare_op_vec_range (<=) true x
+let gteq_vec_range x = compare_op_vec_range (>=) true x
 
 let compare_op_range_vec op sign (l,r) =
   compare_op op (l, (to_num sign r))
 
-let lt_range_vec = compare_op_range_vec (<) true
-let gt_range_vec = compare_op_range_vec (>) true
-let lteq_range_vec = compare_op_range_vec (<=) true
-let gteq_range_vec = compare_op_range_vec (>=) true
+let lt_range_vec x = compare_op_range_vec (<) true x
+let gt_range_vec x = compare_op_range_vec (>) true x
+let lteq_range_vec x = compare_op_range_vec (<=) true x
+let gteq_range_vec x = compare_op_range_vec (>=) true x
 
 val eq : forall 'a. Eq 'a => 'a * 'a -> bool
 let eq (l,r) = (l = r)
