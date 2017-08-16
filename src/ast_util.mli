@@ -86,6 +86,8 @@ val string_of_index_range : index_range -> string
 
 val id_of_fundef : 'a fundef -> id
 
+val id_of_kid : kid -> id
+
 module Id : sig
   type t = id
   val compare : id -> id -> int

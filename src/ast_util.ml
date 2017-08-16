@@ -112,6 +112,7 @@ and map_pat_annot_aux f = function
   | P_as (pat, id) -> P_as (map_pat_annot f pat, id)
   | P_typ (typ, pat) -> P_typ (typ, map_pat_annot f pat)
   | P_id id -> P_id id
+  | P_var kid -> P_var kid
   | P_app (id, pats) -> P_app (id, List.map (map_pat_annot f) pats)
   | P_record (fpats, b) -> P_record (List.map (map_fpat_annot f) fpats, b)
   | P_tup pats -> P_tup (List.map (map_pat_annot f) pats)
@@ -144,6 +145,9 @@ let kid_loc = function
 let string_of_id = function
   | Id_aux (Id v, _) -> v
   | Id_aux (DeIid v, _) -> "(deinfix " ^ v ^ ")"
+
+let id_of_kid = function
+  | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
 let string_of_kid = function
   | Kid_aux (Var v, _) -> v
@@ -313,6 +317,7 @@ and string_of_pat (P_aux (pat, l)) =
   | P_lit lit -> string_of_lit lit
   | P_wild -> "_"
   | P_id v -> string_of_id v
+  | P_var kid -> string_of_kid kid
   | P_typ (typ, pat) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_pat pat
   | P_tup pats -> "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_pat pats ^ ")"

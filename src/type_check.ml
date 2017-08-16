@@ -811,7 +811,7 @@ end = struct
     then typ_error (kid_loc kid) ("Kind identifier " ^ string_of_kid kid ^ " is already bound")
     else
       begin
-        typ_debug ("Adding kind identifier binding " ^ string_of_kid kid ^ " :: " ^ string_of_base_kind_aux k);
+        typ_print ("Adding kind identifier " ^ string_of_kid kid ^ " :: " ^ string_of_base_kind_aux k);
         { env with typ_vars = KBindings.add kid k env.typ_vars }
       end
 
@@ -2064,6 +2064,23 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
             | Unification_error (l, m) -> typ_error l ("Unification error when pattern matching against union constructor: " ^ m)
           end
      end
+  | P_var kid ->
+     begin
+       let v = id_of_kid kid in
+       match Env.lookup_id v env with
+       | Local (Immutable, _) | Unbound ->
+          begin
+            match destruct_exist env typ with
+            | Some ([kid'], nc, typ) ->
+               let env = Env.add_typ_var kid BK_nat env in
+               let env = Env.add_constraint (nc_subst_nexp kid' (Nexp_var kid) nc) env in
+               let env = Env.add_local v (Immutable, typ_subst_nexp kid' (Nexp_var kid) typ) env in
+               annot_pat (P_var kid) typ, env
+            | Some _ -> typ_error l ("Cannot bind type variable pattern against multiple argument existential")
+            | None _ -> typ_error l ("Cannot bind type variable against non existential type")
+          end
+       | _ -> typ_error l ("Bad type identifer pattern: " ^ string_of_pat pat)
+     end
   | P_wild -> annot_pat P_wild typ, env
   | P_cons (hd_pat, tl_pat) ->
      begin
@@ -2829,6 +2846,7 @@ and propagate_pat_effect_aux = function
      let p_pat = propagate_pat_effect pat in
      P_typ (typ, p_pat), effect_of_pat p_pat
   | P_id id -> P_id id, no_effect
+  | P_var kid -> P_var kid, no_effect
   | P_app (id, pats) ->
      let p_pats = List.map propagate_pat_effect pats in
      P_app (id, p_pats), collect_effects_pat p_pats

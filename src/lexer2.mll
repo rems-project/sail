@@ -192,7 +192,6 @@ rule token = parse
       token lexbuf }
   | "&"					{ (Amp(r"&")) }
   | "@"                                 { (At "@") }
-  | "|"                                 { Bar }
   | "2" ws "^"                          { TwoCaret }
   | "^"					{ (Caret(r"^")) }
   | ":"                                 { Colon(r ":") }
@@ -207,6 +206,9 @@ rule token = parse
   | ";"                                 { Semi }
   | "*"                                 { (Star(r"*")) }
   | "_"                                 { Under }
+  | "{|"                                { LcurlyBar }
+  | "|}"                                { RcurlyBar }
+  | "|"                                 { Bar }
   | "{"                                 { Lcurly }
   | "}"                                 { Rcurly }
   | "()"                                { Unit(r"()") }

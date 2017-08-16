@@ -133,7 +133,7 @@ let rec desugar_rchain chain s e =
 %token Div_ Mod ModUnderS Quot Rem QuotUnderS
 
 %token Bar Comma Dot Eof Minus Semi Under DotDot
-%token Lcurly Rcurly Lparen Rparen Lsquare Rsquare
+%token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar
 %token BarBar BarSquare BarBarSquare ColonEq ColonGt ColonSquare
 %token MinusGt LtBar LtColon SquareBar SquareBarBar
 
@@ -484,6 +484,11 @@ atomic_typ:
     { $2 }
   | Lparen typ Comma typ_list Rparen
     { mk_typ (ATyp_tup ($2 :: $4)) $startpos $endpos }
+  | LcurlyBar num_list RcurlyBar
+    { let v = mk_kid "n" $startpos $endpos in
+      let atom_id = mk_id (Id "atom") $startpos $endpos in
+      let atom_of_v = mk_typ (ATyp_app (atom_id, [mk_typ (ATyp_var v) $startpos $endpos])) $startpos $endpos in
+      mk_typ (ATyp_exist ([v], NC_aux (NC_nat_set_bounded (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
   | Lcurly kid_list Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, NC_aux (NC_true, loc $startpos $endpos), $4)) $startpos $endpos }
   | Lcurly kid_list Comma nc Dot typ Rcurly
@@ -603,6 +608,10 @@ atomic_pat:
     { mk_pat (P_lit $1) $startpos $endpos }
   | id
     { mk_pat (P_id $1) $startpos $endpos }
+  | kid
+    { mk_pat (P_var $1) $startpos $endpos }
+  | tydecl typ
+    { mk_pat (P_typ ($2, mk_pat (P_var $1) $startpos $endpos($1))) $startpos $endpos }
   | id Lparen pat_list Rparen
     { mk_pat (P_app ($1, $3)) $startpos $endpos }
   | pat Colon typ
