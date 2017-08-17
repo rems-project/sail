@@ -1,5 +1,5 @@
 
-val extern (int, int) -> bool effect pure gt_int
+val extern (int, int) -> bool effect pure gt_int = "gt"
 
 (* val cast forall Num 'n, Num 'm. [|'n:'m|] -> int effect pure cast_range_int *)
 
