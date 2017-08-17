@@ -52,9 +52,17 @@ function unit wGPR((regno) r, (regval) v) =
     if (r != 0) then
         GPRs[r] := v
 
+function forall 'a. 'a effect { escape } not_implemented((string) message) =
+{
+  exit message;
+}
+
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval
+val extern unit -> unit effect { barr } MEM_fence_rw_rw
+val extern unit -> unit effect { barr } MEM_fence_r_rw
+val extern unit -> unit effect { barr } MEM_fence_rw_w
 
 (* Ideally these would be sail builtin *)
 function (bit[64]) shift_right_arith64 ((bit[64]) v, (bit[6]) shift) =
@@ -71,6 +79,8 @@ typedef iop = enumerate {ADDI; SLTI; SLTIU; XORI; ORI; ANDI} (* immediate ops *)
 typedef sop = enumerate {SLLI; SRLI; SRAI} (* shift ops *)
 typedef rop = enumerate {ADD; SUB; SLL; SLT; SLTU; XOR; SRL; SRA; OR; AND} (* reg-reg ops *)
 typedef ropw = enumerate {ADDW; SUBW; SLLW; SRLW; SRAW} (* reg-reg 32-bit ops *)
+
+typedef word_width = enumerate {BYTE; HALF; WORD; DOUBLE}
 
 scattered function unit execute
 scattered typedef ast = const union
@@ -92,10 +102,10 @@ function clause execute (UTYPE(imm, rd, op)) =
     } in
     wGPR(rd, ret)
 
-union ast member ((bit[20]), regno) JAL
-function clause decode ((bit[20]) imm : (regno) rd : 0b1101111) = Some (JAL(imm, rd))
+union ast member ((bit[21]), regno) JAL
+function clause decode ((bit[20]) imm : (regno) rd : 0b1101111) = Some (JAL(imm[19] : imm[7..0] : imm[8] : imm[18..13] : imm[12..9] : 0b0, rd))
 function clause execute (JAL(imm, rd)) =
-    let (bit[64]) offset = EXTS(imm[19] : imm[7..0] : imm[8] : imm[18..13] : imm[12..9] : 0b0) in {
+    let (bit[64]) offset = EXTS(imm) in {
       nextPC :=  PC + offset;
       wGPR(rd, PC + 4);
     }
@@ -109,13 +119,13 @@ function clause execute (JALR(imm, rs1, rd)) =
       wGPR(rd, PC + 4);
     }
 
-union ast member ((bit[12]), regno, regno, bop) BTYPE
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b000 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1], rs2, rs1, BEQ))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b001 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1], rs2, rs1, BNE))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b100 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1], rs2, rs1, BLT))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b101 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1], rs2, rs1, BGE))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b110 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1], rs2, rs1, BLTU))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b111 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1], rs2, rs1, BGEU))
+union ast member ((bit[13]), regno, regno, bop) BTYPE
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b000 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1] : 0b0, rs2, rs1, BEQ))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b001 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1] : 0b0, rs2, rs1, BNE))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b100 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1] : 0b0, rs2, rs1, BLT))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b101 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1] : 0b0, rs2, rs1, BGE))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b110 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1] : 0b0, rs2, rs1, BLTU))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b111 : (bit[5]) imm5 : 0b1100011) = Some(BTYPE(imm7[6] : imm5[0] : imm7[5..0] : imm5[4..1] : 0b0, rs2, rs1, BGEU))
 
 function clause execute (BTYPE(imm, rs2, rs1, op)) =
   let rs1_val = rGPR(rs1) in
@@ -126,10 +136,10 @@ function clause execute (BTYPE(imm, rs2, rs1, op)) =
     case BLT  -> rs1_val <_s rs2_val
     case BGE  -> rs1_val >=_s rs2_val
     case BLTU -> rs1_val <_u rs2_val
-    case BGEU -> rs1_val >= rs2_val (* XXX is this signed or unsigned? *)
+    case BGEU -> unsigned(rs1_val) >= unsigned(rs2_val) (* XXX sail missing >=_u *)
   } in
   if (taken) then
-      nextPC := PC + EXTS(imm : 0b0)
+      nextPC := PC + EXTS(imm)
 
 union ast member ((bit[12]), regno, regno, iop) ITYPE
 function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b0010011) = Some(ITYPE(imm, rs1, rd, ADDI))
@@ -192,31 +202,52 @@ function clause execute (RTYPE(rs2, rs1, rd, op)) =
   } in
   wGPR(rd, result)
 
-union ast member ((bit[12]), regno, regno, bool, [|8|]) LOAD
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, 1))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b001 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, 2))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b010 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, 4))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b011 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, 8))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b100 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  1))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b101 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  2))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b110 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  4))
+union ast member ((bit[12]), regno, regno, bool, word_width) LOAD
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, BYTE))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b001 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, HALF))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b010 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, WORD))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b011 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, DOUBLE))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b100 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  BYTE))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b101 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  HALF))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b110 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  WORD))
 function clause execute(LOAD(imm, rs1, rd, unsigned, width)) =
     let (bit[64]) addr = rGPR(rs1) + EXTS(imm) in
     let (bit[64]) result = if unsigned then 
-        EXTZ(MEMr(addr, width))
+        switch (width) {
+          case BYTE   -> EXTZ(MEMr(addr, 1))
+          case HALF   -> EXTZ(MEMr(addr, 2))
+          case WORD   -> EXTZ(MEMr(addr, 4))
+          case DOUBLE -> MEMr(addr, 8)
+        }
       else
-        EXTS(MEMr(addr, width)) in
+        switch (width) {
+          case BYTE   -> EXTS(MEMr(addr, 1))
+          case HALF   -> EXTS(MEMr(addr, 2))
+          case WORD   -> EXTS(MEMr(addr, 4))
+          case DOUBLE -> MEMr(addr, 8)
+        } in
     wGPR(rd, result)
 
-union ast member ((bit[12]), regno, regno, [|8|]) STORE
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b000 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, 1))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b001 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, 2))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b010 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, 4))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b011 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, 8))
+union ast member ((bit[12]), regno, regno, word_width) STORE
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b000 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, BYTE))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b001 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, HALF))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b010 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, WORD))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b011 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, DOUBLE))
 function clause execute (STORE(imm, rs2, rs1, width)) =
     let (bit[64]) addr = rGPR(rs1) + EXTS(imm) in {
-      MEMea(addr, width);
-      MEMval(addr, width, rGPR(rs2));
+      switch (width) {
+        case BYTE   -> MEMea(addr, 1)
+        case HALF   -> MEMea(addr, 2)
+        case WORD   -> MEMea(addr, 4)
+        case DOUBLE -> MEMea(addr, 8)
+      };
+      let rs2_val = rGPR(rs2) in
+      switch (width) {
+        case BYTE   -> MEMval(addr, 1, rs2_val[7..0])
+        case HALF   -> MEMval(addr, 2, rs2_val[15..0])
+        case WORD   -> MEMval(addr, 4, rs2_val[31..0])
+        case DOUBLE -> MEMval(addr, 8, rs2_val)
+      }
     }
 
 union ast member ((bit[12]), regno, regno) ADDIW
@@ -257,6 +288,32 @@ function clause execute (RTYPEW(rs2, rs1, rd, op)) =
     case SRAW -> shift_right_arith32(rs1_val, rs2_val[4..0])
   } in
   wGPR(rd, EXTS(result))
+
+union ast member (bit[4], bit[4]) FENCE
+function clause decode (0b0000 : (bit[4]) pred : (bit[4]) succ : 0b00000 : 0b000 : 0b00000 : 0b0001111) = Some(FENCE (pred, succ))
+function clause execute (FENCE(pred, succ)) = {
+  switch(pred, succ) {
+    case (0b0011, 0b0011) -> MEM_fence_rw_rw()
+    case (0b0010, 0b0011) -> MEM_fence_r_rw()
+    case (0b0011, 0b0001) -> MEM_fence_rw_w()
+    case _ -> not_implemented("unsupported fence")
+  }
+}
+
+union ast member unit FENCEI
+function clause decode (0b0000 : 0b0000 : 0b0000 : 0b00000 : 0b001 : 0b00000 : 0b0001111) = Some(FENCEI)
+function clause execute FENCEI = () (* XXX TODO *)
+
+union ast member unit ECALL
+function clause decode (0b000000000000 : 0b00000 : 0b000 : 0b00000 : 0b1110011) = Some(ECALL ())
+function clause execute ECALL = ()
+
+union ast member unit EBREAK
+function clause decode (0b000000000001 : 0b00000 : 0b000 : 0b00000 : 0b1110011) = Some(EBREAK ())
+function clause execute EBREAK = { exit () }
+
+
+function clause decode _ = None
 
 end ast
 end decode

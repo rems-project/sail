@@ -49,7 +49,6 @@ open Interp_interface ;;
 
 open Nat_big_num ;;
 
-let val_to_string_internal = Pretty_interp.val_to_string_internal ;;
 let lit_to_string = Pretty_interp.lit_to_string ;;
 let id_to_string = Pretty_interp.id_to_string ;;
 let loc_to_string = Pretty_interp.loc_to_string ;;
@@ -451,7 +450,7 @@ let local_variables_to_string (IState(stack,_)) =
       String.concat ", " (option_map (fun (id,value)-> 
 	match id with
 	  | "0" -> None (*Let's not print out the context hole again*)
-	  | _ -> Some (id ^ "=" ^ val_to_string_internal mem value)) (Pmap.bindings_list env))
+	  | _ -> Some (id ^ "=" ^ Interp.string_of_value value)) (Pmap.bindings_list env))
 
 let instr_parm_to_string (name, typ, value) = 
   name ^"="^

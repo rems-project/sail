@@ -1,0 +1,79 @@
+let is_inc = false
+
+let translate_reg name value = 
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 5,Nat_big_num.of_int (reg_to_int value))
+
+let translate_uop op = match op with
+  | RISCVLUI   -> LUI0
+  | RISCVAUIPC -> AUIPC
+
+let translate_bop op = match op with
+  | RISCVBEQ  -> BEQ0
+  | RISCVBNE  -> BNE
+  | RISCVBLT  -> BLT
+  | RISCVBGE  -> BGE
+  | RISCVBLTU -> BLTU
+  | RISCVBGEU -> BGEU
+
+let translate_iop op = match op with
+  | RISCVADDI  -> ADDI0 
+  | RISCVSLTI  -> SLTI0
+  | RISCVSLTIU -> SLTIU0
+  | RISCVXORI  -> XORI0
+  | RISCVORI   -> ORI0
+  | RISCVANDI  -> ANDI0
+
+let translate_sop op = match op with
+  | RISCVSLLI -> SLLI
+  | RISCVSRLI -> SRLI
+  | RISCVSRAI -> SRAI
+
+let translate_rop op = match op with
+  | RISCVADD  -> ADD0 
+  | RISCVSUB  -> SUB0 
+  | RISCVSLL  -> SLL0 
+  | RISCVSLT  -> SLT0 
+  | RISCVSLTU -> SLTU0
+  | RISCVXOR  -> XOR0 
+  | RISCVSRL  -> SRL0 
+  | RISCVSRA  -> SRA0 
+  | RISCVOR   -> OR0  
+  | RISCVAND  -> AND0 
+
+let translate_ropw op = match op with
+  | RISCVADDW -> ADDW 
+  | RISCVSUBW -> SUBW 
+  | RISCVSLLW -> SLLW 
+  | RISCVSRLW -> SRLW 
+  | RISCVSRAW -> SRAW 
+
+let translate_wordWidth op = match op with
+  | RISCVBYTE   -> BYTE  
+  | RISCVHALF   -> HALF  
+  | RISCVWORD   -> WORD  
+  | RISCVDOUBLE -> DOUBLE
+
+let translate_bool name = function
+  | true -> Sail_values.B1
+  | false -> Sail_values.B0
+
+let translate_imm21 name value = 
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 21,Nat_big_num.of_int value)
+
+let translate_imm20 name value = 
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 20,Nat_big_num.of_int value)
+
+let translate_imm13 name value = 
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 13,Nat_big_num.of_int value)
+
+let translate_imm12 name value = 
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 12,Nat_big_num.of_int value)
+
+let translate_imm6 name value = 
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 6,Nat_big_num.of_int value)
+
+let translate_imm5 name value = 
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 5,Nat_big_num.of_int value)
+
+let translate_imm4 name value =
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 4,Nat_big_num.of_int value)

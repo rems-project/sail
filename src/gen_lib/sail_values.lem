@@ -378,7 +378,7 @@ let hardware_quot (a:integer) (b:integer) : integer =
   if ((a<0) = (b<0)) then
     q  (* same sign -- result positive *)
   else
-    ~q (* different sign -- result negative *)
+    integerNegate q (* different sign -- result negative *)
 
 let quot_signed = hardware_quot
 

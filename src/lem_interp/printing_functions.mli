@@ -10,7 +10,6 @@ val loc_to_string : l -> string
 val get_loc : tannot exp -> string
 (*interp_interface.value to string*)
 val reg_value_to_string : register_value -> string
-val val_to_string_internal : Interp.lmem -> Interp_ast.value -> string
 
 (*(*Force all representations to hex strings instead of a mixture of hex and binary strings*)
 val val_to_hex_string : value0 -> string*)

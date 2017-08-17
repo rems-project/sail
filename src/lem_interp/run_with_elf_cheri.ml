@@ -1386,7 +1386,7 @@ let run () =
         startaddr,
         startaddr_internal), pp_symbol_map) = initial_system_state_of_elf_file !file in
 
-  let context = build_context isa_defs isa_m0 isa_m1 isa_m2 isa_m3 isa_m4 isa_m5 isa_m6 None isa_externs in
+  let context = build_context false isa_defs isa_m0 isa_m1 isa_m2 isa_m3 isa_m4 isa_m5 isa_m6 None isa_externs in
   (*NOTE: this is likely MIPS specific, so should probably pull from initial_system_state info on to translate or not, 
           endian mode, and translate function name 
   *)

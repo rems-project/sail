@@ -1,0 +1,84 @@
+let (vector <0, 32, inc, string >) GPRstr =
+  [ "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10",
+  "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x18", "x19", "x20",
+  "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28", "x29", "x30", "x31"
+  ]
+
+let CIA_fp = RFull("CIA")
+let NIA_fp = RFull("NIA")
+
+function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (instr) = {
+  iR := [|| ||];
+  oR := [|| ||];
+  aR := [|| ||];
+  ik := IK_simple;
+  Nias := [|| NIAFP_successor ||];
+  Dia := DIAFP_none;
+
+  switch instr {
+     case (EBREAK) -> ()
+     case (UTYPE ( imm, rd, op)) -> {
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+     }
+     case (JAL ( imm, rd)) -> {
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+            let (bit[64]) offset = EXTS(imm) in
+            Nias := [|| NIAFP_concrete_address (PC + offset) ||]
+     }
+     case (JALR ( imm, rs, rd)) -> {
+            if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+            let (bit[64]) offset = EXTS(imm) in
+            Nias := [|| NIAFP_register (RFull(GPRstr[rs])) ||]; (* XXX this should br rs + offset... *)
+     }
+     case (BTYPE ( imm, rs2, rs1, op)) -> {
+            if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
+            if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
+            ik := IK_cond_branch;
+            let (bit[64]) offset = EXTS(imm) in
+            Nias := NIAFP_concrete_address(PC + offset) :: Nias;
+     }
+     case (ITYPE ( imm, rs, rd, op)) -> {
+            if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+     }
+     case (SHIFTIOP ( imm, rs, rd, op)) -> {
+            if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+     }
+     case (RTYPE ( rs2, rs1, rd, op)) -> {
+            if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
+            if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+     }
+     case (LOAD ( imm, rs, rd, unsign, width)) -> { (* XXX "unsigned" causes name conflict in lem shallow embedding... *)
+            if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+            aR := iR;
+            ik := IK_mem_read (Read_plain);
+     }
+     case (STORE( imm, rs2, rs1, width)) -> {
+            if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
+            if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
+            if (rs1 == 0) then () else aR := RFull(GPRstr[rs1]) :: aR;
+            ik := IK_mem_write (Write_plain);
+     }
+     case (ADDIW ( imm, rs, rd)) -> {
+            if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+     }
+     case (SHIFTW ( imm, rs, rd, op)) -> {
+            if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+     } 
+     case (RTYPEW ( rs2, rs1, rd, op))-> {
+            if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
+            if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+     }
+     case (FENCE(pred, succ)) -> {
+          ik := IK_barrier (Barrier_MIPS_SYNC);
+     }
+  };
+  (iR,oR,aR,Nias,Dia,ik)
+}
