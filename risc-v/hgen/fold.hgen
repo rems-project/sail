@@ -6,7 +6,7 @@
 | `RISCVIType (_, r0, r1, _)      -> fold_reg r0 (fold_reg r1 (y_reg, y_sreg))
 | `RISCVShiftIop (_, r0, r1, _)   -> fold_reg r0 (fold_reg r1 (y_reg, y_sreg))
 | `RISCVRType (r0, r1, r2, _)     -> fold_reg r0 (fold_reg r1 (fold_reg r2 (y_reg, y_sreg)))
-| `RISCVLoad (_, r0, r1, _, _)    -> fold_reg r0 (fold_reg r1 (y_reg, y_sreg))
+| `RISCVLoad (_, r0, r1, _, _, _) -> fold_reg r0 (fold_reg r1 (y_reg, y_sreg))
 | `RISCVStore (_, r0, r1, _)      -> fold_reg r0 (fold_reg r1 (y_reg, y_sreg))
 | `RISCVADDIW (_, r0, r1)         -> fold_reg r0 (fold_reg r1 (y_reg, y_sreg))
 | `RISCVSHIFTW (_, r0, r1, _)     -> fold_reg r0 (fold_reg r1 (y_reg, y_sreg))

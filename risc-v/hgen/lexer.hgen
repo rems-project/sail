@@ -33,13 +33,21 @@
 "or",   RTYPE{op=RISCVOR};
 "and",  RTYPE{op=RISCVAND};
 
-"lb",  LOAD{unsigned=false; width=RISCVBYTE};
-"lbu", LOAD{unsigned=true;  width=RISCVBYTE};
-"lh",  LOAD{unsigned=false; width=RISCVHALF};
-"lhu", LOAD{unsigned=true;  width=RISCVHALF};
-"lw",  LOAD{unsigned=false; width=RISCVWORD};
-"lwu", LOAD{unsigned=true;  width=RISCVWORD};
-"ld",  LOAD{unsigned=false; width=RISCVDOUBLE};
+"lb",  LOAD{unsigned=false; width=RISCVBYTE;   aq=false};
+"lbu", LOAD{unsigned=true;  width=RISCVBYTE;   aq=false};
+"lh",  LOAD{unsigned=false; width=RISCVHALF;   aq=false};
+"lhu", LOAD{unsigned=true;  width=RISCVHALF;   aq=false};
+"lw",  LOAD{unsigned=false; width=RISCVWORD;   aq=false};
+"lwu", LOAD{unsigned=true;  width=RISCVWORD;   aq=false};
+"ld",  LOAD{unsigned=false; width=RISCVDOUBLE; aq=false};
+
+"lb.aq",  LOAD{unsigned=false; width=RISCVBYTE;   aq=true};
+"lbu.aq", LOAD{unsigned=true;  width=RISCVBYTE;   aq=true};
+"lh.aq",  LOAD{unsigned=false; width=RISCVHALF;   aq=true};
+"lhu.aq", LOAD{unsigned=true;  width=RISCVHALF;   aq=true};
+"lw.aq",  LOAD{unsigned=false; width=RISCVWORD;   aq=true};
+"lwu.aq", LOAD{unsigned=true;  width=RISCVWORD;   aq=true};
+"ld.aq",  LOAD{unsigned=false; width=RISCVDOUBLE; aq=true};
 
 "sb", STORE{width=RISCVBYTE};
 "sh", STORE{width=RISCVHALF};

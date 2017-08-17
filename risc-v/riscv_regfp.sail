@@ -51,11 +51,11 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
      }
-     case (LOAD ( imm, rs, rd, unsign, width)) -> { (* XXX "unsigned" causes name conflict in lem shallow embedding... *)
+     case (LOAD ( imm, rs, rd, unsign, width, aq)) -> { (* XXX "unsigned" causes name conflict in lem shallow embedding... *)
             if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
             aR := iR;
-            ik := IK_mem_read (Read_plain);
+            ik := if aq then IK_mem_read (Read_RISCV_acquire) else IK_mem_read (Read_plain);
      }
      case (STORE( imm, rs2, rs1, width)) -> {
             if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
@@ -77,7 +77,13 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
      }
      case (FENCE(pred, succ)) -> {
-          ik := IK_barrier (Barrier_MIPS_SYNC);
+          ik :=
+            switch(pred, succ) {
+              case (0b0011, 0b0011) -> IK_barrier (Barrier_RISCV_rw_rw)
+              case (0b0010, 0b0011) -> IK_barrier (Barrier_RISCV_r_rw)
+              case (0b0011, 0b0001) -> IK_barrier (Barrier_RISCV_rw_w)
+              case _ -> exit "unsupported fence"
+            };
      }
   };
   (iR,oR,aR,Nias,Dia,ik)

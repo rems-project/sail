@@ -30,12 +30,13 @@
       translate_reg "rs1" rs1,
       translate_reg "rd" rd,
       translate_rop op)
-| `RISCVLoad(imm, rs, rd, unsigned, width) -> LOAD(
+| `RISCVLoad(imm, rs, rd, unsigned, width, aq) -> LOAD(
       translate_imm12 "imm" imm,
       translate_reg "rs" rs,
       translate_reg "rd" rd,
       translate_bool "unsigned" unsigned,
-      translate_wordWidth width)
+      translate_wordWidth width,
+      translate_bool "aq" aq)
 | `RISCVStore(imm, rs, rd, width) -> STORE (
       translate_imm12 "imm" imm,
       translate_reg "rs" rs,

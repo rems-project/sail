@@ -5,7 +5,7 @@
 | `RISCVIType (x, r0, r1, y)      -> `RISCVIType (x, map_reg r0, map_reg r1, y)
 | `RISCVShiftIop (x, r0, r1, y)   -> `RISCVShiftIop (x, map_reg r0, map_reg r1, y)
 | `RISCVRType (r0, r1, r2, y)     -> `RISCVRType (r0, map_reg r1, map_reg r2, y)
-| `RISCVLoad (x, r0, r1, y, z)    -> `RISCVLoad (x, map_reg r0, map_reg r1, y, z)
+| `RISCVLoad (x, r0, r1, y, z, a) -> `RISCVLoad (x, map_reg r0, map_reg r1, y, z, a)
 | `RISCVStore (x, r0, r1, y)      -> `RISCVStore (x, map_reg r0, map_reg r1, y)
 | `RISCVADDIW (x, r0, r1)         -> `RISCVADDIW (x, map_reg r0, map_reg r1)
 | `RISCVSHIFTW (x, r0, r1, y)     -> `RISCVSHIFTW (x, map_reg r0, map_reg r1, y)

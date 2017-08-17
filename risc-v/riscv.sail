@@ -58,6 +58,17 @@ function forall 'a. 'a effect { escape } not_implemented((string) message) =
 }
 
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr
+val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_acquire
+val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_reserved
+val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_reserved_acquire
+function forall Nat 'n. (bit[8 * 'n]) effect { rmem } mem_read( (bit[64]) addr, ([|'n|]) width, (bool) aq, (bool) res) =
+  switch (aq, res) {
+    case (false, false) -> MEMr(addr, width)
+    case (true,  false) -> MEMr_acquire(addr, width)
+    case (false, true)  -> MEMr_reserved(addr, width)
+    case (true,  true)  -> MEMr_reserved_acquire(addr, width)
+  }
+
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval
 val extern unit -> unit effect { barr } MEM_fence_rw_rw
@@ -202,29 +213,29 @@ function clause execute (RTYPE(rs2, rs1, rd, op)) =
   } in
   wGPR(rd, result)
 
-union ast member ((bit[12]), regno, regno, bool, word_width) LOAD
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, BYTE))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b001 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, HALF))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b010 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, WORD))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b011 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, DOUBLE))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b100 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  BYTE))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b101 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  HALF))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b110 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  WORD))
-function clause execute(LOAD(imm, rs1, rd, unsigned, width)) =
+union ast member ((bit[12]), regno, regno, bool, word_width, bool) LOAD
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, BYTE,   false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b001 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, HALF,   false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b010 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, WORD,   false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b011 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, DOUBLE, false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b100 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  BYTE,   false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b101 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  HALF,   false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b110 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  WORD,   false))
+function clause execute(LOAD(imm, rs1, rd, unsigned, width, aq)) =
     let (bit[64]) addr = rGPR(rs1) + EXTS(imm) in
     let (bit[64]) result = if unsigned then 
         switch (width) {
-          case BYTE   -> EXTZ(MEMr(addr, 1))
-          case HALF   -> EXTZ(MEMr(addr, 2))
-          case WORD   -> EXTZ(MEMr(addr, 4))
-          case DOUBLE -> MEMr(addr, 8)
+          case BYTE   -> EXTZ(mem_read(addr, 1, aq, false))
+          case HALF   -> EXTZ(mem_read(addr, 2, aq, false))
+          case WORD   -> EXTZ(mem_read(addr, 4, aq, false))
+          case DOUBLE -> mem_read(addr, 8, aq, false)
         }
       else
         switch (width) {
-          case BYTE   -> EXTS(MEMr(addr, 1))
-          case HALF   -> EXTS(MEMr(addr, 2))
-          case WORD   -> EXTS(MEMr(addr, 4))
-          case DOUBLE -> MEMr(addr, 8)
+          case BYTE   -> EXTS(mem_read(addr, 1, aq, false))
+          case HALF   -> EXTS(mem_read(addr, 2, aq, false))
+          case WORD   -> EXTS(mem_read(addr, 4, aq, false))
+          case DOUBLE -> mem_read(addr, 8, aq, false)
         } in
     wGPR(rd, result)
 

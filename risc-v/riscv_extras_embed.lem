@@ -4,11 +4,16 @@ open import Sail_impl_base
 open import Sail_values
 open import Prompt
 
-val MEMr             : (vector bitU * integer) -> M (vector bitU)
-val MEMr_reserve     : (vector bitU * integer) -> M (vector bitU)
+val MEMr                  : (vector bitU * integer) -> M (vector bitU)
+val MEMr_acquire          : (vector bitU * integer) -> M (vector bitU)
+val MEMr_reserved         : (vector bitU * integer) -> M (vector bitU)
+val MEMr_reserved_acquire : (vector bitU * integer) -> M (vector bitU)
 
-let MEMr (addr,size)             = read_mem false Read_plain addr size
-let MEMr_reserve (addr,size)     = read_mem false Read_reserve addr size
+let MEMr (addr,size)                  = read_mem false Read_plain addr size
+let MEMr_acquire (addr,size)          = read_mem false Read_RISCV_acquire addr size
+let MEMr_reserved (addr,size)         = read_mem false Read_RISCV_reserved addr size
+let MEMr_reserved_acquire (addr,size) = read_mem false Read_RISCV_reserved_acquire addr size
+
 
 val MEMea                 : (vector bitU * integer) -> M unit
 val MEMea_conditional     : (vector bitU * integer) -> M unit

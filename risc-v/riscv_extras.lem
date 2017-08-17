@@ -32,8 +32,10 @@ let memory_parameter_transformer_option_address _mode v =
 
 
 let read_memory_functions : memory_reads =
-  [ ("MEMr",             (MR Read_plain              memory_parameter_transformer));
-    ("MEMr_reserve",     (MR Read_reserve            memory_parameter_transformer));
+  [ ("MEMr",                  (MR Read_plain                  memory_parameter_transformer));
+    ("MEMr_acquire",          (MR Read_RISCV_acquire          memory_parameter_transformer));
+    ("MEMr_reserved",         (MR Read_RISCV_reserved         memory_parameter_transformer));
+    ("MEMr_reserved_acquire", (MR Read_RISCV_reserved_acquire memory_parameter_transformer));
   ]
 
 let memory_writes : memory_writes =

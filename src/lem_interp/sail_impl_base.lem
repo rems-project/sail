@@ -426,6 +426,8 @@ type read_kind =
   | Read_reserve
   (* AArch64 reads *)
   | Read_acquire | Read_exclusive | Read_exclusive_acquire | Read_stream
+  (* RISC-V reads *)
+  | Read_RISCV_acquire | Read_RISCV_reserved | Read_RISCV_reserved_acquire
 
 instance (Show read_kind)
   let show = function
