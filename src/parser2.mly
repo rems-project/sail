@@ -53,6 +53,7 @@ let mk_kid str n m = Kid_aux (Var str, loc n m)
 
 let deinfix (Id_aux (Id v, l)) = Id_aux (DeIid v, l)
 
+let mk_effect e n m = BE_aux (e, loc n m)
 let mk_typ t n m = ATyp_aux (t, loc n m)
 let mk_pat p n m = P_aux (p, loc n m)
 let mk_pexp p n m = Pat_aux (p, loc n m)
@@ -61,12 +62,14 @@ let mk_lit l n m = L_aux (l, loc n m)
 let mk_lit_exp l n m = mk_exp (E_lit (mk_lit l n m)) n m
 let mk_typschm tq t n m = TypSchm_aux (TypSchm_ts (tq, t), loc n m)
 let mk_nc nc n m = NC_aux (nc, loc n m)
+let mk_sd s n m = SD_aux (s, loc n m)
 
 let mk_funcl f n m = FCL_aux (f, loc n m)
 let mk_fun fn n m = FD_aux (fn, loc n m)
 let mk_td t n m = TD_aux (t, loc n m)
 let mk_vs v n m = VS_aux (v, loc n m)
 let mk_reg_dec d n m = DEC_aux (d, loc n m)
+let mk_default d n m = DT_aux (d, loc n m)
 
 let qi_id_of_kopt (KOpt_aux (kopt_aux, l) as kopt) = QI_aux (QI_id kopt, l)
 
@@ -118,10 +121,10 @@ let rec desugar_rchain chain s e =
 
 /*Terminals with no content*/
 
-%token And As Assert Bitzero Bitone Bits By Match Clause Const Dec Def Default Deinfix Effect EFFECT End Op
-%token Enum Else Exit Extern False Forall Exist Foreach Overload Function_ If_ In IN Inc Let_ Member Int Order Cast
-%token Pure Rec Register Return Scattered Sizeof Struct Switch Then True TwoCaret Type TYPE Typedef
-%token Undefined Union With When Val Constraint
+%token And As Assert Bitzero Bitone Bits By Match Clause Const Dec Def Default Effect EFFECT End Op
+%token Enum Else Extern False Forall Exist Foreach Overload Function_ If_ In IN Inc Let_ Member Int Order Cast
+%token Pure Rec Register Return Scattered Sizeof Struct Then True TwoCaret Type TYPE Typedef
+%token Undefined Union With Val Constraint Throw Try Catch
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 
 %nonassoc Then
@@ -129,10 +132,10 @@ let rec desugar_rchain chain s e =
 
 %token Div_ Mod ModUnderS Quot Rem QuotUnderS
 
-%token Bar Comma Dot Eof Minus Semi Under
-%token Lcurly Rcurly Lparen Rparen Lsquare Rsquare
-%token BarBar BarSquare BarBarSquare ColonEq ColonGt ColonSquare DotDot
-%token MinusGt LtBar LtColon SquareBar SquareBarBar SquareColon
+%token Bar Comma Dot Eof Minus Semi Under DotDot
+%token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar
+%token BarBar BarSquare BarBarSquare ColonEq ColonGt ColonSquare
+%token MinusGt LtBar LtColon SquareBar SquareBarBar
 
 /*Terminals with content*/
 
@@ -140,17 +143,14 @@ let rec desugar_rchain chain s e =
 %token <int> Num
 %token <string> String Bin Hex Real
 
-%token <string> Amp At Caret Div Eq Excl Gt Lt Plus Star Tilde EqGt Unit
+%token <string> Amp At Caret Div Eq Excl Gt Lt Plus Star EqGt Unit
 %token <string> Colon ExclEq
 %token <string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt
 %token <string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar
 
-%token <string> GtEqUnderS GtEqUnderSi GtEqUnderU GtEqUnderUi GtGtUnderU GtUnderS
-%token <string> GtUnderSi GtUnderU GtUnderUi LtEqUnderS LtEqUnderSi LtEqUnderU
-%token <string> LtEqUnderUi LtUnderS LtUnderSi LtUnderU LtUnderUi StarStarUnderS StarStarUnderSi StarUnderS
-%token <string> StarUnderSi StarUnderU StarUnderUi PlusUnderS MinusUnderS
-
 %token <string> Op0 Op1 Op2 Op3 Op4 Op5 Op6 Op7 Op8 Op9
+%token <string> Op0l Op1l Op2l Op3l Op4l Op5l Op6l Op7l Op8l Op9l
+%token <string> Op0r Op1r Op2r Op3r Op4r Op5r Op6r Op7r Op8r Op9r
 
 %start file
 %type <Parse_ast.defs> defs
@@ -159,32 +159,44 @@ let rec desugar_rchain chain s e =
 %%
 
 id:
-  | Id
-    { mk_id (Id $1) $startpos $endpos }
-  | Op Op1
-    { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op2
-    { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op3
-    { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op4
-    { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op5
-    { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op6
-    { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op7
-    { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op8
-    { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op9
-    { mk_id (DeIid $2) $startpos $endpos }
-  | Op Plus
-    { mk_id (DeIid "+") $startpos $endpos }
-  | Op Minus
-    { mk_id (DeIid "-") $startpos $endpos }
-  | Op Star
-    { mk_id (DeIid "*") $startpos $endpos }
+  | Id { mk_id (Id $1) $startpos $endpos }
+
+  | Op Op0 { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op1 { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op2 { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op3 { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op4 { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op5 { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op6 { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op7 { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op8 { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op9 { mk_id (DeIid $2) $startpos $endpos }
+
+  | Op Op0l { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op1l { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op2l { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op3l { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op4l { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op5l { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op6l { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op7l { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op8l { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op9l { mk_id (DeIid $2) $startpos $endpos }
+
+  | Op Op0r { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op1r { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op2r { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op3r { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op4r { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op5r { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op6r { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op7r { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op8r { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op9r { mk_id (DeIid $2) $startpos $endpos }
+
+  | Op Plus { mk_id (DeIid "+") $startpos $endpos }
+  | Op Minus { mk_id (DeIid "-") $startpos $endpos }
+  | Op Star { mk_id (DeIid "*") $startpos $endpos }
 
 op0: Op0 { mk_id (Id $1) $startpos $endpos }
 op1: Op1 { mk_id (Id $1) $startpos $endpos }
@@ -196,6 +208,28 @@ op6: Op6 { mk_id (Id $1) $startpos $endpos }
 op7: Op7 { mk_id (Id $1) $startpos $endpos }
 op8: Op8 { mk_id (Id $1) $startpos $endpos }
 op9: Op9 { mk_id (Id $1) $startpos $endpos }
+
+op0l: Op0l { mk_id (Id $1) $startpos $endpos }
+op1l: Op1l { mk_id (Id $1) $startpos $endpos }
+op2l: Op2l { mk_id (Id $1) $startpos $endpos }
+op3l: Op3l { mk_id (Id $1) $startpos $endpos }
+op4l: Op4l { mk_id (Id $1) $startpos $endpos }
+op5l: Op5l { mk_id (Id $1) $startpos $endpos }
+op6l: Op6l { mk_id (Id $1) $startpos $endpos }
+op7l: Op7l { mk_id (Id $1) $startpos $endpos }
+op8l: Op8l { mk_id (Id $1) $startpos $endpos }
+op9l: Op9l { mk_id (Id $1) $startpos $endpos }
+
+op0r: Op0r { mk_id (Id $1) $startpos $endpos }
+op1r: Op1r { mk_id (Id $1) $startpos $endpos }
+op2r: Op2r { mk_id (Id $1) $startpos $endpos }
+op3r: Op3r { mk_id (Id $1) $startpos $endpos }
+op4r: Op4r { mk_id (Id $1) $startpos $endpos }
+op5r: Op5r { mk_id (Id $1) $startpos $endpos }
+op6r: Op6r { mk_id (Id $1) $startpos $endpos }
+op7r: Op7r { mk_id (Id $1) $startpos $endpos }
+op8r: Op8r { mk_id (Id $1) $startpos $endpos }
+op9r: Op9r { mk_id (Id $1) $startpos $endpos }
 
 decl:
   | Decl
@@ -281,48 +315,156 @@ typ:
   | typ0
     { $1 }
 
+/* The following implements all nine levels of user-defined precedence for
+operators in types, with both left, right and non-associative operators */
+
 typ0:
   | typ1 op0 typ1 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ0l op0l typ1 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ1 op0r typ0r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ1 { $1 }
+typ0l:
+  | typ1 op0 typ1 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ0l op0l typ1 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ1 { $1 }
+typ0r:
+  | typ1 op0 typ1 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ1 op0r typ0r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ1 { $1 }
 
 typ1:
   | typ2 op1 typ2 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ1l op1l typ2 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ2 op1r typ1r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ2 { $1 }
+typ1l:
+  | typ2 op1 typ2 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ1l op1l typ2 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ2 { $1 }
+typ1r:
+  | typ2 op1 typ2 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ2 op1r typ1r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ2 { $1 }
 
 typ2:
   | typ3 op2 typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ2l op2l typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ3 op2r typ2r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ3 { $1 }
+typ2l:
+  | typ3 op2 typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ2l op2l typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ3 { $1 }
+typ2r:
+  | typ3 op2 typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ3 op2r typ2r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ3 { $1 }
 
 typ3:
   | typ4 op3 typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ3l op3l typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ4 op3r typ3r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ4 { $1 }
+typ3l:
+  | typ4 op3 typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ3l op3l typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ4 { $1 }
+typ3r:
+  | typ4 op3 typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ4 op3r typ3r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ4 { $1 }
 
 typ4:
   | typ5 op4 typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ4l op4l typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ5 op4r typ4r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ5 { $1 }
+typ4l:
+  | typ5 op4 typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ4l op4l typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ5 { $1 }
+typ4r:
+  | typ5 op4 typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ5 op4r typ4r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ5 { $1 }
 
 typ5:
   | typ6 op5 typ6 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ5l op5l typ6 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ6 op5r typ5r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ6 { $1 }
+typ5l:
+  | typ6 op5 typ6 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ5l op5l typ6 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ6 { $1 }
+typ5r:
+  | typ6 op5 typ6 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ6 op5r typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ6 { $1 }
 
 typ6:
   | typ7 op6 typ7 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ6 Plus typ7 { mk_typ (ATyp_sum ($1, $3)) $startpos $endpos }
-  | typ6 Minus typ7 { mk_typ (ATyp_minus ($1, $3)) $startpos $endpos }
+  | typ6l op6l typ7 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ7 op6r typ6r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ6l Plus typ7 { mk_typ (ATyp_sum ($1, $3)) $startpos $endpos }
+  | typ6l Minus typ7 { mk_typ (ATyp_minus ($1, $3)) $startpos $endpos }
+  | typ7 { $1 }
+typ6l:
+  | typ7 op6 typ7 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ6l op6l typ7 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ6l Plus typ7 { mk_typ (ATyp_sum ($1, $3)) $startpos $endpos }
+  | typ6l Minus typ7 { mk_typ (ATyp_minus ($1, $3)) $startpos $endpos }
+  | typ7 { $1 }
+typ6r:
+  | typ7 op6 typ7 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ7 op6r typ6r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ7 { $1 }
 
 typ7:
   | typ8 op7 typ8 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ7 Star typ8 { mk_typ (ATyp_times ($1, $3)) $startpos $endpos }
+  | typ7l op7l typ8 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ8 op7r typ7r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ7l Star typ8 { mk_typ (ATyp_times ($1, $3)) $startpos $endpos }
+  | typ8 { $1 }
+typ7l:
+  | typ8 op7 typ8 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ7l op7l typ8 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ7l Star typ8 { mk_typ (ATyp_times ($1, $3)) $startpos $endpos }
+  | typ8 { $1 }
+typ7r:
+  | typ8 op7 typ8 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ8 op7r typ7r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | typ8 { $1 }
 
 typ8:
   | typ9 op8 typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ8l op8l typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ9 op8r typ8r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
+  | typ9 { $1 }
+typ8l:
+  | typ9 op8 typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ8l op8l typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
+  | typ9 { $1 }
+typ8r:
+  | typ9 op8 typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ9 op8r typ8r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
   | typ9 { $1 }
 
 typ9:
   | atomic_typ op9 atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ9l op9l atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | atomic_typ op9r typ9r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | atomic_typ { $1 }
+typ9l:
+  | atomic_typ op9 atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ9l op9l atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | atomic_typ { $1 }
+typ9r:
+  | atomic_typ op9 atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | atomic_typ op9r typ9r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
   | atomic_typ { $1 }
 
 atomic_typ:
@@ -342,6 +484,11 @@ atomic_typ:
     { $2 }
   | Lparen typ Comma typ_list Rparen
     { mk_typ (ATyp_tup ($2 :: $4)) $startpos $endpos }
+  | LcurlyBar num_list RcurlyBar
+    { let v = mk_kid "n" $startpos $endpos in
+      let atom_id = mk_id (Id "atom") $startpos $endpos in
+      let atom_of_v = mk_typ (ATyp_app (atom_id, [mk_typ (ATyp_var v) $startpos $endpos])) $startpos $endpos in
+      mk_typ (ATyp_exist ([v], NC_aux (NC_nat_set_bounded (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
   | Lcurly kid_list Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, NC_aux (NC_true, loc $startpos $endpos), $4)) $startpos $endpos }
   | Lcurly kid_list Comma nc Dot typ Rcurly
@@ -386,11 +533,59 @@ typquant:
   | kopt_list
     { TypQ_aux (TypQ_tq (List.map qi_id_of_kopt $1), loc $startpos $endpos) }
 
+effect:
+  | Barr
+    { mk_effect BE_barr $startpos $endpos }
+  | Depend
+    { mk_effect BE_depend $startpos $endpos }
+  | Rreg
+    { mk_effect BE_rreg $startpos $endpos }
+  | Wreg
+    { mk_effect BE_wreg $startpos $endpos }
+  | Rmem
+    { mk_effect BE_rmem $startpos $endpos }
+  | Rmemt
+    { mk_effect BE_rmemt $startpos $endpos }
+  | Wmem
+    { mk_effect BE_wmem $startpos $endpos }
+  | Wmv
+    { mk_effect BE_wmv $startpos $endpos }
+  | Wmvt
+    { mk_effect BE_wmvt $startpos $endpos }
+  | Eamem
+    { mk_effect BE_eamem $startpos $endpos }
+  | Exmem
+    { mk_effect BE_exmem $startpos $endpos }
+  | Undef
+    { mk_effect BE_undef $startpos $endpos }
+  | Unspec
+    { mk_effect BE_unspec $startpos $endpos }
+  | Nondet
+    { mk_effect BE_nondet $startpos $endpos }
+  | Escape
+    { mk_effect BE_escape $startpos $endpos }
+
+effect_list:
+  | effect
+    { [$1] }
+  | effect Comma effect_list
+    { $1::$3 }
+
+effect_set:
+  | Lcurly effect_list Rcurly
+    { mk_typ (ATyp_set $2) $startpos $endpos }
+  | Pure
+    { mk_typ (ATyp_set []) $startpos $endpos }
+
 typschm:
   | typ MinusGt typ
     { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
   | Forall typquant Dot typ MinusGt typ
     { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
+  | typ MinusGt typ Effect effect_set
+    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, $5)) s e) s e) $startpos $endpos }
+  | Forall typquant Dot typ MinusGt typ Effect effect_set
+    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, $8)) s e) s e) $startpos $endpos }
 
 pat:
   | atomic_pat
@@ -413,6 +608,12 @@ atomic_pat:
     { mk_pat (P_lit $1) $startpos $endpos }
   | id
     { mk_pat (P_id $1) $startpos $endpos }
+  | kid
+    { mk_pat (P_var $1) $startpos $endpos }
+  | tydecl typ
+    { mk_pat (P_typ ($2, mk_pat (P_var $1) $startpos $endpos($1))) $startpos $endpos }
+  | id Lparen pat_list Rparen
+    { mk_pat (P_app ($1, $3)) $startpos $endpos }
   | pat Colon typ
     { mk_pat (P_typ ($3, $1)) $startpos $endpos }
   | decl typ
@@ -431,6 +632,16 @@ lit:
     { mk_lit (L_num $1) $startpos $endpos }
   | Undefined
     { mk_lit L_undef $startpos $endpos }
+  | Bitzero
+    { mk_lit L_zero $startpos $endpos }
+  | Bitone
+    { mk_lit L_one $startpos $endpos }
+  | Bin
+    { mk_lit (L_bin $1) $startpos $endpos }
+  | Hex
+    { mk_lit (L_hex $1) $startpos $endpos }
+  | String
+    { mk_lit (L_string $1) $startpos $endpos }
 
 exp:
   | cast_exp Colon typ
@@ -449,55 +660,171 @@ cast_exp:
     { mk_exp (E_block $2) $startpos $endpos }
   | Return cast_exp
     { mk_exp (E_return $2) $startpos $endpos }
+  | Throw cast_exp
+    { mk_exp (E_throw $2) $startpos $endpos }
   | If_ exp Then cast_exp Else cast_exp
     { mk_exp (E_if ($2, $4, $6)) $startpos $endpos }
-  | Match exp0 Lcurly case_list Rcurly
+  | If_ exp Then cast_exp
+    { mk_exp (E_if ($2, $4, mk_lit_exp L_unit $endpos($4) $endpos($4))) $startpos $endpos }
+  | Match exp Lcurly case_list Rcurly
     { mk_exp (E_case ($2, $4)) $startpos $endpos }
-  | Lparen exp Comma exp_list Rparen
+  | Try exp Catch Lcurly case_list Rcurly
+    { mk_exp (E_try ($2, $5)) $startpos $endpos }
+  | Lparen exp0 Comma exp_list Rparen
     { mk_exp (E_tuple ($2 :: $4)) $startpos $endpos }
+
+/* The following implements all nine levels of user-defined precedence for
+operators in expressions, with both left, right and non-associative operators */
 
 exp0:
   | exp1 op0 exp1 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp0l op0l exp1 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp1 op0r exp0r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp1 { $1 }
+exp0l:
+  | exp1 op0 exp1 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp0l op0l exp1 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp1 { $1 }
+exp0r:
+  | exp1 op0 exp1 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp1 op0r exp0r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp1 { $1 }
 
 exp1:
   | exp2 op1 exp2 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp1l op1l exp2 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp2 op1r exp1r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp2 { $1 }
+exp1l:
+  | exp2 op1 exp2 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp1l op1l exp2 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp2 { $1 }
+exp1r:
+  | exp2 op1 exp2 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp2 op1r exp1r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp2 { $1 }
 
 exp2:
   | exp3 op2 exp3 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp2l op2l exp3 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp3 op2r exp2r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp3 { $1 }
+exp2l:
+  | exp3 op2 exp3 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp2l op2l exp3 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp3 { $1 }
+exp2r:
+  | exp3 op2 exp3 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp3 op2r exp2r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp3 { $1 }
 
 exp3:
   | exp4 op3 exp4 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp3l op3l exp4 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp4 op3r exp3r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp4 { $1 }
+exp3l:
+  | exp4 op3 exp4 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp3l op3l exp4 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp4 { $1 }
+exp3r:
+  | exp4 op3 exp4 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp4 op3r exp3r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp4 { $1 }
 
 exp4:
   | exp5 op4 exp5 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp4l op4l exp5 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp5 op4r exp4r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp5 { $1 }
+exp4l:
+  | exp5 op4 exp5 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp4l op4l exp5 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp5 { $1 }
+exp4r:
+  | exp5 op4 exp5 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp5 op4r exp4r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp5 { $1 }
 
 exp5:
   | exp6 op5 exp6 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp5l op5l exp6 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp6 op5r exp5r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp6 At exp5r { mk_exp (E_vector_append ($1, $3)) $startpos $endpos }
+  | exp6 { $1 }
+exp5l:
+  | exp6 op5 exp6 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp5l op5l exp6 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp6 { $1 }
+exp5r:
+  | exp6 op5 exp6 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp6 op5r exp5r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp6 At exp5r { mk_exp (E_vector_append ($1, $3)) $startpos $endpos }
   | exp6 { $1 }
 
 exp6:
   | exp7 op6 exp7 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
-  | exp6 Plus exp7 { mk_exp (E_app_infix ($1, mk_id (Id "+") $startpos($2) $endpos($2), $3)) $startpos $endpos }
-  | exp6 Minus exp7 { mk_exp (E_app_infix ($1, mk_id (Id "-") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp6l op6l exp7 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp7 op6r exp6r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp6l Plus exp7 { mk_exp (E_app_infix ($1, mk_id (Id "+") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp6l Minus exp7 { mk_exp (E_app_infix ($1, mk_id (Id "-") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp7 { $1 }
+exp6l:
+  | exp7 op6 exp7 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp6l op6l exp7 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp6l Plus exp7 { mk_exp (E_app_infix ($1, mk_id (Id "+") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp6l Minus exp7 { mk_exp (E_app_infix ($1, mk_id (Id "-") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp7 { $1 }
+exp6r:
+  | exp7 op6 exp7 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp7 op6r exp6r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp7 { $1 }
 
 exp7:
   | exp8 op7 exp8 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
-  | exp7 Star exp8 { mk_exp (E_app_infix ($1, mk_id (Id "*") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp7l op7l exp8 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp8 op7r exp7r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp7l Star exp8 { mk_exp (E_app_infix ($1, mk_id (Id "*") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp8 { $1 }
+exp7l:
+  | exp8 op7 exp8 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp7l op7l exp8 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp7l Star exp8 { mk_exp (E_app_infix ($1, mk_id (Id "*") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp8 { $1 }
+exp7r:
+  | exp8 op7 exp8 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp8 op7r exp7r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp8 { $1 }
 
 exp8:
   | exp9 op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp8l op8l exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp9 op8r exp8r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | TwoCaret exp9 { mk_exp (E_app (mk_id (Id "pow2") $startpos($1) $endpos($1), [$2])) $startpos $endpos }
+  | exp9 { $1 }
+exp8l:
+  | exp9 op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp8l op8l exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | TwoCaret exp9 { mk_exp (E_app (mk_id (Id "pow2") $startpos($1) $endpos($1), [$2])) $startpos $endpos }
+  | exp9 { $1 }
+exp8r:
+  | exp9 op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp9 op8r exp8r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | TwoCaret exp9 { mk_exp (E_app (mk_id (Id "pow2") $startpos($1) $endpos($1), [$2])) $startpos $endpos }
   | exp9 { $1 }
 
 exp9:
   | atomic_exp op9 atomic_exp { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp9l op9l atomic_exp { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | atomic_exp op9r exp9r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | atomic_exp { $1 }
+exp9l:
+  | atomic_exp op9 atomic_exp { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | exp9l op9l atomic_exp { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | atomic_exp { $1 }
+exp9r:
+  | atomic_exp op9 atomic_exp { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
+  | atomic_exp op9r exp9r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | atomic_exp { $1 }
 
 case:
@@ -515,8 +842,6 @@ case_list:
 block:
   | exp
     { [$1] }
-  | If_ exp Then exp Semi block
-    { mk_exp (E_if ($2, $4, mk_lit_exp L_unit $startpos($5) $endpos($5))) $startpos $endpos($5) :: $6 }
   | Let_ letbind Semi block
     { [mk_exp (E_let ($2, mk_exp (E_block $4) $startpos($4) $endpos)) $startpos $endpos] }
   | exp Semi /* Allow trailing semicolon in block */
@@ -539,6 +864,22 @@ atomic_exp:
     { mk_exp (E_app ($1, [mk_lit_exp L_unit $startpos($2) $endpos])) $startpos $endpos }
   | id Lparen exp_list Rparen
     { mk_exp (E_app ($1, $3)) $startpos $endpos }
+  | Sizeof Lparen typ Rparen
+    { mk_exp (E_sizeof $3) $startpos $endpos }
+  | Constraint Lparen nc Rparen
+    { mk_exp (E_constraint $3) $startpos $endpos }
+  | Assert Lparen exp Comma exp Rparen
+    { mk_exp (E_assert ($3, $5)) $startpos $endpos }
+  | atomic_exp Lsquare exp Rsquare
+    { mk_exp (E_vector_access ($1, $3)) $startpos $endpos }
+  | atomic_exp Lsquare exp DotDot exp Rsquare
+    { mk_exp (E_vector_subrange ($1, $3, $5)) $startpos $endpos }
+  | Lsquare exp_list Rsquare
+    { mk_exp (E_vector $2) $startpos $endpos }
+  | Lsquare exp With atomic_exp Eq exp Rsquare
+    { mk_exp (E_vector_update ($2, $4, $6)) $startpos $endpos }
+  | Lsquare exp With atomic_exp DotDot atomic_exp Eq exp Rsquare
+    { mk_exp (E_vector_update_subrange ($2, $4, $6, $8)) $startpos $endpos }
   | Lparen exp Rparen
     { $2 }
 
@@ -546,12 +887,6 @@ exp_list:
   | exp
     { [$1] }
   | exp Comma exp_list
-    { $1 :: $3 }
-
-cast_exp_list:
-  | cast_exp
-    { [$1] }
-  | cast_exp Comma exp_list
     { $1 :: $3 }
 
 funcl:
@@ -634,6 +969,20 @@ register_def:
   | Register id Colon typ
     { mk_reg_dec (DEC_reg ($4, $2)) $startpos $endpos }
 
+default_def:
+  | Default base_kind Inc
+    { mk_default (DT_order ($2, mk_typ ATyp_inc $startpos($3) $endpos)) $startpos $endpos }
+  | Default base_kind Dec
+    { mk_default (DT_order ($2, mk_typ ATyp_dec $startpos($3) $endpos)) $startpos $endpos }
+
+scattered_def:
+  | Union id typquant
+    { mk_sd (SD_scattered_variant($2, mk_namesectn, $3)) $startpos $endpos }
+  | Union id
+    { mk_sd (SD_scattered_variant($2, mk_namesectn, mk_typqn)) $startpos $endpos }
+  | Function_ id
+    { mk_sd (SD_scattered_function(mk_recn, mk_tannotn, mk_eannotn, $2)) $startpos $endpos }
+
 def:
   | fun_def
     { DEF_fundef $1 }
@@ -649,6 +998,16 @@ def:
     { DEF_overload ($2, $5) }
   | Overload id Eq enum_bar
     { DEF_overload ($2, $4) }
+  | Scattered scattered_def
+    { DEF_scattered $2 }
+  | Function_ Clause funcl
+    { DEF_scattered (mk_sd (SD_scattered_funcl $3) $startpos $endpos) }
+  | Union Clause id Eq type_union
+    { DEF_scattered (mk_sd (SD_scattered_unioncl ($3, $5)) $startpos $endpos) }
+  | End id
+    { DEF_scattered (mk_sd (SD_scattered_end $2) $startpos $endpos) }
+  | default_def
+    { DEF_default $1 }
 
 defs_list:
   | def

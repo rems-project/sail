@@ -277,6 +277,10 @@ let doc_exp, doc_let =
         (doc_op equals (atomic_exp e1 ^^ colon ^^ atomic_exp e2) (exp e3)))
   | E_list exps ->
       squarebarbars (separate_map comma exp exps)
+  | E_try(e,pexps) ->
+      let opening = separate space [string "try"; exp e; string "catch"; lbrace] in
+      let cases = separate_map (break 1) doc_case pexps in
+      surround 2 1 opening cases rbrace
   | E_case(e,pexps) ->
       let opening = separate space [string "switch"; exp e; lbrace] in
       let cases = separate_map (break 1) doc_case pexps in
@@ -287,6 +291,8 @@ let doc_exp, doc_let =
      string "constraint" ^^ parens (doc_nexp_constraint nc)
   | E_exit e ->
     separate space [string "exit"; atomic_exp e;]
+  | E_throw e ->
+    separate space [string "throw"; atomic_exp e;]
   | E_return e ->
     separate space [string "return"; atomic_exp e;]
   | E_assert(c,m) ->

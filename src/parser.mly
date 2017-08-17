@@ -131,7 +131,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 %token And Alias As Assert Bitzero Bitone Bits By Case Clause Const Dec Def Default Deinfix Effect EFFECT End 
 %token Enumerate Else Exit Extern False Forall Exist Foreach Overload Function_ If_ In IN Inc Let_ Member Nat NatNum Order Cast
 %token Pure Rec Register Return Scattered Sizeof Struct Switch Then True TwoStarStar Type TYPE Typedef 
-%token Undefined Union With When Val Constraint
+%token Undefined Union With When Val Constraint Try Catch Throw
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 
 
@@ -609,10 +609,14 @@ atomic_exp:
     { eloc (E_list($2)) }
   | Switch exp Lcurly case_exps Rcurly
     { eloc (E_case($2,$4)) }
+  | Try exp Catch Lcurly case_exps Rcurly
+    { eloc (E_try ($2, $5)) }
   | Sizeof atomic_typ
     { eloc (E_sizeof($2)) }
   | Constraint Lparen nexp_constraint Rparen
     { eloc (E_constraint $3) }
+  | Throw atomic_exp
+    { eloc (E_throw $2) }
   | Exit atomic_exp
       { eloc (E_exit $2) }
   | Return atomic_exp

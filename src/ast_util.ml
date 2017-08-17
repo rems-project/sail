@@ -77,11 +77,13 @@ and map_exp_annot_aux f = function
   | E_record_update (exp, fexps) -> E_record_update (map_exp_annot f exp, map_fexps_annot f fexps)
   | E_field (exp, id) -> E_field (map_exp_annot f exp, id)
   | E_case (exp, cases) -> E_case (map_exp_annot f exp, List.map (map_pexp_annot f) cases)
+  | E_try (exp, cases) -> E_try (map_exp_annot f exp, List.map (map_pexp_annot f) cases)
   | E_let (letbind, exp) -> E_let (map_letbind_annot f letbind, map_exp_annot f exp)
   | E_assign (lexp, exp) -> E_assign (map_lexp_annot f lexp, map_exp_annot f exp)
   | E_sizeof nexp -> E_sizeof nexp
   | E_constraint nc -> E_constraint nc
   | E_exit exp -> E_exit (map_exp_annot f exp)
+  | E_throw exp -> E_throw (map_exp_annot f exp)
   | E_return exp -> E_return (map_exp_annot f exp)
   | E_assert (test, msg) -> E_assert (map_exp_annot f test, map_exp_annot f msg)
   | E_internal_cast (annot, exp) -> E_internal_cast (f annot, map_exp_annot f exp)
@@ -110,6 +112,7 @@ and map_pat_annot_aux f = function
   | P_as (pat, id) -> P_as (map_pat_annot f pat, id)
   | P_typ (typ, pat) -> P_typ (typ, map_pat_annot f pat)
   | P_id id -> P_id id
+  | P_var kid -> P_var kid
   | P_app (id, pats) -> P_app (id, List.map (map_pat_annot f) pats)
   | P_record (fpats, b) -> P_record (List.map (map_fpat_annot f) fpats, b)
   | P_tup pats -> P_tup (List.map (map_pat_annot f) pats)
@@ -142,6 +145,9 @@ let kid_loc = function
 let string_of_id = function
   | Id_aux (Id v, _) -> v
   | Id_aux (DeIid v, _) -> "(deinfix " ^ v ^ ")"
+
+let id_of_kid = function
+  | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
 let string_of_kid = function
   | Kid_aux (Var v, _) -> v
@@ -220,7 +226,6 @@ and string_of_typ_arg_aux = function
   | Typ_arg_nexp n -> string_of_nexp n
   | Typ_arg_typ typ -> string_of_typ typ
   | Typ_arg_order o -> string_of_order o
-  | Typ_arg_effect eff -> string_of_effect eff
 and string_of_n_constraint = function
   | NC_aux (NC_fixed (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
   | NC_aux (NC_not_equal (n1, n2), _) -> string_of_nexp n1 ^ " != " ^ string_of_nexp n2
@@ -279,6 +284,8 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_tuple exps -> "(" ^ string_of_list ", " string_of_exp exps ^ ")"
   | E_case (exp, cases) ->
      "switch " ^ string_of_exp exp ^ " { case " ^ string_of_list " case " string_of_pexp cases ^ "}"
+  | E_try (exp, cases) ->
+     "try " ^ string_of_exp exp ^ " catch { case " ^ string_of_list " case " string_of_pexp cases ^ "}"
   | E_let (letbind, exp) -> "let " ^ string_of_letbind letbind ^ " in " ^ string_of_exp exp
   | E_assign (lexp, bind) -> string_of_lexp lexp ^ " := " ^ string_of_exp bind
   | E_cast (typ, exp) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_exp exp
@@ -297,6 +304,7 @@ let rec string_of_exp (E_aux (exp, _)) =
      ^ string_of_exp body
   | E_assert (test, msg) -> "assert(" ^ string_of_exp test ^ ", " ^ string_of_exp msg ^ ")"
   | E_exit exp -> "exit " ^ string_of_exp exp
+  | E_throw exp -> "throw " ^ string_of_exp exp
   | E_cons (x, xs) -> string_of_exp x ^ " :: " ^ string_of_exp xs
   | E_list xs -> "[||" ^ string_of_list ", " string_of_exp xs ^ "||]"
   | _ -> "INTERNAL"
@@ -309,6 +317,7 @@ and string_of_pat (P_aux (pat, l)) =
   | P_lit lit -> string_of_lit lit
   | P_wild -> "_"
   | P_id v -> string_of_id v
+  | P_var kid -> string_of_kid kid
   | P_typ (typ, pat) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_pat pat
   | P_tup pats -> "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_pat pats ^ ")"

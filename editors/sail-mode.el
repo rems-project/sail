@@ -713,7 +713,7 @@ Based on Tuareg mode. See Tuareg mode for usage"
      ("\\<\\(_prove\\)\\>"
       0 font-lock-preprocessor-face nil nil)
      ("\\<\\(false\\|true\\|bitzero\\|bitone\\|0x[:xdigit:]\\|[:digit:]\\)\\>" 0 font-lock-constant-face nil nil)
-     ("\\<\\(as\\|downto\\|else\\|foreach\\|if\\|t\\(hen\\|o\\)\\|when\\|in\\|switch\\|with\\|case\\|when\\|exit\\|constraint\\|sizeof\\|nondet\\|from\\|by\\|return\\)\\>"
+     ("\\<\\(as\\|downto\\|else\\|foreach\\|try\\|catch\\|throw\\|if\\|t\\(hen\\|o\\)\\|when\\|in\\|switch\\|with\\|case\\|when\\|exit\\|constraint\\|sizeof\\|nondet\\|from\\|by\\|return\\)\\>"
       0 font-lock-keyword-face nil nil)
      ("\\<\\(clause\\)\\>[ \t\n]*\\(\\(\\w\\|[_ \t()*,]\\)+\\)"
       2 font-lock-variable-name-face keep nil)

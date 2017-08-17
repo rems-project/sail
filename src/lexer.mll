@@ -78,6 +78,9 @@ let kw_table =
      ("extern",                  (fun _ -> Extern));
      ("cast",                    (fun _ -> Cast));
      ("false",                   (fun _ -> False));
+     ("try",                     (fun _ -> Try));
+     ("catch",                   (fun _ -> Catch));
+     ("throw",                   (fun _ -> Throw));
      ("forall",                  (fun _ -> Forall));
      ("exist",                   (fun _ -> Exist));
      ("foreach",                 (fun _ -> Foreach));

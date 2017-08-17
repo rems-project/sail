@@ -49,18 +49,41 @@ let r = fun s -> s (* Ulib.Text.of_latin1 *)
 (* Available as Scanf.unescaped since OCaml 4.0 but 3.12 is still common *)
 let unescaped s = Scanf.sscanf ("\"" ^ s ^ "\"") "%S%!" (fun x -> x)
 
-let mk_operator n op =
-  match n with
-  | 0 -> Op0 op
-  | 1 -> Op1 op
-  | 2 -> Op2 op
-  | 3 -> Op3 op
-  | 4 -> Op4 op
-  | 5 -> Op5 op
-  | 6 -> Op6 op
-  | 7 -> Op7 op
-  | 8 -> Op8 op
-  | 9 -> Op9 op
+type prec = Infix | InfixL | InfixR
+
+let mk_operator prec n op =
+  match prec, n with
+  | Infix, 0 -> Op0 op
+  | Infix, 1 -> Op1 op
+  | Infix, 2 -> Op2 op
+  | Infix, 3 -> Op3 op
+  | Infix, 4 -> Op4 op
+  | Infix, 5 -> Op5 op
+  | Infix, 6 -> Op6 op
+  | Infix, 7 -> Op7 op
+  | Infix, 8 -> Op8 op
+  | Infix, 9 -> Op9 op
+  | InfixL, 0 -> Op0l op
+  | InfixL, 1 -> Op1l op
+  | InfixL, 2 -> Op2l op
+  | InfixL, 3 -> Op3l op
+  | InfixL, 4 -> Op4l op
+  | InfixL, 5 -> Op5l op
+  | InfixL, 6 -> Op6l op
+  | InfixL, 7 -> Op7l op
+  | InfixL, 8 -> Op8l op
+  | InfixL, 9 -> Op9l op
+  | InfixR, 0 -> Op0r op
+  | InfixR, 1 -> Op1r op
+  | InfixR, 2 -> Op2r op
+  | InfixR, 3 -> Op3r op
+  | InfixR, 4 -> Op4r op
+  | InfixR, 5 -> Op5r op
+  | InfixR, 6 -> Op6r op
+  | InfixR, 7 -> Op7r op
+  | InfixR, 8 -> Op8r op
+  | InfixR, 9 -> Op9r op
+  | _, _ -> assert false
 
 let operators = ref M.empty
 
@@ -82,13 +105,11 @@ let kw_table =
      ("def",                     (fun _ -> Def));
      ("op",                      (fun _ -> Op));
      ("default",		 (fun _ -> Default));
-     ("deinfix",                 (fun _ -> Deinfix));
      ("effect",                  (fun _ -> Effect));
      ("Effect",                  (fun _ -> EFFECT));
      ("end",                     (fun _ -> End));
      ("enum",		         (fun _ -> Enum));
      ("else",                    (fun _ -> Else));
-     ("exit",                    (fun _ -> Exit));
      ("extern",                  (fun _ -> Extern));
      ("cast",                    (fun _ -> Cast));
      ("false",                   (fun _ -> False));
@@ -96,6 +117,9 @@ let kw_table =
      ("foreach",                 (fun _ -> Foreach));
      ("function",                (fun x -> Function_));
      ("overload",                (fun _ -> Overload));
+     ("throw",                   (fun _ -> Throw));
+     ("try",                     (fun _ -> Try));
+     ("catch",                   (fun _ -> Catch));
      ("if",                      (fun x -> If_));
      ("in",			 (fun x -> In));
      ("inc",                     (fun _ -> Inc));
@@ -112,7 +136,6 @@ let kw_table =
      ("sizeof",                  (fun x -> Sizeof));
      ("constraint",              (fun x -> Constraint));
      ("struct",                  (fun x -> Struct));
-     ("switch",			 (fun x -> Switch));
      ("then",                    (fun x -> Then));
      ("true",                    (fun x -> True));
      ("Type",                    (fun x -> TYPE));
@@ -120,7 +143,6 @@ let kw_table =
      ("undefined",               (fun x -> Undefined));
      ("union",			 (fun x -> Union));
      ("with",                    (fun x -> With));
-     ("when",                    (fun x -> When));
      ("val",                     (fun x -> Val));
 
      ("div",			 (fun x -> Div_));
@@ -145,12 +167,7 @@ let kw_table =
      ("unspec",                  (fun x -> Unspec));
      ("nondet",                  (fun x -> Nondet));
      ("escape",                  (fun x -> Escape));
-
-]
-
-let default_type_names = ["bool";"unit";"vector";"range";"list";"bit";"nat"; "int"; "real";
-			  "uint8";"uint16";"uint32";"uint64";"atom";"implicit";"string";"option"]
-let custom_type_names : string list ref = ref []
+   ]
 
 }
 
@@ -164,6 +181,7 @@ let startident = letter|'_'
 let ident = alphanum|['_''\'']
 let tyvar_start = '\''
 let oper_char = ['!''$''%''&''*''+''-''.''/'':''<''=''>''?''@''^''|''~']
+let operator = oper_char+ ('_' ident)?
 let escape_sequence = ('\\' ['\\''\"''\'''n''t''b''r']) | ('\\' digit digit digit) | ('\\' 'x' hexdigit hexdigit)
 
 rule token = parse
@@ -173,11 +191,12 @@ rule token = parse
     { Lexing.new_line lexbuf;
       token lexbuf }
   | "&"					{ (Amp(r"&")) }
-  | "|"                                 { Bar }
+  | "@"                                 { (At "@") }
   | "2" ws "^"                          { TwoCaret }
   | "^"					{ (Caret(r"^")) }
   | ":"                                 { Colon(r ":") }
   | ","                                 { Comma }
+  | ".."                                { DotDot }
   | "."                                 { Dot }
   | "="                                 { (Eq(r"=")) }
   | ">"					{ (Gt(r">")) }
@@ -187,6 +206,9 @@ rule token = parse
   | ";"                                 { Semi }
   | "*"                                 { (Star(r"*")) }
   | "_"                                 { Under }
+  | "{|"                                { LcurlyBar }
+  | "|}"                                { RcurlyBar }
+  | "|"                                 { Bar }
   | "{"                                 { Lcurly }
   | "}"                                 { Rcurly }
   | "()"                                { Unit(r"()") }
@@ -199,10 +221,16 @@ rule token = parse
   | "->"                                { MinusGt }
   | "=>"                                { EqGt(r "=>") }
   | "<="				{ (LtEq(r"<=")) }
-  | "infix" ws (digit as p) ws (oper_char+ as op)
-    { operators := M.add op (mk_operator (int_of_string (Char.escaped p)) op) !operators;
+  | "infix" ws (digit as p) ws (operator as op)
+    { operators := M.add op (mk_operator Infix (int_of_string (Char.escaped p)) op) !operators;
       token lexbuf }
-  | oper_char+ as op
+  | "infixl" ws (digit as p) ws (operator as op)
+    { operators := M.add op (mk_operator InfixL (int_of_string (Char.escaped p)) op) !operators;
+      token lexbuf }
+  | "infixr" ws (digit as p) ws (operator as op)
+    { operators := M.add op (mk_operator InfixR (int_of_string (Char.escaped p)) op) !operators;
+      token lexbuf }
+  | operator as op
     { try M.find op !operators
       with Not_found -> raise (LexError ("Operator fixity undeclared", Lexing.lexeme_start_p lexbuf)) }
   | "(*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }

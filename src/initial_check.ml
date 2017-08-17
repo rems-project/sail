@@ -73,7 +73,7 @@ let rec kind_to_string kind = match kind.k with
   | K_Lam (kinds,kind) -> "Lam [" ^ string_of_list ", " kind_to_string kinds ^ "] -> " ^ (kind_to_string kind)
 
 (*Envs is a tuple of used names (currently unused), map from id to kind, default order for vector types and literal vectors *)
-type envs = Nameset.t * kind Envmap.t * order 
+type envs = Nameset.t * kind Envmap.t * order
 type 'a envs_out = 'a * envs
 
 let id_to_string (Id_aux(id,l)) =
@@ -236,7 +236,7 @@ and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
         let n1 = to_ast_nexp k_env t1 in
         let n2 = to_ast_nexp k_env t2 in
         Nexp_aux (Nexp_minus (n1, n2), l)
-     | _ -> typ_error l "Requred an item of kind Nat, encountered an illegal form for this kind" None None None)
+     | _ -> typ_error l "Required an item of kind Nat, encountered an illegal form for this kind" None None None)
 
 and to_ast_order (k_env : kind Envmap.t) (def_ord : order) (o: Parse_ast.atyp) : Ast.order =
   match o with
@@ -301,7 +301,6 @@ and to_ast_typ_arg (k_env : kind Envmap.t) (def_ord : order) (kind : kind) (arg 
     | K_Typ -> Typ_arg_typ (to_ast_typ k_env def_ord arg)
     | K_Nat  -> Typ_arg_nexp (to_ast_nexp k_env arg)
     | K_Ord -> Typ_arg_order (to_ast_order k_env def_ord arg)
-    | K_Efct -> Typ_arg_effect (to_ast_effects k_env arg)
     | _ -> raise (Reporting_basic.err_unreachable l ("To_ast_typ_arg received Lam kind or infer kind: " ^ kind_to_string kind))),
     l)
 
@@ -416,6 +415,7 @@ let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pa
     | Parse_ast.P_as(pat,id) -> P_as(to_ast_pat k_env def_ord pat,to_ast_id id)
     | Parse_ast.P_typ(typ,pat) -> P_typ(to_ast_typ k_env def_ord typ,to_ast_pat k_env def_ord pat)
     | Parse_ast.P_id(id) -> P_id(to_ast_id id)
+    | Parse_ast.P_var kid -> P_var (to_ast_var kid)
     | Parse_ast.P_app(id,pats) ->
       if pats = [] 
       then P_id (to_ast_id id)
@@ -498,11 +498,13 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
       | _ -> raise (Reporting_basic.err_unreachable l "to_ast_fexps with true returned none"))
     | Parse_ast.E_field(exp,id) -> E_field(to_ast_exp k_env def_ord exp, to_ast_id id)
     | Parse_ast.E_case(exp,pexps) -> E_case(to_ast_exp k_env def_ord exp, List.map (to_ast_case k_env def_ord) pexps)
+    | Parse_ast.E_try (exp, pexps) -> E_try (to_ast_exp k_env def_ord exp, List.map (to_ast_case k_env def_ord) pexps)
     | Parse_ast.E_let(leb,exp) -> E_let(to_ast_letbind k_env def_ord leb, to_ast_exp k_env def_ord exp)
     | Parse_ast.E_assign(lexp,exp) -> E_assign(to_ast_lexp k_env def_ord lexp, to_ast_exp k_env def_ord exp)
     | Parse_ast.E_sizeof(nexp) -> E_sizeof(to_ast_nexp k_env nexp)
     | Parse_ast.E_constraint nc -> E_constraint (to_ast_nexp_constraint k_env nc)
     | Parse_ast.E_exit exp -> E_exit(to_ast_exp k_env def_ord exp)
+    | Parse_ast.E_throw exp -> E_throw (to_ast_exp k_env def_ord exp)
     | Parse_ast.E_return exp -> E_return(to_ast_exp k_env def_ord exp)
     | Parse_ast.E_assert(cond,msg) -> E_assert(to_ast_exp k_env def_ord cond, to_ast_exp k_env def_ord msg)
     ), (l,()))
