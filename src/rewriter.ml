@@ -355,7 +355,7 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot))) =
     let ps =  List.map (fun p -> P_aux (P_lit p, simple_annot l bit_typ))
         (vector_string_to_bit_list l lit) in
     rewrap (P_vector ps)
-  | P_lit _ | P_wild | P_id _ -> rewrap pat
+  | P_lit _ | P_wild | P_id _ | P_var _ -> rewrap pat
   | P_as(pat,id) -> rewrap (P_as(rewrite pat, id))
   | P_typ(typ,pat) -> rewrap (P_typ(typ, rewrite pat))
   | P_app(id ,pats) -> rewrap (P_app(id, List.map rewrite pats))
@@ -629,6 +629,7 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_as             : 'pat * id -> 'pat_aux
   ; p_typ            : Ast.typ * 'pat -> 'pat_aux
   ; p_id             : id -> 'pat_aux
+  ; p_var            : kid -> 'pat_aux
   ; p_app            : id * 'pat list -> 'pat_aux
   ; p_record         : 'fpat list * bool -> 'pat_aux
   ; p_vector         : 'pat list -> 'pat_aux
@@ -647,6 +648,7 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat
   | P_lit lit           -> alg.p_lit lit
   | P_wild              -> alg.p_wild
   | P_id id             -> alg.p_id id
+  | P_var kid           -> alg.p_var kid
   | P_as (p,id)         -> alg.p_as (fold_pat alg p,id)
   | P_typ (typ,p)       -> alg.p_typ (typ,fold_pat alg p)
   | P_app (id,ps)       -> alg.p_app (id,List.map (fold_pat alg) ps)
@@ -676,6 +678,7 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   ; p_as             = (fun (pat,id) -> P_as (pat,id))
   ; p_typ            = (fun (typ,pat) -> P_typ (typ,pat))
   ; p_id             = (fun id -> P_id id)
+  ; p_var            = (fun kid -> P_var kid)
   ; p_app            = (fun (id,ps) -> P_app (id,ps))
   ; p_record         = (fun (ps,b) -> P_record (ps,b))
   ; p_vector         = (fun ps -> P_vector ps)
@@ -909,6 +912,7 @@ let compute_pat_alg bot join =
   ; p_as             = (fun ((v,pat),id) -> (v, P_as (pat,id)))
   ; p_typ            = (fun (typ,(v,pat)) -> (v, P_typ (typ,pat)))
   ; p_id             = (fun id -> (bot, P_id id))
+  ; p_var            = (fun kid -> (bot, P_var kid))
   ; p_app            = (fun (id,ps) -> split_join (fun ps -> P_app (id,ps)) ps)
   ; p_record         = (fun (ps,b) -> split_join (fun ps -> P_record (ps,b)) ps)
   ; p_vector         = split_join (fun ps -> P_vector ps)
@@ -1277,6 +1281,7 @@ let remove_vector_concat_pat pat =
     ; p_wild = P_wild
     ; p_as = (fun (pat,id) -> P_as (pat true,id))
     ; p_id  = (fun id -> P_id id)
+    ; p_var = (fun kid -> P_var kid)
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
     ; p_record = (fun (fpats,b) -> P_record (fpats, b))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
@@ -1403,6 +1408,7 @@ let remove_vector_concat_pat pat =
     ; p_as             = (fun ((pat,decls),id) -> (P_as (pat,id),decls))
     ; p_typ            = (fun (typ,(pat,decls)) -> (P_typ (typ,pat),decls))
     ; p_id             = (fun id -> (P_id id,[]))
+    ; p_var            = (fun kid -> (P_var kid, []))
     ; p_app            = (fun (id,ps) -> let (ps,decls) = List.split ps in
                                          (P_app (id,ps),List.flatten decls))
     ; p_record         = (fun (ps,b) -> let (ps,decls) = List.split ps in
@@ -1775,6 +1781,7 @@ let remove_bitvector_pat pat =
     ; p_wild = P_wild
     ; p_as = (fun (pat,id) -> P_as (pat true,id))
     ; p_id  = (fun id -> P_id id)
+    ; p_var = (fun kid -> P_var kid)
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
     ; p_record = (fun (fpats,b) -> P_record (fpats, b))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
@@ -1923,6 +1930,7 @@ let remove_bitvector_pat pat =
     ; p_as             = (fun ((pat,gdls),id) -> (P_as (pat,id), gdls))
     ; p_typ            = (fun (typ,(pat,gdls)) -> (P_typ (typ,pat), gdls))
     ; p_id             = (fun id -> (P_id id, (None, (fun b -> b), [])))
+    ; p_var            = (fun kid -> (P_var kid, (None, (fun b -> b), [])))
     ; p_app            = (fun (id,ps) -> let (ps,gdls) = List.split ps in
                                          (P_app (id,ps), flatten_guards_decls gdls))
     ; p_record         = (fun (ps,b) -> let (ps,gdls) = List.split ps in

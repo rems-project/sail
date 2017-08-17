@@ -501,6 +501,8 @@ atomic_pat:
     { ploc (P_typ($2,$4)) }
   | id
     { ploc (P_app($1,[])) }
+  | tyvar
+    { ploc (P_var $1) }
   | Lcurly fpats Rcurly
     { ploc (P_record((fst $2, snd $2))) }
   | Lsquare comma_pats Rsquare
