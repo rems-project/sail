@@ -53,6 +53,8 @@ let memory_vals : memory_write_vals =
                              (IState (Interp.add_answer_to_stack interp bit) context)))));
   ]
 
-let barrier_functions = [
-  ("MEM_sync", Barrier_MIPS_SYNC);
+let barrier_functions =
+  [ ("MEM_fence_rw_rw", Barrier_RISCV_rw_rw);
+    ("MEM_fence_r_rw",  Barrier_RISCV_r_rw);
+    ("MEM_fence_rw_w",  Barrier_RISCV_rw_w);
   ]

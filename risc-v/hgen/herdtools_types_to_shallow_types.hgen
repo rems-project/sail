@@ -75,5 +75,5 @@ let translate_imm6 name value =
 let translate_imm5 name value = 
     Sail_values.to_vec0 is_inc (Nat_big_num.of_int 5,Nat_big_num.of_int value)
 
-let translate_imm4 name value = 
+let translate_imm4 name value =
     Sail_values.to_vec0 is_inc (Nat_big_num.of_int 4,Nat_big_num.of_int value)

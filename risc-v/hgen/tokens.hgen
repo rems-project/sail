@@ -10,4 +10,5 @@
 %token <RISCVHGenBase.token_ADDIW>    ADDIW   
 %token <RISCVHGenBase.token_SHIFTW>   SHIFTW  
 %token <RISCVHGenBase.token_RTYPEW>   RTYPEW  
-%token <RISCVHGenBase.token_FENCE>    FENCE   
+%token <RISCVHGenBase.token_FENCE>    FENCE
+%token <RISCVHGenBase.token_FENCEOPTION> FENCEOPTION

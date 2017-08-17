@@ -11,4 +11,4 @@
 | ADDIW( imm, rs, rd)         -> `RISCVADDIW(translate_out_simm12 imm, translate_out_ireg rs, translate_out_ireg rd)
 | SHIFTW( imm, rs, rd, op)    -> `RISCVSHIFTW(translate_out_imm5 imm, translate_out_ireg rs, translate_out_ireg rd, translate_out_sop op)
 | RTYPEW( rs2, rs1, rd, op)   -> `RISCVRTYPEW(translate_out_ireg rs2, translate_out_ireg rs1, translate_out_ireg rd, translate_out_ropw op)
-| FENCE(pred, succ)           -> `RISCVFENCE
+| FENCE( pred, succ)          -> `RISCVFENCE(translate_out_imm4 pred, translate_out_imm4 succ)

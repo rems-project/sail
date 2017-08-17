@@ -52,10 +52,17 @@ function unit wGPR((regno) r, (regval) v) =
     if (r != 0) then
         GPRs[r] := v
 
+function forall 'a. 'a effect { escape } not_implemented((string) message) =
+{
+  exit message;
+}
+
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval
-val extern unit -> unit effect { barr } MEM_sync
+val extern unit -> unit effect { barr } MEM_fence_rw_rw
+val extern unit -> unit effect { barr } MEM_fence_r_rw
+val extern unit -> unit effect { barr } MEM_fence_rw_w
 
 (* Ideally these would be sail builtin *)
 function (bit[64]) shift_right_arith64 ((bit[64]) v, (bit[6]) shift) =
@@ -285,7 +292,12 @@ function clause execute (RTYPEW(rs2, rs1, rd, op)) =
 union ast member (bit[4], bit[4]) FENCE
 function clause decode (0b0000 : (bit[4]) pred : (bit[4]) succ : 0b00000 : 0b000 : 0b00000 : 0b0001111) = Some(FENCE (pred, succ))
 function clause execute (FENCE(pred, succ)) = {
- MEM_sync(); (* XXX use pred and succ *)
+  switch(pred, succ) {
+    case (0b0011, 0b0011) -> MEM_fence_rw_rw()
+    case (0b0010, 0b0011) -> MEM_fence_r_rw()
+    case (0b0011, 0b0001) -> MEM_fence_rw_w()
+    case _ -> not_implemented("unsupported fence")
+  }
 }
 
 union ast member unit FENCEI

@@ -17,6 +17,7 @@ let translate_out_simm13 imm = translate_out_signed_int imm 13
 let translate_out_simm12 imm = translate_out_signed_int imm 12
 let translate_out_imm6 imm = translate_out_int imm
 let translate_out_imm5 imm = translate_out_int imm
+let translate_out_imm4 imm = translate_out_int imm
 
 let translate_out_bool = function
   | (name, Bit, [Bitc_one])  -> true

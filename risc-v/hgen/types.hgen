@@ -2,6 +2,7 @@ type bit20 = int
 type bit12 = int
 type bit6  = int
 type bit5  = int
+type bit4  = int
 
 type riscvUop =  (* upper immediate ops *)
 | RISCVLUI
@@ -114,3 +115,9 @@ let pp_riscv_store_op width = match width with
 | RISCVWORD -> "sw"
 | RISCVDOUBLE -> "sd"
 | _ -> failwith "unexpected store op"
+
+let pp_riscv_fence_option = function
+  | 0b0011 -> "rw"
+  | 0b0010 -> "r"
+  | 0b0001 -> "w"
+  | _ -> failwith "unexpected fence option"
