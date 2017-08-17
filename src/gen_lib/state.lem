@@ -6,53 +6,54 @@ open import Sail_values
 
 type memstate = map integer memory_byte
 type tagstate = map integer bitU
-type regstate = map string (vector bitU)
+(* type regstate = map string (vector bitU) *)
 
-type sequential_state = <| regstate : regstate;
-                           memstate : memstate; 
-                           tagstate : tagstate;
-                           write_ea : maybe (write_kind * integer * integer);
-                           last_exclusive_operation_was_load : bool|>
+type sequential_state 'regs =
+  <| regstate : 'regs;
+     memstate : memstate;
+     tagstate : tagstate;
+     write_ea : maybe (write_kind * integer * integer);
+     last_exclusive_operation_was_load : bool|>
 
 (* State, nondeterminism and exception monad with result type 'a
    and exception type 'e. *)
-type ME 'a 'e = sequential_state -> list ((either 'a 'e) * sequential_state)
+type ME 'regs 'a 'e = sequential_state 'regs -> list ((either 'a 'e) * sequential_state 'regs)
 
 (* Most of the time, we don't distinguish between different types of exceptions *)
-type M 'a = ME 'a unit
+type M 'regs 'a = ME 'regs 'a unit
 
 (* For early return, we abuse exceptions by throwing and catching
    the return value. The exception type is "maybe 'r", where "Nothing"
    represents a proper exception and "Just r" an early return of value "r". *)
-type MR 'a 'r = ME 'a (maybe 'r)
+type MR 'regs 'a 'r = ME 'regs 'a (maybe 'r)
 
-val liftR : forall 'a 'r. M 'a -> MR 'a 'r
+val liftR : forall 'a 'r 'regs. M 'regs 'a -> MR 'regs 'a 'r
 let liftR m s = List.map (function
   | (Left a, s') -> (Left a, s')
   | (Right (), s') -> (Right Nothing, s')
   end) (m s)
 
-val return : forall 'a 'e. 'a -> ME 'a 'e
+val return : forall 'regs 'a 'e. 'a -> ME 'regs 'a 'e
 let return a s = [(Left a,s)]
 
-val bind : forall 'a 'b 'e. ME 'a 'e -> ('a -> ME 'b 'e) -> ME 'b 'e
-let bind m f (s : sequential_state) =
+val bind : forall 'regs 'a 'b 'e. ME 'regs 'a 'e -> ('a -> ME 'regs 'b 'e) -> ME 'regs 'b 'e
+let bind m f (s : sequential_state 'regs) =
   List.concatMap (function
                   | (Left a, s') -> f a s'
                   | (Right e, s') -> [(Right e, s')]
                   end) (m s)
 
 let inline (>>=) = bind
-val (>>): forall 'b 'e. ME unit 'e -> ME 'b 'e -> ME 'b 'e
+val (>>): forall 'regs 'b 'e. ME 'regs unit 'e -> ME 'regs 'b 'e -> ME 'regs 'b 'e
 let inline (>>) m n = m >>= fun _ -> n
 
-val exit : forall 'e 'a. 'e -> M 'a
+val exit : forall 'regs 'e 'a. 'e -> M 'regs 'a
 let exit _ s = [(Right (), s)]
 
-val early_return : forall 'r. 'r -> MR unit 'r
+val early_return : forall 'regs 'r. 'r -> MR 'regs unit 'r
 let early_return r s = [(Right (Just r), s)]
 
-val catch_early_return : forall 'a. MR 'a 'a -> M 'a
+val catch_early_return : forall 'regs 'a 'r. MR 'regs 'a 'a -> M 'regs 'a
 let catch_early_return m s =
   List.map
     (function
@@ -66,15 +67,15 @@ let rec range i j =
   if i = j then [i]
   else i :: range (i+1) j
 
-val get_reg : sequential_state -> string -> vector bitU
-let get_reg state reg = Map_extra.find reg state.regstate
+val get_reg : forall 'regs 'a. sequential_state 'regs -> register_ref 'regs 'a -> 'a
+let get_reg state reg = reg.read_from state.regstate
 
-val set_reg : sequential_state -> string -> vector bitU -> sequential_state
-let set_reg state reg bitv =
-  <| state with regstate = Map.insert reg bitv state.regstate |>
+val set_reg : forall 'regs 'a. sequential_state 'regs -> register_ref 'regs 'a -> 'a -> sequential_state 'regs
+let set_reg state reg v =
+  <| state with regstate = reg.write_to state.regstate v |>
 
 
-val read_mem : forall 'a 'b. Size 'b => bool -> read_kind -> bitvector 'a -> integer -> M (bitvector 'b)
+val read_mem : forall 'regs 'a 'b. Size 'b => bool -> read_kind -> bitvector 'a -> integer -> M 'regs (bitvector 'b)
 let read_mem dir read_kind addr sz state =
   let addr = unsigned addr in
   let addrs = range addr (addr+sz-1) in
@@ -96,7 +97,7 @@ let read_mem dir read_kind addr sz state =
 (* caps are aligned at 32 bytes *)
 let cap_alignment = (32 : integer)
 
-val read_tag : forall 'a. bool -> read_kind -> bitvector 'a -> M bitU
+val read_tag : forall 'regs 'a. bool -> read_kind -> bitvector 'a -> M 'regs bitU
 let read_tag dir read_kind addr state =
   let addr = (unsigned addr) / cap_alignment in
   let tag = match (Map.lookup addr state.tagstate) with
@@ -117,18 +118,18 @@ let read_tag dir read_kind addr state =
   then [(Left tag, <| state with last_exclusive_operation_was_load = true |>)]
   else [(Left tag, state)]
 
-val excl_result : unit -> M bool
+val excl_result : forall 'regs. unit -> M 'regs bool
 let excl_result () state =
   let success =
     (Left true,  <| state with last_exclusive_operation_was_load = false |>) in
   (Left false, state) :: if state.last_exclusive_operation_was_load then [success] else []
 
-val write_mem_ea : forall 'a. write_kind -> bitvector 'a -> integer -> M unit
+val write_mem_ea : forall 'regs 'a. write_kind -> bitvector 'a -> integer -> M 'regs unit
 let write_mem_ea write_kind addr sz state = 
   let addr = unsigned addr in
   [(Left (), <| state with write_ea = Just (write_kind,addr,sz) |>)]
 
-val write_mem_val : forall 'b. bitvector 'b -> M bool
+val write_mem_val : forall 'regs 'b. bitvector 'b -> M 'regs bool
 let write_mem_val v state =
   let (write_kind,addr,sz) = match state.write_ea with
     | Nothing -> failwith "write ea has not been announced yet"
@@ -140,7 +141,7 @@ let write_mem_val v state =
                             state.memstate addresses_with_value in
   [(Left true,  <| state with memstate = memstate |>)]
 
-val write_tag : bitU -> M bool
+val write_tag : forall 'regs. bitU -> M 'regs bool
 let write_tag t state =
   let (write_kind,addr,sz) = match state.write_ea with
     | Nothing -> failwith "write ea has not been announced yet"
@@ -149,10 +150,10 @@ let write_tag t state =
   let tagstate = Map.insert taddr t state.tagstate in
   [(Left true,  <| state with tagstate = tagstate |>)]
 
-val read_reg : forall 'a. Size 'a => register -> M (bitvector 'a)
+val read_reg : forall 'regs 'a. register_ref 'regs 'a -> M 'regs 'a
 let read_reg reg state =
-  let v = get_reg state (name_of_reg reg) in
-  [(Left (vec_to_bvec v),state)]
+  let v = reg.read_from state.regstate in
+  [(Left v,state)]
 (*let read_reg_range reg i j state =
   let v = slice (get_reg state (name_of_reg reg)) i j in
   [(Left (vec_to_bvec v),state)]
@@ -168,41 +169,47 @@ let read_reg_bitfield reg regfield =
 
 let reg_deref = read_reg
 
-val write_reg : forall 'a. Size 'a => register -> bitvector 'a -> M unit
+val write_reg : forall 'regs 'a. register_ref 'regs 'a -> 'a -> M 'regs unit
 let write_reg reg v state =
-  [(Left (), set_reg state (name_of_reg reg) (bvec_to_vec v))]
+  [(Left (), <| state with regstate = reg.write_to state.regstate v |>)]
+val update_reg : forall 'regs 'a 'b. register_ref 'regs 'a -> ('a -> 'b -> 'a) -> 'b -> M 'regs unit
+let update_reg reg f v state =
+  let current_value = get_reg state reg in
+  let new_value = f current_value v in
+  [(Left (), set_reg state reg new_value)]
 let write_reg_range reg i j v state =
-  let current_value = get_reg state (name_of_reg reg) in
-  let new_value = update current_value i j (bvec_to_vec v) in
-  [(Left (), set_reg state (name_of_reg reg) new_value)]
+  let current_value = get_reg state reg in
+  let new_value = bvupdate current_value i j v in
+  [(Left (), set_reg state reg new_value)]
 let write_reg_bit reg i bit state =
-  let current_value = get_reg state (name_of_reg reg) in
-  let new_value = update_pos current_value i bit in
-  [(Left (), set_reg state (name_of_reg reg) new_value)]
+  let current_value = get_reg state reg in
+  let new_value = bvupdate_pos current_value i bit in
+  [(Left (), set_reg state reg new_value)]
 let write_reg_field reg regfield =
-  let (i,j) = register_field_indices reg regfield in
-  write_reg_range reg i j
-let write_reg_bitfield reg regfield =
-  let (i,_) = register_field_indices reg regfield in  
-  write_reg_bit reg i
-let write_reg_field_range reg regfield i j v state =
-  let (i0,j0) = register_field_indices reg regfield in
-  let current_value = get_reg state (name_of_reg reg) in
-  let current_field_value = slice current_value i0 j0 in
-  let new_field_value = update current_field_value i j (bvec_to_vec v) in
-  let new_value = update current_value i j new_field_value in
-  [(Left (), set_reg state (name_of_reg reg) new_value)]
+  update_reg reg regfield.set_field
+let write_reg_field_range reg regfield i j =
+  let upd regval v =
+    let current_field_value = regfield.get_field regval in
+    let new_field_value = bvupdate current_field_value i j v in
+    regfield.set_field regval new_field_value in
+  update_reg reg upd
+let write_reg_field_bit reg regfield i =
+  let upd regval v =
+    let current_field_value = regfield.get_field regval in
+    let new_field_value = bvupdate_pos current_field_value i v in
+    regfield.set_field regval new_field_value in
+  update_reg reg upd
 
 
-val barrier : barrier_kind -> M unit
+val barrier : forall 'regs. barrier_kind -> M 'regs unit
 let barrier _ = return ()
 
-val footprint : M unit
+val footprint : forall 'regs. M 'regs unit
 let footprint = return ()
 
 
-val foreachM_inc : forall 'vars 'e. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> ME 'vars 'e) -> ME 'vars 'e
+val foreachM_inc : forall 'regs 'vars 'e. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> ME 'regs 'vars 'e) -> ME 'regs 'vars 'e
 let rec foreachM_inc (i,stop,by) vars body =
   if i <= stop
   then
@@ -211,8 +218,8 @@ let rec foreachM_inc (i,stop,by) vars body =
   else return vars
 
 
-val foreachM_dec : forall 'vars 'e. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> ME 'vars 'e) -> ME 'vars 'e
+val foreachM_dec : forall 'regs 'vars 'e. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> ME 'regs 'vars 'e) -> ME 'regs 'vars 'e
 let rec foreachM_dec (i,stop,by) vars body =
   if i >= stop
   then
@@ -220,7 +227,7 @@ let rec foreachM_dec (i,stop,by) vars body =
     foreachM_dec (i - by,stop,by) vars body
   else return vars
 
-let write_two_regs r1 r2 bvec state =
+(*let write_two_regs r1 r2 bvec state =
   let vec = bvec_to_vec bvec in
   let is_inc =
     let is_inc_r1 = is_inc_of_reg r1 in
@@ -242,4 +249,4 @@ let write_two_regs r1 r2 bvec state =
     else slice vec (start_vec - size_r1) (start_vec - size_vec) in
   let state1 = set_reg state (name_of_reg r1) r1_v in
   let state2 = set_reg state1 (name_of_reg r2) r2_v in
-  [(Left (), state2)]
+  [(Left (), state2)]*)

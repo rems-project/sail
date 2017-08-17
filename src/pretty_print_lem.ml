@@ -140,6 +140,12 @@ let is_regtyp (Typ_aux (typ, _)) env = match typ with
   | Typ_id(id) when Env.is_regtyp id env -> true
   | _ -> false
 
+let doc_nexp_lem (Nexp_aux (nexp, l) as full_nexp) = match nexp with
+  | Nexp_constant i -> string ("ty" ^ string_of_int i)
+  | Nexp_var v -> string (string_of_kid v)
+  | _ -> raise (Reporting_basic.err_unreachable l
+    ("cannot pretty-print non-atomic nexp \"" ^ string_of_nexp full_nexp ^ "\""))
+
 let doc_typ_lem, doc_atomic_typ_lem =
   (* following the structure of parser for precedence *)
   let rec typ regtypes ty = fn_typ regtypes true ty
@@ -168,17 +174,19 @@ let doc_typ_lem, doc_atomic_typ_lem =
           Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
          let tpp = match elem_typ with
            | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) ->
-             (match simplify_nexp m with
+             string "bitvector " ^^ doc_nexp_lem (simplify_nexp m)
+             (* (match simplify_nexp m with
                | (Nexp_aux(Nexp_constant i,_)) -> string "bitvector ty" ^^ doc_int i
                | (Nexp_aux(Nexp_var _, _)) -> separate space [string "bitvector"; doc_nexp m]
                | _ -> raise (Reporting_basic.err_unreachable l
-                 "cannot pretty-print bitvector type with non-constant length"))
+                 "cannot pretty-print bitvector type with non-constant length")) *)
            | _ -> string "vector" ^^ space ^^ typ regtypes elem_typ in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
          (* TODO: Better distinguish register names and contents? *)
          (* fn_typ regtypes atyp_needed etyp *)
-         (string "register")
+         let tpp = (string "register_ref regstate " ^^ typ regtypes etyp) in
+         if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "range", _),_) ->
          (string "integer")
       | Typ_app(Id_aux (Id "implicit", _),_) ->
@@ -206,7 +214,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
          if atyp_needed then parens tpp else tpp
     and doc_typ_arg_lem regtypes (Typ_arg_aux(t,_)) = match t with
       | Typ_arg_typ t -> app_typ regtypes true t
-      | Typ_arg_nexp n -> empty
+      | Typ_arg_nexp n -> doc_nexp_lem (simplify_nexp n)
       | Typ_arg_order o -> empty
       | Typ_arg_effect e -> empty
   in typ', atomic_typ
@@ -234,10 +242,10 @@ and contains_t_arg_pp_var (Typ_arg_aux (targ, _)) = match targ with
   | _ -> false
 
 let doc_tannot_lem regtypes eff typ =
-  if contains_t_pp_var typ then empty
-  else
+  (* if contains_t_pp_var typ then empty
+  else *)
     let ta = doc_typ_lem regtypes typ in
-    if eff then string " : M " ^^ parens ta
+    if eff then string " : _M " ^^ parens ta
     else string " : " ^^ ta
 
 (* doc_lit_lem gets as an additional parameter the type information from the
@@ -346,6 +354,13 @@ let contains_early_return exp =
   { (Rewriter.compute_exp_alg false (||))
     with e_return = (fun (_, r) -> (true, E_return r)) } exp)
 
+let typ_id_of (Typ_aux (typ, l)) = match typ with
+  | Typ_id id -> id
+  | Typ_app (register, [Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id id, _)), _)])
+    when string_of_id register = "register" -> id
+  | Typ_app (id, _) -> id
+  | _ -> raise (Reporting_basic.err_unreachable l "failed to get type id")
+
 let prefix_recordtype = true
 let report = Reporting_basic.err_unreachable
 let doc_exp_lem, doc_let_lem =
@@ -365,14 +380,18 @@ let doc_exp_lem, doc_let_lem =
        (match le_act (*, t, tag*) with
         | LEXP_vector_range (le,e2,e3) ->
            (match le with
-            | LEXP_aux (LEXP_field (le,id), lannot) ->
-               if is_bit_typ (typ_of_annot lannot) then
+            | LEXP_aux (LEXP_field ((LEXP_aux (_, lannot) as le),id), fannot) ->
+               if is_bit_typ (typ_of_annot fannot) then
                  raise (report l "indexing a register's (single bit) bitfield not supported")
                else
+                 let field_ref =
+                   doc_id_lem (typ_id_of (typ_of_annot lannot)) ^^
+                   underscore ^^
+                   doc_id_lem id in
                  liftR ((prefix 2 1)
                    (string "write_reg_field_range")
                    (align (doc_lexp_deref_lem regtypes early_ret le ^^ space^^
-                             string_lit (doc_id_lem id) ^/^ expY e2 ^/^ expY e3 ^/^ expY e)))
+                             field_ref ^/^ expY e2 ^/^ expY e3 ^/^ expY e)))
             | _ ->
                liftR ((prefix 2 1)
                  (string "write_reg_range")
@@ -380,27 +399,35 @@ let doc_exp_lem, doc_let_lem =
            )
         | LEXP_vector (le,e2) when is_bit_typ t ->
            (match le with
-            | LEXP_aux (LEXP_field (le,id), lannot) ->
-               if is_bit_typ (typ_of_annot lannot) then
+            | LEXP_aux (LEXP_field ((LEXP_aux (_, lannot) as le),id), fannot) ->
+               if is_bit_typ (typ_of_annot fannot) then
                  raise (report l "indexing a register's (single bit) bitfield not supported")
                else
+                 let field_ref =
+                   doc_id_lem (typ_id_of (typ_of_annot lannot)) ^^
+                   underscore ^^
+                   doc_id_lem id in
                  liftR ((prefix 2 1)
                    (string "write_reg_field_bit")
-                   (align (doc_lexp_deref_lem regtypes early_ret le ^^ space ^^ doc_id_lem id ^/^ expY e2 ^/^ expY e)))
+                   (align (doc_lexp_deref_lem regtypes early_ret le ^^ space ^^ field_ref ^/^ expY e2 ^/^ expY e)))
             | _ ->
                liftR ((prefix 2 1)
                  (string "write_reg_bit")
                  (doc_lexp_deref_lem regtypes early_ret le ^^ space ^^ expY e2 ^/^ expY e))
            )
-        | LEXP_field (le,id) when is_bit_typ t ->
+        (* | LEXP_field (le,id) when is_bit_typ t ->
            liftR ((prefix 2 1)
              (string "write_reg_bitfield")
-             (doc_lexp_deref_lem regtypes early_ret le ^^ space ^^ string_lit(doc_id_lem id) ^/^ expY e))
-        | LEXP_field (le,id) ->
+             (doc_lexp_deref_lem regtypes early_ret le ^^ space ^^ string_lit(doc_id_lem id) ^/^ expY e)) *)
+        | LEXP_field ((LEXP_aux (_, lannot) as le),id) ->
+          let field_ref =
+            doc_id_lem (typ_id_of (typ_of_annot lannot)) ^^
+            underscore ^^
+            doc_id_lem id in
            liftR ((prefix 2 1)
              (string "write_reg_field")
              (doc_lexp_deref_lem regtypes early_ret le ^^ space ^^
-                string_lit(doc_id_lem id) ^/^ expY e))
+                field_ref ^/^ expY e))
         (* | (LEXP_id id | LEXP_cast (_,id)), t, Alias alias_info ->
            (match alias_info with
             | Alias_field(reg,field) ->
@@ -562,8 +589,7 @@ let doc_exp_lem, doc_let_lem =
           when Env.is_regtyp tid env ->
            let t = (* Env.base_typ_of (env_of full_exp) *) (typ_of full_exp) in
            let eff = effect_of full_exp in
-           let field_f = string "get" ^^ underscore ^^
-             doc_id_lem tid ^^ underscore ^^ doc_id_lem id in
+           let field_f = doc_id_lem tid ^^ underscore ^^ doc_id_lem id ^^ dot ^^ string "get_field" in
            let (ta,aexp_needed) =
              if contains_bitvector_typ t && not (contains_t_pp_var t)
              then (doc_tannot_lem regtypes (effectful eff) t, true)
@@ -986,15 +1012,41 @@ let doc_typdef_lem regtypes (TD_aux(td, (l, _))) = match td with
      doc_op equals (concat [string "type"; space; doc_id_lem_type id])
             (doc_typschm_lem regtypes false typschm)
   | TD_record(id,nm,typq,fs,_) ->
-     let f_pp (typ,fid) =
-       let fname = if prefix_recordtype
-                   then concat [doc_id_lem id;string "_";doc_id_lem_type fid;]
-                   else doc_id_lem_type fid in
-       concat [fname;space;colon;space;doc_typ_lem regtypes typ; semi] in
-      let fs_doc = group (separate_map (break 1) f_pp fs) in
+    let fname fid = if prefix_recordtype
+                    then concat [doc_id_lem id;string "_";doc_id_lem_type fid;]
+                    else doc_id_lem_type fid in
+    let f_pp (typ,fid) =
+      concat [fname fid;space;colon;space;doc_typ_lem regtypes typ; semi] in
+    let rectyp = match typq with
+      | TypQ_aux (TypQ_tq qs, _) ->
+        let quant_item = function
+          | QI_aux (QI_id (KOpt_aux (KOpt_none kid, _)), l)
+          | QI_aux (QI_id (KOpt_aux (KOpt_kind (_, kid), _)), l) ->
+            [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid, l)), l)]
+          | _ -> [] in
+        let targs = List.concat (List.map quant_item qs) in
+        mk_typ (Typ_app (id, targs))
+      | TypQ_aux (TypQ_no_forall, _) -> mk_id_typ id in
+    let fs_doc = group (separate_map (break 1) f_pp fs) in
+    let doc_field (ftyp, fid) =
+      let reftyp =
+        mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
+          [mk_typ_arg (Typ_arg_typ rectyp);
+           mk_typ_arg (Typ_arg_typ ftyp)])) in
+      let rfannot = doc_tannot_lem regtypes false reftyp in
+      let get, set =
+        string "rec_val" ^^ dot ^^ fname fid,
+        anglebars (space ^^ string "rec_val with " ^^
+          (doc_op equals (fname fid) (string "v")) ^^ space) in
       doc_op equals
-             (concat [string "type"; space; doc_id_lem_type id;])
-             ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space)))
+        (concat [string "let "; parens (concat [doc_id_lem id; underscore; doc_id_lem fid; rfannot])])
+        (anglebars (concat [space;
+          doc_op equals (string "get_field") (parens (doc_op arrow (string "fun rec_val") get)); semi_sp;
+          doc_op equals (string "set_field") (parens (doc_op arrow (string "fun rec_val v") set)); space])) in
+    doc_op equals
+           (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem typq])
+           ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space))) ^^ hardline ^^
+    separate_map hardline doc_field fs
   | TD_variant(id,nm,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
@@ -1198,27 +1250,38 @@ let doc_typdef_lem regtypes (TD_aux(td, (l, _))) = match td with
          | BF_aux (BF_single i, _) -> (i, i)
          | BF_aux (BF_range (i, j), _) -> (i, j)
          | _ -> raise (Reporting_basic.err_unreachable l "unsupported field type") in
+         let fsize = if dir_b then j-i+1 else i-j+1 in
+         let ftyp = vector_typ (nconstant i) (nconstant fsize) ord bit_typ in
+         let reftyp =
+           mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
+             [mk_typ_arg (Typ_arg_typ (mk_id_typ id));
+              mk_typ_arg (Typ_arg_typ ftyp)])) in
+         let rfannot = doc_tannot_lem regtypes false reftyp in
          let get, set =
            "bitvector_subrange" ^ dir_suffix ^ " (reg, " ^ string_of_int i ^ ", " ^ string_of_int j ^ ")",
            "bitvector_update" ^ dir_suffix ^ " (reg, " ^ string_of_int i ^ ", " ^ string_of_int j ^ ", v)" in
          doc_op equals
-           (concat [string "let get_"; doc_id_lem id; underscore; doc_id_lem fid;
-             space; parens (string "reg" ^^ tannot)]) (string get) ^^
-         hardline ^^
-         doc_op equals
+           (concat [string "let "; parens (concat [doc_id_lem id; underscore; doc_id_lem fid; rfannot])])
+           (concat [
+             space; langlebar; string (" get_field = (fun reg -> " ^ get ^ ");"); hardline;
+             space; space; space; string (" set_field = (fun reg v -> " ^ set ^ ") "); ranglebar])
+             (* string " = <|" (*; parens (string "reg" ^^ tannot) *)]) ^^ hardline ^^
+         string ("  get_field = (fun reg -> " ^ get ^ ");") ^^ hardline ^^
+         string ("  set_field = (fun reg v -> " ^ set ^") |>") *)
+         (* doc_op equals
            (concat [string "let set_"; doc_id_lem id; underscore; doc_id_lem fid;
-             space; parens (separate comma_sp [parens (string "reg" ^^ tannot); string "v"])]) (string set)
+             space; parens (separate comma_sp [parens (string "reg" ^^ tannot); string "v"])]) (string set) *)
        in
        doc_op equals
          (concat [string "type";space;doc_id_lem id])
          (doc_typ_lem regtypes vtyp)
        ^^ hardline ^^
-       doc_op equals
+       (* doc_op equals
          (concat [string "let";space;string "build_";doc_id_lem id;space;string "regname"])
          (string "Register" ^^ space ^^
             align (separate space [string "regname"; doc_int size; doc_int i1; dir;
                                    break 0 ^^ brackets (align doc_rids)]))
-       ^^ hardline ^^
+       ^^ hardline ^^ *)
        doc_op equals
          (concat [string "let";space;string "cast_";doc_id_lem id;space;string "reg"])
          (string "reg")
@@ -1333,7 +1396,8 @@ let rec doc_fundef_lem regtypes (FD_aux(FD_function(r, typa, efa, fcls),fannot))
 let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
   match reg with
   | DEC_reg(typ,id) ->
-     let env = env_of_annot annot in
+     empty
+     (* let env = env_of_annot annot in
      (match typ with
       | Typ_aux (Typ_id idt, _) when Env.is_regtyp idt env ->
         separate space [string "let";doc_id_lem id;equals;
@@ -1356,7 +1420,7 @@ let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
           else raise (Reporting_basic.err_unreachable l
             ("can't deal with register type " ^ string_of_typ typ))
         else raise (Reporting_basic.err_unreachable l
-          ("can't deal with register type " ^ string_of_typ typ)))
+          ("can't deal with register type " ^ string_of_typ typ))) *)
   | DEC_alias(id,alspec) -> empty
   | DEC_typ_alias(typ,id,alspec) -> empty
 
@@ -1399,9 +1463,50 @@ let find_regtypes (Defs defs) =
       | _ -> acc
     ) [] defs
 
-let pp_defs_lem (types_file,types_modules) (prompt_file,prompt_modules) (state_file,state_modules) d top_line =
+let find_registers (Defs defs) =
+  List.fold_left
+    (fun acc def ->
+      match def with
+      | DEF_reg_dec (DEC_aux(DEC_reg (typ, id),_)) -> (typ, id) :: acc
+      | _ -> acc
+    ) [] defs
+
+let doc_regstate_lem regtypes registers =
+  let l = Parse_ast.Unknown in
+  let annot = (l, None) in
+  let regstate = match registers with
+    | [] ->
+      TD_abbrev (
+        Id_aux (Id "regstate", l),
+        Name_sect_aux (Name_sect_none, l),
+        TypSchm_aux (TypSchm_ts (TypQ_aux (TypQ_tq [], l), unit_typ), l))
+    | _ ->
+      TD_record (
+        Id_aux (Id "regstate", l),
+        Name_sect_aux (Name_sect_none, l),
+        TypQ_aux (TypQ_tq [], l),
+        registers,
+        false) in
+  concat [
+    doc_typdef_lem regtypes (TD_aux (regstate, annot)); hardline;
+    hardline;
+    string "type _M 'a = M regstate 'a"
+  ]
+
+let doc_register_refs_lem regtypes registers =
+  let doc_register_ref (typ, id) =
+    let idd = doc_id_lem id in
+    let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in
+    concat [string "let "; idd; string " = <|"; hardline;
+      string "  read_from = (fun s -> s."; field; string ");"; hardline;
+      string "  write_to = (fun s v -> (<| s with "; field; string " = v |>)) |>"] in
+  separate_map hardline doc_register_ref registers
+
+let pp_defs_lem (types_file,types_modules) (types_seq_file,types_seq_modules) (prompt_file,prompt_modules) (state_file,state_modules) d top_line =
   let regtypes = find_regtypes d in
   let (typdefs,valdefs) = doc_defs_lem regtypes d in
+  let regstate_def = doc_regstate_lem regtypes (find_registers d) in
+  let register_refs = doc_register_refs_lem regtypes (find_registers d) in
   (print types_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
@@ -1420,6 +1525,30 @@ let pp_defs_lem (types_file,types_modules) (prompt_file,prompt_modules) (state_f
              hardline]
         else empty;
         typdefs]);
+  (print types_seq_file)
+    (concat
+       [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
+        (separate_map hardline)
+          (fun lib -> separate space [string "open import";string lib]) types_seq_modules;hardline;
+        if !print_to_from_interp_value
+        then
+          concat
+            [(separate_map hardline)
+               (fun lib -> separate space [string "     import";string lib]) ["Interp";"Interp_ast"];
+             string "open import Deep_shallow_convert";
+             hardline;
+             hardline;
+             string "module SI = Interp"; hardline;
+             string "module SIA = Interp_ast"; hardline;
+             hardline]
+        else empty;
+        typdefs;
+        hardline;
+        hardline;
+        regstate_def;
+        hardline;
+        hardline;
+        register_refs]);
   (print prompt_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;

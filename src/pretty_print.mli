@@ -52,4 +52,4 @@ val pat_to_string : 'a pat -> string
 val pp_lem_defs : Format.formatter -> tannot defs -> unit
 
 val pp_defs_ocaml : out_channel -> tannot defs -> string -> string list -> unit
-val pp_defs_lem : (out_channel * string list) -> (out_channel * string list) -> (out_channel * string list) -> tannot defs -> string -> unit
+val pp_defs_lem : (out_channel * string list) -> (out_channel * string list) -> (out_channel * string list) -> (out_channel * string list) -> tannot defs -> string -> unit
