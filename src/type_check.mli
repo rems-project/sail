@@ -250,6 +250,8 @@ type uvar =
   | U_effect of effect
   | U_typ of typ
 
+val string_of_uvar : uvar -> string
+
 (* Throws Invalid_argument if the argument is not a E_app expression *)
 val instantiation_of : tannot exp -> uvar KBindings.t
 

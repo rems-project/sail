@@ -50,6 +50,11 @@ let mk_nc nc_aux = NC_aux (nc_aux, Parse_ast.Unknown)
 
 let mk_nexp nexp_aux = Nexp_aux (nexp_aux, Parse_ast.Unknown)
 
+let mk_exp exp_aux = E_aux (exp_aux, (Parse_ast.Unknown, ()))
+let unaux_exp (E_aux (exp_aux, _)) = exp_aux
+
+let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
+
 let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
 and map_exp_annot_aux f = function
   | E_block xs -> E_block (List.map (map_exp_annot f) xs)

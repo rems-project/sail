@@ -99,6 +99,10 @@ let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
 
 let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
 and nexp_simp_aux = function
+  | Nexp_minus (Nexp_aux (Nexp_sum (Nexp_aux (n1, _), Nexp_aux (Nexp_constant c1, _)), _), Nexp_aux (Nexp_constant c2, _)) when c1 = c2 ->
+     nexp_simp_aux n1
+  | Nexp_sum (Nexp_aux (Nexp_minus (Nexp_aux (n1, _), Nexp_aux (Nexp_constant c1, _)), _), Nexp_aux (Nexp_constant c2, _)) when c1 = c2 ->
+     nexp_simp_aux n1
   | Nexp_sum (n1, n2) ->
      begin
        let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
@@ -1464,7 +1468,7 @@ let rec unify l env typ1 typ2 =
     | Typ_arg_nexp n1, Typ_arg_nexp n2 ->
        begin
          match unify_nexps l env goals (nexp_simp n1) (nexp_simp n2) with
-         | Some (kid, unifier) -> KBindings.singleton kid (U_nexp unifier)
+         | Some (kid, unifier) -> KBindings.singleton kid (U_nexp (nexp_simp unifier))
          | None -> KBindings.empty
        end
     | Typ_arg_typ typ1, Typ_arg_typ typ2 -> unify_typ l typ1 typ2
