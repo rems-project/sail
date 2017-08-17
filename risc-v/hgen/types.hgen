@@ -108,7 +108,6 @@ let pp_riscv_load_op (unsigned, width, aq) =
   | (false, RISCVWORD)    -> "lw"
   | (true,  RISCVWORD)    -> "lwu"
   | (_, RISCVDOUBLE)      -> "ld"
-  | _                     -> failwith "unexpected load op"
   end
   ^ (if aq then ".aq" else "")
 
@@ -117,7 +116,6 @@ let pp_riscv_store_op width = match width with
 | RISCVHALF -> "sh"
 | RISCVWORD -> "sw"
 | RISCVDOUBLE -> "sd"
-| _ -> failwith "unexpected store op"
 
 let pp_riscv_fence_option = function
   | 0b0011 -> "rw"
