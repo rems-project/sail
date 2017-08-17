@@ -721,6 +721,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_let                    : 'letbind * 'exp -> 'exp_aux
   ; e_assign                 : 'lexp * 'exp -> 'exp_aux
   ; e_sizeof                 : nexp -> 'exp_aux
+  ; e_constraint             : n_constraint -> 'exp_aux
   ; e_exit                   : 'exp -> 'exp_aux
   ; e_return                 : 'exp -> 'exp_aux
   ; e_assert                 : 'exp * 'exp -> 'exp_aux
@@ -789,8 +790,7 @@ let rec fold_exp_aux alg = function
   | E_let (letbind,e) -> alg.e_let (fold_letbind alg letbind, fold_exp alg e)
   | E_assign (lexp,e) -> alg.e_assign (fold_lexp alg lexp, fold_exp alg e)
   | E_sizeof nexp -> alg.e_sizeof nexp
-  | E_constraint nc -> raise (Reporting_basic.err_unreachable (Parse_ast.Unknown)
-      "E_constraint encountered during rewriting")
+  | E_constraint nc -> alg.e_constraint nc
   | E_exit e -> alg.e_exit (fold_exp alg e)
   | E_return e -> alg.e_return (fold_exp alg e)
   | E_assert(e1,e2) -> alg.e_assert (fold_exp alg e1, fold_exp alg e2)
@@ -863,6 +863,7 @@ let id_exp_alg =
   ; e_let = (fun (lb,e2) -> E_let (lb,e2))
   ; e_assign = (fun (lexp,e2) -> E_assign (lexp,e2))
   ; e_sizeof = (fun nexp -> E_sizeof nexp)
+  ; e_constraint = (fun nc -> E_constraint nc)
   ; e_exit = (fun e1 -> E_exit (e1))
   ; e_return = (fun e1 -> E_return e1)
   ; e_assert = (fun (e1,e2) -> E_assert(e1,e2)) 
@@ -964,6 +965,7 @@ let compute_exp_alg bot join =
   ; e_let = (fun ((vl,lb),(v2,e2)) -> (join vl v2, E_let (lb,e2)))
   ; e_assign = (fun ((vl,lexp),(v2,e2)) -> (join vl v2, E_assign (lexp,e2)))
   ; e_sizeof = (fun nexp -> (bot, E_sizeof nexp))
+  ; e_constraint = (fun nc -> (bot, E_constraint nc))
   ; e_exit = (fun (v1,e1) -> (v1, E_exit (e1)))
   ; e_return = (fun (v1,e1) -> (v1, E_return e1))
   ; e_assert = (fun ((v1,e1),(v2,e2)) -> (join v1 v2, E_assert(e1,e2)) )
@@ -1121,6 +1123,7 @@ let rewrite_sizeof (Defs defs) =
     ; e_let = (fun ((lb,lb'),(e2,e2')) -> (E_let (lb,e2), E_let (lb',e2')))
     ; e_assign = (fun ((lexp,lexp'),(e2,e2')) -> (E_assign (lexp,e2), E_assign (lexp',e2')))
     ; e_sizeof = (fun nexp -> (E_sizeof nexp, E_sizeof nexp))
+    ; e_constraint = (fun nc -> (E_constraint nc, E_constraint nc))
     ; e_exit = (fun (e1,e1') -> (E_exit (e1), E_exit (e1')))
     ; e_return = (fun (e1,e1') -> (E_return e1, E_return e1'))
     ; e_assert = (fun ((e1,e1'),(e2,e2')) -> (E_assert(e1,e2), E_assert(e1',e2')) )
@@ -2682,6 +2685,7 @@ let find_updated_vars (E_aux (_,(l,_)) as exp) =
       ; e_case = (fun (e1,pexps) -> e1 @@ lapp2 pexps)
       ; e_let = (fun (lb,e2) -> lb @@ e2)
       ; e_assign = (fun ((ids,acc),e2) -> ([],ids) @@ acc @@ e2)
+      ; e_constraint = (fun nc -> ([],[]))
       ; e_sizeof = (fun nexp -> ([],[]))
       ; e_exit = (fun e1 -> ([],[]))
       ; e_return = (fun e1 -> e1)
