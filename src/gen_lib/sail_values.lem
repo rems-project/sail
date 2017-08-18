@@ -258,12 +258,13 @@ let adjust_dec = reset_bitvector_start
 
 let inline (^^^) = bitvector_concat
 
-val bvslice : forall 'a 'b. bitvector 'a -> integer -> integer -> bitvector 'b
+val bvslice : forall 'a 'b. Size 'a => bitvector 'a -> integer -> integer -> bitvector 'b
 let bvslice (Bitvector bs start is_inc) i j =
   let iN = natFromInteger i in
   let jN = natFromInteger j in
   let startN = natFromInteger start in
-  let (lo,hi) = if is_inc then (iN-startN,jN-startN) else (startN-iN,startN-jN) in
+  let top = word_length bs - 1 in
+  let (hi,lo) = if is_inc then (top+startN-iN,top+startN-jN) else (top-startN+iN,top-startN+jN) in
   let subvector_bits = word_extract lo hi bs in
   Bitvector subvector_bits i is_inc
 
@@ -286,23 +287,25 @@ let bvslice_raw (Bitvector bs start is_inc) i j =
   let len = integerFromNat (word_length bits) in
   Bitvector bits (if is_inc then 0 else len - 1) is_inc
 
-val bvupdate_aux : forall 'a 'b. bitvector 'a -> integer -> integer -> mword 'b -> bitvector 'a
+val bvupdate_aux : forall 'a 'b. Size 'a => bitvector 'a -> integer -> integer -> mword 'b -> bitvector 'a
 let bvupdate_aux (Bitvector bs start is_inc) i j bs' =
   let iN = natFromInteger i in
   let jN = natFromInteger j in
   let startN = natFromInteger start in
-  let (lo,hi) = if is_inc then (iN-startN,jN-startN) else (startN-iN,startN-jN) in
+  let top = word_length bs - 1 in
+  let (hi,lo) = if is_inc then (top+startN-iN,top+startN-jN) else (top-startN+iN,top-startN+jN) in
   let bits = word_update bs lo hi bs' in
   Bitvector bits start is_inc
 
-val bvupdate : forall 'a 'b. bitvector 'a -> integer -> integer -> bitvector 'b -> bitvector 'a
+val bvupdate : forall 'a 'b. Size 'a => bitvector 'a -> integer -> integer -> bitvector 'b -> bitvector 'a
 let bvupdate v i j (Bitvector bs' _ _) =
   bvupdate_aux v i j bs'
 
-val bvaccess : forall 'a. bitvector 'a -> integer -> bitU
+val bvaccess : forall 'a. Size 'a => bitvector 'a -> integer -> bitU
 let bvaccess (Bitvector bs start is_inc) n = bool_to_bitU (
-  if is_inc then getBit bs (natFromInteger (n - start))
-  else getBit bs (natFromInteger (start - n)))
+  let top = integerFromNat (word_length bs) - 1 in
+  if is_inc then getBit bs (natFromInteger (top + start - n))
+  else getBit bs (natFromInteger (top + n - start)))
 
 val bvupdate_pos : forall 'a. Size 'a => bitvector 'a -> integer -> bitU -> bitvector 'a
 let bvupdate_pos v n b =
@@ -784,7 +787,7 @@ let eq (l,r) = (l = r)
 let eq_range (l,r) = (l = r)
 
 val eq_vec : forall 'a. bitvector 'a * bitvector 'a -> bool
-let eq_vec (l,r) = (l = r)
+let eq_vec (Bitvector l _ _,Bitvector r _ _) = (l = r)
 let eq_bit (l,r) = (l = r)
 let eq_vec_range (l,r) = eq (to_num false l,r)
 let eq_range_vec (l,r) = eq (l, to_num false r)
