@@ -109,11 +109,12 @@ function test_lem {
 
 	    cp $MIPS/mips_extras_embed_sequential.lem $DIR/lem/
 	    mv $SAILDIR/${i%%.*}_embed_types.lem $DIR/lem/
+	    mv $SAILDIR/${i%%.*}_embed_types_sequential.lem $DIR/lem/
 	    mv $SAILDIR/${i%%.*}_embed.lem $DIR/lem/
 	    mv $SAILDIR/${i%%.*}_embed_sequential.lem $DIR/lem/
 	    # Test sequential embedding for now
 	    # TODO: Add tests for the free monad
-	    if lem -lib $SAILDIR/src/lem_interp -lib $SAILDIR/src/gen_lib/ $DIR/lem/mips_extras_embed_sequential.lem $DIR/lem/${i%%.*}_embed_types.lem $DIR/lem/${i%%.*}_embed_sequential.lem 2> /dev/null
+	    if lem -lib $SAILDIR/src/lem_interp -lib $SAILDIR/src/gen_lib/ $DIR/lem/mips_extras_embed_sequential.lem $DIR/lem/${i%%.*}_embed_types_sequential.lem $DIR/lem/${i%%.*}_embed_sequential.lem 2> /dev/null
 	    then
 		green "typechecking lem for $1/$i" "pass"
 	    else

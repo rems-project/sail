@@ -84,6 +84,13 @@ let unaux_nexp (Nexp_aux (nexp, _)) = nexp
 let unaux_order (Ord_aux (ord, _)) = ord
 let unaux_typ (Typ_aux (typ, _)) = typ
 
+let orig_kid (Kid_aux (Var v, l) as kid) =
+  try
+    let i = String.rindex v '#' in
+    Kid_aux (Var ("'" ^ String.sub v (i + 1) (String.length v - i - 1)), l)
+  with
+  | Not_found -> kid
+
 let mk_typ typ = Typ_aux (typ, Parse_ast.Unknown)
 let mk_typ_arg arg = Typ_arg_aux (arg, Parse_ast.Unknown)
 let mk_id str = Id_aux (Id str, Parse_ast.Unknown)
@@ -446,7 +453,7 @@ module Env : sig
   val enable_casts : t -> t
   val add_cast : id -> t -> t
   val lookup_id : id -> t -> lvar
-  val fresh_kid : t -> kid
+  val fresh_kid : ?kid:kid -> t -> kid
   val expand_synonyms : t -> typ -> typ
   val base_typ_of : t -> typ -> typ
   val empty : t
@@ -497,12 +504,13 @@ end = struct
 
   let counter = ref 0
 
-  let fresh_kid env =
-    let fresh = Kid_aux (Var ("'fv" ^ string_of_int !counter), Parse_ast.Unknown) in
+  let fresh_kid ?kid:(kid=mk_kid "") env =
+    let suffix = if Kid.compare kid (mk_kid "") = 0 then "#" else "#" ^ string_of_id (id_of_kid kid) in
+    let fresh = Kid_aux (Var ("'fv" ^ string_of_int !counter ^ suffix), Parse_ast.Unknown) in
     incr counter; fresh
 
   let freshen_kid env kid (typq, typ) =
-    let fresh = fresh_kid env in
+    let fresh = fresh_kid ~kid:kid env in
     (typquant_subst_kid kid fresh typq, typ_subst_kid kid fresh typ)
 
   let freshen_bind env bind =

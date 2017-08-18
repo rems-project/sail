@@ -113,8 +113,10 @@ module Env : sig
 
   val is_union_constructor : id -> t -> bool
 
-  (* Return a fresh kind identifier that doesn't exist in the environment *)
-  val fresh_kid : t -> kid
+  (* Return a fresh kind identifier that doesn't exist in the
+     environment. The optional argument bases the new identifer on the
+     old one. *)
+  val fresh_kid : ?kid:kid -> t -> kid
 
   val expand_synonyms : t -> typ -> typ
 
@@ -137,6 +139,8 @@ end
 
 (* Push all the type variables and constraints from a typquant into an environment *)
 val add_typquant : typquant -> Env.t -> Env.t
+
+val orig_kid : kid -> kid
 
 (* Some handy utility functions for constructing types. *)
 val mk_typ : typ_aux -> typ

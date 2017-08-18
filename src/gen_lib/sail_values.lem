@@ -884,6 +884,14 @@ type register =
   | UndefinedRegister of integer (* length *)
   | RegisterPair of register * register
 
+type register_ref 'regstate 'a =
+  <| read_from : 'regstate -> 'a;
+     write_to : 'regstate -> 'a -> 'regstate |>
+
+type field_ref 'regtype 'a =
+  <| get_field : 'regtype -> 'a;
+     set_field : 'regtype -> 'a -> 'regtype |>
+
 let name_of_reg = function
   | Register name _ _ _ _ -> name
   | UndefinedRegister _ -> failwith "name_of_reg UndefinedRegister"

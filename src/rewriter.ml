@@ -1080,10 +1080,9 @@ let rewrite_sizeof (Defs defs) =
         (* Retrieve instantiation of the type variables of the called function
            for the given parameters in the original environment *)
         let inst = instantiation_of orig_exp in
-        Bindings.bindings param_map |> List.iter (fun (id, kids) -> print_endline (string_of_id id ^ " => " ^ Util.string_of_list ", " string_of_kid (KidSet.elements kids)));
-        KBindings.bindings inst |> List.iter (fun (kid, uvar) -> print_endline (string_of_kid kid ^ " => " ^ string_of_uvar uvar));
+        let inst = KBindings.fold (fun kid uvar b -> KBindings.add (orig_kid kid) uvar b) inst KBindings.empty in
         let kid_exp kid = begin
-          match (try KBindings.find kid inst with e -> print_endline (string_of_kid kid ^ " " ^ string_of_exp full_exp); raise e) with
+          match KBindings.find (orig_kid kid) inst with
           | U_nexp nexp -> E_aux (E_sizeof nexp, simple_annot l (atom_typ nexp))
           | _ ->
             raise (Reporting_basic.err_unreachable l
@@ -2313,9 +2312,8 @@ let rewrite_defs_ocaml = [
   rewrite_defs_remove_vector_concat;
   rewrite_constraint;
   rewrite_sizeof;
-  (*
-  (* rewrite_defs_exp_lift_assign (* ;
-  rewrite_defs_separate_numbs *) *) *)
+  rewrite_defs_exp_lift_assign (* ;
+  rewrite_defs_separate_numbs *)
   ]
 
 let rewrite_defs_remove_blocks =
