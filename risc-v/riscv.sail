@@ -70,7 +70,37 @@ function forall Nat 'n. (bit[8 * 'n]) effect { rmem } mem_read( (bit[64]) addr, 
   }
 
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea
+val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_release
+function forall Nat 'n. unit effect { eamem } mem_write_ea( (bit[64]) addr , ([|'n|]) width, (bool) rl) =
+  switch rl {
+    case false -> MEMea(addr, width)
+    case true  -> MEMea_release(addr, width)
+  }
+
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_release
+function forall Nat 'n. unit effect { wmv } mem_write_value( (bit[64]) addr , ([|'n|]) width , (bit[8*'n]) value, (bool) rl) =
+  switch rl {
+    case false -> MEMval(addr, width, value)
+    case true  -> MEMval_release(addr, width, value)
+  }
+
+val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional
+val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional_release
+function forall Nat 'n. unit effect { eamem } mem_write_conditional_ea( (bit[64]) addr , ([|'n|]) width, (bool) rl) =
+  switch rl {
+    case false -> MEMea_conditional(addr, width)
+    case true  -> MEMea_conditional_release(addr, width)
+  }
+
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> bool effect { wmv } MEMval_conditional
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> bool effect { wmv } MEMval_conditional_release
+function forall Nat 'n. bool effect { wmv } mem_write_conditional_value( (bit[64]) addr , ([|'n|]) width , (bit[8*'n]) value, (bool) rl) =
+  switch rl {
+    case false -> MEMval_conditional(addr, width, value)
+    case true  -> MEMval_conditional_release(addr, width, value)
+  }
+
 val extern unit -> unit effect { barr } MEM_fence_rw_rw
 val extern unit -> unit effect { barr } MEM_fence_r_rw
 val extern unit -> unit effect { barr } MEM_fence_rw_w
@@ -239,25 +269,25 @@ function clause execute(LOAD(imm, rs1, rd, unsigned, width, aq)) =
         } in
     wGPR(rd, result)
 
-union ast member ((bit[12]), regno, regno, word_width) STORE
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b000 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, BYTE))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b001 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, HALF))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b010 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, WORD))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b011 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, DOUBLE))
-function clause execute (STORE(imm, rs2, rs1, width)) =
+union ast member ((bit[12]), regno, regno, word_width, bool) STORE
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b000 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, BYTE, false))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b001 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, HALF, false))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b010 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, WORD, false))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b011 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, DOUBLE, false))
+function clause execute (STORE(imm, rs2, rs1, width, rl)) =
     let (bit[64]) addr = rGPR(rs1) + EXTS(imm) in {
       switch (width) {
-        case BYTE   -> MEMea(addr, 1)
-        case HALF   -> MEMea(addr, 2)
-        case WORD   -> MEMea(addr, 4)
-        case DOUBLE -> MEMea(addr, 8)
+        case BYTE   -> mem_write_ea(addr, 1, rl)
+        case HALF   -> mem_write_ea(addr, 2, rl)
+        case WORD   -> mem_write_ea(addr, 4, rl)
+        case DOUBLE -> mem_write_ea(addr, 8, rl)
       };
       let rs2_val = rGPR(rs2) in
       switch (width) {
-        case BYTE   -> MEMval(addr, 1, rs2_val[7..0])
-        case HALF   -> MEMval(addr, 2, rs2_val[15..0])
-        case WORD   -> MEMval(addr, 4, rs2_val[31..0])
-        case DOUBLE -> MEMval(addr, 8, rs2_val)
+        case BYTE   -> mem_write_value(addr, 1, rs2_val[7..0], rl)
+        case HALF   -> mem_write_value(addr, 2, rs2_val[15..0], rl)
+        case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], rl)
+        case DOUBLE -> mem_write_value(addr, 8, rs2_val, rl)
       }
     }
 

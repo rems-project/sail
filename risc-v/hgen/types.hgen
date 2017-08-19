@@ -111,11 +111,14 @@ let pp_riscv_load_op (unsigned, width, aq) =
   end
   ^ (if aq then ".aq" else "")
 
-let pp_riscv_store_op width = match width with
-| RISCVBYTE -> "sb"
-| RISCVHALF -> "sh"
-| RISCVWORD -> "sw"
-| RISCVDOUBLE -> "sd"
+let pp_riscv_store_op (width, rl) =
+  begin match width with
+  | RISCVBYTE -> "sb"
+  | RISCVHALF -> "sh"
+  | RISCVWORD -> "sw"
+  | RISCVDOUBLE -> "sd"
+  end
+  ^ (if rl then ".rl" else "")
 
 let pp_riscv_fence_option = function
   | 0b0011 -> "rw"

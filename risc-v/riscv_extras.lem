@@ -42,15 +42,25 @@ let memory_writes : memory_writes =
   []
 
 let memory_eas : memory_write_eas =
-  [ ("MEMea",                 (MEA Write_plain           memory_parameter_transformer));
-    ("MEMea_conditional",     (MEA Write_conditional     memory_parameter_transformer));
+  [ ("MEMea",                     (MEA Write_plain                     memory_parameter_transformer));
+    ("MEMea_release",             (MEA Write_RISCV_release             memory_parameter_transformer));
+    ("MEMea_conditional",         (MEA Write_RISCV_conditional         memory_parameter_transformer));
+    ("MEMea_conditional_release", (MEA Write_RISCV_conditional_release memory_parameter_transformer));
   ]
 
 let memory_vals : memory_write_vals =
-  [ ("MEMval",      (MV memory_parameter_transformer_option_address Nothing));
-    ("MEMval_conditional", (MV memory_parameter_transformer_option_address
-                           (Just 
-                           (fun (IState interp context) b -> 
+  [ ("MEMval",          (MV memory_parameter_transformer_option_address Nothing));
+    ("MEMval_release",  (MV memory_parameter_transformer_option_address Nothing));
+    ("MEMval_conditional",
+                        (MV memory_parameter_transformer_option_address
+                            (Just
+                            (fun (IState interp context) b ->
+                              let bit = Interp_ast.V_lit (L_aux (if b then L_one else L_zero) Interp_ast.Unknown) in
+                            (IState (Interp.add_answer_to_stack interp bit) context)))));
+    ("MEMval_conditional_release",
+                        (MV memory_parameter_transformer_option_address
+                           (Just
+                           (fun (IState interp context) b ->
                              let bit = Interp_ast.V_lit (L_aux (if b then L_one else L_zero) Interp_ast.Unknown) in
                              (IState (Interp.add_answer_to_stack interp bit) context)))));
   ]

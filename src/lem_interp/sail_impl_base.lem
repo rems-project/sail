@@ -437,6 +437,9 @@ instance (Show read_kind)
     | Read_exclusive -> "Read_exclusive"
     | Read_exclusive_acquire -> "Read_exclusive_acquire"
     | Read_stream -> "Read_stream"
+    | Read_RISCV_acquire -> "Read_RISCV_acquire"
+    | Read_RISCV_reserved -> "Read_RISCV_reserved"
+    | Read_RISCV_reserved_acquire -> "Read_RISCV_reserved_acquire"
   end
 end
 
@@ -447,6 +450,8 @@ type write_kind =
   | Write_conditional
   (* AArch64 writes *)
   | Write_release | Write_exclusive | Write_exclusive_release
+  (* RISC-V *)
+  | Write_RISCV_release | Write_RISCV_conditional | Write_RISCV_conditional_release
 
 instance (Show write_kind)
   let show = function
@@ -455,6 +460,9 @@ instance (Show write_kind)
     | Write_release -> "Write_release"
     | Write_exclusive -> "Write_exclusive"
     | Write_exclusive_release -> "Write_exclusive_release"
+    | Write_RISCV_release -> "Write_RISCV_release"
+    | Write_RISCV_conditional -> "Write_RISCV_conditional"
+    | Write_RISCV_conditional_release -> "Write_RISCV_conditional_release"
   end
 end
 
@@ -488,6 +496,9 @@ instance (Show barrier_kind)
     | Barrier_ISB -> "Barrier_ISB"
     | Barrier_TM_COMMIT -> "Barrier_TM_COMMIT"
     | Barrier_MIPS_SYNC -> "Barrier_MIPS_SYNC"
+    | Barrier_RISCV_rw_rw -> "Barrier_RISCV_rw_rw"
+    | Barrier_RISCV_r_rw  -> "Barrier_RISCV_r_rw"
+    | Barrier_RISCV_rw_w  -> "Barrier_RISCV_rw_w"
   end
 end
 

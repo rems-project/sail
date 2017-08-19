@@ -9,7 +9,8 @@
 | `RISCVRType (rs2, rs1, rd, op)  -> sprintf "%s %s, %s, %s" (pp_riscv_rop op) (pp_reg rd) (pp_reg rs1) (pp_reg rs2)
 | `RISCVLoad(imm, rs, rd, unsigned, width, aq)
                                   -> sprintf "%s %s, %d(%s)" (pp_riscv_load_op (unsigned, width, aq)) (pp_reg rd) imm (pp_reg rs)
-| `RISCVStore(imm, rs2, rs1, width) -> sprintf "%s %s, %d(%s)" (pp_riscv_store_op width) (pp_reg rs2) imm (pp_reg rs1)
+| `RISCVStore(imm, rs2, rs1, width, rl)
+                                  -> sprintf "%s %s, %d(%s)" (pp_riscv_store_op (width, rl)) (pp_reg rs2) imm (pp_reg rs1)
 | `RISCVADDIW(imm, rs, rd)        -> sprintf "addiw %s, %s, %d" (pp_reg rd) (pp_reg rs) imm
 | `RISCVSHIFTW(imm, rs, rd, op)   -> sprintf "%s %s, %s, %d" (pp_riscv_sop op) (pp_reg rd) (pp_reg rs) imm
 | `RISCVRTYPEW(rs2, rs1, rd, op)  -> sprintf "%s %s, %s, %s" (pp_riscv_ropw op) (pp_reg rd) (pp_reg rs1) (pp_reg rs2)

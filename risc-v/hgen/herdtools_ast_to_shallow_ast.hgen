@@ -37,11 +37,12 @@
       translate_bool "unsigned" unsigned,
       translate_wordWidth width,
       translate_bool "aq" aq)
-| `RISCVStore(imm, rs, rd, width) -> STORE (
+| `RISCVStore(imm, rs, rd, width, rl) -> STORE (
       translate_imm12 "imm" imm,
       translate_reg "rs" rs,
       translate_reg "rd" rd,
-      translate_wordWidth width)
+      translate_wordWidth width,
+      translate_bool "rl" rl)
 | `RISCVADDIW(imm, rs, rd) -> ADDIW(
       translate_imm12 "imm" imm,
       translate_reg "rs" rs,

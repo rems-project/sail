@@ -57,11 +57,11 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             aR := iR;
             ik := if aq then IK_mem_read (Read_RISCV_acquire) else IK_mem_read (Read_plain);
      }
-     case (STORE( imm, rs2, rs1, width)) -> {
+     case (STORE( imm, rs2, rs1, width, rl)) -> {
             if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
             if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
             if (rs1 == 0) then () else aR := RFull(GPRstr[rs1]) :: aR;
-            ik := IK_mem_write (Write_plain);
+            ik := if rl then IK_mem_write (Write_RISCV_release) else IK_mem_write (Write_plain);
      }
      case (ADDIW ( imm, rs, rd)) -> {
             if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;

@@ -6,7 +6,7 @@
 | `RISCVShiftIop of bit6 * reg * reg * riscvSop
 | `RISCVRType of reg * reg * reg * riscvRop
 | `RISCVLoad of bit12 * reg * reg * bool * wordWidth * bool
-| `RISCVStore of bit12 * reg * reg * wordWidth
+| `RISCVStore of bit12 * reg * reg * wordWidth * bool
 | `RISCVADDIW of bit12 * reg * reg
 | `RISCVSHIFTW of bit5 * reg * reg * riscvSop
 | `RISCVRTYPEW of reg * reg * reg * riscvRopw

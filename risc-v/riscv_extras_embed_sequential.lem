@@ -14,18 +14,25 @@ let MEMr_acquire (addr,size)          = read_mem false Read_RISCV_acquire addr s
 let MEMr_reserved (addr,size)         = read_mem false Read_RISCV_reserved addr size
 let MEMr_reserved_acquire (addr,size) = read_mem false Read_RISCV_reserved_acquire addr size
 
-val MEMea                 : (vector bitU * integer) -> M unit
-val MEMea_conditional     : (vector bitU * integer) -> M unit
+val MEMea                     : (vector bitU * integer) -> M unit
+val MEMea_release             : (vector bitU * integer) -> M unit
+val MEMea_conditional         : (vector bitU * integer) -> M unit
+val MEMea_conditional_release : (vector bitU * integer) -> M unit
 
-let MEMea (addr,size)                 = write_mem_ea Write_plain addr size
-let MEMea_conditional (addr,size)     = write_mem_ea Write_conditional addr size
+let MEMea (addr,size)                     = write_mem_ea Write_plain addr size
+let MEMea_release (addr,size)             = write_mem_ea Write_RISCV_release addr size
+let MEMea_conditional (addr,size)         = write_mem_ea Write_RISCV_conditional addr size
+let MEMea_conditional_release (addr,size) = write_mem_ea Write_RISCV_conditional_release addr size
 
+val MEMval                     : (vector bitU * integer * vector bitU) -> M unit
+val MEMval_release             : (vector bitU * integer * vector bitU) -> M unit
+val MEMval_conditional         : (vector bitU * integer * vector bitU) -> M bitU
+val MEMval_conditional_release : (vector bitU * integer * vector bitU) -> M bitU
 
-val MEMval                 : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_conditional     : (vector bitU * integer * vector bitU) -> M bitU
-
-let MEMval (_,_,v)                   = write_mem_val v >>= fun _ -> return ()
-let MEMval_conditional (_,_,v)       = write_mem_val v >>= fun b -> return (if b then B1 else B0)
+let MEMval (_,_,v)                     = write_mem_val v >>= fun _ -> return ()
+let MEMval_release (_,_,v)             = write_mem_val v >>= fun _ -> return ()
+let MEMval_conditional (_,_,v)         = write_mem_val v >>= fun b -> return (if b then B1 else B0)
+let MEMval_conditional_release (_,_,v) = write_mem_val v >>= fun b -> return (if b then B1 else B0)
 
 val MEM_fence_rw_rw : unit -> M unit
 val MEM_fence_r_rw  : unit -> M unit

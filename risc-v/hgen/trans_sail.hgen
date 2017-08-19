@@ -69,13 +69,14 @@
       translate_bool "aq" aq;
     ],
     [])
-| `RISCVStore(imm, rs2, rs1, width) -> 
+| `RISCVStore(imm, rs2, rs1, width, rl) ->
    ("STORE",
     [
       translate_imm12 "imm" imm;
       translate_reg "rs2" rs2;
       translate_reg "rs1" rs1;
       translate_width "width" width;
+      translate_bool "rl" rl;
     ],
     [])
 | `RISCVADDIW(imm, rs, rd)        -> 

@@ -50,6 +50,9 @@ typedef write_kind = enumerate {
   Write_release;
   Write_exclusive;
   Write_exclusive_release;
+  Write_RISCV_release;
+  Write_RISCV_conditional;
+  Write_RISCV_conditional_release;
 }
 
 typedef barrier_kind = enumerate {

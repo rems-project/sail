@@ -15,7 +15,7 @@
 | LOAD reg COMMA NUM LPAR reg RPAR
   { `RISCVLoad($4, $6, $2, $1.unsigned, $1.width, $1.aq) }
 | STORE reg COMMA NUM LPAR reg RPAR
-  { `RISCVStore($4, $2, $6, $1.width) }
+  { `RISCVStore($4, $2, $6, $1.width, $1.rl) }
 | ADDIW reg COMMA reg COMMA NUM
   { `RISCVADDIW ($6, $4, $2) }
 | SHIFTW reg COMMA reg COMMA NUM

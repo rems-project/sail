@@ -49,10 +49,15 @@
 "lwu.aq", LOAD{unsigned=true;  width=RISCVWORD;   aq=true};
 "ld.aq",  LOAD{unsigned=false; width=RISCVDOUBLE; aq=true};
 
-"sb", STORE{width=RISCVBYTE};
-"sh", STORE{width=RISCVHALF};
-"sw", STORE{width=RISCVWORD};
-"sd", STORE{width=RISCVDOUBLE};
+"sb", STORE{width=RISCVBYTE;   rl=false};
+"sh", STORE{width=RISCVHALF;   rl=false};
+"sw", STORE{width=RISCVWORD;   rl=false};
+"sd", STORE{width=RISCVDOUBLE; rl=false};
+
+"sb.rl", STORE{width=RISCVBYTE;   rl=true};
+"sh.rl", STORE{width=RISCVHALF;   rl=true};
+"sw.rl", STORE{width=RISCVWORD;   rl=true};
+"sd.rl", STORE{width=RISCVDOUBLE; rl=true};
 
 "addiw", ADDIW ();
 
