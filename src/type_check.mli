@@ -188,6 +188,10 @@ val nc_false : n_constraint
    de-morgans to switch and to or and vice versa. *)
 val nc_negate : n_constraint -> n_constraint
 
+val is_nat_kopt : kinded_id -> bool
+val is_order_kopt : kinded_id -> bool
+val is_typ_kopt : kinded_id -> bool
+
 (* Sail builtin types. *)
 val int_typ : typ
 val nat_typ : typ

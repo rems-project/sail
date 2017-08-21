@@ -2348,7 +2348,7 @@ let rewrite_constraint =
     | NC_false -> E_lit (mk_lit L_true)
     | NC_true -> E_lit (mk_lit L_false)
     | NC_nat_set_bounded (kid, ints) ->
-        unaux_exp (rewrite_nc (List.fold_left (fun nc int -> nc_or nc (nc_eq (nvar kid) (nconstant int))) nc_true ints))
+       unaux_exp (rewrite_nc (List.fold_left (fun nc int -> nc_or nc (nc_eq (nvar kid) (nconstant int))) nc_true ints))
   in
   let rewrite_e_aux (E_aux (e_aux, _) as exp) =
     match e_aux with
@@ -2361,18 +2361,38 @@ let rewrite_constraint =
 
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_e_constraint) }
 
-let rewrite_simple_types (Defs defs) =
-  let is_constraint = function
-    | QI_aux (QI_id _, annot) as qi -> false
-    | _ -> true
+(* Remove overload definitions and cast val specs from the
+   specification because the interpreter doesn't know about them.*)
+let rewrite_overload_cast (Defs defs) =
+  let remove_cast_vs (VS_aux (vs_aux, annot)) =
+    match vs_aux with
+    | VS_val_spec (typschm, id) -> VS_aux (VS_val_spec (typschm, id), annot)
+    | VS_extern_no_rename (typschm, id) -> VS_aux (VS_val_spec (typschm, id), annot)
+    | VS_extern_spec (typschm, id, e) -> VS_aux (VS_extern_spec (typschm, id, e), annot)
+    | VS_cast_spec (typschm, id) -> VS_aux (VS_val_spec (typschm, id), annot)
   in
+  let simple_def = function
+    | DEF_spec vs -> DEF_spec (remove_cast_vs vs)
+    | def -> def
+  in
+  let is_overload = function
+    | DEF_overload _ -> true
+    | _ -> false
+  in
+  let defs = List.map simple_def defs in
+  Defs (List.filter (fun def -> not (is_overload def)) defs)
 
+(* This pass aims to remove all the Num quantifiers from the specification. *)
+let rewrite_simple_types (Defs defs) =
+  let is_simple = function
+    | QI_aux (QI_id kopt, annot) as qi when is_typ_kopt kopt || is_order_kopt kopt -> true
+    | _ -> false
+  in
   let simple_typquant (TypQ_aux (tq_aux, annot)) =
     match tq_aux with
     | TypQ_no_forall -> TypQ_aux (TypQ_no_forall, annot)
-    | TypQ_tq quants -> TypQ_aux (TypQ_tq (List.filter (fun q -> not (is_constraint q)) quants), annot)
+    | TypQ_tq quants -> TypQ_aux (TypQ_tq (List.filter (fun q -> is_simple q) quants), annot)
   in
-
   let rec simple_typ (Typ_aux (typ_aux, l) as typ) = Typ_aux (simple_typ_aux typ_aux, l)
   and simple_typ_aux = function
     | Typ_wild -> Typ_wild
@@ -2388,11 +2408,9 @@ let rewrite_simple_types (Defs defs) =
     | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux typ
     | typ_aux -> typ_aux
   in
-
   let simple_typschm (TypSchm_aux (TypSchm_ts (typq, typ), annot)) =
     TypSchm_aux (TypSchm_ts (simple_typquant typq, simple_typ typ), annot)
   in
-
   let simple_vs (VS_aux (vs_aux, annot)) =
     match vs_aux with
     | VS_val_spec (typschm, id) -> VS_aux (VS_val_spec (simple_typschm typschm, id), annot)
@@ -2400,27 +2418,32 @@ let rewrite_simple_types (Defs defs) =
     | VS_extern_spec (typschm, id, e) -> VS_aux (VS_extern_spec (simple_typschm typschm, id, e), annot)
     | VS_cast_spec (typschm, id) -> VS_aux (VS_cast_spec (simple_typschm typschm, id), annot)
   in
-
-  let simple_def def =
-    match def with
-    | DEF_spec vs -> DEF_spec (simple_vs vs)
-    | _ -> def
+  let rec simple_lit (L_aux (lit_aux, l) as lit) =
+    match lit_aux with
+    | L_bin _ | L_hex _ ->
+       E_list (List.map (fun b -> E_aux (E_lit b, simple_annot l bit_typ)) (vector_string_to_bit_list l lit_aux))
+    | _ -> E_lit lit
   in
-
+  let simple_def = function
+    | DEF_spec vs -> DEF_spec (simple_vs vs)
+    | def -> def
+  in
   let simple_pat = {
       id_pat_alg with
       p_typ = (fun (typ, pat) -> P_typ (simple_typ typ, pat));
-      p_var = (fun kid -> P_id (id_of_kid kid))
+      p_var = (fun kid -> P_id (id_of_kid kid));
+      p_vector = (fun pats -> P_list pats)
     } in
   let simple_exp = {
       id_exp_alg with
+      e_lit = simple_lit;
+      e_vector = (fun exps -> E_list exps);
       e_cast = (fun (typ, exp) -> E_cast (simple_typ typ, exp));
       e_assert = (fun (E_aux (_, annot), str) -> E_assert (E_aux (E_lit (mk_lit L_true), annot), str));
       lEXP_cast = (fun (typ, lexp) -> LEXP_cast (simple_typ typ, lexp));
       pat_alg = simple_pat
     } in
   let simple_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp simple_exp) } in
-
   let defs = Defs (List.map simple_def defs) in
   rewrite_defs_base simple_defs defs
 
@@ -2430,6 +2453,8 @@ let rewrite_defs_ocaml = [
   rewrite_constraint;
   rewrite_trivial_sizeof;
   rewrite_sizeof;
+  rewrite_simple_types;
+  rewrite_overload_cast;
   (* rewrite_defs_exp_lift_assign *)
   (* rewrite_defs_separate_numbs *)
   ]
@@ -2578,7 +2603,7 @@ let rewrite_defs_letbind_effects  =
     | LEXP_vector_range (lexp,e1,e2) ->
        n_lexp lexp (fun lexp ->
        n_exp_name e1 (fun e1 ->
-       n_exp_name e2 (fun e2 ->
+    n_exp_name e2 (fun e2 ->
        k (fix_eff_lexp (LEXP_aux (LEXP_vector_range (lexp,e1,e2),annot))))))
     | LEXP_field (lexp,id) ->
        n_lexp lexp (fun lexp ->

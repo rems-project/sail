@@ -158,6 +158,7 @@ let main() =
        else ());
       (if !(opt_print_ocaml)
        then let ast_ocaml = rewrite_ast_ocaml ast in
+         Pretty_print_sail.pp_defs stdout ast_ocaml;
          if !(opt_libs_ocaml) = []
          then output "" (Ocaml_out None) [out_name,ast_ocaml]
          else output "" (Ocaml_out (Some (List.hd !opt_libs_ocaml))) [out_name,ast_ocaml]
