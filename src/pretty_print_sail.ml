@@ -109,6 +109,7 @@ let doc_pat, doc_atomic_pat =
   | P_lit lit  -> doc_lit lit
   | P_wild -> underscore
   | P_id id -> doc_id id
+  | P_var kid -> doc_var kid
   | P_as(p,id) -> parens (separate space [pat p; string "as"; doc_id id])
   | P_typ(typ,p) -> separate space [parens (doc_typ typ); atomic_pat p]
   | P_app(id,[]) -> doc_id id

@@ -46,6 +46,10 @@ open Ast
 
 val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
+val mk_exp : unit exp_aux -> unit exp
+val mk_lit : lit_aux -> lit
+
+val unaux_exp : 'a exp -> 'a exp_aux
 
 (* Functions to map over the annotations in sub-expressions *)
 val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp

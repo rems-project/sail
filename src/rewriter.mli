@@ -66,6 +66,7 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_as             : 'pat * id -> 'pat_aux
   ; p_typ            : Ast.typ * 'pat -> 'pat_aux
   ; p_id             : id -> 'pat_aux
+  ; p_var            : kid -> 'pat_aux
   ; p_app            : id * 'pat list -> 'pat_aux
   ; p_record         : 'fpat list * bool -> 'pat_aux
   ; p_vector         : 'pat list -> 'pat_aux
@@ -112,6 +113,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
  ; e_let                    : 'letbind * 'exp -> 'exp_aux
  ; e_assign                 : 'lexp * 'exp -> 'exp_aux
  ; e_sizeof                 : nexp -> 'exp_aux
+ ; e_constraint             : n_constraint -> 'exp_aux
  ; e_exit                   : 'exp -> 'exp_aux
  ; e_return                 : 'exp -> 'exp_aux
  ; e_assert                 : 'exp * 'exp -> 'exp_aux

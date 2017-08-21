@@ -355,7 +355,7 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot))) =
     let ps =  List.map (fun p -> P_aux (P_lit p, simple_annot l bit_typ))
         (vector_string_to_bit_list l lit) in
     rewrap (P_vector ps)
-  | P_lit _ | P_wild | P_id _ -> rewrap pat
+  | P_lit _ | P_wild | P_id _ | P_var _ -> rewrap pat
   | P_as(pat,id) -> rewrap (P_as(rewrite pat, id))
   | P_typ(typ,pat) -> rewrap (P_typ(typ, rewrite pat))
   | P_app(id ,pats) -> rewrap (P_app(id, List.map rewrite pats))
@@ -629,6 +629,7 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_as             : 'pat * id -> 'pat_aux
   ; p_typ            : Ast.typ * 'pat -> 'pat_aux
   ; p_id             : id -> 'pat_aux
+  ; p_var            : kid -> 'pat_aux
   ; p_app            : id * 'pat list -> 'pat_aux
   ; p_record         : 'fpat list * bool -> 'pat_aux
   ; p_vector         : 'pat list -> 'pat_aux
@@ -647,6 +648,7 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat
   | P_lit lit           -> alg.p_lit lit
   | P_wild              -> alg.p_wild
   | P_id id             -> alg.p_id id
+  | P_var kid           -> alg.p_var kid
   | P_as (p,id)         -> alg.p_as (fold_pat alg p,id)
   | P_typ (typ,p)       -> alg.p_typ (typ,fold_pat alg p)
   | P_app (id,ps)       -> alg.p_app (id,List.map (fold_pat alg) ps)
@@ -676,6 +678,7 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   ; p_as             = (fun (pat,id) -> P_as (pat,id))
   ; p_typ            = (fun (typ,pat) -> P_typ (typ,pat))
   ; p_id             = (fun id -> P_id id)
+  ; p_var            = (fun kid -> P_var kid)
   ; p_app            = (fun (id,ps) -> P_app (id,ps))
   ; p_record         = (fun (ps,b) -> P_record (ps,b))
   ; p_vector         = (fun ps -> P_vector ps)
@@ -718,6 +721,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_let                    : 'letbind * 'exp -> 'exp_aux
   ; e_assign                 : 'lexp * 'exp -> 'exp_aux
   ; e_sizeof                 : nexp -> 'exp_aux
+  ; e_constraint             : n_constraint -> 'exp_aux
   ; e_exit                   : 'exp -> 'exp_aux
   ; e_return                 : 'exp -> 'exp_aux
   ; e_assert                 : 'exp * 'exp -> 'exp_aux
@@ -786,8 +790,7 @@ let rec fold_exp_aux alg = function
   | E_let (letbind,e) -> alg.e_let (fold_letbind alg letbind, fold_exp alg e)
   | E_assign (lexp,e) -> alg.e_assign (fold_lexp alg lexp, fold_exp alg e)
   | E_sizeof nexp -> alg.e_sizeof nexp
-  | E_constraint nc -> raise (Reporting_basic.err_unreachable (Parse_ast.Unknown)
-      "E_constraint encountered during rewriting")
+  | E_constraint nc -> alg.e_constraint nc
   | E_exit e -> alg.e_exit (fold_exp alg e)
   | E_return e -> alg.e_return (fold_exp alg e)
   | E_assert(e1,e2) -> alg.e_assert (fold_exp alg e1, fold_exp alg e2)
@@ -860,6 +863,7 @@ let id_exp_alg =
   ; e_let = (fun (lb,e2) -> E_let (lb,e2))
   ; e_assign = (fun (lexp,e2) -> E_assign (lexp,e2))
   ; e_sizeof = (fun nexp -> E_sizeof nexp)
+  ; e_constraint = (fun nc -> E_constraint nc)
   ; e_exit = (fun e1 -> E_exit (e1))
   ; e_return = (fun e1 -> E_return e1)
   ; e_assert = (fun (e1,e2) -> E_assert(e1,e2)) 
@@ -909,6 +913,7 @@ let compute_pat_alg bot join =
   ; p_as             = (fun ((v,pat),id) -> (v, P_as (pat,id)))
   ; p_typ            = (fun (typ,(v,pat)) -> (v, P_typ (typ,pat)))
   ; p_id             = (fun id -> (bot, P_id id))
+  ; p_var            = (fun kid -> (bot, P_var kid))
   ; p_app            = (fun (id,ps) -> split_join (fun ps -> P_app (id,ps)) ps)
   ; p_record         = (fun (ps,b) -> split_join (fun ps -> P_record (ps,b)) ps)
   ; p_vector         = split_join (fun ps -> P_vector ps)
@@ -960,6 +965,7 @@ let compute_exp_alg bot join =
   ; e_let = (fun ((vl,lb),(v2,e2)) -> (join vl v2, E_let (lb,e2)))
   ; e_assign = (fun ((vl,lexp),(v2,e2)) -> (join vl v2, E_assign (lexp,e2)))
   ; e_sizeof = (fun nexp -> (bot, E_sizeof nexp))
+  ; e_constraint = (fun nc -> (bot, E_constraint nc))
   ; e_exit = (fun (v1,e1) -> (v1, E_exit (e1)))
   ; e_return = (fun (v1,e1) -> (v1, E_return e1))
   ; e_assert = (fun ((v1,e1),(v2,e2)) -> (join v1 v2, E_assert(e1,e2)) )
@@ -1074,8 +1080,9 @@ let rewrite_sizeof (Defs defs) =
         (* Retrieve instantiation of the type variables of the called function
            for the given parameters in the original environment *)
         let inst = instantiation_of orig_exp in
+        let inst = KBindings.fold (fun kid uvar b -> KBindings.add (orig_kid kid) uvar b) inst KBindings.empty in
         let kid_exp kid = begin
-          match KBindings.find kid inst with
+          match KBindings.find (orig_kid kid) inst with
           | U_nexp nexp -> E_aux (E_sizeof nexp, simple_annot l (atom_typ nexp))
           | _ ->
             raise (Reporting_basic.err_unreachable l
@@ -1117,6 +1124,7 @@ let rewrite_sizeof (Defs defs) =
     ; e_let = (fun ((lb,lb'),(e2,e2')) -> (E_let (lb,e2), E_let (lb',e2')))
     ; e_assign = (fun ((lexp,lexp'),(e2,e2')) -> (E_assign (lexp,e2), E_assign (lexp',e2')))
     ; e_sizeof = (fun nexp -> (E_sizeof nexp, E_sizeof nexp))
+    ; e_constraint = (fun nc -> (E_constraint nc, E_constraint nc))
     ; e_exit = (fun (e1,e1') -> (E_exit (e1), E_exit (e1')))
     ; e_return = (fun (e1,e1') -> (E_return e1, E_return e1'))
     ; e_assert = (fun ((e1,e1'),(e2,e2')) -> (E_assert(e1,e2), E_assert(e1',e2')) )
@@ -1277,6 +1285,7 @@ let remove_vector_concat_pat pat =
     ; p_wild = P_wild
     ; p_as = (fun (pat,id) -> P_as (pat true,id))
     ; p_id  = (fun id -> P_id id)
+    ; p_var = (fun kid -> P_var kid)
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
     ; p_record = (fun (fpats,b) -> P_record (fpats, b))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
@@ -1403,6 +1412,7 @@ let remove_vector_concat_pat pat =
     ; p_as             = (fun ((pat,decls),id) -> (P_as (pat,id),decls))
     ; p_typ            = (fun (typ,(pat,decls)) -> (P_typ (typ,pat),decls))
     ; p_id             = (fun id -> (P_id id,[]))
+    ; p_var            = (fun kid -> (P_var kid, []))
     ; p_app            = (fun (id,ps) -> let (ps,decls) = List.split ps in
                                          (P_app (id,ps),List.flatten decls))
     ; p_record         = (fun (ps,b) -> let (ps,decls) = List.split ps in
@@ -1775,6 +1785,7 @@ let remove_bitvector_pat pat =
     ; p_wild = P_wild
     ; p_as = (fun (pat,id) -> P_as (pat true,id))
     ; p_id  = (fun id -> P_id id)
+    ; p_var = (fun kid -> P_var kid)
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
     ; p_record = (fun (fpats,b) -> P_record (fpats, b))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
@@ -1923,6 +1934,7 @@ let remove_bitvector_pat pat =
     ; p_as             = (fun ((pat,gdls),id) -> (P_as (pat,id), gdls))
     ; p_typ            = (fun (typ,(pat,gdls)) -> (P_typ (typ,pat), gdls))
     ; p_id             = (fun id -> (P_id id, (None, (fun b -> b), [])))
+    ; p_var            = (fun kid -> (P_var kid, (None, (fun b -> b), [])))
     ; p_app            = (fun (id,ps) -> let (ps,gdls) = List.split ps in
                                          (P_app (id,ps), flatten_guards_decls gdls))
     ; p_record         = (fun (ps,b) -> let (ps,gdls) = List.split ps in
@@ -2270,9 +2282,35 @@ let rewrite_defs_early_return =
 
   rewrite_defs_base { rewriters_base with rewrite_fun = rewrite_fun_early_return }
 
+let rewrite_constraint =
+  let rec rewrite_nc (NC_aux (nc_aux, l)) = mk_exp (rewrite_nc_aux nc_aux)
+  and rewrite_nc_aux = function
+    | NC_bounded_ge (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">=", mk_exp (E_sizeof n2))
+    | NC_bounded_le (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">=", mk_exp (E_sizeof n2))
+    | NC_fixed (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "==", mk_exp (E_sizeof n2))
+    | NC_not_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "!=", mk_exp (E_sizeof n2))
+    | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc nc1, mk_id "&", rewrite_nc nc2)
+    | NC_or (nc1, nc2) -> E_app_infix (rewrite_nc nc1, mk_id "|", rewrite_nc nc2)
+    | NC_false -> E_lit (mk_lit L_true)
+    | NC_true -> E_lit (mk_lit L_false)
+    | NC_nat_set_bounded (kid, ints) ->
+        unaux_exp (rewrite_nc (List.fold_left (fun nc int -> nc_or nc (nc_eq (nvar kid) (nconstant int))) nc_true ints))
+  in
+  let rewrite_e_aux (E_aux (e_aux, _) as exp) =
+    match e_aux with
+    | E_constraint nc ->
+       check_exp (env_of exp) (rewrite_nc nc) bool_typ
+    | _ -> exp
+  in
+
+  let rewrite_e_constraint = { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
+
+  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_e_constraint) }
+
 let rewrite_defs_ocaml = [
   top_sort_defs;
   rewrite_defs_remove_vector_concat;
+  rewrite_constraint;
   rewrite_sizeof;
   rewrite_defs_exp_lift_assign (* ;
   rewrite_defs_separate_numbs *)
@@ -2674,6 +2712,7 @@ let find_updated_vars (E_aux (_,(l,_)) as exp) =
       ; e_case = (fun (e1,pexps) -> e1 @@ lapp2 pexps)
       ; e_let = (fun (lb,e2) -> lb @@ e2)
       ; e_assign = (fun ((ids,acc),e2) -> ([],ids) @@ acc @@ e2)
+      ; e_constraint = (fun nc -> ([],[]))
       ; e_sizeof = (fun nexp -> ([],[]))
       ; e_exit = (fun e1 -> ([],[]))
       ; e_return = (fun e1 -> e1)
