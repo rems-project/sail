@@ -158,7 +158,6 @@ let main() =
        else ());
       (if !(opt_print_ocaml)
        then let ast_ocaml = rewrite_ast_ocaml ast in
-         print_endline "Finished re-writing ocaml";
          if !(opt_libs_ocaml) = []
          then output "" (Ocaml_out None) [out_name,ast_ocaml]
          else output "" (Ocaml_out (Some (List.hd !opt_libs_ocaml))) [out_name,ast_ocaml]

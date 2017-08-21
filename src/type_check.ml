@@ -417,6 +417,7 @@ module Env : sig
   val is_record : id -> t -> bool
   val get_accessor : id -> id -> t -> typquant * typ
   val add_local : id -> mut * typ -> t -> t
+  val get_locals : t -> (mut * typ) Bindings.t
   val add_variant : id -> typquant * type_union list -> t -> t
   val add_union_id : id -> typquant * typ -> t -> t
   val add_flow : id -> (typ -> typ) -> t -> t
@@ -791,6 +792,8 @@ end = struct
   let get_regtyp id env =
     try Bindings.find id env.regtyps with
     | Not_found -> typ_error (id_loc id) (string_of_id id ^ " is not a register type")
+
+  let get_locals env = env.locals
 
   let lookup_id id env =
     try
@@ -1286,27 +1289,30 @@ let ord_identical (Ord_aux (ord1, _)) (Ord_aux (ord2, _)) =
   | Ord_dec, Ord_dec -> true
   | _, _ -> false
 
-let rec typ_identical (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
-  match typ1, typ2 with
-  | Typ_wild, Typ_wild -> true
-  | Typ_id v1, Typ_id v2 -> Id.compare v1 v2 = 0
-  | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2 = 0
-  | Typ_tup typs1, Typ_tup typs2 ->
-     begin
-       try List.for_all2 typ_identical typs1 typs2 with
-       | Invalid_argument _ -> false
-     end
-  | Typ_app (f1, args1), Typ_app (f2, args2) ->
-     begin
-       try Id.compare f1 f2 = 0 && List.for_all2 typ_arg_identical args1 args2 with
-       | Invalid_argument _ -> false
-     end
-  | _, _ -> false
-and typ_arg_identical (Typ_arg_aux (arg1, _)) (Typ_arg_aux (arg2, _)) =
-  match arg1, arg2 with
-  | Typ_arg_nexp n1, Typ_arg_nexp n2 -> nexp_identical n1 n2
-  | Typ_arg_typ typ1, Typ_arg_typ typ2 -> typ_identical typ1 typ2
-  | Typ_arg_order ord1, Typ_arg_order ord2 -> ord_identical ord1 ord2
+let typ_identical env typ1 typ2 =
+  let rec typ_identical' (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
+    match typ1, typ2 with
+    | Typ_wild, Typ_wild -> true
+    | Typ_id v1, Typ_id v2 -> Id.compare v1 v2 = 0
+    | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2 = 0
+    | Typ_tup typs1, Typ_tup typs2 ->
+       begin
+         try List.for_all2 typ_identical' typs1 typs2 with
+         | Invalid_argument _ -> false
+       end
+    | Typ_app (f1, args1), Typ_app (f2, args2) ->
+       begin
+         try Id.compare f1 f2 = 0 && List.for_all2 typ_arg_identical args1 args2 with
+         | Invalid_argument _ -> false
+       end
+    | _, _ -> false
+  and typ_arg_identical (Typ_arg_aux (arg1, _)) (Typ_arg_aux (arg2, _)) =
+    match arg1, arg2 with
+    | Typ_arg_nexp n1, Typ_arg_nexp n2 -> nexp_identical n1 n2
+    | Typ_arg_typ typ1, Typ_arg_typ typ2 -> typ_identical' typ1 typ2
+    | Typ_arg_order ord1, Typ_arg_order ord2 -> ord_identical ord1 ord2
+  in
+  typ_identical' (Env.expand_synonyms env typ1) (Env.expand_synonyms env typ2)
 
 type uvar =
   | U_nexp of nexp
@@ -1513,6 +1519,7 @@ let uv_nexp_constraint env (kid, uvar) =
   | _ -> env
 
 let rec subtyp l env typ1 typ2 =
+  typ_print ("Subtype " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2);
   match destruct_exist env typ1, destruct_exist env typ2 with
   | Some (kids, nc, typ1), _ ->
      let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env kids in
@@ -1673,13 +1680,13 @@ let destruct_atom (Typ_aux (typ_aux, _)) =
        when string_of_id f = "range" && c1 = c2 -> c1
   | _ -> assert false
 
-let destruct_atom_nexp (Typ_aux (typ_aux, _)) =
-  match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)])
-       when string_of_id f = "atom" -> n
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _); Typ_arg_aux (Typ_arg_nexp _, _)])
-       when string_of_id f = "range" -> n
-  | _ -> assert false
+let destruct_atom_nexp env typ =
+  match Env.expand_synonyms env typ with
+  | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)]), _)
+       when string_of_id f = "atom" -> Some n
+  | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _); Typ_arg_aux (Typ_arg_nexp _, _)]), _)
+       when string_of_id f = "range" -> Some n
+  | _ -> None
 
 let restrict_range_upper c1 (Typ_aux (typ_aux, l) as typ) =
   match typ_aux with
@@ -1726,20 +1733,20 @@ let apply_flow_constraint = function
 let rec infer_flow env (E_aux (exp_aux, (l, _))) =
   match exp_aux with
   | E_app (f, [x; y]) when string_of_id f = "lteq_atom_atom" ->
-     let n1 = destruct_atom_nexp (typ_of x) in
-     let n2 = destruct_atom_nexp (typ_of y) in
+     let Some n1 = destruct_atom_nexp env (typ_of x) in
+     let Some n2 = destruct_atom_nexp env (typ_of y) in
      [], [nc_lteq n1 n2]
   | E_app (f, [x; y]) when string_of_id f = "gteq_atom_atom" ->
-     let n1 = destruct_atom_nexp (typ_of x) in
-     let n2 = destruct_atom_nexp (typ_of y) in
+     let Some n1 = destruct_atom_nexp env (typ_of x) in
+     let Some n2 = destruct_atom_nexp env (typ_of y) in
      [], [nc_gteq n1 n2]
   | E_app (f, [x; y]) when string_of_id f = "lt_atom_atom" ->
-     let n1 = destruct_atom_nexp (typ_of x) in
-     let n2 = destruct_atom_nexp (typ_of y) in
+     let Some n1 = destruct_atom_nexp env (typ_of x) in
+     let Some n2 = destruct_atom_nexp env (typ_of y) in
      [], [nc_lt n1 n2]
   | E_app (f, [x; y]) when string_of_id f = "gt_atom_atom" ->
-     let n1 = destruct_atom_nexp (typ_of x) in
-     let n2 = destruct_atom_nexp (typ_of y) in
+     let Some n1 = destruct_atom_nexp env (typ_of x) in
+     let Some n2 = destruct_atom_nexp env (typ_of y) in
      [], [nc_gt n1 n2]
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lt_range_atom" ->
      let kid = Env.fresh_kid env in
@@ -2680,7 +2687,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   typ_debug ("Existential constraints: " ^ string_of_list ", " string_of_n_constraint ex_constraints);
 
   let typ_ret =
-    if KidSet.is_empty (KidSet.of_list existentials)
+    if KidSet.is_empty (KidSet.of_list existentials) || KidSet.is_empty (typ_frees typ_ret)
     then (typ_debug "Returning Existential"; typ_ret)
     else mk_typ (Typ_exist (existentials, List.fold_left nc_and nc_true ex_constraints, typ_ret))
   in
@@ -2976,10 +2983,10 @@ let infer_funtyp l env tannotopt funcls =
 
 let mk_val_spec typq typ id = DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id), (Parse_ast.Unknown, None)))
 
-let check_tannotopt typq ret_typ = function
+let check_tannotopt env typq ret_typ = function
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
   | Typ_annot_opt_aux (Typ_annot_opt_some (annot_typq, annot_ret_typ), l) ->
-     if typ_identical ret_typ annot_ret_typ
+     if typ_identical env ret_typ annot_ret_typ
      then ()
      else typ_error l (string_of_bind (typq, ret_typ) ^ " and " ^ string_of_bind (annot_typq, annot_ret_typ) ^ " do not match between function and val spec")
 
@@ -3003,7 +3010,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
        let (quant, typ) = infer_funtyp l env tannotopt funcls in
        false, (quant, typ), env
   in
-  check_tannotopt quant vtyp_ret tannotopt;
+  check_tannotopt env quant vtyp_ret tannotopt;
   typ_debug ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ));
   let funcl_env = add_typquant quant env in
   let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
@@ -3033,7 +3040,7 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
     | VS_extern_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, ext) ->
       let env = Env.add_extern id ext env in
       (id, quants, typ, env) in
-  [DEF_spec (VS_aux (vs, (l, None)))], Env.add_val_spec id (quants, typ) env
+  [DEF_spec (VS_aux (vs, (l, None)))], Env.add_val_spec id (quants, Env.expand_synonyms env typ) env
 
 let check_default env (DT_aux (ds, l)) =
   match ds with
