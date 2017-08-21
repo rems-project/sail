@@ -11,3 +11,5 @@
 | `RISCVADDIW (_, r0, r1)         -> fold_reg r0 (fold_reg r1 (y_reg, y_sreg))
 | `RISCVSHIFTW (_, r0, r1, _)     -> fold_reg r0 (fold_reg r1 (y_reg, y_sreg))
 | `RISCVRTYPEW (r0, r1, r2, _)    -> fold_reg r0 (fold_reg r1 (fold_reg r2 (y_reg, y_sreg)))
+| `RISCVLoadRes (_, _, rs1, _, rd)       -> fold_reg rs1 (fold_reg rd (y_reg, y_sreg))
+| `RISCVStoreCon (_, _, rs2, rs1, _, rd) -> fold_reg rs2 (fold_reg rs1 (fold_reg rd (y_reg, y_sreg)))

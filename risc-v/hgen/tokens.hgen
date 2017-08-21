@@ -12,3 +12,5 @@
 %token <RISCVHGenBase.token_RTYPEW>   RTYPEW  
 %token <RISCVHGenBase.token_FENCE>    FENCE
 %token <RISCVHGenBase.token_FENCEOPTION> FENCEOPTION
+%token <RISCVHGenBase.token_LoadRes>  LOADRES
+%token <RISCVHGenBase.token_StoreCon> STORECON

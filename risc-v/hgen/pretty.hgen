@@ -15,3 +15,18 @@
 | `RISCVSHIFTW(imm, rs, rd, op)   -> sprintf "%s %s, %s, %d" (pp_riscv_sop op) (pp_reg rd) (pp_reg rs) imm
 | `RISCVRTYPEW(rs2, rs1, rd, op)  -> sprintf "%s %s, %s, %s" (pp_riscv_ropw op) (pp_reg rd) (pp_reg rs1) (pp_reg rs2)
 | `RISCVFENCE(pred, succ)         -> sprintf "fence %s, %s" (pp_riscv_fence_option pred) (pp_riscv_fence_option succ)
+| `RISCVLoadRes(aq, rl, rs1, width, rd)
+                                  ->
+                                    assert (rl = false);
+                                    sprintf "%s %s, (%s)"
+                                      (pp_riscv_load_reserved_op (aq, rl, width))
+                                      (pp_reg rd)
+                                      (pp_reg rs1)
+| `RISCVStoreCon(aq, rl, rs2, rs1, width, rd)
+                                  ->
+                                    assert (aq = false);
+                                    sprintf "%s %s, %s, (%s)"
+                                      (pp_riscv_store_conditional_op (aq, rl, width))
+                                      (pp_reg rd)
+                                      (pp_reg rs2)
+                                      (pp_reg rs1)

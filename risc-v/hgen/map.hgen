@@ -10,3 +10,5 @@
 | `RISCVADDIW (x, r0, r1)         -> `RISCVADDIW (x, map_reg r0, map_reg r1)
 | `RISCVSHIFTW (x, r0, r1, y)     -> `RISCVSHIFTW (x, map_reg r0, map_reg r1, y)
 | `RISCVRTYPEW (r0, r1, r2, x)    -> `RISCVRTYPEW (r0, map_reg r1, map_reg r2, x)
+| `RISCVLoadRes (aq, rl, rs1, w, rd)       -> `RISCVLoadRes (aq, rl, map_reg rs1, w, map_reg rd)
+| `RISCVStoreCon (aq, rl, rs2, rs1, w, rd) -> `RISCVStoreCon (aq, rl, map_reg rs2, map_reg rs1, w, map_reg rd)

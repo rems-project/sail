@@ -75,3 +75,13 @@
 "r",  FENCEOPTION Fence_R;
 "w",  FENCEOPTION Fence_W;
 "rw", FENCEOPTION Fence_RW;
+
+"lr.w",    LOADRES {width=RISCVWORD;   aq=false; rl=false};
+"lr.w.aq", LOADRES {width=RISCVWORD;   aq=true;  rl=false};
+"lr.d",    LOADRES {width=RISCVDOUBLE; aq=false; rl=false};
+"lr.d.aq", LOADRES {width=RISCVDOUBLE; aq=true;  rl=false};
+
+"sc.w",    STORECON {width=RISCVWORD;   aq=false; rl=false};
+"sc.w.rl", STORECON {width=RISCVWORD;   aq=false; rl=true};
+"sc.d",    STORECON {width=RISCVDOUBLE; aq=false; rl=false};
+"sc.d.rl", STORECON {width=RISCVDOUBLE; aq=false; rl=true};

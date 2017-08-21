@@ -82,7 +82,27 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
               case (0b0011, 0b0011) -> IK_barrier (Barrier_RISCV_rw_rw)
               case (0b0010, 0b0011) -> IK_barrier (Barrier_RISCV_r_rw)
               case (0b0011, 0b0001) -> IK_barrier (Barrier_RISCV_rw_w)
-              case _ -> exit "unsupported fence"
+              case _ -> exit "not implemented"
+            };
+     }
+     case (LOADRES ( aq, rl, rs1, width, rd)) -> {
+            if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+            aR := iR;
+            ik := switch (aq, rl) {
+              case (false, false) -> IK_mem_read (Read_RISCV_reserved)
+              case (true,  false) -> IK_mem_read (Read_RISCV_reserved_acquire)
+              case (_,     true)  -> exit "not implemented"
+            };
+     }
+     case (STORECON( aq, rl, rs2, rs1, width, rd)) -> {
+            if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
+            if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
+            if (rs1 == 0) then () else aR := RFull(GPRstr[rs1]) :: aR;
+            ik := switch (aq, rl) {
+              case (false, false) -> IK_mem_write (Write_RISCV_conditional)
+              case (false, true)  -> IK_mem_write (Write_RISCV_conditional_release)
+              case (true,  _)     -> exit "not implemented"
             };
      }
   };

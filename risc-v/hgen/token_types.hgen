@@ -11,5 +11,7 @@ type token_ADDIW    = unit
 type token_SHIFTW   = {op : riscvSop }
 type token_RTYPEW   = {op : riscvRopw }
 type token_FENCE    = unit
+type token_LoadRes  = {width : wordWidth; aq: bool; rl: bool }
+type token_StoreCon = {width : wordWidth; aq: bool; rl: bool }
 
 type token_FENCEOPTION = Fence_R | Fence_W | Fence_RW

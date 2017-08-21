@@ -120,6 +120,26 @@ let pp_riscv_store_op (width, rl) =
   end
   ^ (if rl then ".rl" else "")
 
+let pp_riscv_load_reserved_op (aq, rl, width) =
+  "lr" ^
+  begin match width with
+  | RISCVWORD   -> ".w"
+  | RISCVDOUBLE -> ".d"
+  | _ -> assert false
+  end ^
+  (if aq then ".aq" else "") ^
+  (if rl then ".rl" else "")
+
+let pp_riscv_store_conditional_op (aq, rl, width) =
+  "sc" ^
+  begin match width with
+  | RISCVWORD   -> ".w"
+  | RISCVDOUBLE -> ".d"
+  | _ -> assert false
+  end ^
+  (if aq then ".aq" else "") ^
+  (if rl then ".rl" else "")
+
 let pp_riscv_fence_option = function
   | 0b0011 -> "rw"
   | 0b0010 -> "r"

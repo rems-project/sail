@@ -34,3 +34,7 @@
     | (Fence_W,  Fence_R)  -> failwith "'fence w,r' is not supported"
     | (Fence_W,  Fence_W)  -> failwith "'fence w,w' is not supported"
   }
+| LOADRES reg COMMA LPAR reg RPAR
+  { `RISCVLoadRes($1.aq, $1.rl, $5, $1.width, $2) }
+| STORECON reg COMMA reg COMMA LPAR reg RPAR
+  { `RISCVStoreCon($1.aq, $1.rl, $4, $7, $1.width, $2) }

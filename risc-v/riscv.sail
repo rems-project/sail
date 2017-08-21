@@ -353,6 +353,41 @@ union ast member unit EBREAK
 function clause decode (0b000000000001 : 0b00000 : 0b000 : 0b00000 : 0b1110011) = Some(EBREAK ())
 function clause execute EBREAK = { exit () }
 
+union ast member (bool, bool, regno, word_width, regno) LOADRES
+function clause decode (0b00010 : [aq] : [rl] : 0b00000 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(LOADRES(aq, rl, rs1, WORD, rd))
+function clause decode (0b00010 : [aq] : [rl] : 0b00000 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(LOADRES(aq, rl, rs1, DOUBLE, rd))
+function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
+  if rl then not_implemented("load-reserved-release is not implemented")
+  else {
+    let (bit[64]) addr = rGPR(rs1) in
+    let (bit[64]) result =
+        switch width {
+          case WORD   -> EXTS(mem_read(addr, 4, aq, true))
+          case DOUBLE -> mem_read(addr, 8, aq, true)
+        } in
+    wGPR(rd, result)
+  }
+
+union ast member (bool, bool, regno, regno, word_width, regno) STORECON
+function clause decode (0b00011 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(STORECON(aq, rl, rs2, rs1, WORD, rd))
+function clause decode (0b00011 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(STORECON(aq, rl, rs2, rs1, DOUBLE, rd))
+function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
+  if aq then not_implemented("store-conditional-acquire is not implemented");
+  (bit[64]) addr := rGPR(rs1);
+  switch width {
+    case WORD   -> mem_write_conditional_ea(addr, 4, rl)
+    case DOUBLE -> mem_write_conditional_ea(addr, 8, rl)
+  };
+  rs2_val := rGPR(rs2);
+  (bool) success :=
+    switch width {
+      case WORD   -> mem_write_conditional_value(addr, 4, rs2_val[31..0], rl)
+      case DOUBLE -> mem_write_conditional_value(addr, 8, rs2_val, rl)
+    };
+  if success then wGPR(rd, 0)
+  else wGPR(rd, 1);
+}
+
 
 function clause decode _ = None
 

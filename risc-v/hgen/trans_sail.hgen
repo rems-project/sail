@@ -112,3 +112,24 @@
      translate_imm4 "succ" succ;
   ], 
   [])
+| `RISCVLoadRes(aq, rl, rs1, width, rd) ->
+   ("LOADRES",
+    [
+      translate_bool "aq" aq;
+      translate_bool "rl" rl;
+      translate_reg "rs1" rs1;
+      translate_width "width" width;
+      translate_reg "rd" rd;
+    ],
+    [])
+| `RISCVStoreCon(aq, rl, rs2, rs1, width, rd) ->
+   ("STORECON",
+    [
+      translate_bool "aq" aq;
+      translate_bool "rl" rl;
+      translate_reg "rs2" rs2;
+      translate_reg "rs1" rs1;
+      translate_width "width" width;
+      translate_reg "rd" rd;
+    ],
+    [])
