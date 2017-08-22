@@ -71,6 +71,8 @@ typedef barrier_kind = enumerate {
   Barrier_RISCV_rw_rw;
   Barrier_RISCV_r_rw;
   Barrier_RISCV_rw_w;
+  Barrier_RISCV_w_w;
+  Barrier_RISCV_i;
 }
 
 typedef trans_kind = enumerate {

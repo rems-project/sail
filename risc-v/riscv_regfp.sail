@@ -29,7 +29,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
             let (bit[64]) offset = EXTS(imm) in
-            Nias := [|| NIAFP_register (RFull(GPRstr[rs])) ||]; (* XXX this should br rs + offset... *)
+            Nias := [|| NIAFP_register (RFull(GPRstr[rs])) ||];
      }
      case (BTYPE ( imm, rs2, rs1, op)) -> {
             if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
@@ -77,13 +77,17 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
      }
      case (FENCE(pred, succ)) -> {
-          ik :=
-            switch(pred, succ) {
-              case (0b0011, 0b0011) -> IK_barrier (Barrier_RISCV_rw_rw)
-              case (0b0010, 0b0011) -> IK_barrier (Barrier_RISCV_r_rw)
-              case (0b0011, 0b0001) -> IK_barrier (Barrier_RISCV_rw_w)
-              case _ -> exit "not implemented"
-            };
+            ik :=
+              switch(pred, succ) {
+                case (0b0011, 0b0011) -> IK_barrier (Barrier_RISCV_rw_rw)
+                case (0b0010, 0b0011) -> IK_barrier (Barrier_RISCV_r_rw)
+                case (0b0011, 0b0001) -> IK_barrier (Barrier_RISCV_rw_w)
+                case (0b0001, 0b0001) -> IK_barrier (Barrier_RISCV_w_w)
+                case _ -> exit "not implemented"
+              };
+     }
+     case (FENCEI) -> {
+            ik := IK_barrier (Barrier_RISCV_i);
      }
      case (LOADRES ( aq, rl, rs1, width, rd)) -> {
             if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;

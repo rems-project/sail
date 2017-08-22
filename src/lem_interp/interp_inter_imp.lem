@@ -1267,6 +1267,10 @@ let nias_of_instruction
           else [NIA_successor]
        | _ -> [ NIA_successor ]
        end
+    | ("PPCGEN_ism", s) ->
+        let () = ensure (not unknown_nia_address)
+                  ("unexpected unknown/undefined address in nia_values 4 (\"PPCGEN_ism\", \"" ^ s ^ "\")") in
+        [ NIA_successor ]
 
     (* AARch64 label branch (i.e. address must be known) although
     these instructions take the address as an offset from PC, in here
@@ -1301,7 +1305,10 @@ let nias_of_instruction
                             | (Reg name _ _ _) -> name = n_reg
                             | _ -> false
                             end]
-
+    | ("AArch64HandSail", s) ->
+        let () = ensure (not unknown_nia_address)
+                  ("unexpected unknown/undefined address in nia_values 4 (\"AArch64HandSail\", \"" ^ s ^ "\")") in
+        [ NIA_successor ]
 
     (** hacky cut-and-paste for AArch64Gen, duplicating code just to see if this suffices *)
 
@@ -1334,18 +1341,52 @@ let nias_of_instruction
                             | (Reg name _ _ _) -> name = n_reg
                             | _ -> false
                             end]
+    | ("AArch64GenSail", s) ->
+        let () = ensure (not unknown_nia_address)
+                  ("unexpected unknown/undefined address in nia_values 4 (\"AArch64GenSail\", \"" ^ s ^ "\")") in
+        [ NIA_successor ]
 
     (** end of hacky *)
 
     | ("AArch64LitmusSail", "CtrlDep") -> NIA_successor :: nias
+    | ("AArch64LitmusSail", s) ->
+        let () = ensure (not unknown_nia_address)
+                  ("unexpected unknown/undefined address in nia_values 4 (\"AArch64LitmusSail\", \"" ^ s ^ "\")") in
+        [ NIA_successor ]
 
 
     | ("MIPS_ism", "B") -> fail
-
-    | (s1,s2) ->
-       let () = ensure (not unknown_nia_address)
-                       ("unexpected unknown/undefined address in nia_values 4 (\""^s1^"\", \""^s2^"\")") in
+    | ("MIPS_ism", s) ->
+        let () = ensure (not unknown_nia_address)
+                  ("unexpected unknown/undefined address in nia_values 4 (\"MIPS_ism\", \"" ^ s ^ "\")") in
         [ NIA_successor ]
+
+    | ("RISCV_ism", "JAL") -> nias
+    | ("RISCV_ism", "JALR") ->
+        let rs1_integer =
+          match instruction_fields with
+          | [_; (_, _, rs1); _] -> integer_of_bit_list rs1
+          | _ -> fail
+          end
+        in
+        let () = ensure (0 <= rs1_integer && rs1_integer <= 31)
+                  "expected register number from 0 to 31"
+        in
+        if rs1_integer = 0 then nias
+        else
+          let rs1_reg = "x" ^ (String_extra.stringFromInteger rs1_integer) in
+          [NIA_register r | forall (r MEM regs_in)
+                          | match r with
+                            | (Reg name _ _ _) -> name = rs1_reg
+                            | _ -> false
+                            end]
+    | ("RISCV_ism", "BTYPE") -> NIA_successor :: nias
+    | ("RISCV_ism", s) ->
+        let () = ensure (not unknown_nia_address)
+                  ("unexpected unknown/undefined address in nia_values 4 (\"RISCV_ism\", \"" ^ s ^ "\")") in
+        [ NIA_successor ]
+
+    | (s1, s2) -> failwith ("unexpected (thread_ism, instruction_name): (" ^ s1 ^ ", " ^ s2 ^ ")")
     end
 
 let interp_instruction_analysis 

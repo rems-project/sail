@@ -104,6 +104,8 @@ function forall Nat 'n. bool effect { wmv } mem_write_conditional_value( (bit[64
 val extern unit -> unit effect { barr } MEM_fence_rw_rw
 val extern unit -> unit effect { barr } MEM_fence_r_rw
 val extern unit -> unit effect { barr } MEM_fence_rw_w
+val extern unit -> unit effect { barr } MEM_fence_w_w
+val extern unit -> unit effect { barr } MEM_fence_i
 
 (* Ideally these would be sail builtin *)
 function (bit[64]) shift_right_arith64 ((bit[64]) v, (bit[6]) shift) =
@@ -337,17 +339,18 @@ function clause execute (FENCE(pred, succ)) = {
     case (0b0011, 0b0011) -> MEM_fence_rw_rw()
     case (0b0010, 0b0011) -> MEM_fence_r_rw()
     case (0b0011, 0b0001) -> MEM_fence_rw_w()
+    case (0b0001, 0b0001) -> MEM_fence_w_w()
     case _ -> not_implemented("unsupported fence")
   }
 }
 
 union ast member unit FENCEI
-function clause decode (0b0000 : 0b0000 : 0b0000 : 0b00000 : 0b001 : 0b00000 : 0b0001111) = Some(FENCEI)
-function clause execute FENCEI = () (* XXX TODO *)
+function clause decode (0b000000000000 : 0b00000 : 0b001 : 0b00000 : 0b0001111) = Some(FENCEI)
+function clause execute FENCEI = MEM_fence_i()
 
 union ast member unit ECALL
 function clause decode (0b000000000000 : 0b00000 : 0b000 : 0b00000 : 0b1110011) = Some(ECALL ())
-function clause execute ECALL = ()
+function clause execute ECALL = not_implemented("ECALL is not implemented")
 
 union ast member unit EBREAK
 function clause decode (0b000000000001 : 0b00000 : 0b000 : 0b00000 : 0b1110011) = Some(EBREAK ())

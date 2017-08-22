@@ -14,6 +14,7 @@
 | SHIFTW( imm, rs, rd, op)    -> `RISCVSHIFTW(translate_out_imm5 imm, translate_out_ireg rs, translate_out_ireg rd, translate_out_sop op)
 | RTYPEW( rs2, rs1, rd, op)   -> `RISCVRTYPEW(translate_out_ireg rs2, translate_out_ireg rs1, translate_out_ireg rd, translate_out_ropw op)
 | FENCE( pred, succ)          -> `RISCVFENCE(translate_out_imm4 pred, translate_out_imm4 succ)
+| FENCEI                      -> `RISCVFENCEI
 | LOADRES( aq, rl, rs1, width, rd)
                               -> `RISCVLoadRes(translate_out_bool aq, translate_out_bool rl, translate_out_ireg rs1, translate_out_wordWidth width, translate_out_ireg rd)
 | STORECON( aq, rl, rs2, rs1, width, rd)
