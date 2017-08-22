@@ -120,7 +120,7 @@ function forall Nat 'n. unit effect {eamem, wmv} wMEM ((qword) addr, ([|'n|]) le
 
 (* Instruction addressing modes *)
 
-typedef size = const union {
+typedef wsize = const union {
   bool Sz8;
   unit Sz16;
   unit Sz32;
@@ -206,9 +206,9 @@ function cond bv_to_cond ((bit[4]) v) =
 (* Effective addresses *)
 
 typedef ea = const union {
-  (size,qword) Ea_i;
-  (size,regn)  Ea_r;
-  (size,qword) Ea_m;
+  (wsize,qword) Ea_i;
+  (wsize,regn)  Ea_r;
+  (wsize,qword) Ea_m;
 }
 
 function qword ea_index ((option<scale_index>) index) =
@@ -228,20 +228,20 @@ function qword ea_base ((base) b) =
     case (RegBase(b)) -> REG[b]
   }
 
-function ea ea_rm ((size) sz, (rm) r) =
+function ea ea_rm ((wsize) sz, (rm) r) =
   switch r {
     case (Reg(n)) -> Ea_r (sz, n)
     case (Mem(idx, b, d)) -> Ea_m (sz, ea_index(idx) + (qword) (ea_base(b) + d))
   }
 
-function ea ea_dest ((size) sz, (dest_src) ds) =
+function ea ea_dest ((wsize) sz, (dest_src) ds) =
   switch ds {
     case (Rm_i (v, _)) -> ea_rm (sz, v)
     case (Rm_r (v, _)) -> ea_rm (sz, v)
     case (R_rm (v, _)) -> Ea_r (sz, v)
   }
 
-function ea ea_src ((size) sz, (dest_src) ds) =
+function ea ea_src ((wsize) sz, (dest_src) ds) =
   switch ds {
     case (Rm_i (_, v)) -> Ea_i (sz, v)
     case (Rm_r (_, v)) -> Ea_r (sz, v)
@@ -254,7 +254,7 @@ function ea ea_imm_rm ((imm_rm) i_rm) =
     case (Imm (v)) -> Ea_i (Sz64, v)
   }
 
-function qword restrict_size ((size) sz, (qword) imm) =
+function qword restrict_size ((wsize) sz, (qword) imm) =
   switch sz {
     case (Sz8(_)) -> imm & 0x00000000000000FF
     case Sz16     -> imm & 0x000000000000FFFF
@@ -309,7 +309,7 @@ function unit effect { wmem, wreg, escape } wEA ((ea) e, (qword) w) =
     case (Ea_m(Sz64,a)) -> wMEM(a, 8, w)
   }
 
-function (ea, qword, qword) read_dest_src_ea ((size) sz, (dest_src) ds) =
+function (ea, qword, qword) read_dest_src_ea ((wsize) sz, (dest_src) ds) =
   let e = ea_dest (sz, ds) in
   (e, EA(e), EA(ea_src(sz, ds)))
 
@@ -338,7 +338,7 @@ function bit byte_parity ((byte) b) =
   (bit) (acc mod 2 == 0)
 }
 
-function [|64|] size_width ((size) sz) =
+function [|64|] size_width ((wsize) sz) =
   switch sz {
     case (Sz8(_)) -> 8
     case Sz16 -> 16
@@ -346,7 +346,7 @@ function [|64|] size_width ((size) sz) =
     case Sz64 -> 64
   }
 
-function [|63|] size_width_sub1 ((size) sz) =
+function [|63|] size_width_sub1 ((wsize) sz) =
   switch sz {
     case (Sz8(_)) -> 7
     case Sz16 -> 15
@@ -355,16 +355,16 @@ function [|63|] size_width_sub1 ((size) sz) =
   }
 
 (* XXXXX
-function bit word_size_msb ((size) sz, (qword) w) = w[size_width(sz) - 1]
+function bit word_size_msb ((wsize) sz, (qword) w) = w[size_width(sz) - 1]
 *)
 
-function bit word_size_msb ((size) sz, (qword) w) = w[size_width_sub1(sz)]
+function bit word_size_msb ((wsize) sz, (qword) w) = w[size_width_sub1(sz)]
 
 function unit write_PF ((qword) w) = PF := byte_parity (w[7 .. 0])
 
-function unit write_SF ((size) sz, (qword) w) = SF := word_size_msb (sz, w)
+function unit write_SF ((wsize) sz, (qword) w) = SF := word_size_msb (sz, w)
 
-function unit write_ZF ((size) sz, (qword) w) =
+function unit write_ZF ((wsize) sz, (qword) w) =
   ZF := (bit)
          (switch sz {
             case (Sz8(_)) -> w[7 .. 0] == 0x00
@@ -373,7 +373,7 @@ function unit write_ZF ((size) sz, (qword) w) =
             case Sz64 -> w == 0x0000000000000000
           })
 
-function unit write_arith_eflags_except_CF_OF ((size) sz, (qword) w) =
+function unit write_arith_eflags_except_CF_OF ((wsize) sz, (qword) w) =
 {
   AF := undefined;
   write_PF(w);
@@ -381,14 +381,14 @@ function unit write_arith_eflags_except_CF_OF ((size) sz, (qword) w) =
   write_ZF(sz, w);
 }
 
-function unit write_arith_eflags ((size) sz, (qword) w, (bit) c, (bit) x) =
+function unit write_arith_eflags ((wsize) sz, (qword) w, (bit) c, (bit) x) =
 {
   CF := c;
   OF := x;
   write_arith_eflags_except_CF_OF (sz, w)
 }
 
-function unit write_logical_eflags ((size) sz, (qword) w) =
+function unit write_logical_eflags ((wsize) sz, (qword) w) =
   write_arith_eflags (sz, w, bitzero, bitzero)
 
 function unit erase_eflags () =
@@ -404,36 +404,36 @@ function unit erase_eflags () =
 (* XXXXX *)
 function nat power ((nat) x, ([|64|]) y) = undefined
 
-function nat value_width ((size) sz) = power (2, size_width(sz))
+function nat value_width ((wsize) sz) = power (2, size_width(sz))
 
-function bit word_signed_overflow_add ((size) sz, (qword) a, (qword) b) =
+function bit word_signed_overflow_add ((wsize) sz, (qword) a, (qword) b) =
   (bit) (word_size_msb (sz, a) == word_size_msb (sz, b) &
          word_size_msb (sz, a + b) != word_size_msb (sz, a))
 
-function bit word_signed_overflow_sub ((size) sz, (qword) a, (qword) b) =
+function bit word_signed_overflow_sub ((wsize) sz, (qword) a, (qword) b) =
   (bit) (word_size_msb (sz, a) != word_size_msb (sz, b) &
          word_size_msb (sz, a - b) != word_size_msb (sz, a))
 
-function (qword, bit, bit) add_with_carry_out ((size) sz, (qword) a, (qword) b) =
+function (qword, bit, bit) add_with_carry_out ((wsize) sz, (qword) a, (qword) b) =
   (a + b, (bit) ((int) (value_width (sz)) <= unsigned(a) + unsigned(b)),
    word_signed_overflow_add (sz, a, b))
 
-function (qword, bit, bit) sub_with_borrow ((size) sz, (qword) a, (qword) b) =
+function (qword, bit, bit) sub_with_borrow ((wsize) sz, (qword) a, (qword) b) =
   (a - b, (bit) (a < b), word_signed_overflow_sub (sz, a, b))
 
-function unit write_arith_result ((size) sz, (qword) w, (bit) c, (bit) x, (ea) e) =
+function unit write_arith_result ((wsize) sz, (qword) w, (bit) c, (bit) x, (ea) e) =
 {
   write_arith_eflags (sz, w, c, x);
   wEA (e) := w;
 }
 
-function unit write_arith_result_no_CF_OF ((size) sz, (qword) w, (ea) e) =
+function unit write_arith_result_no_CF_OF ((wsize) sz, (qword) w, (ea) e) =
 {
   write_arith_eflags_except_CF_OF (sz, w);
   wEA (e) := w;
 }
 
-function unit write_logical_result ((size) sz, (qword) w, (ea) e) =
+function unit write_logical_result ((wsize) sz, (qword) w, (ea) e) =
 {
   write_arith_eflags_except_CF_OF (sz, w);
   wEA (e) := w;
@@ -445,7 +445,7 @@ function unit write_result_erase_eflags ((qword) w, (ea) e) =
   wEA (e) := w;
 }
 
-function qword effect { escape } sign_extension ((qword) w, (size) size1, (size) size2) =
+function qword effect { escape } sign_extension ((qword) w, (wsize) size1, (wsize) size2) =
 {
   (qword) x := w;
   switch (size1, size2) {
@@ -460,10 +460,10 @@ function qword effect { escape } sign_extension ((qword) w, (size) size1, (size)
   x;
 }
 
-function [|64|] mask_shift ((size) sz, (qword) w) =
+function [|64|] mask_shift ((wsize) sz, (qword) w) =
   if sz == Sz64 then w[5 .. 0] else w[4 .. 0]
 
-function qword rol ((size) sz, (qword) a, (qword) b) =
+function qword rol ((wsize) sz, (qword) a, (qword) b) =
   switch sz {
     case (Sz8(_)) -> EXTZ (ROL8 (a[7 .. 0], b[2 .. 0]))
     case Sz16 -> EXTZ (ROL16 (a[15 .. 0], b[3 .. 0]))
@@ -471,7 +471,7 @@ function qword rol ((size) sz, (qword) a, (qword) b) =
     case Sz64 -> ROL64 (a, b[5 .. 0])
   }
 
-function qword ror ((size) sz, (qword) a, (qword) b) =
+function qword ror ((wsize) sz, (qword) a, (qword) b) =
   switch sz {
     case (Sz8(_)) -> EXTZ (ROR8 (a[7 .. 0], b[2 .. 0]))
     case Sz16 -> EXTZ (ROR16 (a[15 .. 0], b[3 .. 0]))
@@ -479,7 +479,7 @@ function qword ror ((size) sz, (qword) a, (qword) b) =
     case Sz64 -> ROR64 (a, b[5 .. 0])
   }
 
-function qword sar ((size) sz, (qword) a, (qword) b) =
+function qword sar ((wsize) sz, (qword) a, (qword) b) =
   switch sz {
     case (Sz8(_)) -> EXTZ (ASR8 (a[7 .. 0], b[2 .. 0]))
     case Sz16 -> EXTZ (ASR16 (a[15 .. 0], b[3 .. 0]))
@@ -487,7 +487,7 @@ function qword sar ((size) sz, (qword) a, (qword) b) =
     case Sz64 -> ASR64 (a, b[5 .. 0])
   }
 
-function unit write_binop ((size) sz, (binop_name) bop, (qword) a, (qword) b, (ea) e) =
+function unit write_binop ((wsize) sz, (binop_name) bop, (qword) a, (qword) b, (ea) e) =
   switch bop {
     case Add -> let (w,c,x) = add_with_carry_out (sz, a, b) in
                 write_arith_result (sz, w, c, x, e)
@@ -527,7 +527,7 @@ function unit write_binop ((size) sz, (binop_name) bop, (qword) a, (qword) b, (e
     case _ -> exit ()
   }
 
-function unit write_monop ((size) sz, (monop_name) mop, (qword) a, (ea) e) =
+function unit write_monop ((wsize) sz, (monop_name) mop, (qword) a, (ea) e) =
   switch mop {
     case Not -> wEA(e) := ~(a)
     case Dec -> write_arith_result_no_CF_OF (sz, a - 1, e)
@@ -591,7 +591,7 @@ val ast -> unit effect {escape, rmem, rreg, undef, eamem, wmv, wreg} execute
       Binop
    ========================================================================== *)
 
-union ast member (binop_name,size,dest_src) Binop
+union ast member (binop_name,wsize,dest_src) Binop
 
 function clause execute (Binop (bop,sz,ds)) =
   let (e, val_dst, val_src) = read_dest_src_ea (sz, ds) in
@@ -629,7 +629,7 @@ function clause execute CMC = CF := ~(CF)
       CMPXCHG
    ========================================================================== *)
 
-union ast member (size,rm,regn) CMPXCHG
+union ast member (wsize,rm,regn) CMPXCHG
 
 function clause execute (CMPXCHG (sz,r,n)) =
   let src = Ea_r(sz, n) in
@@ -649,7 +649,7 @@ function clause execute (CMPXCHG (sz,r,n)) =
       DIV
    ========================================================================== *)
 
-union ast member (size,rm) DIV
+union ast member (wsize,rm) DIV
 
 function clause execute (DIV (sz,r)) =
   let w = (int) (value_width(sz)) in
@@ -688,7 +688,7 @@ function clause execute (JMP (r)) = RIP := EA (ea_rm (Sz64, r))
       LEA
    ========================================================================== *)
 
-union ast member (size,dest_src) LEA
+union ast member (wsize,dest_src) LEA
 
 function clause execute (LEA (sz,ds)) =
   let src = ea_src (sz, ds) in
@@ -723,7 +723,7 @@ function clause execute (LOOP (c,i)) =
       Monop
    ========================================================================== *)
 
-union ast member (monop_name,size,rm) Monop
+union ast member (monop_name,wsize,rm) Monop
 
 function clause execute (Monop (mop,sz,r)) =
   let e = ea_rm (sz, r) in write_monop (sz, mop, EA(e), e)
@@ -732,7 +732,7 @@ function clause execute (Monop (mop,sz,r)) =
       MOV
    ========================================================================== *)
 
-union ast member (cond,size,dest_src) MOV
+union ast member (cond,wsize,dest_src) MOV
 
 function clause execute (MOV (c,sz,ds)) =
   if read_cond (c) then
@@ -745,7 +745,7 @@ function clause execute (MOV (c,sz,ds)) =
       MOVSX
    ========================================================================== *)
 
-union ast member (size,dest_src,size) MOVSX
+union ast member (wsize,dest_src,wsize) MOVSX
 
 function clause execute (MOVSX (sz1,ds,sz2)) =
   let src = ea_src (sz1, ds) in
@@ -756,7 +756,7 @@ function clause execute (MOVSX (sz1,ds,sz2)) =
       MOVZX
    ========================================================================== *)
 
-union ast member (size,dest_src,size) MOVZX
+union ast member (wsize,dest_src,wsize) MOVZX
 
 function clause execute (MOVZX (sz1,ds,sz2)) =
   let src = ea_src (sz1, ds) in
@@ -767,7 +767,7 @@ function clause execute (MOVZX (sz1,ds,sz2)) =
       MUL
    ========================================================================== *)
 
-union ast member (size,rm) MUL
+union ast member (wsize,rm) MUL
 
 function clause execute (MUL (sz,r)) =
   let eax = Ea_r (sz, 0) in (* RAX *)
@@ -841,7 +841,7 @@ function clause execute STC = CF := true
       XADD
    ========================================================================== *)
 
-union ast member (size,rm,regn) XADD
+union ast member (wsize,rm,regn) XADD
 
 function clause execute (XADD (sz,r,n)) =
   let src = Ea_r (sz, n) in
@@ -857,7 +857,7 @@ function clause execute (XADD (sz,r,n)) =
       XCHG
    ========================================================================== *)
 
-union ast member (size,rm,regn) XCHG
+union ast member (wsize,rm,regn) XCHG
 
 function clause execute (XCHG (sz,r,n)) =
   let src = Ea_r (sz, n) in
@@ -905,20 +905,20 @@ function (qword,ostream) immediate64 ((byte_stream) strm) =
     case _ -> ((qword) undefined, (ostream) None)
   }
 
-function (qword, ostream) immediate ((size) sz, (byte_stream) strm) =
+function (qword, ostream) immediate ((wsize) sz, (byte_stream) strm) =
    switch sz {
       case (Sz8 (_)) -> immediate8 (strm)
       case Sz16      -> immediate16 (strm)
       case _         -> immediate32 (strm)
    }
 
-function (qword, ostream) oimmediate ((size) sz, (ostream) strm) =
+function (qword, ostream) oimmediate ((wsize) sz, (ostream) strm) =
    switch strm {
       case (Some (s)) -> immediate (sz, s)
       case None       -> ((qword) undefined, (ostream) None)
    }
 
-function (qword, ostream) full_immediate ((size) sz, (byte_stream) strm) =
+function (qword, ostream) full_immediate ((wsize) sz, (byte_stream) strm) =
   if sz == Sz64 then immediate64 (strm) else immediate (sz, strm)
 
 (* - Parse ModR/M and SIB bytes --------------------------------------------- *)
@@ -1030,7 +1030,7 @@ function rec option<atuple> read_prefix
 function  option<atuple> read_prefixes ((byte_stream) strm) =
    read_prefix ([||||], [||||], strm)
 
-function size op_size ((bool) have_rex, (bit[1]) w, (bit[1]) v, (bool) override) =
+function wsize op_size ((bool) have_rex, (bit[1]) w, (bit[1]) v, (bool) override) =
   if v == 1 then
     Sz8 (have_rex)
   else if w == 1 then
