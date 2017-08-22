@@ -1918,6 +1918,37 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
           annot_exp (E_list checked_xs) typ
        | None -> typ_error l ("List " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
      end
+  | E_record_update (exp, FES_aux (FES_Fexps (fexps, flag), (l, ()))), _ ->
+     (* TODO: this could also infer exp - also fix code duplication with E_record below *)
+     let checked_exp = crule check_exp env exp typ in
+     let rectyp_id = match Env.expand_synonyms env typ with
+       | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
+          rectyp_id
+       | _ -> typ_error l ("The type " ^ string_of_typ typ ^ " is not a record")
+     in
+     let check_fexp (FE_aux (FE_Fexp (field, exp), (l, ()))) =
+       let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor rectyp_id field env in
+       let unifiers, _, _ (* FIXME *) = try unify l env rectyp_q typ with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m) in
+       let field_typ' = subst_unifiers unifiers field_typ in
+       let checked_exp = crule check_exp env exp field_typ' in
+       FE_aux (FE_Fexp (field, checked_exp), (l, None))
+     in
+     annot_exp (E_record_update (checked_exp, FES_aux (FES_Fexps (List.map check_fexp fexps, flag), (l, None)))) typ
+  | E_record (FES_aux (FES_Fexps (fexps, flag), (l, ()))), _ ->
+     (* TODO: check record fields are total *)
+     let rectyp_id = match Env.expand_synonyms env typ with
+       | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
+          rectyp_id
+       | _ -> typ_error l ("The type " ^ string_of_typ typ ^ " is not a record")
+     in
+     let check_fexp (FE_aux (FE_Fexp (field, exp), (l, ()))) =
+       let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor rectyp_id field env in
+       let unifiers, _, _ (* FIXME *) = try unify l env rectyp_q typ with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m) in
+       let field_typ' = subst_unifiers unifiers field_typ in
+       let checked_exp = crule check_exp env exp field_typ' in
+       FE_aux (FE_Fexp (field, checked_exp), (l, None))
+     in
+     annot_exp (E_record (FES_aux (FES_Fexps (List.map check_fexp fexps, flag), (l, None)))) typ
   | E_let (LB_aux (letbind, (let_loc, _)), exp), _ ->
      begin
        match letbind with
@@ -2773,6 +2804,15 @@ and propagate_exp_effect_aux = function
      let p_cases = List.map propagate_pexp_effect cases in
      let case_eff = List.fold_left union_effects no_effect (List.map snd p_cases) in
      E_case (p_exp, List.map fst p_cases), union_effects (effect_of p_exp) case_eff
+  | E_record_update (exp, FES_aux (FES_Fexps (fexps, flag), (l, _))) ->
+     let p_exp = propagate_exp_effect exp in
+     let p_fexps = List.map propagate_fexp_effect fexps in
+     E_record_update (p_exp, FES_aux (FES_Fexps (List.map fst p_fexps, flag), (l, None))),
+     List.fold_left union_effects no_effect (effect_of p_exp :: List.map snd p_fexps)
+  | E_record (FES_aux (FES_Fexps (fexps, flag), (l, _))) ->
+     let p_fexps = List.map propagate_fexp_effect fexps in
+     E_record (FES_aux (FES_Fexps (List.map fst p_fexps, flag), (l, None))),
+     List.fold_left union_effects no_effect (List.map snd p_fexps)
   | E_try (exp, cases) ->
      let p_exp = propagate_exp_effect exp in
      let p_cases = List.map propagate_pexp_effect cases in
@@ -2820,6 +2860,10 @@ and propagate_exp_effect_aux = function
      E_field (p_exp, id), effect_of p_exp
   | exp_aux -> typ_error Parse_ast.Unknown ("Unimplemented: Cannot propagate effect in expression "
                                             ^ string_of_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))))
+
+and propagate_fexp_effect (FE_aux (FE_Fexp (id, exp), (l, _))) =
+  let p_exp = propagate_exp_effect exp in
+  FE_aux (FE_Fexp (id, p_exp), (l, None)), effect_of p_exp
 
 and propagate_pexp_effect = function
   | Pat_aux (Pat_exp (pat, exp), (l, annot)) ->
