@@ -60,6 +60,7 @@
 | `RISCVFENCE(pred, succ) -> FENCE(
       translate_imm4 "pred" pred,
       translate_imm4 "succ" succ)
+| `RISCVFENCEI -> FENCEI
 | `RISCVLoadRes(aq, rl, rs1, width, rd) -> LOADRES(
       translate_bool "aq" aq,
       translate_bool "rl" rl,

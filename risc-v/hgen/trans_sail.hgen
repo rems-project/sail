@@ -112,6 +112,10 @@
      translate_imm4 "succ" succ;
   ], 
   [])
+| `RISCVFENCEI ->
+  ("FENCEI",
+  [],
+  [])
 | `RISCVLoadRes(aq, rl, rs1, width, rd) ->
    ("LOADRES",
     [

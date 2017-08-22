@@ -37,10 +37,14 @@ let MEMval_conditional_release (_,_,v) = write_mem_val v >>= fun b -> return (if
 val MEM_fence_rw_rw : unit -> M unit
 val MEM_fence_r_rw  : unit -> M unit
 val MEM_fence_rw_w  : unit -> M unit
+val MEM_fence_w_w   : unit -> M unit
+val MEM_fence_i     : unit -> M unit
 
 let MEM_fence_rw_rw () = barrier Barrier_RISCV_rw_rw
 let MEM_fence_r_rw  () = barrier Barrier_RISCV_r_rw
 let MEM_fence_rw_w  () = barrier Barrier_RISCV_rw_w
+let MEM_fence_w_w   () = barrier Barrier_RISCV_w_w
+let MEM_fence_i     () = barrier Barrier_RISCV_i
 
 let duplicate (bit,len) =
   let bits = repeat [bit] len in

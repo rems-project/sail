@@ -75,6 +75,7 @@
 "r",  FENCEOPTION Fence_R;
 "w",  FENCEOPTION Fence_W;
 "rw", FENCEOPTION Fence_RW;
+"fence.i", FENCEI ();
 
 "lr.w",    LOADRES {width=RISCVWORD;   aq=false; rl=false};
 "lr.w.aq", LOADRES {width=RISCVWORD;   aq=true;  rl=false};

@@ -479,6 +479,8 @@ type barrier_kind =
   | Barrier_RISCV_rw_rw
   | Barrier_RISCV_r_rw
   | Barrier_RISCV_rw_w
+  | Barrier_RISCV_w_w
+  | Barrier_RISCV_i
 
 
 instance (Show barrier_kind)
@@ -499,6 +501,8 @@ instance (Show barrier_kind)
     | Barrier_RISCV_rw_rw -> "Barrier_RISCV_rw_rw"
     | Barrier_RISCV_r_rw  -> "Barrier_RISCV_r_rw"
     | Barrier_RISCV_rw_w  -> "Barrier_RISCV_rw_w"
+    | Barrier_RISCV_w_w   -> "Barrier_RISCV_w_w"
+    | Barrier_RISCV_I     -> "Barrier_RISCV_i"
   end
 end
 

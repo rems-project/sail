@@ -11,5 +11,6 @@
 | `RISCVSHIFTW of bit5 * reg * reg * riscvSop
 | `RISCVRTYPEW of reg * reg * reg * riscvRopw
 | `RISCVFENCE of bit4 * bit4
+| `RISCVFENCEI
 | `RISCVLoadRes of bool * bool * reg * wordWidth * reg
 | `RISCVStoreCon of bool * bool * reg * reg * wordWidth * reg
