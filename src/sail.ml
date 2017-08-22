@@ -88,6 +88,9 @@ let options = Arg.align ([
       | [fname;line;var] -> opt_mono_split := ((fname,int_of_string line),var)::!opt_mono_split
       | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable>"))),
       "<filename>:<line>:<variable> to case split for monomorphisation");
+  ( "-ddump_raw_mono_ast",
+    Arg.Set opt_ddump_raw_mono_ast,
+    " (debug) dump the monomorphised ast before type-checking");
   ( "-new_parser",
     Arg.Set Process_file.opt_new_parser,
     " (experimental) use new parser");

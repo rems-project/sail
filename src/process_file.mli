@@ -56,6 +56,7 @@ val opt_just_check : bool ref
 val opt_ddump_tc_ast : bool ref
 val opt_ddump_rewrite_ast : ((string * int) option) ref
 val opt_dno_cast : bool ref
+val opt_ddump_raw_mono_ast : bool ref
 
 type out_type =
   | Lem_ast_out
