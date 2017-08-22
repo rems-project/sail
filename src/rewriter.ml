@@ -566,14 +566,7 @@ let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
 let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
   let rewrite_funcl (FCL_aux (FCL_Funcl(id,pat,exp),(l,annot))) =
     let _ = reset_fresh_name_counter () in
-    (*let _ = Printf.eprintf "Rewriting function %s, pattern %s\n" 
-      (match id with (Id_aux (Id i,_)) -> i) (Pretty_print.pat_to_string pat) in*)
-  (*let map = get_map_tannot fdannot in
-  let map =
-    match map with
-    | None -> None
-    | Some m -> Some(m, Envmap.empty) in*)
-  (FCL_aux (FCL_Funcl (id,rewriters.rewrite_pat rewriters pat,
+    (FCL_aux (FCL_Funcl (id,rewriters.rewrite_pat rewriters pat,
                          rewriters.rewrite_exp rewriters exp),(l,annot))) 
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
@@ -2361,6 +2354,27 @@ let rewrite_constraint =
 
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_e_constraint) }
 
+let rewrite_type_union_typs rw_typ (Tu_aux (tu, annot)) =
+  match tu with
+  | Tu_id id -> Tu_aux (Tu_id id, annot)
+  | Tu_ty_id (typ, id) -> Tu_aux (Tu_ty_id (rw_typ typ, id), annot)
+
+let rewrite_type_def_typs rw_typ rw_typquant rw_typschm (TD_aux (td, annot)) =
+  match td with
+  | TD_abbrev (id, nso, typschm) -> TD_aux (TD_abbrev (id, nso, rw_typschm typschm), annot)
+  | TD_record (id, nso, typq, typ_ids, flag) ->
+     TD_aux (TD_record (id, nso, rw_typquant typq, List.map (fun (typ, id) -> (rw_typ typ, id)) typ_ids, flag), annot)
+  | TD_variant (id, nso, typq, tus, flag) ->
+     TD_aux (TD_variant (id, nso, rw_typquant typq, List.map (rewrite_type_union_typs rw_typ) tus, flag), annot)
+  | TD_enum (id, nso, ids, flag) -> TD_aux (TD_enum (id, nso, ids, flag), annot)
+  | TD_register (id, n1, n2, ranges) -> TD_aux (TD_register (id, n1, n2, ranges), annot)
+
+(* FIXME: other reg_dec types *)
+let rewrite_dec_spec_typs rw_typ (DEC_aux (ds, annot)) =
+  match ds with
+  | DEC_reg (typ, id) -> DEC_aux (DEC_reg (rw_typ typ, id), annot)
+  | _ -> assert false
+
 (* Remove overload definitions and cast val specs from the
    specification because the interpreter doesn't know about them.*)
 let rewrite_overload_cast (Defs defs) =
@@ -2426,6 +2440,8 @@ let rewrite_simple_types (Defs defs) =
   in
   let simple_def = function
     | DEF_spec vs -> DEF_spec (simple_vs vs)
+    | DEF_type td -> DEF_type (rewrite_type_def_typs simple_typ simple_typquant simple_typschm td)
+    | DEF_reg_dec ds -> DEF_reg_dec (rewrite_dec_spec_typs simple_typ ds)
     | def -> def
   in
   let simple_pat = {
@@ -2443,7 +2459,9 @@ let rewrite_simple_types (Defs defs) =
       lEXP_cast = (fun (typ, lexp) -> LEXP_cast (simple_typ typ, lexp));
       pat_alg = simple_pat
     } in
-  let simple_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp simple_exp) } in
+  let simple_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp simple_exp);
+                                          rewrite_pat = (fun _ -> fold_pat simple_pat) }
+  in
   let defs = Defs (List.map simple_def defs) in
   rewrite_defs_base simple_defs defs
 
