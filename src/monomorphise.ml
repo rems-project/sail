@@ -128,6 +128,42 @@ let rec cross = function
      let t' = cross t in
      List.concat (List.map (fun y -> List.map (fun l' -> (x,y)::l') t') l)
 
+let rec cross' = function
+  | [] -> [[]]
+  | (h::t) ->
+     let t' = cross' t in
+     List.concat (List.map (fun x -> List.map (List.cons x) t') h)
+
+let kidset_bigunion = function
+  | [] -> KidSet.empty
+  | h::t -> List.fold_left KidSet.union h t
+
+(* TODO: deal with non-set constraints, intersections, etc somehow *)
+let extract_set_nc var (NC_aux (_,l) as nc) =
+  let rec aux (NC_aux (nc,l)) =
+    let re nc = NC_aux (nc,l) in
+    match nc with
+    | NC_nat_set_bounded (id,is) when Kid.compare id var = 0 -> Some (is,re NC_true)
+    | NC_and (nc1,nc2) ->
+       (match aux nc1, aux nc2 with
+       | None, None -> None
+       | None, Some (is,nc2') -> Some (is, re (NC_and (nc1,nc2')))
+       | Some (is,nc1'), None -> Some (is, re (NC_and (nc1',nc2)))
+       | Some _, Some _ ->
+          raise (Reporting_basic.err_general l ("Multiple set constraints for " ^ string_of_kid var)))
+    | _ -> None
+  in match aux nc with
+  | Some is -> is
+  | None ->
+     raise (Reporting_basic.err_general l ("No set constraint for " ^ string_of_kid var))
+
+
+(* TODO: maybe fold this into subst_src_typ? *)
+let inst_src_type insts ty =
+  let insts = List.map (fun (v,i) -> (v,Nexp_aux (Nexp_constant i,Generated Unknown))) insts in
+  let subst = ksubst_from_list insts in
+  subst_src_typ subst ty
+
 (* Given a type for a constructor, work out which refinements we ought to produce *)
 (* TODO collision avoidance *)
 let split_src_type id ty (TypQ_aux (q,ql)) =
@@ -146,65 +182,55 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
     | Nexp_neg n
       -> size_nvars_nexp n
   in
-  let rec size_nvars_ty (Typ_aux (ty,l)) =
+  let rec size_nvars_ty (Typ_aux (ty,l) as typ) =
     match ty with
     | Typ_wild
     | Typ_id _
     | Typ_var _
-      -> []
+      -> (KidSet.empty,[[],typ])
     | Typ_fn _ ->
        raise (Reporting_basic.err_general l ("Function type in constructor " ^ i))
-    | Typ_tup ts -> List.concat (List.map size_nvars_ty ts)
+    | Typ_tup ts ->
+       let (vars,tys) = List.split (List.map size_nvars_ty ts) in
+       let insttys = List.map (fun x -> let (insts,tys) = List.split x in
+                                        List.concat insts, Typ_aux (Typ_tup tys,l)) (cross' tys) in
+       (kidset_bigunion vars, insttys)
     | Typ_app (Id_aux (Id "vector",_),
                [_;Typ_arg_aux (Typ_arg_nexp sz,_);
                 _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
-       size_nvars_nexp sz
+       (KidSet.of_list (size_nvars_nexp sz), [[],typ])
     | Typ_app (_, tas) ->
-       []  (* We only support sizes for bitvectors mentioned explicitly, not any buried
-              inside another type *)
+       (KidSet.empty,[[],typ])  (* We only support sizes for bitvectors mentioned explicitly, not any buried
+                      inside another type *)
+    | Typ_exist (kids, nc, t) ->
+       let (vars,tys) = size_nvars_ty t in
+       let bound = KidSet.of_list kids in
+       let still_bound = KidSet.diff bound vars in
+       let mono = KidSet.inter bound vars in
+       let free = KidSet.diff vars bound in
+       let (insts,nc') = KidSet.fold (fun k (insts,nc) -> let (is,nc') = extract_set_nc k nc in (List.map (fun i -> (k,i)) is)::insts,nc') mono ([],nc) in
+       let insts = cross' insts in
+       let tys = List.concat (List.map (fun (inst0,ty) ->
+         List.map (fun inst -> (inst@inst0,inst_src_type inst ty)) insts) tys) in
+       let tys = List.map (fun (inst,ty) -> inst,Typ_aux (Typ_exist (KidSet.elements still_bound, nc', ty),l)) tys in
+       (free,tys)
   in
-  let nvars = List.sort_uniq Kid.compare (size_nvars_ty ty) in
-  match nvars with
+  (* TODO: reject universally quantification or monomorphise it *)
+  let (_,variants) = size_nvars_ty ty in
+  match variants with
   | [] -> None
   | sample::__ ->
-     (* Only check for constraints if we found a size to constrain *)
-     let qs =
-       match q with
-       | TypQ_no_forall -> 
-          raise (Reporting_basic.err_general ql
-                   ("No set constraint for variable " ^ string_of_kid sample ^ " in constructor " ^ i))
-       | TypQ_tq qs -> qs
-     in
-     let find_set (Kid_aux (Var nvar,_) as kid) =
-       match list_extract (function
-       | QI_aux (QI_const (NC_aux (NC_nat_set_bounded (Kid_aux (Var nvar',_),vals),_)),_)
-         -> if nvar = nvar' then Some vals else None
-       | _ -> None) qs with
-       | None ->
-          raise (Reporting_basic.err_general ql
-                   ("No set constraint for variable " ^ nvar ^ " in constructor " ^ i))
-       | Some vals -> (kid,vals)
-     in
-     let nvar_sets = List.map find_set nvars in
-     let total_variants = List.fold_left ( * ) 1 (List.map (fun (_,l) -> List.length l) nvar_sets) in
-     let () = if total_variants > size_set_limit then
+     let () = if List.length variants > size_set_limit then
          raise (Reporting_basic.err_general ql
-                  (string_of_int total_variants ^ "variants for constructor " ^ i ^
+                  (string_of_int (List.length variants) ^ "variants for constructor " ^ i ^
                      "bigger than limit " ^ string_of_int size_set_limit)) else ()
      in
-     let variants = cross nvar_sets in
      let wrap = match id with
        | Id_aux (Id i,l) -> (fun f -> Id_aux (Id (f i),Generated l))
        | Id_aux (DeIid i,l) -> (fun f -> Id_aux (DeIid (f i),l))
      in
      let name l i = String.concat "_" (i::(List.map (fun (v,i) -> string_of_kid v ^ string_of_int i) l)) in
-     Some (List.map (fun l -> (l, wrap (name l))) variants)
-
-(* TODO: maybe fold this into subst_src_typ? *)
-let inst_src_type insts ty =
-  let insts = List.map (fun (v,i) -> (v,Nexp_aux (Nexp_constant i,Generated Unknown))) insts in
-  let subst = ksubst_from_list insts in
-  subst_src_typ subst ty
+     Some (List.map (fun (l,ty) -> (l, wrap (name l),ty)) variants)
 
 let reduce_nexp subst ne =
   let rec eval (Nexp_aux (ne,_) as nexp) =
@@ -394,6 +420,7 @@ let bindings_from_pat p =
     | P_typ (_,p) -> aux_pat p
     | P_id id ->
        if pat_id_is_variable env id then [id] else []
+    | P_var kid -> [id_of_kid kid]
     | P_vector ps
     | P_vector_concat ps
     | P_app (_,ps)
@@ -610,7 +637,7 @@ let split_defs splits defs =
          | None -> ([],[Tu_aux (Tu_ty_id (ty,id),l)])
          | Some variants ->
             ([(id,variants)],
-             List.map (fun (insts, id') -> Tu_aux (Tu_ty_id (inst_src_type insts ty,id'),Generated l)) variants))
+             List.map (fun (insts, id', ty) -> Tu_aux (Tu_ty_id (ty,id'),Generated l)) variants))
     in
     let sc_type_def ((TD_aux (tda,annot)) as td) =
       match tda with
@@ -836,7 +863,7 @@ let split_defs splits defs =
       (* Substitute what we've learned about nvars into the term *)
       let nsubsts = isubst_from_list !nexp_substs in
       let () = nexp_substs := [] in
-      nexp_subst_exp nsubsts refinements exp'
+      (*nexp_subst_exp nsubsts refinements*) exp'
   in
     
   (* Split a variable pattern into every possible value *)
@@ -988,7 +1015,7 @@ let split_defs splits defs =
                                 ("Constructor " ^ string_of_id id ^ " is not a construtor!"))
               in
               let varmap = build_nexp_subst l constr_out_typ tannot in
-              let map_inst (insts,id') =
+              let map_inst (insts,id',_) =
                 let insts = List.map (fun (v,i) ->
                   ((match List.assoc (string_of_kid v) varmap with
                   | Nexp_aux (Nexp_var s, _) -> s
