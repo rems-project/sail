@@ -60,6 +60,9 @@ let read_mem dir read_kind addr sz state =
     | Sail_impl_base.Read_exclusive -> true
     | Sail_impl_base.Read_exclusive_acquire -> true
     | Sail_impl_base.Read_stream -> false
+    | Sail_impl_base.Read_RISCV_acquire -> false
+    | Sail_impl_base.Read_RISCV_reserved -> true
+    | Sail_impl_base.Read_RISCV_reserved_acquire -> true
   end in
 
   if is_exclusive 
