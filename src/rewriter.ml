@@ -1223,9 +1223,9 @@ let rewrite_sizeof (Defs defs) =
     let kid_annot kid = simple_annot l (kid_typ kid) in
     let kid_pat kid =
       P_aux (P_typ (kid_typ kid,
-                    P_aux (P_id (Id_aux (Id (string_of_kid kid), l)),
+                    P_aux (P_id (Id_aux (Id (string_of_id (id_of_kid kid) ^ "__tv"), l)),
                            kid_annot kid)), kid_annot kid) in
-    let kid_eaux kid = E_id (Id_aux (Id (string_of_kid kid), l)) in
+    let kid_eaux kid = E_id (Id_aux (Id (string_of_id (id_of_kid kid) ^ "__tv"), l)) in
     let kid_typs = List.map kid_typ (KidSet.elements nvars) in
     let kid_pats = List.map kid_pat (KidSet.elements nvars) in
     let kid_nmap = List.map (fun kid -> (nvar kid, kid_eaux kid)) (KidSet.elements nvars) in

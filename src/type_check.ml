@@ -2154,7 +2154,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           in
           let pats, env = process_pats env pats in
           annot_pat (P_list pats) typ, env
-       | _ -> typ_error l "Cannot match list pattern against non-list type"
+       | _ -> typ_error l ("Cannot match list pattern " ^ string_of_pat pat ^ "  against non-list type " ^ string_of_typ typ)
      end
   | P_tup [] ->
      begin
@@ -2207,6 +2207,9 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
      end
   | P_app (f, _) when not (Env.is_union_constructor f env) ->
      typ_error l (string_of_id f ^ " is not a union constructor in pattern " ^ string_of_pat pat)
+  | P_as (pat, id) ->
+     let (typed_pat, env) = bind_pat env pat typ in
+     annot_pat (P_as (typed_pat, id)) (pat_typ_of typed_pat), Env.add_local id (Immutable, pat_typ_of typed_pat) env
   | _ ->
      let (inferred_pat, env) = infer_pat env pat in
      subtyp l env (pat_typ_of inferred_pat) typ;
