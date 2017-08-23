@@ -30,7 +30,7 @@ let isubst_union s1 s2 =
 let subst_src_typ substs t =
   let rec s_snexp substs (Nexp_aux (ne,l) as nexp) =
     let re ne = Nexp_aux (ne,l) in
-    let s_snexp = s_snexp subst in
+    let s_snexp = s_snexp substs in
     match ne with
     | Nexp_var (Kid_aux (_,l) as kid) ->
        (try KSubst.find kid substs
