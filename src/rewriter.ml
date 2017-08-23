@@ -1018,7 +1018,18 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
          | _ -> None
        end
   in
-  let rewrite_e_aux (E_aux (e_aux, (l, _)) as orig_exp) =
+  let rec split_nexp (Nexp_aux (nexp_aux, l) as nexp) =
+    match nexp_aux with
+    | Nexp_sum (n1, n2) ->
+       mk_exp (E_app (mk_id "add_range", [split_nexp n1; split_nexp n2]))
+    | Nexp_minus (n1, n2) ->
+       mk_exp (E_app (mk_id "sub_range", [split_nexp n1; split_nexp n2]))
+    | Nexp_times (n1, n2) ->
+       mk_exp (E_app (mk_id "mult_range", [split_nexp n1; split_nexp n2]))
+    | Nexp_neg nexp -> mk_exp (E_app (mk_id "negate_range", [split_nexp nexp]))
+    | _ -> mk_exp (E_sizeof nexp)
+  in
+  let rec rewrite_e_aux split_sizeof (E_aux (e_aux, (l, _)) as orig_exp) =
     let env = env_of orig_exp in
     match e_aux with
     | E_sizeof (Nexp_aux (Nexp_constant c, _) as nexp) ->
@@ -1033,12 +1044,15 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
          in
          match exps with
          | (exp :: _) -> exp
+         | [] when split_sizeof ->
+            fold_exp (rewrite_e_sizeof false) (check_exp env (split_nexp nexp) (typ_of orig_exp))
          | [] -> orig_exp
        end
     | _ -> orig_exp
+  and rewrite_e_sizeof split_sizeof =
+    { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux split_sizeof (E_aux (exp, annot))) }
   in
-  let rewrite_e_constraint = { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
-  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_e_constraint) }, rewrite_e_aux
+  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp (rewrite_e_sizeof true)) }, rewrite_e_aux true
 
 (* Rewrite sizeof expressions with type-level variables to
    term-level expressions
@@ -2396,6 +2410,30 @@ let rewrite_overload_cast (Defs defs) =
   let defs = List.map simple_def defs in
   Defs (List.filter (fun def -> not (is_overload def)) defs)
 
+let rewrite_undefined =
+  let rec undefined_of_typ (Typ_aux (typ_aux, _)) =
+    match typ_aux with
+    | Typ_id id ->
+       mk_exp (E_app (prepend_id "undefined_" id, [mk_lit_exp L_unit]))
+    | Typ_app (id, args) ->
+       mk_exp (E_app (prepend_id "undefined_" id, List.concat (List.map undefined_of_typ_args args)))
+    | Typ_fn _ -> assert false
+  and undefined_of_typ_args (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
+    match typ_arg_aux with
+    | Typ_arg_nexp n -> [mk_exp (E_sizeof n)]
+    | Typ_arg_typ typ -> [undefined_of_typ typ]
+    | Typ_arg_order _ -> []
+  in
+  let rewrite_e_aux (E_aux (e_aux, _) as exp) =
+    match e_aux with
+    | E_lit (L_aux (L_undef, l)) ->
+       print_endline ("Undefined: " ^ string_of_typ (typ_of exp));
+       check_exp (env_of exp) (undefined_of_typ (typ_of exp)) (typ_of exp)
+    | _ -> exp
+  in
+  let rewrite_exp_undefined = { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
+  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp_undefined) }
+
 (* This pass aims to remove all the Num quantifiers from the specification. *)
 let rewrite_simple_types (Defs defs) =
   let is_simple = function
@@ -2464,18 +2502,6 @@ let rewrite_simple_types (Defs defs) =
   in
   let defs = Defs (List.map simple_def defs) in
   rewrite_defs_base simple_defs defs
-
-let rewrite_defs_ocaml = [
-    (* top_sort_defs; *)
-  rewrite_defs_remove_vector_concat;
-  rewrite_constraint;
-  rewrite_trivial_sizeof;
-  rewrite_sizeof;
-  rewrite_simple_types;
-  rewrite_overload_cast;
-  (* rewrite_defs_exp_lift_assign *)
-  (* rewrite_defs_separate_numbs *)
-  ]
 
 let rewrite_defs_remove_blocks =
   let letbind_wild v body =
@@ -3321,4 +3347,17 @@ let rewrite_defs_lem =[
   rewrite_defs_remove_superfluous_letbinds;
   rewrite_defs_remove_superfluous_returns
   ]
-  
+
+let rewrite_defs_ocaml = [
+    (* top_sort_defs; *)
+  rewrite_undefined;
+  rewrite_defs_remove_vector_concat;
+  rewrite_constraint;
+  rewrite_trivial_sizeof;
+  (* rewrite_sizeof; *)
+  (* rewrite_simple_types; *)
+  (* rewrite_overload_cast; *)
+  (* rewrite_defs_exp_lift_assign; *)
+  (* rewrite_defs_exp_lift_assign *)
+  (* rewrite_defs_separate_numbs *)
+  ]

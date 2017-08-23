@@ -42,6 +42,7 @@
 
 open Ast
 open Util
+open Ast_util
 
 module Envmap = Finite_map.Fmap_map(String)
 module Nameset' = Set.Make(String)
@@ -1006,6 +1007,46 @@ let initial_kind_env =
     ("implicit", {k = K_Lam( [{k = K_Nat}], {k=K_Typ})} );
   ]
 
+let typschm_of_string order str =
+  let typschm = Parser2.typschm Lexer2.token (Lexing.from_string str) in
+  let (typschm, _, _) = to_ast_typschm initial_kind_env order typschm in
+  typschm
+
+let val_spec_ids (Defs defs) =
+  let val_spec_id (VS_aux (vs_aux, _)) =
+    match vs_aux with
+    | VS_val_spec (typschm, id) -> id
+    | VS_extern_no_rename (typschm, id) -> id
+    | VS_extern_spec (typschm, id, e) -> id
+    | VS_cast_spec (typschm, id) -> id
+  in
+  let rec vs_ids = function
+    | DEF_spec vs :: defs -> val_spec_id vs :: vs_ids defs
+    | def :: defs -> vs_ids defs
+    | [] -> []
+  in
+  IdSet.of_list (vs_ids defs)
+
+let generate_undefineds vs_ids (Defs defs) =
+  let undefined_td = function
+    | TD_enum (id, _, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
+       let typschm = typschm_of_string dec_ord ("unit -> " ^ string_of_id id ^ " effect {undef}") in
+       [mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id));
+        mk_fundef [mk_funcl (prepend_id "undefined_" id)
+                            (mk_pat (P_lit (mk_lit L_unit)))
+                            (mk_exp (E_lit (mk_lit L_undef)))]]
+    | _ -> []
+  in
+  let rec undefined_defs = function
+    | DEF_type (TD_aux (td_aux, _)) as def :: defs ->
+       def :: undefined_td td_aux @ undefined_defs defs
+    | def :: defs ->
+       def :: undefined_defs defs
+    | [] -> []
+  in
+  Defs (undefined_defs defs)
+
 let process_ast order defs =
   let (ast, _, _) = to_ast Nameset.empty initial_kind_env order defs in
-  ast
+  let vs_ids = val_spec_ids ast in
+  generate_undefineds vs_ids ast

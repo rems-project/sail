@@ -99,9 +99,6 @@ let mk_infix_id str = Id_aux (DeIid str, Parse_ast.Unknown)
 
 let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
 
-let inc_ord = Ord_aux (Ord_inc, Parse_ast.Unknown)
-let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
-
 let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
 
 let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)

@@ -46,14 +46,35 @@ open Ast
 open Util
 open Big_int
 
+let no_annot = (Parse_ast.Unknown, ())
+
+let inc_ord = Ord_aux (Ord_inc, Parse_ast.Unknown)
+let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
+
 let mk_nc nc_aux = NC_aux (nc_aux, Parse_ast.Unknown)
 
 let mk_nexp nexp_aux = Nexp_aux (nexp_aux, Parse_ast.Unknown)
 
-let mk_exp exp_aux = E_aux (exp_aux, (Parse_ast.Unknown, ()))
+let mk_exp exp_aux = E_aux (exp_aux, no_annot)
 let unaux_exp (E_aux (exp_aux, _)) = exp_aux
 
+let mk_pat pat_aux = P_aux (pat_aux, no_annot)
+
 let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
+
+let mk_lit_exp lit_aux = mk_exp (E_lit (mk_lit lit_aux))
+
+let mk_funcl id pat body = FCL_aux (FCL_Funcl (id, pat, body), no_annot)
+
+let mk_fundef funcls =
+  let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown) in
+  let effect_opt = Effect_opt_aux (Effect_opt_pure, Parse_ast.Unknown) in
+  let rec_opt = Rec_aux (Rec_nonrec, Parse_ast.Unknown) in
+  DEF_fundef
+   (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), no_annot))
+
+let mk_val_spec vs_aux =
+  DEF_spec (VS_aux (vs_aux, no_annot))
 
 let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
 and map_exp_annot_aux f = function
@@ -156,6 +177,10 @@ let id_of_kid = function
 
 let string_of_kid = function
   | Kid_aux (Var v, _) -> v
+
+let prepend_id str = function
+  | Id_aux (Id v, l) -> Id_aux (Id (str ^ v), l)
+  | Id_aux (DeIid v, l) -> Id_aux (DeIid (str ^ v), l)
 
 let string_of_base_effect_aux = function
   | BE_rreg -> "rreg"
