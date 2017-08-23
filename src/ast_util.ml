@@ -312,7 +312,20 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_throw exp -> "throw " ^ string_of_exp exp
   | E_cons (x, xs) -> string_of_exp x ^ " :: " ^ string_of_exp xs
   | E_list xs -> "[||" ^ string_of_list ", " string_of_exp xs ^ "||]"
+  | E_record_update (exp, FES_aux (FES_Fexps (fexps, _), _)) ->
+     "{ " ^ string_of_exp exp ^ " with " ^ string_of_list "; " string_of_fexp fexps ^ " }"
+  | E_record (FES_aux (FES_Fexps (fexps, _), _)) ->
+     "{ " ^ string_of_list "; " string_of_fexp fexps ^ " }"
+  | E_internal_cast _ -> "INTERNAL CAST"
+  | E_internal_exp _ -> "INTERNAL EXP"
+  | E_sizeof_internal _ -> "INTERNAL SIZEOF"
+  | E_internal_exp_user _ -> "INTERNAL EXP USER"
+  | E_comment _ -> "INTERNAL COMMENT"
+  | E_comment_struc _ -> "INTERNAL COMMENT STRUC"
+  | E_internal_let _ -> "INTERNAL LET"
   | _ -> "INTERNAL"
+and string_of_fexp (FE_aux (FE_Fexp (field, exp), _)) =
+  string_of_id field ^ " = " ^ string_of_exp exp
 and string_of_pexp (Pat_aux (pexp, _)) =
   match pexp with
   | Pat_exp (pat, exp) -> string_of_pat pat ^ " -> " ^ string_of_exp exp

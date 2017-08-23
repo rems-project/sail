@@ -519,7 +519,7 @@ atomic_pat:
     { ploc (P_list([])) }
   | SquareBarBar pat BarBarSquare
     { ploc (P_list([$2])) }
-  | SquareBarBar comma_pats BarBarSquare
+  | SquareBarBar semi_pats BarBarSquare
     { ploc (P_list($2)) }
   | atomic_pat ColonColon pat
     { ploc (P_cons ($1, $3)) }
@@ -550,6 +550,12 @@ comma_pats:
   | atomic_pat Comma atomic_pat
     { [$1;$3] }
   | atomic_pat Comma comma_pats
+    { $1::$3 }
+
+semi_pats:
+  | atomic_pat Semi atomic_pat
+    { [$1;$3] }
+  | atomic_pat Semi semi_pats
     { $1::$3 }
 
 fpat:

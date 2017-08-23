@@ -345,6 +345,7 @@ let doc_exp, doc_let =
   | E_internal_exp_user _ -> raise (Reporting_basic.err_unreachable Unknown ("internal_exp_user not rewritten away"))
   | E_internal_cast ((_, Overload (_, _,_ )), _) | E_internal_exp _ -> assert false
                                   *)
+  | _ -> failwith ("Cannot print: " ^ Ast_util.string_of_exp expr)
   and let_exp (LB_aux(lb,_)) = match lb with
     | LB_val_explicit(ts,pat,e) ->
       (match ts with

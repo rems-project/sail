@@ -73,6 +73,8 @@ module Env : sig
   (* Returns true if id is a register type, false otherwise *)
   val is_regtyp : id -> t -> bool
 
+  val get_locals : t -> (mut * typ) Bindings.t
+
   (* Check if a local variable is mutable. Throws Type_error if it
      isn't a local variable. Probably best to use Env.lookup_id
      instead *)
@@ -140,6 +142,13 @@ end
 (* Push all the type variables and constraints from a typquant into an environment *)
 val add_typquant : typquant -> Env.t -> Env.t
 
+(* When the typechecker creates new type variables it gives them fresh
+   names of the form 'fvXXX#name, where XXX is a number (not
+   necessarily three digits), and name is the original name when the
+   type variable was created by renaming an exisiting type variable to
+   avoid shadowing. orig_kid takes such a type variable and strips out
+   the 'fvXXX# part. It returns the type variable unmodified if it is
+   not of this form. *)
 val orig_kid : kid -> kid
 
 (* Some handy utility functions for constructing types. *)
@@ -178,6 +187,10 @@ val nc_false : n_constraint
    this flips all the inequalites a the n_constraint leaves and uses
    de-morgans to switch and to or and vice versa. *)
 val nc_negate : n_constraint -> n_constraint
+
+val is_nat_kopt : kinded_id -> bool
+val is_order_kopt : kinded_id -> bool
+val is_typ_kopt : kinded_id -> bool
 
 (* Sail builtin types. *)
 val int_typ : typ
@@ -219,6 +232,8 @@ val check_exp : Env.t -> unit exp -> typ -> tannot exp
 
 val infer_exp : Env.t -> unit exp -> tannot exp
 
+val prove : Env.t -> n_constraint -> bool
+
 val subtype_check : Env.t -> typ -> typ -> bool
 
 (* Partial functions: The expressions and patterns passed to these
@@ -231,15 +246,12 @@ val env_of_annot : Ast.l * tannot -> Env.t
 val typ_of : tannot exp -> typ
 val typ_of_annot : Ast.l * tannot -> typ
 
-val env_of : tannot exp -> Env.t
-
 val pat_typ_of : tannot pat -> typ
 
 val effect_of : tannot exp -> effect
 val effect_of_annot : tannot -> effect
 
-(* TODO: make return option *)
-val destruct_atom_nexp : typ -> nexp
+val destruct_atom_nexp : Env.t -> typ -> nexp option
 
 (* Safely destructure an existential type. Returns None if the type is
    not existential. This function will pick a fresh name for the

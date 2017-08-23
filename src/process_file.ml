@@ -228,8 +228,6 @@ let output libpath out_arg files =
     files
 
 let rewrite_step defs rewriter =
-  (* print_endline "=============================== REWRITE STEP";
-  Pretty_print.pp_defs stdout defs; *)
   let defs = rewriter defs in
   let _ = match !(opt_ddump_rewrite_ast) with
     | Some (f, i) ->
