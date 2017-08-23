@@ -205,7 +205,7 @@ val barrier : forall 'regs. barrier_kind -> M 'regs unit
 let barrier _ = return ()
 
 val footprint : forall 'regs. M 'regs unit
-let footprint = return ()
+let footprint s = return () s
 
 
 val foreachM_inc : forall 'regs 'vars 'e. (integer * integer * integer) -> 'vars ->
