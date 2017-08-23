@@ -28,8 +28,9 @@ let isubst_union s1 s2 =
   |  _,  _ -> None) s1 s2
 
 let subst_src_typ substs t =
-  let rec s_snexp (Nexp_aux (ne,l) as nexp) =
+  let rec s_snexp substs (Nexp_aux (ne,l) as nexp) =
     let re ne = Nexp_aux (ne,l) in
+    let s_snexp = s_snexp subst in
     match ne with
     | Nexp_var (Kid_aux (_,l) as kid) ->
        (try KSubst.find kid substs
@@ -42,22 +43,25 @@ let subst_src_typ substs t =
     | Nexp_exp ne -> re (Nexp_exp (s_snexp ne))
     | Nexp_neg ne -> re (Nexp_neg (s_snexp ne))
   in
-  let rec s_styp ((Typ_aux (t,l)) as ty) =
+  let rec s_styp substs ((Typ_aux (t,l)) as ty) =
     let re t = Typ_aux (t,l) in
     match t with
     | Typ_wild
     | Typ_id _
     | Typ_var _
       -> ty
-    | Typ_fn (t1,t2,e) -> re (Typ_fn (s_styp t1, s_styp t2,e))
-    | Typ_tup ts -> re (Typ_tup (List.map s_styp ts))
-    | Typ_app (id,tas) -> re (Typ_app (id,List.map s_starg tas))
-  and s_starg (Typ_arg_aux (ta,l) as targ) =
+    | Typ_fn (t1,t2,e) -> re (Typ_fn (s_styp substs t1, s_styp substs t2,e))
+    | Typ_tup ts -> re (Typ_tup (List.map (s_styp substs) ts))
+    | Typ_app (id,tas) -> re (Typ_app (id,List.map (s_starg substs) tas))
+    | Typ_exist (kids,nc,t) ->
+       let substs = List.fold_left (fun sub v -> KSubst.remove v sub) substs kids in
+       re (Typ_exist (kids,nc,s_styp substs t))
+  and s_starg substs (Typ_arg_aux (ta,l) as targ) =
     match ta with
-    | Typ_arg_nexp ne -> Typ_arg_aux (Typ_arg_nexp (s_snexp ne),l)
-    | Typ_arg_typ t -> Typ_arg_aux (Typ_arg_typ (s_styp t),l)
+    | Typ_arg_nexp ne -> Typ_arg_aux (Typ_arg_nexp (s_snexp substs ne),l)
+    | Typ_arg_typ t -> Typ_arg_aux (Typ_arg_typ (s_styp substs t),l)
     | Typ_arg_order _ -> targ
-  in s_styp t
+  in s_styp substs t
 
 let make_vector_lit sz i =
   let f j = if (i lsr (sz-j-1)) mod 2 = 0 then '0' else '1' in
@@ -435,7 +439,7 @@ let bindings_from_pat p =
 
 let remove_bound env pat =
   let bound = bindings_from_pat pat in
-  List.fold_left (fun sub v -> ISubst.remove v env) env bound
+  List.fold_left (fun sub v -> ISubst.remove v sub) env bound
 
 (* Remove explicit existential types from the AST, so that the sizes of
    bitvectors will be filled in throughout.
@@ -488,6 +492,8 @@ let rec deexist_exp (E_aux (e,(l,(annot : Type_check.tannot))) as exp) =
   | E_let (lb,e1) -> re (E_let (deexist_letbind lb, deexist_exp e1))
   | E_assign (le,e1) -> re (E_assign (deexist_lexp le, deexist_exp e1))
   | E_exit e1 -> re (E_exit (deexist_exp e1))
+  | E_throw e1 -> re (E_throw (deexist_exp e1))
+  | E_try (e1,cases) -> re (E_try (deexist_exp e1, List.map deexist_pexp cases))
   | E_return e1 -> re (E_return (deexist_exp e1))
   | E_assert (e1,e2) -> re (E_assert (deexist_exp e1,deexist_exp e2))
 and deexist_pexp (Pat_aux (pe,(l,annot))) =
@@ -772,6 +778,10 @@ let split_defs splits defs =
        re (E_let (lb', const_prop_exp substs' e))
     | E_assign (le,e) -> re (E_assign (const_prop_lexp substs le, const_prop_exp substs e))
     | E_exit e -> re (E_exit (const_prop_exp substs e))
+    | E_throw e -> re (E_throw (const_prop_exp substs e))
+    | E_try (e,cases) ->
+       let e' = const_prop_exp substs e in
+       re (E_case (e', List.map (const_prop_pexp substs) cases))
     | E_return e -> re (E_return (const_prop_exp substs e))
     | E_assert (e1,e2) -> re (E_assert (const_prop_exp substs e1,const_prop_exp substs e2))
     | E_internal_cast (ann,e) -> re (E_internal_cast (ann,const_prop_exp substs e))
@@ -960,6 +970,7 @@ let split_defs splits defs =
         match p with
         | P_lit _
         | P_wild
+        | P_var _
           -> None
         | P_as (p',id) when id_matches id ->
            raise (Reporting_basic.err_general l
@@ -1082,6 +1093,8 @@ let split_defs splits defs =
       | E_let (lb,e) -> re (E_let (map_letbind lb, map_exp e))
       | E_assign (le,e) -> re (E_assign (map_lexp le, map_exp e))
       | E_exit e -> re (E_exit (map_exp e))
+      | E_throw e -> re (E_throw e)
+      | E_try (e,cases) -> re (E_try (map_exp e, List.concat (List.map map_pexp cases)))
       | E_return e -> re (E_return (map_exp e))
       | E_assert (e1,e2) -> re (E_assert (map_exp e1,map_exp e2))
       | E_internal_cast (ann,e) -> re (E_internal_cast (ann,map_exp e))
