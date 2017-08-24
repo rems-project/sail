@@ -482,7 +482,7 @@ type barrier_kind =
   | Barrier_RISCV_w_w
   | Barrier_RISCV_i
   (* X86 *)
-  | Barrier_X86_MFENCE
+  | Barrier_x86_MFENCE
 
 
 instance (Show barrier_kind)
@@ -505,7 +505,7 @@ instance (Show barrier_kind)
     | Barrier_RISCV_rw_w  -> "Barrier_RISCV_rw_w"
     | Barrier_RISCV_w_w   -> "Barrier_RISCV_w_w"
     | Barrier_RISCV_i     -> "Barrier_RISCV_i"
-    | Barrier_X86_MFENCE  -> "Barrier_X86_MFENCE"
+    | Barrier_x86_MFENCE  -> "Barrier_x86_MFENCE"
   end
 end
 
@@ -735,9 +735,9 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (Barrier_RISCV_i, _) -> LT
   | (_, Barrier_RISCV_i) -> GT
 
-  | (Barrier_X86_MFENCE, Barrier_X86_MFENCE) -> EQ
-  (*| (Barrier_X86_MFENCE, _) -> LT
-  | (_, Barrier_X86_MFENCE) -> GT*)
+  | (Barrier_x86_MFENCE, Barrier_x86_MFENCE) -> EQ
+  (*| (Barrier_x86_MFENCE, _) -> LT
+  | (_, Barrier_x86_MFENCE) -> GT*)
   end
 let inline {ocaml} barrier_kindCompare = defaultCompare
 
