@@ -581,6 +581,13 @@ let can_match (E_aux (e,(l,annot)) as exp0) cases =
      in findpat_generic checkpat "bit" cases
   | _ -> None
 
+(* Remove top-level casts from an expression.  Useful when we need to look at
+   subexpressions to reduce something, but could break type-checking if we used
+   it everywhere. *)
+let rec drop_casts = function
+  | E_aux (E_cast (_,e),_) -> drop_casts e
+  | exp -> exp
+
 
 (* Similarly, simple conditionals *)
 let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
@@ -599,8 +606,8 @@ let neq_fns = [Id "neq_anything"]
 let try_app (l,ann) (Id_aux (id,_),args) =
   let is_eq = List.mem id eq_fns in
   let is_neq = (not is_eq) && List.mem id neq_fns in
+  let new_l = Generated l in
   if is_eq || is_neq then
-    let new_l = Generated l in
     match args with
     | [E_aux (E_lit l1,_); E_aux (E_lit l2,_)] ->
        let lit b = if b then L_true else L_false in
@@ -608,6 +615,11 @@ let try_app (l,ann) (Id_aux (id,_),args) =
        (match lit_eq l1 l2 with
        | None -> None
        | Some b -> Some (E_aux (E_lit (L_aux (lit b,new_l)),(l,ann))))
+    | _ -> None
+  else if id = Id "cast_bit_bool" then
+    match args with
+    | [E_aux (E_lit L_aux (L_zero,_),_)] -> Some (E_aux (E_lit (L_aux (L_false,new_l)),(l,ann)))
+    | [E_aux (E_lit L_aux (L_one ,_),_)] -> Some (E_aux (E_lit (L_aux (L_true ,new_l)),(l,ann)))
     | _ -> None
   else None
 
@@ -623,7 +635,6 @@ let try_app_infix (l,ann) (E_aux (e1,ann1)) (Id_aux (id,_)) (E_aux (e2,ann2)) =
      | Some b -> Some (E_aux (E_lit (L_aux (lit b,new_l)), (l,ann)))
      | None -> None)
   | _ -> None
-
 
 (* We may need to split up a pattern match if (1) we've been told to case split
    on a variable by the user, or (2) we monomorphised a constructor that's used
@@ -743,7 +754,7 @@ let split_defs splits defs =
     | E_if (e1,e2,e3) ->
        let e1' = const_prop_exp substs e1 in
        let e2',e3' = const_prop_exp substs e2, const_prop_exp substs e3 in
-       (match e1' with
+       (match drop_casts e1' with
        | E_aux (E_lit (L_aux ((L_true|L_false) as lit ,_)),_) ->
           let e' = match lit with L_true -> e2' | _ -> e3' in
           (match e' with E_aux (_,(_,annot')) ->
