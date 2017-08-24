@@ -481,6 +481,8 @@ type barrier_kind =
   | Barrier_RISCV_rw_w
   | Barrier_RISCV_w_w
   | Barrier_RISCV_i
+  (* X86 *)
+  | Barrier_X86_MFENCE
 
 
 instance (Show barrier_kind)
@@ -503,6 +505,7 @@ instance (Show barrier_kind)
     | Barrier_RISCV_rw_w  -> "Barrier_RISCV_rw_w"
     | Barrier_RISCV_w_w   -> "Barrier_RISCV_w_w"
     | Barrier_RISCV_I     -> "Barrier_RISCV_i"
+    | Barrier_X86_MFENCE  -> "Barrier_X86_MFENCE"
   end
 end
 
@@ -546,48 +549,42 @@ end
 
 let ~{ocaml} read_kindCompare rk1 rk2 =
   match (rk1, rk2) with
-  | (Read_plain, Read_plain)             -> EQ
-  | (Read_plain, Read_reserve)           -> LT
-  | (Read_plain, Read_acquire)           -> LT
-  | (Read_plain, Read_exclusive)         -> LT
-  | (Read_plain, Read_exclusive_acquire) -> LT
-  | (Read_plain, Read_stream)            -> LT
+  | (Read_plain, Read_plain) -> EQ
+  | (Read_plain, _)           -> LT
+  | (_, Read_plain)           -> GT
 
-  | (Read_reserve, Read_plain)             -> GT
-  | (Read_reserve, Read_reserve)           -> EQ
-  | (Read_reserve, Read_acquire)           -> LT
-  | (Read_reserve, Read_exclusive)         -> LT
-  | (Read_reserve, Read_exclusive_acquire) -> LT
-  | (Read_reserve, Read_stream)            -> LT
+  | (Read_reserve, Read_reserve) -> EQ
+  | (Read_reserve, _)           -> LT
+  | (_, Read_reserve)           -> GT
 
-  | (Read_acquire, Read_plain)             -> GT
-  | (Read_acquire, Read_reserve)           -> GT
-  | (Read_acquire, Read_acquire)           -> EQ
-  | (Read_acquire, Read_exclusive)         -> LT
-  | (Read_acquire, Read_exclusive_acquire) -> LT
-  | (Read_acquire, Read_stream)            -> LT
+  | (Read_acquire, Read_acquire) -> EQ
+  | (Read_acquire, _)           -> LT
+  | (_, Read_acquire)           -> GT
 
-  | (Read_exclusive, Read_plain)             -> GT
-  | (Read_exclusive, Read_reserve)           -> GT
-  | (Read_exclusive, Read_acquire)           -> GT
-  | (Read_exclusive, Read_exclusive)         -> EQ
-  | (Read_exclusive, Read_exclusive_acquire) -> LT
-  | (Read_exclusive, Read_stream)            -> LT
+  | (Read_exclusive, Read_exclusive) -> EQ
+  | (Read_exclusive, _)           -> LT
+  | (_, Read_exclusive)           -> GT
 
-  | (Read_exclusive_acquire, Read_plain)             -> GT
-  | (Read_exclusive_acquire, Read_reserve)           -> GT
-  | (Read_exclusive_acquire, Read_acquire)           -> GT
-  | (Read_exclusive_acquire, Read_exclusive)         -> GT
   | (Read_exclusive_acquire, Read_exclusive_acquire) -> EQ
-  | (Read_exclusive_acquire, Read_stream)            -> GT
+  | (Read_exclusive_acquire, _)           -> LT
+  | (_, Read_exclusive_acquire)           -> GT
 
-  | (Read_stream, Read_plain)             -> GT
-  | (Read_stream, Read_reserve)           -> GT
-  | (Read_stream, Read_acquire)           -> GT
-  | (Read_stream, Read_exclusive)         -> GT
-  | (Read_stream, Read_exclusive_acquire) -> GT
-  | (Read_stream, Read_stream)            -> EQ
-end
+  | (Read_stream, Read_stream) -> EQ
+  | (Read_stream, _)           -> LT
+  | (_, Read_stream)           -> GT
+
+  | (Read_RISCV_acquire, Read_RISCV_acquire) -> EQ
+  | (Read_RISCV_acquire, _)           -> LT
+  | (_, Read_RISCV_acquire)           -> GT
+
+  | (Read_RISCV_reserved, Read_RISCV_reserved) -> EQ
+  | (Read_RISCV_reserved, _)           -> LT
+  | (_, Read_RISCV_reserved)           -> GT
+
+  | (Read_RISCV_reserved_acquire, Read_RISCV_reserved_acquire) -> EQ
+  (*| (Read_RISCV_reserved_acquire, _)           -> LT
+  | (_, Read_RISCV_reserved_acquire)           -> GT*)
+  end
 let inline {ocaml} read_kindCompare = defaultCompare
 
 let ~{ocaml} read_kindLess b1 b2      = read_kindCompare b1 b2 =  LT
@@ -610,36 +607,39 @@ end
 
 let ~{ocaml} write_kindCompare wk1 wk2 =
   match (wk1, wk2) with
-  | (Write_plain, Write_plain)             -> EQ
-  | (Write_plain, Write_conditional)       -> LT
-  | (Write_plain, Write_release)           -> LT
-  | (Write_plain, Write_exclusive)         -> LT
-  | (Write_plain, Write_exclusive_release) -> LT
+  | (Write_plain, Write_plain) -> EQ
+  | (Write_plain, _)           -> LT
+  | (_, Write_plain)           -> GT
 
-  | (Write_conditional, Write_plain)             -> GT
-  | (Write_conditional, Write_conditional)       -> EQ
-  | (Write_conditional, Write_release)           -> LT
-  | (Write_conditional, Write_exclusive)         -> LT
-  | (Write_conditional, Write_exclusive_release) -> LT
+  | (Write_conditional, Write_conditional) -> EQ
+  | (Write_conditional, _)                 -> LT
+  | (_, Write_conditional)                 -> GT
 
-  | (Write_release, Write_plain)             -> GT
-  | (Write_release, Write_conditional)       -> GT
-  | (Write_release, Write_release)           -> EQ
-  | (Write_release, Write_exclusive)         -> LT
-  | (Write_release, Write_exclusive_release) -> LT
 
-  | (Write_exclusive, Write_plain)             -> GT
-  | (Write_exclusive, Write_conditional)       -> GT
-  | (Write_exclusive, Write_release)           -> GT
-  | (Write_exclusive, Write_exclusive)         -> EQ
-  | (Write_exclusive, Write_exclusive_release) -> LT
+  | (Write_release, Write_release) -> EQ
+  | (Write_release, _)             -> LT
+  | (_, Write_release)             -> GT
 
-  | (Write_exclusive_release, Write_plain)             -> GT
-  | (Write_exclusive_release, Write_conditional)       -> GT
-  | (Write_exclusive_release, Write_release)           -> GT
-  | (Write_exclusive_release, Write_exclusive)         -> GT
+  | (Write_exclusive, Write_exclusive) -> EQ
+  | (Write_exclusive, _)               -> LT
+  | (_, Write_exclusive)               -> GT
+
   | (Write_exclusive_release, Write_exclusive_release) -> EQ
-end
+  | (Write_exclusive_release, _)                       -> LT
+  | (_, Write_exclusive_release)                       -> GT
+
+  | (Write_RISCV_release, Write_RISCV_release) -> EQ
+  | (Write_RISCV_release, _)                   -> LT
+  | (_, Write_RISCV_release)                   -> GT
+
+  | (Write_RISCV_conditional, Write_RISCV_conditional) -> EQ
+  | (Write_RISCV_conditional, _)                       -> LT
+  | (_, Write_RISCV_conditional)                       -> GT
+
+  | (Write_RISCV_conditional_release, Write_RISCV_conditional_release) -> EQ
+  (*| (Write_RISCV_conditional_release, _)                               -> LT
+  | (_, Write_RISCV_conditional_release)                               -> GT*)
+  end
 let inline {ocaml} write_kindCompare = defaultCompare
 
 let ~{ocaml} write_kindLess b1 b2      = write_kindCompare b1 b2 =  LT
@@ -659,6 +659,7 @@ instance (Ord write_kind)
   let (>)  = write_kindGreater
   let (>=) = write_kindGreaterEq
 end
+
 
 let ~{ocaml} barrier_kindCompare bk1 bk2 =
   match (bk1, bk2) with
@@ -711,9 +712,32 @@ let ~{ocaml} barrier_kindCompare bk1 bk2 =
   | (_, Barrier_TM_COMMIT) -> GT
 
   | (Barrier_MIPS_SYNC, Barrier_MIPS_SYNC) -> EQ
-  (* | (Barrier_MIPS_SYNC, _) -> LT
-  | (_, Barrier_MIPS_SYNC) -> GT *)
+  | (Barrier_MIPS_SYNC, _) -> LT
+  | (_, Barrier_MIPS_SYNC) -> GT
 
+  | (Barrier_RISCV_rw_rw, Barrier_RISCV_rw_rw) -> EQ
+  | (Barrier_RISCV_rw_rw, _) -> LT
+  | (_, Barrier_RISCV_rw_rw) -> GT
+
+  | (Barrier_RISCV_r_rw, Barrier_RISCV_r_rw) -> EQ
+  | (Barrier_RISCV_r_rw, _) -> LT
+  | (_, Barrier_RISCV_r_rw) -> GT
+
+  | (Barrier_RISCV_rw_w, Barrier_RISCV_rw_w) -> EQ
+  | (Barrier_RISCV_rw_w, _) -> LT
+  | (_, Barrier_RISCV_rw_w) -> GT
+
+  | (Barrier_RISCV_w_w, Barrier_RISCV_w_w) -> EQ
+  | (Barrier_RISCV_w_w, _) -> LT
+  | (_, Barrier_RISCV_w_w) -> GT
+
+  | (Barrier_RISCV_i, Barrier_RISCV_i) -> EQ
+  | (Barrier_RISCV_i, _) -> LT
+  | (_, Barrier_RISCV_i) -> GT
+
+  | (Barrier_X86_MFENCE, Barrier_X86_MFENCE) -> EQ
+  (*| (Barrier_X86_MFENCE, _) -> LT
+  | (_, Barrier_X86_MFENCE) -> GT*)
   end
 let inline {ocaml} barrier_kindCompare = defaultCompare
 
