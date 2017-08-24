@@ -2146,7 +2146,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
       | (E_aux(E_assign((LEXP_aux ((LEXP_id id | LEXP_cast (_,id)),_)) as le,e),
                ((l, Some (env,typ,eff)) as annot)) as exp)::exps ->
         (match Env.lookup_id id env with
-         | Unbound | Local _ ->
+         | Unbound ->
             let le' = rewriters.rewrite_lexp rewriters le in
             let e' = rewrite_base e in
             let exps' = walker exps in
@@ -2417,6 +2417,11 @@ let rewrite_undefined =
        mk_exp (E_app (prepend_id "undefined_" id, [mk_lit_exp L_unit]))
     | Typ_app (id, args) ->
        mk_exp (E_app (prepend_id "undefined_" id, List.concat (List.map undefined_of_typ_args args)))
+    | Typ_var kid ->
+       (* FIXME: bit of a hack, need to add a restriction to how
+          polymorphic undefined can be in the type checker to
+          guarantee this always works. *)
+       mk_exp (E_id (prepend_id "typ_" (id_of_kid kid)))
     | Typ_fn _ -> assert false
   and undefined_of_typ_args (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
     match typ_arg_aux with
@@ -2427,7 +2432,6 @@ let rewrite_undefined =
   let rewrite_e_aux (E_aux (e_aux, _) as exp) =
     match e_aux with
     | E_lit (L_aux (L_undef, l)) ->
-       print_endline ("Undefined: " ^ string_of_typ (typ_of exp));
        check_exp (env_of exp) (undefined_of_typ (typ_of exp)) (typ_of exp)
     | _ -> exp
   in
@@ -2455,10 +2459,15 @@ let rewrite_simple_types (Defs defs) =
        Typ_id (mk_id "int")
     | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 ->
        Typ_id (mk_id "int")
+    | Typ_app (id, args) -> Typ_app (id, List.concat (List.map simple_typ_arg args))
     | Typ_fn (typ1, typ2, effs) -> Typ_fn (simple_typ typ1, simple_typ typ2, effs)
     | Typ_tup typs -> Typ_tup (List.map simple_typ typs)
     | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux typ
     | typ_aux -> typ_aux
+  and simple_typ_arg (Typ_arg_aux (typ_arg_aux, l)) =
+    match typ_arg_aux with
+    | Typ_arg_typ typ -> [Typ_arg_aux (Typ_arg_typ (simple_typ typ), l)]
+    | _ -> []
   in
   let simple_typschm (TypSchm_aux (TypSchm_ts (typq, typ), annot)) =
     TypSchm_aux (TypSchm_ts (simple_typquant typq, simple_typ typ), annot)
@@ -3354,10 +3363,10 @@ let rewrite_defs_ocaml = [
   rewrite_defs_remove_vector_concat;
   rewrite_constraint;
   rewrite_trivial_sizeof;
-  (* rewrite_sizeof; *)
-  (* rewrite_simple_types; *)
-  (* rewrite_overload_cast; *)
-  (* rewrite_defs_exp_lift_assign; *)
+  rewrite_sizeof;
+  rewrite_simple_types;
+  rewrite_overload_cast;
+  rewrite_defs_exp_lift_assign;
   (* rewrite_defs_exp_lift_assign *)
   (* rewrite_defs_separate_numbs *)
   ]

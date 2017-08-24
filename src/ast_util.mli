@@ -44,20 +44,81 @@
 
 open Ast
 
+val mk_id : string -> id
+val mk_kid : string -> kid
+val mk_ord : order_aux -> order
 val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
 val mk_exp : unit exp_aux -> unit exp
 val mk_pat : unit pat_aux -> unit pat
+val mk_lexp : unit lexp_aux -> unit lexp
 val mk_lit : lit_aux -> lit
 val mk_lit_exp : lit_aux -> unit exp
 val mk_funcl : id -> unit pat -> unit exp -> unit funcl
 val mk_fundef : (unit funcl) list -> unit def
 val mk_val_spec : val_spec_aux -> unit def
+val mk_typschm : typquant -> typ -> typschm
+val mk_fexp : id -> unit exp -> unit fexp
+val mk_fexps : (unit fexp) list -> unit fexps
 
 val unaux_exp : 'a exp -> 'a exp_aux
 
 val inc_ord : order
 val dec_ord : order
+
+(* Utilites for working with kinded_ids *)
+val kopt_kid : kinded_id -> kid
+val is_nat_kopt : kinded_id -> bool
+val is_order_kopt : kinded_id -> bool
+val is_typ_kopt : kinded_id -> bool
+
+(* Some handy utility functions for constructing types. *)
+val mk_typ : typ_aux -> typ
+val mk_typ_arg : typ_arg_aux -> typ_arg
+val mk_id_typ : id -> typ
+
+(* Sail builtin types. *)
+val int_typ : typ
+val nat_typ : typ
+val atom_typ : nexp -> typ
+val range_typ : nexp -> nexp -> typ
+val bit_typ : typ
+val bool_typ : typ
+val app_typ : id -> typ_arg list -> typ
+val unit_typ : typ
+val string_typ : typ
+val real_typ : typ
+val vector_typ : nexp -> nexp -> order -> typ -> typ
+val list_typ : typ -> typ
+val exc_typ : typ
+
+val no_effect : effect
+val mk_effect : base_effect_aux list -> effect
+
+val nexp_simp : nexp -> nexp
+
+(* Utilities for building n-expressions *)
+val nconstant : int -> nexp
+val nminus : nexp -> nexp -> nexp
+val nsum : nexp -> nexp -> nexp
+val ntimes : nexp -> nexp -> nexp
+val npow2 : nexp -> nexp
+val nvar : kid -> nexp
+val nid : id -> nexp (* NOTE: Nexp_id's don't do anything currently *)
+
+(* Numeric constraint builders *)
+val nc_eq : nexp -> nexp -> n_constraint
+val nc_neq : nexp -> nexp -> n_constraint
+val nc_lteq : nexp -> nexp -> n_constraint
+val nc_gteq : nexp -> nexp -> n_constraint
+val nc_lt : nexp -> nexp -> n_constraint
+val nc_gt : nexp -> nexp -> n_constraint
+val nc_and : n_constraint -> n_constraint -> n_constraint
+val nc_or : n_constraint -> n_constraint -> n_constraint
+val nc_true : n_constraint
+val nc_false : n_constraint
+
+val quant_items : typquant -> quant_item list
 
 (* Functions to map over the annotations in sub-expressions *)
 val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp

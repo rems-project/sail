@@ -51,6 +51,8 @@ let no_annot = (Parse_ast.Unknown, ())
 let inc_ord = Ord_aux (Ord_inc, Parse_ast.Unknown)
 let dec_ord = Ord_aux (Ord_dec, Parse_ast.Unknown)
 
+let mk_id str = Id_aux (Id str, Parse_ast.Unknown)
+
 let mk_nc nc_aux = NC_aux (nc_aux, Parse_ast.Unknown)
 
 let mk_nexp nexp_aux = Nexp_aux (nexp_aux, Parse_ast.Unknown)
@@ -59,6 +61,8 @@ let mk_exp exp_aux = E_aux (exp_aux, no_annot)
 let unaux_exp (E_aux (exp_aux, _)) = exp_aux
 
 let mk_pat pat_aux = P_aux (pat_aux, no_annot)
+
+let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
 
 let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
 
@@ -75,6 +79,122 @@ let mk_fundef funcls =
 
 let mk_val_spec vs_aux =
   DEF_spec (VS_aux (vs_aux, no_annot))
+
+let kopt_kid (KOpt_aux (kopt_aux, _)) =
+  match kopt_aux with
+  | KOpt_none kid | KOpt_kind (_, kid) -> kid
+
+let is_nat_kopt = function
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_nat, _)], _), _), _) -> true
+  | KOpt_aux (KOpt_none _, _) -> true
+  | _ -> false
+
+let is_order_kopt = function
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_order, _)], _), _), _) -> true
+  | _ -> false
+
+let is_typ_kopt = function
+  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_type, _)], _), _), _) -> true
+  | _ -> false
+
+let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
+and nexp_simp_aux = function
+  | Nexp_minus (Nexp_aux (Nexp_sum (Nexp_aux (n1, _), Nexp_aux (Nexp_constant c1, _)), _), Nexp_aux (Nexp_constant c2, _)) when c1 = c2 ->
+     nexp_simp_aux n1
+  | Nexp_sum (Nexp_aux (Nexp_minus (Nexp_aux (n1, _), Nexp_aux (Nexp_constant c1, _)), _), Nexp_aux (Nexp_constant c2, _)) when c1 = c2 ->
+     nexp_simp_aux n1
+  | Nexp_sum (n1, n2) ->
+     begin
+       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
+       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
+       match n1_simp, n2_simp with
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 + c2)
+       | _, Nexp_neg n2 -> Nexp_minus (n1, n2)
+       | _, _ -> Nexp_sum (n1, n2)
+     end
+  | Nexp_times (n1, n2) ->
+     begin
+       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
+       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
+       match n1_simp, n2_simp with
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 * c2)
+       | _, _ -> Nexp_times (n1, n2)
+     end
+  | Nexp_minus (n1, n2) ->
+     begin
+       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
+       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
+       match n1_simp, n2_simp with
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 - c2)
+       | _, _ -> Nexp_minus (n1, n2)
+     end
+  | nexp -> nexp
+
+let mk_typ typ = Typ_aux (typ, Parse_ast.Unknown)
+let mk_typ_arg arg = Typ_arg_aux (arg, Parse_ast.Unknown)
+let mk_kid str = Kid_aux (Var ("'" ^ str), Parse_ast.Unknown)
+let mk_infix_id str = Id_aux (DeIid str, Parse_ast.Unknown)
+
+let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
+
+let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
+
+let int_typ = mk_id_typ (mk_id "int")
+let nat_typ = mk_id_typ (mk_id "nat")
+let unit_typ = mk_id_typ (mk_id "unit")
+let bit_typ = mk_id_typ (mk_id "bit")
+let real_typ = mk_id_typ (mk_id "real")
+let app_typ id args = mk_typ (Typ_app (id, args))
+let atom_typ nexp =
+  mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp))]))
+let range_typ nexp1 nexp2 =
+  mk_typ (Typ_app (mk_id "range", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp1));
+                                   mk_typ_arg (Typ_arg_nexp (nexp_simp nexp2))]))
+let bool_typ = mk_id_typ (mk_id "bool")
+let string_typ = mk_id_typ (mk_id "string")
+let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (Typ_arg_typ typ)]))
+
+let vector_typ n m ord typ =
+  mk_typ (Typ_app (mk_id "vector",
+                   [mk_typ_arg (Typ_arg_nexp (nexp_simp n));
+                    mk_typ_arg (Typ_arg_nexp (nexp_simp m));
+                    mk_typ_arg (Typ_arg_order ord);
+                    mk_typ_arg (Typ_arg_typ typ)]))
+
+let exc_typ = mk_id_typ (mk_id "exception")
+
+let nconstant c = Nexp_aux (Nexp_constant c, Parse_ast.Unknown)
+let nminus n1 n2 = Nexp_aux (Nexp_minus (n1, n2), Parse_ast.Unknown)
+let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)
+let ntimes n1 n2 = Nexp_aux (Nexp_times (n1, n2), Parse_ast.Unknown)
+let npow2 n = Nexp_aux (Nexp_exp n, Parse_ast.Unknown)
+let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
+let nid id = Nexp_aux (Nexp_id id, Parse_ast.Unknown)
+
+let nc_eq n1 n2 = mk_nc (NC_fixed (n1, n2))
+let nc_neq n1 n2 = mk_nc (NC_not_equal (n1, n2))
+let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
+let nc_gteq n1 n2 = NC_aux (NC_bounded_ge (n1, n2), Parse_ast.Unknown)
+let nc_lt n1 n2 = nc_lteq n1 (nsum n2 (nconstant 1))
+let nc_gt n1 n2 = nc_gteq n1 (nsum n2 (nconstant 1))
+let nc_and nc1 nc2 = mk_nc (NC_and (nc1, nc2))
+let nc_or nc1 nc2 = mk_nc (NC_or (nc1, nc2))
+let nc_true = mk_nc NC_true
+let nc_false = mk_nc NC_false
+
+let mk_typschm typq typ = TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown)
+
+let mk_fexp id exp = FE_aux (FE_Fexp (id, exp), no_annot)
+let mk_fexps fexps = FES_aux (FES_Fexps (fexps, false), no_annot)
+
+let mk_effect effs =
+  Effect_aux (Effect_set (List.map (fun be_aux -> BE_aux (be_aux, Parse_ast.Unknown)) effs), Parse_ast.Unknown)
+
+let no_effect = mk_effect []
+
+let quant_items : typquant -> quant_item list = function
+  | TypQ_aux (TypQ_tq qis, _) -> qis
+  | TypQ_aux (TypQ_no_forall, _) -> []
 
 let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
 and map_exp_annot_aux f = function

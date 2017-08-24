@@ -288,6 +288,7 @@ exp_aux =  (* Expression *)
  | E_try of exp * pexp list
  | E_return of exp
  | E_assert of exp * exp
+ | E_internal_let of exp * exp * exp
 
 and exp = 
    E_aux of exp_aux * l
