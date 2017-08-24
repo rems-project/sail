@@ -1244,17 +1244,20 @@ let rewrite_sizeof (Defs defs) =
     let kid_pats = List.map kid_pat (KidSet.elements nvars) in
     let kid_nmap = List.map (fun kid -> (nvar kid, kid_eaux kid)) (KidSet.elements nvars) in
     let rewrite_funcl_params (FCL_aux (FCL_Funcl (id, pat, exp), annot) as funcl) =
-      let rec rewrite_pat (P_aux (pat,(l,_)) as paux) =
+      let rec rewrite_pat (P_aux (pat, ((l, _) as pannot)) as paux) =
+        let penv = env_of_annot pannot in
+        let peff = effect_of_annot (snd pannot) in
         if KidSet.is_empty nvars then paux else
           match pat_typ_of paux with
-          | Typ_aux (Typ_tup _, _) ->
+          | Typ_aux (Typ_tup typs, _) ->
+             let ptyp' = Typ_aux (Typ_tup (kid_typs @ typs), l) in
              (match pat with
               | P_tup pats ->
-                 P_aux (P_tup (kid_pats @ pats), (l, None))
-              | P_wild -> paux
+                 P_aux (P_tup (kid_pats @ pats), (l, Some (penv, ptyp', peff)))
+              | P_wild -> P_aux (pat, (l, Some (penv, ptyp', peff)))
               | P_typ (Typ_aux (Typ_tup typs, l), pat) ->
                  P_aux (P_typ (Typ_aux (Typ_tup (kid_typs @ typs), l),
-                               rewrite_pat pat), (l, None))
+                               rewrite_pat pat), (l, Some (penv, ptyp', peff)))
               | P_as (_, id) | P_id id ->
                  (* adding parameters here would change the type of id;
               we should remove the P_as/P_id here and add a let-binding to the body *)
@@ -1263,7 +1266,9 @@ let rewrite_sizeof (Defs defs) =
               | _ ->
                  raise (Reporting_basic.err_unreachable l
                                                         "unexpected pattern while rewriting function parameters for sizeof expressions"))
-          | _ -> P_aux (P_tup (kid_pats @ [paux]), (l, None)) in
+          | ptyp ->
+             let ptyp' = Typ_aux (Typ_tup (kid_typs @ [ptyp]), l) in
+             P_aux (P_tup (kid_pats @ [paux]), (l, Some (penv, ptyp', peff))) in
       let exp' = fold_exp { id_exp_alg with e_sizeof = e_sizeof kid_nmap } exp in
       FCL_aux (FCL_Funcl (id, rewrite_pat pat, exp'), annot) in
     let funcls = List.map rewrite_funcl_params funcls in
