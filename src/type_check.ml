@@ -435,6 +435,8 @@ module Env : sig
   val add_ret_typ : typ -> t -> t
   val add_typ_synonym : id -> (t -> typ_arg list -> typ) -> t -> t
   val get_typ_synonym : id -> t -> t -> typ_arg list -> typ
+  val add_num_def : id -> nexp -> t -> t
+  val get_num_def : id -> t -> nexp
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
   val is_extern : id -> t -> bool
@@ -465,6 +467,7 @@ end = struct
       variants : (typquant * type_union list) Bindings.t;
       typ_vars : base_kind_aux KBindings.t;
       typ_synonyms : (t -> typ_arg list -> typ) Bindings.t;
+      num_defs : nexp Bindings.t;
       overloads : (id list) Bindings.t;
       flow : (typ -> typ) Bindings.t;
       enums : IdSet.t Bindings.t;
@@ -487,6 +490,7 @@ end = struct
       variants = Bindings.empty;
       typ_vars = KBindings.empty;
       typ_synonyms = Bindings.empty;
+      num_defs = Bindings.empty;
       overloads = Bindings.empty;
       flow = Bindings.empty;
       enums = Bindings.empty;
@@ -826,6 +830,19 @@ end = struct
         typ_print ("Adding kind identifier " ^ string_of_kid kid ^ " :: " ^ string_of_base_kind_aux k);
         { env with typ_vars = KBindings.add kid k env.typ_vars }
       end
+
+  let add_num_def id nexp env =
+    if Bindings.mem id env.num_defs
+    then typ_error (id_loc id) ("Num identifier " ^ string_of_id id ^ " is already bound")
+    else
+      begin
+        typ_print ("Adding Num identifier " ^ string_of_id id ^ " :: " ^ string_of_nexp nexp);
+        { env with num_defs = Bindings.add id nexp env.num_defs }
+      end
+
+  let get_num_def id env =
+    try Bindings.find id env.num_defs with
+    | Not_found -> typ_error (id_loc id) ("No Num identifier " ^ string_of_id id)
 
   let rec wf_constraint env (NC_aux (nc, _)) =
     match nc with
@@ -3179,10 +3196,18 @@ let check_typedef env (TD_aux (tdef, (l, _))) =
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_enum id ids env
   | TD_register(id, base, top, ranges) -> [DEF_type (TD_aux (tdef, (l, None)))], check_register env id base top ranges
 
+let check_kinddef env (KD_aux (kdef, (l, _))) =
+  let kd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented kind def") in
+  match kdef with
+  | KD_nabbrev ((K_aux(K_kind([BK_aux (BK_nat, _)]),_) as kind), id, nmscm, nexp) ->
+     [DEF_kind (KD_aux (KD_nabbrev (kind, id, nmscm, nexp), (l, None)))],
+     Env.add_num_def id nexp env
+  | _ -> kd_err ()
+
 let rec check_def env def =
   let cd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented Case") in
   match def with
-  | DEF_kind kdef -> cd_err ()
+  | DEF_kind kdef -> check_kinddef env kdef
   | DEF_type tdef -> check_typedef env tdef
   | DEF_fundef fdef -> check_fundef env fdef
   | DEF_val letdef -> check_letdef env letdef
