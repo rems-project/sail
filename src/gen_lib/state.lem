@@ -1,6 +1,7 @@
 open import Pervasives_extra
 open import Sail_impl_base
 open import Sail_values
+open import Sail_operators_mwords
 
 (* 'a is result type *)
 

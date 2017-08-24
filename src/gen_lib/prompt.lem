@@ -2,10 +2,13 @@ open import Pervasives_extra
 open import Sail_impl_base
 open import Sail_values
 
-val return : forall 'a. 'a -> outcome 'a
+type MR 'a 'r = outcome_r 'a 'r
+type M 'a = outcome 'a
+
+val return : forall 'a 'r. 'a -> MR 'a 'r
 let return a = Done a
 
-val bind : forall 'a 'b. outcome 'a -> ('a -> outcome 'b) -> outcome 'b
+val bind : forall 'a 'b 'r. MR 'a 'r -> ('a -> MR 'b 'r) -> MR 'b 'r
 let rec bind m f = match m with
   | Done a ->              f a
   | Read_mem descr k ->    Read_mem descr   (fun v -> let (o,opt) = k v in (bind o f,opt))
@@ -19,18 +22,56 @@ let rec bind m f = match m with
   | Escape descr ->        Escape descr
   | Fail descr ->          Fail descr
   | Error descr ->         Error descr
+  | Return a ->            Return a
   | Internal descr o_s ->  Internal descr   (let (o,opt) = o_s in (bind o f ,opt))
 end
 
 
-type M 'a = outcome 'a
-
 let inline (>>=) = bind
-val (>>) : forall 'b. M unit -> M 'b -> M 'b
+val (>>) : forall 'b 'r. MR unit 'r -> MR 'b 'r -> MR 'b 'r
 let inline (>>) m n = m >>= fun _ -> n
 
 val exit : forall 'a 'b. 'b -> M 'a
 let exit s = Fail Nothing
+
+val early_return : forall 'r. 'r -> MR unit 'r
+let early_return r = Return r
+
+val liftR : forall 'a 'r. M 'a -> MR 'a 'r
+let rec liftR m = match m with
+  | Done a ->              Done a
+  | Read_mem descr k ->    Read_mem descr   (fun v -> let (o,opt) = k v in (liftR o,opt))
+  | Read_reg descr k ->    Read_reg descr   (fun v -> let (o,opt) = k v in (liftR o,opt))
+  | Write_memv descr k ->  Write_memv descr (fun v -> let (o,opt) = k v in (liftR o,opt))
+  | Excl_res k ->          Excl_res         (fun v -> let (o,opt) = k v in (liftR o,opt))
+  | Write_ea descr o_s ->  Write_ea descr   (let (o,opt) = o_s in (liftR o,opt))
+  | Barrier descr o_s ->   Barrier descr    (let (o,opt) = o_s in (liftR o,opt))
+  | Footprint o_s ->       Footprint        (let (o,opt) = o_s in (liftR o,opt))
+  | Write_reg descr o_s -> Write_reg descr  (let (o,opt) = o_s in (liftR o,opt))
+  | Internal descr o_s ->  Internal descr   (let (o,opt) = o_s in (liftR o,opt))
+  | Escape descr ->        Escape descr
+  | Fail descr ->          Fail descr
+  | Error descr ->         Error descr
+  | Return _ ->            Error "uncaught early return"
+end
+
+val catch_early_return : forall 'a 'r. MR 'a 'a -> M 'a
+let rec catch_early_return m = match m with
+  | Done a ->              Done a
+  | Read_mem descr k ->    Read_mem descr   (fun v -> let (o,opt) = k v in (catch_early_return o,opt))
+  | Read_reg descr k ->    Read_reg descr   (fun v -> let (o,opt) = k v in (catch_early_return o,opt))
+  | Write_memv descr k ->  Write_memv descr (fun v -> let (o,opt) = k v in (catch_early_return o,opt))
+  | Excl_res k ->          Excl_res         (fun v -> let (o,opt) = k v in (catch_early_return o,opt))
+  | Write_ea descr o_s ->  Write_ea descr   (let (o,opt) = o_s in (catch_early_return o,opt))
+  | Barrier descr o_s ->   Barrier descr    (let (o,opt) = o_s in (catch_early_return o,opt))
+  | Footprint o_s ->       Footprint        (let (o,opt) = o_s in (catch_early_return o,opt))
+  | Write_reg descr o_s -> Write_reg descr  (let (o,opt) = o_s in (catch_early_return o,opt))
+  | Internal descr o_s ->  Internal descr   (let (o,opt) = o_s in (catch_early_return o,opt))
+  | Escape descr ->        Escape descr
+  | Fail descr ->          Fail descr
+  | Error descr ->         Error descr
+  | Return a ->            Done a
+end
 
 val read_mem : bool -> read_kind -> vector bitU -> integer -> M (vector bitU)
 let read_mem dir rk addr sz =
@@ -73,9 +114,9 @@ let read_reg_bit reg i =
   read_reg_aux (external_reg_slice reg (natFromInteger i,natFromInteger i)) >>= fun v ->
   return (extract_only_element v)
 let read_reg_field reg regfield =
-  read_reg_aux (external_reg_field_whole reg regfield)
+  read_reg_aux (external_reg_field_whole reg regfield.field_name)
 let read_reg_bitfield reg regfield =
-  read_reg_aux (external_reg_field_whole reg regfield) >>= fun v ->
+  read_reg_aux (external_reg_field_whole reg regfield.field_name) >>= fun v ->
   return (extract_only_element v)
 
 let reg_deref = read_reg
@@ -93,12 +134,12 @@ let write_reg_bit reg i bit =
   let iN = natFromInteger i in
   write_reg_aux (external_reg_slice reg (iN,iN)) (Vector [bit] i (is_inc_of_reg reg))
 let write_reg_field reg regfield v =
-  write_reg_aux (external_reg_field_whole reg regfield) v
+  write_reg_aux (external_reg_field_whole reg regfield.field_name) v
 let write_reg_bitfield reg regfield bit =
-  write_reg_aux (external_reg_field_whole reg regfield)
+  write_reg_aux (external_reg_field_whole reg regfield.field_name)
                 (Vector [bit] 0 (is_inc_of_reg reg))
 let write_reg_field_range reg regfield i j v =
-  write_reg_aux (external_reg_field_slice reg regfield (natFromInteger i,natFromInteger j)) v
+  write_reg_aux (external_reg_field_slice reg regfield.field_name (natFromInteger i,natFromInteger j)) v
 
 
 
@@ -110,8 +151,8 @@ val footprint : M unit
 let footprint = Footprint (Done (),Nothing)
 
 
-val foreachM_inc : forall 'vars. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> M 'vars) -> M 'vars
+val foreachM_inc : forall 'vars 'r. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> MR 'vars 'r) -> MR 'vars 'r
 let rec foreachM_inc (i,stop,by) vars body =
   if i <= stop
   then
@@ -120,8 +161,8 @@ let rec foreachM_inc (i,stop,by) vars body =
   else return vars
 
 
-val foreachM_dec : forall 'vars. (integer * integer * integer) -> 'vars ->
-                  (integer -> 'vars -> M 'vars) -> M 'vars
+val foreachM_dec : forall 'vars 'r. (integer * integer * integer) -> 'vars ->
+                  (integer -> 'vars -> MR 'vars 'r) -> MR 'vars 'r
 let rec foreachM_dec (i,stop,by) vars body =
   if i >= stop
   then
