@@ -1417,8 +1417,12 @@ let remove_vector_concat_pat pat =
       let root = E_aux (E_id rootid, rannot) in
       let index_i = simple_num l i in
       let index_j = simple_num l j in
-      
-      let subv = fix_eff_exp (E_aux (E_vector_subrange (root, index_i, index_j), cannot)) in
+
+      (* FIXME *)
+      (* let subv = fix_eff_exp (E_aux (E_vector_subrange (root, index_i, index_j), cannot)) in *)
+      let (_, _, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of root) (typ_of root)) in
+      let subrange_id = if is_order_inc ord then "bitvector_subrange_inc" else "bitvector_subrange_dec" in
+      let subv = fix_eff_exp (E_aux (E_app (mk_id subrange_id, [root; index_i; index_j]), cannot)) in
 
       let id_pat =
         match typ_opt with
@@ -1882,7 +1886,13 @@ let remove_bitvector_pat pat =
   (* Helper functions for generating guard expressions *)
   let access_bit_exp (rootid,rannot) l idx =
     let root : tannot exp = E_aux (E_id rootid,rannot) in
-    E_aux (E_vector_access (root,simple_num l idx), simple_annot l bit_typ) in
+    (* FIXME *)
+    (* E_aux (E_vector_access (root,simple_num l idx), simple_annot l bit_typ) in *)
+    let env = env_of_annot rannot in
+    let t = Env.base_typ_of env (typ_of_annot rannot) in
+    let (_, _, ord, _) = vector_typ_args_of t in
+    let access_id = if is_order_inc ord then "bitvector_access_inc" else "bitvector_access_dec" in
+    E_aux (E_app (mk_id access_id, [root; simple_num l idx]), simple_annot l bit_typ) in
 
   let test_bit_exp rootid l t idx exp =
     let rannot = simple_annot l t in
@@ -1907,10 +1917,13 @@ let remove_bitvector_pat pat =
       | _ ->
       (*if vec_start t = i && vec_length t = List.length lits
       then E_id rootid
-      else*) E_vector_subrange (
+      else*)
+          (* E_vector_subrange (
              E_aux (E_id rootid, simple_annot l typ),
              simple_num l i,
-             simple_num l j) in
+             simple_num l j) in *)
+          let subrange_id = if is_order_inc ord then "bitvector_subrange_inc" else "bitvector_subrange_dec" in
+          E_app (mk_id subrange_id, [E_aux (E_id rootid, simple_annot l typ); simple_num l i; simple_num l j]) in
     E_aux (E_app(
       Id_aux (Id "eq_vec", Parse_ast.Generated l),
       [E_aux (subvec_exp, simple_annot l typ');
@@ -2099,7 +2112,10 @@ let rewrite_defs_remove_bitvector_pats (Defs defs) =
        let defvals = List.map (fun lb -> DEF_val lb) letbinds in
        [DEF_val (LB_aux (LB_val_implicit (pat',exp),a))] @ defvals
     | d -> [d] in
-  fst (check initial_env (Defs (List.flatten (List.map rewrite_def defs))))
+  (* FIXME See above in rewrite_sizeof *)
+  (* fst (check initial_env ( *)
+    Defs (List.flatten (List.map rewrite_def defs))
+    (* )) *)
 
 
 (* Remove pattern guards by rewriting them to if-expressions within the
