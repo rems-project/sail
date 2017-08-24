@@ -1101,7 +1101,7 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
   else
     {
       cursor := getCapCursor(cb_val);
-      vAddr  := cursor + unsigned(rGPR(rt)) + (16 * signed(offset));
+      vAddr  := cursor + unsigned(rGPR(rt)) + (((int) 16) * signed(offset));
       vAddr64:= (bit[64]) vAddr;
       if ((vAddr + cap_size) > getCapTop(cb_val)) then
         raise_c2_exception(CapEx_LengthViolation, cb)
@@ -1148,7 +1148,7 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
   else
     {
       cursor := getCapCursor(cb_val);
-      vAddr  := cursor + unsigned(rGPR(rt)) + (16*signed(offset));
+      vAddr  := cursor + unsigned(rGPR(rt)) + (((int) 16) * signed(offset));
       vAddr64:= (bit[64]) vAddr;
       if ((vAddr + cap_size) > getCapTop(cb_val)) then
         raise_c2_exception(CapEx_LengthViolation, cb)

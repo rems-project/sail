@@ -1121,39 +1121,39 @@ this is equivalent to
 which is then a problem we can feed to the constraint solver expecting unsat.
  *)
 
-let rec nexp_constraint var_of (Nexp_aux (nexp, l)) =
+let rec nexp_constraint env var_of (Nexp_aux (nexp, l)) =
   match nexp with
-  | Nexp_id v -> typ_error l "Unimplemented: Cannot generate constraint from Nexp_id"
+  | Nexp_id v -> nexp_constraint env var_of (Env.get_num_def v env)
   | Nexp_var kid -> Constraint.variable (var_of kid)
   | Nexp_constant c -> Constraint.constant (big_int_of_int c)
-  | Nexp_times (nexp1, nexp2) -> Constraint.mult (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | Nexp_sum (nexp1, nexp2) -> Constraint.add (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | Nexp_minus (nexp1, nexp2) -> Constraint.sub (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | Nexp_exp nexp -> Constraint.pow2 (nexp_constraint var_of nexp)
-  | Nexp_neg nexp -> Constraint.sub (Constraint.constant (big_int_of_int 0)) (nexp_constraint var_of nexp)
+  | Nexp_times (nexp1, nexp2) -> Constraint.mult (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | Nexp_sum (nexp1, nexp2) -> Constraint.add (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | Nexp_minus (nexp1, nexp2) -> Constraint.sub (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | Nexp_exp nexp -> Constraint.pow2 (nexp_constraint env var_of nexp)
+  | Nexp_neg nexp -> Constraint.sub (Constraint.constant (big_int_of_int 0)) (nexp_constraint env var_of nexp)
 
-let rec nc_constraint var_of (NC_aux (nc, l)) =
+let rec nc_constraint env var_of (NC_aux (nc, l)) =
   match nc with
-  | NC_fixed (nexp1, nexp2) -> Constraint.eq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | NC_not_equal (nexp1, nexp2) -> Constraint.neq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | NC_bounded_ge (nexp1, nexp2) -> Constraint.gteq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | NC_bounded_le (nexp1, nexp2) -> Constraint.lteq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
+  | NC_fixed (nexp1, nexp2) -> Constraint.eq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | NC_not_equal (nexp1, nexp2) -> Constraint.neq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | NC_bounded_ge (nexp1, nexp2) -> Constraint.gteq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | NC_bounded_le (nexp1, nexp2) -> Constraint.lteq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
   | NC_nat_set_bounded (_, []) -> Constraint.literal false
   | NC_nat_set_bounded (kid, (int :: ints)) ->
      List.fold_left Constraint.disj
-                    (Constraint.eq (nexp_constraint var_of (nvar kid)) (Constraint.constant (big_int_of_int int)))
-                    (List.map (fun i -> Constraint.eq (nexp_constraint var_of (nvar kid)) (Constraint.constant (big_int_of_int i))) ints)
-  | NC_or (nc1, nc2) -> Constraint.disj (nc_constraint var_of nc1) (nc_constraint var_of nc2)
-  | NC_and (nc1, nc2) -> Constraint.conj (nc_constraint var_of nc1) (nc_constraint var_of nc2)
+                    (Constraint.eq (nexp_constraint env var_of (nvar kid)) (Constraint.constant (big_int_of_int int)))
+                    (List.map (fun i -> Constraint.eq (nexp_constraint env var_of (nvar kid)) (Constraint.constant (big_int_of_int i))) ints)
+  | NC_or (nc1, nc2) -> Constraint.disj (nc_constraint env var_of nc1) (nc_constraint env var_of nc2)
+  | NC_and (nc1, nc2) -> Constraint.conj (nc_constraint env var_of nc1) (nc_constraint env var_of nc2)
   | NC_false -> Constraint.literal false
   | NC_true -> Constraint.literal true
 
-let rec nc_constraints var_of ncs =
+let rec nc_constraints env var_of ncs =
   match ncs with
   | [] -> Constraint.literal true
-  | [nc] -> nc_constraint var_of nc
+  | [nc] -> nc_constraint env var_of nc
   | (nc :: ncs) ->
-     Constraint.conj (nc_constraint var_of nc) (nc_constraints var_of ncs)
+     Constraint.conj (nc_constraint env var_of nc) (nc_constraints env var_of ncs)
 
 let prove_z3 env nc =
   typ_print ("Prove " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc);
@@ -1168,7 +1168,7 @@ let prove_z3 env nc =
     try Bindings.find kid !bindings with
     | Not_found -> fresh_var kid
   in
-  let constr = Constraint.conj (nc_constraints var_of (Env.get_constraints env)) (Constraint.negate (nc_constraint var_of nc)) in
+  let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env)) (Constraint.negate (nc_constraint env var_of nc)) in
   match Constraint.call_z3 constr with
   | Constraint.Unsat _ -> typ_debug "unsat"; true
   | Constraint.Unknown [] -> typ_debug "sat"; false
@@ -1207,16 +1207,16 @@ let rec subtyp_tnf env tnf1 tnf2 =
   let rec neg_props props =
     match props with
     | [] -> Constraint.literal false
-    | [(nexp1, nexp2)] -> Constraint.gt (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
+    | [(nexp1, nexp2)] -> Constraint.gt (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
     | ((nexp1, nexp2) :: props) ->
-       Constraint.disj (Constraint.gt (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)) (neg_props props)
+       Constraint.disj (Constraint.gt (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)) (neg_props props)
   in
   let rec pos_props props =
     match props with
     | [] -> Constraint.literal true
-    | [(nexp1, nexp2)] -> Constraint.lteq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
+    | [(nexp1, nexp2)] -> Constraint.lteq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
     | ((nexp1, nexp2) :: props) ->
-       Constraint.conj (Constraint.lteq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)) (pos_props props)
+       Constraint.conj (Constraint.lteq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)) (pos_props props)
   in
   match (tnf1, tnf2) with
   | Tnf_wild, Tnf_wild -> true
@@ -1234,7 +1234,7 @@ let rec subtyp_tnf env tnf1 tnf2 =
      begin
        let kid3 = Env.fresh_kid env in
        let (prop1, prop2) = props_subst kid1 (Nexp_var kid3) prop1, props_subst kid2 (Nexp_var kid3) prop2 in
-       let constr = Constraint.conj (nc_constraints var_of (Env.get_constraints env)) (Constraint.conj (pos_props prop1) (neg_props prop2)) in
+       let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env)) (Constraint.conj (pos_props prop1) (neg_props prop2)) in
        match Constraint.call_z3 constr with
        | Constraint.Unsat _ -> typ_debug "unsat"; true
        | Constraint.Unknown [] -> typ_debug "sat"; false
@@ -2531,6 +2531,22 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      annot_exp (E_tuple inferred_exps) (mk_typ (Typ_tup (List.map typ_of inferred_exps)))
   | E_assign (lexp, bind) ->
      fst (bind_assignment env lexp bind)
+  | E_record_update (exp, FES_aux (FES_Fexps (fexps, flag), (l, ()))) ->
+     let inferred_exp = irule infer_exp env exp in
+     let typ = typ_of inferred_exp in
+     let rectyp_id = match Env.expand_synonyms env typ with
+       | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
+          rectyp_id
+       | _ -> typ_error l ("The type " ^ string_of_typ typ ^ " is not a record")
+     in
+     let check_fexp (FE_aux (FE_Fexp (field, exp), (l, ()))) =
+       let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor rectyp_id field env in
+       let unifiers, _, _ (* FIXME *) = try unify l env rectyp_q typ with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m) in
+       let field_typ' = subst_unifiers unifiers field_typ in
+       let inferred_exp = crule check_exp env exp field_typ' in
+       FE_aux (FE_Fexp (field, inferred_exp), (l, None))
+     in
+     annot_exp (E_record_update (inferred_exp, FES_aux (FES_Fexps (List.map check_fexp fexps, flag), (l, None)))) typ
   | E_cast (typ, exp) ->
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_cast (typ, checked_exp)) typ
