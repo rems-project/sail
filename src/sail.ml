@@ -138,7 +138,7 @@ let main() =
     let ast =
       List.fold_right (fun (_,(Parse_ast.Defs ast_nodes)) (Parse_ast.Defs later_nodes) 
                         -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
-    let ast = convert_ast Type_check.inc_ord ast in
+    let ast = convert_ast Ast_util.inc_ord ast in
     let (ast, type_envs) = check_ast ast in
 
     let (ast, type_envs) =

@@ -66,6 +66,7 @@ test: sail interpreter
 	./run_tests.native
 
 THIS_MAKEFILE := $(realpath $(lastword $(MAKEFILE_LIST)))
+SAIL_DIR:=$(realpath $(dir $(THIS_MAKEFILE))..)
 BITBUCKET_ROOT=$(realpath $(dir $(THIS_MAKEFILE))../..)
 
 LEM = $(BITBUCKET_ROOT)/lem/lem
@@ -74,24 +75,24 @@ ELFDIR= $(BITBUCKET_ROOT)/linksem
 ZARITH_DIR=$(LEMLIBOCAML)/dependencies/zarith
 ZARITH_LIB=$(ZARITH_DIR)/zarith.cmxa
 
-SAIL_DIR:=$(BITBUCKET_ROOT)/sail
-MIPS_SAIL_DIR:=$(SAIL_DIR)/mips
+SAIL_LIB_DIR:=$(SAIL_DIR)/lib
+MIPS_SAIL_DIR:=$(SAIL_DIR)/mips_new_tc
 
-MIPS_SAILS_PRE:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
+MIPS_SAILS_PRE:=$(SAIL_LIB_DIR)/prelude.sail $(SAIL_LIB_DIR)/prelude_wrappers.sail $(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
 MIPS_SAILS:=$(MIPS_SAILS_PRE) $(SAIL_DIR)/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
 
-MIPS_NOTLB_SAILS_PRE:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb_stub.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
+MIPS_NOTLB_SAILS_PRE:=$(SAIL_LIB_DIR)/prelude.sail $(SAIL_LIB_DIR)/prelude_wrappers.sail $(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb_stub.sail $(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
 MIPS_NOTLB_SAILS:=$(MIPS_NOTLB_SAILS_PRE) $(SAIL_DIR)/etc/regfp.sail $(MIPS_SAIL_DIR)/mips_regfp.sail
 
 CHERI_SAIL_DIR:=$(SAIL_DIR)/cheri
 
-CHERI_NOTLB_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb_stub.sail $(CHERI_SAIL_DIR)/cheri_types.sail $(CHERI_SAIL_DIR)/cheri_prelude_256.sail $(CHERI_SAIL_DIR)/cheri_prelude_common.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
+CHERI_NOTLB_SAILS:=$(SAIL_LIB_DIR)/prelude.sail $(SAIL_LIB_DIR)/prelude_wrappers.sail $(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb_stub.sail $(CHERI_SAIL_DIR)/cheri_types.sail $(CHERI_SAIL_DIR)/cheri_prelude_256.sail $(CHERI_SAIL_DIR)/cheri_prelude_common.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
-CHERI_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(CHERI_SAIL_DIR)/cheri_types.sail $(CHERI_SAIL_DIR)/cheri_prelude_256.sail $(CHERI_SAIL_DIR)/cheri_prelude_common.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
+CHERI_SAILS:=$(SAIL_LIB_DIR)/prelude.sail $(SAIL_LIB_DIR)/prelude_wrappers.sail $(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(CHERI_SAIL_DIR)/cheri_types.sail $(CHERI_SAIL_DIR)/cheri_prelude_256.sail $(CHERI_SAIL_DIR)/cheri_prelude_common.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
-CHERI128_SAILS:=$(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(CHERI_SAIL_DIR)/cheri_types.sail  $(CHERI_SAIL_DIR)/cheri_prelude_128.sail $(CHERI_SAIL_DIR)/cheri_prelude_common.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
+CHERI128_SAILS:=$(SAIL_LIB_DIR)/prelude.sail $(SAIL_LIB_DIR)/prelude_wrappers.sail $(MIPS_SAIL_DIR)/mips_prelude.sail $(MIPS_SAIL_DIR)/mips_tlb.sail $(CHERI_SAIL_DIR)/cheri_types.sail  $(CHERI_SAIL_DIR)/cheri_prelude_128.sail $(CHERI_SAIL_DIR)/cheri_prelude_common.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(CHERI_SAIL_DIR)/cheri_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
 
 elf:
 	make -C $(ELFDIR)

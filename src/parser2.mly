@@ -153,6 +153,8 @@ let rec desugar_rchain chain s e =
 %token <string> Op0r Op1r Op2r Op3r Op4r Op5r Op6r Op7r Op8r Op9r
 
 %start file
+%start typschm
+%type <Parse_ast.typschm> typschm
 %type <Parse_ast.defs> defs
 %type <Parse_ast.defs> file
 
@@ -1022,4 +1024,3 @@ defs:
 file:
   | defs Eof
     { $1 }
-

@@ -207,9 +207,6 @@ val list_typ : typ -> typ
 val exist_typ : (kid -> n_constraint) -> (kid -> typ) -> typ
 val exc_typ : typ
 
-val inc_ord : order
-val dec_ord : order
-
 (* Vector with default order. *)
 val dvector_typ : Env.t -> nexp -> nexp -> typ -> typ
 

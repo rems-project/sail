@@ -47,9 +47,17 @@ open Ast
 val mk_nc : n_constraint_aux -> n_constraint
 val mk_nexp : nexp_aux -> nexp
 val mk_exp : unit exp_aux -> unit exp
+val mk_pat : unit pat_aux -> unit pat
 val mk_lit : lit_aux -> lit
+val mk_lit_exp : lit_aux -> unit exp
+val mk_funcl : id -> unit pat -> unit exp -> unit funcl
+val mk_fundef : (unit funcl) list -> unit def
+val mk_val_spec : val_spec_aux -> unit def
 
 val unaux_exp : 'a exp -> 'a exp_aux
+
+val inc_ord : order
+val dec_ord : order
 
 (* Functions to map over the annotations in sub-expressions *)
 val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
@@ -91,6 +99,8 @@ val string_of_index_range : index_range -> string
 val id_of_fundef : 'a fundef -> id
 
 val id_of_kid : kid -> id
+
+val prepend_id : string -> id -> id
 
 module Id : sig
   type t = id

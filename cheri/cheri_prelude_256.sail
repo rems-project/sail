@@ -35,6 +35,11 @@
 (* 256 bit cap + tag *)
 typedef CapReg = bit[257]
 
+val cast bool -> bit effect pure cast_bool_bit
+val cast forall 'n, 'm. vector<'n,'m,dec,bool> -> vector<'n,'m,dec,bit> effect pure cast_bool_vec
+
+typedef uint64 = range<0, (2** 64) - 1>
+
 typedef CapStruct = const struct {
   bool    tag;
   bit[8]  padding;
@@ -204,4 +209,3 @@ function (bool, CapStruct) setCapBounds((CapStruct) cap, (bit[64]) base, (bit[65
 
 function CapStruct int_to_cap ((bit[64]) offset) = 
     {null_cap with offset = offset}
-

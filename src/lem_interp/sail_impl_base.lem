@@ -784,32 +784,35 @@ end
 
 (* the address_lifted types should go away here and be replaced by address *)
 type with_aux 'o = 'o * maybe ((unit -> (string * string)) * ((list (reg_name * register_value)) -> list event))
-type outcome 'a =
+type outcome_r 'a 'r =
   (* Request to read memory, value is location to read, integer is size to read,
      followed by registers that were used in computing that size *)
-  | Read_mem of (read_kind * address_lifted * nat) * (memory_value -> with_aux (outcome 'a))
+  | Read_mem of (read_kind * address_lifted * nat) * (memory_value -> with_aux (outcome_r 'a 'r))
   (* Tell the system a write is imminent, at address lifted, of size nat *)
-  | Write_ea of (write_kind * address_lifted * nat) * (with_aux (outcome 'a))
+  | Write_ea of (write_kind * address_lifted * nat) * (with_aux (outcome_r 'a 'r))
   (* Request the result of store-exclusive *)
-  | Excl_res of (bool -> with_aux (outcome 'a))
+  | Excl_res of (bool -> with_aux (outcome_r 'a 'r))
   (* Request to write memory at last signalled address. Memory value should be 8
      times the size given in ea signal *)
-  | Write_memv of memory_value * (bool -> with_aux (outcome 'a))
+  | Write_memv of memory_value * (bool -> with_aux (outcome_r 'a 'r))
   (* Request a memory barrier *)
-  | Barrier of barrier_kind * with_aux (outcome 'a)
+  | Barrier of barrier_kind * with_aux (outcome_r 'a 'r)
   (* Tell the system to dynamically recalculate dependency footprint *)
-  | Footprint of with_aux (outcome 'a)
+  | Footprint of with_aux (outcome_r 'a 'r)
   (* Request to read register, will track dependency when mode.track_values *)
-  | Read_reg of reg_name * (register_value -> with_aux (outcome 'a))
+  | Read_reg of reg_name * (register_value -> with_aux (outcome_r 'a 'r))
   (* Request to write register *)
-  | Write_reg of (reg_name * register_value) * with_aux (outcome 'a)
+  | Write_reg of (reg_name * register_value) * with_aux (outcome_r 'a 'r)
   | Escape of maybe string
   (*Result of a failed assert with possible error message to report*)
   | Fail of maybe string
-  | Internal of (maybe string * maybe (unit -> string)) * with_aux (outcome 'a)
+  (* Early return with value of type 'r *)
+  | Return of 'r
+  | Internal of (maybe string * maybe (unit -> string)) * with_aux (outcome_r 'a 'r)
   | Done of 'a
   | Error of string
 
+type outcome 'a = outcome_r 'a unit
 type outcome_s 'a = with_aux (outcome 'a)
 (* first string : output of instruction_stack_to_string
    second string: output of local_variables_to_string *)

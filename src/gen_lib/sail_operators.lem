@@ -1,0 +1,531 @@
+open import Pervasives_extra
+open import Machine_word
+open import Sail_impl_base
+open import Sail_values
+
+(*** Bit vector operations *)
+
+let bvlength = length
+
+let set_bitvector_start = set_vector_start
+let reset_bitvector_start = reset_vector_start
+
+let set_bitvector_start_to_length = set_vector_start_to_length
+
+let bitvector_concat = vector_concat
+let inline (^^^) = bitvector_concat
+
+let bitvector_subrange_inc = vector_subrange_inc
+let bitvector_subrange_dec = vector_subrange_dec
+
+let vector_subrange_bl (v, i, j) =
+  let v' = slice v i j in
+  get_elems v'
+
+let bitvector_access_inc = vector_access_inc
+let bitvector_access_dec = vector_access_dec
+let bitvector_update_pos_dec = update_pos
+let bitvector_update_dec = vector_update_dec
+
+let extract_only_bit = extract_only_element
+
+let norm_dec = reset_vector_start
+let adjust_start_index (start, v) = set_vector_start (start, v)
+
+let cast_vec_bool v = bitU_to_bool (extract_only_element v)
+let cast_bit_vec (start, len, b) = Vector (repeat [b] len) start false
+
+let pp_bitu_vector (Vector elems start inc) =
+  let elems_pp = List.foldl (fun acc elem -> acc ^ showBitU elem) "" elems in
+  "Vector [" ^ elems_pp ^ "] " ^ show start ^ " " ^ show inc
+
+
+let most_significant = function
+  | (Vector (b :: _) _ _) -> b
+  | _ -> failwith "most_significant applied to empty vector"
+  end
+
+let bitwise_not_bitlist = List.map bitwise_not_bit
+
+let bitwise_not (Vector bs start is_inc) =
+  Vector (bitwise_not_bitlist bs) start is_inc
+
+let bitwise_binop op (Vector bsl start is_inc, Vector bsr _ _) =
+  let revbs = foldl (fun acc pair -> bitwise_binop_bit op pair :: acc) [] (zip bsl bsr) in
+  Vector (reverse revbs) start is_inc
+
+let bitwise_and = bitwise_binop (&&)
+let bitwise_or = bitwise_binop (||)
+let bitwise_xor = bitwise_binop xor
+
+let unsigned (Vector bs _ _) : integer =
+  let (sum,_) =
+    List.foldr
+      (fun b (acc,exp) ->
+        match b with
+        | B1 -> (acc + integerPow 2 exp,exp + 1)
+        | B0 -> (acc, exp + 1)
+        | BU -> failwith "unsigned: vector has undefined bits"
+        end)
+      (0,0) bs in
+  sum
+
+let unsigned_big = unsigned
+
+let signed v : integer =
+  match most_significant v with
+  | B1 -> 0 - (1 + (unsigned (bitwise_not v)))
+  | B0 -> unsigned v
+  | BU -> failwith "signed applied to vector with undefined bits"
+  end
+
+let hardware_mod (a: integer) (b:integer) : integer = 
+ if a < 0 && b < 0
+ then (abs a) mod (abs b)
+ else if (a < 0 && b >= 0) 
+ then (a mod b) - b
+ else a mod b
+
+(* There are different possible answers for integer divide regarding
+rounding behaviour on negative operands. Positive operands always
+round down so derive the one we want (trucation towards zero) from
+that *)
+let hardware_quot (a:integer) (b:integer) : integer = 
+  let q = (abs a) / (abs b) in
+  if ((a<0) = (b<0)) then
+    q  (* same sign -- result positive *)
+  else
+    ~q (* different sign -- result negative *)
+
+let quot_signed = hardware_quot
+
+
+let signed_big = signed
+
+let to_num sign = if sign then signed else unsigned
+
+let max_64u = (integerPow 2 64) - 1
+let max_64  = (integerPow 2 63) - 1
+let min_64  = 0 - (integerPow 2 63)
+let max_32u = (4294967295 : integer)
+let max_32  = (2147483647 : integer)
+let min_32  = (0 - 2147483648 : integer)
+let max_8   = (127 : integer)
+let min_8   = (0 - 128 : integer)
+let max_5   = (31 : integer)
+let min_5   = (0 - 32 : integer)
+
+let get_max_representable_in sign (n : integer) : integer =
+  if (n = 64) then match sign with | true -> max_64 | false -> max_64u end
+  else if (n=32) then match sign with | true -> max_32 | false -> max_32u end
+  else if (n=8) then max_8
+  else if (n=5) then max_5
+  else match sign with | true -> integerPow 2 ((natFromInteger n) -1)
+                       | false -> integerPow 2 (natFromInteger n)
+       end
+
+let get_min_representable_in _ (n : integer) : integer =
+  if n = 64 then min_64
+  else if n = 32 then min_32
+  else if n = 8 then min_8
+  else if n = 5 then min_5
+  else 0 - (integerPow 2 (natFromInteger n))
+
+val to_bin_aux : natural -> list bitU
+let rec to_bin_aux x =
+  if x = 0 then []
+  else (if x mod 2 = 1 then B1 else B0) :: to_bin_aux (x / 2)
+let to_bin n = List.reverse (to_bin_aux n)
+
+val pad_zero : list bitU -> integer -> list bitU
+let rec pad_zero bits n =
+  if n = 0 then bits else pad_zero (B0 :: bits) (n -1)
+
+
+let rec add_one_bit_ignore_overflow_aux bits = match bits with
+  | [] -> []
+  | B0 :: bits -> B1 :: bits
+  | B1 :: bits -> B0 :: add_one_bit_ignore_overflow_aux bits
+  | BU :: _ -> failwith "add_one_bit_ignore_overflow: undefined bit"
+end
+
+let add_one_bit_ignore_overflow bits =
+  List.reverse (add_one_bit_ignore_overflow_aux (List.reverse bits))
+  
+
+let to_vec is_inc ((len : integer),(n : integer)) =
+  let start = if is_inc then 0 else len - 1 in
+  let bits = to_bin (naturalFromInteger (abs n)) in
+  let len_bits = integerFromNat (List.length bits) in
+  let longer = len - len_bits in
+  let bits' =
+    if longer < 0 then drop (natFromInteger (abs (longer))) bits
+    else pad_zero bits longer in
+  if n > (0 : integer)
+  then Vector bits' start is_inc
+  else Vector (add_one_bit_ignore_overflow (bitwise_not_bitlist bits'))
+              start is_inc
+
+let to_vec_big = to_vec
+
+let to_vec_inc (start, len, n) = set_vector_start (start, to_vec true (len, n))
+let to_vec_norm_inc (len, n) = to_vec true (len, n)
+let to_vec_dec (start, len, n) = set_vector_start (start, to_vec false (len, n))
+let to_vec_norm_dec (len, n) = to_vec false (len, n)
+
+let cast_0_vec = to_vec_dec
+let cast_1_vec = to_vec_dec
+let cast_01_vec = to_vec_dec
+
+let to_vec_undef is_inc (len : integer) =
+  Vector (replicate (natFromInteger len) BU) (if is_inc then 0 else len-1) is_inc
+
+let to_vec_inc_undef = to_vec_undef true
+let to_vec_dec_undef = to_vec_undef false
+
+let exts (start, len, vec) = set_vector_start (start, to_vec (get_dir vec) (len,signed vec))
+let extz (start, len, vec) = set_vector_start (start, to_vec (get_dir vec) (len,unsigned vec))
+
+let exts_big (start, len, vec) = set_vector_start (start, to_vec_big (get_dir vec) (len, signed_big vec))
+let extz_big (start, len, vec) = set_vector_start (start, to_vec_big (get_dir vec) (len, unsigned_big vec))
+
+(* TODO *)
+let extz_bl (start, len, bits) = Vector bits start false
+let exts_bl (start, len, bits) = Vector bits start false
+
+
+let add (l,r) = integerAdd l r
+let add_signed (l,r) = integerAdd l r
+let sub (l,r) = integerMinus l r
+let mult (l,r) = integerMult l r
+let quotient (l,r) = integerDiv l r
+let modulo (l,r) = hardware_mod l r
+let quot = hardware_quot
+let power (l,r) = integerPow l r
+
+let sub_int = sub
+let mult_int = mult
+
+let arith_op_vec op sign (size : integer) (Vector _ _ is_inc as l) r =
+  let (l',r') = (to_num sign l, to_num sign r) in
+  let n = op l' r' in
+  to_vec is_inc (size * (length l),n)
+
+
+(* add_vec
+ * add_vec_signed
+ * minus_vec
+ * multiply_vec
+ * multiply_vec_signed
+ *)
+let add_VVV = arith_op_vec integerAdd false 1
+let addS_VVV = arith_op_vec integerAdd true 1
+let minus_VVV = arith_op_vec integerMinus false 1
+let mult_VVV = arith_op_vec integerMult false 2
+let multS_VVV = arith_op_vec integerMult true 2
+
+let mult_vec (l, r) = mult_VVV l r
+let mult_svec (l, r) = multS_VVV l r
+
+let add_vec (l, r) = add_VVV l r
+let sub_vec (l, r) = minus_VVV l r
+
+let arith_op_vec_range op sign size (Vector _ _ is_inc as l) r =
+  arith_op_vec op sign size l (to_vec is_inc (length l,r))
+
+(* add_vec_range
+ * add_vec_range_signed
+ * minus_vec_range
+ * mult_vec_range
+ * mult_vec_range_signed
+ *)
+let add_VIV = arith_op_vec_range integerAdd false 1
+let addS_VIV = arith_op_vec_range integerAdd true 1
+let minus_VIV = arith_op_vec_range integerMinus false 1
+let mult_VIV = arith_op_vec_range integerMult false 2
+let multS_VIV = arith_op_vec_range integerMult true 2
+
+let add_vec_int (l, r) = add_VIV l r
+let sub_vec_int (l, r) = minus_VIV l r
+
+let arith_op_range_vec op sign size l (Vector _ _ is_inc as r) =
+  arith_op_vec op sign size (to_vec is_inc (length r, l)) r
+
+(* add_range_vec
+ * add_range_vec_signed
+ * minus_range_vec
+ * mult_range_vec
+ * mult_range_vec_signed
+ *)
+let add_IVV = arith_op_range_vec integerAdd false 1
+let addS_IVV = arith_op_range_vec integerAdd true 1
+let minus_IVV = arith_op_range_vec integerMinus false 1
+let mult_IVV = arith_op_range_vec integerMult false 2
+let multS_IVV = arith_op_range_vec integerMult true 2
+
+let arith_op_range_vec_range op sign l r = op l (to_num sign r)
+
+(* add_range_vec_range
+ * add_range_vec_range_signed
+ * minus_range_vec_range
+ *)
+let add_IVI = arith_op_range_vec_range integerAdd false
+let addS_IVI = arith_op_range_vec_range integerAdd true
+let minus_IVI = arith_op_range_vec_range integerMinus false
+
+let arith_op_vec_range_range op sign l r = op (to_num sign l) r
+
+(* add_vec_range_range
+ * add_vec_range_range_signed
+ * minus_vec_range_range
+ *)
+let add_VII = arith_op_vec_range_range integerAdd false
+let addS_VII = arith_op_vec_range_range integerAdd true
+let minus_VII = arith_op_vec_range_range integerMinus false
+
+
+
+let arith_op_vec_vec_range op sign l r =
+  let (l',r') = (to_num sign l,to_num sign r) in
+  op l' r'
+
+(* add_vec_vec_range
+ * add_vec_vec_range_signed
+ *)
+let add_VVI = arith_op_vec_vec_range integerAdd false
+let addS_VVI = arith_op_vec_vec_range integerAdd true
+
+let arith_op_vec_bit op sign (size : integer) (Vector _ _ is_inc as l)r =
+  let l' = to_num sign l in
+  let n = op l' (match r with | B1 -> (1 : integer) | _ -> 0 end) in
+  to_vec is_inc (length l * size,n)
+
+(* add_vec_bit
+ * add_vec_bit_signed
+ * minus_vec_bit_signed
+ *)
+let add_VBV = arith_op_vec_bit integerAdd false 1
+let addS_VBV = arith_op_vec_bit integerAdd true 1
+let minus_VBV = arith_op_vec_bit integerMinus true 1
+
+let rec arith_op_overflow_vec (op : integer -> integer -> integer) sign size (Vector _ _ is_inc as l) r =
+  let len = length l in
+  let act_size = len * size in
+  let (l_sign,r_sign) = (to_num sign l,to_num sign r) in
+  let (l_unsign,r_unsign) = (to_num false l,to_num false r) in
+  let n = op l_sign r_sign in
+  let n_unsign = op l_unsign r_unsign in
+  let correct_size_num = to_vec is_inc (act_size,n) in
+  let one_more_size_u = to_vec is_inc (act_size + 1,n_unsign) in
+  let overflow =
+    if n <= get_max_representable_in sign len &&
+         n >= get_min_representable_in sign len
+    then B0 else B1 in
+  let c_out = most_significant one_more_size_u in
+  (correct_size_num,overflow,c_out)
+
+(* add_overflow_vec
+ * add_overflow_vec_signed
+ * minus_overflow_vec
+ * minus_overflow_vec_signed
+ * mult_overflow_vec
+ * mult_overflow_vec_signed
+ *)
+let addO_VVV = arith_op_overflow_vec integerAdd false 1
+let addSO_VVV = arith_op_overflow_vec integerAdd true 1
+let minusO_VVV = arith_op_overflow_vec integerMinus false 1
+let minusSO_VVV = arith_op_overflow_vec integerMinus true 1
+let multO_VVV = arith_op_overflow_vec integerMult false 2
+let multSO_VVV = arith_op_overflow_vec integerMult true 2
+
+let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (size : integer)
+                                  (Vector _ _ is_inc as l) r_bit =
+  let act_size = length l * size in
+  let l' = to_num sign l in
+  let l_u = to_num false l in
+  let (n,nu,changed) = match r_bit with
+    | B1 -> (op l' 1, op l_u 1, true)
+    | B0 -> (l',l_u,false)
+    | BU -> failwith "arith_op_overflow_vec_bit applied to undefined bit"
+    end in
+(*    | _ -> assert false *)
+  let correct_size_num = to_vec is_inc (act_size,n) in
+  let one_larger = to_vec is_inc (act_size + 1,nu) in
+  let overflow =
+    if changed
+    then
+      if n <= get_max_representable_in sign act_size && n >= get_min_representable_in sign act_size
+      then B0 else B1
+    else B0 in
+  (correct_size_num,overflow,most_significant one_larger)
+
+(* add_overflow_vec_bit_signed
+ * minus_overflow_vec_bit
+ * minus_overflow_vec_bit_signed
+ *)
+let addSO_VBV = arith_op_overflow_vec_bit integerAdd true 1
+let minusO_VBV = arith_op_overflow_vec_bit integerMinus false 1
+let minusSO_VBV = arith_op_overflow_vec_bit integerMinus true 1
+
+type shift = LL_shift | RR_shift | LLL_shift
+
+let shift_op_vec op (Vector bs start is_inc,(n : integer)) =
+  let n = natFromInteger n in
+  match op with
+  | LL_shift (*"<<"*) ->
+     Vector (sublist bs (n,List.length bs -1) ++ List.replicate n B0) start is_inc
+  | RR_shift (*">>"*) ->
+     Vector (List.replicate n B0 ++ sublist bs (0,n-1)) start is_inc
+  | LLL_shift (*"<<<"*) ->
+     Vector (sublist bs (n,List.length bs - 1) ++ sublist bs (0,n-1)) start is_inc
+  end
+
+let bitwise_leftshift = shift_op_vec LL_shift (*"<<"*)
+let bitwise_rightshift = shift_op_vec RR_shift (*">>"*)
+let bitwise_rotate = shift_op_vec LLL_shift (*"<<<"*)
+
+let shiftl = bitwise_leftshift
+
+let rec arith_op_no0 (op : integer -> integer -> integer) l r =
+  if r = 0
+  then Nothing
+  else Just (op l r)
+
+let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size ((Vector _ start is_inc) as l) r =
+  let act_size = length l * size in
+  let (l',r') = (to_num sign l,to_num sign r) in
+  let n = arith_op_no0 op l' r' in
+  let (representable,n') =
+    match n with
+    | Just n' ->
+      (n' <= get_max_representable_in sign act_size &&
+         n' >= get_min_representable_in sign act_size, n')
+    | _ -> (false,0)
+    end in
+  if representable
+  then to_vec is_inc (act_size,n')
+  else Vector (List.replicate (natFromInteger act_size) BU) start is_inc
+
+let mod_VVV = arith_op_vec_no0 hardware_mod false 1
+let quot_VVV = arith_op_vec_no0 hardware_quot false 1
+let quotS_VVV = arith_op_vec_no0 hardware_quot true 1
+
+let arith_op_overflow_no0_vec op sign size ((Vector _ start is_inc) as l) r =
+  let rep_size = length r * size in
+  let act_size = length l * size in
+  let (l',r') = (to_num sign l,to_num sign r) in
+  let (l_u,r_u) = (to_num false l,to_num false r) in
+  let n = arith_op_no0 op l' r' in
+  let n_u = arith_op_no0 op l_u r_u in
+  let (representable,n',n_u') =
+    match (n, n_u) with
+    | (Just n',Just n_u') ->
+       ((n' <= get_max_representable_in sign rep_size &&
+           n' >= (get_min_representable_in sign rep_size)), n', n_u')
+    | _ -> (true,0,0)
+    end in
+  let (correct_size_num,one_more) =
+    if representable then
+      (to_vec is_inc (act_size,n'),to_vec is_inc (act_size + 1,n_u'))
+    else
+      (Vector (List.replicate (natFromInteger act_size) BU) start is_inc,
+       Vector (List.replicate (natFromInteger (act_size + 1)) BU) start is_inc) in
+  let overflow = if representable then B0 else B1 in
+  (correct_size_num,overflow,most_significant one_more)
+
+let quotO_VVV = arith_op_overflow_no0_vec hardware_quot false 1
+let quotSO_VVV = arith_op_overflow_no0_vec hardware_quot true 1
+
+let arith_op_vec_range_no0 op sign size (Vector _ _ is_inc as l) r =
+  arith_op_vec_no0 op sign size l (to_vec is_inc (length l,r))
+
+let mod_VIV = arith_op_vec_range_no0 hardware_mod false 1
+
+val repeat : forall 'a. list 'a -> integer -> list 'a
+let rec repeat xs n =
+  if n = 0 then []
+  else xs ++ repeat xs (n-1)
+
+(* Assumes decreasing bit vectors *)
+let duplicate (bit, length) =
+  Vector (repeat [bit] length) (length - 1) false
+
+let compare_op op (l,r) = (op l r)
+
+let lt = compare_op (<)
+let gt = compare_op (>)
+let lteq = compare_op (<=)
+let gteq = compare_op (>=)
+
+
+let compare_op_vec op sign (l,r) =
+  let (l',r') = (to_num sign l, to_num sign r) in
+  compare_op op (l',r')
+
+let lt_vec = compare_op_vec (<) true
+let gt_vec = compare_op_vec (>) true
+let lteq_vec = compare_op_vec (<=) true
+let gteq_vec = compare_op_vec (>=) true
+
+let lt_vec_signed = compare_op_vec (<) true
+let gt_vec_signed = compare_op_vec (>) true
+let lteq_vec_signed = compare_op_vec (<=) true
+let gteq_vec_signed = compare_op_vec (>=) true
+let lt_vec_unsigned = compare_op_vec (<) false
+let gt_vec_unsigned = compare_op_vec (>) false
+let lteq_vec_unsigned = compare_op_vec (<=) false
+let gteq_vec_unsigned = compare_op_vec (>=) false
+
+let lt_svec = lt_vec_signed
+
+let compare_op_vec_range op sign (l,r) =
+  compare_op op ((to_num sign l),r)
+
+let lt_vec_range = compare_op_vec_range (<) true
+let gt_vec_range = compare_op_vec_range (>) true
+let lteq_vec_range = compare_op_vec_range (<=) true
+let gteq_vec_range = compare_op_vec_range (>=) true
+
+let compare_op_range_vec op sign (l,r) =
+  compare_op op (l, (to_num sign r))
+
+let lt_range_vec = compare_op_range_vec (<) true
+let gt_range_vec = compare_op_range_vec (>) true
+let lteq_range_vec = compare_op_range_vec (<=) true
+let gteq_range_vec = compare_op_range_vec (>=) true
+
+val eq : forall 'a. Eq 'a => 'a * 'a -> bool
+let eq (l,r) = (l = r)
+let eq_range (l,r) = (l = r)
+
+val eq_vec : forall 'a. vector 'a * vector 'a -> bool
+let eq_vec (l,r) = (l = r)
+let eq_bit (l,r) = (l = r)
+let eq_vec_range (l,r) = eq (to_num false l,r)
+let eq_range_vec (l,r) = eq (l, to_num false r)
+let eq_vec_vec (l,r) = eq (to_num true l, to_num true r)
+
+let neq (l,r) = not (eq (l,r))
+let neq_bit (l,r) = not (eq_bit (l,r))
+let neq_range (l,r) = not (eq_range (l,r))
+let neq_vec (l,r) = not (eq_vec_vec (l,r))
+let neq_vec_range (l,r) = not (eq_vec_range (l,r))
+let neq_range_vec (l,r) = not (eq_range_vec (l,r))
+
+
+val make_indexed_vector : forall 'a. list (integer * 'a) -> 'a -> integer -> integer -> bool -> vector 'a
+let make_indexed_vector entries default start length dir =
+  let length = natFromInteger length in
+  Vector (List.foldl replace (replicate length default) entries) start dir
+
+(*
+val make_bit_vector_undef : integer -> vector bitU
+let make_bitvector_undef length =
+  Vector (replicate (natFromInteger length) BU) 0 true
+ *)
+
+(* let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n) *)
+
+let mask' (start, n, Vector bits _ dir) =
+  let current_size = List.length bits in
+  Vector (drop (current_size - (natFromInteger n)) bits) start dir
