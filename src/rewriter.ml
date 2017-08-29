@@ -2939,10 +2939,23 @@ let eqidtyp (id1,_) (id2,_) =
   let name2 = match id2 with Id_aux ((Id name | DeIid name),_) -> name in
   name1 = name2
 
-let find_updated_vars exp =
+let find_introduced_vars exp =
   let lEXP_aux ((ids,lexp),annot) =
     let ids = match lexp, annot with
     | LEXP_id id, (_, Some (env, _, _)) ->
+      (match Env.lookup_id id env with
+      | Unbound -> IdSet.add id ids
+      | _ -> ids)
+    | _ -> ids in
+    (ids, LEXP_aux (lexp, annot)) in
+  fst (fold_exp
+    { (compute_exp_alg IdSet.empty IdSet.union) with lEXP_aux = lEXP_aux } exp)
+
+let find_updated_vars exp =
+  let intros = find_introduced_vars exp in
+  let lEXP_aux ((ids,lexp),annot) =
+    let ids = match lexp, annot with
+    | LEXP_id id, (_, Some (env, _, _)) when not (IdSet.mem id intros) ->
       (match Env.lookup_id id env with
       | Local (Mutable, _) -> (id, annot) :: ids
       | _ -> ids)
