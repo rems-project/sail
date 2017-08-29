@@ -73,7 +73,7 @@ function clause execute (CGetType(rd, cb)) =
     let capVal = readCapReg(cb) in
     wGPR(rd) := if (capVal.sealed)
       then EXTZ(capVal.otype)
-      else -1
+      else (bitone ^^ 64)
   (* END_CGetType *)
 }
 
@@ -110,8 +110,9 @@ function clause execute (CGetLen(rd, cb)) =
   else
     let capVal = readCapReg(cb) in
     let len65  = getCapLength(capVal) in
-    let len64  = (if len65 > MAX_U64 then MAX_U64 else len65) in
-    wGPR(rd) := (bit[64]) len64;
+    wGPR(rd) := (if len65 > MAX_U64 then MAX_U64 else len65);
+    (*let (uint64) len64 = (if len65 > MAX_U64 then MAX_U64 else len65) in
+    wGPR(rd) := (bit[64]) len64;*)
   (* END_CGetLen *)
 }
 
@@ -123,7 +124,7 @@ function clause execute (CGetTag(rd, cb)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else
     let capVal = readCapReg(cb) in
-    wGPR(rd) := EXTZ(capVal.tag);
+    wGPR(rd) := EXTZ([capVal.tag]);
   (* END_CGetTag *)
 }
 
@@ -135,7 +136,7 @@ function clause execute (CGetSealed(rd, cb)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cb)
   else
     let capVal = readCapReg(cb) in
-    wGPR(rd) := EXTZ(capVal.sealed);
+    wGPR(rd) := EXTZ([capVal.sealed]);
   (* END_CGetSealed *)
 }
 
@@ -150,7 +151,7 @@ function clause execute (CGetPCC(cd)) =
   else
     let pcc = (capRegToCapStruct(PCC)) in
     let (success, pcc2) = setCapOffset(pcc, PC) in
-    {assert (success, None); (* guaranteed to be in-bounds *)
+    {assert (success, ""); (* guaranteed to be in-bounds *)
     writeCapReg(cd, pcc2)};
   (* END_CGetPCC *)
 }
@@ -279,7 +280,7 @@ function clause execute(CSub(rd, cb, ct)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, ct)
   else 
     {
-      wGPR(rd) := (bit[64])(getCapCursor(cb_val) - getCapCursor(ct_val))
+      wGPR(rd) := (bit[64])(to_svec(getCapCursor(cb_val) - getCapCursor(ct_val)))
     }
   (* END_CSub *)
 }
@@ -325,7 +326,7 @@ function clause execute(CPtrCmp(rd, cb, ct, op)) =
           ltu     := (cursor1 < cursor2);
           lts     := (((bit[64])cursor1) <_s ((bit[64])cursor2));
         };
-      wGPR(rd) := EXTZ(switch (op) {
+      wGPR(rd) := EXTZ ((bool[1]) (switch (op) {
         case CEQ   -> [equal]
         case CNE   -> [not (equal)]
         case CLT   -> [lts]
@@ -334,7 +335,7 @@ function clause execute(CPtrCmp(rd, cb, ct, op)) =
         case CLEU  -> [ltu | equal]
         case CEXEQ -> [cb_val == ct_val]
         case CNEXEQ -> [cb_val != ct_val]
-      })
+      }))
     }
   (* END_CPtrCmp *)
 }
@@ -574,8 +575,8 @@ function clause execute (CBuildCap(cd, cb, ct)) =
     let (representable, cd2) = setCapOffset(cd1, (bit[64]) ct_offset) in
     let cd3 = setCapPerms(cd2, ct_perms) in
     {
-      assert(exact, None);         (* base and top came from ct originally so will be exact *)
-      assert(representable, None); (* similarly offset should be representable XXX except for fastRepCheck *)
+      assert(exact, "");         (* base and top came from ct originally so will be exact *)
+      assert(representable, ""); (* similarly offset should be representable XXX except for fastRepCheck *)
       writeCapReg(cd, cd3);
     }
   (* END_CBuildCap *)
@@ -609,11 +610,11 @@ function clause execute (CCopyType(cd, cb, ct)) =
       raise_c2_exception(CapEx_LengthViolation, cb)
     else
       let (success, cap) = setCapOffset(cb_val, (bit[64]) (ct_otype - cb_base)) in {
-        assert(success, None); (* offset is in bounds so must succeed *)
+        assert(success, ""); (* offset is in bounds so must succeed *)
         writeCapReg(cd, cap);
       }
   } else
-    writeCapReg(cd, int_to_cap(-1))
+    writeCapReg(cd, int_to_cap(bitone ^^ 64))
   (* END_CCopyType *)
 }
 
@@ -624,7 +625,7 @@ function clause execute (CCheckPerm(cs, rt)) =
   (* START_CCheckPerm *)
   checkCP2usable();
   cs_val := readCapReg(cs);
-  cs_perms := EXTZ(getCapPerms(cs_val));
+  cs_perms := (bit[64]) (EXTZ(getCapPerms(cs_val)));
   rt_perms := rGPR(rt);
   if (register_inaccessible(cs)) then
     raise_c2_exception(CapEx_AccessSystemRegsViolation, cs)
@@ -725,7 +726,7 @@ function clause execute (CCSeal(cd, cs, ct)) =
     raise_c2_exception(CapEx_AccessSystemRegsViolation, ct)
   else if not (cs_val.tag) then
     raise_c2_exception(CapEx_TagViolation, cs)
-  else if (not (ct_val.tag)) | (getCapCursor(ct_val) == -1) then
+  else if (not (ct_val.tag)) | (getCapCursor(ct_val) == unsigned(bitone ^^ 64)) then
     writeCapReg(cd, cs_val)
   else if (cs_val.sealed) then
     raise_c2_exception(CapEx_SealViolation, cs)
@@ -939,7 +940,7 @@ function clause execute(CJALR(cd, cb, link)) =
         if (success) then
             writeCapReg(cd, linkCap)
         else
-            assert(false, None);
+            assert(false, "");
       delayedPC :=  (bit[64]) (getCapOffset(cb_val));
       delayedPCC := capStructToCapReg(cb_val);
       branchPending := 1;
@@ -982,7 +983,7 @@ function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
       size   := wordWidthBytes(width);
       cursor := getCapCursor(cb_val);
       vAddr  := cursor + unsigned(rGPR(rt)) + (size*signed(offset));
-      vAddr64:= (bit[64]) vAddr;
+      vAddr64:= (bit[64]) (to_svec(vAddr));
       if ((vAddr + size) > getCapTop(cb_val)) then
         raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr < getCapBase(cb_val)) then
@@ -993,18 +994,23 @@ function clause execute (CLoad(rd, cb, rt, offset, signext, width, linked)) =
         {
           pAddr      := (TLBTranslate(vAddr64, LoadData));
           widthBytes := wordWidthBytes(width);
-          memResult  := if (linked) then
+          (bit[64]) memResult := if (linked) then
               {
                 CP0LLBit  := 0b1;
                 CP0LLAddr := pAddr;
-                MEMr_reserve_wrapper(pAddr, widthBytes);
+                if widthBytes == 1 then extendLoad(MEMr_reserve_wrapper(pAddr, 1), signext)
+                else if widthBytes == 2 then extendLoad(MEMr_reserve_wrapper(pAddr, 2), signext)
+                else if widthBytes == 4 then extendLoad(MEMr_reserve_wrapper(pAddr, 4), signext)
+                else extendLoad(MEMr_reserve_wrapper(pAddr, 8), signext)
               }
             else
-              MEMr_wrapper(pAddr, widthBytes);
-          if (signext) then
-            wGPR(rd) := EXTS(memResult)
-          else
-            wGPR(rd) := EXTZ(memResult)
+              {
+                if widthBytes == 1 then extendLoad(MEMr_wrapper(pAddr, 1), signext)
+                else if widthBytes == 2 then extendLoad(MEMr_wrapper(pAddr, 2), signext)
+                else if widthBytes == 4 then extendLoad(MEMr_wrapper(pAddr, 4), signext)
+                else extendLoad(MEMr_wrapper(pAddr, 8), signext)
+              };
+          wGPR(rd) := memResult;
         }
     }
   (* END_CLoad *)
@@ -1039,7 +1045,7 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
       size   := wordWidthBytes(width);
       cursor := getCapCursor(cb_val);
       vAddr  := cursor + unsigned(rGPR(rt)) + (size * signed(offset));
-      vAddr64:= (bit[64]) vAddr;
+      vAddr64:= (bit[64]) (to_svec(vAddr));
       if ((vAddr + size) > getCapTop(cb_val)) then
         raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr < getCapBase(cb_val)) then
@@ -1052,7 +1058,7 @@ function clause execute (CStore(rs, cb, rt, rd, offset, width, conditional)) =
           rs_val := rGPR(rs);
           if (conditional) then
             {
-              success := if (CP0LLBit[0]) then
+              (bool) success := if (CP0LLBit[0]) then
                   switch(width)
                     {
                       case B -> MEMw_conditional_wrapper(pAddr, 1, rs_val[7..0])
@@ -1102,7 +1108,7 @@ function clause execute (CSC(cs, cb, rt, rd, offset, conditional)) =
     {
       cursor := getCapCursor(cb_val);
       vAddr  := cursor + unsigned(rGPR(rt)) + (((int) 16) * signed(offset));
-      vAddr64:= (bit[64]) vAddr;
+      vAddr64:= (bit[64]) (to_svec(vAddr));
       if ((vAddr + cap_size) > getCapTop(cb_val)) then
         raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr < getCapBase(cb_val)) then
@@ -1149,7 +1155,7 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
     {
       cursor := getCapCursor(cb_val);
       vAddr  := cursor + unsigned(rGPR(rt)) + (((int) 16) * signed(offset));
-      vAddr64:= (bit[64]) vAddr;
+      vAddr64:= (bit[64]) (to_svec(vAddr));
       if ((vAddr + cap_size) > getCapTop(cb_val)) then
         raise_c2_exception(CapEx_LengthViolation, cb)
       else if (vAddr < getCapBase(cb_val)) then
@@ -1159,17 +1165,18 @@ function clause execute (CLC(cd, cb, rt, offset, linked)) =
       else
         {
           let (pAddr, suppressTag) = (TLBTranslateC(vAddr64, LoadData)) in
-          let (tag, mem) = (if (linked) 
-            then
-              {
-                CP0LLBit  := 0b1;
-                CP0LLAddr := pAddr;
-                MEMr_tagged_reserve(pAddr);
-              }
-            else 
-              (MEMr_tagged(pAddr)))
-          in
-          (CapRegs[cd]) := memBitsToCapBits(tag & (cb_val.permit_load_cap) & not (suppressTag), mem);
+          if (linked) then
+            {
+              CP0LLBit  := 0b1;
+              CP0LLAddr := pAddr;
+              let (tag, mem) = MEMr_tagged_reserve(pAddr) in
+              (CapRegs[cd]) := memBitsToCapBits(tag & (cb_val.permit_load_cap) & (not (suppressTag)), mem);
+            }
+          else
+            {
+              let (tag, mem) = MEMr_tagged(pAddr) in
+              (CapRegs[cd]) := memBitsToCapBits(tag & (cb_val.permit_load_cap) & (not (suppressTag)), mem);
+            }
         }
     }
   (* END_CLC *)

@@ -11,6 +11,8 @@ type nn = natural
 val pow : integer -> integer -> integer
 let pow m n = m ** (natFromInteger n)
 
+let pow2 n = pow 2 n
+
 let bool_or (l, r) = (l || r)
 let bool_and (l, r) = (l && r)
 let bool_xor (l, r) = xor l r
