@@ -2395,7 +2395,7 @@ let rewrite_overload_cast (Defs defs) =
   let remove_cast_vs (VS_aux (vs_aux, annot)) =
     match vs_aux with
     | VS_val_spec (typschm, id) -> VS_aux (VS_val_spec (typschm, id), annot)
-    | VS_extern_no_rename (typschm, id) -> VS_aux (VS_val_spec (typschm, id), annot)
+    | VS_extern_no_rename (typschm, id) -> VS_aux (VS_extern_no_rename (typschm, id), annot)
     | VS_extern_spec (typschm, id, e) -> VS_aux (VS_extern_spec (typschm, id, e), annot)
     | VS_cast_spec (typschm, id) -> VS_aux (VS_val_spec (typschm, id), annot)
   in
@@ -2475,7 +2475,7 @@ let rewrite_simple_types (Defs defs) =
   let simple_vs (VS_aux (vs_aux, annot)) =
     match vs_aux with
     | VS_val_spec (typschm, id) -> VS_aux (VS_val_spec (simple_typschm typschm, id), annot)
-    | VS_extern_no_rename (typschm, id) -> VS_aux (VS_val_spec (simple_typschm typschm, id), annot)
+    | VS_extern_no_rename (typschm, id) -> VS_aux (VS_extern_no_rename (simple_typschm typschm, id), annot)
     | VS_extern_spec (typschm, id, e) -> VS_aux (VS_extern_spec (simple_typschm typschm, id, e), annot)
     | VS_cast_spec (typschm, id) -> VS_aux (VS_cast_spec (simple_typschm typschm, id), annot)
   in

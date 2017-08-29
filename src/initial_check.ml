@@ -1012,7 +1012,7 @@ let typschm_of_string order str =
   let (typschm, _, _) = to_ast_typschm initial_kind_env order typschm in
   typschm
 
-let val_spec_of_string order id str = mk_val_spec (VS_val_spec (typschm_of_string order str, id))
+let val_spec_of_string order id str = mk_val_spec (VS_extern_no_rename (typschm_of_string order str, id))
 
 let val_spec_ids (Defs defs) =
   let val_spec_id (VS_aux (vs_aux, _)) =
@@ -1059,6 +1059,7 @@ let generate_undefineds vs_ids (Defs defs) =
      gen_vs (mk_id "undefined_bool") "unit -> bool effect {undef}";
      gen_vs (mk_id "undefined_bit") "unit -> bit effect {undef}";
      gen_vs (mk_id "undefined_int") "unit -> int effect {undef}";
+     gen_vs (mk_id "undefined_string") "unit -> string effect {undef}";
      gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
      (* FIXME: How to handle inc/dec order correctly? *)
      gen_vs (mk_id "undefined_vector") "forall 'n 'm 'a:Type. (atom('n), atom('m), 'a) -> vector('n, 'm, dec,'a) effect {undef}";
