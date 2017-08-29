@@ -103,6 +103,8 @@ module Env : sig
 
   val get_overloads : id -> t -> id list
 
+  val get_num_def : id -> t -> nexp
+
   val is_extern : id -> t -> bool
 
   val get_extern : id -> t -> string

@@ -1029,24 +1029,34 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
     | Nexp_neg nexp -> mk_exp (E_app (mk_id "negate_range", [split_nexp nexp]))
     | _ -> mk_exp (E_sizeof nexp)
   in
+  let rec rewrite_nexp_ids env (Nexp_aux (nexp, l) as nexp_aux) = match nexp with
+    | Nexp_id id -> rewrite_nexp_ids env (Env.get_num_def id env)
+    | Nexp_times (nexp1, nexp2) -> Nexp_aux (Nexp_times (rewrite_nexp_ids env nexp1, rewrite_nexp_ids env nexp2), l)
+    | Nexp_sum (nexp1, nexp2) -> Nexp_aux (Nexp_sum (rewrite_nexp_ids env nexp1, rewrite_nexp_ids env nexp2), l)
+    | Nexp_minus (nexp1, nexp2) -> Nexp_aux (Nexp_minus (rewrite_nexp_ids env nexp1, rewrite_nexp_ids env nexp2), l)
+    | Nexp_exp nexp -> Nexp_aux (Nexp_exp (rewrite_nexp_ids env nexp), l)
+    | Nexp_neg nexp -> Nexp_aux (Nexp_neg (rewrite_nexp_ids env nexp), l)
+    | _ -> nexp_aux in
   let rec rewrite_e_aux split_sizeof (E_aux (e_aux, (l, _)) as orig_exp) =
     let env = env_of orig_exp in
     match e_aux with
-    | E_sizeof (Nexp_aux (Nexp_constant c, _) as nexp) ->
-       E_aux (E_lit (L_aux (L_num c, l)), (l, Some (env, atom_typ nexp, no_effect)))
     | E_sizeof nexp ->
        begin
-         let locals = Env.get_locals env in
-         let exps = Bindings.bindings locals
-                    |> List.map (extract_typ_var l env nexp)
-                    |> List.map (fun opt -> match opt with Some x -> [x] | None -> [])
-                    |> List.concat
-         in
-         match exps with
-         | (exp :: _) -> exp
-         | [] when split_sizeof ->
-            fold_exp (rewrite_e_sizeof false) (check_exp env (split_nexp nexp) (typ_of orig_exp))
-         | [] -> orig_exp
+         match simplify_nexp (rewrite_nexp_ids (env_of orig_exp) nexp) with
+         | Nexp_aux (Nexp_constant c, _) ->
+            E_aux (E_lit (L_aux (L_num c, l)), (l, Some (env, atom_typ nexp, no_effect)))
+         | _ ->
+            let locals = Env.get_locals env in
+            let exps = Bindings.bindings locals
+                       |> List.map (extract_typ_var l env nexp)
+                       |> List.map (fun opt -> match opt with Some x -> [x] | None -> [])
+                       |> List.concat
+            in
+            match exps with
+            | (exp :: _) -> exp
+            | [] when split_sizeof ->
+               fold_exp (rewrite_e_sizeof false) (check_exp env (split_nexp nexp) (typ_of orig_exp))
+            | [] -> orig_exp
        end
     | _ -> orig_exp
   and rewrite_e_sizeof split_sizeof =
@@ -1274,7 +1284,7 @@ let rewrite_sizeof (Defs defs) =
     let funcls = List.map rewrite_funcl_params funcls in
     (nvars, FD_aux (FD_function (rec_opt,tannot,eff,funcls),annot)) in
 
-  let rewrite_sizeof_fundef (params_map, defs) = function
+  let rewrite_sizeof_def (params_map, defs) = function
     | DEF_fundef fd as def ->
        let (nvars, fd') = rewrite_sizeof_fun params_map fd in
        let id = id_of_fundef fd in
@@ -1282,6 +1292,17 @@ let rewrite_sizeof (Defs defs) =
          if KidSet.is_empty nvars then params_map
          else Bindings.add id nvars params_map in
        (params_map', defs @ [DEF_fundef fd'])
+    | DEF_val (LB_aux (lb, annot)) ->
+       begin
+         let lb' = match lb with
+         | LB_val_explicit (typschm, pat, exp) ->
+           let exp' = fst (fold_exp { copy_exp_alg with e_aux = e_app_aux params_map } exp) in
+           LB_val_explicit (typschm, pat, exp')
+         | LB_val_implicit (pat, exp) ->
+           let exp' = fst (fold_exp { copy_exp_alg with e_aux = e_app_aux params_map } exp) in
+           LB_val_implicit (pat, exp') in
+         (params_map, defs @ [DEF_val (LB_aux (lb', annot))])
+       end
     | def ->
        (params_map, defs @ [def]) in
 
@@ -1314,7 +1335,7 @@ let rewrite_sizeof (Defs defs) =
        DEF_spec (VS_aux (VS_cast_spec (rewrite_typschm typschm id, id), a))
     | _ -> def in
 
-  let (params_map, defs) = List.fold_left rewrite_sizeof_fundef
+  let (params_map, defs) = List.fold_left rewrite_sizeof_def
                                           (Bindings.empty, []) defs in
   let defs = List.map (rewrite_sizeof_valspec params_map) defs in
   Defs defs
@@ -2819,7 +2840,8 @@ let rewrite_defs_letbind_effects  =
        rewrap (E_let (lb,n_exp body k)))
     | E_sizeof nexp ->
        k (rewrap (E_sizeof nexp))
-    | E_constraint nc -> failwith "E_constraint should have been removed till now"
+    | E_constraint nc ->
+       k (rewrap (E_constraint nc))
     | E_sizeof_internal annot ->
        k (rewrap (E_sizeof_internal annot))
     | E_assign (lexp,exp1) ->

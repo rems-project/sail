@@ -471,11 +471,11 @@ let rec simplify_nexp (Nexp_aux (nexp, l)) =
   | Nexp_times (n1, n2) -> try_binop ( * ) n1 n2 (fun n1 n2 -> Nexp_times (n1, n2))
   | Nexp_sum (n1, n2) -> try_binop ( + ) n1 n2 (fun n1 n2 -> Nexp_sum (n1, n2))
   | Nexp_minus (n1, n2) -> try_binop ( - ) n1 n2 (fun n1 n2 -> Nexp_minus (n1, n2))
-  | Nexp_exp n ->
+  (* | Nexp_exp n ->
     (match simplify_nexp n with
       | Nexp_aux (Nexp_constant i, _) ->
         rewrap (Nexp_constant (power 2 i))
-      | n -> rewrap (Nexp_exp n))
+      | n -> rewrap (Nexp_exp n)) *)
   | Nexp_neg n ->
     (match simplify_nexp n with
       | Nexp_aux (Nexp_constant i, _) ->
