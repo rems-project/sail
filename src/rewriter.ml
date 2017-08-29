@@ -1941,7 +1941,12 @@ let remove_bitvector_pat pat =
     (letexp, letbind) in
 
   let compose_guards guards =
-    List.fold_right (Util.option_binop bitwise_and_exp) guards None in
+    let conj g1 g2 = match g1, g2 with
+      | Some g1, Some g2 -> Some (bitwise_and_exp g1 g2)
+      | Some g1, None -> Some g1
+      | None, Some g2 -> Some g2
+      | None, None -> None in
+    List.fold_right conj guards None in
 
   let flatten_guards_decls gd =
     let (guards,decls,letbinds) = Util.split3 gd in

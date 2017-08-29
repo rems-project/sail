@@ -1686,13 +1686,31 @@ let pat_typ_of (P_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
 (* Flow typing *)
 
+let rec big_int_of_nexp (Nexp_aux (nexp, _)) = match nexp with
+  | Nexp_constant c -> Some (big_int_of_int c)
+  | Nexp_times (n1, n2) ->
+     Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
+  | Nexp_sum (n1, n2) ->
+     Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
+  | Nexp_minus (n1, n2) ->
+     Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
+  | Nexp_exp n ->
+     Util.option_map (power_int_positive_big_int 2) (big_int_of_nexp n)
+  | _ -> None
+
 let destruct_atom (Typ_aux (typ_aux, _)) =
   match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c, _)), _)])
-       when string_of_id f = "atom" -> c
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c1, _)), _); Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c2, _)), _)])
-       when string_of_id f = "range" && c1 = c2 -> c1
-  | _ -> assert false
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp, _)])
+       when string_of_id f = "atom" ->
+     Util.option_map (fun c -> (c, nexp)) (big_int_of_nexp nexp)
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp1, _); Typ_arg_aux (Typ_arg_nexp nexp2, _)])
+       when string_of_id f = "range" ->
+     begin
+       match big_int_of_nexp nexp1, big_int_of_nexp nexp2 with
+       | Some c1, Some c2 -> if eq_big_int c1 c2 then Some (c1, nexp1) else None
+       | _ -> None
+     end
+  | _ -> None
 
 let destruct_atom_nexp env typ =
   match Env.expand_synonyms env typ with
@@ -1701,20 +1719,6 @@ let destruct_atom_nexp env typ =
   | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _); Typ_arg_aux (Typ_arg_nexp _, _)]), _)
        when string_of_id f = "range" -> Some n
   | _ -> None
-
-let restrict_range_upper c1 (Typ_aux (typ_aux, l) as typ) =
-  match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp, _); Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c2, _)), _)])
-     when string_of_id f = "range" ->
-     range_typ nexp (nconstant (min c1 c2))
-  | _ -> typ
-
-let restrict_range_lower c1 (Typ_aux (typ_aux, l) as typ) =
-  match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c2, _)), _); Typ_arg_aux (Typ_arg_nexp nexp, _)])
-     when string_of_id f = "range" ->
-     range_typ (nconstant (max c1 c2)) nexp
-  | _ -> typ
 
 exception Not_a_constraint;;
 
@@ -1737,12 +1741,42 @@ let rec assert_constraint (E_aux (exp_aux, l)) =
   | _ -> nc_true
 
 type flow_constraint =
-  | Flow_lteq of int
-  | Flow_gteq of int
+  | Flow_lteq of big_int * nexp
+  | Flow_gteq of big_int * nexp
+
+let restrict_range_upper c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
+  match typ_aux with
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp, _); Typ_arg_aux (Typ_arg_nexp nexp2, _)])
+     when string_of_id f = "range" ->
+     begin
+       match big_int_of_nexp nexp2 with
+       | Some c2 ->
+          let upper = if (lt_big_int c1 c2) then nexp1 else nexp2 in
+          range_typ nexp upper
+       | _ -> typ
+     end
+  | _ -> typ
+
+let restrict_range_lower c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
+  match typ_aux with
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp2, _); Typ_arg_aux (Typ_arg_nexp nexp, _)])
+     when string_of_id f = "range" ->
+     begin
+       match big_int_of_nexp nexp2 with
+       | Some c2 ->
+          let lower = if (gt_big_int c1 c2) then nexp1 else nexp2 in
+          range_typ lower nexp
+       | _ -> typ
+     end
+  | _ -> typ
 
 let apply_flow_constraint = function
-  | Flow_lteq c -> (restrict_range_upper c, restrict_range_lower (c + 1))
-  | Flow_gteq c -> (restrict_range_lower c, restrict_range_upper (c - 1))
+  | Flow_lteq (c, nexp) ->
+     (restrict_range_upper c nexp,
+      restrict_range_lower (succ_big_int c) (nexp_simp (nsum nexp (nconstant 1))))
+  | Flow_gteq (c, nexp) ->
+     (restrict_range_lower c nexp,
+      restrict_range_upper (pred_big_int c) (nexp_simp (nminus nexp (nconstant 1))))
 
 let rec infer_flow env (E_aux (exp_aux, (l, _))) =
   match exp_aux with
@@ -1764,20 +1798,34 @@ let rec infer_flow env (E_aux (exp_aux, (l, _))) =
      [], [nc_gt n1 n2]
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lt_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destruct_atom (typ_of y) in
-     [(v, Flow_lteq (c - 1))], []
+     begin
+       match destruct_atom (typ_of y) with
+       | Some (c, nexp) ->
+          [(v, Flow_lteq (pred_big_int c, nexp_simp (nminus nexp (nconstant 1))))], []
+       | _ -> [], []
+     end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lteq_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destruct_atom (typ_of y) in
-     [(v, Flow_lteq c)], []
+     begin
+       match destruct_atom (typ_of y) with
+       | Some (c, nexp) -> [(v, Flow_lteq (c, nexp))], []
+       | _ -> [], []
+     end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gt_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destruct_atom (typ_of y) in
-     [(v, Flow_gteq (c + 1))], []
+     begin
+       match destruct_atom (typ_of y) with
+       | Some (c, nexp) ->
+          [(v, Flow_gteq (succ_big_int c, nexp_simp (nsum nexp (nconstant 1))))], []
+       | _ -> [], []
+     end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gteq_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destruct_atom (typ_of y) in
-     [(v, Flow_gteq c)], []
+     begin
+       match destruct_atom (typ_of y) with
+       | Some (c, nexp) -> [(v, Flow_gteq (c, nexp))], []
+       | _ -> [], []
+     end
   | _ -> [], []
 
 let rec add_flows b flows env =
