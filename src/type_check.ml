@@ -323,6 +323,8 @@ module Env : sig
   val add_ret_typ : typ -> t -> t
   val add_typ_synonym : id -> (t -> typ_arg list -> typ) -> t -> t
   val get_typ_synonym : id -> t -> t -> typ_arg list -> typ
+  val add_num_def : id -> nexp -> t -> t
+  val get_num_def : id -> t -> nexp
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
   val is_extern : id -> t -> bool
@@ -353,6 +355,7 @@ end = struct
       variants : (typquant * type_union list) Bindings.t;
       typ_vars : base_kind_aux KBindings.t;
       typ_synonyms : (t -> typ_arg list -> typ) Bindings.t;
+      num_defs : nexp Bindings.t;
       overloads : (id list) Bindings.t;
       flow : (typ -> typ) Bindings.t;
       enums : IdSet.t Bindings.t;
@@ -375,6 +378,7 @@ end = struct
       variants = Bindings.empty;
       typ_vars = KBindings.empty;
       typ_synonyms = Bindings.empty;
+      num_defs = Bindings.empty;
       overloads = Bindings.empty;
       flow = Bindings.empty;
       enums = Bindings.empty;
@@ -716,6 +720,19 @@ end = struct
         { env with typ_vars = KBindings.add kid k env.typ_vars }
       end
 
+  let add_num_def id nexp env =
+    if Bindings.mem id env.num_defs
+    then typ_error (id_loc id) ("Num identifier " ^ string_of_id id ^ " is already bound")
+    else
+      begin
+        typ_print ("Adding Num identifier " ^ string_of_id id ^ " :: " ^ string_of_nexp nexp);
+        { env with num_defs = Bindings.add id nexp env.num_defs }
+      end
+
+  let get_num_def id env =
+    try Bindings.find id env.num_defs with
+    | Not_found -> typ_error (id_loc id) ("No Num identifier " ^ string_of_id id)
+
   let rec wf_constraint env (NC_aux (nc, _)) =
     match nc with
     | NC_fixed (n1, n2) -> wf_nexp env n1; wf_nexp env n2
@@ -993,39 +1010,39 @@ this is equivalent to
 which is then a problem we can feed to the constraint solver expecting unsat.
  *)
 
-let rec nexp_constraint var_of (Nexp_aux (nexp, l)) =
+let rec nexp_constraint env var_of (Nexp_aux (nexp, l)) =
   match nexp with
-  | Nexp_id v -> typ_error l "Unimplemented: Cannot generate constraint from Nexp_id"
+  | Nexp_id v -> nexp_constraint env var_of (Env.get_num_def v env)
   | Nexp_var kid -> Constraint.variable (var_of kid)
   | Nexp_constant c -> Constraint.constant (big_int_of_int c)
-  | Nexp_times (nexp1, nexp2) -> Constraint.mult (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | Nexp_sum (nexp1, nexp2) -> Constraint.add (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | Nexp_minus (nexp1, nexp2) -> Constraint.sub (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | Nexp_exp nexp -> Constraint.pow2 (nexp_constraint var_of nexp)
-  | Nexp_neg nexp -> Constraint.sub (Constraint.constant (big_int_of_int 0)) (nexp_constraint var_of nexp)
+  | Nexp_times (nexp1, nexp2) -> Constraint.mult (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | Nexp_sum (nexp1, nexp2) -> Constraint.add (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | Nexp_minus (nexp1, nexp2) -> Constraint.sub (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | Nexp_exp nexp -> Constraint.pow2 (nexp_constraint env var_of nexp)
+  | Nexp_neg nexp -> Constraint.sub (Constraint.constant (big_int_of_int 0)) (nexp_constraint env var_of nexp)
 
-let rec nc_constraint var_of (NC_aux (nc, l)) =
+let rec nc_constraint env var_of (NC_aux (nc, l)) =
   match nc with
-  | NC_fixed (nexp1, nexp2) -> Constraint.eq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | NC_not_equal (nexp1, nexp2) -> Constraint.neq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | NC_bounded_ge (nexp1, nexp2) -> Constraint.gteq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
-  | NC_bounded_le (nexp1, nexp2) -> Constraint.lteq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
+  | NC_fixed (nexp1, nexp2) -> Constraint.eq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | NC_not_equal (nexp1, nexp2) -> Constraint.neq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | NC_bounded_ge (nexp1, nexp2) -> Constraint.gteq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | NC_bounded_le (nexp1, nexp2) -> Constraint.lteq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
   | NC_nat_set_bounded (_, []) -> Constraint.literal false
   | NC_nat_set_bounded (kid, (int :: ints)) ->
      List.fold_left Constraint.disj
-                    (Constraint.eq (nexp_constraint var_of (nvar kid)) (Constraint.constant (big_int_of_int int)))
-                    (List.map (fun i -> Constraint.eq (nexp_constraint var_of (nvar kid)) (Constraint.constant (big_int_of_int i))) ints)
-  | NC_or (nc1, nc2) -> Constraint.disj (nc_constraint var_of nc1) (nc_constraint var_of nc2)
-  | NC_and (nc1, nc2) -> Constraint.conj (nc_constraint var_of nc1) (nc_constraint var_of nc2)
+                    (Constraint.eq (nexp_constraint env var_of (nvar kid)) (Constraint.constant (big_int_of_int int)))
+                    (List.map (fun i -> Constraint.eq (nexp_constraint env var_of (nvar kid)) (Constraint.constant (big_int_of_int i))) ints)
+  | NC_or (nc1, nc2) -> Constraint.disj (nc_constraint env var_of nc1) (nc_constraint env var_of nc2)
+  | NC_and (nc1, nc2) -> Constraint.conj (nc_constraint env var_of nc1) (nc_constraint env var_of nc2)
   | NC_false -> Constraint.literal false
   | NC_true -> Constraint.literal true
 
-let rec nc_constraints var_of ncs =
+let rec nc_constraints env var_of ncs =
   match ncs with
   | [] -> Constraint.literal true
-  | [nc] -> nc_constraint var_of nc
+  | [nc] -> nc_constraint env var_of nc
   | (nc :: ncs) ->
-     Constraint.conj (nc_constraint var_of nc) (nc_constraints var_of ncs)
+     Constraint.conj (nc_constraint env var_of nc) (nc_constraints env var_of ncs)
 
 let prove_z3 env nc =
   typ_print ("Prove " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc);
@@ -1040,7 +1057,7 @@ let prove_z3 env nc =
     try Bindings.find kid !bindings with
     | Not_found -> fresh_var kid
   in
-  let constr = Constraint.conj (nc_constraints var_of (Env.get_constraints env)) (Constraint.negate (nc_constraint var_of nc)) in
+  let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env)) (Constraint.negate (nc_constraint env var_of nc)) in
   match Constraint.call_z3 constr with
   | Constraint.Unsat _ -> typ_debug "unsat"; true
   | Constraint.Unknown [] -> typ_debug "sat"; false
@@ -1079,16 +1096,16 @@ let rec subtyp_tnf env tnf1 tnf2 =
   let rec neg_props props =
     match props with
     | [] -> Constraint.literal false
-    | [(nexp1, nexp2)] -> Constraint.gt (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
+    | [(nexp1, nexp2)] -> Constraint.gt (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
     | ((nexp1, nexp2) :: props) ->
-       Constraint.disj (Constraint.gt (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)) (neg_props props)
+       Constraint.disj (Constraint.gt (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)) (neg_props props)
   in
   let rec pos_props props =
     match props with
     | [] -> Constraint.literal true
-    | [(nexp1, nexp2)] -> Constraint.lteq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)
+    | [(nexp1, nexp2)] -> Constraint.lteq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
     | ((nexp1, nexp2) :: props) ->
-       Constraint.conj (Constraint.lteq (nexp_constraint var_of nexp1) (nexp_constraint var_of nexp2)) (pos_props props)
+       Constraint.conj (Constraint.lteq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)) (pos_props props)
   in
   match (tnf1, tnf2) with
   | Tnf_wild, Tnf_wild -> true
@@ -1106,7 +1123,7 @@ let rec subtyp_tnf env tnf1 tnf2 =
      begin
        let kid3 = Env.fresh_kid env in
        let (prop1, prop2) = props_subst kid1 (Nexp_var kid3) prop1, props_subst kid2 (Nexp_var kid3) prop2 in
-       let constr = Constraint.conj (nc_constraints var_of (Env.get_constraints env)) (Constraint.conj (pos_props prop1) (neg_props prop2)) in
+       let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env)) (Constraint.conj (pos_props prop1) (neg_props prop2)) in
        match Constraint.call_z3 constr with
        | Constraint.Unsat _ -> typ_debug "unsat"; true
        | Constraint.Unknown [] -> typ_debug "sat"; false
@@ -1558,13 +1575,31 @@ let pat_typ_of (P_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
 (* Flow typing *)
 
+let rec big_int_of_nexp (Nexp_aux (nexp, _)) = match nexp with
+  | Nexp_constant c -> Some (big_int_of_int c)
+  | Nexp_times (n1, n2) ->
+     Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
+  | Nexp_sum (n1, n2) ->
+     Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
+  | Nexp_minus (n1, n2) ->
+     Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
+  | Nexp_exp n ->
+     Util.option_map (power_int_positive_big_int 2) (big_int_of_nexp n)
+  | _ -> None
+
 let destruct_atom (Typ_aux (typ_aux, _)) =
   match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c, _)), _)])
-       when string_of_id f = "atom" -> c
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c1, _)), _); Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c2, _)), _)])
-       when string_of_id f = "range" && c1 = c2 -> c1
-  | _ -> assert false
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp, _)])
+       when string_of_id f = "atom" ->
+     Util.option_map (fun c -> (c, nexp)) (big_int_of_nexp nexp)
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp1, _); Typ_arg_aux (Typ_arg_nexp nexp2, _)])
+       when string_of_id f = "range" ->
+     begin
+       match big_int_of_nexp nexp1, big_int_of_nexp nexp2 with
+       | Some c1, Some c2 -> if eq_big_int c1 c2 then Some (c1, nexp1) else None
+       | _ -> None
+     end
+  | _ -> None
 
 let destruct_atom_nexp env typ =
   match Env.expand_synonyms env typ with
@@ -1573,20 +1608,6 @@ let destruct_atom_nexp env typ =
   | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _); Typ_arg_aux (Typ_arg_nexp _, _)]), _)
        when string_of_id f = "range" -> Some n
   | _ -> None
-
-let restrict_range_upper c1 (Typ_aux (typ_aux, l) as typ) =
-  match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp, _); Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c2, _)), _)])
-     when string_of_id f = "range" ->
-     range_typ nexp (nconstant (min c1 c2))
-  | _ -> typ
-
-let restrict_range_lower c1 (Typ_aux (typ_aux, l) as typ) =
-  match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c2, _)), _); Typ_arg_aux (Typ_arg_nexp nexp, _)])
-     when string_of_id f = "range" ->
-     range_typ (nconstant (max c1 c2)) nexp
-  | _ -> typ
 
 exception Not_a_constraint;;
 
@@ -1609,12 +1630,42 @@ let rec assert_constraint (E_aux (exp_aux, l)) =
   | _ -> nc_true
 
 type flow_constraint =
-  | Flow_lteq of int
-  | Flow_gteq of int
+  | Flow_lteq of big_int * nexp
+  | Flow_gteq of big_int * nexp
+
+let restrict_range_upper c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
+  match typ_aux with
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp, _); Typ_arg_aux (Typ_arg_nexp nexp2, _)])
+     when string_of_id f = "range" ->
+     begin
+       match big_int_of_nexp nexp2 with
+       | Some c2 ->
+          let upper = if (lt_big_int c1 c2) then nexp1 else nexp2 in
+          range_typ nexp upper
+       | _ -> typ
+     end
+  | _ -> typ
+
+let restrict_range_lower c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
+  match typ_aux with
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp2, _); Typ_arg_aux (Typ_arg_nexp nexp, _)])
+     when string_of_id f = "range" ->
+     begin
+       match big_int_of_nexp nexp2 with
+       | Some c2 ->
+          let lower = if (gt_big_int c1 c2) then nexp1 else nexp2 in
+          range_typ lower nexp
+       | _ -> typ
+     end
+  | _ -> typ
 
 let apply_flow_constraint = function
-  | Flow_lteq c -> (restrict_range_upper c, restrict_range_lower (c + 1))
-  | Flow_gteq c -> (restrict_range_lower c, restrict_range_upper (c - 1))
+  | Flow_lteq (c, nexp) ->
+     (restrict_range_upper c nexp,
+      restrict_range_lower (succ_big_int c) (nexp_simp (nsum nexp (nconstant 1))))
+  | Flow_gteq (c, nexp) ->
+     (restrict_range_lower c nexp,
+      restrict_range_upper (pred_big_int c) (nexp_simp (nminus nexp (nconstant 1))))
 
 let rec infer_flow env (E_aux (exp_aux, (l, _))) =
   match exp_aux with
@@ -1636,20 +1687,34 @@ let rec infer_flow env (E_aux (exp_aux, (l, _))) =
      [], [nc_gt n1 n2]
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lt_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destruct_atom (typ_of y) in
-     [(v, Flow_lteq (c - 1))], []
+     begin
+       match destruct_atom (typ_of y) with
+       | Some (c, nexp) ->
+          [(v, Flow_lteq (pred_big_int c, nexp_simp (nminus nexp (nconstant 1))))], []
+       | _ -> [], []
+     end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lteq_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destruct_atom (typ_of y) in
-     [(v, Flow_lteq c)], []
+     begin
+       match destruct_atom (typ_of y) with
+       | Some (c, nexp) -> [(v, Flow_lteq (c, nexp))], []
+       | _ -> [], []
+     end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gt_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destruct_atom (typ_of y) in
-     [(v, Flow_gteq (c + 1))], []
+     begin
+       match destruct_atom (typ_of y) with
+       | Some (c, nexp) ->
+          [(v, Flow_gteq (succ_big_int c, nexp_simp (nsum nexp (nconstant 1))))], []
+       | _ -> [], []
+     end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gteq_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destruct_atom (typ_of y) in
-     [(v, Flow_gteq c)], []
+     begin
+       match destruct_atom (typ_of y) with
+       | Some (c, nexp) -> [(v, Flow_gteq (c, nexp))], []
+       | _ -> [], []
+     end
   | _ -> [], []
 
 let rec add_flows b flows env =
@@ -2403,6 +2468,22 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      annot_exp (E_tuple inferred_exps) (mk_typ (Typ_tup (List.map typ_of inferred_exps)))
   | E_assign (lexp, bind) ->
      fst (bind_assignment env lexp bind)
+  | E_record_update (exp, FES_aux (FES_Fexps (fexps, flag), (l, ()))) ->
+     let inferred_exp = irule infer_exp env exp in
+     let typ = typ_of inferred_exp in
+     let rectyp_id = match Env.expand_synonyms env typ with
+       | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
+          rectyp_id
+       | _ -> typ_error l ("The type " ^ string_of_typ typ ^ " is not a record")
+     in
+     let check_fexp (FE_aux (FE_Fexp (field, exp), (l, ()))) =
+       let (typq, Typ_aux (Typ_fn (rectyp_q, field_typ, _), _)) = Env.get_accessor rectyp_id field env in
+       let unifiers, _, _ (* FIXME *) = try unify l env rectyp_q typ with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m) in
+       let field_typ' = subst_unifiers unifiers field_typ in
+       let inferred_exp = crule check_exp env exp field_typ' in
+       FE_aux (FE_Fexp (field, inferred_exp), (l, None))
+     in
+     annot_exp (E_record_update (inferred_exp, FES_aux (FES_Fexps (List.map check_fexp fexps, flag), (l, None)))) typ
   | E_cast (typ, exp) ->
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_cast (typ, checked_exp)) typ
@@ -2455,7 +2536,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let else_branch' = crule check_exp (add_constraints (List.map nc_negate constrs) (add_flows false flows env)) else_branch (typ_of then_branch') in
      annot_exp (E_if (cond', then_branch', else_branch')) (typ_of then_branch')
   | E_vector_access (v, n) -> infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, ())))
-  | E_vector_append (v1, v2) -> infer_exp env (E_aux (E_app (mk_id "vector_append", [v1; v2]), (l, ())))
+  | E_vector_append (v1, v2) -> infer_exp env (E_aux (E_app (mk_id "append", [v1; v2]), (l, ())))
   | E_vector_subrange (v, n, m) -> infer_exp env (E_aux (E_app (mk_id "vector_subrange", [v; n; m]), (l, ())))
   | E_vector [] -> typ_error l "Cannot infer type of empty vector"
   | E_vector ((item :: items) as vec) ->
@@ -3068,10 +3149,18 @@ let check_typedef env (TD_aux (tdef, (l, _))) =
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_enum id ids env
   | TD_register(id, base, top, ranges) -> [DEF_type (TD_aux (tdef, (l, None)))], check_register env id base top ranges
 
+let check_kinddef env (KD_aux (kdef, (l, _))) =
+  let kd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented kind def") in
+  match kdef with
+  | KD_nabbrev ((K_aux(K_kind([BK_aux (BK_nat, _)]),_) as kind), id, nmscm, nexp) ->
+     [DEF_kind (KD_aux (KD_nabbrev (kind, id, nmscm, nexp), (l, None)))],
+     Env.add_num_def id nexp env
+  | _ -> kd_err ()
+
 let rec check_def env def =
   let cd_err () = raise (Reporting_basic.err_unreachable Parse_ast.Unknown "Unimplemented Case") in
   match def with
-  | DEF_kind kdef -> cd_err ()
+  | DEF_kind kdef -> check_kinddef env kdef
   | DEF_type tdef -> check_typedef env tdef
   | DEF_fundef fdef -> check_fundef env fdef
   | DEF_val letdef -> check_letdef env letdef

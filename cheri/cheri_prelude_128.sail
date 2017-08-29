@@ -35,6 +35,14 @@
 (* 128 bit cap + tag *)
 typedef CapReg = bit[129]
 
+val cast bool -> bit effect pure cast_bool_bit
+val cast forall 'n, 'm. vector<'n,'m,dec,bool> -> vector<'n,'m,dec,bit> effect pure cast_boolvec_bitvec
+val cast forall 'm. [|0:2**'m - 1|] -> vector<'m - 1,'m,dec,bit> effect pure cast_range_bitvec
+function vector<'m - 1,'m,dec,bit> cast_range_bitvec (v) = to_vec (v)
+val extern bool -> bool effect pure not
+
+typedef uint64 = range<0, (2** 64) - 1>
+
 typedef CapStruct = const struct {
   bool    tag;
   bit[4]  uperms;
@@ -85,9 +93,9 @@ def Nat cap_size_t  = 16 (* cap size in bytes *)
 let ([:cap_size_t:]) cap_size = 16
 
 function CapStruct capRegToCapStruct((CapReg) c) =
-  let (bool)    s = c[104] in
-  let (bit[20]) B = if s then c[103..96] : 0x000 else c[103..84] in
-  let (bit[20]) T = if s then c[83..76] : 0x000 else c[83..64] in
+  let (bool)    s  = c[104] in
+  let (bit[20]) Bc = if s then c[103..96] : 0x000 else c[103..84] in
+  let (bit[20]) Tc = if s then c[83..76] : 0x000 else c[83..64] in
   let (bit[24]) otype = if s then c[95..84] : c[75..64] else 0 in
   {
     tag                    = c[128];
@@ -106,8 +114,8 @@ function CapStruct capRegToCapStruct((CapReg) c) =
     reserved               = c[112..111];
     E                      = c[110..105] ^ 0b110000;
     sealed                 = s;
-    B                      = B;
-    T                      = T;
+    B                      = Bc;
+    T                      = Tc;
     otype                  = otype;
     address                = c[63..0];
   }
@@ -175,30 +183,30 @@ function (bool, CapStruct) sealCap((CapStruct) cap, (bit[24]) otype) =
         (false, cap (* was undefined but ocaml shallow embedding can't handle it *) )
 
 function [|-1:1|] a_top_correction((bit[20]) a_mid, (bit[20]) R, (bit[20]) bound) =
-    switch (a_mid <_u R, bound <_u R) {
-      case (bitzero, bitzero) -> 0
-      case (bitzero, bitone)  -> 1
-      case (bitone, bitzero)  -> -1
-      case (bitone, bitone)   -> 0
+    switch (a_mid < R, bound < R) {
+      case (false, false) -> 0
+      case (false, true)  -> 1
+      case (true, false)  -> -1
+      case (true, true)   -> 0
     }
 
 function uint64 getCapBase((CapStruct) c)  = 
     let ([|45|])  E = min(unsigned(c.E), 45) in
-    let (bit[20]) B = c.B in
+    let (bit[20]) Bc = c.B in
     let (bit[65]) a = EXTZ(c.address) in
-    let (bit[20]) R = B - 0x01000 in (* wraps *)
+    let (bit[20]) R = Bc - 0x01000 in (* wraps *)
     let (bit[20]) a_mid = a[(E + 19)..E] in
-    let correction = a_top_correction(a_mid, R, B) in
+    let correction = a_top_correction(a_mid, R, Bc) in
     let a_top = a >> (E+20) in
-    let (bit[64]) base = EXTZ((a_top + correction) : B) << E in
+    let (bit[64]) base = EXTZ((a_top + correction) : Bc) << E in
     unsigned(base)
 
 function CapLen getCapTop ((CapStruct) c)  = 
     let ([|45|])  E = min(unsigned(c.E), 45) in
-    let (bit[20]) B = c.B in
+    let (bit[20]) Bc = c.B in
     let (bit[20]) T = c.T in
     let (bit[65]) a = EXTZ(c.address)  in
-    let (bit[20]) R = B - 0x01000 in (* wraps *)
+    let (bit[20]) R = Bc - 0x01000 in (* wraps *)
     let (bit[20]) a_mid = a[(E + 19)..E] in
     let correction = a_top_correction(a_mid, R, T) in
     let a_top = a >> (E+20) in
@@ -283,10 +291,10 @@ function [|48|] computeE ((bit[65]) rlength) =
 function (bool, CapStruct) setCapBounds((CapStruct) cap, (bit[64]) base, (bit[65]) top) =
     (* {cap with base=base; length=(bit[64]) length; offset=0} *)
     let ([|48|])  e = computeE(top - (0b0 : base)) in
-    let (bit[20]) B = base[(19+e)..e] in
-    let (bit[20]) T = top[(19+e)..e] in
+    let (bit[20]) Bc = base[19+e..e] in
+    let (bit[20]) T = top[19+e..e] in
     let (bit[20]) T2 = T + if (top[(e - 1)..0] == 0) then 0 else 1 in
-    let newCap  = {cap with E=(bit[6]) e; B=B; T=T2} in
+    let newCap  = {cap with E=(bit[6]) e; B=Bc; T=T2} in
     let newBase = getCapBase(newCap) in
     let newTop  = getCapTop(newCap) in
     let exact   = (base == newBase) & (top == newTop) in

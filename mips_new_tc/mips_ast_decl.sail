@@ -1,15 +1,7 @@
-(**************************************************************************)
-(*     Sail                                                               *)
+(*========================================================================*)
 (*                                                                        *)
-(*  Copyright (c) 2013-2017                                               *)
-(*    Kathyrn Gray                                                        *)
-(*    Shaked Flur                                                         *)
-(*    Stephen Kell                                                        *)
-(*    Gabriel Kerneis                                                     *)
-(*    Robert Norton-Wright                                                *)
-(*    Christopher Pulte                                                   *)
-(*    Peter Sewell                                                        *)
-(*                                                                        *)
+(*  Copyright (c) 2015-2017 Robert M. Norton                              *)
+(*  Copyright (c) 2015-2017 Kathyrn Gray                                  *)
 (*  All rights reserved.                                                  *)
 (*                                                                        *)
 (*  This software was developed by the University of Cambridge Computer   *)
@@ -38,18 +30,15 @@
 (*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
 (*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
 (*  SUCH DAMAGE.                                                          *)
-(**************************************************************************)
+(*========================================================================*)
 
-open Ast
-open Type_check
+(* misp_insts.sail: mips instruction decode and execute clauses and AST node
+   declarations *)
 
-(* Prints the defs following source syntax *)
-val pp_defs : out_channel -> 'a defs -> unit 
-val pp_exp : Buffer.t -> 'a exp -> unit
-val pat_to_string : 'a pat -> string
+scattered typedef ast = const union
 
-(* Prints on formatter the defs as Lem Ast nodes *)
-val pp_lem_defs : Format.formatter -> tannot defs -> unit
+val ast -> unit effect {barr, eamem, escape, rmem, rreg, undef, wmv, wreg} execute
+scattered function unit execute
 
-val pp_defs_ocaml : out_channel -> tannot defs -> string -> string list -> unit
-val pp_defs_lem : bool -> bool -> (out_channel * string list) -> (out_channel * string list) -> tannot defs -> string -> unit
+val bit[32] -> option<ast> effect pure decode
+scattered function option<ast> decode

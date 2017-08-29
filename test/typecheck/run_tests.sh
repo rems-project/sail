@@ -18,11 +18,11 @@ rm -f $DIR/tests.xml
 
 MIPS="$SAILDIR/mips_new_tc"
 
-cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail > $DIR/pass/mips_prelude.sail
-cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb.sail > $DIR/pass/mips_tlb.sail
-cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb.sail $MIPS/mips_wrappers.sail > $DIR/pass/mips_wrappers.sail
-cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb.sail $MIPS/mips_wrappers.sail $MIPS/mips_insts.sail $MIPS/mips_epilogue.sail > $DIR/pass/mips_insts.sail
-cat $SAILDIR/lib/prelude.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb_stub.sail $MIPS/mips_wrappers.sail $MIPS/mips_insts.sail $MIPS/mips_epilogue.sail > $DIR/pass/mips_notlb.sail
+cat $SAILDIR/lib/prelude.sail $SAILDIR/lib/prelude_wrappers.sail $MIPS/mips_prelude.sail > $DIR/pass/mips_prelude.sail
+cat $SAILDIR/lib/prelude.sail $SAILDIR/lib/prelude_wrappers.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb.sail > $DIR/pass/mips_tlb.sail
+cat $SAILDIR/lib/prelude.sail $SAILDIR/lib/prelude_wrappers.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb.sail $MIPS/mips_wrappers.sail > $DIR/pass/mips_wrappers.sail
+cat $SAILDIR/lib/prelude.sail $SAILDIR/lib/prelude_wrappers.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb.sail $MIPS/mips_wrappers.sail $MIPS/mips_ast_decl.sail $MIPS/mips_insts.sail $MIPS/mips_epilogue.sail > $DIR/pass/mips_insts.sail
+cat $SAILDIR/lib/prelude.sail $SAILDIR/lib/prelude_wrappers.sail $MIPS/mips_prelude.sail $MIPS/mips_tlb_stub.sail $MIPS/mips_wrappers.sail $MIPS/mips_ast_decl.sail $MIPS/mips_insts.sail $MIPS/mips_epilogue.sail > $DIR/pass/mips_notlb.sail
 
 pass=0
 fail=0

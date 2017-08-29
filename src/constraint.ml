@@ -19,7 +19,7 @@ let big_int_op : nexp_op -> big_int -> big_int -> big_int = function
 let rec arith constr =
   let constr' = match constr with
     | NFun (op, x, y) -> NFun (op, arith x, arith y)
-    | N2n c -> arith c
+    | N2n c -> N2n (arith c)
     | c -> c
   in
   match constr' with
@@ -188,13 +188,13 @@ let rec sexpr_of_cbool = function
   | BFun (And, x, y) -> sfun "and" [sexpr_of_cbool x; sexpr_of_cbool y]
   | BFun (Or, x, y) -> sfun "or" [sexpr_of_cbool x; sexpr_of_cbool y]
   | Not x -> sfun "not" [sexpr_of_cbool x]
-  | CFun (op, x, y) -> cop_sexpr op (sexpr_of_nexp x) (sexpr_of_nexp y)
+  | CFun (op, x, y) -> cop_sexpr op (sexpr_of_nexp (arith x)) (sexpr_of_nexp (arith y))
   | Branch xs -> sfun "BRANCH" (List.map sexpr_of_cbool xs)
   | Boolean true -> Atom "true"
   | Boolean false -> Atom "false"
 
 let sexpr_of_constraint_leaf = function
-  | LFun (op, x, y) -> cop_sexpr op (sexpr_of_nexp x) (sexpr_of_nexp y)
+  | LFun (op, x, y) -> cop_sexpr op (sexpr_of_nexp (arith x)) (sexpr_of_nexp (arith y))
   | LBoolean true -> Atom "true"
   | LBoolean false -> Atom "false"
 

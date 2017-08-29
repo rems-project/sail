@@ -35,14 +35,6 @@
 (* misp_insts.sail: mips instruction decode and execute clauses and AST node
    declarations *)
 
-scattered typedef ast = const union
-
-val ast -> unit effect {barr, eamem, escape, rmem, rreg, undef, wmv, wreg} execute
-scattered function unit execute
-
-val bit[32] -> option<ast> effect pure decode
-scattered function option<ast> decode
-
 (**************************************************************************************)
 (* [D]ADD[I][U] various forms of ADD                                                  *)
 (**************************************************************************************)

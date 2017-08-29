@@ -35,6 +35,14 @@
 (* 256 bit cap + tag *)
 typedef CapReg = bit[257]
 
+val cast bool -> bit effect pure cast_bool_bit
+val cast forall 'n, 'm. vector<'n,'m,dec,bool> -> vector<'n,'m,dec,bit> effect pure cast_boolvec_bitvec
+val cast forall 'm. [|0:2**'m - 1|] -> vector<'m - 1,'m,dec,bit> effect pure cast_range_bitvec
+function vector<'m - 1,'m,dec,bit> cast_range_bitvec (v) = to_vec (v)
+val extern bool -> bool effect pure not
+
+typedef uint64 = range<0, (2** 64) - 1>
+
 typedef CapStruct = const struct {
   bool    tag;
   bit[8]  padding;
@@ -183,13 +191,13 @@ function CapStruct setCapPerms((CapStruct) cap, (bit[31]) perms) =
 function (bool, CapStruct) sealCap((CapStruct) cap, (bit[24]) otype) =
     (true, {cap with sealed=true; otype=otype})
 
-function uint64 getCapBase((CapStruct) c)   = unsigned(c.base)
-function CapLen getCapTop((CapStruct) c)    = unsigned(c.base) + unsigned(c.length)
-function uint64 getCapOffset((CapStruct) c) = unsigned(c.offset)
-function CapLen getCapLength((CapStruct) c) = unsigned(c.length)
+function bit[64] getCapBase((CapStruct) c)        = c.base
+function [|0:2**65 - 2|] getCapTop((CapStruct) c) = unsigned(c.base) + unsigned(c.length)
+function bit[64] getCapOffset((CapStruct) c)      = c.offset
+function CapLen  getCapLength((CapStruct) c)      = unsigned(c.length)
 
 function uint64 getCapCursor((CapStruct) cap) = 
-  (unsigned(cap.base) + unsigned(cap.offset)) mod (2 ** 64)
+  (unsigned(cap.base) + unsigned(cap.offset)) mod (pow2(64))
 
 function (bool, CapStruct) setCapOffset((CapStruct) c, (bit[64]) offset) = 
     (true, {c with offset=offset})
@@ -204,4 +212,3 @@ function (bool, CapStruct) setCapBounds((CapStruct) cap, (bit[64]) base, (bit[65
 
 function CapStruct int_to_cap ((bit[64]) offset) = 
     {null_cap with offset = offset}
-
