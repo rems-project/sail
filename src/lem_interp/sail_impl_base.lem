@@ -110,7 +110,7 @@ type address = Address of list byte (* of length 8 *) * integer
 type opcode = Opcode of list byte (* of length 4 *)
 
 (** typeclass instantiations *)
-
+  
 let ~{ocaml} bitCompare (b1:bit) (b2:bit) =
   match (b1,b2) with
   | (Bitc_zero, Bitc_zero) -> EQ
@@ -213,6 +213,36 @@ instance (Ord byte)
   let (>)  = byteGreater
   let (>=) = byteGreaterEq
 end
+
+
+
+
+
+let ~{ocaml} opcodeCompare (Opcode o1) (Opcode o2) =
+  compare o1 o2
+let {ocaml} opcodeCompare = defaultCompare
+
+let ~{ocaml} opcodeLess b1 b2      = opcodeCompare b1 b2 =  LT
+let ~{ocaml} opcodeLessEq b1 b2    = opcodeCompare b1 b2 <> GT
+let ~{ocaml} opcodeGreater b1 b2   = opcodeCompare b1 b2 =  GT
+let ~{ocaml} opcodeGreaterEq b1 b2 = opcodeCompare b1 b2 <> LT
+
+let inline {ocaml} opcodeLess      = defaultLess
+let inline {ocaml} opcodeLessEq    = defaultLessEq
+let inline {ocaml} opcodeGreater   = defaultGreater
+let inline {ocaml} opcodeGreaterEq = defaultGreaterEq
+
+instance (Ord opcode)
+  let compare = opcodeCompare
+  let (<)  = opcodeLess
+  let (<=) = opcodeLessEq
+  let (>)  = opcodeGreater
+  let (>=) = opcodeGreaterEq
+end
+                              
+
+
+
 
 let addressCompare (Address b1 i1) (Address b2 i2) = compare i1 i2
 (* this cannot be defaultCompare for OCaml because addresses contain big ints *)
