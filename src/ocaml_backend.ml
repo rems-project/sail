@@ -234,6 +234,7 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
      ^//^ ocaml_enum ctx ids
   | TD_abbrev (id, _, TypSchm_aux (TypSchm_ts (typq, typ), _)) ->
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; ocaml_typ ctx typ]
+  | _ -> failwith "Unsupported typedef"
 
 let get_externs (Defs defs) =
   let extern_id (VS_aux (vs_aux, _)) =
@@ -274,12 +275,36 @@ let ocaml_defs (Defs defs) =
   ^^ concat (List.map (ocaml_def ctx) defs)
   ^^ empty_reg_init
 
-let ocaml_main ctx spec =
-  concat [separate space [string "open"; string spec] ^^ ocaml_def_end;
+let ocaml_main spec =
+  concat [separate space [string "open"; string (String.capitalize spec)] ^^ ocaml_def_end;
           separate space [string "let"; string "()"; equals]
-          ^//^ (zencode ctx (mk_id "initialize_registers") ^^ string "()" ^^ semi
-                ^/^ zencode ctx (mk_id "main") ^^ string "()")
+          ^//^ (string "initialize_registers" ^^ string "()" ^^ semi
+                ^/^ string "zmain" ^^ string "()")
          ]
 
 let ocaml_pp_defs f defs =
   ToChannel.pretty 1. 80 f (ocaml_defs defs)
+
+let ocaml_compile spec defs =
+  let sail_lib_dir =
+    try Sys.getenv "SAILLIBDIR" with
+    | Not_found -> failwith "Environment variable SAILLIBDIR needs to be set"
+  in
+  if Sys.file_exists "_sbuild" then () else Unix.mkdir "_sbuild" 0o775;
+  let cwd = Unix.getcwd () in
+  Unix.chdir "_sbuild";
+  let _ = Unix.system ("cp " ^ sail_lib_dir ^ "/sail_lib.ml .") in
+  let out_chan = open_out (spec ^ ".ml") in
+  ocaml_pp_defs out_chan defs;
+  close_out out_chan;
+  if IdSet.mem (mk_id "main") (Initial_check.val_spec_ids defs)
+  then
+    let out_chan = open_out "main.ml" in
+    ToChannel.pretty 1. 80 out_chan (ocaml_main spec);
+    close_out out_chan;
+    let _ = Unix.system "ocamlbuild main.native" in
+    let _ = Unix.system ("cp main.native " ^ cwd ^ "/" ^ spec) in
+    ()
+  else ();
+  Unix.chdir cwd
+
