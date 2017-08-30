@@ -40,6 +40,7 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_id id when Id.compare id (mk_id "string") = 0 -> string "string"
   | Typ_id id -> zencode ctx id
+  | Typ_app (id, []) -> zencode ctx id
   | Typ_app (id, typs) -> parens (separate_map (string " * ") (ocaml_typ_arg ctx) typs) ^^ space ^^ zencode ctx id
   | Typ_tup typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
   | Typ_fn (typ1, typ2, _) -> separate space [ocaml_typ ctx typ1; string "->"; ocaml_typ ctx typ2]
@@ -56,6 +57,7 @@ let ocaml_typquant typq =
     | QI_aux (QI_const _, _) -> failwith "Ocaml type quantifiers should no longer contain constraints"
   in
   match quant_items typq with
+  | [] -> empty
   | [qi] -> ocaml_qi qi
   | qis -> parens (separate_map (string " * ") ocaml_qi qis)
 
@@ -104,7 +106,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
                                       string "then"; ocaml_atomic_exp ctx t;
                                       string "else"; ocaml_atomic_exp ctx e]
   | E_record (FES_aux (FES_Fexps (fexps, _), _)) ->
-     enclose lbrace rbrace (separate_map (semi ^^ space) (ocaml_fexp ctx) fexps)
+     enclose lbrace rbrace (group (separate_map (semi ^^ break 1) (ocaml_fexp ctx) fexps))
   | E_record_update (exp, FES_aux (FES_Fexps (fexps, _), _)) ->
      enclose lbrace rbrace (separate space [ocaml_atomic_exp ctx exp;
                                             string "with";
@@ -116,7 +118,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      separate space [string "let"; string "ref"; ocaml_atomic_lexp ctx lexp;
                      equals; ocaml_exp ctx exp1; string "in"]
      ^/^ ocaml_exp ctx exp2
-  | E_lit _ | E_list _ | E_id _ -> ocaml_atomic_exp ctx exp
+  | E_lit _ | E_list _ | E_id _ | E_tuple _ -> ocaml_atomic_exp ctx exp
   | _ -> string ("EXP(" ^ string_of_exp exp ^ ")")
 and ocaml_letbind ctx (LB_aux (lb_aux, _)) =
   match lb_aux with
@@ -145,11 +147,12 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_id id ->
      begin
        match Env.lookup_id id (env_of exp) with
-       | Local (Immutable, _) | Unbound -> zencode ctx id
+       | Local (Immutable, _) | Unbound | Enum _ -> zencode ctx id
        | Register _ | Local (Mutable, _) -> bang ^^ zencode ctx id
-       | _ -> assert false
+       | _ -> failwith ("Union constructor: " ^ zencode_string (string_of_id id))
      end
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
+  | E_tuple exps -> parens (separate_map (comma ^^ space) (ocaml_exp ctx) exps)
   | _ -> parens (ocaml_exp ctx exp)
 and ocaml_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
   match lexp_aux with

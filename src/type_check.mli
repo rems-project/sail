@@ -174,6 +174,7 @@ type tannot = (Env.t * typ * effect) option
 (* Strip the type annotations from an expression. *)
 val strip_exp : 'a exp -> unit exp
 val strip_pat : 'a pat -> unit pat
+val strip_lexp : 'a lexp -> unit lexp
 
 (* Check an expression has some type. Returns a fully annotated
    version of the expression, where each subexpression is annotated

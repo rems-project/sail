@@ -77,6 +77,8 @@ let mk_fundef funcls =
   DEF_fundef
    (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), no_annot))
 
+let mk_letbind pat exp = LB_aux (LB_val_implicit (pat, exp), no_annot)
+
 let mk_val_spec vs_aux =
   DEF_spec (VS_aux (vs_aux, no_annot))
 
@@ -441,6 +443,8 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_cast (typ, exp) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_exp exp
   | E_vector vec -> "[" ^ string_of_list ", " string_of_exp vec ^ "]"
   | E_vector_access (v, n) -> string_of_exp v ^ "[" ^ string_of_exp n ^ "]"
+  | E_vector_update (v, n, exp) -> "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " = " ^ string_of_exp exp ^ "]"
+  | E_vector_update_subrange (v, n, m, exp) -> "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " .. " ^ string_of_exp m ^ " = " ^ string_of_exp exp ^ "]"
   | E_vector_subrange (v, n1, n2) -> string_of_exp v ^ "[" ^ string_of_exp n1 ^ " .. " ^ string_of_exp n2 ^ "]"
   | E_vector_append (v1, v2) -> string_of_exp v1 ^ " : " ^ string_of_exp v2
   | E_if (cond, then_branch, else_branch) ->
@@ -468,6 +472,8 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_comment _ -> "INTERNAL COMMENT"
   | E_comment_struc _ -> "INTERNAL COMMENT STRUC"
   | E_internal_let _ -> "INTERNAL LET"
+  | E_internal_return _ -> "INTERNAL RETURN"
+  | E_internal_plet _ -> "INTERNAL PLET"
   | _ -> "INTERNAL"
 and string_of_fexp (FE_aux (FE_Fexp (field, exp), _)) =
   string_of_id field ^ " = " ^ string_of_exp exp

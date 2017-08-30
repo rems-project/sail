@@ -60,6 +60,7 @@ val mk_val_spec : val_spec_aux -> unit def
 val mk_typschm : typquant -> typ -> typschm
 val mk_fexp : id -> unit exp -> unit fexp
 val mk_fexps : (unit fexp) list -> unit fexps
+val mk_letbind : unit pat -> unit exp -> unit letbind
 
 val unaux_exp : 'a exp -> 'a exp_aux
 

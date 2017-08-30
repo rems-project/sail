@@ -2216,7 +2216,7 @@ let rec rewrite_local_lexp ((LEXP_aux(lexp,((l,_) as annot))) as le) = match lex
     let field_update exp = FES_aux (FES_Fexps ([FE_aux (FE_Fexp (id, exp), annot)], false), annot) in
     (lexp, E_aux (E_field (access, id), annot),
     (fun exp -> rexp (E_aux (E_record_update (access, field_update exp), annot))))
-  | _ -> raise (Reporting_basic.err_unreachable l "unsupported lexp")
+  | _ -> raise (Reporting_basic.err_unreachable l ("Unsupported lexp: " ^ string_of_lexp le))
 
 (*Expects to be called after rewrite_defs; thus the following should not appear:
   internal_exp of any form
@@ -2590,6 +2590,44 @@ let rewrite_simple_types (Defs defs) =
   let defs = Defs (List.map simple_def defs) in
   rewrite_defs_base simple_defs defs
 
+let rewrite_tuple_assignments defs =
+  let assign_tuple e_aux annot =
+    let env = env_of_annot annot in
+    match e_aux with
+    | E_assign (LEXP_aux (LEXP_tup lexps, _), exp) ->
+       let (_, ids) = List.fold_left (fun (n, ids) _ -> (n + 1, ids @ [mk_id ("tup__" ^ string_of_int n)])) (0, []) lexps in
+       let block_assign i lexp = mk_exp (E_assign (strip_lexp lexp, mk_exp (E_id (mk_id ("tup__" ^ string_of_int i))))) in
+       let block = mk_exp (E_block (List.mapi block_assign lexps)) in
+       let letbind = mk_letbind (mk_pat (P_tup (List.map (fun id -> mk_pat (P_id id)) ids))) (strip_exp exp) in
+       let let_exp = mk_exp (E_let (letbind, block)) in
+       check_exp env let_exp unit_typ
+    | _ -> E_aux (e_aux, annot)
+  in
+  let assign_exp = {
+      id_exp_alg with
+      e_aux = (fun (e_aux, annot) -> assign_tuple e_aux annot)
+    } in
+  let assign_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp assign_exp) } in
+  rewrite_defs_base assign_defs defs
+
+let rewrite_simple_assignments defs =
+  let assign_e_aux e_aux annot =
+    let env = env_of_annot annot in
+    match e_aux with
+    | E_assign (lexp, exp) ->
+       print_endline ("REWRITE: " ^ string_of_exp (E_aux (e_aux, annot)));
+       let (lexp, _, rhs) = rewrite_local_lexp lexp in
+       let assign = mk_exp (E_assign (strip_lexp lexp, strip_exp (rhs exp))) in
+       check_exp env assign unit_typ
+    | _ -> E_aux (e_aux, annot)
+  in
+  let assign_exp = {
+      id_exp_alg with
+      e_aux = (fun (e_aux, annot) -> assign_e_aux e_aux annot)
+    } in
+  let assign_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp assign_exp) } in
+  rewrite_defs_base assign_defs defs
+
 let rewrite_defs_remove_blocks =
   let letbind_wild v body =
     let (E_aux (_,(l,tannot))) = v in
@@ -2911,14 +2949,14 @@ let rewrite_defs_letbind_effects  =
 
 let rewrite_defs_effectful_let_expressions =
 
-  let e_let (lb,body) = 
+  let e_let (lb,body) =
     match lb with
     | LB_aux (LB_val_explicit (_,pat,exp'),annot')
     | LB_aux (LB_val_implicit (pat,exp'),annot') ->
        if effectful exp'
        then E_internal_plet (pat,exp',body)
        else E_let (lb,body) in
-                             
+
   let e_internal_let = fun (lexp,exp1,exp2) ->
     match lexp with
     | LEXP_aux (LEXP_id id,annot)
@@ -2932,7 +2970,7 @@ let rewrite_defs_effectful_let_expressions =
 
   let alg = { id_exp_alg with e_let = e_let; e_internal_let = e_internal_let } in
   rewrite_defs_base
-    {rewrite_exp = (fun _ -> fold_exp alg)
+    { rewrite_exp = (fun _ -> fold_exp alg)
     ; rewrite_pat = rewrite_pat
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
@@ -3332,7 +3370,7 @@ let rewrite_defs_remove_superfluous_returns =
 
   let alg = { id_exp_alg with e_aux = e_aux } in
   rewrite_defs_base
-    {rewrite_exp = (fun _ -> fold_exp alg)
+    { rewrite_exp = (fun _ -> fold_exp alg)
     ; rewrite_pat = rewrite_pat
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
@@ -3377,6 +3415,8 @@ let rewrite_defs_lem =[
 let rewrite_defs_ocaml = [
     (* top_sort_defs; *)
   rewrite_undefined;
+  rewrite_tuple_assignments;
+  rewrite_simple_assignments;
   rewrite_defs_remove_vector_concat;
   rewrite_constraint;
   rewrite_trivial_sizeof;
