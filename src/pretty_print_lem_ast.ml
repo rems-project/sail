@@ -221,6 +221,8 @@ and pp_format_nexp_constraint_lem (NC_aux(nc,l)) =
   | NC_not_equal(n1,n2) -> "(NC_not_equal " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
   | NC_or(nc1,nc2) -> "(NC_or " ^ pp_format_nexp_constraint_lem nc1 ^ " " ^ pp_format_nexp_constraint_lem nc2 ^ ")"
   | NC_and(nc1,nc2) -> "(NC_and " ^ pp_format_nexp_constraint_lem nc1 ^ " " ^ pp_format_nexp_constraint_lem nc2 ^ ")"
+  | NC_true -> "NC_true"
+  | NC_false -> "NC_false"
   | NC_nat_set_bounded(id,bounds) -> "(NC_nat_set_bounded " ^
     pp_format_var_lem id ^
       " [" ^

@@ -2180,17 +2180,21 @@ let rewrite_defs_guarded_pats =
 
 
 let id_is_local_var id env = match Env.lookup_id id env with
-  | Local _ | Unbound -> true
+  | Local _ -> true
   | _ -> false
 
-let rec lexp_is_local (LEXP_aux (lexp, _)) env = match lexp with
+let id_is_unbound id env = match Env.lookup_id id env with
+  | Unbound -> true
+  | _ -> false
+
+let rec lexp_is_local_intro (LEXP_aux (lexp, _)) env = match lexp with
   | LEXP_memory _ -> false
   | LEXP_id id
-  | LEXP_cast (_, id) -> id_is_local_var id env
-  | LEXP_tup lexps -> List.for_all (fun lexp -> lexp_is_local lexp env) lexps
+  | LEXP_cast (_, id) -> id_is_unbound id env
+  | LEXP_tup lexps -> List.for_all (fun lexp -> lexp_is_local_intro lexp env) lexps
   | LEXP_vector (lexp,_)
   | LEXP_vector_range (lexp,_,_)
-  | LEXP_field (lexp,_) -> lexp_is_local lexp env
+  | LEXP_field (lexp,_) -> lexp_is_local_intro lexp env
 
 let lexp_is_effectful (LEXP_aux (_, (_, annot))) = match annot with
   | Some (_, _, eff) -> effectful_effs eff
@@ -2229,7 +2233,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
     let rec walker exps = match exps with
       | [] -> []
       | (E_aux(E_assign(le,e), ((l, Some (env,typ,eff)) as annot)) as exp)::exps
-        when lexp_is_local le env && not (lexp_is_effectful le)->
+        when lexp_is_local_intro le env && not (lexp_is_effectful le)->
         let (le', _, re') = rewrite_local_lexp le in
         let e' = re' (rewrite_base e) in
         let exps' = walker exps in
@@ -2282,7 +2286,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
     in
     rewrap (E_block (walker exps))
   | E_assign(le,e)
-    when lexp_is_local le (env_of full_exp) && not (lexp_is_effectful le) ->
+    when lexp_is_local_intro le (env_of full_exp) && not (lexp_is_effectful le) ->
     let (le', _, re') = rewrite_local_lexp le in
     let e' = re' (rewrite_base e) in
     let block = E_aux (E_block [], simple_annot l unit_typ) in
@@ -2953,10 +2957,9 @@ let eqidtyp (id1,_) (id2,_) =
 let find_introduced_vars exp =
   let lEXP_aux ((ids,lexp),annot) =
     let ids = match lexp, annot with
-    | LEXP_id id, (_, Some (env, _, _)) ->
-      (match Env.lookup_id id env with
-      | Unbound -> IdSet.add id ids
-      | _ -> ids)
+    | LEXP_id id, (_, Some (env, _, _))
+    | LEXP_cast (_, id), (_, Some (env, _, _))
+      when id_is_unbound id env -> IdSet.add id ids
     | _ -> ids in
     (ids, LEXP_aux (lexp, annot)) in
   fst (fold_exp
@@ -2966,10 +2969,10 @@ let find_updated_vars exp =
   let intros = find_introduced_vars exp in
   let lEXP_aux ((ids,lexp),annot) =
     let ids = match lexp, annot with
-    | LEXP_id id, (_, Some (env, _, _)) when not (IdSet.mem id intros) ->
-      (match Env.lookup_id id env with
-      | Local (Mutable, _) -> (id, annot) :: ids
-      | _ -> ids)
+    | LEXP_id id, (_, Some (env, _, _))
+    | LEXP_cast (_, id), (_, Some (env, _, _))
+      when id_is_local_var id env && not (IdSet.mem id intros) ->
+      (id, annot) :: ids
     | _ -> ids in
     (ids, LEXP_aux (lexp, annot)) in
   dedup eqidtyp (fst (fold_exp
