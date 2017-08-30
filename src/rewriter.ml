@@ -2615,7 +2615,6 @@ let rewrite_simple_assignments defs =
     let env = env_of_annot annot in
     match e_aux with
     | E_assign (lexp, exp) ->
-       print_endline ("REWRITE: " ^ string_of_exp (E_aux (e_aux, annot)));
        let (lexp, _, rhs) = rewrite_local_lexp lexp in
        let assign = mk_exp (E_assign (strip_lexp lexp, strip_exp (rhs exp))) in
        check_exp env assign unit_typ
