@@ -42,6 +42,29 @@
 
 open import Pervasives_extra
 
+
+
+class ( EnumerationType 'a ) 
+  val toNat : 'a -> nat
+end
+
+
+val enumeration_typeCompare : forall 'a. EnumerationType 'a => 'a -> 'a -> ordering
+let ~{ocaml} enumeration_typeCompare e1 e2 =
+  compare (toNat e1) (toNat e2)
+let inline {ocaml} enumeration_typeCompare = defaultCompare
+
+ 
+default_instance forall 'a. EnumerationType 'a => (Ord 'a)
+  let compare = enumeration_typeCompare
+  let (<)  r1 r2 = (enumeration_typeCompare r1 r2) = LT
+  let (<=) r1 r2 = (enumeration_typeCompare r1 r2) <> GT
+  let (>)  r1 r2 = (enumeration_typeCompare r1 r2) = GT
+  let (>=) r1 r2 = (enumeration_typeCompare r1 r2) <> LT
+end
+
+
+
 (* maybe isn't a member of type Ord - this should be in the Lem standard library*)
 instance forall 'a. Ord 'a => (Ord (maybe 'a))
   let compare = maybeCompare compare
@@ -111,65 +134,21 @@ type opcode = Opcode of list byte (* of length 4 *)
 
 (** typeclass instantiations *)
   
-let ~{ocaml} bitCompare (b1:bit) (b2:bit) =
-  match (b1,b2) with
-  | (Bitc_zero, Bitc_zero) -> EQ
-  | (Bitc_one, Bitc_one) -> EQ
-  | (Bitc_zero, _) -> LT
-  | (_,_) -> GT
+
+instance (EnumerationType bit)
+  let toNat = function
+    | Bitc_zero -> 0
+    | Bitc_one -> 1
   end
-let inline {ocaml} bitCompare = defaultCompare
-
-let ~{ocaml} bitLess b1 b2      = bitCompare b1 b2 =  LT
-let ~{ocaml} bitLessEq b1 b2    = bitCompare b1 b2 <> GT
-let ~{ocaml} bitGreater b1 b2   = bitCompare b1 b2 =  GT
-let ~{ocaml} bitGreaterEq b1 b2 = bitCompare b1 b2 <> LT
-
-let inline {ocaml} bitLess      = defaultLess
-let inline {ocaml} bitLessEq    = defaultLessEq
-let inline {ocaml} bitGreater   = defaultGreater
-let inline {ocaml} bitGreaterEq = defaultGreaterEq
-
-instance (Ord bit)
-  let compare = bitCompare
-  let (<)  = bitLess
-  let (<=) = bitLessEq
-  let (>)  = bitGreater
-  let (>=) = bitGreaterEq
 end
 
-let ~{ocaml} bit_liftedCompare (bl1:bit_lifted) (bl2:bit_lifted) =
-  match (bl1,bl2) with
-  | (Bitl_zero, Bitl_zero) -> EQ
-  | (Bitl_zero,_) -> LT
-  | (Bitl_one, Bitl_zero) -> GT
-  | (Bitl_one, Bitl_one) -> EQ
-  | (Bitl_one, _) -> LT
-  | (Bitl_undef,Bitl_zero) -> GT
-  | (Bitl_undef,Bitl_one) -> GT
-  | (Bitl_undef,Bitl_undef) -> EQ
-  | (Bitl_undef,_) -> LT
-  | (Bitl_unknown,Bitl_unknown) -> EQ
-  | (Bitl_unknown,_) -> GT
+instance (EnumerationType bit_lifted)
+  let toNat = function
+    | Bitl_zero -> 0 
+    | Bitl_one -> 1
+    | Bitl_undef -> 2
+    | Bitl_unknown -> 3
   end
-let inline {ocaml} bit_liftedCompare = defaultCompare
-
-let ~{ocaml} bit_liftedLess b1 b2      = bit_liftedCompare b1 b2 =  LT
-let ~{ocaml} bit_liftedLessEq b1 b2    = bit_liftedCompare b1 b2 <> GT
-let ~{ocaml} bit_liftedGreater b1 b2   = bit_liftedCompare b1 b2 =  GT
-let ~{ocaml} bit_liftedGreaterEq b1 b2 = bit_liftedCompare b1 b2 <> LT
-
-let inline {ocaml} bit_liftedLess      = defaultLess
-let inline {ocaml} bit_liftedLessEq    = defaultLessEq
-let inline {ocaml} bit_liftedGreater   = defaultGreater
-let inline {ocaml} bit_liftedGreaterEq = defaultGreaterEq
-
-instance (Ord bit_lifted)
-  let compare = bit_liftedCompare
-  let (<)  = bit_liftedLess
-  let (<=) = bit_liftedLessEq
-  let (>)  = bit_liftedGreater
-  let (>=) = bit_liftedGreaterEq
 end
 
 let ~{ocaml} byte_liftedCompare (Byte_lifted b1) (Byte_lifted b2) = compare b1 b2
@@ -578,233 +557,71 @@ end
 
 
 
-let ~{ocaml} read_kindCompare rk1 rk2 =
-  match (rk1, rk2) with
-  | (Read_plain, Read_plain) -> EQ
-  | (Read_plain, _)           -> LT
-  | (_, Read_plain)           -> GT
-
-  | (Read_reserve, Read_reserve) -> EQ
-  | (Read_reserve, _)           -> LT
-  | (_, Read_reserve)           -> GT
-
-  | (Read_acquire, Read_acquire) -> EQ
-  | (Read_acquire, _)           -> LT
-  | (_, Read_acquire)           -> GT
-
-  | (Read_exclusive, Read_exclusive) -> EQ
-  | (Read_exclusive, _)           -> LT
-  | (_, Read_exclusive)           -> GT
-
-  | (Read_exclusive_acquire, Read_exclusive_acquire) -> EQ
-  | (Read_exclusive_acquire, _)           -> LT
-  | (_, Read_exclusive_acquire)           -> GT
-
-  | (Read_stream, Read_stream) -> EQ
-  | (Read_stream, _)           -> LT
-  | (_, Read_stream)           -> GT
-
-  | (Read_RISCV_acquire, Read_RISCV_acquire) -> EQ
-  | (Read_RISCV_acquire, _)           -> LT
-  | (_, Read_RISCV_acquire)           -> GT
-
-  | (Read_RISCV_reserved, Read_RISCV_reserved) -> EQ
-  | (Read_RISCV_reserved, _)           -> LT
-  | (_, Read_RISCV_reserved)           -> GT
-
-  | (Read_RISCV_reserved_acquire, Read_RISCV_reserved_acquire) -> EQ
-  (*| (Read_RISCV_reserved_acquire, _)           -> LT
-  | (_, Read_RISCV_reserved_acquire)           -> GT*)
+instance (EnumerationType read_kind)
+  let toNat = function
+    | Read_plain -> 0
+    | Read_reserve -> 1
+    | Read_acquire -> 2
+    | Read_exclusive -> 3
+    | Read_exclusive_acquire -> 4
+    | Read_stream -> 5
+    | Read_RISCV_acquire -> 6
+    | Read_RISCV_reserved -> 7
+    | Read_RISCV_reserved_acquire -> 8
   end
-let inline {ocaml} read_kindCompare = defaultCompare
-
-let ~{ocaml} read_kindLess b1 b2      = read_kindCompare b1 b2 =  LT
-let ~{ocaml} read_kindLessEq b1 b2    = read_kindCompare b1 b2 <> GT
-let ~{ocaml} read_kindGreater b1 b2   = read_kindCompare b1 b2 =  GT
-let ~{ocaml} read_kindGreaterEq b1 b2 = read_kindCompare b1 b2 <> LT
-
-let inline {ocaml} read_kindLess      = defaultLess
-let inline {ocaml} read_kindLessEq    = defaultLessEq
-let inline {ocaml} read_kindGreater   = defaultGreater
-let inline {ocaml} read_kindGreaterEq = defaultGreaterEq
-
-instance (Ord read_kind)
-  let compare = read_kindCompare
-  let (<)  = read_kindLess
-  let (<=) = read_kindLessEq
-  let (>)  = read_kindGreater
-  let (>=) = read_kindGreaterEq
 end
 
-let ~{ocaml} write_kindCompare wk1 wk2 =
-  match (wk1, wk2) with
-  | (Write_plain, Write_plain) -> EQ
-  | (Write_plain, _)           -> LT
-  | (_, Write_plain)           -> GT
-
-  | (Write_conditional, Write_conditional) -> EQ
-  | (Write_conditional, _)                 -> LT
-  | (_, Write_conditional)                 -> GT
-
-
-  | (Write_release, Write_release) -> EQ
-  | (Write_release, _)             -> LT
-  | (_, Write_release)             -> GT
-
-  | (Write_exclusive, Write_exclusive) -> EQ
-  | (Write_exclusive, _)               -> LT
-  | (_, Write_exclusive)               -> GT
-
-  | (Write_exclusive_release, Write_exclusive_release) -> EQ
-  | (Write_exclusive_release, _)                       -> LT
-  | (_, Write_exclusive_release)                       -> GT
-
-  | (Write_RISCV_release, Write_RISCV_release) -> EQ
-  | (Write_RISCV_release, _)                   -> LT
-  | (_, Write_RISCV_release)                   -> GT
-
-  | (Write_RISCV_conditional, Write_RISCV_conditional) -> EQ
-  | (Write_RISCV_conditional, _)                       -> LT
-  | (_, Write_RISCV_conditional)                       -> GT
-
-  | (Write_RISCV_conditional_release, Write_RISCV_conditional_release) -> EQ
-  (*| (Write_RISCV_conditional_release, _)                               -> LT
-  | (_, Write_RISCV_conditional_release)                               -> GT*)
+instance (EnumerationType write_kind)
+  let toNat = function
+    | Write_plain -> 0
+    | Write_conditional -> 1
+    | Write_release -> 2
+    | Write_exclusive -> 3 
+    | Write_exclusive_release -> 4
+    | Write_RISCV_release -> 5
+    | Write_RISCV_conditional -> 6
+    | Write_RISCV_conditional_release -> 7
   end
-let inline {ocaml} write_kindCompare = defaultCompare
-
-let ~{ocaml} write_kindLess b1 b2      = write_kindCompare b1 b2 =  LT
-let ~{ocaml} write_kindLessEq b1 b2    = write_kindCompare b1 b2 <> GT
-let ~{ocaml} write_kindGreater b1 b2   = write_kindCompare b1 b2 =  GT
-let ~{ocaml} write_kindGreaterEq b1 b2 = write_kindCompare b1 b2 <> LT
-
-let inline {ocaml} write_kindLess      = defaultLess
-let inline {ocaml} write_kindLessEq    = defaultLessEq
-let inline {ocaml} write_kindGreater   = defaultGreater
-let inline {ocaml} write_kindGreaterEq = defaultGreaterEq
-
-instance (Ord write_kind)
-  let compare = write_kindCompare
-  let (<)  = write_kindLess
-  let (<=) = write_kindLessEq
-  let (>)  = write_kindGreater
-  let (>=) = write_kindGreaterEq
 end
 
-
-let ~{ocaml} barrier_kindCompare bk1 bk2 =
-  match (bk1, bk2) with
-  | (Barrier_Sync, Barrier_Sync) -> EQ
-  | (Barrier_Sync, _) -> LT
-  | (_, Barrier_Sync) -> GT
-
-  | (Barrier_LwSync, Barrier_LwSync) -> EQ
-  | (Barrier_LwSync, _) -> LT
-  | (_, Barrier_LwSync) -> GT
-
-  | (Barrier_Eieio, Barrier_Eieio) -> EQ
-  | (Barrier_Eieio, _) -> LT
-  | (_, Barrier_Eieio) -> GT
-
-  | (Barrier_Isync, Barrier_Isync) -> EQ
-  | (Barrier_Isync, _) -> LT
-  | (_, Barrier_Isync) -> GT
-
-  | (Barrier_DMB, Barrier_DMB) -> EQ
-  | (Barrier_DMB, _) -> LT
-  | (_, Barrier_DMB) -> GT
-
-  | (Barrier_DMB_ST, Barrier_DMB_ST) -> EQ
-  | (Barrier_DMB_ST, _) -> LT
-  | (_, Barrier_DMB_ST) -> GT
-
-  | (Barrier_DMB_LD, Barrier_DMB_LD) -> EQ
-  | (Barrier_DMB_LD, _) -> LT
-  | (_, Barrier_DMB_LD) -> GT
-
-  | (Barrier_DSB, Barrier_DSB) -> EQ
-  | (Barrier_DSB, _) -> LT
-  | (_, Barrier_DSB) -> GT
-
-  | (Barrier_DSB_ST, Barrier_DSB_ST) -> EQ
-  | (Barrier_DSB_ST, _) -> LT
-  | (_, Barrier_DSB_ST) -> GT
-
-  | (Barrier_DSB_LD, Barrier_DSB_LD) -> EQ
-  | (Barrier_DSB_LD, _) -> LT
-  | (_, Barrier_DSB_LD) -> GT
-                          
-  | (Barrier_ISB, Barrier_ISB) -> EQ
-  | (Barrier_ISB, _) -> LT
-  | (_, Barrier_ISB) -> GT
-
-  | (Barrier_TM_COMMIT, Barrier_TM_COMMIT) -> EQ
-  | (Barrier_TM_COMMIT, _) -> LT
-  | (_, Barrier_TM_COMMIT) -> GT
-
-  | (Barrier_MIPS_SYNC, Barrier_MIPS_SYNC) -> EQ
-  | (Barrier_MIPS_SYNC, _) -> LT
-  | (_, Barrier_MIPS_SYNC) -> GT
-
-  | (Barrier_RISCV_rw_rw, Barrier_RISCV_rw_rw) -> EQ
-  | (Barrier_RISCV_rw_rw, _) -> LT
-  | (_, Barrier_RISCV_rw_rw) -> GT
-
-  | (Barrier_RISCV_r_rw, Barrier_RISCV_r_rw) -> EQ
-  | (Barrier_RISCV_r_rw, _) -> LT
-  | (_, Barrier_RISCV_r_rw) -> GT
-
-  | (Barrier_RISCV_rw_w, Barrier_RISCV_rw_w) -> EQ
-  | (Barrier_RISCV_rw_w, _) -> LT
-  | (_, Barrier_RISCV_rw_w) -> GT
-
-  | (Barrier_RISCV_w_w, Barrier_RISCV_w_w) -> EQ
-  | (Barrier_RISCV_w_w, _) -> LT
-  | (_, Barrier_RISCV_w_w) -> GT
-
-  | (Barrier_RISCV_i, Barrier_RISCV_i) -> EQ
-  | (Barrier_RISCV_i, _) -> LT
-  | (_, Barrier_RISCV_i) -> GT
-
-  | (Barrier_x86_MFENCE, Barrier_x86_MFENCE) -> EQ
-  (*| (Barrier_x86_MFENCE, _) -> LT
-  | (_, Barrier_x86_MFENCE) -> GT*)
+instance (EnumerationType barrier_kind)
+  let toNat = function
+    | Barrier_Sync -> 0
+    | Barrier_LwSync -> 1
+    | Barrier_Eieio ->2
+    | Barrier_Isync -> 3
+    | Barrier_DMB -> 4
+    | Barrier_DMB_ST -> 5
+    | Barrier_DMB_LD -> 6
+    | Barrier_DSB -> 7
+    | Barrier_DSB_ST -> 8
+    | Barrier_DSB_LD -> 9
+    | Barrier_ISB -> 10
+    | Barrier_TM_COMMIT -> 11
+    | Barrier_MIPS_SYNC -> 12
+    | Barrier_RISCV_rw_rw -> 13
+    | Barrier_RISCV_r_rw -> 14
+    | Barrier_RISCV_rw_w -> 15
+    | Barrier_RISCV_w_w -> 16
+    | Barrier_RISCV_i -> 17
+    | Barrier_x86_MFENCE -> 18
   end
-let inline {ocaml} barrier_kindCompare = defaultCompare
-
-let ~{ocaml} barrier_kindLess b1 b2      = barrier_kindCompare b1 b2 =  LT
-let ~{ocaml} barrier_kindLessEq b1 b2    = barrier_kindCompare b1 b2 <> GT
-let ~{ocaml} barrier_kindGreater b1 b2   = barrier_kindCompare b1 b2 =  GT
-let ~{ocaml} barrier_kindGreaterEq b1 b2 = barrier_kindCompare b1 b2 <> LT
-
-let inline {ocaml} barrier_kindLess      = defaultLess
-let inline {ocaml} barrier_kindLessEq    = defaultLessEq
-let inline {ocaml} barrier_kindGreater   = defaultGreater
-let inline {ocaml} barrier_kindGreaterEq = defaultGreaterEq
-
-instance (Ord barrier_kind)
-  let compare = barrier_kindCompare
-  let (<)  = barrier_kindLess
-  let (<=) = barrier_kindLessEq
-  let (>)  = barrier_kindGreater
-  let (>=) = barrier_kindGreaterEq
 end
-
 
 type event = 
-| E_read_mem of read_kind * address_lifted * nat * maybe (list reg_name)
-| E_read_memt of read_kind * address_lifted * nat * maybe (list reg_name)
-| E_write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name)
-| E_write_ea of write_kind * address_lifted * nat * maybe (list reg_name)
-| E_excl_res
-| E_write_memv of maybe address_lifted * memory_value * maybe (list reg_name)
-| E_write_memvt of maybe address_lifted * (bit_lifted * memory_value) * maybe (list reg_name)
-| E_barrier of barrier_kind
-| E_footprint 
-| E_read_reg of reg_name
-| E_write_reg of reg_name * register_value
-| E_escape
-| E_error of string 
+  | E_read_mem of read_kind * address_lifted * nat * maybe (list reg_name)
+  | E_read_memt of read_kind * address_lifted * nat * maybe (list reg_name)
+  | E_write_mem of write_kind * address_lifted * nat * maybe (list reg_name) * memory_value * maybe (list reg_name)
+  | E_write_ea of write_kind * address_lifted * nat * maybe (list reg_name)
+  | E_excl_res
+  | E_write_memv of maybe address_lifted * memory_value * maybe (list reg_name)
+  | E_write_memvt of maybe address_lifted * (bit_lifted * memory_value) * maybe (list reg_name)
+  | E_barrier of barrier_kind
+  | E_footprint 
+  | E_read_reg of reg_name
+  | E_write_reg of reg_name * register_value
+  | E_escape
+  | E_error of string 
 
 
 let eventCompare e1 e2 = 
