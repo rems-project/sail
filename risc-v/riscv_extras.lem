@@ -51,19 +51,26 @@ let memory_eas : memory_write_eas =
 let memory_vals : memory_write_vals =
   [ ("MEMval",          (MV memory_parameter_transformer_option_address Nothing));
     ("MEMval_release",  (MV memory_parameter_transformer_option_address Nothing));
-    ("MEMval_conditional",
-                        (MV memory_parameter_transformer_option_address
+    ("MEMval_conditional", (MV memory_parameter_transformer_option_address Nothing));
+                        (* (MV memory_parameter_transformer_option_address
                             (Just
                             (fun (IState interp context) b ->
                               let bit = Interp_ast.V_lit (L_aux (if b then L_one else L_zero) Interp_ast.Unknown) in
-                            (IState (Interp.add_answer_to_stack interp bit) context)))));
-    ("MEMval_conditional_release",
-                        (MV memory_parameter_transformer_option_address
+                            (IState (Interp.add_answer_to_stack interp bit) context))))); *)
+    ("MEMval_conditional_release", (MV memory_parameter_transformer_option_address Nothing));
+                        (* (MV memory_parameter_transformer_option_address
                            (Just
                            (fun (IState interp context) b ->
                              let bit = Interp_ast.V_lit (L_aux (if b then L_one else L_zero) Interp_ast.Unknown) in
-                             (IState (Interp.add_answer_to_stack interp bit) context)))));
+                             (IState (Interp.add_answer_to_stack interp bit) context))))); *)
   ]
+
+let speculate_conditional_success : excl_res =
+  let f = fun (IState interp context) b ->
+    let bool_res = Interp_ast.V_lit (L_aux (if b then L_one else L_zero) Interp_ast.Unknown) in
+    IState (Interp.add_answer_to_stack interp bool_res) context
+  in
+  Just ("speculate_conditional_success", (ER (Just f)))
 
 let barrier_functions =
   [ ("MEM_fence_rw_rw", Barrier_RISCV_rw_rw);

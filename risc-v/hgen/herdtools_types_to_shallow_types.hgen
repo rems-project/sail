@@ -47,6 +47,17 @@ let translate_ropw op = match op with
   | RISCVSRLW -> SRLW 
   | RISCVSRAW -> SRAW 
 
+let translate_amoop op = match op with
+  | RISCVAMOSWAP -> AMOSWAP
+  | RISCVAMOADD  -> AMOADD
+  | RISCVAMOXOR  -> AMOXOR
+  | RISCVAMOAND  -> AMOAND
+  | RISCVAMOOR   -> AMOOR
+  | RISCVAMOMIN  -> AMOMIN
+  | RISCVAMOMAX  -> AMOMAX
+  | RISCVAMOMINU -> AMOMINU
+  | RISCVAMOMAXU -> AMOMAXU
+
 let translate_wordWidth op = match op with
   | RISCVBYTE   -> BYTE  
   | RISCVHALF   -> HALF  

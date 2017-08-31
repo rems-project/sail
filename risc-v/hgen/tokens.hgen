@@ -15,3 +15,4 @@
 %token <RISCVHGenBase.token_FENCEI>   FENCEI
 %token <RISCVHGenBase.token_LoadRes>  LOADRES
 %token <RISCVHGenBase.token_StoreCon> STORECON
+%token <RISCVHGenBase.token_AMO> AMO

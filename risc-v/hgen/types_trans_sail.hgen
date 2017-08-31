@@ -16,6 +16,7 @@ let translate_iop = translate_enum [RISCVADDI; RISCVSLTI; RISCVSLTIU; RISCVXORI;
 let translate_sop = translate_enum [RISCVSLLI; RISCVSRLI; RISCVSRAI] (* shift ops *)
 let translate_rop = translate_enum [RISCVADD; RISCVSUB; RISCVSLL; RISCVSLT; RISCVSLTU; RISCVXOR; RISCVSRL; RISCVSRA; RISCVOR; RISCVAND] (* reg-reg ops *)
 let translate_ropw = translate_enum [RISCVADDW; RISCVSUBW; RISCVSLLW; RISCVSRLW; RISCVSRAW] (* reg-reg 32-bit ops *)
+let translate_amoop = translate_enum [RISCVAMOSWAP; RISCVAMOADD; RISCVAMOXOR; RISCVAMOAND; RISCVAMOOR; RISCVAMOMIN; RISCVAMOMAX; RISCVAMOMINU; RISCVAMOMAXU]
 let translate_width = translate_enum [RISCVBYTE; RISCVHALF; RISCVWORD; RISCVDOUBLE] 
 let translate_reg name value = 
     (name, Bvector (Some 5), bit_list_of_integer 5 (Nat_big_num.of_int (reg_to_int value)))

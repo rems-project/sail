@@ -83,6 +83,7 @@ typedef instruction_kind = const union {
   (barrier_kind) IK_barrier;
   (read_kind) IK_mem_read;
   (write_kind) IK_mem_write;
+  (read_kind, write_kind) IK_mem_rmw;
   IK_cond_branch;
   (trans_kind) IK_trans;
   IK_simple

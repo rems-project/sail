@@ -40,3 +40,5 @@
   { `RISCVLoadRes($1.aq, $1.rl, $5, $1.width, $2) }
 | STORECON reg COMMA reg COMMA LPAR reg RPAR
   { `RISCVStoreCon($1.aq, $1.rl, $4, $7, $1.width, $2) }
+| AMO reg COMMA reg COMMA LPAR reg RPAR
+  { `RISCVAMO($1.op, $1.aq, $1.rl, $4, $7, $1.width, $2) }

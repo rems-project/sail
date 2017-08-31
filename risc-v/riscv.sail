@@ -40,7 +40,10 @@ register (bit[64]) PC
 register (bit[64]) nextPC
 
 let (vector <0, 32, inc, (register<(regval)>)>) GPRs =
-  [x0, x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16,x17,x18,x19,x20,x21,x22,x23,x24,x25,x26,x27,x28,x29,x30,x31]
+  [ x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14,
+    x15, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27,
+    x28, x29, x30, x31
+  ]
 
 function (regval) rGPR ((regno) r) = 
     if (r == 0) then 
@@ -71,35 +74,29 @@ function forall Nat 'n. (bit[8 * 'n]) effect { rmem } mem_read( (bit[64]) addr, 
 
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_release
-function forall Nat 'n. unit effect { eamem } mem_write_ea( (bit[64]) addr , ([|'n|]) width, (bool) rl) =
-  switch rl {
-    case false -> MEMea(addr, width)
-    case true  -> MEMea_release(addr, width)
+val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional
+val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional_release
+function forall Nat 'n. unit effect { eamem } mem_write_ea( (bit[64]) addr , ([|'n|]) width, (bool) rl, (bool) con) =
+  switch (rl, con) {
+    case (false, false) -> MEMea(addr, width)
+    case (true,  false) -> MEMea_release(addr, width)
+    case (false, true)  -> MEMea_conditional(addr, width)
+    case (true , true)  -> MEMea_conditional_release(addr, width)
   }
 
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_release
-function forall Nat 'n. unit effect { wmv } mem_write_value( (bit[64]) addr , ([|'n|]) width , (bit[8*'n]) value, (bool) rl) =
-  switch rl {
-    case false -> MEMval(addr, width, value)
-    case true  -> MEMval_release(addr, width, value)
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_conditional
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_conditional_release
+function forall Nat 'n. unit effect { wmv } mem_write_value( (bit[64]) addr , ([|'n|]) width , (bit[8*'n]) value, (bool) rl, (bool) con) =
+  switch (rl, con) {
+    case (false, false) -> MEMval(addr, width, value)
+    case (true,  false) -> MEMval_release(addr, width, value)
+    case (false, true)  -> MEMval_conditional(addr, width, value)
+    case (true,  true)  -> MEMval_conditional_release(addr, width, value)
   }
 
-val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional
-val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional_release
-function forall Nat 'n. unit effect { eamem } mem_write_conditional_ea( (bit[64]) addr , ([|'n|]) width, (bool) rl) =
-  switch rl {
-    case false -> MEMea_conditional(addr, width)
-    case true  -> MEMea_conditional_release(addr, width)
-  }
-
-val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> bool effect { wmv } MEMval_conditional
-val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> bool effect { wmv } MEMval_conditional_release
-function forall Nat 'n. bool effect { wmv } mem_write_conditional_value( (bit[64]) addr , ([|'n|]) width , (bit[8*'n]) value, (bool) rl) =
-  switch rl {
-    case false -> MEMval_conditional(addr, width, value)
-    case true  -> MEMval_conditional_release(addr, width, value)
-  }
+val extern unit -> bool effect {exmem} speculate_conditional_success
 
 val extern unit -> unit effect { barr } MEM_fence_rw_rw
 val extern unit -> unit effect { barr } MEM_fence_r_rw
@@ -122,6 +119,9 @@ typedef iop = enumerate {ADDI; SLTI; SLTIU; XORI; ORI; ANDI} (* immediate ops *)
 typedef sop = enumerate {SLLI; SRLI; SRAI} (* shift ops *)
 typedef rop = enumerate {ADD; SUB; SLL; SLT; SLTU; XOR; SRL; SRA; OR; AND} (* reg-reg ops *)
 typedef ropw = enumerate {ADDW; SUBW; SLLW; SRLW; SRAW} (* reg-reg 32-bit ops *)
+typedef amoop = enumerate {AMOSWAP; AMOADD; AMOXOR; AMOAND; AMOOR;
+    AMOMIN; AMOMAX; AMOMINU; AMOMAXU} (* AMO ops *)
+
 
 typedef word_width = enumerate {BYTE; HALF; WORD; DOUBLE}
 
@@ -279,17 +279,17 @@ function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b011 : (bit
 function clause execute (STORE(imm, rs2, rs1, width, rl)) =
     let (bit[64]) addr = rGPR(rs1) + EXTS(imm) in {
       switch (width) {
-        case BYTE   -> mem_write_ea(addr, 1, rl)
-        case HALF   -> mem_write_ea(addr, 2, rl)
-        case WORD   -> mem_write_ea(addr, 4, rl)
-        case DOUBLE -> mem_write_ea(addr, 8, rl)
+        case BYTE   -> mem_write_ea(addr, 1, rl, false)
+        case HALF   -> mem_write_ea(addr, 2, rl, false)
+        case WORD   -> mem_write_ea(addr, 4, rl, false)
+        case DOUBLE -> mem_write_ea(addr, 8, rl, false)
       };
       let rs2_val = rGPR(rs2) in
       switch (width) {
-        case BYTE   -> mem_write_value(addr, 1, rs2_val[7..0], rl)
-        case HALF   -> mem_write_value(addr, 2, rs2_val[15..0], rl)
-        case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], rl)
-        case DOUBLE -> mem_write_value(addr, 8, rs2_val, rl)
+        case BYTE   -> mem_write_value(addr, 1, rs2_val[7..0],  rl, false)
+        case HALF   -> mem_write_value(addr, 2, rs2_val[15..0], rl, false)
+        case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], rl, false)
+        case DOUBLE -> mem_write_value(addr, 8, rs2_val,        rl, false)
       }
     }
 
@@ -376,21 +376,77 @@ function clause decode (0b00011 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b01
 function clause decode (0b00011 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(STORECON(aq, rl, rs2, rs1, DOUBLE, rd))
 function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
   if aq then not_implemented("store-conditional-acquire is not implemented");
+
+  (*(bit)*) status := if speculate_conditional_success() then 0 else 1;
+  wGPR(rd) := (bit[64]) (EXTZ([status]));
+
   (bit[64]) addr := rGPR(rs1);
   switch width {
-    case WORD   -> mem_write_conditional_ea(addr, 4, rl)
-    case DOUBLE -> mem_write_conditional_ea(addr, 8, rl)
+    case WORD   -> mem_write_ea(addr, 4, rl, true)
+    case DOUBLE -> mem_write_ea(addr, 8, rl, true)
   };
   rs2_val := rGPR(rs2);
-  (bool) success :=
-    switch width {
-      case WORD   -> mem_write_conditional_value(addr, 4, rs2_val[31..0], rl)
-      case DOUBLE -> mem_write_conditional_value(addr, 8, rs2_val, rl)
-    };
-  if success then wGPR(rd, 0)
-  else wGPR(rd, 1);
+  switch width {
+    case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], rl, true)
+    case DOUBLE -> mem_write_value(addr, 8, rs2_val,        rl, true)
+  };
 }
 
+union ast member (amoop, bool, bool, regno, regno, word_width, regno) AMO
+
+function clause decode (0b00001 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(AMO(AMOSWAP, aq, rl, rs2, rs1, WORD,   rd))
+function clause decode (0b00001 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(AMO(AMOSWAP, aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b00000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(AMO(AMOADD , aq, rl, rs2, rs1, WORD,   rd))
+function clause decode (0b00000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(AMO(AMOADD , aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b00100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(AMO(AMOXOR , aq, rl, rs2, rs1, WORD,   rd))
+function clause decode (0b00100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(AMO(AMOXOR , aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b01100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(AMO(AMOAND , aq, rl, rs2, rs1, WORD,   rd))
+function clause decode (0b01100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(AMO(AMOAND , aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b01000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(AMO(AMOOR  , aq, rl, rs2, rs1, WORD,   rd))
+function clause decode (0b01000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(AMO(AMOOR  , aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b10000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(AMO(AMOMIN , aq, rl, rs2, rs1, WORD,   rd))
+function clause decode (0b10000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(AMO(AMOMIN , aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b10100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(AMO(AMOMAX , aq, rl, rs2, rs1, WORD,   rd))
+function clause decode (0b10100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(AMO(AMOMAX , aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b11000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(AMO(AMOMINU, aq, rl, rs2, rs1, WORD,   rd))
+function clause decode (0b11000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(AMO(AMOMINU, aq, rl, rs2, rs1, DOUBLE, rd))
+function clause decode (0b11100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(AMO(AMOMAXU, aq, rl, rs2, rs1, WORD,   rd))
+function clause decode (0b11100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(AMO(AMOMAXU, aq, rl, rs2, rs1, DOUBLE, rd))
+function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
+  (bit[64]) addr := rGPR(rs1);
+
+  switch (width) {
+    case WORD   -> mem_write_ea(addr, 4, rl, true)
+    case DOUBLE -> mem_write_ea(addr, 8, rl, true)
+  };
+
+  (bit[64]) loaded :=
+    switch (width) {
+      case WORD   -> EXTS(mem_read(addr, 4, aq, true))
+      case DOUBLE -> mem_read(addr, 8, aq, true)
+    };
+  wGPR(rd, loaded);
+
+  (bit[64]) rs2_val := rGPR(rs2);
+  (bit[64]) result :=
+    switch(op) {
+      case AMOSWAP -> rs2_val
+      case AMOADD  -> rs2_val + loaded
+      case AMOXOR  -> rs2_val ^ loaded
+      case AMOAND  -> rs2_val & loaded
+      case AMOOR   -> rs2_val | loaded
+
+      case AMOMIN  -> (bit[64]) (min(signed(rs2_val),   signed(loaded)))
+      case AMOMAX  -> (bit[64]) (max(signed(rs2_val),   signed(loaded)))
+      case AMOMINU -> (bit[64]) (min(unsigned(rs2_val), unsigned(loaded)))
+      case AMOMAXU -> (bit[64]) (max(unsigned(rs2_val), unsigned(loaded)))
+    };
+
+  switch (width) {
+    case WORD   -> mem_write_value(addr, 4, result[31..0], rl, true)
+    case DOUBLE -> mem_write_value(addr, 8, result,        rl, true)
+  };
+}
 
 function clause decode _ = None
 

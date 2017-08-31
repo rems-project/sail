@@ -140,6 +140,38 @@ let pp_riscv_store_conditional_op (aq, rl, width) =
   (if aq then ".aq" else "") ^
   (if rl then ".rl" else "")
 
+type riscvAmoop =
+  | RISCVAMOSWAP
+  | RISCVAMOADD
+  | RISCVAMOXOR
+  | RISCVAMOAND
+  | RISCVAMOOR
+  | RISCVAMOMIN
+  | RISCVAMOMAX
+  | RISCVAMOMINU
+  | RISCVAMOMAXU
+
+let pp_riscv_amo_op (op, aq, rl, width) =
+  "amo" ^
+  begin match op with
+  | RISCVAMOSWAP -> "swap"
+  | RISCVAMOADD  -> "add"
+  | RISCVAMOXOR  -> "xor"
+  | RISCVAMOAND  -> "and"
+  | RISCVAMOOR   -> "or"
+  | RISCVAMOMIN  -> "min"
+  | RISCVAMOMAX  -> "max"
+  | RISCVAMOMINU -> "minu"
+  | RISCVAMOMAXU -> "maxu"
+  end ^
+  begin match width with
+  | RISCVWORD   -> ".w"
+  | RISCVDOUBLE -> ".d"
+  | _ -> assert false
+  end ^
+  (if aq then ".aq" else "") ^
+  (if rl then ".rl" else "")
+
 let pp_riscv_fence_option = function
   | 0b0011 -> "rw"
   | 0b0010 -> "r"

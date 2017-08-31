@@ -31,3 +31,10 @@
                                       (pp_reg rd)
                                       (pp_reg rs2)
                                       (pp_reg rs1)
+| `RISCVAMO(op, aq, rl, rs2, rs1, width, rd)
+                                  ->
+                                    sprintf "%s %s, %s, (%s)"
+                                      (pp_riscv_amo_op (op, aq, rl, width))
+                                      (pp_reg rd)
+                                      (pp_reg rs2)
+                                      (pp_reg rs1)

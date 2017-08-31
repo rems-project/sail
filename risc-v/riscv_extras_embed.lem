@@ -26,13 +26,15 @@ let MEMea_conditional_release (addr,size) = write_mem_ea Write_RISCV_conditional
 
 val MEMval                     : (vector bitU * integer * vector bitU) -> M unit
 val MEMval_release             : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_conditional         : (vector bitU * integer * vector bitU) -> M bitU
-val MEMval_conditional_release : (vector bitU * integer * vector bitU) -> M bitU
+val MEMval_conditional         : (vector bitU * integer * vector bitU) -> M unit
+val MEMval_conditional_release : (vector bitU * integer * vector bitU) -> M unit
 
 let MEMval (_,_,v)                     = write_mem_val v >>= fun _ -> return ()
 let MEMval_release (_,_,v)             = write_mem_val v >>= fun _ -> return ()
-let MEMval_conditional (_,_,v)         = write_mem_val v >>= fun b -> return (if b then B1 else B0)
-let MEMval_conditional_release (_,_,v) = write_mem_val v >>= fun b -> return (if b then B1 else B0)
+let MEMval_conditional (_,_,v)         = write_mem_val v >>= fun _ -> return () (* (if b then B1 else B0) *)
+let MEMval_conditional_release (_,_,v) = write_mem_val v >>= fun _ -> return () (* (if b then B1 else B0) *)
+
+let speculate_conditional_success () = excl_result () >>= fun b -> return (if b then B1 else B0)
 
 val MEM_fence_rw_rw : unit -> M unit
 val MEM_fence_r_rw  : unit -> M unit

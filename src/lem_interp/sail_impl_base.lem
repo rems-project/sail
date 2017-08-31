@@ -552,26 +552,27 @@ instance (Show trans_kind)
 end
 
 type instruction_kind = 
-  | IK_barrier of barrier_kind 
-  | IK_mem_read of read_kind 
+  | IK_barrier   of barrier_kind
+  | IK_mem_read  of read_kind
   | IK_mem_write of write_kind
-(* SS reinstating cond_branches
-at present branches are not distinguished in the instruction_kind;
-they just have particular nias (and will be IK_simple *)
-  | IK_cond_branch 
-(*  | IK_uncond_branch *)
-  | IK_trans of trans_kind
+  | IK_mem_rmw   of (read_kind * write_kind)
+  | IK_cond_branch
+  (* unconditional branches are not distinguished in the instruction_kind;
+  they just have particular nias (and will be IK_simple *)
+  (* | IK_uncond_branch *)
+  | IK_trans     of trans_kind
   | IK_simple
 
 
 instance (Show instruction_kind)
   let show = function
     | IK_barrier barrier_kind -> "IK_barrier " ^ (show barrier_kind)
-    | IK_mem_read read_kind -> "IK_mem_read " ^ (show read_kind)
+    | IK_mem_read read_kind   -> "IK_mem_read " ^ (show read_kind)
     | IK_mem_write write_kind -> "IK_mem_write " ^ (show write_kind)
-    | IK_cond_branch -> "IK_cond_branch"
-    | IK_trans trans_kind -> "IK_trans " ^ (show trans_kind)
-    | IK_simple -> "IK_simple"
+    | IK_mem_rmw (r, w)       -> "IK_mem_rmw " ^ (show r) ^ " " ^ (show w)
+    | IK_cond_branch          -> "IK_cond_branch"
+    | IK_trans trans_kind     -> "IK_trans " ^ (show trans_kind)
+    | IK_simple               -> "IK_simple"
   end
 end
 

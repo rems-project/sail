@@ -14,3 +14,4 @@
 | `RISCVFENCEI
 | `RISCVLoadRes of bool * bool * reg * wordWidth * reg
 | `RISCVStoreCon of bool * bool * reg * reg * wordWidth * reg
+| `RISCVAMO of riscvAmoop * bool * bool * reg * reg * wordWidth * reg

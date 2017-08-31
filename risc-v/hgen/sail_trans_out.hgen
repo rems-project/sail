@@ -19,3 +19,5 @@
                                   -> `RISCVLoadRes(translate_out_bool aq, translate_out_bool rl, translate_out_ireg rs1, translate_out_wordWidth width, translate_out_ireg rd)
 | ("STORECON", [aq; rl; rs2; rs1; width; rd])
                                   -> `RISCVStoreCon(translate_out_bool aq, translate_out_bool rl, translate_out_ireg rs2, translate_out_ireg rs1, translate_out_wordWidth width, translate_out_ireg rd)
+| ("AMO", [op; aq; rl; rs2; rs1; width; rd])
+                                  -> `RISCVAMO(translate_out_amoop op, translate_out_bool aq, translate_out_bool rl, translate_out_ireg rs2, translate_out_ireg rs1, translate_out_wordWidth width, translate_out_ireg rd)

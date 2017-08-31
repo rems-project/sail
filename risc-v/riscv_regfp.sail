@@ -103,10 +103,25 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
             if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
             if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
             if (rs1 == 0) then () else aR := RFull(GPRstr[rs1]) :: aR;
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+
             ik := switch (aq, rl) {
               case (false, false) -> IK_mem_write (Write_RISCV_conditional)
               case (false, true)  -> IK_mem_write (Write_RISCV_conditional_release)
               case (true,  _)     -> exit "not implemented"
+            };
+     }
+     case (AMO( op, aq, rl, rs2, rs1, width, rd)) -> {
+            if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
+            if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
+            if (rs1 == 0) then () else aR := RFull(GPRstr[rs1]) :: aR;
+            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
+
+            ik := switch (aq, rl) {
+              case (false, false) -> IK_mem_rmw (Read_RISCV_reserved,         Write_RISCV_conditional)
+              case (false, true)  -> IK_mem_rmw (Read_RISCV_reserved,         Write_RISCV_conditional_release)
+              case (true,  false) -> IK_mem_rmw (Read_RISCV_reserved_acquire, Write_RISCV_conditional)
+              case (true,  true)  -> IK_mem_rmw (Read_RISCV_reserved_acquire, Write_RISCV_conditional_release)
             };
      }
   };

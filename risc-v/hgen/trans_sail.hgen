@@ -137,3 +137,15 @@
       translate_reg "rd" rd;
     ],
     [])
+| `RISCVAMO(op, aq, rl, rs2, rs1, width, rd) ->
+   ("AMO",
+    [
+      translate_amoop "op" op;
+      translate_bool "aq" aq;
+      translate_bool "rl" rl;
+      translate_reg "rs2" rs2;
+      translate_reg "rs1" rs1;
+      translate_width "width" width;
+      translate_reg "rd" rd;
+    ],
+    [])

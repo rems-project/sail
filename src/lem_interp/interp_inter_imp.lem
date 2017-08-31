@@ -1416,6 +1416,41 @@ let interp_instruction_analysis
 
           if forall (inst_kind' MEM inst_kinds). inst_kind' = inst_kind then
             inst_kind
+
+          else if
+            (forall (inst_kind' MEM (inst_kind :: inst_kinds)).
+                match inst_kind' with
+                | IK_mem_read _  -> true
+                | IK_mem_write _ -> true
+                | IK_mem_rmw _   -> false
+                | IK_barrier _   -> false
+                | IK_cond_branch -> false
+                | IK_trans _     -> false
+                | IK_simple      -> false
+                end) &&
+            (exists (inst_kind' MEM (inst_kind :: inst_kinds)).
+                match inst_kind' with
+                | IK_mem_read _  -> true
+                | _              -> false
+                end) &&
+            (exists (inst_kind' MEM (inst_kind :: inst_kinds)).
+                match inst_kind' with
+                | IK_mem_write _ -> true
+                | _              -> false
+                end)
+          then
+            match
+              List.partition
+                (function IK_mem_read _ -> true | _ -> false end)
+                (inst_kind :: inst_kinds)
+            with
+            | ((IK_mem_read r) :: rs, (IK_mem_write w) :: ws) ->
+                let () = ensure (forall (r' MEM rs). r' = IK_mem_read r) "more than one kind of read" in
+                let () = ensure (forall (w' MEM ws). w' = IK_mem_write w) "more than one kind of write" in
+                IK_mem_rmw (r, w)
+            | _ -> fail
+            end
+
           (* the TSTART instruction can also be aborted so it will have two kinds of events *)
           else if (exists (inst_kind' MEM (inst_kind :: inst_kinds)).
                         inst_kind' = IK_trans Transaction_start) &&
@@ -1424,7 +1459,9 @@ let interp_instruction_analysis
                         || inst_kind' = IK_trans Transaction_abort)
           then
             IK_trans Transaction_start
-          else failwith "multiple instruction kinds"
+
+          else
+            failwith "multiple instruction kinds"
     end in
 
   (regs_in, regs_out, regs_feeding_address, nias, dia, inst_kind)
