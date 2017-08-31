@@ -33,7 +33,6 @@ default Order dec
 val extern forall Type 'a. ('a, list<'a>) -> bool effect pure ismember
 val extern forall Type 'a. list<'a> -> nat effect pure listlength
 val extern forall Nat 'n. (bit['n],[|'n|]) -> bit['n] effect pure ASR
-val extern forall Nat 'n. (bit['n],[|'n|]) -> bit['n] effect pure LSR
 val extern forall Nat 'n. (bit['n],[|'n|]) -> bit['n] effect pure ROR
 val extern forall Nat 'n. (bit['n],[|'n|]) -> bit['n] effect pure ROL
 val cast bool -> bit effect pure cast_bool_bit
@@ -79,18 +78,18 @@ let (vector<0,16,inc,(register<qword>)>) REG =
 
 (* Flags *)
 
-register bit CF
-register bit PF
-register bit AF
-register bit ZF
-register bit SF
-register bit OF
+register bit[1] CF
+register bit[1] PF
+register bit[1] AF
+register bit[1] ZF
+register bit[1] SF
+register bit[1] OF
 
 (* --------------------------------------------------------------------------
    Memory
    -------------------------------------------------------------------------- *)
 
-val extern forall Nat 'n. (qword, [|'n|]) -> (bit[8 * 'n]) effect { rmem } MEM
+val extern forall Nat 'n. (qword, [|'n|]) -> (bit[8 * 'n]) effect { rmem } rMEM
 
 val extern forall Nat 'n. (qword, [|'n|], bit[8 * 'n]) -> unit effect { wmem } wMEM
 
@@ -253,10 +252,10 @@ function qword effect { rreg, rmem } EA ((ea) e) =
       else
         (REG[sub4 (r)] >> 8) & 0x00000000000000FF
     case (Ea_r(sz,r)) -> restrict_size(sz, REG[r])
-    case (Ea_m((Sz8(_)),a)) -> EXTZ (MEM(a, 1))
-    case (Ea_m(Sz16,a)) -> EXTZ (MEM(a, 2))
-    case (Ea_m(Sz32,a)) -> EXTZ (MEM(a, 4))
-    case (Ea_m(Sz64,a)) -> MEM(a, 8)
+    case (Ea_m((Sz8(_)),a)) -> EXTZ (rMEM(a, 1))
+    case (Ea_m(Sz16,a)) -> EXTZ (rMEM(a, 2))
+    case (Ea_m(Sz32,a)) -> EXTZ (rMEM(a, 4))
+    case (Ea_m(Sz64,a)) -> rMEM(a, 8)
   }
 
 function unit effect { wmem, wreg, escape } wEA ((ea) e, (qword) w) =
@@ -297,7 +296,7 @@ function qword call_dest_from_ea ((ea) e) =
   switch e {
     case (Ea_i(_, i)) -> RIP + i
     case (Ea_r(_, r)) -> REG[r]
-    case (Ea_m(_, a)) -> MEM(a, 8)
+    case (Ea_m(_, a)) -> rMEM(a, 8)
   }
 
 function qword get_ea_address ((ea) e) =
@@ -522,7 +521,7 @@ function bool read_cond ((cond) c) =
     case A  -> ~(CF) & ~(ZF)
     case NB -> ~(CF)
     case B  -> CF
-    case NA -> CF | (bit) ZF
+    case NA -> CF | ZF
     case E  -> ZF
     case G  -> ~(ZF) & (SF == OF)
     case NL -> SF == OF
@@ -539,7 +538,7 @@ function bool read_cond ((cond) c) =
   }
 
 function qword pop_aux () =
-  let top = MEM(RSP, 8) in
+  let top = rMEM(RSP, 8) in
   {
     RSP := RSP + 8;
     top;
@@ -595,7 +594,7 @@ function clause execute (CALL (i)) =
 
 union ast member unit CLC
 
-function clause execute CLC = CF := false
+function clause execute CLC = CF := 0
 
 (* ==========================================================================
       CMC
@@ -760,7 +759,7 @@ function clause execute (MUL (sz,r)) =
       let edx = Ea_r (sz, 2) in (* RDX *)
       {
         wEA(eax) := m[63 .. 0];
-        wEA(edx) := (LSR (m, size_width(sz)))[63 .. 0]
+        wEA(edx) := (m >> size_width(sz))[63 .. 0]
       }
   }
 
@@ -815,7 +814,7 @@ function clause execute (SET (c,b,r)) =
 
 union ast member unit STC
 
-function clause execute STC = CF := true
+function clause execute STC = CF := 1
 
 (* ==========================================================================
       XADD
