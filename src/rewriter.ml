@@ -2510,7 +2510,7 @@ let rewrite_undefined =
   let rewrite_e_aux (E_aux (e_aux, _) as exp) =
     match e_aux with
     | E_lit (L_aux (L_undef, l)) ->
-       check_exp (env_of exp) (undefined_of_typ (typ_of exp)) (typ_of exp)
+       check_exp (env_of exp) (undefined_of_typ (Env.expand_synonyms (env_of exp) (typ_of exp))) (typ_of exp)
     | _ -> exp
   in
   let rewrite_exp_undefined = { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
