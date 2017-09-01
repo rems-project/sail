@@ -30,18 +30,31 @@ let zchar c =
 
 let zencode_string str = "z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (Util.string_to_list str))
 
+let zencode_upper_string str = "Z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (Util.string_to_list str))
+
 let zencode ctx id =
   try string (string_of_id (Bindings.find id ctx.externs)) with
   | Not_found -> string (zencode_string (string_of_id id))
 
+let zencode_upper ctx id =
+  try string (string_of_id (Bindings.find id ctx.externs)) with
+  | Not_found -> string (zencode_upper_string (string_of_id id))
+
 let zencode_kid kid = string ("'" ^ zencode_string (string_of_id (id_of_kid kid)))
+
+let ocaml_typ_id ctx = function
+  | id when Id.compare id (mk_id "string") = 0 -> string "string"
+  | id when Id.compare id (mk_id "list") = 0 -> string "list"
+  | id when Id.compare id (mk_id "bit") = 0 -> string "bit"
+  | id when Id.compare id (mk_id "int") = 0 -> string "big_int"
+  | id when Id.compare id (mk_id "bool") = 0 -> string "bool"
+  | id -> zencode ctx id
 
 let rec ocaml_typ ctx (Typ_aux (typ_aux, _)) =
   match typ_aux with
-  | Typ_id id when Id.compare id (mk_id "string") = 0 -> string "string"
-  | Typ_id id -> zencode ctx id
-  | Typ_app (id, []) -> zencode ctx id
-  | Typ_app (id, typs) -> parens (separate_map (string " * ") (ocaml_typ_arg ctx) typs) ^^ space ^^ zencode ctx id
+  | Typ_id id -> ocaml_typ_id ctx id
+  | Typ_app (id, []) -> ocaml_typ_id ctx id
+  | Typ_app (id, typs) -> parens (separate_map (string " * ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
   | Typ_tup typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
   | Typ_fn (typ1, typ2, _) -> separate space [ocaml_typ ctx typ1; string "->"; ocaml_typ ctx typ2]
   | Typ_var kid -> zencode_kid kid
@@ -68,7 +81,7 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_one -> string "B1"
   | L_true -> string "true"
   | L_false -> string "false"
-  | L_num n -> string (string_of_int n)
+  | L_num n -> parens (string "big_int_of_int" ^^ space ^^ string (string_of_int n))
   | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
   | L_string str -> dquotes (string (String.escaped str))
   | _ -> string "LIT"
@@ -115,8 +128,8 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      separate space [string "let"; ocaml_letbind ctx lb; string "in"]
      ^/^ ocaml_exp ctx exp
   | E_internal_let (lexp, exp1, exp2) ->
-     separate space [string "let"; string "ref"; ocaml_atomic_lexp ctx lexp;
-                     equals; ocaml_exp ctx exp1; string "in"]
+     separate space [string "let"; ocaml_atomic_lexp ctx lexp;
+                     equals; string "ref"; ocaml_atomic_exp ctx exp1; string "in"]
      ^/^ ocaml_exp ctx exp2
   | E_lit _ | E_list _ | E_id _ | E_tuple _ -> ocaml_atomic_exp ctx exp
   | _ -> string ("EXP(" ^ string_of_exp exp ^ ")")
@@ -147,7 +160,8 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_id id ->
      begin
        match Env.lookup_id id (env_of exp) with
-       | Local (Immutable, _) | Unbound | Enum _ -> zencode ctx id
+       | Local (Immutable, _) | Unbound -> zencode ctx id
+       | Enum _ -> zencode_upper ctx id
        | Register _ | Local (Mutable, _) -> bang ^^ zencode ctx id
        | _ -> failwith ("Union constructor: " ^ zencode_string (string_of_id id))
      end
@@ -173,7 +187,7 @@ let rec get_initialize_registers = function
 
 let initial_value_for id inits =
   let find_reg = function
-    | E_aux (E_assign (LEXP_aux (LEXP_cast (_, reg_id), _), init), _) -> Some init
+    | E_aux (E_assign (LEXP_aux (LEXP_cast (_, reg_id), _), init), _) when Id.compare id reg_id = 0 -> Some init
     | _ -> None
   in
   match Util.option_first find_reg inits with
@@ -188,13 +202,29 @@ let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
                      string "ref"; parens (ocaml_exp ctx (initial_value_for id ctx.register_inits))]
   | _ -> failwith "Unsupported register declaration"
 
+let funcls_id = function
+  | [] -> failwith "Ocaml: empty function"
+  | FCL_aux (FCL_Funcl (id, pat, exp),_) :: _ -> id
+
+let ocaml_funcl_match ctx (FCL_aux (FCL_Funcl (id, pat, exp), _)) =
+  separate space [bar; ocaml_pat ctx pat; string "->"]
+  ^//^ group (string "with_return (fun r ->" ^//^ ocaml_exp ctx exp ^^ rparen)
+
+let rec ocaml_funcl_matches ctx = function
+  | [] -> failwith "Ocaml: empty function"
+  | [clause] -> ocaml_funcl_match ctx clause
+  | (clause :: clauses) -> ocaml_funcl_match ctx clause ^/^ ocaml_funcl_matches ctx clauses
+
 let ocaml_funcls ctx = function
   | [] -> failwith "Ocaml: empty function"
   | [FCL_aux (FCL_Funcl (id, pat, exp),_)] ->
      separate space [string "let"; zencode ctx id; ocaml_pat ctx pat; equals; string "with_return (fun r ->"]
      ^//^ ocaml_exp ctx exp
      ^^ rparen
-  | _ -> string "MBF" (* failwith "Ocaml: multi-body function should have been re-written by now" *)
+  | funcls ->
+     let id = funcls_id funcls in
+     separate space [string "let"; zencode ctx id; equals; string "function"]
+     ^//^ ocaml_funcl_matches ctx funcls
 
 let ocaml_fundef ctx (FD_aux (FD_function (_, _, _, funcls), _)) =
   ocaml_funcls ctx funcls
@@ -219,8 +249,8 @@ let rec ocaml_cases ctx =
   | [] -> empty
 
 let rec ocaml_enum ctx = function
-  | [id] -> zencode ctx id
-  | id :: ids -> zencode ctx id ^/^ ocaml_enum ctx ids
+  | [id] -> zencode_upper ctx id
+  | id :: ids -> zencode_upper ctx id ^/^ (bar ^^ space ^^ ocaml_enum ctx ids)
   | [] -> empty
 
 let ocaml_typedef ctx (TD_aux (td_aux, _)) =
@@ -234,7 +264,7 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
      ^//^ ocaml_cases ctx cases
   | TD_enum (id, _, ids, _) ->
      separate space [string "type"; zencode ctx id; equals]
-     ^//^ ocaml_enum ctx ids
+     ^//^ (bar ^^ space ^^ ocaml_enum ctx ids)
   | TD_abbrev (id, _, TypSchm_aux (TypSchm_ts (typq, typ), _)) ->
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; ocaml_typ ctx typ]
   | _ -> failwith "Unsupported typedef"
@@ -270,19 +300,21 @@ let ocaml_defs (Defs defs) =
   let empty_reg_init =
     if ctx.register_inits = []
     then
-      separate space [string "let"; zencode ctx (mk_id "initialize_registers"); string "()"; equals; string "()"]
+      separate space [string "let"; string "initialize_registers"; string "()"; equals; string "()"]
       ^^ ocaml_def_end
     else empty
   in
-  (string "open Sail_lib" ^^ ocaml_def_end)
+  (string "open Sail_lib;;" ^^ hardline)
+  ^^ (string "open Big_int" ^^ ocaml_def_end)
   ^^ concat (List.map (ocaml_def ctx) defs)
   ^^ empty_reg_init
 
 let ocaml_main spec =
   concat [separate space [string "open"; string (String.capitalize spec)] ^^ ocaml_def_end;
           separate space [string "let"; string "()"; equals]
-          ^//^ (string "initialize_registers" ^^ string "()" ^^ semi
-                ^/^ string "zmain" ^^ string "()")
+          ^//^ (string "Random.self_init ();"
+                ^/^ string "initialize_registers ();"
+                ^/^ string "zmain ()")
          ]
 
 let ocaml_pp_defs f defs =
@@ -305,9 +337,11 @@ let ocaml_compile spec defs =
     let out_chan = open_out "main.ml" in
     ToChannel.pretty 1. 80 out_chan (ocaml_main spec);
     close_out out_chan;
-    let _ = Unix.system "ocamlbuild main.native" in
+    let _ = Unix.system "ocamlbuild -lib nums main.native" in
     let _ = Unix.system ("cp main.native " ^ cwd ^ "/" ^ spec) in
     ()
-  else ();
+  else
+    let _ = Unix.system ("ocamlbuild -lib nums " ^ spec ^ ".cmo") in
+    ();
   Unix.chdir cwd
 

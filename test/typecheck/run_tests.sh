@@ -135,26 +135,26 @@ test_lem rtpass
 
 finish_suite "Lem generation 2"
 
-function test_ocaml {
-    for i in `ls $DIR/pass/`;
-    do
-	if $SAILDIR/sail -ocaml $DIR/$1/$i 2> /dev/null
-	then
-	    green "generated ocaml for $1/$i" "pass"
+# function test_ocaml {
+#     for i in `ls $DIR/pass/`;
+#     do
+# 	if $SAILDIR/sail -ocaml $DIR/$1/$i 2> /dev/null
+# 	then
+# 	    green "generated ocaml for $1/$i" "pass"
 
-	    rm $SAILDIR/${i%%.*}.ml
-	else
-	    red "generated ocaml for $1/$i" "fail"
-	fi
-    done
-}
+# 	    rm $SAILDIR/${i%%.*}.ml
+# 	else
+# 	    red "generated ocaml for $1/$i" "fail"
+# 	fi
+#     done
+# }
 
-test_ocaml pass
+# test_ocaml pass
 
-finish_suite "Ocaml generation 1"
+# finish_suite "Ocaml generation 1"
 
-test_ocaml rtpass
+# test_ocaml rtpass
 
-finish_suite "Ocaml generation 2"
+# finish_suite "Ocaml generation 2"
 
 printf "</testsuites>\n" >> $DIR/tests.xml
