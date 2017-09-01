@@ -97,43 +97,43 @@ done
 
 finish_suite "Expecting fail"
 
-function test_lem {
-    for i in `ls $DIR/pass/`;
-    do
-	# MIPS requires an additional library, Mips_extras_embed.
-	# It might be useful to allow adding options for specific test cases.
-	# For now, include the library for all test cases, which doesn't seem to hurt.
-	if $SAILDIR/sail -lem -lem_lib Mips_extras_embed $DIR/$1/$i 2> /dev/null
-	then
-	    green "generated lem for $1/$i" "pass"
+# function test_lem {
+#     for i in `ls $DIR/pass/`;
+#     do
+# 	# MIPS requires an additional library, Mips_extras_embed.
+# 	# It might be useful to allow adding options for specific test cases.
+# 	# For now, include the library for all test cases, which doesn't seem to hurt.
+# 	if $SAILDIR/sail -lem -lem_lib Mips_extras_embed $DIR/$1/$i 2> /dev/null
+# 	then
+# 	    green "generated lem for $1/$i" "pass"
 
-	    cp $MIPS/mips_extras_embed_sequential.lem $DIR/lem/
-	    mv $SAILDIR/${i%%.*}_embed_types.lem $DIR/lem/
-	    mv $SAILDIR/${i%%.*}_embed_types_sequential.lem $DIR/lem/
-	    mv $SAILDIR/${i%%.*}_embed.lem $DIR/lem/
-	    mv $SAILDIR/${i%%.*}_embed_sequential.lem $DIR/lem/
-	    # Test sequential embedding for now
-	    # TODO: Add tests for the free monad
-	    if lem -lib $SAILDIR/src/lem_interp -lib $SAILDIR/src/gen_lib/ $DIR/lem/mips_extras_embed_sequential.lem $DIR/lem/${i%%.*}_embed_types_sequential.lem $DIR/lem/${i%%.*}_embed_sequential.lem 2> /dev/null
-	    then
-		green "typechecking lem for $1/$i" "pass"
-	    else
-		red "typechecking lem for $1/$i" "fail"
-	    fi
-	else
-	    red "generated lem for $1/$i" "fail"
-	    red "typechecking lem for $1/$i" "fail"
-	fi
-    done
-}
+# 	    cp $MIPS/mips_extras_embed_sequential.lem $DIR/lem/
+# 	    mv $SAILDIR/${i%%.*}_embed_types.lem $DIR/lem/
+# 	    mv $SAILDIR/${i%%.*}_embed_types_sequential.lem $DIR/lem/
+# 	    mv $SAILDIR/${i%%.*}_embed.lem $DIR/lem/
+# 	    mv $SAILDIR/${i%%.*}_embed_sequential.lem $DIR/lem/
+# 	    # Test sequential embedding for now
+# 	    # TODO: Add tests for the free monad
+# 	    if lem -lib $SAILDIR/src/lem_interp -lib $SAILDIR/src/gen_lib/ $DIR/lem/mips_extras_embed_sequential.lem $DIR/lem/${i%%.*}_embed_types_sequential.lem $DIR/lem/${i%%.*}_embed_sequential.lem 2> /dev/null
+# 	    then
+# 		green "typechecking lem for $1/$i" "pass"
+# 	    else
+# 		red "typechecking lem for $1/$i" "fail"
+# 	    fi
+# 	else
+# 	    red "generated lem for $1/$i" "fail"
+# 	    red "typechecking lem for $1/$i" "fail"
+# 	fi
+#     done
+# }
 
-test_lem pass
+# test_lem pass
 
-finish_suite "Lem generation 1"
+# finish_suite "Lem generation 1"
 
-test_lem rtpass
+# test_lem rtpass
 
-finish_suite "Lem generation 2"
+# finish_suite "Lem generation 2"
 
 # function test_ocaml {
 #     for i in `ls $DIR/pass/`;
