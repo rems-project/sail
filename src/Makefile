@@ -173,7 +173,7 @@ _build/cheri_notlb.lem: $(CHERI_NOTLB_SAILS) ./sail.native
 _build/cheri_embed_types_sequential.lem: $(CHERI_SAILS) ./sail.native
 	mkdir -p _build
 	cd _build ;\
-	../sail.native -lem_lib "Mips_extras_embed" -lem -o cheri $(CHERI_SAILS)
+	../sail.native -lem_lib "Mips_extras_embed" -lem -lem_sequential -lem_mwords -o cheri $(CHERI_SAILS)
 
 _build/Cheri_embed_sequential.thy: _build/cheri_embed_types_sequential.lem
 	cd _build ;\

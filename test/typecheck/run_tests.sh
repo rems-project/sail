@@ -103,14 +103,14 @@ function test_lem {
 	# MIPS requires an additional library, Mips_extras_embed.
 	# It might be useful to allow adding options for specific test cases.
 	# For now, include the library for all test cases, which doesn't seem to hurt.
-	if $SAILDIR/sail -lem -lem_lib Mips_extras_embed $DIR/$1/$i 2> /dev/null
+	if $SAILDIR/sail -lem -lem_lib Mips_extras_embed -lem_sequential -lem_mwords $DIR/$1/$i 2> /dev/null
 	then
 	    green "generated lem for $1/$i" "pass"
 
 	    cp $MIPS/mips_extras_embed_sequential.lem $DIR/lem/
-	    mv $SAILDIR/${i%%.*}_embed_types.lem $DIR/lem/
+	    # mv $SAILDIR/${i%%.*}_embed_types.lem $DIR/lem/
 	    mv $SAILDIR/${i%%.*}_embed_types_sequential.lem $DIR/lem/
-	    mv $SAILDIR/${i%%.*}_embed.lem $DIR/lem/
+	    # mv $SAILDIR/${i%%.*}_embed.lem $DIR/lem/
 	    mv $SAILDIR/${i%%.*}_embed_sequential.lem $DIR/lem/
 	    # Test sequential embedding for now
 	    # TODO: Add tests for the free monad

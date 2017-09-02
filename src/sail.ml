@@ -73,6 +73,12 @@ let options = Arg.align ([
   ( "-ocaml_lib",
     Arg.String (fun l -> opt_libs_ocaml := l::!opt_libs_ocaml),
     "<filename> provide additional library to open in OCaml output");
+  ( "-lem_sequential",
+    Arg.Set Process_file.opt_lem_sequential,
+    " use sequential state monad for Lem output");
+  ( "-lem_mwords",
+    Arg.Set Process_file.opt_lem_mwords,
+    " use native machine word library for Lem output");
 (*
   ( "-i",
     Arg.String (fun l -> lib := l::!lib),
