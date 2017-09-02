@@ -391,15 +391,16 @@ let doc_exp_lem, doc_let_lem =
                    underscore ^^
                    doc_id_lem id in
                  liftR ((prefix 2 1)
-                   (string "write_reg_field_range")
+                   (string "update_reg")
                    (align (doc_lexp_deref_lem sequential mwords early_ret le ^^ space^^
-                             field_ref ^/^ expY e2 ^/^ expY e3 ^/^ expY e)))
+                      parens (string "update_reg_field_range" ^/^ field_ref ^/^ expY e2 ^/^ expY e3) ^/^ expY e)))
             | _ ->
                liftR ((prefix 2 1)
-                 (string "write_reg_range")
-                 (align (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^ expY e2 ^/^ expY e3 ^/^ expY e)))
+                 (string "update_reg")
+                 (align (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^
+                   parens (string "update_reg_range" ^/^ expY e2 ^/^ expY e3) ^/^ expY e)))
            )
-        | LEXP_vector (le,e2) when is_bit_typ t ->
+        | LEXP_vector (le,e2) ->
            (match le with
             | LEXP_aux (LEXP_field ((LEXP_aux (_, lannot) as le),id), fannot) ->
                if is_bit_typ (typ_of_annot fannot) then
@@ -410,12 +411,14 @@ let doc_exp_lem, doc_let_lem =
                    underscore ^^
                    doc_id_lem id in
                  liftR ((prefix 2 1)
-                   (string "write_reg_field_bit")
-                   (align (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^ field_ref ^/^ expY e2 ^/^ expY e)))
+                   (string "update_reg")
+                   (align (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^
+                     parens (string "update_reg_field_bit" ^/^ field_ref ^/^ expY e2) ^/^ expY e)))
             | _ ->
                liftR ((prefix 2 1)
-                 (string "write_reg_bit")
-                 (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^ expY e2 ^/^ expY e))
+                 (string "update_reg")
+                 (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^
+                   parens (string "update_reg_bit" ^/^ expY e2) ^/^ expY e))
            )
         (* | LEXP_field (le,id) when is_bit_typ t ->
            liftR ((prefix 2 1)
@@ -425,9 +428,11 @@ let doc_exp_lem, doc_let_lem =
           let field_ref =
             doc_id_lem (typ_id_of (typ_of_annot lannot)) ^^
             underscore ^^
-            doc_id_lem id in
+            doc_id_lem id ^^
+            dot ^^
+            string "set_field" in
            liftR ((prefix 2 1)
-             (string "write_reg_field")
+             (string "update_reg")
              (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^
                 field_ref ^/^ expY e))
         (* | (LEXP_id id | LEXP_cast (_,id)), t, Alias alias_info ->
@@ -801,21 +806,26 @@ let doc_exp_lem, doc_let_lem =
        if aexp_needed then parens (align bepp) else bepp
     | E_vector_update(v,e1,e2) ->
        let t = typ_of full_exp in
+       let (_, _, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
+       let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
        let call =
          if is_bitvector_typ t (*&& mwords*)
-         then "bitvector_update_pos"
-         else "update_pos" in
-       let epp = separate space [string call;expY v;expY e1;expY e2] in
+         then "bitvector_update_pos" ^ ord_suffix
+         else "update_pos" ^ ord_suffix in
+       let epp = string call ^^ space ^^ parens (separate comma_sp [expY v;expY e1;expY e2]) in
        if aexp_needed then parens (align epp) else epp
     | E_vector_update_subrange(v,e1,e2,e3) ->
        let t = typ_of full_exp in
+       let (_, _, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
+       let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
        let call =
          if is_bitvector_typ t (*&& mwords*)
-         then "bitvector_update"
-         else "update" in
-       let epp = align (string call ^//^
-                          group (group (expY v) ^/^ group (expY e1) ^/^ group (expY e2)) ^/^
-                            group (expY e3)) in
+         then "bitvector_update" ^ ord_suffix
+         else "update" ^ ord_suffix in
+       let epp =
+         align (string call ^//^
+           parens (separate comma_sp
+             [group (expY v); group (expY e1); group (expY e2); group (expY e3)])) in
        if aexp_needed then parens (align epp) else epp
     | E_list exps ->
        brackets (separate_map semi (expN) exps)
