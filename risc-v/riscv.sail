@@ -380,15 +380,17 @@ function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
   (*(bit)*) status := if speculate_conditional_success() then 0 else 1;
   wGPR(rd) := (bit[64]) (EXTZ([status]));
 
-  (bit[64]) addr := rGPR(rs1);
-  switch width {
-    case WORD   -> mem_write_ea(addr, 4, rl, true)
-    case DOUBLE -> mem_write_ea(addr, 8, rl, true)
-  };
-  rs2_val := rGPR(rs2);
-  switch width {
-    case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], rl, true)
-    case DOUBLE -> mem_write_value(addr, 8, rs2_val,        rl, true)
+  if status == 1 then () else {
+    (bit[64]) addr := rGPR(rs1);
+    switch width {
+      case WORD   -> mem_write_ea(addr, 4, rl, true)
+      case DOUBLE -> mem_write_ea(addr, 8, rl, true)
+    };
+    rs2_val := rGPR(rs2);
+    switch width {
+      case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], rl, true)
+      case DOUBLE -> mem_write_value(addr, 8, rs2_val,        rl, true)
+    };
   };
 }
 
