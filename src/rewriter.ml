@@ -2183,6 +2183,15 @@ let id_is_local_var id env = match Env.lookup_id id env with
   | Local _ -> true
   | _ -> false
 
+let rec lexp_is_local (LEXP_aux (lexp, _)) env = match lexp with
+  | LEXP_memory _ -> false
+  | LEXP_id id
+  | LEXP_cast (_, id) -> id_is_local_var id env
+  | LEXP_tup lexps -> List.for_all (fun lexp -> lexp_is_local lexp env) lexps
+  | LEXP_vector (lexp,_)
+  | LEXP_vector_range (lexp,_,_)
+  | LEXP_field (lexp,_) -> lexp_is_local lexp env
+
 let id_is_unbound id env = match Env.lookup_id id env with
   | Unbound -> true
   | _ -> false
@@ -2203,6 +2212,13 @@ let lexp_is_effectful (LEXP_aux (_, (_, annot))) = match annot with
 let rec rewrite_local_lexp ((LEXP_aux(lexp,((l,_) as annot))) as le) = match lexp with
   | LEXP_id id | LEXP_cast (_, id) ->
     (le, E_aux (E_id id, annot), (fun exp -> exp))
+  | LEXP_tup les ->
+    let get_id (LEXP_aux(lexp,((l,_) as annot)) as le) = match lexp with
+      | LEXP_id id | LEXP_cast (_, id) -> E_aux (E_id id, annot)
+      | _ ->
+        raise (Reporting_basic.err_unreachable l
+          ("Unsupported sub-lexp " ^ string_of_lexp le ^ " in tuple")) in
+    (le, E_aux (E_tuple (List.map get_id les), annot), (fun exp -> exp))
   | LEXP_vector (lexp, e) ->
     let (lexp, access, rexp) = rewrite_local_lexp lexp in
     (lexp, E_aux (E_vector_access (access, e), annot),
@@ -2233,7 +2249,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
     let rec walker exps = match exps with
       | [] -> []
       | (E_aux(E_assign(le,e), ((l, Some (env,typ,eff)) as annot)) as exp)::exps
-        when lexp_is_local_intro le env && not (lexp_is_effectful le)->
+        when lexp_is_local_intro le env && not (lexp_is_effectful le) ->
         let (le', _, re') = rewrite_local_lexp le in
         let e' = re' (rewrite_base e) in
         let exps' = walker exps in
@@ -2371,12 +2387,11 @@ let rewrite_defs_early_return =
   | _ -> exp in
 
   let e_block es =
-    (* let rec walker = function
-    | e :: es -> if is_return e then [e] else e :: walker es
-    | [] -> [] in
-    let es = walker es in *)
     match es with
     | [E_aux (e, _)] -> e
+    | _ :: _ when is_return (Util.last es) ->
+       let (E_aux (_, annot) as e) = Util.last es in
+       E_return (E_aux (E_block (Util.butlast es @ [get_return e]), annot))
     | _ -> E_block es in
 
   let e_if (e1, e2, e3) =
@@ -2404,14 +2419,19 @@ let rewrite_defs_early_return =
     | _ -> full_exp in
 
   let rewrite_funcl_early_return _ (FCL_aux (FCL_Funcl (id, pat, exp), a)) =
-    let exp = fold_exp
-      { id_exp_alg with e_block = e_block; e_if = e_if; e_case = e_case;
-        e_aux = e_aux } exp in
+    let exp =
+      exp
+      (* Pull early returns out as far as possible *)
+      |> fold_exp { id_exp_alg with e_block = e_block; e_if = e_if; e_case = e_case }
+      (* Remove singleton E_return *)
+      |> get_return
+      (* Fix effect annotations *)
+      |> fold_exp { id_exp_alg with e_aux = e_aux } in
     let a = match a with
     | (l, Some (env, typ, eff)) ->
       (l, Some (env, typ, union_effects eff (effect_of exp)))
     | _ -> a in
-    FCL_aux (FCL_Funcl (id, pat, get_return exp), a) in
+    FCL_aux (FCL_Funcl (id, pat, exp), a) in
 
   let rewrite_fun_early_return rewriters
     (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), a)) =
@@ -2948,8 +2968,19 @@ let rewrite_defs_letbind_effects  =
 
 let rewrite_defs_effectful_let_expressions =
 
+  let rec pat_of_local_lexp (LEXP_aux (lexp, ((l, _) as annot))) = match lexp with
+    | LEXP_id id -> P_aux (P_id id, annot)
+    | LEXP_cast (typ, id) -> P_aux (P_typ (typ, P_aux (P_id id, annot)), annot)
+    | LEXP_tup lexps -> P_aux (P_tup (List.map pat_of_local_lexp lexps), annot)
+    | _ -> raise (Reporting_basic.err_unreachable l "unexpected local lexp") in
+
   let e_let (lb,body) =
     match lb with
+    | LB_aux (LB_val_implicit (P_aux (P_wild, _), E_aux (E_assign ((LEXP_aux (_, annot) as le), exp), _)), _)
+      when lexp_is_local le (env_of_annot annot) ->
+      (* Rewrite assignments to local variables into let bindings *)
+      let (lhs, _, rhs) = rewrite_local_lexp le in
+      E_let (LB_aux (LB_val_implicit (pat_of_local_lexp lhs, rhs exp), annot), body)
     | LB_aux (LB_val_explicit (_,pat,exp'),annot')
     | LB_aux (LB_val_implicit (pat,exp'),annot') ->
        if effectful exp'
@@ -3261,7 +3292,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
      "tail-position": check the definition nexp_term and where it is used. *)
   | _ -> exp
 
-let replace_memwrite_e_assign exp = 
+let replace_memwrite_e_assign exp =
   let e_aux = fun (expaux,annot) ->
     match expaux with
     | E_assign (LEXP_aux (LEXP_memory (id,args),_),v) -> E_aux (E_app (id,args @ [v]),annot)
@@ -3395,7 +3426,8 @@ let rewrite_defs_remove_e_assign =
 let recheck_defs defs = fst (check initial_env defs)
 
 let rewrite_defs_lem =[
-  top_sort_defs;
+  (* top_sort_defs; *)
+  rewrite_trivial_sizeof;
   rewrite_sizeof;
   rewrite_defs_remove_vector_concat;
   rewrite_defs_remove_bitvector_pats;

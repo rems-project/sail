@@ -392,6 +392,11 @@ and string_of_n_constraint = function
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"
 
+let string_of_annot = function
+  | Some (_, typ, eff) ->
+     "Some (_, " ^ string_of_typ typ ^ ", " ^ string_of_effect eff ^ ")"
+  | None -> "None"
+
 let string_of_quant_item_aux = function
   | QI_id (KOpt_aux (KOpt_none kid, _)) -> string_of_kid kid
   | QI_id (KOpt_aux (KOpt_kind (k, kid), _)) -> string_of_kind k ^ " " ^ string_of_kid kid
@@ -629,13 +634,17 @@ let rec is_vector_typ = function
 let typ_app_args_of = function
   | Typ_aux (Typ_app (Id_aux (Id c,_), targs), l) ->
     (c, List.map (fun (Typ_arg_aux (a,_)) -> a) targs, l)
-  | Typ_aux (_, l) -> raise (Reporting_basic.err_typ l "typ_app_args_of called on non-app type")
+  | Typ_aux (_, l) as typ ->
+     raise (Reporting_basic.err_typ l
+       ("typ_app_args_of called on non-app type " ^ string_of_typ typ))
 
 let rec vector_typ_args_of typ = match typ_app_args_of typ with
   | ("vector", [Typ_arg_nexp start; Typ_arg_nexp len; Typ_arg_order ord; Typ_arg_typ etyp], _) ->
-    (start, len, ord, etyp)
+    (simplify_nexp start, simplify_nexp len, ord, etyp)
   | ("register", [Typ_arg_typ rtyp], _) -> vector_typ_args_of rtyp
-  | (_, _, l) -> raise (Reporting_basic.err_typ l "vector_typ_args_of called on non-vector type")
+  | (_, _, l) ->
+     raise (Reporting_basic.err_typ l
+       ("vector_typ_args_of called on non-vector type " ^ string_of_typ typ))
 
 let is_order_inc = function
   | Ord_aux (Ord_inc, _) -> true
