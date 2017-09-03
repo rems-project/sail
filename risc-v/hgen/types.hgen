@@ -99,7 +99,7 @@ type wordWidth =
   | RISCVWORD
   | RISCVDOUBLE
 
-let pp_riscv_load_op (unsigned, width, aq) =
+let pp_riscv_load_op (unsigned, width, aq, rl) =
   begin match (unsigned, width) with
   | (false, RISCVBYTE)    -> "lb"
   | (true,  RISCVBYTE)    -> "lbu"
@@ -108,17 +108,19 @@ let pp_riscv_load_op (unsigned, width, aq) =
   | (false, RISCVWORD)    -> "lw"
   | (true,  RISCVWORD)    -> "lwu"
   | (_, RISCVDOUBLE)      -> "ld"
-  end
-  ^ (if aq then ".aq" else "")
+  end ^
+  (if aq then ".aq" else "") ^
+  (if rl then ".rl" else "")
 
-let pp_riscv_store_op (width, rl) =
+let pp_riscv_store_op (width, aq, rl) =
   begin match width with
   | RISCVBYTE -> "sb"
   | RISCVHALF -> "sh"
   | RISCVWORD -> "sw"
   | RISCVDOUBLE -> "sd"
-  end
-  ^ (if rl then ".rl" else "")
+  end ^
+  (if aq then ".aq" else "") ^
+  (if rl then ".rl" else "")
 
 let pp_riscv_load_reserved_op (aq, rl, width) =
   "lr" ^

@@ -58,7 +58,7 @@
       translate_rop "op" op;
     ],
     [])
-| `RISCVLoad(imm, rs, rd, unsigned, width, aq) ->
+| `RISCVLoad(imm, rs, rd, unsigned, width, aq, rl) ->
    ("LOAD",
     [
       translate_imm12 "imm" imm;
@@ -67,15 +67,17 @@
       translate_bool "unsigned" unsigned;
       translate_width "width" width;
       translate_bool "aq" aq;
+      translate_bool "rl" rl;
     ],
     [])
-| `RISCVStore(imm, rs2, rs1, width, rl) ->
+| `RISCVStore(imm, rs2, rs1, width, aq, rl) ->
    ("STORE",
     [
       translate_imm12 "imm" imm;
       translate_reg "rs2" rs2;
       translate_reg "rs1" rs1;
       translate_width "width" width;
+      translate_bool "aq" aq;
       translate_bool "rl" rl;
     ],
     [])

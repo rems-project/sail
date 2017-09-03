@@ -62,38 +62,56 @@ function forall 'a. 'a effect { escape } not_implemented((string) message) =
 
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_acquire
+val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_strong_acquire
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_reserved
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_reserved_acquire
-function forall Nat 'n. (bit[8 * 'n]) effect { rmem } mem_read( (bit[64]) addr, ([|'n|]) width, (bool) aq, (bool) res) =
-  switch (aq, res) {
-    case (false, false) -> MEMr(addr, width)
-    case (true,  false) -> MEMr_acquire(addr, width)
-    case (false, true)  -> MEMr_reserved(addr, width)
-    case (true,  true)  -> MEMr_reserved_acquire(addr, width)
+val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_reserved_strong_acquire
+function forall Nat 'n. (bit[8 * 'n]) effect { rmem } mem_read( (bit[64]) addr, ([|'n|]) width, (bool) aq, (bool) rl, (bool) res) =
+  switch (aq, rl, res) {
+    case (false, false, false) -> MEMr(addr, width)
+    case (true,  false, false) -> MEMr_acquire(addr, width)
+    case (false, false, true)  -> MEMr_reserved(addr, width)
+    case (true,  false, true)  -> MEMr_reserved_acquire(addr, width)
+    case (false, true,  false) -> not_implemented("load.rl is not implemented")
+    case (true,  true,  false) -> MEMr_strong_acquire(addr, width)
+    case (false, true,  true)  -> not_implemented("lr.rl is not implemented")
+    case (true,  true,  true)  -> MEMr_reserved_strong_acquire(addr, width)
   }
 
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_release
+val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_strong_release
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional_release
-function forall Nat 'n. unit effect { eamem } mem_write_ea( (bit[64]) addr , ([|'n|]) width, (bool) rl, (bool) con) =
-  switch (rl, con) {
-    case (false, false) -> MEMea(addr, width)
-    case (true,  false) -> MEMea_release(addr, width)
-    case (false, true)  -> MEMea_conditional(addr, width)
-    case (true , true)  -> MEMea_conditional_release(addr, width)
+val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional_strong_release
+function forall Nat 'n. unit effect { eamem } mem_write_ea( (bit[64]) addr , ([|'n|]) width, (bool) aq, (bool) rl, (bool) con) =
+  switch (aq, rl, con) {
+    case (false, false, false) -> MEMea(addr, width)
+    case (false, true,  false) -> MEMea_release(addr, width)
+    case (false, false, true)  -> MEMea_conditional(addr, width)
+    case (false, true , true)  -> MEMea_conditional_release(addr, width)
+    case (true,  false, false) -> not_implemented("store.aq is not implemented")
+    case (true,  true,  false) -> MEMea_strong_release(addr, width)
+    case (true,  false, true)  -> not_implemented("sc.aq is not implemented")
+    case (true,  true , true)  -> MEMea_conditional_strong_release(addr, width)
   }
 
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_release
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_strong_release
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_conditional
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_conditional_release
-function forall Nat 'n. unit effect { wmv } mem_write_value( (bit[64]) addr , ([|'n|]) width , (bit[8*'n]) value, (bool) rl, (bool) con) =
-  switch (rl, con) {
-    case (false, false) -> MEMval(addr, width, value)
-    case (true,  false) -> MEMval_release(addr, width, value)
-    case (false, true)  -> MEMval_conditional(addr, width, value)
-    case (true,  true)  -> MEMval_conditional_release(addr, width, value)
+val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_conditional_strong_release
+function forall Nat 'n. unit effect { wmv } mem_write_value( (bit[64]) addr , ([|'n|]) width , (bit[8*'n]) value, (bool) aq, (bool) rl, (bool) con) =
+  switch (aq, rl, con) {
+    case (false, false, false) -> MEMval(addr, width, value)
+    case (false, true,  false) -> MEMval_release(addr, width, value)
+    case (false, false, true)  -> MEMval_conditional(addr, width, value)
+    case (false, true,  true)  -> MEMval_conditional_release(addr, width, value)
+    case (true,  false, false) -> not_implemented("store.aq is not implemented")
+    case (true,  true,  false) -> MEMval_strong_release(addr, width, value)
+    case (true,  false, true)  -> not_implemented("sc.aq is not implemented")
+    case (true,  true,  true)  -> MEMval_conditional_strong_release(addr, width, value)
   }
 
 val extern unit -> bool effect {exmem} speculate_conditional_success
@@ -245,51 +263,51 @@ function clause execute (RTYPE(rs2, rs1, rd, op)) =
   } in
   wGPR(rd, result)
 
-union ast member ((bit[12]), regno, regno, bool, word_width, bool) LOAD
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, BYTE,   false))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b001 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, HALF,   false))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b010 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, WORD,   false))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b011 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, DOUBLE, false))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b100 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  BYTE,   false))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b101 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  HALF,   false))
-function clause decode ((bit[12]) imm : (regno) rs1 : 0b110 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  WORD,   false))
-function clause execute(LOAD(imm, rs1, rd, unsigned, width, aq)) =
+union ast member ((bit[12]), regno, regno, bool, word_width, bool, bool) LOAD
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, BYTE,   false, false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b001 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, HALF,   false, false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b010 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, WORD,   false, false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b011 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, false, DOUBLE, false, false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b100 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  BYTE,   false, false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b101 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  HALF,   false, false))
+function clause decode ((bit[12]) imm : (regno) rs1 : 0b110 : (regno) rd : 0b0000011) = Some(LOAD(imm, rs1, rd, true,  WORD,   false, false))
+function clause execute(LOAD(imm, rs1, rd, unsigned, width, aq, rl)) =
     let (bit[64]) addr = rGPR(rs1) + EXTS(imm) in
     let (bit[64]) result = if unsigned then 
         switch (width) {
-          case BYTE   -> EXTZ(mem_read(addr, 1, aq, false))
-          case HALF   -> EXTZ(mem_read(addr, 2, aq, false))
-          case WORD   -> EXTZ(mem_read(addr, 4, aq, false))
-          case DOUBLE -> mem_read(addr, 8, aq, false)
+          case BYTE   -> EXTZ(mem_read(addr, 1, aq, rl, false))
+          case HALF   -> EXTZ(mem_read(addr, 2, aq, rl, false))
+          case WORD   -> EXTZ(mem_read(addr, 4, aq, rl, false))
+          case DOUBLE -> mem_read(addr, 8, aq, rl, false)
         }
       else
         switch (width) {
-          case BYTE   -> EXTS(mem_read(addr, 1, aq, false))
-          case HALF   -> EXTS(mem_read(addr, 2, aq, false))
-          case WORD   -> EXTS(mem_read(addr, 4, aq, false))
-          case DOUBLE -> mem_read(addr, 8, aq, false)
+          case BYTE   -> EXTS(mem_read(addr, 1, aq, rl, false))
+          case HALF   -> EXTS(mem_read(addr, 2, aq, rl, false))
+          case WORD   -> EXTS(mem_read(addr, 4, aq, rl, false))
+          case DOUBLE -> mem_read(addr, 8, aq, rl, false)
         } in
     wGPR(rd, result)
 
-union ast member ((bit[12]), regno, regno, word_width, bool) STORE
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b000 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, BYTE, false))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b001 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, HALF, false))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b010 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, WORD, false))
-function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b011 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, DOUBLE, false))
-function clause execute (STORE(imm, rs2, rs1, width, rl)) =
+union ast member ((bit[12]), regno, regno, word_width, bool, bool) STORE
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b000 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, BYTE, false, false))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b001 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, HALF, false, false))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b010 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, WORD, false, false))
+function clause decode ((bit[7]) imm7 : (regno) rs2 : (regno) rs1 : 0b011 : (bit[5]) imm5 : 0b0100011) = Some(STORE(imm7 : imm5, rs2, rs1, DOUBLE, false, false))
+function clause execute (STORE(imm, rs2, rs1, width, aq, rl)) =
     let (bit[64]) addr = rGPR(rs1) + EXTS(imm) in {
       switch (width) {
-        case BYTE   -> mem_write_ea(addr, 1, rl, false)
-        case HALF   -> mem_write_ea(addr, 2, rl, false)
-        case WORD   -> mem_write_ea(addr, 4, rl, false)
-        case DOUBLE -> mem_write_ea(addr, 8, rl, false)
+        case BYTE   -> mem_write_ea(addr, 1, aq, rl, false)
+        case HALF   -> mem_write_ea(addr, 2, aq, rl, false)
+        case WORD   -> mem_write_ea(addr, 4, aq, rl, false)
+        case DOUBLE -> mem_write_ea(addr, 8, aq, rl, false)
       };
       let rs2_val = rGPR(rs2) in
       switch (width) {
-        case BYTE   -> mem_write_value(addr, 1, rs2_val[7..0],  rl, false)
-        case HALF   -> mem_write_value(addr, 2, rs2_val[15..0], rl, false)
-        case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], rl, false)
-        case DOUBLE -> mem_write_value(addr, 8, rs2_val,        rl, false)
+        case BYTE   -> mem_write_value(addr, 1, rs2_val[7..0],  aq, rl, false)
+        case HALF   -> mem_write_value(addr, 2, rs2_val[15..0], aq, rl, false)
+        case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], aq, rl, false)
+        case DOUBLE -> mem_write_value(addr, 8, rs2_val,        aq, rl, false)
       }
     }
 
@@ -360,36 +378,31 @@ union ast member (bool, bool, regno, word_width, regno) LOADRES
 function clause decode (0b00010 : [aq] : [rl] : 0b00000 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(LOADRES(aq, rl, rs1, WORD, rd))
 function clause decode (0b00010 : [aq] : [rl] : 0b00000 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(LOADRES(aq, rl, rs1, DOUBLE, rd))
 function clause execute(LOADRES(aq, rl, rs1, width, rd)) =
-  if rl then not_implemented("load-reserved-release is not implemented")
-  else {
-    let (bit[64]) addr = rGPR(rs1) in
-    let (bit[64]) result =
-        switch width {
-          case WORD   -> EXTS(mem_read(addr, 4, aq, true))
-          case DOUBLE -> mem_read(addr, 8, aq, true)
-        } in
-    wGPR(rd, result)
-  }
+  let (bit[64]) addr = rGPR(rs1) in
+  let (bit[64]) result =
+      switch width {
+        case WORD   -> EXTS(mem_read(addr, 4, aq, rl, true))
+        case DOUBLE -> mem_read(addr, 8, aq, rl, true)
+      } in
+  wGPR(rd, result)
 
 union ast member (bool, bool, regno, regno, word_width, regno) STORECON
 function clause decode (0b00011 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(STORECON(aq, rl, rs2, rs1, WORD, rd))
 function clause decode (0b00011 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(STORECON(aq, rl, rs2, rs1, DOUBLE, rd))
 function clause execute (STORECON(aq, rl, rs2, rs1, width, rd)) = {
-  if aq then not_implemented("store-conditional-acquire is not implemented");
-
   (*(bit)*) status := if speculate_conditional_success() then 0 else 1;
   wGPR(rd) := (bit[64]) (EXTZ([status]));
 
   if status == 1 then () else {
     (bit[64]) addr := rGPR(rs1);
     switch width {
-      case WORD   -> mem_write_ea(addr, 4, rl, true)
-      case DOUBLE -> mem_write_ea(addr, 8, rl, true)
+      case WORD   -> mem_write_ea(addr, 4, aq, rl, true)
+      case DOUBLE -> mem_write_ea(addr, 8, aq, rl, true)
     };
     rs2_val := rGPR(rs2);
     switch width {
-      case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], rl, true)
-      case DOUBLE -> mem_write_value(addr, 8, rs2_val,        rl, true)
+      case WORD   -> mem_write_value(addr, 4, rs2_val[31..0], aq, rl, true)
+      case DOUBLE -> mem_write_value(addr, 8, rs2_val,        aq, rl, true)
     };
   };
 }
@@ -418,14 +431,14 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
   (bit[64]) addr := rGPR(rs1);
 
   switch (width) {
-    case WORD   -> mem_write_ea(addr, 4, rl, true)
-    case DOUBLE -> mem_write_ea(addr, 8, rl, true)
+    case WORD   -> mem_write_ea(addr, 4, aq, rl, true)
+    case DOUBLE -> mem_write_ea(addr, 8, aq, rl, true)
   };
 
   (bit[64]) loaded :=
     switch (width) {
-      case WORD   -> EXTS(mem_read(addr, 4, aq, true))
-      case DOUBLE -> mem_read(addr, 8, aq, true)
+      case WORD   -> EXTS(mem_read(addr, 4, aq, rl, true))
+      case DOUBLE -> mem_read(addr, 8, aq, rl, true)
     };
   wGPR(rd, loaded);
 
@@ -445,8 +458,8 @@ function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
     };
 
   switch (width) {
-    case WORD   -> mem_write_value(addr, 4, result[31..0], rl, true)
-    case DOUBLE -> mem_write_value(addr, 8, result,        rl, true)
+    case WORD   -> mem_write_value(addr, 4, result[31..0], aq, rl, true)
+    case DOUBLE -> mem_write_value(addr, 8, result,        aq, rl, true)
   };
 }
 

@@ -33,31 +33,44 @@
 "or",   RTYPE{op=RISCVOR};
 "and",  RTYPE{op=RISCVAND};
 
-"lb",  LOAD{unsigned=false; width=RISCVBYTE;   aq=false};
-"lbu", LOAD{unsigned=true;  width=RISCVBYTE;   aq=false};
-"lh",  LOAD{unsigned=false; width=RISCVHALF;   aq=false};
-"lhu", LOAD{unsigned=true;  width=RISCVHALF;   aq=false};
-"lw",  LOAD{unsigned=false; width=RISCVWORD;   aq=false};
-"lwu", LOAD{unsigned=true;  width=RISCVWORD;   aq=false};
-"ld",  LOAD{unsigned=false; width=RISCVDOUBLE; aq=false};
+"lb",  LOAD{unsigned=false; width=RISCVBYTE;   aq=false; rl=false};
+"lbu", LOAD{unsigned=true;  width=RISCVBYTE;   aq=false; rl=false};
+"lh",  LOAD{unsigned=false; width=RISCVHALF;   aq=false; rl=false};
+"lhu", LOAD{unsigned=true;  width=RISCVHALF;   aq=false; rl=false};
+"lw",  LOAD{unsigned=false; width=RISCVWORD;   aq=false; rl=false};
+"lwu", LOAD{unsigned=true;  width=RISCVWORD;   aq=false; rl=false};
+"ld",  LOAD{unsigned=false; width=RISCVDOUBLE; aq=false; rl=false};
 
-"lb.aq",  LOAD{unsigned=false; width=RISCVBYTE;   aq=true};
-"lbu.aq", LOAD{unsigned=true;  width=RISCVBYTE;   aq=true};
-"lh.aq",  LOAD{unsigned=false; width=RISCVHALF;   aq=true};
-"lhu.aq", LOAD{unsigned=true;  width=RISCVHALF;   aq=true};
-"lw.aq",  LOAD{unsigned=false; width=RISCVWORD;   aq=true};
-"lwu.aq", LOAD{unsigned=true;  width=RISCVWORD;   aq=true};
-"ld.aq",  LOAD{unsigned=false; width=RISCVDOUBLE; aq=true};
+"lb.aq",  LOAD{unsigned=false; width=RISCVBYTE;   aq=true; rl=false};
+"lbu.aq", LOAD{unsigned=true;  width=RISCVBYTE;   aq=true; rl=false};
+"lh.aq",  LOAD{unsigned=false; width=RISCVHALF;   aq=true; rl=false};
+"lhu.aq", LOAD{unsigned=true;  width=RISCVHALF;   aq=true; rl=false};
+"lw.aq",  LOAD{unsigned=false; width=RISCVWORD;   aq=true; rl=false};
+"lwu.aq", LOAD{unsigned=true;  width=RISCVWORD;   aq=true; rl=false};
+"ld.aq",  LOAD{unsigned=false; width=RISCVDOUBLE; aq=true; rl=false};
 
-"sb", STORE{width=RISCVBYTE;   rl=false};
-"sh", STORE{width=RISCVHALF;   rl=false};
-"sw", STORE{width=RISCVWORD;   rl=false};
-"sd", STORE{width=RISCVDOUBLE; rl=false};
+"lb.aq.rl",  LOAD{unsigned=false; width=RISCVBYTE;   aq=true; rl=true};
+"lbu.aq.rl", LOAD{unsigned=true;  width=RISCVBYTE;   aq=true; rl=true};
+"lh.aq.rl",  LOAD{unsigned=false; width=RISCVHALF;   aq=true; rl=true};
+"lhu.aq.rl", LOAD{unsigned=true;  width=RISCVHALF;   aq=true; rl=true};
+"lw.aq.rl",  LOAD{unsigned=false; width=RISCVWORD;   aq=true; rl=true};
+"lwu.aq.rl", LOAD{unsigned=true;  width=RISCVWORD;   aq=true; rl=true};
+"ld.aq.rl",  LOAD{unsigned=false; width=RISCVDOUBLE; aq=true; rl=true};
 
-"sb.rl", STORE{width=RISCVBYTE;   rl=true};
-"sh.rl", STORE{width=RISCVHALF;   rl=true};
-"sw.rl", STORE{width=RISCVWORD;   rl=true};
-"sd.rl", STORE{width=RISCVDOUBLE; rl=true};
+"sb", STORE{width=RISCVBYTE;   aq=false; rl=false};
+"sh", STORE{width=RISCVHALF;   aq=false; rl=false};
+"sw", STORE{width=RISCVWORD;   aq=false; rl=false};
+"sd", STORE{width=RISCVDOUBLE; aq=false; rl=false};
+
+"sb.rl", STORE{width=RISCVBYTE;   aq=false; rl=true};
+"sh.rl", STORE{width=RISCVHALF;   aq=false; rl=true};
+"sw.rl", STORE{width=RISCVWORD;   aq=false; rl=true};
+"sd.rl", STORE{width=RISCVDOUBLE; aq=false; rl=true};
+
+"sb.aq.rl", STORE{width=RISCVBYTE;   aq=true; rl=true};
+"sh.aq.rl", STORE{width=RISCVHALF;   aq=true; rl=true};
+"sw.aq.rl", STORE{width=RISCVWORD;   aq=true; rl=true};
+"sd.aq.rl", STORE{width=RISCVDOUBLE; aq=true; rl=true};
 
 "addiw", ADDIW ();
 
@@ -75,17 +88,22 @@
 "r",  FENCEOPTION Fence_R;
 "w",  FENCEOPTION Fence_W;
 "rw", FENCEOPTION Fence_RW;
+
 "fence.i", FENCEI ();
 
-"lr.w",    LOADRES {width=RISCVWORD;   aq=false; rl=false};
-"lr.w.aq", LOADRES {width=RISCVWORD;   aq=true;  rl=false};
-"lr.d",    LOADRES {width=RISCVDOUBLE; aq=false; rl=false};
-"lr.d.aq", LOADRES {width=RISCVDOUBLE; aq=true;  rl=false};
+"lr.w",       LOADRES {width=RISCVWORD;   aq=false; rl=false};
+"lr.w.aq",    LOADRES {width=RISCVWORD;   aq=true;  rl=false};
+"lr.w.aq.rl", LOADRES {width=RISCVWORD;   aq=true;  rl=true};
+"lr.d",       LOADRES {width=RISCVDOUBLE; aq=false; rl=false};
+"lr.d.aq",    LOADRES {width=RISCVDOUBLE; aq=true;  rl=false};
+"lr.d.aq.rl", LOADRES {width=RISCVDOUBLE; aq=true;  rl=true};
 
-"sc.w",    STORECON {width=RISCVWORD;   aq=false; rl=false};
-"sc.w.rl", STORECON {width=RISCVWORD;   aq=false; rl=true};
-"sc.d",    STORECON {width=RISCVDOUBLE; aq=false; rl=false};
-"sc.d.rl", STORECON {width=RISCVDOUBLE; aq=false; rl=true};
+"sc.w",       STORECON {width=RISCVWORD;   aq=false; rl=false};
+"sc.w.rl",    STORECON {width=RISCVWORD;   aq=false; rl=true};
+"sc.w.aq.rl", STORECON {width=RISCVWORD;   aq=true;  rl=true};
+"sc.d",       STORECON {width=RISCVDOUBLE; aq=false; rl=false};
+"sc.d.rl",    STORECON {width=RISCVDOUBLE; aq=false; rl=true};
+"sc.d.aq.rl", STORECON {width=RISCVDOUBLE; aq=true;  rl=true};
 
 "amoswap.w",  AMO {width=RISCVWORD; aq=false; rl=false; op=RISCVAMOSWAP};
 "amoadd.w",   AMO {width=RISCVWORD; aq=false; rl=false; op=RISCVAMOADD};

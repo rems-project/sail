@@ -39,8 +39,10 @@ typedef read_kind = enumerate {
   Read_exclusive_acquire;
   Read_stream;
   Read_RISCV_acquire;
+  Read_RISCV_strong_acquire;
   Read_RISCV_reserved;
   Read_RISCV_reserved_acquire;
+  Read_RISCV_reserved_strong_acquire;
 }
 
 typedef write_kind = enumerate {
@@ -51,8 +53,10 @@ typedef write_kind = enumerate {
   Write_exclusive;
   Write_exclusive_release;
   Write_RISCV_release;
+  Write_RISCV_strong_release;
   Write_RISCV_conditional;
   Write_RISCV_conditional_release;
+  Write_RISCV_conditional_strong_release;
 }
 
 typedef barrier_kind = enumerate {

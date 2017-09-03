@@ -436,7 +436,9 @@ type read_kind =
   (* AArch64 reads *)
   | Read_acquire | Read_exclusive | Read_exclusive_acquire | Read_stream
   (* RISC-V reads *)
-  | Read_RISCV_acquire | Read_RISCV_reserved | Read_RISCV_reserved_acquire
+  | Read_RISCV_acquire  | Read_RISCV_strong_acquire
+  | Read_RISCV_reserved | Read_RISCV_reserved_acquire
+  | Read_RISCV_reserved_strong_acquire
 
 instance (Show read_kind)
   let show = function
@@ -447,8 +449,10 @@ instance (Show read_kind)
     | Read_exclusive_acquire -> "Read_exclusive_acquire"
     | Read_stream -> "Read_stream"
     | Read_RISCV_acquire -> "Read_RISCV_acquire"
+    | Read_RISCV_strong_acquire -> "Read_RISCV_strong_acquire"
     | Read_RISCV_reserved -> "Read_RISCV_reserved"
     | Read_RISCV_reserved_acquire -> "Read_RISCV_reserved_acquire"
+    | Read_RISCV_reserved_strong_acquire -> "Read_RISCV_reserved_strong_acquire"
   end
 end
 
@@ -460,7 +464,9 @@ type write_kind =
   (* AArch64 writes *)
   | Write_release | Write_exclusive | Write_exclusive_release
   (* RISC-V *)
-  | Write_RISCV_release | Write_RISCV_conditional | Write_RISCV_conditional_release
+  | Write_RISCV_release     | Write_RISCV_strong_release
+  | Write_RISCV_conditional | Write_RISCV_conditional_release
+  | Write_RISCV_conditional_strong_release
 
 instance (Show write_kind)
   let show = function
@@ -470,8 +476,10 @@ instance (Show write_kind)
     | Write_exclusive -> "Write_exclusive"
     | Write_exclusive_release -> "Write_exclusive_release"
     | Write_RISCV_release -> "Write_RISCV_release"
+    | Write_RISCV_strong_release -> "Write_RISCV_strong_release"
     | Write_RISCV_conditional -> "Write_RISCV_conditional"
     | Write_RISCV_conditional_release -> "Write_RISCV_conditional_release"
+    | Write_RISCV_conditional_strong_release -> "Write_RISCV_conditional_strong_release"
   end
 end
 
@@ -566,8 +574,10 @@ instance (EnumerationType read_kind)
     | Read_exclusive_acquire -> 4
     | Read_stream -> 5
     | Read_RISCV_acquire -> 6
-    | Read_RISCV_reserved -> 7
-    | Read_RISCV_reserved_acquire -> 8
+    | Read_RISCV_strong_acquire -> 7
+    | Read_RISCV_reserved -> 8
+    | Read_RISCV_reserved_acquire -> 9
+    | Read_RISCV_reserved_strong_acquire -> 10
   end
 end
 
@@ -579,8 +589,10 @@ instance (EnumerationType write_kind)
     | Write_exclusive -> 3 
     | Write_exclusive_release -> 4
     | Write_RISCV_release -> 5
-    | Write_RISCV_conditional -> 6
-    | Write_RISCV_conditional_release -> 7
+    | Write_RISCV_strong_release -> 6
+    | Write_RISCV_conditional -> 7
+    | Write_RISCV_conditional_release -> 8
+    | Write_RISCV_conditional_strong_release -> 9
   end
 end
 
