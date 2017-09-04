@@ -86,6 +86,15 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (**************************************************************************)
 
+let rec last = function
+  | [x] -> x
+  | _ :: xs -> last xs
+  | [] -> raise (Failure "last")
+
+let rec butlast = function
+  | [x] -> []
+  | x :: xs -> x :: butlast xs
+  | [] -> []
 
 module Duplicate(S : Set.S) = struct
 
@@ -204,10 +213,8 @@ let option_bind f = function
   | Some(o) -> f o
 
 let rec option_binop f x y = match x, y with
-  | None, None -> None
-  | Some x, None -> Some x
-  | None, Some y -> Some y
   | Some x, Some y -> Some (f x y)
+  | _ -> None
 
 let changed2 f g x h y =
   match (g x, h y) with

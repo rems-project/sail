@@ -32,6 +32,16 @@
 (*  SUCH DAMAGE.                                                          *)
 (*========================================================================*)
 
+
+scattered typedef ast = const union
+
+val ast -> unit effect {barr, eamem, escape, rmem, rmemt, rreg, undef, wmvt, wreg} execute
+scattered function unit execute
+
+val bit[32] -> option<ast> effect pure decode
+scattered function option<ast> decode
+
+
 register CapReg PCC
 register CapReg nextPCC
 register CapReg delayedPCC
@@ -74,7 +84,7 @@ let (vector <0, 32, inc, (register<CapReg>)>) CapRegs =
   C21, C22, C23, C24, C25, C26, C27, C28, C29, C30, C31
   ]
 
-let (nat) max_otype = 0xffffff
+let max_otype = MAX(24) (*0xffffff*)
 let have_cp2 = true
 
 function (CapStruct) readCapReg((regno) n) =
@@ -204,7 +214,7 @@ function bool pcc_access_system_regs () =
       (pcc.access_system_regs)
 
 function bool register_inaccessible((regno) r) = 
-  let is_sys_reg = switch(r) {
+  let (bool) is_sys_reg = switch(r) {
     case 0b11011 -> true
     case 0b11100 -> true
     case 0b11101 -> true
@@ -249,7 +259,8 @@ function bool MEMw_tagged_conditional((bit[64]) addr, (bool) tag, (bit[cap_size_
   MEMval_tag_conditional(addr, cap_size, tag, reverse_endianness(data));
 }
 
-function unit effect {wmem} MEMw_wrapper(addr, size, data) =
+val forall Nat 'n, 'n >= 1. (bit[64], [:'n:], bit[8 * 'n]) -> unit effect {wmvt, wreg, eamem} MEMw_wrapper
+function unit effect {wmvt, wreg, eamem} MEMw_wrapper(addr, size, data) =
   let ledata = reverse_endianness(data) in
   if (addr == 0x000000007f000000) then
   {
@@ -263,7 +274,8 @@ function unit effect {wmem} MEMw_wrapper(addr, size, data) =
     MEMval_tag(addr, size, false, ledata);
   }
 
-function bool effect {wmem} MEMw_conditional_wrapper(addr, size, data) =
+val forall Nat 'n, 'n >= 1. (bit[64], [:'n:], bit[8 * 'n]) -> bool effect {wmvt, eamem} MEMw_conditional_wrapper
+function bool effect {wmvt, eamem} MEMw_conditional_wrapper(addr, size, data) =
   {
     (* On cheri non-capability writes must clear the corresponding tag*)
     MEMea_conditional(addr, size);
@@ -293,7 +305,7 @@ function bit[64] addrWrapper((bit[64]) addr, (MemAccessType) accessType, (WordTy
     else if (vAddr < (base)) then
       (raise_c2_exception(CapEx_LengthViolation, capno))
     else
-      (bit[64]) vAddr; (* XXX vAddr not truncated because top <= 2^64 and size > 0 *)
+      (bit[64]) (to_vec(vAddr)); (* XXX vAddr not truncated because top <= 2^64 and size > 0 *)
   }
 
 function (bit[64]) TranslatePC ((bit[64]) vAddr) = {
@@ -311,7 +323,7 @@ function (bit[64]) TranslatePC ((bit[64]) vAddr) = {
 }
 
 function unit checkCP2usable () =
-  if not ((CP0Status.CU)[2]) then
+  if not ((norm_dec (CP0Status.CU))[2]) then
     {
       (CP0Cause.CE) := 0b10;
       (SignalException(CpU));

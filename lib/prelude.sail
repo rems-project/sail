@@ -129,6 +129,9 @@ val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, int) -> vector<'o, 'n, 'ord, bit> effect pure add_vec_int
 
 val forall Num 'n, Num 'o, Order 'ord.
+    (int, vector<'o, 'n, 'ord, bit>) -> vector<'o, 'n, 'ord, bit> effect pure add_int_vec
+
+val forall Num 'n, Num 'o, Order 'ord.
     (vector<'o, 'n, 'ord, bit>, vector<'o, 'n, 'ord, bit>) -> (vector<'o, 'n, 'ord, bit>, bit, bit) effect pure add_overflow_vec
 
 val extern forall Num 'n, Num 'm, Num 'o, Num 'p.
@@ -149,6 +152,7 @@ overload (deinfix +) [
   add_vec;
   add_overflow_vec;
   add_vec_int;
+  add_int_vec;
   add_range;
   add_nat;
   add_int
@@ -264,9 +268,9 @@ val extern forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure lt_atom_a
 val extern forall Num 'n, Num 'm. ([:'n:], [:'m:]) -> bool effect pure gt_atom_atom = "gt"
 
 overload (deinfix >=) [gteq_atom_atom; gteq_range_atom; gteq_atom_range; gteq_vec; gteq_int]
-overload (deinfix >) [gt_atom_atom; gt_vec; gt_int]
+overload (deinfix >) [gt_atom_atom; gt_range_atom; gt_vec; gt_int]
 overload (deinfix <=) [lteq_atom_atom; lteq_range_atom; lteq_atom_range; lteq_vec; lteq_int]
-overload (deinfix <) [lt_atom_atom; lt_vec; lt_int]
+overload (deinfix <) [lt_atom_atom; lt_range_atom; lt_vec; lt_int]
 
 val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gteq_svec
 val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gt_svec
@@ -278,13 +282,21 @@ overload (deinfix <=_s) [lteq_svec]
 overload (deinfix >_s) [gt_svec]
 overload (deinfix >=_s) [gteq_svec]
 
+val extern forall Num 'n, Num 'm, Num 'o, 'o >= 'n. ([|'n:'m|], [:'o:]) -> [|'n:'o|] effect pure min_range_atom = "min"
+val extern (int, int) -> int effect pure min_int = "min"
+
+overload min [min_range_atom; min_int]
+
 val (int, int) -> int effect pure quotient
 
 overload (deinfix quot) [quotient]
 
 val (int, int) -> int effect pure modulo
+val extern forall Num 'm. (int, [:'m:]) -> [|0:'m - 1|] effect pure modulo_atom = "modulo"
 
-overload (deinfix mod) [modulo]
+overload (deinfix mod) [modulo_atom; modulo]
+
+val extern forall Num 'n. [:'n:] -> [:2** 'n:] effect pure pow2
 
 val extern forall Num 'n, Num 'm, Order 'ord, Type 'a. vector<'n,'m,'ord,'a> -> [:'m:] effect pure vector_length = "length"
 val forall Type 'a. list<'a> -> nat effect pure list_length

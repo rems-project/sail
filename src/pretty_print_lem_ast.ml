@@ -221,6 +221,8 @@ and pp_format_nexp_constraint_lem (NC_aux(nc,l)) =
   | NC_not_equal(n1,n2) -> "(NC_not_equal " ^ pp_format_nexp_lem n1 ^ " " ^ pp_format_nexp_lem n2 ^ ")"
   | NC_or(nc1,nc2) -> "(NC_or " ^ pp_format_nexp_constraint_lem nc1 ^ " " ^ pp_format_nexp_constraint_lem nc2 ^ ")"
   | NC_and(nc1,nc2) -> "(NC_and " ^ pp_format_nexp_constraint_lem nc1 ^ " " ^ pp_format_nexp_constraint_lem nc2 ^ ")"
+  | NC_true -> "NC_true"
+  | NC_false -> "NC_false"
   | NC_nat_set_bounded(id,bounds) -> "(NC_nat_set_bounded " ^
     pp_format_var_lem id ^
       " [" ^
@@ -326,6 +328,7 @@ let rec pp_format_pat_lem (P_aux(p,(l,annot))) =
   | P_lit(lit) -> "(P_lit " ^ pp_format_lit_lem lit ^ ")"
   | P_wild -> "P_wild"
   | P_id(id) -> "(P_id " ^ pp_format_id_lem id ^ ")"
+  | P_var(kid) -> "(P_var " ^ pp_format_var_lem kid ^ ")"
   | P_as(pat,id) -> "(P_as " ^ pp_format_pat_lem pat ^ " " ^ pp_format_id_lem id ^ ")"
   | P_typ(typ,pat) -> "(P_typ " ^ pp_format_typ_lem typ ^ " " ^ pp_format_pat_lem pat ^ ")"
   | P_app(id,pats) -> "(P_app " ^ pp_format_id_lem id ^ " [" ^

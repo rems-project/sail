@@ -73,6 +73,12 @@ let options = Arg.align ([
   ( "-ocaml_lib",
     Arg.String (fun l -> opt_libs_ocaml := l::!opt_libs_ocaml),
     "<filename> provide additional library to open in OCaml output");
+  ( "-lem_sequential",
+    Arg.Set Process_file.opt_lem_sequential,
+    " use sequential state monad for Lem output");
+  ( "-lem_mwords",
+    Arg.Set Process_file.opt_lem_mwords,
+    " use native machine word library for Lem output");
 (*
   ( "-i",
     Arg.String (fun l -> lib := l::!lib),
@@ -160,11 +166,10 @@ let main() =
        then output "" Lem_ast_out [out_name,ast]
        else ());
       (if !(opt_print_ocaml)
-       then let ast_ocaml = rewrite_ast_ocaml ast in
-         Pretty_print_sail.pp_defs stdout ast_ocaml;
-         if !(opt_libs_ocaml) = []
-         then output "" (Ocaml_out None) [out_name,ast_ocaml]
-         else output "" (Ocaml_out (Some (List.hd !opt_libs_ocaml))) [out_name,ast_ocaml]
+       then
+         let ast_ocaml = rewrite_ast_ocaml ast in
+         let out = match !opt_file_out with None -> "out" | Some s -> s in
+         Ocaml_backend.ocaml_compile out ast_ocaml
        else ());
       (if !(opt_print_lem)
        then let ast_lem = rewrite_ast_lem ast in

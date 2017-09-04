@@ -103,6 +103,8 @@ module Env : sig
 
   val get_overloads : id -> t -> id list
 
+  val get_num_def : id -> t -> nexp
+
   val is_extern : id -> t -> bool
 
   val get_extern : id -> t -> string
@@ -151,61 +153,13 @@ val add_typquant : typquant -> Env.t -> Env.t
    not of this form. *)
 val orig_kid : kid -> kid
 
-(* Some handy utility functions for constructing types. *)
-val mk_typ : typ_aux -> typ
-val mk_typ_arg : typ_arg_aux -> typ_arg
-val mk_id : string -> id
-val mk_id_typ : id -> typ
-
-val no_effect : effect
-val mk_effect : base_effect_aux list -> effect
-
 val union_effects : effect -> effect -> effect
 val equal_effects : effect -> effect -> bool
-
-val nconstant : int -> nexp
-val nminus : nexp -> nexp -> nexp
-val nsum : nexp -> nexp -> nexp
-val ntimes : nexp -> nexp -> nexp
-val npow2 : nexp -> nexp
-val nvar : kid -> nexp
-val nid : id -> nexp (* NOTE: Nexp_id's don't do anything currently *)
-
-(* Numeric constraint builders *)
-val nc_eq : nexp -> nexp -> n_constraint
-val nc_neq : nexp -> nexp -> n_constraint
-val nc_lteq : nexp -> nexp -> n_constraint
-val nc_gteq : nexp -> nexp -> n_constraint
-val nc_lt : nexp -> nexp -> n_constraint
-val nc_gt : nexp -> nexp -> n_constraint
-val nc_and : n_constraint -> n_constraint -> n_constraint
-val nc_or : n_constraint -> n_constraint -> n_constraint
-val nc_true : n_constraint
-val nc_false : n_constraint
 
 (* Negate a n_constraint. Note that there's no NC_not constructor, so
    this flips all the inequalites a the n_constraint leaves and uses
    de-morgans to switch and to or and vice versa. *)
 val nc_negate : n_constraint -> n_constraint
-
-val is_nat_kopt : kinded_id -> bool
-val is_order_kopt : kinded_id -> bool
-val is_typ_kopt : kinded_id -> bool
-
-(* Sail builtin types. *)
-val int_typ : typ
-val nat_typ : typ
-val atom_typ : nexp -> typ
-val range_typ : nexp -> nexp -> typ
-val bit_typ : typ
-val bool_typ : typ
-val unit_typ : typ
-val string_typ : typ
-val real_typ : typ
-val vector_typ : nexp -> nexp -> order -> typ -> typ
-val list_typ : typ -> typ
-val exist_typ : (kid -> n_constraint) -> (kid -> typ) -> typ
-val exc_typ : typ
 
 (* Vector with default order. *)
 val dvector_typ : Env.t -> nexp -> nexp -> typ -> typ
@@ -213,11 +167,14 @@ val dvector_typ : Env.t -> nexp -> nexp -> typ -> typ
 (* Vector of specific length with default order, i.e. lvector_typ env n bit_typ = bit[n]. *)
 val lvector_typ : Env.t -> nexp -> typ -> typ
 
+val exist_typ : (kid -> n_constraint) -> (kid -> typ) -> typ
+
 type tannot = (Env.t * typ * effect) option
 
 (* Strip the type annotations from an expression. *)
 val strip_exp : 'a exp -> unit exp
 val strip_pat : 'a pat -> unit pat
+val strip_lexp : 'a lexp -> unit lexp
 
 (* Check an expression has some type. Returns a fully annotated
    version of the expression, where each subexpression is annotated

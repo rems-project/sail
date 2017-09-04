@@ -91,74 +91,6 @@ let orig_kid (Kid_aux (Var v, l) as kid) =
   with
   | Not_found -> kid
 
-let mk_typ typ = Typ_aux (typ, Parse_ast.Unknown)
-let mk_typ_arg arg = Typ_arg_aux (arg, Parse_ast.Unknown)
-let mk_id str = Id_aux (Id str, Parse_ast.Unknown)
-let mk_kid str = Kid_aux (Var ("'" ^ str), Parse_ast.Unknown)
-let mk_infix_id str = Id_aux (DeIid str, Parse_ast.Unknown)
-
-let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
-
-let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
-
-let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
-and nexp_simp_aux = function
-  | Nexp_minus (Nexp_aux (Nexp_sum (Nexp_aux (n1, _), Nexp_aux (Nexp_constant c1, _)), _), Nexp_aux (Nexp_constant c2, _)) when c1 = c2 ->
-     nexp_simp_aux n1
-  | Nexp_sum (Nexp_aux (Nexp_minus (Nexp_aux (n1, _), Nexp_aux (Nexp_constant c1, _)), _), Nexp_aux (Nexp_constant c2, _)) when c1 = c2 ->
-     nexp_simp_aux n1
-  | Nexp_sum (n1, n2) ->
-     begin
-       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
-       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
-       match n1_simp, n2_simp with
-       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 + c2)
-       | _, Nexp_neg n2 -> Nexp_minus (n1, n2)
-       | _, _ -> Nexp_sum (n1, n2)
-     end
-  | Nexp_times (n1, n2) ->
-     begin
-       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
-       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
-       match n1_simp, n2_simp with
-       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 * c2)
-       | _, _ -> Nexp_times (n1, n2)
-     end
-  | Nexp_minus (n1, n2) ->
-     begin
-       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
-       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
-       typ_debug ("SIMP: " ^ string_of_nexp n1 ^ " - " ^ string_of_nexp n2);
-       match n1_simp, n2_simp with
-       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (c1 - c2)
-       | _, _ -> Nexp_minus (n1, n2)
-     end
-  | nexp -> nexp
-
-let int_typ = mk_id_typ (mk_id "int")
-let nat_typ = mk_id_typ (mk_id "nat")
-let unit_typ = mk_id_typ (mk_id "unit")
-let bit_typ = mk_id_typ (mk_id "bit")
-let real_typ = mk_id_typ (mk_id "real")
-let app_typ id args = mk_typ (Typ_app (id, args))
-let atom_typ nexp =
-  mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp))]))
-let range_typ nexp1 nexp2 =
-  mk_typ (Typ_app (mk_id "range", [mk_typ_arg (Typ_arg_nexp (nexp_simp nexp1));
-                                   mk_typ_arg (Typ_arg_nexp (nexp_simp nexp2))]))
-let bool_typ = mk_id_typ (mk_id "bool")
-let string_typ = mk_id_typ (mk_id "string")
-let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (Typ_arg_typ typ)]))
-
-let vector_typ n m ord typ =
-  mk_typ (Typ_app (mk_id "vector",
-                   [mk_typ_arg (Typ_arg_nexp (nexp_simp n));
-                    mk_typ_arg (Typ_arg_nexp (nexp_simp m));
-                    mk_typ_arg (Typ_arg_order ord);
-                    mk_typ_arg (Typ_arg_typ typ)]))
-
-let exc_typ = mk_id_typ (mk_id "exception")
-
 let is_range (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)])
@@ -172,25 +104,6 @@ let is_list (Typ_aux (typ_aux, _)) =
   | Typ_app (f, [Typ_arg_aux (Typ_arg_typ typ, _)])
        when string_of_id f = "list" -> Some typ
   | _ -> None
-
-let nconstant c = Nexp_aux (Nexp_constant c, Parse_ast.Unknown)
-let nminus n1 n2 = Nexp_aux (Nexp_minus (n1, n2), Parse_ast.Unknown)
-let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)
-let ntimes n1 n2 = Nexp_aux (Nexp_times (n1, n2), Parse_ast.Unknown)
-let npow2 n = Nexp_aux (Nexp_exp n, Parse_ast.Unknown)
-let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
-let nid id = Nexp_aux (Nexp_id id, Parse_ast.Unknown)
-
-let nc_eq n1 n2 = mk_nc (NC_fixed (n1, n2))
-let nc_neq n1 n2 = mk_nc (NC_not_equal (n1, n2))
-let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
-let nc_gteq n1 n2 = NC_aux (NC_bounded_ge (n1, n2), Parse_ast.Unknown)
-let nc_lt n1 n2 = nc_lteq n1 (nsum n2 (nconstant 1))
-let nc_gt n1 n2 = nc_gteq n1 (nsum n2 (nconstant 1))
-let nc_and nc1 nc2 = mk_nc (NC_and (nc1, nc2))
-let nc_or nc1 nc2 = mk_nc (NC_or (nc1, nc2))
-let nc_true = mk_nc NC_true
-let nc_false = mk_nc NC_false
 
 let mk_lit l = E_aux (E_lit (L_aux (l, Parse_ast.Unknown)), (Parse_ast.Unknown, ()))
 
@@ -211,10 +124,6 @@ let rec nc_negate (NC_aux (nc, _)) =
 
 (* Utilities for constructing effect sets *)
 
-let mk_effect effs =
-  Effect_aux (Effect_set (List.map (fun be_aux -> BE_aux (be_aux, Parse_ast.Unknown)) effs), Parse_ast.Unknown)
-
-let no_effect = mk_effect []
 
 module BESet = Set.Make(BE)
 
@@ -246,10 +155,6 @@ let string_of_index_sort = function
      ^ string_of_list " & " (fun (x, y) -> string_of_nexp x ^ " <= " ^ string_of_nexp y) constraints
      ^ "}"
 
-let quant_items : typquant -> quant_item list = function
-  | TypQ_aux (TypQ_tq qis, _) -> qis
-  | TypQ_aux (TypQ_no_forall, _) -> []
-
 let quant_split typq =
   let qi_kopt = function
     | QI_aux (QI_id kopt, _) -> [kopt]
@@ -261,23 +166,6 @@ let quant_split typq =
   in
   let qis = quant_items typq in
   List.concat (List.map qi_kopt qis), List.concat (List.map qi_nc qis)
-
-let kopt_kid (KOpt_aux (kopt_aux, _)) =
-  match kopt_aux with
-  | KOpt_none kid | KOpt_kind (_, kid) -> kid
-
-let is_nat_kopt = function
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_nat, _)], _), _), _) -> true
-  | KOpt_aux (KOpt_none _, _) -> true
-  | _ -> false
-
-let is_order_kopt = function
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_order, _)], _), _), _) -> true
-  | _ -> false
-
-let is_typ_kopt = function
-  | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_type, _)], _), _), _) -> true
-  | _ -> false
 
 (**************************************************************************)
 (* 1. Substitutions                                                       *)
@@ -768,6 +656,7 @@ end = struct
          end
 
   let add_register id typ env =
+    wf_typ env typ;
     if Bindings.mem id env.registers
     then typ_error (id_loc id) ("Register " ^ string_of_id id ^ " is already bound")
     else
@@ -1686,13 +1575,31 @@ let pat_typ_of (P_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
 (* Flow typing *)
 
+let rec big_int_of_nexp (Nexp_aux (nexp, _)) = match nexp with
+  | Nexp_constant c -> Some (big_int_of_int c)
+  | Nexp_times (n1, n2) ->
+     Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
+  | Nexp_sum (n1, n2) ->
+     Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
+  | Nexp_minus (n1, n2) ->
+     Util.option_binop add_big_int (big_int_of_nexp n1) (big_int_of_nexp n2)
+  | Nexp_exp n ->
+     Util.option_map (power_int_positive_big_int 2) (big_int_of_nexp n)
+  | _ -> None
+
 let destruct_atom (Typ_aux (typ_aux, _)) =
   match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c, _)), _)])
-       when string_of_id f = "atom" -> c
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c1, _)), _); Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c2, _)), _)])
-       when string_of_id f = "range" && c1 = c2 -> c1
-  | _ -> assert false
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp, _)])
+       when string_of_id f = "atom" ->
+     Util.option_map (fun c -> (c, nexp)) (big_int_of_nexp nexp)
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp1, _); Typ_arg_aux (Typ_arg_nexp nexp2, _)])
+       when string_of_id f = "range" ->
+     begin
+       match big_int_of_nexp nexp1, big_int_of_nexp nexp2 with
+       | Some c1, Some c2 -> if eq_big_int c1 c2 then Some (c1, nexp1) else None
+       | _ -> None
+     end
+  | _ -> None
 
 let destruct_atom_nexp env typ =
   match Env.expand_synonyms env typ with
@@ -1701,20 +1608,6 @@ let destruct_atom_nexp env typ =
   | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _); Typ_arg_aux (Typ_arg_nexp _, _)]), _)
        when string_of_id f = "range" -> Some n
   | _ -> None
-
-let restrict_range_upper c1 (Typ_aux (typ_aux, l) as typ) =
-  match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp, _); Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c2, _)), _)])
-     when string_of_id f = "range" ->
-     range_typ nexp (nconstant (min c1 c2))
-  | _ -> typ
-
-let restrict_range_lower c1 (Typ_aux (typ_aux, l) as typ) =
-  match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant c2, _)), _); Typ_arg_aux (Typ_arg_nexp nexp, _)])
-     when string_of_id f = "range" ->
-     range_typ (nconstant (max c1 c2)) nexp
-  | _ -> typ
 
 exception Not_a_constraint;;
 
@@ -1737,12 +1630,42 @@ let rec assert_constraint (E_aux (exp_aux, l)) =
   | _ -> nc_true
 
 type flow_constraint =
-  | Flow_lteq of int
-  | Flow_gteq of int
+  | Flow_lteq of big_int * nexp
+  | Flow_gteq of big_int * nexp
+
+let restrict_range_upper c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
+  match typ_aux with
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp, _); Typ_arg_aux (Typ_arg_nexp nexp2, _)])
+     when string_of_id f = "range" ->
+     begin
+       match big_int_of_nexp nexp2 with
+       | Some c2 ->
+          let upper = if (lt_big_int c1 c2) then nexp1 else nexp2 in
+          range_typ nexp upper
+       | _ -> typ
+     end
+  | _ -> typ
+
+let restrict_range_lower c1 nexp1 (Typ_aux (typ_aux, l) as typ) =
+  match typ_aux with
+  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp nexp2, _); Typ_arg_aux (Typ_arg_nexp nexp, _)])
+     when string_of_id f = "range" ->
+     begin
+       match big_int_of_nexp nexp2 with
+       | Some c2 ->
+          let lower = if (gt_big_int c1 c2) then nexp1 else nexp2 in
+          range_typ lower nexp
+       | _ -> typ
+     end
+  | _ -> typ
 
 let apply_flow_constraint = function
-  | Flow_lteq c -> (restrict_range_upper c, restrict_range_lower (c + 1))
-  | Flow_gteq c -> (restrict_range_lower c, restrict_range_upper (c - 1))
+  | Flow_lteq (c, nexp) ->
+     (restrict_range_upper c nexp,
+      restrict_range_lower (succ_big_int c) (nexp_simp (nsum nexp (nconstant 1))))
+  | Flow_gteq (c, nexp) ->
+     (restrict_range_lower c nexp,
+      restrict_range_upper (pred_big_int c) (nexp_simp (nminus nexp (nconstant 1))))
 
 let rec infer_flow env (E_aux (exp_aux, (l, _))) =
   match exp_aux with
@@ -1764,20 +1687,34 @@ let rec infer_flow env (E_aux (exp_aux, (l, _))) =
      [], [nc_gt n1 n2]
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lt_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destruct_atom (typ_of y) in
-     [(v, Flow_lteq (c - 1))], []
+     begin
+       match destruct_atom (typ_of y) with
+       | Some (c, nexp) ->
+          [(v, Flow_lteq (pred_big_int c, nexp_simp (nminus nexp (nconstant 1))))], []
+       | _ -> [], []
+     end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "lteq_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destruct_atom (typ_of y) in
-     [(v, Flow_lteq c)], []
+     begin
+       match destruct_atom (typ_of y) with
+       | Some (c, nexp) -> [(v, Flow_lteq (c, nexp))], []
+       | _ -> [], []
+     end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gt_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destruct_atom (typ_of y) in
-     [(v, Flow_gteq (c + 1))], []
+     begin
+       match destruct_atom (typ_of y) with
+       | Some (c, nexp) ->
+          [(v, Flow_gteq (succ_big_int c, nexp_simp (nsum nexp (nconstant 1))))], []
+       | _ -> [], []
+     end
   | E_app (f, [E_aux (E_id v, _); y]) when string_of_id f = "gteq_range_atom" ->
      let kid = Env.fresh_kid env in
-     let c = destruct_atom (typ_of y) in
-     [(v, Flow_gteq c)], []
+     begin
+       match destruct_atom (typ_of y) with
+       | Some (c, nexp) -> [(v, Flow_gteq (c, nexp))], []
+       | _ -> [], []
+     end
   | _ -> [], []
 
 let rec add_flows b flows env =
@@ -1857,6 +1794,7 @@ let irule r env exp =
 
 let strip_exp : 'a exp -> unit exp = function exp -> map_exp_annot (fun (l, _) -> (l, ())) exp
 let strip_pat : 'a pat -> unit pat = function pat -> map_pat_annot (fun (l, _) -> (l, ())) pat
+let strip_lexp : 'a lexp -> unit lexp = function lexp -> map_lexp_annot (fun (l, _) -> (l, ())) lexp
 
 let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
   let annot_exp_effect exp typ eff = E_aux (exp, (l, Some (env, typ, eff))) in
@@ -2599,6 +2537,8 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let else_branch' = crule check_exp (add_constraints (List.map nc_negate constrs) (add_flows false flows env)) else_branch (typ_of then_branch') in
      annot_exp (E_if (cond', then_branch', else_branch')) (typ_of then_branch')
   | E_vector_access (v, n) -> infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, ())))
+  | E_vector_update (v, n, exp) -> infer_exp env (E_aux (E_app (mk_id "vector_update", [v; n; exp]), (l, ())))
+  | E_vector_update_subrange (v, n, m, exp) -> infer_exp env (E_aux (E_app (mk_id "vector_update_subrange", [v; n; m; exp]), (l, ())))
   | E_vector_append (v1, v2) -> infer_exp env (E_aux (E_app (mk_id "append", [v1; v2]), (l, ())))
   | E_vector_subrange (v, n, m) -> infer_exp env (E_aux (E_app (mk_id "vector_subrange", [v; n; m]), (l, ())))
   | E_vector [] -> typ_error l "Cannot infer type of empty vector"

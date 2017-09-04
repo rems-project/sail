@@ -34,6 +34,8 @@ let adjust_start_index (start, v) = set_vector_start (start, v)
 
 let cast_vec_bool v = bitU_to_bool (extract_only_element v)
 let cast_bit_vec (start, len, b) = Vector (repeat [b] len) start false
+let cast_boolvec_bitvec (Vector bs start inc) =
+  Vector (List.map bool_to_bitU bs) start inc
 
 let pp_bitu_vector (Vector elems start inc) =
   let elems_pp = List.foldl (fun acc elem -> acc ^ showBitU elem) "" elems in
@@ -203,6 +205,7 @@ let modulo (l,r) = hardware_mod l r
 let quot = hardware_quot
 let power (l,r) = integerPow l r
 
+let add_int = add
 let sub_int = sub
 let mult_int = mult
 
@@ -450,6 +453,9 @@ let rec repeat xs n =
 let duplicate (bit, length) =
   Vector (repeat [bit] length) (length - 1) false
 
+let replicate_bits (v, count) =
+  Vector (repeat (get_elems v) count) ((length v * count) - 1) false
+
 let compare_op op (l,r) = (op l r)
 
 let lt = compare_op (<)
@@ -529,3 +535,17 @@ let make_bitvector_undef length =
 let mask' (start, n, Vector bits _ dir) =
   let current_size = List.length bits in
   Vector (drop (current_size - (natFromInteger n)) bits) start dir
+
+
+(* Register operations *)
+
+let update_reg_range i j reg_val new_val = update reg_val i j new_val
+let update_reg_bit i reg_val bit = update_pos reg_val i bit
+let update_reg_field_range regfield i j reg_val new_val =
+  let current_field_value = regfield.get_field reg_val in
+  let new_field_value = update current_field_value i j new_val in
+  regfield.set_field reg_val new_field_value
+let write_reg_field_bit regfield i reg_val bit =
+  let current_field_value = regfield.get_field reg_val in
+  let new_field_value = update_pos current_field_value i bit in
+  regfield.set_field reg_val new_field_value
