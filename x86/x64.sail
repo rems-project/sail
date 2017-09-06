@@ -401,10 +401,7 @@ function unit erase_eflags () =
   ZF := undefined;
 }
 
-(* XXXXX *)
-function nat power ((nat) x, ([|64|]) y) = undefined
-
-function nat value_width ((wsize) sz) = power (2, size_width(sz))
+function nat value_width ((wsize) sz) = 2 ** size_width(sz)
 
 function bit word_signed_overflow_add ((wsize) sz, (qword) a, (qword) b) =
   (bit) (word_size_msb (sz, a) == word_size_msb (sz, b) &
