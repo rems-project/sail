@@ -201,6 +201,7 @@ val typ_of : tannot exp -> typ
 val typ_of_annot : Ast.l * tannot -> typ
 
 val pat_typ_of : tannot pat -> typ
+val pat_env_of : tannot pat -> Env.t
 
 val effect_of : tannot exp -> effect
 val effect_of_annot : tannot -> effect

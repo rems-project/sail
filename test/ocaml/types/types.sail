@@ -21,6 +21,13 @@ typedef TestStruct = const struct {
 
 register TestStruct SREG
 
+typedef option = const union forall Type 'a. {
+    None;
+    'a Some
+}
+
+register (option<byte>) OREG
+
 val unit -> unit effect {rreg, wreg} main
 
 function main () = {
