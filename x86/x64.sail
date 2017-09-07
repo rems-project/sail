@@ -108,6 +108,7 @@ val extern forall Nat 'n. (qword, [|'n|]) -> (bit[8 * 'n]) effect { rmem } rMEM
 
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval
+val extern unit -> unit effect { barr } X86_MFENCE
 
 function forall Nat 'n. unit effect {eamem, wmv} wMEM ((qword) addr, ([|'n|]) len, (bit[8 * 'n]) data) = {
          MEMea(addr, len);
@@ -582,7 +583,7 @@ function unit drop ((qword) i) = if i[7 ..0] != 0 then () else RSP := RSP + i
 scattered function unit execute
 scattered typedef ast = const union
 
-val ast -> unit effect {escape, rmem, rreg, undef, eamem, wmv, wreg} execute
+val ast -> unit effect {escape, rmem, rreg, undef, eamem, wmv, wreg, barr} execute
 
 (* ==========================================================================
       Binop
@@ -715,6 +716,15 @@ function clause execute (LOOP (c,i)) =
   RCX := RCX - 1;
   if RCX != 0 & read_cond (c) then RIP := RIP + i else ();
 }
+
+(* ==========================================================================
+      MFENCE
+   ========================================================================== *)
+
+union ast member unit MFENCE
+
+function clause execute (MFENCE) =
+  X86_MFENCE ()
 
 (* ==========================================================================
       Monop
