@@ -86,6 +86,15 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (**************************************************************************)
 
+let rec last = function
+  | [x] -> x
+  | _ :: xs -> last xs
+  | [] -> raise (Failure "last")
+
+let rec butlast = function
+  | [x] -> []
+  | x :: xs -> x :: butlast xs
+  | [] -> []
 
 module Duplicate(S : Set.S) = struct
 

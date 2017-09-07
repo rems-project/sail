@@ -40,6 +40,11 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+(* Last element of a list *)
+val last : 'a list -> 'a
+
+val butlast : 'a list -> 'a list
+
 (** Mixed useful things *)
 module Duplicate(S : Set.S) : sig 
   type dups = 

@@ -41,6 +41,8 @@
 (**************************************************************************)
 
 let opt_new_parser = ref false
+let opt_lem_sequential = ref false
+let opt_lem_mwords = ref false
 
 type out_type =
   | Lem_ast_out
@@ -136,31 +138,28 @@ let generated_line f =
 
 let output_lem filename libs defs =
   let generated_line = generated_line filename in
-  let types_module = (filename ^ "_embed_types") in
-  let types_module_seq = (filename ^ "_embed_types_sequential") in
-  let libs_seq = List.map (fun lib -> lib ^ "_sequential") libs in
+  let seq_suffix = if !opt_lem_sequential then "_sequential" else "" in
+  let types_module = (filename ^ "_embed_types" ^ seq_suffix) in
+  let monad_module = if !opt_lem_sequential then "State" else "Prompt" in
+  let operators_module = if !opt_lem_mwords then "Sail_operators_mwords" else "Sail_operators" in
+  let libs = List.map (fun lib -> lib ^ seq_suffix) libs in
+  let base_imports = [
+      "Pervasives_extra";
+      "Sail_impl_base";
+      "Sail_values";
+      operators_module;
+      monad_module
+    ] in
   let ((ot,_, _) as ext_ot) =
-    open_output_with_check_unformatted (filename ^ "_embed_types.lem") in
-  let ((ots,_, _) as ext_ots) =
-    open_output_with_check_unformatted (filename ^ "_embed_types_sequential.lem") in
+    open_output_with_check_unformatted (filename ^ "_embed_types" ^ seq_suffix ^ ".lem") in
   let ((o,_, _) as ext_o) =
-    open_output_with_check_unformatted (filename ^ "_embed.lem") in
-  let ((os,_, _) as ext_os) =
-    open_output_with_check_unformatted (filename ^ "_embed_sequential.lem") in
-  (Pretty_print.pp_defs_lem false false
-     (ot,["Pervasives_extra";"Sail_impl_base";"Sail_values";"Sail_operators";"Prompt"])
-     (o,["Pervasives_extra";"Sail_impl_base";"Sail_values";"Sail_operators";"Prompt";
-       String.capitalize types_module] @ libs)
-     defs generated_line);
-  (Pretty_print.pp_defs_lem true true
-     (ots,["Pervasives_extra";"Sail_impl_base";"Sail_values";"Sail_operators_mwords";"State"])
-     (os,["Pervasives_extra";"Sail_impl_base";"Sail_values";"Sail_operators_mwords";"State";
-       String.capitalize types_module_seq] @ libs_seq)
+    open_output_with_check_unformatted (filename ^ "_embed" ^ seq_suffix ^ ".lem") in
+  (Pretty_print.pp_defs_lem !opt_lem_sequential !opt_lem_mwords
+     (ot, base_imports)
+     (o, base_imports @ (String.capitalize types_module :: libs))
      defs generated_line);
   close_output_with_check ext_ot;
-  close_output_with_check ext_ots;
-  close_output_with_check ext_o;
-  close_output_with_check ext_os
+  close_output_with_check ext_o
 
 let output1 libpath out_arg filename defs  =
   let f' = Filename.basename (Filename.chop_extension filename) in

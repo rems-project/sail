@@ -44,6 +44,8 @@ open Ast
 open Util
 open Ast_util
 
+let opt_undefined_gen = ref false
+
 module Envmap = Finite_map.Fmap_map(String)
 module Nameset' = Set.Make(String)
 module Nameset = struct
@@ -1116,6 +1118,11 @@ let generate_initialize_registers vs_ids (Defs defs) =
 
 let process_ast order defs =
   let (ast, _, _) = to_ast Nameset.empty initial_kind_env order defs in
-  let vs_ids = val_spec_ids ast in
-  let ast = generate_undefineds vs_ids ast in
-  generate_initialize_registers vs_ids ast
+  if not !opt_undefined_gen
+  then ast
+  else
+    begin
+      let vs_ids = val_spec_ids ast in
+      let ast = generate_undefineds vs_ids ast in
+      generate_initialize_registers vs_ids ast
+    end

@@ -58,7 +58,11 @@ let langlebar = string "<|"
 let ranglebar = string "|>"
 let anglebars = enclose langlebar ranglebar
 
-let fix_id name = match name with
+let is_number_char c =
+  c = '0' || c = '1' || c = '2' || c = '3' || c = '4' || c = '5' ||
+  c = '6' || c = '7' || c = '8' || c = '9'
+
+let fix_id remove_tick name = match name with
   | "assert"
   | "lsl"
   | "lsr"
@@ -76,22 +80,17 @@ let fix_id name = match name with
   | "EQ"
   | "integer"
     -> name ^ "'"
-  | _ -> name
-
-let is_number char =
-  char = '0' || char = '1' || char = '2' || char = '3' || char = '4' || char = '5' ||
-  char = '6' || char = '7' || char = '8' || char = '9'
+  | _ ->
+     if name.[0] = '\'' then
+       let var = String.sub name 1 (String.length name - 1) in
+       if remove_tick then var else (var ^ "'")
+     else if is_number_char(name.[0]) then
+       ("v" ^ name ^ "'")
+     else name
 
 let doc_id_lem (Id_aux(i,_)) =
   match i with
-  | Id i ->
-     (* this not the right place to do this, just a workaround *)
-     if i.[0] = '\'' then
-       string ((String.sub i 1 (String.length i - 1)) ^ "'")
-     else if is_number(i.[0]) then
-       string ("v" ^ i ^ "'")
-     else
-       string (fix_id i)
+  | Id i -> string (fix_id false i)
   | DeIid x ->
      (* add an extra space through empty to avoid a closing-comment
       * token in case of x ending with star. *)
@@ -102,7 +101,7 @@ let doc_id_lem_type (Id_aux(i,_)) =
   | Id("int") -> string "ii"
   | Id("nat") -> string "ii"
   | Id("option") -> string "maybe"
-  | Id i -> string (fix_id i)
+  | Id i -> string (fix_id false i)
   | DeIid x ->
      (* add an extra space through empty to avoid a closing-comment
       * token in case of x ending with star. *)
@@ -115,11 +114,13 @@ let doc_id_lem_ctor (Id_aux(i,_)) =
   | Id("nat") -> string "integer"
   | Id("Some") -> string "Just"
   | Id("None") -> string "Nothing"
-  | Id i -> string (fix_id (String.capitalize i))
+  | Id i -> string (fix_id false (String.capitalize i))
   | DeIid x ->
      (* add an extra space through empty to avoid a closing-comment
       * token in case of x ending with star. *)
      separate space [colon; string (String.capitalize x); empty]
+
+let doc_var_lem kid = string (fix_id true (string_of_kid kid))
 
 let effectful_set =
   List.exists
@@ -230,6 +231,7 @@ let rec contains_t_pp_var (Typ_aux (t,a) as typ) = match t with
   | Typ_wild -> true
   | Typ_id _ -> false
   | Typ_var _ -> true
+  | Typ_exist _ -> true
   | Typ_fn (t1,t2,_) -> contains_t_pp_var t1 || contains_t_pp_var t2
   | Typ_tup ts -> List.exists contains_t_pp_var ts
   | Typ_app (c,targs) ->
@@ -321,6 +323,7 @@ let rec doc_pat_lem sequential mwords apat_needed (P_aux (p,(l,annot)) as pa) = 
      begin match id with
      | Id_aux (Id "None",_) -> string "Nothing" (* workaround temporary issue *)
      | _ -> doc_id_lem id end
+  | P_var kid -> doc_var_lem kid
   | P_as(p,id) -> parens (separate space [doc_pat_lem sequential mwords true p; string "as"; doc_id_lem id])
   | P_typ(typ,p) ->
     let doc_p = doc_pat_lem sequential mwords true p in
@@ -391,15 +394,16 @@ let doc_exp_lem, doc_let_lem =
                    underscore ^^
                    doc_id_lem id in
                  liftR ((prefix 2 1)
-                   (string "write_reg_field_range")
+                   (string "update_reg")
                    (align (doc_lexp_deref_lem sequential mwords early_ret le ^^ space^^
-                             field_ref ^/^ expY e2 ^/^ expY e3 ^/^ expY e)))
+                      parens (string "update_reg_field_range" ^/^ field_ref ^/^ expY e2 ^/^ expY e3) ^/^ expY e)))
             | _ ->
                liftR ((prefix 2 1)
-                 (string "write_reg_range")
-                 (align (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^ expY e2 ^/^ expY e3 ^/^ expY e)))
+                 (string "update_reg")
+                 (align (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^
+                   parens (string "update_reg_range" ^/^ expY e2 ^/^ expY e3) ^/^ expY e)))
            )
-        | LEXP_vector (le,e2) when is_bit_typ t ->
+        | LEXP_vector (le,e2) ->
            (match le with
             | LEXP_aux (LEXP_field ((LEXP_aux (_, lannot) as le),id), fannot) ->
                if is_bit_typ (typ_of_annot fannot) then
@@ -410,12 +414,14 @@ let doc_exp_lem, doc_let_lem =
                    underscore ^^
                    doc_id_lem id in
                  liftR ((prefix 2 1)
-                   (string "write_reg_field_bit")
-                   (align (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^ field_ref ^/^ expY e2 ^/^ expY e)))
+                   (string "update_reg")
+                   (align (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^
+                     parens (string "update_reg_field_bit" ^/^ field_ref ^/^ expY e2) ^/^ expY e)))
             | _ ->
                liftR ((prefix 2 1)
-                 (string "write_reg_bit")
-                 (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^ expY e2 ^/^ expY e))
+                 (string "update_reg")
+                 (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^
+                   parens (string "update_reg_bit" ^/^ expY e2) ^/^ expY e))
            )
         (* | LEXP_field (le,id) when is_bit_typ t ->
            liftR ((prefix 2 1)
@@ -425,9 +431,11 @@ let doc_exp_lem, doc_let_lem =
           let field_ref =
             doc_id_lem (typ_id_of (typ_of_annot lannot)) ^^
             underscore ^^
-            doc_id_lem id in
+            doc_id_lem id ^^
+            dot ^^
+            string "set_field" in
            liftR ((prefix 2 1)
-             (string "write_reg_field")
+             (string "update_reg")
              (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^
                 field_ref ^/^ expY e))
         (* | (LEXP_id id | LEXP_cast (_,id)), t, Alias alias_info ->
@@ -692,7 +700,7 @@ let doc_exp_lem, doc_let_lem =
        let recordtyp = match annot with
          | Some (env, Typ_aux (Typ_id tid,_), _) when Env.is_record tid env ->
            tid
-         | _ ->  raise (report l "cannot get record type") in
+         | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
        let epp = anglebars (space ^^ (align (separate_map
                                           (semi_sp ^^ break 1)
                                           (doc_fexp sequential mwords early_ret recordtyp) fexps)) ^^ space) in
@@ -702,7 +710,7 @@ let doc_exp_lem, doc_let_lem =
        let recordtyp = match eannot with
          | Some (env, Typ_aux (Typ_id tid,_), _) when Env.is_record tid env ->
            tid
-         | _ ->  raise (report l "cannot get record type") in
+         | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
        anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp sequential mwords early_ret recordtyp) fexps))
     | E_vector exps ->
        let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
@@ -801,21 +809,26 @@ let doc_exp_lem, doc_let_lem =
        if aexp_needed then parens (align bepp) else bepp
     | E_vector_update(v,e1,e2) ->
        let t = typ_of full_exp in
+       let (_, _, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
+       let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
        let call =
          if is_bitvector_typ t (*&& mwords*)
-         then "bitvector_update_pos"
-         else "update_pos" in
-       let epp = separate space [string call;expY v;expY e1;expY e2] in
+         then "bitvector_update_pos" ^ ord_suffix
+         else "update_pos" ^ ord_suffix in
+       let epp = string call ^^ space ^^ parens (separate comma_sp [expY v;expY e1;expY e2]) in
        if aexp_needed then parens (align epp) else epp
     | E_vector_update_subrange(v,e1,e2,e3) ->
        let t = typ_of full_exp in
+       let (_, _, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
+       let ord_suffix = if is_order_inc ord then "_inc" else "_dec" in
        let call =
          if is_bitvector_typ t (*&& mwords*)
-         then "bitvector_update"
-         else "update" in
-       let epp = align (string call ^//^
-                          group (group (expY v) ^/^ group (expY e1) ^/^ group (expY e2)) ^/^
-                            group (expY e3)) in
+         then "bitvector_update" ^ ord_suffix
+         else "update" ^ ord_suffix in
+       let epp =
+         align (string call ^//^
+           parens (separate comma_sp
+             [group (expY v); group (expY e1); group (expY e2); group (expY e3)])) in
        if aexp_needed then parens (align epp) else epp
     | E_list exps ->
        brackets (separate_map semi (expN) exps)
@@ -1001,6 +1014,7 @@ let doc_exp_lem, doc_let_lem =
                                  top_exp sequential mwords early_ret true e])
     | LEXP_id id -> doc_id_lem id
     | LEXP_cast (typ,id) -> doc_id_lem id
+    | LEXP_tup lexps -> parens (separate_map comma_sp (doc_lexp_deref_lem sequential mwords early_ret) lexps)
     | _ ->
        raise (Reporting_basic.err_unreachable l ("doc_lexp_deref_lem: Shouldn't happen"))
              (* expose doc_exp_lem and doc_let *)
