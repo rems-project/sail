@@ -99,46 +99,36 @@ type wordWidth =
   | RISCVWORD
   | RISCVDOUBLE
 
+let pp_word_width width : string =
+  begin match width with
+  | RISCVBYTE   -> "b"
+  | RISCVHALF   -> "h"
+  | RISCVWORD   -> "w"
+  | RISCVDOUBLE -> "d"
+  end
+
 let pp_riscv_load_op (unsigned, width, aq, rl) =
-  begin match (unsigned, width) with
-  | (false, RISCVBYTE)    -> "lb"
-  | (true,  RISCVBYTE)    -> "lbu"
-  | (false, RISCVHALF)    -> "lh"
-  | (true,  RISCVHALF)    -> "lhu"
-  | (false, RISCVWORD)    -> "lw"
-  | (true,  RISCVWORD)    -> "lwu"
-  | (_, RISCVDOUBLE)      -> "ld"
-  end ^
+  "l" ^
+  (pp_word_width width) ^
+  (if unsigned then "u" else "") ^
   (if aq then ".aq" else "") ^
   (if rl then ".rl" else "")
 
 let pp_riscv_store_op (width, aq, rl) =
-  begin match width with
-  | RISCVBYTE -> "sb"
-  | RISCVHALF -> "sh"
-  | RISCVWORD -> "sw"
-  | RISCVDOUBLE -> "sd"
-  end ^
+  "s" ^
+  (pp_word_width width) ^
   (if aq then ".aq" else "") ^
   (if rl then ".rl" else "")
 
 let pp_riscv_load_reserved_op (aq, rl, width) =
-  "lr" ^
-  begin match width with
-  | RISCVWORD   -> ".w"
-  | RISCVDOUBLE -> ".d"
-  | _ -> assert false
-  end ^
+  "lr." ^
+  (pp_word_width width) ^
   (if aq then ".aq" else "") ^
   (if rl then ".rl" else "")
 
 let pp_riscv_store_conditional_op (aq, rl, width) =
-  "sc" ^
-  begin match width with
-  | RISCVWORD   -> ".w"
-  | RISCVDOUBLE -> ".d"
-  | _ -> assert false
-  end ^
+  "sc." ^
+  (pp_word_width width) ^
   (if aq then ".aq" else "") ^
   (if rl then ".rl" else "")
 
@@ -153,9 +143,7 @@ type riscvAmoop =
   | RISCVAMOMINU
   | RISCVAMOMAXU
 
-let pp_riscv_amo_op (op, aq, rl, width) =
-  "amo" ^
-  begin match op with
+let pp_riscv_amo_op_part = function
   | RISCVAMOSWAP -> "swap"
   | RISCVAMOADD  -> "add"
   | RISCVAMOXOR  -> "xor"
@@ -165,7 +153,10 @@ let pp_riscv_amo_op (op, aq, rl, width) =
   | RISCVAMOMAX  -> "max"
   | RISCVAMOMINU -> "minu"
   | RISCVAMOMAXU -> "maxu"
-  end ^
+
+let pp_riscv_amo_op (op, aq, rl, width) =
+  "amo" ^
+  pp_riscv_amo_op_part op ^
   begin match width with
   | RISCVWORD   -> ".w"
   | RISCVDOUBLE -> ".d"
