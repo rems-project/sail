@@ -2220,8 +2220,9 @@ let rec rewrite_local_lexp ((LEXP_aux(lexp,((l,_) as annot))) as le) =
     (lhs, (fun exp -> rhs (E_aux (E_vector_update_subrange (lexp_to_exp lexp, e1, e2, exp), annot))))
   | LEXP_field (lexp, id) ->
     let (lhs, rhs) = rewrite_local_lexp lexp in
+    let (LEXP_aux (_, recannot)) = lexp in
     let field_update exp = FES_aux (FES_Fexps ([FE_aux (FE_Fexp (id, exp), annot)], false), annot) in
-    (lhs, (fun exp -> rhs (E_aux (E_record_update (lexp_to_exp lexp, field_update exp), annot))))
+    (lhs, (fun exp -> rhs (E_aux (E_record_update (lexp_to_exp lexp, field_update exp), recannot))))
   | _ -> raise (Reporting_basic.err_unreachable l ("Unsupported lexp: " ^ string_of_lexp le))
 
 (*Expects to be called after rewrite_defs; thus the following should not appear:
@@ -2946,6 +2947,18 @@ let rewrite_defs_letbind_effects  =
       let _ = reset_fresh_name_counter () in
       FCL_aux (FCL_Funcl (id,pat,n_exp_term newreturn exp),annot)
     in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),fdannot) in
+  let rewrite_def rewriters = function
+    | DEF_val (LB_aux (lb, annot)) ->
+      let rewrap lb = DEF_val (LB_aux (lb, annot)) in
+      begin
+        match lb with
+        | LB_val_implicit (pat, exp) ->
+          rewrap (LB_val_implicit (pat, n_exp_term (effectful exp) exp))
+        | LB_val_explicit (ts, pat, exp) ->
+          rewrap (LB_val_explicit (ts, pat, n_exp_term (effectful exp) exp))
+      end
+    | DEF_fundef fdef -> DEF_fundef (rewrite_fun rewriters fdef)
+    | d -> d in
   rewrite_defs_base
     {rewrite_exp = rewrite_exp
     ; rewrite_pat = rewrite_pat

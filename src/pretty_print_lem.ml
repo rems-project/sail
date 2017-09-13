@@ -530,14 +530,19 @@ let doc_exp_lem, doc_let_lem =
             if contains_bitvector_typ t && not (contains_t_pp_var t)
             then (align epp ^^ (doc_tannot_lem sequential mwords (effectful eff) t), true)
             else (epp, aexp_needed) in
-          if aexp_needed then parens (align taepp) else taepp
+          if aexp_needed then parens (align taepp) else taepp*)
        | Id_aux (Id "length",_) ->
+          (* Another temporary hack: The sizeof rewriting introduces calls to
+             "length", and the disambiguation between the length function on
+             bitvectors and vectors of other element types should be done by
+             the type checker, but type checking after rewriting steps is
+             currently broken. *)
           let [arg] = args in
           let targ = typ_of arg in
-          let call = if is_bitvector_typ targ then "bvlength" else "length" in
+          let call = if mwords && is_bitvector_typ targ then "bvlength" else "length" in
           let epp = separate space [string call;expY arg] in
           if aexp_needed then parens (align epp) else epp
-       | Id_aux (Id "bool_not", _) ->
+       (*)| Id_aux (Id "bool_not", _) ->
           let [a] = args in
           let epp = align (string "~" ^^ expY a) in
           if aexp_needed then parens (align epp) else epp *)
@@ -709,7 +714,9 @@ let doc_exp_lem, doc_let_lem =
         | _ -> parens (separate_map comma expN exps))
     | E_record(FES_aux(FES_Fexps(fexps,_),_)) ->
        let recordtyp = match annot with
-         | Some (env, Typ_aux (Typ_id tid,_), _) when Env.is_record tid env ->
+         | Some (env, Typ_aux (Typ_id tid,_), _)
+         | Some (env, Typ_aux (Typ_app (tid, _), _), _)
+           when Env.is_record tid env ->
            tid
          | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
        let epp = anglebars (space ^^ (align (separate_map
@@ -717,9 +724,11 @@ let doc_exp_lem, doc_let_lem =
                                           (doc_fexp sequential mwords early_ret recordtyp) fexps)) ^^ space) in
        if aexp_needed then parens epp else epp
     | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
-       let (E_aux (_, (_, eannot))) = e in
-       let recordtyp = match eannot with
-         | Some (env, Typ_aux (Typ_id tid,_), _) when Env.is_record tid env ->
+       (* let (E_aux (_, (_, eannot))) = e in *)
+       let recordtyp = match annot with
+         | Some (env, Typ_aux (Typ_id tid,_), _)
+         | Some (env, Typ_aux (Typ_app (tid, _), _), _)
+           when Env.is_record tid env ->
            tid
          | _ ->  raise (report l ("cannot get record type from annot " ^ string_of_annot annot ^ " of exp " ^ string_of_exp full_exp)) in
        anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp sequential mwords early_ret recordtyp) fexps))
