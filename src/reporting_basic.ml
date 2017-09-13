@@ -87,19 +87,48 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (**************************************************************************)
 
-let format_pos ff p = (
-  Format.fprintf ff "File \"%s\", line %d, character %d:\n"
-    p.Lexing.pos_fname p.Lexing.pos_lnum (p.Lexing.pos_cnum - p.Lexing.pos_bol);
-  Format.pp_print_flush ff ())
+let format_pos ff p =
+  let open Lexing in
+  begin
+    Format.fprintf ff "file \"%s\", line %d, character %d:\n"
+                   p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol);
+    Format.pp_print_flush ff ()
+  end
 
+let rec skip_lines in_chan = function
+  | n when n <= 0 -> ()
+  | n -> input_line in_chan; skip_lines in_chan (n - 1)
 
-let format_pos2 ff p1 p2 = (
-  Format.fprintf ff "File \"%s\", line %d, character %d to line %d, character %d"
-    p1.Lexing.pos_fname 
-    p1.Lexing.pos_lnum (p1.Lexing.pos_cnum - p1.Lexing.pos_bol + 1)
-    p2.Lexing.pos_lnum (p2.Lexing.pos_cnum - p2.Lexing.pos_bol);
-  Format.pp_print_flush ff ()
-)
+let termcode n = "\x1B[" ^ string_of_int n ^ "m"
+
+let print_code ff fname lnum1 cnum1 cnum2 =
+  try
+    let in_chan = open_in fname in
+    begin
+      try
+        skip_lines in_chan (lnum1 - 1);
+        let line = input_line in_chan in
+        Format.fprintf ff "%s%s%s%s%s"
+                       (Str.string_before line cnum1)
+                       (termcode 41)
+                       (Str.string_before (Str.string_after line cnum1) (cnum2 - cnum1))
+                       (termcode 49)
+                       (Str.string_after line cnum2);
+        close_in in_chan
+      with e -> (close_in_noerr in_chan; print_endline (Printexc.to_string e))
+    end
+  with _ -> ()
+
+let format_pos2 ff p1 p2 =
+  let open Lexing in
+  begin
+    Format.fprintf ff "file \"%s\", line %d, character %d to line %d, character %d\n\n"
+                   p1.pos_fname
+                   p1.pos_lnum (p1.pos_cnum - p1.pos_bol + 1)
+                   p2.pos_lnum (p2.pos_cnum - p2.pos_bol);
+    print_code ff p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) (p2.pos_cnum - p2.pos_bol);
+    Format.pp_print_flush ff ()
+  end
 
 (* reads the part between p1 and p2 from the file *)
 
@@ -171,12 +200,12 @@ let loc_to_string l =
 type pos_or_loc = Loc of Parse_ast.l | LocD of Parse_ast.l * Parse_ast.l | Pos of Lexing.position
 
 let print_err_internal fatal verb_loc p_l m1 m2 =
+  Format.eprintf "%s at " m1;
   let _ = (match p_l with Pos p -> print_err_pos p
                         | Loc l -> print_err_loc l
                         | LocD (l1,l2) ->
                           print_err_loc l1; Format.fprintf Format.err_formatter " and "; print_err_loc l2) in
-  let m12 = if String.length m2 = 0 then "" else ": " in
-  Format.eprintf "  %s%s%s\n" m1 m12 m2;
+  Format.eprintf "%s\n" m2;
   if verb_loc then (match p_l with Loc l ->
       format_loc_source Format.err_formatter l;
       Format.pp_print_newline Format.err_formatter (); | _ -> ());

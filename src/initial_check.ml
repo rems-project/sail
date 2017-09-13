@@ -1010,7 +1010,7 @@ let initial_kind_env =
   ]
 
 let typschm_of_string order str =
-  let typschm = Parser2.typschm Lexer2.token (Lexing.from_string str) in
+  let typschm = Parser2.typschm_eof Lexer2.token (Lexing.from_string str) in
   let (typschm, _, _) = to_ast_typschm initial_kind_env order typschm in
   typschm
 
@@ -1057,14 +1057,14 @@ let generate_undefineds vs_ids (Defs defs) =
     if (IdSet.mem id vs_ids) then [] else [val_spec_of_string dec_ord id str]
   in
   let undefined_builtins = List.concat
-    [gen_vs (mk_id "internal_pick") "forall 'a:Type. list('a) -> 'a effect {undef}";
+    [gen_vs (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a effect {undef}";
      gen_vs (mk_id "undefined_bool") "unit -> bool effect {undef}";
      gen_vs (mk_id "undefined_bit") "unit -> bit effect {undef}";
      gen_vs (mk_id "undefined_int") "unit -> int effect {undef}";
      gen_vs (mk_id "undefined_string") "unit -> string effect {undef}";
      gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
      (* FIXME: How to handle inc/dec order correctly? *)
-     gen_vs (mk_id "undefined_vector") "forall 'n 'm 'a:Type. (atom('n), atom('m), 'a) -> vector('n, 'm, dec,'a) effect {undef}";
+     gen_vs (mk_id "undefined_vector") "forall 'n 'm ('a:Type). (atom('n), atom('m), 'a) -> vector('n, 'm, dec,'a) effect {undef}";
      gen_vs (mk_id "undefined_unit") "unit -> unit effect {undef}"]
   in
   let undefined_td = function

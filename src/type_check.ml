@@ -65,9 +65,47 @@ let typ_print m = if !opt_tc_debug > 0 then prerr_endline (indent !depth ^ m) el
 
 let typ_warning m = prerr_endline ("Warning: " ^ m)
 
-exception Type_error of l * string;;
+type type_error =
+  (* First parameter is the error that caused us to start doing type
+     coercions, the second is the errors encountered by all possible
+     coerctions *)
+  | Err_no_casts of type_error * type_error list
+  | Err_subtype of typ * typ * n_constraint list
+  | Err_other of string
 
-let typ_error l m = raise (Type_error (l, m))
+let pp_type_error err =
+  let open PPrint in
+  let rec pp_err = function
+    | Err_no_casts (trigger, []) ->
+       (string "Tried performing type coercion because" ^//^ pp_err trigger)
+       ^/^ string "No possible coercions"
+    | Err_no_casts (trigger, errs) ->
+       (string "Tried performing type coerction because" ^//^ pp_err trigger)
+    | Err_subtype (typ1, typ2, []) ->
+       separate space [ string (string_of_typ typ1);
+                        string "is not a subtype of";
+                        string (string_of_typ typ2) ]
+    | Err_subtype (typ1, typ2, constrs) ->
+       separate space [ string (string_of_typ typ1);
+                        string "is not a subtype of";
+                        string (string_of_typ typ2) ]
+       ^/^ string "in context"
+       ^//^ string (string_of_list ", " string_of_n_constraint constrs)
+    | Err_other str -> string str
+  in
+  pp_err err
+
+let rec string_of_type_error err =
+  let open PPrint in
+  let b = Buffer.create 20 in
+  ToBuffer.pretty 1. 120 b (pp_type_error err);
+  "\n" ^ Buffer.contents b
+
+exception Type_error of l * type_error;;
+
+let typ_error l m = raise (Type_error (l, Err_other m))
+
+let typ_raise l err = raise (Type_error (l, err))
 
 let deinfix = function
   | Id_aux (Id v, l) -> Id_aux (DeIid v, l)
@@ -1447,9 +1485,7 @@ let rec subtyp l env typ1 typ2 =
   | _, None ->
      if subtyp_tnf env (normalize_typ env typ1) (normalize_typ env typ2)
      then ()
-     else typ_error l (string_of_typ typ1
-                       ^ " is not a subtype of " ^ string_of_typ typ2
-                       ^ " in context " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env))
+     else typ_raise l (Err_subtype (typ1, typ2, Env.get_constraints env))
 
 let typ_equality l env typ1 typ2 =
   subtyp l env typ1 typ2; subtyp l env typ2 typ1
@@ -1782,7 +1818,7 @@ let crule r env exp typ =
     let checked_exp = r env exp typ in
     decr depth; checked_exp
   with
-  | Type_error (l, m) -> decr depth; typ_error l m
+  | Type_error (l, err) -> decr depth; typ_raise l err
 
 let irule r env exp =
   incr depth;
@@ -1792,7 +1828,7 @@ let irule r env exp =
     decr depth;
     inferred_exp
   with
-  | Type_error (l, m) -> decr depth; typ_error l m
+  | Type_error (l, err) -> decr depth; typ_raise l err
 
 let strip_exp : 'a exp -> unit exp = function exp -> map_exp_annot (fun (l, _) -> (l, ())) exp
 let strip_pat : 'a pat -> unit pat = function pat -> map_pat_annot (fun (l, _) -> (l, ())) pat
@@ -1928,7 +1964,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        | (f :: fs) -> begin
            typ_print ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
            try crule check_exp env (E_aux (E_app (f, xs), (l, ()))) typ with
-           | Type_error (_, m) -> typ_print ("Error : " ^ m); try_overload fs
+           | Type_error (_, err) -> typ_print ("Error : " ^ string_of_type_error err); try_overload fs
          end
      in
      try_overload (Env.get_overloads f env)
@@ -1991,15 +2027,15 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
 and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
   let strip exp_aux = strip_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))) in
   let annot_exp exp typ = E_aux (exp, (l, Some (env, typ, no_effect))) in
-  let rec try_casts m = function
-    | [] -> typ_error l ("No valid casts:\n" ^ m)
+  let rec try_casts trigger errs = function
+    | [] -> typ_raise l (Err_no_casts (trigger, errs))
     | (cast :: casts) -> begin
         typ_print ("Casting with " ^ string_of_id cast ^ " expression " ^ string_of_exp annotated_exp ^ " to " ^ string_of_typ typ);
         try
           let checked_cast = crule check_exp (Env.no_casts env) (strip (E_app (cast, [annotated_exp]))) typ in
           annot_exp (E_cast (typ, checked_cast)) typ
         with
-        | Type_error (_, m) -> try_casts m casts
+        | Type_error (_, err) -> try_casts trigger (err :: errs) casts
       end
   in
   begin
@@ -2007,10 +2043,10 @@ and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
       typ_debug ("PERFORMING TYPE COERCION: from " ^ string_of_typ (typ_of annotated_exp) ^ " to " ^ string_of_typ typ);
       subtyp l env (typ_of annotated_exp) typ; annotated_exp
     with
-    | Type_error (_, m) when Env.allow_casts env ->
+    | Type_error (_, trigger) when Env.allow_casts env ->
        let casts = filter_casts env (typ_of annotated_exp) typ (Env.get_casts env) in
-       try_casts "" casts
-    | Type_error (l, m) -> typ_error l ("Subtype error " ^ m)
+       try_casts trigger [] casts
+    | Type_error (l, err) -> typ_error l "Subtype error"
   end
 
 (* type_coercion_unify env exp typ attempts to coerce exp to a type
@@ -2021,8 +2057,8 @@ and type_coercion env (E_aux (_, (l, _)) as annotated_exp) typ =
 and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
   let strip exp_aux = strip_exp (E_aux (exp_aux, (Parse_ast.Unknown, None))) in
   let annot_exp exp typ = E_aux (exp, (l, Some (env, typ, no_effect))) in
-  let rec try_casts m = function
-    | [] -> unify_error l ("No valid casts resulted in unification:\n" ^ m)
+  let rec try_casts = function
+    | [] -> unify_error l "No valid casts resulted in unification"
     | (cast :: casts) -> begin
         typ_print ("Casting with " ^ string_of_id cast ^ " expression " ^ string_of_exp annotated_exp ^ " for unification");
         try
@@ -2030,8 +2066,8 @@ and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
           let ityp = typ_of inferred_cast in
           annot_exp (E_cast (ityp, inferred_cast)) ityp, unify l env typ ityp
         with
-        | Type_error (_, m) -> try_casts m casts
-        | Unification_error (_, m) -> try_casts m casts
+        | Type_error (_, err) -> try_casts casts
+        | Unification_error (_, err) -> try_casts casts
       end
   in
   begin
@@ -2041,7 +2077,7 @@ and type_coercion_unify env (E_aux (_, (l, _)) as annotated_exp) typ =
     with
     | Unification_error (_, m) when Env.allow_casts env ->
        let casts = filter_casts env (typ_of annotated_exp) typ (Env.get_casts env) in
-       try_casts "" casts
+       try_casts casts
   end
 
 and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ) =
@@ -2497,7 +2533,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | (f :: fs) -> begin
            typ_print ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
            try irule infer_exp env (E_aux (E_app (f, xs), (l, ()))) with
-           | Type_error (_, m) -> typ_print ("Error: " ^ m); try_overload fs
+           | Type_error (_, err) -> typ_print ("Overload error"); try_overload fs
          end
      in
      try_overload (Env.get_overloads f env)
@@ -3125,7 +3161,7 @@ let mk_synonym typq typ =
        typ_subst_typ (kopt_kid kopt) (unaux_typ arg) typ, ncs
     | kopt :: kopts, Typ_arg_aux (Typ_arg_order arg, _) :: args when is_order_kopt kopt ->
        let typ, ncs = subst_args kopts args in
-       typ_subst_order (kopt_kid kopt) (unaux_order arg) typ, ncs     
+       typ_subst_order (kopt_kid kopt) (unaux_order arg) typ, ncs
     | [], [] -> typ, ncs
     | _, Typ_arg_aux (_, l) :: _ -> typ_error l "Synonym applied to bad arguments"
     | _, _ -> typ_error Parse_ast.Unknown "Synonym applied to bad arguments"
@@ -3193,4 +3229,4 @@ let rec check' env (Defs defs) =
 
 let check env defs =
   try check' env defs with
-  | Type_error (l, m) -> raise (Reporting_basic.err_typ l m)
+  | Type_error (l, err) -> raise (Reporting_basic.err_typ l (string_of_type_error err))

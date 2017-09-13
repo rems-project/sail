@@ -47,7 +47,9 @@ open Ast_util
 val opt_tc_debug : int ref
 val opt_no_effects : bool ref
 
-exception Type_error of l * string;;
+type type_error
+
+exception Type_error of l * type_error;;
 
 type mut = Immutable | Mutable
 

@@ -139,7 +139,7 @@ let rec desugar_rchain chain s e =
 
 /*Terminals with content*/
 
-%token <string> Id TyVar Decl TyDecl
+%token <string> Id TyVar
 %token <int> Num
 %token <string> String Bin Hex Real
 
@@ -153,9 +153,8 @@ let rec desugar_rchain chain s e =
 %token <string> Op0r Op1r Op2r Op3r Op4r Op5r Op6r Op7r Op8r Op9r
 
 %start file
-%start typschm
-%type <Parse_ast.typschm> typschm
-%type <Parse_ast.defs> defs
+%start typschm_eof
+%type <Parse_ast.typschm> typschm_eof
 %type <Parse_ast.defs> file
 
 %%
@@ -233,10 +232,6 @@ op7r: Op7r { mk_id (Id $1) $startpos $endpos }
 op8r: Op8r { mk_id (Id $1) $startpos $endpos }
 op9r: Op9r { mk_id (Id $1) $startpos $endpos }
 
-decl:
-  | Decl
-    { mk_id (Id $1) $startpos $endpos }
-
 id_list:
   | id
     { [$1] }
@@ -245,10 +240,6 @@ id_list:
 
 kid:
   | TyVar
-    { mk_kid $1 $startpos $endpos }
-
-tydecl:
-  | TyDecl
     { mk_kid $1 $startpos $endpos }
 
 kid_list:
@@ -515,8 +506,6 @@ kind:
     { K_aux (K_kind [$1], loc $startpos $endpos) }
 
 kopt:
-  | tydecl kind
-    { KOpt_aux (KOpt_kind ($2, $1), loc $startpos $endpos) }
   | Lparen kid Colon kind Rparen
     { KOpt_aux (KOpt_kind ($4, $2), loc $startpos $endpos) }
   | kid
@@ -589,6 +578,10 @@ typschm:
   | Forall typquant Dot typ MinusGt typ Effect effect_set
     { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, $8)) s e) s e) $startpos $endpos }
 
+typschm_eof:
+  | typschm Eof
+    { $1 }
+
 pat:
   | atomic_pat
     { $1 }
@@ -612,14 +605,10 @@ atomic_pat:
     { mk_pat (P_id $1) $startpos $endpos }
   | kid
     { mk_pat (P_var $1) $startpos $endpos }
-  | tydecl typ
-    { mk_pat (P_typ ($2, mk_pat (P_var $1) $startpos $endpos($1))) $startpos $endpos }
   | id Lparen pat_list Rparen
     { mk_pat (P_app ($1, $3)) $startpos $endpos }
   | pat Colon typ
     { mk_pat (P_typ ($3, $1)) $startpos $endpos }
-  | decl typ
-    { mk_pat (P_typ ($2, mk_pat (P_id $1) $startpos $endpos($1))) $startpos $endpos }
   | Lparen pat Rparen
     { $2 }
 
@@ -646,27 +635,21 @@ lit:
     { mk_lit (L_string $1) $startpos $endpos }
 
 exp:
-  | cast_exp Colon typ
-    { mk_exp (E_cast ($3, $1)) $startpos $endpos }
-  | cast_exp
-    { $1 }
-
-cast_exp:
   | exp0
     { $1 }
-  | atomic_exp Eq cast_exp
+  | atomic_exp Eq exp
     { mk_exp (E_assign ($1, $3)) $startpos $endpos }
-  | Let_ letbind In cast_exp
+  | Let_ letbind In exp
     { mk_exp (E_let ($2, $4)) $startpos $endpos }
   | Lcurly block Rcurly
     { mk_exp (E_block $2) $startpos $endpos }
-  | Return cast_exp
+  | Return exp
     { mk_exp (E_return $2) $startpos $endpos }
-  | Throw cast_exp
+  | Throw exp
     { mk_exp (E_throw $2) $startpos $endpos }
-  | If_ exp Then cast_exp Else cast_exp
+  | If_ exp Then exp Else exp
     { mk_exp (E_if ($2, $4, $6)) $startpos $endpos }
-  | If_ exp Then cast_exp
+  | If_ exp Then exp
     { mk_exp (E_if ($2, $4, mk_lit_exp L_unit $endpos($4) $endpos($4))) $startpos $endpos }
   | Match exp Lcurly case_list Rcurly
     { mk_exp (E_case ($2, $4)) $startpos $endpos }
@@ -856,12 +839,14 @@ block:
     { LB_aux (LB_val_implicit ($1, $3), loc $startpos $endpos) }
 
 atomic_exp:
+  | atomic_exp Colon atomic_typ
+    { mk_exp (E_cast ($3, $1)) $startpos $endpos }
   | lit
     { mk_exp (E_lit $1) $startpos $endpos }
-  | decl atomic_typ
-    { mk_exp (E_cast ($2, mk_exp (E_id $1) $startpos $endpos($1))) $startpos $endpos }
   | id
     { mk_exp (E_id $1) $startpos $endpos }
+  | kid
+    { mk_exp (E_sizeof (mk_typ (ATyp_var $1) $startpos $endpos)) $startpos $endpos }
   | id Unit
     { mk_exp (E_app ($1, [mk_lit_exp L_unit $startpos($2) $endpos])) $startpos $endpos }
   | id Lparen exp_list Rparen
@@ -922,8 +907,6 @@ enum:
     { $1 :: $3 }
 
 struct_field:
-  | decl typ
-    { ($2, $1) }
   | id Colon typ
     { ($3, $1) }
 
@@ -936,8 +919,6 @@ struct_fields:
     { $1 :: $3 }
 
 type_union:
-  | decl typ
-    { Tu_aux (Tu_ty_id ($2, $1), loc $startpos $endpos) }
   | id Colon typ
     { Tu_aux (Tu_ty_id ($3, $1), loc $startpos $endpos) }
   | id
@@ -960,14 +941,10 @@ let_def:
     { $2 }
 
 val_spec_def:
-  | Val decl typschm
-    { mk_vs (VS_val_spec ($3, $2)) $startpos $endpos }
   | Val id Colon typschm
     { mk_vs (VS_val_spec ($4, $2)) $startpos $endpos }
 
 register_def:
-  | Register decl typ
-    { mk_reg_dec (DEC_reg ($3, $2)) $startpos $endpos }
   | Register id Colon typ
     { mk_reg_dec (DEC_reg ($4, $2)) $startpos $endpos }
 

@@ -235,8 +235,6 @@ rule token = parse
       with Not_found -> raise (LexError ("Operator fixity undeclared", Lexing.lexeme_start_p lexbuf)) }
   | "(*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }
   | "*)"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
-  | (tyvar_start startident ident* as i) ":" { TyDecl(r i) }
-  | (startident ident* as i) ":"        { Decl(r i) }
   | tyvar_start startident ident* as i  { TyVar(r i) }
   | startident ident* as i              { if M.mem i kw_table then
                                             (M.find i kw_table) ()

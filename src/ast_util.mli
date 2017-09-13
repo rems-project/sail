@@ -44,6 +44,8 @@
 
 open Ast
 
+val no_annot : unit annot
+
 val mk_id : string -> id
 val mk_kid : string -> kid
 val mk_ord : order_aux -> order
