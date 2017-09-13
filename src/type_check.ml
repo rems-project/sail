@@ -68,8 +68,9 @@ let typ_warning m = prerr_endline ("Warning: " ^ m)
 type type_error =
   (* First parameter is the error that caused us to start doing type
      coercions, the second is the errors encountered by all possible
-     coerctions *)
+     coercions *)
   | Err_no_casts of type_error * type_error list
+  | Err_unresolved_quants of id * quant_item list
   | Err_subtype of typ * typ * n_constraint list
   | Err_other of string
 
