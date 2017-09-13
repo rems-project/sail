@@ -418,10 +418,21 @@ let doc_exp_lem, doc_let_lem =
                    (align (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^
                      parens (string "update_reg_field_bit" ^/^ field_ref ^/^ expY e2) ^/^ expY e)))
             | _ ->
-               liftR ((prefix 2 1)
-                 (string "update_reg")
-                 (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^
-                   parens (string "update_reg_bit" ^/^ expY e2) ^/^ expY e))
+               (match le with
+                 | LEXP_aux (_, (_, Some (_, Typ_aux (Typ_app (vector, [_; _; _; Typ_arg_aux (Typ_arg_typ etyp, _)]), _), _)))
+                   when is_reftyp etyp && string_of_id vector = "vector" ->
+                   (* Special case vectors of register references *)
+                   let deref =
+                     parens (separate space [
+                       string "access";
+                       expY (lexp_to_exp le);
+                       expY e2
+                       ]) in
+                   liftR ((prefix 2 1) (string "write_reg") (deref ^/^ expY e))
+                 | _ ->
+                   liftR ((prefix 2 1) (string "update_reg")
+                   (doc_lexp_deref_lem sequential mwords early_ret le ^^ space ^^
+                     parens (string "update_reg_bit" ^/^ expY e2) ^/^ expY e)))
            )
         (* | LEXP_field (le,id) when is_bit_typ t ->
            liftR ((prefix 2 1)
