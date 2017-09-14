@@ -3429,7 +3429,7 @@ let rewrite_defs_remove_e_assign =
 let recheck_defs defs = fst (check initial_env defs)
 
 let rewrite_defs_lem =[
-  (* top_sort_defs; *)
+  top_sort_defs;
   rewrite_trivial_sizeof;
   rewrite_sizeof;
   rewrite_defs_remove_vector_concat;
