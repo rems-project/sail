@@ -1,5 +1,5 @@
-val extern forall Num 'm. ([:'l:], [:'m:], int) -> vector<'l,'m,dec,bit> effect pure to_vec_dec
-val extern forall Num 'm. ([:'l:], [:'m:], int) -> vector<'l,'m,inc,bit> effect pure to_vec_inc
+val extern forall Num 'l, Num 'm. ([:'l:], [:'m:], int) -> vector<'l,'m,dec,bit> effect pure to_vec_dec
+val extern forall Num 'l, Num 'm. ([:'l:], [:'m:], int) -> vector<'l,'m,inc,bit> effect pure to_vec_inc
 function forall Num 'n, Num 'm. (vector<'m - 1,'m,dec,bit>) to_vec (n) = to_vec_dec ((sizeof 'm) - 1, sizeof 'm, n)
 
 function forall Num 'm. (vector<'m - 1,'m,dec,bit>) to_svec (n) = to_vec_dec ((sizeof 'm) - 1, sizeof 'm, n)
