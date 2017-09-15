@@ -6,20 +6,20 @@ open import Sail_values
 
 
 class (ToFromInterpValue 'a)
-  val toInterpValue : 'a -> Interp.value
-  val fromInterpValue : Interp.value -> 'a
+  val toInterpValue : 'a -> Interp_ast.value
+  val fromInterpValue : Interp_ast.value -> 'a
 end
 
 let toInterValueBool = function
-  | true -> Interp.V_lit (L_aux (L_one) Unknown)
-  | false -> Interp.V_lit (L_aux (L_zero) Unknown)
+  | true -> Interp_ast.V_lit (L_aux (L_one) Unknown)
+  | false -> Interp_ast.V_lit (L_aux (L_zero) Unknown)
 end
 let rec fromInterpValueBool v = match v with
-  | Interp.V_lit (L_aux (L_true) _)  -> true
-  | Interp.V_lit (L_aux (L_false) _) -> false
-  | Interp.V_lit (L_aux (L_one) _)  -> true
-  | Interp.V_lit (L_aux (L_zero) _) -> false
-  | Interp.V_tuple [v] -> fromInterpValueBool v
+  | Interp_ast.V_lit (L_aux (L_true) _)  -> true
+  | Interp_ast.V_lit (L_aux (L_false) _) -> false
+  | Interp_ast.V_lit (L_aux (L_one) _)  -> true
+  | Interp_ast.V_lit (L_aux (L_zero) _) -> false
+  | Interp_ast.V_tuple [v] -> fromInterpValueBool v
   | v -> failwith ("fromInterpValue bool: unexpected value. " ^
                      Interp.debug_print_value v)
 end
@@ -29,10 +29,10 @@ instance (ToFromInterpValue bool)
 end
 
 
-let toInterpValueUnit () = Interp.V_lit (L_aux (L_unit) Unknown)
+let toInterpValueUnit () = Interp_ast.V_lit (L_aux (L_unit) Unknown)
 let rec fromInterpValueUnit v = match v with
-  | Interp.V_lit (L_aux (L_unit) _) -> ()
-  | Interp.V_tuple [v] -> fromInterpValueUnit v
+  | Interp_ast.V_lit (L_aux (L_unit) _) -> ()
+  | Interp_ast.V_tuple [v] -> fromInterpValueUnit v
   | v -> failwith ("fromInterpValue unit: unexpected value. " ^
                      Interp.debug_print_value v)
 end
@@ -44,8 +44,8 @@ end
 
 let toInterpValueInteger i = V_lit (L_aux (L_num i) Unknown)
 let rec fromInterpValueInteger v = match v with
-  | Interp.V_lit (L_aux (L_num i) _) -> i
-  | Interp.V_tuple [v] -> fromInterpValueInteger v
+  | Interp_ast.V_lit (L_aux (L_num i) _) -> i
+  | Interp_ast.V_tuple [v] -> fromInterpValueInteger v
   | v -> failwith ("fromInterpValue integer: unexpected value. " ^
                      Interp.debug_print_value v)
 end
@@ -57,8 +57,8 @@ end
 
 let toInterpValueString s = V_lit (L_aux (L_string s) Unknown)
 let rec fromInterpValueString v = match v with
-  | Interp.V_lit (L_aux (L_string s) _) -> s
-  | Interp.V_tuple [v] -> fromInterpValueString v
+  | Interp_ast.V_lit (L_aux (L_string s) _) -> s
+  | Interp_ast.V_tuple [v] -> fromInterpValueString v
   | v -> failwith ("fromInterpValue integer: unexpected value. " ^
                      Interp.debug_print_value v)
 end
@@ -69,17 +69,17 @@ end
 
 
 let toInterpValueBitU = function
-  | I     -> Interp.V_lit (L_aux (L_one) Unknown)
-  | O     -> Interp.V_lit (L_aux (L_zero) Unknown)
-  | Undef -> Interp.V_lit (L_aux (L_undef) Unknown)
+  | I     -> Interp_ast.V_lit (L_aux (L_one) Unknown)
+  | O     -> Interp_ast.V_lit (L_aux (L_zero) Unknown)
+  | Undef -> Interp_ast.V_lit (L_aux (L_undef) Unknown)
 end
 let rec fromInterpValueBitU v = match v with
-  | Interp.V_lit (L_aux (L_one) _)   -> I
-  | Interp.V_lit (L_aux (L_zero) _)  -> O
-  | Interp.V_lit (L_aux (L_undef) _) -> Undef
-  | Interp.V_lit (L_aux (L_true) _)   -> I
-  | Interp.V_lit (L_aux (L_false) _)  -> O
-  | Interp.V_tuple [v] -> fromInterpValueBitU v
+  | Interp_ast.V_lit (L_aux (L_one) _)   -> B1
+  | Interp_ast.V_lit (L_aux (L_zero) _)  -> B0
+  | Interp_ast.V_lit (L_aux (L_undef) _) -> BU
+  | Interp_ast.V_lit (L_aux (L_true) _)   -> B1
+  | Interp_ast.V_lit (L_aux (L_false) _)  -> B0
+  | Interp_ast.V_tuple [v] -> fromInterpValueBitU v
   | v -> failwith ("fromInterpValue bitU: unexpected value. " ^
                      Interp.debug_print_value v)
 end
@@ -383,29 +383,31 @@ instance forall 'a. ToFromInterpValue 'a => (ToFromInterpValue (maybe 'a))
 end
 
 
-module SI = Interp
-module SIA = Interp_ast
-
-
 let read_kindToInterpValue = function
   | Read_plain -> V_ctor (Id_aux (Id "Read_plain") Unknown) (T_id "read_kind") (C_Enum 0) (toInterpValue ())
-  | Read_tag -> V_ctor (Id_aux (Id "Read_tag") Unknown) (T_id "read_kind") (C_Enum 1) (toInterpValue ())
-  | Read_tag_reserve -> V_ctor (Id_aux (Id "Read_tag_reserve") Unknown) (T_id "read_kind") (C_Enum 1) (toInterpValue ())
   | Read_reserve -> V_ctor (Id_aux (Id "Read_reserve") Unknown) (T_id "read_kind") (C_Enum 2) (toInterpValue ())
   | Read_acquire -> V_ctor (Id_aux (Id "Read_acquire") Unknown) (T_id "read_kind") (C_Enum 3) (toInterpValue ())
   | Read_exclusive -> V_ctor (Id_aux (Id "Read_exclusive") Unknown) (T_id "read_kind") (C_Enum 4) (toInterpValue ())
   | Read_exclusive_acquire -> V_ctor (Id_aux (Id "Read_exclusive_acquire") Unknown) (T_id "read_kind") (C_Enum 5) (toInterpValue ())
   | Read_stream -> V_ctor (Id_aux (Id "Read_stream") Unknown) (T_id "read_kind") (C_Enum 6) (toInterpValue ())
+  | Read_RISCV_acquire -> V_ctor (Id_aux (Id "Read_RISCV_acquire") Unknown) (T_id "read_kind") (C_Enum 7) (toInterpValue ())
+  | Read_RISCV_acquire -> V_ctor (Id_aux (Id "Read_RISCV_strong_acquire") Unknown) (T_id "read_kind") (C_Enum 8) (toInterpValue ())
+  | Read_RISCV_acquire -> V_ctor (Id_aux (Id "Read_RISCV_reserved") Unknown) (T_id "read_kind") (C_Enum 9) (toInterpValue ())
+  | Read_RISCV_acquire -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire") Unknown) (T_id "read_kind") (C_Enum 10) (toInterpValue ())
+  | Read_RISCV_acquire -> V_ctor (Id_aux (Id "Read_RISCV_reserved_strong_acquire") Unknown) (T_id "read_kind") (C_Enum 10) (toInterpValue ())
   end
 let rec read_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Read_plain") _) _ _ v -> Read_plain
-  | V_ctor (Id_aux (Id "Read_tag") _) _ _ v -> Read_tag
-  | V_ctor (Id_aux (Id "Read_tag_reserve") _) _ _ v -> Read_tag_reserve
   | V_ctor (Id_aux (Id "Read_reserve") _) _ _ v -> Read_reserve
   | V_ctor (Id_aux (Id "Read_acquire") _) _ _ v -> Read_acquire
   | V_ctor (Id_aux (Id "Read_exclusive") _) _ _ v -> Read_exclusive
   | V_ctor (Id_aux (Id "Read_exclusive_acquire") _) _ _ v -> Read_exclusive_acquire
   | V_ctor (Id_aux (Id "Read_stream") _) _ _ v -> Read_stream
+  | V_ctor (Id_aux (Id "Read_RISCV_acquire") _) _ _ v -> Read_RISCV_acquire
+  | V_ctor (Id_aux (Id "Read_RISCV_strong_acquire") _) _ _ v -> Read_RISCV_strong_acquire
+  | V_ctor (Id_aux (Id "Read_RISCV_reserved") _) _ _ v -> Read_RISCV_reserved
+  | V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire") _) _ _ v -> Read_RISCV_reserved_acquire
+  | V_ctor (Id_aux (Id "Read_RISCV_reserved_strong_acquire") _) _ _ v -> Read_RISCV_reserved_strong_acquire
   | V_tuple [v] -> read_kindFromInterpValue v
   | v -> failwith ("fromInterpValue read_kind: unexpected value. " ^
                      Interp.debug_print_value v)
@@ -418,21 +420,27 @@ end
 
 let write_kindToInterpValue = function
   | Write_plain -> V_ctor (Id_aux (Id "Write_plain") Unknown) (T_id "write_kind") (C_Enum 0) (toInterpValue ())
-  | Write_tag -> V_ctor (Id_aux (Id "Write_tag") Unknown) (T_id "write_kind") (C_Enum 1) (toInterpValue ())
-  | Write_tag_conditional -> V_ctor (Id_aux (Id "Write_tag_conditional") Unknown) (T_id "write_kind") (C_Enum 1) (toInterpValue ())
   | Write_conditional -> V_ctor (Id_aux (Id "Write_conditional") Unknown) (T_id "write_kind") (C_Enum 2) (toInterpValue ())
   | Write_release -> V_ctor (Id_aux (Id "Write_release") Unknown) (T_id "write_kind") (C_Enum 3) (toInterpValue ())
   | Write_exclusive -> V_ctor (Id_aux (Id "Write_exclusive") Unknown) (T_id "write_kind") (C_Enum 4) (toInterpValue ())
   | Write_exclusive_release -> V_ctor (Id_aux (Id "Write_exclusive_release") Unknown) (T_id "write_kind") (C_Enum 5) (toInterpValue ())
+  | Write_RISCV_release -> V_ctor (Id_aux (Id "Write_RISCV_release") Unknown) (T_id "write_kind") (C_Enum 6) (toInterpValue ())
+  | Write_RISCV_strong_release -> V_ctor (Id_aux (Id "Write_RISCV_strong_release") Unknown) (T_id "write_kind") (C_Enum 7) (toInterpValue ())
+  | Write_RISCV_conditional -> V_ctor (Id_aux (Id "Write_RISCV_conditional") Unknown) (T_id "write_kind") (C_Enum 8) (toInterpValue ())
+  | Write_RISCV_conditional_release -> V_ctor (Id_aux (Id "Write_RISCV_conditional_release") Unknown) (T_id "write_kind") (C_Enum 9) (toInterpValue ())
+  | Write_RISCV_conditional_strong_release -> V_ctor (Id_aux (Id "Write_RISCV_conditional_strong_release") Unknown) (T_id "write_kind") (C_Enum 10) (toInterpValue ())
   end
 let rec write_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Write_plain") _) _ _ v -> Write_plain
-  | V_ctor (Id_aux (Id "Write_tag") _) _ _ v -> Write_tag
-  | V_ctor (Id_aux (Id "Write_tag_conditional") _) _ _ v -> Write_tag_conditional
   | V_ctor (Id_aux (Id "Write_conditional") _) _ _ v -> Write_conditional
   | V_ctor (Id_aux (Id "Write_release") _) _ _ v -> Write_release
   | V_ctor (Id_aux (Id "Write_exclusive") _) _ _ v -> Write_exclusive
   | V_ctor (Id_aux (Id "Write_exclusive_release") _) _ _ v -> Write_exclusive_release
+  | V_ctor (Id_aux (Id "Write_RISCV_release") _) _ _ v -> Write_RISCV_release
+  | V_ctor (Id_aux (Id "Write_RISCV_strong_release") _) _ _ v -> Write_RISCV_strong_release
+  | V_ctor (Id_aux (Id "Write_RISCV_conditional") _) _ _ v -> Write_RISCV_conditional
+  | V_ctor (Id_aux (Id "Write_RISCV_conditional_release") _) _ _ v -> Write_RISCV_conditional_release
+  | V_ctor (Id_aux (Id "Write_RISCV_conditional_strong_release") _) _ _ v -> Write_RISCV_conditional_strong_release
   | V_tuple [v] -> write_kindFromInterpValue v
   | v -> failwith ("fromInterpValue write_kind: unexpected value " ^
                      Interp.debug_print_value v)
@@ -455,7 +463,14 @@ let barrier_kindToInterpValue = function
   | Barrier_DSB_ST -> V_ctor (Id_aux (Id "Barrier_DSB_ST") Unknown) (T_id "barrier_kind") (C_Enum 8) (toInterpValue ())
   | Barrier_DSB_LD -> V_ctor (Id_aux (Id "Barrier_DSB_LD") Unknown) (T_id "barrier_kind") (C_Enum 9) (toInterpValue ())
   | Barrier_ISB -> V_ctor (Id_aux (Id "Barrier_ISB") Unknown) (T_id "barrier_kind") (C_Enum 10) (toInterpValue ())
-  | Barrier_MIPS_SYNC -> V_ctor (Id_aux (Id "Barrier_MIPS_SYNC") Unknown) (T_id "barrier_kind") (C_Enum 11) (toInterpValue ())
+  | Barrier_TM_COMMIT -> V_ctor (Id_aux (Id "Barrier_TM_COMMIT") Unknown) (T_id "barrier_kind") (C_Enum 11) (toInterpValue ())
+  | Barrier_MIPS_SYNC -> V_ctor (Id_aux (Id "Barrier_MIPS_SYNC") Unknown) (T_id "barrier_kind") (C_Enum 12) (toInterpValue ())
+  | Barrier_RISCV_rw_rw -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_rw") Unknown) (T_id "barrier_kind") (C_Enum 13) (toInterpValue ())
+  | Barrier_RISCV_r_rw -> V_ctor (Id_aux (Id "Barrier_RISCV_r_rw") Unknown) (T_id "barrier_kind") (C_Enum 14) (toInterpValue ())
+  | Barrier_RISCV_rw_w -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_w") Unknown) (T_id "barrier_kind") (C_Enum 15) (toInterpValue ())
+  | Barrier_RISCV_w_w -> V_ctor (Id_aux (Id "Barrier_RISCV_w_w") Unknown) (T_id "barrier_kind") (C_Enum 16) (toInterpValue ())
+  | Barrier_RISCV_i -> V_ctor (Id_aux (Id "Barrier_RISCV_i") Unknown) (T_id "barrier_kind") (C_Enum 17) (toInterpValue ())
+  | Barrier_x86_MFENCE -> V_ctor (Id_aux (Id "Barrier_x86_MFENCE") Unknown) (T_id "barrier_kind") (C_Enum 18) (toInterpValue ())
   end
 let rec barrier_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Barrier_Sync") _) _ _ v -> Barrier_Sync
@@ -469,7 +484,14 @@ let rec barrier_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Barrier_DSB_ST") _) _ _ v -> Barrier_DSB_ST
   | V_ctor (Id_aux (Id "Barrier_DSB_LD") _) _ _ v -> Barrier_DSB_LD
   | V_ctor (Id_aux (Id "Barrier_ISB") _) _ _ v -> Barrier_ISB
+  | V_ctor (Id_aux (Id "Barrier_TM_COMMIT") _) _ _ v -> Barrier_TM_COMMIT
   | V_ctor (Id_aux (Id "Barrier_MIPS_SYNC") _) _ _ v -> Barrier_MIPS_SYNC
+  | V_ctor (Id_aux (Id "Barrier_RISCV_rw_rw") _) _ _ v -> Barrier_RISCV_rw_rw
+  | V_ctor (Id_aux (Id "Barrier_RISCV_r_rw") _) _ _ v -> Barrier_RISCV_r_rw
+  | V_ctor (Id_aux (Id "Barrier_RISCV_rw_w") _) _ _ v -> Barrier_RISCV_rw_w
+  | V_ctor (Id_aux (Id "Barrier_RISCV_w_w") _) _ _ v -> Barrier_RISCV_w_w
+  | V_ctor (Id_aux (Id "Barrier_RISCV_i") _) _ _ v -> Barrier_RISCV_i
+  | V_ctor (Id_aux (Id "Barrier_x86_MFENCE") _) _ _ v -> Barrier_x86_MFENCE
   | V_tuple [v] -> barrier_kindFromInterpValue v
   | v -> failwith ("fromInterpValue barrier_kind: unexpected value. " ^
                      Interp.debug_print_value v)
@@ -503,18 +525,18 @@ instance (ToFromInterpValue instruction_kind)
 end
 
 let regfpToInterpValue = function
-  | RFull v -> SI.V_ctor (SIA.Id_aux (SIA.Id "RFull") SIA.Unknown) (SIA.T_id "regfp") SI.C_Union (toInterpValue v)
-  | RSlice v -> SI.V_ctor (SIA.Id_aux (SIA.Id "RSlice") SIA.Unknown) (SIA.T_id "regfp") SI.C_Union (toInterpValue v)
-  | RSliceBit v -> SI.V_ctor (SIA.Id_aux (SIA.Id "RSliceBit") SIA.Unknown) (SIA.T_id "regfp") SI.C_Union (toInterpValue v)
-  | RField v -> SI.V_ctor (SIA.Id_aux (SIA.Id "RField") SIA.Unknown) (SIA.T_id "regfp") SI.C_Union (toInterpValue v)
+  | RFull v -> Interp_ast.V_ctor (Interp_ast.Id_aux (Interp_ast.Id "RFull") Interp_ast.Unknown) (Interp_ast.T_id "regfp") Interp_ast.C_Union (toInterpValue v)
+  | RSlice v -> Interp_ast.V_ctor (Interp_ast.Id_aux (Interp_ast.Id "RSlice") Interp_ast.Unknown) (Interp_ast.T_id "regfp") Interp_ast.C_Union (toInterpValue v)
+  | RSliceBit v -> Interp_ast.V_ctor (Interp_ast.Id_aux (Interp_ast.Id "RSliceBit") Interp_ast.Unknown) (Interp_ast.T_id "regfp") Interp_ast.C_Union (toInterpValue v)
+  | RField v -> Interp_ast.V_ctor (Interp_ast.Id_aux (Interp_ast.Id "RField") Interp_ast.Unknown) (Interp_ast.T_id "regfp") Interp_ast.C_Union (toInterpValue v)
   end
 
 let rec regfpFromInterpValue v = match v with
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "RFull") _) _ _ v -> RFull (fromInterpValue v)
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "RSlice") _) _ _ v -> RSlice (fromInterpValue v)
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "RSliceBit") _) _ _ v -> RSliceBit (fromInterpValue v)
-  | SI.V_ctor (SIA.Id_aux (SIA.Id "RField") _) _ _ v -> RField (fromInterpValue v)
-  | SI.V_tuple [v] -> regfpFromInterpValue v
+  | Interp_ast.V_ctor (Interp_ast.Id_aux (Interp_ast.Id "RFull") _) _ _ v -> RFull (fromInterpValue v)
+  | Interp_ast.V_ctor (Interp_ast.Id_aux (Interp_ast.Id "RSlice") _) _ _ v -> RSlice (fromInterpValue v)
+  | Interp_ast.V_ctor (Interp_ast.Id_aux (Interp_ast.Id "RSliceBit") _) _ _ v -> RSliceBit (fromInterpValue v)
+  | Interp_ast.V_ctor (Interp_ast.Id_aux (Interp_ast.Id "RField") _) _ _ v -> RField (fromInterpValue v)
+  | Interp_ast.V_tuple [v] -> regfpFromInterpValue v
   | v -> failwith ("fromInterpValue regfp: unexpected value. " ^ Interp.debug_print_value v)
   end
 

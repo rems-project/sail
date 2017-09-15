@@ -172,18 +172,23 @@ let output1 libpath out_arg filename defs  =
       | Lem_out None ->
          let generated_line = generated_line filename in
          let types_module = (f' ^ "_embed_types") in
+         let tofrom_module = (f' ^ "_toFromInterp") in
          let ((o,_, _) as ext_o) =
            open_output_with_check_unformatted (f' ^ "_embed_types.lem") in
          let ((o',_, _) as ext_o') =
            open_output_with_check_unformatted (f' ^ "_embed.lem") in
          let ((o'',_, _) as ext_o'') =
            open_output_with_check_unformatted (f' ^ "_embed_sequential.lem") in
+         let ((o''',_, _) as ext_o''') =
+           open_output_with_check_unformatted (f' ^ "_toFromInterp.lem") in
 	 (Pretty_print.pp_defs_lem
             (o,["Pervasives_extra";"Sail_impl_base";"Sail_values"])
             (o',["Pervasives_extra";"Sail_impl_base";"Prompt";"Sail_values";
             String.capitalize types_module])
             (o'',["Pervasives_extra";"Sail_impl_base";"State";"Sail_values";
             String.capitalize types_module])
+            (o''',["Pervasives_extra";"Sail_impl_base";"Sail_values";
+                   String.capitalize types_module])
             defs generated_line);
          close_output_with_check ext_o;
          close_output_with_check ext_o';
@@ -191,22 +196,28 @@ let output1 libpath out_arg filename defs  =
       | Lem_out (Some lib) ->
          let generated_line = generated_line filename in
          let types_module = (f' ^ "_embed_types") in
+         let tofrom_module = (f' ^ "_toFromInterp") in
          let ((o,_, _) as ext_o) =
            open_output_with_check_unformatted (f' ^ "_embed_types.lem") in
          let ((o',_, _) as ext_o') =
            open_output_with_check_unformatted (f' ^ "_embed.lem") in
          let ((o'',_, _) as ext_o'') =
            open_output_with_check_unformatted (f' ^ "_embed_sequential.lem") in
+         let ((o''',_, _) as ext_o''') =
+           open_output_with_check_unformatted (f' ^ "_toFromInterp.lem") in
 	 (Pretty_print.pp_defs_lem
             (o,["Pervasives_extra";"Sail_impl_base";"Sail_values"])
             (o',["Pervasives_extra";"Sail_impl_base";"Prompt";
                  "Sail_values";String.capitalize types_module;lib])
             (o'',["Pervasives_extra";"Sail_impl_base";"State";
                   "Sail_values";String.capitalize types_module;lib ^ "_sequential"])
+            (o''',["Pervasives_extra";"Sail_impl_base";
+                   "Sail_values";String.capitalize types_module;lib])
             defs generated_line);
          close_output_with_check ext_o;
          close_output_with_check ext_o';
-         close_output_with_check ext_o''
+         close_output_with_check ext_o'';
+         close_output_with_check ext_o'''
       | Ocaml_out None ->
         let ((o,temp_file_name, _) as ext_o) = open_output_with_check_unformatted (f' ^ ".ml") in
 	begin Pretty_print.pp_defs_ocaml o defs (generated_line filename) ["Big_int_Z";"Sail_values"];

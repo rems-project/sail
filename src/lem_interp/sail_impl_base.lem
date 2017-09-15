@@ -428,6 +428,8 @@ end
 
 (* Data structures for building up instructions *)
 
+(* careful: changes in the read/write/barrier kinds have to be
+   reflected in deep_shallow_convert *)
 type read_kind =
   (* common reads *)
   | Read_plain

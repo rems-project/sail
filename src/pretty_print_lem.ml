@@ -50,7 +50,7 @@ open Pretty_print_common
  * PPrint-based sail-to-lem pprinter
 ****************************************************************************)
 
-let print_to_from_interp_value = ref false
+let print_to_from_interp_value = ref true
 let langlebar = string "<|"
 let ranglebar = string "|>"
 let anglebars = enclose langlebar ranglebar
@@ -805,8 +805,8 @@ let rec doc_range_lem (BF_aux(r,_)) = match r with
 
 let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
   | TD_abbrev(id,nm,typschm) ->
-     doc_op equals (concat [string "type"; space; doc_id_lem_type id])
-            (doc_typschm_lem regtypes typschm)
+     (doc_op equals (concat [string "type"; space; doc_id_lem_type id])
+             (doc_typschm_lem regtypes typschm),empty)
   | TD_record(id,nm,typq,fs,_) ->
      let f_pp (typ,fid) =
        let fname = if prefix_recordtype
@@ -814,19 +814,19 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                    else doc_id_lem_type fid in
        concat [fname;space;colon;space;doc_typ_lem regtypes typ; semi] in
       let fs_doc = group (separate_map (break 1) f_pp fs) in
-      doc_op equals
+      (doc_op equals
              (concat [string "type"; space; doc_id_lem_type id;])
-             (doc_typquant_lem typq (anglebars (space ^^ align fs_doc ^^ space)))
+             (doc_typquant_lem typq (anglebars (space ^^ align fs_doc ^^ space))),empty)
   | TD_variant(id,nm,typq,ar,_) ->
      (match id with
-      | Id_aux ((Id "read_kind"),_) -> empty
-      | Id_aux ((Id "write_kind"),_) -> empty
-      | Id_aux ((Id "barrier_kind"),_) -> empty
-      | Id_aux ((Id "trans_kind"),_) -> empty
-      | Id_aux ((Id "instruction_kind"),_) -> empty
-      | Id_aux ((Id "regfp"),_) -> empty
-      | Id_aux ((Id "niafp"),_) -> empty
-      | Id_aux ((Id "diafp"),_) -> empty
+      | Id_aux ((Id "read_kind"),_) -> (empty,empty)
+      | Id_aux ((Id "write_kind"),_) -> (empty,empty)
+      | Id_aux ((Id "barrier_kind"),_) -> (empty,empty)
+      | Id_aux ((Id "trans_kind"),_) -> (empty,empty)
+      | Id_aux ((Id "instruction_kind"),_) -> (empty,empty)
+      | Id_aux ((Id "regfp"),_) -> (empty,empty)
+      | Id_aux ((Id "niafp"),_) -> (empty,empty)
+      | Id_aux ((Id "diafp"),_) -> (empty,empty)
       | _ ->
          let ar_doc = group (separate_map (break 1) (doc_type_union_lem regtypes) ar) in
          let typ_pp =
@@ -835,9 +835,9 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
              (concat [string "type"; space; doc_id_lem_type id;])
              (doc_typquant_lem typq ar_doc) in
          let make_id pat id =
-           separate space [string "SIA.Id_aux";
-                           parens (string "SIA.Id " ^^ string_lit (doc_id id));
-                           if pat then underscore else string "SIA.Unknown"] in
+           separate space [string "Interp_ast.Id_aux";
+                           parens (string "Interp_ast.Id " ^^ string_lit (doc_id id));
+                           if pat then underscore else string "Interp_ast.Unknown"] in
          let fromInterpValueF = concat [doc_id_lem_type id;string "FromInterpValue"] in
          let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
          let fromInterpValuePP =
@@ -849,18 +849,18 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                     match tu with
                     | Tu_ty_id (ty,cid) ->
                        (separate space)
-                         [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
+                         [pipe;string "Interp_ast.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
                           arrow;
                           doc_id_lem_ctor cid;
                           parens (string "fromInterpValue v")]
                     | Tu_id cid ->
                        (separate space)
-                         [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
+                         [pipe;string "Interp_ast.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
                           arrow;
                           doc_id_lem_ctor cid])
                   ar) ^/^
 
-                  ((separate space) [pipe;string "SI.V_tuple [v]";arrow;fromInterpValueF;string "v"]) ^/^
+                  ((separate space) [pipe;string "Interp_ast.V_tuple [v]";arrow;fromInterpValueF;string "v"]) ^/^
 
                  let failmessage =
                     (string_lit
@@ -879,43 +879,40 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                     | Tu_ty_id (ty,cid) ->
                        (separate space)
                          [pipe;doc_id_lem_ctor cid;string "v";arrow;
-                          string "SI.V_ctor";
+                          string "Interp_ast.V_ctor";
                           parens (make_id false cid);
-                          parens (string "SIA.T_id " ^^ string_lit (doc_id id));
-                          string "SI.C_Union";
+                          parens (string "Interp_ast.T_id " ^^ string_lit (doc_id id));
+                          string "Interp_ast.C_Union";
                           parens (string "toInterpValue v")]
                     | Tu_id cid ->
                        (separate space)
                          [pipe;doc_id_lem_ctor cid;arrow;
-                          string "SI.V_ctor";
+                          string "Interp_ast.V_ctor";
                           parens (make_id false cid);
-                          parens (string "SIA.T_id " ^^ string_lit (doc_id id));
-                          string "SI.C_Union";
+                          parens (string "Interp_ast.T_id " ^^ string_lit (doc_id id));
+                          string "Interp_ast.C_Union";
                           parens (string "toInterpValue ()")])
                   ar) ^/^
                  string "end") in
          let fromToInterpValuePP =
+          toInterpValuePP ^^ hardline ^^ hardline ^^
+          fromInterpValuePP ^^ hardline ^^ hardline ^^           
            ((prefix 2 1)
               (concat [string "instance ";parens (string "ToFromInterpValue " ^^ doc_id_lem_type id)])
               (concat [string "let toInterpValue = ";toInterpValueF;hardline;
                        string "let fromInterpValue = ";fromInterpValueF]))
            ^/^ string "end" in
-         typ_pp ^^ hardline ^^ hardline ^^
-           if !print_to_from_interp_value then
-           toInterpValuePP ^^ hardline ^^ hardline ^^
-             fromInterpValuePP ^^ hardline ^^ hardline ^^
-               fromToInterpValuePP ^^ hardline
-           else empty)
+         (typ_pp ^^ hardline,fromToInterpValuePP ^^ hardline))
   | TD_enum(id,nm,enums,_) ->
      (match id with
-      | Id_aux ((Id "read_kind"),_) -> empty
-      | Id_aux ((Id "write_kind"),_) -> empty
-      | Id_aux ((Id "barrier_kind"),_) -> empty
-      | Id_aux ((Id "trans_kind"),_) -> empty
-      | Id_aux ((Id "instruction_kind"),_) -> empty
-      | Id_aux ((Id "regfp"),_) -> empty
-      | Id_aux ((Id "niafp"),_) -> empty
-      | Id_aux ((Id "diafp"),_) -> empty
+      | Id_aux ((Id "read_kind"),_) -> (empty,empty)
+      | Id_aux ((Id "write_kind"),_) -> (empty,empty)
+      | Id_aux ((Id "barrier_kind"),_) -> (empty,empty)
+      | Id_aux ((Id "trans_kind"),_) -> (empty,empty)
+      | Id_aux ((Id "instruction_kind"),_) -> (empty,empty)
+      | Id_aux ((Id "regfp"),_) -> (empty,empty)
+      | Id_aux ((Id "niafp"),_) -> (empty,empty)
+      | Id_aux ((Id "diafp"),_) -> (empty,empty)
       | _ ->
          let rec range i j = if i > j then [] else i :: (range (i+1) j) in
          let nats = range 0 in
@@ -926,9 +923,9 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
          let fromInterpValueF = concat [doc_id_lem_type id;string "FromInterpValue"] in
          let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
          let make_id pat id =
-           separate space [string "SIA.Id_aux";
-                           parens (string "SIA.Id " ^^ string_lit (doc_id id));
-                           if pat then underscore else string "SIA.Unknown"] in
+           separate space [string "Interp_ast.Id_aux";
+                           parens (string "Interp_ast.Id " ^^ string_lit (doc_id id));
+                           if pat then underscore else string "Interp_ast.Unknown"] in
          let fromInterpValuePP =
            (prefix 2 1)
              (separate space [string "let rec";fromInterpValueF;string "v";equals;string "match v with"])
@@ -936,7 +933,7 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                ((separate_map (break 1))
                   (fun (cid) ->
                     (separate space)
-                      [pipe;string "SI.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
+                      [pipe;string "Interp_ast.V_ctor";parens (make_id true cid);underscore;underscore;string "v";
                        arrow;doc_id_lem_ctor cid]
                   )
                   enums
@@ -944,7 +941,7 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                  (
                    (align
                       ((prefix 3 1)
-                         (separate space [pipe;string ("SI.V_lit (SIA.L_aux (SIA.L_num n) _)");arrow])
+                         (separate space [pipe;string ("Interp_ast.V_lit (Interp_ast.L_aux (Interp_ast.L_num n) _)");arrow])
                          (separate space [string "match";parens(string "natFromInteger n");string "with"] ^/^
                             (
                               ((separate_map (break 1))
@@ -960,7 +957,7 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                    )
                  ) ^/^
 
-                  ((separate space) [pipe;string "SI.V_tuple [v]";arrow;fromInterpValueF;string "v"]) ^/^
+                  ((separate space) [pipe;string "Interp_ast.V_tuple [v]";arrow;fromInterpValueF;string "v"]) ^/^
 
                    let failmessage =
                      (string_lit
@@ -978,25 +975,23 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
                   (fun (cid,number) ->
                     (separate space)
                       [pipe;doc_id_lem_ctor cid;arrow;
-                       string "SI.V_ctor";
+                       string "Interp_ast.V_ctor";
                        parens (make_id false cid);
-                       parens (string "SIA.T_id " ^^ string_lit (doc_id id));
-                       parens (string ("SI.C_Enum " ^ string_of_int number));
+                       parens (string "Interp_ast.T_id " ^^ string_lit (doc_id id));
+                       parens (string ("Interp_ast.C_Enum " ^ string_of_int number));
                        parens (string "toInterpValue ()")])
                   (List.combine enums (nats ((List.length enums) - 1)))) ^/^
                  string "end") in
          let fromToInterpValuePP =
+           toInterpValuePP ^^ hardline ^^ hardline ^^
+           fromInterpValuePP ^^ hardline ^^ hardline ^^
            ((prefix 2 1)
              (concat [string "instance ";parens (string "ToFromInterpValue " ^^ doc_id_lem_type id)])
              (concat [string "let toInterpValue = ";toInterpValueF;hardline;
                       string "let fromInterpValue = ";fromInterpValueF]))
            ^/^ string "end" in
-          typ_pp ^^ hardline ^^ hardline ^^
-            if !print_to_from_interp_value 
-            then toInterpValuePP ^^ hardline ^^ hardline ^^
-              fromInterpValuePP ^^ hardline ^^ hardline ^^
-                fromToInterpValuePP ^^ hardline
-            else empty)
+         (typ_pp ^^ hardline,
+          fromToInterpValuePP ^^ hardline))
   | TD_register(id,n1,n2,rs) ->
     match n1,n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
@@ -1010,11 +1005,11 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
        let dir_b = i1 < i2 in
        let dir = string (if dir_b then "true" else "false") in
        let size = if dir_b then i2-i1 +1 else i1-i2 + 1 in
-       (doc_op equals)
+       ((doc_op equals)
          (concat [string "let";space;string "build_";doc_id_lem id;space;string "regname"])
          (string "Register" ^^ space ^^
             align (separate space [string "regname"; doc_int size; doc_int i1; dir;
-                                   break 0 ^^ brackets (align doc_rids)]))
+                                   break 0 ^^ brackets (align doc_rids)])),empty)
        (*^^ hardline ^^
          separate_map hardline doc_rfield rs *)
 
@@ -1147,26 +1142,29 @@ let doc_spec_lem regtypes (VS_aux (valspec,annot)) =
 
 
 let rec doc_def_lem regtypes def = match def with
-  | DEF_spec v_spec -> (doc_spec_lem regtypes v_spec,empty)
-  | DEF_type t_def -> (group (doc_typdef_lem regtypes t_def) ^/^ hardline,empty)
-  | DEF_reg_dec dec -> (group (doc_dec_lem dec),empty)
+  | DEF_spec v_spec -> ((doc_spec_lem regtypes v_spec,empty),empty)
+  | DEF_type t_def ->
+     let (typdefs,fromtodefs) = doc_typdef_lem regtypes t_def in
+     ((group typdefs ^/^ hardline,fromtodefs),empty)
+  | DEF_reg_dec dec -> ((group (doc_dec_lem dec),empty),empty)
 
-  | DEF_default df -> (empty,empty)
-  | DEF_fundef f_def -> (empty,group (doc_fundef_lem regtypes f_def) ^/^ hardline)
-  | DEF_val lbind -> (empty,group (doc_let_lem regtypes lbind) ^/^ hardline)
+  | DEF_default df -> ((empty,empty),empty)
+  | DEF_fundef f_def -> ((empty,empty),group (doc_fundef_lem regtypes f_def) ^/^ hardline)
+  | DEF_val lbind -> ((empty,empty),group (doc_let_lem regtypes lbind) ^/^ hardline)
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"
 
-  | DEF_kind _ -> (empty,empty)
+  | DEF_kind _ -> ((empty,empty),empty)
 
-  | DEF_comm (DC_comm s) -> (empty,comment (string s))
+  | DEF_comm (DC_comm s) -> ((empty,empty),comment (string s))
   | DEF_comm (DC_comm_struct d) ->
-     let (typdefs,vdefs) = doc_def_lem regtypes d in
-     (empty,comment (typdefs ^^ hardline ^^ vdefs))
+     let ((typdefs,tofromdefs),vdefs) = doc_def_lem regtypes d in
+     ((empty,empty),comment (typdefs ^^ hardline ^^ tofromdefs ^^ hardline ^^ vdefs))
 
 
 let doc_defs_lem regtypes (Defs defs) =
   let (typdefs,valdefs) = List.split (List.map (doc_def_lem regtypes) defs) in
-  (separate empty typdefs,separate empty valdefs)
+  let (typdefs,tofromdefs) = List.split typdefs in
+  (separate empty typdefs,separate empty tofromdefs, separate empty valdefs)
 
 let find_regtypes (Defs defs) =
   List.fold_left
@@ -1180,38 +1178,33 @@ let find_regtypes (Defs defs) =
 let typ_to_t env =
   Type_check.typ_to_t env false false
 
-let pp_defs_lem (types_file,types_modules) (prompt_file,prompt_modules) (state_file,state_modules) d top_line =
+let pp_defs_lem
+      (types_file,types_modules)
+      (prompt_file,prompt_modules)
+      (state_file,state_modules)
+      (tofrom_file,tofrom_modules)
+      d top_line =
+  let pp_aux file modules defs = 
+    (print file)
+      (concat
+         [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
+          (separate_map hardline)
+            (fun lib -> separate space [string "open import";string lib]) modules;hardline;
+          defs]);
+  in
+  
+
   let regtypes = find_regtypes d in
-  let (typdefs,valdefs) = doc_defs_lem regtypes d in
-  (print types_file)
+  let (typdefs,tofromdefs,valdefs) = doc_defs_lem regtypes d in
+
+  pp_aux types_file types_modules typdefs;
+  pp_aux prompt_file prompt_modules valdefs;
+  pp_aux state_file state_modules valdefs;
+
+  (print tofrom_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
-        (separate_map hardline)
-          (fun lib -> separate space [string "open import";string lib]) types_modules;hardline;
-        if !print_to_from_interp_value
-        then
-          concat
-            [(separate_map hardline)
-               (fun lib -> separate space [string "     import";string lib]) ["Interp";"Interp_ast"];
-             string "open import Deep_shallow_convert";
-             hardline;
-             hardline;
-             string "module SI = Interp"; hardline;
-             string "module SIA = Interp_ast"; hardline;
-             hardline]
-        else empty;
-        typdefs]);
-  (print prompt_file)
-    (concat
-       [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
-        (separate_map hardline)
-          (fun lib -> separate space [string "open import";string lib]) prompt_modules;hardline;
-        hardline;
-        valdefs]);
-  (print state_file)
-    (concat
-       [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
-        (separate_map hardline)
-          (fun lib -> separate space [string "open import";string lib]) state_modules;hardline;
-        hardline;
-        valdefs]);
+        (separate_map hardline) (fun lib -> separate space [string "open import";string lib]) tofrom_modules;hardline;
+        (separate_map hardline) (fun lib -> separate space [string "     import";string lib]) ["Interp";"Interp_ast"];hardline;
+        string "open import Deep_shallow_convert";
+        hardline;tofromdefs])
