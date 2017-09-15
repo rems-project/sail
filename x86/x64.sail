@@ -321,7 +321,7 @@ function qword call_dest_from_ea ((ea) e) =
     case (Ea_m(_, a)) -> rMEM(a, 8)
   }
 
-function qword get_ea_address ((ea) e) =
+function qword get_ea_address ((ea) e) = (* XXX rmn30 looks broken *)
   switch e {
     case (Ea_i(_, i)) -> 0x0000000000000000
     case (Ea_r(_, r)) -> 0x0000000000000000
@@ -494,9 +494,9 @@ function unit write_binop ((wsize) sz, (binop_name) bop, (qword) a, (qword) b, (
     case Cmp -> let (w,c,x) = sub_with_borrow (sz, a, b) in
                 write_arith_eflags (sz, w, c, x)
     case Test -> write_logical_eflags (sz, a & b)
-    case And -> write_logical_result (sz, a & b, e)
+    case And -> write_logical_result (sz, a & b, e) (* XXX rmn30 wrong flags? *)
     case Xor -> write_logical_result (sz, a ^ b, e)
-    case Or -> write_logical_result (sz, a | b, e)
+    case Or  -> write_logical_result (sz, a | b, e)
     case Rol -> write_result_erase_eflags (rol (sz, a, b), e)
     case Ror -> write_result_erase_eflags (ror (sz, a, b), e)
     case Sar -> write_result_erase_eflags (sar (sz, a, b), e)
@@ -528,8 +528,8 @@ function unit write_binop ((wsize) sz, (binop_name) bop, (qword) a, (qword) b, (
 function unit write_monop ((wsize) sz, (monop_name) mop, (qword) a, (ea) e) =
   switch mop {
     case Not -> wEA(e) := ~(a)
-    case Dec -> write_arith_result_no_CF_OF (sz, a - 1, e)
-    case Inc -> write_arith_result_no_CF_OF (sz, a + 1, e)
+    case Dec -> write_arith_result_no_CF_OF (sz, a - 1, e) 
+    case Inc -> write_arith_result_no_CF_OF (sz, a + 1, e)(* XXX rmn30 should set OF *)
     case Neg -> { write_arith_result_no_CF_OF (sz, 0 - a, e);
                   CF := undefined;
                 }
@@ -636,7 +636,7 @@ function clause execute (CMPXCHG (sz,r,n)) =
   let val_dst = EA(dst) in
   let val_acc = EA(src) in
   {
-    write_binop (sz, Cmp, val_acc, val_dst, src);
+    write_binop (sz, Cmp, val_acc, val_dst, src); 
     if val_acc == val_dst then
       wEA(dst) := EA (src)
     else
@@ -1266,6 +1266,103 @@ function (byte_stream, ast, nat) decode ((byte_stream) strm) =
 let (vector <0, 16, inc, string >) GPRstr =
   ["RAX","RCX","RDX","RBX","RSP","RBP","RSI","RDI","R8","R9","R10","R11","R12","R13","R14","R15"]
 
+function (regfps) regfp_base ((base) b) =
+  switch b {
+    case NoBase -> [|| ||]
+    case RipBase -> [|| RFull("RIP") ||]
+    case (RegBase(b)) -> [|| RFull(GPRstr[b]) ||]
+  }
+
+function (regfps) regfp_idx ((option<scale_index>) idx) =
+  switch idx {
+    case (None) -> [|| ||]
+    case (Some(scale, idx)) -> [|| RFull(GPRstr[idx]) ||]
+  }
+
+function (bool, regfps, regfps) regfp_rm ((rm) r) =
+  switch r {
+    case (Reg(n)) -> 
+       (false, [|| RFull(GPRstr[n]) ||], [|| ||])
+    case (Mem(idx, b, d)) -> {
+       (true, [|| ||], append(regfp_idx(idx), regfp_base(b)))
+    }
+  }
+
+function (instruction_kind, regfps, regfps, regfps) regfp_dest_src ((dest_src) ds) =
+  switch ds {
+    case (Rm_i (r_m, i)) ->
+      let (m,rd,ars) = regfp_rm(r_m) in
+      (if m then IK_mem_write(Write_plain) else IK_simple, ars, rd, ars)
+    case (Rm_r (r_m, r)) ->
+      let (m,rd,ars) = regfp_rm(r_m) in
+      (if m then IK_mem_write(Write_plain) else IK_simple, RFull(GPRstr[r]) :: ars, rd, ars)
+    case (R_rm (r, r_m)) ->
+      let (m,rs,ars) = regfp_rm(r_m) in
+      (if m then IK_mem_read(Read_plain) else IK_simple, append(rs, ars), [|| RFull(GPRstr[r]) ||], ars)
+  }
+
+(* as above but where destination is also a source operand *)
+function (instruction_kind, regfps, regfps, regfps) regfp_dest_src_rmw ((dest_src) ds) =
+  switch ds {
+    case (Rm_i (r_m, i)) ->
+      let (m,rds, ars) = regfp_rm(r_m) in
+      (if m then IK_mem_rmw(Read_plain, Write_plain) else IK_simple, append(rds, ars), rds, ars)
+    case (Rm_r (r_m, r)) ->
+      let (m,rds, ars) = regfp_rm(r_m) in
+      (if m then IK_mem_rmw(Read_plain, Write_plain) else IK_simple, RFull(GPRstr[r]) :: append(rds, ars), rds, ars)
+    case (R_rm (r, r_m)) ->
+      let rds = [|| RFull(GPRstr[r]) ||] in
+      let (m,rs,ars) = regfp_rm(r_m) in
+      (if m then IK_mem_read(Read_plain) else IK_simple, append(rds, ars), rds, ars)
+  }
+
+function (bool, regfps, regfps) regfp_imm_rm ((imm_rm) i_rm) =
+  switch i_rm {
+    case (Rm (v)) -> regfp_rm (v)
+    case (Imm (v)) -> (false, [|| ||], [|| ||])
+  }
+
+let all_flags_but_cf_of = [|| RFull("AF"), RFull("PF"), RFull("SF"), RFull("ZF") ||]
+let all_flags = append([|| RFull("CF"), RFull("OF") ||], all_flags_but_cf_of)
+
+function (regfps) regfp_binop_flags ((binop_name) op) = 
+  switch (op) {
+    case Add -> all_flags
+    case Sub -> all_flags
+    case Cmp -> all_flags
+    case Test -> all_flags_but_cf_of
+    case And -> all_flags_but_cf_of
+    case Xor -> all_flags_but_cf_of
+    case Or  -> all_flags_but_cf_of
+    case Rol -> all_flags
+    case Ror -> all_flags
+    case Sar -> all_flags
+    case Shl -> all_flags
+    case Shr -> all_flags
+    case Adc -> all_flags
+    case Sbb -> all_flags
+  }
+function (regfps) regfp_cond ((cond) c) =
+  switch c {
+    case A  -> [|| RFull("CF"), RFull("ZF") ||]
+    case NB -> [|| RFull("CF") ||]
+    case B  -> [|| RFull("CF") ||]
+    case NA -> [|| RFull("CF"), RFull("ZF") ||]
+    case E  -> [|| RFull("ZF") ||]
+    case G  -> [|| RFull("ZF"), RFull("SF"), RFull("OF") ||]
+    case NL -> [|| RFull("SF"), RFull("OF") ||]
+    case L  -> [|| RFull("SF"), RFull("OF") ||]
+    case NG -> [|| RFull("ZF"), RFull("SF"), RFull("OF") ||]
+    case NE -> [|| RFull("ZF") ||]
+    case NO -> [|| RFull("OF") ||]
+    case NP -> [|| RFull("PF") ||]
+    case NS -> [|| RFull("SF") ||]
+    case O  -> [|| RFull("OF") ||]
+    case P  -> [|| RFull("PF") ||]
+    case S  -> [|| RFull("SF") ||]
+    case ALWAYS -> [|| ||]
+  }
+
 function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (instr) = {
   iR := [|| ||];
   oR := [|| ||];
@@ -1274,76 +1371,126 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
   Nias := [|| NIAFP_successor ||];
   Dia := DIAFP_none;
   x := (qword) RIP;
-  (*switch instr {
-     case (EBREAK) -> ()
-     case (UTYPE ( imm, rd, op)) -> {
-            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
-     }
-     case (JAL ( imm, rd)) -> {
-            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
-            let (bit[64]) offset = EXTS(imm) in
-            Nias := [|| NIAFP_concrete_address (PC + offset) ||]
-     }
-     case (JALR ( imm, rs, rd)) -> {
-            if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
-            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
-            let (bit[64]) offset = EXTS(imm) in
-            Nias := [|| NIAFP_register (RFull(GPRstr[rs])) ||]; (* XXX this should br rs + offset... *)
-     }
-     case (BTYPE ( imm, rs2, rs1, op)) -> {
-            if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
-            if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
-            ik := IK_cond_branch;
-            let (bit[64]) offset = EXTS(imm) in
-            Nias := NIAFP_concrete_address(PC + offset) :: Nias;
-     }
-     case (ITYPE ( imm, rs, rd, op)) -> {
-            if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
-            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
-     }
-     case (SHIFTIOP ( imm, rs, rd, op)) -> {
-            if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
-            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
-     }
-     case (RTYPE ( rs2, rs1, rd, op)) -> {
-            if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
-            if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
-            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
-     }
-     case (LOAD ( imm, rs, rd, unsign, width, aq)) -> { (* XXX "unsigned" causes name conflict in lem shallow embedding... *)
-            if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
-            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
-            aR := iR;
-            ik := if aq then IK_mem_read (Read_RISCV_acquire) else IK_mem_read (Read_plain);
-     }
-     case (STORE( imm, rs2, rs1, width)) -> {
-            if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
-            if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
-            if (rs1 == 0) then () else aR := RFull(GPRstr[rs1]) :: aR;
-            ik := IK_mem_write (Write_plain);
-     }
-     case (ADDIW ( imm, rs, rd)) -> {
-            if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
-            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
-     }
-     case (SHIFTW ( imm, rs, rd, op)) -> {
-            if (rs == 0) then () else iR := RFull(GPRstr[rs]) :: iR;
-            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
-     } 
-     case (RTYPEW ( rs2, rs1, rd, op))-> {
-            if (rs2 == 0) then () else iR := RFull(GPRstr[rs2]) :: iR;
-            if (rs1 == 0) then () else iR := RFull(GPRstr[rs1]) :: iR;
-            if (rd == 0) then () else oR := RFull(GPRstr[rd]) :: oR;
-     }
-     case (FENCE(pred, succ)) -> {
-          ik :=
-            switch(pred, succ) {
-              case (0b0011, 0b0011) -> IK_barrier (Barrier_RISCV_rw_rw)
-              case (0b0010, 0b0011) -> IK_barrier (Barrier_RISCV_r_rw)
-              case (0b0011, 0b0001) -> IK_barrier (Barrier_RISCV_rw_w)
-              case _ -> exit "unsupported fence"
-            };
-     }
-  };*)
+  switch instr {
+    case(Binop   (binop, sz, ds)) -> {
+      let flags = regfp_binop_flags (binop) in
+      let (ik', iRs, oRs, aRs) = regfp_dest_src_rmw(ds) in {
+        ik := ik';
+        iR := append(iRs, iR);
+        oR := append(flags, append(oRs, oR));
+        aR := append(aRs, aR);
+      }
+    }
+    (*case(CALL    (imm_rm)             ) -> {
+
+    }*)
+    case(CLC                          ) -> oR := RFull("CF") :: oR
+    case(CMC                          ) -> {
+      iR := RFull("CF") :: iR;
+      oR := RFull("CF") :: oR;
+    }
+    case(CMPXCHG (sz, r_m, reg)       ) ->
+      let (m, rs, aRs) = regfp_rm (r_m) in {
+        iK := if m then IK_mem_rmw (Read_plain, Write_plain) else IK_simple;
+        iR := RFull("RAX") :: RFull(GPRstr[reg]) :: append(rs, aRs);
+        oR := RFull("RAX") :: append(regfp_binop_flags(Cmp),  rs);
+        aR := aRs;
+      }
+    case(DIV    (sz, r_m)             ) ->
+      let (m, rs, ars) = regfp_rm (r_m) in {
+        iK := if m then IK_mem_read (Read_plain) else IK_simple;
+        iR := RFull("RAX") :: RFull("RDX") :: append(rs, ars);
+        oR := RFull("RAX") :: RFull("RDX") :: append(oR, all_flags);
+        aR := ars;
+      }
+    case(HLT                          ) -> ()
+    (*case(Jcc     (cond, imm64)        ) -> `X86JCC     (translate_out_cond cond, translate_out_imm64 imm64)
+    case(JMP     (rm)                 ) -> `X86JMP     (translate_out_rm rm)*)
+    case(LEA     (sz, ds)             ) ->
+      let (_, irs, ors, ars) = regfp_dest_src (ds) in {
+        iR := irs;
+        oR := ors;
+        aR := ars;
+      }
+    (*case(LEAVE                        ) -> `X86LEAVE*)
+    (*case(LOOP    (cond, imm64)        ) -> `X86LOOP    (translate_out_cond cond, translate_out_imm64 imm64)*)
+    case(MFENCE                       ) -> iK := IK_barrier (Barrier_x86_MFENCE)
+    case(Monop   (monop, sz, r_m)     ) -> 
+      let (m, rds, ars) = regfp_rm(r_m) in {
+        iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_simple;
+        iR := append(rds, ars);
+        oR := append(all_flags_but_cf_of, rds); (* XXX fix flags *)
+        aR := ars;
+      }
+    case(MOV     (c, sz, ds) )       -> 
+      let (ik, irs, ors, ars) = regfp_dest_src (ds) in 
+      let flags = regfp_cond(c) in
+      {
+          iK := ik;
+          iR := append(irs, flags);
+          oR := ors;
+          aR := ars;
+      }
+    case(MOVSX   (sz1, ds, sz2) ) -> 
+      let (ik, irs, ors, ars) = regfp_dest_src (ds) in {
+          iK := ik;
+          iR := irs;
+          oR := ors;
+          aR := ars;
+      }
+    case(MOVZX   (sz1, ds, sz2) ) -> 
+      let (ik, irs, ors, ars) = regfp_dest_src (ds) in {
+          iK := ik;
+          iR := irs;
+          oR := ors;
+          aR := ars;
+      }
+    case(MUL    (sz, r_m)              ) ->
+      let (m, rs, ars) = regfp_rm (r_m) in {
+        iK := if m then IK_mem_read (Read_plain) else IK_simple;
+        iR := RFull("RAX") :: append(rs, ars);
+        oR := RFull("RAX") :: RFull("RDX") :: append(oR, all_flags);
+        aR := ars;
+      }
+    case(NOP     (_)                  ) -> ()
+    case(POP     (r_m)                ) -> 
+      let (m, rd, ars) = regfp_rm (r_m) in {
+        iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_mem_write(Write_plain);
+        iR := RFull("RSP") :: ars;
+        oR := RFull("RSP") :: rd;
+        aR := RFull("RSP") :: ars;
+      }
+    case(PUSH    (irm)               ) -> 
+      let (m, rs, ars) = regfp_imm_rm (irm) in {
+        iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_mem_write(Write_plain);
+        iR := RFull("RSP") :: append(rs, ars);
+        oR := RFull("RSP") :: oR;
+        aR := RFull("RSP") :: ars;
+      }
+    (*case(RET     (imm64)              ) -> `X86RET     (translate_out_imm64 imm64)*)
+    case(SET     (c, b, r_m)          ) -> 
+      let flags = regfp_cond(c) in
+      let (m, rs, ars) = regfp_rm(r_m) in {
+        iK := if m then IK_mem_write(Write_plain) else IK_simple;
+        iR := append(flags, ars);
+        oR := rs;
+        aR := ars;
+      }
+    case(STC                          ) -> oR := [|| RFull("CF") ||]
+    case(XADD    (sz, r_m, reg)       ) -> 
+      let (m, rs, ars) = regfp_rm(r_m) in {
+        iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_simple;
+        iR := RFull(GPRstr[reg]) :: append(rs, ars);
+        oR := RFull(GPRstr[reg]) :: append(rs, all_flags);
+        aR := ars;
+      }
+    case(XCHG    (sz, r_m, reg)       ) -> 
+      let (m, rs, ars) = regfp_rm(r_m) in {
+        iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_simple;
+        iR := RFull(GPRstr[reg]) :: append(rs, ars);
+        oR := RFull(GPRstr[reg]) :: rs;
+        aR := ars;
+      }
+  };
   (iR,oR,aR,Nias,Dia,ik)
 }
