@@ -70,6 +70,14 @@ let mk_lit_exp lit_aux = mk_exp (E_lit (mk_lit lit_aux))
 
 let mk_funcl id pat body = FCL_aux (FCL_Funcl (id, pat, body), no_annot)
 
+let mk_qi_nc nc = QI_aux (QI_const nc, Parse_ast.Unknown)
+
+let mk_qi_id bk kid =
+  let kopt =
+    KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (bk, Parse_ast.Unknown)], Parse_ast.Unknown), kid), Parse_ast.Unknown)
+  in
+  QI_aux (QI_id kopt, Parse_ast.Unknown)
+
 let mk_fundef funcls =
   let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown) in
   let effect_opt = Effect_opt_aux (Effect_opt_pure, Parse_ast.Unknown) in
@@ -155,6 +163,8 @@ let range_typ nexp1 nexp2 =
 let bool_typ = mk_id_typ (mk_id "bool")
 let string_typ = mk_id_typ (mk_id "string")
 let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (Typ_arg_typ typ)]))
+let tuple_typ typs = mk_typ (Typ_tup typs)
+let function_typ typ1 typ2 eff = mk_typ (Typ_fn (typ1, typ2, eff))
 
 let vector_typ n m ord typ =
   mk_typ (Typ_app (mk_id "vector",
@@ -173,6 +183,7 @@ let npow2 n = Nexp_aux (Nexp_exp n, Parse_ast.Unknown)
 let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
 let nid id = Nexp_aux (Nexp_id id, Parse_ast.Unknown)
 
+let nc_set kid ints = mk_nc (NC_nat_set_bounded (kid, ints))
 let nc_eq n1 n2 = mk_nc (NC_fixed (n1, n2))
 let nc_neq n1 n2 = mk_nc (NC_not_equal (n1, n2))
 let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
@@ -296,6 +307,10 @@ let string_of_id = function
 
 let id_of_kid = function
   | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
+
+let kid_of_id = function
+  | Id_aux (Id v, l) -> Kid_aux (Var ("'" ^ v), l)
+  | Id_aux (DeIid v, _) -> assert false
 
 let string_of_kid = function
   | Kid_aux (Var v, _) -> v

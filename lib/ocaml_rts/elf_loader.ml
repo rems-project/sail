@@ -122,11 +122,8 @@ let load_segment seg =
   List.iteri (fun i byte -> Sail_lib.wram (add_big_int paddr (big_int_of_int i)) byte) (List.map int_of_char bs)
 
 let load_elf () =
-  let name =
-    match !opt_file_arguments with
-    | (name :: _) -> name
-    | [] -> failwith "Must provide an elf file"
-  in
-  let segments, e_entry = read name in
-  List.iter load_segment segments;
-  ()
+  match !opt_file_arguments with
+  | (name :: _) ->
+     let segments, e_entry = read name in
+     List.iter load_segment segments
+  | [] -> ()

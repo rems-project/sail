@@ -72,6 +72,7 @@ type type_error =
   | Err_no_casts of type_error * type_error list
   | Err_unresolved_quants of id * quant_item list
   | Err_subtype of typ * typ * n_constraint list
+  | Err_no_num_ident of id
   | Err_other of string
 
 let pp_type_error err =
@@ -92,6 +93,8 @@ let pp_type_error err =
                         string (string_of_typ typ2) ]
        ^/^ string "in context"
        ^//^ string (string_of_list ", " string_of_n_constraint constrs)
+    | Err_no_num_ident id ->
+       string "No num identifier" ^^ space ^^ string (string_of_id id)
     | Err_other str -> string str
   in
   pp_err err
@@ -770,7 +773,7 @@ end = struct
 
   let get_num_def id env =
     try Bindings.find id env.num_defs with
-    | Not_found -> typ_error (id_loc id) ("No Num identifier " ^ string_of_id id)
+    | Not_found -> typ_raise (id_loc id) (Err_no_num_ident id)
 
   let rec wf_constraint env (NC_aux (nc, _)) =
     match nc with

@@ -43,7 +43,7 @@ function finish_suite {
     fail=0
 }
 
-SAILLIBDIR="$DIR"
+SAILLIBDIR="$DIR/../../lib/"
 
 printf "<testsuites>\n" >> $DIR/tests.xml
 
