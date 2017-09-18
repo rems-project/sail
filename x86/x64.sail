@@ -1381,9 +1381,13 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
         aR := append(aRs, aR);
       }
     }
-    (*case(CALL    (imm_rm)             ) -> {
-
-    }*)
+    case(CALL    (irm)             ) ->
+      let (m, rs, ars) = regfp_imm_rm (irm) in { 
+          iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_mem_write(Write_plain);
+          iR := RFull("RIP") :: RFull("RSP") :: rs;
+          oR := RFull("RSP") :: oR;
+          (* nias := XXX rmn30 help *)
+      }
     case(CLC                          ) -> oR := RFull("CF") :: oR
     case(CMC                          ) -> {
       iR := RFull("CF") :: iR;
@@ -1404,16 +1408,38 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
         aR := ars;
       }
     case(HLT                          ) -> ()
-    (*case(Jcc     (cond, imm64)        ) -> `X86JCC     (translate_out_cond cond, translate_out_imm64 imm64)
-    case(JMP     (rm)                 ) -> `X86JMP     (translate_out_rm rm)*)
+    case(Jcc     (c, imm64)           ) -> 
+      let flags = regfp_cond(c) in {
+        iK := IK_cond_branch;
+        iR := RFull("RIP") :: flags;
+        Nias :=  NIAFP_concrete_address(RIP + imm64) :: Nias;
+      }
+    case(JMP     (r_m)                 ) ->
+      let (m, rs, ars) = regfp_rm (r_m) in {
+        iK := if m then IK_mem_read(Read_plain) else IK_simple;
+        iR := RFull("RIP")::append(rs, ars);
+        aR := ars;
+        (* XXX rmn30 help Nias := *)
+      }
     case(LEA     (sz, ds)             ) ->
       let (_, irs, ors, ars) = regfp_dest_src (ds) in {
         iR := irs;
         oR := ors;
         aR := ars;
       }
-    (*case(LEAVE                        ) -> `X86LEAVE*)
-    (*case(LOOP    (cond, imm64)        ) -> `X86LOOP    (translate_out_cond cond, translate_out_imm64 imm64)*)
+    case(LEAVE                        ) -> {
+      iK := IK_mem_read(Read_plain);
+      iR := RFull("RBP") :: iR;
+      oR := RFull("RBP") :: RFull("RSP") :: oR;
+      aR := RFull("RBP") :: aR;
+    }
+    case(LOOP    (c, imm64)           ) -> 
+      let flags = regfp_cond(c) in {
+          iK := IK_cond_branch;
+          iR := RFull("RCX") :: flags;
+          oR := RFull("RCX") :: oR;
+          Nias := NIAFP_concrete_address(RIP + imm64) :: Nias;
+      }
     case(MFENCE                       ) -> iK := IK_barrier (Barrier_x86_MFENCE)
     case(Monop   (monop, sz, r_m)     ) -> 
       let (m, rds, ars) = regfp_rm(r_m) in {
@@ -1467,7 +1493,13 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
         oR := RFull("RSP") :: oR;
         aR := RFull("RSP") :: ars;
       }
-    (*case(RET     (imm64)              ) -> `X86RET     (translate_out_imm64 imm64)*)
+    case(RET     (imm64)              ) -> {
+      iK := IK_mem_read(Read_plain);
+      iR := RFull("RSP") :: iR;
+      oR := RFull("RSP") :: oR;
+      aR := RFull("RSP") :: aR;
+      (* Nias := XXX rmn30 help *)
+    }
     case(SET     (c, b, r_m)          ) -> 
       let flags = regfp_cond(c) in
       let (m, rs, ars) = regfp_rm(r_m) in {
