@@ -350,6 +350,7 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
     b,used,set
   | E_exit e -> fv_of_exp consider_var bound used set e
   | E_assert(c,m) -> list_fv bound used set [c;m]
+  | E_return e -> fv_of_exp consider_var bound used set e
   | _ -> bound,used,set
 
 and fv_of_pes consider_var bound used set pes =

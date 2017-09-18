@@ -44,6 +44,8 @@ open Ast
 open Util
 open Ast_util
 
+let opt_undefined_gen = ref false
+
 module Envmap = Finite_map.Fmap_map(String)
 module Nameset' = Set.Make(String)
 module Nameset = struct
@@ -1008,7 +1010,7 @@ let initial_kind_env =
   ]
 
 let typschm_of_string order str =
-  let typschm = Parser2.typschm Lexer2.token (Lexing.from_string str) in
+  let typschm = Parser2.typschm_eof Lexer2.token (Lexing.from_string str) in
   let (typschm, _, _) = to_ast_typschm initial_kind_env order typschm in
   typschm
 
@@ -1055,14 +1057,14 @@ let generate_undefineds vs_ids (Defs defs) =
     if (IdSet.mem id vs_ids) then [] else [val_spec_of_string dec_ord id str]
   in
   let undefined_builtins = List.concat
-    [gen_vs (mk_id "internal_pick") "forall 'a:Type. list('a) -> 'a effect {undef}";
+    [gen_vs (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a effect {undef}";
      gen_vs (mk_id "undefined_bool") "unit -> bool effect {undef}";
      gen_vs (mk_id "undefined_bit") "unit -> bit effect {undef}";
      gen_vs (mk_id "undefined_int") "unit -> int effect {undef}";
      gen_vs (mk_id "undefined_string") "unit -> string effect {undef}";
      gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
      (* FIXME: How to handle inc/dec order correctly? *)
-     gen_vs (mk_id "undefined_vector") "forall 'n 'm 'a:Type. (atom('n), atom('m), 'a) -> vector('n, 'm, dec,'a) effect {undef}";
+     gen_vs (mk_id "undefined_vector") "forall 'n 'm ('a:Type). (atom('n), atom('m), 'a) -> vector('n, 'm, dec,'a) effect {undef}";
      gen_vs (mk_id "undefined_unit") "unit -> unit effect {undef}"]
   in
   let undefined_td = function
@@ -1079,6 +1081,12 @@ let generate_undefineds vs_ids (Defs defs) =
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             pat
                             (mk_exp (E_record (mk_fexps (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields))))]]
+    | TD_variant (id, _, typq, tus, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
+       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id));
+        mk_fundef [mk_funcl (prepend_id "undefined_" id)
+                            (mk_pat (P_lit (mk_lit L_unit)))
+                            (mk_exp (E_app (mk_id "internal_pick",
+                                            [])))]]
     | _ -> []
   in
   let rec undefined_defs = function
@@ -1110,6 +1118,11 @@ let generate_initialize_registers vs_ids (Defs defs) =
 
 let process_ast order defs =
   let (ast, _, _) = to_ast Nameset.empty initial_kind_env order defs in
-  let vs_ids = val_spec_ids ast in
-  let ast = generate_undefineds vs_ids ast in
-  generate_initialize_registers vs_ids ast
+  if not !opt_undefined_gen
+  then ast
+  else
+    begin
+      let vs_ids = val_spec_ids ast in
+      let ast = generate_undefineds vs_ids ast in
+      generate_initialize_registers vs_ids ast
+    end

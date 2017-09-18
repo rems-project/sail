@@ -47,7 +47,9 @@ open Ast_util
 val opt_tc_debug : int ref
 val opt_no_effects : bool ref
 
-exception Type_error of l * string;;
+type type_error
+
+exception Type_error of l * type_error;;
 
 type mut = Immutable | Mutable
 
@@ -201,6 +203,7 @@ val typ_of : tannot exp -> typ
 val typ_of_annot : Ast.l * tannot -> typ
 
 val pat_typ_of : tannot pat -> typ
+val pat_env_of : tannot pat -> Env.t
 
 val effect_of : tannot exp -> effect
 val effect_of_annot : tannot -> effect

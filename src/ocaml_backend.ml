@@ -88,7 +88,13 @@ let ocaml_lit (L_aux (lit_aux, _)) =
 
 let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
   match pat_aux with
-  | P_id id -> zencode ctx id
+  | P_id id ->
+     begin
+       match Env.lookup_id id (pat_env_of pat) with
+       | Local (Immutable, _) | Unbound -> zencode ctx id
+       | Enum _ -> zencode_upper ctx id
+       | _ -> failwith "Ocaml: Cannot pattern match on mutable variable or register"
+     end
   | P_lit lit -> ocaml_lit lit
   | P_typ (_, pat) -> ocaml_pat ctx pat
   | P_tup pats -> parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
@@ -110,7 +116,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_block [] -> string "()"
   | E_block exps -> begin_end (ocaml_block ctx exps)
   | E_field (exp, id) -> ocaml_atomic_exp ctx exp ^^ dot ^^ zencode ctx id
-  | E_exit exp -> string "failwith" ^^ space ^^ dquotes (string (String.escaped (string_of_exp exp)))
+  | E_exit exp -> string "exit 0"
   | E_case (exp, pexps) ->
      begin_end (separate space [string "match"; ocaml_atomic_exp ctx exp; string "with"]
                 ^/^ ocaml_pexps ctx pexps)
@@ -218,12 +224,12 @@ let rec ocaml_funcl_matches ctx = function
 let ocaml_funcls ctx = function
   | [] -> failwith "Ocaml: empty function"
   | [FCL_aux (FCL_Funcl (id, pat, exp),_)] ->
-     separate space [string "let"; zencode ctx id; ocaml_pat ctx pat; equals; string "with_return (fun r ->"]
+     separate space [string "let rec"; zencode ctx id; ocaml_pat ctx pat; equals; string "with_return (fun r ->"]
      ^//^ ocaml_exp ctx exp
      ^^ rparen
   | funcls ->
      let id = funcls_id funcls in
-     separate space [string "let"; zencode ctx id; equals; string "function"]
+     separate space [string "let rec"; zencode ctx id; equals; string "function"]
      ^//^ ocaml_funcl_matches ctx funcls
 
 let ocaml_fundef ctx (FD_aux (FD_function (_, _, _, funcls), _)) =
@@ -311,8 +317,10 @@ let ocaml_defs (Defs defs) =
 
 let ocaml_main spec =
   concat [separate space [string "open"; string (String.capitalize spec)] ^^ ocaml_def_end;
+          separate space [string "open"; string "Elf_loader"] ^^ ocaml_def_end;
           separate space [string "let"; string "()"; equals]
           ^//^ (string "Random.self_init ();"
+                ^/^ string "load_elf ();"
                 ^/^ string "initialize_registers ();"
                 ^/^ string "zmain ()")
          ]
@@ -328,20 +336,23 @@ let ocaml_compile spec defs =
   if Sys.file_exists "_sbuild" then () else Unix.mkdir "_sbuild" 0o775;
   let cwd = Unix.getcwd () in
   Unix.chdir "_sbuild";
-  let _ = Unix.system ("cp " ^ sail_lib_dir ^ "/sail_lib.ml .") in
+  let _ = Unix.system ("cp -r " ^ sail_lib_dir ^ "/ocaml_rts/. .") in
   let out_chan = open_out (spec ^ ".ml") in
   ocaml_pp_defs out_chan defs;
   close_out out_chan;
   if IdSet.mem (mk_id "main") (Initial_check.val_spec_ids defs)
   then
-    let out_chan = open_out "main.ml" in
-    ToChannel.pretty 1. 80 out_chan (ocaml_main spec);
-    close_out out_chan;
-    let _ = Unix.system "ocamlbuild -lib nums main.native" in
-    let _ = Unix.system ("cp main.native " ^ cwd ^ "/" ^ spec) in
-    ()
+    begin
+      print_endline "Generating main";
+      let out_chan = open_out "main.ml" in
+      ToChannel.pretty 1. 80 out_chan (ocaml_main spec);
+      close_out out_chan;
+      let _ = Unix.system "ocamlbuild -pkg zarith -pkg uint main.native" in
+      let _ = Unix.system ("cp main.native " ^ cwd ^ "/" ^ spec) in
+      ()
+    end
   else
-    let _ = Unix.system ("ocamlbuild -lib nums " ^ spec ^ ".cmo") in
+    let _ = Unix.system ("ocamlbuild -pkg zarith -pkg uint " ^ spec ^ ".cmo") in
     ();
   Unix.chdir cwd
 

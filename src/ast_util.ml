@@ -618,11 +618,31 @@ let rec simplify_nexp (Nexp_aux (nexp, l)) =
   | Nexp_exp of nexp (* exponential *)
   | Nexp_neg of nexp (* For internal use *) *)
 
+let rec lexp_to_exp (LEXP_aux (lexp_aux, annot) as le) =
+  let rewrap e_aux = E_aux (e_aux, annot) in
+  match lexp_aux with
+  | LEXP_id id | LEXP_cast (_, id) -> rewrap (E_id id)
+  | LEXP_tup les ->
+    let get_id (LEXP_aux(lexp,((l,_) as annot)) as le) = match lexp with
+      | LEXP_id id | LEXP_cast (_, id) -> E_aux (E_id id, annot)
+      | _ ->
+        raise (Reporting_basic.err_unreachable l
+          ("Unsupported sub-lexp " ^ string_of_lexp le ^ " in tuple")) in
+    rewrap (E_tuple (List.map get_id les))
+  | LEXP_vector (lexp, e) -> rewrap (E_vector_access (lexp_to_exp lexp, e))
+  | LEXP_vector_range (lexp, e1, e2) -> rewrap (E_vector_subrange (lexp_to_exp lexp, e1, e2))
+  | LEXP_field (lexp, id) -> rewrap (E_field (lexp_to_exp lexp, id))
+  | LEXP_memory (id, exps) -> rewrap (E_app (id, exps))
+
 let rec is_number (Typ_aux (t,_)) =
   match t with
   | Typ_app (Id_aux (Id "range", _),_)
   | Typ_app (Id_aux (Id "implicit", _),_)
   | Typ_app (Id_aux (Id "atom", _),_) -> true
+  | _ -> false
+
+let is_reftyp (Typ_aux (typ_aux, _)) = match typ_aux with
+  | Typ_app (id, _) -> string_of_id id = "register" || string_of_id id = "reg"
   | _ -> false
 
 let rec is_vector_typ = function

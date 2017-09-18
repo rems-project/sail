@@ -208,9 +208,9 @@ and pp_format_effects_lem (Effect_aux(e,l)) =
 and pp_format_typ_arg_lem (Typ_arg_aux(t,l)) =
   "(Typ_arg_aux " ^
   (match t with
-  | Typ_arg_typ(t) -> "(Typ_arg_typ " ^ pp_format_typ_lem t ^ ")"
-  | Typ_arg_nexp(n) -> "(Typ_arg_nexp " ^ pp_format_nexp_lem n ^ ")"
-  | Typ_arg_order(o) -> "(Typ_arg_order " ^ pp_format_ord_lem o ^ ")");
+   | Typ_arg_typ(t) -> "(Typ_arg_typ " ^ pp_format_typ_lem t ^ ")"
+   | Typ_arg_nexp(n) -> "(Typ_arg_nexp " ^ pp_format_nexp_lem n ^ ")"
+   | Typ_arg_order(o) -> "(Typ_arg_order " ^ pp_format_ord_lem o ^ ")") ^ " " ^
   (pp_format_l_lem l) ^ ")"
 and pp_format_nexp_constraint_lem (NC_aux(nc,l)) =
   "(NC_aux " ^

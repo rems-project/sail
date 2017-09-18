@@ -65,7 +65,7 @@ let options = Arg.align ([
     Arg.Set opt_print_lem,
     " output a Lem translated version of the input");
   ( "-ocaml",
-    Arg.Set opt_print_ocaml,
+    Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen],
     " output an OCaml translated version of the input");
   ( "-lem_lib",
     Arg.String (fun l -> opt_libs_lem := l::!opt_libs_lem),
@@ -102,7 +102,7 @@ let options = Arg.align ([
     " (experimental) use new parser");
   ( "-just_check",
     Arg.Set opt_just_check,
-    " (experimental) terminate immediately after typechecking, implies -new_typecheck");
+    " (experimental) terminate immediately after typechecking");
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
@@ -118,6 +118,9 @@ let options = Arg.align ([
   ( "-no_effects",
     Arg.Set Type_check.opt_no_effects,
     " turn off effect checking");
+  ( "-undefined-gen",
+    Arg.Set Initial_check.opt_undefined_gen,
+    " generate undefined_type functions for types in the specification");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");

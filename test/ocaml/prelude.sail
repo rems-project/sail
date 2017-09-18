@@ -15,6 +15,10 @@ val extern forall Type 'a, Num 'n. vector<'n - 1, 'n, dec, 'a> -> [:'n:] effect 
 val extern forall Num 'n, Num 'm, Num 'o (* , 'm >= 'o, 'o >= 0, 'n >= 'm + 1 *).
   (bit['n], [:'m:], [:'o:]) -> bit['m - ('o - 1)] effect pure vector_subrange = "subrange"
 
+(* FIXME: rewriter shouldn't assume this exists *)
+val extern forall Num 'n, Num 'm, Num 'o (* , 'm >= 'o, 'o >= 0, 'n >= 'm + 1 *).
+  (bit['n], [:'m:], [:'o:]) -> bit['m - ('o - 1)] effect pure bitvector_subrange_dec = "subrange"
+
 val extern forall Num 'n, Type 'a. (vector<'n - 1, 'n, dec, 'a>, int) -> 'a effect pure vector_access = "access"
 
 val extern forall Num 'n, Type 'a. (vector<'n - 1, 'n, dec, 'a>, int, 'a) -> vector<'n - 1, 'n, dec, 'a> effect pure vector_update = "update"

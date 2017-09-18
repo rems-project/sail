@@ -10,7 +10,7 @@ val forall Num 'n, Num 'm, Num 'o, Num 'p.
   effect pure bitvector_concat
 
 overload (deinfix +) [bv_add]
-overload vector_append [bitvector_concat]
+overload append [bitvector_concat]
 
 val (bit[3], bit[3]) -> bit[3] effect pure test
 
