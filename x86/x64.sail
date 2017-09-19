@@ -1386,7 +1386,12 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
           iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_mem_write(Write_plain);
           iR := RFull("RIP") :: RFull("RSP") :: rs;
           oR := RFull("RSP") :: oR;
-          (* nias := XXX rmn30 help *)
+          aR := ars;
+          Nias := switch irm {
+          (* XXX register name is not important here -- just indicates we don't know the destination yet. *)
+            case (Rm (v))  -> NIAFP_register(RFull("RAX"))
+            case (Imm (v)) -> NIAFP_concrete_address(RIP + v)
+          } :: Nias;
       }
     case(CLC                          ) -> oR := RFull("CF") :: oR
     case(CMC                          ) -> {
@@ -1419,7 +1424,8 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
         iK := if m then IK_mem_read(Read_plain) else IK_simple;
         iR := RFull("RIP")::append(rs, ars);
         aR := ars;
-        (* XXX rmn30 help Nias := *)
+        (* XXX register name is not important here -- just indicates we don't know the destination yet. *)
+        Nias := NIAFP_register(RFull("RAX")) :: Nias;
       }
     case(LEA     (sz, ds)             ) ->
       let (_, irs, ors, ars) = regfp_dest_src (ds) in {
@@ -1498,7 +1504,8 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       iR := RFull("RSP") :: iR;
       oR := RFull("RSP") :: oR;
       aR := RFull("RSP") :: aR;
-      (* Nias := XXX rmn30 help *)
+      (* XXX register name is not important here -- just indicates we don't know the destination yet. *)
+      Nias := NIAFP_register(RFull("RAX")) :: Nias;
     }
     case(SET     (c, b, r_m)          ) -> 
       let flags = regfp_cond(c) in
