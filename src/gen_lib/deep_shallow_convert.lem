@@ -69,9 +69,9 @@ end
 
 
 let toInterpValueBitU = function
-  | I     -> Interp_ast.V_lit (L_aux (L_one) Unknown)
-  | O     -> Interp_ast.V_lit (L_aux (L_zero) Unknown)
-  | Undef -> Interp_ast.V_lit (L_aux (L_undef) Unknown)
+  | B1 -> Interp_ast.V_lit (L_aux (L_one) Unknown)
+  | B0 -> Interp_ast.V_lit (L_aux (L_zero) Unknown)
+  | BU -> Interp_ast.V_lit (L_aux (L_undef) Unknown)
 end
 let rec fromInterpValueBitU v = match v with
   | Interp_ast.V_lit (L_aux (L_one) _)   -> B1
@@ -391,10 +391,10 @@ let read_kindToInterpValue = function
   | Read_exclusive_acquire -> V_ctor (Id_aux (Id "Read_exclusive_acquire") Unknown) (T_id "read_kind") (C_Enum 5) (toInterpValue ())
   | Read_stream -> V_ctor (Id_aux (Id "Read_stream") Unknown) (T_id "read_kind") (C_Enum 6) (toInterpValue ())
   | Read_RISCV_acquire -> V_ctor (Id_aux (Id "Read_RISCV_acquire") Unknown) (T_id "read_kind") (C_Enum 7) (toInterpValue ())
-  | Read_RISCV_acquire -> V_ctor (Id_aux (Id "Read_RISCV_strong_acquire") Unknown) (T_id "read_kind") (C_Enum 8) (toInterpValue ())
-  | Read_RISCV_acquire -> V_ctor (Id_aux (Id "Read_RISCV_reserved") Unknown) (T_id "read_kind") (C_Enum 9) (toInterpValue ())
-  | Read_RISCV_acquire -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire") Unknown) (T_id "read_kind") (C_Enum 10) (toInterpValue ())
-  | Read_RISCV_acquire -> V_ctor (Id_aux (Id "Read_RISCV_reserved_strong_acquire") Unknown) (T_id "read_kind") (C_Enum 10) (toInterpValue ())
+  | Read_RISCV_strong_acquire -> V_ctor (Id_aux (Id "Read_RISCV_strong_acquire") Unknown) (T_id "read_kind") (C_Enum 8) (toInterpValue ())
+  | Read_RISCV_reserved -> V_ctor (Id_aux (Id "Read_RISCV_reserved") Unknown) (T_id "read_kind") (C_Enum 9) (toInterpValue ())
+  | Read_RISCV_reserved_acquire -> V_ctor (Id_aux (Id "Read_RISCV_reserved_acquire") Unknown) (T_id "read_kind") (C_Enum 10) (toInterpValue ())
+  | Read_RISCV_reserved_strong_acquire -> V_ctor (Id_aux (Id "Read_RISCV_reserved_strong_acquire") Unknown) (T_id "read_kind") (C_Enum 10) (toInterpValue ())
   end
 let rec read_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Read_plain") _) _ _ v -> Read_plain
