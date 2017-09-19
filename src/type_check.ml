@@ -2375,6 +2375,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
      end
   | LEXP_tup lexps ->
      begin
+       let typ = Env.expand_synonyms env typ in
        let (Typ_aux (typ_aux, _)) = typ in
        match typ_aux with
        | Typ_tup typs ->
@@ -2386,7 +2387,23 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
             | Invalid_argument _ -> typ_error l "Tuple l-expression and tuple type have different length"
           in
           annot_lexp (LEXP_tup tlexps) typ, env
-       | _ -> typ_error l "Cannot bind tuple l-expression against non tuple type"
+       (* This case is pretty much just for the PSTATE.<N,Z,C,V> := vector pattern which is really common in ASL. *)
+       | Typ_app (id, _) when Id.compare id (mk_id "vector") == 0 ->
+          begin
+            match destruct_vector env typ with
+            | Some (_, vec_len, _, _) ->
+               let bind_bit_tuple lexp (tlexps, env) =
+                 let tlexp, env = bind_lexp env lexp (lvector_typ env (nconstant 1) bit_typ) in
+                 tlexp :: tlexps, env
+               in
+               if prove env (nc_eq vec_len (nconstant (List.length lexps)))
+               then
+                 let (tlexps, env) = List.fold_right bind_bit_tuple lexps ([], env) in
+                 annot_lexp (LEXP_tup tlexps) typ, env
+               else typ_error l "Vector and tuple length must be the same in assignment"
+            | None -> typ_error l ("Cannot bind tuple l-expression against non tuple or vector type " ^ string_of_typ typ)
+          end
+       | _ -> typ_error l ("Cannot bind tuple l-expression against non tuple or vector type " ^ string_of_typ typ)
      end
   | LEXP_vector_range (LEXP_aux (LEXP_id v, _), exp1, exp2) ->
      begin
