@@ -390,22 +390,22 @@ let refine_constructor refinements id substs (E_aux (_,(l,_)) as arg) t =
 (* Substitute found nexps for variables in an expression, and rename constructors to reflect
    specialisation *)
 
+(* TODO: kid shadowing *)
 let nexp_subst_fns substs refinements =
-(*
-  let s_t t = typ_subst substs true t in
+
+  let s_t t = subst_src_typ substs t in
 (*  let s_typschm (TypSchm_aux (TypSchm_ts (q,t),l)) = TypSchm_aux (TypSchm_ts (q,s_t t),l) in
-   hopefully don't need this anyway *)
-  let s_typschm tsh = tsh in
+   hopefully don't need this anyway *)(*
+  let s_typschm tsh = tsh in*)
   let s_tannot = function
-    | Base ((params,t),tag,ranges,effl,effc,bounds) ->
-       (* TODO: do other fields need mapped? *)
-       Base ((params,s_t t),tag,ranges,effl,effc,bounds)
-    | tannot -> tannot
+    | None -> None
+    | Some (env,t,eff) -> Some (env,s_t t,eff) (* TODO: what about env? *)
   in
-  let rec s_pat (P_aux (p,(l,annot))) =
-    let re p = P_aux (p,(l,s_tannot annot)) in
+(*  let rec s_pat (P_aux (p,(l,annot))) =
+    let re p = P_aux (p,(l,(*s_tannot*) annot)) in
     match p with
     | P_lit _ | P_wild | P_id _ -> re p
+    | P_var kid -> re p
     | P_as (p',id) -> re (P_as (s_pat p', id))
     | P_typ (ty,p') -> re (P_typ (ty,s_pat p'))
     | P_app (id,ps) -> re (P_app (id, List.map s_pat ps))
@@ -415,11 +415,12 @@ let nexp_subst_fns substs refinements =
     | P_vector_concat ps -> re (P_vector_concat (List.map s_pat ps))
     | P_tup ps -> re (P_tup (List.map s_pat ps))
     | P_list ps -> re (P_list (List.map s_pat ps))
+    | P_cons (p1,p2) -> re (P_cons (s_pat p1, s_pat p2))
   and s_fpat (FP_aux (FP_Fpat (id, p), (l,annot))) =
     FP_aux (FP_Fpat (id, s_pat p), (l,s_tannot annot))
   in*)
   let rec s_exp (E_aux (e,(l,annot))) =
-    let re e = E_aux (e,(l,(*s_tannot*) annot)) in
+    let re e = E_aux (e,(l,s_tannot annot)) in
       match e with
       | E_block es -> re (E_block (List.map s_exp es))
       | E_nondet es -> re (E_nondet (List.map s_exp es))
@@ -428,10 +429,10 @@ let nexp_subst_fns substs refinements =
       | E_comment _ -> re e
       | E_sizeof ne -> re (E_sizeof ne) (* TODO: does this need done?  does it appear in type checked code? *)
       | E_constraint _ -> re e (* TODO: actual substitution if necessary *)
-      | E_internal_exp (l,annot) -> re (E_internal_exp (l, (*s_tannot*) annot))
-      | E_sizeof_internal (l,annot) -> re (E_sizeof_internal (l, (*s_tannot*) annot))
+      | E_internal_exp (l,annot) -> re (E_internal_exp (l, s_tannot annot))
+      | E_sizeof_internal (l,annot) -> re (E_sizeof_internal (l, s_tannot annot))
       | E_internal_exp_user ((l1,annot1),(l2,annot2)) ->
-         re (E_internal_exp_user ((l1, (*s_tannot*) annot1),(l2, (*s_tannot*) annot2)))
+         re (E_internal_exp_user ((l1, s_tannot annot1),(l2, s_tannot annot2)))
       | E_cast (t,e') -> re (E_cast (t, s_exp e'))
       | E_app (id,es) ->
          let es' = List.map s_exp es in
@@ -475,35 +476,36 @@ let nexp_subst_fns substs refinements =
       | E_exit e -> re (E_exit (s_exp e))
       | E_return e -> re (E_return (s_exp e))
       | E_assert (e1,e2) -> re (E_assert (s_exp e1,s_exp e2))
-      | E_internal_cast ((l,ann),e) -> re (E_internal_cast ((l,(*s_tannot*) ann),s_exp e))
+      | E_internal_cast ((l,ann),e) -> re (E_internal_cast ((l,s_tannot ann),s_exp e))
       | E_comment_struc e -> re (E_comment_struc e)
       | E_internal_let (le,e1,e2) -> re (E_internal_let (s_lexp le, s_exp e1, s_exp e2))
       | E_internal_plet (p,e1,e2) -> re (E_internal_plet ((*s_pat*) p, s_exp e1, s_exp e2))
       | E_internal_return e -> re (E_internal_return (s_exp e))
+      | E_throw e -> re (E_throw (s_exp e))
+      | E_try (e,cases) -> re (E_try (s_exp e, List.map s_pexp cases))
     and s_opt_default (Def_val_aux (ed,(l,annot))) =
       match ed with
-      | Def_val_empty -> Def_val_aux (Def_val_empty,(l,(*s_tannot*) annot))
-      | Def_val_dec e -> Def_val_aux (Def_val_dec (s_exp e),(l,(*s_tannot*) annot))
+      | Def_val_empty -> Def_val_aux (Def_val_empty,(l,s_tannot annot))
+      | Def_val_dec e -> Def_val_aux (Def_val_dec (s_exp e),(l,s_tannot annot))
     and s_fexps (FES_aux (FES_Fexps (fes,flag), (l,annot))) =
-      FES_aux (FES_Fexps (List.map s_fexp fes, flag), (l,(*s_tannot*) annot))
+      FES_aux (FES_Fexps (List.map s_fexp fes, flag), (l,s_tannot annot))
     and s_fexp (FE_aux (FE_Fexp (id,e), (l,annot))) =
-      FE_aux (FE_Fexp (id,s_exp e),(l,(*s_tannot*) annot))
+      FE_aux (FE_Fexp (id,s_exp e),(l,s_tannot annot))
     and s_pexp = function
       | (Pat_aux (Pat_exp (p,e),(l,annot))) ->
-         Pat_aux (Pat_exp ((*s_pat*) p, s_exp e),(l,(*s_tannot*) annot))
+         Pat_aux (Pat_exp ((*s_pat*) p, s_exp e),(l,s_tannot annot))
       | (Pat_aux (Pat_when (p,e1,e2),(l,annot))) ->
-         Pat_aux (Pat_when ((*s_pat*) p, s_exp e1, s_exp e2),(l,(*s_tannot*) annot))
+         Pat_aux (Pat_when ((*s_pat*) p, s_exp e1, s_exp e2),(l,s_tannot annot))
     and s_letbind (LB_aux (lb,(l,annot))) =
       match lb with
       | LB_val_explicit (tysch,p,e) ->
-         LB_aux (LB_val_explicit ((*s_typschm*) tysch,(*s_pat*) p,s_exp e), (l,(*s_tannot*) annot))
-      | LB_val_implicit (p,e) -> LB_aux (LB_val_implicit ((*s_pat*) p,s_exp e), (l,(*s_tannot*) annot))
+         LB_aux (LB_val_explicit ((*s_typschm*) tysch,(*s_pat*) p,s_exp e), (l,s_tannot annot))
+      | LB_val_implicit (p,e) -> LB_aux (LB_val_implicit ((*s_pat*) p,s_exp e), (l,s_tannot annot))
     and s_lexp (LEXP_aux (e,(l,annot))) =
-      let re e = LEXP_aux (e,(l,(*s_tannot*) annot)) in
+      let re e = LEXP_aux (e,(l,s_tannot annot)) in
       match e with
-      | LEXP_id _
-      | LEXP_cast _
-        -> re e
+      | LEXP_id _ -> re e
+      | LEXP_cast (typ,id) -> re (LEXP_cast (s_t typ, id))
       | LEXP_memory (id,es) -> re (LEXP_memory (id,List.map s_exp es))
       | LEXP_tup les -> re (LEXP_tup (List.map s_lexp les))
       | LEXP_vector (le,e) -> re (LEXP_vector (s_lexp le, s_exp e))
@@ -645,17 +647,17 @@ let can_match (E_aux (e,(l,annot)) as exp0) cases =
   let rec findpat_generic check_pat description = function
     | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
                ("Failed to find a case for " ^ description); None)
-    | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[])
+    | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[],[])
     | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
        findpat_generic check_pat description ((Pat_aux (Pat_exp (p,exp),ann))::tl)
     | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tl
         when pat_id_is_variable env id' ->
-       Some (exp, [(id', exp0)])
+       Some (exp, [(id', exp0)], [])
     | (Pat_aux (Pat_when _,_))::_ -> None
     | (Pat_aux (Pat_exp (p,exp),_))::tl ->
        match check_pat p with
        | DoesNotMatch -> findpat_generic check_pat description tl
-       | DoesMatch subst -> Some (exp,subst)
+       | DoesMatch (subst,ksubst) -> Some (exp,subst,ksubst)
        | GiveUp -> None
   in
   match e with
@@ -665,20 +667,30 @@ let can_match (E_aux (e,(l,annot)) as exp0) cases =
         let checkpat = function
           | P_aux (P_id id',_)
           | P_aux (P_app (id',[]),_) ->
-             if Id.compare id id' = 0 then DoesMatch [] else DoesNotMatch
+             if Id.compare id id' = 0 then DoesMatch ([],[]) else DoesNotMatch
           | P_aux (_,(l',_)) ->
              (Reporting_basic.print_err false true l' "Monomorphisation"
                 "Unexpected kind of pattern for enumeration"; GiveUp)
         in findpat_generic checkpat (string_of_id id) cases
      | _ -> None)
-  | E_lit (L_aux (lit_e, _)) ->
+  | E_lit (L_aux (lit_e, lit_l)) ->
      let checkpat = function
        | P_aux (P_lit (L_aux (lit_p, _)),_) ->
-          if lit_match (lit_e,lit_p) then DoesMatch [] else DoesNotMatch
+          if lit_match (lit_e,lit_p) then DoesMatch ([],[]) else DoesNotMatch
+       | P_aux (P_var kid,_) ->
+          begin
+            match lit_e with
+            | L_num i ->
+               DoesMatch ([id_of_kid kid, E_aux (e,(l,annot))],
+                          [kid,Nexp_aux (Nexp_constant i,Unknown)])
+            | _ ->
+               (Reporting_basic.print_err false true lit_l "Monomorphisation"
+                  "Unexpected kind of literal for var match"; GiveUp)
+          end
        | P_aux (_,(l',_)) ->
           (Reporting_basic.print_err false true l' "Monomorphisation"
-             "Unexpected kind of pattern for bit"; GiveUp)
-     in findpat_generic checkpat "bit" cases
+             "Unexpected kind of pattern for literal"; GiveUp)
+     in findpat_generic checkpat "literal" cases
   | _ -> None
 
 (* Remove top-level casts from an expression.  Useful when we need to look at
@@ -834,13 +846,34 @@ let split_defs splits defs =
        let e' = const_prop_exp substs e in
        (match can_match e' cases with
        | None -> re (E_case (e', List.map (const_prop_pexp substs) cases))
-       | Some (E_aux (_,(_,annot')) as exp,newbindings) ->
+       | Some (E_aux (_,(_,annot')) as exp,newbindings,kbindings) ->
+          let exp = nexp_subst_exp (ksubst_from_list kbindings) [] (*???*) exp in
           let newbindings_env = isubst_from_list newbindings in
           let substs' = isubst_union substs newbindings_env in
           const_prop_exp substs' exp)
-    | E_let (lb,e) ->
-       let (lb',substs') = const_prop_letbind substs lb in
-       re (E_let (lb', const_prop_exp substs' e))
+    | E_let (lb,e2) ->
+       begin
+         match lb with
+         | LB_aux (LB_val_explicit (tysch,p,e),annot) ->
+            let substs' = remove_bound substs p in
+            re (E_let (LB_aux (LB_val_explicit (tysch,p,const_prop_exp substs e), annot),
+                       const_prop_exp substs' e2))
+         | LB_aux (LB_val_implicit (p,e), annot) ->
+            let e' = const_prop_exp substs e in
+            let substs' = remove_bound substs p in
+            let plain () =
+              re (E_let (LB_aux (LB_val_implicit (p,e'), annot),
+                         const_prop_exp substs' e2)) in
+            if is_value e' && not (is_value e) then
+              match can_match e' [Pat_aux (Pat_exp (p,e2),(Unknown,None))] with
+              | None -> plain ()
+              | Some (e'',bindings,kbindings) ->
+                 let e'' = nexp_subst_exp (ksubst_from_list kbindings) [] (*???*) e'' in
+                 let bindings = isubst_from_list bindings in
+                 let substs'' = isubst_union substs' bindings in
+                 const_prop_exp substs'' e''
+            else plain ()
+       end
     | E_assign (le,e) -> re (E_assign (const_prop_lexp substs le, const_prop_exp substs e))
     | E_exit e -> re (E_exit (const_prop_exp substs e))
     | E_throw e -> re (E_throw (const_prop_exp substs e))
@@ -870,14 +903,6 @@ let split_defs splits defs =
     | (Pat_aux (Pat_when (p,e1,e2),l)) ->
        let substs' = remove_bound substs p in
        Pat_aux (Pat_when (p, const_prop_exp substs' e1, const_prop_exp substs' e2),l)
-  and const_prop_letbind substs (LB_aux (lb,annot)) =
-    match lb with
-    | LB_val_explicit (tysch,p,e) ->
-       (LB_aux (LB_val_explicit (tysch,p,const_prop_exp substs e), annot),
-        remove_bound substs p)
-    | LB_val_implicit (p,e) ->
-       (LB_aux (LB_val_implicit (p,const_prop_exp substs e), annot),
-        remove_bound substs p)
   and const_prop_lexp substs ((LEXP_aux (e,annot)) as le) =
     let re e = LEXP_aux (e,annot) in
     match e with
@@ -916,7 +941,7 @@ let split_defs splits defs =
            | FCL_aux (FCL_Funcl (_,pat,exp), ann) -> Pat_aux (Pat_exp (pat,exp),ann))
            fcls in
          match can_match arg cases with
-         | Some (exp,bindings) ->
+         | Some (exp,bindings,kbindings) ->
             let substs = isubst_from_list bindings in
             let result = const_prop_exp substs exp in
             if is_value result then Some result else None
