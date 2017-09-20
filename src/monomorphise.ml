@@ -774,48 +774,6 @@ let split_defs splits defs =
 
   let (refinements, defs') = split_constructors defs in
 
-  (* Extract nvar substitution by comparing two types *)
-  let build_nexp_subst l t1 t2 = [] (*
-    let rec from_types t1 t2 =
-      let t1 = match t1.t with Tabbrev(_,t) -> t | _ -> t1 in
-      let t2 = match t2.t with Tabbrev(_,t) -> t | _ -> t2 in
-      if t1 = t2 then [] else
-        match t1.t,t2.t with
-        | Tapp (s1,args1), Tapp (s2,args2) ->
-           if s1 = s2 then
-             List.concat (List.map2 from_args args1 args2)
-           else (Reporting_basic.print_err false true l "Monomorphisation"
-                   "Unexpected type mismatch"; [])
-        | Ttup ts1, Ttup ts2 ->
-           if List.length ts1 = List.length ts2 then
-             List.concat (List.map2 from_types ts1 ts2)
-           else (Reporting_basic.print_err false true l "Monomorphisation"
-                   "Unexpected type mismatch"; [])
-        | _ -> []
-    and from_args arg1 arg2 =
-    match arg1,arg2 with
-    | TA_typ t1, TA_typ t2 -> from_types t1 t2
-    | TA_nexp n1, TA_nexp n2 -> from_nexps n1 n2
-    | _ -> []
-    and from_nexps n1 n2 =
-      match n1.nexp, n2.nexp with
-      | Nvar s, Nvar s' when s = s' -> []
-      | Nvar s, _ -> [(s,n2)]
-      | Nadd (n3,n4), Nadd (n5,n6)
-      | Nsub (n3,n4), Nsub (n5,n6)
-      | Nmult (n3,n4), Nmult (n5,n6)
-        -> from_nexps n3 n5 @ from_nexps n4 n6
-      | N2n (n3,p1), N2n (n4,p2) when p1 = p2 -> from_nexps n3 n4
-      | Npow (n3,p1), Npow (n4,p2) when p1 = p2 -> from_nexps n3 n4
-      | Nneg n3, Nneg n4 -> from_nexps n3 n4
-      | _ -> []
-    in match t1,t2 with
-    | Base ((_,t1),_,_,_,_,_),Base ((_,t2),_,_,_,_,_) -> from_types t1 t2
-    | _ -> []*)
-  in
-
-  let nexp_substs = ref [] in
-
   (* Constant propogation *)
   let rec const_prop_exp substs ((E_aux (e,(l,annot))) as exp) =
     let re e = E_aux (e,(l,annot)) in
@@ -856,10 +814,7 @@ let split_defs splits defs =
        let e2',e3' = const_prop_exp substs e2, const_prop_exp substs e3 in
        (match drop_casts e1' with
        | E_aux (E_lit (L_aux ((L_true|L_false) as lit ,_)),_) ->
-          let e' = match lit with L_true -> e2' | _ -> e3' in
-          (match e' with E_aux (_,(_,annot')) ->
-            nexp_substs := build_nexp_subst l annot annot' @ !nexp_substs;
-            e')
+          (match lit with L_true -> e2' | _ -> e3')
        | _ -> re (E_if (e1',e2',e3')))
     | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3,ord,const_prop_exp (ISubst.remove id substs) e4))
     | E_vector es -> re (E_vector (List.map (const_prop_exp substs) es))
@@ -882,7 +837,6 @@ let split_defs splits defs =
        | Some (E_aux (_,(_,annot')) as exp,newbindings) ->
           let newbindings_env = isubst_from_list newbindings in
           let substs' = isubst_union substs newbindings_env in
-          nexp_substs := build_nexp_subst l annot annot' @ !nexp_substs;
           const_prop_exp substs' exp)
     | E_let (lb,e) ->
        let (lb',substs') = const_prop_letbind substs lb in
@@ -971,12 +925,7 @@ let split_defs splits defs =
 
   let subst_exp substs exp =
     let substs = isubst_from_list substs in
-    let () = nexp_substs := [] in
-    let exp' = const_prop_exp substs exp in
-    (* Substitute what we've learned about nvars into the term *)
-    let nsubsts = isubst_from_list !nexp_substs in
-    let () = nexp_substs := [] in
-    (*nexp_subst_exp nsubsts refinements*) exp'
+    const_prop_exp substs exp
   in
     
   (* Split a variable pattern into every possible value *)
