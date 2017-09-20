@@ -32,7 +32,6 @@ typedef diafp = const union {
 
 typedef read_kind = enumerate {
   Read_plain;
-  Read_tag;
   Read_reserve;
   Read_acquire;
   Read_exclusive;
@@ -43,11 +42,11 @@ typedef read_kind = enumerate {
   Read_RISCV_reserved;
   Read_RISCV_reserved_acquire;
   Read_RISCV_reserved_strong_acquire;
+  Read_X86_locked;
 }
 
 typedef write_kind = enumerate {
   Write_plain;
-  Write_tag;
   Write_conditional;
   Write_release;
   Write_exclusive;
@@ -57,6 +56,7 @@ typedef write_kind = enumerate {
   Write_RISCV_conditional;
   Write_RISCV_conditional_release;
   Write_RISCV_conditional_strong_release;
+  Write_X86_locked;
 }
 
 typedef barrier_kind = enumerate {

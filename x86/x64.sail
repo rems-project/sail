@@ -103,15 +103,17 @@ register bit[1] OF
    -------------------------------------------------------------------------- *)
 
 val extern forall Nat 'n. (qword, [|'n|]) -> (bit[8 * 'n]) effect { rmem } rMEM
-
-
+val extern forall Nat 'n. (qword, [|'n|]) -> (bit[8 * 'n]) effect { rmem } rMEM_locked
+function forall Nat 'n. (bit[8 * 'n]) effect { rmem } rMEMl ((bool) locked, (qword) addr, ([|'n|]) size) =
+  if locked then rMEM_locked(addr, size) else rMEM(addr, size)
 
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea
+val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_locked
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval
 val extern unit -> unit effect { barr } X86_MFENCE
 
-function forall Nat 'n. unit effect {eamem, wmv} wMEM ((qword) addr, ([|'n|]) len, (bit[8 * 'n]) data) = {
-         MEMea(addr, len);
+function forall Nat 'n. unit effect {eamem, wmv} wMEM ((bool) locked, (qword) addr, ([|'n|]) len, (bit[8 * 'n]) data) = {
+         if locked then MEMea_locked(addr, len) else MEMea(addr, len);
          MEMval(addr, len, data);
 }
 
@@ -265,7 +267,7 @@ function qword restrict_size ((wsize) sz, (qword) imm) =
 
 function regn sub4 ((regn) r) = negative_to_zero (r - 4)
 
-function qword effect { rreg, rmem } EA ((ea) e) =
+function qword effect { rreg, rmem } EA ((bool) locked, (ea) e) =
   switch e {
     case (Ea_i(sz,i)) -> restrict_size(sz,i)
     case (Ea_r((Sz8(have_rex)),r)) ->
@@ -274,13 +276,13 @@ function qword effect { rreg, rmem } EA ((ea) e) =
       else
         (REG[sub4 (r)] >> 8) & 0x00000000000000FF
     case (Ea_r(sz,r)) -> restrict_size(sz, REG[r])
-    case (Ea_m((Sz8(_)),a)) -> EXTZ (rMEM(a, 1))
-    case (Ea_m(Sz16,a)) -> EXTZ (rMEM(a, 2))
-    case (Ea_m(Sz32,a)) -> EXTZ (rMEM(a, 4))
-    case (Ea_m(Sz64,a)) -> rMEM(a, 8)
+    case (Ea_m((Sz8(_)),a)) -> EXTZ (rMEMl(locked, a, 1))
+    case (Ea_m(Sz16,a)) -> EXTZ (rMEMl(locked, a, 2))
+    case (Ea_m(Sz32,a)) -> EXTZ (rMEMl(locked, a, 4))
+    case (Ea_m(Sz64,a)) -> rMEMl(locked, a, 8)
   }
 
-function unit effect { wmem, wreg, escape } wEA ((ea) e, (qword) w) =
+function unit effect { wmem, wreg, escape } wEA ((bool) locked, (ea) e, (qword) w) =
   switch e {
     case (Ea_i(_,_)) -> exit ()
     case (Ea_r((Sz8(have_rex)),r)) ->
@@ -304,15 +306,15 @@ function unit effect { wmem, wreg, escape } wEA ((ea) e, (qword) w) =
       }
     case (Ea_r(Sz32,r)) -> REG[r] := (qword) (EXTZ (w[31 .. 0]))
     case (Ea_r(Sz64,r)) -> REG[r] := w
-    case (Ea_m((Sz8(_)),a)) -> wMEM(a, 1, w[7 .. 0])
-    case (Ea_m(Sz16,a)) -> wMEM(a, 2, w[15 .. 0])
-    case (Ea_m(Sz32,a)) -> wMEM(a, 4, w[31 .. 0])
-    case (Ea_m(Sz64,a)) -> wMEM(a, 8, w)
+    case (Ea_m((Sz8(_)),a)) -> wMEM(locked, a, 1, w[7 .. 0])
+    case (Ea_m(Sz16,a)) -> wMEM(locked, a, 2, w[15 .. 0])
+    case (Ea_m(Sz32,a)) -> wMEM(locked, a, 4, w[31 .. 0])
+    case (Ea_m(Sz64,a)) -> wMEM(locked, a, 8, w)
   }
 
-function (ea, qword, qword) read_dest_src_ea ((wsize) sz, (dest_src) ds) =
+function (ea, qword, qword) read_dest_src_ea ((bool) locked, (wsize) sz, (dest_src) ds) =
   let e = ea_dest (sz, ds) in
-  (e, EA(e), EA(ea_src(sz, ds)))
+  (e, EA(locked, e), EA(locked, ea_src(sz, ds)))
 
 function qword call_dest_from_ea ((ea) e) =
   switch e {
@@ -419,28 +421,28 @@ function (qword, bit, bit) add_with_carry_out ((wsize) sz, (qword) a, (qword) b)
 function (qword, bit, bit) sub_with_borrow ((wsize) sz, (qword) a, (qword) b) =
   (a - b, (bit) (a < b), word_signed_overflow_sub (sz, a, b))
 
-function unit write_arith_result ((wsize) sz, (qword) w, (bit) c, (bit) x, (ea) e) =
+function unit write_arith_result ((bool) locked, (wsize) sz, (qword) w, (bit) c, (bit) x, (ea) e) =
 {
   write_arith_eflags (sz, w, c, x);
-  wEA (e) := w;
+  wEA (locked, e) := w;
 }
 
-function unit write_arith_result_no_CF_OF ((wsize) sz, (qword) w, (ea) e) =
+function unit write_arith_result_no_CF_OF ((bool) locked, (wsize) sz, (qword) w, (ea) e) =
 {
   write_arith_eflags_except_CF_OF (sz, w);
-  wEA (e) := w;
+  wEA (locked, e) := w;
 }
 
-function unit write_logical_result ((wsize) sz, (qword) w, (ea) e) =
+function unit write_logical_result ((bool) locked, (wsize) sz, (qword) w, (ea) e) =
 {
   write_arith_eflags_except_CF_OF (sz, w);
-  wEA (e) := w;
+  wEA (locked, e) := w;
 }
 
-function unit write_result_erase_eflags ((qword) w, (ea) e) =
+function unit write_result_erase_eflags ((bool) locked, (qword) w, (ea) e) =
 {
   erase_eflags ();
-  wEA (e) := w;
+  wEA (locked, e) := w;
 }
 
 function qword effect { escape } sign_extension ((qword) w, (wsize) size1, (wsize) size2) =
@@ -485,23 +487,23 @@ function qword sar ((wsize) sz, (qword) a, (qword) b) =
     case Sz64 -> ASR64 (a, b[5 .. 0])
   }
 
-function unit write_binop ((wsize) sz, (binop_name) bop, (qword) a, (qword) b, (ea) e) =
+function unit write_binop ((bool) locked, (wsize) sz, (binop_name) bop, (qword) a, (qword) b, (ea) e) =
   switch bop {
     case Add -> let (w,c,x) = add_with_carry_out (sz, a, b) in
-                write_arith_result (sz, w, c, x, e)
+                write_arith_result (locked, sz, w, c, x, e)
     case Sub -> let (w,c,x) = sub_with_borrow (sz, a, b) in
-                write_arith_result (sz, w, c, x, e)
+                write_arith_result (locked, sz, w, c, x, e)
     case Cmp -> let (w,c,x) = sub_with_borrow (sz, a, b) in
                 write_arith_eflags (sz, w, c, x)
     case Test -> write_logical_eflags (sz, a & b)
-    case And -> write_logical_result (sz, a & b, e) (* XXX rmn30 wrong flags? *)
-    case Xor -> write_logical_result (sz, a ^ b, e)
-    case Or  -> write_logical_result (sz, a | b, e)
-    case Rol -> write_result_erase_eflags (rol (sz, a, b), e)
-    case Ror -> write_result_erase_eflags (ror (sz, a, b), e)
-    case Sar -> write_result_erase_eflags (sar (sz, a, b), e)
-    case Shl -> write_result_erase_eflags (a << mask_shift (sz, b), e)
-    case Shr -> write_result_erase_eflags (a >> mask_shift (sz, b), e)
+    case And -> write_logical_result (locked, sz, a & b, e) (* XXX rmn30 wrong flags? *)
+    case Xor -> write_logical_result (locked, sz, a ^ b, e)
+    case Or  -> write_logical_result (locked, sz, a | b, e)
+    case Rol -> write_result_erase_eflags (locked, rol (sz, a, b), e)
+    case Ror -> write_result_erase_eflags (locked, ror (sz, a, b), e)
+    case Sar -> write_result_erase_eflags (locked, sar (sz, a, b), e)
+    case Shl -> write_result_erase_eflags (locked, a << mask_shift (sz, b), e)
+    case Shr -> write_result_erase_eflags (locked, a >> mask_shift (sz, b), e)
     case Adc ->
       {
         let carry = (bit) CF in
@@ -509,7 +511,7 @@ function unit write_binop ((wsize) sz, (binop_name) bop, (qword) a, (qword) b, (
         {
           CF := (bit) ((int) (value_width (sz)) <= unsigned(a) + unsigned(b));
           OF := undefined;
-          write_arith_result_no_CF_OF (sz, result, e);
+          write_arith_result_no_CF_OF (locked, sz, result, e);
         }
       }
     case Sbb ->
@@ -519,18 +521,18 @@ function unit write_binop ((wsize) sz, (binop_name) bop, (qword) a, (qword) b, (
         {
           CF := (bit) (unsigned(a) < unsigned(b) + (int) carry);
           OF := undefined;
-          write_arith_result_no_CF_OF (sz, result, e);
+          write_arith_result_no_CF_OF (locked, sz, result, e);
         }
       }
     case _ -> exit ()
   }
 
-function unit write_monop ((wsize) sz, (monop_name) mop, (qword) a, (ea) e) =
+function unit write_monop ((bool) locked, (wsize) sz, (monop_name) mop, (qword) a, (ea) e) =
   switch mop {
-    case Not -> wEA(e) := ~(a)
-    case Dec -> write_arith_result_no_CF_OF (sz, a - 1, e) 
-    case Inc -> write_arith_result_no_CF_OF (sz, a + 1, e)(* XXX rmn30 should set OF *)
-    case Neg -> { write_arith_result_no_CF_OF (sz, 0 - a, e);
+    case Not -> wEA(locked, e) := ~(a)
+    case Dec -> write_arith_result_no_CF_OF (locked, sz, a - 1, e) 
+    case Inc -> write_arith_result_no_CF_OF (locked, sz, a + 1, e)(* XXX rmn30 should set OF *)
+    case Neg -> { write_arith_result_no_CF_OF (locked, sz, 0 - a, e);
                   CF := undefined;
                 }
   }
@@ -566,12 +568,12 @@ function qword pop_aux () =
 function unit push_aux ((qword) w) =
 {
   RSP := RSP - 8;
-  wMEM(RSP, 8) := w;
+  wMEM(false, RSP, 8) := w;
 }
 
-function unit pop ((rm) r) = wEA (ea_rm (Sz64,r)) := pop_aux()
+function unit pop ((rm) r) = wEA (false, ea_rm (Sz64,r)) := pop_aux()
 function unit pop_rip () = RIP := pop_aux()
-function unit push ((imm_rm) i) = push_aux (EA (ea_imm_rm (i)))
+function unit push ((imm_rm) i) = push_aux (EA (false, ea_imm_rm (i)))
 function unit push_rip () = push_aux (RIP)
 
 function unit drop ((qword) i) = if i[7 ..0] != 0 then () else RSP := RSP + i
@@ -589,11 +591,11 @@ val ast -> unit effect {escape, rmem, rreg, undef, eamem, wmv, wreg, barr} execu
       Binop
    ========================================================================== *)
 
-union ast member (binop_name,wsize,dest_src) Binop
+union ast member (bool,binop_name,wsize,dest_src) Binop
 
-function clause execute (Binop (bop,sz,ds)) =
-  let (e, val_dst, val_src) = read_dest_src_ea (sz, ds) in
-  write_binop (sz, bop, val_dst, val_src, e)
+function clause execute (Binop (locked,bop,sz,ds)) =
+  let (e, val_dst, val_src) = read_dest_src_ea (locked, sz, ds) in
+  write_binop (locked, sz, bop, val_dst, val_src, e)
 
 (* ==========================================================================
       CALL
@@ -627,20 +629,20 @@ function clause execute CMC = CF := ~(CF)
       CMPXCHG
    ========================================================================== *)
 
-union ast member (wsize,rm,regn) CMPXCHG
+union ast member (bool, wsize,rm,regn) CMPXCHG
 
-function clause execute (CMPXCHG (sz,r,n)) =
+function clause execute (CMPXCHG (locked, sz,r,n)) =
   let src = Ea_r(sz, n) in
   let acc = Ea_r(sz, 0) in (* RAX *)
   let dst = ea_rm(sz, r) in
-  let val_dst = EA(dst) in
-  let val_acc = EA(src) in
+  let val_dst = EA(locked, dst) in
+  let val_acc = EA(false, acc) in
   {
-    write_binop (sz, Cmp, val_acc, val_dst, src); 
+    write_binop (locked, sz, Cmp, val_acc, val_dst, src); 
     if val_acc == val_dst then
-      wEA(dst) := EA (src)
+      wEA(locked, dst) := EA (false, src)
     else
-      wEA(acc) := val_dst;
+      wEA(false, acc) := val_dst;
   }
 
 (* ==========================================================================
@@ -653,15 +655,15 @@ function clause execute (DIV (sz,r)) =
   let w = (int) (value_width(sz)) in
   let eax = Ea_r(sz, 0) in (* RAX *)
   let edx = Ea_r(sz, 2) in (* RDX *)
-  let n = unsigned(EA(edx)) * w + unsigned(EA(eax)) in
-  let d = unsigned(EA(ea_rm(sz, r))) in
+  let n = unsigned(EA(false, edx)) * w + unsigned(EA(false, eax)) in
+  let d = unsigned(EA(false, ea_rm(sz, r))) in
   let q = n quot d in
   let m = n mod d in
   if d == 0 | w < q then exit ()
   else
   {
-    wEA(eax) := (qword) q;
-    wEA(edx) := (qword) m;
+    wEA(false, eax) := (qword) q;
+    wEA(false, edx) := (qword) m;
     erase_eflags();
   }
 
@@ -689,7 +691,7 @@ function clause execute (Jcc (c,i)) =
 
 union ast member rm JMP
 
-function clause execute (JMP (r)) = RIP := EA (ea_rm (Sz64, r))
+function clause execute (JMP (r)) = RIP := EA (false, ea_rm (Sz64, r))
 
 (* ==========================================================================
       LEA
@@ -700,7 +702,7 @@ union ast member (wsize,dest_src) LEA
 function clause execute (LEA (sz,ds)) =
   let src = ea_src (sz, ds) in
   let dst = ea_dest (sz, ds) in
-  wEA(dst) := get_ea_address (src)
+  wEA(false, dst) := get_ea_address (src)
 
 (* ==========================================================================
       LEAVE
@@ -739,10 +741,10 @@ function clause execute (MFENCE) =
       Monop
    ========================================================================== *)
 
-union ast member (monop_name,wsize,rm) Monop
+union ast member (bool,monop_name,wsize,rm) Monop
 
-function clause execute (Monop (mop,sz,r)) =
-  let e = ea_rm (sz, r) in write_monop (sz, mop, EA(e), e)
+function clause execute (Monop (locked,mop,sz,r)) =
+  let e = ea_rm (sz, r) in write_monop (locked, sz, mop, EA(locked, e), e)
 
 (* ==========================================================================
       MOV
@@ -754,7 +756,7 @@ function clause execute (MOV (c,sz,ds)) =
   if read_cond (c) then
     let src = ea_src (sz, ds) in
     let dst = ea_dest (sz, ds) in
-    wEA(dst) := EA(src)
+    wEA(false, dst) := EA(false, src)
   else ()
 
 (* ==========================================================================
@@ -766,7 +768,7 @@ union ast member (wsize,dest_src,wsize) MOVSX
 function clause execute (MOVSX (sz1,ds,sz2)) =
   let src = ea_src (sz1, ds) in
   let dst = ea_dest (sz2, ds) in
-  wEA(dst) := sign_extension (EA(src), sz1, sz2)
+  wEA(false, dst) := sign_extension (EA(false, src), sz1, sz2)
 
 (* ==========================================================================
       MOVZX
@@ -777,7 +779,7 @@ union ast member (wsize,dest_src,wsize) MOVZX
 function clause execute (MOVZX (sz1,ds,sz2)) =
   let src = ea_src (sz1, ds) in
   let dst = ea_dest (sz2, ds) in
-  wEA(dst) := EA(src)
+  wEA(false, dst) := EA(false, src)
 
 (* ==========================================================================
       MUL
@@ -787,16 +789,16 @@ union ast member (wsize,rm) MUL
 
 function clause execute (MUL (sz,r)) =
   let eax = Ea_r (sz, 0) in (* RAX *)
-  let val_eax = EA(eax) in
-  let val_src = EA(ea_rm (sz, r)) in
+  let val_eax = EA(false, eax) in
+  let val_src = EA(false, ea_rm (sz, r)) in
   switch sz {
-    case (Sz8(_)) -> wEA(Ea_r(Sz16,0)) := (val_eax * val_src)[63 .. 0]
+    case (Sz8(_)) -> wEA(false, Ea_r(Sz16,0)) := (val_eax * val_src)[63 .. 0]
     case _ ->
       let m = val_eax * val_src in
       let edx = Ea_r (sz, 2) in (* RDX *)
       {
-        wEA(eax) := m[63 .. 0];
-        wEA(edx) := (m >> size_width(sz))[63 .. 0]
+        wEA(false, eax) := m[63 .. 0];
+        wEA(false, edx) := (m >> size_width(sz))[63 .. 0]
       }
   }
 
@@ -843,7 +845,7 @@ function clause execute (RET (i)) =
 union ast member (cond,bool,rm) SET
 
 function clause execute (SET (c,b,r)) =
-  wEA(ea_rm(Sz8(b),r)) := if read_cond (c) then 1 else 0
+  wEA(false, ea_rm(Sz8(b),r)) := if read_cond (c) then 1 else 0
 
 (* ==========================================================================
       STC
@@ -857,32 +859,32 @@ function clause execute STC = CF := true
       XADD
    ========================================================================== *)
 
-union ast member (wsize,rm,regn) XADD
+union ast member (bool, wsize,rm,regn) XADD
 
-function clause execute (XADD (sz,r,n)) =
+function clause execute (XADD (locked,sz,r,n)) =
   let src = Ea_r (sz, n) in
   let dst = ea_rm (sz, r) in
-  let val_src = EA(src) in
-  let val_dst = EA(dst) in
+  let val_src = EA(false, src) in
+  let val_dst = EA(locked, dst) in
   {
-    wEA(src) := val_dst;
-    write_binop (sz, Add, val_src, val_dst, dst);
+    wEA(false, src) := val_dst;
+    write_binop (locked, sz, Add, val_src, val_dst, dst);
   }
 
 (* ==========================================================================
       XCHG
    ========================================================================== *)
 
-union ast member (wsize,rm,regn) XCHG
+union ast member (bool,wsize,rm,regn) XCHG
 
-function clause execute (XCHG (sz,r,n)) =
+function clause execute (XCHG (locked,sz,r,n)) =
   let src = Ea_r (sz, n) in
   let dst = ea_rm (sz, r) in
-  let val_src = EA(src) in
-  let val_dst = EA(dst) in
+  let val_src = EA(false, src) in
+  let val_dst = EA(locked, dst) in
   {
-    wEA(src) := val_dst;
-    wEA(dst) := val_src;
+    wEA(false, src) := val_dst;
+    wEA(locked, dst) := val_src;
   }
 
 end ast
@@ -1302,14 +1304,16 @@ function (instruction_kind, regfps, regfps, regfps) regfp_dest_src ((dest_src) d
   }
 
 (* as above but where destination is also a source operand *)
-function (instruction_kind, regfps, regfps, regfps) regfp_dest_src_rmw ((dest_src) ds) =
+function (instruction_kind, regfps, regfps, regfps) regfp_dest_src_rmw (locked, (dest_src) ds) =
+  let rk = if locked then Read_X86_locked else Read_plain in
+  let wk = if locked then Write_X86_locked else Write_plain in
   switch ds {
     case (Rm_i (r_m, i)) ->
       let (m,rds, ars) = regfp_rm(r_m) in
-      (if m then IK_mem_rmw(Read_plain, Write_plain) else IK_simple, append(rds, ars), rds, ars)
+      (if m then IK_mem_rmw(rk, wk) else IK_simple, append(rds, ars), rds, ars)
     case (Rm_r (r_m, r)) ->
       let (m,rds, ars) = regfp_rm(r_m) in
-      (if m then IK_mem_rmw(Read_plain, Write_plain) else IK_simple, RFull(GPRstr[r]) :: append(rds, ars), rds, ars)
+      (if m then IK_mem_rmw(rk, wk) else IK_simple, RFull(GPRstr[r]) :: append(rds, ars), rds, ars)
     case (R_rm (r, r_m)) ->
       let rds = [|| RFull(GPRstr[r]) ||] in
       let (m,rs,ars) = regfp_rm(r_m) in
@@ -1372,9 +1376,9 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
   Dia := DIAFP_none;
   x := (qword) RIP;
   switch instr {
-    case(Binop   (binop, sz, ds)) -> {
+    case(Binop   (locked, binop, sz, ds)) -> {
       let flags = regfp_binop_flags (binop) in
-      let (ik', iRs, oRs, aRs) = regfp_dest_src_rmw(ds) in {
+      let (ik', iRs, oRs, aRs) = regfp_dest_src_rmw(locked, ds) in {
         ik := ik';
         iR := append(iRs, iR);
         oR := append(flags, append(oRs, oR));
@@ -1398,9 +1402,11 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
       iR := RFull("CF") :: iR;
       oR := RFull("CF") :: oR;
     }
-    case(CMPXCHG (sz, r_m, reg)       ) ->
+    case(CMPXCHG (locked, sz, r_m, reg)       ) ->
+      let rk = if locked then Read_X86_locked else Read_plain in
+      let wk = if locked then Write_X86_locked else Write_plain in
       let (m, rs, aRs) = regfp_rm (r_m) in {
-        iK := if m then IK_mem_rmw (Read_plain, Write_plain) else IK_simple;
+        iK := if m then IK_mem_rmw (rk, wk) else IK_simple;
         iR := RFull("RAX") :: RFull(GPRstr[reg]) :: append(rs, aRs);
         oR := RFull("RAX") :: append(regfp_binop_flags(Cmp),  rs);
         aR := aRs;
@@ -1447,9 +1453,11 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
           Nias := NIAFP_concrete_address(RIP + imm64) :: Nias;
       }
     case(MFENCE                       ) -> iK := IK_barrier (Barrier_x86_MFENCE)
-    case(Monop   (monop, sz, r_m)     ) -> 
+    case(Monop   (locked, monop, sz, r_m)     ) -> 
+      let rk = if locked then Read_X86_locked else Read_plain in
+      let wk = if locked then Write_X86_locked else Write_plain in
       let (m, rds, ars) = regfp_rm(r_m) in {
-        iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_simple;
+        iK := if m then IK_mem_rmw(rk, wk) else IK_simple;
         iR := append(rds, ars);
         oR := append(all_flags_but_cf_of, rds); (* XXX fix flags *)
         aR := ars;
@@ -1516,16 +1524,20 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
         aR := ars;
       }
     case(STC                          ) -> oR := [|| RFull("CF") ||]
-    case(XADD    (sz, r_m, reg)       ) -> 
+    case(XADD    (locked, sz, r_m, reg)       ) -> 
+      let rk = if locked then Read_X86_locked else Read_plain in
+      let wk = if locked then Write_X86_locked else Write_plain in
       let (m, rs, ars) = regfp_rm(r_m) in {
-        iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_simple;
+        iK := if m then IK_mem_rmw(rk, wk) else IK_simple;
         iR := RFull(GPRstr[reg]) :: append(rs, ars);
         oR := RFull(GPRstr[reg]) :: append(rs, all_flags);
         aR := ars;
       }
-    case(XCHG    (sz, r_m, reg)       ) -> 
+    case(XCHG    (locked, sz, r_m, reg)       ) -> 
+      let rk = if locked then Read_X86_locked else Read_plain in
+      let wk = if locked then Write_X86_locked else Write_plain in
       let (m, rs, ars) = regfp_rm(r_m) in {
-        iK := if m then IK_mem_rmw(Read_plain, Write_plain) else IK_simple;
+        iK := if m then IK_mem_rmw(rk, wk) else IK_simple;
         iR := RFull(GPRstr[reg]) :: append(rs, ars);
         oR := RFull(GPRstr[reg]) :: rs;
         aR := ars;
