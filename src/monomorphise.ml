@@ -3,7 +3,6 @@ open Ast
 open Ast_util
 open Type_check
 
-let disable_const_propagation = false
 let size_set_limit = 8
 let vector_split_limit = 4
 
@@ -742,7 +741,7 @@ let try_app_infix (l,ann) (E_aux (e1,ann1)) (Id_aux (id,_)) (E_aux (e2,ann2)) =
    in the pattern. *)
 type split =
   | NoSplit
-  | VarSplit of (tannot pat * (id * tannot Ast.exp)) list
+  | VarSplit of (tannot pat * (id * tannot Ast.exp) list) list
   | ConstrSplit of (tannot pat * nexp KSubst.t) list
 
 let split_defs splits defs =
@@ -970,22 +969,14 @@ let split_defs splits defs =
          | None -> None
   in
 
-  let subst_exp subst exp =
-    if disable_const_propagation then
-      let (subi,(E_aux (_,subannot) as sube)) = subst in
-      let E_aux (e,(l,annot)) = exp in
-      let lg = Generated l in
-      let id = match subi with Id_aux (i,l) -> Id_aux (i,lg) in
-      let p = P_aux (P_id id, subannot) in
-      E_aux (E_let (LB_aux (LB_val_implicit (p,sube),(lg,annot)), exp),(lg,annot))
-    else 
-      let substs = isubst_from_list [subst] in
-      let () = nexp_substs := [] in
-      let exp' = const_prop_exp substs exp in
-      (* Substitute what we've learned about nvars into the term *)
-      let nsubsts = isubst_from_list !nexp_substs in
-      let () = nexp_substs := [] in
-      (*nexp_subst_exp nsubsts refinements*) exp'
+  let subst_exp substs exp =
+    let substs = isubst_from_list substs in
+    let () = nexp_substs := [] in
+    let exp' = const_prop_exp substs exp in
+    (* Substitute what we've learned about nvars into the term *)
+    let nsubsts = isubst_from_list !nexp_substs in
+    let () = nexp_substs := [] in
+    (*nexp_subst_exp nsubsts refinements*) exp'
   in
     
   (* Split a variable pattern into every possible value *)
@@ -1007,13 +998,13 @@ let split_defs splits defs =
          (* enumerations *)
          let ns = Env.get_enum id env in
          List.map (fun n -> (P_aux (P_id (renew_id n),(l,annot)),
-                             (var,E_aux (E_id (renew_id n),(new_l,annot))))) ns
+                             [var,E_aux (E_id (renew_id n),(new_l,annot))])) ns
        with Type_error _ ->
          match id with
          | Id_aux (Id "bit",_) ->
             List.map (fun b ->
               P_aux (P_lit (L_aux (b,new_l)),(l,annot)),
-              (var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))))
+              [var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))])
               [L_zero; L_one]
          | _ -> cannot ())
     | Typ_app (Id_aux (Id "vector",_), [_;Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
@@ -1023,7 +1014,7 @@ let split_defs splits defs =
             let lits = make_vectors sz in
             List.map (fun lit ->
               P_aux (P_lit lit,(l,annot)),
-              (var,E_aux (E_lit lit,(new_l,annot)))) lits
+              [var,E_aux (E_lit lit,(new_l,annot))]) lits
           else
             raise (Reporting_basic.err_general l
                      ("Refusing to split vector type of length " ^ string_of_int sz ^
@@ -1045,29 +1036,39 @@ let split_defs splits defs =
       | Int _ -> []
       | Generated l -> [] (* Could do match_l l, but only want to split user-written patterns *)
       | Range (p,q) ->
-         List.filter (fun ((filename,line),_) ->
-           Filename.basename p.Lexing.pos_fname = filename &&
-             p.Lexing.pos_lnum <= line && line <= q.Lexing.pos_lnum) ls
+         let matches =
+           List.filter (fun ((filename,line),_) ->
+             Filename.basename p.Lexing.pos_fname = filename &&
+               p.Lexing.pos_lnum <= line && line <= q.Lexing.pos_lnum) ls
+         in List.map snd matches
     in 
 
-    let split_pat var p =
+    let split_pat vars p =
       let id_matches = function
-        | Id_aux (Id x,_) -> x = var
-        | Id_aux (DeIid x,_) -> x = var
+        | Id_aux (Id x,_) -> List.mem x vars
+        | Id_aux (DeIid x,_) -> List.mem x vars
       in
 
       let rec list f = function
         | [] -> None
         | h::t ->
-           match f h with
-           | None -> (match list f t with None -> None | Some (l,ps,r) -> Some (h::l,ps,r))
-           | Some ps -> Some ([],ps,t)
+           let t' =
+             match list f t with
+             | None -> [t,[]]
+             | Some t' -> t'
+           in
+           let h' =
+             match f h with
+             | None -> [h,[]]
+             | Some ps -> ps
+           in
+           Some (List.concat (List.map (fun (h,hsubs) -> List.map (fun (t,tsubs) -> (h::t,hsubs@tsubs)) t') h'))
       in
       let rec spl (P_aux (p,(l,annot))) =
         let relist f ctx ps =
           optmap (list f ps) 
-            (fun (left,ps,right) ->
-              List.map (fun (p,sub) -> P_aux (ctx (left@p::right),(l,annot)),sub) ps)
+            (fun ps ->
+              List.map (fun (ps,sub) -> P_aux (ctx ps,(l,annot)),sub) ps)
         in
         let re f p =
           optmap (spl p)
@@ -1086,7 +1087,7 @@ let split_defs splits defs =
           -> None
         | P_as (p',id) when id_matches id ->
            raise (Reporting_basic.err_general l
-                    ("Cannot split " ^ var ^ " on 'as' pattern"))
+                    ("Cannot split " ^ string_of_id id ^ " on 'as' pattern"))
         | P_as (p',id) ->
            re (fun p -> P_as (p,id)) p'
         | P_typ (t,p') -> re (fun p -> P_typ (t,p)) p'
@@ -1109,18 +1110,21 @@ let split_defs splits defs =
         | P_list ps ->
            relist spl (fun ps -> P_list ps) ps
         | P_cons (p1,p2) ->
-           match re (fun p' -> P_cons (p',p2)) p1 with
-           | Some r -> Some r
-           | None -> re (fun p' -> P_cons (p1,p')) p2
+           match spl p1, spl p2 with
+           | None, None -> None
+           | p1', p2' ->
+              let p1' = match p1' with None -> [p1,[]] | Some p1' -> p1' in
+              let p2' = match p2' with None -> [p2,[]] | Some p2' -> p2' in
+              let ps = List.map (fun (p1',subs1) -> List.map (fun (p2',subs2) ->
+                P_aux (P_cons (p1',p2'),(l,annot)),subs1@subs2) p2') p1' in
+              Some (List.concat ps)
       in spl p
     in
 
     let map_pat_by_loc (P_aux (p,(l,_)) as pat) =
       match match_l l with
       | [] -> None
-      | [(_,var)] -> split_pat var pat
-      | lvs -> raise (Reporting_basic.err_general l
-                        ("Multiple variables to split on: " ^ String.concat ", " (List.map snd lvs)))
+      | vars -> split_pat vars pat
     in
     let map_pat (P_aux (p,(l,tannot)) as pat) =
       match map_pat_by_loc pat with
@@ -1165,7 +1169,7 @@ let split_defs splits defs =
       | lvs ->
          let pvs = bindings_from_pat p in
          let pvs = List.map string_of_id pvs in
-         let overlap = List.exists (fun (_,v) -> List.mem v pvs) lvs in
+         let overlap = List.exists (fun v -> List.mem v pvs) lvs in
          let () =
            if overlap then
              Reporting_basic.print_err false true l "Monomorphisation"
@@ -1232,8 +1236,8 @@ let split_defs splits defs =
          (match map_pat p with
          | NoSplit -> [Pat_aux (Pat_exp (p,map_exp e),l)]
          | VarSplit patsubsts ->
-            List.map (fun (pat',subst) ->
-              let exp' = subst_exp subst e in
+            List.map (fun (pat',substs) ->
+              let exp' = subst_exp substs e in
               Pat_aux (Pat_exp (pat', map_exp exp'),l))
               patsubsts
          | ConstrSplit patnsubsts ->
@@ -1247,9 +1251,9 @@ let split_defs splits defs =
          (match map_pat p with
          | NoSplit -> [Pat_aux (Pat_when (p,map_exp e1,map_exp e2),l)]
          | VarSplit patsubsts ->
-            List.map (fun (pat',subst) ->
-              let exp1' = subst_exp subst e1 in
-              let exp2' = subst_exp subst e2 in
+            List.map (fun (pat',substs) ->
+              let exp1' = subst_exp substs e1 in
+              let exp2' = subst_exp substs e2 in
               Pat_aux (Pat_when (pat', map_exp exp1', map_exp exp2'),l))
               patsubsts
          | ConstrSplit patnsubsts ->
@@ -1281,8 +1285,8 @@ let split_defs splits defs =
       match map_pat pat with
       | NoSplit -> [FCL_aux (FCL_Funcl (id, pat, map_exp exp), annot)]
       | VarSplit patsubsts ->
-         List.map (fun (pat',subst) ->
-           let exp' = subst_exp subst exp in
+         List.map (fun (pat',substs) ->
+           let exp' = subst_exp substs exp in
            FCL_aux (FCL_Funcl (id, pat', map_exp exp'), annot))
            patsubsts
       | ConstrSplit patnsubsts ->
