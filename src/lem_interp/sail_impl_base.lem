@@ -441,7 +441,8 @@ type read_kind =
   | Read_RISCV_acquire  | Read_RISCV_strong_acquire
   | Read_RISCV_reserved | Read_RISCV_reserved_acquire
   | Read_RISCV_reserved_strong_acquire
-  | Read_X86_locked
+  (* x86 reads *)
+  | Read_X86_locked (* the read part of a lock'd instruction (rmw) *)
 
 instance (Show read_kind)
   let show = function
@@ -471,7 +472,8 @@ type write_kind =
   | Write_RISCV_release     | Write_RISCV_strong_release
   | Write_RISCV_conditional | Write_RISCV_conditional_release
   | Write_RISCV_conditional_strong_release
-  | Write_X86_locked
+  (* x86 writes *)
+  | Write_X86_locked (* the write part of a lock'd instruction (rmw) *)
 
 instance (Show write_kind)
   let show = function
