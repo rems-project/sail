@@ -311,10 +311,10 @@ and to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) 
   match c with
   | Parse_ast.NC_aux(nc,l) ->
     NC_aux( (match nc with
-             | Parse_ast.NC_fixed(t1,t2) -> 
+             | Parse_ast.NC_equal(t1,t2) -> 
                let n1 = to_ast_nexp k_env t1 in
                let n2 = to_ast_nexp k_env t2 in
-               NC_fixed(n1,n2)
+               NC_equal(n1,n2)
              | Parse_ast.NC_not_equal(t1,t2) ->
                 let n1 = to_ast_nexp k_env t1 in
                 let n2 = to_ast_nexp k_env t2 in
@@ -327,8 +327,8 @@ and to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) 
                let n1 = to_ast_nexp k_env t1 in
                let n2 = to_ast_nexp k_env t2 in
                NC_bounded_le(n1,n2)
-             | Parse_ast.NC_nat_set_bounded(id,bounds) ->
-                NC_nat_set_bounded(to_ast_var id, bounds)
+             | Parse_ast.NC_set(id,bounds) ->
+                NC_set(to_ast_var id, bounds)
              | Parse_ast.NC_or (nc1, nc2) ->
                 NC_or (to_ast_nexp_constraint k_env nc1, to_ast_nexp_constraint k_env nc2)
              | Parse_ast.NC_and (nc1, nc2) ->

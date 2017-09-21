@@ -153,16 +153,16 @@ let rec nc_negate (NC_aux (nc, _)) =
   match nc with
   | NC_bounded_ge (n1, n2) -> nc_lt n1 n2
   | NC_bounded_le (n1, n2) -> nc_gt n1 n2
-  | NC_fixed (n1, n2) -> nc_neq n1 n2
+  | NC_equal (n1, n2) -> nc_neq n1 n2
   | NC_not_equal (n1, n2) -> nc_eq n1 n2
   | NC_and (n1, n2) -> mk_nc (NC_or (nc_negate n1, nc_negate n2))
   | NC_or (n1, n2) -> mk_nc (NC_and (nc_negate n1, nc_negate n2))
   | NC_false -> mk_nc NC_true
   | NC_true -> mk_nc NC_false
-  | NC_nat_set_bounded (kid, []) -> nc_false
-  | NC_nat_set_bounded (kid, [int]) -> nc_neq (nvar kid) (nconstant int)
-  | NC_nat_set_bounded (kid, int :: ints) ->
-     mk_nc (NC_and (nc_neq (nvar kid) (nconstant int), nc_negate (mk_nc (NC_nat_set_bounded (kid, ints)))))
+  | NC_set (kid, []) -> nc_false
+  | NC_set (kid, [int]) -> nc_neq (nvar kid) (nconstant int)
+  | NC_set (kid, int :: ints) ->
+     mk_nc (NC_and (nc_neq (nvar kid) (nconstant int), nc_negate (mk_nc (NC_set (kid, ints)))))
 
 (* Utilities for constructing effect sets *)
 
@@ -226,15 +226,15 @@ and nexp_subst_aux sv subst = function
 
 let rec nexp_set_to_or l subst = function
   | [] -> typ_error l "Cannot substitute into empty nexp set"
-  | [int] -> NC_fixed (subst, nconstant int)
-  | (int :: ints) -> NC_or (mk_nc (NC_fixed (subst, nconstant int)), mk_nc (nexp_set_to_or l subst ints))
+  | [int] -> NC_equal (subst, nconstant int)
+  | (int :: ints) -> NC_or (mk_nc (NC_equal (subst, nconstant int)), mk_nc (nexp_set_to_or l subst ints))
 
 let rec nc_subst_nexp sv subst (NC_aux (nc, l)) = NC_aux (nc_subst_nexp_aux l sv subst nc, l)
 and nc_subst_nexp_aux l sv subst = function
-  | NC_fixed (n1, n2) -> NC_fixed (nexp_subst sv subst n1, nexp_subst sv subst n2)
+  | NC_equal (n1, n2) -> NC_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_bounded_ge (n1, n2) -> NC_bounded_ge (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_bounded_le (n1, n2) -> NC_bounded_le (nexp_subst sv subst n1, nexp_subst sv subst n2)
-  | NC_nat_set_bounded (kid, ints) as set_nc ->
+  | NC_set (kid, ints) as set_nc ->
      if Kid.compare kid sv = 0
      then nexp_set_to_or l (mk_nexp subst) ints
      else set_nc
@@ -777,11 +777,11 @@ end = struct
 
   let rec wf_constraint env (NC_aux (nc, _)) =
     match nc with
-    | NC_fixed (n1, n2) -> wf_nexp env n1; wf_nexp env n2
+    | NC_equal (n1, n2) -> wf_nexp env n1; wf_nexp env n2
     | NC_not_equal (n1, n2) -> wf_nexp env n1; wf_nexp env n2
     | NC_bounded_ge (n1, n2) -> wf_nexp env n1; wf_nexp env n2
     | NC_bounded_le (n1, n2) -> wf_nexp env n1; wf_nexp env n2
-    | NC_nat_set_bounded (kid, ints) -> () (* MAYBE: We could demand that ints are all unique here *)
+    | NC_set (kid, ints) -> () (* MAYBE: We could demand that ints are all unique here *)
     | NC_or (nc1, nc2) -> wf_constraint env nc1; wf_constraint env nc2
     | NC_and (nc1, nc2) -> wf_constraint env nc1; wf_constraint env nc2
     | NC_true | NC_false -> ()
@@ -1065,12 +1065,12 @@ let rec nexp_constraint env var_of (Nexp_aux (nexp, l)) =
 
 let rec nc_constraint env var_of (NC_aux (nc, l)) =
   match nc with
-  | NC_fixed (nexp1, nexp2) -> Constraint.eq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
+  | NC_equal (nexp1, nexp2) -> Constraint.eq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
   | NC_not_equal (nexp1, nexp2) -> Constraint.neq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
   | NC_bounded_ge (nexp1, nexp2) -> Constraint.gteq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
   | NC_bounded_le (nexp1, nexp2) -> Constraint.lteq (nexp_constraint env var_of nexp1) (nexp_constraint env var_of nexp2)
-  | NC_nat_set_bounded (_, []) -> Constraint.literal false
-  | NC_nat_set_bounded (kid, (int :: ints)) ->
+  | NC_set (_, []) -> Constraint.literal false
+  | NC_set (kid, (int :: ints)) ->
      List.fold_left Constraint.disj
                     (Constraint.eq (nexp_constraint env var_of (nvar kid)) (Constraint.constant (big_int_of_int int)))
                     (List.map (fun i -> Constraint.eq (nexp_constraint env var_of (nvar kid)) (Constraint.constant (big_int_of_int i))) ints)
@@ -1112,10 +1112,10 @@ let prove env (NC_aux (nc_aux, _) as nc) =
     | _, _ -> false
   in
   match nc_aux with
-  | NC_fixed (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 = c2) (nexp_simp nexp1) (nexp_simp nexp2) -> true
+  | NC_equal (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 = c2) (nexp_simp nexp1) (nexp_simp nexp2) -> true
   | NC_bounded_le (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 <= c2) (nexp_simp nexp1) (nexp_simp nexp2) -> true
   | NC_bounded_ge (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 >= c2) (nexp_simp nexp1) (nexp_simp nexp2) -> true
-  | NC_fixed (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 <> c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
+  | NC_equal (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 <> c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
   | NC_bounded_le (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 > c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
   | NC_bounded_ge (nexp1, nexp2) when compare_const (fun c1 c2 -> c1 < c2) (nexp_simp nexp1) (nexp_simp nexp2) -> false
   | NC_true -> true
@@ -1175,7 +1175,7 @@ let rec subtyp_tnf env tnf1 tnf2 =
 
 and tnf_args_eq env arg1 arg2 =
   match arg1, arg2 with
-  | Tnf_arg_nexp n1, Tnf_arg_nexp n2 -> prove env (NC_aux (NC_fixed (n1, n2), Parse_ast.Unknown))
+  | Tnf_arg_nexp n1, Tnf_arg_nexp n2 -> prove env (NC_aux (NC_equal (n1, n2), Parse_ast.Unknown))
   | Tnf_arg_order ord1, Tnf_arg_order ord2 -> order_eq ord1 ord2
   | Tnf_arg_typ tnf1, Tnf_arg_typ tnf2 -> subtyp_tnf env tnf1 tnf2 && subtyp_tnf env tnf2 tnf1
   | _, _ -> assert false
@@ -1274,7 +1274,7 @@ let rec unify_nexps l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (ne
   if KidSet.is_empty (KidSet.inter (nexp_frees nexp1) goals)
   then
     begin
-      if prove env (NC_aux (NC_fixed (nexp1, nexp2), Parse_ast.Unknown))
+      if prove env (NC_aux (NC_equal (nexp1, nexp2), Parse_ast.Unknown))
       then None
       else unify_error l ("Nexp " ^ string_of_nexp nexp1 ^ " and " ^ string_of_nexp nexp2 ^ " are not equal")
     end
@@ -1305,7 +1305,7 @@ let rec unify_nexps l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (ne
        then
          begin
            match nexp_aux2 with
-           | Nexp_times (n2a, n2b) when prove env (NC_aux (NC_fixed (n1a, n2a), Parse_ast.Unknown)) ->
+           | Nexp_times (n2a, n2b) when prove env (NC_aux (NC_equal (n1a, n2a), Parse_ast.Unknown)) ->
               unify_nexps l env goals n1b n2b
            | Nexp_constant c2 ->
               begin
@@ -1320,7 +1320,7 @@ let rec unify_nexps l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (ne
        then
          begin
            match nexp_aux2 with
-           | Nexp_times (n2a, n2b) when prove env (NC_aux (NC_fixed (n1b, n2b), Parse_ast.Unknown)) ->
+           | Nexp_times (n2a, n2b) when prove env (NC_aux (NC_equal (n1b, n2b), Parse_ast.Unknown)) ->
               unify_nexps l env goals n1a n2a
            | _ -> unify_error l ("Cannot unify Nat expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
          end

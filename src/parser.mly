@@ -1089,7 +1089,7 @@ nexp_constraint1:
 
 nexp_constraint2:
   | nexp_typ Eq nexp_typ
-    { NC_aux(NC_fixed($1,$3), loc () ) }
+    { NC_aux(NC_equal($1,$3), loc () ) }
   | nexp_typ ExclEq nexp_typ
     { NC_aux (NC_not_equal ($1, $3), loc ()) }
   | nexp_typ GtEq nexp_typ
@@ -1097,9 +1097,9 @@ nexp_constraint2:
   | nexp_typ LtEq nexp_typ
     { NC_aux(NC_bounded_le($1,$3), loc () ) }
   | tyvar In Lcurly nums Rcurly
-    { NC_aux(NC_nat_set_bounded($1,$4), loc ()) }
+    { NC_aux(NC_set($1,$4), loc ()) }
   | tyvar IN Lcurly nums Rcurly
-    { NC_aux(NC_nat_set_bounded($1,$4), loc ()) }
+    { NC_aux(NC_set($1,$4), loc ()) }
   | True
     { NC_aux (NC_true, loc ()) }
   | False

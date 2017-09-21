@@ -177,7 +177,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
      in
      let find_set (Kid_aux (Var nvar,_) as kid) =
        match list_extract (function
-       | QI_aux (QI_const (NC_aux (NC_nat_set_bounded (Kid_aux (Var nvar',_),vals),_)),_)
+       | QI_aux (QI_const (NC_aux (NC_set (Kid_aux (Var nvar',_),vals),_)),_)
          -> if nvar = nvar' then Some vals else None
        | _ -> None) qs with
        | None ->

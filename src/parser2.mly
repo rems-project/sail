@@ -266,7 +266,7 @@ atomic_nc:
   | False
     { mk_nc NC_false $startpos $endpos }
   | typ Eq typ
-    { mk_nc (NC_fixed ($1, $3)) $startpos $endpos }
+    { mk_nc (NC_equal ($1, $3)) $startpos $endpos }
   | typ ExclEq typ
     { mk_nc (NC_not_equal ($1, $3)) $startpos $endpos }
   | nc_lchain
@@ -276,7 +276,7 @@ atomic_nc:
   | Lparen nc Rparen
     { $2 }
   | kid In Lcurly num_list Rcurly
-    { mk_nc (NC_nat_set_bounded ($1, $4)) $startpos $endpos }
+    { mk_nc (NC_set ($1, $4)) $startpos $endpos }
 
 num_list:
   | Num
@@ -481,7 +481,7 @@ atomic_typ:
     { let v = mk_kid "n" $startpos $endpos in
       let atom_id = mk_id (Id "atom") $startpos $endpos in
       let atom_of_v = mk_typ (ATyp_app (atom_id, [mk_typ (ATyp_var v) $startpos $endpos])) $startpos $endpos in
-      mk_typ (ATyp_exist ([v], NC_aux (NC_nat_set_bounded (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
+      mk_typ (ATyp_exist ([v], NC_aux (NC_set (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
   | Lcurly kid_list Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, NC_aux (NC_true, loc $startpos $endpos), $4)) $startpos $endpos }
   | Lcurly kid_list Comma nc Dot typ Rcurly

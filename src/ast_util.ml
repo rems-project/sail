@@ -183,8 +183,8 @@ let npow2 n = Nexp_aux (Nexp_exp n, Parse_ast.Unknown)
 let nvar kid = Nexp_aux (Nexp_var kid, Parse_ast.Unknown)
 let nid id = Nexp_aux (Nexp_id id, Parse_ast.Unknown)
 
-let nc_set kid ints = mk_nc (NC_nat_set_bounded (kid, ints))
-let nc_eq n1 n2 = mk_nc (NC_fixed (n1, n2))
+let nc_set kid ints = mk_nc (NC_set (kid, ints))
+let nc_eq n1 n2 = mk_nc (NC_equal (n1, n2))
 let nc_neq n1 n2 = mk_nc (NC_not_equal (n1, n2))
 let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
 let nc_gteq n1 n2 = NC_aux (NC_bounded_ge (n1, n2), Parse_ast.Unknown)
@@ -390,7 +390,7 @@ and string_of_typ_arg_aux = function
   | Typ_arg_typ typ -> string_of_typ typ
   | Typ_arg_order o -> string_of_order o
 and string_of_n_constraint = function
-  | NC_aux (NC_fixed (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
+  | NC_aux (NC_equal (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
   | NC_aux (NC_not_equal (n1, n2), _) -> string_of_nexp n1 ^ " != " ^ string_of_nexp n2
   | NC_aux (NC_bounded_ge (n1, n2), _) -> string_of_nexp n1 ^ " >= " ^ string_of_nexp n2
   | NC_aux (NC_bounded_le (n1, n2), _) -> string_of_nexp n1 ^ " <= " ^ string_of_nexp n2
@@ -398,7 +398,7 @@ and string_of_n_constraint = function
      "(" ^ string_of_n_constraint nc1 ^ " | " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_and (nc1, nc2), _) ->
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
-  | NC_aux (NC_nat_set_bounded (kid, ns), _) ->
+  | NC_aux (NC_set (kid, ns), _) ->
      string_of_kid kid ^ " IN {" ^ string_of_list ", " string_of_int ns ^ "}"
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"

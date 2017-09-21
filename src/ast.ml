@@ -168,11 +168,11 @@ kinded_id_aux =  (* optionally kind-annotated identifier *)
 
 type
 n_constraint_aux =  (* constraint over kind $_$ *)
-   NC_fixed of nexp * nexp
+   NC_equal of nexp * nexp
  | NC_bounded_ge of nexp * nexp
  | NC_bounded_le of nexp * nexp
  | NC_not_equal of nexp * nexp
- | NC_nat_set_bounded of kid * (int) list
+ | NC_set of kid * (int) list
  | NC_or of n_constraint * n_constraint
  | NC_and of n_constraint * n_constraint
  | NC_true
