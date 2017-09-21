@@ -422,10 +422,7 @@ type_def_aux =  (* Type definition body *)
 
 type 
 val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_no_rename of typschm * id
- | VS_extern_spec of typschm * id * string
- | VS_cast_spec of typschm * id
+   VS_val_spec of typschm * id * string option * bool
 
 
 type 

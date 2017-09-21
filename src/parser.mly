@@ -51,6 +51,10 @@ let locn m n = Range(Parsing.rhs_start_pos m,Parsing.rhs_end_pos n)
 
 let idl i = Id_aux(i, loc())
 
+let string_of_id = function
+  | Id_aux (Id str, _) -> str
+  | Id_aux (DeIid str, _) -> str
+
 let efl e = BE_aux(e, loc())
 
 let ploc p = P_aux(p,loc ())
@@ -1041,21 +1045,21 @@ fun_def:
 
 val_spec:
   | Val typquant typ id
-    { vloc (VS_val_spec(mk_typschm $2 $3 2 3,$4)) }
+    { vloc (VS_val_spec(mk_typschm $2 $3 2 3,$4, None, false)) }
   | Val typ id
-    { vloc (VS_val_spec(mk_typschm (mk_typqn ()) $2 2 2,$3)) }
+    { vloc (VS_val_spec(mk_typschm (mk_typqn ()) $2 2 2,$3, None, false)) }
   | Val Cast typquant typ id
-    { vloc (VS_cast_spec (mk_typschm $3 $4 3 4,$5)) }
+    { vloc (VS_val_spec (mk_typschm $3 $4 3 4,$5, None, true)) }
   | Val Cast typ id
-    { vloc (VS_cast_spec (mk_typschm (mk_typqn ()) $3 3 3, $4)) }
+    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $3 3 3, $4, None, true)) }
   | Val Extern typquant typ id
-    { vloc (VS_extern_no_rename (mk_typschm $3 $4 3 4,$5)) }
+    { vloc (VS_val_spec (mk_typschm $3 $4 3 4,$5, Some (string_of_id $5), false)) }
   | Val Extern typ id
-    { vloc (VS_extern_no_rename (mk_typschm (mk_typqn ()) $3 3 3, $4)) }
+    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $3 3 3, $4, Some (string_of_id $4), false)) }
   | Val Extern typquant typ id Eq String
-    { vloc (VS_extern_spec (mk_typschm $3 $4 3 4,$5,$7)) }
+    { vloc (VS_val_spec (mk_typschm $3 $4 3 4,$5, Some $7, false)) }
   | Val Extern typ id Eq String
-    { vloc (VS_extern_spec (mk_typschm (mk_typqn ()) $3 3 3,$4, $6)) }
+    { vloc (VS_val_spec (mk_typschm (mk_typqn ()) $3 3 3,$4, Some $6, false)) }
 
 kinded_id:
   | tyvar

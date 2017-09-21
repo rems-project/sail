@@ -3050,7 +3050,7 @@ let infer_funtyp l env tannotopt funcls =
      end
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> typ_error l "Cannot infer function type for unannotated function"
 
-let mk_val_spec typq typ id = DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id), (Parse_ast.Unknown, None)))
+let mk_val_spec typq typ id = DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, None, false), (Parse_ast.Unknown, None)))
 
 let check_tannotopt env typq ret_typ = function
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
@@ -3101,14 +3101,13 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
    the difference is irrelevant for the typechecker. *)
 let check_val_spec env (VS_aux (vs, (l, _))) =
   let (id, quants, typ, env) = match vs with
-    | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id) -> (id, quants, typ, env)
-    | VS_cast_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id) -> (id, quants, typ, Env.add_cast id env)
-    | VS_extern_no_rename (TypSchm_aux (TypSchm_ts (quants, typ), _), id) ->
-      let env = Env.add_extern id (string_of_id id) env in
-      (id, quants, typ, env)
-    | VS_extern_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, ext) ->
-      let env = Env.add_extern id ext env in
-      (id, quants, typ, env) in
+    | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, None, false) -> (id, quants, typ, env)
+    | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, None, true) -> (id, quants, typ, Env.add_cast id env)
+    | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _), id, Some ext, false) ->
+       let env = Env.add_extern id ext env in
+       (id, quants, typ, env)
+    | _ -> typ_error l "Invalid valspec"
+  in
   [DEF_spec (VS_aux (vs, (l, None)))], Env.add_val_spec id (quants, Env.expand_synonyms env typ) env
 
 let check_default env (DT_aux (ds, l)) =

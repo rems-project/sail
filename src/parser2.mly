@@ -942,7 +942,7 @@ let_def:
 
 val_spec_def:
   | Val id Colon typschm
-    { mk_vs (VS_val_spec ($4, $2)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($4, $2, None, false)) $startpos $endpos }
 
 register_def:
   | Register id Colon typ

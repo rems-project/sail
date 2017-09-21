@@ -589,20 +589,9 @@ let to_ast_spec (names,k_env,default_order) (val_:Parse_ast.val_spec) : (unit va
   match val_ with
   | Parse_ast.VS_aux(vs,l) ->
     (match vs with
-    | Parse_ast.VS_val_spec(ts,id) ->
-      (*let _ = Printf.eprintf "to_ast_spec called for internal spec: for %s\n" (id_to_string (to_ast_id id)) in*)
+    | Parse_ast.VS_val_spec(ts,id,ext,is_cast) ->
       let typsch,_,_ = to_ast_typschm k_env default_order ts in
-      VS_aux(VS_val_spec(typsch,to_ast_id id),(l,())),(names,k_env,default_order)
-    | Parse_ast.VS_extern_spec(ts,id,s) ->
-      let typsch,_,_ = to_ast_typschm k_env default_order ts in
-      VS_aux(VS_extern_spec(typsch,to_ast_id id,s),(l,())),(names,k_env,default_order)
-    | Parse_ast.VS_cast_spec(ts,id) ->
-      let typsch,_,_ = to_ast_typschm k_env default_order ts in
-      VS_aux(VS_cast_spec(typsch,to_ast_id id),(l,())),(names,k_env,default_order)
-    | Parse_ast.VS_extern_no_rename(ts,id) ->
-      let typsch,_,_ = to_ast_typschm k_env default_order ts in
-       VS_aux(VS_extern_no_rename(typsch,to_ast_id id),(l,())),(names,k_env,default_order))
-    
+      VS_aux(VS_val_spec(typsch,to_ast_id id,ext,is_cast),(l,())),(names,k_env,default_order))
 
 let to_ast_namescm (Parse_ast.Name_sect_aux(ns,l)) = 
   Name_sect_aux(
@@ -923,15 +912,12 @@ let typschm_of_string order str =
   let (typschm, _, _) = to_ast_typschm initial_kind_env order typschm in
   typschm
 
-let val_spec_of_string order id str = mk_val_spec (VS_extern_no_rename (typschm_of_string order str, id))
+let val_spec_of_string order id str = mk_val_spec (VS_val_spec (typschm_of_string order str, id, Some str, false))
 
 let val_spec_ids (Defs defs) =
   let val_spec_id (VS_aux (vs_aux, _)) =
     match vs_aux with
-    | VS_val_spec (typschm, id) -> id
-    | VS_extern_no_rename (typschm, id) -> id
-    | VS_extern_spec (typschm, id, e) -> id
-    | VS_cast_spec (typschm, id) -> id
+    | VS_val_spec (_, id, _, _) -> id
   in
   let rec vs_ids = function
     | DEF_spec vs :: defs -> val_spec_id vs :: vs_ids defs
@@ -979,19 +965,19 @@ let generate_undefineds vs_ids (Defs defs) =
   let undefined_td = function
     | TD_enum (id, _, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let typschm = typschm_of_string dec_ord ("unit -> " ^ string_of_id id ^ " effect {undef}") in
-       [mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id));
+       [mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, None, false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             (mk_pat (P_lit (mk_lit L_unit)))
                             (mk_exp (E_app (mk_id "internal_pick",
                                             [mk_exp (E_list (List.map (fun id -> mk_exp (E_id id)) ids))])))]]
     | TD_record (id, _, typq, fields, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let pat = mk_pat (P_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))) in
-       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id));
+       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None, false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             pat
                             (mk_exp (E_record (mk_fexps (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields))))]]
     | TD_variant (id, _, typq, tus, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
-       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id));
+       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None, false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             (mk_pat (P_lit (mk_lit L_unit)))
                             (mk_exp (E_app (mk_id "internal_pick",

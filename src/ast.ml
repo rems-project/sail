@@ -490,11 +490,7 @@ type_def_aux =  (* Type definition body *)
 
 type
 val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id
- | VS_extern_no_rename of typschm * id
- | VS_extern_spec of typschm * id * string (* Specify the type and id of a function from Lem, where the string must provide an explicit path to the required function but will not be checked *)
- | VS_cast_spec of typschm * id
-
+   VS_val_spec of typschm * id * string option * bool
 
 type
 'a kind_def_aux =  (* Definition body for elements of kind; many are shorthands for type\_defs *)

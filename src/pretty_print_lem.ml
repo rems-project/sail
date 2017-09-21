@@ -1429,13 +1429,7 @@ let doc_dec_lem sequential (DEC_aux (reg, ((l, _) as annot))) =
   | DEC_alias(id,alspec) -> empty
   | DEC_typ_alias(typ,id,alspec) -> empty
 
-let doc_spec_lem mwords (VS_aux (valspec,annot)) =
-  match valspec with
-  | VS_extern_no_rename _
-  | VS_extern_spec _ -> empty (* ignore these at the moment *)
-  | VS_val_spec (typschm,id) | VS_cast_spec (typschm,id) -> empty
-(* separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem mwords typschm] ^/^ hardline *)
-
+let doc_spec_lem mwords (VS_aux (valspec,annot)) = empty
 
 let rec doc_def_lem sequential mwords def = match def with
   | DEF_spec v_spec -> (doc_spec_lem mwords v_spec,empty)

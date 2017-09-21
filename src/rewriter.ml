@@ -1290,15 +1290,10 @@ let rewrite_sizeof (Defs defs) =
         TypSchm_aux (TypSchm_ts (tq, typ'), l)
       else ts in
     match def with
-    | DEF_spec (VS_aux (VS_val_spec (typschm, id), a)) ->
-       DEF_spec (VS_aux (VS_val_spec (rewrite_typschm typschm id, id), a))
-    | DEF_spec (VS_aux (VS_extern_no_rename (typschm, id), a)) ->
-       DEF_spec (VS_aux (VS_extern_no_rename (rewrite_typschm typschm id, id), a))
-    | DEF_spec (VS_aux (VS_extern_spec (typschm, id, e), a)) ->
-       DEF_spec (VS_aux (VS_extern_spec (rewrite_typschm typschm id, id, e), a))
-    | DEF_spec (VS_aux (VS_cast_spec (typschm, id), a)) ->
-       DEF_spec (VS_aux (VS_cast_spec (rewrite_typschm typschm id, id), a))
-    | _ -> def in
+    | DEF_spec (VS_aux (VS_val_spec (typschm, id, ext, is_cast), a)) ->
+       DEF_spec (VS_aux (VS_val_spec (rewrite_typschm typschm id, id, ext, is_cast), a))
+    | def -> def
+  in
 
   let (params_map, defs) = List.fold_left rewrite_sizeof_def
                                           (Bindings.empty, []) defs in
@@ -2410,10 +2405,7 @@ let rewrite_dec_spec_typs rw_typ (DEC_aux (ds, annot)) =
 let rewrite_overload_cast (Defs defs) =
   let remove_cast_vs (VS_aux (vs_aux, annot)) =
     match vs_aux with
-    | VS_val_spec (typschm, id) -> VS_aux (VS_val_spec (typschm, id), annot)
-    | VS_extern_no_rename (typschm, id) -> VS_aux (VS_extern_no_rename (typschm, id), annot)
-    | VS_extern_spec (typschm, id, e) -> VS_aux (VS_extern_spec (typschm, id, e), annot)
-    | VS_cast_spec (typschm, id) -> VS_aux (VS_val_spec (typschm, id), annot)
+    | VS_val_spec (typschm, id, ext, _) -> VS_aux (VS_val_spec (typschm, id, ext, false), annot)
   in
   let simple_def = function
     | DEF_spec vs -> DEF_spec (remove_cast_vs vs)
@@ -2490,10 +2482,7 @@ let rewrite_simple_types (Defs defs) =
   in
   let simple_vs (VS_aux (vs_aux, annot)) =
     match vs_aux with
-    | VS_val_spec (typschm, id) -> VS_aux (VS_val_spec (simple_typschm typschm, id), annot)
-    | VS_extern_no_rename (typschm, id) -> VS_aux (VS_extern_no_rename (simple_typschm typschm, id), annot)
-    | VS_extern_spec (typschm, id, e) -> VS_aux (VS_extern_spec (simple_typschm typschm, id, e), annot)
-    | VS_cast_spec (typschm, id) -> VS_aux (VS_cast_spec (simple_typschm typschm, id), annot)
+    | VS_val_spec (typschm, id, ext, is_cast) -> VS_aux (VS_val_spec (simple_typschm typschm, id, ext, is_cast), annot)
   in
   let rec simple_lit (L_aux (lit_aux, l) as lit) =
     match lit_aux with

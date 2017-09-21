@@ -385,15 +385,14 @@ let doc_default (DT_aux(df,_)) = match df with
   | DT_order(ord) -> separate space [string "default"; string "Order"; doc_ord ord]
 
 let doc_spec (VS_aux(v,_)) = match v with
-  | VS_val_spec(ts,id) ->
+  | VS_val_spec(ts,id,None,false) ->
      separate space [string "val"; doc_typscm ts; doc_id id]
-  | VS_cast_spec (ts, id) ->
+  | VS_val_spec (ts, id,None,true) ->
      separate space [string "val"; string "cast"; doc_typscm ts; doc_id id]
-  | VS_extern_no_rename(ts,id) ->
-     separate space [string "val"; string "extern"; doc_typscm ts; doc_id id]
-  | VS_extern_spec(ts,id,s) ->
+  | VS_val_spec(ts,id,Some ext,false) ->
      separate space [string "val"; string "extern"; doc_typscm ts;
-                     doc_op equals (doc_id id) (dquotes (string s))]
+                     doc_op equals (doc_id id) (dquotes (string ext))]
+  | _ -> failwith "Invalid valspec"
 
 let doc_namescm (Name_sect_aux(ns,_)) = match ns with
   | Name_sect_none -> empty

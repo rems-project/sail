@@ -506,17 +506,17 @@ let pp_lem_default ppf (DT_aux(df,l)) =
   in
   fprintf ppf "@[<0>(DT_aux %a %a)@]" print_de df pp_lem_l l
 
+(* FIXME *)
 let pp_lem_spec ppf (VS_aux(v,(l,annot))) =
   let print_spec ppf v =
     match v with
-    | VS_val_spec(ts,id) ->
+    | VS_val_spec(ts,id,None,false) ->
       fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_val_spec" pp_lem_typscm ts pp_lem_id id
-    | VS_extern_spec(ts,id,s) ->
+    | VS_val_spec(ts,id,Some s,false) ->
       fprintf ppf "@[<0>(%a %a %a \"%s\")@]@\n" kwd "VS_extern_spec" pp_lem_typscm ts pp_lem_id id s
-    | VS_extern_no_rename(ts,id) ->
-      fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_extern_no_rename" pp_lem_typscm ts pp_lem_id id
-    | VS_cast_spec(ts,id) ->
-      fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_cast_spec" pp_lem_typscm ts pp_lem_id id
+    | VS_val_spec(ts,id,None,true) ->
+       fprintf ppf "@[<0>(%a %a %a)@]@\n" kwd "VS_cast_spec" pp_lem_typscm ts pp_lem_id id
+    | _ -> failwith "Invalid valspec"
   in
   fprintf ppf "@[<0>(VS_aux %a (%a, %a))@]" print_spec v pp_lem_l l pp_annot annot
 

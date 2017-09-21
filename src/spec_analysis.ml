@@ -460,8 +460,7 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_))
   init_env fun_name,Nameset.union ns ns_r
 
 let fv_of_vspec consider_var (VS_aux(vspec,_)) = match vspec with
-  | VS_val_spec(ts,id) | VS_extern_no_rename (ts,id) | VS_extern_spec(ts,id,_)
-  | VS_cast_spec(ts,id) ->
+  | VS_val_spec(ts,id,_,_) ->
      init_env ("val:" ^ (string_of_id id)), snd (fv_of_typschm consider_var mt mt ts)
 
 let rec find_scattered_of name = function
