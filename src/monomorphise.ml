@@ -1298,5 +1298,5 @@ let split_defs splits defs =
     in
     Defs (List.concat (List.map map_def defs))
   in
-  deexist (map_locs splits defs')
+  (*deexist*) (map_locs splits defs')
 
