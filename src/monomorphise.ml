@@ -730,13 +730,19 @@ let rec drop_casts = function
   | E_aux (E_cast (_,e),_) -> drop_casts e
   | exp -> exp
 
+(* TODO: ought to be a big int of some form, but would need L_num to be one *)
+let int_of_lit = function
+  | L_hex hex -> int_of_string ("0x" ^ hex)
+  | L_bin bin -> int_of_string ("0b" ^ bin)
+  | _ -> assert false
 
-(* Similarly, simple conditionals *)
 let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
   match l1,l2 with
   | (L_zero|L_false), (L_zero|L_false)
   | (L_one |L_true ), (L_one |L_true)
     -> Some true
+  | (L_hex _| L_bin _), (L_hex _|L_bin _)
+    -> Some (int_of_lit l1 = int_of_lit l2)
   | L_undef, _ | _, L_undef -> None
   | _ -> Some (l1 = l2)
 
@@ -763,6 +769,29 @@ let try_app (l,ann) (Id_aux (id,_),args) =
     | [E_aux (E_lit L_aux (L_zero,_),_)] -> Some (E_aux (E_lit (L_aux (L_false,new_l)),(l,ann)))
     | [E_aux (E_lit L_aux (L_one ,_),_)] -> Some (E_aux (E_lit (L_aux (L_true ,new_l)),(l,ann)))
     | _ -> None
+  else if id = Id "UInt" then
+    match args with
+    | [E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit,_), _)] ->
+       Some (E_aux (E_lit (L_aux (L_num (int_of_lit lit),new_l)),(l,ann)))
+    | _ -> None
+  else if id = Id "shl_int" then
+    match args with
+    | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
+       Some (E_aux (E_lit (L_aux (L_num (i lsl j),new_l)),(l,ann)))
+    | _ -> None
+  else if id = Id "ex_int" then
+    match args with
+    | [E_aux (E_lit _,_) as exp] -> Some exp
+    | _ -> None
+  else if id = Id "vector_access" then
+    match args with
+    | [E_aux (E_lit L_aux ((L_hex _ | L_bin _) as lit,_),_);
+       E_aux (E_lit L_aux (L_num i,_),_)] ->
+       let v = int_of_lit lit in
+       let b = (v lsr i) land 1 in
+       let lit' = if b = 1 then L_one else L_zero in
+       Some (E_aux (E_lit (L_aux (lit',new_l)),(l,ann)))
+    | _ -> None
   else None
 
 
@@ -777,6 +806,14 @@ let try_app_infix (l,ann) (E_aux (e1,ann1)) (Id_aux (id,_)) (E_aux (e2,ann2)) =
      | Some b -> Some (E_aux (E_lit (L_aux (lit b,new_l)), (l,ann)))
      | None -> None)
   | _ -> None
+
+let construct_lit_vector args =
+  let rec aux l = function
+    | [] -> Some (L_aux (L_bin (String.concat "" (List.rev l)),Unknown))
+    | E_aux (E_lit (L_aux ((L_zero | L_one) as lit,_)),_)::t ->
+       aux ((if lit = L_zero then "0" else "1")::l) t
+    | _ -> None
+  in aux [] args
 
 (* We may need to split up a pattern match if (1) we've been told to case split
    on a variable by the user, or (2) we monomorphised a constructor that's used
@@ -859,7 +896,13 @@ let split_defs splits defs =
           (match lit with L_true -> e2' | _ -> e3')
        | _ -> re (E_if (e1',e2',e3')))
     | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3,ord,const_prop_exp (ISubst.remove id substs) e4))
-    | E_vector es -> re (E_vector (List.map (const_prop_exp substs) es))
+    | E_vector es ->
+       let es' = List.map (const_prop_exp substs) es in
+       begin
+         match construct_lit_vector es' with
+         | None -> re (E_vector es')
+         | Some lit -> re (E_lit lit)
+       end
     | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,const_prop_exp substs e)) ies,
                                                          const_prop_opt_default substs ed))
     | E_vector_access (e1,e2) -> re (E_vector_access (const_prop_exp substs e1,const_prop_exp substs e2))
