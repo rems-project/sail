@@ -26,7 +26,7 @@ let isubst_union s1 s2 =
   |  (Some x), _ -> Some x
   |  _,  _ -> None) s1 s2
 
-let subst_src_typ substs t =
+let subst_nexp substs nexp =
   let rec s_snexp substs (Nexp_aux (ne,l) as nexp) =
     let re ne = Nexp_aux (ne,l) in
     let s_snexp = s_snexp substs in
@@ -41,7 +41,37 @@ let subst_src_typ substs t =
     | Nexp_minus (n1,n2) -> re (Nexp_minus (s_snexp n1, s_snexp n2))
     | Nexp_exp ne -> re (Nexp_exp (s_snexp ne))
     | Nexp_neg ne -> re (Nexp_neg (s_snexp ne))
-  in
+  in s_snexp substs nexp
+
+let rec subst_nc substs (NC_aux (nc,l) as n_constraint) =
+  let snexp nexp = subst_nexp substs nexp in
+  let snc nc = subst_nc substs nc in
+  let re nc = NC_aux (nc,l) in
+  match nc with
+  | NC_fixed (n1,n2) -> re (NC_fixed (snexp n1, snexp n2))
+  | NC_bounded_ge (n1,n2) -> re (NC_bounded_ge (snexp n1, snexp n2))
+  | NC_bounded_le (n1,n2) -> re (NC_bounded_le (snexp n1, snexp n2))
+  | NC_not_equal (n1,n2) -> re (NC_not_equal (snexp n1, snexp n2))
+  | NC_nat_set_bounded (kid,is) ->
+     begin
+       match KSubst.find kid substs with
+       | Nexp_aux (Nexp_constant i,_) ->
+          if List.mem i is then re NC_true else re NC_false
+       | nexp -> 
+          raise (Reporting_basic.err_general l
+                   ("Unable to substitute " ^ string_of_nexp nexp ^
+                       " into set constraint " ^ string_of_n_constraint n_constraint))
+       | exception Not_found -> n_constraint
+     end
+  | NC_or (nc1,nc2) -> re (NC_or (snc nc1, snc nc2))
+  | NC_and (nc1,nc2) -> re (NC_and (snc nc1, snc nc2))
+  | NC_true
+  | NC_false
+      -> n_constraint
+
+
+
+let subst_src_typ substs t =
   let rec s_styp substs ((Typ_aux (t,l)) as ty) =
     let re t = Typ_aux (t,l) in
     match t with
@@ -57,7 +87,7 @@ let subst_src_typ substs t =
        re (Typ_exist (kids,nc,s_styp substs t))
   and s_starg substs (Typ_arg_aux (ta,l) as targ) =
     match ta with
-    | Typ_arg_nexp ne -> Typ_arg_aux (Typ_arg_nexp (s_snexp substs ne),l)
+    | Typ_arg_nexp ne -> Typ_arg_aux (Typ_arg_nexp (subst_nexp substs ne),l)
     | Typ_arg_typ t -> Typ_arg_aux (Typ_arg_typ (s_styp substs t),l)
     | Typ_arg_order _ -> targ
   in s_styp substs t
@@ -428,7 +458,7 @@ let nexp_subst_fns substs refinements =
       | E_lit _
       | E_comment _ -> re e
       | E_sizeof ne -> re (E_sizeof ne) (* TODO: does this need done?  does it appear in type checked code? *)
-      | E_constraint _ -> re e (* TODO: actual substitution if necessary *)
+      | E_constraint nc -> re (E_constraint (subst_nc substs nc))
       | E_internal_exp (l,annot) -> re (E_internal_exp (l, s_tannot annot))
       | E_sizeof_internal (l,annot) -> re (E_sizeof_internal (l, s_tannot annot))
       | E_internal_exp_user ((l1,annot1),(l2,annot2)) ->
