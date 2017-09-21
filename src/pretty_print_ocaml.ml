@@ -439,11 +439,7 @@ let doc_exp_ocaml, doc_let_ocaml =
       "internal expression should have been rewritten before pretty-printing")
   | E_comment _ | E_comment_struc _ -> empty (* TODO Should we output comments? *)
   and let_exp (LB_aux(lb,_)) = match lb with
-  | LB_val_explicit(ts,pat,e) ->
-      prefix 2 1
-        (separate space [string "let"; doc_pat_ocaml pat; equals])
-        (top_exp false e)
-  | LB_val_implicit(pat,e) ->
+  | LB_val(pat,e) ->
       prefix 2 1
         (separate space [string "let"; doc_pat_ocaml pat; equals])
         (top_exp false e)

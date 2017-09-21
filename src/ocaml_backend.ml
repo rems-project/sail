@@ -141,7 +141,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
   | _ -> string ("EXP(" ^ string_of_exp exp ^ ")")
 and ocaml_letbind ctx (LB_aux (lb_aux, _)) =
   match lb_aux with
-  | LB_val_implicit (pat, exp) -> separate space [ocaml_pat ctx pat; equals; ocaml_atomic_exp ctx exp]
+  | LB_val (pat, exp) -> separate space [ocaml_pat ctx pat; equals; ocaml_atomic_exp ctx exp]
   | _ -> failwith "Ocaml: Explicit letbind found"
 and ocaml_pexps ctx = function
   | [pexp] -> ocaml_pexp ctx pexp

@@ -363,9 +363,7 @@ let nexp_subst_fns substs refinements =
          Pat_aux (Pat_when ((*s_pat*) p, s_exp e1, s_exp e2),(l,(*s_tannot*) annot))
     and s_letbind (LB_aux (lb,(l,annot))) =
       match lb with
-      | LB_val_explicit (tysch,p,e) ->
-         LB_aux (LB_val_explicit ((*s_typschm*) tysch,(*s_pat*) p,s_exp e), (l,(*s_tannot*) annot))
-      | LB_val_implicit (p,e) -> LB_aux (LB_val_implicit ((*s_pat*) p,s_exp e), (l,(*s_tannot*) annot))
+      | LB_val (p,e) -> LB_aux (LB_val ((*s_pat*) p,s_exp e), (l,(*s_tannot*) annot))
     and s_lexp (LEXP_aux (e,(l,annot))) =
       let re e = LEXP_aux (e,(l,(*s_tannot*) annot)) in
       match e with
@@ -460,8 +458,7 @@ and deexist_pexp (Pat_aux (pe,(l,annot))) =
   | Pat_when (p,e1,e2) -> Pat_aux (Pat_when ((*Type_check.strip_pat*) p,deexist_exp e1,deexist_exp e2),(l,annot))
 and deexist_letbind (LB_aux (lb,(l,annot))) =
   match lb with (* TODO, drop tysc if there's an exist? Do they even appear here? *)
-  | LB_val_explicit (tysc,p,e) -> LB_aux (LB_val_explicit (tysc,(*Type_check.strip_pat*) p,deexist_exp e),(l,annot))
-  | LB_val_implicit (p,e) -> LB_aux (LB_val_implicit ((*Type_check.strip_pat*) p,deexist_exp e),(l,annot))
+  | LB_val (p,e) -> LB_aux (LB_val ((*Type_check.strip_pat*) p,deexist_exp e),(l,annot))
 and deexist_lexp (LEXP_aux (le,(l,annot))) =
   let re le = LEXP_aux (le,(l,annot)) in
   match le with
@@ -759,11 +756,8 @@ let split_defs splits defs =
        Pat_aux (Pat_when (p, const_prop_exp substs' e1, const_prop_exp substs' e2),l)
   and const_prop_letbind substs (LB_aux (lb,annot)) =
     match lb with
-    | LB_val_explicit (tysch,p,e) ->
-       (LB_aux (LB_val_explicit (tysch,p,const_prop_exp substs e), annot),
-        remove_bound substs p)
-    | LB_val_implicit (p,e) ->
-       (LB_aux (LB_val_implicit (p,const_prop_exp substs e), annot),
+    | LB_val (p,e) ->
+       (LB_aux (LB_val (p,const_prop_exp substs e), annot),
         remove_bound substs p)
   and const_prop_lexp substs ((LEXP_aux (e,annot)) as le) =
     let re e = LEXP_aux (e,annot) in
@@ -817,7 +811,7 @@ let split_defs splits defs =
       let lg = Generated l in
       let id = match subi with Id_aux (i,l) -> Id_aux (i,lg) in
       let p = P_aux (P_id id, subannot) in
-      E_aux (E_let (LB_aux (LB_val_implicit (p,sube),(lg,annot)), exp),(lg,annot))
+      E_aux (E_let (LB_aux (LB_val (p,sube),(lg,annot)), exp),(lg,annot))
     else 
       let substs = isubst_from_list [subst] in
       let () = nexp_substs := [] in
@@ -1090,8 +1084,7 @@ let split_defs splits defs =
             ) patnsubsts)
     and map_letbind (LB_aux (lb,annot)) =
       match lb with
-      | LB_val_explicit (tysch,p,e) -> LB_aux (LB_val_explicit (tysch,check_single_pat p,map_exp e), annot)
-      | LB_val_implicit (p,e) -> LB_aux (LB_val_implicit (check_single_pat p,map_exp e), annot)
+      | LB_val (p,e) -> LB_aux (LB_val (check_single_pat p,map_exp e), annot)
     and map_lexp ((LEXP_aux (e,annot)) as le) =
       let re e = LEXP_aux (e,annot) in
       match e with

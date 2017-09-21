@@ -341,17 +341,7 @@ let doc_exp, doc_let =
       separate space [string "internal let"; doc_lexp lexp; equals; exp exp1; string "in"; exp exp2]
   | _ -> failwith ("Cannot print: " ^ Ast_util.string_of_exp expr)
   and let_exp (LB_aux(lb,_)) = match lb with
-    | LB_val_explicit(ts,pat,e) ->
-      (match ts with
-       | TypSchm_aux (TypSchm_ts (TypQ_aux (TypQ_no_forall,_),_),_) ->
-         prefix 2 1
-           (separate space [string "let"; parens (doc_typscm_atomic ts); doc_atomic_pat pat; equals])
-           (atomic_exp e)
-       | _ ->
-         prefix 2 1
-           (separate space [string "let"; doc_typscm_atomic ts; doc_atomic_pat pat; equals])
-           (atomic_exp e))
-  | LB_val_implicit(pat,e) ->
+  | LB_val(pat,e) ->
       prefix 2 1
         (separate space [string "let"; doc_atomic_pat pat; equals])
         (atomic_exp e)

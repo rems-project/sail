@@ -142,8 +142,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
  ; pat_exp                  : 'pat * 'exp -> 'pexp_aux
  ; pat_when                 : 'pat * 'exp * 'exp -> 'pexp_aux
  ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
- ; lB_val_explicit          : typschm * 'pat * 'exp -> 'letbind_aux
- ; lB_val_implicit          : 'pat * 'exp -> 'letbind_aux
+ ; lB_val          : 'pat * 'exp -> 'letbind_aux
  ; lB_aux                   : 'letbind_aux * 'a annot -> 'letbind
  ; pat_alg                  : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg
  }

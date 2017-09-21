@@ -948,8 +948,7 @@ let doc_exp_lem, doc_let_lem =
       raise (Reporting_basic.err_unreachable l
         "unsupported internal expression encountered while pretty-printing")
   and let_exp sequential mwords early_ret (LB_aux(lb,_)) = match lb with
-    | LB_val_explicit(_,pat,e)
-      | LB_val_implicit(pat,e) ->
+    | LB_val(pat,e) ->
        prefix 2 1
               (separate space [string "let"; doc_pat_lem sequential mwords true pat; equals])
               (top_exp sequential mwords early_ret false e)

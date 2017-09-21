@@ -358,12 +358,7 @@ and fv_of_pes consider_var bound used set pes =
     fv_of_pes consider_var bound us_e set_e pes
     
 and fv_of_let consider_var bound used set (LB_aux(lebind,_)) = match lebind with
-  | LB_val_explicit(typsch,pat,exp) ->
-    let bound_t,us_t = fv_of_typschm consider_var bound used typsch in
-    let bound_p, us_p = pat_bindings consider_var (Nameset.union bound bound_t) used pat in
-    let _,us_e,set_e = fv_of_exp consider_var (Nameset.union bound bound_t) used set exp in
-    (Nameset.union bound_t bound_p),Nameset.union us_t (Nameset.union us_p us_e),set_e
-  | LB_val_implicit(pat,exp) ->
+  | LB_val(pat,exp) ->
     let bound_p, us_p = pat_bindings consider_var bound used pat in
     let _,us_e,set_e = fv_of_exp consider_var bound used set exp in
     bound_p,Nameset.union us_p us_e,set_e

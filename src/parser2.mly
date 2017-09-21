@@ -836,7 +836,7 @@ block:
 
 %inline letbind:
   | pat Eq exp
-    { LB_aux (LB_val_implicit ($1, $3), loc $startpos $endpos) }
+    { LB_aux (LB_val ($1, $3), loc $startpos $endpos) }
 
 atomic_exp:
   | atomic_exp Colon atomic_typ

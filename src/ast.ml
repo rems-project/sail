@@ -374,8 +374,7 @@ and 'a pexp =
    Pat_aux of 'a pexp_aux * 'a annot
 
 and 'a letbind_aux =  (* Let binding *)
-   LB_val_explicit of typschm * 'a pat * 'a exp (* value binding, explicit type ('a pat must be total) *)
- | LB_val_implicit of 'a pat * 'a exp (* value binding, implicit type ('a pat must be total) *)
+   LB_val of 'a pat * 'a exp (* value binding, implicit type ('a pat must be total) *)
 
 and 'a letbind =
    LB_aux of 'a letbind_aux * 'a annot

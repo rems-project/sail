@@ -439,11 +439,8 @@ let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pa
 let rec to_ast_letbind (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.LB_aux(lb,l) : Parse_ast.letbind) : unit letbind =
   LB_aux(
     (match lb with
-    | Parse_ast.LB_val_explicit(typschm,pat,exp) ->
-      let typsch, k_env, _  = to_ast_typschm k_env def_ord typschm in
-      LB_val_explicit(typsch,to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp)
-    | Parse_ast.LB_val_implicit(pat,exp) ->
-      LB_val_implicit(to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp)
+    | Parse_ast.LB_val(pat,exp) ->
+      LB_val(to_ast_pat k_env def_ord pat, to_ast_exp k_env def_ord exp)
     ), (l,()))
 
 and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l) : Parse_ast.exp) : unit exp = 

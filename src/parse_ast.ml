@@ -318,8 +318,7 @@ and pexp =
    Pat_aux of pexp_aux * l
 
 and letbind_aux =  (* Let binding *)
-   LB_val_explicit of typschm * pat * exp (* value binding, explicit type (pat must be total) *)
- | LB_val_implicit of pat * exp (* value binding, implicit type (pat must be total) *)
+   LB_val of pat * exp (* value binding, implicit type (pat must be total) *)
 
 and letbind = 
    LB_aux of letbind_aux * l

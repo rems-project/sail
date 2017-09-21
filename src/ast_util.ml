@@ -85,7 +85,7 @@ let mk_fundef funcls =
   DEF_fundef
    (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), no_annot))
 
-let mk_letbind pat exp = LB_aux (LB_val_implicit (pat, exp), no_annot)
+let mk_letbind pat exp = LB_aux (LB_val (pat, exp), no_annot)
 
 let mk_val_spec vs_aux =
   DEF_spec (VS_aux (vs_aux, no_annot))
@@ -280,8 +280,7 @@ and map_pat_annot_aux f = function
 and map_fpat_annot f (FP_aux (FP_Fpat (id, pat), annot)) = FP_aux (FP_Fpat (id, map_pat_annot f pat), f annot)
 and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
 and map_letbind_annot_aux f = function
-  | LB_val_explicit (typschm, pat, exp) -> LB_val_explicit (typschm, map_pat_annot f pat, map_exp_annot f exp)
-  | LB_val_implicit (pat, exp) -> LB_val_implicit (map_pat_annot f pat, map_exp_annot f exp)
+  | LB_val (pat, exp) -> LB_val (map_pat_annot f pat, map_exp_annot f exp)
 and map_lexp_annot f (LEXP_aux (lexp, annot)) = LEXP_aux (map_lexp_annot_aux f lexp, f annot)
 and map_lexp_annot_aux f = function
   | LEXP_id id -> LEXP_id id
@@ -526,9 +525,7 @@ and string_of_lexp (LEXP_aux (lexp, _)) =
   | _ -> "LEXP"
 and string_of_letbind (LB_aux (lb, l)) =
   match lb with
-  | LB_val_implicit (pat, exp) -> string_of_pat pat ^ " = " ^ string_of_exp exp
-  | LB_val_explicit (typschm, pat, exp) ->
-     string_of_typschm typschm ^ " " ^ string_of_pat pat ^ " = " ^ string_of_exp exp
+  | LB_val (pat, exp) -> string_of_pat pat ^ " = " ^ string_of_exp exp
 
 let rec string_of_index_range (BF_aux (ir, _)) =
   match ir with

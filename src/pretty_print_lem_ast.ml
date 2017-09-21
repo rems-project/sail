@@ -349,10 +349,8 @@ let pp_lem_pat ppf p = base ppf (pp_format_pat_lem p)
 let rec pp_lem_let ppf (LB_aux(lb,(l,annot))) =
   let print_lb ppf lb =
     match lb with
-      | LB_val_explicit(ts,pat,exp) ->
-        fprintf ppf "@[<0>(%a %a %a %a)@]" kwd "LB_val_explicit" pp_lem_typscm ts pp_lem_pat pat pp_lem_exp exp
-      | LB_val_implicit(pat,exp) ->
-        fprintf ppf "@[<0>(%a %a %a)@]" kwd "LB_val_implicit" pp_lem_pat pat  pp_lem_exp exp in
+      | LB_val(pat,exp) ->
+        fprintf ppf "@[<0>(%a %a %a)@]" kwd "LB_val" pp_lem_pat pat  pp_lem_exp exp in
   fprintf ppf "@[<0>(LB_aux %a (%a, %a))@]" print_lb lb pp_lem_l l pp_annot annot
 
 and pp_lem_exp ppf (E_aux(e,(l,annot))) =

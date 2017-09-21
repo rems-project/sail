@@ -1946,15 +1946,14 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_let (LB_aux (letbind, (let_loc, _)), exp), _ ->
      begin
        match letbind with
-       | LB_val_explicit (typschm, pat, bind) -> assert false
-       | LB_val_implicit (P_aux (P_typ (ptyp, _), _) as pat, bind) ->
+       | LB_val (P_aux (P_typ (ptyp, _), _) as pat, bind) ->
           let checked_bind = crule check_exp env bind ptyp in
           let tpat, env = bind_pat env pat ptyp in
-          annot_exp (E_let (LB_aux (LB_val_implicit (tpat, checked_bind), (let_loc, None)), crule check_exp env exp typ)) typ
-       | LB_val_implicit (pat, bind) ->
+          annot_exp (E_let (LB_aux (LB_val (tpat, checked_bind), (let_loc, None)), crule check_exp env exp typ)) typ
+       | LB_val (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
           let tpat, env = bind_pat env pat (typ_of inferred_bind) in
-          annot_exp (E_let (LB_aux (LB_val_implicit (tpat, inferred_bind), (let_loc, None)), crule check_exp env exp typ)) typ
+          annot_exp (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, None)), crule check_exp env exp typ)) typ
      end
   | E_app_infix (x, op, y), _ when List.length (Env.get_overloads (deinfix op) env) > 0 ->
      check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ()))) typ
@@ -2965,15 +2964,10 @@ and propagate_letbind_effect (LB_aux (lb, (l, annot))) =
   | Some (typq, typ, eff) -> LB_aux (p_lb, (l, Some (typq, typ, eff))), eff
   | None -> LB_aux (p_lb, (l, None)), eff
 and propagate_letbind_effect_aux = function
-  | LB_val_explicit (typschm, pat, exp) ->
+  | LB_val (pat, exp) ->
      let p_pat = propagate_pat_effect pat in
      let p_exp = propagate_exp_effect exp in
-     LB_val_explicit (typschm, p_pat, p_exp),
-     union_effects (effect_of_pat p_pat) (effect_of p_exp)
-  | LB_val_implicit (pat, exp) ->
-     let p_pat = propagate_pat_effect pat in
-     let p_exp = propagate_exp_effect exp in
-     LB_val_implicit (p_pat, p_exp),
+     LB_val (p_pat, p_exp),
      union_effects (effect_of_pat p_pat) (effect_of p_exp)
 
 and propagate_lexp_effect (LEXP_aux (lexp, annot)) =
@@ -3010,15 +3004,14 @@ and propagate_lexp_effect_aux = function
 let check_letdef env (LB_aux (letbind, (l, _))) =
   begin
     match letbind with
-    | LB_val_explicit (typschm, pat, bind) -> assert false
-    | LB_val_implicit (P_aux (P_typ (typ_annot, pat), _), bind) ->
+    | LB_val (P_aux (P_typ (typ_annot, pat), _), bind) ->
        let checked_bind = crule check_exp env (strip_exp bind) typ_annot in
        let tpat, env = bind_pat env (strip_pat pat) typ_annot in
-       [DEF_val (LB_aux (LB_val_implicit (P_aux (P_typ (typ_annot, tpat), (l, Some (env, typ_annot, no_effect))), checked_bind), (l, None)))], env
-    | LB_val_implicit (pat, bind) ->
+       [DEF_val (LB_aux (LB_val (P_aux (P_typ (typ_annot, tpat), (l, Some (env, typ_annot, no_effect))), checked_bind), (l, None)))], env
+    | LB_val (pat, bind) ->
        let inferred_bind = irule infer_exp env (strip_exp bind) in
        let tpat, env = bind_pat env (strip_pat pat) (typ_of inferred_bind) in
-       [DEF_val (LB_aux (LB_val_implicit (tpat, inferred_bind), (l, None)))], env
+       [DEF_val (LB_aux (LB_val (tpat, inferred_bind), (l, None)))], env
   end
 
 let check_funcl env (FCL_aux (FCL_Funcl (id, pat, exp), (l, _))) typ =

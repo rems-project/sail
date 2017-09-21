@@ -999,12 +999,7 @@ patsexp:
 
 letbind:
   | Let_ atomic_pat Eq exp
-    { lbloc (LB_val_implicit($2,$4)) }
-  | Let_ typquant atomic_typ atomic_pat Eq exp
-    { lbloc (LB_val_explicit((mk_typschm $2 $3 2 3),$4,$6)) }
-/* This introduces one shift reduce conflict, that basically points out that an atomic_pat with a type declared is the Same as this
-  | Let_ Lparen typ Rparen atomic_pat Eq exp 
-    { assert false (* lbloc (LB_val_explicit((mk_typschm (mk_typqn ()) $2 2 2),$3,$5)) *)} */
+    { lbloc (LB_val($2,$4)) }
 
 funcl:
   | id atomic_pat Eq exp
