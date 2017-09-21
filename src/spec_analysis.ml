@@ -291,8 +291,6 @@ let rec pat_bindings consider_var bound used (P_aux(p,(_,tannot))) =
     List.fold_right (fun (Ast.FP_aux(Ast.FP_Fpat(_,p),_)) (b,n) ->
         pat_bindings consider_var bound used p) fpats (bound,used)
   | P_vector pats | Ast.P_vector_concat pats | Ast.P_tup pats | Ast.P_list pats -> list_fv bound used pats
-  | P_vector_indexed ipats ->
-    List.fold_right (fun (_,p) (b,n) -> pat_bindings consider_var b n p) ipats (bound,used)
   | _ -> bound,used
 
 let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.t * Nameset.t * Nameset.t) =
@@ -317,13 +315,6 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   | E_for(id,from,to_,by,_,body) ->
     let _,used,set = list_fv bound used set [from;to_;by] in
     fv_of_exp consider_var (Nameset.add (string_of_id id) bound) used set body
-  | E_vector_indexed (es_i,(Ast.Def_val_aux(default,_))) ->
-    let bound,used,set =
-      List.fold_right
-        (fun (_,e) (b,u,s) -> fv_of_exp consider_var b u s e) es_i (bound,used,set) in
-    (match default with
-     | Def_val_empty -> bound,used,set
-     | Def_val_dec e -> fv_of_exp consider_var bound used set e)
   | E_vector_access(v,i) -> list_fv bound used set [v;i]
   | E_vector_subrange(v,i1,i2) -> list_fv bound used set [v;i1;i2]
   | E_vector_update(v,i,e) -> list_fv bound used set [v;i;e]

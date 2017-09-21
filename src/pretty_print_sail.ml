@@ -115,7 +115,6 @@ let doc_pat, doc_atomic_pat =
   | P_app(id,[]) -> doc_id id
   | P_record(fpats,_) -> braces (separate_map semi_sp fpat fpats)
   | P_vector pats  -> brackets (separate_map comma_sp atomic_pat pats)
-  | P_vector_indexed ipats  -> brackets (separate_map comma_sp npat ipats)
   | P_tup pats  -> parens (separate_map comma_sp atomic_pat pats)
   | P_list pats  -> squarebarbars (separate_map semi_sp atomic_pat pats)
   | P_cons (pat1, pat2) -> separate space [atomic_pat pat1; coloncolon; pat pat2]
@@ -263,13 +262,6 @@ let doc_exp, doc_let =
                         ((match l with | L_one -> "1" | L_zero -> "0" | L_undef -> "u" | _ -> assert false) ^ rst)
                       | _ -> assert false)) exps ""))
           | _ -> default_print ()))
-  | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
-    let default_string =
-      (match default with
-        | Def_val_empty -> string ""
-        | Def_val_dec e -> concat [semi; space; string "default"; equals; (exp e)]) in
-      let iexp (i,e) = doc_op equals (doc_int i) (exp e) in
-      brackets (concat [(separate_map comma iexp iexps); default_string])
   | E_vector_update(v,e1,e2) ->
       brackets (doc_op (string "with") (exp v) (doc_op equals (atomic_exp e1) (exp e2)))
   | E_vector_update_subrange(v,e1,e2,e3) ->

@@ -198,7 +198,6 @@ let doc_pat_ocaml =
   | P_list pats -> brackets (separate_map semi pat pats) (*Never seen but easy in ocaml*)
   | P_cons (p,p') -> doc_op (string "::") (pat p) (pat p')
   | P_record _ -> raise (Reporting_basic.err_unreachable l "unhandled record pattern")
-  | P_vector_indexed _ -> raise (Reporting_basic.err_unreachable l  "unhandled vector_indexed pattern")
   | P_vector_concat _ -> raise (Reporting_basic.err_unreachable l "unhandled vector_concat pattern")
   in pat
 
@@ -391,42 +390,6 @@ let doc_exp_ocaml, doc_let_ocaml =
            parens (separate space [call; parens (separate comma_sp [squarebars (separate_map semi exp exps);
                                                                    string start;
                                                                    string dir_out])])
-    | E_vector_indexed (iexps, (Def_val_aux (default,_))) ->
-      let (start, len, order, _) = vector_typ_args_of (Env.base_typ_of env typ) in
-      (*match annot with
-       | Base((_,t),_,_,_,_,_) ->
-         match t.t with
-         | Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])
-         | Tabbrev(_,{t= Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])})
-         | Tapp("reg", [TA_typ {t =Tapp("vector", [TA_nexp start; TA_nexp len; TA_ord order; _])}]) ->*)
-           let call =
-             if is_bitvector_typ (Env.base_typ_of env typ)
-             then (string "make_indexed_bitv")
-             else (string "make_indexed_v") in
-           let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
-           let start = match start with
-             | Nexp_aux (Nexp_constant i, _) -> string_of_int i
-             | Nexp_aux (Nexp_exp (Nexp_aux (Nexp_constant i, _)), _) ->
-               string_of_int (Util.power 2 i)
-             | _ -> if dir then "0" else string_of_int (List.length iexps) in
-           let size = match len with
-             | Nexp_aux (Nexp_constant i, _) -> string_of_int i
-             | Nexp_aux (Nexp_exp (Nexp_aux (Nexp_constant i, _)), _) ->
-               string_of_int (Util.power 2 i)
-             | _ ->
-               raise (Reporting_basic.err_unreachable l
-                 "indexed vector without known length") in
-           let default_string =
-             (match default with
-              | Def_val_empty -> string "None"
-              | Def_val_dec e -> parens (string "Some " ^^ (exp e))) in
-           let iexp (i,e) = parens (separate_map comma_sp (fun x -> x) [(doc_int i); (exp e)]) in
-           parens (separate space [call;
-                                   (brackets (separate_map semi iexp iexps));
-                                   default_string;
-                                   string start;
-                                   string size;
-                                   string dir_out])
   | E_vector_update(v,e1,e2) ->
     (*Has never happened to date*)
       brackets (doc_op (string "with") (exp v) (doc_op equals (exp e1) (exp e2)))

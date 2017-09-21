@@ -338,8 +338,6 @@ let rec pp_format_pat_lem (P_aux(p,(l,annot))) =
                                           "(FP_Fpat " ^ pp_format_id_lem id ^ " " ^ pp_format_pat_lem fpat ^ ")") fpats
                        ^ "])"
   | P_vector(pats) -> "(P_vector [" ^ list_format "; " pp_format_pat_lem pats ^ "])"
-  | P_vector_indexed(ipats) ->
-    "(P_vector_indexed [" ^ list_format "; " (fun (i,p) -> Printf.sprintf "(%d, %s)" i (pp_format_pat_lem p)) ipats ^ "])"
   | P_vector_concat(pats) -> "(P_vector_concat [" ^ list_format "; " pp_format_pat_lem pats ^ "])"
   | P_tup(pats) -> "(P_tup [" ^ (list_format "; " pp_format_pat_lem pats) ^ "])"
   | P_list(pats) -> "(P_list [" ^ (list_format "; " pp_format_pat_lem pats) ^ "])"
@@ -387,15 +385,6 @@ and pp_lem_exp ppf (E_aux(e,(l,annot))) =
         pp_lem_ord order pp_lem_exp exp4 pp_lem_l l pp_annot annot
     | E_vector(exps) -> fprintf ppf "@[<0>(E_aux (%a [%a]) (%a, %a))@]"
                           kwd "E_vector" (list_pp pp_semi_lem_exp pp_lem_exp) exps pp_lem_l l pp_annot annot
-    | E_vector_indexed(iexps,(Def_val_aux (default, (dl,dannot)))) ->
-      let iformat ppf (i,e) = fprintf ppf "@[<1>(%i %a %a) %a@]" i kwd ", " pp_lem_exp e kwd ";" in
-      let lformat ppf (i,e) = fprintf ppf "@[<1>(%i %a %a) @]" i kwd ", " pp_lem_exp e in
-      let default_string ppf _ = (match default with
-        | Def_val_empty -> fprintf ppf "(Def_val_aux Def_val_empty (%a,%a))" pp_lem_l dl pp_annot dannot
-        | Def_val_dec e -> fprintf ppf "(Def_val_aux (Def_val_dec %a) (%a,%a))"
-                             pp_lem_exp e pp_lem_l dl pp_annot dannot) in
-      fprintf ppf "@[<0>(E_aux (%a [%a] %a) (%a, %a))@]" kwd "E_vector_indexed"
-        (list_pp iformat lformat) iexps default_string () pp_lem_l l pp_annot annot
     | E_vector_access(v,e) ->
       fprintf ppf "@[<0>(E_aux (%a %a %a) (%a, %a))@]"
         kwd "E_vector_access" pp_lem_exp v pp_lem_exp e pp_lem_l l pp_annot annot

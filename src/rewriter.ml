@@ -131,9 +131,6 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
     | E_if (e1,e2,e3) -> union_eff_exps [e1;e2;e3]
     | E_for (_,e1,e2,e3,_,e4) -> union_eff_exps [e1;e2;e3;e4]
     | E_vector es -> union_eff_exps es
-    | E_vector_indexed (ies,opt_default) ->
-       let (_,es) = List.split ies in
-       union_effects (effect_of_opt_default opt_default) (union_eff_exps es)
     | E_vector_access (e1,e2) -> union_eff_exps [e1;e2]
     | E_vector_subrange (e1,e2,e3) -> union_eff_exps [e1;e2;e3]
     | E_vector_update (e1,e2,e3) -> union_eff_exps [e1;e2;e3]
@@ -363,7 +360,6 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot))) =
     rewrap (P_record(List.map (fun (FP_aux(FP_Fpat(id,pat),pannot)) -> FP_aux(FP_Fpat(id, rewrite pat), pannot)) fpats,
                      false))
   | P_vector pats -> rewrap (P_vector(List.map rewrite pats))
-  | P_vector_indexed ipats -> rewrap (P_vector_indexed(List.map (fun (i,pat) -> (i, rewrite pat)) ipats))
   | P_vector_concat pats -> rewrap (P_vector_concat (List.map rewrite pats))
   | P_tup pats -> rewrap (P_tup (List.map rewrite pats))
   | P_list pats -> rewrap (P_list (List.map rewrite pats))
@@ -389,11 +385,6 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot))) =
   | E_for (id, e1, e2, e3, o, body) ->
     rewrap (E_for (id, rewrite e1, rewrite e2, rewrite e3, o, rewrite body))
   | E_vector exps -> rewrap (E_vector (List.map rewrite exps))
-  | E_vector_indexed (exps,(Def_val_aux(default,dannot))) ->
-    let def = match default with
-      | Def_val_empty -> default
-      | Def_val_dec e -> Def_val_dec (rewrite e) in
-    rewrap (E_vector_indexed (List.map (fun (i,e) -> (i, rewrite e)) exps, Def_val_aux(def,dannot)))
   | E_vector_access (vec,index) -> rewrap (E_vector_access (rewrite vec,rewrite index))
   | E_vector_subrange (vec,i1,i2) ->
     rewrap (E_vector_subrange (rewrite vec,rewrite i1,rewrite i2))
@@ -626,7 +617,6 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_app            : id * 'pat list -> 'pat_aux
   ; p_record         : 'fpat list * bool -> 'pat_aux
   ; p_vector         : 'pat list -> 'pat_aux
-  ; p_vector_indexed : (int * 'pat) list -> 'pat_aux
   ; p_vector_concat  : 'pat list -> 'pat_aux
   ; p_tup            : 'pat list -> 'pat_aux
   ; p_list           : 'pat list -> 'pat_aux
@@ -647,7 +637,6 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat
   | P_app (id,ps)       -> alg.p_app (id,List.map (fold_pat alg) ps)
   | P_record (ps,b)     -> alg.p_record (List.map (fold_fpat alg) ps, b)
   | P_vector ps         -> alg.p_vector (List.map (fold_pat alg) ps)
-  | P_vector_indexed ps -> alg.p_vector_indexed (List.map (fun (i,p) -> (i, fold_pat alg p)) ps)
   | P_vector_concat ps  -> alg.p_vector_concat (List.map (fold_pat alg) ps)
   | P_tup ps            -> alg.p_tup (List.map (fold_pat alg) ps)
   | P_list ps           -> alg.p_list (List.map (fold_pat alg) ps)
@@ -663,7 +652,7 @@ and fold_fpat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a fpat_a
 and fold_fpat (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a fpat -> 'fpat =
   function
   | FP_aux (fpat,annot) -> alg.fP_aux (fold_fpat_aux alg fpat,annot)
-                                      
+
 (* identity fold from term alg to term alg *)
 let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg = 
   { p_lit            = (fun lit -> P_lit lit)
@@ -675,7 +664,6 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   ; p_app            = (fun (id,ps) -> P_app (id,ps))
   ; p_record         = (fun (ps,b) -> P_record (ps,b))
   ; p_vector         = (fun ps -> P_vector ps)
-  ; p_vector_indexed = (fun ps -> P_vector_indexed ps)
   ; p_vector_concat  = (fun ps -> P_vector_concat ps)
   ; p_tup            = (fun ps -> P_tup ps)
   ; p_list           = (fun ps -> P_list ps)
@@ -699,7 +687,6 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_if                     : 'exp * 'exp * 'exp -> 'exp_aux
   ; e_for                    : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux
   ; e_vector                 : 'exp list -> 'exp_aux
-  ; e_vector_indexed         : (int * 'exp) list * 'opt_default -> 'exp_aux
   ; e_vector_access          : 'exp * 'exp -> 'exp_aux
   ; e_vector_subrange        : 'exp * 'exp * 'exp -> 'exp_aux
   ; e_vector_update          : 'exp * 'exp * 'exp -> 'exp_aux
@@ -764,8 +751,6 @@ let rec fold_exp_aux alg = function
   | E_for (id,e1,e2,e3,order,e4) ->
      alg.e_for (id,fold_exp alg e1, fold_exp alg e2, fold_exp alg e3, order, fold_exp alg e4)
   | E_vector es -> alg.e_vector (List.map (fold_exp alg) es)
-  | E_vector_indexed (es,opt) ->
-     alg.e_vector_indexed (List.map (fun (id,e) -> (id,fold_exp alg e)) es, fold_opt_default alg opt)
   | E_vector_access (e1,e2) -> alg.e_vector_access (fold_exp alg e1, fold_exp alg e2)
   | E_vector_subrange (e1,e2,e3) ->
      alg.e_vector_subrange (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
@@ -841,7 +826,6 @@ let id_exp_alg =
   ; e_if = (fun (e1,e2,e3) -> E_if (e1,e2,e3))
   ; e_for = (fun (id,e1,e2,e3,order,e4) -> E_for (id,e1,e2,e3,order,e4))
   ; e_vector = (fun es -> E_vector es)
-  ; e_vector_indexed = (fun (es,opt2) -> E_vector_indexed (es,opt2))
   ; e_vector_access = (fun (e1,e2) -> E_vector_access (e1,e2))
   ; e_vector_subrange =  (fun (e1,e2,e3) -> E_vector_subrange (e1,e2,e3))
   ; e_vector_update = (fun (e1,e2,e3) -> E_vector_update (e1,e2,e3))
@@ -910,10 +894,6 @@ let compute_pat_alg bot join =
   ; p_app            = (fun (id,ps) -> split_join (fun ps -> P_app (id,ps)) ps)
   ; p_record         = (fun (ps,b) -> split_join (fun ps -> P_record (ps,b)) ps)
   ; p_vector         = split_join (fun ps -> P_vector ps)
-  ; p_vector_indexed = (fun ps ->
-                          let (is,ps) = List.split ps in
-                          let (vs,ps) = List.split ps in
-                          (join_list vs, P_vector_indexed (List.combine is ps)))
   ; p_vector_concat  = split_join (fun ps -> P_vector_concat ps)
   ; p_tup            = split_join (fun ps -> P_tup ps)
   ; p_list           = split_join (fun ps -> P_list ps)
@@ -938,10 +918,6 @@ let compute_exp_alg bot join =
   ; e_for = (fun (id,(v1,e1),(v2,e2),(v3,e3),order,(v4,e4)) ->
     (join_list [v1;v2;v3;v4], E_for (id,e1,e2,e3,order,e4)))
   ; e_vector = split_join (fun es -> E_vector es)
-  ; e_vector_indexed = (fun (es,(v2,opt2)) ->
-    let (is,es) = List.split es in
-    let (vs,es) = List.split es in
-    (join_list (vs @ [v2]), E_vector_indexed (List.combine is es,opt2)))
   ; e_vector_access = (fun ((v1,e1),(v2,e2)) -> (join v1 v2, E_vector_access (e1,e2)))
   ; e_vector_subrange =  (fun ((v1,e1),(v2,e2),(v3,e3)) -> (join_list [v1;v2;v3], E_vector_subrange (e1,e2,e3)))
   ; e_vector_update = (fun ((v1,e1),(v2,e2),(v3,e3)) -> (join_list [v1;v2;v3], E_vector_update (e1,e2,e3)))
@@ -1178,7 +1154,6 @@ let rewrite_sizeof (Defs defs) =
     ; e_if = (fun ((e1,e1'),(e2,e2'),(e3,e3')) -> (E_if (e1,e2,e3), E_if (e1',e2',e3')))
     ; e_for = (fun (id,(e1,e1'),(e2,e2'),(e3,e3'),order,(e4,e4')) -> (E_for (id,e1,e2,e3,order,e4), E_for (id,e1',e2',e3',order,e4')))
     ; e_vector = (fun es -> let (es, es') = List.split es in (E_vector es, E_vector es'))
-    ; e_vector_indexed = (fun (es,(opt2,opt2')) -> let (is, es) = List.split es in let (es, es') = List.split es in let (es, es') = (List.combine is es, List.combine is es') in (E_vector_indexed (es,opt2), E_vector_indexed (es',opt2')))
     ; e_vector_access = (fun ((e1,e1'),(e2,e2')) -> (E_vector_access (e1,e2), E_vector_access (e1',e2')))
     ; e_vector_subrange =  (fun ((e1,e1'),(e2,e2'),(e3,e3')) -> (E_vector_subrange (e1,e2,e3), E_vector_subrange (e1',e2',e3')))
     ; e_vector_update = (fun ((e1,e1'),(e2,e2'),(e3,e3')) -> (E_vector_update (e1,e2,e3), E_vector_update (e1',e2',e3')))
@@ -1377,7 +1352,6 @@ let remove_vector_concat_pat pat =
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
     ; p_record = (fun (fpats,b) -> P_record (fpats, b))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
-    ; p_vector_indexed = (fun ps -> P_vector_indexed (List.map (fun (i,p) -> (i,p false)) ps))
     ; p_vector_concat  = (fun ps -> P_vector_concat (List.map (fun p -> p false) ps))
     ; p_tup            = (fun ps -> P_tup (List.map (fun p -> p false) ps))
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
@@ -1511,10 +1485,6 @@ let remove_vector_concat_pat pat =
                                         (P_record (ps,b),List.flatten decls))
     ; p_vector         = (fun ps -> let (ps,decls) = List.split ps in
                                     (P_vector ps,List.flatten decls))
-    ; p_vector_indexed = (fun ps -> let (is,ps) = List.split ps in
-                                    let (ps,decls) = List.split ps in
-                                    let ps = List.combine is ps in
-                                    (P_vector_indexed ps,List.flatten decls))
     ; p_vector_concat  = (fun ps -> let (ps,decls) = List.split ps in
                                     (P_vector_concat ps,List.flatten decls))
     ; p_tup            = (fun ps -> let (ps,decls) = List.split ps in
@@ -1740,10 +1710,6 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
     (match subsumes_pat pat1 pat2, subsumes_pat pats1 pats2 with
     | Some substs1, Some substs2 -> Some (substs1 @ substs2)
     | _ -> None)
-  | P_vector_indexed ips1, P_vector_indexed ips2 ->
-    let (is1,ps1) = List.split ips1 in
-    let (is2,ps2) = List.split ips2 in
-    if is1 = is2 then subsumes_list subsumes_pat ps1 ps2 else None
   | _ -> None
 and subsumes_fpat (FP_aux (FP_Fpat (id1,pat1),_)) (FP_aux (FP_Fpat (id2,pat2),_)) =
   if id1 = id2 then subsumes_pat pat1 pat2 else None
@@ -1782,8 +1748,6 @@ let rec pat_to_exp (P_aux (pat,(l,annot))) =
   | P_tup pats -> rewrap (E_tuple (List.map pat_to_exp pats))
   | P_list pats -> rewrap (E_list (List.map pat_to_exp pats))
   | P_cons (p,ps) -> rewrap (E_cons (pat_to_exp p, pat_to_exp ps))
-  | P_vector_indexed ipats -> raise (Reporting_basic.err_unreachable l
-      "pat_to_exp not implemented for P_vector_indexed") (* TODO *)
 and fpat_to_fexp (FP_aux (FP_Fpat (id,pat),(l,annot))) =
   FE_aux (FE_Fexp (id, pat_to_exp pat),(l,annot))
 
@@ -1853,7 +1817,7 @@ let bitwise_and_exp exp1 exp2 =
 let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with
 | P_lit _ | P_wild | P_id _ -> false
 | P_as (pat,_) | P_typ (_,pat) -> contains_bitvector_pat pat
-| P_vector _ | P_vector_concat _ | P_vector_indexed _ ->
+| P_vector _ | P_vector_concat _ ->
     let typ = Env.base_typ_of (env_of_annot annot) (typ_of_annot annot) in
     is_bitvector_typ typ
 | P_app (_,pats) | P_tup pats | P_list pats ->
@@ -1881,7 +1845,6 @@ let remove_bitvector_pat pat =
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
     ; p_record = (fun (fpats,b) -> P_record (fpats, b))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
-    ; p_vector_indexed = (fun ps -> P_vector_indexed (List.map (fun (i,p) -> (i,p false)) ps))
     ; p_vector_concat  = (fun ps -> P_vector_concat (List.map (fun p -> p false) ps))
     ; p_tup            = (fun ps -> P_tup (List.map (fun p -> p false) ps))
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
@@ -1893,8 +1856,6 @@ let remove_bitvector_pat pat =
           let (l,_) = annot in
           match pat, is_bitvector_typ t, contained_in_p_as with
           | P_vector _, true, false
-          | P_vector_indexed _, true, false ->
-            P_aux (P_as (P_aux (pat,annot),fresh_id "b__" l), annot)
           | _ -> P_aux (pat,annot)
         )
     ; fP_aux = (fun (fpat,annot) -> FP_aux (fpat,annot))
@@ -2047,10 +2008,6 @@ let remove_bitvector_pat pat =
                                         (P_record (ps,b), flatten_guards_decls gdls))
     ; p_vector         = (fun ps -> let (ps,gdls) = List.split ps in
                                     (P_vector ps, flatten_guards_decls gdls))
-    ; p_vector_indexed = (fun p -> let (is,p) = List.split p in
-                                   let (ps,gdls) = List.split p in
-                                   let ps = List.combine is ps in
-                                   (P_vector_indexed ps, flatten_guards_decls gdls))
     ; p_vector_concat  = (fun ps -> let (ps,gdls) = List.split ps in
                                     (P_vector_concat ps, flatten_guards_decls gdls))
     ; p_tup            = (fun ps -> let (ps,gdls) = List.split ps in
@@ -2065,8 +2022,6 @@ let remove_bitvector_pat pat =
                            (match pat, is_bitvector_typ t with
                            | P_as (P_aux (P_vector ps, _), id), true ->
                              (P_aux (P_id id, annot), collect_guards_decls ps id t)
-                           | P_as (P_aux (P_vector_indexed ips, _), id), true ->
-                             (P_aux (P_id id, annot), collect_guards_decls_indexed ips id t)
                            | _, _ -> (P_aux (pat,annot), gdls)))
     ; fP_aux           = (fun ((fpat,gdls),annot) -> (FP_aux (fpat,annot), gdls))
     ; fP_Fpat          = (fun (id,(pat,gdls)) -> (FP_Fpat (id,pat), gdls))
@@ -2843,12 +2798,6 @@ let rewrite_defs_letbind_effects  =
     | E_vector exps ->
        n_exp_nameL exps (fun exps ->
        k (rewrap (E_vector exps)))
-    | E_vector_indexed (exps,opt_default)  ->
-       let (is,exps) = List.split exps in
-       n_exp_nameL exps (fun exps -> 
-       n_opt_default opt_default (fun opt_default ->
-       let exps = List.combine is exps in
-       k (rewrap (E_vector_indexed (exps,opt_default)))))
     | E_vector_access (exp1,exp2) ->
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->

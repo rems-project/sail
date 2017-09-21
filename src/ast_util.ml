@@ -222,8 +222,6 @@ and map_exp_annot_aux f = function
   | E_if (cond, t, e) -> E_if (map_exp_annot f cond, map_exp_annot f t, map_exp_annot f e)
   | E_for (v, e1, e2, e3, o, e4) -> E_for (v, map_exp_annot f e1, map_exp_annot f e2, map_exp_annot f e3, o, map_exp_annot f e4)
   | E_vector exps -> E_vector (List.map (map_exp_annot f) exps)
-  | E_vector_indexed (iexps, opt_default) ->
-     E_vector_indexed (List.map (fun (i, exp) -> (i, map_exp_annot f exp)) iexps, map_opt_default_annot f opt_default)
   | E_vector_access (exp1, exp2) -> E_vector_access (map_exp_annot f exp1, map_exp_annot f exp2)
   | E_vector_subrange (exp1, exp2, exp3) -> E_vector_subrange (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
   | E_vector_update (exp1, exp2, exp3) -> E_vector_update (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
@@ -277,7 +275,6 @@ and map_pat_annot_aux f = function
   | P_tup pats -> P_tup (List.map (map_pat_annot f) pats)
   | P_list pats -> P_list (List.map (map_pat_annot f) pats)
   | P_vector_concat pats -> P_vector_concat (List.map (map_pat_annot f) pats)
-  | P_vector_indexed ipats -> P_vector_indexed (List.map (fun (i, pat) -> (i, map_pat_annot f pat)) ipats)
   | P_vector pats -> P_vector (List.map (map_pat_annot f) pats)
   | P_cons (pat1, pat2) -> P_cons (map_pat_annot f pat1, map_pat_annot f pat2)
 and map_fpat_annot f (FP_aux (FP_Fpat (id, pat), annot)) = FP_aux (FP_Fpat (id, map_pat_annot f pat), f annot)

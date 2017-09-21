@@ -327,8 +327,6 @@ let nexp_subst_fns substs refinements =
       | E_if (e1,e2,e3) -> re (E_if (s_exp e1, s_exp e2, s_exp e3))
       | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,s_exp e1,s_exp e2,s_exp e3,ord,s_exp e4))
       | E_vector es -> re (E_vector (List.map s_exp es))
-      | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,s_exp e)) ies,
-                                                           s_opt_default ed))
       | E_vector_access (e1,e2) -> re (E_vector_access (s_exp e1,s_exp e2))
       | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (s_exp e1,s_exp e2,s_exp e3))
       | E_vector_update (e1,e2,e3) -> re (E_vector_update (s_exp e1,s_exp e2,s_exp e3))
@@ -401,7 +399,6 @@ let bindings_from_pat p =
     | P_list ps
       -> List.concat (List.map aux_pat ps)
     | P_record (fps,_) -> List.concat (List.map aux_fpat fps)
-    | P_vector_indexed ips -> List.concat (List.map (fun (_,p) -> aux_pat p) ips)
     | P_cons (p1,p2) -> aux_pat p1 @ aux_pat p2
   and aux_fpat (FP_aux (FP_Fpat (_,p), _)) = aux_pat p
   in aux_pat p
@@ -440,12 +437,6 @@ let rec deexist_exp (E_aux (e,(l,(annot : Type_check.tannot))) as exp) =
   | E_for (id,e1,e2,e3,ord,e4) ->
      re (E_for (id,deexist_exp e1,deexist_exp e2,deexist_exp e3,ord,deexist_exp e4))
   | E_vector es -> re (E_vector (List.map deexist_exp es))
-  | E_vector_indexed (ies,def) ->
-     re (E_vector_indexed
-           (List.map (fun (i,e) -> (i,deexist_exp e)) ies,
-            match def with
-            | Def_val_aux (Def_val_empty,(l,ann)) -> Def_val_aux (Def_val_empty,(l,ann))
-            | Def_val_aux (Def_val_dec e,(l,ann)) -> Def_val_aux (Def_val_dec (deexist_exp e),(l,ann))))
   | E_vector_access (e1,e2) -> re (E_vector_access (deexist_exp e1,deexist_exp e2))
   | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (deexist_exp e1,deexist_exp e2,deexist_exp e3))
   | E_vector_update (e1,e2,e3) -> re (E_vector_update (deexist_exp e1,deexist_exp e2,deexist_exp e3))
@@ -719,8 +710,6 @@ let split_defs splits defs =
        | _ -> re (E_if (e1',e2',e3')))
     | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3,ord,const_prop_exp (ISubst.remove id substs) e4))
     | E_vector es -> re (E_vector (List.map (const_prop_exp substs) es))
-    | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,const_prop_exp substs e)) ies,
-                                                         const_prop_opt_default substs ed))
     | E_vector_access (e1,e2) -> re (E_vector_access (const_prop_exp substs e1,const_prop_exp substs e2))
     | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3))
     | E_vector_update (e1,e2,e3) -> re (E_vector_update (const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3))
@@ -950,8 +939,6 @@ let split_defs splits defs =
            relist fpat (fun fps -> P_record (fps,flag)) fps
         | P_vector ps ->
            relist spl (fun ps -> P_vector ps) ps
-        | P_vector_indexed ips ->
-           relist ipat (fun ips -> P_vector_indexed ips) ips
         | P_vector_concat ps ->
            relist spl (fun ps -> P_vector_concat ps) ps
         | P_tup ps ->
@@ -1039,8 +1026,6 @@ let split_defs splits defs =
       | E_if (e1,e2,e3) -> re (E_if (map_exp e1, map_exp e2, map_exp e3))
       | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,map_exp e1,map_exp e2,map_exp e3,ord,map_exp e4))
       | E_vector es -> re (E_vector (List.map map_exp es))
-      | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,map_exp e)) ies,
-                                                           map_opt_default ed))
       | E_vector_access (e1,e2) -> re (E_vector_access (map_exp e1,map_exp e2))
       | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (map_exp e1,map_exp e2,map_exp e3))
       | E_vector_update (e1,e2,e3) -> re (E_vector_update (map_exp e1,map_exp e2,map_exp e3))

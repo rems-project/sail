@@ -50,6 +50,7 @@ let opt_print_verbose = ref false
 let opt_print_lem_ast = ref false
 let opt_print_lem = ref false
 let opt_print_ocaml = ref false
+let opt_convert = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_ocaml = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
@@ -100,6 +101,9 @@ let options = Arg.align ([
   ( "-just_check",
     Arg.Set opt_just_check,
     " (experimental) terminate immediately after typechecking");
+  ( "-convert",
+    Arg.Set opt_convert,
+    " Convert sail to new syntax");
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
@@ -145,6 +149,11 @@ let main() =
       List.fold_right (fun (_,(Parse_ast.Defs ast_nodes)) (Parse_ast.Defs later_nodes) 
                         -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
     let ast = convert_ast Ast_util.inc_ord ast in
+
+    if !opt_convert
+    then (Pretty_print_sail2.pp_defs stdout ast; exit 0)
+    else ();
+
     let (ast, type_envs) = check_ast ast in
 
     let (ast, type_envs) =

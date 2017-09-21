@@ -70,7 +70,6 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_app            : id * 'pat list -> 'pat_aux
   ; p_record         : 'fpat list * bool -> 'pat_aux
   ; p_vector         : 'pat list -> 'pat_aux
-  ; p_vector_indexed : (int * 'pat) list -> 'pat_aux
   ; p_vector_concat  : 'pat list -> 'pat_aux
   ; p_tup            : 'pat list -> 'pat_aux
   ; p_list           : 'pat list -> 'pat_aux
@@ -98,7 +97,6 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
  ; e_if                     : 'exp * 'exp * 'exp -> 'exp_aux
  ; e_for                    : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux
  ; e_vector                 : 'exp list -> 'exp_aux
- ; e_vector_indexed         : (int * 'exp) list * 'opt_default -> 'exp_aux
  ; e_vector_access          : 'exp * 'exp -> 'exp_aux
  ; e_vector_subrange        : 'exp * 'exp * 'exp -> 'exp_aux
  ; e_vector_update          : 'exp * 'exp * 'exp -> 'exp_aux

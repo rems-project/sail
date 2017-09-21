@@ -343,7 +343,7 @@ let rec doc_pat_lem sequential mwords apat_needed (P_aux (p,(l,annot)) as pa) = 
       | _ -> parens (separate_map comma_sp (doc_pat_lem sequential mwords false) pats))
   | P_list pats -> brackets (separate_map semi (doc_pat_lem sequential mwords false) pats) (*Never seen but easy in lem*)
   | P_cons (p,p') -> doc_op (string "::") (doc_pat_lem sequential mwords true p) (doc_pat_lem sequential mwords true p')
-  | P_record (_,_) | P_vector_indexed _ -> empty (* TODO *)
+  | P_record (_,_) -> empty (* TODO *)
 
 let rec contains_bitvector_typ (Typ_aux (t,_) as typ) = match t with
   | Typ_tup ts -> List.exists contains_bitvector_typ ts
@@ -770,63 +770,6 @@ let doc_exp_lem, doc_let_lem =
                 else (epp,aexp_needed) in
               if aexp_needed then parens (align epp) else epp
        (* *)
-    | E_vector_indexed (iexps, (Def_val_aux (default,(dl,dannot)))) ->
-      let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
-      let (start, len, order, etyp) =
-        if is_vector_typ t then vector_typ_args_of t
-        else raise (Reporting_basic.err_unreachable l "E_vector_indexed of non-vector type") in
-       let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
-       let start = match simplify_nexp start with
-         | Nexp_aux (Nexp_constant i, _) -> string_of_int i
-         | _ -> if dir then "0" else string_of_int (List.length iexps) in
-       let size = match simplify_nexp len with
-         | Nexp_aux (Nexp_constant i, _)-> string_of_int i
-         | Nexp_aux (Nexp_exp (Nexp_aux (Nexp_constant i, _)), _) ->
-           string_of_int (Util.power 2 i)
-         | _ ->
-           raise (Reporting_basic.err_unreachable l
-             "trying to pretty-print indexed vector without constant size") in
-       let default_string =
-         match default with
-         | Def_val_empty ->
-            if is_bitvector_typ t then string "BU"
-            else failwith "E_vector_indexed of non-bitvector type without default argument"
-         | Def_val_dec e ->
-            (*let (Base ((_,{t = t}),_,_,_,_,_)) = dannot in
-            match t with
-            | Tapp ("register",
-                    [TA_typ ({t = rt})]) ->
-               (* TODO: Does this case still occur with the new type checker? *)
-               let n = match rt with
-                 | Tapp ("vector",TA_nexp {nexp = Nconst i} :: TA_nexp {nexp = Nconst j} ::_) ->
-                    abs_big_int (sub_big_int i j)
-                 | _ ->
-                    raise ((Reporting_basic.err_unreachable dl)
-                             ("not the right type information available to construct "^
-                                "undefined register")) in
-               parens (string ("UndefinedRegister " ^ string_of_big_int n))
-            | _ ->*) expY e in
-       let iexp (i,e) = parens (doc_int i ^^ comma ^^ expN e) in
-       let expspp =
-         match iexps with
-         | [] -> empty
-         | e :: es ->
-            let (expspp,_) =
-              List.fold_left
-                (fun (pp,count) e ->
-                  (pp ^^ semi ^^ (if count = 5 then break 1 else empty) ^^ iexp e),
-                  if count = 5 then 0 else count + 1)
-                (iexp e,0) es in
-            align (expspp) in
-       let call = string "make_indexed_vector" in
-       let epp =
-         align (group (call ^//^ brackets expspp ^/^
-                         separate space [default_string;string start;string size;string dir_out])) in
-       let (bepp, aexp_needed) =
-         if is_bitvector_typ t && mwords
-         then (string "vec_to_bvec" ^^ space ^^ parens (epp) ^^ doc_tannot_lem sequential mwords false t, true)
-         else (epp, aexp_needed) in
-       if aexp_needed then parens (align bepp) else bepp
     | E_vector_update(v,e1,e2) ->
        let t = typ_of full_exp in
        let (_, _, ord, _) = vector_typ_args_of (Env.base_typ_of (env_of full_exp) t) in
