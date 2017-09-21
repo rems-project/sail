@@ -409,19 +409,6 @@ let typ_variants consider_var bound tunions =
 
 let fv_of_kind_def consider_var (KD_aux(k,_)) = match k with
   | KD_nabbrev(_,id,_,nexp) -> init_env (string_of_id id), fv_of_nexp consider_var mt mt nexp
-  | KD_abbrev(_,id,_,typschm) ->
-    init_env (string_of_id id), snd (fv_of_typschm consider_var mt mt typschm)
-  | KD_record(_,id,_,typq,tids,_) ->
-    let binds = init_env (string_of_id id) in
-    let bounds = if consider_var then typq_bindings typq else mt in
-    binds, List.fold_right (fun (t,_) n -> fv_of_typ consider_var bounds n t) tids mt
-  | KD_variant(_,id,_,typq,tunions,_) ->
-    let bindings = Nameset.add (string_of_id id) (if consider_var then typq_bindings typq else mt) in
-    typ_variants consider_var bindings tunions
-  | KD_enum(_,id,_,ids,_) ->
-    Nameset.of_list (List.map string_of_id (id::ids)),mt
-  | KD_register(_,id,n1,n2,_) ->
-    init_env (string_of_id id), fv_of_nexp consider_var mt (fv_of_nexp consider_var mt mt n1) n2
 
 let fv_of_type_def consider_var (TD_aux(t,_)) = match t with
   | TD_abbrev(id,_,typschm) -> init_env (string_of_id id), snd (fv_of_typschm consider_var mt mt typschm)

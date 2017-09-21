@@ -598,55 +598,6 @@ let doc_kdef_ocaml (KD_aux(kd,_)) = match kd with
                      doc_id_ocaml id;
                      equals;
                      doc_nexp nexp]
-  | KD_abbrev(_,id,nm,typschm) ->
-      doc_op equals (concat [string "type"; space; doc_id_ocaml_type id;]) (doc_typscm_ocaml typschm)
-  | KD_record(_,id,nm,typq,fs,_) ->
-      let f_pp (typ,id) = concat [doc_id_ocaml_type id; space; colon; doc_typ_ocaml typ; semi] in
-      let fs_doc = group (separate_map (break 1) f_pp fs) in
-      doc_op equals
-        (concat [string "type"; space; doc_id_ocaml_type id;]) (doc_typquant_ocaml typq (braces fs_doc))
-  | KD_variant(_,id,nm,typq,ar,_) ->
-    let n = List.length ar in
-    let ar_doc = group (separate_map (break 1) (doc_type_union_ocaml n) ar) in
-    doc_op equals
-      (concat [string "type"; space; doc_id_ocaml_type id;])
-      (if n > 246
-       then brackets (space ^^(doc_typquant_ocaml typq ar_doc))
-       else (doc_typquant_ocaml typq ar_doc))
-  | KD_enum(_,id,nm,enums,_) ->
-    let n = List.length enums in
-    let enums_doc = group (separate_map (break 1 ^^ pipe) (doc_id_ocaml_ctor) enums) in
-    doc_op equals
-      (concat [string "type"; space; doc_id_ocaml_type id;])
-      (enums_doc)
-  | KD_register(_,id,n1,n2,rs) ->
-    let doc_rid (r,id) = parens (separate comma_sp [string_lit (doc_id id); doc_range_ocaml r;]) in
-    let doc_rids = group (separate_map (semi ^^ (break 1)) doc_rid rs) in
-    match n1,n2 with
-    | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) ->
-      let dir = i1 < i2 in
-      let size = if dir then i2-i1 +1 else i1-i2 in
-      doc_op equals
-        ((string "let") ^^ space ^^ doc_id_ocaml id ^^ space ^^ (string "init_val"))
-        (separate space [string "Vregister";
-                         (parens (separate comma_sp
-                                    [parens (separate space
-                                               [string "match init_val with";
-                                                pipe;
-                                                string "None";
-                                                arrow;
-                                                string "ref";
-                                                string "(Array.make";
-                                                doc_int size;
-                                                string "Vzero)";
-                                                pipe;
-                                                string "Some init_val";
-                                                arrow;
-                                                string "ref init_val";]);
-                                     doc_nexp n1;
-                                     string (if dir then "true" else "false");
-                                     string_lit (doc_id id);
-                                     brackets doc_rids]))])
 
 let doc_rec_ocaml (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty

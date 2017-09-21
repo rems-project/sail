@@ -436,37 +436,8 @@ let doc_typdef (TD_aux(td,_)) = match td with
         ])
 
 let doc_kindef (KD_aux(kd,_)) = match kd with
-  | KD_abbrev(kind,id,nm,typschm) ->
-    doc_op equals (concat [string "def"; space; doc_kind kind; space; doc_id id; doc_namescm nm]) (doc_typscm typschm)
   | KD_nabbrev(kind,id,nm,n) ->
     doc_op equals (concat [string "def"; space; doc_kind kind; space; doc_id id; doc_namescm nm]) (doc_nexp n)
-  | KD_record(kind,id,nm,typq,fs,_) ->
-    let f_pp (typ,id) = concat [doc_typ typ; space; doc_id id; semi] in
-    let fs_doc = group (separate_map (break 1) f_pp fs) in
-    doc_op equals
-      (concat [string "def"; space;doc_kind kind; space; doc_id id; doc_namescm nm])
-      (string "const struct" ^^ space ^^ doc_typquant typq (braces fs_doc))
-  | KD_variant(kind,id,nm,typq,ar,_) ->
-    let ar_doc = group (separate_map (semi ^^ break 1) doc_type_union ar) in
-    doc_op equals
-      (concat [string "def"; space; doc_kind kind; space; doc_id id; doc_namescm nm])
-      (string "const union" ^^ space ^^ doc_typquant typq (braces ar_doc))
-  | KD_enum(kind,id,nm,enums,_) ->
-      let enums_doc = group (separate_map (semi ^^ break 1) doc_id enums) in
-      doc_op equals
-        (concat [string "def"; space; doc_kind kind; space; doc_id id; doc_namescm nm])
-        (string "enumerate" ^^ space ^^ braces enums_doc)
-  | KD_register(kind,id,n1,n2,rs) ->
-      let doc_rid (r,id) = separate space [doc_range r; colon; doc_id id] ^^ semi in
-      let doc_rids = group (separate_map (break 1) doc_rid rs) in
-      doc_op equals
-        (string "def" ^^ space ^^ doc_kind kind ^^ space ^^ doc_id id)
-        (separate space [
-          string "register bits";
-          brackets (doc_nexp n1 ^^ colon ^^ doc_nexp n2);
-          braces doc_rids;
-        ])
-
 
 let doc_rec (Rec_aux(r,_)) = match r with
   | Rec_nonrec -> empty

@@ -690,16 +690,6 @@ let to_ast_kdef (names,k_env,def_ord) (td:Parse_ast.kind_def) : (unit kind_def) 
     let key = id_to_string id in
     let (kind,k) = to_ast_kind k_env kind in
     (match k.k with
-     | K_Typ | K_Lam _ ->
-       let typschm,k_env,_ = to_ast_typschm k_env def_ord typschm in
-       let kd_abrv = KD_aux(KD_abbrev(kind,id,to_ast_namescm name_scm_opt,typschm),(l,())) in
-       let typ = (match typschm with 
-           | TypSchm_aux(TypSchm_ts(tq,typ), _) ->
-             begin match (typquant_to_quantkinds k_env tq) with
-               | [] -> {k = K_Typ}
-               | typs -> {k= K_Lam(typs,{k=K_Typ})}
-             end) in
-       kd_abrv,(names,Envmap.insert k_env (key,typ),def_ord)
      | K_Nat ->
        let kd_nabrv = 
          (match typschm with
@@ -710,47 +700,7 @@ let to_ast_kdef (names,k_env,def_ord) (td:Parse_ast.kind_def) : (unit kind_def) 
              | _ -> typ_error l "Def with kind Nat cannot have universal quantification" None None None)) in
        kd_nabrv,(names,Envmap.insert k_env (key, k),def_ord)
      | _ -> assert false
-    )
-  | Parse_ast.KD_record(kind,id,name_scm_opt,typq,fields,_) -> 
-    let id = to_ast_id id in
-    let key = id_to_string id in
-    let (kind,k) = to_ast_kind k_env kind in
-    let typq,k_env,_ = to_ast_typquant k_env typq in
-    let fields = List.map (fun (atyp,id) -> (to_ast_typ k_env def_ord atyp),(to_ast_id id)) fields in (* Add check that all arms have unique names locally *)
-    let kd_rec = KD_aux(KD_record(kind,id,to_ast_namescm name_scm_opt,typq,fields,false),(l,())) in
-    let typ = (match (typquant_to_quantkinds k_env typq) with
-      | [ ] -> {k = K_Typ}
-      | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
-    kd_rec, (names,Envmap.insert k_env (key,typ), def_ord)
-  | Parse_ast.KD_variant(kind,id,name_scm_opt,typq,arms,_) ->
-    let id = to_ast_id id in
-    let key = id_to_string id in
-    let kind,k = to_ast_kind k_env kind in
-    let typq,k_env,_ = to_ast_typquant k_env typq in
-    let arms = List.map (to_ast_type_union k_env def_ord) arms in (* Add check that all arms have unique names *)
-    let kd_var = KD_aux(KD_variant(kind,id,to_ast_namescm name_scm_opt,typq,arms,false),(l,())) in
-    let typ = (match (typquant_to_quantkinds k_env typq) with
-      | [ ] -> {k = K_Typ}
-      | typs -> {k = K_Lam(typs,{k=K_Typ})}) in
-    kd_var, (names,Envmap.insert k_env (key,typ), def_ord)
-  | Parse_ast.KD_enum(kind,id,name_scm_opt,enums,_) -> 
-    let id = to_ast_id id in
-    let key = id_to_string id in
-    let kind,k = to_ast_kind k_env kind in
-    let enums = List.map to_ast_id enums in
-    let keys = List.map id_to_string enums in
-    let kd_enum = KD_aux(KD_enum(kind,id,to_ast_namescm name_scm_opt,enums,false),(l,())) in (* Add check that all enums have unique names *)
-    let k_env = List.fold_right (fun k k_env -> Envmap.insert k_env (k,{k=K_Nat})) keys (Envmap.insert k_env (key,{k=K_Typ})) in
-    kd_enum, (names,k_env,def_ord)
-  | Parse_ast.KD_register(kind,id,t1,t2,ranges) -> 
-    let id = to_ast_id id in
-    let key = id_to_string id in
-    let kind,k = to_ast_kind k_env kind in
-    let n1 = to_ast_nexp k_env t1 in
-    let n2 = to_ast_nexp k_env t2 in
-    let ranges = List.map (fun (range,id) -> (to_ast_range range),to_ast_id id) ranges in
-    KD_aux(KD_register(kind,id,n1,n2,ranges),(l,())), (names,Envmap.insert k_env (key, {k=K_Typ}),def_ord))
-
+    ))
 
 let to_ast_rec (Parse_ast.Rec_aux(r,l): Parse_ast.rec_opt) : rec_opt =
   Rec_aux((match r with

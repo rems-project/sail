@@ -431,11 +431,6 @@ val_spec_aux =  (* Value type specification *)
 type 
 kind_def_aux =  (* Definition body for elements of kind; many are shorthands for type\_defs *)
    KD_abbrev of kind * id * name_scm_opt * typschm (* type abbreviation *)
- | KD_record of kind * id * name_scm_opt * typquant * ((atyp * id)) list * bool (* struct type definition *)
- | KD_variant of kind * id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
- | KD_enum of kind * id * name_scm_opt * (id) list * bool (* enumeration type definition *)
- | KD_register of kind * id * atyp * atyp * ((index_range * id)) list (* register mutable bitfield type definition *)
-
 
 type 
 dec_spec_aux =  (* Register declarations *)

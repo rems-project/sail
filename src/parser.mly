@@ -1276,30 +1276,7 @@ ktype_def:
     { kdloc (KD_abbrev($2,$3,mk_namesectn (),mk_typschm (mk_typqn ()) $5 5 5)) }
   | Def kind tid Eq Num
     { kdloc (KD_abbrev($2,$3,mk_namesectn (),mk_typschm (mk_typqn ()) (tlocl (ATyp_constant $5) 5 5) 5 5)) }
-  | Def kind tid name_sect Eq Const Struct typquant Lcurly c_def_body Rcurly
-    { kdloc (KD_record($2,$3,$4,$8,fst $10, snd $10)) }
-  | Def kind tid name_sect Eq Const Struct Lcurly c_def_body Rcurly
-    { kdloc (KD_record($2,$3,$4,(mk_typqn ()), fst $9, snd $9)) }
-  | Def kind tid Eq Const Struct typquant Lcurly c_def_body Rcurly
-    { kdloc (KD_record($2,$3,mk_namesectn (), $7, fst $9, snd $9)) }
-  | Def kind tid Eq Const Struct Lcurly c_def_body Rcurly
-    { kdloc (KD_record($2,$3, mk_namesectn (), mk_typqn (), fst $8, snd $8)) }
-  | Def kind tid name_sect Eq Const Union typquant Lcurly union_body Rcurly
-    { kdloc (KD_variant($2,$3,$4, $8, fst $10, snd $10)) }
-  | Def kind tid Eq Const Union typquant Lcurly union_body Rcurly
-    { kdloc (KD_variant($2,$3,mk_namesectn (), $7, fst $9, snd $9)) }
-  | Def kind tid name_sect Eq Const Union Lcurly union_body Rcurly
-    { kdloc (KD_variant($2, $3,$4, mk_typqn (), fst $9, snd $9)) }
-  | Def kind tid Eq Const Union Lcurly union_body Rcurly
-    { kdloc (KD_variant($2,$3, mk_namesectn (), mk_typqn (), fst $8, snd $8)) }
-  | Def kind tid Eq Enumerate Lcurly enum_body Rcurly
-    { kdloc (KD_enum($2,$3, mk_namesectn (), $7,false)) }
-  | Def kind tid name_sect Eq Enumerate Lcurly enum_body Rcurly
-    { kdloc (KD_enum($2,$3,$4,$8,false)) }
-  | Def kind tid Eq Register Bits Lsquare nexp_typ Colon nexp_typ Rsquare Lcurly r_def_body Rcurly
-    { kdloc (KD_register($2,$3, $8, $10, $13)) }
 
-    
 def:
   | type_def
       { dloc (DEF_type($1)) }

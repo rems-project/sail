@@ -565,35 +565,9 @@ let pp_lem_typdef ppf (TD_aux(td,(l,annot))) =
 let pp_lem_kindef ppf (KD_aux(kd,(l,annot))) =
   let print_kd ppf kd =
     match kd with
-    | KD_abbrev(kind,id,namescm,typschm) ->
-      fprintf ppf "@[<0>(KD_abbrev %a %a %a %a)@]"
-        pp_lem_kind kind pp_lem_id id pp_lem_namescm namescm pp_lem_typscm typschm
     | KD_nabbrev(kind,id,namescm,n) ->
       fprintf ppf "@[<0>(KD_nabbrev %a %a %a %a)@]"
         pp_lem_kind kind pp_lem_id id pp_lem_namescm namescm pp_lem_nexp n
-    | KD_record(kind,id,nm,typq,fs,_) ->
-      let f_pp ppf (typ,id) =
-        fprintf ppf "@[<1>(%a, %a)%a@]" pp_lem_typ typ pp_lem_id id kwd ";" in
-      fprintf ppf "@[<0>(%a %a %a %a %a [%a] false)@]"
-        kwd "KD_record" pp_lem_kind kind pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp f_pp f_pp) fs
-    | KD_variant(kind,id,nm,typq,ar,_) ->
-      let a_pp ppf (Tu_aux(typ_u,l)) =
-        match typ_u with
-        | Tu_ty_id(typ,id) -> fprintf ppf "@[<1>(Tu_aux (Tu_ty_id %a %a) %a);@]"
-                                pp_lem_typ typ pp_lem_id id pp_lem_l l
-        | Tu_id(id) -> fprintf ppf "@[<1>(Tu_aux (Tu_id %a) %a);@]" pp_lem_id id pp_lem_l l
-      in
-      fprintf ppf "@[<0>(%a %a %a %a %a [%a] false)@]"
-        kwd "KD_variant" pp_lem_kind kind pp_lem_id id pp_lem_namescm nm pp_lem_typquant typq (list_pp a_pp a_pp) ar
-    | KD_enum(kind,id,ns,enums,_) ->
-      let pp_id_semi ppf id = fprintf ppf "%a%a " pp_lem_id id kwd ";" in
-      fprintf ppf "@[<0>(%a %a %a %a [%a] false)@]"
-        kwd "KD_enum" pp_lem_kind kind pp_lem_id id pp_lem_namescm ns (list_pp pp_id_semi pp_lem_id) enums
-    | KD_register(kind,id,n1,n2,rs) ->
-      let pp_rid ppf (r,id) = fprintf ppf "(%a, %a)%a " pp_lem_range r pp_lem_id id kwd ";" in
-      let pp_rids = (list_pp pp_rid pp_rid) in
-      fprintf ppf "@[<0>(%a %a %a %a %a [%a])@]"
-        kwd "KD_register" pp_lem_kind kind pp_lem_id id pp_lem_nexp n1 pp_lem_nexp n2 pp_rids rs
   in
   fprintf ppf "@[<0>(KD_aux %a (%a, %a))@]" print_kd kd pp_lem_l l pp_annot annot
 
