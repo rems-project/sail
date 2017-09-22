@@ -310,11 +310,11 @@ function qword call_dest_from_ea ((ea) e) =
     case (Ea_m(_, a)) -> rMEM(a, 8)
   }
 
-function qword get_ea_address ((ea) e) = (* XXX rmn30 looks broken *)
+function qword get_ea_address ((ea) e) =
   switch e {
     case (Ea_i(_, i)) -> 0x0000000000000000
     case (Ea_r(_, r)) -> 0x0000000000000000
-    case (Ea_m(_, a)) -> 0x0000000000000000
+    case (Ea_m(_, a)) -> a
   }
 
 function unit jump_to_ea ((ea) e) = RIP := call_dest_from_ea(e)
