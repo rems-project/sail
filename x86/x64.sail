@@ -301,7 +301,7 @@ function unit effect { wmem, wreg, escape } wEA ((bool) locked, (ea) e, (qword) 
     case (Ea_r(Sz16,r)) ->
       {
         (qword) regr := REG[r];
-        regr[15 .. 8] := w[15 .. 8];
+        regr[15 .. 0] := w[15 .. 0];
         REG[r] := regr
       }
     case (Ea_r(Sz32,r)) -> REG[r] := (qword) (EXTZ (w[31 .. 0]))
