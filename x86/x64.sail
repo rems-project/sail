@@ -287,23 +287,10 @@ function unit effect { wmem, wreg, escape } wEA ((bool) locked, (ea) e, (qword) 
     case (Ea_i(_,_)) -> exit ()
     case (Ea_r((Sz8(have_rex)),r)) ->
       if have_rex | r < 4 (* RSP *) | r > 7 (* RDI *) then
-      {
-        (qword) regr := REG[r];
-        regr[7 .. 0] := w[7 .. 0];
-        REG[r] := regr
-      }
+        (REG[r])[7 .. 0] := w[7 .. 0]
       else
-      {
-        (qword) regr := REG[sub4(r)];
-        regr[15 .. 8] := (vector<15,8,dec,bit>) (w[7 .. 0]);
-        REG[sub4(r)] := regr
-      }
-    case (Ea_r(Sz16,r)) ->
-      {
-        (qword) regr := REG[r];
-        regr[15 .. 0] := w[15 .. 0];
-        REG[r] := regr
-      }
+        (REG[sub4(r)])[15 .. 8] := (vector<15,8,dec,bit>) (w[7 .. 0])
+    case (Ea_r(Sz16,r)) ->(REG[r])[15 .. 0] := w[15 .. 0]
     case (Ea_r(Sz32,r)) -> REG[r] := (qword) (EXTZ (w[31 .. 0]))
     case (Ea_r(Sz64,r)) -> REG[r] := w
     case (Ea_m((Sz8(_)),a)) -> wMEM(locked, a, 1, w[7 .. 0])
