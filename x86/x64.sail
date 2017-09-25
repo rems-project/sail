@@ -628,8 +628,12 @@ function clause execute (CMPXCHG (locked, sz,r,n)) =
     write_binop (locked, sz, Cmp, val_acc, val_dst, src); 
     if val_acc == val_dst then
       wEA(locked, dst) := EA (false, src)
-    else
+    else {
       wEA(false, acc) := val_dst;
+      (* write back the original value in dst so that we always
+         perform locked write after locked read *)
+      wEA(locked, dst) := val_dst;
+    }
   }
 
 (* ==========================================================================
