@@ -823,6 +823,47 @@ type split =
   | VarSplit of (tannot pat * (id * tannot Ast.exp) list) list
   | ConstrSplit of (tannot pat * nexp KSubst.t) list
 
+let threaded_map f state l =
+  let l',state' =
+    List.fold_left (fun (tl,state) element -> let (el',state') = f state element in (el'::tl,state'))
+      ([],state) l
+  in List.rev l',state'
+
+let isubst_minus subst subst' =
+  ISubst.merge (fun _ x y -> match x,y with (Some a), None -> Some a | _, _ -> None) subst subst'
+
+let isubst_minus_set subst set =
+  IdSet.fold ISubst.remove set subst
+
+let assigned_vars exp =
+  fst (Rewriter.fold_exp
+         { (Rewriter.compute_exp_alg IdSet.empty IdSet.union) with
+           Rewriter.lEXP_id = (fun id -> IdSet.singleton id, LEXP_id id);
+           Rewriter.lEXP_cast = (fun (ty,id) -> IdSet.singleton id, LEXP_cast (ty,id)) }
+         exp)
+
+let assigned_vars_in_fexps (FES_aux (FES_Fexps (fes,_), _)) =
+  List.fold_left
+    (fun vs (FE_aux (FE_Fexp (_,e),_)) -> IdSet.union vs (assigned_vars e))
+    IdSet.empty
+    fes
+
+let assigned_vars_in_pexp (Pat_aux (p,_)) =
+  match p with
+  | Pat_exp (_,e) -> assigned_vars e
+  | Pat_when (p,e1,e2) -> IdSet.union (assigned_vars e1) (assigned_vars e2)
+
+let rec assigned_vars_in_lexp (LEXP_aux (le,_)) =
+  match le with
+  | LEXP_id id
+  | LEXP_cast (_,id) -> IdSet.singleton id
+  | LEXP_tup lexps -> List.fold_left (fun vs le -> IdSet.union vs (assigned_vars_in_lexp le)) IdSet.empty lexps
+  | LEXP_memory (_,es) -> List.fold_left (fun vs e -> IdSet.union vs (assigned_vars e)) IdSet.empty es
+  | LEXP_vector (le,e) -> IdSet.union (assigned_vars_in_lexp le) (assigned_vars e)
+  | LEXP_vector_range (le,e1,e2) ->
+     IdSet.union (assigned_vars_in_lexp le) (IdSet.union (assigned_vars e1) (assigned_vars e2))
+  | LEXP_field (le,_) -> assigned_vars_in_lexp le
+
 let split_defs splits defs =
   let split_constructors (Defs defs) =
     let sc_type_union q (Tu_aux (tu,l) as tua) =
@@ -853,18 +894,68 @@ let split_defs splits defs =
 
   let (refinements, defs') = split_constructors defs in
 
-  (* Constant propogation *)
-  let rec const_prop_exp substs ((E_aux (e,(l,annot))) as exp) =
-    let re e = E_aux (e,(l,annot)) in
+  (* Constant propogation.
+     Takes maps of immutable/mutable variables to subsitute.
+     Extremely conservative about evaluation order of assignments in
+     subexpressions, dropping assignments rather than committing to
+     any particular order *)
+  let rec const_prop_exp substs assigns ((E_aux (e,(l,annot))) as exp) =
+    (* Functions to treat lists and tuples of subexpressions as possibly
+       non-deterministic: that is, we stop making any assumptions about
+       variables that are assigned to in any of the subexpressions *)
+    let non_det_exp_list es =
+      let assigned_in =
+        List.fold_left (fun vs exp -> IdSet.union vs (assigned_vars exp))
+          IdSet.empty es in
+      let assigns = isubst_minus_set assigns assigned_in in
+      let es' = List.map (fun e -> fst (const_prop_exp substs assigns e)) es in
+      es',assigns
+    in
+    let non_det_exp_2 e1 e2 =
+       let assigned_in_e12 = IdSet.union (assigned_vars e1) (assigned_vars e2) in
+       let assigns = isubst_minus_set assigns assigned_in_e12 in
+       let e1',_ = const_prop_exp substs assigns e1 in
+       let e2',_ = const_prop_exp substs assigns e2 in
+       e1',e2',assigns
+    in
+    let non_det_exp_3 e1 e2 e3 =
+       let assigned_in_e12 = IdSet.union (assigned_vars e1) (assigned_vars e2) in
+       let assigned_in_e123 = IdSet.union assigned_in_e12 (assigned_vars e3) in
+       let assigns = isubst_minus_set assigns assigned_in_e123 in
+       let e1',_ = const_prop_exp substs assigns e1 in
+       let e2',_ = const_prop_exp substs assigns e2 in
+       let e3',_ = const_prop_exp substs assigns e3 in
+       e1',e2',e3',assigns
+    in
+    let non_det_exp_4 e1 e2 e3 e4 =
+       let assigned_in_e12 = IdSet.union (assigned_vars e1) (assigned_vars e2) in
+       let assigned_in_e123 = IdSet.union assigned_in_e12 (assigned_vars e3) in
+       let assigned_in_e1234 = IdSet.union assigned_in_e123 (assigned_vars e4) in
+       let assigns = isubst_minus_set assigns assigned_in_e1234 in
+       let e1',_ = const_prop_exp substs assigns e1 in
+       let e2',_ = const_prop_exp substs assigns e2 in
+       let e3',_ = const_prop_exp substs assigns e3 in
+       let e4',_ = const_prop_exp substs assigns e4 in
+       e1',e2',e3',e4',assigns
+    in
+    let re e assigns = E_aux (e,(l,annot)),assigns in
     match e with
       (* TODO: are there more circumstances in which we should get rid of these? *)
-    | E_block [e] -> const_prop_exp substs e
-    | E_block es -> re (E_block (List.map (const_prop_exp substs) es))
-    | E_nondet es -> re (E_nondet (List.map (const_prop_exp substs) es))
-       
+    | E_block [e] -> const_prop_exp substs assigns e
+    | E_block es ->
+       let es',assigns = threaded_map (const_prop_exp substs) assigns es in
+       re (E_block es') assigns
+    | E_nondet es ->
+       let es',assigns = non_det_exp_list es in
+       re (E_nondet es') assigns
     | E_id id ->
-       (try ISubst.find id substs
-        with Not_found -> exp)
+       let env,_ = env_typ_expected l annot in
+       (try
+         match Env.lookup_id id env with
+         | Local (Immutable,_) -> ISubst.find id substs
+         | Local (Mutable,_)   -> ISubst.find id assigns
+         | _ -> exp
+       with Not_found -> exp),assigns
     | E_lit _
     | E_sizeof _
     | E_internal_exp _
@@ -872,71 +963,118 @@ let split_defs splits defs =
     | E_internal_exp_user _
     | E_comment _
     | E_constraint _
-      -> exp
-    | E_cast (t,e') -> re (E_cast (t, const_prop_exp substs e'))
+      -> exp,assigns
+    | E_cast (t,e') ->
+       let e'',assigns = const_prop_exp substs assigns e' in
+       re (E_cast (t, e'')) assigns
     | E_app (id,es) ->
-       let es' = List.map (const_prop_exp substs) es in
+       let es',assigns = non_det_exp_list es in
        (match try_app (l,annot) (id,es') with
        | None ->
           (match const_prop_try_fn (id,es') with
-          | None -> re (E_app (id,es'))
-          | Some r -> r)
-       | Some r -> r)
+          | None -> re (E_app (id,es')) assigns
+          | Some r -> r,assigns)
+       | Some r -> r,assigns)
     | E_app_infix (e1,id,e2) ->
-       let e1',e2' = const_prop_exp substs e1,const_prop_exp substs e2 in
+       let e1',e2',assigns = non_det_exp_2 e1 e2 in
        (match try_app_infix (l,annot) e1' id e2' with
-       | Some exp -> exp
-       | None -> re (E_app_infix (e1',id,e2')))
-    | E_tuple es -> re (E_tuple (List.map (const_prop_exp substs) es))
+       | Some exp -> exp,assigns
+       | None -> re (E_app_infix (e1',id,e2')) assigns)
+    | E_tuple es ->
+       let es',assigns = non_det_exp_list es in
+       re (E_tuple es') assigns
     | E_if (e1,e2,e3) ->
-       let e1' = const_prop_exp substs e1 in
-       let e2',e3' = const_prop_exp substs e2, const_prop_exp substs e3 in
+       let e1',assigns = const_prop_exp substs assigns e1 in
+       let e2',assigns2 = const_prop_exp substs assigns e2 in
+       let e3',assigns3 = const_prop_exp substs assigns e3 in
        (match drop_casts e1' with
        | E_aux (E_lit (L_aux ((L_true|L_false) as lit ,_)),_) ->
-          (match lit with L_true -> e2' | _ -> e3')
-       | _ -> re (E_if (e1',e2',e3')))
-    | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3,ord,const_prop_exp (ISubst.remove id substs) e4))
+          (match lit with L_true -> e2',assigns2 | _ -> e3',assigns3)
+       | _ ->
+          let assigns = isubst_minus_set assigns (assigned_vars e2) in
+          let assigns = isubst_minus_set assigns (assigned_vars e3) in
+          re (E_if (e1',e2',e3')) assigns)
+    | E_for (id,e1,e2,e3,ord,e4) ->
+       (* Treat e1, e2 and e3 (from, to and by) as a non-det tuple *)
+       let e1',e2',e3',assigns = non_det_exp_3 e1 e2 e3 in
+       let assigns = isubst_minus_set assigns (assigned_vars e4) in
+       let e4',_ = const_prop_exp (ISubst.remove id substs) assigns e4 in
+       re (E_for (id,e1',e2',e3',ord,e4')) assigns
     | E_vector es ->
-       let es' = List.map (const_prop_exp substs) es in
+       let es',assigns = non_det_exp_list es in
        begin
          match construct_lit_vector es' with
-         | None -> re (E_vector es')
-         | Some lit -> re (E_lit lit)
+         | None -> re (E_vector es') assigns
+         | Some lit -> re (E_lit lit) assigns
        end
-    | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,const_prop_exp substs e)) ies,
-                                                         const_prop_opt_default substs ed))
-    | E_vector_access (e1,e2) -> re (E_vector_access (const_prop_exp substs e1,const_prop_exp substs e2))
-    | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3))
-    | E_vector_update (e1,e2,e3) -> re (E_vector_update (const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3))
-    | E_vector_update_subrange (e1,e2,e3,e4) -> re (E_vector_update_subrange (const_prop_exp substs e1,const_prop_exp substs e2,const_prop_exp substs e3,const_prop_exp substs e4))
-    | E_vector_append (e1,e2) -> re (E_vector_append (const_prop_exp substs e1,const_prop_exp substs e2))
-    | E_list es -> re (E_list (List.map (const_prop_exp substs) es))
-    | E_cons (e1,e2) -> re (E_cons (const_prop_exp substs e1,const_prop_exp substs e2))
-    | E_record fes -> re (E_record (const_prop_fexps substs fes))
-    | E_record_update (e,fes) -> re (E_record_update (const_prop_exp substs e, const_prop_fexps substs fes))
-    | E_field (e,id) -> re (E_field (const_prop_exp substs e,id))
+    | E_vector_indexed (ies,(Def_val_aux (ed,edann))) ->
+       let is,es = List.split ies in
+       let es',assigns = non_det_exp_list (match ed with Def_val_empty -> es | Def_val_dec e -> e::es) in
+       let ed',es' = match ed with Def_val_empty -> Def_val_empty,es' | x -> x,es' in
+       re (E_vector_indexed (List.combine is es', Def_val_aux (ed',edann))) assigns
+    | E_vector_access (e1,e2) ->
+       let e1',e2',assigns = non_det_exp_2 e1 e2 in
+       re (E_vector_access (e1',e2')) assigns
+    | E_vector_subrange (e1,e2,e3) ->
+       let e1',e2',e3',assigns = non_det_exp_3 e1 e2 e3 in
+       re (E_vector_subrange (e1',e2',e3')) assigns
+    | E_vector_update (e1,e2,e3) ->
+       let e1',e2',e3',assigns = non_det_exp_3 e1 e2 e3 in
+       re (E_vector_update (e1',e2',e3')) assigns
+    | E_vector_update_subrange (e1,e2,e3,e4) ->
+       let e1',e2',e3',e4',assigns = non_det_exp_4 e1 e2 e3 e4 in
+       re (E_vector_update_subrange (e1',e2',e3',e4')) assigns
+    | E_vector_append (e1,e2) ->
+       let e1',e2',assigns = non_det_exp_2 e1 e2 in
+       re (E_vector_append (e1',e2')) assigns
+    | E_list es ->
+       let es',assigns = non_det_exp_list es in
+       re (E_list es') assigns
+    | E_cons (e1,e2) ->
+       let e1',e2',assigns = non_det_exp_2 e1 e2 in
+       re (E_cons (e1',e2')) assigns
+    | E_record fes ->
+       let assigned_in_fes = assigned_vars_in_fexps fes in
+       let assigns = isubst_minus_set assigns assigned_in_fes in
+       re (E_record (const_prop_fexps substs assigns fes)) assigns
+    | E_record_update (e,fes) ->
+       let assigned_in = IdSet.union (assigned_vars_in_fexps fes) (assigned_vars e) in
+       let assigns = isubst_minus_set assigns assigned_in in
+       let e',_ = const_prop_exp substs assigns e in
+       re (E_record_update (e', const_prop_fexps substs assigns fes)) assigns
+    | E_field (e,id) ->
+       let e',assigns = const_prop_exp substs assigns e in
+       re (E_field (e',id)) assigns
     | E_case (e,cases) ->
-       let e' = const_prop_exp substs e in
+       let e',assigns = const_prop_exp substs assigns e in
        (match can_match e' cases with
-       | None -> re (E_case (e', List.map (const_prop_pexp substs) cases))
+       | None ->
+          let assigned_in =
+            List.fold_left (fun vs pe -> IdSet.union vs (assigned_vars_in_pexp pe))
+              IdSet.empty cases
+          in
+          let assigns' = isubst_minus_set assigns assigned_in in
+          re (E_case (e', List.map (const_prop_pexp substs assigns) cases)) assigns'
        | Some (E_aux (_,(_,annot')) as exp,newbindings,kbindings) ->
           let exp = nexp_subst_exp (ksubst_from_list kbindings) [] (*???*) exp in
           let newbindings_env = isubst_from_list newbindings in
           let substs' = isubst_union substs newbindings_env in
-          const_prop_exp substs' exp)
+          const_prop_exp substs' assigns exp)
     | E_let (lb,e2) ->
        begin
          match lb with
          | LB_aux (LB_val_explicit (tysch,p,e),annot) ->
             let substs' = remove_bound substs p in
-            re (E_let (LB_aux (LB_val_explicit (tysch,p,const_prop_exp substs e), annot),
-                       const_prop_exp substs' e2))
+            let e',assigns = const_prop_exp substs assigns e in
+            let e2',assigns = const_prop_exp substs' assigns e2 in
+            re (E_let (LB_aux (LB_val_explicit (tysch,p,e'), annot), e2')) assigns
          | LB_aux (LB_val_implicit (p,e), annot) ->
-            let e' = const_prop_exp substs e in
+            let e',assigns = const_prop_exp substs assigns e in
             let substs' = remove_bound substs p in
             let plain () =
+              let e2',assigns = const_prop_exp substs' assigns e2 in
               re (E_let (LB_aux (LB_val_implicit (p,e'), annot),
-                         const_prop_exp substs' e2)) in
+                         e2')) assigns in
             if is_value e' && not (is_value e) then
               match can_match e' [Pat_aux (Pat_exp (p,e2),(Unknown,None))] with
               | None -> plain ()
@@ -944,49 +1082,82 @@ let split_defs splits defs =
                  let e'' = nexp_subst_exp (ksubst_from_list kbindings) [] (*???*) e'' in
                  let bindings = isubst_from_list bindings in
                  let substs'' = isubst_union substs' bindings in
-                 const_prop_exp substs'' e''
+                 const_prop_exp substs'' assigns e''
             else plain ()
        end
-    | E_assign (le,e) -> re (E_assign (const_prop_lexp substs le, const_prop_exp substs e))
-    | E_exit e -> re (E_exit (const_prop_exp substs e))
-    | E_throw e -> re (E_throw (const_prop_exp substs e))
+    (* TODO maybe - tuple assignments *)
+    | E_assign (le,e) ->
+       let env,_ = env_typ_expected l annot in
+       let assigned_in = IdSet.union (assigned_vars_in_lexp le) (assigned_vars e) in
+       let assigns = isubst_minus_set assigns assigned_in in
+       let le',idopt = const_prop_lexp substs assigns le in
+       let e',_ = const_prop_exp substs assigns e in
+       let assigns =
+         match idopt with
+         | Some id ->
+            begin
+              match Env.lookup_id id env with
+              | Local (Mutable,_) | Unbound ->
+                 if is_value e'
+                 then (prerr_endline ("Good assignment " ^ string_of_exp e' ^ " to " ^string_of_id id) ;ISubst.add id e' assigns)
+                 else (prerr_endline (string_of_exp e' ^ " not a value"); ISubst.remove id assigns)
+              | _ -> assigns
+            end
+         | None -> (prerr_endline ("Assignment " ^ string_of_exp exp ^ " not simple enough"); assigns)
+       in
+       re (E_assign (le', e')) assigns
+    | E_exit e ->
+       let e',_ = const_prop_exp substs assigns e in
+       re (E_exit e') ISubst.empty
+    | E_throw e ->
+       let e',_ = const_prop_exp substs assigns e in
+       re (E_throw e') ISubst.empty
     | E_try (e,cases) ->
-       let e' = const_prop_exp substs e in
-       re (E_case (e', List.map (const_prop_pexp substs) cases))
-    | E_return e -> re (E_return (const_prop_exp substs e))
-    | E_assert (e1,e2) -> re (E_assert (const_prop_exp substs e1,const_prop_exp substs e2))
-    | E_internal_cast (ann,e) -> re (E_internal_cast (ann,const_prop_exp substs e))
-    | E_comment_struc e -> re (E_comment_struc e)
+       (* TODO: try and preserve *any* assignment info *)
+       let e',_ = const_prop_exp substs assigns e in
+       re (E_case (e', List.map (const_prop_pexp substs ISubst.empty) cases)) ISubst.empty
+    | E_return e ->
+       let e',_ = const_prop_exp substs assigns e in
+       re (E_return e') ISubst.empty
+    | E_assert (e1,e2) ->
+       let e1',e2',assigns = non_det_exp_2 e1 e2 in
+       re (E_assert (e1',e2')) assigns
+    | E_internal_cast (ann,e) ->
+       let e',assigns = const_prop_exp substs assigns e in
+       re (E_internal_cast (ann,e')) assigns
+    (* TODO: should I substitute or anything here?  Is it even used? *)
+    | E_comment_struc e -> re (E_comment_struc e) assigns
     | E_internal_let _
     | E_internal_plet _
     | E_internal_return _
       -> raise (Reporting_basic.err_unreachable l
                   "Unexpected internal expression encountered in monomorphisation")
-    and const_prop_opt_default substs ((Def_val_aux (ed,annot)) as eda) =
-    match ed with
-    | Def_val_empty -> eda
-    | Def_val_dec e -> Def_val_aux (Def_val_dec (const_prop_exp substs e),annot)
-  and const_prop_fexps substs (FES_aux (FES_Fexps (fes,flag), annot)) =
-    FES_aux (FES_Fexps (List.map (const_prop_fexp substs) fes, flag), annot)
-  and const_prop_fexp substs (FE_aux (FE_Fexp (id,e), annot)) =
-    FE_aux (FE_Fexp (id,const_prop_exp substs e),annot)
-  and const_prop_pexp substs = function
+  and const_prop_fexps substs assigns (FES_aux (FES_Fexps (fes,flag), annot)) =
+    FES_aux (FES_Fexps (List.map (const_prop_fexp substs assigns) fes, flag), annot)
+  and const_prop_fexp substs assigns (FE_aux (FE_Fexp (id,e), annot)) =
+    FE_aux (FE_Fexp (id,fst (const_prop_exp substs assigns e)),annot)
+  and const_prop_pexp substs assigns = function
     | (Pat_aux (Pat_exp (p,e),l)) ->
-       Pat_aux (Pat_exp (p,const_prop_exp (remove_bound substs p) e),l)
+       Pat_aux (Pat_exp (p,fst (const_prop_exp (remove_bound substs p) assigns e)),l)
     | (Pat_aux (Pat_when (p,e1,e2),l)) ->
        let substs' = remove_bound substs p in
-       Pat_aux (Pat_when (p, const_prop_exp substs' e1, const_prop_exp substs' e2),l)
-  and const_prop_lexp substs ((LEXP_aux (e,annot)) as le) =
-    let re e = LEXP_aux (e,annot) in
+       let e1',assigns = const_prop_exp substs' assigns e1 in
+       Pat_aux (Pat_when (p, e1', fst (const_prop_exp substs' assigns e2)),l)
+  and const_prop_lexp substs assigns ((LEXP_aux (e,annot)) as le) =
+    let re e = LEXP_aux (e,annot), None in
     match e with
-    | LEXP_id _ (* shouldn't end up substituting here *)
-    | LEXP_cast _
-      -> le
-    | LEXP_memory (id,es) -> re (LEXP_memory (id,List.map (const_prop_exp substs) es)) (* or here *)
-    | LEXP_tup les -> re (LEXP_tup (List.map (const_prop_lexp substs) les))
-    | LEXP_vector (le,e) -> re (LEXP_vector (const_prop_lexp substs le, const_prop_exp substs e))
-    | LEXP_vector_range (le,e1,e2) -> re (LEXP_vector_range (const_prop_lexp substs le, const_prop_exp substs e1, const_prop_exp substs e2))
-    | LEXP_field (le,id) -> re (LEXP_field (const_prop_lexp substs le, id))
+    | LEXP_id id (* shouldn't end up substituting here *)
+    | LEXP_cast (_,id)
+      -> le, Some id
+    | LEXP_memory (id,es) ->
+       re (LEXP_memory (id,List.map (fun e -> fst (const_prop_exp substs assigns e)) es)) (* or here *)
+    | LEXP_tup les -> re (LEXP_tup (List.map (fun le -> fst (const_prop_lexp substs assigns le)) les))
+    | LEXP_vector (le,e) -> re (LEXP_vector (fst (const_prop_lexp substs assigns le), fst (const_prop_exp substs assigns e)))
+    | LEXP_vector_range (le,e1,e2) ->
+       re (LEXP_vector_range (fst (const_prop_lexp substs assigns le),
+                              fst (const_prop_exp substs assigns e1),
+                              fst (const_prop_exp substs assigns e2)))
+    | LEXP_field (le,id) -> re (LEXP_field (fst (const_prop_lexp substs assigns le), id))
   (* Reduce a function when
      1. all arguments are values,
      2. the function is pure,
@@ -1016,14 +1187,14 @@ let split_defs splits defs =
          match can_match arg cases with
          | Some (exp,bindings,kbindings) ->
             let substs = isubst_from_list bindings in
-            let result = const_prop_exp substs exp in
+            let result,_ = const_prop_exp substs ISubst.empty exp in
             if is_value result then Some result else None
          | None -> None
   in
 
   let subst_exp substs exp =
     let substs = isubst_from_list substs in
-    const_prop_exp substs exp
+    fst (const_prop_exp substs ISubst.empty exp)
   in
     
   (* Split a variable pattern into every possible value *)
