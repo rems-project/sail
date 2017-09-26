@@ -1099,11 +1099,11 @@ let split_defs splits defs =
               match Env.lookup_id id env with
               | Local (Mutable,_) | Unbound ->
                  if is_value e'
-                 then (prerr_endline ("Good assignment " ^ string_of_exp e' ^ " to " ^string_of_id id) ;ISubst.add id e' assigns)
-                 else (prerr_endline (string_of_exp e' ^ " not a value"); ISubst.remove id assigns)
+                 then ISubst.add id e' assigns
+                 else ISubst.remove id assigns
               | _ -> assigns
             end
-         | None -> (prerr_endline ("Assignment " ^ string_of_exp exp ^ " not simple enough"); assigns)
+         | None -> assigns
        in
        re (E_assign (le', e')) assigns
     | E_exit e ->
