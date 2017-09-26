@@ -221,6 +221,7 @@ and map_exp_annot_aux f = function
   | E_tuple xs -> E_tuple (List.map (map_exp_annot f) xs)
   | E_if (cond, t, e) -> E_if (map_exp_annot f cond, map_exp_annot f t, map_exp_annot f e)
   | E_for (v, e1, e2, e3, o, e4) -> E_for (v, map_exp_annot f e1, map_exp_annot f e2, map_exp_annot f e3, o, map_exp_annot f e4)
+  | E_loop (loop_type, e1, e2) -> E_loop (loop_type, map_exp_annot f e1, map_exp_annot f e2)
   | E_vector exps -> E_vector (List.map (map_exp_annot f) exps)
   | E_vector_indexed (iexps, opt_default) ->
      E_vector_indexed (List.map (fun (i, exp) -> (i, map_exp_annot f exp)) iexps, map_opt_default_annot f opt_default)
@@ -476,6 +477,8 @@ let rec string_of_exp (E_aux (exp, _)) =
      ^ " by " ^ string_of_exp u ^ " order " ^ string_of_order ord
      ^ ") { "
      ^ string_of_exp body
+  | E_loop (While, cond, body) -> "while " ^ string_of_exp cond ^ " do " ^ string_of_exp body
+  | E_loop (Until, cond, body) -> "repeat " ^ string_of_exp body ^ " until " ^ string_of_exp cond
   | E_assert (test, msg) -> "assert(" ^ string_of_exp test ^ ", " ^ string_of_exp msg ^ ")"
   | E_exit exp -> "exit " ^ string_of_exp exp
   | E_throw exp -> "throw " ^ string_of_exp exp

@@ -2559,6 +2559,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      in
      try_overload (Env.get_overloads f env)
   | E_app (f, xs) -> infer_funapp l env f xs None
+  | E_loop (loop_type, cond, body) ->
+     let checked_cond = crule check_exp env cond bool_typ in
+     let checked_body = crule check_exp env body unit_typ in
+     annot_exp (E_loop (loop_type, checked_cond, checked_body)) unit_typ
   | E_for (v, f, t, step, ord, body) ->
      begin
        let f, t = match ord with
@@ -2857,6 +2861,11 @@ and propagate_exp_effect_aux = function
      let p_body = propagate_exp_effect body in
      E_for (v, p_f, p_t, p_step, ord, p_body),
      collect_effects [p_f; p_t; p_step; p_body]
+  | E_loop (loop_type, cond, body) ->
+     let p_cond = propagate_exp_effect cond in
+     let p_body = propagate_exp_effect body in
+     E_loop (loop_type, p_cond, p_body),
+     union_effects (effect_of p_cond) (effect_of p_body)
   | E_let (letbind, exp) ->
      let p_lb, eff = propagate_letbind_effect letbind in
      let p_exp = propagate_exp_effect exp in

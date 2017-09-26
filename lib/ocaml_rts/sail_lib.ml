@@ -317,3 +317,5 @@ let shr_int (n, m) = shift_right_big_int n (int_of_big_int m)
 let debug (str1, n, str2, v) = prerr_endline (str1 ^ string_of_big_int n ^ str2 ^ string_of_bits v)
 
 let eq_string (str1, str2) = String.compare str1 str2 == 0
+
+let lt_int (x, y) = lt_big_int x y

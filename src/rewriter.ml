@@ -698,6 +698,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,'fexps,'fexps_aux,
   ; e_tuple                  : 'exp list -> 'exp_aux
   ; e_if                     : 'exp * 'exp * 'exp -> 'exp_aux
   ; e_for                    : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux
+  ; e_loop                   : loop * 'exp * 'exp -> 'exp_aux
   ; e_vector                 : 'exp list -> 'exp_aux
   ; e_vector_indexed         : (int * 'exp) list * 'opt_default -> 'exp_aux
   ; e_vector_access          : 'exp * 'exp -> 'exp_aux
@@ -763,6 +764,8 @@ let rec fold_exp_aux alg = function
   | E_if (e1,e2,e3) -> alg.e_if (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
   | E_for (id,e1,e2,e3,order,e4) ->
      alg.e_for (id,fold_exp alg e1, fold_exp alg e2, fold_exp alg e3, order, fold_exp alg e4)
+  | E_loop (loop_type, e1, e2) ->
+     alg.e_loop (loop_type, fold_exp alg e1, fold_exp alg e2)
   | E_vector es -> alg.e_vector (List.map (fold_exp alg) es)
   | E_vector_indexed (es,opt) ->
      alg.e_vector_indexed (List.map (fun (id,e) -> (id,fold_exp alg e)) es, fold_opt_default alg opt)
@@ -840,6 +843,7 @@ let id_exp_alg =
   ; e_tuple = (fun es -> E_tuple es)
   ; e_if = (fun (e1,e2,e3) -> E_if (e1,e2,e3))
   ; e_for = (fun (id,e1,e2,e3,order,e4) -> E_for (id,e1,e2,e3,order,e4))
+  ; e_loop = (fun (lt, e1, e2) -> E_loop (lt, e1, e2))
   ; e_vector = (fun es -> E_vector es)
   ; e_vector_indexed = (fun (es,opt2) -> E_vector_indexed (es,opt2))
   ; e_vector_access = (fun (e1,e2) -> E_vector_access (e1,e2))
@@ -937,6 +941,8 @@ let compute_exp_alg bot join =
   ; e_if = (fun ((v1,e1),(v2,e2),(v3,e3)) -> (join_list [v1;v2;v3], E_if (e1,e2,e3)))
   ; e_for = (fun (id,(v1,e1),(v2,e2),(v3,e3),order,(v4,e4)) ->
     (join_list [v1;v2;v3;v4], E_for (id,e1,e2,e3,order,e4)))
+  ; e_loop = (fun (lt, (v1, e1), (v2, e2)) ->
+    (join_list [v1;v2], E_loop (lt, e1, e2)))
   ; e_vector = split_join (fun es -> E_vector es)
   ; e_vector_indexed = (fun (es,(v2,opt2)) ->
     let (is,es) = List.split es in
@@ -1177,6 +1183,7 @@ let rewrite_sizeof (Defs defs) =
     ; e_tuple = (fun es -> let (es, es') = List.split es in (E_tuple es, E_tuple es'))
     ; e_if = (fun ((e1,e1'),(e2,e2'),(e3,e3')) -> (E_if (e1,e2,e3), E_if (e1',e2',e3')))
     ; e_for = (fun (id,(e1,e1'),(e2,e2'),(e3,e3'),order,(e4,e4')) -> (E_for (id,e1,e2,e3,order,e4), E_for (id,e1',e2',e3',order,e4')))
+    ; e_loop = (fun (lt, (e1, e1'), (e2, e2')) -> (E_loop (lt, e1, e2), E_loop (lt, e1', e2')))
     ; e_vector = (fun es -> let (es, es') = List.split es in (E_vector es, E_vector es'))
     ; e_vector_indexed = (fun (es,(opt2,opt2')) -> let (is, es) = List.split es in let (es, es') = List.split es in let (es, es') = (List.combine is es, List.combine is es') in (E_vector_indexed (es,opt2), E_vector_indexed (es',opt2')))
     ; e_vector_access = (fun ((e1,e1'),(e2,e2')) -> (E_vector_access (e1,e2), E_vector_access (e1',e2')))
