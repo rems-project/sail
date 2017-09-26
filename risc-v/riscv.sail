@@ -60,13 +60,24 @@ function forall 'a. 'a effect { escape } not_implemented((string) message) =
   exit message;
 }
 
+function unit effect { escape } check_alignment( (bit[64]) addr, (nat) width) =
+{
+  if (unsigned(addr) quot width != 0) then
+    exit "misaligned memory access";
+}
+
+
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_acquire
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_strong_acquire
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_reserved
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_reserved_acquire
 val extern forall Nat 'n. ( bit[64] , [|'n|] ) -> (bit[8 * 'n]) effect { rmem } MEMr_reserved_strong_acquire
-function forall Nat 'n. (bit[8 * 'n]) effect { rmem } mem_read( (bit[64]) addr, ([|'n|]) width, (bool) aq, (bool) rl, (bool) res) =
+function forall Nat 'n. (bit[8 * 'n]) effect { rmem, escape } mem_read( (bit[64]) addr, ([|'n|]) width, (bool) aq, (bool) rl, (bool) res) =
+{
+  if (aq | res) then
+    check_alignment(addr, width);
+
   switch (aq, rl, res) {
     case (false, false, false) -> MEMr(addr, width)
     case (true,  false, false) -> MEMr_acquire(addr, width)
@@ -77,6 +88,7 @@ function forall Nat 'n. (bit[8 * 'n]) effect { rmem } mem_read( (bit[64]) addr, 
     case (false, true,  true)  -> not_implemented("lr.rl is not implemented")
     case (true,  true,  true)  -> MEMr_reserved_strong_acquire(addr, width)
   }
+}
 
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_release
@@ -84,7 +96,11 @@ val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_str
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional_release
 val extern forall Nat 'n. ( bit[64] , [|'n|]) -> unit effect { eamem } MEMea_conditional_strong_release
-function forall Nat 'n. unit effect { eamem } mem_write_ea( (bit[64]) addr , ([|'n|]) width, (bool) aq, (bool) rl, (bool) con) =
+function forall Nat 'n. unit effect { eamem, escape } mem_write_ea( (bit[64]) addr , ([|'n|]) width, (bool) aq, (bool) rl, (bool) con) =
+{
+  if (rl | con) then
+    check_alignment(addr, width);
+
   switch (aq, rl, con) {
     case (false, false, false) -> MEMea(addr, width)
     case (false, true,  false) -> MEMea_release(addr, width)
@@ -95,6 +111,7 @@ function forall Nat 'n. unit effect { eamem } mem_write_ea( (bit[64]) addr , ([|
     case (true,  false, true)  -> not_implemented("sc.aq is not implemented")
     case (true,  true , true)  -> MEMea_conditional_strong_release(addr, width)
   }
+}
 
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_release
@@ -102,7 +119,11 @@ val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv }
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_conditional
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_conditional_release
 val extern forall Nat 'n. ( bit[64] , [|'n|] , bit[8*'n]) -> unit effect { wmv } MEMval_conditional_strong_release
-function forall Nat 'n. unit effect { wmv } mem_write_value( (bit[64]) addr , ([|'n|]) width , (bit[8*'n]) value, (bool) aq, (bool) rl, (bool) con) =
+function forall Nat 'n. unit effect { wmv, escape } mem_write_value( (bit[64]) addr , ([|'n|]) width , (bit[8*'n]) value, (bool) aq, (bool) rl, (bool) con) =
+{
+  if (rl | con) then
+    check_alignment(addr, width);
+
   switch (aq, rl, con) {
     case (false, false, false) -> MEMval(addr, width, value)
     case (false, true,  false) -> MEMval_release(addr, width, value)
@@ -113,6 +134,7 @@ function forall Nat 'n. unit effect { wmv } mem_write_value( (bit[64]) addr , ([
     case (true,  false, true)  -> not_implemented("sc.aq is not implemented")
     case (true,  true,  true)  -> MEMval_conditional_strong_release(addr, width, value)
   }
+}
 
 val extern unit -> bool effect {exmem} speculate_conditional_success
 
@@ -427,6 +449,7 @@ function clause decode (0b11000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b01
 function clause decode (0b11000 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(AMO(AMOMINU, aq, rl, rs2, rs1, DOUBLE, rd))
 function clause decode (0b11100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b010 : (regno) rd : 0b0101111) = Some(AMO(AMOMAXU, aq, rl, rs2, rs1, WORD,   rd))
 function clause decode (0b11100 : [aq] : [rl] : (regno) rs2 : (regno) rs1 : 0b011 : (regno) rd : 0b0101111) = Some(AMO(AMOMAXU, aq, rl, rs2, rs1, DOUBLE, rd))
+
 function clause execute (AMO(op, aq, rl, rs2, rs1, width, rd)) = {
   (bit[64]) addr := rGPR(rs1);
 
