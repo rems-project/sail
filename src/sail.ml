@@ -115,7 +115,7 @@ let options = Arg.align ([
   ( "-no_effects",
     Arg.Set Type_check.opt_no_effects,
     " turn off effect checking");
-  ( "-undefined-gen",
+  ( "-undefined_gen",
     Arg.Set Initial_check.opt_undefined_gen,
     " generate undefined_type functions for types in the specification");
   ( "-v",
