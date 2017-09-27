@@ -1,6 +1,6 @@
 
 SAIL:=../src/sail.native
-SOURCES:=riscv.sail ../etc/regfp.sail riscv_regfp.sail
+SOURCES:=riscv_types.sail riscv.sail ../etc/regfp.sail riscv_regfp.sail
 all: lem_ast shallow
 
 lem_ast: $(SOURCES) $(SAIL)
