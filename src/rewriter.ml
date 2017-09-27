@@ -130,6 +130,7 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match snd annot with
       union_effects (fun_app_effects f env) (union_eff_exps [e1;e2])
     | E_if (e1,e2,e3) -> union_eff_exps [e1;e2;e3]
     | E_for (_,e1,e2,e3,_,e4) -> union_eff_exps [e1;e2;e3;e4]
+    | E_loop (_,e1,e2) -> union_eff_exps [e1;e2]
     | E_vector es -> union_eff_exps es
     | E_vector_indexed (ies,opt_default) ->
        let (_,es) = List.split ies in
@@ -388,6 +389,8 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot))) =
   | E_if (c,t,e) -> rewrap (E_if (rewrite c,rewrite t, rewrite e))
   | E_for (id, e1, e2, e3, o, body) ->
     rewrap (E_for (id, rewrite e1, rewrite e2, rewrite e3, o, rewrite body))
+  | E_loop (loop, e1, e2) ->
+    rewrap (E_loop (loop, rewrite e1, rewrite e2))
   | E_vector exps -> rewrap (E_vector (List.map rewrite exps))
   | E_vector_indexed (exps,(Def_val_aux(default,dannot))) ->
     let def = match default with
@@ -2847,6 +2850,10 @@ let rewrite_defs_letbind_effects  =
        n_exp_name by (fun by ->
        let body = n_exp_term (effectful body) body in
        k (rewrap (E_for (id,start,stop,by,dir,body))))))
+    | E_loop (loop, cond, body) ->
+       let cond = n_exp_term (effectful cond) cond in
+       let body = n_exp_term (effectful body) body in
+       k (rewrap (E_loop (loop,cond,body)))
     | E_vector exps ->
        n_exp_nameL exps (fun exps ->
        k (rewrap (E_vector exps)))
@@ -3171,6 +3178,29 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          else P_aux (P_tup [pat; mktup_pat pl vars],
                      simple_annot pl (typ_of v)) in
        Added_vars (v,pat)
+     | E_loop(loop,cond,body) ->
+        let vars = List.map (fun (var,(l,t)) -> E_aux (E_id var,(l,t))) (find_updated_vars body) in
+        let vartuple = mktup el vars in
+        (* let cond = rewrite_var_updates (add_vars false cond vartuple) in *)
+        let body = rewrite_var_updates (add_vars overwrite body vartuple) in
+        let (E_aux (_,(_,bannot))) = body in
+        let fname = match effectful cond, effectful body with
+          | false, false -> "while_PP"
+          | false, true  -> "while_PM"
+          | true,  false -> "while_MP"
+          | true,  true  -> "while_MM" in
+        let funcl = Id_aux (Id fname,Parse_ast.Generated el) in
+        let is_while =
+          match loop with
+          | While -> E_aux (E_lit (mk_lit L_true), simple_annot el bool_typ)
+          | Until -> E_aux (E_lit (mk_lit L_false), simple_annot el bool_typ) in
+        let v = E_aux (E_app (funcl,[is_while;cond;body;vartuple]),
+                       (Parse_ast.Generated el, bannot)) in
+        let pat =
+          if overwrite then mktup_pat el vars
+          else P_aux (P_tup [pat; mktup_pat pl vars],
+                      simple_annot pl (typ_of v)) in
+        Added_vars (v,pat)
     | E_if (c,e1,e2) ->
        let vars = List.map (fun (var,(l,t)) -> E_aux (E_id var,(l,t)))
                            (dedup eqidtyp (find_updated_vars e1 @ find_updated_vars e2)) in
