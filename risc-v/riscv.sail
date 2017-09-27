@@ -62,7 +62,7 @@ function forall 'a. 'a effect { escape } not_implemented((string) message) =
 
 function unit effect { escape } check_alignment( (bit[64]) addr, (nat) width) =
 {
-  if (unsigned(addr) quot width != 0) then
+  if (unsigned(addr) mod width != 0) then
     exit "misaligned memory access";
 }
 
