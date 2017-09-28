@@ -133,6 +133,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 %token Pure Rec Register Return Scattered Sizeof Struct Switch Then True TwoStarStar Type TYPE Typedef 
 %token Undefined Union With When Val Constraint Try Catch Throw
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
+%token While Do Repeat Until
 
 
 /* Avoid shift/reduce conflict - see right_atomic_exp rule */
@@ -689,6 +690,8 @@ right_atomic_exp:
         then ATyp_aux(ATyp_inc,(locn 6 6))
         else ATyp_aux(ATyp_dec,(locn 6 6)) in
       eloc (E_for($3,$5,$7,step,ord,$9)) }
+  | While exp Do exp
+    { eloc (E_loop (While, $2, $4)) }
   | letbind In exp
     { eloc (E_let($1,$3)) }
 

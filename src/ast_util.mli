@@ -60,6 +60,8 @@ val mk_funcl : id -> unit pat -> unit exp -> unit funcl
 val mk_fundef : (unit funcl) list -> unit def
 val mk_val_spec : val_spec_aux -> unit def
 val mk_typschm : typquant -> typ -> typschm
+val mk_qi_id : base_kind_aux -> kid -> quant_item
+val mk_qi_nc : n_constraint -> quant_item
 val mk_fexp : id -> unit exp -> unit fexp
 val mk_fexps : (unit fexp) list -> unit fexps
 val mk_letbind : unit pat -> unit exp -> unit letbind
@@ -94,6 +96,8 @@ val real_typ : typ
 val vector_typ : nexp -> nexp -> order -> typ -> typ
 val list_typ : typ -> typ
 val exc_typ : typ
+val tuple_typ : typ list -> typ
+val function_typ : typ -> typ -> effect -> typ
 
 val no_effect : effect
 val mk_effect : base_effect_aux list -> effect
@@ -120,6 +124,7 @@ val nc_and : n_constraint -> n_constraint -> n_constraint
 val nc_or : n_constraint -> n_constraint -> n_constraint
 val nc_true : n_constraint
 val nc_false : n_constraint
+val nc_set : kid -> int list -> n_constraint
 
 val quant_items : typquant -> quant_item list
 
@@ -164,6 +169,7 @@ val string_of_index_range : index_range -> string
 val id_of_fundef : 'a fundef -> id
 
 val id_of_kid : kid -> id
+val kid_of_id : id -> kid
 
 val prepend_id : string -> id -> id
 

@@ -68,9 +68,11 @@ let typ_warning m = prerr_endline ("Warning: " ^ m)
 type type_error =
   (* First parameter is the error that caused us to start doing type
      coercions, the second is the errors encountered by all possible
-     coerctions *)
+     coercions *)
   | Err_no_casts of type_error * type_error list
+  | Err_unresolved_quants of id * quant_item list
   | Err_subtype of typ * typ * n_constraint list
+  | Err_no_num_ident of id
   | Err_other of string
 
 let pp_type_error err =
@@ -91,6 +93,8 @@ let pp_type_error err =
                         string (string_of_typ typ2) ]
        ^/^ string "in context"
        ^//^ string (string_of_list ", " string_of_n_constraint constrs)
+    | Err_no_num_ident id ->
+       string "No num identifier" ^^ space ^^ string (string_of_id id)
     | Err_other str -> string str
   in
   pp_err err
@@ -769,7 +773,7 @@ end = struct
 
   let get_num_def id env =
     try Bindings.find id env.num_defs with
-    | Not_found -> typ_error (id_loc id) ("No Num identifier " ^ string_of_id id)
+    | Not_found -> typ_raise (id_loc id) (Err_no_num_ident id)
 
   let rec wf_constraint env (NC_aux (nc, _)) =
     match nc with
@@ -2371,6 +2375,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
      end
   | LEXP_tup lexps ->
      begin
+       let typ = Env.expand_synonyms env typ in
        let (Typ_aux (typ_aux, _)) = typ in
        match typ_aux with
        | Typ_tup typs ->
@@ -2382,7 +2387,23 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
             | Invalid_argument _ -> typ_error l "Tuple l-expression and tuple type have different length"
           in
           annot_lexp (LEXP_tup tlexps) typ, env
-       | _ -> typ_error l "Cannot bind tuple l-expression against non tuple type"
+       (* This case is pretty much just for the PSTATE.<N,Z,C,V> := vector pattern which is really common in ASL. *)
+       | Typ_app (id, _) when Id.compare id (mk_id "vector") == 0 ->
+          begin
+            match destruct_vector env typ with
+            | Some (_, vec_len, _, _) ->
+               let bind_bit_tuple lexp (tlexps, env) =
+                 let tlexp, env = bind_lexp env lexp (lvector_typ env (nconstant 1) bit_typ) in
+                 tlexp :: tlexps, env
+               in
+               if prove env (nc_eq vec_len (nconstant (List.length lexps)))
+               then
+                 let (tlexps, env) = List.fold_right bind_bit_tuple lexps ([], env) in
+                 annot_lexp (LEXP_tup tlexps) typ, env
+               else typ_error l "Vector and tuple length must be the same in assignment"
+            | None -> typ_error l ("Cannot bind tuple l-expression against non tuple or vector type " ^ string_of_typ typ)
+          end
+       | _ -> typ_error l ("Cannot bind tuple l-expression against non tuple or vector type " ^ string_of_typ typ)
      end
   | LEXP_vector_range (LEXP_aux (LEXP_id v, _), exp1, exp2) ->
      begin
@@ -2538,6 +2559,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      in
      try_overload (Env.get_overloads f env)
   | E_app (f, xs) -> infer_funapp l env f xs None
+  | E_loop (loop_type, cond, body) ->
+     let checked_cond = crule check_exp env cond bool_typ in
+     let checked_body = crule check_exp env body unit_typ in
+     annot_exp (E_loop (loop_type, checked_cond, checked_body)) unit_typ
   | E_for (v, f, t, step, ord, body) ->
      begin
        let f, t = match ord with
@@ -2836,6 +2861,11 @@ and propagate_exp_effect_aux = function
      let p_body = propagate_exp_effect body in
      E_for (v, p_f, p_t, p_step, ord, p_body),
      collect_effects [p_f; p_t; p_step; p_body]
+  | E_loop (loop_type, cond, body) ->
+     let p_cond = propagate_exp_effect cond in
+     let p_body = propagate_exp_effect body in
+     E_loop (loop_type, p_cond, p_body),
+     union_effects (effect_of p_cond) (effect_of p_body)
   | E_let (letbind, exp) ->
      let p_lb, eff = propagate_letbind_effect letbind in
      let p_exp = propagate_exp_effect exp in

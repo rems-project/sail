@@ -47,9 +47,16 @@ open Ast_util
 val opt_tc_debug : int ref
 val opt_no_effects : bool ref
 
-type type_error
+type type_error =
+  | Err_no_casts of type_error * type_error list
+  | Err_unresolved_quants of id * quant_item list
+  | Err_subtype of typ * typ * n_constraint list
+  | Err_no_num_ident of id
+  | Err_other of string
 
 exception Type_error of l * type_error;;
+
+val string_of_type_error : type_error -> string
 
 type mut = Immutable | Mutable
 
@@ -250,5 +257,9 @@ Some invariants that will hold of a fully checked AST are:
    as letbinds may have None as their tannots if it doesn't make sense
    for them to have type annotations. *)
 val check : Env.t -> 'a defs -> tannot defs * Env.t
+
+(* Like check but throws type_errors rather than Sail generic errors
+   from Reporting_basic. *)
+val check' : Env.t -> 'a defs -> tannot defs * Env.t
 
 val initial_env : Env.t
