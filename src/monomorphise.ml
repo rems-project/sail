@@ -489,6 +489,7 @@ let nexp_subst_fns substs =
       | E_tuple es -> re (E_tuple (List.map s_exp es))
       | E_if (e1,e2,e3) -> re (E_if (s_exp e1, s_exp e2, s_exp e3))
       | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,s_exp e1,s_exp e2,s_exp e3,ord,s_exp e4))
+      | E_loop (loop,e1,e2) -> re (E_loop (loop,s_exp e1,s_exp e2))
       | E_vector es -> re (E_vector (List.map s_exp es))
       | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,s_exp e)) ies,
                                                            s_opt_default ed))
@@ -918,6 +919,11 @@ let split_defs splits defs =
        let assigns = isubst_minus_set assigns (assigned_vars e4) in
        let e4',_ = const_prop_exp (ISubst.remove id substs) assigns e4 in
        re (E_for (id,e1',e2',e3',ord,e4')) assigns
+    | E_loop (loop,e1,e2) ->
+       let assigns = isubst_minus_set assigns (IdSet.union (assigned_vars e1) (assigned_vars e2)) in
+       let e1',_ = const_prop_exp substs assigns e1 in
+       let e2',_ = const_prop_exp substs assigns e2 in
+       re (E_loop (loop,e1',e2')) assigns
     | E_vector es ->
        let es',assigns = non_det_exp_list es in
        begin
@@ -1333,6 +1339,7 @@ let split_defs splits defs =
       | E_tuple es -> re (E_tuple (List.map map_exp es))
       | E_if (e1,e2,e3) -> re (E_if (map_exp e1, map_exp e2, map_exp e3))
       | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,map_exp e1,map_exp e2,map_exp e3,ord,map_exp e4))
+      | E_loop (loop,e1,e2) -> re (E_loop (loop,map_exp e1,map_exp e2))
       | E_vector es -> re (E_vector (List.map map_exp es))
       | E_vector_indexed (ies,ed) -> re (E_vector_indexed (List.map (fun (i,e) -> (i,map_exp e)) ies,
                                                            map_opt_default ed))
