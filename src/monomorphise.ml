@@ -15,13 +15,11 @@ let env_typ_expected l : tannot -> Env.t * typ = function
   | None -> raise (Reporting_basic.err_unreachable l "Missing type environment")
   | Some (env,ty,_) -> env,ty
 
-module KSubst = Map.Make(Kid)
-module ISubst = Map.Make(Id)
-let ksubst_from_list = List.fold_left (fun s (v,i) -> KSubst.add v i s) KSubst.empty
-let isubst_from_list = List.fold_left (fun s (v,i) -> ISubst.add v i s) ISubst.empty
+let kbindings_from_list = List.fold_left (fun s (v,i) -> KBindings.add v i s) KBindings.empty
+let bindings_from_list = List.fold_left (fun s (v,i) -> Bindings.add v i s) Bindings.empty
 (* union was introduced in 4.03.0, a bit too recently *)
-let isubst_union s1 s2 =
-  ISubst.merge (fun _ x y -> match x,y with
+let bindings_union s1 s2 =
+  Bindings.merge (fun _ x y -> match x,y with
   |  _, (Some x) -> Some x
   |  (Some x), _ -> Some x
   |  _,  _ -> None) s1 s2
@@ -32,7 +30,7 @@ let subst_nexp substs nexp =
     let s_snexp = s_snexp substs in
     match ne with
     | Nexp_var (Kid_aux (_,l) as kid) ->
-       (try KSubst.find kid substs
+       (try KBindings.find kid substs
        with Not_found -> nexp)
     | Nexp_id _
     | Nexp_constant _ -> nexp
@@ -54,7 +52,7 @@ let rec subst_nc substs (NC_aux (nc,l) as n_constraint) =
   | NC_not_equal (n1,n2) -> re (NC_not_equal (snexp n1, snexp n2))
   | NC_nat_set_bounded (kid,is) ->
      begin
-       match KSubst.find kid substs with
+       match KBindings.find kid substs with
        | Nexp_aux (Nexp_constant i,_) ->
           if List.mem i is then re NC_true else re NC_false
        | nexp -> 
@@ -83,7 +81,7 @@ let subst_src_typ substs t =
     | Typ_tup ts -> re (Typ_tup (List.map (s_styp substs) ts))
     | Typ_app (id,tas) -> re (Typ_app (id,List.map (s_starg substs) tas))
     | Typ_exist (kids,nc,t) ->
-       let substs = List.fold_left (fun sub v -> KSubst.remove v sub) substs kids in
+       let substs = List.fold_left (fun sub v -> KBindings.remove v sub) substs kids in
        re (Typ_exist (kids,nc,s_styp substs t))
   and s_starg substs (Typ_arg_aux (ta,l) as targ) =
     match ta with
@@ -210,7 +208,7 @@ let rec split_insts = function
 let apply_kid_insts kid_insts t =
   let kid_insts, kids' = split_insts kid_insts in
   let kid_insts = List.map (fun (v,i) -> (v,Nexp_aux (Nexp_constant i,Generated Unknown))) kid_insts in
-  let subst = ksubst_from_list kid_insts in
+  let subst = kbindings_from_list kid_insts in
   kids', subst_src_typ subst t
 
 let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
@@ -574,7 +572,7 @@ let bindings_from_pat p =
 
 let remove_bound env pat =
   let bound = bindings_from_pat pat in
-  List.fold_left (fun sub v -> ISubst.remove v sub) env bound
+  List.fold_left (fun sub v -> Bindings.remove v sub) env bound
 
 (* Attempt simple pattern matches *)
 let lit_match = function
@@ -736,7 +734,7 @@ let construct_lit_vector args =
 type split =
   | NoSplit
   | VarSplit of (tannot pat * (id * tannot Ast.exp) list) list
-  | ConstrSplit of (tannot pat * nexp KSubst.t) list
+  | ConstrSplit of (tannot pat * nexp KBindings.t) list
 
 let threaded_map f state l =
   let l',state' =
@@ -745,10 +743,10 @@ let threaded_map f state l =
   in List.rev l',state'
 
 let isubst_minus subst subst' =
-  ISubst.merge (fun _ x y -> match x,y with (Some a), None -> Some a | _, _ -> None) subst subst'
+  Bindings.merge (fun _ x y -> match x,y with (Some a), None -> Some a | _, _ -> None) subst subst'
 
 let isubst_minus_set subst set =
-  IdSet.fold ISubst.remove set subst
+  IdSet.fold Bindings.remove set subst
 
 let assigned_vars exp =
   fst (Rewriter.fold_exp
@@ -867,8 +865,8 @@ let split_defs splits defs =
        let env,_ = env_typ_expected l annot in
        (try
          match Env.lookup_id id env with
-         | Local (Immutable,_) -> ISubst.find id substs
-         | Local (Mutable,_)   -> ISubst.find id assigns
+         | Local (Immutable,_) -> Bindings.find id substs
+         | Local (Mutable,_)   -> Bindings.find id assigns
          | _ -> exp
        with Not_found -> exp),assigns
     | E_lit _
@@ -917,7 +915,7 @@ let split_defs splits defs =
        (* Treat e1, e2 and e3 (from, to and by) as a non-det tuple *)
        let e1',e2',e3',assigns = non_det_exp_3 e1 e2 e3 in
        let assigns = isubst_minus_set assigns (assigned_vars e4) in
-       let e4',_ = const_prop_exp (ISubst.remove id substs) assigns e4 in
+       let e4',_ = const_prop_exp (Bindings.remove id substs) assigns e4 in
        re (E_for (id,e1',e2',e3',ord,e4')) assigns
     | E_loop (loop,e1,e2) ->
        let assigns = isubst_minus_set assigns (IdSet.union (assigned_vars e1) (assigned_vars e2)) in
@@ -980,9 +978,9 @@ let split_defs splits defs =
           let assigns' = isubst_minus_set assigns assigned_in in
           re (E_case (e', List.map (const_prop_pexp substs assigns) cases)) assigns'
        | Some (E_aux (_,(_,annot')) as exp,newbindings,kbindings) ->
-          let exp = nexp_subst_exp (ksubst_from_list kbindings) exp in
-          let newbindings_env = isubst_from_list newbindings in
-          let substs' = isubst_union substs newbindings_env in
+          let exp = nexp_subst_exp (kbindings_from_list kbindings) exp in
+          let newbindings_env = bindings_from_list newbindings in
+          let substs' = bindings_union substs newbindings_env in
           const_prop_exp substs' assigns exp)
     | E_let (lb,e2) ->
        begin
@@ -1003,9 +1001,9 @@ let split_defs splits defs =
               match can_match e' [Pat_aux (Pat_exp (p,e2),(Unknown,None))] with
               | None -> plain ()
               | Some (e'',bindings,kbindings) ->
-                 let e'' = nexp_subst_exp (ksubst_from_list kbindings) e'' in
-                 let bindings = isubst_from_list bindings in
-                 let substs'' = isubst_union substs' bindings in
+                 let e'' = nexp_subst_exp (kbindings_from_list kbindings) e'' in
+                 let bindings = bindings_from_list bindings in
+                 let substs'' = bindings_union substs' bindings in
                  const_prop_exp substs'' assigns e''
             else plain ()
        end
@@ -1023,8 +1021,8 @@ let split_defs splits defs =
               match Env.lookup_id id env with
               | Local (Mutable,_) | Unbound ->
                  if is_value e'
-                 then ISubst.add id e' assigns
-                 else ISubst.remove id assigns
+                 then Bindings.add id e' assigns
+                 else Bindings.remove id assigns
               | _ -> assigns
             end
          | None -> assigns
@@ -1032,17 +1030,17 @@ let split_defs splits defs =
        re (E_assign (le', e')) assigns
     | E_exit e ->
        let e',_ = const_prop_exp substs assigns e in
-       re (E_exit e') ISubst.empty
+       re (E_exit e') Bindings.empty
     | E_throw e ->
        let e',_ = const_prop_exp substs assigns e in
-       re (E_throw e') ISubst.empty
+       re (E_throw e') Bindings.empty
     | E_try (e,cases) ->
        (* TODO: try and preserve *any* assignment info *)
        let e',_ = const_prop_exp substs assigns e in
-       re (E_case (e', List.map (const_prop_pexp substs ISubst.empty) cases)) ISubst.empty
+       re (E_case (e', List.map (const_prop_pexp substs Bindings.empty) cases)) Bindings.empty
     | E_return e ->
        let e',_ = const_prop_exp substs assigns e in
-       re (E_return e') ISubst.empty
+       re (E_return e') Bindings.empty
     | E_assert (e1,e2) ->
        let e1',e2',assigns = non_det_exp_2 e1 e2 in
        re (E_assert (e1',e2')) assigns
@@ -1110,15 +1108,15 @@ let split_defs splits defs =
            fcls in
          match can_match arg cases with
          | Some (exp,bindings,kbindings) ->
-            let substs = isubst_from_list bindings in
-            let result,_ = const_prop_exp substs ISubst.empty exp in
+            let substs = bindings_from_list bindings in
+            let result,_ = const_prop_exp substs Bindings.empty exp in
             if is_value result then Some result else None
          | None -> None
   in
 
   let subst_exp substs exp =
-    let substs = isubst_from_list substs in
-    fst (const_prop_exp substs ISubst.empty exp)
+    let substs = bindings_from_list substs in
+    fst (const_prop_exp substs Bindings.empty exp)
   in
     
   (* Split a variable pattern into every possible value *)
@@ -1297,7 +1295,7 @@ let split_defs splits defs =
   P_aux (P_app (id',args),(Generated l,tannot)),
 *)
                    P_aux (P_app (id',[P_aux (P_id (id_of_kid kid),kid_annot)]),(Generated l,tannot)),
-                   ksubst_from_list insts
+                   kbindings_from_list insts
                  in
                  ConstrSplit (List.map map_inst variants)
               | exception Not_found -> NoSplit
