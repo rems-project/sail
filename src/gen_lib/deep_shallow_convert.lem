@@ -15,10 +15,10 @@ let toInterValueBool = function
   | false -> Interp_ast.V_lit (L_aux (L_zero) Unknown)
 end
 let rec fromInterpValueBool v = match v with
-  | Interp_ast.V_lit (L_aux (L_true) _)  -> true
-  | Interp_ast.V_lit (L_aux (L_false) _) -> false
   | Interp_ast.V_lit (L_aux (L_one) _)  -> true
+  | Interp_ast.V_lit (L_aux (L_true) _)  ->  true
   | Interp_ast.V_lit (L_aux (L_zero) _) -> false
+  | Interp_ast.V_lit (L_aux (L_false) _) -> false
   | Interp_ast.V_tuple [v] -> fromInterpValueBool v
   | v -> failwith ("fromInterpValue bool: unexpected value. " ^
                      Interp.debug_print_value v)
@@ -78,7 +78,7 @@ let rec fromInterpValueBitU v = match v with
   | Interp_ast.V_lit (L_aux (L_zero) _)  -> B0
   | Interp_ast.V_lit (L_aux (L_undef) _) -> BU
   | Interp_ast.V_lit (L_aux (L_true) _)   -> B1
-  | Interp_ast.V_lit (L_aux (L_false) _)  -> B0
+  | Interp_ast.V_lit (L_aux (L_false) _)  -> B0 
   | Interp_ast.V_tuple [v] -> fromInterpValueBitU v
   | v -> failwith ("fromInterpValue bitU: unexpected value. " ^
                      Interp.debug_print_value v)
@@ -506,18 +506,41 @@ instance (ToFromInterpValue barrier_kind)
 end
 
 
+let trans_kindToInterpValue = function
+  | Transaction_start -> V_ctor (Id_aux (Id "Transaction_start") Unknown) (T_id "trans_kind") (C_Enum 0) (toInterpValue ())
+  | Transaction_commit -> V_ctor (Id_aux (Id "Transaction_commit") Unknown) (T_id "trans_kind") (C_Enum 1) (toInterpValue ())
+  | Transaction_abort -> V_ctor (Id_aux (Id "Transaction_abort") Unknown) (T_id "trans_kind") (C_Enum 2) (toInterpValue ())
+  end
+let rec trans_kindFromInterpValue v = match v with
+  | V_ctor (Id_aux (Id "Transaction_start") _) _ _ v -> Transaction_start
+  | V_ctor (Id_aux (Id "Transaction_commit") _) _ _ v -> Transaction_commit
+  | V_ctor (Id_aux (Id "Transaction_abort") _) _ _ v -> Transaction_abort
+  | V_tuple [v] -> trans_kindFromInterpValue v
+  | v -> failwith ("fromInterpValue trans_kind: unexpected value. " ^
+                     Interp.debug_print_value v)
+  end
+instance (ToFromInterpValue trans_kind)
+  let toInterpValue = trans_kindToInterpValue
+  let fromInterpValue = trans_kindFromInterpValue
+end
+
+
 let instruction_kindToInterpValue = function
   | IK_barrier v -> V_ctor (Id_aux (Id "IK_barrier") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   | IK_mem_read v -> V_ctor (Id_aux (Id "IK_mem_read") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   | IK_mem_write v -> V_ctor (Id_aux (Id "IK_mem_write") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
+  | IK_mem_rmw v -> V_ctor (Id_aux (Id "IK_mem_rmw") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   | IK_cond_branch -> V_ctor (Id_aux (Id "IK_cond_branch") Unknown) (T_id "instruction_kind") C_Union (toInterpValue ())
+  | IK_trans v -> V_ctor (Id_aux (Id "IK_trans") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   | IK_simple -> V_ctor (Id_aux (Id "IK_simple") Unknown) (T_id "instruction_kind") C_Union (toInterpValue ())
   end
 let rec instruction_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "IK_barrier") _) _ _ v -> IK_barrier (fromInterpValue v)
   | V_ctor (Id_aux (Id "IK_mem_read") _) _ _ v -> IK_mem_read (fromInterpValue v)
   | V_ctor (Id_aux (Id "IK_mem_write") _) _ _ v -> IK_mem_write (fromInterpValue v)
+  | V_ctor (Id_aux (Id "IK_mem_rmw") _) _ _ v -> IK_mem_rmw (fromInterpValue v)
   | V_ctor (Id_aux (Id "IK_cond_branch") _) _ _ v -> IK_cond_branch
+  | V_ctor (Id_aux (Id "IK_trans") _) _ _ v -> IK_trans (fromInterpValue v)
   | V_ctor (Id_aux (Id "IK_simple") _) _ _ v -> IK_simple
   | V_tuple [v] -> instruction_kindFromInterpValue v
   | v -> failwith ("fromInterpValue instruction_kind: unexpected value. " ^
