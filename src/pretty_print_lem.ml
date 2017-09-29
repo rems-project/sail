@@ -418,11 +418,12 @@ let doc_exp_lem, doc_let_lem =
                    doc_id_lem (typ_id_of (typ_of_annot lannot)) ^^
                    underscore ^^
                    doc_id_lem id in
+                 let call = if is_bitvector_typ (Env.base_typ_of (env_of full_exp) (typ_of_annot fannot)) then "write_reg_field_bit" else "write_reg_field_pos" in
                  liftR ((prefix 2 1)
-                   (string "write_reg_field_pos")
+                   (string call)
                    (align (doc_lexp_deref_lem sequential mwords early_ret le ^/^
                      field_ref ^/^ expY e2 ^/^ expY e)))
-            | _ ->
+            | LEXP_aux (_, lannot) ->
                (match le with
                  | LEXP_aux (_, (_, Some (_, Typ_aux (Typ_app (vector, [_; _; _; Typ_arg_aux (Typ_arg_typ etyp, _)]), _), _)))
                    when is_reftyp etyp && string_of_id vector = "vector" ->
@@ -436,7 +437,8 @@ let doc_exp_lem, doc_let_lem =
                    liftR ((prefix 2 1) (string "write_reg") (deref ^/^ expY e))
                  | _ ->
                    let deref = doc_lexp_deref_lem sequential mwords early_ret le in
-                   liftR ((prefix 2 1) (string "write_reg_pos")
+                   let call = if is_bitvector_typ (Env.base_typ_of (env_of full_exp) (typ_of_annot lannot)) then "write_reg_bit" else "write_reg_pos" in
+                   liftR ((prefix 2 1) (string call)
                    (deref ^/^ expY e2 ^/^ expY e)))
            )
         (* | LEXP_field (le,id) when is_bit_typ t ->

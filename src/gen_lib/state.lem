@@ -184,8 +184,11 @@ val update_reg_range : forall 'regs 'a 'b. Bitvector 'a, Bitvector 'b => registe
 let update_reg_range reg i j reg_val new_val = set_bits (reg.reg_is_inc) (reg.reg_start) reg_val i j (bits_of new_val)
 let write_reg_range reg i j = update_reg reg (update_reg_range reg i j)
 
-let update_reg_pos reg i reg_val bit = set_bit (reg.reg_is_inc) (reg.reg_start) reg_val i (to_bitU bit)
+let update_reg_pos reg i reg_val x = update_pos reg_val i x
 let write_reg_pos reg i = update_reg reg (update_reg_pos reg i)
+
+let update_reg_bit reg i reg_val bit = set_bit (reg.reg_is_inc) (reg.reg_start) reg_val i (to_bitU bit)
+let write_reg_bit reg i = update_reg reg (update_reg_bit reg i)
 
 let update_reg_field_range regfield i j reg_val new_val =
   let current_field_value = regfield.get_field reg_val in
@@ -193,11 +196,17 @@ let update_reg_field_range regfield i j reg_val new_val =
   regfield.set_field reg_val new_field_value
 let write_reg_field_range reg regfield i j = update_reg reg (update_reg_field_range regfield i j)
 
-let update_reg_field_pos regfield i reg_val bit =
+let update_reg_field_pos regfield i reg_val x =
+  let current_field_value = regfield.get_field reg_val in
+  let new_field_value = update_pos current_field_value i x in
+  regfield.set_field reg_val new_field_value
+let write_reg_field_pos reg regfield i = update_reg reg (update_reg_field_pos regfield i)
+
+let update_reg_field_bit regfield i reg_val bit =
   let current_field_value = regfield.get_field reg_val in
   let new_field_value = set_bit (regfield.field_is_inc) (regfield.field_start) current_field_value i (to_bitU bit) in
   regfield.set_field reg_val new_field_value
-let write_reg_field_pos reg regfield i = update_reg reg (update_reg_field_pos regfield i)
+let write_reg_field_bit reg regfield i = update_reg reg (update_reg_field_bit regfield i)
 
 val barrier : forall 'regs. barrier_kind -> M 'regs unit
 let barrier _ = return ()
