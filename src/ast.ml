@@ -289,6 +289,7 @@ type
 'a reg_id_aux =
    RI_id of id
 
+type loop = While | Until
 
 type
 'a exp_aux =  (* Expression *)
@@ -301,7 +302,8 @@ type
  | E_app_infix of 'a exp * id * 'a exp (* infix function application *)
  | E_tuple of ('a exp) list (* tuple *)
  | E_if of 'a exp * 'a exp * 'a exp (* conditional *)
- | E_for of id * 'a exp * 'a exp * 'a exp * order * 'a exp (* loop *)
+ | E_for of id * 'a exp * 'a exp * 'a exp * order * 'a exp (* for loop *)
+ | E_loop of loop * 'a exp * 'a exp
  | E_vector of ('a exp) list (* vector (indexed from 0) *)
  | E_vector_indexed of ((int * 'a exp)) list * 'a opt_default (* vector (indexed consecutively) *)
  | E_vector_access of 'a exp * 'a exp (* vector access *)

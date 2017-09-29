@@ -519,6 +519,26 @@ let doc_exp_lem, doc_let_lem =
                    (prefix 1 1 (separate space [string "fun";expY id;varspp;arrow]) (expN body))
                 )
             )
+       | Id_aux ((Id (("while_PP" | "while_PM" |
+                       "while_MP" | "while_MM" ) as loopf),_)) ->
+          let [is_while;cond;body;e5] = args in
+          let varspp = match e5 with
+            | E_aux (E_tuple vars,_) ->
+               let vars = List.map (fun (E_aux (E_id (Id_aux (Id name,_)),_)) -> string name) vars in
+               begin match vars with
+               | [v] -> v
+               | _ -> parens (separate comma vars) end
+            | E_aux (E_id (Id_aux (Id name,_)),_) ->
+               string name
+            | E_aux (E_lit (L_aux (L_unit,_)),_) ->
+               string "_" in
+          parens (
+              (prefix 2 1)
+                ((separate space) [string loopf;expY is_while;expY e5])
+                ((prefix 0 1)
+                  (parens (prefix 1 1 (separate space [string "fun";varspp;arrow]) (expN cond)))
+                  (parens (prefix 1 1 (separate space [string "fun";varspp;arrow]) (expN body))))
+            )
        (* | Id_aux (Id "append",_) ->
           let [e1;e2] = args in
           let epp = align (expY e1 ^^ space ^^ string "++" ^//^ expY e2) in

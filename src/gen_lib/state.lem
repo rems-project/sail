@@ -225,6 +225,35 @@ let rec foreachM_dec (i,stop,by) vars body =
     foreachM_dec (i - by,stop,by) vars body
   else return vars
 
+val while_PP : forall 'vars. bool -> 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars
+let rec while_PP is_while vars cond body =
+  if (cond vars = is_while)
+  then while_PP is_while (body vars) cond body
+  else vars
+
+val while_PM : forall 'regs 'vars 'e. bool -> 'vars -> ('vars -> bool) ->
+                ('vars -> ME 'regs 'vars 'e) -> ME 'regs 'vars 'e
+let rec while_PM is_while vars cond body =
+  if (cond vars = is_while)
+  then body vars >>= fun vars -> while_PM is_while vars cond body
+  else return vars
+
+val while_MP : forall 'regs 'vars 'e. bool -> 'vars -> ('vars -> ME 'regs bool 'e) ->
+                ('vars -> 'vars) -> ME 'regs 'vars 'e
+let rec while_MP is_while vars cond body =
+  cond vars >>= fun continue ->
+  if (continue = is_while)
+  then while_MP is_while (body vars) cond body
+  else return vars
+
+val while_MM : forall 'regs 'vars 'e. bool -> 'vars -> ('vars -> ME 'regs bool 'e) ->
+                ('vars -> ME 'regs 'vars 'e) -> ME 'regs 'vars 'e
+let rec while_MM is_while vars cond body =
+  cond vars >>= fun continue ->
+  if (continue = is_while)
+  then body vars >>= fun vars -> while_MM is_while vars cond body
+  else return vars
+
 (*let write_two_regs r1 r2 bvec state =
   let vec = bvec_to_vec bvec in
   let is_inc =

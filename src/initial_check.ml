@@ -469,7 +469,9 @@ and to_ast_exp (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.E_aux(exp,l)
     | Parse_ast.E_if(e1,e2,e3) -> E_if(to_ast_exp k_env def_ord e1, to_ast_exp k_env def_ord e2, to_ast_exp k_env def_ord e3)
     | Parse_ast.E_for(id,e1,e2,e3,atyp,e4) -> 
       E_for(to_ast_id id,to_ast_exp k_env def_ord e1, to_ast_exp k_env def_ord e2,
-	    to_ast_exp k_env def_ord e3,to_ast_order k_env def_ord atyp, to_ast_exp k_env def_ord e4)
+            to_ast_exp k_env def_ord e3,to_ast_order k_env def_ord atyp, to_ast_exp k_env def_ord e4)
+    | Parse_ast.E_loop(Parse_ast.While, e1, e2) -> E_loop (While, to_ast_exp k_env def_ord e1, to_ast_exp k_env def_ord e2)
+    | Parse_ast.E_loop(Parse_ast.Until, e1, e2) -> E_loop (Until, to_ast_exp k_env def_ord e1, to_ast_exp k_env def_ord e2)
     | Parse_ast.E_vector(exps) -> 
       (match to_ast_iexps false k_env def_ord exps with
 	| Some([]) -> E_vector([])

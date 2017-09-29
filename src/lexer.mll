@@ -112,6 +112,10 @@ let kw_table =
      ("union",			 (fun x -> Union));
      ("with",                    (fun x -> With));
      ("when",                    (fun x -> When));
+     ("repeat",                  (fun x -> Repeat));
+     ("until",                   (fun x -> Until));
+     ("while",                   (fun x -> While));
+     ("do",                      (fun x -> Do));
      ("val",                     (fun x -> Val));
 
      ("div",			 (fun x -> Div_));

@@ -253,6 +253,7 @@ and fpat_aux =  (* Field pattern *)
 and fpat = 
    FP_aux of fpat_aux * l
 
+type loop = While | Until
 
 type 
 exp_aux =  (* Expression *)
@@ -265,6 +266,7 @@ exp_aux =  (* Expression *)
  | E_app_infix of exp * id * exp (* infix function application *)
  | E_tuple of (exp) list (* tuple *)
  | E_if of exp * exp * exp (* conditional *)
+ | E_loop of loop * exp * exp
  | E_for of id * exp * exp * exp * atyp * exp (* loop *)
  | E_vector of (exp) list (* vector (indexed from 0) *)
  | E_vector_indexed of (exp) list * opt_default (* vector (indexed consecutively) *)

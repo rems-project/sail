@@ -99,9 +99,16 @@ let rec skip_lines in_chan = function
   | n when n <= 0 -> ()
   | n -> input_line in_chan; skip_lines in_chan (n - 1)
 
+let rec read_lines in_chan = function
+  | n when n <= 0 -> []
+  | n ->
+     let l = input_line in_chan in
+     let ls = read_lines in_chan (n - 1) in
+     l :: ls
+
 let termcode n = "\x1B[" ^ string_of_int n ^ "m"
 
-let print_code ff fname lnum1 cnum1 cnum2 =
+let print_code1 ff fname lnum1 cnum1 cnum2 =
   try
     let in_chan = open_in fname in
     begin
@@ -119,6 +126,31 @@ let print_code ff fname lnum1 cnum1 cnum2 =
     end
   with _ -> ()
 
+let print_code2 ff fname lnum1 cnum1 lnum2 cnum2 =
+  try
+    let in_chan = open_in fname in
+    begin
+      try
+        skip_lines in_chan (lnum1 - 1);
+        let line = input_line in_chan in
+        Format.fprintf ff "%s%s%s%s\n"
+                       (Str.string_before line cnum1)
+                       (termcode 41)
+                       (Str.string_after line cnum1)
+                       (termcode 49);
+        let lines = read_lines in_chan (lnum2 - lnum1 - 1) in
+        List.iter (fun l -> Format.fprintf ff "%s%s%s\n" (termcode 41) l (termcode 49)) lines;
+        let line = input_line in_chan in
+        Format.fprintf ff "%s%s%s%s"
+                       (termcode 41)
+                       (Str.string_before line cnum2)
+                       (termcode 49)
+                       (Str.string_after line cnum2);
+        close_in in_chan
+      with e -> (close_in_noerr in_chan; print_endline (Printexc.to_string e))
+    end
+  with _ -> ()
+
 let format_pos2 ff p1 p2 =
   let open Lexing in
   begin
@@ -126,7 +158,9 @@ let format_pos2 ff p1 p2 =
                    p1.pos_fname
                    p1.pos_lnum (p1.pos_cnum - p1.pos_bol + 1)
                    p2.pos_lnum (p2.pos_cnum - p2.pos_bol);
-    print_code ff p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) (p2.pos_cnum - p2.pos_bol);
+    if p1.pos_lnum == p2.pos_lnum
+    then print_code1 ff p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) (p2.pos_cnum - p2.pos_bol)
+    else print_code2 ff p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol);
     Format.pp_print_flush ff ()
   end
 

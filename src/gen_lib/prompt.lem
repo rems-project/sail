@@ -172,6 +172,35 @@ let rec foreachM_dec (i,stop,by) vars body =
     foreachM_dec (i - by,stop,by) vars body
   else return vars
 
+val while_PP : forall 'vars. bool -> 'vars -> ('vars -> bool) -> ('vars -> 'vars) -> 'vars
+let rec while_PP is_while vars cond body =
+  if (cond vars = is_while)
+  then while_PP is_while (body vars) cond body
+  else vars
+
+val while_PM : forall 'vars 'r. bool -> 'vars -> ('vars -> bool) ->
+                ('vars -> MR 'vars 'r) -> MR 'vars 'r
+let rec while_PM is_while vars cond body =
+  if (cond vars = is_while)
+  then body vars >>= fun vars -> while_PM is_while vars cond body
+  else return vars
+
+val while_MP : forall 'vars 'r. bool -> 'vars -> ('vars -> MR bool 'r) ->
+                ('vars -> 'vars) -> MR 'vars 'r
+let rec while_MP is_while vars cond body =
+  cond vars >>= fun continue ->
+  if (continue = is_while)
+  then while_MP is_while (body vars) cond body
+  else return vars
+
+val while_MM : forall 'vars 'r. bool -> 'vars -> ('vars -> MR bool 'r) ->
+                ('vars -> MR 'vars 'r) -> MR 'vars 'r
+let rec while_MM is_while vars cond body =
+  cond vars >>= fun continue ->
+  if (continue = is_while)
+  then body vars >>= fun vars -> while_MM is_while vars cond body
+  else return vars
+
 (*let write_two_regs r1 r2 vec =
   let is_inc =
     let is_inc_r1 = is_inc_of_reg r1 in

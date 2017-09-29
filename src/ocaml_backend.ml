@@ -137,6 +137,15 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      separate space [string "let"; ocaml_atomic_lexp ctx lexp;
                      equals; string "ref"; ocaml_atomic_exp ctx exp1; string "in"]
      ^/^ ocaml_exp ctx exp2
+  | E_loop (While, cond, body) ->
+     let loop_body =
+       separate space [string "if"; ocaml_atomic_exp ctx cond;
+                       string "then"; parens (ocaml_atomic_exp ctx body ^^ semi ^^ space ^^ string "loop ()");
+                       string "else ()"]
+     in
+     (string "let rec loop () =" ^//^ loop_body)
+     ^/^ string "in"
+     ^/^ string "loop ()"
   | E_lit _ | E_list _ | E_id _ | E_tuple _ -> ocaml_atomic_exp ctx exp
   | _ -> string ("EXP(" ^ string_of_exp exp ^ ")")
 and ocaml_letbind ctx (LB_aux (lb_aux, _)) =
