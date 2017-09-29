@@ -4,10 +4,10 @@ open import Sail_impl_base
 open import Sail_values
 open import Prompt
 
-val MEMr             : (vector bitU * integer) -> M (vector bitU)
-val MEMr_reserve     : (vector bitU * integer) -> M (vector bitU)
-val MEMr_tag         : (vector bitU * integer) -> M (vector bitU)
-val MEMr_tag_reserve : (vector bitU * integer) -> M (vector bitU)
+val MEMr             : forall 'a 'b. Bitvector 'a, Bitvector 'b => ('a * integer) -> M 'b
+val MEMr_reserve     : forall 'a 'b. Bitvector 'a, Bitvector 'b => ('a * integer) -> M 'b
+val MEMr_tag         : forall 'a 'b. Bitvector 'a, Bitvector 'b => ('a * integer) -> M 'b
+val MEMr_tag_reserve : forall 'a 'b. Bitvector 'a, Bitvector 'b => ('a * integer) -> M 'b
 
 let MEMr (addr,size)             = read_mem false Read_plain addr size
 let MEMr_reserve (addr,size)     = read_mem false Read_reserve addr size
@@ -16,10 +16,10 @@ let MEMr_tag (addr,size)         = read_mem false Read_plain addr size
 let MEMr_tag_reserve (addr,size) = read_mem false Read_reserve addr size
 
 
-val MEMea                 : (vector bitU * integer) -> M unit
-val MEMea_conditional     : (vector bitU * integer) -> M unit
-val MEMea_tag             : (vector bitU * integer) -> M unit
-val MEMea_tag_conditional : (vector bitU * integer) -> M unit
+val MEMea                 : forall 'a. Bitvector 'a => ('a * integer) -> M unit
+val MEMea_conditional     : forall 'a. Bitvector 'a => ('a * integer) -> M unit
+val MEMea_tag             : forall 'a. Bitvector 'a => ('a * integer) -> M unit
+val MEMea_tag_conditional : forall 'a. Bitvector 'a => ('a * integer) -> M unit
 
 let MEMea (addr,size)                 = write_mem_ea Write_plain addr size
 let MEMea_conditional (addr,size)     = write_mem_ea Write_conditional addr size
@@ -28,10 +28,10 @@ let MEMea_tag (addr,size)             = write_mem_ea Write_plain addr size
 let MEMea_tag_conditional (addr,size) = write_mem_ea Write_conditional addr size
 
 
-val MEMval                 : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_conditional     : (vector bitU * integer * vector bitU) -> M bool
-val MEMval_tag             : (vector bitU * integer * vector bitU) -> M unit
-val MEMval_tag_conditional : (vector bitU * integer * vector bitU) -> M bool
+val MEMval                 : forall 'a 'b. Bitvector 'a, Bitvector 'b => ('a * integer * 'b) -> M unit
+val MEMval_conditional     : forall 'a 'b. Bitvector 'a, Bitvector 'b => ('a * integer * 'b) -> M bool
+val MEMval_tag             : forall 'a 'b. Bitvector 'a, Bitvector 'b => ('a * integer * 'b) -> M unit
+val MEMval_tag_conditional : forall 'a 'b. Bitvector 'a, Bitvector 'b => ('a * integer * 'b) -> M bool
 
 let MEMval (_,_,v)                 = write_mem_val v >>= fun _ -> return ()
 let MEMval_conditional (_,_,v)     = write_mem_val v >>= fun b -> return (if b then true else false)

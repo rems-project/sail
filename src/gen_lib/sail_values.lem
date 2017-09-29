@@ -48,12 +48,28 @@ instance (Show bitU)
   let show = showBitU
 end
 
+class (BitU 'a)
+  val to_bitU : 'a -> bitU
+  val from_bitU : bitU -> 'a
+end
+
+instance (BitU bitU)
+  let to_bitU b = b
+  let from_bitU b = b
+end
 
 let bitU_to_bool = function
   | B0 -> false
   | B1  -> true
   | BU -> failwith "to_bool applied to BU"
   end
+
+let bool_to_bitU b = if b then B1 else B0
+
+instance (BitU bool)
+  let to_bitU = bool_to_bitU
+  let from_bitU = bitU_to_bool
+end
 
 let cast_bit_bool = bitU_to_bool
 
@@ -92,8 +108,6 @@ let bitwise_not_bit = function
 val is_one : integer -> bitU
 let is_one i =
   if i = 1 then B1 else B0
-
-let bool_to_bitU b = if b then B1 else B0
 
 let bitwise_binop_bit op = function
   | (BU,_) -> BU (*Do we want to do this or to respect | of I and & of B0 rules?*)
@@ -173,17 +187,19 @@ let update_sublist xs (i,j) xs' =
   let (prefix,_fromItoJ) = List.splitAt i toJ in
   prefix ++ xs' ++ suffix
 
-val slice : forall 'a. vector 'a -> integer -> integer -> vector 'a
-let slice (Vector bs start is_inc) i j =
+val slice_aux : forall 'a. bool -> integer -> list 'a -> integer -> integer -> list 'a
+let slice_aux is_inc start bs i j =
   let iN = natFromInteger i in
   let jN = natFromInteger j in
   let startN = natFromInteger start in
-  let subvector_bits =
-    sublist bs (if is_inc then (iN-startN,jN-startN) else (startN-iN,startN-jN)) in
-  Vector subvector_bits i is_inc
+  sublist bs (if is_inc then (iN-startN,jN-startN) else (startN-iN,startN-jN))
 
-let vector_subrange_inc (v, i, j) = slice v i j
-let vector_subrange_dec (v, i, j) = slice v i j
+val slice : forall 'a. vector 'a -> integer -> integer -> vector 'a
+let slice (Vector bs start is_inc) i j =
+  Vector (slice_aux is_inc start bs i j) i is_inc
+
+let vector_subrange_inc (start, v, i, j) = slice v i j
+let vector_subrange_dec (start, v, i, j) = slice v i j
 
 (* this is for the vector slicing introduced in vector-concat patterns: i and j
 index into the "raw data", the list of bits. Therefore getting the bit list is
@@ -198,34 +214,35 @@ let slice_raw (Vector bs start is_inc) i j =
   Vector bits (if is_inc then 0 else len - 1) is_inc
 
 
-val update_aux : forall 'a. vector 'a -> integer -> integer -> list 'a -> vector 'a
-let update_aux (Vector bs start is_inc) i j bs' =
+val update_aux : forall 'a. bool -> integer -> list 'a -> integer -> integer -> list 'a -> list 'a
+let update_aux is_inc start bs i j bs' =
   let iN = natFromInteger i in
   let jN = natFromInteger j in
   let startN = natFromInteger start in
-  let bits =
-    (update_sublist bs)
-      (if is_inc then (iN-startN,jN-startN) else (startN-iN,startN-jN)) bs' in
-  Vector bits start is_inc
+  update_sublist bs
+      (if is_inc then (iN-startN,jN-startN) else (startN-iN,startN-jN)) bs'
 
 val update : forall 'a. vector 'a -> integer -> integer -> vector 'a -> vector 'a
-let update v i j (Vector bs' _ _) =
-  update_aux v i j bs'
+let update (Vector bs start is_inc) i j (Vector bs' _ _) =
+  Vector (update_aux is_inc start bs i j bs') start is_inc
 
-let vector_update_inc (v, i, j, v') = update v i j v'
-let vector_update_dec (v, i, j, v') = update v i j v'
+let vector_update_inc (start, v, i, j, v') = update v i j v'
+let vector_update_dec (start, v, i, j, v') = update v i j v'
+
+val access_aux : forall 'a. bool -> integer -> list 'a -> integer -> 'a
+let access_aux is_inc start xs n =
+  if is_inc then List_extra.nth xs (natFromInteger (n - start))
+  else List_extra.nth xs (natFromInteger (start - n))
 
 val access : forall 'a. vector 'a -> integer -> 'a
-let access (Vector bs start is_inc) n =
-  if is_inc then List_extra.nth bs (natFromInteger (n - start))
-  else List_extra.nth bs (natFromInteger (start - n))
+let access (Vector bs start is_inc) n = access_aux is_inc start bs n
 
-let vector_access_inc (v, i) = access v i
-let vector_access_dec (v, i) = access v i
+let vector_access_inc (start, v, i) = access v i
+let vector_access_dec (start, v, i) = access v i
 
 val update_pos : forall 'a. vector 'a -> integer -> 'a -> vector 'a
 let update_pos v n b =
-  update_aux v n n [b]
+  update v n n (Vector [b] 0 false)
 
 let extract_only_element (Vector elems _ _) = match elems with
   | [] -> failwith "extract_only_element called for empty vector"
@@ -236,10 +253,65 @@ end
 (*** Bitvectors *)
 
 (* element list * start * has increasing direction *)
-type bitvector 'a = Bitvector of mword 'a * integer * bool
+type bitvector 'a = mword 'a (* Bitvector of mword 'a * integer * bool *)
 declare isabelle target_sorts bitvector = `len`
 
-let showBitvector (Bitvector elems start inc) =
+class (Bitvector 'a)
+  val bits_of : 'a -> list bitU
+  val of_bits : list bitU -> 'a
+  val unsigned : 'a -> integer
+  (* The first two parameters of the following specify indexing:
+     indexing order and start index *)
+  val get_bit : bool -> integer -> 'a -> integer -> bitU
+  val set_bit : bool -> integer -> 'a -> integer -> bitU -> 'a
+  val get_bits : bool -> integer -> 'a -> integer -> integer -> list bitU
+  val set_bits : bool -> integer -> 'a -> integer -> integer -> list bitU -> 'a
+end
+
+val bitlist_to_integer : list bitU -> integer
+let bitlist_to_integer bs =
+  let (sum,_) =
+    List.foldr
+      (fun b (acc,exp) ->
+        match b with
+        | B1 -> (acc + integerPow 2 exp,exp + 1)
+        | B0 -> (acc, exp + 1)
+        | BU -> failwith "unsigned: vector has undefined bits"
+        end)
+      (0,0) bs in
+  sum
+
+instance forall 'a. BitU 'a => (Bitvector (list 'a))
+  let bits_of v = List.map to_bitU v
+  let of_bits v = List.map from_bitU v
+  let unsigned v = bitlist_to_integer (List.map to_bitU v)
+  let get_bit is_inc start v n = to_bitU (access_aux is_inc start v n)
+  let set_bit is_inc start v n b = update_aux is_inc start v n n [from_bitU b]
+  let get_bits is_inc start v i j = List.map to_bitU (slice_aux is_inc start v i j)
+  let set_bits is_inc start v i j v' = update_aux is_inc start v i j (List.map from_bitU v')
+end
+
+instance forall 'a. BitU 'a => (Bitvector (vector 'a))
+  let bits_of v = List.map to_bitU (get_elems v)
+  let of_bits v = Vector (List.map from_bitU v) (integerFromNat (List.length v) - 1) false
+  let unsigned v = unsigned (get_elems v)
+  let get_bit is_inc start v n = to_bitU (access v n)
+  let set_bit is_inc start v n b = update_pos v n (from_bitU b)
+  let get_bits is_inc start v i j = List.map to_bitU (get_elems (slice v i j))
+  let set_bits is_inc start v i j v' = update v i j (Vector (List.map from_bitU v') (integerFromNat (List.length v') - 1) false)
+end
+
+instance forall 'a. Size 'a => (Bitvector (mword 'a))
+  let bits_of v = List.map to_bitU (bitlistFromWord v)
+  let of_bits v = wordFromBitlist (List.map from_bitU v)
+  let unsigned v = unsignedIntegerFromWord v
+  let get_bit is_inc start v n = to_bitU (access_aux is_inc start (bitlistFromWord v) n)
+  let set_bit is_inc start v n b = wordFromBitlist (update_aux is_inc start (bitlistFromWord v) n n [from_bitU b])
+  let get_bits is_inc start v i j = slice_aux is_inc start (List.map to_bitU (bitlistFromWord v)) i j
+  let set_bits is_inc start v i j v' = wordFromBitlist (update_aux is_inc start (bitlistFromWord v) i j (List.map from_bitU v'))
+end
+
+(*let showBitvector (Bitvector elems start inc) =
   "Bitvector " ^ show elems ^ " " ^ show start ^ " " ^ show inc
 
 let bvget_dir (Bitvector _ _ ord) = ord
@@ -248,15 +320,15 @@ let bvget_elems (Bitvector elems _ _) = elems
 
 instance forall 'a. (Show (bitvector 'a))
   let show = showBitvector
-end
+end*)
 
-let bvec_to_vec (Bitvector bs start is_inc) =
+let bvec_to_vec is_inc start bs =
   let bits = List.map bool_to_bitU (bitlistFromWord bs) in
   Vector bits start is_inc
 
 let vec_to_bvec (Vector elems start is_inc) =
-  let word = wordFromBitlist (List.map bitU_to_bool elems) in
-  Bitvector word start is_inc
+  (*let word =*) wordFromBitlist (List.map bitU_to_bool elems) (*in
+  Bitvector word start is_inc*)
 
 (*** Vector operations *)
 
@@ -270,37 +342,37 @@ let rec byte_chunks n list = match (n,list) with
   | _ -> failwith "byte_chunks not given enough bits"
 end
 
-val bitv_of_byte_lifteds : bool -> list Sail_impl_base.byte_lifted -> vector bitU
+val bitv_of_byte_lifteds : bool -> list Sail_impl_base.byte_lifted -> list bitU
 let bitv_of_byte_lifteds dir v =
   let bits = foldl (fun x (Byte_lifted y) -> x ++ (List.map bitU_of_bit_lifted y)) [] v in
   let len = integerFromNat (List.length bits) in
-  Vector bits (if dir then 0 else len - 1) dir
+  bits (*Vector bits (if dir then 0 else len - 1) dir*)
 
-val bitv_of_bytes : bool -> list Sail_impl_base.byte -> vector bitU
+val bitv_of_bytes : bool -> list Sail_impl_base.byte -> list bitU
 let bitv_of_bytes dir v =
   let bits = foldl (fun x (Byte y) -> x ++ (List.map bitU_of_bit y)) [] v in
   let len = integerFromNat (List.length bits) in
-  Vector bits (if dir then 0 else len - 1) dir
+  bits (*Vector bits (if dir then 0 else len - 1) dir*)
 
 
-val byte_lifteds_of_bitv : vector bitU -> list byte_lifted
-let byte_lifteds_of_bitv (Vector bits length is_inc) =
+val byte_lifteds_of_bitv : list bitU -> list byte_lifted
+let byte_lifteds_of_bitv bits =
   let bits = List.map bit_lifted_of_bitU bits in
   byte_lifteds_of_bit_lifteds bits
 
-val bytes_of_bitv : vector bitU -> list byte
-let bytes_of_bitv (Vector bits length is_inc) =
+val bytes_of_bitv : list bitU -> list byte
+let bytes_of_bitv bits =
   let bits = List.map bit_of_bitU bits in
   bytes_of_bits bits
 
 val bit_lifteds_of_bitUs : list bitU -> list bit_lifted
 let bit_lifteds_of_bitUs bits = List.map bit_lifted_of_bitU bits
 
-val bit_lifteds_of_bitv : vector bitU -> list bit_lifted
-let bit_lifteds_of_bitv v = bit_lifteds_of_bitUs (get_elems v)
+val bit_lifteds_of_bitv : list bitU -> list bit_lifted
+let bit_lifteds_of_bitv v = bit_lifteds_of_bitUs v
 
 
-val address_lifted_of_bitv : vector bitU -> address_lifted
+val address_lifted_of_bitv : list bitU -> address_lifted
 let address_lifted_of_bitv v =
   let byte_lifteds = byte_lifteds_of_bitv v in
   let maybe_address_integer =
@@ -310,7 +382,7 @@ let address_lifted_of_bitv v =
     end in
   Address_lifted byte_lifteds maybe_address_integer
 
-val address_of_bitv : vector bitU -> address
+val address_of_bitv : list bitU -> address
 let address_of_bitv v =
   let bytes = bytes_of_bitv v in
   address_of_byte_list bytes
@@ -333,11 +405,15 @@ type register =
 
 type register_ref 'regstate 'a =
   <| reg_name : string;
+     reg_start : integer;
+     reg_is_inc : bool;
      read_from : 'regstate -> 'a;
      write_to : 'regstate -> 'a -> 'regstate |>
 
 type field_ref 'regtype 'a =
   <| field_name : string;
+     field_start : integer;
+     field_is_inc : bool;
      get_field : 'regtype -> 'a;
      set_field : 'regtype -> 'a -> 'regtype |>
 
@@ -416,11 +492,11 @@ let rec external_reg_value reg_name v =
      rv_start          = external_start;
      rv_start_internal = internal_start |>
 
-val internal_reg_value : register_value -> vector bitU
+val internal_reg_value : register_value -> list bitU
 let internal_reg_value v =
-  Vector (List.map bitU_of_bit_lifted v.rv_bits)
-         (integerFromNat v.rv_start_internal)
-         (v.rv_dir = D_increasing)
+  List.map bitU_of_bit_lifted v.rv_bits
+         (*(integerFromNat v.rv_start_internal)
+         (v.rv_dir = D_increasing)*)
 
 
 let external_slice (d:direction) (start:nat) ((i,j):(nat*nat)) =
@@ -503,8 +579,9 @@ let toNaturalFiveTup (n1,n2,n3,n4,n5) =
    toNatural n4,
    toNatural n5)
 
-
-type regfp =
+(* Let the following types be generated by Sail per spec, using either bitlists
+   or machine words as bitvector representation *)
+(*type regfp =
   | RFull of (string)
   | RSlice of (string * integer * integer)
   | RSliceBit of (string * integer)
@@ -546,7 +623,7 @@ end
 
 let niafp_to_nia reginfo = function
   | NIAFP_successor -> NIA_successor
-  | NIAFP_concrete_address v -> NIA_concrete_address (address_of_bitv v)
+  | NIAFP_concrete_address v -> NIA_concrete_address (address_of_bitv (bits_of v))
   | NIAFP_LR -> NIA_LR
   | NIAFP_CTR -> NIA_CTR
   | NIAFP_register r -> NIA_register (regfp_to_reg reginfo r)
@@ -554,6 +631,7 @@ end
 
 let diafp_to_dia reginfo = function
   | DIAFP_none -> DIA_none
-  | DIAFP_concrete v -> DIA_concrete_address (address_of_bitv v)
+  | DIAFP_concrete v -> DIA_concrete_address (address_of_bitv (bits_of v))
   | DIAFP_reg r -> DIA_register (regfp_to_reg reginfo r)
 end
+*)

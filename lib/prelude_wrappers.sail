@@ -4,6 +4,39 @@ function forall Num 'n, Num 'm. (vector<'m - 1,'m,dec,bit>) to_vec (n) = to_vec_
 
 function forall Num 'm. (vector<'m - 1,'m,dec,bit>) to_svec (n) = to_vec_dec ((sizeof 'm) - 1, sizeof 'm, n)
 
+(* Vector access *)
+
+val extern forall Num 'n, Num 'l, Type 'a, 'l >= 0. ([:'n:], vector<'n,'l,dec,'a>, [|'n - 'l + 1:'n|]) -> 'a effect pure vector_access_dec' = "vector_access_dec"
+function forall Num 'n, Num 'l, Type 'a, 'l >= 0. 'a vector_access_dec ((vector<'n,'l,dec,'a>) v, i) = vector_access_dec' (sizeof 'n, v, i)
+val extern forall Num 'n, Num 'l, Type 'a, 'l >= 0. ([:'n:], vector<'n,'l,inc,'a>, [|'n:'n + 'l - 1|]) -> 'a effect pure vector_access_inc' = "vector_access_inc"
+function forall Num 'n, Num 'l, Type 'a, 'l >= 0. 'a vector_access_inc ((vector<'n,'l,inc,'a>) v, i) = vector_access_inc' (sizeof 'n, v, i)
+val extern forall Num 'n, Num 'l, 'l >= 0. ([:'n:], vector<'n,'l,dec,bit>, [|'n - 'l + 1:'n|]) -> bit effect pure bitvector_access_dec' = "bitvector_access_dec"
+function forall Num 'n, Num 'l, 'l >= 0. bit bitvector_access_dec ((vector<'n,'l,dec,bit>) v, i) = bitvector_access_dec' (sizeof 'n, v, i)
+val extern forall Num 'n, Num 'l, 'l >= 0. ([:'n:], vector<'n,'l,inc,bit>, [|'n:'n + 'l - 1|]) -> bit effect pure bitvector_access_inc' = "bitvector_access_inc"
+function forall Num 'n, Num 'l, 'l >= 0. bit bitvector_access_inc ((vector<'n,'l,inc,bit>) v, i) = bitvector_access_inc' (sizeof 'n, v, i)
+
+(* Vector subrange *)
+
+val extern forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'l >= 0, 'm <= 'o, 'o <= 'l.
+  ([:'n:], vector<'n,'l,inc,'a>, [:'m:], [:'o:]) -> vector<'m,('o - 'm) + 1,inc,'a> effect pure vector_subrange_inc' = "vector_subrange_inc"
+function vector_subrange_inc (v, i, j) = vector_subrange_inc' (sizeof 'n, v, i, j)
+
+val extern forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
+  ([:'n:], vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,('m - 'o) + 1,dec,'a> effect pure vector_subrange_dec' = "vector_subrange_dec"
+function vector_subrange_dec (v, i, j) = vector_subrange_dec' (sizeof 'n, v, i, j)
+
+val extern forall Num 'n, Num 'l.
+  ([:'n:], vector<'n,'l,dec,bit>, int, int) -> list<bit> effect pure vector_subrange_bl_dec' = "vector_subrange_bl_dec"
+function vector_subrange_bl_dec (v, i, j) = vector_subrange_bl_dec' (sizeof 'n, v, i, j)
+
+val extern forall Num 'n, Num 'l, Num 'm, Num 'o, 'l >= 0, 'm <= 'o, 'o <= 'l.
+  ([:'n:], vector<'n,'l,inc,bit>, [:'m:], [:'o:]) -> vector<'m,('o - 'm) + 1,inc,bit> effect pure bitvector_subrange_inc' = "bitvector_subrange_inc"
+function bitvector_subrange_inc (v, i, j) = bitvector_subrange_inc' (sizeof 'n, v, i, j)
+
+val extern forall Num 'n, Num 'l, Num 'm, Num 'o, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
+  ([:'n:], vector<'n,'l,dec,bit>, [:'m:], [:'o:]) -> vector<'m,('m - 'o) + 1,dec,bit> effect pure bitvector_subrange_dec' = "bitvector_subrange_dec"
+function bitvector_subrange_dec (v, i, j) = bitvector_subrange_dec' (sizeof 'n, v, i, j)
+
 (* Bitvector extension *)
 val extern forall Num 'n, Num 'm, Num 'o, Num 'p, Order 'ord.
     ([:'p:], [:'m:], vector<'o, 'n, 'ord, bit>) -> vector<'p, 'm, 'ord, bit> effect pure extz' = "extz"
