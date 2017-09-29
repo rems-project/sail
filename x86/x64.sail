@@ -130,6 +130,14 @@ typedef wsize = const union {
   unit Sz64;
 }
 
+function ([|8:64|]) size_to_int((wsize) s) = 
+  switch(s) {
+    case (Sz8(_))  -> 8
+    case Sz16 -> 16
+    case Sz32 -> 32
+    case Sz64 -> 64
+  }
+
 typedef base = const union {
   unit NoBase;
   unit RipBase;
@@ -154,11 +162,18 @@ typedef imm_rm = const union {
   qword Imm;
 }
 
+typedef bit_offset = const union {
+  (rm, qword) Bit_rm_imm;
+  (rm, regn)  Bit_rm_r;
+}
+
 typedef monop_name = enumerate { Dec; Inc; Not; Neg }
 
 typedef binop_name = enumerate {
   Add; Or; Adc; Sbb; And; Sub; Xor; Cmp; Rol; Ror; Rcl; Rcr; Shl; Shr; Test; Sar
 }
+
+typedef bitop_name = enumerate { Bts; Btc; Btr }
 
 function binop_name opc_to_binop_name ((bit[4]) opc) =
   switch opc
@@ -318,6 +333,24 @@ function qword get_ea_address ((ea) e) =
   }
 
 function unit jump_to_ea ((ea) e) = RIP := call_dest_from_ea(e)
+
+function (ea, nat) bit_offset_ea ((wsize) sz, (bit_offset) bo) = 
+  let s = size_to_int (sz) in
+  switch bo {
+    case (Bit_rm_imm (r_m, imm)) ->
+      let base_ea = ea_rm (sz, r_m) in
+      switch (base_ea) {
+        case (Ea_r(_, r)) -> (Ea_r(sz, r), imm mod s)
+        case (Ea_m(_, a)) -> (Ea_m(sz, a), imm mod s)
+      }
+    case (Bit_rm_r (r_m, r)) ->
+      let base_ea = ea_rm (sz, r_m) in
+      let offset = REG[r] in
+      switch (base_ea) {
+        case (Ea_r(_, r)) -> (Ea_r(sz, r), offset mod s)
+        case (Ea_m(_, a)) -> (Ea_m(Sz64, a + (offset div 8)), offset mod 64)
+      }
+  }
 
 (* EFLAG updates *)
 
@@ -583,6 +616,25 @@ union ast member (bool,binop_name,wsize,dest_src) Binop
 function clause execute (Binop (locked,bop,sz,ds)) =
   let (e, val_dst, val_src) = read_dest_src_ea (locked, sz, ds) in
   write_binop (locked, sz, bop, val_dst, val_src, e)
+
+(* ==========================================================================
+      Bitop
+   ========================================================================== *)
+
+union ast member (bool,bitop_name,wsize,bit_offset) Bitop
+
+function clause execute (Bitop (locked,bop,sz,boffset)) =
+  let (base_ea, offset) = bit_offset_ea (sz, boffset) in {
+    word := EA(locked, base_ea);
+    bitval := word[offset];
+    word[offset] := switch(bop) {
+      case Bts -> bitone
+      case Btc -> (~ (bitval))
+      case Btr -> bitzero
+    };
+    CF := bitval;
+    wEA(locked, base_ea) := word;
+  }
 
 (* ==========================================================================
       CALL
@@ -1373,6 +1425,27 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
         ik := ik';
         iR := append(iRs, iR);
         oR := append(flags, append(oRs, oR));
+        aR := append(aRs, aR);
+      }
+    }
+    case(Bitop   (locked, bitop, sz, bitoff)) -> {
+      let rk = if locked then Read_X86_locked else Read_plain in
+      let wk = if locked then Write_X86_locked else Write_plain in
+      let (ik', iRs, oRs, aRs) = switch(bitoff) {
+        case (Bit_rm_imm (r_m, imm)) ->
+          let (m, rs, ars) = regfp_rm(r_m) in
+          (if m then IK_mem_rmw(rk, wk) else IK_simple,
+           append(rs, ars), rs, ars)
+        case (Bit_rm_r (r_m, r)) ->
+          let rfp = RFull(GPRstr[r]) in 
+          let (m, rs, ars) = regfp_rm(r_m) in
+          (if m then IK_mem_rmw(rk, wk) else IK_simple,
+           rfp::append(rs, ars), rs, 
+           if m then (rfp::ars) else ars) (* in memory case r is a third input to address! *)
+      } in {
+        ik := ik';
+        iR := append(iRs, iR);
+        oR := RFull("CF")::append(oRs, oR);
         aR := append(aRs, aR);
       }
     }
