@@ -125,10 +125,14 @@ _build/mips.lem: $(MIPS_SAILS) ./sail.native
 	cd _build ;\
 	../sail.native -lem_ast -o mips $(MIPS_SAILS)
 
-_build/mips_embed_types.lem: $(MIPS_SAILS) ./sail.native
+_build/mips_embed_types.lem: $(MIPS_NOTLB_SAILS) ./sail.native
 	mkdir -p _build
 	cd _build ;\
-	../sail.native -lem_lib "Mips_extras_embed" -lem -o mips $(MIPS_NOTLB_SAILS)
+	../sail.native -lem_lib "Mips_extras_embed" -lem -lem_mwords -o mips $(MIPS_NOTLB_SAILS)
+
+_build/Mips_embed.thy: _build/mips_embed_types.lem
+	cd _build ;\
+	lem -isa -outdir . -lib ../lem_interp -lib ../gen_lib $(MIPS_SAIL_DIR)/mips_extras_embed.lem mips_embed_types.lem mips_embed.lem
 
 _build/mips_notlb.lem: $(MIPS_NOTLB_SAILS) ./sail.native
 	mkdir -p _build
