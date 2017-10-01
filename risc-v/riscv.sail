@@ -24,11 +24,12 @@ union ast member ((bit[21]), regno) JAL
 
 function clause decode ((bit[20]) imm : (regno) rd : 0b1101111) = Some (JAL(imm[19] : imm[7..0] : imm[8] : imm[18..13] : imm[12..9] : 0b0, rd))
 
-function clause execute (JAL(imm, rd)) =
-    let (bit[64]) offset = EXTS(imm) in {
-      nextPC :=  PC + offset;
-      wGPR(rd, PC + 4);
-    }
+function clause execute (JAL(imm, rd)) = {
+    (bit[64]) pc := PC;
+    wGPR(rd, pc + 4);
+    (bit[64]) offset := EXTS(imm);
+    nextPC :=  pc + offset;
+}
 
 (********************************************************************)
 union ast member((bit[12]), regno, regno) JALR
@@ -36,11 +37,12 @@ union ast member((bit[12]), regno, regno) JALR
 function clause decode ((bit[12]) imm : (regno) rs1 : 0b000 : (regno) rd : 0b1100111) =
     Some(JALR(imm, rs1, rd))
 
-function clause execute (JALR(imm, rs1, rd)) =
-    let (bit[64]) newPC = rGPR(rs1) + EXTS(imm) in {
-      nextPC := newPC[63..1] : 0b0;
-      wGPR(rd, PC + 4);
-    }
+function clause execute (JALR(imm, rs1, rd)) = {
+    (* write rd before anything else to prevent unintended strength *)
+    wGPR(rd, PC + 4);
+    (bit[64]) newPC := rGPR(rs1) + EXTS(imm);
+    nextPC := newPC[63..1] : 0b0;
+}
 
 (********************************************************************)
 union ast member ((bit[13]), regno, regno, bop) BTYPE
