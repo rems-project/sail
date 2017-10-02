@@ -694,7 +694,7 @@ let try_app (l,ann) (Id_aux (id,_),args) =
     | _ -> None
   else if id = Id "ex_int" then
     match args with
-    | [E_aux (E_lit _,_) as exp] -> Some exp
+    | [E_aux (E_lit (L_aux (L_num _,_)),_) as exp] -> Some exp
     | _ -> None
   else if id = Id "vector_access" then
     match args with
