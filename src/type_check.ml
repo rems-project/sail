@@ -1647,8 +1647,8 @@ let destruct_atom_nexp env typ =
   match Env.expand_synonyms env typ with
   | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)]), _)
        when string_of_id f = "atom" -> Some n
-  | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _); Typ_arg_aux (Typ_arg_nexp _, _)]), _)
-       when string_of_id f = "range" -> Some n
+  | Typ_aux (Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _); Typ_arg_aux (Typ_arg_nexp m, _)]), _)
+       when string_of_id f = "range" && nexp_identical n m -> Some n
   | _ -> None
 
 exception Not_a_constraint;;

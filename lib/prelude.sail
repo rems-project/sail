@@ -10,32 +10,32 @@ val forall Num 'm. int -> vector<'m - 1,'m,dec,bit> effect pure to_svec
 (* Vector access can't actually be properly polymorphic on vector
    direction because of the ranges being different for each type, so
    we overload it instead *)
-val forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,dec,'a>, [|'n - 'l + 1:'n|]) -> 'a effect pure vector_access_dec
-val forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [|'n:'n + 'l - 1|]) -> 'a effect pure vector_access_inc
-val forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,dec,bit>, [|'n - 'l + 1:'n|]) -> bit effect pure bitvector_access_dec
-val forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,inc,bit>, [|'n:'n + 'l - 1|]) -> bit effect pure bitvector_access_inc
+val extern forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,dec,'a>, [|'n - 'l + 1:'n|]) -> 'a effect pure vector_access_dec
+val extern forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [|'n:'n + 'l - 1|]) -> 'a effect pure vector_access_inc
+val extern forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,dec,bit>, [|'n - 'l + 1:'n|]) -> bit effect pure bitvector_access_dec
+val extern forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,inc,bit>, [|'n:'n + 'l - 1|]) -> bit effect pure bitvector_access_inc
 
 overload vector_access [bitvector_access_inc; bitvector_access_dec; vector_access_inc; vector_access_dec]
 
 (* Type safe vector subrange *)
 (* vector_subrange(v, m, o) returns the subvector of v with elements with
    indices from m up to and *including* o. *)
-val forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'l >= 0, 'm <= 'o, 'o <= 'l.
+val extern forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'l >= 0, 'm <= 'o, 'o <= 'l.
   (vector<'n,'l,inc,'a>, [:'m:], [:'o:]) -> vector<'m,('o - 'm) + 1,inc,'a> effect pure vector_subrange_inc
 
-val forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
+val extern forall Num 'n, Num 'l, Num 'm, Num 'o, Type 'a, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
   (vector<'n,'l,dec,'a>, [:'m:], [:'o:]) -> vector<'m,('m - 'o) + 1,dec,'a> effect pure vector_subrange_dec
 
-val forall Num 'n, Num 'l, Order 'ord.
-  (vector<'n,'l,'ord,bit>, int, int) -> list<bit> effect pure vector_subrange_bl
+val extern forall Num 'n, Num 'l.
+  (vector<'n,'l,dec,bit>, int, int) -> list<bit> effect pure vector_subrange_bl_dec
 
-val forall Num 'n, Num 'l, Num 'm, Num 'o, 'l >= 0, 'm <= 'o, 'o <= 'l.
+val extern forall Num 'n, Num 'l, Num 'm, Num 'o, 'l >= 0, 'm <= 'o, 'o <= 'l.
   (vector<'n,'l,inc,bit>, [:'m:], [:'o:]) -> vector<'m,('o - 'm) + 1,inc,bit> effect pure bitvector_subrange_inc
 
-val forall Num 'n, Num 'l, Num 'm, Num 'o, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
+val extern forall Num 'n, Num 'l, Num 'm, Num 'o, 'n >= 'm, 'm >= 'o, 'o >= 'n - 'l + 1.
   (vector<'n,'l,dec,bit>, [:'m:], [:'o:]) -> vector<'m,('m - 'o) + 1,dec,bit> effect pure bitvector_subrange_dec
 
-overload vector_subrange [bitvector_subrange_inc; bitvector_subrange_dec; vector_subrange_inc; vector_subrange_dec; vector_subrange_bl]
+overload vector_subrange [bitvector_subrange_inc; bitvector_subrange_dec; vector_subrange_inc; vector_subrange_dec; vector_subrange_bl_dec]
 
 (* Type safe vector append *)
 val extern forall Num 'n1, Num 'l1, Num 'n2, Num 'l2, Order 'o, Type 'a, 'l1 >= 0, 'l2 >= 0.
@@ -47,6 +47,15 @@ val extern forall Num 'n1, Num 'l1, Num 'n2, Num 'l2, Order 'o, 'l1 >= 0, 'l2 >=
 val (list<bit>, list<bit>) -> list<bit> effect pure list_append
 
 overload append [bitvector_append; vector_append; list_append]
+
+(* Vector update *)
+
+val extern forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,dec,'a>, [|'n - 'l + 1:'n|], 'a) -> vector<'n,'l,dec,'a> effect pure vector_update_dec
+val extern forall Num 'n, Num 'l, Type 'a, 'l >= 0. (vector<'n,'l,inc,'a>, [|'n:'n + 'l - 1|], 'a) -> vector<'n,'l,dec,'a> effect pure vector_update_inc
+val extern forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,dec,bit>, [|'n - 'l + 1:'n|], bit) -> vector<'n,'l,dec,bit> effect pure bitvector_update_dec
+val extern forall Num 'n, Num 'l, 'l >= 0. (vector<'n,'l,inc,bit>, [|'n:'n + 'l - 1|], bit) -> vector<'n,'l,dec,bit> effect pure bitvector_update_inc
+
+overload vector_update [bitvector_update_dec; bitvector_update_inc; vector_update_dec; vector_update_inc]
 
 (* Implicit register dereferencing *)
 val cast forall Type 'a. register<'a> -> 'a effect {rreg} reg_deref
@@ -230,23 +239,23 @@ overload (deinfix |) [bool_or; bitwise_or]
 
 (* Equality *)
 
-val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure eq_vec
+val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure eq_vec
 
-val forall Type 'a. ('a, 'a) -> bool effect pure eq
+val extern forall Type 'a. ('a, 'a) -> bool effect pure eq
 
-val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure neq_vec
+val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure neq_vec
 
-val forall Type 'a. ('a, 'a) -> bool effect pure neq
+val extern forall Type 'a. ('a, 'a) -> bool effect pure neq
 
-function forall Num 'n, Num 'm, Order 'ord. bool neq_vec (v1, v2) = bool_not(eq_vec(v1, v2))
+(*function forall Num 'n, Num 'm, Order 'ord. bool neq_vec (v1, v2) = bool_not(eq_vec(v1, v2))*)
 
 overload (deinfix ==) [eq_vec; eq]
 overload (deinfix !=) [neq_vec; neq]
 
-val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gteq_vec
-val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gt_vec
-val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure lteq_vec
-val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure lt_vec
+val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gteq_vec
+val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gt_vec
+val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure lteq_vec
+val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure lt_vec
 
 val extern (int, int) -> bool effect pure gteq_int = "gteq"
 val extern (int, int) -> bool effect pure gt_int = "gt"
@@ -272,10 +281,10 @@ overload (deinfix >) [gt_atom_atom; gt_range_atom; gt_vec; gt_int]
 overload (deinfix <=) [lteq_atom_atom; lteq_range_atom; lteq_atom_range; lteq_vec; lteq_int]
 overload (deinfix <) [lt_atom_atom; lt_range_atom; lt_vec; lt_int]
 
-val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gteq_svec
-val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gt_svec
-val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure lteq_svec
-val forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure lt_svec
+val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gteq_svec
+val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure gt_svec
+val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure lteq_svec
+val extern forall Num 'n, Num 'm, Order 'ord. (vector<'n,'m,'ord,bit>, vector<'n,'m,'ord,bit>) -> bool effect pure lt_svec
 
 overload (deinfix <_s) [lt_svec]
 overload (deinfix <=_s) [lteq_svec]
@@ -287,11 +296,11 @@ val extern (int, int) -> int effect pure min_int = "min"
 
 overload min [min_range_atom; min_int]
 
-val (int, int) -> int effect pure quotient
+val extern (int, int) -> int effect pure quotient
 
 overload (deinfix quot) [quotient]
 
-val (int, int) -> int effect pure modulo
+val extern (int, int) -> int effect pure modulo
 val extern forall Num 'm. (int, [:'m:]) -> [|0:'m - 1|] effect pure modulo_atom = "modulo"
 
 overload (deinfix mod) [modulo_atom; modulo]
@@ -299,7 +308,7 @@ overload (deinfix mod) [modulo_atom; modulo]
 val extern forall Num 'n. [:'n:] -> [:2** 'n:] effect pure pow2
 
 val extern forall Num 'n, Num 'm, Order 'ord, Type 'a. vector<'n,'m,'ord,'a> -> [:'m:] effect pure vector_length = "length"
-val forall Type 'a. list<'a> -> nat effect pure list_length
+val extern forall Type 'a. list<'a> -> nat effect pure list_length
 
 val extern forall Num 'n, Num 'm, Order 'ord. vector<'n,'m,'ord,bit> -> [:'m:] effect pure bitvector_length = "bvlength"
 

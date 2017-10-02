@@ -18,14 +18,15 @@ let inline (^^^) = bitvector_concat
 let bitvector_subrange_inc = vector_subrange_inc
 let bitvector_subrange_dec = vector_subrange_dec
 
-let vector_subrange_bl (v, i, j) =
+let vector_subrange_bl (start, v, i, j) =
   let v' = slice v i j in
   get_elems v'
+let vector_subrange_bl_dec = vector_subrange_bl
 
 let bitvector_access_inc = vector_access_inc
 let bitvector_access_dec = vector_access_dec
 let bitvector_update_pos_dec = update_pos
-let bitvector_update_dec = vector_update_dec
+let bitvector_update_subrange_dec = vector_update_dec
 
 let extract_only_bit = extract_only_element
 
@@ -60,7 +61,7 @@ let bitwise_and = bitwise_binop (&&)
 let bitwise_or = bitwise_binop (||)
 let bitwise_xor = bitwise_binop xor
 
-let unsigned (Vector bs _ _) : integer =
+(*let unsigned (Vector bs _ _) : integer =
   let (sum,_) =
     List.foldr
       (fun b (acc,exp) ->
@@ -70,7 +71,7 @@ let unsigned (Vector bs _ _) : integer =
         | BU -> failwith "unsigned: vector has undefined bits"
         end)
       (0,0) bs in
-  sum
+  sum*)
 
 let unsigned_big = unsigned
 
@@ -155,7 +156,7 @@ let add_one_bit_ignore_overflow bits =
   List.reverse (add_one_bit_ignore_overflow_aux (List.reverse bits))
   
 
-let to_vec is_inc ((len : integer),(n : integer)) =
+let to_norm_vec is_inc ((len : integer),(n : integer)) =
   let start = if is_inc then 0 else len - 1 in
   let bits = to_bin (naturalFromInteger (abs n)) in
   let len_bits = integerFromNat (List.length bits) in
@@ -168,12 +169,12 @@ let to_vec is_inc ((len : integer),(n : integer)) =
   else Vector (add_one_bit_ignore_overflow (bitwise_not_bitlist bits'))
               start is_inc
 
-let to_vec_big = to_vec
+let to_vec_big = to_norm_vec
 
-let to_vec_inc (start, len, n) = set_vector_start (start, to_vec true (len, n))
-let to_vec_norm_inc (len, n) = to_vec true (len, n)
-let to_vec_dec (start, len, n) = set_vector_start (start, to_vec false (len, n))
-let to_vec_norm_dec (len, n) = to_vec false (len, n)
+let to_vec_inc (start, len, n) = set_vector_start (start, to_norm_vec true (len, n))
+let to_vec_norm_inc (len, n) = to_norm_vec true (len, n)
+let to_vec_dec (start, len, n) = set_vector_start (start, to_norm_vec false (len, n))
+let to_vec_norm_dec (len, n) = to_norm_vec false (len, n)
 
 let cast_0_vec = to_vec_dec
 let cast_1_vec = to_vec_dec
@@ -185,8 +186,8 @@ let to_vec_undef is_inc (len : integer) =
 let to_vec_inc_undef = to_vec_undef true
 let to_vec_dec_undef = to_vec_undef false
 
-let exts (start, len, vec) = set_vector_start (start, to_vec (get_dir vec) (len,signed vec))
-let extz (start, len, vec) = set_vector_start (start, to_vec (get_dir vec) (len,unsigned vec))
+let exts (start, len, vec) = set_vector_start (start, to_norm_vec (get_dir vec) (len,signed vec))
+let extz (start, len, vec) = set_vector_start (start, to_norm_vec (get_dir vec) (len,unsigned vec))
 
 let exts_big (start, len, vec) = set_vector_start (start, to_vec_big (get_dir vec) (len, signed_big vec))
 let extz_big (start, len, vec) = set_vector_start (start, to_vec_big (get_dir vec) (len, unsigned_big vec))
@@ -212,7 +213,7 @@ let mult_int = mult
 let arith_op_vec op sign (size : integer) (Vector _ _ is_inc as l) r =
   let (l',r') = (to_num sign l, to_num sign r) in
   let n = op l' r' in
-  to_vec is_inc (size * (length l),n)
+  to_norm_vec is_inc (size * (length l),n)
 
 
 (* add_vec
@@ -234,7 +235,7 @@ let add_vec (l, r) = add_VVV l r
 let sub_vec (l, r) = minus_VVV l r
 
 let arith_op_vec_range op sign size (Vector _ _ is_inc as l) r =
-  arith_op_vec op sign size l (to_vec is_inc (length l,r))
+  arith_op_vec op sign size l (to_norm_vec is_inc (length l,r))
 
 (* add_vec_range
  * add_vec_range_signed
@@ -252,7 +253,7 @@ let add_vec_int (l, r) = add_VIV l r
 let sub_vec_int (l, r) = minus_VIV l r
 
 let arith_op_range_vec op sign size l (Vector _ _ is_inc as r) =
-  arith_op_vec op sign size (to_vec is_inc (length r, l)) r
+  arith_op_vec op sign size (to_norm_vec is_inc (length r, l)) r
 
 (* add_range_vec
  * add_range_vec_signed
@@ -301,7 +302,7 @@ let addS_VVI = arith_op_vec_vec_range integerAdd true
 let arith_op_vec_bit op sign (size : integer) (Vector _ _ is_inc as l)r =
   let l' = to_num sign l in
   let n = op l' (match r with | B1 -> (1 : integer) | _ -> 0 end) in
-  to_vec is_inc (length l * size,n)
+  to_norm_vec is_inc (length l * size,n)
 
 (* add_vec_bit
  * add_vec_bit_signed
@@ -318,8 +319,8 @@ let rec arith_op_overflow_vec (op : integer -> integer -> integer) sign size (Ve
   let (l_unsign,r_unsign) = (to_num false l,to_num false r) in
   let n = op l_sign r_sign in
   let n_unsign = op l_unsign r_unsign in
-  let correct_size_num = to_vec is_inc (act_size,n) in
-  let one_more_size_u = to_vec is_inc (act_size + 1,n_unsign) in
+  let correct_size_num = to_norm_vec is_inc (act_size,n) in
+  let one_more_size_u = to_norm_vec is_inc (act_size + 1,n_unsign) in
   let overflow =
     if n <= get_max_representable_in sign len &&
          n >= get_min_representable_in sign len
@@ -352,8 +353,8 @@ let rec arith_op_overflow_vec_bit (op : integer -> integer -> integer) sign (siz
     | BU -> failwith "arith_op_overflow_vec_bit applied to undefined bit"
     end in
 (*    | _ -> assert false *)
-  let correct_size_num = to_vec is_inc (act_size,n) in
-  let one_larger = to_vec is_inc (act_size + 1,nu) in
+  let correct_size_num = to_norm_vec is_inc (act_size,n) in
+  let one_larger = to_norm_vec is_inc (act_size + 1,nu) in
   let overflow =
     if changed
     then
@@ -406,7 +407,7 @@ let rec arith_op_vec_no0 (op : integer -> integer -> integer) sign size ((Vector
     | _ -> (false,0)
     end in
   if representable
-  then to_vec is_inc (act_size,n')
+  then to_norm_vec is_inc (act_size,n')
   else Vector (List.replicate (natFromInteger act_size) BU) start is_inc
 
 let mod_VVV = arith_op_vec_no0 hardware_mod false 1
@@ -429,7 +430,7 @@ let arith_op_overflow_no0_vec op sign size ((Vector _ start is_inc) as l) r =
     end in
   let (correct_size_num,one_more) =
     if representable then
-      (to_vec is_inc (act_size,n'),to_vec is_inc (act_size + 1,n_u'))
+      (to_norm_vec is_inc (act_size,n'),to_norm_vec is_inc (act_size + 1,n_u'))
     else
       (Vector (List.replicate (natFromInteger act_size) BU) start is_inc,
        Vector (List.replicate (natFromInteger (act_size + 1)) BU) start is_inc) in
@@ -440,7 +441,7 @@ let quotO_VVV = arith_op_overflow_no0_vec hardware_quot false 1
 let quotSO_VVV = arith_op_overflow_no0_vec hardware_quot true 1
 
 let arith_op_vec_range_no0 op sign size (Vector _ _ is_inc as l) r =
-  arith_op_vec_no0 op sign size l (to_vec is_inc (length l,r))
+  arith_op_vec_no0 op sign size l (to_norm_vec is_inc (length l,r))
 
 let mod_VIV = arith_op_vec_range_no0 hardware_mod false 1
 
@@ -514,7 +515,8 @@ let eq_vec_vec (l,r) = eq (to_num true l, to_num true r)
 let neq (l,r) = not (eq (l,r))
 let neq_bit (l,r) = not (eq_bit (l,r))
 let neq_range (l,r) = not (eq_range (l,r))
-let neq_vec (l,r) = not (eq_vec_vec (l,r))
+let neq_vec (l,r) = not (eq_vec (l,r))
+let neq_vec_vec (l,r) = not (eq_vec_vec (l,r))
 let neq_vec_range (l,r) = not (eq_vec_range (l,r))
 let neq_range_vec (l,r) = not (eq_range_vec (l,r))
 
@@ -532,20 +534,20 @@ let make_bitvector_undef length =
 
 (* let bitwise_not_range_bit n = bitwise_not (to_vec defaultDir n) *)
 
-let mask' (start, n, Vector bits _ dir) =
+let mask (start, n, Vector bits _ dir) =
   let current_size = List.length bits in
   Vector (drop (current_size - (natFromInteger n)) bits) start dir
 
 
 (* Register operations *)
 
-let update_reg_range i j reg_val new_val = update reg_val i j new_val
-let update_reg_bit i reg_val bit = update_pos reg_val i bit
+(*let update_reg_range i j reg_val new_val = update reg_val i j new_val
+let update_reg_pos i reg_val bit = update_pos reg_val i bit
 let update_reg_field_range regfield i j reg_val new_val =
   let current_field_value = regfield.get_field reg_val in
   let new_field_value = update current_field_value i j new_val in
   regfield.set_field reg_val new_field_value
-let write_reg_field_bit regfield i reg_val bit =
+(*let write_reg_field_pos regfield i reg_val bit =
   let current_field_value = regfield.get_field reg_val in
   let new_field_value = update_pos current_field_value i bit in
-  regfield.set_field reg_val new_field_value
+  regfield.set_field reg_val new_field_value*)*)

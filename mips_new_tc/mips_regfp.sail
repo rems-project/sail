@@ -41,13 +41,13 @@ let (vector <0, 32, inc, string >) GPRs =
 let CIA_fp = RFull("CIA")
 let NIA_fp = RFull("NIA")
 
-function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (instr) = {
-  iR := [|| ||];
-  oR := [|| ||];
-  aR := [|| ||];
-  ik := IK_simple;
-  Nias := [|| ||];
-  Dia := DIAFP_none;
+function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis ((ast) instr) = {
+  (regfps) iR := [|| ||];
+  (regfps) oR := [|| ||];
+  (regfps) aR := [|| ||];
+  (instruction_kind) ik := IK_simple;
+  (niafps) Nias := [|| ||];
+  (diafp) Dia := DIAFP_none;
 
   switch instr {
     case (DADDIU (rs, rt, imm)) -> {
@@ -65,7 +65,7 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) initial_analysis (
     }
     case (DADD (rs, rt, rd)) -> {
       if rs == 0 then () else iR := RFull(GPRs[rs]) :: iR;
-      if rt == 0 then () else oR := RFull(GPRs[rt]) :: oR;
+      if rd == 0 then () else oR := RFull(GPRs[rd]) :: oR;
     }
     case (ADD(rs, rt, rd)) -> {
       if rs == 0 then () else iR := RFull(GPRs[rs]) :: iR;
