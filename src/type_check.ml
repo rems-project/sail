@@ -70,6 +70,7 @@ type type_error =
      coercions, the second is the errors encountered by all possible
      coercions *)
   | Err_no_casts of type_error * type_error list
+  | Err_no_overloading of id * (id * type_error) list
   | Err_unresolved_quants of id * quant_item list
   | Err_subtype of typ * typ * n_constraint list
   | Err_no_num_ident of id
@@ -83,6 +84,9 @@ let pp_type_error err =
        ^/^ string "No possible coercions"
     | Err_no_casts (trigger, errs) ->
        (string "Tried performing type coerction because" ^//^ pp_err trigger)
+    | Err_no_overloading (id, errs) ->
+       string ("No overloadings for " ^ string_of_id id ^ ", tried:") ^//^
+         group (separate_map hardline (fun (id, err) -> string (string_of_id id) ^^ colon ^^ space ^^ pp_err err) errs)
     | Err_subtype (typ1, typ2, []) ->
        separate space [ string (string_of_typ typ1);
                         string "is not a subtype of";
@@ -1964,14 +1968,16 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      else typ_error l ("Cannot prove " ^ string_of_n_constraint nc)
   | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
-       | [] -> typ_error l ("No valid overloading for " ^ string_of_exp exp)
-       | (f :: fs) -> begin
+       | (errs, []) -> typ_raise l (Err_no_overloading (f, errs))
+       | (errs, (f :: fs)) -> begin
            typ_print ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
            try crule check_exp env (E_aux (E_app (f, xs), (l, ()))) typ with
-           | Type_error (_, err) -> typ_print ("Error : " ^ string_of_type_error err); try_overload fs
+           | Type_error (_, err) ->
+              typ_print ("Error : " ^ string_of_type_error err);
+              try_overload (errs @ [(f, err)], fs)
          end
      in
-     try_overload (Env.get_overloads f env)
+     try_overload ([], Env.get_overloads f env)
   | E_return exp, _ ->
      let checked_exp = match Env.get_ret_typ env with
        | Some ret_typ -> crule check_exp env exp ret_typ
@@ -2550,14 +2556,16 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_app_infix (x, op, y) when List.length (Env.get_overloads (deinfix op) env) > 0 -> infer_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ())))
   | E_app (f, xs) when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
-       | [] -> typ_error l ("No valid overloading for " ^ string_of_exp exp)
-       | (f :: fs) -> begin
+       | (errs, []) -> typ_raise l (Err_no_overloading (f, errs))
+       | (errs, (f :: fs)) -> begin
            typ_print ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
            try irule infer_exp env (E_aux (E_app (f, xs), (l, ()))) with
-           | Type_error (_, err) -> typ_print ("Overload error"); try_overload fs
+           | Type_error (_, err) ->
+              typ_print ("Error : " ^ string_of_type_error err);
+              try_overload (errs @ [(f, err)], fs)
          end
      in
-     try_overload (Env.get_overloads f env)
+     try_overload ([], Env.get_overloads f env)
   | E_app (f, xs) -> infer_funapp l env f xs None
   | E_loop (loop_type, cond, body) ->
      let checked_cond = crule check_exp env cond bool_typ in
