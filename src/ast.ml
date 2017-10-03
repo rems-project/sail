@@ -260,7 +260,7 @@ type
  | P_as of 'a pat * id (* named pattern *)
  | P_typ of typ * 'a pat (* typed pattern *)
  | P_id of id (* identifier *)
- | P_var of kid (* bind identifier and type variable *)
+ | P_var of 'a pat * kid (* bind pattern to type variable *)
  | P_app of id * ('a pat) list (* union constructor pattern *)
  | P_record of ('a fpat) list * bool (* struct pattern *)
  | P_vector of ('a pat) list (* vector pattern *)

@@ -49,6 +49,8 @@ open Parse_ast
 let loc () = Range(Parsing.symbol_start_pos(),Parsing.symbol_end_pos())
 let locn m n = Range(Parsing.rhs_start_pos m,Parsing.rhs_end_pos n)
 
+let id_of_kid (Kid_aux (Var str, l)) = Id_aux (Id str, l)
+
 let idl i = Id_aux(i, loc())
 
 let string_of_id = function
@@ -506,7 +508,7 @@ atomic_pat:
   | id
     { ploc (P_app($1,[])) }
   | tyvar
-    { ploc (P_var $1) }
+    { ploc (P_var (ploc (P_id (id_of_kid $1)), $1)) }
   | Lcurly fpats Rcurly
     { ploc (P_record((fst $2, snd $2))) }
   | Lsquare comma_pats Rsquare

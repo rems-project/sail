@@ -51,6 +51,8 @@ let loc n m = Range (m, n)
 let mk_id i n m = Id_aux (i, loc m n)
 let mk_kid str n m = Kid_aux (Var str, loc n m)
 
+let id_of_kid (Kid_aux (Var str, l)) = Id_aux (Id str, l)
+
 let deinfix (Id_aux (Id v, l)) = Id_aux (DeIid v, l)
 
 let mk_effect e n m = BE_aux (e, loc n m)
@@ -604,7 +606,7 @@ atomic_pat:
   | id
     { mk_pat (P_id $1) $startpos $endpos }
   | kid
-    { mk_pat (P_var $1) $startpos $endpos }
+    { mk_pat (P_var (mk_pat (P_id (id_of_kid $1)) $startpos $endpos, $1)) $startpos $endpos }
   | id Lparen pat_list Rparen
     { mk_pat (P_app ($1, $3)) $startpos $endpos }
   | pat Colon typ
@@ -943,6 +945,12 @@ let_def:
 val_spec_def:
   | Val id Colon typschm
     { mk_vs (VS_val_spec ($4, $2, None, false)) $startpos $endpos }
+  | Val Cast id Colon typschm
+    { mk_vs (VS_val_spec ($5, $3, None, true)) $startpos $endpos }
+  | Val id Eq String Colon typschm
+    { mk_vs (VS_val_spec ($6, $2, Some $4, false)) $startpos $endpos }
+  | Val Cast id Eq String Colon typschm
+    { mk_vs (VS_val_spec ($7, $3, Some $5, true)) $startpos $endpos }
 
 register_def:
   | Register id Colon typ

@@ -2107,22 +2107,22 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
             | Unification_error (l, m) -> typ_error l ("Unification error when pattern matching against union constructor: " ^ m)
           end
      end
-  | P_var kid ->
+  | P_var (pat, kid) ->
+     let typ = Env.expand_synonyms env typ in
      begin
-       let v = id_of_kid kid in
-       match Env.lookup_id v env with
-       | Local (Immutable, _) | Unbound ->
-          begin
-            match destruct_exist env typ with
-            | Some ([kid'], nc, typ) ->
-               let env = Env.add_typ_var kid BK_nat env in
-               let env = Env.add_constraint (nc_subst_nexp kid' (Nexp_var kid) nc) env in
-               let env = Env.add_local v (Immutable, typ_subst_nexp kid' (Nexp_var kid) typ) env in
-               annot_pat (P_var kid) typ, env
-            | Some _ -> typ_error l ("Cannot bind type variable pattern against multiple argument existential")
-            | None _ -> typ_error l ("Cannot bind type variable against non existential type")
-          end
-       | _ -> typ_error l ("Bad type identifer pattern: " ^ string_of_pat pat)
+       match destruct_exist env typ, typ with
+       | Some ([kid'], nc, ex_typ), _ ->
+          let env = Env.add_typ_var kid BK_nat env in
+          let ex_typ = typ_subst_nexp kid' (Nexp_var kid) ex_typ in
+          let env = Env.add_constraint (nc_subst_nexp kid' (Nexp_var kid) nc) env in
+          let typed_pat, env = bind_pat env pat ex_typ in
+          annot_pat (P_var (typed_pat, kid)) typ, env
+       | Some _, _ -> typ_error l ("Cannot bind type variable pattern against multiple argument existential")
+       | None, Typ_aux (Typ_id id, _) when Id.compare id (mk_id "int") == 0 ->
+          let env = Env.add_typ_var kid BK_nat env in
+          let typed_pat, env = bind_pat env pat (atom_typ (nvar kid)) in
+          annot_pat (P_var (typed_pat, kid)) typ, env
+       | None, _ -> typ_error l ("Cannot bind type variable against non existential type")
      end
   | P_wild -> annot_pat P_wild typ, env
   | P_cons (hd_pat, tl_pat) ->
@@ -2940,7 +2940,9 @@ and propagate_pat_effect_aux = function
      let p_pat = propagate_pat_effect pat in
      P_typ (typ, p_pat), effect_of_pat p_pat
   | P_id id -> P_id id, no_effect
-  | P_var kid -> P_var kid, no_effect
+  | P_var (pat, kid) ->
+     let p_pat = propagate_pat_effect pat in
+     P_var (p_pat, kid), effect_of_pat p_pat
   | P_app (id, pats) ->
      let p_pats = List.map propagate_pat_effect pats in
      P_app (id, p_pats), collect_effects_pat p_pats

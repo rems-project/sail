@@ -234,7 +234,7 @@ pat_aux =  (* Pattern *)
  | P_as of pat * id (* named pattern *)
  | P_typ of atyp * pat (* typed pattern *)
  | P_id of id (* identifier *)
- | P_var of kid
+ | P_var of pat * kid (* bind pat to type variable *)
  | P_app of id * (pat) list (* union constructor pattern *)
  | P_record of (fpat) list * bool (* struct pattern *)
  | P_vector of (pat) list (* vector pattern *)

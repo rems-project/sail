@@ -61,6 +61,7 @@ let mk_exp exp_aux = E_aux (exp_aux, no_annot)
 let unaux_exp (E_aux (exp_aux, _)) = exp_aux
 
 let mk_pat pat_aux = P_aux (pat_aux, no_annot)
+let unaux_pat (P_aux (pat_aux, _)) = pat_aux
 
 let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
 
@@ -269,7 +270,7 @@ and map_pat_annot_aux f = function
   | P_as (pat, id) -> P_as (map_pat_annot f pat, id)
   | P_typ (typ, pat) -> P_typ (typ, map_pat_annot f pat)
   | P_id id -> P_id id
-  | P_var kid -> P_var kid
+  | P_var (pat, kid) -> P_var (map_pat_annot f pat, kid)
   | P_app (id, pats) -> P_app (id, List.map (map_pat_annot f) pats)
   | P_record (fpats, b) -> P_record (List.map (map_fpat_annot f) fpats, b)
   | P_tup pats -> P_tup (List.map (map_pat_annot f) pats)
@@ -502,7 +503,7 @@ and string_of_pat (P_aux (pat, l)) =
   | P_lit lit -> string_of_lit lit
   | P_wild -> "_"
   | P_id v -> string_of_id v
-  | P_var kid -> string_of_kid kid
+  | P_var (pat, kid) -> string_of_pat pat ^ " as " ^ string_of_kid kid
   | P_typ (typ, pat) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_pat pat
   | P_tup pats -> "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_pat pats ^ ")"

@@ -323,7 +323,7 @@ let rec doc_pat_lem sequential mwords apat_needed (P_aux (p,(l,annot)) as pa) = 
      begin match id with
      | Id_aux (Id "None",_) -> string "Nothing" (* workaround temporary issue *)
      | _ -> doc_id_lem id end
-  | P_var kid -> doc_var_lem kid
+  | P_var(p,kid) -> parens (separate space [doc_pat_lem sequential mwords true p; string "as"; doc_var_lem kid])
   | P_as(p,id) -> parens (separate space [doc_pat_lem sequential mwords true p; string "as"; doc_id_lem id])
   | P_typ(typ,p) ->
     let doc_p = doc_pat_lem sequential mwords true p in

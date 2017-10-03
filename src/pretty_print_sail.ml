@@ -41,6 +41,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_util
 open PPrint
 open Pretty_print_common
 
@@ -109,7 +110,9 @@ let doc_pat, doc_atomic_pat =
   | P_lit lit  -> doc_lit lit
   | P_wild -> underscore
   | P_id id -> doc_id id
-  | P_var kid -> doc_var kid
+  | P_var (P_aux (P_id id, _), kid) when Id.compare (id_of_kid kid) id == 0 ->
+     doc_var kid
+  | P_var(p,kid) -> parens (separate space [pat p; string "as"; doc_var kid])
   | P_as(p,id) -> parens (separate space [pat p; string "as"; doc_id id])
   | P_typ(typ,p) -> separate space [parens (doc_typ typ); atomic_pat p]
   | P_app(id,[]) -> doc_id id
