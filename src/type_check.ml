@@ -2128,7 +2128,18 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           let env = Env.add_typ_var kid BK_nat env in
           let typed_pat, env = bind_pat env pat (atom_typ (nvar kid)) in
           annot_pat (P_var (typed_pat, kid)) typ, env
-       | None, _ -> typ_error l ("Cannot bind type variable against non existential type")
+       | None, Typ_aux (Typ_id id, _) when Id.compare id (mk_id "nat") == 0 ->
+          let env = Env.add_typ_var kid BK_nat env in
+          let env = Env.add_constraint (nc_gt (nvar kid) (nconstant 0)) env in
+          let typed_pat, env = bind_pat env pat (atom_typ (nvar kid)) in
+          annot_pat (P_var (typed_pat, kid)) typ, env
+       | None, Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp lo, _); Typ_arg_aux (Typ_arg_nexp hi, _)]), _)
+            when Id.compare id (mk_id "range") == 0 ->
+          let env = Env.add_typ_var kid BK_nat env in
+          let env = Env.add_constraint (nc_and (nc_lteq lo (nvar kid)) (nc_lteq (nvar kid) hi)) env in
+          let typed_pat, env = bind_pat env pat (atom_typ (nvar kid)) in
+          annot_pat (P_var (typed_pat, kid)) typ, env
+       | None, _ -> typ_error l ("Cannot bind type variable against non existential or numeric type")
      end
   | P_wild -> annot_pat P_wild typ, env
   | P_cons (hd_pat, tl_pat) ->
@@ -2393,20 +2404,49 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
           in
           annot_lexp (LEXP_tup tlexps) typ, env
        (* This case is pretty much just for the PSTATE.<N,Z,C,V> := vector pattern which is really common in ASL. *)
+       (* Maybe this code can be made not horrible? *)
        | Typ_app (id, _) when Id.compare id (mk_id "vector") == 0 ->
           begin
             match destruct_vector env typ with
             | Some (_, vec_len, _, _) ->
-               let bind_bit_tuple lexp (tlexps, env) =
-                 let tlexp, env = bind_lexp env lexp (lvector_typ env (nconstant 1) bit_typ) in
-                 tlexp :: tlexps, env
+               let bind_bits_tuple lexp (tlexps, env, llen) =
+                 match lexp with
+                 | LEXP_aux (LEXP_id v, _) ->
+                    begin
+                      match Env.lookup_id v env with
+                      | Local (Immutable, _) | Enum _ ->
+                         typ_error l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
+                      | Unbound ->
+                         typ_error l "Unbound variable in vector tuple assignment"
+                      | Local (Mutable, vtyp) | Register vtyp ->
+                         let llen' = match destruct_vector env vtyp with
+                           | Some (_, llen', _, _) -> llen'
+                           | None -> typ_error l "Variables in vector tuple assignment must be vectors"
+                         in
+                         let tlexp, env = bind_lexp env lexp vtyp in
+                         tlexp :: tlexps, env, nsum llen llen'
+                    end
+                 | LEXP_aux (LEXP_field (LEXP_aux (LEXP_id v, _), fid), _) ->
+                   (* FIXME: will only work for ASL *)
+                   let rec_id =
+                     match Env.lookup_id v env with
+                     | Register (Typ_aux (Typ_id rec_id, _)) -> rec_id
+                     | _ -> typ_error l (string_of_lexp lexp ^ " must be a record register here")
+                   in
+                   let typq, (Typ_aux (Typ_fn (_, vtyp, _), _)) = Env.get_accessor rec_id fid env in
+                   let llen' = match destruct_vector env vtyp with
+                     | Some (_, llen', _, _) -> llen'
+                     | None -> typ_error l "Variables in vector tuple assignment must be vectors"
+                   in
+                   let tlexp, env = bind_lexp env lexp vtyp in
+                   tlexp :: tlexps, env, nsum llen llen'
+                 | _ -> typ_error l "bit vector assignment must only contain identifiers"
                in
-               if prove env (nc_eq vec_len (nconstant (List.length lexps)))
-               then
-                 let (tlexps, env) = List.fold_right bind_bit_tuple lexps ([], env) in
-                 annot_lexp (LEXP_tup tlexps) typ, env
+               let tlexps, env, lexp_len = List.fold_right bind_bits_tuple lexps ([], env, nconstant 0) in
+               if prove env (nc_eq vec_len lexp_len)
+               then annot_lexp (LEXP_tup tlexps) typ, env
                else typ_error l "Vector and tuple length must be the same in assignment"
-            | None -> typ_error l ("Cannot bind tuple l-expression against non tuple or vector type " ^ string_of_typ typ)
+            | None -> typ_error l ("Malformed vector type " ^ string_of_typ typ)
           end
        | _ -> typ_error l ("Cannot bind tuple l-expression against non tuple or vector type " ^ string_of_typ typ)
      end

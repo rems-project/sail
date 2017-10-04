@@ -124,7 +124,7 @@ let rec desugar_rchain chain s e =
 
 /*Terminals with no content*/
 
-%token And As Assert Bitzero Bitone Bits By Match Clause Const Dec Def Default Effect EFFECT End Op
+%token And As Assert Bitzero Bitone Bits By Match Clause Dec Def Default Effect EFFECT End Op
 %token Enum Else Extern False Forall Exist Foreach Overload Function_ If_ In IN Inc Let_ Member Int Order Cast
 %token Pure Rec Register Return Scattered Sizeof Struct Then True TwoCaret Type TYPE Typedef
 %token Undefined Union With Val Constraint Throw Try Catch
@@ -133,11 +133,8 @@ let rec desugar_rchain chain s e =
 %nonassoc Then
 %nonassoc Else
 
-%token Div_ Mod ModUnderS Quot Rem QuotUnderS
-
 %token Bar Comma Dot Eof Minus Semi Under DotDot
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar
-%token BarBar BarSquare BarBarSquare ColonEq ColonGt ColonSquare
 %token MinusGt LtBar LtColon SquareBar SquareBarBar
 
 /*Terminals with content*/
@@ -148,7 +145,7 @@ let rec desugar_rchain chain s e =
 
 %token <string> Amp At Caret Div Eq Excl Gt Lt Plus Star EqGt Unit
 %token <string> Colon ExclEq
-%token <string> GtEq GtEqPlus GtGt GtGtGt GtPlus HashGtGt HashLtLt
+%token <string> GtEq GtEqPlus GtGt GtGtGt GtPlus
 %token <string> LtEq LtEqPlus LtGt LtLt LtLtLt LtPlus StarStar
 
 %token <string> Op0 Op1 Op2 Op3 Op4 Op5 Op6 Op7 Op8 Op9
@@ -590,8 +587,8 @@ pat:
     { $1 }
   | atomic_pat As id
     { mk_pat (P_as ($1, $3)) $startpos $endpos }
-  | Lparen pat Comma pat_list Rparen
-    { mk_pat (P_tup ($2 :: $4)) $startpos $endpos }
+  | atomic_pat As kid
+    { mk_pat (P_var ($1, $3)) $startpos $endpos }
 
 pat_list:
   | pat
@@ -614,6 +611,8 @@ atomic_pat:
     { mk_pat (P_typ ($3, $1)) $startpos $endpos }
   | Lparen pat Rparen
     { $2 }
+  | Lparen pat Comma pat_list Rparen
+    { mk_pat (P_tup ($2 :: $4)) $startpos $endpos }
 
 lit:
   | True
@@ -658,9 +657,6 @@ exp:
     { mk_exp (E_case ($2, $4)) $startpos $endpos }
   | Try exp Catch Lcurly case_list Rcurly
     { mk_exp (E_try ($2, $5)) $startpos $endpos }
-  | Lparen exp0 Comma exp_list Rparen
-    { mk_exp (E_tuple ($2 :: $4)) $startpos $endpos }
-
 /* The following implements all nine levels of user-defined precedence for
 operators in expressions, with both left, right and non-associative operators */
 
@@ -858,6 +854,8 @@ atomic_exp:
     { mk_exp (E_sizeof $3) $startpos $endpos }
   | Constraint Lparen nc Rparen
     { mk_exp (E_constraint $3) $startpos $endpos }
+  | Assert Lparen exp Rparen
+    { mk_exp (E_assert ($3, mk_lit_exp (L_string "") $startpos($4) $endpos($4))) $startpos $endpos }
   | Assert Lparen exp Comma exp Rparen
     { mk_exp (E_assert ($3, $5)) $startpos $endpos }
   | atomic_exp Lsquare exp Rsquare
@@ -872,6 +870,8 @@ atomic_exp:
     { mk_exp (E_vector_update_subrange ($2, $4, $6, $8)) $startpos $endpos }
   | Lparen exp Rparen
     { $2 }
+  | Lparen exp Comma exp_list Rparen
+    { mk_exp (E_tuple ($2 :: $4)) $startpos $endpos }
 
 exp_list:
   | exp

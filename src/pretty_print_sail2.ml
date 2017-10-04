@@ -91,6 +91,9 @@ let rec doc_pat (P_aux (p_aux, _)) =
   | P_app (id, pats) -> doc_id id ^^ lparen ^^ separate_map (comma ^^ space) doc_pat pats ^^ rparen
   | P_typ (typ, pat) -> separate space [doc_pat pat; colon; doc_typ typ]
   | P_lit lit -> doc_lit lit
+  (* P_var short form sugar *)
+  | P_var (P_aux (P_id id, _), kid) when Id.compare (id_of_kid kid) id == 0 ->
+     doc_kid kid
   | P_var (pat, kid) -> separate space [doc_pat pat; string "as"; doc_kid kid]
   | P_vector_concat pats -> separate_map (space ^^ string "@" ^^ space) doc_pat pats
   | P_wild -> string "_"
@@ -104,7 +107,9 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_lit lit -> doc_lit lit
   | E_cast (typ, exp) ->
      separate space [doc_exp exp; colon; doc_typ typ]
-  | E_app (id, exps) -> assert false
+  (* Format a function with a unit argument as f() rather than f(()) *)
+  | E_app (id, [E_aux (E_lit (L_aux (L_unit, _)), _)]) -> doc_id id ^^ string "()"
+  | E_app (id, exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
   | E_app_infix (x, id, y) -> doc_op (doc_id id) (doc_exp x) (doc_exp y)
   | E_tuple exps -> assert false
   | E_if (if_exp, then_exp, else_exp) -> assert false
@@ -121,19 +126,25 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_field (exp, id) -> assert false
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp exp; doc_pexps pexps]
-  | E_let (lb, exp) -> assert false
+  | E_let (LB_aux (LB_val (pat, binding), _), exp) ->
+     separate space [string "let"; doc_pat pat; equals; doc_exp binding; string "in"; doc_exp exp]
   | E_assign (lexp, exp) ->
      separate space [doc_lexp lexp; equals; doc_exp exp]
   | E_sizeof nexp -> assert false
-  | E_constraint nc -> assert false
+  | E_constraint nc -> string "constraint" ^^ parens (doc_nc nc)
   | E_exit exp -> assert false
+  (* Resugar an assert with an empty message *)
+  | E_assert (exp1, E_aux (E_lit (L_aux (L_string "", _)), _)) -> string "assert" ^^ parens (doc_exp exp1)
+  | E_assert (exp1, exp2) -> string "assert" ^^ parens (doc_exp exp1 ^^ comma ^^ space ^^ doc_exp exp2)
   | E_throw exp -> assert false
   | E_try (exp, pexps) -> assert false
   | E_return exp -> assert false
 and doc_block = function
   | [] -> assert false
+  | [E_aux (E_let (LB_aux (LB_val (pat, binding), _), E_aux (E_block exps, _)), _)] ->
+     separate space [string "let"; doc_pat pat; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block exps
   | [exp] -> doc_exp exp
-  | exp :: exps -> doc_exp exp ^^ semi ^^ break 1 ^^ doc_block exps
+  | exp :: exps -> doc_exp exp ^^ semi ^^ hardline ^^ doc_block exps
 and doc_lexp (LEXP_aux (l_aux, _)) =
   match l_aux with
   | LEXP_id id -> doc_id id
@@ -209,4 +220,4 @@ let rec doc_def def = group (match def with
 let doc_defs (Defs(defs)) =
   separate_map hardline doc_def defs
 
-let pp_defs f d = ToChannel.pretty 1. 120 f (doc_defs d)
+let pp_defs f d = ToChannel.pretty 1. 80 f (doc_defs d)

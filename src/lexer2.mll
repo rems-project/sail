@@ -100,7 +100,6 @@ let kw_table =
      ("by",                      (fun _ -> By));
      ("match",			 (fun _ -> Match));
      ("clause",                  (fun _ -> Clause));
-     ("const",			 (fun _ -> Const));
      ("dec",                     (fun _ -> Dec));
      ("def",                     (fun _ -> Def));
      ("op",                      (fun _ -> Op));
@@ -144,13 +143,6 @@ let kw_table =
      ("union",			 (fun x -> Union));
      ("with",                    (fun x -> With));
      ("val",                     (fun x -> Val));
-
-     ("div",			 (fun x -> Div_));
-     ("mod",			 (fun x -> Mod));
-     ("mod_s",                   (fun x -> ModUnderS));
-     ("quot",			 (fun x -> Quot));
-     ("quot_s",                  (fun x -> QuotUnderS));
-     ("rem",			 (fun x -> Rem));
 
      ("barr",                    (fun x -> Barr));
      ("depend",                  (fun x -> Depend));
